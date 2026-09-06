@@ -117,7 +117,7 @@ function App() {
   const active = visibleRuns.find(r => r.status === 'queued' || r.status === 'running');
   const profileAsset = detail?.assets?.find(asset => asset.allowedUse !== 'inline');
   return <div className="shell">
-    <header className="masthead"><a href="/" className="wordmark">여백<span>NARRATIVE RUNTIME</span></a><div className="header-actions"><span className="badge">M1 · 로컬 fixture</span><button className="secondary small-button" onClick={() => { void api('/session', {}, 'DELETE').then(() => location.reload()).catch(error => setError(error.message)); }}>접속 해제</button></div></header>
+    <header className="masthead"><a href="/" className="wordmark">Uimori<span>NARRATIVE RUNTIME</span></a><div className="header-actions"><span className="badge">M1 · 로컬 fixture</span><button className="secondary small-button" onClick={() => { void api('/session', {}, 'DELETE').then(() => location.reload()).catch(error => setError(error.message)); }}>접속 해제</button></div></header>
     <div className="workspace">
       <aside className="library"><p className="eyebrow">나의 작업실</p><h1>이야기를 이어가는 곳</h1><p className="muted">원문을 먼저 읽고, 번역과 표시 상태는 준비되는 대로 확인해요.</p>
         <nav aria-label="채팅 목록">{chats.map(chat => <button key={chat.id} className={`chat-link ${selected === chat.id ? 'selected' : ''}`} onClick={() => select(chat.id)}>{chat.title}<span>이야기 열기 ↗</span></button>)}</nav>
@@ -150,7 +150,7 @@ function App() {
         <AttemptInspector attempts={detail.attempts ?? []} runs={detail.runs}/>
         <form onSubmit={generate} className="composer"><label htmlFor="request">다음 장면 요청</label><textarea id="request" rows={4} maxLength={4000} value={draft} onChange={e => { setDraft(e.target.value); sessionStorage.setItem(draftKey, e.target.value); }} placeholder="(OOC: ...) 장면과 인물의 행동을 요청해 보세요."/><div><small>현재 분기: {branch?.title || '기본 이야기'}. 서버가 실행을 보관하므로 기다리는 동안 다른 이야기를 읽어도 돼요.</small><button disabled={busy || !!active || !draft.trim()}>{active ? '서버에서 생성 중…' : '원문 생성'}</button></div></form>
       </>}</main>
-    </div><footer>여백 · 원문과 그 곁의 기록들</footer>
+    </div><footer>Uimori · 원문과 그 곁의 기록들</footer>
   </div>;
 }
 
