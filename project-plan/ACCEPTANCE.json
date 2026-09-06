@@ -31,9 +31,13 @@
         "DX11",
         "U30"
       ],
-      "status": "specified-not-run",
-      "implemented_test_ids": [],
-      "notes": ""
+      "status": "passed-m0-local",
+      "implemented_test_ids": [
+        "file SQLite HTTP runtime F01 refuses another owner before recovery; F06 disables controls and prevents cross-origin writes",
+        "scripts/doctor.mjs",
+        "scripts/verify-worktrees.mjs"
+      ],
+      "notes": "Observed 2026-09-06 on Windows 11; build bb367129c575cd92c505b72d277ac29660460a301a63e3d5ac3ba247a2eb0640. output/playwright/2026-09-06T11-40-31-609Z-0c7f1c0e/summary.json; clean checkout output/playwright/clean-checkout-2026-09-06T11-43-17-360Z-38d62924/summary.json. Two simultaneous clean worktrees: output/playwright/worktrees-2026-09-06T11-43-42-817Z-7dcc0fa7/summary.json. Scripted mock lifecycle only; original does_not_prove limits retained."
     },
     {
       "id": "F02",
@@ -53,9 +57,12 @@
         "A03",
         "A12"
       ],
-      "status": "specified-not-run",
-      "implemented_test_ids": [],
-      "notes": ""
+      "status": "passed-m0-local",
+      "implemented_test_ids": [
+        "file SQLite HTTP runtime F02 fixes snapshots, rejects stale revisions, and deduplicates a logical command",
+        "browser.spec.ts F02 F03 F05 two contexts and two tabs keep commands, snapshots, source jobs and reconnection isolated"
+      ],
+      "notes": "Observed 2026-09-06 on Windows 11; build bb367129c575cd92c505b72d277ac29660460a301a63e3d5ac3ba247a2eb0640. output/playwright/2026-09-06T11-40-31-609Z-0c7f1c0e/summary.json; clean checkout output/playwright/clean-checkout-2026-09-06T11-43-17-360Z-38d62924/summary.json. Scripted mock lifecycle only; original does_not_prove limits retained."
     },
     {
       "id": "F03",
@@ -75,9 +82,14 @@
         "A05",
         "A11"
       ],
-      "status": "specified-not-run",
-      "implemented_test_ids": [],
-      "notes": ""
+      "status": "passed-m0-local",
+      "implemented_test_ids": [
+        "file SQLite HTTP runtime F03 replays durable event IDs and keeps errors out of source; F04 enforces call budget and cancellation",
+        "built server process boundary F03 F05 restarts after source commit before worker wake, without regenerating source",
+        "browser.spec.ts F02 F03 F05 two contexts and two tabs keep commands, snapshots, source jobs and reconnection isolated",
+        "browser.spec.ts F03 F05 an older real HTTP response cannot hide a newly committed source"
+      ],
+      "notes": "Observed 2026-09-06 on Windows 11; build bb367129c575cd92c505b72d277ac29660460a301a63e3d5ac3ba247a2eb0640. output/playwright/2026-09-06T11-40-31-609Z-0c7f1c0e/summary.json; clean checkout output/playwright/clean-checkout-2026-09-06T11-43-17-360Z-38d62924/summary.json. Scripted mock lifecycle only; original does_not_prove limits retained."
     },
     {
       "id": "F04",
@@ -97,9 +109,18 @@
         "A10",
         "A13"
       ],
-      "status": "specified-not-run",
-      "implemented_test_ids": [],
-      "notes": ""
+      "status": "passed-m0-local",
+      "implemented_test_ids": [
+        "F04 actual role context and scoped read loop F04 direct path uses exactly one main invocation and no tool/planner, preserves task and preset",
+        "F04 actual role context and scoped read loop F04 metadata is separate from source bodies and real call/results reach the next exact model input",
+        "F04 actual role context and scoped read loop F04 additional legal unprefetched lore is discoverable, paginated, and readable with continuation",
+        "F04 actual role context and scoped read loop F04 excluded resources are absent from counts/search/read and malicious skill text cannot grant tools",
+        "F04 actual role context and scoped read loop F04 budget and cancellation stop at actual invocation/tool boundaries without echoing abort reason",
+        "F04 actual role context and scoped read loop F04 input observation and live-setting mutation cannot rewrite the run snapshot or subsequent tool scope",
+        "file SQLite HTTP runtime F03 replays durable event IDs and keeps errors out of source; F04 enforces call budget and cancellation",
+        "file SQLite HTTP runtime F04 reads scoped SQLite resources through actual research calls and records the next input"
+      ],
+      "notes": "Observed 2026-09-06 on Windows 11; build bb367129c575cd92c505b72d277ac29660460a301a63e3d5ac3ba247a2eb0640. output/playwright/2026-09-06T11-40-31-609Z-0c7f1c0e/summary.json; clean checkout output/playwright/clean-checkout-2026-09-06T11-43-17-360Z-38d62924/summary.json. Scripted mock lifecycle only; original does_not_prove limits retained."
     },
     {
       "id": "F05",
@@ -118,9 +139,16 @@
         "B05",
         "U28"
       ],
-      "status": "specified-not-run",
-      "implemented_test_ids": [],
-      "notes": ""
+      "status": "passed-m0-local",
+      "implemented_test_ids": [
+        "file SQLite HTTP runtime F05 rolls back source/run/job reservations together and honors snapshotted disabled jobs",
+        "file SQLite HTTP runtime F05 keeps delayed jobs on original revisions and retries result transactions without duplicate effects",
+        "built server process boundary F03 F05 restarts after source commit before worker wake, without regenerating source",
+        "browser.spec.ts F02 F03 F05 two contexts and two tabs keep commands, snapshots, source jobs and reconnection isolated",
+        "browser.spec.ts F05 failed auxiliary result retries independently while a later source is selected",
+        "browser.spec.ts F03 F05 an older real HTTP response cannot hide a newly committed source"
+      ],
+      "notes": "Observed 2026-09-06 on Windows 11; build bb367129c575cd92c505b72d277ac29660460a301a63e3d5ac3ba247a2eb0640. output/playwright/2026-09-06T11-40-31-609Z-0c7f1c0e/summary.json; clean checkout output/playwright/clean-checkout-2026-09-06T11-43-17-360Z-38d62924/summary.json. Scripted mock lifecycle only; original does_not_prove limits retained."
     },
     {
       "id": "F06",
@@ -148,9 +176,22 @@
         "G06",
         "U31"
       ],
-      "status": "specified-not-run",
-      "implemented_test_ids": [],
-      "notes": ""
+      "status": "passed-m0-local",
+      "implemented_test_ids": [
+        "file SQLite HTTP runtime F01 refuses another owner before recovery; F06 disables controls and prevents cross-origin writes",
+        "scripts/selftest.mjs:assertion",
+        "scripts/selftest.mjs:zero",
+        "scripts/selftest.mjs:skip",
+        "scripts/selftest.mjs:missing",
+        "scripts/selftest.mjs:stale-report",
+        "scripts/selftest.mjs:stale-server",
+        "scripts/selftest.mjs:timeout",
+        "scripts/selftest.mjs:cleanup",
+        "scripts/selftest.mjs:browser-missing",
+        "scripts/selftest.mjs:unknown-case",
+        "scripts/selftest.mjs:unknown-milestone"
+      ],
+      "notes": "Observed 2026-09-06 on Windows 11; build bb367129c575cd92c505b72d277ac29660460a301a63e3d5ac3ba247a2eb0640. output/playwright/2026-09-06T11-40-31-609Z-0c7f1c0e/summary.json; clean checkout output/playwright/clean-checkout-2026-09-06T11-43-17-360Z-38d62924/summary.json. Scripted mock lifecycle only; original does_not_prove limits retained."
     },
     {
       "id": "P01",
