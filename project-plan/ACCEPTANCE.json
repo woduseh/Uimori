@@ -37,7 +37,7 @@
         "scripts/doctor.mjs",
         "scripts/verify-worktrees.mjs"
       ],
-      "notes": "Observed 2026-09-06 on Windows 11; build bb367129c575cd92c505b72d277ac29660460a301a63e3d5ac3ba247a2eb0640. output/playwright/2026-09-06T11-40-31-609Z-0c7f1c0e/summary.json; clean checkout output/playwright/clean-checkout-2026-09-06T11-43-17-360Z-38d62924/summary.json. Two simultaneous clean worktrees: output/playwright/worktrees-2026-09-06T11-43-42-817Z-7dcc0fa7/summary.json. Scripted mock lifecycle only; original does_not_prove limits retained."
+      "notes": "Observed 2026-09-06 on Windows 11; build bb367129c575cd92c505b72d277ac29660460a301a63e3d5ac3ba247a2eb0640. output/playwright/2026-09-06T11-40-31-609Z-0c7f1c0e/summary.json; clean checkout output/playwright/clean-checkout-2026-09-06T11-43-17-360Z-38d62924/summary.json. Two simultaneous clean worktrees: output/playwright/worktrees-2026-09-06T11-43-42-817Z-7dcc0fa7/summary.json. Scripted mock lifecycle only; original does_not_prove limits retained. M1 implementation regression PASS on source 48e7f8e9fa3c13129c1775427996ff64f4c6d6bc22a6de7bea40e4b85d15185f; output/playwright/2026-09-06T12-37-13-274Z-9922fc39/summary.json. Prior clean-worktree evidence remains scoped to the earlier M0 source."
     },
     {
       "id": "F02",
@@ -62,7 +62,7 @@
         "file SQLite HTTP runtime F02 fixes snapshots, rejects stale revisions, and deduplicates a logical command",
         "browser.spec.ts F02 F03 F05 two contexts and two tabs keep commands, snapshots, source jobs and reconnection isolated"
       ],
-      "notes": "Observed 2026-09-06 on Windows 11; build bb367129c575cd92c505b72d277ac29660460a301a63e3d5ac3ba247a2eb0640. output/playwright/2026-09-06T11-40-31-609Z-0c7f1c0e/summary.json; clean checkout output/playwright/clean-checkout-2026-09-06T11-43-17-360Z-38d62924/summary.json. Scripted mock lifecycle only; original does_not_prove limits retained."
+      "notes": "Observed 2026-09-06 on Windows 11; build bb367129c575cd92c505b72d277ac29660460a301a63e3d5ac3ba247a2eb0640. output/playwright/2026-09-06T11-40-31-609Z-0c7f1c0e/summary.json; clean checkout output/playwright/clean-checkout-2026-09-06T11-43-17-360Z-38d62924/summary.json. Scripted mock lifecycle only; original does_not_prove limits retained. M1 implementation regression PASS on source 48e7f8e9fa3c13129c1775427996ff64f4c6d6bc22a6de7bea40e4b85d15185f; output/playwright/2026-09-06T12-37-13-274Z-9922fc39/summary.json. Prior clean-worktree evidence remains scoped to the earlier M0 source."
     },
     {
       "id": "F03",
@@ -89,7 +89,7 @@
         "browser.spec.ts F02 F03 F05 two contexts and two tabs keep commands, snapshots, source jobs and reconnection isolated",
         "browser.spec.ts F03 F05 an older real HTTP response cannot hide a newly committed source"
       ],
-      "notes": "Observed 2026-09-06 on Windows 11; build bb367129c575cd92c505b72d277ac29660460a301a63e3d5ac3ba247a2eb0640. output/playwright/2026-09-06T11-40-31-609Z-0c7f1c0e/summary.json; clean checkout output/playwright/clean-checkout-2026-09-06T11-43-17-360Z-38d62924/summary.json. Scripted mock lifecycle only; original does_not_prove limits retained."
+      "notes": "Observed 2026-09-06 on Windows 11; build bb367129c575cd92c505b72d277ac29660460a301a63e3d5ac3ba247a2eb0640. output/playwright/2026-09-06T11-40-31-609Z-0c7f1c0e/summary.json; clean checkout output/playwright/clean-checkout-2026-09-06T11-43-17-360Z-38d62924/summary.json. Scripted mock lifecycle only; original does_not_prove limits retained. M1 implementation regression PASS on source 48e7f8e9fa3c13129c1775427996ff64f4c6d6bc22a6de7bea40e4b85d15185f; output/playwright/2026-09-06T12-37-13-274Z-9922fc39/summary.json. Prior clean-worktree evidence remains scoped to the earlier M0 source."
     },
     {
       "id": "F04",
@@ -120,7 +120,7 @@
         "file SQLite HTTP runtime F03 replays durable event IDs and keeps errors out of source; F04 enforces call budget and cancellation",
         "file SQLite HTTP runtime F04 reads scoped SQLite resources through actual research calls and records the next input"
       ],
-      "notes": "Observed 2026-09-06 on Windows 11; build bb367129c575cd92c505b72d277ac29660460a301a63e3d5ac3ba247a2eb0640. output/playwright/2026-09-06T11-40-31-609Z-0c7f1c0e/summary.json; clean checkout output/playwright/clean-checkout-2026-09-06T11-43-17-360Z-38d62924/summary.json. Scripted mock lifecycle only; original does_not_prove limits retained."
+      "notes": "Observed 2026-09-06 on Windows 11; build bb367129c575cd92c505b72d277ac29660460a301a63e3d5ac3ba247a2eb0640. output/playwright/2026-09-06T11-40-31-609Z-0c7f1c0e/summary.json; clean checkout output/playwright/clean-checkout-2026-09-06T11-43-17-360Z-38d62924/summary.json. Scripted mock lifecycle only; original does_not_prove limits retained. M1 implementation regression PASS on source 48e7f8e9fa3c13129c1775427996ff64f4c6d6bc22a6de7bea40e4b85d15185f; output/playwright/2026-09-06T12-37-13-274Z-9922fc39/summary.json. Prior clean-worktree evidence remains scoped to the earlier M0 source."
     },
     {
       "id": "F05",
@@ -148,7 +148,7 @@
         "browser.spec.ts F05 failed auxiliary result retries independently while a later source is selected",
         "browser.spec.ts F03 F05 an older real HTTP response cannot hide a newly committed source"
       ],
-      "notes": "Observed 2026-09-06 on Windows 11; build bb367129c575cd92c505b72d277ac29660460a301a63e3d5ac3ba247a2eb0640. output/playwright/2026-09-06T11-40-31-609Z-0c7f1c0e/summary.json; clean checkout output/playwright/clean-checkout-2026-09-06T11-43-17-360Z-38d62924/summary.json. Scripted mock lifecycle only; original does_not_prove limits retained."
+      "notes": "Observed 2026-09-06 on Windows 11; build bb367129c575cd92c505b72d277ac29660460a301a63e3d5ac3ba247a2eb0640. output/playwright/2026-09-06T11-40-31-609Z-0c7f1c0e/summary.json; clean checkout output/playwright/clean-checkout-2026-09-06T11-43-17-360Z-38d62924/summary.json. Scripted mock lifecycle only; original does_not_prove limits retained. M1 implementation regression PASS on source 48e7f8e9fa3c13129c1775427996ff64f4c6d6bc22a6de7bea40e4b85d15185f; output/playwright/2026-09-06T12-37-13-274Z-9922fc39/summary.json. Prior clean-worktree evidence remains scoped to the earlier M0 source."
     },
     {
       "id": "F06",
@@ -191,7 +191,7 @@
         "scripts/selftest.mjs:unknown-case",
         "scripts/selftest.mjs:unknown-milestone"
       ],
-      "notes": "Observed 2026-09-06 on Windows 11; build bb367129c575cd92c505b72d277ac29660460a301a63e3d5ac3ba247a2eb0640. output/playwright/2026-09-06T11-40-31-609Z-0c7f1c0e/summary.json; clean checkout output/playwright/clean-checkout-2026-09-06T11-43-17-360Z-38d62924/summary.json. Scripted mock lifecycle only; original does_not_prove limits retained."
+      "notes": "Observed 2026-09-06 on Windows 11; build bb367129c575cd92c505b72d277ac29660460a301a63e3d5ac3ba247a2eb0640. output/playwright/2026-09-06T11-40-31-609Z-0c7f1c0e/summary.json; clean checkout output/playwright/clean-checkout-2026-09-06T11-43-17-360Z-38d62924/summary.json. Scripted mock lifecycle only; original does_not_prove limits retained. M1 implementation regression PASS on source 48e7f8e9fa3c13129c1775427996ff64f4c6d6bc22a6de7bea40e4b85d15185f; output/playwright/2026-09-06T12-37-13-274Z-9922fc39/summary.json. Prior clean-worktree evidence remains scoped to the earlier M0 source."
     },
     {
       "id": "P01",
@@ -211,9 +211,15 @@
         "U04",
         "U13"
       ],
-      "status": "specified-not-run",
-      "implemented_test_ids": [],
-      "notes": ""
+      "status": "passed-m1-local-fixture",
+      "implemented_test_ids": [
+        "M1 product data with actual file SQLite P01 P02 P03 freezes exact content/profile revisions and swaps the complete creative control group",
+        "server main runner through the actual loopback adapter P01 P02 P05 pins attached canon, compiles active controls and journals real tool turns before fetch",
+        "server main runner through the actual loopback adapter P01 P04 hides disabled persona in pinned context and read scope; denied model tools cannot escalate",
+        "server main runner through the actual loopback adapter P01 P03 separates native main scope from translation glossary reads and keeps empty profiles free of synthetic facts",
+        "product-browser.spec.ts P01 content revisions stay pinned and a creative preset fully replaces prior controls"
+      ],
+      "notes": "Observed 2026-09-06; source 48e7f8e9fa3c13129c1775427996ff64f4c6d6bc22a6de7bea40e4b85d15185f; output/playwright/2026-09-06T12-39-38-385Z-71d8eb1d/summary.json. Local file SQLite, browser and custom fixture-sse-v1 only. Actual provider protocol/quality/device claims remain BLOCKED; original does_not_prove retained. Small assets stored atomically in SQLite BLOB, not a separate asset directory."
     },
     {
       "id": "P02",
@@ -230,9 +236,13 @@
       "legacy_ids": [
         "B03"
       ],
-      "status": "specified-not-run",
-      "implemented_test_ids": [],
-      "notes": ""
+      "status": "passed-m1-local-fixture",
+      "implemented_test_ids": [
+        "M1 product data with actual file SQLite P01 P02 P03 freezes exact content/profile revisions and swaps the complete creative control group",
+        "server main runner through the actual loopback adapter P01 P02 P05 pins attached canon, compiles active controls and journals real tool turns before fetch",
+        "fixture HTTP transport (no live provider compatibility claim) P02 P05 preserves exact role requests and stable prefix while dynamic controls and source change"
+      ],
+      "notes": "Observed 2026-09-06; source 48e7f8e9fa3c13129c1775427996ff64f4c6d6bc22a6de7bea40e4b85d15185f; output/playwright/2026-09-06T12-39-38-385Z-71d8eb1d/summary.json. Local file SQLite, browser and custom fixture-sse-v1 only. Actual provider protocol/quality/device claims remain BLOCKED; original does_not_prove retained. Small assets stored atomically in SQLite BLOB, not a separate asset directory."
     },
     {
       "id": "P03",
@@ -256,9 +266,12 @@
         "U16",
         "U18"
       ],
-      "status": "specified-not-run",
-      "implemented_test_ids": [],
-      "notes": ""
+      "status": "passed-m1-local-fixture",
+      "implemented_test_ids": [
+        "M1 product data with actual file SQLite P01 P02 P03 freezes exact content/profile revisions and swaps the complete creative control group",
+        "server main runner through the actual loopback adapter P01 P03 separates native main scope from translation glossary reads and keeps empty profiles free of synthetic facts"
+      ],
+      "notes": "Observed 2026-09-06; source 48e7f8e9fa3c13129c1775427996ff64f4c6d6bc22a6de7bea40e4b85d15185f; output/playwright/2026-09-06T12-39-38-385Z-71d8eb1d/summary.json. Local file SQLite, browser and custom fixture-sse-v1 only. Actual provider protocol/quality/device claims remain BLOCKED; original does_not_prove retained. Small assets stored atomically in SQLite BLOB, not a separate asset directory."
     },
     {
       "id": "P04",
@@ -277,9 +290,17 @@
         "B07",
         "U27"
       ],
-      "status": "specified-not-run",
-      "implemented_test_ids": [],
-      "notes": ""
+      "status": "passed-m1-local-fixture",
+      "implemented_test_ids": [
+        "M1 product data with actual file SQLite P04 keeps manual model IDs and credential references separate from content and transport options",
+        "M1 real HTTP application boundaries P04 catalog refresh updates data only and retains prior data on HTTP failure without changing model routes or credentials",
+        "server main runner through the actual loopback adapter P04 P05 checks current connection policy before each call and never retries a revoked route",
+        "server main runner through the actual loopback adapter P01 P04 hides disabled persona in pinned context and read scope; denied model tools cannot escalate",
+        "fixture HTTP transport (no live provider compatibility claim) P04 validates catalog data separately, keeps unknown metadata and preserves manual models on refresh failure",
+        "fixture HTTP transport (no live provider compatibility claim) P12 P04 refuses unapproved origins, redirects and connection options; credentials stay server-side and redacted",
+        "product-browser.spec.ts P04 manual model IDs and distinct main/translation routing preserve connection authority after catalog failure"
+      ],
+      "notes": "Observed 2026-09-06; source 48e7f8e9fa3c13129c1775427996ff64f4c6d6bc22a6de7bea40e4b85d15185f; output/playwright/2026-09-06T12-39-38-385Z-71d8eb1d/summary.json. Local file SQLite, browser and custom fixture-sse-v1 only. Actual provider protocol/quality/device claims remain BLOCKED; original does_not_prove retained. Small assets stored atomically in SQLite BLOB, not a separate asset directory."
     },
     {
       "id": "P05",
@@ -299,9 +320,20 @@
         "U28",
         "DX10"
       ],
-      "status": "specified-not-run",
-      "implemented_test_ids": [],
-      "notes": ""
+      "status": "passed-m1-local-fixture",
+      "implemented_test_ids": [
+        "M1 durable auxiliary orchestration with actual fixture HTTP P07 P05 records actual selected transport attempts, paired batched calls and opaque source-time results",
+        "M1 product data with actual file SQLite P05 P06 P12 records fixture refusals and partials without source/jobs; duplicate attempt finishes cannot rewrite usage",
+        "M1 real HTTP application boundaries P05 P06 P09 routes selected main through fetch, preserves source on refusal/partial and creates a sibling over HTTP",
+        "server main runner through the actual loopback adapter P01 P02 P05 pins attached canon, compiles active controls and journals real tool turns before fetch",
+        "server main runner through the actual loopback adapter P04 P05 checks current connection policy before each call and never retries a revoked route",
+        "fixture HTTP transport (no live provider compatibility claim) P05 handles fragmented UTF8, tool argument JSON, call IDs and opaque state across real fetch turns",
+        "fixture HTTP transport (no live provider compatibility claim) P02 P05 preserves exact role requests and stable prefix while dynamic controls and source change",
+        "fixture HTTP transport (no live provider compatibility claim) P05 P06 keeps refusal, trailing usage, partial output and remote errors distinct without retry",
+        "fixture HTTP transport (no live provider compatibility claim) P05 rejects malformed UTF8/JSON, changed or duplicate tool IDs and incomplete terminal results",
+        "fixture HTTP transport (no live provider compatibility claim) P05 abort and timeout stop a real stream, retain observed text and never start another request"
+      ],
+      "notes": "Observed 2026-09-06; source 48e7f8e9fa3c13129c1775427996ff64f4c6d6bc22a6de7bea40e4b85d15185f; output/playwright/2026-09-06T12-39-38-385Z-71d8eb1d/summary.json. Local file SQLite, browser and custom fixture-sse-v1 only. Actual provider protocol/quality/device claims remain BLOCKED; original does_not_prove retained. Small assets stored atomically in SQLite BLOB, not a separate asset directory."
     },
     {
       "id": "P06",
@@ -320,9 +352,15 @@
         "U01",
         "U02"
       ],
-      "status": "specified-not-run",
-      "implemented_test_ids": [],
-      "notes": ""
+      "status": "passed-m1-local-fixture",
+      "implemented_test_ids": [
+        "M1 durable auxiliary orchestration with actual fixture HTTP P06 a selected transport refusal or partial output is recorded without artifact, implicit retry or mock fallback",
+        "M1 product data with actual file SQLite P05 P06 P12 records fixture refusals and partials without source/jobs; duplicate attempt finishes cannot rewrite usage",
+        "M1 real HTTP application boundaries P05 P06 P09 routes selected main through fetch, preserves source on refusal/partial and creates a sibling over HTTP",
+        "fixture HTTP transport (no live provider compatibility claim) P05 P06 keeps refusal, trailing usage, partial output and remote errors distinct without retry",
+        "product-browser.spec.ts P06 P11 quality notes preserve source and export/backup downloads reject restore into an occupied DB"
+      ],
+      "notes": "Observed 2026-09-06; source 48e7f8e9fa3c13129c1775427996ff64f4c6d6bc22a6de7bea40e4b85d15185f; output/playwright/2026-09-06T12-39-38-385Z-71d8eb1d/summary.json. Local file SQLite, browser and custom fixture-sse-v1 only. Actual provider protocol/quality/device claims remain BLOCKED; original does_not_prove retained. Small assets stored atomically in SQLite BLOB, not a separate asset directory."
     },
     {
       "id": "P07",
@@ -340,9 +378,15 @@
         "U05",
         "U08"
       ],
-      "status": "specified-not-run",
-      "implemented_test_ids": [],
-      "notes": ""
+      "status": "passed-m1-local-fixture",
+      "implemented_test_ids": [
+        "M1 source-bound auxiliary roles P07 freezes source-time identities and exposes legal unprefetched read results to translation only",
+        "M1 source-bound auxiliary roles P07 roles can finish directly and skill reads cannot expand permissions; cancellation and real loop budget apply",
+        "M1 durable auxiliary orchestration with actual fixture HTTP P07 P05 records actual selected transport attempts, paired batched calls and opaque source-time results",
+        "M1 durable auxiliary orchestration with actual fixture HTTP P07 P13 disabled transport uses labeled local fixture; annotations stay separate and cancellation preserves source",
+        "M1 real HTTP application boundaries P07 P08 P12 runs source-time translation through HTTP and file SQLite, retaining partial siblings and retrying only the failed chunk"
+      ],
+      "notes": "Observed 2026-09-06; source 48e7f8e9fa3c13129c1775427996ff64f4c6d6bc22a6de7bea40e4b85d15185f; output/playwright/2026-09-06T12-39-38-385Z-71d8eb1d/summary.json. Local file SQLite, browser and custom fixture-sse-v1 only. Actual provider protocol/quality/device claims remain BLOCKED; original does_not_prove retained. Small assets stored atomically in SQLite BLOB, not a separate asset directory."
     },
     {
       "id": "P08",
@@ -360,9 +404,17 @@
         "U07",
         "U09"
       ],
-      "status": "specified-not-run",
-      "implemented_test_ids": [],
-      "notes": ""
+      "status": "passed-m1-local-fixture",
+      "implemented_test_ids": [
+        "M1 archive trust boundaries in a fresh file SQLite database P08 P11 rejects poisoned persisted plan bodies, missing returned coverage and changed protected spans",
+        "M1 source-bound auxiliary roles P08 stable paragraph anchors preserve offsets, fenced code and protected syntax without mutating source",
+        "M1 source-bound auxiliary roles P08 validates returned block coverage, order, duplicates and protected spans; merged paragraphs remain legal",
+        "M1 source-bound auxiliary roles P08 partial completion retains successful siblings and selects only missing chunk IDs for retry",
+        "M1 durable auxiliary orchestration with actual fixture HTTP P08 failed chunk retries alone over actual HTTP and preserves already completed siblings",
+        "M1 durable auxiliary orchestration with actual fixture HTTP P08 explicit chunk retry leaves other failed chunks untouched and still reports partial",
+        "M1 real HTTP application boundaries P07 P08 P12 runs source-time translation through HTTP and file SQLite, retaining partial siblings and retrying only the failed chunk"
+      ],
+      "notes": "Observed 2026-09-06; source 48e7f8e9fa3c13129c1775427996ff64f4c6d6bc22a6de7bea40e4b85d15185f; output/playwright/2026-09-06T12-39-38-385Z-71d8eb1d/summary.json. Local file SQLite, browser and custom fixture-sse-v1 only. Actual provider protocol/quality/device claims remain BLOCKED; original does_not_prove retained. Small assets stored atomically in SQLite BLOB, not a separate asset directory."
     },
     {
       "id": "P09",
@@ -380,9 +432,13 @@
         "U10",
         "U12"
       ],
-      "status": "specified-not-run",
-      "implemented_test_ids": [],
-      "notes": ""
+      "status": "passed-m1-local-fixture",
+      "implemented_test_ids": [
+        "M1 product data with actual file SQLite P09 preserves sibling candidates from the exact original snapshot and each descendant ancestry with branch CAS",
+        "M1 real HTTP application boundaries P05 P06 P09 routes selected main through fetch, preserves source on refusal/partial and creates a sibling over HTTP",
+        "product-browser.spec.ts P09 P10 P13 candidates and descendants retain tab views, anchors, drafts and separate image annotations"
+      ],
+      "notes": "Observed 2026-09-06; source 48e7f8e9fa3c13129c1775427996ff64f4c6d6bc22a6de7bea40e4b85d15185f; output/playwright/2026-09-06T12-39-38-385Z-71d8eb1d/summary.json. Local file SQLite, browser and custom fixture-sse-v1 only. Actual provider protocol/quality/device claims remain BLOCKED; original does_not_prove retained. Small assets stored atomically in SQLite BLOB, not a separate asset directory."
     },
     {
       "id": "P10",
@@ -400,9 +456,12 @@
       "legacy_ids": [
         "U25"
       ],
-      "status": "specified-not-run",
-      "implemented_test_ids": [],
-      "notes": ""
+      "status": "passed-m1-local-fixture",
+      "implemented_test_ids": [
+        "M1 source-bound auxiliary roles P10 P13 host assets and per-block image annotations preserve source and allow image none",
+        "product-browser.spec.ts P09 P10 P13 candidates and descendants retain tab views, anchors, drafts and separate image annotations"
+      ],
+      "notes": "Observed 2026-09-06; source 48e7f8e9fa3c13129c1775427996ff64f4c6d6bc22a6de7bea40e4b85d15185f; output/playwright/2026-09-06T12-39-38-385Z-71d8eb1d/summary.json. Local file SQLite, browser and custom fixture-sse-v1 only. Actual provider protocol/quality/device claims remain BLOCKED; original does_not_prove retained. Small assets stored atomically in SQLite BLOB, not a separate asset directory."
     },
     {
       "id": "P11",
@@ -419,9 +478,18 @@
       "legacy_ids": [
         "B09"
       ],
-      "status": "specified-not-run",
-      "implemented_test_ids": [],
-      "notes": ""
+      "status": "passed-m1-local-fixture",
+      "implemented_test_ids": [
+        "M1 archive trust boundaries in a fresh file SQLite database P11 restores complete protected translation chunks and normalizes asset URLs without mutating input",
+        "M1 archive trust boundaries in a fresh file SQLite database P11 rejects active asset MIME, foreign identity, cross-chat lineage and poisoned frozen references atomically",
+        "M1 archive trust boundaries in a fresh file SQLite database P08 P11 rejects poisoned persisted plan bodies, missing returned coverage and changed protected spans",
+        "M1 product data with actual file SQLite P11 exports/restores source bytes, lineage and assets while disabling connections and unfinished work",
+        "M1 product data with actual file SQLite P11 rejects changed source/asset bytes and invalid ancestry atomically in an empty restore target",
+        "M1 product data with actual file SQLite P11 upgrades a populated schema-1 file with a standalone backup and preserves completed job references",
+        "M1 product data with actual file SQLite P11 reopens actual backup bytes as standalone SQLite while the source database remains owned",
+        "product-browser.spec.ts P06 P11 quality notes preserve source and export/backup downloads reject restore into an occupied DB"
+      ],
+      "notes": "Observed 2026-09-06; source 48e7f8e9fa3c13129c1775427996ff64f4c6d6bc22a6de7bea40e4b85d15185f; output/playwright/2026-09-06T12-39-38-385Z-71d8eb1d/summary.json. Local file SQLite, browser and custom fixture-sse-v1 only. Actual provider protocol/quality/device claims remain BLOCKED; original does_not_prove retained. Small assets stored atomically in SQLite BLOB, not a separate asset directory."
     },
     {
       "id": "P12",
@@ -440,9 +508,14 @@
         "B07",
         "U29"
       ],
-      "status": "specified-not-run",
-      "implemented_test_ids": [],
-      "notes": ""
+      "status": "passed-m1-local-fixture",
+      "implemented_test_ids": [
+        "M1 product data with actual file SQLite P05 P06 P12 records fixture refusals and partials without source/jobs; duplicate attempt finishes cannot rewrite usage",
+        "M1 real HTTP application boundaries P07 P08 P12 runs source-time translation through HTTP and file SQLite, retaining partial siblings and retrying only the failed chunk",
+        "M1 real HTTP application boundaries P12 protects data, events and asset bytes with an HttpOnly session, rejects foreign origins and revokes logout cookies",
+        "fixture HTTP transport (no live provider compatibility claim) P12 P04 refuses unapproved origins, redirects and connection options; credentials stay server-side and redacted"
+      ],
+      "notes": "Observed 2026-09-06; source 48e7f8e9fa3c13129c1775427996ff64f4c6d6bc22a6de7bea40e4b85d15185f; output/playwright/2026-09-06T12-39-38-385Z-71d8eb1d/summary.json. Local file SQLite, browser and custom fixture-sse-v1 only. Actual provider protocol/quality/device claims remain BLOCKED; original does_not_prove retained. Small assets stored atomically in SQLite BLOB, not a separate asset directory."
     },
     {
       "id": "S01",
@@ -609,9 +682,9 @@
         "B04",
         "DX10"
       ],
-      "status": "specified-not-run",
+      "status": "blocked-prerequisites",
       "implemented_test_ids": [],
-      "notes": ""
+      "notes": "M1 local workflows completed 2026-09-06. Provider/API/model/credential and approved live budget, quality sample, or physical-phone/private-deployment prerequisite pending as applicable. No live call or device-quality claim."
     },
     {
       "id": "L02",
@@ -629,9 +702,9 @@
         "U24",
         "DX11"
       ],
-      "status": "specified-not-run",
+      "status": "blocked-prerequisites",
       "implemented_test_ids": [],
-      "notes": ""
+      "notes": "M1 local workflows completed 2026-09-06. Provider/API/model/credential and approved live budget, quality sample, or physical-phone/private-deployment prerequisite pending as applicable. No live call or device-quality claim."
     },
     {
       "id": "Q01",
@@ -651,9 +724,9 @@
         "U16",
         "U17"
       ],
-      "status": "specified-not-run",
+      "status": "blocked-prerequisites",
       "implemented_test_ids": [],
-      "notes": ""
+      "notes": "M1 local workflows completed 2026-09-06. Provider/API/model/credential and approved live budget, quality sample, or physical-phone/private-deployment prerequisite pending as applicable. No live call or device-quality claim."
     },
     {
       "id": "Q02",
@@ -672,9 +745,9 @@
         "B14",
         "U03"
       ],
-      "status": "specified-not-run",
+      "status": "blocked-prerequisites",
       "implemented_test_ids": [],
-      "notes": ""
+      "notes": "M1 local workflows completed 2026-09-06. Provider/API/model/credential and approved live budget, quality sample, or physical-phone/private-deployment prerequisite pending as applicable. No live call or device-quality claim."
     },
     {
       "id": "Q03",
@@ -690,9 +763,9 @@
       "legacy_ids": [
         "U06"
       ],
-      "status": "specified-not-run",
+      "status": "blocked-prerequisites",
       "implemented_test_ids": [],
-      "notes": ""
+      "notes": "M1 local workflows completed 2026-09-06. Provider/API/model/credential and approved live budget, quality sample, or physical-phone/private-deployment prerequisite pending as applicable. No live call or device-quality claim."
     },
     {
       "id": "Q04",
@@ -797,9 +870,14 @@
       ],
       "does_not_prove": "기계적으로 유효한 선택이 미적으로 적절함 또는 실제 vision 수행",
       "legacy_ids": [],
-      "status": "specified-not-run",
-      "implemented_test_ids": [],
-      "notes": "메인 원고를 재작성하여 태그를 삽입하는 방식이 기본이 아니다. M0 범위는 늘리지 않는다."
+      "status": "passed-m1-local-fixture",
+      "implemented_test_ids": [
+        "M1 source-bound auxiliary roles P10 P13 host assets and per-block image annotations preserve source and allow image none",
+        "M1 source-bound auxiliary roles P13 costume restrictions apply at the block and display annotations cannot smuggle authoritative fields",
+        "M1 durable auxiliary orchestration with actual fixture HTTP P07 P13 disabled transport uses labeled local fixture; annotations stay separate and cancellation preserves source",
+        "product-browser.spec.ts P09 P10 P13 candidates and descendants retain tab views, anchors, drafts and separate image annotations"
+      ],
+      "notes": "Observed 2026-09-06; source 48e7f8e9fa3c13129c1775427996ff64f4c6d6bc22a6de7bea40e4b85d15185f; output/playwright/2026-09-06T12-39-38-385Z-71d8eb1d/summary.json. Local file SQLite, browser and custom fixture-sse-v1 only. Actual provider protocol/quality/device claims remain BLOCKED; original does_not_prove retained. Small assets stored atomically in SQLite BLOB, not a separate asset directory."
     },
     {
       "id": "Q05",
@@ -817,9 +895,9 @@
       ],
       "does_not_prove": "모든미래모델·모든asset묶음에서 자동 품질향상 또는 비용절감",
       "legacy_ids": [],
-      "status": "specified-not-run",
+      "status": "blocked-prerequisites",
       "implemented_test_ids": [],
-      "notes": "원시 비공개 추론을 요구하지 않으며 실제 서사·도구·출처와 선택 결과로 평가한다."
+      "notes": "M1 local workflows completed 2026-09-06. Provider/API/model/credential and approved live budget, quality sample, or physical-phone/private-deployment prerequisite pending as applicable. No live call or device-quality claim."
     }
   ]
 }

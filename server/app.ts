@@ -6,10 +6,14 @@ import { setTimeout as delay } from 'node:timers/promises';
 import type { ServerResponse } from 'node:http';
 import { Store, HttpError } from './store.js';
 import { Controls, type Barrier, type FailurePoint } from './controls.js';
-import { executeMain, syntheticResources } from '../core/provider.js';
+import { syntheticResources } from '../core/provider.js';
+import { runMain } from './model-runner.js';
+import { runAuxiliaryJob } from './product-auxiliary.js';
+import { auxiliaryBridge } from './auxiliary-bridge.js';
+import { productRoutes } from './product-routes.js';
 import type { Settings, RunSnapshot, Job } from '../core/types.js';
 
-export type AppOptions = { dbPath: string; buildId: string; instanceId?: string; testMode?: boolean; webRoot?: string };
+export type AppOptions = { dbPath: string; buildId: string; instanceId?: string; testMode?: boolean; webRoot?: string; approvedOrigins?:string[];accessToken?:string };
 export type App = FastifyInstance & { store: Store; controls: Controls };
 type RecordBody = Record<string, unknown>;
 const object = (value: unknown): RecordBody => {
@@ -33,18 +37,22 @@ function settings(body: RecordBody): Settings {
 }
 
 export async function createApp(options: AppOptions): Promise<App> {
-  const app = Fastify({ logger: false, bodyLimit: 64 * 1024 }) as unknown as App;
+  const app = Fastify({ logger: false, bodyLimit: 4 * 1024 * 1024 }) as unknown as App;
   const store = new Store(options.dbPath);
   const controls = new Controls();
   const instanceId = options.instanceId ?? randomUUID();
   app.decorate('store', store); app.decorate('controls', controls);
   const subscribers = new Map<string, Map<ServerResponse, number>>();
+  const streamAuthority = new Map<ServerResponse,()=>boolean>();
   const work = new Set<Promise<void>>();
   const runs = new Map<string, AbortController>();
   const jobs = new Set<string>();
+  const jobControllers = new Map<string,AbortController>();
+  const approvedOrigins = options.approvedOrigins ?? [];
   const stopping = new AbortController();
   const publish = (chatId: string) => {
     for (const [response, cursor] of subscribers.get(chatId) ?? []) {
+      if (streamAuthority.get(response)?.() === false) { response.end(); continue; }
       for (const event of store.events(chatId, cursor) as { seq: number }[]) {
         response.write(`id: ${event.seq}\ndata: ${JSON.stringify(event)}\n\n`);
         subscribers.get(chatId)?.set(response, event.seq);
@@ -57,28 +65,38 @@ export async function createApp(options: AppOptions): Promise<App> {
     for (const id of store.queuedJobs()) {
       if (jobs.has(id)) continue;
       jobs.add(id);
+      const controller = new AbortController(); jobControllers.set(id,controller);
+      const signal = AbortSignal.any([controller.signal,stopping.signal]);
       track((async () => {
         let generation = 0;
         let chatId = '';
         try {
           const queued = store.job(id); chatId = queued.chatId;
           const source = store.source(queued.sourceRevision);
+          if (store.run(source.runId).snapshot.profile) {
+            const log = (kind:'inputs'|'toolEvents',value:unknown) => { const current = store.job(id); if (current.status !== 'running') return; const input = current.input as Record<string,unknown>; const prior = Array.isArray(input[kind]) ? input[kind] : []; store.db.prepare('UPDATE jobs SET input=? WHERE id=?').run(JSON.stringify({...input,[kind]:[...prior,value]}),id); };
+            await runAuxiliaryJob(auxiliaryBridge(store,controls,signal),id,instanceId,{
+              signal,approvedOrigins,authorize:connection => store.product.authorize(connection),
+              onAttemptStart:wire => store.product.startAttempt(chatId,null,id,wire),onAttemptFinish:(attempt,result) => store.product.finishAttempt(attempt,result),
+              onInput:(_id,input) => { log('inputs',input); if (!store.run(source.runId).snapshot.profile?.models[queued.kind]) store.product.mockAttempt(chatId,null,id,queued.kind,input); },onToolEvent:(_id,event) => log('toolEvents',event),onProgress:() => publish(chatId),cancellationStatus:'interrupted',
+            }); return;
+          }
           const input = queued.kind === 'translation'
             ? { role: 'translation', mock: true, contract: 'M0 deterministic mock translation; preserve source identity. This does not evaluate translation quality.', sourceRevision: source.id, sourceHash: source.hash, text: source.text, schema: { mock: true, text: 'string', sourceRevision: 'string', sourceHash: 'string' } }
             : { role: 'status', mock: true, contract: 'M0 display-only annotation. Never authoritative state or story evidence.', sourceRevision: source.id, sourceHash: source.hash, text: source.text, previousState: null, schema: { mock: true, label: 'string', sourceRevision: 'string', sourceHash: 'string' } };
           const job = store.claimJob(id, instanceId, input);
           if (!job) return;
           generation = job.generation; publish(chatId);
-          await controls.wait(job.kind, stopping.signal);
-          await delay(job.kind === 'translation' ? 80 : 140, undefined, { signal: stopping.signal });
+          await controls.wait(job.kind, signal);
+          await delay(job.kind === 'translation' ? 80 : 140, undefined, { signal });
           controls.fail(job.kind);
           const result: NonNullable<Job['result']> = job.kind === 'translation'
             ? { mock: true, text: '[모의 한국어 번역 · 고정 합성 문장 · 의미 품질 미검증]\n항구의 저녁빛 아래, 여행자는 오래된 지도 곁에서 다음 길을 생각했다. 먼 언덕의 불빛이 하나씩 켜졌다.', sourceRevision: source.id, sourceHash: source.hash }
             : { mock: true, label: '모의 표시 상태 · 원문 보존됨 · 정사에 반영하지 않음', sourceRevision: source.id, sourceHash: source.hash };
           store.completeJob(id, generation, instanceId, result, controls);
         } catch (error) {
-          if (!stopping.signal.aborted && generation) store.failJob(id, generation, instanceId, error instanceof Error && error.message.startsWith('Injected failure:') ? error.message : 'Mock auxiliary job failed');
-        } finally { jobs.delete(id); if (chatId && !stopping.signal.aborted) publish(chatId); }
+          if (!stopping.signal.aborted) { const current = store.job(id); if (current.status === 'running') store.failJob(id, generation || current.generation, instanceId, error instanceof Error && error.message.startsWith('Injected failure:') ? error.message : 'Auxiliary job failed'); }
+        } finally { jobs.delete(id); jobControllers.delete(id); if (chatId && !stopping.signal.aborted) { publish(chatId); if (store.queuedJobs().length) queueMicrotask(pumpJobs); } }
       })());
     }
   };
@@ -92,12 +110,15 @@ export async function createApp(options: AppOptions): Promise<App> {
         if (!store.startRun(id)) return;
         publish(run.chatId);
         await controls.wait('run', controller.signal);
-        const result = await executeMain(run.snapshot, {
+        const result = await runMain(run.snapshot, {
           signal: controller.signal,
-          onInput: input => store.input(id, input),
+          onInput: input => { store.input(id, input); if (run.snapshot.profile && !run.snapshot.profile.models.main) store.product.mockAttempt(run.chatId,id,null,'main',input); },
           onToolEvent: event => store.tool(id, event),
+          approvedOrigins,authorize:connection => store.product.authorize(connection),
+          onAttemptStart:wire => store.product.startAttempt(run.chatId,id,null,wire),onAttemptFinish:(attempt,result) => store.product.finishAttempt(attempt,result),
         });
         controller.signal.throwIfAborted();
+        if (result.status !== 'completed') { store.finishRun(id,result.status === 'error' ? 'failed' : result.status,result.error ?? 'Provider execution ended',result.status === 'partial' ? result.text : '',result.usage); publish(run.chatId); return; }
         store.completeRun(id, result.text, result.usage, run.snapshot.settings, controls);
         if (controls.crashAfterSourceCommit) process.exit(86);
         publish(run.chatId); pumpJobs();
@@ -126,6 +147,7 @@ export async function createApp(options: AppOptions): Promise<App> {
     const code = error instanceof HttpError ? error.statusCode : typeof statusCode === 'number' && statusCode < 500 ? statusCode : 500;
     void reply.code(code).send({ error: error instanceof HttpError ? error.message : code === 400 ? 'Invalid request' : 'Request failed' });
   });
+  const session = productRoutes(app,store,{approvedOrigins,accessToken:options.accessToken,publish,onAuthChanged:() => { for (const chatId of subscribers.keys()) publish(chatId); }});
   app.get('/api/health', async () => ({ ready: true, buildId: options.buildId, instanceId, dbPath: options.dbPath, mode: 'local-scripted-mock' }));
   app.get('/api/chats', async () => store.chats());
   app.post('/api/chats', async request => {
@@ -140,21 +162,24 @@ export async function createApp(options: AppOptions): Promise<App> {
     publish(chat.id); return chat;
   });
   app.post<{ Params: { id: string } }>('/api/chats/:id/runs', async request => {
-    const body = object(request.body); only(body, ['request', 'expectedRevision', 'expectedSettingsRevision', 'idempotencyKey']);
-    const command = { request: string(body.request, 'request'), expectedRevision: body.expectedRevision === null ? null : string(body.expectedRevision, 'source revision', 100), expectedSettingsRevision: integer(body.expectedSettingsRevision, 'settings revision', 1, 1e9), idempotencyKey: string(body.idempotencyKey, 'idempotency key', 120) };
-    const result = store.createRun(request.params.id, command, chat => ({ chatId: chat.id, parentRevision: chat.headRevision, settingsRevision: chat.settingsRevision, settings: chat.settings, request: command.request, history: store.history(chat.headRevision), resources: store.resources(chat.id) } satisfies RunSnapshot));
+    const body = object(request.body); only(body, ['request', 'expectedRevision', 'expectedSettingsRevision', 'idempotencyKey','branchId','expectedProfileRevision']);
+    const command = { request: string(body.request, 'request'), expectedRevision: body.expectedRevision === null ? null : string(body.expectedRevision, 'source revision', 100), expectedSettingsRevision: integer(body.expectedSettingsRevision, 'settings revision', 1, 1e9), idempotencyKey: string(body.idempotencyKey, 'idempotency key', 120),...(body.branchId !== undefined ? {branchId:string(body.branchId,'branch ID',100)} : {}),...(body.expectedProfileRevision !== undefined ? {expectedProfileRevision:integer(body.expectedProfileRevision,'profile revision',1,1e9)} : {}) };
+    const result = store.createRun(request.params.id, command, chat => { const profile = store.product.snapshot(chat.id); return { chatId: chat.id, parentRevision: chat.headRevision, settingsRevision: chat.settingsRevision, settings: chat.settings, request: command.request, history: store.history(chat.headRevision), resources: store.product.resources(chat.id,profile),...(profile ? {profile} : {}) } satisfies RunSnapshot; });
     if (result.created) { publish(request.params.id); execute(result.run.id); }
     return result.run;
   });
   app.get<{ Params: { id: string } }>('/api/runs/:id', async request => store.run(request.params.id));
+  app.post<{Params:{id:string}}>('/api/runs/:id/candidate',async request => { const body = object(request.body); only(body,['idempotencyKey','title']); const result = store.candidate(request.params.id,string(body.idempotencyKey,'idempotency key',120),body.title === undefined ? '후보 분기' : string(body.title,'title',200)); if (result.created) {publish(result.run.chatId);execute(result.run.id);} return result.run; });
   app.post<{ Params: { id: string } }>('/api/runs/:id/cancel', async request => {
     const run = store.finishRun(request.params.id, 'cancelled', 'Run cancelled');
     runs.get(run.id)?.abort(new Error('Run cancelled'));
     publish(run.chatId); return run;
   });
   app.post<{ Params: { id: string } }>('/api/jobs/:id/retry', async request => {
-    const job = store.retryJob(request.params.id); publish(job.chatId); pumpJobs(); return job;
+    const body = object(request.body ?? {}); only(body,['chunkId']); const job = store.retryJob(request.params.id,body.chunkId === undefined ? undefined : string(body.chunkId,'chunk ID',100)); publish(job.chatId); pumpJobs(); return job;
   });
+  app.post<{Params:{id:string}}>('/api/jobs/:id/cancel',async request => { const job = store.cancelJob(request.params.id); jobControllers.get(job.id)?.abort(new Error('Job cancelled')); publish(job.chatId);return job; });
+  app.post<{Params:{id:string}}>('/api/sources/:id/retranslate',async request => { const body = object(request.body ?? {}); only(body,[]);const job = store.retranslate(request.params.id);publish(job.chatId);pumpJobs();return job; });
   app.get<{ Params: { id: string } }>('/api/chats/:id/events', async (request, reply) => {
     store.chat(request.params.id);
     const rawCursor = request.headers['last-event-id'];
@@ -164,20 +189,21 @@ export async function createApp(options: AppOptions): Promise<App> {
     reply.raw.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', Connection: 'keep-alive', 'X-Content-Type-Options': 'nosniff' });
     const listeners = subscribers.get(request.params.id) ?? new Map<ServerResponse, number>();
     subscribers.set(request.params.id, listeners); listeners.set(reply.raw, cursor);
+    streamAuthority.set(reply.raw,() => session.authenticated(request.headers.cookie));
     reply.raw.write(`data: ${JSON.stringify({ kind: 'snapshot', chatId: request.params.id })}\n\n`);
     publish(request.params.id);
-    const heartbeat = setInterval(() => reply.raw.write(': keepalive\n\n'), 15000); heartbeat.unref();
-    reply.raw.on('close', () => { clearInterval(heartbeat); listeners.delete(reply.raw); if (!listeners.size) subscribers.delete(request.params.id); });
+    const heartbeat = setInterval(() => { if (!session.authenticated(request.headers.cookie)) reply.raw.end(); else reply.raw.write(': keepalive\n\n'); }, 15000); heartbeat.unref();
+    reply.raw.on('close', () => { clearInterval(heartbeat); streamAuthority.delete(reply.raw); listeners.delete(reply.raw); if (!listeners.size) subscribers.delete(request.params.id); });
   });
   if (options.testMode) {
     app.get('/api/test/control', async () => controls.snapshot());
     app.post('/api/test/control', async request => {
       const body = object(request.body); only(body, ['action', 'barrier', 'point']);
       if (body.action === 'hold' || body.action === 'release') {
-        if (!['run', 'translation', 'status'].includes(String(body.barrier))) throw new HttpError(400, 'Invalid barrier');
+        if (!['run', 'translation', 'status','image'].includes(String(body.barrier))) throw new HttpError(400, 'Invalid barrier');
         controls[body.action](body.barrier as Barrier);
       } else if (body.action === 'fail-next') {
-        if (!['source-transaction', 'job-transaction', 'translation', 'status'].includes(String(body.point))) throw new HttpError(400, 'Invalid failure point');
+        if (!['source-transaction', 'job-transaction', 'translation', 'status','image'].includes(String(body.point))) throw new HttpError(400, 'Invalid failure point');
         controls.failures.add(body.point as FailurePoint);
       } else if (body.action === 'crash-after-source-commit') controls.crashAfterSourceCommit = true;
       else throw new HttpError(400, 'Invalid control action');

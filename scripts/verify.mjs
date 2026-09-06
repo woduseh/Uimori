@@ -5,7 +5,8 @@ import { mkdir, readdir, readFile, copyFile } from 'node:fs/promises';
 import { doctor } from './doctor.mjs';
 import { root, artifactRoot, newId, json, command, requireCommand, assertBuild, fingerprint, startServer, killOwned, readReport, browserPath, removeOwned, artifactScan, canary } from './lib.mjs';
 
-const allCases = ['F01', 'F02', 'F03', 'F04', 'F05', 'F06'];
+const foundationCases = ['F01', 'F02', 'F03', 'F04', 'F05', 'F06'];
+const productCases = Array.from({length:13},(_,i) => `P${String(i+1).padStart(2,'0')}`);
 function options(args) {
   let milestone = 'M0'; const cases = [];
   for (let index = 0; index < args.length; index++) {
@@ -13,7 +14,8 @@ function options(args) {
     else if (args[index] === '--case') cases.push(...(args[++index] || '').split(','));
     else throw new Error(`Unknown verify option: ${args[index]}`);
   }
-  if (milestone !== 'M0') throw new Error(`Unknown/unimplemented milestone: ${milestone}`);
+  if (!['M0','M1-local','M1'].includes(milestone)) throw new Error(`Unknown/unimplemented milestone: ${milestone}`);
+  const allCases = milestone === 'M0' ? foundationCases : productCases;
   if (cases.some(id => !allCases.includes(id))) throw new Error(`Unknown case: ${cases.join(',')}`);
   return { milestone, cases: cases.length ? [...new Set(cases)] : allCases };
 }
@@ -22,7 +24,9 @@ async function main(selection) {
   const runId = newId(); const directory = path.join(artifactRoot, runId); const runtime = path.join(directory, 'runtime');
   await mkdir(runtime, { recursive: true });
   const children = new Set(); const failures = [];
-  const summary = { schema: 1, runId, status: 'FAIL', scope: selection, startedAt: new Date().toISOString(), environment: { platform: process.platform, os: os.release(), node: process.version }, commands: [], reports: {}, scenarios: Object.fromEntries(selection.cases.map(id => [id, { required: true, status: 'NOT_RUN', evidence: [] }])), limitations: ['Scripted mock only; no paid/live provider, quality, physical phone, public deployment, or M1+ claim.'], failures, cleanup: { status: 'NOT_RUN' } };
+  const product = selection.milestone !== 'M0';
+  const requiredBrowser = product ? ['P01','P04','P06','P09','P10','P11','P13'] : ['F02','F03','F05'];
+  const summary = { schema: 1, runId, status: 'FAIL', scope: selection, startedAt: new Date().toISOString(), environment: { platform: process.platform, os: os.release(), node: process.version }, commands: [], reports: {}, scenarios: Object.fromEntries(selection.cases.map(id => [id, { required: true, status: 'NOT_RUN', evidence: [] }])), limitations: [product ? 'M1 local file SQLite, browser and fixture HTTP only. Live provider/protocol, semantic quality and physical-phone/private-deployment claims remain BLOCKED.' : 'Scripted mock only; no paid/live provider, quality, physical phone, public deployment, or M1+ claim.'], ...(product ? {externalClaims:{L01:{status:'BLOCKED',reason:'Provider/protocol/model selection, credentials and approved call budget pending'},L02:{status:'BLOCKED',reason:'Private deployment target and physical phone pending'},Q01:{status:'BLOCKED',reason:'Live model and approved creative sample pending'},Q02:{status:'BLOCKED',reason:'Live model and approved refusal-quality sample pending'},Q03:{status:'BLOCKED',reason:'Live translation and approved quality sample pending'},Q05:{status:'BLOCKED',reason:'Live image selection and approved quality sample pending'}}} : {}), failures, cleanup: { status: 'NOT_RUN' } };
   let server;
   let browserBlocked = false;
   const owner = { runId, ownerPid: process.pid, root, directory, active: true, children: [], startedAt: summary.startedAt };
@@ -42,13 +46,13 @@ async function main(selection) {
       const old = JSON.parse(await readFile(file, 'utf8'));
       if (old.active) summary.orphans.push({ runId: old.runId, ownerPid: old.ownerPid, action: 'inspect-only; never kill an unverified old PID' });
     }
-    if (selection.cases.includes('F01') || selection.cases.some(id => ['F02', 'F03', 'F05'].includes(id))) {
+    if (selection.cases.includes('F01') || selection.cases.some(id => requiredBrowser.includes(id))) {
       const result = await doctor(directory); summary.environment.doctor = result;
       if (result.status !== 'PASS') {
         browserBlocked = result.checks.some(check => check.name === 'file-sqlite-transaction-reopen') && result.checks.some(check => check.name === 'localhost-bind-http') && result.cleanup?.status === 'PASS';
         if (!browserBlocked) { for (const id of selection.cases) summary.scenarios[id].status = 'BLOCKED'; throw new Error(`Environment doctor ${result.status}: ${result.error || result.cleanup?.error}`); }
         failures.push(`Browser claims BLOCKED: ${result.error}`);
-        for (const id of selection.cases.filter(id => ['F01', 'F02', 'F03', 'F05'].includes(id))) summary.scenarios[id] = { required: true, status: 'BLOCKED', evidence: ['doctor.json'], error: result.error };
+        for (const id of selection.cases.filter(id => ['F01', ...requiredBrowser].includes(id))) summary.scenarios[id] = { required: true, status: 'BLOCKED', evidence: ['doctor.json'], error: result.error };
       }
       if (summary.scenarios.F01 && !browserBlocked) summary.scenarios.F01 = { required: true, status: 'PASS', evidence: ['doctor.json', 'doctor-browser.png', 'ownership.json', 'summary.json#cleanup'], note: 'Checkout/worktree cross-check evidence is recorded separately when run by the release operator.' };
     }
@@ -56,10 +60,10 @@ async function main(selection) {
     await run(['scripts/build.mjs'], 'build');
     const manifest = await assertBuild(); summary.identity = manifest;
     const temp = path.join(runtime, 'temp'); await mkdir(temp, { recursive: true });
-    const env = { NR_DB: path.join(runtime, 'app.sqlite'), NR_PORT: '0', NR_INSTANCE: runId, NR_BUILD_ID: manifest.buildId, NR_TEST_MODE: '1', NR_ARTIFACT_DIR: directory, NR_BROWSER_OUTPUT: path.join(directory, 'browser'), NR_SECRET_CANARY: canary, TEMP: temp, TMP: temp, ...(browserPath() ? { NR_BROWSER_PATH: browserPath() } : {}) };
+    const env = { NR_DB: path.join(runtime, 'app.sqlite'), NR_PORT: '0', NR_INSTANCE: runId, NR_BUILD_ID: manifest.buildId, NR_TEST_MODE: '1', NR_ACCESS_TOKEN:'',NR_PROVIDER_ORIGINS:'',NR_ARTIFACT_DIR: directory, NR_BROWSER_OUTPUT: path.join(directory, 'browser'), NR_SECRET_CANARY: canary, TEMP: temp, TMP: temp, ...(browserPath() ? { NR_BROWSER_PATH: browserPath() } : {}) };
     server = await startServer(env, directory, children); env.NR_BASE_URL = server.ready.url; summary.server = server.ready;
     owner.children = [{ pid: server.child.pid, command: 'node dist/server/index.js', dbPath: env.NR_DB, url: env.NR_BASE_URL }]; await json(path.join(directory, 'ownership.json'), owner);
-    const software = selection.cases.filter(id => ['F02', 'F03', 'F04', 'F05'].includes(id));
+    const software = selection.cases.filter(id => (product ? productCases : ['F02', 'F03', 'F04', 'F05']).includes(id));
     const unitCases = selection.cases;
     if (unitCases.length) {
       const since = Date.now(); const reportFile = path.join(directory, 'vitest.json');
@@ -71,7 +75,7 @@ async function main(selection) {
       if (failures.length > failureCount) throw new Error('Required Vitest evidence is not PASS');
       if (summary.scenarios.F01) summary.scenarios.F01.serverEvidence = summary.reports.vitest.tests.filter(test => /\bF01\b/.test(test.title)).map(test => test.title);
     }
-    const browserCases = software.filter(id => ['F02', 'F03', 'F05'].includes(id));
+    const browserCases = software.filter(id => requiredBrowser.includes(id));
     if (browserCases.length && !browserBlocked) {
       const since = Date.now(); const reportFile = path.join(directory, 'playwright.json'); let executionError; const failureCount = failures.length;
       try { await run(['node_modules/@playwright/test/cli.js', 'test', '--reporter=json', '--grep', browserCases.join('|')], 'playwright', { ...env, PLAYWRIGHT_JSON_OUTPUT_NAME: reportFile }, 120000); }
@@ -119,6 +123,8 @@ async function main(selection) {
     try { summary.artifactScan = await artifactScan(directory); } catch (error) { failures.push(error.message); summary.artifactScan = { status: 'FAIL', error: error.message }; }
     if (failures.length) for (const scenario of Object.values(summary.scenarios)) if (scenario.status === 'NOT_RUN') scenario.status = 'FAIL';
     summary.status = failures.length ? Object.values(summary.scenarios).some(item => item.status === 'BLOCKED') ? 'BLOCKED' : 'FAIL' : Object.values(summary.scenarios).every(item => item.status === 'PASS') ? 'PASS' : 'FAIL';
+    if (product) summary.localStatus = summary.status;
+    if (selection.milestone === 'M1' && summary.status === 'PASS') summary.status = 'BLOCKED';
     summary.finishedAt = new Date().toISOString(); await json(path.join(directory, 'summary.json'), summary);
     process.removeListener('SIGINT', cancel); process.removeListener('SIGTERM', cancel);
     console.log(JSON.stringify({ status: summary.status, runId, evidence: path.join(directory, 'summary.json'), scenarios: Object.fromEntries(Object.entries(summary.scenarios).map(([id, item]) => [id, item.status])), failures }, null, 2));

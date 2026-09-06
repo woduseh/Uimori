@@ -2,6 +2,8 @@
 
 제안된 이름은 구현을 강제하는 클래스 목록이 아니다. 아래 경계와 동작을 유지하면 더 단순한 표현으로 구현할 수 있다.
 
+2026-09-06 M1 로컬 구현 선택: 소형 PNG/JPEG 에셋을 별도 파일 디렉터리 대신 SQLite BLOB에 저장한다. 파일당 2,000,000 bytes로 제한하고, 데이터·에셋을 같은 VACUUM INTO 백업/JSON archive 안에서 일관되게 복원한다. 수천 에셋을 위한 저장·성능 설계는 M2 이후 필요에 따라 분리한다. 현재 provider adapter는 사용자 실서비스 선택 전의 자체 `fixture-sse-v1`이며 live protocol 지원 주장이 아니다.
+
 ## 1. 배치와 코드 경계
 
 TypeScript, React/Vite, Node/Fastify, 서버 로컬 SQLite WAL을 사용한 모듈형 모놀리스가 출발안이다. 런타임·패키지 버전은 Windows 실제 지원을 확인하고 lockfile로 고정한다. 첫 구조는 web/server/core 정도의 몇 개 경계로 시작하며 미래 도메인마다 별도 패키지를 만들지 않는다.
