@@ -1,0 +1,784 @@
+{
+  "version": "0.6.1",
+  "kind": "acceptance-specification-not-execution-result",
+  "case_count": 36,
+  "notes": [
+    "legacy_ids는 과거 요구 목적을 추적하는 정보이며 과거 파일 전체를 추가 gate로 실행하라는 지시가 아니다.",
+    "관련목적을 통합하고 비동기 상태 요구를 추가했다. 원본 보관 파일은 변경하지 않았다.",
+    "M0는 F01-F06만 필수다. 다른 milestone의 test stub을 만들지 않는다.",
+    "live/device 결과는 별도 평가이며 mock 통과로 승격하지 않는다.",
+    "v0.6: 자율발견과 역할별 context 계약을 기존 ID에 명확히 반영하고, 보조 이미지 표현의 새 범위 P13/Q05를 추가했다. M0는 F01–F06 그대로다.",
+    "v0.6.1: 새 시나리오/기능/단계 없이 F05의 저장·후속 예약 원자성과 S05의 watermark 이후 미처리 구간을 명확히 했다. M1 품질 gate에서 M2 Q04를 분리했다."
+  ],
+  "cases": [
+    {
+      "id": "F01",
+      "milestone": "M0",
+      "title": "실제 환경과 깨끗한 실행",
+      "lane": "environment",
+      "expected": "Windows 대상의 runtime/SQLite/browser/localhost를 실제 확인하고 깨끗한 checkout에서 동일 명령으로 구동·정리한다. 준비된 두 작업트리의 port/DB/browser/temp가 겹치지 않는지 실행 확인한다. 실행 불가능 항목은 BLOCKED다.",
+      "required_evidence": [
+        "doctor",
+        "commands",
+        "cleanup"
+      ],
+      "does_not_prove": "다른 OS 또는 실제 사용자 PC의 사전 검증",
+      "legacy_ids": [
+        "DX01",
+        "DX02",
+        "DX03",
+        "DX06",
+        "DX11",
+        "U30"
+      ],
+      "status": "specified-not-run",
+      "implemented_test_ids": [],
+      "notes": ""
+    },
+    {
+      "id": "F02",
+      "milestone": "M0",
+      "title": "두 채팅·설정·명령 격리",
+      "lane": "software",
+      "expected": "두 독립 context 및 같은 context의 두 탭에서 서로 다른 chat/preset을 사용한다. 중복 명령은 한 논리 실행, 같은 head 충돌은 감지, 진행중 snapshot은 유지한다.",
+      "required_evidence": [
+        "browser",
+        "DB",
+        "model-inputs"
+      ],
+      "does_not_prove": "실제 기기 모든 조건 또는10개 동시 생성",
+      "legacy_ids": [
+        "A01",
+        "A02",
+        "A03",
+        "A12"
+      ],
+      "status": "specified-not-run",
+      "implemented_test_ids": [],
+      "notes": ""
+    },
+    {
+      "id": "F03",
+      "milestone": "M0",
+      "title": "서버 소유 수명과 기록",
+      "lane": "software",
+      "expected": "탭 종료/재접속은 같은 run 구독이다. 서버 재시작 후 완료 기록은 남고 중간 원격요청은 불확실성 없이 자동 재과금하지 않는다. 오류/summary는 본문이 아니다.",
+      "required_evidence": [
+        "browser",
+        "restart",
+        "DB",
+        "events"
+      ],
+      "does_not_prove": "실제 정전 내구성/모든 provider 원격 재개",
+      "legacy_ids": [
+        "A04",
+        "A05",
+        "A11"
+      ],
+      "status": "specified-not-run",
+      "implemented_test_ids": [],
+      "notes": ""
+    },
+    {
+      "id": "F04",
+      "milestone": "M0",
+      "title": "도구 없는 경로와 읽기 도구",
+      "lane": "software",
+      "expected": "scripted mock의 no-tool 경로는 본문 model call1회, tool 경로는 고정계약/목록/실제 scoped 검색·읽기 결과를 구분하여 다음 입력에 보낸다. prefetch가 없어도 도구는 동작하며 skill 로딩은 권한을 늘리지 않고 취소/예산을 지킨다.",
+      "required_evidence": [
+        "model-inputs",
+        "tool-events",
+        "policy-denial"
+      ],
+      "does_not_prove": "모델의 자발적 검색 선택/실제 API 호환",
+      "legacy_ids": [
+        "A06",
+        "A07",
+        "A10",
+        "A13"
+      ],
+      "status": "specified-not-run",
+      "implemented_test_ids": [],
+      "notes": ""
+    },
+    {
+      "id": "F05",
+      "milestone": "M0",
+      "title": "모의 번역·표시 상태의 독립 수명",
+      "lane": "software",
+      "expected": "같은 source의 모의 번역/상태가 다른 순서로 완료되고 실패/재시도한다. 원문은 보존되고 job은 원래 revision에 붙는다. view 전환은 대상 변경이 아니다. 다른 chat state를 갱신하지 않는다. 원문 확정·Run 완료·적격한 후속 예약은 함께 커밋한다. 트랜잭션 중간 실패는 일부만 남기지 않고, 커밋 직후 worker 실행 전 종료돼도 재시작 시 미실행 예약을 찾아 원문 재생성 없이 진행한다. 파생 결과와 job 완료 기록도 함께 커밋하며 중복 반영하지 않는다.",
+      "required_evidence": [
+        "DB",
+        "job-events",
+        "browser",
+        "commit-boundary-restart"
+      ],
+      "does_not_prove": "실제 번역/상태 의미추출/게임 규칙",
+      "legacy_ids": [
+        "B05",
+        "U28"
+      ],
+      "status": "specified-not-run",
+      "implemented_test_ids": [],
+      "notes": ""
+    },
+    {
+      "id": "F06",
+      "milestone": "M0",
+      "title": "검증기 실패 검출과 증거",
+      "lane": "software",
+      "expected": "고의 실패/검사0개/required skip 또는 report누락/stale server/timeout을 성공으로 표시하지 않는다. browser 부재는 browser 주장을 BLOCKED로 처리한다. cleanup 오류가 원래 실패를 숨기지 않는다. 최종 code/build와 증거가 연결되고 비밀·사적 원문 없이 정리한다.",
+      "required_evidence": [
+        "child-suite-results",
+        "summary",
+        "build-identity",
+        "artifact-scan"
+      ],
+      "does_not_prove": "제품 전체 또는 향후 미구현 케이스 통과",
+      "legacy_ids": [
+        "DX04",
+        "DX05",
+        "DX07",
+        "DX08",
+        "G01",
+        "G02",
+        "G03",
+        "G04",
+        "G05",
+        "G06",
+        "U31"
+      ],
+      "status": "specified-not-run",
+      "implemented_test_ids": [],
+      "notes": ""
+    },
+    {
+      "id": "P01",
+      "milestone": "M1",
+      "title": "콘텐츠·작가 과거·제어 프리셋",
+      "lane": "software",
+      "expected": "bot/persona/lore/canon을 생성·편집하고 revision으로 장착한다. 프리셋 그룹 교체는 이전 true를 남기지 않는다. 비활성15000은 사용하지 않는다. OOC는 소설의 작가 지시이며 관리권한이 아니다.",
+      "required_evidence": [
+        "UI",
+        "compiled-controls",
+        "DB"
+      ],
+      "does_not_prove": "완전한 원본 CBS 호환 또는 모델의 문학 판단",
+      "legacy_ids": [
+        "B01",
+        "B02",
+        "U04",
+        "U13"
+      ],
+      "status": "specified-not-run",
+      "implemented_test_ids": [],
+      "notes": ""
+    },
+    {
+      "id": "P02",
+      "milestone": "M1",
+      "title": "역할·캐시 조립 진단",
+      "lane": "software",
+      "expected": "provider별 실제 request에 contract/role/control/source를 정확히 변환하고 미지원 진단을 표시한다. 선택 제어 변경과 stable prefix 관계를 계약대로 검증한다.",
+      "required_evidence": [
+        "wire-request",
+        "prefix-comparison",
+        "diagnostics"
+      ],
+      "does_not_prove": "실제 cache hit/요금 절약",
+      "legacy_ids": [
+        "B03"
+      ],
+      "status": "specified-not-run",
+      "implemented_test_ids": [],
+      "notes": ""
+    },
+    {
+      "id": "P03",
+      "milestone": "M1",
+      "title": "로어 발견·범위·예산",
+      "lane": "software",
+      "expected": "model-led discovery가 기본이며 작은 mandatory/current 맥락과 선택적 prefetch가 공존한다. prefetch 밖의 적법한 자료를 후속검색/목록/연관참조로 발견·읽을 수 있고, 출력 잘림/더 읽기와 실제 source revision을 전달한다. loading mode가 사실권위/권한을 바꾸지 않는다. 메인 입력에 무관한 이미지 catalog·상태 HTML을 넣지 않는다.",
+      "required_evidence": [
+        "retrieval-results",
+        "context-plan",
+        "denial",
+        "prefetch-miss-recovery",
+        "role-contexts"
+      ],
+      "does_not_prove": "한국어 전체 의미검색 또는 실제 모델 선택",
+      "legacy_ids": [
+        "A08",
+        "A09",
+        "A10",
+        "A13",
+        "U16",
+        "U18"
+      ],
+      "status": "specified-not-run",
+      "implemented_test_ids": [],
+      "notes": ""
+    },
+    {
+      "id": "P04",
+      "milestone": "M1",
+      "title": "카탈로그·연결·설정 보호",
+      "lane": "software",
+      "expected": "동적 목록 실패/새모델/unknown과 수동 ID를 처리한다. catalog가 credentials/preset/권한을 덮지 않는다. 임의 body/header의 권한확대는 제한한다.",
+      "required_evidence": [
+        "catalog-diff",
+        "schema-tests",
+        "request-plan"
+      ],
+      "does_not_prove": "신모델 live 지원/정확한 가격",
+      "legacy_ids": [
+        "B06",
+        "B07",
+        "U27"
+      ],
+      "status": "specified-not-run",
+      "implemented_test_ids": [],
+      "notes": ""
+    },
+    {
+      "id": "P05",
+      "milestone": "M1",
+      "title": "실제 어댑터를 통과하는 프로토콜",
+      "lane": "software",
+      "expected": "loopback provider의 UTF8/JSON/tool 조각과 call ID, refusal/usage, EOF/cancel/opaque state를 실제 fetch/decoder/adapter로 처리한다. 목적별 모델은 명시 라우팅한다.",
+      "required_evidence": [
+        "wire-fixture",
+        "adapter-output",
+        "routing-ledger"
+      ],
+      "does_not_prove": "실제 공급자 round-trip",
+      "legacy_ids": [
+        "B04",
+        "B05",
+        "U28",
+        "DX10"
+      ],
+      "status": "specified-not-run",
+      "implemented_test_ids": [],
+      "notes": ""
+    },
+    {
+      "id": "P06",
+      "milestone": "M1",
+      "title": "거절·부분·품질 이슈의 구분",
+      "lane": "software",
+      "expected": "명시적 refusal은 원문 정사/번역/상태/기억에 자동 합류하지 않는다. 기술 retry와 분리하고 요청 불일치는 사용자 표시 및 원문 보존으로 다룬다.",
+      "required_evidence": [
+        "run-status",
+        "job-list",
+        "usage",
+        "UI"
+      ],
+      "does_not_prove": "암묵적 softening 완전 검출/정책 우회",
+      "legacy_ids": [
+        "U01",
+        "U02"
+      ],
+      "status": "specified-not-run",
+      "implemented_test_ids": [],
+      "notes": ""
+    },
+    {
+      "id": "P07",
+      "milestone": "M1",
+      "title": "시점에 맞는 번역 맥락·버전",
+      "lane": "software",
+      "expected": "작은 인물/호칭/용어/장면 context를 구성하고 필요시 scoped read를 한다. 원문/사전/시점 revision을 연결하며 재번역은 서사/state를 변경하지 않는다. 번역 역할은 관련 추가 맥락을 자율 조회할 수 있고 메인 모델의 조회 목록에만 갇히지 않는다.",
+      "required_evidence": [
+        "translation-input",
+        "dependencies",
+        "DB"
+      ],
+      "does_not_prove": "번역 의미 품질/모든 생략된 주어 판정",
+      "legacy_ids": [
+        "U05",
+        "U08"
+      ],
+      "status": "specified-not-run",
+      "implemented_test_ids": [],
+      "notes": ""
+    },
+    {
+      "id": "P08",
+      "milestone": "M1",
+      "title": "긴 번역과 보호구문",
+      "lane": "software",
+      "expected": "긴 원문을 필요에 따라 묶어 번역하고 block coverage/순서/중복/보호 syntax를 검사한다. 실패 구간만 재실행하며 부분완료를 완역으로 표시하지 않는다.",
+      "required_evidence": [
+        "block-map",
+        "protected-spans",
+        "retry-events"
+      ],
+      "does_not_prove": "블록 coverage만으로 의미 누락 없음",
+      "legacy_ids": [
+        "U07",
+        "U09"
+      ],
+      "status": "specified-not-run",
+      "implemented_test_ids": [],
+      "notes": ""
+    },
+    {
+      "id": "P09",
+      "milestone": "M1",
+      "title": "후보 보존·재진입·개별 view",
+      "lane": "software",
+      "expected": "같은 요청의 형제 후보와 각 후손으로 돌아간다. 다른 기기 view는 강제로 바뀌지 않고 shared head 쓰기는 expected revision을 검사한다.",
+      "required_evidence": [
+        "browser",
+        "tree",
+        "DB"
+      ],
+      "does_not_prove": "전체 상태/장기기억 의미 격리",
+      "legacy_ids": [
+        "U10",
+        "U12"
+      ],
+      "status": "specified-not-run",
+      "implemented_test_ids": [],
+      "notes": ""
+    },
+    {
+      "id": "P10",
+      "milestone": "M1",
+      "title": "장문 읽기·기본 에셋",
+      "lane": "software",
+      "expected": "원문/번역 anchor 전환, 진행중에도 독서 위치와 초안 보존, 기본 profile/inline asset을 표시한다. 긴 응답 한 개 전체를 매 token 재처리하지 않는다.",
+      "required_evidence": [
+        "browser",
+        "anchors",
+        "network",
+        "console"
+      ],
+      "does_not_prove": "실제 폰 잠금/수천 에셋 최종성능",
+      "legacy_ids": [
+        "U25"
+      ],
+      "status": "specified-not-run",
+      "implemented_test_ids": [],
+      "notes": ""
+    },
+    {
+      "id": "P11",
+      "milestone": "M1",
+      "title": "사용자 데이터 export·백업·복원",
+      "lane": "software",
+      "expected": "소스·분기·콘텐츠 참조와 파생물 버전을 비밀키 없이 export하고 새 DB/asset 디렉터리에서 복원한다. 실제 일관 backup과 schema 호환 검사를 수행한다.",
+      "required_evidence": [
+        "backup-restore",
+        "reference-checks",
+        "secret-scan"
+      ],
+      "does_not_prove": "바이너리 downgrade 안전 또는 재해복구 모든경우",
+      "legacy_ids": [
+        "B09"
+      ],
+      "status": "specified-not-run",
+      "implemented_test_ids": [],
+      "notes": ""
+    },
+    {
+      "id": "P12",
+      "milestone": "M1",
+      "title": "총비용과 비공개 접속의 경계",
+      "lane": "software",
+      "expected": "모든 model/aux/retry/candidate 사용량을 중복 없이 집계하고 unknown을0으로 보지 않는다. 외부 접속 전 인증·event/asset 권한·secret·URL/redirect 경계를 검증한다.",
+      "required_evidence": [
+        "usage-ledger",
+        "price-revision",
+        "security-tests"
+      ],
+      "does_not_prove": "$2실측 달성/이미 발생한 비용환급/공개 SaaS 준비",
+      "legacy_ids": [
+        "B08",
+        "B07",
+        "U29"
+      ],
+      "status": "specified-not-run",
+      "implemented_test_ids": [],
+      "notes": ""
+    },
+    {
+      "id": "S01",
+      "milestone": "M2",
+      "title": "상태 제안·계산·표시 구분",
+      "lane": "software",
+      "expected": "보조 모델은 원문과 pre-state/규칙에 근거한 구조화 proposal을 반환한다. 허용 field/근거/범위를 검사하고 deterministic reducer가 계산한다. annotation을 정사로 자동 승격하지 않는다. schema/직전state/필드 의미/규칙과 읽기 도구를 해당 역할에 제공한다. 모호한 서사 해석과 확정 숫자를 구분하며 규칙이 허용한 변화 판단은 모델에 맡길 수 있다.",
+      "required_evidence": [
+        "proposal",
+        "source-spans",
+        "reducer-tests"
+      ],
+      "does_not_prove": "schema가 의미상 정확성을 보증",
+      "legacy_ids": [
+        "U19",
+        "U20"
+      ],
+      "status": "specified-not-run",
+      "implemented_test_ids": [],
+      "notes": ""
+    },
+    {
+      "id": "S02",
+      "milestone": "M2",
+      "title": "늦은 상태와 다음 턴 barrier",
+      "lane": "software",
+      "expected": "authoritative state에 의존하는 후속 run은 적합한 revision을 기다린다. display-only는 읽기/다음 턴을 막지 않는다. 늦은 결과는 원래 유효 source에 저장하며 새 head를 덮지 않는다.",
+      "required_evidence": [
+        "controlled-race",
+        "job-dependencies",
+        "context-snapshot"
+      ],
+      "does_not_prove": "post-hoc검사가 잘못된 원고를 수리",
+      "legacy_ids": [
+        "C02",
+        "U11",
+        "U15"
+      ],
+      "status": "specified-not-run",
+      "implemented_test_ids": [],
+      "notes": ""
+    },
+    {
+      "id": "S03",
+      "milestone": "M2",
+      "title": "상태 재시도·실패·규칙 변경",
+      "lane": "software",
+      "expected": "중복 완료/재시도는 effect를 중복 가산하지 않는다. invalid/부재/규칙불일치는 기존원고·상태를 보존하고 보류를 표시한다. 재추출은 후손기준을 자동으로 바꾸지 않는다.",
+      "required_evidence": [
+        "DB-constraints",
+        "events",
+        "revision-tree"
+      ],
+      "does_not_prove": "모든 상태 모델의 신뢰성",
+      "legacy_ids": [
+        "U19",
+        "U23"
+      ],
+      "status": "specified-not-run",
+      "implemented_test_ids": [],
+      "notes": ""
+    },
+    {
+      "id": "S04",
+      "milestone": "M2",
+      "title": "작가 설정·사건·믿음·분기",
+      "lane": "software",
+      "expected": "transcript 없는 author-canon을 정상 출처로 인정하며 가짜message ID를 만들지 않는다. 원문/요약/믿음/취향 구분과 retcon·다른 ancestry 배제를 검증한다.",
+      "required_evidence": [
+        "source-manifest",
+        "context-plan",
+        "ancestry"
+      ],
+      "does_not_prove": "모델의 의미 이해 전부",
+      "legacy_ids": [
+        "C01",
+        "C02",
+        "C04",
+        "U13",
+        "U15"
+      ],
+      "status": "specified-not-run",
+      "implemented_test_ids": [],
+      "notes": ""
+    },
+    {
+      "id": "S05",
+      "milestone": "M2",
+      "title": "장기 체크포인트와 원문 회수",
+      "lane": "software",
+      "expected": "사용자 수동복제 없이 같은작품에서 context를 구성한다. 원문은 남고 해당분기에서 연속으로 처리한 마지막 원문revision을 indexing watermark로 기록한다. watermark 이후 아직 처리하지 않은 원문구간은 recent tail로 보완하며, 더 오래된 원문은 필요시 검색·읽기로 회수한다.",
+      "required_evidence": [
+        "long-fixture",
+        "request-plan",
+        "source-read"
+      ],
+      "does_not_prove": "모든 사건의 완전 기억",
+      "legacy_ids": [
+        "C03",
+        "U14"
+      ],
+      "status": "specified-not-run",
+      "implemented_test_ids": [],
+      "notes": ""
+    },
+    {
+      "id": "S06",
+      "milestone": "M2",
+      "title": "상태창·버튼·안전한 후처리",
+      "lane": "software",
+      "expected": "과거 상태창은 당시snapshot을 표시하고 render/translation은 무부작용이다. 장면 command는 성공에 맞춰 소비하며 실패/취소/중복을 처리한다. 제한 regex/HTML은 중단·정화되고 전역쓰기 불가다.",
+      "required_evidence": [
+        "browser",
+        "commands",
+        "timeout",
+        "security-tests"
+      ],
+      "does_not_prove": "기존Lua/CBS전체 호환/임의코드 sandbox",
+      "legacy_ids": [
+        "U19",
+        "U20",
+        "U21",
+        "U23"
+      ],
+      "status": "specified-not-run",
+      "implemented_test_ids": [],
+      "notes": ""
+    },
+    {
+      "id": "S07",
+      "milestone": "M2",
+      "title": "대형 로어·긴 메시지·에셋 성능",
+      "lane": "software",
+      "expected": "같은 활성경로에서 보관량/로어/단일원고/에셋을 각각 늘려 측정한다. manifest 없는조합은 fallback/오류이고 전체 bytes를 선로딩하지 않는다. baseline과 표본수/환경을 남긴다.",
+      "required_evidence": [
+        "perf-baseline",
+        "asset-resolution",
+        "network",
+        "memory"
+      ],
+      "does_not_prove": "상대비교만으로 모든기기 지연 보증",
+      "legacy_ids": [
+        "X01",
+        "U22",
+        "U26"
+      ],
+      "status": "specified-not-run",
+      "implemented_test_ids": [],
+      "notes": ""
+    },
+    {
+      "id": "L01",
+      "milestone": "M1",
+      "title": "승인된 실제 모델 왕복",
+      "lane": "live-provider",
+      "expected": "승인된 endpoint/auth/model/adapter에서 작은 실제 생성/스트림/tool round-trip과 번역경로를 확인한다. 경로별 결과와 실제usage를 보존한다.",
+      "required_evidence": [
+        "live-response",
+        "connection-identity",
+        "usage"
+      ],
+      "does_not_prove": "모든provider/모든모델/소설품질",
+      "legacy_ids": [
+        "B04",
+        "DX10"
+      ],
+      "status": "specified-not-run",
+      "implemented_test_ids": [],
+      "notes": ""
+    },
+    {
+      "id": "L02",
+      "milestone": "M1",
+      "title": "실제 휴대폰 복귀와 배포",
+      "lane": "device",
+      "expected": "승인된 private host에서 폰잠금/네트워크변경/재접속/독서·입력·실제IME를 확인한다. 추가생성없이 같은run에 복귀한다.",
+      "required_evidence": [
+        "device-record",
+        "host-version",
+        "run-id"
+      ],
+      "does_not_prove": "browser emulator만으로 실제기기 PASS",
+      "legacy_ids": [
+        "U24",
+        "DX11"
+      ],
+      "status": "specified-not-run",
+      "implemented_test_ids": [],
+      "notes": ""
+    },
+    {
+      "id": "Q01",
+      "milestone": "M1",
+      "title": "모델의 자발적 로어 선택",
+      "lane": "live-quality",
+      "expected": "정답키 없는 입력에서 필요한 자료회수·불필요조회·누락을 평가한다. 한국어 조사/별칭/간접지칭과 큰목록을 포함하고 이미주어진자료는 재조회 강제하지 않는다. 고정 tool 순서/최소 호출수를 정답으로 삼지 않으며 관련자료 prefetch 누락 뒤 복구와 불필요조회 자제 모두 평가한다.",
+      "required_evidence": [
+        "live-eval",
+        "rubric",
+        "all-runs"
+      ],
+      "does_not_prove": "미관찰bot전부 회수 보증",
+      "legacy_ids": [
+        "B10",
+        "B11",
+        "U16",
+        "U17"
+      ],
+      "status": "specified-not-run",
+      "implemented_test_ids": [],
+      "notes": ""
+    },
+    {
+      "id": "Q02",
+      "milestone": "M1",
+      "title": "창작 계약·다양한 장면 품질",
+      "lane": "live-human",
+      "expected": "일상/관계/장르 사례에서 권한·시점·연속성·호흡을 평가한다. 허용된성장과 무근거전제교체를 구분하며 OOC fiction도 명시요청으로 다룬다.",
+      "required_evidence": [
+        "blinded-comparison",
+        "user-rubric",
+        "all-failures"
+      ],
+      "does_not_prove": "모델judge만으로 사용자취향 확정",
+      "legacy_ids": [
+        "B12",
+        "B14",
+        "U03"
+      ],
+      "status": "specified-not-run",
+      "implemented_test_ids": [],
+      "notes": ""
+    },
+    {
+      "id": "Q03",
+      "milestone": "M1",
+      "title": "번역 의미·문체",
+      "lane": "live-human",
+      "expected": "source의 fact/agency/uncertainty/호칭/말투를 보존하며 한국어 자연스러움을 별도로 평가한다. 미래시점정정/새사건추가를 검사한다.",
+      "required_evidence": [
+        "source-target-pairs",
+        "rubric"
+      ],
+      "does_not_prove": "protected syntax통과만으로 의미보증",
+      "legacy_ids": [
+        "U06"
+      ],
+      "status": "specified-not-run",
+      "implemented_test_ids": [],
+      "notes": ""
+    },
+    {
+      "id": "Q04",
+      "milestone": "M2",
+      "title": "상태·기억 추출 의미와 전체 비용",
+      "lane": "live-quality",
+      "expected": "보조추출의 무근거정보/누락/오해/annotation 오염과 장기 source회수를 평가한다. 같은조건의main-only/aux결합 등 적절한 비교에서 총비용·지연·품질을 분리한다. 메인과 보조 모델의 문맥 제공/역할 분리에 따른 실패를 구분하고 모델 등급을 고정하지 않는다.",
+      "required_evidence": [
+        "live-extraction",
+        "source-evidence",
+        "usage",
+        "latency"
+      ],
+      "does_not_prove": "항상aux가 더 싸고 정확하다는 일반화",
+      "legacy_ids": [
+        "B13",
+        "C04",
+        "U29"
+      ],
+      "status": "specified-not-run",
+      "implemented_test_ids": [],
+      "notes": ""
+    },
+    {
+      "id": "E01",
+      "milestone": "M3",
+      "title": "확장도구·권한폐기·모호한 부작용",
+      "lane": "software",
+      "expected": "권한철회/secret폐기를 다음경계에서 재확인하고 모델추가도 UI와 같은검증command를 사용한다. 외부성공불명확은 자동재실행하지 않는다.",
+      "required_evidence": [
+        "policy-tests",
+        "audit",
+        "idempotency"
+      ],
+      "does_not_prove": "외부서비스 exactly-once",
+      "legacy_ids": [
+        "D02",
+        "D03",
+        "D04"
+      ],
+      "status": "specified-not-run",
+      "implemented_test_ids": [],
+      "notes": ""
+    },
+    {
+      "id": "E02",
+      "milestone": "M3",
+      "title": "후보생성과 first-success경쟁 구분",
+      "lane": "software",
+      "expected": "first-success가 명시적으로도입되면 패자의외부상태변경은막고 모든비용을집계한다. 사용자요청N후보는전부보존하며 동일기능으로덮지않는다.",
+      "required_evidence": [
+        "attempts",
+        "state-effects",
+        "ledger"
+      ],
+      "does_not_prove": "거절을우회하는provider순회",
+      "legacy_ids": [
+        "D01"
+      ],
+      "status": "specified-not-run",
+      "implemented_test_ids": [],
+      "notes": ""
+    },
+    {
+      "id": "E03",
+      "milestone": "M3",
+      "title": "추가 검증과 공개 경계",
+      "lane": "software",
+      "expected": "실제추가code범위에서 integration후검사·source변화/report부분누락/egress/cleanup실패·개인자료/재사용허용·다중사용자권한을검토한다.",
+      "required_evidence": [
+        "CI-or-local",
+        "sentinel",
+        "release-check"
+      ],
+      "does_not_prove": "M0/M1이공개서비스준비완료라는주장",
+      "legacy_ids": [
+        "DX09",
+        "DX12",
+        "G07",
+        "G08",
+        "G09",
+        "G10"
+      ],
+      "status": "specified-not-run",
+      "implemented_test_ids": [],
+      "notes": ""
+    },
+    {
+      "id": "P13",
+      "milestone": "M1",
+      "title": "보조 이미지 선택과 원문 밖 표현 annotation",
+      "lane": "software",
+      "expected": "이미지 역할에 원문/표현 지침/작은 asset catalog 및 조회 경로를 제공한다. 원문revision+유효blockanchor+실재assetref를 host가 검증·표시한다. 잘못된 ref/anchor, 장면시점 불일치, 재시도/분기전환/재번역을 처리하고 원문hash·canon·state는 불변이다. 이미지 없음도 정상 결과로 처리한다.",
+      "required_evidence": [
+        "role-input",
+        "asset-manifest",
+        "source-hash",
+        "presentation-annotations",
+        "anchor-map",
+        "browser",
+        "DB"
+      ],
+      "does_not_prove": "기계적으로 유효한 선택이 미적으로 적절함 또는 실제 vision 수행",
+      "legacy_ids": [],
+      "status": "specified-not-run",
+      "implemented_test_ids": [],
+      "notes": "메인 원고를 재작성하여 태그를 삽입하는 방식이 기본이 아니다. M0 범위는 늘리지 않는다."
+    },
+    {
+      "id": "Q05",
+      "milestone": "M1",
+      "title": "역할별 자율 탐색·이미지 표현의 의미와 전체 비용",
+      "lane": "live-quality",
+      "expected": "승인된 합성 장면에서 보조가 적절한 asset/복장/시점/배치를 선택하거나 생략하는지 평가한다. 고정계약·자료설명·도구가 충분한지 확인하고 main-text-only/local-render baseline과 총비용·지연·원문유지·선택적합성을 구분해 비교한다. 정해진 도구횟수/순서를 품질점수로 삼지 않는다.",
+      "required_evidence": [
+        "live-role-traces",
+        "rubric",
+        "all-runs",
+        "model-config",
+        "usage",
+        "latency"
+      ],
+      "does_not_prove": "모든미래모델·모든asset묶음에서 자동 품질향상 또는 비용절감",
+      "legacy_ids": [],
+      "status": "specified-not-run",
+      "implemented_test_ids": [],
+      "notes": "원시 비공개 추론을 요구하지 않으며 실제 서사·도구·출처와 선택 결과로 평가한다."
+    }
+  ]
+}

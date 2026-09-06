@@ -1,0 +1,80 @@
+{
+  "version": "0.6.1",
+  "kind": "planning-kit-structural-validation-only",
+  "performed_at": "2026-09-06",
+  "baseline_zip_sha256": "0078e21657830d1be30e569515e4a20eecb30be2173225be740c7a47a33816d4",
+  "checks": {
+    "baseline_zip_crc": "PASS",
+    "baseline_manifest_hashes": "PASS",
+    "baseline_standalone_copies_match": "PASS",
+    "json_parse": "PASS",
+    "same_file_inventory": "PASS",
+    "same_36_case_ids_milestones_lanes": "PASS",
+    "same_89_historical_id_mapping": "PASS",
+    "M0_scope_F01_F06": "PASS",
+    "all_cases_specified_not_run": "PASS",
+    "only_F05_S05_case_text_changed": "PASS",
+    "local_markdown_links": "PASS",
+    "no_auto_active_AGENTS": "PASS",
+    "first_task_stops_at_M0": "PASS"
+  },
+  "counts": {
+    "active_cases": 36,
+    "historical_ids_mapped": 89,
+    "local_links_checked": 14,
+    "files_including_report": 15
+  },
+  "changed_case_ids": [
+    "F05",
+    "S05"
+  ],
+  "review_scope": "read and compare planning documents/prompts; static and structural checks only",
+  "private_sources": "Original stories, bot assets, plugin code and credentials were not added. Names/metadata and prior analysis summaries remain; this is not an anonymity guarantee.",
+  "prior_source_checks_not_repeated": [
+    {
+      "name": "Léman Chronicles_2026-09-06T103515954Z_chat.json",
+      "bytes": 52670,
+      "sha256": "4402a443994b25c87dd776fc1b7c5e4d88b1dacdd68cab6face69cb01ac17501",
+      "json_parse": "PASS",
+      "format": "risuChat",
+      "version": 2,
+      "message_count": 2,
+      "scope": "format inspection only; not full original-export completeness or literary evaluation"
+    },
+    {
+      "name": "Nakamura Kano_2026-09-06T103557736Z_chat.json.crdownload",
+      "bytes": 46979,
+      "sha256": "5ffe7c38a7d93ec410a60be1df06a7a801ea21a0b5f93f53fa0177c5954429a1",
+      "json_parse": "PASS",
+      "format": "risuChat",
+      "version": 2,
+      "message_count": 2,
+      "scope": "format inspection only; not full original-export completeness or literary evaluation"
+    }
+  ],
+  "not_performed": [
+    "application implementation or execution",
+    "Windows runtime or browser E2E",
+    "database/application crash test",
+    "live provider requests",
+    "autonomous model retrieval or translation/status/image quality evaluation",
+    "real mobile device or pricing validation",
+    "license validation"
+  ],
+  "file_sha256": {
+    "ACCEPTANCE.json": "112cfaf24fef2b833cfa59ad2770e477113fe3ded01eb5fbe48328347b6786d2",
+    "ARCHITECTURE.md": "8fc06b9f1d3cfaf8404a65ae837e2e6e85ba32ee7a7414b34f87b6d7b53c9487",
+    "CURRENT.md": "0a495373a8728abaf2de577e332ebd4d59e0543b530c335423e8fef306f9ae4a",
+    "MILESTONES.md": "7392100232332b5d093ef1acc31e489be609b319518a20c708c57dd853d20630",
+    "PROJECT.md": "8fbe5a4664c36bb59e1a60a2acd39e69782f0349e3e28997390fca8ccf8ae878",
+    "README.md": "6b1c423f21b2538f18bc5328129f858fbd1a1e3f77a2a6216e25c10b21eaffeb",
+    "REVIEW.md": "e793088e1c76972a9a9fb5fa370cb2c1f420ca3c08460196439042bbe795a3b5",
+    "SOURCES.md": "4dbaa7e1b22915504dcc924e7091c8b11184c621328bf2551e7c895771b3c005",
+    "TRACEABILITY.json": "de1383e3cc462259f82f29072105cf0fc4f8c0ce30efb089f7c8eb4a59fa6cfa",
+    "VERIFICATION.md": "6e1d9bf7c6e41baee23ccb324ba5c137ae054dad8dbe86af93fd5366b12d3779",
+    "prompts/01-build-M0.ko.md": "3e0b21c2957708c778012627162f96e82994b76bbb0bd2d080b3b4a9d41f355a",
+    "prompts/02-review.ko.md": "119cb3528ae22142e9f712bf6f742e1ddd209d50a787ef78d67fa6f6e510bf07",
+    "prompts/03-continue.ko.md": "02bed31a627c3661d5a848806cb1ced7776abc0fb1195eb72483faa1aac728be",
+    "templates/AGENTS.md.template": "2cf2897c174be0e107f326be5b9e8a8f7975182fddcbae87dec6636c95746554"
+  }
+}

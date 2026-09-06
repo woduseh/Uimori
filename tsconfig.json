@@ -1,0 +1,9 @@
+{
+  "compilerOptions": {
+    "target": "ES2023", "lib": ["ES2023", "DOM", "DOM.Iterable"],
+    "module": "NodeNext", "moduleResolution": "NodeNext", "jsx": "react-jsx",
+    "strict": true, "esModuleInterop": true, "skipLibCheck": true,
+    "resolveJsonModule": true, "types": ["node", "vite/client"], "noEmit": true
+  },
+  "include": ["core", "server", "web", "tests", "*.config.ts"]
+}
