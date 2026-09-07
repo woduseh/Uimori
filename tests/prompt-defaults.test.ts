@@ -2,6 +2,7 @@ import { describe, expect, test } from 'vitest';
 import { createHash } from 'node:crypto';
 import { createDefaultPromptProgram } from '../core/prompt-defaults.js';
 import { defaultProfile, type ProviderProtocol } from '../core/product.js';
+import { modelCapability } from '../core/model-capabilities.js';
 import { DEFAULT_MAIN_PROMPT, DEFAULT_TRANSLATION_PROMPT } from '../core/prompts.js';
 import { compileTranslationPrompt, createTranslationPlan, translationInput } from '../core/auxiliary.js';
 import { sourceTimeContext } from '../server/product-auxiliary.js';
@@ -16,8 +17,8 @@ import type { RunSnapshot } from '../core/types.js';
 
 const protocols:ProviderProtocol[]=['vertex-gemini-v1','openai-responses-v1','openai-chat-v1','anthropic-messages-v1','vercel-chat-v1'];
 function snapshot(protocol:ProviderProtocol):RunSnapshot {
-  const modelId=protocol==='vertex-gemini-v1'?'gemini-3.8-flash':protocol==='anthropic-messages-v1'?'claude-sonnet-4-6':'gpt-5.6';
-  const target={id:'model',revision:1,title:'Synthetic',connectionId:'connection',connectionRevision:1,modelId,maxOutputTokens:1024,temperature:null,connection:{id:'connection',revision:1,title:'Synthetic',protocol,endpoint:'https://synthetic.invalid',enabled:true,catalog:[],catalogError:null}};
+  const modelId=protocol==='vertex-gemini-v1'?'gemini-3.8-flash':protocol==='anthropic-messages-v1'?'claude-opus-5':'gpt-5.6';
+  const target={id:'model',revision:1,title:'Synthetic',connectionId:'connection',connectionRevision:1,modelId,capabilityRevision:modelCapability(protocol,modelId)?.revision,maxOutputTokens:1024,temperature:null,connection:{id:'connection',revision:1,title:'Synthetic',protocol,endpoint:'https://synthetic.invalid',enabled:true,catalog:[],catalogError:null}};
   return {chatId:'default-prompt',parentRevision:null,settingsRevision:1,settings:{preset:'calm',mode:'direct',translation:true,status:false,maxCalls:3},request:'Continue.',history:[],resources:[],profile:{...defaultProfile('default-prompt'),contents:[{id:'module',revision:3,kind:'module',title:'Scope',description:'',text:'Pinned module evidence.',loading:'pinned',relatedIds:[]}],models:{main:target,translation:target}}};
 }
 describe('single prompt program defaults at real native encoder boundaries',()=>{

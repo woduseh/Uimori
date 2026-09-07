@@ -30,7 +30,7 @@ function bundle(kind: 'state' | 'memory', origin: string) {
   const story: StorySnapshot = {
     config: { ...defaultStoryConfig(), revision: 1, memory: { enabled: true, model: null, recentCount: 2, maxPacketChars: 60000 }, module: { id: 'coins', revision: 1, name: 'Synthetic coins', mode: 'authoritative', fields: { coins: { type: 'number', initial: 10, min: 0, max: 100, description: 'Spend three coins' } }, rules: { spend: { field: 'coins', delta: -3 } } } },
     state: { id: 'initial', sourceRevision: null, sourceHash: null, moduleRevision: 1, values: { coins: 10 }, canonical: true }, waiting: false, lineageHash: 'lineage-evaluation', canonHash: memoryHash('[]'), memory: null,
-    models: { [kind]: { id: 'evaluated-model', revision: 1, title: 'Synthetic evaluated model', connectionId: 'conn-responses', connectionRevision: 1, modelId: `synthetic-evaluated-${kind}`, maxOutputTokens: 2048, temperature: null, timeoutMs: 4000, evaluationTools: defaultEvaluationToolOptions(),
+    models: { [kind]: { id: 'evaluated-model', revision: 1, title: 'Synthetic evaluated model', connectionId: 'conn-responses', modelId: `synthetic-evaluated-${kind}`, maxOutputTokens: 2048, temperature: null, timeoutMs: 4000, evaluationTools: defaultEvaluationToolOptions(),
       connection: { id: 'conn-responses', revision: 1, title: 'Local Responses', enabled: true, protocol: 'openai-responses-v1', endpoint: `${origin}/v1`, credentialEnv, catalog: [], catalogError: null } } },
   };
   const snapshot: RunSnapshot = { chatId: source.chatId, parentRevision: null, settingsRevision: 1, settings: { preset: 'calm', mode: 'direct', translation: false, status: true, maxCalls: 4 }, request: 'Continue', history: [], story,

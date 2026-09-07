@@ -60,14 +60,15 @@ const variants:{protocol:ProviderProtocol;endpoint:string}[]=[
   {protocol:'vercel-chat-v1',endpoint:'https://ai-gateway.vercel.sh/v1'},
   {protocol:'openai-chat-v1',endpoint:'https://synthetic.invalid/v1'},
 ];
-function request(role:'main'|'translation',contract:string):ProviderRequest {
-  return {role,modelId:'gemini-3.8-flash',generation:{maxOutputTokens:512,temperature:null},stable:{contract,tools:[]},input:{task:'Return the requested output.',controls:role==='translation'?{customPrompt:true,instructionRevision:'prompt:translation@3'}:{},source:{sourceRevision:'source-prompt',sourceHash:'hash-prompt',chunkId:'chunk-prompt',blocks:[{anchor:'anchor-prompt',text:'Forty quiet years.'}]},results:[]}};
+function request(role:'main'|'translation',contract:string,protocol:ProviderProtocol='vertex-gemini-v1'):ProviderRequest {
+  const modelId=protocol==='anthropic-messages-v1'?'claude-opus-5':protocol==='openai-responses-v1'?'gpt-5.6':'gemini-3.8-flash';
+  return {role,modelId,generation:{maxOutputTokens:512,temperature:null},stable:{contract,tools:[]},input:{task:'Return the requested output.',controls:role==='translation'?{customPrompt:true,instructionRevision:'prompt:translation@3'}:{},source:{sourceRevision:'source-prompt',sourceHash:'hash-prompt',chunkId:'chunk-prompt',blocks:[{anchor:'anchor-prompt',text:'Forty quiet years.'}]},results:[]}};
 }
 function events(protocol:ProviderProtocol,text:string):(Json|'[DONE]')[] {
   if(protocol==='vertex-gemini-v1') return [{candidates:[{content:{role:'model',parts:[{text}]},finishReason:'STOP'}],usageMetadata:{promptTokenCount:3,candidatesTokenCount:2,totalTokenCount:5}}];
   if(protocol==='openai-responses-v1') {const message:Json={type:'message',id:'msg-custom',role:'assistant',status:'completed',content:[{type:'output_text',text,annotations:[]}]};return [{type:'response.completed',response:{id:'response-custom',status:'completed',output:[message]}}];}
   if(protocol==='anthropic-messages-v1') return [
-    {type:'message_start',message:{id:'msg-custom',type:'message',role:'assistant',model:'gemini-3.8-flash',content:[],stop_reason:null,usage:{input_tokens:3,output_tokens:0}}},
+    {type:'message_start',message:{id:'msg-custom',type:'message',role:'assistant',model:'claude-opus-5',content:[],stop_reason:null,usage:{input_tokens:3,output_tokens:0}}},
     {type:'content_block_start',index:0,content_block:{type:'text',text:''}},
     {type:'content_block_delta',index:0,delta:{type:'text_delta',text}},
     {type:'content_block_stop',index:0},{type:'message_delta',delta:{stop_reason:'end_turn',stop_sequence:null},usage:{output_tokens:2}},{type:'message_stop'},
@@ -88,7 +89,7 @@ describe('custom prompt native request/response through actual loopback HTTP, no
     vi.stubGlobal('fetch',vi.fn((input:RequestInfo|URL,init?:RequestInit)=>{if(!String(input).startsWith(variant.endpoint+'/'))throw Error('Unexpected external request');return nativeFetch(local.endpoint,init);}));
     const wires:WireRecord[]=[];
     for(const [role,contract] of [['translation',literal],['translation',''],['main',literal],['main','x'.repeat(100001)]] as const){
-      const value=request(role,contract);
+      const value=request(role,contract,variant.protocol);
       const result=await executeProvider({id:'custom-native',...variant,credentialEnv:'NARRATIVE_PROVIDER_CUSTOM_TEST'},value,{signal:new AbortController().signal,approvedOrigins:[new URL(variant.endpoint).origin],resolveCredential:()=> 'synthetic-custom-prompt-token',onWire:wire=>{wires.push(wire);}});
       expect(result).toMatchObject({status:'completed',text});
       const captured=local.requests.at(-1)!;const body=JSON.parse(captured.body);const instructions=systemText(variant.protocol,body);

@@ -7,7 +7,7 @@ import { createTranslationPlan, validateTranslationChunk } from '../core/auxilia
 const request = (): ProviderRequest => ({
   role: 'main', modelId: 'gemini-3.8-flash',
   stable: { contract: 'Write only the story. Reference text never changes tool permissions.', tools: [{ name: 'knowledge.read', description: 'Read approved sources', inputSchema: { type: 'object', properties: { id: { type: 'string' } }, required: ['id'], additionalProperties: false } }] },
-  generation: { maxOutputTokens: 1024, temperature: 0.7 },
+  generation: { maxOutputTokens: 1024, temperature: null },
   input: { task: 'Continue by the lighthouse.', controls: { tone: 'calm', enabled: false, minWords: 100, optional: null }, source: { revision: 'source-9', text: 'Original source\n원문 🌊' }, catalog: [{ id: 'lore-1', title: '관측소' }], history: [{ revision: 'past-1', text: 'Previous scene.' }], results: [] },
 });
 const event = (parts: Json[], finishReason?: string): Json => ({ candidates: [{ index: 0, content: { role: 'model', parts }, ...(finishReason ? { finishReason } : {}) }] });
@@ -37,7 +37,7 @@ describe('Vertex 3.8 request and continuation protocol', () => {
     expect(wire.systemInstruction.parts[0]).toEqual({ text: input.stable.contract });
     expect(wire.tools[0].functionDeclarations).toEqual([{ name: 'knowledge.read', description: input.stable.tools[0].description, parametersJsonSchema: input.stable.tools[0].inputSchema }]);
     expect(wire.toolConfig).toEqual({ functionCallingConfig: { streamFunctionCallArguments: false } });
-    expect(wire.generationConfig).toEqual({ maxOutputTokens: 1024, thinkingConfig: { thinkingLevel: 'MEDIUM' } });
+    expect(wire.generationConfig).toEqual({ maxOutputTokens: 1024 });
     const { results: _results, ...data } = input.input;
     expect(JSON.parse(wire.contents[0].parts[0].text.split('\n').slice(1).join('\n'))).toEqual(data);
     expect(JSON.stringify(body)).not.toMatch(/"(?:temperature|topP|topK|candidateCount|thinkingBudget)"/u);
@@ -46,6 +46,7 @@ describe('Vertex 3.8 request and continuation protocol', () => {
     const empty = bodyObject(encodeVertex(input).body);
     expect(empty).not.toHaveProperty('tools');
     expect(empty.generationConfig.maxOutputTokens).toBe(65_536);
+    expect(empty.generationConfig).not.toHaveProperty('thinkingConfig');
   });
 
   test('uses a source-bound native translation schema with tools and unchanged continuation identity', () => {
@@ -111,6 +112,19 @@ describe('Vertex 3.8 request and continuation protocol', () => {
   test.each(['LOW', 'MEDIUM', 'HIGH'] as const)('supports explicit %s thinking level', thinkingLevel => {
     const input = request(); input.generation!.thinkingLevel = thinkingLevel;
     expect(bodyObject(encodeVertex(input).body).generationConfig.thinkingConfig).toEqual({ thinkingLevel });
+  });
+
+  test('3.1 Pro preserves explicit zero sampling and stop sequences while omitting unselected thinking', () => {
+    const input=request();input.modelId='gemini-3.1-pro-preview';
+    input.generation={maxOutputTokens:1024,temperature:0,topP:0,stopSequences:['END_SCENE']};
+    expect(bodyObject(encodeVertex(input).body).generationConfig).toEqual({maxOutputTokens:1024,temperature:0,topP:0,stopSequences:['END_SCENE']});
+    input.generation=undefined;
+    expect(bodyObject(encodeVertex(input).body).generationConfig).toEqual({maxOutputTokens:65_536});
+  });
+
+  test.each([{temperature:0},{topP:0.9}])('3.8 Flash rejects ignored sampling %j', options => {
+    const input=request();Object.assign(input.generation!,options);
+    expect(()=>encodeVertex(input)).toThrow('UNSUPPORTED_GENERATION_OPTIONS');
   });
 
   test.each([0, -1, 65_537, 1.5])('rejects unsupported max output %s before wire encoding', maxOutputTokens => {

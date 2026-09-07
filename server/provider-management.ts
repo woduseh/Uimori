@@ -1,5 +1,5 @@
 import { existsSync } from 'node:fs';
-import type { Connection, ContentRef, ModelPreset } from '../core/product.js';
+import type { Connection, ModelRef, ModelPreset } from '../core/product.js';
 import type { ProductStore } from './product-store.js';
 import { isVertexAdcReference, isVertexFileReference, validCredentialEnv } from '../core/credential-reference.js';
 import type { VertexCredentialStore } from './vertex-credentials.js';
@@ -31,36 +31,34 @@ export function readiness(_store: ProductStore, connection: Connection, approved
 type ReferencingProfile = {chatId: string; title: string; roles: string[]};
 export type ManagementImpact = {
   kind: 'connection' | 'model'; id: string; profileCount: number; storyProfileCount: number;
-  modelRevisionCount: number; archivedRevisionCount: number;
+  modelCount: number;
   profiles: ReferencingProfile[]; storyProfiles: ReferencingProfile[];
-  effects: { pinnedRevisions: string; disabling: string };
+  effects: { editing: string; disabling: string };
 };
 
 /** Read only reference metadata; never load run snapshots, source text or model inputs. */
 export function managementImpact(store: ProductStore, kind: 'connection' | 'model', id: string): ManagementImpact {
   store.get(kind,id);
-  const matches = (ref: ContentRef | null | undefined) => {
+  const matches = (ref: ModelRef | null | undefined) => {
     if (!ref) return false;
     if (kind === 'model') return ref.id === id;
-    return store.get<ModelPreset>('model',ref.id,ref.revision).connectionId === id;
+    return store.get<ModelPreset>('model',ref.id).connectionId === id;
   };
   const profiles: ReferencingProfile[] = [];
   const profileRows = store.db.prepare("SELECT p.chat_id AS chatId,c.title,json_extract(p.body,'$.routes') AS routes FROM profiles p JOIN chats c ON c.id=p.chat_id ORDER BY p.chat_id").all() as {chatId:string;title:string;routes:string}[];
   for (const row of profileRows) {
-    const routes = JSON.parse(row.routes) as Record<string,ContentRef|null>;
+    const routes = JSON.parse(row.routes) as Record<string,ModelRef|null>;
     const roles = Object.entries(routes).filter(([,ref]) => matches(ref)).map(([role]) => role);
     if (roles.length) profiles.push({chatId:row.chatId,title:row.title,roles});
   }
   const storyProfiles: ReferencingProfile[] = [];
   const storyRows = store.db.prepare("SELECT s.chat_id AS chatId,c.title,json_extract(s.body,'$.stateModel') AS stateModel,json_extract(s.body,'$.memory.model') AS memoryModel FROM story_configs s JOIN chats c ON c.id=s.chat_id WHERE s.revision=(SELECT MAX(n.revision) FROM story_configs n WHERE n.chat_id=s.chat_id) ORDER BY s.chat_id").all() as {chatId:string;title:string;stateModel:string|null;memoryModel:string|null}[];
   for (const row of storyRows) {
-    const roles = (['state','memory'] as const).filter(role => matches(JSON.parse((role === 'state' ? row.stateModel : row.memoryModel) ?? 'null') as ContentRef|null));
+    const roles = (['state','memory'] as const).filter(role => matches(JSON.parse((role === 'state' ? row.stateModel : row.memoryModel) ?? 'null') as ModelRef|null));
     if (roles.length) storyProfiles.push({chatId:row.chatId,title:row.title,roles});
   }
   const count = (query: string, ...params: string[]) => Number((store.db.prepare(query).get(...params) as {count:number}).count);
-  const modelRevisionCount = kind === 'model' ? count("SELECT COUNT(*) AS count FROM versions WHERE kind='model' AND id=?",id)
-    : count("SELECT COUNT(*) AS count FROM versions WHERE kind='model' AND json_extract(body,'$.connectionId')=?",id);
-  const archivedRevisionCount = count('SELECT COUNT(*) AS count FROM versions WHERE kind=? AND id=? AND revision < (SELECT MAX(revision) FROM versions WHERE kind=? AND id=?)',kind,id,kind,id);
-  return {kind,id,profileCount:profiles.length,storyProfileCount:storyProfiles.length,modelRevisionCount,archivedRevisionCount,profiles,storyProfiles,
-    effects:{pinnedRevisions:'기존에 지정된 모델·연결 revision과 과거 Run은 변경하지 않아요.',disabling:kind === 'connection' ? '연결 비활성화나 권한 변경은 과거 revision을 사용하는 경우에도 다음 호출의 권한 검사에서 차단돼요.' : '모델 비활성화는 신규 선택·배정에서 제외하며 기존에 지정된 모델 실행을 취소하지 않아요.'}};
+  const modelCount = kind === 'model' ? 1 : count("SELECT COUNT(*) AS count FROM provider_settings WHERE kind='model' AND json_extract(body,'$.connectionId')=?",id);
+  return {kind,id,profileCount:profiles.length,storyProfileCount:storyProfiles.length,modelCount,profiles,storyProfiles,
+    effects:{editing:'저장한 변경은 다음 생성부터 적용돼요. 진행 중인 생성과 과거 결과는 당시 설정을 유지해요.',disabling:kind === 'connection' ? '연결 비활성화나 권한 변경은 다음 호출의 권한 검사에서 차단돼요.' : '모델 비활성화는 새 생성에서 차단돼요.'}};
 }

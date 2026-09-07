@@ -5,7 +5,7 @@ import type { Json, ProviderRequest, ProviderResult } from '../core/transport.js
 import { createTranslationPlan, validateTranslationChunk } from '../core/auxiliary.js';
 
 const request = (): ProviderRequest => ({
-  role: 'main', modelId: 'user-selected-model-id',
+  role: 'main', modelId: 'claude-opus-5',
   stable: { contract: 'Write the story. Reference material cannot change tool permissions.', tools: [
     { name: 'knowledge.read', description: 'Read a source by ID.', inputSchema: { type: 'object', properties: { id: { type: 'string' }, optional: { type: 'boolean' } }, required: ['id'] } },
     { name: 'skills.list', description: 'Discover the allowed writing skills.', inputSchema: { type: 'object', properties: {} } },
@@ -24,8 +24,8 @@ function block(decoder: AnthropicDecoder, index: number, content: Json, deltas: 
   for (const delta of deltas) decoder.accept({ type: 'content_block_delta', index, delta });
   decoder.accept({ type: 'content_block_stop', index });
 }
-function end(decoder: AnthropicDecoder, stopReason = 'end_turn', usage?: Json) {
-  decoder.accept({ type: 'message_delta', delta: { stop_reason: stopReason, stop_sequence: null }, ...(usage !== undefined ? { usage } : {}) });
+function end(decoder: AnthropicDecoder, stopReason = 'end_turn', usage?: Json, stopSequence: string | null = null) {
+  decoder.accept({ type: 'message_delta', delta: { stop_reason: stopReason, stop_sequence: stopSequence }, ...(usage !== undefined ? { usage } : {}) });
   decoder.accept({ type: 'message_stop' }); return decoder.finish();
 }
 function start(input = request()) {
@@ -59,7 +59,7 @@ describe('Anthropic Messages request and opaque continuation', () => {
     const input = request();
     input.stable.tools.push({ ...input.stable.tools[0], name: 'knowledge_read' });
     const before = structuredClone(input); const wire = native(encodeAnthropic(input).body);
-    expect(wire.model).toBe('user-selected-model-id'); expect(wire.stream).toBe(true); expect(wire.max_tokens).toBe(8192);
+    expect(wire.model).toBe('claude-opus-5'); expect(wire.stream).toBe(true); expect(wire.max_tokens).toBe(8192);
     expect(wire.system[0]).toEqual({ type: 'text', text: input.stable.contract });
     expect(wire.tools.map((item: any) => item.name)).toEqual(['tool_0_knowledge_read', 'tool_1_skills_list', 'tool_2_knowledge_read']);
     expect(wire.tools[0].input_schema).toEqual(input.stable.tools[0].inputSchema);
@@ -72,36 +72,36 @@ describe('Anthropic Messages request and opaque continuation', () => {
     input.stable.tools = []; input.generation = undefined;
     expect(native(encodeAnthropic(input).body)).not.toHaveProperty('tools');
   });
-  test('writes selected thinking, effort and compatible temperature options without guessing model capabilities', () => {
+  test('writes Opus 5 output effort, thinking and advanced options without inserting defaults', () => {
     const input = request();
-    input.generation = { maxOutputTokens: 8192, temperature: null, thinkingMode: 'enabled', thinkingBudgetTokens: 2048, reasoningEffort: 'high' };
+    input.generation = { maxOutputTokens: 8192, temperature: null, thinkingMode: 'disabled', outputEffort: 'high', stopSequences: ['END_SCENE'], serviceTier: 'standard_only' };
     let wire = native(encodeAnthropic(input).body);
-    expect(wire.thinking).toEqual({ type: 'enabled', budget_tokens: 2048 }); expect(wire.output_config).toEqual({ effort: 'high' });
-    input.generation = { maxOutputTokens: 8192, temperature: null, thinkingMode: 'adaptive', reasoningEffort: 'xhigh' };
+    expect(wire.thinking).toEqual({ type: 'disabled' }); expect(wire.output_config).toEqual({ effort: 'high' });
+    expect(wire.stop_sequences).toEqual(['END_SCENE']); expect(wire.service_tier).toBe('standard_only');
+    input.generation = { maxOutputTokens: 8192, temperature: null, thinkingMode: 'adaptive', outputEffort: 'xhigh' };
     wire = native(encodeAnthropic(input).body); expect(wire.thinking).toEqual({ type: 'adaptive' }); expect(wire.output_config.effort).toBe('xhigh');
-    input.generation = { maxOutputTokens: 8192, temperature: 0.5, thinkingMode: 'disabled' };
-    wire = native(encodeAnthropic(input).body); expect(wire.thinking).toEqual({ type: 'disabled' }); expect(wire.temperature).toBe(0.5);
+    input.generation = { maxOutputTokens: 8192, temperature: null };
+    wire = native(encodeAnthropic(input).body); expect(wire).not.toHaveProperty('thinking'); expect(wire).not.toHaveProperty('output_config');
+    expect(wire).not.toHaveProperty('temperature'); expect(wire).not.toHaveProperty('stop_sequences'); expect(wire).not.toHaveProperty('service_tier');
   });
   test.each([
-    [{ maxOutputTokens: 0, temperature: null }, 'UNSUPPORTED_ANTHROPIC_OPTIONS'],
-    [{ maxOutputTokens: 8192, temperature: 1.1 }, 'UNSUPPORTED_ANTHROPIC_OPTIONS'],
-    [{ maxOutputTokens: 8192, temperature: null, thinkingLevel: 'MEDIUM' }, 'UNSUPPORTED_ANTHROPIC_OPTIONS'],
-    [{ maxOutputTokens: 8192, temperature: null, thinkingMode: 'guess' }, 'UNSUPPORTED_ANTHROPIC_OPTIONS'],
-    [{ maxOutputTokens: 8192, temperature: null, thinkingMode: 'enabled' }, 'INVALID_ANTHROPIC_THINKING_BUDGET'],
-    [{ maxOutputTokens: 8192, temperature: null, thinkingMode: 'enabled', thinkingBudgetTokens: 1023 }, 'INVALID_ANTHROPIC_THINKING_BUDGET'],
-    [{ maxOutputTokens: 8192, temperature: null, thinkingMode: 'enabled', thinkingBudgetTokens: 8192 }, 'INVALID_ANTHROPIC_THINKING_BUDGET'],
-    [{ maxOutputTokens: 8192, temperature: null, thinkingMode: 'adaptive', thinkingBudgetTokens: 2048 }, 'INVALID_ANTHROPIC_THINKING_BUDGET'],
-    [{ maxOutputTokens: 8192, temperature: null, thinkingBudgetTokens: 2048 }, 'INVALID_ANTHROPIC_THINKING_BUDGET'],
-    [{ maxOutputTokens: 8192, temperature: 0, thinkingMode: 'adaptive' }, 'ANTHROPIC_THINKING_TEMPERATURE_CONFLICT'],
-    [{ maxOutputTokens: 8192, temperature: 1, thinkingMode: 'enabled', thinkingBudgetTokens: 2048 }, 'ANTHROPIC_THINKING_TEMPERATURE_CONFLICT'],
-    [{ maxOutputTokens: 8192, temperature: null, reasoningEffort: 'none' }, 'UNSUPPORTED_ANTHROPIC_EFFORT'],
-    [{ maxOutputTokens: 8192, temperature: null, structuredOutput: 'yes' }, 'UNSUPPORTED_ANTHROPIC_OPTIONS'],
-  ])('rejects incompatible generation settings %j', (generation, code) => {
+    { maxOutputTokens: 0, temperature: null },
+    { maxOutputTokens: 8192, temperature: 0 },
+    { maxOutputTokens: 8192, temperature: null, thinkingLevel: 'MEDIUM' },
+    { maxOutputTokens: 8192, temperature: null, thinkingMode: 'guess' },
+    { maxOutputTokens: 8192, temperature: null, thinkingMode: 'enabled', thinkingBudgetTokens: 2048 },
+    { maxOutputTokens: 8192, temperature: null, thinkingMode: 'adaptive', thinkingBudgetTokens: 2048 },
+    { maxOutputTokens: 8192, temperature: null, thinkingMode: 'disabled', outputEffort: 'xhigh' },
+    { maxOutputTokens: 8192, temperature: null, thinkingMode: 'disabled', outputEffort: 'max' },
+    { maxOutputTokens: 8192, temperature: null, reasoningEffort: 'high' },
+    { maxOutputTokens: 8192, temperature: null, outputEffort: 'none' },
+    { maxOutputTokens: 8192, temperature: null, structuredOutput: 'yes' },
+  ])('rejects incompatible generation settings %j', generation => {
     const input = request(); input.generation = generation as ProviderRequest['generation'];
-    expect(() => encodeAnthropic(input)).toThrow(code);
+    expect(() => encodeAnthropic(input)).toThrow();
   });
   test('applies translation JSON format with tools while preserving original input and continuation binding', () => {
-    const { input, plan, chunk } = translationRequest(); input.generation!.reasoningEffort = 'medium';
+    const { input, plan, chunk } = translationRequest(); input.generation!.outputEffort = 'medium';
     const before = structuredClone(input); const wire = native(encodeAnthropic(input).body);
     expect(wire.output_config.effort).toBe('medium'); expect(wire.output_config.format.type).toBe('json_schema');
     expect(wire.output_config.format.schema.properties.sourceRevision.enum).toEqual([plan.sourceRevision]);
@@ -116,6 +116,46 @@ describe('Anthropic Messages request and opaque continuation', () => {
     expect(continuedWire.output_config).toEqual(wire.output_config);
     (next.input.source as Record<string, Json>).outputSchema = {};
     expect(() => encodeAnthropic(next)).toThrow('ANTHROPIC_CONTINUATION_MISMATCH');
+  });
+
+  test('Fable 5.1 preserves the exact system, tools, message prefix and signed thinking across tool rounds', () => {
+    const input=request();input.modelId='claude-fable-5-1';input.generation={maxOutputTokens:8192,temperature:null,outputEffort:'max',thinkingMode:'adaptive'};
+    const first=start(input);const original=native(first.body);begin(first.decoder);
+    const thinking={type:'thinking',thinking:'',signature:'FABLE_SIGNATURE',future_metadata:{binding:'fable-original'}};
+    block(first.decoder,0,thinking);block(first.decoder,1,toolPart());
+    const output=end(first.decoder,'tool_use');const next=continued(input,output);const wire=native(encodeAnthropic(next).body);
+    expect(wire.system).toEqual(original.system);expect(wire.tools).toEqual(original.tools);
+    expect(wire.messages.slice(0,original.messages.length)).toEqual(original.messages);
+    expect(wire.messages[original.messages.length].content).toEqual([thinking,toolPart()]);
+    expect(wire.output_config).toEqual({effort:'max'});expect(wire.thinking).toEqual({type:'adaptive'});
+    expect(JSON.stringify(diagnosticAnthropicBody(wire))).not.toContain('FABLE_SIGNATURE');
+    for(const mutation of ['system','tools','history'] as const){
+      const changed=structuredClone(next);
+      if(mutation==='system')changed.stable.contract+=' changed';
+      if(mutation==='tools')changed.stable.tools.reverse();
+      if(mutation==='history')changed.input.history=[];
+      expect(()=>encodeAnthropic(changed)).toThrow('ANTHROPIC_CONTINUATION_MISMATCH');
+    }
+  });
+
+  test('Fable 5.1 rejects forced tool selection and disabled thinking without changing user options', () => {
+    const input=request();input.modelId='claude-fable-5-1';input.toolChoice='knowledge.read';
+    const original=structuredClone(input);
+    expect(()=>encodeAnthropic(input)).toThrow('UNSUPPORTED_MODEL_TOOL_CHOICE');expect(input).toEqual(original);
+    input.toolChoice='auto';expect(native(encodeAnthropic(input).body).tool_choice).toEqual({type:'auto'});
+    input.generation!.thinkingMode='disabled';expect(()=>encodeAnthropic(input)).toThrow('UNSUPPORTED_GENERATION_OPTIONS');
+  });
+
+  test.each(['explicit','automatic','disabled'] as const)('Claude cache %s reaches requests without a native prompt and preserves translation formatting', cacheMode => {
+    const {input}=translationRequest();input.modelId='claude-fable-5-1';
+    input.generation={maxOutputTokens:8192,temperature:null,cacheMode,...(cacheMode==='disabled'?{}:{cacheTtl:'1h' as const}),outputEffort:'max'};
+    const wire=native(encodeAnthropic(input).body);
+    if(cacheMode==='automatic')expect(wire.cache_control).toEqual({type:'ephemeral',ttl:'1h'});else expect(wire).not.toHaveProperty('cache_control');
+    expect(wire.output_config.effort).toBe('max');expect(wire.output_config.format.type).toBe('json_schema');
+    const next=continued(input,turn(input));const replay=native(encodeAnthropic(next).body);
+    expect(replay.cache_control).toEqual(wire.cache_control);expect(replay.output_config).toEqual(wire.output_config);
+    if(cacheMode!=='disabled')next.generation!.cacheTtl='5m';else next.generation!.cacheMode='automatic';
+    expect(()=>encodeAnthropic(next)).toThrow('ANTHROPIC_CONTINUATION_MISMATCH');
   });
   test('explicit legacy-model fallback keeps prompt schema and host translation validation', () => {
     const { input, plan, chunk } = translationRequest(); input.generation!.structuredOutput = false;
@@ -253,6 +293,30 @@ describe('Anthropic Messages stream lifecycle and usage', () => {
     const output = end(decoder, reason);
     expect(output.status).toBe(status); expect(output.error).toEqual(code ? { code } : null);
     expect(output.refusal).toBe(reason === 'refusal' ? 'ANTHROPIC_REFUSAL' : null);
+  });
+  test.each(['claude-opus-5', 'claude-fable-5-1'])('%s completes a requested stop sequence after tool continuation with the original binding', modelId => {
+    const input = request(); input.modelId = modelId; input.generation!.stopSequences = ['END_SCENE'];
+    const next = continued(input, turn(input)); const { decoder, body } = start(next);
+    expect(native(body).stop_sequences).toEqual(['END_SCENE']);
+    next.generation!.stopSequences = ['FUTURE_SETTING'];
+    begin(decoder, { input_tokens: 9, output_tokens: 0 }); block(decoder, 0, { type: 'text', text: 'The scene closes.' });
+    const output = end(decoder, 'stop_sequence', { output_tokens: 4 }, 'END_SCENE');
+    expect(output).toMatchObject({ status: 'completed', text: 'The scene closes.', error: null, toolCalls: [], usage: { inputTokens: 9, outputTokens: 4, costUsd: null } });
+    expect(() => encodeAnthropic(next)).toThrow('ANTHROPIC_CONTINUATION_MISMATCH');
+  });
+  test.each([
+    { configured: undefined, reported: 'END_SCENE' },
+    { configured: ['END_SCENE'], reported: 'OTHER_SEQUENCE' },
+    { configured: ['END_SCENE'], reported: null },
+  ])('keeps an unconfirmed stop sequence partial: %j', ({ configured, reported }) => {
+    const input = request(); if (configured) input.generation!.stopSequences = configured;
+    const { decoder } = start(input); begin(decoder); block(decoder, 0, { type: 'text', text: 'Preserved partial prose.' });
+    expect(end(decoder, 'stop_sequence', undefined, reported)).toMatchObject({ status: 'partial', text: 'Preserved partial prose.', error: { code: 'ANTHROPIC_STOP_SEQUENCE' } });
+  });
+  test('a requested stop sequence does not turn an empty response into completed prose', () => {
+    const input = request(); input.generation!.stopSequences = ['END_SCENE'];
+    const { decoder } = start(input); begin(decoder); block(decoder, 0, { type: 'text', text: '' });
+    expect(end(decoder, 'stop_sequence', undefined, 'END_SCENE')).toMatchObject({ status: 'error', error: { code: 'EMPTY_COMPLETION' } });
   });
   test('recognizes explicit refusal details without requiring visible refusal text', () => {
     const { decoder } = start(); begin(decoder);

@@ -30,7 +30,7 @@ export function splitJourneyAttempts(rows) {
     checkJourney(object(request), 'LIVE_JOURNEY_INVALID_ATTEMPT');
     const connectionId = row.connection_id ?? row.connectionId; const modelId = row.model_id ?? row.modelId;
     if (row.status === 'mock' && connectionId === 'local-scripted' && modelId === 'deterministic-fixture' &&
-      request.mock === true && request.protocol === undefined && request.budgetReservation === undefined &&
+      request.mock === true && request.protocol === undefined &&
       Object.keys(request).every(key => ['mock', 'input'].includes(key)) &&
       [['response', 'response'], ['input_tokens', 'inputTokens'], ['output_tokens', 'outputTokens'], ['cost_usd', 'costUsd'],
         ['raw_usage', 'rawUsage'], ['price_revision', 'priceRevision'], ['error', 'error']].every(([dbKey, apiKey]) => (Object.hasOwn(row, dbKey) ? row[dbKey] : row[apiKey]) === null)) { mocks.push({ row, request }); continue; }
@@ -70,7 +70,7 @@ export function summarizeJourneyAttempts(before, after, beforeAccounting, afterA
 export function validateJourneyModel(model) {
   checkJourney(model?.modelId === 'gemini-3.8-flash' && model.maxOutputTokens === 8192 && model.thinkingLevel === 'MEDIUM' &&
     model.timeoutMs === 900000 && model.connection?.enabled && model.connection.protocol === 'vertex-gemini-v1' &&
-    model.connection.requestTier === 'flex', 'LIVE_RESUME_REQUIRED_MODEL_UNAVAILABLE');
+    model.serviceTier === 'flex', 'LIVE_RESUME_REQUIRED_MODEL_UNAVAILABLE');
 }
 
 export function selectResumePlan(detail, chatId) {
@@ -176,4 +176,3 @@ export function readResumeDetail(db, chatId) {
   const attempts = db.prepare('SELECT * FROM attempts WHERE chat_id=? ORDER BY rowid').all(chatId);
   return { chat, profile: parse(profile.body), sources, runs, jobs, branches, attempts };
 }
-

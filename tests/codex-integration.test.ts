@@ -6,7 +6,6 @@ import { createHash, randomUUID } from 'node:crypto';
 import { createApp, type App } from '../server/app.js';
 import type { CodexRuntimeService } from '../server/codex-runtime.js';
 import type { ProviderRequest, ProviderResult } from '../core/transport.js';
-import { ProviderBudget } from '../server/provider-budget.js';
 
 const owned: { directory: string; app?: App }[] = [];
 afterEach(async () => {
@@ -21,7 +20,7 @@ async function api(app: App, url: string, body?: unknown, method: 'GET'|'POST'|'
   const response = await app.inject({ method, url, headers: { host: '127.0.0.1', 'content-type': 'application/json' }, ...(body === undefined ? {} : { payload: JSON.stringify(body) }) });
   expect(response.statusCode, response.body).toBe(status); return response.json();
 }
-const ref = (value: { id: string; revision: number }) => ({ id: value.id, revision: value.revision });
+const ref = (value: { id: string }) => ({ id: value.id });
 const hash = (value: unknown) => createHash('sha256').update(JSON.stringify(value)).digest('hex');
 
 test('runtime HTTP routes enforce authentication and Origin and redact failures with no-store', async () => {
@@ -78,7 +77,7 @@ test('app routes every agent role through Codex and persists RPC attempts, propo
   const item = { directory: await mkdtemp(join(tmpdir(), 'uimori-codex-integration-')) } as (typeof owned)[number]; owned.push(item);
   const app = await createApp({ dbPath: join(item.directory, 'test.sqlite'), buildId: 'codex-synthetic', instanceId: randomUUID(), testMode: true, codexRuntime: runtime }); item.app = app; await app.ready();
   const connection = await api(app, '/api/connections', { title: 'Codex', protocol: 'codex-app-server-v1', endpoint: 'codex://local', enabled: true });
-  const model = await api(app, '/api/model-presets', { title: 'Synthetic Codex', connectionId: connection.id, connectionRevision: connection.revision, modelId: 'synthetic', maxOutputTokens: 1024, temperature: null });
+  const model = await api(app, '/api/model-presets', { title: 'Synthetic Codex', connectionId: connection.id, modelId: 'synthetic', maxOutputTokens: 1024, temperature: null });
   const chat = await api(app, '/api/chats', { title: 'Synthetic Codex story' });
   const profile = await api(app, `/api/chats/${chat.id}/profile`);
   await api(app, `/api/chats/${chat.id}/profile`, { expectedRevision: profile.revision, attachments: [], creative: profile.creative, routes: { main: ref(model), translation: ref(model), status: ref(model), image: ref(model) }, image: true }, 'PUT');
@@ -91,27 +90,17 @@ test('app routes every agent role through Codex and persists RPC attempts, propo
   await expect.poll(() => app.store.product.attempts(chat.id).filter(attempt => attempt.status === 'running').length).toBe(0);
   expect(app.store.product.attempts(chat.id)).toHaveLength(6);
   for (const attempt of app.store.product.attempts(chat.id)) { expect(attempt.request).toMatchObject({ method: 'RPC', url: 'codex://local', body: { method: 'turn/start' } }); expect(attempt.costUsd).toBeNull(); }
-  const registration = await api(app, '/api/provider-management/registrations', { key: randomUUID(), request: 'Create a model proposal.', target: ref(model) });
+  const registration = await api(app, '/api/provider-management/registrations', { key: randomUUID(), request: 'Create a model proposal.', target: {id:model.id,revision:model.revision} });
   await expect.poll(async () => (await api(app, `/api/provider-management/registrations/${registration.id}`)).status).toBe('ready');
   const archive = await api(app, '/api/export');
   const restoredItem = { directory: await mkdtemp(join(tmpdir(), 'uimori-codex-integration-')) } as (typeof owned)[number]; owned.push(restoredItem);
   const restored = await createApp({ dbPath: join(restoredItem.directory, 'restore.sqlite'), buildId: 'codex-restore', instanceId: randomUUID(), testMode: true, codexRuntime: runtime }); restoredItem.app = restored; await restored.ready();
   await api(restored, '/api/import', { archive });
   expect(JSON.stringify(archive)).toContain('codex://local');
-  const budget = new ProviderBudget(app.store.db);
-  expect(budget.snapshot().requestCount).toBe(0);
-  const recorded = app.store.product.attempts(chat.id)[0];
-  const wire = recorded.request as Record<string, any>;
-  expect(wire.externalBilling).toBe('not-estimated');
-  for (const patch of [{ method: 'POST' }, { url: 'codex://other' }, { body: { ...wire.body, model: 'wrong-model' } }]) {
-    expect(() => budget.start({ ...wire, ...patch } as any, () => { throw new Error('Invalid RPC persisted'); })).toThrow('LIVE_BUDGET_NOT_CONFIGURED');
-    app.store.db.prepare('UPDATE attempts SET request=? WHERE id=?').run(JSON.stringify({ ...wire, ...patch }), recorded.id);
-    expect(() => budget.snapshot()).toThrow('LIVE_BUDGET_HISTORY_UNVERIFIABLE');
-  }
-  app.store.db.prepare('UPDATE attempts SET request=? WHERE id=?').run(JSON.stringify(wire), recorded.id);
-  expect(budget.snapshot().requestCount).toBe(0);
+  expect(restored.store.product.attempts(chat.id)).toEqual(app.store.product.attempts(chat.id));
+  for (const role of ['state', 'memory']) expect(app.store.product.attempts(chat.id).find(attempt => attempt.role === role)?.storyJobId).toEqual(expect.any(String));
   const count = calls.length;
   await api(app, `/api/connections/${connection.id}`, { title: connection.title, protocol: connection.protocol, endpoint: connection.endpoint, enabled: false, expectedRevision: connection.revision }, 'PUT');
-  await api(app, '/api/provider-management/registrations', { key: randomUUID(), request: 'Must not run.', target: ref(model) }, 'POST', 403);
+  await api(app, '/api/provider-management/registrations', { key: randomUUID(), request: 'Must not run.', target: {id:model.id,revision:model.revision} }, 'POST', 403);
   expect(calls).toHaveLength(count);
 });

@@ -1,10 +1,11 @@
-import { afterEach, describe, expect, test } from 'vitest';
+import { afterEach, describe, expect, test, vi } from 'vitest';
 import Fastify from 'fastify';
 import { buildMainProviderRequest, encodeMainPreview, attachMainHostContext, nativeStorySubmissionEnabled, STORY_SUBMIT_MAX_CHARS } from '../server/main-request.js';
 import { compileSnapshotPrompt } from '../server/prompt-snapshot.js';
 import { promptRoutes } from '../server/prompt-routes.js';
 import { runMain, type MainHooks } from '../server/model-runner.js';
 import { defaultProfile, type ProviderProtocol } from '../core/product.js';
+import { modelCapability } from '../core/model-capabilities.js';
 import { defaultStoryConfig } from '../core/story.js';
 import { planMemoryContext } from '../core/memory.js';
 import type { PromptProgram } from '../core/prompt-program.js';
@@ -14,10 +15,10 @@ import type { Store } from '../server/store.js';
 import { loopbackProvider, writeSse } from './fixtures/loopback-provider.js';
 
 const closes:(()=>Promise<void>)[]=[];
-afterEach(async()=>{for(const close of closes.splice(0).reverse())await close();});
+afterEach(async()=>{vi.unstubAllGlobals();for(const close of closes.splice(0).reverse())await close();});
 function program(variant='normal'):PromptProgram{return{version:1,controls:[{id:'pheme_session_mode',label:'Mode',type:'select',default:'1',options:[{label:'Fiction',value:'1'},{label:'OOC',value:'2'}]}],blocks:[{id:'static',title:'Static',kind:'message',role:'system',template:[{kind:'text',text:'SYNTHETIC_STATIC_PROMPT'}]},{id:'static-cache',title:'Static cache',kind:'cache',depth:1,role:'all',policy:'prefer'},{id:'memory',title:'Memory',kind:'slot',role:'user',slot:'memory'},{id:'conversation',title:'Conversation',kind:'history',from:0,to:'end'}],provenance:{sourceHash:'a'.repeat(64),variant,conversionVersion:'synthetic',notes:[]}};}
 function snapshot(endpoint='http://127.0.0.1:19099/v1/responses',variant='normal',mode='1'):RunSnapshot{
-  const p=program(variant),profile={...defaultProfile('synthetic-chat'),contents:[],models:{main:{id:'model',revision:1,title:'Synthetic',connectionId:'connection',connectionRevision:1,modelId:'gpt-5.6',maxOutputTokens:1024,temperature:null,connection:{id:'connection',revision:1,title:'Synthetic',protocol:'openai-chat-v1' as ProviderProtocol,endpoint,enabled:true,catalog:[],catalogError:null}}},promptPresets:{main:{id:'prompt',revision:1,title:'Synthetic',role:'main' as const,text:'',program:p}},promptControls:{'prompt@1':{values:{pheme_session_mode:mode},combinations:[]}}};
+  const p=program(variant),profile={...defaultProfile('synthetic-chat'),contents:[],models:{main:{id:'model',revision:1,title:'Synthetic',connectionId:'connection',connectionRevision:1,modelId:'gpt-5.6',capabilityRevision:modelCapability('openai-chat-v1','gpt-5.6')!.revision,maxOutputTokens:1024,temperature:null,connection:{id:'connection',revision:1,title:'Synthetic',protocol:'openai-chat-v1' as ProviderProtocol,endpoint,enabled:true,catalog:[],catalogError:null}}},promptPresets:{main:{id:'prompt',revision:1,title:'Synthetic',role:'main' as const,text:'',program:p}},promptControls:{'prompt@1':{values:{pheme_session_mode:mode},combinations:[]}}};
   return{chatId:profile.chatId,parentRevision:null,settingsRevision:1,settings:{preset:'calm',mode:'direct',translation:false,status:false,maxCalls:3},request:'SYNTHETIC_CURRENT_ONCE',history:[],resources:[],logicalHistory:[],profile};
 }
 function hooks(origin:string){const events:ToolEvent[]=[],attempts:WireRecord[]=[],finished:ProviderResult[]=[];const value:MainHooks={signal:new AbortController().signal,approvedOrigins:[origin],authorize:connection=>connection,onInput:()=>{},onToolEvent:event=>{events.push(event);},onAttemptStart:wire=>{attempts.push(wire);return`attempt-${attempts.length}`;},onAttemptFinish:(_id,result)=>{finished.push(result);}};return{value,events,attempts,finished};}
@@ -41,6 +42,7 @@ describe('Exact native main preview and terminal submission (synthetic loopback 
     const work=snapshot(),entry={id:'author',chatId:work.chatId,atRevision:null,atHash:null,kind:'author-canon' as const,text:'SYNTHETIC_MEMORY_SENTINEL',declaration:{author:'Synthetic author',text:'SYNTHETIC_MEMORY_SENTINEL'}},plan=planMemoryContext({scope:{chatId:work.chatId,history:[]},entries:[entry]});
     work.story={config:{...defaultStoryConfig(),revision:1},state:null,waiting:false,lineageHash:'synthetic',canonHash:'synthetic',memory:{entries:[entry],checkpoint:{chatId:work.chatId,indexed:[]},plan},models:{}};
     work.profile!.models.main!.connection.protocol='openai-responses-v1';
+    work.profile!.models.main!.capabilityRevision=modelCapability('openai-responses-v1',work.profile!.models.main!.modelId)!.revision;
     const built=buildMainProviderRequest(compileSnapshotPrompt(work)),body=encodeMainPreview(built.request,work.profile!.models.main!).body as Record<string,any>;
     const compiled=built.request.prompt!;const memory=compiled.messages.find(m=>m.id==='memory')!,host=compiled.messages.find(m=>m.id==='native.host-context')!;
     expect(memory.role).toBe('user');expect(memory.content[0].text).toContain(entry.text);expect(host.content[0].text).not.toContain(entry.text);expect((built.request.input.source as Record<string,Json>).memory).toBeUndefined();expect(body.instructions).not.toContain('parentRevision');expect(body.instructions).not.toContain(entry.text);
@@ -68,7 +70,7 @@ describe('Exact native main preview and terminal submission (synthetic loopback 
   });
 
   test('NMR06 exact encoders report explicit unsupported placement instead of reordering user blocks',()=>{
-    for(const protocol of ['openai-responses-v1','openai-chat-v1','vercel-chat-v1','anthropic-messages-v1','vertex-gemini-v1'] as ProviderProtocol[]){const work=compileSnapshotPrompt(snapshot());const target=work.profile!.models.main!;target.connection.protocol=protocol;target.modelId=protocol==='vertex-gemini-v1'?'gemini-3.8-flash':protocol==='anthropic-messages-v1'?'claude-sonnet-4-6':'gpt-5.6';const built=buildMainProviderRequest(work);expect(encodeMainPreview(built.request,target)).toHaveProperty('body');}
+    for(const protocol of ['openai-responses-v1','openai-chat-v1','vercel-chat-v1','anthropic-messages-v1','vertex-gemini-v1'] as ProviderProtocol[]){const work=compileSnapshotPrompt(snapshot());const target=work.profile!.models.main!;target.connection.protocol=protocol;target.modelId=protocol==='vertex-gemini-v1'?'gemini-3.8-flash':protocol==='anthropic-messages-v1'?'claude-opus-5':'gpt-5.6';target.capabilityRevision=modelCapability(protocol,target.modelId)?.revision;const built=buildMainProviderRequest(work);expect(encodeMainPreview(built.request,target)).toHaveProperty('body');}
   });
 
   test('NMR07 tool continuation keeps the frozen host message and original cache bindings stable',async()=>{
@@ -79,8 +81,8 @@ describe('Exact native main preview and terminal submission (synthetic loopback 
   });
 
   test('NMR08 unreviewed model aliases do not inherit explicit cache or mid-system capabilities',()=>{
-    const work=compileSnapshotPrompt(snapshot()),target=work.profile!.models.main!;target.connection.protocol='openai-responses-v1';target.modelId='gpt-5.9';const built=buildMainProviderRequest(work),preview=encodeMainPreview(built.request,target);expect(preview.diagnostics.some(d=>d.code==='PROMPT_CACHE_NOT_APPLIED')).toBe(true);expect((preview.body as Record<string,Json>).prompt_cache_options).toBeUndefined();
-    target.modelId='gpt-6-astra';const supported=encodeMainPreview(buildMainProviderRequest(work).request,target);expect(supported.diagnostics.some(d=>d.code==='CACHE_BREAKPOINT_ENCODED_HIT_UNVERIFIED')).toBe(true);
+    const work=compileSnapshotPrompt(snapshot()),target=work.profile!.models.main!;target.connection.protocol='openai-responses-v1';target.modelId='gpt-5.9';delete target.capabilityRevision;const built=buildMainProviderRequest(work),preview=encodeMainPreview(built.request,target);expect(preview.diagnostics.some(d=>d.code==='PROMPT_CACHE_NOT_APPLIED')).toBe(true);expect((preview.body as Record<string,Json>).prompt_cache_options).toBeUndefined();
+    target.modelId='gpt-6-astra';target.capabilityRevision=modelCapability(target.connection.protocol,target.modelId)!.revision;const supported=encodeMainPreview(buildMainProviderRequest(work).request,target);expect(supported.diagnostics.some(d=>d.code==='CACHE_BREAKPOINT_ENCODED_HIT_UNVERIFIED')).toBe(true);
   });
 
   test('NMR09 explicit state and pinned context slots have no duplicate host-envelope bodies',()=>{
@@ -90,5 +92,26 @@ describe('Exact native main preview and terminal submission (synthetic loopback 
     const built=buildMainProviderRequest(compileSnapshotPrompt(work)),source=built.request.input.source as Record<string,Json>;expect(source.pinnedSources).toEqual([]);expect(source.facts).toEqual([]);expect(source.state).toBeUndefined();
     const messages=built.request.prompt!.messages;expect(messages.find(m=>m.id==='state')?.content[0].text).toContain('"coins":7');expect(messages.find(m=>m.id==='native.host-context')?.content[0].text).not.toContain('"coins":7');
     const wire=JSON.stringify(encodeMainPreview(built.request,work.profile!.models.main!).body);for(const marker of ['SYNTHETIC_PINNED_BOT','SYNTHETIC_CANON_ALWAYS_PINNED'])expect(wire.split(marker).length-1).toBe(1);
+  });
+
+  test.each(['END_SCENE','UNREQUESTED_SEQUENCE'])('NMR10 Claude stop %s keeps the requested completion contract through the main runner',async stopSequence=>{
+    const prose='The synthetic scene closes.';
+    const server=await loopbackProvider(async(_request,response)=>writeSse(response,[
+      {type:'message_start',message:{id:'synthetic-stop',type:'message',role:'assistant',content:[],stop_reason:null,usage:{input_tokens:10,output_tokens:0}}},
+      {type:'content_block_start',index:0,content_block:{type:'text',text:prose}},
+      {type:'content_block_stop',index:0},
+      {type:'message_delta',delta:{stop_reason:'stop_sequence',stop_sequence:stopSequence},usage:{output_tokens:4}},
+      {type:'message_stop'},
+    ]));closes.push(server.close);
+    const work=snapshot('https://api.anthropic.com/v1'),target=work.profile!.models.main!;
+    target.connection.protocol='anthropic-messages-v1';target.connection.credentialEnv='NARRATIVE_PROVIDER_NATIVE_TEST';
+    target.modelId='claude-opus-5';target.capabilityRevision=modelCapability(target.connection.protocol,target.modelId)!.revision;target.stopSequences=['END_SCENE'];
+    const nativeFetch=globalThis.fetch;
+    vi.stubGlobal('fetch',vi.fn((input:RequestInfo|URL,init?:RequestInit)=>{if(String(input)!=='https://api.anthropic.com/v1/messages')throw new Error('Unexpected external request');return nativeFetch(`${server.origin}/v1/messages`,init);}));
+    const before=structuredClone(work),log=hooks('https://api.anthropic.com');log.value.resolveCredential=()=> 'synthetic-native-test-token';
+    const result=await runMain(work,log.value),matched=stopSequence==='END_SCENE';
+    expect(result).toMatchObject({status:matched?'completed':'partial',text:prose,error:matched?null:'ANTHROPIC_STOP_SEQUENCE',usage:{modelCalls:1,inputTokens:10,outputTokens:4,costUsd:null}});
+    expect(server.requests).toHaveLength(1);expect(JSON.parse(server.requests[0].body).stop_sequences).toEqual(['END_SCENE']);
+    expect(log.finished).toHaveLength(1);expect(log.finished[0].status).toBe(result.status);expect(log.events).toEqual([]);expect(work).toEqual(before);
   });
 });

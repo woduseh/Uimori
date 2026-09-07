@@ -2,6 +2,8 @@ import { createHash } from 'node:crypto';
 import { isVertexAdcReference } from './credential-reference.js';
 import { providerFetchOptions, transportFailureCode } from './provider-fetch.js';
 import { validateVertexEndpoint } from './product.js';
+import { modelCapability, requireSupportedModel } from './model-capabilities.js';
+import { assertContextBudget } from './context-budget.js';
 import { vertexAccessToken } from './vertex-auth.js';
 import { encodeVertex, diagnosticVertexBody, VertexDecoder, VertexProtocolError } from './vertex-protocol.js';
 import { ProviderContractError, validateConnection, validateRequest, type Json, type ProviderConnection, type ProviderExecutionOptions, type ProviderResult } from './transport.js';
@@ -82,9 +84,15 @@ export async function executeVertexProvider(connectionValue: ProviderConnection,
   try {
     const connection = validateConnection(connectionValue, options.approvedOrigins);
     const request = validateRequest(requestValue);
+    requireSupportedModel(connection, request.modelId);
     const prepared = encodeVertex(request);
+    const requestedTier = request.generation?.serviceTier;
+    const tier = options.vertexRequestTier ?? requestedTier ?? 'standard';
+    if (!modelCapability('vertex-gemini-v1', request.modelId)?.serviceTiers?.includes(tier) ||
+        (options.vertexRequestTier !== undefined && requestedTier !== undefined && options.vertexRequestTier !== requestedTier)) throw new ProviderContractError('INVALID_VERTEX_REQUEST_TIER');
     decoder = new VertexDecoder(prepared.context);
     if (signal.aborted) return failure('CANCELLED');
+    assertContextBudget(prepared.body, request.contextBudget);
     // Google's well-known variable contains an ADC file path, never a bearer token.
     const token = isVertexAdcReference(connection.credentialEnv)
       ? await vertexAccessToken(signal)
@@ -92,8 +100,6 @@ export async function executeVertexProvider(connectionValue: ProviderConnection,
     if (!token || /[\r\n]/u.test(token)) throw new ProviderContractError('CREDENTIAL_UNAVAILABLE');
     if (signal.aborted) return failure('CANCELLED');
     const endpoint = `${validateVertexEndpoint(connection.endpoint)}/${encodeURIComponent(request.modelId)}:streamGenerateContent?alt=sse`;
-    const tier = options.vertexRequestTier ?? connection.requestTier ?? 'standard';
-    if (!['standard', 'flex'].includes(tier)) throw new ProviderContractError('INVALID_VERTEX_REQUEST_TIER');
     const tierHeaders: Record<string, string> = tier === 'flex' ? { 'x-vertex-ai-llm-request-type': 'shared', 'x-vertex-ai-llm-shared-request-type': 'flex', 'x-server-timeout': String(Math.ceil(timeoutMs / 1000)) } : {};
     const body = JSON.stringify(prepared.body);
     // The diagnostic view does not become the actual request. Signatures remain byte-for-byte in body.
@@ -101,7 +107,7 @@ export async function executeVertexProvider(connectionValue: ProviderConnection,
     await options.onWire?.({ connectionId: connection.id, protocol: connection.protocol, role: request.role, modelId: request.modelId,
       method: 'POST', url: endpoint, headers: { 'content-type': 'application/json', accept: 'text/event-stream', ...tierHeaders, authorization: '[REDACTED]' },
       body: diagnostic, bodySha256: sha(body), stablePrefixSha256: sha(JSON.stringify(request.stable)) });
-    // The persisted attempt and shared budget admission both complete before generation starts.
+    // The persisted attempt completes before generation starts.
     if (signal.aborted) return failure('CANCELLED');
     const response = await fetch(endpoint, providerFetchOptions({ method: 'POST', body, headers: { 'content-type': 'application/json', accept: 'text/event-stream', ...tierHeaders, authorization: `Bearer ${token}` }, signal, redirect: 'error' }));
     if (!response.ok) { await response.body?.cancel(); return failure(`HTTP_${response.status}`); }

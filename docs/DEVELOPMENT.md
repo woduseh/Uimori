@@ -1,6 +1,6 @@
 # 개발과 검증
 
-정식 배포 전에는 하위 호환성을 요구하지 않아요. 현재 DB·보관 형식은 **v8**이며 구버전 자료·채팅·백업을 자동 이관하거나 보존용 백업을 만들지 않아요. 개발 DB를 다시 시작하려면 실행 중인 서버를 종료한 뒤 `npm run reset:dev`를 실행해요. 이 명령은 저장소의 `.local/narrative.sqlite`와 해당 SQLite 부속 파일·알려진 구형 자동 백업만 삭제해요. 서버가 DB를 사용 중이거나 경로가 저장소 밖으로 연결되면 중단해요. 다른 검증 산출물과 credential 파일은 대상으로 삼지 않아요.
+정식 배포 전에는 하위 호환성을 요구하지 않아요. 현재 DB·보관 형식은 **v9**이며 구버전 자료·채팅·백업을 자동 이관하거나 보존용 백업을 만들지 않아요. 개발 DB를 다시 시작하려면 실행 중인 서버를 종료한 뒤 `npm run reset:dev`를 실행해요. 이 명령은 저장소의 `.local/narrative.sqlite`와 해당 SQLite 부속 파일·알려진 구형 자동 백업만 삭제해요. 서버가 DB를 사용 중이거나 경로가 저장소 밖으로 연결되면 중단해요. 다른 검증 산출물과 credential 파일은 대상으로 삼지 않아요.
 
 [시작하기](../README.md) · [검증 계약](../project-plan/VERIFICATION.md)
 
@@ -64,7 +64,7 @@ node scripts/verify-worktrees.mjs --a '<준비된 작업트리 A>' --b '<준비�
 
 - `web/`: 봇별 탐색·채팅·패키지·프롬프트 편집, 안전한 원고 표시, 탭별 URL/초안/독서 위치, 페이지 읽기·SSE 갱신과 늦은 HTTP 응답 폐기.
 - `core/`: 공통 ContentPackage와 역할별 문맥, PromptProgram 데이터 AST·선택형 문법·TypeScript 제작 API, 콘텐츠 가져오기 변환, 공급자 adapter와 상태·기억·원문 회수, 번역·표현 검증. 개발용 지침과 앱 자료는 별개예요.
-- `server/`: schema/archive v8, SQLite WAL, revision/idempotency, 봇 소속·폴더, 분기, Run/job/chunk/attempt 수명, 판정 기회·임시 행동 상태, 인증·SSE·현재 형식 백업. DB 트랜잭션은 모델이나 브라우저를 기다리지 않아요.
+- `server/`: schema/archive v9, SQLite WAL, revision/idempotency, 봇 소속·폴더, 분기, Run/job/chunk/attempt 수명, 판정 기회·임시 행동 상태, 인증·SSE·현재 형식 백업. DB 트랜잭션은 모델이나 브라우저를 기다리지 않아요.
 - `tests/`: 실제 파일 DB/HTTP/프로세스 재시작과 Playwright 브라우저 검사. `scripts/`는 기존 reporter와 작은 수명주기 코드를 연결해요.
 
 원문·Run 완료·적격 보조 예약은 한 트랜잭션에 저장하고 worker는 커밋 뒤에 실행해요. job 결과·완료도 한 트랜잭션이며 source/hash와 worker generation/owner를 검사해요. 재시작은 완료 원문을 다시 생성하지 않아요. 실행 중이던 메인 요청은 `interrupted`로 남고, 로컬 결정적 모의 job만 재개해요. 표시 상태는 다음 원고의 사실로 주입하지 않아요.
@@ -73,4 +73,4 @@ node scripts/verify-worktrees.mjs --a '<준비된 작업트리 A>' --b '<준비�
 
 native JSON 가져오기 한도와 검토·저장 절차는 [JSON 가져오기](RISU-IMPORT.md), 에이전트의 원본 조사·native 작성·등록·검증은 [Risu 이식 가이드](RISU-PORTING.md), 프롬프트 작성 방식의 현재 후보와 실행 경계는 [제작 방식 비교](PROMPT-AUTHORING.md)에 있어요. Uimori 앱에는 Risu 원본 업로드·변환 API가 없어요. 외부 에이전트가 작성한 native 결과만 기존 편집기에서 검증·저장해요.
 
-현재 코드/검증 증거와 남은 범위는 [CURRENT](../project-plan/CURRENT.md), [M1 결과](../project-plan/M1-RESULTS.md), 제품 계약은 [계획 시작점](../project-plan/README.md)에 있어요. 실제 모델 호출·배포는 승인된 연결과 예산 범위가 정해진 뒤 진행해요.
+현재 코드/검증 증거와 남은 범위는 [CURRENT](../project-plan/CURRENT.md), [M1 결과](../project-plan/M1-RESULTS.md), 제품 계약은 [계획 시작점](../project-plan/README.md)에 있어요. 서버의 누적 호출 수·금액 제한과 단가 추정은 없으며 작업별 호출·시간·출력 한도와 전송 전 attempt 기록은 유지해요. 실제 모델 호출·배포는 명시적으로 승인된 범위에서 진행해요.

@@ -38,9 +38,9 @@ for (const observed of [
   const url = await app.listen({ port: 0, host: '127.0.0.1' });
   const chat = await api<Chat>(url, '/api/chats', { title: 'Synthetic cancelled usage' });
   const connection = app.store.product.connection({ title: 'Isolated fixture', protocol: 'fixture-sse-v1', endpoint: provider.endpoint, enabled: true }) as Connection;
-  const model = app.store.product.model({ title: 'Fixture model', connectionId: connection.id, connectionRevision: connection.revision, modelId: 'fixture-cancelled-usage', maxOutputTokens: 100, temperature: null }) as ModelPreset;
+  const model = app.store.product.model({ title: 'Fixture model', connectionId: connection.id, modelId: 'fixture-cancelled-usage', maxOutputTokens: 100, temperature: null }) as ModelPreset;
   const originalProfile = app.store.product.profile(chat.id);
-  const profile = app.store.product.updateProfile(chat.id, { expectedRevision: originalProfile.revision, attachments: [], creative: originalProfile.creative, routes: { ...originalProfile.routes, main: { id: model.id, revision: model.revision } }, image: false });
+  const profile = app.store.product.updateProfile(chat.id, { expectedRevision: originalProfile.revision, attachments: [], creative: originalProfile.creative, routes: { ...originalProfile.routes, main: { id: model.id } }, image: false });
   let release!: () => void; const gate = new Promise<void>(resolve => { release = resolve; }); item.release = release;
   let recorded!: (value: { id: string; result: ProviderResult }) => void; const persisted = new Promise<{ id: string; result: ProviderResult }>(resolve => { recorded = resolve; });
   const finishAttempt = app.store.product.finishAttempt.bind(app.store.product);

@@ -90,19 +90,21 @@ describe('M1 product data with actual file SQLite', () => {
     const { store, product } = await database();
     const chat = store.createChat('connection-story');
     const bound = product.connection({ title: 'Local fixture', protocol: 'fixture-sse-v1', endpoint: 'http://127.0.0.1:49999/turn', credentialEnv: 'NARRATIVE_PROVIDER_SYNTHETIC', enabled: true }) as Connection;
-    const model = product.model({ title: 'Manual unknown model', connectionId: bound.id, connectionRevision: 1, modelId: 'user-entered-unknown-model', maxOutputTokens: 4096, temperature: null }) as ModelPreset;
-    profile(product, chat, [], { routes: { main: reference(model), translation: null, status: null, image: null } });
+    const model = product.model({ title: 'Manual unknown model', connectionId: bound.id, modelId: 'user-entered-unknown-model', maxOutputTokens: 4096, temperature: null }) as ModelPreset;
+    profile(product, chat, [], { routes: { main: {id:model.id}, translation: null, status: null, image: null } });
     const snapshot = product.snapshot(chat.id)!;
     expect(snapshot.models.main?.modelId).toBe('user-entered-unknown-model');
     expect(snapshot.models.main?.connection.credentialEnv).toBe('NARRATIVE_PROVIDER_SYNTHETIC');
     expect(bound.catalog).toEqual([]);
     expect(() => product.connection({ title: 'injected', protocol: 'fixture-sse-v1', endpoint: bound.endpoint, enabled: true, headers: { authorization: 'forged' } })).toThrow('Unknown request field');
-    expect(() => product.model({ title: 'injected', connectionId: bound.id, connectionRevision: 1, modelId: 'unknown', maxOutputTokens: 100, temperature: null, body: { tools: ['shell.execute'] } })).toThrow('Unknown request field');
+    expect(() => product.model({ title: 'injected', connectionId: bound.id, modelId: 'unknown', maxOutputTokens: 100, temperature: null, body: { tools: ['shell.execute'] } })).toThrow('Unknown request field');
     const disabled = product.connection({ title: bound.title, protocol: bound.protocol, endpoint: bound.endpoint, credentialEnv: bound.credentialEnv, enabled: false, expectedRevision: bound.revision }, bound.id) as Connection;
     expect(disabled.revision).toBe(2);
     expect(snapshot.models.main?.connection.enabled).toBe(true);
     expect(() => product.authorize(snapshot.models.main!.connection)).toThrow();
-    expect(product.get<Connection>('connection', bound.id, 1).enabled).toBe(true);
+    expect(product.get<Connection>('connection', bound.id)).toEqual(disabled);
+    expect(() => product.get<Connection>('connection', bound.id, 1)).toThrow('Setting not found');
+    expect(snapshot.models.main?.connection).toEqual(bound);
   });
 
   test('P09 preserves sibling candidates from the exact original snapshot and each descendant ancestry with branch CAS', async () => {
@@ -154,8 +156,8 @@ describe('M1 product data with actual file SQLite', () => {
     const preserved = completedSource(store, product, chat.id, 'PRESERVED_ORIGINAL');
     const originalJobCount = store.detail(chat.id).jobs.length;
     const bound = product.connection({ title: 'Actual loopback fixture', protocol: 'fixture-sse-v1', endpoint: server.endpoint, enabled: true }) as Connection;
-    const model = product.model({ title: 'Main fixture target', connectionId: bound.id, connectionRevision: 1, modelId: 'fixture-main', maxOutputTokens: 4000, temperature: null }) as ModelPreset;
-    profile(product, chat, [], { routes: { main: reference(model), translation: null, status: null, image: null } });
+    const model = product.model({ title: 'Main fixture target', connectionId: bound.id, modelId: 'fixture-main', maxOutputTokens: 4000, temperature: null }) as ModelPreset;
+    profile(product, chat, [], { routes: { main: {id:model.id}, translation: null, status: null, image: null } });
     for (const expected of ['refused', 'partial'] as const) {
       const run = queuedRun(store, product, chat.id); store.startRun(run.id);
       const result = await runMain(run.snapshot, { signal: new AbortController().signal, approvedOrigins: [server.origin], authorize: value => product.authorize(value),
@@ -227,7 +229,7 @@ describe('M1 product data with actual file SQLite', () => {
     expect(product.asset(asset.id).asset.hash).toBe(asset.hash);
   });
 
-  test.each([1,2,3,4,5,6,7])('P11 rejects unsupported schema %i without automatic migration or backup', async version => {
+  test.each([1,2,3,4,5,6,7,8])('P11 rejects unsupported schema %i without automatic migration or backup', async version => {
     const item = await directory(); const path = join(item.directory, 'legacy.sqlite');
     schema1Fixture(path);
     const old=new DatabaseSync(path);old.exec(`PRAGMA user_version=${version};`);old.close();
@@ -250,7 +252,7 @@ describe('M1 product data with actual file SQLite', () => {
     const bytes = product.backup(); const path = join(item.directory, 'downloaded-backup.sqlite'); await writeFile(path, bytes);
     const reopened = new DatabaseSync(path, { readOnly: true });
     try {
-      expect(reopened.prepare('PRAGMA user_version').get()).toEqual({ user_version: 8 });
+      expect(reopened.prepare('PRAGMA user_version').get()).toEqual({ user_version: 9 });
       expect(reopened.prepare('SELECT id,text,hash FROM sources WHERE id=?').get(source.id)).toEqual({ id: source.id, text: source.text, hash: source.hash });
       expect(reopened.prepare('SELECT source_revision FROM jobs ORDER BY id').all()).toEqual(store.db.prepare('SELECT source_revision FROM jobs ORDER BY id').all());
       expect(Buffer.from((reopened.prepare('SELECT bytes FROM assets WHERE id=?').get(asset.id) as { bytes: Uint8Array }).bytes)).toEqual(Buffer.from(pixel, 'base64'));
@@ -319,9 +321,9 @@ describe('M1 real HTTP application boundaries', () => {
     const chat = await api<Chat>(url, `/api/chats/${created.id}/settings`, { expectedSettingsRevision: created.settingsRevision, ...created.settings, status: false, maxCalls: 8 }, { method: 'PATCH' });
     const glossary = app.store.product.content(contentBody('glossary', 'SOURCE_TIME_GLOSSARY_OLD')) as Content; glossaryId = glossary.id;
     const bound = app.store.product.connection({ title: 'Role routes fixture', protocol: 'fixture-sse-v1', endpoint: provider.endpoint, enabled: true }) as Connection;
-    const main = app.store.product.model({ title: 'Main', connectionId: bound.id, connectionRevision: 1, modelId: 'fixture-main', maxOutputTokens: 6000, temperature: null }) as ModelPreset;
-    const translation = app.store.product.model({ title: 'Translator', connectionId: bound.id, connectionRevision: 1, modelId: 'fixture-translator', maxOutputTokens: 6000, temperature: null }) as ModelPreset;
-    const configured = profile(app.store.product, chat, [reference(glossary)], { routes: { main: reference(main), translation: reference(translation), status: null, image: null } });
+    const main = app.store.product.model({ title: 'Main', connectionId: bound.id, modelId: 'fixture-main', maxOutputTokens: 6000, temperature: null }) as ModelPreset;
+    const translation = app.store.product.model({ title: 'Translator', connectionId: bound.id, modelId: 'fixture-translator', maxOutputTokens: 6000, temperature: null }) as ModelPreset;
+    const configured = profile(app.store.product, chat, [reference(glossary)], { routes: { main: {id:main.id}, translation: {id:translation.id}, status: null, image: null } });
     await api(url, '/api/test/control', { action: 'hold', barrier: 'translation' });
     const run = await api<Run>(url, `/api/chats/${chat.id}/runs`, { request: 'Translate this synthetic long scene after generation.', expectedRevision: null, expectedSettingsRevision: chat.settingsRevision, expectedProfileRevision: configured.revision, idempotencyKey: randomUUID() });
     const done = await terminal(url, run.id); expect(done.status).toBe('completed');
@@ -334,13 +336,17 @@ describe('M1 real HTTP application boundaries', () => {
     await api(url, '/api/test/control', { action: 'release', barrier: 'translation' });
     const partial = await terminalJob(url, chat.id, jobId);
     expect(partial.status).toBe('partial'); expect(partial.chunks?.map(chunk => chunk.status)).toEqual(['completed', 'failed', 'completed']);
+    expect(app.store.job(jobId).input).toMatchObject({translationModelSelection:{id:translation.id},translationModelSnapshot:{...translation,connection:bound}});
     expect(partial.result?.segments).toHaveLength(2); expect(partial.result?.sourceRevision).toBe(source.id); expect(partial.result?.mock).toBe(true);
     const successfulChunks = partial.chunks!.filter(chunk => chunk.status === 'completed').map(chunk => structuredClone(chunk));
     const failedChunk = partial.chunks!.find(chunk => chunk.status === 'failed')!;
     const beforeRetry = new Map(chunkRequests);
+    app.store.product.model({title:'Future translator settings',connectionId:bound.id,modelId:'future-translator',maxOutputTokens:2048,temperature:null,expectedRevision:translation.revision},translation.id);
     await api(url, `/api/jobs/${jobId}/retry`, { chunkId: failedChunk.id });
     const completed = await terminalJob(url, chat.id, jobId);
     expect(completed.status).toBe('completed'); expect(completed.result?.segments).toHaveLength(3);
+    expect(app.store.job(jobId).input).toMatchObject({translationModelSelection:{id:translation.id},translationModelSnapshot:{...translation,connection:bound}});
+    expect(app.store.product.get<ModelPreset>('model',translation.id).modelId).toBe('future-translator');
     expect(completed.result?.segments?.flatMap(segment => segment.anchors)).toEqual(source.blocks?.map(block => block.anchor));
     for (const chunk of successfulChunks) { expect(completed.chunks?.find(value => value.id === chunk.id)).toEqual(chunk); expect(chunkRequests.get(chunk.id)).toBe(beforeRetry.get(chunk.id)); }
     expect(chunkRequests.get(failedChunk.id)).toBe(beforeRetry.get(failedChunk.id)! + 1);
@@ -357,6 +363,31 @@ describe('M1 real HTTP application boundaries', () => {
     expect(provider.requests.filter(request => JSON.parse(request.body).role === 'main')).toHaveLength(1);
   });
 
+  test('invalid queued translation snapshot fails once before any provider request and leaves the HTTP server responsive', async () => {
+    const fixtureItem=await directory();
+    const provider=await loopbackProvider(async (_captured,response)=>{await writeSse(response,[{type:'error',message:'Unexpected provider dispatch'}]);});fixtureItem.close=provider.close;
+    const item=await directory();
+    const app=await createApp({dbPath:join(item.directory,'invalid-translation.sqlite'),buildId:'invalid-translation-snapshot',instanceId:randomUUID(),testMode:true,approvedOrigins:[provider.origin]});item.close=()=>app.close();
+    const store=app.store,product=store.product;
+    const initial=store.createChat('Invalid queued translation fixture');
+    const chat=store.settings(initial.id,initial.settingsRevision,{...initial.settings,translation:false,status:false});
+    const connection=product.connection({title:'Valid local fixture',protocol:'fixture-sse-v1',endpoint:provider.endpoint,enabled:true}) as Connection;
+    const model=product.model({title:'Translator',connectionId:connection.id,modelId:'fixture-translator',maxOutputTokens:2000,temperature:null}) as ModelPreset;
+    profile(product,chat,[],{routes:{main:null,translation:{id:model.id},status:null,image:null}});
+    const source=completedSource(store,product,chat.id,'The synthetic keeper waited by the river.');
+    const job=store.requestTranslation(source.id),frozen=structuredClone(store.run(source.runId).snapshot),storedSource=structuredClone(store.source(source.id));
+    const input=structuredClone(job.input) as Record<string,unknown>;delete input.translationModelSnapshot;
+    store.db.prepare('UPDATE jobs SET input=? WHERE id=?').run(JSON.stringify(input),job.id);
+    const url=await app.listen({port:0,host:'127.0.0.1'});
+    const failed=await terminalJob(url,chat.id,job.id);
+    expect(failed).toMatchObject({status:'failed',generation:job.generation,error:'Auxiliary job failed'});
+    await api(url,'/api/session');await api(url,`/api/chats/${chat.id}`);
+    expect(store.queuedJobs()).not.toContain(job.id);
+    expect(store.events(chat.id,0).filter(event=>event.kind==='job.failed'&&event.entityId===job.id)).toHaveLength(1);
+    expect(product.attempts(chat.id)).toEqual([]);expect(provider.requests).toHaveLength(0);
+    expect(store.source(source.id)).toEqual(storedSource);expect(store.run(source.runId).snapshot).toEqual(frozen);
+  });
+
   test('P05 P06 P09 routes selected main through fetch, preserves source on refusal/partial and creates a sibling over HTTP', async () => {
     const fixtureItem = await directory();
     const provider = await loopbackProvider(async (captured, response) => {
@@ -368,8 +399,8 @@ describe('M1 real HTTP application boundaries', () => {
     const { app, url } = await application({ approvedOrigins: [provider.origin] });
     const chat = await api<Chat>(url, '/api/chats', { title: 'HTTP provider chat' });
     const bound = app.store.product.connection({ title: 'Loopback selected', protocol: 'fixture-sse-v1', endpoint: provider.endpoint, enabled: true }) as Connection;
-    const model = app.store.product.model({ title: 'Fixture', connectionId: bound.id, connectionRevision: 1, modelId: 'fixture-http-main', maxOutputTokens: 4096, temperature: null }) as ModelPreset;
-    const configured = profile(app.store.product, chat, [], { routes: { main: reference(model), translation: null, status: null, image: null } });
+    const model = app.store.product.model({ title: 'Fixture', connectionId: bound.id, modelId: 'fixture-http-main', maxOutputTokens: 4096, temperature: null }) as ModelPreset;
+    const configured = profile(app.store.product, chat, [], { routes: { main: {id:model.id}, translation: null, status: null, image: null } });
     async function create(request: string) {
       const current = app.store.chat(chat.id);
       return api<Run>(url, `/api/chats/${chat.id}/runs`, { request, expectedRevision: current.headRevision, expectedSettingsRevision: current.settingsRevision, expectedProfileRevision: configured.revision, idempotencyKey: randomUUID() });
@@ -410,7 +441,7 @@ describe('M1 real HTTP application boundaries', () => {
     try {
       const { app, url } = await application({ approvedOrigins: [provider.origin] });
       const bound = app.store.product.connection({ title: 'Catalog fixture', protocol: 'fixture-sse-v1', endpoint: provider.endpoint, credentialEnv: envName, enabled: true }) as Connection;
-      const model = app.store.product.model({ title: 'Unlisted manual ID', connectionId: bound.id, connectionRevision: 1, modelId: 'manual-unlisted-id', maxOutputTokens: 1000, temperature: null }) as ModelPreset;
+      const model = app.store.product.model({ title: 'Unlisted manual ID', connectionId: bound.id, modelId: 'manual-unlisted-id', maxOutputTokens: 1000, temperature: null }) as ModelPreset;
       await api(url, `/api/connections/${bound.id}/catalog`, {});
       const refreshed = app.store.product.get<Connection>('connection', bound.id);
       expect(refreshed.catalog.map(item => item.id)).toEqual(['catalog-new-entry']);

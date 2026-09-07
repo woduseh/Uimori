@@ -32,7 +32,7 @@ function routedSnapshot(endpoint: string): RunSnapshot {
   return {
     chatId: 'routed-chat', parentRevision: 'parent-1', settingsRevision: 1, request: 'Visit the place the keeper mentioned.', settings: { preset: 'calm', mode: 'direct', translation: true, status: true, maxCalls: 4 }, history: [{ revision: 'parent-1', text: 'Ada points beyond the harbor.' }],
     resources: contents.map(content => ({ ...content, kind: content.kind === 'skill' ? 'skill' : 'lore', sourceKind: content.kind, chatId: 'routed-chat' })),
-    profile: { ...defaultProfile('routed-chat'), contents, attachments: contents.map(({ id, revision }) => ({ id, revision })), models: { main: { id: 'main-preset', revision: 1, title: 'Main fixture route', connectionId: bound.id, connectionRevision: 1, modelId: 'fixture-main-selected', maxOutputTokens: 4096, temperature: null, connection: bound } } },
+    profile: { ...defaultProfile('routed-chat'), contents, attachments: contents.map(({ id, revision }) => ({ id, revision })), models: { main: { id: 'main-preset', revision: 1, title: 'Main fixture route', connectionId: bound.id, modelId: 'fixture-main-selected', maxOutputTokens: 4096, temperature: null, connection: bound } } },
   };
 }
 function runnerHooks(origin: string, extra: Partial<MainHooks> = {}) {

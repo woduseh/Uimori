@@ -5,7 +5,7 @@ import { lineageHash, storyDependencyKey } from './story-store.js';
 import { activationRebuildState, defaultStoryConfig, type StoryConfig, type StorySnapshot, type StoryState } from '../core/story.js';
 import { initialState, reduceStateProposal, validateStateModule, validateStateValues } from '../core/state.js';
 import { memoryHash, planMemoryContext, validateMemoryEntry, validateMemoryCheckpoint, type MemoryEntry, type MemoryScope } from '../core/memory.js';
-import type { Connection, ModelPreset } from '../core/product.js';
+import { validateModelSnapshot } from './product-store.js';
 import type { RunSnapshot } from '../core/types.js';
 
 type Row = Record<string, any>;
@@ -22,7 +22,6 @@ function integer(value: unknown, min = 0, max = 1e9): asserts value is number { 
 function same(left: unknown, right: unknown, reason: string) { if (!isDeepStrictEqual(left, right)) reject(reason); }
 const rows = (store: Store, table: string): Row[] => store.db.prepare(`SELECT * FROM ${table}`).all() as Row[];
 const canonHash = (entries: MemoryEntry[]) => memoryHash(JSON.stringify(entries.filter(entry => entry.kind === 'author-canon').sort((a, b) => a.id.localeCompare(b.id))));
-function connectionView(value: unknown): Row { const result = structuredClone(object(value)); delete result.credentialEnv; result.enabled = false; return result; }
 
 function sourceRef(store: Store, chatId: string, revision: unknown, hash: unknown) {
   id(revision); id(hash); const source = store.sourceAtHash(revision, hash);
@@ -52,7 +51,7 @@ function configValue(store: Store, value: unknown, chatId: string): StoryConfig 
   if (typeof memory.enabled !== 'boolean') reject('invalid memory setting');
   integer(memory.recentCount, 1, 100); integer(memory.maxPacketChars, 1000, 2_000_000);
   for (const value of [config.stateModel, memory.model]) if (value !== null) {
-    const ref = shape(value, ['id', 'revision']); id(ref.id); integer(ref.revision, 1); store.product.get('model', ref.id, ref.revision);
+    const ref = shape(value, ['id']); id(ref.id); store.product.get('model', ref.id);
   }
   if (config.activatedAt !== null) { const ref = shape(config.activatedAt, ['revision', 'hash']); sourceRef(store, chatId, ref.revision, ref.hash); }
   if (config.revision === 0) same(config, defaultStoryConfig(), 'invalid default configuration');
@@ -97,10 +96,8 @@ export function validateStoryArchive(store: Store): void {
       const modelMap = shape(story.models, [], ['state', 'memory']);
       for (const [kind, ref] of [['state', config.stateModel], ['memory', config.memory.model]] as const) {
         if (!ref) { if (modelMap[kind] !== undefined) reject('unselected model snapshot'); continue; }
-        const model = store.product.get<ModelPreset>('model', ref.id, ref.revision);
-        const selected = object(modelMap[kind]); const { connection, ...body } = selected;
-        same(body, model, 'immutable model snapshot mismatch');
-        same(connectionView(connection), connectionView(store.product.get<Connection>('connection', model.connectionId, model.connectionRevision)), 'immutable connection snapshot mismatch');
+        const selected = validateModelSnapshot(modelMap[kind]);
+        if (selected.id !== ref.id) reject('model snapshot selection mismatch');
       }
       if (story.state !== null) {
         const state = shape(story.state, ['id', 'sourceRevision', 'sourceHash', 'moduleRevision', 'values', 'canonical']) as StoryState;

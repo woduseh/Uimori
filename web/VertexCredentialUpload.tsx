@@ -9,10 +9,10 @@ export function VertexCredentialUpload({credentialEnv,disabled,onRegistered,onBu
   const epoch=useRef(0);
   useEffect(()=>()=>{epoch.current++;},[]);
   const stored=credentialEnv.startsWith('NARRATIVE_PROVIDER_VERTEX_FILE_');
-  return <section className="vertex-credential-upload full" aria-label="Vertex 서비스 계정 JSON">
+  return <section className="vertex-credential-upload full" aria-label="Google 서비스 계정 JSON">
     <div className="provider-section-heading"><strong><FileKey size={18} aria-hidden="true"/>서비스 계정 JSON</strong><span className="provider-status">{stored?'JSON 인증 선택됨':'파일로 간편 등록'}</span></div>
     <p>Google Cloud에서 발급한 서비스 계정 키 파일을 선택해요. 프로젝트 ID와 인증 설정을 자동으로 채워요.</p>
-    <label className="vertex-upload-field"><span><Upload size={16} aria-hidden="true"/>{uploading?'서버에 등록하는 중…':stored?'다른 JSON 파일로 변경':'Vertex 키 JSON 파일 선택'}</span><input type="file" aria-label="Vertex 키 JSON 파일" accept=".json,application/json" disabled={disabled||uploading} onChange={async event=>{
+    <label className="vertex-upload-field"><span><Upload size={16} aria-hidden="true"/>{uploading?'서버에 등록하는 중…':stored?'다른 JSON 파일로 변경':'Google 키 JSON 파일 선택'}</span><input type="file" aria-label="Google 키 JSON 파일" accept=".json,application/json" disabled={disabled||uploading} onChange={async event=>{
       const file=event.target.files?.[0];event.target.value='';if(!file)return;
       setError('');
       if(file.size>64*1024){setError('64 KB 이하의 서비스 계정 JSON 파일을 선택해 주세요.');return;}

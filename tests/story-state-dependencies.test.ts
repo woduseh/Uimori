@@ -56,6 +56,24 @@ async function finish(store: Store, id: string, owner = 'state-fixture') {
 function stateCount(store: Store, jobId: string) { return store.db.prepare('SELECT count(*) AS n FROM story_states WHERE job_id=?').get(jobId)!.n; }
 
 describe('S02 S03 actual Store continuity and activation dependencies', () => {
+  test('model IDs use latest settings for new reservations and rebuilds while existing snapshots stay fixed', async () => {
+    const store=await database(),id=chat(store);const config=activate(store,id,'authoritative');
+    const connection=store.product.connection({title:'Synthetic connection',protocol:'fixture-sse-v1',endpoint:'http://127.0.0.1:44901/turn',enabled:true});
+    const model=store.product.model({title:'Synthetic model',connectionId:connection.id,modelId:'fixture-state-first',maxOutputTokens:1024,temperature:null});
+    const selected=store.story.saveConfig(id,{expectedRevision:config.revision,module:config.module,stateModel:{id:model.id},memory:config.memory});
+    expect(selected.stateModel).toEqual({id:model.id});
+    expect(()=>store.story.saveConfig(id,{expectedRevision:selected.revision,module:selected.module,stateModel:{id:model.id,revision:model.revision},memory:selected.memory})).toThrow('Unknown request field');
+    const first=source(store,id,'Snapshot ownership is preserved.'),before=job(store,id,first.id),frozen=store.story.bundle(before.id).snapshot;
+    const changedModel=store.product.model({title:'Updated model',connectionId:connection.id,modelId:'fixture-state-latest',maxOutputTokens:2048,temperature:null,expectedRevision:model.revision},model.id);
+    const changedConnection=store.product.connection({title:'Updated connection',protocol:'fixture-sse-v1',endpoint:'http://127.0.0.1:44902/turn',enabled:true,expectedRevision:connection.revision},connection.id);
+    const rebuilt=store.story.rebuildSource(first.id,'state');expect(rebuilt.id).not.toBe(before.id);
+    expect(store.story.bundle(rebuilt.id).snapshot.story!.models.state).toEqual({...changedModel,connection:changedConnection});
+    expect(store.story.bundle(before.id).snapshot).toEqual(frozen);
+    expect(store.story.rebuildSource(first.id,'state').id).toBe(rebuilt.id);
+    const next=request(store,id);expect(next.snapshot.story!.models.state).toEqual({...changedModel,connection:changedConnection});
+    expect(store.story.config(id)).toEqual(selected);expect(fetch).not.toHaveBeenCalled();
+  });
+
   test('continuity permits the next source but defers its state claim until the preceding state is ready; duplicate claims and completions cannot double-apply', async () => {
     const store = await database(); const id = chat(store); activate(store, id, 'continuity');
     const first = source(store, id, 'First purchase. [[event:purchase]]'); const firstJob = job(store, id, first.id);
@@ -91,7 +109,7 @@ describe('S02 S03 actual Store continuity and activation dependencies', () => {
     const originalRun = structuredClone(store.run(second.runId).snapshot);
     expect(store.story.claim(secondJob.id, 'too-early')).toBeNull(); await finish(store, firstJob.id); await finish(store, secondJob.id);
     expect(store.story.stateAt(id, second.id)?.values).toEqual({ coins: 7 });
-    const restored = await database(); const archive = store.product.export(); expect(archive.version).toBe(8);
+    const restored = await database(); const archive = store.product.export(); expect(archive.version).toBe(9);
     expect(restored.product.import(archive).restored).toBe(true);
     expect(restored.run(second.runId).snapshot).toEqual(originalRun);
     expect(restored.story.bundle(secondJob.id).snapshot.story?.state?.values).toEqual({ coins: 7 });

@@ -31,13 +31,14 @@ describe('local provider definitions (no network or provider capability inferenc
     expect(PROVIDER_DEFINITIONS.filter(item => item.catalog === 'local-support').map(item => item.id)).toEqual(['vertex-gemini-v1']);
   });
   test('does not advertise provider-specific model options on incompatible adapters', () => {
-    expect(providerDefinition('vertex-gemini-v1').optionKeys).toEqual(['maxOutputTokens', 'timeoutMs', 'thinkingLevel']);
+    expect(providerDefinition('vertex-gemini-v1').optionKeys).toEqual(['maxOutputTokens', 'temperature', 'timeoutMs', 'thinkingLevel', 'topP', 'stopSequences', 'serviceTier']);
     for (const item of PROVIDER_DEFINITIONS) {
       expect(item.optionKeys).not.toContain('requestTier');
       expect(item.optionKeys).not.toContain('sol');
       expect(item.optionKeys).not.toContain('evaluationTools');
+      for(const settingField of ['connectionRevision','revision','expectedRevision']) expect(item.optionKeys).not.toContain(settingField);
       expect(item.optionKeys.includes('thinkingMode')).toBe(item.id === 'anthropic-messages-v1');
-      expect(item.optionKeys.includes('thinkingBudgetTokens')).toBe(item.id === 'anthropic-messages-v1');
+      expect(item.optionKeys).not.toContain('thinkingBudgetTokens');
       if (!['vertex-gemini-v1', 'fixture-sse-v1'].includes(item.id)) expect(item.optionKeys).not.toContain('thinkingLevel');
       if (['vertex-gemini-v1', 'fixture-sse-v1'].includes(item.id)) expect(item.optionKeys).not.toContain('reasoningEffort');
     }

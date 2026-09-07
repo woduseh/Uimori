@@ -1,8 +1,8 @@
-import type { Connection, ContentRef, ModelPreset } from './product.js';
+import type { Connection, ContentRef, ModelPreset, ModelSnapshot } from './product.js';
 import type { Json, ProviderUsage, WireRecord } from './transport.js';
 
-export type RegistrationConnectionDraft = Pick<Connection,'title'|'protocol'|'endpoint'|'credentialEnv'|'requestTier'|'enabled'>;
-export type RegistrationModelDraft = Omit<ModelPreset,'id'|'revision'|'connectionId'|'connectionRevision'|'source'|'userOverrides'>;
+export type RegistrationConnectionDraft = Pick<Connection,'title'|'protocol'|'endpoint'|'credentialEnv'|'enabled'>;
+export type RegistrationModelDraft = Omit<ModelPreset,'id'|'revision'|'connectionId'|'source'|'userOverrides'|'capabilityRevision'>;
 export type RegistrationPlan = {
   connection: {kind:'existing';id:string;revision:number} | {kind:'new';draft:RegistrationConnectionDraft};
   model: RegistrationModelDraft;
@@ -14,10 +14,13 @@ export type RegistrationRun = ContentRef & {
   intentHash:string; createdAt:string; finishedAt:string|null;
   status:'running'|'ready'|'failed'|'cancelled'|'interrupted'|'applied';
   request:string; target:ContentRef; connection:ContentRef;
+  targetSnapshot:ModelSnapshot;
   attempts:RegistrationAttempt[]; plan:RegistrationPlan|null; planHash:string|null; error:string|null;
+  planConnectionSnapshot:Connection|null;
   applied:{connection:ContentRef;model:ContentRef}|null;
+  appliedSnapshot:{connection:Connection;model:ModelPreset}|null;
 };
-export type RegistrationView = Omit<RegistrationRun,'intentHash'|'attempts'> & {
+export type RegistrationView = Omit<RegistrationRun,'intentHash'|'attempts'|'targetSnapshot'|'planConnectionSnapshot'|'appliedSnapshot'> & {
   modelCalls:number; usage:ProviderUsage|null;
 };
 export const REGISTRATION_LIMITS = {maxCalls:1, timeoutMs:60_000, requestCharacters:6000} as const;

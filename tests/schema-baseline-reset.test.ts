@@ -23,9 +23,9 @@ function reset(f:ReturnType<typeof fixture>,args:string[]=[],env:Record<string,s
   return {...result,body:line?JSON.parse(line):undefined};
 }
 
-test('BASE01 a fresh database creates the complete schema 8 and a current database reopens directly',()=>{
+test('BASE01 a fresh database creates the complete schema 9 and a current database reopens directly',()=>{
   const f=fixture(),store=new Store(f.path);f.owner.store=store;
-  expect(store.db.prepare('PRAGMA user_version').get()).toEqual({user_version:8});
+  expect(store.db.prepare('PRAGMA user_version').get()).toEqual({user_version:9});
   expect(store.db.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
   expect(store.db.prepare('SELECT count(*) AS n FROM package_behavior_entropy').get()).toEqual({n:1});
   const chat=store.createChat('Current baseline');store.close();f.owner.store=undefined;
@@ -43,7 +43,20 @@ test('BASE03 fresh initialization rolls back as one transaction and releases its
   const f=fixture(),mock=vi.spyOn(ProductStore.prototype,'initFresh').mockImplementationOnce(()=>{throw new Error('synthetic initialization failure');});
   expect(()=>new Store(f.path)).toThrow('synthetic initialization failure');mock.mockRestore();
   const db=new DatabaseSync(f.path,{readOnly:true});try{expect(db.prepare('PRAGMA user_version').get()).toEqual({user_version:0});expect(db.prepare("SELECT name FROM sqlite_schema WHERE type='table' AND name NOT LIKE 'sqlite_%'").all()).toEqual([]);}finally{db.close();}
-  f.owner.store=new Store(f.path);expect(f.owner.store.db.prepare('PRAGMA user_version').get()).toEqual({user_version:8});
+  f.owner.store=new Store(f.path);expect(f.owner.store.db.prepare('PRAGMA user_version').get()).toEqual({user_version:9});
+});
+
+test('BASE04 only schema 9 archives restore, and a rejected version leaves both databases untouched',()=>{
+  const source=fixture(),target=fixture();source.owner.store=new Store(source.path);target.owner.store=new Store(target.path);
+  const chat=source.owner.store.createChat('Current archive');const archive=source.owner.store.product.export();
+  const before=structuredClone(archive),empty=target.owner.store.product.export().tables;
+  expect(archive.version).toBe(9);
+  for(const version of [8,10]){
+    expect(()=>target.owner.store!.product.import({...archive,version})).toThrow('Unsupported archive');
+    expect(target.owner.store.product.export().tables).toEqual(empty);expect(archive).toEqual(before);
+  }
+  expect(target.owner.store.product.import(archive)).toMatchObject({restored:true,chats:1});
+  expect(target.owner.store.chat(chat.id).title).toBe('Current archive');expect(archive).toEqual(before);
 });
 
 test('RESET01 the CLI removes only the fixed development DB family and known pre-upgrade copies',()=>{

@@ -14,6 +14,7 @@ import { initBehaviorHost, freezePackageStates, completePackageOutputs, branchPa
 import { initRunBehavior, prepareRunBehavior, copyCandidateBehavior } from './package-behavior-run.js';
 import { nativeResources } from '../core/native-context.js';
 import { captureLogicalHistory, compileSnapshotPrompt } from './prompt-snapshot.js';
+import { seedContextPlan } from './context-planning.js';
 import { splitSource, BUILTIN_ASSETS } from '../core/auxiliary.js';
 import type { Settings, Chat as BaseChat, Run as BaseRun, Source as BaseSource, Job as BaseJob, Resource, RunSnapshot, Usage, ModelInput, ToolEvent } from '../core/types.js';
 
@@ -48,7 +49,7 @@ export class Store {
     catch (error) { this.ownership.close(); throw error; }
     try {
     const version = Number((this.db.prepare('PRAGMA user_version').get() as Row).user_version);
-    if (![0,8].includes(version)) throw new Error(`Unsupported database schema version ${version}; Uimori requires schema 8. For disposable default development data, stop the server and run npm run reset:dev.`);
+    if (![0,9].includes(version)) throw new Error(`Unsupported database schema version ${version}; Uimori requires schema 9. For disposable default development data, stop the server and run npm run reset:dev.`);
     if(version===0&&this.db.prepare("SELECT 1 FROM sqlite_schema WHERE type='table' AND name NOT LIKE 'sqlite_%' LIMIT 1").get())throw new Error('Unversioned database is not empty. For disposable default development data, stop the server and run npm run reset:dev.');
     this.db.exec('PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON; PRAGMA busy_timeout=3000;');
     this.product = new ProductStore(this);
@@ -69,9 +70,11 @@ export class Store {
       CREATE TABLE IF NOT EXISTS tool_events (seq INTEGER PRIMARY KEY AUTOINCREMENT, run_id TEXT NOT NULL REFERENCES runs(id), event TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS events (seq INTEGER PRIMARY KEY AUTOINCREMENT, chat_id TEXT NOT NULL REFERENCES chats(id), kind TEXT NOT NULL, entity_id TEXT NOT NULL, at TEXT NOT NULL);
       CREATE INDEX IF NOT EXISTS chat_events ON events(chat_id,seq);
+      CREATE TABLE provider_connection_tests (id TEXT PRIMARY KEY, idempotency_key TEXT NOT NULL UNIQUE, model_id TEXT NOT NULL, model_revision INTEGER NOT NULL, status TEXT NOT NULL, sent_at TEXT, body TEXT NOT NULL);
+      CREATE UNIQUE INDEX one_active_connection_test_per_model ON provider_connection_tests(model_id) WHERE status='running';
       `);
       this.product.initFresh();this.story.initFresh();this.native.init();this.organization.init();
-      this.behavior.init();initBehaviorHost(this);initRunBehavior(this);this.db.exec('PRAGMA user_version=8');
+      this.behavior.init();initBehaviorHost(this);initRunBehavior(this);this.db.exec('PRAGMA user_version=9');
     });
     } catch (error) { this.db.close(); this.ownership.close(); throw error; }
   }
@@ -143,6 +146,7 @@ export class Store {
       const hiddenStory=new HiddenStoryStore(this.product).freeze(base.profile?.hiddenStory,{seed:id,userLabel:base.profile?.contents.find(c=>c.kind==='persona')?.title??'User'});
       if(nativeBot && hiddenStory?.config.contentPolicy==='general-fiction')throw new HttpError(400,'This native bot requires the nonsexual Hidden Story policy');
       let frozen = this.story.prepareRunInTransaction({...base,...(hiddenStory?{hiddenStory}:{})});
+      frozen = seedContextPlan(frozen);
       frozen = freezePackageStates(this,{...frozen,logicalHistory:captureLogicalHistory(this,frozen)},true);
       frozen = compileSnapshotPrompt(prepareRunBehavior(this,id,frozen));
       const status = frozen.story?.waiting ? 'waiting_for_state' : 'queued';
@@ -264,9 +268,10 @@ export class Store {
     return this.transaction(() => {
       const priorInput = this.job(id).input;
       const translationModelSelection = priorInput && typeof priorInput === 'object' && Object.hasOwn(priorInput,'translationModelSelection') ? {translationModelSelection:(priorInput as {translationModelSelection:unknown}).translationModelSelection} : {};
+      const translationModelSnapshot = priorInput && typeof priorInput === 'object' && Object.hasOwn(priorInput,'translationModelSnapshot') ? {translationModelSnapshot:(priorInput as {translationModelSnapshot:unknown}).translationModelSnapshot} : {};
       const promptSelection = priorInput && typeof priorInput === 'object' && Object.hasOwn(priorInput,'promptSelection') ? {promptSelection:(priorInput as {promptSelection:unknown}).promptSelection} : {};
       const promptControlSelection = priorInput && typeof priorInput === 'object' && Object.hasOwn(priorInput,'promptControlSelection') ? {promptControlSelection:(priorInput as {promptControlSelection:unknown}).promptControlSelection} : {};
-      const claimedInput = input && typeof input === 'object' && !Array.isArray(input) ? {...input,...promptSelection,...translationModelSelection,...promptControlSelection} : input;
+      const claimedInput = input && typeof input === 'object' && !Array.isArray(input) ? {...input,...promptSelection,...translationModelSelection,...translationModelSnapshot,...promptControlSelection} : input;
       const changed = this.db.prepare("UPDATE jobs SET status='running',generation=generation+1,owner=?,input=?,error=NULL,updated_at=? WHERE id=? AND status='queued'").run(owner, json(claimedInput), now(), id);
       if (!changed.changes) return null;
       if (plan) { this.product.plan(id,plan); for (const chunk of plan.chunks) this.db.prepare("INSERT OR IGNORE INTO job_chunks(job_id,id,status,attempt) VALUES(?,?,'queued',0)").run(id,chunk.id); }
@@ -290,6 +295,9 @@ export class Store {
       const changed = this.db.prepare("UPDATE jobs SET status='failed',error=?,updated_at=? WHERE id=? AND status='running' AND generation=? AND owner=?").run(error, now(), id, generation, owner);
       if (changed.changes) this.event(this.job(id).chatId, 'job.failed', id);
     });
+  }
+  failQueuedJob(id:string,expectedGeneration:number,error:string){
+    this.transaction(()=>{const changed=this.db.prepare("UPDATE jobs SET status='failed',error=?,updated_at=? WHERE id=? AND status='queued' AND generation=?").run(error,now(),id,expectedGeneration);if(changed.changes)this.event(this.job(id).chatId,'job.failed',id);});
   }
   retryJob(id: string, chunkId?: string): Job {
     return this.transaction(() => {

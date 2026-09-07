@@ -29,6 +29,7 @@ function roleResources(snapshot: RunSnapshot, role: 'main' | 'translation' | 'st
   return resources;
 }
 export type MainInput = ModelInput & {
+  contextSummary?: string;
   controls?: ReturnType<typeof compileCreative>;
   pinnedSources?: { id: string; revision: number; kind: string; hash: string; text: string }[];
   state?: { values: import('./state.js').StateValues; sourceRevision:string|null; moduleRevision:number; constraints:import('./state.js').StateModule };
@@ -69,11 +70,17 @@ export function buildMainInput(snapshot: RunSnapshot, results: readonly ToolEven
   }
   if(snapshot.story?.memory){
     const {recentHistory,...memory}=hiddenMemoryPlanForRequest(snapshot,snapshot.story.memory.plan);
-    if(!memory.ready)throw new Error('Memory context budget exceeded');
+    if(!memory.ready&&!snapshot.contextPlan)throw new Error('Memory context budget exceeded');
     input.history=structuredClone(recentHistory);input.memory=structuredClone(memory);
     input.tools.push(...STORY_READ_NAMES);
   }
   else if(snapshot.hiddenStory)input.history=hiddenHistoryForRequest(snapshot);
+  if(snapshot.contextPlan){
+    const kept=new Set(snapshot.contextPlan.recentSourceRevisions);
+    input.history=structuredClone(hiddenHistoryForRequest(snapshot).filter(entry=>kept.has(entry.revision)));
+    if(snapshot.contextPlan.summary)input.contextSummary=snapshot.contextPlan.summary;
+    for(const tool of STORY_READ_NAMES)if(!input.tools.includes(tool))input.tools.push(tool);
+  }
   if(snapshot.hiddenStory)input.contract+='\nHidden segment visibility is for the reader. A memory kind alone never establishes world truth or actor knowledge: respect knowledge.worldStatus and knownByActorIds; unspecified/null remains unknown. Never infer actor knowledge from a portrait or from the reader opening a panel.';
   if(input.catalog.length>100){input.catalogPage={total:input.catalog.length,listed:100,remaining:'Use knowledge.search or skills.list with pagination to discover the full approved scope.'};input.catalog=input.catalog.slice(0,100);}
   const behaviorTools = listBehaviorTools(snapshot);
@@ -100,7 +107,7 @@ export type ToolAction = { callId: string; name: string; args: Record<string, un
 /** Execute a reusable read action against the immutable Run's local corpus. */
 export function executeTool(snapshot: RunSnapshot, action: ToolAction, signal?: AbortSignal, role: 'main' | 'translation' | 'status' | 'image' = 'main'): ToolEvent {
   checkAbort(signal);
-  if((role==='main' || role==='translation') && STORY_READ_NAMES.includes(action.name))return executeStoryRead(snapshot,action,role==='translation');
+  if((role==='main' || role==='translation') && STORY_READ_NAMES.includes(action.name))return executeStoryRead(snapshot,action,role==='translation'||!!snapshot.contextPlan);
   const denied = (code: string): ToolEvent => ({ callId: action.callId, name: ALLOWED_TOOLS.includes(action.name) ? action.name : 'unapproved', args: {}, result: { code }, denied: true });
   if (!ALLOWED_TOOLS.includes(action.name)) return denied('TOOL_NOT_ALLOWED');
   // Scope applies before search, counts, pagination, and individual reads alike.

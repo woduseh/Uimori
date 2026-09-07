@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { basename, isAbsolute, join, relative, resolve } from 'node:path';
 import { createHash, randomUUID } from 'node:crypto';
 import { createApp, type App } from '../server/app.js';
-import type { Chat, ChatDetail, Run } from '../core/types.js';
+import type { Chat, ChatDetail, Run, RunSnapshot } from '../core/types.js';
 import type { ChatProfile, Connection, Content, ModelPreset } from '../core/product.js';
 import type { SourceTimeContext } from '../core/auxiliary.js';
 import type { Json } from '../core/transport.js';
@@ -27,17 +27,16 @@ afterEach(async () => {
   vi.unstubAllGlobals(); vi.unstubAllEnvs(); vi.useRealTimers();
 });
 const ref = ({ id, revision }: { id: string; revision: number }) => ({ id, revision });
+const frozenInputs = ({contextPlan:_contextPlan,promptCompilation:_promptCompilation,...snapshot}:RunSnapshot) => snapshot;
 async function api<T>(app: App, path: string, body?: unknown, method: 'POST' | 'PUT' | 'PATCH' = 'POST'): Promise<T> {
   const response = await app.inject({ method: body === undefined ? 'GET' : method, url: path, headers: { host: '127.0.0.1', ...(body === undefined ? {} : { 'content-type': 'application/json' }) }, ...(body === undefined ? {} : { payload: JSON.stringify(body) }) });
   expect(response.statusCode, response.body).toBe(200); return response.json() as T;
 }
 async function launch(item: (typeof owned)[number]) {
-  const app = await createApp({ dbPath: join(item.directory, 'story.sqlite'), buildId: 'vertex-app-local-fixture', instanceId: randomUUID(), testMode: true, approvedOrigins: [origin], liveBudget: { maxRequests: 24, maxCostUsd: 100 } });
+  const app = await createApp({ dbPath: join(item.directory, 'story.sqlite'), buildId: 'vertex-app-local-fixture', instanceId: randomUUID(), testMode: true, approvedOrigins: [origin] });
   item.app = app; await app.listen({ port: 0, host: '127.0.0.1' }); return app;
 }
 async function fixture(handler: Parameters<typeof loopbackProvider>[0]) {
-  // Keep the published-price validity boundary deterministic while sockets and timers remain real.
-  vi.useFakeTimers({ toFake: ['Date'] }); vi.setSystemTime(new Date('2026-09-07T00:00:00Z'));
   vi.stubEnv(credentialEnv, fakeBearer);
   const item = { directory: await mkdtemp(join(tmpdir(), 'uimori vertex app fixture ')) } as (typeof owned)[number]; owned.push(item);
   const provider = await loopbackProvider(handler); item.close = provider.close;
@@ -45,6 +44,10 @@ async function fixture(handler: Parameters<typeof loopbackProvider>[0]) {
   vi.stubGlobal('fetch', vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
     const url = input instanceof Request ? input.url : String(input); urls.push(url);
     if (url !== providerUrl) throw new Error('Unexpected external request blocked by the fixture');
+    const attempt = item.app!.store.db.prepare("SELECT request,run_id,job_id,status,cost_usd FROM attempts ORDER BY rowid DESC LIMIT 1").get()!;
+    expect(attempt.status).toBe('running'); expect(attempt.cost_usd).toBeNull();
+    expect(JSON.parse(String(attempt.request))).toMatchObject({ url: providerUrl });
+    expect(attempt.run_id !== null || attempt.job_id !== null).toBe(true);
     return nativeFetch(provider.endpoint, init);
   }));
   return { item, provider, urls, app: await launch(item) };
@@ -78,10 +81,10 @@ async function setup(app: App, translation = true) {
     ['glossary', 'ORIGINAL_GLOSSARY: Ada means 에이다.', 'pinned'],
   ] as const) contents.push(await api<Content>(app, '/api/content', { kind, title: `Synthetic ${kind}`, description: `Fixture ${kind}`, text, loading, relatedIds: [] }));
   const connection = await api<Connection>(app, '/api/connections', { title: 'Vertex to local HTTP fixture', protocol: 'vertex-gemini-v1', endpoint, credentialEnv, enabled: true });
-  const main = await api<ModelPreset>(app, '/api/model-presets', { title: 'Main fixture', connectionId: connection.id, connectionRevision: connection.revision, modelId: 'gemini-3.8-flash', maxOutputTokens: 8192, temperature: null, thinkingLevel: 'MEDIUM', timeoutMs: 5000 });
-  const auxiliary = await api<ModelPreset>(app, '/api/model-presets', { title: 'Translation fixture', connectionId: connection.id, connectionRevision: connection.revision, modelId: 'gemini-3.8-flash', maxOutputTokens: 4096, temperature: null, thinkingLevel: 'LOW', timeoutMs: 5000 });
+  const main = await api<ModelPreset>(app, '/api/model-presets', { title: 'Main fixture', connectionId: connection.id, modelId: 'gemini-3.8-flash', maxOutputTokens: 8192, temperature: null, thinkingLevel: 'MEDIUM', timeoutMs: 5000 });
+  const auxiliary = await api<ModelPreset>(app, '/api/model-presets', { title: 'Translation fixture', connectionId: connection.id, modelId: 'gemini-3.8-flash', maxOutputTokens: 4096, temperature: null, thinkingLevel: 'LOW', timeoutMs: 5000 });
   const prior = await api<ChatProfile>(app, `/api/chats/${chat.id}/profile`);
-  const profile = await api<ChatProfile>(app, `/api/chats/${chat.id}/profile`, { expectedRevision: prior.revision, attachments: contents.map(ref), creative: prior.creative, routes: { main: ref(main), translation: translation ? ref(auxiliary) : null, status: null, image: null }, image: false }, 'PUT');
+  const profile = await api<ChatProfile>(app, `/api/chats/${chat.id}/profile`, { expectedRevision: prior.revision, attachments: contents.map(ref), creative: prior.creative, routes: { main: {id:main.id}, translation: translation ? {id:auxiliary.id} : null, status: null, image: null }, image: false }, 'PUT');
   return { chat, profile, contents, main, auxiliary };
 }
 function command(chat: Chat, profile: ChatProfile) {
@@ -131,7 +134,9 @@ test('L01 P05 P07 P08 P09 preserves source-time Main/Aux snapshots, long chunks 
   await api(app, '/api/test/control', { action: 'hold', barrier: 'translation' });
   const input = command(selected.chat, selected.profile);
   const originalRun = await api<Run>(app, `/api/chats/${selected.chat.id}/runs`, input); await received;
-  const originalSnapshot = structuredClone(originalRun.snapshot);
+  const originalSnapshot = structuredClone(app.store.run(originalRun.id).snapshot);
+  expect(frozenInputs(originalSnapshot)).toEqual(frozenInputs(originalRun.snapshot));
+  expect(originalSnapshot.contextPlan).toMatchObject({status:'ready',compacted:[],summaryCalls:0});
   const edited: Content[] = [];
   for (const content of selected.contents) edited.push(await api<Content>(app, `/api/content/${content.id}`, { kind: content.kind, title: content.title, description: content.description, loading: content.loading, relatedIds: content.relatedIds, text: 'FUTURE_MUTATION_' + content.kind, expectedRevision: content.revision }, 'PUT'));
   await api(app, `/api/chats/${selected.chat.id}/profile`, { expectedRevision: selected.profile.revision, attachments: edited.map(ref), creative: { ...selected.profile.creative, style: 'vivid' }, routes: selected.profile.routes, image: false }, 'PUT');
@@ -200,6 +205,9 @@ test.each(['main', 'translation'] as const)('L01 P06 P11 restarting an in-flight
   }
   await received;
   const before = await api<ChatDetail>(state.app, `/api/chats/${selected.chat.id}`);
+  const transmittedSnapshot = before.runs.find(item=>item.id===run.id)!.snapshot;
+  expect(frozenInputs(transmittedSnapshot)).toEqual(frozenInputs(run.snapshot));
+  expect(transmittedSnapshot.contextPlan).toMatchObject({status:'ready',compacted:[],summaryCalls:0});
   const expectedRequests = stalledRole === 'main' ? 1 : 2;
   expect(state.provider.requests).toHaveLength(expectedRequests);
   const attemptIds = before.attempts!.map(attempt => attempt.id);
@@ -208,7 +216,7 @@ test.each(['main', 'translation'] as const)('L01 P06 P11 restarting an in-flight
   await state.app.close(); state.item.app = undefined;
   const reopened = await launch(state.item); const after = await api<ChatDetail>(reopened, `/api/chats/${selected.chat.id}`);
   expect(after.sources).toEqual(before.sources); expect(after.attempts!.map(attempt => attempt.id)).toEqual(attemptIds);
-  expect(after.runs.find(item => item.id === run.id)!.snapshot).toEqual(run.snapshot);
+  expect(after.runs.find(item => item.id === run.id)!.snapshot).toEqual(transmittedSnapshot);
   if (stalledRole === 'main') {
     expect(after.runs.find(item => item.id === run.id)).toMatchObject({ status: 'interrupted', sourceRevision: null });
     expect(after.jobs).toEqual([]); expect(after.chat.headRevision).toBeNull();

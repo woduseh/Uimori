@@ -1,3 +1,4 @@
+import { GENERATION_KEYS, generationFromModel, modelCapability, validateGenerationShape, validateModelOptions, validateCapabilityRevision } from '../core/model-capabilities.js';
 import { createDefaultPromptProgram } from '../core/prompt-defaults.js';
 import { randomUUID, createHash } from 'node:crypto';
 import { isVertexFileReference, validVertexFileReference, validCredentialEnv } from '../core/credential-reference.js';
@@ -6,7 +7,7 @@ import { existsSync, readFileSync, unlinkSync } from 'node:fs';
 import { isDeepStrictEqual } from 'node:util';
 import type { Store } from './store.js';
 import { HttpError } from './store.js';
-import { defaultProfile, validateProviderEndpoint, PROVIDER_PROTOCOLS, VERTEX_GEMINI_MODEL_ID, VERTEX_GEMINI_MAX_OUTPUT_TOKENS, VERTEX_GEMINI_DEFAULT_THINKING_LEVEL, VERTEX_GEMINI_DEFAULT_TIMEOUT_MS, type Content, type ContentRef, type PromptPreset, type PromptRole, type CreativeControls, type ChatProfile, type ProfileSnapshot, type Connection, type ModelPreset, type Library, type Branch, type Asset, type Attempt } from '../core/product.js';
+import { defaultProfile, validateProviderEndpoint, PROVIDER_PROTOCOLS, VERTEX_GEMINI_DEFAULT_TIMEOUT_MS, type Content, type ContentRef, type ModelRef, type ModelSnapshot, type PromptPreset, type PromptRole, type CreativeControls, type ChatProfile, type ProfileSnapshot, type Connection, type ModelPreset, type Library, type Branch, type Asset, type Attempt } from '../core/product.js';
 import type { RunSnapshot, Resource } from '../core/types.js';
 import type { ProviderResult, WireRecord } from '../core/transport.js';
 import { aggregateTranslation, BUILTIN_ASSETS, validateDisplayAnnotation, validatePresentation, validateTranslationChunk, validateTranslationPlan, type TranslationPlan, type TranslationResult } from '../core/auxiliary.js';
@@ -20,8 +21,9 @@ import { validateHiddenStorySelection } from './hidden-story.js';
 import { nativeBotTables } from './native-bot.js';
 import { validateNativeArchive, validateNativeVersion, validateNativeRunSnapshot } from './native-archive.js';
 import { nativeResources } from '../core/native-context.js';
-import { validateRegistrationArchive, validateRegistrationGraph } from './provider-registration-store.js';
+import { validateRegistrationArchive, validateRegistrationGraph, normalizeRegistrationArchiveRow } from './provider-registration-store.js';
 import { assertModelSelection } from './provider-selection.js';
+import { previousContextPlan, measureMainContext } from './context-planning.js';
 import { organizationTables } from './chat-organization.js';
 import { validateContentPackage, validatePackageAttachment, type ContentPackage, type PackageAttachment } from '../core/content-package.js';
 import { compilePackageAttachment } from '../core/package-runtime.js';
@@ -38,6 +40,8 @@ export const number = (v: unknown, name: string, min = 1, max = 1e9): number => 
 const choice = <T extends string>(v: unknown, values: T[], name: string): T => { if (!values.includes(v as T)) throw new HttpError(400, `Invalid ${name}`); return v as T; };
 const boolean = (v: unknown): boolean => { if (typeof v !== 'boolean') throw new HttpError(400, 'Invalid boolean'); return v; };
 const ref = (v: unknown): ContentRef => { const b = record(v); fields(b, ['id','revision']); return { id: text(b.id, 'reference', 100), revision: number(b.revision, 'revision') }; };
+export const modelRef = (v: unknown): ModelRef => { const b=record(v);fields(b,['id']);return {id:text(b.id,'model',100)}; };
+const isProviderSetting = (kind:string) => kind==='connection'||kind==='model';
 export function creative(v: unknown): CreativeControls {
   const b = record(v); fields(b, ['mode','language','personaReference','worldFocus','coNarration','declarationFinal','pov','style','lengthMode','minWords','maxWords','customWords']);
   const result: CreativeControls = { mode: choice(b.mode,['novel','rp'],'mode'), language: choice(b.language,['en','ko'],'language'), personaReference: boolean(b.personaReference), worldFocus: boolean(b.worldFocus), coNarration: boolean(b.coNarration), declarationFinal: boolean(b.declarationFinal), pov: choice(b.pov,['auto','first','third'],'pov'), style: choice(b.style,['auto','calm','vivid'],'style'), lengthMode: choice(b.lengthMode,['auto','range','custom'],'length'), minWords: number(b.minWords,'minWords',1,100000), maxWords: number(b.maxWords,'maxWords',1,100000), customWords: number(b.customWords,'customWords',1,100000) };
@@ -48,12 +52,8 @@ function connectionEndpoint(value: unknown, protocol: Connection['protocol']) {
   const endpoint = text(value,'endpoint',2000);
   try { return validateProviderEndpoint(protocol,endpoint); } catch { throw new HttpError(400,'Invalid provider endpoint'); }
 }
-function requestTier(value: unknown, protocol: Connection['protocol']) {
-  if (value === undefined) return undefined;
-  if (protocol !== 'vertex-gemini-v1') throw new HttpError(400,'Request tier requires Vertex');
-  return choice(value,['standard','flex'],'request tier');
-}
-const modelOptionKeys = ['thinkingLevel','timeoutMs','structuredOutput','reasoningEffort','thinkingMode','thinkingBudgetTokens','evaluationTools'];
+
+const modelOptionKeys = [...GENERATION_KEYS.filter(key=>!['maxOutputTokens','temperature'].includes(key)),'timeoutMs','evaluationTools','inputTokenLimit'];
 function catalogTimestamp(value: unknown): string | null {
   if (value === null) return null;
   if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(value) || !Number.isFinite(Date.parse(value)) || new Date(value).toISOString() !== value) throw new HttpError(400,'Invalid catalog timestamp');
@@ -67,48 +67,29 @@ function validateModelMetadata(value: Row) {
   if (value.enabled !== undefined) boolean(value.enabled);
   if (value.userOverrides !== undefined) userOverrides(value.userOverrides);
   if (value.source !== undefined) {
-    const source = record(value.source); fields(source,['kind','connectionRevision','catalogUpdatedAt']);
-    choice(source.kind,['catalog','manual'],'model source'); number(source.connectionRevision,'source connection revision'); catalogTimestamp(source.catalogUpdatedAt);
-    if (source.connectionRevision !== value.connectionRevision) throw new HttpError(400,'Model source revision mismatch');
+    const source = record(value.source); fields(source,['kind','catalogUpdatedAt']);
+    choice(source.kind,['catalog','manual'],'model source'); catalogTimestamp(source.catalogUpdatedAt);
   }
 }
-function validateModelGeneration(value: Row, protocol?: Connection['protocol']) {
+function validateModelGeneration(value: Row, protocol?: Connection['protocol'], checkCapability=true) {
+  if(value.inputTokenLimit!==undefined)number(value.inputTokenLimit,'input context limit',8192,1000000);
   if (value.evaluationTools !== undefined) try { validateEvaluationToolOptions(value.evaluationTools); } catch { throw new HttpError(400,'Invalid evaluation tool options'); }
-  number(value.maxOutputTokens,'output limit',1,200000);
-  if (value.temperature !== null && (typeof value.temperature !== 'number' || !Number.isFinite(value.temperature) || value.temperature < 0 || value.temperature > 2)) throw new HttpError(400,'Invalid temperature');
-  if (value.thinkingLevel !== undefined) choice(value.thinkingLevel,['LOW','MEDIUM','HIGH'],'thinking level');
   if (value.timeoutMs !== undefined) number(value.timeoutMs,'timeout',1,protocol === 'fixture-sse-v1' ? 600000 : 1800000);
-  if (value.structuredOutput !== undefined) boolean(value.structuredOutput);
-  if (value.reasoningEffort !== undefined) choice(value.reasoningEffort,['none','minimal','low','medium','high','xhigh','max'],'reasoning effort');
-  if (value.thinkingMode !== undefined) choice(value.thinkingMode,['disabled','enabled','adaptive'],'thinking mode');
-  if (value.thinkingBudgetTokens !== undefined) number(value.thinkingBudgetTokens,'thinking budget',1024,value.maxOutputTokens-1);
-  if (protocol === 'codex-app-server-v1' && value.temperature !== null) throw new HttpError(400,'Codex does not accept temperature');
-  if (protocol === 'codex-app-server-v1' && value.structuredOutput !== undefined) throw new HttpError(400,'Codex uses a fixed output schema');
-  if (!protocol) return; // Archive graph validation checks the referenced connection after every version is restored.
-  const forbidden = protocol === 'vertex-gemini-v1' || protocol === 'fixture-sse-v1' ? ['structuredOutput','reasoningEffort','thinkingMode','thinkingBudgetTokens'] :
-    protocol === 'anthropic-messages-v1' ? ['thinkingLevel'] : ['thinkingLevel','thinkingMode','thinkingBudgetTokens'];
-  if (forbidden.some(key => value[key] !== undefined)) throw new HttpError(400,'Unsupported provider model option');
-  if (protocol === 'vertex-gemini-v1') {
-    if (value.modelId !== VERTEX_GEMINI_MODEL_ID) throw new HttpError(400,'Unsupported Vertex model');
-    if (value.temperature !== null) throw new HttpError(400,'Vertex Gemini does not accept temperature');
-    number(value.maxOutputTokens,'Vertex output limit',1,VERTEX_GEMINI_MAX_OUTPUT_TOKENS);
-  }
-  if (protocol === 'anthropic-messages-v1') {
-    if (value.temperature !== null && value.temperature > 1) throw new HttpError(400,'Invalid Anthropic temperature');
-    if (value.reasoningEffort !== undefined) choice(value.reasoningEffort,['low','medium','high','xhigh','max'],'Anthropic effort');
-    if (value.thinkingMode === 'enabled') number(value.thinkingBudgetTokens,'thinking budget',1024,value.maxOutputTokens-1);
-    else if (value.thinkingBudgetTokens !== undefined) throw new HttpError(400,'Thinking budget requires enabled thinking');
-    if (['enabled','adaptive'].includes(value.thinkingMode) && value.temperature !== null) throw new HttpError(400,'Thinking does not accept temperature');
-  }
+  const generation = generationFromModel(value as ModelPreset);
+  try {
+    if(protocol){validateModelOptions(generation,protocol,value.modelId);if(checkCapability)validateCapabilityRevision(value as ModelPreset,protocol);if(modelCapability(protocol,value.modelId)?.forcedTools===false&&value.evaluationTools?.contextMode==='preloaded')throw new Error('이 모델은 강제 도구 호출을 지원하지 않아요. 평가 문맥을 모델 선택으로 설정해 주세요.');}
+    else validateGenerationShape(generation);
+  } catch(error) { throw new HttpError(400,error instanceof Error?error.message:'Invalid model options'); }
 }
 
 export class ProductStore {
   constructor(readonly store: Store) {}
   get db() { return this.store.db; }
-  /** Joins Store's single transaction for a new, empty schema-8 database. */
+  /** Joins Store's single transaction for a new, empty database. */
   initFresh() {
       this.db.exec(`
         CREATE TABLE versions (kind TEXT NOT NULL,id TEXT NOT NULL,revision INTEGER NOT NULL,body TEXT NOT NULL,PRIMARY KEY(kind,id,revision));
+        CREATE TABLE provider_settings (kind TEXT NOT NULL CHECK(kind IN ('connection','model')),id TEXT NOT NULL,revision INTEGER NOT NULL,body TEXT NOT NULL,PRIMARY KEY(kind,id));
         CREATE TABLE profiles (chat_id TEXT PRIMARY KEY REFERENCES chats(id),body TEXT NOT NULL);
         CREATE TABLE branches (id TEXT PRIMARY KEY,chat_id TEXT NOT NULL REFERENCES chats(id),title TEXT NOT NULL,head_revision TEXT REFERENCES sources(id),revision INTEGER NOT NULL,is_default INTEGER NOT NULL);
         CREATE UNIQUE INDEX default_branch ON branches(chat_id) WHERE is_default=1;
@@ -118,19 +99,28 @@ export class ProductStore {
         CREATE TABLE source_edits(source_id TEXT NOT NULL REFERENCES sources(id),revision INTEGER NOT NULL,text TEXT NOT NULL,hash TEXT NOT NULL,created_at TEXT NOT NULL,PRIMARY KEY(source_id,revision));
       `);
   }
-  all(kind: string): any[] { return (this.db.prepare('SELECT v.body FROM versions v WHERE kind=? AND revision=(SELECT MAX(revision) FROM versions n WHERE n.kind=v.kind AND n.id=v.id) ORDER BY id').all(kind) as Row[]).map(r => parse(r.body)); }
+  all(kind: string): any[] { return (this.db.prepare(isProviderSetting(kind)?'SELECT body FROM provider_settings WHERE kind=? ORDER BY id':'SELECT v.body FROM versions v WHERE kind=? AND revision=(SELECT MAX(revision) FROM versions n WHERE n.kind=v.kind AND n.id=v.id) ORDER BY id').all(kind) as Row[]).map(r => parse(r.body)); }
   get<T>(kind: string, id: string, revision?: number): T {
+    if(isProviderSetting(kind)){
+      const row=this.db.prepare('SELECT revision,body FROM provider_settings WHERE kind=? AND id=?').get(kind,id) as Row|undefined;
+      if(!row||revision!==undefined&&revision!==row.revision)throw new HttpError(404,'Setting not found');
+      return parse(row.body);
+    }
     const r = (revision === undefined ? this.db.prepare('SELECT body FROM versions WHERE kind=? AND id=? ORDER BY revision DESC LIMIT 1').get(kind,id) : this.db.prepare('SELECT body FROM versions WHERE kind=? AND id=? AND revision=?').get(kind,id,revision)) as Row | undefined;
     if (!r) throw new HttpError(404, `${kind} revision not found`); return parse(r.body);
   }
   save(kind: string, value: Row, id?: string, expected?: number) {
-    return this.store.transaction(() => {
+    return this.store.transaction(() => this.saveInTransaction(kind,value,id,expected));
+  }
+  /** Caller owns the transaction when reserving settings with an immutable registration receipt. */
+  saveInTransaction(kind: string, value: Row, id?: string, expected?: number) {
       const prior = id ? this.get<ContentRef>(kind,id) : null;
       if (prior && prior.revision !== expected) throw new HttpError(409,'Revision conflict');
       const result: Row & ContentRef = { ...value, id: id ?? randomUUID(), revision: (prior?.revision ?? 0) + 1 };
       if (kind === 'content' && result.package) result.package = validateContentPackage({...result.package,id:result.id,revision:result.revision,title:result.title,description:result.description,body:result.text});
-      this.db.prepare('INSERT INTO versions VALUES(?,?,?,?)').run(kind,result.id,result.revision,json(result)); return result;
-    });
+      if(isProviderSetting(kind))this.db.prepare('INSERT INTO provider_settings VALUES(?,?,?,?) ON CONFLICT(kind,id) DO UPDATE SET revision=excluded.revision,body=excluded.body').run(kind,result.id,result.revision,json(result));
+      else this.db.prepare('INSERT INTO versions VALUES(?,?,?,?)').run(kind,result.id,result.revision,json(result));
+      return result;
   }
   content(value: unknown, id?: string) {
     const b = record(value); fields(b,['kind','title','description','text','loading','relatedIds','expectedRevision','package']);
@@ -153,10 +143,10 @@ export class ProductStore {
     return this.save('prompt-preset',{title:text(b.title,'title',200),role,program},id,id ? number(b.expectedRevision,'revision') : undefined);
   }
   prepareConnection(value: unknown, id?: string) {
-    const b = record(value); fields(b,['title','protocol','endpoint','credentialEnv','requestTier','enabled','expectedRevision']);
-    const protocol = choice(b.protocol,[...PROVIDER_PROTOCOLS],'protocol'); const tier = requestTier(b.requestTier,protocol);
+    const b = record(value); fields(b,['title','protocol','endpoint','credentialEnv','enabled','expectedRevision']);
+    const protocol = choice(b.protocol,[...PROVIDER_PROTOCOLS],'protocol');
     const endpoint = connectionEndpoint(b.endpoint,protocol);
-    if (protocol === 'codex-app-server-v1' && (b.credentialEnv !== undefined || b.requestTier !== undefined)) throw new HttpError(400,'Codex uses official local login');
+    if (protocol === 'codex-app-server-v1' && (b.credentialEnv !== undefined)) throw new HttpError(400,'Codex uses official local login');
     const credentialEnv = b.credentialEnv === undefined || b.credentialEnv === '' ? undefined : text(b.credentialEnv,'credential reference',200);
     if (credentialEnv && !validCredentialEnv(credentialEnv)) throw new HttpError(400,'Invalid credential reference');
     if (credentialEnv && isVertexFileReference(credentialEnv) && (protocol !== 'vertex-gemini-v1' || !validVertexFileReference(credentialEnv))) throw new HttpError(400,'Invalid service account reference');
@@ -164,38 +154,47 @@ export class ProductStore {
     const expectedRevision = id ? number(b.expectedRevision,'revision') : undefined;
     if (prior && prior.revision !== expectedRevision) throw new HttpError(409,'Revision conflict');
     const sameAuthority = prior?.protocol === protocol && prior.endpoint === endpoint && prior.credentialEnv === credentialEnv;
-    const prepared: Omit<Connection,'id'|'revision'> = { title: text(b.title,'title',200), protocol, endpoint, ...(credentialEnv ? {credentialEnv} : {}), ...(tier !== undefined ? {requestTier:tier} : {}), enabled: boolean(b.enabled), catalog: sameAuthority ? structuredClone(prior.catalog) : [], catalogError: sameAuthority ? prior.catalogError : null, catalogUpdatedAt: sameAuthority ? prior.catalogUpdatedAt ?? null : null };
+    const prepared: Omit<Connection,'id'|'revision'> = { title: text(b.title,'title',200), protocol, endpoint, ...(credentialEnv ? {credentialEnv} : {}), enabled: boolean(b.enabled), catalog: sameAuthority ? structuredClone(prior.catalog) : [], catalogError: sameAuthority ? prior.catalogError : null, catalogUpdatedAt: sameAuthority ? prior.catalogUpdatedAt ?? null : null };
     return {value:prepared,expectedRevision};
   }
   connection(value: unknown, id?: string) { const prepared = this.prepareConnection(value,id); return this.save('connection',prepared.value,id,prepared.expectedRevision); }
   prepareModel(value: unknown, id?: string, validationConnection?: Connection) {
-    const b = record(value); fields(b,['title','connectionId','connectionRevision','modelId','maxOutputTokens','temperature',...modelOptionKeys,'enabled','userOverrides','expectedRevision']);
+    const b = record(value); fields(b,['title','connectionId','modelId','maxOutputTokens','temperature',...modelOptionKeys,'enabled','userOverrides','expectedRevision']);
     const expectedRevision = id ? number(b.expectedRevision,'revision') : undefined;
     if (id && this.get<ModelPreset>('model',id).revision !== expectedRevision) throw new HttpError(409,'Revision conflict');
-    const connectionId = text(b.connectionId,'connection ID',100); const connectionRevision = number(b.connectionRevision,'connection revision');
-    if (validationConnection && (validationConnection.id !== connectionId || validationConnection.revision !== connectionRevision)) throw new HttpError(400,'Validation connection revision mismatch');
-    const connection = validationConnection ?? this.get<Connection>('connection',connectionId,connectionRevision);
-    const modelId = text(b.modelId,'model ID',300); validateModelGeneration(b,connection.protocol);
+    const connectionId = text(b.connectionId,'connection ID',100);
+    if (validationConnection && validationConnection.id !== connectionId) throw new HttpError(400,'Validation connection mismatch');
+    const connection = validationConnection ?? this.get<Connection>('connection',connectionId);
+    const modelId = text(b.modelId,'model ID',300); validateModelGeneration(b,connection.protocol,false);
     const vertex = connection.protocol === 'vertex-gemini-v1';
-    const prepared: Omit<ModelPreset,'id'|'revision'> = { title: text(b.title,'title',200), connectionId, connectionRevision, modelId, maxOutputTokens: b.maxOutputTokens, temperature: b.temperature,
-      ...(vertex || b.thinkingLevel !== undefined ? {thinkingLevel:b.thinkingLevel ?? VERTEX_GEMINI_DEFAULT_THINKING_LEVEL} : {}),
+    const prepared: Omit<ModelPreset,'id'|'revision'> = { title: text(b.title,'title',200), connectionId, modelId, ...generationFromModel(b as ModelPreset),
+      capabilityProtocol:connection.protocol,...(b.inputTokenLimit!==undefined?{inputTokenLimit:b.inputTokenLimit}:{}),
+      ...(modelCapability(connection.protocol,modelId)?{capabilityRevision:modelCapability(connection.protocol,modelId)!.revision}:{}),
       ...(vertex || b.timeoutMs !== undefined ? {timeoutMs:b.timeoutMs ?? VERTEX_GEMINI_DEFAULT_TIMEOUT_MS} : {}),
-      ...Object.fromEntries(['structuredOutput','reasoningEffort','thinkingMode','thinkingBudgetTokens'].filter(key => b[key] !== undefined).map(key => [key,b[key]])),
       ...(b.evaluationTools !== undefined ? {evaluationTools:validateEvaluationToolOptions(b.evaluationTools)} : {}),
       ...(b.enabled !== undefined ? {enabled:boolean(b.enabled)} : {}),
       ...(b.userOverrides !== undefined ? {userOverrides:userOverrides(b.userOverrides)} : {}),
-      source:{kind:connection.catalog.some(item => item.id === modelId) ? 'catalog' : 'manual',connectionRevision,catalogUpdatedAt:connection.catalogUpdatedAt ?? null},
+      source:{kind:connection.catalog.some(item => item.id === modelId) ? 'catalog' : 'manual',catalogUpdatedAt:connection.catalogUpdatedAt ?? null},
     };
     return {value:prepared,expectedRevision};
   }
   model(value: unknown, id?: string) { const prepared = this.prepareModel(value,id); return this.save('model',prepared.value,id,prepared.expectedRevision); }
+  modelSnapshot(id:string):ModelSnapshot {
+    const model=this.get<ModelPreset>('model',id);
+    if(model.enabled===false)throw new HttpError(403,'Model disabled');
+    const connection=this.get<Connection>('connection',model.connectionId);
+    this.authorize(connection);
+    if(model.capabilityProtocol!==undefined&&model.capabilityProtocol!==connection.protocol)throw new HttpError(400,'Connection protocol changed; review and save the model settings');
+    validateModelGeneration(model,connection.protocol);
+    return structuredClone({...model,connection});
+  }
   profile(chatId: string): ChatProfile { this.store.chat(chatId); const r = this.db.prepare('SELECT body FROM profiles WHERE chat_id=?').get(chatId) as Row | undefined; return r ? parse(r.body) : defaultProfile(chatId); }
   updateProfile(chatId: string, value: unknown): ChatProfile {
     const b = record(value); fields(b,['expectedRevision','attachments','creative','routes','image','prompts','promptControls','hiddenStory','packageAttachments','packageValues']); const routes = record(b.routes); fields(routes,['main','translation','status','image']);
     if (!Array.isArray(b.attachments) || b.attachments.length > 300) throw new HttpError(400,'Invalid attachments');
     const attachments = b.attachments.map(ref); if (new Set(attachments.map(r => r.id)).size !== attachments.length) throw new HttpError(400,'Duplicate attachment');
     for (const r of attachments) this.get('content',r.id,r.revision);
-    const selected = Object.fromEntries(['main','translation','status','image'].map(role => { const r = routes[role] === null ? null : ref(routes[role]); if (r) this.get('model',r.id,r.revision); return [role,r]; })) as ChatProfile['routes'];
+    const selected = Object.fromEntries(['main','translation','status','image'].map(role => { const r = routes[role] === null ? null : modelRef(routes[role]); if (r) this.get('model',r.id); return [role,r]; })) as ChatProfile['routes'];
     const controls = creative(b.creative); const image = boolean(b.image);
     const requestedPrompts = b.prompts === undefined ? undefined : promptRefs(this,b.prompts);
     const requestedControls = b.promptControls === undefined ? undefined : promptControls(this,b.promptControls);
@@ -223,7 +222,7 @@ export class ProductStore {
     if (!this.db.prepare('SELECT 1 FROM profiles WHERE chat_id=?').get(chatId)) return undefined;
     const p = this.profile(chatId); const contents = p.attachments.map(r => this.get<Content>('content',r.id,r.revision));
     const models: ProfileSnapshot['models'] = {};
-    for (const role of ['main','translation','status','image'] as const) { const r = p.routes[role]; if (r) { const m = this.get<ModelPreset>('model',r.id,r.revision); models[role] = {...m,connection:this.get<Connection>('connection',m.connectionId,m.connectionRevision)}; } }
+    for (const role of ['main','translation','status','image'] as const) { const r = p.routes[role]; if (r) models[role]=this.modelSnapshot(r.id); }
     return structuredClone({...p,contents,models,...(p.packageAttachments!==undefined?{packages:p.packageAttachments.map(r=>this.get<Content>('content',r.id,r.revision).package!)}:{}),...(p.prompts !== undefined ? {promptPresets:resolvedPrompts(this,p.prompts)} : {})});
   }
   resolveJobPrompt(snapshot: RunSnapshot, input: unknown): RunSnapshot {
@@ -232,7 +231,7 @@ export class ProductStore {
       const selected=record(input).translationModelSelection;
       resolved.profile ??= {...defaultProfile(resolved.chatId),contents:[],models:{}};
       if(selected===null){delete resolved.profile.models.translation;resolved.profile.routes.translation=null;}
-      else {const reference=ref(selected);const model=this.get<ModelPreset>('model',reference.id,reference.revision);resolved.profile.models.translation={...model,connection:this.get<Connection>('connection',model.connectionId,model.connectionRevision)};resolved.profile.routes.translation=reference;}
+      else {const reference=modelRef(selected);const model=validateModelSnapshot(record(input).translationModelSnapshot);if(model.id!==reference.id)throw new HttpError(400,'Translation model snapshot mismatch');resolved.profile.models.translation=model;resolved.profile.routes.translation=reference;}
     }
     if (!input || typeof input !== 'object' || Array.isArray(input) || !Object.hasOwn(input,'promptSelection')) return resolved;
     const selection = record(record(input).promptSelection); fields(selection,['translation']);
@@ -254,7 +253,7 @@ export class ProductStore {
     return resolved;
   }
   resources(chatId: string, p?: ProfileSnapshot): Resource[] { return p ? [...p.contents.filter(c => ['lore','skill','glossary'].includes(c.kind)).map(c => ({...c,chatId,kind:c.kind === 'skill' ? 'skill' as const : 'lore' as const,sourceKind:c.kind})),...(p.packageAttachments??[]).flatMap(r=>compilePackageAttachment(p.packages!.find(pkg=>pkg.id===r.id&&pkg.revision===r.revision)!,r,{chatId,target:'main',resourcesOnly:true,values:p.packageValues?.[packageControlKey(r)]}).resources)] : this.store.resources(chatId); }
-  authorize(connection: Connection) { const current = this.get<Connection>('connection',connection.id); if (!current.enabled || current.endpoint !== connection.endpoint || current.protocol !== connection.protocol || current.credentialEnv !== connection.credentialEnv || current.requestTier !== connection.requestTier) throw new HttpError(403,'Connection disabled or authority changed'); return structuredClone(connection); }
+  authorize(connection: Connection) { const current = this.get<Connection>('connection',connection.id); if (!current.enabled || current.endpoint !== connection.endpoint || current.protocol !== connection.protocol || current.credentialEnv !== connection.credentialEnv) throw new HttpError(403,'Connection disabled or authority changed'); return structuredClone(connection); }
   branches(chatId: string): Branch[] { return (this.db.prepare('SELECT * FROM branches WHERE chat_id=? ORDER BY is_default DESC,id').all(chatId) as Row[]).map(r => ({id:r.id,chatId:r.chat_id,title:r.title,headRevision:r.head_revision,revision:r.revision,default:!!r.is_default})); }
   branch(chatId: string, id = `main:${chatId}`): Branch { const b = this.branches(chatId).find(x => x.id === id); if (!b) throw new HttpError(404,'Branch not found'); return b; }
   createBranch(chatId:string,value:unknown,native?:import('../core/native-bot.js').NativeBotSnapshot|null){
@@ -290,13 +289,13 @@ export class ProductStore {
     const contents = summary ? (this.db.prepare("SELECT json_set(json_remove(v.body,'$.package'),'$.text','') AS body, json_type(v.body,'$.package') AS packaged FROM versions v WHERE kind='content' AND revision=(SELECT MAX(revision) FROM versions n WHERE n.kind=v.kind AND n.id=v.id) ORDER BY id").all() as Row[]).map(r => ({...parse(r.body),...(r.packaged?{hasPackage:true}:{})})) : this.all('content');
     return {...(summary ? {contentBodiesOmitted:true,assetsOmitted:true} : {}),promptPresets:this.all('prompt-preset'),promptCombinations:this.all('prompt-combination'),contents,presets:this.all('preset'),connections:this.all('connection'),models:this.all('model'),assets:summary ? [] : this.assets()};
   }
-  export() { const tables = Object.fromEntries(archiveTables.map(t => [t,(this.db.prepare(`SELECT * FROM ${t}`).all() as Row[]).map(r => t === 'assets' ? {...r,bytes:Buffer.from(r.bytes).toString('base64')} : r)])); return {format:'narrative-archive',version:8,createdAt:new Date().toISOString(),tables}; }
+  export() { const tables = Object.fromEntries(archiveTables.map(t => [t,(this.db.prepare(`SELECT * FROM ${t}`).all() as Row[]).map(r => t === 'assets' ? {...r,bytes:Buffer.from(r.bytes).toString('base64')} : r)])); return {format:'narrative-archive',version:9,createdAt:new Date().toISOString(),tables}; }
   backup(): Buffer { const path = `${this.store.path}.backup-${randomUUID()}.sqlite`; if (existsSync(path)) throw new Error('Backup destination exists'); try { this.db.prepare('VACUUM INTO ?').run(path); return readFileSync(path); } finally { if (existsSync(path)) unlinkSync(path); } }
   import(value: unknown) {
     // Validation and normalization must never mutate the caller's archive, even
     // when a later row fails and the database transaction rolls back.
     let copy: unknown; try { copy = structuredClone(value); } catch { throw new HttpError(400,'Invalid archive'); }
-    const a = record(copy); fields(a,['format','version','createdAt','tables']); if (a.format !== 'narrative-archive' || a.version!==8) throw new HttpError(400,'Unsupported archive'); const tables = record(a.tables); fields(tables,archiveTables);
+    const a = record(copy); fields(a,['format','version','createdAt','tables']); if (a.format !== 'narrative-archive' || a.version!==9) throw new HttpError(400,'Unsupported archive'); const tables = record(a.tables); fields(tables,archiveTables);
     if (archiveTables.some(t => !Array.isArray(tables[t]) || tables[t].length > 100000)) throw new HttpError(400,'Missing or oversized archive table');
     if (archiveTables.some(t => t!=='package_behavior_entropy' && this.db.prepare(`SELECT 1 FROM ${t} LIMIT 1`).get())) throw new HttpError(409,'Restore requires an empty database');
     try { this.store.transaction(() => {
@@ -306,7 +305,8 @@ export class ProductStore {
         const columns = (this.db.prepare(`PRAGMA table_info(${table})`).all() as Row[]).map(r => r.name as string);
         for (const entry of tables[table]) { const row = record(entry); fields(row,columns); if (columns.some(k => !(k in row))) throw new HttpError(400,'Missing archive column');
           if (Object.values(row).some(v => v !== null && (typeof v !== 'string' && typeof v !== 'number' || typeof v === 'number' && !Number.isFinite(v)))) throw new HttpError(400,'Invalid archive column');
-          if (table === 'versions') { validateArchiveVersion(row); if (row.kind === 'connection') { const body = record(parse(row.body)); delete body.credentialEnv; body.enabled = false; row.body = json(body); } }
+          if (table === 'versions') { validateArchiveVersion(row); if(row.kind==='registration-run')normalizeRegistrationArchiveRow(row); }
+          if (table === 'provider_settings') { if(!isProviderSetting(row.kind))throw new HttpError(400,'Invalid provider setting kind'); validateArchiveVersion(row,true); if(row.kind==='connection'){const body=record(parse(row.body));delete body.credentialEnv;body.enabled=false;row.body=json(body);} }
           if (table === 'assets') validateArchiveAsset(row);
           if (table === 'runs') {
             const snapshot = record(parse(row.snapshot));
@@ -317,6 +317,7 @@ export class ProductStore {
           }
           if (table === 'runs' && ['queued','running'].includes(row.status)) { row.status = 'interrupted'; row.error = 'Restored unfinished run; explicit retry required'; }
           if (table === 'jobs' && ['queued','running'].includes(row.status)) { row.status = 'interrupted'; row.owner = null; row.error = 'Restored unfinished job; explicit retry required'; }
+          if (table === 'jobs' && row.input) { const input=parse(row.input);if(input&&typeof input==='object'&&!Array.isArray(input)&&input.translationModelSnapshot){const connection=record(input.translationModelSnapshot.connection);delete connection.credentialEnv;connection.enabled=false;row.input=json(input);} }
           if (table === 'job_chunks' && row.status === 'running') { row.status = 'interrupted'; row.error = 'Restored uncertain chunk; explicit retry required'; }
           if (table === 'attempts' && row.status === 'running') { row.status = 'interrupted'; row.error = 'Restored uncertain request'; }
           if (table === 'attempts') {
@@ -338,7 +339,7 @@ export class ProductStore {
     return {restored:true,chats:this.store.chats().length};
   }
 }
-const archiveTables = ['chats','resources','versions','profiles','branches','runs','sources','source_edits','jobs','job_results','model_inputs','tool_events','events','job_chunks','attempts','assets',...storyTables,...nativeBotTables,...organizationTables,...packageBehaviorTables];
+const archiveTables = ['chats','resources','versions','provider_settings','profiles','branches','runs','sources','source_edits','jobs','job_results','model_inputs','tool_events','events','job_chunks','attempts','assets',...storyTables,...nativeBotTables,...organizationTables,...packageBehaviorTables];
 
 export const packageControlKey=(r:PackageAttachment)=>`${r.id}@${r.revision}:${r.role}`;
 function packageRefs(product:ProductStore,value:unknown):PackageAttachment[]{
@@ -388,7 +389,8 @@ function promptRefs(product: ProductStore, value: unknown): NonNullable<ChatProf
 function resolvedPrompts(product: ProductStore, value: NonNullable<ChatProfile['prompts']>): NonNullable<ProfileSnapshot['promptPresets']> {
   return Object.fromEntries(Object.entries(promptRefs(product,value)).flatMap(([role,reference]) => reference ? [[role,product.get<PromptPreset>('prompt-preset',reference.id,reference.revision)]] : []));
 }
-function validateArchiveVersion(row: Row) {
+function validateArchiveVersion(row: Row, providerSetting=false) {
+  if(isProviderSetting(row.kind)&&!providerSetting)throw new HttpError(400,'Provider settings do not have archived revisions');
   const body = record(parse(row.body)); archiveId(row.id); number(row.revision,'version');
   if (body.id !== row.id || body.revision !== row.revision) throw new HttpError(400,'Version identity mismatch');
   if(row.kind==='registration-run'){validateRegistrationArchive(body);return;}
@@ -401,16 +403,26 @@ function validateArchiveVersion(row: Row) {
   else if (row.kind === 'prompt-preset') { fields(body,['id','revision','title','role','program']); choice(body.role,['main','translation'],'prompt role'); validatePromptProgram(body.program); }
   else if (row.kind === 'prompt-combination') { fields(body,['id','revision','title','prompt','values']);ref(body.prompt);validateChatPromptControls({values:body.values,combinations:[]}); }
   else if (row.kind === 'connection') {
-    fields(body,['id','revision','title','protocol','endpoint','credentialEnv','requestTier','enabled','catalog','catalogError','catalogUpdatedAt']); const protocol = choice(body.protocol,[...PROVIDER_PROTOCOLS],'protocol'); requestTier(body.requestTier,protocol);
+    fields(body,['id','revision','title','protocol','endpoint','credentialEnv','enabled','catalog','catalogError','catalogUpdatedAt']); const protocol = choice(body.protocol,[...PROVIDER_PROTOCOLS],'protocol');
     if (body.catalogUpdatedAt !== undefined) catalogTimestamp(body.catalogUpdatedAt);
     connectionEndpoint(body.endpoint,protocol);
-    if (protocol === 'codex-app-server-v1' && (body.credentialEnv !== undefined || body.requestTier !== undefined)) throw new HttpError(400,'Invalid Codex authority');
+    if (protocol === 'codex-app-server-v1' && (body.credentialEnv !== undefined)) throw new HttpError(400,'Invalid Codex authority');
     boolean(body.enabled); if (body.credentialEnv !== undefined && !validCredentialEnv(text(body.credentialEnv,'credential reference',200))) throw new HttpError(400,'Invalid credential reference');
     archiveList(body.catalog,5000).forEach(raw => { const model = record(raw); fields(model,['id','name','capabilities','priceRevision']); text(model.id,'catalog ID',300); text(model.name,'catalog name',400); const capabilities = record(model.capabilities); if (Object.values(capabilities).some(v => v !== null && typeof v !== 'boolean')) throw new HttpError(400,'Invalid catalog capabilities'); if (model.priceRevision !== null) text(model.priceRevision,'price revision',200); });
     if (body.catalogError !== null) text(body.catalogError,'catalog error',2000);
   } else if (row.kind === 'model') {
-    fields(body,['id','revision','title','connectionId','connectionRevision','modelId','maxOutputTokens','temperature',...modelOptionKeys,'enabled','userOverrides','source']); archiveId(body.connectionId); number(body.connectionRevision,'connection revision'); text(body.modelId,'model ID',300); validateModelGeneration(body); validateModelMetadata(body);
+    fields(body,['id','revision','title','connectionId','modelId','maxOutputTokens','temperature',...modelOptionKeys,'enabled','userOverrides','source','capabilityRevision','capabilityProtocol']); archiveId(body.connectionId); text(body.modelId,'model ID',300); validateModelGeneration(body,body.capabilityProtocol===undefined?undefined:choice(body.capabilityProtocol,[...PROVIDER_PROTOCOLS],'model protocol')); validateModelMetadata(body);
   } else if(['native-bot','hidden-story'].includes(row.kind))validateNativeVersion(row);else throw new HttpError(400,'Invalid archive version kind');
+}
+/** Execution snapshots are self-contained evidence, independent of later setting edits. */
+export function validateModelSnapshot(value:unknown):ModelSnapshot {
+  const snapshot=record(value),{connection:rawConnection,...model}=snapshot,connection=record(rawConnection);
+  validateArchiveVersion({kind:'model',id:model.id,revision:model.revision,body:json(model)},true);
+  validateArchiveVersion({kind:'connection',id:connection.id,revision:connection.revision,body:json(connection)},true);
+  if(model.connectionId!==connection.id)throw new HttpError(400,'Model snapshot connection mismatch');
+  if(model.capabilityProtocol!==undefined&&model.capabilityProtocol!==connection.protocol)throw new HttpError(400,'Model snapshot protocol mismatch');
+  validateModelGeneration(model,connection.protocol);
+  return structuredClone(snapshot) as ModelSnapshot;
 }
 function validateArchiveAsset(row: Row) {
   const body = record(parse(row.body)); fields(body,['id','chatId','revision','title','mime','hash','description','actor','outfit','location','allowedUse','url']);
@@ -429,7 +441,13 @@ function validateArchiveProfile(product: ProductStore, value: unknown, chatId: s
   const attachments = archiveList(p.attachments).map(ref); if (new Set(attachments.map(r => r.id)).size !== attachments.length) throw new HttpError(400,'Duplicate attachment');
   const contents = attachments.map(r => product.get<Content>('content',r.id,r.revision)); const routes = record(p.routes); fields(routes,['main','translation','status','image']);
   const models: ProfileSnapshot['models'] = {};
-  for (const role of ['main','translation','status','image'] as const) if (routes[role] !== null) { const r = ref(routes[role]); const model = product.get<ModelPreset>('model',r.id,r.revision); models[role] = {...model,connection:product.get<Connection>('connection',model.connectionId,model.connectionRevision)}; }
+  if(frozen)fields(record(p.models),['main','translation','status','image']);
+  for (const role of ['main','translation','status','image'] as const) {
+    if(routes[role]===null){if(frozen&&p.models[role]!==undefined)throw new HttpError(400,'Unexpected frozen model');continue;}
+    const r=modelRef(routes[role]);
+    if(frozen){const model=validateModelSnapshot(p.models[role]);if(model.id!==r.id)throw new HttpError(400,'Frozen model selection mismatch');models[role]=model;}
+    else product.get<ModelPreset>('model',r.id);
+  }
   const prompts = p.prompts === undefined ? undefined : promptRefs(product,p.prompts); if(p.promptControls!==undefined)promptControls(product,p.promptControls);if(p.hiddenStory!==undefined)validateHiddenStorySelection(product,p.hiddenStory);
   const promptPresets = prompts === undefined ? undefined : resolvedPrompts(product,prompts);
   const packageAttachments=p.packageAttachments===undefined?undefined:packageRefs(product,p.packageAttachments);
@@ -474,9 +492,7 @@ function validateArchiveGraph(product: ProductStore) {
   }
   for (const chat of chats.values()) { text(chat.title,'chat title',200); number(chat.settings_revision,'settings revision'); archiveSettings(parse(chat.settings)); sameChat(chat.head_revision,chat.id,sources); const defaults = [...branches.values()].filter(b => b.chat_id === chat.id && b.is_default === 1); if (defaults.length !== 1 || defaults[0].head_revision !== chat.head_revision) throw new HttpError(400,'Default branch mismatch'); }
   for (const branch of branches.values()) { sameChat(branch.head_revision,branch.chat_id,sources); text(branch.title,'branch title',200); number(branch.revision,'branch revision'); if (![0,1].includes(branch.is_default)) throw new HttpError(400,'Invalid branch type'); }
-  for (const row of rows('versions')) if (row.kind === 'model') { const model = record(parse(row.body)); const connection = product.get<Connection>('connection',model.connectionId,model.connectionRevision); validateModelGeneration(model,connection.protocol);
-    if (model.source && (model.source.catalogUpdatedAt !== (connection.catalogUpdatedAt ?? null) || model.source.kind !== (connection.catalog.some(item => item.id === model.modelId) ? 'catalog' : 'manual'))) throw new HttpError(400,'Model source catalog mismatch');
-  }
+  for (const row of rows('provider_settings')) if (row.kind === 'model') { const model=record(parse(row.body));product.get<Connection>('connection',model.connectionId);validateModelGeneration(model,choice(model.capabilityProtocol,[...PROVIDER_PROTOCOLS],'model protocol')); }
   for (const row of rows('profiles')) validateArchiveProfile(product,parse(row.body),row.chat_id);
   for (const row of rows('resources')) { const resource = record(parse(row.body)); if (resource.id !== row.id || resource.chatId !== row.chat_id) throw new HttpError(400,'Resource identity mismatch'); number(resource.revision,'resource revision'); choice(resource.kind,['lore','skill'],'resource kind'); text(resource.text,'resource text',String(resource.id).startsWith('package:')?1_000_000:100000,String(resource.id).startsWith('package:')); }
   for (const run of runs.values()) {
@@ -489,6 +505,16 @@ function validateArchiveGraph(product: ProductStore) {
     const resources = archiveList(snapshot.resources,10000); const ids = new Set<string>();
     for (const raw of resources) { const resource = record(raw); if (resource.chatId !== run.chat_id || ids.has(resource.id)) throw new HttpError(400,'Snapshot resource scope mismatch'); ids.add(archiveId(resource.id)); number(resource.revision,'resource revision'); choice(resource.kind,['lore','skill'],'resource kind'); text(resource.text,'resource text',String(resource.id).startsWith('package:')?1_000_000:100000,String(resource.id).startsWith('package:')); }
     validateNativeRunSnapshot(product.store,snapshot as RunSnapshot);
+    const context=(snapshot as RunSnapshot).contextPlan;
+    if(context?.status==='ready'){
+      if(measureMainContext(snapshot as RunSnapshot).estimatedInputTokens!==context.estimatedInputTokens)throw new HttpError(400,'Context estimate mismatch');
+      if(!snapshot.forkedFrom){
+        const summaries=db.prepare("SELECT status,response FROM attempts WHERE run_id=? AND role='memory' ORDER BY rowid").all(run.id) as Row[];
+        if(summaries.length!==context.summaryCalls)throw new HttpError(400,'Context attempt count mismatch');
+        if(context.summaryCalls){const last=summaries.at(-1)!;if(last.status!=='completed'||parse(last.response)?.text.trim()!==context.summary)throw new HttpError(400,'Context summary receipt mismatch');}
+        else if(context.summary!==null){const previous=previousContextPlan(product.store,snapshot as RunSnapshot),candidate=snapshot.candidateOf?product.store.run(snapshot.candidateOf).snapshot.contextPlan:undefined;if(previous?.summary!==context.summary&&!(candidate?.summary===context.summary&&JSON.stringify(candidate.compacted)===JSON.stringify(context.compacted)))throw new HttpError(400,'Context checkpoint receipt missing');}
+      }
+    }
     validatePackageBehaviorRunSnapshot(product.store,snapshot as RunSnapshot);
     if (snapshot.profile) { const profile = validateArchiveProfile(product,snapshot.profile,run.chat_id,true) as ProfileSnapshot; if (!isDeepStrictEqual(resources,[...product.resources(run.chat_id,profile),...nativeResources(run.chat_id,snapshot.nativeBot)])) throw new HttpError(400,'Snapshot resource revision mismatch'); }
   }
@@ -527,8 +553,8 @@ function validateArchiveGraph(product: ProductStore) {
   }
   for (const attempt of rows('attempts')) {
     sameChat(attempt.run_id,attempt.chat_id,runs); sameChat(attempt.job_id,attempt.chat_id,jobs); if ([attempt.run_id,attempt.job_id,attempt.story_job_id].filter(id=>id!==null).length!==1) throw new HttpError(400,'Attempt target mismatch');
-    if(attempt.story_job_id!==null){const target=product.db.prepare('SELECT chat_id,kind FROM story_jobs WHERE id=?').get(attempt.story_job_id) as Row|undefined;if(!target||target.chat_id!==attempt.chat_id||target.kind!==attempt.role)throw new HttpError(400,'Story attempt target mismatch');}
-    choice(attempt.role,['main','translation','status','image','state','memory'],'attempt role'); if (attempt.story_job_id===null && (attempt.run_id !== null ? attempt.role !== 'main' : jobs.get(attempt.job_id)?.kind !== attempt.role)) throw new HttpError(400,'Attempt role mismatch');
+    if(attempt.story_job_id!==null){const target=product.db.prepare('SELECT chat_id,kind,inputs FROM story_jobs WHERE id=?').get(attempt.story_job_id) as Row|undefined;const compaction=attempt.role==='memory'&&parse(target?.inputs??'[]')?.some((input:Row)=>input.contextPlan);if(!target||target.chat_id!==attempt.chat_id||target.kind!==attempt.role&&!compaction)throw new HttpError(400,'Story attempt target mismatch');}
+    choice(attempt.role,['main','translation','status','image','state','memory'],'attempt role'); if (attempt.story_job_id===null && (attempt.run_id !== null ? attempt.role !== 'main'&&!(attempt.role==='memory'&&parse(runs.get(attempt.run_id)!.snapshot).contextPlan) : jobs.get(attempt.job_id)?.kind !== attempt.role)) throw new HttpError(400,'Attempt role mismatch');
     const request = record(parse(attempt.request));
     if (attempt.status === 'mock') {
       fields(request,['mock','input']); const input = record(request.input);

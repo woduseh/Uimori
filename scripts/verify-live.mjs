@@ -10,7 +10,7 @@ import { root, newId, json, assertBuild, killOwned } from './lib.mjs';
 // Default execution is a metadata-only preflight. Paid model requests require an explicit --execute.
 const args = process.argv.slice(2);
 if (args.includes('--help')) {
-  console.log('node scripts/verify-live.mjs [--preflight | --execute]\nRequired environment: NR_VERTEX_PROJECT, GOOGLE_APPLICATION_CREDENTIALS (file reference), NR_LIVE_MAX_REQUESTS, NR_LIVE_MAX_USD.\nDefault/--preflight performs no authentication or network request. --execute uses the configured paid-call ceilings and a new isolated SQLite database.');
+  console.log('node scripts/verify-live.mjs [--preflight | --execute]\nRequired environment: NR_VERTEX_PROJECT, GOOGLE_APPLICATION_CREDENTIALS (file reference), NR_VERTEX_REQUEST_TIER=flex.\nDefault/--preflight performs no authentication or network request. --execute runs paid synthetic scenarios in a new isolated SQLite database. Per-run call, timeout and output limits remain in force.');
   process.exit(0);
 }
 if (args.some(arg => !['--preflight', '--execute'].includes(arg)) || new Set(args).size !== args.length || args.length > 1) {
@@ -32,13 +32,13 @@ const summary = {
   preflight: {}, scenarios: {}, samples: [], requests: [], restarts: [], failures: [],
   limitations: [
     'Synthetic creative material only. Semantic quality and refusal quality require a separate human review.',
-    'A reservation is a conservative published-rate estimate before promotional credits, not an invoice or verified actual charge. Actual cost stays null when the provider does not report it.',
+    'Actual cost stays null when the provider does not report it. Token usage is recorded without estimating charges.',
     'Cancellation is observed after durable attempt admission; it does not prove that the remote model stopped or that no charge occurred.',
     'No automatic provider retries. Unexpected or uncertain results are retained; each scenario is attempted only once.',
     'This runner does not establish browser rendering, physical-phone behavior, live timeout/429 behavior, or a complete M1 acceptance claim.',
   ], cleanup: { status: 'NOT_RUN', retained: [] },
 };
-let build; let budgetModule; let limits;
+let build;
 const checks = summary.preflight;
 try { build = await assertBuild(); summary.identity = { buildId: build.buildId, sourceHash: build.sourceHash, distHash: build.distHash, builtAt: build.builtAt }; checks.build = 'PASS'; }
 catch { checks.build = 'BUILD_MISSING_OR_STALE'; }
@@ -51,20 +51,14 @@ checks.credentials = 'GOOGLE_APPLICATION_CREDENTIALS_FILE_REQUIRED';
 if (credentialFile) try { if ((await stat(credentialFile)).isFile()) checks.credentials = 'PASS'; } catch { /* Metadata only: never read or echo the credential file. */ }
 if (build) {
   try {
-    budgetModule = await import(pathToFileURL(path.join(root, 'dist/server/provider-budget.js')).href);
     const { createApp } = await import(pathToFileURL(path.join(root, 'dist/server/app.js')).href);
-    check(typeof createApp === 'function' && typeof budgetModule.ProviderBudget?.prototype.snapshot === 'function', 'LIVE_BUILD_EXPORT_MISSING');
-    limits = budgetModule.parseLiveBudgetLimits(process.env);
-    check(limits, 'LIVE_BUDGET_NOT_CONFIGURED');
-    check(limits.maxCostUsd >= budgetModule.VERTEX_BUDGET_RESERVATION_USD, 'LIVE_COST_BELOW_FULL_REQUEST_RESERVATION');
-    const date = Date.now(); check(date >= Date.parse('2026-09-02T00:00:00Z') && date < Date.parse('2027-01-01T00:00:00Z'), 'LIVE_PRICE_REVERIFY_REQUIRED');
-    checks.budget = 'PASS'; summary.approvedLimits = limits;
-    summary.pricing = { perRequestReservationUsd: budgetModule.VERTEX_BUDGET_RESERVATION_USD, revision: budgetModule.VERTEX_BUDGET_PRICE_REVISION, source: budgetModule.VERTEX_BUDGET_PRICE_SOURCE };
-  } catch (error) { checks.budget = safeCode(error, 'LIVE_BUILD_OR_BUDGET_INVALID'); }
-} else checks.budget = 'REQUIRES_CURRENT_BUILD';
+    check(typeof createApp === 'function', 'LIVE_BUILD_EXPORT_MISSING');
+    checks.runtime = 'PASS';
+  } catch (error) { checks.runtime = safeCode(error, 'LIVE_BUILD_INVALID'); }
+} else checks.runtime = 'REQUIRES_CURRENT_BUILD';
 checks.authenticationAttempted = false;
 checks.networkRequests = 0;
-checks.ready = ['build', 'project', 'credentials', 'budget'].every(key => checks[key] === 'PASS');
+checks.ready = ['build', 'project', 'credentials', 'requestTier', 'runtime'].every(key => checks[key] === 'PASS');
 if (!execute || !checks.ready) {
   summary.status = checks.ready ? 'READY' : 'BLOCKED';
   summary.finishedAt = new Date().toISOString(); summary.cleanup = { status: 'PASS', retained: ['summary.json'], serverStarted: false };
@@ -102,7 +96,6 @@ async function runLive() {
     const child = spawn(process.execPath, ['dist/server/index.js'], { cwd: root, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'], env: {
       ...process.env, NR_DB: dbPath, NR_PORT: '0', NR_INSTANCE: instanceId, NR_BUILD_ID: build.buildId,
       NR_TEST_MODE: '0', NR_ACCESS_TOKEN: accessToken, NR_PROVIDER_ORIGINS: 'https://aiplatform.googleapis.com',
-      NR_LIVE_MAX_REQUESTS: String(limits.maxRequests), NR_LIVE_MAX_USD: String(limits.maxCostUsd),
     } });
     children.add(child); await owned();
     let pending = ''; let stderrBytes = 0;
@@ -129,19 +122,17 @@ async function runLive() {
   const ledger = () => {
     const db = new DatabaseSync(dbPath, { readOnly: true });
     try {
-      const accounting = new budgetModule.ProviderBudget(db, limits).snapshot();
       const attempts = db.prepare('SELECT id,chat_id,run_id,job_id,role,model_id,status,input_tokens,output_tokens,cost_usd,raw_usage,price_revision,error,request FROM attempts ORDER BY rowid').all().map(row => {
         const request = JSON.parse(row.request);
         return { id: row.id, chatId: row.chat_id, runId: row.run_id, jobId: row.job_id, role: row.role, modelId: row.model_id, status: row.status,
           inputTokens: row.input_tokens, outputTokens: row.output_tokens, costUsd: row.cost_usd, rawUsage: row.raw_usage === null ? null : JSON.parse(row.raw_usage),
-          priceRevision: row.price_revision, error: row.error, bodySha256: request.bodySha256, stablePrefixSha256: request.stablePrefixSha256,
-          reservation: request.budgetReservation ?? null };
+          priceRevision: row.price_revision, error: row.error, bodySha256: request.bodySha256, stablePrefixSha256: request.stablePrefixSha256 };
       });
-      return { accounting, attempts };
+      return { requestCount: attempts.length, attempts };
     } finally { db.close(); }
   };
   const checkpoint = async () => {
-    const current = ledger(); summary.accounting = current.accounting; summary.requests = current.attempts;
+    const current = ledger(); summary.totalRequestCount = current.requestCount; summary.requests = current.attempts;
     await json(path.join(directory, 'summary.json'), summary); return current;
   };
   const pause = async ms => { check(!interrupted, 'LIVE_VERIFY_INTERRUPTED'); await delay(ms); };
@@ -149,7 +140,7 @@ async function runLive() {
     const deadline = Date.now() + timeoutMs; let lastProgress = 0;
     while (Date.now() < deadline) {
       const value = await observe(); if (predicate(value)) return value;
-      if (Date.now() - lastProgress > 30_000) { await log('waiting', { boundary: code, attempts: ledger().accounting.requestCount }); lastProgress = Date.now(); }
+      if (Date.now() - lastProgress > 30_000) { await log('waiting', { boundary: code, attempts: ledger().requestCount }); lastProgress = Date.now(); }
       await pause(100);
     }
     fail(code);
@@ -168,8 +159,7 @@ async function runLive() {
     const providerCode = typeof value.error === 'string' ? value.error : '';
     const accessFailure = ['CREDENTIAL_UNAVAILABLE', 'CONNECTION_NOT_AUTHORIZED', 'ENDPOINT_NOT_APPROVED', 'HTTP_401', 'HTTP_403', 'HTTP_404'].find(code => providerCode.includes(code));
     if (accessFailure) { fatalAccessReason = accessFailure; fail(accessFailure); }
-    const budgetFailure = ['LIVE_REQUEST_BUDGET_EXHAUSTED', 'LIVE_COST_BUDGET_EXHAUSTED', 'LIVE_BUDGET_NOT_CONFIGURED', 'LIVE_PRICE_REVERIFY_REQUIRED'].find(code => providerCode.includes(code));
-    fail(budgetFailure ?? fallback);
+    fail(fallback);
   };
   const prepareChat = async (name, { attachments = [], translation = false, long = false } = {}) => {
     const created = await api('/api/chats', { title: `Live synthetic ${name}` });
@@ -192,13 +182,9 @@ async function runLive() {
     await log('scenario.started', { name }); const startedAt = new Date().toISOString();
     try {
       if (needsRequest && fatalAccessReason) { summary.scenarios[name] = { status: 'BLOCKED', reason: fatalAccessReason, startedAt }; return; }
-      if (needsRequest) {
-        const current = ledger().accounting;
-        if (!current.nextRequestAdmissible) { summary.scenarios[name] = { status: 'BLOCKED', reason: current.blockedReason, startedAt }; return; }
-      }
       const result = await action(); summary.scenarios[name] = { status: 'PASS', startedAt, ...result };
     } catch (error) {
-      const code = safeCode(error); summary.scenarios[name] = { status: code.includes('NOT_OBSERVED') ? 'NOT_OBSERVED' : code.includes('DEPENDENCY') || code.includes('BUDGET') || code === 'LIVE_PRICE_REVERIFY_REQUIRED' ? 'BLOCKED' : 'FAIL', reason: code, startedAt };
+      const code = safeCode(error); summary.scenarios[name] = { status: code.includes('NOT_OBSERVED') ? 'NOT_OBSERVED' : code.includes('DEPENDENCY') ? 'BLOCKED' : 'FAIL', reason: code, startedAt };
       summary.failures.push({ scenario: name, code });
       // A local deadline never causes an uncertain request to be retried.
       // Stop/reopen the same database so later independent cases can run without orphan work.
@@ -297,11 +283,11 @@ async function runLive() {
       for (const { chat } of charts.values()) { const current = await detail(chat.id); savedSources.set(chat.id, current.sources.map(source => ({ id: source.id, hash: source.hash, textHash: digest(source.text) }))); }
       const transition = await restart('explicit live lifecycle check'); await pause(1500); const after = ledger();
       check(transition.priorPid !== transition.nextPid, 'PROCESS_RESTART_NOT_OBSERVED');
-      check(after.accounting.requestCount === before.accounting.requestCount, 'RESTART_REPLAYED_PROVIDER_REQUEST');
+      check(after.requestCount === before.requestCount, 'RESTART_REPLAYED_PROVIDER_REQUEST');
       check(JSON.stringify(after.attempts.map(item => item.id)) === JSON.stringify(before.attempts.map(item => item.id)), 'RESTART_CHANGED_ATTEMPT_IDENTITY');
       for (const [chatId, expected] of savedSources) { const current = await detail(chatId); check(JSON.stringify(current.sources.map(source => ({ id: source.id, hash: source.hash, textHash: digest(source.text) }))) === JSON.stringify(expected), 'RESTART_CHANGED_SOURCE'); }
       if (cancellation) { const run = await api(`/api/runs/${cancellation.runId}`); check(run.status === 'cancelled' && run.sourceRevision === null, 'RESTART_CHANGED_CANCELLED_RUN'); }
-      return { ...transition, beforeRequests: before.accounting.requestCount, afterRequests: after.accounting.requestCount, sourceChatsChecked: savedSources.size,
+      return { ...transition, beforeRequests: before.requestCount, afterRequests: after.requestCount, sourceChatsChecked: savedSources.size,
         cancelledRunChecked: cancellation?.runId ?? null, reconnect: 'actual new HTTP origin and session' };
     }, false);
     await assertBuild();
@@ -314,13 +300,12 @@ async function runLive() {
     summary.cleanup = { status: cleanupErrors.length || owner.active ? 'FAIL' : 'PASS', serverStillRunning: owner.active, errors: cleanupErrors,
       retained: ['runtime/evidence.sqlite', 'samples', 'summary.json', 'events.jsonl', 'ownership.json'] };
     summary.failures.push(...cleanupErrors.map(code => ({ scenario: 'cleanup', code })));
-    summary.status = summary.failures.some(item => !item.code.includes('NOT_OBSERVED') && !item.code.includes('DEPENDENCY') && !item.code.includes('BUDGET') && item.code !== 'LIVE_PRICE_REVERIFY_REQUIRED') ? 'FAIL'
+    summary.status = summary.failures.some(item => !item.code.includes('NOT_OBSERVED') && !item.code.includes('DEPENDENCY')) ? 'FAIL'
       : Object.values(summary.scenarios).some(item => item.status === 'BLOCKED') ? 'BLOCKED'
       : Object.values(summary.scenarios).length === 6 && Object.values(summary.scenarios).every(item => item.status === 'PASS') ? 'PASS' : 'INCOMPLETE';
     summary.finishedAt = new Date().toISOString(); await json(path.join(directory, 'summary.json'), summary);
     process.removeListener('SIGINT', onInterrupt); process.removeListener('SIGTERM', onInterrupt);
-    console.log(JSON.stringify({ status: summary.status, evidence: path.join(directory, 'summary.json'), requests: summary.accounting?.requestCount ?? null, cleanup: summary.cleanup.status }, null, 2));
+    console.log(JSON.stringify({ status: summary.status, evidence: path.join(directory, 'summary.json'), requests: summary.totalRequestCount ?? null, cleanup: summary.cleanup.status }, null, 2));
     if (summary.status !== 'PASS') process.exitCode = 1;
   }
 }
-

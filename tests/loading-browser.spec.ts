@@ -1,5 +1,5 @@
 import { test, expect, type APIRequestContext, type Page } from '@playwright/test';
-import type { Chat, ChatDetail, Run } from '../core/types.js';
+import type { Chat, ChatDetail, ReaderDetail, ReaderRun, Run } from '../core/types.js';
 import type { Content } from '../core/product.js';
 import { navigationAction } from './ui-navigation.js';
 
@@ -140,4 +140,56 @@ test('LOADUI04 offline edits reappear on reconnect and connected SSE sends only 
   await expect(article(page, first.id).getByTestId('source-text')).toContainText('Source changed while browser was offline.');
   const after = await detail(request, seeded.chat.id); expect(after.runs).toEqual(seeded.runs); expect(after.attempts).toEqual(seeded.attempts); expect(generated).toHaveLength(0);
   await page.screenshot({ path: info.outputPath('loading-reconnected.png') });
+});
+
+test('LOADUI05 context summary status fits mobile reader and run details without changing source or dispatching requests', async ({ page, request }, info) => {
+  const seeded = await seed(request, 1); const source = seeded.sources[0];
+  const writes: string[] = [];
+  page.on('request', request => { if (request.url().includes('/api/') && !['GET', 'HEAD'].includes(request.method())) writes.push(`${request.method()} ${request.url()}`); });
+  let stage: 'pending' | 'ready' | 'failed' | 'unknown' = 'pending';
+  const summary = (): NonNullable<ReaderRun['contextSummary']> => ({
+    status: stage === 'unknown' ? 'ready' : stage, inputTokenLimit: 272000,
+    estimatedInputTokens: stage === 'pending' || stage === 'unknown' ? null : 248600,
+    compactedSources: stage === 'pending' ? 0 : 12, summaryCalls: stage === 'pending' ? 0 : 2,
+    error: stage === 'failed' ? '필수 지침과 최신 원문만으로 입력 컨텍스트 한도를 넘었어요. 입력 한도를 높이거나 자료를 줄여 주세요.' : null,
+  });
+  await page.route(`**/api/chats/${seeded.chat.id}/reader?*`, async route => {
+    const response = await route.fetch(); const body = await response.json() as ReaderDetail;
+    const base = body.runs.find(run => run.id === source.runId)!;
+    body.runs = body.runs.map(run => ({ ...run, contextSummary: stage === 'ready' || stage === 'unknown' ? summary() : undefined }));
+    if (stage === 'pending' || stage === 'failed') body.runs.push({
+      ...base, id: `${base.id}-context-status-fixture`, request: 'Synthetic context status preview',
+      status: stage === 'pending' ? 'running' : 'failed', sourceRevision: null, partialText: undefined, error: null, contextSummary: summary(),
+    });
+    await route.fulfill({ response, json: body });
+  });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto(`/?chat=${seeded.chat.id}`);
+  const pending = page.getByTestId('pending-run').getByTestId('context-summary');
+  await expect(pending).toHaveAttribute('data-context-status', 'pending');
+  await expect(pending).toHaveText('컨텍스트 확인 중');
+
+  stage = 'ready'; await page.reload();
+  const ready = article(page, source.id).getByTestId('context-summary');
+  await expect(ready).toHaveText('앞선 12개 원문 요약 · 입력 약 248,600 / 272,000 토큰 · 요약 2회');
+  await ready.scrollIntoViewIfNeeded();
+  const bounds = await ready.boundingBox(); expect(bounds).not.toBeNull();
+  expect(bounds!.x).toBeGreaterThanOrEqual(0); expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(390);
+  expect(await ready.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
+  await page.screenshot({ path: info.outputPath('context-summary-mobile.png') });
+  await article(page, source.id).getByRole('button', { name: '실행 상세', exact: true }).click();
+  await expect(page.getByRole('region', { name: '실행 기록' }).getByTestId('context-summary')).toHaveText('앞선 12개 원문 요약 · 입력 약 248,600 / 272,000 토큰 · 요약 2회');
+  await page.keyboard.press('Escape');
+
+  stage = 'failed'; await page.reload();
+  const failed = page.getByTestId('pending-run').getByTestId('context-summary');
+  await expect(failed).toHaveAttribute('role', 'alert');
+  await expect(failed).toContainText('컨텍스트 확인에 실패했어요.');
+  await expect(failed).toContainText('필수 지침과 최신 원문만으로 입력 컨텍스트 한도를 넘었어요.');
+
+  stage = 'unknown'; await page.reload();
+  await expect(article(page, source.id).getByTestId('context-summary')).toContainText('입력 추정치 미확인');
+  await expect(article(page, source.id).getByTestId('source-text')).toBeAttached();
+  const after = await detail(request, seeded.chat.id);
+  expect(after.sources).toEqual(seeded.sources); expect(after.runs).toEqual(seeded.runs); expect(after.attempts).toEqual(seeded.attempts); expect(writes).toHaveLength(0);
 });

@@ -39,7 +39,7 @@ function start(store: Store, chatId: string): Run {
 function model(store: Store, run: Run) { const binding = listBehaviorTools(run.snapshot)[0], event = executeRunBehaviorTool(store, run.id, binding, { callId: randomUUID(), name: binding.tool.name, args: { purpose: 'persuasion' } }); expect(event.denied).toBe(false); return event; }
 function complete(store: Store, run: Run) { return store.completeRun(run.id, 'Exact synthetic prose. <state>{"count":11}</state>', { modelCalls: 0, inputTokens: null, outputTokens: null, costUsd: null }, run.snapshot.settings); }
 
-describe('v8 recorded automatic/model behavior archive', () => {
+describe('v9 recorded automatic/model behavior archive', () => {
   test('RBA01 automatic result projection is compact and committed journals roundtrip exactly', () => {
     const f = fixture(), run = start(f.store, f.chat.id); model(f.store, run); const source = complete(f.store, run), archive = f.store.product.export();
     expect(run.snapshot.behaviorExecution?.baseStates[0].state).toEqual({ count: 0 }); expect(run.snapshot.packageStates?.[0].state).toEqual({ count: 1 });
@@ -50,7 +50,7 @@ describe('v8 recorded automatic/model behavior archive', () => {
     expect(target.run(run.id).snapshot).toEqual(f.store.run(run.id).snapshot); expect(target.source(source.id).text).toBe(source.text);
     for (const name of ['package_behavior_entropy', 'package_behavior_opportunities', 'package_behavior_runs', 'package_behavior_outputs']) expect(target.product.export().tables[name]).toEqual(archive.tables[name]);
     const routed = structuredClone(run.snapshot);
-    routed.profile!.models.main = { id: 'model', revision: 1, title: 'Synthetic fixture', connectionId: 'connection', connectionRevision: 1, modelId: 'fixture', temperature: null, maxOutputTokens: 1024, connection: { id: 'connection', revision: 1, title: 'Fixture', protocol: 'fixture-sse-v1', endpoint: 'http://127.0.0.1:19999/turn', enabled: true, catalog: [], catalogError: null } };
+    routed.profile!.models.main = { id: 'model', revision: 1, title: 'Synthetic fixture', connectionId: 'connection', modelId: 'fixture', temperature: null, maxOutputTokens: 1024, connection: { id: 'connection', revision: 1, title: 'Fixture', protocol: 'fixture-sse-v1', endpoint: 'http://127.0.0.1:19999/turn', enabled: true, catalog: [], catalogError: null } };
     const request = buildMainProviderRequest(routed).request, projected = request.input.source as Record<string, any>;
     expect(projected.automaticResults).toEqual(run.snapshot.behaviorExecution!.automaticResults);
     expect(JSON.stringify(projected.automaticResults)).not.toMatch(/drawSeed|hostRuntime|before|after|stateSchema/);
@@ -89,7 +89,7 @@ describe('v8 recorded automatic/model behavior archive', () => {
     output.after.state.count=99;archived.tables.package_behavior_outputs[0].body=JSON.stringify(output);expect(()=>database().product.import(archived)).toThrow();
   });
 
-  test('RBA04 forged staged calculations and missing v8 tables reject atomically, restoring local entropy', () => {
+  test('RBA04 forged staged calculations and missing v9 tables reject atomically, restoring local entropy', () => {
     const f = fixture(), run = start(f.store, f.chat.id); model(f.store, run); complete(f.store, run); const base = f.store.product.export();
     const change = (row: any, update: (value: any) => void) => { const value = JSON.parse(row.body); update(value); row.body = JSON.stringify(value); };
     const snap = (archive: any, update: (value: any) => void) => { const row = archive.tables.runs[0], value = JSON.parse(row.snapshot); update(value); row.snapshot = JSON.stringify(value); };

@@ -1,9 +1,10 @@
+import { supportedModels } from '../core/model-capabilities.js';
 import type { FastifyInstance } from 'fastify';
 import { HttpError, type Store } from './store.js';
 import { AccessSessions, AccessSessionRateLimitError } from './access-session.js';
 import { forkChat } from './chat-fork.js';
 import { fields, record, text, number } from './product-store.js';
-import { validateVertexEndpoint, VERTEX_GEMINI_MODEL_ID, type Connection } from '../core/product.js';
+import { validateVertexEndpoint, type Connection } from '../core/product.js';
 import { parseCatalog, validateConnection } from '../core/transport.js';
 import { BUILTIN_ASSETS, builtinAssetSvg } from '../core/auxiliary.js';
 import { promptRoutes } from './prompt-routes.js';
@@ -73,7 +74,7 @@ export function productRoutes(app: FastifyInstance, store: Store, options: {cred
   app.put<{Params:{id:string}}>('/api/connections/:id',async request => {const prepared=product.prepareConnection(request.body,request.params.id);options.credentials?.validate(prepared.value);return product.connection(request.body,request.params.id);});
   app.post('/api/model-presets',async request => product.model(request.body));
   app.put<{Params:{id:string}}>('/api/model-presets/:id',async request => product.model(request.body,request.params.id));
-  app.get<{Params:{kind:string;id:string;revision:string}}>('/api/revisions/:kind/:id/:revision',async request => { if (!['content','preset','prompt-preset','connection','model'].includes(request.params.kind)) throw new HttpError(404,'Revision kind not found'); return product.get(request.params.kind,request.params.id,number(Number(request.params.revision),'revision')); });
+  app.get<{Params:{kind:string;id:string;revision:string}}>('/api/revisions/:kind/:id/:revision',async request => { if (!['content','preset','prompt-preset'].includes(request.params.kind)) throw new HttpError(404,'Revision kind not found'); return product.get(request.params.kind,request.params.id,number(Number(request.params.revision),'revision')); });
   app.post<{Params:{id:string}}>('/api/connections/:id/catalog',async request => {
     const b = record(request.body ?? {}); fields(b,[]); const previous = product.get<Connection>('connection',request.params.id);
     let error: string|null = null; let catalog = previous.catalog;
@@ -86,7 +87,7 @@ export function productRoutes(app: FastifyInstance, store: Store, options: {cred
       } else if (previous.protocol === 'vertex-gemini-v1') {
         // This is the adapter's local support list, not a provider availability probe.
         validateVertexEndpoint(previous.endpoint);
-        catalog = [{id:VERTEX_GEMINI_MODEL_ID,name:'Gemini 3.8 Flash',capabilities:{tools:true,structuredOutput:null},priceRevision:null}];
+        catalog = supportedModels('vertex-gemini-v1').map(model=>({id:model.id,name:model.name,capabilities:{tools:true,structuredOutput:null},priceRevision:null}));
       } else {
         product.authorize(previous);
         const c = validateConnection({id:previous.id,protocol:previous.protocol,endpoint:previous.endpoint,...(previous.credentialEnv ? {credentialEnv:previous.credentialEnv} : {})},options.approvedOrigins);

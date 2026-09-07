@@ -5,12 +5,12 @@ const helperUrl = new URL('../scripts/live-journey-evidence.mjs', import.meta.ur
 const browserUrl = new URL('../scripts/live-journey-browser.mjs', import.meta.url).href;
 const resumeUrl = new URL('../scripts/resume-journey-browser.mjs', import.meta.url).href;
 const { parseLiveJourneyOptions, splitJourneyAttempts, summarizeJourneyAttempts, selectResumePlan, checkRetriedTranslation,
-  checkCandidatePreservation, checkFirstRetranslation, sourceHash } = await import(helperUrl);
+  checkCandidatePreservation, checkFirstRetranslation, validateJourneyModel, sourceHash } = await import(helperUrl);
 const { runLiveJourney } = await import(browserUrl);
 const { runResumeJourney } = await import(resumeUrl);
 
-const model = (id: string) => ({ id, revision: 1, modelId: 'gemini-3.8-flash', maxOutputTokens: 8192, temperature: null, thinkingLevel: 'MEDIUM', timeoutMs: 900000,
-  connectionId: 'vertex', connectionRevision: 1, connection: { id: 'vertex', revision: 1, enabled: true, protocol: 'vertex-gemini-v1', requestTier: 'flex' } });
+const model = (id: string) => ({ id, revision: 1, modelId: 'gemini-3.8-flash', maxOutputTokens: 8192, temperature: null, thinkingLevel: 'MEDIUM', timeoutMs: 900000, serviceTier: 'flex',
+  connectionId: 'vertex', connectionRevision: 1, connection: { id: 'vertex', revision: 1, enabled: true, protocol: 'vertex-gemini-v1' } });
 const native = (id: string, role = 'main', jobId: string | null = null): any => ({ id, role, jobId, connectionId: 'vertex', modelId: 'gemini-3.8-flash', status: 'completed',
   inputTokens: 1, outputTokens: 2, costUsd: null, priceRevision: null, error: null, response: {}, rawUsage: { trafficType: 'ON_DEMAND_FLEX' },
   request: { role, protocol: 'vertex-gemini-v1', connectionId: 'vertex', modelId: 'gemini-3.8-flash', method: 'POST',
@@ -90,6 +90,13 @@ describe('live journey resume and evidence checks without network', () => {
     expect(plan.run.id).toBe('r-second'); expect(plan.completed.map((chunk: any) => chunk.id)).toEqual(['second-chunk-2']);
     expect(plan.failed.map((chunk: any) => chunk.id)).toEqual(['second-chunk-0', 'second-chunk-1']);
     plan.completed[0].attempt = 9; expect(input.jobs[1].chunks[2].attempt).toBe(1);
+  });
+  test('uses the model service tier and rejects missing or standard tier even with a legacy connection field', () => {
+    const selected = model('main'); expect(() => validateJourneyModel(selected)).not.toThrow();
+    for (const serviceTier of [undefined, 'standard']) {
+      const outdated = { ...selected, serviceTier, connection: { ...selected.connection, requestTier: 'flex' } };
+      expect(() => validateJourneyModel(outdated)).toThrow('LIVE_RESUME_REQUIRED_MODEL_UNAVAILABLE');
+    }
   });
   test.each(['active', 'completed', 'candidate', 'model', 'hash'])('rejects changed resume state %s before a retry', mode => {
     const input = fixture();

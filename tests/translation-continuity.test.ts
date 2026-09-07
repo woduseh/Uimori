@@ -34,7 +34,7 @@ function bridge(seed:AuxiliaryBundle) {
   return {store,data,chunks,outputs};
 }
 function selected(seed:AuxiliaryBundle,endpoint:string) {
-  seed.snapshot.profile!.models.translation={id:'model-continuity',revision:1,title:'Synthetic local fixture',connectionId:'connection-continuity',connectionRevision:1,modelId:'fixture-continuity',maxOutputTokens:8192,temperature:null,connection:{id:'connection-continuity',revision:1,title:'Loopback only',protocol:'fixture-sse-v1',endpoint,enabled:true,catalog:[],catalogError:null}};
+  seed.snapshot.profile!.models.translation={id:'model-continuity',revision:1,title:'Synthetic local fixture',connectionId:'connection-continuity',modelId:'fixture-continuity',maxOutputTokens:8192,temperature:null,connection:{id:'connection-continuity',revision:1,title:'Loopback only',protocol:'fixture-sse-v1',endpoint,enabled:true,catalog:[],catalogError:null}};
 }
 function hooks(origin:string):AuxiliaryJobHooks {return {signal:new AbortController().signal,approvedOrigins:[origin],authorize:value=>value,onAttemptStart:()=> 'synthetic-attempt',onAttemptFinish:()=>{},maxChunkChars:100};}
 function body(wire:string) {const packet=JSON.parse(wire).input.source;return {sourceRevision:packet.sourceRevision,sourceHash:packet.sourceHash,chunkId:packet.chunkId,segments:packet.blocks.map((block:{anchor:string})=>({anchors:[block.anchor],text:'앨런 선장은 곧 돌아올 거야.'}))};}

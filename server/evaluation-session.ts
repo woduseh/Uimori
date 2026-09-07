@@ -14,7 +14,7 @@ export function createEvaluationToolSession(target:(ModelPreset&{connection:unkn
     toolChoice:(completedToolResults:number)=>options.contextMode==='preloaded'?(completedToolResults===0?'eval_create_case':'auto'):undefined,
     generation:(base:ModelGeneration,completedToolResults:number):ModelGeneration=>{
       if(options.contextMode!=='preloaded'||completedToolResults!==0||options.approvalReasoningMode==='configured')return structuredClone(base);
-      return{...structuredClone(base),maxOutputTokens:Math.min(base.maxOutputTokens,8000),...(base.reasoningEffort!==undefined?{reasoningEffort:base.reasoningEffort==='none'?'none':'low'}:{})};
+      return{...structuredClone(base),maxOutputTokens:Math.min(base.maxOutputTokens,8000),...(base.reasoningEffort!==undefined?{reasoningEffort:['none','minimal'].includes(base.reasoningEffort)?base.reasoningEffort:'low'}:{}),...(base.outputEffort!==undefined?{outputEffort:'low'}:{})};
     },
     generationBinding:(base:ModelGeneration,completedToolResults:number):ModelGeneration|undefined=>options.contextMode==='preloaded'&&completedToolResults===0&&options.approvalReasoningMode==='economized'?structuredClone(base):undefined,
     diagnosticResult:(result:ProviderResult):ProviderResult=>({...structuredClone(result),toolCalls:result.toolCalls.map(call=>call.name==='eval_submit_artifact'?{...call,arguments:{}}:call)}),

@@ -1,3 +1,5 @@
+import { generationFromModel } from '../core/model-capabilities.js';
+import { contextBudgetForModel } from '../core/context-budget.js';
 import { compileSnapshotPrompt } from './prompt-snapshot.js';
 import { buildMainInput, type MainInput } from '../core/provider.js';
 import { packageContext } from '../core/package-context.js';
@@ -10,6 +12,7 @@ import { encodeResponses } from '../core/openai-protocol.js';
 import { encodeChat } from '../core/openai-chat-protocol.js';
 import { encodeAnthropic } from '../core/anthropic-protocol.js';
 import { encodeVertex } from '../core/vertex-protocol.js';
+import { buildCodexDescriptor } from '../core/codex-protocol.js';
 import { assertBehaviorToolCapability, listBehaviorTools } from '../core/package-behavior-tools.js';
 
 const pagination = { offset: { type: 'integer', minimum: 0 }, limit: { type: 'integer', minimum: 1 } };
@@ -36,7 +39,7 @@ function requestInput(snapshot:RunSnapshot,input:MainInput):ProviderRequest['inp
   const packages = structured ? packageContext(snapshot, 'main') : undefined;
   const templateHasState=(nodes:PromptTemplate):boolean=>nodes.some(node=>node.kind==='slot'&&node.name==='state'||node.kind==='if'&&(templateHasState(node.then)||templateHasState(node.else??[]))||node.kind==='each'&&(templateHasState(node.body)||templateHasState(node.else??[]))||node.kind==='let'&&templateHasState(node.body));
   const stateSlot=snapshot.profile?.promptPresets?.main?.program?.blocks.some(block=>block.kind==='slot'&&block.slot==='state'||(block.kind==='slot'||block.kind==='message')&&templateHasState(block.template??[]));
-  return {task:input.task,controls,source:json({parentRevision:snapshot.parentRevision,facts:structured||input.pinnedSources?.length?[]:input.facts,pinnedSources:structured?[]:input.pinnedSources??[],prefetch:input.prefetch,...(packages?{packages}:{}),...(input.state&&!stateSlot?{state:input.state}:{}),...(!structured&&input.memory?{memory:input.memory}:{}),...(input.catalogPage?{catalogPage:input.catalogPage}:{}),...(snapshot.behaviorExecution?.automaticResults.length?{automaticResults:snapshot.behaviorExecution.automaticResults}:{})}),catalog:json(input.catalog),...(!snapshot.promptCompilation?{history:json(input.history)}:{}),results:json(input.results)};
+  return {task:input.task,controls,source:json({parentRevision:snapshot.parentRevision,...(!structured&&input.contextSummary?{contextSummary:input.contextSummary}:{}),facts:structured||input.pinnedSources?.length?[]:input.facts,pinnedSources:structured?[]:input.pinnedSources??[],prefetch:input.prefetch,...(packages?{packages}:{}),...(input.state&&!stateSlot?{state:input.state}:{}),...(!structured&&input.memory?{memory:input.memory}:{}),...(input.catalogPage?{catalogPage:input.catalogPage}:{}),...(snapshot.behaviorExecution?.automaticResults.length?{automaticResults:snapshot.behaviorExecution.automaticResults}:{})}),catalog:json(input.catalog),...(!snapshot.promptCompilation?{history:json(input.history)}:{}),results:json(input.results)};
 }
 /** Explicit dynamic data boundary. Existing user-authored roles, order and cache IDs stay unchanged. */
 export function attachMainHostContext(snapshot:RunSnapshot):RunSnapshot{
@@ -65,12 +68,12 @@ export function buildMainProviderRequest(snapshot:RunSnapshot,options:{results?:
   if(terminal)contract+='\nThe registered story.submit tool is this run\'s final fiction submission boundary. Ordinary final text remains a supported fallback.';
   if(options.evaluation)contract+='\nThe selected evaluation tool set is scoped to this model preset and this run. eval_submit_artifact returns its content as the completed run output; userFacingNotice remains separate metadata. Tool results do not alter host permissions.';
   const request:ProviderRequest={role:'main',modelId:target.modelId,stable:{contract,tools:[...MAIN_READ_TOOLS.filter(tool=>input.tools.includes(tool.name)).map(tool=>structuredClone(tool)),...behaviorTools.map(binding=>binding.tool),...(terminal?[structuredClone(STORY_SUBMIT_TOOL)]:[]),...(options.evaluation?.definitions.map(tool=>structuredClone(tool))??[])]},
-    generation:{maxOutputTokens:target.maxOutputTokens,temperature:target.temperature,...(target.thinkingLevel?{thinkingLevel:target.thinkingLevel}:{}),...(target.structuredOutput!==undefined?{structuredOutput:target.structuredOutput}:{}),...(target.reasoningEffort?{reasoningEffort:target.reasoningEffort}:{}),...(target.thinkingMode?{thinkingMode:target.thinkingMode}:{}),...(target.thinkingBudgetTokens!==undefined?{thinkingBudgetTokens:target.thinkingBudgetTokens}:{})},
+    generation:generationFromModel(target,target.connection.protocol),contextBudget:contextBudgetForModel(target),
     input:requestInput(fixed,input),...(options.evaluation?.bootstrap.length?{bootstrap:options.evaluation.bootstrap.map(item=>({callId:item.callId,name:item.name,args:json(item.args) as Record<string,Json>,result:json(item.result),denied:item.denied}))}:{}),...(options.evaluation?.toolChoice?{toolChoice:options.evaluation.toolChoice}:{}),...(fixed.promptCompilation?{prompt:{compilerVersion:fixed.promptCompilation.compilerVersion,messages:fixed.promptCompilation.messages,cachePlan:fixed.promptCompilation.cachePlan,values:fixed.promptCompilation.values}}:{}),...(options.opaqueState!==undefined?{opaqueState:options.opaqueState}:{})};
   return {snapshot:fixed,input,request:validateRequest(request)};
 }
 export function encodeMainPreview(request:ProviderRequest,target:ModelPreset & {connection:Connection}){
   const checked=validateRequest(request),protocol=target.connection.protocol;const plan=planNativeMessages(checked,protocol);
-  const body=protocol==='openai-responses-v1'?encodeResponses(checked).body:protocol==='anthropic-messages-v1'?encodeAnthropic(checked).body:protocol==='vertex-gemini-v1'?encodeVertex(checked).body:protocol==='openai-chat-v1'||protocol==='vercel-chat-v1'?encodeChat(checked).body:json(checked);
+  const body=protocol==='openai-responses-v1'?encodeResponses(checked).body:protocol==='anthropic-messages-v1'?encodeAnthropic(checked).body:protocol==='vertex-gemini-v1'?encodeVertex(checked).body:protocol==='openai-chat-v1'||protocol==='vercel-chat-v1'?encodeChat(checked).body:protocol==='codex-app-server-v1'?buildCodexDescriptor(checked):json(checked);
   return{protocol,modelId:target.modelId,kind:'exact-request-body' as const,body,diagnostics:plan?.diagnostics??[],capabilityVersion:plan?.capabilityVersion??'fixture-only'};
 }

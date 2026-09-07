@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, test, vi } from 'vitest';
 import { defaultProfile, type ProviderProtocol } from '../core/product.js';
+import { modelCapability } from '../core/model-capabilities.js';
 import type { ContentPackage } from '../core/content-package.js';
 import type { PackageBehavior } from '../core/package-behavior.js';
 import { behaviorInputJsonSchema, listBehaviorTools } from '../core/package-behavior-tools.js';
@@ -22,7 +23,7 @@ function behavior(): PackageBehavior {
 function snapshot(endpoint = 'http://127.0.0.1:19999/turn', protocol: ProviderProtocol = 'fixture-sse-v1'): RunSnapshot {
   const pkg: ContentPackage = { version: 1, id: 'rules', revision: 1, title: 'Synthetic rules', description: '', lore: [], instructions: [], controls: [], transforms: [], behavior: behavior() };
   return { chatId: 'synthetic', parentRevision: null, settingsRevision: 1, request: 'Persuade the keeper.', history: [], resources: [], settings: { preset: 'calm', mode: 'direct', translation: false, status: false, maxCalls: 3 },
-    profile: { ...defaultProfile('synthetic'), contents: [], packageAttachments: [{ id: pkg.id, revision: 1, role: 'bot' }], packages: [pkg], models: { main: { id: 'model', revision: 1, title: 'Synthetic model', connectionId: 'connection', connectionRevision: 1, modelId: 'synthetic-model', maxOutputTokens: 1024, temperature: null,
+    profile: { ...defaultProfile('synthetic'), contents: [], packageAttachments: [{ id: pkg.id, revision: 1, role: 'bot' }], packages: [pkg], models: { main: { id: 'model', revision: 1, title: 'Synthetic model', connectionId: 'connection', modelId: 'synthetic-model', maxOutputTokens: 1024, temperature: null,
       connection: { id: 'connection', revision: 1, title: 'Local synthetic only', enabled: true, protocol, endpoint, catalog: [], catalogError: null } } } } };
 }
 function hooks(origin: string, extra: Partial<MainHooks> = {}) {
@@ -89,7 +90,7 @@ describe('Author-selected behavior tool surface', () => {
 
   test.each(['openai-responses-v1', 'openai-chat-v1', 'vercel-chat-v1', 'anthropic-messages-v1', 'vertex-gemini-v1'] as const)('BT04 %s native preview carries the same selected input schema', protocol => {
     const endpoint = protocol === 'vertex-gemini-v1' ? 'https://aiplatform.googleapis.com/v1/projects/synthetic/locations/global/publishers/google/models' : 'http://127.0.0.1:19999/v1';
-    const work = snapshot(endpoint, protocol); if (protocol === 'vertex-gemini-v1') work.profile!.models.main!.modelId = 'gemini-3.8-flash';
+    const work = snapshot(endpoint, protocol); if (protocol === 'vertex-gemini-v1') { const target = work.profile!.models.main!; target.modelId = 'gemini-3.8-flash'; target.capabilityRevision = modelCapability(protocol, target.modelId)!.revision; }
     const selected = listBehaviorTools(work)[0], built = buildMainProviderRequest(work);
     const encoded = encodeMainPreview(built.request, work.profile!.models.main!);
     expect(JSON.stringify(encoded.body)).toContain(selected.tool.name);

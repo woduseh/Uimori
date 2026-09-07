@@ -27,7 +27,7 @@ test('upload persists normalized file outside SQLite and survives app restart wi
   expect(uploaded.statusCode).toBe(200);const reference=uploaded.json();
   expect(reference).toEqual({credentialEnv:expect.stringMatching(/^NARRATIVE_PROVIDER_VERTEX_FILE_[A-F0-9]{32}$/),projectId:account.project_id,clientEmail:account.client_email});
   expect(uploaded.body).not.toContain('PRIVATE KEY');
-  const saved=await app.inject({method:'POST',url:'/api/connections',payload:{title:'JSON Vertex',protocol:'vertex-gemini-v1',endpoint,credentialEnv:reference.credentialEnv,enabled:true,requestTier:'flex'}});
+  const saved=await app.inject({method:'POST',url:'/api/connections',payload:{title:'JSON Vertex',protocol:'vertex-gemini-v1',endpoint,credentialEnv:reference.credentialEnv,enabled:true}});
   expect(saved.statusCode).toBe(200);const connection=saved.json<Connection>();
   const files=readdirSync(db+'.vertex-credentials');expect(files).toHaveLength(1);
   const filename=join(db+'.vertex-credentials',files[0]!);expect(JSON.parse(readFileSync(filename,'utf8'))).not.toHaveProperty('extra');

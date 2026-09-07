@@ -5,7 +5,6 @@ import { tmpdir } from 'node:os';
 import { basename, isAbsolute, join, relative, resolve } from 'node:path';
 import { Store } from '../server/store.js';
 import { RegistrationStore, normalizeRegistrationPlan, validateRegistrationArchive, validateRegistrationGraph } from '../server/provider-registration-store.js';
-import { ProviderBudget, VERTEX_BUDGET_RESERVATION_USD } from '../server/provider-budget.js';
 import type { Connection, ModelPreset } from '../core/product.js';
 import type { ProviderResult, WireRecord } from '../core/transport.js';
 import type { RegistrationPlan, RegistrationRun } from '../core/provider-registration.js';
@@ -16,11 +15,11 @@ beforeEach(()=>{vi.spyOn(globalThis,'fetch').mockRejectedValue(new Error('Provid
 afterEach(()=>{expect(fetch).not.toHaveBeenCalled();vi.restoreAllMocks();vi.unstubAllEnvs();for(const {directory,store} of owned.splice(0).reverse()){store?.close();const target=resolve(directory),within=relative(resolve(tmpdir()),target);if(isAbsolute(within)||within.startsWith('..')||!basename(target).startsWith('uimori-registration-'))throw new Error('Unsafe test cleanup');rmSync(target,{recursive:true,force:true});}});
 const digest=(v:unknown)=>createHash('sha256').update(JSON.stringify(v)).digest('hex');
 const reference=({id,revision}:{id:string;revision:number})=>({id,revision});
-const endpoint='https://aiplatform.googleapis.com/v1/projects/synthetic-budget/locations/global/publishers/google/models';
+const endpoint='https://aiplatform.googleapis.com/v1/projects/synthetic-registration/locations/global/publishers/google/models';
 const connectionBody=(vertex=false)=>({title:'Synthetic assistant connection',protocol:vertex?'vertex-gemini-v1':'openai-chat-v1',endpoint:vertex?endpoint:'http://127.0.0.1:9999/v1',credentialEnv:'NARRATIVE_PROVIDER_REGISTRATION_SYNTHETIC',enabled:true});
 const modelBody={title:'Proposed synthetic model',modelId:'synthetic-proposed',maxOutputTokens:1000,temperature:null};
 const proposal=():RegistrationPlan=>({connection:{kind:'new',draft:{title:'Disabled proposal',protocol:'openai-chat-v1',endpoint:'http://127.0.0.1:9998/v1',enabled:false,credentialEnv:'NARRATIVE_PROVIDER_PROPOSED'}},model:{...modelBody}});
-function setup(vertex=false){const {store,item}=database();const connection=store.product.connection(connectionBody(vertex)) as Connection;const model=store.product.model({...modelBody,modelId:vertex?'gemini-3.8-flash':'synthetic-assistant',connectionId:connection.id,connectionRevision:connection.revision}) as ModelPreset;const journal=new RegistrationStore(store.product);const input={key:randomUUID(),request:'Prepare a synthetic disabled model connection.',target:reference(model)};return {store,item,connection,model,journal,input};}
+function setup(vertex=false){const {store,item}=database();const connection=store.product.connection(connectionBody(vertex)) as Connection;const model=store.product.model({...modelBody,modelId:vertex?'gemini-3.8-flash':'synthetic-assistant',connectionId:connection.id}) as ModelPreset;const journal=new RegistrationStore(store.product);const input={key:randomUUID(),request:'Prepare a synthetic disabled model connection.',target:reference(model)};return {store,item,connection,model,journal,input};}
 function wire(c:Connection,m:ModelPreset):WireRecord{return {connectionId:c.id,protocol:c.protocol,role:'main',modelId:m.modelId,method:'POST',url:c.protocol==='vertex-gemini-v1'?`${c.endpoint}/${m.modelId}:streamGenerateContent?alt=sse`:`${c.endpoint}/chat/completions`,headers:{authorization:'[REDACTED]'},body:{input:'Synthetic configuration metadata'},bodySha256:digest('body'),stablePrefixSha256:digest('prefix')};}
 const result=(status:ProviderResult['status']='completed'):ProviderResult=>({status,text:'NOT_STORED_RESPONSE',toolCalls:[],refusal:null,error:null,opaqueState:{private:'NOT_STORED_OPAQUE'},usage:{inputTokens:100,outputTokens:20,costUsd:null,raw:{private:'NOT_STORED_RAW_USAGE'},priceRevision:null}});
 function ready(s:ReturnType<typeof setup>,plan:RegistrationPlan=proposal()){const run=s.journal.create(s.input).run;const attempt=s.journal.startAttempt(run.id,wire(s.connection,s.model));s.journal.finishAttempt(run.id,attempt,result());return s.journal.finish(run.id,'ready',plan);}
@@ -51,6 +50,14 @@ test('existing connection edits make apply stale, while archived historical plan
   expect(()=>validateRegistrationGraph(s.store.product)).not.toThrow();const restored=database().store;restored.product.import(s.store.product.export());expect(new RegistrationStore(restored.product).get(run.id).plan).toEqual(plan);
 });
 
+test('known model proposals validate against the reviewed connection without storing capability metadata in the proposal',()=>{
+  const s=setup(true);const plan:RegistrationPlan={connection:{kind:'existing',...reference(s.connection)},model:{...modelBody,modelId:'gemini-3.8-flash',timeoutMs:240000}};
+  const reviewed=ready(s,plan);expect(reviewed.plan!.model).not.toHaveProperty('capabilityRevision');
+  expect(()=>validateRegistrationArchive(reviewed)).not.toThrow();expect(()=>validateRegistrationGraph(s.store.product)).not.toThrow();
+  const applied=s.journal.apply(reviewed.id,{expectedRevision:reviewed.revision,planHash:reviewed.planHash});expect(applied.appliedSnapshot!.model.capabilityRevision).toBe(s.model.capabilityRevision);
+  expect(()=>validateRegistrationGraph(s.store.product)).not.toThrow();
+});
+
 test('untrusted protocol/options/credential values/overrides cannot become proposals or settings',()=>{
   const s=setup();const before=counts(s.store);
   const attacks:((p:any)=>void)[]=[p=>p.connection.draft.protocol='unsupported',p=>p.connection.draft.enabled=true,p=>p.connection.draft.credentialEnv='sk-SYNTHETIC_RAW_KEY_VALUE',p=>p.connection.draft.apiKey='raw',p=>p.connection.draft.endpoint='http://127.0.0.1:9998/v1?api_key=raw',p=>p.model.thinkingMode='enabled',p=>p.model.userOverrides={tools:true,structuredOutput:true,note:'model claims'},p=>p.model.temperature='1'];
@@ -76,26 +83,52 @@ test('JSON and SQLite backup roundtrip retain null accounting without raw respon
   expect(new RegistrationStore(target.item.store.product).view(run.id)).toEqual(s.journal.view(run.id));validateRegistrationGraph(target.item.store.product);
 });
 
-test('archive schemas and graph reject poisoned plans, applied refs, fractional tokens and dropped budget attempts',()=>{
+test('archive schemas and graph reject poisoned plans, applied refs, fractional tokens and dropped attempts',()=>{
   const s=setup();const run=ready(s);const applied=s.journal.apply(run.id,{expectedRevision:run.revision,planHash:run.planHash});const valid=s.store.product.export();
   const attacks:((r:any)=>void)[]=[r=>r.applied=null,r=>r.applied.model={id:'missing',revision:1},r=>r.plan.model.maxOutputTokens='many',r=>r.plan.model.userOverrides={tools:true,structuredOutput:true,note:''},r=>r.attempts[0].usage.inputTokens=1.5,r=>r.attempts=[],r=>r.attempts[0].request.modelId='different',r=>r.attempts[0].request.headers.authorization='Bearer RAW_SECRET',r=>r.attempts[0].request.body.opaqueState={raw:'private'},r=>r.finishedAt='not-a-date'];
   for(const mutate of attacks){const archive=structuredClone(valid);const row=archive.tables.versions.find((row:any)=>row.id===applied.id&&row.revision===applied.revision)!;const body=JSON.parse(row.body);mutate(body);if(body.plan)body.planHash=digest(body.plan);row.body=JSON.stringify(body);const target=database().store;expect(()=>target.product.import(archive)).toThrow();expect(target.product.all('connection')).toEqual([]);}
   const malformed=structuredClone(applied);malformed.status='running';expect(()=>validateRegistrationArchive(malformed)).toThrow();
 });
 
-test('same-DB Vertex ledger counts one registration HTTP attempt across journal versions and preserves full reservation',()=>{
-  const s=setup(true);const limits={maxRequests:2,maxCostUsd:10};const now=()=>new Date('2026-09-07T00:00:00.000Z');const budget=new ProviderBudget(s.store.db,limits,now);const run=s.journal.create(s.input).run;
-  const attempt=budget.start(wire(s.connection,s.model),admitted=>s.journal.startAttempt(run.id,admitted));expect(budget.snapshot()).toMatchObject({requestCount:1,fullReservationCount:1,accountedCostUsd:VERTEX_BUDGET_RESERVATION_USD});
-  s.journal.finishAttempt(run.id,attempt,result());s.journal.finish(run.id,'ready',proposal());expect(s.store.product.all('registration-run')).toHaveLength(1);expect(budget.snapshot()).toMatchObject({requestCount:1,fullReservationCount:1,usageAdjustedCount:0});
-  const chat=s.store.createChat('Budget peer'),p=s.store.product.profile(chat.id);s.store.product.updateProfile(chat.id,{expectedRevision:p.revision,attachments:[],creative:p.creative,routes:{...p.routes,main:reference(s.model)},image:false});
-  const profile=s.store.product.snapshot(chat.id)!;const narrative=s.store.createRun(chat.id,{request:'Synthetic budget peer',expectedRevision:null,expectedSettingsRevision:chat.settingsRevision,idempotencyKey:randomUUID()},current=>({chatId:chat.id,parentRevision:null,settingsRevision:current.settingsRevision,settings:current.settings,request:'Synthetic budget peer',history:[],resources:[],profile})).run;
-  budget.start(wire(s.connection,s.model),admitted=>s.store.product.startAttempt(chat.id,narrative.id,null,admitted));expect(budget.snapshot()).toMatchObject({requestCount:2,fullReservationCount:2,blockedReason:'LIVE_REQUEST_BUDGET_EXHAUSTED'});
-  const other=s.journal.create({...s.input,key:randomUUID()}).run;expect(()=>budget.start(wire(s.connection,s.model),admitted=>s.journal.startAttempt(other.id,admitted))).toThrow('LIVE_REQUEST_BUDGET_EXHAUSTED');expect(s.journal.get(other.id).attempts).toEqual([]);
-  const restored=database().store;restored.product.import(s.store.product.export());expect(new ProviderBudget(restored.db,limits,now).snapshot()).toMatchObject({requestCount:2,fullReservationCount:2});
+test('registration retains its per-run attempt limit and durable usage across independent runs and archive restore',()=>{
+  const s=setup(true);const run=s.journal.create(s.input).run;const request=wire(s.connection,s.model);
+  const attempt=s.journal.startAttempt(run.id,request);
+  expect(s.journal.get(run.id).attempts).toEqual([{id:attempt,request,status:'running',usage:null,error:null}]);
+  expect(()=>s.journal.startAttempt(run.id,request)).toThrow('Registration request is no longer admitted');
+  s.journal.finishAttempt(run.id,attempt,result());s.journal.finish(run.id,'ready',proposal());
+  expect(s.journal.view(run.id)).toMatchObject({modelCalls:1,usage:{inputTokens:100,outputTokens:20,costUsd:null,raw:null,priceRevision:null}});
+  const other=s.journal.create({...s.input,key:randomUUID()}).run;
+  const otherAttempt=s.journal.startAttempt(other.id,request);s.journal.finishAttempt(other.id,otherAttempt,result());s.journal.finish(other.id,'ready',proposal());
+  const restored=database().store;restored.product.import(s.store.product.export());
+  expect(new RegistrationStore(restored.product).view(run.id)).toEqual(s.journal.view(run.id));
+  expect(new RegistrationStore(restored.product).view(other.id)).toEqual(s.journal.view(other.id));
+  for(const id of [run.id,other.id])expect(new RegistrationStore(restored.product).get(id).targetSnapshot.connection).toMatchObject({id:s.connection.id,enabled:false});
+});
+
+test('edits replace current settings while registration replay and applied snapshots remain frozen',()=>{
+  const s=setup();const plan:RegistrationPlan={connection:{kind:'existing',...reference(s.connection)},model:{...modelBody}};
+  const reviewed=ready(s,plan);const applied=s.journal.apply(reviewed.id,{expectedRevision:reviewed.revision,planHash:reviewed.planHash});
+  const frozen=structuredClone(applied),created=applied.appliedSnapshot!.model;
+  const updatedTarget=s.store.product.model({...modelBody,title:'Changed assistant',modelId:'changed-assistant',connectionId:s.connection.id,expectedRevision:s.model.revision},s.model.id) as ModelPreset;
+  s.store.product.model({...modelBody,title:'Changed applied model',modelId:'changed-applied',connectionId:s.connection.id,expectedRevision:created.revision},created.id);
+  s.store.product.connection({...connectionBody(),title:'Changed connection',endpoint:'http://127.0.0.1:9988/v1',expectedRevision:s.connection.revision},s.connection.id);
+  expect(()=>s.store.product.get('model',s.model.id,s.model.revision)).toThrow('Setting not found');
+  expect(()=>s.store.product.get('connection',s.connection.id,s.connection.revision)).toThrow('Setting not found');
+  expect(s.journal.create(s.input)).toMatchObject({created:false,run:frozen,target:frozen.targetSnapshot});
+  expect(s.journal.apply(reviewed.id,{expectedRevision:reviewed.revision,planHash:reviewed.planHash})).toEqual(frozen);
+  expect(()=>s.journal.create({...s.input,key:randomUUID()})).toThrow('model changed');
+  expect(s.store.db.prepare("SELECT COUNT(*) AS n FROM versions WHERE kind IN ('connection','model')").get()).toMatchObject({n:0});
+  expect(s.store.product.get<ModelPreset>('model',s.model.id)).toEqual(updatedTarget);
+  expect(()=>validateRegistrationGraph(s.store.product)).not.toThrow();
+  const restored=database().store;restored.product.import(s.store.product.export());const journal=new RegistrationStore(restored.product);
+  expect(journal.view(reviewed.id)).toEqual(s.journal.view(reviewed.id));
+  const receipt=journal.get(reviewed.id);expect(receipt.targetSnapshot.modelId).toBe(s.model.modelId);expect(receipt.appliedSnapshot!.model.modelId).toBe(created.modelId);
+  for(const connection of [receipt.targetSnapshot.connection,receipt.planConnectionSnapshot,receipt.appliedSnapshot!.connection]){expect(connection).not.toHaveProperty('credentialEnv');expect(connection?.enabled).toBe(false);}
+  expect(()=>validateRegistrationGraph(restored.product)).not.toThrow();
 });
 
 test('registration prepare/apply does not assign roles or modify a source and frozen run',()=>{
-  const s=setup();const chat=s.store.createChat('Synthetic role owner');const p=s.store.product.profile(chat.id);s.store.product.updateProfile(chat.id,{expectedRevision:p.revision,attachments:[],creative:p.creative,routes:{...p.routes,main:reference(s.model)},image:false});
+  const s=setup();const chat=s.store.createChat('Synthetic role owner');const p=s.store.product.profile(chat.id);s.store.product.updateProfile(chat.id,{expectedRevision:p.revision,attachments:[],creative:p.creative,routes:{...p.routes,main:{id:s.model.id}},image:false});
   const profile=s.store.product.snapshot(chat.id)!;const run=s.store.createRun(chat.id,{request:'Synthetic story',expectedRevision:null,expectedSettingsRevision:chat.settingsRevision,idempotencyKey:randomUUID()},current=>({chatId:chat.id,parentRevision:null,settingsRevision:current.settingsRevision,settings:current.settings,request:'Synthetic story',history:[],resources:[],profile})).run;s.store.startRun(run.id);const source=s.store.completeRun(run.id,'An immutable synthetic scene.',{modelCalls:1,inputTokens:null,outputTokens:null,costUsd:null},run.snapshot.settings);
   const before={profile:s.store.product.profile(chat.id),snapshot:s.store.run(run.id).snapshot,source:s.store.source(source.id),story:s.store.story.config(chat.id)};
   const registration=ready(s);s.journal.apply(registration.id,{expectedRevision:registration.revision,planHash:registration.planHash});
@@ -104,7 +137,7 @@ test('registration prepare/apply does not assign roles or modify a source and fr
 
 test('fixture root endpoints compare the normalized transport URL during archive validation',()=>{
   const s=setup();const c=s.store.product.connection({title:'Root fixture',protocol:'fixture-sse-v1',endpoint:'http://127.0.0.1:9997',enabled:true}) as Connection;
-  const m=s.store.product.model({...modelBody,connectionId:c.id,connectionRevision:c.revision}) as ModelPreset;const run=s.journal.create({...s.input,key:randomUUID(),target:reference(m)}).run;
+  const m=s.store.product.model({...modelBody,connectionId:c.id}) as ModelPreset;const run=s.journal.create({...s.input,key:randomUUID(),target:reference(m)}).run;
   const attempt=s.journal.startAttempt(run.id,{...wire(c,m),url:new URL(c.endpoint).href});s.journal.finishAttempt(run.id,attempt,result());s.journal.finish(run.id,'ready',proposal());
   expect(()=>validateRegistrationGraph(s.store.product)).not.toThrow();const restored=database().store;expect(()=>restored.product.import(s.store.product.export())).not.toThrow();
 });

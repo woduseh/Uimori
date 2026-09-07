@@ -14,7 +14,7 @@ const proposed = () => ({ connection: { kind: 'new', draft: { title: 'Proposed l
 const context = (): Json => ({ definitions: JSON.parse(JSON.stringify(PROVIDER_DEFINITIONS)), connections: [{ id: 'existing', revision: 2, protocol: 'openai-chat-v1', title: 'Saved connection', endpoint: 'PRIVATE_EXISTING_ENDPOINT', credentialEnv: 'PRIVATE_EXISTING_CREDENTIAL_REF', catalog: [{ text: 'PRIVATE_CATALOG_BODY' }] }],
   models: [{ id: 'model', revision: 3, title: 'Saved model', modelId: 'saved/model', protocol: 'openai-chat-v1', endpoint: 'PRIVATE_MODEL_ENDPOINT', body: 'PRIVATE_MODEL_BODY' }], story: 'PRIVATE_STORY_BODY' });
 type Target = ModelPreset & { connection: Connection };
-function target(origin: string, protocol: Connection['protocol'] = 'fixture-sse-v1'): Target { return { id: 'selected', revision: 1, title: 'Registration model', connectionId: 'connection', connectionRevision: 1, modelId: 'synthetic-model', maxOutputTokens: 512, temperature: 0, timeoutMs: 4000,
+function target(origin: string, protocol: Connection['protocol'] = 'fixture-sse-v1'): Target { return { id: 'selected', revision: 1, title: 'Registration model', connectionId: 'connection', modelId: 'synthetic-model', maxOutputTokens: 512, temperature: 0, timeoutMs: 4000,
   connection: { id: 'connection', revision: 1, title: 'Synthetic runtime', protocol, endpoint: `${origin}${protocol === 'fixture-sse-v1' ? '/turn' : '/v1'}`, credentialEnv: env, enabled: true, catalog: [], catalogError: null } }; }
 async function fixture(handler: (body: any, response: ServerResponse) => void | Promise<void>) {
   vi.stubEnv(env, 'synthetic-registration-key');

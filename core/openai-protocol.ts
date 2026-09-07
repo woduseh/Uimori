@@ -2,6 +2,8 @@ import { createHash } from 'node:crypto';
 import { CUSTOM_TRANSLATION_FORMAT_INSTRUCTION, TRANSLATION_FORMAT_INSTRUCTION, translationJsonSchema } from './provider-format.js';
 import type { Json, ProviderRequest, ProviderResult, ProviderToolCall, ProviderUsage } from './transport.js';
 import { nativeHostInstruction, planNativeMessages } from './provider-messages.js';
+import { validateModelOptions } from './model-capabilities.js';
+import { planProviderCache } from './provider-cache.js';
 
 export class OpenAIProtocolError extends Error {
   constructor(readonly code: string) { super(code); this.name = 'OpenAIProtocolError'; }
@@ -41,16 +43,13 @@ function readTurn(value: Json): OpenAITurn {
 function prepare(request: ProviderRequest, version: OpenAITurn['version'], protocol: 'openai-responses-v1' | 'openai-chat-v1' = version === 'openai-chat-turn-v1' ? 'openai-chat-v1' : 'openai-responses-v1') {
   if (!nonempty(request.modelId) || request.modelId.length > 200) reject('INVALID_MODEL_ID');
   const generation = request.generation;
-  if (generation?.thinkingLevel !== undefined || generation?.thinkingMode !== undefined || generation?.thinkingBudgetTokens !== undefined) reject('UNSUPPORTED_GENERATION_OPTIONS');
-  if (generation && (!Number.isSafeInteger(generation.maxOutputTokens) || generation.maxOutputTokens < 1 || generation.maxOutputTokens > 200000 || (generation.temperature !== null && (typeof generation.temperature !== 'number' || !Number.isFinite(generation.temperature) || generation.temperature < 0 || generation.temperature > 2)))) reject('UNSUPPORTED_GENERATION_OPTIONS');
-  if (generation?.reasoningEffort !== undefined && !['none', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'].includes(generation.reasoningEffort)) reject('UNSUPPORTED_GENERATION_OPTIONS');
-  if (generation?.structuredOutput !== undefined && typeof generation.structuredOutput !== 'boolean') reject('UNSUPPORTED_GENERATION_OPTIONS');
+  if (generation) validateModelOptions(generation, protocol, request.modelId);
   const { results: rawResults, ...input } = request.input;
   const results = copy(rawResults ?? [], 'TOOL_RESULT_MISMATCH');
   if (!Array.isArray(results)) return reject('TOOL_RESULT_MISMATCH');
   const plan = planNativeMessages(request, protocol);
   const bootstrap=copy(request.bootstrap??[],'INVALID_BOOTSTRAP');if(!Array.isArray(bootstrap))reject('INVALID_BOOTSTRAP');
-  const bindingHash = hash(copy({ role: request.role, modelId: request.modelId, stable: request.stable, generation: request.generationBinding ?? generation ?? null, input, prompt: request.prompt ?? null, bootstrap, ...(plan ? { protocol, capabilityVersion: plan.capabilityVersion } : {}) }, 'INVALID_OPENAI_REQUEST'));
+  const bindingHash = hash(copy({ role: request.role, modelId: request.modelId, stable: request.stable, generation: request.generationBinding ?? generation ?? null, contextBudget: request.contextBudget ?? null, input, prompt: request.prompt ?? null, bootstrap, ...(plan ? { protocol, capabilityVersion: plan.capabilityVersion } : {}) }, 'INVALID_OPENAI_REQUEST'));
   const names = new Set<string>();
   const aliases = request.stable.tools.map((tool, index) => {
     if (!nonempty(tool.name) || names.has(tool.name) || !object(tool.inputSchema)) return reject('INVALID_TOOLS');
@@ -138,12 +137,20 @@ function withState(result: ProviderResult, context: OpenAITurn, output: Json[]):
   return { ...structuredClone(result), opaqueState: copy(seal({ ...context, phase: result.status, input: [...context.input, ...output], pending,
     usedIds: [...context.usedIds, ...pending.map(call => call.id)] })) };
 }
+function reasoningSettings(value: Json): boolean {
+  if (!object(value)) return false;
+  const allowed: Record<string, readonly string[]> = {
+    effort: ['none', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'], summary: ['auto', 'concise', 'detailed'],
+    mode: ['standard', 'pro'], context: ['auto', 'all_turns', 'current_turn'],
+  };
+  return Object.entries(value).every(([key, item]) => typeof item === 'string' && allowed[key]?.includes(item));
+}
 function diagnostic(value: Json): Json {
   if (Array.isArray(value)) return value.map(diagnostic);
   if (!object(value)) return value;
   if (value.type === 'reasoning') return { type: 'reasoning', ...(typeof value.id === 'string' ? { id: value.id } : {}), content: '[provider reasoning withheld]' };
   return Object.fromEntries(Object.entries(value).map(([key, item]) => [key,
-    (/^(reasoning_(?:content|details)|encrypted(?:_content|_data)?|opaque(?:State|_state|_data)?|signature|thoughtSignature|authorization|api[_-]?key|credential|secret|password|access[_-]?token)$/iu.test(key) || (key === 'reasoning' && !(object(item) && Object.keys(item).every(field => field === 'effort' || field === 'summary') && (item.summary === undefined || ['auto', 'concise', 'detailed'].includes(String(item.summary)))))) ? '[provider continuation withheld]' : diagnostic(item)]));
+    (/^(reasoning_(?:content|details)|encrypted(?:_content|_data)?|opaque(?:State|_state|_data)?|signature|thoughtSignature|authorization|api[_-]?key|credential|secret|password|access[_-]?token)$/iu.test(key) || (key === 'reasoning' && !reasoningSettings(item))) ? '[provider continuation withheld]' : diagnostic(item)]));
 }
 // Shared only by the two OpenAI wire protocols; neither helper performs network or host tool execution.
 export const openAIProtocol = { reject, object, nonempty, copy, canonical, seal, prepare, argumentsObject, toolCall, readUsage, empty, withState, diagnostic };
@@ -155,10 +162,22 @@ export function encodeResponses(request: ProviderRequest): { body: Json; context
   const bootstrapInput:Json[]=[];for(const item of bootstrap as Record<string,Json>[]){bootstrapInput.push({type:'function_call',id:`fc_${item.callId}`,call_id:item.callId,name:item.name,arguments:JSON.stringify(item.args),status:'completed'},{type:'function_call_output',call_id:item.callId,output:JSON.stringify(item.result),status:'completed'});}
   const input: Json[] = previous ? [...previous.input, ...previous.pending.map((call, index) => ({ type: 'function_call_output', call_id: call.id, output: JSON.stringify(fresh[index].result) }))]
     : [...bootstrapInput,...(plan ? structuredClone(plan.messages) : [{ role: 'user', content: [{ type: 'input_text', text: 'Request data (JSON):\n' + JSON.stringify(prepared.wireInput) }] }])];
-  const body: Json = { model: request.modelId, instructions: prepared.instructions, input, stream: true, store: false, ...plan?.options,
-    ...(generation ? { max_output_tokens: generation.maxOutputTokens, ...(generation.temperature !== null ? { temperature: generation.temperature } : {}), ...(generation.reasoningEffort !== undefined ? { reasoning: { effort: generation.reasoningEffort } } : {}) } : {}),
+  const reasoning: Record<string, Json> = {
+    ...(generation?.reasoningEffort !== undefined ? { effort: generation.reasoningEffort } : {}),
+    ...(generation?.reasoningMode !== undefined ? { mode: generation.reasoningMode } : {}),
+    ...(generation?.reasoningContext !== undefined ? { context: generation.reasoningContext } : {}),
+  };
+  const text: Record<string, Json> = {
+    ...(generation?.verbosity !== undefined ? { verbosity: generation.verbosity } : {}),
+    ...(schema ? { format: { type: 'json_schema', name: 'translation_result', strict: true, schema } } : {}),
+  };
+  const cacheOptions = plan?.options ?? planProviderCache(request, 'openai-responses-v1').options;
+  const body: Json = { model: request.modelId, instructions: prepared.instructions, input, stream: true, store: false, ...cacheOptions,
+    ...(generation ? { max_output_tokens: generation.maxOutputTokens, ...(generation.temperature !== null ? { temperature: generation.temperature } : {}),
+      ...(generation.topP !== undefined ? { top_p: generation.topP } : {}), ...(generation.serviceTier !== undefined ? { service_tier: generation.serviceTier } : {}) } : {}),
+    ...(Object.keys(reasoning).length ? { reasoning } : {}),
     ...(aliases.length ? { tools: request.stable.tools.map((tool, index) => ({ type: 'function', name: aliases[index].providerName, description: tool.description, parameters: copy(tool.inputSchema), strict: false })), ...(request.toolChoice?{tool_choice:request.toolChoice==='auto'?'auto':{type:'function',name:aliases.find(alias=>alias.name===request.toolChoice)!.providerName}}:{}) } : {}),
-    ...(schema ? { text: { format: { type: 'json_schema', name: 'translation_result', strict: true, schema } } } : {}) };
+    ...(Object.keys(text).length ? { text } : {}) };
   return { body: copy(body, 'INVALID_OPENAI_REQUEST'), context: seal({ version: 'openai-responses-turn-v1', modelId: request.modelId, bindingHash: prepared.bindingHash,
     phase: 'request', input: structuredClone(input), completedResults: prepared.results, aliases, pending: [], usedIds: [...previous?.usedIds ?? []] }) };
 }

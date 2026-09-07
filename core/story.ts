@@ -1,4 +1,4 @@
-import type { ContentRef, ModelPreset, Connection } from './product.js';
+import type { ModelRef, ModelSnapshot } from './product.js';
 import type { StateModule, StateValues, StateProposal } from './state.js';
 import type { MemoryEntry, MemoryCheckpoint, MemoryContextPlan } from './memory.js';
 import { memoryHash } from './memory.js';
@@ -7,8 +7,8 @@ import { initialState } from './state.js';
 export type StoryConfig = {
   revision: number;
   module: StateModule | null;
-  stateModel: ContentRef | null;
-  memory: { enabled: boolean; model: ContentRef | null; recentCount: number; maxPacketChars: number };
+  stateModel: ModelRef | null;
+  memory: { enabled: boolean; model: ModelRef | null; recentCount: number; maxPacketChars: number };
   activatedAt: { revision: string; hash: string } | null;
 };
 export const defaultStoryConfig = (): StoryConfig => ({ revision: 0, module: null, stateModel: null, memory: { enabled: false, model: null, recentCount: 2, maxPacketChars: 60000 }, activatedAt: null });
@@ -26,7 +26,7 @@ export type StorySnapshot = {
   lineageHash: string;
   canonHash: string;
   memory: { entries: MemoryEntry[]; checkpoint: MemoryCheckpoint; plan: MemoryContextPlan } | null;
-  models: Partial<Record<'state' | 'memory', ModelPreset & { connection: Connection }>>;
+  models: Partial<Record<'state' | 'memory', ModelSnapshot>>;
   sceneCommandId?: string;
 };
 export type StoryJob = {

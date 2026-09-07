@@ -7,6 +7,7 @@ import type { RunSnapshot } from '../core/types.js';
 import { captureLogicalHistory, compileSnapshotPrompt } from './prompt-snapshot.js';
 import { HttpError, type Store } from './store.js';
 import { fields, number, record, text } from './product-store.js';
+import { validateContextPlan } from './context-planning.js';
 
 type Row=Record<string,any>;
 const reject=(message:string):never=>{throw new HttpError(400,`Invalid native archive: ${message}`);};
@@ -33,6 +34,7 @@ function nativeSnapshot(store:Store,value:unknown,chatId:string,branchId?:string
   return b as NativeBotSnapshot;
 }
 export function validateNativeRunSnapshot(store:Store,snapshot:RunSnapshot):void{
+  validateContextPlan(snapshot);
   if(snapshot.nativeBot)nativeSnapshot(store,snapshot.nativeBot,snapshot.chatId,snapshot.branchId);
   if(snapshot.hiddenStory){
     const hidden=snapshot.hiddenStory;const pkg=store.product.get('hidden-story',hidden.module.id,hidden.module.revision);
@@ -45,7 +47,7 @@ export function validateNativeRunSnapshot(store:Store,snapshot:RunSnapshot):void
     const p=snapshot.promptCompilation;validateProviderPrompt({compilerVersion:p.compilerVersion,messages:p.messages,cachePlan:p.cachePlan,values:p.values});
     const expected=compileSnapshotPrompt({...snapshot,promptCompilation:undefined});
     if(!isDeepStrictEqual(expected.promptCompilation,p))reject('compiled prompt mismatch');
-  }else if(!snapshot.story?.waiting)reject('compiled prompt missing');
+  }else if(!snapshot.story?.waiting&&!['pending','failed'].includes(snapshot.contextPlan?.status??''))reject('compiled prompt missing');
 }
 export function validateNativeArchive(store:Store):void{
   for(const row of store.db.prepare('SELECT * FROM native_chat_settings').all() as Row[]){const value=nativeSnapshot(store,JSON.parse(row.body),row.chat_id,row.branch_id);if(value.revision!==row.revision)reject('settings revision');}
@@ -58,10 +60,11 @@ export function mapNativeForkSnapshot(snapshot:RunSnapshot,newChatId:string,bran
   const source=(id:string|undefined)=>id?sources.get(id)??reject('fork source dependency'):undefined;
   const run=(id:string|undefined)=>id?runs.get(id)??reject('fork run dependency'):undefined;
   if(snapshot.logicalHistory)snapshot.logicalHistory=snapshot.logicalHistory.map(item=>({...item,id:item.sourceRevision?`${item.role==='user'?'request':'source'}:${source(item.sourceRevision)}`:item.id,...(item.sourceRevision?{sourceRevision:source(item.sourceRevision)}:{}),...(item.runId?{runId:run(item.runId)}:{})}));
+  if(snapshot.contextPlan){snapshot.contextPlan.compacted=snapshot.contextPlan.compacted.map(ref=>({...ref,revision:source(ref.revision)!}));snapshot.contextPlan.recentSourceRevisions=snapshot.contextPlan.recentSourceRevisions.map(id=>source(id)!);}
   if(snapshot.nativeBot)snapshot.nativeBot={...snapshot.nativeBot,branchId,sourceRevision:source(snapshot.nativeBot.sourceRevision??undefined)??null,pending:null};
   if(snapshot.promptCompilation){
     const ids=new Map<string,string>();
-    for(const message of snapshot.promptCompilation.messages){if(message.provenance.origin==='history'){const p=message.provenance;const mapped=source(p.sourceRevision);const id=`${p.blockId}:${message.role==='user'?'request':'source'}:${mapped}`;ids.set(message.id,id);message.id=id;p.sourceRevision=mapped;if(p.runId)p.runId=run(p.runId);}}
+    for(const message of snapshot.promptCompilation.messages){if(message.provenance.origin==='history'&&message.provenance.sourceRevision){const p=message.provenance;const mapped=source(p.sourceRevision);const id=`${p.blockId}:${message.role==='user'?'request':'source'}:${mapped}`;ids.set(message.id,id);message.id=id;p.sourceRevision=mapped;if(p.runId)p.runId=run(p.runId);}}
     for(const anchor of snapshot.promptCompilation.cachePlan)anchor.afterMessageId=ids.get(anchor.afterMessageId)??anchor.afterMessageId;
     for(const trace of snapshot.promptCompilation.trace)trace.messageIds=trace.messageIds.map(id=>ids.get(id)??id);
   }

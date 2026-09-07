@@ -147,6 +147,49 @@ describe('native Responses pure protocol (no live calls)', () => {
     const plain = record(encodeResponses(input).body); expect(plain).not.toHaveProperty('text'); expect(JSON.stringify(plain.input)).toContain('EXAMPLE_ONLY');
   });
 
+  test('keeps every selected Responses option alongside the translation schema and signed continuation', () => {
+    const input = request(); input.modelId = 'gpt-5.6-sol'; input.role = 'translation';
+    input.generation = { maxOutputTokens: 8192, temperature: null, reasoningEffort: 'high', verbosity: 'low', reasoningMode: 'pro', reasoningContext: 'all_turns', serviceTier: 'flex' };
+    input.input.source = { sourceRevision: 'source-1', sourceHash: 'hash-1', chunkId: 'chunk-1' };
+    const run = first(input); const wire = record(run.body);
+    expect(wire.reasoning).toEqual({ effort: 'high', mode: 'pro', context: 'all_turns' });
+    expect(wire.text.verbosity).toBe('low'); expect(wire.text.format.schema.properties.sourceHash.enum).toEqual(['hash-1']);
+    expect(wire.service_tier).toBe('flex'); expect(record(diagnosticResponsesBody(run.body)).reasoning).toEqual(wire.reasoning);
+    const reasoning = { type: 'reasoning', id: 'rs-options', encrypted_content: 'PRIVATE_CONTINUATION' };
+    run.decoder.accept(terminal([reasoning, call()]));
+    const continued = next(input, run.decoder.finish()); const replay = record(encodeResponses(continued).body);
+    expect(replay.input).toContainEqual(reasoning); expect(replay.reasoning).toEqual(wire.reasoning); expect(replay.text).toEqual(wire.text);
+    expect(JSON.stringify(diagnosticResponsesBody(replay))).not.toContain('PRIVATE_CONTINUATION');
+    continued.generation!.reasoningContext = 'current_turn';
+    expect(() => encodeResponses(continued)).toThrow('OPENAI_CONTINUATION_MISMATCH');
+  });
+
+  test('omits unselected reasoning and verbosity while rejecting unsupported Astra effort', () => {
+    const input = request(); input.modelId = 'gpt-6-astra'; input.generation = { maxOutputTokens: 8192, temperature: null };
+    const wire = record(encodeResponses(input).body);
+    expect(wire).not.toHaveProperty('reasoning'); expect(wire).not.toHaveProperty('text'); expect(wire).not.toHaveProperty('service_tier');
+    input.generation.reasoningEffort = 'none'; expect(() => encodeResponses(input)).toThrow();
+  });
+
+  test.each(['explicit','automatic','disabled'] as const)('Responses cache %s reaches requests without a native prompt and preserves translation formatting', cacheMode => {
+    const input=request();input.modelId='gpt-5.6-sol';input.role='translation';
+    input.generation={maxOutputTokens:8192,temperature:null,cacheMode,...(cacheMode==='disabled'?{}:{cacheTtl:'30m' as const}),verbosity:'low'};
+    input.input.source={sourceRevision:'source-cache',sourceHash:'hash-cache',chunkId:'chunk-cache'};
+    const wire=record(encodeResponses(input).body);
+    expect(wire.prompt_cache_options).toEqual({mode:cacheMode==='automatic'?'implicit':'explicit',...(cacheMode==='disabled'?{}:{ttl:'30m'})});
+    expect(wire.text.verbosity).toBe('low');expect(wire.text.format.schema.properties.sourceHash.enum).toEqual(['hash-cache']);
+    expect(JSON.stringify(wire)).not.toContain('prompt_cache_breakpoint');
+    const run=first(input);run.decoder.accept(terminal([call()]));const continued=next(input,run.decoder.finish());
+    expect(record(encodeResponses(continued).body).prompt_cache_options).toEqual(wire.prompt_cache_options);
+    continued.generation!.cacheMode=cacheMode==='explicit'?'automatic':'explicit';
+    expect(()=>encodeResponses(continued)).toThrow('OPENAI_CONTINUATION_MISMATCH');
+  });
+
+  test('never mistakes content disguised as a reasoning setting for safe diagnostics', () => {
+    const body: Json = { reasoning: { effort: 'PRIVATE_THOUGHT' }, nested: { reasoning: { mode: 'pro', context: 'PRIVATE_THOUGHT' } } };
+    expect(JSON.stringify(diagnosticResponsesBody(body))).not.toContain('PRIVATE_THOUGHT');
+  });
+
   test.each(['thinkingLevel', 'thinkingMode', 'thinkingBudgetTokens'])('rejects foreign generation option %s', key => {
     const input = request(); Object.assign(input.generation!, { [key]: key === 'thinkingBudgetTokens' ? 1024 : 'LOW' });
     expect(() => encodeResponses(input)).toThrow('UNSUPPORTED_GENERATION_OPTIONS');

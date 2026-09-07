@@ -46,7 +46,7 @@ function hooks(origin = 'http://127.0.0.1:1') {
   return { options, wire, finishes };
 }
 function selectProvider(seed: AuxiliaryBundle, endpoint: string) {
-  seed.snapshot.profile!.models[seed.job.kind] = { id: 'model-translation', revision: 5, title: 'Selected local fixture', connectionId: 'connection-local', connectionRevision: 2, modelId: 'explicit-fixture-model', maxOutputTokens: 4000, temperature: null,
+  seed.snapshot.profile!.models[seed.job.kind] = { id: 'model-translation', revision: 5, title: 'Selected local fixture', connectionId: 'connection-local', modelId: 'explicit-fixture-model', maxOutputTokens: 4000, temperature: null,
     connection: { id: 'connection-local', revision: 2, title: 'Local fixture', protocol: 'fixture-sse-v1', endpoint, enabled: true, catalog: [], catalogError: null } };
 }
 function translationBody(wire: string) {

@@ -7,6 +7,7 @@ import { fields, record, text } from './product-store.js';
 import { latestTranslation, validateTranslationArtifact } from './source-editing.js';
 import { sourceTimeContext } from './product-auxiliary.js';
 import { mapNativeForkSnapshot, copyNativeFork } from './native-archive.js';
+import { contextDependencyKey, measureMainContext } from './context-planning.js';
 import { nativeResources } from '../core/native-context.js';
 import { compileSnapshotPrompt } from './prompt-snapshot.js';
 import { copyStoryFork } from './story-archive.js';
@@ -117,7 +118,7 @@ export function forkChat(store: Store, chatId: string, value: unknown): Chat {
         if(job.source_hash!==original.hash)continue;
         if(job.kind==='translation'){if(latestTranslation(store,original.id)?.id!==job.id)continue;validateTranslationArtifact(store,store.job(job.id),original);}
         const jobId=randomUUID(); const oldInput=parse(job.input);
-        const input=job.kind==='translation' && oldInput && Object.hasOwn(oldInput,'promptSelection') ? {promptSelection:structuredClone(oldInput.promptSelection),...(Object.hasOwn(oldInput,'translationModelSelection')?{translationModelSelection:structuredClone(oldInput.translationModelSelection)}:{})} : null;
+        const input=job.kind==='translation'&&oldInput?structuredClone(Object.fromEntries(['promptSelection','promptControlSelection','translationModelSelection','translationModelSnapshot'].filter(key=>Object.hasOwn(oldInput,key)).map(key=>[key,oldInput[key]]))):null;
         const resolved=store.product.resolveJobPrompt(snapshot,input);
         const result=artifact(parse(job.result));
         if(result.sourceRevision!==sourceId||result.sourceHash!==original.hash)throw new HttpError(400,'Invalid completed fork result');
@@ -146,7 +147,10 @@ export function forkChat(store: Store, chatId: string, value: unknown): Chat {
     copyNativeFork(store,chatId,id,fromRevision,sourceIds);
     copyPackageFork(store,id,branchId,sourceIds,head);
     for(const copiedId of runIds.values()){
-      const copied=store.run(copiedId);const snapshot=compileSnapshotPrompt(copied.snapshot);
+      const copied=store.run(copiedId);
+      if(copied.snapshot.contextPlan)copied.snapshot.contextPlan.dependencyKey=contextDependencyKey(copied.snapshot);
+      const snapshot=compileSnapshotPrompt({...copied.snapshot,promptCompilation:undefined});
+      if(snapshot.contextPlan?.status==='ready')snapshot.contextPlan.estimatedInputTokens=measureMainContext(snapshot).estimatedInputTokens;
       store.db.prepare('UPDATE runs SET snapshot=? WHERE id=?').run(json(snapshot),copiedId);
     }
     store.event(id,'chat.forked',command);

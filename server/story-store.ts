@@ -1,12 +1,12 @@
 import { createHash, randomUUID } from 'node:crypto';
-import { compileSnapshotPrompt } from './prompt-snapshot.js';
+import { compileSnapshotPrompt, captureLogicalHistory } from './prompt-snapshot.js';
 import { isDeepStrictEqual } from 'node:util';
 import { HttpError, type Store, type Source, type Run } from './store.js';
 import { fields, record, text, number } from './product-store.js';
 import { initialState, reduceStateProposal, validateStateModule, type StateProposal } from '../core/state.js';
 import { activationRebuildState, defaultStoryConfig, type StoryConfig, type StorySnapshot, type StoryState, type StoryJob, type StoryDetail, type SceneCommand } from '../core/story.js';
 import type { RunSnapshot } from '../core/types.js';
-import type { ModelPreset, Connection, ContentRef } from '../core/product.js';
+import type { ModelPreset, Connection, ModelRef } from '../core/product.js';
 import { StoryMemory } from './story-memory.js';
 import { assertModelSelection } from './provider-selection.js';
 
@@ -16,7 +16,11 @@ const json = JSON.stringify;
 const now = () => new Date().toISOString();
 const digest = (value: unknown) => createHash('sha256').update(json(value)).digest('hex');
 export const lineageHash = (history: RunSnapshot['history']) => digest(history.map(item => [item.revision, createHash('sha256').update(item.text).digest('hex')]));
-export const storyDependencyKey = (kind:'state'|'memory',source:{id:string;hash:string},snapshot:RunSnapshot) => digest([kind,source.id,source.hash,lineageHash(snapshot.history),snapshot.story?.canonHash,kind==='state'?[snapshot.story?.config.module,snapshot.story?.state,snapshot.story?.config.stateModel]:snapshot.story?.config.memory.model]);
+export const storyDependencyKey = (kind:'state'|'memory',source:{id:string;hash:string},snapshot:RunSnapshot) => {
+  const model = snapshot.story?.models[kind];
+  return digest([kind,source.id,source.hash,lineageHash(snapshot.history),snapshot.story?.canonHash,kind==='state'?[snapshot.story?.config.module,snapshot.story?.state,snapshot.story?.config.stateModel]:snapshot.story?.config.memory.model,
+    model ? [model.id,model.revision,model.connection.id,model.connection.revision] : null]);
+};
 export const storyTables = ['story_configs','story_jobs','story_states','story_memories','story_indexes','scene_commands'];
 
 /** Durable state and memory are separate from the single-slot reading translation. */
@@ -55,11 +59,11 @@ export class StoryStore {
     const row=this.db.prepare('SELECT c.body FROM story_configs c WHERE c.chat_id=? AND NOT EXISTS(SELECT 1 FROM native_state_config_owners o WHERE o.chat_id=c.chat_id AND o.config_revision=c.revision) ORDER BY c.revision DESC LIMIT 1').get(chatId) as Row|undefined;
     return row?parse(row.body):defaultStoryConfig();
   }
-  private model(value: unknown): ContentRef | null {
+  private model(value: unknown): ModelRef | null {
     if (value === null) return null;
-    const body = record(value); fields(body,['id','revision']);
-    const ref = {id:text(body.id,'model',100),revision:number(body.revision,'model revision')};
-    this.store.product.get<ModelPreset>('model',ref.id,ref.revision); return ref;
+    const body = record(value); fields(body,['id']);
+    const ref = {id:text(body.id,'model',100)};
+    this.store.product.get<ModelPreset>('model',ref.id); return ref;
   }
   saveConfig(chatId: string, value: unknown): StoryConfig {
     const body = record(value); fields(body,['expectedRevision','module','stateModel','memory','branchId','resetState']);
@@ -101,8 +105,8 @@ export class StoryStore {
   private models(config: StoryConfig): StorySnapshot['models'] {
     const result: StorySnapshot['models'] = {};
     for (const [kind,ref] of [['state',config.stateModel],['memory',config.memory.model]] as const) if (ref) {
-      const model = this.store.product.get<ModelPreset>('model',ref.id,ref.revision);
-      result[kind] = {...model,connection:this.store.product.get<Connection>('connection',model.connectionId,model.connectionRevision)};
+      const model = this.store.product.get<ModelPreset>('model',ref.id);
+      result[kind] = {...model,connection:this.store.product.get<Connection>('connection',model.connectionId)};
     }
     return result;
   }
@@ -127,7 +131,7 @@ export class StoryStore {
     if (!config.module && !config.memory.enabled && !authored) return undefined;
     const state = this.stateAt(snapshot.chatId,snapshot.parentRevision,config);
     const memory = config.memory.enabled || authored ? this.memory.plan(scope,config.memory) : null;
-    if (memory && !memory.plan.ready) throw new HttpError(409,'필수 작가 설정과 원문 문맥이 한도를 넘었어요. 기억 작업을 복구하거나 한도를 조정해 주세요.');
+    if (memory && !memory.plan.ready && !snapshot.profile?.models.main) throw new HttpError(409,'필수 작가 설정과 원문 문맥이 한도를 넘었어요. 기억 작업을 복구하거나 한도를 조정해 주세요.');
     return {config,state,waiting:config.module?.mode==='authoritative' && state===null,lineageHash:lineageHash(snapshot.history),canonHash:this.memory.canonHash(scope),memory,models:this.models(config)};
   }
   prepareRunInTransaction(snapshot: RunSnapshot): RunSnapshot { const story = this.prepare(snapshot); return story ? {...snapshot,story} : snapshot; }
@@ -178,6 +182,7 @@ export class StoryStore {
       if(kind==='state' && !state) state=activationRebuildState(source.chatId,config,source,history);
       if(kind==='state' && !state)throw new HttpError(409,'이전 원문의 상태를 먼저 복구해 주세요. 상태 시작점 이전 장면은 현재 장면에서 새 기준을 적용해야 해요.');
       const snapshot:RunSnapshot={...structuredClone(original),branchId:branch.id,history,story:{config,state,waiting:false,lineageHash:lineageHash(history),canonHash:this.memory.canonHash(scope),memory:this.memory.plan(scope,config.memory),models:this.models(config)}};
+      snapshot.logicalHistory=captureLogicalHistory(this.store,snapshot);
       return this.scheduleInTransaction(kind,source,snapshot);
     });
   }

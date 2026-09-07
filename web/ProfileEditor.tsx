@@ -1,8 +1,7 @@
 import { useEffect, useState } from 'react';
-import type { ChatProfile, ContentRef, Library, ModelPreset, TaskRole } from '../core/product.js';
+import type { ChatProfile, Library, ModelRef, TaskRole } from '../core/product.js';
 import { api } from './api.js';
 import { PromptEditor } from './PromptEditor.js';
-import { refValue } from './LibraryPanel.js';
 import { useModelSelection } from './model-selection.js';
 import { PackageAttachments } from './PackageAttachments.js';
 
@@ -17,21 +16,13 @@ export function ProfileEditor({ profile, library, onSaved, onError, onDirtyChang
   const [tab, setTab] = useState<ProfileSection>(initialTab);
   const [error, setError] = useState('');
   const [status, setStatus] = useState('');
-  const [archivedModels, setArchivedModels] = useState<ModelPreset[]>([]);
-  const {canSelect} = useModelSelection(library.models,library.connections,archivedModels);
+  const {canSelect} = useModelSelection(library.models,library.connections);
   useEffect(() => { if (!dirty) setValue(current => profile.chatId !== current.chatId || profile.revision >= current.revision ? profile : current); }, [profile, dirty]);
   useEffect(() => { onDirtyChange?.(dirty || promptDirty); }, [dirty, promptDirty, onDirtyChange]);
   useEffect(() => () => onDirtyChange?.(false), [onDirtyChange]);
-  useEffect(() => {
-    let alive = true;
-    const refs = [...new Map([...Object.values(value.routes),...Object.values(profile.routes)].filter((item): item is ContentRef => item !== null).map(ref => [refValue(ref), ref])).values()];
-    void Promise.all(refs.filter(ref => !library.models.some(item => refValue(item) === refValue(ref))).map(ref => api<ModelPreset>(`/revisions/model/${ref.id}/${ref.revision}`)))
-      .then(models => { if (alive) setArchivedModels(models); }).catch(caught => { if (alive) { setError(caught.message); onError(caught.message); } });
-    return () => { alive = false; };
-  }, [value.routes, profile.routes, library, onError]);
-  const models = [...library.models, ...archivedModels.filter(old => !library.models.some(item => refValue(item) === refValue(old)))];
-  const sameRef = (item: ContentRef, selected: ContentRef | null) => !!selected && refValue(item) === refValue(selected);
-  const retainedModelRefs = (role:TaskRole) => [...new Map([profile.routes[role],value.routes[role]].filter((ref):ref is ContentRef => ref !== null).map(ref => [refValue(ref),ref])).values()];
+  const models = library.models;
+  const sameRef = (item: ModelRef, selected: ModelRef | null) => item.id === selected?.id;
+  const retainedModelRefs = (role:TaskRole) => [...new Map([profile.routes[role],value.routes[role]].filter((ref):ref is ModelRef => ref !== null).map(ref => [ref.id,ref])).values()];
   const change = (next: ChatProfile) => { setValue(next); setDirty(true); setStatus(''); };
   async function save(work: () => Promise<ChatProfile>, message = '채팅 설정을 저장했어요.') {
     setSaving(true); onError(''); setError(''); setStatus('');
@@ -51,7 +42,7 @@ export function ProfileEditor({ profile, library, onSaved, onError, onDirtyChang
       <div id="profile-fields" role="tabpanel" aria-labelledby={`profile-tab-${tab}`}><fieldset className="profile-fields" disabled={saving}>
         {tab==='characters'&&<PackageAttachments ownerBotId={ownerBotId} profile={value} library={library} onChange={change} onError={onError}/>}
         <div hidden={tab !== 'prompts'}><PromptEditor chatId={profile.chatId} branchId={branchId} promptControls={value.promptControls} onSaveControls={async (reference,state) => { const ok=await save(() => api<ChatProfile>(`/chats/${profile.chatId}/profile`,profileBody({...value,promptControls:{...value.promptControls,[`${reference.id}@${reference.revision}`]:state}}),'PUT'),'선택값과 조합을 이 채팅에 저장했어요.'); if(!ok)throw new Error('선택값 저장에 실패했어요.'); }} library={library} reload={onLibraryChanged} onError={onError} selections={value.prompts} onDirtyChange={setPromptDirty} onApply={(role, reference) => save(() => api<ChatProfile>(`/chats/${profile.chatId}/profile`, profileBody({ ...value, prompts: { ...value.prompts, [role]: reference } }), 'PUT'), '프롬프트 선택을 이야기에 적용했어요.')}/></div>
-        {tab === 'models' && <fieldset className="control-grid"><legend>역할별 모델</legend>{(['main', 'translation', 'status', 'image'] as TaskRole[]).map((role, index) => <label key={role}>{['본문 모델', '번역 모델', '표시 상태 모델', '이미지 선택 모델'][index]}<select aria-label={['원문 모델', '번역 모델', '표시 상태 모델', '이미지 선택 모델'][index]} value={value.routes[role] ? refValue(value.routes[role]!) : ''} onChange={event => { const model = models.find(item => refValue(item) === event.target.value) ?? retainedModelRefs(role).find(item => refValue(item) === event.target.value); change({ ...value, routes: { ...value.routes, [role]: model ? { id: model.id, revision: model.revision } : null } }); }}><option value="">Scripted mock · 모의 생성</option>{retainedModelRefs(role).filter(ref => !models.some(item => sameRef(item,ref))).map(ref => <option key={refValue(ref)} disabled={!sameRef(ref,profile.routes[role])} value={refValue(ref)}>보관된 모델 v{ref.revision} · 확인 필요</option>)}{models.filter(item => canSelect(item) || sameRef(item,profile.routes[role]) || sameRef(item,value.routes[role])).map(item => <option disabled={!canSelect(item) && !sameRef(item,profile.routes[role])} key={refValue(item)} value={refValue(item)}>{item.title} · {!canSelect(item) ? '신규 선택 불가 · ' : ''}{item.modelId} · {archivedModels.some(old => refValue(old) === refValue(item)) ? '보관된 ' : ''}v{item.revision}</option>)}</select>{value.routes[role] && !models.some(item => sameRef(item,value.routes[role]) && canSelect(item)) && <small role="status">모델 또는 연결이 비활성이거나 권한 확인이 필요해요. 저장된 선택은 유지할 수 있고, 실행 시 연결 권한을 다시 검사해요.</small>}</label>)}<label className="check"><input aria-label="보조 이미지 표시" type="checkbox" checked={value.image} onChange={event => change({ ...value, image: event.target.checked })}/>보조 이미지 표시</label><small>이미지는 원고와 별도로 표시해요. 재사용할 연결과 모델 프리셋은 앱 설정에서 관리해요. 선택한 연결의 프로토콜과 서버 실행 한도가 적용돼요.</small></fieldset>}
+        {tab === 'models' && <fieldset className="control-grid"><legend>역할별 모델</legend>{(['main', 'translation', 'status', 'image'] as TaskRole[]).map((role, index) => <label key={role}>{['본문 모델', '번역 모델', '표시 상태 모델', '이미지 선택 모델'][index]}<select aria-label={['원문 모델', '번역 모델', '표시 상태 모델', '이미지 선택 모델'][index]} value={value.routes[role] ? value.routes[role]!.id : ''} onChange={event => { const model = models.find(item => item.id === event.target.value) ?? retainedModelRefs(role).find(item => item.id === event.target.value); change({ ...value, routes: { ...value.routes, [role]: model ? { id: model.id } : null } }); }}><option value="">Scripted mock · 모의 생성</option>{retainedModelRefs(role).filter(ref => !models.some(item => sameRef(item,ref))).map(ref => <option key={ref.id} disabled={!sameRef(ref,profile.routes[role])} value={ref.id}>선택한 모델 · 확인 필요</option>)}{models.filter(item => canSelect(item) || sameRef(item,profile.routes[role]) || sameRef(item,value.routes[role])).map(item => <option disabled={!canSelect(item) && !sameRef(item,profile.routes[role])} key={item.id} value={item.id}>{item.title} · {!canSelect(item) ? '비활성 · ' : ''}{item.modelId}</option>)}</select>{value.routes[role] && !models.some(item => sameRef(item,value.routes[role]) && canSelect(item)) && <small role="status">모델 또는 연결이 비활성이거나 권한 확인이 필요해요. 저장된 선택은 유지되지만 새 실행은 차단돼요.</small>}</label>)}<label className="check"><input aria-label="보조 이미지 표시" type="checkbox" checked={value.image} onChange={event => change({ ...value, image: event.target.checked })}/>보조 이미지 표시</label><small>이미지는 원고와 별도로 표시해요. 재사용할 연결과 모델 프리셋은 앱 설정에서 관리해요. 모델과 연결의 변경은 다음 신규 생성부터 적용돼요.</small></fieldset>}
       </fieldset></div>
       {profile.revision > value.revision && dirty && <p className="error" role="alert">다른 요청에서 채팅 설정이 바뀌었어요. 입력은 유지했어요. 최신 설정을 확인한 뒤 다시 저장해 주세요.</p>}
       {error && <p className="error" role="alert">{error} 입력한 내용은 유지했어요.</p>}

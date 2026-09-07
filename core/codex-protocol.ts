@@ -26,6 +26,12 @@ export function buildCodexTurn(request: ProviderRequest): { developerInstruction
   };
 }
 
+/** The complete provider input shared by planning, diagnostics and the runtime budget guard. */
+export function buildCodexDescriptor(request: ProviderRequest, built = buildCodexTurn(request)): Json {
+  return { method: 'turn/start', role: request.role, model: request.modelId, ...(request.generation?.reasoningEffort ? { effort: request.generation.reasoningEffort } : {}),
+    developerInstructions: built.developerInstructions, input: [{ type: 'text', text: built.inputText }], outputSchema: built.outputSchema, environmentAccess: false, ephemeral: true };
+}
+
 export function decodeCodexOutput(text: string, request: ProviderRequest): ProviderResult {
   const result: ProviderResult = { status: 'error', text: '', toolCalls: [], refusal: null, error: null, usage: { inputTokens: null, outputTokens: null, costUsd: null, raw: null, priceRevision: null }, opaqueState: null };
   try {

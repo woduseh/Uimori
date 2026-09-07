@@ -151,7 +151,7 @@ test('BRUN11 current-format archive and chat fork retain staged outcomes and ind
   expect(runBehaviorProgress(f.store,forkedRun.id)!.entries.map(e=>e.result)).toEqual(runBehaviorProgress(f.store,run.id)!.entries.map(e=>e.result));
   expect(forkedRun.snapshot.behaviorExecution!.opportunityId).not.toBe(run.snapshot.behaviorExecution!.opportunityId);
   expect(behaviorDetail(f.store,fork.id).instances[0]).toMatchObject({stateRevision:2,state:{days:1,...result.result as object}});
-  const archive=f.store.product.export(),restored=database();expect(archive.version).toBe(8);expect(restored.product.import(archive)).toMatchObject({restored:true,chats:2});
+  const archive=f.store.product.export(),restored=database();expect(archive.version).toBe(9);expect(restored.product.import(archive)).toMatchObject({restored:true,chats:2});
   expect(restored.run(run.id).snapshot).toEqual(f.store.run(run.id).snapshot);
   expect(runBehaviorProgress(restored,run.id)).toEqual(runBehaviorProgress(f.store,run.id));
 });

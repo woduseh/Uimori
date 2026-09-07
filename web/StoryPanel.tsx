@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import type { Connection, ContentRef, ModelPreset } from '../core/product.js';
+import type { Connection, ModelRef, ModelPreset } from '../core/product.js';
 import type { StateModule } from '../core/state.js';
 import type { MemoryEntry } from '../core/memory.js';
 import type { StoryConfig, StoryDetail, StoryJob, StoryState } from '../core/story.js';
@@ -9,7 +9,7 @@ import { useModelSelection } from './model-selection.js';
 
 type PanelProps = { chatId: string; branchId: string; headRevision: string | null; settingsRevision: number; profileRevision?: number; models: ModelPreset[]; connections: Connection[]; onChanged: () => void; onError: (message: string) => void };
 const id = encodeURIComponent;
-const refKey = (value: ContentRef | null) => value ? `${value.id}@${value.revision}` : '';
+const refKey = (value: ModelRef | null) => value ? value.id : '';
 const pending = (jobs: StoryJob[]) => jobs.some(job => job.status === 'queued' || job.status === 'running');
 const readiness: Record<string, string> = { disabled: '사용 안 함', ready: '준비됨', pending: '상태 확인 중', stale: '이전 원고의 상태', historical: '이전 원고에 연결된 상태', completed: '확인 완료' };
 const memoryNames: Record<MemoryEntry['kind'], string> = { 'author-canon': '작가 선언', 'observed-story': '본문에서 확인한 사실', 'derived-summary': '요약', preference: '선호', 'character-belief': '인물의 믿음 · 사실과 구분', hypothesis: '가설 · 미확정' };
@@ -23,14 +23,14 @@ function useScope(key: string) {
   return () => { const captured = scope.current.generation; return () => scope.current.alive && scope.current.generation === captured; };
 }
 
-function ModelChoice({ label, value, original, models, canSelect, onChange }: { label: string; value: ContentRef | null; original: ContentRef | null; models: ModelPreset[]; canSelect: (model:ModelPreset) => boolean; onChange: (value: ContentRef | null) => void }) {
+function ModelChoice({ label, value, original, models, canSelect, onChange }: { label: string; value: ModelRef | null; original: ModelRef | null; models: ModelPreset[]; canSelect: (model:ModelPreset) => boolean; onChange: (value: ModelRef | null) => void }) {
   const selected = refKey(value);
-  const retained = [...new Map([original,value].filter((ref):ref is ContentRef => ref !== null).map(ref => [refKey(ref),ref])).values()];
-  return <label>{label}<select value={selected} onChange={event => { const model = [...models,...retained].find(item => refKey(item) === event.target.value); onChange(model ? { id: model.id, revision: model.revision } : null); }}>
+  const retained = [...new Map([original,value].filter((ref):ref is ModelRef => ref !== null).map(ref => [refKey(ref),ref])).values()];
+  return <label>{label}<select value={selected} onChange={event => { const model = [...models,...retained].find(item => refKey(item) === event.target.value); onChange(model ? { id: model.id } : null); }}>
     <option value="">모의 처리 · 실제 모델 호출 없음</option>
-    {retained.filter(ref => !models.some(model => refKey(model) === refKey(ref))).map(ref => <option key={refKey(ref)} value={refKey(ref)} disabled={refKey(ref) !== refKey(original)}>보관된 선택 · {ref.id} v{ref.revision}</option>)}
-    {models.filter(model => canSelect(model) || retained.some(ref => refKey(ref) === refKey(model))).map(model => <option disabled={!canSelect(model) && refKey(model) !== refKey(original)} key={refKey(model)} value={refKey(model)}>{model.title} · {!canSelect(model) ? '신규 선택 불가 · ' : ''}{model.modelId} · v{model.revision}</option>)}
-  </select>{selected && !models.some(model => refKey(model) === selected && canSelect(model)) && <small>저장된 선택은 유지할 수 있어요. 모델·연결 상태를 확인하고, 실행 시 연결 권한을 다시 검사해요.</small>}</label>;
+    {retained.filter(ref => !models.some(model => refKey(model) === refKey(ref))).map(ref => <option key={refKey(ref)} value={refKey(ref)} disabled={refKey(ref) !== refKey(original)}>선택한 모델 · 확인 필요</option>)}
+    {models.filter(model => canSelect(model) || retained.some(ref => refKey(ref) === refKey(model))).map(model => <option disabled={!canSelect(model) && refKey(model) !== refKey(original)} key={refKey(model)} value={refKey(model)}>{model.title} · {!canSelect(model) ? '비활성 · ' : ''}{model.modelId}</option>)}
+  </select>{selected && !models.some(model => refKey(model) === selected && canSelect(model)) && <small>저장된 선택은 유지되지만 새 실행은 차단돼요. 모델과 연결을 활성화해 주세요.</small>}</label>;
 }
 
 function StateValues({ state }: { state: StoryState | null }) {

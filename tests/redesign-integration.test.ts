@@ -52,7 +52,7 @@ test('v6 archive roundtrips package refs, large internal lore, empty body, optio
   const folder=store.organization.createFolder(pkg.id,{title:'Folder',defaultPersona:reference(pkg)});const chat=store.createChat('Story','calm',()=>[],{botId:pkg.id,folderId:folder.id});
   const p=prompt(store);const combination=store.product.promptCombination({title:'Saved',prompt:reference(p),values:{choice:false}});
   update(store,chat.id,{packageValues:{[`${pkg.id}@1:persona`]:{enabled:false}}});const run=capture(store,chat.id);
-  const archive=store.product.export();expect(archive.version).toBe(8);const before=JSON.stringify(archive);const restored=db();expect(restored.product.import(archive)).toEqual({restored:true,chats:1});expect(JSON.stringify(archive)).toBe(before);
+  const archive=store.product.export();expect(archive.version).toBe(9);const before=JSON.stringify(archive);const restored=db();expect(restored.product.import(archive)).toEqual({restored:true,chats:1});expect(JSON.stringify(archive)).toBe(before);
   expect(restored.organization.metadata(chat.id)).toEqual(store.organization.metadata(chat.id));expect(restored.organization.folder(pkg.id,folder.id)).toEqual(folder);
   expect(restored.product.profile(chat.id)).toEqual(store.product.profile(chat.id));expect(restored.product.get('prompt-combination',combination.id)).toEqual(combination);
   expect(restored.run(run.id).snapshot.resources).toEqual(run.snapshot.resources);expect(restored.run(run.id).snapshot.profile!.packages).toEqual(run.snapshot.profile!.packages);

@@ -240,14 +240,14 @@ export function useStory() {
           contents = [...contents, ...await Promise.all(missing.map(ref => api<Content>(`/revisions/content/${ref.id}/${ref.revision}`)))];
         }
         const persona = contents.find(item => item.kind === 'persona' && refValue(item) === value);
-        const model = library.models.find(item => refValue(item) === value);
-        if (kind === 'model' && model && value !== (profile.routes.main ? refValue(profile.routes.main) : '') && !canSelectModel(model)) throw new Error('비활성 모델이거나 연결 권한을 확인할 수 없어요. 모델 목록을 다시 확인해 주세요.');
+        const model = library.models.find(item => item.id === value);
+        if (kind === 'model' && model && value !== (profile.routes.main?.id ?? '') && !canSelectModel(model)) throw new Error('비활성 모델이거나 연결 권한을 확인할 수 없어요. 모델 목록을 다시 확인해 주세요.');
         if (kind === 'persona' && value && !persona || kind === 'model' && value && !model) throw new Error('선택한 설정을 찾지 못했어요. 목록을 다시 확인해 주세요.');
         const packaged=!!persona&&(!!persona.package||!!persona.hasPackage);
         const attachments = kind === 'persona' ? [...profile.attachments.filter(ref => !contents.some(item => item.kind === 'persona' && refValue(item) === refValue(ref))), ...(persona&&!packaged ? [{ id: persona.id, revision: persona.revision }] : [])] : profile.attachments;
         const packageAttachments=kind==='persona'?[...profile.packageAttachments??[]].filter(r=>r.role!=='persona').concat(persona&&packaged?[{id:persona.id,revision:persona.revision,role:'persona'}]:[]):profile.packageAttachments;
         const packageKeys=new Set(packageAttachments?.map(r=>`${r.id}@${r.revision}:${r.role}`));
-        const routes = kind === 'model' ? { ...profile.routes, main: model ? { id: model.id, revision: model.revision } : null } : profile.routes;
+        const routes = kind === 'model' ? { ...profile.routes, main: model ? { id: model.id } : null } : profile.routes;
         await api(`/chats/${chatId}/profile`, { expectedRevision: profile.revision, attachments, creative: profile.creative, routes, image: profile.image,...(packageAttachments?{packageAttachments,packageValues:Object.fromEntries(Object.entries(profile.packageValues??{}).filter(([key])=>packageKeys.has(key)))}:{}) }, 'PUT');
       }
       if (current.current === chatId) setNotice('다음 요청에 적용할 설정을 저장했어요.');

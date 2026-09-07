@@ -28,8 +28,8 @@ async function request<T>(app: App, path: string, payload: unknown, status = 200
 }
 const endpoint = 'https://aiplatform.googleapis.com/v1/projects/synthetic-project/locations/global/publishers/google/models';
 const vertexConnection = (changes: Record<string, unknown> = {}) => ({ title: 'Synthetic Vertex', protocol: 'vertex-gemini-v1', endpoint, enabled: true, ...changes });
-const modelBody = (connection: Connection, changes: Record<string, unknown> = {}) => ({ title: 'Synthetic model', connectionId: connection.id, connectionRevision: connection.revision, modelId: VERTEX_GEMINI_MODEL_ID, maxOutputTokens: 8192, temperature: null, ...changes });
-const ref = ({ id, revision }: { id: string; revision: number }) => ({ id, revision });
+const modelBody = (connection: Connection, changes: Record<string, unknown> = {}) => ({ title: 'Synthetic model', connectionId: connection.id, modelId: VERTEX_GEMINI_MODEL_ID, maxOutputTokens: 8192, temperature: null, ...changes });
+const ref = ({ id }: { id: string }) => ({ id });
 
 describe('Vertex connection and model settings with file SQLite', () => {
   test('accepts ADC and named Bearer references, normalizes the global base path and rejects unsupported authority', async () => {
@@ -54,13 +54,14 @@ describe('Vertex connection and model settings with file SQLite', () => {
   test('stores the selected model defaults and bounds while keeping fixture rows unchanged', async () => {
     const app = await application(); const connection = await request<Connection>(app, '/connections', vertexConnection());
     const defaults = await request<ModelPreset>(app, '/model-presets', modelBody(connection));
-    expect(defaults).toMatchObject({ modelId: VERTEX_GEMINI_MODEL_ID, temperature: null, thinkingLevel: 'MEDIUM', timeoutMs: 300000 });
+    expect(defaults).toMatchObject({ modelId: VERTEX_GEMINI_MODEL_ID, temperature: null, timeoutMs: 300000 });
+    expect(defaults).not.toHaveProperty('thinkingLevel');
     const maximum = await request<ModelPreset>(app, '/model-presets', modelBody(connection, { maxOutputTokens: VERTEX_GEMINI_MAX_OUTPUT_TOKENS, thinkingLevel: 'HIGH', timeoutMs: 600000 }));
     expect(maximum).toMatchObject({ maxOutputTokens: 65536, thinkingLevel: 'HIGH', timeoutMs: 600000 });
     const minimum = await request<ModelPreset>(app, '/model-presets', modelBody(connection, { maxOutputTokens: 1, thinkingLevel: 'LOW', timeoutMs: 1 }));
     expect(minimum).toMatchObject({ maxOutputTokens: 1, thinkingLevel: 'LOW', timeoutMs: 1 });
     for (const invalid of [
-      { modelId: 'gemini-3.8-pro' }, { temperature: 0.1 }, { maxOutputTokens: 65537 }, { maxOutputTokens: 0 },
+      { temperature: 0.1 }, { maxOutputTokens: 65537 }, { maxOutputTokens: 0 },
       { thinkingLevel: 'MINIMAL' }, { thinkingLevel: 'medium' }, { thinkingLevel: null },
       { timeoutMs: 0 }, { timeoutMs: 1800001 }, { timeoutMs: 1.5 }, { timeoutMs: null }, { topP: 0.9 },
     ]) await request(app, '/model-presets', modelBody(connection, invalid), 400);
@@ -78,7 +79,7 @@ describe('Vertex connection and model settings with file SQLite', () => {
     const connection = await request<Connection>(app, '/connections', vertexConnection({ enabled: false, credentialEnv: 'NARRATIVE_PROVIDER_VERTEX_TEST' }));
     const catalog = await request<Connection>(app, `/connections/${connection.id}/catalog`, {});
     expect(catalog).toMatchObject({ id: connection.id, revision: 2, enabled: false, credentialEnv: connection.credentialEnv, catalogError: null });
-    expect(catalog.catalog).toEqual([{ id: VERTEX_GEMINI_MODEL_ID, name: 'Gemini 3.8 Flash', capabilities: { tools: true, structuredOutput: null }, priceRevision: null }]);
+    expect(catalog.catalog).toEqual([{ id: VERTEX_GEMINI_MODEL_ID, name: 'Gemini 3.8 Flash', capabilities: { tools: true, structuredOutput: null }, priceRevision: null },{id:'gemini-3.1-pro-preview',name:'Gemini 3.1 Pro (Preview)',capabilities:{tools:true,structuredOutput:null},priceRevision:null}]);
     const fixture = await request<Connection>(app, '/connections', { title: 'Disabled fixture', protocol: 'fixture-sse-v1', endpoint: 'http://127.0.0.1:9/turn', enabled: false });
     const denied = await request<Connection>(app, `/connections/${fixture.id}/catalog`, {});
     expect(denied).toMatchObject({ catalog: [], catalogError: 'CATALOG_UNAVAILABLE', enabled: false });
@@ -102,9 +103,10 @@ describe('Vertex connection and model settings with file SQLite', () => {
     const archive = product.export(); const originalArchive = JSON.stringify(archive);
     const target = await application(); expect(target.store.product.import(archive)).toMatchObject({ restored: true, chats: 1 }); expect(JSON.stringify(archive)).toBe(originalArchive);
     const restored = target.store.product;
-    expect(restored.get<ModelPreset>('model', model.id, 1)).toEqual(model);
-    expect(restored.get<ModelPreset>('model', model.id, 2)).toMatchObject({ thinkingLevel: 'LOW', timeoutMs: 1 });
-    expect(restored.get<ModelPreset>('model', oldModel.id, 1)).toEqual(oldModel);
+    expect(()=>restored.get<ModelPreset>('model', model.id, model.revision)).toThrow('Setting not found');
+    expect(restored.get<ModelPreset>('model', model.id)).toMatchObject({ thinkingLevel: 'LOW', timeoutMs: 1 });
+    expect(restored.get<ModelPreset>('model', oldModel.id)).toEqual(oldModel);
+    expect(target.store.db.prepare("SELECT COUNT(*) AS count FROM provider_settings WHERE kind='model' AND id=?").get(model.id)?.count).toBe(1);
     for (const id of [connection.id, fixture.id]) { const value = restored.get<Connection>('connection', id); expect(value.enabled).toBe(false); expect(value).not.toHaveProperty('credentialEnv'); }
     const frozen = target.store.run(run.id).snapshot.profile!;
     expect(frozen.models.main).toMatchObject({ thinkingLevel: 'HIGH', timeoutMs: 123456, connection: { protocol: 'vertex-gemini-v1', enabled: false } });
@@ -116,7 +118,7 @@ describe('Vertex connection and model settings with file SQLite', () => {
     const source = await application(); const connection = await request<Connection>(source, '/connections', vertexConnection());
     await request<ModelPreset>(source, '/model-presets', modelBody(connection)); const archive = source.store.product.export();
     for (const changes of [{ modelId: 'unsupported-model' }, { temperature: 0.3 }, { maxOutputTokens: 65537 }, { thinkingLevel: 'MINIMAL' }, { timeoutMs: 1800001 }]) {
-      const forged = structuredClone(archive); const row = forged.tables.versions.find(row => row.kind === 'model')!; row.body = JSON.stringify({ ...JSON.parse(row.body), ...changes });
+      const forged = structuredClone(archive); const row = forged.tables.provider_settings.find(row => row.kind === 'model')!; row.body = JSON.stringify({ ...JSON.parse(row.body), ...changes });
       const unchanged = JSON.stringify(forged); const target = await application();
       expect(() => target.store.product.import(forged)).toThrow(); expect(JSON.stringify(forged)).toBe(unchanged);
       expect(target.store.product.library()).toMatchObject({ connections: [], models: [], contents: [] }); expect(target.store.db.prepare('PRAGMA foreign_key_check').all()).toEqual([]);

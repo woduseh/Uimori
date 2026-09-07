@@ -1,6 +1,8 @@
 import { createHash } from 'node:crypto';
 import { providerFetchOptions, transportFailureCode } from './provider-fetch.js';
 import { validateProviderEndpoint } from './product.js';
+import { requireSupportedModel, validateModelOptions } from './model-capabilities.js';
+import { assertContextBudget } from './context-budget.js';
 import { consumeSse } from './vertex.js';
 import { encodeResponses, ResponsesDecoder, diagnosticResponsesBody, OpenAIProtocolError } from './openai-protocol.js';
 import { encodeChat, ChatDecoder, diagnosticChatBody, OpenAIChatProtocolError } from './openai-chat-protocol.js';
@@ -32,12 +34,15 @@ export async function executeNativeProvider(connectionValue: ProviderConnection,
   };
   try {
     const connection = validateConnection(connectionValue,options.approvedOrigins); const request = validateRequest(requestValue);
+    requireSupportedModel(connection, request.modelId);
+    if (request.generation) validateModelOptions(request.generation, connection.protocol, request.modelId);
     let bodyValue: Json; let diagnostic: Json; let path: string; let allowDone = false;
     if (connection.protocol === 'openai-responses-v1') { const prepared = encodeResponses(request); decoder = new ResponsesDecoder(prepared.context); bodyValue = prepared.body; diagnostic = diagnosticResponsesBody(bodyValue); path = '/responses'; }
     else if (connection.protocol === 'anthropic-messages-v1') { const prepared = encodeAnthropic(request); decoder = new AnthropicDecoder(prepared.context); bodyValue = prepared.body; diagnostic = diagnosticAnthropicBody(bodyValue); path = '/messages'; }
     else if (connection.protocol === 'vercel-chat-v1' || connection.protocol === 'openai-chat-v1') { const prepared = encodeChat(request); decoder = new ChatDecoder(prepared.context); bodyValue = prepared.body; diagnostic = diagnosticChatBody(bodyValue); path = '/chat/completions'; allowDone = true; }
     else throw new ProviderContractError('UNSUPPORTED_PROTOCOL');
     if (signal.aborted) return failure('CANCELLED');
+    assertContextBudget(bodyValue, request.contextBudget);
     const secret = connection.credentialEnv ? await (options.resolveCredential ?? (name => process.env[name]))(connection.credentialEnv, connection, signal) : undefined;
     if ((connection.credentialEnv || connection.protocol !== 'openai-chat-v1') && (!secret || /[\r\n]/u.test(secret))) throw new ProviderContractError('CREDENTIAL_UNAVAILABLE');
     const headers: Record<string,string> = { 'content-type':'application/json', accept:'text/event-stream' };

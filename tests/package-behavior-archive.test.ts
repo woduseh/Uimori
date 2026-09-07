@@ -23,9 +23,9 @@ function fixture(){
   expect(store.startRun(run.id)).toBe(true);const source=store.completeRun(run.id,'Unchanged story. <state>{"count":0,"visible":false}</state>',{modelCalls:0,inputTokens:null,outputTokens:null,costUsd:null},run.snapshot.settings);
   return {store,chat,content,instanceId,branchId,run:store.run(run.id),source};
 }
-describe('package behavior archive v8',()=>{
+describe('package behavior archive v9',()=>{
   it('roundtrips clocks, frozen states, original text, draw seed, action and parser journals',()=>{
-    const f=fixture(),archive=f.store.product.export(),before=structuredClone(archive);expect(archive.version).toBe(8);expect(archive.tables.package_behavior_journal).toHaveLength(2);const target=database();expect(target.product.import(archive)).toEqual({restored:true,chats:1});expect(archive).toEqual(before);expect(target.run(f.run.id).snapshot).toEqual(f.run.snapshot);expect(target.source(f.source.id).text).toBe(f.source.text);for(const table of packageBehaviorTables)expect(target.product.export().tables[table]).toEqual(archive.tables[table]);
+    const f=fixture(),archive=f.store.product.export(),before=structuredClone(archive);expect(archive.version).toBe(9);expect(archive.tables.package_behavior_journal).toHaveLength(2);const target=database();expect(target.product.import(archive)).toEqual({restored:true,chats:1});expect(archive).toEqual(before);expect(target.run(f.run.id).snapshot).toEqual(f.run.snapshot);expect(target.source(f.source.id).text).toBe(f.source.text);for(const table of packageBehaviorTables)expect(target.product.export().tables[table]).toEqual(archive.tables[table]);
   });
   it('rejects forged definition hashes, state values, draws, payloads and source ownership atomically',()=>{
     const f=fixture(),base=f.store.product.export();const attacks:((a:any)=>void)[]=[

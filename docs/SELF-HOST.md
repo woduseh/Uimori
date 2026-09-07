@@ -56,13 +56,13 @@ docker compose --env-file .env.self-host up -d
 
 앱의 연결 설정에는 키 값 대신 `OPENAI_API_KEY`라는 참조 이름을 넣어요. 접속 토큰은 작업실 로그인용이고 `OPENAI_API_KEY` 같은 인증 환경변수는 외부 모델 호출용이에요. 이름은 영문 대소문자 또는 밑줄로 시작하고 이후 숫자를 포함할 수 있으며 최대 200자예요. 특정 접두사는 요구하지 않아요. 모델별 설정과 현재 검증 범위는 [공급자 안내](PROVIDERS.md)를 확인하세요.
 
-Vertex의 서비스 계정 파일을 쓰는 경우 `deploy/compose.vertex.example.yaml`을 함께 사용해요. `.env.self-host`에 `UIMORI_SECRETS_DIR=/srv/uimori/secrets`와 필요한 `NR_PROVIDER_ORIGINS`, `NR_LIVE_MAX_REQUESTS`, `NR_LIVE_MAX_USD`를 설정하고 그 디렉터리에 `service-account.json`을 둬요. 파일은 앱의 UID 1000 사용자가 읽을 수 있어야 해요. 이 overlay는 서버 안의 `/run/uimori-secrets/service-account.json`을 읽기 전용으로 연결하고 Vertex 요청을 Flex로 고정해요. [Compose 읽기 전용 bind mount](https://docs.docker.com/reference/compose-file/services/#volumes)
+Google Agent Platform의 서비스 계정 파일을 쓰는 경우 `deploy/compose.vertex.example.yaml`을 함께 사용해요. `.env.self-host`에 `UIMORI_SECRETS_DIR=/srv/uimori/secrets`와 선택한 Google 리전의 `NR_PROVIDER_ORIGINS`를 설정하고 그 디렉터리에 `service-account.json`을 둬요. 파일은 앱의 UID 1000 사용자가 읽을 수 있어야 해요. 이 overlay는 서버 안의 `/run/uimori-secrets/service-account.json`을 읽기 전용으로 연결하고 Gemini 요청을 Flex로 고정해요. [Compose 읽기 전용 bind mount](https://docs.docker.com/reference/compose-file/services/#volumes)
 
 ```sh
 docker compose --env-file .env.self-host -f compose.yaml -f deploy/compose.vertex.example.yaml up --build -d
 ```
 
-이 구성을 선택했으면 이후 `up`, `down`, `logs`에도 같은 두 `-f` 옵션을 사용해요. 요청·금액 한도는 사용하려는 범위로 직접 정하세요. 다른 공급자에는 Vertex의 USD 한도가 적용되지 않아요.
+이 구성을 선택했으면 이후 `up`, `down`, `logs`에도 같은 두 `-f` 옵션을 사용해요. 서버의 누적 호출 수·금액 제한은 없으며 작업별 호출·시간·출력 한도는 유지해요. 실제 청구 금액은 추정하지 않아요.
 
 컨테이너 안의 `127.0.0.1`은 그 컨테이너 자신이에요. PC나 Docker 호스트에 있는 호환 API를 이 주소로 설정하면 연결되지 않아요. 현재 공급자 정책은 비-loopback HTTP를 허용하지 않으므로, 별도 서버는 접근 가능한 HTTPS 주소와 outbound origin 허용 설정을 사용하세요.
 

@@ -14,6 +14,17 @@ function next(input: ProviderRequest, result: ProviderResult): ProviderRequest {
 function called(input = request()) { const run = first(input); run.decoder.accept(chunk({ tool_calls: [tool()] }, 'tool_calls')); run.decoder.accept('[DONE]'); return run.decoder.finish(); }
 
 describe('OpenAI-compatible Chat pure protocol (no live calls)', () => {
+  test.each([{verbosity:'low'},{reasoningMode:'pro'},{reasoningContext:'all_turns'},{outputEffort:'high'},{serviceTier:'flex'}])('does not silently send or discard unreviewed native option %j', options => {
+    const input = request(); Object.assign(input.generation!, options);
+    expect(() => encodeChat(input)).toThrow();
+  });
+  test('registered GPT Chat models retain Flex across exact tool continuation', () => {
+    const input=request();input.modelId='gpt-5.6-sol';input.generation={maxOutputTokens:8192,temperature:null,reasoningEffort:'high',serviceTier:'flex'};
+    const wire=record(encodeChat(input).body);
+    expect(wire.service_tier).toBe('flex');expect(wire.reasoning_effort).toBe('high');
+    const continued=next(input,called(input));expect(record(encodeChat(continued).body).service_tier).toBe('flex');
+    continued.generation!.serviceTier='default';expect(()=>encodeChat(continued)).toThrow('OPENAI_CONTINUATION_MISMATCH');
+  });
   test('encodes the selected model and explicit options without assuming native structured output support', () => {
     const input = request(); const original = structuredClone(input); const wire = record(encodeChat(input).body);
     expect(wire).toMatchObject({ model: input.modelId, max_completion_tokens: 321, temperature: 0, reasoning_effort: 'none', stream: true, stream_options: { include_usage: true } });

@@ -9,13 +9,15 @@ import { readerDetail } from './reader.js';
 import { readerRoutes } from './reader-routes.js';
 import { Controls, type Barrier, type FailurePoint } from './controls.js';
 import { syntheticResources } from '../core/provider.js';
-import { runMain } from './model-runner.js';
+import { runMain, type MainHooks } from './model-runner.js';
+import { prepareInputContext, ContextCompactionError } from './context-compaction.js';
+import { previousContextPlan, contextSourceRefs, validateContextPlan } from './context-planning.js';
 import { executeRunBehaviorTool } from './package-behavior-run.js';
-import { ProviderBudget, validateLiveBudgetLimits, type LiveBudgetLimits } from './provider-budget.js';
 import { runAuxiliaryJob } from './product-auxiliary.js';
 import { auxiliaryBridge } from './auxiliary-bridge.js';
 import { productRoutes } from './product-routes.js';
 import { registrationRoutes } from './provider-registration-routes.js';
+import { providerConnectionTestRoutes } from './provider-connection-test.js';
 import { storyRoutes } from './story-routes.js';
 import { hiddenStoryRoutes } from './hidden-story-routes.js';
 import { registerNativeBotRoutes } from './native-bot-routes.js';
@@ -30,7 +32,7 @@ import type { Connection } from '../core/product.js';
 import { PROVIDER_PROTOCOLS } from '../core/product.js';
 import type { Settings, RunSnapshot, Job } from '../core/types.js';
 
-export type AppOptions = { dbPath: string; buildId: string; instanceId?: string; testMode?: boolean; webRoot?: string; approvedOrigins?:string[];accessToken?:string;publicOrigin?:string;liveBudget?:LiveBudgetLimits;vertexRequestTier?:'standard'|'flex';codex?:CodexRuntimeOptions;codexRuntime?:CodexRuntimeService };
+export type AppOptions = { dbPath: string; buildId: string; instanceId?: string; testMode?: boolean; webRoot?: string; approvedOrigins?:string[];accessToken?:string;publicOrigin?:string;vertexRequestTier?:'standard'|'flex';codex?:CodexRuntimeOptions;codexRuntime?:CodexRuntimeService };
 export type App = FastifyInstance & { store: Store; controls: Controls };
 type RecordBody = Record<string, unknown>;
 const object = (value: unknown): RecordBody => {
@@ -55,7 +57,6 @@ function settings(body: RecordBody): Settings {
 
 export async function createApp(options: AppOptions): Promise<App> {
   const network = networkPolicy(options);
-  validateLiveBudgetLimits(options.liveBudget);
   const app = Fastify({ logger: false, bodyLimit: 4 * 1024 * 1024 }) as unknown as App;
   const store = new Store(options.dbPath);
   const credentials = new VertexCredentialStore(options.dbPath);
@@ -63,20 +64,19 @@ export async function createApp(options: AppOptions): Promise<App> {
   const executeCodex: NonNullable<ProviderExecutionOptions['executeCodex']> = (connection, request, execution) => {
     const authorize = () => {
       const current = store.product.get<Connection>('connection', connection.id);
-      if (!current.enabled || current.protocol !== connection.protocol || current.endpoint !== connection.endpoint || current.credentialEnv !== connection.credentialEnv || current.requestTier !== connection.requestTier) throw new ProviderContractError('CONNECTION_NOT_AUTHORIZED');
+      if (!current.enabled || current.protocol !== connection.protocol || current.endpoint !== connection.endpoint || current.credentialEnv !== connection.credentialEnv) throw new ProviderContractError('CONNECTION_NOT_AUTHORIZED');
     };
     authorize();
-    return codex.execute(connection, request, { ...execution, beforeTurn: authorize, onWire: async wire => { authorize(); await execution.onWire?.(wire); authorize(); } });
+    return codex.execute(connection, request, { ...execution, beforeTurn: () => { authorize(); execution.beforeTurn?.(); }, onWire: async wire => { authorize(); await execution.onWire?.(wire); authorize(); } });
   };
   const resolveCredential:NonNullable<ProviderExecutionOptions['resolveCredential']>=async(reference,connection,signal)=>{
     const authorize=()=>{
       if(!connection)throw new ProviderContractError('CREDENTIAL_UNAVAILABLE');
       const current=store.product.get<Connection>('connection',connection.id);
-      if(!current.enabled||current.protocol!==connection.protocol||current.endpoint!==connection.endpoint||current.credentialEnv!==reference||current.requestTier!==connection.requestTier)throw new ProviderContractError('CREDENTIAL_UNAVAILABLE');
+      if(!current.enabled||current.protocol!==connection.protocol||current.endpoint!==connection.endpoint||current.credentialEnv!==reference)throw new ProviderContractError('CREDENTIAL_UNAVAILABLE');
     };
     authorize();const token=await credentials.resolve(reference,connection,signal);authorize();return token;
   };
-  const providerBudget = new ProviderBudget(store.db, options.liveBudget);
   const controls = new Controls();
   const instanceId = options.instanceId ?? randomUUID();
   app.decorate('store', store); app.decorate('controls', controls);
@@ -117,7 +117,7 @@ export async function createApp(options: AppOptions): Promise<App> {
             const log = (kind:'inputs'|'toolEvents',value:unknown) => { const current = store.job(id); if (current.status !== 'running') return; const input = current.input as Record<string,unknown>; const prior = Array.isArray(input[kind]) ? input[kind] : []; store.db.prepare('UPDATE jobs SET input=? WHERE id=?').run(JSON.stringify({...input,[kind]:[...prior,value]}),id); };
             await runAuxiliaryJob(auxiliaryBridge(store,controls,signal),id,instanceId,{
               signal,approvedOrigins,resolveCredential,executeCodex,authorize:connection => store.product.authorize(connection),
-              vertexRequestTier:options.vertexRequestTier,onAttemptStart:wire => providerBudget.start(wire,admitted => store.product.startAttempt(chatId,null,id,admitted)),onAttemptFinish:(attempt,result) => store.product.finishAttempt(attempt,result),
+              vertexRequestTier:options.vertexRequestTier,onAttemptStart:wire => store.product.startAttempt(chatId,null,id,wire),onAttemptFinish:(attempt,result) => store.product.finishAttempt(attempt,result),
               onInput:(_id,input) => { log('inputs',input); if (!snapshot.profile?.models[queued.kind]) store.product.mockAttempt(chatId,null,id,queued.kind,input); },onToolEvent:(_id,event) => log('toolEvents',event),onProgress:() => publish(chatId),cancellationStatus:'interrupted',
             }); return;
           }
@@ -135,7 +135,7 @@ export async function createApp(options: AppOptions): Promise<App> {
             : { mock: true, label: '모의 표시 상태 · 원문 보존됨 · 정사에 반영하지 않음', sourceRevision: source.id, sourceHash: source.hash };
           store.completeJob(id, generation, instanceId, result, controls);
         } catch (error) {
-          if (!stopping.signal.aborted) { const current = store.job(id); if (current.status === 'running') store.failJob(id, generation || current.generation, instanceId, error instanceof Error && error.message.startsWith('Injected failure:') ? error.message : 'Auxiliary job failed'); }
+          if (!stopping.signal.aborted) { const current = store.job(id);const message=error instanceof Error&&error.message.startsWith('Injected failure:')?error.message:'Auxiliary job failed';if(current.status==='queued')store.failQueuedJob(id,current.generation,message);else if (current.status === 'running') store.failJob(id, generation || current.generation, instanceId,message); }
         } finally { jobs.delete(id); jobControllers.delete(id); if (chatId && !stopping.signal.aborted) { publish(chatId); if (store.queuedJobs().length) queueMicrotask(pumpJobs); } }
       })());
     }
@@ -150,14 +150,32 @@ export async function createApp(options: AppOptions): Promise<App> {
         if (!store.startRun(id)) return;
         publish(run.chatId);
         await controls.wait('run', controller.signal);
-        const result = await runMain(run.snapshot, {
+        const hooks:MainHooks = {
           signal: controller.signal,
           onInput: input => { store.input(id, input); if (run.snapshot.profile && !run.snapshot.profile.models.main) store.product.mockAttempt(run.chatId,id,null,'main',input); },
           onToolEvent: event => store.tool(id, event),
           onBehaviorTool: (binding,action) => executeRunBehaviorTool(store,id,binding,action,controller.signal),
           approvedOrigins,resolveCredential,executeCodex,authorize:connection => store.product.authorize(connection),
-          vertexRequestTier:options.vertexRequestTier,onAttemptStart:wire => providerBudget.start(wire,admitted => store.product.startAttempt(run.chatId,id,null,admitted)),onAttemptFinish:(attempt,result) => store.product.finishAttempt(attempt,result),
-        });
+          vertexRequestTier:options.vertexRequestTier,onAttemptStart:wire => {
+            const target=wire.role==='memory'?(run.snapshot.story?.models.memory??run.snapshot.profile?.models.main):run.snapshot.profile?.models.main;
+            if(target)store.product.authorize(target.connection);
+            return store.product.startAttempt(run.chatId,id,null,wire);
+          },onAttemptFinish:(attempt,result) => store.product.finishAttempt(attempt,result),
+        };
+        let executionSnapshot=run.snapshot;
+        if(executionSnapshot.contextPlan){
+          const assertCurrent=()=>{
+            if(controller.signal.aborted||store.run(id).status!=='running')throw new Error('CONTEXT_CANCELLED');
+            if(store.product.branch(run.chatId,run.snapshot.branchId).headRevision!==run.parentRevision||JSON.stringify(contextSourceRefs(run.snapshot))!==JSON.stringify(contextSourceRefs({...run.snapshot,history:store.history(run.parentRevision)}))||run.snapshot.story&&store.story.memory.canonHash({chatId:run.chatId,history:run.snapshot.history})!==run.snapshot.story.canonHash)throw new Error('CONTEXT_DEPENDENCIES_CHANGED');
+          };
+          assertCurrent();
+          const prepared=await prepareInputContext(executionSnapshot,{...hooks,authorize:connection=>{assertCurrent();return store.product.authorize(connection);},onAttemptStart:wire=>{assertCurrent();return hooks.onAttemptStart(wire);},onProgress:plan=>{
+            store.transaction(()=>{assertCurrent();const current=store.run(id);store.db.prepare('UPDATE runs SET snapshot=?,updated_at=? WHERE id=?').run(JSON.stringify({...current.snapshot,contextPlan:plan}),new Date().toISOString(),id);store.event(run.chatId,'run.context.updated',id);});publish(run.chatId);
+          }},previousContextPlan(store,executionSnapshot));
+          store.transaction(()=>{assertCurrent();validateContextPlan(prepared.snapshot);store.db.prepare('UPDATE runs SET snapshot=?,updated_at=? WHERE id=?').run(JSON.stringify(prepared.snapshot),new Date().toISOString(),id);store.event(run.chatId,'run.context.updated',id);});
+          executionSnapshot=prepared.snapshot;hooks.initialUsage=prepared.usage;
+        }
+        const result = await runMain(executionSnapshot,hooks);
         if (controller.signal.aborted) {
           // Cancellation owns the terminal state; late provider usage is accounting only.
           store.settleCancelledUsage(id, result.usage); publish(run.chatId); return;
@@ -168,8 +186,12 @@ export async function createApp(options: AppOptions): Promise<App> {
         publish(run.chatId); pumpJobs(); pumpStory();
       } catch (error) {
         if (!stopping.signal.aborted) {
+          if(error instanceof ContextCompactionError){
+            store.transaction(()=>{const current=store.run(id);if(current.status==='running')store.db.prepare('UPDATE runs SET snapshot=? WHERE id=?').run(JSON.stringify({...current.snapshot,contextPlan:error.plan}),id);});
+            store.finishRun(id,controller.signal.aborted?'cancelled':'failed',error.message,'',error.usage);if(controller.signal.aborted)store.settleCancelledUsage(id,error.usage);publish(run.chatId);return;
+          }
           const message = error instanceof Error ? error.message : '';
-          const safeError = message === 'Model call budget exhausted' || message.startsWith('Injected failure:') ? message : controller.signal.aborted ? 'Run cancelled' : 'Scripted generation failed';
+          const safeError = message === 'Model call budget exhausted' || message.startsWith('Injected failure:') || message.startsWith('CONTEXT_') ? message : controller.signal.aborted ? 'Run cancelled' : 'Scripted generation failed';
           store.finishRun(id, controller.signal.aborted ? 'cancelled' : 'failed', safeError);
           publish(run.chatId);
         }
@@ -193,7 +215,7 @@ export async function createApp(options: AppOptions): Promise<App> {
           await controls.wait(job.kind,signal);controls.fail(job.kind);
           const result=await runStoryJob(store.story.bundle(id),{
             signal,approvedOrigins,resolveCredential,executeCodex,authorize:connection=>store.product.authorize(connection),vertexRequestTier:options.vertexRequestTier,
-            onAttemptStart:wire=>providerBudget.start(wire,admitted=>store.transaction(()=>{const attempt=store.product.startAttempt(job.chatId,null,null,admitted);store.db.prepare('UPDATE attempts SET story_job_id=? WHERE id=?').run(id,attempt);return attempt;})),
+            onAttemptStart:wire=>store.transaction(()=>{const current=store.story.job(id);if(current.status!=='running'||current.generation!==job.generation||current.owner!==instanceId)throw new Error('STORY_JOB_STALE');const models=store.story.bundle(id).snapshot.story!.models;const target=wire.role==='memory'?(models.memory??models[job.kind]):models[job.kind];if(target)store.product.authorize(target.connection);const attempt=store.product.startAttempt(job.chatId,null,null,wire);store.db.prepare('UPDATE attempts SET story_job_id=? WHERE id=?').run(id,attempt);return attempt;}),
             onAttemptFinish:(attempt,result)=>store.product.finishAttempt(attempt,result),
             onInput:input=>{store.story.diagnostic(id,job.generation,instanceId,'inputs',input);if(job.mock){const attempt=store.product.mockAttempt(job.chatId,null,null,job.kind,input);store.db.prepare('UPDATE attempts SET story_job_id=? WHERE id=?').run(id,attempt);}},
             onToolEvent:event=>store.story.diagnostic(id,job.generation,instanceId,'tool_events',event),
@@ -224,12 +246,13 @@ export async function createApp(options: AppOptions): Promise<App> {
   });
   const session = productRoutes(app,store,{credentials,codex,approvedOrigins,accessToken:options.accessToken,publicOrigin:network.publicOrigin,publish,onAuthChanged:() => { for (const chatId of subscribers.keys()) publish(chatId); }});
   readerRoutes(app,store);
-  registrationRoutes(app,store,{budget:providerBudget,approvedOrigins,resolveCredential,executeCodex,signal:stopping.signal,vertexRequestTier:options.vertexRequestTier,track,authenticated:session.authenticated});
+  registrationRoutes(app,store,{approvedOrigins,resolveCredential,executeCodex,signal:stopping.signal,vertexRequestTier:options.vertexRequestTier,track,authenticated:session.authenticated});
+  providerConnectionTestRoutes(app,store,{approvedOrigins,resolveCredential,executeCodex,signal:stopping.signal,vertexRequestTier:options.vertexRequestTier,track,authenticated:session.authenticated});
   agentRuntimeRoutes(app,codex);
   storyRoutes(app,store,{publish,pump:pumpStory,execute,abort:id=>storyControllers.get(id)?.abort()});
   registerNativeBotRoutes(app,store);
   hiddenStoryRoutes(app,store,{publish});
-  app.get('/api/health', async () => ({ ready: true, buildId: options.buildId, instanceId, dbPath: options.dbPath, mode: network.publicOrigin ? 'self-host' : 'local-provider-runtime', supportedProtocols: [...PROVIDER_PROTOCOLS], vertexRequestTier: options.vertexRequestTier ?? null, liveBudgetConfigured: !!options.liveBudget }));
+  app.get('/api/health', async () => ({ ready: true, buildId: options.buildId, instanceId, dbPath: options.dbPath, mode: network.publicOrigin ? 'self-host' : 'local-provider-runtime', supportedProtocols: [...PROVIDER_PROTOCOLS], vertexRequestTier: options.vertexRequestTier ?? null }));
   app.get('/api/chats', async () => store.chats());
   app.post('/api/chats', async request => {
     const body = object(request.body); only(body, ['title', 'preset', 'botId', 'folderId']);

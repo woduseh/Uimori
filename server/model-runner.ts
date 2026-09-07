@@ -10,6 +10,7 @@ import { BehaviorError } from '../core/package-behavior.js';
 
 export type MainResult = { status: 'completed' | 'refused' | 'partial' | 'error' | 'cancelled'; text: string; error: string | null; usage: Usage };
 export type MainHooks = {
+  initialUsage?: Usage;
   executeCodex?: import('../core/transport.js').ProviderExecutionOptions['executeCodex'];
   resolveCredential?: import('../core/transport.js').ProviderExecutionOptions['resolveCredential'];
   signal: AbortSignal;
@@ -45,13 +46,15 @@ export async function runMain(snapshot: RunSnapshot, hooks: MainHooks): Promise<
   }
   const results: ToolEvent[] = [];
   const evaluation = createEvaluationToolSession(target, hooks.timeoutMs);
-  const maxCalls = evaluation ? Math.min(fixed.settings.maxCalls, evaluation.maxCalls) : fixed.settings.maxCalls;
-  const usage: Usage = { modelCalls: 0, inputTokens: 0, outputTokens: 0, costUsd: 0 };
+  const maxCalls = fixed.settings.maxCalls;
+  const mainCallLimit = evaluation ? Math.min(maxCalls, evaluation.maxCalls) : maxCalls;
+  let mainCalls=0;
+  const usage: Usage = structuredClone(hooks.initialUsage??{ modelCalls: 0, inputTokens: 0, outputTokens: 0, costUsd: 0 });
   let opaqueState: Json | undefined;
   const fail = (error: string, text = '', status: MainResult['status'] = hooks.signal.aborted ? 'cancelled' : text ? 'partial' : 'error'): MainResult => ({ status, error, text, usage });
   while (true) {
     if (hooks.signal.aborted) return fail('CANCELLED');
-    if (!Number.isSafeInteger(maxCalls) || maxCalls < 1 || usage.modelCalls >= maxCalls) return fail('MODEL_CALL_BUDGET_EXHAUSTED');
+    if (!Number.isSafeInteger(maxCalls) || maxCalls < 1 || usage.modelCalls >= maxCalls || mainCalls >= mainCallLimit) return fail('MODEL_CALL_BUDGET_EXHAUSTED');
     if (evaluation && evaluation.remainingMs() === 0) return fail('TIMEOUT');
     let authorized: Connection;
     try { authorized = await hooks.authorize(structuredClone(target.connection)); }
@@ -64,13 +67,14 @@ export async function runMain(snapshot: RunSnapshot, hooks: MainHooks): Promise<
     let attemptId: string | undefined;
     const remainingTimeout = evaluation?.remainingMs();
     if (remainingTimeout === 0) return fail('TIMEOUT');
-    const result = await executeProvider({ id: authorized.id, protocol: authorized.protocol, endpoint: authorized.endpoint, ...(authorized.credentialEnv ? { credentialEnv: authorized.credentialEnv } : {}), ...(authorized.requestTier ? { requestTier: authorized.requestTier } : {}) }, request, {
+    const result = await executeProvider({ id: authorized.id, protocol: authorized.protocol, endpoint: authorized.endpoint, ...(authorized.credentialEnv ? { credentialEnv: authorized.credentialEnv } : {}) }, request, {
       approvedOrigins: hooks.approvedOrigins, signal: hooks.signal, resolveCredential: hooks.resolveCredential, executeCodex: hooks.executeCodex,
       vertexRequestTier: hooks.vertexRequestTier, timeoutMs: remainingTimeout ?? hooks.timeoutMs ?? target.timeoutMs ?? (target.connection.protocol === 'vertex-gemini-v1' ? 300_000 : undefined),
       onWire: async wire => {
         attemptId = await hooks.onAttemptStart(wire);
         // Persistence completes before fetch. A crash leaves an uncertain attempt, not a queued replay.
         usage.modelCalls++;
+        mainCalls++;
       },
     });
     if (attemptId !== undefined) await hooks.onAttemptFinish(attemptId, evaluation?evaluation.diagnosticResult(result):structuredClone(result));

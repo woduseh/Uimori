@@ -1,3 +1,5 @@
+import { generationFromModel } from '../core/model-capabilities.js';
+import { contextBudgetForModel } from '../core/context-budget.js';
 import {
   aggregateTranslation, BUILTIN_ASSETS, compileTranslationPrompt, createTranslationPlan, displayInput, executeAuxiliary,
   presentationInput, scriptedAuxiliary, translationInput, validateDisplayAnnotation,
@@ -141,14 +143,14 @@ export async function runAuxiliaryJob(store: AuxiliaryStoreBridge, jobId: string
       try { authorized = await hooks.authorize(structuredClone(target.connection)); }
       catch { throw new AuxiliaryExecutionError('CONNECTION_NOT_AUTHORIZED', true); }
       if (!authorized.enabled || authorized.id !== target.connectionId || authorized.endpoint !== target.connection.endpoint || authorized.protocol !== target.connection.protocol) throw new AuxiliaryExecutionError('CONNECTION_NOT_AUTHORIZED', true);
-      const generation = { maxOutputTokens: target.maxOutputTokens, temperature: target.temperature, ...(target.thinkingLevel ? { thinkingLevel: target.thinkingLevel } : {}), ...(target.structuredOutput !== undefined ? { structuredOutput: target.structuredOutput } : {}), ...(target.reasoningEffort ? { reasoningEffort: target.reasoningEffort } : {}), ...(target.thinkingMode ? { thinkingMode: target.thinkingMode } : {}), ...(target.thinkingBudgetTokens !== undefined ? { thinkingBudgetTokens: target.thinkingBudgetTokens } : {}) };
+      const generation = generationFromModel(target,target.connection.protocol);
       const completedToolResults=Array.isArray(next.results)?next.results.length:0;
-      const body = providerInput(next, target.modelId, evaluation?evaluation.generation(generation,completedToolResults):generation, opaqueState, snapshot,evaluation);
+      const body = { ...providerInput(next, target.modelId, evaluation?evaluation.generation(generation,completedToolResults):generation, opaqueState, snapshot,evaluation), contextBudget: contextBudgetForModel(target) };
       const generationBinding=evaluation?.generationBinding(generation,completedToolResults);if(generationBinding)body.generationBinding=generationBinding;
       let attemptId: string | undefined;
       const remainingTimeout = evaluation?.remainingMs();
       if (remainingTimeout === 0) throw new AuxiliaryExecutionError('AUXILIARY_PROVIDER_TIMEOUT', true);
-      const result = await executeProvider({ id: authorized.id, protocol: authorized.protocol, endpoint: authorized.endpoint, ...(authorized.credentialEnv ? { credentialEnv: authorized.credentialEnv } : {}), ...(authorized.requestTier ? { requestTier: authorized.requestTier } : {}) }, body, {
+      const result = await executeProvider({ id: authorized.id, protocol: authorized.protocol, endpoint: authorized.endpoint, ...(authorized.credentialEnv ? { credentialEnv: authorized.credentialEnv } : {}) }, body, {
         approvedOrigins: hooks.approvedOrigins, signal: hooks.signal, resolveCredential: hooks.resolveCredential, executeCodex: hooks.executeCodex, vertexRequestTier: hooks.vertexRequestTier, timeoutMs: remainingTimeout ?? hooks.timeoutMs ?? target.timeoutMs ?? (target.connection.protocol === 'vertex-gemini-v1' ? 300_000 : undefined),
         onWire: async wire => { attemptId = await hooks.onAttemptStart(wire); },
       });

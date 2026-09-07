@@ -9,13 +9,12 @@ import { checkJourney as check, sameJourney as same, activeJourney as active, so
 const safeCode = error => /^[A-Z0-9_]+$/u.test(error?.code ?? '') ? error.code : 'LIVE_RESUME_FAILED';
 const ref = model => ({ id: model.id, revision: model.revision });
 
-/** Import is inert. The runner alone owns copied evidence, processes and budget. */
+/** Import is inert. The runner alone owns copied evidence and processes. */
 export async function runResumeJourney({ execute = false, page, baseURL, output, resumeChat, retranslateFirst = false,
   referenceEvidence, timeoutMs = 1800000, onCheckpoint = async () => {} }) {
   rejectRetiredLiveJourney();
   check(execute === true, 'LIVE_BROWSER_EXPLICIT_EXECUTE_REQUIRED');
-  check(process.env.NR_VERTEX_REQUEST_TIER === 'flex' && process.env.NR_LIVE_MAX_REQUESTS === '1000' &&
-    process.env.NR_LIVE_MAX_USD === '100', 'LIVE_BROWSER_APPROVED_LIMITS_REQUIRED');
+  check(process.env.NR_VERTEX_REQUEST_TIER === 'flex', 'LIVE_BROWSER_FLEX_REQUIRED');
   check(typeof resumeChat === 'string' && /^[A-Za-z0-9][A-Za-z0-9._:-]{0,199}$/u.test(resumeChat) &&
     typeof retranslateFirst === 'boolean' && referenceEvidence?.chatId === resumeChat &&
     /^[a-f0-9]{64}$/u.test(referenceEvidence.summarySha256 ?? ''), 'LIVE_RESUME_REFERENCE_REQUIRED');
@@ -90,7 +89,7 @@ export async function runResumeJourney({ execute = false, page, baseURL, output,
     check(/[가-힣]/u.test(await rendered.getByTestId('translation-text').innerText()), 'LIVE_RESUME_TRANSLATION_NOT_RENDERED');
   };
   try {
-    const health = await api('/health'); check(health.liveBudgetConfigured && health.vertexRequestTier === 'flex', 'LIVE_RESUME_SERVER_BUDGET_REQUIRED');
+    const health = await api('/health'); check(health.vertexRequestTier === 'flex', 'LIVE_RESUME_SERVER_TIER_MISMATCH');
     const initial = await detail(); plan = selectResumePlan(initial, resumeChat); summary.chat = { id: initial.chat.id, title: initial.chat.title };
     const library = await api('/library');
     for (const role of ['main', 'translation']) {
@@ -98,8 +97,8 @@ export async function runResumeJourney({ execute = false, page, baseURL, output,
       const connection = library.connections.find(item => item.id === model.connection.id);
       check(saved && same(saved, Object.fromEntries(Object.entries(model).filter(([key]) => key !== 'connection'))) &&
         connection?.enabled && connection.revision === model.connection.revision && connection.protocol === 'vertex-gemini-v1' &&
-        connection.requestTier === 'flex' && connection.endpoint === model.connection.endpoint, 'LIVE_RESUME_REQUIRED_MODEL_UNAVAILABLE');
-      summary[role + 'Model'] = { ...ref(model), title: model.title, protocol: connection.protocol, requestTier: connection.requestTier };
+        model.serviceTier === 'flex' && connection.endpoint === model.connection.endpoint, 'LIVE_RESUME_REQUIRED_MODEL_UNAVAILABLE');
+      summary[role + 'Model'] = { ...ref(model), title: model.title, protocol: connection.protocol, serviceTier: model.serviceTier };
     }
     const retryPath = '/api/jobs/' + plan.translation.id + '/retry';
     const candidatePath = '/api/runs/' + plan.run.id + '/candidate';
@@ -186,7 +185,7 @@ export async function runResumeJourney({ execute = false, page, baseURL, output,
     check(pageErrors.length === 0, 'LIVE_RESUME_PAGE_ERROR'); summary.status = 'PASS';
   } catch (error) {
     const code = safeCode(error); if (record) { record.status = 'FAIL'; record.error = code; record.finishedAt = new Date().toISOString(); }
-    summary.failures.push({ step: currentStep, code }); summary.status = /BUDGET|AUTH|CREDENTIAL|UNAVAILABLE/u.test(code) ? 'BLOCKED' : /TIMEOUT/u.test(code) ? 'INCOMPLETE' : 'FAIL';
+    summary.failures.push({ step: currentStep, code }); summary.status = /AUTH|CREDENTIAL|UNAVAILABLE/u.test(code) ? 'BLOCKED' : /TIMEOUT/u.test(code) ? 'INCOMPLETE' : 'FAIL';
     try { await capture('failure'); } catch { summary.failures.push({ step: currentStep, code: 'LIVE_RESUME_FAILURE_SCREENSHOT_UNAVAILABLE' }); }
     try { const value = await detail(); summary.failureState = { chatId: resumeChat, runs: value.runs.map(run => ({ id: run.id, status: run.status, sourceRevision: run.sourceRevision, error: run.error })),
       jobs: value.jobs.map(job => ({ id: job.id, kind: job.kind, status: job.status, sourceRevision: job.sourceRevision, error: job.error })),
@@ -201,4 +200,3 @@ export async function runResumeJourney({ execute = false, page, baseURL, output,
   }
   return summary;
 }
-

@@ -1,22 +1,22 @@
+import { modelCapability } from './model-capabilities.js';
 import type { ProviderProtocol } from './product.js';
 import { validateProviderPrompt, type LogicalMessage } from './prompt-program.js';
 import type { Json, ProviderRequest } from './transport.js';
 import { ProviderContractError } from './provider-errors.js';
+import { planProviderCache } from './provider-cache.js';
 
 export type MessageDiagnostic={code:string;blockId:string;logicalIndex:number;protocol:ProviderProtocol;modelId:string;status:'mapped'|'not-applied'};
 export type NativeMessagePlan={messages:Json[];system:Json[];options:Record<string,Json>;diagnostics:MessageDiagnostic[];capabilityVersion:'native-wire-2026-09-07'};
 // Official docs, retrieved 2026-09-07; exact aliases only. Dated or future names need a reviewed entry.
-const OPENAI_EXPLICIT_CACHE_MODELS=new Set(['gpt-5.6','gpt-5.6-sol','gpt-5.6-terra','gpt-5.6-luna','gpt-6-astra']);
-const ANTHROPIC_MID_SYSTEM_MODELS=new Set(['claude-fable-5-1','claude-mythos-5-1','claude-fable-5','claude-mythos-5','claude-opus-4-8','claude-opus-5']);
 /** Explicit wire capabilities. An encoding check does not claim account/model availability. */
 export function planNativeMessages(request:ProviderRequest,protocol:ProviderProtocol):NativeMessagePlan|undefined{
   if(!request.prompt)return;
-  const prompt=validateProviderPrompt(request.prompt);const diagnostics:MessageDiagnostic[]=[];const system:Json[]=[];const messages:Json[]=[];const options:Record<string,Json>={};
+  const prompt=validateProviderPrompt(request.prompt);const diagnostics:MessageDiagnostic[]=[];const system:Json[]=[];const messages:Json[]=[];
+  const cache=planProviderCache(request,protocol);const options=cache.options;
   const reject=(code:string,m:LogicalMessage,index:number):never=>{throw new ProviderContractError(`${code}:block=${m.provenance.blockId}:index=${index}:protocol=${protocol}:model=${request.modelId}`);};
   const note=(code:string,m:LogicalMessage,index:number,status:MessageDiagnostic['status']='mapped')=>diagnostics.push({code,blockId:m.provenance.blockId,logicalIndex:index,protocol,modelId:request.modelId,status});
   const responses=protocol==='openai-responses-v1';const anthropic=protocol==='anthropic-messages-v1';const vertex=protocol==='vertex-gemini-v1';
-  const midSystem=anthropic&&ANTHROPIC_MID_SYSTEM_MODELS.has(request.modelId);
-  const explicitOpenAI=protocol==='openai-responses-v1'&&OPENAI_EXPLICIT_CACHE_MODELS.has(request.modelId);
+  const midSystem=anthropic&&modelCapability(protocol,request.modelId)?.midSystem===true;
   let leading=true;let cacheCount=0;const cacheIds=new Set<string>();
   for(const [index,message]of prompt.messages.entries()){
     if(message.completion==='prefill')reject('PROMPT_PREFILL_UNSUPPORTED',message,index);
@@ -32,9 +32,10 @@ export function planNativeMessages(request:ProviderRequest,protocol:ProviderProt
     const parts=message.content.map((part):Record<string,Json>=>responses?{type:'input_text',text:part.text}:vertex?{text:part.text}:{type:'text',text:part.text});
     for(const anchor of prompt.cachePlan.filter(a=>a.afterMessageId===message.id)){
       if(cacheIds.has(message.id))continue;
-      const supported=anthropic||explicitOpenAI;const available=cacheCount<4;
+      if(cache.disabled){cacheIds.add(message.id);note('PROMPT_CACHE_DISABLED_BY_MODEL',message,index,'not-applied');continue;}
+      const supported=cache.breakpoint!==undefined;const available=cacheCount<cache.explicitLimit;
       if(!supported||!available){if(anchor.policy==='require')reject(supported?'PROMPT_CACHE_LIMIT':'PROMPT_CACHE_UNSUPPORTED',message,index);note(supported?'PROMPT_CACHE_LIMIT_NOT_APPLIED':'PROMPT_CACHE_NOT_APPLIED',message,index,'not-applied');continue;}
-      if(anthropic)parts.at(-1)!.cache_control={type:'ephemeral'};else{parts.at(-1)!.prompt_cache_breakpoint={mode:'explicit'};options.prompt_cache_options={mode:'explicit'};}
+      parts.at(-1)![cache.breakpoint!.field]=structuredClone(cache.breakpoint!.value);
       cacheIds.add(message.id);cacheCount++;note('CACHE_BREAKPOINT_ENCODED_HIT_UNVERIFIED',message,index);
     }
     if((anthropic||vertex)&&message.role==='system'&&wasLeading){system.push(...parts);note('LEADING_SYSTEM_TO_DEDICATED_FIELD',message,index);}

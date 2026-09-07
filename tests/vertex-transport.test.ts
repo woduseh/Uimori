@@ -162,8 +162,8 @@ describe('Vertex native wire through real local HTTP streams (no live calls)', (
     const result = await executeProvider(connection, request(), options());
     expect(result).toMatchObject({ status: 'error', error: { code: 'HTTP_429' }, usage: { inputTokens: null, outputTokens: null, costUsd: null } });
     expect(JSON.stringify(result)).not.toContain(token);
-    const denied = await executeProvider(connection, request(), options({ onWire: () => { throw new ProviderContractError('LIVE_BUDGET_REQUEST_LIMIT'); } }));
-    expect(denied.error?.code).toBe('LIVE_BUDGET_REQUEST_LIMIT');
+    const denied = await executeProvider(connection, request(), options({ onWire: () => { throw new ProviderContractError('ATTEMPT_PERSISTENCE_FAILED'); } }));
+    expect(denied.error?.code).toBe('ATTEMPT_PERSISTENCE_FAILED');
     const wrongOrigin = await executeProvider(connection, request(), options({ approvedOrigins: [] }));
     expect(wrongOrigin.error?.code).toBe('ENDPOINT_NOT_APPROVED');
     expect(local.requests).toHaveLength(1);
@@ -179,7 +179,8 @@ describe('Vertex Flex admission (synthetic HTTP only)', () => {
       expect(captured.headers['x-server-timeout']).toBe('900');
       await writeSse(response,[{candidates:[{content:{role:'model',parts:[{text:'합성 원고'}]},finishReason:'STOP'}]}, {usageMetadata:{...usage,trafficType:confirmed?'ON_DEMAND_FLEX':'ON_DEMAND'}}]);
     });
-    const result=await executeProvider({...connection,requestTier:'standard'},request(),options({vertexRequestTier:'flex',timeoutMs:900000,onWire:(wire:WireRecord)=>wires.push(wire)}));
+    const input=request();input.generation!.serviceTier='flex';
+    const result=await executeProvider(connection,input,options({timeoutMs:900000,onWire:(wire:WireRecord)=>wires.push(wire)}));
     expect(result.status).toBe(confirmed?'completed':'error');
     if(!confirmed) expect(result.error?.code).toBe('FLEX_NOT_CONFIRMED');
     expect(wires[0].headers['x-vertex-ai-llm-shared-request-type']).toBe('flex');
@@ -190,5 +191,32 @@ describe('Vertex Flex admission (synthetic HTTP only)', () => {
     const value=request();value.generation!.structuredOutput=false;
     const result=await executeProvider(connection,value,options());
     expect(result.error?.code).toBe('UNSUPPORTED_GENERATION_OPTIONS');expect(local.requests).toHaveLength(0);
+  });
+  test('a server Flex override applies only when the model request has no conflicting selection', async () => {
+    const local=await redirectedFixture(async(captured,response)=>{
+      expect(captured.headers['x-vertex-ai-llm-shared-request-type']).toBe('flex');
+      await writeSse(response,[{candidates:[{content:{role:'model',parts:[{text:'합성 원고'}]},finishReason:'STOP'}]}, {usageMetadata:{...usage,trafficType:'ON_DEMAND_FLEX'}}]);
+    });
+    expect((await executeProvider(connection,request(),options({vertexRequestTier:'flex'}))).status).toBe('completed');
+    const input=request();input.generation!.serviceTier='standard';
+    const resolveCredential=vi.fn(()=>token);const onWire=vi.fn();
+    const rejected=await executeProvider(connection,input,options({vertexRequestTier:'flex',resolveCredential,onWire}));
+    expect(rejected.error?.code).toBe('INVALID_VERTEX_REQUEST_TIER');
+    expect(resolveCredential).not.toHaveBeenCalled();expect(onWire).not.toHaveBeenCalled();expect(local.requests).toHaveLength(1);
+  });
+  test('Gemini 3.1 Pro uses the exact global model path and selected sampling values', async () => {
+    const local=await redirectedFixture(async(captured,response)=>{
+      expect(JSON.parse(captured.body).generationConfig).toEqual({maxOutputTokens:2048,temperature:0,topP:0.9,thinkingConfig:{thinkingLevel:'HIGH'},stopSequences:['END_SCENE']});
+      await writeSse(response,[{candidates:[{content:{role:'model',parts:[{text:'합성 원고'}]},finishReason:'STOP'}]}, {usageMetadata:usage}]);
+    });
+    const input=request();input.modelId='gemini-3.1-pro-preview';input.generation={maxOutputTokens:2048,temperature:0,topP:0.9,thinkingLevel:'HIGH',stopSequences:['END_SCENE']};
+    expect((await executeProvider(connection,input,options())).status).toBe('completed');
+    expect(local.urls).toEqual([connection.endpoint+'/gemini-3.1-pro-preview:streamGenerateContent?alt=sse']);
+  });
+  test('unreviewed Google models fail before resolving credentials or fetching', async () => {
+    const fetch=vi.fn();const resolveCredential=vi.fn(()=>token);vi.stubGlobal('fetch',fetch);
+    const input=request();input.modelId='gemini-unreviewed';
+    expect((await executeProvider(connection,input,options({resolveCredential}))).error?.code).toBe('UNVERIFIED_MODEL_CAPABILITY');
+    expect(resolveCredential).not.toHaveBeenCalled();expect(fetch).not.toHaveBeenCalled();
   });
 });

@@ -22,16 +22,16 @@ afterEach(() => {
 });
 const connectionBody = (extra:Record<string,unknown> = {}) => ({title:'Synthetic',protocol:'openai-chat-v1',endpoint:'http://127.0.0.1:9999/v1',enabled:true,...extra});
 const editConnection = (c:Connection,extra:Record<string,unknown> = {}) => connectionBody({title:c.title,protocol:c.protocol,endpoint:c.endpoint,enabled:c.enabled,...(c.credentialEnv ? {credentialEnv:c.credentialEnv}:{}),expectedRevision:c.revision,...extra});
-const modelBody = (c:Connection,extra:Record<string,unknown> = {}) => ({title:'Model',connectionId:c.id,connectionRevision:c.revision,modelId:'synthetic',maxOutputTokens:1000,temperature:null,...extra});
-const ref = ({id,revision}:{id:string;revision:number}) => ({id,revision});
-const count = (s:Store) => Number((s.db.prepare('SELECT COUNT(*) AS n FROM versions').get() as {n:number}).n);
+const modelBody = (c:Connection,extra:Record<string,unknown> = {}) => ({title:'Model',connectionId:c.id,modelId:'synthetic',maxOutputTokens:1000,temperature:null,...extra});
+const ref = ({id}:{id:string}) => ({id});
+const count = (s:Store) => Number((s.db.prepare('SELECT COUNT(*) AS n FROM provider_settings').get() as {n:number}).n);
 const stamp = '2026-09-07T00:00:00.000Z';
 
 test('prepare is read only and create/update enforce the same CAS contract', () => {
   const s = database(); const p = s.product;
   expect(p.prepareConnection(connectionBody()).value.catalog).toEqual([]); expect(count(s)).toBe(0);
   const c = p.connection(connectionBody()) as Connection;
-  expect(p.prepareModel(modelBody(c)).value.source).toEqual({kind:'manual',connectionRevision:1,catalogUpdatedAt:null}); expect(count(s)).toBe(1);
+  expect(p.prepareModel(modelBody(c)).value.source).toEqual({kind:'manual',catalogUpdatedAt:null}); expect(count(s)).toBe(1);
   const m = p.model(modelBody(c)) as ModelPreset;
   const prepared = p.prepareModel(modelBody(c,{expectedRevision:1,enabled:false}),m.id);
   expect(count(s)).toBe(2); expect(prepared.value.enabled).toBe(false);
@@ -44,7 +44,10 @@ test('prepare is read only and create/update enforce the same CAS contract', () 
   p.connection(editConnection(c,{title:'Renamed'}),c.id);
   expect(() => p.prepareConnection(editConnection(c),c.id)).toThrow('Revision conflict');
   expect(() => p.connection(editConnection(c),c.id)).toThrow('Revision conflict');
-  expect(p.get<ModelPreset>('model',m.id,1)).toEqual(m);
+  expect(p.get<ModelPreset>('model',m.id)).toEqual(updated);
+  expect(() => p.get<ModelPreset>('model',m.id,1)).toThrow('Setting not found');
+  expect(count(s)).toBe(2);
+  expect(s.db.prepare("SELECT COUNT(*) AS n FROM versions WHERE kind IN ('model','connection')").get()).toEqual({n:0});
 });
 
 test('catalog/error retention uses credential authority and old connection execution is revoked', () => {
@@ -55,23 +58,31 @@ test('catalog/error retention uses credential authority and old connection execu
   expect(rename).toMatchObject({catalog:cached.catalog,catalogUpdatedAt:stamp,catalogError:'CATALOG_FAILED'});
   const changed = p.connection(editConnection(rename,{credentialEnv:'NARRATIVE_PROVIDER_TEST_B'}),c.id) as Connection;
   expect(changed).toMatchObject({catalog:[],catalogUpdatedAt:null,catalogError:null});
-  expect(() => p.authorize(cached)).toThrow('authority changed'); expect(p.get('connection',cached.id,cached.revision)).toEqual(cached);
+  expect(() => p.authorize(cached)).toThrow('authority changed'); expect(p.get('connection',cached.id)).toEqual(changed);
+  expect(() => p.get('connection',cached.id,cached.revision)).toThrow('Setting not found');
+  expect(cached).toMatchObject({catalog:rename.catalog,credentialEnv:'NARRATIVE_PROVIDER_TEST_A'});
   const disabled = p.connection(editConnection(changed,{enabled:false}),c.id) as Connection;
   expect(() => p.authorize(changed)).toThrow('disabled'); expect(disabled.enabled).toBe(false);
 });
 
-test('model metadata is server sourced, strict and preserves pinned models after disabling', () => {
+test('model metadata is server sourced and disabling blocks new selection while preserving a captured run', () => {
   const s = database(); const p = s.product; const chat = s.createChat('Metadata only');
   const c = p.connection(connectionBody()) as Connection;
   const cached = p.save('connection',{...c,catalog:[{id:'synthetic',name:'Synthetic',capabilities:{},priceRevision:null}],catalogUpdatedAt:stamp},c.id,c.revision) as Connection;
   const overrides = {tools:false,structuredOutput:null,note:'User confirmed; no provider claim'};
   const m = p.model(modelBody(cached,{enabled:true,userOverrides:overrides})) as ModelPreset;
-  expect(m.source).toEqual({kind:'catalog',connectionRevision:cached.revision,catalogUpdatedAt:stamp});
+  expect(m.source).toEqual({kind:'catalog',catalogUpdatedAt:stamp});
   const profile = p.profile(chat.id);
   const {chatId:_chatId,revision:_revision,...profileBody} = profile;
   p.updateProfile(chat.id,{...profileBody,expectedRevision:profile.revision,routes:{...profile.routes,main:ref(m)}});
+  const captured = p.snapshot(chat.id)!;
+  const run = s.createRun(chat.id,{request:'Synthetic captured settings',expectedRevision:chat.headRevision,expectedSettingsRevision:chat.settingsRevision,idempotencyKey:'captured-settings'},current=>({chatId:chat.id,parentRevision:current.headRevision,settingsRevision:current.settingsRevision,settings:current.settings,request:'Synthetic captured settings',history:[],resources:p.resources(chat.id,captured),profile:captured})).run;
+  const frozen = structuredClone(run.snapshot);
   p.model(modelBody(cached,{enabled:false,expectedRevision:m.revision,userOverrides:overrides}),m.id);
-  expect(p.snapshot(chat.id)?.models.main).toMatchObject({...m,connection:cached});
+  expect(() => p.snapshot(chat.id)).toThrow('Model disabled');
+  expect(s.run(run.id).snapshot).toEqual(frozen);
+  expect(s.run(run.id).snapshot.profile?.models.main).toMatchObject({...m,connection:cached});
+  expect(p.profile(chat.id).routes.main).toEqual({id:m.id});
   expect(p.authorize(cached)).toEqual(cached);
   for (const userOverrides of [null,{tools:true,structuredOutput:null},{tools:1,structuredOutput:null,note:''},{tools:null,structuredOutput:null,note:'',grant:true}]) expect(() => p.model(modelBody(cached,{userOverrides}))).toThrow();
   expect(() => p.model(modelBody(cached,{source:m.source}))).toThrow('Unknown request field');
@@ -89,16 +100,16 @@ test('archive roundtrip retains management metadata, strips authority, and rejec
   expect(p.get<Connection>('connection',c.id).credentialEnv).toBe('NARRATIVE_PROVIDER_TEST_A');
   for (const mutate of [
     (body:any) => {body.source.connectionRevision=999;},
-    (body:any) => {body.source.kind='catalog';},
+    (body:any) => {body.source.kind='forged-catalog';},
     (body:any) => {body.userOverrides.tools='yes';},
     (body:any) => {body.source.catalogUpdatedAt='2026-02-30T00:00:00.000Z';},
   ]) {
-    const bad = structuredClone(archive); const row = bad.tables.versions.find((r:any) => r.kind === 'model')!; const body = JSON.parse(row.body); mutate(body); row.body=JSON.stringify(body);
+    const bad = structuredClone(archive); const row = bad.tables.provider_settings.find((r:any) => r.kind === 'model')!; const body = JSON.parse(row.body); mutate(body); row.body=JSON.stringify(body);
     const empty = database(); expect(() => empty.product.import(bad)).toThrow(); expect(count(empty)).toBe(0);
   }
-  const legacy = structuredClone(archive);
-  for (const row of legacy.tables.versions) { const body = JSON.parse(row.body); delete body.source; delete body.enabled; delete body.userOverrides; delete body.catalogUpdatedAt; if(row.kind==='connection')body.enabled=true;row.body=JSON.stringify(body); }
-  const legacyStore = database(); legacyStore.product.import(legacy); expect(legacyStore.product.get('model',m.id)).not.toHaveProperty('enabled');
+  const optionalMetadata = structuredClone(archive);
+  for (const row of optionalMetadata.tables.provider_settings) { const body = JSON.parse(row.body); delete body.source; delete body.enabled; delete body.userOverrides; delete body.catalogUpdatedAt; if(row.kind==='connection')body.enabled=true;row.body=JSON.stringify(body); }
+  const minimalStore = database(); minimalStore.product.import(optionalMetadata); expect(minimalStore.product.get('model',m.id)).not.toHaveProperty('enabled');
 });
 
 test('readiness reveals only presence and approved origin without authenticating', () => {
@@ -118,7 +129,7 @@ test('readiness reveals only presence and approved origin without authenticating
   expect(network).not.toHaveBeenCalled();
 });
 
-test('impact counts current profile references through old model revisions and exposes metadata only', () => {
+test('impact counts current profile model IDs after settings edits and exposes metadata only', () => {
   const s = database(); const p = s.product; const chat = s.createChat('Reference title');
   const c = p.connection(connectionBody()) as Connection; const m = p.model(modelBody(c)) as ModelPreset;
   const profile = p.profile(chat.id); const {chatId:_chatId,revision:_revision,...body} = profile;
@@ -127,7 +138,7 @@ test('impact counts current profile references through old model revisions and e
   s.story.saveConfig(chat.id,{expectedRevision:1,module:null,stateModel:null,memory:{...config.memory,model:ref(m)}});
   p.model(modelBody(c,{expectedRevision:m.revision,enabled:false}),m.id);
   const impact = managementImpact(p,'connection',c.id);
-  expect(impact).toMatchObject({profileCount:1,storyProfileCount:1,modelRevisionCount:2,profiles:[{chatId:chat.id,title:chat.title,roles:['main','translation']}],storyProfiles:[{chatId:chat.id,title:chat.title,roles:['memory']}]});
-  expect(managementImpact(p,'model',m.id).archivedRevisionCount).toBe(1);
+  expect(impact).toMatchObject({profileCount:1,storyProfileCount:1,modelCount:1,profiles:[{chatId:chat.id,title:chat.title,roles:['main','translation']}],storyProfiles:[{chatId:chat.id,title:chat.title,roles:['memory']}]});
+  expect(managementImpact(p,'model',m.id)).not.toHaveProperty('archivedRevisionCount');
   expect(Object.keys(impact.profiles[0]).sort()).toEqual(['chatId','roles','title']);
 });

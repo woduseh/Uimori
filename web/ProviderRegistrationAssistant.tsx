@@ -6,13 +6,13 @@ import { useModelSelection } from './model-selection.js';
 import { api, ApiError } from './api.js';
 
 const storageKey='uimori.provider-registration.request-key';
-const label=(value:{id:string;revision:number})=>`${value.id}@${value.revision}`;
+const label=(value:{id:string})=>value.id;
 const errors:Record<string,string>={
   PROPOSAL_STALE:'연결 설정이 바뀌었어요. 현재 설정으로 새 제안을 요청해 주세요.',
   REGISTRATION_PROPOSAL_INVALID:'등록 가능한 설정안을 만들지 못했어요. 프로토콜과 모델 ID를 구체적으로 적거나 수동으로 등록해 주세요.',
   SERVER_INTERRUPTED_NO_AUTOMATIC_REPLAY:'서버가 중단되어 요청을 다시 실행하지 않았어요. 필요하면 새 제안을 명시적으로 요청해 주세요.',
 };
-const optionLabels:Record<string,string>={title:'프리셋 이름',modelId:'모델 ID',maxOutputTokens:'최대 출력 토큰',temperature:'Temperature',timeoutMs:'제한 시간(ms)',thinkingLevel:'생각 수준',structuredOutput:'구조화 출력',reasoningEffort:'Reasoning effort',thinkingMode:'Thinking',thinkingBudgetTokens:'Thinking 토큰',evaluationTools:'선택형 평가 도구',enabled:'새 선택에 표시'};
+const optionLabels:Record<string,string>={title:'프리셋 이름',modelId:'모델 ID',maxOutputTokens:'최대 출력 토큰',inputTokenLimit:'입력 컨텍스트 한도',temperature:'Temperature',timeoutMs:'제한 시간(ms)',thinkingLevel:'Thinking Level',structuredOutput:'구조화 출력',reasoningEffort:'Reasoning Effort',outputEffort:'Output Effort',verbosity:'Verbosity',reasoningMode:'Reasoning Mode',reasoningContext:'Reasoning Context',serviceTier:'Service Tier',cacheMode:'캐시 사용',cacheTtl:'캐시 유지 시간',topP:'Top P',stopSequences:'정지 문자열',thinkingMode:'Thinking',thinkingBudgetTokens:'Thinking 토큰',evaluationTools:'선택형 평가 도구',enabled:'새 선택에 표시'};
 
 /** Agent registration uses an explicitly chosen model; only the reviewed proposal can create settings. */
 export function ProviderRegistrationAssistant({library,reload,onError}:{library:Library;reload:()=>Promise<void>;onError:(error:string)=>void}) {
@@ -81,10 +81,10 @@ export function ProviderRegistrationAssistant({library,reload,onError}:{library:
       {proposal&&<>
         <h4>{draft?'새 연결 · 비활성 상태로 등록':'기존 연결 사용'}</h4>
         <dl><dt>연결</dt><dd>{draft?.title??selected?.title??(proposal.connection.kind==='existing'?proposal.connection.id:'')}</dd>
-          {draft?<><dt>프로토콜</dt><dd>{providerDefinition(draft.protocol).label}</dd><dt>기본 주소</dt><dd><code>{draft.endpoint}</code></dd><dt>인증 참조</dt><dd>{draft.credentialEnv??'서버 기본 설정 / 인증 없음'}</dd>{draft.requestTier&&<><dt>요금제</dt><dd>{draft.requestTier}</dd></>}</>:proposal.connection.kind==='existing'&&<><dt>연결 버전</dt><dd>{proposal.connection.revision}</dd></>}
+          {draft?<><dt>프로토콜</dt><dd>{providerDefinition(draft.protocol).label}</dd><dt>기본 주소</dt><dd><code>{draft.endpoint}</code></dd><dt>인증 참조</dt><dd>{draft.credentialEnv??'서버 기본 설정 / 인증 없음'}</dd></>:null}
         </dl>
-        <h4>새 모델 프리셋</h4><dl>{Object.entries(proposal.model).map(([key,value])=><div key={key}><dt>{key==='maxOutputTokens'&&(draft?.protocol??selected?.protocol)==='codex-app-server-v1'?'출력 목표 토큰':optionLabels[key]??key}</dt><dd>{value===null?'공급자 기본값':typeof value==='object'?JSON.stringify(value):String(value)}</dd></div>)}</dl>
-        <p>기존 채팅의 모델과 과거 실행은 바꾸지 않아요. 새 모델 ID가 현재 프로토콜에서 작동하는지, 옵션과 가격이 맞는지는 미확인이에요.{draft?' 새 연결의 서버 인증과 허용 주소를 준비한 뒤 직접 활성화해 주세요. 모델 편집에서 활성화된 최신 연결 버전을 선택하고 저장하면 역할에 배정할 수 있어요.':''}</p>
+        <h4>새 모델 프리셋</h4><dl>{Object.entries(proposal.model).map(([key,value])=><div key={key}><dt>{key==='maxOutputTokens'&&(draft?.protocol??selected?.protocol)==='codex-app-server-v1'?'출력 목표 토큰':optionLabels[key]??key}</dt><dd>{value===null?'모델 기본값':typeof value==='object'?JSON.stringify(value):String(value)}</dd></div>)}</dl>
+        <p>기존 채팅의 모델과 과거 실행은 바꾸지 않아요. 새 모델 ID가 현재 프로토콜에서 작동하는지, 옵션과 가격이 맞는지는 미확인이에요.{draft?' 새 연결의 서버 인증과 허용 주소를 준비한 뒤 직접 활성화해 주세요. 연결을 활성화하면 모델을 역할에 배정할 수 있어요.':''}</p>
         {ready&&<button type="button" disabled={busy} onClick={()=>{void perform(async()=>{const value=await api<RegistrationView>(`/provider-management/registrations/${run.id}/apply`,{expectedRevision:run.revision,planHash:run.planHash});setRun(value);await reload();});}}>검토한 연결·모델 등록 적용</button>}
         {run.status==='applied'&&<p role="status">설정 목록에 저장했어요. 새 이야기 또는 이야기 설정의 모델 탭에서 사용할 역할에 배정해 주세요.</p>}
       </>}

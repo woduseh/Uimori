@@ -26,9 +26,9 @@ function source(store:Store,chatId:string,text='Mira spoke softly to Captain Arl
 }
 function configure(store:Store,chatId:string,endpoint:string){
  const connection=store.product.connection({title:'Synthetic loopback',protocol:'fixture-sse-v1',endpoint,enabled:true}) as Connection;
- const model=store.product.model({title:'Synthetic translator',connectionId:connection.id,connectionRevision:connection.revision,modelId:'fixture-translation',maxOutputTokens:4000,temperature:null}) as ModelPreset;
+ const model=store.product.model({title:'Synthetic translator',connectionId:connection.id,modelId:'fixture-translation',maxOutputTokens:4000,temperature:null}) as ModelPreset;
  const prior=store.product.profile(chatId);
- store.product.updateProfile(chatId,{expectedRevision:prior.revision,attachments:prior.attachments,creative:prior.creative,routes:{...prior.routes,translation:{id:model.id,revision:model.revision}},image:false});
+ store.product.updateProfile(chatId,{expectedRevision:prior.revision,attachments:prior.attachments,creative:prior.creative,routes:{...prior.routes,translation:{id:model.id}},image:false});
 }
 async function execute(store:Store,id:string,origin:string,events:ToolEvent[]=[]){const signal=new AbortController().signal;return runAuxiliaryJob(auxiliaryBridge(store,new Controls(),signal),id,'context-owner',{signal,approvedOrigins:[origin],authorize:c=>store.product.authorize(c),onAttemptStart:w=>store.product.startAttempt(store.job(id).chatId,null,id,w),onAttemptFinish:(id,r)=>store.product.finishAttempt(id,r),onToolEvent:(_id,e)=>{events.push(e);}});}
 const call=(name:string,args:Record<string,unknown>,callId=name)=>({callId,name,args});

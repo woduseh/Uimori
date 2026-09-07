@@ -11,6 +11,7 @@ import { ArchivePanel } from './ArchivePanel.js';
 import { AttemptInspector } from './AttemptInspector.js';
 import { RunIssue } from './RuntimeSettings.js';
 import { JobCard } from './SourceReader.js';
+import { ContextSummaryStatus } from './ContextSummaryStatus.js';
 
 export function TasksPanel({ state, inspectedRun, onInspect, onClose }: { state: StoryState; inspectedRun: string | null; onInspect: (runId: string) => void; onClose: () => void }) {
   const [pending, setPending] = useState<string[]>([]);
@@ -33,6 +34,7 @@ export function TasksPanel({ state, inspectedRun, onInspect, onClose }: { state:
     <div className="runs">{runs.map(run => <article key={run.id} data-testid="run" data-run-id={run.id} className="run">
       <div className="task-heading"><strong>{run.snapshot.forkedFrom ? '복사한 원고' : `원문 ${labels[run.status]}`}</strong><small>{run.modelTitle || 'Scripted mock · 모의 생성'}</small></div>
       <p className="task-request">{run.request}</p>
+      <ContextSummaryStatus summary={run.contextSummary}/>
       {run.error && <p className="error">{run.error}</p>}
       {run.status === 'refused' && <p className="error">요청에 대한 생성이 거절됐어요. 대체 원고를 자동 생성하지 않았어요.</p>}
       {run.partialText && <details className="partial-result"><summary>보존된 부분 출력 · 확정 원문에 합류하지 않음</summary><pre>{run.partialText}</pre></details>}

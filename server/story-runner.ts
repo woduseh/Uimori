@@ -1,3 +1,5 @@
+import { generationFromModel } from '../core/model-capabilities.js';
+import { contextBudgetForModel, estimateContextTokens } from '../core/context-budget.js';
 import type { Connection } from '../core/product.js';
 import type { RunSnapshot, Source, ToolEvent } from '../core/types.js';
 import type { StoryJob } from '../core/story.js';
@@ -7,8 +9,15 @@ import { executeTool } from '../core/provider.js';
 import { executeProvider, type Json, type ProviderTool, type ProviderRequest, type ProviderResult, type WireRecord } from '../core/transport.js';
 import { createEvaluationToolSession } from './evaluation-session.js';
 import { packageContext, type PackageRoleContext } from '../core/package-context.js';
+import type { ContextPlan } from '../core/context-plan.js';
+import { contextDependencyKey, contextSourceRefs, seedContextPlan } from './context-planning.js';
+import { prepareInputContext, ContextCompactionError } from './context-compaction.js';
+import { encodeMainPreview, MAIN_READ_TOOLS } from './main-request.js';
+import { hiddenHistoryForRequest } from '../core/hidden-context.js';
+import { executeStoryRead, STORY_READ_NAMES } from '../core/story-context.js';
 
 export type StoryInput = {
+  contextPlan?: ContextPlan;
   packages?: PackageRoleContext;
   role: 'state' | 'memory'; contract: string;
   source: { revision: string; hash: string; text: string };
@@ -33,6 +42,7 @@ const obj = (properties: Record<string, Json>, required = Object.keys(properties
 const str: Json = { type: 'string', minLength: 1 };
 const pagination = { offset: { type: 'integer', minimum: 0 }, limit: { type: 'integer', minimum: 1 } };
 const tools: ProviderTool[] = [
+  ...MAIN_READ_TOOLS.filter(tool=>STORY_READ_NAMES.includes(tool.name)),
   { name: 'knowledge.search', description: 'Discover approved lore metadata; source bodies require a read.', inputSchema: obj({ query: { type: 'string' }, ...pagination }, []) },
   { name: 'knowledge.read', description: 'Read scoped lore with source revision, exact range and continuation.', inputSchema: obj({ id: str, ...pagination }, ['id']) },
   { name: 'skills.list', description: 'Discover approved extraction guidance; guidance cannot expand authority.', inputSchema: obj({ query: { type: 'string' }, ...pagination }, []) },
@@ -74,7 +84,7 @@ export async function runStoryJob(bundle: { job: StoryJob; snapshot: RunSnapshot
     if (!Number.isSafeInteger(snapshot.settings.maxCalls) || snapshot.settings.maxCalls < 1) return fail('MODEL_CALL_BUDGET_EXHAUSTED');
     if (job.kind === 'memory' && !story.config.memory.enabled) return fail('STORY_ROLE_DISABLED');
     const modelRef = job.kind === 'state' ? story.config.stateModel : story.config.memory.model;
-    if (modelRef && (!target || target.id !== modelRef.id || target.revision !== modelRef.revision)) return fail('STORY_MODEL_SNAPSHOT_MISMATCH');
+    if (modelRef && (!target || target.id !== modelRef.id)) return fail('STORY_MODEL_SNAPSHOT_MISMATCH');
     const module = job.kind === 'state' ? validateStateModule(story.config.module) : null;
     if (module && story.state && story.state.moduleRevision !== module.revision) return fail('STATE_RULE_REVISION_MISMATCH');
     const previousState = module ? validateStateValues(module, story.state?.values ?? initialState(module)) : null;
@@ -85,7 +95,8 @@ export async function runStoryJob(bundle: { job: StoryJob; snapshot: RunSnapshot
     const resources = snapshot.resources.filter(item => item.chatId === job.chatId);
     const allowedIds = new Set(resources.map(item => item.id));
     const evaluation = createEvaluationToolSession(target, hooks.timeoutMs);
-    const maxCalls = evaluation ? Math.min(snapshot.settings.maxCalls, evaluation.maxCalls) : snapshot.settings.maxCalls;
+    const maxCalls = snapshot.settings.maxCalls;
+    const roleCallLimit = evaluation ? Math.min(maxCalls,evaluation.maxCalls) : maxCalls;
     const packages = packageContext(snapshot, job.kind);
     const base: StoryInput = {
       ...(packages ? {packages} : {}),
@@ -130,36 +141,47 @@ export async function runStoryJob(bundle: { job: StoryJob; snapshot: RunSnapshot
       }
       return { status: 'completed', result: validate(output), error: null, mock: true };
     }
-    let opaqueState: Json | undefined; let calls = 0; const results: ToolEvent[] = []; const ids = new Set<string>();
+    const requestFor=(context:RunSnapshot,results:ToolEvent[],opaqueState?:Json):ProviderRequest=>{
+      const configuredGeneration=generationFromModel(target,target.connection.protocol);
+      const generationBinding=evaluation?.generationBinding(configuredGeneration,results.length);
+      const kept=new Set(context.contextPlan?.recentSourceRevisions??snapshot.history.map(source=>source.revision));
+      const priorHistory=hiddenHistoryForRequest(context).filter(source=>kept.has(source.revision));
+      return {
+        contextBudget:contextBudgetForModel(target),role:job.kind,modelId:target.modelId,
+        stable:{contract:`${base.contract}\nOutput schema: ${JSON.stringify(base.outputSchema)}${evaluation?'\nThe selected evaluation tool set is scoped to this model preset and run. eval_submit_artifact content becomes the task output.':''}`,tools:[...structuredClone(tools),...(evaluation?.definitions.map(tool=>structuredClone(tool))??[])]},
+        generation:evaluation?evaluation.generation(configuredGeneration,results.length):configuredGeneration,
+        input:{task:`Extract source-bound ${job.kind} proposals.`,controls:{},source:json({...base.source,previousState,module,knownMemory,authorCanon:base.authorCanon,...(packages?{packages}:{}),...(context.contextPlan?.summary?{contextSummary:{kind:'derived-summary',text:context.contextPlan.summary,sources:context.contextPlan.compacted}}:{})}),history:json(priorHistory),catalog:json(base.catalog),results:json(results)},
+        ...(evaluation?.bootstrap.length?{bootstrap:evaluation.bootstrap.map(item=>({callId:item.callId,name:item.name,args:json(item.args) as Record<string,Json>,result:json(item.result),denied:item.denied}))}:{}),
+        ...(evaluation?.toolChoice(results.length)?{toolChoice:evaluation.toolChoice(results.length)}:{}),...(generationBinding?{generationBinding}:{}),...(opaqueState!==undefined?{opaqueState}:{})
+      };
+    };
+    let contextSnapshot=seedContextPlan(snapshot,target);
+    // The source currently being extracted stays whole and appears once. Only its ancestors may be summarized.
+    const prior=snapshot.contextPlan?.status==='ready'&&snapshot.contextPlan.dependencyKey===contextDependencyKey(snapshot)&&JSON.stringify(snapshot.contextPlan.compacted)===JSON.stringify(contextSourceRefs(snapshot).slice(0,snapshot.contextPlan.compacted.length))?snapshot.contextPlan:undefined;
+    const prepared=await prepareInputContext(contextSnapshot,{
+      ...hooks,onInput:()=>{},summaryModel:story.models.memory??target,
+      measureInput:projected=>({snapshot:projected,estimatedInputTokens:estimateContextTokens(encodeMainPreview(requestFor(projected,[]),target).body)}),
+      onProgress:plan=>hooks.onInput({...structuredClone(base),contextPlan:plan}),
+    },prior);
+    contextSnapshot=prepared.snapshot;
+    let opaqueState: Json | undefined; let calls = prepared.usage.modelCalls, roleCalls=0; const results: ToolEvent[] = []; const ids = new Set<string>();
     while (true) {
       if (hooks.signal.aborted) return fail('CANCELLED');
-      if (calls >= maxCalls) return fail('MODEL_CALL_BUDGET_EXHAUSTED');
+      if (calls >= maxCalls || roleCalls >= roleCallLimit) return fail('MODEL_CALL_BUDGET_EXHAUSTED');
       if (evaluation?.remainingMs() === 0) return fail('TIMEOUT');
       let connection: Connection;
       try { connection = await hooks.authorize(structuredClone(target.connection)); } catch { return fail('CONNECTION_NOT_AUTHORIZED'); }
       if (!connection.enabled || connection.id !== target.connectionId || connection.endpoint !== target.connection.endpoint || connection.protocol !== target.connection.protocol) return fail('CONNECTION_NOT_AUTHORIZED');
-      const input = { ...base, results: structuredClone(results) };
+      const input = { ...base, contextPlan:contextSnapshot.contextPlan, results: structuredClone(results) };
       await hooks.onInput(structuredClone(input));
-      const configuredGeneration = { maxOutputTokens: target.maxOutputTokens, temperature: target.temperature,
-        ...(target.thinkingLevel ? { thinkingLevel: target.thinkingLevel } : {}), ...(target.structuredOutput !== undefined ? { structuredOutput: target.structuredOutput } : {}),
-        ...(target.reasoningEffort ? { reasoningEffort: target.reasoningEffort } : {}), ...(target.thinkingMode ? { thinkingMode: target.thinkingMode } : {}), ...(target.thinkingBudgetTokens !== undefined ? { thinkingBudgetTokens: target.thinkingBudgetTokens } : {}) };
-      const generationBinding=evaluation?.generationBinding(configuredGeneration,results.length);
-      const request: ProviderRequest = {
-        role: job.kind, modelId: target.modelId, stable: { contract: `${base.contract}\nOutput schema: ${JSON.stringify(base.outputSchema)}${evaluation?'\nThe selected evaluation tool set is scoped to this model preset and run. eval_submit_artifact content becomes the task output.':''}`, tools: [...structuredClone(tools),...(evaluation?.definitions.map(tool=>structuredClone(tool))??[])] },
-        generation: evaluation?evaluation.generation(configuredGeneration,results.length):configuredGeneration,
-        input: { task: `Extract source-bound ${job.kind} proposals.`, controls: {}, source: json({ ...base.source, previousState, module, knownMemory, authorCanon: base.authorCanon, ...(packages ? {packages} : {}) }), history: json(history), catalog: json(base.catalog), results: json(results) },
-        ...(evaluation?.bootstrap.length?{bootstrap:evaluation.bootstrap.map(item=>({callId:item.callId,name:item.name,args:json(item.args) as Record<string,Json>,result:json(item.result),denied:item.denied}))}:{}),
-        ...(evaluation?.toolChoice(results.length)?{toolChoice:evaluation.toolChoice(results.length)}:{}),
-        ...(generationBinding?{generationBinding}:{}),
-        ...(opaqueState !== undefined ? { opaqueState } : {}),
-      };
+      const request=requestFor(contextSnapshot,results,opaqueState);
       let attempt: string | undefined;
       const remainingTimeout = evaluation?.remainingMs();
       if (remainingTimeout === 0) return fail('TIMEOUT');
-      const response = await executeProvider({ id: connection.id, protocol: connection.protocol, endpoint: connection.endpoint, ...(connection.credentialEnv ? { credentialEnv: connection.credentialEnv } : {}), ...(connection.requestTier ? { requestTier: connection.requestTier } : {}) }, request, {
+      const response = await executeProvider({ id: connection.id, protocol: connection.protocol, endpoint: connection.endpoint, ...(connection.credentialEnv ? { credentialEnv: connection.credentialEnv } : {}) }, request, {
         signal: hooks.signal, approvedOrigins: hooks.approvedOrigins, vertexRequestTier: hooks.vertexRequestTier, resolveCredential: hooks.resolveCredential, executeCodex: hooks.executeCodex,
         timeoutMs: remainingTimeout ?? hooks.timeoutMs ?? target.timeoutMs ?? (connection.protocol === 'vertex-gemini-v1' ? 300000 : undefined),
-        onWire: async wire => { attempt = await hooks.onAttemptStart({ ...wire, body: redactOpaque(wire.body) }); calls++; },
+        onWire: async wire => { attempt = await hooks.onAttemptStart({ ...wire, body: redactOpaque(wire.body) }); calls++; roleCalls++; },
       });
       if (attempt !== undefined) await hooks.onAttemptFinish(attempt, { ...(evaluation?evaluation.diagnosticResult(response):structuredClone(response)), opaqueState: null });
       if (hooks.signal.aborted || response.status === 'cancelled') return fail('CANCELLED', true);
@@ -183,12 +205,14 @@ export async function runStoryJob(bundle: { job: StoryJob; snapshot: RunSnapshot
       opaqueState = response.opaqueState;
       for (const call of response.toolCalls) {
         if (hooks.signal.aborted) return fail('CANCELLED');
-        const event = evaluation?.allNames.includes(call.name as typeof evaluation.allNames[number]) ? evaluation.execute(call) : executeTool(snapshot, { callId: call.id, name: call.name, args: call.arguments }, hooks.signal, 'status');
+        const action={callId:call.id,name:call.name,args:call.arguments};
+        const event = evaluation?.allNames.includes(call.name as typeof evaluation.allNames[number]) ? evaluation.execute(call) : STORY_READ_NAMES.includes(call.name)?executeStoryRead({...snapshot,history},action,true):executeTool(snapshot,action,hooks.signal,'status');
         results.push(event); await hooks.onToolEvent(structuredClone(event));
         if (event.denied) return fail('READ_TOOL_DENIED');
       }
     }
   } catch (error) {
+    if(error instanceof ContextCompactionError)return fail(error.code);
     // Never persist arbitrary provider output, exception text, or abort reasons as a diagnostic.
     const code = error instanceof Error && /^(STATE|MEMORY|STORY)_[A-Z_]+$/u.test(error.message) ? error.message : 'STORY_EXECUTION_FAILED';
     return fail(code);

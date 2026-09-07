@@ -110,7 +110,7 @@ describe('native translation prompt and hidden source boundaries', () => {
   });
   test('invalid frozen program values fail with their prompt code before an attempt is sent', async () => {
     const seed = bundle(); seed.snapshot.profile!.promptControls!['translation-preset@4'].values.style = 'unrecognized';
-    seed.snapshot.profile!.models.translation = { id: 'model', revision: 1, title: 'Fixture', modelId: 'fixture', connectionId: 'connection', connectionRevision: 1, maxOutputTokens: 4096, temperature: null, connection: { id: 'connection', revision: 1, title: 'Fixture', protocol: 'fixture-sse-v1', endpoint: 'http://127.0.0.1:1', enabled: true, catalog: [], catalogError: null } };
+    seed.snapshot.profile!.models.translation = { id: 'model', revision: 1, title: 'Fixture', modelId: 'fixture', connectionId: 'connection', maxOutputTokens: 4096, temperature: null, connection: { id: 'connection', revision: 1, title: 'Fixture', protocol: 'fixture-sse-v1', endpoint: 'http://127.0.0.1:1', enabled: true, catalog: [], catalogError: null } };
     const state = bridge(seed); const options = hooks('http://127.0.0.1:1'); let attempts = 0; options.onAttemptStart = () => { attempts++; return 'unexpected'; };
     const outcome = await runAuxiliaryJob(state.store, seed.job.id, 'owner', options);
     expect(outcome).toEqual({ status: 'failed', result: null, error: 'PROMPT_INVALID_CONTROL_VALUE' });
@@ -123,7 +123,7 @@ describe('native translation prompt and hidden source boundaries', () => {
       if (calls === 1) await writeSse(response, [{ type: 'tool_delta', index: 0, id: 'lookup', name: 'knowledge.search', argumentsDelta: '{"query":"keeper"}' }, { type: 'opaque_state', state: { cursor: 'synthetic-source-time' } }, { type: 'done', reason: 'tool_calls' }]);
       else { const packet = body.input.source; await writeSse(response, [{ type: 'text_delta', delta: JSON.stringify({ sourceRevision: packet.sourceRevision, sourceHash: packet.sourceHash, chunkId: packet.chunkId, segments: packet.blocks.map((block: { anchor: string; text: string }) => ({ anchors: [block.anchor], text: block.text })) }) }, { type: 'done', reason: 'stop' }]); }
     }); cleanups.push(local.close);
-    seed.snapshot.profile!.models.translation = { id: 'native-model', revision: 1, title: 'Fixture', modelId: 'fixture-native-translation', connectionId: 'native-connection', connectionRevision: 1, maxOutputTokens: 4096, temperature: null, connection: { id: 'native-connection', revision: 1, title: 'Fixture', protocol: 'fixture-sse-v1', endpoint: local.endpoint, enabled: true, catalog: [], catalogError: null } };
+    seed.snapshot.profile!.models.translation = { id: 'native-model', revision: 1, title: 'Fixture', modelId: 'fixture-native-translation', connectionId: 'native-connection', maxOutputTokens: 4096, temperature: null, connection: { id: 'native-connection', revision: 1, title: 'Fixture', protocol: 'fixture-sse-v1', endpoint: local.endpoint, enabled: true, catalog: [], catalogError: null } };
     const state = bridge(seed); const observed: AuxiliaryInput[] = []; const options = hooks(local.origin);
     options.onInput = (_job, input) => { observed.push(input); state.state.snapshot.profile!.promptControls!['translation-preset@4'].values.style = 'soft'; seed.snapshot.profile!.promptPresets!.translation!.program!.blocks = []; };
     const outcome = await runAuxiliaryJob(state.store, seed.job.id, 'owner', options);
@@ -143,7 +143,7 @@ describe('native translation prompt and hidden source boundaries', () => {
       const segments = packet.blocks.map((block: { anchor: string; text: string }) => ({ anchors: [block.anchor], text: block.text.replaceAll('\n', ' ') }));
       await writeSse(response, [{ type: 'text_delta', delta: JSON.stringify({ sourceRevision: packet.sourceRevision, sourceHash: packet.sourceHash, chunkId: packet.chunkId, segments }) }, { type: 'done', reason: 'stop' }]);
     }); cleanups.push(local.close);
-    seed.snapshot.profile!.models.translation = { id: 'model', revision: 1, title: 'Fixture', modelId: 'fixture', connectionId: 'connection', connectionRevision: 1, maxOutputTokens: 4096, temperature: null, connection: { id: 'connection', revision: 1, title: 'Fixture', protocol: 'fixture-sse-v1', endpoint: local.endpoint, enabled: true, catalog: [], catalogError: null } };
+    seed.snapshot.profile!.models.translation = { id: 'model', revision: 1, title: 'Fixture', modelId: 'fixture', connectionId: 'connection', maxOutputTokens: 4096, temperature: null, connection: { id: 'connection', revision: 1, title: 'Fixture', protocol: 'fixture-sse-v1', endpoint: local.endpoint, enabled: true, catalog: [], catalogError: null } };
     const state = bridge(seed); const outcome = await runAuxiliaryJob(state.store, seed.job.id, 'owner', hooks(local.origin));
     expect(outcome?.status).toBe('failed'); expect(outcome?.result).toBeNull(); expect(outcome?.error).toMatch(/^HIDDEN_/u);
     expect(state.outcomes.every(result => result.status !== 'completed')).toBe(true);

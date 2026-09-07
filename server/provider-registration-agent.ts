@@ -1,5 +1,7 @@
+import { generationFromModel } from '../core/model-capabilities.js';
+import { contextBudgetForModel } from '../core/context-budget.js';
 import { CREDENTIAL_ENV_PATTERN } from '../core/credential-reference.js';
-import { PROVIDER_PROTOCOLS, type Connection, type ModelGeneration, type ModelPreset, type VertexRequestTier } from '../core/product.js';
+import { PROVIDER_PROTOCOLS, type Connection, type ModelSnapshot, type VertexRequestTier } from '../core/product.js';
 import { executeProvider, type Json, type ProviderRequest, type ProviderResult, type WireRecord } from '../core/transport.js';
 
 export type RegistrationAgentHooks = {
@@ -19,11 +21,11 @@ const revision: Json = { type: 'integer', minimum: 1 };
 const evaluationToolsSchema = objectSchema({ contextMode: { enum: ['model-selected', 'preloaded'] }, maximumToolRounds: { type: 'integer', minimum: 0, maximum: 32 }, terminalLateCorrections: { type: 'boolean' }, outputRecovery: { type: 'boolean' } });
 const proposalSchema = objectSchema({
   connection: { oneOf: [objectSchema({ kind: { const: 'existing' }, id: shortString, revision }), objectSchema({ kind: { const: 'new' }, draft: objectSchema({
-    title: shortString, protocol: { enum: [...PROVIDER_PROTOCOLS] }, endpoint: { type: 'string', minLength: 1, maxLength: 2048 }, credentialEnv: { type: 'string', pattern: CREDENTIAL_ENV_PATTERN, maxLength: 200 }, requestTier: { enum: ['standard', 'flex'] }, enabled: { const: false },
+    title: shortString, protocol: { enum: [...PROVIDER_PROTOCOLS] }, endpoint: { type: 'string', minLength: 1, maxLength: 2048 }, credentialEnv: { type: 'string', pattern: CREDENTIAL_ENV_PATTERN, maxLength: 200 }, enabled: { const: false },
   }, ['title', 'protocol', 'endpoint', 'enabled']) })] },
   model: objectSchema({ title: shortString, modelId: shortString, maxOutputTokens: { type: 'integer', minimum: 1, maximum: 200000 }, temperature: { type: ['number', 'null'], minimum: 0, maximum: 2 },
     timeoutMs: { type: 'integer', minimum: 1, maximum: 1800000 }, thinkingLevel: { enum: ['LOW', 'MEDIUM', 'HIGH'] }, structuredOutput: { type: 'boolean' }, reasoningEffort: { enum: ['none', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'] },
-    thinkingMode: { enum: ['disabled', 'enabled', 'adaptive'] }, thinkingBudgetTokens: { type: 'integer', minimum: 1024 }, evaluationTools: evaluationToolsSchema,
+    thinkingMode: { enum: ['disabled', 'adaptive'] }, outputEffort: { enum: ['low','medium','high','xhigh','max'] }, verbosity: { enum: ['low','medium','high'] }, reasoningMode: { enum: ['standard','pro'] }, reasoningContext: { enum: ['auto','all_turns','current_turn'] }, topP: { type:'number',minimum:0,maximum:1 }, stopSequences: {type:'array',maxItems:4,items:{type:'string',minLength:1,maxLength:1000}}, serviceTier: {type:'string',minLength:1,maxLength:40}, cacheMode: {enum:['disabled','explicit','automatic']}, cacheTtl: {enum:['5m','30m','1h']}, evaluationTools: evaluationToolsSchema,
   }, ['title', 'modelId', 'maxOutputTokens', 'temperature']),
 });
 const contract = 'Prepare a provider/model registration proposal from the user request and supplied adapter metadata. This is a proposal-only task, separate from story generation. '
@@ -65,16 +67,10 @@ function sanitizedContext(value: Json): Json {
   if (JSON.stringify(result).length > 200000) throw new Error('REGISTRATION_CONTEXT_INVALID');
   return result;
 }
-function modelGeneration(target: ModelPreset): ModelGeneration {
-  const generation: ModelGeneration = { maxOutputTokens: target.maxOutputTokens, temperature: target.temperature };
-  for (const key of ['thinkingLevel', 'structuredOutput', 'reasoningEffort', 'thinkingMode', 'thinkingBudgetTokens'] as const) {
-    if (target[key] !== undefined) Object.assign(generation, { [key]: structuredClone(target[key]) });
-  }
-  return generation;
-}
+
 
 /** Exactly one provider call. Hooks own durable attempts and proposal normalization/application. */
-export async function runRegistrationAgent(target: ModelPreset & { connection: Connection }, request: string, hooks: RegistrationAgentHooks): Promise<RegistrationAgentResult> {
+export async function runRegistrationAgent(target: ModelSnapshot, request: string, hooks: RegistrationAgentHooks): Promise<RegistrationAgentResult> {
   const failed = (error: string): RegistrationAgentResult => ({ status: hooks.signal.aborted ? 'cancelled' : 'failed', error: hooks.signal.aborted ? 'CANCELLED' : error });
   if (hooks.signal.aborted) return failed('CANCELLED');
   if (typeof request !== 'string' || !request.trim() || request.length > 6000) return failed('REGISTRATION_REQUEST_INVALID');
@@ -90,17 +86,17 @@ export async function runRegistrationAgent(target: ModelPreset & { connection: C
     let connection: Connection;
     try { connection = await hooks.authorize(structuredClone(fixed.connection)); } catch { throw new Error('CONNECTION_NOT_AUTHORIZED'); }
     if (signal.aborted) throw new Error(hooks.signal.aborted ? 'CANCELLED' : 'TIMEOUT');
-    if (!connection.enabled || connection.id !== fixed.connection.id || connection.endpoint !== fixed.connection.endpoint || connection.protocol !== fixed.connection.protocol || connection.credentialEnv !== fixed.connection.credentialEnv || connection.requestTier !== fixed.connection.requestTier) throw new Error('CONNECTION_NOT_AUTHORIZED');
+    if (!connection.enabled || connection.id !== fixed.connection.id || connection.endpoint !== fixed.connection.endpoint || connection.protocol !== fixed.connection.protocol || connection.credentialEnv !== fixed.connection.credentialEnv) throw new Error('CONNECTION_NOT_AUTHORIZED');
   };
   try {
     const context = sanitizedContext(hooks.context);
     await check();
-    const input: ProviderRequest = { role: 'main', modelId: fixed.modelId, generation: modelGeneration(fixed),
+    const input: ProviderRequest = { role: 'main', modelId: fixed.modelId, generation: generationFromModel(fixed,fixed.connection.protocol), contextBudget: contextBudgetForModel(fixed),
       stable: { contract: contract + '\nProposal schema: ' + JSON.stringify(proposalSchema), tools: [{ name: 'registration.propose', description: 'Return a reviewable registration proposal without saving, enabling, assigning or testing it.', inputSchema: proposalSchema }] },
       input: { task: request, controls: { purpose: 'provider-registration', maxCalls: 1 }, catalog: context, results: [] },
     };
     const result = await executeProvider({ id: fixed.connection.id, protocol: fixed.connection.protocol, endpoint: fixed.connection.endpoint,
-      ...(fixed.connection.credentialEnv ? { credentialEnv: fixed.connection.credentialEnv } : {}), ...(fixed.connection.requestTier ? { requestTier: fixed.connection.requestTier } : {}),
+      ...(fixed.connection.credentialEnv ? { credentialEnv: fixed.connection.credentialEnv } : {}),
     }, input, { approvedOrigins: hooks.approvedOrigins, signal, timeoutMs: duration, vertexRequestTier: hooks.vertexRequestTier, resolveCredential: hooks.resolveCredential, executeCodex: hooks.executeCodex,
       onWire: async wire => {
         try { await check(); } catch (error) { boundaryError = (error as Error).message; throw error; }

@@ -10,10 +10,11 @@ import { nativeInstructions } from '../core/native-context.js';
 import { DEFAULT_MAIN_PROMPT } from '../core/prompts.js';
 import { packageSlots, compiledPackages } from '../core/package-context.js';
 import { executionContext } from '../core/execution-context.js';
+import { projectedLogicalHistory } from '../core/context-projection.js';
 
 /** Pair each exact source version with its actual user request; never infer roles from prose. */
 export function captureLogicalHistory(store:Store,snapshot:RunSnapshot):PromptHistoryMessage[]{
-  const entries=snapshot.story?.memory?.plan.recentHistory??snapshot.history;
+  const entries=snapshot.history;
   return entries.flatMap(entry=>{
     const source=entry.contentHash?store.sourceAtHash(entry.revision,entry.contentHash):store.sourceOriginal(entry.revision);
     const row=store.db.prepare('SELECT request FROM runs WHERE id=?').get(source.runId) as {request:string}|undefined;
@@ -37,12 +38,14 @@ export function promptContext(snapshot:RunSnapshot){
   slots.description = slots.bot;
   slots.lorebook=slots.lore;slots.authornote=slots.authorNote;
   for (const instruction of compiledPackages(snapshot,'main').flatMap(p=>p.instructions)) if (instruction.position) slots[instruction.position] = [slots[instruction.position],instruction.text].filter(Boolean).join('\n\n');
-  const history=[...hiddenLogicalHistoryForRequest(snapshot,snapshot.logicalHistory??input.history.map(entry=>({id:`source:${entry.revision}`,role:'assistant' as const,text:entry.text,sourceRevision:entry.revision,...(entry.contentHash?{sourceHash:entry.contentHash}:{})}))),{id:'current-input',role:'user' as const,text:snapshot.request,current:true}];
+  const inputHistoryIds=new Set(input.history.map(entry=>entry.revision));
+  const logical=(snapshot.logicalHistory??input.history.map(entry=>({id:`source:${entry.revision}`,role:'assistant' as const,text:entry.text,sourceRevision:entry.revision,...(entry.contentHash?{sourceHash:entry.contentHash}:{})}))).filter(message=>snapshot.contextPlan||!message.sourceRevision||inputHistoryIds.has(message.sourceRevision));
+  const history=[...projectedLogicalHistory(snapshot,hiddenLogicalHistoryForRequest(snapshot,logical)),{id:'current-input',role:'user' as const,text:snapshot.request,current:true}];
   const preset=snapshot.profile?.promptPresets?.main;
   return {slots,history,runtime:executionContext(snapshot),values:preset?snapshot.profile?.promptControls?.[`${preset.id}@${preset.revision}`]?.values:undefined};
 }
 export function compileSnapshotPrompt(snapshot:RunSnapshot,program?:PromptProgram,values?:Record<string,PromptValue>):RunSnapshot{
-  if(snapshot.story?.waiting)return snapshot;
+  if(snapshot.story?.waiting||snapshot.contextPlan?.status==='pending')return snapshot;
   const selected=program??snapshot.profile?.promptPresets?.main?.program??createDefaultPromptProgram(DEFAULT_MAIN_PROMPT);
   const positioned=compiledPackages(snapshot,'main').flatMap(p=>p.instructions).filter(n=>n.position);
   if(positioned.length){

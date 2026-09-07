@@ -52,7 +52,7 @@ async function fixture(handler: (request: CapturedRequest, response: ServerRespo
   };
   const cookie = await login();
   const connection = await api<Connection>(app, '/api/connections', { title: 'Synthetic assistant', protocol: 'fixture-sse-v1', endpoint: provider.endpoint, credentialEnv, enabled: true }, 'POST', cookie);
-  const model = await api<ModelPreset>(app, '/api/model-presets', { title: 'Synthetic registration model', connectionId: connection.id, connectionRevision: connection.revision, modelId: 'synthetic-registration', maxOutputTokens: 2048, temperature: null }, 'POST', cookie);
+  const model = await api<ModelPreset>(app, '/api/model-presets', { title: 'Synthetic registration model', connectionId: connection.id, modelId: 'synthetic-registration', maxOutputTokens: 2048, temperature: null }, 'POST', cookie);
   const chat = await api<Chat>(app, '/api/chats', { title: 'Unchanged role fixture' }, 'POST', cookie);
   const profile = await api<ChatProfile>(app, `/api/chats/${chat.id}/profile`, undefined, 'GET', cookie);
   const command = { key: randomUUID(), request: '새 로컬 공급자와 모델 등록안을 만들어 주세요.', target: ref(model) };

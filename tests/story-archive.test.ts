@@ -114,13 +114,15 @@ describe('M2 archive graph and selected-ancestry fork with actual isolated file 
     const completed: Row = { status: 'stale', owner: null, snapshot: JSON.stringify(snapshot), result: JSON.stringify({ operations: [] }), error: 'Historical diagnostic' }; normalizeStoryArchiveRow('story_jobs', completed); expect(completed.error).toBe('Historical diagnostic'); expect(completed.status).toBe('stale');
   });
 
-  test('S03 restored selected model snapshots match immutable versions and poisoned target models fail', async () => {
+  test('S03 restored model snapshots remain independent of later settings and reject mismatched connection identities', async () => {
     const store = await database(); const chat = store.createChat('Model snapshot fixture'); configure(store, chat.id);
     const connection = store.product.connection({ title: 'Never called', protocol: 'fixture-sse-v1', endpoint: 'http://127.0.0.1:43819/turn', enabled: true, credentialEnv: 'NARRATIVE_PROVIDER_SYNTHETIC' });
-    const model = store.product.model({ title: 'Immutable model', connectionId: connection.id, connectionRevision: connection.revision, modelId: 'fixture-immutable', maxOutputTokens: 1024, temperature: null });
+    const model = store.product.model({ title: 'Immutable model', connectionId: connection.id, modelId: 'fixture-immutable', maxOutputTokens: 1024, temperature: null });
     const config = store.story.config(chat.id);
-    store.story.saveConfig(chat.id, { expectedRevision: config.revision, module: config.module, stateModel: { id: model.id, revision: model.revision }, memory: config.memory });
+    store.story.saveConfig(chat.id, { expectedRevision: config.revision, module: config.module, stateModel: { id: model.id }, memory: config.memory });
     completeSource(store, chat.id, 'Unfinished requests must not replay.');
+    store.product.model({ title: 'Edited latest model', connectionId: connection.id, modelId: 'fixture-latest', maxOutputTokens: 2048, temperature: null, expectedRevision: model.revision }, model.id);
+    store.product.connection({ title: 'Edited latest connection', protocol: connection.protocol, endpoint: 'http://127.0.0.1:43820/turn', enabled: true, expectedRevision: connection.revision }, connection.id);
     store.transaction(() => {
       for (const table of ['runs', 'story_jobs']) for (const row of all(store, table)) {
         normalizeStoryArchiveRow(table, row);
@@ -133,11 +135,11 @@ describe('M2 archive graph and selected-ancestry fork with actual isolated file 
     const job = all(store, 'story_jobs').find(row => row.kind === 'state')!;
     expect(job.snapshot).not.toContain('NARRATIVE_PROVIDER_SYNTHETIC');
     expect(() => store.transaction(() => {
-      const snapshot = JSON.parse(job.snapshot); snapshot.story.models.state.modelId = 'another-model';
+      const snapshot = JSON.parse(job.snapshot); snapshot.story.models.state.connectionId = 'another-connection';
       store.db.prepare('UPDATE story_jobs SET snapshot=? WHERE id=?').run(JSON.stringify(snapshot), job.id); validateStoryArchive(store);
-    })).toThrow('immutable model');
+    })).toThrow();
     expect(() => store.transaction(() => {
-      const row = all(store, 'story_configs')[0]; const body = JSON.parse(row.body); body.stateModel = { id: 'invented-model', revision: 1 };
+      const row = all(store, 'story_configs')[0]; const body = JSON.parse(row.body); body.stateModel = { id: 'invented-model' };
       store.db.prepare('UPDATE story_configs SET body=? WHERE chat_id=? AND revision=?').run(JSON.stringify(body), row.chat_id, row.revision); validateStoryArchive(store);
     })).toThrow();
   });

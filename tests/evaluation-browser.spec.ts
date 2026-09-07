@@ -32,7 +32,7 @@ async function register(page:Page,request:APIRequestContext,title:string,gateway
   await expect(page.getByRole('status').filter({hasText:title+' 연결 등록됨'})).toBeVisible();
   const connection=(await library(request)).connections.find(item=>item.title===title)!;
   expect(connection).toMatchObject({protocol:'openai-responses-v1',credentialEnv:'Evaluation_Browser_Key',enabled:true});
-  await page.getByLabel('모델 연결').selectOption(`${connection.id}@${connection.revision}`);
+  await page.getByLabel('모델 연결').selectOption(`${connection.id}`);
   await page.getByLabel('모델 프리셋 이름').fill(title+' 모델');
   await page.getByLabel('모델 ID',{exact:true}).fill(gateway==='vercel'?'openai/synthetic-evaluation':'synthetic-evaluation');
   return connection;
@@ -53,16 +53,16 @@ test('EVALUI01 desktop preset evaluation opt-in persists selected story roles af
   const connection=await register(page,request,title,'llm-gateway');
   await page.getByRole('button',{name:'고급 옵션',exact:true}).click();await expect(page.getByLabel('이 모델 프리셋에 평가 도구 4개 사용')).not.toBeChecked();await page.getByLabel('이 모델 프리셋에 평가 도구 4개 사용').check();await page.getByLabel('평가 문맥 제공').selectOption('preloaded');await page.getByLabel('첫 case 라운드 추론').selectOption('economized'); await page.getByLabel('최대 평가 도구 라운드').fill('3');
   await page.getByLabel('제출 원고의 정확한 문자열 교정 허용').check();
-  await page.getByText('선택 옵션 · 모델이 지원할 때 사용',{exact:true}).click(); await page.getByLabel('Reasoning effort',{exact:true}).selectOption('high');
+  await page.getByRole('button',{name:'생성 설정',exact:true}).click(); await page.getByLabel('Reasoning Effort',{exact:true}).selectOption('high'); await page.getByRole('button',{name:'고급 옵션',exact:true}).click();
   await page.getByLabel('평가 문맥 제공').scrollIntoViewIfNeeded(); await page.screenshot({path:info.outputPath('evaluation-desktop-options.png')});
   const model=await saveModel(page,request,connection); expect(model).toMatchObject({reasoningEffort:'high',evaluationTools:{contextMode:'preloaded',approvalReasoningMode:'economized',maximumToolRounds:3,terminalLateCorrections:true,outputRecovery:true}});
   await page.keyboard.press('Escape'); await navigation(page,'새 이야기'); await page.getByLabel('새 채팅 이름').fill(title+' 이야기');
-  const ref=`${model.id}@${model.revision}`; await page.getByLabel('시작 본문 모델').selectOption(ref); await page.getByLabel('시작 번역 모델').selectOption(ref); await page.getByRole('button',{name:'채팅 만들기',exact:true}).click();
+  const ref=`${model.id}`; await page.getByLabel('시작 본문 모델').selectOption(ref); await page.getByLabel('시작 번역 모델').selectOption(ref); await page.getByRole('button',{name:'채팅 만들기',exact:true}).click();
   await expect.poll(()=>new URL(page.url()).searchParams.get('chat')).toBeTruthy(); const storyUrl=page.url(),chatId=new URL(storyUrl).searchParams.get('chat')!;
   await page.reload(); await expect(page.getByLabel('빠른 본문 모델')).toHaveValue(ref);
   const reconnected=await context.newPage(); await reconnected.setViewportSize({width:1440,height:1000}); await reconnected.goto(storyUrl); await reconnected.getByRole('button',{name:'채팅 설정',exact:true}).click(); await reconnected.getByRole('tab',{name:'모델',exact:true}).click();
   await expect(reconnected.getByLabel('원문 모델',{exact:true})).toHaveValue(ref); await expect(reconnected.getByLabel('번역 모델',{exact:true})).toHaveValue(ref); await reconnected.screenshot({path:info.outputPath('evaluation-desktop-restored-roles.png')});
-  const detail=await (await request.get(`/api/chats/${chatId}`)).json() as ChatDetail; expect(detail.profile?.routes.main).toEqual({id:model.id,revision:model.revision}); expect(detail.runs).toEqual([]); expect(detail.attempts).toEqual([]); expect(detail.jobs).toEqual([]);
+  const detail=await (await request.get(`/api/chats/${chatId}`)).json() as ChatDetail; expect(detail.profile?.routes.main).toEqual({id:model.id}); expect(detail.runs).toEqual([]); expect(detail.attempts).toEqual([]); expect(detail.jobs).toEqual([]);
   expect((await library(request)).models.find(item=>item.id===model.id)).toEqual(model); expect(observed.errors).toEqual([]); expect(observed.forbidden).toEqual([]); await reconnected.close();
 });
 

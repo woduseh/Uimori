@@ -237,13 +237,13 @@ test('UI03 UI12 failed starting profile read survives reload and recovers frozen
   const choice = await createPromptChoice(request,title);
   // An enabled synthetic connection permits a new role selection; this recovery test never starts a Run.
   const connectionResponse = await request.post('/api/connections', { data: { title: `${title} synthetic fixture`, protocol: 'fixture-sse-v1', endpoint: 'http://127.0.0.1:9/no-network', enabled: true } }); expect(connectionResponse.ok()).toBeTruthy(); const connection = await connectionResponse.json() as { id: string; revision: number };
-  const modelResponse = await request.post('/api/model-presets', { data: { title: `${title} saved route`, connectionId: connection.id, connectionRevision: connection.revision, modelId: 'synthetic-not-called', maxOutputTokens: 500, temperature: null } }); expect(modelResponse.ok()).toBeTruthy(); const model = await modelResponse.json() as { id: string; revision: number };
+  const modelResponse = await request.post('/api/model-presets', { data: { title: `${title} saved route`, connectionId: connection.id, modelId: 'synthetic-not-called', maxOutputTokens: 500, temperature: null } }); expect(modelResponse.ok()).toBeTruthy(); const model = await modelResponse.json() as { id: string; revision: number };
   const priorChats = await (await request.get('/api/chats')).json() as Chat[]; let chatPosts = 0; page.on('request', item => { if (item.method() === 'POST' && /\/api\/chats$/.test(item.url())) chatPosts++; });
   await page.goto('/'); await nav(page, '서재'); await page.getByRole('button', { name: `${title} 봇으로 시작`, exact: true }).click(); const dialog = page.getByRole('dialog', { name: '새 채팅', exact: true }); await selectStartPrompt(page,choice);
   let rejectRead = true; await page.route('**/api/chats/*/profile', async route => { if (route.request().method() === 'GET' && rejectRead) { rejectRead = false; return route.fulfill({ status: 500, contentType: 'application/json', body: JSON.stringify({ error: 'SYNTHETIC_FIRST_PROFILE_READ' }) }); } await route.continue(); });
   const accepted = page.waitForResponse(response => /\/api\/chats$/.test(response.url()) && response.request().method() === 'POST'); await dialog.getByRole('button', { name: '채팅 만들기', exact: true }).click(); const chat = await (await accepted).json() as Chat;
   await expect(dialog.getByRole('alert')).toContainText('(500)'); expect(await page.evaluate(id => sessionStorage.getItem(`pending-profile:${id}`), chat.id)).not.toBeNull(); await close(page);
-  const original = (await data(request, chat.id)).profile!; const currentRoutes = { ...original.routes, main: { id: model.id, revision: model.revision } };
+  const original = (await data(request, chat.id)).profile!; const currentRoutes = { ...original.routes, main: { id: model.id} };
   // Competing updates preserve permanent bot ownership while changing unrelated settings.
   const update = await request.put(`/api/chats/${chat.id}/profile`, { data: { expectedRevision: original.revision, attachments: original.attachments, ...(original.packageAttachments?{packageAttachments:original.packageAttachments}:{}), creative: original.creative, routes: currentRoutes, image: true } }); expect(update.ok()).toBeTruthy();
   await page.goto(`/?chat=${chat.id}`); await page.getByLabel('다음 장면 요청').fill('복구 전에는 보내지 않는 합성 초안'); await expect(page.getByRole('button', { name: '원문 생성', exact: true })).toBeDisabled();
@@ -257,9 +257,9 @@ test('UI03 UI12 failed starting profile read survives reload and recovers frozen
 async function startingModels(request: APIRequestContext, title: string) {
   const connectionResponse = await request.post('/api/connections', { data: { title: `${title} fixture`, protocol: 'fixture-sse-v1', endpoint: 'http://127.0.0.1:9/no-provider', enabled: true } }); expect(connectionResponse.ok()).toBeTruthy();
   const connection = await connectionResponse.json() as { id: string; revision: number };
-  const models: { id: string; revision: number }[] = [];
+  const models: { id: string }[] = [];
   for (const role of ['main', 'translation']) {
-    const response = await request.post('/api/model-presets', { data: { title: `${title} ${role}`, connectionId: connection.id, connectionRevision: connection.revision, modelId: `synthetic-${role}`, maxOutputTokens: 500, temperature: null } }); expect(response.ok()).toBeTruthy(); const model = await response.json() as { id: string; revision: number }; models.push({ id: model.id, revision: model.revision });
+    const response = await request.post('/api/model-presets', { data: { title: `${title} ${role}`, connectionId: connection.id, modelId: `synthetic-${role}`, maxOutputTokens: 500, temperature: null } }); expect(response.ok()).toBeTruthy(); const model = await response.json() as { id: string; revision: number }; models.push({ id: model.id});
   }
   return { connection, models };
 }
@@ -269,7 +269,7 @@ test('UI03 UI12 starting model choices are saved without execution, reused exact
   const title = `UI start models ${Date.now()}`; const { connection, models } = await startingModels(request, title);
   const writes: string[] = []; page.on('request', item => { if (item.method() === 'POST') writes.push(item.url()); });
   await page.goto('/'); await nav(page, '새 이야기');
-  await page.getByLabel('시작 본문 모델').selectOption(`${models[0].id}@1`); await page.getByLabel('시작 번역 모델').selectOption(`${models[1].id}@1`);
+  await page.getByLabel('시작 본문 모델').selectOption(`${models[0].id}`); await page.getByLabel('시작 번역 모델').selectOption(`${models[1].id}`);
   await page.getByLabel('새 채팅 이름').fill(title);
   const response = page.waitForResponse(item => /\/api\/chats$/.test(item.url()) && item.request().method() === 'POST');
   await page.getByRole('button', { name: '채팅 만들기', exact: true }).click(); const chat = await (await response).json() as Chat;
@@ -277,16 +277,15 @@ test('UI03 UI12 starting model choices are saved without execution, reused exact
   const detail = await data(request, chat.id);
   expect(detail.profile!.routes).toEqual({ main: models[0], translation: models[1], status: null, image: null });
   expect(detail.chat.settings.translation).toBe(true); expect(detail.runs).toHaveLength(0); expect(detail.attempts).toHaveLength(0); expect(writes.filter(url => /\/(?:runs|candidate)$/.test(url))).toEqual([]);
-  await nav(page, '새 이야기'); await expect(page.getByLabel('시작 본문 모델')).toHaveValue(`${models[0].id}@1`); await expect(page.getByLabel('시작 번역 모델')).toHaveValue(`${models[1].id}@1`);
+  await nav(page, '새 이야기'); await expect(page.getByLabel('시작 본문 모델')).toHaveValue(`${models[0].id}`); await expect(page.getByLabel('시작 번역 모델')).toHaveValue(`${models[1].id}`);
   await page.screenshot({ path: info.outputPath('starting-models-mobile.png') }); await close(page);
-  // A presentation-only connection revision still permits the exact remembered model
-  // after its pinned connection revision resolves asynchronously.
+  // Editing the current connection keeps the remembered model IDs.
   const renamed = await request.put(`/api/connections/${connection.id}`, { data: { expectedRevision: connection.revision, title: `${title} renamed`, protocol: 'fixture-sse-v1', endpoint: 'http://127.0.0.1:9/no-provider', enabled: true } }); expect(renamed.ok()).toBeTruthy();
   const renamedConnection = await renamed.json() as {revision:number};
   await page.reload(); await nav(page, '새 이야기');
-  await expect(page.getByLabel('시작 본문 모델').locator(`option[value="${models[0].id}@1"]`)).toBeEnabled();
-  await expect(page.getByLabel('시작 번역 모델').locator(`option[value="${models[1].id}@1"]`)).toBeEnabled();
-  await expect(page.getByLabel('시작 본문 모델')).toHaveValue(`${models[0].id}@1`); await expect(page.getByLabel('시작 번역 모델')).toHaveValue(`${models[1].id}@1`); await close(page);
+  await expect(page.getByLabel('시작 본문 모델').locator(`option[value="${models[0].id}"]`)).toBeEnabled();
+  await expect(page.getByLabel('시작 번역 모델').locator(`option[value="${models[1].id}"]`)).toBeEnabled();
+  await expect(page.getByLabel('시작 본문 모델')).toHaveValue(`${models[0].id}`); await expect(page.getByLabel('시작 번역 모델')).toHaveValue(`${models[1].id}`); await close(page);
   const disabled = await request.put(`/api/connections/${connection.id}`, { data: { expectedRevision: renamedConnection.revision, title: `${title} disabled`, protocol: 'fixture-sse-v1', endpoint: 'http://127.0.0.1:9/no-provider', enabled: false } }); expect(disabled.ok()).toBeTruthy();
   await page.reload(); await nav(page, '새 이야기'); await expect(page.getByLabel('시작 본문 모델')).toHaveValue(''); await expect(page.getByLabel('시작 번역 모델')).toHaveValue('');
   await expect(page.getByLabel('시작 본문 모델').locator('option:checked')).toHaveText('검사용 모의 생성 · 실제 모델 없음');
@@ -295,7 +294,7 @@ test('UI03 UI12 starting model choices are saved without execution, reused exact
 
 test('UI03 UI12 pending starting models recover after a failed profile read without overwriting newer model choices', async ({ page, request }) => {
   const title = `UI pending models ${Date.now()}`; const { models } = await startingModels(request, title);
-  await page.goto('/'); await nav(page, '새 이야기'); await page.getByLabel('시작 본문 모델').selectOption(`${models[0].id}@1`); await page.getByLabel('시작 번역 모델').selectOption(`${models[1].id}@1`);
+  await page.goto('/'); await nav(page, '새 이야기'); await page.getByLabel('시작 본문 모델').selectOption(`${models[0].id}`); await page.getByLabel('시작 번역 모델').selectOption(`${models[1].id}`);
   let fail = true; await page.route('**/api/chats/*/profile', async route => { if (route.request().method() === 'GET' && fail) { fail = false; return route.fulfill({ status: 500, contentType: 'application/json', body: JSON.stringify({ error: 'SYNTHETIC_START_MODELS_READ' }) }); } await route.continue(); });
   const accepted = page.waitForResponse(response => /\/api\/chats$/.test(response.url()) && response.request().method() === 'POST');
   await page.getByRole('button', { name: '채팅 만들기', exact: true }).click(); const chat = await (await accepted).json() as Chat;

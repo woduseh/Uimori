@@ -10,10 +10,10 @@ test('PMUI05 agent proposal is reviewed, survives reload, and applies once befor
   const endpoint=process.env.NR_REGISTRATION_FIXTURE_URL;if(!endpoint)throw new Error('Dedicated registration loopback fixture is required');
   const title='PMUI05 보조 '+Date.now();
   const connection=await post<Connection>(request,'/connections',{title,protocol:'fixture-sse-v1',endpoint,enabled:true});
-  const model=await post<ModelPreset>(request,'/model-presets',{title,connectionId:connection.id,connectionRevision:1,modelId:'synthetic-registration-assistant',maxOutputTokens:512,temperature:null});
+  const model=await post<ModelPreset>(request,'/model-presets',{title,connectionId:connection.id,modelId:'synthetic-registration-assistant',maxOutputTokens:512,temperature:null});
   const before=await getLibrary(request);const pageErrors:string[]=[];page.on('pageerror',e=>pageErrors.push(e.message));
   await page.setViewportSize({width:390,height:844});await page.goto('/');await settings(page);
-  const assistant=page.getByTestId('provider-registration-assistant');await assistant.getByLabel('등록을 도울 모델').selectOption(`${model.id}@1`);
+  const assistant=page.getByTestId('provider-registration-assistant');await assistant.getByLabel('등록을 도울 모델').selectOption(`${model.id}`);
   await assistant.getByLabel('등록 요청',{exact:true}).fill('합성 로컬 연결과 synthetic-created-model 모델을 새로 등록해 줘. 최대 출력 토큰은 512야.');
   await assistant.getByRole('button',{name:'설정안 제안 요청',exact:true}).click();
   const apply=assistant.getByRole('button',{name:'검토한 연결·모델 등록 적용',exact:true});await expect(apply).toBeVisible();
@@ -37,10 +37,10 @@ test('PMUI05 agent proposal is reviewed, survives reload, and applies once befor
 test('PMUI06 rejected admission releases the request key while uncertain delivery reuses it without a second call',async({page,request})=>{
   const endpoint=process.env.NR_REGISTRATION_FIXTURE_URL;if(!endpoint)throw new Error('Dedicated registration loopback fixture is required');
   const connection=await post<Connection>(request,'/connections',{title:'PMUI06 보조',protocol:'fixture-sse-v1',endpoint,enabled:true});
-  const model=await post<ModelPreset>(request,'/model-presets',{title:'PMUI06 보조 모델',connectionId:connection.id,connectionRevision:1,modelId:'synthetic-registration-assistant',maxOutputTokens:512,temperature:null});
+  const model=await post<ModelPreset>(request,'/model-presets',{title:'PMUI06 보조 모델',connectionId:connection.id,modelId:'synthetic-registration-assistant',maxOutputTokens:512,temperature:null});
   const stats=async()=>(await(await request.get(new URL('stats',endpoint).href)).json()).registrationCalls as number;
   const before=await stats();await page.goto('/');await settings(page);const assistant=page.getByTestId('provider-registration-assistant');
-  await assistant.getByLabel('등록을 도울 모델').selectOption(`${model.id}@1`);await assistant.getByLabel('등록 요청',{exact:true}).fill('synthetic sk-this-is-a-fake-rejected-credential-not-a-key');
+  await assistant.getByLabel('등록을 도울 모델').selectOption(`${model.id}`);await assistant.getByLabel('등록 요청',{exact:true}).fill('synthetic sk-this-is-a-fake-rejected-credential-not-a-key');
   await assistant.getByRole('button',{name:'설정안 제안 요청',exact:true}).click();await expect(assistant.getByRole('alert')).toBeVisible();expect(await stats()).toBe(before);
   expect(await page.evaluate(()=>sessionStorage.getItem('uimori.provider-registration.request-key'))).toBeNull();
   await assistant.getByLabel('등록 요청',{exact:true}).fill('합성 로컬 모델을 새로 등록해 줘.');

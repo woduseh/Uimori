@@ -7,7 +7,8 @@ import { tmpdir } from 'node:os';
 import { promisify } from 'node:util';
 import type { CodexRuntimeStatus } from '../core/agent-runtime.js';
 import type { Connection } from '../core/product.js';
-import { buildCodexTurn, CODEX_ENDPOINT, decodeCodexOutput } from '../core/codex-protocol.js';
+import { buildCodexDescriptor, buildCodexTurn, CODEX_ENDPOINT, decodeCodexOutput } from '../core/codex-protocol.js';
+import { assertContextBudget } from '../core/context-budget.js';
 import { ProviderContractError, type Json, type ProviderConnection, type ProviderExecutionOptions, type ProviderRequest, type ProviderResult, type ProviderUsage } from '../core/transport.js';
 import { CodexProcess, CodexProcessError } from './codex-process.js';
 
@@ -268,8 +269,10 @@ export class CodexRuntime implements CodexRuntimeService {
     })();
     const stopOnAbort = () => { aborted(); void stopProcess(); };
     try {
-      if (connection.protocol !== 'codex-app-server-v1' || connection.endpoint !== CODEX_ENDPOINT || connection.credentialEnv || connection.requestTier) error('CODEX_INVALID_CONNECTION');
+      if (connection.protocol !== 'codex-app-server-v1' || connection.endpoint !== CODEX_ENDPOINT || connection.credentialEnv) error('CODEX_INVALID_CONNECTION');
       const built = buildCodexTurn(request), revision = this.revision;
+      const descriptor = buildCodexDescriptor(request, built);
+      assertContextBudget(descriptor, request.contextBudget);
       await this.acquire(signal); slot = true;
       if (revision !== this.revision) error('CODEX_AUTH_CHANGED');
       process = await this.process();
@@ -280,7 +283,6 @@ export class CodexRuntime implements CodexRuntimeService {
       if ((await this.account(process, signal)).type !== 'chatgpt') error('CODEX_LOGIN_REQUIRED');
       if (revision !== this.revision) error('CODEX_AUTH_CHANGED');
       if (signal.aborted) return failure(options.signal.aborted ? 'CANCELLED' : 'TIMEOUT');
-      const descriptor: Json = { method: 'turn/start', role: request.role, model: request.modelId, ...(request.generation?.reasoningEffort ? { effort: request.generation.reasoningEffort } : {}), developerInstructions: built.developerInstructions, input: [{ type: 'text', text: built.inputText }], outputSchema: built.outputSchema, environmentAccess: false, ephemeral: true };
       const serialized = JSON.stringify(descriptor);
       await options.onWire?.({ connectionId: connection.id, protocol: connection.protocol, role: request.role, modelId: request.modelId, method: 'RPC', url: CODEX_ENDPOINT, headers: {}, body: descriptor, bodySha256: hash(serialized), stablePrefixSha256: hash(built.developerInstructions) });
       if (signal.aborted || revision !== this.revision) return failure(options.signal.aborted ? 'CANCELLED' : timeout.aborted ? 'TIMEOUT' : 'CODEX_AUTH_CHANGED');

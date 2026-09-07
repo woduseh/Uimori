@@ -305,3 +305,16 @@ GPL 코드나 개인 패키지의 본문·스크립트를 복사하지 않고 �
 - 검증: 실제 설치 CLI의 새 빈 인증 폴더 initialize/account/read는 `tests/codex-installed.test.ts` opt-in preflight로 확인해요. 실계정 로그인·모델 요청은 보내지 않아요. 합성 subprocess/RPC/codec/6개 역할/등록/export-import/HTTP 권한 검사는 `tests/codex-*.test.ts`, 390px 모의 인증 UI는 provider-management browser 검사에 있어요.
 - 비채택: 기존 사용자 auth.json 재사용·토큰 추출·비공식 ChatGPT HTTP 중계·Codex의 코딩/파일/MCP 실행은 가져오지 않아요. 공식 CLI 자체 지침은 제거할 수 없으므로 논리 메시지를 native provider role과 동일하다고 주장하지 않아요. 0.153 CLI는 내장 openai provider retry override를 거절하므로 해당 설정을 제거했어요. Uimori는 불확실 요청을 재생하지 않지만 CLI 내부 재시도와 내부 모델 호출 수는 제어·계수하지 못해요. maxOutputTokens는 출력 목표이고 cost/modelCalls는 미확인 값을 유지해요.
 - 운영 절차·구체적인 기능 한계: [Codex 연결](../docs/CODEX.md).
+
+## 2026-09-07 공급자별 생성 파라미터 개편 조사
+
+- 검토용 제안은 [공급자·모델 파라미터 계획](PROVIDER-PARAMETERS-PLAN.md)이에요. 후속 사용자 결정에 따라 Google은 global만 유지하고, 기존 누적 호출·금액 예산 제한은 제거 대상으로 확정했어요. 계획 검토 후 사용자가 병행 구현을 요청했고, Fable 5.1·GPT Flex·캐시 ON/OFF/TTL·짧은 연결 테스트를 추가로 지정했어요. 현재 구현 계약은 [모델 파라미터](../docs/MODEL-PARAMETERS.md)에 있어요. 실제 외부 모델 호출은 하지 않았어요.
+- 참고 snapshot: 로컬 `RisuToki/risu/plugins/provider-manager-v1.16.2.js`, SHA-256 `FD5F599BD19BFE66837EA558FC717D907C890E6F4BCB5D16207059FA7B81B7A8`. ignored 파일이므로 저장소 commit에 포함된 코드로 취급하지 않아요. 8행의 `uv/Um`은 Responses/Chat 파라미터 차이, `vp/Zp`는 Claude/Gemini 생성 설정 분리, `Kt`는 연결 주소, `RN/NN/KT`는 Risu host의 tokenizer 등록을 보여줘요.
+- 제안 원리 → 적용 위치: 공급자별 typed options와 모델별 지원 명세 → `core/product.ts`, provider definitions·encoders, `web/ProviderModelFields.tsx`; 공통 generation 추출 → main/auxiliary/story/registration 요청 생성 경로. 검증은 저장된 값과 모든 역할의 실제 body 비교, JSON schema 병합 보존, 미지원 값·조합 차단, Run/job 동결, 예산 제한 제거 후 전송 전 attempt 기록·usage 보존이에요.
+- 비채택: 오래된 모델명 정규식 예외, 조용한 effort 보정, 임의 body/header override, tokenizer 선택 UI. 플러그인 자체 재배포 라이선스를 확인하지 못해 코드는 복사하지 않아요. 이 파일은 Vercel의 실제 파라미터 전달 근거가 아니에요.
+- 공식 자료는 계획서의 항목별 링크에서 직접 확인했어요. Google 공식 명칭과 모델별 Thinking/global/Flex, OpenAI Reasoning·Verbosity, Claude Opus 5 effort/Thinking 제약을 분리해 기록했어요. 문서상 지원과 실제 계정의 API 수락·가격·청구 검증은 구별해요.
+
+- 후속 캐시 채택: 같은 유미 snapshot의 `Vu/Ku/ol/rl/cl`은 메시지 경계의 cachePoint·5m/1h 명시값·reasoning 보존을 참고하는 위치예요. 자동 캐시는 공식 Claude top-level cache_control 및 OpenAI implicit mode로 구현하고, Uimori PromptProgram의 기존 authored points와 4개 한도·OFF 우선 진단을 `core/provider-cache.ts`/`provider-messages.ts`에서 관리해요. TTL·OFF·continuation·번역 format 병합은 protocol/native-wire 합성 검사로 확인해요. 임의 시간이나 사용자별 캐시 최적화 알고리즘은 추가하지 않아요.
+- 공식 추가 근거: [Fable 5.1](https://platform.claude.com/docs/en/models/fable-5-1/whats-new-fable-5-1)의 항상 adaptive·forced-tool 미지원·prefix binding, [Claude cache](https://platform.claude.com/docs/en/build-with-claude/prompt-caching)의 5m/1h·자동 슬롯, [OpenAI cache](https://developers.openai.com/api/docs/guides/prompt-caching)의 explicit/implicit·30m·usage, [Flex](https://developers.openai.com/api/docs/guides/flex-processing)의 Responses/Chat 전달을 2026-09-07 확인했어요.
+
+- 2026-09-08 context token estimate: dqbd/tiktoken README + npm tiktoken 1.0.22 (MIT) → Node WASM get_encoding(o200k_base) → offline segmented estimate with 10% margin in core/context-budget.ts → context-budget and app compaction regression. Pure JS whole-string BPE was not retained: a repeated 8,192-character token took 4.52s; bounded WASM segments keep that fixture responsive. No claim of exact Claude/Gemini/Codex billing tokens.

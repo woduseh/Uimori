@@ -25,7 +25,7 @@ function readIntent(raw: string): NewStoryProfileIntent {
   let models: NewStoryProfileIntent['models'];
   if (pending.models !== undefined) {
     const value = pending.models;
-    const ref = (item: unknown) => item === null || !!item && typeof item === 'object' && !Array.isArray(item) && typeof (item as ContentRef).id === 'string' && (item as ContentRef).id.length > 0 && Number.isSafeInteger((item as ContentRef).revision) && (item as ContentRef).revision > 0;
+    const ref = (item: unknown) => item === null || !!item && typeof item === 'object' && !Array.isArray(item) && typeof (item as ContentRef).id === 'string' && (item as ContentRef).id.length > 0 && Object.keys(item).every(key => key === 'id');
     if (!value || typeof value !== 'object' || Array.isArray(value) || !ref((value as Record<string, unknown>).main) || !ref((value as Record<string, unknown>).translation)) throw new Error('보관한 시작 모델을 읽을 수 없어요.');
     const selected = value as NonNullable<NewStoryProfileIntent['models']>;
     models = { main: selected.main, translation: selected.translation };

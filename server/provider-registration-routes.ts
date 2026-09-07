@@ -5,14 +5,13 @@ import { registrationJson, REGISTRATION_LIMITS } from '../core/provider-registra
 import { fields, record } from './product-store.js';
 import type { Store } from './store.js';
 import { HttpError } from './store.js';
-import type { ProviderBudget } from './provider-budget.js';
 import { RegistrationStore } from './provider-registration-store.js';
 import { runRegistrationAgent } from './provider-registration-agent.js';
 
 export function registrationRoutes(app:FastifyInstance,store:Store,options:{
   executeCodex?: import('../core/transport.js').ProviderExecutionOptions['executeCodex'];
   resolveCredential?: import('../core/transport.js').ProviderExecutionOptions['resolveCredential'];
-  budget:ProviderBudget;approvedOrigins:readonly string[];signal:AbortSignal;vertexRequestTier?:VertexRequestTier;
+  approvedOrigins:readonly string[];signal:AbortSignal;vertexRequestTier?:VertexRequestTier;
   track:(work:Promise<void>)=>void;authenticated:(cookie?:string)=>boolean;
 }) {
   const journal=new RegistrationStore(store.product);journal.recover();
@@ -36,7 +35,7 @@ export function registrationRoutes(app:FastifyInstance,store:Store,options:{
               const current=store.product.get<ModelPreset>('model',target.id);if(current.enabled===false)throw new HttpError(403,'Registration assistant model disabled');
               return store.product.authorize(connection);
             },
-            onAttemptStart:wire=>options.budget.start(wire,admitted=>journal.startAttempt(run.id,admitted)),
+            onAttemptStart:wire=>journal.startAttempt(run.id,wire),
             onAttemptFinish:(attempt,response)=>journal.finishAttempt(run.id,attempt,response),
             onProposal:value=>value,
           });

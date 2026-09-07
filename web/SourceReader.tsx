@@ -1,7 +1,8 @@
 import { StorySourceState } from './StoryPanel.js';
 import { Fragment, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import type { Asset } from '../core/product.js';
-import type { Job, Source } from '../core/types.js';
+import type { Job, ReaderRun, Source } from '../core/types.js';
+import { ContextSummaryStatus } from './ContextSummaryStatus.js';
 import { api, labels } from './api.js';
 import { Prose } from './Prose.js';
 import { LazyDiagnostics } from './LazyDiagnostics.js';
@@ -15,6 +16,7 @@ type ReaderProps = {
   refresh: () => Promise<void>; onError: (error: string) => void;
   onFork: (sourceId: string) => Promise<void>;
   request?: string;
+  contextSummary?: ReaderRun['contextSummary'];
   onInspect?: (runId: string) => void;
   hiddenConfig?: HiddenStoryConfig;
   hasPackages?: boolean;
@@ -50,7 +52,7 @@ export function SourceReader(props: ReaderProps) {
 function latestTranslation(source: Source, jobs: Job[]) {
   return jobs.filter(job => job.kind === 'translation' && job.sourceRevision === source.id && job.sourceHash === source.hash && job.status !== 'stale').sort((a, b) => (b.revision ?? 1) - (a.revision ?? 1)).at(0);
 }
-function SourceReaderContent({ source, index, jobs, assets, refresh: refreshSource, onFork, request, onInspect, hiddenConfig, hasPackages, presentationRefreshKey }: ReaderProps) {
+function SourceReaderContent({ source, index, jobs, assets, refresh: refreshSource, onFork, request, contextSummary, onInspect, hiddenConfig, hasPackages, presentationRefreshKey }: ReaderProps) {
   const mounted = useRef(true);
   useLayoutEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
   const refresh = async () => { if (mounted.current) await refreshSource(); };
@@ -115,6 +117,7 @@ function SourceReaderContent({ source, index, jobs, assets, refresh: refreshSour
   return <article ref={container} className="source" id={`source-${source.id}`} data-testid="source" data-source-id={source.id}>
     {request && <div className="request-message" data-testid="source-request"><span className="request-label">내 요청</span>{request.length > 280 ? <details><summary>{request.slice(0, 240)}… <span>전체 보기</span></summary><p>{request}</p></details> : <p>{request}</p>}</div>}
     <div className="source-heading"><span className="folio">장면 {index + 1}</span><small>{mode === 'translation' ? '한국어 번역' : '원문'}</small></div>
+    <ContextSummaryStatus summary={contextSummary}/>
     <div className="reader-toolbar"><div className="segmented" role="group" aria-label="원문과 번역 보기"><button type="button" className={mode === 'translation' ? '' : 'secondary'} aria-pressed={mode === 'translation'} disabled={pending === 'translation'} onClick={viewTranslation}>번역 보기</button><button type="button" className={mode === 'original' ? '' : 'secondary'} aria-pressed={mode === 'original'} onClick={() => switchMode('original')}>원문 보기</button></div>
 
     </div>

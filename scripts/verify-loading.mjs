@@ -9,8 +9,8 @@ async function main() {
   if (process.argv.length > 2) throw new Error('verify-loading accepts no arguments');
   const runId=`loading-ui-${newId()}`, directory=path.join(artifactRoot,runId), runtime=path.join(directory,'runtime');
   const children=new Set(), failures=[]; let cancelled=false, blocked=false;
-  const requiredCases=['LOADUI01','LOADUI02','LOADUI03','LOADUI04'];
-  const requiredScreenshots=['loading-reader-page.png','loading-cas.png','loading-library.png','loading-reconnected.png'];
+  const requiredCases=['LOADUI01','LOADUI02','LOADUI03','LOADUI04','LOADUI05'];
+  const requiredScreenshots=['loading-reader-page.png','loading-cas.png','loading-library.png','loading-reconnected.png','context-summary-mobile.png'];
   const summary={schema:1,runId,status:'FAIL',scope:'Reader paging, scroll restore, CAS tabs and library exact revision loading',startedAt:new Date().toISOString(),environment:{node:process.version,platform:process.platform},commands:[],reports:{},failures,requiredCases,requiredScreenshots,cleanup:{status:'NOT_RUN'},limitations:['No provider catalog lookup, paid generation, user DB, or deployment.','390px is a browser viewport; physical phone keyboard and IME behavior are not established.','Screenshots require visual review; automated assertions check control bounds and persisted values.','This runner does not replace provider codec, loopback transport, M0 or M1-local verification.']};
   const owner={runId,ownerPid:process.pid,root,directory,active:true,children:[],startedAt:summary.startedAt};
   await mkdir(path.join(runtime,'temp'),{recursive:true}); await json(path.join(directory,'ownership.json'),owner);
