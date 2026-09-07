@@ -4,6 +4,8 @@
 
 ## 2026-09-07 로어 위치·유지와 캐시 경계
 
+2026-09-08 Gemini 임시 호환 참고: 로컬 RisuToki `risu/plugins/provider-manager-v1.16.2.js` v1.16.2 → `Vp`/`Ga` 호출 흐름 → 선두 system 분리 후 나머지 system을 user로 매핑하는 원리 → Uimori `core/provider-messages.ts`에 독립 구현 → `tests/native-wire.test.ts`의 선두·연속·후미 system, 비Gemini 보존, 입력 불변성 검사. 플러그인 코드는 복사하지 않았으며 `system: ` 본문 접두사는 사용자 요청의 role 변경 범위를 넘어 채택하지 않았어요. 신모델 지원 확인 후 모델별로 해제할 임시 처리예요.
+
 사용자와 배치·유지 계획을 논의하면서 [Lost in the Middle](https://arxiv.org/abs/2307.03172), [LongPiBench](https://arxiv.org/abs/2410.14641), Google Research의 [Retrieval Quality at Context Limit](https://research.google/pubs/retrieval-quality-at-context-limit/)를 확인했어요. 위치와 관련 정보 간 거리가 성능에 영향을 줄 수 있지만 과제와 모델에 따라 결과가 다르므로, 최신 모델 전체에 같은 성능 저하나 배치의 우위를 단정하지 않아요. [Anthropic prompt caching](https://platform.claude.com/docs/en/build-with-claude/prompt-caching)에서 동일 prefix와 변동 요소 뒤쪽 배치 원리를 확인했어요. 공급자 공통 캐시 적중률·실제 비용 절감으로 확대하지 않아요.
 
 Uimori 기반 `5761bb2`의 `core/provider.ts::executeTool`, `server/prompt-snapshot.ts::captureLogicalHistory`, `server/main-request.ts::attachMainHostContext`를 기준으로 **포함 결정과 배치 분리, 실제 읽은 범위만 이어 사용, 안정된 이전 자료를 유지하고 변동 host 문맥을 현재 입력 근처로 이동**하는 원리를 적용했어요. 구현은 `core/lore-context.ts`, `server/lore-context.ts`, 공통 `pinnedSlotSources`와 PromptProgram의 실제 `usedSlots` 추적이에요. `tests/lore-context.test.ts`, `tests/lore-context-archive.test.ts`, `tests/lore-placement.test.ts`에서 범위·무효화·fork/archive·네 provider encoder의 실제 prefix를 합성 검증해요.

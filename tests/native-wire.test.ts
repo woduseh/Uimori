@@ -75,9 +75,25 @@ describe('native provider wire (synthetic, no live calls)',()=>{
   test('rejects prefill and unsupported mid-system instead of flattening the prompt',()=>{
     for(const [encoder,model] of [[encodeResponses,'gpt-5.6'],[encodeChat,'gpt-5.6'],[encodeAnthropic,'claude-opus-5'],[encodeVertex,VERTEX_GEMINI_MODEL_ID]] as const) {const r=request(model);r.prompt!.messages.at(-1)!.completion='prefill';expect(()=>encoder(r)).toThrow('PROMPT_PREFILL_UNSUPPORTED');}
     const r=request('unverified-claude');r.prompt!.messages.splice(2,0,message('middle','system','MIDDLE_RULE'));
-    expect(()=>encodeAnthropic(r)).toThrow('PROMPT_MID_SYSTEM_MODEL_UNSUPPORTED');expect(()=>encodeVertex({...r,modelId:VERTEX_GEMINI_MODEL_ID})).toThrow('PROMPT_MID_SYSTEM_UNSUPPORTED');
+    expect(()=>encodeAnthropic(r)).toThrow('PROMPT_MID_SYSTEM_MODEL_UNSUPPORTED');expect(()=>planNativeMessages(r,'vertex-gemini-v1')).toThrow('PROMPT_MID_SYSTEM_UNSUPPORTED');
     const supported=wire(encodeAnthropic({...r,modelId:'claude-opus-5'}).body);expect(supported.messages.map((m:any)=>m.role)).toEqual(['user','system','assistant','user']);
     r.prompt!.messages.splice(2,1);r.prompt!.messages.splice(3,0,message('bad-placement','system','MIDDLE_RULE'));expect(()=>encodeAnthropic({...r,modelId:'claude-opus-5'})).toThrow('PROMPT_MID_SYSTEM_PLACEMENT_UNSUPPORTED');
+  });
+  test.each(['gemini-3.8-flash','gemini-3.1-pro-preview','google/Gemini-3.8-flash'])('maps every non-leading system to user only on the wire for %s',modelId=>{
+    const r=request(modelId);
+    r.prompt!.messages=[message('s1','system','LEADING_ONE'),message('s2','system','LEADING_TWO'),message('u','user','USER'),message('m1','system','MID_ONE'),message('m2','system','MID_TWO'),message('a','assistant','ASSISTANT'),message('m3','system','MID_THREE'),message('last','system','TRAILING')];
+    const before=structuredClone(r);const plan=planNativeMessages(r,'vertex-gemini-v1')!;
+    const body=modelId.includes('/')?{systemInstruction:{parts:plan.system},contents:plan.messages}:wire(encodeVertex(r).body);
+    expect(body.systemInstruction.parts.slice(-2)).toEqual([{text:'LEADING_ONE'},{text:'LEADING_TWO'}]);
+    expect(body.contents).toEqual([{role:'user',parts:[{text:'USER'},{text:'MID_ONE'},{text:'MID_TWO'}]},{role:'model',parts:[{text:'ASSISTANT'}]},{role:'user',parts:[{text:'MID_THREE'},{text:'TRAILING'}]}]);
+    expect(planNativeMessages(r,'vertex-gemini-v1')!.diagnostics.filter(d=>d.code==='GEMINI_MID_SYSTEM_TO_USER').map(d=>[d.blockId,d.logicalIndex,d.status])).toEqual([['m1',3,'mapped'],['m2',4,'mapped'],['m3',6,'mapped'],['last',7,'mapped']]);
+    for(const protocol of ['openai-chat-v1','openai-responses-v1','vercel-chat-v1'] as const){
+      expect(planNativeMessages(r,protocol)!.messages.map(m=>wire(m).role)).toEqual(['system','system','user','user','user','assistant','user','user']);
+    }
+    for(const other of ['gpt-5.6','claude-opus-5','custom-gemini-proxy']){
+      expect(planNativeMessages({...r,modelId:other},'openai-chat-v1')!.messages.map(m=>wire(m).role)).toEqual(before.prompt!.messages.map(m=>m.role));
+    }
+    expect(r).toEqual(before);
   });
   test('Responses two tool rounds preserve native prefix, original signed items, cache and call IDs; altered prompt rejected',()=>{
     const r=request();r.prompt!.cachePlan=[{blockId:'cache',afterMessageId:'system',policy:'prefer'}];const first=wire(encodeResponses(r).body);const one=responseRound(r,'one');const secondRequest=next(r,one.result);const second=wire(encodeResponses(secondRequest).body);

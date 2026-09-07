@@ -17,13 +17,19 @@ export function planNativeMessages(request:ProviderRequest,protocol:ProviderProt
   const note=(code:string,m:LogicalMessage,index:number,status:MessageDiagnostic['status']='mapped')=>diagnostics.push({code,blockId:m.provenance.blockId,logicalIndex:index,protocol,modelId:request.modelId,status});
   const responses=protocol==='openai-responses-v1';const anthropic=protocol==='anthropic-messages-v1';const vertex=protocol==='vertex-gemini-v1';
   const midSystem=anthropic&&modelCapability(protocol,request.modelId)?.midSystem===true;
+  // Temporary Gemini workaround, including namespaced IDs used by compatible gateways.
+  // Revisit per-model wire capabilities when a new Gemini model supports mid-system;
+  // remove this fallback for verified models without changing authored prompts.
+  const gemini=/(?:^|\/)gemini-[^/]+$/iu.test(request.modelId);
   let leading=true;let cacheCount=0;const cacheIds=new Set<string>();
   for(const [index,message]of prompt.messages.entries()){
     if(message.completion==='prefill')reject('PROMPT_PREFILL_UNSUPPORTED',message,index);
     if((anthropic||vertex)&&index===prompt.messages.length-1&&message.role==='assistant')reject('PROMPT_COMPLETED_ASSISTANT_AT_END_UNSUPPORTED',message,index);
     const wasLeading=leading;if(message.role!=='system')leading=false;
-    if(vertex&&message.role==='system'&&!wasLeading)reject('PROMPT_MID_SYSTEM_UNSUPPORTED',message,index);
-    if(anthropic&&message.role==='system'&&!wasLeading){
+    const role=gemini&&message.role==='system'&&!wasLeading?'user':message.role;
+    if(role!==message.role)note('GEMINI_MID_SYSTEM_TO_USER',message,index);
+    if(vertex&&role==='system'&&!wasLeading)reject('PROMPT_MID_SYSTEM_UNSUPPORTED',message,index);
+    if(anthropic&&role==='system'&&!wasLeading){
       if(!midSystem)reject('PROMPT_MID_SYSTEM_MODEL_UNSUPPORTED',message,index);
       const before=prompt.messages.slice(0,index).findLast(m=>m.role!=='system');const after=prompt.messages.slice(index+1).find(m=>m.role!=='system');
       if(before?.role!=='user'||after&&after.role!=='assistant')reject('PROMPT_MID_SYSTEM_PLACEMENT_UNSUPPORTED',message,index);
@@ -43,7 +49,7 @@ export function planNativeMessages(request:ProviderRequest,protocol:ProviderProt
       const role=message.role==='assistant'?'model':'user';const previous=messages.at(-1) as {role:string;parts:Json[]}|undefined;
       if(previous?.role===role){previous.parts.push(...parts);note('CONSECUTIVE_ROLE_PARTS_COMBINED',message,index);}
       else messages.push({role,parts});
-    }else messages.push({role:message.role,content:parts});
+    }else messages.push({role,content:parts});
   }
   if((anthropic||vertex)&&messages.length===0)throw new ProviderContractError('PROMPT_CONVERSATION_REQUIRED');
   return{messages,system,options,diagnostics,capabilityVersion:'native-wire-2026-09-07'};

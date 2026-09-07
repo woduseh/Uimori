@@ -4,6 +4,12 @@
 
 ## 공개 API
 
+### Gemini 중간 system 임시 호환 처리
+
+2026-09-08: `core/provider-messages.ts`는 모델 ID가 `gemini-*`(게이트웨이의 `google/gemini-*` 등 마지막 경로 요소 포함)일 때 첫 non-system 메시지 이후의 모든 system 메시지를 전송 시 user로 바꿔요. 선두의 연속 system, 본문, 순서, 저장된 AST·Run snapshot은 보존하며 `GEMINI_MID_SYSTEM_TO_USER` 진단에 원래 block/index를 남겨요. Vertex는 기존 방식대로 연속 user의 parts를 합쳐요. 다른 모델의 role·지원 검사는 유지해요.
+
+영구적인 Gemini 제약으로 간주하지 않아요. 신모델이 중간 system을 지원하면 모델·프로토콜별 지원을 확인하고 해당 모델의 변환을 해제하도록 개선해요. 현재 검증은 로컬 직렬화 회귀이며 실제 Gemini 응답·품질 검증은 아니에요.
+
 ```ts
 validatePromptExpression(value, controlIds = [], localNames = []): PromptExpression
 validatePromptTemplate(value, controlIds = [], localNames = []): PromptTemplate
