@@ -40,6 +40,7 @@ export type AuxiliaryStoreBridge = {
   finish: (jobId: string, generation: number, owner: string, outcome: AuxiliaryOutcome) => MaybePromise<void>;
 };
 export type AuxiliaryJobHooks = {
+  resolveCredential?: import('../core/transport.js').ProviderExecutionOptions['resolveCredential'];
   signal: AbortSignal; approvedOrigins: readonly string[];
   authorize: (connection: Connection) => MaybePromise<Connection>;
   onAttemptStart: (wire: WireRecord) => MaybePromise<string>;
@@ -142,7 +143,7 @@ export async function runAuxiliaryJob(store: AuxiliaryStoreBridge, jobId: string
       const remainingTimeout = sol?.remainingMs();
       if (remainingTimeout === 0) throw new AuxiliaryExecutionError('AUXILIARY_PROVIDER_TIMEOUT', true);
       const result = await executeProvider({ id: authorized.id, protocol: authorized.protocol, endpoint: authorized.endpoint, ...(authorized.credentialEnv ? { credentialEnv: authorized.credentialEnv } : {}), ...(authorized.requestTier ? { requestTier: authorized.requestTier } : {}) }, body, {
-        approvedOrigins: hooks.approvedOrigins, signal: hooks.signal, vertexRequestTier: hooks.vertexRequestTier, timeoutMs: remainingTimeout ?? hooks.timeoutMs ?? target.timeoutMs ?? (target.connection.protocol === 'vertex-gemini-v1' ? 300_000 : undefined),
+        approvedOrigins: hooks.approvedOrigins, signal: hooks.signal, resolveCredential: hooks.resolveCredential, vertexRequestTier: hooks.vertexRequestTier, timeoutMs: remainingTimeout ?? hooks.timeoutMs ?? target.timeoutMs ?? (target.connection.protocol === 'vertex-gemini-v1' ? 300_000 : undefined),
         onWire: async wire => { attemptId = await hooks.onAttemptStart(wire); },
       });
       // Keep diagnostic output and usage even when a refusal or malformed body cannot become an artifact.

@@ -46,7 +46,7 @@ test('UI01 UI02 UI04 UI05 UI09 long real sources keep composer accessible, safe 
     const settingsBox = await settingsDialog.boundingBox(); expect(settingsBox!.x).toBeGreaterThanOrEqual(0); expect(settingsBox!.x + settingsBox!.width).toBeLessThanOrEqual(viewport.width);
     await close(page); await nav(page, '서재'); await expect(page.getByTestId('library-panel')).toBeVisible();
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth && document.documentElement.scrollHeight <= innerHeight + 1)).toBe(true);
-    await nav(page, '설정'); await page.getByTestId('connection-settings').locator('summary').first().click();
+    await nav(page, '설정'); await page.getByRole('tab', { name: '연결과 모델', exact: true }).click();
     const connectionDialog = page.getByRole('dialog', { name: '설정', exact: true });
     expect(await connectionDialog.evaluate(element => element.scrollWidth <= element.clientWidth + 1)).toBe(true);
     await close(page);
@@ -469,4 +469,67 @@ test('UI18 two-tab conflicts preserve reloadable drafts and manual translation s
     deliverTranslation(); await request.post('/api/test/control', { data: { action: 'release', barrier: 'translation' } }); await expect(page.getByTestId('translation-text')).toContainText('MANUAL_WINS_AFTER_LATE_RESPONSE'); await expect(page.getByRole('button', { name: '번역 보기', exact: true })).toBeEnabled(); await page.reload(); await expect(page.getByTestId('translation-text')).toContainText('MANUAL_WINS_AFTER_LATE_RESPONSE');
     const final = await data(request, chat.id); expect(final.jobs.filter(job => job.kind === 'translation')).toEqual([savedJob]); expect(final.sources[0].text).toBe(winner);
   } finally { sendEdit(); deliverTranslation(); await second.close(); }
+});
+
+test('UI settings categories retain drafts and support keyboard navigation', async ({ page }, info) => {
+  for (const viewport of [{ width: 390, height: 844 }, { width: 1440, height: 1000 }]) {
+    await page.setViewportSize(viewport); await page.goto('/'); await nav(page, '설정');
+    const dialog = page.getByRole('dialog', { name: '설정', exact: true });
+    const tabs = dialog.getByRole('tablist', { name: '설정 항목' });
+    await expect(dialog.getByRole('tabpanel')).toHaveCount(1);
+    await expect(dialog.getByLabel('앱 화면 테마')).toBeVisible();
+    await expect(dialog.getByTestId('connection-editor')).not.toBeVisible();
+    await tabs.getByRole('tab', { name: '연결과 모델', exact: true }).click();
+    await dialog.getByRole('button',{name:'빠른 연결 시작',exact:true}).click();
+    await dialog.getByRole('region',{name:'제공자 선택',exact:true}).getByRole('button',{name:/OpenAI · Responses/}).click();
+    await dialog.getByLabel('연결 이름', { exact: true }).fill('SYNTHETIC unsaved connection');
+    await tabs.getByRole('tab', { name: '데이터 관리', exact: true }).click();
+    await expect(dialog.getByRole('button', { name: 'JSON 내보내기', exact: true })).toBeVisible();
+    await expect(dialog.getByLabel('연결 이름', { exact: true })).not.toBeVisible();
+    await tabs.getByRole('tab', { name: '접근 보안', exact: true }).click();
+    await expect(dialog.getByRole('button', { name: '접속 해제', exact: true })).toBeVisible();
+    await tabs.getByRole('tab', { name: '접근 보안', exact: true }).press('Home');
+    await expect(tabs.getByRole('tab', { name: '일반', exact: true })).toBeFocused();
+    await page.keyboard.press('ArrowDown');
+    await expect(tabs.getByRole('tab', { name: '연결과 모델', exact: true })).toBeFocused();
+    await expect(dialog.getByLabel('연결 이름', { exact: true })).toHaveValue('SYNTHETIC unsaved connection');
+    const closeButton = dialog.getByRole('button', { name: '설정 닫기', exact: true });
+    await closeButton.focus(); await page.keyboard.press('Shift+Tab');
+    await expect(closeButton).not.toBeFocused(); await page.keyboard.press('Tab'); await expect(closeButton).toBeFocused();
+    await expect(dialog.getByRole('tabpanel')).toHaveCount(1);
+    expect(await dialog.getByRole('tabpanel').evaluate(node => node.scrollWidth <= node.clientWidth + 1)).toBe(true);
+    await tabs.getByRole('tab', { name: '일반', exact: true }).click();
+    await dialog.getByLabel('앱 화면 테마').selectOption('dark');
+    await page.screenshot({ path: info.outputPath(`settings-categories-${viewport.width}.png`) });
+    await page.keyboard.press('Escape'); await expect(dialog).not.toBeVisible();
+  }
+});
+
+
+test('UI common dialogs center on desktop and fill mobile without changing dismissal or focus', async ({ page, request }, info) => {
+  const chat=await seed(request,`합성 common dialog ${Date.now()}`,'',0);
+  for(const width of [1440,390]) {
+    const height=width===390?844:1000;await page.setViewportSize({width,height});await page.goto(`/?chat=${chat.id}`);
+    for(const title of ['채팅 설정','작업 현황']) {
+      const opener=page.getByRole('button',{name:title,exact:true});
+      if(title==='작업 현황')await nav(page,title);else await opener.click();
+      const dialog=page.getByRole('dialog',{name:title,exact:true});await expect(dialog).toBeVisible();
+      const box=(await dialog.boundingBox())!;expect(box.x).toBeGreaterThanOrEqual(0);expect(box.y).toBeGreaterThanOrEqual(0);expect(box.x+box.width).toBeLessThanOrEqual(width);expect(box.y+box.height).toBeLessThanOrEqual(height);
+      if(width===390){expect(box.x).toBe(0);expect(box.y).toBe(0);expect(box.width).toBe(width);expect(box.height).toBe(height);}
+      else{expect(Math.abs(box.x+box.width/2-width/2)).toBeLessThanOrEqual(1);expect(Math.abs(box.y+box.height/2-height/2)).toBeLessThanOrEqual(1);expect(box.x).toBeGreaterThan(24);expect(box.y).toBeGreaterThanOrEqual(32);}
+      expect(await dialog.evaluate(node=>node.scrollWidth<=node.clientWidth+1)).toBe(true);
+      await dialog.getByRole('button',{name:title+' 닫기',exact:true}).focus();await page.keyboard.press('Shift+Tab');expect(await dialog.evaluate(node=>node.contains(document.activeElement))).toBe(true);
+      await page.screenshot({path:info.outputPath(`common-dialog-${title==='작업 현황'?'tasks':'story'}-${width}.png`)});
+      await page.keyboard.press('Escape');await expect(dialog).not.toBeVisible();if(title==='채팅 설정'||width===1440)await expect(opener).toBeFocused();
+    }
+    if(width===1440) {
+      const opener=page.getByRole('button',{name:'읽기 설정',exact:true});await opener.click();const dialog=page.getByRole('dialog',{name:'읽기 설정',exact:true});
+      const box=(await dialog.boundingBox())!;expect(box.width).toBe(560);expect(box.height).toBeLessThan(880);expect(Math.abs(box.y+box.height/2-height/2)).toBeLessThanOrEqual(1);
+      await page.mouse.click(8,8);await expect(dialog).not.toBeVisible();await expect(opener).toBeFocused();
+    } else {
+      const opener=page.getByRole('button',{name:'탐색 메뉴',exact:true});await opener.click();const dialog=page.getByRole('dialog',{name:'탐색',exact:true});
+      const box=(await dialog.boundingBox())!;expect(box).toEqual({x:0,y:0,width,height});
+      await page.keyboard.press('Escape');await expect(dialog).not.toBeVisible();await expect(opener).toBeFocused();
+    }
+  }
 });

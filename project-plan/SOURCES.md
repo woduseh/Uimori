@@ -277,3 +277,11 @@ M1의 고정 인계 snapshot `98d80987e721d640570abf837ff0e094b2a7dcfd0caf310da8
 | 모듈 삽입·button·표시 기능 | 선언된 main slot과 typed action 폼 → `prompt-snapshot.ts`, `PackageBehaviorPanel.tsx` | 원래 자리에서 한 번만 공급, 누락 slot 오류, 390px 동작/초안 보존. 임의 HTML·JS·CSS 실행은 비채택 |
 
 GPL 코드나 개인 패키지의 본문·스크립트를 복사하지 않고 기존 Uimori의 snapshot/SQLite/CAS와 독립 구현한 데이터 평가기를 사용했어요. 기능 범위·아직 없는 jobs/hooks/view DSL은 [현재 API](../docs/PACKAGE-BEHAVIOR.md), 실제 검증은 [결과](PACKAGE-BEHAVIOR-RESULTS.md)에 분리해 기록해요.
+
+## Yumi Provider Manager 설정 흐름 참고 (2026-09-07)
+
+- 원본: [배포 페이지](https://update.rsyumi.workers.dev/provider-manager), 로컬 `C:/Users/wodus/ai-workspace/RisuToki/risu/plugins/provider-manager-v1.16.2.js` v1.16.2 / 1,016,732 bytes / SHA-256 `FD5F599BD19BFE66837EA558FC717D907C890E6F4BCB5D16207059FA7B81B7A8`, 사용자 제공 빠른 시작·모델 편집·관리 화면. minified 본문 8행의 `tB`/`eB`(빠른 시작), `UN`(모델 기본값), `PN`/`EB`(초안 편집), `DN`(세부 설정 구분)을 확인했어요.
+- 채택: 제공자 선택 → 인증 정보 → 모델 선택 흐름, 카탈로그 검색과 직접 ID 입력, 공유 연결과 모델별 프리셋 편집. `web/ProviderManagement.tsx`, `web/ProviderCatalogPicker.tsx`, `web/ProviderModelFields.tsx`, `web/VertexCredentialUpload.tsx`에 독립 구현했어요. 원본의 긴 폼 앵커 이동은 실제 기본/생성/고급 화면 구분으로 바꿨어요.
+- 코드 재사용 없음: 헤더와 파일에서 라이선스 허락을 확인하지 못해 원리만 참고했어요. 사용자가 선호한 Yumi 자료가 충분하여 PocketRisu 추가 구현 조사는 하지 않았어요.
+- 비채택: Risu 브라우저 프록시·키 회전·내용 기반 라우터·자동 registry와 body/header 적용·thinking 보관·오류 무시는 Uimori의 서버 호출·권한·원문·불확실 실행 계약과 범위가 달라요. 과거 추천 모델/옵션을 현재 지원 근거로 사용하지 않아요.
+- 검증: PMUI 기존 등록·편집·CAS·권한 유지 + 카탈로그 선택·초안·파일 업로드·오류 입력 이동, UI 공통 모달 화면 검사. Vertex 키 파일은 별도 서버/API 합성 테스트로 검증하며 실제 Google 요청은 실행하지 않아요. 구체적인 최종 실행 결과는 CURRENT를 봐요.

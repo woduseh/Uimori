@@ -15,7 +15,7 @@ export function Dialog({ open, title, onClose, children, wide = false, className
   }, [open]);
   return <dialog ref={ref} className={`app-dialog ${wide ? 'wide' : ''} ${className}`} aria-labelledby={id} onKeyDown={event => {
       if (event.key !== 'Tab') return;
-      const candidates = [...event.currentTarget.querySelectorAll<HTMLElement>('button, input, select, textarea, a[href], summary, [tabindex]')].filter(element => element.tabIndex >= 0 && !element.matches(':disabled') && element.getClientRects().length > 0 && getComputedStyle(element).visibility !== 'hidden');
+      const candidates = [...event.currentTarget.querySelectorAll<HTMLElement>('button, input, select, textarea, a[href], summary, [tabindex]')].filter(element => element.tabIndex >= 0 && !element.matches(':disabled') && element.checkVisibility({ checkVisibilityCSS: true }));
       const first = candidates[0]; const last = candidates.at(-1);
       if (!first || !last) { event.preventDefault(); event.currentTarget.focus(); return; }
       const active = document.activeElement;

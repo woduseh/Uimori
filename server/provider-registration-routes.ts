@@ -10,6 +10,7 @@ import { RegistrationStore } from './provider-registration-store.js';
 import { runRegistrationAgent } from './provider-registration-agent.js';
 
 export function registrationRoutes(app:FastifyInstance,store:Store,options:{
+  resolveCredential?: import('../core/transport.js').ProviderExecutionOptions['resolveCredential'];
   budget:ProviderBudget;approvedOrigins:readonly string[];signal:AbortSignal;vertexRequestTier?:VertexRequestTier;
   track:(work:Promise<void>)=>void;authenticated:(cookie?:string)=>boolean;
 }) {
@@ -28,7 +29,7 @@ export function registrationRoutes(app:FastifyInstance,store:Store,options:{
       options.track((async()=>{
         try {
           const result=await runRegistrationAgent(target,run.request,{
-            approvedOrigins:options.approvedOrigins,signal,timeoutMs:REGISTRATION_LIMITS.timeoutMs,vertexRequestTier:options.vertexRequestTier,context,
+            approvedOrigins:options.approvedOrigins,signal,timeoutMs:REGISTRATION_LIMITS.timeoutMs,vertexRequestTier:options.vertexRequestTier,context,resolveCredential:options.resolveCredential,
             authorize:connection=>{
               if(!options.authenticated(request.headers.cookie)||signal.aborted)throw new HttpError(403,'Registration session no longer authorized');
               const current=store.product.get<ModelPreset>('model',target.id);if(current.enabled===false)throw new HttpError(403,'Registration assistant model disabled');

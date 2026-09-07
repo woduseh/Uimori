@@ -1,6 +1,6 @@
-import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
 import { HttpError, type Store } from './store.js';
+import { AccessSessions, AccessSessionRateLimitError } from './access-session.js';
 import { forkChat } from './chat-fork.js';
 import { fields, record, text, number } from './product-store.js';
 import { validateVertexEndpoint, VERTEX_GEMINI_MODEL_ID, type Connection } from '../core/product.js';
@@ -13,34 +13,48 @@ import { chatOrganizationRoutes } from './chat-organization.js';
 import { packagePresentationRoutes } from './package-presentation-routes.js';
 import { packageBehaviorRoutes } from './package-behavior-routes.js';
 import { inspectRisuImport } from './risu-import.js';
+import type { VertexCredentialStore } from './vertex-credentials.js';
 
-export function productRoutes(app: FastifyInstance, store: Store, options: {accessToken?:string;approvedOrigins:readonly string[];publish:(chatId:string)=>void;onAuthChanged?:()=>void}) {
+export function productRoutes(app: FastifyInstance, store: Store, options: {credentials?:VertexCredentialStore;accessToken?:string;publicOrigin?:string;approvedOrigins:readonly string[];publish:(chatId:string)=>void;onAuthChanged?:()=>void}) {
   const product = store.product;
   promptRoutes(app,store);
   chatOrganizationRoutes(app,store,options.publish);
   packagePresentationRoutes(app,store);
   packageBehaviorRoutes(app,store);
   app.post<{Params:{id:string}}>('/api/chats/:id/fork',async request => { const chat = forkChat(store,request.params.id,request.body); options.publish(chat.id); return chat; });
-  const digest = (v: string) => createHash('sha256').update(v).digest();
-  const sessions = new Map<string,number>();
-  const authenticated = (cookie?:string) => { if (!options.accessToken) return true; const token = cookie?.split(';').map(v => v.trim()).find(v => v.startsWith('nr_session='))?.slice(11); if (!token) return false; const key = digest(token).toString('hex'); const expiry = sessions.get(key); if (!expiry || expiry < Date.now()) { sessions.delete(key); return false; } return true; };
+  const sessions = new AccessSessions(options);
+  const authenticated = (cookie?:string) => sessions.authenticated(cookie);
   app.addHook('onRequest',async request => {
-    if (request.url.split('?')[0].startsWith('/api/') && request.url.split('?')[0] !== '/api/session' && !authenticated(request.headers.cookie)) throw new HttpError(401,'Authentication required');
+    // Fastify resolves percent-encoded paths before hooks, while request.url stays raw.
+    // Authenticate the matched route so /%61pi/export cannot skip API protection.
+    const rawPath = request.url.split('?')[0], routePath = request.routeOptions.url ?? rawPath;
+    if ((routePath.startsWith('/api/') || rawPath.startsWith('/api/')) && routePath !== '/api/session' && !authenticated(request.headers.cookie)) throw new HttpError(401,'Authentication required');
   });
-  app.get('/api/session',async request => ({required:!!options.accessToken,authenticated:authenticated(request.headers.cookie)}));
+  app.get('/api/session',async (request,reply) => reply.header('Cache-Control','no-store').send({required:sessions.required,authenticated:authenticated(request.headers.cookie)}));
   app.post('/api/session',async (request,reply) => {
-    const b = record(request.body); fields(b,['token']); const value = text(b.token,'token',1000);
-    if (options.accessToken && !timingSafeEqual(digest(value),digest(options.accessToken))) throw new HttpError(401,'Invalid access token');
-    const token = randomBytes(32).toString('hex'); sessions.set(digest(token).toString('hex'),Date.now()+12*60*60*1000);
-    reply.header('Set-Cookie',`nr_session=${token}; Path=/; HttpOnly; SameSite=Strict; Max-Age=43200`); return {required:!!options.accessToken,authenticated:true};
+    reply.header('Cache-Control','no-store');
+    try {
+      sessions.checkLoginAllowed();
+      const b = record(request.body); fields(b,['token']); const value = text(b.token,'token',1000);
+      const session = sessions.login(value);
+      if (session.revoked) options.onAuthChanged?.();
+      reply.header('Set-Cookie',session.cookie); return {required:sessions.required,authenticated:true};
+    } catch (error) { if (error instanceof AccessSessionRateLimitError) reply.header('Retry-After',String(error.retryAfterSeconds)); throw error; }
   });
-  app.delete('/api/session',async (request,reply) => { const token = request.headers.cookie?.split(';').map(v => v.trim()).find(v => v.startsWith('nr_session='))?.slice(11); if (token) sessions.delete(digest(token).toString('hex')); options.onAuthChanged?.(); reply.header('Set-Cookie','nr_session=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0'); return {required:!!options.accessToken,authenticated:!options.accessToken}; });
+  app.delete('/api/session',async (request,reply) => { const cookie = sessions.logout(request.headers.cookie); options.onAuthChanged?.(); reply.header('Cache-Control','no-store').header('Set-Cookie',cookie); return {required:sessions.required,authenticated:!sessions.required}; });
   app.get<{Querystring:{view?:string}}>('/api/library',async request => {
     if (request.query.view !== undefined && request.query.view !== 'summary') throw new HttpError(400,'Invalid library view');
     return product.library(request.query.view === 'summary');
   });
   app.get('/api/provider-management/definitions',async () => PROVIDER_DEFINITIONS);
-  app.get<{Params:{id:string}}>('/api/provider-management/connections/:id/readiness',async request=>readiness(product,product.get<Connection>('connection',request.params.id),options.approvedOrigins));
+  app.post('/api/provider-management/vertex-credentials',{bodyLimit:70*1024},async(request,reply)=>{
+    reply.header('Cache-Control','no-store');
+    const b=record(request.body);fields(b,['serviceAccount']);
+    if(Buffer.byteLength(JSON.stringify(b.serviceAccount??null),'utf8')>64*1024)throw new HttpError(400,'Service account JSON is too large');
+    if(!options.credentials)throw new HttpError(503,'Service account storage unavailable');
+    return options.credentials.upload(b.serviceAccount);
+  });
+  app.get<{Params:{id:string}}>('/api/provider-management/connections/:id/readiness',async request=>readiness(product,product.get<Connection>('connection',request.params.id),options.approvedOrigins,options.credentials));
   app.get<{Params:{kind:string;id:string}}>('/api/provider-management/:kind/:id/impact',async request=>{
     if(request.params.kind!=='connection'&&request.params.kind!=='model')throw new HttpError(404,'Unsupported management kind');
     return managementImpact(product,request.params.kind,request.params.id);
@@ -57,8 +71,8 @@ export function productRoutes(app: FastifyInstance, store: Store, options: {acce
   app.post('/api/prompt-combinations',async request => product.promptCombination(request.body));
   app.post('/api/prompt-presets',async request => product.promptPreset(request.body));
   app.put<{Params:{id:string}}>('/api/prompt-presets/:id',async request => product.promptPreset(request.body,request.params.id));
-  app.post('/api/connections',async request => product.connection(request.body));
-  app.put<{Params:{id:string}}>('/api/connections/:id',async request => product.connection(request.body,request.params.id));
+  app.post('/api/connections',async request => {const prepared=product.prepareConnection(request.body);options.credentials?.validate(prepared.value);return product.connection(request.body);});
+  app.put<{Params:{id:string}}>('/api/connections/:id',async request => {const prepared=product.prepareConnection(request.body,request.params.id);options.credentials?.validate(prepared.value);return product.connection(request.body,request.params.id);});
   app.post('/api/model-presets',async request => product.model(request.body));
   app.put<{Params:{id:string}}>('/api/model-presets/:id',async request => product.model(request.body,request.params.id));
   app.get<{Params:{kind:string;id:string;revision:string}}>('/api/revisions/:kind/:id/:revision',async request => { if (!['content','preset','prompt-preset','connection','model'].includes(request.params.kind)) throw new HttpError(404,'Revision kind not found'); return product.get(request.params.kind,request.params.id,number(Number(request.params.revision),'revision')); });

@@ -10,6 +10,7 @@ import { BehaviorError } from '../core/package-behavior.js';
 
 export type MainResult = { status: 'completed' | 'refused' | 'partial' | 'error' | 'cancelled'; text: string; error: string | null; usage: Usage };
 export type MainHooks = {
+  resolveCredential?: import('../core/transport.js').ProviderExecutionOptions['resolveCredential'];
   signal: AbortSignal;
   onInput: (input: ModelInput) => void | Promise<void>;
   onToolEvent: (event: ToolEvent) => void | Promise<void>;
@@ -63,7 +64,7 @@ export async function runMain(snapshot: RunSnapshot, hooks: MainHooks): Promise<
     const remainingTimeout = sol?.remainingMs();
     if (remainingTimeout === 0) return fail('TIMEOUT');
     const result = await executeProvider({ id: authorized.id, protocol: authorized.protocol, endpoint: authorized.endpoint, ...(authorized.credentialEnv ? { credentialEnv: authorized.credentialEnv } : {}), ...(authorized.requestTier ? { requestTier: authorized.requestTier } : {}) }, request, {
-      approvedOrigins: hooks.approvedOrigins, signal: hooks.signal,
+      approvedOrigins: hooks.approvedOrigins, signal: hooks.signal, resolveCredential: hooks.resolveCredential,
       vertexRequestTier: hooks.vertexRequestTier, timeoutMs: remainingTimeout ?? hooks.timeoutMs ?? target.timeoutMs ?? (target.connection.protocol === 'vertex-gemini-v1' ? 300_000 : undefined),
       onWire: async wire => {
         attemptId = await hooks.onAttemptStart(wire);

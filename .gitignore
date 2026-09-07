@@ -4,3 +4,4 @@ dist/
 output/
 *.sqlite*
 .env*
+*.vertex-credentials/

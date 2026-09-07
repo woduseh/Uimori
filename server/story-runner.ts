@@ -18,6 +18,7 @@ export type StoryInput = {
   tools: string[]; results: ToolEvent[];
 };
 export type StoryHooks = {
+  resolveCredential?: import('../core/transport.js').ProviderExecutionOptions['resolveCredential'];
   signal: AbortSignal; approvedOrigins: readonly string[]; vertexRequestTier?: 'standard' | 'flex'; timeoutMs?: number;
   authorize: (connection: Connection) => Connection | Promise<Connection>;
   onAttemptStart: (wire: WireRecord) => string | Promise<string>;
@@ -150,7 +151,7 @@ export async function runStoryJob(bundle: { job: StoryJob; snapshot: RunSnapshot
       const remainingTimeout = sol?.remainingMs();
       if (remainingTimeout === 0) return fail('TIMEOUT');
       const response = await executeProvider({ id: connection.id, protocol: connection.protocol, endpoint: connection.endpoint, ...(connection.credentialEnv ? { credentialEnv: connection.credentialEnv } : {}), ...(connection.requestTier ? { requestTier: connection.requestTier } : {}) }, request, {
-        signal: hooks.signal, approvedOrigins: hooks.approvedOrigins, vertexRequestTier: hooks.vertexRequestTier,
+        signal: hooks.signal, approvedOrigins: hooks.approvedOrigins, vertexRequestTier: hooks.vertexRequestTier, resolveCredential: hooks.resolveCredential,
         timeoutMs: remainingTimeout ?? hooks.timeoutMs ?? target.timeoutMs ?? (connection.protocol === 'vertex-gemini-v1' ? 300000 : undefined),
         onWire: async wire => { attempt = await hooks.onAttemptStart({ ...wire, body: redactOpaque(wire.body) }); calls++; },
       });

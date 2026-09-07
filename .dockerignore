@@ -1,0 +1,33 @@
+# Allow only build inputs. Local databases, exports, TLS keys and env files
+# cannot enter the image through COPY . . .
+**
+!package.json
+!package-lock.json
+!tsconfig*.json
+!vite.config.*
+!vitest.config.*
+!playwright.config.*
+!.gitattributes
+!core/
+!core/**
+!server/
+!server/**
+!web/
+!web/**
+!src/
+!src/**
+!scripts/
+!scripts/**
+!tests/
+!tests/**
+!fixtures/
+!fixtures/**
+**/.env*
+**/*.sqlite*
+**/*.pem
+**/*.key
+**/node_modules/
+**/dist/
+**/output/
+**/.local/
+**/*.vertex-credentials/

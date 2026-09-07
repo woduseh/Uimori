@@ -1,0 +1,14 @@
+# Optional overlay. Set UIMORI_SECRETS_DIR to an existing host directory,
+# then include this file with -f (see docs/SELF-HOST.md).
+services:
+  app:
+    environment:
+      GOOGLE_APPLICATION_CREDENTIALS: /run/uimori-secrets/service-account.json
+      NR_VERTEX_REQUEST_TIER: flex
+    volumes:
+      - type: bind
+        source: ${UIMORI_SECRETS_DIR:?Set the absolute directory containing service-account.json}
+        target: /run/uimori-secrets
+        read_only: true
+        bind:
+          create_host_path: false

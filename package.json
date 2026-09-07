@@ -22,7 +22,8 @@
     "verify:providers": "node scripts/verify-provider-management.mjs",
     "verify:native": "node scripts/verify-native-ui.mjs",
     "verify:loading": "node scripts/verify-loading.mjs",
-    "verify:redesign": "node scripts/verify-redesign.mjs"
+    "verify:redesign": "node scripts/verify-redesign.mjs",
+    "verify:selfhost": "node scripts/verify-self-host.mjs"
   },
   "dependencies": {
     "@fastify/static": "10.1.3",

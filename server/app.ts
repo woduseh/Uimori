@@ -20,11 +20,15 @@ import { storyRoutes } from './story-routes.js';
 import { hiddenStoryRoutes } from './hidden-story-routes.js';
 import { registerNativeBotRoutes } from './native-bot-routes.js';
 import { runStoryJob } from './story-runner.js';
+import { deniedBrowserRequest, networkPolicy } from './network-policy.js';
+import { VertexCredentialStore } from './vertex-credentials.js';
+import { ProviderContractError, type ProviderExecutionOptions } from '../core/transport.js';
+import type { Connection } from '../core/product.js';
 
 import { PROVIDER_PROTOCOLS } from '../core/product.js';
 import type { Settings, RunSnapshot, Job } from '../core/types.js';
 
-export type AppOptions = { dbPath: string; buildId: string; instanceId?: string; testMode?: boolean; webRoot?: string; approvedOrigins?:string[];accessToken?:string;liveBudget?:LiveBudgetLimits;vertexRequestTier?:'standard'|'flex' };
+export type AppOptions = { dbPath: string; buildId: string; instanceId?: string; testMode?: boolean; webRoot?: string; approvedOrigins?:string[];accessToken?:string;publicOrigin?:string;liveBudget?:LiveBudgetLimits;vertexRequestTier?:'standard'|'flex' };
 export type App = FastifyInstance & { store: Store; controls: Controls };
 type RecordBody = Record<string, unknown>;
 const object = (value: unknown): RecordBody => {
@@ -48,9 +52,19 @@ function settings(body: RecordBody): Settings {
 }
 
 export async function createApp(options: AppOptions): Promise<App> {
+  const network = networkPolicy(options);
   validateLiveBudgetLimits(options.liveBudget);
   const app = Fastify({ logger: false, bodyLimit: 4 * 1024 * 1024 }) as unknown as App;
   const store = new Store(options.dbPath);
+  const credentials = new VertexCredentialStore(options.dbPath);
+  const resolveCredential:NonNullable<ProviderExecutionOptions['resolveCredential']>=async(reference,connection,signal)=>{
+    const authorize=()=>{
+      if(!connection)throw new ProviderContractError('CREDENTIAL_UNAVAILABLE');
+      const current=store.product.get<Connection>('connection',connection.id);
+      if(!current.enabled||current.protocol!==connection.protocol||current.endpoint!==connection.endpoint||current.credentialEnv!==reference||current.requestTier!==connection.requestTier)throw new ProviderContractError('CREDENTIAL_UNAVAILABLE');
+    };
+    authorize();const token=await credentials.resolve(reference,connection,signal);authorize();return token;
+  };
   const providerBudget = new ProviderBudget(store.db, options.liveBudget);
   const controls = new Controls();
   const instanceId = options.instanceId ?? randomUUID();
@@ -91,7 +105,7 @@ export async function createApp(options: AppOptions): Promise<App> {
           if (snapshot.profile) {
             const log = (kind:'inputs'|'toolEvents',value:unknown) => { const current = store.job(id); if (current.status !== 'running') return; const input = current.input as Record<string,unknown>; const prior = Array.isArray(input[kind]) ? input[kind] : []; store.db.prepare('UPDATE jobs SET input=? WHERE id=?').run(JSON.stringify({...input,[kind]:[...prior,value]}),id); };
             await runAuxiliaryJob(auxiliaryBridge(store,controls,signal),id,instanceId,{
-              signal,approvedOrigins,authorize:connection => store.product.authorize(connection),
+              signal,approvedOrigins,resolveCredential,authorize:connection => store.product.authorize(connection),
               vertexRequestTier:options.vertexRequestTier,onAttemptStart:wire => providerBudget.start(wire,admitted => store.product.startAttempt(chatId,null,id,admitted)),onAttemptFinish:(attempt,result) => store.product.finishAttempt(attempt,result),
               onInput:(_id,input) => { log('inputs',input); if (!snapshot.profile?.models[queued.kind]) store.product.mockAttempt(chatId,null,id,queued.kind,input); },onToolEvent:(_id,event) => log('toolEvents',event),onProgress:() => publish(chatId),cancellationStatus:'interrupted',
             }); return;
@@ -130,7 +144,7 @@ export async function createApp(options: AppOptions): Promise<App> {
           onInput: input => { store.input(id, input); if (run.snapshot.profile && !run.snapshot.profile.models.main) store.product.mockAttempt(run.chatId,id,null,'main',input); },
           onToolEvent: event => store.tool(id, event),
           onBehaviorTool: (binding,action) => executeRunBehaviorTool(store,id,binding,action,controller.signal),
-          approvedOrigins,authorize:connection => store.product.authorize(connection),
+          approvedOrigins,resolveCredential,authorize:connection => store.product.authorize(connection),
           vertexRequestTier:options.vertexRequestTier,onAttemptStart:wire => providerBudget.start(wire,admitted => store.product.startAttempt(run.chatId,id,null,admitted)),onAttemptFinish:(attempt,result) => store.product.finishAttempt(attempt,result),
         });
         if (controller.signal.aborted) {
@@ -167,7 +181,7 @@ export async function createApp(options: AppOptions): Promise<App> {
           publish(job.chatId);
           await controls.wait(job.kind,signal);controls.fail(job.kind);
           const result=await runStoryJob(store.story.bundle(id),{
-            signal,approvedOrigins,authorize:connection=>store.product.authorize(connection),vertexRequestTier:options.vertexRequestTier,
+            signal,approvedOrigins,resolveCredential,authorize:connection=>store.product.authorize(connection),vertexRequestTier:options.vertexRequestTier,
             onAttemptStart:wire=>providerBudget.start(wire,admitted=>store.transaction(()=>{const attempt=store.product.startAttempt(job.chatId,null,null,admitted);store.db.prepare('UPDATE attempts SET story_job_id=? WHERE id=?').run(id,attempt);return attempt;})),
             onAttemptFinish:(attempt,result)=>store.product.finishAttempt(attempt,result),
             onInput:input=>{store.story.diagnostic(id,job.generation,instanceId,'inputs',input);if(job.mock){const attempt=store.product.mockAttempt(job.chatId,null,null,job.kind,input);store.db.prepare('UPDATE attempts SET story_job_id=? WHERE id=?').run(id,attempt);}},
@@ -186,26 +200,24 @@ export async function createApp(options: AppOptions): Promise<App> {
   };
 
   app.addHook('onRequest', async request => {
-    // M0 is a loopback-only single-user synthetic app, with no cross-origin writes.
-    let hostname: string;
-    try { hostname = new URL(`http://${request.headers.host}`).hostname; }
-    catch { throw new HttpError(403, 'Invalid local host'); }
-    if (!['127.0.0.1', 'localhost', '[::1]'].includes(hostname)) throw new HttpError(403, 'Non-loopback host denied');
-    const origin = request.headers.origin;
-    if (origin && origin !== `http://${request.headers.host}`) throw new HttpError(403, 'Cross-origin access denied');
+    const denied = deniedBrowserRequest(network, { method: request.method, headers: {
+      host: request.headers.host, origin: request.headers.origin,
+      'sec-fetch-site': typeof request.headers['sec-fetch-site'] === 'string' ? request.headers['sec-fetch-site'] : undefined,
+    } });
+    if (denied) throw new HttpError(403, denied);
   });
   app.setErrorHandler((error, _request, reply) => {
     const statusCode = error && typeof error === 'object' && 'statusCode' in error ? error.statusCode : undefined;
     const code = error instanceof HttpError ? error.statusCode : typeof statusCode === 'number' && statusCode < 500 ? statusCode : 500;
     void reply.code(code).send({ error: error instanceof HttpError ? error.message : code === 400 ? 'Invalid request' : 'Request failed' });
   });
-  const session = productRoutes(app,store,{approvedOrigins,accessToken:options.accessToken,publish,onAuthChanged:() => { for (const chatId of subscribers.keys()) publish(chatId); }});
+  const session = productRoutes(app,store,{credentials,approvedOrigins,accessToken:options.accessToken,publicOrigin:network.publicOrigin,publish,onAuthChanged:() => { for (const chatId of subscribers.keys()) publish(chatId); }});
   readerRoutes(app,store);
-  registrationRoutes(app,store,{budget:providerBudget,approvedOrigins,signal:stopping.signal,vertexRequestTier:options.vertexRequestTier,track,authenticated:session.authenticated});
+  registrationRoutes(app,store,{budget:providerBudget,approvedOrigins,resolveCredential,signal:stopping.signal,vertexRequestTier:options.vertexRequestTier,track,authenticated:session.authenticated});
   storyRoutes(app,store,{publish,pump:pumpStory,execute,abort:id=>storyControllers.get(id)?.abort()});
   registerNativeBotRoutes(app,store);
   hiddenStoryRoutes(app,store,{publish});
-  app.get('/api/health', async () => ({ ready: true, buildId: options.buildId, instanceId, dbPath: options.dbPath, mode: 'local-provider-runtime', supportedProtocols: [...PROVIDER_PROTOCOLS], vertexRequestTier: options.vertexRequestTier ?? null, liveBudgetConfigured: !!options.liveBudget }));
+  app.get('/api/health', async () => ({ ready: true, buildId: options.buildId, instanceId, dbPath: options.dbPath, mode: network.publicOrigin ? 'self-host' : 'local-provider-runtime', supportedProtocols: [...PROVIDER_PROTOCOLS], vertexRequestTier: options.vertexRequestTier ?? null, liveBudgetConfigured: !!options.liveBudget }));
   app.get('/api/chats', async () => store.chats());
   app.post('/api/chats', async request => {
     const body = object(request.body); only(body, ['title', 'preset', 'botId', 'folderId']);
@@ -265,7 +277,7 @@ export async function createApp(options: AppOptions): Promise<App> {
     const cursor = rawCursor === undefined ? 0 : Number(rawCursor);
     if (!Number.isSafeInteger(cursor) || cursor < 0) throw new HttpError(400, 'Invalid event cursor');
     reply.hijack();
-    reply.raw.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', Connection: 'keep-alive', 'X-Content-Type-Options': 'nosniff' });
+    reply.raw.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache, no-transform', Connection: 'keep-alive', 'X-Content-Type-Options': 'nosniff', 'X-Accel-Buffering': 'no' });
     const listeners = subscribers.get(request.params.id) ?? new Map<ServerResponse, number>();
     subscribers.set(request.params.id, listeners); listeners.set(reply.raw, cursor);
     streamAuthority.set(reply.raw,() => session.authenticated(request.headers.cookie));

@@ -1,0 +1,69 @@
+name: uimori
+
+services:
+  app:
+    build: .
+    image: uimori:local
+    # A single process owns this SQLite database and its background workers.
+    scale: 1
+    init: true
+    restart: unless-stopped
+    stop_grace_period: 30s
+    env_file: .env.self-host
+    environment:
+      NODE_ENV: production
+      NR_HOST: 0.0.0.0
+      NR_PORT: "4310"
+      NR_DB: /data/narrative.sqlite
+      NR_PUBLIC_ORIGIN: ${NR_PUBLIC_ORIGIN:?Set the exact HTTPS origin in .env.self-host}
+      NR_ACCESS_TOKEN: ${NR_ACCESS_TOKEN:?Set a random access token of at least 32 characters}
+      NR_PROVIDER_ORIGINS: ${NR_PROVIDER_ORIGINS:-}
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    volumes:
+      - data:/data
+    # No host port: HTTPS traffic must enter through the proxy.
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - --input-type=module
+        - -e
+        - >-
+          const response = await fetch('http://127.0.0.1:4310/api/session',
+          {headers: {host: new URL(process.env.NR_PUBLIC_ORIGIN).host}, signal: AbortSignal.timeout(3000)});
+          if (!response.ok || !(await response.json()).required) process.exit(1);
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+
+  proxy:
+    image: nginx:stable
+    restart: unless-stopped
+    depends_on:
+      app:
+        condition: service_healthy
+    ports:
+      - "${UIMORI_HTTPS_PORT:-443}:443"
+    volumes:
+      - type: bind
+        source: ./deploy/nginx.conf
+        target: /etc/nginx/conf.d/default.conf
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ${UIMORI_TLS_DIR:?Set the absolute directory containing fullchain.pem and privkey.pem}
+        target: /etc/nginx/tls
+        read_only: true
+        bind:
+          create_host_path: false
+
+volumes:
+  data:

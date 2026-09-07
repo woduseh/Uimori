@@ -11,7 +11,9 @@ async function library(request:APIRequestContext):Promise<Library> {
 }
 async function settings(page:Page) {
   await navigation(page,'설정');
-  await page.getByTestId('connection-settings').locator('summary').first().click();
+  await page.getByRole('tab', { name: '연결과 모델', exact: true }).click();
+  await page.getByRole('button',{name:'빠른 연결 시작',exact:true}).click();
+  await page.getByRole('region',{name:'제공자 선택',exact:true}).getByRole('button',{name:/Sol · Responses/}).click();
   await expect(page.getByLabel('연결 프로토콜')).toBeVisible();
   await page.getByLabel('연결 프로토콜').selectOption('sol-responses-v1');
 }
@@ -49,7 +51,7 @@ test('SOLUI01 desktop gateway and model registration persists selected story rol
     await page.getByLabel('Sol 게이트웨이').selectOption(gateway); await expect(page.getByLabel('API 기본 주소')).toHaveValue(endpoint); await expect(page.getByLabel('API 기본 주소')).toHaveAttribute('readonly','');
   }
   const connection=await register(page,request,title,'llm-gateway');
-  await page.getByLabel('Sol 문맥 제공').selectOption('preloaded'); await page.getByLabel('Sol 추가 도구 라운드').fill('3');
+  await page.getByRole('button',{name:'고급 옵션',exact:true}).click();await page.getByLabel('Sol 문맥 제공').selectOption('preloaded'); await page.getByLabel('Sol 추가 도구 라운드').fill('3');
   await page.getByLabel('제출 원고의 정확한 문자열 교정 허용').check();
   await page.getByText('선택 옵션 · 모델이 지원할 때 사용',{exact:true}).click(); await page.getByLabel('Reasoning effort',{exact:true}).selectOption('max');
   await page.getByText('Sol 공급자 선택 옵션',{exact:true}).click(); await page.getByLabel('Service tier',{exact:true}).selectOption('flex'); await page.getByLabel('Verbosity',{exact:true}).selectOption('high'); await page.getByLabel('Reasoning summary',{exact:true}).selectOption('detailed'); await page.getByLabel('Encrypted reasoning 연속 요청에 사용').check();
@@ -70,9 +72,10 @@ test('SOLUI02 mobile 390px Sol gateway and optional controls remain inside the v
   await page.getByLabel('Sol 게이트웨이').selectOption('local'); await expect(page.getByLabel('API 기본 주소')).toBeEditable(); await page.getByLabel('API 기본 주소').fill('http://127.0.0.1:8080/v1');
   await page.getByLabel('서버 환경변수 이름').scrollIntoViewIfNeeded(); await page.screenshot({path:info.outputPath('sol-mobile-gateway.png')});
   const connection=await register(page,request,title,'vercel');
-  await page.getByText('Sol 공급자 선택 옵션',{exact:true}).click();
+  await page.getByRole('button',{name:'고급 옵션',exact:true}).click();await page.getByText('Sol 공급자 선택 옵션',{exact:true}).click();
   const labels=['모델 프리셋 이름','모델 ID','최대 출력 토큰','응답 제한 시간 (초)','Sol 문맥 제공','Sol 추가 도구 라운드','Service tier','Verbosity','Reasoning summary'];
   for(const label of labels) {
+    await page.getByRole('button',{name:['모델 프리셋 이름','모델 ID'].includes(label)?'기본 정보':['최대 출력 토큰','응답 제한 시간 (초)'].includes(label)?'생성 설정':'고급 옵션',exact:true}).click();
     const control=page.getByLabel(label,{exact:true}); await control.scrollIntoViewIfNeeded(); await expect(control).toBeVisible();
     const box=await control.boundingBox(); expect(box,label).not.toBeNull(); expect(box!.x,label).toBeGreaterThanOrEqual(0); expect(box!.x+box!.width,label).toBeLessThanOrEqual(390); expect(box!.width,label).toBeGreaterThan(120);
   }
@@ -89,5 +92,5 @@ test('SOLUI02 mobile 390px Sol gateway and optional controls remain inside the v
   // Capture the whole section laid out at 390px, including controls below the scroll fold.
   await page.getByRole('group',{name:'Sol 도구와 출력',exact:true}).screenshot({path:info.outputPath('sol-mobile-options.png')});
   const model=await saveModel(page,request,connection); expect(model.sol).toEqual({contextMode:'model-selected',maximumToolRounds:8,terminalLateCorrections:false,includeEncryptedReasoning:true});
-  await page.reload(); await settings(page); await expect(page.getByText(title+' 모델',{exact:true})).toBeVisible(); expect((await library(request)).models.find(item=>item.id===model.id)).toEqual(model); expect(observed.errors).toEqual([]); expect(observed.forbidden).toEqual([]);
+  await page.reload(); await navigation(page,'설정');await page.getByRole('tab',{name:'연결과 모델',exact:true}).click(); await expect(page.getByText(title+' 모델',{exact:true})).toBeVisible(); expect((await library(request)).models.find(item=>item.id===model.id)).toEqual(model); expect(observed.errors).toEqual([]); expect(observed.forbidden).toEqual([]);
 });

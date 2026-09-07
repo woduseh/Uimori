@@ -1,4 +1,5 @@
 import { randomUUID, createHash } from 'node:crypto';
+import { isVertexFileReference, validVertexFileReference } from '../core/credential-reference.js';
 import { existsSync, readFileSync, unlinkSync } from 'node:fs';
 import { isDeepStrictEqual } from 'node:util';
 import type { Store } from './store.js';
@@ -155,6 +156,7 @@ export class ProductStore {
     const endpoint = connectionEndpoint(b.endpoint,protocol);
     const credentialEnv = b.credentialEnv === undefined || b.credentialEnv === '' ? undefined : text(b.credentialEnv,'credential reference',200);
     if (credentialEnv && !/^NARRATIVE_PROVIDER_[A-Z0-9_]+$/.test(credentialEnv)) throw new HttpError(400,'Invalid credential reference');
+    if (credentialEnv && isVertexFileReference(credentialEnv) && (protocol !== 'vertex-gemini-v1' || !validVertexFileReference(credentialEnv))) throw new HttpError(400,'Invalid service account reference');
     const prior = id ? this.get<Connection>('connection',id) : undefined;
     const expectedRevision = id ? number(b.expectedRevision,'revision') : undefined;
     if (prior && prior.revision !== expectedRevision) throw new HttpError(409,'Revision conflict');

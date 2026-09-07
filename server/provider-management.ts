@@ -1,6 +1,8 @@
 import { existsSync } from 'node:fs';
 import type { Connection, ContentRef, ModelPreset } from '../core/product.js';
 import type { ProductStore } from './product-store.js';
+import { isVertexFileReference } from '../core/credential-reference.js';
+import type { VertexCredentialStore } from './vertex-credentials.js';
 
 export type ProviderReadiness = {
   enabled: boolean; originApproved: boolean;
@@ -9,13 +11,13 @@ export type ProviderReadiness = {
 };
 
 /** Configuration presence only. This performs no authentication or provider request. */
-export function readiness(_store: ProductStore, connection: Connection, approvedOrigins: readonly string[]): ProviderReadiness {
+export function readiness(_store: ProductStore, connection: Connection, approvedOrigins: readonly string[], credentials?:VertexCredentialStore): ProviderReadiness {
   let originApproved = false;
   try { originApproved = approvedOrigins.includes(new URL(connection.endpoint).origin); } catch { /* Invalid roots are never ready. */ }
   let credentialStatus: ProviderReadiness['credentialStatus'];
   if (connection.credentialEnv) {
     const reference = connection.credentialEnv;
-    const configured = /^NARRATIVE_PROVIDER_[A-Z0-9_]+$/.test(reference) && Boolean(process.env[reference]) && !/[\r\n]/u.test(process.env[reference]!);
+    const configured = isVertexFileReference(reference) ? credentials?.configured(connection)===true : /^NARRATIVE_PROVIDER_[A-Z0-9_]+$/.test(reference) && Boolean(process.env[reference]) && !/[\r\n]/u.test(process.env[reference]!);
     credentialStatus = configured ? 'configured' : 'missing';
   } else if (connection.protocol === 'vertex-gemini-v1') {
     const path = process.env.GOOGLE_APPLICATION_CREDENTIALS;

@@ -5,6 +5,7 @@ import { executeNativeProvider } from './provider-http.js';
 import { validateSolOptions } from './sol-config.js';
 import { validateProviderPrompt, type ProviderPrompt } from './prompt-program.js';
 import { ProviderContractError } from './provider-errors.js';
+import { isVertexFileReference, validVertexFileReference } from './credential-reference.js';
 export { ProviderContractError } from './provider-errors.js';
 
 /** This versioned loopback protocol is a local fixture, not a live API claim. */
@@ -67,6 +68,7 @@ export function validateConnection(value: unknown, approvedOrigins: readonly str
   try { validateProviderEndpoint(value.protocol as ProviderProtocol, url.href); } catch { reject(value.protocol === 'vertex-gemini-v1' ? 'INVALID_VERTEX_ENDPOINT' : 'INVALID_PROVIDER_ENDPOINT'); }
   if (value.requestTier !== undefined && (value.protocol !== 'vertex-gemini-v1' || !['standard', 'flex'].includes(value.requestTier as string))) reject('INVALID_VERTEX_REQUEST_TIER');
   if (value.credentialEnv !== undefined && (typeof value.credentialEnv !== 'string' || !/^NARRATIVE_PROVIDER_[A-Z0-9_]+$/.test(value.credentialEnv))) reject('INVALID_CREDENTIAL_REFERENCE');
+  if (typeof value.credentialEnv === 'string' && isVertexFileReference(value.credentialEnv) && (value.protocol !== 'vertex-gemini-v1' || !validVertexFileReference(value.credentialEnv))) reject('INVALID_CREDENTIAL_REFERENCE');
   return { id: value.id, protocol: value.protocol as ProviderProtocol, endpoint: url.href, ...(value.credentialEnv ? { credentialEnv: value.credentialEnv as string } : {}), ...(value.requestTier ? { requestTier: value.requestTier as VertexRequestTier } : {}) };
 }
 
@@ -150,7 +152,7 @@ function redact(value: Json, secret?: string): Json {
 /** Fetch + fatal UTF-8 decoder + SSE assembler. Never retries or follows redirects. */
 export type ProviderExecutionOptions = {
   approvedOrigins: readonly string[]; signal: AbortSignal; timeoutMs?: number; vertexRequestTier?: VertexRequestTier;
-  resolveCredential?: (envReference: string) => string | undefined | Promise<string | undefined>;
+  resolveCredential?: (envReference: string, connection?: ProviderConnection, signal?: AbortSignal) => string | undefined | Promise<string | undefined>;
   onWire?: (record: WireRecord) => void | Promise<void>;
 };
 export async function executeProvider(connectionValue: ProviderConnection, requestValue: ProviderRequest, options: ProviderExecutionOptions): Promise<ProviderResult> {
@@ -179,7 +181,7 @@ export async function executeProvider(connectionValue: ProviderConnection, reque
     const request = validateRequest(requestValue);
     if (signal.aborted) return failure('CANCELLED');
     if (connection.credentialEnv) {
-      secret = await (options.resolveCredential ?? (name => process.env[name]))(connection.credentialEnv);
+      secret = await (options.resolveCredential ?? (name => process.env[name]))(connection.credentialEnv, connection, signal);
       if (!secret || /[\r\n]/u.test(secret)) reject('CREDENTIAL_UNAVAILABLE');
     }
     // Stable prefix precedes dynamic controls and sources in the serialized body.

@@ -3,6 +3,7 @@ import { defaultSolOptions } from '../core/sol-config.js';
 import { executeProvider, type Json, type ProviderRequest, type ProviderResult, type WireRecord } from '../core/transport.js';
 
 export type RegistrationAgentHooks = {
+  resolveCredential?: import('../core/transport.js').ProviderExecutionOptions['resolveCredential'];
   approvedOrigins: readonly string[]; signal: AbortSignal; timeoutMs?: number; vertexRequestTier?: VertexRequestTier; context: Json;
   authorize: (connection: Connection) => Connection | Promise<Connection>;
   onAttemptStart: (wire: WireRecord) => string | Promise<string>;
@@ -102,7 +103,7 @@ export async function runRegistrationAgent(target: ModelPreset & { connection: C
     };
     const result = await executeProvider({ id: fixed.connection.id, protocol: fixed.connection.protocol, endpoint: fixed.connection.endpoint,
       ...(fixed.connection.credentialEnv ? { credentialEnv: fixed.connection.credentialEnv } : {}), ...(fixed.connection.requestTier ? { requestTier: fixed.connection.requestTier } : {}),
-    }, input, { approvedOrigins: hooks.approvedOrigins, signal, timeoutMs: duration, vertexRequestTier: hooks.vertexRequestTier,
+    }, input, { approvedOrigins: hooks.approvedOrigins, signal, timeoutMs: duration, vertexRequestTier: hooks.vertexRequestTier, resolveCredential: hooks.resolveCredential,
       onWire: async wire => {
         try { await check(); } catch (error) { boundaryError = (error as Error).message; throw error; }
         try { attempt = await hooks.onAttemptStart(wire); } catch { boundaryError = 'REGISTRATION_ATTEMPT_START_FAILED'; throw new Error(boundaryError); }

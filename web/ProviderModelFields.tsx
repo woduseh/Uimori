@@ -26,18 +26,23 @@ export function modelPayload(draft:ModelDraft,connection:Connection) {
     ...(connection.protocol==='sol-responses-v1'?{sol:draft.sol}:{}),...(draft.userOverrides?{userOverrides:draft.userOverrides}:{})};
 }
 
-export function ProviderModelFields({value,onChange,connection}:{value:ModelDraft;onChange:(value:ModelDraft)=>void;connection:Connection|undefined}) {
+export function ProviderModelFields({value,onChange,connection,section}:{section:'basic'|'generation'|'advanced';value:ModelDraft;onChange:(value:ModelDraft)=>void;connection:Connection|undefined}) {
   const vertex=connection?.protocol==='vertex-gemini-v1',fixture=connection?.protocol==='fixture-sse-v1',anthropic=connection?.protocol==='anthropic-messages-v1',isSol=connection?.protocol==='sol-responses-v1';
   const update=(next:Partial<ModelDraft>)=>onChange({...value,...next}); const sol=value.sol;
   const setSol=(next:SolOptions)=>update({sol:next});
   const override=(key:'tools'|'structuredOutput'|'note',next:boolean|null|string)=>update({userOverrides:{tools:null,structuredOutput:null,note:'',...value.userOverrides,[key]:next}});
   return <>
+    <div className="provider-model-section full" data-model-section="basic" hidden={section!=='basic'}>
     <label className="full">모델 ID<input aria-label="모델 ID" list="available-models" required readOnly={vertex} value={value.modelId} onChange={event=>update({modelId:event.target.value})}/><datalist id="available-models">{connection?.catalog.map(item=><option key={item.id} value={item.id}>{item.name}</option>)}</datalist><small>목록에서 고르거나 모델 ID를 직접 입력해요. ID 입력만으로 공급자 지원 여부가 확인되지는 않아요.</small></label>
+    </div>
+    <div className="provider-model-section full" data-model-section="generation" hidden={section!=='generation'}>
     <label>최대 출력 토큰<input aria-label="최대 출력 토큰" type="number" min={1} max={vertex?VERTEX_GEMINI_MAX_OUTPUT_TOKENS:200000} required value={value.maxOutputTokens} onChange={event=>update({maxOutputTokens:Number(event.target.value)})}/></label>
     {vertex?<label>생각 수준<select aria-label="생각 수준" value={value.thinkingLevel||'MEDIUM'} onChange={event=>update({thinkingLevel:event.target.value as ModelDraft['thinkingLevel']})}>{['LOW','MEDIUM','HIGH'].map(item=><option key={item}>{item}</option>)}</select></label>:<label>Temperature<input aria-label="Temperature" type="number" step={0.1} min={0} max={anthropic?1:2} placeholder="공급자 기본값" value={value.temperature} onChange={event=>update({temperature:event.target.value})}/></label>}
     {!fixture&&<label>응답 제한 시간 (초)<input aria-label="응답 제한 시간 (초)" type="number" step="any" min={0.001} max={1800} placeholder="앱 기본값" value={value.timeoutSeconds} onChange={event=>update({timeoutSeconds:event.target.value})}/></label>}
     <label className="check"><input type="checkbox" checked={value.enabled} onChange={event=>update({enabled:event.target.checked})}/>새 모델 선택에 표시</label>
     {vertex?<small className="full">Gemini 3.8 Flash는 Temperature를 사용하지 않아요. Flex는 응답이 늦을 수 있어 제한 시간을 최대 1800초까지 늘릴 수 있어요.</small>:<small className="full">모델의 옵션 지원 여부를 확인해 저장하세요. 미지원 옵션 때문에 실패해도 앱이 옵션을 바꿔 자동 재요청하지 않아요.</small>}
+    </div>
+    <div className="provider-model-section full" data-model-section="advanced" hidden={section!=='advanced'}>
     {connection&&!vertex&&!fixture&&<details className="full"><summary>선택 옵션 · 모델이 지원할 때 사용</summary><div className="editor-grid">
       <label>번역 구조화 출력<select aria-label="번역 구조화 출력" value={value.structuredOutput} onChange={event=>update({structuredOutput:event.target.value as ModelDraft['structuredOutput']})}><option value="default">연결 기본값</option><option value="on">JSON Schema 사용</option><option value="off">지침과 결과 검증만 사용</option></select></label>
       <label>Reasoning effort<select aria-label="Reasoning effort" value={value.reasoningEffort} onChange={event=>update({reasoningEffort:event.target.value})}><option value="">공급자 기본값</option>{(anthropic?['low','medium','high','xhigh','max']:isSol?['none','minimal','low','medium','high','xhigh','max']:['none','minimal','low','medium','high','xhigh']).map(item=><option key={item}>{item}</option>)}</select></label>
@@ -63,6 +68,7 @@ export function ProviderModelFields({value,onChange,connection}:{value:ModelDraf
       <label className="full">기능 판단 메모<textarea aria-label="기능 판단 메모" maxLength={2000} value={value.userOverrides?.note??''} onChange={event=>override('note',event.target.value)}/></label>
       {value.userOverrides&&<button type="button" className="secondary" onClick={()=>update({userOverrides:undefined})}>사용자 판단 지우기</button>}
     </div></details>
+    </div>
   </>;
 }
 

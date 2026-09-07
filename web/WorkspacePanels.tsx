@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useId, useState } from 'react';
+import { Settings, Plug, Database, Shield } from 'lucide-react';
 import type { Job, Run } from '../core/types.js';
 import { LazyDiagnostics } from './LazyDiagnostics.js';
 import { branchLabel } from './storyLabels.js';
@@ -72,10 +73,35 @@ export function BranchesPanel({ state, onClose }: { state: StoryState; onClose: 
 
 export function AppSettingsPanel({ state, theme, setTheme, enterSend, setEnterSend }: { state: StoryState; theme: 'system' | 'dark' | 'light'; setTheme: (theme: 'system' | 'dark' | 'light') => void; enterSend: boolean; setEnterSend: (value: boolean) => void }) {
   const [signingOut, setSigningOut] = useState(false);
+  const [active, setActive] = useState('general');
+  const [visited, setVisited] = useState(['general']);
+  const id = useId();
+  const categories = [
+    { key: 'general', label: '일반', icon: Settings },
+    { key: 'connections', label: '연결과 모델', icon: Plug },
+    { key: 'data', label: '데이터 관리', icon: Database },
+    { key: 'security', label: '접근 보안', icon: Shield },
+  ];
+  function select(key: string) { setActive(key); setVisited(previous => previous.includes(key) ? previous : [...previous, key]); }
   return <section className="app-settings-panel" aria-label="앱 설정">
-    <section className="settings-section"><h3>화면과 입력</h3><label>화면 테마<select aria-label="앱 화면 테마" value={theme} onChange={event => setTheme(event.target.value as 'system' | 'dark' | 'light')}><option value="system">기기 설정 따르기</option><option value="dark">어둡게</option><option value="light">밝게</option></select></label><label className="check"><input type="checkbox" checked={enterSend} onChange={event => setEnterSend(event.target.checked)}/>Enter로 보내기</label><small>{enterSend ? 'Enter로 보내고 Shift+Enter로 줄을 바꿔요.' : 'Enter는 줄바꿈, Ctrl/Cmd+Enter는 보내기예요.'} 한글 조합 중에는 보내지 않아요.</small></section>
-    <details className="workspace-tools" data-testid="connection-settings"><summary>연결과 모델</summary>{state.library ? <ConnectionEditor library={state.library} reload={state.loadLibrary} onError={state.setError}/> : <p role="status">연결 목록을 불러오는 중이에요…</p>}</details>
-    <ArchivePanel onImported={async () => { await Promise.all([state.loadChats(), state.loadLibrary()]); if (state.selected) await state.refresh(state.selected); }} onError={state.setError}/>
-    <section className="settings-section"><h3>접근 보안</h3><p className="muted">현재 브라우저의 접속 세션을 해제해요. 서버에서 진행 중인 생성은 취소되지 않아요.</p><button type="button" className="secondary" disabled={signingOut} onClick={() => { setSigningOut(true); void api('/session', {}, 'DELETE').then(() => location.reload()).catch(error => { state.setError(error.message); setSigningOut(false); }); }}>접속 해제</button></section>
+    <div className="settings-navigation" role="tablist" aria-label="설정 항목" aria-orientation="vertical" onKeyDown={event => {
+      const index = categories.findIndex(item => item.key === active);
+      const next = event.key === 'Home' ? 0 : event.key === 'End' ? categories.length - 1 : ['ArrowDown', 'ArrowRight'].includes(event.key) ? (index + 1) % categories.length : ['ArrowUp', 'ArrowLeft'].includes(event.key) ? (index + categories.length - 1) % categories.length : -1;
+      if (next < 0) return;
+      event.preventDefault(); select(categories[next].key);
+      event.currentTarget.querySelectorAll<HTMLButtonElement>('[role="tab"]')[next]?.focus();
+    }}>
+      {categories.map(({ key, label, icon: Icon }) => <button type="button" role="tab" key={key} id={`${id}-${key}-tab`} aria-controls={`${id}-${key}-panel`} aria-selected={active === key} tabIndex={active === key ? 0 : -1} onClick={() => select(key)}><Icon size={18} aria-hidden="true"/><span>{label}</span></button>)}
+    </div>
+    <div className="settings-pages">
+      {categories.map(({ key, label }) => <section className="settings-page" role="tabpanel" id={`${id}-${key}-panel`} aria-labelledby={`${id}-${key}-tab`} hidden={active !== key} tabIndex={0} key={key}>
+        {visited.includes(key) && <><h3 className="settings-page-title">{label}</h3>
+          {key === 'general' && <section className="settings-section"><h3>화면과 입력</h3><label>화면 테마<select aria-label="앱 화면 테마" value={theme} onChange={event => setTheme(event.target.value as 'system' | 'dark' | 'light')}><option value="system">기기 설정 따르기</option><option value="dark">어둡게</option><option value="light">밝게</option></select></label><label className="check"><input type="checkbox" checked={enterSend} onChange={event => setEnterSend(event.target.checked)}/>Enter로 보내기</label><small>{enterSend ? 'Enter로 보내고 Shift+Enter로 줄을 바꿔요.' : 'Enter는 줄바꿈, Ctrl/Cmd+Enter는 보내기예요.'} 한글 조합 중에는 보내지 않아요.</small></section>}
+          {key === 'connections' && <div data-testid="connection-settings">{state.library ? <ConnectionEditor library={state.library} reload={state.loadLibrary} onError={state.setError}/> : <p role="status">연결 목록을 불러오는 중이에요…</p>}</div>}
+          {key === 'data' && <ArchivePanel expanded onImported={async () => { await Promise.all([state.loadChats(), state.loadLibrary()]); if (state.selected) await state.refresh(state.selected); }} onError={state.setError}/>}
+          {key === 'security' && <section className="settings-section"><p className="muted">현재 브라우저의 접속 세션을 해제해요. 서버에서 진행 중인 생성은 취소되지 않아요.</p><button type="button" className="secondary" disabled={signingOut} onClick={() => { setSigningOut(true); void api('/session', {}, 'DELETE').then(() => location.reload()).catch(error => { state.setError(error.message); setSigningOut(false); }); }}>접속 해제</button></section>}
+        </>}
+      </section>)}
+    </div>
   </section>;
 }

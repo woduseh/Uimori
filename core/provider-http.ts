@@ -40,7 +40,7 @@ export async function executeNativeProvider(connectionValue: ProviderConnection,
     else if (connection.protocol === 'vercel-chat-v1' || connection.protocol === 'openai-chat-v1') { const prepared = encodeChat(request); decoder = new ChatDecoder(prepared.context); bodyValue = prepared.body; diagnostic = diagnosticChatBody(bodyValue); path = '/chat/completions'; allowDone = true; }
     else throw new ProviderContractError('UNSUPPORTED_PROTOCOL');
     if (signal.aborted) return failure('CANCELLED');
-    const secret = connection.credentialEnv ? await (options.resolveCredential ?? (name => process.env[name]))(connection.credentialEnv) : undefined;
+    const secret = connection.credentialEnv ? await (options.resolveCredential ?? (name => process.env[name]))(connection.credentialEnv, connection, signal) : undefined;
     if ((connection.credentialEnv || connection.protocol !== 'openai-chat-v1') && (!secret || /[\r\n]/u.test(secret))) throw new ProviderContractError('CREDENTIAL_UNAVAILABLE');
     const headers: Record<string,string> = { 'content-type':'application/json', accept:connection.protocol === 'sol-responses-v1' ? 'text/event-stream, application/json' : 'text/event-stream' };
     if (connection.protocol === 'anthropic-messages-v1') { headers['anthropic-version'] = '2023-06-01'; headers['x-api-key'] = secret!; }

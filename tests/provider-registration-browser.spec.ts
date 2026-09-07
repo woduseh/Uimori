@@ -2,7 +2,7 @@ import { test, expect, type Page, type APIRequestContext } from '@playwright/tes
 import type { Connection, Library, ModelPreset } from '../core/product.js';
 import type { RegistrationView } from '../core/provider-registration.js';
 
-async function settings(page:Page){const button=page.getByRole('button',{name:'설정',exact:true});if(!await button.isVisible())await page.getByRole('button',{name:'탐색 메뉴',exact:true}).click();await button.click();await page.getByTestId('connection-settings').locator('summary').first().click();await page.getByTestId('provider-registration-assistant').locator('summary').first().click();}
+async function settings(page:Page){const button=page.getByRole('button',{name:'설정',exact:true});if(!await button.isVisible())await page.getByRole('button',{name:'탐색 메뉴',exact:true}).click();await button.click();await page.getByRole('tab', { name: '연결과 모델', exact: true }).click();await page.getByTestId('provider-registration-assistant').locator('summary').first().click();}
 async function post<T>(request:APIRequestContext,path:string,data:unknown):Promise<T>{const r=await request.post('/api'+path,{data});expect(r.ok(),await r.text()).toBeTruthy();return r.json();}
 const getLibrary=async(request:APIRequestContext)=>(await request.get('/api/library')).json() as Promise<Library>;
 

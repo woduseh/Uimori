@@ -85,7 +85,7 @@ export async function executeVertexProvider(connectionValue: ProviderConnection,
     decoder = new VertexDecoder(prepared.context);
     if (signal.aborted) return failure('CANCELLED');
     const token = connection.credentialEnv
-      ? await (options.resolveCredential ?? (name => process.env[name]))(connection.credentialEnv)
+      ? await (options.resolveCredential ?? (name => process.env[name]))(connection.credentialEnv, connection, signal)
       : await vertexAccessToken(signal);
     if (!token || /[\r\n]/u.test(token)) throw new ProviderContractError('CREDENTIAL_UNAVAILABLE');
     if (signal.aborted) return failure('CANCELLED');
