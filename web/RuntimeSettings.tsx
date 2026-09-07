@@ -1,0 +1,32 @@
+import React, { useEffect, useState } from 'react';
+import type { Run, Chat, Settings } from '../core/types.js';
+import { api } from './api.js';
+export function RunIssue({ run, refresh, onError }: { run: Run; refresh: () => Promise<void>; onError: (error: string) => void }) {
+  const [note, setNote] = useState(run.issue ?? '');
+  const [busy, setBusy] = useState(false);
+  return <details className="inspector"><summary>요청 충실성 기록</summary><form className="editor-grid" onSubmit={async event => { event.preventDefault(); setBusy(true); try { await api(`/runs/${run.id}/issue`, { note }); await refresh(); } catch (error) { onError((error as Error).message); } finally { setBusy(false); } }}><label className="full">요청 충실성 메모<textarea aria-label="요청 충실성 메모" rows={2} maxLength={2000} value={note} onChange={event => setNote(event.target.value)} placeholder="전제·인물·장르가 달라진 부분을 기록해요."/></label><button className="secondary" disabled={busy}>메모 저장</button><small>메모는 원문을 자동 수정하거나 삭제하지 않아요.</small></form></details>;
+}
+
+export function SettingsEditor({ chat, onSaved, onError }: { chat: Chat; onSaved: () => Promise<void>; onError: (e: string) => void }) {
+  const [value, setValue] = useState<Settings>(chat.settings);
+  const [revision, setRevision] = useState(chat.settingsRevision);
+  const [dirty, setDirty] = useState(false); const [saving, setSaving] = useState(false);
+  const [message, setMessage] = useState(''); const [localError, setLocalError] = useState('');
+  useEffect(() => { if (!dirty && chat.settingsRevision >= revision) { setValue(chat.settings); setRevision(chat.settingsRevision); } }, [chat.settings, chat.settingsRevision, dirty, revision]);
+  function update<K extends keyof Settings>(key: K, next: Settings[K]) { setDirty(true); setMessage(''); setValue(old => ({ ...old, [key]: next })); }
+  return <section className="settings"><h3>자동 후속 작업</h3><small>저장된 설정 v{chat.settingsRevision} · 다음 원고부터 적용해요.</small><form onSubmit={async event => {
+    event.preventDefault(); setSaving(true); setLocalError('');
+    try { const saved = await api<Chat>(`/chats/${chat.id}/settings`, { ...value, expectedSettingsRevision: revision }, 'PATCH'); setValue(saved.settings); setRevision(saved.settingsRevision); setDirty(false); setMessage('후속 작업 설정을 저장했어요.'); onError(''); await onSaved(); }
+    catch (error) { const text = (error as Error).message; setLocalError(text); onError(text); } finally { setSaving(false); }
+  }}><fieldset className="editor-fields full" disabled={saving}>
+    <small className="full">한국어 번역은 각 장면의 번역 보기를 누를 때 시작해요.</small>
+    <label className="check"><input aria-label="장면 상태 자동 실행" type="checkbox" checked={value.status} onChange={event => update('status', event.target.checked)}/>장면 상태 자동 실행</label>
+    <small className="full">모델 경로는 역할별 모델 설정을 따라요. 장면 상태를 끄면 새 원고에서 상태 작업을 호출하지 않아요.</small>
+    <details className="full fixture-settings"><summary>개발자용 모의 실행 제어</summary><div className="editor-grid">
+      <label>모의 서술 프리셋<select aria-label="서술 프리셋" value={value.preset} onChange={event => update('preset', event.target.value as Settings['preset'])}><option value="calm">차분한 서술</option><option value="vivid">선명한 서술</option></select></label>
+      <label>모의 생성 경로<select aria-label="모의 생성 경로" value={value.mode} onChange={event => update('mode', event.target.value as Settings['mode'])}><option value="direct">바로 쓰기 · 도구 없음</option><option value="research">로컬 자료 조사 후 쓰기</option></select></label>
+      <small className="full">이 값은 scripted mock 동작에 사용해요. 제품용 문체·시점·분량은 창작 제어에서 설정해요.</small>
+    </div></details>
+    <div className="form-actions full"><button className="secondary" disabled={!dirty}>설정 저장</button>{dirty && <button type="button" className="secondary" onClick={() => { setValue(chat.settings); setRevision(chat.settingsRevision); setDirty(false); setLocalError(''); onError(''); }}>저장된 설정 다시 불러오기</button>}</div>
+  </fieldset>{message && <p role="status" className="full">{message}</p>}{localError && <p className="error full">{localError}</p>}</form></section>;
+}

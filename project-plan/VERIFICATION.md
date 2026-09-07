@@ -79,6 +79,12 @@ translation은 의미/주체/불확실성/호칭/한국어 문체와 protected s
 
 ## 9. agent 협업과 작업 종료
 
+### M2 로컬 실행
+
+`npm run verify -- --milestone M2-local`은 S01–S07의 실제 Vitest reporter, 브라우저 원문/상태/예약/에셋 검사, S07 네 가지 크기 축 측정을 새 포트·SQLite에서 실행한다. 결과는 `output/playwright/m2-<run-id>/summary.json`, `story-performance.json`, reporter/화면/DB에 기록한다. source/build 변화, 필수 skip·0개·실패·근거 누락·cleanup 실패는 성공이 아니다. 환경 doctor 실패는 BLOCKED로 구분한다.
+
+`--milestone M2`는 같은 로컬 범위를 실행한 뒤 Q04의 실제 장기 의미 품질·비용 및 지정된 봇의 승인된 native 포팅이 남아 있으면 BLOCKED로 종료한다. M1의 기존 유료 시험 예산은 새로운 M2 평가의 승인을 대신하지 않는다. 현재 합성 모듈은 Lua/CBS 실행 호환이나 실제 사용자 봇 대체의 근거가 아니다.
+
 기본 한 lead와 별도 검토 pass. 병렬화가 실제 대기를 줄이거나 오류 탐지에 도움이 될 때 한정된 경계를 나눈다. contracts/lockfile/migrations/전역 test config는 한 담당자가 통합한다. 검토자는 안심 문구보다 요구 누락·false oracle·race·secret·test weakening 반례를 찾는다. 독립 reviewer 부재면 그 한계를 알린다.
 
 통합한 최종 revision에서 필요한 검사만 다시 실행한다. merge 권한/브랜치 보호/CI 정책을 편의상 낮추지 않는다. 실제 코드 검증과 무관한 대규모 slop audit/refactor는 별도 범위로 남긴다.

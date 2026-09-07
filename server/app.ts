@@ -8,12 +8,17 @@ import { Store, HttpError } from './store.js';
 import { Controls, type Barrier, type FailurePoint } from './controls.js';
 import { syntheticResources } from '../core/provider.js';
 import { runMain } from './model-runner.js';
+import { ProviderBudget, validateLiveBudgetLimits, type LiveBudgetLimits } from './provider-budget.js';
 import { runAuxiliaryJob } from './product-auxiliary.js';
 import { auxiliaryBridge } from './auxiliary-bridge.js';
 import { productRoutes } from './product-routes.js';
+import { storyRoutes } from './story-routes.js';
+import { runStoryJob } from './story-runner.js';
+
+import { PROVIDER_PROTOCOLS } from '../core/product.js';
 import type { Settings, RunSnapshot, Job } from '../core/types.js';
 
-export type AppOptions = { dbPath: string; buildId: string; instanceId?: string; testMode?: boolean; webRoot?: string; approvedOrigins?:string[];accessToken?:string };
+export type AppOptions = { dbPath: string; buildId: string; instanceId?: string; testMode?: boolean; webRoot?: string; approvedOrigins?:string[];accessToken?:string;liveBudget?:LiveBudgetLimits;vertexRequestTier?:'standard'|'flex' };
 export type App = FastifyInstance & { store: Store; controls: Controls };
 type RecordBody = Record<string, unknown>;
 const object = (value: unknown): RecordBody => {
@@ -37,8 +42,10 @@ function settings(body: RecordBody): Settings {
 }
 
 export async function createApp(options: AppOptions): Promise<App> {
+  validateLiveBudgetLimits(options.liveBudget);
   const app = Fastify({ logger: false, bodyLimit: 4 * 1024 * 1024 }) as unknown as App;
   const store = new Store(options.dbPath);
+  const providerBudget = new ProviderBudget(store.db, options.liveBudget);
   const controls = new Controls();
   const instanceId = options.instanceId ?? randomUUID();
   app.decorate('store', store); app.decorate('controls', controls);
@@ -48,6 +55,7 @@ export async function createApp(options: AppOptions): Promise<App> {
   const runs = new Map<string, AbortController>();
   const jobs = new Set<string>();
   const jobControllers = new Map<string,AbortController>();
+  const storyControllers = new Map<string,AbortController>();
   const approvedOrigins = options.approvedOrigins ?? [];
   const stopping = new AbortController();
   const publish = (chatId: string) => {
@@ -72,13 +80,14 @@ export async function createApp(options: AppOptions): Promise<App> {
         let chatId = '';
         try {
           const queued = store.job(id); chatId = queued.chatId;
-          const source = store.source(queued.sourceRevision);
-          if (store.run(source.runId).snapshot.profile) {
+          const source = store.sourceAtHash(queued.sourceRevision,queued.sourceHash);
+          const snapshot = store.product.resolveJobPrompt(store.run(source.runId).snapshot,queued.input);
+          if (snapshot.profile) {
             const log = (kind:'inputs'|'toolEvents',value:unknown) => { const current = store.job(id); if (current.status !== 'running') return; const input = current.input as Record<string,unknown>; const prior = Array.isArray(input[kind]) ? input[kind] : []; store.db.prepare('UPDATE jobs SET input=? WHERE id=?').run(JSON.stringify({...input,[kind]:[...prior,value]}),id); };
             await runAuxiliaryJob(auxiliaryBridge(store,controls,signal),id,instanceId,{
               signal,approvedOrigins,authorize:connection => store.product.authorize(connection),
-              onAttemptStart:wire => store.product.startAttempt(chatId,null,id,wire),onAttemptFinish:(attempt,result) => store.product.finishAttempt(attempt,result),
-              onInput:(_id,input) => { log('inputs',input); if (!store.run(source.runId).snapshot.profile?.models[queued.kind]) store.product.mockAttempt(chatId,null,id,queued.kind,input); },onToolEvent:(_id,event) => log('toolEvents',event),onProgress:() => publish(chatId),cancellationStatus:'interrupted',
+              vertexRequestTier:options.vertexRequestTier,onAttemptStart:wire => providerBudget.start(wire,admitted => store.product.startAttempt(chatId,null,id,admitted)),onAttemptFinish:(attempt,result) => store.product.finishAttempt(attempt,result),
+              onInput:(_id,input) => { log('inputs',input); if (!snapshot.profile?.models[queued.kind]) store.product.mockAttempt(chatId,null,id,queued.kind,input); },onToolEvent:(_id,event) => log('toolEvents',event),onProgress:() => publish(chatId),cancellationStatus:'interrupted',
             }); return;
           }
           const input = queued.kind === 'translation'
@@ -115,13 +124,16 @@ export async function createApp(options: AppOptions): Promise<App> {
           onInput: input => { store.input(id, input); if (run.snapshot.profile && !run.snapshot.profile.models.main) store.product.mockAttempt(run.chatId,id,null,'main',input); },
           onToolEvent: event => store.tool(id, event),
           approvedOrigins,authorize:connection => store.product.authorize(connection),
-          onAttemptStart:wire => store.product.startAttempt(run.chatId,id,null,wire),onAttemptFinish:(attempt,result) => store.product.finishAttempt(attempt,result),
+          vertexRequestTier:options.vertexRequestTier,onAttemptStart:wire => providerBudget.start(wire,admitted => store.product.startAttempt(run.chatId,id,null,admitted)),onAttemptFinish:(attempt,result) => store.product.finishAttempt(attempt,result),
         });
-        controller.signal.throwIfAborted();
+        if (controller.signal.aborted) {
+          // Cancellation owns the terminal state; late provider usage is accounting only.
+          store.settleCancelledUsage(id, result.usage); publish(run.chatId); return;
+        }
         if (result.status !== 'completed') { store.finishRun(id,result.status === 'error' ? 'failed' : result.status,result.error ?? 'Provider execution ended',result.status === 'partial' ? result.text : '',result.usage); publish(run.chatId); return; }
         store.completeRun(id, result.text, result.usage, run.snapshot.settings, controls);
         if (controls.crashAfterSourceCommit) process.exit(86);
-        publish(run.chatId); pumpJobs();
+        publish(run.chatId); pumpJobs(); pumpStory();
       } catch (error) {
         if (!stopping.signal.aborted) {
           const message = error instanceof Error ? error.message : '';
@@ -131,6 +143,39 @@ export async function createApp(options: AppOptions): Promise<App> {
         }
       } finally { runs.delete(id); stopping.signal.removeEventListener('abort', onStop); }
     })());
+  };
+  const pumpStory = () => {
+    if(stopping.signal.aborted)return;
+    for(const [id,controller] of storyControllers)if(!['queued','running'].includes(store.story.job(id).status))controller.abort();
+    for(const runId of store.story.resumeWaiting())execute(runId);
+    for(const id of store.story.queued()) {
+      if(storyControllers.size>=2)break;
+      if(storyControllers.has(id))continue;
+      const job=store.story.claim(id,instanceId);
+      if(!job)continue;
+      const controller=new AbortController();storyControllers.set(id,controller);
+      const signal=AbortSignal.any([controller.signal,stopping.signal]);
+      track((async()=>{
+        try {
+          publish(job.chatId);
+          await controls.wait(job.kind,signal);controls.fail(job.kind);
+          const result=await runStoryJob(store.story.bundle(id),{
+            signal,approvedOrigins,authorize:connection=>store.product.authorize(connection),vertexRequestTier:options.vertexRequestTier,
+            onAttemptStart:wire=>providerBudget.start(wire,admitted=>store.transaction(()=>{const attempt=store.product.startAttempt(job.chatId,null,null,admitted);store.db.prepare('UPDATE attempts SET story_job_id=? WHERE id=?').run(id,attempt);return attempt;})),
+            onAttemptFinish:(attempt,result)=>store.product.finishAttempt(attempt,result),
+            onInput:input=>{store.story.diagnostic(id,job.generation,instanceId,'inputs',input);if(job.mock){const attempt=store.product.mockAttempt(job.chatId,null,null,job.kind,input);store.db.prepare('UPDATE attempts SET story_job_id=? WHERE id=?').run(id,attempt);}},
+            onToolEvent:event=>store.story.diagnostic(id,job.generation,instanceId,'tool_events',event),
+          });
+          store.story.finish(id,job.generation,instanceId,result);
+        } catch(error) {
+          if(job){const safe=error instanceof Error&&error.message.startsWith('Injected failure:')?error.message:signal.aborted?'보조 작업이 중단됐어요.':'상태·기억 결과를 검증하지 못했어요.';
+            store.story.finish(id,job.generation,instanceId,{status:signal.aborted?'interrupted':'failed',result:null,error:safe,mock:job.mock});}
+        } finally {
+          storyControllers.delete(id);
+          if(!stopping.signal.aborted){publish(store.story.job(id).chatId);queueMicrotask(pumpStory);}
+        }
+      })());
+    }
   };
 
   app.addHook('onRequest', async request => {
@@ -148,7 +193,8 @@ export async function createApp(options: AppOptions): Promise<App> {
     void reply.code(code).send({ error: error instanceof HttpError ? error.message : code === 400 ? 'Invalid request' : 'Request failed' });
   });
   const session = productRoutes(app,store,{approvedOrigins,accessToken:options.accessToken,publish,onAuthChanged:() => { for (const chatId of subscribers.keys()) publish(chatId); }});
-  app.get('/api/health', async () => ({ ready: true, buildId: options.buildId, instanceId, dbPath: options.dbPath, mode: 'local-scripted-mock' }));
+  storyRoutes(app,store,{publish,pump:pumpStory,execute,abort:id=>storyControllers.get(id)?.abort()});
+  app.get('/api/health', async () => ({ ready: true, buildId: options.buildId, instanceId, dbPath: options.dbPath, mode: 'local-provider-runtime', supportedProtocols: [...PROVIDER_PROTOCOLS], vertexRequestTier: options.vertexRequestTier ?? null, liveBudgetConfigured: !!options.liveBudget }));
   app.get('/api/chats', async () => store.chats());
   app.post('/api/chats', async request => {
     const body = object(request.body); only(body, ['title', 'preset']);
@@ -165,7 +211,7 @@ export async function createApp(options: AppOptions): Promise<App> {
     const body = object(request.body); only(body, ['request', 'expectedRevision', 'expectedSettingsRevision', 'idempotencyKey','branchId','expectedProfileRevision']);
     const command = { request: string(body.request, 'request'), expectedRevision: body.expectedRevision === null ? null : string(body.expectedRevision, 'source revision', 100), expectedSettingsRevision: integer(body.expectedSettingsRevision, 'settings revision', 1, 1e9), idempotencyKey: string(body.idempotencyKey, 'idempotency key', 120),...(body.branchId !== undefined ? {branchId:string(body.branchId,'branch ID',100)} : {}),...(body.expectedProfileRevision !== undefined ? {expectedProfileRevision:integer(body.expectedProfileRevision,'profile revision',1,1e9)} : {}) };
     const result = store.createRun(request.params.id, command, chat => { const profile = store.product.snapshot(chat.id); return { chatId: chat.id, parentRevision: chat.headRevision, settingsRevision: chat.settingsRevision, settings: chat.settings, request: command.request, history: store.history(chat.headRevision), resources: store.product.resources(chat.id,profile),...(profile ? {profile} : {}) } satisfies RunSnapshot; });
-    if (result.created) { publish(request.params.id); execute(result.run.id); }
+    if (result.created) { publish(request.params.id); if(result.run.status==='queued')execute(result.run.id); }
     return result.run;
   });
   app.get<{ Params: { id: string } }>('/api/runs/:id', async request => store.run(request.params.id));
@@ -179,7 +225,25 @@ export async function createApp(options: AppOptions): Promise<App> {
     const body = object(request.body ?? {}); only(body,['chunkId']); const job = store.retryJob(request.params.id,body.chunkId === undefined ? undefined : string(body.chunkId,'chunk ID',100)); publish(job.chatId); pumpJobs(); return job;
   });
   app.post<{Params:{id:string}}>('/api/jobs/:id/cancel',async request => { const job = store.cancelJob(request.params.id); jobControllers.get(job.id)?.abort(new Error('Job cancelled')); publish(job.chatId);return job; });
+  app.post<{Params:{id:string}}>('/api/sources/:id/translation',async request => {
+    const body=object(request.body ?? {}); only(body,[]);
+    const job=store.requestTranslation(request.params.id); publish(job.chatId); pumpJobs(); return job;
+  });
   app.post<{Params:{id:string}}>('/api/sources/:id/retranslate',async request => { const body = object(request.body ?? {}); only(body,[]);const job = store.retranslate(request.params.id);publish(job.chatId);pumpJobs();return job; });
+  app.put<{Params:{id:string}}>('/api/sources/:id/text',{bodyLimit:8*1024*1024},async request => {
+    const body=object(request.body); only(body,['text','expectedRevision']);
+    const source=store.editSource(request.params.id,{text:string(body.text,'source text',2_000_000),expectedRevision:integer(body.expectedRevision,'source edit revision',0,Number.MAX_SAFE_INTEGER)});
+    for(const [jobId,controller] of jobControllers){const job=store.job(jobId);if(job.sourceRevision===source.id && job.sourceHash!==source.hash)controller.abort(new Error('Source edited'));}
+    for(const [jobId,controller] of storyControllers)if(store.story.job(jobId).status==='stale')controller.abort();
+    pumpStory();
+    publish(source.chatId); return source;
+  });
+  app.put<{Params:{id:string}}>('/api/sources/:id/translation',{bodyLimit:8*1024*1024},async request => {
+    const body=object(request.body); only(body,['text','expectedRevision','expectedSourceHash']);
+    const job=store.editTranslation(request.params.id,{text:string(body.text,'translation text',2_000_000),expectedRevision:integer(body.expectedRevision,'translation revision',0,Number.MAX_SAFE_INTEGER),expectedSourceHash:string(body.expectedSourceHash,'source hash',64)});
+    jobControllers.get(job.id)?.abort(new Error('Translation edited'));
+    publish(job.chatId); return job;
+  });
   app.get<{ Params: { id: string } }>('/api/chats/:id/events', async (request, reply) => {
     store.chat(request.params.id);
     const rawCursor = request.headers['last-event-id'];
@@ -200,10 +264,10 @@ export async function createApp(options: AppOptions): Promise<App> {
     app.post('/api/test/control', async request => {
       const body = object(request.body); only(body, ['action', 'barrier', 'point']);
       if (body.action === 'hold' || body.action === 'release') {
-        if (!['run', 'translation', 'status','image'].includes(String(body.barrier))) throw new HttpError(400, 'Invalid barrier');
+        if (!['run', 'translation', 'status','image','state','memory'].includes(String(body.barrier))) throw new HttpError(400, 'Invalid barrier');
         controls[body.action](body.barrier as Barrier);
       } else if (body.action === 'fail-next') {
-        if (!['source-transaction', 'job-transaction', 'translation', 'status','image'].includes(String(body.point))) throw new HttpError(400, 'Invalid failure point');
+        if (!['source-transaction', 'job-transaction', 'translation', 'status','image','state','memory'].includes(String(body.point))) throw new HttpError(400, 'Invalid failure point');
         controls.failures.add(body.point as FailurePoint);
       } else if (body.action === 'crash-after-source-commit') controls.crashAfterSourceCommit = true;
       else throw new HttpError(400, 'Invalid control action');
@@ -221,6 +285,7 @@ export async function createApp(options: AppOptions): Promise<App> {
   });
   app.addHook('onClose', async () => store.close());
   store.recover();
-  app.addHook('onListen', async () => pumpJobs());
+  store.story.recover();
+  app.addHook('onListen', async () => {pumpJobs();pumpStory();});
   return app;
 }

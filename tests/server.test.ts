@@ -111,8 +111,12 @@ describe('file SQLite HTTP runtime', () => {
     await control(url, { action: 'hold', barrier: 'status' });
     const first = await api<Run>(url, `/api/chats/${chat.id}/runs`, command(chat)); await completed(url, first.id);
     const original = await detail(url, chat); const source = original.sources[0];
+    expect(original.jobs.some(job => job.kind === 'translation')).toBe(false);
+    await api(url, `/api/sources/${source.id}/translation`, {});
     await until(() => api(url, '/api/test/control'), value => value.waiting.translation === 1 && value.waiting.status === 1);
     const second = await api<Run>(url, `/api/chats/${chat.id}/runs`, command(original.chat)); await completed(url, second.id);
+    const secondSource = (await detail(url, chat)).sources.find(value => value.runId === second.id)!;
+    await api(url, `/api/sources/${secondSource.id}/translation`, {});
     await until(() => api(url, '/api/test/control'), value => value.waiting.translation === 2 && value.waiting.status === 2);
     await control(url, { action: 'fail-next', point: 'job-transaction' });
     await control(url, { action: 'release', barrier: 'status' });
@@ -123,7 +127,11 @@ describe('file SQLite HTTP runtime', () => {
     await api(url, `/api/jobs/${failed.id}/retry`, {});
     await control(url, { action: 'release', barrier: 'translation' });
     const all = await until(() => detail(url, chat), value => value.jobs.every(job => job.status === 'completed'));
-    expect(all.sources.find(value => value.id === source.id)).toEqual(source);
+    const currentSource = all.sources.find(value => value.id === source.id)!;
+    const { translationRevision: beforeTranslationRevision, ...beforeSource } = source;
+    const { translationRevision, ...afterSource } = currentSource;
+    expect(afterSource).toEqual(beforeSource); expect(beforeTranslationRevision).toBe(0);
+    expect(translationRevision).toBe(all.jobs.find(job => job.kind === 'translation' && job.sourceRevision === source.id)!.revision);
     expect(all.sources[1].parentRevision).toBe(source.id);
     for (const job of all.jobs) { expect(job.result!.sourceRevision).toBe(job.sourceRevision); expect(job.result!.sourceHash).toBe(job.sourceHash); }
     const retried = all.jobs.find(job => job.id === failed.id)!; expect(retried.attempt).toBe(2);
@@ -205,18 +213,23 @@ describe('built server process boundary', () => {
     await control(first.url, { action: 'release', barrier: 'run' }).catch(() => undefined);
     expect(await exited).toBe(86);
     const db = new DatabaseSync(join(directory, 'story.sqlite'), { readOnly: true });
-    expect(db.prepare('SELECT status FROM runs').get()).toEqual({ status: 'completed' });
-    expect(db.prepare('SELECT count(*) AS n FROM sources').get()).toEqual({ n: 1 });
-    expect(db.prepare("SELECT count(*) AS n FROM jobs WHERE status='queued'").get()).toEqual({ n: 2 });
-    expect(db.prepare('SELECT count(*) AS n FROM job_results').get()).toEqual({ n: 0 });
-    const originalText = db.prepare('SELECT text,hash FROM sources').get();
-    const beforeRestart = {
-      runs: db.prepare('SELECT id,status,source_revision FROM runs').all(),
-      sources: db.prepare('SELECT id,hash FROM sources').all(),
-      jobs: db.prepare('SELECT id,source_revision,status,generation FROM jobs').all(),
-      resultCount: db.prepare('SELECT count(*) AS n FROM job_results').get(),
-      inputCount: db.prepare('SELECT count(*) AS n FROM model_inputs').get(),
-    }; db.close();
+    const { originalText, beforeRestart } = (() => {
+      try {
+        expect(db.prepare('SELECT status FROM runs').get()).toEqual({ status: 'completed' });
+        expect(db.prepare('SELECT count(*) AS n FROM sources').get()).toEqual({ n: 1 });
+        expect(db.prepare("SELECT count(*) AS n FROM jobs WHERE status='queued'").get()).toEqual({ n: 1 });
+        expect(db.prepare('SELECT count(*) AS n FROM job_results').get()).toEqual({ n: 0 });
+        const originalText = db.prepare('SELECT text,hash FROM sources').get();
+        const beforeRestart = {
+          runs: db.prepare('SELECT id,status,source_revision FROM runs').all(),
+          sources: db.prepare('SELECT id,hash FROM sources').all(),
+          jobs: db.prepare('SELECT id,source_revision,status,generation FROM jobs').all(),
+          resultCount: db.prepare('SELECT count(*) AS n FROM job_results').get(),
+          inputCount: db.prepare('SELECT count(*) AS n FROM model_inputs').get(),
+        };
+        return { originalText, beforeRestart };
+      } finally { db.close(); }
+    })();
     // Transfer directory cleanup to the newest process entry.
     owned.splice(owned.indexOf(first.entry), 1);
     const second = await startChild(directory);
@@ -224,7 +237,8 @@ describe('built server process boundary', () => {
     expect(recovered.runs).toHaveLength(1); expect(recovered.runs[0].id).toBe(run.id);
     expect(recovered.runs[0].inputs).toHaveLength(1); expect(recovered.sources).toHaveLength(1);
     expect({ text: recovered.sources[0].text, hash: recovered.sources[0].hash }).toEqual(originalText);
-    expect(recovered.jobs.map(job => job.attempt)).toEqual([1, 1]);
+    expect(recovered.jobs.map(job => job.attempt)).toEqual([1]);
+    expect(recovered.jobs.map(job => job.kind)).toEqual(['status']);
     const held = await control(second.url, { action: 'hold', barrier: 'run' }); expect(held.held).toContain('run');
     const interrupted = await api<Run>(second.url, `/api/chats/${chat.id}/runs`, command(recovered.chat));
     const stop = new Promise<void>(resolveExit => second.child.once('exit', () => resolveExit())); second.child.kill(); await stop;

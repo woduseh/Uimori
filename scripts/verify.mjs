@@ -7,6 +7,7 @@ import { root, artifactRoot, newId, json, command, requireCommand, assertBuild, 
 
 const foundationCases = ['F01', 'F02', 'F03', 'F04', 'F05', 'F06'];
 const productCases = Array.from({length:13},(_,i) => `P${String(i+1).padStart(2,'0')}`);
+const storyCases = Array.from({length:7},(_,i) => `S${String(i+1).padStart(2,'0')}`);
 function options(args) {
   let milestone = 'M0'; const cases = [];
   for (let index = 0; index < args.length; index++) {
@@ -14,8 +15,8 @@ function options(args) {
     else if (args[index] === '--case') cases.push(...(args[++index] || '').split(','));
     else throw new Error(`Unknown verify option: ${args[index]}`);
   }
-  if (!['M0','M1-local','M1'].includes(milestone)) throw new Error(`Unknown/unimplemented milestone: ${milestone}`);
-  const allCases = milestone === 'M0' ? foundationCases : productCases;
+  if (!['M0','M1-local','M1','M2-local','M2'].includes(milestone)) throw new Error(`Unknown/unimplemented milestone: ${milestone}`);
+  const allCases = milestone === 'M0' ? foundationCases : milestone.startsWith('M2') ? storyCases : productCases;
   if (cases.some(id => !allCases.includes(id))) throw new Error(`Unknown case: ${cases.join(',')}`);
   return { milestone, cases: cases.length ? [...new Set(cases)] : allCases };
 }
@@ -26,7 +27,7 @@ async function main(selection) {
   const children = new Set(); const failures = [];
   const product = selection.milestone !== 'M0';
   const requiredBrowser = product ? ['P01','P04','P06','P09','P10','P11','P13'] : ['F02','F03','F05'];
-  const summary = { schema: 1, runId, status: 'FAIL', scope: selection, startedAt: new Date().toISOString(), environment: { platform: process.platform, os: os.release(), node: process.version }, commands: [], reports: {}, scenarios: Object.fromEntries(selection.cases.map(id => [id, { required: true, status: 'NOT_RUN', evidence: [] }])), limitations: [product ? 'M1 local file SQLite, browser and fixture HTTP only. Live provider/protocol, semantic quality and physical-phone/private-deployment claims remain BLOCKED.' : 'Scripted mock only; no paid/live provider, quality, physical phone, public deployment, or M1+ claim.'], ...(product ? {externalClaims:{L01:{status:'BLOCKED',reason:'Provider/protocol/model selection, credentials and approved call budget pending'},L02:{status:'BLOCKED',reason:'Private deployment target and physical phone pending'},Q01:{status:'BLOCKED',reason:'Live model and approved creative sample pending'},Q02:{status:'BLOCKED',reason:'Live model and approved refusal-quality sample pending'},Q03:{status:'BLOCKED',reason:'Live translation and approved quality sample pending'},Q05:{status:'BLOCKED',reason:'Live image selection and approved quality sample pending'}}} : {}), failures, cleanup: { status: 'NOT_RUN' } };
+  const summary = { schema: 1, runId, status: 'FAIL', scope: selection, startedAt: new Date().toISOString(), environment: { platform: process.platform, os: os.release(), node: process.version }, commands: [], reports: {}, scenarios: Object.fromEntries(selection.cases.map(id => [id, { required: true, status: 'NOT_RUN', evidence: [] }])), limitations: [product ? 'M1 local file SQLite, browser and fixture HTTP only. Live provider/protocol, semantic quality and physical-phone/private-deployment claims remain BLOCKED.' : 'Scripted mock only; no paid/live provider, quality, physical phone, public deployment, or M1+ claim.'], ...(product ? {externalClaims:{L01:{status:'BLOCKED',reason:'This local verifier does not execute or import live evidence; see the separate output/live artifacts and M1-RESULTS'},L02:{status:'BLOCKED',reason:'Private deployment target and physical phone pending'},Q01:{status:'BLOCKED',reason:'Human creative-quality evaluation is not performed by this local verifier'},Q02:{status:'BLOCKED',reason:'Human refusal-quality evaluation is not performed by this local verifier'},Q03:{status:'BLOCKED',reason:'Human translation-quality evaluation is not performed by this local verifier'},Q05:{status:'BLOCKED',reason:'Live image selection and approved quality sample pending'}}} : {}), failures, cleanup: { status: 'NOT_RUN' } };
   let server;
   let browserBlocked = false;
   const owner = { runId, ownerPid: process.pid, root, directory, active: true, children: [], startedAt: summary.startedAt };
@@ -131,5 +132,5 @@ async function main(selection) {
     if (summary.status !== 'PASS') process.exitCode = 1;
   }
 }
-try { await main(options(process.argv.slice(2))); }
+try { const selection=options(process.argv.slice(2)); if(selection.milestone.startsWith('M2'))await (await import('./verify-story.mjs')).verifyStory(selection);else await main(selection); }
 catch (error) { console.error(error.message); process.exitCode = 2; }

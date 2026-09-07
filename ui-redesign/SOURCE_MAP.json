@@ -1,0 +1,113 @@
+{
+  "repository": "woduseh/Uimori",
+  "branch": "main",
+  "commit": "87548d15c41fa0adb74284a1873c9d28e1dfe8ee",
+  "retrieval": "GitHub read connector; no repository writes",
+  "reviewed_files": [
+    {
+      "path": "web/main.tsx",
+      "url": "https://github.com/woduseh/Uimori/blob/87548d15c41fa0adb74284a1873c9d28e1dfe8ee/web/main.tsx",
+      "range": "key UI flow and file text; main source retrieved with a separate ending range"
+    },
+    {
+      "path": "web/style.css",
+      "url": "https://github.com/woduseh/Uimori/blob/87548d15c41fa0adb74284a1873c9d28e1dfe8ee/web/style.css",
+      "range": "key UI flow and file text; main source retrieved with a separate ending range"
+    },
+    {
+      "path": "web/product.css",
+      "url": "https://github.com/woduseh/Uimori/blob/87548d15c41fa0adb74284a1873c9d28e1dfe8ee/web/product.css",
+      "range": "key UI flow and file text; main source retrieved with a separate ending range"
+    },
+    {
+      "path": "web/SourceReader.tsx",
+      "url": "https://github.com/woduseh/Uimori/blob/87548d15c41fa0adb74284a1873c9d28e1dfe8ee/web/SourceReader.tsx",
+      "range": "key UI flow and file text; main source retrieved with a separate ending range"
+    },
+    {
+      "path": "web/ProfileEditor.tsx",
+      "url": "https://github.com/woduseh/Uimori/blob/87548d15c41fa0adb74284a1873c9d28e1dfe8ee/web/ProfileEditor.tsx",
+      "range": "key UI flow and file text; main source retrieved with a separate ending range"
+    },
+    {
+      "path": "web/LibraryPanel.tsx",
+      "url": "https://github.com/woduseh/Uimori/blob/87548d15c41fa0adb74284a1873c9d28e1dfe8ee/web/LibraryPanel.tsx",
+      "range": "key UI flow and file text; main source retrieved with a separate ending range"
+    },
+    {
+      "path": "core/product.ts",
+      "url": "https://github.com/woduseh/Uimori/blob/87548d15c41fa0adb74284a1873c9d28e1dfe8ee/core/product.ts",
+      "range": "key UI flow and file text; main source retrieved with a separate ending range"
+    },
+    {
+      "path": "core/types.ts",
+      "url": "https://github.com/woduseh/Uimori/blob/87548d15c41fa0adb74284a1873c9d28e1dfe8ee/core/types.ts",
+      "range": "key UI flow and file text; main source retrieved with a separate ending range"
+    },
+    {
+      "path": "project-plan/CURRENT.md",
+      "url": "https://github.com/woduseh/Uimori/blob/87548d15c41fa0adb74284a1873c9d28e1dfe8ee/project-plan/CURRENT.md",
+      "range": "key UI flow and file text; main source retrieved with a separate ending range"
+    },
+    {
+      "path": "package.json",
+      "url": "https://github.com/woduseh/Uimori/blob/87548d15c41fa0adb74284a1873c9d28e1dfe8ee/package.json",
+      "range": "key UI flow and file text; main source retrieved with a separate ending range"
+    },
+    {
+      "path": "tests/product-browser.spec.ts",
+      "url": "https://github.com/woduseh/Uimori/blob/87548d15c41fa0adb74284a1873c9d28e1dfe8ee/tests/product-browser.spec.ts",
+      "range": "lines 1-120"
+    }
+  ],
+  "not_executed": [
+    "original Uimori app",
+    "repository test commands",
+    "real provider requests",
+    "remote deploy",
+    "real Windows/Android device"
+  ],
+  "references": [
+    {
+      "id": "R-CODEX",
+      "url": "https://openai.com/index/introducing-the-codex-app/",
+      "use": "project/thread work separation; not exact current pixel geometry"
+    },
+    {
+      "id": "R-CHATGPT",
+      "url": "https://help.openai.com/en/articles/10169521",
+      "use": "chat/project navigation and branching"
+    },
+    {
+      "id": "R-CLAUDE",
+      "url": "https://code.claude.com/docs/en/desktop",
+      "use": "transcript density modes and background task pane"
+    },
+    {
+      "id": "R-RISU",
+      "url": "https://risuai.net/",
+      "use": "character-first workflow, translation and advanced RP features"
+    },
+    {
+      "id": "R-CAI",
+      "url": "https://blog.character.ai/memory/",
+      "use": "dedicated memory surface, persona/character-related facts"
+    },
+    {
+      "id": "R-CAI-BRANCH",
+      "url": "https://support.character.ai/hc/en-us/articles/34428285052827-Community-Update-February-2025",
+      "use": "historically announced Start New Chat From Here without losing the original"
+    },
+    {
+      "id": "R-A11Y-DIALOG",
+      "url": "https://www.w3.org/WAI/ARIA/apg/patterns/dialog-modal/",
+      "use": "focus behavior and modal close expectations"
+    },
+    {
+      "id": "R-A11Y-TARGET",
+      "url": "https://www.w3.org/WAI/WCAG22/Understanding/target-size-minimum.html",
+      "use": "24px minimum with exceptions; distinguish Uimori 44px design target"
+    }
+  ],
+  "reference_limit": "Official text/docs inspected. Third-party authenticated UIs were not exercised; app patterns are selected references, not blanket endorsements."
+}

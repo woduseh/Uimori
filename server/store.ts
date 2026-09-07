@@ -3,7 +3,9 @@ import { createHash, randomUUID } from 'node:crypto';
 import { basename, dirname, join } from 'node:path';
 import { existsSync, mkdirSync, realpathSync } from 'node:fs';
 import type { Controls } from './controls.js';
+import { editSource, editTranslation, requestTranslation, latestTranslation, validateTranslationArtifact } from './source-editing.js';
 import { ProductStore } from './product-store.js';
+import { StoryStore } from './story-store.js';
 import { splitSource, BUILTIN_ASSETS } from '../core/auxiliary.js';
 import type { Settings, Chat as BaseChat, Run as BaseRun, Source as BaseSource, Job as BaseJob, Resource, RunSnapshot, Usage, ModelInput, ToolEvent } from '../core/types.js';
 
@@ -21,6 +23,7 @@ export class HttpError extends Error { constructor(readonly statusCode: number, 
 export class Store {
   readonly db: DatabaseSync;
   readonly product: ProductStore;
+  readonly story: StoryStore;
   private readonly ownership: DatabaseSync;
   constructor(readonly path: string) {
     mkdirSync(dirname(path), { recursive: true });
@@ -35,7 +38,7 @@ export class Store {
     try {
     this.db.exec('PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON; PRAGMA busy_timeout=3000;');
     const version = this.db.prepare('PRAGMA user_version').get() as Row;
-    if (Number(version.user_version) > 2) throw new Error('Unsupported database schema version');
+    if (Number(version.user_version) > 4) throw new Error('Unsupported database schema version');
     if (Number(version.user_version) === 0) this.db.exec(`
       BEGIN;
       CREATE TABLE IF NOT EXISTS chats (id TEXT PRIMARY KEY, title TEXT NOT NULL, head_revision TEXT, settings_revision INTEGER NOT NULL, settings TEXT NOT NULL, created_at TEXT NOT NULL);
@@ -54,6 +57,8 @@ export class Store {
     `);
     this.product = new ProductStore(this);
     this.product.migrate(Number(version.user_version));
+    this.story = new StoryStore(this);
+    this.story.migrate();
     } catch (error) { this.db.close(); this.ownership.close(); throw error; }
   }
   close() { this.db.close(); this.ownership.close(); }
@@ -89,7 +94,7 @@ export class Store {
   history(head: string | null): RunSnapshot['history'] {
     const history: RunSnapshot['history'] = [];
     const seen = new Set<string>();
-    while (head) { if (seen.has(head)) throw new HttpError(400,'Source ancestry cycle'); seen.add(head); const source = this.source(head); history.unshift({ revision: source.id, text: source.text }); head = source.parentRevision; }
+    while (head) { if (seen.has(head)) throw new HttpError(400,'Source ancestry cycle'); seen.add(head); const source = this.source(head); history.unshift({ revision: source.id, text: source.text, ...(source.hash !== this.sourceOriginal(source.id).hash ? {contentHash:source.hash} : {}) }); head = source.parentRevision; }
     return history;
   }
   settings(id: string, expected: number, settings: Settings): Chat {
@@ -101,9 +106,9 @@ export class Store {
       return this.chat(id);
     });
   }
-  createRun(chatId: string, command: { request: string; expectedRevision: string | null; expectedSettingsRevision: number; idempotencyKey: string; branchId?: string; expectedProfileRevision?: number }, snapshot: (chat: Chat) => RunSnapshot): { run: Run; created: boolean } {
+  createRun(chatId: string, command: { request: string; expectedRevision: string | null; expectedSettingsRevision: number; idempotencyKey: string; branchId?: string; expectedProfileRevision?: number; sceneCommandId?: string }, snapshot: (chat: Chat) => RunSnapshot): { run: Run; created: boolean } {
     return this.transaction(() => {
-      const canonical = json({ request: command.request, expectedRevision: command.expectedRevision, expectedSettingsRevision: command.expectedSettingsRevision, branchId: command.branchId ?? `main:${chatId}`, expectedProfileRevision: command.expectedProfileRevision });
+      const canonical = json({ request: command.request, expectedRevision: command.expectedRevision, expectedSettingsRevision: command.expectedSettingsRevision, branchId: command.branchId ?? `main:${chatId}`, expectedProfileRevision: command.expectedProfileRevision, ...(command.sceneCommandId ? {sceneCommandId:command.sceneCommandId} : {}) });
       const prior = this.db.prepare('SELECT id,command FROM runs WHERE chat_id=? AND request_key=?').get(chatId, command.idempotencyKey) as Row | undefined;
       if (prior) {
         if (prior.command !== canonical) throw new HttpError(409, 'Idempotency key reused with different command');
@@ -114,18 +119,20 @@ export class Store {
       if (branch.headRevision !== command.expectedRevision) throw new HttpError(409, 'Source revision conflict');
       if (chat.settingsRevision !== command.expectedSettingsRevision) throw new HttpError(409, 'Settings revision conflict');
       if (command.expectedProfileRevision !== undefined && this.product.profile(chatId).revision !== command.expectedProfileRevision) throw new HttpError(409,'Profile revision conflict');
-      if (this.db.prepare("SELECT id FROM runs WHERE branch_id=? AND status IN ('queued','running')").get(branch.id)) throw new HttpError(409, 'A run already owns this head');
+      if (this.db.prepare("SELECT id FROM runs WHERE branch_id=? AND status IN ('queued','running','waiting_for_state')").get(branch.id)) throw new HttpError(409, 'A run already owns this head');
       const id = randomUUID(); const time = now();
-      const frozen = {...snapshot({...chat,headRevision:branch.headRevision}),branchId:branch.id};
-      this.db.prepare('INSERT INTO runs(id,chat_id,parent_revision,status,request,snapshot,request_key,command,created_at,updated_at,branch_id) VALUES(?,?,?,\'queued\',?,?,?,?,?,?,?)').run(id, chatId, command.expectedRevision, command.request, json(frozen), command.idempotencyKey, canonical, time, time,branch.id);
-      this.event(chatId, 'run.queued', id);
+      const frozen = this.story.prepareRunInTransaction({...snapshot({...chat,headRevision:branch.headRevision}),branchId:branch.id});
+      const status = frozen.story?.waiting ? 'waiting_for_state' : 'queued';
+      this.db.prepare('INSERT INTO runs(id,chat_id,parent_revision,status,request,snapshot,request_key,command,created_at,updated_at,branch_id) VALUES(?,?,?,?,?,?,?,?,?,?,?)').run(id, chatId, command.expectedRevision, status, command.request, json(frozen), command.idempotencyKey, canonical, time, time,branch.id);
+      if (command.sceneCommandId) this.story.bindCommandInTransaction(command.sceneCommandId,id);
+      this.event(chatId, `run.${status}`, id);
       return { run: this.run(id), created: true };
     });
   }
   candidate(runId: string, key: string, title: string): {run: Run; created: boolean} {
     return this.transaction(() => {
       const original = this.run(runId);
-      if (['queued','running'].includes(original.status)) throw new HttpError(409,'Original run is still active');
+      if (['queued','running','waiting_for_state'].includes(original.status)) throw new HttpError(409,'Original run is still active');
       const canonical = json({candidateOf:runId,title});
       const prior = this.db.prepare('SELECT id,command FROM runs WHERE chat_id=? AND request_key=?').get(original.chatId,key) as Row | undefined;
       if (prior) { if (prior.command !== canonical) throw new HttpError(409,'Idempotency key reused with different command'); return {run:this.run(prior.id),created:false}; }
@@ -156,9 +163,20 @@ export class Store {
   finishRun(id: string, status: 'failed' | 'cancelled' | 'interrupted' | 'refused' | 'partial', error: string, partialText = '', usage?: Usage) {
     return this.transaction(() => {
       const run = this.run(id);
-      if (!['queued', 'running'].includes(run.status)) return run;
+      if (!['queued', 'running', 'waiting_for_state'].includes(run.status)) return run;
       this.db.prepare('UPDATE runs SET status=?,error=?,partial_text=?,usage=COALESCE(?,usage),updated_at=? WHERE id=?').run(status, error, partialText, usage ? json(usage) : null, now(), id);
+      this.story.finishCommandInTransaction(id,status==='cancelled'?'cancelled':'failed');
       this.event(run.chatId, `run.${status}`, id); return this.run(id);
+    });
+  }
+  settleCancelledUsage(id: string, usage: Usage): Run {
+    return this.transaction(() => {
+      const run = this.run(id);
+      // A cancel endpoint may finish the run before the in-flight attempt returns.
+      // Fill that missing aggregate once without changing status, source, or prior usage.
+      const changed = this.db.prepare("UPDATE runs SET usage=?,updated_at=? WHERE id=? AND status='cancelled' AND usage IS NULL").run(json(usage), now(), id);
+      if (changed.changes) this.event(run.chatId, 'run.usage', id);
+      return this.run(id);
     });
   }
   completeRun(id: string, text: string, usage: Usage, settings: Settings, controls?: Controls): Source {
@@ -173,21 +191,39 @@ export class Store {
       controls?.fail('source-transaction');
       this.db.prepare('UPDATE branches SET head_revision=?,revision=revision+1 WHERE id=?').run(source.id,branch.id);
       if (branch.default) this.db.prepare('UPDATE chats SET head_revision=? WHERE id=?').run(source.id, source.chatId);
-      for (const kind of ['translation', 'status','image'] as const) {
+      for (const kind of ['status','image'] as const) {
         if (!(kind === 'image' ? run.snapshot.profile?.image : settings[kind])) continue;
         const jobId = randomUUID(); const time = now();
         this.db.prepare("INSERT INTO jobs(id,chat_id,source_revision,source_hash,kind,status,created_at,updated_at) VALUES(?,?,?,?,?,'queued',?,?)").run(jobId, source.chatId, source.id, source.hash, kind, time, time);
         this.event(source.chatId, 'job.queued', jobId);
       }
+      this.story.reserveSourceInTransaction(source,run);
       this.event(source.chatId, 'source.ready', source.id);
       this.event(source.chatId, 'run.completed', id);
       return source;
     });
   }
-  source(id: string): Source {
-    const row = this.db.prepare('SELECT id,chat_id AS chatId,run_id AS runId,parent_revision AS parentRevision,text,hash,created_at AS createdAt FROM sources WHERE id=?').get(id) as Source | undefined;
-    if (!row) throw new HttpError(404, 'Source not found'); return {...row,blocks:splitSource(row)};
+  sourceOriginal(id:string):Source {
+    const row=this.db.prepare('SELECT id,chat_id AS chatId,run_id AS runId,parent_revision AS parentRevision,text,hash,created_at AS createdAt FROM sources WHERE id=?').get(id) as Source|undefined;
+    if(!row)throw new HttpError(404,'Source not found');const translation=this.db.prepare("SELECT revision FROM jobs WHERE source_revision=? AND kind='translation' ORDER BY revision DESC,created_at DESC,id DESC LIMIT 1").get(id) as Row|undefined;return {...row,editRevision:0,translationRevision:translation?.revision??0,blocks:splitSource(row)};
   }
+  source(id:string):Source {
+    const original=this.sourceOriginal(id);const edit=this.db.prepare('SELECT text,hash,revision FROM source_edits WHERE source_id=? ORDER BY revision DESC LIMIT 1').get(id) as Row|undefined;
+    if(!edit)return original;const source={...original,text:edit.text,hash:edit.hash,editRevision:edit.revision};return {...source,blocks:splitSource(source)};
+  }
+  sourceAtHash(id:string,hash:string):Source {
+    const original=this.sourceOriginal(id);if(original.hash===hash)return original;
+    const edit=this.db.prepare('SELECT text,hash,revision FROM source_edits WHERE source_id=? AND hash=? ORDER BY revision DESC LIMIT 1').get(id,hash) as Row|undefined;
+    if(!edit)throw new HttpError(400,'Unknown source content hash');const source={...original,text:edit.text,hash:edit.hash,editRevision:edit.revision};return {...source,blocks:splitSource(source)};
+  }
+  validateHistory(history:RunSnapshot['history'],head:string|null):boolean {
+    if(!Array.isArray(history))return false;const ids=this.history(head).map(item=>item.revision);
+    if(ids.length!==history.length)return false;
+    return history.every((item,index)=>{if(!item||item.revision!==ids[index]||Object.keys(item).some(k=>!['revision','text','contentHash'].includes(k)))return false;const source=item.contentHash===undefined?this.sourceOriginal(item.revision):this.sourceAtHash(item.revision,item.contentHash);return item.text===source.text;});
+  }
+  editSource(id:string,value:{text:string;expectedRevision:number}):Source{return editSource(this,id,value);}
+  editTranslation(id:string,value:{text:string;expectedRevision:number;expectedSourceHash:string}):Job{return editTranslation(this,id,value);}
+  requestTranslation(id:string):Job{return requestTranslation(this,id);}
   job(id: string): Job {
     const row = this.db.prepare('SELECT j.*,r.result FROM jobs j LEFT JOIN job_results r ON r.job_id=j.id WHERE j.id=?').get(id) as Row | undefined;
     if (!row) throw new HttpError(404, 'Job not found');
@@ -196,7 +232,11 @@ export class Store {
   queuedJobs(): string[] { return (this.db.prepare("SELECT id FROM jobs WHERE status='queued' ORDER BY created_at,id").all() as Row[]).map(row => row.id); }
   claimJob(id: string, owner: string, input: unknown, plan?: {chunks:{id:string}[]}): Job | null {
     return this.transaction(() => {
-      const changed = this.db.prepare("UPDATE jobs SET status='running',generation=generation+1,owner=?,input=?,error=NULL,updated_at=? WHERE id=? AND status='queued'").run(owner, json(input), now(), id);
+      const priorInput = this.job(id).input;
+      const translationModelSelection = priorInput && typeof priorInput === 'object' && Object.hasOwn(priorInput,'translationModelSelection') ? {translationModelSelection:(priorInput as {translationModelSelection:unknown}).translationModelSelection} : {};
+      const promptSelection = priorInput && typeof priorInput === 'object' && Object.hasOwn(priorInput,'promptSelection') ? {promptSelection:(priorInput as {promptSelection:unknown}).promptSelection} : {};
+      const claimedInput = input && typeof input === 'object' && !Array.isArray(input) ? {...input,...promptSelection,...translationModelSelection} : input;
+      const changed = this.db.prepare("UPDATE jobs SET status='running',generation=generation+1,owner=?,input=?,error=NULL,updated_at=? WHERE id=? AND status='queued'").run(owner, json(claimedInput), now(), id);
       if (!changed.changes) return null;
       if (plan) { this.product.plan(id,plan); for (const chunk of plan.chunks) this.db.prepare("INSERT OR IGNORE INTO job_chunks(job_id,id,status,attempt) VALUES(?,?,'queued',0)").run(id,chunk.id); }
       const job = this.job(id); this.event(job.chatId, 'job.running', id); return job;
@@ -232,7 +272,7 @@ export class Store {
     });
   }
   cancelJob(id: string): Job { return this.transaction(() => { const job = this.job(id); if (['queued','running'].includes(job.status)) { this.db.prepare("UPDATE jobs SET status='cancelled',error='Job cancelled',updated_at=? WHERE id=?").run(now(),id); this.event(job.chatId,'job.cancelled',id); } return this.job(id); }); }
-  retranslate(id: string): Job { return this.transaction(() => { const source = this.source(id); const r = this.db.prepare("SELECT COALESCE(MAX(revision),0)+1 AS revision FROM jobs WHERE source_revision=? AND kind='translation'").get(id) as Row; const jobId = randomUUID(); const time = now(); this.db.prepare("INSERT INTO jobs(id,chat_id,source_revision,source_hash,kind,status,revision,created_at,updated_at) VALUES(?,?,?,?,'translation','queued',?,?,?)").run(jobId,source.chatId,id,source.hash,r.revision,time,time); this.event(source.chatId,'job.queued',jobId); return this.job(jobId); }); }
+  retranslate(id:string):Job{return requestTranslation(this,id,true);}
   finishAuxiliary(id: string, generation: number, owner: string, value: {status:string;result:unknown;error:string|null}, controls?: Controls) {
     return this.transaction(() => {
       const row = this.db.prepare("SELECT * FROM jobs WHERE id=? AND generation=? AND owner=? AND status='running'").get(id,generation,owner) as Row | undefined;
@@ -248,10 +288,11 @@ export class Store {
       for (const row of this.db.prepare("SELECT id FROM runs WHERE status IN ('queued','running')").all() as Row[]) {
         const run = this.run(row.id);
         this.db.prepare("UPDATE runs SET status='interrupted',error='Server stopped; generation was not automatically replayed',updated_at=? WHERE id=?").run(now(), run.id);
+        this.story.finishCommandInTransaction(run.id,'failed');
         this.event(run.chatId, 'run.interrupted', run.id);
       }
       for (const row of this.db.prepare("SELECT id,source_revision,kind FROM jobs WHERE status='running'").all() as Row[]) {
-        const source = this.source(row.source_revision); const snapshot = this.run(source.runId).snapshot;
+        const source = this.sourceAtHash(row.source_revision,this.job(row.id).sourceHash); const snapshot = this.product.resolveJobPrompt(this.run(source.runId).snapshot,this.job(row.id).input);
         const live = !!snapshot.profile?.models[row.kind as 'translation'|'status'|'image'];
         this.db.prepare('UPDATE jobs SET status=?,owner=NULL,error=?,updated_at=? WHERE id=?').run(live ? 'interrupted':'queued',live ? 'Provider outcome uncertain; explicit retry required':null,now(),row.id);
       }
@@ -263,6 +304,6 @@ export class Store {
     return { chat,
       runs: (this.db.prepare('SELECT id FROM runs WHERE chat_id=? ORDER BY created_at,id').all(id) as Row[]).map(row => this.run(row.id)),
       sources: (this.db.prepare('SELECT id FROM sources WHERE chat_id=? ORDER BY created_at,id').all(id) as Row[]).map(row => this.source(row.id)),
-      jobs: (this.db.prepare('SELECT id FROM jobs WHERE chat_id=? ORDER BY created_at,id').all(id) as Row[]).map(row => this.job(row.id)),profile:this.product.profile(id),branches:this.product.branches(id),attempts:this.product.attempts(id),assets:[...this.product.assets(id),...BUILTIN_ASSETS.map(a => ({id:a.ref,chatId:id,revision:a.revision,title:a.alt,mime:'image/svg+xml',hash:a.hash,description:a.caption,actor:a.actorId ?? '',outfit:a.clothing ?? '',location:a.location ?? '',allowedUse:a.uses.length === 2 ? 'both' as const : a.uses[0],url:a.url}))] };
+      jobs: (this.db.prepare('SELECT id FROM jobs WHERE chat_id=? ORDER BY created_at,id').all(id) as Row[]).map(row => this.job(row.id)).filter(job=>{const source=this.source(job.sourceRevision);if(job.sourceHash!==source.hash)return false;if(job.kind!=='translation')return true;if(latestTranslation(this,source.id)?.id!==job.id)return false;if(job.status==='completed'){try{validateTranslationArtifact(this,job,source);}catch{return false;}}return true;}),profile:this.product.profile(id),branches:this.product.branches(id),attempts:this.product.attempts(id),assets:[...this.product.assets(id),...BUILTIN_ASSETS.map(a => ({id:a.ref,chatId:id,revision:a.revision,title:a.alt,mime:'image/svg+xml',hash:a.hash,description:a.caption,actor:a.actorId ?? '',outfit:a.clothing ?? '',location:a.location ?? '',allowedUse:a.uses.length === 2 ? 'both' as const : a.uses[0],url:a.url}))] };
   }
 }

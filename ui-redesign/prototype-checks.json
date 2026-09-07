@@ -1,0 +1,31 @@
+{
+  "scope": "standalone synthetic HTML prototype only; not Uimori application E2E",
+  "checks": [
+    "desktop composer visible without scrolling",
+    "original/translation toggle",
+    "sibling candidate navigation without generation",
+    "library search and cards",
+    "mock send, task state, result; no provider calls",
+    "synthetic draft isolated across conversation switches",
+    "mobile drawer navigation and settings sheet",
+    "reading focus mode enter/exit",
+    "layout 360x800: no page horizontal overflow; composer visible",
+    "layout 390x844: no page horizontal overflow; composer visible",
+    "layout 768x1024: no page horizontal overflow; composer visible",
+    "layout 1024x768: no page horizontal overflow; composer visible",
+    "layout 1440x1000: no page horizontal overflow; composer visible"
+  ],
+  "screenshots": [
+    "desktop-chat.png",
+    "desktop-context.png",
+    "desktop-library.png",
+    "desktop-light.png",
+    "mobile-chat.png",
+    "mobile-library.png",
+    "mobile-context.png"
+  ],
+  "pageErrors": [],
+  "status": "PASS",
+  "browser": "144.0.7559.96",
+  "environment": "Linux Chromium, emulated viewport; not Windows or actual Android device"
+}

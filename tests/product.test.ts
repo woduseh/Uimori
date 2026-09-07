@@ -187,6 +187,7 @@ describe('M1 product data with actual file SQLite', () => {
     profile(product, chat, [reference(canon)]);
     const first = completedSource(store, product, chat.id, 'First original paragraph.\n\nSecond original paragraph.');
     const second = completedSource(store, product, chat.id, 'A descendant keeps the earlier scene.');
+    store.requestTranslation(first.id);
     const asset = product.createAsset(chat.id, assetBody);
     const archive = product.export(); const original = structuredClone(archive);
     const target = await database();
@@ -208,6 +209,7 @@ describe('M1 product data with actual file SQLite', () => {
   test('P11 rejects changed source/asset bytes and invalid ancestry atomically in an empty restore target', async () => {
     const { store, product } = await database(); const chat = store.createChat('integrity-story');
     const source = completedSource(store, product, chat.id);
+    store.requestTranslation(source.id);
     const asset = product.createAsset(chat.id, assetBody);
     const archive = product.export();
     const mutations: { name: string; mutate: (value: typeof archive) => void }[] = [
@@ -233,7 +235,7 @@ describe('M1 product data with actual file SQLite', () => {
     const store = new Store(path); item.store = store;
     const product = new ProductStore(store);
     if ((store.db.prepare('PRAGMA user_version').get() as { user_version: number }).user_version < 2) product.migrate(1);
-    expect(store.db.prepare('PRAGMA user_version').get()).toEqual({ user_version: 2 });
+    expect(store.db.prepare('PRAGMA user_version').get()).toEqual({ user_version: 4 });
     expect(store.source('old-source')).toMatchObject({ text: 'Legacy original preserved.', runId: 'old-run', chatId: 'old-chat' });
     expect(store.job('old-job')).toMatchObject({ status: 'completed', sourceRevision: 'old-source', result: { mock: true, text: '기존 모의 번역' } });
     expect(product.branch('old-chat').headRevision).toBe('old-source');
@@ -256,7 +258,7 @@ describe('M1 product data with actual file SQLite', () => {
     const bytes = product.backup(); const path = join(item.directory, 'downloaded-backup.sqlite'); await writeFile(path, bytes);
     const reopened = new DatabaseSync(path, { readOnly: true });
     try {
-      expect(reopened.prepare('PRAGMA user_version').get()).toEqual({ user_version: 2 });
+      expect(reopened.prepare('PRAGMA user_version').get()).toEqual({ user_version: 4 });
       expect(reopened.prepare('SELECT id,text,hash FROM sources WHERE id=?').get(source.id)).toEqual({ id: source.id, text: source.text, hash: source.hash });
       expect(reopened.prepare('SELECT source_revision FROM jobs ORDER BY id').all()).toEqual(store.db.prepare('SELECT source_revision FROM jobs ORDER BY id').all());
       expect(Buffer.from((reopened.prepare('SELECT bytes FROM assets WHERE id=?').get(asset.id) as { bytes: Uint8Array }).bytes)).toEqual(Buffer.from(pixel, 'base64'));
@@ -332,7 +334,8 @@ describe('M1 real HTTP application boundaries', () => {
     const run = await api<Run>(url, `/api/chats/${chat.id}/runs`, { request: 'Translate this synthetic long scene after generation.', expectedRevision: null, expectedSettingsRevision: chat.settingsRevision, expectedProfileRevision: configured.revision, idempotencyKey: randomUUID() });
     const done = await terminal(url, run.id); expect(done.status).toBe('completed');
     const source = app.store.source(done.sourceRevision!); expect(source.text).toBe(originalText);
-    const initial = await api<ChatDetail>(url, `/api/chats/${chat.id}`); expect(initial.jobs).toHaveLength(1); const jobId = initial.jobs[0].id;
+    const initial = await api<ChatDetail>(url, `/api/chats/${chat.id}`); expect(initial.jobs).toHaveLength(0);
+    const requested = await api<Job>(url, `/api/sources/${source.id}/translation`, {}); const jobId = requested.id;
     const updatedGlossary = app.store.product.content({ ...contentBody('glossary', 'FUTURE_GLOSSARY_NEW'), expectedRevision: glossary.revision }, glossary.id) as Content;
     profile(app.store.product, chat, [reference(updatedGlossary)], { routes: configured.routes });
     const other = await api<Chat>(url, '/api/chats', { title: 'Another visible chat' }); await api(url, `/api/chats/${other.id}`);
@@ -383,14 +386,14 @@ describe('M1 real HTTP application boundaries', () => {
     expect(completed.status).toBe('completed');
     const success = await api<ChatDetail>(url, `/api/chats/${chat.id}`);
     expect(success.sources).toHaveLength(1); expect(success.sources[0].text).toBe('HTTP_PROVIDER_ORIGINAL');
-    expect(success.jobs).toHaveLength(2);
+    expect(success.jobs.map(job => job.kind)).toEqual(['status']);
     expect(success.attempts?.[0]).toMatchObject({ modelId: 'fixture-http-main', status: 'completed', inputTokens: 4, outputTokens: 2, costUsd: null });
     for (const [request, status] of [['refuse main', 'refused'], ['partial main', 'partial']] as const) {
       const run = await create(request); const done = await terminal(url, run.id);
       expect(done).toMatchObject({ status, sourceRevision: null });
     }
     const preserved = await api<ChatDetail>(url, `/api/chats/${chat.id}`);
-    expect(preserved.sources).toEqual(success.sources); expect(preserved.jobs).toHaveLength(2);
+    expect(preserved.sources).toEqual(success.sources); expect(preserved.jobs.map(job => job.kind)).toEqual(['status']);
     expect(preserved.runs.find(run => run.status === 'partial')?.partialText).toBe('PARTIAL_NOT_SOURCE');
     const key = randomUUID();
     const sibling = await api<Run>(url, `/api/runs/${created.id}/candidate`, { idempotencyKey: key, title: 'HTTP sibling' });

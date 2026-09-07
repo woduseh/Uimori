@@ -1,0 +1,82 @@
+{
+  "artifact": "Uimori UI redesign v1.0",
+  "repo_snapshot": "87548d15c41fa0adb74284a1873c9d28e1dfe8ee",
+  "scope": "proposal plus tested standalone prototype; no repo mutation or deployment",
+  "files": [
+    {
+      "path": "CODEX_UI_TASK.ko.md",
+      "bytes": 7309,
+      "sha256": "89498eeecb652707ca6c91e6fd99ecaffa98f096e12ee3ac147a24eff7400da7"
+    },
+    {
+      "path": "README.md",
+      "bytes": 3208,
+      "sha256": "34d8dff56ebacc6cbd9fc63ab3a592e8fe7ef4d93533dbb68885a1a613bac851"
+    },
+    {
+      "path": "SOURCE_MAP.json",
+      "bytes": 4755,
+      "sha256": "7593a7de7c0db4e0b3ce6558ac7340e3aa0ed1c853a3f3972b15a90c4a5abe90"
+    },
+    {
+      "path": "UI_ACCEPTANCE.json",
+      "bytes": 6979,
+      "sha256": "14b6bee5789fbfb69755b88de9df44e4edb9f2a4b5a5bda2376aeeae16204eeb"
+    },
+    {
+      "path": "UI_REDESIGN.md",
+      "bytes": 26796,
+      "sha256": "3b0ce05f824c61af629ebd6f78098a8bc0867d5008fbd22311af60f28885e920"
+    },
+    {
+      "path": "check-prototype.py",
+      "bytes": 5866,
+      "sha256": "6e9f49f59f81b820e2c5ae19adfcc1cb7b2a117b98575db8d213571e827f0039"
+    },
+    {
+      "path": "desktop-chat.png",
+      "bytes": 135429,
+      "sha256": "6a7b00341b5df5f307764880eb4f73558d814d25edd6a80f304191261f1de145"
+    },
+    {
+      "path": "desktop-context.png",
+      "bytes": 159585,
+      "sha256": "e5eb90ed46b720c28974e594cc333346de37cd0f2f84e933c3907f81c15fc4fb"
+    },
+    {
+      "path": "desktop-library.png",
+      "bytes": 80771,
+      "sha256": "9771945fc82922009847ce8e84fcf178c9b99ab60ea29c68dada60d596a566d4"
+    },
+    {
+      "path": "desktop-light.png",
+      "bytes": 143724,
+      "sha256": "1921fd5acef736931dba33cd29c1b17e34cf21b233af0a665e133ee0a00960d3"
+    },
+    {
+      "path": "mobile-chat.png",
+      "bytes": 64221,
+      "sha256": "49f0c16bfcf86764844b7193df05263b69404cc8ce634126bc1edd49a61043ba"
+    },
+    {
+      "path": "mobile-context.png",
+      "bytes": 38788,
+      "sha256": "20895c2a7468fa8ef4d24372d0f4598539b7c5efa267c6939aeb08900e062e80"
+    },
+    {
+      "path": "mobile-library.png",
+      "bytes": 44193,
+      "sha256": "a91d88c7351094de10acaf9ac6ee4bb91970076ec70a884d1b3d6635f0b5f99f"
+    },
+    {
+      "path": "prototype-checks.json",
+      "bytes": 1192,
+      "sha256": "c6027682df96c9f990ba6b3b7305b77532c9c907c158534d3188c87952988bb6"
+    },
+    {
+      "path": "uimori-ui-prototype.html",
+      "bytes": 59265,
+      "sha256": "acdef9c0b763cb4f768bf7426959d73ce3cb8b108e168953e50727bae37434a5"
+    }
+  ]
+}

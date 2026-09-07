@@ -80,6 +80,54 @@ describe('server main runner through the actual loopback adapter', () => {
     expect(first.generation).toEqual({ maxOutputTokens: 4096, temperature: null });
   });
 
+  test('P05 rejects reused tool IDs across main rounds before executing any tools from the invalid round', async () => {
+    let calls = 0;
+    const originalId = 'Read-Lore_Original.7';
+    const server = await fixture(async (_captured, response) => {
+      calls++;
+      if (calls === 1) await writeSse(response, [
+        { type: 'tool_delta', index: 0, id: originalId, name: 'knowledge.read', argumentsDelta: '{"id":"lore-1"}' },
+        { type: 'usage', inputTokens: 7, outputTokens: 2 }, { type: 'done', reason: 'tool_calls' },
+      ]);
+      else if (calls === 2) await writeSse(response, [
+        { type: 'tool_delta', index: 0, id: 'fresh-call', name: 'skills.load', argumentsDelta: '{"id":"craft-1"}' },
+        { type: 'tool_delta', index: 1, id: originalId, name: 'knowledge.read', argumentsDelta: '{"id":"lore-1"}' },
+        { type: 'usage', inputTokens: 11, outputTokens: 4 }, { type: 'done', reason: 'tool_calls' },
+      ]);
+      else await writeSse(response, [{ type: 'text_delta', delta: 'Unexpected third request.' }, { type: 'done', reason: 'stop' }]);
+    });
+    const observed = runnerHooks(server.origin);
+    const outcome = await runMain(routedSnapshot(server.endpoint), observed.hooks);
+    expect(outcome).toMatchObject({ status: 'error', error: 'DUPLICATE_TOOL_ID', text: '', usage: { modelCalls: 2, inputTokens: 18, outputTokens: 6, costUsd: null } });
+    expect(server.requests).toHaveLength(2);
+    expect(observed.attempts).toHaveLength(2);
+    expect(observed.attempts.every(attempt => !!attempt.result)).toBe(true);
+    expect(observed.tools.map(event => event.callId)).toEqual([originalId]);
+    expect(JSON.parse(server.requests[1].body).input.results.map((event: ToolEvent) => event.callId)).toEqual([originalId]);
+  });
+
+  test.each([
+    { selection: 'hook before preset', hookTimeout: 100, presetTimeout: 5000 },
+    { selection: 'preset', hookTimeout: undefined, presetTimeout: 100 },
+  ])('P05 honors main timeout from $selection and forwards selected thinking level', async ({ hookTimeout, presetTimeout }) => {
+    const server = await fixture((_captured, response) => {
+      response.writeHead(200, { 'content-type': 'text/event-stream' });
+      response.write(sse({ type: 'text_delta', delta: 'Observed main prefix.' }));
+      response.write(sse({ type: 'usage', inputTokens: 5, outputTokens: 2 }));
+    });
+    const observed = runnerHooks(server.origin, { timeoutMs: hookTimeout });
+    const snapshot = routedSnapshot(server.endpoint);
+    snapshot.profile!.models.main!.timeoutMs = presetTimeout;
+    snapshot.profile!.models.main!.thinkingLevel = 'LOW';
+    const outcome = await runMain(snapshot, observed.hooks);
+    expect(outcome).toMatchObject({ status: 'partial', text: 'Observed main prefix.', error: 'TIMEOUT', usage: { modelCalls: 1, inputTokens: 5, outputTokens: 2, costUsd: null } });
+    expect(server.requests).toHaveLength(1);
+    expect(observed.tools).toEqual([]);
+    expect(observed.attempts).toHaveLength(1);
+    expect(observed.attempts[0].result).toMatchObject({ status: 'partial', error: { code: 'TIMEOUT' } });
+    expect(JSON.parse(server.requests[0].body).generation).toEqual({ maxOutputTokens: 4096, temperature: null, thinkingLevel: 'LOW' });
+  });
+
   test('P04 P05 checks current connection policy before each call and never retries a revoked route', async () => {
     const server = await fixture(async (_captured, response) => { await writeSse(response, [{ type: 'tool_delta', index: 0, id: 'read-lore', name: 'knowledge.read', argumentsDelta: '{"id":"lore-1"}' }, { type: 'done', reason: 'tool_calls' }]); });
     let checks = 0;
@@ -272,4 +320,25 @@ describe('fixture HTTP transport (no live provider compatibility claim)', () => 
     expect((await executeProvider(connection(server.endpoint), request(), options(server.origin, { signal: before.signal }))).status).toBe('cancelled');
     expect(server.requests).toHaveLength(2);
   });
+});
+
+test('custom main prompt remains literal across tools after the caller changes its profile', async () => {
+  const custom = '  CUSTOM MAIN\r\n{{char}} `verbatim`  ';
+  const server = await fixture(async (captured, response) => {
+    const body = JSON.parse(captured.body);
+    if (!body.input.results.length) await writeSse(response, [{ type: 'tool_delta', index: 0, id: 'custom-read', name: 'knowledge.read', argumentsDelta: '{"id":"lore-1"}' }, { type: 'opaque_state', state: { test: 'custom-continuation' } }, { type: 'done', reason: 'tool_calls' }]);
+    else await writeSse(response, [{ type: 'text_delta', delta: 'Custom scene received.' }, { type: 'done', reason: 'stop' }]);
+  });
+  const seed = routedSnapshot(server.endpoint);
+  seed.profile!.promptPresets = { main: { id: 'writing-custom', revision: 4, role: 'main', title: 'Custom writing', text: custom } };
+  const observed = runnerHooks(server.origin, { onInput: () => { seed.profile!.promptPresets!.main!.text = 'FUTURE PROMPT'; } });
+  expect(await runMain(seed, observed.hooks)).toMatchObject({ status: 'completed', text: 'Custom scene received.' });
+  expect(server.requests).toHaveLength(2);
+  for (const captured of server.requests) {
+    const wire = JSON.parse(captured.body);
+    expect(wire.stable.contract).toBe(custom);
+    expect(wire.stable.tools.map((tool: { name: string }) => tool.name)).toEqual(['knowledge.search', 'knowledge.read', 'skills.list', 'skills.load']);
+    expect(captured.body).not.toContain('FUTURE PROMPT');
+  }
+  expect(JSON.parse(server.requests[1].body).input.results[0].callId).toBe('custom-read');
 });

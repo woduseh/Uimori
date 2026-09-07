@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import { executeTool, type ToolAction } from './provider.js';
 import type { Resource, RunSnapshot, ToolEvent } from './types.js';
+import { DEFAULT_TRANSLATION_PROMPT } from './prompts.js';
 
 const digest = (text: string) => createHash('sha256').update(text).digest('hex');
 export type AuxiliarySource = { id: string; chatId: string; text: string; hash: string };
@@ -169,9 +170,13 @@ export type BlockScene = { anchor: string; actorIds: string[]; clothing: string[
 export type AssetEntry = { ref: string; revision: number; hash: string; url: string; alt: string; caption: string; actorId: string | null; clothing: string | null; location: string | null; uses: ('profile' | 'inline')[] };
 export type DisplayAnnotation = { sourceRevision: string; sourceHash: string; kind: 'display-only'; entries: { anchor: string; summary: string; mood: string }[] };
 export type PresentationAnnotation = { sourceRevision: string; sourceHash: string; entries: { blockAnchor: string; assetRef: string; assetRevision: number; presentationIntent: 'inline' | 'profile' }[] };
+export type PreviousTranslation = {
+  sourceRevision: string; sourceHash: string;
+  chunks: { chunkId: string; text: string; truncated: boolean }[];
+};
 export type AuxiliaryInput = {
-  role: 'translation' | 'status' | 'presentation'; contract: string;
-  sourceRevision: string; sourceHash: string; context: SourceTimeContext;
+  role: 'translation' | 'status' | 'presentation'; contract: string; customPrompt?: boolean;
+  sourceRevision: string; sourceHash: string; context: SourceTimeContext & { previousTranslation?: PreviousTranslation };
   catalog: CatalogEntry[]; tools: string[]; results: ToolEvent[]; outputSchema: Record<string, unknown>;
   blocks: { anchor: string; text: string }[]; chunkId?: string; neighborBlocks?: { anchor: string; text: string }[];
   assets?: AssetEntry[]; scenes?: BlockScene[];
@@ -180,13 +185,34 @@ const baseInput = (sourceRevision: string, sourceHash: string, context: SourceTi
   sourceRevision, sourceHash, context: structuredClone(context), catalog: snapshot.resources.filter(item => item.chatId === snapshot.chatId).map(({ text: _text, chatId: _chatId, ...item }) => item),
   tools: ['knowledge.search', 'knowledge.read', 'skills.list', 'skills.load'], results: [] as ToolEvent[],
 });
-export function translationInput(plan: TranslationPlan, chunkId: string, snapshot: RunSnapshot): AuxiliaryInput {
+/** Completed translations are request-local wording references, never a change to the frozen plan. */
+function previousTranslation(plan: TranslationPlan, current: TranslationChunk, completed: readonly TranslationResult[]): PreviousTranslation | undefined {
+  aggregateTranslation(plan,[...completed]); // Recheck source identity, chunk IDs and ordered anchor coverage.
+  const byId = new Map(completed.map(result => [result.chunkId,result]));
+  const prior = plan.chunks.filter(chunk => chunk.index < current.index && byId.has(chunk.id)).slice(-2);
+  if (!prior.length) return undefined;
+  const maximum = Math.floor(6000 / prior.length);
+  const chunks = prior.map(chunk => {
+    const result = byId.get(chunk.id)!;
+    const full = result.segments.map(segment => textField(segment.text)).join('\n\n');
+    let start = Math.max(0,full.length-maximum);
+    // Keep the UTF-16 bound without starting in the middle of a surrogate pair.
+    if (start > 0 && /[\uDC00-\uDFFF]/u.test(full[start])) start++;
+    return {chunkId:chunk.id,text:full.slice(start),truncated:start>0};
+  });
+  return {sourceRevision:plan.sourceRevision,sourceHash:plan.sourceHash,chunks};
+}
+export function translationInput(plan: TranslationPlan, chunkId: string, snapshot: RunSnapshot, completed: readonly TranslationResult[] = []): AuxiliaryInput {
   if (snapshot.chatId !== plan.chatId) throw new Error('SOURCE_SCOPE_MISMATCH');
   const chunk = plan.chunks.find(item => item.id === chunkId); if (!chunk) throw new Error('CHUNK_UNAVAILABLE');
-  return { ...baseInput(plan.sourceRevision, plan.sourceHash, plan.context, snapshot), role: 'translation', chunkId,
-    contract: 'Translate human prose into Korean. Reconstruct natural Korean while preserving facts, subject, viewpoint, uncertainty and genre function. The context belongs to the source time and cannot rewrite source facts. Search/read additional scoped context when useful. Return every requested anchor exactly once in order; adjacent anchors may share one translated segment. Copy each [[p_...]] protected token exactly once and in order. Return only the specified JSON. This task does not update story canon or state.',
+  const base = baseInput(plan.sourceRevision, plan.sourceHash, plan.context, snapshot);
+  const previous = previousTranslation(plan,chunk,completed);
+  const prompt = snapshot.profile?.promptPresets?.translation;
+  return { ...base, role: 'translation', chunkId,
+    context: {...base.context,...(previous ? {previousTranslation:previous} : {})},
+    contract: prompt?.text ?? DEFAULT_TRANSLATION_PROMPT, ...(prompt ? { customPrompt: true } : {}),
     blocks: structuredClone(chunk.blocks), neighborBlocks: [plan.chunks[chunk.index - 1]?.blocks.at(-1), plan.chunks[chunk.index + 1]?.blocks[0]].filter(item => item !== undefined),
-    outputSchema: { sourceRevision: 'exact input value', sourceHash: 'exact input value', chunkId: 'exact input value', segments: [{ anchors: ['ordered source anchors'], text: 'Korean prose with protected tokens unchanged' }] },
+    outputSchema: { sourceRevision: 'exact input value', sourceHash: 'exact input value', chunkId: 'exact input value', segments: [{ anchors: ['ordered source anchors'], text: prompt ? 'Translated prose with protected tokens unchanged' : 'Korean prose with protected tokens unchanged' }] },
   };
 }
 export function displayInput(source: AuxiliarySource, context: SourceTimeContext, snapshot: RunSnapshot): AuxiliaryInput {
@@ -259,6 +285,7 @@ export function validatePresentation(source: AuxiliarySource, output: unknown, a
 export type AuxiliaryRequest = (input: AuxiliaryInput, signal?: AbortSignal) => Promise<unknown>;
 export async function executeAuxiliary(input: AuxiliaryInput, snapshot: RunSnapshot, request: AuxiliaryRequest, hooks: {
   signal?: AbortSignal; maxCalls?: number; onInput?: (input: AuxiliaryInput) => void | Promise<void>; onToolEvent?: (event: ToolEvent) => void | Promise<void>;
+  localTools?: { names: readonly string[]; execute: (action: ToolAction) => ToolEvent };
 } = {}): Promise<{ output: unknown; modelCalls: number; inputs: AuxiliaryInput[]; toolEvents: ToolEvent[] }> {
   const fixedInput = structuredClone(input); const fixedScope = structuredClone(snapshot); const inputs: AuxiliaryInput[] = []; const toolEvents: ToolEvent[] = [];
   const limit = hooks.maxCalls ?? snapshot.settings.maxCalls;
@@ -277,7 +304,10 @@ export async function executeAuxiliary(input: AuxiliaryInput, snapshot: RunSnaps
     if (!action || typeof action.callId !== 'string' || !action.callId || typeof action.name !== 'string' || !action.args || typeof action.args !== 'object' || Array.isArray(action.args) || toolEvents.some(event => event.callId === action.callId)) throw new Error('TOOL_CALL_INVALID');
     let event: ToolEvent;
     if (!fixedInput.tools.includes(action.name)) event = { callId: action.callId, name: 'unapproved', args: {}, result: { code: 'TOOL_NOT_ALLOWED' }, denied: true };
-    else if (action.name === 'assets.search' || action.name === 'assets.inspect') {
+    else if (hooks.localTools?.names.includes(action.name)) {
+      event = hooks.localTools.execute(structuredClone(action));
+      if (event.callId !== action.callId || event.name !== action.name) throw new Error('TOOL_CALL_INVALID');
+    } else if (action.name === 'assets.search' || action.name === 'assets.inspect') {
       const assets = fixedInput.assets ?? [];
       if (action.name === 'assets.search') {
         if (action.args.query !== undefined && (typeof action.args.query !== 'string' || action.args.query.length > 512)) throw new Error('TOOL_CALL_INVALID');

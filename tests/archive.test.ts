@@ -30,7 +30,8 @@ async function prepared() {
   const profile = store.product.profile(a.id); store.product.updateProfile(a.id,{expectedRevision:profile.revision,attachments:[{id:lore.id,revision:lore.revision}],creative:profile.creative,routes:profile.routes,image:false});
   const first = complete(store,a.id,'Mira counted 9 lamps beside `north_gate`.'); const second = complete(store,b.id,'The other fictional scene remains isolated.');
   const asset = store.product.createAsset(a.id,{title:'Synthetic pixel',mime:'image/png',base64:pixel,description:'A synthetic pixel',actor:'',outfit:'',location:'',allowedUse:'inline'});
-  const job = store.detail(a.id).jobs.find(job => job.kind === 'translation')!; const controller = new AbortController();
+  expect(store.detail(a.id).jobs.some(job => job.kind === 'translation')).toBe(false);
+  const job = store.requestTranslation(first.id); const controller = new AbortController();
   expect((await runAuxiliaryJob(auxiliaryBridge(store,new Controls(),controller.signal),job.id,'archive-worker',{signal:controller.signal,approvedOrigins:[],authorize:c=>c,onAttemptStart:()=>{throw new Error('Unexpected external request');},onAttemptFinish:()=>{}}))?.status).toBe('completed');
   return {store,a,b,first,second,asset,job,archive:store.product.export()};
 }

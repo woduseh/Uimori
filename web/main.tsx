@@ -1,177 +1,84 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
-import type { Chat, ChatDetail, Run, Settings, Source } from '../core/types.js';
-import type { Branch, Library } from '../core/product.js';
+import { ArrowUp, BookOpen, Clock3, Copy, Maximize, Menu, Minimize, Plus, Search, Settings2, SlidersHorizontal, Square, Type } from 'lucide-react';
+import type { Content } from '../core/product.js';
 import { api, labels } from './api.js';
-import { LibraryPanel } from './LibraryPanel.js';
+import { LibraryPanel, refValue } from './LibraryPanel.js';
 import { ProfileEditor } from './ProfileEditor.js';
 import { SourceReader } from './SourceReader.js';
-import { ArchivePanel } from './ArchivePanel.js';
+import { StoryPanel } from './StoryPanel.js';
 import { AssetEditor } from './AssetEditor.js';
 import { SessionGate } from './SessionGate.js';
-import { AttemptInspector } from './AttemptInspector.js';
+import { Dialog } from './Dialog.js';
+import { NewStory } from './NewStory.js';
+import { completePendingStoryProfile } from './pendingStory.js';
+import { SettingsEditor } from './RuntimeSettings.js';
+import { AppSettingsPanel, BranchesPanel, TasksPanel } from './WorkspacePanels.js';
+import { useStory } from './useStory.js';
+import { modelLabel } from './storyLabels.js';
 import './style.css';
 import './product.css';
 
-function initialView() {
-  const params = new URLSearchParams(location.search);
-  const chat = params.get('chat') || '';
-  return { chat, branch: params.get('branch') || sessionStorage.getItem(`branch:${chat}`) || '', source: params.get('source') || '' };
-}
-function ancestry(sources: Source[], head: string | null) {
-  const byId = new Map(sources.map(source => [source.id, source])); const seen = new Set<string>(); const result: Source[] = [];
-  while (head && !seen.has(head)) { seen.add(head); const source = byId.get(head); if (!source) break; result.unshift(source); head = source.parentRevision; }
-  return result;
-}
-
+type Panel = ''|'navigation'|'new'|'story'|'branches'|'tasks'|'settings'|'reading';
 function App() {
-  const [chats, setChats] = useState<Chat[]>([]);
-  const [selected, setSelected] = useState(() => initialView().chat);
-  const [viewedBranch, setViewedBranch] = useState(() => initialView().branch);
-  const [readSource, setReadSource] = useState(() => initialView().source);
-  const [detail, setDetail] = useState<ChatDetail | null>(null);
-  const [library, setLibrary] = useState<Library | null>(null);
-  const [title, setTitle] = useState('');
-  const [draft, setDraft] = useState('');
-  const [error, setError] = useState('');
-  const [busy, setBusy] = useState(false);
-  const [connected, setConnected] = useState(false);
-  const current = useRef(selected);
-  const refreshVersion = useRef(0);
-  const restoredView = useRef('');
-  current.current = selected;
-  const refresh = useCallback(async (id: string) => {
-    if (current.current !== id) return;
-    const version = ++refreshVersion.current;
-    const value = await api<ChatDetail>(`/chats/${id}`);
-    if (current.current === id && refreshVersion.current === version) setDetail(value);
-  }, []);
-  const loadChats = useCallback(async () => setChats(await api<Chat[]>('/chats')), []);
-  const loadLibrary = useCallback(async () => setLibrary(await api<Library>('/library')), []);
-  useEffect(() => { void Promise.all([loadChats(), loadLibrary()]).catch(e => setError(e.message)); }, [loadChats, loadLibrary]);
-  useEffect(() => {
-    setDetail(null); setError(''); setConnected(false);
-    if (!selected) return;
-    let alive = true;
-    void refresh(selected).catch(e => { if (alive) setError(e.message); });
-    const stream = new EventSource(`/api/chats/${selected}/events`);
-    stream.onopen = () => { if (alive) setConnected(true); };
-    stream.onerror = () => { if (alive) setConnected(false); };
-    stream.onmessage = () => { if (alive) void refresh(selected).catch(e => setError(e.message)); };
-    return () => { alive = false; stream.close(); };
-  }, [selected, refresh]);
-  const viewKey = `${selected}:${viewedBranch}`;
-  const draftKey = `draft:${selected}${viewedBranch ? `:${viewedBranch}` : ''}`;
-  useEffect(() => { setDraft(sessionStorage.getItem(draftKey) || ''); }, [draftKey]);
-  useEffect(() => {
-    const record = () => { if (selected && restoredView.current === viewKey) sessionStorage.setItem(`scroll:${viewKey}`, String(scrollY)); };
-    addEventListener('scroll', record, { passive: true });
-    return () => { record(); removeEventListener('scroll', record); };
-  }, [selected, viewKey]);
-  useEffect(() => {
-    const onPop = () => { const view = initialView(); setSelected(view.chat); setViewedBranch(view.branch); setReadSource(view.source); };
-    addEventListener('popstate', onPop); return () => removeEventListener('popstate', onPop);
-  }, []);
-  const setViewUrl = (chat: string, branch = '', source = '') => { const params = new URLSearchParams({ chat }); if (branch) params.set('branch', branch); if (source) params.set('source', source); history.pushState(null, '', `?${params}`); };
-  const select = (id: string) => { const branch = sessionStorage.getItem(`branch:${id}`) || ''; setViewUrl(id, branch); setSelected(id); setViewedBranch(branch); setReadSource(''); };
-  const chooseBranch = (id: string) => { setViewUrl(selected, id); sessionStorage.setItem(`branch:${selected}`, id); setViewedBranch(id); setReadSource(''); };
-  const branch = detail?.branches?.find(item => item.id === viewedBranch) ?? detail?.branches?.find(item => item.default);
-  const sources = detail ? branch ? ancestry(detail.sources, branch.headRevision) : detail.sources : [];
-  const visibleRuns = detail?.runs.filter(run => !branch || !run.snapshot.branchId && branch.default || run.snapshot.branchId === branch.id) ?? [];
-  useEffect(() => {
-    if (!detail || detail.chat.id !== selected || restoredView.current === viewKey) return;
-    restoredView.current = viewKey;
-    requestAnimationFrame(() => {
-      const target = readSource && document.getElementById(`source-${readSource}`);
-      if (target) target.scrollIntoView({ block: 'start' }); else scrollTo({ top: Number(sessionStorage.getItem(`scroll:${viewKey}`) || 0), behavior: 'instant' });
-    });
-  }, [detail, selected, viewKey, readSource]);
-  async function createChat(event: React.FormEvent) {
-    event.preventDefault(); setBusy(true); setError('');
-    try { const chat = await api<Chat>('/chats', { title: title.trim() }); await loadChats(); select(chat.id); setTitle(''); }
-    catch (e) { setError((e as Error).message); } finally { setBusy(false); }
-  }
-  async function generate(event: React.FormEvent) {
-    event.preventDefault(); if (!detail || !draft.trim()) return;
-    const chat = detail.chat;
-    const payload = { request: draft, expectedRevision: branch ? branch.headRevision : chat.headRevision, expectedSettingsRevision: chat.settingsRevision, ...(viewedBranch && branch ? { branchId: branch.id } : {}), ...(detail.profile ? { expectedProfileRevision: detail.profile.revision } : {}) };
-    // A lost HTTP response can be retried with the identical logical command.
-    const key = `command:${chat.id}${viewedBranch ? `:${viewedBranch}` : ''}`;
-    const previous = JSON.parse(sessionStorage.getItem(key) || 'null') as { payload: string; id: string } | null;
-    const serialized = JSON.stringify(payload);
-    const idempotencyKey = previous?.payload === serialized ? previous.id : crypto.randomUUID();
-    sessionStorage.setItem(key, JSON.stringify({ payload: serialized, id: idempotencyKey }));
-    setBusy(true); setError('');
-    try { await api(`/chats/${chat.id}/runs`, { ...payload, idempotencyKey }); await refresh(chat.id); }
-    catch (e) { setError((e as Error).message); await refresh(chat.id).catch(() => undefined); }
-    finally { setBusy(false); }
-  }
-  async function createBranch(sourceId: string) {
-    const next = await api<Branch>(`/chats/${selected}/branches`, { title: `분기 ${(detail?.branches?.length ?? 0) + 1}`, fromRevision: sourceId });
-    await refresh(selected); if (current.current === selected) chooseBranch(next.id);
-  }
-  async function candidate(run: Run) {
-    const result = await api<Run>(`/runs/${run.id}/candidate`, { idempotencyKey: crypto.randomUUID() });
-    await refresh(run.chatId); if (current.current === run.chatId && result.snapshot.branchId) chooseBranch(result.snapshot.branchId);
-  }
-  const active = visibleRuns.find(r => r.status === 'queued' || r.status === 'running');
-  const profileAsset = detail?.assets?.find(asset => asset.allowedUse !== 'inline');
-  return <div className="shell">
-    <header className="masthead"><a href="/" className="wordmark">Uimori<span>NARRATIVE RUNTIME</span></a><div className="header-actions"><span className="badge">M1 · 로컬 fixture</span><button className="secondary small-button" onClick={() => { void api('/session', {}, 'DELETE').then(() => location.reload()).catch(error => setError(error.message)); }}>접속 해제</button></div></header>
-    <div className="workspace">
-      <aside className="library"><p className="eyebrow">나의 작업실</p><h1>이야기를 이어가는 곳</h1><p className="muted">원문을 먼저 읽고, 번역과 표시 상태는 준비되는 대로 확인해요.</p>
-        <nav aria-label="채팅 목록">{chats.map(chat => <button key={chat.id} className={`chat-link ${selected === chat.id ? 'selected' : ''}`} onClick={() => select(chat.id)}>{chat.title}<span>이야기 열기 ↗</span></button>)}</nav>
-        <form onSubmit={createChat} className="new-chat"><label htmlFor="title">새 이야기 이름</label><input id="title" value={title} maxLength={100} onChange={e => setTitle(e.target.value)} placeholder="예: 등대의 편지" required/><button disabled={busy || !title.trim()}>이야기 만들기</button></form>
-        <p className="footnote">현재 연결은 로컬 검사용이에요. 실모델·실제 폰·외부 공개 검증은 별도로 진행해요.</p>
-      </aside>
-      <main>{error && <div role="alert" className="error">{error}</div>}
-      <LibraryPanel library={library} reload={loadLibrary} onError={setError}/>
-      <ArchivePanel onImported={async () => { await Promise.all([loadChats(), loadLibrary()]); if (selected) await refresh(selected); }} onError={setError}/>
-      {!selected ? <section className="empty"><span className="folio">01 / 시작</span><h2>아직 쓰이지 않은<br/>다음 장면.</h2><p>이야기를 만들고 짧은 장면 요청으로 시작해 보세요.</p></section> : !detail ? <p role="status">이야기를 불러오는 중이에요…</p> : <>
-        <div className="chapter-heading"><div className="chapter-title">{profileAsset && <img className="profile-asset" data-testid="profile-asset" src={profileAsset.url} alt={profileAsset.description || profileAsset.title}/>}<div><span className="eyebrow">WORK IN PROGRESS</span><h2>{detail.chat.title}</h2></div></div><span className="connection">{connected ? '● 연결됨' : '○ 재연결 중'}</span></div>
-        <SettingsEditor key={detail.chat.id} chat={detail.chat} onSaved={() => refresh(detail.chat.id)} onError={setError}/>
-        {detail.profile && library && <ProfileEditor key={detail.chat.id} profile={detail.profile} library={library} onSaved={() => refresh(detail.chat.id)} onError={setError}/>}
-        <AssetEditor key={`assets:${detail.chat.id}`} chatId={detail.chat.id} assets={detail.assets ?? []} refresh={() => refresh(detail.chat.id)} onError={setError}/>
-        {!!detail.branches?.length && <section className="branch-navigation" aria-label="분기 탐색"><label>읽고 이어갈 분기<select aria-label="읽고 이어갈 분기" value={branch?.default ? '' : branch?.id ?? ''} onChange={event => chooseBranch(event.target.value)}>{detail.branches.map(item => <option key={item.id} value={item.default ? '' : item.id}>{item.title}{item.default ? ' · 기본' : ''}</option>)}</select></label><label>읽을 원문<select aria-label="읽을 원문" value={sources.some(source => source.id === readSource) ? readSource : ''} onChange={event => { const id = event.target.value; setReadSource(id); setViewUrl(selected, viewedBranch, id); if (id) document.getElementById(`source-${id}`)?.scrollIntoView({ block: 'start' }); }}><option value="">분기 전체</option>{sources.map((source, index) => <option key={source.id} value={source.id}>원문 {index + 1} · {source.text.slice(0, 28)}</option>)}</select></label><small>보기와 독서 위치는 이 탭에만 저장돼요. 분기를 선택해도 다른 탭의 보기는 움직이지 않아요.</small></section>}
-        <section className="reader" aria-label="원고">
-          {!sources.length && <p className="muted">첫 요청을 보내면 이곳에 원문이 남아요. 탭을 닫아도 서버에서 진행돼요.</p>}
-          {sources.map((source, index) => <SourceReader key={source.id} source={source} index={index} jobs={detail.jobs.filter(job => job.sourceRevision === source.id)} assets={detail.assets ?? []} refresh={() => refresh(detail.chat.id)} onError={setError} onBranch={createBranch}/>)}
-        </section>
-        <section className="runs" aria-label="실행 기록">{visibleRuns.map(run => <div key={run.id} data-testid="run" data-run-id={run.id} className="run">
-          <div><strong>원문 {labels[run.status]}</strong><span className="muted"> · {run.snapshot.settings.preset === 'calm' ? '차분한 서술' : '선명한 서술'}</span></div>
-          {run.error && <p className="error">{run.error}</p>}
-          {run.partialText && <details className="partial-result"><summary>보존된 부분 출력 · 확정 원문에 합류하지 않음</summary><pre>{run.partialText}</pre></details>}
-          {run.issue && <p className="error">요청 충실성 메모: {run.issue}</p>}
-          <RunIssue run={run} refresh={() => refresh(detail.chat.id)} onError={setError}/>
-          {(run.status === 'queued' || run.status === 'running') && <button className="secondary" onClick={() => { void api(`/runs/${run.id}/cancel`, {}).then(() => refresh(detail.chat.id)).catch(e => setError(e.message)); }}>원문 생성 취소</button>}
-          {run.status === 'completed' && <button className="secondary" onClick={() => { void candidate(run).catch(error => setError(error.message)); }}>같은 요청의 다른 후보 생성</button>}
-          <details className="inspector"><summary>실행과 실제 입력 확인</summary><p>Run {run.id} · 모델 호출 {run.usage.modelCalls}회 · 입력 {run.usage.inputTokens ?? '미확인'} / 출력 {run.usage.outputTokens ?? '미확인'} 토큰 · 비용 {run.usage.costUsd === null ? '미확인' : `$${run.usage.costUsd}`}</p><pre>{JSON.stringify({ snapshot: { parentRevision: run.parentRevision, settingsRevision: run.settingsRevision, settings: run.snapshot.settings, profile: run.snapshot.profile }, inputs: run.inputs, toolEvents: run.toolEvents, attempts: detail.attempts?.filter(attempt => attempt.runId === run.id) }, null, 2)}</pre></details>
-        </div>)}</section>
-        <AttemptInspector attempts={detail.attempts ?? []} runs={detail.runs}/>
-        <form onSubmit={generate} className="composer"><label htmlFor="request">다음 장면 요청</label><textarea id="request" rows={4} maxLength={4000} value={draft} onChange={e => { setDraft(e.target.value); sessionStorage.setItem(draftKey, e.target.value); }} placeholder="(OOC: ...) 장면과 인물의 행동을 요청해 보세요."/><div><small>현재 분기: {branch?.title || '기본 이야기'}. 서버가 실행을 보관하므로 기다리는 동안 다른 이야기를 읽어도 돼요.</small><button disabled={busy || !!active || !draft.trim()}>{active ? '서버에서 생성 중…' : '원문 생성'}</button></div></form>
-      </>}</main>
-    </div><footer>Uimori · 원문과 그 곁의 기록들</footer>
+  const s=useStory();
+  const [panel,setPanel]=useState<Panel>(''); const [storySearch,setStorySearch]=useState('');
+  const [initialBot,setInitialBot]=useState<Content>(); const [newKey,setNewKey]=useState(0);
+  const [focus,setFocus]=useState(false); const [inspectedRun,setInspectedRun]=useState('');
+  const [theme,setTheme]=useState<'system'|'dark'|'light'>(()=>{const value=localStorage.getItem('uimori:theme');return value==='dark'||value==='light'?value:'system';});
+  const [font,setFont]=useState(()=>localStorage.getItem('uimori:font')||'sans');
+  const [fontSize,setFontSize]=useState(()=>Math.max(16,Math.min(22,Number(localStorage.getItem('uimori:font-size')||18))));
+  const [enterSend,setEnterSend]=useState(()=>localStorage.getItem('uimori:enter-send')==='true');
+  const [readingLanguage,setReadingLanguage]=useState(()=>localStorage.getItem('uimori:reading-language')||'translation');
+  const composing=useRef(false);
+  useLayoutEffect(()=>{
+    const node=s.input.current;if(!node)return;
+    node.style.height='auto';node.style.height=`${Math.min(node.scrollHeight,180)}px`;
+  },[s.draft,s.viewKey,s.destination]);
+  const mainModel=s.library?.models.find(item=>s.detail?.profile?.routes.main&&refValue(item)===refValue(s.detail.profile.routes.main));
+  const mainDescription=mainModel?modelLabel(mainModel,s.library):s.detail?.profile?.routes.main?'보관된 본문 모델':'검사용 모의 생성 · 실제 모델 없음';
+  useEffect(()=>{
+    const media=matchMedia('(prefers-color-scheme: dark)');const apply=()=>{document.documentElement.dataset.theme=theme==='system'?media.matches?'dark':'light':theme;};
+    apply();media.addEventListener('change',apply);localStorage.setItem('uimori:theme',theme);return()=>media.removeEventListener('change',apply);
+  },[theme]);
+  useEffect(()=>{document.documentElement.dataset.readingFont=font;document.documentElement.style.setProperty('--reading',`${fontSize}px`);localStorage.setItem('uimori:font',font);localStorage.setItem('uimori:font-size',String(fontSize));},[font,fontSize]);
+  useEffect(()=>{localStorage.setItem('uimori:enter-send',String(enterSend));},[enterSend]);
+  useEffect(()=>{localStorage.setItem('uimori:reading-language',readingLanguage);},[readingLanguage]);
+  useEffect(()=>{const viewport=visualViewport;const update=()=>document.documentElement.style.setProperty('--app-height',`${viewport?.height??innerHeight}px`);update();viewport?.addEventListener('resize',update);return()=>viewport?.removeEventListener('resize',update);},[]);
+  useEffect(()=>{const onPop=()=>setPanel('');addEventListener('popstate',onPop);return()=>removeEventListener('popstate',onPop);},[]);
+  function newStory(bot?:Content){setInitialBot(bot);setNewKey(old=>old+1);setPanel('new');}
+  function select(id:string){s.select(id);setPanel('');}
+  function showLibrary(){s.showLibrary();setPanel('');}
+  function inspect(id:string){setInspectedRun(id);setPanel('tasks');}
+  const navigation=<><div className="brand">Uimori</div><button className="new-story-button secondary" onClick={()=>newStory()}><Plus size={19}/>새 이야기</button><label className="story-search"><Search size={17}/><input aria-label="이야기 검색" placeholder="이야기 검색" value={storySearch} onChange={e=>setStorySearch(e.target.value)}/></label><button className={`nav-button ${s.destination==='library'?'selected':''}`} onClick={showLibrary}><BookOpen size={19}/>서재</button><div className="recent-label">최근 이야기</div><nav aria-label="채팅 목록" className="story-list">{s.chats.filter(chat=>chat.title.toLowerCase().includes(storySearch.toLowerCase())).map(chat=><button key={chat.id} className={`chat-link ${s.selected===chat.id&&s.destination==='story'?'selected':''}`} onClick={()=>select(chat.id)}><strong>{chat.title}</strong><small>{chat.id===s.selected&&s.tasks?`${s.tasks}개 작업 진행 중`:'이야기 열기'}</small></button>)}{!s.chats.length&&<p className="muted">아직 이야기가 없어요.</p>}</nav><div className="nav-bottom"><button className="nav-button" aria-label="작업 현황" onClick={()=>inspect('')}><Clock3 size={19}/>작업 현황{s.tasks>0&&<span className="count">{s.tasks}</span>}</button><button className="nav-button" onClick={()=>setPanel('settings')}><Settings2 size={19}/>설정</button></div></>;
+  return <div className={`app-shell ${focus?'focus-reading':''}`}>
+    <aside className="sidebar">{navigation}</aside>
+    <main className="story-workspace">
+      <header className="workspace-header"><button className="icon-button mobile-menu" aria-label="탐색 메뉴" onClick={()=>setPanel('navigation')}><Menu size={20}/></button><div className="header-title"><h1>{s.destination==='library'?'서재':s.detail?.chat.title||'Uimori'}</h1><small>{s.destination==='library'?'인물 · 세계 · 창작 프리셋':s.bot?.title||(s.selected?'이야기를 이어가는 중':'나의 이야기')}</small></div><div className="header-actions">{s.selected&&s.destination==='story'&&<><button className="icon-button" aria-label="이야기 포크" title="여기까지 복사해서 새 이야기로 이어가기" disabled={!s.sources.length||s.forking.some(key=>key.startsWith(`${s.selected}:`))} onClick={()=>{const source=s.sources.at(-1);if(source)void s.fork(source.id);}}><Copy size={19}/></button><button className="icon-button reading-button" aria-label="읽기 설정" title="읽기 설정" onClick={()=>setPanel('reading')}><Type size={20}/></button><button className="icon-button" aria-label={focus?'집중 읽기 종료':'집중 읽기'} title="집중 읽기" onClick={()=>setFocus(!focus)}>{focus?<Minimize size={19}/>:<Maximize size={19}/>}</button><button className="icon-button" aria-label="이야기 설정" title="이야기 설정" onClick={()=>setPanel('story')}><SlidersHorizontal size={20}/></button></>}</div></header>
+      {s.destination==='library'?<div className="destination-scroll"><LibraryPanel library={s.library} reload={s.loadLibrary} onError={s.setError} onStartStory={newStory}/>{s.error&&<p className="error" role="alert">{s.error}</p>}</div>:<>
+        <div ref={s.reader} className="reader-scrollport" data-reader-scrollport onScroll={s.savePosition}><section className="reader" aria-label="원고">
+          {!s.selected?<div className="empty-state"><BookOpen size={32}/><h2>어떤 이야기를 시작할까요?</h2><p className="muted">서재에서 봇을 고르거나, 원하는 장면으로 시작해요.</p><button onClick={()=>newStory()}>새 이야기</button><button className="secondary" onClick={showLibrary}>서재 둘러보기</button></div>:!s.detail?<p role="status">이야기를 불러오는 중이에요…</p>:<>
+            <div className="story-context">{s.profileAsset&&<img className="profile-asset" data-testid="profile-asset" src={s.profileAsset.url} alt={s.profileAsset.description||s.profileAsset.title}/>}<span>{s.bot?.title||'나의 이야기'}{s.persona&&` · 페르소나 ${s.persona.title}`}</span>{(s.detail.branches?.length??0)>1&&<button className="secondary" onClick={()=>setPanel('branches')}>보관된 전개</button>}</div>
+            {!s.connected&&<p className="connection-note" role="status">연결을 다시 확인하는 중이에요.</p>}
+            {!s.sources.length&&!s.visibleRuns.length&&!s.active&&<div className="first-scene"><h2>첫 장면을 들려주세요.</h2><p className="muted">배경과 인물, 일어나길 바라는 일을 아래에 적어주세요.</p></div>}
+            {s.sources.map((source,index)=><SourceReader key={source.id} source={source} index={index} request={s.detail!.runs.find(run=>run.id===source.runId)?.request} jobs={s.detail!.jobs.filter(job=>job.sourceRevision===source.id)} assets={s.detail!.assets??[]} refresh={()=>s.refresh(s.selected)} onError={s.setError} onFork={s.fork} onInspect={inspect}/>)}
+            {s.visibleRuns.filter(run=>!run.sourceRevision).map(run=><article className="pending-turn" key={run.id} data-testid="pending-run"><div className="request-message"><small>내 장면 요청</small><p>{run.request}</p></div><div className="run-outcome"><strong>{run.status==='waiting_for_state'?'상태 확인 대기':s.active?.id===run.id?'다음 장면을 만들고 있어요':labels[run.status]}</strong>{run.error&&<p className="error">{run.error}</p>}{run.partialText&&<><small>확정되지 않은 부분 출력</small><p className="partial-prose">{run.partialText}</p></>}<button className="secondary" onClick={()=>inspect(run.id)}>작업 상세</button></div></article>)}
+          </>}
+        </section></div>
+        {s.selected&&<div className="composer-dock">{s.pendingProfile&&<div className="error" role="alert">시작 설정 저장이 끝나지 않았어요.<button className="secondary" onClick={()=>{void(async()=>{try{const chatId=s.selected;await completePendingStoryProfile(chatId);await s.refresh(chatId);}catch(err){s.setError((err as Error).message);}})();}}>시작 설정 다시 저장</button></div>}{s.error&&<div className="error" role="alert">{s.error}</div>}
+          <form className="composer" onSubmit={event=>{event.preventDefault();void s.generate();}}><label className="sr-only" htmlFor="request">다음 장면 요청</label><textarea ref={s.input} id="request" rows={2} maxLength={4000} value={s.draft} onCompositionStart={()=>{composing.current=true;}} onCompositionEnd={()=>{composing.current=false;}} onSelect={s.rememberCursor} onChange={event=>{s.editDraft(event.target.value);}} onKeyDown={event=>{if(event.key!=='Enter'||event.nativeEvent.isComposing||composing.current||event.keyCode===229)return;if(event.ctrlKey||event.metaKey||enterSend&&!event.shiftKey){event.preventDefault();if(!s.active)void s.generate();}}} placeholder="다음 장면을 부탁하거나, 이야기를 이어가세요…"/>
+            <div className="composer-bottom"><div className="quick-controls"><label><span className="sr-only">빠른 창작 프리셋</span><select aria-label="빠른 창작 프리셋" value={s.preset?refValue(s.preset):''} disabled={s.quickBusy||s.profileDirty||!s.detail} onChange={event=>{void s.quickChange('preset',event.target.value);}}><option value="">{s.detail?.profile?.creative.mode==='rp'?'RP · 현재 제어':'소설 · 현재 제어'}</option>{s.library?.presets.map(item=><option value={refValue(item)} key={refValue(item)}>{item.title}</option>)}</select></label><label><span className="sr-only">빠른 페르소나</span><select aria-label="빠른 페르소나" value={s.persona?refValue(s.persona):''} disabled={s.quickBusy||s.profileDirty||!s.detail||!s.attachmentsReady} onChange={event=>{void s.quickChange('persona',event.target.value);}}><option value="">{s.attachmentsReady?'페르소나 없음':'페르소나 확인 중…'}</option>{s.allContents.filter(item=>item.kind==='persona').map(item=><option key={refValue(item)} value={refValue(item)}>{item.title}</option>)}</select></label><label className="quick-model"><span className="sr-only">빠른 본문 모델</span><select aria-label="빠른 본문 모델" value={s.detail?.profile?.routes.main?refValue(s.detail.profile.routes.main):''} disabled={s.quickBusy||s.profileDirty||!s.detail} onChange={event=>{void s.quickChange('model',event.target.value);}}><option value="">검사용 모의 생성 · 실제 모델 없음</option>{s.detail?.profile?.routes.main&&!s.library?.models.some(item=>refValue(item)===refValue(s.detail!.profile!.routes.main!))&&<option value={refValue(s.detail.profile.routes.main)}>보관된 본문 모델</option>}{s.library?.models.map(item=><option key={refValue(item)} value={refValue(item)}>{modelLabel(item,s.library)}</option>)}</select></label></div>{s.active?<button type="button" className="send-button" aria-label="원문 생성 취소" title="원문 생성 중단" onClick={()=>{void api(`/runs/${s.active!.id}/cancel`,{}).then(()=>s.refresh(s.selected)).catch(e=>s.setError(e.message));}}><Square size={18}/></button>:<button className="send-button" aria-label={s.pendingRequest?'이전 요청 확인':'원문 생성'} title={s.pendingRequest?'이전 전송의 수락 확인':'보내기'} disabled={s.submitting.includes(s.viewKey)||(!s.draft.trim()&&!s.pendingRequest)||!s.detail||s.pendingProfile}><ArrowUp size={21}/></button>}</div>
+          </form><div className="composer-caption"><span role="status">{s.submitting.includes(s.viewKey)?'요청을 보내는 중…':s.active?`원문 ${labels[s.active.status]} · 작업 상세에서 확인`:s.pendingRequest?'이전 전송의 수락을 확인해 주세요. 새 초안은 보존돼요.':s.notice||mainDescription}{s.profileDirty&&' · 이야기 설정에 미저장 변경'}</span><span>{enterSend?'Enter 보내기 · Shift+Enter 줄바꿈':'Ctrl+Enter 보내기'}</span></div>
+        </div>}
+      </>}
+    </main>
+    <Dialog open={panel==='navigation'} title="탐색" onClose={()=>setPanel('')} className="navigation-dialog">{navigation}</Dialog>
+    <Dialog open={panel==='new'} title="새 이야기" onClose={()=>setPanel('')}>{s.library&&<NewStory key={newKey} library={s.library} initialBot={initialBot} onCreated={async chat=>{await s.loadChats();select(chat.id);}}/>}</Dialog>
+    <Dialog open={panel==='story'} title="이야기 설정" onClose={()=>setPanel('')} wide>{s.detail&&s.library&&<>{s.detail.profile&&<ProfileEditor key={s.selected} profile={s.detail.profile} library={s.library} onSaved={()=>s.refresh(s.selected)} onError={s.setError} onDirtyChange={s.setProfileDirty} onLibraryChanged={s.loadLibrary}/>}<StoryPanel key={`story:${s.selected}`} chatId={s.selected} branchId={s.branch?.id??`main:${s.selected}`} headRevision={s.branch?.headRevision??s.detail.chat.headRevision} settingsRevision={s.detail.chat.settingsRevision} profileRevision={s.detail.profile?.revision} models={s.library.models} onChanged={()=>{void s.refresh(s.selected);}} onError={s.setError}/><AssetEditor key={`assets:${s.selected}`} chatId={s.selected} assets={s.detail.assets??[]} refresh={()=>s.refresh(s.selected)} onError={s.setError}/><SettingsEditor key={`runtime:${s.selected}`} chat={s.detail.chat} onSaved={()=>s.refresh(s.selected)} onError={s.setError}/><button className="secondary" onClick={()=>setPanel('reading')}>읽기 설정 열기</button>{s.error&&<p role="alert" className="error">{s.error}</p>}</>}</Dialog>
+    <Dialog open={panel==='branches'} title="보관된 전개" onClose={()=>setPanel('')}><BranchesPanel state={s} onClose={()=>setPanel('')}/></Dialog>
+    <Dialog open={panel==='tasks'} title="작업 현황" onClose={()=>setPanel('')} wide>{panel==='tasks'&&<TasksPanel state={s} inspectedRun={inspectedRun} onInspect={setInspectedRun} onClose={()=>setPanel('')}/>}</Dialog>
+    <Dialog open={panel==='reading'} title="읽기 설정" onClose={()=>setPanel('')}><div className="settings-stack"><label>새 원고의 기본 보기<select aria-label="새 원고의 기본 보기" value={readingLanguage} onChange={event=>setReadingLanguage(event.target.value)}><option value="translation">한국어 번역</option><option value="original">원문</option></select></label><small>번역이 없으면 원문을 먼저 보여 줘요. 번역 보기를 눌러 번역을 시작하고, 이미 저장된 번역은 다시 호출하지 않아요.</small><label>본문 글꼴<select aria-label="본문 글꼴" value={font} onChange={event=>setFont(event.target.value)}><option value="sans">기본 고딕</option><option value="serif">명조</option></select></label><label>본문 크기<input aria-label="본문 크기" type="range" min={16} max={22} step={1} value={fontSize} onChange={event=>setFontSize(Number(event.target.value))}/><span>{fontSize}px</span></label><label>화면 테마<select aria-label="화면 테마" value={theme} onChange={event=>setTheme(event.target.value as typeof theme)}><option value="system">기기 설정</option><option value="dark">어두운 화면</option><option value="light">밝은 화면</option></select></label><button className="secondary" onClick={()=>{setFocus(true);setPanel('');}}>집중 읽기 시작</button></div></Dialog>
+    <Dialog open={panel==='settings'} title="설정" onClose={()=>setPanel('')} wide>{panel==='settings'&&<><AppSettingsPanel state={s} theme={theme} setTheme={setTheme} enterSend={enterSend} setEnterSend={setEnterSend}/>{s.error&&<p className="error" role="alert">{s.error}</p>}</>}</Dialog>
   </div>;
-}
-
-function RunIssue({ run, refresh, onError }: { run: Run; refresh: () => Promise<void>; onError: (error: string) => void }) {
-  const [note, setNote] = useState(run.issue ?? '');
-  const [busy, setBusy] = useState(false);
-  return <details className="inspector"><summary>요청 충실성 기록</summary><form className="editor-grid" onSubmit={async event => { event.preventDefault(); setBusy(true); try { await api(`/runs/${run.id}/issue`, { note }); await refresh(); } catch (error) { onError((error as Error).message); } finally { setBusy(false); } }}><label className="full">요청 충실성 메모<textarea aria-label="요청 충실성 메모" rows={2} maxLength={2000} value={note} onChange={event => setNote(event.target.value)} placeholder="전제·인물·장르가 달라진 부분을 기록해요."/></label><button className="secondary" disabled={busy}>메모 저장</button><small>메모는 원문을 자동 수정하거나 삭제하지 않아요.</small></form></details>;
-}
-
-function SettingsEditor({ chat, onSaved, onError }: { chat: Chat; onSaved: () => Promise<void>; onError: (e: string) => void }) {
-  const [value, setValue] = useState<Settings>(chat.settings);
-  const [revision, setRevision] = useState(chat.settingsRevision);
-  const [dirty, setDirty] = useState(false);
-  const [saving, setSaving] = useState(false);
-  useEffect(() => { if (!dirty) { setValue(chat.settings); setRevision(chat.settingsRevision); } }, [chat.settings, chat.settingsRevision, dirty]);
-  function update<K extends keyof Settings>(key: K, v: Settings[K]) { setDirty(true); setValue(old => ({ ...old, [key]: v })); }
-  return <details className="settings"><summary>이야기 설정 <small>저장된 설정 v{chat.settingsRevision}</small></summary><form onSubmit={async e => { e.preventDefault(); setSaving(true); try { await api(`/chats/${chat.id}/settings`, { ...value, expectedSettingsRevision: revision }, 'PATCH'); setDirty(false); onError(''); await onSaved(); } catch (error) { onError((error as Error).message); } finally { setSaving(false); } }}>
-    <label>서술 프리셋<select aria-label="서술 프리셋" value={value.preset} onChange={e => update('preset', e.target.value as Settings['preset'])}><option value="calm">차분한 서술</option><option value="vivid">선명한 서술</option></select></label>
-    <label>모의 생성 경로<select aria-label="모의 생성 경로" value={value.mode} onChange={e => update('mode', e.target.value as Settings['mode'])}><option value="direct">바로 쓰기 · 도구 없음</option><option value="research">로컬 자료 조사 후 쓰기</option></select></label>
-    <label className="check"><input type="checkbox" checked={value.translation} onChange={e => update('translation', e.target.checked)}/>모의 한국어 번역</label><label className="check"><input type="checkbox" checked={value.status} onChange={e => update('status', e.target.checked)}/>모의 표시 상태</label>
-    <button className="secondary" disabled={saving || !dirty}>설정 저장</button>{dirty && <button type="button" className="secondary" onClick={() => { setValue(chat.settings); setRevision(chat.settingsRevision); setDirty(false); onError(''); }}>저장된 설정 다시 불러오기</button>}<small>저장한 설정은 다음 실행에 적용돼요.</small>
-  </form></details>;
 }
 createRoot(document.getElementById('root')!).render(<SessionGate><App/></SessionGate>);

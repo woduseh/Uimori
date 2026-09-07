@@ -87,28 +87,28 @@ describe('M1 durable auxiliary orchestration with actual fixture HTTP', () => {
 
   test('P08 failed chunk retries alone over actual HTTP and preserves already completed siblings', async () => {
     const seed = bundle(['A quiet traveler watched the waves softly wash against the pier at sunset.', 'The bellkeeper waited beside the lamps while the sea slowly darkened again.', 'The traveler left the next decision open and listened for the distant bell.'].join('\n\n'));
-    let failMiddle = true;
+    let failMiddle = 3;
     const server = await fixture(async (request, response) => {
       const output = translationBody(request.body);
-      if (output.chunkId.endsWith('-1') && failMiddle) { failMiddle = false; output.segments = []; }
+      if (output.chunkId.endsWith('-1') && failMiddle) { failMiddle--; output.segments = []; }
       await writeSse(response, [{ type: 'text_delta', delta: JSON.stringify(output) }, { type: 'done', reason: 'stop' }]);
     });
     selectProvider(seed, server.endpoint); const state = bridge(seed); const observed = hooks(server.origin); observed.options.maxChunkChars = 100;
     const partial = await runAuxiliaryJob(state.store, seed.job.id, 'server-a', observed.options);
     expect(partial).toMatchObject({ status: 'partial', result: { completedChunks: 2, totalChunks: 3 }, error: 'CHUNK_COVERAGE_INVALID' });
     const before = [...state.chunks.values()].filter(chunk => chunk.status === 'completed').map(chunk => structuredClone(chunk));
-    expect(before).toHaveLength(2); expect(server.requests).toHaveLength(3);
+    expect(before).toHaveLength(2); expect(server.requests).toHaveLength(5);
     const afterRetry = await runAuxiliaryJob(state.store, seed.job.id, 'server-b', observed.options);
     expect(afterRetry).toMatchObject({ status: 'completed', result: { completedChunks: 3, totalChunks: 3 }, error: null });
-    expect(server.requests).toHaveLength(4);
+    expect(server.requests).toHaveLength(6);
     const requestedChunks = server.requests.map(request => JSON.parse(request.body).input.source.chunkId as string);
-    expect(requestedChunks[3]).toBe(requestedChunks[1]);
+    expect(requestedChunks[5]).toBe(requestedChunks[1]);
     for (const successful of before) expect(state.chunks.get(successful.id)).toEqual(successful);
-    expect([...state.chunks.values()].map(chunk => chunk.attempt)).toEqual([1, 2, 1]);
+    expect([...state.chunks.values()].map(chunk => chunk.attempt)).toEqual([1, 4, 1]);
     expect(afterRetry?.result?.segments?.flatMap(segment => segment.anchors)).toEqual((state.data.plan as TranslationPlan).blocks.map(block => block.anchor));
   });
 
-  test('P06 a selected transport refusal or partial output is recorded without artifact, implicit retry or mock fallback', async () => {
+  test('P06 a selected transport refusal or partial output is recorded without artifact or mock fallback; only confirmed refusals retry', async () => {
     for (const terminal of ['refused', 'partial'] as const) {
       const server = await fixture(async (_request, response) => {
         const events: Json[] = terminal === 'refused' ? [{ type: 'refusal', message: 'Fixture refusal' }, { type: 'usage', inputTokens: 8, outputTokens: 1, costUsd: null, raw: { refused: true } }, { type: 'done', reason: 'refusal' }] : [{ type: 'text_delta', delta: '{"unfinished"' }];
@@ -117,13 +117,14 @@ describe('M1 durable auxiliary orchestration with actual fixture HTTP', () => {
       const seed = bundle(); selectProvider(seed, server.endpoint); const state = bridge(seed); const observed = hooks(server.origin);
       const outcome = await runAuxiliaryJob(state.store, seed.job.id, 'server-a', observed.options);
       expect(outcome).toMatchObject({ status: 'failed', result: null, error: terminal === 'refused' ? 'AUXILIARY_PROVIDER_REFUSED' : 'AUXILIARY_PROVIDER_PARTIAL' });
-      expect(server.requests).toHaveLength(1); expect(observed.finishes[0].result.status).toBe(terminal);
+      expect(server.requests).toHaveLength(terminal === 'refused' ? 3 : 1); expect(observed.finishes[0].result.status).toBe(terminal);
       expect([...state.chunks.values()][0].status).toBe('failed');
     }
   });
 
   test('P08 explicit chunk retry leaves other failed chunks untouched and still reports partial', async () => {
     const seed = bundle(['A quiet traveler watched the waves softly wash against the pier at sunset.', 'The bellkeeper waited beside the lamps while the sea slowly darkened again.', 'The traveler left the next decision open and listened for the distant bell.'].join('\n\n'));
+    seed.snapshot.settings.maxCalls = 8;
     let firstPass = true;
     const server = await fixture(async (request, response) => {
       const output = translationBody(request.body);
@@ -135,8 +136,8 @@ describe('M1 durable auxiliary orchestration with actual fixture HTTP', () => {
     const plan = state.data.plan!; firstPass = false; state.data.retryChunkIds = [plan.chunks[0].id];
     const result = await runAuxiliaryJob(state.store, seed.job.id, 'server-b', observed.options);
     expect(result).toMatchObject({ status: 'partial', result: { completedChunks: 2, totalChunks: 3 } });
-    expect(server.requests).toHaveLength(4); expect(JSON.parse(server.requests[3].body).input.source.chunkId).toBe(plan.chunks[0].id);
-    expect(state.chunks.get(plan.chunks[2].id)).toMatchObject({ status: 'failed', attempt: 1 });
+    expect(server.requests).toHaveLength(8); expect(JSON.parse(server.requests[7].body).input.source.chunkId).toBe(plan.chunks[0].id);
+    expect(state.chunks.get(plan.chunks[2].id)).toMatchObject({ status: 'failed', attempt: 3 });
   });
 
   test('P07 P13 disabled transport uses labeled local fixture; annotations stay separate and cancellation preserves source', async () => {
@@ -156,4 +157,36 @@ describe('M1 durable auxiliary orchestration with actual fixture HTTP', () => {
     expect(cancelled).toMatchObject({ status: 'cancelled', error: 'AUXILIARY_CANCELLED' }); expect(JSON.stringify(cancelled)).not.toContain('PRIVATE_ABORT_REASON');
     expect(JSON.stringify(seed.source)).toBe(original);
   });
+});
+
+test('custom translation prompt survives tool continuation and failed chunk retry without inheriting later edits', async () => {
+  const custom = '  Translate into French.\r\n{{char}} remains literal.  ';
+  const seed = bundle();
+  seed.snapshot.profile!.promptPresets = { translation: { id: 'translation-custom', revision: 8, role: 'translation', title: 'Custom translation', text: custom } };
+  let requests = 0;
+  const server = await fixture(async (captured, response) => {
+    requests++;
+    if (requests === 1) await writeSse(response, [{ type: 'tool_delta', index: 0, id: 'custom-glossary', name: 'knowledge.read', argumentsDelta: '{"id":"old-glossary"}' }, { type: 'opaque_state', state: { test: 'custom-translation' } }, { type: 'done', reason: 'tool_calls' }]);
+    else {
+      const result = translationBody(captured.body);
+      if (requests <= 4) result.segments = [];
+      await writeSse(response, [{ type: 'text_delta', delta: JSON.stringify(result) }, { type: 'done', reason: 'stop' }]);
+    }
+  });
+  selectProvider(seed, server.endpoint); const state = bridge(seed); const observed = hooks(server.origin);
+  const first = await runAuxiliaryJob(state.store, seed.job.id, 'first-owner', observed.options);
+  expect(first?.error).toBe('CHUNK_COVERAGE_INVALID');
+  seed.snapshot.profile!.promptPresets!.translation!.text = 'FUTURE TRANSLATION PROMPT';
+  const second = await runAuxiliaryJob(state.store, seed.job.id, 'retry-owner', observed.options);
+  expect(second?.status).toBe('completed'); expect(server.requests).toHaveLength(5);
+  for (const captured of server.requests) {
+    const wire = JSON.parse(captured.body);
+    expect(wire.stable.contract).toBe(custom);
+    expect(wire.input.task).not.toContain('Korean');
+    expect(wire.input.controls).toMatchObject({ instructionRevision: 'prompt:translation-custom@8', customPrompt: true });
+    expect(JSON.stringify(wire.input.source.outputSchema)).not.toContain('Korean');
+    expect(captured.body).not.toContain('FUTURE TRANSLATION PROMPT');
+  }
+  expect(JSON.parse(server.requests[1].body).input.results[0].callId).toBe('custom-glossary');
+  expect([...state.chunks.values()][0].attempt).toBe(4);
 });

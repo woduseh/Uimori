@@ -2,7 +2,7 @@
 
 제안된 이름은 구현을 강제하는 클래스 목록이 아니다. 아래 경계와 동작을 유지하면 더 단순한 표현으로 구현할 수 있다.
 
-2026-09-06 M1 로컬 구현 선택: 소형 PNG/JPEG 에셋을 별도 파일 디렉터리 대신 SQLite BLOB에 저장한다. 파일당 2,000,000 bytes로 제한하고, 데이터·에셋을 같은 VACUUM INTO 백업/JSON archive 안에서 일관되게 복원한다. 수천 에셋을 위한 저장·성능 설계는 M2 이후 필요에 따라 분리한다. 현재 provider adapter는 사용자 실서비스 선택 전의 자체 `fixture-sse-v1`이며 live protocol 지원 주장이 아니다.
+2026-09-06 M1 로컬 구현 선택: 소형 PNG/JPEG 에셋을 별도 파일 디렉터리 대신 SQLite BLOB에 저장한다. 파일당 2,000,000 bytes로 제한하고, 데이터·에셋을 같은 VACUUM INTO 백업/JSON archive 안에서 일관되게 복원한다. 수천 에셋을 위한 저장·성능 설계는 M2 이후 필요에 따라 분리한다. 이 시점의 provider adapter는 사용자 실서비스 선택 전의 자체 `fixture-sse-v1`이었다. 2026-09-07 후속에서 승인된 Vertex global/Gemini 3.8 Flash 경로를 추가했으며 실제 검증 범위와 결과는 [M1-RESULTS](M1-RESULTS.md)를 따른다.
 
 ## 1. 배치와 코드 경계
 
@@ -25,7 +25,7 @@ PromptProgram(편집 가능한 텍스트+타입 있는 제어+명시적 조립 �
 ## 3. 작품·분기·작업의 최소 데이터 계약
 
 - 작품/채팅: 사용자가 이어가는 단위. 봇은 재사용 콘텐츠이고 채팅 자체가 아니다.
-- 서사 revision/node: 불변 입력·원고 또는 명시적 작가 설정 변경. 단일 부모의 tree로 시작한다. 과거 원문 편집은 새 revision/분기를 만들며 기존 후손을 몰래 재해석하지 않는다.
+- 서사 revision/node: 불변 입력·원고 또는 명시적 작가 설정 변경. 단일 부모의 tree로 시작한다. 최신 사용자 지시에 따라 원문 편집은 같은 논리 source의 최신 내용을 바꾸고 내부 source_edits에 hash와 수정 순서를 보관한다. 생성 당시 sources와 과거 Run snapshot은 불변이며, 새 입력은 HistoryRef.contentHash로 선택한 수정본을 고정한다. 별도 편집 버전·분기 선택 UI는 만들지 않고 기존 후손을 몰래 재해석하지 않는다.
 - 분기: 현재 이어갈 경로와 head revision. 화면에서 고른 후보는 device view이며 공유 head를 무조건 움직이지 않는다.
 - Run / ModelAttempt: 고정된 입력으로 수행한 작업/실제 provider 호출. 실패와 과금 기록도 보존한다.
 - DerivedArtifact / Job: 번역·상태 제안·기억 등 특정 원문과 의존 버전에서 만들어진 파생물.
@@ -36,7 +36,7 @@ PromptProgram(편집 가능한 텍스트+타입 있는 제어+명시적 조립 �
 
 ## 4. 비동기 파생 작업의 공통 계약
 
-원문을 먼저 저장하고 표시한다. translation, presentation.enrich, status.extract, memory.extract는 원문 revision에 연결된 별도 job으로 실행한다. 자동 실행 여부와 모델 선택은 채팅별 설정이며, disabled이면 비용이 들지 않는다. 기본값 제안: 본문 번역 자동, 상태창을 장착한 채팅만 보조 상태 처리; 다중 후보의 비선택 번역/기억은 지연 실행.
+원문을 먼저 저장하고 표시한다. translation, presentation.enrich, status.extract, memory.extract는 원문 revision에 연결된 별도 job으로 실행한다. 번역은 번역 보기의 명시적 요청에서만 예약하며 정상 캐시는 재사용한다. 원문 완료·새로고침·이야기 이동·언어 설정 변경만으로 번역을 시작하지 않는다. 상태·이미지의 자동 실행 여부와 모델 선택은 기존 채팅 설정을 따른다. 기억의 실행 정책은 M2 계약에서 정한다.
 
 작업 의존성은 sourceRevision, sourceHash, branch lineage, parentStateRevision, relevantCanonRevision, instruction/ruleRevision, modelPresetRevision과 같은 값으로 식별한다. 실제 사용하지 않은 전역 값까지 넣어 불필요하게 무효화하지 않는다. 파생 작업 시작 시 계보와 입력 범위를 고정한다.
 
@@ -46,9 +46,11 @@ PromptProgram(편집 가능한 텍스트+타입 있는 제어+명시적 조립 �
 
 원문 완료/번역 완료/상태 준비/기억 인덱스 준비는 다른 상태다. 번역 실패는 원문 실패가 아니며, annotation 실패가 정상 본문을 지우지 않는다. 영구 실패는 기존 결과 보존+부분 상태+개별 재시도 UI로 처리한다. 같은 원문을 다시 생성해 해결하지 않는다.
 
-**저장과 후속 예약의 원자성:** 정상 원문 확정, 해당 Run의 완료 기록, 그 원문에 대해 켜져 있고 적격한 후속 job의 예약 레코드는 같은 서버 로컬 SQLite의 짧은 트랜잭션으로 커밋한다. 모델 호출·작업 실행·이벤트 전송은 커밋 밖에서 한다. 실제 후속 처리는 여전히 원문 확정 뒤에 실행하므로 원고 읽기를 번역·상태 완료까지 지연시키지 않는다.
+**저장과 후속 예약의 원자성:** 정상 원문 확정, 해당 Run의 완료 기록, 그 원문에 대해 켜져 있고 적격한 상태·이미지 job의 예약 레코드는 같은 서버 로컬 SQLite의 짧은 트랜잭션으로 커밋한다. 모델 호출·작업 실행·이벤트 전송은 커밋 밖에서 한다. 실제 후속 처리는 여전히 원문 확정 뒤에 실행하므로 원고 읽기를 번역·상태 완료까지 지연시키지 않는다.
 
 원문만 저장한 뒤 메모리의 callback으로 job을 만드는 구간을 남기지 않는다. 커밋 직후 worker 깨우기나 알림 전에 프로세스가 종료돼도 재시작한 worker가 저장된 미실행 예약을 발견할 수 있어야 한다. 중복 예약은 논리 job의 유일성으로 막고, 파생 결과 저장과 해당 job 완료 기록도 함께 커밋한다. 거절·차단·부분 결과에는 기존 적격성 정책을 적용한다. 이는 로컬 기록의 계약이지 이미 시작된 원격 유료 요청의 exactly-once 보장이 아니다.
+
+번역은 별도의 요청 transaction에서 sourceHash와 현재 번역 지침·모델 선택을 고정하고 최신 job 한 슬롯을 갱신한다. 원문·번역 직접 저장은 CAS로 충돌을 감지하고 worker owner/generation을 무효화한다. 내부 revision과 과거 attempt는 실행 증거용이며 번역 버전 UX가 아니다. 정상 종료가 확인된 거절·빈 응답·구조 손상은 구간별 최대 3회 및 전체 호출 한도 안에서 재시도한다. 불확실한 원격 실행은 자동 재생하지 않는다.
 
 ## 5. 보조 모델 기반 상태창 — 이번에 추가한 핵심 결정
 
@@ -175,6 +177,18 @@ budget은 전체 사용자 작업, 후보 그룹, 각 child 작업에 예약/집
 장면 버튼은 chat/branch에 예약된 command다. 성공 원문 반영 시 소비하며 실패/거절/중복/취소를 명시한다. 원본 first message·lore·asset은 선택적 일회성 변환으로 옮길 수 있다. Lua/CBS의 실행 호환과 구분하고 미지원 변환은 보고한다.
 
 ## 10. 실제 사용 전 보안·복구
+
+### M2 구현의 저장·실행 계약
+
+schema v4의 `story_configs/jobs/states/memories/indexes/scene_commands`는 기존 원문·최신 번역과 별도이며, 원문 확정 transaction에서 적격 상태·기억 작업을 예약한다. `attempts.story_job_id`로 모든 역할의 전송을 기존 예산·사용량 기록에 합산한다. 사용량/비용 누락을 0으로 간주하지 않는다.
+
+state job은 source/hash·전체 ancestry·canon·모듈·직전 state·선택 model revision으로 식별한다. owner/generation은 늦은 완료와 중복 commit을 거절한다. continuity의 메인 Run snapshot은 상태 없이 확정될 수 있으나, 그 상태 job은 이전 상태를 받은 뒤 전송 전 별도 입력을 확정한다. authoritative 대기 Run은 해당 의존성·branch head를 재검사한 뒤 한 번 queued로 전환한다. annotation 값은 메인 canonical 입력에 넣지 않는다.
+
+모듈 초기값은 선택 branch의 활성화 장면부터 유효하다. 활성화 장면 편집 후 명시적 재계산은 그 장면 바로 전 초기값을 job에만 고정하고 원문 사건을 다시 적용한다. 과거 Run 입력을 바꾸거나 후손을 자동 재생하지 않는다. 새 초기 기준 적용은 새 모듈 revision을 만들며 이전 대기 요청을 취소한다.
+
+author-canon은 직접 작가 선언의 출처를 가지며 extractor가 생성할 수 없다. retcon/원문 변경 뒤 옛 결과와 receipt를 보존하되 현재 의존성이 다르면 입력·watermark에서 제외한다. 새 의존성의 추출 완료는 무효 receipt를 원자적으로 대체한다. 필수 canon·미처리 tail은 조용히 잘라내지 않는다. source/기억 read는 UTF-16 offset을 유지하며 JSON UTF-8 응답 상한 안에서 continuation을 제공하고, 긴 근거 quote를 metadata에 중복하지 않는다.
+
+archive는 immutable source hash 버전과 reducer 결과·기억 출처·config·parent를 검증한다. 복원 시 불확실 실행은 중단하고 연결을 비활성화한다. fork는 선택 ancestry의 완료 산출물을 새 ID로 복사하며 재실행하지 않는다. 선택 범위 밖의 의존성은 제외 사유를 기록하고 원본을 보존한다.
 
 M0은 loopback/local 합성 데이터로 제한한다. 외부에서 폰으로 쓰기 전 단일 사용자라도 인증된 세션, HTTPS/안전한 사설 접속, chat/asset/event 권한 검사, CSRF/Origin·업로드 경계, 비밀키 서버 보관을 갖춘다. ‘private service’라는 이름만으로 보안 검증을 생략하지 않는다.
 

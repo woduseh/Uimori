@@ -7,24 +7,33 @@ import type { Connection, Content, CreativePreset, Library, ModelPreset } from '
 async function getDetail(request: APIRequestContext, id: string): Promise<ChatDetail> { const response = await request.get(`/api/chats/${id}`); expect(response.ok()).toBeTruthy(); return response.json(); }
 async function getLibrary(request: APIRequestContext): Promise<Library> { const response = await request.get('/api/library'); expect(response.ok()).toBeTruthy(); return response.json(); }
 async function createChat(page: Page, title: string): Promise<Chat> {
-  await page.goto('/'); await page.getByLabel('새 이야기 이름').fill(title);
-  const response = page.waitForResponse(response => response.url().endsWith('/api/chats') && response.request().method() === 'POST');
-  await page.getByRole('button', { name: '이야기 만들기', exact: true }).click();
-  const created = await response; expect(created.ok()).toBeTruthy(); const chat = await created.json() as Chat;
+  // Preserve the revision-one fixture for legacy product assertions; UI03 covers actual bot-first creation.
+  const response = await page.request.post('/api/chats', { data: { title } }); expect(response.ok()).toBeTruthy();
+  const chat = await response.json() as Chat; await page.goto(`/?chat=${chat.id}`);
   await expect(page.getByRole('heading', { name: title, exact: true })).toBeVisible(); return chat;
 }
+async function closeDialog(page: Page) { if (await page.getByRole('dialog').filter({ visible: true }).count()) await page.keyboard.press('Escape'); }
+async function navigation(page: Page, name: string) { await closeDialog(page); const button = page.getByRole('button', { name, exact: true }); if (!await button.isVisible()) await page.getByRole('button', { name: '탐색 메뉴', exact: true }).click(); await button.click(); }
+async function storySettings(page: Page) { await closeDialog(page); if (!await page.getByRole('button', { name: '이야기 설정', exact: true }).isVisible()) { const chatId = new URL(page.url()).searchParams.get('chat')!; const detail = await getDetail(page.request, chatId); const menu = page.getByRole('button', { name: '탐색 메뉴', exact: true }); if (await menu.isVisible()) await menu.click(); await page.getByRole('navigation', { name: '채팅 목록' }).getByRole('button').filter({ hasText: detail.chat.title }).click(); } await page.getByRole('button', { name: '이야기 설정', exact: true }).click(); return page.getByRole('dialog', { name: '이야기 설정', exact: true }); }
+async function profileInfo(page: Page) { const panel = page.getByTestId('profile-editor'); const info = panel.locator('details').filter({ has: page.locator('summary', { hasText: '설정 저장 정보' }) }); if (await info.getAttribute('open') === null) await info.locator('summary').click(); return panel; }
+async function creativeTab(page: Page) { const panel = page.getByTestId('profile-editor'); await panel.getByRole('tab', { name: '창작 제어', exact: true }).click(); return profileInfo(page); }
 async function send(page: Page, text: string): Promise<Run> {
+  await closeDialog(page);
   await page.getByLabel('다음 장면 요청').fill(text);
   const response = page.waitForResponse(response => /\/api\/chats\/[^/]+\/runs$/.test(response.url()) && response.request().method() === 'POST');
   await page.getByRole('button', { name: '원문 생성', exact: true }).click();
   const created = await response; expect(created.ok()).toBeTruthy(); return created.json();
 }
-async function openDetails(page: Page, testId: string) { const panel = page.getByTestId(testId); if ((await panel.getAttribute('open')) === null) await panel.locator('summary').first().click(); return panel; }
+async function openDetails(page: Page, testId: string) {
+  if (testId === 'library-panel') { await navigation(page, '서재'); return page.getByTestId(testId); }
+  await storySettings(page); await page.getByTestId('profile-editor').getByRole('tab', { name: '인물', exact: true }).click(); return profileInfo(page);
+}
 
 test('P01 content revisions stay pinned and a creative preset fully replaces prior controls', async ({ page, request }) => {
   const unique = `P01-${Date.now()}`;
   const chat = await createChat(page, `합성 ${unique}`);
   const library = await openDetails(page, 'library-panel');
+  await library.getByRole('button', { name: '새로 만들기', exact: true }).first().click();
   await page.getByLabel('자료 종류', { exact: true }).selectOption('bot');
   await page.getByLabel('자료 이름', { exact: true }).fill(`Mira ${unique}`);
   await page.getByLabel('자료 설명', { exact: true }).fill('Synthetic keeper of the harbor.');
@@ -35,16 +44,18 @@ test('P01 content revisions stay pinned and a creative preset fully replaces pri
   expect(added.revision).toBe(1);
   const profile = await openDetails(page, 'profile-editor');
   await page.getByLabel(`장착 봇 Mira ${unique} v1`, { exact: true }).check();
+  await creativeTab(page);
   await page.getByLabel('profile 공동 서술', { exact: true }).check();
   await page.getByRole('button', { name: '콘텐츠와 제어 저장', exact: true }).click();
   await expect(profile.getByText('장착 설정 v2')).toBeVisible();
+  await openDetails(page, 'library-panel'); await page.getByRole('button', { name: `Mira ${unique} 자료 편집`, exact: true }).click();
   await page.getByLabel('자료 본문', { exact: true }).fill('Mira is a synthetic harbor keeper. Her compass is silver in this new authored revision.');
   await page.getByRole('button', { name: '새 revision 저장', exact: true }).click();
   await expect(library.getByRole('status')).toContainText('v2 저장됨');
   expect((await getDetail(request, chat.id)).profile?.attachments).toEqual([{ id: added.id, revision: 1 }]);
-  await expect(page.getByLabel(`장착 봇 Mira ${unique} v1`, { exact: true })).toBeChecked();
+  await openDetails(page, 'profile-editor'); await expect(page.getByLabel(`장착 봇 Mira ${unique} v1`, { exact: true })).toBeChecked();
 
-  await library.getByRole('tab', { name: '창작 프리셋', exact: true }).click();
+  await openDetails(page, 'library-panel'); await library.getByRole('tab', { name: '창작 프리셋', exact: true }).click(); await library.getByRole('button', { name: '새로 만들기', exact: true }).first().click();
   await page.getByLabel('새 창작 프리셋 이름').fill(`공동 ${unique}`);
   await page.getByLabel('preset 공동 서술', { exact: true }).check();
   await page.getByLabel('preset 선언 결과 확정', { exact: true }).check();
@@ -57,6 +68,7 @@ test('P01 content revisions stay pinned and a creative preset fully replaces pri
   const presetBResponse = page.waitForResponse(response => response.url().endsWith('/api/creative-presets') && response.request().method() === 'POST');
   await page.getByRole('button', { name: '창작 프리셋 저장', exact: true }).click();
   const presetB = await (await presetBResponse).json() as CreativePreset;
+  await openDetails(page, 'profile-editor'); await creativeTab(page);
   await page.getByLabel('적용할 창작 프리셋').selectOption(`${presetA.id}@1`);
   await page.getByRole('button', { name: '프리셋으로 제어 전체 교체' }).click();
   await expect(profile.getByText('장착 설정 v3')).toBeVisible();
@@ -78,8 +90,7 @@ test('P01 content revisions stay pinned and a creative preset fully replaces pri
 
 test('P04 manual model IDs and distinct main/translation routing preserve connection authority after catalog failure', async ({ page, request }) => {
   const unique = `P04-${Date.now()}`; const chat = await createChat(page, `합성 ${unique}`);
-  const library = await openDetails(page, 'library-panel');
-  await library.getByRole('tab', { name: '연결과 모델', exact: true }).click();
+  await navigation(page, '설정'); await page.getByTestId('connection-settings').locator('summary').first().click(); const library = page.getByTestId('connection-editor');
   await page.getByLabel('연결 이름', { exact: true }).fill(`격리 연결 ${unique}`);
   await page.getByLabel('로컬 endpoint').fill('http://127.0.0.1:9/turn');
   await page.getByLabel('서버 환경변수 이름').fill('NARRATIVE_PROVIDER_SYNTHETIC');
@@ -97,11 +108,12 @@ test('P04 manual model IDs and distinct main/translation routing preserve connec
     modelRefs.push(await (await response).json() as ModelPreset);
   }
   await library.locator('.compact-card').filter({ hasText: connection.title }).getByRole('button', { name: '모델 목록 새로고침' }).click();
-  await expect(library.locator('.compact-card').filter({ hasText: connection.title })).toContainText('모델 목록을 새로 받지 못했어요');
+  await expect(library.locator('.compact-card').filter({ hasText: connection.title })).toContainText('모델 목록을 확인하지 못했어요');
   const after = (await getLibrary(request)).connections.find(item => item.id === connection.id)!;
   expect(after).toMatchObject({ endpoint: connection.endpoint, enabled: false, credentialEnv: 'NARRATIVE_PROVIDER_SYNTHETIC' });
   expect((await request.get(`/api/revisions/connection/${connection.id}/1`)).ok()).toBe(true);
   await openDetails(page, 'profile-editor');
+  await page.getByTestId('profile-editor').getByRole('tab', { name: '모델', exact: true }).click();
   await page.getByLabel('원문 모델', { exact: true }).selectOption(`${modelRefs[0].id}@1`);
   await page.getByLabel('번역 모델', { exact: true }).selectOption(`${modelRefs[1].id}@1`);
   await page.getByRole('button', { name: '콘텐츠와 제어 저장', exact: true }).click();
@@ -112,9 +124,10 @@ test('P04 manual model IDs and distinct main/translation routing preserve connec
   expect(await page.evaluate(() => Object.values(localStorage).concat(Object.values(sessionStorage)).some(value => String(value).includes('NARRATIVE_PROVIDER_SYNTHETIC')))).toBe(false);
 });
 
-test('P09 P10 P13 candidates and descendants retain tab views, anchors, drafts and separate image annotations', async ({ page, context, request }, testInfo) => {
+test('P09 P10 P13 fork from a completed scene preserves long prose and annotations with independent settings tabs and descendants', async ({ page, context, request }, testInfo) => {
   const chat = await createChat(page, `합성 P09-${Date.now()}`);
   const errors: string[] = []; page.on('pageerror', error => errors.push(error.message));
+  await storySettings(page);
   const imagePanel = page.locator('details').filter({ has: page.locator('summary', { hasText: '이 이야기의 이미지' }) });
   await imagePanel.locator('summary').click();
   const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+j9n8AAAAASUVORK5CYII=', 'base64');
@@ -125,57 +138,38 @@ test('P09 P10 P13 candidates and descendants retain tab views, anchors, drafts a
   await page.getByRole('button', { name: '이미지 등록', exact: true }).click();
   await expect(imagePanel.getByRole('status')).toContainText('이미지를 등록했어요');
   await openDetails(page, 'profile-editor');
+  await page.getByTestId('profile-editor').getByRole('tab', { name: '모델', exact: true }).click();
   await page.getByLabel('보조 이미지 표시', { exact: true }).check();
   await page.getByRole('button', { name: '콘텐츠와 제어 저장', exact: true }).click();
   await expect(page.getByText('장착 설정 v2')).toBeVisible();
-  const first = await send(page, 'SYNTHETIC_BRANCH: Mira waits at the pier.');
-  await expect.poll(async () => (await getDetail(request, chat.id)).runs.find(run => run.id === first.id)?.status).toBe('completed');
-  await expect.poll(async () => (await getDetail(request, chat.id)).jobs.length).toBe(3);
-  await expect.poll(async () => (await getDetail(request, chat.id)).jobs.every(job => job.status === 'completed')).toBe(true);
-  const before = await getDetail(request, chat.id); const source = before.sources[0];
-  await expect(page.getByTestId('profile-asset')).toBeVisible();
-  await expect(page.getByTestId('inline-annotation').first()).toBeVisible();
-  const anchors = await page.getByTestId('source-text').locator('[data-block-anchor]').evaluateAll(elements => elements.map(element => element.getAttribute('data-block-anchor')));
-  expect(anchors).toEqual(source.blocks!.map(block => block.anchor));
-  await page.getByRole('button', { name: '번역 보기', exact: true }).click();
-  await expect(page.getByTestId('translation-text')).toBeVisible();
-  const translatedAnchors = await page.getByTestId('translation-text').locator('[data-block-anchor]').evaluateAll(elements => elements.flatMap(element => element.getAttribute('data-block-anchor')!.split(' ')));
-  expect(translatedAnchors).toEqual(anchors);
-  await page.getByRole('button', { name: '원문 보기', exact: true }).click();
-  await page.getByLabel('다음 장면 요청').fill('SYNTHETIC retained default draft');
-  const otherTab = await context.newPage();
+  const first = await send(page, 'SYNTHETIC_FORK: Mira waits at the pier.\n\n' + 'The harbor bell is silent, the letter is sealed, and the traveler chooses their own next action.\n\n'.repeat(24));
+  await expect.poll(async () => (await getDetail(request, chat.id)).runs.find(run => run.id === first.id)?.status).toBe('completed'); await page.getByRole('button', { name: '번역 보기', exact: true }).click(); await expect.poll(async () => (await getDetail(request, chat.id)).jobs.length).toBe(3); await expect.poll(async () => (await getDetail(request, chat.id)).jobs.every(job => job.status === 'completed')).toBe(true);
+  const firstDetail = await getDetail(request, chat.id); const source = firstDetail.sources[0]; expect(source.text.length).toBeGreaterThan(2000);
+  await expect(page.getByTestId('profile-asset')).toBeVisible(); await expect(page.getByTestId('inline-annotation').first()).toBeVisible(); await page.getByRole('button', { name: '원문 보기', exact: true }).click();
+  const anchors = await page.getByTestId('source-text').locator('[data-block-anchor]').evaluateAll(elements => elements.map(element => element.getAttribute('data-block-anchor'))); expect(anchors).toEqual(source.blocks!.map(block => block.anchor));
+  await page.getByRole('button', { name: '번역 보기', exact: true }).click(); expect(await page.getByTestId('translation-text').locator('[data-block-anchor]').evaluateAll(elements => elements.flatMap(element => element.getAttribute('data-block-anchor')!.split(' ')))).toEqual(anchors);
+  const laterOriginal = await send(page, 'SYNTHETIC_ORIGINAL_ONLY: this later scene must not enter a fork from the first scene.');
+  await expect.poll(async () => (await getDetail(request, chat.id)).runs.find(run => run.id === laterOriginal.id)?.status).toBe('completed'); await expect(page.getByTestId('source')).toHaveCount(2); await page.getByTestId('source').last().getByRole('button', { name: '번역 보기', exact: true }).click(); await expect.poll(async () => (await getDetail(request, chat.id)).jobs.length).toBe(6); await expect.poll(async () => (await getDetail(request, chat.id)).jobs.every(job => job.status === 'completed')).toBe(true);
+  const before = await getDetail(request, chat.id); await expect(page.getByTestId('source')).toHaveCount(2); await page.getByLabel('다음 장면 요청').fill('SYNTHETIC retained original draft'); const otherTab = await context.newPage();
   try {
-    await otherTab.goto(`/?chat=${chat.id}`);
-    await expect(otherTab.getByTestId('source')).toHaveAttribute('data-source-id', source.id);
-    const candidateResponse = page.waitForResponse(response => response.url().endsWith(`/api/runs/${first.id}/candidate`) && response.request().method() === 'POST');
-    await page.getByRole('button', { name: '같은 요청의 다른 후보 생성', exact: true }).click();
-    const candidate = await (await candidateResponse).json() as Run;
-    await expect(page.getByLabel('읽고 이어갈 분기')).toHaveValue(candidate.snapshot.branchId!);
-    await expect.poll(async () => (await getDetail(request, chat.id)).runs.find(run => run.id === candidate.id)?.status).toBe('completed');
-    const candidateSource = (await getDetail(request, chat.id)).sources.find(item => item.runId === candidate.id)!;
-    expect(candidateSource.parentRevision).toBe(source.parentRevision);
-    await expect(page.getByTestId('source')).toHaveAttribute('data-source-id', candidateSource.id);
-    await expect(otherTab.getByTestId('source')).toHaveAttribute('data-source-id', source.id);
-    const next = await send(page, 'SYNTHETIC descendant in the candidate branch.');
-    await expect.poll(async () => (await getDetail(request, chat.id)).runs.find(run => run.id === next.id)?.status).toBe('completed');
-    await expect(page.getByTestId('source')).toHaveCount(2);
-    const final = await getDetail(request, chat.id);
-    const descendant = final.sources.find(item => item.runId === next.id)!;
-    expect(descendant.parentRevision).toBe(candidateSource.id);
-    expect(final.runs.find(item => item.id === next.id)?.snapshot.history.map(item => item.revision)).toEqual([candidateSource.id]);
-    await page.getByLabel('다음 장면 요청').fill('SYNTHETIC candidate draft');
-    await page.getByLabel('읽고 이어갈 분기').selectOption('');
-    await expect(page.getByTestId('source')).toHaveAttribute('data-source-id', source.id);
-    await expect(page.getByLabel('다음 장면 요청')).toHaveValue('SYNTHETIC retained default draft');
-    await page.getByLabel('읽고 이어갈 분기').selectOption(candidate.snapshot.branchId!);
-    await expect(page.getByLabel('다음 장면 요청')).toHaveValue('SYNTHETIC candidate draft');
-    await page.reload();
-    await expect(page.getByLabel('읽고 이어갈 분기')).toHaveValue(candidate.snapshot.branchId!);
-    await expect(page.getByLabel('다음 장면 요청')).toHaveValue('SYNTHETIC candidate draft');
-    expect((await getDetail(request, chat.id)).sources.find(item => item.id === source.id)?.hash).toBe(createHash('sha256').update(source.text).digest('hex'));
-    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-    await page.screenshot({ path: testInfo.outputPath('m1-mobile-reader.png'), fullPage: true });
-    expect(errors).toEqual([]);
+    await otherTab.goto(`/?chat=${chat.id}`); await expect(otherTab.getByTestId('source')).toHaveCount(2); await otherTab.getByLabel('다음 장면 요청').fill('SYNTHETIC independent other-tab draft');
+    const forkResponse = page.waitForResponse(response => response.url().endsWith(`/api/chats/${chat.id}/fork`) && response.request().method() === 'POST'); await page.locator(`[data-testid="source"][data-source-id="${source.id}"]`).getByRole('button', { name: '여기서 새 이야기로 이어가기', exact: true }).click();
+    const forkReply = await forkResponse; expect(forkReply.ok()).toBeTruthy(); expect(forkReply.request().postDataJSON().fromRevision).toBe(source.id); const fork = await forkReply.json() as Chat;
+    await expect.poll(() => new URL(page.url()).searchParams.get('chat')).toBe(fork.id); await expect(page.getByTestId('source')).toHaveCount(1); await expect(page.getByLabel('다음 장면 요청')).toHaveValue('');
+    const copied = await getDetail(request, fork.id); const forkSource = copied.sources[0]; expect(forkSource.id).not.toBe(source.id); expect(forkSource.chatId).toBe(fork.id); expect(forkSource.parentRevision).toBeNull(); expect(forkSource.text).toBe(source.text); expect(forkSource.hash).toBe(source.hash);
+    expect(forkSource.blocks!.map(({ index, text, start, end }) => ({ index, text, start, end }))).toEqual(source.blocks!.map(({ index, text, start, end }) => ({ index, text, start, end })));
+    expect(copied.sources).toHaveLength(1); expect(copied.runs).toHaveLength(1); expect(copied.attempts).toHaveLength(0); expect(copied.jobs).toHaveLength(3); expect(copied.jobs.every(job => job.status === 'completed' && job.sourceRevision === forkSource.id && job.result?.sourceRevision === forkSource.id && job.result?.sourceHash === source.hash)).toBe(true);
+    const oldTranslation = firstDetail.jobs.find(job => job.kind === 'translation')!.result!; const newTranslation = copied.jobs.find(job => job.kind === 'translation')!.result!; expect(newTranslation.segments?.map(segment => segment.text)).toEqual(oldTranslation.segments?.map(segment => segment.text)); expect(newTranslation.text).toBe(oldTranslation.text);
+    await expect(page.getByTestId('profile-asset')).toBeVisible(); await expect(page.getByTestId('inline-annotation').first()).toBeVisible(); await page.getByRole('button', { name: '번역 보기', exact: true }).click(); expect(await page.getByTestId('translation-text').locator('[data-block-anchor]').evaluateAll(elements => elements.flatMap(element => element.getAttribute('data-block-anchor')!.split(' ')))).toEqual(forkSource.blocks!.map(block => block.anchor));
+    await expect(otherTab.getByTestId('source')).toHaveCount(2); await expect(otherTab.getByLabel('다음 장면 요청')).toHaveValue('SYNTHETIC independent other-tab draft'); expect(await getDetail(request, chat.id)).toEqual(before);
+    await storySettings(page); await creativeTab(page); await page.getByLabel('profile 문체', { exact: true }).selectOption('vivid'); await page.getByRole('button', { name: '콘텐츠와 제어 저장', exact: true }).click(); await expect.poll(async () => (await getDetail(request, fork.id)).profile!.creative.style).toBe('vivid'); expect((await getDetail(request, chat.id)).profile).toEqual(before.profile);
+    const next = await send(page, 'SYNTHETIC fork-only descendant.\n\n' + 'Only the fork follows this long path along the pier.\n\n'.repeat(30));
+    await expect.poll(async () => (await getDetail(request, fork.id)).runs.find(run => run.id === next.id)?.status).toBe('completed'); await expect.poll(async () => (await getDetail(request, fork.id)).jobs.every(job => job.status === 'completed')).toBe(true); await expect(page.getByTestId('source')).toHaveCount(2);
+    const final = await getDetail(request, fork.id); const descendant = final.sources.find(item => item.runId === next.id)!; expect(descendant.parentRevision).toBe(forkSource.id); expect(descendant.text.length).toBeGreaterThan(1500); expect(final.runs.find(item => item.id === next.id)?.snapshot.history.map(item => item.revision)).toEqual([forkSource.id]); expect(final.runs.find(item => item.id === next.id)?.snapshot.history.map(item => item.text)).toEqual([source.text]);
+    await page.getByLabel('다음 장면 요청').fill('SYNTHETIC independent fork draft'); const forkUrl = page.url(); await page.getByRole('button', { name: '탐색 메뉴', exact: true }).click(); await page.getByRole('navigation', { name: '채팅 목록' }).getByRole('button').filter({ hasText: chat.title }).filter({ hasNotText: fork.title }).click();
+    await expect.poll(() => new URL(page.url()).searchParams.get('chat')).toBe(chat.id); await expect(page.getByLabel('다음 장면 요청')).toHaveValue('SYNTHETIC retained original draft'); await page.getByRole('button', { name: '탐색 메뉴', exact: true }).click(); await page.getByRole('navigation', { name: '채팅 목록' }).getByRole('button').filter({ hasText: fork.title }).click();
+    await expect(page).toHaveURL(forkUrl); await expect(page.getByLabel('다음 장면 요청')).toHaveValue('SYNTHETIC independent fork draft'); await page.reload(); await expect(page).toHaveURL(forkUrl); await expect(page.getByLabel('다음 장면 요청')).toHaveValue('SYNTHETIC independent fork draft'); await expect(otherTab.getByTestId('source')).toHaveCount(2); await expect(otherTab.getByLabel('다음 장면 요청')).toHaveValue('SYNTHETIC independent other-tab draft');
+    expect(await getDetail(request, chat.id)).toEqual(before); expect(final.sources.find(item => item.id === forkSource.id)).toEqual(forkSource); expect(source.hash).toBe(createHash('sha256').update(source.text).digest('hex')); expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true); await page.screenshot({ path: testInfo.outputPath('m1-mobile-fork-reader.png'), fullPage: true }); expect(errors).toEqual([]);
   } finally { await otherTab.close(); }
 });
 
@@ -184,12 +178,14 @@ test('P06 P11 quality notes preserve source and export/backup downloads reject r
   const run = await send(page, 'SYNTHETIC_ARCHIVE: The letter is still sealed.');
   await expect.poll(async () => (await getDetail(request, chat.id)).runs.find(item => item.id === run.id)?.status).toBe('completed');
   const source = (await getDetail(request, chat.id)).sources[0];
+  await page.getByRole('button', { name: '실행 상세', exact: true }).click();
   await page.getByText('요청 충실성 기록', { exact: true }).click();
   await page.getByLabel('요청 충실성 메모', { exact: true }).fill('SYNTHETIC note: retain the sealed letter premise.');
   await page.getByRole('button', { name: '메모 저장', exact: true }).click();
   await expect(page.getByText('요청 충실성 메모: SYNTHETIC note: retain the sealed letter premise.')).toBeVisible();
   const after = await getDetail(request, chat.id);
   expect(after.sources[0]).toEqual(source);
+  await navigation(page, '설정');
   const archivePanel = page.locator('details').filter({ has: page.locator('summary', { hasText: '내보내기와 복원' }) });
   await archivePanel.locator('summary').click();
   const downloadPromise = page.waitForEvent('download'); await page.getByRole('button', { name: 'JSON 내보내기', exact: true }).click();
@@ -202,6 +198,85 @@ test('P06 P11 quality notes preserve source and export/backup downloads reject r
   expect(dbBytes.subarray(0, 16).toString('utf8')).toBe('SQLite format 3\u0000');
   await page.getByLabel('가져올 JSON 파일').setInputFiles({ name: 'synthetic-export.json', mimeType: 'application/json', buffer: bytes });
   await page.getByRole('button', { name: '빈 DB에 가져오기', exact: true }).click();
-  await expect(page.getByRole('alert')).toContainText('다른 요청이 먼저 반영됐어요');
+  await expect(page.getByRole('dialog', { name: '설정', exact: true }).getByRole('alert')).toContainText('다른 요청이 먼저 반영됐어요');
   expect((await getDetail(request, chat.id)).sources[0]).toEqual(source);
+});
+
+test('P04 Vertex settings use service-account references and persist distinct main and translation presets without execution', async ({ page, request }, testInfo) => {
+  const unique = `Vertex-${Date.now()}`; const chat = await createChat(page, `합성 ${unique}`);
+  const pageErrors: string[] = []; page.on('pageerror', error => pageErrors.push(error.message));
+  await navigation(page, '설정'); await page.getByTestId('connection-settings').locator('summary').first().click();
+  const editor = page.getByTestId('connection-editor');
+  await page.getByLabel('연결 프로토콜', { exact: true }).selectOption('vertex-gemini-v1');
+  await page.getByLabel('연결 이름', { exact: true }).fill(unique);
+  await page.getByLabel('Vertex endpoint', { exact: true }).fill('https://aiplatform.googleapis.com/v1/projects/synthetic-project/locations/global/publishers/google/models');
+  await page.getByLabel('이 연결 사용', { exact: true }).check();
+  await expect(page.getByLabel('서버 환경변수 이름', { exact: true })).toHaveValue('');
+  const connectionResponse = page.waitForResponse(response => response.url().endsWith('/api/connections') && response.request().method() === 'POST');
+  await page.getByRole('button', { name: '연결 등록', exact: true }).click();
+  const connection = await (await connectionResponse).json() as Connection;
+  expect(connection).toMatchObject({ protocol: 'vertex-gemini-v1', enabled: true }); expect(connection).not.toHaveProperty('credentialEnv');
+  await editor.locator('.compact-card').filter({ hasText: unique }).getByRole('button', { name: '로컬 지원 모델 확인', exact: true }).click();
+  await expect(editor.getByRole('status')).toContainText('공급자 조회 없음');
+  const latest = (await getLibrary(request)).connections.find(item => item.id === connection.id)!;
+  const models: ModelPreset[] = [];
+  for (const role of ['main', 'translation']) {
+    await page.getByLabel('모델 프리셋 이름', { exact: true }).fill(`${unique}-${role}`);
+    await page.getByLabel('모델 연결', { exact: true }).selectOption(`${latest.id}@${latest.revision}`);
+    await expect(page.getByLabel('모델 ID', { exact: true })).toHaveValue('gemini-3.8-flash');
+    await expect(page.getByLabel('모델 ID', { exact: true })).toHaveAttribute('readonly', '');
+    await expect(page.getByLabel('Temperature', { exact: true })).toHaveCount(0);
+    await page.getByLabel('생각 수준', { exact: true }).selectOption(role === 'main' ? 'MEDIUM' : 'LOW');
+    await page.getByLabel('응답 제한 시간 (초)', { exact: true }).fill(role === 'main' ? '300' : '180');
+    const modelResponse = page.waitForResponse(response => response.url().endsWith('/api/model-presets') && response.request().method() === 'POST');
+    await page.getByRole('button', { name: '모델 프리셋 등록', exact: true }).click();
+    models.push(await (await modelResponse).json() as ModelPreset);
+  }
+  expect(models[0]).toMatchObject({ temperature: null, thinkingLevel: 'MEDIUM', timeoutMs: 300000 });
+  expect(models[1]).toMatchObject({ temperature: null, thinkingLevel: 'LOW', timeoutMs: 180000 });
+  await page.screenshot({ path: testInfo.outputPath('vertex-settings-mobile.png'), fullPage: true });
+  await openDetails(page, 'profile-editor'); await page.getByTestId('profile-editor').getByRole('tab', { name: '모델', exact: true }).click();
+  await page.getByLabel('원문 모델', { exact: true }).selectOption(`${models[0].id}@1`);
+  await page.getByLabel('번역 모델', { exact: true }).selectOption(`${models[1].id}@1`);
+  await page.getByRole('button', { name: '콘텐츠와 제어 저장', exact: true }).click();
+  await expect(page.getByText('장착 설정 v2')).toBeVisible();
+  const detail = await getDetail(request, chat.id);
+  expect(detail.profile?.routes).toMatchObject({ main: { id: models[0].id, revision: 1 }, translation: { id: models[1].id, revision: 1 } });
+  expect(detail.runs).toHaveLength(0); expect(detail.sources).toHaveLength(0); expect(detail.attempts).toHaveLength(0); expect(pageErrors).toEqual([]);
+});
+
+test('P04 named and custom providers save native options from mobile settings without model execution', async ({page,request},testInfo)=>{
+  const chat=await createChat(page,`공급자 설정 ${Date.now()}`);
+  await navigation(page,'설정');await page.getByTestId('connection-settings').locator('summary').first().click();
+  const cases=[
+    {protocol:'openai-responses-v1',endpoint:'https://api.openai.com/v1',credential:'NARRATIVE_PROVIDER_OPENAI',modelId:'synthetic-responses'},
+    {protocol:'anthropic-messages-v1',endpoint:'https://api.anthropic.com/v1',credential:'NARRATIVE_PROVIDER_ANTHROPIC',modelId:'synthetic-messages'},
+    {protocol:'vercel-chat-v1',endpoint:'https://ai-gateway.vercel.sh/v1',credential:'NARRATIVE_PROVIDER_VERCEL',modelId:'synthetic/model'},
+    {protocol:'openai-chat-v1',endpoint:'https://synthetic.example/v1',credential:'NARRATIVE_PROVIDER_CUSTOM',modelId:'synthetic-chat'},
+  ];
+  for(const item of cases){
+    await page.getByLabel('연결 프로토콜',{exact:true}).selectOption(item.protocol);
+    await page.getByLabel('연결 이름',{exact:true}).fill(item.protocol);
+    const endpoint=page.getByLabel('API 기본 주소',{exact:true});
+    if(item.protocol==='openai-chat-v1')await endpoint.fill(item.endpoint);else await expect(endpoint).toHaveValue(item.endpoint);
+    await expect(page.getByLabel('서버 환경변수 이름',{exact:true})).toHaveValue(item.credential);
+    await page.getByLabel('이 연결 사용',{exact:true}).check();
+    const saved=page.waitForResponse(r=>r.url().endsWith('/api/connections')&&r.request().method()==='POST');
+    await page.getByRole('button',{name:'연결 등록',exact:true}).click();const connection=await(await saved).json() as Connection;
+    expect(connection).toMatchObject({protocol:item.protocol,endpoint:item.endpoint,credentialEnv:item.credential,enabled:true});
+    await page.getByLabel('모델 연결',{exact:true}).selectOption(`${connection.id}@${connection.revision}`);
+    await page.getByLabel('모델 프리셋 이름',{exact:true}).fill(item.modelId);await page.getByLabel('모델 ID',{exact:true}).fill(item.modelId);
+    await page.getByLabel('응답 제한 시간 (초)',{exact:true}).fill('900');
+    const advanced=page.getByTestId('connection-editor').locator('details').filter({has:page.locator('summary',{hasText:'선택 옵션 · 모델이 지원할 때 사용'})});
+    if(await advanced.getAttribute('open')===null)await advanced.locator('summary').click();
+    await page.getByLabel('번역 구조화 출력',{exact:true}).selectOption('on');await page.getByLabel('Reasoning effort',{exact:true}).selectOption('high');
+    if(item.protocol==='anthropic-messages-v1')await page.getByLabel('Thinking',{exact:true}).selectOption('adaptive');
+    const savedModel=page.waitForResponse(r=>r.url().endsWith('/api/model-presets')&&r.request().method()==='POST');
+    await page.getByRole('button',{name:'모델 프리셋 등록',exact:true}).click();const model=await(await savedModel).json() as ModelPreset;
+    expect(model).toMatchObject({connectionId:connection.id,modelId:item.modelId,temperature:null,timeoutMs:900000,structuredOutput:true,reasoningEffort:'high'});
+    expect(model.thinkingMode).toBe(item.protocol==='anthropic-messages-v1'?'adaptive':undefined);
+  }
+  const detail=await getDetail(request,chat.id);expect(detail.attempts).toHaveLength(0);expect(detail.runs).toHaveLength(0);
+  await page.screenshot({path:testInfo.outputPath('provider-settings.png'),fullPage:true});
+  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
 });

@@ -533,9 +533,32 @@
         "U19",
         "U20"
       ],
-      "status": "specified-not-run",
-      "implemented_test_ids": [],
-      "notes": ""
+      "status": "passed-m2-local-fixture",
+      "implemented_test_ids": [
+        "M2 deterministic state validation (synthetic evidence; no semantic quality claim) S01 versioned event mapping calculates 10 minus 3 as 7 and preserves all inputs",
+        "M2 deterministic state validation (synthetic evidence; no semantic quality claim) S01 annotation results are never canonical; continuity is distinct from authoritative",
+        "M2 deterministic state validation (synthetic evidence; no semantic quality claim) S01 exact UTF16 source spans accept whole astral characters and reject invented text and split pairs",
+        "M2 deterministic state validation (synthetic evidence; no semantic quality claim) S01 nonnumeric sets enforce field allowlist, enums, boolean type, text bounds and forbid numeric assignments",
+        "M2 deterministic state validation (synthetic evidence; no semantic quality claim) S01 unknown keys and provider-invented deltas cannot override module rules",
+        "M2 deterministic state validation (synthetic evidence; no semantic quality claim) S01 S03 the same numeric evidence cannot charge twice under different operation IDs or aliased event names",
+        "M2 deterministic state validation (synthetic evidence; no semantic quality claim) S01 two disjoint same-event purchases are legitimate and each deducts exactly once",
+        "M2 deterministic state validation (synthetic evidence; no semantic quality claim) S01 overlapping evidence for the same numeric field fails even with a different rule delta, while different fields may share evidence",
+        "M2 story runner actual localhost request evidence (synthetic, no live provider quality claim) S01 actual provider receives original source, rules and previous state; tool results and opaque continuation stay correctly scoped",
+        "M2 story runner actual localhost request evidence (synthetic, no live provider quality claim) S01 provider no-facts empty proposal is preserved without inventing numeric changes",
+        "M2 story runner actual localhost request evidence (synthetic, no live provider quality claim) S01 R03 mock is explicit: numeric events need literal markers and memory is extractive with safe UTF16 evidence",
+        "M2 S01–S06 actual file SQLite integration S01 state 10→7 is applied once and is present in the next real main input",
+        "M2 S01–S06 actual file SQLite integration S02 a delayed authoritative state parks generation while original remains readable; cancelled wait never resumes",
+        "M2 S01–S06 actual file SQLite integration S02 failed state keeps waiting until explicit retry succeeds, then freezes the resumed dependency",
+        "M2 S01–S06 actual file SQLite integration S03 late source-edit result is stale and prior source state remains an immutable historical artifact",
+        "M2 S01–S06 actual file SQLite integration S03 restart retains queued work, interrupts uncertain running work, and does not replay it automatically",
+        "M2 S01–S06 actual file SQLite integration S05 out-of-order memory completion preserves holes and main tools recover actual compacted historical text",
+        "M2 S01–S06 actual file SQLite integration S04 stored author canon retcon is branch scoped and does not rewrite earlier Run snapshots",
+        "M2 S01–S06 actual file SQLite integration S04 persisted character belief retains actor and evidence without leaking into a sibling candidate",
+        "M2 S01–S06 actual file SQLite integration S01 source transaction failure rolls back original, Run completion and all durable story reservations",
+        "M2 S01–S06 actual file SQLite integration S06 scene commands are consumed only with successful source commit; cancelled or failed runs never consume",
+        "story-browser.spec.ts S01 S02 state settings use synthetic rules, preserve readable original while waiting, then compile persisted state"
+      ],
+      "notes": "2026-09-07 final local reporter PASS; see M2-RESULTS.md and output/m2-final/2026-09-07/summary.json. Q04/native port remain BLOCKED."
     },
     {
       "id": "S02",
@@ -554,9 +577,19 @@
         "U11",
         "U15"
       ],
-      "status": "specified-not-run",
-      "implemented_test_ids": [],
-      "notes": ""
+      "status": "passed-m2-local-fixture",
+      "implemented_test_ids": [
+        "S02 S03 actual Store continuity and activation dependencies continuity permits the next source but defers its state claim until the preceding state is ready; duplicate claims and completions cannot double-apply",
+        "S02 S03 actual Store continuity and activation dependencies continuity dependency hydration survives export/import and selected-ancestry fork while original Run snapshots remain unchanged",
+        "S02 S03 actual Store continuity and activation dependencies explicit rebuild of an edited first activation source rebases initial state before that source and releases a waiting Run",
+        "S02 S03 actual Store continuity and activation dependencies activation at the second source rebuilds from its parent baseline and rejects rebuilding pre-activation history",
+        "S02 S03 actual Store continuity and activation dependencies explicit state reset pins a new module revision to the selected branch and cancels old-rule waiting without rewriting history",
+        "M2 S01–S06 actual file SQLite integration S02 a delayed authoritative state parks generation while original remains readable; cancelled wait never resumes",
+        "M2 S01–S06 actual file SQLite integration S02 failed state keeps waiting until explicit retry succeeds, then freezes the resumed dependency",
+        "M2 HTTP state controls and authored memory S02 held state preserves readable source; cancellation and failure require retry before the HTTP waiting Run resumes",
+        "story-browser.spec.ts S01 S02 state settings use synthetic rules, preserve readable original while waiting, then compile persisted state"
+      ],
+      "notes": "2026-09-07 final local reporter PASS; see M2-RESULTS.md and output/m2-final/2026-09-07/summary.json. Q04/native port remain BLOCKED."
     },
     {
       "id": "S03",
@@ -574,9 +607,36 @@
         "U19",
         "U23"
       ],
-      "status": "specified-not-run",
-      "implemented_test_ids": [],
-      "notes": ""
+      "status": "passed-m2-local-fixture",
+      "implemented_test_ids": [
+        "M2 deterministic state validation (synthetic evidence; no semantic quality claim) S03 source revision/hash mismatch or corrupted source fails without rewriting previous values",
+        "M2 deterministic state validation (synthetic evidence; no semantic quality claim) S03 changed rule revision invalidates proposals; duplicate operation IDs reject retries inside one proposal",
+        "M2 deterministic state validation (synthetic evidence; no semantic quality claim) S01 S03 the same numeric evidence cannot charge twice under different operation IDs or aliased event names",
+        "M2 deterministic state validation (synthetic evidence; no semantic quality claim) S03 out-of-range or overflowing reduction rejects all effects instead of clamping or partial mutation",
+        "M2 deterministic state validation (synthetic evidence; no semantic quality claim) S03 invalid modules reject nonfinite numbers, invalid rules, bounds and undeclared metadata",
+        "M2 deterministic state validation (synthetic evidence; no semantic quality claim) S03 dangerous prototype names, inherited definitions, symbols and getters fail closed",
+        "M2 deterministic state validation (synthetic evidence; no semantic quality claim) S03 pre-state is complete and typed; absent proposals fail while empty valid changes preserve state",
+        "M2 archive graph and selected-ancestry fork with actual isolated file SQLite S03 R03 completed state is recomputed; immutable snapshots and historical edited sources remain valid",
+        "M2 archive graph and selected-ancestry fork with actual isolated file SQLite S03 R03 poisoned state, config, source identity, immutable dependency and memory evidence reject with rollback",
+        "M2 archive graph and selected-ancestry fork with actual isolated file SQLite S03 retcon ownership, ancestry and cycles reject without altering authored text",
+        "M2 archive graph and selected-ancestry fork with actual isolated file SQLite S03 restore normalization disables nested connections, strips provider continuation and never queues uncertain jobs",
+        "M2 archive graph and selected-ancestry fork with actual isolated file SQLite S03 restored selected model snapshots match immutable versions and poisoned target models fail",
+        "M2 archive graph and selected-ancestry fork with actual isolated file SQLite S03 R03 fork remaps source/state/memory identities and dependency keys, preserves prose, and copies no attempts",
+        "M2 archive graph and selected-ancestry fork with actual isolated file SQLite S03 fork omits unresolved artifacts and reports exclusions while retaining the original source",
+        "M2 story runner actual localhost request evidence (synthetic, no live provider quality claim) S03 malformed terminal JSON and invalid evidence preserve usage with no automatic retry",
+        "M2 story runner actual localhost request evidence (synthetic, no live provider quality claim) S03 duplicate calls are rejected before reads; connection revocation and budget block the next fetch",
+        "M2 story runner actual localhost request evidence (synthetic, no live provider quality claim) S03 refused provider is terminal and cross-chat read cannot expand scope",
+        "M2 story runner actual localhost request evidence (synthetic, no live provider quality claim) S03 repeated tool IDs across turns are rejected and uncertain partial output is never replayed",
+        "M2 story runner actual localhost request evidence (synthetic, no live provider quality claim) S03 stale source and pre-aborted jobs cannot reach provider or leak abort reason",
+        "S02 S03 actual Store continuity and activation dependencies continuity permits the next source but defers its state claim until the preceding state is ready; duplicate claims and completions cannot double-apply",
+        "S02 S03 actual Store continuity and activation dependencies continuity dependency hydration survives export/import and selected-ancestry fork while original Run snapshots remain unchanged",
+        "S02 S03 actual Store continuity and activation dependencies explicit rebuild of an edited first activation source rebases initial state before that source and releases a waiting Run",
+        "S02 S03 actual Store continuity and activation dependencies activation at the second source rebuilds from its parent baseline and rejects rebuilding pre-activation history",
+        "S02 S03 actual Store continuity and activation dependencies explicit state reset pins a new module revision to the selected branch and cancels old-rule waiting without rewriting history",
+        "M2 S01–S06 actual file SQLite integration S03 late source-edit result is stale and prior source state remains an immutable historical artifact",
+        "M2 S01–S06 actual file SQLite integration S03 restart retains queued work, interrupts uncertain running work, and does not replay it automatically"
+      ],
+      "notes": "2026-09-07 final local reporter PASS; see M2-RESULTS.md and output/m2-final/2026-09-07/summary.json. Q04/native port remain BLOCKED."
     },
     {
       "id": "S04",
@@ -597,9 +657,28 @@
         "U13",
         "U15"
       ],
-      "status": "specified-not-run",
-      "implemented_test_ids": [],
-      "notes": ""
+      "status": "passed-m2-local-fixture",
+      "implemented_test_ids": [
+        "S04 typed memory provenance and ancestry author-canon accepts a declaration with no transcript or fake message ID",
+        "S04 typed memory provenance and ancestry beliefs retain actor and category; source-free observations, fake quotes, and future evidence fail",
+        "S04 typed memory provenance and ancestry other chat, sibling, future and retconned memory is excluded from reads, search and counts",
+        "S04 typed memory provenance and ancestry strict inputs reject extra fields, bad hashes, duplicates and nonserializable payloads",
+        "S04/S05 bounded memory and original-source tool responses memory.read limit1 never injects the 10000-character evidence quote through provenance",
+        "S04/S05 bounded memory and original-source tool responses authored declaration metadata does not repeat the entire canonical text",
+        "S04/S05 bounded memory and original-source tool responses large provenance is explicitly paginated and every exact source coordinate remains recoverable",
+        "S04/S05 bounded memory and original-source tool responses memory.search honors the actual result byte budget and continuation retrieves every matching item",
+        "S04/S05 bounded memory and original-source tool responses Unicode and JSON-escaped source/memory bodies use byte-aware text continuation without data loss",
+        "S04/S05 bounded memory and original-source tool responses individual memory reads apply the same current ancestry and chat validation as search counts",
+        "S04 durable memory source identity and authored retcon validates the entire extraction before inserts, rejects forged/cross-chat evidence and preserves atomic rollback",
+        "S04 durable memory source identity and authored retcon extractor cannot create author canon, choose IDs or anchor at another revision",
+        "S04 durable memory source identity and authored retcon shared-ancestor retcon changes only the selected descendant branch and preserves stored earlier snapshots",
+        "S04 durable memory source identity and authored retcon pre-transcript authored declaration uses null anchor and GET helpers never write",
+        "M2 S01–S06 actual file SQLite integration S04 stored author canon retcon is branch scoped and does not rewrite earlier Run snapshots",
+        "M2 S01–S06 actual file SQLite integration S04 persisted character belief retains actor and evidence without leaking into a sibling candidate",
+        "M2 HTTP state controls and authored memory S04 HTTP author declarations do not need transcripts and retcon preserves the old stored record",
+        "story-browser.spec.ts S04 explicit author declaration and retcon remain distinct memory after reload"
+      ],
+      "notes": "2026-09-07 final local reporter PASS; see M2-RESULTS.md and output/m2-final/2026-09-07/summary.json. Q04/native port remain BLOCKED."
     },
     {
       "id": "S05",
@@ -617,9 +696,27 @@
         "C03",
         "U14"
       ],
-      "status": "specified-not-run",
-      "implemented_test_ids": [],
-      "notes": ""
+      "status": "passed-m2-local-fixture",
+      "implemented_test_ids": [
+        "S05 contiguous checkpoint and long source recovery out-of-order completion cannot jump holes and a hash edit rewinds the watermark",
+        "S05 contiguous checkpoint and long source recovery long indexed history compacts input, preserves unprocessed tail and original sources, and paginates actual old text",
+        "S05 contiguous checkpoint and long source recovery oversized unprocessed tail is explicit and never silently truncated",
+        "S05 contiguous checkpoint and long source recovery author canon is mandatory even when it alone exceeds the packet budget; only derived memories may be omitted",
+        "S04/S05 bounded memory and original-source tool responses memory.read limit1 never injects the 10000-character evidence quote through provenance",
+        "S04/S05 bounded memory and original-source tool responses authored declaration metadata does not repeat the entire canonical text",
+        "S04/S05 bounded memory and original-source tool responses large provenance is explicitly paginated and every exact source coordinate remains recoverable",
+        "S04/S05 bounded memory and original-source tool responses memory.search honors the actual result byte budget and continuation retrieves every matching item",
+        "S04/S05 bounded memory and original-source tool responses Unicode and JSON-escaped source/memory bodies use byte-aware text continuation without data loss",
+        "S04/S05 bounded memory and original-source tool responses individual memory reads apply the same current ancestry and chat validation as search counts",
+        "S05 persisted indexing checkpoint ancestral retcon invalidates descendant extraction and receipts; rebuilding preserves old rows and stored snapshots",
+        "S05 persisted indexing checkpoint read-only freshness excludes stale semantic data even before status refresh and receipt replacement remains possible",
+        "S05 persisted indexing checkpoint re-extraction replaces a stale receipt while retaining previous artifacts outside current visibility",
+        "S05 persisted indexing checkpoint completed no-facts receipt advances progress but pending work cannot skip a hole",
+        "S05 persisted indexing checkpoint source hash changes rewind progress and a completed receipt never leaks into sibling scope",
+        "S07 independent archive/lore/manuscript/asset growth measures actual SQLite active context; S05 200k source roundtrips",
+        "M2 S01–S06 actual file SQLite integration S05 out-of-order memory completion preserves holes and main tools recover actual compacted historical text"
+      ],
+      "notes": "2026-09-07 final local reporter PASS; see M2-RESULTS.md and output/m2-final/2026-09-07/summary.json. Q04/native port remain BLOCKED."
     },
     {
       "id": "S06",
@@ -640,9 +737,27 @@
         "U21",
         "U23"
       ],
-      "status": "specified-not-run",
-      "implemented_test_ids": [],
-      "notes": ""
+      "status": "passed-m2-local-fixture",
+      "implemented_test_ids": [
+        "S06 renders a derived plain text value and preserves original source including HTML",
+        "S06 terminates catastrophic regex and can run a subsequent worker",
+        "S06 enforces input, rule, pattern, replacement and expanded output limits",
+        "S06 rejects invalid flags and patterns without leaking regex error details",
+        "S06 advances zero-length Unicode matches without looping or splitting characters",
+        "M2 S01–S06 actual file SQLite integration S01 state 10→7 is applied once and is present in the next real main input",
+        "M2 S01–S06 actual file SQLite integration S02 a delayed authoritative state parks generation while original remains readable; cancelled wait never resumes",
+        "M2 S01–S06 actual file SQLite integration S02 failed state keeps waiting until explicit retry succeeds, then freezes the resumed dependency",
+        "M2 S01–S06 actual file SQLite integration S03 late source-edit result is stale and prior source state remains an immutable historical artifact",
+        "M2 S01–S06 actual file SQLite integration S03 restart retains queued work, interrupts uncertain running work, and does not replay it automatically",
+        "M2 S01–S06 actual file SQLite integration S05 out-of-order memory completion preserves holes and main tools recover actual compacted historical text",
+        "M2 S01–S06 actual file SQLite integration S04 stored author canon retcon is branch scoped and does not rewrite earlier Run snapshots",
+        "M2 S01–S06 actual file SQLite integration S04 persisted character belief retains actor and evidence without leaking into a sibling candidate",
+        "M2 S01–S06 actual file SQLite integration S01 source transaction failure rolls back original, Run completion and all durable story reservations",
+        "M2 S01–S06 actual file SQLite integration S06 scene commands are consumed only with successful source commit; cancelled or failed runs never consume",
+        "story-browser.spec.ts S06 scene commands distinguish successful original, failed original and cancelled reservation",
+        "story-browser.spec.ts S06 S07 text presentation keeps malicious HTML inert and asset catalog transfers metadata without preloading bytes"
+      ],
+      "notes": "2026-09-07 final local reporter PASS; see M2-RESULTS.md and output/m2-final/2026-09-07/summary.json. Q04/native port remain BLOCKED."
     },
     {
       "id": "S07",
@@ -662,9 +777,15 @@
         "U22",
         "U26"
       ],
-      "status": "specified-not-run",
-      "implemented_test_ids": [],
-      "notes": ""
+      "status": "passed-m2-local-fixture",
+      "implemented_test_ids": [
+        "S07 resolves exact stable metadata and rejects stale, missing, conflicting and denied combinations",
+        "S07 metadata search is scoped, paginated and never transmits URL or asset bytes",
+        "S07 incomplete refs and oversized metadata have explicit fallback",
+        "S07 independent archive/lore/manuscript/asset growth measures actual SQLite active context; S05 200k source roundtrips",
+        "story-browser.spec.ts S06 S07 text presentation keeps malicious HTML inert and asset catalog transfers metadata without preloading bytes"
+      ],
+      "notes": "2026-09-07 final local reporter PASS; see M2-RESULTS.md and output/m2-final/2026-09-07/summary.json. Q04/native port remain BLOCKED."
     },
     {
       "id": "L01",
@@ -785,9 +906,9 @@
         "C04",
         "U29"
       ],
-      "status": "specified-not-run",
+      "status": "blocked-m2-external-prerequisites",
       "implemented_test_ids": [],
-      "notes": ""
+      "notes": "M2 local contracts passed; live longitudinal semantic evaluation requires a selected model/data and explicit call/cost scope."
     },
     {
       "id": "E01",

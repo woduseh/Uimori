@@ -8,6 +8,7 @@ import {
 import type { Connection, TaskRole } from '../core/product.js';
 import { executeProvider, type Json, type ProviderRequest, type ProviderResult, type ProviderTool, type WireRecord } from '../core/transport.js';
 import type { RunSnapshot, ToolEvent } from '../core/types.js';
+import { createSolSession } from './sol-session.js';
 
 type MaybePromise<T> = T | Promise<T>;
 type JobKind = Exclude<TaskRole, 'main'>;
@@ -42,10 +43,10 @@ export type AuxiliaryJobHooks = {
   onInput?: (jobId: string, input: AuxiliaryInput) => MaybePromise<void>;
   onToolEvent?: (jobId: string, event: ToolEvent) => MaybePromise<void>;
   onProgress?: () => MaybePromise<void>;
-  maxChunkChars?: number; timeoutMs?: number; cancellationStatus?: 'cancelled' | 'interrupted';
+  maxChunkChars?: number; timeoutMs?: number; vertexRequestTier?: 'standard' | 'flex'; cancellationStatus?: 'cancelled' | 'interrupted';
 };
 const json = (value: unknown): Json => JSON.parse(JSON.stringify(value)) as Json;
-class AuxiliaryExecutionError extends Error { constructor(readonly code: string, readonly stop: boolean = false) { super(code); } }
+class AuxiliaryExecutionError extends Error { constructor(readonly code: string, readonly stop: boolean = false, readonly retryable: boolean = false) { super(code); } }
 const safeError = (error: unknown) => {
   if (error instanceof AuxiliaryExecutionError) return error.code;
   if (error instanceof Error && error.name === 'BudgetError') return 'AUXILIARY_CALL_BUDGET_EXHAUSTED';
@@ -72,7 +73,7 @@ export function sourceTimeContext(snapshot: RunSnapshot, kind: JobKind): SourceT
     glossary: kind === 'translation' ? versioned('glossary') : [], canon: versioned('canon'),
     scene: 'Use the supplied source blocks and source-time canon; later revisions are excluded.',
     previousSources: snapshot.history.slice(-2).map(item => ({ ...item })),
-    instructionRevision: kind === 'translation' ? 'hermeneia-native-1' : kind === 'status' ? 'display-only-1' : 'source-presentation-1',
+    instructionRevision: kind === 'translation' ? profile?.promptPresets?.translation ? `prompt:${profile.promptPresets.translation.id}@${profile.promptPresets.translation.revision}` : 'hermeneia-native-1' : kind === 'status' ? 'display-only-1' : 'source-presentation-1',
     modelPresetRevision: target ? `${target.id}@${target.revision}` : 'scripted-mock-1',
   };
 }
@@ -82,8 +83,8 @@ function providerInput(input: AuxiliaryInput, modelId: string, generation: Provi
     role: input.role === 'presentation' ? 'image' : input.role, modelId,
     stable: { contract: input.contract, tools: toolSchemas.filter(tool => input.tools.includes(tool.name)).map(tool => structuredClone(tool)) }, generation,
     input: {
-      task: input.role === 'translation' ? 'Translate the requested blocks into Korean and return the specified JSON.' : input.role === 'status' ? 'Return optional display-only annotations for the source blocks.' : 'Select appropriate existing assets or return no images.',
-      controls: { instructionRevision: input.context.instructionRevision, modelPresetRevision: input.context.modelPresetRevision },
+      task: input.role === 'translation' ? input.customPrompt ? 'Translate the requested blocks according to the selected prompt and return the specified JSON.' : 'Translate the requested blocks into Korean and return the specified JSON.' : input.role === 'status' ? 'Return optional display-only annotations for the source blocks.' : 'Select appropriate existing assets or return no images.',
+      controls: { instructionRevision: input.context.instructionRevision, modelPresetRevision: input.context.modelPresetRevision, ...(input.customPrompt ? { customPrompt: true } : {}) },
       source: json({ sourceRevision: input.sourceRevision, sourceHash: input.sourceHash, ...(input.chunkId ? { chunkId: input.chunkId } : {}), context: input.context, blocks: input.blocks, ...(input.neighborBlocks ? { neighborBlocks: input.neighborBlocks } : {}), ...(input.scenes ? { scenes: input.scenes } : {}), outputSchema: input.outputSchema }),
       catalog: json(input.role === 'presentation' ? input.assets ?? [] : input.catalog), results: json(input.results),
     }, ...(opaqueState !== undefined ? { opaqueState } : {}),
@@ -103,26 +104,31 @@ export async function runAuxiliaryJob(store: AuxiliaryStoreBridge, jobId: string
   if (generation === null) return null;
   await hooks.onProgress?.();
   const target = snapshot.profile?.models[job.kind]; let calls = 0;
-  // A selected transport is still a fixture. The protocol does not assert live quality.
+  const sol = createSolSession(target, hooks.timeoutMs);
+  // Fixture annotations remain explicitly marked; live output still requires artifact validation.
   const mock = !target || target.connection.protocol === 'fixture-sse-v1';
   const successful = new Map<string, TranslationResult>();
   for (const chunk of bundle.chunks ?? []) if (chunk.status === 'completed' && chunk.result) successful.set(chunk.id, structuredClone(chunk.result));
   let lastError: string | null = null; let stopped = false;
   const cancelState = () => hooks.cancellationStatus ?? 'cancelled';
   const runInput = async (packet: AuxiliaryInput) => {
+    if (sol) packet = { ...packet, tools: [...packet.tools, ...sol.toolNames] };
     let opaqueState: Json | undefined;
     const request = async (next: AuxiliaryInput) => {
       if (calls >= snapshot.settings.maxCalls) throw Object.assign(new Error('Auxiliary call budget exhausted'), { name: 'BudgetError' });
+      if (sol && sol.remainingMs() === 0) throw new AuxiliaryExecutionError('AUXILIARY_PROVIDER_TIMEOUT', true);
       calls++;
       if (!target) return scriptedAuxiliary(next, hooks.signal);
       let authorized: Connection;
       try { authorized = await hooks.authorize(structuredClone(target.connection)); }
       catch { throw new AuxiliaryExecutionError('CONNECTION_NOT_AUTHORIZED', true); }
       if (!authorized.enabled || authorized.id !== target.connectionId || authorized.endpoint !== target.connection.endpoint || authorized.protocol !== target.connection.protocol) throw new AuxiliaryExecutionError('CONNECTION_NOT_AUTHORIZED', true);
-      const body = providerInput(next, target.modelId, { maxOutputTokens: target.maxOutputTokens, temperature: target.temperature }, opaqueState);
+      const body = providerInput(next, target.modelId, { maxOutputTokens: target.maxOutputTokens, temperature: target.temperature, ...(target.thinkingLevel ? { thinkingLevel: target.thinkingLevel } : {}), ...(target.structuredOutput !== undefined ? { structuredOutput: target.structuredOutput } : {}), ...(target.reasoningEffort ? { reasoningEffort: target.reasoningEffort } : {}), ...(target.thinkingMode ? { thinkingMode: target.thinkingMode } : {}), ...(target.thinkingBudgetTokens !== undefined ? { thinkingBudgetTokens: target.thinkingBudgetTokens } : {}), ...(sol ? { sol: sol.options } : {}) }, opaqueState);
       let attemptId: string | undefined;
-      const result = await executeProvider({ id: authorized.id, protocol: authorized.protocol, endpoint: authorized.endpoint, ...(authorized.credentialEnv ? { credentialEnv: authorized.credentialEnv } : {}) }, body, {
-        approvedOrigins: hooks.approvedOrigins, signal: hooks.signal, ...(hooks.timeoutMs ? { timeoutMs: hooks.timeoutMs } : {}),
+      const remainingTimeout = sol?.remainingMs();
+      if (remainingTimeout === 0) throw new AuxiliaryExecutionError('AUXILIARY_PROVIDER_TIMEOUT', true);
+      const result = await executeProvider({ id: authorized.id, protocol: authorized.protocol, endpoint: authorized.endpoint, ...(authorized.credentialEnv ? { credentialEnv: authorized.credentialEnv } : {}), ...(authorized.requestTier ? { requestTier: authorized.requestTier } : {}) }, body, {
+        approvedOrigins: hooks.approvedOrigins, signal: hooks.signal, vertexRequestTier: hooks.vertexRequestTier, timeoutMs: remainingTimeout ?? hooks.timeoutMs ?? target.timeoutMs ?? (target.connection.protocol === 'vertex-gemini-v1' ? 300_000 : undefined),
         onWire: async wire => { attemptId = await hooks.onAttemptStart(wire); },
       });
       // Keep diagnostic output and usage even when a refusal or malformed body cannot become an artifact.
@@ -131,11 +137,12 @@ export async function runAuxiliaryJob(store: AuxiliaryStoreBridge, jobId: string
         opaqueState = result.opaqueState;
         return { kind: 'tools', actions: result.toolCalls.map(call => ({ callId: call.id, name: call.name, args: call.arguments })) };
       }
-      if (result.status !== 'completed') throw new AuxiliaryExecutionError(result.status === 'refused' ? 'AUXILIARY_PROVIDER_REFUSED' : result.status === 'partial' ? 'AUXILIARY_PROVIDER_PARTIAL' : result.status === 'cancelled' ? 'AUXILIARY_CANCELLED' : `AUXILIARY_PROVIDER_${result.error?.code ?? 'ERROR'}`, result.status === 'refused' || result.status === 'cancelled');
+      if (result.status !== 'completed') throw new AuxiliaryExecutionError(result.status === 'refused' ? 'AUXILIARY_PROVIDER_REFUSED' : result.status === 'partial' ? 'AUXILIARY_PROVIDER_PARTIAL' : result.status === 'cancelled' ? 'AUXILIARY_CANCELLED' : `AUXILIARY_PROVIDER_${result.error?.code ?? 'ERROR'}`, result.status === 'refused' || result.status === 'cancelled', result.status === 'refused' && !result.error || result.status === 'error' && ['EMPTY_COMPLETION', 'EMPTY_RESPONSE'].includes(result.error?.code ?? ''));
       return result.text;
     };
     return executeAuxiliary(packet, snapshot, request, {
-      signal: hooks.signal, maxCalls: snapshot.settings.maxCalls,
+      signal: hooks.signal, maxCalls: sol ? Math.min(snapshot.settings.maxCalls, sol.maxCalls) : snapshot.settings.maxCalls,
+      ...(sol ? { localTools: { names: sol.toolNames, execute: (action: { callId: string; name: string; args: Record<string, unknown> }) => sol.execute({id:action.callId,name:action.name,arguments:json(action.args) as Record<string,Json>}) } } : {}),
       onInput: value => hooks.onInput?.(jobId, value), onToolEvent: value => hooks.onToolEvent?.(jobId, value),
     });
   };
@@ -145,21 +152,37 @@ export async function runAuxiliaryJob(store: AuxiliaryStoreBridge, jobId: string
         if (successful.has(chunk.id)) continue;
         if (bundle.retryChunkIds && !bundle.retryChunkIds.includes(chunk.id)) continue;
         if (hooks.signal.aborted || stopped) break;
-        await store.beginChunk(jobId, chunk.id, generation, owner); await hooks.onProgress?.();
-        try {
-          const result = await runInput(translationInput(plan, chunk.id, snapshot));
-          const validated = validateTranslationChunk(plan, chunk.id, result.output);
-          await store.completeChunk(jobId, chunk.id, generation, owner, validated); successful.set(chunk.id, validated);
-        } catch (error) {
-          lastError = hooks.signal.aborted ? 'AUXILIARY_CANCELLED' : safeError(error);
-          await store.failChunk(jobId, chunk.id, generation, owner, lastError, hooks.signal.aborted ? cancelState() : 'failed');
-          stopped = hooks.signal.aborted || error instanceof AuxiliaryExecutionError && error.stop || error instanceof Error && error.name === 'BudgetError';
+        // Only confirmed refusals, empty completions and validated terminal artifacts can be replayed.
+        // Each replay starts fresh tool/opaque state while sharing the job's call budget.
+        for (let attempt = 0; attempt < 3; attempt++) {
+          if (hooks.signal.aborted) break;
+          await store.beginChunk(jobId, chunk.id, generation, owner); await hooks.onProgress?.();
+          try {
+            const result = await runInput(translationInput(plan, chunk.id, snapshot, [...successful.values()]));
+            let validated: TranslationResult;
+            try { validated = validateTranslationChunk(plan, chunk.id, result.output); }
+            catch (error) {
+              const code = safeError(error);
+              throw new AuxiliaryExecutionError(code, false, ['OUTPUT_SCHEMA_INVALID', 'CHUNK_COVERAGE_INVALID', 'PROTECTED_SPAN_INVALID', 'UNPROTECTED_SYNTAX_RETURNED', 'SOURCE_DEPENDENCY_MISMATCH'].includes(code));
+            }
+            await store.completeChunk(jobId, chunk.id, generation, owner, validated); successful.set(chunk.id, validated);
+            await hooks.onProgress?.();
+            break;
+          } catch (error) {
+            const code = hooks.signal.aborted ? 'AUXILIARY_CANCELLED' : safeError(error);
+            await store.failChunk(jobId, chunk.id, generation, owner, code, hooks.signal.aborted ? cancelState() : 'failed');
+            await hooks.onProgress?.();
+            const retry = !hooks.signal.aborted && error instanceof AuxiliaryExecutionError && error.retryable && attempt < 2;
+            if (retry) continue;
+            lastError = code;
+            stopped = hooks.signal.aborted || error instanceof AuxiliaryExecutionError && error.stop || error instanceof Error && error.name === 'BudgetError';
+            break;
+          }
         }
-        await hooks.onProgress?.();
       }
       const combined = aggregateTranslation(plan, [...successful.values()]);
       const result: AuxiliaryJobResult = { mock, sourceRevision: source.id, sourceHash: source.hash, segments: combined.segments, text: combined.segments.map(segment => segment.text).join('\n\n'), completedChunks: combined.completedChunks, totalChunks: combined.totalChunks };
-      const outcome: AuxiliaryOutcome = { status: hooks.signal.aborted ? cancelState() : combined.status === 'completed' ? 'completed' : combined.status === 'partial' ? 'partial' : 'failed', result: combined.completedChunks ? result : null, error: lastError ?? (combined.status === 'completed' ? null : hooks.signal.aborted ? 'AUXILIARY_CANCELLED' : 'AUXILIARY_INCOMPLETE') };
+      const outcome: AuxiliaryOutcome = { status: hooks.signal.aborted ? cancelState() : combined.status === 'completed' ? 'completed' : combined.status === 'partial' ? 'partial' : 'failed', result: combined.completedChunks ? result : null, error: combined.status === 'completed' && !hooks.signal.aborted ? null : lastError ?? (hooks.signal.aborted ? 'AUXILIARY_CANCELLED' : 'AUXILIARY_INCOMPLETE') };
       await store.finish(jobId, generation, owner, outcome); await hooks.onProgress?.(); return outcome;
     }
     const output = (await runInput(input)).output;

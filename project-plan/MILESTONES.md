@@ -11,7 +11,7 @@
 - Windows 실제 환경 확인, 짧은 설치/실행/검사/정리 명령, 파일 SQLite+migration, 작은 mobile-width React UI, 서버 소유 Run.
 - chat별 minimal preset snapshot, parent/source revision, idempotency/expected revision, 출력·오류·usage 구분.
 - 최소 역할별 context 구성(고정 계약/목록/도구 결과)을 갖추고, 실제 지식 search/read/skill-load 경로를 쓰는 scripted MockProvider와 도구 없이 완료하는 mock 경로. 인물/지식 fixture는 작고 합성된 것을 사용한다.
-- 원문에 연결된 **모의 번역과 표시용 상태 annotation**의 독립 후속 job을 각각 최소 하나 연결. 원문과 다른 field/table에 저장하고 지연/실패를 표시한다. 원문 확정과 적격한 후속 job 예약은 같은 짧은 DB 트랜잭션에 기록하며, 커밋 직후 재시작해도 예약이 유실되지 않는지 확인한다. 실제 번역·의미 추출 능력이나 게임 상태 계산은 범위 밖이다.
+- 원문에 연결된 **모의 번역과 표시용 상태 annotation**의 독립 후속 job을 각각 최소 하나 연결. 원문과 다른 field/table에 저장하고 지연/실패를 표시한다. 원문 확정과 적격한 후속 job 예약은 같은 짧은 DB 트랜잭션에 기록하며, 커밋 직후 재시작해도 예약이 유실되지 않는지 확인한다. 실제 번역·의미 추출 능력이나 게임 상태 계산은 범위 밖이다. 후속 사용자 지시에 따라 번역은 원문 완료가 아닌 번역 보기 요청에서 예약하며, 원문 완료와의 원자적 예약은 상태·이미지에 적용한다.
 - 두 chat과 원문 revision에 결과를 붙이는 검증. 화면을 바꿔도 결과는 원래 source에 붙어야 한다. 다른 분기 UI 전체를 만들 필요는 없지만 parent/source id는 지금부터 보존한다.
 - 현재 코드와 다른 서버/검사0개/고의 실패/report 누락을 성공으로 숨기지 않는 작은 verify. 기본 reporter를 재사용한다.
 - 실제 생성물/화면/SQLite를 확인하고 새 작업트리 또는 근거가 있는 깨끗한 checkout에서 반복한다. 모든 향후 테스트의 stub을 만들지 않는다.
@@ -25,8 +25,8 @@ M0에서 하지 않을 것: 완전한 페메 이식, 유미 전체 복제, 실�
 한 작업에 몰아넣지 않고, 아래 사용자 흐름 단위로 같은 M1 내 작업을 나눌 수 있다.
 
 1. **M1a 연결과 콘텐츠:** 소형 bot/persona/lore 편집·등록, 기본 Phēmē-native 제어, CreativePreset 저장/교체, 수동 author-canon 텍스트(자동 장기기억과 분리), 선택된 두 작업 경로의 provider adapter/카탈로그/ID 직접 등록/usage, 읽기 도구와 Inspector. 키가 없으면 fixture까지 만들고 live 부분만 남긴다.
-2. **M1b 읽기와 보조 처리:** 실제 translation context/보호구문/분할·재시도, 원문·번역 전환, 표시용 보조 상태 추출/annotation, 기본 profile/inline asset 렌더와 소형 보조 이미지 catalog/search 및 본문 밖 anchor annotation, 원고/번역/표현/상태 각각의 진행·취소.
-3. **M1c 보존과 접속:** 후보 생성·보존·복귀 및 각 후손, device별 읽기 위치/초안, export/restore, 단일사용자 인증/연결 보호, 승인된 배포 환경에서 실제 폰 재접속.
+2. **M1b 읽기와 보조 처리:** 실제 translation context/보호구문/분할·재시도, 번역 보기에서 시작하는 최신 번역과 원문·번역 직접 수정, 정상 종료된 번역 실패의 제한 자동 재시도, 원문·번역 전환, 표시용 보조 상태 추출/annotation, 기본 profile/inline asset 렌더와 소형 보조 이미지 catalog/search 및 본문 밖 anchor annotation, 원고/번역/표현/상태 각각의 진행·취소.
+3. **M1c 보존과 접속:** 선택 장면까지 새 이야기로 복사하는 포크와 독립된 설정·후속 원고, 기존 분기의 읽기 보존, device별 읽기 위치/초안, export/restore, 단일사용자 인증/연결 보호, 승인된 배포 환경에서 실제 폰 재접속.
 
 M1 기능은 P01–P13의 관련 범위를 만족해야 한다. 실제 provider 지원은 L01을 통과한 경로만 주장한다. 실제 모바일 사용은 L02를 따로 기록한다. M1 품질 평가는 Q01·Q02·Q03·Q05의 해당 범위다. Q04의 상태·장기기억 의미 평가는 M2에 속하며 M1 필수 gate로 당겨오지 않는다. M1a/b/c는 선택된 사용자 흐름의 로컬 구현과 관련 live/device 주장을 각각 기록한다. 키·예산·실제 폰 등 외부 전제만 부족하면 해당 주장은 BLOCKED로 남기고, 사용자가 이어가기를 요청한 범위에서 그 전제에 의존하지 않는 다음 로컬 흐름을 진행할 수 있다. 이 경우에도 M1 전체 완료나 실사용 준비 완료로 표시하지 않는다.
 
