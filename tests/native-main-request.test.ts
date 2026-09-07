@@ -61,14 +61,14 @@ describe('Exact native main preview and terminal submission (synthetic loopback 
     }
   });
 
-  test('NMR05 OOC/normal omit native terminal, plain text fallback remains supported, Sol owns its existing terminal',async()=>{
+  test('NMR05 OOC/normal omit native terminal, plain text fallback remains supported, evaluation tools own their terminal',async()=>{
     for(const [variant,mode]of[['normal','1'],['tool-call','2']] as const){const work=compileSnapshotPrompt(snapshot(undefined,variant,mode));expect(nativeStorySubmissionEnabled(work)).toBe(false);expect(buildMainProviderRequest(work).request.stable.tools.some(t=>t.name==='story.submit')).toBe(false);}
     const server=await loopbackProvider(async(_request,response)=>writeSse(response,[complete('Normal text fallback.'),'[DONE]']));closes.push(server.close);const work=compileSnapshotPrompt(snapshot(`${server.origin}/v1/responses`,'tool-call')),log=hooks(server.origin);expect((await runMain(work,log.value)).text).toBe('Normal text fallback.');expect(log.events).toHaveLength(0);
-    const sol=compileSnapshotPrompt(snapshot('https://llm.llm7.io/v1/responses','tool-call'));sol.profile!.models.main!.connection.protocol='sol-responses-v1';expect(nativeStorySubmissionEnabled(sol)).toBe(false);expect(buildMainProviderRequest(sol).request.stable.tools.some(t=>t.name==='story.submit')).toBe(false);
+    const evaluated=compileSnapshotPrompt(snapshot('https://api.openai.com/v1','tool-call'));evaluated.profile!.models.main!.evaluationTools={contextMode:'model-selected',approvalReasoningMode:'configured',maximumToolRounds:8,terminalLateCorrections:false,outputRecovery:true};expect(nativeStorySubmissionEnabled(evaluated)).toBe(false);expect(buildMainProviderRequest(evaluated).request.stable.tools.some(t=>t.name==='story.submit')).toBe(false);
   });
 
   test('NMR06 exact encoders report explicit unsupported placement instead of reordering user blocks',()=>{
-    for(const protocol of ['openai-responses-v1','openai-chat-v1','vercel-chat-v1','anthropic-messages-v1','vertex-gemini-v1'] as ProviderProtocol[]){const work=compileSnapshotPrompt(snapshot());const target=work.profile!.models.main!;target.connection.protocol=protocol;target.modelId=protocol==='vertex-gemini-v1'?'gemini-3.8-flash':protocol==='anthropic-messages-v1'?'claude-sonnet-4-6':'gpt-5.6';const built=buildMainProviderRequest(work);if(protocol==='vertex-gemini-v1')expect(()=>encodeMainPreview(built.request,target)).toThrow('PROMPT_CONSECUTIVE_ROLE_UNVERIFIED');else expect(encodeMainPreview(built.request,target)).toHaveProperty('body');}
+    for(const protocol of ['openai-responses-v1','openai-chat-v1','vercel-chat-v1','anthropic-messages-v1','vertex-gemini-v1'] as ProviderProtocol[]){const work=compileSnapshotPrompt(snapshot());const target=work.profile!.models.main!;target.connection.protocol=protocol;target.modelId=protocol==='vertex-gemini-v1'?'gemini-3.8-flash':protocol==='anthropic-messages-v1'?'claude-sonnet-4-6':'gpt-5.6';const built=buildMainProviderRequest(work);expect(encodeMainPreview(built.request,target)).toHaveProperty('body');}
   });
 
   test('NMR07 tool continuation keeps the frozen host message and original cache bindings stable',async()=>{

@@ -11,13 +11,13 @@ const roots: Record<ProviderProtocol,string> = {
   'fixture-sse-v1':'http://127.0.0.1:9/turn',
   'vertex-gemini-v1':'https://aiplatform.googleapis.com/v1/projects/synthetic-project/locations/global/publishers/google/models',
   'openai-responses-v1':'https://api.openai.com/v1',
-  'sol-responses-v1':'https://ai-gateway.vercel.sh/v1',
+  'codex-app-server-v1':'codex://local',
   'anthropic-messages-v1':'https://api.anthropic.com/v1',
   'vercel-chat-v1':'https://ai-gateway.vercel.sh/v1',
   'openai-chat-v1':'https://synthetic.invalid/nested/v1',
 };
 const native = ['openai-responses-v1','anthropic-messages-v1','vercel-chat-v1','openai-chat-v1'] as const;
-const env = 'NARRATIVE_PROVIDER_SETTINGS_SYNTHETIC';
+const env = 'My_Settings_Key';
 const owned: {directory:string;app?:App}[] = [];
 beforeEach(() => { vi.spyOn(globalThis,'fetch').mockRejectedValue(new Error('Unexpected network in synthetic settings test')); vi.stubEnv(env,'SYNTHETIC_TEST_VALUE'); });
 afterEach(async () => {
@@ -44,10 +44,10 @@ const saved = (value:Connection,changes:Record<string,unknown>={}) => connection
 const response = (value:unknown) => new Response(JSON.stringify(value),{headers:{'content-type':'application/json'}});
 
 describe('provider settings, catalogs and archive contracts', () => {
-  test('saves all six protocols and enforces official roots, optional credential references and Vertex-only tiers', async () => {
+  test('saves supported protocols and enforces endpoints, general credential names and Vertex-only tiers', async () => {
     const app = await application();
     for (const protocol of PROVIDER_PROTOCOLS) {
-      const connection = await request<Connection>(app,'/connections',connectionBody(protocol,{endpoint:roots[protocol]+'/',...(protocol==='vertex-gemini-v1'?{requestTier:'flex'}:{})}));
+      const connection = await request<Connection>(app,'/connections',connectionBody(protocol,{endpoint:roots[protocol]+(protocol==='codex-app-server-v1'?'':'/'),...(protocol==='vertex-gemini-v1'?{requestTier:'flex'}:{})}));
       expect(connection.protocol).toBe(protocol); expect(connection).not.toHaveProperty('credentialEnv');
       expect(connection.endpoint).toBe(protocol==='fixture-sse-v1'?roots[protocol]+'/':roots[protocol]);
       if(protocol==='vertex-gemini-v1') expect(connection.requestTier).toBe('flex'); else expect(connection).not.toHaveProperty('requestTier');
@@ -55,9 +55,11 @@ describe('provider settings, catalogs and archive contracts', () => {
     for(const protocol of native) {
       await request(app,'/connections',connectionBody(protocol,{requestTier:'flex'}),400);
       await request(app,'/connections',connectionBody(protocol,{endpoint:roots[protocol]+'?api_key=synthetic'}),400);
-      for(const credentialEnv of [null,false,5,'UNRELATED_ENV']) await request(app,'/connections',connectionBody(protocol,{credentialEnv}),400);
+      for(const credentialEnv of [null,false,5,'INVALID-NAME','1KEY','A'.repeat(201)]) await request(app,'/connections',connectionBody(protocol,{credentialEnv}),400);
+      for(const credentialEnv of ['OPENAI_API_KEY','myGatewayToken','_CUSTOM_2']) expect(await request<Connection>(app,'/connections',connectionBody(protocol,{credentialEnv}))).toHaveProperty('credentialEnv',credentialEnv);
     }
-    for(const protocol of ['openai-responses-v1','anthropic-messages-v1','vercel-chat-v1'] as const) {
+    expect((await request<Connection>(app,'/connections',connectionBody('openai-responses-v1',{endpoint:'https://synthetic.invalid/v1'}))).endpoint).toBe('https://synthetic.invalid/v1');
+    for(const protocol of ['anthropic-messages-v1','vercel-chat-v1'] as const) {
       await request(app,'/connections',connectionBody(protocol,{endpoint:'https://synthetic.invalid/v1'}),400);
       await request(app,'/connections',connectionBody(protocol,{endpoint:roots[protocol]+'/wrong'}),400);
     }

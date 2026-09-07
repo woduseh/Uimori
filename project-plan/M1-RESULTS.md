@@ -1,6 +1,6 @@
 # M1 구현·검증 기록
 
-최신 통합 검증은 [Sol 통합 요약](../output/sol-provider/2026-09-07/summary.json)이에요. 전체 unit 598개·browser 34개 중 M1-local은 55 unit + 6 browser PASS예요. 실제 Vertex 누적 49회는 실패·부분 응답·취소를 포함하며, 전체 live 여정은 FAIL/INCOMPLETE로 보존해요. 품질 실험은 사용자 지시로 중단됐고 전체 M1 인수는 완료되지 않았어요. 현재 상태는 [CURRENT](CURRENT.md)를 확인해요.
+이 문서의 마지막 통합 기록은 [Sol 통합 요약](../output/sol-provider/2026-09-07/summary.json)이에요. 당시 전체 unit 598개·browser 34개 중 M1-local은 55 unit + 6 browser PASS예요. 실제 Vertex 누적 49회는 실패·부분 응답·취소를 포함하며, 전체 live 여정은 FAIL/INCOMPLETE로 보존해요. 품질 실험은 사용자 지시로 중단됐고 전체 M1 인수는 완료되지 않았어요. 이후 구현·검증을 포함한 현재 상태는 [CURRENT](CURRENT.md)를 확인해요.
 
 아래는 변경 단계별 고정 기록이에요. 각 단계의 검사 수·source/dist·미완료 설명은 당시 상태이며, 최신 통합 상태를 대신하지 않아요.
 

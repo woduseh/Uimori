@@ -6,7 +6,9 @@ export type PackageRole = typeof PACKAGE_ROLES[number];
 export const PACKAGE_TARGETS = ['main', 'translation', 'state', 'memory', 'status', 'image'] as const;
 export type PackageTarget = typeof PACKAGE_TARGETS[number];
 export type PackageAttachment = { id: string; revision: number; role: PackageRole };
-export type PackageLore = { id: string; title: string; description: string; text: string; loading: 'pinned' | 'discoverable'; relatedIds?: string[] };
+/** Flat authoring folders only; folder membership does not change loading or runtime order. */
+export type PackageLoreFolder = { id: string; name: string };
+export type PackageLore = { id: string; title: string; description: string; text: string; loading: 'pinned' | 'discoverable'; relatedIds?: string[]; folderId?: string };
 export type PackageInstruction = { id: string; target: PackageTarget; attachmentRoles?: PackageRole[]; position?: string; text: string; template?: PromptTemplate; when?: PromptExpression };
 export type PackageTransform = { id: string; target: 'source' | 'translation'; pattern: string; flags: string; replacement: string };
 export type PackageStateView = { title: string; fields: { key: string; label: string; format?: 'text' | 'number' | 'boolean'; suffix?: string }[] };
@@ -15,7 +17,7 @@ export type ContentPackage = {
   version: 1; id: string; revision: number; title: string; description: string; body?: string;
   identity?: { name: string; description: string };
   roleBindings?: Partial<Record<PackageRole, string>>;
-  lore: PackageLore[]; instructions: PackageInstruction[]; controls: PromptControl[];
+  lore: PackageLore[]; loreFolders?: PackageLoreFolder[]; instructions: PackageInstruction[]; controls: PromptControl[];
   stateView?: PackageStateView; behavior?: PackageBehavior; transforms: PackageTransform[];
 };
 export class ContentPackageError extends Error {
@@ -48,17 +50,28 @@ export function validatePackageAttachment(value: unknown): PackageAttachment {
 }
 
 export function validateContentPackage(value: unknown): ContentPackage {
-  const p = object(value, ['version', 'id', 'revision', 'title', 'description', 'body', 'identity', 'roleBindings', 'lore', 'instructions', 'controls', 'stateView', 'behavior', 'transforms']);
+  const p = object(value, ['version', 'id', 'revision', 'title', 'description', 'body', 'identity', 'roleBindings', 'lore', 'loreFolders', 'instructions', 'controls', 'stateView', 'behavior', 'transforms']);
   if (p.version !== 1) fail('PACKAGE_VERSION_UNSUPPORTED'); id(p.id);
   if (!Number.isSafeInteger(p.revision) || Number(p.revision) < 1) fail('PACKAGE_INVALID_REVISION');
   string(p.title, 200); string(p.description, 4000); if (p.body !== undefined) string(p.body, 1_000_000);
   if (p.identity !== undefined) { const v = object(p.identity, ['name', 'description']); string(v.name, 200); string(v.description, 100_000); }
   if (p.roleBindings !== undefined) { const v = object(p.roleBindings, [...PACKAGE_ROLES]); for (const text of Object.values(v)) string(text, 100_000); }
+  const folderIds: string[] = [];
+  if (p.loreFolders !== undefined) {
+    list(p.loreFolders, 2000);
+    for (const raw of p.loreFolders) {
+      const f = object(raw, ['id', 'name']); id(f.id); folderIds.push(f.id); string(f.name, 100);
+      if (!f.name.trim() || f.name !== f.name.trim()) fail('PACKAGE_LORE_FOLDER_NAME', f.id);
+    }
+    unique(folderIds);
+  }
+  const folderSet = new Set(folderIds);
   list(p.lore, 2000); const loreIds: string[] = [];
   for (const raw of p.lore) {
-    const l = object(raw, ['id', 'title', 'description', 'text', 'loading', 'relatedIds']); id(l.id); loreIds.push(l.id);
+    const l = object(raw, ['id', 'title', 'description', 'text', 'loading', 'relatedIds', 'folderId']); id(l.id); loreIds.push(l.id);
     string(l.title, 200); string(l.description, 4000); string(l.text, 1_000_000);
     if (l.loading !== 'pinned' && l.loading !== 'discoverable') fail('PACKAGE_LORE_LOADING', l.id);
+    if (l.folderId !== undefined) { id(l.folderId); if (!folderSet.has(l.folderId)) fail('PACKAGE_LORE_FOLDER_REFERENCE', l.id); }
     if (l.relatedIds !== undefined) { list(l.relatedIds, 2000); l.relatedIds.forEach(id); unique(l.relatedIds as string[]); }
   }
   unique(loreIds);

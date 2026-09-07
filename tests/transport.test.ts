@@ -1,3 +1,5 @@
+import { compileSnapshotPrompt } from '../server/prompt-snapshot.js';
+import { createDefaultPromptProgram } from '../core/prompt-defaults.js';
 import { createHash } from 'node:crypto';
 import { afterEach, describe, expect, test } from 'vitest';
 import { executeProvider, parseCatalog, refreshCatalog, registerManualModel, validateConnection, validateRequest, type Json, type ProviderConnection, type ProviderRequest, type WireRecord } from '../core/transport.js';
@@ -71,9 +73,9 @@ describe('server main runner through the actual loopback adapter', () => {
     const first = JSON.parse(server.requests[0].body);
     expect(first.input.controls).toMatchObject({ minWords: 4500, maxWords: 7500 });
     expect(JSON.stringify(first)).not.toContain('15000');
-    expect(first.input.source.pinnedSources.find((item: Content) => item.kind === 'canon')).toMatchObject({ id: 'canon-1', revision: 3, text: 'The lighthouse has never used electricity.' });
+    expect(JSON.parse(first.prompt.messages.find((m: any) => m.id === 'references').content[0].text.split('\n').slice(1).join('\n')).pinnedSources.find((item: Content) => item.kind === 'canon')).toMatchObject({ id: 'canon-1', revision: 3, text: 'The lighthouse has never used electricity.' });
     expect(first.input.source.facts).toEqual([]);
-    expect(first.input.history).toEqual(snapshot.history);
+    expect(first.input).not.toHaveProperty('history'); expect(first.prompt.messages.filter((m:any)=>m.provenance.origin==='history').map((m:any)=>m.content[0].text)).toEqual(snapshot.history.map(h=>h.text));
     expect(JSON.stringify(first)).not.toContain('AUXILIARY_ONLY');
     expect(first.input.catalog.find((item: Content) => item.id === 'lore-1')).not.toHaveProperty('text');
     expect(first.input.source.prefetch).toEqual([]);
@@ -161,7 +163,7 @@ describe('server main runner through the actual loopback adapter', () => {
     const translated = executeTool(snapshot, read, undefined, 'translation');
     expect(translated).toMatchObject({ denied: false, result: { text: 'AUXILIARY_ONLY_TRANSLATION_PROCEDURE', source: { id: 'glossary-1', revision: 1 } } });
     expect(JSON.stringify(buildMainInput(snapshot))).not.toContain('AUXILIARY_ONLY');
-    expect(buildMainInput(snapshot).contract).toContain('An (OOC: ...) request is an author direction inside the fiction');
+    expect(compileSnapshotPrompt(snapshot).promptCompilation!.messages[0].content[0].text).toContain('An (OOC: ...) request is an author direction inside the fiction');
     snapshot.profile!.contents = []; snapshot.resources = [];
     expect(buildMainInput(snapshot).facts).toEqual([]);
     expect(JSON.stringify(buildMainInput(snapshot))).not.toContain('Mira');
@@ -200,7 +202,8 @@ describe('fixture HTTP transport (no live provider compatibility claim)', () => 
     const first = request(); const second = structuredClone(first);
     second.input.controls.tone = 'vivid'; second.input.source = { revision: 'source-8', hash: 'different' };
     const translated = request('translation'); translated.stable.tools = [];
-    for (const input of [first, second, translated]) {
+    const evaluated = request(); evaluated.bootstrap = [{callId:'bootstrap-context',name:'eval_get_context',args:{},result:{session:'synthetic'},denied:false}]; evaluated.toolChoice='knowledge.search';
+    for (const input of [first, second, translated, evaluated]) {
       expect((await executeProvider(connection(server.endpoint), input, options(server.origin, { onWire: record => { wire.push(record); } }))).status).toBe('completed');
     }
     expect(wire[0].stablePrefixSha256).toBe(wire[1].stablePrefixSha256);
@@ -211,6 +214,7 @@ describe('fixture HTTP transport (no live provider compatibility claim)', () => 
       expect(wire[index].bodySha256).toBe(createHash('sha256').update(server.requests[index].body).digest('hex'));
     }
     expect(server.requests[2].body).not.toContain('main role contract');
+    expect(JSON.parse(server.requests[3].body)).toMatchObject({bootstrap:[{callId:'bootstrap-context',name:'eval_get_context'}],toolChoice:'knowledge.search'});
     expect(server.requests[0].body.indexOf('stable')).toBeLessThan(server.requests[0].body.indexOf('controls'));
     const unsupported = { ...request(), headers: { authorization: 'injected' } };
     expect(() => validateRequest(unsupported)).toThrow('UNSUPPORTED_OPTIONS');
@@ -252,7 +256,7 @@ describe('fixture HTTP transport (no live provider compatibility claim)', () => 
       expect(() => validateConnection(connection(endpoint), [server.origin])).toThrow('ENDPOINT_NOT_APPROVED');
     }
     expect(() => validateConnection({ ...bound, headers: { authorization: 'escape' } }, [server.origin])).toThrow('UNSUPPORTED_OPTIONS');
-    expect(() => validateConnection({ ...bound, credentialEnv: 'PATH' }, [server.origin])).toThrow('INVALID_CREDENTIAL_REFERENCE');
+    expect(() => validateConnection({ ...bound, credentialEnv: 'INVALID-NAME' }, [server.origin])).toThrow('INVALID_CREDENTIAL_REFERENCE');
     expect(() => validateConnection(connection('https://example.com/turn'), ['https://example.com'])).toThrow('FIXTURE_REQUIRES_LOOPBACK');
   });
 
@@ -330,13 +334,13 @@ test('custom main prompt remains literal across tools after the caller changes i
     else await writeSse(response, [{ type: 'text_delta', delta: 'Custom scene received.' }, { type: 'done', reason: 'stop' }]);
   });
   const seed = routedSnapshot(server.endpoint);
-  seed.profile!.promptPresets = { main: { id: 'writing-custom', revision: 4, role: 'main', title: 'Custom writing', text: custom } };
-  const observed = runnerHooks(server.origin, { onInput: () => { seed.profile!.promptPresets!.main!.text = 'FUTURE PROMPT'; } });
+  seed.profile!.promptPresets = { main: { id: 'writing-custom', revision: 4, role: 'main', title: 'Custom writing', program: createDefaultPromptProgram(custom) } };
+  const observed = runnerHooks(server.origin, { onInput: () => { seed.profile!.promptPresets!.main!.program = createDefaultPromptProgram('FUTURE PROMPT'); } });
   expect(await runMain(seed, observed.hooks)).toMatchObject({ status: 'completed', text: 'Custom scene received.' });
   expect(server.requests).toHaveLength(2);
   for (const captured of server.requests) {
     const wire = JSON.parse(captured.body);
-    expect(wire.stable.contract).toBe(custom);
+    expect(wire.stable.contract).toBe(''); expect(wire.prompt.messages[0].content[0].text).toBe(custom);
     expect(wire.stable.tools.map((tool: { name: string }) => tool.name)).toEqual(['knowledge.search', 'knowledge.read', 'skills.list', 'skills.load']);
     expect(captured.body).not.toContain('FUTURE PROMPT');
   }

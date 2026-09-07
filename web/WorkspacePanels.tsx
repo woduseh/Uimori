@@ -1,3 +1,4 @@
+import { CodexAgentSettings } from './CodexAgentSettings.js';
 import { useEffect, useId, useState } from 'react';
 import { Settings, Plug, Database, Shield } from 'lucide-react';
 import type { Job, Run } from '../core/types.js';
@@ -44,7 +45,7 @@ export function TasksPanel({ state, inspectedRun, onInspect, onClose }: { state:
       {run.sourceRevision && <small>여기까지 복사하고 새 이야기에서 이어 써요. 복사만으로 모델을 호출하지 않아요.</small>}
       <RunIssue run={run} refresh={refresh} onError={state.setError}/>
       {jobs?.filter(job => job.sourceRevision === run.sourceRevision).map(job => <LazyDiagnostics<Job> key={job.id} path={`/jobs/${job.id}`} revision={detail.reader.cursor} title={`${job.kind} · ${labels[job.status]} · 작업 관리`}>{full => <JobCard job={full} refresh={refresh} onError={state.setError} hideText/>}</LazyDiagnostics>)}
-      <LazyDiagnostics<Run> path={`/runs/${run.id}`} revision={detail.reader.cursor} initiallyOpen={!!inspectedRun} title="실행과 실제 입력 확인">{full => <><p>Run {full.id} · 모델 호출 {full.usage.modelCalls}회 · 입력 {full.usage.inputTokens ?? '미확인'} / 출력 {full.usage.outputTokens ?? '미확인'} 토큰 · 비용 {full.usage.costUsd === null ? '미확인' : `$${full.usage.costUsd}`}</p><pre>{JSON.stringify({ snapshot: full.snapshot, inputs: full.inputs, toolEvents: full.toolEvents }, null, 2)}</pre></>}</LazyDiagnostics>
+      <LazyDiagnostics<Run> path={`/runs/${run.id}`} revision={detail.reader.cursor} initiallyOpen={!!inspectedRun} title="실행과 실제 입력 확인">{full => <><p>Run {full.id} · 실행 요청 {full.usage.modelCalls}회 · 입력 {full.usage.inputTokens ?? '미확인'} / 출력 {full.usage.outputTokens ?? '미확인'} 토큰 · 비용 {full.usage.costUsd === null ? '미확인' : `$${full.usage.costUsd}`}</p><pre>{JSON.stringify({ snapshot: full.snapshot, inputs: full.inputs, toolEvents: full.toolEvents }, null, 2)}</pre></>}</LazyDiagnostics>
     </article>)}</div>
     {jobsError && <p role="alert">보조 작업 목록: {jobsError}</p>}
     {!jobs && !jobsError && <p role="status">보조 작업 목록을 불러오는 중이에요…</p>}
@@ -79,6 +80,7 @@ export function AppSettingsPanel({ state, theme, setTheme, enterSend, setEnterSe
   const categories = [
     { key: 'general', label: '일반', icon: Settings },
     { key: 'connections', label: '연결과 모델', icon: Plug },
+    { key: 'agents', label: '에이전트', icon: Plug },
     { key: 'data', label: '데이터 관리', icon: Database },
     { key: 'security', label: '접근 보안', icon: Shield },
   ];
@@ -98,6 +100,7 @@ export function AppSettingsPanel({ state, theme, setTheme, enterSend, setEnterSe
         {visited.includes(key) && <><h3 className="settings-page-title">{label}</h3>
           {key === 'general' && <section className="settings-section"><h3>화면과 입력</h3><label>화면 테마<select aria-label="앱 화면 테마" value={theme} onChange={event => setTheme(event.target.value as 'system' | 'dark' | 'light')}><option value="system">기기 설정 따르기</option><option value="dark">어둡게</option><option value="light">밝게</option></select></label><label className="check"><input type="checkbox" checked={enterSend} onChange={event => setEnterSend(event.target.checked)}/>Enter로 보내기</label><small>{enterSend ? 'Enter로 보내고 Shift+Enter로 줄을 바꿔요.' : 'Enter는 줄바꿈, Ctrl/Cmd+Enter는 보내기예요.'} 한글 조합 중에는 보내지 않아요.</small></section>}
           {key === 'connections' && <div data-testid="connection-settings">{state.library ? <ConnectionEditor library={state.library} reload={state.loadLibrary} onError={state.setError}/> : <p role="status">연결 목록을 불러오는 중이에요…</p>}</div>}
+          {key === 'agents' && <CodexAgentSettings active={active === 'agents'}/>}
           {key === 'data' && <ArchivePanel expanded onImported={async () => { await Promise.all([state.loadChats(), state.loadLibrary()]); if (state.selected) await state.refresh(state.selected); }} onError={state.setError}/>}
           {key === 'security' && <section className="settings-section"><p className="muted">현재 브라우저의 접속 세션을 해제해요. 서버에서 진행 중인 생성은 취소되지 않아요.</p><button type="button" className="secondary" disabled={signingOut} onClick={() => { setSigningOut(true); void api('/session', {}, 'DELETE').then(() => location.reload()).catch(error => { state.setError(error.message); setSigningOut(false); }); }}>접속 해제</button></section>}
         </>}

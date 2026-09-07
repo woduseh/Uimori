@@ -85,7 +85,8 @@ export function encodeAnthropic(request: ProviderRequest): { body: Json; context
   const results = copy(rawResults ?? [], 'TOOL_RESULT_MISMATCH');
   if (!Array.isArray(results)) reject('TOOL_RESULT_MISMATCH');
   const plan = planNativeMessages(request, 'anthropic-messages-v1');
-  const bindingHash = hash(copy({ role: request.role, modelId: request.modelId, stable: request.stable, generation: generation ?? null, input, prompt: request.prompt ?? null, ...(plan ? { capabilityVersion: plan.capabilityVersion } : {}) }, 'INVALID_ANTHROPIC_REQUEST'));
+  const bootstrap=copy(request.bootstrap??[],'INVALID_BOOTSTRAP');if(!Array.isArray(bootstrap))reject('INVALID_BOOTSTRAP');
+  const bindingHash = hash(copy({ role: request.role, modelId: request.modelId, stable: request.stable, generation: request.generationBinding ?? generation ?? null, input, prompt: request.prompt ?? null, bootstrap, ...(plan ? { capabilityVersion: plan.capabilityVersion } : {}) }, 'INVALID_ANTHROPIC_REQUEST'));
   let messages: Json[]; let usedIds: string[] = [];
   if (request.opaqueState !== undefined && request.opaqueState !== null) {
     const previous = readTurn(copy(request.opaqueState, 'INVALID_ANTHROPIC_CONTINUATION'));
@@ -120,7 +121,8 @@ export function encodeAnthropic(request: ProviderRequest): { body: Json; context
       const { outputSchema: _example, ...source } = input.source as Record<string, Json>;
       wireInput = { ...input, source };
     }
-    messages = plan ? structuredClone(plan.messages) : [{ role: 'user', content: [{ type: 'text', text: 'Request data (JSON):\n' + JSON.stringify(wireInput) }] }];
+    const bootstrapMessages:Json[]=(bootstrap as Record<string,Json>[]).flatMap(item=>[{role:'assistant',content:[{type:'tool_use',id:item.callId,name:item.name,input:item.args}]},{role:'user',content:[{type:'tool_result',tool_use_id:item.callId,content:JSON.stringify(item.result),...(item.denied===true?{is_error:true}:{})}]}]);
+    messages = [...bootstrapMessages,...(plan ? structuredClone(plan.messages) : [{ role: 'user', content: [{ type: 'text', text: 'Request data (JSON):\n' + JSON.stringify(wireInput) }] }])];
   }
   const outputConfig: Record<string, Json> = {
     ...(effort !== undefined ? { effort } : {}),
@@ -136,7 +138,7 @@ export function encodeAnthropic(request: ProviderRequest): { body: Json; context
     ],
     ...(toolNames.length ? { tools: request.stable.tools.map((tool, index) => ({
       name: toolNames[index].wireName, description: 'Host tool: ' + tool.name + '. ' + tool.description, input_schema: copy(tool.inputSchema, 'INVALID_TOOLS'),
-    })), tool_choice: { type: 'auto' } } : {}),
+    })), tool_choice: request.toolChoice&&request.toolChoice!=='auto'?{type:'tool',name:toolNames.find(tool=>tool.name===request.toolChoice)!.wireName}:{ type: 'auto' } } : {}),
     ...(temperature !== null ? { temperature } : {}),
     ...(mode ? { thinking: { type: mode, ...(mode === 'enabled' ? { budget_tokens: budget! } : {}) } } : {}),
     ...(Object.keys(outputConfig).length ? { output_config: outputConfig } : {}),

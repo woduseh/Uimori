@@ -1,6 +1,6 @@
 # M2 상태·기억·표현 후처리 · 2026-09-07
 
-최신 통합 검증은 [Sol 통합 요약](../output/sol-provider/2026-09-07/summary.json)이에요. 전체 unit 598개·browser 34개 중 [M2-local](../output/playwright/m2-2026-09-07T02-09-18-590Z-36b1092a/summary.json)은 78 unit + 4 browser PASS예요. Q04와 지정 봇 native 포팅은 계속 BLOCKED예요. 아래 567개 검사와 source/dist는 Sol 통합 전 M2 완료 시점의 고정 기록이며, 현재 상태는 [CURRENT](CURRENT.md)를 확인해요.
+이 문서의 마지막 통합 기록은 [Sol 통합 요약](../output/sol-provider/2026-09-07/summary.json)이에요. 당시 전체 unit 598개·browser 34개 중 [M2-local](../output/playwright/m2-2026-09-07T02-09-18-590Z-36b1092a/summary.json)은 78 unit + 4 browser PASS예요. 그 시점에는 Q04와 지정 봇 native 포팅이 BLOCKED였어요. 이후 승인된 범위의 native 이식은 [NATIVE-RESULTS](NATIVE-RESULTS.md)에 기록했고, Q04 실제 평가는 여전히 미완료예요. 아래 567개 검사와 source/dist는 Sol 통합 전 M2 완료 시점의 고정 기록이며, 현재 상태는 [CURRENT](CURRENT.md)를 확인해요.
 
 원문을 먼저 보존하고, 원문에 연결된 상태·기억 작업을 별도로 실행해요. 메인에는 준비된 상태와 필요한 기억을 실제 입력으로 전달하고, 오래된 원문은 같은 이야기의 허용된 ancestry 안에서 검색·읽기로 회수해요. 이번 결과는 합성 자료와 로컬 실행 계약을 다뤄요. 실제 추출 의미·전체 유료 비용을 평가하는 Q04와 특정 사용자 봇의 native module 포팅은 별도로 남아요.
 

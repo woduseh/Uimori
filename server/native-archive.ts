@@ -45,7 +45,7 @@ export function validateNativeRunSnapshot(store:Store,snapshot:RunSnapshot):void
     const p=snapshot.promptCompilation;validateProviderPrompt({compilerVersion:p.compilerVersion,messages:p.messages,cachePlan:p.cachePlan,values:p.values});
     const expected=compileSnapshotPrompt({...snapshot,promptCompilation:undefined});
     if(!isDeepStrictEqual(expected.promptCompilation,p))reject('compiled prompt mismatch');
-  }else if(!snapshot.story?.waiting&&(snapshot.profile?.promptPresets?.main?.program||snapshot.hiddenStory))reject('compiled prompt missing');
+  }else if(!snapshot.story?.waiting)reject('compiled prompt missing');
 }
 export function validateNativeArchive(store:Store):void{
   for(const row of store.db.prepare('SELECT * FROM native_chat_settings').all() as Row[]){const value=nativeSnapshot(store,JSON.parse(row.body),row.chat_id,row.branch_id);if(value.revision!==row.revision)reject('settings revision');}

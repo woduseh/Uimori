@@ -2,7 +2,10 @@ name: uimori
 
 services:
   app:
-    build: .
+    build:
+      context: .
+      args:
+        UIMORI_CODEX_VERSION: ${UIMORI_CODEX_VERSION:-}
     image: uimori:local
     # A single process owns this SQLite database and its background workers.
     scale: 1

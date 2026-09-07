@@ -12,10 +12,10 @@ import { PROVIDER_DEFINITIONS } from '../core/provider-definitions.js';
 import { chatOrganizationRoutes } from './chat-organization.js';
 import { packagePresentationRoutes } from './package-presentation-routes.js';
 import { packageBehaviorRoutes } from './package-behavior-routes.js';
-import { inspectRisuImport } from './risu-import.js';
 import type { VertexCredentialStore } from './vertex-credentials.js';
+import type { CodexRuntimeService } from './codex-runtime.js';
 
-export function productRoutes(app: FastifyInstance, store: Store, options: {credentials?:VertexCredentialStore;accessToken?:string;publicOrigin?:string;approvedOrigins:readonly string[];publish:(chatId:string)=>void;onAuthChanged?:()=>void}) {
+export function productRoutes(app: FastifyInstance, store: Store, options: {credentials?:VertexCredentialStore;codex?:CodexRuntimeService;accessToken?:string;publicOrigin?:string;approvedOrigins:readonly string[];publish:(chatId:string)=>void;onAuthChanged?:()=>void}) {
   const product = store.product;
   promptRoutes(app,store);
   chatOrganizationRoutes(app,store,options.publish);
@@ -54,16 +54,14 @@ export function productRoutes(app: FastifyInstance, store: Store, options: {cred
     if(!options.credentials)throw new HttpError(503,'Service account storage unavailable');
     return options.credentials.upload(b.serviceAccount);
   });
-  app.get<{Params:{id:string}}>('/api/provider-management/connections/:id/readiness',async request=>readiness(product,product.get<Connection>('connection',request.params.id),options.approvedOrigins,options.credentials));
+  app.get<{Params:{id:string}}>('/api/provider-management/connections/:id/readiness',async (request,reply)=>{
+    reply.header('Cache-Control','no-store'); const connection=product.get<Connection>('connection',request.params.id);
+    const agent=connection.protocol==='codex-app-server-v1'?await options.codex?.status():undefined;
+    return readiness(product,connection,options.approvedOrigins,options.credentials,agent);
+  });
   app.get<{Params:{kind:string;id:string}}>('/api/provider-management/:kind/:id/impact',async request=>{
     if(request.params.kind!=='connection'&&request.params.kind!=='model')throw new HttpError(404,'Unsupported management kind');
     return managementImpact(product,request.params.kind,request.params.id);
-  });
-  app.post('/api/imports/risu/inspect',{bodyLimit:24*1024*1024},async request=>{
-    const b=record(request.body);fields(b,['fileName','dataBase64']);const fileName=text(b.fileName,'file name',255);const data=text(b.dataBase64,'file bytes',23*1024*1024);
-    if(!/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(data))throw new HttpError(400,'Invalid file encoding');
-    const bytes=Buffer.from(data,'base64');if(bytes.length>16*1024*1024)throw new HttpError(400,'Import file exceeds 16 MiB');
-    return inspectRisuImport({fileName,bytes});
   });
   app.post('/api/content',{bodyLimit:5_000_000},async request => product.content(request.body));
   app.put<{Params:{id:string}}>('/api/content/:id',{bodyLimit:5_000_000},async request => product.content(request.body,request.params.id));
@@ -80,7 +78,12 @@ export function productRoutes(app: FastifyInstance, store: Store, options: {cred
     const b = record(request.body ?? {}); fields(b,[]); const previous = product.get<Connection>('connection',request.params.id);
     let error: string|null = null; let catalog = previous.catalog;
     try {
-      if (previous.protocol === 'vertex-gemini-v1') {
+      if (previous.protocol === 'codex-app-server-v1') {
+        product.authorize(previous);
+        if (!options.codex) throw new Error('Codex unavailable');
+        catalog = await options.codex.catalog();
+        product.authorize(previous);
+      } else if (previous.protocol === 'vertex-gemini-v1') {
         // This is the adapter's local support list, not a provider availability probe.
         validateVertexEndpoint(previous.endpoint);
         catalog = [{id:VERTEX_GEMINI_MODEL_ID,name:'Gemini 3.8 Flash',capabilities:{tools:true,structuredOutput:null},priceRevision:null}];
@@ -88,7 +91,7 @@ export function productRoutes(app: FastifyInstance, store: Store, options: {cred
         product.authorize(previous);
         const c = validateConnection({id:previous.id,protocol:previous.protocol,endpoint:previous.endpoint,...(previous.credentialEnv ? {credentialEnv:previous.credentialEnv} : {})},options.approvedOrigins);
         const credential = c.credentialEnv ? process.env[c.credentialEnv] : undefined;
-        if ((c.credentialEnv || ['openai-responses-v1','sol-responses-v1','anthropic-messages-v1'].includes(c.protocol)) && (!credential || /[\r\n]/.test(credential))) throw new Error('Credential unavailable');
+        if ((c.credentialEnv || ['openai-responses-v1','anthropic-messages-v1'].includes(c.protocol)) && (!credential || /[\r\n]/.test(credential))) throw new Error('Credential unavailable');
         const headers: Record<string,string> = {Accept:'application/json'};
         if (c.protocol === 'anthropic-messages-v1') { headers['anthropic-version'] = '2023-06-01'; headers['x-api-key'] = credential!; }
         else if (credential) headers.Authorization = 'Bearer ' + credential;

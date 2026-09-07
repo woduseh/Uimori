@@ -30,16 +30,6 @@ const roleLabels = { system: 'system · 지침', user: 'user · 사용자', assi
 const kindLabels = { message: '메시지', slot: '참조 자료', history: '대화 범위', current: '현재 입력', cache: '캐시 기준점' };
 const newId = (prefix: string) => `${prefix}-${crypto.randomUUID()}`;
 
-export function createDefaultPromptProgram(text: string): PromptProgram {
-  return { version: 1, controls: [], blocks: [
-    { id: 'instructions', title: '역할 지침', kind: 'message', role: 'system', template: [{ kind: 'text', text }] },
-    { id: 'bot', title: '봇 설정', kind: 'slot', role: 'system', slot: 'description' },
-    { id: 'persona', title: '페르소나', kind: 'slot', role: 'system', slot: 'persona' },
-    { id: 'lorebook', title: '로어', kind: 'slot', role: 'system', slot: 'lorebook' },
-    { id: 'memory', title: '기억', kind: 'slot', role: 'user', slot: 'memory' },
-    { id: 'history', title: '현재 입력을 포함한 대화', kind: 'history', from: 0, to: 'end' },
-  ] };
-}
 function freshBlock(kind: PromptBlock['kind'], id = newId('block'), title = '새 블록'): PromptBlock {
   if (kind === 'message') return { id, title, kind, role: 'system', template: [{ kind: 'text', text: '' }], completion: 'complete' };
   if (kind === 'slot') return { id, title, kind, role: 'system', slot: 'description' };
@@ -133,9 +123,16 @@ function ControlEditor({ control, onChange: commit, onError }: { control: Prompt
 }
 
 export function PromptComposer({ program, onChange, onError, chatId, branchId, role = 'main', controlState, onSaveControls, promptReference, savedCombinations = [], onSaveCombination, onDirtyChange, onPendingDraftChange, initialControlDraft, onControlDraftChange }: Props) {
+  const [view, setView] = useState<'body' | 'structure'>('body');
+  const [bodyId, setBodyId] = useState('');
+  const messageBlocks = program.blocks.filter((block): block is Extract<PromptBlock, {kind:'message'}> => block.kind === 'message');
+  const bodyBlock = messageBlocks.find(block => block.id === bodyId) ?? messageBlocks[0];
+  const plainBody = bodyBlock?.template.every(node => node.kind === 'text') ?? false;
+  const bodyText = plainBody ? bodyBlock!.template.map(node => node.kind === 'text' ? node.text : '').join('') : '';
+  const bodySelection = useRef(bodyBlock?.id); bodySelection.current = bodyBlock?.id;
   const [pendingTemplates, setPendingTemplates] = useState<Record<string, boolean>>({});
   const pendingTemplate = Object.values(pendingTemplates).some(Boolean);
-  const slotNames = new Set<string>([...DEFAULT_PROMPT_SLOTS, 'char', 'globalNote']);
+  const slotNames = new Set<string>([...DEFAULT_PROMPT_SLOTS, 'char', 'globalNote', 'references', 'source', 'context', 'outputSchema', 'catalog']);
   const collectSlots = (nodes: PromptTemplate) => { for (const node of nodes) { if (node.kind === 'slot') slotNames.add(node.name); if (node.kind === 'if') { collectSlots(node.then); if (node.else) collectSlots(node.else); } if (node.kind === 'each' || node.kind === 'let') { collectSlots(node.body); if (node.kind === 'each' && node.else) collectSlots(node.else); } } };
   for (const block of program.blocks) { if (block.kind === 'slot') slotNames.add(block.slot); if ((block.kind === 'message' || block.kind === 'slot') && block.template) collectSlots(block.template); }
   const globalCombinations = savedCombinations.filter(item => promptReference && item.prompt.id === promptReference.id && item.prompt.revision === promptReference.revision);
@@ -226,13 +223,45 @@ export function PromptComposer({ program, onChange, onError, chatId, branchId, r
       change(next); setImportedCombination(suggestion); setStatus('JSON을 편집 초안으로 불러왔어요.');
     } catch (caught) { report(errorMessage(caught)); }
   }
+  async function importBody(file: File) {
+    const selected = bodyBlock, sourceFingerprint = fingerprint;
+    const turn = ++sequence.current;
+    if (!selected || !plainBody || pendingTemplate) return;
+    try {
+      if (!/\.(?:txt|md)$/iu.test(file.name) || file.size > 800_000) throw new Error('UTF-8 .txt 또는 .md 파일을 선택해 주세요.');
+      const text = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(await file.arrayBuffer());
+      if (text.length > 200_000) throw new Error('메시지 본문은 200,000자까지 불러올 수 있어요.');
+      if (turn !== sequence.current || latest.current.fingerprint !== sourceFingerprint || bodySelection.current !== selected.id) return;
+      change({ ...program, blocks: program.blocks.map(block => block.id === selected.id ? { ...selected, template: [{ kind: 'text', text }] } : block) });
+      setStatus('선택한 메시지의 본문을 불러왔어요. 저장하면 적용돼요.');
+    } catch (caught) { if (turn === sequence.current && latest.current.fingerprint === sourceFingerprint) report(errorMessage(caught)); }
+  }
   return <section className="prompt-composer" aria-label="프롬프트 구성" data-testid="prompt-composer">
-    <div className="pc-heading"><div><h3>프롬프트 구성</h3><p className="muted">메시지 순서와 조건, 참조 자료를 편집해요. 실행 기록의 스냅샷과는 별도예요.</p></div><span className="pc-badge">{program.blocks.length}개 블록 · {program.controls.length}개 제어</span></div>
+    <details className="pc-composer-fold" open>
+    <summary aria-label="프롬프트 구성 접기/펼치기"><strong>프롬프트 구성</strong><span className="pc-badge">{program.blocks.length}개 블록 · {program.controls.length}개 제어</span>{pendingTemplate && <small>미적용 문법</small>}{controlsDirty && <small>미저장 옵션</small>}</summary>
+    <div className="pc-composer-content">
+    <p className="muted">간단 편집과 구성 편집은 같은 프롬프트를 수정해요.</p>
+    <div className="pc-actions" role="group" aria-label="프롬프트 편집 보기">
+      <button type="button" className={view === 'body' ? '' : 'secondary'} aria-pressed={view === 'body'} disabled={pendingTemplate} onClick={() => setView('body')}>간단 편집</button>
+      <button type="button" className={view === 'structure' ? '' : 'secondary'} aria-pressed={view === 'structure'} disabled={pendingTemplate} onClick={() => setView('structure')}>구성 편집</button>
+    </div>
     <div className="pc-actions"><label className="pc-file">JSON 불러오기<input aria-label="프롬프트 구성 JSON 불러오기" type="file" disabled={pendingTemplate} accept=".json,application/json" onChange={event => { const file = event.target.files?.[0]; event.target.value = ''; if (file) void importFile(file); }} /></label><button type="button" className="secondary" onClick={() => saveDownload('uimori-prompt-program.json', program)}>JSON 내보내기</button><button type="button" className="ghost" disabled={pendingTemplate || !undo.current.length} onClick={() => { const previous = undo.current.pop(); if (previous) { onChange(previous); setStatus('이전 프롬프트 초안으로 되돌렸어요.'); } }}>이전 편집으로</button></div>
-    <datalist id="pc-slot-names">{['description','persona','lorebook','memory','authorNote','globalNote','postEverything','char'].map(name => <option key={name} value={name} />)}</datalist>
-    <div className="pc-block-list">{program.blocks.map((block, index) => <details className={`pc-block${block.enabled === false ? ' pc-disabled' : ''}`} key={block.id}><summary><span className="pc-order">{index + 1}</span><span className="pc-block-title">{block.title || block.id}<small>{kindLabels[block.kind]}{'role' in block ? ` · ${block.role}` : ''}{block.when !== undefined ? ' · 조건 있음' : ''}{block.enabled === false ? ' · 사용 안 함' : ''}</small></span></summary><div className="pc-block-body"><div className="pc-actions"><button type="button" className="ghost" aria-label={`${block.title} 위로`} disabled={index === 0} onClick={() => move(index, -1)}>↑ 위로</button><button type="button" className="ghost" aria-label={`${block.title} 아래로`} disabled={index === program.blocks.length - 1} onClick={() => move(index, 1)}>↓ 아래로</button><button type="button" className="ghost" disabled={pendingTemplate} onClick={() => edit({ ...program, blocks: program.blocks.filter((_, i) => i !== index) })}>블록 삭제</button></div><BlockEditor block={block} onChange={next => { if (pendingTemplate && next.kind !== block.kind) throw new Error("문법 초안을 먼저 적용하거나 되돌려 주세요."); editBlock(index, next); }} onError={report} controlIds={program.controls.map(control => control.id)} slots={[...slotNames]} onPendingChange={dirty => setPendingTemplates(current => ({ ...current, [block.id]: dirty }))} /></div></details>)}</div>
+    <div className="pc-body-editor" hidden={view !== 'body'}>
+      {bodyBlock ? <>
+        <label>편집할 메시지<select aria-label="편집할 메시지" value={bodyBlock.id} onChange={event => setBodyId(event.target.value)}>{messageBlocks.map(block => <option key={block.id} value={block.id}>{block.title || block.id} · {block.role}</option>)}</select></label>
+        <p className="muted">선택한 메시지의 본문을 수정해요. 순서·역할·조건과 다른 메시지는 구성 편집에서 확인할 수 있어요.{bodyBlock.when !== undefined ? ' 이 메시지에는 적용 조건이 있어요.' : ''}{bodyBlock.enabled === false ? ' 현재 사용하지 않는 메시지예요.' : ''}</p>
+        {plainBody ? <>
+          <label>메시지 본문<textarea aria-label="메시지 본문" spellCheck={false} value={bodyText} rows={14} maxLength={200_000} onChange={event => edit({ ...program, blocks: program.blocks.map(block => block.id === bodyBlock.id ? { ...bodyBlock, template: [{ kind: 'text', text: event.target.value }] } : block) })} /></label>
+          <div className="pc-actions"><label className="pc-file">본문 파일 불러오기<input type="file" aria-label="메시지 본문 파일 불러오기" accept=".txt,.md,text/plain,text/markdown" onChange={event => { const file = event.target.files?.[0]; event.target.value = ''; if (file) void importBody(file); }} /></label><small>{bodyText.length.toLocaleString()}자 · 입력한 문장을 그대로 사용해요.</small></div>
+        </> : <div className="pc-body-guidance"><p>조건이나 참조가 포함된 본문이에요. 구성 편집에서 해당 메시지의 템플릿을 수정해 주세요.</p><button type="button" className="secondary" onClick={() => { setView('structure'); requestAnimationFrame(() => { const element = document.getElementById(`prompt-block-${bodyBlock.id}`); if (element instanceof HTMLDetailsElement) { element.open = true; element.scrollIntoView({ block: 'nearest' }); } }); }}>이 메시지 구성 열기</button></div>}
+      </> : <div className="pc-body-guidance"><p>편집할 본문 메시지가 없어요. 구성 편집에서 메시지를 추가할 수 있어요.</p><button type="button" className="secondary" onClick={() => setView('structure')}>메시지 추가하러 가기</button></div>}
+    </div>
+    <div className="pc-structure-editor" hidden={view !== 'structure'}>
+    <datalist id="pc-slot-names">{['description','persona','lorebook','references','memory','authorNote','globalNote','postEverything','char','source','context','outputSchema','catalog'].map(name => <option key={name} value={name}>{name === 'references' ? '기본 자료 (출처 포함)' : name}</option>)}</datalist>
+    <div className="pc-block-list">{program.blocks.map((block, index) => <details className={`pc-block${block.enabled === false ? ' pc-disabled' : ''}`} key={block.id} id={`prompt-block-${block.id}`}><summary><span className="pc-order">{index + 1}</span><span className="pc-block-title">{block.title || block.id}<small>{kindLabels[block.kind]}{'role' in block ? ` · ${block.role}` : ''}{block.when !== undefined ? ' · 조건 있음' : ''}{block.enabled === false ? ' · 사용 안 함' : ''}</small></span></summary><div className="pc-block-body"><div className="pc-actions"><button type="button" className="ghost" aria-label={`${block.title} 위로`} disabled={index === 0} onClick={() => move(index, -1)}>↑ 위로</button><button type="button" className="ghost" aria-label={`${block.title} 아래로`} disabled={index === program.blocks.length - 1} onClick={() => move(index, 1)}>↓ 아래로</button><button type="button" className="ghost" disabled={pendingTemplate} onClick={() => edit({ ...program, blocks: program.blocks.filter((_, i) => i !== index) })}>블록 삭제</button></div><BlockEditor block={block} onChange={next => { if (pendingTemplate && next.kind !== block.kind) throw new Error("문법 초안을 먼저 적용하거나 되돌려 주세요."); editBlock(index, next); }} onError={report} controlIds={program.controls.map(control => control.id)} slots={[...slotNames]} onPendingChange={dirty => setPendingTemplates(current => ({ ...current, [block.id]: dirty }))} /></div></details>)}</div>
     <div className="pc-actions"><button type="button" className="secondary" disabled={program.blocks.length >= 300} onClick={() => edit({ ...program, blocks: [...program.blocks, freshBlock('message')] })}>블록 추가</button></div>
     <details className="pc-section"><summary>제어 정의 · {program.controls.length}개</summary><div className="pc-stack">{program.controls.map((control, index) => <details className="pc-control" key={control.id}><summary>{control.label}<small> · {control.type}</small></summary><ControlEditor control={control} onError={report} onChange={next => change({ ...program, controls: program.controls.map((item, i) => i === index ? next : item) })} /><button type="button" className="ghost" onClick={() => edit({ ...program, controls: program.controls.filter((_, i) => i !== index) })}>제어 삭제</button></details>)}<button type="button" className="secondary" disabled={program.controls.length >= 150} onClick={() => edit({ ...program, controls: [...program.controls, { id: newId('control'), label: '새 제어', type: 'boolean', default: null }] })}>제어 추가</button></div></details>
+    </div>
     <details className="pc-section" open={program.controls.length > 0}><summary>프롬프트 창작 옵션과 조합</summary><div className="pc-stack"><p className="muted">값을 바꾼 뒤 저장 버튼을 눌러 적용해요. 프롬프트의 기본값은 제어 정의에서 바꿀 수 있어요.</p><div className="pc-control-values">{program.controls.map(control => <ValueInput key={control.id} control={control} label={control.label} value={Object.hasOwn(controls.values, control.id) ? controls.values[control.id]! : control.default} onChange={value => editControls({ ...controls, values: { ...controls.values, [control.id]: value }, selectedCombinationId: undefined })} />)}</div>
       <div className="pc-control"><h4>전역 창작 조합</h4><p className="muted">현재 프롬프트의 저장된 버전에 속한 조합을 모든 이야기에서 다시 사용할 수 있어요. 불러온 뒤 이야기 선택값을 저장하면 실행에 적용돼요.</p><label>전역 조합 선택<select aria-label="전역 창작 조합" value={selectedGlobal} onChange={event => { const item = globalCombinations.find(item => item.id === event.target.value); if (item) safe(() => { resolvePromptValues(program, item.values); editControls({ ...controls, values: structuredClone(item.values), selectedCombinationId: undefined }); setSelectedGlobal(item.id); }); else setSelectedGlobal(''); }}><option value="">직접 선택</option>{globalCombinations.map(item => <option key={item.id} value={item.id}>{item.title}</option>)}</select></label>{selectedGlobal && <small>{pretty(Object.fromEntries(program.controls.map(control => [control.id, Object.hasOwn(controls.values, control.id) ? controls.values[control.id] : control.default]))) === pretty(globalCombinations.find(item => item.id === selectedGlobal)?.values) ? '불러온 조합' : '불러온 조합에서 수정됨'}</small>}{!promptReference && <p className="muted">프롬프트를 저장하면 전역 조합을 만들 수 있어요.</p>}</div>
       <label>이전 이야기 조합<select aria-label="프롬프트 선택 조합" value={controls.selectedCombinationId ?? ''} onChange={event => { const combination = controls.combinations.find(item => item.id === event.target.value); if (combination) editControls({ ...controls, values: structuredClone(combination.values), selectedCombinationId: combination.id }); }}><option value="">직접 선택</option>{controls.combinations.map(combination => <option key={combination.id} value={combination.id}>{combination.title}</option>)}</select></label>
@@ -244,7 +273,7 @@ export function PromptComposer({ program, onChange, onError, chatId, branchId, r
       {importedCombination && <button type="button" className="secondary" disabled={controls.combinations.length >= 50} onClick={() => safe(() => { resolvePromptValues(program, importedCombination.values); editControls({ ...controls, combinations: [...controls.combinations, { ...importedCombination, id: newId('combination') }] }); setImportedCombination(null); })}>가져온 권장 조합을 목록에 추가</button>}
       <div className="pc-actions"><button type="button" disabled={!onSaveControls || !controlsDirty || saving} onClick={() => void saveControls()}>{saving ? '저장 중…' : '이야기 선택값과 조합 저장'}</button>{controlsDirty && <small>미저장 변경 있음</small>}{!onSaveControls && <small>지금은 미리보기에만 사용해요.</small>}</div>
     </div></details>
-    <details className="pc-section"><summary>전체 구성 JSON · 고급 편집</summary><JsonDraft label="전체 프롬프트 구성 JSON" value={program} onApply={value => { if (pendingTemplate) throw new Error("문법 초안을 먼저 적용하거나 되돌려 주세요."); change(validatePromptProgram(value)); }} onError={report} /></details>
+    <details className="pc-section" hidden={view !== 'structure'}><summary>전체 구성 JSON · 고급 편집</summary><JsonDraft label="전체 프롬프트 구성 JSON" value={program} onApply={value => { if (pendingTemplate) throw new Error("문법 초안을 먼저 적용하거나 되돌려 주세요."); change(validatePromptProgram(value)); }} onError={report} /></details>
     <section className="pc-preview" aria-label="프롬프트 미리보기"><h3>전송 미리보기</h3><label>현재 요청<textarea aria-label="미리보기 현재 요청" value={request} onChange={event => setRequest(event.target.value)} /></label><div className="pc-actions"><button type="button" disabled={previewBusy || !request.trim()} onClick={() => void runPreview()}>{previewBusy ? '구성 중…' : '미리보기 갱신'}</button><small>{chatId ? '이 이야기의 자료와 대화를 사용해요. 모델을 호출하지 않아요.' : '합성 자료와 대화로 구성 순서를 확인해요.'}</small></div>
       {preview && <div className="pc-preview-result">{preview.fingerprint !== fingerprint && <p className="pc-stale" role="status">설정이나 요청이 바뀌었어요. 아래는 이전 미리보기예요.</p>}<p className="muted">{preview.synthetic ? '합성 미리보기' : '이야기 미리보기'} · 메시지 {preview.value.compilation.messages.length}개 · 캐시 기준 {preview.value.compilation.cachePlan.length}개</p>
         <ol className="pc-message-list">{preview.value.compilation.messages.map((message, index) => <li key={message.id}><details><summary>{index + 1}. {message.role} · {message.completion}<small>{program.blocks.find(block => block.id === message.provenance.blockId)?.title ?? message.provenance.blockId} · {message.provenance.origin}</small></summary><pre>{message.content.map(part => part.text).join('\n')}</pre></details></li>)}</ol>
@@ -254,6 +283,8 @@ export function PromptComposer({ program, onChange, onError, chatId, branchId, r
         {preview.value.provider ? <details><summary>공급자 전송 구성 · {preview.value.provider.protocol} · {preview.value.provider.modelId}</summary><p className="muted">{preview.value.provider.kind==='exact-request-body'?'현재 미리보기 스냅샷의 인코더 본문이에요. 실제 실행에서는 실행 ID와 무작위 선택, 최신 설정이 달라질 수 있어요. 인증 정보는 없고, 전송이나 과금은 발생하지 않아요.':'역할 변환만 확인하는 미리보기예요. 실행 시 보호된 번역 구간·도구·출력 형식이 추가되므로 실제 요청 본문과 달라요.'}</p><pre>{pretty(preview.value.provider)}</pre></details> : <p className="muted">공급자별 전송 구성은 표시되지 않았어요.</p>}
       </div>}
     </section>
+    </div>
+    </details>
     {error && <p className="error" role="alert">{error}</p>}<p className="pc-status" role="status">{status}</p>
   </section>;
 }

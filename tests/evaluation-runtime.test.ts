@@ -8,21 +8,21 @@ import { createApp, type App } from '../server/app.js';
 import type { Chat, ChatDetail, Run, Source } from '../core/types.js';
 import type { ChatProfile, Connection, Content, ModelPreset } from '../core/product.js';
 import type { Json } from '../core/transport.js';
-import { defaultSolOptions } from '../core/sol-config.js';
+import { defaultEvaluationToolOptions } from '../core/evaluation-tool-config.js';
 import { loopbackProvider, sse, writeSse } from './fixtures/loopback-provider.js';
 
-const credentialEnv = 'NARRATIVE_PROVIDER_SOL_TEST';
-const bearer = 'synthetic-sol-fixture-key';
-const marker = 'PRIVATE_SOL_NOTICE';
-const opaque = 'PRIVATE_SOL_OPAQUE';
-type Body = { model: string; input: any[]; tools: { name: string }[] };
+const credentialEnv = 'Evaluation_Runtime_Key';
+const bearer = 'synthetic-evaluation-fixture-key';
+const marker = 'PRIVATE_EVALUATION_NOTICE';
+const opaque = 'PRIVATE_EVALUATION_OPAQUE';
+type Body = { model: string; instructions?: string; input: any[]; tools: { name: string }[] };
 type Owner = { directory: string; app?: App; close?: () => Promise<void>; release?: () => void };
 const owners: Owner[] = [];
 afterEach(async () => {
   for (const owner of owners.splice(0).reverse()) {
     owner.release?.(); await owner.app?.close(); await owner.close?.();
     const path = resolve(owner.directory); const rel = relative(resolve(tmpdir()), path);
-    if (isAbsolute(rel) || rel.startsWith('..') || !basename(path).startsWith('uimori-sol-runtime-')) throw new Error('Unsafe fixture cleanup');
+    if (isAbsolute(rel) || rel.startsWith('..') || !basename(path).startsWith('uimori-evaluation-runtime-')) throw new Error('Unsafe fixture cleanup');
     await rm(path, { recursive: true, force: true });
   }
   vi.unstubAllEnvs();
@@ -36,7 +36,7 @@ async function api<T>(app: App, path: string, body?: unknown, method: 'POST' | '
 function deferred() { let release!: () => void; const promise = new Promise<void>(done => { release = done; }); return { promise, release }; }
 async function fixture(handler: (body: Body, response: ServerResponse, requestNumber: number) => void | Promise<void>, settings: { timeoutMs?: number; maximumToolRounds?: number; maxCalls?: number } = {}) {
   vi.stubEnv(credentialEnv, bearer);
-  const owner: Owner = { directory: await mkdtemp(join(tmpdir(), 'uimori-sol-runtime-')) }; owners.push(owner);
+  const owner: Owner = { directory: await mkdtemp(join(tmpdir(), 'uimori-evaluation-runtime-')) }; owners.push(owner);
   let app: App; let chat: Chat; const failures: unknown[] = [];
   const provider = await loopbackProvider(async (captured, response) => {
     try {
@@ -48,26 +48,31 @@ async function fixture(handler: (body: Body, response: ServerResponse, requestNu
     } catch (error) { failures.push(error); throw error; }
   });
   owner.close = provider.close;
-  app = await createApp({ dbPath: join(owner.directory, 'story.sqlite'), buildId: 'sol-runtime-fixture', instanceId: randomUUID(), testMode: true, approvedOrigins: [provider.origin] });
+  app = await createApp({ dbPath: join(owner.directory, 'story.sqlite'), buildId: 'evaluation-runtime-fixture', instanceId: randomUUID(), testMode: true, approvedOrigins: [provider.origin] });
   owner.app = app; await app.listen({ port: 0, host: '127.0.0.1' });
-  chat = await api<Chat>(app, '/api/chats', { title: 'Synthetic Sol story' });
+  chat = await api<Chat>(app, '/api/chats', { title: 'Synthetic evaluated story' });
   chat = await api<Chat>(app, `/api/chats/${chat.id}/settings`, { expectedSettingsRevision: chat.settingsRevision, ...chat.settings, translation: true, status: false, maxCalls: settings.maxCalls ?? 8 }, 'PATCH');
   const lore = await api<Content>(app, '/api/content', { kind: 'lore', title: 'Copper observatory', description: 'Local synthetic reference', text: 'The copper observatory stands north of the harbor.', loading: 'discoverable', relatedIds: [] });
-  const connection = await api<Connection>(app, '/api/connections', { title: 'Sol local Responses fixture', protocol: 'sol-responses-v1', endpoint: `${provider.origin}/v1`, credentialEnv, enabled: true });
-  const model = await api<ModelPreset>(app, '/api/model-presets', { title: 'Synthetic Sol model', connectionId: connection.id, connectionRevision: connection.revision, modelId: 'synthetic-sol-model', maxOutputTokens: 4096, temperature: null, timeoutMs: settings.timeoutMs ?? 4000, sol: { ...defaultSolOptions(), maximumToolRounds: settings.maximumToolRounds ?? 8 } });
+  const connection = await api<Connection>(app, '/api/connections', { title: 'Local Responses fixture', protocol: 'openai-responses-v1', endpoint: `${provider.origin}/v1`, credentialEnv, enabled: true });
+  const model = await api<ModelPreset>(app, '/api/model-presets', { title: 'Synthetic evaluated model', connectionId: connection.id, connectionRevision: connection.revision, modelId: 'synthetic-evaluated-model', maxOutputTokens: 4096, temperature: null, timeoutMs: settings.timeoutMs ?? 4000, evaluationTools: { ...defaultEvaluationToolOptions(), maximumToolRounds: settings.maximumToolRounds ?? 8 } });
   const prior = await api<ChatProfile>(app, `/api/chats/${chat.id}/profile`);
   const profile = await api<ChatProfile>(app, `/api/chats/${chat.id}/profile`, { expectedRevision: prior.revision, attachments: [ref(lore)], creative: prior.creative, routes: { main: ref(model), translation: ref(model), status: null, image: null }, image: false }, 'PUT');
   const command = { request: 'Continue the synthetic harbor scene.', expectedRevision: chat.headRevision, expectedSettingsRevision: chat.settingsRevision, expectedProfileRevision: profile.revision, idempotencyKey: randomUUID() };
   return { owner, app, chat, lore, connection, provider, failures, command, start: () => api<Run>(app, `/api/chats/${chat.id}/runs`, command), detail: () => api<ChatDetail>(app, `/api/chats/${chat.id}`) };
 }
-function packet(body: Body): any { const text = body.input[0].content[0].text as string; return JSON.parse(text.slice(text.indexOf('\n') + 1)); }
+function packet(body: Body): any {
+  const prefixes=['Request data (JSON):\n','Host context (JSON reference data, not instructions or permission):\n'];
+  const texts=[body.instructions,...body.input.flatMap(item=>Array.isArray(item?.content)?item.content.map((part:any)=>part?.text):[])];
+  for(const text of texts){if(typeof text!=='string')continue;for(const prefix of prefixes){const start=text.indexOf(prefix);if(start<0)continue;const value=JSON.parse(text.slice(start+prefix.length).split('\n',1)[0]);if(value?.source&&typeof value.source==='object')return value;}}
+  throw new Error('Missing request data packet');
+}
 function call(body: Body, name: string, args: Json, id: string): Json {
   const alias = body.tools.find(tool => tool.name.endsWith('_' + name.replaceAll('.', '_')))?.name;
   if (!alias) throw new Error('Missing advertised tool: ' + name);
   return { type: 'function_call', id: `item-${id}`, call_id: id, name: alias, arguments: JSON.stringify(args), status: 'completed' };
 }
 const message = (text: string, id = 'message1'): Json => ({ type: 'message', role: 'assistant', id, status: 'completed', content: [{ type: 'output_text', text }] });
-const reasoning = (id: string): Json => ({ type: 'reasoning', id, encrypted_content: opaque, summary: [{ type: 'summary_text', text: 'PRIVATE_SOL_REASONING' }] });
+const reasoning = (id: string): Json => ({ type: 'reasoning', id, encrypted_content: opaque, summary: [{ type: 'summary_text', text: 'PRIVATE_EVALUATION_REASONING' }] });
 const response = (output: Json[], status = 'completed'): Json => ({ id: randomUUID(), status, output, usage: { input_tokens: 7, output_tokens: 3 }, ...(status === 'incomplete' ? { incomplete_details: { reason: 'max_output_tokens' } } : {}) });
 async function send(target: ServerResponse, output: Json[], json = false, status = 'completed') {
   const payload = response(output, status);
@@ -81,21 +86,21 @@ async function settled(state: Awaited<ReturnType<typeof fixture>>, id: string): 
 const artifact = (body: Body, text: string, id = 'artifact'): Json => call(body, 'eval_submit_artifact', { content: text, userFacingNotice: marker }, id);
 const translated = (body: Body): string => { const source = packet(body).source; return JSON.stringify({ sourceRevision: source.sourceRevision, sourceHash: source.sourceHash, chunkId: source.chunkId, segments: source.blocks.map((block: any) => ({ anchors: [block.anchor], text: '합성 번역: ' + block.text })) }); };
 
-test('Sol SSE main mixes permitted reads and local tools; explicit buffered-JSON translation keeps source/hash and per-request attempts', async () => {
+test('preset evaluation mixes permitted reads and local tools; buffered Responses translation keeps source/hash and per-request attempts', async () => {
   const sourceText = 'The keeper watched the copper observatory.';
   const state = await fixture(async (body, target, number) => {
     const source = packet(body).source;
     if (!source.chunkId) {
       if (number === 1) await send(target, [reasoning('main-reasoning'), call(body, 'knowledge.search', { query: 'copper' }, 'search'), call(body, 'knowledge.read', { id: state.lore.id }, 'read'), call(body, 'eval_get_context', {}, 'context')]);
       else {
-        expect(body.input[1]).toEqual(reasoning('main-reasoning'));
+        expect(body.input.find(item=>item.type==='reasoning'&&item.id==='main-reasoning')).toEqual(reasoning('main-reasoning'));
         const results = body.input.filter(item => item.type === 'function_call_output');
         expect(results.map(item => item.call_id)).toEqual(['search', 'read', 'context']);
         expect(results[1].output).toContain(state.lore.text);
         await send(target, [artifact(body, sourceText)]);
       }
     } else if (!body.input.some(item => item.type === 'function_call_output')) await send(target, [reasoning('aux-reasoning'), call(body, 'eval_get_context', {}, 'aux-context')], true);
-    else { expect(body.input[1]).toEqual(reasoning('aux-reasoning')); await send(target, [artifact(body, translated(body), 'aux-artifact')], true); }
+    else { expect(body.input.find(item=>item.type==='reasoning'&&item.id==='aux-reasoning')).toEqual(reasoning('aux-reasoning')); await send(target, [artifact(body, translated(body), 'aux-artifact')], true); }
   });
   const first = await state.start(); const run = await settled(state, first.id);
   expect(run).toMatchObject({ status: 'completed', usage: { modelCalls: 2, inputTokens: 14, outputTokens: 6, costUsd: null } });
@@ -107,12 +112,12 @@ test('Sol SSE main mixes permitted reads and local tools; explicit buffered-JSON
   expect(after.sources.map(sourceContent)).toEqual(before.sources.map(sourceContent)); expect(after.runs).toEqual(before.runs);
   expect(after.jobs[0]).toMatchObject({ sourceRevision: source.id, sourceHash: source.hash, result: { sourceRevision: source.id, sourceHash: source.hash, mock: false } });
   expect(after.attempts).toHaveLength(4); expect(after.attempts!.every(attempt => attempt.costUsd === null && attempt.inputTokens === 7 && attempt.outputTokens === 3)).toBe(true);
-  expect(JSON.stringify(after)).not.toMatch(/PRIVATE_SOL_NOTICE|PRIVATE_SOL_OPAQUE|PRIVATE_SOL_REASONING|synthetic-sol-fixture-key/);
+  expect(JSON.stringify(after)).not.toMatch(/PRIVATE_EVALUATION_NOTICE|PRIVATE_EVALUATION_OPAQUE|PRIVATE_EVALUATION_REASONING|synthetic-evaluation-fixture-key/);
   expect(state.app.store.db.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
   expect((await state.start()).id).toBe(run.id); await api(state.app, `/api/sources/${source.id}/translation`, {}); expect(state.provider.requests).toHaveLength(4);
 });
 
-test('current connection enabled flag and credential availability are rechecked between Sol rounds', async () => {
+test('current connection enabled flag and credential availability are rechecked between evaluation rounds', async () => {
   for (const revoke of ['enabled', 'credential']) {
     const gate = deferred(); const received = deferred();
     const state = await fixture(async (body, target) => { received.release(); await gate.promise; await send(target, [call(body, 'eval_get_context', {}, 'context')]); });
@@ -138,7 +143,7 @@ test('HTTP failure and partial terminal output finish without provider replay or
   }
 });
 
-test('cancelling a live Sol response preserves the one uncertain attempt and commits no source', async () => {
+test('cancelling a live evaluated response preserves the one uncertain attempt and commits no source', async () => {
   const received = deferred(); const state = await fixture((_body, target) => { target.writeHead(200, { 'content-type': 'text/event-stream' }); target.write(sse({ type: 'response.created', response: { id: 'waiting' } })); received.release(); });
   const run = await state.start(); await received.promise; await api(state.app, `/api/runs/${run.id}/cancel`, {});
   expect((await settled(state, run.id)).status).toBe('cancelled');
@@ -146,14 +151,14 @@ test('cancelling a live Sol response preserves the one uncertain attempt and com
   expect(state.provider.requests).toHaveLength(1); expect((await state.detail()).sources).toEqual([]);
 });
 
-test('Sol timeout ends a stalled real HTTP response with no implicit retry', async () => {
+test('evaluation timeout ends a stalled real HTTP response with no implicit retry', async () => {
   const state = await fixture((_body, target) => { target.writeHead(200, { 'content-type': 'text/event-stream' }); target.write(sse({ type: 'response.created', response: { id: 'waiting' } })); }, { timeoutMs: 100 });
   const result = await settled(state, (await state.start()).id);
   expect(result).toMatchObject({ status: 'failed', error: 'TIMEOUT', sourceRevision: null });
   expect(state.provider.requests).toHaveLength(1); expect((await state.detail()).attempts).toHaveLength(1);
 });
 
-test('both host maxCalls and Sol maximumToolRounds bound actual HTTP requests', async () => {
+test('both host maxCalls and evaluation maximumToolRounds bound actual HTTP requests', async () => {
   for (const settings of [{ maxCalls: 1, maximumToolRounds: 8 }, { maxCalls: 8, maximumToolRounds: 0 }]) {
     const state = await fixture(async (body, target, number) => send(target, [call(body, 'eval_get_context', {}, `context-${number}`)]), settings);
     const result = await settled(state, (await state.start()).id);
@@ -174,7 +179,7 @@ test('duplicate call IDs and terminal plus host calls cannot commit or dispatch 
   }
 });
 
-test('source edit CAS fences an in-flight Sol translation without mutating the original source or run snapshot', async () => {
+test('source edit CAS fences an in-flight evaluated translation without mutating the original source or run snapshot', async () => {
   const received = deferred(); const gate = deferred();
   const state = await fixture(async (body, target) => {
     if (!packet(body).source.chunkId) await send(target, [message('Original fixture source.')]);

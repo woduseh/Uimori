@@ -47,14 +47,14 @@ PC·휴대폰에서 설정한 HTTPS 주소로 접속하고 토큰을 입력해�
 
 ```dotenv
 NR_PROVIDER_ORIGINS=https://api.openai.com
-NARRATIVE_PROVIDER_OPENAI='실제-서버-키'
+OPENAI_API_KEY='실제-서버-키'
 ```
 
 ```sh
 docker compose --env-file .env.self-host up -d
 ```
 
-앱의 연결 설정에는 키 값 대신 `NARRATIVE_PROVIDER_OPENAI`라는 참조 이름을 넣어요. 접속 토큰은 작업실 로그인용이고 `NARRATIVE_PROVIDER_*`는 외부 모델 호출용이에요. 모델별 설정과 현재 검증 범위는 [공급자 안내](PROVIDERS.md)를 확인하세요.
+앱의 연결 설정에는 키 값 대신 `OPENAI_API_KEY`라는 참조 이름을 넣어요. 접속 토큰은 작업실 로그인용이고 `OPENAI_API_KEY` 같은 인증 환경변수는 외부 모델 호출용이에요. 이름은 영문 대소문자 또는 밑줄로 시작하고 이후 숫자를 포함할 수 있으며 최대 200자예요. 특정 접두사는 요구하지 않아요. 모델별 설정과 현재 검증 범위는 [공급자 안내](PROVIDERS.md)를 확인하세요.
 
 Vertex의 서비스 계정 파일을 쓰는 경우 `deploy/compose.vertex.example.yaml`을 함께 사용해요. `.env.self-host`에 `UIMORI_SECRETS_DIR=/srv/uimori/secrets`와 필요한 `NR_PROVIDER_ORIGINS`, `NR_LIVE_MAX_REQUESTS`, `NR_LIVE_MAX_USD`를 설정하고 그 디렉터리에 `service-account.json`을 둬요. 파일은 앱의 UID 1000 사용자가 읽을 수 있어야 해요. 이 overlay는 서버 안의 `/run/uimori-secrets/service-account.json`을 읽기 전용으로 연결하고 Vertex 요청을 Flex로 고정해요. [Compose 읽기 전용 bind mount](https://docs.docker.com/reference/compose-file/services/#volumes)
 
@@ -112,3 +112,7 @@ self-host 구현 당시 로컬 검증에서는 전체 단위·통합 964개, 기
 - PC·휴대폰 모두 인증서 경고 없이 HTTPS로 접속되고, 로그인 전 채팅 데이터를 가져오지 못하는지 확인해요.
 - 로그인 후 합성 자료로 저장·새로고침·다른 기기 조회와 생성 스트리밍을 확인해요. 실제 모델 실행은 사용자가 설정한 공급자·비용 범위에 해당해요.
 - 생성 중 브라우저를 닫았다가 열어 상태를 확인하고, 서버 재시작 후 재로그인해 저장된 자료가 유지되는지 확인해요. 모바일 화면·키보드와 백그라운드 복귀도 실제 기기에서 확인해요.
+
+## Codex 구독 연결
+
+공식 Codex App Server를 선택적으로 설치해 본문·보조·모델 등록 에이전트에 사용할 수 있어요. Docker 빌드 변수, 전용 로그인 보관과 검증 범위는 [Codex 연결 안내](CODEX.md)를 따라요. 기본값은 비활성이며 API 키 방식으로 자동 전환하지 않아요.

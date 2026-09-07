@@ -1,3 +1,5 @@
+import { DEFAULT_TRANSLATION_PROMPT } from '../core/prompts.js';
+import { createDefaultPromptProgram } from '../core/prompt-defaults.js';
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -31,16 +33,17 @@ function complete(app:App,run:ReturnType<typeof capture>){app.store.startRun(run
 describe('literal user-editable main and translation prompt presets',()=>{
   test('saves exact whitespace, empty text and version history, rejecting stale writes and invalid shapes without generation',async()=>{
     const app=await application();const literal='\r\n  {{char}} ${literal}\n<instructions>Keep my exact wording.</instructions>\t\n';
-    const first=await request<PromptPreset>(app,'/prompt-presets',prompt('main',literal));expect(first.text).toBe(literal);expect(first).toMatchObject({role:'main',revision:1});
-    const empty=await request<PromptPreset>(app,'/prompt-presets',prompt('translation',''));expect(empty.text).toBe('');
-    const blank=await request<PromptPreset>(app,'/prompt-presets',prompt('translation',' \r\n\t'));expect(blank.text).toBe(' \r\n\t');
-    const next=await request<PromptPreset>(app,'/prompt-presets/'+first.id,{...prompt('main','Replacement\n'),expectedRevision:1},200,'PUT');expect(next).toMatchObject({id:first.id,revision:2,text:'Replacement\n'});
+    const first=await request<PromptPreset>(app,'/prompt-presets',prompt('main',literal));expect(first.program).toEqual(createDefaultPromptProgram(literal)); expect(first).not.toHaveProperty('text');expect(first).toMatchObject({role:'main',revision:1});
+    const empty=await request<PromptPreset>(app,'/prompt-presets',prompt('translation',''));expect(empty.program).toEqual(createDefaultPromptProgram('', 'translation'));
+    const blank=await request<PromptPreset>(app,'/prompt-presets',prompt('translation',' \r\n\t'));expect(blank.program).toEqual(createDefaultPromptProgram(' \r\n\t', 'translation'));
+    const next=await request<PromptPreset>(app,'/prompt-presets/'+first.id,{...prompt('main','Replacement\n'),expectedRevision:1},200,'PUT');expect(next).toMatchObject({id:first.id,revision:2,program:createDefaultPromptProgram('Replacement\n')});
     await request(app,'/prompt-presets/'+first.id,{...prompt('main','Lost update'),expectedRevision:1},409,'PUT');
     await request(app,'/prompt-presets/'+first.id,prompt('main','Missing revision'),400,'PUT');
     expect(await read(app,`/revisions/prompt-preset/${first.id}/1`)).toEqual(first);
     const library=await read(app,'/library');expect(library.promptPresets).toHaveLength(3);expect(library.promptPresets.find((item:PromptPreset)=>item.id===first.id)).toEqual(next);
     for(const changes of [{role:'status'},{text:null},{text:3},{text:'x'.repeat(200001)},{title:''},{unknown:true}])await request(app,'/prompt-presets',{...prompt('main','original'),...changes},400);
-    expect((await request<PromptPreset>(app,'/prompt-presets',prompt('main','x'.repeat(200000)))).text).toHaveLength(200000);
+    expect((await request<PromptPreset>(app,'/prompt-presets',prompt('main','x'.repeat(200000)))).program).toEqual(createDefaultPromptProgram('x'.repeat(200000)));
+    const ast=createDefaultPromptProgram('AST wins'); const explicit=await request<PromptPreset>(app,'/prompt-presets',{title:'AST',role:'main',text:'ignored draft',program:ast}); expect(explicit.program).toEqual(ast); expect(explicit).not.toHaveProperty('text');
     expect(app.store.db.prepare('SELECT COUNT(*) AS n FROM runs').get()).toEqual({n:0});expect(app.store.db.prepare('SELECT COUNT(*) AS n FROM attempts').get()).toEqual({n:0});expect(fetch).not.toHaveBeenCalled();
   });
 
@@ -79,7 +82,7 @@ describe('literal user-editable main and translation prompt presets',()=>{
     const input={promptSelection:{translation:reference(selected)}};const resolved=product.resolveJobPrompt(run.snapshot,input);
     expect(resolved.profile?.promptPresets).toEqual({main,translation:selected});expect(resolved.profile?.models).toEqual(run.snapshot.profile?.models);expect(resolved.profile?.contents).toEqual(run.snapshot.profile?.contents);
     await request(app,'/prompt-presets/'+selected.id,{...prompt('translation','Edited later'),expectedRevision:selected.revision},200,'PUT');
-    expect(product.resolveJobPrompt(run.snapshot,input).profile?.promptPresets?.translation?.text).toBe('');
+    expect(product.resolveJobPrompt(run.snapshot,input).profile?.promptPresets?.translation?.program).toEqual(createDefaultPromptProgram('', 'translation'));
     expect(product.resolveJobPrompt(run.snapshot,{promptSelection:{translation:null}}).profile?.promptPresets).toEqual({main});
     expect(product.resolveJobPrompt(run.snapshot,null)).toEqual(run.snapshot);expect(JSON.stringify(run.snapshot)).toBe(original);
     for(const promptSelection of [{translation:reference(main)},{translation:{id:selected.id,revision:99}},{main:reference(main)},null,{}])expect(()=>product.resolveJobPrompt(run.snapshot,{promptSelection})).toThrow();
@@ -92,7 +95,7 @@ describe('literal user-editable main and translation prompt presets',()=>{
     await request(source,'/prompt-presets/'+main.id,{...prompt('main','Latest main'),expectedRevision:1},200,'PUT');
     const legacy=source.store.createChat('Legacy absence');product.updateProfile(legacy.id,profileBody(product.profile(legacy.id)));capture(source,legacy.id);
     const archive=product.export();const unchanged=JSON.stringify(archive);const target=await application();expect(target.store.product.import(archive)).toMatchObject({restored:true,chats:2});expect(JSON.stringify(archive)).toBe(unchanged);
-    expect(target.store.product.get('prompt-preset',main.id,1)).toEqual(main);expect(target.store.product.get('prompt-preset',main.id)).toMatchObject({revision:2,text:'Latest main'});
+    expect(target.store.product.get('prompt-preset',main.id,1)).toEqual(main);expect(target.store.product.get('prompt-preset',main.id)).toMatchObject({revision:2,program:createDefaultPromptProgram('Latest main')});
     expect(target.store.run(run.id).snapshot.profile?.promptPresets).toEqual({main,translation:empty});expect(target.store.product.profile(legacy.id)).not.toHaveProperty('prompts');expect(target.store.product.snapshot(legacy.id)).not.toHaveProperty('promptPresets');
     expect(target.store.db.prepare('PRAGMA foreign_key_check').all()).toEqual([]);expect(fetch).not.toHaveBeenCalled();
   });
@@ -132,5 +135,32 @@ describe('literal user-editable main and translation prompt presets',()=>{
     expect(app.store.run(run.id).snapshot.profile?.promptPresets?.translation).toEqual(first);
     const target=await application();expect(target.store.product.import(savedArchive)).toMatchObject({restored:true,chats:1});
     const restored=target.store.job(job.id);expect(restored.input).toMatchObject({promptSelection:{translation:reference(second)}});expect(target.store.product.resolveJobPrompt(target.store.run(run.id).snapshot,restored.input).profile?.promptPresets?.translation).toEqual(second);expect(fetch).not.toHaveBeenCalled();
+  });
+});
+
+
+describe('translation prompt preview uses the job compiler without writes',()=>{
+  test.each([false,true])('default translation preview with stored source=%s',async stored=>{
+    const app=await application(),chat=app.store.createChat('Translation preview');
+    const source=stored?complete(app,capture(app,chat.id)):undefined;
+    const before=app.store.db.prepare('SELECT total_changes() AS n').get();
+    const program=createDefaultPromptProgram(DEFAULT_TRANSLATION_PROMPT,'translation');
+    const preview=await request(app,`/chats/${chat.id}/prompt-preview`,{role:'translation',program,request:'Synthetic preview source.'});
+    expect(preview.scope).toBe('preview-only-no-provider-call');expect(preview.error).toBeUndefined();
+    expect(preview.previewSource.kind).toBe(stored?'stored':'synthetic');
+    expect(preview.compilation.messages[0].content[0].text).toBe(DEFAULT_TRANSLATION_PROMPT);
+    expect(preview.compilation.messages.some((m:any)=>m.id==='context')).toBe(true);
+    expect(preview.compilation.messages.some((m:any)=>m.id==='outputSchema')).toBe(true);
+    const blocks=JSON.parse(preview.compilation.messages.find((m:any)=>m.id==='source').content[0].text.split('\n').slice(1).join('\n'));
+    expect(blocks[0].text).toBe(stored?'Mira waits by the quiet harbor.':'Synthetic preview source.');
+    if(source)expect(preview.previewSource).toMatchObject({sourceRevision:source.id,sourceHash:source.hash});
+    expect(preview.compilation.messages.filter((m:any)=>m.provenance.origin==='current')).toHaveLength(1);
+    expect(preview.compilation.messages.filter((m:any)=>m.provenance.origin==='history')).toHaveLength(0);
+    program.controls=[{id:'tone',label:'Tone',type:'text',default:'default'}];
+    if(program.blocks[0].kind==='message')program.blocks[0].template.push({kind:'value',expression:{control:'tone'}});
+    const changed=await request(app,`/chats/${chat.id}/prompt-preview`,{role:'translation',program,request:'Synthetic preview source.',values:{tone:'PREVIEW OVERRIDE'}});
+    expect(changed.compilation.messages[0].content[0].text).toContain('PREVIEW OVERRIDE');
+    expect(app.store.db.prepare('SELECT total_changes() AS n').get()).toEqual(before);
+    expect(fetch).not.toHaveBeenCalled();
   });
 });

@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { isVertexAdcReference } from './credential-reference.js';
 import { providerFetchOptions, transportFailureCode } from './provider-fetch.js';
 import { validateVertexEndpoint } from './product.js';
 import { vertexAccessToken } from './vertex-auth.js';
@@ -84,9 +85,10 @@ export async function executeVertexProvider(connectionValue: ProviderConnection,
     const prepared = encodeVertex(request);
     decoder = new VertexDecoder(prepared.context);
     if (signal.aborted) return failure('CANCELLED');
-    const token = connection.credentialEnv
-      ? await (options.resolveCredential ?? (name => process.env[name]))(connection.credentialEnv, connection, signal)
-      : await vertexAccessToken(signal);
+    // Google's well-known variable contains an ADC file path, never a bearer token.
+    const token = isVertexAdcReference(connection.credentialEnv)
+      ? await vertexAccessToken(signal)
+      : await (options.resolveCredential ?? (name => process.env[name]))(connection.credentialEnv!, connection, signal);
     if (!token || /[\r\n]/u.test(token)) throw new ProviderContractError('CREDENTIAL_UNAVAILABLE');
     if (signal.aborted) return failure('CANCELLED');
     const endpoint = `${validateVertexEndpoint(connection.endpoint)}/${encodeURIComponent(request.modelId)}:streamGenerateContent?alt=sse`;

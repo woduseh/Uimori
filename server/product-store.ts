@@ -1,5 +1,7 @@
+import { createDefaultPromptProgram } from '../core/prompt-defaults.js';
 import { randomUUID, createHash } from 'node:crypto';
-import { isVertexFileReference, validVertexFileReference } from '../core/credential-reference.js';
+import { isVertexFileReference, validVertexFileReference, validCredentialEnv } from '../core/credential-reference.js';
+import { validateEvaluationToolOptions } from '../core/evaluation-tool-config.js';
 import { existsSync, readFileSync, unlinkSync } from 'node:fs';
 import { isDeepStrictEqual } from 'node:util';
 import type { Store } from './store.js';
@@ -13,7 +15,6 @@ import { sourceTimeContext } from './product-auxiliary.js';
 import { storyTables } from './story-store.js';
 import { normalizeStoryArchiveRow, validateStoryArchive } from './story-archive.js';
 
-import { validateSolOptions } from '../core/sol-config.js';
 import { validatePromptProgram, validateChatPromptControls, resolvePromptValues } from '../core/prompt-program.js';
 import { validateHiddenStorySelection } from './hidden-story.js';
 import { nativeBotTables } from './native-bot.js';
@@ -52,7 +53,7 @@ function requestTier(value: unknown, protocol: Connection['protocol']) {
   if (protocol !== 'vertex-gemini-v1') throw new HttpError(400,'Request tier requires Vertex');
   return choice(value,['standard','flex'],'request tier');
 }
-const modelOptionKeys = ['thinkingLevel','timeoutMs','structuredOutput','reasoningEffort','thinkingMode','thinkingBudgetTokens','sol'];
+const modelOptionKeys = ['thinkingLevel','timeoutMs','structuredOutput','reasoningEffort','thinkingMode','thinkingBudgetTokens','evaluationTools'];
 function catalogTimestamp(value: unknown): string | null {
   if (value === null) return null;
   if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(value) || !Number.isFinite(Date.parse(value)) || new Date(value).toISOString() !== value) throw new HttpError(400,'Invalid catalog timestamp');
@@ -72,10 +73,7 @@ function validateModelMetadata(value: Row) {
   }
 }
 function validateModelGeneration(value: Row, protocol?: Connection['protocol']) {
-  if (value.sol !== undefined) {
-    if (protocol && protocol !== 'sol-responses-v1') throw new HttpError(400,'Sol options require Sol Responses');
-    try { validateSolOptions(value.sol); } catch { throw new HttpError(400,'Invalid Sol options'); }
-  }
+  if (value.evaluationTools !== undefined) try { validateEvaluationToolOptions(value.evaluationTools); } catch { throw new HttpError(400,'Invalid evaluation tool options'); }
   number(value.maxOutputTokens,'output limit',1,200000);
   if (value.temperature !== null && (typeof value.temperature !== 'number' || !Number.isFinite(value.temperature) || value.temperature < 0 || value.temperature > 2)) throw new HttpError(400,'Invalid temperature');
   if (value.thinkingLevel !== undefined) choice(value.thinkingLevel,['LOW','MEDIUM','HIGH'],'thinking level');
@@ -84,6 +82,8 @@ function validateModelGeneration(value: Row, protocol?: Connection['protocol']) 
   if (value.reasoningEffort !== undefined) choice(value.reasoningEffort,['none','minimal','low','medium','high','xhigh','max'],'reasoning effort');
   if (value.thinkingMode !== undefined) choice(value.thinkingMode,['disabled','enabled','adaptive'],'thinking mode');
   if (value.thinkingBudgetTokens !== undefined) number(value.thinkingBudgetTokens,'thinking budget',1024,value.maxOutputTokens-1);
+  if (protocol === 'codex-app-server-v1' && value.temperature !== null) throw new HttpError(400,'Codex does not accept temperature');
+  if (protocol === 'codex-app-server-v1' && value.structuredOutput !== undefined) throw new HttpError(400,'Codex uses a fixed output schema');
   if (!protocol) return; // Archive graph validation checks the referenced connection after every version is restored.
   const forbidden = protocol === 'vertex-gemini-v1' || protocol === 'fixture-sse-v1' ? ['structuredOutput','reasoningEffort','thinkingMode','thinkingBudgetTokens'] :
     protocol === 'anthropic-messages-v1' ? ['thinkingLevel'] : ['thinkingLevel','thinkingMode','thinkingBudgetTokens'];
@@ -148,14 +148,17 @@ export class ProductStore {
   }
   promptPreset(value: unknown, id?: string) {
     const b = record(value); fields(b,['title','role','text','program','expectedRevision']);
-    return this.save('prompt-preset',{title:text(b.title,'title',200),role:choice(b.role,['main','translation'],'prompt role'),text:text(b.text,'prompt text',200000,true),...(b.program!==undefined?{program:validatePromptProgram(b.program)}:{})},id,id ? number(b.expectedRevision,'revision') : undefined);
+    const role = choice(b.role,['main','translation'],'prompt role');
+    const program = b.program !== undefined ? validatePromptProgram(b.program) : validatePromptProgram(createDefaultPromptProgram(text(b.text,'prompt text',200000,true),role));
+    return this.save('prompt-preset',{title:text(b.title,'title',200),role,program},id,id ? number(b.expectedRevision,'revision') : undefined);
   }
   prepareConnection(value: unknown, id?: string) {
     const b = record(value); fields(b,['title','protocol','endpoint','credentialEnv','requestTier','enabled','expectedRevision']);
     const protocol = choice(b.protocol,[...PROVIDER_PROTOCOLS],'protocol'); const tier = requestTier(b.requestTier,protocol);
     const endpoint = connectionEndpoint(b.endpoint,protocol);
+    if (protocol === 'codex-app-server-v1' && (b.credentialEnv !== undefined || b.requestTier !== undefined)) throw new HttpError(400,'Codex uses official local login');
     const credentialEnv = b.credentialEnv === undefined || b.credentialEnv === '' ? undefined : text(b.credentialEnv,'credential reference',200);
-    if (credentialEnv && !/^NARRATIVE_PROVIDER_[A-Z0-9_]+$/.test(credentialEnv)) throw new HttpError(400,'Invalid credential reference');
+    if (credentialEnv && !validCredentialEnv(credentialEnv)) throw new HttpError(400,'Invalid credential reference');
     if (credentialEnv && isVertexFileReference(credentialEnv) && (protocol !== 'vertex-gemini-v1' || !validVertexFileReference(credentialEnv))) throw new HttpError(400,'Invalid service account reference');
     const prior = id ? this.get<Connection>('connection',id) : undefined;
     const expectedRevision = id ? number(b.expectedRevision,'revision') : undefined;
@@ -178,7 +181,7 @@ export class ProductStore {
       ...(vertex || b.thinkingLevel !== undefined ? {thinkingLevel:b.thinkingLevel ?? VERTEX_GEMINI_DEFAULT_THINKING_LEVEL} : {}),
       ...(vertex || b.timeoutMs !== undefined ? {timeoutMs:b.timeoutMs ?? VERTEX_GEMINI_DEFAULT_TIMEOUT_MS} : {}),
       ...Object.fromEntries(['structuredOutput','reasoningEffort','thinkingMode','thinkingBudgetTokens'].filter(key => b[key] !== undefined).map(key => [key,b[key]])),
-      ...(b.sol !== undefined ? {sol:validateSolOptions(b.sol)} : {}),
+      ...(b.evaluationTools !== undefined ? {evaluationTools:validateEvaluationToolOptions(b.evaluationTools)} : {}),
       ...(b.enabled !== undefined ? {enabled:boolean(b.enabled)} : {}),
       ...(b.userOverrides !== undefined ? {userOverrides:userOverrides(b.userOverrides)} : {}),
       source:{kind:connection.catalog.some(item => item.id === modelId) ? 'catalog' : 'manual',connectionRevision,catalogUpdatedAt:connection.catalogUpdatedAt ?? null},
@@ -395,13 +398,14 @@ function validateArchiveVersion(row: Row) {
     text(body.description,'description',body.package?4000:2000,true); text(body.text,'content text',body.package?1_000_000:100000,!!body.package); choice(body.loading,['pinned','discoverable'],'loading'); archiveList(body.relatedIds,100).forEach(archiveId);
     if(body.package!==undefined){const pkg=validateContentPackage(body.package);if(pkg.id!==body.id||pkg.revision!==body.revision||pkg.title!==body.title||pkg.description!==body.description||pkg.body!==body.text)throw new HttpError(400,'Package identity mismatch');}
   } else if (row.kind === 'preset') { fields(body,['id','revision','title','controls']); creative(body.controls); }
-  else if (row.kind === 'prompt-preset') { fields(body,['id','revision','title','role','text','program']); choice(body.role,['main','translation'],'prompt role'); text(body.text,'prompt text',200000,true); if(body.program!==undefined)validatePromptProgram(body.program); }
+  else if (row.kind === 'prompt-preset') { fields(body,['id','revision','title','role','program']); choice(body.role,['main','translation'],'prompt role'); validatePromptProgram(body.program); }
   else if (row.kind === 'prompt-combination') { fields(body,['id','revision','title','prompt','values']);ref(body.prompt);validateChatPromptControls({values:body.values,combinations:[]}); }
   else if (row.kind === 'connection') {
     fields(body,['id','revision','title','protocol','endpoint','credentialEnv','requestTier','enabled','catalog','catalogError','catalogUpdatedAt']); const protocol = choice(body.protocol,[...PROVIDER_PROTOCOLS],'protocol'); requestTier(body.requestTier,protocol);
     if (body.catalogUpdatedAt !== undefined) catalogTimestamp(body.catalogUpdatedAt);
     connectionEndpoint(body.endpoint,protocol);
-    boolean(body.enabled); if (body.credentialEnv !== undefined && !/^NARRATIVE_PROVIDER_[A-Z0-9_]+$/.test(text(body.credentialEnv,'credential reference',200))) throw new HttpError(400,'Invalid credential reference');
+    if (protocol === 'codex-app-server-v1' && (body.credentialEnv !== undefined || body.requestTier !== undefined)) throw new HttpError(400,'Invalid Codex authority');
+    boolean(body.enabled); if (body.credentialEnv !== undefined && !validCredentialEnv(text(body.credentialEnv,'credential reference',200))) throw new HttpError(400,'Invalid credential reference');
     archiveList(body.catalog,5000).forEach(raw => { const model = record(raw); fields(model,['id','name','capabilities','priceRevision']); text(model.id,'catalog ID',300); text(model.name,'catalog name',400); const capabilities = record(model.capabilities); if (Object.values(capabilities).some(v => v !== null && typeof v !== 'boolean')) throw new HttpError(400,'Invalid catalog capabilities'); if (model.priceRevision !== null) text(model.priceRevision,'price revision',200); });
     if (body.catalogError !== null) text(body.catalogError,'catalog error',2000);
   } else if (row.kind === 'model') {
@@ -529,7 +533,7 @@ function validateArchiveGraph(product: ProductStore) {
     if (attempt.status === 'mock') {
       fields(request,['mock','input']); const input = record(request.input);
       if (request.mock !== true || attempt.connection_id !== 'local-scripted' || attempt.model_id !== 'deterministic-fixture' || input.role !== (attempt.role === 'image' ? 'presentation' : attempt.role) || [attempt.input_tokens,attempt.output_tokens,attempt.cost_usd,attempt.raw_usage].some(value => value !== null)) throw new HttpError(400,'Mock attempt identity mismatch');
-    } else if (request.connectionId !== attempt.connection_id || request.modelId !== attempt.model_id || request.role !== attempt.role) throw new HttpError(400,'Attempt identity mismatch');
+    } else if ((request.protocol === 'codex-app-server-v1' ? request.method !== 'RPC' || request.url !== 'codex://local' : request.method !== 'POST') || request.connectionId !== attempt.connection_id || request.modelId !== attempt.model_id || request.role !== attempt.role) throw new HttpError(400,'Attempt identity mismatch');
   }
   validateRegistrationGraph(product);
 }

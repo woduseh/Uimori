@@ -14,7 +14,7 @@ const request = (): ProviderRequest => ({ role: 'main', modelId: 'gemini-3.8-fla
     history: [{ revision: 'parent', text: 'Ada opened the door.' }], catalog: [{ id: 'lore-1', revision: 2, title: 'The lamp' }], results: [] } });
 const usage = { promptTokenCount: 20, candidatesTokenCount: 4, thoughtsTokenCount: 3, totalTokenCount: 27 };
 const callbacks: (() => Promise<void>)[] = [];
-afterEach(async () => { vi.unstubAllGlobals(); for (const close of callbacks.splice(0)) await close(); });
+afterEach(async () => { vi.unstubAllGlobals(); vi.unstubAllEnvs(); for (const close of callbacks.splice(0)) await close(); });
 
 async function redirectedFixture(handler: Parameters<typeof loopbackProvider>[0]) {
   const local = await loopbackProvider(handler); callbacks.push(local.close);
@@ -31,6 +31,14 @@ const options = (extra: Record<string, unknown> = {}) => ({ approvedOrigins: [or
   resolveCredential: () => token, ...extra });
 
 describe('Vertex native wire through real local HTTP streams (no live calls)', () => {
+  test('the well-known Google credential variable remains an ADC file reference', async () => {
+    vi.stubEnv('GOOGLE_APPLICATION_CREDENTIALS', 'Z:\\missing\\synthetic-service-account.json');
+    const resolveCredential = vi.fn(() => token);
+    const result = await executeProvider({...connection,credentialEnv:'GOOGLE_APPLICATION_CREDENTIALS'},request(),options({resolveCredential}));
+    expect(result.error?.code).toBe('CREDENTIAL_UNAVAILABLE');
+    expect(resolveCredential).not.toHaveBeenCalled();
+  });
+
   test('L01 P04 P05 authenticates after validation, journals before fetch, preserves signed tool parts and late usage', async () => {
     const wires: WireRecord[] = [];
     let calls = 0;

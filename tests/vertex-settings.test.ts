@@ -44,9 +44,11 @@ describe('Vertex connection and model settings with file SQLite', () => {
       endpoint.replace('synthetic-project', 'synthetic%2Fproject'), endpoint + '/gemini-3.8-flash:generateContent',
       endpoint + '?key=synthetic', endpoint + '#fragment', endpoint.replace('https://', 'https://synthetic@'),
     ]) await request(app, '/connections', vertexConnection({ endpoint: invalid }), 400);
-    for (const credentialEnv of ['GOOGLE_APPLICATION_CREDENTIALS', null, false, 0]) await request(app, '/connections', vertexConnection({ credentialEnv }), 400);
+    const generic = await request<Connection>(app, '/connections', vertexConnection({ credentialEnv: 'GOOGLE_APPLICATION_CREDENTIALS' }));
+    expect(generic.credentialEnv).toBe('GOOGLE_APPLICATION_CREDENTIALS');
+    for (const credentialEnv of [null, false, 0]) await request(app, '/connections', vertexConnection({ credentialEnv }), 400);
     await request(app, '/connections', vertexConnection({ apiKey: 'SYNTHETIC_NOT_A_CREDENTIAL' }), 400);
-    expect(app.store.product.all('connection')).toHaveLength(2);
+    expect(app.store.product.all('connection')).toHaveLength(3);
   });
 
   test('stores the selected model defaults and bounds while keeping fixture rows unchanged', async () => {

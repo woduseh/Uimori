@@ -1,5 +1,7 @@
 # Uimori 실제 UI 시각 검토 · 2026-09-06
 
+> 이 문서는 아래 build에 대한 과거 시각 검토 기록이에요. 이후 봇 중심 개편·공급자 관리·패키지 동작·self-host 접속 화면의 현행 상태는 [CURRENT](project-plan/CURRENT.md)와 각 결과 문서에서 확인해요. 이 문서의 스크린샷과 PASS를 최신 전체 UI 검증으로 사용하지 않아요.
+
 final result: passed (2026-09-06 UI 개편 당시 아래 명시된 build 기준)
 
 2026-09-07 M1 사용 여정의 세 가지 후속 수정과 최신 검증·시각 비교는 [UI-RESULTS 후속 절](project-plan/UI-RESULTS.md#2026-09-07-m1-사용-여정-후속)에 별도로 기록했어요. 아래의 과거 PASS를 이후 공급자/여정 구현 전체로 확대하지 않아요.

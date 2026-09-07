@@ -6,7 +6,7 @@ async function settings(page:Page){const button=page.getByRole('button',{name:'�
 async function post<T>(request:APIRequestContext,path:string,data:unknown):Promise<T>{const r=await request.post('/api'+path,{data});expect(r.ok(),await r.text()).toBeTruthy();return r.json();}
 const getLibrary=async(request:APIRequestContext)=>(await request.get('/api/library')).json() as Promise<Library>;
 
-test('PMUI05 natural language proposal is reviewed, survives reload, and applies once before role assignment',async({page,request},info)=>{
+test('PMUI05 agent proposal is reviewed, survives reload, and applies once before role assignment',async({page,request},info)=>{
   const endpoint=process.env.NR_REGISTRATION_FIXTURE_URL;if(!endpoint)throw new Error('Dedicated registration loopback fixture is required');
   const title='PMUI05 보조 '+Date.now();
   const connection=await post<Connection>(request,'/connections',{title,protocol:'fixture-sse-v1',endpoint,enabled:true});
@@ -18,7 +18,7 @@ test('PMUI05 natural language proposal is reviewed, survives reload, and applies
   await assistant.getByRole('button',{name:'설정안 제안 요청',exact:true}).click();
   const apply=assistant.getByRole('button',{name:'검토한 연결·모델 등록 적용',exact:true});await expect(apply).toBeVisible();
   const planned=await getLibrary(request);expect(planned.connections).toHaveLength(before.connections.length);expect(planned.models).toHaveLength(before.models.length);
-  await expect(assistant).toContainText('새 연결 · 비활성 상태로 등록');await expect(assistant).toContainText('synthetic-created-model');await expect(assistant).toContainText('모델 호출 1회');
+  await expect(assistant).toContainText('새 연결 · 비활성 상태로 등록');await expect(assistant).toContainText('synthetic-created-model');await expect(assistant).toContainText('실행 요청 1회');
   await apply.scrollIntoViewIfNeeded();await page.screenshot({path:info.outputPath('provider-registration-mobile-review.png')});
   const key=await page.evaluate(()=>sessionStorage.getItem('uimori.provider-registration.request-key'));expect(key).toBeTruthy();
   const snapshot=await(await request.get(`/api/provider-management/registrations/by-key/${key}`)).json() as RegistrationView;expect(snapshot.status).toBe('ready');

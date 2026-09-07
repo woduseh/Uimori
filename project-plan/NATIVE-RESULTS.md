@@ -2,7 +2,7 @@
 
 지정 자료의 native 구현과 승인된 후속 변경 통합, 로컬 회귀 검사·화면 QA를 완료했어요. 전체 단위 718개와 브라우저 47개가 통과했어요. 실제 자료의 가져오기와 요청 조립은 합성 브라우저 검사와 별도 DB에서 확인했어요. 원본 파일·사용자 DB를 수정하지 않았고 외부 모델 호출·커밋·push·배포는 하지 않았어요.
 
-현재 `main` HEAD는 `51e51967503dd9de9f765c0702210a360adde674`이며 결과는 그 위의 미커밋 작업트리예요. 최초 계약과 원본→native→변경/미지원→검사 대응은 [NATIVE-PORTING.md](NATIVE-PORTING.md), 공급자별 전송 경계는 [NATIVE-WIRE.md](NATIVE-WIRE.md)에 있어요.
+검증 당시 `main` HEAD는 `51e51967503dd9de9f765c0702210a360adde674`이며 결과는 그 위의 당시 미커밋 작업트리예요. 아래 수치·자료·미리보기는 해당 시점의 고정 기록이에요. 이후 전용 변환기는 제거했으며 [정리 결과](RISU-PORTING-RESULTS.md)와 [CURRENT](CURRENT.md)에서 현재 상태를 확인해요. 최초 계약과 원본→native→변경/미지원→검사 대응은 [NATIVE-PORTING.md](NATIVE-PORTING.md), 공급자별 전송 경계는 [NATIVE-WIRE.md](NATIVE-WIRE.md)에 있어요.
 
 ## 구현된 동작
 

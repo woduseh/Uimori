@@ -1,5 +1,7 @@
 # 번역 문맥 자율 조회 보강 결과
 
+아래는 당시 작업·검증 기록이에요. 2026-09-07 문서 점검 시 `output/playwright/translation-context-20260907/regression.json`이 현재 checkout에 없어 해당 원본 증거를 재확인하지 못했어요. 수치와 링크는 이력으로 보존하며 현재 통합 상태는 [CURRENT](CURRENT.md)를 확인해요.
+
 기준: 2026-09-07, main `51e5196`. 작업 경로는 `C:/Users/wodus/.codex/worktrees/7520/uimori`예요. 원래 루트의 `NATIVE-PORTING.md`는 읽기 전용으로 참고했어요. 개인 자료 열람/외부 전송, 유료 호출, 원격 push, 배포는 하지 않았어요.
 
 ## 구현 결과

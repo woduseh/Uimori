@@ -3,7 +3,6 @@ import { encodeResponses, ResponsesDecoder } from '../core/openai-protocol.js';
 import { encodeChat, ChatDecoder } from '../core/openai-chat-protocol.js';
 import { encodeAnthropic, AnthropicDecoder } from '../core/anthropic-protocol.js';
 import { encodeVertex, VertexDecoder } from '../core/vertex-protocol.js';
-import { encodeSolResponses } from '../core/sol-protocol.js';
 import { VERTEX_GEMINI_MODEL_ID } from '../core/product.js';
 import type { LogicalMessage, ProviderPrompt } from '../core/prompt-program.js';
 import type { Json, ProviderRequest, ProviderResult } from '../core/transport.js';
@@ -23,13 +22,12 @@ describe('native provider wire (synthetic, no live calls)',()=>{
     for(const body of [responses,chat,anthropic,vertex]) {const encoded=JSON.stringify(body);expect(encoded).not.toMatch(/DUPLICATE_TASK_SENTINEL|DUPLICATE_HISTORY_SENTINEL|Request data \(JSON\)/);expect(encoded.split('CURRENT_REQUEST')).toHaveLength(2);}
     expect(r).toEqual(before);
   });
-  test('native cache is explicit for eligible Responses, Anthropic; compatible chat and Sol remain unsupported',()=>{
+  test('native cache is explicit for eligible Responses and Anthropic while compatible chat remains unsupported',()=>{
     const r=request();r.prompt!.cachePlan=[{blockId:'cache',afterMessageId:'system',policy:'prefer'}];
     const responses=wire(encodeResponses(r).body);expect(responses.prompt_cache_options).toEqual({mode:'explicit'});expect(responses.input[0].content[0].prompt_cache_breakpoint).toEqual({mode:'explicit'});
     const a=wire(encodeAnthropic({...r,modelId:'claude-sonnet-4-6'}).body);expect(a.system.at(-1).cache_control).toEqual({type:'ephemeral'});
-    expect(wire(encodeChat(r).body)).not.toHaveProperty('prompt_cache_options');expect(wire(encodeResponses(r,'sol-responses-v1').body)).not.toHaveProperty('prompt_cache_options');
-    const sol=wire(encodeSolResponses(r,'https://api.openai.com/v1').body);expect(sol).not.toHaveProperty('prompt_cache_options');
-    r.prompt!.cachePlan[0].policy='require';expect(()=>encodeChat(r)).toThrow('PROMPT_CACHE_UNSUPPORTED');expect(()=>encodeResponses(r,'sol-responses-v1')).toThrow('PROMPT_CACHE_UNSUPPORTED');
+    expect(wire(encodeChat(r).body)).not.toHaveProperty('prompt_cache_options');
+    r.prompt!.cachePlan[0].policy='require';expect(()=>encodeChat(r)).toThrow('PROMPT_CACHE_UNSUPPORTED');
   });
   test('rejects prefill and unsupported mid-system instead of flattening the prompt',()=>{
     for(const [encoder,model] of [[encodeResponses,'gpt-5.6'],[encodeChat,'gpt-5.6'],[encodeAnthropic,'claude-sonnet-4-6'],[encodeVertex,VERTEX_GEMINI_MODEL_ID]] as const) {const r=request(model);r.prompt!.messages.at(-1)!.completion='prefill';expect(()=>encoder(r)).toThrow('PROMPT_PREFILL_UNSUPPORTED');}

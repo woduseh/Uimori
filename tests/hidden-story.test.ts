@@ -2,8 +2,9 @@ import { createHash } from 'node:crypto';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, test } from 'vitest';
-import { HIDDEN_CONTROL_MAP, defaultHiddenStoryConfig, filterHiddenStoryForRequest, hiddenRangeWasExcluded, hiddenReaderSettings, hiddenTranslationMarkers, parseHiddenStory, serializeHiddenStoryConfig, validateHiddenStoryConfig, validateHiddenTranslation, withHiddenKnowledge, type HiddenSource, type HiddenStoryConfig } from '../core/hidden-story.js';
-import { convertHiddenStoryModule, wireHiddenStoryInstructions } from '../core/hidden-story-converter.js';
+import { defaultHiddenStoryConfig, filterHiddenStoryForRequest, hiddenRangeWasExcluded, hiddenReaderSettings, hiddenTranslationMarkers, parseHiddenStory, serializeHiddenStoryConfig, validateHiddenStoryConfig, validateHiddenTranslation, withHiddenKnowledge, type HiddenSource, type HiddenStoryConfig } from '../core/hidden-story.js';
+import { wireHiddenStoryInstructions } from '../core/hidden-story-runtime.js';
+import { createHiddenNativeFixture } from './fixtures/hidden-native.js';
 import { compilePromptProgram } from '../core/prompt-program.js';
 import { HiddenStoryReader } from '../web/HiddenStoryReader.js';
 import { freezeHiddenStory, validateHiddenConversion } from '../core/hidden-story-package.js';
@@ -106,18 +107,10 @@ describe('Native hidden story source, knowledge and translation contracts', () =
   });
 });
 
-function syntheticModule() {
-  const customModuleToggle = HIDDEN_CONTROL_MAP.map(([key, , kind, count]) => `${key}=Synthetic ${key}${kind === 'boolean' ? '' : `=${kind}${kind === 'select' ? `=${Array.from({ length: count }, (_, index) => `choice${index}`).join(',')}` : ''}`}`).join('\n');
-  return { source: { sha256: 'a'.repeat(64) }, module: { id: 'synthetic-module', name: 'Synthetic Hidden Pack', customModuleToggle, lua: '', regex: [], triggers: [{ effect: [{ type: 'v2Header', code: '' }] }], lorebook: [
-    { sourceIndex: 0, comment: 'Synthetic creative', alwaysActive: true, mode: 'normal', insertorder: 2000, content: '@@depth 0\n{{#if_pure {{? {{getglobalvar::toggle_히든}}=0}}}}SYNTHETIC_DUAL {{user}}: {{pick::two::two::three}} blocks. {{#if {{and::{{not_equal::{{getglobalvar::toggle_커스텀테마}}::null}}::{{? {{length::{{getglobalvar::toggle_커스텀테마}}}}>0}}}}}}Theme={{getglobalvar::toggle_커스텀테마}}{{/if}}{{/if}}' },
-    { sourceIndex: 2, comment: 'Synthetic independent addon', alwaysActive: true, mode: 'normal', insertorder: 4000, content: '{{#if {{? {{getglobalvar::toggle_배드전개}}=1}}}}SYNTHETIC_ALLOW_LOSS{{/if}}' },
-    { sourceIndex: 8, comment: 'Synthetic external activation', alwaysActive: false, mode: 'normal', insertorder: 100, content: 'SYNTHETIC_EXTERNAL_ONLY' },
-  ] } };
-}
 
-describe('Source-driven hidden module conversion', () => {
-  test('NHS09 converts all 35 control identities and source conditional creative fragments without evaluating user text', () => {
-    const converted = convertHiddenStoryModule(syntheticModule()); expect(converted.program.controls).toHaveLength(35); expect(converted.controlMap).toHaveLength(35); expect(converted.status).toBe('partial');
+describe('Declarative hidden native package runtime', () => {
+  test('NHS09 assembles native controls and conditional fragments without evaluating user text', () => {
+    const converted = createHiddenNativeFixture(); expect(converted.program.controls).toHaveLength(35); expect(converted.controlMap).toHaveLength(35); expect(converted.status).toBe('partial');
     const wired = wireHiddenStoryInstructions(converted, config({ 'hidden.enabled': 0, 'hidden.customTheme': '{{setvar::private::oops}}', 'hidden.badOutcomes': true }), { seed: 'run-one', userLabel: 'Reader' });
     const compilation = compilePromptProgram({ ...wired.program, blocks: [...wired.program.blocks, { kind: 'current', id: 'current-input', title: 'Current' }] }, { values: wired.values, slots: wired.slots, history: [{ id: 'u', role: 'user', text: 'Synthetic request', current: true }] });
     const output = compilation.messages.map(message => message.content[0].text).join('\n');
@@ -127,7 +120,7 @@ describe('Source-driven hidden module conversion', () => {
   });
 
   test('NHS10 seeded count weights survive reader changes and unsupported external actions are explicit', () => {
-    const converted = convertHiddenStoryModule(syntheticModule()); expect(converted.picks[0].choices).toEqual(['two', 'two', 'three']);
+    const converted = createHiddenNativeFixture(); expect(converted.picks[0].choices).toEqual(['two', 'two', 'three']);
     const first = wireHiddenStoryInstructions(converted, config(), { seed: 'stable-run', userLabel: 'Reader' });
     const second = wireHiddenStoryInstructions(converted, config({ 'hidden.open': 1, 'hidden.color': 7 }), { seed: 'stable-run', userLabel: 'Reader' });
     expect(second.choices).toEqual(first.choices);
@@ -136,15 +129,17 @@ describe('Source-driven hidden module conversion', () => {
     expect(wireHiddenStoryInstructions(converted, config({ 'hidden.style': 1 }), { seed: 's', userLabel: 'Reader' }).issues).toContain('HIDDEN_INVASIVE_CSS_SCOPED');
   });
 
-  test('NHS11 incomplete source control coverage and unknown CBS never become successful active imports', () => {
-    const missing = syntheticModule(); missing.module.customModuleToggle = missing.module.customModuleToggle.split('\n').slice(1).join('\n'); expect(() => convertHiddenStoryModule(missing)).toThrow('HIDDEN_IMPORT_CONTROL_COVERAGE');
-    const unknown = syntheticModule(); unknown.module.lorebook[0].content = '{{exec::unknown}}';
-    const converted = convertHiddenStoryModule(unknown); expect(converted.program.blocks[0].enabled).toBe(false); expect(converted.issues.map(issue => issue.code)).toContain('HIDDEN_CBS_FUNCTION_UNSUPPORTED');
-    const copied = syntheticModule(); const before = structuredClone(copied); convertHiddenStoryModule(copied); expect(copied).toEqual(before);
+  test('NHS11 incomplete native control coverage and unknown AST operations are rejected without mutation', () => {
+    const missing = createHiddenNativeFixture(); missing.program.controls.pop(); expect(() => validateHiddenConversion(missing)).toThrow('HIDDEN_NATIVE_PACKAGE_INVALID');
+    const invalid = createHiddenNativeFixture(); const block = invalid.program.blocks[0];
+    if (block.kind !== 'message') throw new Error('Invalid synthetic fixture');
+    block.template = [{ kind: 'value', expression: { op: 'unknown' as never, args: [] } }];
+    expect(() => validateHiddenConversion(invalid)).toThrow();
+    const native = createHiddenNativeFixture(), before = structuredClone(native); validateHiddenConversion(native); expect(native).toEqual(before);
   });
 
   test('NHS12 native package validation and freezing retain separate message provenance and deterministic choices', () => {
-    const conversion=validateHiddenConversion(convertHiddenStoryModule(syntheticModule()));
+    const conversion=validateHiddenConversion(createHiddenNativeFixture());
     const module={...conversion,id:'synthetic-native',revision:1,title:'Synthetic native',packageHash:'b'.repeat(64)};
     const selection={module:{id:module.id,revision:1},config:config({'hidden.enabled':0,'hidden.badOutcomes':true}),insertion:'before-history' as const};
     const frozen=freezeHiddenStory(module,selection,{seed:'fixed-run',userLabel:'Reader'});
@@ -152,19 +147,18 @@ describe('Source-driven hidden module conversion', () => {
     expect(frozen.messages.map(m=>m.id)).toEqual(['hidden.lore.0','hidden.lore.2','hidden.host-contract']);expect(frozen.insertion).toBe('before-history');
     module.program.blocks.length=0;selection.config.values['hidden.badOutcomes']=false;expect(frozen.module.program.blocks.length).toBeGreaterThan(0);expect(frozen.config.values['hidden.badOutcomes']).toBe(true);
     expect(()=>validateHiddenConversion({...conversion,picks:[{slot:'hidden.pick.0.0',choices:['{{exec::bad}}']}]})).toThrow();
-    const unknown=syntheticModule();unknown.module.lorebook[0].content='{{unknown}}';expect(convertHiddenStoryModule(unknown).program.blocks[0].enabled).toBe(false);
   });
 
   test('NHS13 immutable module versions survive SQLite reopen and stale edits conflict',async()=>{
     const directory=await mkdtemp(join(tmpdir(),'uimori-hidden-native-'));let store:Store|undefined;
     try{
       const path=join(directory,'synthetic.sqlite');store=new Store(path);let hidden=new HiddenStoryStore(store.product);
-      const first=hidden.import({title:'Synthetic module',conversion:convertHiddenStoryModule(syntheticModule())});
+      const first=hidden.import({title:'Synthetic module',conversion:createHiddenNativeFixture()});
       const selected={module:{id:first.id,revision:first.revision},config:config({'hidden.enabled':0})};
       const frozen=hidden.freeze(selected,{seed:'fixed-run',userLabel:'Reader'})!;
-      const second=hidden.import({title:'Synthetic revision two',conversion:convertHiddenStoryModule(syntheticModule()),expectedRevision:1},first.id);
+      const second=hidden.import({title:'Synthetic revision two',conversion:createHiddenNativeFixture(),expectedRevision:1},first.id);
       expect(second.revision).toBe(2);expect(hidden.get(first.id,1).title).toBe('Synthetic module');
-      expect(()=>hidden.import({title:'Stale edit',conversion:convertHiddenStoryModule(syntheticModule()),expectedRevision:1},first.id)).toThrow('Revision conflict');
+      expect(()=>hidden.import({title:'Stale edit',conversion:createHiddenNativeFixture(),expectedRevision:1},first.id)).toThrow('Revision conflict');
       store.close();store=new Store(path);hidden=new HiddenStoryStore(store.product);
       expect(hidden.freeze(selected,{seed:'fixed-run',userLabel:'Reader'})).toEqual(frozen);expect(hidden.list()).toHaveLength(1);expect(hidden.list()[0].revision).toBe(2);
     }finally{

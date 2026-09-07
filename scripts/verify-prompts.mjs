@@ -6,12 +6,12 @@ import { root, artifactRoot, newId, json, command, requireCommand, assertBuild, 
 // Reuse the repository ownership, build identity, fresh reporter and cleanup contracts.
 // Run only after npm run build on a stable source tree.
 async function main() {
-  if (process.argv.length > 2) throw new Error('verify-sol accepts no arguments');
-  const runId=`sol-ui-${newId()}`, directory=path.join(artifactRoot,runId), runtime=path.join(directory,'runtime');
+  if (process.argv.length > 2) throw new Error('verify-prompts accepts no arguments');
+  const runId=`prompt-editor-${newId()}`, directory=path.join(artifactRoot,runId), runtime=path.join(directory,'runtime');
   const children=new Set(), failures=[]; let cancelled=false, blocked=false;
-  const requiredCases=['SOLUI01','SOLUI02'];
-  const requiredScreenshots=['sol-desktop-options.png','sol-desktop-restored-roles.png','sol-mobile-gateway.png','sol-mobile-options.png'];
-  const summary={schema:1,runId,status:'FAIL',scope:'Sol synthetic UI registration and persisted role selection',startedAt:new Date().toISOString(),environment:{node:process.version,platform:process.platform},commands:[],reports:{},failures,requiredCases,requiredScreenshots,cleanup:{status:'NOT_RUN'},limitations:['No provider catalog lookup, paid generation, user DB, or deployment.','390px is a browser viewport; physical phone keyboard and IME behavior are not established.','Screenshots require visual review; automated assertions check control bounds and persisted values.','This runner does not replace provider codec, loopback transport, M0 or M1-local verification.']};
+  const requiredCases=['PUNI01','PUNI02','PRUI01','NUI01','UI17'];
+  const requiredScreenshots=['prompt-collapsed-desktop.png','prompt-collapsed-mobile.png','prompt-simple-mobile.png'];
+  const summary={schema:1,runId,status:'FAIL',scope:'Unified prompt editing, collapse preservation, native import and immutable prompt revisions',startedAt:new Date().toISOString(),environment:{node:process.version,platform:process.platform},commands:[],reports:{},failures,requiredCases,requiredScreenshots,cleanup:{status:'NOT_RUN'},limitations:['No provider catalog lookup, paid generation, user DB, or deployment.','390px is a browser viewport; physical phone keyboard and IME behavior are not established.','Screenshots require visual review; automated assertions check control bounds and persisted values.','This runner does not replace provider codec, loopback transport, M0 or M1-local verification.']};
   const owner={runId,ownerPid:process.pid,root,directory,active:true,children:[],startedAt:summary.startedAt};
   await mkdir(path.join(runtime,'temp'),{recursive:true}); await json(path.join(directory,'ownership.json'),owner);
   const cancel=signal=>{cancelled=true;failures.push(`Cancelled: ${signal}`);for(const child of children) void killOwned(child).catch(error=>failures.push(error.message));};
@@ -26,7 +26,7 @@ async function main() {
     const server=await startServer(env,directory,children); env.NR_BASE_URL=server.ready.url; summary.server=server.ready;
     owner.children=[{pid:server.child.pid,command:'node dist/server/index.js',dbPath:env.NR_DB,url:env.NR_BASE_URL}]; await json(path.join(directory,'ownership.json'),owner);
     const reportFile=path.join(directory,'playwright.json'),since=Date.now();
-    const result=await command(['node_modules/@playwright/test/cli.js','test','tests/sol-browser.spec.ts','--reporter=json'],{env:{...env,PLAYWRIGHT_JSON_OUTPUT_NAME:reportFile},timeout:180000,children,log:path.join(directory,'playwright.log')});
+    const result=await command(['node_modules/@playwright/test/cli.js','test','tests/prompt-unified-browser.spec.ts','tests/prompt-redesign-browser.spec.ts','tests/native-browser.spec.ts','tests/ui-browser.spec.ts','--grep','PUNI|PRUI01|NUI01|UI17','--reporter=json'],{env:{...env,PLAYWRIGHT_JSON_OUTPUT_NAME:reportFile},timeout:180000,children,log:path.join(directory,'playwright.log')});
     const {output,...record}=result; summary.commands.push({...record,log:'playwright.log'});
     // Parse even after command failure so incomplete/missing evidence remains visible.
     try {summary.reports.playwright=await readReport(reportFile,since,'playwright');}
@@ -40,7 +40,7 @@ async function main() {
       const bytes=await readFile(file); if(bytes.length<24||!bytes.subarray(0,8).equals(Buffer.from([137,80,78,71,13,10,26,10]))) throw new Error(`Invalid screenshot: ${name}`);
     }
     summary.screenshots=screenshots.map(file=>path.relative(directory,file));
-    const final=await assertBuild(); if(final.buildId!==summary.identity.buildId||(await fingerprint()).hash!==initial.hash) throw new Error('Source/build changed during Sol UI verification');
+    const final=await assertBuild(); if(final.buildId!==summary.identity.buildId||(await fingerprint()).hash!==initial.hash) throw new Error('Source/build changed during prompt UI verification');
     summary.identityVerifiedAt=new Date().toISOString();
   } catch(error){failures.push(error.message);}
   finally {

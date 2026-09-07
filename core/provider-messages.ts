@@ -14,7 +14,7 @@ export function planNativeMessages(request:ProviderRequest,protocol:ProviderProt
   const prompt=validateProviderPrompt(request.prompt);const diagnostics:MessageDiagnostic[]=[];const system:Json[]=[];const messages:Json[]=[];const options:Record<string,Json>={};
   const reject=(code:string,m:LogicalMessage,index:number):never=>{throw new ProviderContractError(`${code}:block=${m.provenance.blockId}:index=${index}:protocol=${protocol}:model=${request.modelId}`);};
   const note=(code:string,m:LogicalMessage,index:number,status:MessageDiagnostic['status']='mapped')=>diagnostics.push({code,blockId:m.provenance.blockId,logicalIndex:index,protocol,modelId:request.modelId,status});
-  const responses=protocol==='openai-responses-v1'||protocol==='sol-responses-v1';const anthropic=protocol==='anthropic-messages-v1';const vertex=protocol==='vertex-gemini-v1';
+  const responses=protocol==='openai-responses-v1';const anthropic=protocol==='anthropic-messages-v1';const vertex=protocol==='vertex-gemini-v1';
   const midSystem=anthropic&&ANTHROPIC_MID_SYSTEM_MODELS.has(request.modelId);
   const explicitOpenAI=protocol==='openai-responses-v1'&&OPENAI_EXPLICIT_CACHE_MODELS.has(request.modelId);
   let leading=true;let cacheCount=0;const cacheIds=new Set<string>();
@@ -28,7 +28,6 @@ export function planNativeMessages(request:ProviderRequest,protocol:ProviderProt
       const before=prompt.messages.slice(0,index).findLast(m=>m.role!=='system');const after=prompt.messages.slice(index+1).find(m=>m.role!=='system');
       if(before?.role!=='user'||after&&after.role!=='assistant')reject('PROMPT_MID_SYSTEM_PLACEMENT_UNSUPPORTED',message,index);
     }
-    if(vertex&&message.role!=='system'&&index>0&&prompt.messages[index-1].role===message.role)reject('PROMPT_CONSECUTIVE_ROLE_UNVERIFIED',message,index);
     if(anthropic&&index>0&&prompt.messages[index-1].role===message.role&&message.role!=='system')note('PROVIDER_COMBINES_SAME_ROLE_TURNS',message,index);
     const parts=message.content.map((part):Record<string,Json>=>responses?{type:'input_text',text:part.text}:vertex?{text:part.text}:{type:'text',text:part.text});
     for(const anchor of prompt.cachePlan.filter(a=>a.afterMessageId===message.id)){
@@ -39,7 +38,11 @@ export function planNativeMessages(request:ProviderRequest,protocol:ProviderProt
       cacheIds.add(message.id);cacheCount++;note('CACHE_BREAKPOINT_ENCODED_HIT_UNVERIFIED',message,index);
     }
     if((anthropic||vertex)&&message.role==='system'&&wasLeading){system.push(...parts);note('LEADING_SYSTEM_TO_DEDICATED_FIELD',message,index);}
-    else messages.push(vertex?{role:message.role==='assistant'?'model':'user',parts}: {role:message.role,content:parts});
+    else if(vertex){
+      const role=message.role==='assistant'?'model':'user';const previous=messages.at(-1) as {role:string;parts:Json[]}|undefined;
+      if(previous?.role===role){previous.parts.push(...parts);note('CONSECUTIVE_ROLE_PARTS_COMBINED',message,index);}
+      else messages.push({role,parts});
+    }else messages.push({role:message.role,content:parts});
   }
   if((anthropic||vertex)&&messages.length===0)throw new ProviderContractError('PROMPT_CONVERSATION_REQUIRED');
   return{messages,system,options,diagnostics,capabilityVersion:'native-wire-2026-09-07'};

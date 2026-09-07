@@ -29,18 +29,18 @@
 | --- | --- |
 | `core/product.ts`: `PROVIDER_PROTOCOLS`, `validateProviderEndpoint` | 지원 protocol 7개와 기존 endpoint 경계를 유지해요. 추가 API 프로토콜이나 자동 origin 승인은 없어요. |
 | `web/ProviderSettings.tsx`: 조사 시 `labels`, `roots`, `credentials` | 기존 label·endpoint·환경변수 기본값을 보존해요. fixture·Vertex·custom의 빈 endpoint는 사용자 입력이 필요하다는 뜻이에요. |
-| `server/product-store.ts`: `validateModelGeneration` | `optionKeys`는 최상위 모델 프리셋 키예요. timeoutMs는 host 실행 옵션이고 requestTier는 별도 연결 옵션이므로 목록에서 제외해요. Sol 내부 키는 `sol` 아래 기존 validator가 검사해요. |
+| `server/product-store.ts`: `validateModelGeneration` | `optionKeys`는 최상위 모델 프리셋 키예요. timeoutMs는 host 실행 옵션이고 requestTier는 별도 연결 옵션이므로 목록에서 제외해요. 평가 도구는 특정 공급자 옵션이 아니라 선택한 모델 프리셋의 `evaluationTools`로 검증해요. |
 | `core/vertex-protocol.ts`: `encodeVertex`; `core/vertex-auth.ts` | Vertex는 고정 지원 모델·global 프로젝트 endpoint·thinkingLevel을 유지해요. temperature는 null이며 사용자 조절 옵션으로 광고하지 않아요. 서버의 GOOGLE_APPLICATION_CREDENTIALS 파일 또는 기존 Bearer 경로를 사용해요. |
 | `core/openai-protocol.ts`: `encodeResponses`; `core/openai-chat-protocol.ts`: `encodeChat`; `core/anthropic-protocol.ts`: `encodeAnthropic` | 각 encoder가 받는 생성 옵션만 정의해요. Anthropic thinking과 temperature의 상호 제약은 그대로 유지해요. |
-| `core/provider-http.ts`: `executeNativeProvider`; `core/transport.ts`: `executeProvider` | Anthropic은 x-api-key, native Responses·Vercel·Sol은 Bearer예요. custom Chat과 fixture의 선택적 Bearer는 limitations에 명시해요. fixture는 자체 loopback 형식이에요. |
-| `core/sol-config.ts`: `SOL_GATEWAYS`, `validateSolOptions`; `core/sol-protocol.ts`: `encodeSolResponses` | Sol의 기존 세 gateway 선택을 그대로 사용해요. 정의 revision은 모델별 기능 확인 시점이나 가격 revision이 아니에요. |
+| `core/provider-http.ts`: `executeNativeProvider`; `core/transport.ts`: `executeProvider` | Anthropic은 x-api-key, native Responses·Vercel은 Bearer예요. custom Chat과 fixture의 선택적 Bearer는 limitations에 명시해요. fixture는 자체 loopback 형식이에요. |
+| `core/evaluation-tool-config.ts`; `core/evaluation-tools.ts`; `server/evaluation-session.ts` | 네 평가 도구는 공급자 정의와 분리하고, 사용자가 켠 모델 프리셋에만 추가해요. 현재 계약은 [선택형 평가 도구](EVALUATION-TOOLS.md)를 따라요. |
 | `server/product-routes.ts`: `/api/connections/:id/catalog` | Vertex만 로컬 지원 목록이에요. fixture는 loopback에 한정되지만 목록은 HTTP 요청이므로 `remote`로 구분해요. 다른 정의도 실제 목록 조회 성공이나 인증 성공을 미리 주장하지 않아요. |
 
 `optionKeys`는 기존 어댑터·저장 검증에서 받아들이는 범위를 설명해요. fixture는 전달받은 옵션을 합성 서버가 해석하므로 실제 모델의 생성 옵션 지원을 검증한 것이 아니에요. 공통 최대 토큰·temperature·timeout 설정도 모델별 실제 지원을 보증하지 않아요.
 
 ## 조사 시 로컬 파일 SHA-256
 
-후속 병렬 구현에서 파일이 바뀔 수 있으므로 아래 값은 조사 스냅샷의 식별자예요.
+후속 병렬 구현에서 파일이 바뀔 수 있으므로 아래 값은 조사 스냅샷의 식별자예요. `core/sol-*` 두 행은 제거 전 조사 증거이며 현재 제품 파일이나 지원 protocol 목록이 아니에요.
 
 | 파일 | SHA-256 |
 | --- | --- |

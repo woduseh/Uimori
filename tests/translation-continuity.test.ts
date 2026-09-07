@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { afterEach, describe, expect, test } from 'vitest';
-import { aggregateTranslation, createTranslationPlan, executeAuxiliary, translationInput, validateTranslationChunk, validateTranslationPlan, type AuxiliaryInput, type TranslationPlan, type TranslationResult } from '../core/auxiliary.js';
+import { aggregateTranslation, compileTranslationPrompt, createTranslationPlan, executeAuxiliary, translationInput, validateTranslationChunk, validateTranslationPlan, type AuxiliaryInput, type TranslationPlan, type TranslationResult } from '../core/auxiliary.js';
 import { defaultProfile } from '../core/product.js';
 import { runAuxiliaryJob, sourceTimeContext, type AuxiliaryBundle, type AuxiliaryChunkRecord, type AuxiliaryJobHooks, type AuxiliaryOutcome, type AuxiliaryStoreBridge } from '../server/product-auxiliary.js';
 import { loopbackProvider, writeSse } from './fixtures/loopback-provider.js';
@@ -80,7 +80,7 @@ describe('same-source completed translation wording references',()=>{
       return translated(plan,1);
     });
     expect(output.modelCalls).toBe(2);expect(observed[1].context.previousTranslation).toEqual(observed[0].context.previousTranslation);
-    expect(observed[0].context.glossary[0].text).toBe('Captain Arlen = 앨런 선장');expect(input.contract).toContain('author canon/glossary take precedence');expect(input.contract).toContain('never repeat reference passages');
+    expect(observed[0].context.glossary[0].text).toBe('Captain Arlen = 앨런 선장');expect(input.contract).toBe('');const instructions=compileTranslationPrompt(input,seed.snapshot,'Translate this chunk.')!.messages[0].content[0].text;expect(instructions).toContain('author canon/glossary take precedence');expect(instructions).toContain('never repeat reference passages');
   });
 
   test('sends already persisted earlier wording to subsequent chunks without extra planning calls',async()=>{

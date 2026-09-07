@@ -31,3 +31,4 @@
 **/output/
 **/.local/
 **/*.vertex-credentials/
+**/*.codex/

@@ -105,14 +105,16 @@ test('readiness reveals only presence and approved origin without authenticating
   const s = database(); const c = s.product.connection(connectionBody()) as Connection;
   const network = vi.spyOn(globalThis,'fetch').mockRejectedValue(new Error('Network forbidden'));
   expect(readiness(s.product,c,[])).toEqual({enabled:true,originApproved:false,credentialStatus:'not-required',catalogKind:'remote'});
-  vi.stubEnv('NARRATIVE_PROVIDER_READINESS','TOP_SECRET');
-  const withKey = {...c,credentialEnv:'NARRATIVE_PROVIDER_READINESS'};
+  vi.stubEnv('My_Gateway_Token','TOP_SECRET');
+  const withKey = {...c,credentialEnv:'My_Gateway_Token'};
   const ready = readiness(s.product,withKey,['http://127.0.0.1:9999']);
   expect(ready.credentialStatus).toBe('configured'); expect(JSON.stringify(ready)).not.toContain('TOP_SECRET');
-  vi.stubEnv('NARRATIVE_PROVIDER_READINESS','bad\r\nvalue'); expect(readiness(s.product,withKey,[]).credentialStatus).toBe('missing');
+  vi.stubEnv('My_Gateway_Token','bad\r\nvalue'); expect(readiness(s.product,withKey,[]).credentialStatus).toBe('missing');
   vi.stubEnv('GOOGLE_APPLICATION_CREDENTIALS',s.path);
   expect(readiness(s.product,{...c,protocol:'vertex-gemini-v1'},[])).toMatchObject({credentialStatus:'adc-configured',catalogKind:'local-support'});
+  expect(readiness(s.product,{...c,protocol:'vertex-gemini-v1',credentialEnv:'GOOGLE_APPLICATION_CREDENTIALS'},[])).toMatchObject({credentialStatus:'adc-configured',catalogKind:'local-support'});
   vi.stubEnv('GOOGLE_APPLICATION_CREDENTIALS',s.path+'.absent'); expect(readiness(s.product,{...c,protocol:'vertex-gemini-v1'},[]).credentialStatus).toBe('adc-unchecked');
+  expect(readiness(s.product,{...c,protocol:'vertex-gemini-v1',credentialEnv:'GOOGLE_APPLICATION_CREDENTIALS'},[]).credentialStatus).toBe('adc-unchecked');
   expect(network).not.toHaveBeenCalled();
 });
 

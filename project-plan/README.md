@@ -7,8 +7,13 @@
 | 파일 | 내용 |
 | --- | --- |
 | [CURRENT.md](CURRENT.md) | 현재 구현, 검증 근거, 남은 작업 |
+| [Codex 결과](CODEX-RESULTS.md) · [Codex 연결](../docs/CODEX.md) | 공식 서버 에이전트의 역할별 연결·개인 구독 로그인·합성 검사·실제 실행 미확인 범위 |
+| [선택형 평가 도구](EVALUATION-TOOLS.md) | 모델 프리셋 opt-in, 네 도구 계약, 원본 비교와 provider 분리 |
+| [Self-host 결과](SELF-HOST-RESULTS.md) · [배포 안내](../docs/SELF-HOST.md) | 개인 HTTPS 서버 구성·인증과 로컬 검증, 실제 Linux/기기 미확인 범위 |
+| [Risu 이식 결과](RISU-PORTING-RESULTS.md) · [이식 가이드](../docs/RISU-PORTING.md) | 전용 변환기 제거, 공통 native 계약 유지와 에이전트 이식 절차 |
+| [공통 행동 결과](ACTION-EXECUTION-RESULTS.md) · [패키지 동작 결과](PACKAGE-BEHAVIOR-RESULTS.md) | 상태·계산·추첨·자동/사용자/모델 행동의 구현 및 당시 검증 |
 | [봇 중심 개편](REDESIGN.md) · [개편 결과](REDESIGN-RESULTS.md) | 봇 소속·폴더·공통 패키지·프롬프트 제작과 검증 |
-| [패키지 동작 확장 계획](PACKAGE-BEHAVIOR-PLAN.md) | Veil·메리·Alternate·청원고 정적 분석에 따른 상태/action/job/화면 후속 설계안 |
+| [패키지 동작 확장 계획](PACKAGE-BEHAVIOR-PLAN.md) | 복잡한 봇의 정적 분석에 따른 초기 설계와 이후 구현 범위의 구분 |
 | [PROJECT.md](PROJECT.md) | 목적, 우선순위, 실제 사용 조건, 비목표 |
 | [MILESTONES.md](MILESTONES.md) | M0–M3 범위와 종료 조건 |
 | [ARCHITECTURE.md](ARCHITECTURE.md) | 데이터·자율 조회·역할별 처리·번역·상태·이미지 계약 |
@@ -16,7 +21,7 @@
 | [ACCEPTANCE.json](ACCEPTANCE.json) | 인수 ID, 기대 결과, 증거와 주장 한계 |
 | [SOURCES.md](SOURCES.md) | 참고 자료와 채택·비채택 근거 |
 | [M0 결과](M0-RESULTS.md) · [M1 결과](M1-RESULTS.md) · [M2 결과](M2-RESULTS.md) | 단계별 구현과 당시 검증 기록 |
-| [UI 결과](UI-RESULTS.md) · [Sol 결과](SOL-RESULTS.md) | 후속 UI·공급자 통합 기록 |
+| [UI 결과](UI-RESULTS.md) · [이전 Sol 결과](SOL-RESULTS.md) | 후속 UI와 제거 전 Sol provider의 역사적 통합 기록 |
 
 새 작업은 CURRENT에서 남은 범위를 확인한 뒤 관련 계약만 읽어요. 인수 목록의 모든 향후 항목을 한 번에 구현할 필요는 없어요. 현재 사용자 요청을 우선하며 파일 간 실질적 충돌은 결정과 영향을 기록해요.
 

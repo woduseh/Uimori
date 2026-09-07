@@ -10,8 +10,8 @@ async function main() {
   if (process.argv.length > 2) throw new Error('verify-provider-management accepts no arguments');
   const runId=`provider-management-${newId()}`, directory=path.join(artifactRoot,runId), runtime=path.join(directory,'runtime');
   const children=new Set(), failures=[]; let cancelled=false, blocked=false; let fixture;
-  const requiredCases=['PMUI01','PMUI02','PMUI03','PMUI04','PMUI05','PMUI06'];
-  const requiredScreenshots=['provider-management-mobile-model.png','provider-management-mobile-capabilities.png','provider-management-desktop-conflict.png','provider-management-pinned-model.png','provider-management-current-readiness.png','provider-registration-mobile-review.png','provider-registration-applied.png'];
+  const requiredCases=['PMUI01','PMUI02','PMUI03','PMUI04','PMUI05','PMUI06','PMUI10'];
+  const requiredScreenshots=['provider-management-mobile-model.png','provider-management-mobile-capabilities.png','provider-management-desktop-conflict.png','provider-management-pinned-model.png','provider-management-current-readiness.png','provider-registration-mobile-review.png','provider-registration-applied.png','codex-subscription-settings-mobile.png'];
   const summary={schema:1,runId,status:'FAIL',scope:'Provider management and registration assistant synthetic UI',startedAt:new Date().toISOString(),environment:{node:process.version,platform:process.platform},commands:[],reports:{},failures,requiredCases,requiredScreenshots,cleanup:{status:'NOT_RUN'},limitations:['Synthetic loopback provider only; no live provider, paid generation, user DB or deployment.','390px is a browser viewport; physical phone keyboard and IME behavior are not established.','Screenshots require visual review; automated assertions check control bounds and persisted values.','This runner does not replace provider codec, loopback transport, M0 or M1-local verification.']};
   const owner={runId,ownerPid:process.pid,root,directory,active:true,children:[],startedAt:summary.startedAt};
   await mkdir(path.join(runtime,'temp'),{recursive:true}); await json(path.join(directory,'ownership.json'),owner);

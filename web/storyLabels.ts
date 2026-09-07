@@ -3,7 +3,7 @@ import type { ReaderDetail } from '../core/types.js';
 
 export function modelLabel(model: ModelPreset, library: Library | null) {
   const connection = library?.connections.find(item => item.id === model.connectionId);
-  const providers: Record<string, string> = { 'sol-responses-v1': 'Sol Responses', 'vertex-gemini-v1': 'Vertex AI', 'openai-responses-v1': 'OpenAI Responses', 'openai-chat-v1': 'OpenAI Chat', 'anthropic-messages-v1': 'Anthropic', 'vercel-chat-v1': 'Vercel AI Gateway', 'fixture-sse-v1': '검사용 fixture' };
+  const providers: Record<string, string> = { 'codex-app-server-v1':'Codex', 'vertex-gemini-v1': 'Vertex AI', 'openai-responses-v1': 'OpenAI Responses', 'openai-chat-v1': 'OpenAI Chat', 'anthropic-messages-v1': 'Anthropic', 'vercel-chat-v1': 'Vercel AI Gateway', 'fixture-sse-v1': '검사용 fixture' };
   const provider = connection ? providers[connection.protocol] ?? '저장된 연결' : '연결 확인 필요';
   return `${model.title} · ${provider}`;
 }

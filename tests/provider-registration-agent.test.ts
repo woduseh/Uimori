@@ -2,14 +2,14 @@ import { afterEach, expect, test, vi } from 'vitest';
 import type { ServerResponse } from 'node:http';
 import { runRegistrationAgent, type RegistrationAgentHooks } from '../server/provider-registration-agent.js';
 import { PROVIDER_DEFINITIONS } from '../core/provider-definitions.js';
-import { defaultSolOptions } from '../core/sol-config.js';
+import { defaultEvaluationToolOptions } from '../core/evaluation-tool-config.js';
 import type { Connection, ModelPreset } from '../core/product.js';
 import type { Json, ProviderResult, WireRecord } from '../core/transport.js';
 import { loopbackProvider, sse, writeSse } from './fixtures/loopback-provider.js';
 
 const closes: (() => Promise<void>)[] = [];
 afterEach(async () => { for (const close of closes.splice(0)) await close(); vi.unstubAllEnvs(); });
-const env = 'NARRATIVE_PROVIDER_REGISTRATION_TEST';
+const env = 'My_Registration_Key';
 const proposed = () => ({ connection: { kind: 'new', draft: { title: 'Proposed local connection', protocol: 'openai-chat-v1', endpoint: 'http://127.0.0.1:9/v1', enabled: false } }, model: { title: 'Proposed model', modelId: 'chosen/model', maxOutputTokens: 2048, temperature: null } });
 const context = (): Json => ({ definitions: JSON.parse(JSON.stringify(PROVIDER_DEFINITIONS)), connections: [{ id: 'existing', revision: 2, protocol: 'openai-chat-v1', title: 'Saved connection', endpoint: 'PRIVATE_EXISTING_ENDPOINT', credentialEnv: 'PRIVATE_EXISTING_CREDENTIAL_REF', catalog: [{ text: 'PRIVATE_CATALOG_BODY' }] }],
   models: [{ id: 'model', revision: 3, title: 'Saved model', modelId: 'saved/model', protocol: 'openai-chat-v1', endpoint: 'PRIVATE_MODEL_ENDPOINT', body: 'PRIVATE_MODEL_BODY' }], story: 'PRIVATE_STORY_BODY' });
@@ -33,9 +33,6 @@ function observe(origin: string, extra: Partial<RegistrationAgentHooks> = {}) {
 const tool = (name = 'registration.propose', id = 'proposal', args: unknown = proposed()): Json => ({ type: 'tool_delta', index: 0, id, name, argumentsDelta: JSON.stringify(args) });
 const complete = (args: unknown = proposed()): Json[] => [{ type: 'text_delta', delta: JSON.stringify(args) }, { type: 'usage', inputTokens: 11, outputTokens: 7 }, { type: 'done', reason: 'stop' }];
 const toolComplete = (events: Json[] = [tool()]): Json[] => [...events, { type: 'usage', inputTokens: 11, outputTokens: 7 }, { type: 'done', reason: 'tool_calls' }];
-const data = (body: any) => { const text = body.input[0].content[0].text; return JSON.parse(text.slice(text.indexOf('\n') + 1)); };
-function nativeCall(body: any, name: string, args: unknown): Json { return { type: 'function_call', id: 'item', call_id: 'call', name: body.tools.find((tool: any) => tool.name.endsWith('_' + name.replaceAll('.', '_'))).name, arguments: JSON.stringify(args), status: 'completed' }; }
-async function nativeComplete(response: ServerResponse, output: Json[]) { response.writeHead(200, { 'content-type': 'application/json' }); response.end(JSON.stringify({ id: 'response', status: 'completed', output, usage: { input_tokens: 11, output_tokens: 7 } })); }
 
 test('one proposal call records attempt before HTTP and sends only registration metadata', async () => {
   const server = await fixture(async (body, response) => {
@@ -64,17 +61,16 @@ test('native Chat completed JSON preserves selected generation options and unkno
   expect(server.failures).toEqual([]); expect(server.requests).toHaveLength(1); expect(log.attempts[0].result!.usage).toMatchObject({ inputTokens: null, outputTokens: null, costUsd: null });
 });
 
-test('Sol preserves options, accepts direct proposal/JSON delivery, and never executes local tools', async () => {
+test('registration exposes only its proposal tool even on evaluation-enabled presets', async () => {
   for (const mode of ['proposal', 'artifact', 'local']) {
     const server = await fixture(async (body, response) => {
-      expect(body).toMatchObject({ service_tier: 'flex', text: { verbosity: 'low' }, include: ['reasoning.encrypted_content'] }); expect(body.tool_choice).toBe('auto');
-      expect(data(body)).not.toHaveProperty('source');
-      const call = mode === 'proposal' ? nativeCall(body, 'registration.propose', proposed()) : mode === 'artifact' ? nativeCall(body, 'eval_submit_artifact', { content: JSON.stringify(proposed()), userFacingNotice: 'PRIVATE_NOTICE' }) : nativeCall(body, 'eval_get_context', {});
-      await nativeComplete(response, [call]);
+      expect(body.stable.tools).toHaveLength(1); expect(body.stable.tools[0].name).toBe('registration.propose');
+      expect(body.input).not.toHaveProperty('source');
+      await writeSse(response,toolComplete([tool(mode === 'proposal' ? 'registration.propose' : mode === 'artifact' ? 'eval_submit_artifact' : 'eval_get_context')]));
     });
-    const chosen = target(server.origin, 'sol-responses-v1'); chosen.sol = { ...defaultSolOptions(), serviceTier: 'flex', verbosity: 'low' }; const original = structuredClone(chosen); const log = observe(server.origin);
+    const chosen = target(server.origin); chosen.evaluationTools = defaultEvaluationToolOptions(); const original = structuredClone(chosen); const log = observe(server.origin);
     const result = await runRegistrationAgent(chosen, 'Prepare a proposal', log.hooks);
-    expect(result.status).toBe(mode === 'local' ? 'failed' : 'ready'); expect(log.proposals).toHaveLength(mode === 'local' ? 0 : 1);
+    expect(server.failures).toEqual([]); expect(result.status,JSON.stringify(result)).toBe(mode === 'proposal' ? 'ready' : 'failed'); expect(log.proposals).toHaveLength(mode === 'proposal' ? 1 : 0);
     expect(chosen).toEqual(original); expect(server.requests).toHaveLength(1); expect(server.failures).toEqual([]); expect(JSON.stringify(log.attempts)).not.toContain('PRIVATE_NOTICE');
   }
 });
@@ -101,8 +97,6 @@ test('initial disabled/preloaded/invalid requests and failed attempt persistence
   chosen.connection.enabled = false; expect((await runRegistrationAgent(chosen, 'Prepare', log.hooks)).error).toBe('CONNECTION_NOT_AUTHORIZED'); chosen.connection.enabled = true;
   for (const request of ['', ' ', 'x'.repeat(6001)]) expect((await runRegistrationAgent(chosen, request, log.hooks)).error).toBe('REGISTRATION_REQUEST_INVALID');
   expect((await runRegistrationAgent(chosen, 'Prepare', { ...log.hooks, timeoutMs: 60001 })).error).toBe('REGISTRATION_TIMEOUT_INVALID');
-  const sol = target(server.origin, 'sol-responses-v1'); sol.sol = { ...defaultSolOptions(), contextMode: 'preloaded' };
-  expect((await runRegistrationAgent(sol, 'Prepare', log.hooks)).error).toBe('REGISTRATION_SOL_PRELOADED_UNSUPPORTED');
   expect((await runRegistrationAgent(chosen, 'Prepare', { ...log.hooks, onAttemptStart: () => { throw new Error('PRIVATE_PERSISTENCE_ERROR'); } })).error).toBe('REGISTRATION_ATTEMPT_START_FAILED');
   expect(server.requests).toHaveLength(0); expect(log.proposals).toHaveLength(0);
 });

@@ -1,5 +1,7 @@
 # Codex 작업 지시 — Uimori M1-local UI/UX 개편
 
+> 보관된 2026-09-06 착수 지시예요. 아래 명령형 문장은 당시 요청이며 이 파일을 읽는 것만으로 재구현을 시작하지 않아요. 후속 [REDESIGN](../project-plan/REDESIGN.md)과 현재 AGENTS.md·[CURRENT](../project-plan/CURRENT.md)를 우선해요. 구형 DB 보존/migration 요구와 fixture-only 제약은 현행 계약이 아니에요. 실제 구현·검증은 [UI-RESULTS](../project-plan/UI-RESULTS.md)를 확인해요.
+
 현재 저장소의 기존 M1-local 동작을 유지하면서 사용자용 UI를 개편해줘. 색상/CSS 장식만 바꾸거나 새 데모 페이지만 만들지 말고 **실제 앱의 주요 사용 경로를 새 셸로 옮겨 구현·검증**하는 작업이야.
 
 ## 읽을 자료와 기준

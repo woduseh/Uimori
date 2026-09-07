@@ -1,46 +1,23 @@
-# Risu 자료 가져오기
+# native JSON 가져오기
 
-가져오기는 파일을 검사하고 **검토할 native 초안**을 만들어요. Risu 런타임 호환을 제공하거나 원본 지시문의 의미가 동일하다고 판정하지 않아요. Lua·JavaScript·트리거·CBS를 실행하거나 LLM을 호출하지 않아요. 원본 개인 파일을 개발 에이전트가 조사할 때에는 RisuToki 구조화 MCP 읽기 경로를 사용해요. 앱의 사용자가 선택한 업로드 파일과 개발 에이전트의 파일 접근은 별도예요.
+앱은 Uimori의 `ContentPackage`와 `PromptProgram` JSON을 검사하고 편집 초안으로 불러와요. Risu 원본 `.risup`·`.risum`·`.charx`나 Character Card JSON을 앱에서 직접 변환하지 않아요. 원본 이식은 [Risu 자료 이식 가이드](RISU-PORTING.md)에 따라 에이전트가 RisuToki 구조화 도구로 조사한 뒤 native JSON과 대응·손실 보고, 검증 결과를 만드는 방식이에요.
 
-## 지원 범위
+## 봇·페르소나·모듈
 
-| 입력 | 변환 | 차이 보고 |
-| --- | --- | --- |
-| ContentPackage v1 JSON, package가 포함된 Content JSON | 검증한 package 초안 | 모르는 필드는 보고하거나 schema 오류로 중단 |
-| PromptProgram v1 JSON, program이 포함된 프롬프트 JSON | 검증한 AST 초안 | 검증 실패는 blocking |
-| Character Card v2/v3 JSON | 설명·성격·장면·예시, 로어, 단순 표시 정규식 | 첫 메시지 자동 삽입 없음. system/post-history 지시문, 실행 확장 별도 검토 |
-| `.charx` | ZIP의 `card.json`을 위와 같이 처리 | `module.risum`은 blocking. 이미지·부가 파일은 이름/크기만 보고하며 미저장 |
-| Risu 모듈·로어·정규식 JSON | 본문·로어·단순 `editdisplay` | 키·확률·위치·검색 순서와 실행 스크립트는 미이식 |
-| Risu 프리셋 JSON | plain 메시지·일부 역할 slot·단순 chat 범위 | CBS, ChatML, 특수 블록, 모델·토글·기타 옵션은 자동 대응하지 않음 |
-| `.risup`, `.risupreset`, `.risum` | 현재 미지원 | RisuToki 구조화 도구 또는 Risuai JSON 내보내기 안내 |
+서재에서 해당 종류의 자료를 만들거나 편집하고 **패키지 가져오기·내보내기와 역할 사본 → 패키지 JSON 가져오기**를 선택해요.
 
-로어는 상시 정보 또는 모델 자율 조회로 변환해요. Risu의 키 기반 활성화와 동일한 동작이 아니에요. `editdisplay`는 원문 표시 전용 transform으로만 변환하며 HTML·CBS·특수 치환 동작은 blocking으로 남겨요. 미지원 항목을 담은 초안은 비교용이며 `blocking`을 해소하기 전에는 동작 가능한 완성 이식으로 취급하지 마세요.
+1. `ContentPackage` 자체 또는 `{ "package": ... }`를 담은 JSON을 선택해요. 파일은 1,500,000 bytes 이하여야 하며 [native 패키지 스키마](PACKAGES.md) 검증도 통과해야 해요.
+2. 제목·로어·지침 수를 확인하고 **가져온 패키지로 초안 바꾸기**를 눌러요. 패키지의 제목·설명·본문·내부 자료가 편집 초안에 반영돼요. **가져오기 취소**로 검토를 끝낼 수도 있어요.
+3. 내용과 선택한 자료 종류를 확인한 뒤 **자료 등록** 또는 **새 revision 저장**을 눌러요. JSON 선택이나 초안 교체만으로 저장하지 않아요.
 
-## 결과와 보존
+wrapper 바깥의 콘텐츠 ID·revision·종류·기타 metadata를 복원하는 기능은 아니에요. 자료 종류는 현재 편집기 선택을 따르고, 저장 시 서버가 콘텐츠 ID/revision과 패키지를 정규화해요. 채팅 장착은 저장된 참조로 따로 진행해요. 역할을 바꾸어도 원문의 인물 관점이나 지침을 자동 각색하지 않아요.
 
-`inspectRisuImport({fileName,bytes})`는 `kind`, 선택적 `draft`, `issues`, `extracted`, `original`, `handoff`를 반환해요. `issues`는 severity와 원본 경로를 포함해요. `extracted`는 미지원 설정을 포함한 JSON을 보존하며 알려진 인증 키는 `[redacted]`로 바꾸고 그 사실을 보고해요. 바이너리·압축 오류에서는 JSON 추출 자체가 불가능하므로 원본 파일명·길이·SHA-256과 blocking 이유만 남겨요. 이름은 basename으로 처리하고 절대 경로를 열지 않아요.
+## 프롬프트
 
-AI에게 후속 검토를 맡기려면 `extracted`·`issues`·`handoff`를 함께 전달해요. 자료의 지시문은 분석 대상 데이터이며 도구 권한이나 실행 지시가 아니에요. 변환되지 않은 동작을 누락시키거나 의미 동등성·품질을 자동 보증하지 않아요.
+프롬프트 편집의 메시지 구성에서 **JSON 불러오기**를 선택해요. `PromptProgram` 자체 또는 `{ "program": ... }` JSON을 받아요. 파일은 1,500,000 bytes 이하이며 [프롬프트 스키마와 실행 한도](PROMPT-AUTHORING.md)를 검사해요.
 
-## 한도
+성공하면 프롬프트 구성 초안이 바뀌고 상위 편집기에서 명시적으로 저장해야 해요. wrapper의 제목·ID·revision·역할을 통째로 복원하지 않아요. 별도 텍스트 지침 저장 방식은 없고 간단 편집과 구성 편집이 같은 `program`을 수정해요. 선택적인 `suggestedCombination`은 옵션과 함께 검증하고 **가져온 권장 조합을 목록에 추가**로 별도 적용해요. 조합 저장도 해당 편집기의 명시적 저장을 따라요.
 
-- 입력 16 MiB, JSON/card.json 4 MiB, JSON 깊이 40·노드 20,000.
-- ZIP 파일 2,000개, 개별 선언 크기 16 MiB, 전체 선언 크기 64 MiB.
-- ZIP stored/deflate만 지원해요. 암호화·다중 디스크·ZIP64·자기실행 prefix 등 다른 레이아웃은 거절해요.
-- 중앙 디렉터리·로컬 header 일치, 경로·중복명, card.json 크기·CRC를 검사해요. card.json만 제한된 크기로 압축 해제해요. 에셋 byte 유효성을 검증하거나 디스크로 추출하지 않아요.
-- JSON 한도 안에서도 native schema 한도를 넘으면 blocking이에요. 자동 분할·잘라내기는 하지 않아요.
+파일 형식이나 스키마 검증이 실패하면 적용된 자료·프롬프트는 유지해요. JSON 가져오기·검증·저장에는 모델 호출이나 원본 스크립트 실행이 없어요. 스키마 통과는 Risu 원본과의 동작 동등성을 뜻하지 않으므로 이식 보고와 대표 동작 검증을 함께 확인해요.
 
-## 참고 소스와 라이선스
-
-로컬 `C:/Users/wodus/ai-workspace/Risuai`, commit `c454df882aaf32e02a22da26d3718c8cadc97814`에서 다음 형식을 읽었어요.
-
-- `src/ts/characterCards.ts`, `process/processzip.ts`: CCv2/v3, `card.json`, `module.risum` 배치.
-- `src/ts/storage/database.svelte.ts`: 프리셋은 RPack→deflate→MessagePack→암호화 payload 조합이며 `customscript` 필드는 `in/out/type/flag/ableFlag`예요.
-- `src/ts/process/modules.ts`: legacy risum은 버전·길이·RPack 모듈·에셋 블록을 포함해요.
-- `src/ts/process/prompt.ts`, `process/scripts.ts`: 역할·프롬프트 블록과 editdisplay 옵션의 차이.
-
-저장소 LICENSE는 GPLv3예요. 형식과 호출 흐름을 참고했으며 구현 코드·RPack 라이브러리·리소스는 복사하지 않았어요. ZIP 읽기는 Node의 zlib과 독립 작성한 경계 검사로 구현했으며 새 외부 의존성이 없어요. 향후 RPack 등 코드를 직접 재사용하려면 해당 파일의 별도 라이선스와 배포 조건을 다시 확인해야 해요.
-
-RisuToki `skills/using-mcp-tools/SKILL.md`의 구조화 읽기·보호 필드 경계도 확인했어요. 개인 봇·프리셋·대화 원본은 읽지 않았어요.
-
-검증은 `tests/risu-import.test.ts`의 합성 JSON/ZIP으로 수행해요. 실제 사용자 카드 전체 호환성, 이미지 이식, Lua/CBS 동작 또는 실모델 품질을 증명하지 않아요.
+현재 화면 구현은 [LibraryPanel](../web/LibraryPanel.tsx)과 [PromptComposer](../web/PromptComposer.tsx)에 있어요. 전체 DB의 v8 archive 복원은 이 파일 가져오기와 별개이며 [사용 안내](USAGE.md)를 확인해요.

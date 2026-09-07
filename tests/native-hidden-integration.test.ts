@@ -7,8 +7,8 @@ import { Store } from '../server/store.js';
 import { HiddenStoryStore } from '../server/hidden-story.js';
 import { forkChat } from '../server/chat-fork.js';
 import { createNeutralNativeBotPackage } from '../core/native-bot.js';
-import { HIDDEN_CONTROL_MAP, defaultHiddenStoryConfig, parseHiddenStory } from '../core/hidden-story.js';
-import { convertHiddenStoryModule } from '../core/hidden-story-converter.js';
+import { defaultHiddenStoryConfig, parseHiddenStory } from '../core/hidden-story.js';
+import { createHiddenNativeFixture } from './fixtures/hidden-native.js';
 import { createTranslationPlan, validateTranslationChunk, aggregateTranslation } from '../core/auxiliary.js';
 import { sourceTimeContext } from '../server/product-auxiliary.js';
 import { validateTranslationArtifact } from '../server/source-editing.js';
@@ -22,8 +22,8 @@ function database(){const store=new Store(join(mkdtempSync(join(tmpdir(),'Uimori
 const hiddenText='MAIN_VISIBLE_BEFORE.\n\n@hsTitle: Synthetic secret\n⟦Library @ Morning @ Companion⟧\n\nHIDDEN_EVIDENCE_SENTINEL stays in a sealed notebook.\n@hs\n\nMAIN_VISIBLE_AFTER.\n\n<EvaluationReport><RevisionReport>[88]<DevelopmentReport>EVALUATION_SENTINEL.</EvaluationReport>';
 function fixture(memory=true) {
   const store=database();const chat=store.createChat('Native hidden synthetic');store.settings(chat.id,chat.settingsRevision,{...chat.settings,translation:false,status:false});const branchId=`main:${chat.id}`;const p=store.native.importPackage(createNeutralNativeBotPackage());store.native.attach(chat.id,{branchId,packageId:p.id,packageRevision:p.revision,expectedRevision:0,expectedSourceRevision:null,expectedSourceHash:null,idempotencyKey:randomUUID()});
-  const customModuleToggle=HIDDEN_CONTROL_MAP.map(([key,,kind,count])=>`${key}=Synthetic ${key}${kind==='boolean'?'':`=${kind}${kind==='select'?`=${Array.from({length:count},(_,i)=>`choice${i}`).join(',')}`:''}`}`).join('\n');
-  const conversion=convertHiddenStoryModule({source:{sha256:'a'.repeat(64)},module:{id:'synthetic-hidden',name:'Synthetic hidden',customModuleToggle,lua:'',regex:[],triggers:[],lorebook:[{sourceIndex:0,comment:'Synthetic neutral instruction',alwaysActive:true,mode:'normal',insertorder:100,content:'Write a nonsexual daily-life story for {{user}}. Hidden segments do not grant actor knowledge.'}]}});
+
+  const conversion=createHiddenNativeFixture();
   const hiddenStore=new HiddenStoryStore(store.product);const module=hiddenStore.import({title:'Synthetic hidden module',conversion});const config=defaultHiddenStoryConfig();config.values['hidden.enabled']=0;config.values['hidden.evaluation']=0;
   const preset=store.product.promptPreset({title:'Synthetic memory-slot program',role:'main',text:'',program:{version:1,controls:[],blocks:[{id:'host',title:'Host',kind:'message',role:'system',template:[{kind:'text',text:'Keep exact provenance.'}]},{id:'memory-slot',title:'Memory',kind:'slot',role:'system',slot:'memory'},{id:'history',title:'History',kind:'history',from:0,to:'end'}]}});
   const prior=store.product.profile(chat.id);store.product.updateProfile(chat.id,{expectedRevision:prior.revision,attachments:prior.attachments,creative:prior.creative,routes:prior.routes,image:false,prompts:{main:{id:preset.id,revision:preset.revision}},hiddenStory:{module:{id:module.id,revision:module.revision},config,insertion:'before-current'}});

@@ -99,7 +99,8 @@ test('LOADUI03 large library uses summaries then fetches exact displayed revisio
   const summaryResponse = page.waitForResponse(response => response.url().includes('/api/library?'));
   await page.goto('/'); const summaries = await (await summaryResponse).json();
   expect(summaries.contentBodiesOmitted).toBe(true);
-  expect(summaries.contents).toHaveLength(100); expect(summaries.contents.every((item: Record<string, unknown>) => item.text === '')).toBe(true);
+  expect(summaries.contents.filter((item: Content) => item.title.startsWith(`${prefix} `))).toHaveLength(100);
+  expect(summaries.contents.every((item: Record<string, unknown>) => item.text === '')).toBe(true);
   expect(JSON.stringify(summaries)).not.toContain('Synthetic character document.');
   expect(JSON.stringify(summaries)).not.toContain(first.text);
   await navLibrary(page); await expect(page.getByTestId('library-panel')).toBeVisible();

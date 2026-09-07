@@ -4,6 +4,8 @@
 
 앱에 구현된 연결·제약을 설명하는 문서예요. 실제 계정·모델별 호환성은 [현재 검증 범위](../project-plan/CURRENT.md)를 확인해요.
 
+개인 ChatGPT 구독을 사용하는 Codex는 **설정 → 에이전트**에서 공식 로그인을 준비한 뒤 **연결과 모델**에 저장해요. 본문·모든 보조 역할·모델 등록 요청에서 선택할 수 있어요. 준비 상태 조회는 Codex 프로세스의 로그인 메타데이터를 읽으며 모델을 호출하지 않아요. 서버 설치·Docker 선택 옵션과 실행 한계는 [Codex 연결](CODEX.md)을 확인하세요.
+
 ## 등록과 관리
 
 설정 → 연결과 모델은 **모델 프리셋**과 **연결 관리** 목록으로 나뉘어요. **빠른 연결 시작**에서 제공자 카드 → 연결 정보 → 모델 선택 순서로 등록해요. 목록을 떠나면 편집 화면 하나만 표시하고, 목록으로 돌아가도 초안은 **편집 이어서**에서 복원해요. 다른 항목으로 초안을 교체할 때는 확인해요. 모델 편집은 **기본 정보 / 생성 설정 / 고급 옵션**으로 나뉘며, 저장된 카탈로그를 검색해 선택하면 이름·ID를 채워요.  준비 상태는 서버의 허용 주소와 인증 참조 설정 여부만 확인하며, 실제 인증이나 모델 요청을 실행하지 않아요. 모델 목록을 명시적으로 조회하거나 모델 ID를 직접 입력하고, 지원 여부를 확인한 옵션을 저장한 뒤 새 이야기/이야기 설정에서 역할에 배정해요. Vertex는 이 어댑터가 지원하는 고정 로컬 모델만 등록할 수 있어요.
@@ -12,21 +14,21 @@
 
 조회 실패 시 마지막 모델 목록과 수동 ID를 유지해요. 편집 도중 다른 창에서 저장하면 409 충돌을 표시하고 입력을 보존해요. 최신 내용 다시 불러오기는 현재 초안을 교체하는 명시적 동작이에요. 모델 기능은 조회 결과·미확인·사용자 확인값을 구분하고 실제 가격은 추정하지 않아요.
 
-## 자연어로 모델 등록하기
+## 에이전트에게 모델 등록 요청하기
 
 이미 저장한 보조 모델을 선택하고 등록 요청을 입력해 **설정안 제안 요청**을 누르세요. 요청 내용과 설정 목록의 이름·ID·프로토콜을 선택한 공급자에 전송해요. 이야기 본문·사용자 연결 주소·인증 참조·키 원문은 모델 문맥에 넣지 않아요. 키는 요청문에도 입력하지 마세요.
 
 최대 한 번·60초 요청으로 새 연결/모델 설정안을 받아 기존 저장 검증을 적용해요. **검토한 연결·모델 등록 적용**을 눌러야 저장하며 새 연결은 비활성으로 생성해요. 활성화·역할 배정은 관리 화면에서 직접 진행해요. 기존 설정을 자동 수정하거나 새 API 코드·플러그인을 설치하는 기능은 없어요. 모델 ID·옵션·가격의 실제 지원을 검증하는 기능도 아니에요.
 
-중단되거나 응답이 불확실한 요청은 자동 재실행하지 않아요. 같은 요청 키는 원래 결과를 반환하며 새로고침 후 상태를 다시 확인할 수 있어요. Sol의 `preloaded` 모드는 등록 보조에서 지원하지 않아요. 다른 Sol 옵션은 그대로 유지하며 등록 제안 외 도구 왕복은 실행하지 않아요. Vertex 요청은 같은 DB의 기존 예산에 합산하고 보조 요청의 예약은 보수적으로 전액 유지해요. 실제 금액 미확인은 0원으로 바꾸지 않아요.
+중단되거나 응답이 불확실한 요청은 자동 재실행하지 않아요. 같은 요청 키는 원래 결과를 반환하며 새로고침 후 상태를 다시 확인할 수 있어요. 등록 보조는 새 설정안을 제안하는 `registration.propose`만 사용하며, 제안할 모델에 평가 도구 옵션이 있더라도 평가 도구를 실행하지 않아요. Vertex 요청은 같은 DB의 기존 예산에 합산하고 보조 요청의 예약은 보수적으로 전액 유지해요. 실제 금액 미확인은 0원으로 바꾸지 않아요.
 
 [공급자 관리 결과·검증과 한계](../project-plan/PROVIDER-MANAGEMENT-RESULTS.md)
 
-## Sol Responses 연결
+## 모델 프리셋의 선택형 평가 도구
 
-**설정 → 연결과 모델 → Sol · Responses**에서 Vercel AI Gateway, LLM Gateway 또는 OpenAI Official을 선택해요. 저장한 모델 프리셋을 본문·번역·상태·기억 역할에 사용할 수 있어요. RisuAI 플러그인을 설치할 필요는 없어요. Sol 문맥 제공 방식·최대 도구 라운드·제출 원고 교정·reasoning 옵션을 모델별로 저장하며, 원고 제출 도구의 안내문은 원문에 합치지 않아요.
+평가 도구는 별도 provider가 아니며 기본적으로 꺼져 있어요. **모델 프리셋 편집 → 고급 옵션 → 이 모델 프리셋에 평가 도구 4개 사용**을 켠 프리셋에만 네 도구를 추가해요. 같은 연결의 다른 프리셋에는 영향을 주지 않으며 도구를 지원하지 않는다고 확인한 모델에는 저장할 수 없어요.
 
-서버 credential 참조와 허용 origin을 설정한 뒤 사용해요. [연결 주소·설정과 원본 플러그인과의 차이](../project-plan/SOL-RESPONSES.md)를 확인하세요. 로컬 합성 검증만 수행했으며 실제 계정·모델 지원과 품질·청구는 확인하지 않았어요.
+도구의 세션·preloaded 흐름·case receipt·terminal content/notice 분리·잘림 복구와 원본 비교는 [선택형 평가 도구](../project-plan/EVALUATION-TOOLS.md)를 확인하세요. 로컬 합성 검증만 수행했으며 실제 계정·모델 지원과 품질·청구는 확인하지 않았어요.
 
 ## OpenAI·Anthropic·Vercel·별도 호환 연결
 
@@ -34,12 +36,12 @@
 
 | 연결 | 기본 주소 | 서버 환경변수 예시 | 전송 |
 | --- | --- | --- | --- |
-| OpenAI | `https://api.openai.com/v1` | `NARRATIVE_PROVIDER_OPENAI` | Responses API, `store:false`, native function calls |
-| Anthropic | `https://api.anthropic.com/v1` | `NARRATIVE_PROVIDER_ANTHROPIC` | Messages API, `x-api-key`, native tool use |
-| Vercel AI Gateway | `https://ai-gateway.vercel.sh/v1` | `NARRATIVE_PROVIDER_VERCEL` | OpenAI Chat Completions, 모델 `공급자/모델` |
-| OpenAI 호환 별도 공급자 | 사용자가 지정한 HTTPS API root | `NARRATIVE_PROVIDER_CUSTOM` | Chat Completions; 인증 없는 literal loopback HTTP도 가능 |
+| Responses 호환 | `https://api.openai.com/v1` | `OPENAI_API_KEY` | Responses API, `store:false`, native function calls; 허용한 HTTPS/loopback API root 지정 가능 |
+| Anthropic | `https://api.anthropic.com/v1` | `ANTHROPIC_API_KEY` | Messages API, `x-api-key`, native tool use |
+| Vercel AI Gateway | `https://ai-gateway.vercel.sh/v1` | `VERCEL_API_KEY` | OpenAI Chat Completions, 모델 `공급자/모델` |
+| OpenAI 호환 별도 공급자 | 사용자가 지정한 HTTPS API root | `PROVIDER_API_KEY` | Chat Completions; 인증 없는 literal loopback HTTP도 가능 |
 
-`NR_PROVIDER_ORIGINS`에는 사용할 주소의 origin을 쉼표로 구분해 추가해요. 키는 각 `NARRATIVE_PROVIDER_…` 서버 변수에 설정하며 브라우저에 붙여 넣지 않아요. 서버 환경변수를 바꿨다면 서버를 다시 시작하세요. 공식 세 연결의 기본 주소는 고정이며 별도 게이트웨이는 호환 연결을 사용해요.
+`NR_PROVIDER_ORIGINS`에는 사용할 주소의 origin을 쉼표로 구분해 추가해요. 키는 사용자가 선택한 이름의 서버 환경변수에 설정하며, 이름은 영문자 또는 `_`로 시작하는 영문자·숫자·`_` 조합이면 돼요. 특정 접두사는 요구하지 않아요. 키 원문은 브라우저에 붙여 넣지 말고 서버 환경변수를 바꿨다면 서버를 다시 시작하세요. Anthropic과 Vercel 기본 주소는 고정하며 Responses와 Chat 호환 연결은 허용한 HTTPS 또는 literal loopback HTTP API root를 사용할 수 있어요.
 
 모델 프리셋에는 출력 한도·timeout·지원 모델용 reasoning effort/Anthropic thinking 옵션을 저장할 수 있어요. `Temperature`를 비우면 전송하지 않아요. 번역 JSON Schema는 Responses·Messages에서 기본 사용, Chat Completions 연결에서 기본 미사용이며 선택 옵션으로 바꿀 수 있어요. 호환 서버는 SSE, `max_completion_tokens`, 선택한 옵션과 function tools를 지원해야 해요. 미지원 옵션·모델·인증·요금 오류는 그대로 실패 처리하고 다른 모델이나 옵션으로 자동 재요청하지 않아요.
 
@@ -60,7 +62,7 @@ npm run dev
 
 1. 설정 → 연결과 모델 → **빠른 연결 시작** → `Vertex AI · Gemini 3.8 Flash`를 선택해요.
 2. **Vertex 키 JSON 파일**에 Google Cloud 서비스 계정 파일(64 KiB 이하)을 선택해요. 서버에 등록되면 프로젝트 ID와 global endpoint, 인증 참조를 채워요. 업로드·연결 저장은 OAuth 토큰이나 모델을 요청하지 않아요.
-3. 기존 서버 인증을 쓰려면 파일을 선택하지 않고 **Google Cloud 프로젝트 ID**를 입력해요. 환경변수 이름을 비우면 `GOOGLE_APPLICATION_CREDENTIALS` 파일, `NARRATIVE_PROVIDER_VERTEX_TOKEN`처럼 지정하면 해당 서버 변수의 OAuth Bearer token을 사용해요. JSON 등록 후 **서버 ADC / 환경변수 방식으로 변경**은 현재 연결 초안의 인증 방식을 바꾸며 서버 키 파일을 삭제하지 않아요.
+3. 기존 서버 인증을 쓰려면 파일을 선택하지 않고 **Google Cloud 프로젝트 ID**를 입력해요. 환경변수 이름을 비우거나 `GOOGLE_APPLICATION_CREDENTIALS`를 지정하면 그 변수의 ADC 파일을 사용하고, `VERTEX_ACCESS_TOKEN`처럼 다른 이름을 지정하면 해당 서버 변수의 OAuth Bearer token을 사용해요. JSON 등록 후 **서버 ADC / 환경변수 방식으로 변경**은 현재 연결 초안의 인증 방식을 바꾸며 서버 키 파일을 삭제하지 않아요.
 4. 연결을 지정한 모델 프리셋을 만들어요. ID는 `gemini-3.8-flash`, 최대 출력은 65,536 이하, 기본 thinking은 `MEDIUM`, timeout은 300초예요. Flex 장문·번역 시험에서는 응답 제한 시간을 900초로 저장했어요. Gemini 3.8이 무시하는 Temperature/topP/topK는 보내지 않아요.
 5. 새 이야기에서 봇 → 페르소나 → 창작 프리셋과 메인·번역 모델을 선택해요. 명시적으로 선택한 모델은 다음 시작에 복원하고, 비활성 연결은 제외해요. 기존 이야기는 이야기 설정에서 역할별 모델을 바꿀 수 있어요. 번역은 원고의 **번역 보기**를 눌러 시작하며 연결하지 않은 역할은 검사용 모의 경로예요.
 

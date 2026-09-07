@@ -12,4 +12,4 @@ Claude 공식 [mid-conversation system messages](https://platform.claude.com/doc
 
 Phēmē tool-call variant의 Fiction 모드에는 non-Sol 메인 실행에서만 `story.submit({content})`을 최종 제출 경계로 등록해요. 한 번의 sole call, 비어 있지 않은 500,000자 이하 본문, 추가 인자 없음이 필요해요. mixed call/외부 source identity/잘못된 본문은 원고를 만들지 않아요. host가 chat·parent·profile·preset 귀속을 기록하고 기존 원자적 완료 경로가 source를 저장해요. OOC/normal 프리셋에는 이 도구를 노출하지 않으며 일반 text 완료 fallback은 유지해요. Sol은 기존 `eval_submit_artifact` 경계를 사용해요.
 
-검증은 `tests/native-main-request.test.ts`의 합성 무호출 인코딩 및 로컬 Chat 호환 loopback 시험이에요. 실제 외부 요청·모델 품질·가격·cache hit 시험은 하지 않았어요. 미출시 native 중간 빌드 snapshot은 버전 호환 계약이 아니며 최종 compiler로 재생성해요. 기존 schema v4 사용자 archive의 호환 계약은 별도 유지해요.
+검증은 `tests/native-main-request.test.ts`의 합성 무호출 인코딩 및 로컬 Chat 호환 loopback 시험이에요. 실제 외부 요청·모델 품질·가격·cache hit 시험은 하지 않았어요. 미출시 native 중간 빌드 snapshot은 버전 호환 계약이 아니에요. 현재 DB·archive는 v8만 사용하며, 구버전 DB 이관·archive 복원 호환은 제공하지 않아요. 새 Risu 자료 이식은 [공통 이식 가이드](../docs/RISU-PORTING.md)를 따르고 현재 검증 상태는 [CURRENT](CURRENT.md)를 확인해요.

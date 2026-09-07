@@ -23,7 +23,7 @@ compilePromptProgram(program, { values, slots, history, runtime, limits }): Prom
 {"op":"map","args":[{"context":["npcs"]},{"local":"npc","path":["name"]}],"as":"npc"}
 ```
 
-`context`/`local.path`는 own property만 읽어요. 배열 index는 경로의 숫자 문자열로 지정해요. 없는 필드나 index는 null이고, scalar에서 하위 필드를 읽는 잘못된 접근은 오류예요. `__proto__`, `constructor`, `prototype` 경로 및 객체 key는 허용하지 않아요. Date·함수·accessor·순환 참조 등 JSON이 아닌 데이터는 거절해요.
+`context`/`local.path`는 own property만 읽어요. 배열 index는 경로의 숫자 문자열로 지정해요. 없는 필드나 index는 null이며, null 아래로 경로를 더 읽어도 null을 반환해요. 문자열·숫자·불리언에서 하위 필드를 읽는 잘못된 접근은 오류예요. `__proto__`, `constructor`, `prototype` 경로 및 객체 key는 허용하지 않아요. Date·함수·accessor·순환 참조 등 JSON이 아닌 데이터는 거절해요.
 
 `map`/`filter`는 `args: [source, body]`, 필수 `as`, 선택 `index` 이름을 사용해요. `filter`의 body는 boolean 또는 null이어야 해요. 반복 source는 실제 배열이어야 하며 JSON 문자열을 다시 파싱하지 않아요.
 

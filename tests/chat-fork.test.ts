@@ -1,3 +1,4 @@
+import { createDefaultPromptProgram } from '../core/prompt-defaults.js';
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { basename, isAbsolute, join, relative, resolve } from 'node:path';
@@ -110,7 +111,7 @@ describe('independent stored-story fork without generation',()=>{
       expect(run.snapshot.settingsRevision).toBe(store.run(oldSource.runId).snapshot.settingsRevision);
       expect(run.snapshot.history).toEqual(store.history(run.parentRevision));
       expect(run.snapshot.resources).toEqual(store.product.resources(copy.id,run.snapshot.profile));
-      expect(run.snapshot.profile?.promptPresets?.main?.text).toBe('  MAIN exact\r\n');
+      expect(run.snapshot.profile?.promptPresets?.main?.program).toEqual(createDefaultPromptProgram('  MAIN exact\r\n'));
     }
     expect(detail.attempts).toEqual([]);expect(detail.jobs.every(job=>job.status==='completed')).toBe(true);
     const expectedJobs=originalDetail.jobs.filter(job=>[fixture.first.id,fixture.second.id].includes(job.sourceRevision)&&job.status==='completed');

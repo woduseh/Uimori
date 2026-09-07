@@ -1,6 +1,6 @@
 # UI 구현·검증 기록
 
-최신 통합 검증은 [Sol 통합 요약](../output/sol-provider/2026-09-07/summary.json)이에요. [기존 UI](../output/playwright/ui-2026-09-07T02-09-41-126Z-d7e26af4/summary.json) 9 unit + 19 browser와 [Sol 설정 UI](../output/playwright/sol-ui-2026-09-07T02-10-02-278Z-1a8f24c4/summary.json) 2 browser가 PASS예요. 아래는 단계별 고정 화면·측정 기록이며, 당시의 source/build·지원 범위·미커밋 설명을 현재 상태로 해석하지 않아요. 실제 휴대폰·키보드/IME 검증은 별도예요.
+이 문서의 마지막 통합 기록은 [Sol 통합 요약](../output/sol-provider/2026-09-07/summary.json)이에요. 당시 [기존 UI](../output/playwright/ui-2026-09-07T02-09-41-126Z-d7e26af4/summary.json) 9 unit + 19 browser와 [Sol 설정 UI](../output/playwright/sol-ui-2026-09-07T02-10-02-278Z-1a8f24c4/summary.json) 2 browser가 PASS예요. 아래는 단계별 고정 화면·측정 기록이며, 당시의 source/build·지원 범위·미커밋 설명을 현재 상태로 해석하지 않아요. 이후 UI 개편과 현재 검증 상태는 [CURRENT](CURRENT.md)를 확인해요. 실제 휴대폰·키보드/IME 검증은 별도예요.
 
 # 번역·직접 편집 UI 후속 · 2026-09-07
 

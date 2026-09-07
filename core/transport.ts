@@ -2,10 +2,9 @@ import { createHash } from 'node:crypto';
 import { validateProviderEndpoint, PROVIDER_PROTOCOLS, type ProviderProtocol, type VertexRequestTier, type ModelGeneration } from './product.js';
 import { executeVertexProvider } from './vertex.js';
 import { executeNativeProvider } from './provider-http.js';
-import { validateSolOptions } from './sol-config.js';
 import { validateProviderPrompt, type ProviderPrompt } from './prompt-program.js';
 import { ProviderContractError } from './provider-errors.js';
-import { isVertexFileReference, validVertexFileReference } from './credential-reference.js';
+import { isVertexFileReference, validVertexFileReference, validCredentialEnv } from './credential-reference.js';
 export { ProviderContractError } from './provider-errors.js';
 
 /** This versioned loopback protocol is a local fixture, not a live API claim. */
@@ -18,21 +17,26 @@ export type ProviderRequest = {
   role: ProviderRole; modelId: string;
   stable: { contract: string; tools: ProviderTool[] };
   generation?: ModelGeneration;
+  /** Host baseline used only for continuation binding when an intermediate evaluation round lowers tokens or effort. Never sent to a provider. */
+  generationBinding?: ModelGeneration;
   prompt?: ProviderPrompt;
+  bootstrap?: { callId:string; name:string; args:Record<string,Json>; result:Json; denied:boolean }[];
+  /** Host tool name to require for this round. Omit to leave provider tool selection automatic. */
+  toolChoice?: string;
   input: { task: string; controls: Record<string, string | number | boolean | null>; source?: Json; catalog?: Json; results?: Json; history?: Json };
   opaqueState?: Json;
 };
 export type ProviderUsage = { inputTokens: number | null; outputTokens: number | null; costUsd: number | null; raw: Json; priceRevision: string | null };
-export type ProviderToolCall = { id: string; name: string; arguments: Record<string, Json> };
+export type ProviderToolCall = { id: string; name: string; arguments: Record<string, Json>; recoveredFromTruncation?: boolean };
 export type ProviderResult = {
   status: 'completed' | 'tool_calls' | 'refused' | 'partial' | 'error' | 'cancelled';
   text: string; toolCalls: ProviderToolCall[]; refusal: string | null; error: { code: string } | null;
   usage: ProviderUsage; opaqueState: Json;
-  delivery?: { kind: 'sol-artifact'; noticeProvided: boolean; noticeCharacters: number; correctionCount: number };
+  delivery?: { kind: 'evaluation-artifact'; noticeProvided: boolean; noticeCharacters: number; correctionCount: number };
 };
 export type WireRecord = {
   connectionId: string; protocol: ProviderConnection['protocol']; role: ProviderRole; modelId: string;
-  method: 'POST'; url: string; headers: Record<string, string>; body: Json; bodySha256: string; stablePrefixSha256: string;
+  method: 'POST' | 'RPC'; url: string; headers: Record<string, string>; body: Json; bodySha256: string; stablePrefixSha256: string;
 };
 export type CatalogModel = {
   id: string; label: string; capabilities: { tools: boolean | null; structuredOutput: boolean | null };
@@ -60,6 +64,10 @@ export function validateConnection(value: unknown, approvedOrigins: readonly str
   keys(value, ['id', 'protocol', 'endpoint', 'credentialEnv', 'requestTier']);
   string(value.id); string(value.endpoint, 2048);
   if (!PROVIDER_PROTOCOLS.includes(value.protocol as ProviderProtocol)) reject('UNSUPPORTED_PROTOCOL');
+  if (value.protocol === 'codex-app-server-v1') {
+    if (value.endpoint !== 'codex://local' || value.credentialEnv !== undefined || value.requestTier !== undefined) reject('INVALID_CODEX_CONNECTION');
+    return { id: value.id, protocol: value.protocol, endpoint: value.endpoint };
+  }
   let url: URL;
   try { url = new URL(value.endpoint); } catch { return reject('INVALID_ENDPOINT'); }
   if (url.username || url.password || url.search || url.hash || !approvedOrigins.includes(url.origin)) reject('ENDPOINT_NOT_APPROVED');
@@ -67,28 +75,35 @@ export function validateConnection(value: unknown, approvedOrigins: readonly str
   if (value.protocol === 'fixture-sse-v1' && (url.protocol !== 'http:' || !['127.0.0.1', '[::1]'].includes(url.hostname))) reject('FIXTURE_REQUIRES_LOOPBACK');
   try { validateProviderEndpoint(value.protocol as ProviderProtocol, url.href); } catch { reject(value.protocol === 'vertex-gemini-v1' ? 'INVALID_VERTEX_ENDPOINT' : 'INVALID_PROVIDER_ENDPOINT'); }
   if (value.requestTier !== undefined && (value.protocol !== 'vertex-gemini-v1' || !['standard', 'flex'].includes(value.requestTier as string))) reject('INVALID_VERTEX_REQUEST_TIER');
-  if (value.credentialEnv !== undefined && (typeof value.credentialEnv !== 'string' || !/^NARRATIVE_PROVIDER_[A-Z0-9_]+$/.test(value.credentialEnv))) reject('INVALID_CREDENTIAL_REFERENCE');
+  if (value.credentialEnv !== undefined && !validCredentialEnv(value.credentialEnv)) reject('INVALID_CREDENTIAL_REFERENCE');
   if (typeof value.credentialEnv === 'string' && isVertexFileReference(value.credentialEnv) && (value.protocol !== 'vertex-gemini-v1' || !validVertexFileReference(value.credentialEnv))) reject('INVALID_CREDENTIAL_REFERENCE');
   return { id: value.id, protocol: value.protocol as ProviderProtocol, endpoint: url.href, ...(value.credentialEnv ? { credentialEnv: value.credentialEnv as string } : {}), ...(value.requestTier ? { requestTier: value.requestTier as VertexRequestTier } : {}) };
 }
 
+function validateGeneration(value:unknown):asserts value is ModelGeneration{
+  keys(value, ['maxOutputTokens', 'temperature', 'thinkingLevel', 'structuredOutput', 'reasoningEffort', 'thinkingMode', 'thinkingBudgetTokens']);
+  if (value.structuredOutput !== undefined && typeof value.structuredOutput !== 'boolean') reject('UNSUPPORTED_GENERATION_OPTIONS');
+  if (value.reasoningEffort !== undefined && !['none', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'].includes(value.reasoningEffort as string)) reject('UNSUPPORTED_GENERATION_OPTIONS');
+  if (value.thinkingMode !== undefined && !['disabled', 'enabled', 'adaptive'].includes(value.thinkingMode as string)) reject('UNSUPPORTED_GENERATION_OPTIONS');
+  if (value.thinkingBudgetTokens !== undefined && (!Number.isSafeInteger(value.thinkingBudgetTokens) || Number(value.thinkingBudgetTokens) < 1024 || Number(value.thinkingBudgetTokens) >= Number(value.maxOutputTokens))) reject('UNSUPPORTED_GENERATION_OPTIONS');
+  if (value.thinkingLevel !== undefined && !['LOW', 'MEDIUM', 'HIGH'].includes(value.thinkingLevel as string)) reject('UNSUPPORTED_GENERATION_OPTIONS');
+  if (!Number.isSafeInteger(value.maxOutputTokens) || (value.maxOutputTokens as number) < 1 || (value.maxOutputTokens as number) > 200_000) reject('UNSUPPORTED_GENERATION_OPTIONS');
+  if (value.temperature !== null && (typeof value.temperature !== 'number' || !Number.isFinite(value.temperature) || value.temperature < 0 || value.temperature > 2)) reject('UNSUPPORTED_GENERATION_OPTIONS');
+}
+
 export function validateRequest(value: unknown): ProviderRequest {
-  keys(value, ['role', 'modelId', 'stable', 'generation', 'input', 'opaqueState','prompt']);
+  keys(value, ['role', 'modelId', 'stable', 'generation','generationBinding', 'input', 'opaqueState','prompt','bootstrap','toolChoice']);
   if(value.prompt!==undefined){try{validateProviderPrompt(value.prompt);}catch(error){reject(error instanceof Error?error.message:'INVALID_PROMPT');}}
   if (!['main', 'translation', 'status', 'image', 'state', 'memory'].includes(value.role as string)) reject('INVALID_ROLE');
   string(value.modelId);
-  if (value.generation !== undefined) {
-    keys(value.generation, ['maxOutputTokens', 'temperature', 'thinkingLevel', 'structuredOutput', 'reasoningEffort', 'thinkingMode', 'thinkingBudgetTokens', 'sol']);
-    if (value.generation.sol !== undefined) {
-      try { validateSolOptions(value.generation.sol); } catch { reject('UNSUPPORTED_GENERATION_OPTIONS'); }
-    }
-    if (value.generation.structuredOutput !== undefined && typeof value.generation.structuredOutput !== 'boolean') reject('UNSUPPORTED_GENERATION_OPTIONS');
-    if (value.generation.reasoningEffort !== undefined && !['none', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'].includes(value.generation.reasoningEffort as string)) reject('UNSUPPORTED_GENERATION_OPTIONS');
-    if (value.generation.thinkingMode !== undefined && !['disabled', 'enabled', 'adaptive'].includes(value.generation.thinkingMode as string)) reject('UNSUPPORTED_GENERATION_OPTIONS');
-    if (value.generation.thinkingBudgetTokens !== undefined && (!Number.isSafeInteger(value.generation.thinkingBudgetTokens) || Number(value.generation.thinkingBudgetTokens) < 1024 || Number(value.generation.thinkingBudgetTokens) >= Number(value.generation.maxOutputTokens))) reject('UNSUPPORTED_GENERATION_OPTIONS');
-    if (value.generation.thinkingLevel !== undefined && !['LOW', 'MEDIUM', 'HIGH'].includes(value.generation.thinkingLevel as string)) reject('UNSUPPORTED_GENERATION_OPTIONS');
-    if (!Number.isSafeInteger(value.generation.maxOutputTokens) || (value.generation.maxOutputTokens as number) < 1 || (value.generation.maxOutputTokens as number) > 200_000) reject('UNSUPPORTED_GENERATION_OPTIONS');
-    if (value.generation.temperature !== null && (typeof value.generation.temperature !== 'number' || !Number.isFinite(value.generation.temperature) || value.generation.temperature < 0 || value.generation.temperature > 2)) reject('UNSUPPORTED_GENERATION_OPTIONS');
+  if (value.generation !== undefined) validateGeneration(value.generation);
+  if(value.generationBinding!==undefined){
+    validateGeneration(value.generationBinding);if(value.generation===undefined)reject('INVALID_GENERATION_BINDING');
+    for(const key of ['temperature','thinkingLevel','structuredOutput','thinkingMode','thinkingBudgetTokens'] as const)if(value.generation[key]!==value.generationBinding[key])reject('INVALID_GENERATION_BINDING');
+  }
+  if(value.bootstrap!==undefined){
+    if(!Array.isArray(value.bootstrap)||value.bootstrap.length>8)reject('INVALID_BOOTSTRAP');const ids=new Set<string>();
+    for(const item of value.bootstrap){keys(item,['callId','name','args','result','denied']);string(item.callId);string(item.name);if(ids.has(item.callId)||!object(item.args)||typeof item.denied!=='boolean'||!Object.hasOwn(item,'result'))reject('INVALID_BOOTSTRAP');ids.add(item.callId);}
   }
   keys(value.stable, ['contract', 'tools']);
   // An explicitly selected empty prompt is distinct from using the application default.
@@ -100,6 +115,7 @@ export function validateRequest(value: unknown): ProviderRequest {
     if (names.has(tool.name) || !object(tool.inputSchema)) reject('INVALID_TOOLS');
     names.add(tool.name);
   }
+  if(value.toolChoice!==undefined){string(value.toolChoice);if(value.toolChoice!=='auto'&&!names.has(value.toolChoice))reject('INVALID_TOOL_CHOICE');}
   keys(value.input, ['task', 'controls', 'source', 'catalog', 'results', 'history']); string(value.input.task, 500_000);
   if (!object(value.input.controls) || Object.entries(value.input.controls).some(([key, val]) =>
     key.length > 100 || (val !== null && !['string', 'number', 'boolean'].includes(typeof val)) || (typeof val === 'number' && !Number.isFinite(val)))) reject('INVALID_CONTROLS');
@@ -151,15 +167,18 @@ function redact(value: Json, secret?: string): Json {
 
 /** Fetch + fatal UTF-8 decoder + SSE assembler. Never retries or follows redirects. */
 export type ProviderExecutionOptions = {
+  executeCodex?: (connection: ProviderConnection, request: ProviderRequest, options: ProviderExecutionOptions) => Promise<ProviderResult>;
   approvedOrigins: readonly string[]; signal: AbortSignal; timeoutMs?: number; vertexRequestTier?: VertexRequestTier;
   resolveCredential?: (envReference: string, connection?: ProviderConnection, signal?: AbortSignal) => string | undefined | Promise<string | undefined>;
   onWire?: (record: WireRecord) => void | Promise<void>;
 };
 export async function executeProvider(connectionValue: ProviderConnection, requestValue: ProviderRequest, options: ProviderExecutionOptions): Promise<ProviderResult> {
-  if (requestValue?.generation?.sol !== undefined && connectionValue.protocol !== 'sol-responses-v1') return {
-    status: 'error', text: '', toolCalls: [], refusal: null, error: { code: 'UNSUPPORTED_GENERATION_OPTIONS' },
-    usage: { inputTokens: null, outputTokens: null, costUsd: null, raw: null, priceRevision: null }, opaqueState: null,
-  };
+  if (connectionValue.protocol === 'codex-app-server-v1') {
+    const connection = validateConnection(connectionValue, options.approvedOrigins), request = validateRequest(requestValue);
+    if (request.generation && (request.generation.temperature !== null || request.generation.structuredOutput !== undefined || request.generation.thinkingLevel !== undefined || request.generation.thinkingMode !== undefined || request.generation.thinkingBudgetTokens !== undefined)) reject('UNSUPPORTED_GENERATION_OPTIONS');
+    if (options.executeCodex) return options.executeCodex(connection, request, options);
+    return { status: 'error', text: '', toolCalls: [], refusal: null, error: { code: 'CODEX_UNAVAILABLE' }, usage: { inputTokens: null, outputTokens: null, costUsd: null, raw: null, priceRevision: null }, opaqueState: null };
+  }
   if (connectionValue.protocol === 'vertex-gemini-v1') return executeVertexProvider(connectionValue, requestValue, options);
   if (connectionValue.protocol !== 'fixture-sse-v1') return executeNativeProvider(connectionValue, requestValue, options);
   const result: ProviderResult = { status: 'error', text: '', toolCalls: [], refusal: null, error: null,
@@ -186,7 +205,7 @@ export async function executeProvider(connectionValue: ProviderConnection, reque
     }
     // Stable prefix precedes dynamic controls and sources in the serialized body.
     const stablePrefix = JSON.stringify({ protocol: connection.protocol, role: request.role, stable: request.stable });
-    const body = JSON.stringify({ protocol: connection.protocol, role: request.role, stable: request.stable, modelId: request.modelId, ...(request.generation ? { generation: request.generation } : {}), input: request.input, ...(request.prompt?{prompt:request.prompt}:{}), ...(request.opaqueState !== undefined ? { opaqueState: request.opaqueState } : {}) });
+    const body = JSON.stringify({ protocol: connection.protocol, role: request.role, stable: request.stable, modelId: request.modelId, ...(request.generation ? { generation: request.generation } : {}), ...(request.bootstrap?{bootstrap:request.bootstrap}:{}), ...(request.toolChoice?{toolChoice:request.toolChoice}:{}), input: request.input, ...(request.prompt?{prompt:request.prompt}:{}), ...(request.opaqueState !== undefined ? { opaqueState: request.opaqueState } : {}) });
     const headers: Record<string, string> = { 'content-type': 'application/json', accept: 'text/event-stream', ...(secret ? { authorization: `Bearer ${secret}` } : {}) };
     await options.onWire?.({ connectionId: connection.id, protocol: connection.protocol, role: request.role, modelId: request.modelId,
       method: 'POST', url: connection.endpoint, headers: { ...headers, ...(secret ? { authorization: '[REDACTED]' } : {}) },

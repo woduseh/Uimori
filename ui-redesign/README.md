@@ -1,5 +1,7 @@
 # Uimori UI 개편 자료 1.0
 
+> 이 폴더는 2026-09-06 개편 전 설계·독립 시안의 역사 자료예요. 아래 “현재”, “아직 실행하지 않은”, 작업 지시는 당시 기준이며 새 구현 요청이 아니에요. 이후 실제 UI 구현·검증은 [UI-RESULTS](../project-plan/UI-RESULTS.md), 봇 중심 후속 결정은 [REDESIGN](../project-plan/REDESIGN.md), 최신 사용법과 상태는 [USAGE](../docs/USAGE.md)·[CURRENT](../project-plan/CURRENT.md)를 보세요. fixture-only·구형 DB 보존 같은 당시 제약을 현행 계약으로 적용하지 않아요.
+
 이 묶음은 사용자 저장소의 **실제 UI 수정본이 아니라, 현재 소스 검토에 기반한 설계와 독립 HTML 시안**입니다. 원격 저장소에 커밋·배포하지 않았습니다.
 
 ## 먼저 볼 것

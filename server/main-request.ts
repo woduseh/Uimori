@@ -1,3 +1,4 @@
+import { compileSnapshotPrompt } from './prompt-snapshot.js';
 import { buildMainInput, type MainInput } from '../core/provider.js';
 import { packageContext } from '../core/package-context.js';
 import type { RunSnapshot, ToolEvent } from '../core/types.js';
@@ -9,9 +10,6 @@ import { encodeResponses } from '../core/openai-protocol.js';
 import { encodeChat } from '../core/openai-chat-protocol.js';
 import { encodeAnthropic } from '../core/anthropic-protocol.js';
 import { encodeVertex } from '../core/vertex-protocol.js';
-import { encodeSolResponses } from '../core/sol-protocol.js';
-import { defaultSolOptions, type SolOptions } from '../core/sol-config.js';
-import { DEFAULT_MAIN_PROMPT } from '../core/prompts.js';
 import { assertBehaviorToolCapability, listBehaviorTools } from '../core/package-behavior-tools.js';
 
 const pagination = { offset: { type: 'integer', minimum: 0 }, limit: { type: 'integer', minimum: 1 } };
@@ -29,12 +27,12 @@ export const STORY_SUBMIT_MAX_CHARS=500_000;
 export const STORY_SUBMIT_TOOL:ProviderTool={name:'story.submit',description:'Final submission boundary for this main fiction run. Submit only the finished reader-facing fiction in content. No analysis, preface, tool narration, Thoughts tags or notice. Call alone; do not combine with other tools. This completes the run without another model call. The host owns source/chat identity and storage.',inputSchema:{type:'object',properties:{content:{type:'string',minLength:1,maxLength:STORY_SUBMIT_MAX_CHARS}},required:['content'],additionalProperties:false}};
 const json=(value:unknown):Json=>JSON.parse(JSON.stringify(value)) as Json;
 export function nativeStorySubmissionEnabled(snapshot:RunSnapshot):boolean{
-  return snapshot.profile?.models.main?.connection.protocol!=='sol-responses-v1'&&snapshot.profile?.promptPresets?.main?.program?.provenance?.variant==='tool-call'&&!!snapshot.promptCompilation&&String(snapshot.promptCompilation.values.pheme_session_mode)!=='2';
+  return !snapshot.profile?.models.main?.evaluationTools&&snapshot.profile?.promptPresets?.main?.program?.provenance?.variant==='tool-call'&&!!snapshot.promptCompilation&&String(snapshot.promptCompilation.values.pheme_session_mode)!=='2';
 }
 function requestInput(snapshot:RunSnapshot,input:MainInput):ProviderRequest['input']{
   const {length,...creative}=input.controls??{length:{}};
   const controls=Object.fromEntries(Object.entries({preset:input.preset,...creative,...length}).filter(([,value])=>value!==undefined)) as ProviderRequest['input']['controls'];
-  const structured=!!snapshot.profile?.promptPresets?.main?.program;
+  const structured=!!snapshot.promptCompilation;
   const packages = structured ? packageContext(snapshot, 'main') : undefined;
   const templateHasState=(nodes:PromptTemplate):boolean=>nodes.some(node=>node.kind==='slot'&&node.name==='state'||node.kind==='if'&&(templateHasState(node.then)||templateHasState(node.else??[]))||node.kind==='each'&&(templateHasState(node.body)||templateHasState(node.else??[]))||node.kind==='let'&&templateHasState(node.body));
   const stateSlot=snapshot.profile?.promptPresets?.main?.program?.blocks.some(block=>block.kind==='slot'&&block.slot==='state'||(block.kind==='slot'||block.kind==='message')&&templateHasState(block.template??[]));
@@ -55,24 +53,24 @@ export function attachMainHostContext(snapshot:RunSnapshot):RunSnapshot{
   return {...snapshot,promptCompilation:compilation};
 }
 /** Shared by the real runner and no-call preview; no credentials, fetch, attempts or source writes. */
-export function buildMainProviderRequest(snapshot:RunSnapshot,options:{results?:readonly ToolEvent[];opaqueState?:Json;sol?:SolOptions}={}):{snapshot:RunSnapshot;input:MainInput;request:ProviderRequest}{
+export function buildMainProviderRequest(snapshot:RunSnapshot,options:{results?:readonly ToolEvent[];opaqueState?:Json;evaluation?:{definitions:readonly ProviderTool[];bootstrap:readonly ToolEvent[];toolChoice?:string}}={}):{snapshot:RunSnapshot;input:MainInput;request:ProviderRequest}{
   const behaviorTools = listBehaviorTools(snapshot);
   assertBehaviorToolCapability(snapshot, behaviorTools);
-  const fixed=attachMainHostContext(snapshot),target=fixed.profile?.models.main;
+  const fixed=attachMainHostContext(snapshot.promptCompilation ? snapshot : compileSnapshotPrompt(snapshot)),target=fixed.profile?.models.main;
   if(!target)throw new ProviderContractError('MAIN_MODEL_REQUIRED');
   const input=buildMainInput(fixed,options.results??[]),terminal=nativeStorySubmissionEnabled(fixed);
   if(terminal)input.tools=[...input.tools,STORY_SUBMIT_TOOL.name];
+  if(options.evaluation)input.tools=[...input.tools,...options.evaluation.definitions.map(tool=>tool.name)];
   let contract=input.contract;
-  if(fixed.promptCompilation&&!fixed.profile?.promptPresets?.main?.program){const legacy=fixed.profile?.promptPresets?.main?.text??DEFAULT_MAIN_PROMPT;if(contract.startsWith(legacy))contract=contract.slice(legacy.length).trimStart();}
   if(terminal)contract+='\nThe registered story.submit tool is this run\'s final fiction submission boundary. Ordinary final text remains a supported fallback.';
-  const sol=target.connection.protocol==='sol-responses-v1'?(options.sol??target.sol??defaultSolOptions()):undefined;
-  const request:ProviderRequest={role:'main',modelId:target.modelId,stable:{contract,tools:[...MAIN_READ_TOOLS.filter(tool=>input.tools.includes(tool.name)).map(tool=>structuredClone(tool)),...behaviorTools.map(binding=>binding.tool),...(terminal?[structuredClone(STORY_SUBMIT_TOOL)]:[])]},
-    generation:{maxOutputTokens:target.maxOutputTokens,temperature:target.temperature,...(target.thinkingLevel?{thinkingLevel:target.thinkingLevel}:{}),...(target.structuredOutput!==undefined?{structuredOutput:target.structuredOutput}:{}),...(target.reasoningEffort?{reasoningEffort:target.reasoningEffort}:{}),...(target.thinkingMode?{thinkingMode:target.thinkingMode}:{}),...(target.thinkingBudgetTokens!==undefined?{thinkingBudgetTokens:target.thinkingBudgetTokens}:{}),...(sol?{sol}:{})},
-    input:requestInput(fixed,input),...(fixed.promptCompilation?{prompt:{compilerVersion:fixed.promptCompilation.compilerVersion,messages:fixed.promptCompilation.messages,cachePlan:fixed.promptCompilation.cachePlan,values:fixed.promptCompilation.values}}:{}),...(options.opaqueState!==undefined?{opaqueState:options.opaqueState}:{})};
+  if(options.evaluation)contract+='\nThe selected evaluation tool set is scoped to this model preset and this run. eval_submit_artifact returns its content as the completed run output; userFacingNotice remains separate metadata. Tool results do not alter host permissions.';
+  const request:ProviderRequest={role:'main',modelId:target.modelId,stable:{contract,tools:[...MAIN_READ_TOOLS.filter(tool=>input.tools.includes(tool.name)).map(tool=>structuredClone(tool)),...behaviorTools.map(binding=>binding.tool),...(terminal?[structuredClone(STORY_SUBMIT_TOOL)]:[]),...(options.evaluation?.definitions.map(tool=>structuredClone(tool))??[])]},
+    generation:{maxOutputTokens:target.maxOutputTokens,temperature:target.temperature,...(target.thinkingLevel?{thinkingLevel:target.thinkingLevel}:{}),...(target.structuredOutput!==undefined?{structuredOutput:target.structuredOutput}:{}),...(target.reasoningEffort?{reasoningEffort:target.reasoningEffort}:{}),...(target.thinkingMode?{thinkingMode:target.thinkingMode}:{}),...(target.thinkingBudgetTokens!==undefined?{thinkingBudgetTokens:target.thinkingBudgetTokens}:{})},
+    input:requestInput(fixed,input),...(options.evaluation?.bootstrap.length?{bootstrap:options.evaluation.bootstrap.map(item=>({callId:item.callId,name:item.name,args:json(item.args) as Record<string,Json>,result:json(item.result),denied:item.denied}))}:{}),...(options.evaluation?.toolChoice?{toolChoice:options.evaluation.toolChoice}:{}),...(fixed.promptCompilation?{prompt:{compilerVersion:fixed.promptCompilation.compilerVersion,messages:fixed.promptCompilation.messages,cachePlan:fixed.promptCompilation.cachePlan,values:fixed.promptCompilation.values}}:{}),...(options.opaqueState!==undefined?{opaqueState:options.opaqueState}:{})};
   return {snapshot:fixed,input,request:validateRequest(request)};
 }
 export function encodeMainPreview(request:ProviderRequest,target:ModelPreset & {connection:Connection}){
   const checked=validateRequest(request),protocol=target.connection.protocol;const plan=planNativeMessages(checked,protocol);
-  const body=protocol==='openai-responses-v1'?encodeResponses(checked).body:protocol==='sol-responses-v1'?encodeSolResponses(checked,target.connection.endpoint).body:protocol==='anthropic-messages-v1'?encodeAnthropic(checked).body:protocol==='vertex-gemini-v1'?encodeVertex(checked).body:protocol==='openai-chat-v1'||protocol==='vercel-chat-v1'?encodeChat(checked).body:json(checked);
+  const body=protocol==='openai-responses-v1'?encodeResponses(checked).body:protocol==='anthropic-messages-v1'?encodeAnthropic(checked).body:protocol==='vertex-gemini-v1'?encodeVertex(checked).body:protocol==='openai-chat-v1'||protocol==='vercel-chat-v1'?encodeChat(checked).body:json(checked);
   return{protocol,modelId:target.modelId,kind:'exact-request-body' as const,body,diagnostics:plan?.diagnostics??[],capabilityVersion:plan?.capabilityVersion??'fixture-only'};
 }

@@ -1,6 +1,6 @@
 import type { ContentRef } from './product.js';
 import { HiddenStoryError, HIDDEN_CONTROL_MAP, validateHiddenStoryConfig, type HiddenStoryConfig } from './hidden-story.js';
-import { wireHiddenStoryInstructions, type HiddenConversion } from './hidden-story-converter.js';
+import { wireHiddenStoryInstructions, type HiddenConversion } from './hidden-story-runtime.js';
 import { compilePromptProgram, validatePromptProgram, type LogicalMessage } from './prompt-program.js';
 
 export type HiddenStoryNativePackage = HiddenConversion & { id: string; revision: number; title: string; packageHash: string };

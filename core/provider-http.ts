@@ -5,7 +5,6 @@ import { consumeSse } from './vertex.js';
 import { encodeResponses, ResponsesDecoder, diagnosticResponsesBody, OpenAIProtocolError } from './openai-protocol.js';
 import { encodeChat, ChatDecoder, diagnosticChatBody, OpenAIChatProtocolError } from './openai-chat-protocol.js';
 import { encodeAnthropic, AnthropicDecoder, diagnosticAnthropicBody, AnthropicProtocolError } from './anthropic-protocol.js';
-import { encodeSolResponses, SolResponsesDecoder } from './sol-protocol.js';
 import { ProviderContractError, validateConnection, validateRequest, type Json, type ProviderConnection, type ProviderExecutionOptions, type ProviderResult } from './transport.js';
 
 type Decoder = { accept(value: unknown): void; snapshot(): ProviderResult; finish(): ProviderResult };
@@ -35,14 +34,13 @@ export async function executeNativeProvider(connectionValue: ProviderConnection,
     const connection = validateConnection(connectionValue,options.approvedOrigins); const request = validateRequest(requestValue);
     let bodyValue: Json; let diagnostic: Json; let path: string; let allowDone = false;
     if (connection.protocol === 'openai-responses-v1') { const prepared = encodeResponses(request); decoder = new ResponsesDecoder(prepared.context); bodyValue = prepared.body; diagnostic = diagnosticResponsesBody(bodyValue); path = '/responses'; }
-    else if (connection.protocol === 'sol-responses-v1') { const prepared = encodeSolResponses(request, connection.endpoint); decoder = new SolResponsesDecoder(prepared.context); bodyValue = prepared.body; diagnostic = diagnosticResponsesBody(bodyValue); path = '/responses'; }
     else if (connection.protocol === 'anthropic-messages-v1') { const prepared = encodeAnthropic(request); decoder = new AnthropicDecoder(prepared.context); bodyValue = prepared.body; diagnostic = diagnosticAnthropicBody(bodyValue); path = '/messages'; }
     else if (connection.protocol === 'vercel-chat-v1' || connection.protocol === 'openai-chat-v1') { const prepared = encodeChat(request); decoder = new ChatDecoder(prepared.context); bodyValue = prepared.body; diagnostic = diagnosticChatBody(bodyValue); path = '/chat/completions'; allowDone = true; }
     else throw new ProviderContractError('UNSUPPORTED_PROTOCOL');
     if (signal.aborted) return failure('CANCELLED');
     const secret = connection.credentialEnv ? await (options.resolveCredential ?? (name => process.env[name]))(connection.credentialEnv, connection, signal) : undefined;
     if ((connection.credentialEnv || connection.protocol !== 'openai-chat-v1') && (!secret || /[\r\n]/u.test(secret))) throw new ProviderContractError('CREDENTIAL_UNAVAILABLE');
-    const headers: Record<string,string> = { 'content-type':'application/json', accept:connection.protocol === 'sol-responses-v1' ? 'text/event-stream, application/json' : 'text/event-stream' };
+    const headers: Record<string,string> = { 'content-type':'application/json', accept:'text/event-stream' };
     if (connection.protocol === 'anthropic-messages-v1') { headers['anthropic-version'] = '2023-06-01'; headers['x-api-key'] = secret!; }
     else if (secret) headers.authorization = `Bearer ${secret}`;
     const url = validateProviderEndpoint(connection.protocol,connection.endpoint) + path; const body = JSON.stringify(bodyValue);
@@ -54,25 +52,12 @@ export async function executeNativeProvider(connectionValue: ProviderConnection,
     if (!response.ok) { await response.body?.cancel(); return failure(`HTTP_${response.status}`); }
     const contentType = response.headers.get('content-type')?.toLowerCase() ?? '';
     if (!response.body) return failure('INVALID_CONTENT_TYPE');
-    if (connection.protocol === 'sol-responses-v1' && /^application\/json(?:\s*;|$)/u.test(contentType)) {
-      reader = response.body.getReader();
-      let bytes = 0; const parts: Uint8Array[] = [];
-      const abort = () => { void reader?.cancel().catch(() => {}); };
-      signal.addEventListener('abort',abort,{once:true});
-      try {
-        if (signal.aborted) return failure('CANCELLED');
-        while (true) {
-          const next = await reader.read(); if (signal.aborted) return failure('CANCELLED'); if (next.done) break;
-          bytes += next.value.byteLength; if (bytes > 4_000_000) return failure('RESPONSE_TOO_LARGE'); parts.push(next.value);
-        }
-        let payload: unknown;
-        try { payload = JSON.parse(new TextDecoder('utf-8',{fatal:true}).decode(Buffer.concat(parts))); }
-        catch { return failure('INVALID_RESPONSE_JSON'); }
-        if (!payload || typeof payload !== 'object' || !['completed','incomplete','failed','cancelled'].includes(String((payload as {status?:unknown}).status))) return failure('INVALID_RESPONSE_STATUS');
-        decoder.accept({type:`response.${(payload as {status:string}).status}`,response:payload});
-      } finally { signal.removeEventListener('abort',abort); }
-    } else if (contentType.startsWith('text/event-stream')) {
+    if (contentType.startsWith('text/event-stream')) {
       reader = response.body.getReader(); await consumeSse(reader,value => decoder!.accept(value),signal,allowDone);
+    } else if (connection.protocol === 'openai-responses-v1' && contentType.startsWith('application/json')) {
+      const value:unknown=await response.json();
+      if(!value||typeof value!=='object'||Array.isArray(value)||!['completed','incomplete','failed'].includes(String((value as Record<string,unknown>).status)))return failure('INVALID_JSON_RESPONSE');
+      decoder.accept({type:`response.${String((value as Record<string,unknown>).status)}`,response:value});
     } else { await response.body.cancel(); return failure('INVALID_CONTENT_TYPE'); }
     if (signal.aborted) return failure('CANCELLED');
     return decoder.finish();

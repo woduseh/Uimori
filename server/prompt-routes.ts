@@ -10,7 +10,9 @@ import { HttpError, type Store } from './store.js';
 import type { RunSnapshot } from '../core/types.js';
 import { buildMainProviderRequest, encodeMainPreview } from './main-request.js';
 import { freezePackageStates } from './package-behavior-host.js';
-import { executionContext } from '../core/execution-context.js';
+import { createHash } from 'node:crypto';
+import { compileTranslationPrompt, createTranslationPlan, translationInput } from '../core/auxiliary.js';
+import { sourceTimeContext } from './product-auxiliary.js';
 
 /** A read-only preview, including unsaved draft blocks. No provider call or Run is created. */
 export function promptRoutes(app:FastifyInstance,store:Store){
@@ -21,7 +23,7 @@ export function promptRoutes(app:FastifyInstance,store:Store){
     const profile=store.product.snapshot(chat.id)??{...defaultProfile(chat.id),contents:[],models:{}};
     if(role==='main'){
       const selected=profile.promptPresets?.main;
-      profile.promptPresets={...profile.promptPresets,main:{id:selected?.id??'preview-draft',revision:selected?.revision??1,title:selected?.title??'Preview draft',role:'main',text:selected?.text??'',program}};
+      profile.promptPresets={...profile.promptPresets,main:{id:selected?.id??'preview-draft',revision:selected?.revision??1,title:selected?.title??'Preview draft',role:'main',program}};
     }
     let snapshot:RunSnapshot={chatId:chat.id,parentRevision:branch.headRevision,settingsRevision:chat.settingsRevision,settings:chat.settings,request:text(b.request,'preview request',500_000),history:store.history(branch.headRevision),resources:store.product.resources(chat.id,profile),profile,branchId:branch.id};
     const nativeBot=store.native.snapshot(chat.id,branch.id);if(nativeBot){snapshot.nativeBot=nativeBot;snapshot.resources.push(...nativeResources(chat.id,nativeBot));}
@@ -29,9 +31,25 @@ export function promptRoutes(app:FastifyInstance,store:Store){
     if(nativeBot&&snapshot.hiddenStory?.config.contentPolicy==='general-fiction')throw new HttpError(400,'This native bot requires the nonsexual Hidden Story policy');
     snapshot=store.story.prepareRunInTransaction(snapshot);snapshot.logicalHistory=captureLogicalHistory(store,snapshot);
     const previewTime=new Date().toISOString();snapshot=freezePackageStates(store,{...snapshot,executionClock:{iso:previewTime,unix:Math.floor(Date.parse(previewTime)/1000)}},false);
-    const context=promptContext(snapshot);if(role==='translation'){context.runtime=executionContext(snapshot,'translation');context.history=[context.history.at(-1)!];context.slots.source=branch.headRevision?store.source(branch.headRevision).text:'';}
     const values=b.values!==undefined?record(b.values):undefined;
-    let compilation=role==='main'&&!snapshot.story?.waiting?compileSnapshotPrompt(snapshot,program,values).promptCompilation!:compilePromptProgram(program,{...context,...(values?{values}:{})});
+    let previewSource: { kind: 'stored' | 'synthetic'; sourceRevision: string; sourceHash: string; chunkId: string } | undefined;
+    let compilation;
+    if(role==='translation'){
+      // Existing originals use their frozen source-time context, exactly as a job does.
+      // An empty conversation has only explicit preview data; nothing is persisted.
+      const source=branch.headRevision?store.source(branch.headRevision):{id:'preview-source',chatId:chat.id,text:snapshot.request,hash:createHash('sha256').update(snapshot.request).digest('hex')};
+      const frozen=branch.headRevision?structuredClone(store.run((source as import('../core/types.js').Source).runId).snapshot):snapshot;
+      const selected=profile.promptPresets?.translation;
+      const preset={id:selected?.id??'preview-draft',revision:selected?.revision??1,title:selected?.title??'Preview draft',role:'translation' as const,program};
+      const fixed={...frozen,profile:{...frozen.profile??{...defaultProfile(chat.id),contents:[],models:{}},promptPresets:{...frozen.profile?.promptPresets,translation:preset},promptControls:{...frozen.profile?.promptControls,[`${preset.id}@${preset.revision}`]:{values:values??profile.promptControls?.[`${preset.id}@${preset.revision}`]?.values??{},combinations:[]}}}};
+      const translationPlan=createTranslationPlan(source,sourceTimeContext(fixed,'translation'));
+      const input=translationInput(translationPlan,translationPlan.chunks[0].id,fixed);
+      compilation=compileTranslationPrompt(input,fixed,'Translate the requested blocks according to the selected prompt and return the specified JSON.')!;
+      previewSource={kind:branch.headRevision?'stored':'synthetic',sourceRevision:source.id,sourceHash:source.hash,chunkId:input.chunkId!};
+    }else{
+      const context=promptContext(snapshot);
+      compilation=!snapshot.story?.waiting?compileSnapshotPrompt(snapshot,program,values).promptCompilation!:compilePromptProgram(program,{...context,...(values?{values}:{})});
+    }
     const target=profile.models[role as 'main'|'translation'];let provider=null;let error:string|undefined;
     if(target)try{
       if(role==='main'&&!snapshot.story?.waiting){
@@ -41,6 +59,6 @@ export function promptRoutes(app:FastifyInstance,store:Store){
         provider={protocol:target.connection.protocol,modelId:target.modelId,kind:'mapping-only' as const,...plan};
       }
     }catch(caught){error=(caught as Error).message;}
-    return{compilation,provider,...(error?{error}:{}),...(snapshot.story?.waiting?{waitingForState:true}:{}),scope:'preview-only-no-provider-call'};
+    return{compilation,provider,...(previewSource?{previewSource}:{}),...(error?{error}:{}),...(snapshot.story?.waiting?{waitingForState:true}:{}),scope:'preview-only-no-provider-call'};
   });
 }

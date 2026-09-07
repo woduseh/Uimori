@@ -8,7 +8,7 @@ import {
 import type { Connection, TaskRole } from '../core/product.js';
 import { executeProvider, type Json, type ProviderRequest, type ProviderResult, type ProviderTool, type WireRecord } from '../core/transport.js';
 import type { RunSnapshot, ToolEvent } from '../core/types.js';
-import { createSolSession } from './sol-session.js';
+import { createEvaluationToolSession } from './evaluation-session.js';
 import { validateHiddenTranslation } from '../core/hidden-story.js';
 import { translationReader, TRANSLATION_READ_NAMES, type TranslationReference } from '../core/translation-context.js';
 import { PromptProgramError } from '../core/prompt-program.js';
@@ -40,6 +40,7 @@ export type AuxiliaryStoreBridge = {
   finish: (jobId: string, generation: number, owner: string, outcome: AuxiliaryOutcome) => MaybePromise<void>;
 };
 export type AuxiliaryJobHooks = {
+  executeCodex?: import('../core/transport.js').ProviderExecutionOptions['executeCodex'];
   resolveCredential?: import('../core/transport.js').ProviderExecutionOptions['resolveCredential'];
   signal: AbortSignal; approvedOrigins: readonly string[];
   authorize: (connection: Connection) => MaybePromise<Connection>;
@@ -88,12 +89,14 @@ export function sourceTimeContext(snapshot: RunSnapshot, kind: JobKind): SourceT
   };
 }
 
-function providerInput(input: AuxiliaryInput, modelId: string, generation: ProviderRequest['generation'], opaqueState: Json | undefined, snapshot: RunSnapshot): ProviderRequest {
+function providerInput(input: AuxiliaryInput, modelId: string, generation: ProviderRequest['generation'], opaqueState: Json | undefined, snapshot: RunSnapshot, evaluation?:ReturnType<typeof createEvaluationToolSession>): ProviderRequest {
   const task = input.role === 'translation' ? input.customPrompt ? 'Translate the requested blocks according to the selected prompt and return the specified JSON.' : 'Translate the requested blocks into Korean and return the specified JSON.' : input.role === 'status' ? 'Return optional display-only annotations for the source blocks.' : 'Select appropriate existing assets or return no images.';
   const compilation = compileTranslationPrompt(input, snapshot, task);
   return {
     role: input.role === 'presentation' ? 'image' : input.role, modelId,
-    stable: { contract: compilation ? '' : input.contract, tools: toolSchemas.filter(tool => input.tools.includes(tool.name)).map(tool => structuredClone(tool)) }, generation,
+    stable: { contract: (compilation ? '' : input.contract)+(evaluation?'\nThe selected evaluation tool set is scoped to this model preset and this run. eval_submit_artifact returns content as the completed task output; userFacingNotice remains separate metadata.':''), tools: [...toolSchemas.filter(tool => input.tools.includes(tool.name)).map(tool => structuredClone(tool)),...(evaluation?.definitions.map(tool=>structuredClone(tool))??[])] }, generation,
+    ...(evaluation?.bootstrap.length?{bootstrap:evaluation.bootstrap.map(item=>({callId:item.callId,name:item.name,args:json(item.args) as Record<string,Json>,result:json(item.result),denied:item.denied}))}:{}),
+    ...(evaluation?.toolChoice(Array.isArray(input.results)?input.results.length:0)?{toolChoice:evaluation.toolChoice(Array.isArray(input.results)?input.results.length:0)}:{}),
     ...(compilation ? { prompt: { compilerVersion: compilation.compilerVersion, messages: compilation.messages, cachePlan: compilation.cachePlan, values: compilation.values } } : {}),
     input: {
       task,
@@ -119,7 +122,7 @@ export async function runAuxiliaryJob(store: AuxiliaryStoreBridge, jobId: string
   const target = snapshot.profile?.models[job.kind]; let calls = 0;
   let contextBytes = 0;
   const readTranslation = translationReader(snapshot,bundle.translationReferences ?? []);
-  const sol = createSolSession(target, hooks.timeoutMs);
+  const evaluation = createEvaluationToolSession(target, hooks.timeoutMs);
   // Fixture annotations remain explicitly marked; live output still requires artifact validation.
   const mock = !target || target.connection.protocol === 'fixture-sse-v1';
   const successful = new Map<string, TranslationResult>();
@@ -127,37 +130,46 @@ export async function runAuxiliaryJob(store: AuxiliaryStoreBridge, jobId: string
   let lastError: string | null = null; let stopped = false;
   const cancelState = () => hooks.cancellationStatus ?? 'cancelled';
   const runInput = async (packet: AuxiliaryInput) => {
-    if (sol) packet = { ...packet, tools: [...packet.tools, ...sol.toolNames] };
+    if (evaluation) packet = { ...packet, tools: [...packet.tools, ...evaluation.definitions.map(tool=>tool.name)] };
     let opaqueState: Json | undefined;
     const request = async (next: AuxiliaryInput) => {
       if (calls >= snapshot.settings.maxCalls) throw Object.assign(new Error('Auxiliary call budget exhausted'), { name: 'BudgetError' });
-      if (sol && sol.remainingMs() === 0) throw new AuxiliaryExecutionError('AUXILIARY_PROVIDER_TIMEOUT', true);
+      if (evaluation && evaluation.remainingMs() === 0) throw new AuxiliaryExecutionError('AUXILIARY_PROVIDER_TIMEOUT', true);
       calls++;
       if (!target) return scriptedAuxiliary(next, hooks.signal);
       let authorized: Connection;
       try { authorized = await hooks.authorize(structuredClone(target.connection)); }
       catch { throw new AuxiliaryExecutionError('CONNECTION_NOT_AUTHORIZED', true); }
       if (!authorized.enabled || authorized.id !== target.connectionId || authorized.endpoint !== target.connection.endpoint || authorized.protocol !== target.connection.protocol) throw new AuxiliaryExecutionError('CONNECTION_NOT_AUTHORIZED', true);
-      const body = providerInput(next, target.modelId, { maxOutputTokens: target.maxOutputTokens, temperature: target.temperature, ...(target.thinkingLevel ? { thinkingLevel: target.thinkingLevel } : {}), ...(target.structuredOutput !== undefined ? { structuredOutput: target.structuredOutput } : {}), ...(target.reasoningEffort ? { reasoningEffort: target.reasoningEffort } : {}), ...(target.thinkingMode ? { thinkingMode: target.thinkingMode } : {}), ...(target.thinkingBudgetTokens !== undefined ? { thinkingBudgetTokens: target.thinkingBudgetTokens } : {}), ...(sol ? { sol: sol.options } : {}) }, opaqueState, snapshot);
+      const generation = { maxOutputTokens: target.maxOutputTokens, temperature: target.temperature, ...(target.thinkingLevel ? { thinkingLevel: target.thinkingLevel } : {}), ...(target.structuredOutput !== undefined ? { structuredOutput: target.structuredOutput } : {}), ...(target.reasoningEffort ? { reasoningEffort: target.reasoningEffort } : {}), ...(target.thinkingMode ? { thinkingMode: target.thinkingMode } : {}), ...(target.thinkingBudgetTokens !== undefined ? { thinkingBudgetTokens: target.thinkingBudgetTokens } : {}) };
+      const completedToolResults=Array.isArray(next.results)?next.results.length:0;
+      const body = providerInput(next, target.modelId, evaluation?evaluation.generation(generation,completedToolResults):generation, opaqueState, snapshot,evaluation);
+      const generationBinding=evaluation?.generationBinding(generation,completedToolResults);if(generationBinding)body.generationBinding=generationBinding;
       let attemptId: string | undefined;
-      const remainingTimeout = sol?.remainingMs();
+      const remainingTimeout = evaluation?.remainingMs();
       if (remainingTimeout === 0) throw new AuxiliaryExecutionError('AUXILIARY_PROVIDER_TIMEOUT', true);
       const result = await executeProvider({ id: authorized.id, protocol: authorized.protocol, endpoint: authorized.endpoint, ...(authorized.credentialEnv ? { credentialEnv: authorized.credentialEnv } : {}), ...(authorized.requestTier ? { requestTier: authorized.requestTier } : {}) }, body, {
-        approvedOrigins: hooks.approvedOrigins, signal: hooks.signal, resolveCredential: hooks.resolveCredential, vertexRequestTier: hooks.vertexRequestTier, timeoutMs: remainingTimeout ?? hooks.timeoutMs ?? target.timeoutMs ?? (target.connection.protocol === 'vertex-gemini-v1' ? 300_000 : undefined),
+        approvedOrigins: hooks.approvedOrigins, signal: hooks.signal, resolveCredential: hooks.resolveCredential, executeCodex: hooks.executeCodex, vertexRequestTier: hooks.vertexRequestTier, timeoutMs: remainingTimeout ?? hooks.timeoutMs ?? target.timeoutMs ?? (target.connection.protocol === 'vertex-gemini-v1' ? 300_000 : undefined),
         onWire: async wire => { attemptId = await hooks.onAttemptStart(wire); },
       });
       // Keep diagnostic output and usage even when a refusal or malformed body cannot become an artifact.
-      if (attemptId !== undefined) await hooks.onAttemptFinish(attemptId, structuredClone(result));
+      if (attemptId !== undefined) await hooks.onAttemptFinish(attemptId, evaluation?evaluation.diagnosticResult(result):structuredClone(result));
       if (result.status === 'tool_calls') {
         opaqueState = result.opaqueState;
-        return { kind: 'tools', actions: result.toolCalls.map(call => ({ callId: call.id, name: call.name, args: call.arguments })) };
+        return { kind: 'tools', actions: result.toolCalls.map(call => ({ callId: call.id, name: call.name, args: call.arguments, ...(call.recoveredFromTruncation?{recoveredFromTruncation:true}:{}) })) };
       }
       if (result.status !== 'completed') throw new AuxiliaryExecutionError(result.status === 'refused' ? 'AUXILIARY_PROVIDER_REFUSED' : result.status === 'partial' ? 'AUXILIARY_PROVIDER_PARTIAL' : result.status === 'cancelled' ? 'AUXILIARY_CANCELLED' : `AUXILIARY_PROVIDER_${result.error?.code ?? 'ERROR'}`, result.status === 'refused' || result.status === 'cancelled', result.status === 'refused' && !result.error || result.status === 'error' && ['EMPTY_COMPLETION', 'EMPTY_RESPONSE'].includes(result.error?.code ?? ''));
       return result.text;
     };
     return executeAuxiliary(packet, snapshot, request, {
-      signal: hooks.signal, maxCalls: sol ? Math.min(snapshot.settings.maxCalls, sol.maxCalls) : snapshot.settings.maxCalls,
-      localTools: { names: [...(job.kind==='translation'?TRANSLATION_READ_NAMES:[]),...(sol?.toolNames ?? [])], execute: action => TRANSLATION_READ_NAMES.includes(action.name) ? readTranslation(action) : sol!.execute({id:action.callId,name:action.name,arguments:json(action.args) as Record<string,Json>}) },
+      signal: hooks.signal, maxCalls: evaluation ? Math.min(snapshot.settings.maxCalls, evaluation.maxCalls) : snapshot.settings.maxCalls,
+      localTools: { names: [...(job.kind==='translation'?TRANSLATION_READ_NAMES:[]),...(evaluation?.allNames ?? [])], execute: action => {
+        if(TRANSLATION_READ_NAMES.includes(action.name))return readTranslation(action);
+        const call={id:action.callId,name:action.name,arguments:json(action.args) as Record<string,Json>};
+        if(action.name!=='eval_submit_artifact')return evaluation!.execute(call);
+        const submitted=evaluation!.submit(call,action.recoveredFromTruncation===true);if(!submitted.ok)return submitted.event;
+        return{event:{callId:action.callId,name:action.name,args:{},denied:false,result:{accepted:true,sha256:submitted.artifact.sha256,characters:submitted.artifact.text.length,utf8Bytes:submitted.artifact.utf8Bytes,noticeProvided:submitted.artifact.noticeProvided,noticeCharacters:submitted.artifact.noticeCharacters,correctionCount:submitted.artifact.correctionCount}},terminalOutput:submitted.artifact.text};
+      } },
       onInput: value => hooks.onInput?.(jobId, value), onToolEvent: async value => {
         if(job.kind==='translation') {
           contextBytes += Buffer.byteLength(JSON.stringify(value),'utf8');

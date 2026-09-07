@@ -271,5 +271,6 @@ test('other explicit native connections record unknown billing without consuming
   expect(budget.snapshot()).toMatchObject({requestCount:0,accountedCostUsd:0});
   const row=store.db.prepare('SELECT request,cost_usd FROM attempts WHERE id=?').get(id)!;
   expect(JSON.parse(String(row.request))).toMatchObject({externalBilling:'not-estimated'});expect(row.cost_usd).toBeNull();
-  expect(()=>budget.start({...native,url:'https://unapproved.example/v1/responses'},persist)).toThrow('LIVE_PRICE_SCOPE_UNSUPPORTED');
+  const compatible=budget.start({...native,url:'https://unapproved.example/v1/responses'},persist);store.product.finishAttempt(compatible,terminal());
+  expect(budget.snapshot()).toMatchObject({requestCount:0,accountedCostUsd:0});
 });

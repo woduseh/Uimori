@@ -1,5 +1,17 @@
 # 근거와 확인 범위 v0.6.1
 
+문서 제목의 v0.6.1은 초기 계약 버전이에요. 각 절의 조사·채택·미구현·검증 문구는 그 절을 기록한 시점의 근거이며, 이후 구현으로 대체된 판단도 이력으로 남겨요. 현재 기능·schema·검증 범위는 [CURRENT](CURRENT.md), 공통 API는 [패키지 동작](../docs/PACKAGE-BEHAVIOR.md), 새 자료 이식은 [Risu 이식 가이드](../docs/RISU-PORTING.md)를 확인해요.
+
+## 2026-09-07 Risu 자료 이식 경로 정리
+
+후속으로 앱의 Risu JSON/CHARX 부분 변환도 제거했어요. 원본 해석을 RisuToki 구조화 MCP와 에이전트에 맡기고 `LibraryPanel`/`PromptComposer`의 native JSON 초안 입력을 재사용해요. 별도 바이너리 파서·부분 의미 변환·Agent 중간파일을 앱에서 중복 유지하는 방식은 채택하지 않아요. 이후 절의 Risu importer 코드는 당시 구현 근거이며 현재 실행 경로가 아니에요.
+
+RisuToki `45048b1139361cd0fded462683dd30fd7df7ce98`의 `skills/using-mcp-tools/SKILL.md`, `FILE_STRUCTURES.md`, `risu/prompts/skills/writing-risup-presets/SKILL.md`, `risu/modules/skills/writing-risum-modules/SKILL.md`와 common의 CBS·정규식 스킬 및 `writing-trigger-scripts/RUNTIME_INTEROP.md`를 읽었어요. 현재 MCP의 `list_skills` 응답과 inspect/read/analyze/evaluate 도구 계약도 확인했어요. 개인 자료는 열지 않았어요.
+
+- 구조화된 제한 조회·누락 범위 기록, 실행 단계별 의미 구분 원리를 [Risu 자료 이식 가이드](../docs/RISU-PORTING.md)에 적용해요. 결과는 공통 native JSON과 대응/손실 보고로 전달하고 Uimori validator·요청 조립·해당 동작 검사로 검증해요.
+- Risu 문법을 복제하거나 특정 자료 이름의 변환기를 계속 추가하는 방식은 채택하지 않아요. RisuToki가 원본 해석을 맡고 에이전트가 native 표현을 작성해요. 이 결정은 모든 자료의 의미 동등성 또는 실모델 품질을 보증하지 않아요.
+- 아래 지정 자료 이식 기록에 등장하는 `pheme-converter.ts`, `hidden-story-converter.ts`, `import-pheme.mjs`는 과거 구현 경로예요. 전용 변환기는 제거하고 히든 native 타입·조립만 `core/hidden-story-runtime.ts`에 유지해요. 검증 자료는 합성 native fixture로 분리해요. RisuToki 구현 코드를 복사하지 않았어요.
+
 ## 2026-09-07 공통 행동의 자동·UI·Tool 호출
 
 Uimori의 기존 `core/package-behavior.ts` 순수 계산과 `server/store.ts` 원문 완료 transaction을 공통 기준으로 사용했어요. 실행기와 호출 권한을 분리하고 `triggers`가 자동·사용자·모델 진입점만 선택하도록 적용했어요. 각 연산을 별도 Tool로 제공하거나 모델에 함수 본문을 전달하는 방식은 호출·문맥 비용을 늘리므로 채택하지 않았어요. 검증은 `tests/package-behavior-run.test.ts`, `tests/package-behavior-tools.test.ts`, `tests/package-behavior-run-archive.test.ts`와 BUI03–04에서 수행해요.
@@ -210,20 +222,20 @@ M1의 고정 인계 snapshot `98d80987e721d640570abf837ff0e094b2a7dcfd0caf310da8
 
 메인 실행 당시 snapshot을 나중에 수정해서 지연 상태를 끼워 넣는 방식은 채택하지 않았어요. continuity 상태 작업의 부모만 전송 전에 별도로 확정하며 이미 확정한 Run은 유지해요. 모델 proposal의 ID를 effect 중복 판정 기준으로 삼거나, completed 상태만 보고 기억 freshness를 판단하거나, HTML/정규식 실행 결과를 canon으로 사용하는 방식도 채택하지 않았어요. 각 반례와 수정 회귀는 M2 결과에 연결돼요.
 
-## 2026-09-07 Sol Responses provider
+## 2026-09-07 Sol 평가 도구 참고와 provider 분리
 
 참고는 로컬 `C:/Users/wodus/ai-workspace/RisuToki/risu/plugins/sol-responses-relay`, HEAD `53d7d02`, package v0.19.0과 미커밋 변경을 포함한 소스예요. 플러그인 자체 LICENSE/package license는 확인되지 않았고 상위 RisuToki LICENSE는 CC BY-NC 4.0이에요. 이 범위를 코드 복사의 포괄 허용으로 추정하지 않았으며 원본 코드·장문 프롬프트를 복사하지 않고 독립 구현했어요.
 
 | 확인한 파일·snapshot | 채택 원리 → Uimori 적용 → 검증 |
 |---|---|
-| `src/index.js:registerPlugin`, `provider-runner.js:runProvider` (SHA-256 `6053c187cb124265d67a91207752cf4757c7e43227d35a43bd960ed065af174f`) | Risu 등록과 전송/라운드 분리 → 기존 host loop + `sol-session.ts` → 실제 loopback HTTP와 전송 전 SQLite attempt 검사 |
-| `src/local-tools.js` (SHA-256 `121bf6b84cbb1385d06e59c497d4323a7f6d35b99e9e2890f35ce6190889e10d`) | terminal content/notice 분리·제한 교정 → `sol-tools.ts`, `sol-protocol.ts` → 필수 notice·모호한 치환·partial·mixed tool·진단 누출 검사 |
-| `responses-request.js` (SHA-256 `e9dfcfe354c27ba03d950ba9412b52f05a030a2195ce1f6c75d2ae1bc827625d`), `gateway-profiles.js` | 세 게이트웨이 선택 → `sol-config.ts`·설정 UI → endpoint 경계와 설정/archive roundtrip |
-| `provider-settings.js` (SHA-256 `4fa08145bc0d3d4edeeeb83a7f3b4d546591eec24c47a6955c14daec99483fb0`), `round-policy.js` | 옵션·호출 제한을 입력에 고정 → model.sol과 기존 maxCalls/deadline → 옵션 변경 continuation 거절·호출 한도 검사 |
+| `src/index.js:registerPlugin`, `provider-runner.js:runProvider` (SHA-256 `6053c187cb124265d67a91207752cf4757c7e43227d35a43bd960ed065af174f`) | 도구 실행과 provider 전송 분리 → 기존 역할별 host loop + `evaluation-session.ts` → Responses loopback HTTP와 전송 전 SQLite attempt 검사 |
+| `src/local-tools.js` (SHA-256 `121bf6b84cbb1385d06e59c497d4323a7f6d35b99e9e2890f35ce6190889e10d`) | 네 schema, run session, case receipt, terminal content/notice 분리·제한 교정 → `evaluation-tools.ts` → validation 재제출·거절 1회·잘림 복구·진단 누출 검사 |
+| `responses-request.js` (SHA-256 `e9dfcfe354c27ba03d950ba9412b52f05a030a2195ce1f6c75d2ae1bc827625d`), `gateway-profiles.js` | gateway·인증·reasoning은 provider 책임 → Sol 전용 protocol/config 제거, 기존 Responses adapter와 모델 preset opt-in 사용 → endpoint·credential·설정/archive 검사 |
+| `provider-settings.js` (SHA-256 `4fa08145bc0d3d4edeeeb83a7f3b4d546591eec24c47a6955c14daec99483fb0`), `round-policy.js` | model-selected/preloaded와 호출 제한을 run에 고정하고 preloaded 첫 case는 configured/economized 정책을 적용 → `ModelPreset.evaluationTools`와 기존 maxCalls/deadline → 첫 case 선택·bootstrap·호출 한도·첫 라운드 출력/추론 조정 검사 |
 
-원본의 고정 외부 검토자/verified IAM/무조건 accepted는 실제 권한 근거가 아니므로 채택하지 않았어요. 로컬 정보·제안 기록을 반환하며 host read 권한은 기존 실행기가 소유해요. 브라우저 체크포인트와 자동 HTTP 재생은 서버의 불확실 실행 금지 계약과 달라 채택하지 않았어요. 원본의 LLM Gateway Chat 변환은 opaque reasoning item을 잃으므로 native Responses를 사용해요.
+원본의 고정 외부 검토자/verified IAM은 실제 권한 근거가 아니므로 채택하지 않았어요. accepted receipt는 이 실행의 평가 도구 범위만 나타내며 host read 권한은 기존 실행기가 소유해요. 브라우저 체크포인트와 자동 HTTP 재생은 서버의 불확실 실행 금지 계약과 달라 채택하지 않았어요. 원본의 LLM Gateway Chat 변환은 opaque reasoning item을 잃으므로 Responses 호환 연결은 native Responses를 사용해요.
 
-공식 근거: [OpenAI Function calling](https://developers.openai.com/api/docs/guides/function-calling)의 reasoning item/도구 결과 동반 반환, [Vercel OpenResponses](https://vercel.com/docs/ai-gateway/sdks-and-apis/openresponses)의 endpoint·model format·providerOptions, [LLM Gateway reasoning](https://docs.llmgateway.io/features/reasoning)의 `store:false`·`include`와 원래 output item 재전송을 확인했어요. Sol의 새 기본값은 encrypted reasoning을 요청하고 정확한 item/ID를 같은 실행에서만 보존해요. 실제 공급자 호출·모델 접근권한·가격은 확인하지 않았어요. 사용 방법과 비채택 범위는 [SOL-RESPONSES](SOL-RESPONSES.md)에 있어요.
+공식 근거: [OpenAI Function calling](https://developers.openai.com/api/docs/guides/function-calling)의 reasoning item/도구 결과 동반 반환, [Vercel OpenResponses](https://vercel.com/docs/ai-gateway/sdks-and-apis/openresponses)의 endpoint·model format·providerOptions, [LLM Gateway reasoning](https://docs.llmgateway.io/features/reasoning)의 `store:false`·`include`와 원래 output item 재전송을 확인했어요. 정확한 item/ID는 같은 실행의 continuation에서만 보존해요. 실제 공급자 호출·모델 접근권한·가격은 확인하지 않았어요. 사용 방법과 비채택 범위는 [선택형 평가 도구](EVALUATION-TOOLS.md)에 있어요.
 
 ## 2026-09-07 공급자 관리와 등록 보조
 
@@ -285,3 +297,11 @@ GPL 코드나 개인 패키지의 본문·스크립트를 복사하지 않고 �
 - 코드 재사용 없음: 헤더와 파일에서 라이선스 허락을 확인하지 못해 원리만 참고했어요. 사용자가 선호한 Yumi 자료가 충분하여 PocketRisu 추가 구현 조사는 하지 않았어요.
 - 비채택: Risu 브라우저 프록시·키 회전·내용 기반 라우터·자동 registry와 body/header 적용·thinking 보관·오류 무시는 Uimori의 서버 호출·권한·원문·불확실 실행 계약과 범위가 달라요. 과거 추천 모델/옵션을 현재 지원 근거로 사용하지 않아요.
 - 검증: PMUI 기존 등록·편집·CAS·권한 유지 + 카탈로그 선택·초안·파일 업로드·오류 입력 이동, UI 공통 모달 화면 검사. Vertex 키 파일은 별도 서버/API 합성 테스트로 검증하며 실제 Google 요청은 실행하지 않아요. 구체적인 최종 실행 결과는 CURRENT를 봐요.
+
+## Codex App Server 채택 (2026-09-07)
+
+- 공식 소스: [App Server 계약](https://learn.chatgpt.com/docs/app-server), [인증](https://learn.chatgpt.com/docs/auth), 설치된 공식 `codex-cli 0.153.0`의 `app-server generate-ts --experimental` 출력. 실측 생성 파일은 `output/codex-contract/experimental/v2/ThreadStartParams.ts`, `TurnStartParams.ts`, `UserInput.ts`, account/model/notification 타입이에요. 공식 실행 파일은 실행만 하며 코드를 복사·수정하지 않았어요.
+- 채택 원리: 공식 stdio initialize/account/device-code login/model catalog/ephemeral turn → `server/codex-process.ts`, `server/codex-runtime.ts`. 새 전용 home, API 환경변수 제거, `environments: []`, `selectedCapabilityRoots: []`, builtin 접근 차단 → 같은 runtime. 역할별 판단과 Uimori 권한 실행 분리 → `core/codex-protocol.ts`의 JSON envelope와 기존 main/auxiliary/story/registration 하네스 공통 콜백.
+- 검증: 실제 설치 CLI의 새 빈 인증 폴더 initialize/account/read는 `tests/codex-installed.test.ts` opt-in preflight로 확인해요. 실계정 로그인·모델 요청은 보내지 않아요. 합성 subprocess/RPC/codec/6개 역할/등록/export-import/HTTP 권한 검사는 `tests/codex-*.test.ts`, 390px 모의 인증 UI는 provider-management browser 검사에 있어요.
+- 비채택: 기존 사용자 auth.json 재사용·토큰 추출·비공식 ChatGPT HTTP 중계·Codex의 코딩/파일/MCP 실행은 가져오지 않아요. 공식 CLI 자체 지침은 제거할 수 없으므로 논리 메시지를 native provider role과 동일하다고 주장하지 않아요. 0.153 CLI는 내장 openai provider retry override를 거절하므로 해당 설정을 제거했어요. Uimori는 불확실 요청을 재생하지 않지만 CLI 내부 재시도와 내부 모델 호출 수는 제어·계수하지 못해요. maxOutputTokens는 출력 목표이고 cost/modelCalls는 미확인 값을 유지해요.
+- 운영 절차·구체적인 기능 한계: [Codex 연결](../docs/CODEX.md).

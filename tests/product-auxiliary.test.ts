@@ -1,3 +1,4 @@
+import { createDefaultPromptProgram } from '../core/prompt-defaults.js';
 import { createHash } from 'node:crypto';
 import { afterEach, describe, expect, test } from 'vitest';
 import { runAuxiliaryJob, sourceTimeContext, type AuxiliaryBundle, type AuxiliaryChunkRecord, type AuxiliaryJobHooks, type AuxiliaryOutcome, type AuxiliaryStoreBridge } from '../server/product-auxiliary.js';
@@ -162,7 +163,7 @@ describe('M1 durable auxiliary orchestration with actual fixture HTTP', () => {
 test('custom translation prompt survives tool continuation and failed chunk retry without inheriting later edits', async () => {
   const custom = '  Translate into French.\r\n{{char}} remains literal.  ';
   const seed = bundle();
-  seed.snapshot.profile!.promptPresets = { translation: { id: 'translation-custom', revision: 8, role: 'translation', title: 'Custom translation', text: custom } };
+  seed.snapshot.profile!.promptPresets = { translation: { id: 'translation-custom', revision: 8, role: 'translation', title: 'Custom translation', program: createDefaultPromptProgram(custom, 'translation') } };
   let requests = 0;
   const server = await fixture(async (captured, response) => {
     requests++;
@@ -176,12 +177,12 @@ test('custom translation prompt survives tool continuation and failed chunk retr
   selectProvider(seed, server.endpoint); const state = bridge(seed); const observed = hooks(server.origin);
   const first = await runAuxiliaryJob(state.store, seed.job.id, 'first-owner', observed.options);
   expect(first?.error).toBe('CHUNK_COVERAGE_INVALID');
-  seed.snapshot.profile!.promptPresets!.translation!.text = 'FUTURE TRANSLATION PROMPT';
+  seed.snapshot.profile!.promptPresets!.translation!.program = createDefaultPromptProgram('FUTURE TRANSLATION PROMPT', 'translation');
   const second = await runAuxiliaryJob(state.store, seed.job.id, 'retry-owner', observed.options);
   expect(second?.status).toBe('completed'); expect(server.requests).toHaveLength(5);
   for (const captured of server.requests) {
     const wire = JSON.parse(captured.body);
-    expect(wire.stable.contract).toBe(custom);
+    expect(wire.stable.contract).toBe(''); expect(wire.prompt.messages[0].content[0].text).toBe(custom);
     expect(wire.input.task).not.toContain('Korean');
     expect(wire.input.controls).toMatchObject({ instructionRevision: 'prompt:translation-custom@8', customPrompt: true });
     expect(JSON.stringify(wire.input.source.outputSchema)).not.toContain('Korean');

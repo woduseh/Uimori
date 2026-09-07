@@ -1,3 +1,4 @@
+import { createDefaultPromptProgram } from '../core/prompt-defaults.js';
 import { createHash } from 'node:crypto';
 import { afterEach, describe, expect, test } from 'vitest';
 import { aggregateTranslation, compileTranslationPrompt, createTranslationPlan, translationInput, validateTranslationChunk, validateTranslationPlan, type AuxiliaryInput, type TranslationPlan, type TranslationResult } from '../core/auxiliary.js';
@@ -23,7 +24,7 @@ function bundle(sourceText = text): AuxiliaryBundle {
     chatId: source.chatId, parentRevision: null, settingsRevision: 1,
     settings: { preset: 'calm', mode: 'direct', translation: true, status: false, maxCalls: 5 },
     request: 'MAIN_TASK_MUST_NOT_REPLAY', history: [], logicalHistory: [{ id: 'main-history', role: 'user', text: 'MAIN_HISTORY_MUST_NOT_REPLAY' }], resources: [],
-    profile: { ...defaultProfile(source.chatId), revision: 3, contents: [], models: {}, promptPresets: { translation: { id: 'translation-preset', revision: 4, role: 'translation', title: 'Frozen translation', text: 'LEGACY_FALLBACK_MUST_NOT_OVERRIDE', program: structuredClone(program) } }, promptControls: { 'translation-preset@4': { values: { style: 'precise' }, combinations: [] }, 'translation-preset@5': { values: { style: 'soft' }, combinations: [] } } },
+    profile: { ...defaultProfile(source.chatId), revision: 3, contents: [], models: {}, promptPresets: { translation: { id: 'translation-preset', revision: 4, role: 'translation', title: 'Frozen translation', program: structuredClone(program) } }, promptControls: { 'translation-preset@4': { values: { style: 'precise' }, combinations: [] }, 'translation-preset@5': { values: { style: 'soft' }, combinations: [] } } },
   } };
 }
 function echo(plan: TranslationPlan, chunkIndex = 0): TranslationResult {
@@ -96,14 +97,14 @@ describe('native translation prompt and hidden source boundaries', () => {
     const changed = structuredClone(seed.snapshot); changed.profile!.promptPresets!.translation!.revision++;
     expect(() => compileTranslationPrompt(input, changed, 'task')).toThrow('SOURCE_PROMPT_REVISION_MISMATCH');
   });
-  test('legacy default and explicit empty text retain their contracts without composing a program', () => {
+  test('default and explicit empty instructions use the same program compiler', () => {
     for (const selected of [false, true]) {
       const seed = bundle('The harbor was quiet.');
-      if (selected) { seed.snapshot.profile!.promptPresets!.translation!.text = ''; delete seed.snapshot.profile!.promptPresets!.translation!.program; }
+      if (selected) { seed.snapshot.profile!.promptPresets!.translation!.program = createDefaultPromptProgram('', 'translation'); delete seed.snapshot.profile!.promptControls; }
       else delete seed.snapshot.profile!.promptPresets;
       const plan = createTranslationPlan(seed.source, sourceTimeContext(seed.snapshot, 'translation')); const input = translationInput(plan, plan.chunks[0].id, seed.snapshot);
-      expect(input.contract).toBe(selected ? '' : DEFAULT_TRANSLATION_PROMPT);
-      expect(compileTranslationPrompt(input, seed.snapshot, 'task')).toBeUndefined();
+      expect(input.contract).toBe('');
+      const compilation = compileTranslationPrompt(input, seed.snapshot, 'task')!; expect(compilation).toBeDefined(); expect(compilation.messages.some(m => m.id === 'instructions')).toBe(!selected);
       expect(plan.context).not.toHaveProperty('hiddenKnowledge');
     }
   });

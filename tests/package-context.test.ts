@@ -40,7 +40,7 @@ describe('source-time package role context', () => {
   it('provides main body and instructions both in simple input and composed host context', () => {
     const s=snapshot();attach(s);
     expect(buildMainInput(s).facts).toEqual(['EXACT_BODY','EXACT_LORE','MAIN_ONLY']);
-    s.profile!.promptPresets={main:{id:'prompt',revision:1,title:'Prompt',role:'main',text:'',program:{version:1,controls:[],blocks:[{id:'body',title:'Body',kind:'slot',role:'system',slot:'bot'},{id:'turn',title:'Turn',kind:'current'}]}}};
+    s.profile!.promptPresets={main:{id:'prompt',revision:1,title:'Prompt',role:'main',program:{version:1,controls:[],blocks:[{id:'body',title:'Body',kind:'slot',role:'system',slot:'bot'},{id:'turn',title:'Turn',kind:'current'}]}}};
     const compiled=compileSnapshotPrompt(s);const text=JSON.stringify(compiled.promptCompilation);
     expect(text).toContain('EXACT_BODY');expect(text).toContain('MAIN_ONLY');expect(text).not.toContain('TRANSLATION_ONLY');
     expect(promptContext(s).slots.char).toBe('Package character');
@@ -54,7 +54,7 @@ describe('source-time package role context', () => {
     expect(executeTool(s,{callId:'read',name:'knowledge.read',args:{id}},undefined,'translation').denied).toBe(false);
   });
   it('supplies translation-only context and package slots to an independent composed translation', () => {
-    const s=snapshot();attach(s);s.profile!.promptPresets={translation:{id:'tr',revision:1,title:'Translate',role:'translation',text:'',program:{version:1,controls:[],blocks:[{id:'bot',title:'Bot',kind:'slot',role:'system',slot:'bot'},{id:'turn',title:'Turn',kind:'current'}]}}};
+    const s=snapshot();attach(s);s.profile!.promptPresets={translation:{id:'tr',revision:1,title:'Translate',role:'translation',program:{version:1,controls:[],blocks:[{id:'bot',title:'Bot',kind:'slot',role:'system',slot:'bot'},{id:'turn',title:'Turn',kind:'current'}]}}};
     const plan=createTranslationPlan({id:'source',hash:createHash('sha256').update('Original').digest('hex'),chatId:'chat',text:'Original'}, {...context,instructionRevision:'prompt:tr@1'});
     const input=translationInput(plan,plan.chunks[0].id,s);
     expect(input.context.packages!.instructions.map(n=>n.text)).toEqual(['TRANSLATION_ONLY']);expect(JSON.stringify(input)).not.toContain('MAIN_ONLY');

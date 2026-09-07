@@ -15,7 +15,6 @@ import { AssetEditor } from './AssetEditor.js';
 import { SessionGate } from './SessionGate.js';
 import { Dialog } from './Dialog.js';
 import { NewStory } from './NewStory.js';
-import { RisuImport } from './RisuImport.js';
 import { BotNavigation, type ChatFolder } from './BotNavigation.js';
 import { completePendingStoryProfile } from './pendingStory.js';
 import { SettingsEditor } from './RuntimeSettings.js';
@@ -25,7 +24,7 @@ import { modelLabel } from './storyLabels.js';
 import './style.css';
 import './product.css';
 
-type Panel = ''|'navigation'|'new'|'story'|'branches'|'tasks'|'settings'|'reading'|'import';
+type Panel = ''|'navigation'|'new'|'story'|'branches'|'tasks'|'settings'|'reading';
 function App() {
   const s=useStory();
   const [panel,setPanel]=useState<Panel>(''); const [storySearch,setStorySearch]=useState('');
@@ -63,7 +62,7 @@ function App() {
     <aside className="sidebar">{navigation}</aside>
     <main className="story-workspace">
       <header className="workspace-header"><button className="icon-button mobile-menu" aria-label="탐색 메뉴" onClick={()=>setPanel('navigation')}><Menu size={20}/></button><div className="header-title"><h1>{s.destination==='library'?({bot:'봇',persona:'페르소나',module:'모듈',prompts:'프롬프트'}[libraryTab]):s.detail?.chat.title||'Uimori'}</h1><small>{s.destination==='library'?'내 자료와 창작 방식':s.bot?.title||(s.selected?'채팅을 이어가는 중':'나의 채팅')}</small></div><div className="header-actions">{s.selected&&s.destination==='story'&&<><button className="icon-button" aria-label="채팅 포크" title="여기까지 복사해서 새 채팅으로 이어가기" disabled={!s.sources.length||s.forking.some(key=>key.startsWith(`${s.selected}:`))} onClick={()=>{const source=s.sources.at(-1);if(source)void s.fork(source.id);}}><Copy size={19}/></button><button className="icon-button reading-button" aria-label="읽기 설정" title="읽기 설정" onClick={()=>setPanel('reading')}><Type size={20}/></button><button className="icon-button" aria-label={focus?'집중 읽기 종료':'집중 읽기'} title="집중 읽기" onClick={()=>setFocus(!focus)}>{focus?<Minimize size={19}/>:<Maximize size={19}/>}</button><button className="icon-button" aria-label="채팅 설정" title="채팅 설정" onClick={()=>setPanel('story')}><SlidersHorizontal size={20}/></button></>}</div></header>
-      {s.destination==='library'?<div className="destination-scroll"><div className="library-import-action"><button className="secondary" onClick={()=>setPanel('import')}>자료 가져오기</button></div><LibraryPanel library={s.library} reload={s.loadLibrary} onError={s.setError} onStartStory={newStory} initialTab={libraryTab} onTabChange={setLibraryTab} onDirtyChange={setLibraryDirty}/>{s.error&&<p className="error" role="alert">{s.error}</p>}</div>:<>
+      {s.destination==='library'?<div className="destination-scroll"><LibraryPanel library={s.library} reload={s.loadLibrary} onError={s.setError} onStartStory={newStory} initialTab={libraryTab} onTabChange={setLibraryTab} onDirtyChange={setLibraryDirty}/>{s.error&&<p className="error" role="alert">{s.error}</p>}</div>:<>
         <div ref={s.reader} className="reader-scrollport" data-reader-scrollport onScroll={s.savePosition}><section className="reader" aria-label="원고">
           {!s.selected?<div className="empty-state"><BookOpen size={32}/><h2>어떤 채팅을 시작할까요?</h2><p className="muted">서재에서 봇을 고르거나, 원하는 장면으로 시작해요.</p><button onClick={()=>newStory()}>새 채팅</button><button className="secondary" onClick={()=>showLibrary()}>서재 둘러보기</button></div>:!s.detail?<p role="status">채팅을 불러오는 중이에요…</p>:<>
             <div className="story-context">{s.profileAsset&&<img className="profile-asset" data-testid="profile-asset" src={s.profileAsset.url} alt={s.profileAsset.description||s.profileAsset.title}/>}<span>{s.bot?.title||'나의 채팅'}{s.persona&&` · 페르소나 ${s.persona.title}`}</span>{(s.detail.branches?.length??0)>1&&<button className="secondary" onClick={()=>setPanel('branches')}>보관된 전개</button>}</div>
@@ -83,7 +82,6 @@ function App() {
       </>}
     </main>
     <Dialog open={!!pendingNavigation} title="편집 중인 자료" onClose={()=>setPendingNavigation(null)}><p>저장하지 않은 자료 편집이 있어요.</p><button className="secondary" onClick={()=>setPendingNavigation(null)}>계속 편집</button><button onClick={()=>{const go=pendingNavigation;setPendingNavigation(null);setLibraryDirty(false);go?.();}}>초안 버리고 이동</button></Dialog>
-    <Dialog open={panel==='import'} title="자료 가져오기" onClose={()=>setPanel('')} wide>{panel==='import'&&<RisuImport onImported={s.loadLibrary} onClose={()=>setPanel('')}/>}</Dialog>
     <Dialog open={panel==='navigation'} title="탐색" onClose={()=>setPanel('')} className="navigation-dialog">{navigation}</Dialog>
     <Dialog open={panel==='new'} title="새 채팅" onClose={()=>setPanel('')}>{s.library&&<NewStory key={newKey} library={s.library} initialBot={initialBot} initialFolder={initialFolder} onCreated={async chat=>{await s.loadChats();select(chat.id);}}/>}</Dialog>
     <Dialog scopeKey={s.selected} open={panel==='story'} title="채팅 설정" onClose={()=>setPanel('')} wide>{s.detail&&s.library&&<>{s.detail.profile&&<ProfileEditor ownerBotId={s.detail.chat.botId} branchId={s.branch?.id} key={s.selected} profile={s.detail.profile} library={s.library} onSaved={()=>s.refresh(s.selected)} onError={s.setError} onDirtyChange={s.setProfileDirty} onLibraryChanged={s.loadLibrary}/>}{s.detail.profile&&<HiddenStoryPanel forceNonsexual={s.detail.reader.nativeBotAttached} profile={s.detail.profile} onChanged={()=>{void s.refresh(s.selected);}} onError={s.setError}/>}<NativeBotPanel refreshKey={s.detail.reader.cursor} chatId={s.selected} branchId={s.branch?.id??`main:${s.selected}`} headRevision={s.branch?.headRevision??s.detail.chat.headRevision} sourceHash={s.detail.reader.headSourceHash} onChanged={()=>{void s.refresh(s.selected);}} onError={s.setError} onRunRequest={(text,commandId)=>{s.editDraft(text,commandId);setPanel('');s.input.current?.focus();}}/><StoryPanel key={`story:${s.selected}`} chatId={s.selected} branchId={s.branch?.id??`main:${s.selected}`} headRevision={s.branch?.headRevision??s.detail.chat.headRevision} settingsRevision={s.detail.chat.settingsRevision} profileRevision={s.detail.profile?.revision} models={s.library.models} connections={s.library.connections} onChanged={()=>{void s.refresh(s.selected);}} onError={s.setError}/><AssetEditor key={`assets:${s.selected}`} chatId={s.selected} assets={s.detail.assets??[]} refresh={()=>s.refresh(s.selected)} onError={s.setError}/><SettingsEditor key={`runtime:${s.selected}`} chat={s.detail.chat} onSaved={()=>s.refresh(s.selected)} onError={s.setError}/><button className="secondary" onClick={()=>setPanel('reading')}>읽기 설정 열기</button>{s.error&&<p role="alert" className="error">{s.error}</p>}</>}</Dialog>

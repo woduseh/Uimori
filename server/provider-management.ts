@@ -1,27 +1,29 @@
 import { existsSync } from 'node:fs';
 import type { Connection, ContentRef, ModelPreset } from '../core/product.js';
 import type { ProductStore } from './product-store.js';
-import { isVertexFileReference } from '../core/credential-reference.js';
+import { isVertexAdcReference, isVertexFileReference, validCredentialEnv } from '../core/credential-reference.js';
 import type { VertexCredentialStore } from './vertex-credentials.js';
+import type { CodexRuntimeStatus } from '../core/agent-runtime.js';
 
 export type ProviderReadiness = {
   enabled: boolean; originApproved: boolean;
   credentialStatus: 'configured' | 'missing' | 'not-required' | 'adc-configured' | 'adc-unchecked';
-  catalogKind: 'remote' | 'local-support';
+  catalogKind: 'remote' | 'local-support' | 'agent-runtime';
 };
 
 /** Configuration presence only. This performs no authentication or provider request. */
-export function readiness(_store: ProductStore, connection: Connection, approvedOrigins: readonly string[], credentials?:VertexCredentialStore): ProviderReadiness {
+export function readiness(_store: ProductStore, connection: Connection, approvedOrigins: readonly string[], credentials?:VertexCredentialStore, agent?:CodexRuntimeStatus): ProviderReadiness {
+  if (connection.protocol === 'codex-app-server-v1') return { enabled: connection.enabled, originApproved: connection.endpoint === 'codex://local' && agent?.available === true, credentialStatus: agent?.authenticated ? 'configured' : 'missing', catalogKind: 'agent-runtime' };
   let originApproved = false;
   try { originApproved = approvedOrigins.includes(new URL(connection.endpoint).origin); } catch { /* Invalid roots are never ready. */ }
   let credentialStatus: ProviderReadiness['credentialStatus'];
-  if (connection.credentialEnv) {
-    const reference = connection.credentialEnv;
-    const configured = isVertexFileReference(reference) ? credentials?.configured(connection)===true : /^NARRATIVE_PROVIDER_[A-Z0-9_]+$/.test(reference) && Boolean(process.env[reference]) && !/[\r\n]/u.test(process.env[reference]!);
-    credentialStatus = configured ? 'configured' : 'missing';
-  } else if (connection.protocol === 'vertex-gemini-v1') {
+  if (connection.protocol === 'vertex-gemini-v1' && isVertexAdcReference(connection.credentialEnv)) {
     const path = process.env.GOOGLE_APPLICATION_CREDENTIALS;
     credentialStatus = path && existsSync(path) ? 'adc-configured' : 'adc-unchecked';
+  } else if (connection.credentialEnv) {
+    const reference = connection.credentialEnv;
+    const configured = isVertexFileReference(reference) ? credentials?.configured(connection)===true : validCredentialEnv(reference) && Boolean(process.env[reference]) && !/[\r\n]/u.test(process.env[reference]!);
+    credentialStatus = configured ? 'configured' : 'missing';
   } else credentialStatus = ['fixture-sse-v1','openai-chat-v1'].includes(connection.protocol) ? 'not-required' : 'missing';
   return {enabled:connection.enabled,originApproved,credentialStatus,catalogKind:connection.protocol === 'vertex-gemini-v1' ? 'local-support' : 'remote'};
 }

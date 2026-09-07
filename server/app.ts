@@ -22,13 +22,15 @@ import { registerNativeBotRoutes } from './native-bot-routes.js';
 import { runStoryJob } from './story-runner.js';
 import { deniedBrowserRequest, networkPolicy } from './network-policy.js';
 import { VertexCredentialStore } from './vertex-credentials.js';
+import { CodexRuntime, type CodexRuntimeOptions, type CodexRuntimeService } from './codex-runtime.js';
+import { agentRuntimeRoutes } from './agent-runtime-routes.js';
 import { ProviderContractError, type ProviderExecutionOptions } from '../core/transport.js';
 import type { Connection } from '../core/product.js';
 
 import { PROVIDER_PROTOCOLS } from '../core/product.js';
 import type { Settings, RunSnapshot, Job } from '../core/types.js';
 
-export type AppOptions = { dbPath: string; buildId: string; instanceId?: string; testMode?: boolean; webRoot?: string; approvedOrigins?:string[];accessToken?:string;publicOrigin?:string;liveBudget?:LiveBudgetLimits;vertexRequestTier?:'standard'|'flex' };
+export type AppOptions = { dbPath: string; buildId: string; instanceId?: string; testMode?: boolean; webRoot?: string; approvedOrigins?:string[];accessToken?:string;publicOrigin?:string;liveBudget?:LiveBudgetLimits;vertexRequestTier?:'standard'|'flex';codex?:CodexRuntimeOptions;codexRuntime?:CodexRuntimeService };
 export type App = FastifyInstance & { store: Store; controls: Controls };
 type RecordBody = Record<string, unknown>;
 const object = (value: unknown): RecordBody => {
@@ -57,6 +59,15 @@ export async function createApp(options: AppOptions): Promise<App> {
   const app = Fastify({ logger: false, bodyLimit: 4 * 1024 * 1024 }) as unknown as App;
   const store = new Store(options.dbPath);
   const credentials = new VertexCredentialStore(options.dbPath);
+  const codex = options.codexRuntime ?? new CodexRuntime(options.dbPath, options.codex);
+  const executeCodex: NonNullable<ProviderExecutionOptions['executeCodex']> = (connection, request, execution) => {
+    const authorize = () => {
+      const current = store.product.get<Connection>('connection', connection.id);
+      if (!current.enabled || current.protocol !== connection.protocol || current.endpoint !== connection.endpoint || current.credentialEnv !== connection.credentialEnv || current.requestTier !== connection.requestTier) throw new ProviderContractError('CONNECTION_NOT_AUTHORIZED');
+    };
+    authorize();
+    return codex.execute(connection, request, { ...execution, beforeTurn: authorize, onWire: async wire => { authorize(); await execution.onWire?.(wire); authorize(); } });
+  };
   const resolveCredential:NonNullable<ProviderExecutionOptions['resolveCredential']>=async(reference,connection,signal)=>{
     const authorize=()=>{
       if(!connection)throw new ProviderContractError('CREDENTIAL_UNAVAILABLE');
@@ -105,7 +116,7 @@ export async function createApp(options: AppOptions): Promise<App> {
           if (snapshot.profile) {
             const log = (kind:'inputs'|'toolEvents',value:unknown) => { const current = store.job(id); if (current.status !== 'running') return; const input = current.input as Record<string,unknown>; const prior = Array.isArray(input[kind]) ? input[kind] : []; store.db.prepare('UPDATE jobs SET input=? WHERE id=?').run(JSON.stringify({...input,[kind]:[...prior,value]}),id); };
             await runAuxiliaryJob(auxiliaryBridge(store,controls,signal),id,instanceId,{
-              signal,approvedOrigins,resolveCredential,authorize:connection => store.product.authorize(connection),
+              signal,approvedOrigins,resolveCredential,executeCodex,authorize:connection => store.product.authorize(connection),
               vertexRequestTier:options.vertexRequestTier,onAttemptStart:wire => providerBudget.start(wire,admitted => store.product.startAttempt(chatId,null,id,admitted)),onAttemptFinish:(attempt,result) => store.product.finishAttempt(attempt,result),
               onInput:(_id,input) => { log('inputs',input); if (!snapshot.profile?.models[queued.kind]) store.product.mockAttempt(chatId,null,id,queued.kind,input); },onToolEvent:(_id,event) => log('toolEvents',event),onProgress:() => publish(chatId),cancellationStatus:'interrupted',
             }); return;
@@ -144,7 +155,7 @@ export async function createApp(options: AppOptions): Promise<App> {
           onInput: input => { store.input(id, input); if (run.snapshot.profile && !run.snapshot.profile.models.main) store.product.mockAttempt(run.chatId,id,null,'main',input); },
           onToolEvent: event => store.tool(id, event),
           onBehaviorTool: (binding,action) => executeRunBehaviorTool(store,id,binding,action,controller.signal),
-          approvedOrigins,resolveCredential,authorize:connection => store.product.authorize(connection),
+          approvedOrigins,resolveCredential,executeCodex,authorize:connection => store.product.authorize(connection),
           vertexRequestTier:options.vertexRequestTier,onAttemptStart:wire => providerBudget.start(wire,admitted => store.product.startAttempt(run.chatId,id,null,admitted)),onAttemptFinish:(attempt,result) => store.product.finishAttempt(attempt,result),
         });
         if (controller.signal.aborted) {
@@ -181,7 +192,7 @@ export async function createApp(options: AppOptions): Promise<App> {
           publish(job.chatId);
           await controls.wait(job.kind,signal);controls.fail(job.kind);
           const result=await runStoryJob(store.story.bundle(id),{
-            signal,approvedOrigins,resolveCredential,authorize:connection=>store.product.authorize(connection),vertexRequestTier:options.vertexRequestTier,
+            signal,approvedOrigins,resolveCredential,executeCodex,authorize:connection=>store.product.authorize(connection),vertexRequestTier:options.vertexRequestTier,
             onAttemptStart:wire=>providerBudget.start(wire,admitted=>store.transaction(()=>{const attempt=store.product.startAttempt(job.chatId,null,null,admitted);store.db.prepare('UPDATE attempts SET story_job_id=? WHERE id=?').run(id,attempt);return attempt;})),
             onAttemptFinish:(attempt,result)=>store.product.finishAttempt(attempt,result),
             onInput:input=>{store.story.diagnostic(id,job.generation,instanceId,'inputs',input);if(job.mock){const attempt=store.product.mockAttempt(job.chatId,null,null,job.kind,input);store.db.prepare('UPDATE attempts SET story_job_id=? WHERE id=?').run(id,attempt);}},
@@ -211,9 +222,10 @@ export async function createApp(options: AppOptions): Promise<App> {
     const code = error instanceof HttpError ? error.statusCode : typeof statusCode === 'number' && statusCode < 500 ? statusCode : 500;
     void reply.code(code).send({ error: error instanceof HttpError ? error.message : code === 400 ? 'Invalid request' : 'Request failed' });
   });
-  const session = productRoutes(app,store,{credentials,approvedOrigins,accessToken:options.accessToken,publicOrigin:network.publicOrigin,publish,onAuthChanged:() => { for (const chatId of subscribers.keys()) publish(chatId); }});
+  const session = productRoutes(app,store,{credentials,codex,approvedOrigins,accessToken:options.accessToken,publicOrigin:network.publicOrigin,publish,onAuthChanged:() => { for (const chatId of subscribers.keys()) publish(chatId); }});
   readerRoutes(app,store);
-  registrationRoutes(app,store,{budget:providerBudget,approvedOrigins,resolveCredential,signal:stopping.signal,vertexRequestTier:options.vertexRequestTier,track,authenticated:session.authenticated});
+  registrationRoutes(app,store,{budget:providerBudget,approvedOrigins,resolveCredential,executeCodex,signal:stopping.signal,vertexRequestTier:options.vertexRequestTier,track,authenticated:session.authenticated});
+  agentRuntimeRoutes(app,codex);
   storyRoutes(app,store,{publish,pump:pumpStory,execute,abort:id=>storyControllers.get(id)?.abort()});
   registerNativeBotRoutes(app,store);
   hiddenStoryRoutes(app,store,{publish});
@@ -307,6 +319,7 @@ export async function createApp(options: AppOptions): Promise<App> {
   }
   app.addHook('preClose', async () => {
     stopping.abort(new Error('Server stopping'));
+    await codex.close();
     for (const listeners of subscribers.values()) for (const response of listeners.keys()) response.end();
     await Promise.allSettled([...work]);
   });

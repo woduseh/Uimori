@@ -18,7 +18,7 @@
     "verify:selftest": "node scripts/selftest.mjs",
     "cleanup": "node scripts/cleanup.mjs",
     "verify:ui": "node scripts/verify-ui.mjs",
-    "verify:sol": "node scripts/verify-sol.mjs",
+    "verify:evaluation": "node scripts/verify-evaluation.mjs",
     "verify:providers": "node scripts/verify-provider-management.mjs",
     "verify:native": "node scripts/verify-native-ui.mjs",
     "verify:loading": "node scripts/verify-loading.mjs",

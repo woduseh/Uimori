@@ -1,3 +1,4 @@
+import { createDefaultPromptProgram } from './prompt-defaults.js';
 import { createHash } from 'node:crypto';
 import { executeTool, type ToolAction } from './provider.js';
 import type { Resource, RunSnapshot, ToolEvent } from './types.js';
@@ -238,7 +239,7 @@ export function translationInput(plan: TranslationPlan, chunkId: string, snapsho
   return { ...base, role: 'translation', chunkId,
     tools: [...base.tools, ...STORY_READ_NAMES, ...TRANSLATION_READ_NAMES],
     context: {...base.context,...(packages ? {packages} : {}),...(previous ? {previousTranslation:previous} : {})},
-    contract: prompt?.text ?? DEFAULT_TRANSLATION_PROMPT, referencePolicy: 'Optional story.search/read retrieves frozen prior originals; memory.search/read retrieves typed source-time evidence; translation.search/read retrieves prior wording, never new facts. Search names, forms of address and speaker register when useful, then read only needed ranges. Current source and author canon/glossary take precedence over prior translations, beliefs and summaries. Hidden viewpoints remain distinct: reference knowledge does not become a character’s knowledge. Empty search needs no retry; translation remains possible without tools. Total tool result budget is 96000 UTF-8 bytes per job.', ...(prompt ? { customPrompt: true } : {}),
+    contract: '', referencePolicy: 'Optional story.search/read retrieves frozen prior originals; memory.search/read retrieves typed source-time evidence; translation.search/read retrieves prior wording, never new facts. Search names, forms of address and speaker register when useful, then read only needed ranges. Current source and author canon/glossary take precedence over prior translations, beliefs and summaries. Hidden viewpoints remain distinct: reference knowledge does not become a character’s knowledge. Empty search needs no retry; translation remains possible without tools. Total tool result budget is 96000 UTF-8 bytes per job.', ...(prompt ? { customPrompt: true } : {}),
     blocks: structuredClone(chunk.blocks), neighborBlocks: [plan.chunks[chunk.index - 1]?.blocks.at(-1), plan.chunks[chunk.index + 1]?.blocks[0]].filter(item => item !== undefined),
     outputSchema: { sourceRevision: 'exact input value', sourceHash: 'exact input value', chunkId: 'exact input value', segments: [{ anchors: ['ordered source anchors'], text: prompt ? 'Translated prose with protected tokens unchanged' : 'Korean prose with protected tokens unchanged' }] },
   };
@@ -247,8 +248,7 @@ export function translationInput(plan: TranslationPlan, chunkId: string, snapsho
 export function compileTranslationPrompt(input: AuxiliaryInput, snapshot: RunSnapshot, task: string): PromptCompilation | undefined {
   if (input.role !== 'translation') return undefined;
   const preset = snapshot.profile?.promptPresets?.translation;
-  if (!preset?.program) return undefined;
-  if (preset.role !== 'translation' || input.context.instructionRevision !== `prompt:${preset.id}@${preset.revision}`) throw new Error('SOURCE_PROMPT_REVISION_MISMATCH');
+  if (preset && (preset.role !== 'translation' || input.context.instructionRevision !== `prompt:${preset.id}@${preset.revision}`)) throw new Error('SOURCE_PROMPT_REVISION_MISMATCH');
   const contents = snapshot.profile?.contents ?? [];
   const content = (kind: string) => contents.filter(item => item.kind === kind).map(item => item.text).join('\n\n');
   const description = [input.context.bot?.text ?? '', nativeInstructions(snapshot.nativeBot)].filter(Boolean).join('\n\n');
@@ -266,9 +266,9 @@ export function compileTranslationPrompt(input: AuxiliaryInput, snapshot: RunSna
   if (packageSlot.char) slots.char = packageSlot.char;
   for (const key of ['bot', 'persona', 'lore'] as const) if (packageSlot[key]) slots[key] = [slots[key], packageSlot[key]].filter(Boolean).join('\n\n');
   slots.description = slots.bot; slots.lorebook = slots.lore;
-  return compilePromptProgram(preset.program, {
+  return compilePromptProgram(preset?.program ?? createDefaultPromptProgram(DEFAULT_TRANSLATION_PROMPT, 'translation'), {
     runtime: {...executionContext(snapshot,'translation'),source:{id:input.sourceRevision,hash:input.sourceHash,blocks:input.blocks as unknown as import('./prompt-program.js').RuntimeValue}},
-    values: snapshot.profile?.promptControls?.[`${preset.id}@${preset.revision}`]?.values,
+    values: preset ? snapshot.profile?.promptControls?.[`${preset.id}@${preset.revision}`]?.values : undefined,
     slots, history: [{ id: `translation-current:${input.chunkId ?? input.sourceRevision}`, role: 'user', text: task, sourceRevision: input.sourceRevision, sourceHash: input.sourceHash, current: true }],
   });
 }
@@ -344,7 +344,7 @@ export function validatePresentation(source: AuxiliarySource, output: unknown, a
 export type AuxiliaryRequest = (input: AuxiliaryInput, signal?: AbortSignal) => Promise<unknown>;
 export async function executeAuxiliary(input: AuxiliaryInput, snapshot: RunSnapshot, request: AuxiliaryRequest, hooks: {
   signal?: AbortSignal; maxCalls?: number; onInput?: (input: AuxiliaryInput) => void | Promise<void>; onToolEvent?: (event: ToolEvent) => void | Promise<void>;
-  localTools?: { names: readonly string[]; execute: (action: ToolAction) => ToolEvent };
+  localTools?: { names: readonly string[]; execute: (action: ToolAction) => ToolEvent | {event:ToolEvent;terminalOutput:unknown} };
 } = {}): Promise<{ output: unknown; modelCalls: number; inputs: AuxiliaryInput[]; toolEvents: ToolEvent[] }> {
   const fixedInput = structuredClone(input); const fixedScope = structuredClone(snapshot); const inputs: AuxiliaryInput[] = []; const toolEvents: ToolEvent[] = [];
   const limit = hooks.maxCalls ?? snapshot.settings.maxCalls;
@@ -364,7 +364,9 @@ export async function executeAuxiliary(input: AuxiliaryInput, snapshot: RunSnaps
     let event: ToolEvent;
     if (!fixedInput.tools.includes(action.name)) event = { callId: action.callId, name: 'unapproved', args: {}, result: { code: 'TOOL_NOT_ALLOWED' }, denied: true };
     else if (hooks.localTools?.names.includes(action.name)) {
-      event = hooks.localTools.execute(structuredClone(action));
+      const local=hooks.localTools.execute(structuredClone(action));
+      if('terminalOutput' in local){event=local.event;toolEvents.push(structuredClone(event));await hooks.onToolEvent?.(structuredClone(event));check();return{output:local.terminalOutput,modelCalls:inputs.length,inputs,toolEvents};}
+      event = local;
       if (event.callId !== action.callId || event.name !== action.name) throw new Error('TOOL_CALL_INVALID');
     } else if (action.name === 'assets.search' || action.name === 'assets.inspect') {
       const assets = fixedInput.assets ?? [];

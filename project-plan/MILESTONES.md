@@ -1,5 +1,7 @@
 # 구현 순서와 범위 v0.6.1
 
+> 2026-09-07 읽는 기준: 아래는 단계별 인수 요구와 당시 구현 순서이며 현재의 할 일 목록이 아니다. 실제 완료/미완료는 [CURRENT](CURRENT.md), [M1-RESULTS](M1-RESULTS.md), [M2-RESULTS](M2-RESULTS.md)를 따른다. 현재 DB/archive v8은 새 DB만 초기화하고 구형 DB migration을 제공하지 않는다. 개인 self-host는 별도 후속 구현으로 추가됐고 실제 Linux/Docker/휴대폰 검증은 남아 있다([SELF-HOST-RESULTS](SELF-HOST-RESULTS.md)). 자료별 전용 변환기 대신 [범용 이식 가이드](../docs/RISU-PORTING.md)를 사용한다.
+
 이 파일의 M0/M1/M2/M3는 과거 A0/A1/A2 및 A01 같은 acceptance ID와 혼동하지 않기 위한 새 milestone 이름이다. 이전 검증 목적은 ACCEPTANCE의 `legacy_ids`로 추적한다. 테스트 숫자나 파일 수를 강제하지 않는다.
 
 ## M0 — 첫 착수 작업: 작은 제품과 검증 루프

@@ -1,5 +1,7 @@
 # 아키텍처 계약 v0.6.1
 
+> 2026-09-07 현행 연결: 문서 제목의 v0.6.1은 계약 문서 버전이며 현재 DB/archive는 v8이다. 구형 DB는 이관하지 않고 거부하며 개발 DB 초기화는 `npm run reset:dev`를 사용한다. 공통 패키지·Run 상태·기록된 난수는 [PACKAGE-BEHAVIOR](../docs/PACKAGE-BEHAVIOR.md), 개인 HTTPS 접속·세션은 [SELF-HOST](../docs/SELF-HOST.md), Risu 자료의 에이전트 이식은 [RISU-PORTING](../docs/RISU-PORTING.md)을 따른다. 아래 M1/M2 시점의 설명과 장기 설계는 각 단계의 계약이며 전체 구현 완료를 뜻하지 않는다. 실제 완료 범위는 [CURRENT](CURRENT.md)에서 확인한다.
+
 제안된 이름은 구현을 강제하는 클래스 목록이 아니다. 아래 경계와 동작을 유지하면 더 단순한 표현으로 구현할 수 있다.
 
 2026-09-06 M1 로컬 구현 선택: 소형 PNG/JPEG 에셋을 별도 파일 디렉터리 대신 SQLite BLOB에 저장한다. 파일당 2,000,000 bytes로 제한하고, 데이터·에셋을 같은 VACUUM INTO 백업/JSON archive 안에서 일관되게 복원한다. 수천 에셋을 위한 저장·성능 설계는 M2 이후 필요에 따라 분리한다. 이 시점의 provider adapter는 사용자 실서비스 선택 전의 자체 `fixture-sse-v1`이었다. 2026-09-07 후속에서 승인된 Vertex global/Gemini 3.8 Flash 경로를 추가했으며 실제 검증 범위와 결과는 [M1-RESULTS](M1-RESULTS.md)를 따른다.
@@ -180,7 +182,7 @@ budget은 전체 사용자 작업, 후보 그룹, 각 child 작업에 예약/집
 
 ### M2 구현의 저장·실행 계약
 
-schema v4의 `story_configs/jobs/states/memories/indexes/scene_commands`는 기존 원문·최신 번역과 별도이며, 원문 확정 transaction에서 적격 상태·기억 작업을 예약한다. `attempts.story_job_id`로 모든 역할의 전송을 기존 예산·사용량 기록에 합산한다. 사용량/비용 누락을 0으로 간주하지 않는다.
+M2 당시 schema v4에서 도입해 현재 v8 새 DB에도 포함하는 `story_configs/jobs/states/memories/indexes/scene_commands`는 기존 원문·최신 번역과 별도이며, 원문 확정 transaction에서 적격 상태·기억 작업을 예약한다. `attempts.story_job_id`로 모든 역할의 전송을 기존 예산·사용량 기록에 합산한다. 사용량/비용 누락을 0으로 간주하지 않는다.
 
 state job은 source/hash·전체 ancestry·canon·모듈·직전 state·선택 model revision으로 식별한다. owner/generation은 늦은 완료와 중복 commit을 거절한다. continuity의 메인 Run snapshot은 상태 없이 확정될 수 있으나, 그 상태 job은 이전 상태를 받은 뒤 전송 전 별도 입력을 확정한다. authoritative 대기 Run은 해당 의존성·branch head를 재검사한 뒤 한 번 queued로 전환한다. annotation 값은 메인 canonical 입력에 넣지 않는다.
 

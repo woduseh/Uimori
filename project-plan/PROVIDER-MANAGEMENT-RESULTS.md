@@ -1,5 +1,7 @@
 # 공급자 관리와 모델 등록 보조 · 2026-09-07
 
+아래는 별도 작업트리의 당시 구현·검증 기록이에요. 2026-09-07 문서 점검 시 이 문서의 `output/` 링크 2개 대상은 현재 checkout에 없어 해당 원본 증거를 재확인하지 못했어요. 수치와 링크는 이력으로 보존하며 이후 통합 상태는 [CURRENT](CURRENT.md)를 확인해요.
+
 작업 기준은 main `51e51967503dd9de9f765c0702210a360adde674`예요. `codex/provider-management` 전용 작업트리에서 구현했으며 공용 main에 직접 병합하거나 push하지 않았어요. 원래 루트의 미커밋 native 문서는 읽기만 했어요.
 
 작업트리: `C:/Users/wodus/.codex/visualizations/2026/09/07/01a07961-8314-75c2-971f-0dade42cfa71/uimori-provider-management`.
@@ -65,7 +67,7 @@
 ## 미지원과 통합 주의
 
 - 원본 Provider Manager의 원격 registry 다운로드·동적 정의 import·임의 headers/body·OAuth·key rotation·자동 fallback·새 adapter 설치는 구현하지 않았어요. 원본 실행·수정·코드 복제도 하지 않았어요.
-- 보조 등록은 새 연결/모델 생성안을 제공해요. 기존 설정 수정은 관리 UI에서 해요. Sol preloaded 요청 및 등록 제안 외 Sol 도구 왕복은 미지원이며 무음 옵션 변경·추가 모델 호출로 보완하지 않아요.
+- 보조 등록은 새 연결/모델 생성안을 제공해요. 기존 설정 수정은 관리 UI에서 해요. 이후 `sol-responses-v1` 전용 provider는 제거했고 평가 도구는 선택한 모델 프리셋의 `evaluationTools`로 분리했어요. 보조 등록 실행에는 선택 프리셋의 평가 도구를 섞지 않아요.
 - 실제 키·사용자 DB·유료 API·개인 작품 전송·push·배포는 사용하지 않았어요. 모델별 기능·요금·실제 공급자 연결·문학/번역 품질은 미검증이에요.
 - `ConnectionEditor` 외부 props/re-export와 기존 `/api/library` 형태를 유지해요. 로딩 작업의 `view=summary`는 connections/models를 그대로 제공하므로 호환돼요. 관리 검색은 content 본문에 의존하지 않아요.
 - native와 경합 가능 파일은 `core/product.ts`의 Connection/ModelPreset만, `product-store.ts` connection/model/metadata/archive와 신규 선택 guard, `product-routes.ts` 관리 routes예요. PromptPreset/program·역할 메시지 조립·wire encoder는 수정하지 않았어요. `useStory.ts` quickModels, `main.tsx` 선택 목록·StoryPanel connections prop은 로딩/native 변경과 합칠 때 보존해야 해요.

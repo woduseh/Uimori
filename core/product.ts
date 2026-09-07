@@ -1,8 +1,8 @@
-import { validateSolEndpoint, type SolOptions } from './sol-config.js';
-export const PROVIDER_PROTOCOLS = ['fixture-sse-v1', 'vertex-gemini-v1', 'openai-responses-v1', 'anthropic-messages-v1', 'vercel-chat-v1', 'openai-chat-v1', 'sol-responses-v1'] as const;
+import type { EvaluationToolOptions } from './evaluation-tool-config.js';
+export const PROVIDER_PROTOCOLS = ['fixture-sse-v1', 'vertex-gemini-v1', 'openai-responses-v1', 'anthropic-messages-v1', 'vercel-chat-v1', 'openai-chat-v1', 'codex-app-server-v1'] as const;
 export type ProviderProtocol = typeof PROVIDER_PROTOCOLS[number];
 export type VertexRequestTier = 'standard' | 'flex';
-export type ModelGeneration = { maxOutputTokens: number; temperature: number | null; thinkingLevel?: 'LOW' | 'MEDIUM' | 'HIGH'; structuredOutput?: boolean; reasoningEffort?: 'none' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'max'; thinkingMode?: 'disabled' | 'enabled' | 'adaptive'; thinkingBudgetTokens?: number; sol?: SolOptions };
+export type ModelGeneration = { maxOutputTokens: number; temperature: number | null; thinkingLevel?: 'LOW' | 'MEDIUM' | 'HIGH'; structuredOutput?: boolean; reasoningEffort?: 'none' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'max'; thinkingMode?: 'disabled' | 'enabled' | 'adaptive'; thinkingBudgetTokens?: number };
 export type ContentKind = 'bot' | 'persona' | 'module' | 'lore' | 'canon' | 'skill' | 'glossary';
 export type ContentRef = { id: string; revision: number };
 export type Content = ContentRef & { kind: ContentKind; title: string; description: string; text: string; loading: 'pinned' | 'discoverable'; relatedIds: string[]; package?: import('./content-package.js').ContentPackage; hasPackage?: boolean };
@@ -10,10 +10,10 @@ export type SavedPromptCombination = ContentRef & { title: string; prompt: Conte
 export type CreativeControls = { mode: 'novel' | 'rp'; language: 'en' | 'ko'; personaReference: boolean; worldFocus: boolean; coNarration: boolean; declarationFinal: boolean; pov: 'auto' | 'first' | 'third'; style: 'auto' | 'calm' | 'vivid'; lengthMode: 'auto' | 'range' | 'custom'; minWords: number; maxWords: number; customWords: number };
 export type CreativePreset = ContentRef & { title: string; controls: CreativeControls };
 export type PromptRole = 'main' | 'translation';
-export type PromptPreset = ContentRef & { title: string; role: PromptRole; text: string; program?: import('./prompt-program.js').PromptProgram };
+export type PromptPreset = ContentRef & { title: string; role: PromptRole; program: import('./prompt-program.js').PromptProgram };
 export type TaskRole = 'main' | 'translation' | 'status' | 'image';
 export type Connection = ContentRef & { title: string; protocol: ProviderProtocol; endpoint: string; credentialEnv?: string; requestTier?: VertexRequestTier; enabled: boolean; catalog: { id: string; name: string; capabilities: Record<string, boolean | null>; priceRevision: string | null }[]; catalogError: string | null; catalogUpdatedAt?: string | null };
-export type ModelPreset = ContentRef & ModelGeneration & { title: string; connectionId: string; connectionRevision: number; modelId: string; timeoutMs?: number; enabled?: boolean; userOverrides?: { tools: boolean | null; structuredOutput: boolean | null; note: string }; source?: { kind: 'catalog' | 'manual'; connectionRevision: number; catalogUpdatedAt: string | null } };
+export type ModelPreset = ContentRef & ModelGeneration & { title: string; connectionId: string; connectionRevision: number; modelId: string; timeoutMs?: number; enabled?: boolean; evaluationTools?: EvaluationToolOptions; userOverrides?: { tools: boolean | null; structuredOutput: boolean | null; note: string }; source?: { kind: 'catalog' | 'manual'; connectionRevision: number; catalogUpdatedAt: string | null } };
 export type ChatProfile = { hiddenStory?: import('./hidden-story-package.js').HiddenStorySelection; chatId: string; revision: number; attachments: ContentRef[]; creative: CreativeControls; routes: Record<TaskRole, ContentRef | null>; image: boolean; prompts?: Partial<Record<PromptRole,ContentRef | null>>; promptControls?: Record<string,import('./prompt-program.js').ChatPromptControls>; packageAttachments?: import('./content-package.js').PackageAttachment[]; packageValues?: Record<string,Record<string,import('./prompt-program.js').PromptValue>> };
 export type ProfileSnapshot = ChatProfile & { contents: Content[]; packages?: import('./content-package.js').ContentPackage[]; models: Partial<Record<TaskRole, ModelPreset & { connection: Connection }>>; promptPresets?: Partial<Record<PromptRole,PromptPreset>> };
 export type Branch = { id: string; chatId: string; title: string; headRevision: string | null; revision: number; default: boolean };
@@ -47,7 +47,7 @@ export function validateVertexEndpoint(value: string): string {
 
 /** API roots are connection settings; paths supplied by model output never change them. */
 export function validateProviderEndpoint(protocol: ProviderProtocol, value: string): string {
-  if (protocol === 'sol-responses-v1') return validateSolEndpoint(value);
+  if (protocol === 'codex-app-server-v1') { if (value !== 'codex://local') throw new Error('INVALID_CODEX_ENDPOINT'); return value; }
   if (protocol === 'vertex-gemini-v1') return validateVertexEndpoint(value);
   const url = new URL(value);
   if (url.username || url.password || url.search || url.hash) throw new Error('INVALID_ENDPOINT');
@@ -55,9 +55,9 @@ export function validateProviderEndpoint(protocol: ProviderProtocol, value: stri
     if (url.protocol !== 'http:' || !['127.0.0.1', '[::1]'].includes(url.hostname)) throw new Error('FIXTURE_REQUIRES_LOOPBACK');
     return value;
   }
-  const official = { 'openai-responses-v1': 'https://api.openai.com/v1', 'anthropic-messages-v1': 'https://api.anthropic.com/v1', 'vercel-chat-v1': 'https://ai-gateway.vercel.sh/v1' };
+  const official = { 'anthropic-messages-v1': 'https://api.anthropic.com/v1', 'vercel-chat-v1': 'https://ai-gateway.vercel.sh/v1' };
   const normalized = url.href.replace(/\/$/u, '');
-  if (protocol !== 'openai-chat-v1') {
+  if (protocol !== 'openai-chat-v1' && protocol !== 'openai-responses-v1') {
     if (normalized !== official[protocol]) throw new Error('INVALID_PROVIDER_ENDPOINT');
   } else if (url.protocol !== 'https:' && !(url.protocol === 'http:' && ['127.0.0.1', '[::1]'].includes(url.hostname))) throw new Error('HTTPS_OR_LOOPBACK_REQUIRED');
   return normalized;

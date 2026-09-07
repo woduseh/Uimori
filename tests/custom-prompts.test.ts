@@ -1,3 +1,6 @@
+import { compileSnapshotPrompt } from '../server/prompt-snapshot.js';
+import { compileTranslationPrompt } from '../core/auxiliary.js';
+import { createDefaultPromptProgram } from '../core/prompt-defaults.js';
 import { createHash } from 'node:crypto';
 import { afterEach, describe, expect, test, vi } from 'vitest';
 import { createTranslationPlan, translationInput, validateTranslationPlan } from '../core/auxiliary.js';
@@ -10,7 +13,7 @@ import { sourceTimeContext } from '../server/product-auxiliary.js';
 import { loopbackProvider } from './fixtures/loopback-provider.js';
 
 const literal = '  CUSTOM 日本語\r\n{{char}} {{#if mode}} \n`literal` \nDo not trim or execute these tokens.  ';
-const preset = (role: PromptPreset['role'], text=literal): PromptPreset => ({id:'prompt-'+role,revision:3,title:'Custom '+role,role,text});
+const preset = (role: PromptPreset['role'], text=literal): PromptPreset => ({id:'prompt-'+role,revision:3,title:'Custom '+role,role,program:createDefaultPromptProgram(text,role)});
 function snapshot():RunSnapshot {
   return {chatId:'prompt-chat',parentRevision:null,settingsRevision:1,settings:{preset:'calm',mode:'direct',translation:true,status:false,maxCalls:4},request:'Continue the scene.',history:[],resources:[],profile:{...defaultProfile('prompt-chat'),contents:[],models:{}}};
 }
@@ -22,23 +25,23 @@ describe('full editable prompt boundaries',()=>{
     const original=snapshot(); const context=sourceTimeContext(original,'translation');
     const source={id:'source-prompt',chatId:original.chatId,text:'The harbor waited.',hash:createHash('sha256').update('The harbor waited.').digest('hex')};
     const legacy=createTranslationPlan(source,context);
-    expect(buildMainInput(original).contract).toBe(DEFAULT_MAIN_PROMPT);
-    expect(translationInput(legacy,legacy.chunks[0].id,original).contract).toBe(DEFAULT_TRANSLATION_PROMPT);
+    expect(compileSnapshotPrompt(original).promptCompilation!.messages[0].content[0].text).toBe(DEFAULT_MAIN_PROMPT);
+    expect(compileTranslationPrompt(translationInput(legacy,legacy.chunks[0].id,original),original,'task')!.messages[0].content[0].text).toBe(DEFAULT_TRANSLATION_PROMPT);
     expect(context.instructionRevision).toBe('hermeneia-native-1');
     expect(validateTranslationPlan(source,sourceTimeContext(structuredClone(original),'translation'),legacy)).toEqual(legacy);
     for(const text of ['', '  \r\n  ',literal]) {
       const selected=structuredClone(original); selected.profile!.promptPresets={main:preset('main',text),translation:preset('translation',text)};
-      const frozen=structuredClone(selected); selected.profile!.promptPresets.main!.text='FUTURE REVISION';
-      expect(buildMainInput(frozen).contract).toBe(text);
+      const frozen=structuredClone(selected); selected.profile!.promptPresets.main!.program=createDefaultPromptProgram('FUTURE REVISION');
+      expect(frozen.profile!.promptPresets!.main!.program).toEqual(createDefaultPromptProgram(text)); expect(buildMainInput(frozen).contract).toBe('');
       const selectedContext=sourceTimeContext(frozen,'translation');
       const plan=createTranslationPlan(source,selectedContext); const input=translationInput(plan,plan.chunks[0].id,frozen);
-      expect(input.contract).toBe(text); expect(input.customPrompt).toBe(true);
+      expect(input.contract).toBe(''); expect(compileTranslationPrompt(input,frozen,'task')).toBeDefined(); expect(input.customPrompt).toBe(true);
       expect(input.context.instructionRevision).toBe('prompt:prompt-translation@3');
       expect(JSON.stringify(input.outputSchema)).not.toContain('Korean');
       expect(()=>validateTranslationPlan(source,context,plan)).toThrow('SOURCE_TRANSLATION_PLAN_INVALID');
     }
     const legacySnapshot=snapshot(); delete legacySnapshot.profile;
-    expect(buildMainInput(legacySnapshot).contract).toContain('original English narrative');
+    expect(compileSnapshotPrompt(legacySnapshot).promptCompilation!.messages[0].content[0].text).toBe(DEFAULT_MAIN_PROMPT);
   });
 
   test('transport permits explicit empty text without weakening non-prompt string validation',()=>{

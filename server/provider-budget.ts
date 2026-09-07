@@ -60,8 +60,13 @@ function flexRequested(wire: Record<string, unknown>): boolean {
 /** Non-Vertex connections are user-operated; their model prices are not supplied by this Vertex test budget. */
 function externalProviderScope(wire: Record<string, unknown>): boolean {
   const protocol = wire.protocol;
-  if (!['openai-responses-v1', 'sol-responses-v1', 'anthropic-messages-v1', 'vercel-chat-v1', 'openai-chat-v1'].includes(String(protocol)) || wire.method !== 'POST' || typeof wire.modelId !== 'string' || !wire.modelId || typeof wire.url !== 'string') return false;
-  const suffix = protocol === 'openai-responses-v1' || protocol === 'sol-responses-v1' ? '/responses' : protocol === 'anthropic-messages-v1' ? '/messages' : '/chat/completions';
+  if (protocol === 'codex-app-server-v1') return wire.method === 'RPC' && wire.url === 'codex://local' &&
+    typeof wire.connectionId === 'string' && !!wire.connectionId && typeof wire.modelId === 'string' && !!wire.modelId &&
+    ['main', 'translation', 'status', 'image', 'state', 'memory'].includes(String(wire.role)) &&
+    object(wire.headers) && Object.keys(wire.headers).length === 0 && object(wire.body) &&
+    wire.body.method === 'turn/start' && wire.body.role === wire.role && wire.body.model === wire.modelId;
+  if (!['openai-responses-v1', 'anthropic-messages-v1', 'vercel-chat-v1', 'openai-chat-v1'].includes(String(protocol)) || wire.method !== 'POST' || typeof wire.modelId !== 'string' || !wire.modelId || typeof wire.url !== 'string') return false;
+  const suffix = protocol === 'openai-responses-v1' ? '/responses' : protocol === 'anthropic-messages-v1' ? '/messages' : '/chat/completions';
   if (!wire.url.endsWith(suffix)) return false;
   try { validateProviderEndpoint(protocol as ProviderProtocol, wire.url.slice(0, -suffix.length)); return true; } catch { return false; }
 }

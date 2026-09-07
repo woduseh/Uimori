@@ -1,5 +1,7 @@
 # 긴 대화·서재 로딩 개선 결과
 
+아래는 별도 작업트리의 당시 측정·검증 기록이에요. 2026-09-07 문서 점검 시 검증 표의 `output/` 링크 6개 대상은 현재 checkout에 없어 원본 증거를 재확인하지 못했어요. 수치와 링크는 이력으로 보존해요. 이후 최초 조회와 SSE 직렬화 경합 수정은 [NATIVE-RESULTS](NATIVE-RESULTS.md), 현재 통합 상태는 [CURRENT](CURRENT.md)를 확인해요.
+
 2026-09-07. 기준 `51e5196`, 작업 경로 `C:/Users/wodus/.codex/worktrees/deca/uimori`예요. 사용자 DB·원본 자료·공용 루트는 수정하지 않았고 유료 provider 호출·외부 전송·push·배포는 없어요.
 
 ## 결과

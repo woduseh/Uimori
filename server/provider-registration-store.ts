@@ -1,7 +1,8 @@
+import { validCredentialEnv } from '../core/credential-reference.js';
 import { createHash, randomUUID } from 'node:crypto';
 import { isDeepStrictEqual } from 'node:util';
 import { PROVIDER_PROTOCOLS, validateProviderEndpoint, type Connection, type ContentRef, type ModelPreset } from '../core/product.js';
-import { validateSolOptions } from '../core/sol-config.js';
+import { validateEvaluationToolOptions } from '../core/evaluation-tool-config.js';
 import type { ProviderResult, WireRecord } from '../core/transport.js';
 import { REGISTRATION_LIMITS, type RegistrationConnectionDraft, type RegistrationPlan, type RegistrationRun, type RegistrationView } from '../core/provider-registration.js';
 import type { ProductStore } from './product-store.js';
@@ -12,7 +13,7 @@ const kind = 'registration-run';
 const hash = (value:unknown) => createHash('sha256').update(JSON.stringify(value)).digest('hex');
 const ref = (value:unknown):ContentRef => {const b=record(value);fields(b,['id','revision']);return {id:text(b.id,'reference',100),revision:number(b.revision,'revision')};};
 const connectionFields = ['title','protocol','endpoint','credentialEnv','requestTier','enabled'];
-const modelFields = ['title','modelId','maxOutputTokens','temperature','thinkingLevel','timeoutMs','structuredOutput','reasoningEffort','thinkingMode','thinkingBudgetTokens','sol','enabled'];
+const modelFields = ['title','modelId','maxOutputTokens','temperature','thinkingLevel','timeoutMs','structuredOutput','reasoningEffort','thinkingMode','thinkingBudgetTokens','evaluationTools','enabled'];
 const pick = (value:Record<string,unknown>,keys:string[]) => Object.fromEntries(keys.filter(key=>value[key]!==undefined).map(key=>[key,value[key]]));
 
 /** No settings write. New-connection previews validate a synthetic reference through the same model validator. */
@@ -127,7 +128,7 @@ const attemptStatuses=['running','completed','tool_calls','refused','partial','e
 function validateWire(value:unknown) {
   const wire=record(value);fields(wire,['connectionId','protocol','role','modelId','method','url','headers','body','bodySha256','stablePrefixSha256','budgetReservation','externalBilling']);
   text(wire.connectionId,'wire connection',100);text(wire.modelId,'wire model',300);
-  if(!PROVIDER_PROTOCOLS.includes(wire.protocol)||wire.role!=='main'||wire.method!=='POST'||!validHash(wire.bodySha256)||!validHash(wire.stablePrefixSha256))throw new HttpError(400,'Invalid registration wire');
+  if(!PROVIDER_PROTOCOLS.includes(wire.protocol)||wire.role!=='main'||(wire.protocol==='codex-app-server-v1'?wire.method!=='RPC'||wire.url!=='codex://local':wire.method!=='POST')||!validHash(wire.bodySha256)||!validHash(wire.stablePrefixSha256))throw new HttpError(400,'Invalid registration wire');
   const url=new URL(text(wire.url,'wire URL',2200));if(url.username||url.password||url.hash)throw new HttpError(400,'Invalid registration URL');
   const headers=record(wire.headers);
   for(const [key,value] of Object.entries(headers)){text(value,'wire header',2000);if(/[\r\n]/u.test(value as string)||(/^(authorization|x-api-key|api[_-]?key|credential|secret|password|access[_-]?token)$/iu.test(key)&&value!=='[REDACTED]'))throw new HttpError(400,'Unsafe registration header');}
@@ -155,14 +156,14 @@ export function validateRegistrationArchive(value:unknown) {
     if(!['ready','applied'].includes(b.status))throw new HttpError(400,'Unexpected registration plan');
     const plan=record(b.plan);fields(plan,['connection','model']);const c=record(plan.connection);
     if(c.kind==='existing'){fields(c,['kind','id','revision']);ref({id:c.id,revision:c.revision});}
-    else if(c.kind==='new'){fields(c,['kind','draft']);const draft=record(c.draft);fields(draft,connectionFields);if(draft.enabled!==false||!PROVIDER_PROTOCOLS.includes(draft.protocol))throw new HttpError(400,'Invalid proposed authority');text(draft.title,'connection title',200);validateProviderEndpoint(draft.protocol,text(draft.endpoint,'endpoint',2000));if(draft.credentialEnv!==undefined&&(typeof draft.credentialEnv!=='string'||!/^NARRATIVE_PROVIDER_[A-Z0-9_]+$/u.test(draft.credentialEnv)))throw new HttpError(400,'Invalid credential reference');if(draft.requestTier!==undefined&&(draft.protocol!=='vertex-gemini-v1'||!['standard','flex'].includes(draft.requestTier)))throw new HttpError(400,'Invalid request tier');}
+    else if(c.kind==='new'){fields(c,['kind','draft']);const draft=record(c.draft);fields(draft,connectionFields);if(draft.enabled!==false||!PROVIDER_PROTOCOLS.includes(draft.protocol))throw new HttpError(400,'Invalid proposed authority');text(draft.title,'connection title',200);validateProviderEndpoint(draft.protocol,text(draft.endpoint,'endpoint',2000));if(draft.credentialEnv!==undefined&&!validCredentialEnv(draft.credentialEnv))throw new HttpError(400,'Invalid credential reference');if(draft.requestTier!==undefined&&(draft.protocol!=='vertex-gemini-v1'||!['standard','flex'].includes(draft.requestTier)))throw new HttpError(400,'Invalid request tier');}
     else throw new HttpError(400,'Invalid proposed connection');
     const model=record(plan.model);fields(model,modelFields);text(model.title,'model title',200);text(model.modelId,'model ID',300);number(model.maxOutputTokens,'output limit',1,200000);
     if(model.temperature!==null&&(typeof model.temperature!=='number'||!Number.isFinite(model.temperature)||model.temperature<0||model.temperature>2))throw new HttpError(400,'Invalid temperature');
     if(model.timeoutMs!==undefined)number(model.timeoutMs,'timeout',1,1800000);
     for(const key of ['enabled','structuredOutput'])if(model[key]!==undefined&&typeof model[key]!=='boolean')throw new HttpError(400,'Invalid model boolean');
     for(const [key,choices]of Object.entries({thinkingLevel:['LOW','MEDIUM','HIGH'],reasoningEffort:['none','minimal','low','medium','high','xhigh','max'],thinkingMode:['disabled','enabled','adaptive']}))if(model[key]!==undefined&&!choices.includes(model[key]))throw new HttpError(400,'Invalid model option');
-    if(model.thinkingBudgetTokens!==undefined)number(model.thinkingBudgetTokens,'thinking budget',1024,model.maxOutputTokens-1);if(model.sol!==undefined)validateSolOptions(model.sol);
+    if(model.thinkingBudgetTokens!==undefined)number(model.thinkingBudgetTokens,'thinking budget',1024,model.maxOutputTokens-1);if(model.evaluationTools!==undefined)validateEvaluationToolOptions(model.evaluationTools);
     if(!validHash(b.planHash)||b.planHash!==hash(b.plan))throw new HttpError(400,'Registration plan hash mismatch');
   }
   if(b.applied!==null){const applied=record(b.applied);fields(applied,['connection','model']);ref(applied.connection);ref(applied.model);if(b.status!=='applied')throw new HttpError(400,'Invalid applied registration');}
@@ -177,7 +178,7 @@ export function validateRegistrationGraph(product:ProductStore) {
   for(const row of rows){const run=JSON.parse(row.body) as RegistrationRun;validateRegistrationArchive(run);
     const target=product.get<ModelPreset>('model',run.target.id,run.target.revision),connection=product.get<Connection>('connection',run.connection.id,run.connection.revision);
     if(target.connectionId!==connection.id||target.connectionRevision!==connection.revision)throw new HttpError(400,'Registration target mismatch');
-    for(const attempt of run.attempts){const wire=attempt.request;const suffix=connection.protocol==='vertex-gemini-v1'?`/${target.modelId}:streamGenerateContent?alt=sse`:connection.protocol==='anthropic-messages-v1'?'/messages':['openai-responses-v1','sol-responses-v1'].includes(connection.protocol)?'/responses':'/chat/completions';const url=connection.protocol==='fixture-sse-v1'?new URL(connection.endpoint).href:connection.endpoint.replace(/\/$/u,'')+suffix;
+    for(const attempt of run.attempts){const wire=attempt.request;const suffix=connection.protocol==='vertex-gemini-v1'?`/${target.modelId}:streamGenerateContent?alt=sse`:connection.protocol==='anthropic-messages-v1'?'/messages':connection.protocol==='openai-responses-v1'?'/responses':'/chat/completions';const url=connection.protocol==='codex-app-server-v1'?'codex://local':connection.protocol==='fixture-sse-v1'?new URL(connection.endpoint).href:connection.endpoint.replace(/\/$/u,'')+suffix;
       if(wire.connectionId!==connection.id||wire.protocol!==connection.protocol||wire.modelId!==target.modelId||wire.url!==url)throw new HttpError(400,'Registration attempt target mismatch');
     }
     if(run.plan){const normalized=normalizeRegistrationPlan(product,run.plan,{historical:true});if(!isDeepStrictEqual(normalized,run.plan))throw new HttpError(400,'Registration plan normalization mismatch');}

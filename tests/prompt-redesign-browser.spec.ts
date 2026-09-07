@@ -19,6 +19,7 @@ test('PRUI01 optional template draft safety and reusable prompt-owned combinatio
   await composer.getByLabel('합성 상세도', { exact: true }).fill('2'); await expect(composer.getByText('불러온 조합에서 수정됨', { exact: true })).toBeVisible();
   await composer.getByLabel('새 조합 이름', { exact: true }).fill('Reusable medium'); await composer.getByRole('button', { name: '전역 창작 조합으로 저장', exact: true }).click();
   await expect(global.locator('option')).toHaveCount(3); await expect(global).toContainText('Reusable medium');
+  await composer.getByRole('button', { name: '구성 편집', exact: true }).click();
   const block = composer.locator('.pc-block').first(); await block.locator('summary').first().click();
   await block.getByRole('button', { name: '템플릿 문법으로 편집 · 시험', exact: true }).click();
   const source = block.getByLabel('합성 지침 본문 문법', { exact: true }); await expect(source).toHaveValue('Synthetic {{ options.detail }}');

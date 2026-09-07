@@ -1,3 +1,4 @@
+import { compileSnapshotPrompt } from '../server/prompt-snapshot.js';
 import { randomUUID } from 'node:crypto';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -127,7 +128,10 @@ describe('S02 S03 actual Store continuity and activation dependencies', () => {
     const originalRow = poisoned.tables.runs.find(row => row.id === first.runId)!;
     const forgedSnapshot = JSON.parse(String(originalRow.snapshot)); forgedSnapshot.story = store.story.bundle(rebuilt.id).snapshot.story;
     originalRow.snapshot = JSON.stringify(forgedSnapshot);
-    const rejected = await database(); expect(() => rejected.product.import(poisoned)).toThrow('initial state mismatch');
+    const rejected = await database(); expect(() => rejected.product.import(poisoned)).toThrow('compiled prompt mismatch');
+    // Recompile the forged state to exercise the deeper state provenance check too.
+    originalRow.snapshot = JSON.stringify(compileSnapshotPrompt({...forgedSnapshot,promptCompilation:undefined}));
+    expect(() => rejected.product.import(poisoned)).toThrow('initial state mismatch');
     expect(rejected.chats()).toEqual([]);
     expect(globalThis.fetch).not.toHaveBeenCalled();
   });

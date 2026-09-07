@@ -7,12 +7,13 @@ function reject(code: string): never { throw new OpenAIProtocolError(code); }
 /** OpenAI's Chat Completions shape. Compatible servers choose their own model/capabilities. */
 export function encodeChat(request: ProviderRequest): { body: Json; context: OpenAITurn } {
   const prepared = prepare(request, 'openai-chat-turn-v1');
-  const { generation, aliases, schema, previous, fresh, plan } = prepared;
+  const { generation, aliases, schema, previous, fresh, plan, bootstrap } = prepared;
+  const bootstrapMessages:Json[]=[];for(const item of bootstrap as Record<string,Json>[]){bootstrapMessages.push({role:'assistant',content:null,tool_calls:[{id:item.callId,type:'function',function:{name:item.name,arguments:JSON.stringify(item.args)}}]},{role:'tool',tool_call_id:item.callId,content:JSON.stringify(item.result),name:item.name});}
   const messages: Json[] = previous ? [...previous.input, ...previous.pending.map((call, index) => ({ role: 'tool', tool_call_id: call.id, content: JSON.stringify(fresh[index].result) }))]
-    : [{ role: 'system', content: prepared.instructions }, ...(plan ? structuredClone(plan.messages) : [{ role: 'user', content: 'Request data (JSON):\n' + JSON.stringify(prepared.wireInput) }])];
+    : [{ role: 'system', content: prepared.instructions },...bootstrapMessages, ...(plan ? structuredClone(plan.messages) : [{ role: 'user', content: 'Request data (JSON):\n' + JSON.stringify(prepared.wireInput) }])];
   const body: Json = { model: request.modelId, messages, stream: true, stream_options: { include_usage: true }, ...plan?.options,
     ...(generation ? { max_completion_tokens: generation.maxOutputTokens, ...(generation.temperature !== null ? { temperature: generation.temperature } : {}), ...(generation.reasoningEffort !== undefined ? { reasoning_effort: generation.reasoningEffort } : {}) } : {}),
-    ...(aliases.length ? { tools: request.stable.tools.map((tool, index) => ({ type: 'function', function: { name: aliases[index].providerName, description: tool.description, parameters: copy(tool.inputSchema), strict: false } })) } : {}),
+    ...(aliases.length ? { tools: request.stable.tools.map((tool, index) => ({ type: 'function', function: { name: aliases[index].providerName, description: tool.description, parameters: copy(tool.inputSchema), strict: false } })), ...(request.toolChoice?{tool_choice:request.toolChoice==='auto'?'auto':{type:'function',function:{name:aliases.find(alias=>alias.name===request.toolChoice)!.providerName}}}:{}) } : {}),
     ...(schema ? { response_format: { type: 'json_schema', json_schema: { name: 'translation_result', strict: true, schema } } } : {}) };
   return { body: copy(body, 'INVALID_OPENAI_REQUEST'), context: seal({ version: 'openai-chat-turn-v1', modelId: request.modelId, bindingHash: prepared.bindingHash,
     phase: 'request', input: structuredClone(messages), completedResults: prepared.results, aliases, pending: [], usedIds: [...previous?.usedIds ?? []] }) };

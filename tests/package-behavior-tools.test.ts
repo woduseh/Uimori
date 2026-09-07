@@ -87,7 +87,7 @@ describe('Author-selected behavior tool surface', () => {
     expect(observed.attempts).toEqual([]); expect(observed.events).toEqual([]); expect(observed.inputs).toEqual([]);
   });
 
-  test.each(['openai-responses-v1', 'openai-chat-v1', 'vercel-chat-v1', 'anthropic-messages-v1', 'vertex-gemini-v1', 'sol-responses-v1'] as const)('BT04 %s native preview carries the same selected input schema', protocol => {
+  test.each(['openai-responses-v1', 'openai-chat-v1', 'vercel-chat-v1', 'anthropic-messages-v1', 'vertex-gemini-v1'] as const)('BT04 %s native preview carries the same selected input schema', protocol => {
     const endpoint = protocol === 'vertex-gemini-v1' ? 'https://aiplatform.googleapis.com/v1/projects/synthetic/locations/global/publishers/google/models' : 'http://127.0.0.1:19999/v1';
     const work = snapshot(endpoint, protocol); if (protocol === 'vertex-gemini-v1') work.profile!.models.main!.modelId = 'gemini-3.8-flash';
     const selected = listBehaviorTools(work)[0], built = buildMainProviderRequest(work);
@@ -132,13 +132,13 @@ describe('Main behavior tool execution through local provider transports', () =>
     expect(observed.events).toHaveLength(1); expect(JSON.stringify(observed.events)).not.toContain('PRIVATE_ARGUMENT');
   });
 
-  test('BT07 Sol host actions coexist with local tools and preserve continuation into final artifact', async () => {
+  test('BT07 preset evaluation tools coexist with host actions on Responses and preserve continuation into the final artifact', async () => {
     let actionName = '';
     const server = await loopbackProvider(async (captured, response) => {
       const body = JSON.parse(captured.body), alias = (name: string) => body.tools.find((tool: { name: string }) => tool.name.endsWith('_' + name))!.name;
       const call = (name: string, id: string, args: Json): Json => ({ type: 'function_call', id: `item-${id}`, call_id: id, name: alias(name), arguments: JSON.stringify(args), status: 'completed' });
       const output = server.requests.length === 1 ? [call(actionName, 'action', { intent: 'persuade', difficulty: 'easy' }), call('eval_get_context', 'local', {})]
-        : [call('eval_submit_artifact', 'final', { content: 'Synthetic resolved Sol prose.', userFacingNotice: 'PRIVATE_NOTICE' })];
+        : [call('eval_submit_artifact', 'final', { content: 'Synthetic resolved evaluated prose.', userFacingNotice: 'PRIVATE_NOTICE' })];
       if (server.requests.length === 2) {
         const outputs = body.input.filter((item: { type: string }) => item.type === 'function_call_output');
         expect(outputs.map((item: { call_id: string }) => item.call_id)).toEqual(['action', 'local']);
@@ -146,13 +146,14 @@ describe('Main behavior tool execution through local provider transports', () =>
       }
       await writeSse(response, [{ type: 'response.completed', response: { id: `response-${server.requests.length}`, status: 'completed', output, usage: { input_tokens: 10, output_tokens: 3 } } }]);
     }); cleanups.push(server.close);
-    const work = snapshot(`${server.origin}/v1`, 'sol-responses-v1'); actionName = listBehaviorTools(work)[0].tool.name;
+    const work = snapshot(`${server.origin}/v1`, 'openai-responses-v1'); actionName = listBehaviorTools(work)[0].tool.name;
+    work.profile!.models.main!.evaluationTools={contextMode:'model-selected',approvalReasoningMode:'configured',maximumToolRounds:8,terminalLateCorrections:false,outputRecovery:true};
     work.profile!.models.main!.connection.credentialEnv = 'NARRATIVE_PROVIDER_BEHAVIOR_TEST';
     vi.stubEnv('NARRATIVE_PROVIDER_BEHAVIOR_TEST', 'synthetic-test-value');
     const observed = hooks(server.origin, { onBehaviorTool: (_binding, action) => ({ ...action, denied: false, result: { success: true } }) });
     const outcome = await runMain(work, observed.value);
-    expect(outcome, JSON.stringify(outcome)).toMatchObject({ status: 'completed', text: 'Synthetic resolved Sol prose.', usage: { modelCalls: 2 } });
-    expect(observed.events.map(event => event.name)).toEqual([actionName, 'eval_get_context']);
+    expect(outcome, JSON.stringify(outcome)).toMatchObject({ status: 'completed', text: 'Synthetic resolved evaluated prose.', usage: { modelCalls: 2 } });
+    expect(observed.events.map(event => event.name)).toEqual([actionName, 'eval_get_context','eval_submit_artifact']);
     expect(JSON.stringify(observed.events)).not.toContain('PRIVATE_NOTICE');
   });
 });

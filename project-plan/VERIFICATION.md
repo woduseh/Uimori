@@ -2,7 +2,7 @@
 
 ## 1. 원칙
 
-완료 주장 → 재현 입력 → 독립 기대값 → 실제 검사 → 해당 코드/환경의 증거 → 남은 한계를 연결한다. 문서 개수·test count·agent 자신감이 완료 근거가 아니다. 현재 ACCEPTANCE는 모두 명세 상태다.
+완료 주장 → 재현 입력 → 독립 기대값 → 실제 검사 → 해당 코드/환경의 증거 → 남은 한계를 연결한다. 문서 개수·test count·agent 자신감이 완료 근거가 아니다. ACCEPTANCE는 요구 명세이며 실제 충족 여부는 [CURRENT](CURRENT.md)와 연결된 실행 결과에서 확인한다. 로컬 PASS와 남은 live/품질/실제 휴대폰 BLOCKED를 구분한다.
 
 빠른 반복에서는 가까운 검사, milestone 완료에서는 필수 통합·브라우저·빌드 검사를 수행한다. 이미 충족한 검사를 이유 없이 되풀이하거나 새 불변 조건 없이 테스트를 양산하지 않는다. 검증기 자체는 기존 Vitest/Playwright reporter와 작은 Node 수명주기 스크립트로 시작한다. 별도 검증 프레임워크를 만들지 않는다.
 
@@ -17,7 +17,7 @@
 
 ## 3. 실행 계약
 
-구현 목표 명령: `pnpm run doctor`, `pnpm run dev`, `pnpm run check`, `pnpm run verify --milestone M0`, 선택 케이스 실행, 제한된 `verify:selftest`. 이 파일만으로 명령이 존재하는 것은 아니다. 실제 runner option은 구현 후 문서화한다. setup/install 단계와 daily dev를 분리하고 dev 때 전체 재설치를 강제하지 않는다.
+현재 명령은 npm 기준이다: `npm run doctor`, `npm run dev`, `npm run check`, `npm run build`, `npm run verify -- --milestone M0`, `npm run verify:selftest`. 선택 검사는 `npm run verify -- --milestone M0 --case F01,F02`처럼 milestone에 속한 case만 지정한다. 지원 milestone은 `M0`, `M1-local`, `M1`, `M2-local`, `M2`다. 추가 UI/provider/native/self-host 검사는 [개발 안내](../docs/DEVELOPMENT.md)와 `package.json`을 따른다. setup/install 단계와 daily dev를 분리하고 dev 때 전체 재설치를 강제하지 않는다.
 
 Doctor는 버전 문자열 외에도 임시 SQLite transaction, 쓰기 경로, localhost bind, Playwright 실제 launch와 페이지 접근을 확인한다. 기본 paid provider 호출은 없다. node_modules가 있어도 native driver/browser가 동작한다는 보장은 없으므로 기능 시험을 한다.
 
