@@ -174,6 +174,8 @@ test('LOADUI05 context summary status fits mobile reader and run details without
   await expect(ready).toHaveText('앞선 12개 원문 요약 · 입력 약 248,600 / 272,000 토큰 · 요약 2회');
   await ready.scrollIntoViewIfNeeded();
   const bounds = await ready.boundingBox(); expect(bounds).not.toBeNull();
+  const toolbar = await article(page, source.id).getByRole('group', { name: '원문과 번역 보기' }).boundingBox();
+  expect(toolbar).not.toBeNull(); expect(bounds!.y).toBeGreaterThanOrEqual(toolbar!.y + toolbar!.height);
   expect(bounds!.x).toBeGreaterThanOrEqual(0); expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(390);
   expect(await ready.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
   await page.screenshot({ path: info.outputPath('context-summary-mobile.png') });

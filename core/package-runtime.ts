@@ -13,7 +13,10 @@ export function compilePackageAttachment(value: ContentPackage, ref: PackageAtta
   if (!context.chatId || typeof context.chatId !== 'string') throw new ContentPackageError('PACKAGE_CHAT_REQUIRED');
   const prefix = `package:${pkg.id}:${attachment.role}`;
   const resource = (key: string, title: string, description: string, text: string, loading: 'pinned' | 'discoverable', sourceKind: string): Resource => ({ id: `${prefix}:${key}`, chatId: context.chatId, revision: pkg.revision, title, description, text, loading, sourceKind, kind: 'lore' });
-  const resources = pkg.lore.map(lore => ({ ...resource(`lore:${lore.id}`, lore.title, lore.description, lore.text, lore.loading, 'lore'), ...(lore.relatedIds ? { relatedIds: lore.relatedIds.map(id => `${prefix}:lore:${id}`) } : {}) }));
+  const groups = new Map<string, typeof pkg.lore>();
+  for (const lore of pkg.lore) { const key = lore.loreContext?.group ?? ''; groups.set(key, [...groups.get(key) ?? [], lore]); }
+  const ordered = [...groups.values()].flatMap(group => [...group].sort((a,b) => (a.loreContext?.order ?? 0) - (b.loreContext?.order ?? 0)));
+  const resources = ordered.map(lore => ({ ...resource(`lore:${lore.id}`, lore.title, lore.description, lore.text, lore.loading, 'lore'), ...(lore.loreContext ? { loreContext: structuredClone(lore.loreContext) } : {}), ...(lore.relatedIds ? { relatedIds: lore.relatedIds.map(id => `${prefix}:lore:${id}`) } : {}) }));
   if (pkg.body !== undefined) resources.unshift(resource('body', pkg.title, pkg.description, pkg.body, 'pinned', attachment.role));
   if (pkg.identity) resources.unshift(resource('identity', pkg.identity.name, 'Identity description supplied by the package author.', pkg.identity.description, 'pinned', attachment.role));
   if (context.resourcesOnly) return { resources, pinned: resources.filter(r => r.loading === 'pinned'), instructions: [], controls: structuredClone(pkg.controls), values: resolvePromptValues({version:1,controls:pkg.controls,blocks:[]},context.values), stateView: pkg.stateView, transforms: structuredClone(pkg.transforms) };

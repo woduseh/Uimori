@@ -1,11 +1,12 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Folder, Plus, Search } from 'lucide-react';
 import type { ContentPackage, PackageLore } from '../core/content-package.js';
 import { Dialog } from './Dialog.js';
 import './lore-editor.css';
+import './lore-context.css';
 
 const PAGE_SIZE = 50;
-export function LoreEditor({ value, onChange }: { value: ContentPackage; onChange: (part: Partial<ContentPackage>) => void }) {
+export function LoreEditor({ value, onChange, onDraftChange }: { value: ContentPackage; onChange: (part: Partial<ContentPackage>) => void; onDraftChange?:(dirty:boolean)=>void }) {
   const folders = value.loreFolders ?? [];
   const [folder, setFolder] = useState('*');
   const [query, setQuery] = useState('');
@@ -15,6 +16,9 @@ export function LoreEditor({ value, onChange }: { value: ContentPackage; onChang
   const [page, setPage] = useState(0);
   const [folderEdit, setFolderEdit] = useState<{ id?: string; name: string } | null>(null);
   const [deleteLore, setDeleteLore] = useState<string | null>(null);
+  const [orderDrafts,setOrderDrafts]=useState<Record<string,string>>({});
+  const pendingOrders=value.lore.filter(row=>Object.hasOwn(orderDrafts,row.id));
+  useEffect(()=>{onDraftChange?.(pendingOrders.length>0);},[pendingOrders.length,onDraftChange]);
   const activeFolder = folders.find(item => item.id === folder);
   const search = query.trim().toLocaleLowerCase();
   const filtered = value.lore.filter(item => (folder === '*' || (item.folderId ?? '') === folder) && (loading === '*' || item.loading === loading) && (!search || `${item.title}\n${item.description}\n${item.text}`.toLocaleLowerCase().includes(search)));
@@ -25,6 +29,12 @@ export function LoreEditor({ value, onChange }: { value: ContentPackage; onChang
   const index = item ? value.lore.findIndex(row => row.id === item.id) : -1;
   const resetList = () => { setPage(0); setChecked([]); setSelected(''); };
   const changeItem = (patch: Partial<PackageLore>) => { if (!item) return; setSelected(item.id); onChange({ lore: value.lore.map(row => row.id === item.id ? { ...row, ...patch } : row) }); };
+  const changeOrder=(text:string)=>{
+    if(!item)return;const order=text.trim()===''?undefined:Number(text);
+    if(order!==undefined&&(!Number.isSafeInteger(order)||Math.abs(order)>1_000_000)){setOrderDrafts(current=>({...current,[item.id]:text}));return;}
+    setOrderDrafts(current=>{const next={...current};delete next[item.id];return next;});
+    changeItem({loreContext:{placement:'background',...item.loreContext,order}});
+  };
   const move = (ids: string[], target: string) => {
     onChange({ lore: value.lore.map(row => { if (!ids.includes(row.id)) return row; const { folderId: _, ...rest } = row; return target ? { ...rest, folderId: target } : rest; }) });
     setChecked([]);
@@ -35,7 +45,8 @@ export function LoreEditor({ value, onChange }: { value: ContentPackage; onChang
     setQuery(''); setLoading('*'); setSelected(id); setChecked([]); setPage(Math.floor(value.lore.filter(row => folder === '*' || (row.folderId ?? '') === folder).length / PAGE_SIZE));
   };
   return <div className="lore-manager">
-    <header className="lore-heading"><div><strong>로어 <span className="muted">{value.lore.length}</span></strong><p className="muted">폴더로 정리하고 필요한 항목만 편집해요.</p></div><div className="lore-actions"><button type="button" className="secondary" onClick={() => setFolderEdit({ name: '' })}><Folder size={15}/>폴더 추가</button><button type="button" className="secondary" onClick={add} disabled={value.lore.length >= 2000}><Plus size={15}/>로어 추가</button></div></header>
+    <header className="lore-heading"><div><strong>로어 <span className="muted">{value.lore.length}</span></strong><p className="muted">폴더는 편집용 분류예요. 포함 방식과 프롬프트 배치는 각 로어에서 정해요.</p></div><div className="lore-actions"><button type="button" className="secondary" onClick={() => setFolderEdit({ name: '' })}><Folder size={15}/>폴더 추가</button><button type="button" className="secondary" onClick={add} disabled={value.lore.length >= 2000}><Plus size={15}/>로어 추가</button></div></header>
+    {pendingOrders.length>0&&<p className="error" role="status">순서 입력을 확인할 로어가 {pendingOrders.length}개 있어요. {pendingOrders.map(row=><button type="button" className="ghost" key={row.id} onClick={()=>setSelected(row.id)}>{row.title||'이름 없는 로어'}</button>)}</p>}
     <div className="lore-filters"><label className="lore-search"><Search size={16}/><input aria-label="로어 검색" placeholder="이름, 설명, 본문 검색" value={query} onChange={event => { setQuery(event.target.value); resetList(); }}/></label><select aria-label="로어 폴더 필터" value={folder} onChange={event => { setFolder(event.target.value); resetList(); }}><option value="*">모든 폴더 · {value.lore.length}</option><option value="">미분류 · {value.lore.filter(row => !row.folderId).length}</option>{folders.map(entry => <option key={entry.id} value={entry.id}>{entry.name} · {value.lore.filter(row => row.folderId === entry.id).length}</option>)}</select><select aria-label="로어 사용 방법 필터" value={loading} onChange={event => { setLoading(event.target.value); resetList(); }}><option value="*">모든 사용 방법</option><option value="pinned">항상 포함</option><option value="discoverable">필요할 때 읽기</option></select></div>
     {activeFolder && <div className="lore-folder-bar"><span><Folder size={14}/>{activeFolder.name}</span><button type="button" className="ghost" onClick={() => setFolderEdit({ id: activeFolder.id, name: activeFolder.name })}>폴더 관리</button></div>}
     <div className="lore-workspace">
@@ -48,9 +59,10 @@ export function LoreEditor({ value, onChange }: { value: ContentPackage; onChang
       <section className="lore-detail" aria-label="선택한 로어 편집">{item ? <>
         <div className="lore-detail-heading"><strong>로어 편집</strong><button type="button" className="ghost" onClick={() => setDeleteLore(item.id)}>로어 삭제</button></div>
         <label>로어 이름<input aria-label={`로어 ${index + 1} 이름`} value={item.title} maxLength={200} onChange={event => changeItem({ title: event.target.value })}/></label>
-        <div className="lore-detail-options"><label>폴더<select aria-label="로어 소속 폴더" value={item.folderId ?? ''} onChange={event => move([item.id], event.target.value)}><option value="">미분류</option>{folders.map(entry => <option key={entry.id} value={entry.id}>{entry.name}</option>)}</select></label><label>사용 방법<select aria-label="사용 방법" value={item.loading} onChange={event => changeItem({ loading: event.target.value as PackageLore['loading'] })}><option value="discoverable">모델이 필요할 때 읽기</option><option value="pinned">항상 포함</option></select></label></div>
+        <div className="lore-detail-options"><label>폴더<select aria-label="로어 소속 폴더" value={item.folderId ?? ''} onChange={event => move([item.id], event.target.value)}><option value="">미분류</option>{folders.map(entry => <option key={entry.id} value={entry.id}>{entry.name}</option>)}</select></label><label>포함 방식<select aria-label="사용 방법" value={item.loading} onChange={event => changeItem({ loading: event.target.value as PackageLore['loading'] })}><option value="discoverable">자동 · 모델이 필요할 때 읽기</option><option value="pinned">고정 · 항상 포함</option></select></label></div>
+        <fieldset className="lore-placement-fields"><legend>고정 포함 때의 배치</legend><label>배치<select aria-label={`로어 ${index+1} 배치`} value={item.loreContext?.placement??'background'} onChange={event=>changeItem({loreContext:{...item.loreContext,placement:event.target.value as 'background'|'scene'}})}><option value="background">배경 · 앞쪽의 공통 설정</option><option value="scene">장면 · 현재 요청 근처</option></select></label><div className="lore-placement-row"><label>배치 묶음<input aria-label={`로어 ${index+1} 배치 묶음`} maxLength={200} value={item.loreContext?.group??''} onChange={event=>changeItem({loreContext:{placement:'background',...item.loreContext,group:event.target.value||undefined}})}/></label><label>묶음 안 순서<input aria-label={`로어 ${index+1} 배치 순서`} inputMode="numeric" placeholder="0" value={orderDrafts[item.id]??(item.loreContext?.order===undefined?'':String(item.loreContext.order))} onChange={event=>changeOrder(event.target.value)} aria-invalid={Object.hasOwn(orderDrafts,item.id)}/></label></div><small className="muted">순서는 −1,000,000–1,000,000의 정수예요. 비우면 0으로 정렬해요.</small>{Object.hasOwn(orderDrafts,item.id)&&<p className="error" role="alert">정수 범위를 확인해 주세요. 입력한 초안은 유지돼요.</p>}<small className="muted">자동 로어는 도구를 호출한 위치에서 읽어요. 다음 생성에 유지하는 구간은 처음 읽은 이력 위치에 놓아요. 위 배치는 고정 로어에 사용해요.</small><small className="muted">사용자가 만든 PromptProgram의 슬롯·역할·순서는 자동으로 바꾸지 않아요.</small></fieldset>
         <label>검색용 설명<input value={item.description} maxLength={4000} onChange={event => changeItem({ description: event.target.value })}/></label>
-        <label>로어 본문<textarea aria-label={`로어 ${index + 1} 본문`} rows={10} maxLength={1_000_000} value={item.text} onChange={event => changeItem({ text: event.target.value })}/></label><small className="muted">{item.text.length.toLocaleString()}자 · 자료를 저장하면 변경 사항이 함께 저장돼요.</small>
+        <label>로어 본문<textarea aria-label={`로어 ${index + 1} 본문`} rows={10} maxLength={1_000_000} value={item.text} onChange={event => changeItem({ text: event.target.value })}/></label><small className="muted">UTF-16 {item.text.length.toLocaleString()}자 · 자료를 저장하면 변경 사항이 함께 저장돼요.</small>
       </> : <p className="lore-empty muted">로어를 추가하거나 검색 조건을 바꿔 주세요.</p>}</section>
     </div>
     <Dialog open={!!folderEdit} title={folderEdit?.id ? '로어 폴더 관리' : '로어 폴더 추가'} onClose={() => setFolderEdit(null)} className="lore-folder-dialog">

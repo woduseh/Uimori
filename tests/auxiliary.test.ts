@@ -169,12 +169,12 @@ describe('M1 source-bound auxiliary roles', () => {
     });
     expect(result.modelCalls).toBe(3); expect(result.toolEvents[1].result).toMatchObject({ bytesProvided: false });
     const annotation = validatePresentation(raw, result.output);
-    expect(annotation.entries).toContainEqual({ blockAnchor: blocks[0].anchor, assetRef: 'harbor-evening', assetRevision: 1, presentationIntent: 'inline' });
-    expect(annotation.entries).toContainEqual({ blockAnchor: blocks[1].anchor, assetRef: 'observatory-dome', assetRevision: 1, presentationIntent: 'inline' });
+    expect(annotation.entries).toContainEqual({ blockAnchor: blocks[0].anchor, assetRef: 'harbor-evening', assetRevision: 1, assetHash: BUILTIN_ASSETS.find(a=>a.ref==='harbor-evening')!.hash, presentationIntent: 'inline' });
+    expect(annotation.entries).toContainEqual({ blockAnchor: blocks[1].anchor, assetRef: 'observatory-dome', assetRevision: 1, assetHash: BUILTIN_ASSETS.find(a=>a.ref==='observatory-dome')!.hash, presentationIntent: 'inline' });
     const noImages = { sourceRevision: raw.id, sourceHash: raw.hash, entries: [] };
     expect(validatePresentation(raw, noImages).entries).toEqual([]);
-    const badScene = { ...noImages, entries: [{ blockAnchor: blocks[0].anchor, assetRef: 'observatory-dome', assetRevision: 1, presentationIntent: 'inline' }] };
-    expect(() => validatePresentation(raw, badScene)).toThrow('ASSET_SCENE_MISMATCH');
+    const badScene = { ...noImages, entries: [{ blockAnchor: blocks[0].anchor, assetRef: 'observatory-dome', assetRevision: 1, assetHash: BUILTIN_ASSETS.find(a=>a.ref==='observatory-dome')!.hash, presentationIntent: 'inline' }] };
+    expect(validatePresentation(raw, badScene).entries).toHaveLength(1);
     expect(() => validatePresentation(raw, { ...badScene, entries: [{ ...badScene.entries[0], assetRef: 'missing' }] })).toThrow('ASSET_REFERENCE_INVALID');
     expect(() => validatePresentation(raw, { ...badScene, entries: [{ ...badScene.entries[0], blockAnchor: 'other-revision-anchor' }] })).toThrow('ANNOTATION_ANCHOR_INVALID');
     expect(() => validatePresentation(raw, { ...badScene, entries: [{ ...badScene.entries[0], assetRevision: 99 }] })).toThrow('ASSET_REFERENCE_INVALID');
@@ -184,12 +184,13 @@ describe('M1 source-bound auxiliary roles', () => {
     expect(JSON.stringify(raw)).toBe(before); expect(JSON.stringify(ctx.canon)).toBe(canonBefore);
   });
 
-  test('P13 costume restrictions apply at the block and display annotations cannot smuggle authoritative fields', async () => {
+  test('P13 authored metadata does not require literal scene cues and display annotations cannot smuggle authoritative fields', async () => {
     const raw = source('Mira wore a blue coat by the pier.\n\nMira wore a red cloak by the pier.'); const blocks = splitSource(raw);
     const assets = [{ ...BUILTIN_ASSETS[0], clothing: 'blue coat', uses: ['inline' as const] }];
-    const image = { sourceRevision: raw.id, sourceHash: raw.hash, entries: [{ blockAnchor: blocks[0].anchor, assetRef: assets[0].ref, assetRevision: 1, presentationIntent: 'inline' }] };
+    const image = { sourceRevision: raw.id, sourceHash: raw.hash, entries: [{ blockAnchor: blocks[0].anchor, assetRef: assets[0].ref, assetRevision: 1, assetHash: assets[0].hash, presentationIntent: 'inline' }] };
     expect(validatePresentation(raw, image, assets).entries).toHaveLength(1);
-    expect(() => validatePresentation(raw, { ...image, entries: [{ ...image.entries[0], blockAnchor: blocks[1].anchor }] }, assets)).toThrow('ASSET_SCENE_MISMATCH');
+    expect(validatePresentation(raw, { ...image, entries: [{ ...image.entries[0], blockAnchor: blocks[1].anchor }] }, assets).entries).toHaveLength(1);
+    expect(() => validatePresentation(raw, {...image, entries:[{...image.entries[0],assetHash:'different'}]}, assets)).toThrow('ASSET_REFERENCE_INVALID');
     const input = displayInput(raw, context(), snapshot());
     expect(input.role).toBe('status'); expect(input).not.toHaveProperty('assets'); expect(JSON.stringify(input)).not.toContain('data:image');
     const result = await executeAuxiliary(input, snapshot(), scriptedAuxiliary);
@@ -197,4 +198,31 @@ describe('M1 source-bound auxiliary roles', () => {
     expect(() => validateDisplayAnnotation(raw, { ...(result.output as object), coins: 100 })).toThrow('OUTPUT_SCHEMA_INVALID');
     expect(() => validateDisplayAnnotation(raw, { ...(result.output as object), kind: 'authoritative' })).toThrow('OUTPUT_SCHEMA_INVALID');
   });
+});
+
+
+test('image catalog pages find names beyond the first page without exposing URLs', async () => {
+  const assets=Array.from({length:114},(_,i)=>({...BUILTIN_ASSETS[0],ref:`asset-${i}`,alt:`이름 ${i}`,caption:'선택적 설명',actorId:null,clothing:null,location:null}));
+  const input=presentationInput(source('고요한 창가.'),context(),snapshot(),assets);
+  expect(input.assets).toHaveLength(20); expect(input.assetPage).toEqual({total:114,nextOffset:20});
+  expect(JSON.stringify(input.assets)).not.toContain('/api/');
+  const result=await executeAuxiliary(input,snapshot(),async packet=>{
+    if(!packet.results.length)return{kind:'tool',action:{callId:'page',name:'assets.search',args:{offset:100,limit:20}}};
+    if(packet.results.length===1)return{kind:'tool',action:{callId:'inspect',name:'assets.inspect',args:{ref:'asset-113'}}};
+    return{sourceRevision:input.sourceRevision,sourceHash:input.sourceHash,entries:[]};
+  },{assetCatalog:assets});
+  expect(result.toolEvents[0].result).toMatchObject({total:114,nextOffset:null,items:expect.arrayContaining([expect.objectContaining({ref:'asset-113'})])});
+  expect(result.toolEvents[1].result).toMatchObject({asset:{ref:'asset-113'},bytesProvided:false});
+  expect(JSON.stringify(result.toolEvents)).not.toContain('/api/');
+  const bad=()=>executeAuxiliary(input,snapshot(),async()=>({kind:'tool',action:{callId:'bad',name:'assets.search',args:{limit:51}}}),{assetCatalog:assets});
+  await expect(bad()).rejects.toThrow('ASSET_SEARCH_INVALID');
+});
+
+test('image selection uses IDs for duplicate names and rejects a different content hash', () => {
+  const raw=source('그녀가 돌아보며 미소 지었다.');
+  const assets=[{...BUILTIN_ASSETS[0],ref:'first',alt:'미소',uses:['inline' as const],actorId:'영문 이름',clothing:'literal outfit',location:'literal place'}, {...BUILTIN_ASSETS[1],ref:'second',alt:'미소'}];
+  const selected={sourceRevision:raw.id,sourceHash:raw.hash,entries:[{blockAnchor:splitSource(raw)[0].anchor,assetRef:'first',assetRevision:assets[0].revision,assetHash:assets[0].hash,presentationIntent:'inline'}]};
+  expect(validatePresentation(raw,selected,assets).entries[0].assetRef).toBe('first');
+  expect(()=>validatePresentation(raw,{...selected,entries:[{...selected.entries[0],assetHash:'wrong'}]},assets)).toThrow('ASSET_REFERENCE_INVALID');
+  expect(()=>validatePresentation(raw,selected,[...assets,assets[0]])).toThrow('ASSET_REFERENCE_INVALID');
 });

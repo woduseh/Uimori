@@ -8,7 +8,7 @@ import type { Connection, ModelSnapshot } from '../core/product.js';
 import type { PromptHistoryMessage } from '../core/prompt-program.js';
 import { executeProvider, ProviderContractError, type Json, type ProviderRequest, type ProviderResult } from '../core/transport.js';
 import type { RunSnapshot, Usage } from '../core/types.js';
-import { contextSourceRefs, measureMainContext, withContextProjection } from './context-planning.js';
+import { contextSourceRefs, fitFixedLoreContext, measureMainContext, withContextProjection } from './context-planning.js';
 import { encodeMainPreview } from './main-request.js';
 import type { MainHooks } from './model-runner.js';
 
@@ -91,6 +91,7 @@ export async function prepareInputContext(snapshot: RunSnapshot, hooks: ContextC
     }
     const allRefs = contextSourceRefs(fixed);
     if (JSON.stringify(plan.compacted) !== JSON.stringify(allRefs.slice(0, plan.compacted.length)) || plan.compacted.length > allRefs.length || plan.compacted.length > 0 && !plan.summary?.trim()) fail('CONTEXT_CHECKPOINT_INVALID');
+    if (!hooks.measureInput && fixed.loreContext) fixed.loreContext = fitFixedLoreContext(withContextProjection(fixed, allRefs, plan.summary)).loreContext;
     let prepared = measure();
     if (estimate <= limit * TRIGGER_RATIO) { plan.status = 'ready'; await progress(); return { snapshot: { ...prepared, contextPlan: structuredClone(plan) }, usage: structuredClone(usage) }; }
     // Measuring the fixed input is only a feasibility check; this empty-history projection is never returned or sent.
@@ -151,7 +152,9 @@ export async function prepareInputContext(snapshot: RunSnapshot, hooks: ContextC
       return result.text;
     };
     const validateUnit = (unit: SourceUnit) => {
-      if (unit.messages.length !== 2 || unit.messages[0].role !== 'user' || unit.messages[1].role !== 'assistant' || unit.messages.some(message => message.sourceHash !== undefined && message.sourceHash !== unit.ref.hash)) fail('CONTEXT_LOGICAL_PAIR_MISSING');
+      const pair = unit.messages.length === 2 && unit.messages[0].role === 'user' && unit.messages[1].role === 'assistant' && unit.messages.every(message => message.sourceKind === undefined);
+      const authoredStart = unit.messages.length === 1 && unit.messages[0].role === 'assistant' && unit.messages[0].sourceKind === 'authored-start';
+      if ((!pair && !authoredStart) || unit.messages.some(message => message.sourceHash !== undefined && message.sourceHash !== unit.ref.hash)) fail('CONTEXT_LOGICAL_PAIR_MISSING');
     };
     await progress();
     while (estimate > limit * TARGET_RATIO) {

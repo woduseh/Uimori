@@ -5,6 +5,7 @@ import { defaultStoryConfig } from '../core/story.js';
 import type { RunSnapshot } from '../core/types.js';
 import type { ContextPlan } from '../core/context-plan.js';
 import type { ProviderResult, WireRecord } from '../core/transport.js';
+import { compilePromptProgram, validateProviderPrompt, type PromptHistoryMessage } from '../core/prompt-program.js';
 import { estimateContextTokens } from '../core/context-budget.js';
 import { defaultHiddenStoryConfig } from '../core/hidden-story.js';
 import { freezeHiddenStory } from '../core/hidden-story-package.js';
@@ -122,6 +123,29 @@ describe('input context projection and durable summary calls', () => {
     }
     for (const plan of log.progress.filter(plan => plan.summaryCalls > 0 && plan.summaryCalls < payloads.length)) expect(plan).toMatchObject({ compacted: [], summary: null });
     expect(log.wires.every(wire => wire.role === 'memory')).toBe(true); expect(source.history[0].text).toBe(text);
+  });
+
+  test('an explicitly authored start can be compacted as one assistant message without inventing a user turn or leaking its host discriminator', async () => {
+    const text = `AUTHORED_START\n${paragraph.repeat(450)}`, source = snapshot([text]);
+    const authored: PromptHistoryMessage = { ...source.logicalHistory![1], runId: 'authored-start-run', sourceKind: 'authored-start' };
+    source.logicalHistory = [authored]; const original = structuredClone(source), log = observed(), payloads = respondWithMergedSummary(log);
+    const initial = measureMainContext(withContextProjection(source, [], null)).snapshot;
+    const request = buildMainProviderRequest(initial).request, message = request.prompt!.messages.find(item => item.provenance.sourceRevision === 'source-0')!;
+    expect(message.role).toBe('assistant'); expect(message.provenance).toEqual({ blockId: 'history', origin: 'history', sourceRevision: 'source-0', sourceHash: hash(text), runId: 'authored-start-run' });
+    expect(() => validateProviderPrompt(request.prompt)).not.toThrow(); expect(JSON.stringify(request)).not.toContain('sourceKind');
+    const result = await prepareInputContext(source, log.hooks), fragments = payloads.flatMap(payload => payload.fragments);
+    expect(result.snapshot.contextPlan).toMatchObject({ status: 'ready', compacted: [{ revision: 'source-0', hash: hash(text) }] }); expect(payloads.length).toBeGreaterThan(0);
+    expect(fragments.every(part => part.role === 'assistant' && part.messageId === authored.id)).toBe(true); expect(fragments.map(part => part.text).join('')).toBe(text);
+    expect(result.snapshot.logicalHistory).toEqual([authored]); expect(source).toEqual(original); expect(JSON.stringify(log.wires)).not.toContain('sourceKind');
+  });
+
+  test('an authored-start discriminator is invalid on user/current messages or an ordinary pair, and unknown discriminators are rejected', async () => {
+    const valid: PromptHistoryMessage = { id: 'authored', role: 'assistant', text: 'A directly authored start.', sourceRevision: 'source', sourceHash: 'a'.repeat(64), runId: 'run', sourceKind: 'authored-start' };
+    for (const changed of [{ ...valid, role: 'user' }, { ...valid, current: true }, { ...valid, sourceKind: 'generated' }]) {
+      expect(() => compilePromptProgram({ version: 1, controls: [], blocks: [{ id: 'history', title: 'History', kind: 'history', from: 0, to: 'end' }] }, { slots: {}, history: [changed as PromptHistoryMessage] })).toThrow('PROMPT_INVALID_HISTORY_SOURCE');
+    }
+    const paired = snapshot(oldScenes()); paired.logicalHistory![1].sourceKind = 'authored-start';
+    expect(await failure(prepareInputContext(paired, observed().hooks))).toMatchObject({ code: 'CONTEXT_LOGICAL_PAIR_MISSING', usage: { modelCalls: 0 } }); expect(fetch).not.toHaveBeenCalled();
   });
 
   test('hidden exclusions are applied before summarization while compacted references hash the full original source', async () => {

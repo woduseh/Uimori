@@ -1,12 +1,12 @@
+import { loreHistory } from '../core/lore-context.js';
 import { createDefaultPromptProgram } from '../core/prompt-defaults.js';
 import { createHash } from 'node:crypto';
 import { attachMainHostContext } from './main-request.js';
-import { buildMainInput } from '../core/provider.js';
+import { buildMainInput, pinnedSlotSources } from '../core/provider.js';
 import { compilePromptProgram, type PromptHistoryMessage, type PromptProgram, type PromptValue, type PromptTemplate } from '../core/prompt-program.js';
 import { hiddenLogicalHistoryForRequest } from '../core/hidden-context.js';
 import type { RunSnapshot } from '../core/types.js';
 import type { Store } from './store.js';
-import { nativeInstructions } from '../core/native-context.js';
 import { DEFAULT_MAIN_PROMPT } from '../core/prompts.js';
 import { packageSlots, compiledPackages } from '../core/package-context.js';
 import { executionContext } from '../core/execution-context.js';
@@ -17,30 +17,29 @@ export function captureLogicalHistory(store:Store,snapshot:RunSnapshot):PromptHi
   const entries=snapshot.history;
   return entries.flatMap(entry=>{
     const source=entry.contentHash?store.sourceAtHash(entry.revision,entry.contentHash):store.sourceOriginal(entry.revision);
-    const row=store.db.prepare('SELECT request FROM runs WHERE id=?').get(source.runId) as {request:string}|undefined;
+    const row=store.db.prepare("SELECT request,json_extract(snapshot,'$.packageStart.mode') AS startMode FROM runs WHERE id=?").get(source.runId) as {request:string;startMode:string|null}|undefined;
     if(!row)throw new Error('PROMPT_HISTORY_REQUEST_MISSING');
     const provenance={sourceRevision:entry.revision,sourceHash:entry.contentHash??source.hash,runId:source.runId};
-    return [{id:`request:${entry.revision}`,role:'user' as const,text:row.request,...provenance},{id:`source:${entry.revision}`,role:'assistant' as const,text:entry.text,...provenance}];
+    return [...(row.startMode==='authored'?[]:[{id:`request:${entry.revision}`,role:'user' as const,text:row.request,...provenance}]),{id:`source:${entry.revision}`,role:'assistant' as const,text:entry.text,...provenance,...(row.startMode==='authored'?{sourceKind:'authored-start' as const}:{})}];
   });
 }
 export function promptContext(snapshot:RunSnapshot){
   const input=buildMainInput(snapshot);const contents=snapshot.profile?.contents??[];
-  const content=(kind:string)=>contents.filter(c=>c.kind===kind&&(kind!=='persona'||snapshot.profile?.creative.personaReference!==false)).map(c=>c.text).join('\n\n');
+  const body=(slot:string)=>pinnedSlotSources(input,slot).map(item=>item.text).join('\n\n');
   const slots:Record<string,string>={
-    char:snapshot.nativeBot?.package.title??contents.find(c=>c.kind==='bot')?.title??'Character',bot:[content('bot'),nativeInstructions(snapshot.nativeBot)].filter(Boolean).join('\n\n'),description:[content('bot'),nativeInstructions(snapshot.nativeBot)].filter(Boolean).join('\n\n'),persona:content('persona'),
-    lore:[...contents.filter(c=>['lore','canon','skill'].includes(c.kind)&&(c.loading==='pinned'||c.kind==='canon')).map(c=>c.text),...snapshot.resources.filter(r=>r.id.startsWith('native:')&&r.loading==='pinned').map(r=>r.text)].join('\n\n'),
+    char:snapshot.nativeBot?.package.title??contents.find(c=>c.kind==='bot')?.title??'Character',bot:body('bot'),description:body('description'),persona:body('persona'),lore:body('lore'),
     memory:input.memory?JSON.stringify(input.memory):'',state:input.state?JSON.stringify(input.state):'',globalNote:'',authorNote:'',postEverything:'',slot:'',
+    backgroundLore:pinnedSlotSources(input,'backgroundLore').map(item=>JSON.stringify(item)).join('\n'),sceneLore:pinnedSlotSources(input,'sceneLore').map(item=>JSON.stringify(item)).join('\n'),
     references:JSON.stringify(input.pinnedSources?.length ? {pinnedSources:input.pinnedSources} : {facts:input.facts}),controls:JSON.stringify(input.controls??{}),catalog:JSON.stringify(input.catalog),source:'',
   };
   const packages = packageSlots(snapshot, 'main');
   if (packages.char) slots.char = packages.char;
-  for (const key of ['bot','persona','lore'] as const) if (packages[key]) slots[key] = [slots[key],packages[key]].filter(Boolean).join('\n\n');
   slots.description = slots.bot;
   slots.lorebook=slots.lore;slots.authornote=slots.authorNote;
   for (const instruction of compiledPackages(snapshot,'main').flatMap(p=>p.instructions)) if (instruction.position) slots[instruction.position] = [slots[instruction.position],instruction.text].filter(Boolean).join('\n\n');
   const inputHistoryIds=new Set(input.history.map(entry=>entry.revision));
   const logical=(snapshot.logicalHistory??input.history.map(entry=>({id:`source:${entry.revision}`,role:'assistant' as const,text:entry.text,sourceRevision:entry.revision,...(entry.contentHash?{sourceHash:entry.contentHash}:{})}))).filter(message=>snapshot.contextPlan||!message.sourceRevision||inputHistoryIds.has(message.sourceRevision));
-  const history=[...projectedLogicalHistory(snapshot,hiddenLogicalHistoryForRequest(snapshot,logical)),{id:'current-input',role:'user' as const,text:snapshot.request,current:true}];
+  const history=[...loreHistory(projectedLogicalHistory(snapshot,hiddenLogicalHistoryForRequest(snapshot,logical)),snapshot.loreContext),{id:'current-input',role:'user' as const,text:snapshot.request,current:true}];
   const preset=snapshot.profile?.promptPresets?.main;
   return {slots,history,runtime:executionContext(snapshot),values:preset?snapshot.profile?.promptControls?.[`${preset.id}@${preset.revision}`]?.values:undefined};
 }

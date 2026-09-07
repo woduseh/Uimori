@@ -1,16 +1,8 @@
-# 공급자 생성 설정·캐시·응답 테스트 결과
+# 공급자 설정·컨텍스트·공통 자료 통합 결과
 
-## 2026-09-08 후속 구현과 통합 상태
+2026-09-08. 공급자 작업 `63b7247`과 공통 자료·로어 작업 `6303545`를 main에 통합했어요. 기준 commit은 `5761bb2`이고 두 작업의 모델 설정, 이미지·시작문, 로어 유지와 자동 대화 요약을 함께 검증해요. 최종 합본 검증과 근거는 아래에 기록해요.
 
-모델·연결의 편집 버전 선택을 제거하고 `provider_settings`의 최신 한 벌과 자체 실행 snapshot을 분리했어요. 기본 입력 한도 272,000, 실제 요청 body 추정, 이전 대화 자동 요약·체크포인트 재사용, 상태/기억 보조 작업의 동일 압축을 추가했어요. 출력 한도 확대 요청은 철회되어 변경하지 않았어요. [현재 설정 계약](../docs/MODEL-PARAMETERS.md), [컨텍스트 계약](../docs/CONTEXT-LIMITS.md)을 확인해요.
-
-후속의 확정된 로컬 증거는 상태·등록 69/69(`latest-settings-story-registration-vitest.json`), 설정 30/30(`current-settings-final.json`), 압축 엔진 17/17(`context-compaction-vitest-final.json`), WASM 입력 예산+App/SQLite 통합 37/37(`vitest-context-wasm-regression.json`), 상태·기억 압축 20/20(`story-context-compaction-vitest-initial.json`)이며 모두 `output/provider-parameters/`에 있어요. 이 결과들은 합본 전체 회귀 수치가 아니에요.
-
-첫 후속 전체 검사는 1,035 PASS·30 FAIL·1 skip(`vitest-context-integration-first.json`)이었어요. 남은 구형 설정 fixture를 갱신하면서 번역 `claimJob`이 선택 모델 snapshot을 유실하는 결함을 발견해 고쳤고, claim 전 준비 실패는 queued 상태에서 반복되지 않고 명시 실패로 끝내도록 했어요. 중단·원본 SQLite 증거는 `current-settings-selected-cancelled/`, `current-settings-selected-retry-stall/`에 보존했어요. 반복 문자열의 로컬 tokenizer 지연도 독립 재현한 뒤 segmented WASM 추정으로 바꿨어요. 중단된 실행에는 임의 PASS/FAIL 개수를 부여하지 않았어요.
-
-사용자가 공통 자료·로어 작업과 함께 main 병합·커밋을 승인했어요. 상대 브랜치는 `63035455e870ac5d8dd06a7f7d4ff8bbfc5c619d`이고, 합본의 검증·커밋은 진행 중이에요. **아래 2026-09-07 표는 이 후속 범위 이전에 확인한 증거예요.**
-
-2026-09-07. `5761bb2f5aaf9dfc14c91f8b29598111c266acf3`에서 분리한 `codex/provider-parameters` 작업이에요. Google global 고정·누적 예산 제거를 반영하고, 후속 요청인 Claude Fable 5.1·GPT Flex·캐시 OFF/자동/유지 시간·짧은 실제 응답 테스트를 구현했어요. 전체 화면 회귀와 마지막 시각 확인을 진행 중이에요.
+모델·연결은 `provider_settings`의 최신 한 벌로 편집하고 실행마다 모델·연결 snapshot을 고정해요. 입력 한도 기본값은 272,000이며 실제 요청 body를 로컬에서 추정해 앞선 대화를 요약·재사용해요. 상태·기억 보조 작업에도 같은 압축 엔진을 적용해요. 출력 한도 확대 요청은 철회되어 변경하지 않았어요. [모델 설정](../docs/MODEL-PARAMETERS.md) · [입력 컨텍스트](../docs/CONTEXT-LIMITS.md)
 
 ## 구현
 
@@ -24,20 +16,25 @@
 
 정확한 지원 ID, API 매핑, 캐시 한계와 사용 절차는 [모델 파라미터 문서](../docs/MODEL-PARAMETERS.md)에 있어요. [계획](PROVIDER-PARAMETERS-PLAN.md)의 Vercel 전용 routing/native option 매핑은 후속 범위이며 기존 호환 어댑터 계약을 유지해요.
 
+## 합본 통합
+
+공통 자료의 옵션·지침·이미지·공유 모듈·작성된 시작문과 로어 배경/장면 배치를 함께 반영했어요. 최신 모델 ID 선택과 응답 유실 시 동일 생성 요청 재확인을 유지해요. [자료 작업](SHARED-PACKAGE-RESULTS.md) · [로어 작업](LORE-CONTEXT-RESULTS.md)
+
+자동 요약은 로어 본문을 섞지 않은 실제 대화만 처리해요. authored 시작문은 검증된 출처 표식으로 assistant 단독을 허용하고 일반 대화의 user 누락은 거절해요. 고정 입력만으로 한도에 가까워지면 조회 자료를 LRU 순서로 통째 정리하고, 이후 Run과 독립 포크·보관에서 제외 항목을 부활시키지 않아요. 요약에 따라 원래 위치가 빠진 참고 자료는 요약 뒤·최근 대화 앞에 제공해요.
+
 ## 검증
 
 | 검사 | 결과 | 근거 |
 | --- | --- | --- |
 | 타입·빌드 | PASS | `npm run check`, `npm run build` |
-| 전체 단위·통합 | 1,027 PASS · 1 opt-in skip | [Vitest JSON](../output/provider-parameters/vitest-verified.json) |
-| 공급자 관리·등록 보조 브라우저 | 15/15 PASS | [summary](../output/playwright/provider-management-2026-09-07T14-14-37-912Z-16aef76e/summary.json) |
-| 평가 도구 화면 | 2/2 PASS | [summary](../output/playwright/evaluation-ui-2026-09-07T14-14-39-548Z-0c4eb3ea/summary.json) |
-| 전체 브라우저 회귀 | 실행 중 | 완료 후 기록 |
-| 모바일 캐시 제어 시각 검사 | 실행 중 | 완료 후 기록 |
+| 전체 단위·통합 | **1,175 PASS · 0 FAIL · 1 opt-in skip** | [Vitest](../output/provider-parameters/vitest-merged-final.json) |
+| 전체 브라우저 | **79/79 PASS** | [브라우저 summary](../output/playwright/redesign-2026-09-07T15-40-44-406Z-6eb46595/summary.json) |
+| source/build 일치·cleanup | PASS | 같은 브라우저 summary · 남은 PID 0 |
+| 390px 시각 확인 | PASS | [최종 증거](../output/provider-parameters/FINAL-VERIFICATION.json)의 PNG 목록 |
 
-단위 skip은 `installed Codex initializes with isolated empty authentication`의 명시 opt-in 사전 검사예요. 실제 계정/모델 실행 검증을 뜻하지 않아요. 브라우저 검사는 독립 DB·포트·임시 디렉터리와 합성 provider를 사용했고, 완료한 두 실행의 cleanup·source/build 일치가 PASS예요.
+최종 source/build는 `1e5cce2af3ed71c8448378df20392fd779614d759b09f7550d7f2cab0e4b13de`, dist는 `273a849c0af88fb52ff8e258e137333be4540673b50a1f285a41062d85e00fc7`예요. 단위 검사는 `eb2bb117e0265c7b8bc9dc49f226e9af1a951b9e4aca70220a19b0b0b0956578`에서 완료했고, 이후 제품 변경은 SourceReader의 안내 위치 한 곳뿐이에요. 이 화면 변경과 브라우저 fixture 수정 뒤 타입·빌드·전체 브라우저를 다시 통과했어요. 단위 skip은 설치된 Codex의 빈 인증 프로필 사전 검사를 명시 실행할 때만 켜는 항목이에요.
 
-최종 브라우저 source/build는 `fd7255ea9effee6e7f848ca1c1dac158b9fcd54f994a54f1194f0c76cf00d898`, dist는 `704960bb4844a3d802bae990998799db26efaae6da8a69bf112ffd5a990c5408`예요. 전체 단위 검사 시작 당시 source는 `21d5a1c03278c0a1a1030e50048ec3426ae174b81ec8de43c9676b3439d0a401`이며 이후에는 브라우저 검사 두 파일의 선택자/DOM 속성 판정만 수정했어요. 제품 코드와 dist는 같아요.
+공급자 단독 최종 검사는 1,094 PASS·1 skip(`vitest-before-merge-final.json`)이었어요. 합본 최초 검사는 1,173 PASS·1 FAIL·1 skip(`vitest-merged-first.json`)이며 새 로어 테스트의 복원 연결 조회 fixture 오류를 수정했어요. 실패 기록은 그대로 보존해요. 최종 근거 파일은 모두 `output/provider-parameters/`에 있어요.
 
 ## 발견·수정과 첫 실패 보존
 
@@ -46,8 +43,10 @@
 3. Claude의 지정 정지 문자열 종료가 기존 decoder에서 항상 partial이었어요. 요청에 고정한 `stopSequences`와 응답 `stop_sequence`가 일치할 때만 completed로 바꿨어요. 미지정·불일치·빈 응답·잘림은 기존 실패 계약을 유지해요. 최초 신규 loopback fixture는 endpoint 설정으로 **158 PASS·2 FAIL**이었고 원본을 보존한 뒤 실제 endpoint 검증을 유지하는 전달 fixture로 수정했어요. [최초 fixture 결과](../output/provider-parameters/vitest-anthropic-stop-sequences.json), [관련 160/160 PASS](../output/provider-parameters/vitest-anthropic-stop-sequences-final.json)
 4. 첫 공급자 브라우저는 `<option disabled>`에 일반 control용 disabled 판정을 사용한 1건이 실패했어요. 실제 DOM에는 disabled가 있었으므로 DOM property로 검사하도록 수정했어요. 첫 평가 브라우저는 옛 메뉴/레이블을 찾다가 1건 timeout이 났고 생성 설정의 새 위치로 갱신했어요. 제품 코드는 바꾸지 않았고 두 실행 모두 cleanup을 마쳤어요. [공급자 첫 FAIL](../output/playwright/provider-management-2026-09-07T14-12-55-319Z-8a41ef49/summary.json), [평가 첫 FAIL](../output/playwright/evaluation-ui-2026-09-07T14-12-58-340Z-36aa0bb9/summary.json)
 
-## 한계와 병행 작업
+5. 최신 설정 후속의 첫 전체 검사는 **1,035 PASS·30 FAIL·1 skip**이었어요(`vitest-context-integration-first.json`). 구형 설정 fixture를 갱신하면서 번역 `claimJob`이 선택 모델 snapshot을 유실하는 결함을 고쳤고, claim 전 준비 실패는 queued 상태에서 반복되지 않고 명시 실패로 끝내도록 했어요. 중단·원본 SQLite는 `current-settings-selected-cancelled/`, `current-settings-selected-retry-stall/`에 보존했어요. 반복 문자열의 tokenizer 지연은 별도 재현 후 4,096 UTF-16 조각의 WASM 추정으로 수정했어요. 중단된 실행에 임의의 PASS/FAIL 개수를 부여하지 않았어요.
 
-실제 API 수락·계정별 모델 가용성·Flex 대기·캐시 hit·청구액·Codex 구독 실행·물리 휴대폰/IME·배포는 검증하지 않았어요. 응답 테스트 기능을 눌렀을 때 실제 요청을 보내도록 구현한 것이며, 개발 중에는 합성 요청만 실행했어요. Gemini 암묵적 캐시의 프로젝트 제어와 `cachedContents` 수명 관리는 이번 범위에 없어요.
+최초 합본 브라우저는 **78 PASS·1 FAIL**이었어요. PMUI07은 카탈로그 POST만 합성하고 새로 조회한 library에는 빈 목록을 반환한 fixture 때문에 실패했어요. 실제 저장 경로와 같은 조회 결과가 이어지도록 합성 응답을 맞췄어요. 자동 검사는 통과했던 컨텍스트 상태 화면도 PNG에서 직접 확인해 번역 버튼과의 겹침을 발견했고, 안내를 도구 모음 뒤로 옮기고 영역 비겹침 검사를 추가했어요. [최초 합본 브라우저와 cleanup](../output/playwright/redesign-2026-09-07T15-34-47-580Z-c326c678/summary.json)은 그대로 보존해요.
 
-별도 `codex/shared-package-authoring` 작업과 공유 파일의 책임을 조율했어요. 통합 시 `core/product.ts`의 모델/연결 필드, `server/product-store.ts`의 모델/연결/archive 검증, `server/app.ts`의 hook/route, `server/product-auxiliary.ts`의 generation 추출, `server/store.ts`의 v9와 진단 테이블을 함께 보존해야 해요. 그 작업의 패키지 이미지·start·모듈 변경을 이 결과에 합산하지 않아요. 이 브랜치의 commit·merge·push는 수행하지 않았어요.
+## 검증 한계
+
+실제 API 수락·계정별 모델 가용성·Flex 대기·캐시 hit·청구액·실모델 요약 품질·Codex 구독 실행·물리 휴대폰/IME·배포는 검증하지 않았어요. 응답 테스트 기능은 사용자가 실행하면 짧은 실제 요청을 보내며 개발 중에는 합성 요청만 실행했어요. Gemini 암묵적 캐시의 프로젝트 제어와 `cachedContents` 수명 관리는 이번 범위에 없어요. 현재 schema/archive는 v9이며 기존 사용자 DB를 초기화하거나 이관하지 않았어요.

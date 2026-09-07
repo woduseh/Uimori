@@ -62,7 +62,7 @@ function finishOther(store:Store,revision:Source,assetId:string){
     const claimed=store.claimJob(job.id,'synthetic-fork-worker',{})!;
     const result=job.kind==='status'
       ? {mock:true,sourceRevision:revision.id,sourceHash:revision.hash,display:[{anchor:revision.blocks![0].anchor,summary:'Synthetic display only',mood:'quiet'}]}
-      : {mock:true,sourceRevision:revision.id,sourceHash:revision.hash,annotations:[{blockAnchor:revision.blocks![0].anchor,assetRef:assetId,assetRevision:1,presentationIntent:'inline',caption:'Synthetic pixel'}]};
+      : {mock:true,sourceRevision:revision.id,sourceHash:revision.hash,annotations:[{blockAnchor:revision.blocks![0].anchor,assetRef:assetId,assetRevision:1,assetHash:store.product.asset(assetId).asset.hash,presentationIntent:'inline',caption:'Synthetic pixel'}]};
     expect(store.completeJob(job.id,claimed.generation,'synthetic-fork-worker',result)).toBe(true);
   }
 }

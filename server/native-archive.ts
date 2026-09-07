@@ -6,6 +6,7 @@ import { validateProviderPrompt } from '../core/prompt-program.js';
 import type { RunSnapshot } from '../core/types.js';
 import { captureLogicalHistory, compileSnapshotPrompt } from './prompt-snapshot.js';
 import { HttpError, type Store } from './store.js';
+import { packagePersonaName } from './package-features.js';
 import { fields, number, record, text } from './product-store.js';
 import { validateContextPlan } from './context-planning.js';
 
@@ -39,7 +40,7 @@ export function validateNativeRunSnapshot(store:Store,snapshot:RunSnapshot):void
   if(snapshot.hiddenStory){
     const hidden=snapshot.hiddenStory;const pkg=store.product.get('hidden-story',hidden.module.id,hidden.module.revision);
     if(!isDeepStrictEqual(pkg,hidden.module))reject('frozen hidden module mismatch');
-    const expected=freezeHiddenStory(hidden.module,{module:hidden.module,config:hidden.config,insertion:hidden.insertion},{seed:hidden.seed,userLabel:snapshot.profile?.contents.find(c=>c.kind==='persona')?.title??'User'});
+    const expected=freezeHiddenStory(hidden.module,{module:hidden.module,config:hidden.config,insertion:hidden.insertion},{seed:hidden.seed,userLabel:packagePersonaName(snapshot.profile)});
     if(!isDeepStrictEqual(expected,hidden))reject('frozen hidden instructions mismatch');
   }
   if(snapshot.logicalHistory!==undefined&&!isDeepStrictEqual(snapshot.logicalHistory,captureLogicalHistory(store,snapshot)))reject('logical history mismatch');

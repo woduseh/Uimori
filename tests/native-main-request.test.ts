@@ -7,7 +7,7 @@ import { runMain, type MainHooks } from '../server/model-runner.js';
 import { defaultProfile, type ProviderProtocol } from '../core/product.js';
 import { modelCapability } from '../core/model-capabilities.js';
 import { defaultStoryConfig } from '../core/story.js';
-import { planMemoryContext } from '../core/memory.js';
+import { planMemoryContext, memoryHash } from '../core/memory.js';
 import type { PromptProgram } from '../core/prompt-program.js';
 import type { RunSnapshot, ToolEvent } from '../core/types.js';
 import type { Json, ProviderResult, WireRecord } from '../core/transport.js';
@@ -31,7 +31,7 @@ describe('Exact native main preview and terminal submission (synthetic loopback 
     const server=await loopbackProvider(async(_request,response)=>writeSse(response,[complete('Synthetic final prose.'),'[DONE]']));closes.push(server.close);
     const work=snapshot(`${server.origin}/v1/responses`),frozen=compileSnapshotPrompt(work),built=buildMainProviderRequest(frozen),expected=encodeMainPreview(built.request,work.profile!.models.main!);
     const app=Fastify();closes.push(()=>app.close());
-    const fake={chat:()=>({id:work.chatId,settingsRevision:work.settingsRevision,settings:work.settings}),history:()=>[],product:{snapshot:()=>structuredClone(work.profile),branch:()=>({id:'branch-1',headRevision:null}),resources:()=>[]},native:{snapshot:()=>undefined},story:{prepareRunInTransaction:(value:RunSnapshot)=>value}} as unknown as Store;
+    const fake={chat:()=>({id:work.chatId,settingsRevision:work.settingsRevision,settings:work.settings}),history:()=>[],product:{snapshot:()=>structuredClone(work.profile),branch:()=>({id:'branch-1',headRevision:null}),resources:()=>[]},native:{snapshot:()=>undefined},story:{prepareRunInTransaction:(value:RunSnapshot)=>value,memory:{scope:()=>({chatId:work.chatId,history:[]}),canonHash:()=>memoryHash('[]')}}} as unknown as Store;
     promptRoutes(app,fake);
     const response=await app.inject({method:'POST',url:`/api/chats/${work.chatId}/prompt-preview`,payload:{program:work.profile!.promptPresets!.main!.program,request:work.request,role:'main',values:{pheme_session_mode:'1'}}});expect(response.statusCode).toBe(200);expect(response.json().provider.body).toEqual(expected.body);expect(server.requests).toHaveLength(0);
     const log=hooks(server.origin),result=await runMain(frozen,log.value);expect(result.status).toBe('completed');expect(log.attempts).toHaveLength(1);expect(log.attempts[0].body).toEqual(expected.body);expect(JSON.parse(server.requests[0].body)).toEqual(expected.body);

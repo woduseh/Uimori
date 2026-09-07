@@ -2,6 +2,8 @@
 
 - 모델·연결은 `provider_settings`의 최신 한 벌이며 ModelRef는 `{id}`예요. 내부 revision은 CAS용이고 과거 Run/번역/등록 snapshot은 자체 모델·연결을 보존해요. 입력 한도·요약은 `docs/CONTEXT-LIMITS.md`, `core/context-budget.ts`, `server/context-planning.ts`, `server/context-compaction.ts`를 봐요. full history와 전송 projection을 분리하고 source/hash·히든 viewHash·정사 의존성을 유지해요. 요약 호출도 전체 maxCalls에 포함하며 불확실 실행을 자동 재생하지 않아요.
 
+- 공통 자료의 이미지·시작·옵션·공유 모듈은 `docs/PACKAGES.md`, 로어 배치·조회 유지·새 장면은 `docs/LORE-CONTEXT.md`를 봐요. 조회 문맥은 직전 Run의 유지 항목과 새 성공 읽기만 상속하고 예산 정리로 뺀 과거 읽기를 부활시키지 않아요. 원문 대화 요약에 로어 본문을 섞지 않으며 authored 시작문은 사용자 요청 없는 출처로 보존해요.
+
 - 개인 self-host는 `docs/SELF-HOST.md`, `server/network-policy.ts`(HTTPS origin·Host·Origin·필수 토큰), `server/access-session.ts`(세션·시도 제한), `compose.yaml`과 `deploy/nginx.conf`를 참고해요. 실제 Linux/Docker/휴대폰 검증은 미완료예요.
 
 - 정식 배포 전에는 하위 호환성을 요구하지 않아요. 이전 자료·채팅은 테스트 데이터이며 새 계약을 위해 삭제할 수 있어요. 구형 데이터 보존을 위한 이관·호환 UI·자동 백업을 추가하지 않아요. 현재 실행의 상태·난수·원문 귀속과 취소·중복 처리 규칙은 유지해요.

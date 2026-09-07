@@ -1,3 +1,4 @@
+import { imageCatalogPage, imageMetadata, type ImageMetadata } from './image-catalog.js';
 import { createDefaultPromptProgram } from './prompt-defaults.js';
 import { createHash } from 'node:crypto';
 import { executeTool, type ToolAction } from './provider.js';
@@ -192,7 +193,7 @@ type CatalogEntry = Omit<Resource, 'text' | 'chatId'>;
 export type BlockScene = { anchor: string; actorIds: string[]; clothing: string[]; location: string | null };
 export type AssetEntry = { ref: string; revision: number; hash: string; url: string; alt: string; caption: string; actorId: string | null; clothing: string | null; location: string | null; uses: ('profile' | 'inline')[] };
 export type DisplayAnnotation = { sourceRevision: string; sourceHash: string; kind: 'display-only'; entries: { anchor: string; summary: string; mood: string }[] };
-export type PresentationAnnotation = { sourceRevision: string; sourceHash: string; entries: { blockAnchor: string; assetRef: string; assetRevision: number; presentationIntent: 'inline' | 'profile' }[] };
+export type PresentationAnnotation = { sourceRevision: string; sourceHash: string; entries: { blockAnchor: string; assetRef: string; assetRevision: number; assetHash: string; presentationIntent: 'inline' | 'profile' }[] };
 export type PreviousTranslation = {
   sourceRevision: string; sourceHash: string;
   chunks: { chunkId: string; text: string; truncated: boolean }[];
@@ -202,7 +203,7 @@ export type AuxiliaryInput = {
   sourceRevision: string; sourceHash: string; context: SourceTimeContext & { previousTranslation?: PreviousTranslation };
   catalog: CatalogEntry[]; tools: string[]; results: ToolEvent[]; outputSchema: Record<string, unknown>;
   blocks: { anchor: string; text: string }[]; chunkId?: string; neighborBlocks?: { anchor: string; text: string }[];
-  assets?: AssetEntry[]; scenes?: BlockScene[]; referencePolicy?: string;
+  assets?: ImageMetadata[]; assetPage?: {total: number; nextOffset: number | null}; scenes?: BlockScene[]; referencePolicy?: string;
 };
 const baseInput = (sourceRevision: string, sourceHash: string, context: SourceTimeContext, snapshot: RunSnapshot) => ({
   sourceRevision, sourceHash, context: structuredClone(context), catalog: snapshot.resources.filter(item => item.chatId === snapshot.chatId).map(({ text: _text, chatId: _chatId, ...item }) => item),
@@ -319,9 +320,10 @@ export function sourceScenes(blocks: SourceBlock[], assets: readonly AssetEntry[
 export function presentationInput(source: AuxiliarySource, context: SourceTimeContext, snapshot: RunSnapshot, assets: readonly AssetEntry[] = BUILTIN_ASSETS, scenes = sourceScenes(splitSource(source), assets)): AuxiliaryInput {
   if (source.chatId !== snapshot.chatId) throw new Error('SOURCE_SCOPE_MISMATCH');
   const packages = packageContext(snapshot, 'image');
-  return { ...baseInput(source.id, source.hash, packages ? {...context, packages} : context, snapshot), catalog: [], role: 'presentation', blocks: splitSource(source), assets: structuredClone([...assets]), scenes: structuredClone(scenes), tools: ['assets.search', 'assets.inspect'],
-    contract: 'Select optional existing images for the corresponding source block. Use each block scene independently; do not apply the final scene to all earlier blocks. Assets metadata is an authored description, not a claim that you viewed image bytes. Search/inspect the small host manifest when useful. No suitable image means an empty entries list, which is successful. Return source-bound annotations only; never HTML or rewritten narrative. The host validates source, anchor, asset version and scene compatibility. Image interpretation never changes story canon or state.',
-    outputSchema: { sourceRevision: 'exact input value', sourceHash: 'exact input value', entries: [{ blockAnchor: 'existing source anchor', assetRef: 'existing host manifest ref', assetRevision: 'exact manifest revision', presentationIntent: 'inline or profile' }] },
+  const page = imageCatalogPage(assets);
+  return { ...baseInput(source.id, source.hash, packages ? {...context, packages} : context, snapshot), catalog: [], role: 'presentation', blocks: splitSource(source), assets: page.items, assetPage: {total:page.total,nextOffset:page.nextOffset}, scenes: structuredClone(scenes), tools: ['assets.search', 'assets.inspect'],
+    contract: 'Select optional existing images for the corresponding source block. Choose from the authored names and optional descriptions using the source meaning. Do not require literal actor, clothing or location strings in a block. Assets metadata is an authored description, not a claim that you viewed image bytes. The initial catalog is a bounded page. Use assets.search with offset/limit and follow nextOffset when useful; assets.inspect reads an exact ref. Never invent a name-to-ID mapping. No suitable image means an empty entries list, which is successful. Return source-bound annotations only; never HTML or rewritten narrative. The host validates source, anchor, asset revision/hash and allowed use. Image interpretation never changes story canon or state.',
+    outputSchema: { sourceRevision: 'exact input value', sourceHash: 'exact input value', entries: [{ blockAnchor: 'existing source anchor', assetRef: 'existing host manifest ref', assetRevision: 'exact manifest revision', assetHash: 'exact manifest hash', presentationIntent: 'inline or profile' }] },
   };
 }
 export function validatePresentation(source: AuxiliarySource, output: unknown, assets: readonly AssetEntry[] = BUILTIN_ASSETS, scenes = sourceScenes(splitSource(source), assets), maximum = 4): PresentationAnnotation {
@@ -329,14 +331,13 @@ export function validatePresentation(source: AuxiliarySource, output: unknown, a
   if (!Array.isArray(value.entries) || value.entries.length > maximum) throw new Error('PRESENTATION_LIMIT_INVALID');
   const seen = new Set<string>();
   const entries = value.entries.map(raw => {
-    const item = object(raw); only(item, ['blockAnchor', 'assetRef', 'assetRevision', 'presentationIntent']);
+    const item = object(raw); only(item, ['blockAnchor', 'assetRef', 'assetRevision', 'assetHash', 'presentationIntent']);
     const anchor = textField(item.blockAnchor, 200); const ref = textField(item.assetRef, 200);
-    const selected = assets.find(asset => asset.ref === ref); const scene = scenes.find(scene => scene.anchor === anchor);
+    const candidates = assets.filter(asset => asset.ref === ref); const selected = candidates.length === 1 ? candidates[0] : undefined;
     if (!blocks.some(block => block.anchor === anchor)) throw new Error('ANNOTATION_ANCHOR_INVALID');
-    if (!selected || selected.revision !== item.assetRevision || !['inline', 'profile'].includes(String(item.presentationIntent)) || !selected.uses.includes(item.presentationIntent as 'inline' | 'profile')) throw new Error('ASSET_REFERENCE_INVALID');
+    if (!selected || selected.revision !== item.assetRevision || selected.hash !== item.assetHash || !['inline', 'profile'].includes(String(item.presentationIntent)) || !selected.uses.includes(item.presentationIntent as 'inline' | 'profile')) throw new Error('ASSET_REFERENCE_INVALID');
     if (seen.has(`${anchor}:${ref}`)) throw new Error('DUPLICATE_PRESENTATION'); seen.add(`${anchor}:${ref}`);
-    if (!scene || (selected.actorId && !scene.actorIds.includes(selected.actorId)) || (selected.clothing && !scene.clothing.includes(selected.clothing)) || (selected.location && scene.location !== selected.location)) throw new Error('ASSET_SCENE_MISMATCH');
-    return { blockAnchor: anchor, assetRef: ref, assetRevision: selected.revision, presentationIntent: item.presentationIntent as 'inline' | 'profile' };
+    return { blockAnchor: anchor, assetRef: ref, assetRevision: selected.revision, assetHash: selected.hash, presentationIntent: item.presentationIntent as 'inline' | 'profile' };
   });
   return { sourceRevision: source.id, sourceHash: source.hash, entries };
 }
@@ -344,8 +345,10 @@ export function validatePresentation(source: AuxiliarySource, output: unknown, a
 export type AuxiliaryRequest = (input: AuxiliaryInput, signal?: AbortSignal) => Promise<unknown>;
 export async function executeAuxiliary(input: AuxiliaryInput, snapshot: RunSnapshot, request: AuxiliaryRequest, hooks: {
   signal?: AbortSignal; maxCalls?: number; onInput?: (input: AuxiliaryInput) => void | Promise<void>; onToolEvent?: (event: ToolEvent) => void | Promise<void>;
+  assetCatalog?: readonly AssetEntry[];
   localTools?: { names: readonly string[]; execute: (action: ToolAction) => ToolEvent | {event:ToolEvent;terminalOutput:unknown} };
 } = {}): Promise<{ output: unknown; modelCalls: number; inputs: AuxiliaryInput[]; toolEvents: ToolEvent[] }> {
+  const assetCatalog = structuredClone(hooks.assetCatalog ?? input.assets ?? []);
   const fixedInput = structuredClone(input); const fixedScope = structuredClone(snapshot); const inputs: AuxiliaryInput[] = []; const toolEvents: ToolEvent[] = [];
   const limit = hooks.maxCalls ?? snapshot.settings.maxCalls;
   const check = () => { if (hooks.signal?.aborted) throw Object.assign(new Error('Auxiliary cancelled'), { name: 'AbortError' }); };
@@ -369,14 +372,16 @@ export async function executeAuxiliary(input: AuxiliaryInput, snapshot: RunSnaps
       event = local;
       if (event.callId !== action.callId || event.name !== action.name) throw new Error('TOOL_CALL_INVALID');
     } else if (action.name === 'assets.search' || action.name === 'assets.inspect') {
-      const assets = fixedInput.assets ?? [];
+      const assets = assetCatalog;
       if (action.name === 'assets.search') {
-        if (action.args.query !== undefined && (typeof action.args.query !== 'string' || action.args.query.length > 512)) throw new Error('TOOL_CALL_INVALID');
-        const query = String(action.args.query ?? '').toLocaleLowerCase('en'); const found = assets.filter(asset => JSON.stringify(asset).toLocaleLowerCase('en').includes(query));
-        event = { ...action, args: { query }, result: { items: structuredClone(found), total: found.length }, denied: false };
+        if (Object.keys(action.args).some(key => !['query','offset','limit'].includes(key))) throw new Error('TOOL_CALL_INVALID');
+        const query = action.args.query ?? '', offset = action.args.offset ?? 0, limit = action.args.limit ?? 20;
+        const page = imageCatalogPage(assets, query as string, offset as number, limit as number);
+        event = { ...action, args: {query,offset,limit}, result: page, denied: false };
       } else {
+        if (Object.keys(action.args).some(key => key !== 'ref') || typeof action.args.ref !== 'string' || action.args.ref.length > 200) throw new Error('TOOL_CALL_INVALID');
         const found = assets.find(asset => asset.ref === action.args.ref);
-        event = found ? { ...action, args: { ref: found.ref }, result: { asset: structuredClone(found), bytesProvided: false }, denied: false } : { callId: action.callId, name: action.name, args: {}, result: { code: 'ASSET_UNAVAILABLE' }, denied: true };
+        event = found ? { ...action, args: { ref: found.ref }, result: { asset: imageMetadata(found), bytesProvided: false }, denied: false } : { callId: action.callId, name: action.name, args: {}, result: { code: 'ASSET_UNAVAILABLE' }, denied: true };
       }
     } else event = executeTool(fixedScope, action, hooks.signal, fixedInput.role === 'presentation' ? 'image' : fixedInput.role);
     toolEvents.push(structuredClone(event)); await hooks.onToolEvent?.(structuredClone(event)); check();
@@ -398,7 +403,7 @@ export const scriptedAuxiliary: AuxiliaryRequest = async input => {
   for (const scene of input.scenes ?? []) for (const asset of input.assets ?? []) {
     if (entries.length >= 4) break;
     if ((asset.actorId && !scene.actorIds.includes(asset.actorId)) || (asset.clothing && !scene.clothing.includes(asset.clothing)) || (asset.location && scene.location !== asset.location)) continue;
-    entries.push({ blockAnchor: scene.anchor, assetRef: asset.ref, assetRevision: asset.revision, presentationIntent: asset.uses[0] });
+    entries.push({ blockAnchor: scene.anchor, assetRef: asset.ref, assetRevision: asset.revision, assetHash: asset.hash, presentationIntent: asset.uses[0] });
   }
   return { sourceRevision: input.sourceRevision, sourceHash: input.sourceHash, entries };
 };

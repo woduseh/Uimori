@@ -29,6 +29,11 @@ import { validateContentPackage, validatePackageAttachment, type ContentPackage,
 import { compilePackageAttachment } from '../core/package-runtime.js';
 import { packageBehaviorTables, validatePackageBehaviorArchive, validatePackageBehaviorRunSnapshot } from './package-behavior-archive.js';
 import { branchPackageStates } from './package-behavior-host.js';
+import { assertPackageReferences, resolvePackageModules, resolvePackageProfile, packageHiddenSelection } from './package-features.js';
+import { decodeImage, validateImageBlob, validateImageCatalog, imageCatalog } from './package-images.js';
+import { validateArchivedPackageStart } from './package-start.js';
+import { validateLoreContextPolicy } from '../core/lore-context.js';
+import { validateArchivedLoreContext } from './lore-context-archive.js';
 
 type Row = Record<string, any>;
 const json = JSON.stringify;
@@ -118,6 +123,7 @@ export class ProductStore {
       if (prior && prior.revision !== expected) throw new HttpError(409,'Revision conflict');
       const result: Row & ContentRef = { ...value, id: id ?? randomUUID(), revision: (prior?.revision ?? 0) + 1 };
       if (kind === 'content' && result.package) result.package = validateContentPackage({...result.package,id:result.id,revision:result.revision,title:result.title,description:result.description,body:result.text});
+      if (kind === 'content' && result.package) assertPackageReferences(this,result.package);
       if(isProviderSetting(kind))this.db.prepare('INSERT INTO provider_settings VALUES(?,?,?,?) ON CONFLICT(kind,id) DO UPDATE SET revision=excluded.revision,body=excluded.body').run(kind,result.id,result.revision,json(result));
       else this.db.prepare('INSERT INTO versions VALUES(?,?,?,?)').run(kind,result.id,result.revision,json(result));
       return result;
@@ -190,7 +196,7 @@ export class ProductStore {
   }
   profile(chatId: string): ChatProfile { this.store.chat(chatId); const r = this.db.prepare('SELECT body FROM profiles WHERE chat_id=?').get(chatId) as Row | undefined; return r ? parse(r.body) : defaultProfile(chatId); }
   updateProfile(chatId: string, value: unknown): ChatProfile {
-    const b = record(value); fields(b,['expectedRevision','attachments','creative','routes','image','prompts','promptControls','hiddenStory','packageAttachments','packageValues']); const routes = record(b.routes); fields(routes,['main','translation','status','image']);
+    const b = record(value); fields(b,['expectedRevision','attachments','creative','routes','image','prompts','promptControls','hiddenStory','packageAttachments','packageValues','loreContext']); const routes = record(b.routes); fields(routes,['main','translation','status','image']);
     if (!Array.isArray(b.attachments) || b.attachments.length > 300) throw new HttpError(400,'Invalid attachments');
     const attachments = b.attachments.map(ref); if (new Set(attachments.map(r => r.id)).size !== attachments.length) throw new HttpError(400,'Duplicate attachment');
     for (const r of attachments) this.get('content',r.id,r.revision);
@@ -198,21 +204,23 @@ export class ProductStore {
     const controls = creative(b.creative); const image = boolean(b.image);
     const requestedPrompts = b.prompts === undefined ? undefined : promptRefs(this,b.prompts);
     const requestedControls = b.promptControls === undefined ? undefined : promptControls(this,b.promptControls);
-    const requestedHidden = b.hiddenStory===undefined?undefined:validateHiddenStorySelection(this,b.hiddenStory);
+    const requestedHidden = b.hiddenStory===undefined?undefined:validateHiddenStorySelection(this,b.hiddenStory); let requestedLore; try { requestedLore = b.loreContext===undefined?undefined:validateLoreContextPolicy(b.loreContext); } catch { throw new HttpError(400,'Invalid lore context policy'); }
     return this.store.transaction(() => {
       const prior = this.profile(chatId); if (prior.revision !== number(b.expectedRevision,'profile revision')) throw new HttpError(409,'Profile revision conflict');
       const packageAttachments=b.packageAttachments===undefined?prior.packageAttachments:packageRefs(this,b.packageAttachments);
       validateAttachmentRoles(this,attachments,packageAttachments);
-      const allowedPackageKeys=new Set((packageAttachments??[]).map(packageControlKey));
+      const resolvedPackages=resolvePackageModules(this,packageAttachments??[]);
+      const allowedPackageKeys=new Set(resolvedPackages.attachments.map(packageControlKey));
       const inheritedPackageValues=prior.packageValues===undefined?undefined:Object.fromEntries(Object.entries(prior.packageValues).filter(([key])=>allowedPackageKeys.has(key)));
       const requestedPackageValues=b.packageValues===undefined?inheritedPackageValues:b.packageValues;
-      const packageValues=requestedPackageValues===undefined?undefined:packageControlValues(this,packageAttachments??[],requestedPackageValues);
+      const packageValues=requestedPackageValues===undefined?undefined:packageControlValues(this,resolvedPackages.attachments,requestedPackageValues);
       this.store.organization.assertBotAttachments(chatId,attachments,packageAttachments);
       for (const role of ['main','translation','status','image'] as const) assertModelSelection(this,selected[role],prior.routes[role]);
       const prompts = requestedPrompts === undefined ? prior.prompts : {...prior.prompts,...requestedPrompts};
       const savedControls = requestedControls === undefined ? prior.promptControls : {...prior.promptControls,...requestedControls};
       const hiddenStory=requestedHidden??prior.hiddenStory;
-      const result: ChatProfile = { chatId, revision: prior.revision+1, attachments, creative: controls, routes: selected, image, ...(prompts !== undefined ? {prompts} : {}), ...(savedControls!==undefined?{promptControls:savedControls}:{}),...(hiddenStory?{hiddenStory}:{}),...(packageAttachments!==undefined?{packageAttachments}:{}),...(packageValues!==undefined?{packageValues}:{}) };
+      const result: ChatProfile = { ...(requestedLore??prior.loreContext ? {loreContext:requestedLore??prior.loreContext} : {}), chatId, revision: prior.revision+1, attachments, creative: controls, routes: selected, image, ...(prompts !== undefined ? {prompts} : {}), ...(savedControls!==undefined?{promptControls:savedControls}:{}),...(hiddenStory?{hiddenStory}:{}),...(packageAttachments!==undefined?{packageAttachments}:{}),...(packageValues!==undefined?{packageValues}:{}) };
+      packageHiddenSelection(this,result,resolvedPackages);
       this.db.prepare('INSERT INTO profiles VALUES(?,?) ON CONFLICT(chat_id) DO UPDATE SET body=excluded.body').run(chatId,json(result)); this.store.event(chatId,'profile.updated',chatId); return result;
     });
   }
@@ -223,7 +231,7 @@ export class ProductStore {
     const p = this.profile(chatId); const contents = p.attachments.map(r => this.get<Content>('content',r.id,r.revision));
     const models: ProfileSnapshot['models'] = {};
     for (const role of ['main','translation','status','image'] as const) { const r = p.routes[role]; if (r) models[role]=this.modelSnapshot(r.id); }
-    return structuredClone({...p,contents,models,...(p.packageAttachments!==undefined?{packages:p.packageAttachments.map(r=>this.get<Content>('content',r.id,r.revision).package!)}:{}),...(p.prompts !== undefined ? {promptPresets:resolvedPrompts(this,p.prompts)} : {})});
+    return structuredClone({...p,contents,models,...resolvePackageProfile(this,p),...(p.prompts !== undefined ? {promptPresets:resolvedPrompts(this,p.prompts)} : {})});
   }
   resolveJobPrompt(snapshot: RunSnapshot, input: unknown): RunSnapshot {
     const resolved = structuredClone(snapshot);
@@ -279,14 +287,13 @@ export class ProductStore {
   asset(id: string) { const r = this.db.prepare('SELECT body,bytes FROM assets WHERE id=?').get(id) as Row | undefined; if (!r) throw new HttpError(404,'Asset not found'); return { asset:parse(r.body) as Asset,bytes:Buffer.from(r.bytes) }; }
   createAsset(chatId: string, value: unknown) {
     this.store.chat(chatId); const b = record(value); fields(b,['title','mime','base64','description','actor','outfit','location','allowedUse']);
-    const mime = choice(b.mime,['image/png','image/jpeg'],'image type'); const base64 = text(b.base64,'image',3e6); if (!/^[A-Za-z0-9+/]+={0,2}$/.test(base64)) throw new HttpError(400,'Invalid image encoding'); const bytes = Buffer.from(base64,'base64');
-    if (bytes.length > 2e6 || (mime === 'image/png' ? !bytes.subarray(0,8).equals(Buffer.from([137,80,78,71,13,10,26,10])) : bytes.length < 4 || bytes[0] !== 255 || bytes[1] !== 216 || bytes.at(-2) !== 255 || bytes.at(-1) !== 217)) throw new HttpError(400,'Invalid image bytes');
+    const {mime,bytes} = decodeImage(b.mime,b.base64);
     const id = randomUUID(); const result: Asset = {id,chatId,revision:1,title:text(b.title,'title',200),mime,hash:createHash('sha256').update(bytes).digest('hex'),description:text(b.description,'description',2000,true),actor:text(b.actor,'actor',200,true),outfit:text(b.outfit,'outfit',200,true),location:text(b.location,'location',200,true),allowedUse:choice(b.allowedUse,['profile','inline','both'],'asset use'),url:`/api/assets/${id}`};
     this.db.prepare('INSERT INTO assets VALUES(?,?,?,?)').run(id,chatId,json(result),bytes); return result;
   }
   library(summary = false): Library {
     // Project inside SQLite so large bodies never cross into JS for list requests.
-    const contents = summary ? (this.db.prepare("SELECT json_set(json_remove(v.body,'$.package'),'$.text','') AS body, json_type(v.body,'$.package') AS packaged FROM versions v WHERE kind='content' AND revision=(SELECT MAX(revision) FROM versions n WHERE n.kind=v.kind AND n.id=v.id) ORDER BY id").all() as Row[]).map(r => ({...parse(r.body),...(r.packaged?{hasPackage:true}:{})})) : this.all('content');
+    const contents = summary ? (this.db.prepare("SELECT json_set(json_remove(v.body,'$.package'),'$.text','') AS body, json_type(v.body,'$.package') AS packaged, (SELECT image.value FROM json_each(v.body,'$.package.images') image WHERE json_extract(image.value,'$.id')=json_extract(v.body,'$.package.portraitImageId') LIMIT 1) AS portrait FROM versions v WHERE kind='content' AND revision=(SELECT MAX(revision) FROM versions n WHERE n.kind=v.kind AND n.id=v.id) ORDER BY id").all() as Row[]).map(r => ({...parse(r.body),...(r.packaged?{hasPackage:true}:{}),...(r.portrait?{coverImage:{url:`/api/package-image-blobs/${parse(r.portrait).blobHash}`,title:parse(r.portrait).title}}:{})})) : this.all('content');
     return {...(summary ? {contentBodiesOmitted:true,assetsOmitted:true} : {}),promptPresets:this.all('prompt-preset'),promptCombinations:this.all('prompt-combination'),contents,presets:this.all('preset'),connections:this.all('connection'),models:this.all('model'),assets:summary ? [] : this.assets()};
   }
   export() { const tables = Object.fromEntries(archiveTables.map(t => [t,(this.db.prepare(`SELECT * FROM ${t}`).all() as Row[]).map(r => t === 'assets' ? {...r,bytes:Buffer.from(r.bytes).toString('base64')} : r)])); return {format:'narrative-archive',version:9,createdAt:new Date().toISOString(),tables}; }
@@ -394,6 +401,7 @@ function validateArchiveVersion(row: Row, providerSetting=false) {
   const body = record(parse(row.body)); archiveId(row.id); number(row.revision,'version');
   if (body.id !== row.id || body.revision !== row.revision) throw new HttpError(400,'Version identity mismatch');
   if(row.kind==='registration-run'){validateRegistrationArchive(body);return;}
+  if(row.kind==='package-image'){validateImageBlob(body);return;}
   text(body.title,'title',200);
   if (row.kind === 'content') {
     fields(body,['id','revision','kind','title','description','text','loading','relatedIds','package']); choice(body.kind,['bot','persona','module','lore','canon','skill','glossary'],'content kind');
@@ -429,14 +437,13 @@ function validateArchiveAsset(row: Row) {
   archiveId(row.id); archiveId(row.chat_id); if (body.id !== row.id || body.chatId !== row.chat_id) throw new HttpError(400,'Asset identity mismatch');
   if (BUILTIN_ASSETS.some(asset => asset.ref === row.id)) throw new HttpError(400,'Reserved host asset ID');
   number(body.revision,'asset revision'); text(body.title,'asset title',200); text(body.description,'asset description',2000,true); for (const key of ['actor','outfit','location']) text(body[key],key,200,true);
-  choice(body.allowedUse,['profile','inline','both'],'asset use'); const mime = choice(body.mime,['image/png','image/jpeg'],'asset MIME');
-  const encoded = text(row.bytes,'asset bytes',3e6); if (!/^[A-Za-z0-9+/]+={0,2}$/.test(encoded)) throw new HttpError(400,'Invalid asset encoding'); const bytes = Buffer.from(encoded,'base64');
-  if (bytes.length > 2e6 || (mime === 'image/png' ? !bytes.subarray(0,8).equals(Buffer.from([137,80,78,71,13,10,26,10])) : bytes.length < 4 || bytes[0] !== 255 || bytes[1] !== 216 || bytes.at(-2) !== 255 || bytes.at(-1) !== 217)) throw new HttpError(400,'Invalid asset bytes');
+  choice(body.allowedUse,['profile','inline','both'],'asset use'); const {bytes}=decodeImage(body.mime,row.bytes);
   if (createHash('sha256').update(bytes).digest('hex') !== body.hash) throw new HttpError(400,'Asset hash mismatch');
   body.url = `/api/assets/${encodeURIComponent(row.id)}`; row.body = json(body);
 }
 function validateArchiveProfile(product: ProductStore, value: unknown, chatId: string, frozen = false): ProfileSnapshot | ChatProfile {
-  const p = record(value); fields(p,['chatId','revision','attachments','creative','routes','image','prompts','promptControls','hiddenStory','packageAttachments','packageValues',...(frozen ? ['contents','models','promptPresets','packages'] : [])]);
+  const p = record(value); fields(p,['chatId','revision','attachments','creative','routes','image','prompts','promptControls','hiddenStory','packageAttachments','packageValues','loreContext',...(frozen ? ['contents','models','promptPresets','packages'] : [])]);
+  if(p.loreContext!==undefined)validateLoreContextPolicy(p.loreContext);
   if (p.chatId !== chatId) throw new HttpError(400,'Profile chat mismatch'); number(p.revision,'profile revision'); creative(p.creative); boolean(p.image);
   const attachments = archiveList(p.attachments).map(ref); if (new Set(attachments.map(r => r.id)).size !== attachments.length) throw new HttpError(400,'Duplicate attachment');
   const contents = attachments.map(r => product.get<Content>('content',r.id,r.revision)); const routes = record(p.routes); fields(routes,['main','translation','status','image']);
@@ -451,9 +458,13 @@ function validateArchiveProfile(product: ProductStore, value: unknown, chatId: s
   const prompts = p.prompts === undefined ? undefined : promptRefs(product,p.prompts); if(p.promptControls!==undefined)promptControls(product,p.promptControls);if(p.hiddenStory!==undefined)validateHiddenStorySelection(product,p.hiddenStory);
   const promptPresets = prompts === undefined ? undefined : resolvedPrompts(product,prompts);
   const packageAttachments=p.packageAttachments===undefined?undefined:packageRefs(product,p.packageAttachments);
-  if(p.packageValues!==undefined)packageControlValues(product,packageAttachments??[],p.packageValues);
+  const resolvedPackages=resolvePackageModules(product,packageAttachments??[]);
+  const effectiveHidden=packageHiddenSelection(product,p as ChatProfile,resolvedPackages);
+  if(frozen&&!isDeepStrictEqual(p.hiddenStory,effectiveHidden))throw new HttpError(400,'Frozen package Hidden Story mismatch');
+  if(p.packageValues!==undefined)packageControlValues(product,resolvedPackages.attachments,p.packageValues);
   validateAttachmentRoles(product,attachments,packageAttachments);
-  const packages=packageAttachments?.map(r=>product.get<Content>('content',r.id,r.revision).package!);
+  const packages=packageAttachments===undefined?undefined:resolvedPackages.packages;
+  if(frozen&&packageAttachments!==undefined&&!isDeepStrictEqual(packageAttachments,resolvedPackages.attachments))throw new HttpError(400,'Frozen module dependency mismatch');
   if(frozen&&!isDeepStrictEqual(p.packages,packages))throw new HttpError(400,'Frozen package revision mismatch');
   if (frozen && !isDeepStrictEqual(p.promptPresets,promptPresets)) throw new HttpError(400,'Frozen prompt revision mismatch');
   if (frozen && (!isDeepStrictEqual(p.contents,contents) || !isDeepStrictEqual(p.models,models))) throw new HttpError(400,'Frozen profile revision mismatch');
@@ -472,6 +483,7 @@ export function validateStoredChunk(plan: TranslationPlan, raw: unknown): Transl
   const validated = validateTranslationChunk(plan,chunk.id,restored); if (!isDeepStrictEqual(validated,value)) throw new HttpError(400,'Stored translation mismatch'); return validated;
 }
 function validateArchiveGraph(product: ProductStore) {
+  for(const row of product.db.prepare("SELECT body FROM versions WHERE kind='content'").all() as Row[]){const content=JSON.parse(row.body);if(content.package)assertPackageReferences(product,content.package);}
   for(const saved of product.all('prompt-combination')){const r=ref(saved.prompt);const preset=product.get<PromptPreset>('prompt-preset',r.id,r.revision);if(!preset.program)throw new HttpError(400,'Creative preset prompt missing controls');resolvePromptValues(preset.program,record(saved.values));}
   const db = product.db; const rows = (table: string) => db.prepare(`SELECT * FROM ${table}`).all() as Row[];
   const chats = new Map(rows('chats').map(row => [archiveId(row.id),row])); const sources = new Map(rows('sources').map(row => [archiveId(row.id),row]));
@@ -517,11 +529,14 @@ function validateArchiveGraph(product: ProductStore) {
     }
     validatePackageBehaviorRunSnapshot(product.store,snapshot as RunSnapshot);
     if (snapshot.profile) { const profile = validateArchiveProfile(product,snapshot.profile,run.chat_id,true) as ProfileSnapshot; if (!isDeepStrictEqual(resources,[...product.resources(run.chat_id,profile),...nativeResources(run.chat_id,snapshot.nativeBot)])) throw new HttpError(400,'Snapshot resource revision mismatch'); }
+    validateArchivedPackageStart(product.store,product.store.run(run.id),snapshot as RunSnapshot);
+    validateArchivedLoreContext(product.store,snapshot as RunSnapshot);
   }
   for (const job of jobs.values()) {
     sameChat(job.source_revision,job.chat_id,sources); const source = product.store.sourceAtHash(job.source_revision,job.source_hash); const jobInput = parse(job.input);
     if (jobInput && typeof jobInput === 'object' && !Array.isArray(jobInput) && (Object.hasOwn(jobInput,'promptSelection')||Object.hasOwn(jobInput,'translationModelSelection')||Object.hasOwn(jobInput,'promptControlSelection')) && job.kind !== 'translation') throw new HttpError(400,'Prompt selection requires a translation job');
     const snapshot = product.resolveJobPrompt(product.store.run(source.runId).snapshot,jobInput);
+    if(job.kind==='image'&&job.status!=='stale')validateImageCatalog(product.store,job.chat_id,jobInput);
     if (job.source_hash !== source.hash) throw new HttpError(400,'Job source hash mismatch'); choice(job.kind,['translation','status','image'],'job kind'); choice(job.status,['completed','failed','partial','cancelled','interrupted','stale'],'job status'); number(job.generation,'job generation',0); number(job.revision,'job revision');
     const resultRow = db.prepare('SELECT * FROM job_results WHERE job_id=?').get(job.id) as Row | undefined; const result = resultRow ? record(parse(resultRow.result)) : null;
     if (result && (result.sourceRevision !== source.id || result.sourceHash !== source.hash || typeof result.mock !== 'boolean' || resultRow!.generation > job.generation)) throw new HttpError(400,'Job result dependency mismatch');
@@ -545,8 +560,9 @@ function validateArchiveGraph(product: ProductStore) {
       }
     } else if (chunks.length) throw new HttpError(400,'Chunk plan missing');
     if (result && job.kind === 'image') {
-      const assets = [...BUILTIN_ASSETS,...product.assets(job.chat_id).map(a => ({ref:a.id,revision:a.revision,hash:a.hash,url:a.url,alt:a.title,caption:a.description,actorId:a.actor,clothing:a.outfit,location:a.location,uses:a.allowedUse === 'both' ? ['profile' as const,'inline' as const] : [a.allowedUse]}))];
-      const entries = archiveList(result.annotations,4).map(raw => { const entry = record(raw); fields(entry,['blockAnchor','assetRef','assetRevision','presentationIntent','caption']); const {caption:_caption,...annotation} = entry; return annotation; });
+      validateImageCatalog(product.store,job.chat_id,jobInput);
+      const assets = imageCatalog(jobInput);
+      const entries = archiveList(result.annotations,4).map(raw => { const entry = record(raw); fields(entry,['blockAnchor','assetRef','assetRevision','assetHash','presentationIntent','caption']); const {caption:_caption,...annotation} = entry; return annotation; });
       validatePresentation(source,{sourceRevision:source.id,sourceHash:source.hash,entries},assets);
     }
     if (result && job.kind === 'status' && result.display) validateDisplayAnnotation(source,{sourceRevision:source.id,sourceHash:source.hash,kind:'display-only',entries:result.display});

@@ -33,6 +33,25 @@ export function measureMainContext(snapshot:RunSnapshot):{snapshot:RunSnapshot;e
     throw error;
   }
 }
+/** Called on a history-free feasibility projection. Remove only retained reads,
+ * so long raw conversations alone cannot evict otherwise affordable references. */
+export function fitFixedLoreContext(snapshot:RunSnapshot):RunSnapshot {
+  const context=snapshot.loreContext,limit=snapshot.contextPlan?.budget.inputTokenLimit;
+  if(!context?.entries.length||!limit||measureMainContext(snapshot).estimatedInputTokens<=limit*.85)return snapshot;
+  let fitted=structuredClone(snapshot);
+  delete fitted.promptCompilation;
+  const lore=fitted.loreContext!,ancestry=fitted.history.map(source=>source.revision);
+  do {
+    let oldest=0;
+    for(let index=1;index<lore.entries.length;index++)if(ancestry.indexOf(lore.entries[index]!.lastUsed)<ancestry.indexOf(lore.entries[oldest]!.lastUsed))oldest=index;
+    lore.entries.splice(oldest,1);
+    lore.stats.droppedEntries++;
+    lore.stats.retainedEntries=lore.entries.length;
+    lore.stats.retainedChars=lore.entries.reduce((sum,entry)=>sum+entry.text.length,0);
+    if(!lore.stats.reasons.includes('overall-context-budget'))lore.stats.reasons.push('overall-context-budget');
+  } while(lore.entries.length&&measureMainContext(fitted).estimatedInputTokens>limit*.75);
+  return fitted;
+}
 export function validateContextPlan(snapshot:RunSnapshot):void {
   const plan=snapshot.contextPlan;if(!plan)return;
   const keys=['version','status','budget','dependencyKey','estimatedInputTokens','compacted','recentSourceRevisions','summary','summaryCalls','usage','error'];

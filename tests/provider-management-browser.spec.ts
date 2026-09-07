@@ -70,6 +70,12 @@ test('PMUI04 a delayed readiness response cannot replace the currently selected 
 
 test('PMUI07 quick setup selects a cached catalog model and keeps drafts across workspace pages',async({page,request},info)=>{
   const observed=observe(page);
+  const catalogSnapshots=new Map<string,Pick<Connection,'catalog'|'catalogError'|'catalogUpdatedAt'>>();
+  await page.route(/\/api\/library(?:\?.*)?$/u,async route=>{
+    const response=await route.fetch(),body=await response.json() as Library;
+    body.connections=body.connections.map(connection=>({...connection,...catalogSnapshots.get(connection.id)}));
+    await route.fulfill({response,json:body});
+  });
   for(const width of [390,1440]) {
     await page.setViewportSize({width,height:width===390?844:1000});await settings(page);
     const title=`PMUI07 ${width} ${Date.now()}`,form=page.getByRole('form',{name:'연결 편집 양식'}),modelForm=page.getByRole('form',{name:'모델 편집 양식'});
@@ -81,8 +87,8 @@ test('PMUI07 quick setup selects a cached catalog model and keeps drafts across 
     await form.getByRole('button',{name:'연결 등록',exact:true}).click();await expect(modelForm).toBeVisible();
     const connection=(await library(request)).connections.find(item=>item.title===title)!;expect(connection).toBeTruthy();
     const catalog=[{id:'synthetic/catalog-alpha',name:title+' Alpha',capabilities:{},priceRevision:null},{id:'synthetic/catalog-beta',name:title+' Beta',capabilities:{},priceRevision:null}];let catalogRequests=0;
-    // Return synthetic catalog data at the app route; never contact any provider.
-    await page.route(`**/api/connections/${connection.id}/catalog`,route=>{catalogRequests++;return route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({...connection,catalog,catalogError:null,catalogUpdatedAt:'2026-09-07T00:00:00.000Z'})});});
+    // The real catalog route saves before reloading the library; mirror that read view without contacting a provider.
+    await page.route(`**/api/connections/${connection.id}/catalog`,route=>{catalogRequests++;const snapshot={catalog,catalogError:null,catalogUpdatedAt:'2026-09-07T00:00:00.000Z'};catalogSnapshots.set(connection.id,snapshot);return route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({...connection,...snapshot})});});
     await modelForm.getByText('연결 준비 상태와 목록 새로고침',{exact:true}).click();await modelForm.getByRole('button',{name:'모델 목록 새로고침',exact:true}).click();await modelForm.getByLabel('모델 목록 검색').fill('catalog-beta');
     const picker=modelForm.getByRole('region',{name:'저장된 모델 목록에서 선택'});await expect(picker.getByRole('button')).toHaveCount(1);await picker.getByRole('button',{name: new RegExp(title+' Beta')}).click();
     await expect(modelForm.getByLabel('모델 프리셋 이름')).toHaveValue(title+' Beta');await expect(modelForm.getByLabel('모델 ID',{exact:true})).toHaveValue('synthetic/catalog-beta');
@@ -171,7 +177,9 @@ test('PMUI11 reviewed provider options are visible and round-trip without genera
       await form.getByRole('button',{name:'생성 설정',exact:true}).click();
     }
     expect(await page.getByRole('dialog',{name:'설정',exact:true}).evaluate(node=>node.scrollWidth<=node.clientWidth+1)).toBe(true);
-    await form.screenshot({path:info.outputPath(`provider-parameters-${index}-mobile.png`)});await form.getByRole('button',{name:'모델 프리셋 등록',exact:true}).click();
+    await form.screenshot({path:info.outputPath(`provider-parameters-${index}-mobile.png`)});
+    if(item.choices['캐시 방식']){await form.getByLabel('캐시 방식',{exact:true}).scrollIntoViewIfNeeded();await page.screenshot({path:info.outputPath(`provider-cache-${index}-mobile.png`)});}
+    await form.getByRole('button',{name:'모델 프리셋 등록',exact:true}).click();
     await expect.poll(async()=>(await library(request)).models.find(model=>model.title===title)).toMatchObject({modelId:item.modelId,...item.saved});
     const saved=(await library(request)).models.find(model=>model.title===title)!;for(const key of item.absent)expect(saved).not.toHaveProperty(key);expect(connection).not.toHaveProperty('requestTier');
     await page.getByRole('button',{name:title+' 모델 수정',exact:true}).click();await form.getByRole('button',{name:'생성 설정',exact:true}).click();

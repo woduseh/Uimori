@@ -1,4 +1,5 @@
 import { createHash, randomUUID } from 'node:crypto';
+import { forkImageInput } from './package-images.js';
 import { isDeepStrictEqual } from 'node:util';
 import { splitSource, createTranslationPlan, validateTranslationPlan, aggregateTranslation, type TranslationPlan, type TranslationResult } from '../core/auxiliary.js';
 import type { Resource, RunSnapshot } from '../core/types.js';
@@ -12,6 +13,8 @@ import { nativeResources } from '../core/native-context.js';
 import { compileSnapshotPrompt } from './prompt-snapshot.js';
 import { copyStoryFork } from './story-archive.js';
 import { copyPackageFork } from './package-behavior-host.js';
+import { historicalRunLoreReads } from './lore-context-archive.js';
+import type { RetainedLore } from '../core/lore-context.js';
 
 type Row = Record<string, any>;
 const json = JSON.stringify;
@@ -58,6 +61,17 @@ export function forkChat(store: Store, chatId: string, value: unknown): Chat {
     for(const resource of [...localResources,...[...originalRuns.values()].filter(run=>!run.snapshot.profile).flatMap(run=>run.snapshot.resources)]){
       if(!resourceIds.has(resource.id))resourceIds.set(resource.id,randomUUID());
     }
+    // Preserve proven historical reads; current source/ancestor/canon checks still govern later reuse.
+    const originalLoreReads=new Map([...originalRuns].map(([runId,run])=>[runId,historicalRunLoreReads(store,run)]));
+    const loreEntry=(entry:RetainedLore):RetainedLore=>{
+      const originSource=sourceIds.get(entry.origin.sourceRevision),originRun=runIds.get(entry.origin.runId),lastUsed=sourceIds.get(entry.lastUsed);
+      if(!originSource||!originRun||!lastUsed)throw new HttpError(400,'Invalid fork lore ancestry');
+      return {...structuredClone(entry),id:resourceIds.get(entry.id)??entry.id,origin:{...entry.origin,sourceRevision:originSource,runId:originRun},lastUsed};
+    };
+    const loreDependencies=(items:{sourceRevision:string;sourceHash:string}[])=>items.map(item=>{
+      const sourceRevision=sourceIds.get(item.sourceRevision);if(!sourceRevision)throw new HttpError(400,'Invalid fork lore dependency');
+      return {...item,sourceRevision};
+    });
     const resource=(value:Resource):Resource=>({...structuredClone(value),chatId:id,id:resourceIds.get(value.id) ?? value.id,
       ...(value.relatedIds ? {relatedIds:value.relatedIds.map(reference=>resourceIds.get(reference) ?? reference)} : {})});
     const assetIds=new Map(store.product.assets(chatId).map(asset=>[asset.id,randomUUID()]));
@@ -86,6 +100,8 @@ export function forkChat(store: Store, chatId: string, value: unknown): Chat {
         history:run.snapshot.history.map(item=>({...item,revision:sourceIds.get(item.revision)!})),
         forkedFrom:{chatId,runId:run.id,sourceRevision:original.id}};
       delete snapshot.candidateOf;
+      delete snapshot.forkedLoreReads;
+      if(snapshot.loreContext)snapshot.loreContext={...snapshot.loreContext,dependencies:loreDependencies(snapshot.loreContext.dependencies),entries:snapshot.loreContext.entries.map(loreEntry)};
       mapNativeForkSnapshot(snapshot,id,branchId,sourceIds,runIds);
       if(snapshot.profile){
         snapshot.profile.chatId=id;
@@ -118,7 +134,7 @@ export function forkChat(store: Store, chatId: string, value: unknown): Chat {
         if(job.source_hash!==original.hash)continue;
         if(job.kind==='translation'){if(latestTranslation(store,original.id)?.id!==job.id)continue;validateTranslationArtifact(store,store.job(job.id),original);}
         const jobId=randomUUID(); const oldInput=parse(job.input);
-        const input=job.kind==='translation'&&oldInput?structuredClone(Object.fromEntries(['promptSelection','promptControlSelection','translationModelSelection','translationModelSnapshot'].filter(key=>Object.hasOwn(oldInput,key)).map(key=>[key,oldInput[key]]))):null;
+        const input=job.kind==='image' ? forkImageInput(oldInput,assetIds) : job.kind==='translation'&&oldInput?structuredClone(Object.fromEntries(['promptSelection','promptControlSelection','translationModelSelection','translationModelSnapshot'].filter(key=>Object.hasOwn(oldInput,key)).map(key=>[key,oldInput[key]]))):null;
         const resolved=store.product.resolveJobPrompt(snapshot,input);
         const result=artifact(parse(job.result));
         if(result.sourceRevision!==sourceId||result.sourceHash!==original.hash)throw new HttpError(400,'Invalid completed fork result');
@@ -146,12 +162,37 @@ export function forkChat(store: Store, chatId: string, value: unknown): Chat {
     copyStoryFork(store,chatId,id,sourceIds,runIds);
     copyNativeFork(store,chatId,id,fromRevision,sourceIds);
     copyPackageFork(store,id,branchId,sourceIds,head);
-    for(const copiedId of runIds.values()){
-      const copied=store.run(copiedId);
-      if(copied.snapshot.contextPlan)copied.snapshot.contextPlan.dependencyKey=contextDependencyKey(copied.snapshot);
-      const snapshot=compileSnapshotPrompt({...copied.snapshot,promptCompilation:undefined});
+    const canonHashes=new Map<string,string>();
+    for(const original of originalRuns.values()){
+      const canon=original.snapshot.loreContext?.canonHash;if(!canon)continue;
+      const current=store.story.memory.canonHash(store.story.memory.scope(chatId,original.parentRevision));
+      if(canon===current){
+        const copied=store.run(runIds.get(original.id)!);
+        canonHashes.set(canon,store.story.memory.canonHash(store.story.memory.scope(id,copied.parentRevision)));
+      }
+    }
+    const loreCanon=(old:string)=>canonHashes.get(old)??createHash('sha256').update(json(['forked-stale-lore-canon-v1',id,old])).digest('hex');
+    for(const [oldId,copiedId] of runIds){
+      const copied=store.run(copiedId);let snapshot=copied.snapshot;
+      if(snapshot.loreContext){
+        snapshot.loreContext={...snapshot.loreContext,canonHash:loreCanon(snapshot.loreContext.canonHash)};
+        const entries=originalLoreReads.get(oldId)!.map(loreEntry);
+        if(entries.length)snapshot.forkedLoreReads={version:1,canonHash:snapshot.loreContext.canonHash,dependencies:structuredClone(snapshot.loreContext.dependencies),entries};
+      }
+      if(snapshot.contextPlan)snapshot.contextPlan.dependencyKey=contextDependencyKey(snapshot);
+      snapshot=compileSnapshotPrompt({...snapshot,promptCompilation:undefined});
       if(snapshot.contextPlan?.status==='ready')snapshot.contextPlan.estimatedInputTokens=measureMainContext(snapshot).estimatedInputTokens;
       store.db.prepare('UPDATE runs SET snapshot=? WHERE id=?').run(json(snapshot),copiedId);
+    }
+    // These are inherited main-context fields, not state/memory tool authority or execution logs.
+    // Reuse the remapped main metadata so cached lore references cannot retain original identities.
+    for(const row of store.db.prepare('SELECT id,source_revision,snapshot FROM story_jobs WHERE chat_id=?').all(id) as Row[]){
+      const snapshot=parse(row.snapshot) as RunSnapshot,main=store.run(store.sourceOriginal(row.source_revision).runId).snapshot;
+      for(const field of ['loreContext','loreContextReset','forkedLoreReads','logicalHistory','promptCompilation'] as const){
+        delete snapshot[field];
+        if(main[field]!==undefined)Object.assign(snapshot,{[field]:structuredClone(main[field])});
+      }
+      store.db.prepare('UPDATE story_jobs SET snapshot=? WHERE id=?').run(json(snapshot),row.id);
     }
     store.event(id,'chat.forked',command);
     return store.chat(id);

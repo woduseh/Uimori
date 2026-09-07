@@ -1,5 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { compileSnapshotPrompt, captureLogicalHistory } from './prompt-snapshot.js';
+import { freezeLoreContext } from './lore-context.js';
 import { isDeepStrictEqual } from 'node:util';
 import { HttpError, type Store, type Source, type Run } from './store.js';
 import { fields, record, text, number } from './product-store.js';
@@ -280,7 +281,7 @@ export class StoryStore {
           this.db.prepare("UPDATE runs SET status='failed',error='대기 중 원문 또는 작가 설정이 변경됐어요. 새 요청이 필요해요.',updated_at=? WHERE id=?").run(now(),run.id); this.finishCommandInTransaction(run.id,'failed'); this.store.event(run.chatId,'run.failed',run.id); continue;
         }
         const state = this.stateAt(run.chatId,run.parentRevision,story.config); if (!state) continue;
-        const snapshot = compileSnapshotPrompt({...run.snapshot,story:{...story,state,waiting:false}});
+        const snapshot = compileSnapshotPrompt(freezeLoreContext(this.store,{...run.snapshot,story:{...story,state,waiting:false}}));
         this.db.prepare("UPDATE runs SET status='queued',snapshot=?,updated_at=? WHERE id=? AND status='waiting_for_state'").run(json(snapshot),now(),run.id);
         this.store.event(run.chatId,'run.queued',run.id); ready.push(run.id);
       }

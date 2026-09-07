@@ -5,6 +5,7 @@ import { executeStoryRead, STORY_READ_NAMES } from './story-context.js';
 import { nativeInstructions } from './native-context.js';
 import { hiddenHistoryForRequest, hiddenMemoryPlanForRequest } from './hidden-context.js';
 import { compiledPackages, packageContext } from './package-context.js';
+import { DEFAULT_LORE_CONTEXT, type LorePlacement } from './lore-context.js';
 import { listBehaviorTools } from './package-behavior-tools.js';
 
 // These are host permissions, never instructions read from a content package.
@@ -14,7 +15,7 @@ const PINNED_FACTS = Object.freeze(['The fictional scene starts at Lantern Harbo
 const metadata = ({ text: _text, chatId: _chatId, ...item }: Resource) => item;
 const scopedMetadata = (item: Resource, allowedIds: Set<string>) => ({ ...metadata(item), ...(item.relatedIds ? { relatedIds: item.relatedIds.filter(id => allowedIds.has(id)) } : {}) });
 const hash = (text: string) => createHash('sha256').update(text).digest('hex');
-function roleResources(snapshot: RunSnapshot, role: 'main' | 'translation' | 'status' | 'image' = 'main') {
+export function roleResources(snapshot: RunSnapshot, role: 'main' | 'translation' | 'status' | 'image' = 'main') {
   const resources = snapshot.resources.filter(item => item.chatId === snapshot.chatId && !(snapshot.profile?.packageAttachments?.length && item.id.startsWith('package:')) && (role !== 'main' || (item.sourceKind !== 'glossary' && !(item.sourceKind === 'persona' && snapshot.profile?.creative.personaReference === false))));
   if (role === 'translation') {
     const ids = new Set(resources.map(item => item.id));
@@ -31,11 +32,22 @@ function roleResources(snapshot: RunSnapshot, role: 'main' | 'translation' | 'st
 export type MainInput = ModelInput & {
   contextSummary?: string;
   controls?: ReturnType<typeof compileCreative>;
-  pinnedSources?: { id: string; revision: number; kind: string; hash: string; text: string }[];
+  pinnedSources?: { id: string; revision: number; kind: string; hash: string; text: string; loreContext?: LorePlacement }[];
   state?: { values: import('./state.js').StateValues; sourceRevision:string|null; moduleRevision:number; constraints:import('./state.js').StateModule };
   memory?: Omit<import('./memory.js').MemoryContextPlan,'recentHistory'>;
   catalogPage?: {total:number;listed:number;remaining:string};
 };
+/** Slot bodies and fallback suppression share this exact source selection. */
+export function pinnedSlotSources(input: MainInput, slot: string): NonNullable<MainInput['pinnedSources']> {
+  const sources = input.pinnedSources ?? [];
+  if (slot === 'references') return sources;
+  if (slot === 'backgroundLore') return sources.filter(item => item.loreContext?.placement !== 'scene');
+  if (slot === 'sceneLore') return sources.filter(item => item.loreContext?.placement === 'scene');
+  if (slot === 'bot' || slot === 'description') return sources.filter(item => item.kind === 'bot');
+  if (slot === 'persona') return sources.filter(item => item.kind === 'persona');
+  if (slot === 'lore' || slot === 'lorebook') return sources.filter(item => !['bot', 'persona', 'instruction'].includes(item.kind));
+  return [];
+}
 /** Fixed contract, provenance-bearing pinned content, catalog and observed reads stay separate. */
 export function buildMainInput(snapshot: RunSnapshot, results: readonly ToolEvent[] = []): MainInput {
   const resources = roleResources(snapshot);
@@ -65,8 +77,15 @@ export function buildMainInput(snapshot: RunSnapshot, results: readonly ToolEven
   }
   const packageData = packageContext(snapshot, 'main');
   if (packageData) {
-    const pinned = [...packageData.pinned.map(r => ({ id: r.id, revision: r.revision, kind: r.sourceKind ?? r.kind, text: r.text })), ...packageData.instructions.map(n => ({ ...n, kind: 'instruction' }))].map(r => ({ ...r, hash: hash(r.text) }));
+    const pinned = [...packageData.pinned.map(r => ({ id: r.id, revision: r.revision, kind: r.sourceKind ?? r.kind, text: r.text, ...(r.loreContext ? {loreContext:r.loreContext} : {}) })), ...packageData.instructions.map(n => ({ ...n, kind: 'instruction' }))].map(r => ({ ...r, hash: hash(r.text) }));
     input.pinnedSources = [...input.pinnedSources ?? [], ...pinned]; input.facts.push(...pinned.map(r => r.text));
+  }
+  if (input.pinnedSources) {
+    const seen = new Set<string>();
+    input.pinnedSources = input.pinnedSources.filter(item => { const key = `${item.id}@${item.revision}:${item.hash}`; if (seen.has(key)) return false; seen.add(key); return true; });
+    const limit = snapshot.loreContext?.policy.maxPinnedChars ?? snapshot.profile?.loreContext?.maxPinnedChars ?? DEFAULT_LORE_CONTEXT.maxPinnedChars;
+    if (input.pinnedSources.reduce((sum,item) => sum + item.text.length, 0) > limit) throw Object.assign(new Error('LORE_PINNED_BUDGET_EXCEEDED: 고정 자료가 설정한 문자 한도를 초과했어요. 자료를 줄이거나 고정 자료 한도를 조정해 주세요.'), {statusCode:409});
+    input.facts = input.pinnedSources.filter(item => item.kind !== 'skill').map(item => item.text);
   }
   if(snapshot.story?.memory){
     const {recentHistory,...memory}=hiddenMemoryPlanForRequest(snapshot,snapshot.story.memory.plan);

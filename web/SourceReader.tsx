@@ -1,3 +1,4 @@
+import { containedImageAnchors, resolveInlineImage, IMAGE_POSITION_UNAVAILABLE } from './image-placement.js';
 import { StorySourceState } from './StoryPanel.js';
 import { Fragment, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import type { Asset } from '../core/product.js';
@@ -17,6 +18,7 @@ type ReaderProps = {
   onFork: (sourceId: string) => Promise<void>;
   request?: string;
   contextSummary?: ReaderRun['contextSummary'];
+  packageStart?: {mode:'authored'|'generate';title:string};
   onInspect?: (runId: string) => void;
   hiddenConfig?: HiddenStoryConfig;
   hasPackages?: boolean;
@@ -52,13 +54,14 @@ export function SourceReader(props: ReaderProps) {
 function latestTranslation(source: Source, jobs: Job[]) {
   return jobs.filter(job => job.kind === 'translation' && job.sourceRevision === source.id && job.sourceHash === source.hash && job.status !== 'stale').sort((a, b) => (b.revision ?? 1) - (a.revision ?? 1)).at(0);
 }
-function SourceReaderContent({ source, index, jobs, assets, refresh: refreshSource, onFork, request, contextSummary, onInspect, hiddenConfig, hasPackages, presentationRefreshKey }: ReaderProps) {
+function SourceReaderContent({ source, index, jobs, assets, refresh: refreshSource, onFork, request, contextSummary, packageStart, onInspect, hiddenConfig, hasPackages, presentationRefreshKey }: ReaderProps) {
   const mounted = useRef(true);
   useLayoutEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
   const refresh = async () => { if (mounted.current) await refreshSource(); };
   const container = useRef<HTMLElement>(null);
   const restoreAnchor = useRef<AnchorPosition | undefined>(undefined);
   const translation = latestTranslation(source, jobs);
+  const latestImageJob = jobs.filter(job=>job.kind==='image'&&job.sourceRevision===source.id).sort((a,b)=>(b.revision??1)-(a.revision??1))[0];
   const presentation = usePackagePresentation(source, translation, hasPackages === true, `${presentationRefreshKey ?? ''}:${jobs.map(job => `${job.id}:${job.status}`).join(',')}`);
   const projected = !hiddenConfig ? presentation?.data : undefined;
   const [mode, setMode] = useState<ReaderMode>(() => initialMode(source.id, !!translation?.result));
@@ -72,8 +75,8 @@ function SourceReaderContent({ source, index, jobs, assets, refresh: refreshSour
   const segments = validTranslation?.segments ?? validTranslation?.blocks?.map(block => ({ anchors: [block.anchor], text: block.text }));
   const displayJobs = jobs.filter(job => job.sourceHash === source.hash && (job.kind !== 'translation' || job.id === translation?.id));
   const attentionJobs = displayJobs.filter(job => activeJob(job) || retryable(job.status));
-  const image = jobs.filter(job => job.kind === 'image' && job.status === 'completed').at(-1);
-  const annotations = image?.result?.sourceRevision === source.id && image.result.sourceHash === source.hash ? image.result.annotations ?? [] : [];
+  const image = jobs.filter(job => job.kind === 'image' && job.sourceRevision === source.id && job.sourceHash === source.hash && job.status !== 'stale').sort((a,b)=>(b.revision ?? 1)-(a.revision ?? 1)).at(0);
+  const annotations = image?.status === 'completed' && image.result?.sourceRevision === source.id && image.result.sourceHash === source.hash ? image.result.annotations ?? [] : [];
   const status = jobs.filter(job => job.kind === 'status' && job.status === 'completed').at(-1);
   const sceneStatus = status?.result?.sourceRevision === source.id && status.result.sourceHash === source.hash ? status.result.label ?? status.result.text : '';
 
@@ -111,19 +114,20 @@ function SourceReaderContent({ source, index, jobs, assets, refresh: refreshSour
     void action('translation', async () => { await api(`/sources/${source.id}/translation`, {}); await refresh(); });
   };
   const inline = (anchor: string) => annotations.filter(annotation => annotation.blockAnchor === anchor).map(annotation => {
-    const asset = assets.find(item => item.id === annotation.assetRef && item.chatId === source.chatId && item.allowedUse !== 'profile');
+    const asset = resolveInlineImage(assets, source.chatId, annotation);
     return asset ? <figure className="inline-asset" key={`${anchor}:${asset.id}`} data-testid="inline-annotation" data-asset-ref={asset.id}><img src={asset.url} alt={asset.description || asset.title} loading="lazy"/><figcaption>{annotation.caption || asset.title}</figcaption></figure> : null;
   });
   return <article ref={container} className="source" id={`source-${source.id}`} data-testid="source" data-source-id={source.id}>
-    {request && <div className="request-message" data-testid="source-request"><span className="request-label">내 요청</span>{request.length > 280 ? <details><summary>{request.slice(0, 240)}… <span>전체 보기</span></summary><p>{request}</p></details> : <p>{request}</p>}</div>}
+    {packageStart?.mode === 'authored' && <p className="muted" data-testid="authored-start">작성된 도입문 · {packageStart.title}</p>}
+    {packageStart?.mode !== 'authored' && request && <div className="request-message" data-testid="source-request"><span className="request-label">내 요청</span>{request.length > 280 ? <details><summary>{request.slice(0, 240)}… <span>전체 보기</span></summary><p>{request}</p></details> : <p>{request}</p>}</div>}
     <div className="source-heading"><span className="folio">장면 {index + 1}</span><small>{mode === 'translation' ? '한국어 번역' : '원문'}</small></div>
-    <ContextSummaryStatus summary={contextSummary}/>
     <div className="reader-toolbar"><div className="segmented" role="group" aria-label="원문과 번역 보기"><button type="button" className={mode === 'translation' ? '' : 'secondary'} aria-pressed={mode === 'translation'} disabled={pending === 'translation'} onClick={viewTranslation}>번역 보기</button><button type="button" className={mode === 'original' ? '' : 'secondary'} aria-pressed={mode === 'original'} onClick={() => switchMode('original')}>원문 보기</button></div>
 
     </div>
+    <ContextSummaryStatus summary={contextSummary}/>
     {editor && <TextEditor key={editor} role={editor} source={source} translation={translation} onCancel={() => setEditor(null)} onSaved={async () => { await refresh(); if (mounted.current) { setEditor(null); if (editor === 'translation') switchMode('translation'); } }}/>}
     {validTranslation?.manual && mode === 'translation' && <p className="muted">직접 수정한 번역</p>}
-    {hiddenConfig && (mode === 'original' || validTranslation) ? <NativeHiddenBody source={source} config={hiddenConfig} translationText={mode === 'translation' ? validTranslation?.text ?? segments?.map(segment => segment.text).join('\n\n') ?? '' : undefined} blocks={blocks} inline={inline}/> : mode === 'original' && projected?.original.changed ? <div className="prose" data-testid="source-text"><div className="source-block" data-block-anchor={blocks.map(block=>block.anchor).join(' ')}><Prose text={projected.original.text}/></div>{blocks.flatMap(block=>inline(block.anchor))}</div> : mode === 'translation' && validTranslation && projected?.translation?.changed ? <div className="prose translated" data-testid="translation-text"><div className="source-block" data-block-anchor={blocks.map(block=>block.anchor).join(' ')}><Prose text={projected.translation.text}/></div>{blocks.flatMap(block=>inline(block.anchor))}</div> : mode === 'original' ? <div className="prose" data-testid="source-text">{source.text.slice(0, blocks[0].start)}{blocks.map((block, position) => <Fragment key={block.anchor}><div className="source-block" data-block-anchor={block.anchor} id={`block-${source.id}-${block.anchor}`}><Prose text={source.text.slice(block.start, blocks[position + 1]?.start ?? source.text.length)}/></div>{inline(block.anchor)}</Fragment>)}</div> : validTranslation ? <div className="prose translated" data-testid="translation-text">{segments?.length ? segments.map((segment, position) => <Fragment key={`${segment.anchors.join('-')}:${position}`}><div className="source-block" data-block-anchor={segment.anchors.join(' ')}><Prose text={segment.text}/></div>{segment.anchors.flatMap(inline)}</Fragment>) : <div className="source-block" data-block-anchor={blocks.map(block => block.anchor).join(' ')}><Prose text={validTranslation.text ?? ''}/>{blocks.flatMap(block => inline(block.anchor))}</div>}</div> : <div className="translation-placeholder" role="status"><p>{translation ? activeJob(translation) ? '한국어 번역을 준비하고 있어요. 원문은 저장됐어요.' : '한국어 번역이 아직 준비되지 않았어요. 원문은 보존돼요.' : '이 장면에는 아직 한국어 번역이 없어요.'}</p><button type="button" className="secondary" onClick={() => switchMode('original')}>원문부터 읽기</button></div>}
+    {hiddenConfig && (mode === 'original' || validTranslation) ? <NativeHiddenBody source={source} config={hiddenConfig} translationText={mode === 'translation' ? validTranslation?.text ?? segments?.map(segment => segment.text).join('\n\n') ?? '' : undefined} blocks={blocks} inline={inline}/> : mode === 'original' && projected?.original.changed ? <div className="prose" data-testid="source-text"><div className="source-block" data-block-anchor={blocks.map(block=>block.anchor).join(' ')}><Prose text={projected.original.text}/></div>{annotations.length > 0 && <p className="muted" role="status">{IMAGE_POSITION_UNAVAILABLE}</p>}</div> : mode === 'translation' && validTranslation && projected?.translation?.changed ? <div className="prose translated" data-testid="translation-text"><div className="source-block" data-block-anchor={blocks.map(block=>block.anchor).join(' ')}><Prose text={projected.translation.text}/></div>{annotations.length > 0 && <p className="muted" role="status">{IMAGE_POSITION_UNAVAILABLE}</p>}</div> : mode === 'original' ? <div className="prose" data-testid="source-text">{source.text.slice(0, blocks[0].start)}{blocks.map((block, position) => <Fragment key={block.anchor}><div className="source-block" data-block-anchor={block.anchor} id={`block-${source.id}-${block.anchor}`}><Prose text={source.text.slice(block.start, blocks[position + 1]?.start ?? source.text.length)}/></div>{inline(block.anchor)}</Fragment>)}</div> : validTranslation ? <div className="prose translated" data-testid="translation-text">{segments?.length ? segments.map((segment, position) => <Fragment key={`${segment.anchors.join('-')}:${position}`}><div className="source-block" data-block-anchor={segment.anchors.join(' ')}><Prose text={segment.text}/></div>{segment.anchors.flatMap(inline)}</Fragment>) : <div className="source-block" data-block-anchor={blocks.map(block => block.anchor).join(' ')}><Prose text={validTranslation.text ?? ''}/>{annotations.length > 0 && <p className="muted" role="status">번역의 문단 위치를 확인할 수 없어 이미지를 생략했어요.</p>}</div>}</div> : <div className="translation-placeholder" role="status"><p>{translation ? activeJob(translation) ? '한국어 번역을 준비하고 있어요. 원문은 저장됐어요.' : '한국어 번역이 아직 준비되지 않았어요. 원문은 보존돼요.' : '이 장면에는 아직 한국어 번역이 없어요.'}</p><button type="button" className="secondary" onClick={() => switchMode('original')}>원문부터 읽기</button></div>}
     {presentation?.error && <p className="error" role="alert">{presentation.error}</p>}
     <PackageStateCards data={presentation?.data}/>
     {sceneStatus && <aside className="scene-status" aria-label="현재 장면의 표시 상태"><small>장면 상태</small><span>{sceneStatus}</span></aside>}
@@ -134,6 +138,7 @@ function SourceReaderContent({ source, index, jobs, assets, refresh: refreshSour
       <button type="button" className="secondary" disabled={!!pending} onClick={() => { void action('fork', () => onFork(source.id)); }}>{pending === 'fork' ? '이야기 복사 중…' : '여기서 새 이야기로 이어가기'}</button>
       <button type="button" className="secondary" disabled={!!editor || !!pending} onClick={() => setEditor('original')}>원문 수정</button>
       <button type="button" className="secondary" disabled={!!editor || !!pending} onClick={() => setEditor('translation')}>번역 수정</button>
+      <button type="button" className="secondary" disabled={!!editor || !!pending || !!latestImageJob&&activeJob(latestImageJob)&&latestImageJob.sourceHash===source.hash} onClick={()=>void action('images',async()=>{await api(`/sources/${source.id}/images`,{expectedSourceHash:source.hash,expectedRevision:latestImageJob?.revision??0});await refresh();})}>{pending==='images'?'이미지 선택을 예약하는 중…':latestImageJob?'이미지 다시 선택':'이미지 선택'}</button>
       {onInspect && <button type="button" className="secondary" onClick={() => onInspect(source.runId)}>실행 상세</button>}
     </div>
     {actionError && <p className="error" role="alert">{actionError}</p>}
@@ -152,7 +157,7 @@ export function NativeHiddenBody({source,config,translationText,blocks,inline}:{
   const emitted=new Set<string>();
   return <div className={`prose${translation?' translated':''}`} data-testid={translation?'translation-text':'source-text'}>{error&&<p role="alert">{error}</p>}<HiddenStoryReader source={original} config={config} translation={translation} renderText={(text,segment)=>{
     const anchors=blocks.filter(block=>block.start<segment.range.end&&segment.range.start<block.end).map(block=>block.anchor);
-    const images=anchors.filter(anchor=>!emitted.has(anchor));images.forEach(anchor=>emitted.add(anchor));
+    const images=containedImageAnchors(blocks,segment.bodyRange).filter(anchor=>!emitted.has(anchor));images.forEach(anchor=>emitted.add(anchor));
     return <div className="source-block" data-block-anchor={anchors.join(' ')}><Prose text={text}/>{images.flatMap(inline)}</div>;
   }}/></div>;
 }

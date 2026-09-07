@@ -149,8 +149,9 @@ test('PKUI01 package editing preserves internal lore, instructions, unsaved work
   await guard.getByRole('button', { name: '계속 편집', exact: true }).click();
   await page.setViewportSize({width:1440,height:1000});
   await expect(fields.getByLabel('지침 1 본문', { exact: true })).toHaveValue('Mention visible actions before interpretation.');
+  await fields.getByRole('button', { name: '지침 검증 후 적용', exact: true }).click();
   await library.getByRole('button', { name: '자료 등록', exact: true }).click();
-  await expect(library.getByRole('status')).toContainText('v1 저장됨');
+  await expect(library.locator('.library-savebar [role="status"]')).toContainText('v1 저장됨');
   const listingResponse = await request.get('/api/library'); expect(listingResponse.ok()).toBe(true); const listing: Library = await listingResponse.json();
   const summary = listing.contents.find(item => item.title === 'Synthetic package editor bot')!; expect(summary).toBeTruthy();
   const fullResponse = await request.get(`/api/revisions/content/${summary.id}/${summary.revision}`); expect(fullResponse.ok()).toBe(true); const original: Content = await fullResponse.json();
@@ -199,7 +200,8 @@ test('PKUI02 library exposes package roles and prompts with direct internal lore
   await fields.getByRole('button', { name: '지침', exact: true }).click();
   await fields.getByRole('button', { name: '지침 추가', exact: true }).click();
   await fields.getByLabel('지침 1 본문', { exact: true }).fill('Synthetic package instruction');
-  await library.getByRole('button', { name: '자료 등록', exact: true }).click();await expect(library.getByRole('status')).toContainText('v1 저장됨');
+  await fields.getByRole('button', { name: '지침 검증 후 적용', exact: true }).click();
+  await library.getByRole('button', { name: '자료 등록', exact: true }).click();await expect(library.locator('.library-savebar [role="status"]')).toContainText('v1 저장됨');
   const listing:Library=await(await request.get('/api/library')).json();const item=listing.contents.find(item=>item.title===title)!;expect(item).toBeTruthy();
   const saved:Content=await(await request.get(`/api/revisions/content/${item.id}/${item.revision}`)).json();
   expect(saved.package?.lore[0].text).toBe('Synthetic direct lore text');expect(saved.package?.instructions[0].text).toBe('Synthetic package instruction');expect(saved.relatedIds).toEqual([]);
