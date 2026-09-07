@@ -182,7 +182,8 @@ test('F03 F05 an older real HTTP response cannot hide a newly committed source',
   // intercepted and then cancelled by navigation, so no delayed response arrives.
   await page.goto('about:blank');
   const pending = new Set<Request>();
-  page.on('request', request => { if (request.url().endsWith(`/api/chats/${chat.id}`) && request.method() === 'GET') pending.add(request); });
+  const readerPath = `/api/chats/${chat.id}/reader`;
+  page.on('request', request => { if (new URL(request.url()).pathname === readerPath && request.method() === 'GET') pending.add(request); });
   page.on('requestfinished', request => pending.delete(request));
   page.on('requestfailed', request => pending.delete(request));
   let release!: () => void;
@@ -190,7 +191,7 @@ test('F03 F05 an older real HTTP response cannot hide a newly committed source',
   let captured!: () => void;
   const firstCaptured = new Promise<void>(resolve => { captured = resolve; });
   let first = true;
-  await page.route(`**/api/chats/${chat.id}`, async route => {
+  await page.route(`**${readerPath}?**`, async route => {
     if (!first || route.request().method() !== 'GET') { await route.continue(); return; }
     first = false;
     const realResponse = await route.fetch(); const realBody = await realResponse.body();

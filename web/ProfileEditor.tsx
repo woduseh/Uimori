@@ -4,12 +4,13 @@ import { api } from './api.js';
 import { CreativeEditor } from './CreativeEditor.js';
 import { PromptEditor } from './PromptEditor.js';
 import { contentLabels, refValue } from './LibraryPanel.js';
+import { useModelSelection } from './model-selection.js';
 
 type ProfileSection = 'characters' | 'world' | 'creative' | 'prompts' | 'models';
 const sections: { id: ProfileSection; title: string }[] = [{ id: 'characters', title: '인물' }, { id: 'world', title: '세계와 자료' }, { id: 'creative', title: '창작 제어' }, { id: 'prompts', title: '프롬프트' }, { id: 'models', title: '모델' }];
 const kindDescriptions: Record<ContentKind, string> = { bot: '이야기에 등장하는 인물과 봇을 골라요.', persona: '내가 맡을 인물이에요. 선택하지 않아도 괜찮아요.', lore: '배경과 세계의 지식을 연결해요.', canon: '작가가 선언한 설정과 과거예요.', skill: '모델이 참고할 창작 방법이에요.', glossary: '이름과 번역 표현을 일관되게 유지해요.' };
 
-export function ProfileEditor({ profile, library, onSaved, onError, onDirtyChange, onLibraryChanged, initialTab = 'characters' }: { profile: ChatProfile; library: Library; onSaved: () => Promise<void>; onError: (error: string) => void; onDirtyChange?: (dirty: boolean) => void; onLibraryChanged?: () => Promise<void>; initialTab?: ProfileSection }) {
+export function ProfileEditor({ profile, library, onSaved, onError, onDirtyChange, onLibraryChanged, initialTab = 'characters', branchId }: { branchId?: string; profile: ChatProfile; library: Library; onSaved: () => Promise<void>; onError: (error: string) => void; onDirtyChange?: (dirty: boolean) => void; onLibraryChanged?: () => Promise<void>; initialTab?: ProfileSection }) {
   const [value, setValue] = useState(profile);
   const [dirty, setDirty] = useState(false);
   const [promptDirty, setPromptDirty] = useState(false);
@@ -21,20 +22,23 @@ export function ProfileEditor({ profile, library, onSaved, onError, onDirtyChang
   const [error, setError] = useState('');
   const [status, setStatus] = useState('');
   const [archived, setArchived] = useState<{ contents: Content[]; models: ModelPreset[] }>({ contents: [], models: [] });
+  const {canSelect} = useModelSelection(library.models,library.connections,archived.models);
   useEffect(() => { if (!dirty) setValue(current => profile.chatId !== current.chatId || profile.revision >= current.revision ? profile : current); }, [profile, dirty]);
   useEffect(() => { onDirtyChange?.(dirty || promptDirty); }, [dirty, promptDirty, onDirtyChange]);
   useEffect(() => () => onDirtyChange?.(false), [onDirtyChange]);
   useEffect(() => {
     let alive = true;
-    const refs = [...new Map(Object.values(value.routes).filter((item): item is ContentRef => item !== null).map(ref => [refValue(ref), ref])).values()];
+    const refs = [...new Map([...Object.values(value.routes),...Object.values(profile.routes)].filter((item): item is ContentRef => item !== null).map(ref => [refValue(ref), ref])).values()];
     void Promise.all([
       Promise.all(value.attachments.filter(ref => !library.contents.some(item => refValue(item) === refValue(ref))).map(ref => api<Content>(`/revisions/content/${ref.id}/${ref.revision}`))),
       Promise.all(refs.filter(ref => !library.models.some(item => refValue(item) === refValue(ref))).map(ref => api<ModelPreset>(`/revisions/model/${ref.id}/${ref.revision}`))),
     ]).then(([contents, models]) => { if (alive) setArchived({ contents, models }); }).catch(caught => { if (alive) { setError(caught.message); onError(caught.message); } });
     return () => { alive = false; };
-  }, [value.attachments, value.routes, library, onError]);
+  }, [value.attachments, value.routes, profile.routes, library, onError]);
   const contents = [...library.contents, ...archived.contents.filter(old => !library.contents.some(item => refValue(item) === refValue(old)))];
   const models = [...library.models, ...archived.models.filter(old => !library.models.some(item => refValue(item) === refValue(old)))];
+  const sameRef = (item: ContentRef, selected: ContentRef | null) => !!selected && refValue(item) === refValue(selected);
+  const retainedModelRefs = (role:TaskRole) => [...new Map([profile.routes[role],value.routes[role]].filter((ref):ref is ContentRef => ref !== null).map(ref => [refValue(ref),ref])).values()];
   const change = (next: ChatProfile) => { setValue(next); setDirty(true); setStatus(''); };
   const toggleAttachment = (ref: ContentRef, checked: boolean) => change({ ...value, attachments: checked ? [...value.attachments.filter(item => item.id !== ref.id), ref] : value.attachments.filter(item => item.id !== ref.id || item.revision !== ref.revision) });
   async function save(work: () => Promise<ChatProfile>, message = '이야기 설정을 저장했어요.') {
@@ -43,7 +47,7 @@ export function ProfileEditor({ profile, library, onSaved, onError, onDirtyChang
     catch (caught) { const message = (caught as Error).message; setError(message); onError(message); return false; }
     finally { setSaving(false); }
   }
-  const profileBody = (next: ChatProfile) => ({ expectedRevision: next.revision, attachments: next.attachments, creative: next.creative, routes: next.routes, image: next.image, ...(next.prompts ? { prompts: next.prompts } : {}) });
+  const profileBody = (next: ChatProfile) => ({ expectedRevision: next.revision, attachments: next.attachments, creative: next.creative, routes: next.routes, image: next.image, ...(next.prompts ? { prompts: next.prompts } : {}), ...(next.promptControls ? {promptControls:next.promptControls}:{}), ...(next.hiddenStory?{hiddenStory:next.hiddenStory}:{}) });
   function renderAttachments(kind: ContentKind) {
     const available = contents.filter(item => item.kind === kind && `${item.title} ${item.description}`.toLocaleLowerCase().includes(query.toLocaleLowerCase()));
     const selectedCount = contents.filter(item => item.kind === kind && value.attachments.some(ref => refValue(ref) === refValue(item))).length;
@@ -69,8 +73,8 @@ export function ProfileEditor({ profile, library, onSaved, onError, onDirtyChang
           setSaving(true); setError(''); setStatus(''); onError('');
           void api<CreativePreset>('/creative-presets', { title: presetTitle.trim(), controls: structuredClone(value.creative) }).then(async preset => { setStatus(`${preset.title} 프리셋을 저장했어요.`); await onLibraryChanged?.(); }).catch(caught => { setError(caught.message); onError(caught.message); }).finally(() => setSaving(false));
         }}>현재 제어를 프리셋으로 저장</button><small>화면에 편집 중인 창작 제어를 새 프리셋으로 보관해요. 원본 프리셋과 이야기의 저장된 설정은 바꾸지 않아요.</small></div></div>}
-        <div hidden={tab !== 'prompts'}><PromptEditor library={library} reload={onLibraryChanged} onError={onError} selections={value.prompts} onDirtyChange={setPromptDirty} onApply={(role, reference) => save(() => api<ChatProfile>(`/chats/${profile.chatId}/profile`, profileBody({ ...value, prompts: { ...value.prompts, [role]: reference } }), 'PUT'), '프롬프트 선택을 이야기에 적용했어요.')}/></div>
-        {tab === 'models' && <fieldset className="control-grid"><legend>역할별 모델</legend>{(['main', 'translation', 'status', 'image'] as TaskRole[]).map((role, index) => <label key={role}>{['본문 모델', '번역 모델', '표시 상태 모델', '이미지 선택 모델'][index]}<select aria-label={['원문 모델', '번역 모델', '표시 상태 모델', '이미지 선택 모델'][index]} value={value.routes[role] ? refValue(value.routes[role]!) : ''} onChange={event => { const model = models.find(item => refValue(item) === event.target.value); change({ ...value, routes: { ...value.routes, [role]: model ? { id: model.id, revision: model.revision } : null } }); }}><option value="">Scripted mock · 모의 생성</option>{models.map(item => <option key={refValue(item)} value={refValue(item)}>{item.title} · {item.modelId} · {archived.models.some(old => refValue(old) === refValue(item)) ? '보관된 ' : ''}v{item.revision}</option>)}</select></label>)}<label className="check"><input aria-label="보조 이미지 표시" type="checkbox" checked={value.image} onChange={event => change({ ...value, image: event.target.checked })}/>보조 이미지 표시</label><small>이미지는 원고와 별도로 표시해요. 재사용할 연결과 모델 프리셋은 앱 설정에서 관리해요. 선택한 연결의 프로토콜과 서버 실행 한도가 적용돼요.</small></fieldset>}
+        <div hidden={tab !== 'prompts'}><PromptEditor chatId={profile.chatId} branchId={branchId} promptControls={value.promptControls} onSaveControls={async (reference,state) => { const ok=await save(() => api<ChatProfile>(`/chats/${profile.chatId}/profile`,profileBody({...value,promptControls:{...value.promptControls,[`${reference.id}@${reference.revision}`]:state}}),'PUT'),'선택값과 조합을 이 이야기에 저장했어요.'); if(!ok)throw new Error('선택값 저장에 실패했어요.'); }} library={library} reload={onLibraryChanged} onError={onError} selections={value.prompts} onDirtyChange={setPromptDirty} onApply={(role, reference) => save(() => api<ChatProfile>(`/chats/${profile.chatId}/profile`, profileBody({ ...value, prompts: { ...value.prompts, [role]: reference } }), 'PUT'), '프롬프트 선택을 이야기에 적용했어요.')}/></div>
+        {tab === 'models' && <fieldset className="control-grid"><legend>역할별 모델</legend>{(['main', 'translation', 'status', 'image'] as TaskRole[]).map((role, index) => <label key={role}>{['본문 모델', '번역 모델', '표시 상태 모델', '이미지 선택 모델'][index]}<select aria-label={['원문 모델', '번역 모델', '표시 상태 모델', '이미지 선택 모델'][index]} value={value.routes[role] ? refValue(value.routes[role]!) : ''} onChange={event => { const model = models.find(item => refValue(item) === event.target.value) ?? retainedModelRefs(role).find(item => refValue(item) === event.target.value); change({ ...value, routes: { ...value.routes, [role]: model ? { id: model.id, revision: model.revision } : null } }); }}><option value="">Scripted mock · 모의 생성</option>{retainedModelRefs(role).filter(ref => !models.some(item => sameRef(item,ref))).map(ref => <option key={refValue(ref)} disabled={!sameRef(ref,profile.routes[role])} value={refValue(ref)}>보관된 모델 v{ref.revision} · 확인 필요</option>)}{models.filter(item => canSelect(item) || sameRef(item,profile.routes[role]) || sameRef(item,value.routes[role])).map(item => <option disabled={!canSelect(item) && !sameRef(item,profile.routes[role])} key={refValue(item)} value={refValue(item)}>{item.title} · {!canSelect(item) ? '신규 선택 불가 · ' : ''}{item.modelId} · {archived.models.some(old => refValue(old) === refValue(item)) ? '보관된 ' : ''}v{item.revision}</option>)}</select>{value.routes[role] && !models.some(item => sameRef(item,value.routes[role]) && canSelect(item)) && <small role="status">모델 또는 연결이 비활성이거나 권한 확인이 필요해요. 저장된 선택은 유지할 수 있고, 실행 시 연결 권한을 다시 검사해요.</small>}</label>)}<label className="check"><input aria-label="보조 이미지 표시" type="checkbox" checked={value.image} onChange={event => change({ ...value, image: event.target.checked })}/>보조 이미지 표시</label><small>이미지는 원고와 별도로 표시해요. 재사용할 연결과 모델 프리셋은 앱 설정에서 관리해요. 선택한 연결의 프로토콜과 서버 실행 한도가 적용돼요.</small></fieldset>}
       </fieldset></div>
       {profile.revision > value.revision && dirty && <p className="error" role="alert">다른 요청에서 이야기 설정이 바뀌었어요. 입력은 유지했어요. 최신 설정을 확인한 뒤 다시 저장해 주세요.</p>}
       {error && <p className="error" role="alert">{error} 입력한 내용은 유지했어요.</p>}

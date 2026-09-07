@@ -6,9 +6,13 @@ import { fields, record, text, number } from './product-store.js';
 import { validateVertexEndpoint, VERTEX_GEMINI_MODEL_ID, type Connection } from '../core/product.js';
 import { parseCatalog, validateConnection } from '../core/transport.js';
 import { BUILTIN_ASSETS, builtinAssetSvg } from '../core/auxiliary.js';
+import { promptRoutes } from './prompt-routes.js';
+import { readiness, managementImpact } from './provider-management.js';
+import { PROVIDER_DEFINITIONS } from '../core/provider-definitions.js';
 
 export function productRoutes(app: FastifyInstance, store: Store, options: {accessToken?:string;approvedOrigins:readonly string[];publish:(chatId:string)=>void;onAuthChanged?:()=>void}) {
   const product = store.product;
+  promptRoutes(app,store);
   app.post<{Params:{id:string}}>('/api/chats/:id/fork',async request => { const chat = forkChat(store,request.params.id,request.body); options.publish(chat.id); return chat; });
   const digest = (v: string) => createHash('sha256').update(v).digest();
   const sessions = new Map<string,number>();
@@ -24,7 +28,16 @@ export function productRoutes(app: FastifyInstance, store: Store, options: {acce
     reply.header('Set-Cookie',`nr_session=${token}; Path=/; HttpOnly; SameSite=Strict; Max-Age=43200`); return {required:!!options.accessToken,authenticated:true};
   });
   app.delete('/api/session',async (request,reply) => { const token = request.headers.cookie?.split(';').map(v => v.trim()).find(v => v.startsWith('nr_session='))?.slice(11); if (token) sessions.delete(digest(token).toString('hex')); options.onAuthChanged?.(); reply.header('Set-Cookie','nr_session=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0'); return {required:!!options.accessToken,authenticated:!options.accessToken}; });
-  app.get('/api/library',async () => product.library());
+  app.get<{Querystring:{view?:string}}>('/api/library',async request => {
+    if (request.query.view !== undefined && request.query.view !== 'summary') throw new HttpError(400,'Invalid library view');
+    return product.library(request.query.view === 'summary');
+  });
+  app.get('/api/provider-management/definitions',async () => PROVIDER_DEFINITIONS);
+  app.get<{Params:{id:string}}>('/api/provider-management/connections/:id/readiness',async request=>readiness(product,product.get<Connection>('connection',request.params.id),options.approvedOrigins));
+  app.get<{Params:{kind:string;id:string}}>('/api/provider-management/:kind/:id/impact',async request=>{
+    if(request.params.kind!=='connection'&&request.params.kind!=='model')throw new HttpError(404,'Unsupported management kind');
+    return managementImpact(product,request.params.kind,request.params.id);
+  });
   app.post('/api/content',async request => product.content(request.body));
   app.put<{Params:{id:string}}>('/api/content/:id',async request => product.content(request.body,request.params.id));
   app.post('/api/creative-presets',async request => product.preset(request.body));
@@ -81,7 +94,7 @@ export function productRoutes(app: FastifyInstance, store: Store, options: {acce
         catalog = collected;
       }
     } catch { error = 'CATALOG_UNAVAILABLE'; }
-    return product.save('connection',{...previous,catalog,catalogError:error},previous.id,previous.revision);
+    return product.save('connection',{...previous,catalog,catalogError:error,catalogUpdatedAt:error?previous.catalogUpdatedAt??null:new Date().toISOString()},previous.id,previous.revision);
   });
   app.get<{Params:{id:string}}>('/api/chats/:id/profile',async request => product.profile(request.params.id));
   app.put<{Params:{id:string}}>('/api/chats/:id/profile',async request => { const p = product.updateProfile(request.params.id,request.body); options.publish(p.chatId); return p; });

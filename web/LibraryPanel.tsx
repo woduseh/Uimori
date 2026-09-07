@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { defaultCreative, type Content, type ContentKind, type CreativePreset, type Library, type ModelPreset } from '../core/product.js';
 import { api } from './api.js';
 import { CreativeEditor } from './CreativeEditor.js';
@@ -17,20 +17,34 @@ export function LibraryPanel({ library, reload, onError, onStartStory }: { libra
   const [query, setQuery] = useState('');
   const [editing, setEditing] = useState<{ kind: ContentKind; item: Content | null } | null>(null);
   const [presetEditing, setPresetEditing] = useState<CreativePreset | 'new' | null>(null);
+  const opening = useRef(0);
+  const [loading, setLoading] = useState(false);
+  useEffect(() => () => { opening.current++; }, []);
+  function cancelOpening() { opening.current++; setLoading(false); }
+  async function openContent(item: Content, start = false) {
+    const request = ++opening.current; setLoading(true);
+    try {
+      const full = library?.contentBodiesOmitted ? await api<Content>(`/revisions/content/${item.id}/${item.revision}`) : item;
+      if (request !== opening.current) return;
+      if (start) onStartStory?.(full); else setEditing({ kind: full.kind, item: full });
+    } catch (error) { if (request === opening.current) onError((error as Error).message); }
+    finally { if (request === opening.current) setLoading(false); }
+  }
   const filtered = library?.contents.filter(item => item.kind === tab && `${item.title} ${item.description}`.toLocaleLowerCase().includes(query.toLocaleLowerCase())) ?? [];
   const presets = library?.presets.filter(item => item.title.toLocaleLowerCase().includes(query.toLocaleLowerCase())) ?? [];
-  function openNew() { if (tab === 'prompts') return; if (tab === 'presets') setPresetEditing('new'); else setEditing({ kind: tab, item: null }); }
+  function openNew() { cancelOpening(); if (tab === 'prompts') return; if (tab === 'presets') setPresetEditing('new'); else setEditing({ kind: tab, item: null }); }
   return <section className="library-page" data-testid="library-panel" aria-label="서재">
     <header className="library-heading"><div><h1>서재</h1><p className="muted">이야기에 함께할 인물과 세계를 골라요.</p></div>{!editing && !presetEditing && tab !== 'prompts' && <button type="button" className="secondary" onClick={openNew} disabled={!library}>새로 만들기</button>}</header>
+    {loading && <p role="status">자료 본문을 불러오는 중이에요…</p>}
     {!library ? <p role="status">서재를 불러오는 중이에요…</p> : editing ? <ContentEditor key={editing.item ? refValue(editing.item) : `new-${editing.kind}`} library={library} reload={reload} onError={onError} initial={editing.item} kind={editing.kind} onClose={() => setEditing(null)} onStartStory={onStartStory}/> : presetEditing ? <PresetEditor key={presetEditing === 'new' ? 'new' : refValue(presetEditing)} library={library} reload={reload} onError={onError} initial={presetEditing === 'new' ? undefined : presetEditing} onClose={() => setPresetEditing(null)}/> : <>
       <div className="library-tabs" role="tablist" aria-label="서재 분류" onKeyDown={event => {
         if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
         event.preventDefault(); const index = libraryTabs.findIndex(item => item.id === tab); const next = event.key === 'Home' ? 0 : event.key === 'End' ? libraryTabs.length - 1 : (index + (event.key === 'ArrowRight' ? 1 : -1) + libraryTabs.length) % libraryTabs.length;
-        setTab(libraryTabs[next].id); (event.currentTarget.querySelectorAll('button')[next] as HTMLButtonElement).focus();
-      }}>{libraryTabs.map(item => <button type="button" role="tab" id={`library-tab-${item.id}`} aria-controls="library-results" aria-selected={tab === item.id} tabIndex={tab === item.id ? 0 : -1} className="secondary" key={item.id} onClick={() => setTab(item.id)}>{item.title}</button>)}</div>
+        cancelOpening(); setTab(libraryTabs[next].id); (event.currentTarget.querySelectorAll('button')[next] as HTMLButtonElement).focus();
+      }}>{libraryTabs.map(item => <button type="button" role="tab" id={`library-tab-${item.id}`} aria-controls="library-results" aria-selected={tab === item.id} tabIndex={tab === item.id ? 0 : -1} className="secondary" key={item.id} onClick={() => { cancelOpening(); setTab(item.id); }}>{item.title}</button>)}</div>
       {tab !== 'prompts' && <div className="library-search"><label><span className="sr-only">서재 검색</span><input type="search" aria-label="서재 검색" placeholder="이름이나 설명으로 찾기" value={query} onChange={event => setQuery(event.target.value)}/></label><span className="muted">{tab === 'presets' ? presets.length : filtered.length}개</span></div>}
       <div id="library-results" role="tabpanel" aria-labelledby={`library-tab-${tab}`} className={tab === 'prompts' ? 'library-prompt-editor' : 'library-cards'}>
-        {tab === 'prompts' ? <PromptEditor library={library} reload={reload} onError={onError}/> : tab === 'presets' ? presets.map(item => <article className="library-card" key={refValue(item)}><div className="library-avatar" aria-hidden="true">Aa</div><h2>{item.title}</h2><p>{item.controls.mode === 'novel' ? '소설' : 'RP'} · {item.controls.language === 'ko' ? '한국어' : '영어'} · {item.controls.style === 'calm' ? '차분한 문체' : item.controls.style === 'vivid' ? '선명한 문체' : '자동 문체'}</p><button type="button" className="secondary" onClick={() => setPresetEditing(item)} aria-label={`${item.title} 프리셋 살펴보기`}>살펴보기 · 사본 만들기</button></article>) : filtered.map(item => <article className="library-card" key={refValue(item)}><div className="library-avatar" aria-hidden="true">{Array.from(item.title.trim())[0] ?? '·'}</div><h2><button type="button" className="library-title-button" onClick={() => setEditing({ kind: item.kind, item })} aria-label={`${item.title} 자료 편집`}>{item.title}</button></h2><p>{item.description || '아직 설명이 없어요.'}</p><small>{item.loading === 'pinned' ? '항상 포함' : '모델이 필요할 때 읽기'}</small>{item.kind === 'bot' && onStartStory ? <button type="button" className="secondary" onClick={() => onStartStory(item)} aria-label={`${item.title} 봇으로 시작`}>이 봇으로 시작</button> : <button type="button" className="secondary" onClick={() => setEditing({ kind: item.kind, item })}>자료 살펴보기</button>}</article>)}
+        {tab === 'prompts' ? <PromptEditor library={library} reload={reload} onError={onError}/> : tab === 'presets' ? presets.map(item => <article className="library-card" key={refValue(item)}><div className="library-avatar" aria-hidden="true">Aa</div><h2>{item.title}</h2><p>{item.controls.mode === 'novel' ? '소설' : 'RP'} · {item.controls.language === 'ko' ? '한국어' : '영어'} · {item.controls.style === 'calm' ? '차분한 문체' : item.controls.style === 'vivid' ? '선명한 문체' : '자동 문체'}</p><button type="button" className="secondary" onClick={() => setPresetEditing(item)} aria-label={`${item.title} 프리셋 살펴보기`}>살펴보기 · 사본 만들기</button></article>) : filtered.map(item => <article className="library-card" key={refValue(item)}><div className="library-avatar" aria-hidden="true">{Array.from(item.title.trim())[0] ?? '·'}</div><h2><button type="button" className="library-title-button" onClick={() => void openContent(item)} aria-label={`${item.title} 자료 편집`}>{item.title}</button></h2><p>{item.description || '아직 설명이 없어요.'}</p><small>{item.loading === 'pinned' ? '항상 포함' : '모델이 필요할 때 읽기'}</small>{item.kind === 'bot' && onStartStory ? <button type="button" className="secondary" onClick={() => void openContent(item, true)} aria-label={`${item.title} 봇으로 시작`}>이 봇으로 시작</button> : <button type="button" className="secondary" onClick={() => void openContent(item)}>자료 살펴보기</button>}</article>)}
         {tab !== 'prompts' && (tab === 'presets' ? presets : filtered).length === 0 && <div className="library-empty"><h2>{query ? '찾는 자료가 없어요' : `아직 ${tab === 'presets' ? '창작 프리셋이' : `${contentLabels[tab]} 자료가`} 없어요`}</h2><p>{query ? '다른 이름이나 설명으로 찾아보세요.' : '직접 만든 설정을 보관하고 여러 이야기에서 함께 사용할 수 있어요.'}</p><button type="button" className="secondary" onClick={openNew}>새로 만들기</button></div>}
       </div>
     </>}

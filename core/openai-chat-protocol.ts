@@ -7,10 +7,10 @@ function reject(code: string): never { throw new OpenAIProtocolError(code); }
 /** OpenAI's Chat Completions shape. Compatible servers choose their own model/capabilities. */
 export function encodeChat(request: ProviderRequest): { body: Json; context: OpenAITurn } {
   const prepared = prepare(request, 'openai-chat-turn-v1');
-  const { generation, aliases, schema, previous, fresh } = prepared;
+  const { generation, aliases, schema, previous, fresh, plan } = prepared;
   const messages: Json[] = previous ? [...previous.input, ...previous.pending.map((call, index) => ({ role: 'tool', tool_call_id: call.id, content: JSON.stringify(fresh[index].result) }))]
-    : [{ role: 'system', content: prepared.instructions }, { role: 'user', content: 'Request data (JSON):\n' + JSON.stringify(prepared.wireInput) }];
-  const body: Json = { model: request.modelId, messages, stream: true, stream_options: { include_usage: true },
+    : [{ role: 'system', content: prepared.instructions }, ...(plan ? structuredClone(plan.messages) : [{ role: 'user', content: 'Request data (JSON):\n' + JSON.stringify(prepared.wireInput) }])];
+  const body: Json = { model: request.modelId, messages, stream: true, stream_options: { include_usage: true }, ...plan?.options,
     ...(generation ? { max_completion_tokens: generation.maxOutputTokens, ...(generation.temperature !== null ? { temperature: generation.temperature } : {}), ...(generation.reasoningEffort !== undefined ? { reasoning_effort: generation.reasoningEffort } : {}) } : {}),
     ...(aliases.length ? { tools: request.stable.tools.map((tool, index) => ({ type: 'function', function: { name: aliases[index].providerName, description: tool.description, parameters: copy(tool.inputSchema), strict: false } })) } : {}),
     ...(schema ? { response_format: { type: 'json_schema', json_schema: { name: 'translation_result', strict: true, schema } } } : {}) };

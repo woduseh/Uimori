@@ -1,5 +1,5 @@
 import {
-  aggregateTranslation, BUILTIN_ASSETS, createTranslationPlan, displayInput, executeAuxiliary,
+  aggregateTranslation, BUILTIN_ASSETS, compileTranslationPrompt, createTranslationPlan, displayInput, executeAuxiliary,
   presentationInput, scriptedAuxiliary, translationInput, validateDisplayAnnotation,
   validatePresentation, validateTranslationChunk, validateTranslationPlan,
   type AssetEntry, type AuxiliaryInput, type AuxiliarySource, type SourceTimeContext,
@@ -9,6 +9,9 @@ import type { Connection, TaskRole } from '../core/product.js';
 import { executeProvider, type Json, type ProviderRequest, type ProviderResult, type ProviderTool, type WireRecord } from '../core/transport.js';
 import type { RunSnapshot, ToolEvent } from '../core/types.js';
 import { createSolSession } from './sol-session.js';
+import { validateHiddenTranslation } from '../core/hidden-story.js';
+import { translationReader, TRANSLATION_READ_NAMES, type TranslationReference } from '../core/translation-context.js';
+import { PromptProgramError } from '../core/prompt-program.js';
 
 type MaybePromise<T> = T | Promise<T>;
 type JobKind = Exclude<TaskRole, 'main'>;
@@ -16,6 +19,7 @@ export type AuxiliaryChunkRecord = { id: string; status: string; attempt: number
 export type AuxiliaryBundle = {
   job: { id: string; kind: JobKind; status: string; sourceRevision: string; sourceHash: string };
   source: AuxiliarySource; snapshot: RunSnapshot; assets?: AssetEntry[];
+  translationReferences?: TranslationReference[];
   plan?: TranslationPlan; chunks?: AuxiliaryChunkRecord[]; retryChunkIds?: string[];
 };
 export type AuxiliaryJobResult = {
@@ -49,11 +53,16 @@ const json = (value: unknown): Json => JSON.parse(JSON.stringify(value)) as Json
 class AuxiliaryExecutionError extends Error { constructor(readonly code: string, readonly stop: boolean = false, readonly retryable: boolean = false) { super(code); } }
 const safeError = (error: unknown) => {
   if (error instanceof AuxiliaryExecutionError) return error.code;
+  if (error instanceof PromptProgramError) return error.code;
   if (error instanceof Error && error.name === 'BudgetError') return 'AUXILIARY_CALL_BUDGET_EXHAUSTED';
-  if (error instanceof Error && /^(?:SOURCE_|CHUNK_|OUTPUT_|PROTECTED_|UNPROTECTED_|ANNOTATION_|ASSET_|DUPLICATE_|PRESENTATION_|TOOL_)[A-Z_]+$/.test(error.message)) return error.message;
+  if (error instanceof Error && /^(?:SOURCE_|CHUNK_|OUTPUT_|PROTECTED_|UNPROTECTED_|ANNOTATION_|ASSET_|DUPLICATE_|PRESENTATION_|TOOL_|HIDDEN_)[A-Z_]+$/.test(error.message)) return error.message;
   return 'AUXILIARY_EXECUTION_FAILED';
 };
 const toolSchemas: ProviderTool[] = [
+  ...(['story', 'memory', 'translation'] as const).flatMap((kind): ProviderTool[] => [
+    {name: `${kind}.search`, description: `Search scoped ${kind} evidence; empty query lists metadata. Translation is wording only, memory retains epistemic kind.`, inputSchema: {type:'object',properties:{query:{type:'string'},offset:{type:'integer'},limit:{type:'integer'}},required:['query'],additionalProperties:false}},
+    {name: `${kind}.read`, description: 'Read discovered evidence with exact source provenance and range. Follow nextOffset; memory sourceContinuation uses sourceOffset.', inputSchema: {type:'object',properties:{id:{type:'string'},offset:{type:'integer'},limit:{type:'integer'},...(kind==='memory'?{sourceOffset:{type:'integer'}}:{})},required:['id'],additionalProperties:false}},
+  ]),
   { name: 'knowledge.search', description: 'Search all approved source-time local references; return metadata with continuation.', inputSchema: { type: 'object', properties: { query: { type: 'string' }, offset: { type: 'integer' }, limit: { type: 'integer' } }, additionalProperties: false } },
   { name: 'knowledge.read', description: 'Read a scoped reference by ID and optional UTF-16 offset/limit. Results identify revision, range and continuation.', inputSchema: { type: 'object', properties: { id: { type: 'string' }, offset: { type: 'integer' }, limit: { type: 'integer' } }, required: ['id'], additionalProperties: false } },
   { name: 'skills.list', description: 'Discover scoped method guidance. This does not load its body or grant permissions.', inputSchema: { type: 'object', properties: { query: { type: 'string' }, offset: { type: 'integer' }, limit: { type: 'integer' } }, additionalProperties: false } },
@@ -78,14 +87,17 @@ export function sourceTimeContext(snapshot: RunSnapshot, kind: JobKind): SourceT
   };
 }
 
-function providerInput(input: AuxiliaryInput, modelId: string, generation: ProviderRequest['generation'], opaqueState: Json | undefined): ProviderRequest {
+function providerInput(input: AuxiliaryInput, modelId: string, generation: ProviderRequest['generation'], opaqueState: Json | undefined, snapshot: RunSnapshot): ProviderRequest {
+  const task = input.role === 'translation' ? input.customPrompt ? 'Translate the requested blocks according to the selected prompt and return the specified JSON.' : 'Translate the requested blocks into Korean and return the specified JSON.' : input.role === 'status' ? 'Return optional display-only annotations for the source blocks.' : 'Select appropriate existing assets or return no images.';
+  const compilation = compileTranslationPrompt(input, snapshot, task);
   return {
     role: input.role === 'presentation' ? 'image' : input.role, modelId,
-    stable: { contract: input.contract, tools: toolSchemas.filter(tool => input.tools.includes(tool.name)).map(tool => structuredClone(tool)) }, generation,
+    stable: { contract: compilation ? '' : input.contract, tools: toolSchemas.filter(tool => input.tools.includes(tool.name)).map(tool => structuredClone(tool)) }, generation,
+    ...(compilation ? { prompt: { compilerVersion: compilation.compilerVersion, messages: compilation.messages, cachePlan: compilation.cachePlan, values: compilation.values } } : {}),
     input: {
-      task: input.role === 'translation' ? input.customPrompt ? 'Translate the requested blocks according to the selected prompt and return the specified JSON.' : 'Translate the requested blocks into Korean and return the specified JSON.' : input.role === 'status' ? 'Return optional display-only annotations for the source blocks.' : 'Select appropriate existing assets or return no images.',
+      task,
       controls: { instructionRevision: input.context.instructionRevision, modelPresetRevision: input.context.modelPresetRevision, ...(input.customPrompt ? { customPrompt: true } : {}) },
-      source: json({ sourceRevision: input.sourceRevision, sourceHash: input.sourceHash, ...(input.chunkId ? { chunkId: input.chunkId } : {}), context: input.context, blocks: input.blocks, ...(input.neighborBlocks ? { neighborBlocks: input.neighborBlocks } : {}), ...(input.scenes ? { scenes: input.scenes } : {}), outputSchema: input.outputSchema }),
+      source: json({ sourceRevision: input.sourceRevision, sourceHash: input.sourceHash, ...(input.chunkId ? { chunkId: input.chunkId } : {}), context: input.context, ...(input.referencePolicy ? {referencePolicy:input.referencePolicy} : {}), blocks: input.blocks, ...(input.neighborBlocks ? { neighborBlocks: input.neighborBlocks } : {}), ...(input.scenes ? { scenes: input.scenes } : {}), outputSchema: input.outputSchema }),
       catalog: json(input.role === 'presentation' ? input.assets ?? [] : input.catalog), results: json(input.results),
     }, ...(opaqueState !== undefined ? { opaqueState } : {}),
   };
@@ -104,6 +116,8 @@ export async function runAuxiliaryJob(store: AuxiliaryStoreBridge, jobId: string
   if (generation === null) return null;
   await hooks.onProgress?.();
   const target = snapshot.profile?.models[job.kind]; let calls = 0;
+  let contextBytes = 0;
+  const readTranslation = translationReader(snapshot,bundle.translationReferences ?? []);
   const sol = createSolSession(target, hooks.timeoutMs);
   // Fixture annotations remain explicitly marked; live output still requires artifact validation.
   const mock = !target || target.connection.protocol === 'fixture-sse-v1';
@@ -123,7 +137,7 @@ export async function runAuxiliaryJob(store: AuxiliaryStoreBridge, jobId: string
       try { authorized = await hooks.authorize(structuredClone(target.connection)); }
       catch { throw new AuxiliaryExecutionError('CONNECTION_NOT_AUTHORIZED', true); }
       if (!authorized.enabled || authorized.id !== target.connectionId || authorized.endpoint !== target.connection.endpoint || authorized.protocol !== target.connection.protocol) throw new AuxiliaryExecutionError('CONNECTION_NOT_AUTHORIZED', true);
-      const body = providerInput(next, target.modelId, { maxOutputTokens: target.maxOutputTokens, temperature: target.temperature, ...(target.thinkingLevel ? { thinkingLevel: target.thinkingLevel } : {}), ...(target.structuredOutput !== undefined ? { structuredOutput: target.structuredOutput } : {}), ...(target.reasoningEffort ? { reasoningEffort: target.reasoningEffort } : {}), ...(target.thinkingMode ? { thinkingMode: target.thinkingMode } : {}), ...(target.thinkingBudgetTokens !== undefined ? { thinkingBudgetTokens: target.thinkingBudgetTokens } : {}), ...(sol ? { sol: sol.options } : {}) }, opaqueState);
+      const body = providerInput(next, target.modelId, { maxOutputTokens: target.maxOutputTokens, temperature: target.temperature, ...(target.thinkingLevel ? { thinkingLevel: target.thinkingLevel } : {}), ...(target.structuredOutput !== undefined ? { structuredOutput: target.structuredOutput } : {}), ...(target.reasoningEffort ? { reasoningEffort: target.reasoningEffort } : {}), ...(target.thinkingMode ? { thinkingMode: target.thinkingMode } : {}), ...(target.thinkingBudgetTokens !== undefined ? { thinkingBudgetTokens: target.thinkingBudgetTokens } : {}), ...(sol ? { sol: sol.options } : {}) }, opaqueState, snapshot);
       let attemptId: string | undefined;
       const remainingTimeout = sol?.remainingMs();
       if (remainingTimeout === 0) throw new AuxiliaryExecutionError('AUXILIARY_PROVIDER_TIMEOUT', true);
@@ -142,8 +156,14 @@ export async function runAuxiliaryJob(store: AuxiliaryStoreBridge, jobId: string
     };
     return executeAuxiliary(packet, snapshot, request, {
       signal: hooks.signal, maxCalls: sol ? Math.min(snapshot.settings.maxCalls, sol.maxCalls) : snapshot.settings.maxCalls,
-      ...(sol ? { localTools: { names: sol.toolNames, execute: (action: { callId: string; name: string; args: Record<string, unknown> }) => sol.execute({id:action.callId,name:action.name,arguments:json(action.args) as Record<string,Json>}) } } : {}),
-      onInput: value => hooks.onInput?.(jobId, value), onToolEvent: value => hooks.onToolEvent?.(jobId, value),
+      localTools: { names: [...(job.kind==='translation'?TRANSLATION_READ_NAMES:[]),...(sol?.toolNames ?? [])], execute: action => TRANSLATION_READ_NAMES.includes(action.name) ? readTranslation(action) : sol!.execute({id:action.callId,name:action.name,arguments:json(action.args) as Record<string,Json>}) },
+      onInput: value => hooks.onInput?.(jobId, value), onToolEvent: async value => {
+        if(job.kind==='translation') {
+          contextBytes += Buffer.byteLength(JSON.stringify(value),'utf8');
+          if(contextBytes > 96000) throw new AuxiliaryExecutionError('TOOL_CONTEXT_BUDGET_EXHAUSTED',true);
+        }
+        await hooks.onToolEvent?.(jobId,value);
+      },
     });
   };
   try {
@@ -182,6 +202,10 @@ export async function runAuxiliaryJob(store: AuxiliaryStoreBridge, jobId: string
       }
       const combined = aggregateTranslation(plan, [...successful.values()]);
       const result: AuxiliaryJobResult = { mock, sourceRevision: source.id, sourceHash: source.hash, segments: combined.segments, text: combined.segments.map(segment => segment.text).join('\n\n'), completedChunks: combined.completedChunks, totalChunks: combined.totalChunks };
+      if (combined.status === 'completed' && !hooks.signal.aborted) {
+        const validation = validateHiddenTranslation({ sourceRevision: source.id, sourceHash: source.hash, text: source.text }, result.text!);
+        if (!validation.ok) throw new Error(validation.diagnostics.find(item => item.severity === 'error')?.code ?? 'HIDDEN_TRANSLATION_INVALID');
+      }
       const outcome: AuxiliaryOutcome = { status: hooks.signal.aborted ? cancelState() : combined.status === 'completed' ? 'completed' : combined.status === 'partial' ? 'partial' : 'failed', result: combined.completedChunks ? result : null, error: combined.status === 'completed' && !hooks.signal.aborted ? null : lastError ?? (hooks.signal.aborted ? 'AUXILIARY_CANCELLED' : 'AUXILIARY_INCOMPLETE') };
       await store.finish(jobId, generation, owner, outcome); await hooks.onProgress?.(); return outcome;
     }

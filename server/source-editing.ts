@@ -53,7 +53,8 @@ export function requestTranslation(store:Store,id:string,force=false):Job{
       }
     }
     const profile=store.product.profile(source.chatId);
-    const input={promptSelection:{translation:profile.prompts?.translation??null},translationModelSelection:profile.routes.translation};
+    const ref=profile.prompts?.translation;const controls=ref?profile.promptControls?.[`${ref.id}@${ref.revision}`]:undefined;
+    const input={promptSelection:{translation:ref??null},translationModelSelection:profile.routes.translation,promptControlSelection:controls??null};
     store.product.resolveJobPrompt(store.run(source.runId).snapshot,input);
     const jobId=latest?.id??randomUUID();const time=new Date().toISOString();obsolete(store,id,jobId);
     if(latest){clear(store,jobId);store.db.prepare("UPDATE jobs SET source_hash=?,status='queued',generation=generation+1,revision=revision+1,owner=NULL,input=?,error=NULL,updated_at=? WHERE id=?").run(source.hash,JSON.stringify(input),time,jobId);}

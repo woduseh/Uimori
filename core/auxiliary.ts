@@ -2,6 +2,11 @@ import { createHash } from 'node:crypto';
 import { executeTool, type ToolAction } from './provider.js';
 import type { Resource, RunSnapshot, ToolEvent } from './types.js';
 import { DEFAULT_TRANSLATION_PROMPT } from './prompts.js';
+import { hiddenTranslationMarkers, parseHiddenStory, type HiddenKnowledge, type HiddenRange } from './hidden-story.js';
+import { compilePromptProgram, type PromptCompilation } from './prompt-program.js';
+import { nativeInstructions } from './native-context.js';
+import { STORY_READ_NAMES } from './story-context.js';
+import { TRANSLATION_READ_NAMES } from './translation-context.js';
 
 const digest = (text: string) => createHash('sha256').update(text).digest('hex');
 export type AuxiliarySource = { id: string; chatId: string; text: string; hash: string };
@@ -12,6 +17,10 @@ export type SourceTimeContext = {
   glossary: VersionedText[]; canon: VersionedText[]; scene: string;
   previousSources: { revision: string; text: string }[];
   instructionRevision: string; modelPresetRevision: string; protectedLiterals?: string[];
+  hiddenKnowledge?: {
+    sourceRevision: string; sourceHash: string; provenance: 'source-markers';
+    segments: { id: string; kind: 'main' | 'hidden' | 'evaluation'; range: HiddenRange; readerExposure: 'present-in-source'; actorKnowledge: HiddenKnowledge; worldTruth: 'unknown' }[];
+  };
 };
 export type SourceBlock = { anchor: string; index: number; start: number; end: number; text: string };
 export type ProtectedSpan = { token: string; literal: string; anchor: string; start: number; end: number };
@@ -80,6 +89,16 @@ function protect(block: SourceBlock, sourceHash: string, literals: string[], seq
 export function createTranslationPlan(source: AuxiliarySource, context: SourceTimeContext, maxChunkChars = 3000): TranslationPlan {
   if (!Number.isSafeInteger(maxChunkChars) || maxChunkChars < 100 || maxChunkChars > 24000) throw new Error('INVALID_CHUNK_LIMIT');
   const blocks = splitSource(source); const sequence = { value: 0 }; const chunks: TranslationChunk[] = [];
+  const hiddenSource = { sourceRevision: source.id, sourceHash: source.hash, text: source.text };
+  const document = parseHiddenStory(hiddenSource);
+  if (document.segments.some(segment => segment.kind !== 'main') || document.diagnostics.some(item => item.severity === 'error')) {
+    // Translation receives every source segment. Reader visibility does not establish
+    // actor knowledge or world truth, and generated prose cannot supply declarations.
+    context = { ...context, protectedLiterals: [...new Set([...(context.protectedLiterals ?? []), ...hiddenTranslationMarkers(hiddenSource).flatMap(marker => [marker.literal, marker.literal.replace(/[\r\n]+$/u, '')])])], hiddenKnowledge: {
+      sourceRevision: source.id, sourceHash: source.hash, provenance: 'source-markers',
+      segments: document.segments.map(segment => ({ id: segment.id, kind: segment.kind, range: { ...segment.range }, readerExposure: 'present-in-source', actorKnowledge: structuredClone(segment.knowledge), worldTruth: 'unknown' })),
+    } };
+  }
   let size = 0;
   for (const block of blocks) {
     let chunk = chunks.at(-1);
@@ -98,7 +117,7 @@ export function validateTranslationPlan(source: AuxiliarySource, context: Source
   const expected = createTranslationPlan(source, context, 24000);
   try {
     const plan = value as TranslationPlan;
-    if (!plan || plan.sourceRevision !== source.id || plan.sourceHash !== source.hash || plan.chatId !== source.chatId || JSON.stringify(plan.context) !== JSON.stringify(context) || JSON.stringify(plan.blocks) !== JSON.stringify(expected.blocks) || !Array.isArray(plan.chunks) || !plan.chunks.length) throw new Error();
+    if (!plan || plan.sourceRevision !== source.id || plan.sourceHash !== source.hash || plan.chatId !== source.chatId || JSON.stringify(plan.context) !== JSON.stringify(expected.context) || JSON.stringify(plan.blocks) !== JSON.stringify(expected.blocks) || !Array.isArray(plan.chunks) || !plan.chunks.length) throw new Error();
     for (const [index, chunk] of plan.chunks.entries()) {
       if (chunk.index !== index || chunk.id !== `t-${source.hash.slice(0, 12)}-${index}` || !Array.isArray(chunk.blocks) || !chunk.blocks.length || !Array.isArray(chunk.protectedSpans) || JSON.stringify(chunk.anchors) !== JSON.stringify(chunk.blocks.map(block => block.anchor))) throw new Error();
     }
@@ -179,7 +198,7 @@ export type AuxiliaryInput = {
   sourceRevision: string; sourceHash: string; context: SourceTimeContext & { previousTranslation?: PreviousTranslation };
   catalog: CatalogEntry[]; tools: string[]; results: ToolEvent[]; outputSchema: Record<string, unknown>;
   blocks: { anchor: string; text: string }[]; chunkId?: string; neighborBlocks?: { anchor: string; text: string }[];
-  assets?: AssetEntry[]; scenes?: BlockScene[];
+  assets?: AssetEntry[]; scenes?: BlockScene[]; referencePolicy?: string;
 };
 const baseInput = (sourceRevision: string, sourceHash: string, context: SourceTimeContext, snapshot: RunSnapshot) => ({
   sourceRevision, sourceHash, context: structuredClone(context), catalog: snapshot.resources.filter(item => item.chatId === snapshot.chatId).map(({ text: _text, chatId: _chatId, ...item }) => item),
@@ -209,11 +228,36 @@ export function translationInput(plan: TranslationPlan, chunkId: string, snapsho
   const previous = previousTranslation(plan,chunk,completed);
   const prompt = snapshot.profile?.promptPresets?.translation;
   return { ...base, role: 'translation', chunkId,
+    tools: [...base.tools, ...STORY_READ_NAMES, ...TRANSLATION_READ_NAMES],
     context: {...base.context,...(previous ? {previousTranslation:previous} : {})},
-    contract: prompt?.text ?? DEFAULT_TRANSLATION_PROMPT, ...(prompt ? { customPrompt: true } : {}),
+    contract: prompt?.text ?? DEFAULT_TRANSLATION_PROMPT, referencePolicy: 'Optional story.search/read retrieves frozen prior originals; memory.search/read retrieves typed source-time evidence; translation.search/read retrieves prior wording, never new facts. Search names, forms of address and speaker register when useful, then read only needed ranges. Current source and author canon/glossary take precedence over prior translations, beliefs and summaries. Hidden viewpoints remain distinct: reference knowledge does not become a character’s knowledge. Empty search needs no retry; translation remains possible without tools. Total tool result budget is 96000 UTF-8 bytes per job.', ...(prompt ? { customPrompt: true } : {}),
     blocks: structuredClone(chunk.blocks), neighborBlocks: [plan.chunks[chunk.index - 1]?.blocks.at(-1), plan.chunks[chunk.index + 1]?.blocks[0]].filter(item => item !== undefined),
     outputSchema: { sourceRevision: 'exact input value', sourceHash: 'exact input value', chunkId: 'exact input value', segments: [{ anchors: ['ordered source anchors'], text: prompt ? 'Translated prose with protected tokens unchanged' : 'Korean prose with protected tokens unchanged' }] },
   };
+}
+/** A translation job compiles its own frozen preset and values, never main-turn messages. */
+export function compileTranslationPrompt(input: AuxiliaryInput, snapshot: RunSnapshot, task: string): PromptCompilation | undefined {
+  if (input.role !== 'translation') return undefined;
+  const preset = snapshot.profile?.promptPresets?.translation;
+  if (!preset?.program) return undefined;
+  if (preset.role !== 'translation' || input.context.instructionRevision !== `prompt:${preset.id}@${preset.revision}`) throw new Error('SOURCE_PROMPT_REVISION_MISMATCH');
+  const contents = snapshot.profile?.contents ?? [];
+  const content = (kind: string) => contents.filter(item => item.kind === kind).map(item => item.text).join('\n\n');
+  const description = [input.context.bot?.text ?? '', nativeInstructions(snapshot.nativeBot)].filter(Boolean).join('\n\n');
+  const lore = [...contents.filter(item => ['lore','canon'].includes(item.kind) && item.loading === 'pinned').map(item => item.text), ...snapshot.resources.filter(item => item.chatId === snapshot.chatId && item.id.startsWith('native:') && item.loading === 'pinned').map(item => item.text)].join('\n\n');
+  const slots: Record<string, string> = {
+    char: snapshot.nativeBot?.package.title ?? contents.find(item => item.kind === 'bot')?.title ?? 'Character',
+    bot: description, description, persona: input.context.persona?.text ?? '', lore, lorebook: lore,
+    memory: snapshot.story?.memory ? JSON.stringify(snapshot.story.memory) : '',
+    state: snapshot.story?.state ? JSON.stringify(snapshot.story.state) : '', glossary: content('glossary'),
+    source: JSON.stringify(input.blocks), context: JSON.stringify(input.context), outputSchema: JSON.stringify(input.outputSchema),
+    catalog: JSON.stringify(input.catalog), controls: JSON.stringify(snapshot.profile?.creative ?? {}),
+    globalNote: '', authorNote: '', authornote: '', postEverything: '', slot: '',
+  };
+  return compilePromptProgram(preset.program, {
+    values: snapshot.profile?.promptControls?.[`${preset.id}@${preset.revision}`]?.values,
+    slots, history: [{ id: `translation-current:${input.chunkId ?? input.sourceRevision}`, role: 'user', text: task, sourceRevision: input.sourceRevision, sourceHash: input.sourceHash, current: true }],
+  });
 }
 export function displayInput(source: AuxiliarySource, context: SourceTimeContext, snapshot: RunSnapshot): AuxiliaryInput {
   if (source.chatId !== snapshot.chatId) throw new Error('SOURCE_SCOPE_MISMATCH');
@@ -326,7 +370,12 @@ export async function executeAuxiliary(input: AuxiliaryInput, snapshot: RunSnaps
 
 /** Explicit deterministic local adapter: validates plumbing, never semantic quality. */
 export const scriptedAuxiliary: AuxiliaryRequest = async input => {
-  if (input.role === 'translation') return { sourceRevision: input.sourceRevision, sourceHash: input.sourceHash, chunkId: input.chunkId, segments: input.blocks.map(block => ({ anchors: [block.anchor], text: `[모의 번역 · 의미 품질 미검증] ${block.text}` })) };
+  if (input.role === 'translation') return { sourceRevision: input.sourceRevision, sourceHash: input.sourceHash, chunkId: input.chunkId, segments: input.blocks.map(block => ({ anchors: [block.anchor],
+    // Hidden markers are protected tokens here. An inline mock prefix would move
+    // their restored opening delimiter off column zero and orphan the closing tag.
+    // Echo this structured source unchanged; the job result still declares mock:true.
+    text: input.context.hiddenKnowledge ? block.text : `[모의 번역 · 의미 품질 미검증] ${block.text}`,
+  })) };
   if (input.role === 'status') return { sourceRevision: input.sourceRevision, sourceHash: input.sourceHash, kind: 'display-only', entries: input.blocks.slice(0, 1).map(block => ({ anchor: block.anchor, summary: '모의 표시 상태 · 원문 보존됨 · 정사에 반영하지 않음', mood: '합성 표시' })) };
   const entries: PresentationAnnotation['entries'] = [];
   for (const scene of input.scenes ?? []) for (const asset of input.assets ?? []) {

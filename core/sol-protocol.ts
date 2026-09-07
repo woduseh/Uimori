@@ -14,7 +14,7 @@ export function encodeSolResponses(request: ProviderRequest, endpoint: string): 
     contract: request.stable.contract + '\n\nSol delivery: ordinary final text is supported. To submit an artifact, call eval_submit_artifact with final content and a separate userFacingNotice. The notice is metadata and never part of the source. Do not combine terminal submission with host tool calls. Local case/context tools grant no permissions.\nSol runtime configuration: ' + JSON.stringify({ gateway, endpoint: validateSolEndpoint(endpoint), options })
       + (options.contextMode === 'preloaded' ? '\nLocal runtime metadata: ' + JSON.stringify({ context: solContext(options), reviewer: solReviewer() }) : ''),
   } };
-  const encoded = encodeResponses(normalized);
+  const encoded = encodeResponses(normalized, 'sol-responses-v1');
   const body = encoded.body as Record<string, Json>;
   if (gateway === 'vercel') body.providerOptions = { gateway: { only: ['openai'] } };
   if (options.serviceTier !== undefined) body.service_tier = options.serviceTier;

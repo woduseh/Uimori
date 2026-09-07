@@ -1,11 +1,14 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { isDeepStrictEqual } from 'node:util';
-import { splitSource, validateTranslationPlan, aggregateTranslation, type TranslationPlan, type TranslationResult } from '../core/auxiliary.js';
+import { splitSource, createTranslationPlan, validateTranslationPlan, aggregateTranslation, type TranslationPlan, type TranslationResult } from '../core/auxiliary.js';
 import type { Resource, RunSnapshot } from '../core/types.js';
 import { HttpError, type Store, type Chat, type Source } from './store.js';
 import { fields, record, text } from './product-store.js';
 import { latestTranslation, validateTranslationArtifact } from './source-editing.js';
 import { sourceTimeContext } from './product-auxiliary.js';
+import { mapNativeForkSnapshot, copyNativeFork } from './native-archive.js';
+import { nativeResources } from '../core/native-context.js';
+import { compileSnapshotPrompt } from './prompt-snapshot.js';
 import { copyStoryFork } from './story-archive.js';
 
 type Row = Record<string, any>;
@@ -80,9 +83,10 @@ export function forkChat(store: Store, chatId: string, value: unknown): Chat {
         history:run.snapshot.history.map(item=>({...item,revision:sourceIds.get(item.revision)!})),
         forkedFrom:{chatId,runId:run.id,sourceRevision:original.id}};
       delete snapshot.candidateOf;
+      mapNativeForkSnapshot(snapshot,id,branchId,sourceIds,runIds);
       if(snapshot.profile){
         snapshot.profile.chatId=id;
-        snapshot.resources=store.product.resources(id,snapshot.profile);
+        snapshot.resources=[...store.product.resources(id,snapshot.profile),...nativeResources(id,snapshot.nativeBot)];
       }else snapshot.resources=snapshot.resources.map(resource);
       store.db.prepare("INSERT INTO runs(id,chat_id,parent_revision,status,request,snapshot,request_key,command,source_revision,usage,created_at,updated_at,branch_id) VALUES(?,?,?,'completed',?,?,?,?,?,?,?,?,?)")
         .run(runId,id,parentRevision,run.request,json(snapshot),'fork:'+original.id,json({forkedFrom:{chatId,runId:run.id,sourceRevision:original.id}}),sourceId,json(zeroUsage),original.createdAt,original.createdAt,branchId);
@@ -120,7 +124,7 @@ export function forkChat(store: Store, chatId: string, value: unknown): Chat {
         if(job.plan!==null){
           const oldSnapshot=store.product.resolveJobPrompt(run.snapshot,input);
           validateTranslationPlan(original,sourceTimeContext(oldSnapshot,'translation'),parse(job.plan));
-          const mapped=artifact(parse(job.plan)); mapped.context=sourceTimeContext(resolved,'translation');
+          const mapped=artifact(parse(job.plan)); mapped.context=createTranslationPlan(copiedSource,sourceTimeContext(resolved,'translation'),24000).context;
           plan=validateTranslationPlan(copiedSource,mapped.context,mapped);
           if(chunks.length!==plan.chunks.length||chunks.some(chunk=>chunk.status!=='completed'||!chunk.result))throw new HttpError(400,'Incomplete fork translation');
           const combined=aggregateTranslation(plan,chunks.map(chunk=>artifact(chunk.result) as TranslationResult));
@@ -137,6 +141,11 @@ export function forkChat(store: Store, chatId: string, value: unknown): Chat {
     store.db.prepare('UPDATE chats SET head_revision=? WHERE id=?').run(head,id);
     store.db.prepare('UPDATE branches SET head_revision=? WHERE id=?').run(head,branchId);
     copyStoryFork(store,chatId,id,sourceIds,runIds);
+    copyNativeFork(store,chatId,id,fromRevision,sourceIds);
+    for(const copiedId of runIds.values()){
+      const copied=store.run(copiedId);const snapshot=compileSnapshotPrompt(copied.snapshot);
+      store.db.prepare('UPDATE runs SET snapshot=? WHERE id=?').run(json(snapshot),copiedId);
+    }
     store.event(id,'chat.forked',command);
     return store.chat(id);
   });

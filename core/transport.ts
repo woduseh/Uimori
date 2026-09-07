@@ -3,6 +3,9 @@ import { validateProviderEndpoint, PROVIDER_PROTOCOLS, type ProviderProtocol, ty
 import { executeVertexProvider } from './vertex.js';
 import { executeNativeProvider } from './provider-http.js';
 import { validateSolOptions } from './sol-config.js';
+import { validateProviderPrompt, type ProviderPrompt } from './prompt-program.js';
+import { ProviderContractError } from './provider-errors.js';
+export { ProviderContractError } from './provider-errors.js';
 
 /** This versioned loopback protocol is a local fixture, not a live API claim. */
 export type Json = null | boolean | number | string | Json[] | { [key: string]: Json };
@@ -14,6 +17,7 @@ export type ProviderRequest = {
   role: ProviderRole; modelId: string;
   stable: { contract: string; tools: ProviderTool[] };
   generation?: ModelGeneration;
+  prompt?: ProviderPrompt;
   input: { task: string; controls: Record<string, string | number | boolean | null>; source?: Json; catalog?: Json; results?: Json; history?: Json };
   opaqueState?: Json;
 };
@@ -35,9 +39,6 @@ export type CatalogModel = {
   origin: 'catalog' | 'manual';
 };
 
-export class ProviderContractError extends Error {
-  constructor(readonly code: string) { super(code); this.name = 'ProviderContractError'; }
-}
 function reject(code: string): never { throw new ProviderContractError(code); }
 const object = (value: unknown): value is Record<string, unknown> => value !== null && typeof value === 'object' && !Array.isArray(value);
 function keys(value: unknown, allowed: readonly string[]): asserts value is Record<string, unknown> {
@@ -70,7 +71,8 @@ export function validateConnection(value: unknown, approvedOrigins: readonly str
 }
 
 export function validateRequest(value: unknown): ProviderRequest {
-  keys(value, ['role', 'modelId', 'stable', 'generation', 'input', 'opaqueState']);
+  keys(value, ['role', 'modelId', 'stable', 'generation', 'input', 'opaqueState','prompt']);
+  if(value.prompt!==undefined){try{validateProviderPrompt(value.prompt);}catch(error){reject(error instanceof Error?error.message:'INVALID_PROMPT');}}
   if (!['main', 'translation', 'status', 'image', 'state', 'memory'].includes(value.role as string)) reject('INVALID_ROLE');
   string(value.modelId);
   if (value.generation !== undefined) {
@@ -182,7 +184,7 @@ export async function executeProvider(connectionValue: ProviderConnection, reque
     }
     // Stable prefix precedes dynamic controls and sources in the serialized body.
     const stablePrefix = JSON.stringify({ protocol: connection.protocol, role: request.role, stable: request.stable });
-    const body = JSON.stringify({ protocol: connection.protocol, role: request.role, stable: request.stable, modelId: request.modelId, ...(request.generation ? { generation: request.generation } : {}), input: request.input, ...(request.opaqueState !== undefined ? { opaqueState: request.opaqueState } : {}) });
+    const body = JSON.stringify({ protocol: connection.protocol, role: request.role, stable: request.stable, modelId: request.modelId, ...(request.generation ? { generation: request.generation } : {}), input: request.input, ...(request.prompt?{prompt:request.prompt}:{}), ...(request.opaqueState !== undefined ? { opaqueState: request.opaqueState } : {}) });
     const headers: Record<string, string> = { 'content-type': 'application/json', accept: 'text/event-stream', ...(secret ? { authorization: `Bearer ${secret}` } : {}) };
     await options.onWire?.({ connectionId: connection.id, protocol: connection.protocol, role: request.role, modelId: request.modelId,
       method: 'POST', url: connection.endpoint, headers: { ...headers, ...(secret ? { authorization: '[REDACTED]' } : {}) },

@@ -10,3 +10,5 @@
 .start-models{min-width:0;margin:0;padding:16px;border:1px solid var(--line);border-radius:9px;display:grid;grid-template-columns:minmax(0,1fr);gap:14px}.start-models legend{padding:0 6px;font-size:13px}.start-models label,.new-story>label{min-width:0}.start-models select{width:100%}
 
 .source-text-editor{display:grid;gap:12px;margin:18px 0 28px;padding:16px;border:1px solid var(--line);border-radius:12px;background:var(--panel)}.source-text-editor textarea{width:100%;min-height:220px;line-height:1.7}.source-text-editor .form-actions{display:flex;gap:8px;flex-wrap:wrap}
+
+.reader-pages { display:flex; align-items:center; flex-wrap:wrap; gap:8px; margin-block:16px; }

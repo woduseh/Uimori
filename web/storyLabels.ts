@@ -1,5 +1,5 @@
 import type { Branch, Library, ModelPreset } from '../core/product.js';
-import type { ChatDetail } from '../core/types.js';
+import type { ReaderDetail } from '../core/types.js';
 
 export function modelLabel(model: ModelPreset, library: Library | null) {
   const connection = library?.connections.find(item => item.id === model.connectionId);
@@ -8,7 +8,7 @@ export function modelLabel(model: ModelPreset, library: Library | null) {
   return `${model.title} · ${provider}`;
 }
 
-export function branchLabel(branch: Branch, detail: ChatDetail) {
+export function branchLabel(branch: Branch, detail: ReaderDetail) {
   if (branch.default) return '기본 전개';
   if (branch.title !== '후보 분기') return branch.title;
   // Run order is creation order; adding a candidate never renumbers earlier ones.

@@ -235,7 +235,7 @@ describe('M1 product data with actual file SQLite', () => {
     const store = new Store(path); item.store = store;
     const product = new ProductStore(store);
     if ((store.db.prepare('PRAGMA user_version').get() as { user_version: number }).user_version < 2) product.migrate(1);
-    expect(store.db.prepare('PRAGMA user_version').get()).toEqual({ user_version: 4 });
+    expect(store.db.prepare('PRAGMA user_version').get()).toEqual({ user_version: 5 });
     expect(store.source('old-source')).toMatchObject({ text: 'Legacy original preserved.', runId: 'old-run', chatId: 'old-chat' });
     expect(store.job('old-job')).toMatchObject({ status: 'completed', sourceRevision: 'old-source', result: { mock: true, text: '기존 모의 번역' } });
     expect(product.branch('old-chat').headRevision).toBe('old-source');
@@ -258,7 +258,7 @@ describe('M1 product data with actual file SQLite', () => {
     const bytes = product.backup(); const path = join(item.directory, 'downloaded-backup.sqlite'); await writeFile(path, bytes);
     const reopened = new DatabaseSync(path, { readOnly: true });
     try {
-      expect(reopened.prepare('PRAGMA user_version').get()).toEqual({ user_version: 4 });
+      expect(reopened.prepare('PRAGMA user_version').get()).toEqual({ user_version: 5 });
       expect(reopened.prepare('SELECT id,text,hash FROM sources WHERE id=?').get(source.id)).toEqual({ id: source.id, text: source.text, hash: source.hash });
       expect(reopened.prepare('SELECT source_revision FROM jobs ORDER BY id').all()).toEqual(store.db.prepare('SELECT source_revision FROM jobs ORDER BY id').all());
       expect(Buffer.from((reopened.prepare('SELECT bytes FROM assets WHERE id=?').get(asset.id) as { bytes: Uint8Array }).bytes)).toEqual(Buffer.from(pixel, 'base64'));

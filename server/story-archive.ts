@@ -276,7 +276,11 @@ export function copyStoryFork(store: Store, originalChatId: string, newChatId: s
   const stateId = (old: string) => { const mapped = initialId(old) ?? states.get(old); if (!mapped) throw new Error('unavailable parent state dependency'); return mapped; };
   const mapEntry = (entry: MemoryEntry): MemoryEntry => {
     const mapped = memories.get(entry.id); if (!mapped) throw new Error('unavailable memory dependency');
-    return { ...structuredClone(entry), id: mapped, chatId: newChatId, atRevision: sourceId(entry.atRevision), ...('sources' in entry ? { sources: entry.sources.map(ref => ({ ...ref, revision: sourceId(ref.revision)! })) } : {}) } as MemoryEntry;
+    return {
+      ...structuredClone(entry), id: mapped, chatId: newChatId, atRevision: sourceId(entry.atRevision),
+      ...('sources' in entry ? { sources: entry.sources.map(ref => ({ ...ref, revision: sourceId(ref.revision)! })) } : {}),
+      ...(entry.knowledge ? { knowledge: { ...structuredClone(entry.knowledge), segments: entry.knowledge.segments.map(segment => ({ ...segment, sourceRevision: sourceId(segment.sourceRevision)! })) } } : {}),
+    } as MemoryEntry;
   };
   const mapState = (state: StoryState | null): StoryState | null => state ? { ...structuredClone(state), id: stateId(state.id), sourceRevision: sourceId(state.sourceRevision) } : null;
   const mapStory = (story: StorySnapshot, history: RunSnapshot['history']): StorySnapshot => {

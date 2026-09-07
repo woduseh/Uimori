@@ -100,6 +100,7 @@ test('P04 manual model IDs and distinct main/translation routing preserve connec
   expect(connection.enabled).toBe(false);
   const modelRefs: ModelPreset[] = [];
   for (const role of ['main', 'translation']) {
+    await library.getByRole('button', { name: '새 모델 입력', exact: true }).click();
     await page.getByLabel('모델 프리셋 이름', { exact: true }).fill(`${role} ${unique}`);
     await page.getByLabel('모델 연결', { exact: true }).selectOption(`${connection.id}@1`);
     await page.getByLabel('모델 ID', { exact: true }).fill(`synthetic-${role}-unlisted`);
@@ -107,20 +108,43 @@ test('P04 manual model IDs and distinct main/translation routing preserve connec
     await page.getByRole('button', { name: '모델 프리셋 등록', exact: true }).click();
     modelRefs.push(await (await response).json() as ModelPreset);
   }
-  await library.locator('.compact-card').filter({ hasText: connection.title }).getByRole('button', { name: '모델 목록 새로고침' }).click();
-  await expect(library.locator('.compact-card').filter({ hasText: connection.title })).toContainText('모델 목록을 확인하지 못했어요');
+  const connectionCard = library.getByRole('article', { name: `${connection.title} 연결`, exact: true });
+  await connectionCard.getByRole('button', { name: `${connection.title} 모델 목록 새로고침`, exact: true }).click();
+  await expect(connectionCard).toContainText('모델 목록 조회 실패');
   const after = (await getLibrary(request)).connections.find(item => item.id === connection.id)!;
   expect(after).toMatchObject({ endpoint: connection.endpoint, enabled: false, credentialEnv: 'NARRATIVE_PROVIDER_SYNTHETIC' });
   expect((await request.get(`/api/revisions/connection/${connection.id}/1`)).ok()).toBe(true);
   await openDetails(page, 'profile-editor');
   await page.getByTestId('profile-editor').getByRole('tab', { name: '모델', exact: true }).click();
-  await page.getByLabel('원문 모델', { exact: true }).selectOption(`${modelRefs[0].id}@1`);
-  await page.getByLabel('번역 모델', { exact: true }).selectOption(`${modelRefs[1].id}@1`);
+  // A model saved against a disabled connection is excluded from a new role selection.
+  for (const roleLabel of ['원문 모델', '번역 모델']) for (const model of modelRefs) {
+    await expect(page.getByLabel(roleLabel, { exact: true }).locator(`option[value="${model.id}@${model.revision}"]`)).toHaveCount(0);
+  }
+  expect((await getDetail(request, chat.id)).profile!.routes).toMatchObject({ main: null, translation: null });
+  await navigation(page, '설정'); await page.getByTestId('connection-settings').locator('summary').first().click();
+  const enabledResponse = page.waitForResponse(response => response.url().endsWith(`/api/connections/${connection.id}`) && response.request().method() === 'PUT');
+  await library.getByRole('button', { name: `${connection.title} 연결 활성화`, exact: true }).click();
+  const enabledReply = await enabledResponse; expect(enabledReply.ok()).toBe(true); const enabled = await enabledReply.json() as Connection;
+  expect(enabled).toMatchObject({ id: connection.id, endpoint: connection.endpoint, enabled: true, credentialEnv: connection.credentialEnv });
+  // Explicitly choose the enabled connection revision for each existing model; preserving old versions is intentional.
+  for (let index = 0; index < modelRefs.length; index++) {
+    const old = modelRefs[index]; await library.getByRole('button', { name: `${old.title} 모델 수정`, exact: true }).click();
+    await page.getByLabel('모델 연결', { exact: true }).selectOption(`${enabled.id}@${enabled.revision}`);
+    await page.getByLabel('모델 ID', { exact: true }).fill(old.modelId);
+    const updatedResponse = page.waitForResponse(response => response.url().endsWith(`/api/model-presets/${old.id}`) && response.request().method() === 'PUT');
+    await library.getByRole('button', { name: '모델 변경 저장', exact: true }).click();
+    const updatedReply = await updatedResponse; expect(updatedReply.ok()).toBe(true); modelRefs[index] = await updatedReply.json() as ModelPreset;
+    expect(modelRefs[index]).toMatchObject({ id: old.id, revision: old.revision + 1, modelId: old.modelId, connectionRevision: enabled.revision });
+  }
+  await openDetails(page, 'profile-editor'); await page.getByTestId('profile-editor').getByRole('tab', { name: '모델', exact: true }).click();
+  await page.getByLabel('원문 모델', { exact: true }).selectOption(`${modelRefs[0].id}@${modelRefs[0].revision}`);
+  await page.getByLabel('번역 모델', { exact: true }).selectOption(`${modelRefs[1].id}@${modelRefs[1].revision}`);
   await page.getByRole('button', { name: '콘텐츠와 제어 저장', exact: true }).click();
   await expect(page.getByText('장착 설정 v2')).toBeVisible();
   const profile = (await getDetail(request, chat.id)).profile!;
-  expect(profile.routes.main).toEqual({ id: modelRefs[0].id, revision: 1 });
-  expect(profile.routes.translation).toEqual({ id: modelRefs[1].id, revision: 1 });
+  expect(profile.routes.main).toEqual({ id: modelRefs[0].id, revision: modelRefs[0].revision });
+  expect(profile.routes.translation).toEqual({ id: modelRefs[1].id, revision: modelRefs[1].revision });
+  const unchanged = await getDetail(request, chat.id); expect(unchanged.runs).toHaveLength(0); expect(unchanged.sources).toHaveLength(0); expect(unchanged.attempts).toHaveLength(0);
   expect(await page.evaluate(() => Object.values(localStorage).concat(Object.values(sessionStorage)).some(value => String(value).includes('NARRATIVE_PROVIDER_SYNTHETIC')))).toBe(false);
 });
 
@@ -216,11 +240,12 @@ test('P04 Vertex settings use service-account references and persist distinct ma
   await page.getByRole('button', { name: '연결 등록', exact: true }).click();
   const connection = await (await connectionResponse).json() as Connection;
   expect(connection).toMatchObject({ protocol: 'vertex-gemini-v1', enabled: true }); expect(connection).not.toHaveProperty('credentialEnv');
-  await editor.locator('.compact-card').filter({ hasText: unique }).getByRole('button', { name: '로컬 지원 모델 확인', exact: true }).click();
+  await editor.getByRole('article', { name: `${unique} 연결`, exact: true }).getByRole('button', { name: `${unique} 로컬 지원 모델 확인`, exact: true }).click();
   await expect(editor.getByRole('status')).toContainText('공급자 조회 없음');
   const latest = (await getLibrary(request)).connections.find(item => item.id === connection.id)!;
   const models: ModelPreset[] = [];
   for (const role of ['main', 'translation']) {
+    await editor.getByRole('button', { name: '새 모델 입력', exact: true }).click();
     await page.getByLabel('모델 프리셋 이름', { exact: true }).fill(`${unique}-${role}`);
     await page.getByLabel('모델 연결', { exact: true }).selectOption(`${latest.id}@${latest.revision}`);
     await expect(page.getByLabel('모델 ID', { exact: true })).toHaveValue('gemini-3.8-flash');
@@ -255,6 +280,7 @@ test('P04 named and custom providers save native options from mobile settings wi
     {protocol:'openai-chat-v1',endpoint:'https://synthetic.example/v1',credential:'NARRATIVE_PROVIDER_CUSTOM',modelId:'synthetic-chat'},
   ];
   for(const item of cases){
+    await page.getByTestId('connection-editor').getByRole('button',{name:'새 연결 입력',exact:true}).click();
     await page.getByLabel('연결 프로토콜',{exact:true}).selectOption(item.protocol);
     await page.getByLabel('연결 이름',{exact:true}).fill(item.protocol);
     const endpoint=page.getByLabel('API 기본 주소',{exact:true});
@@ -264,6 +290,7 @@ test('P04 named and custom providers save native options from mobile settings wi
     const saved=page.waitForResponse(r=>r.url().endsWith('/api/connections')&&r.request().method()==='POST');
     await page.getByRole('button',{name:'연결 등록',exact:true}).click();const connection=await(await saved).json() as Connection;
     expect(connection).toMatchObject({protocol:item.protocol,endpoint:item.endpoint,credentialEnv:item.credential,enabled:true});
+    await page.getByTestId('connection-editor').getByRole('button',{name:'새 모델 입력',exact:true}).click();
     await page.getByLabel('모델 연결',{exact:true}).selectOption(`${connection.id}@${connection.revision}`);
     await page.getByLabel('모델 프리셋 이름',{exact:true}).fill(item.modelId);await page.getByLabel('모델 ID',{exact:true}).fill(item.modelId);
     await page.getByLabel('응답 제한 시간 (초)',{exact:true}).fill('900');
@@ -276,7 +303,7 @@ test('P04 named and custom providers save native options from mobile settings wi
     expect(model).toMatchObject({connectionId:connection.id,modelId:item.modelId,temperature:null,timeoutMs:900000,structuredOutput:true,reasoningEffort:'high'});
     expect(model.thinkingMode).toBe(item.protocol==='anthropic-messages-v1'?'adaptive':undefined);
   }
-  const detail=await getDetail(request,chat.id);expect(detail.attempts).toHaveLength(0);expect(detail.runs).toHaveLength(0);
+  const detail=await getDetail(request,chat.id);expect(detail.attempts).toHaveLength(0);expect(detail.runs).toHaveLength(0);expect(detail.sources).toHaveLength(0);
   await page.screenshot({path:testInfo.outputPath('provider-settings.png'),fullPage:true});
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
 });

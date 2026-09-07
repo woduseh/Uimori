@@ -5,6 +5,8 @@ import { randomUUID } from 'node:crypto';
 import { setTimeout as delay } from 'node:timers/promises';
 import type { ServerResponse } from 'node:http';
 import { Store, HttpError } from './store.js';
+import { readerDetail } from './reader.js';
+import { readerRoutes } from './reader-routes.js';
 import { Controls, type Barrier, type FailurePoint } from './controls.js';
 import { syntheticResources } from '../core/provider.js';
 import { runMain } from './model-runner.js';
@@ -12,7 +14,10 @@ import { ProviderBudget, validateLiveBudgetLimits, type LiveBudgetLimits } from 
 import { runAuxiliaryJob } from './product-auxiliary.js';
 import { auxiliaryBridge } from './auxiliary-bridge.js';
 import { productRoutes } from './product-routes.js';
+import { registrationRoutes } from './provider-registration-routes.js';
 import { storyRoutes } from './story-routes.js';
+import { hiddenStoryRoutes } from './hidden-story-routes.js';
+import { registerNativeBotRoutes } from './native-bot-routes.js';
 import { runStoryJob } from './story-runner.js';
 
 import { PROVIDER_PROTOCOLS } from '../core/product.js';
@@ -193,7 +198,11 @@ export async function createApp(options: AppOptions): Promise<App> {
     void reply.code(code).send({ error: error instanceof HttpError ? error.message : code === 400 ? 'Invalid request' : 'Request failed' });
   });
   const session = productRoutes(app,store,{approvedOrigins,accessToken:options.accessToken,publish,onAuthChanged:() => { for (const chatId of subscribers.keys()) publish(chatId); }});
+  readerRoutes(app,store);
+  registrationRoutes(app,store,{budget:providerBudget,approvedOrigins,signal:stopping.signal,vertexRequestTier:options.vertexRequestTier,track,authenticated:session.authenticated});
   storyRoutes(app,store,{publish,pump:pumpStory,execute,abort:id=>storyControllers.get(id)?.abort()});
+  registerNativeBotRoutes(app,store);
+  hiddenStoryRoutes(app,store,{publish});
   app.get('/api/health', async () => ({ ready: true, buildId: options.buildId, instanceId, dbPath: options.dbPath, mode: 'local-provider-runtime', supportedProtocols: [...PROVIDER_PROTOCOLS], vertexRequestTier: options.vertexRequestTier ?? null, liveBudgetConfigured: !!options.liveBudget }));
   app.get('/api/chats', async () => store.chats());
   app.post('/api/chats', async request => {
@@ -202,14 +211,15 @@ export async function createApp(options: AppOptions): Promise<App> {
     return store.createChat(string(body.title, 'title', 120), body.preset as Settings['preset'] | undefined, syntheticResources);
   });
   app.get<{ Params: { id: string } }>('/api/chats/:id', async request => store.detail(request.params.id));
+  app.get<{ Params: { id: string }; Querystring: Record<string,string|undefined> }>('/api/chats/:id/reader', async request => readerDetail(store,request.params.id,request.query));
   app.patch<{ Params: { id: string } }>('/api/chats/:id/settings', async request => {
     const body = object(request.body); only(body, ['expectedSettingsRevision', 'preset', 'mode', 'translation', 'status', 'maxCalls']);
     const chat = store.settings(request.params.id, integer(body.expectedSettingsRevision, 'settings revision', 1, 1e9), settings(body));
     publish(chat.id); return chat;
   });
   app.post<{ Params: { id: string } }>('/api/chats/:id/runs', async request => {
-    const body = object(request.body); only(body, ['request', 'expectedRevision', 'expectedSettingsRevision', 'idempotencyKey','branchId','expectedProfileRevision']);
-    const command = { request: string(body.request, 'request'), expectedRevision: body.expectedRevision === null ? null : string(body.expectedRevision, 'source revision', 100), expectedSettingsRevision: integer(body.expectedSettingsRevision, 'settings revision', 1, 1e9), idempotencyKey: string(body.idempotencyKey, 'idempotency key', 120),...(body.branchId !== undefined ? {branchId:string(body.branchId,'branch ID',100)} : {}),...(body.expectedProfileRevision !== undefined ? {expectedProfileRevision:integer(body.expectedProfileRevision,'profile revision',1,1e9)} : {}) };
+    const body = object(request.body); only(body, ['request', 'expectedRevision', 'expectedSettingsRevision', 'idempotencyKey','branchId','expectedProfileRevision','nativeCommandId']);
+    const command = { ...(body.nativeCommandId!==undefined?{nativeCommandId:string(body.nativeCommandId,'native command',120)}:{}), request: string(body.request, 'request'), expectedRevision: body.expectedRevision === null ? null : string(body.expectedRevision, 'source revision', 100), expectedSettingsRevision: integer(body.expectedSettingsRevision, 'settings revision', 1, 1e9), idempotencyKey: string(body.idempotencyKey, 'idempotency key', 120),...(body.branchId !== undefined ? {branchId:string(body.branchId,'branch ID',100)} : {}),...(body.expectedProfileRevision !== undefined ? {expectedProfileRevision:integer(body.expectedProfileRevision,'profile revision',1,1e9)} : {}) };
     const result = store.createRun(request.params.id, command, chat => { const profile = store.product.snapshot(chat.id); return { chatId: chat.id, parentRevision: chat.headRevision, settingsRevision: chat.settingsRevision, settings: chat.settings, request: command.request, history: store.history(chat.headRevision), resources: store.product.resources(chat.id,profile),...(profile ? {profile} : {}) } satisfies RunSnapshot; });
     if (result.created) { publish(request.params.id); if(result.run.status==='queued')execute(result.run.id); }
     return result.run;

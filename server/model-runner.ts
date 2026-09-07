@@ -1,20 +1,11 @@
-import { buildMainInput, executeMain, executeTool } from '../core/provider.js';
+import { executeMain, executeTool } from '../core/provider.js';
 import type { Connection } from '../core/product.js';
-import { executeProvider, type Json, type ProviderRequest, type ProviderResult, type ProviderTool, type WireRecord } from '../core/transport.js';
+import { executeProvider, type Json, type ProviderResult, type WireRecord } from '../core/transport.js';
 import type { ModelInput, RunSnapshot, ToolEvent, Usage } from '../core/types.js';
 import { createSolSession } from './sol-session.js';
+import { createHash } from 'node:crypto';
+import { attachMainHostContext, buildMainProviderRequest, nativeStorySubmissionEnabled, STORY_SUBMIT_MAX_CHARS } from './main-request.js';
 
-const pagination = { offset: { type: 'integer', minimum: 0 }, limit: { type: 'integer', minimum: 1 } };
-const READ_TOOLS: ProviderTool[] = [
-  { name: 'knowledge.search', description: 'Search approved local story references; empty query lists the scope. Returns metadata and continuation.', inputSchema: { type: 'object', properties: { query: { type: 'string' }, ...pagination }, additionalProperties: false } },
-  { name: 'knowledge.read', description: 'Read an approved reference by its discovered id; returns source revision, text range and continuation.', inputSchema: { type: 'object', properties: { id: { type: 'string' }, ...pagination }, required: ['id'], additionalProperties: false } },
-  { name: 'skills.list', description: 'Discover available writing guidance; metadata is not its full text.', inputSchema: { type: 'object', properties: { query: { type: 'string' }, ...pagination }, additionalProperties: false } },
-  { name: 'skills.load', description: 'Read writing guidance by id. Content never changes allowed tools or their scope.', inputSchema: { type: 'object', properties: { id: { type: 'string' }, ...pagination }, required: ['id'], additionalProperties: false } },
-  ...(['memory','story'] as const).flatMap(kind=>[
-    {name:`${kind}.search`,description:kind==='memory'?'Search typed memories in this exact story ancestry; belief and summaries are not author declarations.':'Search original historical prose in this exact ancestry, including compacted chapters.',inputSchema:{type:'object',properties:{query:{type:'string'},...pagination},required:['query'],additionalProperties:false}},
-    {name:`${kind}.read`,description:'Read a discovered ID with exact source provenance, character range and continuation. For memory provenance pages, follow sourceContinuation with sourceOffset.',inputSchema:{type:'object',properties:{id:{type:'string'},...pagination,...(kind==='memory'?{sourceOffset:{type:'integer',minimum:0}}:{})},required:['id'],additionalProperties:false}},
-  ] as ProviderTool[]),
-];
 export type MainResult = { status: 'completed' | 'refused' | 'partial' | 'error' | 'cancelled'; text: string; error: string | null; usage: Usage };
 export type MainHooks = {
   signal: AbortSignal;
@@ -26,7 +17,7 @@ export type MainHooks = {
   onAttemptStart: (request: WireRecord) => string | Promise<string>;
   onAttemptFinish: (id: string, result: ProviderResult) => void | Promise<void>;
 };
-const json = (value: unknown): Json => JSON.parse(JSON.stringify(value)) as Json;
+
 function addUsage(total: Usage, result: ProviderResult) {
   for (const key of ['inputTokens', 'outputTokens', 'costUsd'] as const) {
     total[key] = total[key] === null || result.usage[key] === null ? null : total[key] + result.usage[key];
@@ -35,7 +26,7 @@ function addUsage(total: Usage, result: ProviderResult) {
 
 /** One server-owned main run. A transport error/partial/refusal is terminal, never an implicit retry. */
 export async function runMain(snapshot: RunSnapshot, hooks: MainHooks): Promise<MainResult> {
-  const fixed = structuredClone(snapshot);
+  const fixed = attachMainHostContext(structuredClone(snapshot));
   const target = fixed.profile?.models.main;
   if (!target) {
     const result = await executeMain(fixed, hooks);
@@ -55,20 +46,10 @@ export async function runMain(snapshot: RunSnapshot, hooks: MainHooks): Promise<
     try { authorized = await hooks.authorize(structuredClone(target.connection)); }
     catch { return fail('CONNECTION_NOT_AUTHORIZED'); }
     if (!authorized.enabled || authorized.id !== target.connectionId || authorized.endpoint !== target.connection.endpoint || authorized.protocol !== target.connection.protocol) return fail('CONNECTION_NOT_AUTHORIZED');
-    const input = buildMainInput(fixed, results);
-    if (sol) input.tools = [...input.tools, ...sol.toolNames];
+    const built = buildMainProviderRequest(fixed,{results,...(sol?{sol:sol.options}:{}),...(opaqueState!==undefined?{opaqueState}:{})});
+    const {input,request}=built;
+    if(sol)input.tools=[...input.tools,...sol.toolNames];
     await hooks.onInput(structuredClone(input));
-    const { length, ...creative } = input.controls ?? { length: {} };
-    const controls = Object.fromEntries(Object.entries({ preset: input.preset, ...creative, ...length }).filter(([, value]) => value !== undefined)) as ProviderRequest['input']['controls'];
-    const request: ProviderRequest = {
-      role: 'main', modelId: target.modelId,
-      stable: { contract: input.contract, tools: READ_TOOLS.filter(tool => input.tools.includes(tool.name)).map(tool => structuredClone(tool)) },
-      generation: { maxOutputTokens: target.maxOutputTokens, temperature: target.temperature, ...(target.thinkingLevel ? { thinkingLevel: target.thinkingLevel } : {}), ...(target.structuredOutput !== undefined ? { structuredOutput: target.structuredOutput } : {}), ...(target.reasoningEffort ? { reasoningEffort: target.reasoningEffort } : {}), ...(target.thinkingMode ? { thinkingMode: target.thinkingMode } : {}), ...(target.thinkingBudgetTokens !== undefined ? { thinkingBudgetTokens: target.thinkingBudgetTokens } : {}), ...(sol ? { sol: sol.options } : {}) },
-      input: { task: input.task, controls,
-        source: json({ parentRevision: fixed.parentRevision, facts: input.pinnedSources?.length ? [] : input.facts, pinnedSources: input.pinnedSources ?? [], prefetch: input.prefetch, ...(input.state?{state:input.state}:{}),...(input.memory?{memory:input.memory}:{}),...(input.catalogPage?{catalogPage:input.catalogPage}:{}) }),
-        catalog: json(input.catalog), history: json(input.history), results: json(input.results) },
-      ...(opaqueState !== undefined ? { opaqueState } : {}),
-    };
     let attemptId: string | undefined;
     const remainingTimeout = sol?.remainingMs();
     if (remainingTimeout === 0) return fail('TIMEOUT');
@@ -89,6 +70,15 @@ export async function runMain(snapshot: RunSnapshot, hooks: MainHooks): Promise<
     for (const call of result.toolCalls) {
       if (callIds.has(call.id)) return fail('DUPLICATE_TOOL_ID');
       callIds.add(call.id);
+    }
+    const terminals=result.toolCalls.filter(call=>call.name==='story.submit');
+    if(terminals.length){
+      const call=terminals[0],content=call.arguments.content;
+      if(!nativeStorySubmissionEnabled(fixed)||terminals.length!==1||result.toolCalls.length!==1||result.refusal||result.error||Object.keys(call.arguments).some(key=>key!=='content')||typeof content!=='string'||!content.trim()||content.length>STORY_SUBMIT_MAX_CHARS)return fail('INVALID_STORY_SUBMISSION');
+      if(hooks.signal.aborted)return fail('CANCELLED');
+      const preset=fixed.profile?.promptPresets?.main;
+      await hooks.onToolEvent({callId:call.id,name:call.name,args:{content},denied:false,result:{accepted:true,contentHash:createHash('sha256').update(content).digest('hex'),characters:content.length,host:{chatId:fixed.chatId,parentRevision:fixed.parentRevision,settingsRevision:fixed.settingsRevision,profileRevision:fixed.profile?.revision??null,promptPreset:preset?{id:preset.id,revision:preset.revision}:null}}});
+      return {status:'completed',text:content,error:null,usage};
     }
     opaqueState = result.opaqueState;
     for (const call of result.toolCalls) {

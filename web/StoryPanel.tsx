@@ -1,12 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
-import type { ContentRef, ModelPreset } from '../core/product.js';
+import type { Connection, ContentRef, ModelPreset } from '../core/product.js';
 import type { StateModule } from '../core/state.js';
 import type { MemoryEntry } from '../core/memory.js';
 import type { StoryConfig, StoryDetail, StoryJob, StoryState } from '../core/story.js';
 import { api, ApiError, labels } from './api.js';
 import './story.css';
+import { useModelSelection } from './model-selection.js';
 
-type PanelProps = { chatId: string; branchId: string; headRevision: string | null; settingsRevision: number; profileRevision?: number; models: ModelPreset[]; onChanged: () => void; onError: (message: string) => void };
+type PanelProps = { chatId: string; branchId: string; headRevision: string | null; settingsRevision: number; profileRevision?: number; models: ModelPreset[]; connections: Connection[]; onChanged: () => void; onError: (message: string) => void };
 const id = encodeURIComponent;
 const refKey = (value: ContentRef | null) => value ? `${value.id}@${value.revision}` : '';
 const pending = (jobs: StoryJob[]) => jobs.some(job => job.status === 'queued' || job.status === 'running');
@@ -22,13 +23,14 @@ function useScope(key: string) {
   return () => { const captured = scope.current.generation; return () => scope.current.alive && scope.current.generation === captured; };
 }
 
-function ModelChoice({ label, value, models, onChange }: { label: string; value: ContentRef | null; models: ModelPreset[]; onChange: (value: ContentRef | null) => void }) {
+function ModelChoice({ label, value, original, models, canSelect, onChange }: { label: string; value: ContentRef | null; original: ContentRef | null; models: ModelPreset[]; canSelect: (model:ModelPreset) => boolean; onChange: (value: ContentRef | null) => void }) {
   const selected = refKey(value);
-  return <label>{label}<select value={selected} onChange={event => { const model = models.find(item => refKey(item) === event.target.value); onChange(model ? { id: model.id, revision: model.revision } : null); }}>
+  const retained = [...new Map([original,value].filter((ref):ref is ContentRef => ref !== null).map(ref => [refKey(ref),ref])).values()];
+  return <label>{label}<select value={selected} onChange={event => { const model = [...models,...retained].find(item => refKey(item) === event.target.value); onChange(model ? { id: model.id, revision: model.revision } : null); }}>
     <option value="">모의 처리 · 실제 모델 호출 없음</option>
-    {selected && !models.some(model => refKey(model) === selected) && <option value={selected}>보관된 선택 · {value!.id} v{value!.revision}</option>}
-    {models.map(model => <option key={refKey(model)} value={refKey(model)}>{model.title} · {model.modelId} · v{model.revision}</option>)}
-  </select></label>;
+    {retained.filter(ref => !models.some(model => refKey(model) === refKey(ref))).map(ref => <option key={refKey(ref)} value={refKey(ref)} disabled={refKey(ref) !== refKey(original)}>보관된 선택 · {ref.id} v{ref.revision}</option>)}
+    {models.filter(model => canSelect(model) || retained.some(ref => refKey(ref) === refKey(model))).map(model => <option disabled={!canSelect(model) && refKey(model) !== refKey(original)} key={refKey(model)} value={refKey(model)}>{model.title} · {!canSelect(model) ? '신규 선택 불가 · ' : ''}{model.modelId} · v{model.revision}</option>)}
+  </select>{selected && !models.some(model => refKey(model) === selected && canSelect(model)) && <small>저장된 선택은 유지할 수 있어요. 모델·연결 상태를 확인하고, 실행 시 연결 권한을 다시 검사해요.</small>}</label>;
 }
 
 function StateValues({ state }: { state: StoryState | null }) {
@@ -47,7 +49,8 @@ export function StoryPanel(props: PanelProps) {
   return <StoryPanelEditor key={`${props.chatId}/${props.branchId}`} {...props}/>;
 }
 
-function StoryPanelEditor({ chatId, branchId, headRevision, settingsRevision, profileRevision, models, onChanged, onError }: PanelProps) {
+function StoryPanelEditor({ chatId, branchId, headRevision, settingsRevision, profileRevision, models, connections, onChanged, onError }: PanelProps) {
+  const {canSelect} = useModelSelection(models,connections);
   const capture = useScope(JSON.stringify([chatId, branchId, headRevision, settingsRevision, profileRevision]));
   const [detail, setDetail] = useState<StoryDetail | null>(null);
   const [draft, setDraft] = useState<StoryConfig | null>(null);
@@ -98,9 +101,9 @@ function StoryPanelEditor({ chatId, branchId, headRevision, settingsRevision, pr
           <details><summary>합성 예제 살펴보기</summary><p>항구의 동전 10개에서 표를 사면 3개를 빼는 시험용 예제예요. 아래 버튼은 초안에만 넣어요.</p><button type="button" className="secondary" onClick={() => change({ ...draft, module: structuredClone(sampleModule) })}>합성 항구 예제를 초안에 넣기</button></details>
           {draft.module && <div className="story-module-preview"><h4>저장 전 미리보기</h4><p>{draft.module.name} · {({ annotation: '표시용', continuity: '연속성 참고', authoritative: '규칙에 따른 상태 관리' })[draft.module.mode]}</p><p>필드 {Object.keys(draft.module.fields).length}개 · 변화 규칙 {Object.keys(draft.module.rules).length}개</p><pre>{JSON.stringify(draft.module, null, 2)}</pre></div>}
         </div>
-        <ModelChoice label="상태 확인 모델" value={draft.stateModel} models={models} onChange={stateModel => change({ ...draft, stateModel })}/>
+        <ModelChoice label="상태 확인 모델" value={draft.stateModel} original={detail?.config.stateModel ?? null} models={models} canSelect={canSelect} onChange={stateModel => change({ ...draft, stateModel })}/>
         <label className="check"><input type="checkbox" checked={draft.memory.enabled} onChange={event => change({ ...draft, memory: { ...draft.memory, enabled: event.target.checked } })}/>기억 자동 정리 사용</label>
-        <ModelChoice label="기억 정리 모델" value={draft.memory.model} models={models} onChange={model => change({ ...draft, memory: { ...draft.memory, model } })}/>
+        <ModelChoice label="기억 정리 모델" value={draft.memory.model} original={detail?.config.memory.model ?? null} models={models} canSelect={canSelect} onChange={model => change({ ...draft, memory: { ...draft.memory, model } })}/>
         <details className="full"><summary>기억 분량 설정</summary><div className="editor-grid"><label>원문으로 유지할 최근 장면 수<input type="number" min={0} max={20} value={draft.memory.recentCount} onChange={event => change({ ...draft, memory: { ...draft.memory, recentCount: Number(event.target.value) } })}/></label><label>기억 입력 최대 글자 수<input type="number" min={1000} max={200000} value={draft.memory.maxPacketChars} onChange={event => change({ ...draft, memory: { ...draft.memory, maxPacketChars: Number(event.target.value) } })}/></label></div></details>
         <div className="form-actions full"><button className="secondary" disabled={!dirty.current}>상태와 기억 설정 저장</button>{dirty.current && detail && draft.revision !== detail.config.revision && <div><p role="alert">저장된 설정이 바뀌었어요. 입력한 내용은 유지했어요. 현재 설정을 확인한 뒤 다시 저장해 주세요.</p><details><summary>현재 저장된 설정 확인</summary><p>상태: {detail.config.module?.name ?? '사용 안 함'} · 기억: {detail.config.memory.enabled ? '사용' : '사용 안 함'}</p><pre className="story-text-preview">{JSON.stringify(detail.config, null, 2)}</pre></details><button type="button" className="secondary" onClick={() => { change({ ...draft, revision: detail.config.revision }); setMessage(`저장된 설정 v${detail.config.revision}을 기준으로 현재 초안을 다시 저장할 수 있어요.`); }}>현재 설정을 확인했어요 · 내 초안 유지</button></div>}</div>
       </fieldset>

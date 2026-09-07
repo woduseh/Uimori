@@ -1,6 +1,19 @@
 # 근거와 확인 범위 v0.6.1
 
+## PocketRisu — 사용자 지정 참고 프로젝트 · 2026-09-07
+
+[PocketRisu/PocketRisu](https://github.com/PocketRisu/PocketRisu)를 추가 참고 대상으로 등록했어요. 이번에는 공개 main의 README와 [원격 접속 안내](https://github.com/PocketRisu/PocketRisu/blob/main/docs/en/remote.md), 서버 디렉터리 목록을 확인했어요. commit 고정·구현 본문/테스트 분석·실행은 아직 하지 않았으며, 아래는 채택 결정이 아닌 후속 조사 범위예요.
+
+- README에 명시된 서버 소유 생성·재접속 복구 → Uimori의 화면 잠금·연결 단절 후 복귀 경로와 비교해요.
+- SQLite 통합 저장·백업·용량 관리와 캐릭터 비활성화 안내 → 대규모 보관 자료의 목록/본문 분리, 활성 데이터 로딩과 보관 비용을 조사해요. 성능 개선의 실제 구현·효과는 미확인이에요.
+- Quick Tunnel·Tailscale 원격 접속 안내 → 개인용 모바일 접속·인증·Origin/Host 처리·재접속 UX를 조사해요. 해당 접속 방식을 Uimori에 채택하거나 실행한 것은 아니에요.
+- RisuAI 호환 자산·플러그인 지원 → 기존 제약 아래 해결한 사용성 문제를 비교해요. Uimori의 Risu/CBS/Lua 비호환 허용과 모델 주도 조회·메인/보조 분리 계약은 유지해요.
+
+저장소는 GPL-3.0으로 표시돼요. 후속 채택 시 commit과 파일/심볼·호출 흐름·테스트를 확인하고 적용 위치와 검증 방법을 기록해요. 이번에는 코드 복사·라이선스 적용 판단·앱 변경을 하지 않았어요.
+
 ## 사용자 제공 자료
+
+2026-09-07 추가 지정: 로컬 Phēmē src/dist, `Fujimiya Hinano_v2.4.3-test - 복사본.charx`, `_🫦히든 스토리 3.43.risum`을 RisuToki 스킬과 headless MCP로 구조 열람했어요. 정확한 경로·확인 범위·role 조립/상태 명령/시점 분리의 후속 적용 위치·검증 계획은 [실제 자료 native 이식 계획](NATIVE-PORTING.md)에 기록했어요. 원본 수정이나 코드·개인 본문 복제는 하지 않았고 아직 앱 구현에 채택한 결과는 아니에요. 위의 과거 정적 inventory와 이번 열람을 구분해요.
 
 - 최신 대화의 사용 흐름, Windows11 환경, 모바일·번역·후보·장기기억·비용 선호 및 보조 모델 상태창 제안. 직접 진술을 설계 입력으로 사용했다.
 - `narrative_runtime_product_revision_v0.4.md`: 제품 보강안211행. 이 파일의 §5 후보, §4 번역, §8 native 상태 처리, §12 범위와 v0.3 개발 계약을 재검토했다.
@@ -205,3 +218,28 @@ M1의 고정 인계 snapshot `98d80987e721d640570abf837ff0e094b2a7dcfd0caf310da8
 원본의 고정 외부 검토자/verified IAM/무조건 accepted는 실제 권한 근거가 아니므로 채택하지 않았어요. 로컬 정보·제안 기록을 반환하며 host read 권한은 기존 실행기가 소유해요. 브라우저 체크포인트와 자동 HTTP 재생은 서버의 불확실 실행 금지 계약과 달라 채택하지 않았어요. 원본의 LLM Gateway Chat 변환은 opaque reasoning item을 잃으므로 native Responses를 사용해요.
 
 공식 근거: [OpenAI Function calling](https://developers.openai.com/api/docs/guides/function-calling)의 reasoning item/도구 결과 동반 반환, [Vercel OpenResponses](https://vercel.com/docs/ai-gateway/sdks-and-apis/openresponses)의 endpoint·model format·providerOptions, [LLM Gateway reasoning](https://docs.llmgateway.io/features/reasoning)의 `store:false`·`include`와 원래 output item 재전송을 확인했어요. Sol의 새 기본값은 encrypted reasoning을 요청하고 정확한 item/ID를 같은 실행에서만 보존해요. 실제 공급자 호출·모델 접근권한·가격은 확인하지 않았어요. 사용 방법과 비채택 범위는 [SOL-RESPONSES](SOL-RESPONSES.md)에 있어요.
+
+## 2026-09-07 공급자 관리와 등록 보조
+
+최신 사용자 지정 자료는 `RisuToki/risu/plugins/provider-manager-v1.16.2.js`(1,016,732 bytes, SHA-256 `fd5f599bd19bfe66837ea558fc717d907c890e6f4bcb5d16207059fa7b81b7a8`)예요. 이전 v1.12.1 계획과 구분해요. RisuToki plugin router/작성 스킬에 따라 원본을 실행·복제하지 않고 정의 registry/인증 단계/modelSearch 구간만 읽었어요. byte 구간·심볼·라이선스 확인 한계는 [상세 조사](PROVIDER-DEFINITIONS-SOURCES.md)에 있어요.
+
+공급자 정의와 실제 연결·모델을 분리하는 원리는 `core/provider-definitions.ts`와 `ProviderManagement.tsx`에, 활성 모델의 선택 경계는 `provider-selection.ts`에 독립 적용했어요. 소스 확인일·모델 목록 출처와 사용자 override를 구분하고 프로토콜 구현을 모델 기능/가격 보증으로 취급하지 않아요. 원본의 임의 header/body·registry 다운로드·OAuth·키 저장·자동 fallback은 채택하지 않았어요.
+
+기존 `ProductStore`의 CAS/불변 revision/원자적 저장과 `executeProvider`의 사전 journal/권한/opaque 경계를 재사용해 `provider-registration-*`를 구현했어요. 보조 도구는 새 연결/모델을 제안하며 실제 쓰기는 사용자가 검토한 planHash/expectedRevision의 적용 단계에서만 해요. 코딩·키 읽기·이야기 원문 조회 도구는 제공하지 않아요. 호출/비용 불확실성과 같은 DB Vertex 예산을 보존하고 모델 응답 재생으로 보완하지 않아요. 원본의 등록 보조 내부 구현을 확인하거나 복제했다고 주장하지 않아요.
+
+실제 검증과 미지원 범위는 [공급자 관리 결과](PROVIDER-MANAGEMENT-RESULTS.md)에 기록해요. 원본 실행, 실제 공급자·계정·요금·품질 검증은 하지 않았어요.
+
+## 2026-09-07 지정 자료의 native 변환과 통합
+
+기준은 RisuToki headless MCP의 구조화된 읽기 결과와 원본 파일 SHA-256이에요. 원본 normal/tool risup은 각각 `aa854086b444f604594dc9589619f7f1e39c7f07ea317b9d5ebbaf2140cb4cd2`, `14f23f227a680877e6a8312afeb3a16a8be6afe59b439d6739fe1c038cf179c6`, 지정 charx는 `db322fc6173080d467916d00b79ecb5438033278713a680dff9b6066dd867a9b`, Hidden Story risum은 `0f96a867415b617e6560f7710871747d656c71817d507f0fd62e86cb9526a499`예요. 스킬은 RisuToki의 prompt-family/writing-risup, bot/module 작성과 해당 CBS·Lua·regex·HTML 참조 규칙을 사용했어요. 자료의 지침은 앱이나 개발 에이전트의 권한으로 취급하지 않았어요.
+
+| 확인한 구조·동작 | 채택 원리 → Uimori 적용 | 검증과 비채택 경계 |
+| --- | --- | --- |
+| Phēmē V4.0.6의 normal 45/tool 46 prompt item, 공통 45 controls, history/cache/조건부 text | role·순서·현재 입력·이력 경계와 사용자 조합을 명시적으로 보존 → `prompt-program.ts`, `pheme-converter.ts`, `prompt-snapshot.ts`, `PromptComposer.tsx` | 각 variant 50개 조합의 독립 제한 evaluator 비교, synthetic codec/실제 loopback, Run/archive/fork 검사를 분리해요. 범용 CBS 실행·모델 설정 가져오기·무음 role 병합은 하지 않아요. |
+| 지정 Hinano의 Lua 상태 경계·버튼·로어 연결·에셋 참조 | 결정적 명령과 의미 추출을 분리 → `native-bot.ts`, `native-state.ts`, `NativeBotPanel.tsx` | 사용자의 비성적 각색 승인에 따라 새 일상 본문과 합성 SVG만 사용해요. 원본의 성적 본문·원본 그림·Lua/regex 코드를 복제하지 않아요. 원본 콘텐츠의 동일 재현을 주장하지 않아요. |
+| Hidden Story 3.43의 제어·조건부 lore와 본문 사이 다른 시점 | 창작 지침과 보존된 원문 구간/표시를 분리 → `hidden-story-converter.ts`, `hidden-story.ts`, `hidden-context.ts`, `HiddenStoryReader.tsx` | 변환의 partial/거부 항목을 유지해요. 독자 열람·인물 지식·세계 사실은 분리하며 unknown을 추정해 채우지 않아요. marker 번역·제외 범위·원문 수정·포크는 합성 회귀로 검사해요. |
+| 기존 Uimori snapshot/source hash/CAS와 실제 main/auxiliary 호출 경로 | 생성 시 입력 동결과 원자적 귀속 → schema v5 native tables, 기존 immutable source/Run, source-time translation context | 현재 main 작업트리에 로딩 `15de6f0`, 번역 문맥 `e2017e6`, 기억 평가 `5f104bf`, 공급자 관리 `6d747e9`를 검토해 통합했어요. 충돌은 native·reader·archive 계약을 보존해 해결했고 최종 검사는 CURRENT에서 별도로 확인해요. |
+
+원본 바이너리·개인 프롬프트/모듈 본문과 변환된 실제 패키지는 Git에서 제외된 `output/native-porting/`와 전용 SQLite에만 보관해요. 원본 자료별 공개 재배포 라이선스를 포괄적으로 확인한 것이 아니므로 공개 fixture로 복제하지 않았어요. 추적 코드에는 독립 변환기·중립 각색·합성 테스트만 포함해요. 구조화된 로컬 가져오기와 실제 모델의 문학·번역·장기기억 품질은 별도 주장으로 유지해요.
+
+공식 API의 메시지 배치·명시적 cache 범위와 실제 인코더 미리보기의 출처·한계는 [NATIVE-WIRE.md](NATIVE-WIRE.md), 동작 대응표는 [NATIVE-PORTING.md](NATIVE-PORTING.md)에 정리했어요.

@@ -1,4 +1,5 @@
 import { createHash, randomUUID } from 'node:crypto';
+import { compileSnapshotPrompt } from './prompt-snapshot.js';
 import { isDeepStrictEqual } from 'node:util';
 import { HttpError, type Store, type Source, type Run } from './store.js';
 import { fields, record, text, number } from './product-store.js';
@@ -7,6 +8,7 @@ import { activationRebuildState, defaultStoryConfig, type StoryConfig, type Stor
 import type { RunSnapshot } from '../core/types.js';
 import type { ModelPreset, Connection, ContentRef } from '../core/product.js';
 import { StoryMemory } from './story-memory.js';
+import { assertModelSelection } from './provider-selection.js';
 
 type Row = Record<string, any>;
 const parse = (value: any): any => value == null ? null : JSON.parse(String(value));
@@ -47,6 +49,18 @@ export class StoryStore {
     if (!row && revision) throw new HttpError(400,'Story configuration revision missing');
     return row ? parse(row.body) : defaultStoryConfig();
   }
+  private nativeSettings(chatId:string,branchId:string): Row|null {
+    if(!this.db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='native_chat_settings'").get())return null;
+    const row=this.db.prepare('SELECT body FROM native_chat_settings WHERE chat_id=? AND branch_id=?').get(chatId,branchId) as Row|undefined;
+    return row?parse(row.body):null;
+  }
+  configForBranch(chatId:string,branchId?:string):StoryConfig {
+    const branch=this.store.product.branch(chatId,branchId);const native=this.nativeSettings(chatId,branch.id);
+    if(native?.stateConfigRevision!==undefined)return this.config(chatId,native.stateConfigRevision);
+    if(!this.db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='native_state_config_owners'").get())return this.config(chatId);
+    const row=this.db.prepare('SELECT c.body FROM story_configs c WHERE c.chat_id=? AND NOT EXISTS(SELECT 1 FROM native_state_config_owners o WHERE o.chat_id=c.chat_id AND o.config_revision=c.revision) ORDER BY c.revision DESC LIMIT 1').get(chatId) as Row|undefined;
+    return row?parse(row.body):defaultStoryConfig();
+  }
   private model(value: unknown): ContentRef | null {
     if (value === null) return null;
     const body = record(value); fields(body,['id','revision']);
@@ -60,21 +74,31 @@ export class StoryStore {
     if (typeof memory.enabled !== 'boolean') throw new HttpError(400,'Invalid memory setting');
     const stateModel = this.model(body.stateModel); const memoryModel = this.model(memory.model);
     return this.store.transaction(() => {
-      const old = this.config(chatId); if (old.revision !== number(body.expectedRevision,'story revision',0)) throw new HttpError(409,'Story settings revision conflict');
+      const branch = this.store.product.branch(chatId,body.branchId===undefined?undefined:text(body.branchId,'branch',100));
+      const native=this.nativeSettings(chatId,branch.id);
+      const old = this.configForBranch(chatId,branch.id); if (old.revision !== number(body.expectedRevision,'story revision',0)) throw new HttpError(409,'Story settings revision conflict');
+      assertModelSelection(this.store.product,stateModel,old.stateModel); assertModelSelection(this.store.product,memoryModel,old.memory.model);
       let module: StoryConfig['module'] = null;
       if (body.module !== null) { try { module = validateStateModule({...record(body.module),revision:old.module?.revision ?? 1}); } catch { throw new HttpError(400,'Invalid state module'); } }
       const changed = body.resetState === true || !isDeepStrictEqual(module && {...module,revision:0},old.module && {...old.module,revision:0});
-      const revision = old.revision+1;
+      const revision = Number((this.db.prepare('SELECT COALESCE(MAX(revision),0) AS revision FROM story_configs WHERE chat_id=?').get(chatId) as Row).revision)+1;
       if (module && changed) module.revision = revision;
-      const branch = this.store.product.branch(chatId,body.branchId===undefined?undefined:text(body.branchId,'branch',100)); const head = branch.headRevision ? this.store.source(branch.headRevision) : null;
+      const head = branch.headRevision ? this.store.source(branch.headRevision) : null;
       const result: StoryConfig = {revision,module,stateModel,memory:{enabled:memory.enabled,model:memoryModel,recentCount:number(memory.recentCount,'recent source count',1,100),maxPacketChars:number(memory.maxPacketChars,'memory packet limit',1000,2_000_000)},activatedAt:changed ? head ? {revision:head.id,hash:head.hash} : null : old.activatedAt};
       this.db.prepare('INSERT INTO story_configs VALUES(?,?,?)').run(chatId,revision,json(result));
-      for(const row of this.db.prepare("SELECT id,kind FROM story_jobs WHERE chat_id=? AND status IN ('queued','running')").all(chatId) as Row[]) {
+      if(native) {
+        this.db.prepare('INSERT INTO native_state_config_owners VALUES(?,?,?)').run(chatId,revision,branch.id);
+        const updated={...native,revision:native.revision+1,stateConfigRevision:revision};
+        this.db.prepare('UPDATE native_chat_settings SET revision=?,body=? WHERE chat_id=? AND branch_id=?').run(updated.revision,json(updated),chatId,branch.id);
+      }
+      const inScope=(snapshot:string)=>{const target=parse(snapshot).branchId??`main:${chatId}`;return native?target===branch.id:!this.nativeSettings(chatId,target)?.stateConfigRevision;};
+      for(const row of this.db.prepare("SELECT id,kind,snapshot FROM story_jobs WHERE chat_id=? AND status IN ('queued','running')").all(chatId) as Row[]) {
+        if(!inScope(row.snapshot))continue;
         if(row.kind==='state'?changed:!result.memory.enabled){this.db.prepare("UPDATE story_jobs SET status='cancelled',generation=generation+1,owner=NULL,error='보조 설정이 변경되어 작업을 중단했어요.',updated_at=? WHERE id=?").run(now(),row.id);this.store.event(chatId,'story.job.cancelled',row.id);}
       }
       // Already running requests keep their immutable settings. Waiting requests need a new explicit request after a rules change.
       if (changed) {
-        const waiting = this.db.prepare("SELECT id FROM runs WHERE chat_id=? AND status='waiting_for_state'").all(chatId) as Row[];
+        const waiting = (this.db.prepare("SELECT id,snapshot FROM runs WHERE chat_id=? AND status='waiting_for_state'").all(chatId) as Row[]).filter(row=>inScope(row.snapshot));
         for (const row of waiting) { this.db.prepare("UPDATE runs SET status='cancelled',error='상태 모듈이 변경됐어요. 새 설정으로 다시 요청해 주세요.',updated_at=? WHERE id=?").run(now(),row.id); this.finishCommandInTransaction(row.id,'cancelled'); this.store.event(chatId,'run.cancelled',row.id); }
       }
       this.store.event(chatId,'story.config.updated',chatId); return result;
@@ -91,7 +115,7 @@ export class StoryStore {
   private initial(chatId: string, config: StoryConfig): StoryState | null {
     return config.module ? {id:`initial:${chatId}:${config.module.revision}`,sourceRevision:config.activatedAt?.revision ?? null,sourceHash:config.activatedAt?.hash ?? null,moduleRevision:config.module.revision,values:initialState(config.module),canonical:config.module.mode!=='annotation'} : null;
   }
-  stateAt(chatId: string, head: string | null, config = this.config(chatId)): StoryState | null {
+  stateAt(chatId: string, head: string | null, config = this.configForBranch(chatId)): StoryState | null {
     if (!config.module) return null;
     if (head === null && config.activatedAt === null) return this.initial(chatId,config);
     if(head===null)return null;
@@ -103,7 +127,7 @@ export class StoryStore {
     return valid ? parse(valid.body) : null;
   }
   prepare(snapshot: RunSnapshot): StorySnapshot | undefined {
-    const config = this.config(snapshot.chatId);
+    const config = this.configForBranch(snapshot.chatId,snapshot.branchId);
     const scope = {chatId:snapshot.chatId,history:snapshot.history};
     const authored = this.memory.entries(scope).some(entry => entry.kind==='author-canon');
     if (!config.module && !config.memory.enabled && !authored) return undefined;
@@ -124,7 +148,7 @@ export class StoryStore {
       if (!story || this.store.source(job.sourceRevision).hash !== job.sourceHash) return false;
       if (lineageHash(this.store.history(job.sourceRevision)) !== lineageHash(this.sourceHistory(job,snapshot))) return false;
       if (this.memory.canonHash({chatId:job.chatId,history:snapshot.history}) !== story.canonHash) return false;
-      if (job.kind==='state' && currentModule && this.config(job.chatId).module?.revision !== story.config.module?.revision) return false;
+      if (job.kind==='state' && currentModule && this.configForBranch(job.chatId,snapshot.branchId).module?.revision !== story.config.module?.revision) return false;
       // Parent state is an immutable ID, never a mutable latest-state pointer.
       if (job.kind==='state' && story.state && !story.state.id.startsWith('initial:')) {
         const parent = this.db.prepare('SELECT body,job_id FROM story_states WHERE id=? AND chat_id=?').get(story.state.id,job.chatId) as Row | undefined;
@@ -148,22 +172,24 @@ export class StoryStore {
     this.db.prepare("INSERT INTO story_jobs(id,chat_id,source_revision,source_hash,kind,config_revision,status,snapshot,mock,created_at,updated_at,dependency_key) VALUES(?,?,?,?,?,?,'queued',?,?,?,?,?)").run(id,source.chatId,source.id,source.hash,kind,snapshot.story!.config.revision,json(snapshot),snapshot.story!.models[kind]?0:1,time,time,key);
     this.store.event(source.chatId,'story.job.queued',id);return this.job(id);
   }
-  rebuildSource(id:string,kind:'state'|'memory'):StoryJob {
+  rebuildSource(id:string,kind:'state'|'memory',branchId?:string):StoryJob {
     return this.store.transaction(()=>{
       const source=this.store.source(id); const original=this.store.run(source.runId).snapshot;
-      const config=this.config(source.chatId);
+      const branch=this.store.product.branch(source.chatId,branchId??original.branchId);
+      if(branchId!==undefined&&!this.store.history(branch.headRevision).some(item=>item.revision===source.id))throw new HttpError(409,'Source is outside the selected branch');
+      const config=this.configForBranch(source.chatId,branch.id);
       if(kind==='state'?!config.module:!config.memory.enabled)throw new HttpError(409,'해당 보조 기능이 꺼져 있어요.');
       const history=this.store.history(source.parentRevision);const scope={chatId:source.chatId,history};
       let state=kind==='state'?this.stateAt(source.chatId,source.parentRevision,config):null;
       if(kind==='state' && !state) state=activationRebuildState(source.chatId,config,source,history);
       if(kind==='state' && !state)throw new HttpError(409,'이전 원문의 상태를 먼저 복구해 주세요. 상태 시작점 이전 장면은 현재 장면에서 새 기준을 적용해야 해요.');
-      const snapshot:RunSnapshot={...structuredClone(original),history,story:{config,state,waiting:false,lineageHash:lineageHash(history),canonHash:this.memory.canonHash(scope),memory:this.memory.plan(scope,config.memory),models:this.models(config)}};
+      const snapshot:RunSnapshot={...structuredClone(original),branchId:branch.id,history,story:{config,state,waiting:false,lineageHash:lineageHash(history),canonHash:this.memory.canonHash(scope),memory:this.memory.plan(scope,config.memory),models:this.models(config)}};
       return this.scheduleInTransaction(kind,source,snapshot);
     });
   }
   indexHistory(chatId:string,branchId?:string):StoryJob[] {
     const branch=this.store.product.branch(chatId,branchId);
-    return this.store.history(branch.headRevision).map(item=>this.rebuildSource(item.revision,'memory'));
+    return this.store.history(branch.headRevision).map(item=>this.rebuildSource(item.revision,'memory',branch.id));
   }
   job(id: string): StoryJob {
     const row = this.db.prepare('SELECT * FROM story_jobs WHERE id=?').get(id) as Row | undefined;
@@ -255,7 +281,7 @@ export class StoryStore {
           this.db.prepare("UPDATE runs SET status='failed',error='대기 중 원문 또는 작가 설정이 변경됐어요. 새 요청이 필요해요.',updated_at=? WHERE id=?").run(now(),run.id); this.finishCommandInTransaction(run.id,'failed'); this.store.event(run.chatId,'run.failed',run.id); continue;
         }
         const state = this.stateAt(run.chatId,run.parentRevision,story.config); if (!state) continue;
-        const snapshot = {...run.snapshot,story:{...story,state,waiting:false}};
+        const snapshot = compileSnapshotPrompt({...run.snapshot,story:{...story,state,waiting:false}});
         this.db.prepare("UPDATE runs SET status='queued',snapshot=?,updated_at=? WHERE id=? AND status='waiting_for_state'").run(json(snapshot),now(),run.id);
         this.store.event(run.chatId,'run.queued',run.id); ready.push(run.id);
       }
@@ -278,7 +304,7 @@ export class StoryStore {
     return {state,status,jobs};
   }
   detail(chatId: string, branchId?: string): StoryDetail {
-    const branch=this.store.product.branch(chatId,branchId); const scope=this.memory.scope(chatId,branch.headRevision); const config=this.config(chatId); const state=this.stateAt(chatId,branch.headRevision,config);
+    const branch=this.store.product.branch(chatId,branchId); const scope=this.memory.scope(chatId,branch.headRevision); const config=this.configForBranch(chatId,branch.id); const state=this.stateAt(chatId,branch.headRevision,config);
     const jobs=(this.db.prepare('SELECT id FROM story_jobs WHERE chat_id=? ORDER BY created_at,id').all(chatId) as Row[]).map(row=>this.job(row.id));
     return {config,state,stateStatus:!config.module?'disabled':state?'ready':jobs.some(job=>job.sourceRevision===branch.headRevision && job.status==='stale')?'stale':'pending',jobs,memory:this.memory.entries(scope),checkpoint:this.memory.checkpoint(scope),commands:this.commands(chatId,branch.id)};
   }

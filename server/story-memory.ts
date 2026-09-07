@@ -3,6 +3,7 @@ import { isDeepStrictEqual } from 'node:util';
 import { memoryHash, planMemoryContext, validateMemoryEntry, visibleMemoryEntries, type MemoryCheckpoint, type MemoryEntry, type MemoryHistoryItem, type MemoryScope } from '../core/memory.js';
 import type { StoryConfig } from '../core/story.js';
 import { HttpError, type Store } from './store.js';
+import { hiddenMemoryEntryAllowed } from '../core/hidden-context.js';
 
 type Row = Record<string, any>;
 const reject = (message: string): never => { throw new HttpError(400, `Memory: ${message}`); };
@@ -105,6 +106,8 @@ export class StoryMemory {
       const entry = validateMemoryEntry({ ...raw, id: randomUUID() }, scope);
       if (entry.kind === 'author-canon') reject('extractor cannot author canon');
       if (entry.atRevision !== source.id || entry.atHash !== source.hash) reject('entry must anchor to job source');
+      const snapshot=JSON.parse(job!.snapshot);
+      if(!hiddenMemoryEntryAllowed({...snapshot,history},entry))reject('entry evidence is excluded from this request');
       return entry;
     });
     const prior = this.db.prepare('SELECT i.job_id,j.* FROM story_indexes i JOIN story_jobs j ON j.id=i.job_id WHERE i.chat_id=? AND i.source_revision=? AND i.source_hash=?').get(chatId, source.id, source.hash) as Row | undefined;

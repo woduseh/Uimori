@@ -1,10 +1,12 @@
 import { createHash } from 'node:crypto';
+import { parseHiddenStory, type HiddenRange } from './hidden-story.js';
 
 export type MemoryHistoryItem = { revision: string; text: string; contentHash?: string };
 /** The host supplies the exact ordered source ancestry, ending at the request's source time. */
 export type MemoryScope = { chatId: string; history: readonly MemoryHistoryItem[] };
 export type MemorySourceRef = { revision: string; hash: string; start: number; end: number; quote: string };
-type MemoryBase = { id: string; chatId: string; atRevision: string | null; atHash: string | null; text: string };
+export type MemoryKnowledge = {readerVisible:true;worldStatus:'unspecified';knownByActorIds:null;segments:{sourceRevision:string;sourceHash:string;segmentId:string;kind:'hidden'|'evaluation';range:HiddenRange}[]};
+type MemoryBase = { id: string; chatId: string; atRevision: string | null; atHash: string | null; text: string; knowledge?:MemoryKnowledge };
 export type MemoryEntry = MemoryBase & (
   | { kind: 'author-canon'; declaration: { author: string; text: string } }
   | { kind: 'observed-story' | 'derived-summary' | 'preference'; sources: MemorySourceRef[] }
@@ -38,7 +40,7 @@ export function validateMemoryEntry(value: unknown, scope: MemoryScope): MemoryE
   const entry = object(value); const items = history(scope);
   const canon = entry.kind === 'author-canon'; const belief = entry.kind === 'character-belief' || entry.kind === 'hypothesis';
   if (!['author-canon', 'observed-story', 'derived-summary', 'preference', 'character-belief', 'hypothesis'].includes(String(entry.kind))) fail('INVALID_KIND');
-  keys(entry, ['id', 'chatId', 'atRevision', 'atHash', 'text', 'kind', ...(canon ? ['declaration'] : belief ? ['actor', 'sources'] : ['sources'])]);
+  keys(entry, ['id', 'chatId', 'atRevision', 'atHash', 'text', 'kind', 'knowledge', ...(canon ? ['declaration'] : belief ? ['actor', 'sources'] : ['sources'])]);
   if (!text(entry.id) || !text(entry.text) || entry.chatId !== scope.chatId) fail('INVALID_ENTRY');
   const anchor = items.findIndex(item => item.revision === entry.atRevision && item.contentHash === entry.atHash);
   if (anchor < 0 && !(canon && entry.atRevision === null && entry.atHash === null)) fail('OUT_OF_SCOPE');
@@ -55,7 +57,22 @@ export function validateMemoryEntry(value: unknown, scope: MemoryScope): MemoryE
       if (!integer(ref.start) || !integer(ref.end) || ref.end <= ref.start || ref.end > items[index].text.length || typeof ref.quote !== 'string' || items[index].text.slice(ref.start, ref.end) !== ref.quote) fail('INVALID_SOURCE_RANGE');
     }
   }
-  return structuredClone(value) as MemoryEntry;
+  const segments:MemoryKnowledge['segments']=[];
+  if(!canon)for(const raw of entry.sources as MemorySourceRef[]){
+    const source=items.find(item=>item.revision===raw.revision)!;
+    if(!/@hsTitle:|<EvaluationReport>/u.test(source.text))continue;
+    const parsed=parseHiddenStory({sourceRevision:source.revision,sourceHash:source.contentHash,text:source.text});
+    if(parsed.diagnostics.some(d=>d.severity==='error'))fail('HIDDEN_EVIDENCE_UNCERTAIN');
+    for(const segment of parsed.segments)if(segment.kind!=='main'&&segment.range.start<raw.end&&raw.start<segment.range.end&&!segments.some(s=>s.sourceRevision===source.revision&&s.segmentId===segment.id))segments.push({sourceRevision:source.revision,sourceHash:source.contentHash,segmentId:segment.id,kind:segment.kind,range:{...segment.range}});
+  }
+  const knowledge:MemoryKnowledge|undefined=segments.length?{readerVisible:true,worldStatus:'unspecified',knownByActorIds:null,segments}:undefined;
+  if(entry.knowledge!==undefined){
+    // Canonical field order makes equality independent of the caller's JSON key order.
+    const supplied=object(entry.knowledge);keys(supplied,['readerVisible','worldStatus','knownByActorIds','segments']);
+    if(!knowledge||supplied.readerVisible!==true||supplied.worldStatus!=='unspecified'||supplied.knownByActorIds!==null||!Array.isArray(supplied.segments)||supplied.segments.length!==segments.length)fail('HIDDEN_KNOWLEDGE_MISMATCH');
+    for(const [index,raw]of(supplied.segments as unknown[]).entries()){const s=object(raw);keys(s,['sourceRevision','sourceHash','segmentId','kind','range']);const range=object(s.range);keys(range,['start','end']);const expected=segments[index];if(s.sourceRevision!==expected.sourceRevision||s.sourceHash!==expected.sourceHash||s.segmentId!==expected.segmentId||s.kind!==expected.kind||range.start!==expected.range.start||range.end!==expected.range.end)fail('HIDDEN_KNOWLEDGE_MISMATCH');}
+  }
+  return {...structuredClone(value as MemoryEntry),...(knowledge?{knowledge}:{})};
 }
 
 export function visibleMemoryEntries(scope: MemoryScope, entries: readonly MemoryEntry[]): MemoryEntry[] {

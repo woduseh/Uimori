@@ -99,7 +99,15 @@ export class ProviderBudget {
 
   private ledger() {
       let requests = 0; let reserved = 0n; let fullReservationCount = 0;
-      for (const row of this.db.prepare('SELECT request,status,connection_id,model_id,input_tokens,output_tokens,raw_usage,error FROM attempts').all() as AttemptRow[]) {
+      const registrationRows:AttemptRow[]=[];
+      const entries=this.db.prepare("SELECT body FROM versions v WHERE kind='registration-run' AND revision=(SELECT MAX(revision) FROM versions n WHERE n.kind=v.kind AND n.id=v.id)").all() as {body:string}[];
+      for(const entry of entries) {
+        let run:unknown;try{run=JSON.parse(entry.body);}catch{return reject('LIVE_BUDGET_HISTORY_UNVERIFIABLE');}
+        if(!object(run)||!Array.isArray(run.attempts))return reject('LIVE_BUDGET_HISTORY_UNVERIFIABLE');
+        for(const value of run.attempts){if(!object(value)||!object(value.request))return reject('LIVE_BUDGET_HISTORY_UNVERIFIABLE');const usage=object(value.usage)?value.usage:null;
+          registrationRows.push({request:JSON.stringify(value.request),status:String(value.status),connection_id:String(value.request.connectionId),model_id:String(value.request.modelId),input_tokens:usage?.inputTokens as number|null??null,output_tokens:usage?.outputTokens as number|null??null,raw_usage:null,error:value.error as string|null});}
+      }
+      for (const row of [...this.db.prepare('SELECT request,status,connection_id,model_id,input_tokens,output_tokens,raw_usage,error FROM attempts').all() as AttemptRow[],...registrationRows]) {
         let request: unknown;
         try { request = JSON.parse(row.request); } catch { return reject('LIVE_BUDGET_HISTORY_UNVERIFIABLE'); }
         if (!object(request)) return reject('LIVE_BUDGET_HISTORY_UNVERIFIABLE');
@@ -163,4 +171,3 @@ export class ProviderBudget {
     }
   }
 }
-

@@ -1,4 +1,4 @@
-import { Fragment, type ReactNode } from 'react';
+import { Fragment, memo, type ReactNode } from 'react';
 
 /**
  * Deliberate Markdown subset for reading saved prose. This produces React nodes,
@@ -121,7 +121,7 @@ function renderBlocks(text: string, depth = 0): ReactNode[] {
 }
 
 /** Render-only input: callers keep the canonical source and anchor mapping. */
-export function Prose({ text }: { text: string }) {
+export const Prose = memo(function Prose({ text }: { text: string }) {
   return <>{renderBlocks(text)}</>;
-}
+});
 

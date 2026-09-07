@@ -5,25 +5,24 @@ import { api } from './api.js';
 import { refValue } from './LibraryPanel.js';
 import { modelLabel } from './storyLabels.js';
 import { completePendingStoryProfile, savePendingStoryProfile, type NewStoryProfileIntent } from './pendingStory.js';
+import { useModelSelection } from './model-selection.js';
 
 type StorySelection = { title: string; bot: Content | null; persona: Content | null; preset: CreativePreset | null; main: ModelPreset | null; translation: ModelPreset | null; profile: NewStoryProfileIntent | null };
 
 const modelsKey = 'uimori:new-story-models';
-function availableModels(library: Library) {
-  return library.models.filter(model => library.connections.some(connection => connection.id === model.connectionId && connection.enabled));
-}
 function rememberedModels(library: Library): { main: string; translation: string } {
   try {
     const saved: unknown = JSON.parse(localStorage.getItem(modelsKey) || 'null');
     if (!saved || typeof saved !== 'object' || Array.isArray(saved)) return { main: '', translation: '' };
     const choices = saved as Record<string, unknown>;
-    const available = availableModels(library);
+    const available = library.models.filter(model => model.enabled !== false);
     const restore = (role: string) => available.some(item => refValue(item) === choices[role]) ? String(choices[role]) : '';
     return { main: restore('main'), translation: restore('translation') };
   } catch { return { main: '', translation: '' }; }
 }
 
 export function NewStory({ library, initialBot, onCreated }: { library: Library; initialBot?: Content; onCreated: (chat: Chat) => Promise<void> }) {
+  const {choices,resolving} = useModelSelection(library.models,library.connections);
   const [bot, setBot] = useState(initialBot ? refValue(initialBot) : '');
   const [persona, setPersona] = useState(''); const [preset, setPreset] = useState('');
   const [models, setModels] = useState(() => rememberedModels(library));
@@ -31,12 +30,23 @@ export function NewStory({ library, initialBot, onCreated }: { library: Library;
   const [busy, setBusy] = useState(false); const [error, setError] = useState('');
   const created = useRef<Chat | null>(null); const uncertain = useRef(false);
   const submitted = useRef<StorySelection | null>(null); const creating = useRef(false); const profileRecorded = useRef(false);
+  const availableModelKeys=JSON.stringify(choices.map(refValue));
   useEffect(() => { if (initialBot && !submitted.current) setBot(refValue(initialBot)); }, [initialBot]);
+  useEffect(()=>{
+    // A remembered suggestion is not an already-submitted profile intent. Resolve pinned
+    // connection revisions first so a harmless connection rename cannot discard it.
+    if(resolving||submitted.current)return;
+    setModels(previous=>{
+      const available=new Set<string>(JSON.parse(availableModelKeys));
+      const main=available.has(previous.main)?previous.main:'',translation=available.has(previous.translation)?previous.translation:'';
+      return main===previous.main&&translation===previous.translation?previous:{main,translation};
+    });
+  },[availableModelKeys,resolving]);
   function captureSelection(): StorySelection {
     const selectedBot = bot ? library.contents.find(item => item.kind === 'bot' && refValue(item) === bot) : null;
     const selectedPersona = persona ? library.contents.find(item => item.kind === 'persona' && refValue(item) === persona) : null;
     const selectedPreset = preset ? library.presets.find(item => refValue(item) === preset) : null;
-    const available = availableModels(library);
+    const available = choices;
     const main = models.main ? available.find(item => refValue(item) === models.main) : null;
     const translation = models.translation ? available.find(item => refValue(item) === models.translation) : null;
     if (models.main && !main || models.translation && !translation) throw new Error('선택한 모델을 사용할 수 없어요. 연결과 모델 목록을 확인한 뒤 다시 골라 주세요.');
@@ -83,7 +93,6 @@ export function NewStory({ library, initialBot, onCreated }: { library: Library;
   for (const item of frozenContents) if (!contents.some(current => refValue(current) === refValue(item))) contents.push(item);
   const presets = library.presets.map(item => frozen?.preset && refValue(frozen.preset) === refValue(item) ? frozen.preset : item);
   if (frozen?.preset && !presets.some(item => refValue(item) === refValue(frozen.preset!))) presets.push(frozen.preset);
-  const choices = availableModels(library);
   for (const selected of [frozen?.main, frozen?.translation]) if (selected && !choices.some(item => refValue(item) === refValue(selected))) choices.push(selected);
   const bots = contents.filter(item => item.kind === 'bot' && `${item.title} ${item.description}`.toLowerCase().includes(search.toLowerCase()));
   return <form className="new-story" onSubmit={event => { event.preventDefault(); void create(); }}>
@@ -93,8 +102,8 @@ export function NewStory({ library, initialBot, onCreated }: { library: Library;
     <label>페르소나<select aria-label="시작 페르소나" value={persona} onChange={e => setPersona(e.target.value)} disabled={locked}><option value="">페르소나 없음</option>{contents.filter(item => item.kind === 'persona').map(item => <option key={refValue(item)} value={refValue(item)}>{item.title}</option>)}</select></label>
     <label>창작 프리셋<select aria-label="시작 창작 프리셋" value={preset} onChange={e => setPreset(e.target.value)} disabled={locked}><option value="">기본 창작 제어</option>{presets.map(item => <option key={refValue(item)} value={refValue(item)}>{item.title}</option>)}</select></label>
     <fieldset className="start-models"><legend>본문과 한국어 번역</legend>
-      <label>본문 모델<select aria-label="시작 본문 모델" value={models.main} onChange={event => setModels(value => ({ ...value, main: event.target.value }))} disabled={locked}><option value="">검사용 모의 생성 · 실제 모델 없음</option>{choices.map(item => <option key={refValue(item)} value={refValue(item)}>{modelLabel(item, library)}</option>)}</select></label>
-      <label>한국어 번역 모델<select aria-label="시작 번역 모델" value={models.translation} onChange={event => setModels(value => ({ ...value, translation: event.target.value }))} disabled={locked}><option value="">검사용 모의 번역 · 실제 모델 없음</option>{choices.map(item => <option key={refValue(item)} value={refValue(item)}>{modelLabel(item, library)}</option>)}</select></label>
+      <label>본문 모델<select aria-label="시작 본문 모델" value={models.main} onChange={event => setModels(value => ({ ...value, main: event.target.value }))} disabled={locked}><option value="">검사용 모의 생성 · 실제 모델 없음</option>{models.main && !choices.some(item => refValue(item) === models.main) && <option value={models.main} disabled>이전 선택 · 연결 확인 또는 재선택 필요</option>}{choices.map(item => <option key={refValue(item)} value={refValue(item)}>{modelLabel(item, library)}</option>)}</select></label>
+      <label>한국어 번역 모델<select aria-label="시작 번역 모델" value={models.translation} onChange={event => setModels(value => ({ ...value, translation: event.target.value }))} disabled={locked}><option value="">검사용 모의 번역 · 실제 모델 없음</option>{models.translation && !choices.some(item => refValue(item) === models.translation) && <option value={models.translation} disabled>이전 선택 · 연결 확인 또는 재선택 필요</option>}{choices.map(item => <option key={refValue(item)} value={refValue(item)}>{modelLabel(item, library)}</option>)}</select></label>
       <small>선택한 모델은 다음 이야기에도 제안해요. 이야기를 만든 뒤 장면을 보내면 본문 생성과 한국어 번역을 시작해요.</small>
     </fieldset>
     <label>이야기 이름 <small>비워 두면 자동으로 정해요</small><input aria-label="새 이야기 이름" value={title} maxLength={100} onChange={e => setTitle(e.target.value)} disabled={locked}/></label>

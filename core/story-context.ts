@@ -1,6 +1,7 @@
 import { readMemorySource, searchMemorySources, searchMemoryEntries, visibleMemoryEntries, type MemoryEntry } from './memory.js';
 import type { RunSnapshot, ToolEvent } from './types.js';
 import type { ToolAction } from './provider.js';
+import { hiddenMemoryEntryAllowed, hiddenReadRange, hiddenSourceRequestView } from './hidden-context.js';
 
 export const STORY_READ_NAMES = ['memory.search','memory.read','story.search','story.read'];
 export const STORY_RESULT_MAX_BYTES = 24000;
@@ -10,6 +11,7 @@ const bytes = (value: unknown) => Buffer.byteLength(JSON.stringify(value), 'utf8
 /** Evidence bodies are retrieved with story.read; memory metadata keeps the exact source coordinates. */
 function provenance(entry: MemoryEntry, sourceOffset = 0) {
   const base: Record<string, unknown> = { id: entry.id, chatId: entry.chatId, kind: entry.kind, atRevision: entry.atRevision, atHash: entry.atHash };
+  if(entry.knowledge)base.knowledge=entry.knowledge;
   if (entry.kind === 'character-belief' || entry.kind === 'hypothesis') base.actor = entry.actor;
   if (entry.kind === 'author-canon') base.declaration = { author: entry.declaration.author };
   const sources = entry.kind === 'author-canon' ? [] : entry.sources;
@@ -51,10 +53,23 @@ function boundedSearch(total: number, offset: number, candidates: unknown[]) {
   return result();
 }
 
-export function executeStoryRead(snapshot:RunSnapshot,action:ToolAction):ToolEvent {
+/** Search only inside a kept source span: a query cannot cross an omitted hidden region. */
+function searchHiddenSources(snapshot:RunSnapshot,query:string,offset:number,limit:number){
+  if(!query.trim())throw new Error('QUERY_REQUIRED');
+  const matches=snapshot.history.flatMap(item=>{
+    const view=hiddenSourceRequestView(snapshot,item.revision);
+    for(const range of view.keptRanges){const match=item.text.slice(range.start,range.end).indexOf(query);if(match<0)continue;
+      const start=Math.max(range.start,range.start+match-60),end=Math.min(range.end,start+240),quote=item.text.slice(start,end);
+      return[{revision:item.revision,text:quote,source:{revision:item.revision,hash:view.sourceHash,start,end,quote},truncated:start>0||end<item.text.length,nextOffset:end<item.text.length?end:null}];
+    }return[];
+  });
+  return{results:matches.slice(offset,offset+limit),total:matches.length,nextOffset:offset+limit<matches.length?offset+limit:null};
+}
+
+export function executeStoryRead(snapshot:RunSnapshot,action:ToolAction,allowWithoutMemory=false):ToolEvent {
   const denied=(code:string):ToolEvent=>({callId:action.callId,name:action.name,args:{},result:{code},denied:true});
-  if(!snapshot.story?.memory || !STORY_READ_NAMES.includes(action.name))return denied('TOOL_NOT_ALLOWED');
-  const scope={chatId:snapshot.chatId,history:snapshot.history};const memory=snapshot.story.memory;
+  if((!snapshot.story?.memory && !allowWithoutMemory) || !STORY_READ_NAMES.includes(action.name))return denied('TOOL_NOT_ALLOWED');
+  const scope={chatId:snapshot.chatId,history:snapshot.history};const memory=snapshot.story?.memory;
   const args=action.args;
   const search=action.name.endsWith('.search');
   if(Object.keys(args).some(key=>!(search?['query','offset','limit']:action.name==='memory.read'?['id','offset','limit','sourceOffset']:['id','offset','limit']).includes(key)))return denied('INVALID_ARGUMENTS');
@@ -62,15 +77,16 @@ export function executeStoryRead(snapshot:RunSnapshot,action:ToolAction):ToolEve
   const offset=args.offset===undefined?0:Number(args.offset);const limit=args.limit===undefined?(search?20:4096):Number(args.limit);
   if(limit>(search?100:16000))return denied('INVALID_ARGUMENTS');
   try {
+    const entries=visibleMemoryEntries(scope,memory?.entries??[]).filter(entry=>hiddenMemoryEntryAllowed(snapshot,entry));
     let result:unknown;
     if(search){
       if(typeof args.query!=='string'||args.query.length>512)return denied('INVALID_ARGUMENTS');
       if(action.name==='story.search'){
-        const found=searchMemorySources(scope,{query:args.query,offset,limit});
+        const found=snapshot.hiddenStory?searchHiddenSources(snapshot,args.query,offset,limit):searchMemorySources(scope,{query:args.query,offset,limit});
         result=boundedSearch(found.total,offset,found.results.map(({source:{quote:_quote,...source},...item})=>({...item,source})));
       }
       else {
-        const found=searchMemoryEntries(scope,memory.entries,args.query,offset,limit);
+        const found=searchMemoryEntries(scope,entries,args.query,offset,limit);
         result=boundedSearch(found.total,offset,found.results.map(entry=>{const {entry:metadata,...page}=provenance(entry);return {...metadata,...page,excerpt:entry.text.slice(0,240),totalChars:entry.text.length};}));
       }
     }else{
@@ -78,10 +94,10 @@ export function executeStoryRead(snapshot:RunSnapshot,action:ToolAction):ToolEve
       if(action.name==='story.read'){
         const page=readMemorySource(scope,{revision:args.id,offset,limit});
         const {quote:_quote,...source}=page.source;
-        result=boundedRead(offset,page.source.end,end=>({text:page.text.slice(0,end-offset),source:{...source,end},totalChars:page.totalChars,truncated:end<page.totalChars,nextOffset:end<page.totalChars?end:null}));
+        result=boundedRead(offset,page.source.end,end=>{const filtered=snapshot.hiddenStory?hiddenReadRange(snapshot,args.id as string,offset,end):undefined;return{text:filtered?.text??page.text.slice(0,end-offset),source:{...source,end},...(filtered?{keptRanges:filtered.ranges,excludedRanges:filtered.excluded.map(item=>item.range),rangeSemantics:'source coordinates; text concatenates keptRanges'}:{}),totalChars:page.totalChars,truncated:end<page.totalChars,nextOffset:end<page.totalChars?end:null};});
       }
       else{
-        const entry=visibleMemoryEntries(scope,memory.entries).find(item=>item.id===args.id);
+        const entry=entries.find(item=>item.id===args.id);
         if(!entry||offset>entry.text.length)return denied('RESOURCE_UNAVAILABLE');
         if(args.sourceOffset!==undefined&&(!Number.isSafeInteger(args.sourceOffset)||Number(args.sourceOffset)<0))return denied('INVALID_ARGUMENTS');
         const metadata=provenance(entry,args.sourceOffset===undefined?0:Number(args.sourceOffset));

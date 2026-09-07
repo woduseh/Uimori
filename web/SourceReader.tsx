@@ -1,9 +1,12 @@
 import { StorySourceState } from './StoryPanel.js';
-import { Fragment, useLayoutEffect, useRef, useState } from 'react';
+import { Fragment, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import type { Asset } from '../core/product.js';
 import type { Job, Source } from '../core/types.js';
 import { api, labels } from './api.js';
 import { Prose } from './Prose.js';
+import { LazyDiagnostics } from './LazyDiagnostics.js';
+import { HiddenStoryReader, type HiddenTranslationView } from './HiddenStoryReader.js';
+import { parseHiddenStory, validateHiddenTranslation, type HiddenStoryConfig } from '../core/hidden-story.js';
 
 type ReaderMode = 'original' | 'translation';
 type ReaderProps = {
@@ -12,6 +15,7 @@ type ReaderProps = {
   onFork: (sourceId: string) => Promise<void>;
   request?: string;
   onInspect?: (runId: string) => void;
+  hiddenConfig?: HiddenStoryConfig;
 };
 type AnchorPosition = { anchors: string[]; top: number; scrollport: HTMLElement };
 
@@ -43,7 +47,7 @@ export function SourceReader(props: ReaderProps) {
 function latestTranslation(source: Source, jobs: Job[]) {
   return jobs.filter(job => job.kind === 'translation' && job.sourceRevision === source.id && job.sourceHash === source.hash && job.status !== 'stale').sort((a, b) => (b.revision ?? 1) - (a.revision ?? 1)).at(0);
 }
-function SourceReaderContent({ source, index, jobs, assets, refresh: refreshSource, onFork, request, onInspect }: ReaderProps) {
+function SourceReaderContent({ source, index, jobs, assets, refresh: refreshSource, onFork, request, onInspect, hiddenConfig }: ReaderProps) {
   const mounted = useRef(true);
   useLayoutEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
   const refresh = async () => { if (mounted.current) await refreshSource(); };
@@ -111,7 +115,7 @@ function SourceReaderContent({ source, index, jobs, assets, refresh: refreshSour
     </div>
     {editor && <TextEditor key={editor} role={editor} source={source} translation={translation} onCancel={() => setEditor(null)} onSaved={async () => { await refresh(); if (mounted.current) { setEditor(null); if (editor === 'translation') switchMode('translation'); } }}/>}
     {validTranslation?.manual && mode === 'translation' && <p className="muted">직접 수정한 번역</p>}
-    {mode === 'original' ? <div className="prose" data-testid="source-text">{source.text.slice(0, blocks[0].start)}{blocks.map((block, position) => <Fragment key={block.anchor}><div className="source-block" data-block-anchor={block.anchor} id={`block-${source.id}-${block.anchor}`}><Prose text={source.text.slice(block.start, blocks[position + 1]?.start ?? source.text.length)}/></div>{inline(block.anchor)}</Fragment>)}</div> : validTranslation ? <div className="prose translated" data-testid="translation-text">{segments?.length ? segments.map((segment, position) => <Fragment key={`${segment.anchors.join('-')}:${position}`}><div className="source-block" data-block-anchor={segment.anchors.join(' ')}><Prose text={segment.text}/></div>{segment.anchors.flatMap(inline)}</Fragment>) : <div className="source-block" data-block-anchor={blocks.map(block => block.anchor).join(' ')}><Prose text={validTranslation.text ?? ''}/>{blocks.flatMap(block => inline(block.anchor))}</div>}</div> : <div className="translation-placeholder" role="status"><p>{translation ? activeJob(translation) ? '한국어 번역을 준비하고 있어요. 원문은 저장됐어요.' : '한국어 번역이 아직 준비되지 않았어요. 원문은 보존돼요.' : '이 장면에는 아직 한국어 번역이 없어요.'}</p><button type="button" className="secondary" onClick={() => switchMode('original')}>원문부터 읽기</button></div>}
+    {hiddenConfig && (mode === 'original' || validTranslation) ? <NativeHiddenBody source={source} config={hiddenConfig} translationText={mode === 'translation' ? validTranslation?.text ?? segments?.map(segment => segment.text).join('\n\n') ?? '' : undefined} blocks={blocks} inline={inline}/> : mode === 'original' ? <div className="prose" data-testid="source-text">{source.text.slice(0, blocks[0].start)}{blocks.map((block, position) => <Fragment key={block.anchor}><div className="source-block" data-block-anchor={block.anchor} id={`block-${source.id}-${block.anchor}`}><Prose text={source.text.slice(block.start, blocks[position + 1]?.start ?? source.text.length)}/></div>{inline(block.anchor)}</Fragment>)}</div> : validTranslation ? <div className="prose translated" data-testid="translation-text">{segments?.length ? segments.map((segment, position) => <Fragment key={`${segment.anchors.join('-')}:${position}`}><div className="source-block" data-block-anchor={segment.anchors.join(' ')}><Prose text={segment.text}/></div>{segment.anchors.flatMap(inline)}</Fragment>) : <div className="source-block" data-block-anchor={blocks.map(block => block.anchor).join(' ')}><Prose text={validTranslation.text ?? ''}/>{blocks.flatMap(block => inline(block.anchor))}</div>}</div> : <div className="translation-placeholder" role="status"><p>{translation ? activeJob(translation) ? '한국어 번역을 준비하고 있어요. 원문은 저장됐어요.' : '한국어 번역이 아직 준비되지 않았어요. 원문은 보존돼요.' : '이 장면에는 아직 한국어 번역이 없어요.'}</p><button type="button" className="secondary" onClick={() => switchMode('original')}>원문부터 읽기</button></div>}
     {sceneStatus && <aside className="scene-status" aria-label="현재 장면의 표시 상태"><small>장면 상태</small><span>{sceneStatus}</span></aside>}
     <div className="derived-summary" aria-label="이 장면의 후속 작업">
       {attentionJobs.length ? attentionJobs.map(job => <div className={retryable(job.status) ? 'job-summary has-error' : 'job-summary'} key={job.id} data-job-id={job.id}><span>{jobTitle(job)} · {labels[job.status]}{retryable(job.status) ? ' · 원문 보존됨' : ''}</span><JobActions job={job} refresh={refresh} onError={setActionError} compact/></div>) : jobs.length > 0 && <p className="muted">{displayJobs.map(job => `${jobTitle(job)} ${labels[job.status]}`).join(' · ')}</p>}
@@ -125,6 +129,22 @@ function SourceReaderContent({ source, index, jobs, assets, refresh: refreshSour
     {actionError && <p className="error" role="alert">{actionError}</p>}
     <details className="source-job-details" onToggle={event => setDetailsOpen(event.currentTarget.open)}><summary>작업 상세{jobs.length ? ` · ${jobs.length}개` : ''}</summary>{detailsOpen && <><div className="derived">{displayJobs.map(job => <JobCard key={job.id} job={job} refresh={refresh} onError={setActionError} hideText={job.kind === 'translation'}/>)}</div><details className="inspector"><summary>원문 연결 정보</summary><dl><dt>source revision</dt><dd>{source.id}</dd><dt>parent revision</dt><dd>{source.parentRevision || '시작'}</dd><dt>SHA-256</dt><dd>{source.hash}</dd></dl><details><summary>현재 원문</summary><pre data-testid="source-raw">{source.text}</pre></details><p>제목·강조·목록·인용·링크·코드를 표시해요. 속성 없는 ruby의 본문과 rt만 읽기 표기로 표시하고, 나머지 HTML과 Markdown 이미지는 문자로 남겨요.</p></details></>}</details>
   </article>;
+}
+
+export function NativeHiddenBody({source,config,translationText,blocks,inline}:{source:Source;config:HiddenStoryConfig;translationText?:string;blocks:{anchor:string;start:number;end:number}[];inline:(anchor:string)=>ReactNode[]}){
+  const original={sourceRevision:source.id,sourceHash:source.hash,text:source.text};
+  let translation:HiddenTranslationView|undefined,error='';
+  if(translationText!==undefined){try{
+    const checked=validateHiddenTranslation(original,translationText);if(!checked.ok)throw new Error('Hidden translation boundaries differ');
+    const raw=parseHiddenStory(original),translated=parseHiddenStory({...original,text:translationText});
+    translation={sourceRevision:source.id,sourceHash:source.hash,segments:Object.fromEntries(raw.segments.map((segment,index)=>{const target=translated.segments[index];if(!target||target.kind!==segment.kind)throw new Error('Hidden translation structure differs');return[segment.id,{body:translationText.slice(target.bodyRange.start,target.bodyRange.end),...(target.title?{title:target.title}:{}),...(target.scene?{scene:target.scene}:{})}];}))};
+  }catch{error='번역의 히든 구간 경계를 확인할 수 없어 이 장면은 원문으로 표시해요. 번역과 원문은 보존돼요.';}}
+  const emitted=new Set<string>();
+  return <div className={`prose${translation?' translated':''}`} data-testid={translation?'translation-text':'source-text'}>{error&&<p role="alert">{error}</p>}<HiddenStoryReader source={original} config={config} translation={translation} renderText={(text,segment)=>{
+    const anchors=blocks.filter(block=>block.start<segment.range.end&&segment.range.start<block.end).map(block=>block.anchor);
+    const images=anchors.filter(anchor=>!emitted.has(anchor));images.forEach(anchor=>emitted.add(anchor));
+    return <div className="source-block" data-block-anchor={anchors.join(' ')}><Prose text={text}/>{images.flatMap(inline)}</div>;
+  }}/></div>;
 }
 
 type Draft = { text: string; expectedRevision: number; expectedSourceHash: string };
@@ -184,7 +204,7 @@ export function JobCard({ job, refresh, onError, hideText = false }: { job: Job;
     {job.error && <p className="error">보조 작업이 실패했어요. 원문은 보존돼요.</p>}
     <JobActions job={job} refresh={refresh} onError={onError}/>
     {job.chunks && job.chunks.length > 1 && <details className="chunk-details"><summary>번역 구간별 상태</summary><ol className="chunk-list">{job.chunks.map((chunk, index) => <li key={chunk.id}><span>구간 {index + 1} · {labels[chunk.status] || chunk.status} · 시도 {chunk.attempt}</span>{retryable(chunk.status) && <ChunkRetry jobId={job.id} chunkId={chunk.id} refresh={refresh} onError={onError}/>}</li>)}</ol></details>}
-    <details className="inspector"><summary>보조 작업의 실제 입력과 도구</summary><pre>{JSON.stringify({ jobId: job.id, sourceRevision: job.sourceRevision, sourceHash: job.sourceHash, input: (job as Job & { input?: unknown }).input, chunks: job.chunks }, null, 2)}</pre></details>
+    <LazyDiagnostics<Job & {input?:unknown}> path={`/jobs/${job.id}`} revision={`${job.status}:${job.attempt}:${job.revision}`} title="보조 작업의 실제 입력과 도구">{value=><pre>{JSON.stringify({jobId:value.id,sourceRevision:value.sourceRevision,sourceHash:value.sourceHash,input:value.input,chunks:value.chunks},null,2)}</pre>}</LazyDiagnostics>
     {job.kind === 'status' && <small>현재 장면의 표시예요. 다음 이야기의 사실에는 반영하지 않아요.</small>}
   </section>;
 }

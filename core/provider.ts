@@ -3,6 +3,8 @@ import type { ModelInput, Resource, RunSnapshot, ToolEvent, Usage } from './type
 import { compileCreative } from './product.js';
 import { DEFAULT_MAIN_PROMPT } from './prompts.js';
 import { executeStoryRead, STORY_READ_NAMES } from './story-context.js';
+import { nativeInstructions } from './native-context.js';
+import { hiddenHistoryForRequest, hiddenMemoryPlanForRequest } from './hidden-context.js';
 
 // These are host permissions, never instructions read from a content package.
 const ALLOWED_TOOLS = Object.freeze(['knowledge.search', 'knowledge.read', 'skills.list', 'skills.load']);
@@ -13,7 +15,16 @@ const metadata = ({ text: _text, chatId: _chatId, ...item }: Resource) => item;
 const scopedMetadata = (item: Resource, allowedIds: Set<string>) => ({ ...metadata(item), ...(item.relatedIds ? { relatedIds: item.relatedIds.filter(id => allowedIds.has(id)) } : {}) });
 const hash = (text: string) => createHash('sha256').update(text).digest('hex');
 function roleResources(snapshot: RunSnapshot, role: 'main' | 'translation' | 'status' | 'image' = 'main') {
-  return snapshot.resources.filter(item => item.chatId === snapshot.chatId && (role !== 'main' || (item.sourceKind !== 'glossary' && !(item.sourceKind === 'persona' && snapshot.profile?.creative.personaReference === false))));
+  const resources = snapshot.resources.filter(item => item.chatId === snapshot.chatId && (role !== 'main' || (item.sourceKind !== 'glossary' && !(item.sourceKind === 'persona' && snapshot.profile?.creative.personaReference === false))));
+  if (role === 'translation') {
+    const ids = new Set(resources.map(item => item.id));
+    for (const item of snapshot.profile?.contents ?? []) {
+      if (ids.has(item.id)) continue;
+      resources.push({...item, chatId:snapshot.chatId, kind:item.kind === 'skill' ? 'skill' : 'lore', sourceKind:item.kind});
+      ids.add(item.id);
+    }
+  }
+  return resources;
 }
 export type MainInput = ModelInput & {
   controls?: ReturnType<typeof compileCreative>;
@@ -27,7 +38,7 @@ export function buildMainInput(snapshot: RunSnapshot, results: readonly ToolEven
   const resources = roleResources(snapshot);
   const allowedIds = new Set(resources.map(item => item.id));
   const input: MainInput = {
-    role: 'main', contract: snapshot.profile ? snapshot.profile.promptPresets?.main?.text ?? DEFAULT_MAIN_PROMPT : MAIN_CONTRACT, task: snapshot.request, preset: snapshot.settings.preset,
+    role: 'main', contract: snapshot.profile?.promptPresets?.main?.program ? '' : snapshot.profile ? snapshot.profile.promptPresets?.main?.text ?? DEFAULT_MAIN_PROMPT : MAIN_CONTRACT, task: snapshot.request, preset: snapshot.settings.preset,
     facts: [...PINNED_FACTS], history: structuredClone(snapshot.history),
     catalog: resources.map(item => scopedMetadata(item, allowedIds)), prefetch: [], tools: [...ALLOWED_TOOLS], results: structuredClone([...results]),
   };
@@ -44,12 +55,19 @@ export function buildMainInput(snapshot: RunSnapshot, results: readonly ToolEven
     const state=snapshot.story.state;
     input.state={values:structuredClone(state.values),sourceRevision:state.sourceRevision,moduleRevision:state.moduleRevision,constraints:structuredClone(snapshot.story.config.module)};
   }
+  if(snapshot.nativeBot){
+    const p=snapshot.nativeBot.package;
+    const native=[{id:`native:${p.id}:instructions`,revision:p.revision,kind:'bot',text:nativeInstructions(snapshot.nativeBot)},...snapshot.resources.filter(r=>r.id.startsWith(`native:${p.id}:`)&&r.loading==='pinned').map(r=>({id:r.id,revision:r.revision,kind:'lore',text:r.text}))].map(item=>({...item,hash:hash(item.text)}));
+    input.pinnedSources=[...input.pinnedSources??[],...native];input.facts.push(...native.map(item=>item.text));
+  }
   if(snapshot.story?.memory){
-    const {recentHistory,...memory}=snapshot.story.memory.plan;
+    const {recentHistory,...memory}=hiddenMemoryPlanForRequest(snapshot,snapshot.story.memory.plan);
     if(!memory.ready)throw new Error('Memory context budget exceeded');
     input.history=structuredClone(recentHistory);input.memory=structuredClone(memory);
     input.tools.push(...STORY_READ_NAMES);
   }
+  else if(snapshot.hiddenStory)input.history=hiddenHistoryForRequest(snapshot);
+  if(snapshot.hiddenStory)input.contract+='\nHidden segment visibility is for the reader. A memory kind alone never establishes world truth or actor knowledge: respect knowledge.worldStatus and knownByActorIds; unspecified/null remains unknown. Never infer actor knowledge from a portrait or from the reader opening a panel.';
   if(input.catalog.length>100){input.catalogPage={total:input.catalog.length,listed:100,remaining:'Use knowledge.search or skills.list with pagination to discover the full approved scope.'};input.catalog=input.catalog.slice(0,100);}
   return input;
 }
@@ -70,7 +88,7 @@ export type ToolAction = { callId: string; name: string; args: Record<string, un
 /** Execute a reusable read action against the immutable Run's local corpus. */
 export function executeTool(snapshot: RunSnapshot, action: ToolAction, signal?: AbortSignal, role: 'main' | 'translation' | 'status' | 'image' = 'main'): ToolEvent {
   checkAbort(signal);
-  if(role==='main' && STORY_READ_NAMES.includes(action.name))return executeStoryRead(snapshot,action);
+  if((role==='main' || role==='translation') && STORY_READ_NAMES.includes(action.name))return executeStoryRead(snapshot,action,role==='translation');
   const denied = (code: string): ToolEvent => ({ callId: action.callId, name: ALLOWED_TOOLS.includes(action.name) ? action.name : 'unapproved', args: {}, result: { code }, denied: true });
   if (!ALLOWED_TOOLS.includes(action.name)) return denied('TOOL_NOT_ALLOWED');
   // Scope applies before search, counts, pagination, and individual reads alike.
@@ -98,7 +116,7 @@ export function executeTool(snapshot: RunSnapshot, action: ToolAction, signal?: 
   const end = Math.min(resource.text.length, offset + limit);
   const truncated = end < resource.text.length;
   return { ...action, args: { id: resource.id, offset, limit }, denied: false, result: {
-    source: { id: resource.id, kind: resource.kind, revision: resource.revision, hash: hash(resource.text), reference: `resource:${resource.id}@${resource.revision}#chars=${offset}-${end}` },
+    source: { id: resource.id, kind: resource.kind, ...(role==='translation' && resource.sourceKind ? {sourceKind:resource.sourceKind} : {}), revision: resource.revision, hash: hash(resource.text), reference: `resource:${resource.id}@${resource.revision}#chars=${offset}-${end}` },
     range: { start: offset, end, unit: 'utf16-code-unit' }, totalLength: resource.text.length,
     text: resource.text.slice(offset, end), truncated,
     continuation: truncated ? { id: resource.id, offset: end, limit } : null,

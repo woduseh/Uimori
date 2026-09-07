@@ -13,6 +13,13 @@ import { storyTables } from './story-store.js';
 import { normalizeStoryArchiveRow, validateStoryArchive } from './story-archive.js';
 
 import { validateSolOptions } from '../core/sol-config.js';
+import { validatePromptProgram, validateChatPromptControls, resolvePromptValues } from '../core/prompt-program.js';
+import { validateHiddenStorySelection } from './hidden-story.js';
+import { nativeBotTables } from './native-bot.js';
+import { validateNativeArchive, validateNativeVersion, validateNativeRunSnapshot } from './native-archive.js';
+import { nativeResources } from '../core/native-context.js';
+import { validateRegistrationArchive, validateRegistrationGraph } from './provider-registration-store.js';
+import { assertModelSelection } from './provider-selection.js';
 
 type Row = Record<string, any>;
 const json = JSON.stringify;
@@ -40,6 +47,24 @@ function requestTier(value: unknown, protocol: Connection['protocol']) {
   return choice(value,['standard','flex'],'request tier');
 }
 const modelOptionKeys = ['thinkingLevel','timeoutMs','structuredOutput','reasoningEffort','thinkingMode','thinkingBudgetTokens','sol'];
+function catalogTimestamp(value: unknown): string | null {
+  if (value === null) return null;
+  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(value) || !Number.isFinite(Date.parse(value)) || new Date(value).toISOString() !== value) throw new HttpError(400,'Invalid catalog timestamp');
+  return value;
+}
+function userOverrides(value: unknown): NonNullable<ModelPreset['userOverrides']> {
+  const b = record(value); fields(b,['tools','structuredOutput','note']);
+  return {tools:b.tools === null ? null : boolean(b.tools),structuredOutput:b.structuredOutput === null ? null : boolean(b.structuredOutput),note:text(b.note,'override note',2000,true)};
+}
+function validateModelMetadata(value: Row) {
+  if (value.enabled !== undefined) boolean(value.enabled);
+  if (value.userOverrides !== undefined) userOverrides(value.userOverrides);
+  if (value.source !== undefined) {
+    const source = record(value.source); fields(source,['kind','connectionRevision','catalogUpdatedAt']);
+    choice(source.kind,['catalog','manual'],'model source'); number(source.connectionRevision,'source connection revision'); catalogTimestamp(source.catalogUpdatedAt);
+    if (source.connectionRevision !== value.connectionRevision) throw new HttpError(400,'Model source revision mismatch');
+  }
+}
 function validateModelGeneration(value: Row, protocol?: Connection['protocol']) {
   if (value.sol !== undefined) {
     if (protocol && protocol !== 'sol-responses-v1') throw new HttpError(400,'Sol options require Sol Responses');
@@ -133,44 +158,62 @@ export class ProductStore {
   }
   preset(value: unknown) { const b = record(value); fields(b,['title','controls']); return this.save('preset',{ title: text(b.title,'title',200), controls: creative(b.controls) }); }
   promptPreset(value: unknown, id?: string) {
-    const b = record(value); fields(b,['title','role','text','expectedRevision']);
-    return this.save('prompt-preset',{title:text(b.title,'title',200),role:choice(b.role,['main','translation'],'prompt role'),text:text(b.text,'prompt text',200000,true)},id,id ? number(b.expectedRevision,'revision') : undefined);
+    const b = record(value); fields(b,['title','role','text','program','expectedRevision']);
+    return this.save('prompt-preset',{title:text(b.title,'title',200),role:choice(b.role,['main','translation'],'prompt role'),text:text(b.text,'prompt text',200000,true),...(b.program!==undefined?{program:validatePromptProgram(b.program)}:{})},id,id ? number(b.expectedRevision,'revision') : undefined);
   }
-  connection(value: unknown, id?: string) {
+  prepareConnection(value: unknown, id?: string) {
     const b = record(value); fields(b,['title','protocol','endpoint','credentialEnv','requestTier','enabled','expectedRevision']);
     const protocol = choice(b.protocol,[...PROVIDER_PROTOCOLS],'protocol'); const tier = requestTier(b.requestTier,protocol);
     const endpoint = connectionEndpoint(b.endpoint,protocol);
     const credentialEnv = b.credentialEnv === undefined || b.credentialEnv === '' ? undefined : text(b.credentialEnv,'credential reference',200);
     if (credentialEnv && !/^NARRATIVE_PROVIDER_[A-Z0-9_]+$/.test(credentialEnv)) throw new HttpError(400,'Invalid credential reference');
     const prior = id ? this.get<Connection>('connection',id) : undefined;
-    const catalog = prior?.protocol === protocol && prior.endpoint === endpoint ? prior.catalog : [];
-    return this.save('connection',{ title: text(b.title,'title',200), protocol, endpoint, ...(credentialEnv ? {credentialEnv} : {}), ...(tier !== undefined ? {requestTier:tier} : {}), enabled: boolean(b.enabled), catalog, catalogError: null },id,id ? number(b.expectedRevision,'revision') : undefined);
+    const expectedRevision = id ? number(b.expectedRevision,'revision') : undefined;
+    if (prior && prior.revision !== expectedRevision) throw new HttpError(409,'Revision conflict');
+    const sameAuthority = prior?.protocol === protocol && prior.endpoint === endpoint && prior.credentialEnv === credentialEnv;
+    const prepared: Omit<Connection,'id'|'revision'> = { title: text(b.title,'title',200), protocol, endpoint, ...(credentialEnv ? {credentialEnv} : {}), ...(tier !== undefined ? {requestTier:tier} : {}), enabled: boolean(b.enabled), catalog: sameAuthority ? structuredClone(prior.catalog) : [], catalogError: sameAuthority ? prior.catalogError : null, catalogUpdatedAt: sameAuthority ? prior.catalogUpdatedAt ?? null : null };
+    return {value:prepared,expectedRevision};
   }
-  model(value: unknown, id?: string) {
-    const b = record(value); fields(b,['title','connectionId','connectionRevision','modelId','maxOutputTokens','temperature',...modelOptionKeys,'expectedRevision']);
-    const connectionId = text(b.connectionId,'connection ID',100); const connectionRevision = number(b.connectionRevision,'connection revision'); const connection = this.get<Connection>('connection',connectionId,connectionRevision);
+  connection(value: unknown, id?: string) { const prepared = this.prepareConnection(value,id); return this.save('connection',prepared.value,id,prepared.expectedRevision); }
+  prepareModel(value: unknown, id?: string, validationConnection?: Connection) {
+    const b = record(value); fields(b,['title','connectionId','connectionRevision','modelId','maxOutputTokens','temperature',...modelOptionKeys,'enabled','userOverrides','expectedRevision']);
+    const expectedRevision = id ? number(b.expectedRevision,'revision') : undefined;
+    if (id && this.get<ModelPreset>('model',id).revision !== expectedRevision) throw new HttpError(409,'Revision conflict');
+    const connectionId = text(b.connectionId,'connection ID',100); const connectionRevision = number(b.connectionRevision,'connection revision');
+    if (validationConnection && (validationConnection.id !== connectionId || validationConnection.revision !== connectionRevision)) throw new HttpError(400,'Validation connection revision mismatch');
+    const connection = validationConnection ?? this.get<Connection>('connection',connectionId,connectionRevision);
     const modelId = text(b.modelId,'model ID',300); validateModelGeneration(b,connection.protocol);
     const vertex = connection.protocol === 'vertex-gemini-v1';
-    return this.save('model',{ title: text(b.title,'title',200), connectionId, connectionRevision, modelId, maxOutputTokens: b.maxOutputTokens, temperature: b.temperature,
+    const prepared: Omit<ModelPreset,'id'|'revision'> = { title: text(b.title,'title',200), connectionId, connectionRevision, modelId, maxOutputTokens: b.maxOutputTokens, temperature: b.temperature,
       ...(vertex || b.thinkingLevel !== undefined ? {thinkingLevel:b.thinkingLevel ?? VERTEX_GEMINI_DEFAULT_THINKING_LEVEL} : {}),
       ...(vertex || b.timeoutMs !== undefined ? {timeoutMs:b.timeoutMs ?? VERTEX_GEMINI_DEFAULT_TIMEOUT_MS} : {}),
       ...Object.fromEntries(['structuredOutput','reasoningEffort','thinkingMode','thinkingBudgetTokens'].filter(key => b[key] !== undefined).map(key => [key,b[key]])),
       ...(b.sol !== undefined ? {sol:validateSolOptions(b.sol)} : {}),
-    },id,id ? number(b.expectedRevision,'revision') : undefined);
+      ...(b.enabled !== undefined ? {enabled:boolean(b.enabled)} : {}),
+      ...(b.userOverrides !== undefined ? {userOverrides:userOverrides(b.userOverrides)} : {}),
+      source:{kind:connection.catalog.some(item => item.id === modelId) ? 'catalog' : 'manual',connectionRevision,catalogUpdatedAt:connection.catalogUpdatedAt ?? null},
+    };
+    return {value:prepared,expectedRevision};
   }
+  model(value: unknown, id?: string) { const prepared = this.prepareModel(value,id); return this.save('model',prepared.value,id,prepared.expectedRevision); }
   profile(chatId: string): ChatProfile { this.store.chat(chatId); const r = this.db.prepare('SELECT body FROM profiles WHERE chat_id=?').get(chatId) as Row | undefined; return r ? parse(r.body) : defaultProfile(chatId); }
   updateProfile(chatId: string, value: unknown): ChatProfile {
-    const b = record(value); fields(b,['expectedRevision','attachments','creative','routes','image','prompts']); const routes = record(b.routes); fields(routes,['main','translation','status','image']);
+    const b = record(value); fields(b,['expectedRevision','attachments','creative','routes','image','prompts','promptControls','hiddenStory']); const routes = record(b.routes); fields(routes,['main','translation','status','image']);
     if (!Array.isArray(b.attachments) || b.attachments.length > 300) throw new HttpError(400,'Invalid attachments');
     const attachments = b.attachments.map(ref); if (new Set(attachments.map(r => r.id)).size !== attachments.length) throw new HttpError(400,'Duplicate attachment');
     for (const r of attachments) this.get('content',r.id,r.revision);
     const selected = Object.fromEntries(['main','translation','status','image'].map(role => { const r = routes[role] === null ? null : ref(routes[role]); if (r) this.get('model',r.id,r.revision); return [role,r]; })) as ChatProfile['routes'];
     const controls = creative(b.creative); const image = boolean(b.image);
     const requestedPrompts = b.prompts === undefined ? undefined : promptRefs(this,b.prompts);
+    const requestedControls = b.promptControls === undefined ? undefined : promptControls(this,b.promptControls);
+    const requestedHidden = b.hiddenStory===undefined?undefined:validateHiddenStorySelection(this,b.hiddenStory);
     return this.store.transaction(() => {
       const prior = this.profile(chatId); if (prior.revision !== number(b.expectedRevision,'profile revision')) throw new HttpError(409,'Profile revision conflict');
+      for (const role of ['main','translation','status','image'] as const) assertModelSelection(this,selected[role],prior.routes[role]);
       const prompts = requestedPrompts === undefined ? prior.prompts : {...prior.prompts,...requestedPrompts};
-      const result: ChatProfile = { chatId, revision: prior.revision+1, attachments, creative: controls, routes: selected, image, ...(prompts !== undefined ? {prompts} : {}) };
+      const savedControls = requestedControls === undefined ? prior.promptControls : {...prior.promptControls,...requestedControls};
+      const hiddenStory=requestedHidden??prior.hiddenStory;
+      const result: ChatProfile = { chatId, revision: prior.revision+1, attachments, creative: controls, routes: selected, image, ...(prompts !== undefined ? {prompts} : {}), ...(savedControls!==undefined?{promptControls:savedControls}:{}),...(hiddenStory?{hiddenStory}:{}) };
       this.db.prepare('INSERT INTO profiles VALUES(?,?) ON CONFLICT(chat_id) DO UPDATE SET body=excluded.body').run(chatId,json(result)); this.store.event(chatId,'profile.updated',chatId); return result;
     });
   }
@@ -203,13 +246,28 @@ export class ProductStore {
     resolved.profile.promptPresets = {...resolved.profile.promptPresets};
     if (selected === null) delete resolved.profile.promptPresets.translation;
     else resolved.profile.promptPresets.translation = this.get<PromptPreset>('prompt-preset',selected.id,selected.revision);
+    if(Object.hasOwn(input,'promptControlSelection')){
+      const raw=record(input).promptControlSelection;
+      if(selected){const key=`${selected.id}@${selected.revision}`;const existing={...resolved.profile.promptControls};delete existing[key];if(raw!==null)Object.assign(existing,promptControls(this,{[key]:raw}));resolved.profile.promptControls=existing;}
+      else if(raw!==null)throw new HttpError(400,'Prompt controls require selected translation prompt');
+    }
     return resolved;
   }
   resources(chatId: string, p?: ProfileSnapshot): Resource[] { return p ? p.contents.filter(c => ['lore','skill','glossary'].includes(c.kind)).map(c => ({...c,chatId,kind:c.kind === 'skill' ? 'skill' : 'lore',sourceKind:c.kind})) : this.store.resources(chatId); }
   authorize(connection: Connection) { const current = this.get<Connection>('connection',connection.id); if (!current.enabled || current.endpoint !== connection.endpoint || current.protocol !== connection.protocol || current.credentialEnv !== connection.credentialEnv || current.requestTier !== connection.requestTier) throw new HttpError(403,'Connection disabled or authority changed'); return structuredClone(connection); }
   branches(chatId: string): Branch[] { return (this.db.prepare('SELECT * FROM branches WHERE chat_id=? ORDER BY is_default DESC,id').all(chatId) as Row[]).map(r => ({id:r.id,chatId:r.chat_id,title:r.title,headRevision:r.head_revision,revision:r.revision,default:!!r.is_default})); }
   branch(chatId: string, id = `main:${chatId}`): Branch { const b = this.branches(chatId).find(x => x.id === id); if (!b) throw new HttpError(404,'Branch not found'); return b; }
-  createBranch(chatId: string, value: unknown) { const b = record(value); fields(b,['title','fromRevision']); const title = text(b.title,'title',200); const head = b.fromRevision === null ? null : text(b.fromRevision,'source revision',100); if (head && this.store.source(head).chatId !== chatId) throw new HttpError(400,'Source outside chat'); this.store.chat(chatId); const id = randomUUID(); this.db.prepare('INSERT INTO branches VALUES(?,?,?,?,1,0)').run(id,chatId,title,head); this.store.event(chatId,'branch.created',id); return this.branch(chatId,id); }
+  createBranch(chatId:string,value:unknown,native?:import('../core/native-bot.js').NativeBotSnapshot|null){
+    const b=record(value);fields(b,['title','fromRevision']);const title=text(b.title,'title',200);const head=b.fromRevision===null?null:text(b.fromRevision,'source revision',100);
+    if(head&&this.store.source(head).chatId!==chatId)throw new HttpError(400,'Source outside chat');this.store.chat(chatId);
+    const original=native===undefined&&head?this.store.run(this.store.source(head).runId).snapshot.nativeBot:native;
+    this.db.exec('SAVEPOINT create_native_branch');
+    try{
+      const id=randomUUID();this.db.prepare('INSERT INTO branches VALUES(?,?,?,?,1,0)').run(id,chatId,title,head);
+      if(original)this.store.native.cloneToBranchInTransaction(original,id);
+      this.store.event(chatId,'branch.created',id);this.db.exec('RELEASE create_native_branch');return this.branch(chatId,id);
+    }catch(error){this.db.exec('ROLLBACK TO create_native_branch; RELEASE create_native_branch');throw error;}
+  }
   chunks(jobId: string) { return (this.db.prepare('SELECT * FROM job_chunks WHERE job_id=? ORDER BY rowid').all(jobId) as Row[]).map(r => ({ id:r.id,status:r.status,attempt:r.attempt,error:r.error,result:parse(r.result),input:parse(r.input) })); }
   plan(jobId: string, value?: unknown): any { if (value !== undefined) this.db.prepare('UPDATE jobs SET plan=? WHERE id=? AND plan IS NULL').run(json(value),jobId); const r = this.db.prepare('SELECT plan FROM jobs WHERE id=?').get(jobId) as Row; return parse(r.plan); }
   chunk(jobId: string, id: string, status: string, input?: unknown, result?: unknown, error?: string) { this.db.prepare('INSERT INTO job_chunks(job_id,id,status,attempt,input,result,error) VALUES(?,?,?,1,?,?,?) ON CONFLICT(job_id,id) DO UPDATE SET status=excluded.status,attempt=job_chunks.attempt+CASE WHEN excluded.status=\'running\' THEN 1 ELSE 0 END,input=COALESCE(excluded.input,job_chunks.input),result=COALESCE(excluded.result,job_chunks.result),error=excluded.error').run(jobId,id,status,input === undefined ? null : json(input),result === undefined ? null : json(result),error ?? null); }
@@ -226,15 +284,20 @@ export class ProductStore {
     const id = randomUUID(); const result: Asset = {id,chatId,revision:1,title:text(b.title,'title',200),mime,hash:createHash('sha256').update(bytes).digest('hex'),description:text(b.description,'description',2000,true),actor:text(b.actor,'actor',200,true),outfit:text(b.outfit,'outfit',200,true),location:text(b.location,'location',200,true),allowedUse:choice(b.allowedUse,['profile','inline','both'],'asset use'),url:`/api/assets/${id}`};
     this.db.prepare('INSERT INTO assets VALUES(?,?,?,?)').run(id,chatId,json(result),bytes); return result;
   }
-  library(): Library { return {promptPresets:this.all('prompt-preset'),contents:this.all('content'),presets:this.all('preset'),connections:this.all('connection'),models:this.all('model'),assets:this.assets()}; }
-  export() { const tables = Object.fromEntries(archiveTables.map(t => [t,(this.db.prepare(`SELECT * FROM ${t}`).all() as Row[]).map(r => t === 'assets' ? {...r,bytes:Buffer.from(r.bytes).toString('base64')} : r)])); return {format:'narrative-archive',version:4,createdAt:new Date().toISOString(),tables}; }
+  library(summary = false): Library {
+    // Project inside SQLite so large bodies never cross into JS for list requests.
+    const contents = summary ? (this.db.prepare("SELECT json_set(v.body,'$.text','') AS body FROM versions v WHERE kind='content' AND revision=(SELECT MAX(revision) FROM versions n WHERE n.kind=v.kind AND n.id=v.id) ORDER BY id").all() as Row[]).map(r => parse(r.body)) : this.all('content');
+    return {...(summary ? {contentBodiesOmitted:true,assetsOmitted:true} : {}),promptPresets:this.all('prompt-preset'),contents,presets:this.all('preset'),connections:this.all('connection'),models:this.all('model'),assets:summary ? [] : this.assets()};
+  }
+  export() { const tables = Object.fromEntries(archiveTables.map(t => [t,(this.db.prepare(`SELECT * FROM ${t}`).all() as Row[]).map(r => t === 'assets' ? {...r,bytes:Buffer.from(r.bytes).toString('base64')} : r)])); return {format:'narrative-archive',version:5,createdAt:new Date().toISOString(),tables}; }
   backup(): Buffer { const path = `${this.store.path}.backup-${randomUUID()}.sqlite`; if (existsSync(path)) throw new Error('Backup destination exists'); try { this.db.prepare('VACUUM INTO ?').run(path); return readFileSync(path); } finally { if (existsSync(path)) unlinkSync(path); } }
   import(value: unknown) {
     // Validation and normalization must never mutate the caller's archive, even
     // when a later row fails and the database transaction rolls back.
     let copy: unknown; try { copy = structuredClone(value); } catch { throw new HttpError(400,'Invalid archive'); }
-    const a = record(copy); fields(a,['format','version','createdAt','tables']); if (a.format !== 'narrative-archive' || ![2,3,4].includes(a.version)) throw new HttpError(400,'Unsupported archive'); const tables = record(a.tables); fields(tables,archiveTables); if(a.version===2 && tables.source_edits===undefined)tables.source_edits=[];
+    const a = record(copy); fields(a,['format','version','createdAt','tables']); if (a.format !== 'narrative-archive' || ![2,3,4,5].includes(a.version)) throw new HttpError(400,'Unsupported archive'); const tables = record(a.tables); fields(tables,archiveTables); if(a.version===2 && tables.source_edits===undefined)tables.source_edits=[];
     if(a.version<4){for(const table of storyTables)if(tables[table]===undefined)tables[table]=[];if(Array.isArray(tables.attempts))for(const row of tables.attempts)if(row.story_job_id===undefined)row.story_job_id=null;}
+    if(a.version<5)for(const table of nativeBotTables)if(tables[table]===undefined)tables[table]=[];
     if (archiveTables.some(t => !Array.isArray(tables[t]) || tables[t].length > 100000)) throw new HttpError(400,'Missing or oversized archive table');
     if (archiveTables.some(t => this.db.prepare(`SELECT 1 FROM ${t} LIMIT 1`).get())) throw new HttpError(409,'Restore requires an empty database');
     try { this.store.transaction(() => {
@@ -268,11 +331,12 @@ export class ProductStore {
       if (this.db.prepare('PRAGMA foreign_key_check').all().length) throw new HttpError(400,'Archive references invalid');
       validateArchiveGraph(this);
       validateStoryArchive(this.store);
+      validateNativeArchive(this.store);
     }); } catch (error) { if (error instanceof HttpError && error.statusCode === 400) throw error; throw new HttpError(400,'Archive data or references invalid'); }
     return {restored:true,chats:this.store.chats().length};
   }
 }
-const archiveTables = ['chats','resources','versions','profiles','branches','runs','sources','source_edits','jobs','job_results','model_inputs','tool_events','events','job_chunks','attempts','assets',...storyTables];
+const archiveTables = ['chats','resources','versions','profiles','branches','runs','sources','source_edits','jobs','job_results','model_inputs','tool_events','events','job_chunks','attempts','assets',...storyTables,...nativeBotTables];
 
 const archiveId = (value: unknown) => { const id = text(value,'archive ID',200); if (!/^[A-Za-z0-9][A-Za-z0-9._:-]*$/.test(id)) throw new HttpError(400,'Invalid archive ID'); return id; };
 function scrubArchiveSecrets(value: unknown): unknown {
@@ -284,6 +348,10 @@ function archiveList(value: unknown, maximum = 300): any[] { if (!Array.isArray(
 function archiveSettings(value: unknown) {
   const b = record(value); fields(b,['preset','mode','translation','status','maxCalls']);
   choice(b.preset,['calm','vivid'],'preset'); choice(b.mode,['direct','research'],'mode'); boolean(b.translation); boolean(b.status); number(b.maxCalls,'call limit',1,16);
+}
+function promptControls(product:ProductStore,value:unknown):NonNullable<ChatProfile['promptControls']>{
+  const b=record(value);if(Object.keys(b).length>200)throw new HttpError(400,'Too many saved prompt control sets');
+  return Object.fromEntries(Object.entries(b).map(([key,raw])=>{const match=/^([^@]+)@([1-9][0-9]*)$/u.exec(key);if(!match)throw new HttpError(400,'Prompt control key requires id@revision');const preset=product.get<PromptPreset>('prompt-preset',match[1],number(Number(match[2]),'prompt revision'));if(!preset.program)throw new HttpError(400,'Prompt controls require a composed prompt');const controls=validateChatPromptControls(raw);resolvePromptValues(preset.program,controls.values);controls.combinations.forEach(c=>resolvePromptValues(preset.program!,c.values));return[key,controls];}));
 }
 function promptRefs(product: ProductStore, value: unknown): NonNullable<ChatProfile['prompts']> {
   const selected = record(value); fields(selected,['main','translation']);
@@ -301,21 +369,23 @@ function resolvedPrompts(product: ProductStore, value: NonNullable<ChatProfile['
 function validateArchiveVersion(row: Row) {
   const body = record(parse(row.body)); archiveId(row.id); number(row.revision,'version');
   if (body.id !== row.id || body.revision !== row.revision) throw new HttpError(400,'Version identity mismatch');
+  if(row.kind==='registration-run'){validateRegistrationArchive(body);return;}
   text(body.title,'title',200);
   if (row.kind === 'content') {
     fields(body,['id','revision','kind','title','description','text','loading','relatedIds']); choice(body.kind,['bot','persona','lore','canon','skill','glossary'],'content kind');
     text(body.description,'description',2000,true); text(body.text,'content text',100000); choice(body.loading,['pinned','discoverable'],'loading'); archiveList(body.relatedIds,100).forEach(archiveId);
   } else if (row.kind === 'preset') { fields(body,['id','revision','title','controls']); creative(body.controls); }
-  else if (row.kind === 'prompt-preset') { fields(body,['id','revision','title','role','text']); choice(body.role,['main','translation'],'prompt role'); text(body.text,'prompt text',200000,true); }
+  else if (row.kind === 'prompt-preset') { fields(body,['id','revision','title','role','text','program']); choice(body.role,['main','translation'],'prompt role'); text(body.text,'prompt text',200000,true); if(body.program!==undefined)validatePromptProgram(body.program); }
   else if (row.kind === 'connection') {
-    fields(body,['id','revision','title','protocol','endpoint','credentialEnv','requestTier','enabled','catalog','catalogError']); const protocol = choice(body.protocol,[...PROVIDER_PROTOCOLS],'protocol'); requestTier(body.requestTier,protocol);
+    fields(body,['id','revision','title','protocol','endpoint','credentialEnv','requestTier','enabled','catalog','catalogError','catalogUpdatedAt']); const protocol = choice(body.protocol,[...PROVIDER_PROTOCOLS],'protocol'); requestTier(body.requestTier,protocol);
+    if (body.catalogUpdatedAt !== undefined) catalogTimestamp(body.catalogUpdatedAt);
     connectionEndpoint(body.endpoint,protocol);
     boolean(body.enabled); if (body.credentialEnv !== undefined && !/^NARRATIVE_PROVIDER_[A-Z0-9_]+$/.test(text(body.credentialEnv,'credential reference',200))) throw new HttpError(400,'Invalid credential reference');
     archiveList(body.catalog,5000).forEach(raw => { const model = record(raw); fields(model,['id','name','capabilities','priceRevision']); text(model.id,'catalog ID',300); text(model.name,'catalog name',400); const capabilities = record(model.capabilities); if (Object.values(capabilities).some(v => v !== null && typeof v !== 'boolean')) throw new HttpError(400,'Invalid catalog capabilities'); if (model.priceRevision !== null) text(model.priceRevision,'price revision',200); });
     if (body.catalogError !== null) text(body.catalogError,'catalog error',2000);
   } else if (row.kind === 'model') {
-    fields(body,['id','revision','title','connectionId','connectionRevision','modelId','maxOutputTokens','temperature',...modelOptionKeys]); archiveId(body.connectionId); number(body.connectionRevision,'connection revision'); text(body.modelId,'model ID',300); validateModelGeneration(body);
-  } else throw new HttpError(400,'Invalid archive version kind');
+    fields(body,['id','revision','title','connectionId','connectionRevision','modelId','maxOutputTokens','temperature',...modelOptionKeys,'enabled','userOverrides','source']); archiveId(body.connectionId); number(body.connectionRevision,'connection revision'); text(body.modelId,'model ID',300); validateModelGeneration(body); validateModelMetadata(body);
+  } else if(['native-bot','hidden-story'].includes(row.kind))validateNativeVersion(row);else throw new HttpError(400,'Invalid archive version kind');
 }
 function validateArchiveAsset(row: Row) {
   const body = record(parse(row.body)); fields(body,['id','chatId','revision','title','mime','hash','description','actor','outfit','location','allowedUse','url']);
@@ -329,13 +399,13 @@ function validateArchiveAsset(row: Row) {
   body.url = `/api/assets/${encodeURIComponent(row.id)}`; row.body = json(body);
 }
 function validateArchiveProfile(product: ProductStore, value: unknown, chatId: string, frozen = false): ProfileSnapshot | ChatProfile {
-  const p = record(value); fields(p,['chatId','revision','attachments','creative','routes','image','prompts',...(frozen ? ['contents','models','promptPresets'] : [])]);
+  const p = record(value); fields(p,['chatId','revision','attachments','creative','routes','image','prompts','promptControls','hiddenStory',...(frozen ? ['contents','models','promptPresets'] : [])]);
   if (p.chatId !== chatId) throw new HttpError(400,'Profile chat mismatch'); number(p.revision,'profile revision'); creative(p.creative); boolean(p.image);
   const attachments = archiveList(p.attachments).map(ref); if (new Set(attachments.map(r => r.id)).size !== attachments.length) throw new HttpError(400,'Duplicate attachment');
   const contents = attachments.map(r => product.get<Content>('content',r.id,r.revision)); const routes = record(p.routes); fields(routes,['main','translation','status','image']);
   const models: ProfileSnapshot['models'] = {};
   for (const role of ['main','translation','status','image'] as const) if (routes[role] !== null) { const r = ref(routes[role]); const model = product.get<ModelPreset>('model',r.id,r.revision); models[role] = {...model,connection:product.get<Connection>('connection',model.connectionId,model.connectionRevision)}; }
-  const prompts = p.prompts === undefined ? undefined : promptRefs(product,p.prompts);
+  const prompts = p.prompts === undefined ? undefined : promptRefs(product,p.prompts); if(p.promptControls!==undefined)promptControls(product,p.promptControls);if(p.hiddenStory!==undefined)validateHiddenStorySelection(product,p.hiddenStory);
   const promptPresets = prompts === undefined ? undefined : resolvedPrompts(product,prompts);
   if (frozen && !isDeepStrictEqual(p.promptPresets,promptPresets)) throw new HttpError(400,'Frozen prompt revision mismatch');
   if (frozen && (!isDeepStrictEqual(p.contents,contents) || !isDeepStrictEqual(p.models,models))) throw new HttpError(400,'Frozen profile revision mismatch');
@@ -373,7 +443,9 @@ function validateArchiveGraph(product: ProductStore) {
   }
   for (const chat of chats.values()) { text(chat.title,'chat title',200); number(chat.settings_revision,'settings revision'); archiveSettings(parse(chat.settings)); sameChat(chat.head_revision,chat.id,sources); const defaults = [...branches.values()].filter(b => b.chat_id === chat.id && b.is_default === 1); if (defaults.length !== 1 || defaults[0].head_revision !== chat.head_revision) throw new HttpError(400,'Default branch mismatch'); }
   for (const branch of branches.values()) { sameChat(branch.head_revision,branch.chat_id,sources); text(branch.title,'branch title',200); number(branch.revision,'branch revision'); if (![0,1].includes(branch.is_default)) throw new HttpError(400,'Invalid branch type'); }
-  for (const row of rows('versions')) if (row.kind === 'model') { const model = record(parse(row.body)); const connection = product.get<Connection>('connection',model.connectionId,model.connectionRevision); validateModelGeneration(model,connection.protocol); }
+  for (const row of rows('versions')) if (row.kind === 'model') { const model = record(parse(row.body)); const connection = product.get<Connection>('connection',model.connectionId,model.connectionRevision); validateModelGeneration(model,connection.protocol);
+    if (model.source && (model.source.catalogUpdatedAt !== (connection.catalogUpdatedAt ?? null) || model.source.kind !== (connection.catalog.some(item => item.id === model.modelId) ? 'catalog' : 'manual'))) throw new HttpError(400,'Model source catalog mismatch');
+  }
   for (const row of rows('profiles')) validateArchiveProfile(product,parse(row.body),row.chat_id);
   for (const row of rows('resources')) { const resource = record(parse(row.body)); if (resource.id !== row.id || resource.chatId !== row.chat_id) throw new HttpError(400,'Resource identity mismatch'); number(resource.revision,'resource revision'); choice(resource.kind,['lore','skill'],'resource kind'); text(resource.text,'resource text',100000); }
   for (const run of runs.values()) {
@@ -385,11 +457,12 @@ function validateArchiveGraph(product: ProductStore) {
     if (!product.store.validateHistory(snapshot.history,run.parent_revision)) throw new HttpError(400,'Snapshot history differs from source ancestry');
     const resources = archiveList(snapshot.resources,10000); const ids = new Set<string>();
     for (const raw of resources) { const resource = record(raw); if (resource.chatId !== run.chat_id || ids.has(resource.id)) throw new HttpError(400,'Snapshot resource scope mismatch'); ids.add(archiveId(resource.id)); number(resource.revision,'resource revision'); choice(resource.kind,['lore','skill'],'resource kind'); text(resource.text,'resource text',100000); }
-    if (snapshot.profile) { const profile = validateArchiveProfile(product,snapshot.profile,run.chat_id,true) as ProfileSnapshot; if (!isDeepStrictEqual(resources,product.resources(run.chat_id,profile))) throw new HttpError(400,'Snapshot resource revision mismatch'); }
+    validateNativeRunSnapshot(product.store,snapshot as RunSnapshot);
+    if (snapshot.profile) { const profile = validateArchiveProfile(product,snapshot.profile,run.chat_id,true) as ProfileSnapshot; if (!isDeepStrictEqual(resources,[...product.resources(run.chat_id,profile),...nativeResources(run.chat_id,snapshot.nativeBot)])) throw new HttpError(400,'Snapshot resource revision mismatch'); }
   }
   for (const job of jobs.values()) {
     sameChat(job.source_revision,job.chat_id,sources); const source = product.store.sourceAtHash(job.source_revision,job.source_hash); const jobInput = parse(job.input);
-    if (jobInput && typeof jobInput === 'object' && !Array.isArray(jobInput) && (Object.hasOwn(jobInput,'promptSelection')||Object.hasOwn(jobInput,'translationModelSelection')) && job.kind !== 'translation') throw new HttpError(400,'Prompt selection requires a translation job');
+    if (jobInput && typeof jobInput === 'object' && !Array.isArray(jobInput) && (Object.hasOwn(jobInput,'promptSelection')||Object.hasOwn(jobInput,'translationModelSelection')||Object.hasOwn(jobInput,'promptControlSelection')) && job.kind !== 'translation') throw new HttpError(400,'Prompt selection requires a translation job');
     const snapshot = product.resolveJobPrompt(product.store.run(source.runId).snapshot,jobInput);
     if (job.source_hash !== source.hash) throw new HttpError(400,'Job source hash mismatch'); choice(job.kind,['translation','status','image'],'job kind'); choice(job.status,['completed','failed','partial','cancelled','interrupted','stale'],'job status'); number(job.generation,'job generation',0); number(job.revision,'job revision');
     const resultRow = db.prepare('SELECT * FROM job_results WHERE job_id=?').get(job.id) as Row | undefined; const result = resultRow ? record(parse(resultRow.result)) : null;
@@ -430,4 +503,5 @@ function validateArchiveGraph(product: ProductStore) {
       if (request.mock !== true || attempt.connection_id !== 'local-scripted' || attempt.model_id !== 'deterministic-fixture' || input.role !== (attempt.role === 'image' ? 'presentation' : attempt.role) || [attempt.input_tokens,attempt.output_tokens,attempt.cost_usd,attempt.raw_usage].some(value => value !== null)) throw new HttpError(400,'Mock attempt identity mismatch');
     } else if (request.connectionId !== attempt.connection_id || request.modelId !== attempt.model_id || request.role !== attempt.role) throw new HttpError(400,'Attempt identity mismatch');
   }
+  validateRegistrationGraph(product);
 }

@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import type { Chat, ChatDetail, Run, Source } from '../core/types.js';
+import type { Chat, ReaderDetail, Run, Source } from '../core/types.js';
 import type { Content, Library } from '../core/product.js';
 import { api, ApiError } from './api.js';
 import { refValue } from './LibraryPanel.js';
+import { useModelSelection } from './model-selection.js';
 
 function initialView() {
   const params = new URLSearchParams(location.search); const chat = params.get('chat') || '';
@@ -13,7 +14,7 @@ function ancestry(sources: Source[], head: string | null) {
   while (head && !seen.has(head)) { seen.add(head); const source = byId.get(head); if (!source) break; result.unshift(source); head = source.parentRevision; }
   return result;
 }
-type RunPayload = { request: string; expectedRevision: string | null; expectedSettingsRevision: number; branchId?: string; expectedProfileRevision?: number };
+type RunPayload = { nativeCommandId?:string; request: string; expectedRevision: string | null; expectedSettingsRevision: number; branchId?: string; expectedProfileRevision?: number };
 type PendingCommand = { payload: string; id: string };
 function readCommand(key: string): { record: PendingCommand; payload: RunPayload } | null {
   try {
@@ -32,11 +33,12 @@ function definiteRejection(error: unknown): boolean {
   return error instanceof ApiError && error.status >= 400 && error.status < 500 && error.status !== 408;
 }
 
-type Position = { source: string; anchor: string; offset: number; top: number };
+type Position = { target?:string; source: string; anchor: string; offset: number; top: number };
 export function useStory() {
   const [chats,setChats] = useState<Chat[]>([]); const [selected,setSelected] = useState(() => initialView().chat);
   const [viewedBranch,setViewedBranch] = useState(() => initialView().branch); const [readSource,setReadSource] = useState(() => initialView().source);
-  const [loadedDetail,setDetail] = useState<ChatDetail|null>(null); const [library,setLibrary] = useState<Library|null>(null);
+  const [loadedDetail,setDetail] = useState<ReaderDetail|null>(null); const [library,setLibrary] = useState<Library|null>(null);
+  const {choices:quickModels,canSelect:canSelectModel} = useModelSelection(library?.models ?? [],library?.connections ?? []);
   const detail = loadedDetail?.chat.id === selected ? loadedDetail : null;
   const [archivedContents,setArchivedContents] = useState<Content[]>([]);
   const [draft,setDraft] = useState(''); const [error,setError] = useState(''); const [notice,setNotice] = useState('');
@@ -48,38 +50,80 @@ export function useStory() {
   // A completed server operation may navigate only while its original viewing intent is current.
   // Increment on every navigation, including A -> B -> A and changes within the same story.
   const navigationEpoch = useRef(0);
-  const refresh = useCallback(async (id: string) => {
-    if (current.current !== id) return; const version = ++refreshVersion.current; const value = await api<ChatDetail>(`/chats/${id}`);
-    if (current.current === id && refreshVersion.current === version) { setDetail(value); setChats(old => old.map(chat => chat.id === id ? value.chat : chat)); }
+  const readerQuery = useRef({branch:'',source:'',key:''});
+  const readerCache = useRef<{key:string;detail:ReaderDetail}|null>(null);
+  const savedPosition = JSON.parse(sessionStorage.getItem(`reading:${selected}:${viewedBranch}`) || 'null') as Position|null;
+  readerQuery.current = {branch:viewedBranch,source:(savedPosition?.target===readSource?savedPosition?.source:readSource) || savedPosition?.source || '',key:`${selected}:${viewedBranch}:${readSource}`};
+  const refresh = useCallback(async (id: string, incremental = false) => {
+    if (current.current !== id) return;
+    const version = ++refreshVersion.current; const query = readerQuery.current;
+    const cached = readerCache.current?.key === query.key ? readerCache.current.detail : null;
+    const params = new URLSearchParams({branch:query.branch,source:cached?.reader?.order[0] || query.source});
+    if (incremental && cached?.reader) { params.set('since',String(cached.reader.cursor)); params.set('known',cached.reader.order.join(',')); }
+    const value = await api<ReaderDetail>(`/chats/${id}/reader?${params}`);
+    if (current.current === id && readerQuery.current.key === query.key && refreshVersion.current === version) {
+      const changed = new Set(value.sources.map(source=>source.id));
+      const available = new Map([...(cached?.sources??[]),...value.sources].map(source=>[source.id,source]));
+      const merged = {...value, assets:value.assets??cached?.assets??[], sources:value.reader!.order.map(id=>available.get(id)!).filter(Boolean),
+        jobs:[...(cached?.jobs??[]).filter(job=>!changed.has(job.sourceRevision)&&value.reader!.order.includes(job.sourceRevision)),...value.jobs]};
+      readerCache.current={key:query.key,detail:merged}; setDetail(merged); setChats(old => old.map(chat => chat.id === id ? value.chat : chat));
+    }
   }, []);
   current.current = selected;
   const loadChats = useCallback(async () => setChats(await api<Chat[]>('/chats')), []);
-  const loadLibrary = useCallback(async () => setLibrary(await api<Library>('/library')), []);
+  const loadLibrary = useCallback(async () => setLibrary(await api<Library>('/library?view=summary')), []);
   useEffect(() => { void Promise.all([loadChats(),loadLibrary()]).catch(e => setError(e.message)); }, [loadChats,loadLibrary]);
   useEffect(() => {
-    setDetail(null); setError(''); setNotice(''); setConnected(false); setProfileDirty(false); setArchivedContents([]);
+    readerCache.current = null; setDetail(null); setError(''); setNotice(''); setConnected(false); setProfileDirty(false); setArchivedContents([]);
     if (!selected) return; let alive = true; let timer: ReturnType<typeof setTimeout>|undefined;
-    void refresh(selected).catch(e => { if (alive) setError(e.message); });
+    let firstSnapshot = true; let requestedCursor = 0; let reconnect = false; let eventRefreshInFlight = false;
+    const openStream = () => {
     const stream = new EventSource(`/api/chats/${selected}/events`);
     stream.onopen = () => { if (alive) setConnected(true); }; stream.onerror = () => { if (alive) setConnected(false); };
     // Batch event bursts; refreshVersion still rejects out-of-order HTTP responses.
-    stream.onmessage = () => { if (!alive || timer) return; timer = setTimeout(() => { timer = undefined; if (alive) void refresh(selected).catch(e => { if (alive) setError(e.message); }); },60); };
-    return () => { alive = false; clearTimeout(timer); stream.close(); };
+    stream.onmessage = event => {
+      if (!alive) return;
+      const message = JSON.parse(event.data) as {kind:string;seq?:number};
+      if (message.kind === 'snapshot') { if(firstSnapshot) { firstSnapshot=false; if(!reconnect)return; } reconnect=true; }
+      requestedCursor=Math.max(requestedCursor,message.seq??0);
+      if(timer) return;
+      const flush = () => {
+        if (!alive) return;
+        // Serialize event refreshes only. A stalled initial/manual HTTP response
+        // must not block newer SSE state; refreshVersion rejects its late result.
+        if (eventRefreshInFlight) { timer=setTimeout(flush,100); return; }
+        timer=undefined;
+        const applied=readerCache.current?.detail.reader.cursor??-1;
+        if(reconnect || requestedCursor>applied) { const incremental=!reconnect; reconnect=false; eventRefreshInFlight=true; void refresh(selected,incremental).catch(e=>{if(alive)setError(e.message);}).finally(()=>{eventRefreshInFlight=false;}); }
+      };
+      timer=setTimeout(flush,100);
+    };
+    return stream;
+    };
+    let stream = navigator.onLine ? openStream() : undefined;
+    const offline = () => { stream?.close(); setConnected(false); };
+    const online = () => { if(alive) { stream?.close(); reconnect=true; stream=openStream(); } };
+    addEventListener('offline',offline); addEventListener('online',online);
+    return () => { alive = false; clearTimeout(timer); stream?.close(); removeEventListener('offline',offline); removeEventListener('online',online); };
   },[selected,refresh]);
+  useEffect(() => { let alive=true; if(selected) { restoredView.current=''; setDetail(null); void refresh(selected).catch(e=>{if(alive)setError(e.message);}); } return()=>{alive=false;}; },[selected,viewedBranch,readSource,refresh]);
+  const attachmentKey = detail?.profile?.attachments.map(refValue).join(',')??'';
   useEffect(() => {
     let alive = true; if (!detail?.profile || !library) return;
     const missing = detail.profile.attachments.filter(ref => !library.contents.some(item => refValue(item) === refValue(ref)));
     void Promise.all(missing.map(ref => api<Content>(`/revisions/content/${ref.id}/${ref.revision}`))).then(items => { if (alive) setArchivedContents(items); }).catch(e => { if (alive) setError(e.message); });
     return () => { alive = false; };
-  },[detail?.profile,library]);
+  },[attachmentKey,library,selected]);
   const viewKey = `${selected}:${viewedBranch}`; const draftKey = `draft:${selected}${viewedBranch ? `:${viewedBranch}` : ''}`; currentDraftKey.current = draftKey; currentView.current = viewKey;
   const savePosition = useCallback(() => {
     const node = reader.current; if (!node || restoredView.current !== viewKey || !selected) return;
-    const box = node.getBoundingClientRect(); const blocks = [...node.querySelectorAll<HTMLElement>('[data-block-anchor]')].filter(item => item.offsetParent !== null);
-    const block = blocks.find(item => item.getBoundingClientRect().bottom > box.top+12);
-    const position: Position = { source: block?.closest('[data-source-id]')?.getAttribute('data-source-id') || '',anchor: block?.dataset.blockAnchor?.split(' ')[0] || '',offset: block ? block.getBoundingClientRect().top-box.top : 0,top: node.scrollTop };
+    const box = node.getBoundingClientRect(); const blocks = node.querySelectorAll<HTMLElement>('.prose [data-block-anchor]');
+    let low=0,high=blocks.length;
+    while(low<high){const mid=(low+high)>>>1;if(blocks[mid].getBoundingClientRect().bottom<=box.top+12)low=mid+1;else high=mid;}
+    const block=blocks[low];
+    const position: Position = { target:readSource, source: block?.closest('[data-source-id]')?.getAttribute('data-source-id') || '',anchor: block?.dataset.blockAnchor?.split(' ')[0] || '',offset: block ? block.getBoundingClientRect().top-box.top : 0,top: node.scrollTop };
     sessionStorage.setItem(`reading:${viewKey}`,JSON.stringify(position));
-  },[selected,viewKey]);
+  },[selected,viewKey,readSource]);
   useLayoutEffect(() => {
     setDraft(sessionStorage.getItem(draftKey) || '');
     const cursor = JSON.parse(sessionStorage.getItem(`cursor:${draftKey}`) || 'null') as {start:number;end:number}|null;
@@ -88,17 +132,17 @@ export function useStory() {
   },[draftKey]);
   useEffect(() => { const before = () => savePosition(); addEventListener('pagehide',before); return () => { savePosition(); removeEventListener('pagehide',before); }; },[savePosition]);
   function rememberCursor() { const node = input.current; if (node) sessionStorage.setItem(`cursor:${draftKey}`,JSON.stringify({start:node.selectionStart,end:node.selectionEnd})); }
-  function editDraft(value: string) { setDraft(value); sessionStorage.setItem(draftKey,value); }
+  function editDraft(value: string,nativeCommandId?:string) { setDraft(value); sessionStorage.setItem(draftKey,value); if(nativeCommandId)sessionStorage.setItem(`native-draft:${draftKey}`,nativeCommandId);else sessionStorage.removeItem(`native-draft:${draftKey}`); }
   const branch = detail?.branches?.find(item => item.id === viewedBranch) ?? detail?.branches?.find(item => item.default);
-  const sources = useMemo(() => detail ? branch ? ancestry(detail.sources,branch.headRevision) : detail.sources : [],[detail,branch]);
+  const sources = useMemo(() => detail ? detail.reader ? detail.sources : branch ? ancestry(detail.sources,branch.headRevision) : detail.sources : [],[detail,branch]);
   const visibleRuns = detail?.runs.filter(run => !branch || !run.snapshot.branchId && branch.default || run.snapshot.branchId === branch.id) ?? [];
   useLayoutEffect(() => {
-    if (!detail || destination !== 'story' || restoredView.current === viewKey || !reader.current) return;
+    if (!detail || readerCache.current?.key !== readerQuery.current.key || destination !== 'story' || restoredView.current === viewKey || !reader.current) return;
     const node = reader.current;
     const saved = JSON.parse(sessionStorage.getItem(`reading:${viewKey}`) || 'null') as Position | null;
     const frame = requestAnimationFrame(() => {
       if (current.current !== selected || currentView.current !== viewKey || reader.current !== node) return;
-      const sourceTarget = readSource ? document.getElementById(`source-${readSource}`) : null;
+      const sourceTarget = readSource && saved?.target!==readSource ? document.getElementById(`source-${readSource}`) : null;
       if (sourceTarget && node.contains(sourceTarget)) node.scrollTop += sourceTarget.getBoundingClientRect().top - node.getBoundingClientRect().top;
       else {
         const block = saved?.anchor ? [...node.querySelectorAll<HTMLElement>('[data-block-anchor]')].find(item => item.offsetParent !== null && item.closest('[data-source-id]')?.getAttribute('data-source-id') === saved.source && item.dataset.blockAnchor?.split(' ').includes(saved.anchor)) : null;
@@ -113,14 +157,11 @@ export function useStory() {
   const select = (id:string) => { navigationEpoch.current++; savePosition(); rememberCursor(); const target=sessionStorage.getItem(`branch:${id}`)||''; setViewUrl(id,target); setSelected(id); setViewedBranch(target); setReadSource(''); setDestination('story'); restoredView.current=''; };
   const chooseBranch = (id:string) => { navigationEpoch.current++; savePosition(); rememberCursor(); setViewUrl(selected,id); sessionStorage.setItem(`branch:${selected}`,id); setViewedBranch(id); setReadSource(''); restoredView.current=''; };
   const chooseSource = (id: string) => {
-    navigationEpoch.current++; savePosition(); setReadSource(id); setViewUrl(selected, viewedBranch, id);
-    if (!id) return;
-    const node = reader.current; const chosenView = viewKey;
-    requestAnimationFrame(() => {
-      const target = document.getElementById(`source-${id}`);
-      if (currentView.current !== chosenView || reader.current !== node || !node || !target || !node.contains(target)) return;
-      node.scrollTop += target.getBoundingClientRect().top - node.getBoundingClientRect().top;
-    });
+    navigationEpoch.current++; savePosition(); restoredView.current=''; setReadSource(id); setViewUrl(selected, viewedBranch, id);
+    if(id===readSource) {
+      const key=currentView.current;
+      requestAnimationFrame(()=>{const node=reader.current,target=document.getElementById(`source-${id}`);if(currentView.current===key && node && target && node.contains(target)){node.scrollTop+=target.getBoundingClientRect().top-node.getBoundingClientRect().top;restoredView.current=key;}});
+    }
   };
   useEffect(() => { const onPop=() => { navigationEpoch.current++; savePosition(); rememberCursor(); const view=initialView(); setSelected(view.chat);setViewedBranch(view.branch);setReadSource(view.source);setDestination('story');restoredView.current=''; }; addEventListener('popstate',onPop);return () => removeEventListener('popstate',onPop); },[savePosition]);
   function showLibrary(){navigationEpoch.current++;savePosition();setDestination('library');restoredView.current='';}
@@ -132,7 +173,7 @@ export function useStory() {
     if (!previous && !draft.trim()) return;
     // An uncertain request keeps its original snapshot as well as its key.
     // A newer draft is never silently sent after recovering that earlier request.
-    const payload: RunPayload = previous?.payload ?? { request: draft, expectedRevision: branch ? branch.headRevision : chat.headRevision, expectedSettingsRevision: chat.settingsRevision, ...(viewedBranch && branch ? { branchId: branch.id } : {}), ...(detail.profile ? { expectedProfileRevision: detail.profile.revision } : {}) };
+    const payload: RunPayload = previous?.payload ?? { request: draft, ...(sessionStorage.getItem(`native-draft:${draftKey}`)?{nativeCommandId:sessionStorage.getItem(`native-draft:${draftKey}`)!}:{}), expectedRevision: branch ? branch.headRevision : chat.headRevision, expectedSettingsRevision: chat.settingsRevision, ...(viewedBranch && branch ? { branchId: branch.id } : {}), ...(detail.profile ? { expectedProfileRevision: detail.profile.revision } : {}) };
     const sentDraft = payload.request;
     const idempotencyKey = previous?.record.id ?? crypto.randomUUID();
     sessionStorage.setItem(commandKey, JSON.stringify({ payload: JSON.stringify(payload), id: idempotencyKey }));
@@ -143,7 +184,7 @@ export function useStory() {
       accepted = true;
       clearCommand(commandKey, idempotencyKey);
       if (sessionStorage.getItem(sentKey) === sentDraft) {
-        sessionStorage.removeItem(sentKey);
+        sessionStorage.removeItem(sentKey); sessionStorage.removeItem(`native-draft:${sentKey}`);
         if (currentDraftKey.current === sentKey) setDraft('');
       }
       if (currentView.current === sentView) setNotice(previous
@@ -163,7 +204,7 @@ export function useStory() {
   async function fork(sourceId: string) {
     const chatId = selected; const epoch = navigationEpoch.current;
     const lock = `${chatId}:${sourceId}`; const key = `fork-command:${lock}`;
-    if (!detail?.sources.some(source => source.id === sourceId) || forkLocks.current.has(lock)) return;
+    if (!detail?.runs.some(run => run.sourceRevision === sourceId) || forkLocks.current.has(lock)) return;
     forkLocks.current.add(lock); setForking([...forkLocks.current]);
     const idempotencyKey = sessionStorage.getItem(key) || crypto.randomUUID();
     sessionStorage.setItem(key, idempotencyKey); setError('');
@@ -196,6 +237,7 @@ export function useStory() {
         }
         const persona = contents.find(item => item.kind === 'persona' && refValue(item) === value);
         const model = library.models.find(item => refValue(item) === value);
+        if (kind === 'model' && model && value !== (profile.routes.main ? refValue(profile.routes.main) : '') && !canSelectModel(model)) throw new Error('비활성 모델이거나 연결 권한을 확인할 수 없어요. 모델 목록을 다시 확인해 주세요.');
         if (kind === 'persona' && value && !persona || kind === 'model' && value && !model) throw new Error('선택한 설정을 찾지 못했어요. 목록을 다시 확인해 주세요.');
         const attachments = kind === 'persona' ? [...profile.attachments.filter(ref => !contents.some(item => item.kind === 'persona' && refValue(item) === refValue(ref))), ...(persona ? [{ id: persona.id, revision: persona.revision }] : [])] : profile.attachments;
         const routes = kind === 'model' ? { ...profile.routes, main: model ? { id: model.id, revision: model.revision } : null } : profile.routes;
@@ -216,9 +258,9 @@ export function useStory() {
   const bot=attached.find(item=>item.kind==='bot');const persona=attached.find(item=>item.kind==='persona');
   const preset=library?.presets.find(item=>JSON.stringify(item.controls)===JSON.stringify(detail?.profile?.creative));
   const profileAsset=detail?.assets?.find(asset=>asset.allowedUse!=='inline');
-  const tasks=detail?detail.runs.filter(run=>['running','queued','waiting_for_state'].includes(run.status)).length+detail.jobs.filter(job=>['running','queued'].includes(job.status)).length:0;
+  const tasks=detail?detail.runs.filter(run=>['running','queued','waiting_for_state'].includes(run.status)).length+detail.reader.activeJobs:0;
   const pendingProfile=!!selected&&!!sessionStorage.getItem(`pending-profile:${selected}`);
-  return {chats,selected,viewedBranch,readSource,detail,library,draft,error,notice,connected,destination,profileDirty,quickBusy,reader,input,viewKey,active,allContents,bot,persona,preset,profileAsset,tasks,pendingProfile,branch,sources,visibleRuns,submitting,attachmentsReady,pendingRequest,forking,
+  return {chats,selected,viewedBranch,readSource,detail,library,quickModels,draft,error,notice,connected,destination,profileDirty,quickBusy,reader,input,viewKey,active,allContents,bot,persona,preset,profileAsset,tasks,pendingProfile,branch,sources,visibleRuns,submitting,attachmentsReady,pendingRequest,forking,
     setError,setNotice,setProfileDirty,refresh,loadChats,loadLibrary,savePosition,rememberCursor,editDraft,select,chooseBranch,chooseSource,showLibrary,generate,fork,quickChange};
 }
 export type StoryState=ReturnType<typeof useStory>;
