@@ -15,7 +15,8 @@ function ancestry(sources: Source[], head: string | null) {
   return result;
 }
 type RunPayload = { nativeCommandId?:string; loreContextReset?:boolean; request: string; expectedRevision: string | null; expectedSettingsRevision: number; branchId?: string; expectedProfileRevision?: number };
-type PendingCommand = { payload: string; id: string };
+type PendingCommand = { payload: string; id: string; preserveDraft?: boolean; startedAt?: string };
+export type RequestActivity = { id: string; startedAt: string; runId?: string; status: 'sending'|'accepted'|'uncertain'|'failed' };
 function readCommand(key: string): { record: PendingCommand; payload: RunPayload } | null {
   try {
     const record = JSON.parse(sessionStorage.getItem(key) || 'null') as PendingCommand | null;
@@ -45,6 +46,7 @@ export function useStory() {
   const [draft,setDraft] = useState(''); const [error,setError] = useState(''); const [notice,setNotice] = useState('');
   const [loreResetDraft,setLoreResetDraft]=useState(false);
   const [submitting,setSubmitting] = useState<string[]>([]); const submitLocks = useRef(new Set<string>());
+  const [requestActivities,setRequestActivities] = useState<Record<string,RequestActivity>>({});
   const [connected,setConnected] = useState(false); const [destination,setDestination] = useState<'story'|'library'>(()=>initialView().chat?'story':'library');
   const [profileDirty,setProfileDirty] = useState(false); const [quickBusy,setQuickBusy] = useState(false);
   const reader = useRef<HTMLDivElement>(null); const input = useRef<HTMLTextAreaElement>(null);
@@ -72,7 +74,15 @@ export function useStory() {
     }
   }, []);
   current.current = selected;
-  const loadChats = useCallback(async () => setChats(await api<Chat[]>('/chats')), []);
+  const loadChats = useCallback(async () => {
+    const selectedAtRequest=current.current,epoch=navigationEpoch.current;
+    const chats=await api<Chat[]>('/chats');setChats(chats);
+    if(selectedAtRequest&&current.current===selectedAtRequest&&navigationEpoch.current===epoch&&!chats.some(chat=>chat.id===selectedAtRequest)){
+      navigationEpoch.current++;refreshVersion.current++;current.current='';readerCache.current=null;
+      setSelected('');setViewedBranch('');setReadSource('');setDetail(null);setDestination('library');
+      const url=new URL(location.href);for(const key of ['chat','branch','source'])url.searchParams.delete(key);history.replaceState(null,'',url);
+    }
+  }, []);
   const loadLibrary = useCallback(async () => setLibrary(await api<Library>('/library?view=summary')), []);
   useEffect(() => { void Promise.all([loadChats(),loadLibrary()]).catch(e => setError(e.message)); }, [loadChats,loadLibrary]);
   useEffect(() => {
@@ -85,7 +95,12 @@ export function useStory() {
     // Batch event bursts; refreshVersion still rejects out-of-order HTTP responses.
     stream.onmessage = event => {
       if (!alive) return;
-      const message = JSON.parse(event.data) as {kind:string;seq?:number};
+      const message = JSON.parse(event.data) as {kind:string;seq?:number;entityId?:string};
+      if(message.kind==='chat.deleted') { stream.close();void loadChats().catch(e=>{if(alive)setError(e.message);});return; }
+      if(message.kind==='branch.deleted'&&readerQuery.current.branch===message.entityId){
+        navigationEpoch.current++;readerCache.current=null;setViewedBranch('');setReadSource('');
+        sessionStorage.removeItem(`branch:${selected}`);const url=new URL(location.href);url.searchParams.delete('branch');url.searchParams.delete('source');history.replaceState(null,'',url);return;
+      }
       if (message.kind === 'snapshot') { if(firstSnapshot) { firstSnapshot=false; if(!reconnect)return; } reconnect=true; }
       requestedCursor=Math.max(requestedCursor,message.seq??0);
       if(timer) return;
@@ -107,7 +122,7 @@ export function useStory() {
     const online = () => { if(alive) { stream?.close(); reconnect=true; stream=openStream(); } };
     addEventListener('offline',offline); addEventListener('online',online);
     return () => { alive = false; clearTimeout(timer); stream?.close(); removeEventListener('offline',offline); removeEventListener('online',online); };
-  },[selected,refresh]);
+  },[selected,refresh,loadChats]);
   useEffect(() => { let alive=true; if(selected) { restoredView.current=''; setDetail(null); void refresh(selected).catch(e=>{if(alive)setError(e.message);}); } return()=>{alive=false;}; },[selected,viewedBranch,readSource,refresh]);
   const attachmentKey = [...detail?.profile?.attachments??[],...detail?.profile?.packageAttachments??[]].map(refValue).join(',');
   useEffect(() => {
@@ -172,33 +187,56 @@ export function useStory() {
   };
   useEffect(() => { const onPop=() => { navigationEpoch.current++; savePosition(); rememberCursor(); const view=initialView(); setSelected(view.chat);setViewedBranch(view.branch);setReadSource(view.source);setDestination('story');restoredView.current=''; }; addEventListener('popstate',onPop);return () => removeEventListener('popstate',onPop); },[savePosition]);
   function showLibrary(){navigationEpoch.current++;savePosition();setDestination('library');restoredView.current='';}
-  async function generate() {
+  function canReuseRun(id: string) {
+    const run = visibleRuns.find(run => run.id === id);
+    return !!run && !run.sourceRevision && ['failed','cancelled','interrupted','refused','partial'].includes(run.status);
+  }
+  function activeRun() { return visibleRuns.find(run => ['queued','running','waiting_for_state'].includes(run.status)); }
+  const reuseBlocked = !!activeRun() || submitting.includes(viewKey) || quickBusy || profileDirty || !detail || !!sessionStorage.getItem(`pending-profile:${selected}`) || !!readCommand(`command:${selected}${viewedBranch ? `:${viewedBranch}` : ''}`);
+  function editRunRequest(id: string) {
+    if (reuseBlocked || !canReuseRun(id) || submitLocks.current.has(viewKey)) return;
+    const run = visibleRuns.find(run => run.id === id)!;
+    if (draft && draft !== run.request && !window.confirm('작성 중인 입력을 이 요청으로 바꿀까요?')) return;
+    editDraft(run.request);
+    editLoreContextReset(run.snapshot.loreContextReset === true);
+    setNotice('이전 요청을 가져왔어요. 편집 후 보내면 현재 설정으로 새로 생성해요.');
+    input.current?.focus();
+  }
+  async function generate(retryRunId?: string) {
     if (!detail || detail.chat.id !== selected || submitLocks.current.has(viewKey) || sessionStorage.getItem(`pending-profile:${selected}`)) return;
+    if (activeRun() || (retryRunId && (reuseBlocked || !canReuseRun(retryRunId)))) return;
+    const retryRun = retryRunId ? visibleRuns.find(run => run.id === retryRunId)! : undefined;
     const chat = detail.chat; const sentKey = draftKey; const sentView = viewKey;
     const commandKey = `command:${chat.id}${viewedBranch ? `:${viewedBranch}` : ''}`;
     const previous = readCommand(commandKey);
-    if (!previous && !draft.trim()) return;
+    if (!previous && !retryRun && !draft.trim()) return;
     // An uncertain request keeps its original snapshot as well as its key.
     // A newer draft is never silently sent after recovering that earlier request.
-    const payload: RunPayload = previous?.payload ?? { request: draft,...(loreResetDraft?{loreContextReset:true}:{}), ...(sessionStorage.getItem(`native-draft:${draftKey}`)?{nativeCommandId:sessionStorage.getItem(`native-draft:${draftKey}`)!}:{}), expectedRevision: branch ? branch.headRevision : chat.headRevision, expectedSettingsRevision: chat.settingsRevision, ...(viewedBranch && branch ? { branchId: branch.id } : {}), ...(detail.profile ? { expectedProfileRevision: detail.profile.revision } : {}) };
+    const payload: RunPayload = previous?.payload ?? { request: retryRun?.request ?? draft,...((retryRun ? retryRun.snapshot.loreContextReset : loreResetDraft)?{loreContextReset:true}:{}), ...(!retryRun && sessionStorage.getItem(`native-draft:${draftKey}`)?{nativeCommandId:sessionStorage.getItem(`native-draft:${draftKey}`)!}:{}), expectedRevision: branch ? branch.headRevision : chat.headRevision, expectedSettingsRevision: chat.settingsRevision, ...(viewedBranch && branch ? { branchId: branch.id } : {}), ...(detail.profile ? { expectedProfileRevision: detail.profile.revision } : {}) };
+    const preserveDraft = !!retryRun || previous?.record.preserveDraft === true;
     const sentDraft = payload.request;
     const idempotencyKey = previous?.record.id ?? crypto.randomUUID();
-    sessionStorage.setItem(commandKey, JSON.stringify({ payload: JSON.stringify(payload), id: idempotencyKey }));
+    const startedAt = previous?.record.startedAt ?? new Date().toISOString();
+    const track = (status: RequestActivity['status'],runId?:string) => setRequestActivities(old=>({...old,[sentView]:{id:idempotencyKey,startedAt,status,runId}}));
+    sessionStorage.setItem(commandKey, JSON.stringify({ payload: JSON.stringify(payload), id: idempotencyKey, startedAt, ...(preserveDraft ? {preserveDraft:true} : {}) }));
+    track('sending');
     submitLocks.current.add(sentView); setSubmitting([...submitLocks.current]); setError(''); setNotice('');
     let accepted = false;
     try {
-      await api<Run>(`/chats/${chat.id}/runs`, { ...payload, idempotencyKey });
+      const admitted = await api<Run>(`/chats/${chat.id}/runs`, { ...payload, idempotencyKey });
+      track('accepted',admitted.id);
       accepted = true;
       clearCommand(commandKey, idempotencyKey);
-      if(payload.loreContextReset){sessionStorage.removeItem(`lore-reset:${sentKey}`);if(currentDraftKey.current===sentKey)setLoreResetDraft(false);}
-      if (sessionStorage.getItem(sentKey) === sentDraft) {
+      if(!preserveDraft && payload.loreContextReset){sessionStorage.removeItem(`lore-reset:${sentKey}`);if(currentDraftKey.current===sentKey)setLoreResetDraft(false);}
+      if (!preserveDraft && sessionStorage.getItem(sentKey) === sentDraft) {
         sessionStorage.removeItem(sentKey); sessionStorage.removeItem(`native-draft:${sentKey}`);
         if (currentDraftKey.current === sentKey) setDraft('');
       }
       if (currentView.current === sentView) setNotice(previous
         ? sessionStorage.getItem(sentKey) ? '이전 요청의 수락을 확인했어요. 새로 작성한 초안은 남겨두었어요.' : '이전 요청의 수락을 확인했어요.'
-        : '요청을 받았어요. 서버에서 이어서 만들어요.');
+        : '');
     } catch (error) {
+      track(definiteRejection(error)?'failed':'uncertain');
       if (definiteRejection(error) && (!previous || error instanceof ApiError && error.status === 409)) clearCommand(commandKey, idempotencyKey);
       if (currentView.current === sentView) setError(error instanceof Error ? error.message : '요청의 수락 여부를 확인하지 못했어요.');
     }
@@ -276,9 +314,13 @@ export function useStory() {
   const bot=packageContent('bot')??attached.find(item=>item.kind==='bot');const persona=packageContent('persona')??attached.find(item=>item.kind==='persona');
   const preset=library?.presets.find(item=>JSON.stringify(item.controls)===JSON.stringify(detail?.profile?.creative));
   const profileAsset=detail?.assets?.find(asset=>asset.allowedUse!=='inline');
-  const tasks=detail?detail.runs.filter(run=>['running','queued','waiting_for_state'].includes(run.status)).length+detail.reader.activeJobs:0;
+  const tasks=detail?(detail.reader.activity?.filter(item=>['running','queued','waiting_for_state'].includes(item.status)).length??detail.runs.filter(run=>['running','queued','waiting_for_state'].includes(run.status)).length+detail.reader.activeJobs):0;
   const pendingProfile=!!selected&&!!sessionStorage.getItem(`pending-profile:${selected}`);
-  return {chats,selected,viewedBranch,readSource,detail,library,quickModels,draft,error,notice,connected,destination,profileDirty,quickBusy,reader,input,viewKey,active,allContents,bot,persona,preset,profileAsset,tasks,pendingProfile,branch,sources,visibleRuns,submitting,attachmentsReady,pendingRequest,loreContextReset,forking,
-    setError,setNotice,setProfileDirty,refresh,loadChats,loadLibrary,savePosition,rememberCursor,editDraft,editLoreContextReset,select,chooseBranch,chooseSource,showLibrary,generate,fork,quickChange};
+  const trackedRequest = requestActivities[viewKey];
+  // Settled runs may leave the bounded activity projection. Do not resurrect their admission indicator.
+  const settledOutsideActivity = trackedRequest?.status==='accepted' && (!detail || detail.runs.some(run=>run.id===trackedRequest.runId&&!['queued','running','waiting_for_state'].includes(run.status))&&!detail.reader.activity?.some(item=>item.id===trackedRequest.runId));
+  const requestActivity = (settledOutsideActivity?undefined:trackedRequest) ?? (pendingCommand ? {id:pendingCommand.record.id,startedAt:pendingCommand.record.startedAt??'',status:'uncertain' as const} : undefined);
+  return {requestActivity,chats,selected,viewedBranch,readSource,detail,library,quickModels,draft,error,notice,connected,destination,profileDirty,quickBusy,reader,input,viewKey,active,allContents,bot,persona,preset,profileAsset,tasks,pendingProfile,branch,sources,visibleRuns,submitting,attachmentsReady,pendingRequest,loreContextReset,forking,
+    setError,setNotice,setProfileDirty,refresh,loadChats,loadLibrary,savePosition,rememberCursor,editDraft,editLoreContextReset,select,chooseBranch,chooseSource,showLibrary,generate,canReuseRun,reuseBlocked,editRunRequest,fork,quickChange};
 }
 export type StoryState=ReturnType<typeof useStory>;

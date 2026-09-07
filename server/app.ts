@@ -247,7 +247,13 @@ export async function createApp(options: AppOptions): Promise<App> {
     const code = error instanceof HttpError ? error.statusCode : typeof statusCode === 'number' && statusCode < 500 ? statusCode : 500;
     void reply.code(code).send({ error: error instanceof HttpError ? error.message : code === 400 ? 'Invalid request' : 'Request failed' });
   });
-  const session = productRoutes(app,store,{credentials,codex,approvedOrigins,accessToken:options.accessToken,publicOrigin:network.publicOrigin,publish,onAuthChanged:() => { for (const chatId of subscribers.keys()) publish(chatId); }});
+  const session = productRoutes(app,store,{credentials,codex,approvedOrigins,accessToken:options.accessToken,publicOrigin:network.publicOrigin,publish,onChatDeleted:chatId=>{
+    for(const response of subscribers.get(chatId)?.keys()??[]){
+      if(streamAuthority.get(response)?.()!==false)response.write(`data: ${JSON.stringify({kind:'chat.deleted',chatId})}\n\n`);
+      response.end();
+    }
+    subscribers.delete(chatId);
+  },onAuthChanged:() => { for (const chatId of subscribers.keys()) publish(chatId); }});
   readerRoutes(app,store);
   registrationRoutes(app,store,{approvedOrigins,resolveCredential,executeCodex,signal:stopping.signal,vertexRequestTier:options.vertexRequestTier,track,authenticated:session.authenticated});
   providerConnectionTestRoutes(app,store,{approvedOrigins,resolveCredential,executeCodex,signal:stopping.signal,vertexRequestTier:options.vertexRequestTier,track,authenticated:session.authenticated});

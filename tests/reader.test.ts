@@ -123,3 +123,30 @@ test('restoring any source retains its whole fixed page, including all of a shor
   }
 });
 
+test('activity remains page independent and retains active work beyond the terminal limit', async () => {
+  const {store} = await setup(), chat = store.createChat('Activity');
+  const items = Array.from({length:35},()=>source(store,chat.id));
+  const first = readerDetail(store,chat.id,{});
+  const activities = first.reader.activity;
+  expect(activities.filter(a=>!['queued','running','waiting_for_state'].includes(a.status))).toHaveLength(30);
+  const active = activities.filter(a=>['queued','running'].includes(a.status));
+  expect(active.length).toBeGreaterThan(30);
+  expect(active.some(a=>a.sourceRevision===items[34].id)).toBe(true);
+  expect(readerDetail(store,chat.id,{since:String(first.reader.cursor),known:first.reader.order.join(',')}).reader.activity).toEqual(activities);
+  const other = source(store,store.createChat('Other activity').id);
+  expect(readerDetail(store,chat.id,{}).reader.activity.some(a=>a.id===other.runId)).toBe(false);
+  expect(Object.keys(activities[0]).sort()).toEqual(['id','kind','status','createdAt','updatedAt','startedAt','finishedAt','branchId','sourceRevision','generation'].sort());
+});
+
+test('activity completion time ignores subsequent usage updates and retries restart queue time', async () => {
+  const {store} = await setup(), chat = store.createChat('Activity time'), item = source(store,chat.id);
+  const before = readerDetail(store,chat.id,{}).reader.activity.find(a=>a.id===item.runId)!;
+  store.db.prepare('UPDATE runs SET updated_at=? WHERE id=?').run('2099-01-01T00:00:00.000Z',item.runId);
+  const after = readerDetail(store,chat.id,{}).reader.activity.find(a=>a.id===item.runId)!;
+  expect(after.finishedAt).toBe(before.finishedAt);
+  const job = readerDetail(store,chat.id,{}).reader.activity.find(a=>a.kind!=='main')!;
+  store.db.prepare("UPDATE events SET at=? WHERE entity_id=? AND kind='job.queued'").run('2026-09-08T12:00:00.000Z',job.id);
+  const restarted = readerDetail(store,chat.id,{}).reader.activity.find(a=>a.id===job.id)!;
+  expect(restarted.startedAt).toBe('2026-09-08T12:00:00.000Z');
+  expect(restarted.finishedAt).toBeNull();
+});

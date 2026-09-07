@@ -1,6 +1,33 @@
 import { latestTranslation, validateTranslationArtifact } from './source-editing.js';
 import { HttpError, type Store } from './store.js';
 import { mergedReaderAssets } from './package-images.js';
+import type { ReaderActivity } from '../core/types.js';
+
+/** Page-independent metadata: no execution snapshots, prompts or result bodies. */
+function readerActivity(store: Store, chatId: string): ReaderActivity[] {
+  const rows = store.db.prepare(`WITH activity AS (
+    SELECT id,'main' AS kind,status,created_at AS createdAt,updated_at AS updatedAt,branch_id AS branchId,source_revision AS sourceRevision,0 AS generation FROM runs WHERE chat_id=?
+    UNION ALL
+    SELECT j.id,j.kind,j.status,j.created_at,j.updated_at,r.branch_id,j.source_revision,j.generation FROM jobs j JOIN sources s ON s.id=j.source_revision JOIN runs r ON r.id=s.run_id
+      WHERE j.chat_id=? AND j.source_hash=COALESCE((SELECT hash FROM source_edits WHERE source_id=s.id ORDER BY revision DESC LIMIT 1),s.hash)
+    UNION ALL
+    SELECT j.id,j.kind,j.status,j.created_at,j.updated_at,COALESCE(json_extract(j.snapshot,'$.branchId'),r.branch_id),j.source_revision,j.generation FROM story_jobs j JOIN sources s ON s.id=j.source_revision JOIN runs r ON r.id=s.run_id
+      WHERE j.chat_id=? AND j.source_hash=COALESCE((SELECT hash FROM source_edits WHERE source_id=s.id ORDER BY revision DESC LIMIT 1),s.hash)
+  ), recent AS (SELECT * FROM activity WHERE status NOT IN ('queued','running','waiting_for_state') ORDER BY updatedAt DESC,id DESC LIMIT 30)
+  SELECT * FROM activity WHERE status IN ('queued','running','waiting_for_state') UNION ALL SELECT * FROM recent ORDER BY createdAt,id`).all(chatId,chatId,chatId) as Omit<ReaderActivity,'startedAt'|'finishedAt'>[];
+  const eventTimes = new Map<string,string>();
+  const timeline = store.db.prepare(`SELECT entity_id,kind,at FROM events WHERE chat_id=? AND entity_id IN (SELECT value FROM json_each(?))
+    AND kind NOT IN ('run.usage','run.delta','run.running','job.running','story.job.running') ORDER BY seq`).all(chatId,JSON.stringify(rows.map(row=>row.id))) as {entity_id:string;kind:string;at:string}[];
+  for (const event of timeline) eventTimes.set(`${event.entity_id}:${event.kind}`,event.at);
+  return rows.map(row => {
+    const prefix = row.kind === 'main' ? 'run' : ['state','memory'].includes(row.kind) ? 'story.job' : 'job';
+    const time = (status: string) => eventTimes.get(`${row.id}:${prefix}.${status}`);
+    // A retry can reuse a job ID; queue time identifies that new user-visible execution.
+    const startedAt = row.kind === 'main' ? row.createdAt : time('queued') ?? row.createdAt;
+    const finishedAt = ['queued','running','waiting_for_state'].includes(row.status) ? null : time(row.status) ?? row.updatedAt;
+    return {...row,startedAt,finishedAt};
+  });
+}
 
 /** Read projection only. Frozen execution records remain available through detail/run APIs. */
 export function readerDetail(store: Store, id: string, query: Record<string, string | undefined>) {
@@ -45,11 +72,11 @@ export function readerDetail(store: Store, id: string, query: Record<string, str
     json_extract(snapshot,'$.settingsRevision') AS settingsRevision,CASE WHEN json_extract(snapshot,'$.packageStart.mode')='authored' THEN NULL ELSE json_extract(snapshot,'$.profile.models.main.title') END AS modelTitle,json_extract(snapshot,'$.hiddenStory.config') AS hiddenConfig,COALESCE(json_array_length(snapshot,'$.profile.packageAttachments'),0)>0 AS hasPackages,
     CASE WHEN json_type(snapshot,'$.packageStart') IS NOT NULL THEN json_object('mode',json_extract(snapshot,'$.packageStart.mode'),'title',json_extract(snapshot,'$.packageStart.title')) END AS packageStart,
     CASE WHEN json_type(snapshot,'$.contextPlan')='object' THEN json_object('status',json_extract(snapshot,'$.contextPlan.status'),'inputTokenLimit',json_extract(snapshot,'$.contextPlan.budget.inputTokenLimit'),'estimatedInputTokens',json_extract(snapshot,'$.contextPlan.estimatedInputTokens'),'compactedSources',json_array_length(snapshot,'$.contextPlan.compacted'),'summaryCalls',json_extract(snapshot,'$.contextPlan.summaryCalls'),'error',json_extract(snapshot,'$.contextPlan.error')) END AS contextSummary,
-    json_object('branchId',branch_id,'candidateOf',json_extract(snapshot,'$.candidateOf'),'forkedFrom',json_extract(snapshot,'$.forkedFrom')) AS snapshot
-    FROM runs WHERE chat_id=? ORDER BY created_at,id`).all(id) as Record<string,any>[]).map(row => ({...row,snapshot:JSON.parse(row.snapshot),contextSummary:row.contextSummary?JSON.parse(row.contextSummary):undefined,packageStart:row.packageStart?JSON.parse(row.packageStart):undefined,hiddenConfig:row.hiddenConfig?JSON.parse(row.hiddenConfig):undefined,usage:row.usage ? JSON.parse(row.usage) : {modelCalls:0,inputTokens:null,outputTokens:null,costUsd:null}}));
+    json_object('loreContextReset',json_extract(snapshot,'$.loreContextReset'),'branchId',branch_id,'candidateOf',json_extract(snapshot,'$.candidateOf'),'forkedFrom',json_extract(snapshot,'$.forkedFrom')) AS snapshot
+    FROM runs WHERE chat_id=? ORDER BY created_at,id`).all(id) as Record<string,any>[]).map(row => ({...row,snapshot:{...JSON.parse(row.snapshot),loreContextReset:!!JSON.parse(row.snapshot).loreContextReset},contextSummary:row.contextSummary?JSON.parse(row.contextSummary):undefined,packageStart:row.packageStart?JSON.parse(row.packageStart):undefined,hiddenConfig:row.hiddenConfig?JSON.parse(row.hiddenConfig):undefined,usage:row.usage ? JSON.parse(row.usage) : {modelCalls:0,inputTokens:null,outputTokens:null,costUsd:null}}));
   const activeJobs = Number((store.db.prepare(`SELECT COUNT(*) AS count FROM jobs j JOIN sources s ON s.id=j.source_revision WHERE j.chat_id=? AND j.status IN ('queued','running') AND j.source_hash=COALESCE((SELECT hash FROM source_edits WHERE source_id=s.id ORDER BY revision DESC LIMIT 1),s.hash)`).get(id) as {count:number}).count);
   const assetsChanged = !events || events.some(event => event.kind.startsWith('asset.') || event.kind.startsWith('job.') || event.kind.startsWith('source.'));
   return {chat,runs,sources,jobs,profile:store.product.profile(id),branches:store.product.branches(id),
     ...(assetsChanged ? {assets:mergedReaderAssets(store,id,order)} : {}),
-    reader:{nativeBotAttached:!!store.db.prepare('SELECT 1 FROM native_chat_settings WHERE chat_id=? AND branch_id=?').get(id,branch.id),headSourceHash:branch.headRevision?(store.db.prepare('SELECT COALESCE((SELECT hash FROM source_edits WHERE source_id=s.id ORDER BY revision DESC LIMIT 1),s.hash) AS hash FROM sources s WHERE s.id=?').get(branch.headRevision) as {hash:string}|undefined)?.hash??null:null,activeJobs,cursor,order,start,total:chain.length,previous:start>0?chain[Math.max(0,start-limit)]:null,next:chain[start+limit]??null,latest:chain[Math.max(0,Math.floor((chain.length-1)/limit)*limit)]??null,projection:true as const}};
+    reader:{activity:readerActivity(store,id),nativeBotAttached:!!store.db.prepare('SELECT 1 FROM native_chat_settings WHERE chat_id=? AND branch_id=?').get(id,branch.id),headSourceHash:branch.headRevision?(store.db.prepare('SELECT COALESCE((SELECT hash FROM source_edits WHERE source_id=s.id ORDER BY revision DESC LIMIT 1),s.hash) AS hash FROM sources s WHERE s.id=?').get(branch.headRevision) as {hash:string}|undefined)?.hash??null:null,activeJobs,cursor,order,start,total:chain.length,previous:start>0?chain[Math.max(0,start-limit)]:null,next:chain[start+limit]??null,latest:chain[Math.max(0,Math.floor((chain.length-1)/limit)*limit)]??null,projection:true as const}};
 }

@@ -1,3 +1,4 @@
+import { DeleteButton } from './DeleteButton.js';
 import { useEffect, useRef, useState } from 'react';
 import type { NativeBotPackage, NativeBotSnapshot, NativeCommandInput, NativeAxis } from '../core/native-bot.js';
 import { api } from './api.js';
@@ -23,6 +24,7 @@ function NativeBotEditor({chatId,branchId,headRevision,sourceHash:onScreenHash,r
     <label>패키지 JSON 가져오기<input type="file" accept="application/json,.json" disabled={busy} onChange={event=>{const file=event.target.files?.[0];if(file)void importFile(file);event.target.value='';}}/></label>
     <label>사용할 패키지<select value={selected} disabled={busy} onChange={event=>setSelected(event.target.value)}><option value="">패키지를 선택하세요</option>{packages.map(x=><option key={x.id} value={x.id}>{x.title} · v{x.revision}</option>)}</select></label>
     <button type="button" disabled={busy||!ready||!selected||headRevision!==null&&!sourceHash} onClick={()=>{const item=packages.find(x=>x.id===selected);if(item)void act({packageId:item.id,packageRevision:item.revision},true);}}>이 분기에 적용 · 설정 초기화</button>
+    {packages.filter(item=>item.id===selected).map(item=><DeleteButton key={item.id} path={`/native-bots/${encodeURIComponent(item.id)}`} revision={item.revision} title={item.title} label="패키지 삭제" disabled={busy} onError={onError} onDeleted={async()=>{setPackages(items=>items.filter(p=>p.id!==item.id));setSelected('');onChanged();}}/>)}
     {p&&state&&<><h3>{p.title}</h3><small>{p.provenance.mode==='synthetic'?'합성 예제':'비성적 일상으로 재구성'} · 설정 v{current!.revision}</small><div className="story-state-values">{(['affection','trust','independence'] as NativeAxis[]).map((field,i)=><StatControl key={`${field}:${state[field]}:${current!.revision}`} field={field} label={['친밀도','신뢰도','자립도'][i]} value={state[field]} disabled={busy} apply={command}/>)}</div>
     <label>언어<select value={state.language} disabled={busy} onChange={event=>command({kind:'language',value:event.target.value as typeof state.language})}><option value="kr">한국어</option><option value="en">English</option><option value="jp">日本語</option></select></label>
     <label>응답 길이<select value={state.volume} disabled={busy} onChange={event=>command({kind:'volume',value:event.target.value as typeof state.volume})}><option value="standard">기본</option><option value="long">길게</option><option value="extra">아주 길게</option></select></label>

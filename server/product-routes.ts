@@ -1,3 +1,5 @@
+import { chatDeletionRoutes } from './chat-deletion.js';
+import { assetDeletionRoutes } from './asset-deletion.js';
 import { supportedModels } from '../core/model-capabilities.js';
 import type { FastifyInstance } from 'fastify';
 import { HttpError, type Store } from './store.js';
@@ -17,10 +19,14 @@ import type { VertexCredentialStore } from './vertex-credentials.js';
 import type { CodexRuntimeService } from './codex-runtime.js';
 import { PROVIDER_PROTOCOLS, validateProviderEndpoint, type ProviderProtocol } from '../core/product.js';
 import { providerOriginApproval } from '../core/provider-origin-policy.js';
+import { libraryDeletionRoutes } from './library-deletion.js';
 
-export function productRoutes(app: FastifyInstance, store: Store, options: {credentials?:VertexCredentialStore;codex?:CodexRuntimeService;accessToken?:string;publicOrigin?:string;approvedOrigins:readonly string[];publish:(chatId:string)=>void;onAuthChanged?:()=>void}) {
+export function productRoutes(app: FastifyInstance, store: Store, options: {credentials?:VertexCredentialStore;codex?:CodexRuntimeService;accessToken?:string;publicOrigin?:string;approvedOrigins:readonly string[];publish:(chatId:string)=>void;onAuthChanged?:()=>void;onChatDeleted?:(chatId:string)=>void}) {
   const product = store.product;
+  libraryDeletionRoutes(app,store);
   promptRoutes(app,store);
+  chatDeletionRoutes(app,store,options.publish,options.onChatDeleted);
+  assetDeletionRoutes(app,store,options.publish);
   chatOrganizationRoutes(app,store,options.publish);
   packagePresentationRoutes(app,store);
   packageBehaviorRoutes(app,store);

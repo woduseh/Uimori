@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import type { Asset } from '../core/product.js';
 import { api } from './api.js';
+import { DeleteButton } from './DeleteButton.js';
 
 export function AssetEditor({ chatId, assets, refresh, onError }: { chatId: string; assets: Asset[]; refresh: () => Promise<void>; onError: (error: string) => void }) {
   const [value, setValue] = useState({ title: '', description: '', actor: '', outfit: '', location: '', allowedUse: 'both' as Asset['allowedUse'] });
@@ -10,7 +11,7 @@ export function AssetEditor({ chatId, assets, refresh, onError }: { chatId: stri
   const [open,setOpen] = useState(false); const [page,setPage] = useState(0);
   const pageSize=48; const start=Math.min(page*pageSize,Math.max(0,Math.ceil(assets.length/pageSize)-1)*pageSize);
   return <details className="workspace-tools" onToggle={event=>setOpen(event.currentTarget.open)}><summary>이 이야기의 이미지 <small>{assets.length}개</small></summary>
-    <div className="asset-grid">{open && assets.slice(start,start+pageSize).map(asset => <figure key={asset.id}><img src={asset.url} alt={asset.description || asset.title} loading="lazy"/><figcaption>{asset.title}<small>{[asset.actor, asset.outfit, asset.location].filter(Boolean).join(' · ')} · {asset.allowedUse}</small></figcaption></figure>)}</div>
+    <div className="asset-grid">{open && assets.slice(start,start+pageSize).map(asset => <figure key={asset.id}><img src={asset.url} alt={asset.description || asset.title} loading="lazy"/><figcaption>{asset.title}<small>{[asset.actor, asset.outfit, asset.location].filter(Boolean).join(' · ')} · {asset.allowedUse}</small>{!asset.packageOwner && asset.url===`/api/assets/${asset.id}` && <DeleteButton path={`/chats/${encodeURIComponent(chatId)}/assets/${encodeURIComponent(asset.id)}`} title={asset.title} label="이미지 삭제" description="이야기에 업로드한 이미지와 파일을 영구 삭제해요. 과거 실행·이미지 작업에서 참조 중인 이미지는 삭제할 수 없어요." disabled={busy} onDeleted={async()=>{setMessage(asset.title+' 이미지를 삭제했어요.');await refresh();}} onError={onError}/>}</figcaption></figure>)}</div>
     {open && assets.length>pageSize && <nav aria-label="이미지 목록 구간" className="reader-pages"><button className="secondary" disabled={start===0} onClick={()=>setPage(Math.max(0,page-1))}>이전 이미지</button><span>{start+1}–{Math.min(start+pageSize,assets.length)} / {assets.length}</span><button className="secondary" disabled={start+pageSize>=assets.length} onClick={()=>setPage(page+1)}>다음 이미지</button></nav>}
     <form className="editor-grid" onSubmit={async event => {
       event.preventDefault(); if (!file) return; setBusy(true); onError('');

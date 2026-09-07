@@ -28,7 +28,7 @@ test('LCUI01 lore placement and invalid order drafts stay independent from folde
 
 test('LCUI02 policy drafts survive tabs and preview reflects the unsaved policy without writing or calling models',async({page,request},info)=>{
   const errors:string[]=[];page.on('pageerror',error=>errors.push(error.message));const bot=await seed(request,`합성 로어 정책 ${Date.now()}`,{lore:[{id:'fixed',title:'고정 배경',description:'',text:'Synthetic fixed lighthouse.',loading:'pinned',loreContext:{placement:'background'}}]}),chat=await createChat(request,bot);
-  await page.setViewportSize({width:1440,height:1000});await page.goto(`/?chat=${chat.id}`);await page.getByLabel('다음 장면 요청',{exact:true}).fill('합성 다음 장면');await page.getByLabel('새 장면 · 조회 로어 정리',{exact:true}).check();await page.getByRole('button',{name:'채팅 설정',exact:true}).click();
+  await page.setViewportSize({width:1440,height:1000});await page.goto(`/?chat=${chat.id}`);await page.getByLabel('다음 장면 요청',{exact:true}).fill('합성 다음 장면');await page.getByRole('button',{name:'입력창 더보기'}).click();await page.getByRole('checkbox',{name:'다음 생성에서 조회 로어 제외'}).click();await page.getByRole('button',{name:'채팅 설정',exact:true}).click();
   const editor=page.getByTestId('profile-editor'),policy=editor.getByRole('region',{name:'로어 문맥 정책',exact:true}),save=editor.getByRole('button',{name:'콘텐츠와 제어 저장',exact:true});await expect(policy.getByLabel('조회 로어 문자 한도',{exact:true})).toHaveValue('48000');await expect(policy.getByLabel('고정 자료 문자 한도',{exact:true})).toHaveValue('200000');
   await policy.getByLabel('조회 로어 구간 한도',{exact:true}).fill('257');await expect(save).toBeDisabled();await editor.getByRole('tab',{name:'모델',exact:true}).click();await expect(save).toBeDisabled();await editor.getByRole('tab',{name:'봇·페르소나·모듈',exact:true}).click();await expect(policy.getByLabel('조회 로어 구간 한도',{exact:true})).toHaveValue('257');
   await policy.getByLabel('조회 로어 구간 한도',{exact:true}).fill('8');await policy.getByLabel('조회 로어 문자 한도',{exact:true}).fill('1234');await policy.getByLabel('고정 자료 문자 한도',{exact:true}).fill('5000');
@@ -41,9 +41,23 @@ test('LCUI02 policy drafts survive tabs and preview reflects the unsaved policy 
 test('LCUI03 a lost response freezes the one-shot reset through retry and exposes the accepted run diagnostics',async({page,request},info)=>{
   const bot=await seed(request,`합성 로어 재확인 ${Date.now()}`),chat=await createChat(request,bot),commands:Record<string,unknown>[]=[];await page.setViewportSize({width:1440,height:1000});await page.goto(`/?chat=${chat.id}`);
   await page.route(`**/api/chats/${chat.id}/runs`,async route=>{commands.push(route.request().postDataJSON());if(commands.length===1){const response=await route.fetch();expect(response.ok()).toBe(true);await route.abort('failed');}else await route.continue();});
-  const reset=page.getByLabel('새 장면 · 조회 로어 정리',{exact:true});await page.getByLabel('다음 장면 요청',{exact:true}).fill('합성 처음 요청');await reset.check();await page.getByRole('button',{name:'원문 생성',exact:true}).click();await expect.poll(async()=>(await detail(request,chat.id)).runs[0]?.status).toBe('completed');await expect(page.getByTestId('source')).toHaveCount(1);await expect(reset).toBeChecked();await expect(reset).toBeDisabled();
+  const reset=page.getByRole('button',{name:'조회 로어 제외 해제'});await page.getByLabel('다음 장면 요청',{exact:true}).fill('합성 처음 요청');await page.getByRole('button',{name:'입력창 더보기'}).click();await page.getByRole('checkbox',{name:'다음 생성에서 조회 로어 제외'}).click();await page.getByRole('button',{name:'원문 생성',exact:true}).click();await expect.poll(async()=>(await detail(request,chat.id)).runs[0]?.status).toBe('completed');await expect(page.getByTestId('source')).toHaveCount(1);await expect(reset).toBeVisible();await expect(reset).toBeDisabled();
   expect(commands[0].loreContextReset).toBe(true);expect(await page.evaluate(id=>JSON.parse(JSON.parse(sessionStorage.getItem(`command:${id}`)!).payload).loreContextReset,chat.id)).toBe(true);
-  await page.getByLabel('다음 장면 요청',{exact:true}).fill('합성 나중 초안');await page.getByRole('button',{name:'이전 요청 확인',exact:true}).click();await expect(page.getByRole('button',{name:'원문 생성',exact:true})).toBeVisible();await expect(reset).not.toBeChecked();await expect(page.getByLabel('다음 장면 요청',{exact:true})).toHaveValue('합성 나중 초안');expect(commands).toHaveLength(2);expect(commands[1]).toEqual(commands[0]);
+  await page.getByLabel('다음 장면 요청',{exact:true}).fill('합성 나중 초안');await page.getByRole('button',{name:'이전 요청 확인',exact:true}).click();await expect(page.getByRole('button',{name:'원문 생성',exact:true})).toBeVisible();await expect(reset).toHaveCount(0);await expect(page.getByLabel('다음 장면 요청',{exact:true})).toHaveValue('합성 나중 초안');expect(commands).toHaveLength(2);expect(commands[1]).toEqual(commands[0]);
   const state=await detail(request,chat.id);expect(state.runs).toHaveLength(1);expect(state.sources).toHaveLength(1);expect(await page.evaluate(id=>sessionStorage.getItem(`lore-reset:draft:${id}`),chat.id)).toBeNull();const full=await(await request.get(`/api/runs/${state.runs[0].id}`)).json() as Run;expect(full.snapshot.loreContextReset).toBe(true);expect(full.snapshot.loreContext!.stats.reasons).toContain('new-scene');
   await page.getByRole('button',{name:'작업 현황',exact:true}).click();await page.getByText('실행과 실제 입력 확인',{exact:true}).click();const result=page.getByRole('region',{name:'조회 로어 유지 결과',exact:true});await expect(result).toContainText('이 요청에서 새 장면 정리를 선택했어요.');await expect(result).toContainText('새 장면 요청으로 조회 로어 정리');await evidence(page,result,info,'lore-run-diagnostics');
+});
+
+
+test('LCUI04 rare request option stays hidden until selected and supports dismissal',async({page,request},info)=>{
+  const bot=await seed(request,`Synthetic composer ${Date.now()}`),chat=await createChat(request,bot);
+  await page.goto(`/?chat=${chat.id}`);
+  const more=page.getByRole('button',{name:'입력창 더보기'}),choice=page.getByRole('checkbox',{name:'다음 생성에서 조회 로어 제외'}),chip=page.getByRole('button',{name:'조회 로어 제외 해제'});
+  await expect(chip).toHaveCount(0);await expect(choice).toHaveCount(0);
+  await more.click();await expect(choice).toBeFocused();await page.keyboard.press('Escape');await expect(more).toBeFocused();await expect(choice).toHaveCount(0);
+  await more.click();await page.locator('.header-title').click();await expect(choice).toHaveCount(0);
+  await more.click();await evidence(page,choice,info,'composer-more-open');await choice.click();await expect(chip).toBeVisible();await expect(choice).toHaveCount(0);
+  await evidence(page,chip,info,'composer-more-selected');await chip.click();await expect(chip).toHaveCount(0);
+  await more.click();await choice.click();await page.getByRole('textbox',{name:'다음 장면 요청'}).fill('Synthetic scene');await page.getByRole('button',{name:'원문 생성',exact:true}).click();await expect(chip).toHaveCount(0);
+  await expect.poll(async()=>(await detail(request,chat.id)).runs.length).toBe(1);
 });

@@ -15,13 +15,14 @@ export function Dialog({ open, title, onClose, children, wide = false, className
   }, [open]);
   return <dialog ref={ref} role={role} className={`app-dialog ${wide ? 'wide' : ''} ${className}`} aria-labelledby={id} onKeyDown={event => {
       if (event.key !== 'Tab') return;
+      event.stopPropagation();
       const candidates = [...event.currentTarget.querySelectorAll<HTMLElement>('button, input, select, textarea, a[href], summary, [tabindex]')].filter(element => element.tabIndex >= 0 && !element.matches(':disabled') && element.checkVisibility({ checkVisibilityCSS: true }));
       const first = candidates[0]; const last = candidates.at(-1);
       if (!first || !last) { event.preventDefault(); event.currentTarget.focus(); return; }
       const active = document.activeElement;
       if (event.shiftKey && (active === first || !event.currentTarget.contains(active))) { event.preventDefault(); last.focus(); }
       else if (!event.shiftKey && (active === last || !event.currentTarget.contains(active))) { event.preventDefault(); first.focus(); }
-    }} onCancel={() => close.current()} onClose={() => { if (isOpen.current) close.current(); }} onClick={event => { if (event.target === event.currentTarget) { const r = event.currentTarget.getBoundingClientRect(); if (event.clientX < r.left || event.clientX > r.right || event.clientY < r.top || event.clientY > r.bottom) close.current(); } }}>
+    }} onCancel={event => { event.stopPropagation(); event.preventDefault(); close.current(); }} onClose={event => { event.stopPropagation(); if (isOpen.current) close.current(); }} onClick={event => { if (event.target === event.currentTarget) { const r = event.currentTarget.getBoundingClientRect(); if (event.clientX < r.left || event.clientX > r.right || event.clientY < r.top || event.clientY > r.bottom) close.current(); } }}>
     <header className="dialog-header"><h2 id={id}>{title}</h2><button type="button" className="icon-button secondary" aria-label={`${title} 닫기`} onClick={onClose}><X size={20}/></button></header><div className="dialog-body">{(open || visited===scopeKey) && children}</div>
   </dialog>;
 }

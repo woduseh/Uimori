@@ -51,7 +51,7 @@ test('P01 package revisions stay pinned and prompt-owned creative choices replac
     await composer.getByRole('button',{name:'이야기 선택값과 조합 저장',exact:true}).click();
     await expect.poll(async()=>(await getDetail(request,chat.id)).profile?.promptControls?.[`${choice.prompt.id}@1`]?.values).toEqual(combination.values);
   }
-  await expect(composer.getByRole('combobox',{name:'합성 공동 서술',exact:true})).toHaveValue('false');await expect(composer.getByLabel('합성 상세도',{exact:true})).toHaveValue('1');
+  await expect(composer.getByRole('checkbox',{name:'합성 공동 서술',exact:true})).not.toBeChecked();await expect(composer.getByLabel('합성 상세도',{exact:true})).toHaveValue('1');
   const run=await send(page,'(OOC: Continue the harbor scene.) SYNTHETIC_P01');await expect.poll(async()=>(await getDetail(request,chat.id)).runs.find(item=>item.id===run.id)?.status).toBe('completed');
   const saved=(await getDetail(request,chat.id)).runs.find(item=>item.id===run.id)!;
   expect(saved.snapshot.profile?.packages?.[0].body).toBe(firstBody);expect(saved.snapshot.profile?.packageAttachments).toEqual([{id:added.id,revision:1,role:'module'}]);

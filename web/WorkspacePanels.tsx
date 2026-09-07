@@ -1,3 +1,5 @@
+import { DeleteButton } from './DeleteButton.js';
+import { ActivityDetails } from './ActivityStatus.js';
 import { CodexAgentSettings } from './CodexAgentSettings.js';
 import { useEffect, useId, useState } from 'react';
 import { Settings, Plug, Database, Shield } from 'lucide-react';
@@ -31,6 +33,7 @@ export function TasksPanel({ state, inspectedRun, onInspect, onClose }: { state:
   return <section className="tasks-panel" aria-label="실행 기록">
     <div className="panel-intro"><p className="muted">{detail.chat.title} · 이 화면을 닫아도 서버의 작업은 이어져요.</p>{inspectedRun && <button type="button" className="secondary" onClick={() => onInspect('')}>전체 작업 보기</button>}</div>
     {!state.connected && <p className="connection-notice" role="status">연결을 다시 확인하는 중이에요. 원격 작업의 상태는 아직 확정할 수 없어요.</p>}
+    <ActivityDetails activities={detail.reader.activity??[]} branchId={state.branch?.id}/>
     {!runs.length && <p className="muted">아직 실행한 작업이 없어요.</p>}
     <div className="runs">{runs.map(run => <article key={run.id} data-testid="run" data-run-id={run.id} className="run">
       <div className="task-heading"><strong>{run.snapshot.forkedFrom ? '복사한 원고' : `원문 ${labels[run.status]}`}</strong><small>{run.packageStart?.mode==="authored"?"작성된 도입문 · 모델 호출 없음":run.modelTitle || 'Scripted mock · 모의 생성'}</small></div>
@@ -70,7 +73,7 @@ export function BranchesPanel({ state, onClose }: { state: StoryState; onClose: 
   }
   return <section className="branches-panel" aria-label="보관된 전개 목록">
     <p className="muted">이전에 저장한 전개를 읽어요. 새로 갈라 쓰려면 원고에서 ‘새 이야기로 이어가기’를 눌러요.</p>
-    <div className="branch-list">{detail.branches?.map(branch => <button type="button" className={`secondary branch-choice ${state.branch?.id === branch.id ? 'selected' : ''}`} key={branch.id} onClick={() => {state.chooseBranch(branch.default ? '' : branch.id);onClose();}} aria-pressed={state.branch?.id === branch.id}><strong>{branchLabel(branch, detail)}</strong><small>{state.branch?.id === branch.id ? '읽는 중' : '이 전개 읽기'}</small><span className="branch-preview">{preview(branch.id, branch.headRevision)}</span></button>)}</div>
+    <div className="branch-list">{detail.branches?.map(branch => <div className="branch-entry" key={branch.id}><button type="button" className={`secondary branch-choice ${state.branch?.id === branch.id ? 'selected' : ''}`} key={branch.id} onClick={() => {state.chooseBranch(branch.default ? '' : branch.id);onClose();}} aria-pressed={state.branch?.id === branch.id}><strong>{branchLabel(branch, detail)}</strong><small>{state.branch?.id === branch.id ? '읽는 중' : '이 전개 읽기'}</small><span className="branch-preview">{preview(branch.id, branch.headRevision)}</span></button>{!branch.default&&<DeleteButton path={`/chats/${detail.chat.id}/branches/${branch.id}`} revision={branch.revision} title={branchLabel(branch,detail)} label="분기 삭제" description="이 분기에서 생성한 원문과 실행 기록을 영구 삭제해요. 다른 분기가 사용하는 기록은 삭제할 수 없어요." onError={state.setError} onDeleted={async()=>{if(state.branch?.id===branch.id)state.chooseBranch('');else await state.refresh(detail.chat.id);}}/>}</div>)}</div>
   </section>;
 
 }

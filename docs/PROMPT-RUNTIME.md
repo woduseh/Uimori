@@ -95,3 +95,12 @@ system('npcs', letValue('total', expr.sum(expr.context<number[]>('scores')), tot
 큰 range·split·반복 결과, 문자열 치환·대소문자 확장, JSON escape 확장과 직렬화 크기를 확인한 뒤 생성해요. 시간 초과는 협력적 검사이며 OS 차원의 임의 코드 격리가 아니에요. 사용자 정규식·임의 JS를 받아 실행하지 않고, 상한이 있는 고정 연산만 사용해요. 기존 program 전체 1,000,000 JSON 코드 단위, control/블록/표현식 깊이 및 최종 provider prompt 한도도 유지해요.
 
 state write·action idempotency·job dispatch·random draw 저장·reroll·source hash 귀속은 host가 책임져요. 이 계산기가 상태를 직접 저장하거나 원문을 바꾸지는 않아요.
+
+
+## 채팅에서 창작 옵션 변경
+
+입력창의 `창작 옵션` 버튼은 현재 main 프롬프트의 옵션 패널을 열어요. 넓은 화면에서는 대화 옆에, 1100px 이하에서는 별도 시트로 표시해요. 프롬프트의 `group`과 `description`을 표시하고 `visiblePromptControls`로 조건을 평가해요. 숨긴 옵션의 값은 지우지 않아요. 프롬프트 편집기와 채팅 패널은 `web/PromptControlFields.tsx`의 입력을 공유해요.
+
+선택값은 `이 채팅에 적용`으로 명시 저장하며 프롬프트 ID/revision별 `promptControls`를 기존 profile CAS로 갱신해요. 과거 Run과 진행 중인 실행의 snapshot은 바뀌지 않아요. 저장 중에는 새 전송을 막고, 미적용 초안이 있을 때 생성하면 저장된 옵션을 사용한다고 표시해요. 기본값 복원도 적용 전에는 초안이에요. 패널 닫기·채팅 이동 시 초안은 현재 페이지 메모리에 유지하며 새로고침 후에는 저장된 값으로 시작해요. 동시 profile 변경은 초안을 유지하고 충돌을 알리며, 최신 설정에 내 옵션을 적용할지는 사용자가 선택해요.
+
+검증: `node scripts/verify-chat-prompt-options.mjs`는 새 DB/port에서 옵션 입력·명시 저장·채팅 간 초안 분리·CAS 복구·390px 화면과 기존 P01 프롬프트 선택/Run snapshot 회귀를 확인해요. 실제 공급자나 개인 자료는 사용하지 않아요.

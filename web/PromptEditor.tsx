@@ -1,3 +1,4 @@
+import { DeleteButton } from './DeleteButton.js';
 import { useEffect, useRef, useState } from 'react';
 import type { ContentRef, Library, PromptPreset, PromptRole, SavedPromptCombination } from '../core/product.js';
 import { DEFAULT_MAIN_PROMPT, DEFAULT_TRANSLATION_PROMPT } from '../core/prompts.js';
@@ -95,6 +96,19 @@ export function PromptEditor({ library, reload, onError, selections, onApply, on
       </fieldset>
       <div className="prompt-save-actions"><button type="button" disabled={pendingSavedText || pendingTemplate || !draft.title.trim()} onClick={() => void save(false, false)}>새 프롬프트로 저장</button>{draft.base && <button type="button" className="secondary" disabled={pendingTemplate || !draft.dirty} onClick={() => void save(true, false)}>기존 프롬프트 수정 저장</button>}{onApply && <><button type="button" className="secondary" disabled={pendingSavedText || pendingTemplate || draft.dirty || draft.source === 'new'} onClick={() => void apply(draft.base ? { id: draft.base.id, revision: draft.base.revision } : null)}>이야기에 선택 적용</button>{draft.dirty && <button type="button" disabled={pendingSavedText || !draft.title.trim()} onClick={() => void save(Boolean(draft.base), true)}>저장하고 이야기에 적용</button>}</>}</div>
     </fieldset>
+    {draft.base && <DeleteButton path={`/prompt-presets/${encodeURIComponent(draft.base.id)}`} revision={draft.base.revision} title={draft.base.title} label="프롬프트 삭제" disabled={busy} onError={onError} onDeleted={async()=>{
+      const removed=draft.base!.id;
+      setLocalPresets(current=>current.filter(item=>item.id!==removed));
+      for(const key of Object.keys(draftCache.current))if(draftCache.current[key].base?.id===removed)delete draftCache.current[key];
+      setComposerDirty(current=>Object.fromEntries(Object.entries(current).filter(([key])=>!key.includes(`:${removed}@`))));
+      setDrafts(current=>Object.fromEntries(roles.map(role=>[role,current[role].base?.id===removed?draftFor(role):current[role]])) as Record<PromptRole,Draft>);
+      await reload?.();setStatus('프롬프트를 삭제했어요.');
+    }}/>}
+    <details><summary>저장된 창작 조합·프리셋 관리</summary><div className="deletion-list">
+      {[...(library.promptCombinations??[]),...localCombinations.filter(item=>!library.promptCombinations?.some(saved=>saved.id===item.id))].map(item=><div className="deletion-row" key={item.id}><span>{item.title} · 전역 조합</span><DeleteButton path={`/prompt-combinations/${encodeURIComponent(item.id)}`} revision={item.revision} title={item.title} onError={onError} onDeleted={async()=>{setLocalCombinations(current=>current.filter(saved=>saved.id!==item.id));await reload?.();}}/></div>)}
+      {library.presets.map(item=><div className="deletion-row" key={item.id}><span>{item.title} · 기본 창작 프리셋</span><DeleteButton path={`/creative-presets/${encodeURIComponent(item.id)}`} revision={item.revision} title={item.title} onError={onError} onDeleted={async()=>{await reload?.();}}/></div>)}
+      {!library.presets.length&&!library.promptCombinations?.length&&!localCombinations.length&&<p className="muted">저장된 조합이나 프리셋이 없어요.</p>}
+    </div></details>
     {pendingTemplate && <p className="muted">미적용 문법 초안이 있어요. 해당 본문에서 적용하거나 되돌린 뒤 저장·전환해 주세요.</p>}{draft.dirty && <p className="muted prompt-unsaved">편집 중인 프롬프트를 아직 저장하지 않았어요.</p>}
     {error && <p className="error" role="alert">{error} 편집 내용은 유지했어요.</p>}
     <p role="status" className="prompt-status">{busy ? '처리 중…' : status}</p>

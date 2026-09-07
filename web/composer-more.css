@@ -1,0 +1,8 @@
+.composer-dock .composer{overflow:visible}
+.composer-more{position:relative;flex:none}
+.composer-more-panel{position:absolute;bottom:calc(100% + 8px);left:0;width:290px;max-width:calc(100vw - 64px);padding:14px;border:1px solid var(--line);border-radius:12px;background:var(--panel);color:var(--text);box-shadow:0 8px 24px #0003;z-index:20}
+.quick-controls .composer-more-panel label{display:flex;flex-direction:row;max-width:none;align-items:flex-start;gap:8px;font-size:13px;line-height:1.5;cursor:pointer}
+.composer-more-panel input{width:16px;height:16px;min-height:16px;flex:none;margin:2px 0 0}
+.composer-more-panel p{margin:8px 0 0 24px;font-size:12px;line-height:1.6;color:var(--muted)}
+.composer-request-chips{padding:10px 12px 0}
+.composer .lore-reset-chip{display:inline-flex;align-items:center;gap:8px;min-height:32px;padding:4px 10px;border:1px solid var(--line);border-radius:20px;background:var(--panel);color:var(--text);font-size:12px}

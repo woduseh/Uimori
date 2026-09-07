@@ -77,12 +77,12 @@ export function PackageImagesEditor({ value, onChange, onDirtyChange }: Props) {
     </div>
     <p role="status" aria-live="polite">{message || `${images.length}개 이미지`}{busy && ' · 업로드가 끝난 뒤 자료를 저장해 주세요.'}</p>
     {error && <p role="alert" className="error package-images-error">{error}</p>}
-    <div className="package-images-layout">
+    <div className={`package-images-layout${images.length ? '' : ' is-empty'}`}>
       <div>
         <div className="package-images-list" role="list" aria-label="등록한 이미지">
           {visible.map(image => <div role="listitem" key={image.id}><button type="button" className={`secondary package-image-choice${selected === image.id ? ' is-selected' : ''}`} aria-pressed={selected === image.id} onClick={() => { setSelected(image.id); setRemove(''); }}><img src={imageUrl(image)} alt="" loading="lazy"/><span>{image.title || '이름 없음'}<small>{image.allowedUse === 'both' ? '대표 · 본문' : image.allowedUse === 'profile' ? '대표 이미지' : '본문용'}</small></span></button></div>)}
         </div>
-        {!found.length && <p className="muted">{images.length ? '검색 결과가 없어요.' : '아직 등록한 이미지가 없어요.'}</p>}
+        {!found.length && (images.length ? <p className="muted">검색 결과가 없어요.</p> : <p className="package-images-empty"><strong>아직 등록한 이미지가 없어요.</strong><small>위에서 이미지 파일을 추가한 뒤 이름과 설명을 편집해요.</small></p>)}
         {found.length > pageSize && <nav className="package-images-pages" aria-label="자료 이미지 페이지"><button type="button" className="secondary" disabled={currentPage === 0} onClick={() => setPage(currentPage - 1)}>이전</button><span>{currentPage * pageSize + 1}–{Math.min((currentPage + 1) * pageSize, found.length)} / {found.length}</span><button type="button" className="secondary" disabled={(currentPage + 1) * pageSize >= found.length} onClick={() => setPage(currentPage + 1)}>다음</button></nav>}
       </div>
       {active ? <div className="package-image-detail" aria-label="선택한 이미지 편집">
@@ -94,7 +94,7 @@ export function PackageImagesEditor({ value, onChange, onDirtyChange }: Props) {
         <small>같은 이름도 사용할 수 있어요. 구분 번호: {active.id.slice(0, 8)}</small>
         <button type="button" className="ghost" onClick={() => setRemove(active.id)}>이 자료에서 이미지 제거</button>
         {removing && <div role="alertdialog" aria-label="이미지 참조 제거 확인" className="package-image-remove"><p>“{removing.title}”을 이 자료의 새 버전에서 제거할까요? 저장된 이전 자료 버전과 과거 장면에서 쓰는 이미지는 보존돼요.</p><button type="button" className="secondary" onClick={() => { change((latest.current.value.images ?? []).filter(image => image.id !== removing.id)); setRemove(''); setSelected(''); }}>이미지 참조 제거</button><button type="button" className="secondary" onClick={() => setRemove('')}>취소</button></div>}
-      </div> : <p className="muted">이미지를 선택하면 이름과 설명을 편집할 수 있어요.</p>}
+      </div> : images.length > 0 && <p className="muted">이미지를 선택하면 이름과 설명을 편집할 수 있어요.</p>}
     </div>
   </section>;
 }
