@@ -4,6 +4,7 @@ import type { ProductStore } from './product-store.js';
 import { isVertexAdcReference, isVertexFileReference, validCredentialEnv } from '../core/credential-reference.js';
 import type { VertexCredentialStore } from './vertex-credentials.js';
 import type { CodexRuntimeStatus } from '../core/agent-runtime.js';
+import { providerOriginApproval } from '../core/provider-origin-policy.js';
 
 export type ProviderReadiness = {
   enabled: boolean; originApproved: boolean;
@@ -15,7 +16,7 @@ export type ProviderReadiness = {
 export function readiness(_store: ProductStore, connection: Connection, approvedOrigins: readonly string[], credentials?:VertexCredentialStore, agent?:CodexRuntimeStatus): ProviderReadiness {
   if (connection.protocol === 'codex-app-server-v1') return { enabled: connection.enabled, originApproved: connection.endpoint === 'codex://local' && agent?.available === true, credentialStatus: agent?.authenticated ? 'configured' : 'missing', catalogKind: 'agent-runtime' };
   let originApproved = false;
-  try { originApproved = approvedOrigins.includes(new URL(connection.endpoint).origin); } catch { /* Invalid roots are never ready. */ }
+  originApproved = providerOriginApproval(connection.protocol, connection.endpoint, approvedOrigins) !== null;
   let credentialStatus: ProviderReadiness['credentialStatus'];
   if (connection.protocol === 'vertex-gemini-v1' && isVertexAdcReference(connection.credentialEnv)) {
     const path = process.env.GOOGLE_APPLICATION_CREDENTIALS;

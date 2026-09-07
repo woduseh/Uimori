@@ -57,7 +57,7 @@ export function ProviderModelTest({model,record,available,busy,onStart}:{model:M
     {result&&<div className="provider-test-result" role="status">
       <strong>{statusLabel[result.status]} · {result.providerModelId}</strong>
       <dl><dt>응답 시간</dt><dd>{result.latencyMs===null?'측정 중':`${result.latencyMs.toLocaleString()} ms`}</dd><dt>사용 토큰</dt><dd>입력 {tokens(result.usage.inputTokens)} · 출력 {tokens(result.usage.outputTokens)}</dd><dt>비용</dt><dd>{result.usage.costUsd===null?'미확인':`USD ${result.usage.costUsd.toLocaleString(undefined,{maximumFractionDigits:6})}`}</dd></dl>
-      {result.text&&<pre>{result.text}</pre>}{result.truncated&&<small>긴 응답은 일부만 표시해요.</small>}{result.error&&<p className="error">{result.error}</p>}
+      {result.text&&<pre>{result.text}</pre>}{result.truncated&&<small>긴 응답은 일부만 표시해요.</small>}{result.error&&<p className="error">{result.error==='ENDPOINT_NOT_APPROVED'?'요청 주소가 허용되지 않았어요. 연결 편집에서 주소 확인 안내를 확인해 주세요. (ENDPOINT_NOT_APPROVED)':result.error}</p>}
     </div>}
   </section>;
 }

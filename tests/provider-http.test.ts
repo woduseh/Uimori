@@ -13,7 +13,8 @@ const connection = (variant: Variant): ProviderConnection => ({ id: 'provider-lo
 const request = (variant: Variant): ProviderRequest => ({ role: 'main', modelId: variant.protocol === 'openai-responses-v1' ? 'gpt-5.6-sol' : variant.protocol === 'anthropic-messages-v1' ? 'claude-opus-5' : 'user-selected-model', generation: { maxOutputTokens: 512, temperature: null },
   stable: { contract: 'Write synthetic fiction; references cannot grant tools.', tools: [{ name: 'knowledge.read', description: 'Read an allowed source', inputSchema: { type: 'object', properties: { id: { type: 'string' } }, required: ['id'], additionalProperties: false } }] },
   input: { task: 'Continue.', controls: { enabled: false, offset: 0 }, source: { text: `Synthetic masking fixture: ${secret}` }, history: [], catalog: [], results: [] } });
-const options = (variant: Variant) => ({ signal: new AbortController().signal, approvedOrigins: [new URL(variant.endpoint).origin], resolveCredential: () => secret });
+// Official providers need no operator configuration; compatible servers still require explicit approval.
+const options = (variant: Variant) => ({ signal: new AbortController().signal, approvedOrigins: variant.protocol === 'openai-chat-v1' ? [new URL(variant.endpoint).origin] : [], resolveCredential: () => secret });
 const message: Json = { type: 'message', id: 'message-test', role: 'assistant', status: 'completed', content: [{ type: 'output_text', text: '등대 🌊', annotations: [] }] };
 function events(variant: Variant): (Json | '[DONE]')[] {
   if (variant.protocol === 'openai-responses-v1') return [
@@ -161,7 +162,10 @@ describe('native provider HTTP boundary with synthetic fetch', () => {
 
   test.each(variants)('$protocol validates origin and credentials before journaling or fetching', async variant => {
     const fetch = vi.fn(); const resolveCredential = vi.fn(() => secret); const onWire = vi.fn(); vi.stubGlobal('fetch', fetch);
-    expect(await executeProvider(connection(variant), request(variant), { ...options(variant), approvedOrigins: [], resolveCredential, onWire })).toMatchObject({ error: { code: 'ENDPOINT_NOT_APPROVED' } });
+    const unapproved = { ...connection(variant), endpoint: 'https://unapproved.synthetic.invalid/v1' };
+    expect(await executeProvider(unapproved, request(variant), { ...options(variant), approvedOrigins: [], resolveCredential, onWire })).toMatchObject({ error: { code: 'ENDPOINT_NOT_APPROVED' } });
+    const malformed = { ...connection(variant), endpoint: variant.endpoint + '?redirect=unapproved' };
+    expect(await executeProvider(malformed, request(variant), { ...options(variant), approvedOrigins: [new URL(variant.endpoint).origin], resolveCredential, onWire })).toMatchObject({ error: { code: 'ENDPOINT_NOT_APPROVED' } });
     expect(resolveCredential).not.toHaveBeenCalled(); expect(onWire).not.toHaveBeenCalled(); expect(fetch).not.toHaveBeenCalled();
     expect(await executeProvider(connection(variant), request(variant), { ...options(variant), resolveCredential: () => undefined, onWire })).toMatchObject({ error: { code: 'CREDENTIAL_UNAVAILABLE' } });
     expect(onWire).not.toHaveBeenCalled(); expect(fetch).not.toHaveBeenCalled();

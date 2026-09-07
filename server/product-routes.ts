@@ -15,6 +15,8 @@ import { packagePresentationRoutes } from './package-presentation-routes.js';
 import { packageBehaviorRoutes } from './package-behavior-routes.js';
 import type { VertexCredentialStore } from './vertex-credentials.js';
 import type { CodexRuntimeService } from './codex-runtime.js';
+import { PROVIDER_PROTOCOLS, validateProviderEndpoint, type ProviderProtocol } from '../core/product.js';
+import { providerOriginApproval } from '../core/provider-origin-policy.js';
 
 export function productRoutes(app: FastifyInstance, store: Store, options: {credentials?:VertexCredentialStore;codex?:CodexRuntimeService;accessToken?:string;publicOrigin?:string;approvedOrigins:readonly string[];publish:(chatId:string)=>void;onAuthChanged?:()=>void}) {
   const product = store.product;
@@ -48,6 +50,19 @@ export function productRoutes(app: FastifyInstance, store: Store, options: {cred
     return product.library(request.query.view === 'summary');
   });
   app.get('/api/provider-management/definitions',async () => PROVIDER_DEFINITIONS);
+  app.post('/api/provider-management/endpoint-status',async (request,reply) => {
+    reply.header('Cache-Control','no-store');
+    const b=record(request.body); fields(b,['protocol','endpoint']);
+    if(!PROVIDER_PROTOCOLS.includes(b.protocol as ProviderProtocol))throw new HttpError(400,'Unsupported protocol');
+    const protocol=b.protocol as ProviderProtocol, endpoint=text(b.endpoint,'endpoint',2048);
+    try {
+      validateProviderEndpoint(protocol,endpoint);
+      const url=new URL(endpoint);
+      if(url.username||url.password||url.search||url.hash) return {status:'invalid',origin:null};
+      if(protocol==='codex-app-server-v1')return {status:'local',origin:null};
+      return {status:providerOriginApproval(protocol,endpoint,options.approvedOrigins)??'needs-approval',origin:url.origin};
+    } catch { return {status:'invalid',origin:null}; }
+  });
   app.post('/api/provider-management/vertex-credentials',{bodyLimit:70*1024},async(request,reply)=>{
     reply.header('Cache-Control','no-store');
     const b=record(request.body);fields(b,['serviceAccount']);

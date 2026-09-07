@@ -27,7 +27,7 @@ async function redirectedFixture(handler: Parameters<typeof loopbackProvider>[0]
   }));
   return { ...local, urls };
 }
-const options = (extra: Record<string, unknown> = {}) => ({ approvedOrigins: [origin], signal: new AbortController().signal,
+const options = (extra: Record<string, unknown> = {}) => ({ approvedOrigins: [], signal: new AbortController().signal,
   resolveCredential: () => token, ...extra });
 
 describe('Vertex native wire through real local HTTP streams (no live calls)', () => {
@@ -164,8 +164,10 @@ describe('Vertex native wire through real local HTTP streams (no live calls)', (
     expect(JSON.stringify(result)).not.toContain(token);
     const denied = await executeProvider(connection, request(), options({ onWire: () => { throw new ProviderContractError('ATTEMPT_PERSISTENCE_FAILED'); } }));
     expect(denied.error?.code).toBe('ATTEMPT_PERSISTENCE_FAILED');
-    const wrongOrigin = await executeProvider(connection, request(), options({ approvedOrigins: [] }));
+    const resolveCredential = vi.fn(() => token); const onWire = vi.fn(); const fetch = vi.mocked(globalThis.fetch);
+    const wrongOrigin = await executeProvider({ ...connection, endpoint: connection.endpoint.replace(origin, 'https://unapproved.synthetic.invalid') }, request(), options({ resolveCredential, onWire }));
     expect(wrongOrigin.error?.code).toBe('ENDPOINT_NOT_APPROVED');
+    expect(resolveCredential).not.toHaveBeenCalled(); expect(onWire).not.toHaveBeenCalled(); expect(fetch).toHaveBeenCalledTimes(1);
     expect(local.requests).toHaveLength(1);
   });
 });

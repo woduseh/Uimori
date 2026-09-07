@@ -41,7 +41,7 @@
 | Vercel AI Gateway | `https://ai-gateway.vercel.sh/v1` | `VERCEL_API_KEY` | OpenAI Chat Completions, 모델 `공급자/모델` |
 | OpenAI 호환 별도 공급자 | 사용자가 지정한 HTTPS API root | `PROVIDER_API_KEY` | Chat Completions; 인증 없는 literal loopback HTTP도 가능 |
 
-`NR_PROVIDER_ORIGINS`에는 사용할 주소의 origin을 쉼표로 구분해 추가해요. 키는 사용자가 선택한 이름의 서버 환경변수에 설정하며, 이름은 영문자 또는 `_`로 시작하는 영문자·숫자·`_` 조합이면 돼요. 특정 접두사는 요구하지 않아요. 키 원문은 브라우저에 붙여 넣지 말고 서버 환경변수를 바꿨다면 서버를 다시 시작하세요. Anthropic과 Vercel 기본 주소는 고정하며 Responses와 Chat 호환 연결은 허용한 HTTPS 또는 literal loopback HTTP API root를 사용할 수 있어요.
+공식 Gemini global·OpenAI·Anthropic·Vercel 주소는 연결 방식에 맞는 API 기본 주소일 때 기본 허용해요. 별도 `NR_PROVIDER_ORIGINS` 설정이 필요하지 않아요. 사용자 지정 프록시·호환 API·로컬 검사용 주소만 `NR_PROVIDER_ORIGINS`에 origin(경로와 마지막 `/` 제외)을 쉼표로 구분해 추가해요. 이 목록은 공식 주소에 더하는 추가 허용 목록이에요. 연결 편집의 주소 확인 안내는 서버 정책만 조회하며 인증이나 모델 요청을 보내지 않아요. Windows 사용자 환경변수나 서버 실행 설정에 저장하면 매번 입력할 필요가 없어요. 키는 사용자가 선택한 이름의 서버 환경변수에 설정하며, 이름은 영문자 또는 `_`로 시작하는 영문자·숫자·`_` 조합이면 돼요. 특정 접두사는 요구하지 않아요. 키 원문은 브라우저에 붙여 넣지 말고 서버 환경변수를 바꿨다면 서버를 다시 시작하세요. Anthropic과 Vercel 기본 주소는 고정하며 Responses와 Chat 호환 연결은 허용한 HTTPS 또는 literal loopback HTTP API root를 사용할 수 있어요.
 
 생성 옵션은 연결에 속한 **모델 프리셋**에 저장해요. Responses는 Reasoning Effort·Verbosity, Claude는 Output Effort·Thinking Mode, Gemini는 Thinking Level처럼 지원 모델의 capability에 등록한 옵션만 선택할 수 있어요. 출력 한도·timeout과 해당 모델이 지원하는 sampling·service tier 옵션도 같은 프리셋에 저장해요. 빈 선택은 모델 기본값을 사용하며 명시적 `none`·`disabled`와 구분해요. 미지원 옵션은 저장·실행 검증에서 거절하고 다른 값으로 조용히 바꾸지 않아요.
 
@@ -55,13 +55,12 @@ Google Agent Platform은 `vertex-gemini-v1`을 사용하는 **Gemini 계열 전�
 
 ```powershell
 $env:GOOGLE_APPLICATION_CREDENTIALS = 'C:\보관위치\service-account.json'
-$env:NR_PROVIDER_ORIGINS = 'https://aiplatform.googleapis.com'
 $env:NR_VERTEX_REQUEST_TIER = 'flex'
 npm run dev
 ```
 
 1. 설정 → 연결과 모델 → **빠른 연결 시작** → **Google Agent Platform**을 선택해요.
-2. 서비스 계정 JSON 파일(64 KiB 이하)을 선택해요. 서버에 등록되면 프로젝트 ID와 인증 참조를 채워요. 리전은 `global` 또는 사용할 지역을 선택하며 지역 endpoint의 origin도 `NR_PROVIDER_ORIGINS`에 허용해야 해요. 업로드·연결 저장은 OAuth 토큰이나 모델을 요청하지 않아요.
+2. 서비스 계정 JSON 파일(64 KiB 이하)을 선택해요. 서버에 등록되면 프로젝트 ID와 인증 참조를 채워요. 현재 Gemini 연결은 `global` endpoint만 지원하며 공식 주소를 기본 허용해요. 업로드·연결 저장은 OAuth 토큰이나 모델을 요청하지 않아요.
 3. 기존 서버 인증을 쓰려면 파일을 선택하지 않고 **Google Cloud 프로젝트 ID**를 입력해요. 환경변수 이름을 비우거나 `GOOGLE_APPLICATION_CREDENTIALS`를 지정하면 그 변수의 ADC 파일을 사용하고, `VERTEX_ACCESS_TOKEN`처럼 다른 이름을 지정하면 해당 서버 변수의 OAuth Bearer token을 사용해요. JSON 등록 후 **서버 ADC / 환경변수 방식으로 변경**은 현재 연결 초안의 인증 방식을 바꾸며 서버 키 파일을 삭제하지 않아요.
 4. 연결을 지정한 모델 프리셋을 만들어요. 예를 들어 `gemini-3.8-flash`는 최대 출력 65,536 이하와 Thinking Level을 지원해요. 서비스 티어는 **Standard** 또는 **Flex**를 선택해요. 모델·리전에서 지원하지 않는 조합은 저장 또는 실행 시 거절해요. Flex 장문·번역 시험에서는 응답 제한 시간을 900초로 저장했어요.
 5. 새 이야기에서 봇 → 페르소나 → 창작 프리셋과 메인·번역 모델을 선택해요. 명시적으로 선택한 모델은 다음 시작에 복원하고, 비활성 연결은 제외해요. 기존 이야기는 이야기 설정에서 역할별 모델을 바꿀 수 있어요. 번역은 원고의 **번역 보기**를 눌러 시작하며 연결하지 않은 역할은 검사용 모의 경로예요.
@@ -100,4 +99,4 @@ node scripts/verify-live-retry.mjs --source 'output/live/완료된-시험-폴더
 
 키 파일은 `NR_DB` 파일 옆의 `<DB 파일명>.vertex-credentials/`에 저장돼요. 재시작 후에도 같은 DB 경로와 키 디렉터리가 필요해요. 기본 Compose는 `/data` 볼륨 안에 함께 보관해요. JSON 내보내기와 SQLite 백업에는 키 원문이 포함되지 않으므로 다른 서버로 복원하면 해당 서버에서 키 파일을 다시 등록하고 연결·모델 버전을 선택해 주세요. 키 파일을 수동 이전하는 경우에도 서버의 보호된 위치와 동일한 DB 파일명을 유지해야 해요.
 
-서비스 계정 형식·RSA 키·Google 토큰 주소를 서버가 검사하고, 등록 참조는 해당 프로젝트의 Gemini 연결에서만 사용할 수 있어요. `NR_PROVIDER_ORIGINS`의 Google origin 허용과 접속 권한은 별도로 유지해요. 업로드한 파일은 Git 및 Docker 빌드 입력에서 제외해요. Linux 파일 생성 권한은 디렉터리 0700·파일 0600이며, Windows는 호스트의 파일 접근 권한을 따라요. 실제 Google 인증·모델 응답 검증과 파일 저장 검증은 구분해요.
+서비스 계정 형식·RSA 키·Google 토큰 주소를 서버가 검사하고, 등록 참조는 해당 프로젝트의 Gemini 연결에서만 사용할 수 있어요. 공식 Google global 주소는 기본 허용하지만 프로젝트·인증 참조·최신 연결 권한 검사는 별도로 유지해요. 업로드한 파일은 Git 및 Docker 빌드 입력에서 제외해요. Linux 파일 생성 권한은 디렉터리 0700·파일 0600이며, Windows는 호스트의 파일 접근 권한을 따라요. 실제 Google 인증·모델 응답 검증과 파일 저장 검증은 구분해요.

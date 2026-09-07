@@ -7,6 +7,7 @@ import { validateProviderPrompt, type ProviderPrompt } from './prompt-program.js
 import { ProviderContractError } from './provider-errors.js';
 import { isVertexFileReference, validVertexFileReference, validCredentialEnv } from './credential-reference.js';
 import { assertContextBudget, validateContextBudget, type ContextBudget } from './context-budget.js';
+import { providerOriginApproval } from './provider-origin-policy.js';
 export { ProviderContractError } from './provider-errors.js';
 
 /** This versioned loopback protocol is a local fixture, not a live API claim. */
@@ -63,7 +64,7 @@ function numeric(value: unknown, integer = false): number | null {
 }
 const sha = (text: string) => createHash('sha256').update(text).digest('hex');
 
-/** Only host-approved origins are eligible; catalog or prompt content cannot approve one. */
+/** Only validated official roots or host-approved origins are eligible; content cannot approve one. */
 export function validateConnection(value: unknown, approvedOrigins: readonly string[]): ProviderConnection {
   keys(value, ['id', 'protocol', 'endpoint', 'credentialEnv']);
   string(value.id); string(value.endpoint, 2048);
@@ -74,10 +75,12 @@ export function validateConnection(value: unknown, approvedOrigins: readonly str
   }
   let url: URL;
   try { url = new URL(value.endpoint); } catch { return reject('INVALID_ENDPOINT'); }
-  if (url.username || url.password || url.search || url.hash || !approvedOrigins.includes(url.origin)) reject('ENDPOINT_NOT_APPROVED');
+  const approval = providerOriginApproval(value.protocol as ProviderProtocol, value.endpoint, approvedOrigins);
+  if (url.username || url.password || url.search || url.hash || (!approval && !approvedOrigins.includes(url.origin))) reject('ENDPOINT_NOT_APPROVED');
   // An unselected fixture protocol never becomes a generic remote proxy.
   if (value.protocol === 'fixture-sse-v1' && (url.protocol !== 'http:' || !['127.0.0.1', '[::1]'].includes(url.hostname))) reject('FIXTURE_REQUIRES_LOOPBACK');
   try { validateProviderEndpoint(value.protocol as ProviderProtocol, url.href); } catch { reject(value.protocol === 'vertex-gemini-v1' ? 'INVALID_VERTEX_ENDPOINT' : 'INVALID_PROVIDER_ENDPOINT'); }
+  if (!approval) reject('ENDPOINT_NOT_APPROVED');
   if (value.credentialEnv !== undefined && !validCredentialEnv(value.credentialEnv)) reject('INVALID_CREDENTIAL_REFERENCE');
   if (typeof value.credentialEnv === 'string' && isVertexFileReference(value.credentialEnv) && (value.protocol !== 'vertex-gemini-v1' || !validVertexFileReference(value.credentialEnv))) reject('INVALID_CREDENTIAL_REFERENCE');
   return { id: value.id, protocol: value.protocol as ProviderProtocol, endpoint: url.href, ...(value.credentialEnv ? { credentialEnv: value.credentialEnv as string } : {}) };

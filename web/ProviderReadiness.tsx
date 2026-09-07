@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import type { Connection } from '../core/product.js';
 import { api } from './api.js';
+import { ProviderEndpointStatus } from './ProviderEndpointStatus.js';
 
 type Readiness = {enabled:boolean;originApproved:boolean;credentialStatus:'configured'|'missing'|'not-required'|'adc-configured'|'adc-unchecked';catalogKind:'remote'|'local-support'};
 const credentials:Record<Readiness['credentialStatus'],string> = {configured:'인증 참조 설정됨',missing:'인증 참조 설정 필요','not-required':'인증 참조 불필요','adc-configured':'ADC 파일 설정됨','adc-unchecked':'서버 ADC 설정 확인 필요'};
@@ -29,7 +30,8 @@ export function ProviderReadiness({connection,onCatalog,busy}:{connection:Connec
     <div className="provider-section-heading"><strong>{connection.title} · 준비 상태</strong><button type="button" className="secondary" disabled={busy} onClick={()=>setRefresh(value=>value+1)}>준비 상태 다시 확인</button></div>
     {state?.key===key&&state.error?<p className="error" role="status">{state.error}</p>:!value?<p role="status">서버 설정을 확인하고 있어요…</p>:<>
       <p>{prepared?'서버 설정 준비됨':'사용 전 설정 확인이 필요해요'}</p>
-      <ul><li>{value.enabled?'연결 사용 허용':'연결 비활성'}</li><li>{value.originApproved?'서버에서 주소 허용됨':'서버의 NR_PROVIDER_ORIGINS에서 주소 허용 필요'}</li><li>{credentials[value.credentialStatus]}</li></ul>
+      <ul><li>{value.enabled?'연결 사용 허용':'연결 비활성'}</li><li>{value.originApproved?'서버에서 주소 허용됨':'요청 주소 설정 확인 필요'}</li><li>{credentials[value.credentialStatus]}</li></ul>
+      {!value.originApproved&&<ProviderEndpointStatus protocol={connection.protocol} endpoint={connection.endpoint}/>}
       <small>현재 서버 설정을 확인했어요. 실제 공급자 인증과 모델 응답은 응답 테스트로 확인해 주세요.</small>
     </>}
     {connection.catalogError&&<p className="error">모델 목록 조회 실패 · 마지막 저장 목록과 수동 입력을 사용할 수 있어요.</p>}

@@ -26,7 +26,7 @@ openssl rand -hex 32
 | `NR_ACCESS_TOKEN` | 공백 없는 무작위 접속 토큰 32–1000자. 위 명령은 64자리 hex를 생성해요. |
 | `UIMORI_TLS_DIR` | 두 TLS 파일이 있는 서버의 절대 디렉터리. |
 | `UIMORI_HTTPS_PORT` | 기본 `443`. `8443`이면 public origin에도 `:8443`을 넣어요. |
-| `NR_PROVIDER_ORIGINS` | 서버가 모델을 호출할 때 허용하는 origin을 쉼표로 나열해요. public origin과 별도이며 처음에는 비워둘 수 있어요. |
+| `NR_PROVIDER_ORIGINS` | 공식 공급자 주소는 기본 허용해요. 사용자 지정 API의 추가 허용 origin을 쉼표로 나열해요. public origin과 별도이며 공식 연결만 쓰면 비워둬요. |
 
 4. 설정을 확인하고 시작해요. 아래 명령은 저장소 루트에서 실행해요. `config --quiet`는 비밀 값을 출력하지 않고 Compose 설정을 검사해요. 보간에 필요한 값이 없으면 시작 전에 오류를 반환해요. [Compose 환경 파일](https://docs.docker.com/compose/how-tos/environment-variables/variable-interpolation/), [필수 값 보간](https://docs.docker.com/reference/compose-file/interpolation/)
 
@@ -56,7 +56,7 @@ docker compose --env-file .env.self-host up -d
 
 앱의 연결 설정에는 키 값 대신 `OPENAI_API_KEY`라는 참조 이름을 넣어요. 접속 토큰은 작업실 로그인용이고 `OPENAI_API_KEY` 같은 인증 환경변수는 외부 모델 호출용이에요. 이름은 영문 대소문자 또는 밑줄로 시작하고 이후 숫자를 포함할 수 있으며 최대 200자예요. 특정 접두사는 요구하지 않아요. 모델별 설정과 현재 검증 범위는 [공급자 안내](PROVIDERS.md)를 확인하세요.
 
-Google Agent Platform의 서비스 계정 파일을 쓰는 경우 `deploy/compose.vertex.example.yaml`을 함께 사용해요. `.env.self-host`에 `UIMORI_SECRETS_DIR=/srv/uimori/secrets`와 선택한 Google 리전의 `NR_PROVIDER_ORIGINS`를 설정하고 그 디렉터리에 `service-account.json`을 둬요. 파일은 앱의 UID 1000 사용자가 읽을 수 있어야 해요. 이 overlay는 서버 안의 `/run/uimori-secrets/service-account.json`을 읽기 전용으로 연결하고 Gemini 요청을 Flex로 고정해요. [Compose 읽기 전용 bind mount](https://docs.docker.com/reference/compose-file/services/#volumes)
+Google Agent Platform의 서비스 계정 파일을 쓰는 경우 `deploy/compose.vertex.example.yaml`을 함께 사용해요. `.env.self-host`에 `UIMORI_SECRETS_DIR=/srv/uimori/secrets`를 설정하고 그 디렉터리에 `service-account.json`을 둬요. 파일은 앱의 UID 1000 사용자가 읽을 수 있어야 해요. 이 overlay는 서버 안의 `/run/uimori-secrets/service-account.json`을 읽기 전용으로 연결하고 Gemini 요청을 Flex로 고정해요. [Compose 읽기 전용 bind mount](https://docs.docker.com/reference/compose-file/services/#volumes)
 
 ```sh
 docker compose --env-file .env.self-host -f compose.yaml -f deploy/compose.vertex.example.yaml up --build -d

@@ -270,3 +270,33 @@ test('PMUI10 Codex subscription login preserves drafts and saves a connection an
   await page.getByRole('tab',{name:'에이전트',exact:true}).click();await panel.getByRole('button',{name:'Codex 연결 해제',exact:true}).click();await expect(panel).toContainText('ChatGPT 로그인이 필요해요');available=false;await panel.getByRole('button',{name:'Codex 상태 다시 확인'}).click();await expect(panel).toContainText('서버에 Codex 실행 설정이 필요해요');
   expect(mutations).toEqual(['POST /api/agent-runtimes/codex/login','POST /api/agent-runtimes/codex/login/cancel','POST /api/agent-runtimes/codex/login','DELETE /api/agent-runtimes/codex/session']);expect(observed.errors).toEqual([]);expect(observed.generations).toEqual([]);expect(observed.legacyReads).toEqual([]);
 });
+
+test('PMUI16 endpoint guidance checks server policy before saving and ignores a stale draft response',async({page,request},info)=>{
+  await page.setViewportSize({width:390,height:844});await settings(page);
+  await page.getByRole('button',{name:'빠른 연결 시작',exact:true}).click();
+  await page.getByRole('region',{name:'제공자 선택',exact:true}).getByRole('button',{name:/OpenAI · Responses/}).click();
+  const form=page.getByRole('form',{name:'연결 편집 양식'}), address=form.getByLabel('API 기본 주소'), status=form.getByRole('status',{name:'연결 주소 확인'});
+  await expect(status).toContainText('별도 주소 허용 설정 없이');
+  const before=await library(request);
+  await address.fill('https://custom.example/v1');
+  await expect(status).toContainText('서버에서 한 번 허용');await expect(status).toContainText('https://custom.example');
+  await expect(status).toContainText('매번 입력하지 않아도');
+  for(const width of [390,1440]){
+    await page.setViewportSize({width,height:1000});await status.scrollIntoViewIfNeeded();
+    const box=await status.boundingBox();expect(box!.x).toBeGreaterThanOrEqual(0);expect(box!.x+box!.width).toBeLessThanOrEqual(width);
+    await status.screenshot({path:info.outputPath(`endpoint-guidance-${width}.png`)});
+  }
+  let release!:()=>void, seen!:()=>void;const pending=new Promise<void>(resolve=>{seen=resolve;});
+  await page.route('**/api/provider-management/endpoint-status',async route=>{
+    if(route.request().postDataJSON().endpoint!=='https://delayed.example/v1'){await route.continue();return;}
+    seen();await new Promise<void>(resolve=>{release=resolve;});
+    await route.fulfill({json:{status:'needs-approval',origin:'https://delayed.example'}});
+  });
+  await address.fill('https://delayed.example/v1');await pending;
+  await address.fill('https://api.openai.com/v1');await expect(status).toContainText('공식 공급자 주소');
+  release();await expect(status).not.toContainText('delayed.example');
+  await form.getByLabel('연결 프로토콜').selectOption('vertex-gemini-v1');
+  await form.getByLabel('Google Cloud 프로젝트 ID').fill('synthetic-project');
+  await expect(status).toContainText('공식 공급자 주소');
+  const after=await library(request);expect(after.connections).toEqual(before.connections);expect(after.models).toEqual(before.models);
+});
