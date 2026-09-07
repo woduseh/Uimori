@@ -1,10 +1,14 @@
+# UI 구현·검증 기록
+
+최신 통합 검증은 [Sol 통합 요약](../output/sol-provider/2026-09-07/summary.json)이에요. [기존 UI](../output/playwright/ui-2026-09-07T02-09-41-126Z-d7e26af4/summary.json) 9 unit + 19 browser와 [Sol 설정 UI](../output/playwright/sol-ui-2026-09-07T02-10-02-278Z-1a8f24c4/summary.json) 2 browser가 PASS예요. 아래는 단계별 고정 화면·측정 기록이며, 당시의 source/build·지원 범위·미커밋 설명을 현재 상태로 해석하지 않아요. 실제 휴대폰·키보드/IME 검증은 별도예요.
+
 # 번역·직접 편집 UI 후속 · 2026-09-07
 
 원문 우선 표시와 **번역 보기**의 명시 시작, 최신 번역 하나, **원문 수정 / 번역 수정** 편집기를 추가했어요. 초안 재복원·저장 충돌·이야기 간 비동기 응답 경계·직접 저장한 번역 보호를 실제 브라우저에서 확인했어요.
 
-UI **9개 렌더 검사+19개 브라우저 검사**와 M0/M1 브라우저 **9개**가 PASS예요. [최종 근거](../output/translation-final/2026-09-07/summary.json), [UI 보고서](../output/playwright/ui-2026-09-07T01-11-15-192Z-ef48f575/summary.json). 390×844의 [원문 편집](../output/playwright/ui-2026-09-07T01-11-15-192Z-ef48f575/browser/ui-browser-UI18-source-and-22bd6-with-one-latest-translation/source-editor-mobile.png)·[번역 편집](../output/playwright/ui-2026-09-07T01-11-15-192Z-ef48f575/browser/ui-browser-UI18-source-and-22bd6-with-one-latest-translation/translation-editor-mobile.png) 화면을 직접 검토했어요. 캡처는 현재 스크롤 위치이며 전체 편집기를 한 화면에 표시한 근거는 아니에요. 실제 휴대폰 키보드·IME 검증과 이전 UI14 성능 측정을 다시 수행한 주장은 하지 않아요.
+UI **9개 렌더 검사+19개 브라우저 검사**와 M0/M1 브라우저 **9개**가 PASS예요. [해당 단계 완료 근거](../output/translation-final/2026-09-07/summary.json), [UI 보고서](../output/playwright/ui-2026-09-07T01-11-15-192Z-ef48f575/summary.json). 390×844의 [원문 편집](../output/playwright/ui-2026-09-07T01-11-15-192Z-ef48f575/browser/ui-browser-UI18-source-and-22bd6-with-one-latest-translation/source-editor-mobile.png)·[번역 편집](../output/playwright/ui-2026-09-07T01-11-15-192Z-ef48f575/browser/ui-browser-UI18-source-and-22bd6-with-one-latest-translation/translation-editor-mobile.png) 화면을 직접 검토했어요. 캡처는 현재 스크롤 위치이며 전체 편집기를 한 화면에 표시한 근거는 아니에요. 실제 휴대폰 키보드·IME 검증과 이전 UI14 성능 측정을 다시 수행한 주장은 하지 않아요.
 
-아래는 이전 UI 개편의 역사적 범위·수치예요. 현재 source/build와 번역 UX는 위 근거를 사용해요.
+아래는 이전 UI 개편의 역사적 범위·수치예요. 번역 UX 변경 당시 화면은 위 근거를, 최신 통합 source/build는 문서 첫머리의 Sol 통합 근거를 사용해요.
 
 # Uimori UI-1–UI-3 결과 · 2026-09-06
 

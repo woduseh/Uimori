@@ -805,7 +805,7 @@
       ],
       "status": "blocked-prerequisites",
       "implemented_test_ids": [],
-      "notes": "M1 local workflows completed 2026-09-06. Provider/API/model/credential and approved live budget, quality sample, or physical-phone/private-deployment prerequisite pending as applicable. No live call or device-quality claim."
+      "notes": "2026-09-07: Vertex AI global gemini-3.8-flash main/translation paths were partially verified with 49 cumulative live requests, including failures, partial responses and cancellation; this is not 49 successes. See M1-RESULTS.md and output/live/live-journey-2026-09-06T23-39-46-321Z-f08c44ac/summary.json (FAIL/INCOMPLETE, cleanup PASS). Other provider/model combinations and Sol real-account compatibility remain unverified. Quality experiments stopped at user direction; no automatic resumption or full M1 acceptance."
     },
     {
       "id": "L02",
@@ -929,7 +929,7 @@
       ],
       "status": "specified-not-run",
       "implemented_test_ids": [],
-      "notes": ""
+      "notes": "Partial supporting evidence only: Sol local integration checks connection/credential revocation at each round, records attempts before transport and does not automatically replay uncertain execution. See SOL-RESULTS.md and output/sol-provider/2026-09-07/summary.json. Full extension-tool/external-action acceptance has not run; status remains specified-not-run."
     },
     {
       "id": "E02",
@@ -972,7 +972,7 @@
       ],
       "status": "specified-not-run",
       "implemented_test_ids": [],
-      "notes": ""
+      "notes": "Partial supporting evidence only: Sol source/dist-matched integration, synthetic secret checks and five-server cleanup passed; see SOL-RESULTS.md and output/sol-provider/2026-09-07/summary.json. This does not establish full E03 acceptance, public deployment or multi-user authorization; status remains specified-not-run."
     },
     {
       "id": "P13",
