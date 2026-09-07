@@ -10,14 +10,14 @@
 
 - 정식 배포 전에는 하위 호환성을 요구하지 않아요. 이전 자료·채팅은 테스트 데이터이며 새 계약을 위해 삭제할 수 있어요. 구형 데이터 보존을 위한 이관·호환 UI·자동 백업을 추가하지 않아요. 현재 실행의 상태·난수·원문 귀속과 취소·중복 처리 규칙은 유지해요.
 
-- 공통 패키지 상태와 CBS 계열 읽기/계산은 `docs/PACKAGE-BEHAVIOR.md`, `docs/PROMPT-RUNTIME.md`를 봐요. schema/archive v10은 `server/package-behavior-store.ts`, source/분기 연결은 `server/package-behavior-host.ts`, 복원 검증은 `server/package-behavior-archive.ts`와 `server/package-behavior-run-archive.ts`예요. `server/package-behavior-run.ts`가 자동·모델 호출과 판정 기회·임시 상태를 관리해요. 상태·추첨은 Run에 고정하고, 원문 수정 후 stale은 명시 reset으로 복구해요. 렌더/preview에서는 상태를 쓰거나 추첨하지 않아요.
+- 공통 패키지 상태와 CBS 계열 읽기/계산은 `docs/PACKAGE-BEHAVIOR.md`, `docs/PROMPT-RUNTIME.md`를 봐요. schema/archive v11은 `server/package-behavior-store.ts`, source/분기 연결은 `server/package-behavior-host.ts`, 복원 검증은 `server/package-behavior-archive.ts`와 `server/package-behavior-run-archive.ts`예요. `server/package-behavior-run.ts`가 자동·모델 호출과 판정 기회·임시 상태를 관리해요. 상태·추첨은 Run에 고정하고, 원문 수정 후 stale은 명시 reset으로 복구해요. 렌더/preview에서는 상태를 쓰거나 추첨하지 않아요.
 
 - 목적과 milestone 계약: `project-plan/README.md`. 실제 코드/증거: `project-plan/CURRENT.md`, `project-plan/M1-RESULTS.md`, `project-plan/M2-RESULTS.md`.
-- 코드: `web/` React, `server/` Fastify+파일 SQLite, `core/` 역할 입력/프롬프트/fixture·Vertex·Responses·Messages·Chat transport/보조 검증. 현재 schema v10의 새 DB 초기화는 `server/store.ts`, 콘텐츠·분기·보관은 `server/product-store.ts`, 원문 수정·최신 번역은 `server/source-editing.ts`에 있어요. 구형 DB는 이관하지 않으며 기본 개발 DB 초기화 명령은 `npm run reset:dev`예요. 유저 DB는 테스트에 사용하지 않아요.
+- 코드: `web/` React, `server/` Fastify+파일 SQLite, `core/` 역할 입력/프롬프트/fixture·Vertex·Responses·Messages·Chat transport/보조 검증. 현재 schema v11의 새 DB 초기화는 `server/store.ts`, 콘텐츠·분기·보관은 `server/product-store.ts`, 원문 수정·최신 번역은 `server/source-editing.ts`에 있어요. 구형 DB는 이관하지 않으며 기본 개발 DB 초기화 명령은 `npm run reset:dev`예요. 유저 DB는 테스트에 사용하지 않아요.
 - 확인한 명령: `npm ci --offline --no-audit --no-fund`, `npm run dev`, `npm run check`, `npm run build`, `node scripts/doctor.mjs`, `npm run verify -- --milestone M0`, `node scripts/selftest.mjs`, `npm run cleanup -- --run <run-id>`. Windows Node 24.14 이상 24.x/PowerShell에서 실행해요.
 - 두 clean 작업트리의 동시 port/DB/profile/temp 격리는 `node scripts/verify-worktrees.mjs --a <A> --b <B>`로 확인했어요. 각 작업트리는 별도 의존성 설치와 빌드가 필요해요.
 - 검증은 새 포트/DB를 사용하고 `output/playwright/<run-id>/summary.json`과 reporter/DB/화면 증거를 남겨요. 실패나 BLOCKED를 PASS로 바꾸지 않아요.
-- 생성 당시 sources와 과거 Run snapshot은 불변이에요. 현재 v10 DB의 source_edits가 최신 수정본을 보관하고 새 이력은 contentHash로 고정해요. 원문/Run/상태·이미지 예약의 원자성, 원래 source/hash에 붙는 결과, expected revision/idempotency와 worker owner/generation을 유지해요. 메인에 보조 표현·번역 절차를 섞지 않아요.
+- 생성 당시 sources와 과거 Run snapshot은 불변이에요. 현재 v11 DB의 source_edits가 최신 수정본을 보관하고 새 이력은 contentHash로 고정해요. 원문/Run/상태·이미지 예약의 원자성, 원래 source/hash에 붙는 결과, expected revision/idempotency와 worker owner/generation을 유지해요. 메인에 보조 표현·번역 절차를 섞지 않아요.
 - `npm run verify -- --milestone M1-local`은 P01–P13 로컬 검사예요. `M1`은 미충족 외부 전제가 남으면 BLOCKED로 끝나요. 번역은 번역 보기를 명시 요청할 때만 시작하며 최신 job 한 슬롯을 표시해요. 원문·번역 직접 저장은 CAS로 보호하고 모델을 호출하지 않아요. 정상 종료된 거절·빈 응답·번역 구조 손상만 구간별 최대 3회 및 전체 호출 한도 안에서 재시도하며 완료 chunk와 attempt를 유지해요. 전송 전에 attempt를 기록하고 불확실한 provider 실행을 자동 재생하지 않아요.
 - Google Agent Platform의 Gemini 연결은 `vertex-gemini-v1` REST/SSE를 사용해요. 서버의 누적 호출 수·금액 제한과 단가 추정은 제거했어요. 전송 전 durable attempt, 작업별 `maxCalls`·timeout·출력 토큰 한도, 취소·중복·불확실 실행 규칙은 유지해요. 실제 billing이 없는 `costUsd=null`을 0으로 바꾸지 않아요. 프로토콜·인증·지원 모델은 `docs/PROVIDERS.md`, 채택 근거는 `project-plan/SOURCES.md`를 읽어요.
 - 모델별 파라미터·캐시·응답 테스트는 `docs/MODEL-PARAMETERS.md`, 지원 명세와 snapshot 추출은 `core/model-capabilities.ts`를 봐요. 공식 미등록 모델은 저장 후 검토할 수 있지만 실행은 차단해요. 캐시 제어는 `core/provider-cache.ts`에서 요청별로 계획하며 실제 적중은 공급자 usage로만 확인해요.
@@ -32,7 +32,7 @@
 
 ## 구현 참고 원칙
 
-- 봇 중심 개편 계약은 `project-plan/REDESIGN.md`예요. 현재 v10에 포함된 봇 소속·단일 깊이 폴더는 `server/chat-organization.ts`, 공통 패키지는 `core/content-package.ts`, 역할별 snapshot 실행은 `core/package-context.ts`예요. 채팅의 봇 소속은 고정하며 포크는 폴더를 상속해요. 패키지 개정은 과거 Run을 바꾸지 않아요.
+- 봇 중심 개편 계약은 `project-plan/REDESIGN.md`예요. 현재 v11에 포함된 봇 소속·단일 깊이 폴더는 `server/chat-organization.ts`, 공통 패키지는 `core/content-package.ts`, 역할별 snapshot 실행은 `core/package-context.ts`예요. 채팅의 봇 소속은 고정하며 포크는 폴더를 상속해요. 패키지 개정은 과거 Run을 바꾸지 않아요.
 - 프롬프트는 `PromptProgram` 데이터 AST로 실행해요. `core/prompt-language.ts`와 `core/prompt-authoring.ts`는 선택 가능한 제작 방식이며 기본 문법 채택은 미확정이에요. 전역 옵션 조합은 프롬프트 ID/revision에 묶여요. 패키지 정규식은 worker 제한 내 읽기 표현만 바꾸며 저장 원문을 수정하지 않아요. `npm run verify:redesign`은 fresh DB/port의 전체 합성 브라우저 회귀예요.
 - Uimori는 Risu 원본을 직접 업로드·변환하지 않아요. `docs/RISU-IMPORT.md`의 자료/프롬프트 편집기에서 native JSON을 검증하고 초안 검토 후 저장해요. Risu 원본 조사·변환은 아래 이식 가이드와 RisuToki를 사용하는 외부 에이전트 작업이에요.
 - Risu 자료를 Uimori용으로 이식할 때는 `docs/RISU-PORTING.md`를 먼저 읽어요. RisuToki 구조화 MCP와 필요한 원본 문법 스킬로 동작을 조사하고, 공통 native JSON·대응/손실 보고·검증 결과를 만들어요. 자료 이름에 종속된 변환기를 제품 코드에 추가하지 않아요. 기존 기능으로 표현할 수 없는 동작은 누락시키지 말고 영향과 공통 기능 확장 필요성을 보고해요.

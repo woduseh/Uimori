@@ -617,14 +617,15 @@ test('P06 P11 quality notes preserve source and export/backup downloads reject r
     )
     .toBe('completed');
   const source = (await getDetail(request, chat.id)).sources[0];
-  await page.getByRole('button', { name: '실행 상세', exact: true }).click();
-  await page.getByText('요청 충실성 기록', { exact: true }).click();
-  await page
+  const activity = page.locator(`[data-testid="turn-activity"][data-run-id="${run.id}"]`);
+  await activity.locator(':scope > summary').click();
+  await activity.getByText('요청 충실성 기록', { exact: true }).click();
+  await activity
     .getByLabel('요청 충실성 메모', { exact: true })
     .fill('SYNTHETIC note: retain the sealed letter premise.');
-  await page.getByRole('button', { name: '메모 저장', exact: true }).click();
+  await activity.getByRole('button', { name: '메모 저장', exact: true }).click();
   await expect(
-    page.getByText('요청 충실성 메모: SYNTHETIC note: retain the sealed letter premise.')
+    activity.getByText('요청 충실성 메모: SYNTHETIC note: retain the sealed letter premise.')
   ).toBeVisible();
   const after = await getDetail(request, chat.id);
   expect(after.sources[0]).toEqual(source);

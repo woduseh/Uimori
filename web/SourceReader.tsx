@@ -31,7 +31,7 @@ type ReaderProps = {
   request?: string;
   contextSummary?: ReaderRun['contextSummary'];
   packageStart?: { mode: 'authored' | 'generate'; title: string };
-  onInspect?: (runId: string) => void;
+  activity?: ReactNode;
   sourceSegments?: SourceSegmentPolicy;
   hasPackages?: boolean;
   presentationRefreshKey?: string | number;
@@ -101,7 +101,7 @@ function SourceReaderContent({
   request,
   contextSummary,
   packageStart,
-  onInspect,
+  activity,
   sourceSegments,
   hasPackages,
   presentationRefreshKey,
@@ -272,6 +272,7 @@ function SourceReaderContent({
           )}
         </div>
       )}
+      {activity}
       <div className="source-heading">
         <span className="folio">장면 {index + 1}</span>
         <small>{mode === 'translation' ? '한국어 번역' : '원문'}</small>
@@ -297,7 +298,7 @@ function SourceReaderContent({
           </button>
         </div>
       </div>
-      <ContextSummaryStatus summary={contextSummary} />
+      {!activity && <ContextSummaryStatus summary={contextSummary} />}
       {editor && (
         <TextEditor
           key={editor}
@@ -431,27 +432,29 @@ function SourceReaderContent({
           <span>{sceneStatus}</span>
         </aside>
       )}
-      <div className="derived-summary" aria-label="이 장면의 후속 작업">
-        {attentionJobs.length
-          ? attentionJobs.map((job) => (
-              <div
-                className={retryable(job.status) ? 'job-summary has-error' : 'job-summary'}
-                key={job.id}
-                data-job-id={job.id}
-              >
-                <span>
-                  {jobTitle(job)} · {labels[job.status]}
-                  {retryable(job.status) ? ' · 원문 보존됨' : ''}
-                </span>
-                <JobActions job={job} refresh={refresh} onError={setActionError} compact />
-              </div>
-            ))
-          : jobs.length > 0 && (
-              <p className="muted">
-                {displayJobs.map((job) => `${jobTitle(job)} ${labels[job.status]}`).join(' · ')}
-              </p>
-            )}
-      </div>
+      {!activity && (
+        <div className="derived-summary" aria-label="이 장면의 후속 작업">
+          {attentionJobs.length
+            ? attentionJobs.map((job) => (
+                <div
+                  className={retryable(job.status) ? 'job-summary has-error' : 'job-summary'}
+                  key={job.id}
+                  data-job-id={job.id}
+                >
+                  <span>
+                    {jobTitle(job)} · {labels[job.status]}
+                    {retryable(job.status) ? ' · 원문 보존됨' : ''}
+                  </span>
+                  <JobActions job={job} refresh={refresh} onError={setActionError} compact />
+                </div>
+              ))
+            : jobs.length > 0 && (
+                <p className="muted">
+                  {displayJobs.map((job) => `${jobTitle(job)} ${labels[job.status]}`).join(' · ')}
+                </p>
+              )}
+        </div>
+      )}
       <StorySourceState
         sourceId={source.id}
         refreshKey={`${source.hash}:${jobs.map((job) => job.status).join(',')}`}
@@ -509,11 +512,6 @@ function SourceReaderContent({
               ? '이미지 다시 선택'
               : '이미지 선택'}
         </button>
-        {onInspect && (
-          <button type="button" className="secondary" onClick={() => onInspect(source.runId)}>
-            실행 상세
-          </button>
-        )}
       </div>
       {actionError && (
         <p className="error" role="alert">
@@ -524,22 +522,25 @@ function SourceReaderContent({
         className="source-job-details"
         onToggle={(event) => setDetailsOpen(event.currentTarget.open)}
       >
-        <summary>작업 상세{jobs.length ? ` · ${jobs.length}개` : ''}</summary>
+        <summary>
+          {activity ? '원문 연결 정보' : `작업 상세${jobs.length ? ` · ${jobs.length}개` : ''}`}
+        </summary>
         {detailsOpen && (
           <>
-            <div className="derived">
-              {displayJobs.map((job) => (
-                <JobCard
-                  key={job.id}
-                  job={job}
-                  refresh={refresh}
-                  onError={setActionError}
-                  hideText={job.kind === 'translation'}
-                />
-              ))}
-            </div>
-            <details className="inspector">
-              <summary>원문 연결 정보</summary>
+            {!activity && (
+              <div className="derived">
+                {displayJobs.map((job) => (
+                  <JobCard
+                    key={job.id}
+                    job={job}
+                    refresh={refresh}
+                    onError={setActionError}
+                    hideText={job.kind === 'translation'}
+                  />
+                ))}
+              </div>
+            )}
+            <div className="inspector">
               <dl>
                 <dt>source revision</dt>
                 <dd>{source.id}</dd>
@@ -556,7 +557,7 @@ function SourceReaderContent({
                 제목·강조·목록·인용·링크·코드를 표시해요. 속성 없는 ruby의 본문과 rt만 읽기 표기로
                 표시하고, 나머지 HTML과 Markdown 이미지는 문자로 남겨요.
               </p>
-            </details>
+            </div>
           </>
         )}
       </details>

@@ -1,4 +1,5 @@
 import { useRef, useState } from 'react';
+import { Trash2 } from 'lucide-react';
 import { api } from './api.js';
 import { Dialog } from './Dialog.js';
 import './deletion.css';
@@ -10,6 +11,7 @@ type Props = {
   label?: string;
   description?: string;
   disabled?: boolean;
+  iconOnly?: boolean;
   preparePath?: string;
   body?: Record<string, unknown>;
   onDeleted: () => Promise<void> | void;
@@ -23,6 +25,7 @@ export function DeleteButton({
   label = '삭제',
   description = '저장된 항목과 모든 버전을 삭제해요. 되돌릴 수 없어요. 다른 자료나 채팅에서 사용 중이면 삭제할 수 없는 이유를 안내해요.',
   disabled,
+  iconOnly = false,
   preparePath,
   body,
   onDeleted,
@@ -77,12 +80,12 @@ export function DeleteButton({
     <span className="delete-control">
       <button
         type="button"
-        className="secondary delete-button"
+        className={`secondary delete-button ${iconOnly ? 'icon-only' : ''}`}
         aria-label={`${title} ${label}`}
         disabled={disabled || busy}
         onClick={() => void open()}
       >
-        {label}
+        {iconOnly ? <Trash2 size={14} aria-hidden="true" /> : label}
       </button>
       {!target && error && (
         <span className="error" role="alert">

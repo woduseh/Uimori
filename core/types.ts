@@ -14,6 +14,7 @@ export type Chat = {
   botId: string;
   folderId?: string | null;
   organizationRevision?: number;
+  sortPosition?: number;
 };
 export type Resource = {
   loreContext?: import('./lore-context.js').LorePlacement;
@@ -207,10 +208,14 @@ export type ReaderActivity = {
   sourceRevision: string | null;
   generation: number;
 };
+export type ReaderNavigationItem = { id: string; number: number; label: string };
+
 export type ReaderDetail = Omit<ChatDetail, 'runs' | 'attempts'> & {
   runs: ReaderRun[];
   reader: {
+    navigation: ReaderNavigationItem[];
     activity?: ReaderActivity[];
+    responseActivity?: ReaderActivity[];
     headSourceHash?: string | null;
     activeJobs: number;
     cursor: number;

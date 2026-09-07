@@ -155,7 +155,7 @@ function StateValues({ state }: { state: StoryState | null }) {
   );
 }
 
-function JobList({
+export function StoryJobList({
   jobs,
   busy,
   act,
@@ -659,7 +659,7 @@ function StoryPanelEditor({
             )}
           >
             <summary>상태·기억 작업 {detail.jobs.length}개</summary>
-            <JobList
+            <StoryJobList
               jobs={detail.jobs}
               busy={busy}
               act={(path) => void act(path)}
@@ -971,7 +971,7 @@ function SourceState({ sourceId, refreshKey }: { sourceId: string; refreshKey?: 
         <details>
           <summary>이 원고의 상태 · {readiness[detail.status] ?? detail.status}</summary>
           <StateValues state={detail.state} />
-          <JobList jobs={detail.jobs} busy={busy} />
+          <StoryJobList jobs={detail.jobs} busy={busy} />
         </details>
       )}
       <details>

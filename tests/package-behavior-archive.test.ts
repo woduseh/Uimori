@@ -139,12 +139,12 @@ function fixture() {
   );
   return { store, chat, content, instanceId, branchId, run: store.run(run.id), source };
 }
-describe('package behavior archive v10', () => {
+describe('package behavior archive v11', () => {
   it('roundtrips clocks, frozen states, original text, draw seed, action and parser journals', () => {
     const f = fixture(),
       archive = f.store.product.export(),
       before = structuredClone(archive);
-    expect(archive.version).toBe(10);
+    expect(archive.version).toBe(11);
     expect(archive.tables.package_behavior_journal).toHaveLength(2);
     const target = database();
     expect(target.product.import(archive)).toEqual({ restored: true, chats: 1 });

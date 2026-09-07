@@ -254,7 +254,7 @@ test('prompt combinations reject nonprimitive values and controls from a differe
     }).values
   ).toEqual({ choice: false });
 });
-test('v10 archive roundtrips package refs, large internal lore, empty body, option combinations and bot folder ownership', () => {
+test('v11 archive roundtrips package refs, large internal lore, empty body, option combinations and bot folder ownership', () => {
   const store = db(),
     body = packageBody();
   body.lore[0].text = 'L'.repeat(100001);
@@ -273,7 +273,7 @@ test('v10 archive roundtrips package refs, large internal lore, empty body, opti
   update(store, chat.id, { packageValues: { [`${pkg.id}@1:persona`]: { enabled: false } } });
   const run = capture(store, chat.id);
   const archive = store.product.export();
-  expect(archive.version).toBe(10);
+  expect(archive.version).toBe(11);
   const before = JSON.stringify(archive);
   const restored = db();
   expect(restored.product.import(archive)).toEqual({ restored: true, chats: 1 });

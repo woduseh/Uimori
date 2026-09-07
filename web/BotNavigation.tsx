@@ -1,7 +1,14 @@
+import { Dialog } from './Dialog.js';
+import { useChatActivities } from './useChatActivities.js';
+import type { DragEvent } from 'react';
 import { DeleteButton } from './DeleteButton.js';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ArrowLeft,
+  ChevronRight,
+  MoreHorizontal,
+  LoaderCircle,
+  FolderPlus,
   BookOpen,
   Boxes,
   Clock3,
@@ -57,6 +64,26 @@ export function BotNavigation(props: Props) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [newTitle, setNewTitle] = useState('');
+  const [creating, setCreating] = useState(false);
+  const [settingsId, setSettingsId] = useState<string | null>(null);
+  const [menuId, setMenuId] = useState<string | null>(null);
+  const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
+  const [dragId, setDragId] = useState<string | null>(null);
+  const [dropTarget, setDropTarget] = useState<{
+    folderId: string | null;
+    beforeId: string | null;
+  } | null>(null);
+  const expandTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const expandKey = useRef<string | null>(null);
+  const dragChat = useRef<Chat | null>(null);
+  const activities = useChatActivities();
+  useEffect(
+    () => () => {
+      if (expandTimer.current) clearTimeout(expandTimer.current);
+    },
+    []
+  );
+
   const currentBot = useRef(botId);
   currentBot.current = botId;
   const epoch = useRef(0);
@@ -76,7 +103,9 @@ export function BotNavigation(props: Props) {
     [library, ownerIds]
   );
   const bot = bots.find((content) => content.id === botId);
-  const scoped = chats.filter((chat) => chat.botId === botId);
+  const scoped = chats
+    .filter((chat) => chat.botId === botId)
+    .sort((a, b) => (a.sortPosition ?? 0) - (b.sortPosition ?? 0));
   const visible = scoped.filter((chat) =>
     chat.title.toLocaleLowerCase().includes(query.toLocaleLowerCase())
   );
@@ -87,6 +116,14 @@ export function BotNavigation(props: Props) {
   useEffect(() => {
     const version = ++epoch.current;
     setFolders([]);
+    setCreating(false);
+    setSettingsId(null);
+    setMenuId(null);
+    setDragId(null);
+    dragChat.current = null;
+    setDropTarget(null);
+    if (expandTimer.current) clearTimeout(expandTimer.current);
+    expandKey.current = null;
     setNewTitle('');
     setError('');
     if (!botId) return;
@@ -162,63 +199,212 @@ export function BotNavigation(props: Props) {
     setBotId(id);
     setQuery('');
   }
+  function clearDrag() {
+    setDragId(null);
+    dragChat.current = null;
+    setDropTarget(null);
+    if (expandTimer.current) clearTimeout(expandTimer.current);
+    expandTimer.current = null;
+    expandKey.current = null;
+  }
+  function moveChat(chat: Chat, folderId: string | null, beforeId: string | null = null) {
+    if (beforeId === chat.id || (query && (chat.folderId ?? null) === folderId)) return;
+    void perform(() =>
+      api(
+        `/chats/${encodeURIComponent(chat.id)}/organization`,
+        {
+          expectedRevision: chat.organizationRevision,
+          folderId,
+          beforeChatId: beforeId,
+        },
+        'PATCH'
+      )
+    );
+  }
+  function over(event: DragEvent, folderId: string | null, beforeId: string | null) {
+    if (!dragChat.current || busy || dragChat.current.botId !== botId) return;
+    event.preventDefault();
+    event.stopPropagation();
+    event.dataTransfer.dropEffect = 'move';
+    setDropTarget({ folderId, beforeId });
+    const key = `${botId}:${folderId ?? ''}`;
+    if (expandKey.current !== key) {
+      if (expandTimer.current) clearTimeout(expandTimer.current);
+      expandKey.current = key;
+      if (collapsed[key])
+        expandTimer.current = setTimeout(
+          () => setCollapsed((value) => ({ ...value, [key]: false })),
+          650
+        );
+    }
+    const scroll = event.currentTarget.closest('.bot-navigation-scroll');
+    if (scroll) {
+      const bounds = scroll.getBoundingClientRect();
+      if (event.clientY < bounds.top + 36) scroll.scrollTop -= 12;
+      if (event.clientY > bounds.bottom - 36) scroll.scrollTop += 12;
+    }
+  }
+  function drop(event: DragEvent, folderId: string | null, beforeId: string | null) {
+    event.preventDefault();
+    event.stopPropagation();
+    const chat = dragChat.current;
+    clearDrag();
+    if (chat && chat.botId === botId && !busy) moveChat(chat, folderId, beforeId);
+  }
+  function activity(chat: Chat) {
+    return (
+      activities[chat.id] ??
+      (chat.id === selected && tasks > 0
+        ? { count: tasks, label: `작업 ${tasks}개 진행 중` }
+        : undefined)
+    );
+  }
+  function status(label?: string) {
+    return label ? (
+      <span className="bot-chat-status" tabIndex={0} role="img" aria-label={label} title={label}>
+        <LoaderCircle size={14} aria-hidden="true" />
+      </span>
+    ) : null;
+  }
   function chatList(folderId: string | null) {
     const items = visible.filter((chat) => (chat.folderId ?? null) === folderId);
     return (
       <div className="bot-chat-list">
-        {items.map((chat) => (
-          <div className="bot-chat-item" key={chat.id}>
-            <button
-              className={`chat-link ${selected === chat.id && destination === 'story' ? 'selected' : ''}`}
-              aria-current={selected === chat.id && destination === 'story' ? 'page' : undefined}
-              onClick={() => onSelect(chat.id)}
+        {items.map((chat, index) => {
+          const selectedChat = selected === chat.id && destination === 'story';
+          function target(event: DragEvent) {
+            if (query) return null;
+            const box = event.currentTarget.getBoundingClientRect();
+            return event.clientY < box.top + box.height / 2
+              ? chat.id
+              : (items[index + 1]?.id ?? null);
+          }
+          return (
+            <div
+              className={`bot-chat-item ${selectedChat ? 'selected' : ''} ${dragId === chat.id ? 'dragging' : ''} ${dropTarget?.folderId === folderId && dropTarget.beforeId === chat.id ? 'drop-before' : ''}`}
+              key={chat.id}
+              data-chat-id={chat.id}
+              draggable={!busy && !loading}
+              onDragStart={(event) => {
+                if ((event.target as HTMLElement).closest('.bot-row-actions')) {
+                  event.preventDefault();
+                  return;
+                }
+                dragChat.current = chat;
+                setDragId(chat.id);
+                event.dataTransfer.effectAllowed = 'move';
+                event.dataTransfer.setData('text/plain', chat.id);
+              }}
+              onDragEnd={clearDrag}
+              onDragOver={(event) => over(event, folderId, target(event))}
+              onDrop={(event) => drop(event, folderId, target(event))}
             >
-              <strong>{chat.title}</strong>
-              {selected === chat.id && tasks > 0 && <small>{tasks}개 작업 진행 중</small>}
-            </button>
-            <label className="bot-chat-move">
-              <span className="sr-only">{chat.title} 폴더 이동</span>
-              <select
-                aria-label={`${chat.title} 폴더 이동`}
-                value={chat.folderId ?? ''}
-                disabled={busy || loading || chat.organizationRevision === undefined}
-                onChange={(event) => {
-                  const folderId = event.target.value || null;
-                  void perform(() =>
-                    api(
-                      `/chats/${chat.id}/organization`,
-                      { expectedRevision: chat.organizationRevision, folderId },
-                      'PATCH'
-                    )
-                  );
-                }}
+              <button
+                className="chat-link"
+                title={chat.title}
+                aria-current={selectedChat ? 'page' : undefined}
+                onClick={() => onSelect(chat.id)}
               >
-                <option value="">미분류</option>
-                {folders.map((folder) => (
-                  <option key={folder.id} value={folder.id}>
-                    {folder.title}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <DeleteButton
-              path={`/chats/${encodeURIComponent(chat.id)}`}
-              preparePath={`/chats/${encodeURIComponent(chat.id)}/deletion-impact`}
-              title={chat.title}
-              label="채팅 삭제"
-              disabled={busy}
-              description="이 채팅의 모든 분기, 원문, 번역, 이미지와 실행 기록을 영구 삭제해요. 실행 중인 작업은 먼저 취소하거나 완료해 주세요."
-              onError={onError}
-              onDeleted={onChatsChanged}
-            />
-          </div>
-        ))}
+                <strong>{chat.title}</strong>
+              </button>
+              {status(activity(chat)?.label)}
+              <div className="bot-row-actions">
+                <button
+                  className="icon-button"
+                  aria-label={`${chat.title} 채팅 메뉴`}
+                  title="채팅 메뉴"
+                  onClick={() => setMenuId(chat.id)}
+                >
+                  <MoreHorizontal size={16} />
+                </button>
+                <DeleteButton
+                  path={`/chats/${encodeURIComponent(chat.id)}`}
+                  preparePath={`/chats/${encodeURIComponent(chat.id)}/deletion-impact`}
+                  title={chat.title}
+                  label="채팅 삭제"
+                  iconOnly
+                  disabled={busy}
+                  description="이 채팅의 모든 분기, 원문, 번역, 이미지와 실행 기록을 영구 삭제해요. 실행 중인 작업은 먼저 취소하거나 완료해 주세요."
+                  onError={onError}
+                  onDeleted={onChatsChanged}
+                />
+              </div>
+            </div>
+          );
+        })}
+        {dropTarget?.folderId === folderId && dropTarget.beforeId === null && (
+          <div className="bot-drop-end" aria-hidden="true" />
+        )}
         {!items.length && (
-          <p className="bot-empty-folder">{query ? '검색 결과가 없어요.' : '채팅이 없어요.'}</p>
+          <p className="bot-empty-folder">
+            {dragId ? '여기로 이동' : query ? '검색 결과가 없어요.' : '채팅이 없어요.'}
+          </p>
         )}
       </div>
     );
   }
+  function folderSection(folder: ChatFolder | null) {
+    const id = folder?.id ?? null,
+      title = folder?.title ?? '미분류';
+    const key = `${botId}:${id ?? ''}`;
+    const expanded = query.length > 0 || !collapsed[key];
+    const count = scoped
+      .filter((chat) => (chat.folderId ?? null) === id)
+      .reduce((sum, chat) => sum + (activity(chat)?.count ?? 0), 0);
+    return (
+      <section
+        className={`bot-folder ${dropTarget?.folderId === id && dropTarget.beforeId === null ? 'drop-folder' : ''}`}
+        key={id ?? ''}
+        data-folder-id={id ?? ''}
+        onDragOver={(event) => over(event, id, null)}
+        onDrop={(event) => drop(event, id, null)}
+      >
+        <div className="bot-folder-heading">
+          <button
+            className="bot-folder-toggle"
+            aria-label={`${title} 폴더`}
+            aria-expanded={expanded}
+            onClick={() => setCollapsed((value) => ({ ...value, [key]: expanded }))}
+          >
+            <ChevronRight size={12} className={expanded ? 'expanded' : ''} />
+            <Folder size={15} />
+            <span>{title}</span>
+          </button>
+          {!expanded && status(count ? `폴더 안에서 작업 ${count}개 진행 중` : undefined)}
+          <div className="bot-row-actions">
+            {bot && (
+              <button
+                className="icon-button"
+                aria-label={`${title}에서 새 채팅`}
+                title="새 채팅"
+                disabled={busy}
+                onClick={() => void start(folder ?? undefined)}
+              >
+                <Plus size={16} />
+              </button>
+            )}
+            {folder && (
+              <button
+                className="icon-button"
+                aria-label={`${title} 폴더 설정`}
+                title="폴더 설정"
+                onClick={() => setSettingsId(folder.id)}
+              >
+                <MoreHorizontal size={16} />
+              </button>
+            )}
+          </div>
+        </div>
+        {expanded && chatList(id)}
+      </section>
+    );
+  }
+  const menuChat = scoped.find((chat) => chat.id === menuId);
+  const menuSiblings = scoped.filter(
+    (chat) => (chat.folderId ?? null) === (menuChat?.folderId ?? null)
+  );
+  const menuIndex = menuSiblings.findIndex((chat) => chat.id === menuId);
+  const settingsFolder = folders.find((folder) => folder.id === settingsId);
   const navigation: [LibraryDestination, string, typeof BookOpen][] = [
     ['bot', '봇', BookOpen],
     ['persona', '페르소나', Users],
@@ -226,7 +412,20 @@ export function BotNavigation(props: Props) {
     ['prompts', '프롬프트', BookOpen],
   ];
   return (
-    <div className="bot-navigation" data-testid="bot-navigation">
+    <div
+      className="bot-navigation"
+      data-testid="bot-navigation"
+      onKeyDown={(event) => {
+        if (event.key === 'Escape') clearDrag();
+      }}
+      onDragLeave={(event) => {
+        if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
+          setDropTarget(null);
+          if (expandTimer.current) clearTimeout(expandTimer.current);
+          expandKey.current = null;
+        }
+      }}
+    >
       <div className="brand">Uimori</div>
       <nav className="bot-library-nav" aria-label="자료 탐색">
         {navigation.map(([tab, label, Icon]) => (
@@ -323,93 +522,23 @@ export function BotNavigation(props: Props) {
                 onChange={(event) => setQuery(event.target.value)}
               />
             </label>
-            <details className="bot-folder-create">
-              <summary>폴더 만들기</summary>
-              <form
-                onSubmit={(event) => {
-                  event.preventDefault();
-                  const title = newTitle.trim();
-                  if (title)
-                    void perform(async () => {
-                      await api(`/bots/${encodeURIComponent(botId)}/folders`, { title });
-                      if (currentBot.current === botId) setNewTitle('');
-                    });
-                }}
+            <div className="bot-folders-toolbar">
+              <span>채팅 폴더</span>
+              <button
+                className="icon-button"
+                aria-label="폴더 만들기"
+                title="폴더 만들기"
+                onClick={() => setCreating(true)}
               >
-                <label>
-                  새 폴더 이름
-                  <input
-                    aria-label="새 폴더 이름"
-                    required
-                    maxLength={200}
-                    value={newTitle}
-                    onChange={(event) => setNewTitle(event.target.value)}
-                  />
-                </label>
-                <button type="submit" disabled={busy || !newTitle.trim()}>
-                  폴더 추가
-                </button>
-              </form>
-            </details>
+                <FolderPlus size={16} />
+              </button>
+            </div>
             {loading ? (
               <p role="status">폴더를 불러오는 중이에요…</p>
             ) : (
               <nav aria-label="봇의 채팅 목록">
-                <section className="bot-folder">
-                  <div className="bot-folder-heading">
-                    <h3>
-                      <Folder size={15} />
-                      미분류
-                    </h3>
-                  </div>
-                  {chatList(null)}
-                </section>
-                {folders.map((folder) => (
-                  <section className="bot-folder" key={folder.id}>
-                    <div className="bot-folder-heading">
-                      <h3>
-                        <Folder size={15} />
-                        {folder.title}
-                      </h3>
-                      {bot && (
-                        <button
-                          className="icon-button"
-                          aria-label={`${folder.title}에서 새 채팅`}
-                          disabled={busy}
-                          onClick={() => {
-                            void start(folder);
-                          }}
-                        >
-                          <Plus size={16} />
-                        </button>
-                      )}
-                    </div>
-                    {chatList(folder.id)}
-                    <FolderSettings
-                      folder={folder}
-                      personas={personas}
-                      busy={busy}
-                      onSave={(value) =>
-                        perform(() =>
-                          api(
-                            `/bots/${encodeURIComponent(botId)}/folders/${folder.id}`,
-                            { expectedRevision: folder.revision, ...value },
-                            'PATCH'
-                          )
-                        )
-                      }
-                      onRemove={() =>
-                        perform(() =>
-                          api(
-                            `/bots/${encodeURIComponent(botId)}/folders/${folder.id}`,
-                            { expectedRevision: folder.revision },
-                            'DELETE'
-                          )
-                        )
-                      }
-                    />
-                  </section>
-                ))}
+                {folderSection(null)}
+                {folders.map((folder) => folderSection(folder))}
               </nav>
             )}
           </>
@@ -420,6 +549,132 @@ export function BotNavigation(props: Props) {
           </p>
         )}
       </div>
+      <Dialog
+        open={creating}
+        title="폴더 만들기"
+        onClose={() => setCreating(false)}
+        className="bot-organize-dialog"
+      >
+        <form
+          className="bot-folder-create"
+          onSubmit={(event) => {
+            event.preventDefault();
+            const title = newTitle.trim();
+            if (title)
+              void perform(async () => {
+                await api(`/bots/${encodeURIComponent(botId)}/folders`, { title });
+                if (currentBot.current === botId) {
+                  setNewTitle('');
+                  setCreating(false);
+                }
+              });
+          }}
+        >
+          <label>
+            새 폴더 이름
+            <input
+              aria-label="새 폴더 이름"
+              required
+              maxLength={200}
+              value={newTitle}
+              onChange={(event) => setNewTitle(event.target.value)}
+            />
+          </label>
+          <button disabled={busy || !newTitle.trim()}>폴더 추가</button>
+        </form>
+      </Dialog>
+      <Dialog
+        open={!!settingsFolder}
+        title="폴더 설정"
+        onClose={() => setSettingsId(null)}
+        className="bot-organize-dialog"
+      >
+        {settingsFolder && (
+          <FolderSettings
+            key={settingsFolder.id}
+            folder={settingsFolder}
+            personas={personas}
+            busy={busy}
+            onSave={(value) =>
+              perform(() =>
+                api(
+                  `/bots/${encodeURIComponent(botId)}/folders/${settingsFolder.id}`,
+                  { expectedRevision: settingsFolder.revision, ...value },
+                  'PATCH'
+                )
+              )
+            }
+            onRemove={() =>
+              perform(() =>
+                api(
+                  `/bots/${encodeURIComponent(botId)}/folders/${settingsFolder.id}`,
+                  { expectedRevision: settingsFolder.revision },
+                  'DELETE'
+                )
+              )
+            }
+          />
+        )}
+      </Dialog>
+      <Dialog
+        open={!!menuChat}
+        title="채팅 메뉴"
+        onClose={() => setMenuId(null)}
+        className="bot-organize-dialog"
+      >
+        {menuChat && (
+          <div className="bot-chat-menu">
+            <strong>{menuChat.title}</strong>
+            <label>
+              폴더로 이동
+              <select
+                aria-label={`${menuChat.title} 폴더 이동`}
+                value={menuChat.folderId ?? ''}
+                disabled={busy || loading}
+                onChange={(event) => moveChat(menuChat, event.target.value || null)}
+              >
+                <option value="">미분류</option>
+                {folders.map((folder) => (
+                  <option key={folder.id} value={folder.id}>
+                    {folder.title}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <div className="form-actions">
+              <button
+                disabled={busy || !!query || menuIndex <= 0}
+                onClick={() =>
+                  moveChat(menuChat, menuChat.folderId ?? null, menuSiblings[menuIndex - 1].id)
+                }
+              >
+                위로 이동
+              </button>
+              <button
+                disabled={busy || !!query || menuIndex >= menuSiblings.length - 1}
+                onClick={() =>
+                  moveChat(
+                    menuChat,
+                    menuChat.folderId ?? null,
+                    menuSiblings[menuIndex + 2]?.id ?? null
+                  )
+                }
+              >
+                아래로 이동
+              </button>
+            </div>
+            <DeleteButton
+              path={`/chats/${encodeURIComponent(menuChat.id)}`}
+              preparePath={`/chats/${encodeURIComponent(menuChat.id)}/deletion-impact`}
+              title={menuChat.title}
+              label="채팅 삭제"
+              disabled={busy}
+              onError={onError}
+              onDeleted={onChatsChanged}
+            />
+          </div>
+        )}
+      </Dialog>
       <div className="nav-bottom">
         <button className="nav-button" aria-label="작업 현황" onClick={onTasks}>
           <Clock3 size={19} />
@@ -461,8 +716,7 @@ function FolderSettings({
     setPersona(personaId === undefined ? '' : `${personaId}@${personaRevision}`);
   }, [folder.title, personaId, personaRevision]);
   return (
-    <details className="bot-folder-settings">
-      <summary>{folder.title} 폴더 설정</summary>
+    <div className="bot-folder-settings">
       <form
         onSubmit={(event) => {
           event.preventDefault();
@@ -520,6 +774,6 @@ function FolderSettings({
       >
         폴더 해제 · 채팅 유지
       </button>
-    </details>
+    </div>
   );
 }

@@ -193,7 +193,7 @@ test('UI01 UI02 UI04 UI05 UI09 long real sources keep composer accessible, safe 
     );
   expect(translated).toEqual(anchors);
   await source.getByRole('button', { name: '원문 보기', exact: true }).click();
-  await source.locator('summary').filter({ hasText: '작업 상세' }).click();
+  await source.locator('details.source-job-details > summary').click();
   await expect(source.getByTestId('source-raw')).toHaveText(before.sources[0].text);
   const after = await data(request, chat.id);
   expect(after.sources).toEqual(before.sources);

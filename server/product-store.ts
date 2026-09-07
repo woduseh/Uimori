@@ -950,7 +950,7 @@ export class ProductStore {
     );
     return {
       format: 'narrative-archive',
-      version: 10,
+      version: 11,
       createdAt: new Date().toISOString(),
       tables,
     };
@@ -976,7 +976,7 @@ export class ProductStore {
     }
     const a = record(copy);
     fields(a, ['format', 'version', 'createdAt', 'tables']);
-    if (a.format !== 'narrative-archive' || a.version !== 10)
+    if (a.format !== 'narrative-archive' || a.version !== 11)
       throw new HttpError(400, 'Unsupported archive');
     const tables = record(a.tables);
     fields(tables, archiveTables);

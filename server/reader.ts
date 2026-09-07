@@ -3,8 +3,11 @@ import { HttpError, type Store } from './store.js';
 import { mergedReaderAssets } from './package-images.js';
 import type { ReaderActivity } from '../core/types.js';
 
-/** Page-independent metadata: no execution snapshots, prompts or result bodies. */
-function readerActivity(store: Store, chatId: string): ReaderActivity[] {
+/** Metadata only; an explicit page scope includes its older completed work as well. */
+function readerActivity(store: Store, chatId: string, sourceIds?: string[]): ReaderActivity[] {
+  const selection = sourceIds
+    ? 'SELECT * FROM activity WHERE sourceRevision IN (SELECT value FROM json_each(?)) ORDER BY createdAt,id'
+    : "SELECT * FROM activity WHERE status IN ('queued','running','waiting_for_state') UNION ALL SELECT * FROM recent ORDER BY createdAt,id";
   const rows = store.db
     .prepare(`WITH activity AS (
     SELECT id,'main' AS kind,status,created_at AS createdAt,updated_at AS updatedAt,branch_id AS branchId,source_revision AS sourceRevision,0 AS generation FROM runs WHERE chat_id=?
@@ -15,8 +18,11 @@ function readerActivity(store: Store, chatId: string): ReaderActivity[] {
     SELECT j.id,j.kind,j.status,j.created_at,j.updated_at,COALESCE(json_extract(j.snapshot,'$.branchId'),r.branch_id),j.source_revision,j.generation FROM story_jobs j JOIN sources s ON s.id=j.source_revision JOIN runs r ON r.id=s.run_id
       WHERE j.chat_id=? AND j.source_hash=COALESCE((SELECT hash FROM source_edits WHERE source_id=s.id ORDER BY revision DESC LIMIT 1),s.hash)
   ), recent AS (SELECT * FROM activity WHERE status NOT IN ('queued','running','waiting_for_state') ORDER BY updatedAt DESC,id DESC LIMIT 30)
-  SELECT * FROM activity WHERE status IN ('queued','running','waiting_for_state') UNION ALL SELECT * FROM recent ORDER BY createdAt,id`)
-    .all(chatId, chatId, chatId) as Omit<ReaderActivity, 'startedAt' | 'finishedAt'>[];
+  ${selection}`)
+    .all(chatId, chatId, chatId, ...(sourceIds ? [JSON.stringify(sourceIds)] : [])) as Omit<
+    ReaderActivity,
+    'startedAt' | 'finishedAt'
+  >[];
   const eventTimes = new Map<string, string>();
   const timeline = store.db
     .prepare(`SELECT entity_id,kind,at FROM events WHERE chat_id=? AND entity_id IN (SELECT value FROM json_each(?))
@@ -45,8 +51,10 @@ export function readerDetail(store: Store, id: string, query: Record<string, str
   const chat = store.chat(id);
   const branch = store.product.branch(id, query.branch || undefined);
   const rows = store.db
-    .prepare('SELECT id,parent_revision AS parentRevision FROM sources WHERE chat_id=?')
-    .all(id) as { id: string; parentRevision: string | null }[];
+    .prepare(
+      'SELECT id,parent_revision AS parentRevision,run_id AS runId FROM sources WHERE chat_id=?'
+    )
+    .all(id) as { id: string; parentRevision: string | null; runId: string }[];
   const byId = new Map(rows.map((row) => [row.id, row]));
   const chain: string[] = [];
   const seen = new Set<string>();
@@ -123,7 +131,7 @@ export function readerDetail(store: Store, id: string, query: Record<string, str
     CASE WHEN json_type(snapshot,'$.contextPlan')='object' THEN json_object('status',json_extract(snapshot,'$.contextPlan.status'),'inputTokenLimit',json_extract(snapshot,'$.contextPlan.budget.inputTokenLimit'),'estimatedInputTokens',json_extract(snapshot,'$.contextPlan.estimatedInputTokens'),'compactedSources',json_array_length(snapshot,'$.contextPlan.compacted'),'summaryCalls',json_extract(snapshot,'$.contextPlan.summaryCalls'),'error',json_extract(snapshot,'$.contextPlan.error')) END AS contextSummary,
     json_object('loreContextReset',json_extract(snapshot,'$.loreContextReset'),'branchId',branch_id,'candidateOf',json_extract(snapshot,'$.candidateOf'),'forkedFrom',json_extract(snapshot,'$.forkedFrom')) AS snapshot
     FROM runs WHERE chat_id=? ORDER BY created_at,id`)
-      .all(id) as Record<string, any>[]
+      .all(id) as (Record<string, any> & { id: string; request: string })[]
   ).map((row) => ({
     ...row,
     snapshot: {
@@ -137,6 +145,23 @@ export function readerDetail(store: Store, id: string, query: Record<string, str
       ? JSON.parse(row.usage)
       : { modelCalls: 0, inputTokens: null, outputTokens: null, costUsd: null },
   }));
+  const runsById = new Map(runs.map((run) => [run.id, run]));
+  // Requests label the branch's complete index without loading off-page source bodies.
+  // Authored starts have no user request; never substitute generated or hidden content.
+  const navigation = chain.map((sourceId, index) => {
+    const run = runsById.get(byId.get(sourceId)!.runId);
+    const request = String(run?.request ?? '')
+      .replace(/\s+/gu, ' ')
+      .trim();
+    const characters = Array.from(request);
+    const label =
+      run?.packageStart?.mode === 'authored'
+        ? '시작 장면'
+        : characters.length > 100
+          ? `${characters.slice(0, 99).join('')}…`
+          : request || `장면 ${index + 1}`;
+    return { id: sourceId, number: index + 1, label };
+  });
   const activeJobs = Number(
     (
       store.db
@@ -163,7 +188,9 @@ export function readerDetail(store: Store, id: string, query: Record<string, str
     branches: store.product.branches(id),
     ...(assetsChanged ? { assets: mergedReaderAssets(store, id, order) } : {}),
     reader: {
+      navigation,
       activity: readerActivity(store, id),
+      responseActivity: readerActivity(store, id, order),
       headSourceHash: branch.headRevision
         ? ((
             store.db

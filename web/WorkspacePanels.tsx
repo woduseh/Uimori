@@ -3,18 +3,14 @@ import { ActivityDetails } from './ActivityStatus.js';
 import { CodexAgentSettings } from './CodexAgentSettings.js';
 import { useEffect, useId, useState } from 'react';
 import { Settings, Plug, Database, Shield } from 'lucide-react';
-import type { Job, Run } from '../core/types.js';
-import { LazyDiagnostics } from './LazyDiagnostics.js';
+import type { Job } from '../core/types.js';
 import { branchLabel } from './storyLabels.js';
 import type { StoryState } from './useStory.js';
 import { api, labels } from './api.js';
 import { ConnectionEditor } from './LibraryPanel.js';
 import { ArchivePanel } from './ArchivePanel.js';
 import { AttemptInspector } from './AttemptInspector.js';
-import { RunIssue } from './RuntimeSettings.js';
-import { JobCard } from './SourceReader.js';
-import { ContextSummaryStatus } from './ContextSummaryStatus.js';
-import { LoreContextDiagnostics } from './LoreContextDiagnostics.js';
+import { RunTaskDetails } from './RunTaskDetails.js';
 
 export function TasksPanel({
   state,
@@ -87,129 +83,54 @@ export function TasksPanel({
       <div className="runs">
         {runs.map((run) => (
           <article key={run.id} data-testid="run" data-run-id={run.id} className="run">
-            <div className="task-heading">
-              <strong>
-                {run.snapshot.forkedFrom ? '복사한 원고' : `원문 ${labels[run.status]}`}
-              </strong>
-              <small>
-                {run.packageStart?.mode === 'authored'
-                  ? '작성된 도입문 · 모델 호출 없음'
-                  : run.modelTitle || 'Scripted mock · 모의 생성'}
-              </small>
-            </div>
             <p className="task-request">{run.request}</p>
-            <ContextSummaryStatus summary={run.contextSummary} />
-            {run.error && <p className="error">{run.error}</p>}
-            {run.status === 'refused' && (
-              <p className="error">
-                요청에 대한 생성이 거절됐어요. 대체 원고를 자동 생성하지 않았어요.
-              </p>
-            )}
-            {run.partialText && (
-              <details className="partial-result">
-                <summary>보존된 부분 출력 · 확정 원문에 합류하지 않음</summary>
-                <pre>{run.partialText}</pre>
-              </details>
-            )}
-            {run.issue && <p className="error">요청 충실성 메모: {run.issue}</p>}
-            <div className="form-actions">
-              {run.sourceRevision && (
-                <button
-                  type="button"
-                  className="secondary"
-                  onClick={() => {
-                    const branch =
-                      detail.branches?.find((item) => item.id === run.snapshot.branchId) ??
-                      detail.branches?.find((item) => item.default);
-                    if (branch && branch.id !== state.branch?.id)
-                      state.chooseBranch(branch.default ? '' : branch.id);
-                    else state.chooseSource(run.sourceRevision!);
-                    onClose();
-                  }}
-                >
-                  원고 읽기
-                </button>
-              )}
-              {(run.status === 'queued' ||
-                run.status === 'running' ||
-                run.status === 'waiting_for_state') && (
-                <button
-                  type="button"
-                  className="secondary"
-                  disabled={pending.includes(run.id)}
-                  onClick={() => {
-                    void perform(run.id, async () => {
-                      await api(`/runs/${run.id}/cancel`, {});
-                      await refresh();
-                    });
-                  }}
-                >
-                  원문 생성 취소
-                </button>
-              )}
-              {run.sourceRevision && (
-                <button
-                  type="button"
-                  className="secondary"
-                  disabled={pending.includes(run.id)}
-                  onClick={() => {
-                    void perform(run.id, async () => {
-                      await state.fork(run.sourceRevision!);
-                    });
-                  }}
-                >
-                  새 이야기로 이어가기
-                </button>
-              )}
-            </div>
-            {run.sourceRevision && (
-              <small>
-                여기까지 복사하고 새 이야기에서 이어 써요. 복사만으로 모델을 호출하지 않아요.
-              </small>
-            )}
-            <RunIssue run={run} refresh={refresh} onError={state.setError} />
-            {jobs
-              ?.filter((job) => job.sourceRevision === run.sourceRevision)
-              .map((job) => (
-                <LazyDiagnostics<Job>
-                  key={job.id}
-                  path={`/jobs/${job.id}`}
-                  revision={detail.reader.cursor}
-                  title={`${job.kind} · ${labels[job.status]} · 작업 관리`}
-                >
-                  {(full) => (
-                    <JobCard job={full} refresh={refresh} onError={state.setError} hideText />
-                  )}
-                </LazyDiagnostics>
-              ))}
-            <LazyDiagnostics<Run>
-              path={`/runs/${run.id}`}
+            <RunTaskDetails
+              run={run}
+              jobs={jobs ?? []}
               revision={detail.reader.cursor}
-              initiallyOpen={!!inspectedRun}
-              title="실행과 실제 입력 확인"
+              refresh={refresh}
+              onError={state.setError}
+              initiallyInspect={!!inspectedRun}
             >
-              {(full) => (
-                <>
-                  <p>
-                    Run {full.id} · 실행 요청 {full.usage.modelCalls}회 · 입력{' '}
-                    {full.usage.inputTokens ?? '미확인'} / 출력{' '}
-                    {full.usage.outputTokens ?? '미확인'} 토큰 · 비용{' '}
-                    {full.usage.costUsd === null ? '미확인' : `$${full.usage.costUsd}`}
-                  </p>
-                  <LoreContextDiagnostics
-                    snapshot={full.snapshot.loreContext}
-                    reset={full.snapshot.loreContextReset}
-                  />
-                  <pre>
-                    {JSON.stringify(
-                      { snapshot: full.snapshot, inputs: full.inputs, toolEvents: full.toolEvents },
-                      null,
-                      2
-                    )}
-                  </pre>
-                </>
+              <div className="form-actions">
+                {run.sourceRevision && (
+                  <button
+                    type="button"
+                    className="secondary"
+                    onClick={() => {
+                      const branch =
+                        detail.branches?.find((item) => item.id === run.snapshot.branchId) ??
+                        detail.branches?.find((item) => item.default);
+                      if (branch && branch.id !== state.branch?.id)
+                        state.chooseBranch(branch.default ? '' : branch.id);
+                      else state.chooseSource(run.sourceRevision!);
+                      onClose();
+                    }}
+                  >
+                    원고 읽기
+                  </button>
+                )}
+                {run.sourceRevision && (
+                  <button
+                    type="button"
+                    className="secondary"
+                    disabled={pending.includes(run.id)}
+                    onClick={() => {
+                      void perform(run.id, async () => {
+                        await state.fork(run.sourceRevision!);
+                      });
+                    }}
+                  >
+                    새 이야기로 이어가기
+                  </button>
+                )}
+              </div>
+              {run.sourceRevision && (
+                <small>
+                  여기까지 복사하고 새 이야기에서 이어 써요. 복사만으로 모델을 호출하지 않아요.
+                </small>
               )}
-            </LazyDiagnostics>
+            </RunTaskDetails>
           </article>
         ))}
       </div>

@@ -10,6 +10,7 @@ export type ChatOrganization = {
   botId: string;
   folderId: string | null;
   organizationRevision: number;
+  sortPosition: number;
 };
 type Row = Record<string, any>;
 
@@ -18,7 +19,7 @@ export class ChatOrganizationStore {
   constructor(readonly store: Store) {}
   init() {
     this.store.db.exec(`CREATE TABLE IF NOT EXISTS chat_folders(id TEXT PRIMARY KEY,bot_id TEXT NOT NULL,title TEXT NOT NULL,default_persona TEXT,revision INTEGER NOT NULL CHECK(revision>0));
-      CREATE TABLE IF NOT EXISTS chat_organization(chat_id TEXT PRIMARY KEY REFERENCES chats(id),bot_id TEXT NOT NULL,folder_id TEXT REFERENCES chat_folders(id),revision INTEGER NOT NULL CHECK(revision>0));
+      CREATE TABLE IF NOT EXISTS chat_organization(chat_id TEXT PRIMARY KEY REFERENCES chats(id),bot_id TEXT NOT NULL,folder_id TEXT REFERENCES chat_folders(id),revision INTEGER NOT NULL CHECK(revision>0),sort_position INTEGER NOT NULL);
       CREATE INDEX IF NOT EXISTS chat_folders_bot ON chat_folders(bot_id);
       CREATE INDEX IF NOT EXISTS chat_organization_folder ON chat_organization(folder_id);`);
   }
@@ -33,8 +34,39 @@ export class ChatOrganizationStore {
       .prepare('SELECT * FROM chat_organization WHERE chat_id=?')
       .get(chatId) as Row | undefined;
     return row
-      ? { botId: row.bot_id, folderId: row.folder_id, organizationRevision: row.revision }
+      ? {
+          botId: row.bot_id,
+          folderId: row.folder_id,
+          organizationRevision: row.revision,
+          sortPosition: row.sort_position,
+        }
       : undefined;
+  }
+  private orderedIds(botId: string, folderId: string | null): string[] {
+    return (
+      this.store.db
+        .prepare(
+          'SELECT chat_id FROM chat_organization WHERE bot_id=? AND folder_id IS ? ORDER BY sort_position,chat_id'
+        )
+        .all(botId, folderId) as Row[]
+    ).map((row) => String(row.chat_id));
+  }
+  private firstPosition(botId: string, folderId: string | null): number {
+    const row = this.store.db
+      .prepare(
+        'SELECT MIN(sort_position) AS first FROM chat_organization WHERE bot_id=? AND folder_id IS ?'
+      )
+      .get(botId, folderId) as Row;
+    return row.first === null ? 0 : row.first - 1;
+  }
+  /** Rank normalization changes no relative order or CAS revision of existing siblings. */
+  private setPositions(ids: string[]) {
+    const update = this.store.db.prepare(
+      'UPDATE chat_organization SET sort_position=? WHERE chat_id=?'
+    );
+    ids.forEach((id, index) => {
+      update.run(index, id);
+    });
   }
   private mapFolder(row: Row): ChatFolder {
     return {
@@ -108,16 +140,14 @@ export class ChatOrganizationStore {
     return this.store.transaction(() => {
       const folder = this.folder(botId, id);
       if (folder.revision !== expected) throw new HttpError(409, 'Folder revision conflict');
-      const moved = (
-        this.store.db
-          .prepare('SELECT chat_id FROM chat_organization WHERE folder_id=?')
-          .all(id) as Row[]
-      ).map((row) => String(row.chat_id));
+      const moved = this.orderedIds(botId, id);
+      const unfiled = this.orderedIds(botId, null);
       this.store.db
         .prepare(
           'UPDATE chat_organization SET folder_id=NULL,revision=revision+1 WHERE folder_id=?'
         )
         .run(id);
+      this.setPositions([...unfiled, ...moved]);
       this.store.db.prepare('DELETE FROM chat_folders WHERE id=?').run(id);
       for (const chatId of moved) this.store.event(chatId, 'organization.updated', chatId);
       return { deleted: true, movedChatIds: moved };
@@ -131,8 +161,8 @@ export class ChatOrganizationStore {
     const folderId = selection.folderId ?? null;
     const folder = folderId === null ? null : this.folder(botId, folderId);
     this.store.db
-      .prepare('INSERT INTO chat_organization VALUES(?,?,?,1)')
-      .run(chatId, botId, folderId);
+      .prepare('INSERT INTO chat_organization VALUES(?,?,?,1,?)')
+      .run(chatId, botId, folderId, this.firstPosition(botId, folderId));
     if (bot || folder?.defaultPersona) {
       const profile = defaultProfile(chatId);
       const persona = folder?.defaultPersona
@@ -162,23 +192,36 @@ export class ChatOrganizationStore {
     const original = this.metadata(originalId);
     if (!original) throw new HttpError(409, 'Chat organization is missing');
     this.store.db
-      .prepare('INSERT INTO chat_organization VALUES(?,?,?,1)')
-      .run(newId, original.botId, original.folderId);
+      .prepare('INSERT INTO chat_organization VALUES(?,?,?,1,?)')
+      .run(
+        newId,
+        original.botId,
+        original.folderId,
+        this.firstPosition(original.botId, original.folderId)
+      );
   }
   move(chatId: string, value: unknown) {
     const b = record(value);
-    fields(b, ['expectedRevision', 'folderId']);
+    fields(b, ['expectedRevision', 'folderId', 'beforeChatId']);
     const expected = number(b.expectedRevision, 'organization revision');
     const folderId = b.folderId === null ? null : text(b.folderId, 'folder ID', 100);
+    const beforeChatId =
+      b.beforeChatId == null ? null : text(b.beforeChatId, 'before chat ID', 100);
     return this.store.transaction(() => {
       this.store.chat(chatId);
       const prior = this.metadata(chatId);
       if (!prior || prior.organizationRevision !== expected)
         throw new HttpError(409, 'Organization revision conflict');
       if (folderId !== null) this.folder(prior.botId, folderId);
+      const siblings = this.orderedIds(prior.botId, folderId).filter((id) => id !== chatId);
+      const index = beforeChatId === null ? siblings.length : siblings.indexOf(beforeChatId);
+      if (index < 0)
+        throw new HttpError(409, 'Order anchor is not another chat in the destination folder');
+      siblings.splice(index, 0, chatId);
       this.store.db
         .prepare('UPDATE chat_organization SET folder_id=?,revision=revision+1 WHERE chat_id=?')
         .run(folderId, chatId);
+      this.setPositions(siblings);
       this.store.event(chatId, 'organization.updated', chatId);
       return this.store.chat(chatId);
     });
@@ -218,6 +261,8 @@ export class ChatOrganizationStore {
     for (const row of this.store.db.prepare('SELECT * FROM chat_organization').all() as Row[]) {
       this.bot(row.bot_id);
       number(row.revision, 'organization revision');
+      if (!Number.isSafeInteger(row.sort_position))
+        throw new HttpError(400, 'Invalid chat sort position');
       if (row.folder_id !== null) this.folder(row.bot_id, row.folder_id);
       const profile = this.store.product.profile(row.chat_id);
       this.assertBotAttachments(row.chat_id, profile.attachments, profile.packageAttachments);

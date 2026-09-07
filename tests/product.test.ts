@@ -527,7 +527,7 @@ describe('M1 product data with actual file SQLite', () => {
     expect(product.asset(asset.id).asset.hash).toBe(asset.hash);
   });
 
-  test.each([1, 2, 3, 4, 5, 6, 7, 8])(
+  test.each([1, 2, 3, 4, 5, 6, 7, 8, 9, 10])(
     'P11 rejects unsupported schema %i without automatic migration or backup',
     async (version) => {
       const item = await directory();
@@ -570,7 +570,7 @@ describe('M1 product data with actual file SQLite', () => {
     await writeFile(path, bytes);
     const reopened = new DatabaseSync(path, { readOnly: true });
     try {
-      expect(reopened.prepare('PRAGMA user_version').get()).toEqual({ user_version: 10 });
+      expect(reopened.prepare('PRAGMA user_version').get()).toEqual({ user_version: 11 });
       expect(
         reopened.prepare('SELECT id,text,hash FROM sources WHERE id=?').get(source.id)
       ).toEqual({ id: source.id, text: source.text, hash: source.hash });

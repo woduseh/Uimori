@@ -5,6 +5,7 @@ import { randomUUID } from 'node:crypto';
 import type { ServerResponse } from 'node:http';
 import { Store, HttpError } from './store.js';
 import { readerDetail } from './reader.js';
+import { chatActivities } from './chat-activity.js';
 import { readerRoutes } from './reader-routes.js';
 import { Controls, type Barrier, type FailurePoint } from './controls.js';
 import { runMain, type MainHooks } from './model-runner.js';
@@ -608,6 +609,7 @@ export async function createApp(options: AppOptions): Promise<App> {
     vertexRequestTier: options.vertexRequestTier ?? null,
   }));
   app.get('/api/chats', async () => store.chats());
+  app.get('/api/chat-activities', async () => chatActivities(store));
   app.post('/api/chats', async (request) => {
     const body = object(request.body);
     only(body, ['title', 'preset', 'botId', 'folderId']);

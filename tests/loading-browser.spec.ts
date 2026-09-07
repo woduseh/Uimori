@@ -1,5 +1,5 @@
 import { postFixtureChat } from './fixtures/chat.js';
-import { test, expect, type APIRequestContext, type Page } from '@playwright/test';
+import { test, expect, type APIRequestContext, type Locator, type Page } from '@playwright/test';
 import type { Chat, ChatDetail, ReaderDetail, ReaderRun, Run } from '../core/types.js';
 import type { Content } from '../core/product.js';
 import { navigationAction } from './ui-navigation.js';
@@ -50,6 +50,93 @@ const article = (page: Page, id: string) =>
 async function navLibrary(page: Page) {
   await navigationAction(page, '봇');
 }
+async function openActivity(container: Locator) {
+  const activity = container.getByTestId('turn-activity');
+  await expect(activity).toBeVisible();
+  if ((await activity.getAttribute('open')) === null)
+    await activity.locator('summary').first().click();
+  return activity;
+}
+
+test('LOADUI06 scene navigator jumps across bounded pages and remains usable in focus and mobile reading', async ({
+  page,
+  request,
+}, info) => {
+  const seeded = await seed(request, 12);
+  const ids = seeded.sources.map((source) => source.id);
+  const writes: string[] = [];
+  page.on('request', (request) => {
+    if (request.url().includes('/api/') && !['GET', 'HEAD'].includes(request.method()))
+      writes.push(`${request.method()} ${request.url()}`);
+  });
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.goto(`/?chat=${seeded.chat.id}`);
+  const navigator = page.getByRole('navigation', { name: '장면 탐색', exact: true });
+  const list = page.getByRole('dialog', { name: '장면 목록', exact: true });
+  await expect(navigator).toBeVisible();
+  await expect(navigator).toContainText('1 / 12');
+  await navigator.getByRole('button', { name: '장면 목록 열기', exact: true }).click();
+  await expect(list.getByRole('button', { name: /번째 장면 ·/ })).toHaveCount(12);
+  await list.getByRole('button', { name: /^8번째 장면 · Synthetic page 8\./ }).click();
+  await expect(list).toHaveCount(0);
+  await expect(articles(page)).toHaveCount(5);
+  await expect(article(page, ids[7])).toBeVisible();
+  await expect(article(page, ids[0])).toHaveCount(0);
+  await expect(navigator).toContainText('8 / 12');
+  await expect(page).toHaveURL(new RegExp(`source=${ids[7]}`));
+  const currentMark = navigator.getByRole('button', { name: /^8번째 장면 ·/ });
+  await expect(currentMark).toBeVisible();
+  await expect(currentMark).toHaveAttribute('aria-current', 'location');
+  await currentMark.hover();
+  await expect(currentMark.locator('.scene-preview')).toBeVisible();
+  await page.screenshot({ path: info.outputPath('scene-navigator-desktop.png') });
+
+  await navigator.getByRole('button', { name: '최신 장면으로', exact: true }).click();
+  await expect(article(page, ids[11])).toBeVisible();
+  await expect(articles(page)).toHaveCount(2);
+  await expect(navigator).toContainText('12 / 12');
+  await page.goBack();
+  await expect(article(page, ids[7])).toBeVisible();
+  await expect(navigator).toContainText('8 / 12');
+
+  await page.getByRole('button', { name: '집중 읽기', exact: true }).click();
+  await expect(navigator).toBeVisible();
+  await expect(currentMark).toBeVisible();
+  await navigator.getByRole('button', { name: '장면 목록 열기', exact: true }).click();
+  await expect(list).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(list).toHaveCount(0);
+  await expect(
+    navigator.getByRole('button', { name: '장면 목록 열기', exact: true })
+  ).toBeFocused();
+  await page.getByRole('button', { name: '집중 읽기 종료', exact: true }).click();
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(navigator).toBeVisible();
+  await navigator.getByRole('button', { name: '장면 목록 열기', exact: true }).click();
+  const choice = list.getByRole('button', { name: /^3번째 장면 · Synthetic page 3\./ });
+  await expect(choice).toBeVisible();
+  for (const control of [list, choice]) {
+    const bounds = await control.boundingBox();
+    expect(bounds).not.toBeNull();
+    expect(bounds!.x).toBeGreaterThanOrEqual(0);
+    expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(390);
+    expect(await control.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(
+      true
+    );
+  }
+  await page.screenshot({ path: info.outputPath('scene-navigator-mobile.png') });
+  await choice.click();
+  await expect(list).toHaveCount(0);
+  await expect(article(page, ids[2])).toBeVisible();
+  await expect(navigator).toContainText('3 / 12');
+  await expect(articles(page)).toHaveCount(5);
+  const after = await detail(request, seeded.chat.id);
+  expect(after.sources).toEqual(seeded.sources);
+  expect(after.runs).toEqual(seeded.runs);
+  expect(after.attempts).toEqual(seeded.attempts);
+  expect(writes).toHaveLength(0);
+});
 
 test('LOADUI01 bounded pages, previous/next, deep links and reload preserve reader position', async ({
   page,
@@ -347,34 +434,33 @@ test('LOADUI05 context summary status fits mobile reader and run details without
   });
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto(`/?chat=${seeded.chat.id}`);
+  await openActivity(page.getByTestId('pending-run'));
   const pending = page.getByTestId('pending-run').getByTestId('context-summary');
   await expect(pending).toHaveAttribute('data-context-status', 'pending');
   await expect(pending).toHaveText('컨텍스트 확인 중');
 
   stage = 'ready';
   await page.reload();
+  const activity = await openActivity(article(page, source.id));
   const ready = article(page, source.id).getByTestId('context-summary');
   await expect(ready).toHaveText('앞선 12개 원문 요약 · 입력 약 248,600 / 272,000 토큰 · 요약 2회');
   await ready.scrollIntoViewIfNeeded();
   const bounds = await ready.boundingBox();
   expect(bounds).not.toBeNull();
-  const toolbar = await article(page, source.id)
-    .getByRole('group', { name: '원문과 번역 보기' })
-    .boundingBox();
-  expect(toolbar).not.toBeNull();
-  expect(bounds!.y).toBeGreaterThanOrEqual(toolbar!.y + toolbar!.height);
+  const heading = await activity.locator('.task-heading').boundingBox();
+  expect(heading).not.toBeNull();
+  expect(bounds!.y).toBeGreaterThanOrEqual(heading!.y + heading!.height);
   expect(bounds!.x).toBeGreaterThanOrEqual(0);
   expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(390);
   expect(await ready.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
   await page.screenshot({ path: info.outputPath('context-summary-mobile.png') });
-  await article(page, source.id).getByRole('button', { name: '실행 상세', exact: true }).click();
-  await expect(
-    page.getByRole('region', { name: '실행 기록' }).getByTestId('context-summary')
-  ).toHaveText('앞선 12개 원문 요약 · 입력 약 248,600 / 272,000 토큰 · 요약 2회');
-  await page.keyboard.press('Escape');
+  await expect(activity.locator('.run-task-details').getByTestId('context-summary')).toHaveText(
+    '앞선 12개 원문 요약 · 입력 약 248,600 / 272,000 토큰 · 요약 2회'
+  );
 
   stage = 'failed';
   await page.reload();
+  await openActivity(page.getByTestId('pending-run'));
   const failed = page.getByTestId('pending-run').getByTestId('context-summary');
   await expect(failed).toHaveAttribute('role', 'alert');
   await expect(failed).toContainText('컨텍스트 확인에 실패했어요.');
@@ -382,6 +468,7 @@ test('LOADUI05 context summary status fits mobile reader and run details without
 
   stage = 'unknown';
   await page.reload();
+  await openActivity(article(page, source.id));
   await expect(article(page, source.id).getByTestId('context-summary')).toContainText(
     '입력 추정치 미확인'
   );
@@ -391,4 +478,76 @@ test('LOADUI05 context summary status fits mobile reader and run details without
   expect(after.runs).toEqual(seeded.runs);
   expect(after.attempts).toEqual(seeded.attempts);
   expect(writes).toHaveLength(0);
+});
+
+test('LOADUI07 synthetic navigation metadata covers long-list paging, search and visible-source tracking', async ({
+  page,
+  request,
+}) => {
+  const seeded = await seed(request, 2);
+  const ids = seeded.sources.map((source) => source.id);
+  // Only two real fixture sources are stored. Extra index entries exercise list rendering,
+  // not server paging or navigation to nonexistent source bodies.
+  await page.route(`**/api/chats/${seeded.chat.id}/reader?*`, async (route) => {
+    const response = await route.fetch();
+    const body = (await response.json()) as ReaderDetail;
+    body.reader.navigation = [
+      ...body.reader.navigation,
+      ...Array.from({ length: 63 }, (_, index) => ({
+        id: `synthetic-navigation-${index + 3}`,
+        number: index + 3,
+        label: `Synthetic navigator ${index + 3}`,
+      })),
+    ];
+    await route.fulfill({ response, json: body });
+  });
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.goto(`/?chat=${seeded.chat.id}`);
+  const navigator = page.getByRole('navigation', { name: '장면 탐색', exact: true });
+  const list = page.getByRole('dialog', { name: '장면 목록', exact: true });
+  await expect(navigator).toContainText('1 / 65');
+  await navigator.getByRole('button', { name: '장면 목록 열기', exact: true }).click();
+  await expect(list.getByRole('button', { name: /번째 장면 ·/ })).toHaveCount(60);
+  await list.getByRole('button', { name: '다음 목록', exact: true }).click();
+  const nextFirst = list.getByRole('button', {
+    name: '61번째 장면 · Synthetic navigator 61',
+    exact: true,
+  });
+  await expect(nextFirst).toBeFocused();
+  await expect(nextFirst).toBeInViewport();
+  await expect(list.getByRole('button', { name: /번째 장면 ·/ })).toHaveCount(5);
+  await expect(list.getByRole('button', { name: '다음 목록', exact: true })).toBeDisabled();
+  await list.getByRole('button', { name: '이전 목록', exact: true }).click();
+  await expect(list.getByRole('button', { name: /^1번째 장면 ·/ })).toBeFocused();
+  const search = list.getByRole('searchbox', { name: '장면 번호 또는 요청으로 찾기' });
+  await search.fill('65');
+  await expect(list.getByRole('button', { name: /번째 장면 ·/ })).toHaveCount(1);
+  await expect(
+    list.getByRole('button', { name: '65번째 장면 · Synthetic navigator 65', exact: true })
+  ).toBeVisible();
+  await search.fill('Synthetic page 2.');
+  await expect(list.getByRole('button', { name: /번째 장면 ·/ })).toHaveCount(1);
+  await list.getByRole('button', { name: /^2번째 장면 · Synthetic page 2\./ }).click();
+  await expect(navigator).toContainText('2 / 65');
+  await expect(navigator.getByRole('button', { name: /^2번째 장면 ·/ })).toHaveAttribute(
+    'aria-current',
+    'location'
+  );
+  await navigator.getByRole('button', { name: /^1번째 장면 ·/ }).click();
+  await expect(navigator).toContainText('1 / 65');
+  await article(page, ids[1]).evaluate((element) => {
+    const viewport = element.closest<HTMLElement>('[data-reader-scrollport]')!;
+    viewport.scrollTop +=
+      element.getBoundingClientRect().top - viewport.getBoundingClientRect().top;
+  });
+  await expect(navigator).toContainText('2 / 65');
+  await expect(navigator.getByRole('button', { name: /^2번째 장면 ·/ })).toHaveAttribute(
+    'aria-current',
+    'location'
+  );
+  await expect(articles(page)).toHaveCount(2);
+  const after = await detail(request, seeded.chat.id);
+  expect(after.sources).toEqual(seeded.sources);
+  expect(after.runs).toEqual(seeded.runs);
+  expect(after.attempts).toEqual(seeded.attempts);
 });

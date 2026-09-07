@@ -135,6 +135,7 @@ test('DEL03 deleting selected chat clears reader and URL while preserving anothe
   await page.goto(`/?chat=${chat.id}`);
   await page.getByRole('button', { name: '탐색 메뉴', exact: true }).click();
   const nav = page.getByTestId('bot-navigation').filter({ visible: true });
+  await nav.locator(`[data-chat-id="${chat.id}"]`).hover();
   await nav.getByRole('button', { name: `${chat.title} 채팅 삭제`, exact: true }).click();
   await confirm(page);
   await expect(nav.getByRole('button', { name: chat.title, exact: true })).toHaveCount(0);

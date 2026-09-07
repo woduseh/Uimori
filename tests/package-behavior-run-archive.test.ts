@@ -165,7 +165,7 @@ function complete(store: Store, run: Run) {
   );
 }
 
-describe('v10 recorded automatic/model behavior archive', () => {
+describe('v11 recorded automatic/model behavior archive', () => {
   test('RBA01 automatic result projection is compact and committed journals roundtrip exactly', () => {
     const f = fixture(),
       run = start(f.store, f.chat.id);

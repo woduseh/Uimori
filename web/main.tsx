@@ -1,6 +1,7 @@
 import { ComposerMore, LoreResetChip } from './ComposerMore.js';
 import { ChatPromptOptions } from './ChatPromptOptions.js';
 import { ReaderPages } from './ReaderPages.js';
+import { SceneNavigator } from './SceneNavigator.js';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import {
@@ -17,11 +18,11 @@ import {
   Type,
 } from 'lucide-react';
 import type { Content } from '../core/product.js';
-import { api, labels } from './api.js';
+import { api } from './api.js';
 import { LibraryPanel, refValue } from './LibraryPanel.js';
 import { ProfileEditor } from './ProfileEditor.js';
 import { SourceReader } from './SourceReader.js';
-import { ContextSummaryStatus } from './ContextSummaryStatus.js';
+import { TurnActivity } from './TurnActivity.js';
 import { PackageBehaviorPanel } from './PackageBehaviorPanel.js';
 import { StoryPanel } from './StoryPanel.js';
 import { AssetEditor } from './AssetEditor.js';
@@ -291,169 +292,192 @@ function App() {
         ) : (
           <>
             <div
-              ref={s.reader}
-              className="reader-scrollport"
-              data-reader-scrollport
-              onScroll={s.savePosition}
+              className={`reader-stage ${s.detail?.reader.navigation.length ? 'has-scenes' : ''}`}
             >
-              <section className="reader" aria-label="원고">
-                {!s.selected ? (
-                  <div className="empty-state">
-                    <BookOpen size={32} />
-                    <h2>어떤 채팅을 시작할까요?</h2>
-                    <p className="muted">서재에서 봇을 고르거나, 원하는 장면으로 시작해요.</p>
-                    <button onClick={() => newStory()}>새 채팅</button>
-                    <button className="secondary" onClick={() => showLibrary()}>
-                      서재 둘러보기
-                    </button>
-                  </div>
-                ) : !s.detail ? (
-                  <p role="status">채팅을 불러오는 중이에요…</p>
-                ) : (
-                  <>
-                    <div className="story-context">
-                      {s.profileAsset && (
-                        <img
-                          className="profile-asset"
-                          data-testid="profile-asset"
-                          src={s.profileAsset.url}
-                          alt={s.profileAsset.description || s.profileAsset.title}
+              <div
+                ref={s.reader}
+                className="reader-scrollport"
+                data-reader-scrollport
+                onScroll={s.savePosition}
+              >
+                <section className="reader" aria-label="원고">
+                  {!s.selected ? (
+                    <div className="empty-state">
+                      <BookOpen size={32} />
+                      <h2>어떤 채팅을 시작할까요?</h2>
+                      <p className="muted">서재에서 봇을 고르거나, 원하는 장면으로 시작해요.</p>
+                      <button onClick={() => newStory()}>새 채팅</button>
+                      <button className="secondary" onClick={() => showLibrary()}>
+                        서재 둘러보기
+                      </button>
+                    </div>
+                  ) : !s.detail ? (
+                    <p role="status">채팅을 불러오는 중이에요…</p>
+                  ) : (
+                    <>
+                      <div className="story-context">
+                        {s.profileAsset && (
+                          <img
+                            className="profile-asset"
+                            data-testid="profile-asset"
+                            src={s.profileAsset.url}
+                            alt={s.profileAsset.description || s.profileAsset.title}
+                          />
+                        )}
+                        <span>
+                          {s.bot?.title || '나의 채팅'}
+                          {s.persona && ` · 페르소나 ${s.persona.title}`}
+                        </span>
+                        {(s.detail.branches?.length ?? 0) > 1 && (
+                          <button className="secondary" onClick={() => setPanel('branches')}>
+                            보관된 전개
+                          </button>
+                        )}
+                      </div>
+                      {!s.connected && (
+                        <p className="connection-note" role="status">
+                          연결을 다시 확인하는 중이에요.
+                        </p>
+                      )}
+                      {!s.sources.length && !s.visibleRuns.length && !s.active && (
+                        <div className="first-scene">
+                          <h2>첫 장면을 들려주세요.</h2>
+                          <p className="muted">
+                            배경과 인물, 일어나길 바라는 일을 아래에 적어주세요.
+                          </p>
+                        </div>
+                      )}
+                      <ReaderPages
+                        detail={s.detail}
+                        head={s.branch?.headRevision ?? null}
+                        onSelect={s.chooseSource}
+                      />
+                      {s.sources.map((source, index) => (
+                        <SourceReader
+                          contextSummary={
+                            s.detail!.runs.find((run) => run.id === source.runId)?.contextSummary
+                          }
+                          packageStart={
+                            s.detail!.runs.find((run) => run.id === source.runId)?.packageStart
+                          }
+                          hasPackages={
+                            !!s.detail!.runs.find((run) => run.id === source.runId)?.hasPackages
+                          }
+                          presentationRefreshKey={s.detail!.reader.cursor}
+                          sourceSegments={
+                            s.detail!.runs.find((run) => run.id === source.runId)?.sourceSegments
+                          }
+                          key={source.id}
+                          source={source}
+                          index={index + (s.detail?.reader?.start ?? 0)}
+                          request={s.detail!.runs.find((run) => run.id === source.runId)?.request}
+                          jobs={s.detail!.jobs.filter((job) => job.sourceRevision === source.id)}
+                          assets={s.detail!.assets ?? []}
+                          refresh={() => s.refresh(s.selected)}
+                          onError={s.setError}
+                          onFork={s.fork}
+                          activity={(() => {
+                            const run = s.detail!.runs.find((item) => item.id === source.runId);
+                            return (
+                              run && (
+                                <TurnActivity
+                                  run={run}
+                                  source={source}
+                                  jobs={s.detail!.jobs}
+                                  activities={s.detail!.reader.responseActivity ?? []}
+                                  connected={s.connected}
+                                  branchId={s.branch?.id}
+                                  revision={s.detail!.reader.cursor}
+                                  refresh={() => s.refresh(s.selected)}
+                                  onError={s.setError}
+                                />
+                              )
+                            );
+                          })()}
+                        />
+                      ))}
+                      <ReaderPages
+                        detail={s.detail}
+                        head={s.branch?.headRevision ?? null}
+                        onSelect={s.chooseSource}
+                        end
+                      />
+                      {!!s.detail.profile?.packageAttachments?.length && (
+                        <PackageBehaviorPanel
+                          chatId={s.selected}
+                          branchId={s.branch?.id}
+                          refreshKey={s.detail.reader.cursor}
+                          onRunRequest={(text, id) => {
+                            s.editDraft(text, id);
+                            s.input.current?.focus();
+                          }}
+                          onChange={() => {
+                            void s.refresh(s.selected);
+                          }}
                         />
                       )}
-                      <span>
-                        {s.bot?.title || '나의 채팅'}
-                        {s.persona && ` · 페르소나 ${s.persona.title}`}
-                      </span>
-                      {(s.detail.branches?.length ?? 0) > 1 && (
-                        <button className="secondary" onClick={() => setPanel('branches')}>
-                          보관된 전개
-                        </button>
-                      )}
-                    </div>
-                    {!s.connected && (
-                      <p className="connection-note" role="status">
-                        연결을 다시 확인하는 중이에요.
-                      </p>
-                    )}
-                    {!s.sources.length && !s.visibleRuns.length && !s.active && (
-                      <div className="first-scene">
-                        <h2>첫 장면을 들려주세요.</h2>
-                        <p className="muted">
-                          배경과 인물, 일어나길 바라는 일을 아래에 적어주세요.
-                        </p>
-                      </div>
-                    )}
-                    <ReaderPages
-                      detail={s.detail}
-                      head={s.branch?.headRevision ?? null}
-                      onSelect={s.chooseSource}
-                    />
-                    {s.sources.map((source, index) => (
-                      <SourceReader
-                        contextSummary={
-                          s.detail!.runs.find((run) => run.id === source.runId)?.contextSummary
-                        }
-                        packageStart={
-                          s.detail!.runs.find((run) => run.id === source.runId)?.packageStart
-                        }
-                        hasPackages={
-                          !!s.detail!.runs.find((run) => run.id === source.runId)?.hasPackages
-                        }
-                        presentationRefreshKey={s.detail!.reader.cursor}
-                        sourceSegments={
-                          s.detail!.runs.find((run) => run.id === source.runId)?.sourceSegments
-                        }
-                        key={source.id}
-                        source={source}
-                        index={index + (s.detail?.reader?.start ?? 0)}
-                        request={s.detail!.runs.find((run) => run.id === source.runId)?.request}
-                        jobs={s.detail!.jobs.filter((job) => job.sourceRevision === source.id)}
-                        assets={s.detail!.assets ?? []}
-                        refresh={() => s.refresh(s.selected)}
-                        onError={s.setError}
-                        onFork={s.fork}
-                        onInspect={inspect}
-                      />
-                    ))}
-                    <ReaderPages
-                      detail={s.detail}
-                      head={s.branch?.headRevision ?? null}
-                      onSelect={s.chooseSource}
-                      end
-                    />
-                    {!!s.detail.profile?.packageAttachments?.length && (
-                      <PackageBehaviorPanel
-                        chatId={s.selected}
-                        branchId={s.branch?.id}
-                        refreshKey={s.detail.reader.cursor}
-                        onRunRequest={(text, id) => {
-                          s.editDraft(text, id);
-                          s.input.current?.focus();
-                        }}
-                        onChange={() => {
-                          void s.refresh(s.selected);
-                        }}
-                      />
-                    )}
-                    {s.visibleRuns
-                      .filter((run) => !run.sourceRevision)
-                      .map((run) => (
-                        <article className="pending-turn" key={run.id} data-testid="pending-run">
-                          <div className="request-message">
-                            <small>내 장면 요청</small>
-                            <p>{run.request}</p>
-                          </div>
-                          <div className="run-outcome">
-                            <strong>
-                              {run.status === 'waiting_for_state'
-                                ? '상태 확인 대기'
-                                : s.active?.id === run.id
-                                  ? '다음 장면을 만들고 있어요'
-                                  : labels[run.status]}
-                            </strong>
-                            <ContextSummaryStatus summary={run.contextSummary} />
-                            {run.error && <p className="error">{run.error}</p>}
-                            {run.partialText && (
-                              <>
-                                <small>확정되지 않은 부분 출력</small>
-                                <p className="partial-prose">{run.partialText}</p>
-                              </>
-                            )}
-                            {s.canReuseRun(run.id) && (
-                              <div className="form-actions">
-                                <button
-                                  type="button"
-                                  className="secondary"
-                                  disabled={s.reuseBlocked || optionsBusy}
-                                  onClick={() => s.editRunRequest(run.id)}
-                                >
-                                  요청 다시 편집
-                                </button>
-                                <button
-                                  type="button"
-                                  className="secondary"
-                                  disabled={s.reuseBlocked || optionsBusy}
-                                  onClick={() => {
-                                    void s.generate(run.id);
-                                  }}
-                                >
-                                  현재 설정으로 재시도
-                                </button>
-                                <small>
-                                  현재 대화와 저장된 설정으로 새로 생성해요. 기존 실패 기록은
-                                  남아요.
-                                </small>
-                              </div>
-                            )}
-                            <button className="secondary" onClick={() => inspect(run.id)}>
-                              작업 상세
-                            </button>
-                          </div>
-                        </article>
-                      ))}
-                  </>
-                )}
-              </section>
+                      {s.visibleRuns
+                        .filter((run) => !run.sourceRevision)
+                        .map((run) => (
+                          <article className="pending-turn" key={run.id} data-testid="pending-run">
+                            <div className="request-message">
+                              <small>내 장면 요청</small>
+                              <p>{run.request}</p>
+                            </div>
+                            <div className="run-outcome">
+                              <TurnActivity
+                                run={run}
+                                jobs={[]}
+                                activities={s.detail!.reader.activity ?? []}
+                                connected={s.connected}
+                                branchId={s.branch?.id}
+                                revision={s.detail!.reader.cursor}
+                                refresh={() => s.refresh(s.selected)}
+                                onError={s.setError}
+                              >
+                                {s.canReuseRun(run.id) && (
+                                  <div className="form-actions">
+                                    <button
+                                      type="button"
+                                      className="secondary"
+                                      disabled={s.reuseBlocked || optionsBusy}
+                                      onClick={() => s.editRunRequest(run.id)}
+                                    >
+                                      요청 다시 편집
+                                    </button>
+                                    <button
+                                      type="button"
+                                      className="secondary"
+                                      disabled={s.reuseBlocked || optionsBusy}
+                                      onClick={() => {
+                                        void s.generate(run.id);
+                                      }}
+                                    >
+                                      현재 설정으로 재시도
+                                    </button>
+                                    <small>
+                                      현재 대화와 저장된 설정으로 새로 생성해요. 기존 실패 기록은
+                                      남아요.
+                                    </small>
+                                  </div>
+                                )}
+                              </TurnActivity>
+                            </div>
+                          </article>
+                        ))}
+                    </>
+                  )}
+                </section>
+              </div>
+              {s.detail && (
+                <SceneNavigator
+                  key={s.viewKey}
+                  detail={s.detail}
+                  reader={s.reader}
+                  target={s.readSource}
+                  onSelect={s.chooseSource}
+                />
+              )}
             </div>
             {s.selected && (
               <div className="composer-dock">

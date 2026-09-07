@@ -32,12 +32,12 @@ async function sourceDetails(page: Page) {
   for (const source of await page.getByTestId('source').all()) {
     const original = source.getByRole('button', { name: '원문 보기', exact: true });
     if (await original.count()) await original.click();
-    const details = source
-      .locator('details')
-      .filter({ has: page.locator('summary', { hasText: '작업 상세' }) })
-      .first();
+    const activity = source.getByTestId('turn-activity');
+    if ((await activity.count()) && (await activity.getAttribute('open')) === null)
+      await activity.locator(':scope > summary').click();
+    const details = source.locator('details.source-job-details');
     if ((await details.count()) && (await details.getAttribute('open')) === null)
-      await details.locator('summary').first().click();
+      await details.locator(':scope > summary').click();
   }
 }
 async function storySettings(page: Page) {

@@ -110,102 +110,246 @@
   justify-content: center;
 }
 .bot-folder {
-  border-top: 1px solid var(--line);
-  padding: 8px 0;
+  padding: 2px 0;
 }
-.bot-folder-heading h3 {
-  font-size: 12px;
-  margin: 0;
+.bot-folder-heading {
+  min-height: 32px;
+  border-radius: 6px;
+  gap: 2px;
+}
+.bot-folder-heading:hover {
+  background: var(--hover);
+}
+.bot-folder-toggle {
   display: flex;
   align-items: center;
   gap: 6px;
+  flex: 1;
+  min-width: 0;
+  padding: 6px;
+  background: transparent;
   color: var(--muted);
-  overflow-wrap: anywhere;
+  text-align: left;
+  font-size: 12px;
+  min-height: 32px;
 }
-.bot-folder-heading h3 svg {
+.bot-folder-toggle span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.bot-folder-toggle svg {
   flex-shrink: 0;
 }
-.bot-folder-heading {
-  min-height: 36px;
+.bot-folder-toggle .expanded {
+  transform: rotate(90deg);
 }
-.bot-folder-heading .icon-button {
-  width: 36px;
-  min-width: 36px;
-  height: 40px;
+.bot-row-actions {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+.bot-chat-item:hover .bot-row-actions,
+.bot-chat-item:focus-within .bot-row-actions,
+.bot-folder-heading:hover .bot-row-actions,
+.bot-folder-heading:focus-within .bot-row-actions {
+  opacity: 1;
+  pointer-events: auto;
+}
+.bot-navigation .bot-row-actions > .icon-button,
+.bot-navigation .bot-row-actions > .delete-control > .delete-button {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  min-width: 26px;
+  height: 28px;
+  min-height: 28px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  border-radius: 4px;
+}
+.bot-navigation .bot-row-actions > button:hover {
+  background: var(--hover);
+  color: var(--text);
+}
+.bot-navigation .bot-row-actions > .delete-control > .delete-button:hover {
+  color: var(--danger, #e88b8b);
+}
+.bot-row-actions .delete-control {
+  display: flex;
 }
 .bot-chat-list {
   display: grid;
-  gap: 5px;
+  gap: 1px;
+  padding-left: 18px;
 }
 .bot-chat-item {
-  padding: 4px;
-  border-radius: 9px;
-  background: var(--surface-raised);
+  position: relative;
+  display: flex;
+  align-items: center;
   min-width: 0;
+  height: 32px;
+  padding: 0 3px 0 0;
+  border-radius: 6px;
+  gap: 2px;
+}
+.bot-chat-item:hover {
+  background: var(--hover);
+}
+.bot-chat-item.selected {
+  background: var(--surface-raised);
 }
 .bot-chat-item .chat-link {
-  width: 100%;
+  display: flex;
+  flex: 1;
+  width: auto;
+  min-width: 0;
+  height: 32px;
+  min-height: 32px;
   margin: 0;
-  padding: 8px;
-  min-height: 42px;
+  padding: 6px 5px;
+  background: transparent;
+  border: 0;
+  text-align: left;
 }
 .bot-chat-item .chat-link strong {
+  display: block;
   font-size: 12px;
+  font-weight: 400;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
-.bot-chat-move {
-  position: relative;
-  padding: 0 5px 4px;
+.bot-chat-item.selected .chat-link strong {
+  font-weight: 600;
 }
-.bot-chat-move select {
-  font-size: 11px;
-  min-height: 32px;
-  padding: 4px 8px;
-  width: 100%;
-  background: transparent;
+.bot-chat-status {
+  display: grid;
+  place-items: center;
+  width: 18px;
+  flex-shrink: 0;
   color: var(--muted);
+}
+.bot-chat-status svg {
+  animation: bot-working 1.2s linear infinite;
+}
+@keyframes bot-working {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .bot-chat-status svg {
+    animation: none;
+  }
+}
+.bot-chat-item.dragging {
+  opacity: 0.45;
+}
+.bot-chat-item.drop-before::before {
+  content: "";
+  position: absolute;
+  top: -1px;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: var(--accent);
+  pointer-events: none;
+}
+.bot-drop-end {
+  height: 2px;
+  background: var(--accent);
+}
+.bot-folder.drop-folder > .bot-folder-heading {
+  background: var(--hover);
+  outline: 1px solid var(--accent);
 }
 .bot-empty-folder {
   font-size: 11px;
   color: var(--faint);
-  margin: 4px 8px 9px;
+  margin: 7px 5px;
 }
-.bot-folder-settings summary,
-.bot-folder-create summary {
+.bot-folders-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   font-size: 11px;
   color: var(--muted);
-  min-height: 36px;
-  padding: 8px 3px;
+  margin: 12px 4px 5px;
+}
+.bot-folders-toolbar .icon-button {
+  width: 28px;
+  min-height: 28px;
+  height: 28px;
+  padding: 4px;
+}
+.bot-organize-dialog.app-dialog {
+  width: min(420px, calc(100vw - 24px));
+  height: fit-content;
+  max-height: calc(100dvh - 24px);
+  margin: auto;
+  border-radius: 12px;
 }
 .bot-folder-settings form,
-.bot-folder-create form {
+.bot-folder-create,
+.bot-chat-menu {
   display: grid;
-  gap: 9px;
-  padding: 7px 3px 12px;
+  gap: 14px;
 }
 .bot-folder-settings label,
-.bot-folder-create label {
-  font-size: 11px;
+.bot-folder-create label,
+.bot-chat-menu label {
+  display: grid;
+  gap: 6px;
+  font-size: 12px;
 }
 .bot-folder-settings input,
 .bot-folder-settings select,
-.bot-folder-create input {
-  font-size: 12px;
+.bot-folder-create input,
+.bot-chat-menu select {
   width: 100%;
-  padding: 8px;
+  min-width: 0;
+  font-size: 13px;
   min-height: 40px;
+  padding: 8px;
 }
 .bot-folder-settings small {
-  font-size: 11px;
+  font-size: 12px;
   line-height: 1.5;
 }
-.bot-folder-settings button,
-.bot-folder-create button {
-  font-size: 12px;
-}
 .bot-folder-release {
+  margin-top: 18px;
   width: 100%;
-  margin-bottom: 9px;
-  color: var(--muted);
+}
+.bot-chat-menu > strong {
+  overflow-wrap: anywhere;
+}
+@media (hover: none), (pointer: coarse) {
+  .bot-row-actions {
+    opacity: 1;
+    pointer-events: auto;
+  }
+  .bot-chat-item,
+  .bot-chat-item .chat-link {
+    min-height: 44px;
+    height: 44px;
+  }
+  .bot-navigation .bot-row-actions > .icon-button {
+    width: 36px;
+    min-width: 36px;
+    height: 40px;
+    min-height: 40px;
+  }
+  .bot-chat-item > .bot-row-actions > .delete-control {
+    display: none;
+  }
+  .bot-folder-toggle {
+    min-height: 44px;
+  }
 }
 .bot-navigation-empty {
   padding: 16px 4px;
@@ -221,4 +365,12 @@
 .bot-library-nav button,
 .bot-chat-item button {
   white-space: normal;
+}
+
+.bot-row-actions:has(dialog[open]) {
+  opacity: 1;
+  pointer-events: auto;
+}
+.bot-row-actions dialog[open] {
+  pointer-events: auto;
 }

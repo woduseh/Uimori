@@ -85,6 +85,13 @@ test('100-source HTTP reader pages retain order while execution snapshot and ful
     const page: ReturnType<typeof readerDetail> = response.json();
     expect(page.sources).toHaveLength(5);
     expect(page.reader.total).toBe(100);
+    expect(page.reader.navigation).toEqual(
+      sources.map((item, index) => ({
+        id: item.id,
+        number: index + 1,
+        label: 'Synthetic request',
+      }))
+    );
     expect(page.sources.map((s: { id: string }) => s.id)).toEqual(page.reader.order);
     expect(
       page.runs.every(
@@ -120,6 +127,13 @@ test('source cursors and supplied known IDs cannot cross branch or chat boundari
     child.id,
   ]);
   expect(readerDetail(store, chat.id, {}).reader.order).toEqual([root.id, main.id]);
+  expect(
+    readerDetail(store, chat.id, { branch: branch.id }).reader.navigation.map((item) => item.id)
+  ).toEqual([root.id, child.id]);
+  expect(readerDetail(store, chat.id, {}).reader.navigation.map((item) => item.id)).toEqual([
+    root.id,
+    main.id,
+  ]);
   for (const id of [main.id, other.id])
     expect(() => readerDetail(store, chat.id, { branch: branch.id, source: id })).toThrow(
       'Source is not in this branch'
@@ -150,6 +164,7 @@ test('delta includes current edited source and matching latest translation only,
   const idle = readerDetail(store, chat.id, { since: String(first.reader.cursor), known });
   expect(idle.sources).toEqual([]);
   expect(idle.jobs).toEqual([]);
+  expect(idle.reader.navigation).toEqual(first.reader.navigation);
   expect(idle).not.toHaveProperty('assets');
   const edited = store.editSource(a.id, { text: 'Revised source', expectedRevision: 0 });
   const changed = readerDetail(store, chat.id, { since: String(first.reader.cursor), known });
@@ -171,6 +186,54 @@ test('delta includes current edited source and matching latest translation only,
   expect(
     readerDetail(store, chat.id, { since: String(delta.reader.cursor), known })
   ).toHaveProperty('assets');
+});
+
+test('navigation labels use bounded requests and never authored, generated, or edited source bodies', async () => {
+  const { store } = await setup(),
+    chat = createFixtureChat(store, 'Navigation labels');
+  const items = Array.from({ length: 7 }, (_, index) =>
+    source(store, chat.id, `Hidden source body ${index}`)
+  );
+  const request = store.db.prepare('UPDATE runs SET request=? WHERE id=?');
+  request.run('  Request\n\twith   whitespace  ', items[1].runId);
+  request.run('🙂'.repeat(110), items[2].runId);
+  request.run(' \n ', items[3].runId);
+  store.db
+    .prepare(
+      "UPDATE runs SET snapshot=json_set(snapshot,'$.packageStart',json(?)),request=? WHERE id=?"
+    )
+    .run(
+      JSON.stringify({ mode: 'authored', title: 'Private authored title' }),
+      'Private start content',
+      items[0].runId
+    );
+  store.editSource(items[6].id, { text: 'Private edited hidden source body', expectedRevision: 0 });
+  const page = readerDetail(store, chat.id, {});
+  expect(page.sources).toHaveLength(5);
+  expect(page.reader.navigation).toHaveLength(7);
+  expect(page.reader.navigation.map((item) => item.label)).toEqual([
+    '시작 장면',
+    'Request with whitespace',
+    `${'🙂'.repeat(99)}…`,
+    '장면 4',
+    'Synthetic request',
+    'Synthetic request',
+    'Synthetic request',
+  ]);
+  expect(
+    page.reader.navigation.every((item) => Object.keys(item).sort().join(',') === 'id,label,number')
+  ).toBe(true);
+  const serialized = JSON.stringify(page.reader.navigation);
+  for (const body of [
+    'Hidden source body',
+    'Private edited hidden source body',
+    'Private start content',
+    'Private authored title',
+  ])
+    expect(serialized).not.toContain(body);
+  const last = readerDetail(store, chat.id, { source: items[6].id });
+  expect(last.reader.navigation).toEqual(page.reader.navigation);
+  expect(last.reader.order).toContain(items[6].id);
 });
 
 test('new source joins an incomplete last page on delta and another chat does not dirty it', async () => {
@@ -290,4 +353,60 @@ test('activity completion time ignores subsequent usage updates and retries rest
   const restarted = readerDetail(store, chat.id, {}).reader.activity.find((a) => a.id === job.id)!;
   expect(restarted.startedAt).toBe('2026-09-08T12:00:00.000Z');
   expect(restarted.finishedAt).toBeNull();
+});
+
+test('response activity retains older page work without expanding global activity or other pages', async () => {
+  const { store } = await setup(),
+    chat = createFixtureChat(store, 'Response activity');
+  const items = Array.from({ length: 35 }, () => source(store, chat.id));
+  store.db
+    .prepare("UPDATE jobs SET status='completed',updated_at='2000-01-01' WHERE chat_id=?")
+    .run(chat.id);
+  store.db
+    .prepare("INSERT INTO story_configs(chat_id,revision,body) VALUES(?,1,'{}')")
+    .run(chat.id);
+  const storyJob = (index: number, kind: 'state' | 'memory', hash = items[index].hash): string => {
+    const id = randomUUID();
+    store.db
+      .prepare(`INSERT INTO story_jobs(id,chat_id,source_revision,source_hash,kind,config_revision,status,snapshot,mock,created_at,updated_at,dependency_key)
+      VALUES(?,?,?,?,?,1,'completed','{}',1,'2000-01-01','2000-01-01',?)`)
+      .run(id, chat.id, items[index].id, hash, kind, id);
+    return id;
+  };
+  const state = storyJob(0, 'state'),
+    memory = storyJob(0, 'memory'),
+    offPage = storyJob(5, 'state'),
+    stale = storyJob(0, 'memory', 'stale-hash');
+  const page = readerDetail(store, chat.id, {});
+  expect(page.reader.activity).toHaveLength(30);
+  expect(page.reader.activity.some((a) => [state, memory, offPage].includes(a.id))).toBe(false);
+  const activity = page.reader.responseActivity;
+  expect(activity.some((a) => a.id === state)).toBe(true);
+  expect(activity.some((a) => a.id === memory)).toBe(true);
+  expect(activity.some((a) => [offPage, stale].includes(a.id))).toBe(false);
+  expect(activity.every((a) => page.reader.order.includes(a.sourceRevision!))).toBe(true);
+  expect(new Set(activity.map((a) => a.id)).size).toBe(activity.length);
+  const delta = readerDetail(store, chat.id, {
+    since: String(page.reader.cursor),
+    known: page.reader.order.join(','),
+  });
+  expect(delta.sources).toEqual([]);
+  expect(delta.reader.responseActivity).toEqual(activity);
+  const next = readerDetail(store, chat.id, { source: items[5].id });
+  expect(next.reader.responseActivity.some((a) => a.id === offPage)).toBe(true);
+  expect(next.reader.responseActivity.some((a) => [state, memory].includes(a.id))).toBe(false);
+  expect(next.reader.activity).toEqual(page.reader.activity);
+
+  const oldJobs = store.db
+    .prepare('SELECT id FROM jobs WHERE source_revision=?')
+    .all(items[0].id) as { id: string }[];
+  expect(oldJobs.length).toBeGreaterThan(0);
+  const edited = store.editSource(items[0].id, { text: 'Edited response', expectedRevision: 0 });
+  const currentMemory = storyJob(0, 'memory', edited.hash);
+  const editedActivity = readerDetail(store, chat.id, {}).reader.responseActivity;
+  expect(
+    editedActivity.some((a) => [state, memory, ...oldJobs.map((j) => j.id)].includes(a.id))
+  ).toBe(false);
+  expect(editedActivity.some((a) => a.id === currentMemory)).toBe(true);
+  expect(editedActivity.some((a) => a.id === items[0].runId)).toBe(true);
 });

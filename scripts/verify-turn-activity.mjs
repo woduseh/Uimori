@@ -23,38 +23,22 @@ import {
 // Reuse the repository ownership, build identity, fresh reporter and cleanup contracts.
 // Run only after npm run build on a stable source tree.
 async function main() {
-  if (process.argv.length > 2) throw new Error('verify-loading accepts no arguments');
-  const runId = `loading-ui-${newId()}`,
+  if (process.argv.length > 2) throw new Error('verify-turn-activity accepts no arguments');
+  const runId = `turn-activity-ui-${newId()}`,
     directory = path.join(artifactRoot, runId),
     runtime = path.join(directory, 'runtime');
   const children = new Set(),
     failures = [];
   let cancelled = false,
     blocked = false;
-  const requiredCases = [
-    'LOADUI01',
-    'LOADUI02',
-    'LOADUI03',
-    'LOADUI04',
-    'LOADUI05',
-    'LOADUI06',
-    'LOADUI07',
-  ];
-  const requiredScreenshots = [
-    'loading-reader-page.png',
-    'loading-cas.png',
-    'loading-library.png',
-    'loading-reconnected.png',
-    'context-summary-mobile.png',
-    'scene-navigator-desktop.png',
-    'scene-navigator-mobile.png',
-  ];
+  const requiredCases = ['TURNUI01', 'TURNUI02', 'TURNUI03', 'TURNUI04'];
+  const requiredScreenshots = ['turn-activity-desktop.png', 'turn-activity-mobile.png'];
   const summary = {
     schema: 1,
     runId,
     status: 'FAIL',
     scope:
-      'Reader paging, scene navigation, scroll restore, CAS tabs and library exact revision loading',
+      'Synthetic per-response activity expansion, lazy diagnostics, ownership, progress, failures and mobile layout',
     startedAt: new Date().toISOString(),
     environment: { node: process.version, platform: process.platform },
     commands: [],
@@ -66,7 +50,6 @@ async function main() {
     limitations: [
       'No provider catalog lookup, paid generation, user DB, or deployment.',
       '390px is a browser viewport; physical phone keyboard and IME behavior are not established.',
-      'LOADUI07 projects 65 synthetic navigation entries over two stored fixture sources; off-page synthetic entries do not establish server paging.',
       'Screenshots require visual review; automated assertions check control bounds and persisted values.',
       'This runner does not replace provider codec, loopback transport, M0 or M1-local verification.',
     ],
@@ -136,7 +119,7 @@ async function main() {
       [
         'node_modules/@playwright/test/cli.js',
         'test',
-        'tests/loading-browser.spec.ts',
+        'tests/turn-activity-browser.spec.ts',
         '--reporter=json',
       ],
       {
@@ -180,7 +163,7 @@ async function main() {
     summary.screenshots = screenshots.map((file) => path.relative(directory, file));
     const final = await assertBuild();
     if (final.buildId !== summary.identity.buildId || (await fingerprint()).hash !== initial.hash)
-      throw new Error('Source/build changed during loading UI verification');
+      throw new Error('Source/build changed during activity UI verification');
     summary.identityVerifiedAt = new Date().toISOString();
   } catch (error) {
     failures.push(error.message);

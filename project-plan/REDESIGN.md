@@ -1,6 +1,6 @@
 # 봇 중심 작업 공간과 공통 패키지 개편
 
-> 2026-09-07 후속 계약: 아래는 개편 결정 당시의 설계이며 구현 결과는 [REDESIGN-RESULTS](REDESIGN-RESULTS.md), 최신 상태는 [CURRENT](CURRENT.md)를 따른다. 이후 정식 배포 전 구형 DB 보존·migration·호환 UI를 요구하지 않기로 했으므로 아래의 이전 자료 보존/migration 요구는 현행 구현 지시가 아니다. 현재 schema/archive v10의 새 DB 초기화와 동일 버전 보관/포크 계약을 사용한다. Risu 이식은 [RISU-PORTING](../docs/RISU-PORTING.md)을 따르며 자료 이름에 종속된 제품 변환기는 추가하지 않는다.
+> 2026-09-07 후속 계약: 아래는 개편 결정 당시의 설계이며 구현 결과는 [REDESIGN-RESULTS](REDESIGN-RESULTS.md), 최신 상태는 [CURRENT](CURRENT.md)를 따른다. 이후 정식 배포 전 구형 DB 보존·migration·호환 UI를 요구하지 않기로 했으므로 아래의 이전 자료 보존/migration 요구는 현행 구현 지시가 아니다. 현재 schema/archive v11의 새 DB 초기화와 동일 버전 보관/포크 계약을 사용한다. Risu 이식은 [RISU-PORTING](../docs/RISU-PORTING.md)을 따르며 자료 이름에 종속된 제품 변환기는 추가하지 않는다.
 
 2026-09-07 사용자와 논의해 확정한 후속 설계예요. 이전 이야기 중심 UI와 CBS 호환 우선 계획보다 이 결정을 우선해요. 구현 결과는 별도 결과 문서에서 실제 검증과 함께 기록해요.
 

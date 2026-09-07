@@ -1,0 +1,55 @@
+.turn-activity {
+  margin: 0 0 1.2rem;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  font-size: 0.85rem;
+  min-width: 0;
+}
+.turn-activity > summary {
+  padding: 0.75rem 0.9rem;
+  cursor: pointer;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+  line-height: 1.6;
+}
+.turn-activity > summary small {
+  margin-left: 0.6rem;
+  white-space: nowrap;
+}
+.turn-activity > summary:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+  border-radius: 10px;
+}
+.turn-activity-issue > summary {
+  color: var(--danger, #ce786e);
+}
+.turn-activity-body {
+  padding: 0 0.9rem 0.9rem;
+  border-top: 1px solid var(--border);
+  overflow-wrap: anywhere;
+}
+.turn-activity-body .task-heading {
+  margin-top: 0.9rem;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+.turn-activity-body pre {
+  max-width: 100%;
+  overflow: auto;
+}
+.turn-activity-body .form-actions {
+  flex-wrap: wrap;
+}
+.turn-activity-body button {
+  max-width: 100%;
+  white-space: normal;
+}
+@media (max-width: 600px) {
+  .turn-activity > summary {
+    padding: 0.65rem;
+  }
+  .turn-activity-body {
+    padding: 0 0.65rem 0.65rem;
+  }
+}

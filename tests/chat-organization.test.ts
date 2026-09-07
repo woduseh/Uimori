@@ -44,6 +44,85 @@ async function fixture() {
   };
 }
 const ref = (content: Content) => ({ id: content.id, revision: content.revision });
+function titles(store: Store, botId: string, folderId: string | null) {
+  return store
+    .chats()
+    .filter((chat) => chat.botId === botId && chat.folderId === folderId)
+    .sort((a, b) => a.sortPosition! - b.sortPosition!)
+    .map((chat) => chat.title);
+}
+
+test('manual order survives moves, folder deletion, new chats, archive and reopen', async () => {
+  const { store, bot } = await fixture();
+  const folder = store.organization.createFolder(bot.id, { title: 'Stories' });
+  const first = store.createChat('First', 'calm', { botId: bot.id });
+  const second = store.createChat('Second', 'calm', { botId: bot.id });
+  const third = store.createChat('Third', 'calm', { botId: bot.id });
+  expect(titles(store, bot.id, null)).toEqual(['Third', 'Second', 'First']);
+  store.organization.move(first.id, {
+    expectedRevision: 1,
+    folderId: null,
+    beforeChatId: second.id,
+  });
+  expect(titles(store, bot.id, null)).toEqual(['Third', 'First', 'Second']);
+  store.organization.move(third.id, {
+    expectedRevision: 1,
+    folderId: folder.id,
+    beforeChatId: null,
+  });
+  store.organization.move(second.id, {
+    expectedRevision: 1,
+    folderId: folder.id,
+    beforeChatId: third.id,
+  });
+  expect(titles(store, bot.id, folder.id)).toEqual(['Second', 'Third']);
+  store.organization.move(second.id, {
+    expectedRevision: 2,
+    folderId: folder.id,
+    beforeChatId: null,
+  });
+  expect(titles(store, bot.id, folder.id)).toEqual(['Third', 'Second']);
+  store.event(third.id, 'run.updated', 'synthetic-activity');
+  expect(titles(store, bot.id, folder.id)).toEqual(['Third', 'Second']);
+  store.organization.deleteFolder(bot.id, folder.id, { expectedRevision: 1 });
+  expect(titles(store, bot.id, null)).toEqual(['First', 'Third', 'Second']);
+  store.createChat('Newest', 'calm', { botId: bot.id });
+  const order = ['Newest', 'First', 'Third', 'Second'];
+  expect(titles(store, bot.id, null)).toEqual(order);
+  const directory = await mkdtemp(join(tmpdir(), 'Uimori organization '));
+  const target = new Store(join(directory, 'restored.sqlite'));
+  owned.push({ directory, store: target });
+  target.product.import(store.product.export());
+  expect(titles(target, bot.id, null)).toEqual(order);
+  const owner = owned.find((item) => item.store === store)!;
+  store.close();
+  owner.store = undefined;
+  const reopened = new Store(store.path);
+  owner.store = reopened;
+  expect(titles(reopened, bot.id, null)).toEqual(order);
+});
+
+test('invalid and stale order anchors roll back every position and revision', async () => {
+  const { store, bot, other } = await fixture();
+  const folder = store.organization.createFolder(bot.id, { title: 'Elsewhere' });
+  const moving = store.createChat('Moving', 'calm', { botId: bot.id });
+  const wrongFolder = store.createChat('Wrong folder', 'calm', {
+    botId: bot.id,
+    folderId: folder.id,
+  });
+  const wrongBot = store.createChat('Wrong bot', 'calm', { botId: other.id });
+  const original = store.chats();
+  for (const beforeChatId of [moving.id, wrongFolder.id, wrongBot.id, 'missing']) {
+    expect(() =>
+      store.organization.move(moving.id, { expectedRevision: 1, folderId: null, beforeChatId })
+    ).toThrow('Order anchor');
+    expect(store.chats()).toEqual(original);
+  }
+  expect(() =>
+    store.organization.move(moving.id, { expectedRevision: 99, folderId: null, beforeChatId: null })
+  ).toThrow('revision conflict');
+  expect(store.chats()).toEqual(original);
+});
 function attach(store: Store, chatId: string, attachments: { id: string; revision: number }[]) {
   const p = store.product.profile(chatId);
   return store.product.updateProfile(chatId, {
@@ -312,7 +391,7 @@ test('one package can own a chat and serve as a persona through explicit attachm
   ).toThrow('owning bot');
 });
 
-test('schema v10 reopen keeps explicit organization revisions without automatic preservation files', async () => {
+test('schema v11 reopen keeps explicit organization revisions without automatic preservation files', async () => {
   const { store, bot } = await fixture();
   const chat = store.createChat('Current schema', 'calm', { botId: bot.id });
   const folder = store.organization.createFolder(bot.id, { title: 'Persisted' });
@@ -323,7 +402,7 @@ test('schema v10 reopen keeps explicit organization revisions without automatic 
   owner.store = undefined;
   const reopened = new Store(path);
   owner.store = reopened;
-  expect(reopened.db.prepare('PRAGMA user_version').get()).toMatchObject({ user_version: 10 });
+  expect(reopened.db.prepare('PRAGMA user_version').get()).toMatchObject({ user_version: 11 });
   expect(reopened.chat(chat.id)).toMatchObject({
     botId: bot.id,
     folderId: folder.id,

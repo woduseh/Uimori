@@ -66,11 +66,11 @@ function reset(
   return { ...result, body: line ? JSON.parse(line) : undefined };
 }
 
-test('BASE01 a fresh database creates the complete schema 10 and a current database reopens directly', () => {
+test('BASE01 a fresh database creates the complete schema 11 and a current database reopens directly', () => {
   const f = fixture(),
     store = new Store(f.path);
   f.owner.store = store;
-  expect(store.db.prepare('PRAGMA user_version').get()).toEqual({ user_version: 10 });
+  expect(store.db.prepare('PRAGMA user_version').get()).toEqual({ user_version: 11 });
   expect(
     store.db.prepare("SELECT name FROM sqlite_schema WHERE type='table' AND name='resources'").get()
   ).toBeUndefined();
@@ -123,10 +123,10 @@ test('BASE03 fresh initialization rolls back as one transaction and releases its
     db.close();
   }
   f.owner.store = new Store(f.path);
-  expect(f.owner.store.db.prepare('PRAGMA user_version').get()).toEqual({ user_version: 10 });
+  expect(f.owner.store.db.prepare('PRAGMA user_version').get()).toEqual({ user_version: 11 });
 });
 
-test('BASE04 only schema 10 archives restore, and a rejected version leaves both databases untouched', () => {
+test('BASE04 only schema 11 archives restore, and a rejected version leaves both databases untouched', () => {
   const source = fixture(),
     target = fixture();
   source.owner.store = new Store(source.path);
@@ -135,8 +135,8 @@ test('BASE04 only schema 10 archives restore, and a rejected version leaves both
   const archive = source.owner.store.product.export();
   const before = structuredClone(archive),
     empty = target.owner.store.product.export().tables;
-  expect(archive.version).toBe(10);
-  for (const version of [9, 11]) {
+  expect(archive.version).toBe(11);
+  for (const version of [9, 10, 12]) {
     expect(() => target.owner.store!.product.import({ ...archive, version })).toThrow(
       'Unsupported archive'
     );

@@ -97,9 +97,9 @@ export class Store {
     }
     try {
       const version = Number((this.db.prepare('PRAGMA user_version').get() as Row).user_version);
-      if (![0, 10].includes(version))
+      if (![0, 11].includes(version))
         throw new Error(
-          `Unsupported database schema version ${version}; Uimori requires schema 10. For disposable default development data, stop the server and run npm run reset:dev.`
+          `Unsupported database schema version ${version}; Uimori requires schema 11. For disposable default development data, stop the server and run npm run reset:dev.`
         );
       if (
         version === 0 &&
@@ -142,7 +142,7 @@ export class Store {
           this.behavior.init();
           initBehaviorHost(this);
           initRunBehavior(this);
-          this.db.exec('PRAGMA user_version=10');
+          this.db.exec('PRAGMA user_version=11');
         });
     } catch (error) {
       this.db.close();

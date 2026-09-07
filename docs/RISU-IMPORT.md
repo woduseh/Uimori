@@ -20,4 +20,4 @@ wrapper 바깥의 콘텐츠 ID·revision·종류·기타 metadata를 복원하�
 
 파일 형식이나 스키마 검증이 실패하면 적용된 자료·프롬프트는 유지해요. JSON 가져오기·검증·저장에는 모델 호출이나 원본 스크립트 실행이 없어요. 스키마 통과는 Risu 원본과의 동작 동등성을 뜻하지 않으므로 이식 보고와 대표 동작 검증을 함께 확인해요.
 
-현재 화면 구현은 [LibraryPanel](../web/LibraryPanel.tsx)과 [PromptComposer](../web/PromptComposer.tsx)에 있어요. 전체 DB의 v10 archive 복원은 이 파일 가져오기와 별개이며 [사용 안내](USAGE.md)를 확인해요.
+현재 화면 구현은 [LibraryPanel](../web/LibraryPanel.tsx)과 [PromptComposer](../web/PromptComposer.tsx)에 있어요. 전체 DB의 v11 archive 복원은 이 파일 가져오기와 별개이며 [사용 안내](USAGE.md)를 확인해요.
