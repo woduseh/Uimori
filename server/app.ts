@@ -10,6 +10,7 @@ import { readerRoutes } from './reader-routes.js';
 import { Controls, type Barrier, type FailurePoint } from './controls.js';
 import { syntheticResources } from '../core/provider.js';
 import { runMain } from './model-runner.js';
+import { executeRunBehaviorTool } from './package-behavior-run.js';
 import { ProviderBudget, validateLiveBudgetLimits, type LiveBudgetLimits } from './provider-budget.js';
 import { runAuxiliaryJob } from './product-auxiliary.js';
 import { auxiliaryBridge } from './auxiliary-bridge.js';
@@ -128,6 +129,7 @@ export async function createApp(options: AppOptions): Promise<App> {
           signal: controller.signal,
           onInput: input => { store.input(id, input); if (run.snapshot.profile && !run.snapshot.profile.models.main) store.product.mockAttempt(run.chatId,id,null,'main',input); },
           onToolEvent: event => store.tool(id, event),
+          onBehaviorTool: (binding,action) => executeRunBehaviorTool(store,id,binding,action,controller.signal),
           approvedOrigins,authorize:connection => store.product.authorize(connection),
           vertexRequestTier:options.vertexRequestTier,onAttemptStart:wire => providerBudget.start(wire,admitted => store.product.startAttempt(run.chatId,id,null,admitted)),onAttemptFinish:(attempt,result) => store.product.finishAttempt(attempt,result),
         });
@@ -206,9 +208,12 @@ export async function createApp(options: AppOptions): Promise<App> {
   app.get('/api/health', async () => ({ ready: true, buildId: options.buildId, instanceId, dbPath: options.dbPath, mode: 'local-provider-runtime', supportedProtocols: [...PROVIDER_PROTOCOLS], vertexRequestTier: options.vertexRequestTier ?? null, liveBudgetConfigured: !!options.liveBudget }));
   app.get('/api/chats', async () => store.chats());
   app.post('/api/chats', async request => {
-    const body = object(request.body); only(body, ['title', 'preset']);
+    const body = object(request.body); only(body, ['title', 'preset', 'botId', 'folderId']);
     if (body.preset !== undefined && !['calm', 'vivid'].includes(String(body.preset))) throw new HttpError(400, 'Invalid preset');
-    return store.createChat(string(body.title, 'title', 120), body.preset as Settings['preset'] | undefined, syntheticResources);
+    return store.createChat(string(body.title, 'title', 120), body.preset as Settings['preset'] | undefined, syntheticResources, {
+      ...(body.botId===undefined?{}:{botId:string(body.botId,'bot ID',100)}),
+      ...(body.folderId===undefined?{}:{folderId:body.folderId===null?null:string(body.folderId,'folder ID',100)}),
+    });
   });
   app.get<{ Params: { id: string } }>('/api/chats/:id', async request => store.detail(request.params.id));
   app.get<{ Params: { id: string }; Querystring: Record<string,string|undefined> }>('/api/chats/:id/reader', async request => readerDetail(store,request.params.id,request.query));

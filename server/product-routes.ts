@@ -9,10 +9,17 @@ import { BUILTIN_ASSETS, builtinAssetSvg } from '../core/auxiliary.js';
 import { promptRoutes } from './prompt-routes.js';
 import { readiness, managementImpact } from './provider-management.js';
 import { PROVIDER_DEFINITIONS } from '../core/provider-definitions.js';
+import { chatOrganizationRoutes } from './chat-organization.js';
+import { packagePresentationRoutes } from './package-presentation-routes.js';
+import { packageBehaviorRoutes } from './package-behavior-routes.js';
+import { inspectRisuImport } from './risu-import.js';
 
 export function productRoutes(app: FastifyInstance, store: Store, options: {accessToken?:string;approvedOrigins:readonly string[];publish:(chatId:string)=>void;onAuthChanged?:()=>void}) {
   const product = store.product;
   promptRoutes(app,store);
+  chatOrganizationRoutes(app,store,options.publish);
+  packagePresentationRoutes(app,store);
+  packageBehaviorRoutes(app,store);
   app.post<{Params:{id:string}}>('/api/chats/:id/fork',async request => { const chat = forkChat(store,request.params.id,request.body); options.publish(chat.id); return chat; });
   const digest = (v: string) => createHash('sha256').update(v).digest();
   const sessions = new Map<string,number>();
@@ -38,9 +45,16 @@ export function productRoutes(app: FastifyInstance, store: Store, options: {acce
     if(request.params.kind!=='connection'&&request.params.kind!=='model')throw new HttpError(404,'Unsupported management kind');
     return managementImpact(product,request.params.kind,request.params.id);
   });
-  app.post('/api/content',async request => product.content(request.body));
-  app.put<{Params:{id:string}}>('/api/content/:id',async request => product.content(request.body,request.params.id));
+  app.post('/api/imports/risu/inspect',{bodyLimit:24*1024*1024},async request=>{
+    const b=record(request.body);fields(b,['fileName','dataBase64']);const fileName=text(b.fileName,'file name',255);const data=text(b.dataBase64,'file bytes',23*1024*1024);
+    if(!/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(data))throw new HttpError(400,'Invalid file encoding');
+    const bytes=Buffer.from(data,'base64');if(bytes.length>16*1024*1024)throw new HttpError(400,'Import file exceeds 16 MiB');
+    return inspectRisuImport({fileName,bytes});
+  });
+  app.post('/api/content',{bodyLimit:5_000_000},async request => product.content(request.body));
+  app.put<{Params:{id:string}}>('/api/content/:id',{bodyLimit:5_000_000},async request => product.content(request.body,request.params.id));
   app.post('/api/creative-presets',async request => product.preset(request.body));
+  app.post('/api/prompt-combinations',async request => product.promptCombination(request.body));
   app.post('/api/prompt-presets',async request => product.promptPreset(request.body));
   app.put<{Params:{id:string}}>('/api/prompt-presets/:id',async request => product.promptPreset(request.body,request.params.id));
   app.post('/api/connections',async request => product.connection(request.body));

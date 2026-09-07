@@ -43,7 +43,7 @@ export function useStory() {
   const [archivedContents,setArchivedContents] = useState<Content[]>([]);
   const [draft,setDraft] = useState(''); const [error,setError] = useState(''); const [notice,setNotice] = useState('');
   const [submitting,setSubmitting] = useState<string[]>([]); const submitLocks = useRef(new Set<string>());
-  const [connected,setConnected] = useState(false); const [destination,setDestination] = useState<'story'|'library'>('story');
+  const [connected,setConnected] = useState(false); const [destination,setDestination] = useState<'story'|'library'>(()=>initialView().chat?'story':'library');
   const [profileDirty,setProfileDirty] = useState(false); const [quickBusy,setQuickBusy] = useState(false);
   const reader = useRef<HTMLDivElement>(null); const input = useRef<HTMLTextAreaElement>(null);
   const current = useRef(selected); const currentView = useRef(''); const currentDraftKey = useRef(''); const refreshVersion = useRef(0); const restoredView = useRef('');
@@ -107,10 +107,10 @@ export function useStory() {
     return () => { alive = false; clearTimeout(timer); stream?.close(); removeEventListener('offline',offline); removeEventListener('online',online); };
   },[selected,refresh]);
   useEffect(() => { let alive=true; if(selected) { restoredView.current=''; setDetail(null); void refresh(selected).catch(e=>{if(alive)setError(e.message);}); } return()=>{alive=false;}; },[selected,viewedBranch,readSource,refresh]);
-  const attachmentKey = detail?.profile?.attachments.map(refValue).join(',')??'';
+  const attachmentKey = [...detail?.profile?.attachments??[],...detail?.profile?.packageAttachments??[]].map(refValue).join(',');
   useEffect(() => {
     let alive = true; if (!detail?.profile || !library) return;
-    const missing = detail.profile.attachments.filter(ref => !library.contents.some(item => refValue(item) === refValue(ref)));
+    const missing = [...detail.profile.attachments,...detail.profile.packageAttachments??[]].filter(ref => !library.contents.some(item => refValue(item) === refValue(ref)));
     void Promise.all(missing.map(ref => api<Content>(`/revisions/content/${ref.id}/${ref.revision}`))).then(items => { if (alive) setArchivedContents(items); }).catch(e => { if (alive) setError(e.message); });
     return () => { alive = false; };
   },[attachmentKey,library,selected]);
@@ -219,12 +219,16 @@ export function useStory() {
     } finally { forkLocks.current.delete(lock); setForking([...forkLocks.current]); }
   }
   const quickLock = useRef(false);
-  async function quickChange(kind: 'preset' | 'persona' | 'model', value: string) {
+  async function quickChange(kind: 'preset' | 'combination' | 'persona' | 'model', value: string) {
     if (!detail?.profile || detail.chat.id !== selected || !library || profileDirty || quickLock.current) return;
     const chatId = detail.chat.id; const profile = detail.profile;
     quickLock.current = true; setQuickBusy(true); setError(''); setNotice('');
     try {
-      if (kind === 'preset') {
+      if (kind === 'combination') {
+        const preset=library.promptCombinations?.find(c=>refValue(c)===value);const prompt=profile.prompts?.main;
+        if(!preset||!prompt||refValue(preset.prompt)!==refValue(prompt))throw new Error('현재 프롬프트의 창작 프리셋을 선택해 주세요.');
+        const key=refValue(prompt);await api(`/chats/${chatId}/profile`,{expectedRevision:profile.revision,attachments:profile.attachments,creative:profile.creative,routes:profile.routes,image:profile.image,promptControls:{...profile.promptControls,[key]:{values:preset.values,combinations:profile.promptControls?.[key]?.combinations??[]}}},'PUT');
+      } else if (kind === 'preset') {
         const preset = library.presets.find(item => refValue(item) === value);
         if (!preset) return;
         await api(`/chats/${chatId}/preset`, { expectedRevision: profile.revision, presetId: preset.id, presetRevision: preset.revision });
@@ -239,9 +243,12 @@ export function useStory() {
         const model = library.models.find(item => refValue(item) === value);
         if (kind === 'model' && model && value !== (profile.routes.main ? refValue(profile.routes.main) : '') && !canSelectModel(model)) throw new Error('비활성 모델이거나 연결 권한을 확인할 수 없어요. 모델 목록을 다시 확인해 주세요.');
         if (kind === 'persona' && value && !persona || kind === 'model' && value && !model) throw new Error('선택한 설정을 찾지 못했어요. 목록을 다시 확인해 주세요.');
-        const attachments = kind === 'persona' ? [...profile.attachments.filter(ref => !contents.some(item => item.kind === 'persona' && refValue(item) === refValue(ref))), ...(persona ? [{ id: persona.id, revision: persona.revision }] : [])] : profile.attachments;
+        const packaged=!!persona&&(!!persona.package||!!persona.hasPackage);
+        const attachments = kind === 'persona' ? [...profile.attachments.filter(ref => !contents.some(item => item.kind === 'persona' && refValue(item) === refValue(ref))), ...(persona&&!packaged ? [{ id: persona.id, revision: persona.revision }] : [])] : profile.attachments;
+        const packageAttachments=kind==='persona'?[...profile.packageAttachments??[]].filter(r=>r.role!=='persona').concat(persona&&packaged?[{id:persona.id,revision:persona.revision,role:'persona'}]:[]):profile.packageAttachments;
+        const packageKeys=new Set(packageAttachments?.map(r=>`${r.id}@${r.revision}:${r.role}`));
         const routes = kind === 'model' ? { ...profile.routes, main: model ? { id: model.id, revision: model.revision } : null } : profile.routes;
-        await api(`/chats/${chatId}/profile`, { expectedRevision: profile.revision, attachments, creative: profile.creative, routes, image: profile.image }, 'PUT');
+        await api(`/chats/${chatId}/profile`, { expectedRevision: profile.revision, attachments, creative: profile.creative, routes, image: profile.image,...(packageAttachments?{packageAttachments,packageValues:Object.fromEntries(Object.entries(profile.packageValues??{}).filter(([key])=>packageKeys.has(key)))}:{}) }, 'PUT');
       }
       if (current.current === chatId) setNotice('다음 요청에 적용할 설정을 저장했어요.');
       await refresh(chatId);
@@ -255,7 +262,8 @@ export function useStory() {
   const attachmentsReady = !!detail?.profile && detail.profile.attachments.every(ref => allContents.some(item => refValue(item) === refValue(ref)));
   const pendingRequest = selected ? readCommand(`command:${selected}${viewedBranch ? `:${viewedBranch}` : ''}`)?.payload.request ?? null : null;
   const attached=allContents.filter(item=>detail?.profile?.attachments.some(ref=>refValue(ref)===refValue(item)));
-  const bot=attached.find(item=>item.kind==='bot');const persona=attached.find(item=>item.kind==='persona');
+  const packageContent=(role:string)=>{const r=detail?.profile?.packageAttachments?.find(r=>r.role===role);return r?allContents.find(c=>refValue(c)===refValue(r)):undefined;};
+  const bot=packageContent('bot')??attached.find(item=>item.kind==='bot');const persona=packageContent('persona')??attached.find(item=>item.kind==='persona');
   const preset=library?.presets.find(item=>JSON.stringify(item.controls)===JSON.stringify(detail?.profile?.creative));
   const profileAsset=detail?.assets?.find(asset=>asset.allowedUse!=='inline');
   const tasks=detail?detail.runs.filter(run=>['running','queued','waiting_for_state'].includes(run.status)).length+detail.reader.activeJobs:0;

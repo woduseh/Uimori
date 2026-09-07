@@ -27,8 +27,6 @@ async function directory() { const path = await mkdtemp(join(tmpdir(), '서사 M
 async function database() {
   const item = await directory(); const store = new Store(join(item.directory, 'story.sqlite')); item.store = store;
   const product = new ProductStore(store);
-  const version = (store.db.prepare('PRAGMA user_version').get() as { user_version: number }).user_version;
-  if (version < 2) product.migrate(version);
   return { item, store, product };
 }
 const reference = ({ id, revision }: { id: string; revision: number }) => ({ id, revision });
@@ -229,22 +227,16 @@ describe('M1 product data with actual file SQLite', () => {
     expect(product.asset(asset.id).asset.hash).toBe(asset.hash);
   });
 
-  test('P11 upgrades a populated schema-1 file with a standalone backup and preserves completed job references', async () => {
+  test.each([1,2,3,4,5,6,7])('P11 rejects unsupported schema %i without automatic migration or backup', async version => {
     const item = await directory(); const path = join(item.directory, 'legacy.sqlite');
     schema1Fixture(path);
-    const store = new Store(path); item.store = store;
-    const product = new ProductStore(store);
-    if ((store.db.prepare('PRAGMA user_version').get() as { user_version: number }).user_version < 2) product.migrate(1);
-    expect(store.db.prepare('PRAGMA user_version').get()).toEqual({ user_version: 5 });
-    expect(store.source('old-source')).toMatchObject({ text: 'Legacy original preserved.', runId: 'old-run', chatId: 'old-chat' });
-    expect(store.job('old-job')).toMatchObject({ status: 'completed', sourceRevision: 'old-source', result: { mock: true, text: '기존 모의 번역' } });
-    expect(product.branch('old-chat').headRevision).toBe('old-source');
-    expect(store.db.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
-    const files = (await readdir(item.directory)).filter(name => name.startsWith('legacy.sqlite.pre-m1-') && name.endsWith('.sqlite'));
-    expect(files).toHaveLength(1);
-    const backup = new DatabaseSync(join(item.directory, files[0]), { readOnly: true });
+    const old=new DatabaseSync(path);old.exec(`PRAGMA user_version=${version};`);old.close();
+    expect(()=>new Store(path)).toThrow(`Unsupported database schema version ${version}`);
+    expect(()=>new Store(path)).toThrow('npm run reset:dev');
+    expect((await readdir(item.directory)).filter(name=>name.includes('.pre-'))).toEqual([]);
+    const backup = new DatabaseSync(path, { readOnly: true });
     try {
-      expect(backup.prepare('PRAGMA user_version').get()).toEqual({ user_version: 1 });
+      expect(backup.prepare('PRAGMA user_version').get()).toEqual({ user_version: version });
       expect(backup.prepare('SELECT text FROM sources WHERE id=?').get('old-source')).toEqual({ text: 'Legacy original preserved.' });
       expect(backup.prepare('SELECT result FROM job_results WHERE job_id=?').get('old-job')).toEqual({ result: JSON.stringify({ mock: true, text: '기존 모의 번역' }) });
       expect(backup.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
@@ -258,7 +250,7 @@ describe('M1 product data with actual file SQLite', () => {
     const bytes = product.backup(); const path = join(item.directory, 'downloaded-backup.sqlite'); await writeFile(path, bytes);
     const reopened = new DatabaseSync(path, { readOnly: true });
     try {
-      expect(reopened.prepare('PRAGMA user_version').get()).toEqual({ user_version: 5 });
+      expect(reopened.prepare('PRAGMA user_version').get()).toEqual({ user_version: 8 });
       expect(reopened.prepare('SELECT id,text,hash FROM sources WHERE id=?').get(source.id)).toEqual({ id: source.id, text: source.text, hash: source.hash });
       expect(reopened.prepare('SELECT source_revision FROM jobs ORDER BY id').all()).toEqual(store.db.prepare('SELECT source_revision FROM jobs ORDER BY id').all());
       expect(Buffer.from((reopened.prepare('SELECT bytes FROM assets WHERE id=?').get(asset.id) as { bytes: Uint8Array }).bytes)).toEqual(Buffer.from(pixel, 'base64'));

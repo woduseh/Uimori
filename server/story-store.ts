@@ -24,11 +24,9 @@ export class StoryStore {
   readonly memory: StoryMemory;
   constructor(readonly store: Store) { this.memory = new StoryMemory(store); }
   get db() { return this.store.db; }
-  migrate() {
-    const version = Number((this.db.prepare('PRAGMA user_version').get() as Row).user_version);
-    if (version >= 4) return;
-    if (this.db.prepare('SELECT 1 FROM chats LIMIT 1').get()) this.db.prepare('VACUUM INTO ?').run(`${this.store.path}.pre-m2-${Date.now()}-${randomUUID().slice(0,8)}.sqlite`);
-    this.store.transaction(() => this.db.exec(`
+  /** Joins Store's single transaction for the current empty database baseline. */
+  initFresh() {
+    this.db.exec(`
       CREATE TABLE story_configs(chat_id TEXT NOT NULL REFERENCES chats(id),revision INTEGER NOT NULL,body TEXT NOT NULL,PRIMARY KEY(chat_id,revision));
       CREATE TABLE story_jobs(id TEXT PRIMARY KEY,chat_id TEXT NOT NULL REFERENCES chats(id),source_revision TEXT NOT NULL REFERENCES sources(id),source_hash TEXT NOT NULL,kind TEXT NOT NULL CHECK(kind IN ('state','memory')),config_revision INTEGER NOT NULL,generation INTEGER NOT NULL DEFAULT 0,owner TEXT,status TEXT NOT NULL,snapshot TEXT NOT NULL,result TEXT,error TEXT,mock INTEGER NOT NULL,created_at TEXT NOT NULL,updated_at TEXT NOT NULL,dependency_key TEXT NOT NULL UNIQUE,inputs TEXT NOT NULL DEFAULT '[]',tool_events TEXT NOT NULL DEFAULT '[]',FOREIGN KEY(chat_id,config_revision) REFERENCES story_configs(chat_id,revision));
       CREATE INDEX story_jobs_queue ON story_jobs(status,created_at);
@@ -37,11 +35,7 @@ export class StoryStore {
       CREATE TABLE story_memories(id TEXT PRIMARY KEY,chat_id TEXT NOT NULL REFERENCES chats(id),job_id TEXT REFERENCES story_jobs(id),entry TEXT NOT NULL,retired_at TEXT,replaces_id TEXT REFERENCES story_memories(id));
       CREATE TABLE story_indexes(chat_id TEXT NOT NULL REFERENCES chats(id),source_revision TEXT NOT NULL REFERENCES sources(id),source_hash TEXT NOT NULL,job_id TEXT NOT NULL REFERENCES story_jobs(id),PRIMARY KEY(chat_id,source_revision,source_hash));
       CREATE TABLE scene_commands(id TEXT PRIMARY KEY,chat_id TEXT NOT NULL REFERENCES chats(id),branch_id TEXT NOT NULL REFERENCES branches(id),request_key TEXT NOT NULL,label TEXT NOT NULL,request TEXT NOT NULL,status TEXT NOT NULL,run_id TEXT REFERENCES runs(id),source_revision TEXT REFERENCES sources(id),UNIQUE(chat_id,request_key));
-      ALTER TABLE attempts ADD COLUMN story_job_id TEXT REFERENCES story_jobs(id);
-      DROP INDEX one_active_run_per_branch;
-      CREATE UNIQUE INDEX one_active_run_per_branch ON runs(branch_id) WHERE status IN ('queued','running','waiting_for_state');
-      PRAGMA user_version=4;
-    `));
+    `);
   }
   config(chatId: string, revision?: number): StoryConfig {
     this.store.chat(chatId);

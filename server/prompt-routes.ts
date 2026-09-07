@@ -9,6 +9,8 @@ import { fields, record, text } from './product-store.js';
 import { HttpError, type Store } from './store.js';
 import type { RunSnapshot } from '../core/types.js';
 import { buildMainProviderRequest, encodeMainPreview } from './main-request.js';
+import { freezePackageStates } from './package-behavior-host.js';
+import { executionContext } from '../core/execution-context.js';
 
 /** A read-only preview, including unsaved draft blocks. No provider call or Run is created. */
 export function promptRoutes(app:FastifyInstance,store:Store){
@@ -26,7 +28,8 @@ export function promptRoutes(app:FastifyInstance,store:Store){
     if(role==='main')snapshot.hiddenStory=new HiddenStoryStore(store.product).freeze(profile.hiddenStory,{seed:`preview:${branch.id}:${snapshot.request}`,userLabel:profile.contents.find(c=>c.kind==='persona')?.title??'User'});
     if(nativeBot&&snapshot.hiddenStory?.config.contentPolicy==='general-fiction')throw new HttpError(400,'This native bot requires the nonsexual Hidden Story policy');
     snapshot=store.story.prepareRunInTransaction(snapshot);snapshot.logicalHistory=captureLogicalHistory(store,snapshot);
-    const context=promptContext(snapshot);if(role==='translation'){context.history=[context.history.at(-1)!];context.slots.source=branch.headRevision?store.source(branch.headRevision).text:'';}
+    const previewTime=new Date().toISOString();snapshot=freezePackageStates(store,{...snapshot,executionClock:{iso:previewTime,unix:Math.floor(Date.parse(previewTime)/1000)}},false);
+    const context=promptContext(snapshot);if(role==='translation'){context.runtime=executionContext(snapshot,'translation');context.history=[context.history.at(-1)!];context.slots.source=branch.headRevision?store.source(branch.headRevision).text:'';}
     const values=b.values!==undefined?record(b.values):undefined;
     let compilation=role==='main'&&!snapshot.story?.waiting?compileSnapshotPrompt(snapshot,program,values).promptCompilation!:compilePromptProgram(program,{...context,...(values?{values}:{})});
     const target=profile.models[role as 'main'|'translation'];let provider=null;let error:string|undefined;

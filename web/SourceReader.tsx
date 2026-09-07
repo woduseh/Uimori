@@ -7,6 +7,7 @@ import { Prose } from './Prose.js';
 import { LazyDiagnostics } from './LazyDiagnostics.js';
 import { HiddenStoryReader, type HiddenTranslationView } from './HiddenStoryReader.js';
 import { parseHiddenStory, validateHiddenTranslation, type HiddenStoryConfig } from '../core/hidden-story.js';
+import { PackageStateCards, usePackagePresentation } from './PackagePresentation.js';
 
 type ReaderMode = 'original' | 'translation';
 type ReaderProps = {
@@ -16,6 +17,8 @@ type ReaderProps = {
   request?: string;
   onInspect?: (runId: string) => void;
   hiddenConfig?: HiddenStoryConfig;
+  hasPackages?: boolean;
+  presentationRefreshKey?: string | number;
 };
 type AnchorPosition = { anchors: string[]; top: number; scrollport: HTMLElement };
 
@@ -47,13 +50,15 @@ export function SourceReader(props: ReaderProps) {
 function latestTranslation(source: Source, jobs: Job[]) {
   return jobs.filter(job => job.kind === 'translation' && job.sourceRevision === source.id && job.sourceHash === source.hash && job.status !== 'stale').sort((a, b) => (b.revision ?? 1) - (a.revision ?? 1)).at(0);
 }
-function SourceReaderContent({ source, index, jobs, assets, refresh: refreshSource, onFork, request, onInspect, hiddenConfig }: ReaderProps) {
+function SourceReaderContent({ source, index, jobs, assets, refresh: refreshSource, onFork, request, onInspect, hiddenConfig, hasPackages, presentationRefreshKey }: ReaderProps) {
   const mounted = useRef(true);
   useLayoutEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
   const refresh = async () => { if (mounted.current) await refreshSource(); };
   const container = useRef<HTMLElement>(null);
   const restoreAnchor = useRef<AnchorPosition | undefined>(undefined);
   const translation = latestTranslation(source, jobs);
+  const presentation = usePackagePresentation(source, translation, hasPackages === true, `${presentationRefreshKey ?? ''}:${jobs.map(job => `${job.id}:${job.status}`).join(',')}`);
+  const projected = !hiddenConfig ? presentation?.data : undefined;
   const [mode, setMode] = useState<ReaderMode>(() => initialMode(source.id, !!translation?.result));
   const [editor, setEditor] = useState<ReaderMode | null>(null);
   const requestPending = useRef(false);
@@ -115,7 +120,9 @@ function SourceReaderContent({ source, index, jobs, assets, refresh: refreshSour
     </div>
     {editor && <TextEditor key={editor} role={editor} source={source} translation={translation} onCancel={() => setEditor(null)} onSaved={async () => { await refresh(); if (mounted.current) { setEditor(null); if (editor === 'translation') switchMode('translation'); } }}/>}
     {validTranslation?.manual && mode === 'translation' && <p className="muted">직접 수정한 번역</p>}
-    {hiddenConfig && (mode === 'original' || validTranslation) ? <NativeHiddenBody source={source} config={hiddenConfig} translationText={mode === 'translation' ? validTranslation?.text ?? segments?.map(segment => segment.text).join('\n\n') ?? '' : undefined} blocks={blocks} inline={inline}/> : mode === 'original' ? <div className="prose" data-testid="source-text">{source.text.slice(0, blocks[0].start)}{blocks.map((block, position) => <Fragment key={block.anchor}><div className="source-block" data-block-anchor={block.anchor} id={`block-${source.id}-${block.anchor}`}><Prose text={source.text.slice(block.start, blocks[position + 1]?.start ?? source.text.length)}/></div>{inline(block.anchor)}</Fragment>)}</div> : validTranslation ? <div className="prose translated" data-testid="translation-text">{segments?.length ? segments.map((segment, position) => <Fragment key={`${segment.anchors.join('-')}:${position}`}><div className="source-block" data-block-anchor={segment.anchors.join(' ')}><Prose text={segment.text}/></div>{segment.anchors.flatMap(inline)}</Fragment>) : <div className="source-block" data-block-anchor={blocks.map(block => block.anchor).join(' ')}><Prose text={validTranslation.text ?? ''}/>{blocks.flatMap(block => inline(block.anchor))}</div>}</div> : <div className="translation-placeholder" role="status"><p>{translation ? activeJob(translation) ? '한국어 번역을 준비하고 있어요. 원문은 저장됐어요.' : '한국어 번역이 아직 준비되지 않았어요. 원문은 보존돼요.' : '이 장면에는 아직 한국어 번역이 없어요.'}</p><button type="button" className="secondary" onClick={() => switchMode('original')}>원문부터 읽기</button></div>}
+    {hiddenConfig && (mode === 'original' || validTranslation) ? <NativeHiddenBody source={source} config={hiddenConfig} translationText={mode === 'translation' ? validTranslation?.text ?? segments?.map(segment => segment.text).join('\n\n') ?? '' : undefined} blocks={blocks} inline={inline}/> : mode === 'original' && projected?.original.changed ? <div className="prose" data-testid="source-text"><div className="source-block" data-block-anchor={blocks.map(block=>block.anchor).join(' ')}><Prose text={projected.original.text}/></div>{blocks.flatMap(block=>inline(block.anchor))}</div> : mode === 'translation' && validTranslation && projected?.translation?.changed ? <div className="prose translated" data-testid="translation-text"><div className="source-block" data-block-anchor={blocks.map(block=>block.anchor).join(' ')}><Prose text={projected.translation.text}/></div>{blocks.flatMap(block=>inline(block.anchor))}</div> : mode === 'original' ? <div className="prose" data-testid="source-text">{source.text.slice(0, blocks[0].start)}{blocks.map((block, position) => <Fragment key={block.anchor}><div className="source-block" data-block-anchor={block.anchor} id={`block-${source.id}-${block.anchor}`}><Prose text={source.text.slice(block.start, blocks[position + 1]?.start ?? source.text.length)}/></div>{inline(block.anchor)}</Fragment>)}</div> : validTranslation ? <div className="prose translated" data-testid="translation-text">{segments?.length ? segments.map((segment, position) => <Fragment key={`${segment.anchors.join('-')}:${position}`}><div className="source-block" data-block-anchor={segment.anchors.join(' ')}><Prose text={segment.text}/></div>{segment.anchors.flatMap(inline)}</Fragment>) : <div className="source-block" data-block-anchor={blocks.map(block => block.anchor).join(' ')}><Prose text={validTranslation.text ?? ''}/>{blocks.flatMap(block => inline(block.anchor))}</div>}</div> : <div className="translation-placeholder" role="status"><p>{translation ? activeJob(translation) ? '한국어 번역을 준비하고 있어요. 원문은 저장됐어요.' : '한국어 번역이 아직 준비되지 않았어요. 원문은 보존돼요.' : '이 장면에는 아직 한국어 번역이 없어요.'}</p><button type="button" className="secondary" onClick={() => switchMode('original')}>원문부터 읽기</button></div>}
+    {presentation?.error && <p className="error" role="alert">{presentation.error}</p>}
+    <PackageStateCards data={presentation?.data}/>
     {sceneStatus && <aside className="scene-status" aria-label="현재 장면의 표시 상태"><small>장면 상태</small><span>{sceneStatus}</span></aside>}
     <div className="derived-summary" aria-label="이 장면의 후속 작업">
       {attentionJobs.length ? attentionJobs.map(job => <div className={retryable(job.status) ? 'job-summary has-error' : 'job-summary'} key={job.id} data-job-id={job.id}><span>{jobTitle(job)} · {labels[job.status]}{retryable(job.status) ? ' · 원문 보존됨' : ''}</span><JobActions job={job} refresh={refresh} onError={setActionError} compact/></div>) : jobs.length > 0 && <p className="muted">{displayJobs.map(job => `${jobTitle(job)} ${labels[job.status]}`).join(' · ')}</p>}

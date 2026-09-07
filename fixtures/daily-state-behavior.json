@@ -1,0 +1,53 @@
+{
+  "revision": 1,
+  "schemaVersion": 1,
+  "mode": "authoritative",
+  "stateSchema": {
+    "type": "record",
+    "properties": {
+      "day": { "type": "string", "maxLength": 30 },
+      "energy": { "type": "number", "min": 0, "max": 10, "integer": true },
+      "inventory": { "type": "list", "maxItems": 20, "items": { "type": "string", "maxLength": 60 } },
+      "people": { "type": "list", "maxItems": 12, "items": { "type": "record", "properties": { "name": { "type": "string", "maxLength": 60 }, "affinity": { "type": "number", "min": 0, "max": 100 } } } },
+      "schedule": { "type": "list", "maxItems": 4, "items": { "type": "string", "maxLength": 60 } },
+      "lastRoll": { "type": "number", "min": 0, "max": 6, "integer": true }
+    }
+  },
+  "initialState": {
+    "day": "2026-01-01T00:00:00.000Z",
+    "energy": 10,
+    "inventory": [],
+    "people": [{ "name": "가람", "affinity": 0 }, { "name": "나래", "affinity": 25 }],
+    "schedule": ["도서관", "산책", "작업실", "휴식"],
+    "lastRoll": 0
+  },
+  "actions": [
+    {
+      "id": "add-item", "label": "물건 추가",
+      "inputSchema": { "type": "record", "properties": { "item": { "type": "string", "maxLength": 60 } } },
+      "when": { "op": "lt", "args": [{ "op": "size", "args": [{ "context": ["state", "inventory"] }] }, 20] },
+      "effects": [{ "path": ["inventory"], "value": { "op": "append", "args": [{ "context": ["state", "inventory"] }, { "context": ["input", "item"] }] } }]
+    },
+    {
+      "id": "spend", "label": "활동하기",
+      "inputSchema": { "type": "record", "properties": { "cost": { "type": "number", "min": 1, "max": 10, "integer": true } } },
+      "when": { "op": "gte", "args": [{ "context": ["state", "energy"] }, { "context": ["input", "cost"] }] },
+      "draws": [{ "id": "die", "type": "integer", "min": 1, "max": 6 }],
+      "effects": [
+        { "path": ["energy"], "value": { "op": "subtract", "args": [{ "context": ["state", "energy"] }, { "context": ["input", "cost"] }] } },
+        { "path": ["lastRoll"], "value": { "context": ["draws", "die"] } }
+      ]
+    },
+    {
+      "id": "next-day", "label": "다음 날과 일정 추첨",
+      "inputSchema": { "type": "record", "properties": {} },
+      "draws": [{ "id": "schedule", "type": "shuffle", "values": ["도서관", "산책", "작업실", "휴식"] }],
+      "effects": [
+        { "path": ["day"], "value": { "op": "dateAddDays", "args": [{ "context": ["state", "day"] }, 1] } },
+        { "path": ["energy"], "value": 10 },
+        { "path": ["schedule"], "value": { "context": ["draws", "schedule"] } }
+      ]
+    }
+  ],
+  "outputParsers": []
+}

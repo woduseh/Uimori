@@ -200,7 +200,7 @@ describe('independent stored-story fork without generation',()=>{
     expect(target.detail(copy.id)).toEqual(store.detail(copy.id));expect(target.db.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
     const isolated=structuredClone(archive);const runIds=new Set(isolated.tables.runs.filter(row=>row.chat_id===copy.id).map(row=>row.id));const jobIds=new Set(isolated.tables.jobs.filter(row=>row.chat_id===copy.id).map(row=>row.id));
     for(const [name,rows] of Object.entries(isolated.tables)){
-      if(name==='versions')continue;
+      if(name==='versions'||name==='package_behavior_entropy')continue;
       isolated.tables[name]=rows.filter(row=>Object.hasOwn(row,'chat_id')?row.chat_id===copy.id:Object.hasOwn(row,'run_id')?runIds.has(row.run_id):Object.hasOwn(row,'job_id')?jobIds.has(row.job_id):name==='chats'?row.id===copy.id:false);
     }
     const standalone=await database();expect(standalone.product.import(isolated)).toEqual({restored:true,chats:1});expect(standalone.detail(copy.id)).toEqual(store.detail(copy.id));

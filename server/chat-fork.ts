@@ -10,6 +10,7 @@ import { mapNativeForkSnapshot, copyNativeFork } from './native-archive.js';
 import { nativeResources } from '../core/native-context.js';
 import { compileSnapshotPrompt } from './prompt-snapshot.js';
 import { copyStoryFork } from './story-archive.js';
+import { copyPackageFork } from './package-behavior-host.js';
 
 type Row = Record<string, any>;
 const json = JSON.stringify;
@@ -68,6 +69,7 @@ export function forkChat(store: Store, chatId: string, value: unknown): Chat {
       }
     }
     store.db.prepare('INSERT INTO chats VALUES(?,?,NULL,1,?,?)').run(id,title,json(originalChat.settings),time);
+    store.organization.copy(chatId,id);
     store.db.prepare('INSERT INTO branches VALUES(?,?,?,NULL,1,1)').run(branchId,id,'기본 분기');
     for(const original of localResources){const copied=resource(original);store.db.prepare('INSERT INTO resources VALUES(?,?,?)').run(copied.id,id,json(copied));}
     const profile=store.db.prepare('SELECT body FROM profiles WHERE chat_id=?').get(chatId) as Row | undefined;
@@ -142,6 +144,7 @@ export function forkChat(store: Store, chatId: string, value: unknown): Chat {
     store.db.prepare('UPDATE branches SET head_revision=? WHERE id=?').run(head,branchId);
     copyStoryFork(store,chatId,id,sourceIds,runIds);
     copyNativeFork(store,chatId,id,fromRevision,sourceIds);
+    copyPackageFork(store,id,branchId,sourceIds,head);
     for(const copiedId of runIds.values()){
       const copied=store.run(copiedId);const snapshot=compileSnapshotPrompt(copied.snapshot);
       store.db.prepare('UPDATE runs SET snapshot=? WHERE id=?').run(json(snapshot),copiedId);

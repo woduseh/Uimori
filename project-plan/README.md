@@ -7,6 +7,8 @@
 | 파일 | 내용 |
 | --- | --- |
 | [CURRENT.md](CURRENT.md) | 현재 구현, 검증 근거, 남은 작업 |
+| [봇 중심 개편](REDESIGN.md) · [개편 결과](REDESIGN-RESULTS.md) | 봇 소속·폴더·공통 패키지·프롬프트 제작과 검증 |
+| [패키지 동작 확장 계획](PACKAGE-BEHAVIOR-PLAN.md) | Veil·메리·Alternate·청원고 정적 분석에 따른 상태/action/job/화면 후속 설계안 |
 | [PROJECT.md](PROJECT.md) | 목적, 우선순위, 실제 사용 조건, 비목표 |
 | [MILESTONES.md](MILESTONES.md) | M0–M3 범위와 종료 조건 |
 | [ARCHITECTURE.md](ARCHITECTURE.md) | 데이터·자율 조회·역할별 처리·번역·상태·이미지 계약 |

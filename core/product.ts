@@ -3,9 +3,10 @@ export const PROVIDER_PROTOCOLS = ['fixture-sse-v1', 'vertex-gemini-v1', 'openai
 export type ProviderProtocol = typeof PROVIDER_PROTOCOLS[number];
 export type VertexRequestTier = 'standard' | 'flex';
 export type ModelGeneration = { maxOutputTokens: number; temperature: number | null; thinkingLevel?: 'LOW' | 'MEDIUM' | 'HIGH'; structuredOutput?: boolean; reasoningEffort?: 'none' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'max'; thinkingMode?: 'disabled' | 'enabled' | 'adaptive'; thinkingBudgetTokens?: number; sol?: SolOptions };
-export type ContentKind = 'bot' | 'persona' | 'lore' | 'canon' | 'skill' | 'glossary';
+export type ContentKind = 'bot' | 'persona' | 'module' | 'lore' | 'canon' | 'skill' | 'glossary';
 export type ContentRef = { id: string; revision: number };
-export type Content = ContentRef & { kind: ContentKind; title: string; description: string; text: string; loading: 'pinned' | 'discoverable'; relatedIds: string[] };
+export type Content = ContentRef & { kind: ContentKind; title: string; description: string; text: string; loading: 'pinned' | 'discoverable'; relatedIds: string[]; package?: import('./content-package.js').ContentPackage; hasPackage?: boolean };
+export type SavedPromptCombination = ContentRef & { title: string; prompt: ContentRef; values: Record<string, import('./prompt-program.js').PromptValue> };
 export type CreativeControls = { mode: 'novel' | 'rp'; language: 'en' | 'ko'; personaReference: boolean; worldFocus: boolean; coNarration: boolean; declarationFinal: boolean; pov: 'auto' | 'first' | 'third'; style: 'auto' | 'calm' | 'vivid'; lengthMode: 'auto' | 'range' | 'custom'; minWords: number; maxWords: number; customWords: number };
 export type CreativePreset = ContentRef & { title: string; controls: CreativeControls };
 export type PromptRole = 'main' | 'translation';
@@ -13,14 +14,14 @@ export type PromptPreset = ContentRef & { title: string; role: PromptRole; text:
 export type TaskRole = 'main' | 'translation' | 'status' | 'image';
 export type Connection = ContentRef & { title: string; protocol: ProviderProtocol; endpoint: string; credentialEnv?: string; requestTier?: VertexRequestTier; enabled: boolean; catalog: { id: string; name: string; capabilities: Record<string, boolean | null>; priceRevision: string | null }[]; catalogError: string | null; catalogUpdatedAt?: string | null };
 export type ModelPreset = ContentRef & ModelGeneration & { title: string; connectionId: string; connectionRevision: number; modelId: string; timeoutMs?: number; enabled?: boolean; userOverrides?: { tools: boolean | null; structuredOutput: boolean | null; note: string }; source?: { kind: 'catalog' | 'manual'; connectionRevision: number; catalogUpdatedAt: string | null } };
-export type ChatProfile = { hiddenStory?: import('./hidden-story-package.js').HiddenStorySelection; chatId: string; revision: number; attachments: ContentRef[]; creative: CreativeControls; routes: Record<TaskRole, ContentRef | null>; image: boolean; prompts?: Partial<Record<PromptRole,ContentRef | null>>; promptControls?: Record<string,import('./prompt-program.js').ChatPromptControls> };
-export type ProfileSnapshot = ChatProfile & { contents: Content[]; models: Partial<Record<TaskRole, ModelPreset & { connection: Connection }>>; promptPresets?: Partial<Record<PromptRole,PromptPreset>> };
+export type ChatProfile = { hiddenStory?: import('./hidden-story-package.js').HiddenStorySelection; chatId: string; revision: number; attachments: ContentRef[]; creative: CreativeControls; routes: Record<TaskRole, ContentRef | null>; image: boolean; prompts?: Partial<Record<PromptRole,ContentRef | null>>; promptControls?: Record<string,import('./prompt-program.js').ChatPromptControls>; packageAttachments?: import('./content-package.js').PackageAttachment[]; packageValues?: Record<string,Record<string,import('./prompt-program.js').PromptValue>> };
+export type ProfileSnapshot = ChatProfile & { contents: Content[]; packages?: import('./content-package.js').ContentPackage[]; models: Partial<Record<TaskRole, ModelPreset & { connection: Connection }>>; promptPresets?: Partial<Record<PromptRole,PromptPreset>> };
 export type Branch = { id: string; chatId: string; title: string; headRevision: string | null; revision: number; default: boolean };
 export type Asset = { id: string; chatId: string; revision: number; title: string; mime: string; hash: string; description: string; actor: string; outfit: string; location: string; allowedUse: 'profile' | 'inline' | 'both'; url: string };
 export type Attempt = { id: string; runId: string | null; jobId: string | null; storyJobId?: string | null; role: TaskRole | 'state' | 'memory'; connectionId: string; modelId: string; status: string; inputTokens: number | null; outputTokens: number | null; costUsd: number | null; rawUsage: unknown; priceRevision: string | null; error: string | null; request: unknown; response: unknown };
 // Summary lists preserve content references and metadata; their text is a placeholder.
 // Fetch the immutable revision before opening a content editor.
-export type Library = { contentBodiesOmitted?: boolean; assetsOmitted?: boolean; promptPresets?: PromptPreset[]; contents: Content[]; presets: CreativePreset[]; connections: Connection[]; models: ModelPreset[]; assets: Asset[] };
+export type Library = { contentBodiesOmitted?: boolean; assetsOmitted?: boolean; promptPresets?: PromptPreset[]; promptCombinations?: SavedPromptCombination[]; contents: Content[]; presets: CreativePreset[]; connections: Connection[]; models: ModelPreset[]; assets: Asset[] };
 export const defaultCreative = (): CreativeControls => ({ mode: 'novel', language: 'en', personaReference: true, worldFocus: true, coNarration: false, declarationFinal: false, pov: 'auto', style: 'auto', lengthMode: 'range', minWords: 4500, maxWords: 7500, customWords: 15000 });
 export const defaultProfile = (chatId: string): ChatProfile => ({ chatId, revision: 1, attachments: [], creative: defaultCreative(), routes: { main: null, translation: null, status: null, image: null }, image: false });
 export function compileCreative(value: CreativeControls) {

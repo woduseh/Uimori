@@ -1,8 +1,8 @@
 import { test, expect, type Page, type APIRequestContext } from '@playwright/test';
 import { createHash } from 'node:crypto';
 import type { Chat, ChatDetail, Run } from '../core/types.js';
-import type { Content, CreativePreset } from '../core/product.js';
-import { defaultCreative } from '../core/product.js';
+import type { Content } from '../core/product.js';
+import { createPromptChoice, navigationAction, selectStartPrompt } from './ui-navigation.js';
 
 async function data(request: APIRequestContext, id: string): Promise<ChatDetail> { const response = await request.get(`/api/chats/${id}`); expect(response.ok()).toBeTruthy(); return response.json(); }
 async function seed(request: APIRequestContext, title: string, prompt: string, count = 1) {
@@ -17,10 +17,11 @@ async function prepareTranslations(request: APIRequestContext, chatId: string) {
   await expect.poll(async () => (await data(request, chatId)).jobs.every(job => job.status === 'completed')).toBe(true);
 }
 async function close(page: Page) { if (await page.getByRole('dialog').filter({ visible: true }).count()) await page.keyboard.press('Escape'); }
-async function nav(page: Page, name: string) { await close(page); const button = page.getByRole('button', { name, exact: true }); if (!await button.isVisible()) await page.getByRole('button', { name: '탐색 메뉴', exact: true }).click(); await button.click(); }
+async function nav(page: Page, name: string) { await navigationAction(page,name); }
 const longPrompt = 'SYNTHETIC_UI_LONG\n\n# 황혼의 부두\n\n> 조용한 약속을 기다려요.\n\n**미라**와 여행자는 편지를 열지 않았다.\n\n' + '바닷바람은 서서히 잦아들고 등대의 불빛이 어두운 수면을 건넜다. 두 사람은 오늘의 선택을 서두르지 않았다.\n\n'.repeat(35);
 
 test.afterEach(async ({ request }) => { for (const barrier of ['run', 'translation', 'status']) { const response = await request.post('/api/test/control', { data: { action: 'release', barrier } }); expect(response.ok()).toBeTruthy(); } });
+test.beforeEach(async({request})=>{const response=await request.post('/api/content',{data:{kind:'bot',title:`UI navigation bot ${Date.now()}`,description:'Synthetic navigation fixture',text:'Synthetic keeper.',loading:'pinned',relatedIds:[]}});expect(response.ok()).toBeTruthy();});
 
 test('UI01 UI02 UI04 UI05 UI09 long real sources keep composer accessible, safe prose and zero-call view changes', async ({ page, request }, info) => {
   const malicious = '\n\n<script>globalThis.__uimoriExecuted=true</script>\n\n<img src=x onerror="globalThis.__uimoriExecuted=true">\n\n<ruby>物語<rt>이야기</rt></ruby>\n\n`asset:synthetic_fixed`\n\n[unsafe](javascript:alert(1))';
@@ -39,8 +40,8 @@ test('UI01 UI02 UI04 UI05 UI09 long real sources keep composer accessible, safe 
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth && document.documentElement.scrollHeight <= innerHeight + 1)).toBe(true);
     }
     if ([390, 1440].includes(viewport.width)) await page.screenshot({ path: info.outputPath(`reader-${viewport.width}.png`) });
-    await page.getByRole('button', { name: '이야기 설정', exact: true }).click();
-    const settingsDialog = page.getByRole('dialog', { name: '이야기 설정', exact: true });
+    await page.getByRole('button', { name: '채팅 설정', exact: true }).click();
+    const settingsDialog = page.getByRole('dialog', { name: '채팅 설정', exact: true });
     expect(await settingsDialog.evaluate(element => element.scrollWidth <= element.clientWidth + 1)).toBe(true);
     const settingsBox = await settingsDialog.boundingBox(); expect(settingsBox!.x).toBeGreaterThanOrEqual(0); expect(settingsBox!.x + settingsBox!.width).toBeLessThanOrEqual(viewport.width);
     await close(page); await nav(page, '서재'); await expect(page.getByTestId('library-panel')).toBeVisible();
@@ -70,26 +71,27 @@ test('UI01 UI02 UI04 UI05 UI09 long real sources keep composer accessible, safe 
 
 test('UI03 bot-first retry saves one story and complete profile before any generation', async ({ page, request }) => {
   const title = `UI03-${Date.now()}`; const added = await request.post('/api/content', { data: { kind: 'bot', title, description: '합성 봇 시작 검사', text: 'Synthetic harbor keeper.', loading: 'pinned', relatedIds: [] } }); expect(added.ok()).toBeTruthy(); const bot = await added.json() as Content;
-  const presetResponse = await request.post('/api/creative-presets', { data: { title: `${title} 프리셋`, controls: { ...defaultCreative(), coNarration: true, worldFocus: true } } }); expect(presetResponse.ok()).toBeTruthy(); const preset = await presetResponse.json() as CreativePreset;
+  const choice = await createPromptChoice(request,title);
   const priorChats = await (await request.get('/api/chats')).json() as Chat[];
   const writes: { url: string; method: string }[] = []; page.on('request', request => { if (['POST', 'PUT'].includes(request.method())) writes.push({ url: request.url(), method: request.method() }); });
   let rejected = false; await page.route('**/api/chats/*/profile', async route => { if (route.request().method() === 'PUT' && !rejected) { rejected = true; await route.fulfill({ status: 409, contentType: 'application/json', body: JSON.stringify({ error: 'PROFILE_REVISION_CONFLICT' }) }); } else await route.continue(); });
   await page.goto('/'); await nav(page, '서재'); await page.getByRole('button', { name: `${title} 봇으로 시작`, exact: true }).click();
-  const dialog = page.getByRole('dialog', { name: '새 이야기', exact: true }); await expect(dialog).toBeVisible(); await page.getByLabel('시작 창작 프리셋').selectOption(`${preset.id}@1`);
-  await expect(page.getByLabel('새 이야기 이름')).toHaveValue(''); await dialog.getByRole('button', { name: '이야기 만들기', exact: true }).click();
-  await expect(dialog.getByRole('alert')).toContainText('이야기는 하나만 만들었어요'); await dialog.getByRole('button', { name: '설정 저장 다시 시도', exact: true }).click();
+  const dialog = page.getByRole('dialog', { name: '새 채팅', exact: true }); await expect(dialog).toBeVisible(); await selectStartPrompt(page,choice);
+  await expect(dialog.getByText('이전 창작 제어',{exact:true})).toHaveCount(0);
+  await expect(page.getByLabel('새 채팅 이름')).toHaveValue(''); await dialog.getByRole('button', { name: '채팅 만들기', exact: true }).click();
+  await expect(dialog.getByRole('alert')).toContainText('하나만 만들었어요'); await dialog.getByRole('button', { name: '설정 저장 다시 시도', exact: true }).click();
   await expect(dialog).not.toBeVisible(); const chats = await (await request.get('/api/chats')).json() as Chat[]; const addedChats = chats.filter(chat => !priorChats.some(item => item.id === chat.id)); expect(addedChats).toHaveLength(1);
-  const detail = await data(request, addedChats[0].id); expect(detail.chat.title).toBe(`${title}의 이야기`); expect(detail.profile!.attachments).toEqual([{ id: bot.id, revision: 1 }]); expect(detail.profile!.creative).toEqual(preset.controls); expect(detail.runs).toHaveLength(0);
+  const detail = await data(request, addedChats[0].id); expect(detail.chat.title).toBe(`${title}의 채팅`); expect(detail.profile!.attachments).toEqual([{ id: bot.id, revision: 1 }]); expect(detail.profile!.prompts?.main).toEqual({id:choice.prompt.id,revision:choice.prompt.revision}); expect(detail.profile!.promptControls?.[`${choice.prompt.id}@${choice.prompt.revision}`]?.values).toEqual(choice.combination.values); expect(detail.runs).toHaveLength(0);
   expect(writes.filter(item => /\/api\/chats$/.test(item.url))).toHaveLength(1);
   await page.getByLabel('다음 장면 요청').fill('합성 첫 장면'); await page.getByRole('button', { name: '원문 생성', exact: true }).click(); await expect.poll(async () => (await data(request, addedChats[0].id)).runs.length).toBe(1);
-  const run = (await data(request, addedChats[0].id)).runs[0]; expect(run.snapshot.profile!.attachments).toEqual(detail.profile!.attachments); expect(run.snapshot.profile!.creative).toEqual(preset.controls);
+  const run = (await data(request, addedChats[0].id)).runs[0]; expect(run.snapshot.profile!.attachments).toEqual(detail.profile!.attachments); expect(run.snapshot.profile!.promptControls?.[`${choice.prompt.id}@${choice.prompt.revision}`]?.values).toEqual(choice.combination.values);
   const runIndex = writes.findIndex(item => /\/runs$/.test(item.url)); expect(runIndex).toBeGreaterThan(writes.findLastIndex(item => /\/profile$/.test(item.url)));
 });
 
 test('UI08 UI12 native dialog focus, composition, URL and draft selection stay local', async ({ page, context, request }) => {
   const chat = await seed(request, `합성 UI keyboard ${Date.now()}`, 'Synthetic quiet harbor.');
-  await page.goto(`/?chat=${chat.id}`); const settings = page.getByRole('button', { name: '이야기 설정', exact: true }); await settings.focus(); await settings.press('Enter');
-  const dialog = page.getByRole('dialog', { name: '이야기 설정', exact: true }); await expect(dialog).toBeVisible();
+  await page.goto(`/?chat=${chat.id}`); const settings = page.getByRole('button', { name: '채팅 설정', exact: true }); await settings.focus(); await settings.press('Enter');
+  const dialog = page.getByRole('dialog', { name: '채팅 설정', exact: true }); await expect(dialog).toBeVisible();
   for (let index = 0; index < 15; index++) { await page.keyboard.press('Tab'); expect(await dialog.evaluate(element => element.contains(document.activeElement))).toBe(true); }
   await page.keyboard.press('Escape'); await expect(dialog).not.toBeVisible(); await expect(settings).toBeFocused();
   const input = page.getByLabel('다음 장면 요청'); await input.fill('합성 IME 입력 초안'); await input.evaluate(element => { const input = element as HTMLTextAreaElement; input.setSelectionRange(3, 7, 'forward'); input.dispatchEvent(new Event('select', { bubbles: true })); input.dispatchEvent(new CompositionEvent('compositionstart', { bubbles: true, data: '한' })); input.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'Enter', code: 'Enter', ctrlKey: true, isComposing: true })); input.dispatchEvent(new CompositionEvent('compositionend', { bubbles: true, data: '한' })); });
@@ -144,9 +146,9 @@ test('UI07 UI12 lost fork response reuses one new story and Back Forward preserv
     if (payloads.length === 1) { accepted(await response.json() as Chat); await route.abort('failed'); } else await route.fulfill({ response });
   });
   const failed = page.waitForEvent('requestfailed', event => event.url().endsWith(`/api/chats/${chat.id}/fork`));
-  await page.getByRole('button', { name: '이야기 포크', exact: true }).click(); const fork = await acceptedChat; await failed;
-  await expect(page.getByRole('button', { name: '이야기 포크', exact: true })).toBeEnabled(); await expect.poll(() => new URL(page.url()).searchParams.get('chat')).toBe(chat.id);
-  await page.getByLabel('다음 장면 요청').fill('수락 확인 전에 새로 적은 원본 초안'); await page.getByRole('button', { name: '이야기 포크', exact: true }).click();
+  await page.getByRole('button', { name: '채팅 포크', exact: true }).click(); const fork = await acceptedChat; await failed;
+  await expect(page.getByRole('button', { name: '채팅 포크', exact: true })).toBeEnabled(); await expect.poll(() => new URL(page.url()).searchParams.get('chat')).toBe(chat.id);
+  await page.getByLabel('다음 장면 요청').fill('수락 확인 전에 새로 적은 원본 초안'); await page.getByRole('button', { name: '채팅 포크', exact: true }).click();
   await expect.poll(() => new URL(page.url()).searchParams.get('chat')).toBe(fork.id);
   const copied = await data(request, fork.id); expect(payloads).toHaveLength(2); expect(payloads[1]).toEqual(payloads[0]); expect(payloads[0].fromRevision).toBe(original.chat.headRevision);
   expect((await (await request.get('/api/chats')).json() as Chat[]).filter(item => !priorChats.some(prior => prior.id === item.id)).map(item => item.id)).toEqual([fork.id]);
@@ -170,12 +172,12 @@ test('UI07 UI12 late accepted fork cannot navigate after A B A or replace the cu
   const modelOrCancelRequests: string[] = []; page.on('request', event => { if (event.method() === 'POST' && /\/(?:runs|candidate|retranslate|retry|cancel)(?:\?|$)/u.test(event.url())) modelOrCancelRequests.push(event.url()); });
   await page.route(`**/api/chats/${chat.id}/fork`, async route => { const response = await route.fetch(); expect(response.ok()).toBeTruthy(); accepted(await response.json() as Chat); await gate; await route.fulfill({ response }); });
   try {
-    await page.getByRole('button', { name: '여기서 새 이야기로 이어가기', exact: true }).click(); const fork = await acceptedChat; const list = page.getByRole('navigation', { name: '채팅 목록' });
+    await page.getByRole('button', { name: '여기서 새 이야기로 이어가기', exact: true }).click(); const fork = await acceptedChat; const list = page.getByRole('navigation', { name: '봇의 채팅 목록' });
     await list.getByRole('button').filter({ hasText: other.title }).click(); await expect.poll(() => new URL(page.url()).searchParams.get('chat')).toBe(other.id);
     await list.getByRole('button').filter({ hasText: chat.title }).click(); await expect.poll(() => new URL(page.url()).searchParams.get('chat')).toBe(chat.id);
     await page.getByLabel('다음 장면 요청').fill('돌아온 원본에 새로 작성한 초안'); const selectedUrl = page.url();
     const response = page.waitForResponse(event => event.url().endsWith(`/api/chats/${chat.id}/fork`)); release(); await (await response).finished();
-    await expect(list.getByRole('button').filter({ hasText: fork.title })).toBeVisible(); await expect(page.getByRole('button', { name: '이야기 포크', exact: true })).toBeEnabled(); await expect(page).toHaveURL(selectedUrl);
+    await expect(list.getByRole('button').filter({ hasText: fork.title })).toBeVisible(); await expect(page.getByRole('button', { name: '채팅 포크', exact: true })).toBeEnabled(); await expect(page).toHaveURL(selectedUrl);
     await expect(page.getByLabel('다음 장면 요청')).toHaveValue('돌아온 원본에 새로 작성한 초안'); await expect(page.getByTestId('source')).toHaveAttribute('data-source-id', source.id);
     const copy = await data(request, fork.id); expect(copy.sources.map(item => item.text)).toEqual([source.text]); expect(copy.attempts).toHaveLength(0);
     expect(await data(request, chat.id)).toEqual(original); expect(await data(request, other.id)).toEqual(otherBefore); expect(modelOrCancelRequests).toEqual([]);
@@ -190,7 +192,7 @@ test('UI12 late failed SSE refresh from another story never publishes its error 
   let first = true; await page.route(`**/api/chats/${chatA.id}/reader?*`, async route => { if (!first) return route.continue(); first = false; intercepted(); await gate; await route.fulfill({ status: 500, contentType: 'application/json', body: JSON.stringify({ error: 'SYNTHETIC_OLD_STORY_REFRESH' }) }); });
   try {
     const profile = (await data(request, chatA.id)).profile!; const update = await request.put(`/api/chats/${chatA.id}/profile`, { data: { expectedRevision: profile.revision, attachments: profile.attachments, creative: profile.creative, routes: profile.routes, image: profile.image } }); expect(update.ok()).toBeTruthy();
-    await held; await page.getByRole('navigation', { name: '채팅 목록', exact: true }).getByRole('button').filter({ hasText: chatB.title }).click();
+    await held; await page.getByRole('navigation', { name: '봇의 채팅 목록', exact: true }).getByRole('button').filter({ hasText: chatB.title }).click();
     await expect(page.getByRole('heading', { name: chatB.title, exact: true })).toBeVisible(); await page.getByLabel('다음 장면 요청').fill('현재 이야기의 초안');
     const failed = page.waitForResponse(response => new URL(response.url()).pathname === `/api/chats/${chatA.id}/reader` && response.status() === 500); release(); await (await failed).finished();
     await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
@@ -201,7 +203,7 @@ test('UI12 late failed SSE refresh from another story never publishes its error 
 test('UI03 UI12 new story retry freezes selected revisions across a late library refresh and locks its pending creation', async ({ page, request }) => {
   await page.setViewportSize({ width: 1440, height: 1000 });
   const title = `UI frozen start ${Date.now()}`; const response = await request.post('/api/content', { data: { kind: 'bot', title, description: 'Original synthetic bot.', text: 'Synthetic first revision.', loading: 'pinned', relatedIds: [] } }); expect(response.ok()).toBeTruthy(); const bot = await response.json() as Content;
-  const presetResponse = await request.post('/api/creative-presets', { data: { title: `${title} controls`, controls: { ...defaultCreative(), coNarration: true, worldFocus: true } } }); expect(presetResponse.ok()).toBeTruthy(); const preset = await presetResponse.json() as CreativePreset;
+  const choice = await createPromptChoice(request,title);
   const beforeChats = await (await request.get('/api/chats')).json() as Chat[];
   await page.goto('/'); await nav(page, '서재'); await page.getByRole('button', { name: `${title} 자료 편집`, exact: true }).click();
   let releaseLibrary!: () => void; const libraryGate = new Promise<void>(resolve => { releaseLibrary = resolve; }); let libraryHeld!: () => void; const libraryWaiting = new Promise<void>(resolve => { libraryHeld = resolve; });
@@ -210,46 +212,44 @@ test('UI03 UI12 new story retry freezes selected revisions across a late library
   let chatPosts = 0; await page.route('**/api/chats', async route => { if (route.request().method() !== 'POST') return route.continue(); chatPosts++; const response = await route.fetch(); expect(response.ok()).toBeTruthy(); chatAccepted(await response.json() as Chat); await chatGate; await route.fulfill({ response }); });
   const savedProfiles: Record<string, unknown>[] = []; let reject = true; await page.route('**/api/chats/*/profile', async route => { if (route.request().method() !== 'PUT') return route.continue(); savedProfiles.push(route.request().postDataJSON()); if (reject) { reject = false; return route.fulfill({ status: 409, contentType: 'application/json', body: JSON.stringify({ error: 'SYNTHETIC_PROFILE_CONFLICT' }) }); } await route.continue(); });
   try {
+    const newerPrompt=await request.put(`/api/prompt-presets/${choice.prompt.id}`,{data:{expectedRevision:1,title:choice.prompt.title,role:'main',text:'',program:choice.prompt.program}});expect(newerPrompt.ok()).toBeTruthy();
     await page.getByLabel('자료 본문').fill('Synthetic updated second revision.'); await page.getByRole('button', { name: '새 revision 저장', exact: true }).click(); await libraryWaiting;
-    await page.getByRole('button', { name: '새 이야기', exact: true }).click(); const dialog = page.getByRole('dialog', { name: '새 이야기', exact: true }); await expect(dialog).toBeVisible();
-    await dialog.getByRole('button').filter({ has: page.getByText(title, { exact: true }) }).click(); await page.getByLabel('시작 창작 프리셋').selectOption(`${preset.id}@1`); await page.getByLabel('새 이야기 이름').fill(`${title} story`);
-    await dialog.getByRole('button', { name: '이야기 만들기', exact: true }).click(); const chat = await chatWaiting; await expect(dialog.getByRole('button', { name: '이야기를 준비하는 중…', exact: true })).toBeVisible();
-    expect.soft(await dialog.getByRole('button', { name: /봇 없이 시작/ }).isDisabled()).toBe(true); expect.soft(await page.getByLabel('시작 페르소나').isDisabled()).toBe(true); expect.soft(await page.getByLabel('시작 창작 프리셋').isDisabled()).toBe(true); expect.soft(await page.getByLabel('새 이야기 이름').isDisabled()).toBe(true);
-    releaseChat(); await expect(dialog.getByRole('alert')).toContainText('이야기는 하나만 만들었어요');
+    await navigationAction(page,'새 채팅',title); const dialog = page.getByRole('dialog', { name: '새 채팅', exact: true }); await expect(dialog).toBeVisible();
+    await expect(dialog.locator('.bot-option.chosen')).toContainText(title);await selectStartPrompt(page,choice); await page.getByLabel('새 채팅 이름').fill(`${title} story`);
+    await dialog.getByRole('button', { name: '채팅 만들기', exact: true }).click(); const chat = await chatWaiting; await expect(dialog.getByRole('button', { name: /준비하는 중/ })).toBeVisible();
+    expect.soft(await dialog.locator('.bot-option.chosen').isDisabled()).toBe(true); expect.soft(await page.getByLabel('시작 페르소나').isDisabled()).toBe(true); expect.soft(await page.getByLabel('시작 프롬프트').isDisabled()).toBe(true); expect.soft(await page.getByLabel('시작 옵션 조합').isDisabled()).toBe(true); expect.soft(await page.getByLabel('새 채팅 이름').isDisabled()).toBe(true);
+    releaseChat(); await expect(dialog.getByRole('alert')).toContainText('하나만 만들었어요');
     const refreshed = page.waitForResponse(response => new URL(response.url()).pathname === '/api/library' && new URL(response.url()).searchParams.get('view') === 'summary'); releaseLibrary(); const latest = await (await refreshed).json() as { contents: Content[] }; expect(latest.contents.find(item => item.id === bot.id)?.revision).toBe(2);
     await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
+    await expect(page.getByLabel('시작 프롬프트',{exact:true})).toHaveValue(`${choice.prompt.id}@1`);await expect(page.getByLabel('시작 옵션 조합',{exact:true})).toHaveValue(`${choice.combination.id}@1`);
     await dialog.getByRole('button', { name: '설정 저장 다시 시도', exact: true }).click(); await expect(dialog).not.toBeVisible();
-    const detail = await data(request, chat.id); expect(detail.profile!.attachments).toEqual([{ id: bot.id, revision: 1 }]); expect(detail.profile!.creative).toEqual(preset.controls); expect(detail.runs).toHaveLength(0); expect(chatPosts).toBe(1);
+    const detail = await data(request, chat.id); expect(detail.profile!.attachments).toEqual([{ id: bot.id, revision: 1 }]); expect(detail.profile!.prompts?.main).toEqual({id:choice.prompt.id,revision:choice.prompt.revision}); expect(detail.profile!.promptControls?.[`${choice.prompt.id}@${choice.prompt.revision}`]?.values).toEqual(choice.combination.values); expect(detail.runs).toHaveLength(0); expect(chatPosts).toBe(1);
     expect(savedProfiles).toHaveLength(2); expect(savedProfiles[1]).toEqual(savedProfiles[0]);
     const afterChats = await (await request.get('/api/chats')).json() as Chat[]; expect(afterChats.filter(item => !beforeChats.some(before => before.id === item.id))).toHaveLength(1); expect(await page.evaluate(id => sessionStorage.getItem(`pending-profile:${id}`), chat.id)).toBeNull();
   } finally { releaseChat(); releaseLibrary(); }
 });
 
-test('UI03 UI12 failed starting profile read survives reload and recovers frozen choices with current routes and legacy pending data', async ({ page, request }) => {
+test('UI03 UI12 failed starting profile read survives reload and recovers frozen prompt choices with current routes', async ({ page, request }) => {
   await page.setViewportSize({ width: 1440, height: 1000 });
   const title = `UI pending profile ${Date.now()}`;
   const botResponse = await request.post('/api/content', { data: { kind: 'bot', title, description: 'Synthetic pending recovery.', text: 'Synthetic original start.', loading: 'pinned', relatedIds: [] } }); expect(botResponse.ok()).toBeTruthy(); const bot = await botResponse.json() as Content;
-  const presetResponse = await request.post('/api/creative-presets', { data: { title: `${title} controls`, controls: { ...defaultCreative(), coNarration: true, pov: 'third', style: 'calm' } } }); expect(presetResponse.ok()).toBeTruthy(); const preset = await presetResponse.json() as CreativePreset;
+  const choice = await createPromptChoice(request,title);
   // An enabled synthetic connection permits a new role selection; this recovery test never starts a Run.
   const connectionResponse = await request.post('/api/connections', { data: { title: `${title} synthetic fixture`, protocol: 'fixture-sse-v1', endpoint: 'http://127.0.0.1:9/no-network', enabled: true } }); expect(connectionResponse.ok()).toBeTruthy(); const connection = await connectionResponse.json() as { id: string; revision: number };
   const modelResponse = await request.post('/api/model-presets', { data: { title: `${title} saved route`, connectionId: connection.id, connectionRevision: connection.revision, modelId: 'synthetic-not-called', maxOutputTokens: 500, temperature: null } }); expect(modelResponse.ok()).toBeTruthy(); const model = await modelResponse.json() as { id: string; revision: number };
   const priorChats = await (await request.get('/api/chats')).json() as Chat[]; let chatPosts = 0; page.on('request', item => { if (item.method() === 'POST' && /\/api\/chats$/.test(item.url())) chatPosts++; });
-  await page.goto('/'); await nav(page, '서재'); await page.getByRole('button', { name: `${title} 봇으로 시작`, exact: true }).click(); const dialog = page.getByRole('dialog', { name: '새 이야기', exact: true }); await page.getByLabel('시작 창작 프리셋').selectOption(`${preset.id}@1`);
+  await page.goto('/'); await nav(page, '서재'); await page.getByRole('button', { name: `${title} 봇으로 시작`, exact: true }).click(); const dialog = page.getByRole('dialog', { name: '새 채팅', exact: true }); await selectStartPrompt(page,choice);
   let rejectRead = true; await page.route('**/api/chats/*/profile', async route => { if (route.request().method() === 'GET' && rejectRead) { rejectRead = false; return route.fulfill({ status: 500, contentType: 'application/json', body: JSON.stringify({ error: 'SYNTHETIC_FIRST_PROFILE_READ' }) }); } await route.continue(); });
-  const accepted = page.waitForResponse(response => /\/api\/chats$/.test(response.url()) && response.request().method() === 'POST'); await dialog.getByRole('button', { name: '이야기 만들기', exact: true }).click(); const chat = await (await accepted).json() as Chat;
+  const accepted = page.waitForResponse(response => /\/api\/chats$/.test(response.url()) && response.request().method() === 'POST'); await dialog.getByRole('button', { name: '채팅 만들기', exact: true }).click(); const chat = await (await accepted).json() as Chat;
   await expect(dialog.getByRole('alert')).toContainText('(500)'); expect(await page.evaluate(id => sessionStorage.getItem(`pending-profile:${id}`), chat.id)).not.toBeNull(); await close(page);
   const original = (await data(request, chat.id)).profile!; const currentRoutes = { ...original.routes, main: { id: model.id, revision: model.revision } };
-  const update = await request.put(`/api/chats/${chat.id}/profile`, { data: { expectedRevision: original.revision, attachments: [], creative: original.creative, routes: currentRoutes, image: true } }); expect(update.ok()).toBeTruthy();
+  // Competing updates preserve permanent bot ownership while changing unrelated settings.
+  const update = await request.put(`/api/chats/${chat.id}/profile`, { data: { expectedRevision: original.revision, attachments: original.attachments, ...(original.packageAttachments?{packageAttachments:original.packageAttachments}:{}), creative: original.creative, routes: currentRoutes, image: true } }); expect(update.ok()).toBeTruthy();
   await page.goto(`/?chat=${chat.id}`); await page.getByLabel('다음 장면 요청').fill('복구 전에는 보내지 않는 합성 초안'); await expect(page.getByRole('button', { name: '원문 생성', exact: true })).toBeDisabled();
   await page.getByRole('button', { name: '시작 설정 다시 저장', exact: true }).click(); await expect(page.getByRole('button', { name: '시작 설정 다시 저장', exact: true })).toHaveCount(0);
-  const restored = await data(request, chat.id); expect(restored.profile!.attachments).toEqual([{ id: bot.id, revision: 1 }]); expect(restored.profile!.creative).toEqual(preset.controls); expect(restored.profile!.routes).toEqual(currentRoutes); expect(restored.profile!.image).toBe(true); expect(restored.profile!.revision).toBe(original.revision + 2); expect(restored.runs).toHaveLength(0); expect(restored.attempts).toHaveLength(0); expect(chatPosts).toBe(1); expect(await page.evaluate(id => sessionStorage.getItem(`pending-profile:${id}`), chat.id)).toBeNull();
+  const restored = await data(request, chat.id); expect(restored.profile!.attachments).toEqual([{ id: bot.id, revision: 1 }]); expect(restored.profile!.prompts?.main).toEqual({id:choice.prompt.id,revision:choice.prompt.revision}); expect(restored.profile!.promptControls?.[`${choice.prompt.id}@${choice.prompt.revision}`]?.values).toEqual(choice.combination.values); expect(restored.profile!.routes).toEqual(currentRoutes); expect(restored.profile!.image).toBe(true); expect(restored.profile!.revision).toBe(original.revision + 2); expect(restored.runs).toHaveLength(0); expect(restored.attempts).toHaveLength(0); expect(chatPosts).toBe(1); expect(await page.evaluate(id => sessionStorage.getItem(`pending-profile:${id}`), chat.id)).toBeNull();
   const afterChats = await (await request.get('/api/chats')).json() as Chat[]; expect(afterChats.filter(item => !priorChats.some(before => before.id === item.id))).toHaveLength(1);
-  // Earlier clients stored a full profile body. Its old routes and image flag are not replayed.
-  const legacyChatResponse = await request.post('/api/chats', { data: { title: `${title} legacy` } }); expect(legacyChatResponse.ok()).toBeTruthy(); const legacyChat = await legacyChatResponse.json() as Chat; const legacyOriginal = (await data(request, legacyChat.id)).profile!;
-  const legacyUpdate = await request.put(`/api/chats/${legacyChat.id}/profile`, { data: { expectedRevision: legacyOriginal.revision, attachments: [], creative: legacyOriginal.creative, routes: currentRoutes, image: true } }); expect(legacyUpdate.ok()).toBeTruthy();
-  await page.evaluate(({ id, desired }) => sessionStorage.setItem(`pending-profile:${id}`, JSON.stringify(desired)), { id: legacyChat.id, desired: { attachments: [{ id: bot.id, revision: 1 }], creative: preset.controls, routes: legacyOriginal.routes, image: false } });
-  await page.goto(`/?chat=${legacyChat.id}`); await page.getByLabel('다음 장면 요청').fill('이전 형식 복구를 기다리는 합성 초안'); await expect(page.getByRole('button', { name: '원문 생성', exact: true })).toBeDisabled(); await page.getByRole('button', { name: '시작 설정 다시 저장', exact: true }).click(); await expect(page.getByRole('button', { name: '시작 설정 다시 저장', exact: true })).toHaveCount(0);
-  const legacyRestored = await data(request, legacyChat.id); expect(legacyRestored.profile!.attachments).toEqual([{ id: bot.id, revision: 1 }]); expect(legacyRestored.profile!.creative).toEqual(preset.controls); expect(legacyRestored.profile!.routes).toEqual(currentRoutes); expect(legacyRestored.profile!.image).toBe(true); expect(legacyRestored.profile!.revision).toBe(legacyOriginal.revision + 2); expect(legacyRestored.runs).toHaveLength(0); expect(legacyRestored.attempts).toHaveLength(0); expect(await page.evaluate(id => sessionStorage.getItem(`pending-profile:${id}`), legacyChat.id)).toBeNull();
+
 });
 
 
@@ -269,10 +269,10 @@ test('UI03 UI12 starting model choices are saved without execution, reused exact
   const writes: string[] = []; page.on('request', item => { if (item.method() === 'POST') writes.push(item.url()); });
   await page.goto('/'); await nav(page, '새 이야기');
   await page.getByLabel('시작 본문 모델').selectOption(`${models[0].id}@1`); await page.getByLabel('시작 번역 모델').selectOption(`${models[1].id}@1`);
-  await page.getByLabel('새 이야기 이름').fill(title);
+  await page.getByLabel('새 채팅 이름').fill(title);
   const response = page.waitForResponse(item => /\/api\/chats$/.test(item.url()) && item.request().method() === 'POST');
-  await page.getByRole('button', { name: '이야기 만들기', exact: true }).click(); const chat = await (await response).json() as Chat;
-  await expect(page.getByRole('dialog', { name: '새 이야기', exact: true })).not.toBeVisible();
+  await page.getByRole('button', { name: '채팅 만들기', exact: true }).click(); const chat = await (await response).json() as Chat;
+  await expect(page.getByRole('dialog', { name: '새 채팅', exact: true })).not.toBeVisible();
   const detail = await data(request, chat.id);
   expect(detail.profile!.routes).toEqual({ main: models[0], translation: models[1], status: null, image: null });
   expect(detail.chat.settings.translation).toBe(true); expect(detail.runs).toHaveLength(0); expect(detail.attempts).toHaveLength(0); expect(writes.filter(url => /\/(?:runs|candidate)$/.test(url))).toEqual([]);
@@ -297,7 +297,7 @@ test('UI03 UI12 pending starting models recover after a failed profile read with
   await page.goto('/'); await nav(page, '새 이야기'); await page.getByLabel('시작 본문 모델').selectOption(`${models[0].id}@1`); await page.getByLabel('시작 번역 모델').selectOption(`${models[1].id}@1`);
   let fail = true; await page.route('**/api/chats/*/profile', async route => { if (route.request().method() === 'GET' && fail) { fail = false; return route.fulfill({ status: 500, contentType: 'application/json', body: JSON.stringify({ error: 'SYNTHETIC_START_MODELS_READ' }) }); } await route.continue(); });
   const accepted = page.waitForResponse(response => /\/api\/chats$/.test(response.url()) && response.request().method() === 'POST');
-  await page.getByRole('button', { name: '이야기 만들기', exact: true }).click(); const chat = await (await accepted).json() as Chat;
+  await page.getByRole('button', { name: '채팅 만들기', exact: true }).click(); const chat = await (await accepted).json() as Chat;
   await expect(page.getByRole('dialog').getByRole('alert')).toContainText('(500)');
   const pending = await page.evaluate(id => JSON.parse(sessionStorage.getItem(`pending-profile:${id}`)!), chat.id); expect(pending.version).toBe(2); expect(pending.models).toEqual({ main: models[0], translation: models[1] });
   const original = (await data(request, chat.id)).profile!; const changedRoutes = { ...original.routes, main: models[1], translation: null };
@@ -341,14 +341,14 @@ test('UI17 full writing and empty translation prompts import, save and apply wit
   const before = await data(request, chat.id); const writes: string[] = [];
   page.on('request', event => { if (['POST', 'PUT'].includes(event.method())) writes.push(event.url()); });
   await page.setViewportSize({ width: 390, height: 844 }); await page.goto(`/?chat=${chat.id}`);
-  await page.getByRole('button', { name: '이야기 설정', exact: true }).click(); const dialog = page.getByRole('dialog', { name: '이야기 설정', exact: true });
-  await dialog.getByRole('tab', { name: '프롬프트', exact: true }).click(); const editor = dialog.getByTestId('prompt-editor');
+  await page.getByRole('button', { name: '채팅 설정', exact: true }).click(); const dialog = page.getByRole('dialog', { name: '채팅 설정', exact: true });
+  await dialog.getByRole('tab', { name: '프롬프트·창작 프리셋', exact: true }).click(); const editor = dialog.getByTestId('prompt-editor');
   await expect(editor.getByLabel('작문 전체 프롬프트')).not.toHaveValue('');
   await editor.getByLabel('불러올 프롬프트').selectOption('new');
   const literal = '  FULL_PROMPT_UI17\n{{user}} {{#if exact}}literal CBS{{/if}}\n<script>globalThis.__promptExecuted=true</script>\n' + 'Preserve this complete authored prompt and all tool data separately.\n'.repeat(90) + '\n  ';
   await editor.getByLabel('프롬프트 파일 불러오기').setInputFiles({ name: 'UI17-full-main.md', mimeType: 'text/markdown', buffer: Buffer.from(literal) });
   await expect(editor.getByLabel('작문 전체 프롬프트')).toHaveValue(literal); await expect(editor.getByLabel('프롬프트 이름')).toHaveValue('UI17-full-main');
-  await dialog.getByRole('tab', { name: '인물', exact: true }).click(); await dialog.getByRole('tab', { name: '프롬프트', exact: true }).click();
+  await dialog.getByRole('tab', { name: '봇·페르소나·모듈', exact: true }).click(); await dialog.getByRole('tab', { name: '프롬프트·창작 프리셋', exact: true }).click();
   await expect(editor.getByLabel('작문 전체 프롬프트')).toHaveValue(literal);
   await editor.getByRole('button', { name: '편집 영역 넓히기', exact: true }).click();
   expect(await editor.evaluate(element => element.scrollWidth <= element.clientWidth + 1)).toBe(true);
@@ -382,7 +382,7 @@ test('UI17 full prompt revisions stay pinned and conflict keeps the edited text'
   const profile = (await data(request, chat.id)).profile!;
   const attached = await request.put(`/api/chats/${chat.id}/profile`, { data: { expectedRevision: profile.revision, attachments: profile.attachments, creative: profile.creative, routes: profile.routes, image: profile.image, prompts: { main: { id: first.id, revision: first.revision } } } }); expect(attached.ok()).toBeTruthy();
   const latest = await request.put(`/api/prompt-presets/${first.id}`, { data: { expectedRevision: 1, title: first.title, role: 'main', text: 'Latest library writing prompt.' } }); expect(latest.ok()).toBeTruthy();
-  await page.goto(`/?chat=${chat.id}`); await page.getByRole('button', { name: '이야기 설정', exact: true }).click(); const dialog = page.getByRole('dialog', { name: '이야기 설정', exact: true }); await dialog.getByRole('tab', { name: '프롬프트', exact: true }).click();
+  await page.goto(`/?chat=${chat.id}`); await page.getByRole('button', { name: '채팅 설정', exact: true }).click(); const dialog = page.getByRole('dialog', { name: '채팅 설정', exact: true }); await dialog.getByRole('tab', { name: '프롬프트·창작 프리셋', exact: true }).click();
   const editor = dialog.getByTestId('prompt-editor'); await expect(editor.getByLabel('작문 전체 프롬프트')).toHaveValue(originalText);
   const edited = 'Unsaved custom full prompt.\n' + 'Keep my edited text intact.\n'.repeat(30);
   await editor.getByLabel('작문 전체 프롬프트').fill(edited); await editor.getByLabel('프롬프트 역할').selectOption('translation'); await editor.getByLabel('프롬프트 역할').selectOption('main'); await expect(editor.getByLabel('작문 전체 프롬프트')).toHaveValue(edited);
@@ -406,12 +406,12 @@ test('UI18 translation is requested only by first view click, never by restore, 
   await page.setViewportSize({ width: 1440, height: 1000 }); await page.goto(`/?chat=${chat.id}`);
   await expect(page.getByTestId('source-text')).toBeVisible(); await page.reload(); await expect(page.getByTestId('source-text')).toBeVisible();
   await page.getByRole('button', { name: '읽기 설정', exact: true }).click(); await page.getByLabel('새 원고의 기본 보기').selectOption('original'); await page.getByLabel('새 원고의 기본 보기').selectOption('translation'); await close(page);
-  await page.getByRole('navigation', { name: '채팅 목록' }).getByRole('button').filter({ hasText: other.title }).click(); await expect(page.getByTestId('source-text')).toBeVisible();
-  await page.getByRole('navigation', { name: '채팅 목록' }).getByRole('button').filter({ hasText: chat.title }).click(); await expect(page.getByTestId('source-text')).toBeVisible();
+  await page.getByRole('navigation', { name: '봇의 채팅 목록' }).getByRole('button').filter({ hasText: other.title }).click(); await expect(page.getByTestId('source-text')).toBeVisible();
+  await page.getByRole('navigation', { name: '봇의 채팅 목록' }).getByRole('button').filter({ hasText: chat.title }).click(); await expect(page.getByTestId('source-text')).toBeVisible();
   // A real settings event exercises SSE refresh, including legacy translation=false.
   const before = await data(request, chat.id);
   const changed = await request.patch(`/api/chats/${chat.id}/settings`, { data: { ...before.chat.settings, translation: false, expectedSettingsRevision: before.chat.settingsRevision } }); expect(changed.ok()).toBeTruthy();
-  await page.getByRole('button', { name: '이야기 설정', exact: true }).click(); await expect(page.getByText(`저장된 설정 v${before.chat.settingsRevision + 1}`)).toBeVisible(); await close(page);
+  await page.getByRole('button', { name: '채팅 설정', exact: true }).click(); await expect(page.getByText(`저장된 설정 v${before.chat.settingsRevision + 1}`)).toBeVisible(); await close(page);
   expect(posts).toEqual([]); expect((await data(request, chat.id)).jobs.filter(job => job.kind === 'translation')).toHaveLength(0); expect((await data(request, other.id)).jobs.filter(job => job.kind === 'translation')).toHaveLength(0);
   await request.post('/api/test/control', { data: { action: 'hold', barrier: 'translation' } });
   await page.getByRole('button', { name: '번역 보기', exact: true }).click();

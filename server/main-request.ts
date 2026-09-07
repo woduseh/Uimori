@@ -1,4 +1,5 @@
 import { buildMainInput, type MainInput } from '../core/provider.js';
+import { packageContext } from '../core/package-context.js';
 import type { RunSnapshot, ToolEvent } from '../core/types.js';
 import type { Connection, ModelPreset } from '../core/product.js';
 import { validateProviderPrompt, type PromptTemplate } from '../core/prompt-program.js';
@@ -11,6 +12,7 @@ import { encodeVertex } from '../core/vertex-protocol.js';
 import { encodeSolResponses } from '../core/sol-protocol.js';
 import { defaultSolOptions, type SolOptions } from '../core/sol-config.js';
 import { DEFAULT_MAIN_PROMPT } from '../core/prompts.js';
+import { assertBehaviorToolCapability, listBehaviorTools } from '../core/package-behavior-tools.js';
 
 const pagination = { offset: { type: 'integer', minimum: 0 }, limit: { type: 'integer', minimum: 1 } };
 export const MAIN_READ_TOOLS: ProviderTool[] = [
@@ -33,9 +35,10 @@ function requestInput(snapshot:RunSnapshot,input:MainInput):ProviderRequest['inp
   const {length,...creative}=input.controls??{length:{}};
   const controls=Object.fromEntries(Object.entries({preset:input.preset,...creative,...length}).filter(([,value])=>value!==undefined)) as ProviderRequest['input']['controls'];
   const structured=!!snapshot.profile?.promptPresets?.main?.program;
-  const templateHasState=(nodes:PromptTemplate):boolean=>nodes.some(node=>node.kind==='slot'&&node.name==='state'||node.kind==='if'&&(templateHasState(node.then)||templateHasState(node.else??[])));
+  const packages = structured ? packageContext(snapshot, 'main') : undefined;
+  const templateHasState=(nodes:PromptTemplate):boolean=>nodes.some(node=>node.kind==='slot'&&node.name==='state'||node.kind==='if'&&(templateHasState(node.then)||templateHasState(node.else??[]))||node.kind==='each'&&(templateHasState(node.body)||templateHasState(node.else??[]))||node.kind==='let'&&templateHasState(node.body));
   const stateSlot=snapshot.profile?.promptPresets?.main?.program?.blocks.some(block=>block.kind==='slot'&&block.slot==='state'||(block.kind==='slot'||block.kind==='message')&&templateHasState(block.template??[]));
-  return {task:input.task,controls,source:json({parentRevision:snapshot.parentRevision,facts:structured||input.pinnedSources?.length?[]:input.facts,pinnedSources:structured?[]:input.pinnedSources??[],prefetch:input.prefetch,...(input.state&&!stateSlot?{state:input.state}:{}),...(!structured&&input.memory?{memory:input.memory}:{}),...(input.catalogPage?{catalogPage:input.catalogPage}:{})}),catalog:json(input.catalog),...(!snapshot.promptCompilation?{history:json(input.history)}:{}),results:json(input.results)};
+  return {task:input.task,controls,source:json({parentRevision:snapshot.parentRevision,facts:structured||input.pinnedSources?.length?[]:input.facts,pinnedSources:structured?[]:input.pinnedSources??[],prefetch:input.prefetch,...(packages?{packages}:{}),...(input.state&&!stateSlot?{state:input.state}:{}),...(!structured&&input.memory?{memory:input.memory}:{}),...(input.catalogPage?{catalogPage:input.catalogPage}:{}),...(snapshot.behaviorExecution?.automaticResults.length?{automaticResults:snapshot.behaviorExecution.automaticResults}:{})}),catalog:json(input.catalog),...(!snapshot.promptCompilation?{history:json(input.history)}:{}),results:json(input.results)};
 }
 /** Explicit dynamic data boundary. Existing user-authored roles, order and cache IDs stay unchanged. */
 export function attachMainHostContext(snapshot:RunSnapshot):RunSnapshot{
@@ -53,6 +56,8 @@ export function attachMainHostContext(snapshot:RunSnapshot):RunSnapshot{
 }
 /** Shared by the real runner and no-call preview; no credentials, fetch, attempts or source writes. */
 export function buildMainProviderRequest(snapshot:RunSnapshot,options:{results?:readonly ToolEvent[];opaqueState?:Json;sol?:SolOptions}={}):{snapshot:RunSnapshot;input:MainInput;request:ProviderRequest}{
+  const behaviorTools = listBehaviorTools(snapshot);
+  assertBehaviorToolCapability(snapshot, behaviorTools);
   const fixed=attachMainHostContext(snapshot),target=fixed.profile?.models.main;
   if(!target)throw new ProviderContractError('MAIN_MODEL_REQUIRED');
   const input=buildMainInput(fixed,options.results??[]),terminal=nativeStorySubmissionEnabled(fixed);
@@ -61,7 +66,7 @@ export function buildMainProviderRequest(snapshot:RunSnapshot,options:{results?:
   if(fixed.promptCompilation&&!fixed.profile?.promptPresets?.main?.program){const legacy=fixed.profile?.promptPresets?.main?.text??DEFAULT_MAIN_PROMPT;if(contract.startsWith(legacy))contract=contract.slice(legacy.length).trimStart();}
   if(terminal)contract+='\nThe registered story.submit tool is this run\'s final fiction submission boundary. Ordinary final text remains a supported fallback.';
   const sol=target.connection.protocol==='sol-responses-v1'?(options.sol??target.sol??defaultSolOptions()):undefined;
-  const request:ProviderRequest={role:'main',modelId:target.modelId,stable:{contract,tools:[...MAIN_READ_TOOLS.filter(tool=>input.tools.includes(tool.name)).map(tool=>structuredClone(tool)),...(terminal?[structuredClone(STORY_SUBMIT_TOOL)]:[])]},
+  const request:ProviderRequest={role:'main',modelId:target.modelId,stable:{contract,tools:[...MAIN_READ_TOOLS.filter(tool=>input.tools.includes(tool.name)).map(tool=>structuredClone(tool)),...behaviorTools.map(binding=>binding.tool),...(terminal?[structuredClone(STORY_SUBMIT_TOOL)]:[])]},
     generation:{maxOutputTokens:target.maxOutputTokens,temperature:target.temperature,...(target.thinkingLevel?{thinkingLevel:target.thinkingLevel}:{}),...(target.structuredOutput!==undefined?{structuredOutput:target.structuredOutput}:{}),...(target.reasoningEffort?{reasoningEffort:target.reasoningEffort}:{}),...(target.thinkingMode?{thinkingMode:target.thinkingMode}:{}),...(target.thinkingBudgetTokens!==undefined?{thinkingBudgetTokens:target.thinkingBudgetTokens}:{}),...(sol?{sol}:{})},
     input:requestInput(fixed,input),...(fixed.promptCompilation?{prompt:{compilerVersion:fixed.promptCompilation.compilerVersion,messages:fixed.promptCompilation.messages,cachePlan:fixed.promptCompilation.cachePlan,values:fixed.promptCompilation.values}}:{}),...(options.opaqueState!==undefined?{opaqueState:options.opaqueState}:{})};
   return {snapshot:fixed,input,request:validateRequest(request)};

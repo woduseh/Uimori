@@ -14,8 +14,8 @@ async function create(page: Page, title: string): Promise<Chat> {
   await page.goto(`/?chat=${chat.id}`); await expect(page.getByRole('heading', { name: title, exact: true })).toBeVisible(); return chat;
 }
 async function panel(page: Page) {
-  const dialog = page.getByRole('dialog', { name: '이야기 설정', exact: true });
-  if (!await dialog.isVisible()) await page.getByRole('button', { name: '이야기 설정', exact: true }).click();
+  const dialog = page.getByRole('dialog', { name: '채팅 설정', exact: true });
+  if (!await dialog.isVisible()) await page.getByRole('button', { name: '채팅 설정', exact: true }).click();
   const section = dialog.getByRole('region', { name: '이야기 상태와 기억', exact: true });
   await expect(section.getByRole('button', { name: '상태와 기억 설정 저장', exact: true })).toBeVisible(); return section;
 }

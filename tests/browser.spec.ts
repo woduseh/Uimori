@@ -26,8 +26,8 @@ async function sourceDetails(page: Page) {
   }
 }
 async function storySettings(page: Page) {
-  const dialog = page.getByRole('dialog', { name: '이야기 설정', exact: true });
-  if (!await dialog.isVisible()) await page.getByRole('button', { name: '이야기 설정', exact: true }).click();
+  const dialog = page.getByRole('dialog', { name: '채팅 설정', exact: true });
+  if (!await dialog.isVisible()) await page.getByRole('button', { name: '채팅 설정', exact: true }).click();
   const fixture = dialog.locator('details').filter({ has: page.locator('summary', { hasText: '개발자용 모의 실행 제어' }) });
   if (await fixture.count() && await fixture.getAttribute('open') === null) await fixture.locator('summary').click();
 }
@@ -87,7 +87,7 @@ test('F02 F03 F05 two contexts and two tabs keep commands, snapshots, source job
     await page.getByRole('button', { name: '설정 저장', exact: true }).click();
     await expect(page.getByText('저장된 설정 v2')).toBeVisible();
     await aSecondTab.getByRole('button', { name: '설정 저장', exact: true }).click();
-    await expect(aSecondTab.getByRole('dialog', { name: '이야기 설정', exact: true }).getByRole('alert')).toContainText('다른 요청이 먼저 반영됐어요');
+    await expect(aSecondTab.getByRole('dialog', { name: '채팅 설정', exact: true }).getByRole('alert')).toContainText('다른 요청이 먼저 반영됐어요');
     await aSecondTab.getByRole('button', { name: '저장된 설정 다시 불러오기' }).click();
     await expect(aSecondTab.getByRole('alert')).toHaveCount(0);
     expect((await detail(request, a.id)).runs[0].snapshot.settings.preset).toBe('calm');

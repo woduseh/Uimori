@@ -1,12 +1,14 @@
 import { createHash } from 'node:crypto';
 import { attachMainHostContext } from './main-request.js';
 import { buildMainInput } from '../core/provider.js';
-import { compilePromptProgram, type PromptHistoryMessage, type PromptProgram, type PromptValue } from '../core/prompt-program.js';
+import { compilePromptProgram, type PromptHistoryMessage, type PromptProgram, type PromptValue, type PromptTemplate } from '../core/prompt-program.js';
 import { hiddenLogicalHistoryForRequest } from '../core/hidden-context.js';
 import type { RunSnapshot } from '../core/types.js';
 import type { Store } from './store.js';
 import { nativeInstructions } from '../core/native-context.js';
 import { DEFAULT_MAIN_PROMPT } from '../core/prompts.js';
+import { packageSlots, compiledPackages } from '../core/package-context.js';
+import { executionContext } from '../core/execution-context.js';
 
 /** Pair each exact source version with its actual user request; never infer roles from prose. */
 export function captureLogicalHistory(store:Store,snapshot:RunSnapshot):PromptHistoryMessage[]{
@@ -28,15 +30,27 @@ export function promptContext(snapshot:RunSnapshot){
     memory:input.memory?JSON.stringify(input.memory):'',state:input.state?JSON.stringify(input.state):'',globalNote:'',authorNote:'',postEverything:'',slot:'',
     controls:JSON.stringify(input.controls??{}),catalog:JSON.stringify(input.catalog),source:'',
   };
+  const packages = packageSlots(snapshot, 'main');
+  if (packages.char) slots.char = packages.char;
+  for (const key of ['bot','persona','lore'] as const) if (packages[key]) slots[key] = [slots[key],packages[key]].filter(Boolean).join('\n\n');
+  slots.description = slots.bot;
   slots.lorebook=slots.lore;slots.authornote=slots.authorNote;
+  for (const instruction of compiledPackages(snapshot,'main').flatMap(p=>p.instructions)) if (instruction.position) slots[instruction.position] = [slots[instruction.position],instruction.text].filter(Boolean).join('\n\n');
   const history=[...hiddenLogicalHistoryForRequest(snapshot,snapshot.logicalHistory??[]),{id:'current-input',role:'user' as const,text:snapshot.request,current:true}];
   const preset=snapshot.profile?.promptPresets?.main;
-  return {slots,history,values:preset?snapshot.profile?.promptControls?.[`${preset.id}@${preset.revision}`]?.values:undefined};
+  return {slots,history,runtime:executionContext(snapshot),values:preset?snapshot.profile?.promptControls?.[`${preset.id}@${preset.revision}`]?.values:undefined};
 }
 export function compileSnapshotPrompt(snapshot:RunSnapshot,program?:PromptProgram,values?:Record<string,PromptValue>):RunSnapshot{
-  const selected=program??snapshot.profile?.promptPresets?.main?.program??(snapshot.hiddenStory?{version:1 as const,controls:[],blocks:[{id:'legacy-instructions',title:'Role instructions',kind:'message' as const,role:'system' as const,template:[{kind:'text' as const,text:snapshot.profile?.promptPresets?.main?.text??DEFAULT_MAIN_PROMPT}]},{id:'history',title:'Conversation',kind:'history' as const,from:0,to:'end' as const}]}:undefined);
-  if(!selected)return snapshot;
   if(snapshot.story?.waiting)return snapshot;
+  const selected=program??snapshot.profile?.promptPresets?.main?.program??(snapshot.hiddenStory?{version:1 as const,controls:[],blocks:[{id:'legacy-instructions',title:'Role instructions',kind:'message' as const,role:'system' as const,template:[{kind:'text' as const,text:snapshot.profile?.promptPresets?.main?.text??DEFAULT_MAIN_PROMPT}]},{id:'history',title:'Conversation',kind:'history' as const,from:0,to:'end' as const}]}:undefined);
+  const positioned=compiledPackages(snapshot,'main').flatMap(p=>p.instructions).filter(n=>n.position);
+  if(positioned.length){
+    const declared=new Set<string>();
+    const walk=(nodes:PromptTemplate)=>{for(const node of nodes){if(node.kind==='slot')declared.add(node.name);else if(node.kind==='if'){walk(node.then);walk(node.else??[]);}else if(node.kind==='each'){walk(node.body);walk(node.else??[]);}else if(node.kind==='let')walk(node.body);}};
+    for(const block of selected?.blocks??[]){if(block.kind==='slot')declared.add(block.slot);if((block.kind==='slot'||block.kind==='message')&&block.template)walk(block.template);}
+    for(const instruction of positioned)if(!declared.has(instruction.position!))throw new Error(`PACKAGE_INSERTION_SLOT_MISSING (${instruction.position})`);
+  }
+  if(!selected)return snapshot;
   const context=promptContext(snapshot);const promptCompilation=compilePromptProgram(selected,{...context,...(values?{values}:{})});
   if(snapshot.hiddenStory){
     const hidden=snapshot.hiddenStory;let index=promptCompilation.messages.findIndex(m=>hidden.insertion==='before-history'?m.provenance.origin!=='prompt':m.provenance.origin==='current');

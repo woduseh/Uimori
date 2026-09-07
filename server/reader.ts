@@ -42,7 +42,7 @@ export function readerDetail(store: Store, id: string, query: Record<string, str
   });
   // JSON projection happens in SQLite: do not parse quadratic history or diagnostic bodies.
   const runs = (store.db.prepare(`SELECT id,chat_id AS chatId,parent_revision AS parentRevision,status,request,source_revision AS sourceRevision,error,usage,partial_text AS partialText,issue,
-    json_extract(snapshot,'$.settingsRevision') AS settingsRevision,json_extract(snapshot,'$.profile.models.main.title') AS modelTitle,json_extract(snapshot,'$.hiddenStory.config') AS hiddenConfig,
+    json_extract(snapshot,'$.settingsRevision') AS settingsRevision,json_extract(snapshot,'$.profile.models.main.title') AS modelTitle,json_extract(snapshot,'$.hiddenStory.config') AS hiddenConfig,COALESCE(json_array_length(snapshot,'$.profile.packageAttachments'),0)>0 AS hasPackages,
     json_object('branchId',branch_id,'candidateOf',json_extract(snapshot,'$.candidateOf'),'forkedFrom',json_extract(snapshot,'$.forkedFrom')) AS snapshot
     FROM runs WHERE chat_id=? ORDER BY created_at,id`).all(id) as Record<string,any>[]).map(row => ({...row,snapshot:JSON.parse(row.snapshot),hiddenConfig:row.hiddenConfig?JSON.parse(row.hiddenConfig):undefined,usage:row.usage ? JSON.parse(row.usage) : {modelCalls:0,inputTokens:null,outputTokens:null,costUsd:null}}));
   const activeJobs = Number((store.db.prepare(`SELECT COUNT(*) AS count FROM jobs j JOIN sources s ON s.id=j.source_revision WHERE j.chat_id=? AND j.status IN ('queued','running') AND j.source_hash=COALESCE((SELECT hash FROM source_edits WHERE source_id=s.id ORDER BY revision DESC LIMIT 1),s.hash)`).get(id) as {count:number}).count);

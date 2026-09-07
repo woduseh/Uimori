@@ -1,11 +1,10 @@
 import { test, expect, type Page, type APIRequestContext } from '@playwright/test';
 import type { Connection, Library, ModelPreset } from '../core/product.js';
 import type { ChatDetail } from '../core/types.js';
+import { navigationAction } from './ui-navigation.js';
 
 async function navigation(page:Page,name:string) {
-  const button=name==='새 이야기'?page.getByRole('complementary').getByRole('button',{name,exact:true}):page.getByRole('button',{name,exact:true});
-  if(!await button.isVisible()) await page.getByRole('button',{name:'탐색 메뉴',exact:true}).click();
-  await button.click();
+  await navigationAction(page,name);
 }
 async function library(request:APIRequestContext):Promise<Library> {
   const response=await request.get('/api/library'); expect(response.ok()).toBeTruthy(); return response.json();
@@ -44,6 +43,7 @@ async function saveModel(page:Page,request:APIRequestContext,connection:Connecti
 
 test('SOLUI01 desktop gateway and model registration persists selected story roles after reconnect without model calls', async ({page,context,request},info)=>{
   await page.setViewportSize({width:1440,height:1000}); const observed=observe(page); const title='합성 Sol desktop '+Date.now();
+  const bot=await request.post('/api/content',{data:{kind:'bot',title:`${title} bot`,description:'Synthetic Sol navigation',text:'Synthetic keeper',loading:'pinned',relatedIds:[]}});expect(bot.ok()).toBeTruthy();
   await page.goto('/'); await settings(page);
   for(const [gateway,endpoint] of [['vercel','https://ai-gateway.vercel.sh/v1'],['llm-gateway','https://api.llmgateway.io/v1'],['openai','https://api.openai.com/v1']]) {
     await page.getByLabel('Sol 게이트웨이').selectOption(gateway); await expect(page.getByLabel('API 기본 주소')).toHaveValue(endpoint); await expect(page.getByLabel('API 기본 주소')).toHaveAttribute('readonly','');
@@ -55,11 +55,11 @@ test('SOLUI01 desktop gateway and model registration persists selected story rol
   await page.getByText('Sol 공급자 선택 옵션',{exact:true}).click(); await page.getByLabel('Service tier',{exact:true}).selectOption('flex'); await page.getByLabel('Verbosity',{exact:true}).selectOption('high'); await page.getByLabel('Reasoning summary',{exact:true}).selectOption('detailed'); await page.getByLabel('Encrypted reasoning 연속 요청에 사용').check();
   await page.getByLabel('Sol 문맥 제공').scrollIntoViewIfNeeded(); await page.screenshot({path:info.outputPath('sol-desktop-options.png')});
   const model=await saveModel(page,request,connection); expect(model).toMatchObject({reasoningEffort:'max',sol:{contextMode:'preloaded',maximumToolRounds:3,terminalLateCorrections:true,serviceTier:'flex',verbosity:'high',reasoningSummary:'detailed',includeEncryptedReasoning:true}});
-  await page.keyboard.press('Escape'); await navigation(page,'새 이야기'); await page.getByLabel('새 이야기 이름').fill(title+' 이야기');
-  const ref=`${model.id}@${model.revision}`; await page.getByLabel('시작 본문 모델').selectOption(ref); await page.getByLabel('시작 번역 모델').selectOption(ref); await page.getByRole('button',{name:'이야기 만들기',exact:true}).click();
+  await page.keyboard.press('Escape'); await navigation(page,'새 이야기'); await page.getByLabel('새 채팅 이름').fill(title+' 이야기');
+  const ref=`${model.id}@${model.revision}`; await page.getByLabel('시작 본문 모델').selectOption(ref); await page.getByLabel('시작 번역 모델').selectOption(ref); await page.getByRole('button',{name:'채팅 만들기',exact:true}).click();
   await expect.poll(()=>new URL(page.url()).searchParams.get('chat')).toBeTruthy(); const storyUrl=page.url(),chatId=new URL(storyUrl).searchParams.get('chat')!;
   await page.reload(); await expect(page.getByLabel('빠른 본문 모델')).toHaveValue(ref);
-  const reconnected=await context.newPage(); await reconnected.setViewportSize({width:1440,height:1000}); await reconnected.goto(storyUrl); await reconnected.getByRole('button',{name:'이야기 설정',exact:true}).click(); await reconnected.getByRole('tab',{name:'모델',exact:true}).click();
+  const reconnected=await context.newPage(); await reconnected.setViewportSize({width:1440,height:1000}); await reconnected.goto(storyUrl); await reconnected.getByRole('button',{name:'채팅 설정',exact:true}).click(); await reconnected.getByRole('tab',{name:'모델',exact:true}).click();
   await expect(reconnected.getByLabel('원문 모델',{exact:true})).toHaveValue(ref); await expect(reconnected.getByLabel('번역 모델',{exact:true})).toHaveValue(ref); await reconnected.screenshot({path:info.outputPath('sol-desktop-restored-roles.png')});
   const detail=await (await request.get(`/api/chats/${chatId}`)).json() as ChatDetail; expect(detail.profile?.routes.main).toEqual({id:model.id,revision:model.revision}); expect(detail.runs).toEqual([]); expect(detail.attempts).toEqual([]); expect(detail.jobs).toEqual([]);
   expect((await library(request)).models.find(item=>item.id===model.id)).toEqual(model); expect(observed.errors).toEqual([]); expect(observed.forbidden).toEqual([]); await reconnected.close();

@@ -90,7 +90,7 @@ describe('S02 S03 actual Store continuity and activation dependencies', () => {
     const originalRun = structuredClone(store.run(second.runId).snapshot);
     expect(store.story.claim(secondJob.id, 'too-early')).toBeNull(); await finish(store, firstJob.id); await finish(store, secondJob.id);
     expect(store.story.stateAt(id, second.id)?.values).toEqual({ coins: 7 });
-    const restored = await database(); const archive = store.product.export(); expect(archive.version).toBe(5);
+    const restored = await database(); const archive = store.product.export(); expect(archive.version).toBe(8);
     expect(restored.product.import(archive).restored).toBe(true);
     expect(restored.run(second.runId).snapshot).toEqual(originalRun);
     expect(restored.story.bundle(secondJob.id).snapshot.story?.state?.values).toEqual({ coins: 7 });

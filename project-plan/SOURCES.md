@@ -1,5 +1,11 @@
 # 근거와 확인 범위 v0.6.1
 
+## 2026-09-07 공통 행동의 자동·UI·Tool 호출
+
+Uimori의 기존 `core/package-behavior.ts` 순수 계산과 `server/store.ts` 원문 완료 transaction을 공통 기준으로 사용했어요. 실행기와 호출 권한을 분리하고 `triggers`가 자동·사용자·모델 진입점만 선택하도록 적용했어요. 각 연산을 별도 Tool로 제공하거나 모델에 함수 본문을 전달하는 방식은 호출·문맥 비용을 늘리므로 채택하지 않았어요. 검증은 `tests/package-behavior-run.test.ts`, `tests/package-behavior-tools.test.ts`, `tests/package-behavior-run-archive.test.ts`와 BUI03–04에서 수행해요.
+
+[Anthropic Tool use 공식 문서](https://platform.claude.com/docs/en/agents-and-tools/tool-use/overview)를 2026-09-07 확인했어요. 도구 정의·호출·결과가 문맥에 포함되고 클라이언트 Tool은 결과를 돌려준 후 모델이 이어서 응답한다는 호출 경계를 참고했어요. 자주 필요한 고정 계산은 생성 전에 실행하고, 문맥 판단이 필요한 행동은 한 번의 domain Tool로 묶어 작은 결과만 돌려줘요. 공급자 비용 수치나 성능 우위를 추정하지 않았으며 실제 절감률은 측정하지 않았어요. 외부 구현 코드는 복사하지 않았어요.
+
 ## PocketRisu — 사용자 지정 참고 프로젝트 · 2026-09-07
 
 [PocketRisu/PocketRisu](https://github.com/PocketRisu/PocketRisu)를 추가 참고 대상으로 등록했어요. 이번에는 공개 main의 README와 [원격 접속 안내](https://github.com/PocketRisu/PocketRisu/blob/main/docs/en/remote.md), 서버 디렉터리 목록을 확인했어요. commit 고정·구현 본문/테스트 분석·실행은 아직 하지 않았으며, 아래는 채택 결정이 아닌 후속 조사 범위예요.
@@ -243,3 +249,31 @@ M1의 고정 인계 snapshot `98d80987e721d640570abf837ff0e094b2a7dcfd0caf310da8
 원본 바이너리·개인 프롬프트/모듈 본문과 변환된 실제 패키지는 Git에서 제외된 `output/native-porting/`와 전용 SQLite에만 보관해요. 원본 자료별 공개 재배포 라이선스를 포괄적으로 확인한 것이 아니므로 공개 fixture로 복제하지 않았어요. 추적 코드에는 독립 변환기·중립 각색·합성 테스트만 포함해요. 구조화된 로컬 가져오기와 실제 모델의 문학·번역·장기기억 품질은 별도 주장으로 유지해요.
 
 공식 API의 메시지 배치·명시적 cache 범위와 실제 인코더 미리보기의 출처·한계는 [NATIVE-WIRE.md](NATIVE-WIRE.md), 동작 대응표는 [NATIVE-PORTING.md](NATIVE-PORTING.md)에 정리했어요.
+
+## 2026-09-07 봇 중심 개편과 변환 진입점
+
+사용자 논의의 최종 계약은 [REDESIGN.md](REDESIGN.md)예요. PocketRisu의 `b315d898abd543fffaf5346d8eb3246b20da92cd`에서 `src/lib/Others/ChatList.svelte`, `src/lib/SideBars/SideChatList.svelte`, persona 연결 흐름을 참고했어요. 봇을 먼저 선택한 뒤 그 봇의 채팅을 탐색하는 정보 구조를 `web/BotNavigation.tsx`에 독립 적용했어요. 저장 구조는 기존 Uimori 불변 Content revision과 별도 chat organization을 결합하며 원본 UI·코드를 복제하지 않았어요. 검증은 봇 소속 고정, 폴더 scope/CAS, 포크 상속, 좁은 화면 탐색이에요.
+
+로컬 Risuai `c454df882aaf32e02a22da26d3718c8cadc97814`의 `characterCards.ts`, `process/processzip.ts`, `storage/database.svelte.ts`, `process/modules.ts`, `process/prompt.ts`, `process/scripts.ts`는 카드/모듈/프리셋의 파일 배치와 역할·표시 정규식 차이를 확인하는 데 사용했어요. GPLv3 구현이나 RPack 코드는 복사하지 않았어요. `core/risu-import.ts`와 `server/risu-import.ts`는 JSON 변환·ZIP 경계 검사·손실 보고를 독립 구현해요. 합성 JSON/ZIP, 크기·CRC·경로·미지원 CBS 검사를 사용하며 실제 파일 전체 호환을 주장하지 않아요. 세부 형식·제한은 [RISU-IMPORT.md](../docs/RISU-IMPORT.md)에 있어요.
+
+기존 `prompt-program.ts`, `ProductStore`의 revision/CAS, source hash와 main/auxiliary snapshot 경계를 재사용했어요. 공통 패키지는 Risu의 인물/로어북 구분을 런타임 제약으로 가져오지 않고, body/lore/instructions/controls/presentation과 장착 역할을 분리해요. Lua/트리거 호환·요청별 임의 코드 실행은 채택하지 않았어요. TypeScript 제작 API와 선택형 문법은 모두 검증된 AST를 생성하며, 기본 작성 방식의 선택은 [제작 방식 비교](../docs/PROMPT-AUTHORING.md)에 남겨요.
+
+## 2026-09-07 복잡한 봇의 동작 확장 조사
+
+사용자가 지정한 `RisuToki/risu/bot/Reference/`의 `Merry Sisters! - Final.charx`, `Alternate Hunters V2.charx`, `Cheongwon High School.charx`를 headless MCP로 정적 조회했어요. 앞서 전달된 Veil 조사 중 regex[4,6]의 상태 파싱과 lore[69]의 단일 추첨 진입부도 재확인했어요. 조회 범위·메타데이터·미확인 영역은 [패키지 동작 확장 계획](PACKAGE-BEHAVIOR-PLAN.md#직접-확인한-근거와-한계)에 있어요.
+
+메리 Lua[12,22,24,28,29]의 판정·보조 호출·상태 복원·주기 작업, 청원고 Lua[3,5]의 재생성 delta 처리·시간표, Alternate의 출력 후 상태 작업에서 상태/action/job/projection을 분리해야 한다는 요구를 도출했어요. 제안 적용 위치는 공통 package behavior와 기존 source-bound 저장/작업 실행기이며, 검증 방법은 계획의 B0–B5 및 표본별 반례예요. **아직 동작 확장 구현이나 표본 실행 검증은 하지 않았어요.**
+
+원본의 `setChat` 재작성, 대기 후 최신 메시지 재선택, 대화 길이 기반 rollback, 무조건 보조 호출 재시도는 Uimori의 원문/분기 귀속·불확실 실행 계약과 달라 채택하지 않아요. 소스/장문 프롬프트/에셋은 복제하지 않았고 원본의 공개 재배포 권한을 추정하지 않았어요. Lua 호환 실행기를 만드는 대신 제작 방식과 호스트 동작 계약을 비교하는 후속 설계 근거로만 사용했어요.
+
+## 2026-09-07 CBS 의미 기능의 독립 구현
+
+후속 사용자 요청으로 RisuToki `risu/common/skills/writing-cbs-syntax/REFERENCE.md`와 RisuAI `c454df882aaf32e02a22da26d3718c8cadc97814`의 `src/ts/cbs.ts`, `src/ts/parser/parser.svelte.ts`, `src/ts/process/index.svelte.ts`, `src/ts/parser/chatVar.svelte.ts`를 정적으로 비교했어요. 문서의 분류를 지원 목록 그대로 취급하지 않고 등록 callback·실행 순서·변수 저장과 대조했어요.
+
+| 소스·심볼 | 채택 원리 → Uimori | 확인 방법 / 비채택 |
+| --- | --- | --- |
+| `cbs.ts` 산술/문자열/array/object/history 태그, 파서의 조건·지역 변수·반복 | typed JSON 읽기와 순수 계산 → `prompt-program.ts`, `prompt-values.ts`, `execution-context.ts`, 작성 API | 기존 scalar 비교 결과 회귀, 동적 목록/지역 범위/날짜/분기별 이력, 시간·작업량·출력 상한 검사. JSON 문자열 배열이나 0/false 누락 관행은 복제하지 않음 |
+| `cbs.ts`의 pick/rollp 및 chatVar 저장, `runCurrentChatFunction` | 실제 추첨과 상태를 원문 밖에 기록 → `package-behavior-store.ts`, `package-behavior-host.ts` | source/CAS/idempotency, candidate/branch/fork/재시작·archive 검증. 메시지 수 seed와 기존 원문 덮어쓰기는 비채택 |
+| 모듈 삽입·button·표시 기능 | 선언된 main slot과 typed action 폼 → `prompt-snapshot.ts`, `PackageBehaviorPanel.tsx` | 원래 자리에서 한 번만 공급, 누락 slot 오류, 390px 동작/초안 보존. 임의 HTML·JS·CSS 실행은 비채택 |
+
+GPL 코드나 개인 패키지의 본문·스크립트를 복사하지 않고 기존 Uimori의 snapshot/SQLite/CAS와 독립 구현한 데이터 평가기를 사용했어요. 기능 범위·아직 없는 jobs/hooks/view DSL은 [현재 API](../docs/PACKAGE-BEHAVIOR.md), 실제 검증은 [결과](PACKAGE-BEHAVIOR-RESULTS.md)에 분리해 기록해요.

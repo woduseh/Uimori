@@ -9,6 +9,7 @@
   "scripts": {
     "dev": "npm run build && node dist/server/index.js",
     "start": "node dist/server/index.js",
+    "reset:dev": "node scripts/reset-dev-data.mjs",
     "check": "tsc --noEmit",
     "build": "node scripts/build.mjs",
     "test": "vitest run",
@@ -20,7 +21,8 @@
     "verify:sol": "node scripts/verify-sol.mjs",
     "verify:providers": "node scripts/verify-provider-management.mjs",
     "verify:native": "node scripts/verify-native-ui.mjs",
-    "verify:loading": "node scripts/verify-loading.mjs"
+    "verify:loading": "node scripts/verify-loading.mjs",
+    "verify:redesign": "node scripts/verify-redesign.mjs"
   },
   "dependencies": {
     "@fastify/static": "10.1.3",

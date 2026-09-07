@@ -1,0 +1,54 @@
+{
+  "revision": 1,
+  "schemaVersion": 1,
+  "stateSchema": {
+    "type": "record",
+    "properties": {
+      "turn": { "type": "number", "min": 0, "max": 100000, "integer": true, "label": "진행한 턴" },
+      "weather": { "type": "enum", "values": ["맑음", "흐림", "비"], "label": "날씨" },
+      "encounter": { "type": "boolean", "label": "우연한 만남" },
+      "lastCheck": { "type": "enum", "values": ["미판정", "성공", "실패"], "label": "최근 설득 판정" }
+    }
+  },
+  "initialState": { "turn": 0, "weather": "맑음", "encounter": false, "lastCheck": "미판정" },
+  "actions": [
+    {
+      "id": "prepare_scene",
+      "label": "장면 조건 결정",
+      "description": "새 원문을 생성할 때 날씨와 10%의 우연한 만남을 함께 결정해요.",
+      "triggers": ["before-turn"],
+      "inputSchema": { "type": "record", "properties": {} },
+      "draws": [
+        { "id": "weather", "type": "choice", "values": ["맑음", "흐림", "비"] },
+        { "id": "encounter", "type": "integer", "min": 1, "max": 100 }
+      ],
+      "effects": [
+        { "path": ["turn"], "value": { "op": "add", "args": [{ "context": ["state", "turn"] }, 1] } },
+        { "path": ["weather"], "value": { "context": ["draws", "weather"] } },
+        { "path": ["encounter"], "value": { "op": "lte", "args": [{ "context": ["draws", "encounter"] }, 10] } }
+      ],
+      "result": { "op": "object", "args": ["날씨", { "context": ["nextState", "weather"] }, "우연한 만남", { "context": ["nextState", "encounter"] }] }
+    },
+    {
+      "id": "roll_die",
+      "label": "d6 굴리기",
+      "description": "주사위 결과를 화면에 보여 줘요.",
+      "triggers": ["user"],
+      "inputSchema": { "type": "record", "properties": {} },
+      "draws": [{ "id": "die", "type": "integer", "min": 1, "max": 6 }],
+      "effects": [],
+      "result": { "op": "object", "args": ["주사위", "d6", "결과", { "context": ["draws", "die"] }] }
+    },
+    {
+      "id": "resolve_persuasion",
+      "label": "설득 판정",
+      "description": "Use when the user's attempted persuasion needs a game-rule outcome. Choose the intended target; the host rolls d6 and succeeds on 4 or more. Use the returned outcome in the fiction.",
+      "triggers": ["model"],
+      "inputSchema": { "type": "record", "properties": { "target": { "type": "enum", "values": ["gatekeeper", "merchant"], "label": "대상" } } },
+      "draws": [{ "id": "die", "type": "integer", "min": 1, "max": 6 }],
+      "effects": [{ "path": ["lastCheck"], "value": { "op": "typedIf", "args": [{ "op": "gte", "args": [{ "context": ["draws", "die"] }, 4] }, "성공", "실패"] } }],
+      "result": { "op": "object", "args": ["target", { "context": ["input", "target"] }, "roll", { "context": ["draws", "die"] }, "outcome", { "context": ["nextState", "lastCheck"] }] }
+    }
+  ],
+  "outputParsers": []
+}

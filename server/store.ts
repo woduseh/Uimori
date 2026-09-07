@@ -8,6 +8,10 @@ import { ProductStore } from './product-store.js';
 import { StoryStore } from './story-store.js';
 import { NativeBotStore } from './native-bot.js';
 import { HiddenStoryStore } from './hidden-story.js';
+import { ChatOrganizationStore } from './chat-organization.js';
+import { PackageBehaviorStore } from './package-behavior-store.js';
+import { initBehaviorHost, freezePackageStates, completePackageOutputs, branchPackageStates } from './package-behavior-host.js';
+import { initRunBehavior, prepareRunBehavior, copyCandidateBehavior } from './package-behavior-run.js';
 import { nativeResources } from '../core/native-context.js';
 import { captureLogicalHistory, compileSnapshotPrompt } from './prompt-snapshot.js';
 import { splitSource, BUILTIN_ASSETS } from '../core/auxiliary.js';
@@ -29,6 +33,8 @@ export class Store {
   readonly product: ProductStore;
   readonly story: StoryStore;
   readonly native: NativeBotStore;
+  readonly organization: ChatOrganizationStore;
+  readonly behavior: PackageBehaviorStore;
   private readonly ownership: DatabaseSync;
   constructor(readonly path: string) {
     mkdirSync(dirname(path), { recursive: true });
@@ -41,32 +47,32 @@ export class Store {
     try { this.db = new DatabaseSync(this.path); }
     catch (error) { this.ownership.close(); throw error; }
     try {
+    const version = Number((this.db.prepare('PRAGMA user_version').get() as Row).user_version);
+    if (![0,8].includes(version)) throw new Error(`Unsupported database schema version ${version}; Uimori requires schema 8. For disposable default development data, stop the server and run npm run reset:dev.`);
+    if(version===0&&this.db.prepare("SELECT 1 FROM sqlite_schema WHERE type='table' AND name NOT LIKE 'sqlite_%' LIMIT 1").get())throw new Error('Unversioned database is not empty. For disposable default development data, stop the server and run npm run reset:dev.');
     this.db.exec('PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON; PRAGMA busy_timeout=3000;');
-    const version = this.db.prepare('PRAGMA user_version').get() as Row;
-    if (Number(version.user_version) > 5) throw new Error('Unsupported database schema version');
-    if (Number(version.user_version) === 0) this.db.exec(`
-      BEGIN;
+    this.product = new ProductStore(this);
+    this.story = new StoryStore(this);
+    this.native = new NativeBotStore(this);
+    this.organization = new ChatOrganizationStore(this);
+    this.behavior = new PackageBehaviorStore(this.db,(chatId,branchId)=>{const branch=this.product.branch(chatId,branchId);return branch.headRevision?this.source(branch.headRevision).hash:null;});
+    if (version === 0) this.transaction(()=>{
+      this.db.exec(`
       CREATE TABLE IF NOT EXISTS chats (id TEXT PRIMARY KEY, title TEXT NOT NULL, head_revision TEXT, settings_revision INTEGER NOT NULL, settings TEXT NOT NULL, created_at TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS resources (id TEXT PRIMARY KEY, chat_id TEXT NOT NULL REFERENCES chats(id), body TEXT NOT NULL);
-      CREATE TABLE IF NOT EXISTS runs (id TEXT PRIMARY KEY, chat_id TEXT NOT NULL REFERENCES chats(id), parent_revision TEXT, status TEXT NOT NULL, request TEXT NOT NULL, snapshot TEXT NOT NULL, request_key TEXT NOT NULL, command TEXT NOT NULL, source_revision TEXT, error TEXT, usage TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, UNIQUE(chat_id,request_key));
-      CREATE UNIQUE INDEX IF NOT EXISTS one_active_run_per_chat ON runs(chat_id) WHERE status IN ('queued','running');
+      CREATE TABLE IF NOT EXISTS runs (id TEXT PRIMARY KEY, chat_id TEXT NOT NULL REFERENCES chats(id), parent_revision TEXT, status TEXT NOT NULL, request TEXT NOT NULL, snapshot TEXT NOT NULL, request_key TEXT NOT NULL, command TEXT NOT NULL, source_revision TEXT, error TEXT, usage TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, branch_id TEXT REFERENCES branches(id), partial_text TEXT, issue TEXT, UNIQUE(chat_id,request_key));
+      CREATE UNIQUE INDEX IF NOT EXISTS one_active_run_per_branch ON runs(branch_id) WHERE status IN ('queued','running','waiting_for_state');
       CREATE TABLE IF NOT EXISTS sources (id TEXT PRIMARY KEY, chat_id TEXT NOT NULL REFERENCES chats(id), run_id TEXT NOT NULL UNIQUE REFERENCES runs(id), parent_revision TEXT REFERENCES sources(id), text TEXT NOT NULL, hash TEXT NOT NULL, created_at TEXT NOT NULL);
-      CREATE TABLE IF NOT EXISTS jobs (id TEXT PRIMARY KEY, chat_id TEXT NOT NULL REFERENCES chats(id), source_revision TEXT NOT NULL REFERENCES sources(id), source_hash TEXT NOT NULL, kind TEXT NOT NULL CHECK(kind IN ('translation','status')), status TEXT NOT NULL, generation INTEGER NOT NULL DEFAULT 0, owner TEXT, input TEXT, error TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, UNIQUE(source_revision,kind));
+      CREATE TABLE IF NOT EXISTS jobs (id TEXT PRIMARY KEY, chat_id TEXT NOT NULL REFERENCES chats(id), source_revision TEXT NOT NULL REFERENCES sources(id), source_hash TEXT NOT NULL, kind TEXT NOT NULL CHECK(kind IN ('translation','status','image')), status TEXT NOT NULL, generation INTEGER NOT NULL DEFAULT 0, owner TEXT, input TEXT, error TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, revision INTEGER NOT NULL DEFAULT 1, plan TEXT, retry_chunk TEXT, UNIQUE(source_revision,kind,revision));
       CREATE TABLE IF NOT EXISTS job_results (job_id TEXT PRIMARY KEY REFERENCES jobs(id), generation INTEGER NOT NULL, result TEXT NOT NULL, created_at TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS model_inputs (seq INTEGER PRIMARY KEY AUTOINCREMENT, run_id TEXT NOT NULL REFERENCES runs(id), input TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS tool_events (seq INTEGER PRIMARY KEY AUTOINCREMENT, run_id TEXT NOT NULL REFERENCES runs(id), event TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS events (seq INTEGER PRIMARY KEY AUTOINCREMENT, chat_id TEXT NOT NULL REFERENCES chats(id), kind TEXT NOT NULL, entity_id TEXT NOT NULL, at TEXT NOT NULL);
       CREATE INDEX IF NOT EXISTS chat_events ON events(chat_id,seq);
-      PRAGMA user_version=1;
-      COMMIT;
-    `);
-    this.product = new ProductStore(this);
-    this.product.migrate(Number(version.user_version));
-    this.story = new StoryStore(this);
-    this.story.migrate();
-    this.native = new NativeBotStore(this);
-    if (Number(version.user_version) < 5 && this.db.prepare('SELECT 1 FROM chats LIMIT 1').get()) this.db.prepare('VACUUM INTO ?').run(`${this.path}.pre-native-${Date.now()}-${randomUUID().slice(0,8)}.sqlite`);
-    this.transaction(() => { this.native.init(); this.db.exec('PRAGMA user_version=5'); });
+      `);
+      this.product.initFresh();this.story.initFresh();this.native.init();this.organization.init();
+      this.behavior.init();initBehaviorHost(this);initRunBehavior(this);this.db.exec('PRAGMA user_version=8');
+    });
     } catch (error) { this.db.close(); this.ownership.close(); throw error; }
   }
   close() { this.db.close(); this.ownership.close(); }
@@ -81,20 +87,21 @@ export class Store {
   events(chatId: string, after: number) {
     return this.db.prepare('SELECT seq,chat_id AS chatId,kind,entity_id AS entityId,at FROM events WHERE chat_id=? AND seq>? ORDER BY seq').all(chatId, after);
   }
-  private mapChat(row: Row): Chat { return { id: row.id, title: row.title, headRevision: row.head_revision, settingsRevision: row.settings_revision, settings: parse(row.settings), createdAt: row.created_at }; }
+  private mapChat(row: Row): Chat { return { id: row.id, title: row.title, headRevision: row.head_revision, settingsRevision: row.settings_revision, settings: parse(row.settings), createdAt: row.created_at, ...this.organization?.metadata(row.id) }; }
   chat(id: string): Chat {
     const row = this.db.prepare('SELECT * FROM chats WHERE id=?').get(id) as Row | undefined;
     if (!row) throw new HttpError(404, 'Chat not found');
     return this.mapChat(row);
   }
   chats(): Chat[] { return (this.db.prepare('SELECT * FROM chats ORDER BY created_at,id').all() as Row[]).map(row => this.mapChat(row)); }
-  createChat(title: string, preset: Settings['preset'] = 'calm', resources: (id: string) => Resource[] = () => []): Chat {
+  createChat(title: string, preset: Settings['preset'] = 'calm', resources: (id: string) => Resource[] = () => [], organization: {botId?:string;folderId?:string|null} = {}): Chat {
     const id = randomUUID();
     const settings: Settings = { preset, mode: 'direct', translation: true, status: true, maxCalls: 8 };
     this.transaction(() => {
       this.db.prepare('INSERT INTO chats VALUES(?,?,NULL,1,?,?)').run(id, title, json(settings), now());
       this.db.prepare('INSERT INTO branches VALUES(?,?,?,NULL,1,1)').run(`main:${id}`,id,'기본 분기');
       for (const resource of resources(id)) this.db.prepare('INSERT INTO resources VALUES(?,?,?)').run(resource.id, id, json(resource));
+      this.organization.create(id,organization);
     });
     return this.chat(id);
   }
@@ -131,12 +138,13 @@ export class Store {
       const id = randomUUID(); const time = now();
       const nativeBot=this.native.snapshot(chatId,branch.id);
       if(command.nativeCommandId && (!nativeBot?.pending || nativeBot.pending.commandId!==command.nativeCommandId || nativeBot.pending.request!==command.request)) throw new HttpError(409,'Native command no longer matches this source or request');
-      const base={...snapshot({...chat,headRevision:branch.headRevision}),branchId:branch.id,...(nativeBot?{nativeBot}:{})};
+      const base={...snapshot({...chat,headRevision:branch.headRevision}),executionClock:{iso:time,unix:Math.floor(Date.parse(time)/1000)},branchId:branch.id,...(nativeBot?{nativeBot}:{})};
       base.resources.push(...nativeResources(chatId,nativeBot??undefined));
       const hiddenStory=new HiddenStoryStore(this.product).freeze(base.profile?.hiddenStory,{seed:id,userLabel:base.profile?.contents.find(c=>c.kind==='persona')?.title??'User'});
       if(nativeBot && hiddenStory?.config.contentPolicy==='general-fiction')throw new HttpError(400,'This native bot requires the nonsexual Hidden Story policy');
       let frozen = this.story.prepareRunInTransaction({...base,...(hiddenStory?{hiddenStory}:{})});
-      frozen = compileSnapshotPrompt({...frozen,logicalHistory:captureLogicalHistory(this,frozen)});
+      frozen = freezePackageStates(this,{...frozen,logicalHistory:captureLogicalHistory(this,frozen)},true);
+      frozen = compileSnapshotPrompt(prepareRunBehavior(this,id,frozen));
       const status = frozen.story?.waiting ? 'waiting_for_state' : 'queued';
       this.db.prepare('INSERT INTO runs(id,chat_id,parent_revision,status,request,snapshot,request_key,command,created_at,updated_at,branch_id) VALUES(?,?,?,?,?,?,?,?,?,?,?)').run(id, chatId, command.expectedRevision, status, command.request, json(frozen), command.idempotencyKey, canonical, time, time,branch.id);
       if (command.sceneCommandId) this.story.bindCommandInTransaction(command.sceneCommandId,id);
@@ -154,8 +162,11 @@ export class Store {
       if (prior) { if (prior.command !== canonical) throw new HttpError(409,'Idempotency key reused with different command'); return {run:this.run(prior.id),created:false}; }
       const branch = this.product.createBranch(original.chatId,{title,fromRevision:original.parentRevision},original.snapshot.nativeBot??null);
       const snapshot: RunSnapshot = {...structuredClone(original.snapshot),branchId:branch.id,candidateOf:original.id};
+      branchPackageStates(this,original.chatId,branch.id,original.parentRevision,snapshot);
+      freezePackageStates(this,snapshot,false);
       if(snapshot.nativeBot){snapshot.nativeBot=this.native.snapshot(original.chatId,branch.id)!;if(snapshot.story&&snapshot.nativeBot.stateConfigRevision)snapshot.story.config=this.story.config(original.chatId,snapshot.nativeBot.stateConfigRevision);}
       const id = randomUUID(); const time = now();
+      copyCandidateBehavior(this,original,id,snapshot);
       this.db.prepare("INSERT INTO runs(id,chat_id,parent_revision,status,request,snapshot,request_key,command,created_at,updated_at,branch_id) VALUES(?,?,?,'queued',?,?,?,?,?,?,?)").run(id,original.chatId,original.parentRevision,original.request,json(snapshot),key,canonical,time,time,branch.id);
       this.event(original.chatId,'run.queued',id); return {run:this.run(id),created:true};
     });
@@ -216,6 +227,7 @@ export class Store {
         this.event(source.chatId, 'job.queued', jobId);
       }
       this.story.reserveSourceInTransaction(source,run);
+      completePackageOutputs(this,run,source);
       this.event(source.chatId, 'source.ready', source.id);
       this.event(source.chatId, 'run.completed', id);
       return source;

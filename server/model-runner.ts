@@ -1,16 +1,19 @@
-import { executeMain, executeTool } from '../core/provider.js';
+import { executeMain, executeTool, type ToolAction } from '../core/provider.js';
 import type { Connection } from '../core/product.js';
 import { executeProvider, type Json, type ProviderResult, type WireRecord } from '../core/transport.js';
 import type { ModelInput, RunSnapshot, ToolEvent, Usage } from '../core/types.js';
 import { createSolSession } from './sol-session.js';
 import { createHash } from 'node:crypto';
 import { attachMainHostContext, buildMainProviderRequest, nativeStorySubmissionEnabled, STORY_SUBMIT_MAX_CHARS } from './main-request.js';
+import { assertBehaviorToolCapability, listBehaviorTools, type BehaviorToolBinding } from '../core/package-behavior-tools.js';
+import { BehaviorError } from '../core/package-behavior.js';
 
 export type MainResult = { status: 'completed' | 'refused' | 'partial' | 'error' | 'cancelled'; text: string; error: string | null; usage: Usage };
 export type MainHooks = {
   signal: AbortSignal;
   onInput: (input: ModelInput) => void | Promise<void>;
   onToolEvent: (event: ToolEvent) => void | Promise<void>;
+  onBehaviorTool?: (binding: Pick<BehaviorToolBinding, 'instanceId' | 'actionId'>, action: ToolAction) => ToolEvent | Promise<ToolEvent>;
   approvedOrigins: readonly string[];
   timeoutMs?: number; vertexRequestTier?: 'standard' | 'flex';
   authorize: (connection: Connection) => Connection | Promise<Connection>;
@@ -26,6 +29,12 @@ function addUsage(total: Usage, result: ProviderResult) {
 
 /** One server-owned main run. A transport error/partial/refusal is terminal, never an implicit retry. */
 export async function runMain(snapshot: RunSnapshot, hooks: MainHooks): Promise<MainResult> {
+  let behaviorTools: BehaviorToolBinding[];
+  try { behaviorTools = listBehaviorTools(snapshot); assertBehaviorToolCapability(snapshot, behaviorTools); }
+  catch (error) {
+    if (!(error instanceof BehaviorError)) throw error;
+    return { status: 'error', text: '', error: error.message, usage: { modelCalls: 0, inputTokens: 0, outputTokens: 0, costUsd: 0 } };
+  }
   const fixed = attachMainHostContext(structuredClone(snapshot));
   const target = fixed.profile?.models.main;
   if (!target) {
@@ -83,11 +92,17 @@ export async function runMain(snapshot: RunSnapshot, hooks: MainHooks): Promise<
     opaqueState = result.opaqueState;
     for (const call of result.toolCalls) {
       if (hooks.signal.aborted) return fail('CANCELLED');
-      // Transport only decodes; this host read executor owns permissions and resource scope.
-      const event = sol?.toolNames.includes(call.name) ? sol.execute(call) : executeTool(fixed, { callId: call.id, name: call.name, args: call.arguments }, hooks.signal);
+      // Transport only decodes. Exact frozen bindings separate state actions from read permissions.
+      const binding = behaviorTools.find(item => item.tool.name === call.name);
+      const action = { callId: call.id, name: call.name, args: call.arguments };
+      let event: ToolEvent;
+      if (binding) {
+        event = hooks.onBehaviorTool ? await hooks.onBehaviorTool({ instanceId: binding.instanceId, actionId: binding.actionId }, action)
+          : { callId: call.id, name: call.name, args: {}, result: { code: 'BEHAVIOR_EXECUTOR_UNAVAILABLE' }, denied: true };
+      } else event = sol?.toolNames.includes(call.name) ? sol.execute(call) : executeTool(fixed, action, hooks.signal);
       results.push(event);
       await hooks.onToolEvent(structuredClone(event));
-      if (event.denied) return fail('READ_TOOL_DENIED');
+      if (event.denied) return fail(binding || call.name.startsWith('behavior_') ? 'ACTION_TOOL_DENIED' : 'READ_TOOL_DENIED');
     }
   }
 }

@@ -1,7 +1,11 @@
 # 작업 지도
 
+- 정식 배포 전에는 하위 호환성을 요구하지 않아요. 이전 자료·채팅은 테스트 데이터이며 새 계약을 위해 삭제할 수 있어요. 구형 데이터 보존을 위한 이관·호환 UI·자동 백업을 추가하지 않아요. 현재 실행의 상태·난수·원문 귀속과 취소·중복 처리 규칙은 유지해요.
+
+- 공통 패키지 상태와 CBS 계열 읽기/계산은 `docs/PACKAGE-BEHAVIOR.md`, `docs/PROMPT-RUNTIME.md`를 봐요. schema/archive v8은 `server/package-behavior-store.ts`, source/분기 연결은 `server/package-behavior-host.ts`, 복원 검증은 `server/package-behavior-archive.ts`와 `server/package-behavior-run-archive.ts`예요. `server/package-behavior-run.ts`가 자동·모델 호출과 판정 기회·임시 상태를 관리해요. 상태·추첨은 Run에 고정하고, 원문 수정 후 stale은 명시 reset으로 복구해요. 렌더/preview에서는 상태를 쓰거나 추첨하지 않아요.
+
 - 목적과 milestone 계약: `project-plan/README.md`. 실제 코드/증거: `project-plan/CURRENT.md`, `project-plan/M1-RESULTS.md`, `project-plan/M2-RESULTS.md`.
-- 코드: `web/` React, `server/` Fastify+파일 SQLite, `core/` 역할 입력/창작제어/fixture·Vertex·Responses·Messages·Chat transport/보조 검증. DB schema v1 기본은 `server/store.ts`, schema v2 콘텐츠/분기/백업과 schema v3 migration은 `server/product-store.ts`, 원문 수정·최신 번역은 `server/source-editing.ts`에 있어요. 유저 DB는 테스트에 사용하지 않아요.
+- 코드: `web/` React, `server/` Fastify+파일 SQLite, `core/` 역할 입력/창작제어/fixture·Vertex·Responses·Messages·Chat transport/보조 검증. 현재 schema v8의 새 DB 초기화는 `server/store.ts`, 콘텐츠·분기·보관은 `server/product-store.ts`, 원문 수정·최신 번역은 `server/source-editing.ts`에 있어요. 구형 DB는 이관하지 않으며 기본 개발 DB 초기화 명령은 `npm run reset:dev`예요. 유저 DB는 테스트에 사용하지 않아요.
 - 확인한 명령: `npm ci --offline --no-audit --no-fund`, `npm run dev`, `npm run check`, `npm run build`, `node scripts/doctor.mjs`, `npm run verify -- --milestone M0`, `node scripts/selftest.mjs`, `npm run cleanup -- --run <run-id>`. Windows Node 24.x/PowerShell에서 실행해요.
 - 두 clean 작업트리의 동시 port/DB/profile/temp 격리는 `node scripts/verify-worktrees.mjs --a <A> --b <B>`로 확인했어요. 각 작업트리는 별도 의존성 설치와 빌드가 필요해요.
 - 검증은 새 포트/DB를 사용하고 `output/playwright/<run-id>/summary.json`과 reporter/DB/화면 증거를 남겨요. 실패나 BLOCKED를 PASS로 바꾸지 않아요.
@@ -17,6 +21,10 @@
 - Reader의 원문 페이지·이벤트 cursor는 `server/reader.ts`와 `web/useStory.ts`, 요약 library와 revision 조회는 `server/product-store.ts`예요. 초기/수동 조회 지연이 SSE 갱신을 막지 않도록 이벤트 조회만 직렬화하며, 늦은 응답은 view key와 request version으로 제외해요. `npm run verify:loading`, `npm run verify:providers`의 정확한 명령은 package.json을 확인해요. 번역 자료 조회는 `server/translation-context.ts`, 공급자 등록 보조는 `server/provider-registration-agent.ts`와 검토 후 적용 API에 있어요.
 
 ## 구현 참고 원칙
+
+- 봇 중심 개편 계약은 `project-plan/REDESIGN.md`예요. schema/archive v6의 봇 소속·단일 깊이 폴더는 `server/chat-organization.ts`, 공통 패키지는 `core/content-package.ts`, 역할별 snapshot 실행은 `core/package-context.ts`예요. 채팅의 봇 소속은 고정하며 포크는 폴더를 상속해요. 패키지 개정은 과거 Run을 바꾸지 않아요.
+- 프롬프트는 `PromptProgram` 데이터 AST로 실행해요. `core/prompt-language.ts`와 `core/prompt-authoring.ts`는 선택 가능한 제작 방식이며 기본 문법 채택은 미확정이에요. 전역 옵션 조합은 프롬프트 ID/revision에 묶여요. 패키지 정규식은 worker 제한 내 읽기 표현만 바꾸며 저장 원문을 수정하지 않아요. `npm run verify:redesign`은 fresh DB/port의 전체 합성 브라우저 회귀예요.
+- 자료 가져오기 범위와 손실 보고는 `docs/RISU-IMPORT.md`예요. 현재 JSON과 CHARX 카드 데이터를 검사하며 바이너리 RISUP/RISUM은 구조화 추출 안내를 반환해요. blocking 변환 결과는 UI에서 저장하지 않아요. 외부 코드 실행·유료 AI 변환은 하지 않아요.
 
 - 주요 참고 프로젝트와 확인 범위는 [project-plan/SOURCES.md](project-plan/SOURCES.md)에 있어요. 현재 작업에 관련된 소스·호출 흐름·테스트부터 확인하고, UI는 실제 사용 흐름/화면, 하네스는 실행/실패/경합을 중심으로 검토해요. 모든 저장소의 전체 분석을 선행 조건으로 삼지 않아요.
 - 중요한 채택 결정만 `저장소·commit/스냅샷 → 파일/심볼 → 배운 원리 → Uimori 적용 위치 → 검증 방법`으로 SOURCES에 기록하고, 중요한 비채택 방식은 이유를 한 줄로 남겨요. 현재 계획·구현·검증 계약을 우선하며 참고를 이유로 전면 재작성·새 프레임워크·범위 확장을 하지 않아요.

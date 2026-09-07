@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import type { ContentRef, Library, PromptPreset, PromptRole } from '../core/product.js';
+import type { ContentRef, Library, PromptPreset, PromptRole, SavedPromptCombination } from '../core/product.js';
 import { DEFAULT_MAIN_PROMPT, DEFAULT_TRANSLATION_PROMPT } from '../core/prompts.js';
 import { validatePromptProgram, type ChatPromptControls, type PromptProgram } from '../core/prompt-program.js';
 import { PromptComposer, createDefaultPromptProgram } from './PromptComposer.js';
@@ -22,12 +22,16 @@ export function PromptEditor({ library, reload, onError, selections, onApply, on
     return [role, ref && !preset ? { ...draftFor(role), source: keyOf(ref), text: '' } : draftFor(role, preset)];
   })) as Record<PromptRole, Draft>);
   const [busy, setBusy] = useState(false);
+  const [composerDirty, setComposerDirty] = useState<Record<string, boolean>>({});
+  const [pendingTemplate, setPendingTemplate] = useState(false);
+  const [localCombinations, setLocalCombinations] = useState<SavedPromptCombination[]>([]);
   const [expanded, setExpanded] = useState(false);
   const [error, setError] = useState('');
   const [status, setStatus] = useState('');
   const draftCache = useRef<Record<string, Draft>>({});
+  const controlDraftCache = useRef<Record<string, ChatPromptControls>>({});
   const presets = [...(library.promptPresets ?? []), ...localPresets.filter(item => !library.promptPresets?.some(latest => keyOf(latest) === keyOf(item)))];
-  const dirty = [...Object.values(drafts), ...Object.values(draftCache.current)].some(draft => draft.dirty);
+  const dirty = Object.values(composerDirty).some(Boolean) || [...Object.values(drafts), ...Object.values(draftCache.current)].some(draft => draft.dirty);
   useEffect(() => { onDirtyChange?.(dirty); }, [dirty, onDirtyChange]);
   useEffect(() => () => onDirtyChange?.(false), [onDirtyChange]);
   useEffect(() => {
@@ -43,6 +47,7 @@ export function PromptEditor({ library, reload, onError, selections, onApply, on
   const draft = drafts[role];
   const edit = (changes: Partial<Draft>) => { setDrafts(current => ({ ...current, [role]: { ...current[role], ...changes, dirty: true } })); setError(''); setStatus(''); };
   function choose(source: string) {
+    if (pendingTemplate) return;
     const preset = presets.find(item => item.role === role && keyOf(item) === source);
     setDrafts(current => {
       draftCache.current[`${role}:${current[role].source}`] = current[role];
@@ -58,11 +63,13 @@ export function PromptEditor({ library, reload, onError, selections, onApply, on
     finally { setBusy(false); }
   }
   async function save(update: boolean, alsoApply: boolean) {
-    if (!draft.title.trim() || update && !draft.base) return;
+    if (pendingTemplate || !draft.title.trim() || update && !draft.base) return;
     setBusy(true); setError(''); setStatus(''); onError('');
     try {
       const accepted = await api<PromptPreset>(update ? `/prompt-presets/${draft.base!.id}` : '/prompt-presets', { title: draft.title.trim(), role, text: draft.text, ...(draft.mode === 'program' ? { program: validatePromptProgram(draft.program) } : {}), ...(update ? { expectedRevision: draft.base!.revision } : {}) }, update ? 'PUT' : 'POST');
       setLocalPresets(current => [...current.filter(item => keyOf(item) !== keyOf(accepted)), accepted]);
+      const controlDraft = controlDraftCache.current[`${role}:${draft.source}`]; if (controlDraft) controlDraftCache.current[`${role}:${keyOf(accepted)}`] = controlDraft;
+      setComposerDirty(current => { const next = { ...current }; delete next[`${role}:${draft.source}`]; return next; });
       setDrafts(current => ({ ...current, [role]: draftFor(role, accepted) }));
       delete draftCache.current[`${role}:${draft.source}`];
       draftCache.current[`${role}:${keyOf(accepted)}`] = draftFor(role, accepted);
@@ -78,13 +85,13 @@ export function PromptEditor({ library, reload, onError, selections, onApply, on
   return <section className={`prompt-editor${expanded ? ' prompt-editor-expanded' : ''}`} data-testid="prompt-editor" aria-label="전체 프롬프트 편집">
     <p className="muted">작문과 번역의 역할 지침 전체를 바꿔요. 창작 제어와 인물·자료 선택은 각각의 설정을 사용해요.</p>
     <fieldset className="prompt-editor-fields" disabled={busy}>
-      <div className="prompt-editor-row"><label>역할<select aria-label="프롬프트 역할" value={role} onChange={event => { setRole(event.target.value as PromptRole); setError(''); setStatus(''); }}><option value="main">작문</option><option value="translation">번역</option></select></label><label>불러올 프롬프트<select aria-label="불러올 프롬프트" value={draft.source} onChange={event => choose(event.target.value)}><option value="builtin">앱 기본 프롬프트</option><option value="new">새 프롬프트</option>{presets.filter(item => item.role === role).map(item => <option key={keyOf(item)} value={keyOf(item)}>{item.title}{library.promptPresets?.some(latest => latest.id === item.id && latest.revision > item.revision) ? ' · 보관된 버전' : ''} · v{item.revision}</option>)}{pendingSavedText && <option value={draft.source}>선택한 프롬프트 불러오는 중…</option>}</select></label></div>
+      <div className="prompt-editor-row"><label>역할<select aria-label="프롬프트 역할" disabled={pendingTemplate} value={role} onChange={event => { setRole(event.target.value as PromptRole); setError(''); setStatus(''); }}><option value="main">작문</option><option value="translation">번역</option></select></label><label>불러올 프롬프트<select aria-label="불러올 프롬프트" disabled={pendingTemplate} value={draft.source} onChange={event => choose(event.target.value)}><option value="builtin">앱 기본 프롬프트</option><option value="new">새 프롬프트</option>{presets.filter(item => item.role === role).map(item => <option key={keyOf(item)} value={keyOf(item)}>{item.title}{library.promptPresets?.some(latest => latest.id === item.id && latest.revision > item.revision) ? ' · 보관된 버전' : ''} · v{item.revision}</option>)}{pendingSavedText && <option value={draft.source}>선택한 프롬프트 불러오는 중…</option>}</select></label></div>
       {onApply && <p className="prompt-applied">이 이야기에서 사용: <strong>{selected ? selectedPreset?.title ?? '저장된 프롬프트' : '앱 기본 프롬프트'}</strong>{selectedPreset?.program ? ' · 메시지 구성 사용' : selectedPreset?.text === '' ? ' · 빈 지침' : ''}</p>}
       <label>프롬프트 이름<input aria-label="프롬프트 이름" maxLength={160} value={draft.title} onChange={event => edit({ title: event.target.value })}/></label>
-      <div className="prompt-editor-tools" role="group" aria-label="프롬프트 편집 방식"><button type="button" className={draft.mode === 'text' ? '' : 'secondary'} aria-pressed={draft.mode === 'text'} disabled={pendingSavedText} onClick={() => { if (draft.mode !== 'text') edit({ mode: 'text' }); }}>텍스트 지침</button><button type="button" className={draft.mode === 'program' ? '' : 'secondary'} aria-pressed={draft.mode === 'program'} disabled={pendingSavedText} onClick={() => { if (draft.mode !== 'program') edit({ mode: 'program', program: draft.program ?? createDefaultPromptProgram(draft.text) }); }}>메시지 구성</button></div>
-      {draft.mode === 'program' && draft.program && <><p className="prompt-text-note">메시지 구성이 실제 요청의 역할·순서·조건을 결정해요. 텍스트 지침은 별도 초안으로 보관해요. JSON 불러오기에서 native Phēmē 변환본도 열 수 있어요.</p><PromptComposer key={`${role}:${draft.source}`} program={draft.program} onChange={program => edit({ program })} onError={message => { setError(message); onError(message); }} chatId={chatId} branchId={branchId} role={role} controlState={draft.base ? promptControls?.[keyOf(draft.base)] : undefined} onSaveControls={draft.base && !draft.dirty && onSaveControls ? state => onSaveControls({ id: draft.base!.id, revision: draft.base!.revision }, state) : undefined} /></>}
+      <div className="prompt-editor-tools" role="group" aria-label="프롬프트 편집 방식"><button type="button" className={draft.mode === 'text' ? '' : 'secondary'} aria-pressed={draft.mode === 'text'} disabled={pendingSavedText || pendingTemplate} onClick={() => { if (draft.mode !== 'text') edit({ mode: 'text' }); }}>텍스트 지침</button><button type="button" className={draft.mode === 'program' ? '' : 'secondary'} aria-pressed={draft.mode === 'program'} disabled={pendingSavedText || pendingTemplate} onClick={() => { if (draft.mode !== 'program') edit({ mode: 'program', program: draft.program ?? createDefaultPromptProgram(draft.text) }); }}>메시지 구성</button></div>
+      {draft.mode === 'program' && draft.program && <><p className="prompt-text-note">메시지 구성이 실제 요청의 역할·순서·조건을 결정해요. 텍스트 지침은 별도 초안으로 보관해요. JSON 불러오기에서 native Phēmē 변환본도 열 수 있어요.</p><PromptComposer key={`${role}:${draft.source}`} program={draft.program} initialControlDraft={controlDraftCache.current[`${role}:${draft.source}`]} onControlDraftChange={state => { controlDraftCache.current[`${role}:${draft.source}`] = state; }} onDirtyChange={value => setComposerDirty(current => current[`${role}:${draft.source}`] === value ? current : { ...current, [`${role}:${draft.source}`]: value })} onPendingDraftChange={setPendingTemplate} promptReference={draft.base ?? undefined} savedCombinations={[...(library.promptCombinations ?? []), ...localCombinations.filter(item => !library.promptCombinations?.some(saved => saved.id === item.id))]} onSaveCombination={draft.base && !draft.dirty ? async (title, values) => { const accepted = await api<SavedPromptCombination>('/prompt-combinations', { title, prompt: { id: draft.base!.id, revision: draft.base!.revision }, values }, 'POST'); setLocalCombinations(current => [...current, accepted]); await reload?.(); } : undefined} onChange={program => edit({ program })} onError={message => { setError(message); onError(message); }} chatId={chatId} branchId={branchId} role={role} controlState={draft.base ? promptControls?.[keyOf(draft.base)] : undefined} onSaveControls={draft.base && !draft.dirty && onSaveControls ? state => onSaveControls({ id: draft.base!.id, revision: draft.base!.revision }, state) : undefined} /></>}
       <div hidden={draft.mode !== 'text'} className="prompt-legacy-text">
-      <div className="prompt-editor-tools"><button type="button" className="secondary" disabled={pendingSavedText} onClick={() => edit({ text: defaults[role] })}>기본 전체 불러오기</button><label className="prompt-file">텍스트 파일 불러오기<input type="file" aria-label="프롬프트 파일 불러오기" accept=".txt,.md,text/plain,text/markdown" onChange={async event => {
+      <div className="prompt-editor-tools"><button type="button" className="secondary" disabled={pendingSavedText || pendingTemplate} onClick={() => edit({ text: defaults[role] })}>기본 전체 불러오기</button><label className="prompt-file">텍스트 파일 불러오기<input type="file" aria-label="프롬프트 파일 불러오기" accept=".txt,.md,text/plain,text/markdown" onChange={async event => {
         const file = event.target.files?.[0]; event.target.value = ''; if (!file) return;
         setBusy(true); setError(''); setStatus('');
         try {
@@ -96,12 +103,12 @@ export function PromptEditor({ library, reload, onError, selections, onApply, on
         } catch (caught) { const message = (caught as Error).message; setError(message); onError(message); }
         finally { setBusy(false); }
       }}/></label><button type="button" className="secondary" aria-pressed={expanded} onClick={() => setExpanded(value => !value)}>{expanded ? '편집 영역 줄이기' : '편집 영역 넓히기'}</button></div>
-      <label className="prompt-text-label">{labels[role]} 전체 프롬프트<textarea aria-label={`${labels[role]} 전체 프롬프트`} spellCheck={false} value={draft.text} disabled={pendingSavedText} maxLength={200000} rows={14} onChange={event => edit({ text: event.target.value })}/></label>
+      <label className="prompt-text-label">{labels[role]} 전체 프롬프트<textarea aria-label={`${labels[role]} 전체 프롬프트`} spellCheck={false} value={draft.text} disabled={pendingSavedText || pendingTemplate} maxLength={200000} rows={14} onChange={event => edit({ text: event.target.value })}/></label>
       <p className="prompt-text-note">{draft.text.length.toLocaleString()}자 · {draft.text === '' && draft.source !== 'builtin' ? '빈 사용자 지침으로 저장할 수 있어요. ' : ''}텍스트를 그대로 저장해요. RisuAI 템플릿 문법(CBS)은 실행하지 않아요.</p>
       </div>
-      <div className="prompt-save-actions"><button type="button" disabled={pendingSavedText || !draft.title.trim()} onClick={() => void save(false, false)}>새 프롬프트로 저장</button>{draft.base && <button type="button" className="secondary" disabled={!draft.dirty} onClick={() => void save(true, false)}>기존 프롬프트 수정 저장</button>}{onApply && <><button type="button" className="secondary" disabled={pendingSavedText || draft.dirty || draft.source === 'new'} onClick={() => void apply(draft.base ? { id: draft.base.id, revision: draft.base.revision } : null)}>이야기에 선택 적용</button>{draft.dirty && <button type="button" disabled={pendingSavedText || !draft.title.trim()} onClick={() => void save(Boolean(draft.base), true)}>저장하고 이야기에 적용</button>}</>}</div>
+      <div className="prompt-save-actions"><button type="button" disabled={pendingSavedText || pendingTemplate || !draft.title.trim()} onClick={() => void save(false, false)}>새 프롬프트로 저장</button>{draft.base && <button type="button" className="secondary" disabled={pendingTemplate || !draft.dirty} onClick={() => void save(true, false)}>기존 프롬프트 수정 저장</button>}{onApply && <><button type="button" className="secondary" disabled={pendingSavedText || pendingTemplate || draft.dirty || draft.source === 'new'} onClick={() => void apply(draft.base ? { id: draft.base.id, revision: draft.base.revision } : null)}>이야기에 선택 적용</button>{draft.dirty && <button type="button" disabled={pendingSavedText || !draft.title.trim()} onClick={() => void save(Boolean(draft.base), true)}>저장하고 이야기에 적용</button>}</>}</div>
     </fieldset>
-    {draft.dirty && <p className="muted prompt-unsaved">편집 중인 프롬프트를 아직 저장하지 않았어요.</p>}
+    {pendingTemplate && <p className="muted">미적용 문법 초안이 있어요. 해당 본문에서 적용하거나 되돌린 뒤 저장·전환해 주세요.</p>}{draft.dirty && <p className="muted prompt-unsaved">편집 중인 프롬프트를 아직 저장하지 않았어요.</p>}
     {error && <p className="error" role="alert">{error} 편집 내용은 유지했어요.</p>}
     <p role="status" className="prompt-status">{busy ? '처리 중…' : status}</p>
   </section>;

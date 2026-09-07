@@ -1,6 +1,7 @@
 import { test, expect, type APIRequestContext, type Page } from '@playwright/test';
 import type { Chat, ChatDetail, Run } from '../core/types.js';
 import type { Content } from '../core/product.js';
+import { navigationAction } from './ui-navigation.js';
 
 test.setTimeout(120000);
 async function detail(request: APIRequestContext, id: string): Promise<ChatDetail> {
@@ -22,9 +23,7 @@ async function seed(request: APIRequestContext, count: number) {
 const articles = (page: Page) => page.getByTestId('source');
 const article = (page: Page, id: string) => page.locator(`[data-testid="source"][data-source-id="${id}"]`);
 async function navLibrary(page: Page) {
-  const button = page.getByRole('button', { name: '서재', exact: true });
-  if (!await button.isVisible()) await page.getByRole('button', { name: '탐색 메뉴', exact: true }).click();
-  await button.click();
+  await navigationAction(page,'봇');
 }
 
 test('LOADUI01 bounded pages, previous/next, deep links and reload preserve reader position', async ({ page, context, request }, info) => {

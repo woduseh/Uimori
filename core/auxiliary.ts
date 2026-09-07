@@ -4,15 +4,18 @@ import type { Resource, RunSnapshot, ToolEvent } from './types.js';
 import { DEFAULT_TRANSLATION_PROMPT } from './prompts.js';
 import { hiddenTranslationMarkers, parseHiddenStory, type HiddenKnowledge, type HiddenRange } from './hidden-story.js';
 import { compilePromptProgram, type PromptCompilation } from './prompt-program.js';
+import { executionContext } from './execution-context.js';
 import { nativeInstructions } from './native-context.js';
 import { STORY_READ_NAMES } from './story-context.js';
 import { TRANSLATION_READ_NAMES } from './translation-context.js';
+import { compiledPackages, packageContext, packageSlots, type PackageRoleContext } from './package-context.js';
 
 const digest = (text: string) => createHash('sha256').update(text).digest('hex');
 export type AuxiliarySource = { id: string; chatId: string; text: string; hash: string };
 export type VersionedText = { id: string; revision: string | number; text: string };
 /** Host projects the originating Run snapshot here, never the currently selected chat. */
 export type SourceTimeContext = {
+  packages?: PackageRoleContext;
   revision: string; bot: VersionedText | null; persona: VersionedText | null;
   glossary: VersionedText[]; canon: VersionedText[]; scene: string;
   previousSources: { revision: string; text: string }[];
@@ -227,9 +230,14 @@ export function translationInput(plan: TranslationPlan, chunkId: string, snapsho
   const base = baseInput(plan.sourceRevision, plan.sourceHash, plan.context, snapshot);
   const previous = previousTranslation(plan,chunk,completed);
   const prompt = snapshot.profile?.promptPresets?.translation;
+  const packages = packageContext(snapshot, 'translation');
+  if (packages) {
+    const ids = new Set(base.catalog.map(r => r.id));
+    for (const pack of compiledPackages(snapshot, 'translation')) for (const { text: _text, chatId: _chatId, ...r } of pack.resources) if (!ids.has(r.id)) { base.catalog.push(r); ids.add(r.id); }
+  }
   return { ...base, role: 'translation', chunkId,
     tools: [...base.tools, ...STORY_READ_NAMES, ...TRANSLATION_READ_NAMES],
-    context: {...base.context,...(previous ? {previousTranslation:previous} : {})},
+    context: {...base.context,...(packages ? {packages} : {}),...(previous ? {previousTranslation:previous} : {})},
     contract: prompt?.text ?? DEFAULT_TRANSLATION_PROMPT, referencePolicy: 'Optional story.search/read retrieves frozen prior originals; memory.search/read retrieves typed source-time evidence; translation.search/read retrieves prior wording, never new facts. Search names, forms of address and speaker register when useful, then read only needed ranges. Current source and author canon/glossary take precedence over prior translations, beliefs and summaries. Hidden viewpoints remain distinct: reference knowledge does not become a character’s knowledge. Empty search needs no retry; translation remains possible without tools. Total tool result budget is 96000 UTF-8 bytes per job.', ...(prompt ? { customPrompt: true } : {}),
     blocks: structuredClone(chunk.blocks), neighborBlocks: [plan.chunks[chunk.index - 1]?.blocks.at(-1), plan.chunks[chunk.index + 1]?.blocks[0]].filter(item => item !== undefined),
     outputSchema: { sourceRevision: 'exact input value', sourceHash: 'exact input value', chunkId: 'exact input value', segments: [{ anchors: ['ordered source anchors'], text: prompt ? 'Translated prose with protected tokens unchanged' : 'Korean prose with protected tokens unchanged' }] },
@@ -254,14 +262,20 @@ export function compileTranslationPrompt(input: AuxiliaryInput, snapshot: RunSna
     catalog: JSON.stringify(input.catalog), controls: JSON.stringify(snapshot.profile?.creative ?? {}),
     globalNote: '', authorNote: '', authornote: '', postEverything: '', slot: '',
   };
+  const packageSlot = packageSlots(snapshot, 'translation');
+  if (packageSlot.char) slots.char = packageSlot.char;
+  for (const key of ['bot', 'persona', 'lore'] as const) if (packageSlot[key]) slots[key] = [slots[key], packageSlot[key]].filter(Boolean).join('\n\n');
+  slots.description = slots.bot; slots.lorebook = slots.lore;
   return compilePromptProgram(preset.program, {
+    runtime: {...executionContext(snapshot,'translation'),source:{id:input.sourceRevision,hash:input.sourceHash,blocks:input.blocks as unknown as import('./prompt-program.js').RuntimeValue}},
     values: snapshot.profile?.promptControls?.[`${preset.id}@${preset.revision}`]?.values,
     slots, history: [{ id: `translation-current:${input.chunkId ?? input.sourceRevision}`, role: 'user', text: task, sourceRevision: input.sourceRevision, sourceHash: input.sourceHash, current: true }],
   });
 }
 export function displayInput(source: AuxiliarySource, context: SourceTimeContext, snapshot: RunSnapshot): AuxiliaryInput {
   if (source.chatId !== snapshot.chatId) throw new Error('SOURCE_SCOPE_MISMATCH');
-  return { ...baseInput(source.id, source.hash, context, snapshot), role: 'status', blocks: splitSource(source),
+  const packages = packageContext(snapshot, 'status');
+  return { ...baseInput(source.id, source.hash, packages ? {...context, packages} : context, snapshot), role: 'status', blocks: splitSource(source),
     contract: 'Create optional display-only scene summaries and mood annotations grounded in the specified source blocks. Do not invent inner motives or new events. These interpretations never become authoritative state, canon, or next-turn evidence. Return structured data; do not rewrite the source or add HTML.',
     outputSchema: { sourceRevision: 'exact input value', sourceHash: 'exact input value', kind: 'display-only', entries: [{ anchor: 'existing source anchor', summary: 'brief grounded description', mood: 'interpretive display label' }] },
   };
@@ -304,7 +318,8 @@ export function sourceScenes(blocks: SourceBlock[], assets: readonly AssetEntry[
 }
 export function presentationInput(source: AuxiliarySource, context: SourceTimeContext, snapshot: RunSnapshot, assets: readonly AssetEntry[] = BUILTIN_ASSETS, scenes = sourceScenes(splitSource(source), assets)): AuxiliaryInput {
   if (source.chatId !== snapshot.chatId) throw new Error('SOURCE_SCOPE_MISMATCH');
-  return { ...baseInput(source.id, source.hash, context, snapshot), catalog: [], role: 'presentation', blocks: splitSource(source), assets: structuredClone([...assets]), scenes: structuredClone(scenes), tools: ['assets.search', 'assets.inspect'],
+  const packages = packageContext(snapshot, 'image');
+  return { ...baseInput(source.id, source.hash, packages ? {...context, packages} : context, snapshot), catalog: [], role: 'presentation', blocks: splitSource(source), assets: structuredClone([...assets]), scenes: structuredClone(scenes), tools: ['assets.search', 'assets.inspect'],
     contract: 'Select optional existing images for the corresponding source block. Use each block scene independently; do not apply the final scene to all earlier blocks. Assets metadata is an authored description, not a claim that you viewed image bytes. Search/inspect the small host manifest when useful. No suitable image means an empty entries list, which is successful. Return source-bound annotations only; never HTML or rewritten narrative. The host validates source, anchor, asset version and scene compatibility. Image interpretation never changes story canon or state.',
     outputSchema: { sourceRevision: 'exact input value', sourceHash: 'exact input value', entries: [{ blockAnchor: 'existing source anchor', assetRef: 'existing host manifest ref', assetRevision: 'exact manifest revision', presentationIntent: 'inline or profile' }] },
   };
