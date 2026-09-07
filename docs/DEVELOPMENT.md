@@ -1,6 +1,6 @@
 # 개발과 검증
 
-정식 배포 전에는 하위 호환성을 요구하지 않아요. 현재 DB·보관 형식은 **v9**이며 구버전 자료·채팅·백업을 자동 이관하거나 보존용 백업을 만들지 않아요. 개발 DB를 다시 시작하려면 실행 중인 서버를 종료한 뒤 `npm run reset:dev`를 실행해요. 이 명령은 저장소의 `.local/narrative.sqlite`와 해당 SQLite 부속 파일·알려진 구형 자동 백업만 삭제해요. 서버가 DB를 사용 중이거나 경로가 저장소 밖으로 연결되면 중단해요. 다른 검증 산출물과 credential 파일은 대상으로 삼지 않아요.
+정식 배포 전에는 하위 호환성을 요구하지 않아요. 현재 DB·보관 형식은 **v10**이며 구버전 자료·채팅·백업을 자동 이관하거나 보존용 백업을 만들지 않아요. 개발 DB를 다시 시작하려면 실행 중인 서버를 종료한 뒤 `npm run reset:dev`를 실행해요. 이 명령은 저장소의 `.local/narrative.sqlite`와 해당 SQLite 부속 파일·알려진 구형 자동 백업만 삭제해요. 서버가 DB를 사용 중이거나 경로가 저장소 밖으로 연결되면 중단해요. 다른 검증 산출물과 credential 파일은 대상으로 삼지 않아요.
 
 [시작하기](../README.md) · [검증 계약](../project-plan/VERIFICATION.md)
 
@@ -12,7 +12,7 @@ npm test
 npm run build
 npm run verify:ui
 npm run verify:evaluation
-npm run verify:native
+npm run verify:packages
 npm run verify:providers
 npm run verify:loading
 npm run verify:redesign
@@ -54,7 +54,7 @@ node scripts/verify-worktrees.mjs --a '<준비된 작업트리 A>' --b '<준비�
 | 명령 | 범위 |
 | --- | --- |
 | `npm test` | Vitest 단위·통합 검사. 브라우저·실제 공급자 검사를 대신하지 않아요. |
-| `npm run verify:native` | 합성 native 프롬프트 조립·봇 설정·히든 리더와 번역 표시. 전용 Risu 변환기를 사용하지 않아요. |
+| `npm run verify:packages` | 공통 프롬프트 조립·패키지 요청 예약·원문 구간 편집과 Reader·번역 표시. |
 | `npm run verify:providers` | 합성 공급자 등록·모델 선택·관리 화면 |
 | `npm run verify:loading` | 합성 자료의 로딩·페이지/SSE 갱신 화면 |
 
@@ -64,7 +64,7 @@ node scripts/verify-worktrees.mjs --a '<준비된 작업트리 A>' --b '<준비�
 
 - `web/`: 봇별 탐색·채팅·패키지·프롬프트 편집, 안전한 원고 표시, 탭별 URL/초안/독서 위치, 페이지 읽기·SSE 갱신과 늦은 HTTP 응답 폐기.
 - `core/`: 공통 ContentPackage와 역할별 문맥, PromptProgram 데이터 AST·선택형 문법·TypeScript 제작 API, 콘텐츠 가져오기 변환, 공급자 adapter와 상태·기억·원문 회수, 번역·표현 검증. 개발용 지침과 앱 자료는 별개예요.
-- `server/`: schema/archive v9, SQLite WAL, revision/idempotency, 봇 소속·폴더, 분기, Run/job/chunk/attempt 수명, 판정 기회·임시 행동 상태, 인증·SSE·현재 형식 백업. DB 트랜잭션은 모델이나 브라우저를 기다리지 않아요.
+- `server/`: schema/archive v10, SQLite WAL, revision/idempotency, 봇 소속·폴더, 분기, Run/job/chunk/attempt 수명, 판정 기회·임시 행동 상태, 인증·SSE·현재 형식 백업. DB 트랜잭션은 모델이나 브라우저를 기다리지 않아요.
 - `tests/`: 실제 파일 DB/HTTP/프로세스 재시작과 Playwright 브라우저 검사. `scripts/`는 기존 reporter와 작은 수명주기 코드를 연결해요.
 
 원문·Run 완료·적격 보조 예약은 한 트랜잭션에 저장하고 worker는 커밋 뒤에 실행해요. job 결과·완료도 한 트랜잭션이며 source/hash와 worker generation/owner를 검사해요. 재시작은 완료 원문을 다시 생성하지 않아요. 실행 중이던 메인 요청은 `interrupted`로 남고, 로컬 결정적 모의 job만 재개해요. 표시 상태는 다음 원고의 사실로 주입하지 않아요.

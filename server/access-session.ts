@@ -8,7 +8,9 @@ const MAX_LOGIN_FAILURES = 10;
 const digest = (value: string) => createHash('sha256').update(value).digest();
 
 export class AccessSessionRateLimitError extends HttpError {
-  constructor(readonly retryAfterSeconds: number) { super(429, 'Too many login attempts. Try again later.'); }
+  constructor(readonly retryAfterSeconds: number) {
+    super(429, 'Too many login attempts. Try again later.');
+  }
 }
 
 /** In-memory personal-workspace sessions; a server restart revokes every session. */
@@ -24,8 +26,15 @@ export class AccessSessions {
 
   constructor(options: { accessToken?: string; publicOrigin?: string; now?: () => number }) {
     this.secure = !!options.publicOrigin;
-    if (this.secure && (!options.accessToken || options.accessToken.length < 32 || /[\r\n]/u.test(options.accessToken))) {
-      throw new Error('Remote access requires an access token of at least 32 characters without line breaks');
+    if (
+      this.secure &&
+      (!options.accessToken ||
+        options.accessToken.length < 32 ||
+        /[\r\n]/u.test(options.accessToken))
+    ) {
+      throw new Error(
+        'Remote access requires an access token of at least 32 characters without line breaks'
+      );
     }
     this.required = !!options.accessToken;
     this.tokenDigest = options.accessToken ? digest(options.accessToken) : undefined;
@@ -33,7 +42,10 @@ export class AccessSessions {
   }
 
   private sessionKey(cookie?: string): string | undefined {
-    const values = cookie?.split(';').map(value => value.trim()).filter(value => value.startsWith('nr_session='));
+    const values = cookie
+      ?.split(';')
+      .map((value) => value.trim())
+      .filter((value) => value.startsWith('nr_session='));
     if (values?.length !== 1) return undefined;
     const token = values[0].slice('nr_session='.length);
     return /^[a-f0-9]{64}$/u.test(token) ? digest(token).toString('hex') : undefined;
@@ -53,8 +65,14 @@ export class AccessSessions {
   checkLoginAllowed(): void {
     if (!this.secure) return;
     const now = this.now();
-    if (now >= this.loginWindowEnd) { this.loginFailures = 0; this.loginWindowEnd = 0; }
-    if (this.loginFailures >= MAX_LOGIN_FAILURES) throw new AccessSessionRateLimitError(Math.max(1, Math.ceil((this.loginWindowEnd - now) / 1000)));
+    if (now >= this.loginWindowEnd) {
+      this.loginFailures = 0;
+      this.loginWindowEnd = 0;
+    }
+    if (this.loginFailures >= MAX_LOGIN_FAILURES)
+      throw new AccessSessionRateLimitError(
+        Math.max(1, Math.ceil((this.loginWindowEnd - now) / 1000))
+      );
   }
 
   private cookie(value: string, maxAge: number): string {
@@ -66,12 +84,19 @@ export class AccessSessions {
     const now = this.now();
     this.discardExpired(now);
     if (this.tokenDigest && !timingSafeEqual(digest(value), this.tokenDigest)) {
-      if (this.secure) { if (this.loginFailures === 0) this.loginWindowEnd = now + LOGIN_WINDOW_MS; this.loginFailures++; }
+      if (this.secure) {
+        if (this.loginFailures === 0) this.loginWindowEnd = now + LOGIN_WINDOW_MS;
+        this.loginFailures++;
+      }
       throw new HttpError(401, 'Invalid access token');
     }
-    this.loginFailures = 0; this.loginWindowEnd = 0;
+    this.loginFailures = 0;
+    this.loginWindowEnd = 0;
     let revoked = false;
-    while (this.sessions.size >= MAX_SESSIONS) { this.sessions.delete(this.sessions.keys().next().value!); revoked = true; }
+    while (this.sessions.size >= MAX_SESSIONS) {
+      this.sessions.delete(this.sessions.keys().next().value!);
+      revoked = true;
+    }
     const token = randomBytes(32).toString('hex');
     this.sessions.set(digest(token).toString('hex'), now + SESSION_LIFETIME_MS);
     return { cookie: this.cookie(token, SESSION_LIFETIME_MS / 1000), revoked };

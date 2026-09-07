@@ -12,6 +12,10 @@
 
 ## 선택형 제작 문법
 
+창작 언어·분량·문체는 프롬프트 본문과 그 프롬프트의 옵션으로 작성해요. 별도 `CreativeControls`나 전역 고정 분량 지침을 덧붙이지 않아요. 저장된 옵션 조합은 특정 프롬프트 ID/revision을 참조해요. 페르소나의 메인 참조 여부는 채팅의 `personaReference`로 별도 관리해요.
+
+도구로 최종 원문을 제출하는 프롬프트는 `execution: {storySubmission: {when?: PromptExpression}}`을 선언해요. `when` 생략은 활성화를 뜻하고, 선언 자체가 없으면 비활성화예요. 컴파일 결과의 boolean을 Run에 고정해 `story.submit` 도구를 제공하며, 자료 이름·provenance·특정 옵션 ID는 권한을 만들지 않아요. 평가 도구를 선택한 실행은 기존 평가 도구의 최종 제출 계약을 사용해요.
+
 TypeScript 제작 API를 별도 후보로 추가했어요. 기본 작성 방식의 채택을 확정하는 변경은 아니에요. 기존 본문/JSON 편집과 선택형 템플릿 문법을 유지하고, 모든 작성 결과를 기존 `PromptProgram` 데이터 AST로 모아요. 현재 제공하는 TypeScript API는 **작성할 때 한 번 실행해 AST를 생성하는 방식**이에요.
 
 | 판단 기준 | 독자 템플릿 문법 | TypeScript 제작 API → AST | 요청마다 격리 TypeScript 런타임 |

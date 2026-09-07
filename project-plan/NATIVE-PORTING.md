@@ -1,6 +1,6 @@
 # 실제 자료 native 이식 계획 · 2026-09-07
 
-> 유지보수 변경: 아래 표의 Phēmē·히든 스토리 전용 변환기와 `scripts/import-pheme.mjs`, 전용 변환 시험은 당시 이식의 역사적 기록이에요. 이후 전용 변환 코드는 제거하고 [공통 이식 가이드](../docs/RISU-PORTING.md)로 대체해요. 이미 생성된 native 자료의 저장·조립·표시 계약은 유지하며, 히든 조립 타입/함수는 `core/hidden-story-runtime.ts`에 분리해요. 현재 회귀 검사는 원본 변환기 대신 합성 native fixture로 실행해요. 아래 과거 검증 수치는 이번 변경의 재검증 결과를 뜻하지 않아요.
+> 역사적 기록: 아래 표의 자료별 변환기·native/hidden 실행기와 검증 수치는 당시 이식의 증거예요. 2026-09-08에는 `core/hidden-story-runtime.ts`를 포함한 전용 실행 경로도 제거하고 공통 패키지·프롬프트·원문 구간 정책으로 통합했어요. 구형 자료의 자동 변환이나 현재 형식 호환을 보증하지 않아요. 현재 계약은 [공통 이식 가이드](../docs/RISU-PORTING.md), 구현·검증은 [코드베이스 정리 결과](CODEBASE-CLEANUP-RESULTS.md)를 봐요.
 
 상태: 아래 계약에 따른 native 구성·변환기·저장·리더·공급자 연결과 합성 검사를 구현했고, 실제 지정 자료의 별도 로컬 가져오기·조립·화면 확인을 완료했어요. 최초 계획의 단계와 인수 조건은 유지하며, 승인된 Hinano 비성적 각색과 Hidden partial 범위를 구분해요. 최종 빌드와 전체 검사 결과는 [CURRENT.md](CURRENT.md), 구체적 인수 근거와 한계는 [NATIVE-RESULTS.md](NATIVE-RESULTS.md)를 기준으로 확인해요. RisuAI 파일 전체 호환을 주장하지 않고 실제 사용 동작을 Uimori 구조로 옮겨요.
 

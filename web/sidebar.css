@@ -1,5 +1,17 @@
-.sidebar-collapsed{grid-template-columns:minmax(0,1fr)}
-.sidebar-collapsed .sidebar{display:none}
-.sidebar-toggle{flex-shrink:0}
-.focus-reading .sidebar-toggle{display:none}
-@media(max-width:760px){.sidebar-toggle{display:none}}
+.sidebar-collapsed {
+  grid-template-columns: minmax(0, 1fr);
+}
+.sidebar-collapsed .sidebar {
+  display: none;
+}
+.sidebar-toggle {
+  flex-shrink: 0;
+}
+.focus-reading .sidebar-toggle {
+  display: none;
+}
+@media (max-width: 760px) {
+  .sidebar-toggle {
+    display: none;
+  }
+}

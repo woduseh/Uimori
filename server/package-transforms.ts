@@ -1,5 +1,9 @@
 import { Worker } from 'node:worker_threads';
-import { ContentPackageError, validatePackageTransform, type PackageTransform } from '../core/content-package.js';
+import {
+  ContentPackageError,
+  validatePackageTransform,
+  type PackageTransform,
+} from '../core/content-package.js';
 
 // Constant trusted worker code only. Patterns and replacements are data in workerData.
 const WORKER_SOURCE = String.raw`
@@ -44,24 +48,55 @@ try {
 `;
 export type PackageTransformResult = { text: string; applied: string[]; changed: boolean };
 /** Presentation-only result. Caller must never replace source text/hash with this projection. */
-export async function applyPackageTransforms(text: string, rules: readonly PackageTransform[], target: 'source' | 'translation', options: { timeoutMs?: number } = {}): Promise<PackageTransformResult> {
-  if (typeof text !== 'string' || text.length > 1_000_000) throw new ContentPackageError('PACKAGE_TRANSFORM_INPUT_LIMIT');
-  if (!Array.isArray(rules) || rules.length > 32) throw new ContentPackageError('PACKAGE_TRANSFORM_RULE_LIMIT');
-  if (target !== 'source' && target !== 'translation') throw new ContentPackageError('PACKAGE_TRANSFORM_TARGET');
-  const selected = rules.map(validatePackageTransform).filter(r => r.target === target);
+export async function applyPackageTransforms(
+  text: string,
+  rules: readonly PackageTransform[],
+  target: 'source' | 'translation',
+  options: { timeoutMs?: number } = {}
+): Promise<PackageTransformResult> {
+  if (typeof text !== 'string' || text.length > 1_000_000)
+    throw new ContentPackageError('PACKAGE_TRANSFORM_INPUT_LIMIT');
+  if (!Array.isArray(rules) || rules.length > 32)
+    throw new ContentPackageError('PACKAGE_TRANSFORM_RULE_LIMIT');
+  if (target !== 'source' && target !== 'translation')
+    throw new ContentPackageError('PACKAGE_TRANSFORM_TARGET');
+  const selected = rules.map(validatePackageTransform).filter((r) => r.target === target);
   if (!selected.length) return { text, applied: [], changed: false };
   const timeoutMs = options.timeoutMs ?? 1000;
-  if (!Number.isSafeInteger(timeoutMs) || timeoutMs < 10 || timeoutMs > 10_000) throw new ContentPackageError('PACKAGE_TRANSFORM_TIMEOUT_LIMIT');
+  if (!Number.isSafeInteger(timeoutMs) || timeoutMs < 10 || timeoutMs > 10_000)
+    throw new ContentPackageError('PACKAGE_TRANSFORM_TIMEOUT_LIMIT');
   return new Promise((resolve, reject) => {
-    const worker = new Worker(WORKER_SOURCE, { eval: true, workerData: { text, rules: selected }, resourceLimits: { maxOldGenerationSizeMb: 64, maxYoungGenerationSizeMb: 16, stackSizeMb: 2 } });
+    const worker = new Worker(WORKER_SOURCE, {
+      eval: true,
+      workerData: { text, rules: selected },
+      resourceLimits: { maxOldGenerationSizeMb: 64, maxYoungGenerationSizeMb: 16, stackSizeMb: 2 },
+    });
     let settled = false;
     const finish = (error?: ContentPackageError, result?: PackageTransformResult) => {
-      if (settled) return; settled = true; clearTimeout(timer);
-      void worker.terminate().then(() => error ? reject(error) : resolve(result!), () => reject(error ?? new ContentPackageError('PACKAGE_TRANSFORM_WORKER_FAILED')));
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      void worker.terminate().then(
+        () => (error ? reject(error) : resolve(result!)),
+        () => reject(error ?? new ContentPackageError('PACKAGE_TRANSFORM_WORKER_FAILED'))
+      );
     };
-    const timer = setTimeout(() => finish(new ContentPackageError('PACKAGE_TRANSFORM_TIMEOUT')), timeoutMs);
-    worker.once('message', message => message.ok ? finish(undefined, { text: message.text, applied: message.applied, changed: message.changed }) : finish(new ContentPackageError(message.code, message.id)));
+    const timer = setTimeout(
+      () => finish(new ContentPackageError('PACKAGE_TRANSFORM_TIMEOUT')),
+      timeoutMs
+    );
+    worker.once('message', (message) =>
+      message.ok
+        ? finish(undefined, {
+            text: message.text,
+            applied: message.applied,
+            changed: message.changed,
+          })
+        : finish(new ContentPackageError(message.code, message.id))
+    );
     worker.once('error', () => finish(new ContentPackageError('PACKAGE_TRANSFORM_WORKER_FAILED')));
-    worker.once('exit', () => { if (!settled) finish(new ContentPackageError('PACKAGE_TRANSFORM_WORKER_FAILED')); });
+    worker.once('exit', () => {
+      if (!settled) finish(new ContentPackageError('PACKAGE_TRANSFORM_WORKER_FAILED'));
+    });
   });
 }

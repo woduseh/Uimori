@@ -1,2 +1,18 @@
-.context-summary { display: grid; gap: 4px; min-width: 0; margin: 10px 0; padding: 8px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); color: var(--muted); font-size: 12px; line-height: 1.6; white-space: normal; overflow-wrap: anywhere; }
-.context-summary-error { color: var(--text); }
+.context-summary {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  margin: 10px 0;
+  padding: 8px 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.6;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.context-summary-error {
+  color: var(--text);
+}

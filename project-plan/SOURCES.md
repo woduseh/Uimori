@@ -20,7 +20,7 @@ RisuToki `45048b1139361cd0fded462683dd30fd7df7ce98`의 `skills/using-mcp-tools/S
 
 - 구조화된 제한 조회·누락 범위 기록, 실행 단계별 의미 구분 원리를 [Risu 자료 이식 가이드](../docs/RISU-PORTING.md)에 적용해요. 결과는 공통 native JSON과 대응/손실 보고로 전달하고 Uimori validator·요청 조립·해당 동작 검사로 검증해요.
 - Risu 문법을 복제하거나 특정 자료 이름의 변환기를 계속 추가하는 방식은 채택하지 않아요. RisuToki가 원본 해석을 맡고 에이전트가 native 표현을 작성해요. 이 결정은 모든 자료의 의미 동등성 또는 실모델 품질을 보증하지 않아요.
-- 아래 지정 자료 이식 기록에 등장하는 `pheme-converter.ts`, `hidden-story-converter.ts`, `import-pheme.mjs`는 과거 구현 경로예요. 전용 변환기는 제거하고 히든 native 타입·조립만 `core/hidden-story-runtime.ts`에 유지해요. 검증 자료는 합성 native fixture로 분리해요. RisuToki 구현 코드를 복사하지 않았어요.
+- 아래 지정 자료 이식 기록의 변환기·native/hidden 경로는 과거 구현이에요. `core/hidden-story-runtime.ts`를 포함한 자료별 실행기도 제거하고 공통 패키지·PromptProgram·원문 구간 정책으로 통합했어요. 현재 대응과 합성 검증은 [코드베이스 정리 결과](CODEBASE-CLEANUP-RESULTS.md)를 봐요. RisuToki 구현 코드를 복사하지 않았어요.
 
 ## 2026-09-07 공통 행동의 자동·UI·Tool 호출
 
@@ -243,7 +243,7 @@ M1의 고정 인계 snapshot `98d80987e721d640570abf837ff0e094b2a7dcfd0caf310da8
 | `responses-request.js` (SHA-256 `e9dfcfe354c27ba03d950ba9412b52f05a030a2195ce1f6c75d2ae1bc827625d`), `gateway-profiles.js` | gateway·인증·reasoning은 provider 책임 → Sol 전용 protocol/config 제거, 기존 Responses adapter와 모델 preset opt-in 사용 → endpoint·credential·설정/archive 검사 |
 | `provider-settings.js` (SHA-256 `4fa08145bc0d3d4edeeeb83a7f3b4d546591eec24c47a6955c14daec99483fb0`), `round-policy.js` | model-selected/preloaded와 호출 제한을 run에 고정하고 preloaded 첫 case는 configured/economized 정책을 적용 → `ModelPreset.evaluationTools`와 기존 maxCalls/deadline → 첫 case 선택·bootstrap·호출 한도·첫 라운드 출력/추론 조정 검사 |
 
-원본의 고정 외부 검토자/verified IAM은 실제 권한 근거가 아니므로 채택하지 않았어요. accepted receipt는 이 실행의 평가 도구 범위만 나타내며 host read 권한은 기존 실행기가 소유해요. 브라우저 체크포인트와 자동 HTTP 재생은 서버의 불확실 실행 금지 계약과 달라 채택하지 않았어요. 원본의 LLM Gateway Chat 변환은 opaque reasoning item을 잃으므로 Responses 호환 연결은 native Responses를 사용해요.
+사용자 확인에 따라 고정 외부 검토자·verified IAM·accepted authorization receipt와 `consume-and-suppress`/`separate-delivery`를 포함한 모델-facing 표현을 원본과 동일하게 복원했어요. 실제 terminal content 전달과 requester notice 비전달의 비대칭도 유지해요. 브라우저 체크포인트와 자동 HTTP 재생은 서버의 불확실 실행 금지 계약과 달라 채택하지 않았어요. 원본의 LLM Gateway Chat 변환은 opaque reasoning item을 잃으므로 Responses 호환 연결은 native Responses를 사용해요.
 
 공식 근거: [OpenAI Function calling](https://developers.openai.com/api/docs/guides/function-calling)의 reasoning item/도구 결과 동반 반환, [Vercel OpenResponses](https://vercel.com/docs/ai-gateway/sdks-and-apis/openresponses)의 endpoint·model format·providerOptions, [LLM Gateway reasoning](https://docs.llmgateway.io/features/reasoning)의 `store:false`·`include`와 원래 output item 재전송을 확인했어요. 정확한 item/ID는 같은 실행의 continuation에서만 보존해요. 실제 공급자 호출·모델 접근권한·가격은 확인하지 않았어요. 사용 방법과 비채택 범위는 [선택형 평가 도구](EVALUATION-TOOLS.md)에 있어요.
 

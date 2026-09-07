@@ -1,3 +1,46 @@
-.delete-control{display:inline-flex;flex-wrap:wrap;gap:6px;max-width:100%}.delete-button{color:var(--danger,#b33b43)}.delete-dialog.app-dialog{width:min(480px,calc(100vw - 32px));height:fit-content;max-height:calc(100dvh - 32px);margin:auto;border-radius:14px}.delete-dialog .dialog-body{display:grid;gap:12px;overflow-wrap:anywhere}.deletion-list{display:grid;gap:10px}.deletion-row{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}.branch-entry{display:grid;gap:6px;min-width:0}
+.delete-control {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  max-width: 100%;
+}
+.delete-button {
+  color: var(--danger, #b33b43);
+}
+.delete-dialog.app-dialog {
+  width: min(480px, calc(100vw - 32px));
+  height: fit-content;
+  max-height: calc(100dvh - 32px);
+  margin: auto;
+  border-radius: 14px;
+}
+.delete-dialog .dialog-body {
+  display: grid;
+  gap: 12px;
+  overflow-wrap: anywhere;
+}
+.deletion-list {
+  display: grid;
+  gap: 10px;
+}
+.deletion-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.branch-entry {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
 
-.delete-button:not(.secondary){background:#a52932;color:#fff;border-color:#a52932}.delete-button:not(.secondary):hover{background:#89202a}
+.delete-button:not(.secondary) {
+  background: #a52932;
+  color: #fff;
+  border-color: #a52932;
+}
+.delete-button:not(.secondary):hover {
+  background: #89202a;
+}

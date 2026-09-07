@@ -1,5 +1,12 @@
 export type Barrier = 'run' | 'translation' | 'status' | 'image' | 'state' | 'memory';
-export type FailurePoint = 'source-transaction' | 'job-transaction' | 'translation' | 'status' | 'image' | 'state' | 'memory';
+export type FailurePoint =
+  | 'source-transaction'
+  | 'job-transaction'
+  | 'translation'
+  | 'status'
+  | 'image'
+  | 'state'
+  | 'memory';
 
 /** Explicit deterministic controls. Never registered outside NR_TEST_MODE. */
 export class Controls {
@@ -8,7 +15,9 @@ export class Controls {
   private waiters = new Map<Barrier, Set<() => void>>();
   crashAfterSourceCommit = false;
 
-  hold(barrier: Barrier) { this.held.add(barrier); }
+  hold(barrier: Barrier) {
+    this.held.add(barrier);
+  }
   release(barrier: Barrier) {
     this.held.delete(barrier);
     for (const resume of this.waiters.get(barrier) ?? []) resume();
@@ -22,14 +31,27 @@ export class Controls {
     await new Promise<void>((resolve, reject) => {
       const waiters = this.waiters.get(barrier) ?? new Set();
       this.waiters.set(barrier, waiters);
-      const clean = () => { waiters.delete(resume); signal.removeEventListener('abort', abort); };
-      const resume = () => { clean(); resolve(); };
-      const abort = () => { clean(); reject(signal.reason); };
+      const clean = () => {
+        waiters.delete(resume);
+        signal.removeEventListener('abort', abort);
+      };
+      const resume = () => {
+        clean();
+        resolve();
+      };
+      const abort = () => {
+        clean();
+        reject(signal.reason);
+      };
       waiters.add(resume);
       signal.addEventListener('abort', abort, { once: true });
     });
   }
   snapshot() {
-    return { held: [...this.held], waiting: Object.fromEntries([...this.waiters].map(([key, value]) => [key, value.size])), failures: [...this.failures] };
+    return {
+      held: [...this.held],
+      waiting: Object.fromEntries([...this.waiters].map(([key, value]) => [key, value.size])),
+      failures: [...this.failures],
+    };
   }
 }

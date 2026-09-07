@@ -41,6 +41,9 @@ RisuToki의 현재 skill 목록과 `read_skill`을 이용해 해당 자료에 �
 | 변수 변경·트리거 | behavior stateSchema/initialState/actions. user/before-turn/model 호출 시점을 의미에 맞게 선택해요. 프롬프트 렌더에는 상태 쓰기를 넣지 않아요. |
 | 추첨·pick/random | behavior의 기록된 draws. 원본의 재평가/고정 선택 규칙과 Uimori의 Run·판정 기회 재사용 차이를 적어요. 미리보기에서 추첨하지 않아요. |
 | 출력에서 상태 읽기 | outputParsers의 고정 경계 JSON/구분자 자료. 일반 정규식 파서나 임의 코드를 지원한다고 가정하지 않아요. |
+| 접힘 본문·평가 주석·요청 제외 | `sourceSegments`의 리터럴 경계·표시·제외 조건. 자료의 생성 지침은 instructions로 별도 보존하며 인물 지식을 추론하지 않아요. |
+| 버튼에서 다음 창작 요청 선택 | user 행동의 `nextRequest` 식과 source/hash에 고정된 예약. 사용자가 본문 요청을 실행할 때 한 번 소비하며 모델 호출이나 자동 생성 권한을 만들지 않아요. |
+| 도구로 최종 이야기 제출 | 프롬프트 `execution.storySubmission` 선언. 원본 이름·variant·옵션 이름으로 활성화하지 않아요. |
 | 정규식 | editdisplay에 해당하는 표시만 transforms로 대응해요. 입력·저장 전 출력·모델 요청 변경은 표시 변환과 별개예요. 원문 hash/저장본을 바꾸는 우회 구현을 하지 않아요. |
 | 로어 | pinned 또는 discoverable. 키 활성화·확률·검색 깊이·순서와 자동 동등하지 않아요. |
 | HTML·외부 코드·전용 UI·에셋 | 지원되는 텍스트 표시·stateView 등으로 대체할 수 있는지 판단하고 달라지는 사용자 경험/참조를 보고해요. 코드나 HTML을 그대로 실행하지 않아요. |

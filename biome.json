@@ -1,0 +1,219 @@
+{
+  "$schema": "https://biomejs.dev/schemas/2.5.12/schema.json",
+  "vcs": {
+    "enabled": true,
+    "clientKind": "git",
+    "useIgnoreFile": true
+  },
+  "files": {
+    "ignoreUnknown": true,
+    "includes": [
+      "core/**",
+      "server/**",
+      "web/**",
+      "tests/**",
+      "scripts/**",
+      "fixtures/**",
+      ".vscode/**",
+      "*.json",
+      "*.mjs",
+      "*.ts",
+      "!package-lock.json"
+    ]
+  },
+  "formatter": {
+    "indentStyle": "space",
+    "indentWidth": 2,
+    "lineWidth": 100,
+    "lineEnding": "lf"
+  },
+  "javascript": {
+    "formatter": {
+      "quoteStyle": "single",
+      "trailingCommas": "es5",
+      "semicolons": "always"
+    }
+  },
+  "assist": {
+    "enabled": false
+  },
+  "linter": {
+    "enabled": true,
+    "rules": {
+      "preset": "recommended",
+      "style": {
+        "preset": "none"
+      },
+      "complexity": {
+        "preset": "none"
+      },
+      "a11y": {
+        "preset": "none"
+      },
+      "suspicious": {
+        "noExplicitAny": "off",
+        "noAssignInExpressions": "off",
+        "noThenProperty": "off",
+        "noArrayIndexKey": "off"
+      }
+    }
+  },
+  "overrides": [
+    {
+      "includes": ["core/**"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "patterns": [
+                  {
+                    "group": ["**/tests", "**/tests/**", "**/scripts", "**/scripts/**"],
+                    "message": "Product code cannot import tests or operational scripts."
+                  },
+                  {
+                    "group": ["**/server", "**/server/**", "**/web", "**/web/**"],
+                    "message": "Core cannot import application layers, including types."
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "includes": ["server/**"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "patterns": [
+                  {
+                    "group": ["**/tests", "**/tests/**", "**/scripts", "**/scripts/**"],
+                    "message": "Product code cannot import tests or operational scripts."
+                  },
+                  {
+                    "group": ["**/web", "**/web/**"],
+                    "message": "Server code cannot import the browser layer, including types."
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "includes": ["web/**"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "patterns": [
+                  {
+                    "group": ["**/tests", "**/tests/**", "**/scripts", "**/scripts/**"],
+                    "message": "Product code cannot import tests or operational scripts."
+                  },
+                  {
+                    "group": ["**/server", "**/server/**"],
+                    "message": "Browser contracts belong in core; do not import server code or types."
+                  },
+                  {
+                    "group": [
+                      "node:*",
+                      "node:*/**",
+                      "undici",
+                      "undici/**",
+                      "google-auth-library",
+                      "google-auth-library/**",
+                      "fastify",
+                      "fastify/**",
+                      "@fastify/**"
+                    ],
+                    "message": "Browser code cannot import Node builtins or server SDKs."
+                  }
+                ],
+                "paths": {
+                  "_http_agent": "Browser code cannot import Node builtins.",
+                  "_http_client": "Browser code cannot import Node builtins.",
+                  "_http_common": "Browser code cannot import Node builtins.",
+                  "_http_incoming": "Browser code cannot import Node builtins.",
+                  "_http_outgoing": "Browser code cannot import Node builtins.",
+                  "_http_server": "Browser code cannot import Node builtins.",
+                  "_stream_duplex": "Browser code cannot import Node builtins.",
+                  "_stream_passthrough": "Browser code cannot import Node builtins.",
+                  "_stream_readable": "Browser code cannot import Node builtins.",
+                  "_stream_transform": "Browser code cannot import Node builtins.",
+                  "_stream_wrap": "Browser code cannot import Node builtins.",
+                  "_stream_writable": "Browser code cannot import Node builtins.",
+                  "_tls_common": "Browser code cannot import Node builtins.",
+                  "_tls_wrap": "Browser code cannot import Node builtins.",
+                  "assert": "Browser code cannot import Node builtins.",
+                  "assert/strict": "Browser code cannot import Node builtins.",
+                  "async_hooks": "Browser code cannot import Node builtins.",
+                  "buffer": "Browser code cannot import Node builtins.",
+                  "child_process": "Browser code cannot import Node builtins.",
+                  "cluster": "Browser code cannot import Node builtins.",
+                  "console": "Browser code cannot import Node builtins.",
+                  "constants": "Browser code cannot import Node builtins.",
+                  "crypto": "Browser code cannot import Node builtins.",
+                  "dgram": "Browser code cannot import Node builtins.",
+                  "diagnostics_channel": "Browser code cannot import Node builtins.",
+                  "dns": "Browser code cannot import Node builtins.",
+                  "dns/promises": "Browser code cannot import Node builtins.",
+                  "domain": "Browser code cannot import Node builtins.",
+                  "events": "Browser code cannot import Node builtins.",
+                  "fs": "Browser code cannot import Node builtins.",
+                  "fs/promises": "Browser code cannot import Node builtins.",
+                  "http": "Browser code cannot import Node builtins.",
+                  "http2": "Browser code cannot import Node builtins.",
+                  "https": "Browser code cannot import Node builtins.",
+                  "inspector": "Browser code cannot import Node builtins.",
+                  "inspector/promises": "Browser code cannot import Node builtins.",
+                  "module": "Browser code cannot import Node builtins.",
+                  "net": "Browser code cannot import Node builtins.",
+                  "os": "Browser code cannot import Node builtins.",
+                  "path": "Browser code cannot import Node builtins.",
+                  "path/posix": "Browser code cannot import Node builtins.",
+                  "path/win32": "Browser code cannot import Node builtins.",
+                  "perf_hooks": "Browser code cannot import Node builtins.",
+                  "process": "Browser code cannot import Node builtins.",
+                  "punycode": "Browser code cannot import Node builtins.",
+                  "querystring": "Browser code cannot import Node builtins.",
+                  "readline": "Browser code cannot import Node builtins.",
+                  "readline/promises": "Browser code cannot import Node builtins.",
+                  "repl": "Browser code cannot import Node builtins.",
+                  "stream": "Browser code cannot import Node builtins.",
+                  "stream/consumers": "Browser code cannot import Node builtins.",
+                  "stream/promises": "Browser code cannot import Node builtins.",
+                  "stream/web": "Browser code cannot import Node builtins.",
+                  "string_decoder": "Browser code cannot import Node builtins.",
+                  "sys": "Browser code cannot import Node builtins.",
+                  "timers": "Browser code cannot import Node builtins.",
+                  "timers/promises": "Browser code cannot import Node builtins.",
+                  "tls": "Browser code cannot import Node builtins.",
+                  "trace_events": "Browser code cannot import Node builtins.",
+                  "tty": "Browser code cannot import Node builtins.",
+                  "url": "Browser code cannot import Node builtins.",
+                  "util": "Browser code cannot import Node builtins.",
+                  "util/types": "Browser code cannot import Node builtins.",
+                  "v8": "Browser code cannot import Node builtins.",
+                  "vm": "Browser code cannot import Node builtins.",
+                  "wasi": "Browser code cannot import Node builtins.",
+                  "worker_threads": "Browser code cannot import Node builtins.",
+                  "zlib": "Browser code cannot import Node builtins."
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
+}

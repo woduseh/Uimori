@@ -1,14 +1,90 @@
-.activity-status{display:flex;align-items:center;gap:4px;margin:0 0 6px;min-width:0;color:var(--muted);font-size:12px}
-.activity-status button{background:transparent;color:inherit;min-height:44px;padding:8px;border-radius:9px;font-size:inherit}
-.activity-status button:hover{background:var(--hover);filter:none}
-.activity-toggle{display:flex;align-items:center;gap:8px;min-width:0;text-align:left;max-width:100%}
-.activity-label{min-width:0;overflow-wrap:anywhere}
-.activity-elapsed{font-variant-numeric:tabular-nums;white-space:nowrap;flex-shrink:0}
-.activity-count{white-space:nowrap;flex-shrink:0;font-size:11px}
-.activity-details{flex-shrink:0;margin-left:auto}
-.activity-issue{color:var(--error)}
-.activity-spinner{animation:activity-spin 1.4s linear infinite}
-.activity-list{margin-bottom:20px}.activity-list ul{list-style:none;padding:0;margin:0}.activity-list li{display:flex;justify-content:space-between;gap:12px;padding:8px 0;border-bottom:1px solid var(--line);font-size:13px}
-@keyframes activity-spin{to{transform:rotate(360deg)}}
-@media(prefers-reduced-motion:reduce){.activity-spinner{animation:none}}
-@media(max-width:600px){.activity-toggle{gap:6px}.activity-status button{padding:6px}.activity-label{font-size:11px}}
+.activity-status {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin: 0 0 6px;
+  min-width: 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+.activity-status button {
+  background: transparent;
+  color: inherit;
+  min-height: 44px;
+  padding: 8px;
+  border-radius: 9px;
+  font-size: inherit;
+}
+.activity-status button:hover {
+  background: var(--hover);
+  filter: none;
+}
+.activity-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  text-align: left;
+  max-width: 100%;
+}
+.activity-label {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.activity-elapsed {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.activity-count {
+  white-space: nowrap;
+  flex-shrink: 0;
+  font-size: 11px;
+}
+.activity-details {
+  flex-shrink: 0;
+  margin-left: auto;
+}
+.activity-issue {
+  color: var(--error);
+}
+.activity-spinner {
+  animation: activity-spin 1.4s linear infinite;
+}
+.activity-list {
+  margin-bottom: 20px;
+}
+.activity-list ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+.activity-list li {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--line);
+  font-size: 13px;
+}
+@keyframes activity-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .activity-spinner {
+    animation: none;
+  }
+}
+@media (max-width: 600px) {
+  .activity-toggle {
+    gap: 6px;
+  }
+  .activity-status button {
+    padding: 6px;
+  }
+  .activity-label {
+    font-size: 11px;
+  }
+}

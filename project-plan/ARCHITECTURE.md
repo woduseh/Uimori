@@ -1,6 +1,6 @@
 # 아키텍처 계약 v0.6.1
 
-> 2026-09-07 현행 연결: 문서 제목의 v0.6.1은 계약 문서 버전이며 현재 DB/archive는 v8이다. 구형 DB는 이관하지 않고 거부하며 개발 DB 초기화는 `npm run reset:dev`를 사용한다. 공통 패키지·Run 상태·기록된 난수는 [PACKAGE-BEHAVIOR](../docs/PACKAGE-BEHAVIOR.md), 개인 HTTPS 접속·세션은 [SELF-HOST](../docs/SELF-HOST.md), Risu 자료의 에이전트 이식은 [RISU-PORTING](../docs/RISU-PORTING.md)을 따른다. 아래 M1/M2 시점의 설명과 장기 설계는 각 단계의 계약이며 전체 구현 완료를 뜻하지 않는다. 실제 완료 범위는 [CURRENT](CURRENT.md)에서 확인한다.
+> 2026-09-07 현행 연결: 문서 제목의 v0.6.1은 계약 문서 버전이며 현재 DB/archive는 v10이다. 구형 DB는 이관하지 않고 거부하며 개발 DB 초기화는 `npm run reset:dev`를 사용한다. 공통 패키지·Run 상태·기록된 난수는 [PACKAGE-BEHAVIOR](../docs/PACKAGE-BEHAVIOR.md), 개인 HTTPS 접속·세션은 [SELF-HOST](../docs/SELF-HOST.md), Risu 자료의 에이전트 이식은 [RISU-PORTING](../docs/RISU-PORTING.md)을 따른다. 아래 M1/M2 시점의 설명과 장기 설계는 각 단계의 계약이며 전체 구현 완료를 뜻하지 않는다. 실제 완료 범위는 [CURRENT](CURRENT.md)에서 확인한다.
 
 제안된 이름은 구현을 강제하는 클래스 목록이 아니다. 아래 경계와 동작을 유지하면 더 단순한 표현으로 구현할 수 있다.
 
@@ -18,7 +18,7 @@ TypeScript, React/Vite, Node/Fastify, 서버 로컬 SQLite WAL을 사용한 모�
 
 콘텐츠 패키지는 character/persona/world/style/skill/UI 자원 등을 버전 관리한다. 패키지 형식은 통일하되 자료·지시·실행 도구·권한은 의미가 다르다. 캐릭터와 페르소나는 같은 actor 정의를 역할별로 사용할 수 있다. 모든 NPC에 독립 에이전트를 붙이지 않는다.
 
-PromptProgram(편집 가능한 텍스트+타입 있는 제어+명시적 조립 규칙), CreativePreset(제어 조합), ModelPreset(모델/생성설정), ProviderConnection(프로토콜/endpoint/credential ref), ExecutionPolicy(도구·예산·취소)를 분리한다.
+PromptProgram(편집 가능한 텍스트+타입 있는 제어+명시적 조립 규칙), SavedPromptCombination(프롬프트 옵션 조합), ModelPreset(모델/생성설정), ProviderConnection(프로토콜/endpoint/credential ref), ExecutionPolicy(도구·예산·취소)를 분리한다.
 
 채팅은 버전 있는 콘텐츠를 장착하고 채팅별 override를 가진다. 전역 값은 새 채팅의 기본값일 뿐 기존 실행을 몰래 바꾸지 않는다. Run 시작 시 설정·콘텐츠·읽기 범위·가격 근거를 snapshot으로 고정한다. 권한 폐기와 비밀키 폐기는 실행 경계에서 최신 정책으로 재확인한다. secret 원문은 snapshot에 저장하지 않는다.
 
@@ -120,7 +120,7 @@ PromptProgram(편집 가능한 텍스트+타입 있는 제어+명시적 조립 �
 
 ### 6.4 역할별 작업 환경
 
-메인은 고정 창작 계약/현재 장면과 lore·memory·craft 자료 읽기를 가진다. 기본 메인 입력에는 이미지 전체 목록, 파일명 규칙, 상태 HTML·CSS, 수치 출력 양식, 번역 프로토콜을 넣지 않는다. 단, 장면을 제약하는 사실·외모·행동 규칙은 메인도 알 수 있어야 한다.
+메인은 선택한 프롬프트 계약/현재 장면과 lore·memory·craft 자료 읽기를 가진다. 기본 메인 입력에는 이미지 전체 목록, 파일명 규칙, 상태 HTML·CSS, 수치 출력 양식, 번역 프로토콜을 넣지 않는다. 단, 장면을 제약하는 사실·외모·행동 규칙은 메인도 알 수 있어야 한다.
 
 이미지 역할은 해당 원문과 표현 지침, asset 목록/검색/preview 도구를 받는다. 상태 역할은 원문·직전 상태·상태 정의/계산 규칙·출력 schema와 scoped 지식 조회를 받는다. 번역 역할은 원문·번역 계약·명칭집과 시점별 조회를 받는다. 이미지 선택이나 상태 표현의 적절한 방법은 보조 모델이 결정하고 실제 저장/표시는 host가 계약에 맞게 수행한다.
 
@@ -154,7 +154,7 @@ Connection, protocol adapter, model catalog/capabilities, task-specific preset�
 
 캐시는 안정 구간·동적 제어·tool schema 변경의 영향을 관찰한다. Phēmē source의 특정 relay TTL/explicit breakpoint를 모든 공식 API 계약으로 복사하지 않는다. cache key와 실제 cache hit/청구량은 다르다. 각 요청/attempt의 raw usage와 price revision을 보존하고 추론 토큰 포함 관계/캐시 쓰기/읽기를 중복 없이 계산한다.
 
-budget은 전체 사용자 작업, 후보 그룹, 각 child 작업에 예약/집계한다. 보조 상태도 포함한다. 확인되지 않은 사용량/가격은0이 아니다. 알려진 근거로 상한이 산정되지 않으면 경고/확인 정책을 적용하고 임의 무료 표기를 하지 않는다. 이미 발생한 원격 비용의 환급이나 앱 취소로 정확한 하드 차단을 보증하지 않는다.
+현재 서버는 누적 금액 예산·예약금·단가 추정을 사용하지 않는다. 작업별 maxCalls·timeout·출력 토큰 한도와 durable attempt를 유지한다. 실제 provider가 보고한 비용만 보존하며 미확인 costUsd는 null이다. 과거 금액 예산 요구는 현행 구현 지시가 아니다.
 
 부분 출력 후 실패/서버 재시작/외부 도구 성공 여부 불명확은 자동 replay하지 않는다. 한도 내 명시된 안전한 기술적 retry만 사용한다. policy refusal을 순환 provider 재시도나 우회 프롬프트로 바꾸지 않는다.
 
@@ -182,7 +182,7 @@ budget은 전체 사용자 작업, 후보 그룹, 각 child 작업에 예약/집
 
 ### M2 구현의 저장·실행 계약
 
-M2 당시 schema v4에서 도입해 현재 v8 새 DB에도 포함하는 `story_configs/jobs/states/memories/indexes/scene_commands`는 기존 원문·최신 번역과 별도이며, 원문 확정 transaction에서 적격 상태·기억 작업을 예약한다. `attempts.story_job_id`로 모든 역할의 전송을 기존 예산·사용량 기록에 합산한다. 사용량/비용 누락을 0으로 간주하지 않는다.
+M2 당시 schema v4에서 도입해 현재 v10 새 DB에도 포함하는 `story_configs/jobs/states/memories/indexes/scene_commands`는 기존 원문·최신 번역과 별도이며, 원문 확정 transaction에서 적격 상태·기억 작업을 예약한다. `attempts.story_job_id`로 모든 역할의 전송을 기존 예산·사용량 기록에 합산한다. 사용량/비용 누락을 0으로 간주하지 않는다.
 
 state job은 source/hash·전체 ancestry·canon·모듈·직전 state·선택 model revision으로 식별한다. owner/generation은 늦은 완료와 중복 commit을 거절한다. continuity의 메인 Run snapshot은 상태 없이 확정될 수 있으나, 그 상태 job은 이전 상태를 받은 뒤 전송 전 별도 입력을 확정한다. authoritative 대기 Run은 해당 의존성·branch head를 재검사한 뒤 한 번 queued로 전환한다. annotation 값은 메인 canonical 입력에 넣지 않는다.
 

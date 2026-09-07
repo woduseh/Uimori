@@ -1,5 +1,7 @@
 # 현재 작업 상태 · Uimori
 
+2026-09-08 자료별 native/hidden 실행기·고정 창작 제어·기본 합성 자료 주입·M0 resources 경로를 정리하고 공통 패키지·프롬프트·원문 구간 정책·요청 예약으로 통합했어요. 공통 Run 보관·포크 검증도 분리하고 후보의 원래 컴파일 조건을 보존해요. 현재 schema/archive는 **v10**이며 구형 v9·전용 자료를 자동 변환하지 않아요. 사용자 DB는 열거나 초기화하지 않았어요. 병행 품질 도구·공급자 변경을 포함한 `quality`·빌드, 단위·통합 **1,226 PASS·1 opt-in skip**, 최종 UI 회귀 **96/96 PASS**, 소스/빌드 일치·cleanup을 확인했어요. 단위 검사 후 브라우저 기대값만 변경했으며 제품 dist hash는 같아요. [변경 대응·검증·첫 실패 기록](CODEBASE-CLEANUP-RESULTS.md)과 [원문 구간 계약](../docs/SOURCE-SEGMENTS.md)을 봐요. 아래 수치·구형 schema·native/hidden 구현 및 미완료 표현은 각 시점의 기록이에요.
+
 2026-09-08 삭제 기능을 서재 자료·프롬프트·조합·연결/모델·채팅/분기·이미지·native/hidden 자료·미사용 선언/예약에 추가했어요. 참조·실행·revision 보호와 확인창, 삭제 후 다른 탭의 선택 정리를 포함해요. 고정 소스 복사본에서 단위·통합 **1,219 PASS·1 opt-in skip**, 관련 브라우저 **9/9 PASS** 및 cleanup을 확인했고 공유 폴더 타입·빌드도 통과했어요. 병행 UI 변경과 검증 범위는 [삭제 결과](DELETION-RESULTS.md), 사용법과 개별 삭제 경계는 [삭제 안내](../docs/DELETION.md)를 봐요.
 
 2026-09-08 공급자 설정·캐시·응답 테스트, 최신 모델·연결 설정, 입력 한도 272,000과 대화 자동 요약을 공통 자료·이미지·작성된 시작문·로어 유지 작업과 main에 통합했어요. 현재 schema/archive는 **v9**예요. 전체 단위·통합 **1,175 PASS·1 opt-in skip**, 최종 전체 브라우저 **79/79 PASS**, 타입·빌드·source/build 일치·cleanup을 확인했어요. 모바일에서 요약 안내·캐시·로어·시작문도 직접 확인했어요. source/build `1e5cce2af3ed71c8448378df20392fd779614d759b09f7550d7f2cab0e4b13de`이며 실제 모델·과금·요약 품질·휴대폰/IME·배포는 검증하지 않았어요. [통합 범위·실패 보존·최종 증거](PROVIDER-PARAMETERS-RESULTS.md) · [입력 한도 계약](../docs/CONTEXT-LIMITS.md). 아래 미커밋·병합 전·PENDING 표현은 해당 시점 기록이에요.
@@ -16,7 +18,7 @@
 
 **Codex 구독 에이전트 연결**을 추가했어요. 본문·번역·장면 상태·이미지 작업·상태·기억과 모델 등록 요청에서 Codex를 선택하며, **설정 → 에이전트**에서 전용 로그인을 관리해요. 관련 단위·통합 **74/74**, 실제 설치 CLI의 모델 호출 없는 사전 검사 **1/1**, 타입·빌드와 관리 브라우저 **10/10 PASS**예요. 실제 구독 로그인·모델 실행과 Linux Docker는 미검증이에요. 소스 지문·화면·수정 중 발견한 실패와 한계는 [Codex 결과](CODEX-RESULTS.md), 활성화 절차는 [연결 안내](../docs/CODEX.md)에 있어요. 병행 작업의 전체 회귀와는 범위를 구분해요.
 
-Sol 전용 provider를 제거하고 네 평가 도구를 모델 프리셋별 opt-in으로 분리했어요. 인증 환경변수 이름은 특정 접두사 없이 일반 환경변수 문법을 허용하며, Responses 호환 연결은 허용한 HTTPS 또는 loopback API root를 사용할 수 있어요. model-selected/preloaded, run session, case receipt, terminal content/notice 분리, 제한 교정, validation·거절 재제출, 명시적 잘림 복구를 main과 모든 보조 역할에 연결했어요. 최종 source/build `e2370e0bd1b2791f54620b2f5a211a3511b57615ddfedbbdf868c2f7e550a42f`에서 타입·빌드, 전체 Vitest **992 PASS·1 skip**, [평가 도구 브라우저 2/2](../output/playwright/evaluation-ui-2026-09-07T13-00-35-895Z-9cd8eb25/summary.json), [공급자 관리 브라우저 10/10](../output/playwright/provider-management-2026-09-07T13-00-56-452Z-6c3d8397/summary.json)이 PASS예요. 두 실행은 같은 source/build를 확인하고 cleanup을 마쳤어요. 현재 계약과 원본 비교는 [선택형 평가 도구](EVALUATION-TOOLS.md)를 확인해요.
+Sol 전용 provider를 제거하고 네 평가 도구를 모델 프리셋별 opt-in으로 분리했어요. 인증 환경변수 이름은 특정 접두사 없이 일반 환경변수 문법을 허용하며, Responses 호환 연결은 허용한 HTTPS 또는 loopback API root를 사용할 수 있어요. `GOOGLE_APPLICATION_CREDENTIALS`를 명시한 Vertex 연결은 변수 값을 Bearer token으로 보내지 않고 ADC 파일 경로로 사용해요. model-selected/preloaded, run session, case receipt, terminal content/notice 분리, 제한 교정, validation·거절 재제출, 명시적 잘림 복구를 main과 모든 보조 역할에 연결했어요. 후속 요청에 따라 외부 검토자·verified IAM·accepted authorization과 suppression/delivery를 포함한 모델-facing 문구·schema·결과 표현을 원본과 동일하게 복원했어요. 병행 구조 개편과 분리한 고정 소스 복사본 `58aab3dcf356babcf931b622e78c28271a70b4edda98809a259f089c4151946f`에서 타입·빌드, 전체 Vitest **1,219 PASS·1 opt-in skip**, [평가 도구 브라우저 2/2](../output/playwright/evaluation-ui-2026-09-07T17-26-15-469Z-baf591db/summary.json)이 PASS예요. 현재 공유 작업트리의 최종 빌드는 진행 중인 별도 구조 개편이 끝난 뒤 합본 검증해야 해요. 현재 계약과 원본 비교는 [선택형 평가 도구](EVALUATION-TOOLS.md)를 확인해요.
 
 최근 사용자 요청의 **연결·모델 관리 개편 / Vertex 키 JSON 등록 / 공통 중앙 팝업** 구현을 마쳤어요. 모델·연결 목록과 기본/생성/고급 편집을 분리했고, 업로드 키는 서버 별도 파일로 보관해요. 작업 현황·읽기·채팅 설정과 모바일 탐색도 공통 Dialog 규칙을 사용해요. 최종 source/build `69477f9e7570713d5848c985a676ae2c12b74ea3934bc70178306826e3f03851`에서 타입·빌드 및 [전체 브라우저 61/61](../output/playwright/redesign-2026-09-07T10-59-01-192Z-8c0265f7/summary.json)이 PASS예요. 직전 동일 백엔드의 전체 단위 948/948, provider 전용 9/9와 화면 검증도 PASS이며, 세부 지문·첫 FAIL·실제 Google 미검증 범위는 [통합 결과](PROVIDER-UX-RESULTS.md)에 기록했어요. 커밋·푸시는 하지 않았어요.
 
@@ -44,7 +46,7 @@ Risu 원본 변환은 앱 밖으로 분리했어요. 통합 ‘자료 가져오�
 | --- | --- | --- |
 | M0 | 서버 소유 실행·SQLite·채팅 격리·재접속·실패 탐지, F01–F06 | M0 범위 완료 |
 | M1 | 콘텐츠·연결·전체 프롬프트, 요청 시 최신 번역·제한 재시도·직접 편집, 포크·읽기 위치·백업, P01–P13 로컬 통과 | 실제 폰·접속 환경 L02, 공급자별 L01 미확인 경로, Q01/Q02/Q03/Q05 품질 |
-| M2 | 상태 계산·대기·무효화/복구, 기억·checkpoint·원문 회수, 장면 예약·표현·에셋과 지정 자료 native 구현·로컬 가져오기·화면 확인. Hinano는 승인된 비성적 각색 | Q04 실제 장기 의미·비용 평가. 기존 Hidden native 자료는 제한이 있는 partial이며 전용 원본 변환기는 제거됨 |
+| M2 | 상태 계산·대기·무효화/복구, 기억·checkpoint·원문 회수, 장면 예약·표현·에셋. 자료별 실행기는 공통 패키지 행동·다음 요청 예약·원문 구간 정책으로 통합 | Q04 실제 장기 의미·비용 평가와 개인 자료의 공통 형식 재이식. 과거 Hinano/Hidden 전용 구현 증거는 현재 형식 호환을 보증하지 않음 |
 | M3 | 모델 프리셋별 선택형 평가 도구를 본문·번역·상태·이미지·기억에 연결하고 연결·모델 관리, 검토 후 적용하는 등록 보조 구현 | E01–E03 전체 인수 미실행. 실제 공급자별 도구 호환·일반 MCP/외부 action·공개 배포는 별도 범위 |
 
 M1·M2 로컬 통과를 전체 인수 완료로 표시하지 않아요. 실제 봇의 Lua/CBS 호환이나 실제 모델 품질을 합성 검사로 보증하지 않아요.

@@ -11,13 +11,38 @@ export type StoryConfig = {
   memory: { enabled: boolean; model: ModelRef | null; recentCount: number; maxPacketChars: number };
   activatedAt: { revision: string; hash: string } | null;
 };
-export const defaultStoryConfig = (): StoryConfig => ({ revision: 0, module: null, stateModel: null, memory: { enabled: false, model: null, recentCount: 2, maxPacketChars: 60000 }, activatedAt: null });
-export type StoryState = { id: string; sourceRevision: string | null; sourceHash: string | null; moduleRevision: number; values: StateValues; canonical: boolean };
+export const defaultStoryConfig = (): StoryConfig => ({
+  revision: 0,
+  module: null,
+  stateModel: null,
+  memory: { enabled: false, model: null, recentCount: 2, maxPacketChars: 60000 },
+  activatedAt: null,
+});
+export type StoryState = {
+  id: string;
+  sourceRevision: string | null;
+  sourceHash: string | null;
+  moduleRevision: number;
+  values: StateValues;
+  canonical: boolean;
+};
 /** An explicit rebuild re-applies the activation scene, starting immediately before it. */
-export function activationRebuildState(chatId: string, config: StoryConfig, source: { id: string; hash: string }, history: { revision: string; text: string }[]): StoryState | null {
+export function activationRebuildState(
+  chatId: string,
+  config: StoryConfig,
+  source: { id: string; hash: string },
+  history: { revision: string; text: string }[]
+): StoryState | null {
   if (!config.module || config.activatedAt?.revision !== source.id) return null;
   const parent = history.at(-1);
-  return { id: `initial:${chatId}:${config.module.revision}:rebuild:${source.hash}`, sourceRevision: parent?.revision ?? null, sourceHash: parent ? memoryHash(parent.text) : null, moduleRevision: config.module.revision, values: initialState(config.module), canonical: config.module.mode !== 'annotation' };
+  return {
+    id: `initial:${chatId}:${config.module.revision}:rebuild:${source.hash}`,
+    sourceRevision: parent?.revision ?? null,
+    sourceHash: parent ? memoryHash(parent.text) : null,
+    moduleRevision: config.module.revision,
+    values: initialState(config.module),
+    canonical: config.module.mode !== 'annotation',
+  };
 }
 export type StorySnapshot = {
   config: StoryConfig;
@@ -30,12 +55,39 @@ export type StorySnapshot = {
   sceneCommandId?: string;
 };
 export type StoryJob = {
-  id: string; chatId: string; sourceRevision: string; sourceHash: string; kind: 'state' | 'memory';
-  configRevision: number; generation: number; owner: string | null;
+  id: string;
+  chatId: string;
+  sourceRevision: string;
+  sourceHash: string;
+  kind: 'state' | 'memory';
+  configRevision: number;
+  generation: number;
+  owner: string | null;
   status: 'queued' | 'running' | 'completed' | 'failed' | 'stale' | 'cancelled' | 'interrupted';
-  error: string | null; mock: boolean; createdAt: string; updatedAt: string;
+  error: string | null;
+  mock: boolean;
+  createdAt: string;
+  updatedAt: string;
   result: StateProposal | { entries: MemoryEntry[] } | null;
-  inputs?: unknown[]; toolEvents?: unknown[];
+  inputs?: unknown[];
+  toolEvents?: unknown[];
 };
-export type SceneCommand = { id: string; chatId: string; branchId: string; label: string; request: string; status: 'pending' | 'consumed' | 'failed' | 'cancelled'; runId: string | null; sourceRevision: string | null };
-export type StoryDetail = { config: StoryConfig; state: StoryState | null; stateStatus: 'disabled' | 'ready' | 'pending' | 'stale'; jobs: StoryJob[]; memory: MemoryEntry[]; checkpoint: MemoryCheckpoint; commands: SceneCommand[] };
+export type SceneCommand = {
+  id: string;
+  chatId: string;
+  branchId: string;
+  label: string;
+  request: string;
+  status: 'pending' | 'consumed' | 'failed' | 'cancelled';
+  runId: string | null;
+  sourceRevision: string | null;
+};
+export type StoryDetail = {
+  config: StoryConfig;
+  state: StoryState | null;
+  stateStatus: 'disabled' | 'ready' | 'pending' | 'stale';
+  jobs: StoryJob[];
+  memory: MemoryEntry[];
+  checkpoint: MemoryCheckpoint;
+  commands: SceneCommand[];
+};

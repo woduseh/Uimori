@@ -1,2 +1,102 @@
-.package-authoring-editor{min-width:0}.package-authoring-editor p{margin:0}.package-authoring-editor input:not([type=checkbox]),.package-authoring-editor select,.package-authoring-editor textarea,.package-control-values input:not([type=checkbox]),.package-control-values select{width:100%;box-sizing:border-box;min-width:0;max-width:100%}.package-authoring-editor textarea[spellcheck=false]{font-family:monospace}.package-authoring-row,.package-scalar-editor{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;align-items:start}.package-authoring-editor small{color:var(--muted);overflow-wrap:anywhere}.package-instruction-roles{display:flex;flex-wrap:wrap;gap:12px;border:1px solid var(--line);border-radius:8px;margin:14px 0;padding:12px;min-width:0}.package-instruction-roles legend{font-size:13px}.package-control-values{display:grid;gap:14px;min-width:0}.package-control-group{border:1px solid var(--line);border-radius:8px;margin:0;padding:12px;display:grid;gap:12px;min-width:0}.package-control-group legend{padding:0 6px;font-size:13px;color:var(--muted)}.package-control-value{min-width:0;overflow-wrap:anywhere}.package-control-value>small{font-weight:400;color:var(--muted)}.package-control-value.check{display:grid;grid-template-columns:auto 1fr;align-items:start;gap:6px 8px}.package-control-value.check>small{grid-column:2}.package-control-value.check input{width:18px;height:18px;min-height:18px;margin-top:2px}.package-authoring-editor .check input{width:18px;height:18px;min-height:18px}
-@media(max-width:600px){.package-authoring-row,.package-scalar-editor{grid-template-columns:1fr}.package-authoring-editor .package-role-actions{align-items:stretch}.package-authoring-editor .package-role-actions>button{flex-basis:100%}}
+.package-authoring-editor {
+  min-width: 0;
+}
+.package-authoring-editor p {
+  margin: 0;
+}
+.package-authoring-editor input:not([type="checkbox"]),
+.package-authoring-editor select,
+.package-authoring-editor textarea,
+.package-control-values input:not([type="checkbox"]),
+.package-control-values select {
+  width: 100%;
+  box-sizing: border-box;
+  min-width: 0;
+  max-width: 100%;
+}
+.package-authoring-editor textarea[spellcheck="false"] {
+  font-family: monospace;
+}
+.package-authoring-row,
+.package-scalar-editor {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  align-items: start;
+}
+.package-authoring-editor small {
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+.package-instruction-roles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  margin: 14px 0;
+  padding: 12px;
+  min-width: 0;
+}
+.package-instruction-roles legend {
+  font-size: 13px;
+}
+.package-control-values {
+  display: grid;
+  gap: 14px;
+  min-width: 0;
+}
+.package-control-group {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  margin: 0;
+  padding: 12px;
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+.package-control-group legend {
+  padding: 0 6px;
+  font-size: 13px;
+  color: var(--muted);
+}
+.package-control-value {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.package-control-value > small {
+  font-weight: 400;
+  color: var(--muted);
+}
+.package-control-value.check {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: start;
+  gap: 6px 8px;
+}
+.package-control-value.check > small {
+  grid-column: 2;
+}
+.package-control-value.check input {
+  width: 18px;
+  height: 18px;
+  min-height: 18px;
+  margin-top: 2px;
+}
+.package-authoring-editor .check input {
+  width: 18px;
+  height: 18px;
+  min-height: 18px;
+}
+@media (max-width: 600px) {
+  .package-authoring-row,
+  .package-scalar-editor {
+    grid-template-columns: 1fr;
+  }
+  .package-authoring-editor .package-role-actions {
+    align-items: stretch;
+  }
+  .package-authoring-editor .package-role-actions > button {
+    flex-basis: 100%;
+  }
+}

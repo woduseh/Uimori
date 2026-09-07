@@ -9,14 +9,19 @@ export async function vertexAccessToken(signal: AbortSignal): Promise<string> {
   if (!keyFile) throw new ProviderContractError('CREDENTIAL_UNAVAILABLE');
   let client = clients.get(keyFile);
   if (!client) {
-    client = new GoogleAuth({ keyFile, scopes: ['https://www.googleapis.com/auth/cloud-platform'] });
+    client = new GoogleAuth({
+      keyFile,
+      scopes: ['https://www.googleapis.com/auth/cloud-platform'],
+    });
     clients.set(keyFile, client);
   }
   if (signal.aborted) throw new ProviderContractError('CANCELLED');
   const token = await new Promise<string | null | undefined>((resolve, reject) => {
     const abort = () => reject(new ProviderContractError('CANCELLED'));
     signal.addEventListener('abort', abort, { once: true });
-    client!.getAccessToken().then(resolve, () => reject(new ProviderContractError('CREDENTIAL_UNAVAILABLE')))
+    client!
+      .getAccessToken()
+      .then(resolve, () => reject(new ProviderContractError('CREDENTIAL_UNAVAILABLE')))
       .finally(() => signal.removeEventListener('abort', abort));
   });
   if (!token || /[\r\n]/u.test(token)) throw new ProviderContractError('CREDENTIAL_UNAVAILABLE');

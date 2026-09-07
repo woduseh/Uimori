@@ -43,7 +43,7 @@ npm run dev
 
 ## 데이터와 접속
 
-- 기본 DB는 `.local/narrative.sqlite`예요. 현재 DB·JSON archive는 **v9**이며 정식 배포 전에는 구버전 호환·자동 이관을 지원하지 않아요. 개발 DB를 초기화하려면 서버 종료 후 `npm run reset:dev`를 실행해요.
+- 기본 DB는 `.local/narrative.sqlite`예요. 현재 DB·JSON archive는 **v10**이며 정식 배포 전에는 구버전 호환·자동 이관을 지원하지 않아요. 개발 DB를 초기화하려면 서버 종료 후 `npm run reset:dev`를 실행해요.
 - **설정 → 내보내기와 복원**에서 JSON 또는 SQLite 백업을 저장해요. JSON은 새 빈 DB로 복원해요. [백업·격리 DB 사용법](docs/USAGE.md)
 - 기본은 `127.0.0.1` 로컬 모드이며 `NR_ACCESS_TOKEN` 인증을 선택할 수 있어요. 개인 서버 모드는 `NR_PUBLIC_ORIGIN`에 HTTPS 주소 하나를 지정하고 32자 이상 접속 토큰을 필수로 사용해요. `NR_HOST`로 수신 주소를 정하며 외부 수신은 개인 서버 모드에서만 허용해요. [접속 조건](docs/SELF-HOST.md#프록시와-접속-조건)
 - 인증 정보는 서버 환경변수·서버가 읽는 파일로 설정해요. 사용자 데이터·인증 파일·실행 산출물은 Git에서 제외해요.

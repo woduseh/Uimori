@@ -11,6 +11,13 @@
     "start": "node dist/server/index.js",
     "reset:dev": "node scripts/reset-dev-data.mjs",
     "check": "tsc --noEmit",
+    "format": "biome format --write .",
+    "format:check": "biome format .",
+    "lint": "biome lint . --error-on-warnings",
+    "lint:fix": "biome lint --write . --error-on-warnings",
+    "lint:architecture": "biome lint core server web --only=style/noRestrictedImports --error-on-warnings",
+    "quality": "biome check . --error-on-warnings && tsc --noEmit",
+    "quality:full": "npm run quality && npm test && npm run build",
     "build": "node scripts/build.mjs",
     "test": "vitest run",
     "doctor": "node scripts/doctor.mjs",
@@ -20,7 +27,7 @@
     "verify:ui": "node scripts/verify-ui.mjs",
     "verify:evaluation": "node scripts/verify-evaluation.mjs",
     "verify:providers": "node scripts/verify-provider-management.mjs",
-    "verify:native": "node scripts/verify-native-ui.mjs",
+    "verify:packages": "node scripts/verify-package-ui.mjs",
     "verify:loading": "node scripts/verify-loading.mjs",
     "verify:redesign": "node scripts/verify-redesign.mjs",
     "verify:selfhost": "node scripts/verify-self-host.mjs"
@@ -36,6 +43,7 @@
     "undici": "7.29.1"
   },
   "devDependencies": {
+    "@biomejs/biome": "2.5.12",
     "@playwright/test": "1.63.0",
     "@types/node": "26.4.1",
     "@types/react": "19.2.18",
