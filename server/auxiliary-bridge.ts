@@ -3,6 +3,7 @@ import { BUILTIN_ASSETS, type AssetEntry } from '../core/auxiliary.js';
 import type { AuxiliaryStoreBridge } from './product-auxiliary.js';
 import type { Controls } from './controls.js';
 import { translationReferences } from './translation-context.js';
+import { imageCatalog } from './package-images.js';
 
 export function auxiliaryBridge(store: Store, controls: Controls, signal: AbortSignal): AuxiliaryStoreBridge {
   const owns = (id:string,generation:number,owner:string) => { if (!store.ownsJob(id,generation,owner)) throw new Error('Job ownership changed'); const job = store.job(id); const source = store.source(job.sourceRevision); if (source.hash !== job.sourceHash || source.chatId !== job.chatId) throw new Error('SOURCE_DEPENDENCY_MISMATCH'); };
@@ -11,7 +12,7 @@ export function auxiliaryBridge(store: Store, controls: Controls, signal: AbortS
       const job = store.job(id); const source = store.sourceAtHash(job.sourceRevision,job.sourceHash); const snapshot = store.product.resolveJobPrompt(store.run(source.runId).snapshot,job.input);
       const assets:AssetEntry[] = store.product.assets(job.chatId).map(a => ({ref:a.id,revision:a.revision,hash:a.hash,url:a.url,alt:a.title,caption:a.description,actorId:a.actor,clothing:a.outfit,location:a.location,uses:a.allowedUse === 'both' ? ['profile','inline'] : [a.allowedUse]}));
       const row = store.db.prepare('SELECT retry_chunk FROM jobs WHERE id=?').get(id) as {retry_chunk:string|null};
-      return {job,source,snapshot,...(job.kind === 'translation' ? {translationReferences:translationReferences(store,snapshot)} : {}),assets:[...BUILTIN_ASSETS,...assets],plan:store.product.plan(id) ?? undefined,chunks:store.product.chunks(id),...(row.retry_chunk ? {retryChunkIds:[row.retry_chunk]} : {})};
+      return {job,source,snapshot,...(job.kind === 'translation' ? {translationReferences:translationReferences(store,snapshot)} : {}),assets:job.kind === 'image' ? imageCatalog(job.input) : [...BUILTIN_ASSETS,...assets],plan:store.product.plan(id) ?? undefined,chunks:store.product.chunks(id),...(row.retry_chunk ? {retryChunkIds:[row.retry_chunk]} : {})};
     },
     async claim(id,owner,prepared) {
       const job = store.claimJob(id,owner,{initial:prepared.input,inputs:[],toolEvents:[]},prepared.plan);

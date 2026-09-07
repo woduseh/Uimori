@@ -11,6 +11,7 @@ import { ArchivePanel } from './ArchivePanel.js';
 import { AttemptInspector } from './AttemptInspector.js';
 import { RunIssue } from './RuntimeSettings.js';
 import { JobCard } from './SourceReader.js';
+import { LoreContextDiagnostics } from './LoreContextDiagnostics.js';
 
 export function TasksPanel({ state, inspectedRun, onInspect, onClose }: { state: StoryState; inspectedRun: string | null; onInspect: (runId: string) => void; onClose: () => void }) {
   const [pending, setPending] = useState<string[]>([]);
@@ -31,7 +32,7 @@ export function TasksPanel({ state, inspectedRun, onInspect, onClose }: { state:
     {!state.connected && <p className="connection-notice" role="status">연결을 다시 확인하는 중이에요. 원격 작업의 상태는 아직 확정할 수 없어요.</p>}
     {!runs.length && <p className="muted">아직 실행한 작업이 없어요.</p>}
     <div className="runs">{runs.map(run => <article key={run.id} data-testid="run" data-run-id={run.id} className="run">
-      <div className="task-heading"><strong>{run.snapshot.forkedFrom ? '복사한 원고' : `원문 ${labels[run.status]}`}</strong><small>{run.modelTitle || 'Scripted mock · 모의 생성'}</small></div>
+      <div className="task-heading"><strong>{run.snapshot.forkedFrom ? '복사한 원고' : `원문 ${labels[run.status]}`}</strong><small>{run.packageStart?.mode==="authored"?"작성된 도입문 · 모델 호출 없음":run.modelTitle || 'Scripted mock · 모의 생성'}</small></div>
       <p className="task-request">{run.request}</p>
       {run.error && <p className="error">{run.error}</p>}
       {run.status === 'refused' && <p className="error">요청에 대한 생성이 거절됐어요. 대체 원고를 자동 생성하지 않았어요.</p>}
@@ -45,7 +46,7 @@ export function TasksPanel({ state, inspectedRun, onInspect, onClose }: { state:
       {run.sourceRevision && <small>여기까지 복사하고 새 이야기에서 이어 써요. 복사만으로 모델을 호출하지 않아요.</small>}
       <RunIssue run={run} refresh={refresh} onError={state.setError}/>
       {jobs?.filter(job => job.sourceRevision === run.sourceRevision).map(job => <LazyDiagnostics<Job> key={job.id} path={`/jobs/${job.id}`} revision={detail.reader.cursor} title={`${job.kind} · ${labels[job.status]} · 작업 관리`}>{full => <JobCard job={full} refresh={refresh} onError={state.setError} hideText/>}</LazyDiagnostics>)}
-      <LazyDiagnostics<Run> path={`/runs/${run.id}`} revision={detail.reader.cursor} initiallyOpen={!!inspectedRun} title="실행과 실제 입력 확인">{full => <><p>Run {full.id} · 실행 요청 {full.usage.modelCalls}회 · 입력 {full.usage.inputTokens ?? '미확인'} / 출력 {full.usage.outputTokens ?? '미확인'} 토큰 · 비용 {full.usage.costUsd === null ? '미확인' : `$${full.usage.costUsd}`}</p><pre>{JSON.stringify({ snapshot: full.snapshot, inputs: full.inputs, toolEvents: full.toolEvents }, null, 2)}</pre></>}</LazyDiagnostics>
+      <LazyDiagnostics<Run> path={`/runs/${run.id}`} revision={detail.reader.cursor} initiallyOpen={!!inspectedRun} title="실행과 실제 입력 확인">{full => <><p>Run {full.id} · 실행 요청 {full.usage.modelCalls}회 · 입력 {full.usage.inputTokens ?? '미확인'} / 출력 {full.usage.outputTokens ?? '미확인'} 토큰 · 비용 {full.usage.costUsd === null ? '미확인' : `$${full.usage.costUsd}`}</p><LoreContextDiagnostics snapshot={full.snapshot.loreContext} reset={full.snapshot.loreContextReset}/><pre>{JSON.stringify({ snapshot: full.snapshot, inputs: full.inputs, toolEvents: full.toolEvents }, null, 2)}</pre></>}</LazyDiagnostics>
     </article>)}</div>
     {jobsError && <p role="alert">보조 작업 목록: {jobsError}</p>}
     {!jobs && !jobsError && <p role="status">보조 작업 목록을 불러오는 중이에요…</p>}

@@ -14,7 +14,7 @@ function ancestry(sources: Source[], head: string | null) {
   while (head && !seen.has(head)) { seen.add(head); const source = byId.get(head); if (!source) break; result.unshift(source); head = source.parentRevision; }
   return result;
 }
-type RunPayload = { nativeCommandId?:string; request: string; expectedRevision: string | null; expectedSettingsRevision: number; branchId?: string; expectedProfileRevision?: number };
+type RunPayload = { nativeCommandId?:string; loreContextReset?:boolean; request: string; expectedRevision: string | null; expectedSettingsRevision: number; branchId?: string; expectedProfileRevision?: number };
 type PendingCommand = { payload: string; id: string };
 function readCommand(key: string): { record: PendingCommand; payload: RunPayload } | null {
   try {
@@ -23,6 +23,7 @@ function readCommand(key: string): { record: PendingCommand; payload: RunPayload
     const payload = JSON.parse(record.payload) as RunPayload;
     if (!payload || typeof payload.request !== 'string' || !payload.request.trim() || !(payload.expectedRevision === null || typeof payload.expectedRevision === 'string') || !Number.isInteger(payload.expectedSettingsRevision)) return null;
     if (payload.branchId !== undefined && typeof payload.branchId !== 'string' || payload.expectedProfileRevision !== undefined && !Number.isInteger(payload.expectedProfileRevision)) return null;
+    if(payload.loreContextReset!==undefined&&typeof payload.loreContextReset!=='boolean')return null;
     return { record, payload };
   } catch { return null; }
 }
@@ -42,6 +43,7 @@ export function useStory() {
   const detail = loadedDetail?.chat.id === selected ? loadedDetail : null;
   const [archivedContents,setArchivedContents] = useState<Content[]>([]);
   const [draft,setDraft] = useState(''); const [error,setError] = useState(''); const [notice,setNotice] = useState('');
+  const [loreResetDraft,setLoreResetDraft]=useState(false);
   const [submitting,setSubmitting] = useState<string[]>([]); const submitLocks = useRef(new Set<string>());
   const [connected,setConnected] = useState(false); const [destination,setDestination] = useState<'story'|'library'>(()=>initialView().chat?'story':'library');
   const [profileDirty,setProfileDirty] = useState(false); const [quickBusy,setQuickBusy] = useState(false);
@@ -126,6 +128,7 @@ export function useStory() {
   },[selected,viewKey,readSource]);
   useLayoutEffect(() => {
     setDraft(sessionStorage.getItem(draftKey) || '');
+    setLoreResetDraft(sessionStorage.getItem(`lore-reset:${draftKey}`)==='true');
     const cursor = JSON.parse(sessionStorage.getItem(`cursor:${draftKey}`) || 'null') as {start:number;end:number}|null;
     const frame = requestAnimationFrame(() => { if (cursor && currentDraftKey.current === draftKey) input.current?.setSelectionRange(cursor.start,cursor.end); });
     return () => cancelAnimationFrame(frame);
@@ -133,6 +136,10 @@ export function useStory() {
   useEffect(() => { const before = () => savePosition(); addEventListener('pagehide',before); return () => { savePosition(); removeEventListener('pagehide',before); }; },[savePosition]);
   function rememberCursor() { const node = input.current; if (node) sessionStorage.setItem(`cursor:${draftKey}`,JSON.stringify({start:node.selectionStart,end:node.selectionEnd})); }
   function editDraft(value: string,nativeCommandId?:string) { setDraft(value); sessionStorage.setItem(draftKey,value); if(nativeCommandId)sessionStorage.setItem(`native-draft:${draftKey}`,nativeCommandId);else sessionStorage.removeItem(`native-draft:${draftKey}`); }
+  function editLoreContextReset(value:boolean){
+    if(readCommand(`command:${selected}${viewedBranch?`:${viewedBranch}`:''}`))return;
+    setLoreResetDraft(value);if(value)sessionStorage.setItem(`lore-reset:${draftKey}`,'true');else sessionStorage.removeItem(`lore-reset:${draftKey}`);
+  }
   const branch = detail?.branches?.find(item => item.id === viewedBranch) ?? detail?.branches?.find(item => item.default);
   const sources = useMemo(() => detail ? detail.reader ? detail.sources : branch ? ancestry(detail.sources,branch.headRevision) : detail.sources : [],[detail,branch]);
   const visibleRuns = detail?.runs.filter(run => !branch || !run.snapshot.branchId && branch.default || run.snapshot.branchId === branch.id) ?? [];
@@ -173,7 +180,7 @@ export function useStory() {
     if (!previous && !draft.trim()) return;
     // An uncertain request keeps its original snapshot as well as its key.
     // A newer draft is never silently sent after recovering that earlier request.
-    const payload: RunPayload = previous?.payload ?? { request: draft, ...(sessionStorage.getItem(`native-draft:${draftKey}`)?{nativeCommandId:sessionStorage.getItem(`native-draft:${draftKey}`)!}:{}), expectedRevision: branch ? branch.headRevision : chat.headRevision, expectedSettingsRevision: chat.settingsRevision, ...(viewedBranch && branch ? { branchId: branch.id } : {}), ...(detail.profile ? { expectedProfileRevision: detail.profile.revision } : {}) };
+    const payload: RunPayload = previous?.payload ?? { request: draft,...(loreResetDraft?{loreContextReset:true}:{}), ...(sessionStorage.getItem(`native-draft:${draftKey}`)?{nativeCommandId:sessionStorage.getItem(`native-draft:${draftKey}`)!}:{}), expectedRevision: branch ? branch.headRevision : chat.headRevision, expectedSettingsRevision: chat.settingsRevision, ...(viewedBranch && branch ? { branchId: branch.id } : {}), ...(detail.profile ? { expectedProfileRevision: detail.profile.revision } : {}) };
     const sentDraft = payload.request;
     const idempotencyKey = previous?.record.id ?? crypto.randomUUID();
     sessionStorage.setItem(commandKey, JSON.stringify({ payload: JSON.stringify(payload), id: idempotencyKey }));
@@ -183,6 +190,7 @@ export function useStory() {
       await api<Run>(`/chats/${chat.id}/runs`, { ...payload, idempotencyKey });
       accepted = true;
       clearCommand(commandKey, idempotencyKey);
+      if(payload.loreContextReset){sessionStorage.removeItem(`lore-reset:${sentKey}`);if(currentDraftKey.current===sentKey)setLoreResetDraft(false);}
       if (sessionStorage.getItem(sentKey) === sentDraft) {
         sessionStorage.removeItem(sentKey); sessionStorage.removeItem(`native-draft:${sentKey}`);
         if (currentDraftKey.current === sentKey) setDraft('');
@@ -260,7 +268,9 @@ export function useStory() {
   const active=visibleRuns.find(run=>run.status==='queued'||run.status==='running'||run.status==='waiting_for_state');
   const allContents=[...library?.contents??[],...archivedContents];
   const attachmentsReady = !!detail?.profile && detail.profile.attachments.every(ref => allContents.some(item => refValue(item) === refValue(ref)));
-  const pendingRequest = selected ? readCommand(`command:${selected}${viewedBranch ? `:${viewedBranch}` : ''}`)?.payload.request ?? null : null;
+  const pendingCommand=selected?readCommand(`command:${selected}${viewedBranch?`:${viewedBranch}`:''}`):null;
+  const pendingRequest=pendingCommand?.payload.request??null;
+  const loreContextReset=pendingCommand?pendingCommand.payload.loreContextReset===true:loreResetDraft;
   const attached=allContents.filter(item=>detail?.profile?.attachments.some(ref=>refValue(ref)===refValue(item)));
   const packageContent=(role:string)=>{const r=detail?.profile?.packageAttachments?.find(r=>r.role===role);return r?allContents.find(c=>refValue(c)===refValue(r)):undefined;};
   const bot=packageContent('bot')??attached.find(item=>item.kind==='bot');const persona=packageContent('persona')??attached.find(item=>item.kind==='persona');
@@ -268,7 +278,7 @@ export function useStory() {
   const profileAsset=detail?.assets?.find(asset=>asset.allowedUse!=='inline');
   const tasks=detail?detail.runs.filter(run=>['running','queued','waiting_for_state'].includes(run.status)).length+detail.reader.activeJobs:0;
   const pendingProfile=!!selected&&!!sessionStorage.getItem(`pending-profile:${selected}`);
-  return {chats,selected,viewedBranch,readSource,detail,library,quickModels,draft,error,notice,connected,destination,profileDirty,quickBusy,reader,input,viewKey,active,allContents,bot,persona,preset,profileAsset,tasks,pendingProfile,branch,sources,visibleRuns,submitting,attachmentsReady,pendingRequest,forking,
-    setError,setNotice,setProfileDirty,refresh,loadChats,loadLibrary,savePosition,rememberCursor,editDraft,select,chooseBranch,chooseSource,showLibrary,generate,fork,quickChange};
+  return {chats,selected,viewedBranch,readSource,detail,library,quickModels,draft,error,notice,connected,destination,profileDirty,quickBusy,reader,input,viewKey,active,allContents,bot,persona,preset,profileAsset,tasks,pendingProfile,branch,sources,visibleRuns,submitting,attachmentsReady,pendingRequest,loreContextReset,forking,
+    setError,setNotice,setProfileDirty,refresh,loadChats,loadLibrary,savePosition,rememberCursor,editDraft,editLoreContextReset,select,chooseBranch,chooseSource,showLibrary,generate,fork,quickChange};
 }
 export type StoryState=ReturnType<typeof useStory>;

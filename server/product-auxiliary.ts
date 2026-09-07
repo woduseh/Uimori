@@ -25,7 +25,7 @@ export type AuxiliaryBundle = {
 export type AuxiliaryJobResult = {
   mock: boolean; sourceRevision: string; sourceHash: string; text?: string; label?: string;
   segments?: { anchors: string[]; text: string }[];
-  annotations?: { blockAnchor: string; assetRef: string; assetRevision: number; presentationIntent: 'inline' | 'profile'; caption?: string }[];
+  annotations?: { blockAnchor: string; assetRef: string; assetRevision: number; assetHash: string; presentationIntent: 'inline' | 'profile'; caption?: string }[];
   display?: { anchor: string; summary: string; mood: string }[];
   completedChunks?: number; totalChunks?: number;
 };
@@ -69,7 +69,7 @@ const toolSchemas: ProviderTool[] = [
   { name: 'knowledge.read', description: 'Read a scoped reference by ID and optional UTF-16 offset/limit. Results identify revision, range and continuation.', inputSchema: { type: 'object', properties: { id: { type: 'string' }, offset: { type: 'integer' }, limit: { type: 'integer' } }, required: ['id'], additionalProperties: false } },
   { name: 'skills.list', description: 'Discover scoped method guidance. This does not load its body or grant permissions.', inputSchema: { type: 'object', properties: { query: { type: 'string' }, offset: { type: 'integer' }, limit: { type: 'integer' } }, additionalProperties: false } },
   { name: 'skills.load', description: 'Read a guidance body by ID. Its text never expands host permissions.', inputSchema: { type: 'object', properties: { id: { type: 'string' }, offset: { type: 'integer' }, limit: { type: 'integer' } }, required: ['id'], additionalProperties: false } },
-  { name: 'assets.search', description: 'Search the small approved host asset manifest by metadata.', inputSchema: { type: 'object', properties: { query: { type: 'string' } }, additionalProperties: false } },
+  { name: 'assets.search', description: 'Search the frozen approved image catalog by name or description. Follow nextOffset for more matches.', inputSchema: { type: 'object', properties: { query: { type: 'string' }, offset: {type:'integer',minimum:0}, limit: {type:'integer',minimum:1,maximum:50} }, additionalProperties: false } },
   { name: 'assets.inspect', description: 'Inspect an existing approved asset metadata record. Image bytes are not sent to this model.', inputSchema: { type: 'object', properties: { ref: { type: 'string' } }, required: ['ref'], additionalProperties: false } },
 ];
 
@@ -101,8 +101,8 @@ function providerInput(input: AuxiliaryInput, modelId: string, generation: Provi
     input: {
       task,
       controls: { instructionRevision: input.context.instructionRevision, modelPresetRevision: input.context.modelPresetRevision, ...(input.customPrompt ? { customPrompt: true } : {}) },
-      source: json({ sourceRevision: input.sourceRevision, sourceHash: input.sourceHash, ...(input.chunkId ? { chunkId: input.chunkId } : {}), context: input.context, ...(input.referencePolicy ? {referencePolicy:input.referencePolicy} : {}), blocks: input.blocks, ...(input.neighborBlocks ? { neighborBlocks: input.neighborBlocks } : {}), ...(input.scenes ? { scenes: input.scenes } : {}), outputSchema: input.outputSchema }),
-      catalog: json(input.role === 'presentation' ? input.assets ?? [] : input.catalog), results: json(input.results),
+      source: json({ sourceRevision: input.sourceRevision, sourceHash: input.sourceHash, ...(input.chunkId ? { chunkId: input.chunkId } : {}), context: input.context, ...(input.referencePolicy ? {referencePolicy:input.referencePolicy} : {}), blocks: input.blocks, ...(input.neighborBlocks ? { neighborBlocks: input.neighborBlocks } : {}), ...(input.role !== 'presentation' && input.scenes ? { scenes: input.scenes } : {}), outputSchema: input.outputSchema }),
+      catalog: json(input.role === 'presentation' ? {items:input.assets??[],...input.assetPage} : input.catalog), results: json(input.results),
     }, ...(opaqueState !== undefined ? { opaqueState } : {}),
   };
 }
@@ -162,6 +162,7 @@ export async function runAuxiliaryJob(store: AuxiliaryStoreBridge, jobId: string
       return result.text;
     };
     return executeAuxiliary(packet, snapshot, request, {
+      assetCatalog: assets,
       signal: hooks.signal, maxCalls: evaluation ? Math.min(snapshot.settings.maxCalls, evaluation.maxCalls) : snapshot.settings.maxCalls,
       localTools: { names: [...(job.kind==='translation'?TRANSLATION_READ_NAMES:[]),...(evaluation?.allNames ?? [])], execute: action => {
         if(TRANSLATION_READ_NAMES.includes(action.name))return readTranslation(action);

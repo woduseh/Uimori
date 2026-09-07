@@ -13,8 +13,12 @@ import { PackageBehaviorStore } from './package-behavior-store.js';
 import { initBehaviorHost, freezePackageStates, completePackageOutputs, branchPackageStates } from './package-behavior-host.js';
 import { initRunBehavior, prepareRunBehavior, copyCandidateBehavior } from './package-behavior-run.js';
 import { nativeResources } from '../core/native-context.js';
+import { completeAuthoredPackageStartStatesInTransaction } from './package-start.js';
 import { captureLogicalHistory, compileSnapshotPrompt } from './prompt-snapshot.js';
-import { splitSource, BUILTIN_ASSETS } from '../core/auxiliary.js';
+import { freezeLoreContext } from './lore-context.js';
+import { splitSource } from '../core/auxiliary.js';
+import { imageJobInput, mergedReaderAssets } from './package-images.js';
+import { packagePersonaName } from './package-features.js';
 import type { Settings, Chat as BaseChat, Run as BaseRun, Source as BaseSource, Job as BaseJob, Resource, RunSnapshot, Usage, ModelInput, ToolEvent } from '../core/types.js';
 
 export type Chat = BaseChat & { createdAt: string };
@@ -121,9 +125,13 @@ export class Store {
       return this.chat(id);
     });
   }
-  createRun(chatId: string, command: { request: string; expectedRevision: string | null; expectedSettingsRevision: number; idempotencyKey: string; branchId?: string; expectedProfileRevision?: number; sceneCommandId?: string; nativeCommandId?: string }, snapshot: (chat: Chat) => RunSnapshot): { run: Run; created: boolean } {
-    return this.transaction(() => {
-      const canonical = json({ request: command.request, expectedRevision: command.expectedRevision, expectedSettingsRevision: command.expectedSettingsRevision, branchId: command.branchId ?? `main:${chatId}`, expectedProfileRevision: command.expectedProfileRevision, ...(command.sceneCommandId ? {sceneCommandId:command.sceneCommandId} : {}), ...(command.nativeCommandId?{nativeCommandId:command.nativeCommandId}:{}) });
+  createRun(chatId: string, command: { request: string; expectedRevision: string | null; expectedSettingsRevision: number; idempotencyKey: string; branchId?: string; expectedProfileRevision?: number; sceneCommandId?: string; nativeCommandId?: string; loreContextReset?: boolean; packageStart?: import('../core/package-start.js').PackageStartRef }, snapshot: (chat: Chat) => RunSnapshot): { run: Run; created: boolean } {
+    return this.transaction(() => this.createRunInTransaction(chatId, command, snapshot));
+  }
+  /** Joins the host's transaction when an authored opening and its source commit together. */
+  createRunInTransaction(chatId: string, command: Parameters<Store['createRun']>[1], snapshot: (chat: Chat) => RunSnapshot): { run: Run; created: boolean } {
+      if (command.loreContextReset !== undefined && typeof command.loreContextReset !== 'boolean') throw new HttpError(400,'Invalid lore context reset');
+      const canonical = json({ request: command.request, expectedRevision: command.expectedRevision, expectedSettingsRevision: command.expectedSettingsRevision, branchId: command.branchId ?? `main:${chatId}`, expectedProfileRevision: command.expectedProfileRevision, ...(command.sceneCommandId ? {sceneCommandId:command.sceneCommandId} : {}), ...(command.nativeCommandId?{nativeCommandId:command.nativeCommandId}:{}), ...(command.packageStart?{packageStart:command.packageStart}:{}), ...(command.loreContextReset?{loreContextReset:true}:{}) });
       const prior = this.db.prepare('SELECT id,command FROM runs WHERE chat_id=? AND request_key=?').get(chatId, command.idempotencyKey) as Row | undefined;
       if (prior) {
         if (prior.command !== canonical) throw new HttpError(409, 'Idempotency key reused with different command');
@@ -138,24 +146,25 @@ export class Store {
       const id = randomUUID(); const time = now();
       const nativeBot=this.native.snapshot(chatId,branch.id);
       if(command.nativeCommandId && (!nativeBot?.pending || nativeBot.pending.commandId!==command.nativeCommandId || nativeBot.pending.request!==command.request)) throw new HttpError(409,'Native command no longer matches this source or request');
-      const base={...snapshot({...chat,headRevision:branch.headRevision}),executionClock:{iso:time,unix:Math.floor(Date.parse(time)/1000)},branchId:branch.id,...(nativeBot?{nativeBot}:{})};
+      const base={...snapshot({...chat,headRevision:branch.headRevision}),...(command.loreContextReset?{loreContextReset:true}:{}),executionClock:{iso:time,unix:Math.floor(Date.parse(time)/1000)},branchId:branch.id,...(nativeBot?{nativeBot}:{})};
       base.resources.push(...nativeResources(chatId,nativeBot??undefined));
-      const hiddenStory=new HiddenStoryStore(this.product).freeze(base.profile?.hiddenStory,{seed:id,userLabel:base.profile?.contents.find(c=>c.kind==='persona')?.title??'User'});
+      const hiddenStory=new HiddenStoryStore(this.product).freeze(base.profile?.hiddenStory,{seed:id,userLabel:packagePersonaName(base.profile)});
       if(nativeBot && hiddenStory?.config.contentPolicy==='general-fiction')throw new HttpError(400,'This native bot requires the nonsexual Hidden Story policy');
-      let frozen = this.story.prepareRunInTransaction({...base,...(hiddenStory?{hiddenStory}:{})});
+      const authored = base.packageStart?.mode === 'authored';
+      let frozen = authored ? {...base,...(hiddenStory?{hiddenStory}:{})} : this.story.prepareRunInTransaction({...base,...(hiddenStory?{hiddenStory}:{})});
       frozen = freezePackageStates(this,{...frozen,logicalHistory:captureLogicalHistory(this,frozen)},true);
-      frozen = compileSnapshotPrompt(prepareRunBehavior(this,id,frozen));
+      frozen = compileSnapshotPrompt(freezeLoreContext(this,authored ? frozen : prepareRunBehavior(this,id,frozen)));
       const status = frozen.story?.waiting ? 'waiting_for_state' : 'queued';
       this.db.prepare('INSERT INTO runs(id,chat_id,parent_revision,status,request,snapshot,request_key,command,created_at,updated_at,branch_id) VALUES(?,?,?,?,?,?,?,?,?,?,?)').run(id, chatId, command.expectedRevision, status, command.request, json(frozen), command.idempotencyKey, canonical, time, time,branch.id);
       if (command.sceneCommandId) this.story.bindCommandInTransaction(command.sceneCommandId,id);
       if(command.nativeCommandId && nativeBot){const consumed={...nativeBot,revision:nativeBot.revision+1,pending:null};this.db.prepare('UPDATE native_chat_settings SET revision=?,body=? WHERE chat_id=? AND branch_id=?').run(consumed.revision,json(consumed),chatId,branch.id);}
       this.event(chatId, `run.${status}`, id);
       return { run: this.run(id), created: true };
-    });
   }
   candidate(runId: string, key: string, title: string): {run: Run; created: boolean} {
     return this.transaction(() => {
       const original = this.run(runId);
+      if (original.snapshot.packageStart?.mode==='authored') throw new HttpError(409,'Authored opening cannot be regenerated as a model candidate');
       if (['queued','running','waiting_for_state'].includes(original.status)) throw new HttpError(409,'Original run is still active');
       const canonical = json({candidateOf:runId,title});
       const prior = this.db.prepare('SELECT id,command FROM runs WHERE chat_id=? AND request_key=?').get(original.chatId,key) as Row | undefined;
@@ -209,7 +218,10 @@ export class Store {
     });
   }
   completeRun(id: string, text: string, usage: Usage, settings: Settings, controls?: Controls): Source {
-    return this.transaction(() => {
+    return this.transaction(() => this.completeRunInTransaction(id, text, usage, settings, controls));
+  }
+  /** Provider completion and authored openings share source/branch CAS and source hashing. */
+  completeRunInTransaction(id: string, text: string, usage: Usage, settings: Settings, controls?: Controls): Source {
       const run = this.run(id);
       if (run.status !== 'running') throw new HttpError(409, 'Run no longer owns completion');
       const branch = this.product.branch(run.chatId,run.snapshot.branchId);
@@ -221,17 +233,17 @@ export class Store {
       this.db.prepare('UPDATE branches SET head_revision=?,revision=revision+1 WHERE id=?').run(source.id,branch.id);
       if (branch.default) this.db.prepare('UPDATE chats SET head_revision=? WHERE id=?').run(source.id, source.chatId);
       for (const kind of ['status','image'] as const) {
+        if (run.snapshot.packageStart?.mode === 'authored') continue;
         if (!(kind === 'image' ? run.snapshot.profile?.image : settings[kind])) continue;
         const jobId = randomUUID(); const time = now();
-        this.db.prepare("INSERT INTO jobs(id,chat_id,source_revision,source_hash,kind,status,created_at,updated_at) VALUES(?,?,?,?,?,'queued',?,?)").run(jobId, source.chatId, source.id, source.hash, kind, time, time);
+        this.db.prepare("INSERT INTO jobs(id,chat_id,source_revision,source_hash,kind,status,input,created_at,updated_at) VALUES(?,?,?,?,?,'queued',?,?,?)").run(jobId, source.chatId, source.id, source.hash, kind, kind==='image'?json(imageJobInput(this,run.snapshot)):null, time, time);
         this.event(source.chatId, 'job.queued', jobId);
       }
-      this.story.reserveSourceInTransaction(source,run);
-      completePackageOutputs(this,run,source);
+      if (run.snapshot.packageStart?.mode === 'authored') completeAuthoredPackageStartStatesInTransaction(this,run,source);
+      else { this.story.reserveSourceInTransaction(source,run); completePackageOutputs(this,run,source); }
       this.event(source.chatId, 'source.ready', source.id);
       this.event(source.chatId, 'run.completed', id);
       return source;
-    });
   }
   sourceOriginal(id:string):Source {
     const row=this.db.prepare('SELECT id,chat_id AS chatId,run_id AS runId,parent_revision AS parentRevision,text,hash,created_at AS createdAt FROM sources WHERE id=?').get(id) as Source|undefined;
@@ -266,7 +278,8 @@ export class Store {
       const translationModelSelection = priorInput && typeof priorInput === 'object' && Object.hasOwn(priorInput,'translationModelSelection') ? {translationModelSelection:(priorInput as {translationModelSelection:unknown}).translationModelSelection} : {};
       const promptSelection = priorInput && typeof priorInput === 'object' && Object.hasOwn(priorInput,'promptSelection') ? {promptSelection:(priorInput as {promptSelection:unknown}).promptSelection} : {};
       const promptControlSelection = priorInput && typeof priorInput === 'object' && Object.hasOwn(priorInput,'promptControlSelection') ? {promptControlSelection:(priorInput as {promptControlSelection:unknown}).promptControlSelection} : {};
-      const claimedInput = input && typeof input === 'object' && !Array.isArray(input) ? {...input,...promptSelection,...translationModelSelection,...promptControlSelection} : input;
+      const imageSelection = priorInput && typeof priorInput === 'object' && Object.hasOwn(priorInput,'imageCatalog') ? {imageCatalog:(priorInput as {imageCatalog:unknown}).imageCatalog} : {};
+      const claimedInput = input && typeof input === 'object' && !Array.isArray(input) ? {...input,...promptSelection,...translationModelSelection,...promptControlSelection,...imageSelection} : input;
       const changed = this.db.prepare("UPDATE jobs SET status='running',generation=generation+1,owner=?,input=?,error=NULL,updated_at=? WHERE id=? AND status='queued'").run(owner, json(claimedInput), now(), id);
       if (!changed.changes) return null;
       if (plan) { this.product.plan(id,plan); for (const chunk of plan.chunks) this.db.prepare("INSERT OR IGNORE INTO job_chunks(job_id,id,status,attempt) VALUES(?,?,'queued',0)").run(id,chunk.id); }
@@ -335,6 +348,6 @@ export class Store {
     return { chat,
       runs: (this.db.prepare('SELECT id FROM runs WHERE chat_id=? ORDER BY created_at,id').all(id) as Row[]).map(row => this.run(row.id)),
       sources: (this.db.prepare('SELECT id FROM sources WHERE chat_id=? ORDER BY created_at,id').all(id) as Row[]).map(row => this.source(row.id)),
-      jobs: (this.db.prepare('SELECT id FROM jobs WHERE chat_id=? ORDER BY created_at,id').all(id) as Row[]).map(row => this.job(row.id)).filter(job=>{const source=this.source(job.sourceRevision);if(job.sourceHash!==source.hash)return false;if(job.kind!=='translation')return true;if(latestTranslation(this,source.id)?.id!==job.id)return false;if(job.status==='completed'){try{validateTranslationArtifact(this,job,source);}catch{return false;}}return true;}),profile:this.product.profile(id),branches:this.product.branches(id),attempts:this.product.attempts(id),assets:[...this.product.assets(id),...BUILTIN_ASSETS.map(a => ({id:a.ref,chatId:id,revision:a.revision,title:a.alt,mime:'image/svg+xml',hash:a.hash,description:a.caption,actor:a.actorId ?? '',outfit:a.clothing ?? '',location:a.location ?? '',allowedUse:a.uses.length === 2 ? 'both' as const : a.uses[0],url:a.url}))] };
+      jobs: (this.db.prepare('SELECT id FROM jobs WHERE chat_id=? ORDER BY created_at,id').all(id) as Row[]).map(row => this.job(row.id)).filter(job=>{const source=this.source(job.sourceRevision);if(job.sourceHash!==source.hash)return false;if(job.kind!=='translation')return true;if(latestTranslation(this,source.id)?.id!==job.id)return false;if(job.status==='completed'){try{validateTranslationArtifact(this,job,source);}catch{return false;}}return true;}),profile:this.product.profile(id),branches:this.product.branches(id),attempts:this.product.attempts(id),assets:mergedReaderAssets(this,id) };
   }
 }

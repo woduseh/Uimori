@@ -13,7 +13,7 @@ export const PROMPT_OPERATION_ARITY = {
 export type PromptOperation = keyof typeof PROMPT_OPERATION_ARITY;
 export type PromptExpression = PromptValue | { control: string } | { context: string[] } | { local: string; path?: string[] } | { literal: RuntimeValue } | { op: PromptOperation; args: PromptExpression[]; as?: string; index?: string };
 export type PromptTemplate = ({ kind: 'text'; text: string } | { kind: 'value'; expression: PromptExpression } | { kind: 'slot'; name: string } | { kind: 'if'; condition: PromptExpression; then: PromptTemplate; else?: PromptTemplate; trimLines?: boolean } | { kind: 'each'; source: PromptExpression; as: string; index?: string; body: PromptTemplate; else?: PromptTemplate } | { kind: 'let'; name: string; value: PromptExpression; body: PromptTemplate })[];
-export type PromptControl = { id: string; label: string; type: 'select' | 'boolean' | 'number' | 'text'; default: PromptValue; options?: { label: string; value: PromptValue }[]; min?: number; max?: number; description?: string };
+export type PromptControl = { id: string; label: string; type: 'select' | 'boolean' | 'number' | 'text'; default: PromptValue; options?: { label: string; value: PromptValue }[]; min?: number; max?: number; description?: string; group?: string; visibleWhen?: PromptExpression };
 export type PromptBlock = { id: string; title: string; enabled?: boolean; when?: PromptExpression } & (
   { kind: 'message'; role: PromptRoleName; template: PromptTemplate; completion?: 'complete' | 'prefill' } |
   { kind: 'slot'; role: PromptRoleName; slot: string; template?: PromptTemplate } |
@@ -26,7 +26,7 @@ export type PromptCombination = { id: string; title: string; values: Record<stri
 export type ChatPromptControls = { values: Record<string, PromptValue>; combinations: PromptCombination[]; selectedCombinationId?: string };
 export type LogicalMessage = { id: string; role: PromptRoleName; content: { type: 'text'; text: string }[]; completion: 'complete' | 'prefill'; provenance: { blockId: string; origin: 'prompt' | 'history' | 'current'; sourceRevision?: string; sourceHash?: string; runId?: string } };
 export type PromptCacheAnchor = { blockId: string; afterMessageId: string; policy: 'prefer' | 'require' };
-export type PromptCompilation = { compilerVersion: 'uimori-prompt-1'; values: Record<string, PromptValue>; messages: LogicalMessage[]; cachePlan: PromptCacheAnchor[]; trace: { blockId: string; included: boolean; messageIds: string[]; reason?: string }[]; historyScope: 'm2-recent-or-full'; warnings: string[] };
+export type PromptCompilation = { usedSlots?: string[]; compilerVersion: 'uimori-prompt-1'; values: Record<string, PromptValue>; messages: LogicalMessage[]; cachePlan: PromptCacheAnchor[]; trace: { blockId: string; included: boolean; messageIds: string[]; reason?: string }[]; historyScope: 'm2-recent-or-full'; warnings: string[] };
 export type PromptHistoryMessage = { id: string; role: 'user' | 'assistant'; text: string; sourceRevision?: string; sourceHash?: string; runId?: string; current?: boolean };
 export type ProviderPrompt = Pick<PromptCompilation,'compilerVersion'|'messages'|'cachePlan'|'values'>;
 export class PromptProgramError extends Error {
@@ -129,14 +129,17 @@ export function validatePromptProgram(value: unknown): PromptProgram {
   if (raw.version !== 1 || !Array.isArray(raw.controls) || raw.controls.length > 150 || !Array.isArray(raw.blocks) || raw.blocks.length > 300) fail('PROMPT_PROGRAM_LIMIT');
   const controls = new Set<string>();
   for (const item of raw.controls) {
-    const c = object(item,['id','label','type','default','options','min','max','description']); id(c.id); str(c.label); primitive(c.default);
+    const c = object(item,['id','label','type','default','options','min','max','description','group','visibleWhen']); id(c.id); str(c.label); primitive(c.default);
     if (controls.has(c.id) || !['select','boolean','number','text'].includes(String(c.type))) fail('PROMPT_INVALID_CONTROL'); controls.add(c.id);
     if (c.description !== undefined) str(c.description,4000);
+    if (c.group !== undefined) str(c.group,200);
     if (c.options !== undefined) { if (!Array.isArray(c.options) || c.options.length > 100) fail('PROMPT_INVALID_OPTIONS'); for (const option of c.options) { const o=object(option,['label','value']); str(o.label); primitive(o.value); } }
     for (const key of ['min','max']) if (c[key] !== undefined && (typeof c[key] !== 'number' || !Number.isFinite(c[key]))) fail('PROMPT_INVALID_RANGE');
     if (c.min !== undefined && c.max !== undefined && Number(c.min)>Number(c.max)) fail('PROMPT_INVALID_RANGE');
     validateControlValue(c as PromptControl,c.default);
   }
+  // Presentation conditions can refer to controls declared later in the list.
+  for (const c of raw.controls as PromptControl[]) if (c.visibleWhen !== undefined) expression(c.visibleWhen,controls);
   const ids=new Set<string>();
   for (const item of raw.blocks) {
     const b=object(item,['id','title','enabled','when','kind','role','template','completion','slot','from','to','depth','policy']); id(b.id); str(b.title); if(ids.has(b.id)) fail('PROMPT_DUPLICATE_BLOCK',b.id); ids.add(b.id);
@@ -186,6 +189,7 @@ function dateValue(value:RuntimeValue):Date {
 }
 
 class PromptEvaluator {
+  readonly usedSlots = new Set<string>();
   readonly budget:PromptBudget;
   readonly runtime:Record<string,RuntimeValue>;
   readonly locals:Record<string,RuntimeValue>;
@@ -311,7 +315,7 @@ class PromptEvaluator {
       this.budget.step();
       if(node.kind==='text')append(node.text);
       else if(node.kind==='value')append(this.display(this.evaluate(node.expression,locals)));
-      else if(node.kind==='slot'){if(!Object.hasOwn(slots,node.name))fail('PROMPT_UNKNOWN_SLOT',node.name);append(slots[node.name]);}
+      else if(node.kind==='slot'){if(!Object.hasOwn(slots,node.name))fail('PROMPT_UNKNOWN_SLOT',node.name);if(slots[node.name].length)this.usedSlots.add(node.name);append(slots[node.name]);}
       else if(node.kind==='if'){
         let value=this.render(truth(this.evaluate(node.condition,locals))?node.then:node.else??[],slots,locals,depth+1);
         if(node.trimLines){const lines=value.split('\n');let from=0,to=lines.length;while(from<to&&lines[from].trim()==='')from++;while(to>from&&lines[to-1].trim()==='')to--;value=lines.slice(from,to).join('\n');}append(value);
@@ -346,6 +350,13 @@ export function evaluatePromptExpressions(expressions:PromptExpression[],values:
   }
   evaluator.budget.step();return structuredClone(results);
 }
+/** UI visibility only. Hidden controls retain their resolved values and runtime effects. */
+export function visiblePromptControls(controls:PromptControl[],values:Record<string,PromptValue>={},options:PromptEvaluationOptions={}):PromptControl[] {
+  const program=validatePromptProgram({version:1,controls,blocks:[]});
+  const resolved=resolvePromptValues(program,values);
+  const visible=evaluatePromptExpressions(program.controls.map(control=>control.visibleWhen===undefined?true:control.visibleWhen),resolved,options);
+  return program.controls.filter((_,index)=>truth(visible[index]));
+}
 export function renderPromptTemplate(nodes:PromptTemplate,values:Record<string,PromptValue>={},slots:Record<string,string>={},options:PromptEvaluationOptions={}):string {
   inspectAst(nodes);
   template(nodes,new Set(Object.keys(values)),0,new Set(Object.keys(options.locals??{})));
@@ -363,6 +374,8 @@ export function compilePromptProgram(program:PromptProgram,context:{values?:Reco
     if(block.kind==='message'||block.kind==='slot'){
       const slot=block.kind==='slot'?(Object.hasOwn(context.slots,block.slot)?context.slots[block.slot]:fail('PROMPT_UNKNOWN_SLOT',block.id)):'';
       const text=block.kind==='message'?evaluator.render(block.template,context.slots):slot.length?(block.template?evaluator.render(block.template,{...context.slots,slot}):slot):'';
+      if(block.kind==='slot'&&text.length&&(!block.template||evaluator.usedSlots.has('slot')))evaluator.usedSlots.add(block.slot);
+      evaluator.usedSlots.delete('slot');
       evaluator.claimOutput(text.length);
       if(text.length)messages.push({id:block.id,role:block.role,content:[{type:'text',text}],completion:block.kind==='message'?block.completion??'complete':'complete',provenance:{blockId:block.id,origin:'prompt'}});
     }else if(block.kind==='history'){
@@ -381,5 +394,5 @@ export function compilePromptProgram(program:PromptProgram,context:{values?:Reco
   if(messages.some((m,i)=>m.completion==='prefill'&&i!==messages.length-1))fail('PROMPT_PREFILL_MUST_BE_LAST');
   inspectAst(messages,1_500_000);
   if(messages.length>1000||JSON.stringify(messages).length>1_500_000)fail('PROMPT_COMPILED_LIMIT');
-  return{compilerVersion:'uimori-prompt-1',values,messages,cachePlan,trace,historyScope:'m2-recent-or-full',warnings};
+  return{usedSlots:[...evaluator.usedSlots],compilerVersion:'uimori-prompt-1',values,messages,cachePlan,trace,historyScope:'m2-recent-or-full',warnings};
 }

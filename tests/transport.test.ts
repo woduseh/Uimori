@@ -73,7 +73,9 @@ describe('server main runner through the actual loopback adapter', () => {
     const first = JSON.parse(server.requests[0].body);
     expect(first.input.controls).toMatchObject({ minWords: 4500, maxWords: 7500 });
     expect(JSON.stringify(first)).not.toContain('15000');
-    expect(JSON.parse(first.prompt.messages.find((m: any) => m.id === 'references').content[0].text.split('\n').slice(1).join('\n')).pinnedSources.find((item: Content) => item.kind === 'canon')).toMatchObject({ id: 'canon-1', revision: 3, text: 'The lighthouse has never used electricity.' });
+    const pinned = first.prompt.messages.find((m: any) => m.id === 'backgroundLore').content[0].text.split('\n').slice(1).map((line: string)=>JSON.parse(line)) as Content[];
+    expect(pinned.find(item => item.kind === 'canon')).toMatchObject({ id: 'canon-1', revision: 3, text: 'The lighthouse has never used electricity.' });
+    expect(JSON.stringify(first).split('The lighthouse has never used electricity.').length - 1).toBe(1);
     expect(first.input.source.facts).toEqual([]);
     expect(first.input).not.toHaveProperty('history'); expect(first.prompt.messages.filter((m:any)=>m.provenance.origin==='history').map((m:any)=>m.content[0].text)).toEqual(snapshot.history.map(h=>h.text));
     expect(JSON.stringify(first)).not.toContain('AUXILIARY_ONLY');

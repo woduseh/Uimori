@@ -5,6 +5,7 @@ import { planNativeMessages } from '../core/provider-messages.js';
 import { captureLogicalHistory, compileSnapshotPrompt, promptContext } from './prompt-snapshot.js';
 import { nativeResources } from '../core/native-context.js';
 import { HiddenStoryStore } from './hidden-story.js';
+import { packagePersonaName } from './package-features.js';
 import { fields, record, text } from './product-store.js';
 import { HttpError, type Store } from './store.js';
 import type { RunSnapshot } from '../core/types.js';
@@ -13,24 +14,33 @@ import { freezePackageStates } from './package-behavior-host.js';
 import { createHash } from 'node:crypto';
 import { compileTranslationPrompt, createTranslationPlan, translationInput } from '../core/auxiliary.js';
 import { sourceTimeContext } from './product-auxiliary.js';
+import { freezeLoreContext } from './lore-context.js';
+import { validateLoreContextPolicy } from '../core/lore-context.js';
+import { createDefaultPromptProgram } from '../core/prompt-defaults.js';
+import { DEFAULT_MAIN_PROMPT } from '../core/prompts.js';
 
 /** A read-only preview, including unsaved draft blocks. No provider call or Run is created. */
 export function promptRoutes(app:FastifyInstance,store:Store){
   app.post<{Params:{id:string}}>('/api/chats/:id/prompt-preview',{bodyLimit:2_000_000},async request=>{
-    const b=record(request.body);fields(b,['program','request','values','branchId','role']);
-    const program=validatePromptProgram(b.program);const role=b.role??'main';if(!['main','translation'].includes(role))throw new HttpError(400,'Invalid prompt role');
+    const b=record(request.body);fields(b,['program','request','values','branchId','role','loreContext','loreContextReset']);
+    const role=b.role??'main';if(!['main','translation'].includes(role))throw new HttpError(400,'Invalid prompt role');
+    if(b.loreContextReset!==undefined && typeof b.loreContextReset!=='boolean')throw new HttpError(400,'Invalid lore context reset');
+    if(role!=='main'&&(b.loreContext!==undefined||b.loreContextReset!==undefined))throw new HttpError(400,'Lore context preview requires the main role');
     const chat=store.chat(request.params.id);const branch=store.product.branch(chat.id,b.branchId===undefined?undefined:text(b.branchId,'branch ID',100));
     const profile=store.product.snapshot(chat.id)??{...defaultProfile(chat.id),contents:[],models:{}};
+    const program=b.program===undefined&&role==='main' ? profile.promptPresets?.main?.program??createDefaultPromptProgram(DEFAULT_MAIN_PROMPT) : validatePromptProgram(b.program);
+    if(b.loreContext!==undefined)try{profile.loreContext=validateLoreContextPolicy(b.loreContext);}catch{throw new HttpError(400,'Invalid lore context policy');}
     if(role==='main'){
       const selected=profile.promptPresets?.main;
       profile.promptPresets={...profile.promptPresets,main:{id:selected?.id??'preview-draft',revision:selected?.revision??1,title:selected?.title??'Preview draft',role:'main',program}};
     }
-    let snapshot:RunSnapshot={chatId:chat.id,parentRevision:branch.headRevision,settingsRevision:chat.settingsRevision,settings:chat.settings,request:text(b.request,'preview request',500_000),history:store.history(branch.headRevision),resources:store.product.resources(chat.id,profile),profile,branchId:branch.id};
+    let snapshot:RunSnapshot={chatId:chat.id,parentRevision:branch.headRevision,settingsRevision:chat.settingsRevision,settings:chat.settings,request:text(b.request,'preview request',500_000),history:store.history(branch.headRevision),resources:store.product.resources(chat.id,profile),profile,branchId:branch.id,...(b.loreContextReset?{loreContextReset:true}:{})};
     const nativeBot=store.native.snapshot(chat.id,branch.id);if(nativeBot){snapshot.nativeBot=nativeBot;snapshot.resources.push(...nativeResources(chat.id,nativeBot));}
-    if(role==='main')snapshot.hiddenStory=new HiddenStoryStore(store.product).freeze(profile.hiddenStory,{seed:`preview:${branch.id}:${snapshot.request}`,userLabel:profile.contents.find(c=>c.kind==='persona')?.title??'User'});
+    if(role==='main')snapshot.hiddenStory=new HiddenStoryStore(store.product).freeze(profile.hiddenStory,{seed:`preview:${branch.id}:${snapshot.request}`,userLabel:packagePersonaName(profile)});
     if(nativeBot&&snapshot.hiddenStory?.config.contentPolicy==='general-fiction')throw new HttpError(400,'This native bot requires the nonsexual Hidden Story policy');
     snapshot=store.story.prepareRunInTransaction(snapshot);snapshot.logicalHistory=captureLogicalHistory(store,snapshot);
     const previewTime=new Date().toISOString();snapshot=freezePackageStates(store,{...snapshot,executionClock:{iso:previewTime,unix:Math.floor(Date.parse(previewTime)/1000)}},false);
+    if(role==='main')snapshot=freezeLoreContext(store,snapshot);
     const values=b.values!==undefined?record(b.values):undefined;
     let previewSource: { kind: 'stored' | 'synthetic'; sourceRevision: string; sourceHash: string; chunkId: string } | undefined;
     let compilation;
@@ -59,6 +69,6 @@ export function promptRoutes(app:FastifyInstance,store:Store){
         provider={protocol:target.connection.protocol,modelId:target.modelId,kind:'mapping-only' as const,...plan};
       }
     }catch(caught){error=(caught as Error).message;}
-    return{compilation,provider,...(previewSource?{previewSource}:{}),...(error?{error}:{}),...(snapshot.story?.waiting?{waitingForState:true}:{}),scope:'preview-only-no-provider-call'};
+    return{compilation,provider,...(snapshot.loreContext?{loreContext:snapshot.loreContext}:{}),...(previewSource?{previewSource}:{}),...(error?{error}:{}),...(snapshot.story?.waiting?{waitingForState:true}:{}),scope:'preview-only-no-provider-call'};
   });
 }

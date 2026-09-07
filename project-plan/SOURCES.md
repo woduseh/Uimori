@@ -2,6 +2,14 @@
 
 문서 제목의 v0.6.1은 초기 계약 버전이에요. 각 절의 조사·채택·미구현·검증 문구는 그 절을 기록한 시점의 근거이며, 이후 구현으로 대체된 판단도 이력으로 남겨요. 현재 기능·schema·검증 범위는 [CURRENT](CURRENT.md), 공통 API는 [패키지 동작](../docs/PACKAGE-BEHAVIOR.md), 새 자료 이식은 [Risu 이식 가이드](../docs/RISU-PORTING.md)를 확인해요.
 
+## 2026-09-07 로어 위치·유지와 캐시 경계
+
+사용자와 배치·유지 계획을 논의하면서 [Lost in the Middle](https://arxiv.org/abs/2307.03172), [LongPiBench](https://arxiv.org/abs/2410.14641), Google Research의 [Retrieval Quality at Context Limit](https://research.google/pubs/retrieval-quality-at-context-limit/)를 확인했어요. 위치와 관련 정보 간 거리가 성능에 영향을 줄 수 있지만 과제와 모델에 따라 결과가 다르므로, 최신 모델 전체에 같은 성능 저하나 배치의 우위를 단정하지 않아요. [Anthropic prompt caching](https://platform.claude.com/docs/en/build-with-claude/prompt-caching)에서 동일 prefix와 변동 요소 뒤쪽 배치 원리를 확인했어요. 공급자 공통 캐시 적중률·실제 비용 절감으로 확대하지 않아요.
+
+Uimori 기반 `5761bb2`의 `core/provider.ts::executeTool`, `server/prompt-snapshot.ts::captureLogicalHistory`, `server/main-request.ts::attachMainHostContext`를 기준으로 **포함 결정과 배치 분리, 실제 읽은 범위만 이어 사용, 안정된 이전 자료를 유지하고 변동 host 문맥을 현재 입력 근처로 이동**하는 원리를 적용했어요. 구현은 `core/lore-context.ts`, `server/lore-context.ts`, 공통 `pinnedSlotSources`와 PromptProgram의 실제 `usedSlots` 추적이에요. `tests/lore-context.test.ts`, `tests/lore-context-archive.test.ts`, `tests/lore-placement.test.ts`에서 범위·무효화·fork/archive·네 provider encoder의 실제 prefix를 합성 검증해요.
+
+매 턴 모든 로어를 재주입하거나, 캐시 유지만을 위해 수정된 자료를 계속 남기거나, 이 작업에서 장면 판정·요약 모델을 추가하는 방식은 채택하지 않았어요. 전체 토큰 예산과 요약 checkpoint는 병행 작업과 분리하고 [조율 계약](LORE-CONTEXT-PLAN.md)에 기록해요. 외부 프로젝트 코드를 복사하지 않았어요.
+
 ## 2026-09-07 Risu 자료 이식 경로 정리
 
 후속으로 앱의 Risu JSON/CHARX 부분 변환도 제거했어요. 원본 해석을 RisuToki 구조화 MCP와 에이전트에 맡기고 `LibraryPanel`/`PromptComposer`의 native JSON 초안 입력을 재사용해요. 별도 바이너리 파서·부분 의미 변환·Agent 중간파일을 앱에서 중복 유지하는 방식은 채택하지 않아요. 이후 절의 Risu importer 코드는 당시 구현 근거이며 현재 실행 경로가 아니에요.
