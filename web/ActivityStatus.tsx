@@ -192,10 +192,12 @@ export function ActivityStatus({
       : hasIssue
         ? '확인 필요'
         : `작업 ${running.length}`;
-  const elapsed =
+  const measured =
     item && !connectionIssue
       ? elapsedLabel(item.startedAt, active(item.status) ? now : Date.parse(item.finishedAt ?? ''))
       : '';
+  // A finished task that took under a second has no meaningful duration to show.
+  const elapsed = !item || active(item.status) || measured !== '0초' ? measured : '';
   function hide() {
     setHidden((old) => [...new Set([...old, ...candidates.map((item) => item.key)])]);
   }

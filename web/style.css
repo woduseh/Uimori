@@ -419,19 +419,12 @@ input[type="checkbox"] {
 }
 .request-message {
   max-width: 86%;
-  margin: 0 0 28px auto;
+  margin: 0 0 14px auto;
   padding: 14px 17px;
   background: var(--user);
   border: 1px solid var(--line);
   border-radius: 16px 16px 4px 16px;
   font-size: 14px;
-}
-.request-label,
-.request-message > small {
-  display: block;
-  color: var(--muted);
-  font-size: 11px;
-  margin-bottom: 6px;
 }
 .request-message p {
   margin: 0;
@@ -456,32 +449,53 @@ input[type="checkbox"] {
   scroll-margin-top: 24px;
 }
 .source + .source {
-  margin-top: 50px;
-  padding-top: 36px;
+  margin-top: 30px;
+  padding-top: 22px;
   border-top: 1px solid var(--line);
 }
-.source-heading {
+/* Scene header row: number, status glyph and badges on the left; the view toggle sits over
+   the right end of the row so it is never part of the activity summary. */
+.scene-header {
+  position: relative;
+  margin: 0 0 8px;
+  color: var(--muted);
+}
+.scene-header > .turn-activity {
+  margin: 0;
+}
+.scene-header > .turn-activity > summary,
+.scene-header-lead {
+  padding-right: 128px;
+}
+.scene-header-lead {
   display: flex;
-  flex-direction: column;
-  justify-content: center;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
   min-height: 44px;
-  margin-bottom: 22px;
+  min-width: 0;
+}
+.scene-header-tools {
+  position: absolute;
+  top: 0;
+  right: 0;
+  height: 44px;
+  display: flex;
+  align-items: center;
 }
 .folio {
   font-size: 13px;
   font-weight: 600;
+  color: var(--text);
 }
-.source-heading small {
+.scene-badge {
   font-size: 11px;
-}
-.reader-toolbar {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 10px;
-  min-height: 44px;
-  margin: -66px 0 26px auto;
-  max-width: 70%;
+  line-height: 1.4;
+  padding: 1px 7px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  color: var(--muted);
+  white-space: nowrap;
 }
 .segmented {
   display: flex;
@@ -503,6 +517,14 @@ input[type="checkbox"] {
 .segmented button[aria-pressed="true"] {
   background: var(--surface);
   color: var(--text);
+}
+.segmented.compact {
+  padding: 2px;
+  border-radius: 8px;
+}
+.segmented.compact button {
+  min-height: 34px;
+  padding: 3px 10px;
 }
 .prose {
   font-size: var(--reading);
@@ -621,17 +643,71 @@ input[type="checkbox"] {
 .has-error {
   color: var(--error);
 }
+/* Scene footer: one row of quiet actions, then rarely used disclosures on the right. */
 .source-actions {
+  position: relative;
   display: flex;
-  justify-content: flex-end;
-  margin-top: 18px;
-}
-.source-job-details {
-  font-size: 11px;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px;
+  margin-top: 4px;
   color: var(--muted);
 }
-.source-job-details > summary {
+.source-actions .scene-action,
+.source-actions > .action-menu > summary {
+  color: var(--faint);
+}
+.source-actions .scene-action:hover:not(:disabled),
+.source-actions > .action-menu > summary:hover {
+  color: var(--text);
+}
+.source-actions > .action-menu {
+  position: static;
+  margin-right: auto;
+}
+/* The scene menu sits at the left of the row, so its popover anchors to the row's left edge
+   and stays inside narrow viewports. */
+.source-actions > .action-menu > .action-menu-body {
+  right: auto;
+  left: 0;
+}
+.source-actions > .story-source-state {
+  display: contents;
+}
+.source-actions > details:not(.action-menu),
+.source-actions .story-source-state details {
+  font-size: 11px;
+  color: var(--faint);
+  border: 0;
+  margin: 0;
+  padding: 0;
+  min-width: 0;
+}
+.source-actions > details:not(.action-menu) > summary,
+.source-actions .story-source-state details > summary {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0 8px;
   width: fit-content;
+  cursor: pointer;
+}
+.source-actions > details[open]:not(.action-menu),
+.source-actions .story-source-state details[open] {
+  flex-basis: 100%;
+  color: var(--muted);
+  font-size: 12px;
+}
+.source-actions .story-source-state > p.error {
+  flex-basis: 100%;
+}
+.focus-reading .source-actions {
+  opacity: 0.35;
+  transition: opacity 0.15s;
+}
+.focus-reading .source:hover .source-actions,
+.focus-reading .source:focus-within .source-actions {
+  opacity: 1;
 }
 .inline-asset {
   max-width: 400px;
@@ -963,16 +1039,9 @@ input[type="checkbox"] {
   }
   .request-message {
     max-width: 94%;
-    padding: 14px 15px;
-    margin-bottom: 28px;
+    padding: 12px 14px;
+    margin-bottom: 10px;
     font-size: 13px;
-  }
-  .reader-toolbar {
-    max-width: 72%;
-    margin-bottom: 23px;
-  }
-  .source-heading {
-    margin-bottom: 22px;
   }
   .prose {
     font-size: var(--reading);
@@ -1012,8 +1081,8 @@ input[type="checkbox"] {
     display: none;
   }
   .source + .source {
-    margin-top: 34px;
-    padding-top: 30px;
+    margin-top: 22px;
+    padding-top: 16px;
   }
   .app-dialog,
   .app-dialog.wide {

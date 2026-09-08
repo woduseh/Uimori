@@ -74,11 +74,17 @@ test('RACOM01 source footer stays compact and its menu supports touch, keyboard 
     await page.getByLabel('다음 장면 요청', { exact: true }).fill('메뉴를 닫아도 남는 합성 초안');
     await trigger.scrollIntoViewIfNeeded();
     await expect(menu).toHaveJSProperty('open', false);
-    await expect(footer.locator('button, summary').filter({ visible: true })).toHaveCount(1);
-    const triggerBox = (await trigger.boundingBox())!;
-    expect(triggerBox.width).toBeGreaterThanOrEqual(44);
-    expect(triggerBox.height).toBeGreaterThanOrEqual(44);
-    expect((await footer.boundingBox())!.height).toBeLessThanOrEqual(52);
+    // Quiet footer row: copy, edit the current view, the scene menu, then two small disclosures.
+    await expect(footer.locator('button, summary').filter({ visible: true })).toHaveCount(5);
+    await expect(footer.getByRole('button', { name: '본문 복사', exact: true })).toBeVisible();
+    await expect(footer.getByRole('button', { name: '원문 수정', exact: true })).toBeVisible();
+    for (const control of await footer.locator('button, summary').filter({ visible: true }).all()) {
+      const box = (await control.boundingBox())!;
+      expect(box.width).toBeGreaterThanOrEqual(44);
+      expect(box.height).toBeGreaterThanOrEqual(44);
+    }
+    // Narrow phones may wrap the disclosures under the icon row; wider screens keep one row.
+    expect((await footer.boundingBox())!.height).toBeLessThanOrEqual(width < 400 ? 100 : 52);
     await noHorizontalOverflow(page, scene);
     await page.screenshot({ path: info.outputPath(`response-actions-${width}.png`) });
 
@@ -86,9 +92,9 @@ test('RACOM01 source footer stays compact and its menu supports touch, keyboard 
     await trigger.press('Enter');
     await expect(menu).toHaveJSProperty('open', true);
     const actions = menu.locator('.action-menu-body');
+    // The row already edits the current view, so the menu offers the other editor only.
     await expect(actions.getByRole('button')).toHaveText([
       '여기서 새 이야기로 이어가기',
-      '원문 수정',
       '번역 수정',
       '이미지 선택',
     ]);
@@ -112,7 +118,7 @@ test('RACOM01 source footer stays compact and its menu supports touch, keyboard 
     await expect(menu).toHaveJSProperty('open', false);
     await expect(composer).toBeFocused();
     await expect(composer).toHaveValue('메뉴를 닫아도 남는 합성 초안');
-    await expect(footer.locator('button, summary').filter({ visible: true })).toHaveCount(1);
+    await expect(footer.locator('button, summary').filter({ visible: true })).toHaveCount(5);
   }
   const after = await detail(request, before.chat.id);
   expect(after.sources).toEqual(before.sources);

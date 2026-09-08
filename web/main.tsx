@@ -398,7 +398,13 @@ function App() {
             {navigationControls}
             <div className="header-title">
               <h1>{s.detail?.chat.title || 'Uimori'}</h1>
-              <small>{s.bot?.title || (s.selected ? '채팅을 이어가는 중' : '나의 채팅')}</small>
+              <small>
+                {s.bot?.title
+                  ? `${s.bot.title}${s.persona ? ` · 페르소나 ${s.persona.title}` : ''}`
+                  : s.selected
+                    ? '채팅을 이어가는 중'
+                    : '나의 채팅'}
+              </small>
             </div>
             <div className="header-actions">
               {s.selected && s.destination === 'story' && (
@@ -515,26 +521,23 @@ function App() {
                     <p role="status">채팅을 불러오는 중이에요…</p>
                   ) : (
                     <>
-                      <div className="story-context">
-                        {s.bot && <ContentAvatar content={s.bot} />}
-                        {s.profileAsset && (
-                          <img
-                            className="profile-asset"
-                            data-testid="profile-asset"
-                            src={s.profileAsset.url}
-                            alt={s.profileAsset.description || s.profileAsset.title}
-                          />
-                        )}
-                        <span className="story-context-name">
-                          {s.bot?.title || '나의 채팅'}
-                          {s.persona && ` · 페르소나 ${s.persona.title}`}
-                        </span>
-                        {(s.detail.branches?.length ?? 0) > 1 && (
-                          <button className="secondary" onClick={() => setPanel('branches')}>
-                            보관된 전개
-                          </button>
-                        )}
-                      </div>
+                      {(s.profileAsset || (s.detail.branches?.length ?? 0) > 1) && (
+                        <div className="story-context">
+                          {s.profileAsset && (
+                            <img
+                              className="profile-asset"
+                              data-testid="profile-asset"
+                              src={s.profileAsset.url}
+                              alt={s.profileAsset.description || s.profileAsset.title}
+                            />
+                          )}
+                          {(s.detail.branches?.length ?? 0) > 1 && (
+                            <button className="secondary" onClick={() => setPanel('branches')}>
+                              보관된 전개
+                            </button>
+                          )}
+                        </div>
+                      )}
                       {!s.connected && (
                         <p className="connection-note" role="status">
                           연결을 다시 확인하는 중이에요.
@@ -578,11 +581,13 @@ function App() {
                           onError={s.setError}
                           onFork={s.fork}
                           onEditingChange={onSourceEditing}
-                          activity={(() => {
+                          activity={(slots) => {
                             const run = s.detail!.runs.find((item) => item.id === source.runId);
                             return (
                               run && (
                                 <TurnActivity
+                                  leading={slots.leading}
+                                  badges={slots.badges}
                                   run={run}
                                   source={source}
                                   jobs={s.detail!.jobs}
@@ -595,7 +600,7 @@ function App() {
                                 />
                               )
                             );
-                          })()}
+                          }}
                         />
                       ))}
                       <ReaderPages
@@ -623,7 +628,6 @@ function App() {
                         .map((run) => (
                           <article className="pending-turn" key={run.id} data-testid="pending-run">
                             <div className="request-message">
-                              <small>내 장면 요청</small>
                               <p>{run.request}</p>
                             </div>
                             <div className="run-outcome">
