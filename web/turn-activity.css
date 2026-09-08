@@ -1,32 +1,62 @@
 .turn-activity {
-  margin: 0 0 1.2rem;
-  border: 1px solid var(--border);
-  border-radius: 10px;
+  margin: 0 0 8px;
   font-size: 0.85rem;
   min-width: 0;
 }
 .turn-activity > summary {
-  padding: 0.75rem 0.9rem;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  padding: 0;
+  list-style: none;
   cursor: pointer;
   color: var(--muted);
-  overflow-wrap: anywhere;
-  line-height: 1.6;
+  line-height: 1.4;
 }
-.turn-activity > summary small {
-  margin-left: 0.6rem;
-  white-space: nowrap;
+.turn-activity > summary::-webkit-details-marker {
+  display: none;
 }
 .turn-activity > summary:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 3px;
-  border-radius: 10px;
+  border-radius: 8px;
 }
-.turn-activity-issue > summary {
-  color: var(--danger, #ce786e);
+.turn-activity-lead {
+  display: flex;
+  flex: 1;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.turn-activity-lead .folio {
+  color: var(--text);
+}
+.turn-status {
+  display: inline-flex;
+  color: var(--faint);
+}
+.turn-status-running svg {
+  animation: turn-spin 1s linear infinite;
+}
+.turn-status-issue,
+.turn-activity-issue .turn-activity-text {
+  color: var(--error);
+}
+.turn-activity-text {
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+.turn-activity > summary small {
+  font-size: 12px;
+  white-space: nowrap;
 }
 .turn-activity-body {
-  padding: 0 0.9rem 0.9rem;
-  border-top: 1px solid var(--border);
+  margin: 4px 0 14px;
+  padding: 12px 14px 14px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
   overflow-wrap: anywhere;
 }
 .turn-activity-body .task-heading {
@@ -45,11 +75,18 @@
   max-width: 100%;
   white-space: normal;
 }
-@media (max-width: 600px) {
-  .turn-activity > summary {
-    padding: 0.65rem;
+@keyframes turn-spin {
+  to {
+    transform: rotate(360deg);
   }
+}
+@media (prefers-reduced-motion: reduce) {
+  .turn-status-running svg {
+    animation: none;
+  }
+}
+@media (max-width: 600px) {
   .turn-activity-body {
-    padding: 0 0.65rem 0.65rem;
+    padding: 10px 12px 12px;
   }
 }
