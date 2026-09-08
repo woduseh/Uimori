@@ -2,7 +2,7 @@ import { DeleteButton } from './DeleteButton.js';
 import { ActionMenu } from './ActionMenu.js';
 import { IconButton } from './IconButton.js';
 import { CopyIcon } from './ui-icons.js';
-import { Maximize, Minimize, RotateCcw } from 'lucide-react';
+import { Maximize, Minimize } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import type {
   ContentRef,
@@ -44,13 +44,9 @@ type Props = {
   library: Library;
   reload?: () => Promise<void>;
   onError: (message: string) => void;
-  selections?: Partial<Record<PromptRole, ContentRef | null>>;
-  onApply?: (role: PromptRole, reference: ContentRef | null) => Promise<boolean>;
   onDirtyChange?: (dirty: boolean) => void;
   chatId?: string;
   branchId?: string;
-  promptControls?: Record<string, ChatPromptControls>;
-  onSaveControls?: (reference: ContentRef, state: ChatPromptControls) => Promise<void>;
 };
 const draftFor = (role: PromptRole, preset?: PromptPreset): Draft => ({
   source: preset ? keyOf(preset) : 'builtin',
@@ -69,13 +65,9 @@ export function PromptEditor({
   library,
   reload,
   onError,
-  selections,
-  onApply,
   onDirtyChange,
   chatId,
   branchId,
-  promptControls,
-  onSaveControls,
 }: Props) {
   const [role, setRole] = useState<PromptRole>(initialRole);
   const [localPresets, setLocalPresets] = useState<PromptPreset[]>([]);
@@ -90,14 +82,7 @@ export function PromptEditor({
                 ? draftFor(role, initialPreset)
                 : { ...draftFor(role), source: 'new', title: '' },
             ];
-          const ref = selections?.[role];
-          const preset = library.promptPresets?.find(
-            (item) => item.role === role && ref && keyOf(item) === keyOf(ref)
-          );
-          return [
-            role,
-            ref && !preset ? { ...draftFor(role), source: keyOf(ref) } : draftFor(role, preset),
-          ];
+          return [role, draftFor(role)];
         })
       ) as Record<PromptRole, Draft>
   );
@@ -125,7 +110,6 @@ export function PromptEditor({
   }, [dirty, busy, onDirtyChange]);
   useEffect(() => () => onDirtyChange?.(false), [onDirtyChange]);
   useEffect(() => {
-    let alive = true;
     setDrafts((current) => {
       let next = current;
       for (const role of roles) {
@@ -143,46 +127,7 @@ export function PromptEditor({
       }
       return next;
     });
-    const missing = roles.flatMap((role) => {
-      const ref = selections?.[role];
-      return ref &&
-        !library.promptPresets?.some((item) => item.id === ref.id) &&
-        !localPresets.some((item) => item.id === ref.id)
-        ? [{ role, ref }]
-        : [];
-    });
-    void Promise.all(
-      missing.map(async ({ role, ref }) => ({
-        role,
-        item: await api<PromptPreset>(`/prompt-presets/${ref.id}`),
-      }))
-    )
-      .then((results) => {
-        if (!alive || !results.length) return;
-        setLocalPresets((current) => [
-          ...current,
-          ...results
-            .map((result) => result.item)
-            .filter((item) => !current.some((prior) => keyOf(prior) === keyOf(item))),
-        ]);
-        setDrafts((current) => {
-          const next = { ...current };
-          for (const { role, item } of results)
-            if (!current[role].dirty && current[role].source.split('@')[0] === item.id)
-              next[role] = draftFor(role, item);
-          return next;
-        });
-      })
-      .catch((caught) => {
-        if (alive) {
-          setError(caught.message);
-          onError(caught.message);
-        }
-      });
-    return () => {
-      alive = false;
-    };
-  }, [selections, library.promptPresets, localPresets, composerDirty, onError]);
+  }, [library.promptPresets, localPresets, composerDirty]);
   const draft = drafts[role];
   const collaborationIssue =
     role === 'main'
@@ -217,28 +162,7 @@ export function PromptEditor({
     setError('');
     setStatus('');
   }
-  async function apply(reference: ContentRef | null) {
-    if (!onApply) return;
-    setBusy(true);
-    setError('');
-    setStatus('');
-    onError('');
-    try {
-      if (await onApply(role, reference))
-        setStatus(
-          reference
-            ? '선택한 프롬프트를 이야기에 적용했어요.'
-            : '앱 기본 프롬프트를 이야기에 적용했어요.'
-        );
-    } catch (caught) {
-      const message = (caught as Error).message;
-      setError(message);
-      onError(message);
-    } finally {
-      setBusy(false);
-    }
-  }
-  async function save(update: boolean, alsoApply: boolean) {
+  async function save(update: boolean) {
     if (pendingTemplate || collaborationIssue || !draft.title.trim() || (update && !draft.base))
       return;
     setBusy(true);
@@ -252,6 +176,10 @@ export function PromptEditor({
           title: draft.title.trim(),
           role,
           program: validatePromptProgram(draft.program),
+          values:
+            controlDraftCache.current[`${role}:${draft.source}`]?.values ??
+            draft.base?.values ??
+            {},
           ...(update ? { expectedRevision: draft.base!.revision } : {}),
         },
         update ? 'PUT' : 'POST'
@@ -273,14 +201,6 @@ export function PromptEditor({
       setStatus('프롬프트를 저장했어요.');
       await onSaved?.(accepted, !update);
       await reload?.();
-      if (alsoApply && onApply) {
-        const applied = await onApply(role, { id: accepted.id, revision: accepted.revision });
-        setStatus(
-          applied
-            ? '프롬프트를 저장하고 이야기에 적용했어요.'
-            : '프롬프트는 저장했어요. 이야기 적용을 다시 시도해 주세요.'
-        );
-      }
     } catch (caught) {
       const message = (caught as Error).message;
       setError(message);
@@ -289,8 +209,6 @@ export function PromptEditor({
       setBusy(false);
     }
   }
-  const selected = selections?.[role];
-  const selectedPreset = selected ? presets.find((item) => keyOf(item) === keyOf(selected)) : null;
   const pendingSavedText = draft.source !== 'builtin' && draft.source !== 'new' && !draft.base;
   return (
     <section
@@ -299,8 +217,8 @@ export function PromptEditor({
       aria-label="전체 프롬프트 편집"
     >
       <p className="muted">
-        본문과 메시지 구성을 하나의 프롬프트로 저장해요. 인물·자료와 이야기별 옵션은 선택한 설정을
-        사용해요.
+        본문·메시지 구성과 옵션을 독립된 프리셋으로 저장해요. 현재 프롬프트에서 불러와 사용할 수
+        있어요.
       </p>
       <fieldset className="prompt-editor-fields" disabled={busy}>
         <div className="prompt-editor-row">
@@ -359,14 +277,6 @@ export function PromptEditor({
             </button>
           )}
         </div>
-        {onApply && (
-          <p className="prompt-applied">
-            이 이야기에서 사용:{' '}
-            <strong>
-              {selected ? (selectedPreset?.title ?? '저장된 프롬프트') : '앱 기본 프롬프트'}
-            </strong>
-          </p>
-        )}
         <label>
           프롬프트 이름
           <input
@@ -391,6 +301,7 @@ export function PromptEditor({
             initialControlDraft={controlDraftCache.current[`${role}:${draft.source}`]}
             onControlDraftChange={(state) => {
               controlDraftCache.current[`${role}:${draft.source}`] = state;
+              edit({});
             }}
             onDirtyChange={(value) =>
               setComposerDirty((current) =>
@@ -400,7 +311,6 @@ export function PromptEditor({
               )
             }
             onPendingDraftChange={setPendingTemplate}
-            promptReference={draft.base ?? undefined}
             savedCombinations={[
               ...(library.promptCombinations ?? []),
               ...localCombinations.filter(
@@ -414,7 +324,7 @@ export function PromptEditor({
                       '/prompt-combinations',
                       {
                         title,
-                        prompt: { id: draft.base!.id, revision: draft.base!.revision },
+                        role,
                         values,
                       },
                       'POST'
@@ -432,12 +342,8 @@ export function PromptEditor({
             chatId={chatId}
             branchId={branchId}
             role={role}
-            controlState={draft.base ? promptControls?.[keyOf(draft.base)] : undefined}
-            onSaveControls={
-              draft.base && !draft.dirty && onSaveControls
-                ? (state) =>
-                    onSaveControls({ id: draft.base!.id, revision: draft.base!.revision }, state)
-                : undefined
+            controlState={
+              draft.base ? { values: draft.base.values ?? {}, combinations: [] } : undefined
             }
           />
           {role === 'main' && (
@@ -453,9 +359,8 @@ export function PromptEditor({
         <div className="prompt-save-actions">
           <small className="prompt-save-scope">
             {draft.base
-              ? '수정 저장은 이 프롬프트를 사용하는 채팅의 다음 실행부터 반영돼요.'
-              : '새 프롬프트로 저장해요. 사용할 채팅은 따로 선택해요.'}
-            {onApply && ' 이 채팅에 적용하면 현재 채팅의 프롬프트 선택을 바꿔요.'}
+              ? '저장된 프리셋 사본을 수정해요. 현재 프롬프트는 바뀌지 않아요.'
+              : '새 프리셋으로 저장해요. 현재 프롬프트에 불러와서 사용할 수 있어요.'}
           </small>
           <div className="prompt-save-buttons">
             <button
@@ -467,40 +372,11 @@ export function PromptEditor({
                 !draft.title.trim() ||
                 (!!draft.base && !draft.dirty)
               }
-              onClick={() => void save(!!draft.base, false)}
+              onClick={() => void save(!!draft.base)}
             >
               {draft.base ? '수정 저장' : '새 프롬프트 저장'}
             </button>
-            {onApply &&
-              (draft.dirty ? (
-                <button
-                  type="button"
-                  className="secondary"
-                  disabled={
-                    pendingSavedText ||
-                    pendingTemplate ||
-                    !!collaborationIssue ||
-                    !draft.title.trim()
-                  }
-                  onClick={() => void save(Boolean(draft.base), true)}
-                >
-                  저장하고 적용
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  className="secondary"
-                  disabled={pendingSavedText || pendingTemplate || draft.source === 'new'}
-                  onClick={() =>
-                    void apply(
-                      draft.base ? { id: draft.base.id, revision: draft.base.revision } : null
-                    )
-                  }
-                >
-                  이 채팅에 적용
-                </button>
-              ))}
-            {(draft.base || onApply) && (
+            {draft.base && (
               <ActionMenu label="프롬프트 관리" className="prompt-management-menu">
                 {draft.base && (
                   <button
@@ -512,19 +388,9 @@ export function PromptEditor({
                       !!collaborationIssue ||
                       !draft.title.trim()
                     }
-                    onClick={() => void save(false, false)}
+                    onClick={() => void save(false)}
                   >
                     <CopyIcon size={18} aria-hidden="true" /> 복사본으로 저장
-                  </button>
-                )}
-                {onApply && (
-                  <button
-                    type="button"
-                    className="secondary"
-                    disabled={pendingTemplate || !selected}
-                    onClick={() => void apply(null)}
-                  >
-                    <RotateCcw size={18} aria-hidden="true" /> 앱 기본 프롬프트 사용
                   </button>
                 )}
                 {draft.base && (

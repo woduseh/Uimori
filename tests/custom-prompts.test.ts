@@ -3,11 +3,7 @@ import { compileTranslationPrompt } from '../core/auxiliary.js';
 import { createDefaultPromptProgram } from '../core/prompt-defaults.js';
 import { createHash } from 'node:crypto';
 import { afterEach, describe, expect, test, vi } from 'vitest';
-import {
-  createTranslationPlan,
-  translationInput,
-  validateTranslationPlan,
-} from '../core/auxiliary.js';
+import { translationInput } from '../core/auxiliary.js';
 import { defaultProfile, type PromptPreset, type ProviderProtocol } from '../core/product.js';
 import { DEFAULT_MAIN_PROMPT, DEFAULT_TRANSLATION_PROMPT } from '../core/prompts.js';
 import { buildMainInput } from '../core/provider.js';
@@ -59,25 +55,14 @@ describe('full editable prompt boundaries', () => {
       text: 'The harbor waited.',
       hash: createHash('sha256').update('The harbor waited.').digest('hex'),
     };
-    const legacy = createTranslationPlan(source, context);
     expect(compileSnapshotPrompt(original).promptCompilation!.messages[0].content[0].text).toBe(
       DEFAULT_MAIN_PROMPT
     );
     expect(
-      compileTranslationPrompt(
-        translationInput(legacy, legacy.chunks[0].id, original),
-        original,
-        'task'
-      )!.messages[0].content[0].text
+      compileTranslationPrompt(translationInput(source, context, original), original, 'task')!
+        .messages[0].content[0].text
     ).toBe(DEFAULT_TRANSLATION_PROMPT);
     expect(context.instructionRevision).toBe('default-translation-1');
-    expect(
-      validateTranslationPlan(
-        source,
-        sourceTimeContext(structuredClone(original), 'translation'),
-        legacy
-      )
-    ).toEqual(legacy);
     for (const text of ['', '  \r\n  ', literal]) {
       const selected = structuredClone(original);
       selected.profile!.promptPresets = {
@@ -91,16 +76,13 @@ describe('full editable prompt boundaries', () => {
       );
       expect(buildMainInput(frozen).contract).toBe('');
       const selectedContext = sourceTimeContext(frozen, 'translation');
-      const plan = createTranslationPlan(source, selectedContext);
-      const input = translationInput(plan, plan.chunks[0].id, frozen);
+      const input = translationInput(source, selectedContext, frozen);
       expect(input.contract).toBe('');
       expect(compileTranslationPrompt(input, frozen, 'task')).toBeDefined();
       expect(input.customPrompt).toBe(true);
       expect(input.context.instructionRevision).toBe('prompt:prompt-translation@3');
-      expect(JSON.stringify(input.outputSchema)).not.toContain('Korean');
-      expect(() => validateTranslationPlan(source, context, plan)).toThrow(
-        'SOURCE_TRANSLATION_PLAN_INVALID'
-      );
+      expect(input.sourceText).toBe(source.text);
+      expect(input.outputSchema).toEqual({});
     }
     const legacySnapshot = snapshot();
     delete legacySnapshot.profile;
@@ -162,8 +144,7 @@ function request(
       source: {
         sourceRevision: 'source-prompt',
         sourceHash: 'hash-prompt',
-        chunkId: 'chunk-prompt',
-        blocks: [{ anchor: 'anchor-prompt', text: 'Forty quiet years.' }],
+        text: 'Forty quiet years.',
       },
       results: [],
     },
@@ -236,12 +217,7 @@ describe('custom prompt native request/response through actual loopback HTTP, no
   test.each(variants)(
     '$protocol preserves custom literals and empty selection at its native wire boundary',
     async (variant) => {
-      const text = JSON.stringify({
-        sourceRevision: 'source-prompt',
-        sourceHash: 'hash-prompt',
-        chunkId: 'chunk-prompt',
-        segments: [{ anchors: ['anchor-prompt'], text: 'Le port attendait.' }],
-      });
+      const text = 'Le port attendait depuis 40 ans. Tournez à gauche.';
       const local = await loopbackProvider(async (_request, response) => {
         response.writeHead(200, { 'content-type': 'text/event-stream' });
         response.end(
@@ -292,8 +268,9 @@ describe('custom prompt native request/response through actual loopback HTTP, no
         expect(combined).not.toContain(DEFAULT_TRANSLATION_PROMPT);
         if (role === 'translation') {
           expect(combined).not.toMatch(/Korean|사십 년/);
-          expect(combined).toContain('[[p_...]]');
-          expect(combined).toContain('sourceRevision');
+          expect(combined).toContain('complete translated text only');
+          expect(combined).not.toContain('[[p_...]]');
+          expect(combined).not.toContain('segments.text');
         }
         expect(wires.at(-1)!.bodySha256).toBe(
           createHash('sha256').update(captured.body).digest('hex')

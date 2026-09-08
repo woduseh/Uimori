@@ -1,8 +1,6 @@
 import { createHash } from 'node:crypto';
 import { describe, expect, test } from 'vitest';
 import {
-  aggregateTranslation,
-  createTranslationPlan,
   displayInput,
   executeAuxiliary,
   presentationInput,
@@ -11,12 +9,9 @@ import {
   translationInput,
   validateDisplayAnnotation,
   validatePresentation,
-  validateTranslationChunk,
-  validateTranslationPlan,
   type AuxiliaryInput,
   type AuxiliarySource,
   type SourceTimeContext,
-  type TranslationPlan,
 } from '../core/auxiliary.js';
 import { BUILTIN_ASSETS, builtinAssetSvg, sourceScenes } from '../core/fixtures/presentation.js';
 import type { RunSnapshot } from '../core/types.js';
@@ -41,7 +36,6 @@ const context = (): SourceTimeContext => ({
   ],
   instructionRevision: 'default-translation-1',
   modelPresetRevision: 'mock-translation-1',
-  protectedLiterals: ['ready'],
 });
 const snapshot = (): RunSnapshot => ({
   chatId: 'chat-a',
@@ -81,96 +75,14 @@ const snapshot = (): RunSnapshot => ({
     },
   ],
 });
-function fixtureOutput(plan: TranslationPlan, chunkId = plan.chunks[0].id) {
-  const chunk = plan.chunks.find((item) => item.id === chunkId)!;
-  return {
-    sourceRevision: plan.sourceRevision,
-    sourceHash: plan.sourceHash,
-    chunkId,
-    segments: chunk.blocks.map((block) => ({
-      anchors: [block.anchor],
-      text: `합성 문장 ${block.text}`,
-    })),
-  };
-}
-
 describe('M1 source-bound auxiliary roles', () => {
-  test('translation chunk targets group whole paragraphs and unlimited preserves the entire source in one chunk', () => {
-    const paragraphs = ['가'.repeat(60), '나'.repeat(40), '다'.repeat(101), '라'.repeat(60)];
-    const raw = source(paragraphs.join('\n\n'));
-    const limited = createTranslationPlan(raw, context(), 100);
-    expect(limited.maxChunkChars).toBe(100);
-    expect(limited.chunks.map((chunk) => chunk.blocks.map((block) => block.text))).toEqual([
-      paragraphs.slice(0, 2),
-      [paragraphs[2]],
-      [paragraphs[3]],
-    ]);
-    expect(validateTranslationPlan(raw, context(), limited)).toEqual(limited);
-    const unlimited = createTranslationPlan(raw, context(), null);
-    expect(unlimited.maxChunkChars).toBeNull();
-    expect(unlimited.chunks).toHaveLength(1);
-    expect(unlimited.chunks[0].blocks.map((block) => block.text)).toEqual(paragraphs);
-    expect(unlimited.blocks).toEqual(limited.blocks);
-    expect(validateTranslationPlan(raw, context(), unlimited)).toEqual(unlimited);
-    expect(createTranslationPlan(raw, context()).maxChunkChars).toBe(3000);
-  });
-
-  test('oversized paragraphs and fenced blocks remain intact even beyond the largest numeric target', () => {
-    const paragraphs = [
-      '가'.repeat(25000),
-      `\`\`\`text\n${'나'.repeat(25000)}\n\n${'다'.repeat(100)}\n\`\`\``,
-      '끝',
-    ];
-    const raw = source(paragraphs.join('\r\n\r\n'));
-    const limited = createTranslationPlan(raw, context(), 24000);
-    expect(limited.blocks.map((block) => block.text)).toEqual(paragraphs);
-    expect(limited.chunks.map((chunk) => chunk.anchors)).toEqual(
-      limited.blocks.map((block) => [block.anchor])
-    );
-    expect(validateTranslationPlan(raw, context(), limited)).toEqual(limited);
-    const unlimited = createTranslationPlan(raw, context(), null);
-    expect(unlimited.chunks).toHaveLength(1);
-    expect(unlimited.chunks[0].anchors).toEqual(limited.blocks.map((block) => block.anchor));
-    expect(unlimited.chunks[0].protectedSpans[0].literal).toBe(paragraphs[1]);
-    expect(validateTranslationPlan(raw, context(), unlimited)).toEqual(unlimited);
-  });
-
-  test('persisted plans reject invalid targets and grouping that disagrees with their frozen target', () => {
-    const raw = source(['가'.repeat(80), '나'.repeat(80)].join('\n\n'));
-    const plan = createTranslationPlan(raw, context(), 100);
-    for (const maxChunkChars of [99, 24001, 100.5, NaN, Infinity, '100', false, undefined]) {
-      if (maxChunkChars !== undefined)
-        expect(() => createTranslationPlan(raw, context(), maxChunkChars as number)).toThrow(
-          'INVALID_CHUNK_LIMIT'
-        );
-      expect(() => validateTranslationPlan(raw, context(), { ...plan, maxChunkChars })).toThrow(
-        'SOURCE_TRANSLATION_PLAN_INVALID'
-      );
-    }
-    const { maxChunkChars: _limit, ...missingLimit } = plan;
-    expect(() => validateTranslationPlan(raw, context(), missingLimit)).toThrow(
-      'SOURCE_TRANSLATION_PLAN_INVALID'
-    );
-    expect(() => validateTranslationPlan(raw, context(), { ...plan, maxChunkChars: null })).toThrow(
-      'SOURCE_TRANSLATION_PLAN_INVALID'
-    );
-    expect(() => validateTranslationPlan(raw, context(), { ...plan, maxChunkChars: 200 })).toThrow(
-      'SOURCE_TRANSLATION_PLAN_INVALID'
-    );
-    const unlimited = createTranslationPlan(raw, context(), null);
-    expect(() =>
-      validateTranslationPlan(raw, context(), { ...unlimited, maxChunkChars: 100 })
-    ).toThrow('SOURCE_TRANSLATION_PLAN_INVALID');
-  });
-
   test('P07 freezes source-time identities and exposes legal unprefetched read results to translation only', async () => {
     const raw = source('Mira could not tell who stood beneath the green dome.');
     const capturedContext = context();
-    const plan = createTranslationPlan(raw, capturedContext);
     const run = snapshot();
+    const input = translationInput(raw, capturedContext, run);
     capturedContext.bot!.text = 'FUTURE_REVEAL';
     capturedContext.references[0].revision = 99;
-    const input = translationInput(plan, plan.chunks[0].id, run);
     expect(input.context.bot!.text).toBe('Mira has not learned who rang the bell.');
     expect(input.context.references[0].revision).toBe(5);
     expect(input.context.previousSources[0].revision).toBe('source-previous');
@@ -196,15 +108,7 @@ describe('M1 source-bound auxiliary roles', () => {
           action: { callId: 'read', name: 'knowledge.read', args: { id: search.items[0].id } },
         };
       }
-      return {
-        ...fixtureOutput(plan),
-        segments: [
-          {
-            anchors: [plan.blocks[0].anchor],
-            text: '미라는 초록 눈 아래에 누가 서 있는지 알 수 없었다.',
-          },
-        ],
-      };
+      return '미라는 초록 눈 아래에 누가 서 있는지 알 수 없었다.';
     });
     expect(result.modelCalls).toBe(3);
     expect(result.toolEvents.map((event) => event.name)).toEqual([
@@ -219,24 +123,22 @@ describe('M1 source-bound auxiliary roles', () => {
     expect(JSON.stringify(result)).not.toMatch(
       /CHANGED_AFTER_START|EXCLUDED_FUTURE_CANARY|FUTURE_REVEAL/
     );
-    const translated = validateTranslationChunk(plan, plan.chunks[0].id, result.output);
-    expect(translated.segments[0].text).toBe('미라는 초록 눈 아래에 누가 서 있는지 알 수 없었다.');
+    expect(result.output).toBe('미라는 초록 눈 아래에 누가 서 있는지 알 수 없었다.');
     expect(raw.text).toBe('Mira could not tell who stood beneath the green dome.');
     expect(createHash('sha256').update(raw.text).digest('hex')).toBe(raw.hash);
-    expect(() => translationInput(plan, plan.chunks[0].id, { ...run, chatId: 'chat-b' })).toThrow(
+    expect(() => translationInput(raw, context(), { ...run, chatId: 'chat-b' })).toThrow(
       'SOURCE_SCOPE_MISMATCH'
     );
   });
 
   test('P07 roles can finish directly and skill reads cannot expand permissions; cancellation and real loop budget apply', async () => {
     const raw = source('A quiet fictional evening.');
-    const plan = createTranslationPlan(raw, context());
     const run = snapshot();
-    const input = translationInput(plan, plan.chunks[0].id, run);
+    const input = translationInput(raw, context(), run);
     const direct = await executeAuxiliary(input, run, scriptedAuxiliary);
     expect(direct.modelCalls).toBe(1);
     expect(direct.toolEvents).toEqual([]);
-    expect(() => validateTranslationChunk(plan, plan.chunks[0].id, direct.output)).not.toThrow();
+    expect(direct.output).toBe(raw.text);
     const observed: string[] = [];
     await expect(
       executeAuxiliary(
@@ -289,158 +191,70 @@ describe('M1 source-bound auxiliary roles', () => {
     ).rejects.toMatchObject({ name: 'AbortError', message: 'Auxiliary cancelled' });
   });
 
-  test('P08 stable paragraph anchors preserve offsets, fenced code and protected syntax without mutating source', () => {
-    const raw = source(
-      'Mira kept asset:harbor-evening and TASK_READY at 12.5%.\r\n\r\n```json\n{"state":"ready","coins":7}\n\n```\r\n\r\nShe read `move(42)` beside the pier.'
-    );
-    const plan = createTranslationPlan(raw, context(), 100);
-    const before = JSON.stringify(raw);
-    expect(plan.blocks).toHaveLength(3);
-    expect(plan.chunks).toHaveLength(2);
-    for (const block of plan.blocks)
-      expect(raw.text.slice(block.start, block.end)).toBe(block.text);
-    expect(plan.blocks[1].text).toBe('```json\n{"state":"ready","coins":7}\n\n```');
-    expect(splitSource(raw)).toEqual(plan.blocks);
-    expect(splitSource({ ...raw, id: 'new-revision' }).map((block) => block.anchor)).not.toEqual(
-      plan.blocks.map((block) => block.anchor)
-    );
-    const literals = plan.chunks.flatMap((chunk) =>
-      chunk.protectedSpans.map((span) => span.literal)
-    );
-    expect(literals).toEqual([
-      'asset:harbor-evening',
-      'TASK_READY',
-      '12.5%',
-      '```json\n{"state":"ready","coins":7}\n\n```',
-      '`move(42)`',
-    ]);
-    for (const chunk of plan.chunks) {
-      const output = fixtureOutput(plan, chunk.id);
-      const result = validateTranslationChunk(plan, chunk.id, output);
-      for (const span of chunk.protectedSpans)
-        expect(result.segments.map((segment) => segment.text).join('\n')).toContain(span.literal);
-      expect(result.segments.some((segment) => segment.text.includes('[[p_'))).toBe(false);
-    }
-    expect(JSON.stringify(raw)).toBe(before);
-    expect(() => splitSource({ ...raw, hash: 'invalid' })).toThrow('SOURCE_IDENTITY_INVALID');
-    expect(validateTranslationPlan(raw, context(), plan)).toEqual(plan);
-    const changedPayload = structuredClone(plan);
-    changedPayload.chunks[0].blocks[0].text = 'Wrong source attached to the genuine source hash.';
-    expect(() => validateTranslationPlan(raw, context(), changedPayload)).toThrow(
-      'SOURCE_TRANSLATION_PLAN_INVALID'
-    );
-    const changedLiteral = structuredClone(plan);
-    changedLiteral.chunks[0].protectedSpans[0].literal = 'asset:other';
-    expect(() => validateTranslationPlan(raw, context(), changedLiteral)).toThrow(
-      'SOURCE_TRANSLATION_PLAN_INVALID'
-    );
-    const changedTime = structuredClone(plan);
-    changedTime.context.references[0].revision = 999;
-    expect(() => validateTranslationPlan(raw, context(), changedTime)).toThrow(
-      'SOURCE_TRANSLATION_PLAN_INVALID'
-    );
-  });
-
-  test('P08 validates returned block coverage, order, duplicates and protected spans; merged paragraphs remain legal', () => {
-    const raw = source(
-      'Mira carried 12 coins.\n\nShe read `north_gate` aloud.\n\nThe label was {"state":"ready","coins":7}.'
-    );
-    const plan = createTranslationPlan(raw, context());
-    const chunk = plan.chunks[0];
-    const output = fixtureOutput(plan);
-    const merged = {
-      ...output,
-      segments: [
-        { anchors: [...chunk.anchors], text: chunk.blocks.map((block) => block.text).join('\n') },
-      ],
-    };
-    const result = validateTranslationChunk(plan, chunk.id, JSON.stringify(merged));
-    expect(result.segments).toHaveLength(1);
-    expect(result.segments[0].anchors).toHaveLength(3);
-    const omitted = structuredClone(output);
-    omitted.segments.pop();
-    expect(() => validateTranslationChunk(plan, chunk.id, omitted)).toThrow(
-      'CHUNK_COVERAGE_INVALID'
-    );
-    const reordered = structuredClone(output);
-    reordered.segments.reverse();
-    expect(() => validateTranslationChunk(plan, chunk.id, reordered)).toThrow(
-      'CHUNK_COVERAGE_INVALID'
-    );
-    const duplicate = structuredClone(output);
-    duplicate.segments[1].anchors = [...duplicate.segments[0].anchors];
-    expect(() => validateTranslationChunk(plan, chunk.id, duplicate)).toThrow(
-      'CHUNK_COVERAGE_INVALID'
-    );
-    const missingSpan = structuredClone(output);
-    missingSpan.segments[0].text = '미라는 동전을 가지고 있었다.';
-    expect(() => validateTranslationChunk(plan, chunk.id, missingSpan)).toThrow(
-      'PROTECTED_SPAN_INVALID'
-    );
-    const repeatedSpan = structuredClone(output);
-    repeatedSpan.segments[0].text += chunk.protectedSpans[0].token;
-    expect(() => validateTranslationChunk(plan, chunk.id, repeatedSpan)).toThrow(
-      'PROTECTED_SPAN_INVALID'
-    );
-    const addedNumber = structuredClone(output);
-    addedNumber.segments[0].text += ' 999';
-    expect(() => validateTranslationChunk(plan, chunk.id, addedNumber)).toThrow(
-      'UNPROTECTED_SYNTAX_RETURNED'
-    );
-    expect(() =>
-      validateTranslationChunk(plan, chunk.id, { ...output, sourceHash: 'future-hash' })
-    ).toThrow('SOURCE_DEPENDENCY_MISMATCH');
-    expect(() => validateTranslationChunk(plan, chunk.id, { ...output, html: '<img>' })).toThrow(
-      'OUTPUT_SCHEMA_INVALID'
-    );
-  });
-
-  test('P08 partial completion retains successful siblings and selects only missing chunk IDs for retry', () => {
-    const raw = source(
-      [
-        'A quiet traveler watched the waves softly wash against the pier at sunset.',
-        'The bellkeeper waited beside the lamps while the sea slowly darkened again.',
-        'The traveler left the next decision open and listened for the distant bell.',
-      ].join('\n\n')
-    );
-    const plan = createTranslationPlan(raw, context(), 100);
-    expect(plan.chunks).toHaveLength(3);
-    const first = validateTranslationChunk(
-      plan,
-      plan.chunks[0].id,
-      fixtureOutput(plan, plan.chunks[0].id)
-    );
-    const last = validateTranslationChunk(
-      plan,
-      plan.chunks[2].id,
-      fixtureOutput(plan, plan.chunks[2].id)
-    );
-    expect(aggregateTranslation(plan, [])).toMatchObject({
-      status: 'incomplete',
-      completedChunks: 0,
-      totalChunks: 3,
+  test('a recoverable scoped read error is returned for correction without losing the original', async () => {
+    const raw = source('A source with a name.');
+    const input = translationInput(raw, context(), snapshot());
+    const result = await executeAuxiliary(input, snapshot(), async (packet) => {
+      if (!packet.results.length)
+        return {
+          kind: 'tool',
+          action: { callId: 'missing', name: 'knowledge.read', args: { id: 'not-found' } },
+        };
+      if (packet.results.length === 1) {
+        expect(packet.results[0]).toMatchObject({ denied: true, errorKind: 'recoverable' });
+        return {
+          kind: 'tool',
+          action: { callId: 'corrected', name: 'knowledge.read', args: { id: 'chat-a:glossary' } },
+        };
+      }
+      return '이름이 있는 원문.';
     });
-    const partial = aggregateTranslation(plan, [last, first]);
-    expect(partial.status).toBe('partial');
-    expect(partial.retryChunkIds).toEqual([plan.chunks[1].id]);
-    expect(partial.segments.flatMap((segment) => segment.anchors)).toEqual([
-      plan.blocks[0].anchor,
-      plan.blocks[2].anchor,
-    ]);
-    const retried = validateTranslationChunk(
-      plan,
-      partial.retryChunkIds[0],
-      fixtureOutput(plan, partial.retryChunkIds[0])
+    expect(result.modelCalls).toBe(3);
+    expect(result.toolEvents[1].denied).toBe(false);
+    expect(result.output).toBe('이름이 있는 원문.');
+    expect(input.sourceText).toBe(raw.text);
+  });
+  test('repeating an identical recoverable read is bounded before a third provider call', async () => {
+    let calls = 0;
+    await expect(
+      executeAuxiliary(
+        translationInput(source('A source.'), context(), snapshot()),
+        snapshot(),
+        async () => ({
+          kind: 'tool',
+          action: {
+            callId: `missing-${++calls}`,
+            name: 'knowledge.read',
+            args: { id: 'not-found' },
+          },
+        })
+      )
+    ).rejects.toThrow('TOOL_CORRECTION_EXHAUSTED');
+    expect(calls).toBe(2);
+  });
+
+  test('whole-source translation preserves long prose, natural numbers and exact source identity without tokens', async () => {
+    const raw = source('She screamed NO! One apple, 3 guards.\n\n' + '가'.repeat(60000));
+    const input = translationInput(raw, context(), snapshot());
+    expect(input.sourceText).toBe(raw.text);
+    expect(input.blocks).toEqual([]);
+    expect(input).not.toHaveProperty('chunkId');
+    expect(JSON.stringify(input)).not.toContain('[[p_');
+    const translated = '그녀는 안 돼! 하고 소리쳤다. 사과 1개, 경비병 세 명. ' + '나'.repeat(60000);
+    expect((await executeAuxiliary(input, snapshot(), async () => translated)).output).toBe(
+      translated
     );
-    const completed = aggregateTranslation(plan, [last, retried, first]);
-    expect(completed.status).toBe('completed');
-    expect(completed.retryChunkIds).toEqual([]);
-    expect(completed.segments.flatMap((segment) => segment.anchors)).toEqual(
-      plan.blocks.map((block) => block.anchor)
+    expect(() => translationInput({ ...raw, hash: 'wrong' }, context(), snapshot())).toThrow(
+      'SOURCE_IDENTITY_INVALID'
     );
-    expect(completed.segments[0]).toEqual(first.segments[0]);
-    expect(completed.segments[2]).toEqual(last.segments[0]);
-    expect(() => aggregateTranslation(plan, [first, first])).toThrow('DUPLICATE_CHUNK_RESULT');
+  });
+
+  test('reader and image paragraph anchors retain exact fenced code offsets', () => {
+    const raw = source('First.\r\n\r\n```json\n{"count":3}\n\n```\r\n\r\nLast.');
+    const blocks = splitSource(raw);
+    expect(blocks).toHaveLength(3);
+    for (const block of blocks) expect(raw.text.slice(block.start, block.end)).toBe(block.text);
+    expect(blocks[1].text).toContain('\n\n```');
   });
 
   test('presentation without supplied assets cannot select the synthetic fixture catalog', async () => {

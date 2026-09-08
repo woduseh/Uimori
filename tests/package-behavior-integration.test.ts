@@ -1,3 +1,4 @@
+import { promptWorkspace, updatePromptWorkspace } from '../server/prompt-workspace.js';
 import { createFixtureChat, injectWithFixtureBot } from './fixtures/chat.js';
 import { afterEach, expect, test } from 'vitest';
 import Fastify, { type FastifyInstance } from 'fastify';
@@ -126,7 +127,10 @@ function fixture() {
     personaReference: profile.personaReference,
     routes: profile.routes,
     image: profile.image,
-    prompts: { main: { id: prompt.id, revision: prompt.revision } },
+  });
+  updatePromptWorkspace(store, {
+    expectedRevision: promptWorkspace(store).revision,
+    main: { title: prompt.title, program: prompt.program, values: prompt.values ?? {} },
   });
   const instanceId = packageInstanceId({ id: content.id, revision: content.revision, role: 'bot' });
   const scope: BehaviorScope = {

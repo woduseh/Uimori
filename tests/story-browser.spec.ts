@@ -1,3 +1,4 @@
+import { visualReview } from './fixtures/visual-review.js';
 import { selectChatSettingsSection } from './ui-navigation.js';
 import { postFixtureChat } from './fixtures/chat.js';
 import { test, expect, type Page, type APIRequestContext, type Locator } from '@playwright/test';
@@ -133,10 +134,11 @@ test('S01 S02 state settings use synthetic rules, preserve readable original whi
     ).toContainText('상태 정리 대기');
     await expect(article.getByTestId('source-text')).toContainText('SYNTHETIC_FIRST');
     await page.getByTestId('pending-run').scrollIntoViewIfNeeded();
-    await page.screenshot({
-      path: testInfo.outputPath('S02-mobile-waiting-original.png'),
-      fullPage: true,
-    });
+    if (visualReview)
+      await page.screenshot({
+        path: testInfo.outputPath('S02-mobile-waiting-original.png'),
+        fullPage: true,
+      });
     await control(request, 'release', { barrier: 'state' });
     await complete(request, chat.id, second.id);
     const accepted = (await detail(request, chat.id)).runs.find((run) => run.id === second.id)!;
@@ -167,10 +169,11 @@ test('S01 S02 state settings use synthetic rules, preserve readable original whi
     }
     await page.setViewportSize({ width: 1440, height: 1000 });
     await panel(page);
-    await page.screenshot({
-      path: testInfo.outputPath('S01-desktop-state-settings.png'),
-      fullPage: true,
-    });
+    if (visualReview)
+      await page.screenshot({
+        path: testInfo.outputPath('S01-desktop-state-settings.png'),
+        fullPage: true,
+      });
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
       true
     );
@@ -213,10 +216,11 @@ test('S04 explicit author declaration and retcon remain distinct memory after re
   expect(
     (await story(request, chat.id)).memory.find((entry) => entry.text === '항구의 종은 초록색이다.')
   ).toMatchObject({ kind: 'author-canon', declaration: { author: '합성 작가' } });
-  await page.screenshot({
-    path: testInfo.outputPath('S04-mobile-author-memory.png'),
-    fullPage: true,
-  });
+  if (visualReview)
+    await page.screenshot({
+      path: testInfo.outputPath('S04-mobile-author-memory.png'),
+      fullPage: true,
+    });
 });
 
 test('S06 scene commands distinguish successful original, failed original and cancelled reservation', async ({
@@ -270,10 +274,11 @@ test('S06 scene commands distinguish successful original, failed original and ca
     .toBe('cancelled');
   await expect(cancelled).toContainText('취소됨');
   await page.setViewportSize({ width: 1440, height: 1000 });
-  await page.screenshot({
-    path: testInfo.outputPath('S05-desktop-command-outcomes.png'),
-    fullPage: true,
-  });
+  if (visualReview)
+    await page.screenshot({
+      path: testInfo.outputPath('S05-desktop-command-outcomes.png'),
+      fullPage: true,
+    });
 });
 
 test('S06 S07 text presentation keeps malicious HTML inert and asset catalog transfers metadata without preloading bytes', async ({
@@ -383,9 +388,10 @@ test('S06 S07 text presentation keeps malicious HTML inert and asset catalog tra
     contentType: 'application/json',
   });
   expect(uploadedLoads).toEqual([]);
-  await page.screenshot({
-    path: testInfo.outputPath('S06-mobile-inert-text-preview.png'),
-    fullPage: true,
-  });
+  if (visualReview)
+    await page.screenshot({
+      path: testInfo.outputPath('S06-mobile-inert-text-preview.png'),
+      fullPage: true,
+    });
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
 });

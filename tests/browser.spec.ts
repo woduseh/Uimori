@@ -1,3 +1,4 @@
+import { visualReview } from './fixtures/visual-review.js';
 import { selectChatSettingsSection } from './ui-navigation.js';
 import { postFixtureChat } from './fixtures/chat.js';
 import { test, expect, type Page, type APIRequestContext, type Request } from '@playwright/test';
@@ -243,7 +244,8 @@ test('F02 F03 F05 two contexts and two tabs keep commands, snapshots, source job
     expect(
       await returned.evaluate(() => document.documentElement.scrollWidth <= innerWidth)
     ).toBeTruthy();
-    await returned.screenshot({ path: testInfo.outputPath('mobile-source.png'), fullPage: true });
+    if (visualReview)
+      await returned.screenshot({ path: testInfo.outputPath('mobile-source.png'), fullPage: true });
     // Independent file connection, not a mocked API, verifies storage and logical uniqueness.
     const db = new DatabaseSync(process.env.NR_DB!, { readOnly: true });
     try {
@@ -306,7 +308,7 @@ test('F05 failed auxiliary result retries independently while a later source is 
   await send(page, 'SYNTHETIC_SECOND: The letter remains sealed.');
   await expect(page.getByTestId('source')).toHaveCount(2);
   await sourceDetails(page);
-  page.once('dialog', (dialog) => dialog.accept());
+  await control(request, 'hold', { barrier: 'translation' });
   await page
     .getByTestId('source')
     .getByTestId('job-translation')
@@ -314,15 +316,34 @@ test('F05 failed auxiliary result retries independently while a later source is 
     .getByRole('button', { name: '현재 설정으로 번역 재시도' })
     .click();
   await expect
-    .poll(
-      async () => (await detail(request, chat.id)).jobs.find((j) => j.id === failedJob.id)?.status
+    .poll(async () =>
+      (await detail(request, chat.id)).jobs.some(
+        (job) =>
+          job.kind === 'translation' && job.sourceRevision === source.id && job.id !== failedJob.id
+      )
     )
-    .toBe('completed');
+    .toBe(true);
+  const retriedJob = (await detail(request, chat.id)).jobs.find(
+    (job) => job.kind === 'translation' && job.sourceRevision === source.id
+  )!;
+  expect(retriedJob.id).not.toBe(failedJob.id);
+  expect(retriedJob.revision).toBe(failedJob.revision! + 1);
+  // Concurrent retry deliveries join the active new job for the original source.
   const repeated = await Promise.all([
     request.post(`/api/jobs/${failedJob.id}/retry`, { data: {} }),
     request.post(`/api/jobs/${failedJob.id}/retry`, { data: {} }),
   ]);
-  for (const response of repeated) expect(response.ok()).toBeTruthy();
+  for (const response of repeated) {
+    expect(response.ok()).toBeTruthy();
+    expect((await response.json()).id).toBe(retriedJob.id);
+  }
+  await control(request, 'release', { barrier: 'translation' });
+  await expect
+    .poll(
+      async () =>
+        (await detail(request, chat.id)).jobs.find((job) => job.id === retriedJob.id)?.status
+    )
+    .toBe('completed');
   const after = await detail(request, chat.id);
   expect(after.runs).toHaveLength(2);
   expect(after.sources.find((s) => s.id === source.id)).toEqual({
@@ -331,7 +352,15 @@ test('F05 failed auxiliary result retries independently while a later source is 
   });
   const later = after.sources.find((s) => s.id !== source.id)!;
   expect(later.parentRevision).toBe(source.id);
-  expect(after.jobs.find((j) => j.id === failedJob.id)?.sourceRevision).toBe(source.id);
+  expect(after.jobs.find((j) => j.id === retriedJob.id)?.sourceRevision).toBe(source.id);
+  const db = new DatabaseSync(process.env.NR_DB!, { readOnly: true });
+  try {
+    expect(db.prepare('SELECT status FROM jobs WHERE id=?').get(failedJob.id)?.status).toBe(
+      'failed'
+    );
+  } finally {
+    db.close();
+  }
   expect(after.jobs.filter((j) => j.sourceRevision === source.id)).toHaveLength(2);
   expect(after.runs.find((r) => r.sourceRevision === later.id)?.inputs[0].history).toEqual([
     { revision: source.id, text: source.text },

@@ -4,11 +4,7 @@ import { createDefaultPromptProgram } from '../core/prompt-defaults.js';
 import { defaultProfile, type ProviderProtocol } from '../core/product.js';
 import { modelCapability } from '../core/model-capabilities.js';
 import { DEFAULT_MAIN_PROMPT, DEFAULT_TRANSLATION_PROMPT } from '../core/prompts.js';
-import {
-  compileTranslationPrompt,
-  createTranslationPlan,
-  translationInput,
-} from '../core/auxiliary.js';
+import { compileTranslationPrompt, translationInput } from '../core/auxiliary.js';
 import { sourceTimeContext } from '../server/product-auxiliary.js';
 import { buildMainProviderRequest, encodeMainPreview } from '../server/main-request.js';
 import { encodeVertex } from '../core/vertex-protocol.js';
@@ -122,8 +118,7 @@ describe('single prompt program defaults at real native encoder boundaries', () 
           hash: createHash('sha256').update('Quiet harbor.').digest('hex'),
         };
       seed.history = [{ revision: 'main-history', text: 'MAIN HISTORY MUST NOT LEAK' }];
-      const plan = createTranslationPlan(source, sourceTimeContext(seed, 'translation')),
-        input = translationInput(plan, plan.chunks[0].id, seed);
+      const input = translationInput(source, sourceTimeContext(seed, 'translation'), seed);
       const compilation = compileTranslationPrompt(input, seed, 'Translate this chunk.')!;
       const request: ProviderRequest = {
         role: 'translation',
@@ -142,8 +137,7 @@ describe('single prompt program defaults at real native encoder boundaries', () 
           source: {
             sourceRevision: source.id,
             sourceHash: source.hash,
-            chunkId: input.chunkId!,
-            blocks: input.blocks,
+            text: input.sourceText!,
             outputSchema: JSON.parse(JSON.stringify(input.outputSchema)),
           },
           results: [],
@@ -161,7 +155,7 @@ describe('single prompt program defaults at real native encoder boundaries', () 
       expect(compilation.messages.filter((m) => m.provenance.origin === 'history')).toHaveLength(0);
       expect(compilation.messages.filter((m) => m.provenance.origin === 'current')).toHaveLength(1);
       expect(JSON.stringify(body)).toContain(source.hash);
-      expect(JSON.stringify(body)).toContain('outputSchema');
+      expect(compilation.messages.some((message) => message.id === 'outputSchema')).toBe(false);
       if (protocol === 'vertex-gemini-v1') {
         const mapped = planNativeMessages(request, protocol)!;
         expect(mapped.messages).toHaveLength(1);

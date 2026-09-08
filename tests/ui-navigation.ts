@@ -177,10 +177,18 @@ export async function createPromptChoice(request: APIRequestContext, title: stri
   });
   expect(saved.ok()).toBeTruthy();
   const prompt = (await saved.json()) as PromptPreset;
+  const workspace = await (await request.get('/api/prompt-workspace')).json();
+  expect(
+    (
+      await request.post('/api/prompt-workspace/apply', {
+        data: { expectedRevision: workspace.revision, role: 'main', presetId: prompt.id },
+      })
+    ).ok()
+  ).toBeTruthy();
   const response = await request.post('/api/prompt-combinations', {
     data: {
       title: `${title} choices`,
-      prompt: { id: prompt.id, revision: prompt.revision },
+      role: 'main',
       values: { detail: 3, coNarration: true },
     },
   });
@@ -193,12 +201,20 @@ export async function selectStartPrompt(
   choice: Awaited<ReturnType<typeof createPromptChoice>>
 ) {
   await openNewStoryOptions(page);
-  await page
-    .getByLabel('시작 프롬프트', { exact: true })
-    .selectOption(`${choice.prompt.id}@${choice.prompt.revision}`);
-  await page
-    .getByLabel('시작 옵션 조합', { exact: true })
-    .selectOption(`${choice.combination.id}@${choice.combination.revision}`);
+  await expect(page.getByLabel('시작 프롬프트', { exact: true })).toHaveCount(0);
+  await expect(page.getByLabel('시작 옵션 조합', { exact: true })).toHaveCount(0);
+  const workspace = await (await page.request.get('/api/prompt-workspace')).json();
+  expect(
+    (
+      await page.request.post('/api/prompt-workspace/apply-options', {
+        data: {
+          expectedRevision: workspace.revision,
+          role: 'main',
+          combinationId: choice.combination.id,
+        },
+      })
+    ).ok()
+  ).toBeTruthy();
 }
 
 export async function openNewStoryOptions(page: Page) {

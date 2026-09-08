@@ -1,19 +1,10 @@
 import { HttpError, fields, record, text } from './request-validation.js';
 import { createHash, randomUUID } from 'node:crypto';
 import { forkImageInput } from './package-images.js';
-import { isDeepStrictEqual } from 'node:util';
-import {
-  splitSource,
-  createTranslationPlan,
-  validateTranslationPlan,
-  aggregateTranslation,
-  type TranslationPlan,
-  type TranslationResult,
-} from '../core/auxiliary.js';
+import { splitSource } from '../core/auxiliary.js';
 import type { Resource, RunSnapshot } from '../core/types.js';
 import type { Store, Chat, Source } from './store.js';
-import { latestTranslation, validateTranslationArtifact } from './source-editing.js';
-import { sourceTimeContext } from './product-auxiliary.js';
+import { successfulTranslation, validateTranslationArtifact } from './source-editing.js';
 import { mapForkSnapshot } from './snapshot-archive.js';
 import { contextDependencyKey, measureMainContext } from './context-planning.js';
 import { compileSnapshotPrompt } from './prompt-snapshot.js';
@@ -240,7 +231,7 @@ export function forkChat(store: Store, chatId: string, value: unknown): Chat {
         if (job.chat_id !== chatId) throw new HttpError(400, 'Invalid completed fork job');
         if (job.source_hash !== original.hash) continue;
         if (job.kind === 'translation') {
-          if (latestTranslation(store, original.id)?.id !== job.id) continue;
+          if (successfulTranslation(store, original)?.id !== job.id) continue;
           validateTranslationArtifact(store, store.job(job.id), original);
         }
         const jobId = randomUUID();
@@ -252,11 +243,11 @@ export function forkChat(store: Store, chatId: string, value: unknown): Chat {
               ? structuredClone(
                   Object.fromEntries(
                     [
-                      'promptSelection',
-                      'promptControlSelection',
+                      'translationPrompt',
+                      'promptWorkspaceRevision',
+                      'translationPolicy',
                       'translationModelSelection',
                       'translationModelSnapshot',
-                      'translationChunkChars',
                       'statusModelSelection',
                       'statusModelSnapshot',
                     ]
@@ -265,44 +256,12 @@ export function forkChat(store: Store, chatId: string, value: unknown): Chat {
                   )
                 )
               : null;
-        const resolved = store.product.resolveJobPrompt(snapshot, input);
         const result = artifact(parse(job.result));
         if (result.sourceRevision !== sourceId || result.sourceHash !== original.hash)
           throw new HttpError(400, 'Invalid completed fork result');
-        let plan: TranslationPlan | null = null;
-        const chunks = store.product.chunks(job.id);
-        if (job.plan !== null) {
-          const oldSnapshot = store.product.resolveJobPrompt(run.snapshot, input);
-          validateTranslationPlan(
-            original,
-            sourceTimeContext(oldSnapshot, 'translation'),
-            parse(job.plan)
-          );
-          const mapped = artifact(parse(job.plan));
-          mapped.context = createTranslationPlan(
-            copiedSource,
-            sourceTimeContext(resolved, 'translation'),
-            24000
-          ).context;
-          plan = validateTranslationPlan(copiedSource, mapped.context, mapped);
-          if (
-            chunks.length !== plan.chunks.length ||
-            chunks.some((chunk) => chunk.status !== 'completed' || !chunk.result)
-          )
-            throw new HttpError(400, 'Incomplete fork translation');
-          const combined = aggregateTranslation(
-            plan,
-            chunks.map((chunk) => artifact(chunk.result) as TranslationResult)
-          );
-          if (
-            combined.status !== 'completed' ||
-            !isDeepStrictEqual(combined.segments, result.segments)
-          )
-            throw new HttpError(400, 'Invalid fork translation coverage');
-        } else if (chunks.length) throw new HttpError(400, 'Fork translation plan missing');
         store.db
           .prepare(
-            "INSERT INTO jobs(id,chat_id,source_revision,source_hash,kind,status,generation,owner,input,error,created_at,updated_at,revision,plan,retry_chunk) VALUES(?,?,?,?,?,'completed',?,NULL,?,NULL,?,?,?,?,NULL)"
+            "INSERT INTO jobs(id,chat_id,source_revision,source_hash,kind,status,generation,owner,input,error,created_at,updated_at,revision) VALUES(?,?,?,?,?,'completed',?,NULL,?,NULL,?,?,?)"
           )
           .run(
             jobId,
@@ -314,18 +273,11 @@ export function forkChat(store: Store, chatId: string, value: unknown): Chat {
             json(input),
             job.created_at,
             job.updated_at,
-            job.revision,
-            plan === null ? null : json(plan)
+            job.revision
           );
         store.db
           .prepare('INSERT INTO job_results VALUES(?,?,?,?)')
           .run(jobId, job.generation, json(result), job.result_created_at);
-        for (const chunk of chunks)
-          store.db
-            .prepare(
-              "INSERT INTO job_chunks(job_id,id,status,attempt,input,result,error) VALUES(?,?,'completed',?,NULL,?,NULL)"
-            )
-            .run(jobId, chunk.id, chunk.attempt, json(artifact(chunk.result)));
       }
     }
     const head = sourceIds.get(fromRevision)!;

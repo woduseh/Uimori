@@ -79,9 +79,6 @@ test('image evaluation artifact passes source and asset validation without treat
     const bridge: AuxiliaryStoreBridge = {
       load: () => structuredClone(bundle),
       claim: () => 1,
-      beginChunk: () => {},
-      completeChunk: () => {},
-      failChunk: () => {},
       finish: (_id, generation, owner, outcome) => {
         expect([generation, owner]).toEqual([1, 'worker']);
         saved = outcome;

@@ -7,7 +7,13 @@ import { createHash, randomUUID } from 'node:crypto';
 import type { ServerResponse } from 'node:http';
 import { createApp, type App } from '../server/app.js';
 import type { Chat, ChatDetail, Run, Source } from '../core/types.js';
-import type { ChatProfile, Connection, Content, ModelPreset } from '../core/product.js';
+import type {
+  ChatProfile,
+  Connection,
+  Content,
+  ModelPreset,
+  PromptWorkspace,
+} from '../core/product.js';
 import type { Json } from '../core/transport.js';
 import { defaultEvaluationToolOptions } from '../core/evaluation-tool-config.js';
 import { loopbackProvider, sse, writeSse } from './fixtures/loopback-provider.js';
@@ -81,7 +87,13 @@ async function fixture(
       const attempts = app.store.product.attempts(chat.id);
       expect(attempts).toHaveLength(provider.requests.length);
       expect(attempts.filter((attempt) => attempt.status === 'running')).toHaveLength(1);
-      await handler(JSON.parse(captured.body) as Body, response, provider.requests.length);
+      const body = JSON.parse(captured.body) as Body;
+      if (packet(body).controls?.purpose === 'translation-refusal') {
+        expect(body.model).toBe('synthetic-refusal-classifier');
+        expect(body.tools ?? []).toEqual([]);
+        expect(packet(body).source.prefix.length).toBeLessThanOrEqual(1000);
+        await send(response, [message('{"verdict":"accepted"}')], true);
+      } else await handler(body, response, provider.requests.length);
     } catch (error) {
       failures.push(error);
       throw error;
@@ -137,6 +149,23 @@ async function fixture(
       maximumToolRounds: settings.maximumToolRounds ?? 8,
     },
   });
+  const classifier = await api<ModelPreset>(app, '/api/model-presets', {
+    title: 'Synthetic refusal classifier',
+    connectionId: connection.id,
+    modelId: 'synthetic-refusal-classifier',
+    maxOutputTokens: 256,
+    temperature: null,
+  });
+  const workspace = await api<PromptWorkspace>(app, '/api/prompt-workspace');
+  await api(
+    app,
+    '/api/prompt-workspace',
+    {
+      expectedRevision: workspace.revision,
+      translationPolicy: { refusalModel: { id: classifier.id }, maxRetries: 1, maxCalls: 16 },
+    },
+    'PUT'
+  );
   const prior = await api<ChatProfile>(app, `/api/chats/${chat.id}/profile`);
   const profile = await api<ChatProfile>(
     app,
@@ -242,24 +271,13 @@ async function settled(state: Awaited<ReturnType<typeof fixture>>, id: string): 
 }
 const artifact = (body: Body, text: string, id = 'artifact'): Json =>
   call(body, 'eval_submit_artifact', { content: text, userFacingNotice: marker }, id);
-const translated = (body: Body): string => {
-  const source = packet(body).source;
-  return JSON.stringify({
-    sourceRevision: source.sourceRevision,
-    sourceHash: source.sourceHash,
-    chunkId: source.chunkId,
-    segments: source.blocks.map((block: any) => ({
-      anchors: [block.anchor],
-      text: '합성 번역: ' + block.text,
-    })),
-  });
-};
+const translated = (body: Body): string => '합성 번역: ' + packet(body).source.text;
 
 test('preset evaluation mixes permitted reads and local tools; buffered Responses translation keeps source/hash and per-request attempts', async () => {
   const sourceText = 'The keeper watched the copper observatory.';
   const state = await fixture(async (body, target, number) => {
     const source = packet(body).source;
-    if (!source.chunkId) {
+    if (!source.sourceRevision) {
       if (number === 1)
         await send(target, [
           reasoning('main-reasoning'),
@@ -310,7 +328,7 @@ test('preset evaluation mixes permitted reads and local tools; buffered Response
     .toBe('completed');
   const after = await state.detail();
   expect(state.failures).toEqual([]);
-  expect(state.provider.requests).toHaveLength(4);
+  expect(state.provider.requests).toHaveLength(5);
   expect(after.sources.map(sourceContent)).toEqual(before.sources.map(sourceContent));
   expect(after.runs).toEqual(before.runs);
   expect(after.jobs[0]).toMatchObject({
@@ -318,7 +336,7 @@ test('preset evaluation mixes permitted reads and local tools; buffered Response
     sourceHash: source.hash,
     result: { sourceRevision: source.id, sourceHash: source.hash, mock: false },
   });
-  expect(after.attempts).toHaveLength(4);
+  expect(after.attempts).toHaveLength(5);
   expect(
     after.attempts!.every(
       (attempt) =>
@@ -331,7 +349,7 @@ test('preset evaluation mixes permitted reads and local tools; buffered Response
   expect(state.app.store.db.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
   expect((await state.start()).id).toBe(run.id);
   await api(state.app, `/api/sources/${source.id}/translation`, {});
-  expect(state.provider.requests).toHaveLength(4);
+  expect(state.provider.requests).toHaveLength(5);
 });
 
 test('current connection enabled flag and credential availability are rechecked between evaluation rounds', async () => {
@@ -463,7 +481,8 @@ test('source edit CAS fences an in-flight evaluated translation without mutating
   const received = deferred();
   const gate = deferred();
   const state = await fixture(async (body, target) => {
-    if (!packet(body).source.chunkId) await send(target, [message('Original fixture source.')]);
+    if (!packet(body).source.sourceRevision)
+      await send(target, [message('Original fixture source.')]);
     else {
       received.release();
       await gate.promise;

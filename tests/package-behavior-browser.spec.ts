@@ -1,3 +1,4 @@
+import { visualReview } from './fixtures/visual-review.js';
 import {
   editLibraryContent,
   navigationAction,
@@ -168,7 +169,7 @@ test('BUI01 typed actions preserve drafts after CAS conflicts, block duplicate w
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(
     true
   );
-  await page.screenshot({ path: info.outputPath('behavior-mobile.png') });
+  if (visualReview) await page.screenshot({ path: info.outputPath('behavior-mobile.png') });
   expect(errors).toEqual([]);
 });
 
@@ -262,7 +263,8 @@ test('BUI03 invocation methods persist, validate automatic input drafts and show
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(
     true
   );
-  await methods.screenshot({ path: info.outputPath('behavior-method-editor-mobile.png') });
+  if (visualReview)
+    await methods.screenshot({ path: info.outputPath('behavior-method-editor-mobile.png') });
   const addedResponse = page.waitForResponse(
     (response) => response.url().endsWith('/api/content') && response.request().method() === 'POST'
   );
@@ -304,7 +306,8 @@ test('BUI03 invocation methods persist, validate automatic input drafts and show
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(
     true
   );
-  await panel.screenshot({ path: info.outputPath('behavior-model-only-mobile.png') });
+  if (visualReview)
+    await panel.screenshot({ path: info.outputPath('behavior-model-only-mobile.png') });
   expect(errors).toEqual([]);
 });
 
@@ -381,6 +384,7 @@ test('BUI04 a pure dice action displays its stored result safely and reload does
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(
     true
   );
-  await panel.screenshot({ path: info.outputPath('behavior-action-result-mobile.png') });
+  if (visualReview)
+    await panel.screenshot({ path: info.outputPath('behavior-action-result-mobile.png') });
   expect(errors).toEqual([]);
 });

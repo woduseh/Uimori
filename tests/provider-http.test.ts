@@ -207,14 +207,14 @@ describe('native provider HTTP boundary with synthetic fetch', () => {
   );
 
   test.each(variants.slice(0, 2))(
-    '$protocol sends the selected generation options and translation schema together',
+    '$protocol sends the selected generation options with plain text translation',
     async (variant) => {
       const input = request(variant);
       input.role = 'translation';
       input.input.source = {
         sourceRevision: 'source-options',
         sourceHash: 'hash-options',
-        chunkId: 'chunk-options',
+        text: 'Full source text.',
       };
       input.generation =
         variant.protocol === 'openai-responses-v1'
@@ -241,14 +241,12 @@ describe('native provider HTTP boundary with synthetic fetch', () => {
         if (variant.protocol === 'openai-responses-v1') {
           expect(body.reasoning).toEqual({ effort: 'high', mode: 'pro', context: 'all_turns' });
           expect(body.text.verbosity).toBe('low');
-          expect(body.text.format.schema.properties.sourceHash.enum).toEqual(['hash-options']);
+          expect(body.text.format).toBeUndefined();
           expect(body.service_tier).toBe('flex');
           expect((wires[0].body as Record<string, Json>).reasoning).toEqual(body.reasoning);
         } else {
           expect(body.output_config.effort).toBe('max');
-          expect(body.output_config.format.schema.properties.sourceHash.enum).toEqual([
-            'hash-options',
-          ]);
+          expect(body.output_config.format).toBeUndefined();
           expect(body.thinking).toEqual({ type: 'adaptive' });
           expect(body.service_tier).toBe('standard_only');
           expect(body.stop_sequences).toEqual(['END_SCENE']);

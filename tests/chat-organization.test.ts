@@ -100,6 +100,8 @@ test('manual order survives moves, folder deletion, new chats, archive and reope
   const reopened = new Store(store.path);
   owner.store = reopened;
   expect(titles(reopened, bot.id, null)).toEqual(order);
+  expect(reopened.chats()).toEqual(target.chats());
+  expect((await readdir(owner.directory)).filter((name) => name.includes('.pre-'))).toEqual([]);
 });
 
 test('invalid and stale order anchors roll back every position and revision', async () => {
@@ -389,24 +391,4 @@ test('one package can own a chat and serve as a persona through explicit attachm
   expect(() =>
     store.organization.assertBotAttachments(chat.id, [], [{ ...ref(content), role: 'persona' }])
   ).toThrow('owning bot');
-});
-
-test('schema v11 reopen keeps explicit organization revisions without automatic preservation files', async () => {
-  const { store, bot } = await fixture();
-  const chat = store.createChat('Current schema', 'calm', { botId: bot.id });
-  const folder = store.organization.createFolder(bot.id, { title: 'Persisted' });
-  store.organization.move(chat.id, { expectedRevision: 1, folderId: folder.id });
-  const owner = owned.find((item) => item.store === store)!;
-  const path = store.path;
-  store.close();
-  owner.store = undefined;
-  const reopened = new Store(path);
-  owner.store = reopened;
-  expect(reopened.db.prepare('PRAGMA user_version').get()).toMatchObject({ user_version: 13 });
-  expect(reopened.chat(chat.id)).toMatchObject({
-    botId: bot.id,
-    folderId: folder.id,
-    organizationRevision: 2,
-  });
-  expect((await readdir(owner.directory)).filter((name) => name.includes('.pre-'))).toEqual([]);
 });

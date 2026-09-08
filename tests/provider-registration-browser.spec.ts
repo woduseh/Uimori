@@ -1,3 +1,4 @@
+import { visualReview } from './fixtures/visual-review.js';
 import { selectSettingsSection } from './ui-navigation.js';
 import { test, expect, type Page, type APIRequestContext } from '@playwright/test';
 import type { Connection, Library, ModelPreset } from '../core/product.js';
@@ -62,7 +63,8 @@ test('PMUI05 agent proposal is reviewed, survives reload, and applies once befor
   await expect(assistant).toContainText('synthetic-created-model');
   await expect(assistant).toContainText('실행 요청 1회');
   await apply.scrollIntoViewIfNeeded();
-  await page.screenshot({ path: info.outputPath('provider-registration-mobile-review.png') });
+  if (visualReview)
+    await page.screenshot({ path: info.outputPath('provider-registration-mobile-review.png') });
   const key = await page.evaluate(() =>
     sessionStorage.getItem('uimori.provider-registration.request-key')
   );
@@ -99,7 +101,8 @@ test('PMUI05 agent proposal is reviewed, survives reload, and applies once befor
   expect(stats.registrationCalls).toBe(1);
   await page.setViewportSize({ width: 1440, height: 1000 });
   await assistant.getByRole('region', { name: '모델 등록 제안' }).scrollIntoViewIfNeeded();
-  await page.screenshot({ path: info.outputPath('provider-registration-applied.png') });
+  if (visualReview)
+    await page.screenshot({ path: info.outputPath('provider-registration-applied.png') });
   expect(pageErrors).toEqual([]);
 });
 

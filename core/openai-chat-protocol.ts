@@ -21,7 +21,7 @@ function reject(code: string): never {
 /** OpenAI's Chat Completions shape. Compatible servers choose their own model/capabilities. */
 export function encodeChat(request: ProviderRequest): { body: Json; context: OpenAITurn } {
   const prepared = prepare(request, 'openai-chat-turn-v1');
-  const { generation, aliases, schema, previous, fresh, plan, bootstrap } = prepared;
+  const { generation, aliases, previous, fresh, plan, bootstrap } = prepared;
   const bootstrapMessages: Json[] = [];
   for (const item of bootstrap as Record<string, Json>[]) {
     bootstrapMessages.push(
@@ -106,14 +106,6 @@ export function encodeChat(request: ProviderRequest): { body: Json; context: Ope
                       },
               }
             : {}),
-        }
-      : {}),
-    ...(schema
-      ? {
-          response_format: {
-            type: 'json_schema',
-            json_schema: { name: 'translation_result', strict: true, schema },
-          },
         }
       : {}),
   };

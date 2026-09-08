@@ -52,7 +52,7 @@ export type Content = ContentRef & {
 };
 export type SavedPromptCombination = ContentRef & {
   title: string;
-  prompt: ContentRef;
+  role: PromptRole;
   values: Record<string, import('./prompt-program.js').PromptValue>;
 };
 export type PromptRole = 'main' | 'translation';
@@ -60,6 +60,23 @@ export type PromptPreset = ContentRef & {
   title: string;
   role: PromptRole;
   program: import('./prompt-program.js').PromptProgram;
+  values?: Record<string, import('./prompt-program.js').PromptValue>;
+};
+/** Editable, application-wide working copies. Applying a preset copies its content. */
+export type CurrentPrompt = {
+  title: string;
+  program: import('./prompt-program.js').PromptProgram;
+  values: Record<string, import('./prompt-program.js').PromptValue>;
+};
+export type PromptWorkspace = {
+  revision: number;
+  main: CurrentPrompt;
+  translation: CurrentPrompt;
+  translationPolicy: {
+    refusalModel: ModelRef | null;
+    maxRetries: number;
+    maxCalls: number;
+  };
 };
 export type TaskRole = 'main' | 'translation' | 'status' | 'image';
 export type Connection = ContentRef & {
@@ -102,12 +119,14 @@ export type ChatProfile = {
   personaReference?: boolean;
   routes: Record<TaskRole, ModelRef | null>;
   image: boolean;
-  prompts?: Partial<Record<PromptRole, ContentRef | null>>;
-  promptControls?: Record<string, import('./prompt-program.js').ChatPromptControls>;
   packageAttachments?: import('./content-package.js').PackageAttachment[];
   packageValues?: Record<string, Record<string, import('./prompt-program.js').PromptValue>>;
 };
 export type ProfileSnapshot = ChatProfile & {
+  /** Self-contained execution evidence; never a live library dependency. */
+  prompts?: Partial<Record<PromptRole, ContentRef | null>>;
+  promptControls?: Record<string, import('./prompt-program.js').ChatPromptControls>;
+  promptWorkspaceRevision?: number;
   /** Models resolved at reservation, keyed by the main prompt's advisor IDs. */
   collaborationModels?: Record<string, ModelSnapshot>;
   contents: Content[];

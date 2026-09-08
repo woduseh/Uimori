@@ -9,8 +9,7 @@ import { randomUUID } from 'node:crypto';
 import { createApp, type App } from '../server/app.js';
 import type { ChatProfile, PromptPreset, Connection, ModelPreset } from '../core/product.js';
 import type { RunSnapshot } from '../core/types.js';
-import { createTranslationPlan } from '../core/auxiliary.js';
-import { sourceTimeContext } from '../server/product-auxiliary.js';
+import { compileSnapshotPrompt } from '../server/prompt-snapshot.js';
 
 const owned: { directory: string; app?: App }[] = [];
 beforeEach(() => {
@@ -69,7 +68,6 @@ async function read<T = any>(app: App, path: string, status = 200): Promise<T> {
   expect(response.statusCode, response.body).toBe(status);
   return response.json() as T;
 }
-const reference = ({ id, revision }: { id: string; revision: number }) => ({ id, revision });
 const prompt = (role: 'main' | 'translation', text: string, title = 'Synthetic prompt') => ({
   title,
   role,
@@ -120,83 +118,18 @@ function complete(app: App, run: ReturnType<typeof capture>) {
   );
 }
 
-describe('literal user-editable main and translation prompt presets', () => {
-  test('current options carry valid values across schema edits without changing queued snapshots or reading writes', async () => {
-    const app = await application(),
-      product = app.store.product;
-    const chat = createFixtureChat(app.store, 'Synthetic current options');
-    const program = createDefaultPromptProgram('First prompt');
-    program.controls = [
-      { id: 'detail', label: 'Detail', type: 'number', default: 1, min: 0, max: 10 },
-      { id: 'tone', label: 'Tone', type: 'text', default: 'calm' },
-      { id: 'retired', label: 'Retired', type: 'boolean', default: false },
-    ];
-    const first = product.promptPreset({
-      title: 'Current option fixture',
-      role: 'main',
-      program,
-    }) as PromptPreset;
-    const values = { detail: 7, tone: 'dramatic', retired: true };
-    const combination = product.promptCombination({
-      title: 'Reusable',
-      prompt: reference(first),
-      values,
-    });
-    product.updateProfile(
-      chat.id,
-      profileBody(product.profile(chat.id), {
-        prompts: { main: reference(first) },
-        promptControls: {
-          [`${first.id}@1`]: { values, combinations: [{ id: 'local', title: 'Local', values }] },
-        },
-      })
-    );
-    const queued = capture(app, chat.id),
-      frozen = structuredClone(queued.snapshot);
-    const revisedProgram = createDefaultPromptProgram('New prompt');
-    revisedProgram.controls = [
-      program.controls[0],
-      { id: 'tone', label: 'Tone', type: 'boolean', default: false },
-      { id: 'added', label: 'Added', type: 'text', default: 'new default' },
-    ];
-    const second = product.promptPreset(
-      { title: first.title, role: 'main', program: revisedProgram, expectedRevision: 1 },
-      first.id
-    ) as PromptPreset;
-    const before = structuredClone(product.export().tables);
-    const current = product.profile(chat.id),
-      selected = current.promptControls![`${first.id}@2`];
-    expect(current.prompts?.main).toEqual(reference(second));
-    expect(selected.values).toEqual({ detail: 7, tone: false, added: 'new default' });
-    expect(selected.combinations[0].values).toEqual(selected.values);
-    expect(current.optionAdjustments?.join(' ')).toMatch(/tone/);
-    expect(current.optionAdjustments?.join(' ')).toMatch(/retired/);
-    expect(product.snapshot(chat.id)).not.toHaveProperty('optionAdjustments');
-    expect(product.snapshot(chat.id).promptPresets?.main).toEqual(second);
-    expect(product.export().tables).toEqual(before);
-    await request(
-      app,
-      `/prompt-presets/${first.id}`,
-      {
-        title: first.title,
-        role: 'translation',
-        program: revisedProgram,
-        expectedRevision: second.revision,
-      },
-      409,
-      'PUT'
-    );
-    expect(product.profile(chat.id)).toEqual(current);
-    expect(product.export().tables).toEqual(before);
-    expect(app.store.run(queued.id).snapshot).toEqual(frozen);
-    expect(product.get('prompt-combination', combination.id)).toEqual(combination);
-    await read(app, `/prompt-presets/${first.id}`);
-    const restored = await application();
-    restored.store.product.import(product.export());
-    expect(restored.store.run(queued.id).snapshot).toEqual(frozen);
-    expect(restored.store.product.profile(chat.id).promptControls).toEqual(current.promptControls);
-    expect(fetch).not.toHaveBeenCalled();
+async function workspace(app: App) {
+  return read<import('../core/product.js').PromptWorkspace>(app, '/prompt-workspace');
+}
+async function apply(app: App, preset: PromptPreset) {
+  return request<import('../core/product.js').PromptWorkspace>(app, '/prompt-workspace/apply', {
+    expectedRevision: (await workspace(app)).revision,
+    role: preset.role,
+    presetId: preset.id,
   });
+}
+
+describe('global working prompts and independent library copies', () => {
   test('rejects retired fixed creative controls and APIs while preserving explicit persona scope', async () => {
     const app = await application();
     const chat = createFixtureChat(app.store, 'Synthetic current profile');
@@ -319,379 +252,271 @@ describe('literal user-editable main and translation prompt presets', () => {
     expect(fetch).not.toHaveBeenCalled();
   });
 
-  test('preserves omitted prompt roles, distinguishes null from an empty preset, and rejects cross-role references', async () => {
+  test('one workspace supplies both chats; stale saves and obsolete chat prompt controls are rejected', async () => {
     const app = await application();
-    const chat = createFixtureChat(app.store, 'Synthetic prompt selections');
-    const product = app.store.product;
-    const main = await request<PromptPreset>(app, '/prompt-presets', prompt('main', 'Main prompt'));
-    const translation = await request<PromptPreset>(
+    const one = createFixtureChat(app.store, 'One'),
+      two = createFixtureChat(app.store, 'Two');
+    const initial = await workspace(app);
+    const changed = await request(
       app,
-      '/prompt-presets',
-      prompt('translation', '')
-    );
-    expect(product.profile(chat.id)).not.toHaveProperty('prompts');
-    let profile = await request<ChatProfile>(
-      app,
-      `/chats/${chat.id}/profile`,
-      profileBody(product.profile(chat.id), {
-        prompts: { main: reference(main), translation: reference(translation) },
-      }),
+      '/prompt-workspace',
+      {
+        expectedRevision: initial.revision,
+        main: {
+          title: 'Exact current',
+          program: createDefaultPromptProgram('  Current prose\n'),
+          values: {},
+        },
+      },
       200,
       'PUT'
     );
-    expect(product.snapshot(chat.id)?.promptPresets).toEqual({ main, translation });
-    profile = await request<ChatProfile>(
-      app,
-      `/chats/${chat.id}/profile`,
-      profileBody(profile, { image: true }),
-      200,
-      'PUT'
-    );
-    expect(profile.prompts).toEqual({ main: reference(main), translation: reference(translation) });
-    profile = await request<ChatProfile>(
-      app,
-      `/chats/${chat.id}/profile`,
-      profileBody(profile, { personaReference: false }),
-      200,
-      'PUT'
-    );
-    expect(profile.prompts?.translation).toEqual(reference(translation));
-    profile = await request<ChatProfile>(
-      app,
-      `/chats/${chat.id}/profile`,
-      profileBody(profile, { prompts: { main: null } }),
-      200,
-      'PUT'
-    );
-    expect(profile.prompts).toEqual({ main: null, translation: reference(translation) });
-    expect(product.snapshot(chat.id)?.promptPresets).toEqual({ translation });
-    profile = await request<ChatProfile>(
-      app,
-      `/chats/${chat.id}/profile`,
-      profileBody(profile, { prompts: {} }),
-      200,
-      'PUT'
-    );
-    expect(profile.prompts).toEqual({ main: null, translation: reference(translation) });
-    for (const prompts of [
-      { main: reference(translation) },
-      { translation: reference(main) },
-      { status: null },
-      { translation: false },
-      { translation: { id: translation.id, revision: 0 } },
-      null,
-    ])
+    expect(changed.translation).toEqual(initial.translation);
+    for (const chat of [one, two]) {
+      const snapshot = app.store.product.snapshot(chat.id);
+      expect(snapshot.promptPresets!.main).toMatchObject({
+        id: 'current-main',
+        revision: changed.revision,
+        program: changed.main.program,
+      });
+      expect(snapshot.promptPresets!.translation!.id).toBe('current-translation');
+      expect(app.store.product.profile(chat.id)).not.toHaveProperty('prompts');
       await request(
         app,
         `/chats/${chat.id}/profile`,
-        profileBody(profile, { prompts }),
+        profileBody(app.store.product.profile(chat.id), { prompts: { main: null } }),
         400,
         'PUT'
       );
+    }
     await request(
       app,
-      `/chats/${chat.id}/profile`,
-      profileBody(profile, { prompts: { main: { id: 'missing', revision: 1 } } }),
-      404,
+      '/prompt-workspace',
+      { expectedRevision: initial.revision, main: initial.main },
+      409,
       'PUT'
     );
-    expect(product.profile(chat.id)).toEqual(profile);
+    expect(await workspace(app)).toEqual(changed);
+    const before = app.store.db.prepare('SELECT total_changes() AS n').get();
+    await workspace(app);
+    app.store.product.snapshot(one.id);
+    expect(app.store.db.prepare('SELECT total_changes() AS n').get()).toEqual(before);
     expect(fetch).not.toHaveBeenCalled();
   });
 
-  test('pins both prompt versions in a source snapshot and candidate while a new scene captures current selections', async () => {
+  test('applying a preset copies its exact program and values; later edits and deletion do not change the workspace', async () => {
     const app = await application();
-    const chat = createFixtureChat(app.store, 'Synthetic frozen prompts');
-    const product = app.store.product;
-    const main = await request<PromptPreset>(
+    const preset = await request<PromptPreset>(app, '/prompt-presets', prompt('translation', ''));
+    const current = await apply(app, preset);
+    expect(current.translation.program).toEqual(createDefaultPromptProgram('', 'translation'));
+    const edited = await request<PromptPreset>(
       app,
-      '/prompt-presets',
-      prompt('main', 'Main version one')
-    );
-    const translation = await request<PromptPreset>(
-      app,
-      '/prompt-presets',
-      prompt('translation', 'Translation version one')
-    );
-    let profile = product.updateProfile(
-      chat.id,
-      profileBody(product.profile(chat.id), {
-        prompts: { main: reference(main), translation: reference(translation) },
-      })
-    );
-    const original = capture(app, chat.id);
-    complete(app, original);
-    const frozen = JSON.stringify(original.snapshot);
-    const updated = await request<PromptPreset>(
-      app,
-      '/prompt-presets/' + main.id,
-      { ...prompt('main', 'Main version two'), expectedRevision: main.revision },
+      `/prompt-presets/${preset.id}`,
+      { ...prompt('translation', 'Later library text'), expectedRevision: 1 },
       200,
       'PUT'
     );
-    profile = product.updateProfile(
-      chat.id,
-      profileBody(profile, { prompts: { main: reference(updated), translation: null } })
+    expect(await workspace(app)).toEqual(current);
+    await request(
+      app,
+      '/prompt-workspace/apply',
+      { expectedRevision: current.revision, role: 'main', presetId: preset.id },
+      400
     );
-    expect(JSON.stringify(app.store.run(original.id).snapshot)).toBe(frozen);
-    const candidate = app.store.candidate(original.id, randomUUID(), 'Preserved candidate').run;
-    expect(candidate.snapshot.profile?.promptPresets).toEqual({ main, translation });
-    const next = capture(app, chat.id);
-    expect(next.snapshot.profile?.prompts).toEqual({ main: reference(updated), translation: null });
-    expect(next.snapshot.profile?.promptPresets).toEqual({ main: updated });
-    expect(fetch).not.toHaveBeenCalled();
+    const applied = await apply(app, edited);
+    expect(applied.translation.program).toEqual(edited.program);
+    const response = await app.inject({
+      method: 'DELETE',
+      url: `/api/prompt-presets/${preset.id}`,
+      payload: { expectedRevision: 2 },
+      headers: { host: '127.0.0.1' },
+    });
+    expect(response.statusCode, response.body).toBe(200);
+    expect(await workspace(app)).toEqual(applied);
+    expect(app.store.product.get('prompt-preset', preset.id, 1)).toEqual(preset);
   });
 
-  test('overlays only the explicitly captured job translation prompt and keeps source-time facts, main prompt and model fixed', async () => {
+  test('option presets copy only values into the current role and never retarget a saved prompt', async () => {
     const app = await application();
-    const chat = createFixtureChat(app.store, 'Synthetic job prompt');
-    const product = app.store.product;
-    const main = await request<PromptPreset>(app, '/prompt-presets', prompt('main', 'Main fixed'));
-    const old = await request<PromptPreset>(
-      app,
-      '/prompt-presets',
-      prompt('translation', 'Old translation')
-    );
-    const selected = await request<PromptPreset>(app, '/prompt-presets', prompt('translation', ''));
-    product.updateProfile(
-      chat.id,
-      profileBody(product.profile(chat.id), {
-        prompts: { main: reference(main), translation: reference(old) },
-      })
-    );
-    const run = capture(app, chat.id);
-    const original = JSON.stringify(run.snapshot);
-    const input = { promptSelection: { translation: reference(selected) } };
-    const resolved = product.resolveJobPrompt(run.snapshot, input);
-    expect(resolved.profile?.promptPresets).toEqual({ main, translation: selected });
-    expect(resolved.profile?.models).toEqual(run.snapshot.profile?.models);
-    expect(resolved.profile?.contents).toEqual(run.snapshot.profile?.contents);
-    await request(
-      app,
-      '/prompt-presets/' + selected.id,
-      { ...prompt('translation', 'Edited later'), expectedRevision: selected.revision },
-      200,
-      'PUT'
-    );
-    expect(
-      product.resolveJobPrompt(run.snapshot, input).profile?.promptPresets?.translation?.program
-    ).toEqual(createDefaultPromptProgram('', 'translation'));
-    expect(
-      product.resolveJobPrompt(run.snapshot, { promptSelection: { translation: null } }).profile
-        ?.promptPresets
-    ).toEqual({ main });
-    expect(product.resolveJobPrompt(run.snapshot, null)).toEqual(run.snapshot);
-    expect(JSON.stringify(run.snapshot)).toBe(original);
-    for (const promptSelection of [
-      { translation: reference(main) },
-      { translation: { id: selected.id, revision: 99 } },
-      { main: reference(main) },
-      null,
-      {},
-    ])
-      expect(() => product.resolveJobPrompt(run.snapshot, { promptSelection })).toThrow();
-  });
-
-  test('round-trips literal versions and frozen snapshots while accepting legacy absence', async () => {
-    const source = await application();
-    const product = source.store.product;
-    const chat = createFixtureChat(source.store, 'Synthetic archive prompts');
-    const main = await request<PromptPreset>(
-      source,
-      '/prompt-presets',
-      prompt('main', '  Literal main\r\n')
-    );
-    const empty = await request<PromptPreset>(source, '/prompt-presets', prompt('translation', ''));
-    product.updateProfile(
-      chat.id,
-      profileBody(product.profile(chat.id), {
-        prompts: { main: reference(main), translation: reference(empty) },
-      })
-    );
-    const run = capture(source, chat.id);
-    complete(source, run);
-    await request(
-      source,
-      '/prompt-presets/' + main.id,
-      { ...prompt('main', 'Latest main'), expectedRevision: 1 },
-      200,
-      'PUT'
-    );
-    const legacy = createFixtureChat(source.store, 'Legacy absence');
-    product.updateProfile(legacy.id, profileBody(product.profile(legacy.id)));
-    capture(source, legacy.id);
-    const archive = product.export();
-    const unchanged = JSON.stringify(archive);
-    const target = await application();
-    expect(target.store.product.import(archive)).toMatchObject({ restored: true, chats: 2 });
-    expect(JSON.stringify(archive)).toBe(unchanged);
-    expect(target.store.product.get('prompt-preset', main.id, 1)).toEqual(main);
-    expect(target.store.product.get('prompt-preset', main.id)).toMatchObject({
-      revision: 2,
-      program: createDefaultPromptProgram('Latest main'),
-    });
-    expect(target.store.run(run.id).snapshot.profile?.promptPresets).toEqual({
-      main,
-      translation: empty,
-    });
-    expect(target.store.product.profile(legacy.id)).not.toHaveProperty('prompts');
-    expect(target.store.product.snapshot(legacy.id)).not.toHaveProperty('promptPresets');
-    expect(target.store.db.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
-    expect(fetch).not.toHaveBeenCalled();
-  });
-
-  test('rejects forged prompt versions, profile roles and frozen text with archive rollback', async () => {
-    const source = await application();
-    const chat = createFixtureChat(source.store, 'Synthetic archive binding');
-    source.store.settings(chat.id, chat.settingsRevision, { ...chat.settings, status: true });
-    const main = await request<PromptPreset>(
-      source,
-      '/prompt-presets',
-      prompt('main', 'Original literal')
-    );
-    const translation = await request<PromptPreset>(
-      source,
-      '/prompt-presets',
-      prompt('translation', 'Translation literal')
-    );
-    source.store.product.updateProfile(
-      chat.id,
-      profileBody(source.store.product.profile(chat.id), {
-        prompts: { main: reference(main), translation: reference(translation) },
-      })
-    );
-    const run = capture(source, chat.id);
-    const scene = complete(source, run);
-    source.store.requestTranslation(scene.id);
-    const archive = source.store.product.export();
-    const attacks: ((value: typeof archive) => void)[] = [
-      (value) => {
-        const row = value.tables.versions.find((row) => row.kind === 'prompt-preset')!;
-        row.body = JSON.stringify({ ...JSON.parse(row.body), role: 'status' });
-      },
-      (value) => {
-        const row = value.tables.versions.find((row) => row.kind === 'prompt-preset')!;
-        row.body = JSON.stringify({ ...JSON.parse(row.body), text: 'x'.repeat(200001) });
-      },
-      (value) => {
-        const row = value.tables.profiles[0];
-        row.body = JSON.stringify({
-          ...JSON.parse(row.body),
-          prompts: { main: reference(translation) },
-        });
-      },
-      (value) => {
-        const row = value.tables.runs[0];
-        const snapshot = JSON.parse(row.snapshot);
-        snapshot.profile.promptPresets.main.text = 'Forged text';
-        row.snapshot = JSON.stringify(snapshot);
-      },
-      (value) => {
-        const row = value.tables.runs[0];
-        const snapshot = JSON.parse(row.snapshot);
-        delete snapshot.profile.promptPresets;
-        row.snapshot = JSON.stringify(snapshot);
-      },
-      (value) => {
-        const row = value.tables.jobs.find((row) => row.kind === 'translation')!;
-        row.input = JSON.stringify({ promptSelection: { translation: reference(main) } });
-      },
-      (value) => {
-        const row = value.tables.jobs.find((row) => row.kind === 'status')!;
-        row.input = JSON.stringify({ promptSelection: { translation: reference(translation) } });
+    const initial = await workspace(app);
+    const program = createDefaultPromptProgram('Current options');
+    program.controls = [
+      {
+        id: 'tone',
+        label: 'Tone',
+        type: 'select',
+        default: 'quiet',
+        options: [
+          { label: 'Quiet', value: 'quiet' },
+          { label: 'Bold', value: 'bold' },
+        ],
       },
     ];
-    for (const attack of attacks) {
-      const forged = structuredClone(archive);
-      attack(forged);
-      const original = JSON.stringify(forged);
-      const target = await application();
-      expect(() => target.store.product.import(forged)).toThrow();
-      expect(JSON.stringify(forged)).toBe(original);
-      expect(target.store.chats()).toEqual([]);
-      expect(target.store.product.library().promptPresets).toEqual([]);
-    }
+    const updated = await request(
+      app,
+      '/prompt-workspace',
+      {
+        expectedRevision: initial.revision,
+        main: { title: 'Working', program, values: { tone: 'quiet' } },
+      },
+      200,
+      'PUT'
+    );
+    const options = await request(app, '/prompt-combinations', {
+      title: 'Bold option',
+      role: 'main',
+      values: { tone: 'bold' },
+    });
+    expect(options).toMatchObject({ role: 'main', values: { tone: 'bold' } });
+    expect(options).not.toHaveProperty('prompt');
+    const applied = await request(app, '/prompt-workspace/apply-options', {
+      expectedRevision: updated.revision,
+      role: 'main',
+      combinationId: options.id,
+    });
+    expect(applied.main).toEqual({ ...updated.main, values: { tone: 'bold' } });
+    expect(applied.translation).toEqual(updated.translation);
+    await request(
+      app,
+      '/prompt-workspace/apply-options',
+      { expectedRevision: applied.revision, role: 'translation', combinationId: options.id },
+      400
+    );
   });
 
-  test('explicit translation retry captures the current prompt while the original run stays frozen', async () => {
+  test('new scenes capture current working copies while prior source and candidate keep their frozen prompt', async () => {
     const app = await application();
-    const chat = createFixtureChat(app.store, 'Synthetic retranslation prompt');
-    const product = app.store.product;
+    const chat = createFixtureChat(app.store, 'Frozen prompts');
+    const first = await request<PromptPreset>(
+      app,
+      '/prompt-presets',
+      prompt('main', 'First current')
+    );
+    await apply(app, first);
+    const run = capture(app, chat.id),
+      frozen = structuredClone(run.snapshot);
+    complete(app, run);
+    const nextPreset = await request<PromptPreset>(
+      app,
+      '/prompt-presets',
+      prompt('main', 'Next current')
+    );
+    await apply(app, nextPreset);
+    const candidate = app.store.candidate(run.id, randomUUID(), 'Synthetic candidate').run;
+    expect(candidate.snapshot.profile).toEqual(frozen.profile);
+    app.store.finishRun(candidate.id, 'cancelled', 'Synthetic');
+    const next = capture(app, chat.id);
+    expect(next.snapshot.profile!.promptPresets!.main!.program).toEqual(nextPreset.program);
+    expect(app.store.run(run.id).snapshot).toEqual(frozen);
+  });
+
+  test('translation reservations copy the current translation and a later retry keeps earlier jobs intact', async () => {
+    const app = await application(),
+      chat = createFixtureChat(app.store, 'Translation copies');
     const first = await request<PromptPreset>(
       app,
       '/prompt-presets',
       prompt('translation', 'First translation')
     );
-    let profile = product.updateProfile(
-      chat.id,
-      profileBody(product.profile(chat.id), { prompts: { translation: reference(first) } })
-    );
-    const run = capture(app, chat.id);
-    const source = complete(app, run);
-    const second = await request<PromptPreset>(
+    await apply(app, first);
+    const run = capture(app, chat.id),
+      source = complete(app, run);
+    const job = app.store.requestTranslation(source.id);
+    const frozenJob = structuredClone(job);
+    const next = await request<PromptPreset>(
       app,
       '/prompt-presets',
-      prompt('translation', 'Second translation')
+      prompt('translation', 'Later translation')
     );
-    profile = product.updateProfile(
-      chat.id,
-      profileBody(profile, { prompts: { translation: reference(second) } })
-    );
-    const job = app.store.retranslate(source.id);
-    expect(job.input).toMatchObject({ promptSelection: { translation: reference(second) } });
-    const overlaid = product.resolveJobPrompt(run.snapshot, job.input);
-    expect(overlaid.profile?.promptPresets?.translation).toEqual(second);
-    const plan = createTranslationPlan(source, sourceTimeContext(overlaid, 'translation'));
-    const claimed = app.store.claimJob(
-      job.id,
-      'synthetic-worker',
-      { initial: {}, inputs: [], toolEvents: [] },
-      plan
-    )!;
-    expect(claimed.input).toMatchObject({ promptSelection: { translation: reference(second) } });
-    const generation = claimed.generation;
-    product.chunk(
-      job.id,
-      plan.chunks[0].id,
-      'failed',
-      undefined,
-      undefined,
-      'Synthetic transport error'
-    );
-    app.store.finishAuxiliary(job.id, generation, 'synthetic-worker', {
-      status: 'failed',
-      result: null,
-      error: 'Synthetic transport error',
-    });
-    profile = product.updateProfile(
-      chat.id,
-      profileBody(profile, { prompts: { translation: null } })
-    );
+    await apply(app, next);
+    expect(app.store.job(job.id)).toEqual(frozenJob);
+    app.store.cancelJob(job.id);
+    const old = app.store.job(job.id);
     const retried = app.store.retryJob(job.id);
-    expect(retried.input).toMatchObject({ promptSelection: { translation: null } });
+    expect(retried.id).not.toBe(job.id);
+    expect(app.store.job(job.id)).toEqual(old);
+    expect(retried.input).toMatchObject({ translationPrompt: { program: next.program } });
     expect(
-      product.resolveJobPrompt(run.snapshot, retried.input).profile?.promptPresets?.translation
-    ).toBeUndefined();
-    const retryClaim = app.store.claimJob(job.id, 'retry-worker', retried.input)!;
-    app.store.failJob(job.id, retryClaim.generation, 'retry-worker', 'Synthetic retry failure');
-    const savedArchive = product.export();
-    const builtin = app.store.retranslate(source.id);
-    expect(builtin.id).toBe(job.id);
-    expect(builtin.revision).toBeGreaterThan(job.revision ?? 1);
-    expect(builtin.input).toMatchObject({ promptSelection: { translation: null } });
-    expect(product.resolveJobPrompt(run.snapshot, builtin.input).profile?.promptPresets).toEqual(
-      {}
+      app.store.product.resolveJobPrompt(run.snapshot, retried.input).profile!.promptPresets!
+        .translation!.program
+    ).toEqual(next.program);
+    expect(app.store.run(run.id).snapshot.profile!.promptPresets!.translation!.program).toEqual(
+      first.program
     );
-    expect(app.store.run(run.id).snapshot.profile?.promptPresets?.translation).toEqual(first);
+  });
+
+  test('archive restores copied prompts and rejects forged frozen role or compiled prompt content atomically', async () => {
+    const app = await application(),
+      chat = createFixtureChat(app.store, 'Archive copies');
+    const preset = await request<PromptPreset>(
+      app,
+      '/prompt-presets',
+      prompt('main', 'Archive literal')
+    );
+    await apply(app, preset);
+    const run = capture(app, chat.id);
+    const compiled = compileSnapshotPrompt({ ...run.snapshot, contextPlan: undefined });
+    app.store.db
+      .prepare('UPDATE runs SET snapshot=? WHERE id=?')
+      .run(JSON.stringify(compiled), run.id);
+    const archive = app.store.product.export();
     const target = await application();
-    expect(target.store.product.import(savedArchive)).toMatchObject({ restored: true, chats: 1 });
-    const restored = target.store.job(job.id);
-    expect(restored.input).toMatchObject({ promptSelection: { translation: null } });
-    expect(
-      target.store.product.resolveJobPrompt(target.store.run(run.id).snapshot, restored.input)
-        .profile?.promptPresets?.translation
-    ).toBeUndefined();
-    expect(fetch).not.toHaveBeenCalled();
+    expect(target.store.product.import(archive)).toMatchObject({ restored: true });
+    expect(target.store.run(run.id).snapshot.profile!.promptPresets!.main!.program).toEqual(
+      preset.program
+    );
+    expect(await workspace(target)).toEqual(await workspace(app));
+    for (const forge of [
+      (snapshot: any) => {
+        snapshot.profile.promptPresets.main.role = 'translation';
+      },
+      (snapshot: any) => {
+        snapshot.promptCompilation.messages[0].content[0].text = 'Forged compiled text';
+      },
+    ]) {
+      const damaged = structuredClone(archive);
+      const row = damaged.tables.runs.find((row) => row.id === run.id)!;
+      const snapshot = JSON.parse(row.snapshot);
+      forge(snapshot);
+      row.snapshot = JSON.stringify(snapshot);
+      const rejected = await application();
+      expect(() => rejected.store.product.import(damaged)).toThrow();
+      expect(rejected.store.chats()).toEqual([]);
+    }
+  });
+
+  test('an unavailable optional translation connection does not block a main snapshot', async () => {
+    const app = await application(),
+      chat = createFixtureChat(app.store, 'Optional translation');
+    const c = app.store.product.connection({
+      title: 'Disabled translator',
+      protocol: 'fixture-sse-v1',
+      endpoint: 'http://127.0.0.1:1',
+      enabled: true,
+    }) as Connection;
+    const model = app.store.product.model({
+      title: 'Optional model',
+      connectionId: c.id,
+      modelId: 'fixture',
+      maxOutputTokens: 100,
+      temperature: null,
+    }) as ModelPreset;
+    const profile = app.store.product.profile(chat.id);
+    app.store.product.updateProfile(
+      chat.id,
+      profileBody(profile, { routes: { ...profile.routes, translation: { id: model.id } } })
+    );
+    app.store.product.connection(
+      {
+        title: c.title,
+        protocol: c.protocol,
+        endpoint: c.endpoint,
+        enabled: false,
+        expectedRevision: c.revision,
+      },
+      c.id
+    );
+    expect(app.store.product.snapshot(chat.id)).toHaveProperty('promptPresets.main');
   });
 });
 
@@ -712,17 +537,13 @@ describe('translation prompt preview uses the job compiler without writes', () =
     expect(preview.previewSource.kind).toBe(stored ? 'stored' : 'synthetic');
     expect(preview.compilation.messages[0].content[0].text).toBe(DEFAULT_TRANSLATION_PROMPT);
     expect(preview.compilation.messages.some((m: any) => m.id === 'context')).toBe(true);
-    expect(preview.compilation.messages.some((m: any) => m.id === 'outputSchema')).toBe(true);
-    const blocks = JSON.parse(
-      preview.compilation.messages
-        .find((m: any) => m.id === 'source')
-        .content[0].text.split('\n')
-        .slice(1)
-        .join('\n')
-    );
-    expect(blocks[0].text).toBe(
+    expect(preview.compilation.messages.some((m: any) => m.id === 'outputSchema')).toBe(false);
+    const sourceText = preview.compilation.messages.find((m: any) => m.id === 'source').content[0]
+      .text;
+    expect(sourceText).toContain(
       stored ? 'Mira waits by the quiet harbor.' : 'Synthetic preview source.'
     );
+    expect(sourceText).not.toContain('anchor');
     if (source)
       expect(preview.previewSource).toMatchObject({
         sourceRevision: source.id,

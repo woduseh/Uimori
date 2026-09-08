@@ -7,7 +7,6 @@ import {
   VertexProtocolError,
 } from '../core/vertex-protocol.js';
 import type { Json, ProviderRequest, ProviderResult } from '../core/transport.js';
-import { createTranslationPlan, validateTranslationChunk } from '../core/auxiliary.js';
 
 const request = (): ProviderRequest => ({
   role: 'main',
@@ -75,45 +74,16 @@ function continued(input: ProviderRequest, output: ProviderResult): ProviderRequ
 const bodyObject = (body: Json) => body as Record<string, any>;
 
 function translationRequest() {
-  const text = 'He had served forty years. The gauge read 40.';
-  const plan = createTranslationPlan(
-    {
-      id: 'source-translation',
-      chatId: 'chat-translation',
-      text,
-      hash: createHash('sha256').update(text).digest('hex'),
-    },
-    {
-      revision: 'source-time-1',
-      bot: null,
-      persona: null,
-      references: [],
-      scene: 'A quiet room.',
-      previousSources: [],
-      instructionRevision: 'default-translation-1',
-      modelPresetRevision: 'translation-preset-1',
-    }
-  );
-  const chunk = plan.chunks[0];
+  const text = 'He had served forty years. The gauge read 40. Turn LEFT.';
   const input = request();
   input.role = 'translation';
-  input.stable.contract =
-    'Translate human prose into Korean. Copy protected tokens and return only the specified JSON.';
+  input.stable.contract = 'Translate the complete prose into Korean.';
   input.input.source = {
-    sourceRevision: plan.sourceRevision,
-    sourceHash: plan.sourceHash,
-    chunkId: chunk.id,
-    blocks: chunk.blocks,
-    context: { instructionRevision: plan.context.instructionRevision },
-    neighborBlocks: [],
-    outputSchema: {
-      sourceRevision: 'exact input value',
-      sourceHash: 'exact input value',
-      chunkId: 'exact input value',
-      segments: [{ anchors: ['ordered source anchors'], text: 'HUMAN_OUTPUT_SCHEMA_SENTINEL' }],
-    },
+    sourceRevision: 'source-translation',
+    sourceHash: createHash('sha256').update(text).digest('hex'),
+    text,
   };
-  return { input, plan, chunk };
+  return { input };
 }
 
 // Pure recorded-object fixtures: these checks do not call a live model or assess prose quality.
@@ -151,48 +121,23 @@ describe('Vertex 3.8 request and continuation protocol', () => {
     expect(empty.generationConfig).not.toHaveProperty('thinkingConfig');
   });
 
-  test('uses a source-bound native translation schema with tools and unchanged continuation identity', () => {
-    const { input, plan, chunk } = translationRequest();
+  test('translates complete source as plain text while preserving tools and continuation identity', () => {
+    const { input } = translationRequest();
     const original = structuredClone(input);
     const first = start(input);
     const wire = bodyObject(first.body);
     const config = wire.generationConfig;
-    expect(config.responseMimeType).toBe('application/json');
-    expect(config.responseSchema).toEqual({
-      type: 'OBJECT',
-      propertyOrdering: ['sourceRevision', 'sourceHash', 'chunkId', 'segments'],
-      properties: {
-        sourceRevision: { type: 'STRING', enum: [plan.sourceRevision] },
-        sourceHash: { type: 'STRING', enum: [plan.sourceHash] },
-        chunkId: { type: 'STRING', enum: [chunk.id] },
-        segments: {
-          type: 'ARRAY',
-          minItems: '1',
-          items: {
-            type: 'OBJECT',
-            propertyOrdering: ['anchors', 'text'],
-            properties: {
-              anchors: { type: 'ARRAY', minItems: '1', items: { type: 'STRING' } },
-              text: { type: 'STRING' },
-            },
-            required: ['anchors', 'text'],
-          },
-        },
-      },
-      required: ['sourceRevision', 'sourceHash', 'chunkId', 'segments'],
-    });
+    expect(config).not.toHaveProperty('responseMimeType');
+    expect(config).not.toHaveProperty('responseSchema');
     expect(config).not.toHaveProperty('responseJsonSchema');
     expect(wire.tools[0].functionDeclarations).toHaveLength(input.stable.tools.length);
     const packet = JSON.parse(wire.contents[0].parts[0].text.split('\n').slice(1).join('\n'));
-    const { outputSchema: _example, ...expectedSource } = bodyObject(input.input.source!);
-    expect(packet.source).toEqual(expectedSource);
-    expect(JSON.stringify(wire.contents)).not.toContain('HUMAN_OUTPUT_SCHEMA_SENTINEL');
+    expect(packet.source).toEqual(input.input.source);
     const instructions = wire.systemInstruction.parts
       .map((part: { text: string }) => part.text)
       .join('\n');
-    expect(instructions).toContain('Korean number words');
-    expect(instructions).toContain('[[p_...]]');
-    expect(instructions).toContain('segments.text');
+    expect(instructions).toContain('complete translated text only');
+    expect(instructions).not.toMatch(/Korean number words|\[\[p_|segments.text/);
     expect(input).toEqual(original);
     first.decoder.accept(
       event(
@@ -213,52 +158,27 @@ describe('Vertex 3.8 request and continuation protocol', () => {
     expect(next.contents[0]).toEqual(wire.contents[0]);
     expect(next.contents[1].parts[0].thoughtSignature).toBe('TRANSLATION_SIGNATURE');
     expect(next.contents[2].parts[0].functionResponse.id).toBe('Translation-Read.Original');
-    bodyObject(nextInput.input.source!).outputSchema = { changed: true };
+    bodyObject(nextInput.input.source!).text = 'Different source';
     expect(() => encodeVertex(nextInput)).toThrow('VERTEX_CONTINUATION_MISMATCH');
   });
 
-  test('keeps strict translation artifact validation for fences, new digits and protected numeric literals', () => {
-    const { input, plan, chunk } = translationRequest();
+  test('plain translated text preserves natural digits, direction words and line breaks', () => {
+    const { input } = translationRequest();
     const { decoder } = start(input);
-    const protectedNumber = chunk.protectedSpans[0].token;
-    const result = {
-      sourceRevision: plan.sourceRevision,
-      sourceHash: plan.sourceHash,
-      chunkId: chunk.id,
-      segments: [
-        {
-          anchors: chunk.anchors,
-          text: `그는 사십 년을 근무했다. 계기는 ${protectedNumber}을 가리켰다.`,
-        },
-      ],
-    };
-    decoder.accept(event([{ text: JSON.stringify(result) }], 'STOP'));
-    const response = decoder.finish();
-    expect(validateTranslationChunk(plan, chunk.id, response.text).segments[0].text).toBe(
-      '그는 사십 년을 근무했다. 계기는 40을 가리켰다.'
-    );
-    expect(() =>
-      validateTranslationChunk(plan, chunk.id, '```json\n' + response.text + '\n```')
-    ).toThrow('OUTPUT_SCHEMA_INVALID');
-    const digits = structuredClone(result);
-    digits.segments[0].text = digits.segments[0].text.replace('사십', '40');
-    expect(() => validateTranslationChunk(plan, chunk.id, JSON.stringify(digits))).toThrow(
-      'UNPROTECTED_SYNTAX_RETURNED'
-    );
-    const changedIdentity = { ...result, sourceRevision: 'different-source' };
-    expect(() => validateTranslationChunk(plan, chunk.id, JSON.stringify(changedIdentity))).toThrow(
-      'SOURCE_DEPENDENCY_MISMATCH'
-    );
+    const prose = '그는 40년 동안 근무했다. 계기는 사십을 가리켰다.\n왼쪽으로 돌아라.';
+    decoder.accept(event([{ text: prose }], 'STOP'));
+    expect(decoder.finish()).toMatchObject({ status: 'completed', text: prose });
   });
 
-  test.each(['sourceRevision', 'sourceHash', 'chunkId'])(
-    'rejects a translation request with missing %s before encoding',
-    (field) => {
-      const { input } = translationRequest();
-      delete bodyObject(input.input.source!)[field];
-      expect(() => encodeVertex(input)).toThrow('INVALID_VERTEX_TRANSLATION_SOURCE');
-    }
-  );
+  test('refusal classification does not receive translation output instructions', () => {
+    const { input } = translationRequest();
+    input.input.controls.purpose = 'translation-refusal';
+    input.stable.contract = 'Classify whether this response refused the task.';
+    const wire = bodyObject(encodeVertex(input).body);
+    expect(JSON.stringify(wire.systemInstruction)).not.toContain('complete translated text only');
+    expect(JSON.stringify(wire.systemInstruction)).toContain(input.stable.contract);
+    expect(wire.generationConfig).not.toHaveProperty('responseSchema');
+  });
 
   test.each(['main', 'status', 'image'] as const)(
     'does not add translation format constraints to %s',

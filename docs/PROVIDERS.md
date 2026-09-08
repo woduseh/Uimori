@@ -75,18 +75,17 @@ Flex는 `shared`와 `flex` 요청 헤더를 함께 보내고 응답에서 적용
 
 과거 합성 시험에 사용한 DB 누적 예산·요청당 예약금·단가 유효기간 차단은 현행 실행 계약에서 제거했어요. `NR_LIVE_MAX_REQUESTS`·`NR_LIVE_MAX_USD`도 사용하지 않아요. 실제 청구 비용을 추정하지 않으며 보고되지 않은 `costUsd`는 `null`로 보존해요. 과거 시험의 호출 수·추정 금액·FAIL/INCOMPLETE 결과는 당시 기록으로 남아요.
 
-합성 live 검증기는 기존 사용자 DB를 사용하지 않아요. `--preflight`는 모델 요청 없이 설정·최신 빌드만 확인하고, `--execute`만 실제 시험을 시작해요. 새 유료 실행은 별도로 승인된 범위에서 진행해요.
+`scripts/verify-live.mjs --preflight`는 모델 요청 없이 설정·최신 빌드 메타데이터만 확인해요. 이전 유료 시나리오는 채팅 프롬프트 참조와 번역 구간·앵커를 전제로 하므로 종료했어요. 환경 준비 여부는 `environmentReady`로 별도 기록하며 preflight/execute 모두 `LIVE_VERIFY_CURRENT_CONTRACT_REVIEW_REQUIRED`와 BLOCKED를 반환해요. 현재 프롬프트·전체 번역·거절 판정 모델을 포함하는 새 live 평가 계획과 실행 승인은 별도 작업이에요.
 
 ```powershell
 $env:NR_VERTEX_PROJECT = 'PROJECT_ID'
 node scripts/verify-live.mjs --preflight
-# 위 설정과 유료 실행 승인을 확인한 뒤 실행
-node scripts/verify-live.mjs --execute
+# --execute도 현재는 BLOCKED이며 인증·서버·DB·모델 요청을 시작하지 않아요.
 ```
 
-검증기는 `output/live/` 아래 새 DB와 결과를 보존해요. 불확실한 요청을 자동 재호출하지 않으며 live 결과를 fixture 실패 재현과 구분해요. 사용한 key 파일·Bearer token·reasoning/signature 본문은 진단에 저장하지 않아요. 실행 재시도는 새 유료 요청이므로 결과를 읽은 뒤 판단해야 해요.
+사전 검사 결과는 `output/live/`에 남고 DB를 생성하지 않아요. 과거 실행 DB와 결과는 그대로 보존해요. key 파일 본문·Bearer token은 읽거나 진단에 저장하지 않아요.
 
-번역은 native JSON schema와 source identity를 함께 보내고 host가 anchor 순서·보호구문을 재검증해요. 정상 종료가 확인된 거절·빈 응답과 번역 구조 검증 실패는 같은 구간을 최대 3회 시도해요. 작업 전체 호출 한도를 함께 지키며 완료 구간과 모든 attempt 기록을 보존해요. 취소·한도 초과·시간 초과·단절·HTTP 오류는 자동 재시도하지 않아요. 사용자가 재시도하면 현재 모델·프롬프트·구간 기준으로 장면 전체를 새 번역하며 완료 구간을 교체해요.
+번역은 전체 원문과 원문 시점의 추가 문맥을 보내고 일반 텍스트를 받아요. 설정한 거절 판정 모델에는 응답 앞 1,000자만 보내요. 명확한 거절만 기본 1회 추가 요청하며 0~5회로 설정해요. 판정 실패·불확실·빈 응답·부분 응답·취소·시간 초과·단절·HTTP 오류는 자동 재시도하지 않아요. 수동 재번역은 현재 모델·프롬프트로 새 작업을 만들며 실패 시 이전 성공 번역을 유지해요. [전체 계약](RUNTIME-SIMPLIFICATION.md)을 봐요.
 
 기존 `scripts/verify-live-retry.mjs`는 실패 구간만 유료 재시도한다는 승인·검증 계약으로 작성됐어요. 현재 전체 장면 재번역을 그 승인으로 실행하지 않도록 preflight/execute 모두 `LIVE_RETRY_FAILED_CHUNK_CONTRACT_RETIRED`와 BLOCKED를 반환해요. DB 본문 열람·복사·인증·모델 호출 전에 멈추며 과거 증거는 유지해요. 전체 장면용 live 검증기 개편과 실행은 이번 범위에 포함하지 않아요.
 

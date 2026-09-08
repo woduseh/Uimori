@@ -6,7 +6,7 @@ import {
   newId,
   command,
   requireCommand,
-  fingerprint,
+  buildFingerprint,
   distHash,
   json,
   ownedPath,
@@ -58,7 +58,7 @@ export async function build({
       throw new Error('Refusing to replace a symlink/junction dist');
     priorHash = existsSync(dist) ? await distHash(dist) : null;
     summary.previousDistHash = priorHash;
-    const before = await fingerprint(cwd);
+    const before = await buildFingerprint(cwd);
     await mkdir(candidate);
     for (const [name, args] of [
       [
@@ -91,7 +91,7 @@ export async function build({
         throw error;
       }
     }
-    const after = await fingerprint(cwd);
+    const after = await buildFingerprint(cwd);
     if (before.hash !== after.hash)
       throw new Error('Source changed while building; rerun after edits finish.');
     for (const file of ['server/index.js', 'web/index.html'])

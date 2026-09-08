@@ -121,7 +121,7 @@ async function prepared() {
 }
 
 describe('M1 archive trust boundaries in a fresh file SQLite database', () => {
-  test('P11 restores complete protected translation chunks and normalizes asset URLs without mutating input', async () => {
+  test('P11 restores complete plain translation text and normalizes asset URLs without mutating input', async () => {
     const original = await prepared();
     const archive = structuredClone(original.archive);
     const row = archive.tables.assets[0];
@@ -136,9 +136,10 @@ describe('M1 archive trust boundaries in a fresh file SQLite database', () => {
       `/api/assets/${original.asset.id}`
     );
     expect(target.job(original.job.id).result).toEqual(original.store.job(original.job.id).result);
-    expect(target.product.chunks(original.job.id)).toEqual(
-      original.store.product.chunks(original.job.id)
-    );
+    expect(target.job(original.job.id).result).not.toHaveProperty('segments');
+    expect(
+      target.db.prepare("SELECT name FROM sqlite_schema WHERE name='job_chunks'").get()
+    ).toBeUndefined();
     expect(target.source(original.first.id).hash).toBe(original.first.hash);
     expect(target.queuedJobs()).toEqual([]);
   });
@@ -222,46 +223,35 @@ describe('M1 archive trust boundaries in a fresh file SQLite database', () => {
     }
   });
 
-  test('P08 P11 rejects poisoned persisted plan bodies, missing returned coverage and changed protected spans', async () => {
+  test('P08 P11 rejects foreign translation identity, malformed text and retired structured output', async () => {
     const source = await prepared();
-    const attacks: { name: string; mutate: (a: typeof source.archive) => void }[] = [
-      {
-        name: 'plan payload',
-        mutate: (a) => {
-          const row = a.tables.jobs.find((r) => r.id === source.job.id)!;
-          const plan = JSON.parse(row.plan);
-          plan.chunks[0].blocks[0].text = 'UNRELATED_SOURCE_BUT_GENUINE_HASH';
-          row.plan = JSON.stringify(plan);
-        },
+    const attacks = [
+      (result: Record<string, unknown>) => {
+        result.sourceHash = '0'.repeat(64);
       },
-      {
-        name: 'chunk coverage',
-        mutate: (a) => {
-          const row = a.tables.job_chunks.find((r) => r.job_id === source.job.id)!;
-          const result = JSON.parse(row.result);
-          result.segments[0].anchors = [];
-          row.result = JSON.stringify(result);
-        },
+      (result: Record<string, unknown>) => {
+        result.sourceRevision = source.second.id;
       },
-      {
-        name: 'protected numeric value',
-        mutate: (a) => {
-          const row = a.tables.job_chunks.find((r) => r.job_id === source.job.id)!;
-          const result = JSON.parse(row.result);
-          result.segments[0].text = result.segments[0].text.replace('9 lamps', '99 lamps');
-          row.result = JSON.stringify(result);
-        },
+      (result: Record<string, unknown>) => {
+        result.text = '';
+      },
+      (result: Record<string, unknown>) => {
+        result.text = { text: 'Nested JSON' };
+      },
+      (result: Record<string, unknown>) => {
+        result.segments = [];
       },
     ];
     for (const attack of attacks) {
       const archive = structuredClone(source.archive);
-      attack.mutate(archive);
+      const row = archive.tables.job_results.find((row) => row.job_id === source.job.id)!;
+      const result = JSON.parse(row.result);
+      attack(result);
+      row.result = JSON.stringify(result);
       const target = await database();
-      expect(() => target.product.import(archive), attack.name).toThrow();
-      expect(target.chats(), attack.name).toEqual([]);
-      expect(target.db.prepare('SELECT count(*) AS n FROM job_chunks').get(), attack.name).toEqual({
-        n: 0,
-      });
+      expect(() => target.product.import(archive)).toThrow();
+      expect(target.chats()).toEqual([]);
+      expect(target.db.prepare('SELECT count(*) AS n FROM job_results').get()).toEqual({ n: 0 });
     }
   });
 });

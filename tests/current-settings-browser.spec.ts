@@ -1,13 +1,11 @@
+import { visualReview } from './fixtures/visual-review.js';
+import { preservePromptWorkspace } from './fixtures/prompt-workspace.js';
 import { test, expect, type APIRequestContext } from '@playwright/test';
 import { fixtureBotInput } from './fixtures/chat.js';
 import type { ChatDetail } from '../core/types.js';
 import type { PromptPreset } from '../core/product.js';
 import type { PromptProgram } from '../core/prompt-program.js';
-import {
-  navigationAction,
-  openNewStoryOptions,
-  selectChatSettingsSection,
-} from './ui-navigation.js';
+import { navigationAction, openNewStoryOptions } from './ui-navigation.js';
 
 async function detail(request: APIRequestContext, chatId: string): Promise<ChatDetail> {
   const response = await request.get(`/api/chats/${chatId}`);
@@ -48,10 +46,18 @@ test('CURRENTUI01 saved creative combinations follow current prompt controls wit
   });
   expect(response.ok()).toBe(true);
   const prompt = (await response.json()) as PromptPreset;
+  const originalWorkspace = await (await request.get('/api/prompt-workspace')).json();
+  expect(
+    (
+      await request.post('/api/prompt-workspace/apply', {
+        data: { expectedRevision: originalWorkspace.revision, role: 'main', presetId: prompt.id },
+      })
+    ).ok()
+  ).toBe(true);
   const combinationResponse = await request.post('/api/prompt-combinations', {
     data: {
       title: '보존한 창작 조합',
-      prompt: { id: prompt.id, revision: prompt.revision },
+      role: 'main',
       values: { detail: 3, style: 'old', removed: true },
     },
   });
@@ -67,20 +73,6 @@ test('CURRENTUI01 saved creative combinations follow current prompt controls wit
   });
   expect(chatResponse.ok()).toBe(true);
   const chat = await chatResponse.json();
-  const profile = (await detail(request, chat.id)).profile!;
-  expect(
-    (
-      await request.put(`/api/chats/${chat.id}/profile`, {
-        data: {
-          ...profile,
-          chatId: undefined,
-          revision: undefined,
-          expectedRevision: profile.revision,
-          prompts: { main: { id: prompt.id, revision: prompt.revision } },
-        },
-      })
-    ).ok()
-  ).toBe(true);
   const updatedResponse = await request.put(`/api/prompt-presets/${prompt.id}`, {
     data: {
       title: prompt.title,
@@ -103,7 +95,16 @@ test('CURRENTUI01 saved creative combinations follow current prompt controls wit
     },
   });
   expect(updatedResponse.ok()).toBe(true);
-  const updated = (await updatedResponse.json()) as PromptPreset;
+  await updatedResponse.json();
+  const copiedBefore = await (await request.get('/api/prompt-workspace')).json();
+  expect(copiedBefore.main.program).toEqual(program);
+  expect(
+    (
+      await request.post('/api/prompt-workspace/apply', {
+        data: { expectedRevision: copiedBefore.revision, role: 'main', presetId: prompt.id },
+      })
+    ).ok()
+  ).toBe(true);
   const errors: string[] = [];
   page.on('pageerror', (error) => errors.push(error.message));
   await page.setViewportSize({ width: 390, height: 844 });
@@ -119,44 +120,20 @@ test('CURRENTUI01 saved creative combinations follow current prompt controls wit
   await expect(panel.getByLabel('새 합성 옵션', { exact: true })).not.toBeChecked();
   await expect(panel.getByLabel('제거할 옵션', { exact: true })).toHaveCount(0);
   await expect(panel).toContainText('현재 옵션과 맞지 않는 이전 선택값은 기본값으로 조정했어요.');
-  await panel.getByRole('button', { name: '이 채팅에 적용', exact: true }).click();
+  await panel.getByRole('button', { name: '현재 옵션 적용', exact: true }).click();
   await expect
-    .poll(
-      async () =>
-        (await detail(request, chat.id)).profile?.promptControls?.[
-          `${updated.id}@${updated.revision}`
-        ]?.values
-    )
+    .poll(async () => (await (await request.get('/api/prompt-workspace')).json()).main.values)
     .toEqual({ detail: 3, style: 'current', added: false });
-  await page.screenshot({ path: info.outputPath('current-prompt-options-mobile.png') });
+  if (visualReview)
+    await page.screenshot({ path: info.outputPath('current-prompt-options-mobile.png') });
   await panel.getByRole('button', { name: '창작 옵션 닫기', exact: true }).click();
-  await page.getByRole('button', { name: '채팅 설정', exact: true }).click();
-  const settings = page.getByRole('dialog', { name: '채팅 설정', exact: true });
-  await selectChatSettingsSection(page, '프롬프트·창작 프리셋');
-  const editor = settings.getByTestId('prompt-editor');
-  const options = editor.getByLabel('불러올 프롬프트', { exact: true }).locator('option');
-  await expect(options.filter({ hasText: prompt.title })).toHaveCount(1);
-  await expect(options.filter({ hasText: prompt.title })).toHaveText(prompt.title);
-  await editor.getByLabel('전역 창작 조합', { exact: true }).selectOption(combination.id);
-  await expect(editor.getByLabel('합성 서술량', { exact: true })).toHaveValue('3');
-  await expect(editor.getByLabel('합성 문체', { exact: true })).toHaveValue(
-    JSON.stringify('current')
-  );
-  await expect(editor).toContainText('현재 옵션과 맞지 않는 이전 선택값은 기본값으로 조정했어요.');
-  expect(await settings.evaluate((node) => node.scrollWidth <= node.clientWidth + 1)).toBe(true);
-  await page.keyboard.press('Escape');
-  const ownerResponse = await request.get(`/api/content/${chat.botId}`);
-  expect(ownerResponse.ok()).toBe(true);
-  const owner = await ownerResponse.json();
+  const savedWorkspace = await (await request.get('/api/prompt-workspace')).json();
+  const owner = await (await request.get(`/api/content/${chat.botId}`)).json();
   await navigationAction(page, '새 채팅', owner.title);
   const newChat = page.getByRole('dialog', { name: '새 채팅', exact: true });
   await openNewStoryOptions(page);
-  await newChat
-    .getByLabel('시작 프롬프트', { exact: true })
-    .selectOption(`${updated.id}@${updated.revision}`);
-  await newChat
-    .getByLabel('시작 옵션 조합', { exact: true })
-    .selectOption(`${combination.id}@${combination.revision}`);
+  await expect(newChat.getByLabel('시작 프롬프트', { exact: true })).toHaveCount(0);
+  await expect(newChat.getByLabel('시작 옵션 조합', { exact: true })).toHaveCount(0);
   const created = page.waitForResponse(
     (response) =>
       new URL(response.url()).pathname === '/api/chats' && response.request().method() === 'POST'
@@ -166,10 +143,9 @@ test('CURRENTUI01 saved creative combinations follow current prompt controls wit
   expect(accepted.ok()).toBe(true);
   const newChatData = await accepted.json();
   await expect(newChat).not.toBeVisible();
-  expect(
-    (await detail(request, newChatData.id)).profile?.promptControls?.[
-      `${updated.id}@${updated.revision}`
-    ]?.values
-  ).toEqual({ detail: 3, style: 'current', added: false });
+  expect((await detail(request, newChatData.id)).profile).not.toHaveProperty('promptControls');
+  expect(await (await request.get('/api/prompt-workspace')).json()).toEqual(savedWorkspace);
   expect(errors).toEqual([]);
 });
+
+preservePromptWorkspace();

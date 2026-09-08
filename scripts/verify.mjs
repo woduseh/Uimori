@@ -192,6 +192,7 @@ async function main(selection) {
     await run(['scripts/build.mjs'], 'build');
     const manifest = await assertBuild();
     summary.identity = manifest;
+    summary.verificationIdentity = await fingerprint();
     const temp = path.join(runtime, 'temp');
     await mkdir(temp, { recursive: true });
     const env = localVerificationEnv({
@@ -333,7 +334,7 @@ async function main(selection) {
     }
     try {
       await assertBuild();
-      if ((await fingerprint()).hash !== summary.identity.sourceHash)
+      if ((await fingerprint()).hash !== summary.verificationIdentity.hash)
         throw new Error('Source changed during verification');
     } catch (error) {
       for (const scenario of Object.values(summary.scenarios)) {

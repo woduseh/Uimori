@@ -1,5 +1,12 @@
 import { HttpError, fields, number, record, text } from './request-validation.js';
-import { translationChunkChars } from '../core/translation-settings.js';
+import { translationPolicy } from '../core/translation-settings.js';
+import {
+  defaultPromptWorkspace,
+  promptWorkspace,
+  freezeCurrentPrompts,
+  validateCurrentPrompt,
+  validatePromptWorkspace,
+} from './prompt-workspace.js';
 import {
   GENERATION_KEYS,
   generationFromModel,
@@ -30,7 +37,6 @@ import {
   type ModelRef,
   type ModelSnapshot,
   type PromptPreset,
-  type PromptRole,
   type ChatProfile,
   type ProfileSnapshot,
   type Connection,
@@ -42,17 +48,8 @@ import {
 } from '../core/product.js';
 import type { RunSnapshot, Resource } from '../core/types.js';
 import type { ProviderResult, WireRecord } from '../core/transport.js';
-import {
-  aggregateTranslation,
-  validateDisplayAnnotation,
-  validatePresentation,
-  validateTranslationChunk,
-  validateTranslationPlan,
-  type TranslationPlan,
-  type TranslationResult,
-} from '../core/auxiliary.js';
+import { validateDisplayAnnotation, validatePresentation } from '../core/auxiliary.js';
 import { validateTranslationArtifact } from './source-editing.js';
-import { sourceTimeContext } from './product-auxiliary.js';
 import { storyTables } from './story-store.js';
 import { normalizeStoryArchiveRow, validateStoryArchive } from './story-archive.js';
 
@@ -216,22 +213,30 @@ export class ProductStore {
         CREATE TABLE profiles (chat_id TEXT PRIMARY KEY REFERENCES chats(id),body TEXT NOT NULL);
         CREATE TABLE branches (id TEXT PRIMARY KEY,chat_id TEXT NOT NULL REFERENCES chats(id),title TEXT NOT NULL,head_revision TEXT REFERENCES sources(id),revision INTEGER NOT NULL,is_default INTEGER NOT NULL);
         CREATE UNIQUE INDEX default_branch ON branches(chat_id) WHERE is_default=1;
-        CREATE TABLE job_chunks (job_id TEXT NOT NULL REFERENCES jobs(id),id TEXT NOT NULL,status TEXT NOT NULL,attempt INTEGER NOT NULL DEFAULT 0,input TEXT,result TEXT,error TEXT,PRIMARY KEY(job_id,id));
+        CREATE TABLE prompt_workspace (id INTEGER PRIMARY KEY CHECK(id=1),body TEXT NOT NULL);
+        CREATE TABLE library_hidden (kind TEXT NOT NULL,id TEXT NOT NULL,PRIMARY KEY(kind,id));
         CREATE TABLE attempts (id TEXT PRIMARY KEY,chat_id TEXT NOT NULL REFERENCES chats(id),run_id TEXT REFERENCES runs(id),job_id TEXT REFERENCES jobs(id),role TEXT NOT NULL,connection_id TEXT NOT NULL,model_id TEXT NOT NULL,status TEXT NOT NULL,request TEXT NOT NULL,response TEXT,input_tokens INTEGER,output_tokens INTEGER,cost_usd REAL,raw_usage TEXT,price_revision TEXT,error TEXT,story_job_id TEXT REFERENCES story_jobs(id));
         CREATE TABLE assets (id TEXT PRIMARY KEY,chat_id TEXT NOT NULL REFERENCES chats(id),body TEXT NOT NULL,bytes BLOB NOT NULL);
         CREATE TABLE source_edits(source_id TEXT NOT NULL REFERENCES sources(id),revision INTEGER NOT NULL,text TEXT NOT NULL,hash TEXT NOT NULL,created_at TEXT NOT NULL,PRIMARY KEY(source_id,revision));
       `);
+    this.db.prepare('INSERT INTO prompt_workspace VALUES(1,?)').run(json(defaultPromptWorkspace()));
   }
   all(kind: string): any[] {
     return (
       this.db
         .prepare(
           isProviderSetting(kind)
-            ? 'SELECT body FROM provider_settings WHERE kind=? ORDER BY id'
-            : 'SELECT v.body FROM versions v WHERE kind=? AND revision=(SELECT MAX(revision) FROM versions n WHERE n.kind=v.kind AND n.id=v.id) ORDER BY id'
+            ? 'SELECT body FROM provider_settings v WHERE kind=? AND NOT EXISTS(SELECT 1 FROM library_hidden h WHERE h.kind=v.kind AND h.id=v.id) ORDER BY id'
+            : 'SELECT v.body FROM versions v WHERE kind=? AND revision=(SELECT MAX(revision) FROM versions n WHERE n.kind=v.kind AND n.id=v.id) AND NOT EXISTS(SELECT 1 FROM library_hidden h WHERE h.kind=v.kind AND h.id=v.id) ORDER BY id'
         )
         .all(kind) as Row[]
     ).map((r) => parse(r.body));
+  }
+  isHidden(kind: string, id: string): boolean {
+    return !!this.db.prepare('SELECT 1 FROM library_hidden WHERE kind=? AND id=?').get(kind, id);
+  }
+  assertAvailable(kind: string, id: string) {
+    if (this.isHidden(kind, id)) throw new HttpError(404, 'Library item deleted');
   }
   get<T>(kind: string, id: string, revision?: number): T {
     if (isProviderSetting(kind)) {
@@ -261,18 +266,13 @@ export class ProductStore {
   }
   /** Caller owns the transaction when reserving settings with an immutable registration receipt. */
   saveInTransaction(kind: string, value: Row, id?: string, expected?: number) {
+    if (id) this.assertAvailable(kind, id);
     const prior = id ? this.get<Row & ContentRef>(kind, id) : null;
     if (prior && prior.revision !== expected) throw new HttpError(409, 'Revision conflict');
     if (prior && (kind === 'content' || kind === 'prompt-preset')) {
       const profiles = (this.db.prepare('SELECT body FROM profiles').all() as Row[]).map(
         (row) => parse(row.body) as ChatProfile
       );
-      if (
-        kind === 'prompt-preset' &&
-        prior.role !== value.role &&
-        profiles.some((p) => Object.values(p.prompts ?? {}).some((r) => r?.id === id))
-      )
-        throw new HttpError(409, 'A selected prompt must keep its role; save a separate prompt');
       if (
         kind === 'content' &&
         !!prior.package !== !!value.package &&
@@ -357,16 +357,15 @@ export class ProductStore {
   }
   promptCombination(value: unknown) {
     const b = record(value);
-    fields(b, ['title', 'prompt', 'values']);
-    const prompt = ref(b.prompt);
-    const preset = this.get<PromptPreset>('prompt-preset', prompt.id, prompt.revision);
-    if (!preset.program) throw new HttpError(400, 'Creative preset requires prompt controls');
-    const values = resolvePromptValues(preset.program, record(b.values));
-    return this.save('prompt-combination', { title: text(b.title, 'title', 200), prompt, values });
+    fields(b, ['title', 'role', 'values']);
+    const role = choice(b.role, ['main', 'translation'], 'prompt role');
+    const current = promptWorkspace(this.store)[role];
+    const values = resolvePromptValues(current.program, record(b.values));
+    return this.save('prompt-combination', { title: text(b.title, 'title', 200), role, values });
   }
   promptPreset(value: unknown, id?: string) {
     const b = record(value);
-    fields(b, ['title', 'role', 'text', 'program', 'expectedRevision']);
+    fields(b, ['title', 'role', 'text', 'program', 'values', 'expectedRevision']);
     const role = choice(b.role, ['main', 'translation'], 'prompt role');
     const program =
       b.program !== undefined
@@ -390,7 +389,12 @@ export class ProductStore {
     }
     return this.save(
       'prompt-preset',
-      { title: text(b.title, 'title', 200), role, program },
+      {
+        title: text(b.title, 'title', 200),
+        role,
+        program,
+        values: resolvePromptValues(program, b.values === undefined ? {} : record(b.values)),
+      },
       id,
       id ? number(b.expectedRevision, 'revision') : undefined
     );
@@ -490,8 +494,10 @@ export class ProductStore {
     return this.save('model', prepared.value, id, prepared.expectedRevision);
   }
   modelSnapshot(id: string): ModelSnapshot {
+    this.assertAvailable('model', id);
     const model = this.get<ModelPreset>('model', id);
     if (model.enabled === false) throw new HttpError(403, 'Model disabled');
+    this.assertAvailable('connection', model.connectionId);
     const connection = this.get<Connection>('connection', model.connectionId);
     this.authorize(connection);
     if (model.capabilityProtocol !== undefined && model.capabilityProtocol !== connection.protocol)
@@ -514,8 +520,6 @@ export class ProductStore {
       'personaReference',
       'routes',
       'image',
-      'prompts',
-      'promptControls',
       'packageAttachments',
       'packageValues',
       'loreContext',
@@ -538,12 +542,6 @@ export class ProductStore {
     const personaReference =
       b.personaReference === undefined ? undefined : boolean(b.personaReference);
     const image = boolean(b.image);
-    const requestedPrompts =
-      b.prompts === undefined ? undefined : currentPromptRefs(this, b.prompts);
-    const requestedControls =
-      b.promptControls === undefined
-        ? undefined
-        : currentPromptControls(this, promptControls(this, b.promptControls)).controls;
     let requestedLore: ReturnType<typeof validateLoreContextPolicy> | undefined;
     try {
       requestedLore =
@@ -582,12 +580,6 @@ export class ProductStore {
       this.store.organization.assertBotAttachments(chatId, attachments, packageAttachments);
       for (const role of ['main', 'translation', 'status', 'image'] as const)
         assertModelSelection(this, selected[role], prior.routes[role]);
-      const prompts =
-        requestedPrompts === undefined ? prior.prompts : { ...prior.prompts, ...requestedPrompts };
-      const savedControls =
-        requestedControls === undefined
-          ? prior.promptControls
-          : { ...prior.promptControls, ...requestedControls };
       const result: ChatProfile = {
         ...((requestedLore ?? prior.loreContext)
           ? { loreContext: requestedLore ?? prior.loreContext }
@@ -598,8 +590,6 @@ export class ProductStore {
         personaReference: personaReference ?? prior.personaReference ?? true,
         routes: selected,
         image,
-        ...(prompts !== undefined ? { prompts } : {}),
-        ...(savedControls !== undefined ? { promptControls: savedControls } : {}),
         ...(packageAttachments !== undefined ? { packageAttachments } : {}),
         ...(packageValues !== undefined ? { packageValues } : {}),
       };
@@ -619,18 +609,25 @@ export class ProductStore {
       return result;
     });
   }
-  snapshot(chatId: string): ProfileSnapshot {
+  snapshot(chatId: string, requiredRole: 'main' | 'translation' = 'main'): ProfileSnapshot {
     const { optionAdjustments: _notices, ...p } = this.profile(chatId);
     const contents = p.attachments.map((r) => this.get<Content>('content', r.id, r.revision));
     const models: ProfileSnapshot['models'] = {};
+    const routes = { ...p.routes };
     for (const role of ['main', 'translation', 'status', 'image'] as const) {
       const r = p.routes[role];
-      if (r) models[role] = this.modelSnapshot(r.id);
+      if (!r) continue;
+      try {
+        models[role] = this.modelSnapshot(r.id);
+      } catch (error) {
+        if (role === requiredRole) throw error;
+        routes[role] = null;
+      }
     }
-    const promptPresets = p.prompts === undefined ? undefined : resolvedPrompts(this, p.prompts);
-    const collaboration = promptPresets?.main?.program.collaboration;
+    const frozen = freezeCurrentPrompts(promptWorkspace(this.store));
+    const collaboration = frozen.promptPresets?.main?.program.collaboration;
     const collaborationModels: Record<string, ModelSnapshot> = {};
-    if (collaboration?.enabled)
+    if (collaboration?.enabled && requiredRole === 'main')
       for (const agent of collaboration.agents) {
         const model = agent.model ? this.modelSnapshot(agent.model.id) : models.main;
         if (!model) throw new HttpError(400, '협업을 사용하려면 작문 모델을 선택해 주세요.');
@@ -638,22 +635,32 @@ export class ProductStore {
       }
     return structuredClone({
       ...p,
+      routes,
       contents,
       models,
       ...resolvePackageProfile(this, p),
-      ...(promptPresets !== undefined ? { promptPresets } : {}),
-      ...(collaboration?.enabled ? { collaborationModels } : {}),
+      ...frozen,
+      ...(collaboration?.enabled && requiredRole === 'main' ? { collaborationModels } : {}),
     });
   }
   resolveJobPrompt(snapshot: RunSnapshot, input: unknown): RunSnapshot {
     const resolved = structuredClone(snapshot);
     for (const role of ['translation', 'status'] as const) {
       const key = `${role}ModelSelection`;
+      if (
+        input &&
+        typeof input === 'object' &&
+        Object.hasOwn(input, `${role}ModelSnapshot`) &&
+        !Object.hasOwn(input, key)
+      )
+        throw new HttpError(400, `${role} model snapshot requires selection`);
       if (!input || typeof input !== 'object' || Array.isArray(input) || !Object.hasOwn(input, key))
         continue;
       const selected = record(input)[key];
       resolved.profile ??= { ...defaultProfile(resolved.chatId), contents: [], models: {} };
       if (selected === null) {
+        if (record(input)[`${role}ModelSnapshot`] != null)
+          throw new HttpError(400, `${role} model snapshot requires selection`);
         delete resolved.profile.models[role];
         resolved.profile.routes[role] = null;
       } else {
@@ -665,40 +672,35 @@ export class ProductStore {
       }
     }
     if (
-      !input ||
-      typeof input !== 'object' ||
-      Array.isArray(input) ||
-      !Object.hasOwn(input, 'promptSelection')
-    )
-      return resolved;
-    const selection = record(record(input).promptSelection);
-    fields(selection, ['translation']);
-    if (!Object.hasOwn(selection, 'translation'))
-      throw new HttpError(400, 'Translation prompt selection required');
-    const selected = promptRefs(this, selection).translation!;
-    if (!resolved.profile) {
-      if (selected === null) return resolved;
-      resolved.profile = { ...defaultProfile(resolved.chatId), contents: [], models: {} };
-    }
-    resolved.profile.prompts = { ...resolved.profile.prompts, translation: selected };
-    resolved.profile.promptPresets = { ...resolved.profile.promptPresets };
-    if (selected === null) delete resolved.profile.promptPresets.translation;
-    else
-      resolved.profile.promptPresets.translation = this.get<PromptPreset>(
-        'prompt-preset',
-        selected.id,
-        selected.revision
-      );
-    if (Object.hasOwn(input, 'promptControlSelection')) {
-      const raw = record(input).promptControlSelection;
-      if (selected) {
-        const key = `${selected.id}@${selected.revision}`;
-        const existing = { ...resolved.profile.promptControls };
-        delete existing[key];
-        if (raw !== null) Object.assign(existing, promptControls(this, { [key]: raw }));
-        resolved.profile.promptControls = existing;
-      } else if (raw !== null)
-        throw new HttpError(400, 'Prompt controls require selected translation prompt');
+      input &&
+      typeof input === 'object' &&
+      !Array.isArray(input) &&
+      Object.hasOwn(input, 'translationPrompt')
+    ) {
+      const data = record(input);
+      const current = validateCurrentPrompt(data.translationPrompt, 'translation');
+      const revision = number(data.promptWorkspaceRevision, 'prompt workspace revision');
+      const preset = {
+        ...current,
+        id: 'current-translation',
+        revision,
+        role: 'translation' as const,
+      };
+      resolved.profile ??= { ...defaultProfile(resolved.chatId), contents: [], models: {} };
+      resolved.profile.prompts = {
+        ...resolved.profile.prompts,
+        translation: { id: preset.id, revision },
+      };
+      resolved.profile.promptPresets = { ...resolved.profile.promptPresets, translation: preset };
+      resolved.profile.promptControls = {
+        ...resolved.profile.promptControls,
+        [`${preset.id}@${revision}`]: { values: current.values, combinations: [] },
+      };
+      if (data.translationPolicy) {
+        const policy = translationPolicy(data.translationPolicy);
+        if (policy.refusalModel) validateModelSnapshot(policy.refusalModel);
+        resolved.settings.maxCalls = policy.maxCalls;
+      }
     }
     return resolved;
   }
@@ -777,45 +779,6 @@ export class ProductStore {
       this.db.exec('ROLLBACK TO create_branch; RELEASE create_branch');
       throw error;
     }
-  }
-  chunks(jobId: string) {
-    return (
-      this.db.prepare('SELECT * FROM job_chunks WHERE job_id=? ORDER BY rowid').all(jobId) as Row[]
-    ).map((r) => ({
-      id: r.id,
-      status: r.status,
-      attempt: r.attempt,
-      error: r.error,
-      result: parse(r.result),
-      input: parse(r.input),
-    }));
-  }
-  plan(jobId: string, value?: unknown): any {
-    if (value !== undefined)
-      this.db.prepare('UPDATE jobs SET plan=? WHERE id=? AND plan IS NULL').run(json(value), jobId);
-    const r = this.db.prepare('SELECT plan FROM jobs WHERE id=?').get(jobId) as Row;
-    return parse(r.plan);
-  }
-  chunk(
-    jobId: string,
-    id: string,
-    status: string,
-    input?: unknown,
-    result?: unknown,
-    error?: string
-  ) {
-    this.db
-      .prepare(
-        "INSERT INTO job_chunks(job_id,id,status,attempt,input,result,error) VALUES(?,?,?,1,?,?,?) ON CONFLICT(job_id,id) DO UPDATE SET status=excluded.status,attempt=job_chunks.attempt+CASE WHEN excluded.status='running' THEN 1 ELSE 0 END,input=COALESCE(excluded.input,job_chunks.input),result=COALESCE(excluded.result,job_chunks.result),error=excluded.error"
-      )
-      .run(
-        jobId,
-        id,
-        status,
-        input === undefined ? null : json(input),
-        result === undefined ? null : json(result),
-        error ?? null
-      );
   }
   startAttempt(chatId: string, runId: string | null, jobId: string | null, request: WireRecord) {
     const id = randomUUID();
@@ -901,11 +864,14 @@ export class ProductStore {
       response: parse(r.response),
     }));
   }
-  assets(chatId?: string): Asset[] {
+  assets(chatId?: string, includeHidden = false): Asset[] {
+    const visible = includeHidden
+      ? ''
+      : " AND NOT EXISTS (SELECT 1 FROM library_hidden WHERE kind='asset' AND id=assets.id)";
     return (
       (chatId
-        ? this.db.prepare('SELECT body FROM assets WHERE chat_id=?').all(chatId)
-        : this.db.prepare('SELECT body FROM assets').all()) as Row[]
+        ? this.db.prepare(`SELECT body FROM assets WHERE chat_id=?${visible}`).all(chatId)
+        : this.db.prepare(`SELECT body FROM assets WHERE 1=1${visible}`).all()) as Row[]
     ).map((r) => parse(r.body));
   }
   asset(id: string) {
@@ -953,7 +919,7 @@ export class ProductStore {
       ? (
           this.db
             .prepare(
-              "SELECT json_set(json_remove(v.body,'$.package'),'$.text','') AS body, json_type(v.body,'$.package') AS packaged, (SELECT image.value FROM json_each(v.body,'$.package.images') image WHERE json_extract(image.value,'$.id')=json_extract(v.body,'$.package.portraitImageId') LIMIT 1) AS portrait FROM versions v WHERE kind='content' AND revision=(SELECT MAX(revision) FROM versions n WHERE n.kind=v.kind AND n.id=v.id) ORDER BY id"
+              "SELECT json_set(json_remove(v.body,'$.package'),'$.text','') AS body, json_type(v.body,'$.package') AS packaged, (SELECT image.value FROM json_each(v.body,'$.package.images') image WHERE json_extract(image.value,'$.id')=json_extract(v.body,'$.package.portraitImageId') LIMIT 1) AS portrait FROM versions v WHERE kind='content' AND revision=(SELECT MAX(revision) FROM versions n WHERE n.kind=v.kind AND n.id=v.id) AND NOT EXISTS(SELECT 1 FROM library_hidden h WHERE h.kind=v.kind AND h.id=v.id) ORDER BY id"
             )
             .all() as Row[]
         ).map((r) => ({
@@ -991,7 +957,7 @@ export class ProductStore {
     );
     return {
       format: 'narrative-archive',
-      version: 13,
+      version: 14,
       createdAt: new Date().toISOString(),
       tables,
     };
@@ -1007,12 +973,19 @@ export class ProductStore {
     }
   }
   importStatus() {
+    const { revision: _currentRevision, ...current } = promptWorkspace(this.store);
+    const { revision: _defaultRevision, ...defaults } = defaultPromptWorkspace();
     return {
-      canImport: !archiveTables.some(
-        (table) =>
-          !['package_behavior_entropy', 'library_organization_state'].includes(table) &&
-          this.db.prepare(`SELECT 1 FROM ${table} LIMIT 1`).get()
-      ),
+      canImport:
+        isDeepStrictEqual(current, defaults) &&
+        !archiveTables.some(
+          (table) =>
+            ![
+              'package_behavior_entropy',
+              'library_organization_state',
+              'prompt_workspace',
+            ].includes(table) && this.db.prepare(`SELECT 1 FROM ${table} LIMIT 1`).get()
+        ),
     };
   }
   import(value: unknown) {
@@ -1026,19 +999,21 @@ export class ProductStore {
     }
     const a = record(copy);
     fields(a, ['format', 'version', 'createdAt', 'tables']);
-    if (a.format !== 'narrative-archive' || a.version !== 13)
+    if (a.format !== 'narrative-archive' || a.version !== 14)
       throw new HttpError(400, 'Unsupported archive');
     const tables = record(a.tables);
     fields(tables, archiveTables);
     if (archiveTables.some((t) => !Array.isArray(tables[t]) || tables[t].length > 100000))
       throw new HttpError(400, 'Missing or oversized archive table');
+    if (tables.prompt_workspace.length !== 1)
+      throw new HttpError(400, 'Archive requires exactly one prompt workspace');
     try {
       this.store.transaction(() => {
         if (!this.importStatus().canImport)
           throw new HttpError(409, 'Restore requires an empty database');
         this.db.exec('PRAGMA defer_foreign_keys=ON');
         this.db.exec(
-          'DELETE FROM package_behavior_entropy; DELETE FROM library_organization_state'
+          'DELETE FROM package_behavior_entropy; DELETE FROM library_organization_state; DELETE FROM prompt_workspace'
         );
         for (const table of archiveTables) {
           const columns = (this.db.prepare(`PRAGMA table_info(${table})`).all() as Row[]).map(
@@ -1073,6 +1048,10 @@ export class ProductStore {
                 row.body = json(body);
               }
             }
+            if (table === 'prompt_workspace') {
+              if (row.id !== 1) throw new HttpError(400, 'Invalid prompt workspace row');
+              validatePromptWorkspace(parse(row.body));
+            }
             if (table === 'assets') validateArchiveAsset(row);
             if (table === 'runs') {
               const snapshot = record(parse(row.snapshot));
@@ -1103,12 +1082,13 @@ export class ProductStore {
                   delete connection.credentialEnv;
                   connection.enabled = false;
                 }
+                if (input.translationPolicy?.refusalModel) {
+                  const connection = record(input.translationPolicy.refusalModel.connection);
+                  delete connection.credentialEnv;
+                  connection.enabled = false;
+                }
                 row.input = json(input);
               }
-            }
-            if (table === 'job_chunks' && row.status === 'running') {
-              row.status = 'interrupted';
-              row.error = 'Restored uncertain chunk; explicit retry required';
             }
             if (table === 'attempts' && row.status === 'running') {
               row.status = 'interrupted';
@@ -1172,7 +1152,8 @@ const archiveTables = [
   'model_inputs',
   'tool_events',
   'events',
-  'job_chunks',
+  'prompt_workspace',
+  'library_hidden',
   'attempts',
   'assets',
   ...storyTables,
@@ -1186,47 +1167,6 @@ export const packageControlKey = (r: PackageAttachment) => `${r.id}@${r.revision
 function currentRef(product: ProductStore, kind: string, reference: ContentRef): ContentRef {
   const current = product.get<ContentRef>(kind, reference.id);
   return { id: current.id, revision: current.revision };
-}
-function currentPromptRefs(product: ProductStore, value: unknown) {
-  const selected = promptRefs(product, value);
-  return promptRefs(
-    product,
-    Object.fromEntries(
-      Object.entries(selected).map(([role, r]) => [
-        role,
-        r ? currentRef(product, 'prompt-preset', r) : null,
-      ])
-    )
-  );
-}
-function currentPromptControls(
-  product: ProductStore,
-  saved: NonNullable<ChatProfile['promptControls']>
-) {
-  const controls: NonNullable<ChatProfile['promptControls']> = {};
-  const notices: string[] = [];
-  // A newer saved set wins if a pre-existing profile contains several sets for one ID.
-  for (const [key, value] of Object.entries(saved).sort(
-    ([a], [b]) => Number(a.split('@')[1]) - Number(b.split('@')[1])
-  )) {
-    const preset = product.get<PromptPreset>('prompt-preset', key.split('@')[0]);
-    const adjusted = reconcilePromptValues(preset.program, value.values);
-    const resetKeys = new Set(adjusted.resetKeys);
-    const combinations = value.combinations.map((combination) => {
-      const result = reconcilePromptValues(preset.program, combination.values);
-      result.resetKeys.forEach((key) => {
-        resetKeys.add(key);
-      });
-      return { ...combination, values: result.values };
-    });
-    controls[`${preset.id}@${preset.revision}`] = {
-      ...value,
-      values: adjusted.values,
-      combinations,
-    };
-    if (resetKeys.size) notices.push(`${preset.title}: ${[...resetKeys].join(', ')}`);
-  }
-  return { controls, notices };
 }
 function currentPackageValues(
   product: ProductStore,
@@ -1262,15 +1202,15 @@ function currentPackageValues(
 function currentProfile(product: ProductStore, saved: ChatProfile): ChatProfile {
   const result = {
     ...saved,
+    routes: Object.fromEntries(
+      Object.entries(saved.routes).map(([role, ref]) => [
+        role,
+        ref && product.isHidden('model', ref.id) ? null : ref,
+      ])
+    ) as ChatProfile['routes'],
     attachments: saved.attachments.map((r) => currentRef(product, 'content', r)),
   };
   const notices: string[] = [];
-  if (saved.prompts) result.prompts = currentPromptRefs(product, saved.prompts);
-  if (saved.promptControls) {
-    const adjusted = currentPromptControls(product, saved.promptControls);
-    result.promptControls = adjusted.controls;
-    notices.push(...adjusted.notices);
-  }
   if (saved.packageAttachments)
     result.packageAttachments = saved.packageAttachments.map((r) => ({
       ...r,
@@ -1365,65 +1305,12 @@ function archiveList(value: unknown, maximum = 300): any[] {
 }
 function archiveSettings(value: unknown) {
   const b = record(value);
-  fields(b, ['preset', 'mode', 'translation', 'translationChunkChars', 'status', 'maxCalls']);
+  fields(b, ['preset', 'mode', 'translation', 'status', 'maxCalls']);
   choice(b.preset, ['calm', 'vivid'], 'preset');
   choice(b.mode, ['direct', 'research'], 'mode');
   boolean(b.translation);
-  translationChunkChars(b.translationChunkChars);
   boolean(b.status);
   number(b.maxCalls, 'call limit', 1, 16);
-}
-function promptControls(
-  product: ProductStore,
-  value: unknown
-): NonNullable<ChatProfile['promptControls']> {
-  const b = record(value);
-  if (Object.keys(b).length > 200) throw new HttpError(400, 'Too many saved prompt control sets');
-  return Object.fromEntries(
-    Object.entries(b).map(([key, raw]) => {
-      const match = /^([^@]+)@([1-9][0-9]*)$/u.exec(key);
-      if (!match) throw new HttpError(400, 'Prompt control key requires id@revision');
-      const preset = product.get<PromptPreset>(
-        'prompt-preset',
-        match[1],
-        number(Number(match[2]), 'prompt revision')
-      );
-      if (!preset.program) throw new HttpError(400, 'Prompt controls require a composed prompt');
-      const controls = validateChatPromptControls(raw);
-      resolvePromptValues(preset.program, controls.values);
-      controls.combinations.forEach((c) => {
-        resolvePromptValues(preset.program!, c.values);
-      });
-      return [key, controls];
-    })
-  );
-}
-function promptRefs(product: ProductStore, value: unknown): NonNullable<ChatProfile['prompts']> {
-  const selected = record(value);
-  fields(selected, ['main', 'translation']);
-  const result: NonNullable<ChatProfile['prompts']> = {};
-  for (const role of Object.keys(selected) as PromptRole[]) {
-    const reference = selected[role] === null ? null : ref(selected[role]);
-    if (
-      reference &&
-      product.get<PromptPreset>('prompt-preset', reference.id, reference.revision).role !== role
-    )
-      throw new HttpError(400, 'Prompt role mismatch');
-    result[role] = reference;
-  }
-  return result;
-}
-function resolvedPrompts(
-  product: ProductStore,
-  value: NonNullable<ChatProfile['prompts']>
-): NonNullable<ProfileSnapshot['promptPresets']> {
-  return Object.fromEntries(
-    Object.entries(promptRefs(product, value)).flatMap(([role, reference]) =>
-      reference
-        ? [[role, product.get<PromptPreset>('prompt-preset', reference.id, reference.revision)]]
-        : []
-    )
-  );
 }
 function validateArchiveVersion(row: Row, providerSetting = false) {
   if (isProviderSetting(row.kind) && !providerSetting)
@@ -1471,14 +1358,15 @@ function validateArchiveVersion(row: Row, providerSetting = false) {
         throw new HttpError(400, 'Package identity mismatch');
     }
   } else if (row.kind === 'prompt-preset') {
-    fields(body, ['id', 'revision', 'title', 'role', 'program']);
+    fields(body, ['id', 'revision', 'title', 'role', 'program', 'values']);
     choice(body.role, ['main', 'translation'], 'prompt role');
     const program = validatePromptProgram(body.program);
+    resolvePromptValues(program, body.values === undefined ? {} : record(body.values));
     if (program.collaboration && body.role !== 'main')
       throw new HttpError(400, 'Collaboration requires the main prompt role');
   } else if (row.kind === 'prompt-combination') {
-    fields(body, ['id', 'revision', 'title', 'prompt', 'values']);
-    ref(body.prompt);
+    fields(body, ['id', 'revision', 'title', 'role', 'values']);
+    choice(body.role, ['main', 'translation'], 'prompt role');
     validateChatPromptControls({ values: body.values, combinations: [] });
   } else if (row.kind === 'connection') {
     fields(body, [
@@ -1612,12 +1500,21 @@ function validateArchiveProfile(
     'personaReference',
     'routes',
     'image',
-    'prompts',
-    'promptControls',
     'packageAttachments',
     'packageValues',
     'loreContext',
-    ...(frozen ? ['contents', 'models', 'promptPresets', 'packages', 'collaborationModels'] : []),
+    ...(frozen
+      ? [
+          'contents',
+          'models',
+          'promptPresets',
+          'prompts',
+          'promptControls',
+          'promptWorkspaceRevision',
+          'packages',
+          'collaborationModels',
+        ]
+      : []),
   ]);
   if (p.loreContext !== undefined) validateLoreContextPolicy(p.loreContext);
   if (p.chatId !== chatId) throw new HttpError(400, 'Profile chat mismatch');
@@ -1645,9 +1542,36 @@ function validateArchiveProfile(
       models[role] = model;
     } else product.get<ModelPreset>('model', r.id);
   }
-  const prompts = p.prompts === undefined ? undefined : promptRefs(product, p.prompts);
-  if (p.promptControls !== undefined) promptControls(product, p.promptControls);
-  const promptPresets = prompts === undefined ? undefined : resolvedPrompts(product, prompts);
+  const promptPresets = frozen ? (p.promptPresets as ProfileSnapshot['promptPresets']) : undefined;
+  if (frozen && promptPresets) {
+    fields(record(promptPresets), ['main', 'translation']);
+    const allowedKeys: string[] = [];
+    for (const role of ['main', 'translation'] as const) {
+      const preset = promptPresets[role];
+      if (!preset) continue;
+      const program = validatePromptProgram(preset.program);
+      if (preset.role !== role) throw new HttpError(400, 'Frozen prompt role mismatch');
+      number(preset.revision, 'prompt revision');
+      text(preset.id, 'prompt ID', 100);
+      const key = `${preset.id}@${preset.revision}`;
+      allowedKeys.push(key);
+      if (
+        p.prompts?.[role] &&
+        !isDeepStrictEqual(p.prompts[role], { id: preset.id, revision: preset.revision })
+      )
+        throw new HttpError(400, 'Frozen prompt selection mismatch');
+      const controls = p.promptControls?.[key];
+      if (controls) {
+        const checked = validateChatPromptControls(controls);
+        resolvePromptValues(program, checked.values);
+        for (const combination of checked.combinations)
+          resolvePromptValues(program, combination.values);
+      }
+    }
+    if (p.promptControls) fields(record(p.promptControls), allowedKeys);
+    if (p.promptWorkspaceRevision !== undefined)
+      number(p.promptWorkspaceRevision, 'prompt workspace revision');
+  }
   if (frozen) {
     const collaboration = promptPresets?.main?.program.collaboration;
     if (collaboration?.enabled) {
@@ -1699,31 +1623,6 @@ function validateArchiveProfile(
     throw new HttpError(400, 'Frozen profile revision mismatch');
   return p as ProfileSnapshot | ChatProfile;
 }
-/** Re-tokenize a stored translation before applying the same output validator. */
-export function validateStoredChunk(plan: TranslationPlan, raw: unknown): TranslationResult {
-  const value = record(raw);
-  const chunk = plan.chunks.find((c) => c.id === value.chunkId);
-  if (!chunk) throw new HttpError(400, 'Unknown translation chunk');
-  const restored = structuredClone(value);
-  const segments = archiveList(restored.segments, plan.blocks.length);
-  for (const segment of segments) {
-    const entry = record(segment);
-    const anchors = archiveList(entry.anchors, plan.blocks.length);
-    let cursor = 0;
-    let tokenized = '';
-    const translated = text(entry.text, 'translated block', 50000);
-    for (const span of chunk.protectedSpans.filter((span) => anchors.includes(span.anchor))) {
-      const index = translated.indexOf(span.literal, cursor);
-      if (index < 0) throw new HttpError(400, 'Stored protected span missing');
-      tokenized += translated.slice(cursor, index) + span.token;
-      cursor = index + span.literal.length;
-    }
-    entry.text = tokenized + translated.slice(cursor);
-  }
-  const validated = validateTranslationChunk(plan, chunk.id, restored);
-  if (!isDeepStrictEqual(validated, value)) throw new HttpError(400, 'Stored translation mismatch');
-  return validated;
-}
 function validateArchiveGraph(product: ProductStore) {
   for (const preset of product.all('prompt-preset') as PromptPreset[])
     for (const agent of preset.program.collaboration?.agents ?? [])
@@ -1734,11 +1633,24 @@ function validateArchiveGraph(product: ProductStore) {
     const content = JSON.parse(row.body);
     if (content.package) assertPackageReferences(product, content.package);
   }
-  for (const saved of product.all('prompt-combination')) {
-    const r = ref(saved.prompt);
-    const preset = product.get<PromptPreset>('prompt-preset', r.id, r.revision);
-    if (!preset.program) throw new HttpError(400, 'Creative preset prompt missing controls');
-    resolvePromptValues(preset.program, record(saved.values));
+  // Option presets were validated as independent role/value copies by validateArchiveVersion.
+  const workspace = promptWorkspace(product.store);
+  for (const selected of [
+    workspace.translationPolicy.refusalModel,
+    ...(workspace.main.program.collaboration?.agents ?? []).map((agent) => agent.model),
+  ])
+    if (selected) product.get<ModelPreset>('model', selected.id);
+  for (const hidden of product.db.prepare('SELECT kind,id FROM library_hidden').all() as Row[]) {
+    const kind = choice(
+      hidden.kind,
+      ['content', 'prompt-preset', 'prompt-combination', 'connection', 'model', 'asset'],
+      'hidden library kind'
+    );
+    const id = archiveId(hidden.id);
+    if (kind === 'asset') {
+      if (!product.db.prepare('SELECT 1 FROM assets WHERE id=?').get(id))
+        throw new HttpError(400, 'Hidden asset missing');
+    } else product.get(kind, id);
   }
   const db = product.db;
   const rows = (table: string) => db.prepare(`SELECT * FROM ${table}`).all() as Row[];
@@ -1916,41 +1828,19 @@ function validateArchiveGraph(product: ProductStore) {
     sameChat(job.source_revision, job.chat_id, sources);
     const source = product.store.sourceAtHash(job.source_revision, job.source_hash);
     const jobInput = parse(job.input);
-    if (jobInput && Object.hasOwn(jobInput, 'translationChunkChars')) {
-      if (job.kind !== 'translation')
-        throw new HttpError(400, 'Chunk settings require a translation job');
-      translationChunkChars(jobInput.translationChunkChars);
-      if (job.plan && JSON.parse(job.plan).maxChunkChars !== jobInput.translationChunkChars)
-        throw new HttpError(400, 'Translation chunk setting does not match plan');
-    }
     if (jobInput && typeof jobInput === 'object' && !Array.isArray(jobInput)) {
-      if (
-        (Object.hasOwn(jobInput, 'promptSelection') ||
-          Object.hasOwn(jobInput, 'promptControlSelection')) &&
-        job.kind !== 'translation'
-      )
-        throw new HttpError(400, 'Prompt selection requires a translation job');
-      if (
-        Object.hasOwn(jobInput, 'statusModelSnapshot') &&
-        !Object.hasOwn(jobInput, 'statusModelSelection')
-      )
-        throw new HttpError(400, 'Status model snapshot requires selection');
       for (const role of ['translation', 'status'] as const) {
         if (
           (Object.hasOwn(jobInput, `${role}ModelSelection`) ||
-            Object.hasOwn(jobInput, `${role}ModelSnapshot`) ||
-            (jobInput.promptSelection && Object.hasOwn(record(jobInput.promptSelection), role))) &&
+            Object.hasOwn(jobInput, `${role}ModelSnapshot`)) &&
           job.kind !== role
         )
           throw new HttpError(400, 'Auxiliary selection does not match job kind');
       }
-      if (
-        Object.hasOwn(jobInput, 'promptControlSelection') &&
-        !Object.hasOwn(jobInput, 'promptSelection')
-      )
-        throw new HttpError(400, 'Prompt controls require selection');
+      if ((jobInput.translationPrompt || jobInput.translationPolicy) && job.kind !== 'translation')
+        throw new HttpError(400, 'Translation settings require translation job');
     }
-    const snapshot = product.resolveJobPrompt(product.store.run(source.runId).snapshot, jobInput);
+    product.resolveJobPrompt(product.store.run(source.runId).snapshot, jobInput);
     if (job.kind === 'image' && job.status !== 'stale')
       validateImageCatalog(product.store, job.chat_id, jobInput);
     if (job.source_hash !== source.hash) throw new HttpError(400, 'Job source hash mismatch');
@@ -1980,68 +1870,6 @@ function validateArchiveGraph(product: ProductStore) {
       throw new HttpError(400, 'Invalid authored marker');
     if (job.kind === 'translation' && job.status === 'completed')
       validateTranslationArtifact(product.store, product.store.job(job.id), source);
-    const chunks = product.chunks(job.id);
-    if (job.plan !== null) {
-      if (job.kind !== 'translation') throw new HttpError(400, 'Unexpected job plan');
-      const plan = validateTranslationPlan(
-        source,
-        sourceTimeContext(snapshot, 'translation'),
-        parse(job.plan)
-      );
-      if (
-        chunks.length !== plan.chunks.length ||
-        chunks.some((c) => !plan.chunks.some((p) => p.id === c.id))
-      )
-        throw new HttpError(400, 'Translation reservation mismatch');
-      const completed: TranslationResult[] = [];
-      for (const chunk of chunks) {
-        choice(
-          chunk.status,
-          ['queued', 'completed', 'failed', 'cancelled', 'interrupted'],
-          'chunk status'
-        );
-        number(chunk.attempt, 'chunk attempt', 0);
-        if (chunk.result) {
-          const validated = validateStoredChunk(plan, chunk.result);
-          if (validated.chunkId !== chunk.id) throw new HttpError(400, 'Chunk identity mismatch');
-          if (chunk.status === 'completed') completed.push(validated);
-        } else if (chunk.status === 'completed')
-          throw new HttpError(400, 'Completed chunk result missing');
-      }
-      const combined = aggregateTranslation(plan, completed);
-      if (
-        job.status === 'completed' &&
-        (combined.status !== 'completed' || !isDeepStrictEqual(result?.segments, combined.segments))
-      )
-        throw new HttpError(400, 'Completed translation coverage mismatch');
-      if (result?.segments) {
-        const storedSegments = archiveList(result.segments, plan.blocks.length);
-        let cursor = 0;
-        for (const segment of storedSegments) {
-          const index = combined.segments.findIndex(
-            (candidate, index) => index >= cursor && isDeepStrictEqual(candidate, segment)
-          );
-          if (index < 0) throw new HttpError(400, 'Translation result differs from stored chunks');
-          cursor = index + 1;
-        }
-      }
-      if (result) {
-        const segments = archiveList(result.segments, plan.blocks.length);
-        const anchors = new Set(
-          segments.flatMap((segment) => archiveList(record(segment).anchors, plan.blocks.length))
-        );
-        const included = plan.chunks.filter((chunk) =>
-          chunk.anchors.every((anchor) => anchors.has(anchor))
-        );
-        if (
-          included.flatMap((chunk) => chunk.anchors).length !== anchors.size ||
-          result.completedChunks !== included.length ||
-          result.totalChunks !== plan.chunks.length ||
-          result.text !== segments.map((segment) => segment.text).join('\n\n')
-        )
-          throw new HttpError(400, 'Translation summary coverage mismatch');
-      }
-    } else if (chunks.length) throw new HttpError(400, 'Chunk plan missing');
     if (result && job.kind === 'image') {
       validateImageCatalog(product.store, job.chat_id, jobInput);
       const assets = imageCatalog(jobInput);

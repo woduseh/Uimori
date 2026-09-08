@@ -135,7 +135,12 @@ function standalone(store: Store, chatId: string) {
       archive.tables.sources.filter((row) => row.chat_id === chatId).map((row) => row.id)
     );
   for (const [name, rows] of Object.entries(archive.tables)) {
-    if (name === 'versions' || name === 'package_behavior_entropy' || name.startsWith('library_'))
+    if (
+      name === 'versions' ||
+      name === 'prompt_workspace' ||
+      name === 'package_behavior_entropy' ||
+      name.startsWith('library_')
+    )
       continue;
     archive.tables[name] = rows.filter((row) =>
       Object.hasOwn(row, 'chat_id')

@@ -21,6 +21,7 @@
     "build": "node scripts/build.mjs",
     "test": "vitest run",
     "test:tooling": "node scripts/test-tooling.mjs",
+    "benchmark:story": "node scripts/benchmark-story.mjs",
     "doctor": "node scripts/doctor.mjs",
     "verify": "node scripts/verify.mjs",
     "verify:smoke": "node scripts/verify.mjs --case F02,F03,F06",
@@ -36,6 +37,8 @@
     "verify:navigation": "node scripts/verify-navigation.mjs",
     "verify:library": "node scripts/verify-library.mjs",
     "verify:redesign": "node scripts/verify-redesign.mjs",
+    "verify:browser-smoke": "node scripts/verify-browser-smoke.mjs",
+    "verify:visual": "node scripts/verify-visual.mjs",
     "verify:selfhost": "node scripts/verify-self-host.mjs"
   },
   "dependencies": {

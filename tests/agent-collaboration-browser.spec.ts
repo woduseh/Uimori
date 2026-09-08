@@ -1,3 +1,5 @@
+import { visualReview } from './fixtures/visual-review.js';
+import { preservePromptWorkspace } from './fixtures/prompt-workspace.js';
 import { test, expect } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
 import { createDefaultPromptProgram } from '../core/prompt-defaults.js';
@@ -74,11 +76,13 @@ test('AGENTUI01 collaboration stays editable through incomplete drafts, undo and
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(
     true
   );
-  await page.screenshot({ path: info.outputPath('agent-collaboration-mobile.png') });
+  if (visualReview)
+    await page.screenshot({ path: info.outputPath('agent-collaboration-mobile.png') });
   await collaboration
     .getByRole('heading', { name: '에이전트 협업', exact: true })
     .evaluate((element) => element.scrollIntoView({ block: 'start' }));
-  await page.screenshot({ path: info.outputPath('agent-collaboration-mobile-overview.png') });
+  if (visualReview)
+    await page.screenshot({ path: info.outputPath('agent-collaboration-mobile-overview.png') });
   await enabled.uncheck();
   const updatedResponse = page.waitForResponse(
     (item) =>
@@ -160,13 +164,20 @@ test('AGENTUI02 saved collaboration options reach the real preview API and trans
       ...fields,
       expectedRevision: profile.revision,
       routes: { ...profile.routes, main: { id: model.id } },
-      prompts: { main: { id: saved.id, revision: saved.revision } },
-      promptControls: {
-        [`${saved.id}@${saved.revision}`]: { values: { perspective: '먼 시점' }, combinations: [] },
-      },
     },
   });
   expect(configured.ok(), await configured.text()).toBe(true);
+  const workspace = await (await request.get('/api/prompt-workspace')).json();
+  expect(
+    (
+      await request.put('/api/prompt-workspace', {
+        data: {
+          expectedRevision: workspace.revision,
+          main: { title: saved.title, program: saved.program, values: { perspective: '먼 시점' } },
+        },
+      })
+    ).ok()
+  ).toBe(true);
   const preview = await request.post(`/api/chats/${chat.id}/prompt-preview`, {
     data: { request: '합성 장면을 이어 줘.' },
   });
@@ -181,11 +192,13 @@ test('AGENTUI02 saved collaboration options reach the real preview API and trans
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(
     true
   );
-  await page.screenshot({ path: info.outputPath('agent-collaboration-desktop.png') });
+  if (visualReview)
+    await page.screenshot({ path: info.outputPath('agent-collaboration-desktop.png') });
   await collaboration
     .getByRole('heading', { name: '에이전트 협업', exact: true })
     .evaluate((element) => element.scrollIntoView({ block: 'start' }));
-  await page.screenshot({ path: info.outputPath('agent-collaboration-desktop-overview.png') });
+  if (visualReview)
+    await page.screenshot({ path: info.outputPath('agent-collaboration-desktop-overview.png') });
   // Saved presets keep their role. Check translation on a new draft through the normal UI.
   await expect(editor.getByLabel('프롬프트 역할', { exact: true })).toBeDisabled();
   const library = page.getByTestId('prompt-library');
@@ -194,3 +207,5 @@ test('AGENTUI02 saved collaboration options reach the real preview API and trans
   await editor.getByLabel('프롬프트 역할', { exact: true }).selectOption('translation');
   await expect(editor.getByRole('region', { name: '에이전트 협업' })).toHaveCount(0);
 });
+
+preservePromptWorkspace();

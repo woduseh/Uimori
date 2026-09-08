@@ -1,3 +1,5 @@
+import { visualReview } from './fixtures/visual-review.js';
+import { preservePromptWorkspace } from './fixtures/prompt-workspace.js';
 import { selectChatSettingsSection, openPromptTools } from './ui-navigation.js';
 import { test, expect, type APIRequestContext, type Page } from '@playwright/test';
 import { randomUUID } from 'node:crypto';
@@ -110,9 +112,8 @@ test('NUI01 native prompt import, draft preservation, roles, history and saved c
   await page.setViewportSize({ width: 1440, height: 1000 });
   await settings(page, c.id);
   await selectChatSettingsSection(page, '프롬프트·창작 프리셋');
-  const editor = page.getByTestId('prompt-editor');
-  await editor.getByRole('button', { name: '새 프롬프트 생성', exact: true }).click();
-  await editor.getByLabel('프롬프트 이름', { exact: true }).fill('Synthetic native composed');
+  const editor = page.getByRole('region', { name: '현재 프롬프트 설정' });
+  await editor.getByLabel('현재 프롬프트 이름', { exact: true }).fill('Synthetic native composed');
   const composer = page.getByTestId('prompt-composer');
   await openPromptTools(composer);
   await composer.getByLabel('프롬프트 구성 JSON 불러오기', { exact: true }).setInputFiles({
@@ -127,10 +128,8 @@ test('NUI01 native prompt import, draft preservation, roles, history and saved c
   });
   await expect(composer.locator('.pc-block')).toHaveCount(4);
   await expect(composer.getByLabel('합성 분위기', { exact: true })).toHaveValue('null');
-  await composer
-    .getByRole('button', { name: '가져온 권장 조합을 목록에 추가', exact: true })
-    .click();
-  await expect(composer.getByLabel('합성 분위기', { exact: true })).toHaveValue('null');
+  await composer.getByRole('button', { name: '가져온 권장 옵션 적용', exact: true }).click();
+  await expect(composer.getByLabel('합성 분위기', { exact: true })).toHaveValue('"bright"');
   const jsonSection = composer
     .locator('.pc-section')
     .filter({ has: page.locator('summary', { hasText: '전체 구성 JSON · 고급 편집' }) });
@@ -143,27 +142,25 @@ test('NUI01 native prompt import, draft preservation, roles, history and saved c
   await jsonSection.getByRole('button', { name: '적용된 값으로 되돌리기', exact: true }).click();
   await expect(raw).toHaveValue(JSON.stringify(program, null, 2));
   await jsonSection.locator('summary').first().click();
-  await editor.getByRole('button', { name: '저장하고 적용', exact: true }).click();
+  await editor.getByRole('button', { name: '현재 설정 저장', exact: true }).click();
   await expect
-    .poll(async () => (await detail(request, c.id)).profile?.prompts?.main?.id)
-    .toBeTruthy();
+    .poll(async () => (await (await request.get('/api/prompt-workspace')).json()).main.title)
+    .toBe('Synthetic native composed');
   await composer.getByLabel('합성 분위기', { exact: true }).selectOption('"calm"');
   await composer.getByLabel('새 조합 이름', { exact: true }).fill('차분한 장면');
-  await composer.getByRole('button', { name: '현재 값으로 조합 만들기', exact: true }).click();
+  await composer.getByRole('button', { name: '전역 창작 조합으로 저장', exact: true }).click();
+  await expect(composer.getByLabel('새 조합 이름', { exact: true })).toHaveValue('');
   await composer.getByLabel('합성 분위기', { exact: true }).selectOption('"bright"');
   await composer
-    .getByLabel('프롬프트 선택 조합', { exact: true })
+    .getByLabel('전역 창작 조합', { exact: true })
     .selectOption({ label: '차분한 장면' });
   await expect(composer.getByLabel('합성 분위기', { exact: true })).toHaveValue('"calm"');
-  await composer.getByRole('button', { name: '이야기 선택값과 조합 저장', exact: true }).click();
+  await editor.getByRole('button', { name: '현재 설정 저장', exact: true }).click();
+  await expect
+    .poll(async () => (await (await request.get('/api/prompt-workspace')).json()).main.values)
+    .toEqual({ tone: 'calm' });
   const after = await detail(request, c.id);
-  const selected = after.profile!.prompts!.main!;
-  const state = after.profile!.promptControls![`${selected.id}@${selected.revision}`];
-  expect(state.values).toEqual({ tone: 'calm' });
-  expect(state.combinations).toHaveLength(2);
-  expect(state.combinations.map((item) => item.title)).toEqual(
-    expect.arrayContaining(['합성 권장', '차분한 장면'])
-  );
+  expect(after.profile).toEqual(before.profile);
   expect(after.profile!.routes.main).toEqual(before.profile!.routes.main);
   await composer.getByLabel('전송 미리보기 접기/펼치기', { exact: true }).click();
   await composer.getByLabel('미리보기 현재 요청', { exact: true }).fill('Synthetic next turn.');
@@ -202,7 +199,7 @@ test('NUI01 native prompt import, draft preservation, roles, history and saved c
   await composer.locator('.pc-message-list > li').first().locator('summary').click();
   await expect(composer.locator('.pc-message-list pre').first()).toHaveText('SYNTHETIC TONE=calm');
   await fits(page);
-  await page.screenshot({ path: info.outputPath('native-composer-desktop.png') });
+  if (visualReview) await page.screenshot({ path: info.outputPath('native-composer-desktop.png') });
   const firstBlock = composer.locator('.pc-block').first();
   await firstBlock.locator('summary').first().click();
   await expect(firstBlock.getByRole('combobox', { name: '메시지 역할', exact: true })).toHaveValue(
@@ -215,7 +212,8 @@ test('NUI01 native prompt import, draft preservation, roles, history and saved c
     await page.setViewportSize({ width, height });
     await firstBlock.evaluate((el) => el.scrollIntoView({ block: 'start' }));
     await fits(page);
-    await page.screenshot({ path: info.outputPath(`native-composer-block-${name}.png`) });
+    if (visualReview)
+      await page.screenshot({ path: info.outputPath(`native-composer-block-${name}.png`) });
   }
   await firstBlock.locator('summary').first().click();
   const historyBlock = composer.locator('.pc-block').last();
@@ -223,12 +221,13 @@ test('NUI01 native prompt import, draft preservation, roles, history and saved c
   await expect(historyBlock.getByLabel('시작 위치', { exact: true })).toHaveValue('0');
   await historyBlock.evaluate((el) => el.scrollIntoView({ block: 'start' }));
   await fits(page);
-  await page.screenshot({ path: info.outputPath('native-composer-history-mobile.png') });
+  if (visualReview)
+    await page.screenshot({ path: info.outputPath('native-composer-history-mobile.png') });
   await historyBlock.locator('summary').first().click();
   await page.setViewportSize({ width: 390, height: 844 });
   await composer.scrollIntoViewIfNeeded();
   await fits(page);
-  await page.screenshot({ path: info.outputPath('native-composer-mobile.png') });
+  if (visualReview) await page.screenshot({ path: info.outputPath('native-composer-mobile.png') });
   await page.reload();
   await page.getByRole('button', { name: '채팅 설정', exact: true }).click();
   await selectChatSettingsSection(page, '프롬프트·창작 프리셋');
@@ -240,3 +239,5 @@ test('NUI01 native prompt import, draft preservation, roles, history and saved c
   expect(final.attempts).toEqual(before.attempts);
   expect(errors).toEqual([]);
 });
+
+preservePromptWorkspace();

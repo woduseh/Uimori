@@ -1,3 +1,4 @@
+import { visualReview } from './fixtures/visual-review.js';
 import { test, expect, type APIRequestContext } from '@playwright/test';
 import { createActionPackage } from './fixtures/action-package.js';
 import type { ChatDetail } from '../core/types.js';
@@ -62,7 +63,8 @@ test('PREQUESTUI01 generic controls reserve a proposal, survive reload, consume 
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(
     true
   );
-  await pending.screenshot({ path: info.outputPath('package-request-mobile.png') });
+  if (visualReview)
+    await pending.screenshot({ path: info.outputPath('package-request-mobile.png') });
   await pending.getByRole('button', { name: '작성란에 넣기', exact: true }).click();
   await expect(page.getByLabel('다음 장면 요청', { exact: true })).toHaveValue(text);
   await page.reload();

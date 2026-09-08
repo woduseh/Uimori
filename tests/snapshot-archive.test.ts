@@ -1,3 +1,4 @@
+import { promptWorkspace, updatePromptWorkspace } from '../server/prompt-workspace.js';
 import { randomUUID } from 'node:crypto';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -257,7 +258,10 @@ async function candidateFixture() {
   state.store.product.updateProfile(state.chat.id, {
     ...profile,
     expectedRevision: revision,
-    prompts: { main: { id: prompt.id, revision: prompt.revision } },
+  });
+  updatePromptWorkspace(state.store, {
+    expectedRevision: promptWorkspace(state.store).revision,
+    main: { title: prompt.title, program: prompt.program, values: prompt.values ?? {} },
   });
   const original = state.complete(
     'Request with a branch-sensitive execution condition.',
@@ -407,8 +411,11 @@ test.each(['ready', 'pending'] as const)(
     store.product.updateProfile(chat.id, {
       ...profile,
       expectedRevision: revision,
-      prompts: { main: { id: prompt.id, revision: prompt.revision } },
       routes: { ...profile.routes, main: { id: model.id } },
+    });
+    updatePromptWorkspace(store, {
+      expectedRevision: promptWorkspace(store).revision,
+      main: { title: prompt.title, program: prompt.program, values: prompt.values ?? {} },
     });
     const owner = owned.find((item) => item.store === store)!;
     store.close();

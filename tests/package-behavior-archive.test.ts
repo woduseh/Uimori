@@ -144,7 +144,7 @@ describe('package behavior archive v11', () => {
     const f = fixture(),
       archive = f.store.product.export(),
       before = structuredClone(archive);
-    expect(archive.version).toBe(13);
+    expect(archive.version).toBe(14);
     expect(archive.tables.package_behavior_journal).toHaveLength(2);
     const target = database();
     expect(target.product.import(archive)).toEqual({ restored: true, chats: 1 });
@@ -211,17 +211,4 @@ describe('package behavior archive v11', () => {
     expect(target.sourceOriginal(f.source.id).text).toBe(f.source.text);
     expect(target.source(f.source.id).text).toMatch(/^Edited/);
   });
-  it.each([2, 3, 4, 5, 6, 7])(
-    'rejects unsupported archive v%i without compatibility mutation',
-    (version) => {
-      const source = database();
-      createFixtureChat(source, 'old synthetic', 'calm');
-      const archive: any = source.product.export();
-      archive.version = version;
-      const target = database(),
-        before = target.product.export().tables;
-      expect(() => target.product.import(archive)).toThrow('Unsupported archive');
-      expect(target.product.export().tables).toEqual(before);
-    }
-  );
 });

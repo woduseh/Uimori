@@ -9,7 +9,9 @@ export function createDefaultPromptProgram(text: string, role: PromptRole = 'mai
   const dataSlots =
     role === 'main'
       ? ['backgroundLore', 'globalNote', 'authorNote', 'postEverything']
-      : ['source', 'context', 'outputSchema', 'catalog'];
+      : role === 'translation'
+        ? ['context', 'catalog', 'source']
+        : ['source', 'context', 'outputSchema', 'catalog'];
   return {
     version: 1,
     controls: [],

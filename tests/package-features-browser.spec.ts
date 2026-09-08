@@ -1,3 +1,4 @@
+import { visualReview } from './fixtures/visual-review.js';
 import {
   expect,
   test,
@@ -88,7 +89,7 @@ async function evidence(page: Page, target: Locator, info: TestInfo, name: strin
       expect(
         await dialog.evaluate((element) => element.scrollWidth <= element.clientWidth + 1)
       ).toBe(true);
-    await page.screenshot({ path: info.outputPath(`${name}-${suffix}.png`) });
+    if (visualReview) await page.screenshot({ path: info.outputPath(`${name}-${suffix}.png`) });
   }
 }
 async function detail(request: APIRequestContext, id: string): Promise<ChatDetail> {

@@ -13,6 +13,7 @@ import { deleteLibraryItem, libraryDeletionImpact } from '../server/library-dele
 import { buildAgentProviderRequest } from '../server/agent-collaboration.js';
 import { buildMainProviderRequest } from '../server/main-request.js';
 import { definePrompt } from '../core/prompt-authoring.js';
+import { promptWorkspace, updatePromptWorkspace } from '../server/prompt-workspace.js';
 import { compileSnapshotPrompt } from '../server/prompt-snapshot.js';
 
 const owned: { root: string; store: Store }[] = [];
@@ -36,14 +37,11 @@ afterEach(() => {
     rmSync(path, { recursive: true, force: true });
   }
 });
-const ref = ({ id, revision }: { id: string; revision: number }) => ({ id, revision });
 const profileBody = (p: ChatProfile) => ({
   expectedRevision: p.revision,
   attachments: p.attachments,
   routes: p.routes,
   image: p.image,
-  prompts: p.prompts,
-  promptControls: p.promptControls,
 });
 function fixture() {
   const store = database(),
@@ -92,8 +90,10 @@ function fixture() {
   product.updateProfile(chat.id, {
     ...profileBody(initial),
     routes: { ...initial.routes, main: { id: main.id } },
-    prompts: { main: ref(preset) },
-    promptControls: { [`${preset.id}@1`]: { values: { shared: 'selected' }, combinations: [] } },
+  });
+  updatePromptWorkspace(store, {
+    expectedRevision: promptWorkspace(store).revision,
+    main: { title: preset.title, program: preset.program, values: { shared: 'selected' } },
   });
   const capture = () => {
     const p = product.snapshot(chat.id),
@@ -143,6 +143,14 @@ test('reservation freezes each advisor and prompt; later current settings apply 
     f.preset.id
   );
   expect(f.store.run(run.id).snapshot).toEqual(frozen);
+  expect(promptWorkspace(f.store).main.program.collaboration!.sharedInstructions).toBe(
+    'Shared creative direction'
+  );
+  const edited = f.product.get<PromptPreset>('prompt-preset', f.preset.id);
+  updatePromptWorkspace(f.store, {
+    expectedRevision: promptWorkspace(f.store).revision,
+    main: { title: edited.title, program: edited.program, values: { shared: 'selected' } },
+  });
   f.store.startRun(run.id);
   f.store.completeRun(
     run.id,
@@ -244,18 +252,24 @@ test('disabled collaboration and switching the main prompt restore the ordinary 
     { title: f.preset.title, role: 'main', program: disabled, expectedRevision: 1 },
     f.preset.id
   );
+  expect(f.product.snapshot(f.chat.id)).toHaveProperty('collaborationModels');
+  updatePromptWorkspace(f.store, {
+    expectedRevision: promptWorkspace(f.store).revision,
+    main: { title: f.preset.title, program: disabled, values: {} },
+  });
   expect(f.product.snapshot(f.chat.id)).not.toHaveProperty('collaborationModels');
   const plain = f.product.promptPreset({
     title: 'Independent writer',
     role: 'main',
     text: 'Other instructions',
   }) as PromptPreset;
-  f.product.updateProfile(f.chat.id, {
-    ...profileBody(f.product.profile(f.chat.id)),
-    prompts: { main: ref(plain) },
+  updatePromptWorkspace(f.store, {
+    expectedRevision: promptWorkspace(f.store).revision,
+    main: { title: plain.title, program: plain.program, values: {} },
   });
   const run = f.capture();
-  expect(run.snapshot.profile!.promptPresets!.main!.id).toBe(plain.id);
+  expect(run.snapshot.profile!.promptPresets!.main!.id).toBe('current-main');
+  expect(run.snapshot.profile!.promptPresets!.main!.program).toEqual(plain.program);
   expect(
     buildMainProviderRequest(run.snapshot).request.stable.tools.some(
       (tool) => tool.name === 'agents.consult'
@@ -265,7 +279,7 @@ test('disabled collaboration and switching the main prompt restore the ordinary 
 
 test('model references, prompt role and CAS are checked before storing collaboration settings', () => {
   const f = fixture();
-  expect(libraryDeletionImpact(f.store, 'model', f.advisor.id).canDelete).toBe(false);
+  expect(libraryDeletionImpact(f.store, 'model', f.advisor.id).canDelete).toBe(true);
   expect(() =>
     f.product.promptPreset({ title: 'Wrong role', role: 'translation', program: f.program })
   ).toThrow('작문');
@@ -287,7 +301,7 @@ test('model references, prompt role and CAS are checked before storing collabora
   ).toEqual(createAgentCollaboration());
 });
 
-test('removing a current advisor model selection releases deletion while its historical Run remains restorable', () => {
+test('advisor model deletion preserves its historical Run independently of current library references', () => {
   const f = fixture(),
     run = f.capture();
   f.product.promptPreset(
@@ -299,7 +313,7 @@ test('removing a current advisor model selection releases deletion while its his
     },
     f.preset.id
   );
-  expect(libraryDeletionImpact(f.store, 'model', f.advisor.id).canDelete).toBe(false);
+  expect(libraryDeletionImpact(f.store, 'model', f.advisor.id).canDelete).toBe(true);
   f.store.startRun(run.id);
   f.store.completeRun(
     run.id,

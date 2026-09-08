@@ -1,5 +1,5 @@
-import { selectChatSettingsSection } from './ui-navigation.js';
-import { postFixtureChat } from './fixtures/chat.js';
+import { visualReview } from './fixtures/visual-review.js';
+import { navigationAction } from './ui-navigation.js';
 import { test, expect } from '@playwright/test';
 import type { PromptProgram } from '../core/prompt-program.js';
 
@@ -56,21 +56,16 @@ test('PUNI01 structured editor preserves one AST; folding keeps drafts and compl
   expect(savedResponse.ok()).toBe(true);
   const saved = await savedResponse.json();
   expect(saved).not.toHaveProperty('text');
-  const chatResponse = await postFixtureChat(request, {
-    data: { title: 'Synthetic unified editor' },
-  });
-  expect(chatResponse.ok()).toBe(true);
-  const chat = await chatResponse.json();
   const errors: string[] = [];
   page.on('pageerror', (error) => errors.push(error.message));
-  await page.goto(`/?chat=${chat.id}`);
-  await page.getByRole('button', { name: '채팅 설정', exact: true }).click();
-  await selectChatSettingsSection(page, '프롬프트·창작 프리셋');
+  await page.goto('/');
+  await navigationAction(page, '프롬프트');
+  await page
+    .getByTestId('prompt-library')
+    .getByRole('button', { name: `${saved.title} 프롬프트 편집`, exact: true })
+    .click();
   const editor = page.getByTestId('prompt-editor'),
     composer = editor.getByTestId('prompt-composer');
-  await editor
-    .getByLabel('불러올 프롬프트', { exact: true })
-    .selectOption(`${saved.id}@${saved.revision}`);
   const firstBlock = composer.locator('#prompt-block-instructions');
   await firstBlock.locator('summary').first().click();
   const body = firstBlock.getByLabel('기본 지침 본문', { exact: true });
@@ -97,11 +92,12 @@ test('PUNI01 structured editor preserves one AST; folding keeps drafts and compl
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(
       true
     );
-    await page.screenshot({ path: info.outputPath(`prompt-collapsed-${name}.png`) });
+    if (visualReview)
+      await page.screenshot({ path: info.outputPath(`prompt-collapsed-${name}.png`) });
   }
   await fold.press('Enter');
   await expect(body).toHaveValue(edited);
-  await page.screenshot({ path: info.outputPath('prompt-structure-mobile.png') });
+  if (visualReview) await page.screenshot({ path: info.outputPath('prompt-structure-mobile.png') });
   await expect(firstBlock.getByLabel('기본 지침 본문', { exact: true })).toHaveValue(edited);
   const conditional = composer.locator('#prompt-block-conditional');
   await conditional.locator('summary').first().click();
@@ -113,7 +109,11 @@ test('PUNI01 structured editor preserves one AST; folding keeps drafts and compl
     JSON.stringify(program.blocks[1].kind === 'message' ? program.blocks[1].template : [], null, 2)
   );
   await save.click();
-  await expect(editor.getByLabel('불러올 프롬프트', { exact: true })).toHaveValue(`${saved.id}@2`);
+  await expect
+    .poll(
+      async () => (await (await request.get(`/api/prompt-presets/${saved.id}`)).json()).revision
+    )
+    .toBe(2);
   const afterResponse = await request.get(`/api/revisions/prompt-preset/${saved.id}/2`);
   expect(afterResponse.ok()).toBe(true);
   const after = await afterResponse.json();
@@ -138,15 +138,14 @@ test('PUNI02 file import edits one block and folded preview retains its snapshot
       data: { title: 'Synthetic body file', role: 'main', program },
     })
   ).json();
-  const chat = await (
-    await postFixtureChat(request, { data: { title: 'Synthetic body import' } })
-  ).json();
-  await page.goto(`/?chat=${chat.id}`);
-  await page.getByRole('button', { name: '채팅 설정', exact: true }).click();
-  await selectChatSettingsSection(page, '프롬프트·창작 프리셋');
+  await page.goto('/');
+  await navigationAction(page, '프롬프트');
+  await page
+    .getByTestId('prompt-library')
+    .getByRole('button', { name: `${saved.title} 프롬프트 편집`, exact: true })
+    .click();
   const editor = page.getByTestId('prompt-editor'),
     composer = editor.getByTestId('prompt-composer');
-  await editor.getByLabel('불러올 프롬프트').selectOption(`${saved.id}@1`);
   const block = composer.locator('#prompt-block-message-3');
   await block.locator('summary').first().click();
   const imported = '  BODY FILE\n{{slot}} is literal.  ';
@@ -158,21 +157,14 @@ test('PUNI02 file import edits one block and folded preview retains its snapshot
   await expect(composer.getByLabel('미리보기 현재 요청')).not.toBeVisible();
   await previewFold.click();
   await composer.getByLabel('미리보기 현재 요청').fill('SYNTHETIC_SINGLE_REQUEST');
-  const previewResponse = page.waitForResponse(
-    (response) =>
-      response.url().endsWith('/prompt-preview') && response.request().method() === 'POST'
-  );
   await composer.getByRole('button', { name: '미리보기 갱신', exact: true }).click();
-  const preview = await (await previewResponse).json();
-  expect(preview.error).toBeUndefined();
-  expect(
-    preview.compilation.messages.find((m: { id: string }) => m.id === 'message-3').content[0].text
-  ).toBe(imported);
-  expect(
-    preview.compilation.messages.filter(
-      (m: { provenance: { origin: string } }) => m.provenance.origin === 'current'
-    )
-  ).toHaveLength(1);
+  const messages = composer.locator('.pc-message-list > li');
+  const importedMessage = messages.filter({
+    has: page.getByText('6. 추가 지침 3 · prompt', { exact: true }),
+  });
+  await importedMessage.locator('summary').click();
+  await expect(importedMessage.locator('pre')).toHaveText(imported);
+  await expect(messages.filter({ hasText: 'SYNTHETIC_SINGLE_REQUEST' })).toHaveCount(1);
   await composer.getByText('블록별 조건과 포함 결과', { exact: true }).click();
   const traceName = composer.getByRole('cell', { name: '6. 추가 지침 3', exact: true });
   await expect(traceName).toBeVisible();
@@ -182,7 +174,11 @@ test('PUNI02 file import edits one block and folded preview retains its snapshot
   await expect(traceName).toBeVisible();
   await expect(composer.getByLabel('미리보기 현재 요청')).toHaveValue('SYNTHETIC_SINGLE_REQUEST');
   await editor.getByRole('button', { name: '수정 저장', exact: true }).click();
-  await expect(editor.getByLabel('불러올 프롬프트')).toHaveValue(`${saved.id}@2`);
+  await expect
+    .poll(
+      async () => (await (await request.get(`/api/prompt-presets/${saved.id}`)).json()).revision
+    )
+    .toBe(2);
   const after = await (await request.get(`/api/revisions/prompt-preset/${saved.id}/2`)).json();
   const expected = structuredClone(program);
   const index = expected.blocks.findIndex((block) => block.id === 'message-3');

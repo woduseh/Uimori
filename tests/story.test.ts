@@ -615,6 +615,5 @@ describe('M2 HTTP state controls and authored memory', () => {
       409
     );
     expect(app.store.detail(created.id).runs).toEqual([]);
-    expect(app.store.detail(created.id).attempts).toEqual([]);
   });
 });

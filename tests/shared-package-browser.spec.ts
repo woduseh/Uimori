@@ -1,3 +1,4 @@
+import { visualReview } from './fixtures/visual-review.js';
 import { test, expect, type Page, type APIRequestContext } from '@playwright/test';
 import type { Content, Library } from '../core/product.js';
 import type { ChatDetail } from '../core/types.js';
@@ -74,7 +75,8 @@ test('shared persona draft uploads an image and starts as a bot with an exact au
   await expect(images.getByRole('status')).toContainText('1개 이미지를 자료에 추가했어요');
   await images.getByLabel('선택한 이미지 이름', { exact: true }).fill('창가의 검');
   await images.getByLabel('자료의 대표 이미지로 사용', { exact: true }).check();
-  await images.screenshot({ path: info.outputPath('shared-persona-images-desktop.png') });
+  if (visualReview)
+    await images.screenshot({ path: info.outputPath('shared-persona-images-desktop.png') });
   await selectPackageSection(page, '시작');
   await library.locator('.package-start-editor > summary').click();
   await library.getByRole('button', { name: '시작 추가', exact: true }).click();
@@ -133,7 +135,8 @@ test('shared persona draft uploads an image and starts as a bot with an exact au
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(
     true
   );
-  await page.screenshot({ path: info.outputPath('shared-authored-reader-mobile.png') });
+  if (visualReview)
+    await page.screenshot({ path: info.outputPath('shared-authored-reader-mobile.png') });
 });
 
 test('shared package image editing pages large lists and preserves old revisions and a portable image bundle', async ({
@@ -208,7 +211,8 @@ test('shared package image editing pages large lists and preserves old revisions
   const old: Content = await (await request.get(`/api/revisions/content/${first.id}/1`)).json();
   expect(old.package!.images).toEqual(first.package!.images);
   await images.getByRole('listitem').first().getByRole('button').click();
-  await images.screenshot({ path: info.outputPath('shared-image-editor-desktop.png') });
+  if (visualReview)
+    await images.screenshot({ path: info.outputPath('shared-image-editor-desktop.png') });
   await page.setViewportSize({ width: 390, height: 844 });
   await images.scrollIntoViewIfNeeded();
   const bounds = await images.boundingBox();
@@ -217,7 +221,8 @@ test('shared package image editing pages large lists and preserves old revisions
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(
     true
   );
-  await page.screenshot({ path: info.outputPath('shared-image-editor-mobile.png') });
+  if (visualReview)
+    await page.screenshot({ path: info.outputPath('shared-image-editor-mobile.png') });
   await page.setViewportSize({ width: 1440, height: 1000 });
   await library.getByText('패키지 가져오기·내보내기와 역할 사본', { exact: true }).click();
   const downloadWait = page.waitForEvent('download');

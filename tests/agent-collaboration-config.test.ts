@@ -17,8 +17,19 @@ function config(agent: Partial<AgentDefinition> = {}): AgentCollaboration {
 }
 
 function rejects(value: unknown, code?: string): void {
-  expect(() => validateAgentCollaboration(value)).toThrow(AgentCollaborationError);
-  if (code) expect(() => validateAgentCollaboration(value)).toThrow(`AGENT_COLLABORATION_${code}`);
+  let error: unknown;
+  try {
+    validateAgentCollaboration(value);
+  } catch (caught) {
+    error = caught;
+  }
+  expect(error).toBeInstanceOf(AgentCollaborationError);
+  if (code)
+    expect(error).toMatchObject({
+      name: 'AgentCollaborationError',
+      code: `AGENT_COLLABORATION_${code}`,
+      message: `AGENT_COLLABORATION_${code}`,
+    });
 }
 
 describe('collaboration defaults and editable templates', () => {
@@ -68,16 +79,6 @@ describe('collaboration defaults and editable templates', () => {
     const lore = createAgentDefinition('lore', 'lore');
     for (const topic of ['출처', '사실', '믿음', '가정', '충돌', '정보 부족'])
       expect(lore.instructions).toContain(topic);
-  });
-
-  test('error exposes its stable code, message and class', () => {
-    const error = new AgentCollaborationError('EXAMPLE');
-    expect(error).toBeInstanceOf(Error);
-    expect(error).toMatchObject({
-      name: 'AgentCollaborationError',
-      code: 'EXAMPLE',
-      message: 'EXAMPLE',
-    });
   });
 });
 

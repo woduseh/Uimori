@@ -2,17 +2,10 @@ import { createDefaultPromptProgram } from '../core/prompt-defaults.js';
 import { createHash } from 'node:crypto';
 import { afterEach, describe, expect, test } from 'vitest';
 import {
-  aggregateTranslation,
   compileTranslationPrompt,
-  createTranslationPlan,
   translationInput,
-  validateTranslationChunk,
-  validateTranslationPlan,
   type AuxiliaryInput,
-  type TranslationPlan,
-  type TranslationResult,
 } from '../core/auxiliary.js';
-import { parseSourceSegments, validateSegmentTranslation } from '../core/source-segments.js';
 import { createSourceSegmentFixture } from './fixtures/source-segments.js';
 import { defaultProfile } from '../core/product.js';
 import type { PromptProgram } from '../core/prompt-program.js';
@@ -20,12 +13,14 @@ import {
   runAuxiliaryJob,
   sourceTimeContext,
   type AuxiliaryBundle,
-  type AuxiliaryChunkRecord,
-  type AuxiliaryJobHooks,
-  type AuxiliaryOutcome,
-  type AuxiliaryStoreBridge,
 } from '../server/product-auxiliary.js';
 import { loopbackProvider, writeSse } from './fixtures/loopback-provider.js';
+import { bridge, hooks as observedHooks } from './fixtures/translation-job.js';
+const hooks = (origin: string) => observedHooks(origin).options;
+const cleanups: (() => Promise<void>)[] = [];
+afterEach(async () => {
+  for (const cleanup of cleanups.splice(0)) await cleanup();
+});
 
 const text =
   'The traveler waited.\n\n@hsTitle: A quiet memory\n⟦harbor @ dusk @ keeper⟧\n[hsPortrait: asset:keeper-profile]\nThe keeper remembered an unopened letter.\n@hs\n\nThe traveler walked away.';
@@ -122,197 +117,39 @@ function bundle(sourceText = text): AuxiliaryBundle {
     },
   };
 }
-function echo(plan: TranslationPlan, chunkIndex = 0): TranslationResult {
-  const chunk = plan.chunks[chunkIndex];
-  return validateTranslationChunk(plan, chunk.id, {
-    sourceRevision: plan.sourceRevision,
-    sourceHash: plan.sourceHash,
-    chunkId: chunk.id,
-    segments: chunk.blocks.map((block) => ({ anchors: [block.anchor], text: block.text })),
-  });
-}
-function bridge(seed: AuxiliaryBundle) {
-  const state = structuredClone(seed);
-  const chunks = new Map<string, AuxiliaryChunkRecord>();
-  const outcomes: AuxiliaryOutcome[] = [];
-  const store: AuxiliaryStoreBridge = {
-    load: () => structuredClone({ ...state, chunks: [...chunks.values()] }),
-    claim: (_job, _owner, prepared) => {
-      state.plan ??= prepared.plan;
-      for (const chunk of prepared.plan?.chunks ?? [])
-        if (!chunks.has(chunk.id))
-          chunks.set(chunk.id, { id: chunk.id, status: 'queued', attempt: 0, result: null });
-      return 1;
-    },
-    beginChunk: (_job, id) => {
-      const chunk = chunks.get(id)!;
-      chunk.status = 'running';
-      chunk.attempt++;
-    },
-    completeChunk: (_job, id, _generation, _owner, result) => {
-      Object.assign(chunks.get(id)!, { status: 'completed', result: structuredClone(result) });
-    },
-    failChunk: (_job, id, _generation, _owner, error, status) => {
-      Object.assign(chunks.get(id)!, { error, status });
-    },
-    finish: (_job, _generation, _owner, result) => {
-      outcomes.push(structuredClone(result));
-    },
-  };
-  return { store, state, chunks, outcomes };
-}
-const cleanups: (() => Promise<void>)[] = [];
-afterEach(async () => {
-  for (const close of cleanups.splice(0)) await close();
-});
-const hooks = (origin: string): AuxiliaryJobHooks => ({
-  signal: new AbortController().signal,
-  approvedOrigins: [origin],
-  authorize: (connection) => connection,
-  onAttemptStart: () => 'native-translation-attempt',
-  onAttemptFinish: () => {},
-});
-
-describe('native translation prompt and hidden source boundaries', () => {
-  test('local scripted translation keeps hidden line boundaries across chunks without altering the source', async () => {
-    const sourceText =
-      'Main arrival.\n\n@hsTitle: Quiet Tower\n⟦Tower @ Dawn @ Mira⟧\nMira recalls a blue bell.\n@hs\n\nMain crossing.\n\n@hsTitle: Old Letter\nAnother traveler remembers winter.\n@hs\n\nMain departure.';
-    const seed = bundle(sourceText);
-    const original = structuredClone(seed.source);
-    const state = bridge(seed);
-    let attempts = 0;
-    const options = hooks('http://127.0.0.1:1');
-    options.maxChunkChars = 100;
-    options.onAttemptStart = () => {
-      attempts++;
-      return 'unexpected-provider-attempt';
-    };
-    const outcome = await runAuxiliaryJob(state.store, seed.job.id, 'owner', options);
-    expect(state.chunks.size).toBeGreaterThan(1);
-    expect(outcome).toMatchObject({
-      status: 'completed',
-      error: null,
-      result: {
-        mock: true,
-        sourceRevision: seed.source.id,
-        sourceHash: seed.source.hash,
-        text: sourceText,
-      },
-    });
-    expect(
-      validateSegmentTranslation(
-        { sourceRevision: seed.source.id, sourceHash: seed.source.hash, text: sourceText },
-        outcome!.result!.text!,
-        createSourceSegmentFixture()
-      ).ok
-    ).toBe(true);
-    expect(
-      parseSourceSegments(
-        {
-          sourceRevision: seed.source.id,
-          sourceHash: seed.source.hash,
-          text: outcome!.result!.text!,
-        },
-        createSourceSegmentFixture()
-      ).segments.map((segment) => segment.kind)
-    ).toEqual(['main', 'aside', 'main', 'aside', 'main']);
-    expect(seed.source).toEqual(original);
-    expect(attempts).toBe(0);
-    // Plain prose retains the explicit mock label; only structured hidden sources echo.
-    const plain = bundle('Plain synthetic source.');
-    const plainState = bridge(plain);
-    const plainOutcome = await runAuxiliaryJob(plainState.store, plain.job.id, 'owner', options);
-    expect(plainOutcome?.result?.text).toBe(
-      '[모의 번역 · 의미 품질 미검증] Plain synthetic source.'
-    );
-  });
-  test('protects hidden delimiters, portrait identity and scene separators without omitting prose', () => {
+describe('whole-source authored translation prompts', () => {
+  test('scripted whole-source output preserves exact structural source text and knowledge metadata without protection tokens', async () => {
     const seed = bundle();
-    const context = sourceTimeContext(seed.snapshot, 'translation');
-    const before = JSON.stringify(context);
-    const plan = createTranslationPlan(seed.source, context, 100);
-    expect(plan.context.protectedLiterals).toEqual(
-      expect.arrayContaining([
-        '@hsTitle:',
-        '@hs',
-        '⟦',
-        '@',
-        '⟧',
-        '[hsPortrait: asset:keeper-profile]',
-      ])
-    );
-    const protectedText = plan.chunks
-      .flatMap((chunk) => chunk.blocks)
-      .map((block) => block.text)
-      .join('\n\n');
-    expect(protectedText).toContain('The keeper remembered an unopened letter.');
-    expect(protectedText).not.toContain('@hsTitle:');
-    expect(protectedText).not.toContain('asset:keeper-profile');
-    const translated = aggregateTranslation(
-      plan,
-      plan.chunks.map((_, index) => echo(plan, index))
-    )
-      .segments.map((segment) => segment.text)
-      .join('\n\n');
-    expect(translated).toBe(seed.source.text);
-    expect(
-      validateSegmentTranslation(
-        { sourceRevision: seed.source.id, sourceHash: seed.source.hash, text: seed.source.text },
-        translated,
-        createSourceSegmentFixture()
-      ).ok
-    ).toBe(true);
-    expect(validateTranslationPlan(seed.source, context, plan)).toEqual(plan);
-    expect(JSON.stringify(context)).toBe(before);
-  });
-  test('source-time provenance separates reader text, actor knowledge and world truth as unknown', () => {
-    const seed = bundle();
-    const plan = createTranslationPlan(
+    const input = translationInput(
       seed.source,
-      sourceTimeContext(seed.snapshot, 'translation')
+      sourceTimeContext(seed.snapshot, 'translation'),
+      seed.snapshot
     );
-    const hidden = plan.context.segmentKnowledge!.segments.find(
-      (segment) => segment.kind === 'aside'
-    )!;
-    expect(plan.context.segmentKnowledge).toMatchObject({
-      sourceRevision: seed.source.id,
-      sourceHash: seed.source.hash,
-      provenance: 'source-markers',
-    });
-    expect(hidden).toMatchObject({
-      readerExposure: 'present-in-source',
-      worldTruth: 'unknown',
-      actorKnowledge: {
-        status: 'unknown',
-        mode: 'unspecified',
-        perspectiveActorIds: null,
-        knownByActorIds: null,
-        evidence: [],
-      },
-    });
-    expect(hidden.range).toEqual(
-      parseSourceSegments(
-        {
-          sourceRevision: seed.source.id,
-          sourceHash: seed.source.hash,
-          text: seed.source.text,
-        },
-        createSourceSegmentFixture()
-      ).segments.find((segment) => segment.kind === 'aside')!.range
+    expect(input.sourceText).toBe(text);
+    expect(input.blocks).toEqual([]);
+    expect(
+      input.context.segmentKnowledge!.segments.some((segment) => segment.kind === 'aside')
+    ).toBe(true);
+    expect(JSON.stringify(input)).not.toContain('[[p_');
+    const output = await runAuxiliaryJob(
+      bridge(seed).store,
+      seed.job.id,
+      'owner',
+      hooks('http://127.0.0.1:1')
     );
-    const forged = structuredClone(plan);
-    forged.context.segmentKnowledge!.segments[0].worldTruth = 'asserted' as 'unknown';
-    expect(() =>
-      validateTranslationPlan(seed.source, sourceTimeContext(seed.snapshot, 'translation'), forged)
-    ).toThrow('SOURCE_TRANSLATION_PLAN_INVALID');
+    expect(output).toMatchObject({
+      status: 'completed',
+      result: { mock: true, text, sourceHash: hash(text) },
+    });
+    expect(seed.source.text).toBe(text);
   });
   test('compiles exactly the frozen translation revision, ordered roles/cache and one current task', () => {
     const seed = bundle();
-    const plan = createTranslationPlan(
+    const input = translationInput(
       seed.source,
-      sourceTimeContext(seed.snapshot, 'translation')
+      sourceTimeContext(seed.snapshot, 'translation'),
+      seed.snapshot
     );
-    const input = translationInput(plan, plan.chunks[0].id, seed.snapshot);
     const compiled = compileTranslationPrompt(input, seed.snapshot, 'Translate this chunk.')!;
     expect(compiled.values).toEqual({ style: 'precise' });
     expect(compiled.messages.map((message) => message.role)).toEqual([
@@ -322,7 +159,7 @@ describe('native translation prompt and hidden source boundaries', () => {
       'user',
     ]);
     expect(compiled.messages[0].content[0].text).toBe('Translate faithfully. Style=precise');
-    expect(compiled.messages[1].content[0].text).toBe(JSON.stringify(input.blocks));
+    expect(compiled.messages[1].content[0].text).toBe(seed.source.text);
     expect(
       compiled.messages.filter((message) => message.provenance.origin === 'current')
     ).toHaveLength(1);
@@ -348,16 +185,16 @@ describe('native translation prompt and hidden source boundaries', () => {
         );
         delete seed.snapshot.profile!.promptControls;
       } else delete seed.snapshot.profile!.promptPresets;
-      const plan = createTranslationPlan(
+      const input = translationInput(
         seed.source,
-        sourceTimeContext(seed.snapshot, 'translation')
+        sourceTimeContext(seed.snapshot, 'translation'),
+        seed.snapshot
       );
-      const input = translationInput(plan, plan.chunks[0].id, seed.snapshot);
       expect(input.contract).toBe('');
       const compilation = compileTranslationPrompt(input, seed.snapshot, 'task')!;
       expect(compilation).toBeDefined();
       expect(compilation.messages.some((m) => m.id === 'instructions')).toBe(!selected);
-      expect(plan.context).not.toHaveProperty('segmentKnowledge');
+      expect(input.sourceText).toBe(seed.source.text);
     }
   });
   test('invalid frozen program values fail with their prompt code before an attempt is sent', async () => {
@@ -420,15 +257,7 @@ describe('native translation prompt and hidden source boundaries', () => {
         await writeSse(response, [
           {
             type: 'text_delta',
-            delta: JSON.stringify({
-              sourceRevision: packet.sourceRevision,
-              sourceHash: packet.sourceHash,
-              chunkId: packet.chunkId,
-              segments: packet.blocks.map((block: { anchor: string; text: string }) => ({
-                anchors: [block.anchor],
-                text: block.text,
-              })),
-            }),
+            delta: packet.text,
           },
           { type: 'done', reason: 'stop' },
         ]);
@@ -459,7 +288,7 @@ describe('native translation prompt and hidden source boundaries', () => {
     const options = hooks(local.origin);
     options.onInput = (_job, input) => {
       observed.push(input);
-      state.state.snapshot.profile!.promptControls!['translation-preset@4'].values.style = 'soft';
+      state.data.snapshot.profile!.promptControls!['translation-preset@4'].values.style = 'soft';
       seed.snapshot.profile!.promptPresets!.translation!.program!.blocks = [];
     };
     const outcome = await runAuxiliaryJob(state.store, seed.job.id, 'owner', options);
@@ -478,56 +307,5 @@ describe('native translation prompt and hidden source boundaries', () => {
     expect(
       observed[0].context.segmentKnowledge!.segments.some((segment) => segment.kind === 'aside')
     ).toBe(true);
-  });
-  test('a fully mapped result with malformed hidden line placement fails instead of being published completed', async () => {
-    const seed = bundle();
-    const local = await loopbackProvider(async (request, response) => {
-      const packet = JSON.parse(request.body).input.source;
-      // All anchors and protected tokens survive, but moving the opening delimiter off
-      // its own line invalidates hidden structure. Final assembly must catch this.
-      const segments = packet.blocks.map((block: { anchor: string; text: string }) => ({
-        anchors: [block.anchor],
-        text: block.text.replaceAll('\n', ' '),
-      }));
-      await writeSse(response, [
-        {
-          type: 'text_delta',
-          delta: JSON.stringify({
-            sourceRevision: packet.sourceRevision,
-            sourceHash: packet.sourceHash,
-            chunkId: packet.chunkId,
-            segments,
-          }),
-        },
-        { type: 'done', reason: 'stop' },
-      ]);
-    });
-    cleanups.push(local.close);
-    seed.snapshot.profile!.models.translation = {
-      id: 'model',
-      revision: 1,
-      title: 'Fixture',
-      modelId: 'fixture',
-      connectionId: 'connection',
-      maxOutputTokens: 4096,
-      temperature: null,
-      connection: {
-        id: 'connection',
-        revision: 1,
-        title: 'Fixture',
-        protocol: 'fixture-sse-v1',
-        endpoint: local.endpoint,
-        enabled: true,
-        catalog: [],
-        catalogError: null,
-      },
-    };
-    const state = bridge(seed);
-    const outcome = await runAuxiliaryJob(state.store, seed.job.id, 'owner', hooks(local.origin));
-    expect(outcome?.status).toBe('failed');
-    expect(outcome?.result).toBeNull();
-    expect(outcome?.error).toMatch(/^SEGMENT_/u);
-    expect(state.outcomes.every((result) => result.status !== 'completed')).toBe(true);
-    expect(seed.source.text).toBe(text);
   });
 });

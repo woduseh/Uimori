@@ -1,3 +1,4 @@
+import { visualReview } from './fixtures/visual-review.js';
 import { test, expect, type APIRequestContext, type Page } from '@playwright/test';
 import type { Chat, ChatDetail, Job, ReaderActivity, ReaderDetail, Run } from '../core/types.js';
 import { postFixtureChat } from './fixtures/chat.js';
@@ -136,7 +137,7 @@ test('TURNUI01 independent response panels, lazy inspector and reload persistenc
   request,
 }, info) => {
   const seeded = await seed(request, 2);
-  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.setViewportSize({ width: 1440, height: 900 });
   const state = await harness(page, seeded.chat.id);
   const panels = page.getByTestId('source').getByTestId('turn-activity');
   await expect(panels).toHaveCount(2);
@@ -172,7 +173,7 @@ test('TURNUI01 independent response panels, lazy inspector and reload persistenc
   await expect(first).not.toHaveAttribute('open');
   await expect(second).toHaveAttribute('open', '');
   await second.scrollIntoViewIfNeeded();
-  await page.screenshot({ path: info.outputPath('turn-activity-desktop.png') });
+  if (visualReview) await page.screenshot({ path: info.outputPath('turn-activity-desktop.png') });
   expect(state.writes).toEqual([]);
   expect((await detail(request, seeded.chat.id)).runs).toEqual(seeded.runs);
 });
@@ -318,7 +319,7 @@ test('TURNUI03 failed response without source keeps inline diagnostics readable 
   expect(await panel.evaluate((element) => element.scrollWidth <= element.clientWidth + 1)).toBe(
     true
   );
-  await page.screenshot({ path: info.outputPath('turn-activity-mobile.png') });
+  if (visualReview) await page.screenshot({ path: info.outputPath('turn-activity-mobile.png') });
   expect(state.writes).toEqual([]);
   expect((await detail(request, seeded.chat.id)).runs).toEqual(seeded.runs);
 });

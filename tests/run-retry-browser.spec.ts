@@ -1,6 +1,6 @@
+import { visualReview } from './fixtures/visual-review.js';
 import { postFixtureChat } from './fixtures/chat.js';
 import { test, expect } from '@playwright/test';
-import type { ReaderDetail } from '../core/types.js';
 
 test('failed request edit, draft protection and uncertain retry reuse one admission', async ({
   page,
@@ -8,23 +8,32 @@ test('failed request edit, draft protection and uncertain retry reuse one admiss
 }, info) => {
   const response = await postFixtureChat(request, { data: { title: 'Synthetic retry' } });
   const chat = await response.json();
-  await page.route(`**/api/chats/${chat.id}/reader?*`, async (route) => {
-    const response = await route.fetch();
-    const body = (await response.json()) as ReaderDetail;
-    body.runs.push({
-      id: 'synthetic-failure',
-      chatId: chat.id,
-      parentRevision: null,
-      settingsRevision: 1,
-      snapshot: { loreContextReset: true },
+  expect(
+    (
+      await request.post('/api/test/control', {
+        data: { action: 'fail-next', point: 'source-transaction' },
+      })
+    ).ok()
+  ).toBe(true);
+  const failedResponse = await request.post(`/api/chats/${chat.id}/runs`, {
+    data: {
       request: '다시 쓸 합성 요청',
-      status: 'failed',
-      sourceRevision: null,
-      error: 'Synthetic failure',
-      usage: { modelCalls: 0, inputTokens: null, outputTokens: null, costUsd: null },
-    });
-    await route.fulfill({ response, json: body });
+      loreContextReset: true,
+      expectedRevision: null,
+      expectedSettingsRevision: chat.settingsRevision,
+      idempotencyKey: crypto.randomUUID(),
+    },
   });
+  expect(failedResponse.ok()).toBe(true);
+  const failed = await failedResponse.json();
+  await expect
+    .poll(
+      async () =>
+        (await (await request.get(`/api/chats/${chat.id}`)).json()).runs.find(
+          (run: { id: string }) => run.id === failed.id
+        )?.status
+    )
+    .toBe('failed');
   await page.goto(`/?chat=${chat.id}`);
   await page
     .getByTestId('pending-run')
@@ -43,9 +52,9 @@ test('failed request edit, draft protection and uncertain retry reuse one admiss
   await edit.click();
   await expect(input).toHaveValue('보존할 초안');
   await page.getByRole('button', { name: '조회 로어 제외 해제' }).click();
-  await page.screenshot({ path: info.outputPath('retry-mobile.png') });
+  if (visualReview) await page.screenshot({ path: info.outputPath('retry-mobile.png') });
   const payloads: Record<string, unknown>[] = [];
-  await page.route(`**/api/chats/${chat.id}/runs`, async (route) => {
+  await page.route(`**/api/runs/${failed.id}/retry`, async (route) => {
     payloads.push(route.request().postDataJSON());
     const response = await route.fetch();
     if (payloads.length === 1) await route.abort('failed');
@@ -60,14 +69,15 @@ test('failed request edit, draft protection and uncertain retry reuse one admiss
   await expect(page.getByRole('button', { name: '원문 생성', exact: true })).toBeVisible();
   expect(payloads).toHaveLength(2);
   expect(payloads[1]).toEqual(payloads[0]);
-  expect(payloads[0].request).toBe('다시 쓸 합성 요청');
-  expect(payloads[0].loreContextReset).toBe(true);
-  await expect(input).toHaveValue('보존할 초안');
+  expect(Object.keys(payloads[0])).toEqual(['idempotencyKey']);
+  expect(await page.evaluate((id) => sessionStorage.getItem(`draft:${id}`), chat.id)).toBe(
+    '보존할 초안'
+  );
   await expect(page.getByRole('button', { name: '조회 로어 제외 해제' })).not.toBeVisible();
   const saved = await (await request.get(`/api/chats/${chat.id}`)).json();
-  expect(saved.runs).toHaveLength(1);
-  expect(saved.runs[0].request).toBe('다시 쓸 합성 요청');
-  await expect(
-    page.getByTestId('pending-run').filter({ hasText: 'Synthetic failure' })
-  ).toBeVisible();
+  expect(saved.runs).toHaveLength(2);
+  const retried = saved.runs.find((run: { id: string }) => run.id !== failed.id);
+  expect(retried.request).toBe('다시 쓸 합성 요청');
+  expect(new URL(page.url()).searchParams.get('branch')).toBe(retried.snapshot.branchId);
+  expect(saved.runs.find((run: { id: string }) => run.id === failed.id).status).toBe('failed');
 });

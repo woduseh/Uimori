@@ -57,8 +57,6 @@ export type NewStoryProfileIntent = {
   models?: Pick<ChatProfile['routes'], 'main' | 'translation'>;
   packageAttachments?: ChatProfile['packageAttachments'];
   packageValues?: ChatProfile['packageValues'];
-  prompts?: ChatProfile['prompts'];
-  promptControls?: ChatProfile['promptControls'];
   packageStart?: PackageStartRef & {
     idempotencyKey: string;
     expectedSettingsRevision?: number;
@@ -176,10 +174,6 @@ function readIntent(raw: string): NewStoryProfileIntent {
     ...(packageAttachments ? { packageAttachments } : {}),
     ...(packageValues ? { packageValues } : {}),
     ...(packageStart ? { packageStart } : {}),
-    ...(pending.prompts ? { prompts: pending.prompts as ChatProfile['prompts'] } : {}),
-    ...(pending.promptControls
-      ? { promptControls: pending.promptControls as ChatProfile['promptControls'] }
-      : {}),
   };
 }
 
@@ -217,8 +211,6 @@ async function applyPendingStoryProfile(chatId: string) {
       image: current.image,
       ...(intent.packageAttachments ? { packageAttachments: intent.packageAttachments } : {}),
       ...(intent.packageValues ? { packageValues: intent.packageValues } : {}),
-      ...(intent.prompts ? { prompts: intent.prompts } : {}),
-      ...(intent.promptControls ? { promptControls: intent.promptControls } : {}),
       expectedRevision: current.revision,
     },
     'PUT'

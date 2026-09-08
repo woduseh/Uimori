@@ -11,6 +11,7 @@ vi.mock('../scripts/lib.mjs', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   assertBuild: vi.fn(),
   fingerprint: vi.fn(),
+  buildFingerprint: vi.fn(),
   browserPath: vi.fn(),
   startServer: vi.fn(),
   command: vi.fn(),
@@ -56,6 +57,8 @@ beforeEach(() => {
   commandFailure = { code: 0, timedOut: false };
   lib.assertBuild.mockResolvedValue(identity);
   lib.fingerprint.mockResolvedValue({ hash: identity.sourceHash });
+  lib.buildFingerprint.mockResolvedValue({ hash: identity.sourceHash });
+  vi.stubEnv('NR_VISUAL_REVIEW', '0');
   lib.browserPath.mockReturnValue(process.execPath);
   lib.killOwned.mockResolvedValue({ exited: true });
   lib.artifactScan.mockImplementation(realLib.artifactScan);
@@ -225,7 +228,7 @@ test.each(['missing', 'zero', 'skipped', 'retried', 'global'])(
   }
 );
 
-test.each(['command', 'timeout', 'source'])(
+test.each(['command', 'timeout', 'source', 'tests'])(
   'passing assertions cannot hide a %s failure',
   async (fault) => {
     if (fault === 'command') commandFailure.code = 1;
@@ -234,6 +237,10 @@ test.each(['command', 'timeout', 'source'])(
       lib.assertBuild
         .mockResolvedValueOnce(identity)
         .mockRejectedValueOnce(new Error('stale build'));
+    if (fault === 'tests')
+      lib.fingerprint
+        .mockResolvedValueOnce({ hash: 'before' })
+        .mockResolvedValueOnce({ hash: 'after' });
     const { summary } = await run();
     expect(summary.report.passed).toBe(1);
     expect(summary.status).toBe('FAIL');
@@ -241,6 +248,16 @@ test.each(['command', 'timeout', 'source'])(
     expect(summary.identityVerifiedAt).toBeUndefined();
   }
 );
+
+test('functional mode records separate verification identity and does not require design PNGs', async () => {
+  lib.fingerprint.mockResolvedValue({ hash: 'test-only-change' });
+  const { summary } = await run({ requiredScreenshots: ['design-only.png'] });
+  expect(summary.status).toBe('PASS');
+  expect(summary.visualReview).toBe(false);
+  expect(summary.requiredScreenshots).toEqual([]);
+  expect(summary.identity.sourceHash).toBe(identity.sourceHash);
+  expect(summary.verificationIdentity.hash).toBe('test-only-change');
+});
 
 test('missing required IDs cannot be satisfied by a longer ID with the same prefix', async () => {
   report = browserReport({ title: 'CASE010 unrelated scenario' });
@@ -275,6 +292,7 @@ test('missing browser records BLOCKED before any server or test launch', async (
 test.each(['missing', 'invalid-signature', 'truncated', 'valid'])(
   'required PNG evidence is checked on disk: %s',
   async (scenario) => {
+    vi.stubEnv('NR_VISUAL_REVIEW', '1');
     const originalCommand = lib.command.getMockImplementation();
     const relativeScreenshot = path.join('browser', 'nested-output', 'required.png');
     lib.command.mockImplementation(

@@ -1,5 +1,5 @@
 import { HttpError, fields, number, record, text } from './request-validation.js';
-import { translationChunkChars } from '../core/translation-settings.js';
+import { promptWorkspaceRoutes } from './prompt-workspace.js';
 import Fastify, { type FastifyInstance } from 'fastify';
 import fastifyStatic from '@fastify/static';
 import { existsSync } from 'node:fs';
@@ -66,17 +66,10 @@ function settings(body: RecordBody): Settings {
     typeof body.status !== 'boolean'
   )
     throw new HttpError(400, 'Invalid settings');
-  let chunkChars: number | null;
-  try {
-    chunkChars = translationChunkChars(body.translationChunkChars);
-  } catch (error) {
-    throw new HttpError(400, (error as Error).message);
-  }
   return {
     preset: body.preset as Settings['preset'],
     mode: body.mode as Settings['mode'],
     translation: body.translation,
-    translationChunkChars: chunkChars,
     status: body.status,
     maxCalls: number(body.maxCalls, 'maxCalls', 1, 16),
   };
@@ -94,6 +87,10 @@ export async function createApp(options: AppOptions): Promise<App> {
     const source = store.sourceAtHash(job.sourceRevision, job.sourceHash);
     const snapshot = store.product.resolveJobPrompt(store.run(source.runId).snapshot, job.input);
     requireModel(snapshot.profile?.models[job.kind], job.kind);
+    if (job.kind === 'translation' && !options.testMode) {
+      const input = record(job.input);
+      requireModel(record(input.translationPolicy).refusalModel, 'translation-refusal');
+    }
   };
   const credentials = new VertexCredentialStore(options.dbPath);
   const codex = options.codexRuntime ?? new CodexRuntime(options.dbPath, options.codex);
@@ -661,7 +658,6 @@ export async function createApp(options: AppOptions): Promise<App> {
       'preset',
       'mode',
       'translation',
-      'translationChunkChars',
       'status',
       'maxCalls',
     ]);
@@ -734,6 +730,21 @@ export async function createApp(options: AppOptions): Promise<App> {
   app.get<{ Params: { id: string } }>('/api/runs/:id', async (request) =>
     store.run(request.params.id)
   );
+  promptWorkspaceRoutes(app, store);
+  app.post<{ Params: { id: string } }>('/api/runs/:id/retry', async (request) => {
+    const body = record(request.body);
+    fields(body, ['idempotencyKey']);
+    const result = store.retryRun(
+      request.params.id,
+      text(body.idempotencyKey, 'idempotency key', 120),
+      (snapshot) => requireModel(snapshot.profile?.models.main, 'main')
+    );
+    if (result.created) {
+      publish(result.run.chatId);
+      execute(result.run.id);
+    }
+    return result.run;
+  });
   app.post<{ Params: { id: string } }>('/api/runs/:id/candidate', async (request) => {
     const body: RecordBody = record(request.body);
     fields(body, ['idempotencyKey', 'title']);

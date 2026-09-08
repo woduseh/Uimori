@@ -1,3 +1,4 @@
+import { visualReview } from './fixtures/visual-review.js';
 import { expect, test, type APIRequestContext, type Locator } from '@playwright/test';
 import type { Content } from '../core/product.js';
 import type { Chat } from '../core/types.js';
@@ -188,7 +189,7 @@ test('ORG02 desktop compact rows support drag ordering, folder drops, collapse a
       .filter({ hasText: folder.title })
       .locator(`[data-chat-id="${order[2]}"]`)
   ).toBeVisible();
-  await page.screenshot({ path: info.outputPath('navigation-desktop.png') });
+  if (visualReview) await page.screenshot({ path: info.outputPath('navigation-desktop.png') });
 });
 
 test('ORG03 touch menu offers folder movement and ordering and keeps deletion confirmation', async ({
@@ -235,7 +236,7 @@ test('ORG03 touch menu offers folder movement and ordering and keeps deletion co
     expect(await nav.evaluate((element) => element.scrollWidth <= element.clientWidth + 1)).toBe(
       true
     );
-    await page.screenshot({ path: info.outputPath('navigation-touch.png') });
+    if (visualReview) await page.screenshot({ path: info.outputPath('navigation-touch.png') });
   } finally {
     await context.close();
   }
@@ -270,7 +271,8 @@ test('ORG04 unselected chat and collapsed folder display compact pending activit
   await expect(
     nav.getByRole('img', { name: '폴더 안에서 작업 1개 진행 중', exact: true })
   ).toBeVisible();
-  await page.screenshot({ path: info.outputPath('navigation-pending-folder.png') });
+  if (visualReview)
+    await page.screenshot({ path: info.outputPath('navigation-pending-folder.png') });
   active = false;
   await page.evaluate(() => window.dispatchEvent(new Event('focus')));
   await expect(nav.locator('.bot-chat-status')).toHaveCount(0);

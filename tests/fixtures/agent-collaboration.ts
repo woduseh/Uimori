@@ -247,12 +247,19 @@ export async function fixture(
       personaReference: prior.personaReference,
       routes: { main: { id: mainModel.id }, translation: null, status: null, image: null },
       image: false,
-      prompts: { main: ref(prompt) },
-      promptControls: {
-        [`${prompt.id}@${prompt.revision}`]: {
-          values: { tone: 'shared dramatic tone', private: 'PRIVATE_UNSHARED_CONTROL' },
-          combinations: [],
-        },
+    },
+    'PUT'
+  );
+  const workspace = await api<{ revision: number }>(app, '/api/prompt-workspace');
+  await api(
+    app,
+    '/api/prompt-workspace',
+    {
+      expectedRevision: workspace.revision,
+      main: {
+        title: prompt.title,
+        program: prompt.program,
+        values: { tone: 'shared dramatic tone', private: 'PRIVATE_UNSHARED_CONTROL' },
       },
     },
     'PUT'

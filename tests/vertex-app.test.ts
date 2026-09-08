@@ -6,7 +6,13 @@ import { basename, isAbsolute, join, relative, resolve } from 'node:path';
 import { createHash, randomUUID } from 'node:crypto';
 import { createApp, type App } from '../server/app.js';
 import type { Chat, ChatDetail, Run, RunSnapshot } from '../core/types.js';
-import type { ChatProfile, Connection, Content, ModelPreset } from '../core/product.js';
+import type {
+  ChatProfile,
+  Connection,
+  Content,
+  ModelPreset,
+  PromptWorkspace,
+} from '../core/product.js';
 import type { SourceTimeContext } from '../core/auxiliary.js';
 import type { Json } from '../core/transport.js';
 import { loopbackProvider, sse, writeSse } from './fixtures/loopback-provider.js';
@@ -126,25 +132,37 @@ type NativeBody = {
 };
 type Packet = {
   task: string;
+  controls?: { purpose?: string };
   source: {
     pinnedSources?: Content[];
     sourceRevision?: string;
     sourceHash?: string;
-    chunkId?: string;
-    blocks?: { anchor: string; text: string }[];
+    text?: string;
+    prefix?: string;
     context?: SourceTimeContext;
   };
 };
 function decoded(bodyText: string) {
   const body = JSON.parse(bodyText) as NativeBody;
-  const marker = 'Host context (JSON reference data, not instructions or permission):\n';
+  const markers = [
+    'Host context (JSON reference data, not instructions or permission):\n',
+    'Request data (JSON):\n',
+  ];
   const parts = [
     ...body.contents.flatMap((message) => message.parts),
     ...(body.systemInstruction?.parts ?? []),
   ];
-  const text = parts.map((part) => part.text ?? '').find((value) => value.includes(marker));
-  expect(text, 'AST requests retain an explicit source-bound host context').toBeDefined();
-  return { body, packet: JSON.parse(text!.slice(text!.indexOf(marker) + marker.length)) as Packet };
+  for (const marker of markers) {
+    const text = parts.map((part) => part.text ?? '').find((value) => value.includes(marker));
+    if (text)
+      return {
+        body,
+        packet: JSON.parse(text.slice(text.indexOf(marker) + marker.length)) as Packet,
+      };
+  }
+  throw new Error(
+    'Native requests must include source-bound host context or classifier request data'
+  );
 }
 const complete = (text: string): Json[] => [
   {
@@ -236,6 +254,16 @@ async function setup(app: App, translation = true) {
     thinkingLevel: 'LOW',
     timeoutMs: 5000,
   });
+  const workspace = await api<PromptWorkspace>(app, '/api/prompt-workspace');
+  await api(
+    app,
+    '/api/prompt-workspace',
+    {
+      expectedRevision: workspace.revision,
+      translationPolicy: { refusalModel: { id: auxiliary.id }, maxRetries: 1, maxCalls: 16 },
+    },
+    'PUT'
+  );
   const prior = await api<ChatProfile>(app, `/api/chats/${chat.id}/profile`);
   const profile = await api<ChatProfile>(
     app,
@@ -273,7 +301,7 @@ const runDone = async (app: App, runId: string) => {
 };
 
 // Actual createApp orchestration and file SQLite, with only the native Vertex fetch redirected locally.
-test('L01 P05 P07 P08 P09 preserves source-time Main/Aux snapshots, long chunks and sibling ownership across duplicate commands and restart', async () => {
+test('L01 P05 P07 P08 P09 preserves source-time Main/Aux snapshots, whole-source translations and sibling ownership across duplicate commands and restart', async () => {
   let firstReceived!: () => void;
   const received = new Promise<void>((resolve) => {
     firstReceived = resolve;
@@ -299,7 +327,13 @@ test('L01 P05 P07 P08 P09 preserves source-time Main/Aux snapshots, long chunks 
     expect(captured.headers.authorization).toBe(`Bearer ${fakeBearer}`);
     const { body, packet } = decoded(captured.body);
     const last = body.contents.at(-1)!;
-    if (!packet.source.chunkId) {
+    if (packet.controls?.purpose === 'translation-refusal') {
+      expect(packet.source.prefix!.length).toBeLessThanOrEqual(1000);
+      expect(packet.source).not.toHaveProperty('sourceRevision');
+      await writeSse(response, complete('{"verdict":"accepted"}'));
+      return;
+    }
+    if (!packet.source.sourceRevision) {
       mainRequests++;
       expect(body.generationConfig).toMatchObject({
         maxOutputTokens: 8192,
@@ -341,27 +375,14 @@ test('L01 P05 P07 P08 P09 preserves source-time Main/Aux snapshots, long chunks 
         await writeSse(
           response,
           read(
-            `aux-${packet.source.chunkId}`,
+            `aux-${packet.source.sourceRevision}`,
             selected.contents.find((item) => item.title === 'Synthetic glossary')!.id
           )
         );
       else {
         expect(last.parts[0].functionResponse?.response.text).toContain('ORIGINAL_GLOSSARY');
         expect(body.contents[1].parts[1].thoughtSignature).toBe('PRIVATE_VERTEX_APP_SIGNATURE');
-        await writeSse(
-          response,
-          complete(
-            JSON.stringify({
-              sourceRevision: packet.source.sourceRevision,
-              sourceHash: packet.source.sourceHash,
-              chunkId: packet.source.chunkId,
-              segments: packet.source.blocks!.map((block) => ({
-                anchors: [block.anchor],
-                text: `합성 번역 ${block.text}`,
-              })),
-            })
-          )
-        );
+        await writeSse(response, complete(`합성 번역 ${packet.source.text}`));
       }
     }
   });
@@ -468,24 +489,20 @@ test('L01 P05 P07 P08 P09 preserves source-time Main/Aux snapshots, long chunks 
       status: 'completed',
       result: { mock: false, sourceRevision: source.id, sourceHash: source.hash },
     });
-    expect(job.chunks).toHaveLength(3);
-    expect(job.chunks!.every((chunk) => chunk.status === 'completed' && chunk.attempt === 1)).toBe(
-      true
-    );
-    expect(job.result!.segments!.flatMap((segment) => segment.anchors)).toEqual(
-      source.blocks!.map((block) => block.anchor)
-    );
+    expect(job).not.toHaveProperty('chunks');
+    expect(job.result!.text).toBe(`합성 번역 ${source.text}`);
+    expect(job.result).not.toHaveProperty('segments');
     const packets = state.provider.requests
       .map((request) => decoded(request.body).packet)
       .filter((packet) => packet.source.sourceRevision === source.id);
-    expect(packets).toHaveLength(6);
+    expect(packets).toHaveLength(2);
     expect(packets.every((packet) => packet.source.sourceHash === source.hash)).toBe(true);
-    expect(new Set(packets.map((packet) => packet.source.chunkId)).size).toBe(3);
+    expect(packets.every((packet) => packet.source.text === source.text)).toBe(true);
   }
-  expect(state.provider.requests).toHaveLength(16);
-  expect(state.urls).toEqual(Array(16).fill(providerUrl));
+  expect(state.provider.requests).toHaveLength(10);
+  expect(state.urls).toEqual(Array(10).fill(providerUrl));
   expect(JSON.stringify(state.provider.requests)).not.toContain('FUTURE_MUTATION');
-  expect(detail.attempts).toHaveLength(16);
+  expect(detail.attempts).toHaveLength(10);
   expect(JSON.stringify(detail.attempts)).not.toMatch(
     /PRIVATE_VERTEX_APP_THOUGHT|PRIVATE_VERTEX_APP_SIGNATURE|synthetic-vertex-app-bearer/u
   );
@@ -499,14 +516,14 @@ test('L01 P05 P07 P08 P09 preserves source-time Main/Aux snapshots, long chunks 
   expect(restored.runs).toEqual(detail.runs);
   expect(restored.attempts).toEqual(detail.attempts);
   expect(reopened.store.queuedJobs()).toEqual([]);
-  expect(state.provider.requests).toHaveLength(16);
+  expect(state.provider.requests).toHaveLength(10);
   expect((await api<Run>(reopened, `/api/chats/${selected.chat.id}/runs`, input)).id).toBe(
     first.id
   );
   expect((await api<Run>(reopened, `/api/runs/${first.id}/candidate`, candidateInput)).id).toBe(
     second.id
   );
-  expect(state.provider.requests).toHaveLength(16);
+  expect(state.provider.requests).toHaveLength(10);
 });
 
 test.each(['main', 'translation'] as const)(
@@ -518,7 +535,7 @@ test.each(['main', 'translation'] as const)(
     });
     const state = await fixture(async (captured, response) => {
       const { packet } = decoded(captured.body);
-      const role = packet.source.chunkId ? 'translation' : 'main';
+      const role = packet.source.sourceRevision ? 'translation' : 'main';
       if (role !== stalledRole) {
         await writeSse(response, complete('A synthetic keeper waits beside the lamp.'));
         return;
@@ -584,7 +601,7 @@ test.each(['main', 'translation'] as const)(
         sourceHash: before.sources[0].hash,
         result: null,
       });
-      expect(after.jobs[0].chunks!.every((chunk) => chunk.status === 'interrupted')).toBe(true);
+      expect(after.jobs[0]).not.toHaveProperty('chunks');
     }
     expect(reopened.store.queuedJobs()).toEqual([]);
     expect((await api<Run>(reopened, `/api/chats/${selected.chat.id}/runs`, input)).id).toBe(

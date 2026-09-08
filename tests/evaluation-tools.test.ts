@@ -1,8 +1,5 @@
 import { describe, expect, test } from 'vitest';
-import {
-  defaultEvaluationToolOptions,
-  validateEvaluationToolOptions,
-} from '../core/evaluation-tool-config.js';
+import { defaultEvaluationToolOptions } from '../core/evaluation-tool-config.js';
 import {
   createEvaluationSession,
   evaluationCase,
@@ -35,17 +32,8 @@ const caseArgs = {
 };
 
 describe('provider-neutral evaluation tools', () => {
-  test('ET01 validates bounded preset-owned options and exposes tools only when requested', () => {
+  test('ET01 exposes preset-selected tools and binds economized generation without changing later rounds', () => {
     const defaults = defaultEvaluationToolOptions();
-    expect(validateEvaluationToolOptions(defaults)).toEqual(defaults);
-    for (const value of [
-      undefined,
-      {},
-      { ...defaults, maximumToolRounds: 33 },
-      { ...defaults, extra: true },
-    ]) {
-      expect(() => validateEvaluationToolOptions(value)).toThrow('INVALID_EVALUATION_TOOL_OPTIONS');
-    }
     const definitions = evaluationToolDefinitions(defaults);
     expect(definitions.map((tool) => tool.name)).toEqual([
       'eval_get_context',

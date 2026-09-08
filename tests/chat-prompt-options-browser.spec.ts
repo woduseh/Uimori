@@ -1,5 +1,8 @@
+import { visualReview } from './fixtures/visual-review.js';
+import { preservePromptWorkspace } from './fixtures/prompt-workspace.js';
 import { postFixtureChat } from './fixtures/chat.js';
 import { test, expect, type APIRequestContext } from '@playwright/test';
+import type { PromptWorkspace } from '../core/product.js';
 import type { ChatDetail } from '../core/types.js';
 import type { PromptProgram } from '../core/prompt-program.js';
 
@@ -58,10 +61,18 @@ async function fixture(request: APIRequestContext) {
   });
   expect(promptResponse.ok()).toBe(true);
   const prompt = await promptResponse.json();
+  const workspace = (await (await request.get('/api/prompt-workspace')).json()) as PromptWorkspace;
+  expect(
+    (
+      await request.post('/api/prompt-workspace/apply', {
+        data: { expectedRevision: workspace.revision, role: 'main', presetId: prompt.id },
+      })
+    ).ok()
+  ).toBe(true);
   const combination = await request.post('/api/prompt-combinations', {
     data: {
       title: '합성 기본 창작 프리셋',
-      prompt: { id: prompt.id, revision: prompt.revision },
+      role: 'main',
       values: { language: 'ko', customLanguage: '', inner: false, detail: 1 },
     },
   });
@@ -69,20 +80,9 @@ async function fixture(request: APIRequestContext) {
   const chatResponse = await postFixtureChat(request, { data: { title: '합성 창작 옵션 채팅' } });
   expect(chatResponse.ok()).toBe(true);
   const chat = await chatResponse.json();
-  const profile = (await detail(request, chat.id)).profile!;
-  const response = await request.put(`/api/chats/${chat.id}/profile`, {
-    data: {
-      ...profile,
-      chatId: undefined,
-      revision: undefined,
-      expectedRevision: profile.revision,
-      prompts: { ...profile.prompts, main: { id: prompt.id, revision: prompt.revision } },
-    },
-  });
-  expect(response.ok()).toBe(true);
   return {
     chat,
-    key: `${prompt.id}@${prompt.revision}`,
+    workspace: (await (await request.get('/api/prompt-workspace')).json()) as PromptWorkspace,
     before: (await detail(request, chat.id)).profile!,
   };
 }
@@ -91,7 +91,7 @@ test('chat creative options preserve drafts, apply explicitly and fit desktop/mo
   page,
   request,
 }, info) => {
-  const { chat, key, before } = await fixture(request);
+  const { chat, before } = await fixture(request);
   const errors: string[] = [];
   page.on('pageerror', (error) => errors.push(error.message));
   const otherResponse = await request.post('/api/chats', {
@@ -130,30 +130,29 @@ test('chat creative options preserve drafts, apply explicitly and fit desktop/mo
   const navigation = page.getByRole('navigation', { name: '봇의 채팅 목록', exact: true });
   await navigation.getByRole('button', { name: other.title, exact: true }).click();
   await expect(page.getByRole('heading', { name: other.title, exact: true })).toBeVisible();
-  await expect(panel.getByLabel('직접 지정 언어', { exact: true })).toBeHidden();
+  await expect(panel.getByLabel('직접 지정 언어', { exact: true })).toHaveValue('프랑스어');
   await navigation.getByRole('button', { name: chat.title, exact: true }).click();
   await expect(custom).toHaveValue('프랑스어');
   await expect(inner).toBeChecked();
   expect((await detail(request, chat.id)).profile).toEqual(before);
-  await panel.getByRole('button', { name: '이 채팅에 적용', exact: true }).click();
+  await panel.getByRole('button', { name: '현재 옵션 적용', exact: true }).click();
   await expect
     .poll(
       async () =>
-        (await detail(request, chat.id)).profile?.promptControls?.[key]?.values.customLanguage
+        (await (await request.get('/api/prompt-workspace')).json()).main.values.customLanguage
     )
     .toBe('프랑스어');
   const saved = (await detail(request, chat.id)).profile!;
-  expect(saved.promptControls?.[key]?.values.inner).toBe(true);
+  expect((await (await request.get('/api/prompt-workspace')).json()).main.values.inner).toBe(true);
   expect(saved.routes).toEqual(before.routes);
   expect(saved.attachments).toEqual(before.attachments);
-  expect(saved.prompts).toEqual(before.prompts);
-  expect(saved.revision).toBe(before.revision + 1);
+  expect(saved).toEqual(before);
   await expect(page.getByRole('textbox', { name: '다음 장면 요청', exact: true })).toHaveValue(
     '보존할 요청 초안'
   );
-  await page.screenshot({ path: info.outputPath('chat-options-desktop.png') });
+  if (visualReview) await page.screenshot({ path: info.outputPath('chat-options-desktop.png') });
   await custom.fill('독일어');
-  await panel.getByRole('button', { name: '편집 전으로 되돌리기', exact: true }).click();
+  await panel.getByRole('button', { name: '최신 설정 다시 불러오기', exact: true }).click();
   await expect(custom).toHaveValue('프랑스어');
   await panel.getByRole('button', { name: '프롬프트 기본값으로', exact: true }).click();
   await expect(language).toHaveValue('"ko"');
@@ -171,8 +170,8 @@ test('chat creative options preserve drafts, apply explicitly and fit desktop/mo
     true
   );
   expect(await panel.evaluate((el) => el.scrollWidth <= el.clientWidth + 1)).toBe(true);
-  await expect(panel.getByRole('button', { name: '이 채팅에 적용', exact: true })).toBeInViewport();
-  await page.screenshot({ path: info.outputPath('chat-options-mobile.png') });
+  await expect(panel.getByRole('button', { name: '현재 옵션 적용', exact: true })).toBeInViewport();
+  if (visualReview) await page.screenshot({ path: info.outputPath('chat-options-mobile.png') });
   expect((await detail(request, chat.id)).runs).toHaveLength(0);
   expect(errors).toEqual([]);
 });
@@ -181,51 +180,51 @@ test('creative option CAS conflict preserves draft and server profile', async ({
   page,
   request,
 }) => {
-  const { chat, key, before } = await fixture(request);
+  const { chat, before, workspace } = await fixture(request);
   await page.goto(`/?chat=${chat.id}`);
   await page.getByRole('button', { name: '입력창 더보기', exact: true }).click();
   await page.getByRole('button', { name: '창작 옵션', exact: true }).click();
   const panel = page.getByRole('region', { name: '창작 옵션 패널', exact: true });
   await panel.getByLabel('응답 언어', { exact: true }).selectOption({ label: '직접 지정' });
   await panel.getByLabel('직접 지정 언어', { exact: true }).fill('스페인어');
-  let concurrent: ChatDetail['profile'];
+  let concurrent!: PromptWorkspace;
   let interleaved = false;
-  await page.route(`**/api/chats/${chat.id}/profile`, async (route) => {
+  await page.route('**/api/prompt-workspace', async (route) => {
     if (route.request().method() !== 'PUT' || interleaved) return route.continue();
     interleaved = true;
     // Interleave after the UI has sent its stale revision so SSE timing cannot
     // turn this server-conflict check into a disabled-button timeout.
-    const response = await request.put(`/api/chats/${chat.id}/profile`, {
+    const response = await request.put('/api/prompt-workspace', {
       data: {
-        ...before,
-        chatId: undefined,
-        revision: undefined,
-        expectedRevision: before.revision,
-        image: !before.image,
+        expectedRevision: workspace.revision,
+        main: { ...workspace.main, title: '동시 수정 이름' },
       },
     });
     expect(response.ok()).toBe(true);
-    concurrent = (await detail(request, chat.id)).profile!;
+    concurrent = await response.json();
     await route.continue();
   });
   const conflict = page.waitForResponse(
     (response) =>
-      response.url().endsWith(`/api/chats/${chat.id}/profile`) &&
-      response.request().method() === 'PUT'
+      response.url().endsWith('/api/prompt-workspace') && response.request().method() === 'PUT'
   );
-  await panel.getByRole('button', { name: '이 채팅에 적용', exact: true }).click();
+  await panel.getByRole('button', { name: '현재 옵션 적용', exact: true }).click();
   expect((await conflict).status()).toBe(409);
   await expect(panel.getByLabel('직접 지정 언어', { exact: true })).toHaveValue('스페인어');
-  expect((await detail(request, chat.id)).profile).toEqual(concurrent);
-  await panel.getByRole('button', { name: '최신 채팅 설정에 내 옵션 유지', exact: true }).click();
-  await panel.getByRole('button', { name: '이 채팅에 적용', exact: true }).click();
+  expect(await (await request.get('/api/prompt-workspace')).json()).toEqual(concurrent);
+  await panel.getByRole('button', { name: '최신 설정에 내 옵션 유지', exact: true }).click();
+  await panel.getByRole('button', { name: '현재 옵션 적용', exact: true }).click();
   await expect
     .poll(
       async () =>
-        (await detail(request, chat.id)).profile?.promptControls?.[key]?.values.customLanguage
+        (await (await request.get('/api/prompt-workspace')).json()).main.values.customLanguage
     )
     .toBe('스페인어');
   const recovered = (await detail(request, chat.id)).profile!;
-  expect(recovered.image).toBe(!before.image);
-  expect(recovered.revision).toBe(before.revision + 2);
+  expect(recovered).toEqual(before);
+  expect((await (await request.get('/api/prompt-workspace')).json()).main.title).toBe(
+    '동시 수정 이름'
+  );
 });
+
+preservePromptWorkspace();

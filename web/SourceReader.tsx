@@ -1,3 +1,4 @@
+import { displayTranslationJob } from './translation-display.js';
 import {
   containedImageAnchors,
   resolveInlineImage,
@@ -14,12 +15,8 @@ import { Prose } from './Prose.js';
 import { LazyDiagnostics } from './LazyDiagnostics.js';
 import { ActionMenu } from './ActionMenu.js';
 import { CopyIcon, EditIcon, ImagesIcon } from './ui-icons.js';
-import { SourceSegmentsReader, type SegmentTranslationView } from './SourceSegmentsReader.js';
-import {
-  parseSourceSegments,
-  validateSegmentTranslation,
-  type SourceSegmentPolicy,
-} from '../core/source-segments.js';
+import { SourceSegmentsReader } from './SourceSegmentsReader.js';
+import type { SourceSegmentPolicy } from '../core/source-segments.js';
 import { PackageStateCards, usePackagePresentation } from './PackagePresentation.js';
 import './source-edit.css';
 
@@ -32,6 +29,8 @@ type ReaderProps = {
   refresh: () => Promise<void>;
   onError: (error: string) => void;
   onFork: (sourceId: string) => Promise<void>;
+  onRetry?: () => Promise<void>;
+  retryDisabled?: boolean;
   onEditingChange?: (sourceId: string, editing: boolean) => void;
   request?: string;
   contextSummary?: ReaderRun['contextSummary'];
@@ -104,6 +103,8 @@ function SourceReaderContent({
   assets,
   refresh: refreshSource,
   onFork,
+  onRetry,
+  retryDisabled,
   onEditingChange,
   request,
   contextSummary,
@@ -126,6 +127,7 @@ function SourceReaderContent({
   const container = useRef<HTMLElement>(null);
   const restoreAnchor = useRef<AnchorPosition | undefined>(undefined);
   const translation = latestTranslation(source, jobs);
+  const displayTranslation = displayTranslationJob(source, translation);
   const latestStatus = jobs
     .filter(
       (job) =>
@@ -137,12 +139,14 @@ function SourceReaderContent({
     .sort((a, b) => (b.revision ?? 1) - (a.revision ?? 1))[0];
   const presentation = usePackagePresentation(
     source,
-    translation,
+    displayTranslation,
     hasPackages === true,
     `${presentationRefreshKey ?? ''}:${jobs.map((job) => `${job.id}:${job.status}`).join(',')}`
   );
   const projected = !sourceSegments ? presentation?.data : undefined;
-  const [mode, setMode] = useState<ReaderMode>(() => initialMode(source.id, !!translation?.result));
+  const [mode, setMode] = useState<ReaderMode>(() =>
+    initialMode(source.id, !!displayTranslation?.result)
+  );
   const [editor, setEditor] = useState<ReaderMode | null>(null);
   const editorOrigin = useRef<EditorOrigin | undefined>(undefined);
   const restoreEditor = useRef(false);
@@ -192,16 +196,13 @@ function SourceReaderContent({
   const [pending, setPending] = useState('');
   const [actionError, setActionError] = useState('');
   const validTranslation =
-    translation?.result?.sourceRevision === source.id &&
-    translation.result.sourceHash === source.hash
-      ? translation.result
+    displayTranslation?.result?.sourceRevision === source.id &&
+    displayTranslation.result.sourceHash === source.hash
+      ? displayTranslation.result
       : null;
   const blocks = source.blocks?.length
     ? source.blocks
     : [{ anchor: 'full', index: 0, text: source.text, start: 0, end: source.text.length }];
-  const segments =
-    validTranslation?.segments ??
-    validTranslation?.blocks?.map((block) => ({ anchors: [block.anchor], text: block.text }));
   const displayJobs = jobs.filter(
     (job) =>
       job.sourceHash === source.hash &&
@@ -362,12 +363,6 @@ function SourceReaderContent({
           className="secondary"
           disabled={!!pending || !!editor}
           onClick={() => {
-            if (
-              !window.confirm(
-                '현재 모델·프롬프트·구간 기준으로 새 번역을 요청해요. 기존 번역과 완료 구간이 교체돼요. 계속할까요?'
-              )
-            )
-              return;
             void action('translation', async () => {
               await api(`/sources/${source.id}/retranslate`, {});
               switchMode('translation');
@@ -384,7 +379,6 @@ function SourceReaderContent({
           key={editor}
           role={editor}
           source={source}
-          translation={translation}
           onCancel={closeEditor}
           onSaved={async () => {
             await refresh();
@@ -395,20 +389,16 @@ function SourceReaderContent({
           }}
         />
       )}
+      {validTranslation && translation?.status !== 'completed' && mode === 'translation' && (
+        <p role="status">이전 완료 번역을 표시하고 있어요. 새 번역이 성공하면 교체돼요.</p>
+      )}
       {validTranslation?.manual && mode === 'translation' && (
         <p className="muted">직접 수정한 번역</p>
       )}
-      {sourceSegments && (mode === 'original' || validTranslation) ? (
+      {sourceSegments && mode === 'original' ? (
         <SourceSegmentBody
           source={source}
           config={sourceSegments}
-          translationText={
-            mode === 'translation'
-              ? (validTranslation?.text ??
-                segments?.map((segment) => segment.text).join('\n\n') ??
-                '')
-              : undefined
-          }
           blocks={blocks}
           inline={inline}
         />
@@ -428,10 +418,7 @@ function SourceReaderContent({
         </div>
       ) : mode === 'translation' && validTranslation && projected?.translation?.changed ? (
         <div className="prose translated" data-testid="translation-text">
-          <div
-            className="source-block"
-            data-block-anchor={blocks.map((block) => block.anchor).join(' ')}
-          >
+          <div className="source-block">
             <Prose text={projected.translation.text} />
           </div>
           {annotations.length > 0 && (
@@ -463,27 +450,13 @@ function SourceReaderContent({
         </div>
       ) : validTranslation ? (
         <div className="prose translated" data-testid="translation-text">
-          {segments?.length ? (
-            segments.map((segment, position) => (
-              <Fragment key={`${segment.anchors.join('-')}:${position}`}>
-                <div className="source-block" data-block-anchor={segment.anchors.join(' ')}>
-                  <Prose text={segment.text} />
-                </div>
-                {segment.anchors.flatMap(inline)}
-              </Fragment>
-            ))
-          ) : (
-            <div
-              className="source-block"
-              data-block-anchor={blocks.map((block) => block.anchor).join(' ')}
-            >
-              <Prose text={validTranslation.text ?? ''} />
-              {annotations.length > 0 && (
-                <p className="muted" role="status">
-                  번역의 문단 위치를 확인할 수 없어 이미지를 생략했어요.
-                </p>
-              )}
-            </div>
+          <div className="source-block">
+            <Prose text={validTranslation.text ?? ''} />
+          </div>
+          {annotations.length > 0 && (
+            <p className="muted" role="status">
+              {IMAGE_POSITION_UNAVAILABLE}
+            </p>
           )}
         </div>
       ) : (
@@ -525,15 +498,6 @@ function SourceReaderContent({
                     {jobTitle(job)} · {labels[job.status]}
                     {retryable(job.status) ? ' · 원문 보존됨' : ''}
                   </span>
-                  {job.kind === 'translation' && job.translationPlan && (
-                    <small data-testid="translation-plan-summary">
-                      적용 구간 기준:{' '}
-                      {job.translationPlan.maxChunkChars === null
-                        ? '무제한'
-                        : `${job.translationPlan.maxChunkChars.toLocaleString()}자`}{' '}
-                      · 실제 {job.translationPlan.totalChunks}구간
-                    </small>
-                  )}
                   {job.kind === 'translation' &&
                     job.error &&
                     /INPUT_CONTEXT_LIMIT_EXCEEDED|CONTEXT_WINDOW_EXCEEDED|TIMEOUT|AUXILIARY_PROVIDER_PARTIAL/.test(
@@ -545,8 +509,8 @@ function SourceReaderContent({
                           : job.error.includes('PARTIAL')
                             ? '모델 응답이 끝까지 완료되지 않았어요. 출력 한도와 공급자 진단을 확인해 주세요.'
                             : '번역 요청이 모델 입력 한도를 초과했어요.'}{' '}
-                        구간을 자동으로 나누지 않았어요. 모델 한도나 번역 구간 기준을 조정한 뒤 새
-                        번역을 요청해 주세요.
+                        구간을 자동으로 나누지 않았어요. 모델의 입력·출력 한도를 확인한 뒤 새 번역을
+                        요청해 주세요.
                       </p>
                     )}
                   <JobActions job={job} refresh={refresh} onError={setActionError} compact />
@@ -565,6 +529,16 @@ function SourceReaderContent({
       />
       <div className="source-actions">
         <ActionMenu label="장면 작업 메뉴" placement="top">
+          {onRetry && (
+            <button
+              type="button"
+              className="secondary"
+              disabled={!!editor || !!pending || retryDisabled}
+              onClick={() => void action('retry', onRetry)}
+            >
+              현재 설정으로 다시 요청
+            </button>
+          )}
           <button
             type="button"
             className="secondary"
@@ -678,60 +652,21 @@ function SourceReaderContent({
 export function SourceSegmentBody({
   source,
   config,
-  translationText,
   blocks,
   inline,
 }: {
   source: Source;
   config: SourceSegmentPolicy;
-  translationText?: string;
   blocks: { anchor: string; start: number; end: number }[];
   inline: (anchor: string) => ReactNode[];
 }) {
   const original = { sourceRevision: source.id, sourceHash: source.hash, text: source.text };
-  let translation: SegmentTranslationView | undefined,
-    error = '';
-  if (translationText !== undefined) {
-    try {
-      const checked = validateSegmentTranslation(original, translationText, config);
-      if (!checked.ok) throw new Error('Hidden translation boundaries differ');
-      const raw = parseSourceSegments(original, config),
-        translated = parseSourceSegments({ ...original, text: translationText }, config);
-      translation = {
-        sourceRevision: source.id,
-        sourceHash: source.hash,
-        segments: Object.fromEntries(
-          raw.segments.map((segment, index) => {
-            const target = translated.segments[index];
-            if (!target || target.kind !== segment.kind)
-              throw new Error('Hidden translation structure differs');
-            return [
-              segment.id,
-              {
-                body: translationText.slice(target.bodyRange.start, target.bodyRange.end),
-                ...(target.title ? { title: target.title } : {}),
-                ...(target.scene ? { scene: target.scene } : {}),
-              },
-            ];
-          })
-        ),
-      };
-    } catch {
-      error =
-        '번역의 구간 경계를 확인할 수 없어 이 장면은 원문으로 표시해요. 번역과 원문은 보존돼요.';
-    }
-  }
   const emitted = new Set<string>();
   return (
-    <div
-      className={`prose${translation ? ' translated' : ''}`}
-      data-testid={translation ? 'translation-text' : 'source-text'}
-    >
-      {error && <p role="alert">{error}</p>}
+    <div className="prose" data-testid="source-text">
       <SourceSegmentsReader
         source={original}
         policy={config}
-        translation={translation}
         renderText={(text, segment) => {
           const anchors = blocks
             .filter((block) => block.start < segment.range.end && segment.range.start < block.end)
@@ -787,12 +722,13 @@ function TextEditor({
   onSaved: () => Promise<void>;
 }) {
   const key = draftKey(source.id, role);
+  const displayed = displayTranslationJob(source, translation);
   const savedText =
     role === 'original'
       ? source.text
-      : (translation?.result?.text ??
-        translation?.result?.segments?.map((segment) => segment.text).join('\n\n') ??
-        translation?.result?.blocks?.map((block) => block.text).join('\n\n') ??
+      : (displayed?.result?.text ??
+        displayed?.result?.segments?.map((segment) => segment.text).join('\n\n') ??
+        displayed?.result?.blocks?.map((block) => block.text).join('\n\n') ??
         '');
   const revision =
     role === 'original'
@@ -945,14 +881,6 @@ function JobActions({
   const [pending, setPending] = useState(false);
   const [error, setError] = useState('');
   const perform = async (operation: 'retry' | 'cancel' | 'status') => {
-    if (
-      operation === 'retry' &&
-      job.kind === 'translation' &&
-      !window.confirm(
-        '현재 모델·프롬프트·구간 기준으로 장면 전체를 다시 번역해요. 기존 번역과 완료 구간이 교체돼요. 계속할까요?'
-      )
-    )
-      return;
     setPending(true);
     setError('');
     onError('');
@@ -1052,7 +980,7 @@ export function JobCard({
         {job.result?.mock ? '모의 ' : ''}
         {title} <small>{labels[job.status]}</small>
       </h3>
-      {!hideText && job.result && (
+      {!hideText && job.result && (job.kind !== 'translation' || job.status === 'completed') && (
         <p>
           {job.result.text ||
             job.result.label ||
@@ -1060,15 +988,6 @@ export function JobCard({
         </p>
       )}
       {job.error && <AuxiliaryError error={job.error} />}
-      {job.kind === 'translation' && job.translationPlan && (
-        <small data-testid="translation-plan-summary">
-          적용 구간 기준:{' '}
-          {job.translationPlan.maxChunkChars === null
-            ? '무제한'
-            : `${job.translationPlan.maxChunkChars.toLocaleString()}자`}{' '}
-          · 실제 {job.translationPlan.totalChunks}구간
-        </small>
-      )}
       {job.kind === 'translation' &&
         job.error &&
         /INPUT_CONTEXT_LIMIT_EXCEEDED|CONTEXT_WINDOW_EXCEEDED|TIMEOUT|AUXILIARY_PROVIDER_PARTIAL/.test(
@@ -1080,26 +999,11 @@ export function JobCard({
               : job.error.includes('PARTIAL')
                 ? '모델 응답이 끝까지 완료되지 않았어요. 출력 한도와 공급자 진단을 확인해 주세요.'
                 : '번역 요청이 모델 입력 한도를 초과했어요.'}{' '}
-            구간을 자동으로 나누지 않았어요. 모델 한도나 번역 구간 기준을 조정한 뒤 새 번역을 요청해
+            구간을 자동으로 나누지 않았어요. 모델의 입력·출력 한도를 확인한 뒤 새 번역을 요청해
             주세요.
           </p>
         )}
       <JobActions job={job} refresh={refresh} onError={onError} />
-      {job.chunks && job.chunks.length > 1 && (
-        <details className="chunk-details">
-          <summary>번역 구간별 상태</summary>
-          <ol className="chunk-list">
-            {job.chunks.map((chunk, index) => (
-              <li key={chunk.id}>
-                <span>
-                  구간 {index + 1} · {labels[chunk.status] || chunk.status} · 시도 {chunk.attempt}
-                </span>
-                {chunk.error && <AuxiliaryError error={chunk.error} />}
-              </li>
-            ))}
-          </ol>
-        </details>
-      )}
       <LazyDiagnostics<Job & { input?: unknown }>
         path={`/jobs/${job.id}`}
         revision={`${job.status}:${job.attempt}:${job.revision}`}
@@ -1114,7 +1018,6 @@ export function JobCard({
                 sourceHash: value.sourceHash,
                 error: auxiliaryErrorDiagnostic(value.error).code,
                 input: value.input,
-                chunks: value.chunks,
               },
               null,
               2

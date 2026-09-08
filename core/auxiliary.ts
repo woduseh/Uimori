@@ -2,10 +2,10 @@ import { imageCatalogPage, imageMetadata, type ImageMetadata } from './image-cat
 import { createDefaultPromptProgram } from './prompt-defaults.js';
 import { createHash } from 'node:crypto';
 import { executeTool, type ToolAction } from './provider.js';
+import { createToolCorrectionPolicy } from './tool-outcome.js';
 import type { Resource, RunSnapshot, ToolEvent } from './types.js';
 import { DEFAULT_TRANSLATION_PROMPT } from './prompts.js';
 import {
-  segmentTranslationMarkers,
   parseSourceSegments,
   type SegmentKnowledge,
   type SegmentRange,
@@ -38,7 +38,6 @@ export type SourceTimeContext = {
   previousSources: { revision: string; text: string }[];
   instructionRevision: string;
   modelPresetRevision: string;
-  protectedLiterals?: string[];
   segmentKnowledge?: {
     sourceRevision: string;
     sourceHash: string;
@@ -60,37 +59,6 @@ export type SourceBlock = {
   end: number;
   text: string;
 };
-export type ProtectedSpan = {
-  token: string;
-  literal: string;
-  anchor: string;
-  start: number;
-  end: number;
-};
-export type TranslationChunk = {
-  id: string;
-  index: number;
-  anchors: string[];
-  blocks: { anchor: string; text: string }[];
-  protectedSpans: ProtectedSpan[];
-};
-export type TranslationPlan = {
-  maxChunkChars: number | null;
-  sourceRevision: string;
-  sourceHash: string;
-  chatId: string;
-  context: SourceTimeContext;
-  blocks: SourceBlock[];
-  chunks: TranslationChunk[];
-};
-export type TranslationSegment = { anchors: string[]; text: string };
-export type TranslationResult = {
-  sourceRevision: string;
-  sourceHash: string;
-  chunkId: string;
-  segments: TranslationSegment[];
-};
-
 export function validateSourceIdentity(source: AuxiliarySource) {
   if (!source.id || !source.chatId || !source.text.trim() || digest(source.text) !== source.hash)
     throw new Error('SOURCE_IDENTITY_INVALID');
@@ -135,170 +103,6 @@ export function splitSource(source: AuxiliarySource): SourceBlock[] {
   return blocks;
 }
 
-// Deliberately lexical protection. Extra enum/identifier literals can be supplied
-// by the typed module; this does not claim arbitrary programming-language parsing.
-const syntax =
-  /```[\s\S]*?```|~~~[\s\S]*?~~~|`+[^`]*`+|\[\[p_[a-f0-9]+_\d+\]\]|"(?:[^"\\]|\\.)+"(?=\s*:)|(?<="(?:status|state|mode|kind|type|enum|id|assetRef)"\s*:\s*)"(?:[^"\\]|\\.)*"|\b(?:asset|resource):[\w.:/@#-]+|\b[\da-f]{8}-[\da-f]{4}-[\da-f]{4}-[\da-f]{4}-[\da-f]{12}\b|\b[A-Za-z][A-Za-z0-9]*_[A-Za-z0-9_]+\b|\b[A-Z][A-Z0-9_]{1,}\b|(?<![\w])[-+]?\d+(?:\.\d+)?(?:[eE][-+]?\d+)?%?(?![\w])/gu;
-function protect(
-  block: SourceBlock,
-  sourceHash: string,
-  literals: string[],
-  sequence: { value: number }
-) {
-  const ranges: { start: number; end: number }[] = [...block.text.matchAll(syntax)].map(
-    (match) => ({ start: match.index, end: match.index + match[0].length })
-  );
-  for (const literal of literals) {
-    if (!literal) continue;
-    for (
-      let index = block.text.indexOf(literal);
-      index >= 0;
-      index = block.text.indexOf(literal, index + literal.length)
-    )
-      ranges.push({ start: index, end: index + literal.length });
-  }
-  ranges.sort((a, b) => a.start - b.start || b.end - a.end);
-  const merged: { start: number; end: number }[] = [];
-  for (const range of ranges) {
-    const previous = merged.at(-1);
-    if (previous && range.start < previous.end) previous.end = Math.max(previous.end, range.end);
-    else merged.push({ ...range });
-  }
-  const spans: ProtectedSpan[] = merged.map((range) => ({
-    ...range,
-    anchor: block.anchor,
-    literal: block.text.slice(range.start, range.end),
-    token: `[[p_${sourceHash.slice(0, 16)}_${sequence.value++}]]`,
-  }));
-  let cursor = 0;
-  let text = '';
-  for (const span of spans) {
-    text += block.text.slice(cursor, span.start) + span.token;
-    cursor = span.end;
-  }
-  return { text: text + block.text.slice(cursor), spans };
-}
-
-export function createTranslationPlan(
-  source: AuxiliarySource,
-  context: SourceTimeContext,
-  maxChunkChars: number | null = 3000
-): TranslationPlan {
-  if (
-    maxChunkChars !== null &&
-    (!Number.isSafeInteger(maxChunkChars) || maxChunkChars < 100 || maxChunkChars > 24000)
-  )
-    throw new Error('INVALID_CHUNK_LIMIT');
-  const blocks = splitSource(source);
-  const sequence = { value: 0 };
-  const chunks: TranslationChunk[] = [];
-  const segmentSource = { sourceRevision: source.id, sourceHash: source.hash, text: source.text };
-  const document = parseSourceSegments(segmentSource, context.sourceSegments);
-  if (
-    document.segments.some((segment) => segment.kind !== 'main') ||
-    document.diagnostics.some((item) => item.severity === 'error')
-  ) {
-    // Translation receives every source segment. Reader visibility does not establish
-    // actor knowledge or world truth, and generated prose cannot supply declarations.
-    context = {
-      ...context,
-      protectedLiterals: [
-        ...new Set([
-          ...(context.protectedLiterals ?? []),
-          ...segmentTranslationMarkers(segmentSource, context.sourceSegments).flatMap((marker) => [
-            marker.literal,
-            marker.literal.replace(/[\r\n]+$/u, ''),
-          ]),
-        ]),
-      ],
-      segmentKnowledge: {
-        sourceRevision: source.id,
-        sourceHash: source.hash,
-        provenance: 'source-markers',
-        segments: document.segments.map((segment) => ({
-          id: segment.id,
-          kind: segment.kind,
-          range: { ...segment.range },
-          readerExposure: 'present-in-source',
-          actorKnowledge: structuredClone(segment.knowledge),
-          worldTruth: 'unknown',
-        })),
-      },
-    };
-  }
-  let size = 0;
-  for (const block of blocks) {
-    let chunk = chunks.at(-1);
-    // Whole paragraphs remain intact; an oversized paragraph is a single chunk.
-    if (!chunk || (maxChunkChars !== null && size && size + block.text.length > maxChunkChars)) {
-      chunk = {
-        id: `t-${source.hash.slice(0, 12)}-${chunks.length}`,
-        index: chunks.length,
-        anchors: [],
-        blocks: [],
-        protectedSpans: [],
-      };
-      chunks.push(chunk);
-      size = 0;
-    }
-    const protectedBlock = protect(block, source.hash, context.protectedLiterals ?? [], sequence);
-    chunk.anchors.push(block.anchor);
-    chunk.blocks.push({ anchor: block.anchor, text: protectedBlock.text });
-    chunk.protectedSpans.push(...protectedBlock.spans);
-    size += block.text.length;
-  }
-  return structuredClone({
-    maxChunkChars,
-    sourceRevision: source.id,
-    sourceHash: source.hash,
-    chatId: source.chatId,
-    context,
-    blocks,
-    chunks,
-  });
-}
-/** Persisted/imported plans are derived data: recheck them against the actual source. */
-export function validateTranslationPlan(
-  source: AuxiliarySource,
-  context: SourceTimeContext,
-  value: unknown
-): TranslationPlan {
-  try {
-    const plan = value as TranslationPlan;
-    if (!plan || !Object.hasOwn(plan, 'maxChunkChars')) throw new Error();
-    const expected = createTranslationPlan(source, context, plan.maxChunkChars);
-    if (
-      !plan ||
-      plan.sourceRevision !== source.id ||
-      plan.sourceHash !== source.hash ||
-      plan.chatId !== source.chatId ||
-      JSON.stringify(plan.context) !== JSON.stringify(expected.context) ||
-      JSON.stringify(plan.blocks) !== JSON.stringify(expected.blocks) ||
-      !Array.isArray(plan.chunks) ||
-      !plan.chunks.length
-    )
-      throw new Error();
-    for (const [index, chunk] of plan.chunks.entries()) {
-      if (
-        chunk.index !== index ||
-        chunk.id !== `t-${source.hash.slice(0, 12)}-${index}` ||
-        !Array.isArray(chunk.blocks) ||
-        !chunk.blocks.length ||
-        !Array.isArray(chunk.protectedSpans) ||
-        JSON.stringify(chunk.anchors) !== JSON.stringify(chunk.blocks.map((block) => block.anchor))
-      )
-        throw new Error();
-    }
-    if (
-      plan.maxChunkChars !== expected.maxChunkChars ||
-      JSON.stringify(plan.chunks) !== JSON.stringify(expected.chunks)
-    )
-      throw new Error();
-    return structuredClone(plan);
-  } catch {
-    throw new Error('SOURCE_TRANSLATION_PLAN_INVALID');
-  }
-}
 const object = (value: unknown): Record<string, unknown> => {
   if (!value || typeof value !== 'object' || Array.isArray(value))
     throw new Error('OUTPUT_SCHEMA_INVALID');
@@ -320,82 +124,9 @@ const textField = (value: unknown, maximum = 50000) => {
     throw new Error('OUTPUT_SCHEMA_INVALID');
   return value;
 };
-const strings = (value: unknown) => {
-  if (!Array.isArray(value) || value.some((item) => typeof item !== 'string'))
-    throw new Error('OUTPUT_SCHEMA_INVALID');
-  return value as string[];
-};
 function identity(value: Record<string, unknown>, sourceRevision: string, sourceHash: string) {
   if (value.sourceRevision !== sourceRevision || value.sourceHash !== sourceHash)
     throw new Error('SOURCE_DEPENDENCY_MISMATCH');
-}
-
-/** Validate the actual returned mapping, not a copied count of requested blocks. */
-export function validateTranslationChunk(
-  plan: TranslationPlan,
-  chunkId: string,
-  output: unknown
-): TranslationResult {
-  const chunk = plan.chunks.find((item) => item.id === chunkId);
-  if (!chunk) throw new Error('CHUNK_UNAVAILABLE');
-  const value = parsed(output);
-  only(value, ['sourceRevision', 'sourceHash', 'chunkId', 'segments']);
-  identity(value, plan.sourceRevision, plan.sourceHash);
-  if (value.chunkId !== chunkId || !Array.isArray(value.segments) || !value.segments.length)
-    throw new Error('CHUNK_COVERAGE_INVALID');
-  const segments = value.segments.map((segment) => {
-    const item = object(segment);
-    only(item, ['anchors', 'text']);
-    const anchors = strings(item.anchors);
-    if (!anchors.length) throw new Error('CHUNK_COVERAGE_INVALID');
-    return { anchors: [...anchors], text: textField(item.text) };
-  });
-  if (
-    JSON.stringify(segments.flatMap((segment) => segment.anchors)) !== JSON.stringify(chunk.anchors)
-  )
-    throw new Error('CHUNK_COVERAGE_INVALID');
-  for (const segment of segments) {
-    const spans = chunk.protectedSpans.filter((span) => segment.anchors.includes(span.anchor));
-    const returnedTokens = segment.text.match(/\[\[p_[a-f0-9]+_\d+\]\]/g) ?? [];
-    if (JSON.stringify(returnedTokens) !== JSON.stringify(spans.map((span) => span.token)))
-      throw new Error('PROTECTED_SPAN_INVALID');
-    let humanText = segment.text;
-    for (const span of spans) humanText = humanText.replace(span.token, '');
-    if (humanText.includes('[[p_') || [...humanText.matchAll(syntax)].length)
-      throw new Error('UNPROTECTED_SYNTAX_RETURNED');
-    for (const span of spans) segment.text = segment.text.replace(span.token, () => span.literal);
-  }
-  return { sourceRevision: plan.sourceRevision, sourceHash: plan.sourceHash, chunkId, segments };
-}
-/** Completed siblings are retained; only missing/failed logical chunk IDs retry. */
-export function aggregateTranslation(plan: TranslationPlan, results: TranslationResult[]) {
-  const byId = new Map<string, TranslationResult>();
-  for (const result of results) {
-    if (byId.has(result.chunkId)) throw new Error('DUPLICATE_CHUNK_RESULT');
-    const chunk = plan.chunks.find((item) => item.id === result.chunkId);
-    if (
-      !chunk ||
-      result.sourceRevision !== plan.sourceRevision ||
-      result.sourceHash !== plan.sourceHash ||
-      JSON.stringify(result.segments.flatMap((segment) => segment.anchors)) !==
-        JSON.stringify(chunk.anchors)
-    )
-      throw new Error('SOURCE_DEPENDENCY_MISMATCH');
-    byId.set(result.chunkId, structuredClone(result));
-  }
-  const retryChunkIds = plan.chunks.filter((chunk) => !byId.has(chunk.id)).map((chunk) => chunk.id);
-  return {
-    status:
-      retryChunkIds.length === 0
-        ? ('completed' as const)
-        : results.length
-          ? ('partial' as const)
-          : ('incomplete' as const),
-    completedChunks: results.length,
-    totalChunks: plan.chunks.length,
-    retryChunkIds,
-    segments: plan.chunks.flatMap((chunk) => byId.get(chunk.id)?.segments ?? []),
-  };
 }
 
 type CatalogEntry = Omit<Resource, 'text' | 'chatId'>;
@@ -434,25 +165,19 @@ export type PresentationAnnotation = {
     presentationIntent: 'inline' | 'profile';
   }[];
 };
-export type PreviousTranslation = {
-  sourceRevision: string;
-  sourceHash: string;
-  chunks: { chunkId: string; text: string; truncated: boolean }[];
-};
 export type AuxiliaryInput = {
   role: 'translation' | 'status' | 'presentation';
   contract: string;
   customPrompt?: boolean;
   sourceRevision: string;
   sourceHash: string;
-  context: SourceTimeContext & { previousTranslation?: PreviousTranslation };
+  context: SourceTimeContext;
   catalog: CatalogEntry[];
   tools: string[];
   results: ToolEvent[];
   outputSchema: Record<string, unknown>;
   blocks: { anchor: string; text: string }[];
-  chunkId?: string;
-  neighborBlocks?: { anchor: string; text: string }[];
+  sourceText?: string;
   assets?: ImageMetadata[];
   assetPage?: { total: number; nextOffset: number | null };
   scenes?: BlockScene[];
@@ -473,43 +198,21 @@ const baseInput = (
   tools: ['knowledge.search', 'knowledge.read', 'skills.list', 'skills.load'],
   results: [] as ToolEvent[],
 });
-/** Completed translations are request-local wording references, never a change to the frozen plan. */
-function previousTranslation(
-  plan: TranslationPlan,
-  current: TranslationChunk,
-  completed: readonly TranslationResult[]
-): PreviousTranslation | undefined {
-  aggregateTranslation(plan, [...completed]); // Recheck source identity, chunk IDs and ordered anchor coverage.
-  const byId = new Map(completed.map((result) => [result.chunkId, result]));
-  const prior = plan.chunks
-    .filter((chunk) => chunk.index < current.index && byId.has(chunk.id))
-    .slice(-2);
-  if (!prior.length) return undefined;
-  const maximum = Math.floor(6000 / prior.length);
-  const chunks = prior.map((chunk) => {
-    const result = byId.get(chunk.id)!;
-    const full = result.segments.map((segment) => textField(segment.text)).join('\n\n');
-    let start = Math.max(0, full.length - maximum);
-    // Keep the UTF-16 bound without starting in the middle of a surrogate pair.
-    if (start > 0 && /[\uDC00-\uDFFF]/u.test(full[start])) start++;
-    return { chunkId: chunk.id, text: full.slice(start), truncated: start > 0 };
-  });
-  return { sourceRevision: plan.sourceRevision, sourceHash: plan.sourceHash, chunks };
-}
+/** The source is sent once, verbatim. The host owns identity; prose is not a schema. */
 export function translationInput(
-  plan: TranslationPlan,
-  chunkId: string,
-  snapshot: RunSnapshot,
-  completed: readonly TranslationResult[] = []
+  source: AuxiliarySource,
+  context: SourceTimeContext,
+  snapshot: RunSnapshot
 ): AuxiliaryInput {
-  if (snapshot.chatId !== plan.chatId) throw new Error('SOURCE_SCOPE_MISMATCH');
-  const chunk = plan.chunks.find((item) => item.id === chunkId);
-  if (!chunk) throw new Error('CHUNK_UNAVAILABLE');
-  const base = baseInput(plan.sourceRevision, plan.sourceHash, plan.context, snapshot);
-  const previous = previousTranslation(plan, chunk, completed);
-  const prompt = snapshot.profile?.promptPresets?.translation;
-  const compiled = compiledPackages(snapshot, 'translation'),
-    packages = packageContextFromCompiled(compiled);
+  validateSourceIdentity(source);
+  if (snapshot.chatId !== source.chatId) throw new Error('SOURCE_SCOPE_MISMATCH');
+  const document = parseSourceSegments(
+    { sourceRevision: source.id, sourceHash: source.hash, text: source.text },
+    context.sourceSegments
+  );
+  const base = baseInput(source.id, source.hash, context, snapshot);
+  const compiled = compiledPackages(snapshot, 'translation');
+  const packages = packageContextFromCompiled(compiled);
   if (packages) {
     const ids = new Set(base.catalog.map((r) => r.id));
     for (const pack of compiled)
@@ -522,35 +225,31 @@ export function translationInput(
   return {
     ...base,
     role: 'translation',
-    chunkId,
+    sourceText: source.text,
+    blocks: [],
     tools: [...base.tools, ...STORY_READ_NAMES, ...TRANSLATION_READ_NAMES],
     context: {
       ...base.context,
       ...(packages ? { packages } : {}),
-      ...(previous ? { previousTranslation: previous } : {}),
+      segmentKnowledge: {
+        sourceRevision: source.id,
+        sourceHash: source.hash,
+        provenance: 'source-markers',
+        segments: document.segments.map((segment) => ({
+          id: segment.id,
+          kind: segment.kind,
+          range: { ...segment.range },
+          readerExposure: 'present-in-source',
+          actorKnowledge: structuredClone(segment.knowledge),
+          worldTruth: 'unknown',
+        })),
+      },
     },
     contract: '',
     referencePolicy:
       'Optional story.search/read retrieves frozen prior originals; memory.search/read retrieves typed source-time evidence; translation.search/read retrieves prior wording, never new facts. Search names, forms of address and speaker register when useful, then read only needed ranges. Current source and source-time references take precedence over prior translations, beliefs and summaries. Hidden viewpoints remain distinct: reference knowledge does not become a character’s knowledge. Empty search needs no retry; translation remains possible without tools. Total tool result budget is 96000 UTF-8 bytes per job.',
-    ...(prompt ? { customPrompt: true } : {}),
-    blocks: structuredClone(chunk.blocks),
-    neighborBlocks: [
-      plan.chunks[chunk.index - 1]?.blocks.at(-1),
-      plan.chunks[chunk.index + 1]?.blocks[0],
-    ].filter((item) => item !== undefined),
-    outputSchema: {
-      sourceRevision: 'exact input value',
-      sourceHash: 'exact input value',
-      chunkId: 'exact input value',
-      segments: [
-        {
-          anchors: ['ordered source anchors'],
-          text: prompt
-            ? 'Translated prose with protected tokens unchanged'
-            : 'Korean prose with protected tokens unchanged',
-        },
-      ],
-    },
+    ...(snapshot.profile?.promptPresets?.translation ? { customPrompt: true } : {}),
+    outputSchema: {},
   };
 }
 /** A translation job compiles its own frozen preset and values, never main-turn messages. */
@@ -583,7 +282,7 @@ export function compileTranslationPrompt(
     lorebook: lore,
     memory: snapshot.story?.memory ? JSON.stringify(snapshot.story.memory) : '',
     state: snapshot.story?.state ? JSON.stringify(snapshot.story.state) : '',
-    source: JSON.stringify(input.blocks),
+    source: input.sourceText ?? JSON.stringify(input.blocks),
     context: JSON.stringify(input.context),
     outputSchema: JSON.stringify(input.outputSchema),
     catalog: JSON.stringify(input.catalog),
@@ -608,6 +307,7 @@ export function compileTranslationPrompt(
         source: {
           id: input.sourceRevision,
           hash: input.sourceHash,
+          text: input.sourceText ?? '',
           blocks: input.blocks as unknown as import('./prompt-program.js').RuntimeValue,
         },
       },
@@ -617,7 +317,7 @@ export function compileTranslationPrompt(
       slots,
       history: [
         {
-          id: `translation-current:${input.chunkId ?? input.sourceRevision}`,
+          id: `translation-current:${input.sourceRevision}`,
           role: 'user',
           text: task,
           sourceRevision: input.sourceRevision,
@@ -789,6 +489,7 @@ export async function executeAuxiliary(
   const inputs: AuxiliaryInput[] = [];
   const toolEvents: ToolEvent[] = [];
   const limit = hooks.maxCalls ?? snapshot.settings.maxCalls;
+  const correction = createToolCorrectionPolicy();
   const check = () => {
     if (hooks.signal?.aborted)
       throw Object.assign(new Error('Auxiliary cancelled'), { name: 'AbortError' });
@@ -900,28 +601,16 @@ export async function executeAuxiliary(
       toolEvents.push(structuredClone(event));
       await hooks.onToolEvent?.(structuredClone(event));
       check();
-      if (event.denied) throw new Error('Auxiliary read tool denied');
+      const decision = correction(event, action.args);
+      if (decision === 'exhausted') throw new Error('TOOL_CORRECTION_EXHAUSTED');
+      if (decision === 'denied') throw new Error('Auxiliary read tool denied');
     }
   }
 }
 
 /** Explicit deterministic local adapter: validates plumbing, never semantic quality. */
 export const scriptedAuxiliary: AuxiliaryRequest = async (input) => {
-  if (input.role === 'translation')
-    return {
-      sourceRevision: input.sourceRevision,
-      sourceHash: input.sourceHash,
-      chunkId: input.chunkId,
-      segments: input.blocks.map((block) => ({
-        anchors: [block.anchor],
-        // Hidden markers are protected tokens here. An inline mock prefix would move
-        // their restored opening delimiter off column zero and orphan the closing tag.
-        // Echo this structured source unchanged; the job result still declares mock:true.
-        text: input.context.segmentKnowledge
-          ? block.text
-          : `[모의 번역 · 의미 품질 미검증] ${block.text}`,
-      })),
-    };
+  if (input.role === 'translation') return input.sourceText ?? '';
   if (input.role === 'status')
     return {
       sourceRevision: input.sourceRevision,

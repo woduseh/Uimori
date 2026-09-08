@@ -10,8 +10,9 @@ import { forkChat } from '../server/chat-fork.js';
 import { Store, HttpError, type Source } from '../server/store.js';
 import { Controls } from '../server/controls.js';
 import { auxiliaryBridge } from '../server/auxiliary-bridge.js';
-import { runAuxiliaryJob, sourceTimeContext } from '../server/product-auxiliary.js';
-import { validateTranslationPlan } from '../core/auxiliary.js';
+import { runAuxiliaryJob } from '../server/product-auxiliary.js';
+import { promptWorkspace, updatePromptWorkspace } from '../server/prompt-workspace.js';
+import { successfulTranslation, validateTranslationArtifact } from '../server/source-editing.js';
 import type { Content, PromptPreset, ChatProfile } from '../core/product.js';
 import type { RunSnapshot } from '../core/types.js';
 
@@ -122,7 +123,6 @@ async function translate(store: Store, jobId: string) {
       signal,
       approvedOrigins: [],
       authorize: (value) => value,
-      maxChunkChars: 100,
       onAttemptStart: () => {
         throw new Error('No provider transport allowed');
       },
@@ -199,9 +199,13 @@ async function rich(app: App) {
     profileBody(store.product.profile(chat.id), {
       attachments: [ref(lore)],
       image: true,
-      prompts: { main: ref(main), translation: ref(translation) },
     })
   );
+  updatePromptWorkspace(store, {
+    expectedRevision: promptWorkspace(store).revision,
+    main: { title: main.title, program: main.program, values: {} },
+    translation: { title: translation.title, program: translation.program, values: {} },
+  });
   store.settings(chat.id, chat.settingsRevision, {
     ...chat.settings,
     preset: 'vivid',
@@ -234,10 +238,10 @@ async function rich(app: App) {
     title: 'Later translation',
     text: '',
   }) as PromptPreset;
-  store.product.updateProfile(
-    chat.id,
-    profileBody(store.product.profile(chat.id), { prompts: { translation: ref(laterPrompt) } })
-  );
+  updatePromptWorkspace(store, {
+    expectedRevision: promptWorkspace(store).revision,
+    translation: { title: laterPrompt.title, program: laterPrompt.program, values: {} },
+  });
   const revised = store.retranslate(first.id);
   await translate(store, revised.id);
   const second = source(
@@ -270,6 +274,7 @@ async function rich(app: App) {
     translation,
     laterPrompt,
     pending,
+    secondJob,
     failed,
     revised,
   };
@@ -401,11 +406,17 @@ describe('independent stored-story fork without generation', () => {
     }
     expect(detail.attempts).toEqual([]);
     expect(detail.jobs.every((job) => job.status === 'completed')).toBe(true);
-    const expectedJobs = originalDetail.jobs.filter(
-      (job) =>
-        [fixture.first.id, fixture.second.id].includes(job.sourceRevision) &&
-        job.status === 'completed'
-    );
+    const expectedJobs = [
+      ...originalDetail.jobs.filter(
+        (job) =>
+          job.kind !== 'translation' &&
+          [fixture.first.id, fixture.second.id].includes(job.sourceRevision) &&
+          job.status === 'completed'
+      ),
+      ...[fixture.first, fixture.second].map((source) => successfulTranslation(store, source)!),
+    ];
+    expect(store.job(fixture.failed.id).status).toBe('failed');
+    expect(expectedJobs.some((job) => job.id === fixture.secondJob.id)).toBe(true);
     expect(detail.jobs).toHaveLength(expectedJobs.length);
     for (const newSource of detail.sources) {
       const old = fixture.first.hash === newSource.hash ? fixture.first : fixture.second;
@@ -439,23 +450,17 @@ describe('independent stored-story fork without generation', () => {
         });
         if (job.kind === 'translation') {
           expect(job.result?.text).toBe(oldJob.result?.text);
-          expect(job.result?.segments?.flatMap((segment) => segment.anchors)).toEqual(
-            newSource.blocks!.map((block) => block.anchor)
-          );
+          expect(job.result).not.toHaveProperty('segments');
           const resolved = store.product.resolveJobPrompt(
             store.run(newSource.runId).snapshot,
             store.job(job.id).input
           );
           expect(() =>
-            validateTranslationPlan(
-              newSource,
-              sourceTimeContext(resolved, 'translation'),
-              store.product.plan(job.id)
-            )
+            validateTranslationArtifact(store, store.job(job.id), newSource)
           ).not.toThrow();
           if (oldJob.id === fixture.revised.id)
-            expect(store.product.plan(job.id).context.instructionRevision).toBe(
-              'prompt:' + fixture.laterPrompt.id + '@1'
+            expect(resolved.profile!.promptPresets!.translation!.program).toEqual(
+              fixture.laterPrompt.program
             );
         } else if (job.kind === 'image') {
           const annotation = job.result!.annotations![0];
@@ -487,7 +492,6 @@ describe('independent stored-story fork without generation', () => {
     store.product.updateProfile(
       copy.id,
       profileBody(copyProfile, {
-        prompts: { main: null, translation: null },
         personaReference: false,
       })
     );
@@ -502,7 +506,9 @@ describe('independent stored-story fork without generation', () => {
     const continued = source(store, copy.id, 'Only the fork continues here.');
     expect(continued.parentRevision).toBe(copy.headRevision);
     expect(store.run(continued.runId).snapshot.history).toEqual(ancestry);
-    expect(store.run(continued.runId).snapshot.profile?.promptPresets).toEqual({});
+    expect(store.run(continued.runId).snapshot.profile?.promptPresets?.main?.program).toEqual(
+      promptWorkspace(store).main.program
+    );
     expect(store.detail(fixture.chat.id)).toEqual(originalDetail);
     expect(fetch).not.toHaveBeenCalled();
     expect(store.db.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
@@ -652,7 +658,12 @@ describe('independent stored-story fork without generation', () => {
       isolated.tables.jobs.filter((row) => row.chat_id === copy.id).map((row) => row.id)
     );
     for (const [name, rows] of Object.entries(isolated.tables)) {
-      if (name === 'versions' || name === 'package_behavior_entropy' || name.startsWith('library_'))
+      if (
+        name === 'versions' ||
+        name === 'prompt_workspace' ||
+        name === 'package_behavior_entropy' ||
+        name.startsWith('library_')
+      )
         continue;
       isolated.tables[name] = rows.filter((row) =>
         Object.hasOwn(row, 'chat_id')

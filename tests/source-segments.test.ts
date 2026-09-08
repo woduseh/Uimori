@@ -8,8 +8,6 @@ import {
   filterSourceSegments,
   parseSourceSegments,
   resolveSourceSegmentPolicy,
-  segmentTranslationMarkers,
-  validateSegmentTranslation,
   validateSourceSegmentPolicy,
   type SegmentSource,
   type SourceSegmentPolicy,
@@ -106,7 +104,6 @@ describe('package-authored source segments', () => {
         range: { start: 0, end: raw.text.length },
       });
       expect(parsed.diagnostics).toEqual([]);
-      expect(segmentTranslationMarkers(raw, unselected)).toEqual([]);
     }
     expect(
       parseSourceSegments(raw, policy()).segments.filter((segment) => segment.kind === 'annotation')
@@ -189,87 +186,6 @@ describe('package-authored source segments', () => {
     expect(view.text).not.toContain('Mira imagines');
     expect(view.text).not.toContain('Only a commentary');
     expect(source(view.text).sourceHash).not.toBe(raw.sourceHash);
-    expect(raw).toEqual(before);
-  });
-
-  test('translation localizes prose, titles and scene labels while preserving markers and portrait identity', () => {
-    const raw = sample(),
-      translated = raw.text
-        .replace('Quiet bell', '조용한 종')
-        .replace('Tower :: Morning :: Mira', '탑 :: 아침 :: 미라')
-        .replace('Mira imagines a silent bell. 😀', '미라는 조용한 종을 상상해요. 😀');
-    expect(validateSegmentTranslation(raw, translated, policy())).toEqual({
-      ok: true,
-      diagnostics: [],
-    });
-    const markers = segmentTranslationMarkers(raw, policy());
-    expect(
-      markers.filter((marker) => marker.kind === 'scene').map((marker) => marker.literal)
-    ).toEqual(['⟬', '::', '::', '⟭']);
-    expect(markers.some((marker) => marker.literal.includes('Tower'))).toBe(false);
-    expect(markers.find((marker) => marker.kind === 'portrait')!.literal).toContain(
-      'resource:coat@1'
-    );
-    expect(
-      validateSegmentTranslation(
-        raw,
-        translated.replace('resource:coat@1', 'resource:forged@2'),
-        policy()
-      ).ok
-    ).toBe(false);
-    expect(
-      validateSegmentTranslation(raw, translated.replace('탑 :: 아침', '탑 / 아침'), policy()).ok
-    ).toBe(false);
-    expect(
-      validateSegmentTranslation(raw, translated.replace('[[/aside]]', '[[/other]]'), policy()).ok
-    ).toBe(false);
-    const aside = parseSourceSegments(raw, policy()).segments[1];
-    const without = raw.text.slice(0, aside.range.start) + raw.text.slice(aside.range.end);
-    expect(
-      validateSegmentTranslation(raw, without, policy()).diagnostics.map((item) => item.code)
-    ).toContain('SEGMENT_TRANSLATION_COVERAGE');
-    expect(
-      validateSegmentTranslation(
-        raw,
-        without + raw.text.slice(aside.range.start, aside.range.end),
-        policy()
-      ).ok
-    ).toBe(false);
-    expect(
-      validateSegmentTranslation(
-        raw,
-        raw.text.replace('Mira imagines a silent bell. 😀', ''),
-        policy()
-      ).diagnostics.map((item) => item.code)
-    ).toContain('SEGMENT_EMPTY');
-  });
-
-  test('translation diagnostics retain source and translated errors before structure mismatches', () => {
-    const raw = source('A<audit></audit>B');
-    const result = validateSegmentTranslation(raw, 'A\n[[aside: Unclosed\nbody', policy());
-    expect(result.ok).toBe(false);
-    expect(result.diagnostics.map((item) => item.code)).toEqual([
-      'SEGMENT_EMPTY',
-      'SEGMENT_UNCLOSED',
-      'SEGMENT_TRANSLATION_COVERAGE',
-      'SEGMENT_TRANSLATION_MARKERS',
-    ]);
-  });
-
-  test.each([
-    ['unclosed', 'A\n[[aside: Secret\nprivate text', 'SEGMENT_UNCLOSED'],
-    ['nested', 'A\n[[aside: Outer\n<audit>inner</audit>\n[[/aside]]\nB', 'SEGMENT_NESTED'],
-  ])('identical malformed translation still rejects %s blocks', (_label, text, code) => {
-    const raw = source(text);
-    const before = structuredClone(raw);
-    expect(validateSegmentTranslation(raw, text, policy())).toEqual({
-      ok: false,
-      diagnostics: [
-        expect.objectContaining({ code, severity: 'error' }),
-        expect.objectContaining({ code, severity: 'error' }),
-      ],
-    });
-    expect(segmentTranslationMarkers(raw, policy())).toEqual([]);
     expect(raw).toEqual(before);
   });
 

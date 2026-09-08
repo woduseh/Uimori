@@ -1,3 +1,4 @@
+import { visualReview } from './fixtures/visual-review.js';
 import { test, expect, type APIRequestContext, type Page, type Locator } from '@playwright/test';
 import type { Content, Library } from '../core/product.js';
 import type { LibraryOrganization, LibraryFolder } from '../core/library-organization.js';
@@ -137,7 +138,8 @@ test('LIBUI01 library folders move and classify without changing revisions or ow
   await moveItems(page, panel, [a.title, b.title], 'bot', folder);
   await chooseFolder(panel, folder.title);
   await expect(panel.locator('.library-open-content')).toHaveCount(2);
-  await page.screenshot({ path: info.outputPath('library-bot-cards-desktop.png') });
+  if (visualReview)
+    await page.screenshot({ path: info.outputPath('library-bot-cards-desktop.png') });
   await panel.getByRole('tab', { name: '페르소나', exact: true }).click();
   const personas = await createFolder(page, panel, `${prefix} People`);
   await panel.getByRole('tab', { name: '봇', exact: true }).click();
@@ -192,7 +194,7 @@ test('LIBUI02 mobile folder deletion refreshes another page and stale moves requ
   await otherPanel.getByRole('button', { name: '선택', exact: true }).click();
   await otherPanel.getByLabel(`${item.title} 선택`, { exact: true }).check();
   await page.bringToFront();
-  await page.screenshot({ path: info.outputPath('library-folders-mobile.png') });
+  if (visualReview) await page.screenshot({ path: info.outputPath('library-folders-mobile.png') });
   await revealFolderActions(panel);
   await panel.getByRole('button', { name: `${folder.title} 폴더 삭제`, exact: true }).click();
   const confirm = page.getByRole('alertdialog', { name: '삭제 확인', exact: true });
@@ -285,7 +287,8 @@ test('LIBUI03 prompts have independent folders and unsaved edits survive a cance
         )?.revision
     )
     .toBe(2);
-  await page.screenshot({ path: info.outputPath('prompt-management-mobile.png') });
+  if (visualReview)
+    await page.screenshot({ path: info.outputPath('prompt-management-mobile.png') });
   expect((await organization(request)).items.find((item) => item.id === prompt.id)?.folderId).toBe(
     folder.id
   );

@@ -2,7 +2,6 @@ export type Settings = {
   preset: 'calm' | 'vivid';
   mode: 'direct' | 'research';
   translation: boolean;
-  translationChunkChars?: number | null;
   status: boolean;
   maxCalls: number;
 };
@@ -55,6 +54,7 @@ export type ToolEvent = {
   args: Record<string, unknown>;
   result: unknown;
   denied: boolean;
+  errorKind?: 'recoverable';
 };
 export type Usage = {
   modelCalls: number;
@@ -163,14 +163,8 @@ export type Job = {
       caption?: string;
     }[];
   } | null;
-  translationPlan?: { maxChunkChars: number | null; totalChunks: number };
-  chunks?: {
-    id: string;
-    status: string;
-    attempt: number;
-    error: string | null;
-    result?: unknown;
-  }[];
+  /** Last validated translation of this exact source, retained while a new request runs/fails. */
+  previousResult?: { jobId: string; revision: number; result: NonNullable<Job['result']> };
   revision?: number;
 };
 export type ChatDetail = {

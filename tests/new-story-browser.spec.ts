@@ -1,3 +1,4 @@
+import { visualReview } from './fixtures/visual-review.js';
 import { test, expect } from '@playwright/test';
 import type { Chat, ChatDetail } from '../core/types.js';
 import type { Connection, Content, Library, ModelPreset } from '../core/product.js';
@@ -84,7 +85,7 @@ test('NSUI01 a sole usable model reaches an empty chat on mobile and optional ch
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(
     true
   );
-  await page.screenshot({ path: info.outputPath('new-story-simple-mobile.png') });
+  if (visualReview) await page.screenshot({ path: info.outputPath('new-story-simple-mobile.png') });
   const created = page.waitForResponse(
     (response) => /\/api\/chats$/.test(response.url()) && response.request().method() === 'POST'
   );

@@ -1,3 +1,4 @@
+import { visualReview } from './fixtures/visual-review.js';
 import {
   editLibraryContent,
   selectChatSettingsSection,
@@ -68,7 +69,7 @@ async function evidence(page: Page, target: Locator, info: TestInfo, name: strin
       expect(
         await dialog.evaluate((element) => element.scrollWidth <= element.clientWidth + 1)
       ).toBe(true);
-    await page.screenshot({ path: info.outputPath(`${name}-${suffix}.png`) });
+    if (visualReview) await page.screenshot({ path: info.outputPath(`${name}-${suffix}.png`) });
   }
 }
 

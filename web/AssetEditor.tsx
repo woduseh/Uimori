@@ -72,7 +72,7 @@ export function AssetEditor({
                     path={`/chats/${encodeURIComponent(chatId)}/assets/${encodeURIComponent(asset.id)}`}
                     title={asset.title}
                     label="이미지 삭제"
-                    description="이야기에 업로드한 이미지와 파일을 영구 삭제해요. 과거 실행·이미지 작업에서 참조 중인 이미지는 삭제할 수 없어요."
+                    description="업로드 이미지 목록에서 삭제해요. 과거 채팅과 실행에 필요한 이미지 파일은 유지돼요."
                     disabled={busy}
                     onDeleted={async () => {
                       setMessage(asset.title + ' 이미지를 삭제했어요.');

@@ -1,12 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import type { Chat } from '../core/types.js';
-import type {
-  Content,
-  Library,
-  ModelPreset,
-  PromptPreset,
-  SavedPromptCombination,
-} from '../core/product.js';
+import type { Content, Library, ModelPreset } from '../core/product.js';
 import { api } from './api.js';
 import { refValue } from './content-ref.js';
 import { modelLabel } from './storyLabels.js';
@@ -38,8 +32,6 @@ type StorySelection = {
   bot: Content | null;
   persona: Content | null;
   modules: Content[];
-  prompt: PromptPreset | null;
-  combination: SavedPromptCombination | null;
   main: ModelPreset | null;
   translation: ModelPreset | null;
   profile: NewStoryProfileIntent | null;
@@ -83,8 +75,6 @@ export function NewStory({
         : ''
   );
   const [modules, setModules] = useState(() => (initialModules ?? []).map(refValue));
-  const [prompt, setPrompt] = useState('');
-  const [combination, setCombination] = useState('');
   const [remembered] = useState(rememberedModels);
   const suggested = newStoryModelDefaults(library, remembered);
   const [models, setModels] = useState(() => ({
@@ -191,13 +181,6 @@ export function NewStory({
     };
   }, [bot, persona, modules, library, initialBot, initialPersona, initialModules]);
   useEffect(() => {
-    if (submitted.current) return;
-    setPrompt((previous) => {
-      const current = library.promptPresets?.find((item) => item.id === selectedId(previous));
-      return current ? refValue(current) : previous;
-    });
-  }, [library.promptPresets]);
-  useEffect(() => {
     // A submitted profile intent keeps its model IDs while settings remain editable.
     if (submitted.current) return;
     setModels((previous) => {
@@ -284,14 +267,6 @@ export function NewStory({
     if (start && !opening) throw new Error('선택한 시작을 다시 확인해 주세요.');
     if (opening?.mode === 'generate' && !main && !testMode)
       throw new Error('첫 장면을 생성하려면 본문 모델을 선택해 주세요.');
-    const selectedPrompt = library.promptPresets?.find(
-      (p) => refValue(p) === prompt && p.role === 'main'
-    );
-    const selectedCombination = library.promptCombinations?.find(
-      (c) => refValue(c) === combination && selectedPrompt && c.prompt.id === selectedPrompt.id
-    );
-    if ((prompt && !selectedPrompt) || (combination && !selectedCombination))
-      throw new Error('프롬프트와 창작 프리셋의 조합을 다시 확인해 주세요.');
     const selectedContents = [selectedBot, selectedPersona, ...selectedModules].filter(
       (item): item is Content => !!item
     );
@@ -301,12 +276,10 @@ export function NewStory({
       bot: selectedBot ?? null,
       persona: selectedPersona ?? null,
       modules: selectedModules,
-      prompt: selectedPrompt ?? null,
-      combination: selectedCombination ?? null,
       main: main ?? null,
       translation: translation ?? null,
       profile:
-        selectedBot || selectedPersona || selectedPrompt || main || translation
+        selectedBot || selectedPersona || main || translation
           ? {
               attachments: selectedContents
                 .filter((item) => !item.package && !item.hasPackage)
@@ -324,24 +297,6 @@ export function NewStory({
                       packageRevision: opening.packageRevision,
                       startId: opening.startId,
                       idempotencyKey: crypto.randomUUID(),
-                    },
-                  }
-                : {}),
-              ...(selectedPrompt
-                ? {
-                    prompts: { main: { id: selectedPrompt.id, revision: selectedPrompt.revision } },
-                  }
-                : {}),
-              ...(selectedPrompt && selectedCombination
-                ? {
-                    promptControls: {
-                      [refValue(selectedPrompt)]: {
-                        values: reconcilePromptValues(
-                          selectedPrompt.program,
-                          selectedCombination.values
-                        ).values,
-                        combinations: [],
-                      },
                     },
                   }
                 : {}),
@@ -426,15 +381,6 @@ export function NewStory({
   );
   for (const item of frozenContents)
     if (!contents.some((current) => refValue(current) === refValue(item))) contents.push(item);
-  const prompts = [...(library.promptPresets ?? [])];
-  if (frozen?.prompt && !prompts.some((item) => refValue(item) === refValue(frozen.prompt!)))
-    prompts.push(frozen.prompt);
-  const combinations = [...(library.promptCombinations ?? [])];
-  if (
-    frozen?.combination &&
-    !combinations.some((item) => refValue(item) === refValue(frozen.combination!))
-  )
-    combinations.push(frozen.combination);
   for (const selected of [frozen?.main, frozen?.translation])
     if (selected && !choices.some((item) => item.id === selected.id)) choices.push(selected);
   const activeBot =
@@ -494,7 +440,6 @@ export function NewStory({
   const additionalSummary = [
     activePersona ? '페르소나 선택됨' : '',
     modules.length ? `모듈 ${modules.length}개` : '',
-    prompt ? '프롬프트 선택됨' : '',
     models.translation ? '번역 모델 선택됨' : '',
     title.trim() ? '이름 지정됨' : '',
   ]
@@ -692,47 +637,6 @@ export function NewStory({
             />
           </fieldset>
           {packageSettings.slice(1)}
-          <label>
-            프롬프트
-            <select
-              aria-label="시작 프롬프트"
-              value={prompt}
-              disabled={locked}
-              onChange={(e) => {
-                setPrompt(e.target.value);
-                setCombination('');
-              }}
-            >
-              <option value="">기본 프롬프트</option>
-              {prompts
-                .filter((p) => p.role === 'main')
-                .map((p) => (
-                  <option value={refValue(p)} key={refValue(p)}>
-                    {p.title}
-                  </option>
-                ))}
-            </select>
-          </label>
-          {prompt && (
-            <label>
-              창작 프리셋
-              <select
-                aria-label="시작 옵션 조합"
-                value={combination}
-                disabled={locked}
-                onChange={(e) => setCombination(e.target.value)}
-              >
-                <option value="">프롬프트 기본값</option>
-                {combinations
-                  .filter((c) => c.prompt.id === selectedId(prompt))
-                  .map((c) => (
-                    <option value={refValue(c)} key={refValue(c)}>
-                      {c.title}
-                    </option>
-                  ))}
-              </select>
-            </label>
-          )}
           <label>
             한국어 번역 모델
             <select

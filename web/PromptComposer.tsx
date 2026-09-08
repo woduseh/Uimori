@@ -26,7 +26,7 @@ import {
   parsePromptTemplate,
   printPromptTemplate,
 } from '../core/prompt-language.js';
-import type { ContentRef, SavedPromptCombination } from '../core/product.js';
+import type { SavedPromptCombination } from '../core/product.js';
 
 type Props = {
   program: PromptProgram;
@@ -37,7 +37,6 @@ type Props = {
   role?: 'main' | 'translation';
   controlState?: ChatPromptControls;
   onSaveControls?: (state: ChatPromptControls) => Promise<void>;
-  promptReference?: ContentRef;
   savedCombinations?: SavedPromptCombination[];
   onSaveCombination?: (title: string, values: Record<string, PromptValue>) => Promise<void>;
   onDirtyChange?: (dirty: boolean) => void;
@@ -808,7 +807,6 @@ export function PromptComposer({
   role = 'main',
   controlState,
   onSaveControls,
-  promptReference,
   savedCombinations = [],
   onSaveCombination,
   onDirtyChange,
@@ -846,12 +844,10 @@ export function PromptComposer({
     if ((block.kind === 'message' || block.kind === 'slot') && block.template)
       collectSlots(block.template);
   }
-  const globalCombinations = savedCombinations.filter(
-    (item) => promptReference && item.prompt.id === promptReference.id
-  );
+  const globalCombinations = savedCombinations.filter((item) => item.role === role);
   const [selectedGlobal, setSelectedGlobal] = useState('');
   const [savingGlobal, setSavingGlobal] = useState(false);
-  const scope = `${chatId ?? 'local'}:${branchId ?? 'root'}:${role}`;
+  const scope = role;
   const [drafts, setDrafts] = useState<Record<string, ChatPromptControls>>({});
   const [saved, setSaved] = useState<Record<string, string>>({});
   const controls = drafts[scope] ?? initialControlDraft ?? controlState ?? emptyControls();
@@ -1050,25 +1046,6 @@ export function PromptComposer({
     } finally {
       setSavingGlobal(false);
     }
-  }
-  function addCombination() {
-    if (!combinationName.trim()) return;
-    if (controls.combinations.length >= 50) {
-      report('조합은 최대 50개까지 저장할 수 있어요.');
-      return;
-    }
-    editControls({
-      ...controls,
-      combinations: [
-        ...controls.combinations,
-        {
-          id: newId('combination'),
-          title: combinationName.trim(),
-          values: structuredClone(controls.values),
-        },
-      ],
-    });
-    setCombinationName('');
   }
   async function runPreview() {
     const turn = ++sequence.current;
@@ -1388,8 +1365,7 @@ export function PromptComposer({
               <div className="pc-control pc-combination-card">
                 <h4>전역 창작 조합</h4>
                 <p className="muted">
-                  이 프롬프트의 조합을 모든 이야기에서 다시 사용할 수 있어요. 현재 옵션에 맞춰
-                  적용해요. 불러온 뒤 이야기 선택값을 저장하면 실행에 적용돼요.
+                  저장된 옵션을 현재 프롬프트에 복사해요. 현재 설정을 저장하면 다음 요청에 적용돼요.
                 </p>
                 <label>
                   전역 조합 선택
@@ -1440,35 +1416,7 @@ export function PromptComposer({
                       : '불러온 조합에서 수정됨'}
                   </small>
                 )}
-                {!promptReference && (
-                  <p className="muted">프롬프트를 저장하면 전역 조합을 만들 수 있어요.</p>
-                )}
               </div>
-              <label>
-                이전 이야기 조합
-                <select
-                  aria-label="프롬프트 선택 조합"
-                  value={controls.selectedCombinationId ?? ''}
-                  onChange={(event) => {
-                    const combination = controls.combinations.find(
-                      (item) => item.id === event.target.value
-                    );
-                    if (combination)
-                      editControls({
-                        ...controls,
-                        values: structuredClone(combination.values),
-                        selectedCombinationId: combination.id,
-                      });
-                  }}
-                >
-                  <option value="">직접 선택</option>
-                  {controls.combinations.map((combination) => (
-                    <option key={combination.id} value={combination.id}>
-                      {combination.title}
-                    </option>
-                  ))}
-                </select>
-              </label>
               <div className="pc-actions">
                 <button
                   type="button"
@@ -1516,113 +1464,12 @@ export function PromptComposer({
                 </label>
                 <button
                   type="button"
-                  className="secondary"
-                  disabled={!combinationName.trim() || controls.combinations.length >= 50}
-                  onClick={addCombination}
-                >
-                  현재 값으로 조합 만들기
-                </button>
-                <button
-                  type="button"
                   disabled={!onSaveCombination || !combinationName.trim() || savingGlobal}
                   onClick={() => void saveGlobal()}
                 >
                   {savingGlobal ? '저장 중…' : '전역 창작 조합으로 저장'}
                 </button>
               </div>
-              {controls.selectedCombinationId && (
-                <div className="pc-actions">
-                  <button
-                    type="button"
-                    className="ghost"
-                    onClick={() =>
-                      editControls({
-                        ...controls,
-                        combinations: controls.combinations.filter(
-                          (item) => item.id !== controls.selectedCombinationId
-                        ),
-                        selectedCombinationId: undefined,
-                      })
-                    }
-                  >
-                    선택 조합 삭제
-                  </button>
-                </div>
-              )}
-              {controls.combinations.length > 0 && (
-                <details>
-                  <summary>이전 이야기 조합 관리 · {controls.combinations.length} / 50</summary>
-                  <div className="pc-stack">
-                    {controls.combinations.map((combination) => (
-                      <div className="pc-control" key={combination.id}>
-                        <div className="pc-control-fields">
-                          <label>
-                            조합 이름
-                            <input
-                              aria-label={`${combination.title} 조합 이름`}
-                              maxLength={200}
-                              value={combination.title}
-                              onChange={(event) =>
-                                editControls({
-                                  ...controls,
-                                  combinations: controls.combinations.map((item) =>
-                                    item.id === combination.id
-                                      ? { ...item, title: event.target.value }
-                                      : item
-                                  ),
-                                })
-                              }
-                            />
-                          </label>
-                          <div className="pc-actions">
-                            <button
-                              type="button"
-                              className="secondary"
-                              disabled={!onSaveCombination || savingGlobal}
-                              onClick={() => void saveGlobal(combination.title, combination.values)}
-                            >
-                              전역 조합으로 저장
-                            </button>
-                            <button
-                              type="button"
-                              className="secondary"
-                              onClick={() =>
-                                editControls({
-                                  ...controls,
-                                  combinations: controls.combinations.map((item) =>
-                                    item.id === combination.id
-                                      ? { ...item, values: structuredClone(controls.values) }
-                                      : item
-                                  ),
-                                })
-                              }
-                            >
-                              현재 선택값으로 바꾸기
-                            </button>
-                            <button
-                              type="button"
-                              className="ghost"
-                              onClick={() =>
-                                editControls({
-                                  ...controls,
-                                  combinations: controls.combinations.filter(
-                                    (item) => item.id !== combination.id
-                                  ),
-                                  ...(controls.selectedCombinationId === combination.id
-                                    ? { selectedCombinationId: undefined }
-                                    : {}),
-                                })
-                              }
-                            >
-                              이 조합 삭제
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </details>
-              )}
               {importedCombination && (
                 <button
                   type="button"
@@ -1633,16 +1480,13 @@ export function PromptComposer({
                       resolvePromptValues(program, importedCombination.values);
                       editControls({
                         ...controls,
-                        combinations: [
-                          ...controls.combinations,
-                          { ...importedCombination, id: newId('combination') },
-                        ],
+                        values: structuredClone(importedCombination.values),
                       });
                       setImportedCombination(null);
                     })
                   }
                 >
-                  가져온 권장 조합을 목록에 추가
+                  가져온 권장 옵션 적용
                 </button>
               )}
               <div className="pc-actions">
@@ -1651,10 +1495,12 @@ export function PromptComposer({
                   disabled={!onSaveControls || !controlsDirty || saving}
                   onClick={() => void saveControls()}
                 >
-                  {saving ? '저장 중…' : '이야기 선택값과 조합 저장'}
+                  {saving ? '저장 중…' : '현재 옵션 저장'}
                 </button>
                 {controlsDirty && <small>미저장 변경 있음</small>}
-                {!onSaveControls && <small>지금은 미리보기에만 사용해요.</small>}
+                {!onSaveControls && (
+                  <small>편집기 아래의 저장 버튼으로 옵션을 함께 저장해요.</small>
+                )}
               </div>
             </div>
           </details>

@@ -1,3 +1,4 @@
+import { createToolCorrectionPolicy } from '../core/tool-outcome.js';
 import type { AgentDefinition } from '../core/agent-collaboration.js';
 import type { Connection, ModelSnapshot } from '../core/product.js';
 import { generationFromModel } from '../core/model-capabilities.js';
@@ -134,6 +135,7 @@ export function createAgentCollaboration(
     const target = snapshot.profile?.collaborationModels?.[agent.id];
     if (!target) return finish('unavailable', 'ADVISOR_MODEL_SNAPSHOT_MISSING');
     const results: ToolEvent[] = [];
+    const correction = createToolCorrectionPolicy();
     let opaqueState: Json | undefined;
     const deadline = Date.now() + (hooks.timeoutMs ?? target.timeoutMs ?? 120_000);
     while (true) {
@@ -236,8 +238,12 @@ export function createAgentCollaboration(
           result: event.result,
           denied: event.denied,
         });
-        if (event.denied) return finish('unavailable', 'ADVISOR_READ_DENIED');
+        const outcome = correction(event, call.arguments);
+        if (outcome === 'exhausted')
+          return finish('unavailable', 'ADVISOR_TOOL_CORRECTION_EXHAUSTED');
+        if (outcome === 'denied') return finish('unavailable', 'ADVISOR_READ_DENIED');
         results.push(event);
+        if (event.denied) continue;
         const read = event.result as Record<string, unknown> | null;
         const source = read?.source as Record<string, unknown> | undefined;
         evidence.push({

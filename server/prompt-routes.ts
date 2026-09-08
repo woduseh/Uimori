@@ -10,11 +10,7 @@ import type { RunSnapshot } from '../core/types.js';
 import { buildMainProviderRequest, encodeMainPreview } from './main-request.js';
 import { freezePackageStates } from './package-behavior-host.js';
 import { createHash } from 'node:crypto';
-import {
-  compileTranslationPrompt,
-  createTranslationPlan,
-  translationInput,
-} from '../core/auxiliary.js';
+import { compileTranslationPrompt, translationInput } from '../core/auxiliary.js';
 import { sourceTimeContext } from './product-auxiliary.js';
 import { freezeLoreContext } from './lore-context.js';
 import { validateLoreContextPolicy } from '../core/lore-context.js';
@@ -48,14 +44,14 @@ export function promptRoutes(app: FastifyInstance, store: Store) {
         chat.id,
         b.branchId === undefined ? undefined : text(b.branchId, 'branch ID', 100)
       );
-      const profile = store.product.snapshot(chat.id) ?? {
+      const profile = store.product.snapshot(chat.id, role as 'main' | 'translation') ?? {
         ...defaultProfile(chat.id),
         contents: [],
         models: {},
       };
       const program =
-        b.program === undefined && role === 'main'
-          ? (profile.promptPresets?.main?.program ??
+        b.program === undefined
+          ? (profile.promptPresets?.[role as 'main' | 'translation']?.program ??
             createDefaultPromptProgram(DEFAULT_MAIN_PROMPT))
           : validatePromptProgram(b.program);
       if (b.loreContext !== undefined)
@@ -108,7 +104,6 @@ export function promptRoutes(app: FastifyInstance, store: Store) {
             kind: 'stored' | 'synthetic';
             sourceRevision: string;
             sourceHash: string;
-            chunkId: string;
           }
         | undefined;
       let compilation: ReturnType<typeof compilePromptProgram>;
@@ -151,22 +146,16 @@ export function promptRoutes(app: FastifyInstance, store: Store) {
             },
           },
         };
-        const translationPlan = createTranslationPlan(
-          source,
-          sourceTimeContext(fixed, 'translation'),
-          chat.settings.translationChunkChars
-        );
-        const input = translationInput(translationPlan, translationPlan.chunks[0].id, fixed);
+        const input = translationInput(source, sourceTimeContext(fixed, 'translation'), fixed);
         compilation = compileTranslationPrompt(
           input,
           fixed,
-          'Translate the requested blocks according to the selected prompt and return the specified JSON.'
+          'Translate the complete source according to the selected prompt. Return the translated text only.'
         )!;
         previewSource = {
           kind: branch.headRevision ? 'stored' : 'synthetic',
           sourceRevision: source.id,
           sourceHash: source.hash,
-          chunkId: input.chunkId!,
         };
       } else {
         const context = promptContext(snapshot);

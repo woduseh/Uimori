@@ -1,3 +1,4 @@
+import { promptWorkspace, updatePromptWorkspace } from '../server/prompt-workspace.js';
 import { createFixtureChat } from './fixtures/chat.js';
 import { afterEach, expect, test } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
@@ -217,7 +218,7 @@ test('changing attachments drops only inherited obsolete package control keys an
   ).toHaveLength(1);
 });
 function prompt(store: Store, id = 'choice'): PromptPreset {
-  return store.product.promptPreset({
+  const preset = store.product.promptPreset({
     title: 'Composed',
     role: 'main',
     text: '',
@@ -227,34 +228,43 @@ function prompt(store: Store, id = 'choice'): PromptPreset {
       blocks: [{ id: 'turn', title: 'Turn', kind: 'current' }],
     },
   }) as PromptPreset;
+  updatePromptWorkspace(store, {
+    expectedRevision: promptWorkspace(store).revision,
+    main: { title: preset.title, program: preset.program, values: {} },
+  });
+  return preset;
 }
 test('prompt combinations reject nonprimitive values and controls from a different prompt', () => {
   const store = db(),
-    p = prompt(store),
-    other = prompt(store, 'different');
+    p = prompt(store);
   expect(() =>
     store.product.promptCombination({
       title: 'Bad',
-      prompt: reference(p),
+      role: 'main',
       values: { choice: { nested: true } },
     })
   ).toThrow('PROMPT_INVALID_VALUE');
+  prompt(store, 'different');
   expect(() =>
     store.product.promptCombination({
       title: 'Bad',
-      prompt: reference(other),
+      role: 'main',
       values: { choice: true },
     })
   ).toThrow('PROMPT_UNKNOWN_CONTROL');
+  updatePromptWorkspace(store, {
+    expectedRevision: promptWorkspace(store).revision,
+    main: { title: p.title, program: p.program, values: {} },
+  });
   expect(
     store.product.promptCombination({
       title: 'Saved',
-      prompt: reference(p),
+      role: 'main',
       values: { choice: false },
     }).values
   ).toEqual({ choice: false });
 });
-test('v11 archive roundtrips package refs, large internal lore, empty body, option combinations and bot folder ownership', () => {
+test('current archive roundtrips package refs, large internal lore, empty body, option combinations and bot folder ownership', () => {
   const store = db(),
     body = packageBody();
   body.lore[0].text = 'L'.repeat(100001);
@@ -264,16 +274,16 @@ test('v11 archive roundtrips package refs, large internal lore, empty body, opti
     defaultPersona: reference(pkg),
   });
   const chat = createFixtureChat(store, 'Story', 'calm', { botId: pkg.id, folderId: folder.id });
-  const p = prompt(store);
+  prompt(store);
   const combination = store.product.promptCombination({
     title: 'Saved',
-    prompt: reference(p),
+    role: 'main',
     values: { choice: false },
   });
   update(store, chat.id, { packageValues: { [`${pkg.id}@1:persona`]: { enabled: false } } });
   const run = capture(store, chat.id);
   const archive = store.product.export();
-  expect(archive.version).toBe(13);
+  expect(archive.version).toBe(14);
   const before = JSON.stringify(archive);
   const restored = db();
   expect(restored.product.import(archive)).toEqual({ restored: true, chats: 1 });

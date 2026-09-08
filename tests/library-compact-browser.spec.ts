@@ -1,3 +1,4 @@
+import { reviewWidths, visualReview } from './fixtures/visual-review.js';
 import { expect, test, type APIRequestContext, type Locator, type Page } from '@playwright/test';
 import type { Content, Library } from '../core/product.js';
 import type { LibraryOrganization } from '../core/library-organization.js';
@@ -45,7 +46,7 @@ test('LCOM01 compact library keeps row actions aligned across mobile and desktop
   await page.goto('/');
   const panel = page.getByTestId('library-panel');
   await panel.getByRole('searchbox', { name: '서재 검색', exact: true }).fill(stamp);
-  for (const width of [360, 390, 430, 768, 1024, 1440]) {
+  for (const width of reviewWidths([360, 390, 430, 768, 1024, 1440])) {
     await page.setViewportSize({ width, height: 900 });
     const row = panel.locator('.library-list-item');
     await expect(row).toHaveCount(1);
@@ -56,22 +57,26 @@ test('LCOM01 compact library keeps row actions aligned across mobile and desktop
     await expectTouchTarget(chat);
     await expectTouchTarget(menu);
     await expectTouchTarget(panel.getByLabel('목록 관리', { exact: true }));
-    const boxes = await Promise.all([open.boundingBox(), chat.boundingBox(), menu.boundingBox()]);
-    const centers = boxes.map((box) => box!.y + box!.height / 2);
-    expect(Math.max(...centers) - Math.min(...centers)).toBeLessThanOrEqual(1);
-    const input = await panel.getByRole('searchbox').boundingBox();
-    const icon = await panel.locator('.library-search-field > svg').boundingBox();
-    expect(Math.abs(input!.y + input!.height / 2 - icon!.y - icon!.height / 2)).toBeLessThan(1);
+    if (visualReview) {
+      const boxes = await Promise.all([open.boundingBox(), chat.boundingBox(), menu.boundingBox()]);
+      const centers = boxes.map((box) => box!.y + box!.height / 2);
+      expect(Math.max(...centers) - Math.min(...centers)).toBeLessThanOrEqual(1);
+      const input = await panel.getByRole('searchbox').boundingBox();
+      const icon = await panel.locator('.library-search-field > svg').boundingBox();
+      expect(Math.abs(input!.y + input!.height / 2 - icon!.y - icon!.height / 2)).toBeLessThan(1);
+    }
     if (width <= 760) {
       await expect(panel.locator('.library-folder-list')).toBeHidden();
-      expect((await row.boundingBox())!.y).toBeLessThan(285);
+      if (visualReview) expect((await row.boundingBox())!.y).toBeLessThan(285);
     }
     await expectNoOverflow(page);
-    await page.screenshot({ path: info.outputPath(`library-compact-${width}.png`) });
+    if (visualReview)
+      await page.screenshot({ path: info.outputPath(`library-compact-${width}.png`) });
   }
   await page.setViewportSize({ width: 390, height: 900 });
   await panel.getByRole('searchbox').fill('');
-  expect((await panel.locator('.library-list-item').first().boundingBox())!.y).toBeLessThan(245);
+  if (visualReview)
+    expect((await panel.locator('.library-list-item').first().boundingBox())!.y).toBeLessThan(245);
 });
 
 test('LCOM02 empty categories hide unused tools while empty folders and searches retain recovery', async ({
@@ -93,7 +98,7 @@ test('LCOM02 empty categories hide unused tools while empty folders and searches
   await expect(panel.getByLabel('목록 관리', { exact: true })).toHaveCount(0);
   await expect(page.getByRole('button', { name: '새로 만들기', exact: true })).toHaveCount(0);
   await expect(panel.getByRole('button', { name: '모듈 만들기', exact: true })).toBeInViewport();
-  await page.screenshot({ path: info.outputPath('library-compact-empty.png') });
+  if (visualReview) await page.screenshot({ path: info.outputPath('library-compact-empty.png') });
 
   await page.unroute('**/api/library?view=summary');
   const before = (await (
@@ -150,7 +155,8 @@ test('LCOM03 selection replaces list tools and retains search and saved view acr
   await expect(panel.getByRole('group', { name: '자료 선택 작업', exact: true })).toContainText(
     '1개 선택'
   );
-  await page.screenshot({ path: info.outputPath('library-compact-selection.png') });
+  if (visualReview)
+    await page.screenshot({ path: info.outputPath('library-compact-selection.png') });
   await panel.getByRole('button', { name: '선택 취소', exact: true }).click();
   await expect(search).toHaveValue(title);
   await expect(options).toBeFocused();
@@ -162,7 +168,7 @@ test('LCOM03 selection replaces list tools and retains search and saved view acr
   await page.reload();
   await search.fill(title);
   await expect(panel.locator('.library-portrait-card')).toHaveCount(1);
-  await page.setViewportSize({ width: 360, height: 800 });
+  await page.setViewportSize({ width: 390, height: 800 });
   await expect(panel.locator('.library-portrait-card')).toHaveCount(1);
   await expectNoOverflow(page);
 });

@@ -158,12 +158,10 @@ function App() {
   const composing = useRef(false);
   const [libraryDirty, setLibraryDirty] = useState(false);
   const [pendingNavigation, setPendingNavigation] = useState<null | (() => void)>(null);
-  const currentPrompt = s.detail?.profile?.prompts?.main;
-  const selectedPrompt = s.library?.promptPresets?.find((item) => item.id === currentPrompt?.id);
-  const hasCreativeOptions =
-    !!currentPrompt && (!selectedPrompt || selectedPrompt.program.controls.length > 0);
+  const currentPrompt = s.promptWorkspace?.main;
+  const hasCreativeOptions = !!currentPrompt?.program.controls.length;
   const creativePresets =
-    s.library?.promptCombinations?.filter((item) => item.prompt.id === currentPrompt?.id) ?? [];
+    s.library?.promptCombinations?.filter((item) => item.role === 'main') ?? [];
   const recentChatByContent: Record<string, string> = {};
   const recentActivity: Record<string, string> = {};
   for (const chat of s.chats) {
@@ -176,13 +174,10 @@ function App() {
       recentChatByContent[chat.botId] = chat.id;
     }
   }
-  const currentProgram = selectedPrompt?.program;
+  const currentProgram = currentPrompt?.program;
   const currentCombination = s.library?.promptCombinations?.find((c) => {
-    if (!currentPrompt || !currentProgram || c.prompt.id !== currentPrompt.id) return false;
-    const currentValues = reconcilePromptValues(
-      currentProgram,
-      s.detail?.profile?.promptControls?.[refValue(currentPrompt)]?.values ?? {}
-    ).values;
+    if (!currentPrompt || !currentProgram || c.role !== 'main') return false;
+    const currentValues = reconcilePromptValues(currentProgram, currentPrompt.values).values;
     const savedValues = reconcilePromptValues(currentProgram, c.values).values;
     return currentProgram.controls.every(
       (control) => currentValues[control.id] === savedValues[control.id]
@@ -577,6 +572,10 @@ function App() {
                           refresh={() => s.refresh(s.selected)}
                           onError={s.setError}
                           onFork={s.fork}
+                          onRetry={
+                            s.canReuseRun(source.runId) ? () => s.generate(source.runId) : undefined
+                          }
+                          retryDisabled={s.reuseBlocked || optionsBusy}
                           onEditingChange={onSourceEditing}
                           activity={(() => {
                             const run = s.detail!.runs.find((item) => item.id === source.runId);
@@ -658,8 +657,8 @@ function App() {
                                       현재 설정으로 재시도
                                     </button>
                                     <small>
-                                      현재 대화와 저장된 설정으로 새로 생성해요. 기존 실패 기록은
-                                      남아요.
+                                      원래 요청 위치에서 현재 설정으로 새 전개를 생성해요. 기존
+                                      기록은 남아요.
                                     </small>
                                   </div>
                                 )}
@@ -948,7 +947,7 @@ function App() {
       </main>
       <ChatPromptOptions
         open={optionsOpen && s.destination === 'story' && !!s.selected}
-        profile={s.detail?.chat.id === s.selected ? (s.detail.profile ?? undefined) : undefined}
+        workspace={s.promptWorkspace}
         library={s.library}
         disabled={
           optionsBusy ||
@@ -966,7 +965,6 @@ function App() {
             else document.querySelector<HTMLButtonElement>('[aria-label="입력창 더보기"]')?.focus();
           });
         }}
-        onSaved={s.refresh}
         onDirtyChange={setOptionsDirty}
         onBusyChange={setOptionsBusy}
       />

@@ -159,7 +159,7 @@ test('reordering is category scoped and folder deletion moves members to unclass
   expect(store.product.get('content', bot.id)).toEqual(bot);
 });
 
-test('item deletion cleans placement but still honors immutable reference blockers', () => {
+test('item deletion cleans placement and retains immutable references', () => {
   const store = fixture(),
     unused = content(store, 'Unused'),
     used = content(store, 'Used');
@@ -172,14 +172,16 @@ test('item deletion cleans placement but still honors immutable reference blocke
   });
   store.createChat('Protected story', 'calm', { botId: used.id });
   expect(libraryDeletionImpact(store, 'content', unused.id).canDelete).toBe(true);
-  expect(libraryDeletionImpact(store, 'content', used.id).canDelete).toBe(false);
+  expect(libraryDeletionImpact(store, 'content', used.id).canDelete).toBe(true);
   const before = revision(store);
   deleteLibraryItem(store, 'content', unused.id, { expectedRevision: unused.revision });
   expect(revision(store)).toBe(before + 1);
   expect(store.libraryOrganization.snapshot().items.map((item) => item.id)).toEqual([used.id]);
   expect(() =>
     deleteLibraryItem(store, 'content', used.id, { expectedRevision: used.revision })
-  ).toThrow('삭제할 수 없어요');
+  ).not.toThrow();
+  expect(store.product.get('content', used.id)).toEqual(used);
+  expect(store.product.all('content')).not.toContainEqual(used);
 });
 
 test('archives round trip folders and reject poisoned scope or missing placement atomically', () => {
@@ -195,7 +197,7 @@ test('archives round trip folders and reject poisoned scope or missing placement
   const archive = store.product.export(),
     before = structuredClone(archive),
     restored = fixture();
-  expect(archive.version).toBe(13);
+  expect(archive.version).toBe(14);
   restored.product.import(archive);
   expect(restored.libraryOrganization.snapshot()).toEqual(store.libraryOrganization.snapshot());
   expect(archive).toEqual(before);

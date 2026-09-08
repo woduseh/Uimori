@@ -7,7 +7,6 @@ import {
   encodeAnthropic,
 } from '../core/anthropic-protocol.js';
 import type { Json, ProviderRequest, ProviderResult } from '../core/transport.js';
-import { createTranslationPlan, validateTranslationChunk } from '../core/auxiliary.js';
 
 const request = (): ProviderRequest => ({
   role: 'main',
@@ -113,39 +112,16 @@ function continued(input: ProviderRequest, output: ProviderResult): ProviderRequ
   };
 }
 function translationRequest() {
-  const text = 'He had served forty years. The gauge read 40.';
-  const plan = createTranslationPlan(
-    {
-      id: 'source-translation',
-      chatId: 'chat-1',
-      text,
-      hash: createHash('sha256').update(text).digest('hex'),
-    },
-    {
-      revision: 'context-1',
-      bot: null,
-      persona: null,
-      references: [],
-      scene: 'A room.',
-      previousSources: [],
-      instructionRevision: 'default-translation-1',
-      modelPresetRevision: 'translation-preset-1',
-    }
-  );
-  const chunk = plan.chunks[0];
+  const text = 'He had served forty years. The gauge read 40. Turn LEFT.';
   const input = request();
   input.role = 'translation';
+  input.stable.contract = 'Translate the complete prose into Korean.';
   input.input.source = {
-    sourceRevision: plan.sourceRevision,
-    sourceHash: plan.sourceHash,
-    chunkId: chunk.id,
-    blocks: chunk.blocks,
-    outputSchema: {
-      sourceRevision: 'exact input value',
-      segments: [{ anchors: ['ordered source anchors'], text: 'HUMAN_SCHEMA_SENTINEL' }],
-    },
+    sourceRevision: 'source-translation',
+    sourceHash: createHash('sha256').update(text).digest('hex'),
+    text,
   };
-  return { input, plan, chunk };
+  return { input };
 }
 
 // Synthetic protocol objects only: no SDK, credentials, network requests or model-quality claims.
@@ -238,28 +214,22 @@ describe('Anthropic Messages request and opaque continuation', () => {
     input.generation = generation as ProviderRequest['generation'];
     expect(() => encodeAnthropic(input)).toThrow();
   });
-  test('applies translation JSON format with tools while preserving original input and continuation binding', () => {
-    const { input, plan, chunk } = translationRequest();
+  test('plain translation preserves complete source, selected options and continuation binding', () => {
+    const { input } = translationRequest();
     input.generation!.outputEffort = 'medium';
     const before = structuredClone(input);
     const wire = native(encodeAnthropic(input).body);
-    expect(wire.output_config.effort).toBe('medium');
-    expect(wire.output_config.format.type).toBe('json_schema');
-    expect(wire.output_config.format.schema.properties.sourceRevision.enum).toEqual([
-      plan.sourceRevision,
-    ]);
-    expect(wire.output_config.format.schema.properties.sourceHash.enum).toEqual([plan.sourceHash]);
-    expect(wire.output_config.format.schema.properties.chunkId.enum).toEqual([chunk.id]);
-    expect(wire.output_config.format.schema.additionalProperties).toBe(false);
+    expect(wire.output_config).toEqual({ effort: 'medium' });
     expect(wire.tools).toHaveLength(2);
-    expect(JSON.stringify(wire.messages)).not.toContain('HUMAN_SCHEMA_SENTINEL');
-    expect(JSON.stringify(wire.system)).toContain('Korean number words');
+    expect(JSON.stringify(wire.messages)).toContain('Turn LEFT.');
+    expect(JSON.stringify(wire.system)).toContain('complete translated text only');
+    expect(JSON.stringify(wire.system)).not.toMatch(/Korean number words|\[\[p_/);
     expect(input).toEqual(before);
     const output = turn(input);
     const next = continued(input, output);
     const continuedWire = native(encodeAnthropic(next).body);
     expect(continuedWire.output_config).toEqual(wire.output_config);
-    (next.input.source as Record<string, Json>).outputSchema = {};
+    (next.input.source as Record<string, Json>).text = 'Different source';
     expect(() => encodeAnthropic(next)).toThrow('ANTHROPIC_CONTINUATION_MISMATCH');
   });
 
@@ -332,7 +302,7 @@ describe('Anthropic Messages request and opaque continuation', () => {
         expect(wire.cache_control).toEqual({ type: 'ephemeral', ttl: '1h' });
       else expect(wire).not.toHaveProperty('cache_control');
       expect(wire.output_config.effort).toBe('max');
-      expect(wire.output_config.format.type).toBe('json_schema');
+      expect(wire.output_config).not.toHaveProperty('format');
       const next = continued(input, turn(input));
       const replay = native(encodeAnthropic(next).body);
       expect(replay.cache_control).toEqual(wire.cache_control);
@@ -342,34 +312,25 @@ describe('Anthropic Messages request and opaque continuation', () => {
       expect(() => encodeAnthropic(next)).toThrow('ANTHROPIC_CONTINUATION_MISMATCH');
     }
   );
-  test('explicit legacy-model fallback keeps prompt schema and host translation validation', () => {
-    const { input, plan, chunk } = translationRequest();
-    input.generation!.structuredOutput = false;
+  test('plain translation accepts natural digits and direction words without an output envelope', () => {
+    const { input } = translationRequest();
+    input.generation!.structuredOutput = true;
     const wire = native(encodeAnthropic(input).body);
     expect(wire).not.toHaveProperty('output_config');
-    expect(JSON.stringify(wire.messages)).toContain('HUMAN_SCHEMA_SENTINEL');
-    const value = {
-      sourceRevision: plan.sourceRevision,
-      sourceHash: plan.sourceHash,
-      chunkId: chunk.id,
-      segments: [
-        {
-          anchors: chunk.anchors,
-          text: '그는 사십 년을 근무했다. 계기는 ' + chunk.protectedSpans[0].token + '을 가리켰다.',
-        },
-      ],
-    };
+    const prose = '그는 40년 동안 근무했다. 계기는 사십을 가리켰다. 왼쪽으로 돌아라.';
     const { decoder } = start(input);
     begin(decoder);
-    block(decoder, 0, { type: 'text', text: JSON.stringify(value) });
-    const response = end(decoder);
-    expect(validateTranslationChunk(plan, chunk.id, response.text).segments[0].text).toContain(
-      '사십 년'
-    );
-    value.segments[0].text = value.segments[0].text.replace('사십', '40');
-    expect(() => validateTranslationChunk(plan, chunk.id, JSON.stringify(value))).toThrow(
-      'UNPROTECTED_SYNTAX_RETURNED'
-    );
+    block(decoder, 0, { type: 'text', text: prose });
+    expect(end(decoder)).toMatchObject({ status: 'completed', text: prose });
+  });
+  test('refusal classification does not receive translation output instructions', () => {
+    const { input } = translationRequest();
+    input.input.controls.purpose = 'translation-refusal';
+    input.stable.contract = 'Classify whether this response refused the task.';
+    const wire = native(encodeAnthropic(input).body);
+    expect(JSON.stringify(wire.system)).not.toContain('complete translated text only');
+    expect(JSON.stringify(wire.system)).toContain(input.stable.contract);
+    expect(wire).not.toHaveProperty('output_config');
   });
   test.each(['main', 'status', 'image'] as const)(
     'does not send translation formatting for %s',
@@ -380,14 +341,6 @@ describe('Anthropic Messages request and opaque continuation', () => {
       const wire = native(encodeAnthropic(input).body);
       expect(wire).not.toHaveProperty('output_config');
       expect(wire.system).toHaveLength(2);
-    }
-  );
-  test.each(['sourceRevision', 'sourceHash', 'chunkId'])(
-    'rejects native translation without %s',
-    (field) => {
-      const { input } = translationRequest();
-      delete (input.input.source as Record<string, Json>)[field];
-      expect(() => encodeAnthropic(input)).toThrow('INVALID_ANTHROPIC_TRANSLATION_SOURCE');
     }
   );
   test('preserves signed, redacted and opaque content in order across parallel and sequential tool rounds', () => {

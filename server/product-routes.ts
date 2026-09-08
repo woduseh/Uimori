@@ -23,7 +23,7 @@ import {
   type ProviderProtocol,
 } from '../core/product.js';
 import { providerOriginApproval } from '../core/provider-origin-policy.js';
-import { libraryDeletionRoutes } from './library-deletion.js';
+import { assertLibraryVisible, libraryDeletionRoutes } from './library-deletion.js';
 
 export function productRoutes(
   app: FastifyInstance,
@@ -141,6 +141,7 @@ export function productRoutes(
     '/api/provider-management/connections/:id/readiness',
     async (request, reply) => {
       reply.header('Cache-Control', 'no-store');
+      assertLibraryVisible(store, 'connection', request.params.id);
       const connection = product.get<Connection>('connection', request.params.id);
       const agent =
         connection.protocol === 'codex-app-server-v1' ? await options.codex?.status() : undefined;
@@ -152,15 +153,18 @@ export function productRoutes(
     async (request) => {
       if (request.params.kind !== 'connection' && request.params.kind !== 'model')
         throw new HttpError(404, 'Unsupported management kind');
+      assertLibraryVisible(store, request.params.kind, request.params.id);
       return managementImpact(product, request.params.kind, request.params.id);
     }
   );
-  app.get<{ Params: { id: string } }>('/api/content/:id', async (request) =>
-    product.get('content', request.params.id)
-  );
-  app.get<{ Params: { id: string } }>('/api/prompt-presets/:id', async (request) =>
-    product.get('prompt-preset', request.params.id)
-  );
+  app.get<{ Params: { id: string } }>('/api/content/:id', async (request) => {
+    assertLibraryVisible(store, 'content', request.params.id);
+    return product.get('content', request.params.id);
+  });
+  app.get<{ Params: { id: string } }>('/api/prompt-presets/:id', async (request) => {
+    assertLibraryVisible(store, 'prompt-preset', request.params.id);
+    return product.get('prompt-preset', request.params.id);
+  });
   app.post('/api/content', { bodyLimit: 5_000_000 }, async (request) =>
     product.content(request.body)
   );
@@ -193,6 +197,7 @@ export function productRoutes(
     async (request) => {
       if (!['content', 'prompt-preset'].includes(request.params.kind))
         throw new HttpError(404, 'Revision kind not found');
+      assertLibraryVisible(store, request.params.kind, request.params.id);
       return product.get(
         request.params.kind,
         request.params.id,
@@ -203,6 +208,7 @@ export function productRoutes(
   app.post<{ Params: { id: string } }>('/api/connections/:id/catalog', async (request) => {
     const b = record(request.body ?? {});
     fields(b, []);
+    assertLibraryVisible(store, 'connection', request.params.id);
     const previous = product.get<Connection>('connection', request.params.id);
     let error: string | null = null;
     let catalog = previous.catalog;

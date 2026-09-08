@@ -1,3 +1,4 @@
+import { visualReview } from './fixtures/visual-review.js';
 import { editLibraryContent, openSourceActions } from './ui-navigation.js';
 import { postFixtureChat } from './fixtures/chat.js';
 import { test, expect, type APIRequestContext, type Locator, type Page } from '@playwright/test';
@@ -70,7 +71,7 @@ test('LOADUI06 scene navigator jumps across bounded pages and remains usable in 
     if (request.url().includes('/api/') && !['GET', 'HEAD'].includes(request.method()))
       writes.push(`${request.method()} ${request.url()}`);
   });
-  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto(`/?chat=${seeded.chat.id}`);
   const navigator = page.getByRole('navigation', { name: '장면 탐색', exact: true });
   const list = page.getByRole('dialog', { name: '장면 목록', exact: true });
@@ -90,7 +91,7 @@ test('LOADUI06 scene navigator jumps across bounded pages and remains usable in 
   await expect(currentMark).toHaveAttribute('aria-current', 'location');
   await currentMark.hover();
   await expect(currentMark.locator('.scene-preview')).toBeVisible();
-  await page.screenshot({ path: info.outputPath('scene-navigator-desktop.png') });
+  if (visualReview) await page.screenshot({ path: info.outputPath('scene-navigator-desktop.png') });
 
   await navigator.getByRole('button', { name: '최신 장면으로', exact: true }).click();
   await expect(article(page, ids[11])).toBeVisible();
@@ -126,7 +127,7 @@ test('LOADUI06 scene navigator jumps across bounded pages and remains usable in 
       true
     );
   }
-  await page.screenshot({ path: info.outputPath('scene-navigator-mobile.png') });
+  if (visualReview) await page.screenshot({ path: info.outputPath('scene-navigator-mobile.png') });
   await choice.click();
   await expect(list).toHaveCount(0);
   await expect(article(page, ids[2])).toBeVisible();
@@ -202,7 +203,7 @@ test('LOADUI01 bounded pages, previous/next, deep links and reload preserve read
     .toBeLessThan(4);
   await expect(articles(page)).toHaveCount(5);
   await expect(reader).toBeVisible();
-  await page.screenshot({ path: info.outputPath('loading-reader-page.png') });
+  if (visualReview) await page.screenshot({ path: info.outputPath('loading-reader-page.png') });
   const deep = await context.newPage();
   await deep.goto(`/?chat=${seeded.chat.id}&source=${ids[10]}`);
   await expect(article(deep, ids[10])).toBeVisible();
@@ -261,7 +262,7 @@ test('LOADUI02 same-source tabs keep CAS drafts and isolate another chat, manual
   expect(after.sources[0].text).toBe('Accepted source revision from first tab.');
   expect(after.runs).toEqual(seeded.runs);
   expect(after.attempts).toEqual(seeded.attempts);
-  await second.screenshot({ path: info.outputPath('loading-cas.png') });
+  if (visualReview) await second.screenshot({ path: info.outputPath('loading-cas.png') });
   await second.close();
   await third.close();
 });
@@ -324,7 +325,7 @@ test('LOADUI03 large library uses summaries then fetches current content on clic
   );
   expect(revisionRequests).toHaveLength(1);
   expect(revisionRequests[0]).toContain(`/content/${first.id}`);
-  await page.screenshot({ path: info.outputPath('loading-library.png') });
+  if (visualReview) await page.screenshot({ path: info.outputPath('loading-library.png') });
 });
 
 test('LOADUI04 offline edits reappear on reconnect and connected SSE sends only the changed source', async ({
@@ -391,7 +392,7 @@ test('LOADUI04 offline edits reappear on reconnect and connected SSE sends only 
   expect(after.runs).toEqual(seeded.runs);
   expect(after.attempts).toEqual(seeded.attempts);
   expect(generated).toHaveLength(0);
-  await page.screenshot({ path: info.outputPath('loading-reconnected.png') });
+  if (visualReview) await page.screenshot({ path: info.outputPath('loading-reconnected.png') });
 });
 
 test('LOADUI05 context summary status fits mobile reader and run details without changing source or dispatching requests', async ({
@@ -459,7 +460,7 @@ test('LOADUI05 context summary status fits mobile reader and run details without
   expect(bounds!.x).toBeGreaterThanOrEqual(0);
   expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(390);
   expect(await ready.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
-  await page.screenshot({ path: info.outputPath('context-summary-mobile.png') });
+  if (visualReview) await page.screenshot({ path: info.outputPath('context-summary-mobile.png') });
   await expect(activity.locator('.run-task-details').getByTestId('context-summary')).toHaveText(
     '앞선 12개 원문 요약 · 입력 약 248,600 / 272,000 토큰 · 요약 2회'
   );
@@ -507,7 +508,7 @@ test('LOADUI07 synthetic navigation metadata covers long-list paging, search and
     ];
     await route.fulfill({ response, json: body });
   });
-  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto(`/?chat=${seeded.chat.id}`);
   const navigator = page.getByRole('navigation', { name: '장면 탐색', exact: true });
   const list = page.getByRole('dialog', { name: '장면 목록', exact: true });

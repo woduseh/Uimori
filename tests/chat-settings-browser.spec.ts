@@ -1,3 +1,4 @@
+import { reviewWidths, visualReview } from './fixtures/visual-review.js';
 import { expect, test, type APIRequestContext, type Locator, type Page } from '@playwright/test';
 import type { Chat, ChatDetail } from '../core/types.js';
 import { postFixtureChat } from './fixtures/chat.js';
@@ -90,7 +91,7 @@ test('CSUI01 chat settings list and seven details fit six widths with accessible
 }, info) => {
   test.setTimeout(90000);
   const { before, writes, errors } = await prepare(page, request, `CSUI01 ${Date.now()}`);
-  for (const width of [320, 360, 390, 412, 768, 1440]) {
+  for (const width of reviewWidths([320, 360, 390, 412, 768, 1440])) {
     await page.setViewportSize({ width, height: 900 });
     const dialog = await openSettings(page);
     const nav = dialog.locator('.chat-settings-panel > .section-navigation');
@@ -114,7 +115,8 @@ test('CSUI01 chat settings list and seven details fit six widths with accessible
     }
     await expectNoOverflow(page, dialog);
     if (width === 390)
-      await page.screenshot({ path: info.outputPath('chat-settings-list-390.png') });
+      if (visualReview)
+        await page.screenshot({ path: info.outputPath('chat-settings-list-390.png') });
     for (const name of sections) {
       await selectChatSettingsSection(page, name);
       await expect(dialog.getByRole('tabpanel')).toHaveCount(1);
@@ -133,11 +135,12 @@ test('CSUI01 chat settings list and seven details fit six widths with accessible
       }
       await expectNoOverflow(page, dialog);
       if (name === '모델' && (width === 390 || width === 1440))
-        await page.screenshot({
-          path: info.outputPath(
-            width === 390 ? 'chat-settings-detail-390.png' : 'chat-settings-desktop-1440.png'
-          ),
-        });
+        if (visualReview)
+          await page.screenshot({
+            path: info.outputPath(
+              width === 390 ? 'chat-settings-detail-390.png' : 'chat-settings-desktop-1440.png'
+            ),
+          });
     }
     await expectTouchTarget(dialog.getByRole('button', { name: '채팅 설정 닫기', exact: true }));
     await dialog.getByRole('button', { name: '채팅 설정 닫기', exact: true }).click();
@@ -167,9 +170,9 @@ test('CSUI02 section changes, browser Back and resizing preserve chat setting dr
   const originalImage = await image.isChecked();
   await image.setChecked(!originalImage);
   await selectChatSettingsSection(page, '자동 후속 작업');
-  const chunk = dialog.getByLabel('번역 구간 기준 글자 수', { exact: true });
-  const originalChunk = await chunk.inputValue();
-  await chunk.fill('1234');
+  const status = dialog.getByRole('checkbox', { name: '장면 상태 자동 실행', exact: true });
+  const originalStatus = await status.isChecked();
+  await status.setChecked(!originalStatus);
   await page.evaluate(() => history.back());
   await expect(nav).toBeVisible();
   await expect(dialog.getByRole('tabpanel')).toHaveCount(0);
@@ -183,25 +186,25 @@ test('CSUI02 section changes, browser Back and resizing preserve chat setting dr
   await selectChatSettingsSection(page, '모델');
   await expect(image).toBeChecked({ checked: !originalImage });
   await selectChatSettingsSection(page, '자동 후속 작업');
-  await expect(chunk).toHaveValue('1234');
-  await chunk.focus();
+  await expect(status).toBeChecked({ checked: !originalStatus });
+  await status.focus();
   await page.setViewportSize({ width: 1440, height: 900 });
-  await expect(chunk).toBeFocused();
+  await expect(status).toBeFocused();
   await selectChatSettingsSection(page, '모델');
   await expect(image).toBeChecked({ checked: !originalImage });
   await selectChatSettingsSection(page, '자동 후속 작업');
-  await expect(chunk).toHaveValue('1234');
-  await chunk.focus();
+  await expect(status).toBeChecked({ checked: !originalStatus });
+  await status.focus();
   await page.setViewportSize({ width: 390, height: 844 });
-  await expect(chunk).toBeVisible();
-  await expect(chunk).toBeFocused();
+  await expect(status).toBeVisible();
+  await expect(status).toBeFocused();
   await expectNoOverflow(page, dialog);
   await dialog.getByRole('button', { name: '채팅 설정 닫기', exact: true }).click();
   await expect(confirm).toBeVisible();
-  await page.screenshot({ path: info.outputPath('chat-settings-dirty-390.png') });
+  if (visualReview) await page.screenshot({ path: info.outputPath('chat-settings-dirty-390.png') });
   await page.keyboard.press('Escape');
   await expect(confirm).toBeHidden();
-  await expect(chunk).toHaveValue('1234');
+  await expect(status).toBeChecked({ checked: !originalStatus });
   await dialog.getByRole('button', { name: '채팅 설정 닫기', exact: true }).click();
   await confirm.getByRole('button', { name: '초안 버리고 닫기', exact: true }).click();
   await expect(dialog).toBeHidden();
@@ -213,7 +216,7 @@ test('CSUI02 section changes, browser Back and resizing preserve chat setting dr
   await selectChatSettingsSection(page, '모델');
   await expect(image).toBeChecked({ checked: originalImage });
   await selectChatSettingsSection(page, '자동 후속 작업');
-  await expect(chunk).toHaveValue(originalChunk);
+  await expect(status).toBeChecked({ checked: originalStatus });
   await dialog.getByRole('button', { name: '채팅 설정 닫기', exact: true }).click();
   await expect(dialog).toBeHidden();
   await expect(confirm).toBeHidden();

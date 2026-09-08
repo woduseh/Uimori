@@ -367,30 +367,34 @@ describe('OpenAI-compatible Chat pure protocol (no live calls)', () => {
     expect(() => encodeChat(next(input, decoder.finish()))).toThrow('OPENAI_CONTINUATION_MISMATCH');
   });
 
-  test('native translation JSON Schema is opt-in for compatible servers and preserved across tool rounds', () => {
+  test('plain translation keeps tools and complete source across continuation without a JSON format', () => {
     const input = request();
     input.role = 'translation';
     input.input.source = {
       sourceRevision: 'source-1',
       sourceHash: 'hash-1',
-      chunkId: 'chunk-1',
-      outputSchema: { text: 'EXAMPLE_ONLY' },
+      text: 'Turn LEFT. He served forty years.',
     };
-    const plain = record(encodeChat(input).body);
-    expect(plain).not.toHaveProperty('response_format');
-    expect(JSON.stringify(plain.messages)).toContain('EXAMPLE_ONLY');
     input.generation!.structuredOutput = true;
-    const structured = record(encodeChat(input).body);
-    expect(structured.response_format).toMatchObject({
-      type: 'json_schema',
-      json_schema: { strict: true, schema: { additionalProperties: false } },
-    });
-    expect(JSON.stringify(structured.messages)).not.toContain('EXAMPLE_ONLY');
-    expect(structured.messages[0].content).toContain('Korean number words');
+    const wire = record(encodeChat(input).body);
+    expect(wire).not.toHaveProperty('response_format');
+    expect(JSON.stringify(wire.messages)).toContain('Turn LEFT.');
+    expect(wire.messages[0].content).toContain('complete translated text only');
+    expect(wire.messages[0].content).not.toContain('Korean number words');
     const continued = next(input, called(input));
-    expect(record(encodeChat(continued).body).response_format).toEqual(structured.response_format);
-    record(continued.input.source!).outputSchema = { changed: true };
+    expect(record(encodeChat(continued).body)).not.toHaveProperty('response_format');
+    record(continued.input.source!).text = 'Different source';
     expect(() => encodeChat(continued)).toThrow('OPENAI_CONTINUATION_MISMATCH');
+  });
+  test('refusal classification does not receive translation output instructions', () => {
+    const input = request();
+    input.role = 'translation';
+    input.input.controls.purpose = 'translation-refusal';
+    input.stable.contract = 'Classify whether this response refused the task.';
+    const wire = record(encodeChat(input).body);
+    expect(JSON.stringify(wire.messages)).not.toContain('complete translated text only');
+    expect(JSON.stringify(wire.messages)).toContain(input.stable.contract);
+    expect(wire).not.toHaveProperty('response_format');
   });
 
   test.each(['thinkingLevel', 'thinkingMode', 'thinkingBudgetTokens'])(

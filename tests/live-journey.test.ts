@@ -21,47 +21,37 @@ test('retired browser entry points reject before inspecting options', async () =
   );
 });
 
-test('retired CLI preflight and execute stop before source validation, copying, authentication or provider work', () => {
-  const script = fileURLToPath(new URL('../scripts/verify-live-journey.mjs', import.meta.url));
-  for (const args of [[], ['--execute', '--source', 'THIS_SOURCE_MUST_NEVER_BE_OPENED']]) {
-    const result = spawnSync(process.execPath, [script, ...args], {
-      encoding: 'utf8',
-      timeout: 10000,
-      windowsHide: true,
-    });
-    expect(result.status).toBe(2);
-    expect(JSON.parse(result.stdout)).toMatchObject({
-      status: 'BLOCKED',
-      legacy: true,
-      mode: args.length ? 'execute' : 'preflight',
-      code: 'LIVE_JOURNEY_LEGACY_CANDIDATE_UI_RETIRED',
-      preflight: {
-        ready: false,
-        sourceRead: false,
-        databaseCopied: false,
-        authenticationAttempted: false,
-        networkRequests: 0,
-      },
-    });
-  }
-});
-
-test('explicit execute cannot reactivate either retired browser path', async () => {
-  const page = new Proxy(
-    {},
-    {
-      get: () => {
-        throw Error('PAGE_MUST_NOT_BE_USED');
-      },
+test.each([
+  ['verify-live-journey', 'LIVE_JOURNEY_LEGACY_CANDIDATE_UI_RETIRED'],
+  ['verify-live-retry', 'LIVE_RETRY_FAILED_CHUNK_CONTRACT_RETIRED'],
+])(
+  '%s preflight and execute stop before source validation, copying, authentication or provider work',
+  (name, code) => {
+    const script = fileURLToPath(new URL(`../scripts/${name}.mjs`, import.meta.url));
+    for (const args of [
+      [],
+      ['--preflight'],
+      ['--execute', '--source', 'THIS_SOURCE_MUST_NEVER_BE_OPENED'],
+    ]) {
+      const result = spawnSync(process.execPath, [script, ...args], {
+        encoding: 'utf8',
+        timeout: 10000,
+        windowsHide: true,
+      });
+      expect(result.status).toBe(2);
+      expect(JSON.parse(result.stdout)).toMatchObject({
+        status: 'BLOCKED',
+        legacy: true,
+        mode: args.includes('--execute') ? 'execute' : 'preflight',
+        code,
+        preflight: {
+          ready: false,
+          sourceRead: false,
+          databaseCopied: false,
+          authenticationAttempted: false,
+          networkRequests: 0,
+        },
+      });
     }
-  );
-  await expect(runLiveJourney({ execute: true, page })).rejects.toThrow(
-    'LIVE_JOURNEY_LEGACY_CANDIDATE_UI_RETIRED'
-  );
-  await expect(runLiveJourney({ execute: true, page, resumeChat: 'chat' })).rejects.toThrow(
-    'LIVE_JOURNEY_LEGACY_CANDIDATE_UI_RETIRED'
-  );
-  await expect(runResumeJourney({ execute: true, page })).rejects.toThrow(
-    'LIVE_JOURNEY_LEGACY_CANDIDATE_UI_RETIRED'
-  );
-});
+  }
+);

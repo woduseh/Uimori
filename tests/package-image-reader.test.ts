@@ -181,12 +181,15 @@ test('transformed prose suppresses unplaceable images and identifies an authored
       sourceHash: source.hash,
       mock: true,
       text: '합친 번역.',
-      segments: [{ anchors: source.blocks.map((block) => block.anchor), text: '합친 번역.' }],
     },
   } as Job;
-  expect(
-    renderToStaticMarkup(createElement(SourceReader, { ...props, jobs: [job, translation] }))
-  ).toContain('/api/assets/asset');
+  const fullTranslation = renderToStaticMarkup(
+    createElement(SourceReader, { ...props, jobs: [job, translation] })
+  );
+  expect(fullTranslation).toContain('합친 번역.');
+  expect(fullTranslation).not.toContain('/api/assets/asset');
+  expect(fullTranslation).not.toContain('data-block-anchor=');
+  expect(fullTranslation).toContain('이미지를 생략');
   projection.data = {
     sourceRevision: source.id,
     sourceHash: source.hash,

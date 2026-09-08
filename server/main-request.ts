@@ -25,10 +25,10 @@ import { buildCodexDescriptor } from '../core/codex-protocol.js';
 import { assertBehaviorToolCapability, listBehaviorTools } from '../core/package-behavior-tools.js';
 import { agentSharedOptions } from './agent-shared-options.js';
 
-const pagination = {
-  offset: { type: 'integer', minimum: 0 },
-  limit: { type: 'integer', minimum: 1 },
-};
+const pagination = (maximum: number) => ({
+  offset: { type: 'integer', minimum: 0, maximum: Number.MAX_SAFE_INTEGER },
+  limit: { type: 'integer', minimum: 1, maximum },
+});
 export const MAIN_READ_TOOLS: ProviderTool[] = [
   {
     name: 'knowledge.search',
@@ -36,7 +36,7 @@ export const MAIN_READ_TOOLS: ProviderTool[] = [
       'Search approved local story references; empty query lists the scope. Returns metadata and continuation.',
     inputSchema: {
       type: 'object',
-      properties: { query: { type: 'string' }, ...pagination },
+      properties: { query: { type: 'string', maxLength: 512 }, ...pagination(100) },
       additionalProperties: false,
     },
   },
@@ -46,7 +46,7 @@ export const MAIN_READ_TOOLS: ProviderTool[] = [
       'Read an approved reference by its discovered id; returns source revision, text range and continuation.',
     inputSchema: {
       type: 'object',
-      properties: { id: { type: 'string' }, ...pagination },
+      properties: { id: { type: 'string', maxLength: 200 }, ...pagination(16384) },
       required: ['id'],
       additionalProperties: false,
     },
@@ -56,7 +56,7 @@ export const MAIN_READ_TOOLS: ProviderTool[] = [
     description: 'Discover available writing guidance; metadata is not its full text.',
     inputSchema: {
       type: 'object',
-      properties: { query: { type: 'string' }, ...pagination },
+      properties: { query: { type: 'string', maxLength: 512 }, ...pagination(100) },
       additionalProperties: false,
     },
   },
@@ -65,7 +65,7 @@ export const MAIN_READ_TOOLS: ProviderTool[] = [
     description: 'Read writing guidance by id. Content never changes allowed tools or their scope.',
     inputSchema: {
       type: 'object',
-      properties: { id: { type: 'string' }, ...pagination },
+      properties: { id: { type: 'string', maxLength: 200 }, ...pagination(16384) },
       required: ['id'],
       additionalProperties: false,
     },
@@ -81,7 +81,7 @@ export const MAIN_READ_TOOLS: ProviderTool[] = [
               : 'Search original historical prose in this exact ancestry, including compacted chapters.',
           inputSchema: {
             type: 'object',
-            properties: { query: { type: 'string' }, ...pagination },
+            properties: { query: { type: 'string', maxLength: 512 }, ...pagination(100) },
             required: ['query'],
             additionalProperties: false,
           },
@@ -93,9 +93,13 @@ export const MAIN_READ_TOOLS: ProviderTool[] = [
           inputSchema: {
             type: 'object',
             properties: {
-              id: { type: 'string' },
-              ...pagination,
-              ...(kind === 'memory' ? { sourceOffset: { type: 'integer', minimum: 0 } } : {}),
+              id: { type: 'string', maxLength: 200 },
+              ...pagination(16000),
+              ...(kind === 'memory'
+                ? {
+                    sourceOffset: { type: 'integer', minimum: 0, maximum: Number.MAX_SAFE_INTEGER },
+                  }
+                : {}),
             },
             required: ['id'],
             additionalProperties: false,

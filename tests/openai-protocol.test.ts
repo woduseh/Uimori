@@ -418,33 +418,28 @@ describe('native Responses pure protocol (no live calls)', () => {
     } else expect(() => encodeResponses(continued)).toThrow();
   });
 
-  test('native translation output schema is source-bound and can be explicitly disabled', () => {
+  test('translation requests complete prose without native JSON formatting', () => {
     const input = request();
     input.role = 'translation';
     input.input.source = {
       sourceRevision: 'source-1',
       sourceHash: 'hash-1',
-      chunkId: 'chunk-1',
-      outputSchema: { text: 'EXAMPLE_ONLY' },
+      text: 'Turn LEFT. He served forty years.',
     };
+    input.generation!.structuredOutput = true;
     const encoded = record(encodeResponses(input).body);
-    expect(encoded.text.format).toMatchObject({
-      type: 'json_schema',
-      strict: true,
-      schema: {
-        additionalProperties: false,
-        properties: { sourceRevision: { enum: ['source-1'] } },
-      },
-    });
-    expect(encoded.instructions).toContain('Korean number words');
-    expect(JSON.stringify(encoded.input)).not.toContain('EXAMPLE_ONLY');
-    input.generation!.structuredOutput = false;
-    const plain = record(encodeResponses(input).body);
-    expect(plain).not.toHaveProperty('text');
-    expect(JSON.stringify(plain.input)).toContain('EXAMPLE_ONLY');
+    expect(encoded).not.toHaveProperty('text');
+    expect(encoded.instructions).toContain('complete translated text only');
+    expect(encoded.instructions).not.toContain('Korean number words');
+    expect(JSON.stringify(encoded.input)).toContain('Turn LEFT.');
+    input.input.controls.purpose = 'translation-refusal';
+    input.stable.contract = 'Classify whether this response refused the task.';
+    const classified = record(encodeResponses(input).body);
+    expect(classified.instructions).not.toContain('complete translated text only');
+    expect(classified.instructions).toContain(input.stable.contract);
   });
 
-  test('keeps every selected Responses option alongside the translation schema and signed continuation', () => {
+  test('keeps every selected Responses option alongside plain translation and signed continuation', () => {
     const input = request();
     input.modelId = 'gpt-5.6-sol';
     input.role = 'translation';
@@ -457,12 +452,16 @@ describe('native Responses pure protocol (no live calls)', () => {
       reasoningContext: 'all_turns',
       serviceTier: 'flex',
     };
-    input.input.source = { sourceRevision: 'source-1', sourceHash: 'hash-1', chunkId: 'chunk-1' };
+    input.input.source = {
+      sourceRevision: 'source-1',
+      sourceHash: 'hash-1',
+      text: 'Complete source prose.',
+    };
     const run = first(input);
     const wire = record(run.body);
     expect(wire.reasoning).toEqual({ effort: 'high', mode: 'pro', context: 'all_turns' });
     expect(wire.text.verbosity).toBe('low');
-    expect(wire.text.format.schema.properties.sourceHash.enum).toEqual(['hash-1']);
+    expect(wire.text).not.toHaveProperty('format');
     expect(wire.service_tier).toBe('flex');
     expect(record(diagnosticResponsesBody(run.body)).reasoning).toEqual(wire.reasoning);
     const reasoning = {
@@ -509,7 +508,7 @@ describe('native Responses pure protocol (no live calls)', () => {
       input.input.source = {
         sourceRevision: 'source-cache',
         sourceHash: 'hash-cache',
-        chunkId: 'chunk-cache',
+        text: 'Complete source prose.',
       };
       const wire = record(encodeResponses(input).body);
       expect(wire.prompt_cache_options).toEqual({
@@ -517,7 +516,7 @@ describe('native Responses pure protocol (no live calls)', () => {
         ...(cacheMode === 'disabled' ? {} : { ttl: '30m' }),
       });
       expect(wire.text.verbosity).toBe('low');
-      expect(wire.text.format.schema.properties.sourceHash.enum).toEqual(['hash-cache']);
+      expect(wire.text).not.toHaveProperty('format');
       expect(JSON.stringify(wire)).not.toContain('prompt_cache_breakpoint');
       const run = first(input);
       run.decoder.accept(terminal([call()]));

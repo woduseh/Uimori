@@ -93,9 +93,9 @@ export class Store {
     }
     try {
       const version = Number((this.db.prepare('PRAGMA user_version').get() as Row).user_version);
-      if (![0, 13].includes(version))
+      if (![0, 14].includes(version))
         throw new Error(
-          `Unsupported database schema version ${version}; Uimori requires schema 13. For disposable default development data, stop the server and run npm run reset:dev.`
+          `Unsupported database schema version ${version}; Uimori requires schema 14. For disposable default development data, stop the server and run npm run reset:dev.`
         );
       if (
         version === 0 &&
@@ -125,7 +125,7 @@ export class Store {
       CREATE UNIQUE INDEX IF NOT EXISTS one_active_run_per_branch ON runs(branch_id) WHERE status IN ('queued','running','waiting_for_state');
       CREATE INDEX runs_chat_activity ON runs(chat_id,created_at DESC);
       CREATE TABLE IF NOT EXISTS sources (id TEXT PRIMARY KEY, chat_id TEXT NOT NULL REFERENCES chats(id), run_id TEXT NOT NULL UNIQUE REFERENCES runs(id), parent_revision TEXT REFERENCES sources(id), text TEXT NOT NULL, hash TEXT NOT NULL, created_at TEXT NOT NULL);
-      CREATE TABLE IF NOT EXISTS jobs (id TEXT PRIMARY KEY, chat_id TEXT NOT NULL REFERENCES chats(id), source_revision TEXT NOT NULL REFERENCES sources(id), source_hash TEXT NOT NULL, kind TEXT NOT NULL CHECK(kind IN ('translation','status','image')), status TEXT NOT NULL, generation INTEGER NOT NULL DEFAULT 0, owner TEXT, input TEXT, error TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, revision INTEGER NOT NULL DEFAULT 1, plan TEXT, retry_chunk TEXT, UNIQUE(source_revision,kind,revision));
+      CREATE TABLE IF NOT EXISTS jobs (id TEXT PRIMARY KEY, chat_id TEXT NOT NULL REFERENCES chats(id), source_revision TEXT NOT NULL REFERENCES sources(id), source_hash TEXT NOT NULL, kind TEXT NOT NULL CHECK(kind IN ('translation','status','image')), status TEXT NOT NULL, generation INTEGER NOT NULL DEFAULT 0, owner TEXT, input TEXT, error TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, revision INTEGER NOT NULL DEFAULT 1, UNIQUE(source_revision,kind,revision));
       CREATE TABLE IF NOT EXISTS job_results (job_id TEXT PRIMARY KEY REFERENCES jobs(id), generation INTEGER NOT NULL, result TEXT NOT NULL, created_at TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS model_inputs (seq INTEGER PRIMARY KEY AUTOINCREMENT, run_id TEXT NOT NULL REFERENCES runs(id), input TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS tool_events (seq INTEGER PRIMARY KEY AUTOINCREMENT, run_id TEXT NOT NULL REFERENCES runs(id), event TEXT NOT NULL);
@@ -141,7 +141,7 @@ export class Store {
           this.behavior.init();
           initBehaviorHost(this);
           initRunBehavior(this);
-          this.db.exec('PRAGMA user_version=13');
+          this.db.exec('PRAGMA user_version=14');
         });
     } catch (error) {
       this.db.close();
@@ -303,6 +303,7 @@ export class Store {
       packageRequestId?: string;
       loreContextReset?: boolean;
       packageStart?: import('../core/package-start.js').PackageStartRef;
+      retryOf?: string;
     },
     snapshot: (chat: Chat) => RunSnapshot
   ): { run: Run; created: boolean } {
@@ -326,6 +327,7 @@ export class Store {
       ...(command.packageRequestId ? { packageRequestId: command.packageRequestId } : {}),
       ...(command.packageStart ? { packageStart: command.packageStart } : {}),
       ...(command.loreContextReset ? { loreContextReset: true } : {}),
+      ...(command.retryOf ? { retryOf: command.retryOf } : {}),
     });
     const prior = this.db
       .prepare('SELECT id,command FROM runs WHERE chat_id=? AND request_key=?')
@@ -407,6 +409,61 @@ export class Store {
       );
     this.event(chatId, `run.${status}`, id);
     return { run: this.run(id), created: true };
+  }
+  /** A new request with current settings, branching before the selected response. */
+  retryRun(
+    runId: string,
+    key: string,
+    validate?: (snapshot: RunSnapshot) => void
+  ): { run: Run; created: boolean } {
+    return this.transaction(() => {
+      const original = this.run(runId);
+      const prior = this.db
+        .prepare('SELECT id,command FROM runs WHERE chat_id=? AND request_key=?')
+        .get(original.chatId, key) as Row | undefined;
+      if (prior) {
+        if (parse(prior.command).retryOf !== runId)
+          throw new HttpError(409, 'Idempotency key reused with different command');
+        return { run: this.run(prior.id), created: false };
+      }
+      if (['queued', 'running', 'waiting_for_state'].includes(original.status))
+        throw new HttpError(409, 'Original run is still active');
+      if (original.snapshot.packageStart?.mode === 'authored')
+        throw new HttpError(409, 'Authored opening has no model request to repeat');
+      const profile = this.product.snapshot(original.chatId);
+      const chat = this.chat(original.chatId);
+      const branch = this.product.createBranch(original.chatId, {
+        title: '다시 요청',
+        fromRevision: original.parentRevision,
+      });
+      return this.createRunInTransaction(
+        original.chatId,
+        {
+          request: original.request,
+          expectedRevision: original.parentRevision,
+          expectedSettingsRevision: chat.settingsRevision,
+          expectedProfileRevision: profile.revision,
+          branchId: branch.id,
+          idempotencyKey: key,
+          retryOf: runId,
+        },
+        (current) => {
+          const snapshot: RunSnapshot = {
+            chatId: current.id,
+            parentRevision: current.headRevision,
+            settingsRevision: current.settingsRevision,
+            settings: current.settings,
+            request: original.request,
+            history: this.history(current.headRevision),
+            resources: this.product.resources(current.id, profile),
+            profile,
+            branchId: branch.id,
+          };
+          validate?.(snapshot);
+          return snapshot;
+        }
+      );
+    });
   }
   candidate(
     runId: string,
@@ -745,14 +802,28 @@ export class Store {
       createdAt: row.created_at,
       updatedAt: row.updated_at,
       revision: row.revision,
-      chunks: this.product.chunks(id),
-      ...(row.kind === 'translation' && row.plan
-        ? {
-            translationPlan: {
-              maxChunkChars: JSON.parse(row.plan).maxChunkChars,
-              totalChunks: JSON.parse(row.plan).chunks.length,
-            },
-          }
+      ...(row.kind === 'translation' && row.status !== 'completed'
+        ? (() => {
+            const previous = this.db
+              .prepare(
+                "SELECT j.id,j.revision,r.result FROM jobs j JOIN job_results r ON r.job_id=j.id WHERE j.source_revision=? AND j.source_hash=? AND j.kind='translation' AND j.status='completed' AND j.revision<? ORDER BY j.revision DESC LIMIT 1"
+              )
+              .get(row.source_revision, row.source_hash, row.revision) as Row | undefined;
+            if (!previous) return {};
+            const saved = this.job(previous.id);
+            try {
+              validateTranslationArtifact(this, saved, this.source(row.source_revision));
+            } catch {
+              return {};
+            }
+            return {
+              previousResult: {
+                jobId: previous.id,
+                revision: previous.revision,
+                result: parse(previous.result),
+              },
+            };
+          })()
         : {}),
     };
   }
@@ -763,77 +834,14 @@ export class Store {
         .all() as Row[]
     ).map((row) => row.id);
   }
-  claimJob(
-    id: string,
-    owner: string,
-    input: unknown,
-    plan?: { chunks: { id: string }[] }
-  ): Job | null {
+  claimJob(id: string, owner: string, input: unknown): Job | null {
     return this.transaction(() => {
-      const priorInput = this.job(id).input;
-      const statusSelection =
-        priorInput && typeof priorInput === 'object'
-          ? Object.fromEntries(
-              ['statusModelSelection', 'statusModelSnapshot']
-                .filter((key) => Object.hasOwn(priorInput, key))
-                .map((key) => [key, (priorInput as Record<string, unknown>)[key]])
-            )
-          : {};
-      const translationModelSelection =
-        priorInput &&
-        typeof priorInput === 'object' &&
-        Object.hasOwn(priorInput, 'translationModelSelection')
-          ? {
-              translationModelSelection: (priorInput as { translationModelSelection: unknown })
-                .translationModelSelection,
-            }
-          : {};
-      const translationModelSnapshot =
-        priorInput &&
-        typeof priorInput === 'object' &&
-        Object.hasOwn(priorInput, 'translationModelSnapshot')
-          ? {
-              translationModelSnapshot: (priorInput as { translationModelSnapshot: unknown })
-                .translationModelSnapshot,
-            }
-          : {};
-      const chunkSelection =
-        priorInput &&
-        typeof priorInput === 'object' &&
-        Object.hasOwn(priorInput, 'translationChunkChars')
-          ? {
-              translationChunkChars: (priorInput as { translationChunkChars: unknown })
-                .translationChunkChars,
-            }
-          : {};
-      const promptSelection =
-        priorInput && typeof priorInput === 'object' && Object.hasOwn(priorInput, 'promptSelection')
-          ? { promptSelection: (priorInput as { promptSelection: unknown }).promptSelection }
-          : {};
-      const promptControlSelection =
-        priorInput &&
-        typeof priorInput === 'object' &&
-        Object.hasOwn(priorInput, 'promptControlSelection')
-          ? {
-              promptControlSelection: (priorInput as { promptControlSelection: unknown })
-                .promptControlSelection,
-            }
-          : {};
-      const imageSelection =
-        priorInput && typeof priorInput === 'object' && Object.hasOwn(priorInput, 'imageCatalog')
-          ? { imageCatalog: (priorInput as { imageCatalog: unknown }).imageCatalog }
-          : {};
+      const prior = this.job(id).input;
       const claimedInput =
         input && typeof input === 'object' && !Array.isArray(input)
           ? {
+              ...(prior && typeof prior === 'object' && !Array.isArray(prior) ? prior : {}),
               ...input,
-              ...promptSelection,
-              ...chunkSelection,
-              ...translationModelSelection,
-              ...translationModelSnapshot,
-              ...statusSelection,
-              ...promptControlSelection,
-              ...imageSelection,
             }
           : input;
       const changed = this.db
@@ -842,15 +850,6 @@ export class Store {
         )
         .run(owner, json(claimedInput), now(), id);
       if (!changed.changes) return null;
-      if (plan) {
-        this.product.plan(id, plan);
-        for (const chunk of plan.chunks)
-          this.db
-            .prepare(
-              "INSERT OR IGNORE INTO job_chunks(job_id,id,status,attempt) VALUES(?,?,'queued',0)"
-            )
-            .run(id, chunk.id);
-      }
       const job = this.job(id);
       this.event(job.chatId, 'job.running', id);
       return job;
@@ -903,10 +902,7 @@ export class Store {
   }
   retryJob(id: string, validate?: (id: string) => void): Job {
     const job = this.job(id);
-    if (
-      job.kind === 'translation' &&
-      ['failed', 'partial', 'interrupted', 'cancelled'].includes(job.status)
-    )
+    if (job.kind === 'translation')
       return requestTranslation(this, job.sourceRevision, true, validate);
     return this.transaction(() => {
       const job = this.job(id);
@@ -922,9 +918,7 @@ export class Store {
       validate?.(id);
       if (['failed', 'partial', 'interrupted', 'cancelled'].includes(job.status)) {
         this.db
-          .prepare(
-            "UPDATE jobs SET status='queued',error=NULL,retry_chunk=NULL,updated_at=? WHERE id=?"
-          )
+          .prepare("UPDATE jobs SET status='queued',error=NULL,updated_at=? WHERE id=?")
           .run(now(), id);
         this.event(job.chatId, 'job.queued', id);
       }

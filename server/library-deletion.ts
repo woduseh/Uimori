@@ -1,6 +1,7 @@
 import { HttpError, fields, number, record } from './request-validation.js';
 import type { FastifyInstance } from 'fastify';
 import type { Store } from './store.js';
+import { promptWorkspace } from './prompt-workspace.js';
 
 export type LibraryKind =
   | 'content'
@@ -8,93 +9,16 @@ export type LibraryKind =
   | 'prompt-combination'
   | 'connection'
   | 'model';
-type Blocker = { table: string; label: string; count: number };
-const labels: Record<string, string> = {
-  versions: '다른 자료·프롬프트·등록 기록(이전 개정 포함)',
-  provider_settings: '저장된 모델 설정',
-  profiles: '채팅 설정',
-  chat_organization: '봇 소속 채팅',
-  chat_folders: '봇 폴더·기본 페르소나',
-  story_configs: '상태·기억 설정',
-  runs: '생성 기록',
-  jobs: '번역·이미지 작업',
-  story_jobs: '상태·기억 작업',
-  attempts: '모델 호출',
-  provider_connection_tests: '진행 중인 응답 테스트',
-  assets: '저장된 이미지',
-};
-const identifier = (value: string) => `"${value.replaceAll('"', '""')}"`;
-const providerKind = (kind: LibraryKind) => kind === 'connection' || kind === 'model';
+/** Public library access is separate from immutable version/snapshot lookup. */
+export function assertLibraryVisible(store: Store, kind: string, id: string) {
+  if (store.db.prepare('SELECT 1 FROM library_hidden WHERE kind=? AND id=?').get(kind, id))
+    throw new HttpError(404, 'Library item not found');
+}
 
-/** Reference checks stay inside SQLite: return counts, never prompt/source/credential bodies.
- * Versioned content remains necessary to validate frozen runs and archive graphs.
- * Provider settings differ: completed work carries its own immutable model/connection snapshot.
- */
 export function libraryDeletionImpact(store: Store, kind: LibraryKind, id: string) {
+  assertLibraryVisible(store, kind, id);
   const item = store.product.get<{ revision: number }>(kind, id);
-  const ownTable = providerKind(kind) ? 'provider_settings' : 'versions';
-  const blockers: Blocker[] = [];
-  const tables = store.db
-    .prepare("SELECT name FROM sqlite_schema WHERE type='table' AND name NOT LIKE 'sqlite_%'")
-    .all() as { name: string }[];
-  for (const { name: table } of tables) {
-    // Placements are disposable organization metadata, not execution references.
-    if (table === 'library_placements') continue;
-    const columns = store.db.prepare(`PRAGMA table_info(${identifier(table)})`).all() as {
-      name: string;
-      type: string;
-    }[];
-    const textColumns = columns.filter((column) => column.type.toUpperCase() === 'TEXT');
-    if (!textColumns.length) continue;
-    const conditions: string[] = [];
-    const values: (string | number)[] = [];
-    if (table === ownTable) {
-      conditions.push('NOT (t.kind=? AND t.id=?)');
-      values.push(kind, id);
-    }
-    if (providerKind(kind)) {
-      if (['runs', 'jobs', 'story_jobs', 'provider_connection_tests', 'attempts'].includes(table))
-        conditions.push("t.status IN ('queued','running','waiting_for_state','pending')");
-      // These are immutable execution diagnostics, not current provider selectors.
-      if (
-        [
-          'model_inputs',
-          'tool_events',
-          'job_results',
-          'job_chunks',
-          'events',
-          'package_behavior_journal',
-          'package_behavior_run_journal',
-        ].includes(table)
-      )
-        continue;
-      if (table === 'versions')
-        conditions.push(
-          "(t.kind<>'registration-run' OR (json_extract(t.body,'$.status')='running' AND t.revision=(SELECT MAX(v.revision) FROM versions v WHERE v.kind=t.kind AND v.id=t.id)))",
-          // Old advisor selections are execution evidence; runs carry their own model snapshots.
-          "(t.kind<>'prompt-preset' OR t.revision=(SELECT MAX(v.revision) FROM versions v WHERE v.kind=t.kind AND v.id=t.id))"
-        );
-    }
-    // Exact JSON values include refs in arrays (relatedIds), nested package modules,
-    // prompt selections and future reference-bearing fields without substring matches.
-    const references = textColumns.map((column) => {
-      const field = `t.${identifier(column.name)}`;
-      values.push(id, id);
-      return `(${field}=? OR EXISTS (SELECT 1 FROM json_tree(CASE WHEN json_valid(${field}) THEN ${field} ELSE 'null' END) j WHERE j.type='text' AND j.atom=?))`;
-    });
-    conditions.push(`(${references.join(' OR ')})`);
-    const count = Number(
-      (
-        store.db
-          .prepare(
-            `SELECT COUNT(*) AS n FROM ${identifier(table)} t WHERE ${conditions.join(' AND ')}`
-          )
-          .get(...values) as { n: number }
-      ).n
-    );
-    if (count) blockers.push({ table, label: labels[table] ?? '연결된 저장 기록', count });
-  }
-  return { kind, id, revision: item.revision, canDelete: blockers.length === 0, blockers };
+  return { kind, id, revision: item.revision, canDelete: true, blockers: [] };
 }
 
 export function deleteLibraryItem(store: Store, kind: LibraryKind, id: string, value: unknown) {
@@ -102,20 +26,51 @@ export function deleteLibraryItem(store: Store, kind: LibraryKind, id: string, v
   fields(body, ['expectedRevision']);
   const expected = number(body.expectedRevision, 'revision');
   return store.transaction(() => {
+    assertLibraryVisible(store, kind, id);
     const latest = store.product.get<{ revision: number }>(kind, id);
     if (latest.revision !== expected)
       throw new HttpError(409, '항목이 변경됐어요. 새로고침한 뒤 다시 삭제해 주세요.');
-    const impact = libraryDeletionImpact(store, kind, id);
-    if (!impact.canDelete)
-      throw new HttpError(
-        409,
-        `삭제할 수 없어요: ${impact.blockers.map((blocker) => `${blocker.label} ${blocker.count}건`).join(', ')}에서 참조하고 있어요. 연결을 해제하거나 해당 항목을 먼저 삭제해 주세요. 이전 개정·생성 기록의 참조는 해당 자료·채팅을 삭제해야 해제돼요.`
-      );
-    store.db
-      .prepare(
-        `DELETE FROM ${providerKind(kind) ? 'provider_settings' : 'versions'} WHERE kind=? AND id=?`
-      )
-      .run(kind, id);
+    if (kind === 'connection') {
+      // Revoke future sends, including workers holding an earlier frozen connection.
+      // Credentials and already transmitted provider work are not deleted or replayed.
+      store.db
+        .prepare(`UPDATE provider_settings SET revision=revision+1,
+        body=json_set(body,'$.enabled',json('false'),'$.revision',revision+1)
+        WHERE kind='connection' AND id=?`)
+        .run(id);
+      store.db
+        .prepare(`INSERT OR IGNORE INTO library_hidden(kind,id)
+        SELECT 'model',id FROM provider_settings WHERE kind='model' AND json_extract(body,'$.connectionId')=?`)
+        .run(id);
+    }
+    store.db.prepare('INSERT INTO library_hidden(kind,id) VALUES(?,?)').run(kind, id);
+    if (kind === 'model' || kind === 'connection') {
+      const workspace = promptWorkspace(store);
+      let changed = false;
+      if (
+        workspace.translationPolicy.refusalModel &&
+        store.product.isHidden('model', workspace.translationPolicy.refusalModel.id)
+      ) {
+        workspace.translationPolicy.refusalModel = null;
+        changed = true;
+      }
+      const collaboration = workspace.main.program.collaboration;
+      for (const agent of collaboration?.agents ?? []) {
+        if (agent.model && store.product.isHidden('model', agent.model.id)) {
+          agent.model = null;
+          // Deleting a selected advisor must not silently send its instructions to another model.
+          collaboration!.enabled = false;
+          changed = true;
+        }
+      }
+      if (changed) {
+        workspace.revision++;
+        store.db
+          .prepare('UPDATE prompt_workspace SET body=? WHERE id=1')
+          .run(JSON.stringify(workspace));
+        for (const chat of store.chats()) store.event(chat.id, 'prompt-workspace.updated', chat.id);
+      }
+    }
     store.libraryOrganization.remove(kind, id);
     return { deleted: true, id };
   });

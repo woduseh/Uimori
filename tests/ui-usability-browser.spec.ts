@@ -1,3 +1,4 @@
+import { visualReview } from './fixtures/visual-review.js';
 import { selectSettingsSection, navigationAction } from './ui-navigation.js';
 import { test, expect } from '@playwright/test';
 import { fixtureBotInput } from './fixtures/chat.js';
@@ -22,17 +23,19 @@ test('UXUI01 compact composer, square avatar and mobile settings details preserv
   await page.goto(`/?chat=${chat.id}`);
   const input = page.getByLabel('다음 장면 요청', { exact: true });
   await input.fill('아직 보내지 않은 합성 요청');
-  for (const width of [390, 360]) {
+  for (const width of visualReview ? [390, 360] : [390]) {
     await page.setViewportSize({ width, height: 844 });
     await expect(input).toBeInViewport();
     await expect(page.getByLabel('빠른 본문 모델', { exact: true })).toBeInViewport();
     await expect(page.getByRole('button', { name: '원문 생성', exact: true })).toBeInViewport();
-    const avatar = page.locator('.story-context > .content-avatar');
-    const bounds = await avatar.boundingBox();
-    expect(bounds).not.toBeNull();
-    expect(Math.abs(bounds!.width - bounds!.height)).toBeLessThan(1);
-    const dock = await page.locator('.composer-dock').boundingBox();
-    expect(dock!.height).toBeLessThan(190);
+    if (visualReview) {
+      const avatar = page.locator('.story-context > .content-avatar');
+      const bounds = await avatar.boundingBox();
+      expect(bounds).not.toBeNull();
+      expect(Math.abs(bounds!.width - bounds!.height)).toBeLessThan(1);
+      const dock = await page.locator('.composer-dock').boundingBox();
+      expect(dock!.height).toBeLessThan(190);
+    }
     await expect(page.getByRole('button', { name: '빠른 페르소나', exact: true })).toHaveCount(0);
     await page.getByRole('button', { name: '입력창 더보기', exact: true }).click();
     await expect(page.getByRole('button', { name: '창작 옵션', exact: true })).toHaveCount(0);
@@ -42,7 +45,8 @@ test('UXUI01 compact composer, square avatar and mobile settings details preserv
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
       true
     );
-    await page.screenshot({ path: info.outputPath(`compact-composer-${width}.png`) });
+    if (visualReview)
+      await page.screenshot({ path: info.outputPath(`compact-composer-${width}.png`) });
   }
   await navigationAction(page, '설정');
   const dialog = page.getByRole('dialog', { name: '설정', exact: true });
@@ -54,7 +58,7 @@ test('UXUI01 compact composer, square avatar and mobile settings details preserv
   await expect(dialog.getByRole('button', { name: '설정 목록으로', exact: true })).toBeVisible();
   await expect(dialog.getByRole('heading', { name: '백업 받기', exact: true })).toBeVisible();
   await expect(dialog.getByText(/SQLite 백업은 서버를 종료하고/)).toBeHidden();
-  await page.screenshot({ path: info.outputPath('compact-settings-360.png') });
+  if (visualReview) await page.screenshot({ path: info.outputPath('compact-settings-360.png') });
   const after = await (await request.get(`/api/chats/${chat.id}`)).json();
   expect(after.runs).toHaveLength(0);
   expect(after.jobs).toHaveLength(0);

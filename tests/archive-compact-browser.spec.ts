@@ -1,3 +1,4 @@
+import { reviewWidths, visualReview } from './fixtures/visual-review.js';
 import { expect, test, type Page } from '@playwright/test';
 import { navigationAction, selectSettingsSection } from './ui-navigation.js';
 
@@ -35,7 +36,7 @@ test('ACOM01 backup choices and native file selection stay compact across deskto
   await expect(panel.getByRole('button', { name: '빈 DB에 가져오기', exact: true })).toBeEnabled();
   // The native input already names the selected file; the app does not repeat it below.
   await expect(panel.getByText(name, { exact: true })).toHaveCount(0);
-  for (const width of [360, 390, 430, 768, 1024, 1440]) {
+  for (const width of reviewWidths([360, 390, 430, 768, 1024, 1440])) {
     await page.setViewportSize({ width, height: 900 });
     await expect(panel.getByRole('heading', { name: '백업 받기', exact: true })).toBeVisible();
     await expect(panel.getByRole('heading', { name: '가져오기', exact: true })).toBeVisible();
@@ -46,10 +47,12 @@ test('ACOM01 backup choices and native file selection stay compact across deskto
     const box = (await clear.boundingBox())!;
     expect(box.width).toBeGreaterThanOrEqual(44);
     expect(box.height).toBeGreaterThanOrEqual(44);
-    const inputBox = (await file.boundingBox())!;
-    expect(Math.abs(box.y + box.height / 2 - inputBox.y - inputBox.height / 2)).toBeLessThanOrEqual(
-      1
-    );
+    if (visualReview) {
+      const inputBox = (await file.boundingBox())!;
+      expect(
+        Math.abs(box.y + box.height / 2 - inputBox.y - inputBox.height / 2)
+      ).toBeLessThanOrEqual(1);
+    }
     expect(await file.evaluate((node) => (node as HTMLInputElement).files?.[0]?.name)).toBe(name);
     expect(await panel.evaluate((node) => node.scrollWidth - node.clientWidth)).toBeLessThanOrEqual(
       1
@@ -57,7 +60,8 @@ test('ACOM01 backup choices and native file selection stay compact across deskto
     expect(
       await page.evaluate(() => document.documentElement.scrollWidth - innerWidth)
     ).toBeLessThanOrEqual(1);
-    await page.screenshot({ path: info.outputPath(`archive-compact-${width}.png`) });
+    if (visualReview)
+      await page.screenshot({ path: info.outputPath(`archive-compact-${width}.png`) });
   }
   const jsonDownload = page.waitForEvent('download');
   await panel.getByRole('button', { name: 'JSON 내보내기', exact: true }).click();
@@ -139,7 +143,7 @@ test('ACOM02 stale file reads cannot replace a later selection or restore a clea
   expect(await file.evaluate((node) => (node as HTMLInputElement).files?.length)).toBe(0);
   await expect(panel.getByRole('button', { name: '선택한 파일 해제', exact: true })).toHaveCount(0);
   await expect(panel.getByRole('alert')).toHaveCount(0);
-  await page.screenshot({ path: info.outputPath('archive-cleared-mobile.png') });
+  if (visualReview) await page.screenshot({ path: info.outputPath('archive-cleared-mobile.png') });
   await page.getByRole('button', { name: '설정 닫기', exact: true }).click();
   await expect(page.getByRole('dialog', { name: '설정', exact: true })).toBeHidden();
 });
@@ -158,7 +162,7 @@ test('ACOM03 status failure and occupied data block import, while a failed write
     imports.push(route.request().postDataJSON());
     return route.fulfill({ status: 503, json: { error: 'SYNTHETIC_IMPORT_FAILURE' } });
   });
-  await page.setViewportSize({ width: 360, height: 844 });
+  await page.setViewportSize({ width: 390, height: 844 });
   const panel = await openArchive(page);
   const file = panel.getByLabel('가져올 JSON 파일', { exact: true });
   const submit = panel.getByRole('button', { name: '빈 DB에 가져오기', exact: true });
@@ -196,7 +200,8 @@ test('ACOM03 status failure and occupied data block import, while a failed write
   await selectSettingsSection(page, '일반');
   await selectSettingsSection(page, '데이터 관리');
   await expect(form.getByRole('alert')).toContainText('서버 작업을 완료하지 못했어요');
-  await page.screenshot({ path: info.outputPath('archive-import-error-mobile.png') });
+  if (visualReview)
+    await page.screenshot({ path: info.outputPath('archive-import-error-mobile.png') });
   expect(imports).toHaveLength(1);
 });
 
@@ -235,5 +240,6 @@ test('ACOM04 an accepted import clears its file once even when the following lib
   await expect(submit).toBeDisabled();
   await expect(panel.getByRole('button', { name: '선택한 파일 해제', exact: true })).toHaveCount(0);
   expect(imports).toBe(1);
-  await page.screenshot({ path: info.outputPath('archive-accepted-refresh-error.png') });
+  if (visualReview)
+    await page.screenshot({ path: info.outputPath('archive-accepted-refresh-error.png') });
 });

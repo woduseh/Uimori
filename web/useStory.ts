@@ -3,7 +3,7 @@ import { subscribeAppHistory } from './app-history.js';
 import type { Chat, ReaderDetail, Run, Source } from '../core/types.js';
 import type { Content, Library } from '../core/product.js';
 import { api, ApiError, libraryChangedKey } from './api.js';
-import { reconcilePromptValues } from '../core/prompt-program.js';
+import { usePromptWorkspace } from './usePromptWorkspace.js';
 import { refValue } from './content-ref.js';
 import { useModelSelection } from './model-selection.js';
 
@@ -26,6 +26,7 @@ function ancestry(sources: Source[], head: string | null) {
   return result;
 }
 type RunPayload = {
+  retryOf?: string;
   packageRequestId?: string;
   loreContextReset?: boolean;
   request: string;
@@ -66,6 +67,8 @@ function readCommand(key: string): { record: PendingCommand; payload: RunPayload
         !Number.isInteger(payload.expectedProfileRevision))
     )
       return null;
+    if (payload.retryOf !== undefined && (typeof payload.retryOf !== 'string' || !payload.retryOf))
+      return null;
     if (payload.loreContextReset !== undefined && typeof payload.loreContextReset !== 'boolean')
       return null;
     return { record, payload };
@@ -84,6 +87,7 @@ function definiteRejection(error: unknown): boolean {
 
 type Position = { target?: string; source: string; anchor: string; offset: number; top: number };
 export function useStory() {
+  const { workspace: promptWorkspace } = usePromptWorkspace();
   const [chats, setChats] = useState<Chat[]>([]);
   const [selected, setSelected] = useState(() => initialView().chat);
   const [viewedBranch, setViewedBranch] = useState(() => initialView().branch);
@@ -569,8 +573,9 @@ export function useStory() {
     const run = visibleRuns.find((run) => run.id === id);
     return (
       !!run &&
-      !run.sourceRevision &&
-      ['failed', 'cancelled', 'interrupted', 'refused', 'partial'].includes(run.status)
+      !!run.request.trim() &&
+      run.packageStart?.mode !== 'authored' &&
+      ['completed', 'failed', 'cancelled', 'interrupted', 'refused', 'partial'].includes(run.status)
     );
   }
   function activeRun() {
@@ -616,6 +621,7 @@ export function useStory() {
     // A newer draft is never silently sent after recovering that earlier request.
     const payload: RunPayload = previous?.payload ?? {
       request: retryRun?.request ?? draft,
+      ...(retryRun ? { retryOf: retryRun.id } : {}),
       ...((retryRun ? retryRun.snapshot.loreContextReset : loreResetDraft)
         ? { loreContextReset: true }
         : {}),
@@ -652,7 +658,9 @@ export function useStory() {
     setNotice('');
     let accepted = false;
     try {
-      const admitted = await api<Run>(`/chats/${chat.id}/runs`, { ...payload, idempotencyKey });
+      const admitted = payload.retryOf
+        ? await api<Run>(`/runs/${encodeURIComponent(payload.retryOf)}/retry`, { idempotencyKey })
+        : await api<Run>(`/chats/${chat.id}/runs`, { ...payload, idempotencyKey });
       track('accepted', admitted.id);
       accepted = true;
       clearCommand(commandKey, idempotencyKey);
@@ -673,6 +681,8 @@ export function useStory() {
               : '이전 요청의 수락을 확인했어요.'
             : ''
         );
+      if (payload.retryOf && admitted.snapshot.branchId && currentView.current === sentView)
+        chooseBranch(admitted.snapshot.branchId);
     } catch (error) {
       track(definiteRejection(error) ? 'failed' : 'uncertain');
       if (
@@ -749,29 +759,13 @@ export function useStory() {
     try {
       if (kind === 'combination') {
         const preset = library.promptCombinations?.find((c) => refValue(c) === value);
-        const prompt = profile.prompts?.main;
-        const currentPrompt = library.promptPresets?.find((p) => p.id === prompt?.id);
-        if (!preset || !prompt || preset.prompt.id !== prompt.id || !currentPrompt)
-          throw new Error('현재 프롬프트의 창작 프리셋을 선택해 주세요.');
-        const key = refValue(prompt);
-        await api(
-          `/chats/${chatId}/profile`,
-          {
-            expectedRevision: profile.revision,
-            attachments: profile.attachments,
-            personaReference: profile.personaReference,
-            routes: profile.routes,
-            image: profile.image,
-            promptControls: {
-              ...profile.promptControls,
-              [key]: {
-                values: reconcilePromptValues(currentPrompt.program, preset.values).values,
-                combinations: profile.promptControls?.[key]?.combinations ?? [],
-              },
-            },
-          },
-          'PUT'
-        );
+        if (!preset || preset.role !== 'main' || !promptWorkspace)
+          throw new Error('작문 옵션 프리셋을 선택해 주세요.');
+        await api('/prompt-workspace/apply-options', {
+          expectedRevision: promptWorkspace.revision,
+          role: 'main',
+          combinationId: preset.id,
+        });
       } else if (kind === 'module') {
         const epoch = navigationEpoch.current;
         let module = library.contents.find((item) => refValue(item) === value);
@@ -954,6 +948,7 @@ export function useStory() {
         }
       : undefined);
   return {
+    promptWorkspace,
     requestActivity,
     chats,
     selected,
