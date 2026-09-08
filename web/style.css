@@ -342,8 +342,30 @@ input[type="checkbox"] {
   gap: 9px;
 }
 .header-title {
+  position: relative;
   min-width: 0;
   flex: 1;
+}
+/* Compact widths: the whole title block opens the scene list. */
+.header-title-hit {
+  position: absolute;
+  inset: -4px -6px;
+  padding: 0;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  box-shadow: none;
+  min-height: 0;
+}
+.header-title-hit:hover,
+.header-title-hit:focus-visible {
+  background: var(--hover);
+}
+.header-title-caret {
+  display: inline-block;
+  vertical-align: -2px;
+  margin-left: 4px;
+  color: var(--muted);
 }
 .workspace-fallback-body {
   padding: 16px 24px;
@@ -369,6 +391,34 @@ input[type="checkbox"] {
   display: flex;
   gap: 1px;
   align-items: center;
+}
+/* Header model chip: the current main model is always visible and opens the model menu. */
+.model-chip {
+  display: inline-flex;
+  min-width: 0;
+  max-width: 220px;
+  margin-right: 6px;
+}
+.model-chip select {
+  width: 100%;
+  min-height: 36px;
+  padding: 4px 26px 4px 12px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background-color: var(--panel);
+  color: var(--text);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  cursor: pointer;
+}
+.model-chip select:hover:not(:disabled) {
+  border-color: var(--accent);
+}
+.chat-menu > .action-menu-body {
+  min-width: 240px;
+}
+.action-menu-body > .compact-only {
+  display: none;
 }
 .mobile-menu {
   display: none;
@@ -419,19 +469,12 @@ input[type="checkbox"] {
 }
 .request-message {
   max-width: 86%;
-  margin: 0 0 28px auto;
+  margin: 0 0 14px auto;
   padding: 14px 17px;
   background: var(--user);
   border: 1px solid var(--line);
   border-radius: 16px 16px 4px 16px;
   font-size: 14px;
-}
-.request-label,
-.request-message > small {
-  display: block;
-  color: var(--muted);
-  font-size: 11px;
-  margin-bottom: 6px;
 }
 .request-message p {
   margin: 0;
@@ -456,32 +499,53 @@ input[type="checkbox"] {
   scroll-margin-top: 24px;
 }
 .source + .source {
-  margin-top: 50px;
-  padding-top: 36px;
+  margin-top: 30px;
+  padding-top: 22px;
   border-top: 1px solid var(--line);
 }
-.source-heading {
+/* Scene header row: number, status glyph and badges on the left; the view toggle sits over
+   the right end of the row so it is never part of the activity summary. */
+.scene-header {
+  position: relative;
+  margin: 0 0 8px;
+  color: var(--muted);
+}
+.scene-header > .turn-activity {
+  margin: 0;
+}
+.scene-header > .turn-activity > summary,
+.scene-header-lead {
+  padding-right: 128px;
+}
+.scene-header-lead {
   display: flex;
-  flex-direction: column;
-  justify-content: center;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
   min-height: 44px;
-  margin-bottom: 22px;
+  min-width: 0;
+}
+.scene-header-tools {
+  position: absolute;
+  top: 0;
+  right: 0;
+  height: 44px;
+  display: flex;
+  align-items: center;
 }
 .folio {
   font-size: 13px;
   font-weight: 600;
+  color: var(--text);
 }
-.source-heading small {
+.scene-badge {
   font-size: 11px;
-}
-.reader-toolbar {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 10px;
-  min-height: 44px;
-  margin: -66px 0 26px auto;
-  max-width: 70%;
+  line-height: 1.4;
+  padding: 1px 7px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  color: var(--muted);
+  white-space: nowrap;
 }
 .segmented {
   display: flex;
@@ -503,6 +567,14 @@ input[type="checkbox"] {
 .segmented button[aria-pressed="true"] {
   background: var(--surface);
   color: var(--text);
+}
+.segmented.compact {
+  padding: 2px;
+  border-radius: 8px;
+}
+.segmented.compact button {
+  min-height: 34px;
+  padding: 3px 10px;
 }
 .prose {
   font-size: var(--reading);
@@ -621,17 +693,74 @@ input[type="checkbox"] {
 .has-error {
   color: var(--error);
 }
+/* Scene footer: one row of quiet actions, then rarely used disclosures on the right. */
 .source-actions {
+  position: relative;
   display: flex;
-  justify-content: flex-end;
-  margin-top: 18px;
-}
-.source-job-details {
-  font-size: 11px;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px;
+  margin-top: 4px;
   color: var(--muted);
 }
-.source-job-details > summary {
+.source-actions .scene-action,
+.source-actions > .action-menu > summary {
+  color: var(--faint);
+}
+.source-actions .scene-action:hover:not(:disabled),
+.source-actions > .action-menu > summary:hover {
+  color: var(--text);
+}
+.source-actions > .action-menu {
+  position: static;
+  margin-right: auto;
+}
+/* The scene menu sits at the left of the row, so its popover anchors to the row's left edge
+   and stays inside narrow viewports. */
+.source-actions > .action-menu > .action-menu-body {
+  right: auto;
+  left: 0;
+}
+.source-actions > .story-source-state {
+  display: contents;
+}
+.source-actions > details:not(.action-menu),
+.source-actions .story-source-state details {
+  font-size: 11px;
+  color: var(--faint);
+  border: 0;
+  margin: 0;
+  padding: 0;
+  min-width: 0;
+}
+.source-actions > details:not(.action-menu) > summary,
+.source-actions .story-source-state details > summary {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0 8px;
   width: fit-content;
+  cursor: pointer;
+}
+.source-actions > details[open]:not(.action-menu),
+.source-actions .story-source-state details[open] {
+  flex-basis: 100%;
+  color: var(--muted);
+  font-size: 12px;
+}
+.source-actions .story-source-state > p.error {
+  flex-basis: 100%;
+}
+.focus-reading .source-actions,
+.focus-reading .scene-header {
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+.focus-reading .source:hover .source-actions,
+.focus-reading .source:focus-within .source-actions,
+.focus-reading .source:hover .scene-header,
+.focus-reading .source:focus-within .scene-header {
+  opacity: 1;
 }
 .inline-asset {
   max-width: 400px;
@@ -660,24 +789,49 @@ input[type="checkbox"] {
   max-width: 828px;
   margin: 0 auto;
 }
+/* Composer: one row while the draft fits, then the text takes the full width and the
+   buttons move to a row below (see the grown state). */
 .composer {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-areas:
+    "chips chips chips"
+    "more text send";
+  align-items: end;
+  column-gap: 2px;
+  padding: 5px 6px 5px 4px;
   background: var(--panel);
   border: 1px solid var(--line);
   border-radius: 17px;
-  overflow: hidden;
+}
+.composer.grown {
+  grid-template-areas:
+    "chips chips chips"
+    "text text text"
+    "more . send";
+}
+.composer > .quick-controls {
+  grid-area: more;
+}
+.composer > .send-button {
+  grid-area: send;
 }
 .composer textarea {
+  grid-area: text;
   width: 100%;
-  padding: 16px 17px 6px;
+  padding: 11px 8px;
   border: 0;
   resize: none;
-  min-height: 60px;
+  min-height: 44px;
   max-height: 180px;
   border-radius: 0;
   background: transparent;
   font-size: 14px;
-  line-height: 1.7;
+  line-height: 1.6;
   display: block;
+}
+.composer.grown textarea {
+  padding: 12px 14px 8px;
 }
 .composer textarea:focus {
   outline: none;
@@ -688,19 +842,10 @@ input[type="checkbox"] {
 .composer textarea::placeholder {
   color: var(--faint);
 }
-.composer-bottom {
-  display: flex;
-  align-items: flex-end;
-  gap: 8px;
-  padding: 8px 12px 10px 13px;
-}
 .quick-controls {
   display: flex;
-  flex: 1;
   min-width: 0;
   align-items: center;
-  gap: 3px;
-  flex-wrap: wrap;
 }
 .quick-controls label {
   min-width: 0;
@@ -732,20 +877,40 @@ input[type="checkbox"] {
   border-radius: 12px;
   flex-shrink: 0;
 }
-.composer-caption {
-  display: flex;
-  justify-content: space-between;
-  gap: 12px;
-  margin: 5px 5px 0;
-  font-size: 10px;
-  color: var(--faint);
-}
-.composer-caption span {
-  min-width: 0;
+/* Notices only: the model lives in the header chip and the shortcut in the placeholder. */
+.composer-status {
+  margin: 5px 8px 0;
+  font-size: 11px;
+  color: var(--muted);
   overflow-wrap: anywhere;
 }
-.composer-caption span:last-child {
-  text-align: right;
+.composer-status:empty,
+.composer-status[hidden] {
+  display: none;
+}
+.fork-notice {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+  margin-bottom: 6px;
+}
+.link-button {
+  min-height: 32px;
+  padding: 0 4px;
+  border: 0;
+  background: transparent;
+  color: var(--accent);
+  font-size: 12px;
+  text-decoration: underline;
+  box-shadow: none;
+}
+.fork-notice-close {
+  width: 32px;
+  min-width: 32px;
+  height: 32px;
+  min-height: 32px;
+  color: var(--muted);
 }
 .composer-dock > .error {
   margin-bottom: 8px;
@@ -763,6 +928,73 @@ input[type="checkbox"] {
 }
 .run-outcome button {
   justify-self: start;
+}
+/* Running turn: three quiet placeholder lines where the prose will appear. */
+.turn-skeleton {
+  display: grid;
+  gap: 14px;
+  margin: 4px 0 8px;
+}
+.turn-skeleton > span {
+  display: block;
+  height: 14px;
+  border-radius: 7px;
+  background: linear-gradient(90deg, var(--surface) 25%, var(--hover) 50%, var(--surface) 75%);
+  background-size: 200% 100%;
+  animation: turn-shimmer 1.4s linear infinite;
+}
+.turn-skeleton > span:nth-child(1) {
+  width: 92%;
+}
+.turn-skeleton > span:nth-child(2) {
+  width: 80%;
+}
+.turn-skeleton > span:nth-child(3) {
+  width: 58%;
+}
+@keyframes turn-shimmer {
+  to {
+    background-position: -200% 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .turn-skeleton > span {
+    animation: none;
+  }
+}
+/* Failed turn: one card in the prose position with the next actions. */
+.turn-failure {
+  display: grid;
+  gap: 8px;
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--error);
+  border-radius: 10px;
+  background: var(--panel);
+  color: var(--text);
+}
+.turn-failure > strong {
+  font-size: 14px;
+}
+.turn-failure > p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.turn-failure-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.turn-failure-actions > button {
+  min-height: 40px;
+  font-size: 13px;
 }
 .empty-state {
   padding: 16vh 10px 32px;
@@ -782,10 +1014,25 @@ input[type="checkbox"] {
   margin: 6px;
 }
 .first-scene {
-  padding: 10vh 0 14vh;
+  min-height: 52vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  gap: 6px;
+  padding: 4vh 0;
+}
+.first-scene-avatar {
+  --content-avatar-size: 48px;
+  margin-bottom: 10px;
 }
 .first-scene h2 {
   font-size: 22px;
+  margin: 0;
+}
+.first-scene p {
+  margin: 0;
 }
 .destination-scroll {
   flex: 1;
@@ -910,16 +1157,6 @@ input[type="checkbox"] {
     padding-left: 18px;
     padding-right: 18px;
   }
-  .quick-controls label {
-    max-width: 45%;
-  }
-  .quick-model {
-    flex-basis: 100%;
-    max-width: 100%;
-  }
-  .composer-caption span:last-child {
-    display: none;
-  }
 }
 @media (max-width: 760px) {
   .app-shell {
@@ -943,15 +1180,27 @@ input[type="checkbox"] {
   .header-title small {
     font-size: 10px;
   }
-  .reading-button {
+  .focus-button {
     display: none;
+  }
+  .action-menu-body > .compact-only {
+    display: flex;
+  }
+  .model-chip {
+    max-width: 128px;
+    margin-right: 2px;
+  }
+  .model-chip select {
+    min-height: 44px;
+    font-size: 11px;
+    padding: 4px 22px 4px 10px;
   }
   .header-actions {
     gap: 0;
   }
   .header-actions .icon-button {
-    width: 42px;
-    min-width: 42px;
+    width: 44px;
+    min-width: 44px;
   }
   .reader {
     padding: 24px 20px 36px;
@@ -963,16 +1212,9 @@ input[type="checkbox"] {
   }
   .request-message {
     max-width: 94%;
-    padding: 14px 15px;
-    margin-bottom: 28px;
+    padding: 12px 14px;
+    margin-bottom: 10px;
     font-size: 13px;
-  }
-  .reader-toolbar {
-    max-width: 72%;
-    margin-bottom: 23px;
-  }
-  .source-heading {
-    margin-bottom: 22px;
   }
   .prose {
     font-size: var(--reading);
@@ -984,36 +1226,24 @@ input[type="checkbox"] {
   .composer-dock {
     padding: 8px 11px max(7px, env(safe-area-inset-bottom));
   }
+  .composer {
+    padding: 3px 4px 3px 2px;
+  }
   .composer textarea {
-    padding: 13px 14px 4px;
+    padding: 10px 6px;
     font-size: 15px;
-    min-height: 54px;
+    min-height: 44px;
   }
-  .composer-bottom {
-    padding: 6px 10px 9px 10px;
-    gap: 4px;
+  .composer.grown textarea {
+    padding: 11px 12px 6px;
   }
-  .quick-controls {
-    gap: 0;
-  }
-  .quick-controls label {
-    max-width: 50%;
-  }
-  .quick-controls select {
+  .composer-status {
     font-size: 10px;
-    min-height: 38px;
-    padding: 5px 15px 5px 4px;
-  }
-  .composer-caption {
-    font-size: 9px;
     margin-top: 4px;
   }
-  .composer-caption span:last-child {
-    display: none;
-  }
   .source + .source {
-    margin-top: 34px;
-    padding-top: 30px;
+    margin-top: 22px;
+    padding-top: 16px;
   }
   .app-dialog,
   .app-dialog.wide {

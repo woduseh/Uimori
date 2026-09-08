@@ -706,6 +706,12 @@ export function useStory() {
   }
   const forkLocks = useRef(new Set<string>());
   const [forking, setForking] = useState<string[]>([]);
+  // The chat a fork was copied from, shown until the reader leaves the new chat or dismisses it.
+  const [forkOrigin, setForkOrigin] = useState<{
+    id: string;
+    title: string;
+    forkId: string;
+  } | null>(null);
   async function fork(sourceId: string) {
     const chatId = selected;
     const epoch = navigationEpoch.current;
@@ -725,7 +731,14 @@ export function useStory() {
       });
       if (sessionStorage.getItem(key) === idempotencyKey) sessionStorage.removeItem(key);
       setChats((current) => [next, ...current.filter((chat) => chat.id !== next.id)]);
-      if (current.current === chatId && navigationEpoch.current === epoch) select(next.id);
+      if (current.current === chatId && navigationEpoch.current === epoch) {
+        setForkOrigin({
+          id: chatId,
+          title: chats.find((chat) => chat.id === chatId)?.title ?? '원본 채팅',
+          forkId: next.id,
+        });
+        select(next.id);
+      }
     } catch (error) {
       if (definiteRejection(error) && sessionStorage.getItem(key) === idempotencyKey)
         sessionStorage.removeItem(key);
@@ -982,6 +995,8 @@ export function useStory() {
     pendingRequest,
     loreContextReset,
     forking,
+    forkOrigin,
+    dismissForkOrigin: () => setForkOrigin(null),
     setError,
     setNotice,
     setProfileDirty,

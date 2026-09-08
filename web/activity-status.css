@@ -44,6 +44,8 @@
 .activity-details {
   flex-shrink: 0;
   margin-left: auto;
+  min-width: 44px;
+  justify-content: center;
 }
 .activity-issue {
   color: var(--error);

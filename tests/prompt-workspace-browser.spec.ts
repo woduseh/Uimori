@@ -71,6 +71,35 @@ test('PWS02 translation policy and prompt options save in the independent worksp
   ).toBeVisible();
   const workspace = await (await request.get('/api/prompt-workspace')).json();
   expect(workspace.translationPolicy).toMatchObject({ maxRetries: 2, maxCalls: 12 });
+  // Switching to either a new or stored library preset must protect the current workspace draft.
+  const created = await request.post('/api/prompt-presets', {
+    data: {
+      title: `PWS draft guard ${crypto.randomUUID()}`,
+      role: 'translation',
+      program: workspace.translation.program,
+    },
+  });
+  expect(created.ok()).toBe(true);
+  const preset = await created.json();
+  await page.reload();
+  await navigationAction(page, '프롬프트');
+  await page.getByText('현재 작문·번역 프롬프트 설정', { exact: true }).click();
+  await editor.getByLabel('현재 프롬프트 역할').selectOption('translation');
+  await editor.getByLabel('번역 전체 호출 한도').fill('13');
+  const library = page.getByTestId('prompt-library');
+  const guard = page.getByRole('alertdialog', { name: '미저장 프롬프트 확인', exact: true });
+  await library.getByRole('button', { name: '새 프롬프트', exact: true }).first().click();
+  await expect(guard).toBeVisible();
+  await guard.getByRole('button', { name: '계속 편집', exact: true }).click();
+  await expect(editor.getByLabel('번역 전체 호출 한도')).toHaveValue('13');
+  await library.getByRole('button', { name: `${preset.title} 프롬프트 편집`, exact: true }).click();
+  await expect(guard).toBeVisible();
+  await guard.getByRole('button', { name: '초안 버리고 이동', exact: true }).click();
+  await expect(
+    page.getByTestId('prompt-editor').getByLabel('프롬프트 이름', { exact: true })
+  ).toHaveValue(preset.title);
+  expect(await (await request.get('/api/prompt-workspace')).json()).toEqual(workspace);
+
   if (visualReview)
     await page.screenshot({ path: info.outputPath('prompt-workspace-translation.png') });
 });

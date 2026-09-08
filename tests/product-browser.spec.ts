@@ -154,7 +154,6 @@ test('P01 packages use latest settings and prompt-owned creative choices replace
     '상태와 기억',
     '이미지',
     '자동 후속 작업',
-    '읽기 설정',
   ]);
   await selectChatSettingsSection(page, '봇·페르소나·모듈');
   await selectContent(page, '추가할 패키지', added.title);
@@ -163,6 +162,7 @@ test('P01 packages use latest settings and prompt-owned creative choices replace
   await expect
     .poll(async () => (await getDetail(request, chat.id)).profile?.packageAttachments)
     .toEqual([owner, { id: added.id, revision: 1, role: 'module' }]);
+  await expect(profile.getByRole('status')).toContainText('채팅 설정을 저장했어요.');
   const library = await openDetails(page, 'library-panel');
   await library.getByRole('tab', { name: '모듈', exact: true }).click();
   await editLibraryContent(page, `Mira ${unique}`);
@@ -186,6 +186,9 @@ test('P01 packages use latest settings and prompt-owned creative choices replace
     await expect
       .poll(async () => (await (await request.get('/api/prompt-workspace')).json()).main.values)
       .toEqual(combination.values);
+    await expect(
+      editor.getByText('현재 프롬프트와 옵션을 저장했어요.', { exact: true })
+    ).toBeVisible();
   }
   await expect(
     composer.getByRole('checkbox', { name: '합성 공동 서술', exact: true })
@@ -400,6 +403,10 @@ test('P09 P10 P13 fork from a completed scene preserves long prose and annotatio
   await page.getByLabel('보조 이미지 표시', { exact: true }).check();
   await page.getByRole('button', { name: '채팅 설정 저장', exact: true }).click();
   await expect.poll(async () => (await getDetail(request, chat.id)).profile?.revision).toBe(2);
+  // Close only after the panel has acknowledged the write; an in-flight save is still protected.
+  await expect(page.getByTestId('profile-editor').getByRole('status')).toContainText(
+    '채팅 설정을 저장했어요.'
+  );
   const first = await send(
     page,
     'SYNTHETIC_FORK: Mira waits at the pier.\n\n' +

@@ -2,14 +2,13 @@ import { Dialog } from './Dialog.js';
 import { useChatActivities } from './useChatActivities.js';
 import type { DragEvent } from 'react';
 import { DeleteButton } from './DeleteButton.js';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import {
-  ArrowLeft,
+  ChevronDown,
   ChevronRight,
   MoreHorizontal,
   LoaderCircle,
   FolderPlus,
-  Clock3,
   Folder,
   Plus,
   Search,
@@ -57,8 +56,28 @@ export function BotNavigation(props: Props) {
     onTasks,
     tasks,
   } = props;
-  const [botId, setBotId] = useState('');
+  // Start on the selected chat's bot so the first paint never shows the bot list briefly;
+  // the effect below keeps the choice in sync afterwards.
+  const [botId, setBotId] = useState(() =>
+    selected && destination === 'story'
+      ? (chats.find((chat) => chat.id === selected)?.botId ?? '')
+      : ''
+  );
   const [query, setQuery] = useState('');
+  // Bot switch row: one popover replaces the bot list screen, the back button and the count.
+  const [switching, setSwitching] = useState(false);
+  const [botQuery, setBotQuery] = useState('');
+  const switchRoot = useRef<HTMLDivElement>(null);
+  const switchButton = useRef<HTMLButtonElement>(null);
+  const switchId = useId();
+  useEffect(() => {
+    if (!switching) return;
+    const outside = (event: PointerEvent) => {
+      if (!switchRoot.current?.contains(event.target as Node)) setSwitching(false);
+    };
+    document.addEventListener('pointerdown', outside);
+    return () => document.removeEventListener('pointerdown', outside);
+  }, [switching]);
   const [folders, setFolders] = useState<ChatFolder[]>([]);
   const [loading, setLoading] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -104,6 +123,19 @@ export function BotNavigation(props: Props) {
     [library, ownerIds]
   );
   const bot = bots.find((content) => content.id === botId);
+  // Most recently active bot first, then by title.
+  const recentBots = useMemo(() => {
+    const latest = new Map<string, string>();
+    for (const chat of chats) {
+      const at = chat.lastActivityAt ?? '';
+      if (at > (latest.get(chat.botId) ?? '')) latest.set(chat.botId, at);
+    }
+    return [...bots].sort(
+      (a, b) =>
+        (latest.get(b.id) ?? '').localeCompare(latest.get(a.id) ?? '') ||
+        a.title.localeCompare(b.title)
+    );
+  }, [bots, chats]);
   const scoped = chats
     .filter((chat) => chat.botId === botId)
     .sort((a, b) => (a.sortPosition ?? 0) - (b.sortPosition ?? 0));
@@ -345,6 +377,18 @@ export function BotNavigation(props: Props) {
     const count = scoped
       .filter((chat) => (chat.folderId ?? null) === id)
       .reduce((sum, chat) => sum + (activity(chat)?.count ?? 0), 0);
+    if (!folder)
+      return (
+        <section
+          className={`bot-folder bot-folder-unfiled ${dropTarget?.folderId === null && dropTarget.beforeId === null ? 'drop-folder' : ''}`}
+          key=""
+          data-folder-id=""
+          onDragOver={(event) => over(event, null, null)}
+          onDrop={(event) => drop(event, null, null)}
+        >
+          {chatList(null)}
+        </section>
+      );
     return (
       <section
         className={`bot-folder ${dropTarget?.folderId === id && dropTarget.beforeId === null ? 'drop-folder' : ''}`}
@@ -419,120 +463,149 @@ export function BotNavigation(props: Props) {
       }}
     >
       <div className="brand">Uimori</div>
-      <nav className="bot-library-nav" aria-label="자료 탐색">
-        {navigation.map(([tab, label, Icon]) => (
-          <button type="button" className="nav-button" key={tab} onClick={() => onLibrary(tab)}>
-            <Icon size={17} />
-            {label}
-          </button>
-        ))}
-      </nav>
-      <div className="bot-navigation-scroll">
-        {!botId ? (
-          <>
-            <div className="bot-list-heading">
-              <h2>나의 봇</h2>
-              <button
-                className="icon-button"
-                aria-label="봇 만들기"
-                onClick={() => onLibrary('bot')}
-              >
-                <Plus size={18} />
-              </button>
-            </div>
+      {bot && (
+        <button
+          className="new-story-button secondary"
+          disabled={busy}
+          onClick={() => {
+            void start();
+          }}
+        >
+          <Plus size={17} />새 채팅
+        </button>
+      )}
+      <label className="story-search">
+        <Search size={16} />
+        <input
+          aria-label="채팅 검색"
+          placeholder={bot ? '이 봇의 채팅 검색' : '채팅 검색'}
+          value={query}
+          onChange={(event) => setQuery(event.target.value)}
+        />
+      </label>
+      <div
+        className="bot-switch"
+        ref={switchRoot}
+        onBlur={(event) => {
+          if (!event.currentTarget.contains(event.relatedTarget)) setSwitching(false);
+        }}
+        onKeyDown={(event) => {
+          if (event.key === 'Escape' && switching) {
+            event.preventDefault();
+            event.stopPropagation();
+            setSwitching(false);
+            switchButton.current?.focus();
+          }
+        }}
+      >
+        <button
+          ref={switchButton}
+          type="button"
+          className="bot-switch-button"
+          aria-label="봇 목록"
+          title={bot ? `${bot.title} · 다른 봇으로 전환` : '봇 선택'}
+          aria-expanded={switching}
+          aria-controls={switchId}
+          onClick={() => {
+            setBotQuery('');
+            setSwitching((value) => !value);
+          }}
+        >
+          {bot ? (
+            <ContentAvatar content={bot} className="bot-choice-avatar" />
+          ) : (
+            <span className="bot-choice-avatar" aria-hidden="true">
+              ?
+            </span>
+          )}
+          <strong>{bot?.title ?? '봇 선택'}</strong>
+          <ChevronDown size={16} aria-hidden="true" />
+        </button>
+        {switching && (
+          <div id={switchId} className="bot-switch-panel" role="group" aria-label="봇 목록">
             <label className="story-search">
               <Search size={16} />
               <input
                 aria-label="봇 검색"
                 placeholder="봇 검색"
-                value={query}
-                onChange={(event) => setQuery(event.target.value)}
+                value={botQuery}
+                onChange={(event) => setBotQuery(event.target.value)}
               />
             </label>
             {!library ? (
               <p role="status">봇을 불러오는 중이에요…</p>
             ) : (
               <nav aria-label="봇별 채팅">
-                {bots
+                {recentBots
                   .filter((content) =>
-                    content.title.toLocaleLowerCase().includes(query.toLocaleLowerCase())
+                    content.title.toLocaleLowerCase().includes(botQuery.toLocaleLowerCase())
                   )
                   .map((content) => (
                     <button
                       className="bot-choice"
                       key={content.id}
-                      onClick={() => chooseBot(content.id)}
+                      aria-current={content.id === botId ? 'true' : undefined}
+                      onClick={() => {
+                        chooseBot(content.id);
+                        setSwitching(false);
+                      }}
                     >
                       <ContentAvatar content={content} className="bot-choice-avatar" />
                       <span>
                         <strong>{content.title}</strong>
-                        <small>
-                          채팅 {chats.filter((chat) => chat.botId === content.id).length}개
-                        </small>
                       </span>
                     </button>
                   ))}
                 {!bots.length && (
                   <div className="bot-navigation-empty">
                     <p>첫 봇을 준비해 보세요.</p>
-                    <button className="secondary" onClick={() => onLibrary('bot')}>
-                      봇 만들기
-                    </button>
                   </div>
                 )}
               </nav>
             )}
-          </>
-        ) : (
-          <>
-            <button className="bot-back secondary" onClick={() => chooseBot('')}>
-              <ArrowLeft size={16} />봇 목록
-            </button>
-            <div className="bot-owner-heading">
-              <ContentAvatar content={bot} />
-              <h2>{bot?.title ?? '봇'}</h2>
-              <small>채팅 {scoped.length}개</small>
-            </div>
-            {bot && (
+            <div className="bot-switch-tools">
+              {bot && (
+                <button
+                  type="button"
+                  className="secondary"
+                  disabled={busy}
+                  onClick={() => {
+                    setSwitching(false);
+                    setCreating(true);
+                  }}
+                >
+                  <FolderPlus size={16} aria-hidden="true" />새 폴더
+                </button>
+              )}
               <button
-                className="new-story-button secondary"
-                disabled={busy}
+                type="button"
+                className="secondary"
                 onClick={() => {
-                  void start();
+                  setSwitching(false);
+                  onLibrary('bot');
                 }}
               >
-                <Plus size={17} />새 채팅
-              </button>
-            )}
-            <label className="story-search">
-              <Search size={16} />
-              <input
-                aria-label="채팅 검색"
-                placeholder="이 봇의 채팅 검색"
-                value={query}
-                onChange={(event) => setQuery(event.target.value)}
-              />
-            </label>
-            <div className="bot-folders-toolbar">
-              <span>채팅 폴더</span>
-              <button
-                className="icon-button"
-                aria-label="폴더 만들기"
-                title="폴더 만들기"
-                onClick={() => setCreating(true)}
-              >
-                <FolderPlus size={16} />
+                <LibraryIcon size={16} aria-hidden="true" />
+                서재에서 관리
               </button>
             </div>
-            {loading ? (
-              <p role="status">폴더를 불러오는 중이에요…</p>
-            ) : (
-              <nav aria-label="봇의 채팅 목록">
-                {folderSection(null)}
-                {folders.map((folder) => folderSection(folder))}
-              </nav>
-            )}
-          </>
+          </div>
+        )}
+      </div>
+      <div className="bot-navigation-scroll">
+        {!bot ? (
+          <p className="bot-navigation-empty">
+            {library && !bots.length
+              ? '서재에서 첫 봇을 만들어 주세요.'
+              : '봇을 선택하면 채팅 목록이 여기에 보여요.'}
+          </p>
+        ) : loading ? (
+          <p role="status">폴더를 불러오는 중이에요…</p>
+        ) : (
+          <nav aria-label="봇의 채팅 목록">
+            {folderSection(null)}
+            {folders.map((folder) => folderSection(folder))}
+          </nav>
         )}
         {error && (
           <p className="error" role="alert">
@@ -632,6 +705,17 @@ export function BotNavigation(props: Props) {
                 ))}
               </select>
             </label>
+            <button
+              type="button"
+              className="secondary"
+              disabled={busy}
+              onClick={() => {
+                setMenuId(null);
+                setCreating(true);
+              }}
+            >
+              <FolderPlus size={16} aria-hidden="true" />새 폴더 만들기
+            </button>
             <div className="form-actions">
               <button
                 className="secondary"
@@ -669,10 +753,20 @@ export function BotNavigation(props: Props) {
         )}
       </Dialog>
       <div className="nav-bottom">
-        <button className="nav-button" aria-label="작업 현황" onClick={onTasks}>
-          <Clock3 size={19} />
-          작업 현황{tasks > 0 && <span className="count">{tasks}</span>}
-        </button>
+        {tasks > 0 && (
+          <button className="nav-button nav-progress" aria-label="작업 현황" onClick={onTasks}>
+            <LoaderCircle size={17} aria-hidden="true" />
+            진행 중 {tasks}
+          </button>
+        )}
+        <nav className="bot-library-nav" aria-label="자료 탐색">
+          {navigation.map(([tab, label, Icon]) => (
+            <button type="button" className="nav-button" key={tab} onClick={() => onLibrary(tab)}>
+              <Icon size={17} />
+              {label}
+            </button>
+          ))}
+        </nav>
         <button className="nav-button" onClick={onSettings}>
           <SettingsIcon size={19} aria-hidden="true" />
           설정

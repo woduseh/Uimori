@@ -536,11 +536,16 @@
 .library-card > .delete-control > .delete-button:hover {
   color: var(--danger, #e88b8b);
 }
+/* Tool row: folder chooser, search, list options. */
 .library-toolbar {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
   gap: 8px;
+}
+.library-toolbar > .library-search-field {
+  flex: 1;
+  min-width: 160px;
 }
 .library-toolbar > label {
   min-width: 0;
@@ -622,11 +627,30 @@
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 10px 12px;
+  min-height: 64px;
+  padding: 8px 8px 8px 12px;
   border: 1px solid var(--border);
   border-radius: 12px;
   background: var(--surface-raised, #232923);
   min-width: 0;
+}
+/* Row actions stay quiet until the row is hovered or focused; touch shows them fully. */
+.library-list-item > .library-start-chat,
+.library-list-item > .library-item-menu {
+  opacity: 0.45;
+  transition: opacity 0.12s;
+}
+.library-list-item:hover > .library-start-chat,
+.library-list-item:hover > .library-item-menu,
+.library-list-item:focus-within > .library-start-chat,
+.library-list-item:focus-within > .library-item-menu {
+  opacity: 1;
+}
+@media (hover: none), (pointer: coarse) {
+  .library-list-item > .library-start-chat,
+  .library-list-item > .library-item-menu {
+    opacity: 1;
+  }
 }
 .library-open-content {
   display: flex;
@@ -737,9 +761,39 @@
   gap: 24px;
 }
 .library-preview-avatar {
-  --content-avatar-size: 144px;
-  border-radius: 18px;
-  font-size: 48px;
+  --content-avatar-size: 72px;
+  border-radius: 14px;
+  font-size: 28px;
+}
+.library-detail-title {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+.library-detail-title h2 {
+  font-size: 16px;
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.library-detail-title small {
+  color: var(--muted);
+  font-size: 12px;
+}
+.library-preview-heading h2 {
+  font-size: 22px;
+  margin: 0 0 6px;
+  overflow-wrap: anywhere;
+}
+.library-preview-heading p {
+  margin: 0;
+  color: var(--muted);
+}
+.library-preview-counts {
+  font-size: 13px;
+  margin: 0 0 8px;
 }
 .library-preview-heading > div {
   min-width: 0;
@@ -763,8 +817,14 @@
 .library-use-actions {
   display: flex;
   flex-wrap: wrap;
+  align-items: center;
   gap: 8px;
-  margin: 24px 0 12px;
+  margin: 20px 0 12px;
+}
+.library-use-actions > button:first-child {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
 }
 .library-preview > .muted {
   font-size: 12px;
@@ -928,18 +988,6 @@
   font-size: 13px;
   line-height: 1.7;
 }
-.library-use-actions > button:has(small) {
-  display: grid;
-  text-align: left;
-  gap: 5px;
-  flex: 1 1 180px;
-  padding: 12px;
-}
-.library-use-actions small {
-  font-size: 12px;
-  font-weight: 400;
-  line-height: 1.6;
-}
 .library-savebar {
   align-items: center;
 }
@@ -976,11 +1024,22 @@
   .library-page .library-workspace {
     gap: 8px;
   }
+  /* Compact widths: the folder chooser takes the first row, search and list options the next. */
   .library-page .library-toolbar {
-    flex-wrap: nowrap;
+    flex-wrap: wrap;
+  }
+  .library-page .library-toolbar > .library-folders {
+    flex: 1 1 100%;
+  }
+  .library-page .library-toolbar > .library-folders .library-folder-mobile {
+    flex: 1;
+  }
+  .library-page .library-toolbar > .library-folders select {
+    max-width: none;
   }
   .library-page .library-toolbar .library-search-field {
-    flex-basis: 0;
+    flex: 1 1 0;
+    min-width: 0;
   }
   .library-page .library-list-item {
     flex-wrap: nowrap;

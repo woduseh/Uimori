@@ -35,11 +35,11 @@ test('failed request edit, draft protection and uncertain retry reuse one admiss
     )
     .toBe('failed');
   await page.goto(`/?chat=${chat.id}`);
-  await page
-    .getByTestId('pending-run')
-    .getByTestId('turn-activity')
-    .locator(':scope > summary')
-    .click();
+  const failureCard = page.getByRole('group', { name: '실패한 요청', exact: true });
+  await expect(failureCard).toBeVisible();
+  await expect(page.getByTestId('pending-run').getByTestId('turn-activity')).not.toHaveAttribute(
+    'open'
+  );
   const edit = page.getByRole('button', { name: '요청 다시 편집' });
   const retry = page.getByRole('button', { name: '현재 설정으로 재시도' });
   const input = page.getByRole('textbox', { name: '다음 장면 요청' });

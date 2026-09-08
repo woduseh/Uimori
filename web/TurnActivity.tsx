@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { Check, CircleHelp, LoaderCircle, TriangleAlert } from 'lucide-react';
 import type { Job, ReaderActivity, ReaderRun, Source } from '../core/types.js';
 import type { StoryJob } from '../core/story.js';
 import { RunTaskDetails } from './RunTaskDetails.js';
@@ -30,6 +31,10 @@ type Props = {
   refresh: () => Promise<void>;
   onError: (message: string) => void;
   children?: ReactNode;
+  /** Scene number and badges rendered before the status glyph. */
+  leading?: ReactNode;
+  /** Badges shown after the status glyph, such as a manual-translation marker. */
+  badges?: ReactNode;
 };
 
 export function TurnActivity(props: Props) {
@@ -47,6 +52,8 @@ function TurnActivityContent({
   refresh,
   onError,
   children,
+  leading,
+  badges,
 }: Props) {
   const storageKey = `turn-activity:${run.chatId}:${run.id}`;
   const [open, setOpen] = useState(() => {
@@ -115,6 +122,27 @@ function TurnActivityContent({
   const elapsed = connected && running && timing ? elapsedLabel(timing.startedAt, now) : '';
   const uncertain = !connected && running;
   const hasIssue = attention(run.status) || entries.some((item) => attention(item.status));
+  const tone = uncertain ? 'uncertain' : hasIssue ? 'issue' : running ? 'running' : 'done';
+  const Glyph =
+    tone === 'uncertain'
+      ? CircleHelp
+      : tone === 'issue'
+        ? TriangleAlert
+        : tone === 'running'
+          ? LoaderCircle
+          : Check;
+  // A finished response shows only the check; its text stays for assistive technology.
+  const quiet = tone === 'done' && !!source;
+  const text = uncertain ? '연결 확인 중 · 진행 상태 미확인' : summary;
+  const persist = (next: boolean) => {
+    setOpen(next);
+    if (next) setVisited(true);
+    try {
+      sessionStorage.setItem(storageKey, next ? 'open' : 'closed');
+    } catch {
+      /* Current view still works. */
+    }
+  };
   return (
     <details
       className={`turn-activity${hasIssue ? ' turn-activity-issue' : ''}`}
@@ -124,19 +152,29 @@ function TurnActivityContent({
       onToggle={(event) => {
         // Nested diagnostic disclosures must not change this response's state.
         if (event.target !== event.currentTarget) return;
-        const next = event.currentTarget.open;
-        setOpen(next);
-        if (next) setVisited(true);
-        try {
-          sessionStorage.setItem(storageKey, next ? 'open' : 'closed');
-        } catch {
-          /* Current view still works. */
-        }
+        persist(event.currentTarget.open);
       }}
     >
-      <summary>
-        <span>작업 현황 · {uncertain ? '연결 확인 중 · 진행 상태 미확인' : summary}</span>
-        {elapsed && <small>{elapsed}</small>}
+      <summary
+        onClick={(event) => {
+          // Toggle through React state instead of the native activation: the browser fires
+          // toggle asynchronously, so a reload right after closing would otherwise bring the
+          // panel back, and React's controlled attribute would double-toggle the native change.
+          event.preventDefault();
+          persist(!open);
+        }}
+      >
+        <span className="turn-activity-lead">
+          {leading}
+          <span className={`turn-status turn-status-${tone}`} aria-hidden="true">
+            <Glyph size={15} />
+          </span>
+          <span className={quiet ? 'sr-only' : 'turn-activity-text'}>
+            {quiet ? `작업 현황 · ${text}` : text}
+          </span>
+          {elapsed && <small>{elapsed}</small>}
+          {badges}
+        </span>
       </summary>
       {visited && (
         <div className="turn-activity-body">

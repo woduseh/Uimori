@@ -2,7 +2,7 @@ import { reviewWidths, visualReview } from './fixtures/visual-review.js';
 import { expect, test, type APIRequestContext, type Locator, type Page } from '@playwright/test';
 import type { Chat, ChatDetail } from '../core/types.js';
 import { postFixtureChat } from './fixtures/chat.js';
-import { selectChatSettingsSection } from './ui-navigation.js';
+import { openChatMenu, selectChatSettingsSection } from './ui-navigation.js';
 
 const sections = [
   '봇·페르소나·모듈',
@@ -11,7 +11,6 @@ const sections = [
   '상태와 기억',
   '이미지',
   '자동 후속 작업',
-  '읽기 설정',
 ];
 
 async function prepare(page: Page, request: APIRequestContext, title: string) {
@@ -238,24 +237,16 @@ test('CSUI03 keyboard navigation and clean browser Back keep immediate reading p
   await expect(prompts).toBeFocused();
   await expect(prompts).toHaveAttribute('aria-selected', 'true');
   await prompts.press('End');
-  const reading = nav.getByRole('tab', { name: '읽기 설정', exact: true });
-  await expect(reading).toBeFocused();
+  const last = nav.getByRole('tab', { name: sections[sections.length - 1], exact: true });
+  await expect(last).toBeFocused();
   await expect(nav.locator('[tabindex="0"]')).toHaveCount(1);
-  await dialog.getByLabel('새 원고의 기본 보기', { exact: true }).selectOption('original');
-  await dialog.getByLabel('본문 글꼴', { exact: true }).selectOption('serif');
-  await dialog.getByLabel('화면 테마', { exact: true }).selectOption('dark');
-  await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
-  await expect
-    .poll(() =>
-      page.evaluate(() =>
-        ['reading-language', 'font', 'theme'].map((key) => localStorage.getItem(`uimori:${key}`))
-      )
-    )
-    .toEqual(['original', 'serif', 'dark']);
-  await reading.focus();
+  // Reading settings are no longer a chat settings section; the last section keeps its panel.
+  await expect(dialog.getByLabel('새 원고의 기본 보기', { exact: true })).toHaveCount(0);
+  await expect(dialog.getByLabel('장면 상태 자동 실행', { exact: true })).toBeVisible();
+  await last.focus();
   await page.setViewportSize({ width: 390, height: 844 });
   await expect(dialog.getByRole('tabpanel')).toBeFocused();
-  await expect(dialog.getByLabel('화면 테마', { exact: true })).toHaveValue('dark');
+  await expect(dialog.getByLabel('장면 상태 자동 실행', { exact: true })).toBeVisible();
   await page.evaluate(() => history.back());
   await expect(
     dialog.getByRole('navigation', { name: '채팅 설정 분류', exact: true })
@@ -264,12 +255,30 @@ test('CSUI03 keyboard navigation and clean browser Back keep immediate reading p
   await expect(dialog).toBeHidden();
   await expect(page.getByRole('alertdialog')).toHaveCount(0);
   await openSettings(page);
-  await selectChatSettingsSection(page, '읽기 설정');
-  await expect(dialog.getByLabel('새 원고의 기본 보기', { exact: true })).toHaveValue('original');
-  await expect(dialog.getByLabel('본문 글꼴', { exact: true })).toHaveValue('serif');
-  await expect(dialog.getByLabel('화면 테마', { exact: true })).toHaveValue('dark');
   await page.keyboard.press('Escape');
   await expect(dialog).toBeHidden();
   await expect(page.getByRole('button', { name: '채팅 설정', exact: true })).toBeFocused();
+  // Reading settings: the dialog from the chat ⋯ menu keeps view and font; the theme is in 설정 → 일반 only.
+  await openChatMenu(page);
+  await page.getByRole('button', { name: '읽기 설정', exact: true }).click();
+  const reading = page.getByRole('dialog', { name: '읽기 설정', exact: true });
+  await reading.getByLabel('새 원고의 기본 보기', { exact: true }).selectOption('original');
+  await reading.getByLabel('본문 글꼴', { exact: true }).selectOption('serif');
+  await expect(reading.getByLabel('화면 테마', { exact: true })).toHaveCount(0);
+  await expect
+    .poll(() =>
+      page.evaluate(() =>
+        ['reading-language', 'font'].map((key) => localStorage.getItem(`uimori:${key}`))
+      )
+    )
+    .toEqual(['original', 'serif']);
+  await page.keyboard.press('Escape');
+  await expect(reading).toBeHidden();
+  await openChatMenu(page);
+  await page.getByRole('button', { name: '읽기 설정', exact: true }).click();
+  await expect(reading.getByLabel('새 원고의 기본 보기', { exact: true })).toHaveValue('original');
+  await expect(reading.getByLabel('본문 글꼴', { exact: true })).toHaveValue('serif');
+  await page.keyboard.press('Escape');
+  await expect(reading).toBeHidden();
   await expectUnchanged(request, before, writes, errors);
 });

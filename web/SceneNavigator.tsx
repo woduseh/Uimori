@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type RefObject } from 'react';
-import { ArrowDownToLine, List } from 'lucide-react';
+import { ArrowDown, List } from 'lucide-react';
 import type { ReaderDetail } from '../core/types.js';
 import { Dialog } from './Dialog.js';
 import './scene-navigator.css';
@@ -9,15 +9,28 @@ export function SceneNavigator({
   reader,
   target,
   onSelect,
+  compact = false,
+  listOpen = false,
+  onListOpenChange,
 }: {
   detail: ReaderDetail;
   reader: RefObject<HTMLDivElement | null>;
   target: string;
   onSelect: (id: string) => void;
+  /** Compact widths have no rail: the header title opens the list and a floating button jumps to the latest scene. */
+  compact?: boolean;
+  /** Controlled list state on compact widths (the header owns the opener). */
+  listOpen?: boolean;
+  onListOpenChange?: (open: boolean) => void;
 }) {
   const entries = detail.reader.navigation;
   const [current, setCurrent] = useState(target || detail.reader.order[0] || '');
-  const [open, setOpen] = useState(false);
+  const [ownOpen, setOwnOpen] = useState(false);
+  const open = compact ? listOpen : ownOpen;
+  const setOpen = (next: boolean) => {
+    if (compact) onListOpenChange?.(next);
+    else setOwnOpen(next);
+  };
   const [query, setQuery] = useState('');
   const [offset, setOffset] = useState(0);
   const [capacity, setCapacity] = useState(20);
@@ -73,6 +86,18 @@ export function SceneNavigator({
     0,
     entries.findIndex((entry) => entry.id === current)
   );
+  function openList() {
+    setQuery('');
+    setOffset(Math.floor(index / 60) * 60);
+    setOpen(true);
+  }
+  // biome-ignore lint/correctness/useExhaustiveDependencies: The header opener only signals; the list starts from the scene being read at that moment.
+  useEffect(() => {
+    if (compact && listOpen) {
+      setQuery('');
+      setOffset(Math.floor(index / 60) * 60);
+    }
+  }, [compact, listOpen]);
   const active = entries[index];
   const last = entries.at(-1);
   const count = Math.min(capacity, entries.length);
@@ -98,6 +123,82 @@ export function SceneNavigator({
     setOffset(next);
   }
   if (!entries.length) return null;
+  const dialog = (
+    <Dialog open={open} title="장면 목록" onClose={() => setOpen(false)} className="scene-dialog">
+      <label className="scene-search">
+        장면 번호 또는 요청으로 찾기
+        <input
+          type="search"
+          value={query}
+          onChange={(event) => {
+            setQuery(event.target.value);
+            setOffset(0);
+          }}
+        />
+      </label>
+      <p className="muted">
+        현재 분기 · {entries.length}개 장면
+        {!compact && entries.length > capacity ? ' · 눈금에는 일부 장면을 표시해요.' : ''}
+      </p>
+      <ol className="scene-list" start={offset + 1} ref={list}>
+        {page.map((entry) => (
+          <li key={entry.id}>
+            <button
+              type="button"
+              aria-current={entry.id === active.id ? 'location' : undefined}
+              aria-label={`${entry.number}번째 장면 · ${entry.label}`}
+              onClick={() => select(entry.id)}
+            >
+              <span>{entry.number}</span>
+              <span>{entry.label}</span>
+              {entry.id === active.id && <small>읽는 중</small>}
+            </button>
+          </li>
+        ))}
+      </ol>
+      {!filtered.length && <p role="status">일치하는 장면이 없어요.</p>}
+      {filtered.length > 60 && (
+        <div className="scene-list-pages">
+          <button
+            type="button"
+            className="secondary"
+            disabled={offset === 0}
+            onClick={() => changePage(Math.max(0, offset - 60))}
+          >
+            이전 목록
+          </button>
+          <span>
+            {offset + 1}–{Math.min(offset + 60, filtered.length)} / {filtered.length}
+          </span>
+          <button
+            type="button"
+            className="secondary"
+            disabled={offset + 60 >= filtered.length}
+            onClick={() => changePage(offset + 60)}
+          >
+            다음 목록
+          </button>
+        </div>
+      )}
+    </Dialog>
+  );
+  if (compact)
+    return (
+      <>
+        {last && current !== last.id && (
+          <button
+            type="button"
+            className="scene-latest-floating"
+            aria-label="최신 장면으로"
+            title="최신 장면으로"
+            onClick={() => select(last.id)}
+          >
+            <ArrowDown size={20} aria-hidden="true" />
+          </button>
+        )}
+        {dialog}
+      </>
+    );
   return (
     <>
       <nav className="scene-navigator" aria-label="장면 탐색">
@@ -106,11 +207,7 @@ export function SceneNavigator({
           className="scene-list-toggle"
           aria-label="장면 목록 열기"
           title="장면 목록 열기"
-          onClick={() => {
-            setQuery('');
-            setOffset(Math.floor(index / 60) * 60);
-            setOpen(true);
-          }}
+          onClick={openList}
         >
           <List size={18} />
           <span>
@@ -153,66 +250,10 @@ export function SceneNavigator({
           disabled={current === last?.id}
           onClick={() => last && select(last.id)}
         >
-          <ArrowDownToLine size={18} />
+          <ArrowDown size={18} />
         </button>
       </nav>
-      <Dialog open={open} title="장면 목록" onClose={() => setOpen(false)} className="scene-dialog">
-        <label className="scene-search">
-          장면 번호 또는 요청으로 찾기
-          <input
-            type="search"
-            value={query}
-            onChange={(event) => {
-              setQuery(event.target.value);
-              setOffset(0);
-            }}
-          />
-        </label>
-        <p className="muted">
-          현재 분기 · {entries.length}개 장면
-          {entries.length > capacity ? ' · 눈금에는 일부 장면을 표시해요.' : ''}
-        </p>
-        <ol className="scene-list" start={offset + 1} ref={list}>
-          {page.map((entry) => (
-            <li key={entry.id}>
-              <button
-                type="button"
-                aria-current={entry.id === active.id ? 'location' : undefined}
-                aria-label={`${entry.number}번째 장면 · ${entry.label}`}
-                onClick={() => select(entry.id)}
-              >
-                <span>{entry.number}</span>
-                <span>{entry.label}</span>
-                {entry.id === active.id && <small>읽는 중</small>}
-              </button>
-            </li>
-          ))}
-        </ol>
-        {!filtered.length && <p role="status">일치하는 장면이 없어요.</p>}
-        {filtered.length > 60 && (
-          <div className="scene-list-pages">
-            <button
-              type="button"
-              className="secondary"
-              disabled={offset === 0}
-              onClick={() => changePage(Math.max(0, offset - 60))}
-            >
-              이전 목록
-            </button>
-            <span>
-              {offset + 1}–{Math.min(offset + 60, filtered.length)} / {filtered.length}
-            </span>
-            <button
-              type="button"
-              className="secondary"
-              disabled={offset + 60 >= filtered.length}
-              onClick={() => changePage(offset + 60)}
-            >
-              다음 목록
-            </button>
-          </div>
-        )}
-      </Dialog>
+      {dialog}
     </>
   );
 }

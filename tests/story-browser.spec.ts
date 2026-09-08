@@ -114,6 +114,7 @@ test('S01 S02 state settings use synthetic rules, preserve readable original whi
   await expect(section.getByLabel('기억 정리 모델')).toHaveValue('');
   await section.getByRole('button', { name: '상태와 기억 설정 저장', exact: true }).click();
   await expect.poll(async () => (await story(request, chat.id)).config.memory.enabled).toBe(true);
+  await expect(section.getByRole('status')).toContainText('반영했어요.');
   await control(request, 'hold', { barrier: 'state' });
   try {
     const first = await send(page, 'SYNTHETIC_FIRST [[event:buy-ticket]]');

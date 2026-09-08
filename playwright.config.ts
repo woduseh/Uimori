@@ -18,7 +18,8 @@ export default defineConfig({
   use: {
     baseURL: process.env.NR_BASE_URL,
     headless: true,
-    launchOptions: { executablePath },
+    // Every verified server is a loopback address; a system PAC proxy must not intercept it.
+    launchOptions: { executablePath, args: ['--no-proxy-server'] },
     viewport: { width: 390, height: 844 },
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
