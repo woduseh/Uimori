@@ -11,6 +11,8 @@ type Item = {
   finishedAt: string | null;
   kind: string;
   otherBranch: boolean;
+  /** Activity (run) id, so a stored notice can be matched against turns seen on screen. */
+  runId: string;
 };
 type Notice = { item: Item; expiresAt: number | null };
 const active = (status: string) =>
@@ -79,6 +81,7 @@ export function ActivityStatus({
   connected,
   onDetails,
   scope,
+  seenRunIds = [],
 }: {
   activities: ReaderActivity[];
   request?: RequestActivity;
@@ -86,6 +89,8 @@ export function ActivityStatus({
   connected: boolean;
   onDetails: () => void;
   scope: string;
+  /** Pending turns whose failure card the reader has scrolled into view. */
+  seenRunIds?: string[];
 }) {
   const [now, setNow] = useState(Date.now);
   const [hidden, setHidden] = useState<string[]>(() => {
@@ -104,6 +109,7 @@ export function ActivityStatus({
     finishedAt: item.finishedAt,
     kind: item.kind,
     otherBranch: !!item.branchId && !!branchId && item.branchId !== branchId,
+    runId: item.id,
   }));
   if (request && !activities.some((item) => item.id === request.runId))
     items.unshift({
@@ -113,6 +119,7 @@ export function ActivityStatus({
       finishedAt: null,
       kind: 'request',
       otherBranch: false,
+      runId: request.runId ?? request.id,
     });
   const serialized = JSON.stringify(items);
   // An older settled result belongs to its response. Keep active work and uncertain
@@ -154,7 +161,13 @@ export function ActivityStatus({
         (!notice.item.otherBranch &&
           (Date.parse(notice.item.startedAt) || 0) >= latestMainStart)) &&
       (notice.expiresAt === null || notice.expiresAt > now) &&
-      !(success(notice.item.status) && hidden.includes(notice.item.key))
+      !(success(notice.item.status) && hidden.includes(notice.item.key)) &&
+      // The failed turn's own card is on screen; the composer row must not repeat it.
+      !(
+        notice.item.kind === 'main' &&
+        !active(notice.item.status) &&
+        seenRunIds.includes(notice.item.runId)
+      )
   );
   const ticking = running.length > 0 || visibleNotices.some((notice) => notice.expiresAt !== null);
   useEffect(() => {
@@ -281,6 +294,7 @@ export function ActivityDetails({
                 startedAt: item.startedAt,
                 finishedAt: item.finishedAt,
                 otherBranch: !!branchId && !!item.branchId && item.branchId !== branchId,
+                runId: item.id,
               })}
             </span>
             <span className="activity-elapsed">{elapsedLabel(item.startedAt, now)}</span>

@@ -751,12 +751,15 @@ input[type="checkbox"] {
 .source-actions .story-source-state > p.error {
   flex-basis: 100%;
 }
-.focus-reading .source-actions {
-  opacity: 0.35;
+.focus-reading .source-actions,
+.focus-reading .scene-header {
+  opacity: 0;
   transition: opacity 0.15s;
 }
 .focus-reading .source:hover .source-actions,
-.focus-reading .source:focus-within .source-actions {
+.focus-reading .source:focus-within .source-actions,
+.focus-reading .source:hover .scene-header,
+.focus-reading .source:focus-within .scene-header {
   opacity: 1;
 }
 .inline-asset {
@@ -902,6 +905,73 @@ input[type="checkbox"] {
 .run-outcome button {
   justify-self: start;
 }
+/* Running turn: three quiet placeholder lines where the prose will appear. */
+.turn-skeleton {
+  display: grid;
+  gap: 14px;
+  margin: 4px 0 8px;
+}
+.turn-skeleton > span {
+  display: block;
+  height: 14px;
+  border-radius: 7px;
+  background: linear-gradient(90deg, var(--surface) 25%, var(--hover) 50%, var(--surface) 75%);
+  background-size: 200% 100%;
+  animation: turn-shimmer 1.4s linear infinite;
+}
+.turn-skeleton > span:nth-child(1) {
+  width: 92%;
+}
+.turn-skeleton > span:nth-child(2) {
+  width: 80%;
+}
+.turn-skeleton > span:nth-child(3) {
+  width: 58%;
+}
+@keyframes turn-shimmer {
+  to {
+    background-position: -200% 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .turn-skeleton > span {
+    animation: none;
+  }
+}
+/* Failed turn: one card in the prose position with the next actions. */
+.turn-failure {
+  display: grid;
+  gap: 8px;
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--error);
+  border-radius: 10px;
+  background: var(--panel);
+  color: var(--text);
+}
+.turn-failure > strong {
+  font-size: 14px;
+}
+.turn-failure > p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.turn-failure-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.turn-failure-actions > button {
+  min-height: 40px;
+  font-size: 13px;
+}
 .empty-state {
   padding: 16vh 10px 32px;
   text-align: center;
@@ -920,10 +990,25 @@ input[type="checkbox"] {
   margin: 6px;
 }
 .first-scene {
-  padding: 10vh 0 14vh;
+  min-height: 52vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  gap: 6px;
+  padding: 4vh 0;
+}
+.first-scene-avatar {
+  --content-avatar-size: 48px;
+  margin-bottom: 10px;
 }
 .first-scene h2 {
   font-size: 22px;
+  margin: 0;
+}
+.first-scene p {
+  margin: 0;
 }
 .destination-scroll {
   flex: 1;
