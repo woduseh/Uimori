@@ -1,6 +1,6 @@
 import { test, expect, type Page, type TestInfo } from '@playwright/test';
 import { postFixtureChat } from './fixtures/chat.js';
-import { navigationAction } from './ui-navigation.js';
+import { navigationAction, selectChatSettingsSection } from './ui-navigation.js';
 
 async function scriptEvidence(page: Page, info: TestInfo, name: string) {
   const scripts = await page.evaluate(() =>
@@ -30,8 +30,62 @@ test('LAZY01 library entry defers settings and prompt authoring scripts', async 
   await expect(page.getByTestId('library-panel')).toBeVisible();
   const scripts = await scriptEvidence(page, info, 'library-entry-scripts');
   expect(
-    scripts.some((entry) => /WorkspacePanels-|ProfileEditor-|PromptLibrary-/.test(entry.path))
+    scripts.some((entry) => /WorkspacePanels-|ChatSettingsPanel-|PromptLibrary-/.test(entry.path))
   ).toBe(false);
+});
+
+test('LAZY04 failed library keeps desktop and mobile navigation available', async ({
+  page,
+}, info) => {
+  await page.route('**/assets/LibraryPanel-*.js', (route) => route.abort('failed'));
+  const errors: string[] = [];
+  page.on('pageerror', (error) => errors.push(error.message));
+  for (const width of [390, 1440]) {
+    await page.setViewportSize({ width, height: 900 });
+    await page.goto('/');
+    await expect(page.getByRole('alert')).toContainText('불러오지 못했어요');
+    await expect(page.getByRole('heading', { name: '서재', exact: true })).toBeVisible();
+    await page.screenshot({ path: info.outputPath(`library-load-failure-${width}.png`) });
+    await navigationAction(page, '설정');
+    const settings = page.getByRole('dialog', { name: '설정', exact: true });
+    await expect(settings.locator('.settings-navigation')).toBeVisible();
+    await settings.getByRole('button', { name: '설정 닫기', exact: true }).click();
+    await expect(settings).toBeHidden();
+    await expect(page.getByRole('alert')).toContainText('불러오지 못했어요');
+  }
+  expect(errors).toEqual([]);
+});
+
+test('LAZY05 unavailable library data keeps prompt navigation usable', async ({ page }, info) => {
+  await page.route(/\/api\/library(?:\?.*)?$/, (route) =>
+    route.fulfill({
+      status: 503,
+      json: { error: 'SYNTHETIC_LIBRARY_UNAVAILABLE' },
+    })
+  );
+  const errors: string[] = [];
+  page.on('pageerror', (error) => errors.push(error.message));
+  for (const width of [390, 1440]) {
+    await page.setViewportSize({ width, height: 900 });
+    const failed = page.waitForResponse(/\/api\/library(?:\?.*)?$/);
+    await page.goto('/');
+    expect((await failed).status()).toBe(503);
+    await navigationAction(page, '프롬프트');
+    await expect(page.getByRole('heading', { name: '프롬프트', exact: true })).toBeVisible();
+    await expect(page.getByRole('main').getByRole('status')).toContainText(
+      '프롬프트 목록을 불러오지 못했어요.'
+    );
+    if (width === 390)
+      await expect(page.getByRole('button', { name: '탐색 메뉴', exact: true })).toBeVisible();
+    await page.screenshot({ path: info.outputPath(`prompt-data-failure-${width}.png`) });
+    await navigationAction(page, '설정');
+    const settings = page.getByRole('dialog', { name: '설정', exact: true });
+    await expect(settings.locator('.settings-navigation')).toBeVisible();
+    await settings.getByRole('button', { name: '설정 닫기', exact: true }).click();
+    await expect(settings).toBeHidden();
+    await expect(page.getByRole('heading', { name: '프롬프트', exact: true })).toBeVisible();
+  }
+  expect(errors).toEqual([]);
 });
 
 test('LAZY02 delayed settings keep the reader and composer draft available', async ({
@@ -59,7 +113,9 @@ test('LAZY02 delayed settings keep the reader and composer draft available', asy
     const initial = await scriptEvidence(page, info, 'chat-entry-scripts');
     expect(
       initial.some((entry) =>
-        /LibraryPanel-|WorkspacePanels-|ProfileEditor-|PromptLibrary-|NewStory-/.test(entry.path)
+        /LibraryPanel-|WorkspacePanels-|ChatSettingsPanel-|PromptLibrary-|NewStory-/.test(
+          entry.path
+        )
       )
     ).toBe(false);
     await navigationAction(page, '설정');
@@ -73,7 +129,17 @@ test('LAZY02 delayed settings keep the reader and composer draft available', asy
     await expect(draft).toHaveValue('SYNTHETIC_UNSENT_LAZY_DRAFT');
     release();
     await navigationAction(page, '설정');
-    await expect(settings.getByRole('tab', { name: '일반', exact: true })).toBeVisible();
+    await expect(settings.locator('.settings-navigation').filter({ visible: true })).toBeVisible();
+    await expect(
+      settings
+        .getByRole('tab', { name: '일반', exact: true })
+        .or(
+          settings
+            .locator('.settings-navigation')
+            .getByRole('button', { name: '일반', exact: true })
+        )
+        .filter({ visible: true })
+    ).toBeVisible();
     const opened = await scriptEvidence(page, info, 'settings-open-scripts');
     expect(opened.some((entry) => /WorkspacePanels-/.test(entry.path))).toBe(true);
     await page.keyboard.press('Escape');
@@ -110,6 +176,7 @@ test('LAZY03 failed settings script stays local and preserves unsent text', asyn
   await draft.fill('SYNTHETIC_STILL_EDITABLE');
   await page.getByRole('button', { name: '채팅 설정', exact: true }).click();
   const profile = page.getByRole('dialog', { name: '채팅 설정', exact: true });
+  await selectChatSettingsSection(page, '봇·페르소나·모듈');
   await expect(profile.getByTestId('profile-editor')).toBeVisible();
   await info.attach('profile-after-settings-failure', {
     body: await page.screenshot(),

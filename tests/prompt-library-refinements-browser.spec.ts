@@ -2,7 +2,7 @@ import { test, expect, type APIRequestContext } from '@playwright/test';
 import type { Content } from '../core/product.js';
 import { DEFAULT_MAIN_PROMPT, DEFAULT_TRANSLATION_PROMPT } from '../core/prompts.js';
 import { createDefaultPromptProgram } from '../core/prompt-defaults.js';
-import { navigationAction } from './ui-navigation.js';
+import { navigationAction, selectChatSettingsSection } from './ui-navigation.js';
 import { postFixtureChat } from './fixtures/chat.js';
 
 async function seed(request: APIRequestContext, kind: Content['kind'], title: string) {
@@ -94,7 +94,7 @@ test('PLR03 creation uses role defaults and folded preview preserves input and u
   const chat = await created.json();
   await page.goto(`/?chat=${chat.id}`);
   await page.getByRole('button', { name: '채팅 설정', exact: true }).click();
-  await page.getByRole('tab', { name: '프롬프트·창작 프리셋', exact: true }).click();
+  await selectChatSettingsSection(page, '프롬프트·창작 프리셋');
   const editor = page.getByTestId('prompt-editor');
   const composer = editor.getByTestId('prompt-composer');
   const selection = editor.getByLabel('불러올 프롬프트', { exact: true });
@@ -112,7 +112,7 @@ test('PLR03 creation uses role defaults and folded preview preserves input and u
       (response) =>
         response.url().endsWith('/api/prompt-presets') && response.request().method() === 'POST'
     );
-    await editor.getByRole('button', { name: '새 프롬프트로 저장', exact: true }).click();
+    await editor.getByRole('button', { name: '새 프롬프트 저장', exact: true }).click();
     const response = await savedResponse;
     expect(response.ok()).toBe(true);
     const saved = await response.json();

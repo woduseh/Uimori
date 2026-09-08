@@ -1,4 +1,10 @@
-import { editLibraryContent, navigationAction } from './ui-navigation.js';
+import {
+  openProviderMenu,
+  selectSettingsSection,
+  editLibraryContent,
+  navigationAction,
+  openPromptActions,
+} from './ui-navigation.js';
 import { postFixtureChat } from './fixtures/chat.js';
 import { test, expect, type APIRequestContext, type Page } from '@playwright/test';
 import type { Content, Library } from '../core/product.js';
@@ -38,6 +44,9 @@ test('DEL01 library cancel, stale revision, dependent bot and actual deletion at
   const item = await content(request);
   await page.setViewportSize({ width: 1280, height: 900 });
   const panel = await library(page, '봇');
+  await panel.getByLabel('목록 관리', { exact: true }).click();
+  await panel.getByRole('button', { name: '카드', exact: true }).click();
+  await panel.getByLabel('목록 관리', { exact: true }).click();
   await page.emulateMedia({ colorScheme: 'dark' });
   const card = panel
     .locator('.library-card')
@@ -58,6 +67,9 @@ test('DEL01 library cancel, stale revision, dependent bot and actual deletion at
   try {
     const touchPage = await touchContext.newPage();
     const touchPanel = await library(touchPage, '봇');
+    await touchPanel.getByLabel('목록 관리', { exact: true }).click();
+    await touchPanel.getByRole('button', { name: '카드', exact: true }).click();
+    await touchPanel.getByLabel('목록 관리', { exact: true }).click();
     await touchPanel.getByLabel(`${item.title} 메뉴`, { exact: true }).click();
     await expect(
       touchPanel.getByRole('button', { name: `${item.title} 삭제`, exact: true })
@@ -155,6 +167,7 @@ test('DEL02 prompt combinations and presets have deletion and removed prompt doe
   await expect(panel.getByRole('button', { name: '삭제 전역 조합 삭제', exact: true })).toHaveCount(
     0
   );
+  await openPromptActions(panel);
   await panel.getByRole('button', { name: `${prompt.title} 프롬프트 삭제`, exact: true }).click();
   await confirm(page);
   await expect(
@@ -259,11 +272,13 @@ test('DEL05 model is deleted before its connection and settings lists stay curre
   await page.goto('/');
   await page.getByRole('button', { name: '탐색 메뉴', exact: true }).click();
   await page.getByRole('button', { name: '설정', exact: true }).filter({ visible: true }).click();
-  await page.getByRole('tab', { name: '연결과 모델', exact: true }).click();
+  await selectSettingsSection(page, '연결과 모델');
   const editor = page.getByTestId('connection-editor');
+  await openProviderMenu(page, '모델', model.title);
   await editor.getByRole('button', { name: `${model.title} 모델 삭제`, exact: true }).click();
   await page.keyboard.press('Escape');
   await expect(editor).toBeVisible();
+  await openProviderMenu(page, '모델', model.title);
   await editor.getByRole('button', { name: `${model.title} 모델 삭제`, exact: true }).click();
   await confirm(page);
   await expect(editor).toBeVisible();
@@ -271,6 +286,7 @@ test('DEL05 model is deleted before its connection and settings lists stay curre
     editor.getByRole('button', { name: `${model.title} 모델 삭제`, exact: true })
   ).toHaveCount(0);
   await editor.getByRole('button', { name: '연결 관리', exact: true }).click();
+  await openProviderMenu(page, '연결', connection.title);
   await editor.getByRole('button', { name: `${connection.title} 연결 삭제`, exact: true }).click();
   await confirm(page);
   await expect(

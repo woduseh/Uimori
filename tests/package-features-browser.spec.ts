@@ -9,7 +9,11 @@ import {
 import type { ContentPackage } from '../core/content-package.js';
 import type { Content } from '../core/product.js';
 import type { ChatDetail } from '../core/types.js';
-import { editLibraryContent } from './ui-navigation.js';
+import {
+  editLibraryContent,
+  selectPackageSection,
+  selectChatSettingsSection,
+} from './ui-navigation.js';
 
 async function seed(
   request: APIRequestContext,
@@ -113,7 +117,7 @@ test('PFUI01 option drafts survive tabs and validated authoring preserves templa
   });
   const { library, fields } = await openEditor(page, original),
     save = library.getByRole('button', { name: '변경사항 저장', exact: true });
-  await fields.getByRole('button', { name: '옵션', exact: true }).click();
+  await selectPackageSection(page, '옵션');
   await fields.getByRole('button', { name: '옵션 추가', exact: true }).click();
   await fields.getByLabel('옵션 2 이름', { exact: true }).fill('마법 계열');
   await fields.getByLabel('옵션 2 종류', { exact: true }).selectOption('select');
@@ -139,8 +143,8 @@ test('PFUI01 option drafts survive tabs and validated authoring preserves templa
   await fields.getByRole('button', { name: '옵션 검증 후 적용', exact: true }).click();
   await expect(third.getByLabel('옵션 3 표시 조건 JSON', { exact: true })).toHaveValue('{broken');
   await expect(save).toBeDisabled();
-  await fields.getByRole('button', { name: '지침', exact: true }).click();
-  await fields.getByRole('button', { name: '옵션', exact: true }).click();
+  await selectPackageSection(page, '지침');
+  await selectPackageSection(page, '옵션');
   await expect(condition).toHaveValue('{broken');
   await condition.fill('{"control":"missing"}');
   await fields.getByRole('button', { name: '옵션 검증 후 적용', exact: true }).click();
@@ -161,7 +165,7 @@ test('PFUI01 option drafts survive tabs and validated authoring preserves templa
   await expect(preview.getByLabel('힘', { exact: true })).toHaveValue('7');
   await evidence(page, preview, info, 'package-options');
   await page.setViewportSize({ width: 1440, height: 1000 });
-  await fields.getByRole('button', { name: '지침', exact: true }).click();
+  await selectPackageSection(page, '지침');
   await fields.getByLabel('지침 1 본문', { exact: true }).fill('수정한 보관용 본문');
   await expect(save).toBeDisabled();
   await expect(fields.getByLabel('지침 1 조건 템플릿', { exact: true })).toHaveValue(
@@ -226,6 +230,7 @@ test('PFUI02 required module appears once and keeps chat options after another r
   await page.setViewportSize({ width: 1440, height: 1000 });
   await page.goto(`/?chat=${chat.id}`);
   await page.getByRole('button', { name: '채팅 설정', exact: true }).click();
+  await selectChatSettingsSection(page, '봇·페르소나·모듈');
   const editor = page.getByTestId('profile-editor'),
     panel = editor.getByRole('region', { name: '장착 패키지', exact: true });
   const magicRow = panel
@@ -255,7 +260,7 @@ test('PFUI02 required module appears once and keeps chat options after another r
       response.url().endsWith(`/api/chats/${chat.id}/profile`) &&
       response.request().method() === 'PUT'
   );
-  await editor.getByRole('button', { name: '콘텐츠와 제어 저장', exact: true }).click();
+  await editor.getByRole('button', { name: '채팅 설정 저장', exact: true }).click();
   expect((await pending).ok()).toBe(true);
   const shared = await detail(request, chat.id),
     scope = `${magic.id}@${magic.revision}:module`;
@@ -274,7 +279,7 @@ test('PFUI02 required module appears once and keeps chat options after another r
       response.url().endsWith(`/api/chats/${chat.id}/profile`) &&
       response.request().method() === 'PUT'
   );
-  await editor.getByRole('button', { name: '콘텐츠와 제어 저장', exact: true }).click();
+  await editor.getByRole('button', { name: '채팅 설정 저장', exact: true }).click();
   expect((await removed).ok()).toBe(true);
   const after = await detail(request, chat.id);
   expect(after.profile!.packageAttachments).toEqual([
@@ -298,7 +303,7 @@ test('PFUI03 generic source segment drafts validate before save and keep authore
       ],
     }),
     { library, fields } = await openEditor(page, content);
-  await fields.getByRole('button', { name: '연결과 기능', exact: true }).click();
+  await selectPackageSection(page, '연결과 기능');
   const features = fields.getByLabel('패키지 모듈과 기능 편집', { exact: true });
   await features.getByRole('button', { name: '구간 추가', exact: true }).click();
   await features.getByLabel('구간 이름', { exact: true }).fill('다른 관찰자의 기록');

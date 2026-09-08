@@ -1,5 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
-import { ArrowLeft, ArrowRight, Boxes, Plus, Plug, Search } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Plus, Plug, Power, Trash2 } from 'lucide-react';
+import { ActionMenu } from './ActionMenu.js';
+import { IconButton } from './IconButton.js';
+import { ConnectionIcon, CopyIcon, ModelIcon, RefreshIcon, SearchIcon } from './ui-icons.js';
 import { VertexCredentialUpload } from './VertexCredentialUpload.js';
 import { ProviderCatalogPicker } from './ProviderCatalogPicker.js';
 import type {
@@ -76,10 +79,12 @@ export function ConnectionEditor({
   library,
   reload,
   onError,
+  onDirtyChange,
 }: {
   library: Library;
   reload: () => Promise<void>;
   onError: (error: string) => void;
+  onDirtyChange?: (dirty: boolean) => void;
 }) {
   const modelTests = useProviderModelTests();
   const [forcedVertexTier, setForcedVertexTier] = useState<VertexRequestTier>();
@@ -104,11 +109,28 @@ export function ConnectionEditor({
     [modelStarted, setModelStarted] = useState(false);
   const [modelSection, setModelSection] = useState<'basic' | 'generation' | 'advanced'>('basic');
   const heading = useRef<HTMLDivElement>(null);
+  const returnItem = useRef<{ screen: 'models' | 'connections'; id: string } | undefined>(
+    undefined
+  );
   function navigate(next: typeof screen) {
     setConfirmation(undefined);
     setDiscard(undefined);
     setScreen(next);
     requestAnimationFrame(() => {
+      const selected = returnItem.current;
+      const target =
+        selected?.screen === next
+          ? heading.current
+              ?.closest('section')
+              ?.querySelector<HTMLButtonElement>(
+                `button[data-provider-id="${CSS.escape(selected.id)}"]`
+              )
+          : undefined;
+      if (target?.checkVisibility()) {
+        target.scrollIntoView({ block: 'nearest' });
+        target.focus({ preventScroll: true });
+        return;
+      }
       heading.current?.scrollIntoView({ block: 'start' });
       heading.current?.focus({ preventScroll: true });
     });
@@ -134,10 +156,19 @@ export function ConnectionEditor({
     else proceed();
   }
   const [uploadingCredential, setUploadingCredential] = useState(false);
+  const [registrationDirty, setRegistrationDirty] = useState(false);
   const [operationBusy, setOperationBusy] = useState(false),
     [message, setMessage] = useState(''),
     [error, setError] = useState('');
   const busy = operationBusy || uploadingCredential;
+  const dirty =
+    busy ||
+    registrationDirty ||
+    (connectionStarted && JSON.stringify(connection) !== connectionBaseline) ||
+    (modelStarted && JSON.stringify(model) !== modelBaseline);
+  useEffect(() => {
+    onDirtyChange?.(dirty);
+  }, [dirty, onDirtyChange]);
   const setBusy = setOperationBusy;
   const [conflict, setConflict] = useState<'connection' | 'model' | 'status' | null>(null),
     [confirmation, setConfirmation] = useState<Confirmation>();
@@ -288,6 +319,7 @@ export function ConnectionEditor({
     setError('');
     onError('');
     setConnectionStarted(true);
+    returnItem.current = { screen: 'connections', id: item.id };
     setSetup(false);
     navigate('connection');
   }
@@ -310,6 +342,7 @@ export function ConnectionEditor({
     setConfirmation(undefined);
     setModelStarted(true);
     setModelSection('basic');
+    returnItem.current = { screen: 'models', id: item.id };
     navigate('model');
   }
   function startModelFor(item: Connection) {
@@ -357,6 +390,7 @@ export function ConnectionEditor({
       setModelCopy(false);
       setConflict(null);
       setRegisteredModel(saved);
+      returnItem.current = { screen: 'models', id: saved.id };
       setSetup(false);
       navigate('models');
     }
@@ -510,7 +544,6 @@ export function ConnectionEditor({
         </section>
       )}
       <div className="provider-workspace-heading" ref={heading} tabIndex={-1}>
-        <p className="muted">연결은 한 번 준비하고, 모델별 설정은 프리셋으로 관리해요.</p>
         <div className="provider-workspace-navigation" aria-label="연결과 모델 화면">
           <button
             type="button"
@@ -523,8 +556,8 @@ export function ConnectionEditor({
               navigate('models');
             }}
           >
-            <Boxes size={17} />
-            모델 프리셋 <span>{library.models.length}</span>
+            <ModelIcon size={18} aria-hidden="true" />
+            모델
           </button>
           <button
             type="button"
@@ -537,12 +570,13 @@ export function ConnectionEditor({
               navigate('connections');
             }}
           >
-            <Plug size={17} />
-            연결 관리 <span>{library.connections.length}</span>
+            <ConnectionIcon size={18} aria-hidden="true" />
+            연결
           </button>
-          <button
-            type="button"
-            className="secondary provider-refresh"
+          <IconButton
+            label="목록 새로고침"
+            icon={RefreshIcon}
+            className="provider-refresh"
             disabled={busy}
             onClick={() => {
               void perform(async () => {
@@ -550,44 +584,40 @@ export function ConnectionEditor({
                 setMessage('목록을 새로 읽었어요. 편집 초안은 유지돼요.');
               });
             }}
-          >
-            목록 새로고침
-          </button>
+          />
         </div>
       </div>
       {(screen === 'models' || screen === 'connections') && (
         <>
-          <div className="provider-toolbar">
-            <label className="provider-search">
-              <Search size={16} aria-hidden="true" />
-              <input
-                type="search"
-                aria-label="연결·모델 검색"
-                placeholder={
-                  screen === 'models'
-                    ? '프리셋 이름, 모델 ID로 검색'
-                    : '연결 이름, 제공자, 주소로 검색'
-                }
-                value={query}
-                onChange={(event) => setQuery(event.target.value)}
-              />
-            </label>
-            <div className="provider-actions">
-              <button
-                type="button"
-                disabled={busy}
-                onClick={() => (screen === 'connections' ? newConnection() : newModel())}
-              >
-                <Plus size={16} />
-                {screen === 'connections' ? '새 연결 입력' : '새 모델 입력'}
-              </button>
-              {screen === 'models' && (
-                <button type="button" className="secondary" disabled={busy} onClick={newConnection}>
-                  빠른 연결 시작
+          {(screen === 'models' ? library.models.length : library.connections.length) > 0 && (
+            <div className="provider-toolbar">
+              <label className="provider-search">
+                <SearchIcon size={18} aria-hidden="true" />
+                <input
+                  type="search"
+                  aria-label="연결·모델 검색"
+                  placeholder={
+                    screen === 'models'
+                      ? '프리셋 이름, 모델 ID로 검색'
+                      : '연결 이름, 제공자, 주소로 검색'
+                  }
+                  value={query}
+                  onChange={(event) => setQuery(event.target.value)}
+                />
+              </label>
+              <div className="provider-actions">
+                <button
+                  type="button"
+                  aria-label={screen === 'connections' ? '새 연결 입력' : '새 모델 입력'}
+                  disabled={busy}
+                  onClick={() => (screen === 'connections' ? newConnection() : newModel())}
+                >
+                  <Plus size={18} aria-hidden="true" />
+                  <span>{screen === 'connections' ? '새 연결 입력' : '새 모델 입력'}</span>
                 </button>
-              )}
+              </div>
             </div>
-          </div>
+          )}
           {screen === 'connections' && connectionStarted && (
             <button
               type="button"
@@ -608,13 +638,23 @@ export function ConnectionEditor({
               모델 편집 이어서 · {model.title || '이름 없는 초안'}
             </button>
           )}
-          {!library.connections.length && screen === 'models' && (
+          {!library.connections.length && (
             <div className="provider-welcome">
-              <Plug size={28} />
-              <h4>첫 모델을 연결해 보세요</h4>
-              <p>제공자를 고르고 연결 정보를 저장한 뒤 사용할 모델을 선택해요.</p>
+              <ConnectionIcon size={28} aria-hidden="true" />
+              <h4>첫 연결을 준비해요</h4>
+              <p>제공자에 연결한 뒤 사용할 모델을 등록해요.</p>
               <button type="button" disabled={busy} onClick={newConnection}>
-                제공자 선택하기 <ArrowRight size={16} />
+                연결 시작 <ArrowRight size={18} aria-hidden="true" />
+              </button>
+            </div>
+          )}
+          {library.connections.length > 0 && !library.models.length && screen === 'models' && (
+            <div className="provider-welcome">
+              <ModelIcon size={28} aria-hidden="true" />
+              <h4>사용할 모델을 등록해요</h4>
+              <p>준비된 연결을 선택하고 모델과 생성 설정을 저장해요.</p>
+              <button type="button" disabled={busy} onClick={() => newModel()}>
+                <Plus size={18} aria-hidden="true" /> 새 모델 입력
               </button>
             </div>
           )}
@@ -688,95 +728,100 @@ export function ConnectionEditor({
         </section>
       )}
       <section hidden={screen !== 'connections'} aria-label="저장한 연결">
-        <h3>
-          저장한 연결 <small>{connections.length}개</small>
-        </h3>
         <div className="connection-list provider-saved-list">
           {connections.map((item) => (
             <article
-              className="compact-card"
+              className="provider-saved-item"
               key={versionRef(item)}
               aria-label={item.title + ' 연결'}
             >
-              <div className="provider-section-heading">
-                <strong>{item.title}</strong>
-                <span className="provider-status">{item.enabled ? '사용 허용' : '비활성'}</span>
-              </div>
-              <small>
-                {providerDefinition(item.protocol).label}
-                {item.protocol === 'vertex-gemini-v1' ? ' · global' : ''}
-              </small>
-              <code>{item.endpoint}</code>
-              {item.catalogError && (
-                <p className="error">모델 목록 조회 실패 · 마지막 저장 목록을 유지해요.</p>
-              )}
-              <div className="provider-actions">
+              <div className="provider-item-heading">
                 <button
                   type="button"
-                  className="secondary"
+                  className="provider-item-open secondary"
                   disabled={busy}
                   aria-label={item.title + ' 연결 수정'}
+                  data-provider-id={item.id}
                   onClick={() => showConnection(item)}
                 >
-                  수정
+                  <strong>{item.title}</strong>
+                  <span className="provider-item-subtitle">
+                    {providerDefinition(item.protocol).label}
+                    {item.protocol === 'vertex-gemini-v1' ? ' · global' : ''}
+                    {!item.enabled && ' · 비활성'}
+                  </span>
                 </button>
-                <button
-                  type="button"
-                  className="secondary"
-                  disabled={busy}
-                  aria-label={item.title + ' 연결 복제'}
-                  onClick={() => showConnection(item, true)}
-                >
-                  복제
-                </button>
-                <button
-                  type="button"
-                  className="secondary"
-                  disabled={busy}
-                  aria-label={item.title + ' 연결 ' + (item.enabled ? '비활성' : '활성화')}
-                  onClick={() => statusConnection(item)}
-                >
-                  {item.enabled ? '비활성' : '활성화'}
-                </button>
-                <button
-                  type="button"
-                  className="secondary"
-                  disabled={busy}
-                  aria-label={item.title + ' 모델 입력에 사용'}
-                  onClick={() => {
-                    setSetup(false);
-                    replaceDraft('model', () => startModelFor(item));
-                  }}
-                >
-                  모델 입력에 사용
-                </button>
-                <button
-                  type="button"
-                  className="secondary"
-                  disabled={busy}
-                  aria-label={
-                    item.title +
-                    ' ' +
-                    (item.protocol === 'vertex-gemini-v1'
+                <ActionMenu label={item.title + ' 연결 메뉴'}>
+                  <button
+                    type="button"
+                    className="secondary"
+                    disabled={busy}
+                    aria-label={item.title + ' 연결 복제'}
+                    onClick={() => showConnection(item, true)}
+                  >
+                    <CopyIcon size={18} aria-hidden="true" /> 복제
+                  </button>
+                  <button
+                    type="button"
+                    className="secondary"
+                    disabled={busy}
+                    aria-label={item.title + ' 연결 ' + (item.enabled ? '비활성' : '활성화')}
+                    onClick={() => statusConnection(item)}
+                  >
+                    <Power size={18} aria-hidden="true" /> {item.enabled ? '비활성' : '활성화'}
+                  </button>
+                  <button
+                    type="button"
+                    className="secondary"
+                    disabled={busy}
+                    aria-label={item.title + ' 모델 입력에 사용'}
+                    onClick={() => {
+                      setSetup(false);
+                      replaceDraft('model', () => startModelFor(item));
+                    }}
+                  >
+                    <ModelIcon size={18} aria-hidden="true" /> 모델 입력에 사용
+                  </button>
+                  <button
+                    type="button"
+                    className="secondary"
+                    disabled={busy}
+                    aria-label={
+                      item.title +
+                      ' ' +
+                      (item.protocol === 'vertex-gemini-v1'
+                        ? '로컬 지원 모델 확인'
+                        : '모델 목록 새로고침')
+                    }
+                    onClick={() => {
+                      void perform(() => catalog(item));
+                    }}
+                  >
+                    <RefreshIcon size={18} aria-hidden="true" />
+                    {item.protocol === 'vertex-gemini-v1'
                       ? '로컬 지원 모델 확인'
-                      : '모델 목록 새로고침')
-                  }
-                  onClick={() => {
-                    void perform(() => catalog(item));
-                  }}
-                >
-                  {item.protocol === 'vertex-gemini-v1'
-                    ? '로컬 지원 모델 확인'
-                    : '모델 목록 새로고침'}
-                </button>
-                {deleteConnection(item)}
+                      : '모델 목록 새로고침'}
+                  </button>
+                  <span className="provider-menu-delete">
+                    <Trash2 size={18} aria-hidden="true" />
+                    {deleteConnection(item)}
+                  </span>
+                </ActionMenu>
               </div>
+              {item.catalogError && (
+                <p className="error provider-item-notice">
+                  모델 목록 조회 실패 · 마지막 저장 목록을 유지해요.
+                </p>
+              )}
             </article>
           ))}
-          {connections.length === 0 && (
-            <p className="provider-empty">
-              {filter ? '검색 조건에 맞는 연결이 없어요.' : '아직 저장한 연결이 없어요.'}
-            </p>
+          {connections.length === 0 && library.connections.length > 0 && (
+            <div className="provider-empty" role="status">
+              <p>검색 조건에 맞는 연결이 없어요.</p>
+              <button type="button" className="secondary" onClick={() => setQuery('')}>
+                검색 지우기
+              </button>
+            </div>
           )}
         </div>
       </section>
@@ -785,111 +830,137 @@ export function ConnectionEditor({
         className="registered-models"
         aria-label="저장한 모델 프리셋"
       >
-        <h3>
-          저장한 모델 프리셋 <small>{models.length}개</small>
-        </h3>
         <div className="provider-saved-list">
           {models.map((item) => (
             <article
-              className="compact-card"
+              className="provider-saved-item"
               key={versionRef(item)}
               aria-label={item.title + ' 모델'}
             >
-              <div className="provider-section-heading">
-                <strong>{item.title}</strong>
-                <span className="provider-status">
-                  {item.enabled === false ? '비활성' : '모델 활성'}
-                </span>
-              </div>
-              <small>
-                {item.modelId} ·{' '}
-                {library.connections.find((c) => c.id === item.connectionId)?.protocol ===
-                'codex-app-server-v1'
-                  ? '출력 목표'
-                  : '최대'}{' '}
-                {item.maxOutputTokens.toLocaleString()} 토큰
-                {item.timeoutMs !== undefined && ` · 제한 ${item.timeoutMs / 1000}초`}
-              </small>
-              <small>
-                {library.connections.find((c) => c.id === item.connectionId)?.title ??
-                  '연결 확인 필요'}
-              </small>
-              <details className="provider-capabilities">
-                <summary>기능·출처·가격 확인</summary>
-                <p>모델별 공급자 기능: 미확인 · 가격: 미확인</p>
-                <p>
-                  도구 호출: {capability(item.userOverrides?.tools)}
-                  <br />
-                  구조화 출력: {capability(item.userOverrides?.structuredOutput)}
-                </p>
-                {item.userOverrides?.note && (
-                  <p className="provider-override-note">사용자 메모: {item.userOverrides.note}</p>
-                )}
-                <p>
-                  등록 출처:{' '}
-                  {item.source?.kind === 'catalog'
-                    ? '목록에서 선택'
-                    : item.source?.kind === 'manual'
-                      ? '직접 입력'
-                      : '미기록'}
-                  <br />
-                  목록 확인일: {item.source?.catalogUpdatedAt ?? '미확인'}
-                </p>
-              </details>
-              <div className="provider-actions">
+              <div className="provider-item-heading">
                 <button
                   type="button"
-                  className="secondary"
+                  className="provider-item-open secondary"
                   disabled={busy}
                   aria-label={item.title + ' 모델 수정'}
+                  data-provider-id={item.id}
                   onClick={() => {
                     void perform(() => showModel(item), 'model');
                   }}
                 >
-                  수정
+                  <strong>{item.title}</strong>
+                  <span className="provider-item-subtitle">
+                    {library.connections.find((c) => c.id === item.connectionId)?.title ??
+                      '연결 확인 필요'}
+                    {item.enabled === false
+                      ? ' · 비활성'
+                      : library.connections.find((c) => c.id === item.connectionId)?.enabled ===
+                          false
+                        ? ' · 연결 비활성'
+                        : ''}
+                  </span>
                 </button>
-                <button
-                  type="button"
-                  className="secondary"
-                  disabled={busy}
-                  aria-label={item.title + ' 모델 복제'}
-                  onClick={() => {
-                    void perform(() => showModel(item, true), 'model');
-                  }}
-                >
-                  복제
-                </button>
-                <button
-                  type="button"
-                  className="secondary"
-                  disabled={busy}
-                  aria-label={
-                    item.title + ' 모델 ' + (item.enabled === false ? '활성화' : '비활성')
-                  }
-                  onClick={() => statusModel(item)}
-                >
-                  {item.enabled === false ? '활성화' : '비활성'}
-                </button>
-                {deleteModel(item)}
+                <ActionMenu label={item.title + ' 모델 메뉴'}>
+                  <button
+                    type="button"
+                    className="secondary"
+                    disabled={busy}
+                    aria-label={item.title + ' 모델 복제'}
+                    onClick={() => {
+                      void perform(() => showModel(item, true), 'model');
+                    }}
+                  >
+                    <CopyIcon size={18} aria-hidden="true" /> 복제
+                  </button>
+                  <button
+                    type="button"
+                    className="secondary"
+                    disabled={busy}
+                    aria-label={
+                      item.title + ' 모델 ' + (item.enabled === false ? '활성화' : '비활성')
+                    }
+                    onClick={() => statusModel(item)}
+                  >
+                    <Power size={18} aria-hidden="true" />{' '}
+                    {item.enabled === false ? '활성화' : '비활성'}
+                  </button>
+                  <span className="provider-menu-delete">
+                    <Trash2 size={18} aria-hidden="true" />
+                    {deleteModel(item)}
+                  </span>
+                </ActionMenu>
               </div>
-              <ProviderModelTest
-                model={item}
-                record={modelTests.records[versionRef(item)]}
-                available={
-                  item.enabled !== false &&
-                  library.connections.some(
-                    (connection) => connection.id === item.connectionId && connection.enabled
-                  )
-                }
-                busy={busy}
-                onStart={modelTests.start}
-              />
+              <details
+                className="provider-item-details"
+                open={!!modelTests.records[versionRef(item)]}
+              >
+                <summary>
+                  진단과 상세
+                  {modelTests.records[versionRef(item)] && (
+                    <span className="provider-status">
+                      {modelTests.records[versionRef(item)].pending
+                        ? ' · 응답 확인 중'
+                        : modelTests.records[versionRef(item)].error
+                          ? ' · 테스트 상태 확인 필요'
+                          : modelTests.records[versionRef(item)].result?.status === 'completed'
+                            ? ' · 응답 완료'
+                            : ' · 테스트 결과 확인'}
+                    </span>
+                  )}
+                </summary>
+                <p className="provider-model-definition">
+                  {item.modelId} ·{' '}
+                  {library.connections.find((c) => c.id === item.connectionId)?.protocol ===
+                  'codex-app-server-v1'
+                    ? '출력 목표'
+                    : '최대'}{' '}
+                  {item.maxOutputTokens.toLocaleString()} 토큰
+                  {item.timeoutMs !== undefined && ` · 제한 ${item.timeoutMs / 1000}초`}
+                </p>
+                <ProviderModelTest
+                  model={item}
+                  record={modelTests.records[versionRef(item)]}
+                  available={
+                    item.enabled !== false &&
+                    library.connections.some(
+                      (connection) => connection.id === item.connectionId && connection.enabled
+                    )
+                  }
+                  busy={busy}
+                  onStart={modelTests.start}
+                />
+                <details className="provider-capabilities">
+                  <summary>기능·출처·가격 확인</summary>
+                  <p>모델별 공급자 기능: 미확인 · 가격: 미확인</p>
+                  <p>
+                    도구 호출: {capability(item.userOverrides?.tools)}
+                    <br />
+                    구조화 출력: {capability(item.userOverrides?.structuredOutput)}
+                  </p>
+                  {item.userOverrides?.note && (
+                    <p className="provider-override-note">사용자 메모: {item.userOverrides.note}</p>
+                  )}
+                  <p>
+                    등록 출처:{' '}
+                    {item.source?.kind === 'catalog'
+                      ? '목록에서 선택'
+                      : item.source?.kind === 'manual'
+                        ? '직접 입력'
+                        : '미기록'}
+                    <br />
+                    목록 확인일: {item.source?.catalogUpdatedAt ?? '미확인'}
+                  </p>
+                </details>
+              </details>
             </article>
           ))}
-          {models.length === 0 && (
-            <p className="provider-empty">
-              {filter ? '검색 조건에 맞는 모델이 없어요.' : '아직 저장한 모델 프리셋이 없어요.'}
-            </p>
+          {models.length === 0 && library.models.length > 0 && (
+            <div className="provider-empty" role="status">
+              <p>검색 조건에 맞는 모델이 없어요.</p>
+              <button type="button" className="secondary" onClick={() => setQuery('')}>
+                검색 지우기
+              </button>
+            </div>
           )}
         </div>
       </section>
@@ -1438,8 +1509,13 @@ export function ConnectionEditor({
           </small>
         </section>
       )}
-      <div hidden={screen !== 'models'}>
-        <ProviderRegistrationAssistant library={library} reload={reload} onError={onError} />
+      <div hidden={screen !== 'models' || library.connections.length === 0}>
+        <ProviderRegistrationAssistant
+          library={library}
+          reload={reload}
+          onError={onError}
+          onDirtyChange={setRegistrationDirty}
+        />
       </div>
     </section>
   );

@@ -3,7 +3,7 @@ import type { ContentPackage } from '../core/content-package.js';
 import type { LibraryOrganization } from '../core/library-organization.js';
 import type { Content } from '../core/product.js';
 import type { ChatDetail } from '../core/types.js';
-import { revealLibraryEditor } from './ui-navigation.js';
+import { revealLibraryEditor, selectPackageSection } from './ui-navigation.js';
 
 const png = Buffer.from(
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jG1sAAAAASUVORK5CYII=',
@@ -166,10 +166,7 @@ test('LIMG01 representative image upload, unset and existing inline selection pr
   const reused = await save(page, library, unset);
   expect(reused.package!.portraitImageId).toBe('inline');
   expect(reused.package!.images![0].allowedUse).toBe('both');
-  await library
-    .getByRole('group', { name: '패키지 편집 분류', exact: true })
-    .getByRole('button', { name: '이미지', exact: true })
-    .click();
+  await selectPackageSection(page, '이미지');
   const images = library.getByRole('region', { name: '자료 이미지', exact: true });
   await images
     .getByRole('listitem')
@@ -369,10 +366,7 @@ test('LIMG04 shared module references show current names and portraits while pre
   });
   expect(changed.ok(), await changed.text()).toBe(true);
   const library = await edit(page, parent);
-  await library
-    .getByRole('group', { name: '패키지 편집 분류', exact: true })
-    .getByRole('button', { name: '연결과 기능', exact: true })
-    .click();
+  await selectPackageSection(page, '연결과 기능');
   const features = library.getByLabel('패키지 모듈과 기능 편집', { exact: true });
   const current = features.getByRole('group', { name: `${child.title} 새 이름`, exact: true });
   await expect(current).toBeVisible();

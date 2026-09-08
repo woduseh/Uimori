@@ -7,6 +7,10 @@
 | 파일 | 내용 |
 | --- | --- |
 | [CURRENT.md](CURRENT.md) | 현재 구현, 검증 근거, 남은 작업 |
+| [공통 UI·아이콘 원칙](../docs/UI-PRINCIPLES.md) | 데스크톱·모바일의 공통 의미·아이콘, 화면 폭에 따른 배치, 후속 적용·확인 기준 |
+| [설정·서재 화면 설계](../docs/UI-SCREEN-DESIGN.md) | 데스크톱·모바일 시안, 연결·모델·데이터 관리, 메뉴·빈 화면·편집 상태와 아이콘 명세 |
+| [공통 UI·아이콘 구현 결과](UI-COMPACT-IMPLEMENTATION.md) | 설정 목록·상세, 서재·모델·연결·데이터, 초안·뒤로가기 보호와 반응형 검증 |
+| [상세 화면의 공통 UI 적용](UI-DETAIL-IMPLEMENTATION.md) | 채팅 설정·고급 패키지 분야, 프롬프트 저장·관리와 장면 작업 메뉴, 초안·초점·반응형 검증 |
 | [커스텀 협업 결과](AGENT-COLLABORATION-RESULTS.md) · [사용·실행 계약](../docs/AGENT-COLLABORATION.md) | 프롬프트별 보조 지침·모델·공유 옵션, 제한된 자문 실행과 v13·UI 통합 |
 | [화면 지연 로딩·CI 결과](BUNDLE-CI-RESULTS.md) | 초기 JS 다운로드 감소, 빌드 경고와 CI 검사 순서·대량 fixture 수정 |
 | [코드·문서·하네스 유지보수](MAINTENANCE-RESULTS.md) | 현행 안내 정합성, 미사용 코드·중복 실행기 정리와 검증 |

@@ -1,3 +1,4 @@
+import { selectChatSettingsSection } from './ui-navigation.js';
 import { postFixtureChat } from './fixtures/chat.js';
 import { test, expect } from '@playwright/test';
 import type { PromptProgram } from '../core/prompt-program.js';
@@ -64,7 +65,7 @@ test('PUNI01 structured editor preserves one AST; folding keeps drafts and compl
   page.on('pageerror', (error) => errors.push(error.message));
   await page.goto(`/?chat=${chat.id}`);
   await page.getByRole('button', { name: '채팅 설정', exact: true }).click();
-  await page.getByRole('tab', { name: '프롬프트·창작 프리셋', exact: true }).click();
+  await selectChatSettingsSection(page, '프롬프트·창작 프리셋');
   const editor = page.getByTestId('prompt-editor'),
     composer = editor.getByTestId('prompt-composer');
   await editor
@@ -74,7 +75,7 @@ test('PUNI01 structured editor preserves one AST; folding keeps drafts and compl
   await firstBlock.locator('summary').first().click();
   const body = firstBlock.getByLabel('기본 지침 본문', { exact: true });
   await expect(body).toHaveValue('SYNTHETIC_ORIGINAL');
-  const save = editor.getByRole('button', { name: '기존 프롬프트 수정 저장', exact: true });
+  const save = editor.getByRole('button', { name: '수정 저장', exact: true });
   await expect(save).toBeDisabled();
   await expect(composer.getByRole('button', { name: '간단 편집', exact: true })).toHaveCount(0);
   await firstBlock.locator('summary').first().click();
@@ -142,7 +143,7 @@ test('PUNI02 file import edits one block and folded preview retains its snapshot
   ).json();
   await page.goto(`/?chat=${chat.id}`);
   await page.getByRole('button', { name: '채팅 설정', exact: true }).click();
-  await page.getByRole('tab', { name: '프롬프트·창작 프리셋', exact: true }).click();
+  await selectChatSettingsSection(page, '프롬프트·창작 프리셋');
   const editor = page.getByTestId('prompt-editor'),
     composer = editor.getByTestId('prompt-composer');
   await editor.getByLabel('불러올 프롬프트').selectOption(`${saved.id}@1`);
@@ -180,7 +181,7 @@ test('PUNI02 file import edits one block and folded preview retains its snapshot
   await previewFold.press('Enter');
   await expect(traceName).toBeVisible();
   await expect(composer.getByLabel('미리보기 현재 요청')).toHaveValue('SYNTHETIC_SINGLE_REQUEST');
-  await editor.getByRole('button', { name: '기존 프롬프트 수정 저장', exact: true }).click();
+  await editor.getByRole('button', { name: '수정 저장', exact: true }).click();
   await expect(editor.getByLabel('불러올 프롬프트')).toHaveValue(`${saved.id}@2`);
   const after = await (await request.get(`/api/revisions/prompt-preset/${saved.id}/2`)).json();
   const expected = structuredClone(program);

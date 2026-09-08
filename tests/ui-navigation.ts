@@ -1,4 +1,4 @@
-import { expect, type APIRequestContext, type Page } from '@playwright/test';
+import { expect, type APIRequestContext, type Locator, type Page } from '@playwright/test';
 import type { PromptPreset, SavedPromptCombination } from '../core/product.js';
 import type { PromptProgram } from '../core/prompt-program.js';
 
@@ -31,6 +31,84 @@ export async function navigationAction(page: Page, name: string, botTitle?: stri
   if (libraryTab)
     await page.getByTestId('library-panel').getByRole('tab', { name, exact: true }).click();
 }
+export async function selectSettingsSection(page: Page, name: string) {
+  const dialog = page.getByRole('dialog', { name: '설정', exact: true });
+  await expect(dialog).toBeVisible();
+  const back = dialog.getByRole('button', { name: '설정 목록으로', exact: true });
+  if (await back.isVisible()) await back.click();
+  const navigation = dialog.locator('.settings-navigation').filter({ visible: true });
+  await expect(navigation).toBeVisible();
+  const tab = navigation.getByRole('tab', { name, exact: true });
+  if (await tab.isVisible()) await tab.click();
+  else await navigation.getByRole('button', { name, exact: true }).click();
+}
+export async function selectChatSettingsSection(page: Page, name: string) {
+  const dialog = page.getByRole('dialog', { name: '채팅 설정', exact: true });
+  await expect(dialog).toBeVisible();
+  await expect(dialog.locator('.chat-settings-panel')).toBeVisible();
+  const back = dialog.getByRole('button', { name: '채팅 설정 목록으로', exact: true });
+  if (await back.isVisible()) await back.click();
+  const navigation = dialog.locator('.section-navigation').filter({ visible: true });
+  await expect(navigation).toBeVisible();
+  const tab = navigation.getByRole('tab', { name, exact: true });
+  if (await tab.isVisible()) await tab.click();
+  else await navigation.getByRole('button', { name, exact: true }).click();
+}
+export async function selectPackageSection(page: Page, name: string) {
+  const fields = page.getByTestId('package-fields');
+  await expect(fields).toBeVisible();
+  const back = fields.getByRole('button', { name: '패키지 분야 목록', exact: true });
+  if (await back.isVisible()) await back.click();
+  const tab = fields.getByRole('tab', { name, exact: true });
+  if (await tab.isVisible()) await tab.click();
+  else await fields.getByRole('button', { name, exact: true }).click();
+}
+export async function openSourceActions(source: Locator) {
+  const menu = source.getByLabel('장면 작업 메뉴', { exact: true });
+  await expect(menu).toBeVisible();
+  if (!(await menu.evaluate((node) => (node.parentElement as HTMLDetailsElement).open)))
+    await menu.click();
+  return menu;
+}
+export async function openPromptActions(editor: Locator) {
+  const menu = editor.getByLabel('프롬프트 관리', { exact: true });
+  await expect(menu).toBeVisible();
+  if (!(await menu.evaluate((node) => (node.parentElement as HTMLDetailsElement).open)))
+    await menu.click();
+}
+export async function openPromptTools(editor: Locator) {
+  const menu = editor.getByLabel('프롬프트 구성 도구', { exact: true });
+  await expect(menu).toBeVisible();
+  if (!(await menu.evaluate((node) => (node.parentElement as HTMLDetailsElement).open)))
+    await menu.click();
+}
+export async function startProviderConnection(page: Page) {
+  const editor = page.getByTestId('connection-editor');
+  await expect(editor).toBeVisible();
+  const start = editor.getByRole('button', { name: '연결 시작', exact: true });
+  if (await start.isVisible()) await start.click();
+  else {
+    await editor.getByRole('button', { name: '연결 관리', exact: true }).click();
+    await editor.getByRole('button', { name: '새 연결 입력', exact: true }).click();
+  }
+  await expect(editor.getByRole('region', { name: '제공자 선택', exact: true })).toBeVisible();
+}
+export async function openProviderMenu(page: Page, kind: '모델' | '연결', title: string) {
+  const menu = page
+    .getByTestId('connection-editor')
+    .getByLabel(`${title} ${kind} 메뉴`, { exact: true });
+  await expect(menu).toBeVisible();
+  if (!(await menu.evaluate((node) => (node.parentElement as HTMLDetailsElement).open)))
+    await menu.click();
+}
+export async function revealProviderDiagnostics(page: Page, title: string) {
+  const summary = page
+    .getByRole('article', { name: `${title} 모델`, exact: true })
+    .getByText('진단과 상세', { exact: true });
+  await expect(summary).toBeVisible();
+  if (!(await summary.evaluate((node) => (node.parentElement as HTMLDetailsElement).open)))
+    await summary.click();
+}
 export async function editLibraryContent(page: Page, title: string) {
   await page.getByRole('button', { name: `${title} 상세 보기`, exact: true }).click();
   await page
@@ -40,17 +118,24 @@ export async function editLibraryContent(page: Page, title: string) {
     .click();
   await revealLibraryEditor(page);
 }
-export async function revealLibraryEditor(page: Page) {
-  const sections = page
+export async function createLibraryContent(page: Page) {
+  await page
     .getByTestId('library-panel')
-    .locator('summary')
-    .filter({
-      hasText: /^(대표 이미지 · 선택|고급 패키지 설정|분류·읽기 설정)$/,
-    });
+    .getByRole('button', { name: /^(새로 만들기|봇 만들기|페르소나 만들기|모듈 만들기)$/ })
+    .click();
+}
+export async function revealLibraryEditor(page: Page) {
+  const library = page.getByTestId('library-panel');
+  await expect(library.getByLabel('자료 이름', { exact: true })).toBeVisible();
+  const sections = library.locator('summary').filter({
+    hasText: /^(대표 이미지 · 선택|고급 패키지 설정|분류·읽기 설정)$/,
+  });
   for (const section of await sections.all()) {
     if (!(await section.evaluate((node) => (node.parentElement as HTMLDetailsElement).open)))
       await section.click();
   }
+  // Plain content has no package fields until the author explicitly expands its structure.
+  if (await library.getByTestId('package-fields').count()) await selectPackageSection(page, '로어');
 }
 export async function selectContent(page: Page, label: string, title: string) {
   await page.getByRole('button', { name: label, exact: true }).click();

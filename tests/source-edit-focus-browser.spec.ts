@@ -1,3 +1,4 @@
+import { openSourceActions } from './ui-navigation.js';
 import { test, expect, type APIRequestContext, type Locator } from '@playwright/test';
 import type { Chat, ChatDetail, Run } from '../core/types.js';
 import { postFixtureChat } from './fixtures/chat.js';
@@ -93,7 +94,7 @@ for (const [label, viewport] of [
     await page.setViewportSize(viewport);
     await page.goto(`/?chat=${before.chat.id}`);
     const scene = page.locator(`[data-source-id="${source.id}"][data-testid="source"]`);
-    const opener = scene.getByRole('button', { name: '원문 수정', exact: true });
+    const opener = scene.getByLabel('장면 작업 메뉴', { exact: true });
     const field = scene.getByRole('textbox', { name: '원문 수정 내용', exact: true });
     await expect(scene.getByTestId('source-text')).toContainText('Synthetic paragraph 40.');
     expect(
@@ -105,7 +106,8 @@ for (const [label, viewport] of [
 
     await opener.scrollIntoViewIfNeeded();
     const offset = await readerOffset(opener);
-    await opener.click();
+    await openSourceActions(scene);
+    await scene.getByRole('button', { name: '원문 수정', exact: true }).click();
     await expect(field).toBeFocused();
     await insideReader(field);
     await field.fill('A cancelled synthetic edit.');
@@ -115,7 +117,8 @@ for (const [label, viewport] of [
     await insideReader(opener);
     await expect.poll(async () => Math.abs((await readerOffset(opener)) - offset)).toBeLessThan(16);
 
-    await opener.click();
+    await openSourceActions(scene);
+    await scene.getByRole('button', { name: '원문 수정', exact: true }).click();
     await expect(field).toBeFocused();
     await expect(field).toHaveValue(source.text);
     await insideReader(field);
@@ -126,7 +129,8 @@ for (const [label, viewport] of [
     await insideReader(opener);
     expect((await detail(request, before.chat.id)).sources[0].text).toBe(source.text);
 
-    await opener.click();
+    await openSourceActions(scene);
+    await scene.getByRole('button', { name: '원문 수정', exact: true }).click();
     await expect(field).toBeFocused();
     const edited = `${source.text}\n\nThe synthetic keeper returns to the lamp.`;
     await field.fill(edited);
@@ -141,15 +145,15 @@ for (const [label, viewport] of [
     expect(after.runs).toEqual(before.runs);
     expect(after.attempts).toEqual(before.attempts);
 
-    const translationOpener = scene.getByRole('button', { name: '번역 수정', exact: true });
-    await translationOpener.click();
+    await openSourceActions(scene);
+    await scene.getByRole('button', { name: '번역 수정', exact: true }).click();
     const translation = scene.getByRole('textbox', { name: '번역 수정 내용', exact: true });
     await expect(translation).toBeFocused();
     await insideReader(translation);
     await page.keyboard.press('Escape');
     await expect(translation).toHaveCount(0);
-    await expect(translationOpener).toBeFocused();
-    await insideReader(translationOpener);
+    await expect(opener).toBeFocused();
+    await insideReader(opener);
     await page.screenshot({ path: info.outputPath(`source-reading-restored-${label}.png`) });
   });
 }
@@ -163,8 +167,9 @@ test('C04E failed source save keeps the draft available and a later save restore
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto(`/?chat=${before.chat.id}`);
   const scene = page.locator(`[data-source-id="${source.id}"][data-testid="source"]`);
-  const opener = scene.getByRole('button', { name: '원문 수정', exact: true });
-  await opener.click();
+  const opener = scene.getByLabel('장면 작업 메뉴', { exact: true });
+  await openSourceActions(scene);
+  await scene.getByRole('button', { name: '원문 수정', exact: true }).click();
   const field = scene.getByRole('textbox', { name: '원문 수정 내용', exact: true });
   await expect(field).toBeFocused();
   await insideReader(field);

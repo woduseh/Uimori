@@ -88,6 +88,54 @@
   height: 18px;
   min-height: 18px;
 }
+.package-fields:has(> .package-editor-layout) {
+  border-top: 0;
+  padding-top: 0;
+}
+.package-editor-layout {
+  display: grid;
+  grid-template-columns: 176px minmax(0, 1fr);
+  align-items: start;
+  gap: 20px;
+  min-width: 0;
+}
+.package-editor-layout > .section-navigation {
+  position: sticky;
+  top: 12px;
+}
+.package-section-content,
+.package-section-content > [data-package-section] {
+  min-width: 0;
+}
+.package-section-content[hidden],
+.package-section-content > [data-package-section][hidden] {
+  display: none;
+}
+.package-section-heading {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 48px;
+  margin-bottom: 16px;
+  border-bottom: 1px solid var(--line);
+  background: var(--bg);
+}
+.package-section-heading h3 {
+  min-width: 0;
+  margin: 0;
+  font-size: 18px;
+  overflow-wrap: anywhere;
+}
+.package-editor-layout[data-compact="true"] {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0;
+}
+.package-editor-layout[data-compact="true"] > .section-navigation {
+  position: static;
+}
 @media (max-width: 600px) {
   .package-authoring-row,
   .package-scalar-editor {

@@ -1,4 +1,4 @@
-import { editLibraryContent } from './ui-navigation.js';
+import { editLibraryContent, selectPackageSection } from './ui-navigation.js';
 import { test, expect, type APIRequestContext, type Page } from '@playwright/test';
 import { createHash, randomUUID } from 'node:crypto';
 import { fixtureBotInput } from './fixtures/chat.js';
@@ -228,7 +228,7 @@ test('SEGMENTUI02 current modules preserve unapplied segment drafts and existing
   const library = page.getByTestId('library-panel');
   await editLibraryContent(page, `${owner.title}`);
   const fields = library.getByRole('region', { name: '패키지 구성', exact: true });
-  await fields.getByRole('button', { name: '연결과 기능', exact: true }).click();
+  await selectPackageSection(page, '연결과 기능');
   const features = fields.getByLabel('패키지 모듈과 기능 편집', { exact: true });
   const name = features.getByLabel('구간 이름', { exact: true });
   const save = library.getByRole('button', { name: '변경사항 저장', exact: true });

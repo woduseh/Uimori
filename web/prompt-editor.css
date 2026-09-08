@@ -53,7 +53,7 @@
 .prompt-editor-tools > button,
 .prompt-save-buttons > button {
   min-height: 44px;
-  font-size: 12px;
+  font-size: 14px;
 }
 .prompt-editor textarea {
   min-height: 220px;
@@ -101,38 +101,29 @@
   .prompt-editor-expanded textarea {
     height: 72dvh;
   }
-  .prompt-save-buttons {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr);
-  }
-  .prompt-save-buttons > button {
-    width: 100%;
-    white-space: normal;
-  }
-  .prompt-editor-tools > button {
-    flex: 1 1 130px;
-  }
-  .prompt-editor-tools {
-    align-items: stretch;
-  }
 }
 
 .prompt-save-actions {
-  align-items: flex-start;
-  gap: 12px 24px;
+  display: grid;
+  gap: 12px;
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
+}
+.prompt-save-scope {
+  line-height: 1.7;
 }
 .prompt-save-buttons {
-  flex: 1 1 300px;
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 8px;
+  align-items: center;
 }
-.prompt-delete-action {
+.prompt-management-menu {
   margin-inline-start: auto;
 }
-.prompt-delete-action:empty {
-  display: none;
-}
-.prompt-delete-action > .delete-control > button {
-  min-height: 44px;
-  font-size: 12px;
+.prompt-management-menu > .action-menu-body {
+  top: auto;
+  bottom: calc(100% + 4px);
 }
 .prompt-saved-management {
   margin-top: 16px;
@@ -151,14 +142,10 @@
   padding-bottom: 8px;
 }
 @media (max-width: 600px) {
-  .prompt-save-actions {
-    flex-direction: column;
-    align-items: stretch;
-  }
-  .prompt-save-buttons {
-    flex: auto;
-  }
-  .prompt-delete-action {
-    align-self: flex-end;
+  .prompt-save-buttons > button {
+    flex: 1 1 0;
+    min-width: 0;
+    padding-inline: 10px;
+    white-space: normal;
   }
 }

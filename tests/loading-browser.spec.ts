@@ -1,4 +1,4 @@
-import { editLibraryContent } from './ui-navigation.js';
+import { editLibraryContent, openSourceActions } from './ui-navigation.js';
 import { postFixtureChat } from './fixtures/chat.js';
 import { test, expect, type APIRequestContext, type Locator, type Page } from '@playwright/test';
 import type { Chat, ChatDetail, ReaderDetail, ReaderRun, Run } from '../core/types.js';
@@ -232,6 +232,7 @@ test('LOADUI02 same-source tabs keep CAS drafts and isolate another chat, manual
   ]);
   for (const tab of [page, second]) {
     await expect(article(tab, source.id)).toBeVisible();
+    await openSourceActions(article(tab, source.id));
     await article(tab, source.id).getByRole('button', { name: '원문 수정', exact: true }).click();
   }
   await second.getByLabel('원문 수정 내용').fill('Stale tab draft must survive.');
@@ -248,6 +249,7 @@ test('LOADUI02 same-source tabs keep CAS drafts and isolate another chat, manual
   expect(rejected.status()).toBe(409);
   await expect(third.getByLabel('다음 장면 요청')).toHaveValue('Other chat draft stays here.');
   expect((await detail(request, other.chat.id)).sources).toEqual(other.sources);
+  await openSourceActions(article(page, source.id));
   await article(page, source.id).getByRole('button', { name: '번역 수정', exact: true }).click();
   await page.getByLabel('번역 수정 내용').fill('직접 저장한 합성 번역이에요.');
   await page.getByRole('button', { name: '번역 저장', exact: true }).click();

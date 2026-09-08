@@ -1,0 +1,80 @@
+.ui-icon-button {
+  width: 44px;
+  min-width: 44px;
+  min-height: 44px;
+  height: 44px;
+  padding: 0;
+}
+.ui-icon-button svg,
+.action-menu > summary svg {
+  flex: none;
+  stroke-width: 1.7;
+}
+.action-menu {
+  position: relative;
+  flex: none;
+}
+.action-menu > summary {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0;
+  list-style: none;
+  border-radius: 9px;
+  color: var(--text);
+}
+.action-menu > summary::-webkit-details-marker {
+  display: none;
+}
+.action-menu > summary:hover,
+.action-menu[open] > summary {
+  background: var(--hover);
+}
+.action-menu > .action-menu-body {
+  position: absolute;
+  z-index: 8;
+  right: 0;
+  top: calc(100% + 4px);
+  display: grid;
+  gap: 4px;
+  width: max-content;
+  min-width: 184px;
+  max-width: min(300px, calc(100vw - 32px));
+  padding: 6px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--panel);
+  box-shadow: 0 12px 28px #0003;
+}
+.action-menu-body > button,
+.action-menu-body > .delete-control > button {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 8px;
+  width: 100%;
+  min-height: 44px;
+  padding: 10px 12px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--text);
+  font-size: 14px;
+  text-align: left;
+}
+.action-menu-body > button:hover:not(:disabled),
+.action-menu-body > .delete-control > button:hover:not(:disabled) {
+  background: var(--hover);
+}
+.action-menu-body > .delete-control > button {
+  color: var(--error);
+}
+.action-menu-body svg {
+  flex-shrink: 0;
+}
+.action-menu-up > .action-menu-body {
+  top: auto;
+  bottom: calc(100% + 4px);
+}

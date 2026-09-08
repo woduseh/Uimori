@@ -1,7 +1,12 @@
+import {
+  selectSettingsSection,
+  startProviderConnection,
+  navigationAction,
+  selectChatSettingsSection,
+} from './ui-navigation.js';
 import { test, expect, type Page, type APIRequestContext } from '@playwright/test';
 import type { Connection, Library, ModelPreset } from '../core/product.js';
 import type { ChatDetail } from '../core/types.js';
-import { navigationAction } from './ui-navigation.js';
 
 async function navigation(page: Page, name: string) {
   await navigationAction(page, name);
@@ -13,8 +18,8 @@ async function library(request: APIRequestContext): Promise<Library> {
 }
 async function settings(page: Page) {
   await navigation(page, '설정');
-  await page.getByRole('tab', { name: '연결과 모델', exact: true }).click();
-  await page.getByRole('button', { name: '빠른 연결 시작', exact: true }).click();
+  await selectSettingsSection(page, '연결과 모델');
+  await startProviderConnection(page);
   await page
     .getByRole('region', { name: '제공자 선택', exact: true })
     .getByRole('button', { name: /OpenAI · Responses/ })
@@ -142,7 +147,7 @@ test('EVALUI01 desktop preset evaluation opt-in persists selected story roles af
   await reconnected.setViewportSize({ width: 1440, height: 1000 });
   await reconnected.goto(storyUrl);
   await reconnected.getByRole('button', { name: '채팅 설정', exact: true }).click();
-  await reconnected.getByRole('tab', { name: '모델', exact: true }).click();
+  await selectChatSettingsSection(reconnected, '모델');
   await expect(reconnected.getByLabel('원문 모델', { exact: true })).toHaveValue(ref);
   await expect(reconnected.getByLabel('번역 모델', { exact: true })).toHaveValue(ref);
   await reconnected.screenshot({ path: info.outputPath('evaluation-desktop-restored-roles.png') });
@@ -245,7 +250,7 @@ test('EVALUI02 mobile 390px evaluation controls save only for opted-in presets a
   });
   await page.reload();
   await navigation(page, '설정');
-  await page.getByRole('tab', { name: '연결과 모델', exact: true }).click();
+  await selectSettingsSection(page, '연결과 모델');
   await expect(page.getByText(title + ' 모델', { exact: true })).toBeVisible();
   expect((await library(request)).models.find((item) => item.id === model.id)).toEqual(model);
   expect(observed.errors).toEqual([]);

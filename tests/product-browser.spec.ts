@@ -1,11 +1,20 @@
-import { editLibraryContent, selectContent } from './ui-navigation.js';
+import {
+  selectSettingsSection,
+  startProviderConnection,
+  editLibraryContent,
+  selectContent,
+  createPromptChoice,
+  navigationAction,
+  openProviderMenu,
+  selectChatSettingsSection,
+  openSourceActions,
+} from './ui-navigation.js';
 import { postFixtureChat } from './fixtures/chat.js';
 import { test, expect, type APIRequestContext, type Page } from '@playwright/test';
 import { createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import type { Chat, ChatDetail, Run } from '../core/types.js';
 import type { Asset, Connection, Content, Library, ModelPreset } from '../core/product.js';
-import { createPromptChoice, navigationAction } from './ui-navigation.js';
 
 async function getDetail(request: APIRequestContext, id: string): Promise<ChatDetail> {
   const response = await request.get(`/api/chats/${id}`);
@@ -54,7 +63,7 @@ async function profileInfo(page: Page) {
 }
 async function promptTab(page: Page) {
   const panel = page.getByTestId('profile-editor');
-  await panel.getByRole('tab', { name: '프롬프트·창작 프리셋', exact: true }).click();
+  await selectChatSettingsSection(page, '프롬프트·창작 프리셋');
   return panel.getByTestId('prompt-editor');
 }
 async function send(page: Page, text: string): Promise<Run> {
@@ -75,10 +84,7 @@ async function openDetails(page: Page, testId: string) {
     return page.getByTestId(testId);
   }
   await storySettings(page);
-  await page
-    .getByTestId('profile-editor')
-    .getByRole('tab', { name: '봇·페르소나·모듈', exact: true })
-    .click();
+  await selectChatSettingsSection(page, '봇·페르소나·모듈');
   return profileInfo(page);
 }
 
@@ -126,14 +132,30 @@ test('P01 packages use latest settings and prompt-owned creative choices replace
   const second = await secondResponse.json();
   await page.reload();
   const profile = await openDetails(page, 'profile-editor');
-  await expect(profile.getByRole('tab')).toHaveText([
+  const chatSettings = page.getByRole('dialog', { name: '채팅 설정', exact: true });
+  const backToCategories = chatSettings.getByRole('button', {
+    name: '채팅 설정 목록으로',
+    exact: true,
+  });
+  if (await backToCategories.isVisible()) await backToCategories.click();
+  await expect(
+    chatSettings
+      .locator('.section-navigation')
+      .filter({ visible: true })
+      .locator('button .section-navigation-title')
+  ).toHaveText([
     '봇·페르소나·모듈',
     '프롬프트·창작 프리셋',
     '모델',
+    '상태와 기억',
+    '이미지',
+    '자동 후속 작업',
+    '읽기 설정',
   ]);
+  await selectChatSettingsSection(page, '봇·페르소나·모듈');
   await selectContent(page, '추가할 패키지', added.title);
   await page.getByRole('button', { name: '패키지 장착', exact: true }).click();
-  await page.getByRole('button', { name: '콘텐츠와 제어 저장', exact: true }).click();
+  await page.getByRole('button', { name: '채팅 설정 저장', exact: true }).click();
   await expect
     .poll(async () => (await getDetail(request, chat.id)).profile?.packageAttachments)
     .toEqual([owner, { id: added.id, revision: 1, role: 'module' }]);
@@ -153,7 +175,7 @@ test('P01 packages use latest settings and prompt-owned creative choices replace
   ).not.toContainText('v1');
   const editor = await promptTab(page);
   await editor.getByLabel('불러올 프롬프트', { exact: true }).selectOption(`${choice.prompt.id}@1`);
-  await editor.getByRole('button', { name: '이야기에 선택 적용', exact: true }).click();
+  await editor.getByRole('button', { name: '이 채팅에 적용', exact: true }).click();
   const composer = editor.getByTestId('prompt-composer');
   for (const combination of [choice.combination, second]) {
     await composer.getByLabel('전역 창작 조합', { exact: true }).selectOption(combination.id);
@@ -200,9 +222,9 @@ test('P04 manual model IDs and distinct main/translation routing preserve connec
   const unique = `P04-${Date.now()}`;
   const chat = await createChat(page, `합성 ${unique}`);
   await navigation(page, '설정');
-  await page.getByRole('tab', { name: '연결과 모델', exact: true }).click();
+  await selectSettingsSection(page, '연결과 모델');
   const library = page.getByTestId('connection-editor');
-  await library.getByRole('button', { name: '빠른 연결 시작', exact: true }).click();
+  await startProviderConnection(page);
   await library.getByText('개발·검사용 연결', { exact: true }).click();
   await library.getByRole('button', { name: '로컬 fixture로 설정', exact: true }).click();
   await page.getByLabel('연결 이름', { exact: true }).fill(`격리 연결 ${unique}`);
@@ -234,6 +256,7 @@ test('P04 manual model IDs and distinct main/translation routing preserve connec
     name: `${connection.title} 연결`,
     exact: true,
   });
+  await openProviderMenu(page, '연결', connection.title);
   await connectionCard
     .getByRole('button', { name: `${connection.title} 모델 목록 새로고침`, exact: true })
     .click();
@@ -246,7 +269,7 @@ test('P04 manual model IDs and distinct main/translation routing preserve connec
   });
   expect((await request.get(`/api/revisions/connection/${connection.id}/1`)).ok()).toBe(false);
   await openDetails(page, 'profile-editor');
-  await page.getByTestId('profile-editor').getByRole('tab', { name: '모델', exact: true }).click();
+  await selectChatSettingsSection(page, '모델');
   // A model saved against a disabled connection is excluded from a new role selection.
   for (const roleLabel of ['원문 모델', '번역 모델'])
     for (const model of modelRefs) {
@@ -259,13 +282,14 @@ test('P04 manual model IDs and distinct main/translation routing preserve connec
     translation: null,
   });
   await navigation(page, '설정');
-  await page.getByRole('tab', { name: '연결과 모델', exact: true }).click();
+  await selectSettingsSection(page, '연결과 모델');
   await library.getByRole('button', { name: '연결 관리', exact: true }).click();
   const enabledResponse = page.waitForResponse(
     (response) =>
       response.url().endsWith(`/api/connections/${connection.id}`) &&
       response.request().method() === 'PUT'
   );
+  await openProviderMenu(page, '연결', connection.title);
   await library
     .getByRole('button', { name: `${connection.title} 연결 활성화`, exact: true })
     .click();
@@ -283,10 +307,10 @@ test('P04 manual model IDs and distinct main/translation routing preserve connec
   for (const model of modelRefs)
     expect(activatedModels.find((item) => item.id === model.id)).toEqual(model);
   await openDetails(page, 'profile-editor');
-  await page.getByTestId('profile-editor').getByRole('tab', { name: '모델', exact: true }).click();
+  await selectChatSettingsSection(page, '모델');
   await page.getByLabel('원문 모델', { exact: true }).selectOption(`${modelRefs[0].id}`);
   await page.getByLabel('번역 모델', { exact: true }).selectOption(`${modelRefs[1].id}`);
-  await page.getByRole('button', { name: '콘텐츠와 제어 저장', exact: true }).click();
+  await page.getByRole('button', { name: '채팅 설정 저장', exact: true }).click();
   await expect.poll(async () => (await getDetail(request, chat.id)).profile?.revision).toBe(2);
   const profile = (await getDetail(request, chat.id)).profile!;
   expect(profile.routes.main).toEqual({ id: modelRefs[0].id });
@@ -323,10 +347,9 @@ test('P09 P10 P13 fork from a completed scene preserves long prose and annotatio
   const chat = (await settingsResponse.json()) as Chat;
   await page.reload();
   await storySettings(page);
-  const imagePanel = page
-    .locator('details')
-    .filter({ has: page.locator('summary', { hasText: '이 이야기의 이미지' }) });
-  await imagePanel.locator('summary').click();
+  await selectChatSettingsSection(page, '이미지');
+  const imagePanel = page.getByRole('region', { name: '이 이야기의 이미지', exact: true });
+  await expect(imagePanel.getByLabel('PNG 또는 JPEG 이미지', { exact: true })).toBeVisible();
   const png = Buffer.from(
     'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+j9n8AAAAASUVORK5CYII=',
     'base64'
@@ -373,10 +396,10 @@ test('P09 P10 P13 fork from a completed scene preserves long prose and annotatio
   const imageModel = (await modelReply.json()) as ModelPreset;
   await page.reload();
   await openDetails(page, 'profile-editor');
-  await page.getByTestId('profile-editor').getByRole('tab', { name: '모델', exact: true }).click();
+  await selectChatSettingsSection(page, '모델');
   await page.getByLabel('이미지 선택 모델', { exact: true }).selectOption(imageModel.id);
   await page.getByLabel('보조 이미지 표시', { exact: true }).check();
-  await page.getByRole('button', { name: '콘텐츠와 제어 저장', exact: true }).click();
+  await page.getByRole('button', { name: '채팅 설정 저장', exact: true }).click();
   await expect.poll(async () => (await getDetail(request, chat.id)).profile?.revision).toBe(2);
   const first = await send(
     page,
@@ -469,6 +492,7 @@ test('P09 P10 P13 fork from a completed scene preserves long prose and annotatio
         response.url().endsWith(`/api/chats/${chat.id}/fork`) &&
         response.request().method() === 'POST'
     );
+    await openSourceActions(page.locator(`[data-testid="source"][data-source-id="${source.id}"]`));
     await page
       .locator(`[data-testid="source"][data-source-id="${source.id}"]`)
       .getByRole('button', { name: '여기서 새 이야기로 이어가기', exact: true })
@@ -535,7 +559,7 @@ test('P09 P10 P13 fork from a completed scene preserves long prose and annotatio
     await forkEditor
       .getByLabel('지침 본문', { exact: true })
       .fill('Synthetic vivid narration for this fork.');
-    await forkEditor.getByRole('button', { name: '저장하고 이야기에 적용', exact: true }).click();
+    await forkEditor.getByRole('button', { name: '저장하고 적용', exact: true }).click();
     await expect
       .poll(async () => Boolean((await getDetail(request, fork.id)).profile!.prompts?.main))
       .toBe(true);
@@ -637,7 +661,7 @@ test('P06 P11 quality notes preserve source and export/backup downloads reject r
   const after = await getDetail(request, chat.id);
   expect(after.sources[0]).toEqual(source);
   await navigation(page, '설정');
-  await page.getByRole('tab', { name: '데이터 관리', exact: true }).click();
+  await selectSettingsSection(page, '데이터 관리');
   const downloadPromise = page.waitForEvent('download');
   await page.getByRole('button', { name: 'JSON 내보내기', exact: true }).click();
   const download = await downloadPromise;
@@ -659,10 +683,16 @@ test('P06 P11 quality notes preserve source and export/backup downloads reject r
   await page
     .getByLabel('가져올 JSON 파일')
     .setInputFiles({ name: 'synthetic-export.json', mimeType: 'application/json', buffer: bytes });
-  await page.getByRole('button', { name: '빈 DB에 가져오기', exact: true }).click();
+  await expect(page.getByRole('button', { name: '빈 DB에 가져오기', exact: true })).toBeDisabled();
   await expect(
-    page.getByRole('dialog', { name: '설정', exact: true }).getByRole('alert')
-  ).toContainText('다른 요청이 먼저 반영됐어요');
+    page
+      .getByTestId('archive-panel')
+      .getByRole('status')
+      .filter({ hasText: '현재 DB에 자료가 있어 가져올 수 없어요.' })
+  ).toBeVisible();
+  const rejected = await request.post('/api/import', { data: { archive } });
+  expect(rejected.status()).toBe(409);
+  expect(await rejected.json()).toEqual({ error: 'Restore requires an empty database' });
   expect((await getDetail(request, chat.id)).sources[0]).toEqual(source);
 });
 
@@ -675,9 +705,9 @@ test('P04 Vertex settings use service-account references and persist distinct ma
   const pageErrors: string[] = [];
   page.on('pageerror', (error) => pageErrors.push(error.message));
   await navigation(page, '설정');
-  await page.getByRole('tab', { name: '연결과 모델', exact: true }).click();
+  await selectSettingsSection(page, '연결과 모델');
   const editor = page.getByTestId('connection-editor');
-  await editor.getByRole('button', { name: '빠른 연결 시작', exact: true }).click();
+  await startProviderConnection(page);
   await editor
     .getByRole('region', { name: '제공자 선택', exact: true })
     .getByRole('button', { name: /Google Agent Platform/ })
@@ -700,6 +730,7 @@ test('P04 Vertex settings use service-account references and persist distinct ma
   expect(connection).toMatchObject({ protocol: 'vertex-gemini-v1', enabled: true });
   expect(connection).not.toHaveProperty('credentialEnv');
   await editor.getByRole('button', { name: '연결 관리', exact: true }).click();
+  await openProviderMenu(page, '연결', unique);
   await editor
     .getByRole('article', { name: `${unique} 연결`, exact: true })
     .getByRole('button', { name: `${unique} 로컬 지원 모델 확인`, exact: true })
@@ -740,10 +771,10 @@ test('P04 Vertex settings use service-account references and persist distinct ma
     fullPage: true,
   });
   await openDetails(page, 'profile-editor');
-  await page.getByTestId('profile-editor').getByRole('tab', { name: '모델', exact: true }).click();
+  await selectChatSettingsSection(page, '모델');
   await page.getByLabel('원문 모델', { exact: true }).selectOption(`${models[0].id}`);
   await page.getByLabel('번역 모델', { exact: true }).selectOption(`${models[1].id}`);
-  await page.getByRole('button', { name: '콘텐츠와 제어 저장', exact: true }).click();
+  await page.getByRole('button', { name: '채팅 설정 저장', exact: true }).click();
   await expect.poll(async () => (await getDetail(request, chat.id)).profile?.revision).toBe(2);
   const detail = await getDetail(request, chat.id);
   expect(detail.profile?.routes).toMatchObject({
@@ -762,7 +793,7 @@ test('P04 named and custom providers save native options from mobile settings wi
 }, testInfo) => {
   const chat = await createChat(page, `공급자 설정 ${Date.now()}`);
   await navigation(page, '설정');
-  await page.getByRole('tab', { name: '연결과 모델', exact: true }).click();
+  await selectSettingsSection(page, '연결과 모델');
   const cases = [
     {
       protocol: 'openai-responses-v1',
@@ -790,14 +821,7 @@ test('P04 named and custom providers save native options from mobile settings wi
     },
   ];
   for (const item of cases) {
-    await page
-      .getByTestId('connection-editor')
-      .getByRole('button', { name: '연결 관리', exact: true })
-      .click();
-    await page
-      .getByTestId('connection-editor')
-      .getByRole('button', { name: '새 연결 입력', exact: true })
-      .click();
+    await startProviderConnection(page);
     await page
       .getByRole('region', { name: '제공자 선택', exact: true })
       .getByRole('button', { name: /OpenAI · Responses/ })

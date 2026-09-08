@@ -3,7 +3,11 @@ import { fixtureBotInput } from './fixtures/chat.js';
 import type { ChatDetail } from '../core/types.js';
 import type { PromptPreset } from '../core/product.js';
 import type { PromptProgram } from '../core/prompt-program.js';
-import { navigationAction, openNewStoryOptions } from './ui-navigation.js';
+import {
+  navigationAction,
+  openNewStoryOptions,
+  selectChatSettingsSection,
+} from './ui-navigation.js';
 
 async function detail(request: APIRequestContext, chatId: string): Promise<ChatDetail> {
   const response = await request.get(`/api/chats/${chatId}`);
@@ -128,7 +132,7 @@ test('CURRENTUI01 saved creative combinations follow current prompt controls wit
   await panel.getByRole('button', { name: '창작 옵션 닫기', exact: true }).click();
   await page.getByRole('button', { name: '채팅 설정', exact: true }).click();
   const settings = page.getByRole('dialog', { name: '채팅 설정', exact: true });
-  await settings.getByRole('tab', { name: '프롬프트·창작 프리셋', exact: true }).click();
+  await selectChatSettingsSection(page, '프롬프트·창작 프리셋');
   const editor = settings.getByTestId('prompt-editor');
   const options = editor.getByLabel('불러올 프롬프트', { exact: true }).locator('option');
   await expect(options.filter({ hasText: prompt.title })).toHaveCount(1);

@@ -1,3 +1,4 @@
+import { selectChatSettingsSection } from './ui-navigation.js';
 import { postFixtureChat } from './fixtures/chat.js';
 import { test, expect, type Page, type APIRequestContext, type Request } from '@playwright/test';
 import { DatabaseSync } from 'node:sqlite';
@@ -53,6 +54,7 @@ async function storySettings(page: Page) {
   const dialog = page.getByRole('dialog', { name: '채팅 설정', exact: true });
   if (!(await dialog.isVisible()))
     await page.getByRole('button', { name: '채팅 설정', exact: true }).click();
+  await selectChatSettingsSection(page, '자동 후속 작업');
   const fixture = dialog
     .locator('details')
     .filter({ has: page.locator('summary', { hasText: '개발자용 모의 실행 제어' }) });
@@ -127,11 +129,19 @@ test('F02 F03 F05 two contexts and two tabs keep commands, snapshots, source job
       'Write a garden scene after researching the harbor. SYNTHETIC_B'
     );
     expect(aRun.id).not.toBe(bRun.id);
-    await closeDialog(aSecondTab);
-    await openWork(aSecondTab);
-    await expect(aSecondTab.getByTestId('run')).toHaveAttribute('data-run-id', aRun.id);
-    await closeDialog(aSecondTab);
-    await storySettings(aSecondTab);
+    // Keep the second tab's unsaved settings intact for the later revision conflict.
+    const aWorkTab = await context.newPage();
+    aWorkTab.on('pageerror', (error) => errors.push(error.message));
+    try {
+      await aWorkTab.goto(`/?chat=${a.id}`);
+      await openWork(aWorkTab);
+      await expect(
+        aWorkTab.getByRole('dialog', { name: '작업 현황', exact: true }).getByTestId('run')
+      ).toHaveAttribute('data-run-id', aRun.id);
+    } finally {
+      await aWorkTab.close();
+    }
+    await expect(aSecondTab.getByLabel('서술 프리셋')).toHaveValue('vivid');
     // Duplicate identical HTTP command uses the exact browser-submitted body/key.
     const command = commands.get(aRun.id)!;
     expect(command).toMatchObject({

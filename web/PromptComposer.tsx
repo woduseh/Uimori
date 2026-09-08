@@ -1,4 +1,8 @@
 import { PromptControlFields, ValueInput } from './PromptControlFields.js';
+import { ActionMenu } from './ActionMenu.js';
+import { IconButton } from './IconButton.js';
+import { DownloadIcon, UploadIcon } from './ui-icons.js';
+import { ArrowUp, ArrowDown, Undo2, Trash2 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import {
   compilePromptProgram,
@@ -854,9 +858,6 @@ export function PromptComposer({
   const savedControls = saved[scope] ?? pretty(controlState ?? emptyControls());
   const controlsDirty = pretty(controls) !== savedControls;
   useEffect(() => {
-    onDirtyChange?.(controlsDirty || pendingTemplate);
-  }, [controlsDirty, pendingTemplate, onDirtyChange]);
-  useEffect(() => {
     onPendingDraftChange?.(pendingTemplate);
   }, [pendingTemplate, onPendingDraftChange]);
   const knownControls = new Set(program.controls.map((control) => control.id));
@@ -877,9 +878,29 @@ export function PromptComposer({
   } | null>(null);
   const [previewBusy, setPreviewBusy] = useState(false);
   const [saving, setSaving] = useState(false);
+  useEffect(() => {
+    onDirtyChange?.(
+      controlsDirty ||
+        pendingTemplate ||
+        combinationName.length > 0 ||
+        importedCombination !== null ||
+        savingGlobal ||
+        saving
+    );
+  }, [
+    controlsDirty,
+    pendingTemplate,
+    combinationName,
+    importedCombination,
+    savingGlobal,
+    saving,
+    onDirtyChange,
+  ]);
   const [error, setError] = useState('');
   const [status, setStatus] = useState('');
   const [undo, setUndo] = useState<PromptProgram[]>([]);
+  const root = useRef<HTMLElement>(null);
+  const lastBlockAction = useRef<string | undefined>(undefined);
   const lastCollaboration = useRef(program.collaboration);
   useEffect(() => {
     // The separate advisor editor owns these edits. An older body undo must not erase them.
@@ -949,12 +970,50 @@ export function PromptComposer({
       report(errorMessage(caught));
     }
   };
+  function focusBlock(id: string, direction?: number) {
+    requestAnimationFrame(() => {
+      const block = root.current?.querySelector<HTMLElement>(`#prompt-block-${CSS.escape(id)}`);
+      const button =
+        direction === undefined
+          ? null
+          : block?.querySelector<HTMLButtonElement>(`[data-block-move="${direction}"]`);
+      const target =
+        button && !button.disabled ? button : block?.querySelector<HTMLElement>(':scope > summary');
+      target?.focus({ preventScroll: true });
+      target?.scrollIntoView({ block: 'nearest' });
+    });
+  }
   function move(index: number, direction: number) {
     const blocks = [...program.blocks];
     const target = index + direction;
     if (target < 0 || target >= blocks.length) return;
     [blocks[index], blocks[target]] = [blocks[target]!, blocks[index]!];
+    lastBlockAction.current = program.blocks[index].id;
     edit({ ...program, blocks });
+    focusBlock(program.blocks[index].id, direction);
+  }
+  function removeBlock(index: number) {
+    if (pendingTemplate) return;
+    lastBlockAction.current = program.blocks[index].id;
+    const remaining = program.blocks.filter((_, i) => i !== index);
+    edit({ ...program, blocks: remaining });
+    const next = remaining[Math.min(index, remaining.length - 1)];
+    if (next) focusBlock(next.id);
+    else
+      requestAnimationFrame(() =>
+        root.current?.querySelector<HTMLButtonElement>('[data-add-block]')?.focus()
+      );
+  }
+  function undoEdit() {
+    if (pendingTemplate) return;
+    const previous = undo.at(-1);
+    if (!previous) return;
+    setUndo((current) => current.slice(0, -1));
+    lastCollaboration.current = previous.collaboration;
+    onChange(previous);
+    setStatus('이전 프롬프트 초안으로 되돌렸어요.');
+    const target = previous.blocks.find((block) => block.id === lastBlockAction.current);
+    if (target) focusBlock(target.id);
   }
   async function saveControls() {
     if (!onSaveControls) return;
@@ -1110,7 +1169,12 @@ export function PromptComposer({
     }
   }
   return (
-    <section className="prompt-composer" aria-label="프롬프트 구성" data-testid="prompt-composer">
+    <section
+      ref={root}
+      className="prompt-composer"
+      aria-label="프롬프트 구성"
+      data-testid="prompt-composer"
+    >
       <details className="pc-composer-fold" open>
         <summary aria-label="프롬프트 구성 접기/펼치기">
           <strong>프롬프트 구성</strong>
@@ -1121,44 +1185,36 @@ export function PromptComposer({
           {controlsDirty && <small>미저장 옵션</small>}
         </summary>
         <div className="pc-composer-content">
-          <div className="pc-actions">
-            <label className="pc-file">
-              JSON 불러오기
-              <input
-                aria-label="프롬프트 구성 JSON 불러오기"
-                type="file"
-                disabled={pendingTemplate}
-                accept=".json,application/json"
-                onChange={(event) => {
-                  const file = event.target.files?.[0];
-                  event.target.value = '';
-                  if (file) void importFile(file);
-                }}
-              />
-            </label>
-            <button
-              type="button"
-              className="secondary"
-              onClick={() => saveDownload('uimori-prompt-program.json', program)}
-            >
-              JSON 내보내기
-            </button>
-            <button
-              type="button"
-              className="ghost"
+          <div className="pc-composer-tools">
+            <IconButton
+              label="이전 편집으로"
+              icon={Undo2}
               disabled={pendingTemplate || !undo.length}
-              onClick={() => {
-                const previous = undo.at(-1);
-                if (previous) {
-                  setUndo((current) => current.slice(0, -1));
-                  lastCollaboration.current = previous.collaboration;
-                  onChange(previous);
-                  setStatus('이전 프롬프트 초안으로 되돌렸어요.');
-                }
-              }}
-            >
-              이전 편집으로
-            </button>
+              onClick={undoEdit}
+            />
+            <ActionMenu label="프롬프트 구성 도구" className="pc-program-menu">
+              <label className="pc-file">
+                <UploadIcon size={18} aria-hidden="true" /> JSON 불러오기
+                <input
+                  aria-label="프롬프트 구성 JSON 불러오기"
+                  type="file"
+                  disabled={pendingTemplate}
+                  accept=".json,application/json"
+                  onChange={(event) => {
+                    const file = event.target.files?.[0];
+                    event.target.value = '';
+                    if (file) void importFile(file);
+                  }}
+                />
+              </label>
+              <button
+                type="button"
+                className="secondary"
+                onClick={() => saveDownload('uimori-prompt-program.json', program)}
+              >
+                <DownloadIcon size={18} aria-hidden="true" /> JSON 내보내기
+              </button>
+            </ActionMenu>
           </div>
           <div className="pc-structure-editor">
             <datalist id="pc-slot-names">
@@ -1202,35 +1258,31 @@ export function PromptComposer({
                     </span>
                   </summary>
                   <div className="pc-block-body">
-                    <div className="pc-actions">
-                      <button
-                        type="button"
-                        className="ghost"
-                        aria-label={`${block.title} 위로`}
+                    <div className="pc-block-tools">
+                      <IconButton
+                        label={`${block.title} 위로`}
+                        icon={ArrowUp}
+                        data-block-move={-1}
                         disabled={index === 0}
                         onClick={() => move(index, -1)}
-                      >
-                        ↑ 위로
-                      </button>
-                      <button
-                        type="button"
-                        className="ghost"
-                        aria-label={`${block.title} 아래로`}
+                      />
+                      <IconButton
+                        label={`${block.title} 아래로`}
+                        icon={ArrowDown}
+                        data-block-move={1}
                         disabled={index === program.blocks.length - 1}
                         onClick={() => move(index, 1)}
-                      >
-                        ↓ 아래로
-                      </button>
-                      <button
-                        type="button"
-                        className="ghost"
-                        disabled={pendingTemplate}
-                        onClick={() =>
-                          edit({ ...program, blocks: program.blocks.filter((_, i) => i !== index) })
-                        }
-                      >
-                        블록 삭제
-                      </button>
+                      />
+                      <ActionMenu label={`${block.title || block.id} 블록 메뉴`}>
+                        <button
+                          type="button"
+                          className="secondary"
+                          disabled={pendingTemplate}
+                          onClick={() => removeBlock(index)}
+                        >
+                          <Trash2 size={18} aria-hidden="true" /> 블록 삭제
+                        </button>
+                      </ActionMenu>
                     </div>
                     <BlockEditor
                       block={block}
@@ -1254,6 +1306,7 @@ export function PromptComposer({
               <button
                 type="button"
                 className="secondary"
+                data-add-block
                 disabled={program.blocks.length >= 300}
                 onClick={() =>
                   edit({ ...program, blocks: [...program.blocks, freshBlock('message')] })

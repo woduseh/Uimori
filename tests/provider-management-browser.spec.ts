@@ -1,3 +1,10 @@
+import {
+  openProviderMenu,
+  revealProviderDiagnostics,
+  selectSettingsSection,
+  startProviderConnection,
+  selectChatSettingsSection,
+} from './ui-navigation.js';
 import { test, expect, type APIRequestContext, type Page } from '@playwright/test';
 import type { Connection, Library, ModelPreset } from '../core/product.js';
 import type { Chat, ChatDetail } from '../core/types.js';
@@ -51,7 +58,7 @@ async function settings(page: Page) {
   if (!(await button.isVisible()))
     await page.getByRole('button', { name: '탐색 메뉴', exact: true }).click();
   await button.click();
-  await page.getByRole('tab', { name: '연결과 모델', exact: true }).click();
+  await selectSettingsSection(page, '연결과 모델');
   await expect(page.getByTestId('connection-editor')).toBeVisible();
 }
 function observe(page: Page) {
@@ -81,7 +88,7 @@ test('PMUI01 mobile template registration selects the connection, reports catalo
   await settings(page);
   const form = page.getByRole('form', { name: '연결 편집 양식' }),
     modelForm = page.getByRole('form', { name: '모델 편집 양식' });
-  await page.getByRole('button', { name: '빠른 연결 시작', exact: true }).click();
+  await startProviderConnection(page);
   await page
     .getByRole('region', { name: '제공자 선택', exact: true })
     .getByRole('button', { name: /OpenAI · Responses/ })
@@ -194,6 +201,7 @@ test('PMUI02 connection clone requires review and stale edits retain their draft
   const form = page.getByRole('form', { name: '연결 편집 양식' });
   await page.getByRole('button', { name: '연결 관리', exact: true }).click();
   await page.getByLabel('연결·모델 검색').fill(title);
+  await openProviderMenu(page, '연결', title);
   await page.getByRole('button', { name: title + ' 연결 복제', exact: true }).click();
   await expect(form.getByLabel('연결 이름', { exact: true })).toHaveValue(title + ' 복사');
   await expect(form.getByLabel('이 연결 사용')).not.toBeChecked();
@@ -312,6 +320,7 @@ test('PMUI03 model edits use the latest connection without changing role IDs; de
   expect((await api<ChatDetail>(request, `/chats/${chat.id}`)).profile?.routes.main).toEqual({
     id: original.id,
   });
+  await openProviderMenu(page, '모델', changed.title);
   await page.getByRole('button', { name: changed.title + ' 모델 복제', exact: true }).click();
   await expect(form.getByLabel('모델 프리셋 이름')).toHaveValue(changed.title + ' 복사');
   expect(
@@ -332,6 +341,7 @@ test('PMUI03 model edits use the latest connection without changing role IDs; de
     maxOutputTokens: 4096,
     evaluationTools: original.evaluationTools,
   });
+  await openProviderMenu(page, '모델', changed.title);
   await page.getByRole('button', { name: changed.title + ' 모델 비활성', exact: true }).click();
   const confirmation = page.getByRole('region', { name: '비활성 영향 확인' });
   await expect(confirmation).toContainText('기존 이야기의 다음 실행이 차단');
@@ -345,6 +355,7 @@ test('PMUI03 model edits use the latest connection without changing role IDs; de
     )
     .toBe(false);
   await page.getByRole('button', { name: '연결 관리', exact: true }).click();
+  await openProviderMenu(page, '연결', title + ' 연결 최신판');
   await page.getByRole('button', { name: title + ' 연결 최신판 연결 비활성', exact: true }).click();
   await expect(confirmation).toContainText('기존 이야기의 다음 호출도 차단');
   await confirmation.getByRole('button', { name: '비활성 취소', exact: true }).click();
@@ -355,7 +366,7 @@ test('PMUI03 model edits use the latest connection without changing role IDs; de
   await page.goto(`/?chat=${chat.id}`);
   await expect(page.getByLabel('빠른 본문 모델')).toHaveValue(`${original.id}`);
   await page.getByRole('button', { name: '채팅 설정', exact: true }).click();
-  await page.getByRole('tab', { name: '모델', exact: true }).click();
+  await selectChatSettingsSection(page, '모델');
   await expect(page.getByLabel('원문 모델', { exact: true })).toHaveValue(`${original.id}`);
   await expect(
     page.getByLabel('원문 모델', { exact: true }).locator('option:checked')
@@ -459,7 +470,7 @@ test('PMUI07 quick setup selects a cached catalog model and keeps drafts across 
     const title = `PMUI07 ${width} ${Date.now()}`,
       form = page.getByRole('form', { name: '연결 편집 양식' }),
       modelForm = page.getByRole('form', { name: '모델 편집 양식' });
-    await page.getByRole('button', { name: '빠른 연결 시작', exact: true }).click();
+    await startProviderConnection(page);
     await expect(page.getByRole('list', { name: '빠른 연결 진행' })).toContainText('1 제공자');
     await page.getByText('개발·검사용 연결', { exact: true }).click();
     await page.getByRole('button', { name: '로컬 fixture로 설정', exact: true }).click();
@@ -557,7 +568,7 @@ test('PMUI08 Vertex JSON upload validates locally and saves only the returned cr
   await settings(page);
   const title = 'PMUI08 ' + Date.now(),
     observed = observe(page);
-  await page.getByRole('button', { name: '빠른 연결 시작', exact: true }).click();
+  await startProviderConnection(page);
   await page
     .getByRole('region', { name: '제공자 선택', exact: true })
     .getByRole('button', { name: /Google Agent Platform/ })
@@ -1005,6 +1016,7 @@ test('PMUI13 response tests are explicit and late results stay with the original
   await settings(page);
   await page.getByLabel('연결·모델 검색').fill(title);
   expect(posts).toEqual([]);
+  await revealProviderDiagnostics(page, a.title);
   const button = page.getByRole('button', { name: a.title + ' 응답 테스트', exact: true });
   await button.click();
   await expect(button).toBeDisabled();
@@ -1067,6 +1079,7 @@ test('PMUI14 an uncertain response test reuses its key until an explicit new tes
   });
   await settings(page);
   await page.getByLabel('연결·모델 검색').fill(title);
+  await revealProviderDiagnostics(page, title);
   const button = page.getByRole('button', { name: title + ' 응답 테스트', exact: true }),
     result = page.getByRole('region', { name: title + ' 응답 테스트 결과', exact: true });
   await button.click();
@@ -1187,7 +1200,7 @@ test('PMUI10 Codex subscription login preserves drafts and saves a connection an
   await page.setViewportSize({ width: 390, height: 844 });
   const observed = observe(page);
   await settings(page);
-  await page.getByRole('button', { name: '빠른 연결 시작', exact: true }).click();
+  await startProviderConnection(page);
   await page
     .getByRole('region', { name: '제공자 선택', exact: true })
     .getByRole('button', { name: /Codex/ })
@@ -1197,7 +1210,7 @@ test('PMUI10 Codex subscription login preserves drafts and saves a connection an
   await expect(form.getByLabel('Codex 실행 위치')).toHaveValue('codex://local');
   await expect(form.getByLabel('Codex 실행 위치')).toHaveAttribute('readonly', '');
   await expect(form.getByLabel('서버 환경변수 이름')).toBeHidden();
-  await page.getByRole('tab', { name: '에이전트', exact: true }).click();
+  await selectSettingsSection(page, '에이전트');
   const panel = page.getByRole('region', { name: 'Codex 에이전트 연결' });
   await expect(panel).toContainText('ChatGPT 로그인이 필요해요');
   expect(mutations).toEqual([]);
@@ -1216,7 +1229,7 @@ test('PMUI10 Codex subscription login preserves drafts and saves a connection an
   await expect(panel).toContainText('ChatGPT 구독으로 연결됐어요');
   await expect(panel).toContainText('사용 25%');
   await page.screenshot({ path: info.outputPath('codex-subscription-settings-mobile.png') });
-  await page.getByRole('tab', { name: '연결과 모델', exact: true }).click();
+  await selectSettingsSection(page, '연결과 모델');
   await expect(form.getByLabel('연결 이름', { exact: true })).toHaveValue('보존할 Codex 초안');
   await form.getByRole('button', { name: '연결 등록', exact: true }).click();
   const modelForm = page.getByRole('form', { name: '모델 편집 양식' });
@@ -1249,7 +1262,7 @@ test('PMUI10 Codex subscription login preserves drafts and saves a connection an
     maxOutputTokens: 2048,
     temperature: null,
   });
-  await page.getByRole('tab', { name: '에이전트', exact: true }).click();
+  await selectSettingsSection(page, '에이전트');
   await panel.getByRole('button', { name: 'Codex 연결 해제', exact: true }).click();
   await expect(panel).toContainText('ChatGPT 로그인이 필요해요');
   available = false;
@@ -1272,7 +1285,7 @@ test('PMUI16 endpoint guidance checks server policy before saving and ignores a 
 }, info) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await settings(page);
-  await page.getByRole('button', { name: '빠른 연결 시작', exact: true }).click();
+  await startProviderConnection(page);
   await page
     .getByRole('region', { name: '제공자 선택', exact: true })
     .getByRole('button', { name: /OpenAI · Responses/ })

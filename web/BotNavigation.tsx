@@ -9,13 +9,12 @@ import {
   MoreHorizontal,
   LoaderCircle,
   FolderPlus,
-  BookOpen,
   Clock3,
   Folder,
   Plus,
   Search,
-  Settings2,
 } from 'lucide-react';
+import { LibraryIcon, PromptIcon, SettingsIcon } from './ui-icons.js';
 import type { Content, Library } from '../core/product.js';
 import type { Chat } from '../core/types.js';
 import type { ChatFolder } from '../core/product.js';
@@ -400,9 +399,9 @@ export function BotNavigation(props: Props) {
   );
   const menuIndex = menuSiblings.findIndex((chat) => chat.id === menuId);
   const settingsFolder = folders.find((folder) => folder.id === settingsId);
-  const navigation: [LibraryDestination, string, typeof BookOpen][] = [
-    ['bot', '서재', BookOpen],
-    ['prompts', '프롬프트', BookOpen],
+  const navigation: [LibraryDestination, string, typeof LibraryIcon][] = [
+    ['bot', '서재', LibraryIcon],
+    ['prompts', '프롬프트', PromptIcon],
   ];
   return (
     <div
@@ -675,7 +674,7 @@ export function BotNavigation(props: Props) {
           작업 현황{tasks > 0 && <span className="count">{tasks}</span>}
         </button>
         <button className="nav-button" onClick={onSettings}>
-          <Settings2 size={19} />
+          <SettingsIcon size={19} aria-hidden="true" />
           설정
         </button>
       </div>

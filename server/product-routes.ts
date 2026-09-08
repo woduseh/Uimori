@@ -386,6 +386,9 @@ export function productRoutes(
       .type('application/vnd.sqlite3')
       .send(product.backup())
   );
+  app.get('/api/import/status', async (_request, reply) =>
+    reply.header('Cache-Control', 'no-store').send(product.importStatus())
+  );
   app.post('/api/import', { bodyLimit: 64 * 1024 * 1024 }, async (request) => {
     const b = record(request.body);
     fields(b, ['archive']);

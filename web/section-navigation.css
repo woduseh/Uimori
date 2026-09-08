@@ -1,0 +1,55 @@
+.section-navigation {
+  display: grid;
+  align-content: start;
+  gap: 4px;
+  min-width: 0;
+}
+.section-navigation[hidden] {
+  display: none;
+}
+.section-navigation > button {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  min-height: 44px;
+  width: 100%;
+  padding: 10px 12px;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+  font-size: 14px;
+  line-height: 1.5;
+}
+.section-navigation > button > svg {
+  flex: none;
+  color: var(--muted);
+}
+.section-navigation > button > span {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+  overflow-wrap: anywhere;
+}
+.section-navigation-title {
+  font-weight: 550;
+}
+.section-navigation small {
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--muted);
+  word-break: keep-all;
+}
+.section-navigation > button[aria-selected="true"],
+.section-navigation > button[aria-current="page"] {
+  background: var(--accent-soft);
+}
+.section-navigation > button[aria-selected="true"] > svg,
+.section-navigation > button[aria-current="page"] > svg {
+  color: var(--accent);
+}
+.section-navigation > button:hover {
+  background: var(--hover);
+}

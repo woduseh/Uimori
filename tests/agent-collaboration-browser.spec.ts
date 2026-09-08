@@ -2,7 +2,7 @@ import { test, expect } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
 import { createDefaultPromptProgram } from '../core/prompt-defaults.js';
 import type { PromptPreset } from '../core/product.js';
-import { navigationAction } from './ui-navigation.js';
+import { navigationAction, openPromptTools } from './ui-navigation.js';
 import { postFixtureChat } from './fixtures/chat.js';
 
 test('AGENTUI01 collaboration stays editable through incomplete drafts, undo and JSON round trips at 390px', async ({
@@ -21,7 +21,7 @@ test('AGENTUI01 collaboration stays editable through incomplete drafts, undo and
     .getByLabel('프롬프트 이름', { exact: true })
     .fill(`협업 합성 UI ${crypto.randomUUID()}`);
   const enabled = collaboration.getByRole('switch', { name: '협업 사용' });
-  const save = editor.getByRole('button', { name: '새 프롬프트로 저장', exact: true });
+  const save = editor.getByRole('button', { name: '새 프롬프트 저장', exact: true });
   await expect(enabled).not.toBeChecked();
   await enabled.check();
   await expect(save).toBeDisabled();
@@ -66,6 +66,7 @@ test('AGENTUI01 collaboration stays editable through incomplete drafts, undo and
     saved.program
   );
   const downloaded = page.waitForEvent('download');
+  await openPromptTools(editor);
   await editor.getByRole('button', { name: 'JSON 내보내기', exact: true }).click();
   const download = await downloaded;
   expect(JSON.parse(await readFile((await download.path())!, 'utf8'))).toEqual(saved.program);
@@ -83,7 +84,7 @@ test('AGENTUI01 collaboration stays editable through incomplete drafts, undo and
     (item) =>
       item.url().endsWith(`/api/prompt-presets/${saved.id}`) && item.request().method() === 'PUT'
   );
-  await editor.getByRole('button', { name: '기존 프롬프트 수정 저장', exact: true }).click();
+  await editor.getByRole('button', { name: '수정 저장', exact: true }).click();
   expect((await (await updatedResponse).json()).program.collaboration.enabled).toBe(false);
   await page.reload();
   await navigationAction(page, '프롬프트');
@@ -122,7 +123,7 @@ test('AGENTUI02 saved collaboration options reach the real preview API and trans
     (item) =>
       item.url().endsWith(`/api/prompt-presets/${preset.id}`) && item.request().method() === 'PUT'
   );
-  await editor.getByRole('button', { name: '기존 프롬프트 수정 저장', exact: true }).click();
+  await editor.getByRole('button', { name: '수정 저장', exact: true }).click();
   const saved = (await (await updated).json()) as PromptPreset;
   expect(saved.program.collaboration).toMatchObject({
     maxCalls: 4,

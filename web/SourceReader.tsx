@@ -12,6 +12,8 @@ import { api, labels } from './api.js';
 import { auxiliaryErrorDiagnostic } from './auxiliary-error.js';
 import { Prose } from './Prose.js';
 import { LazyDiagnostics } from './LazyDiagnostics.js';
+import { ActionMenu } from './ActionMenu.js';
+import { CopyIcon, EditIcon, ImagesIcon } from './ui-icons.js';
 import { SourceSegmentsReader, type SegmentTranslationView } from './SourceSegmentsReader.js';
 import {
   parseSourceSegments,
@@ -40,7 +42,7 @@ type ReaderProps = {
   presentationRefreshKey?: string | number;
 };
 type AnchorPosition = { anchors: string[]; top: number; scrollport: HTMLElement };
-type EditorOrigin = { button: HTMLButtonElement; scrollport: HTMLElement; offset: number };
+type EditorOrigin = { button: HTMLElement; scrollport: HTMLElement; offset: number };
 
 function initialMode(sourceId: string, hasTranslation: boolean): ReaderMode {
   if (!hasTranslation) return 'original';
@@ -168,14 +170,17 @@ function SourceReaderContent({
     return () => cancelAnimationFrame(frame);
   }, [editor]);
   const openEditor = (role: ReaderMode, button: HTMLButtonElement) => {
-    const scrollport = button.closest<HTMLElement>('[data-reader-scrollport]');
+    const menu = button.closest<HTMLDetailsElement>('.action-menu');
+    const origin = menu?.querySelector('summary') ?? button;
+    const scrollport = origin.closest<HTMLElement>('[data-reader-scrollport]');
     editorOrigin.current = scrollport
       ? {
-          button,
+          button: origin,
           scrollport,
-          offset: button.getBoundingClientRect().top - scrollport.getBoundingClientRect().top,
+          offset: origin.getBoundingClientRect().top - scrollport.getBoundingClientRect().top,
         }
       : undefined;
+    if (menu) menu.open = false;
     setEditor(role);
   };
   const closeEditor = () => {
@@ -559,58 +564,64 @@ function SourceReaderContent({
         refreshKey={`${source.hash}:${jobs.map((job) => job.status).join(',')}`}
       />
       <div className="source-actions">
-        <button
-          type="button"
-          className="secondary"
-          disabled={!!pending}
-          onClick={() => {
-            void action('fork', () => onFork(source.id));
-          }}
-        >
-          {pending === 'fork' ? '이야기 복사 중…' : '여기서 새 이야기로 이어가기'}
-        </button>
-        <button
-          type="button"
-          className="secondary"
-          disabled={!!editor || !!pending}
-          onClick={(event) => openEditor('original', event.currentTarget)}
-        >
-          원문 수정
-        </button>
-        <button
-          type="button"
-          className="secondary"
-          disabled={!!editor || !!pending}
-          onClick={(event) => openEditor('translation', event.currentTarget)}
-        >
-          번역 수정
-        </button>
-        <button
-          type="button"
-          className="secondary"
-          disabled={
-            !!editor ||
-            !!pending ||
-            (!!latestImageJob &&
-              activeJob(latestImageJob) &&
-              latestImageJob.sourceHash === source.hash)
-          }
-          onClick={() =>
-            void action('images', async () => {
-              await api(`/sources/${source.id}/images`, {
-                expectedSourceHash: source.hash,
-                expectedRevision: latestImageJob?.revision ?? 0,
-              });
-              await refresh();
-            })
-          }
-        >
-          {pending === 'images'
-            ? '이미지 선택을 예약하는 중…'
-            : latestImageJob
-              ? '이미지 다시 선택'
-              : '이미지 선택'}
-        </button>
+        <ActionMenu label="장면 작업 메뉴" placement="top">
+          <button
+            type="button"
+            className="secondary"
+            disabled={!!editor || !!pending}
+            onClick={() => {
+              void action('fork', () => onFork(source.id));
+            }}
+          >
+            <CopyIcon size={18} aria-hidden="true" />
+            {pending === 'fork' ? '이야기 복사 중…' : '여기서 새 이야기로 이어가기'}
+          </button>
+          <button
+            type="button"
+            className="secondary"
+            disabled={!!editor || !!pending}
+            onClick={(event) => openEditor('original', event.currentTarget)}
+          >
+            <EditIcon size={18} aria-hidden="true" />
+            원문 수정
+          </button>
+          <button
+            type="button"
+            className="secondary"
+            disabled={!!editor || !!pending}
+            onClick={(event) => openEditor('translation', event.currentTarget)}
+          >
+            <EditIcon size={18} aria-hidden="true" />
+            번역 수정
+          </button>
+          <button
+            type="button"
+            className="secondary"
+            disabled={
+              !!editor ||
+              !!pending ||
+              (!!latestImageJob &&
+                activeJob(latestImageJob) &&
+                latestImageJob.sourceHash === source.hash)
+            }
+            onClick={() =>
+              void action('images', async () => {
+                await api(`/sources/${source.id}/images`, {
+                  expectedSourceHash: source.hash,
+                  expectedRevision: latestImageJob?.revision ?? 0,
+                });
+                await refresh();
+              })
+            }
+          >
+            <ImagesIcon size={18} aria-hidden="true" />
+            {pending === 'images'
+              ? '이미지 선택을 예약하는 중…'
+              : latestImageJob
+                ? '이미지 다시 선택'
+                : '이미지 선택'}
+          </button>
+        </ActionMenu>
       </div>
       {actionError && (
         <p className="error" role="alert">

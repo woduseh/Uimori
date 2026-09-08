@@ -304,6 +304,7 @@ test.each([false, true])(
       '/api/library',
       '/api/export',
       '/api/backup',
+      '/api/import/status',
       '/api/assets/private-asset',
       '/api/chats/private-chat/reader',
     ];

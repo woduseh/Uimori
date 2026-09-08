@@ -44,10 +44,12 @@ export function ProviderRegistrationAssistant({
   library,
   reload,
   onError,
+  onDirtyChange,
 }: {
   library: Library;
   reload: () => Promise<void>;
   onError: (error: string) => void;
+  onDirtyChange?: (dirty: boolean) => void;
 }) {
   const { choices } = useModelSelection(library.models, library.connections);
   const [target, setTarget] = useState(''),
@@ -56,11 +58,16 @@ export function ProviderRegistrationAssistant({
   const [busy, setBusy] = useState(false),
     [error, setError] = useState(''),
     [restoring, setRestoring] = useState(true);
+  const [baseline, setBaseline] = useState(() => JSON.stringify({ target: '', request: '' }));
   const pendingKey = useRef<string | undefined>(undefined),
     pendingIntent = useRef(''),
     locked = useRef(false),
     epoch = useRef(0);
   const running = run?.status === 'running';
+  const dirty = busy || running || JSON.stringify({ target, request }) !== baseline;
+  useEffect(() => {
+    onDirtyChange?.(dirty);
+  }, [dirty, onDirtyChange]);
   useEffect(() => {
     let alive = true;
     const key = sessionStorage.getItem(storageKey);
@@ -77,6 +84,7 @@ export function ProviderRegistrationAssistant({
           setRun(value);
           setRequest(value.request);
           setTarget(label(value.target));
+          setBaseline(JSON.stringify({ target: label(value.target), request: value.request }));
           pendingKey.current = undefined;
         }
       })
@@ -160,6 +168,7 @@ export function ProviderRegistrationAssistant({
       setRun(value);
       setRequest(value.request);
       setTarget(label(value.target));
+      setBaseline(JSON.stringify({ target: label(value.target), request: value.request }));
       pendingKey.current = undefined;
       pendingIntent.current = '';
     } catch (caught) {
@@ -199,6 +208,7 @@ export function ProviderRegistrationAssistant({
     }
     if (scope !== epoch.current) return;
     setRun(value);
+    setBaseline(JSON.stringify({ target: label(value.target), request: value.request }));
     pendingKey.current = undefined;
     pendingIntent.current = '';
   }

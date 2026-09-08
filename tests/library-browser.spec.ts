@@ -84,7 +84,6 @@ async function moveItems(
 ) {
   await revealListOptions(panel);
   await panel.getByRole('button', { name: '선택', exact: true }).click();
-  await panel.locator('.library-list-options > summary').click();
   for (const title of titles) await panel.getByLabel(`${title} 선택`, { exact: true }).check();
   await panel.getByRole('button', { name: '선택한 자료 이동', exact: true }).click();
   const dialog = page.getByRole('dialog', { name: '자료 이동', exact: true });
@@ -191,7 +190,6 @@ test('LIBUI02 mobile folder deletion refreshes another page and stale moves requ
   await chooseFolder(otherPanel, folder.title);
   await revealListOptions(otherPanel);
   await otherPanel.getByRole('button', { name: '선택', exact: true }).click();
-  await otherPanel.locator('.library-list-options > summary').click();
   await otherPanel.getByLabel(`${item.title} 선택`, { exact: true }).check();
   await page.bringToFront();
   await page.screenshot({ path: info.outputPath('library-folders-mobile.png') });
@@ -278,7 +276,7 @@ test('LIBUI03 prompts have independent folders and unsaved edits survive a cance
   await guard.getByRole('button', { name: '계속 편집', exact: true }).click();
   await expect(page.getByRole('dialog', { name: '탐색', exact: true })).toBeHidden();
   await expect(panel.getByLabel('프롬프트 이름', { exact: true })).toHaveValue(`${prefix} Unsaved`);
-  await panel.getByRole('button', { name: '기존 프롬프트 수정 저장', exact: true }).click();
+  await panel.getByRole('button', { name: '수정 저장', exact: true }).click();
   await expect
     .poll(
       async () =>

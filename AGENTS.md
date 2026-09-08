@@ -1,5 +1,7 @@
 # 작업 지도
 
+- 데스크톱·모바일 UI와 아이콘은 [docs/UI-PRINCIPLES.md](docs/UI-PRINCIPLES.md)를 기준으로 해요. 기능의 이름·아이콘·묶음을 공유하고 화면 폭에 맞춰 배치해요. 내용·주된 행동을 먼저 보여주고 관리 도구는 필요할 때 열어요. 터치 영역·취소·오류·초안 보호를 유지하며, 문서의 후속 적용안과 현재 구현·실기기 검증을 구분해요.
+
 - 커스텀 작문 보조는 `docs/AGENT-COLLABORATION.md`, `core/agent-collaboration.ts`, `server/agent-collaboration.ts`를 봐요. `PromptProgram.collaboration`은 기본 OFF이며 보조의 지침·공유 옵션·모델을 Run에 고정해요. 읽기 권한·전체 호출 한도·전송 전 attempt·취소를 유지하고 메인만 원문을 저장해요. `npm run verify:collaboration`은 설정·미리보기 합성 화면 검사이며 실제 창작 품질의 증거는 아니에요.
 
 - 코드 품질·완료 검사: `docs/QUALITY.md`. 수정 중에는 `npm run quality`(서식·lint·타입·의존성), 완료/통합 전에는 `npm run quality:full`(단위·통합·빌드 추가)을 실행해요. UI 동작 변경은 빌드 후 해당 `verify:*` 또는 전체 `npm run verify:redesign`을 추가해요. 서식 수정은 `npm run format`, lint 자동 수정은 안전한 수정만 하는 `npm run lint:fix`예요. 필요한 검사 통과 후 반복·확대하지 않으며, 검사 통과를 위한 광범위 ignore·규칙 약화 대신 좁은 예외에 이유를 남겨요.

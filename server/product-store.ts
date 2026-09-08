@@ -1024,6 +1024,15 @@ export class ProductStore {
       if (existsSync(path)) unlinkSync(path);
     }
   }
+  importStatus() {
+    return {
+      canImport: !archiveTables.some(
+        (table) =>
+          !['package_behavior_entropy', 'library_organization_state'].includes(table) &&
+          this.db.prepare(`SELECT 1 FROM ${table} LIMIT 1`).get()
+      ),
+    };
+  }
   import(value: unknown) {
     // Validation and normalization must never mutate the caller's archive, even
     // when a later row fails and the database transaction rolls back.
@@ -1041,16 +1050,10 @@ export class ProductStore {
     fields(tables, archiveTables);
     if (archiveTables.some((t) => !Array.isArray(tables[t]) || tables[t].length > 100000))
       throw new HttpError(400, 'Missing or oversized archive table');
-    if (
-      archiveTables.some(
-        (t) =>
-          !['package_behavior_entropy', 'library_organization_state'].includes(t) &&
-          this.db.prepare(`SELECT 1 FROM ${t} LIMIT 1`).get()
-      )
-    )
-      throw new HttpError(409, 'Restore requires an empty database');
     try {
       this.store.transaction(() => {
+        if (!this.importStatus().canImport)
+          throw new HttpError(409, 'Restore requires an empty database');
         this.db.exec('PRAGMA defer_foreign_keys=ON');
         this.db.exec(
           'DELETE FROM package_behavior_entropy; DELETE FROM library_organization_state'
@@ -1167,7 +1170,7 @@ export class ProductStore {
         this.store.libraryOrganization.validateArchive();
       });
     } catch (error) {
-      if (error instanceof HttpError && error.statusCode === 400) throw error;
+      if (error instanceof HttpError && [400, 409].includes(error.statusCode)) throw error;
       throw new HttpError(400, 'Archive data or references invalid');
     }
     return { restored: true, chats: this.store.chats().length };

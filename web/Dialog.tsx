@@ -1,5 +1,6 @@
-import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
-import { X } from 'lucide-react';
+import { useEffect, useLayoutEffect, useId, useRef, useState, type ReactNode } from 'react';
+import { IconButton } from './IconButton.js';
+import { CloseIcon } from './ui-icons.js';
 
 /** Native modal supplies background inertness, Escape, focus containment and restoration. */
 export function Dialog({
@@ -11,6 +12,8 @@ export function Dialog({
   className = '',
   scopeKey = '',
   role = 'dialog',
+  headerTitle,
+  headerLeading,
 }: {
   open: boolean;
   title: string;
@@ -20,6 +23,8 @@ export function Dialog({
   className?: string;
   scopeKey?: string;
   role?: 'dialog' | 'alertdialog';
+  headerTitle?: string;
+  headerLeading?: ReactNode;
 }) {
   const [visited, setVisited] = useState<string | null>(null);
   useEffect(() => {
@@ -31,6 +36,14 @@ export function Dialog({
   close.current = onClose;
   const isOpen = useRef(open);
   isOpen.current = open;
+  useLayoutEffect(() => {
+    const node = ref.current!;
+    return () => {
+      // Conditional panels must close before removal to restore the native opener focus.
+      isOpen.current = false;
+      if (node.open) node.close();
+    };
+  }, []);
   useEffect(() => {
     const node = ref.current!;
     if (open && !node.open) node.showModal();
@@ -41,7 +54,8 @@ export function Dialog({
       ref={ref}
       role={role}
       className={`app-dialog ${wide ? 'wide' : ''} ${className}`}
-      aria-labelledby={id}
+      aria-labelledby={headerTitle ? undefined : id}
+      aria-label={headerTitle ? title : undefined}
       onKeyDown={(event) => {
         if (event.key !== 'Tab') return;
         event.stopPropagation();
@@ -94,15 +108,14 @@ export function Dialog({
       }}
     >
       <header className="dialog-header">
-        <h2 id={id}>{title}</h2>
-        <button
-          type="button"
-          className="icon-button secondary"
-          aria-label={`${title} 닫기`}
+        {headerLeading}
+        <h2 id={id}>{headerTitle ?? title}</h2>
+        <IconButton
+          className="secondary"
+          label={`${title} 닫기`}
+          icon={CloseIcon}
           onClick={onClose}
-        >
-          <X size={20} />
-        </button>
+        />
       </header>
       <div className="dialog-body">{(open || visited === scopeKey) && children}</div>
     </dialog>

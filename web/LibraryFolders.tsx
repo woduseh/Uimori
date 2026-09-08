@@ -1,12 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import {
-  ArrowDown,
-  ArrowUp,
-  Folder,
-  FolderPlus,
-  PanelLeftClose,
-  PanelLeftOpen,
-} from 'lucide-react';
+import { ArrowDown, ArrowUp, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
 import type { Library } from '../core/product.js';
 import type {
   LibraryCategory,
@@ -17,6 +10,8 @@ import type {
 import { api } from './api.js';
 import { Dialog } from './Dialog.js';
 import { DeleteButton } from './DeleteButton.js';
+import { ActionMenu } from './ActionMenu.js';
+import { EditIcon, FolderAddIcon, FolderIcon, MoreIcon } from './ui-icons.js';
 import './library-folders.css';
 
 export const categoryLabels: Record<LibraryCategory, string> = {
@@ -100,38 +95,21 @@ export function useLibraryOrganization(
 }
 export type LibraryOrganizer = ReturnType<typeof useLibraryOrganization>;
 
-export function LibraryItemMenu({ title, children }: { title: string; children: ReactNode }) {
-  const ref = useRef<HTMLDetailsElement>(null);
-  const [open, setOpen] = useState(false);
-  useEffect(() => {
-    if (!open) return;
-    const dismiss = (event: PointerEvent) => {
-      if (event.target instanceof Node && ref.current && !ref.current.contains(event.target))
-        ref.current.open = false;
-    };
-    document.addEventListener('pointerdown', dismiss);
-    return () => document.removeEventListener('pointerdown', dismiss);
-  }, [open]);
+export function LibraryItemMenu({
+  title,
+  children,
+  className = '',
+  icon = MoreIcon,
+}: {
+  title: string;
+  children: ReactNode;
+  className?: string;
+  icon?: typeof MoreIcon;
+}) {
   return (
-    <details
-      ref={ref}
-      className="library-item-menu"
-      onToggle={(event) => setOpen(event.currentTarget.open)}
-      onKeyDown={(event) => {
-        if (
-          event.key !== 'Escape' ||
-          (event.target instanceof Element && event.target.closest('dialog[open]'))
-        )
-          return;
-        event.stopPropagation();
-        event.preventDefault();
-        event.currentTarget.open = false;
-        event.currentTarget.querySelector('summary')?.focus();
-      }}
-    >
-      <summary aria-label={title}>⋯</summary>
-      <div>{children}</div>
-    </details>
+    <ActionMenu label={title} className={`library-item-menu ${className}`} icon={icon}>
+      {children}
+    </ActionMenu>
   );
 }
 
@@ -182,6 +160,7 @@ export function LibraryFolders({
           disabled={busy}
           onClick={() => openEdit(folder)}
         >
+          <EditIcon size={18} aria-hidden="true" />
           이름 변경
         </button>
         <button
@@ -196,7 +175,7 @@ export function LibraryFolders({
             )
           }
         >
-          <ArrowUp size={14} />
+          <ArrowUp size={18} aria-hidden="true" />
           위로
         </button>
         <button
@@ -211,7 +190,7 @@ export function LibraryFolders({
             )
           }
         >
-          <ArrowDown size={14} />
+          <ArrowDown size={18} aria-hidden="true" />
           아래로
         </button>
         <DeleteButton
@@ -254,8 +233,8 @@ export function LibraryFolders({
           disabled={busy || !organization}
           onClick={() => openEdit(null)}
         >
-          <FolderPlus size={17} />
-          <span>새 폴더</span>
+          <FolderAddIcon size={20} aria-hidden="true" />
+          <span className={compactMobile ? 'sr-only' : undefined}>새 폴더</span>
         </button>
       </div>
       <label className="library-folder-mobile">
@@ -277,7 +256,7 @@ export function LibraryFolders({
               disabled={busy || !organization}
               onClick={() => openEdit(null)}
             >
-              <FolderPlus size={17} />새 폴더
+              <FolderAddIcon size={18} aria-hidden="true" />새 폴더
             </button>
             {selectedFolder && folderActions(selectedFolder)}
           </LibraryItemMenu>
@@ -297,7 +276,7 @@ export function LibraryFolders({
                   onClick={() => onChange(item.id)}
                   title={item.title}
                 >
-                  <Folder size={15} />
+                  <FolderIcon size={18} aria-hidden="true" />
                   <span>{item.title}</span>
                   <small>{counts[item.id] ?? 0}</small>
                 </button>

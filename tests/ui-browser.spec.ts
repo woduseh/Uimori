@@ -1,11 +1,21 @@
-import { editLibraryContent, openNewStoryOptions } from './ui-navigation.js';
+import {
+  selectSettingsSection,
+  startProviderConnection,
+  editLibraryContent,
+  openNewStoryOptions,
+  createPromptChoice,
+  navigationAction,
+  selectStartPrompt,
+  selectChatSettingsSection,
+  openPromptActions,
+  openSourceActions,
+} from './ui-navigation.js';
 import { postFixtureChat } from './fixtures/chat.js';
 import { test, expect, type Page, type APIRequestContext, type Locator } from '@playwright/test';
 import { createHash } from 'node:crypto';
 import type { Chat, ChatDetail, Run } from '../core/types.js';
 import type { Content } from '../core/product.js';
 import { createDefaultPromptProgram } from '../core/prompt-defaults.js';
-import { createPromptChoice, navigationAction, selectStartPrompt } from './ui-navigation.js';
 
 async function promptBody(editor: Locator) {
   const block = editor.locator('#prompt-block-instructions');
@@ -172,7 +182,7 @@ test('UI01 UI02 UI04 UI05 UI09 long real sources keep composer accessible, safe 
       )
     ).toBe(true);
     await nav(page, '설정');
-    await page.getByRole('tab', { name: '연결과 모델', exact: true }).click();
+    await selectSettingsSection(page, '연결과 모델');
     const connectionDialog = page.getByRole('dialog', { name: '설정', exact: true });
     expect(
       await connectionDialog.evaluate((element) => element.scrollWidth <= element.clientWidth + 1)
@@ -608,6 +618,7 @@ test('UI07 UI12 late accepted fork cannot navigate after A B A or replace the cu
     await route.fulfill({ response });
   });
   try {
+    await openSourceActions(page.getByTestId('source'));
     await page.getByRole('button', { name: '여기서 새 이야기로 이어가기', exact: true }).click();
     const fork = await acceptedChat;
     const list = page.getByRole('navigation', { name: '봇의 채팅 목록' });
@@ -1036,10 +1047,17 @@ test('UI03 starting without a model explains setup and creates a chat without ex
   await expect(dialog).toContainText('모델은 나중에 선택하고 채팅만 먼저 만들 수도 있어요.');
   await dialog.getByRole('button', { name: '모델 연결 설정', exact: true }).click();
   await expect(page.getByRole('dialog', { name: '설정', exact: true })).toBeVisible();
-  await expect(page.getByRole('tab', { name: '연결과 모델', exact: true })).toHaveAttribute(
-    'aria-selected',
-    'true'
-  );
+  await expect(page.getByTestId('connection-editor')).toBeVisible();
+  const settings = page.getByRole('dialog', { name: '설정', exact: true });
+  const connectionTab = settings.getByRole('tab', { name: '연결과 모델', exact: true });
+  if (await connectionTab.isVisible())
+    await expect(connectionTab).toHaveAttribute('aria-selected', 'true');
+  else {
+    await expect(settings.getByRole('heading', { name: '연결과 모델', exact: true })).toBeVisible();
+    await expect(
+      settings.getByRole('button', { name: '설정 목록으로', exact: true })
+    ).toBeVisible();
+  }
   await nav(page, '새 이야기');
   await openNewStoryOptions(page);
   await dialog.getByLabel('새 채팅 이름').fill(title);
@@ -1330,7 +1348,7 @@ test('UI17 full writing and empty translation prompts import, save and apply wit
   await page.goto(`/?chat=${chat.id}`);
   await page.getByRole('button', { name: '채팅 설정', exact: true }).click();
   const dialog = page.getByRole('dialog', { name: '채팅 설정', exact: true });
-  await dialog.getByRole('tab', { name: '프롬프트·창작 프리셋', exact: true }).click();
+  await selectChatSettingsSection(page, '프롬프트·창작 프리셋');
   const editor = dialog.getByTestId('prompt-editor');
   await expect(await promptBody(editor)).not.toHaveValue('');
   await editor.getByRole('button', { name: '새 프롬프트 생성', exact: true }).click();
@@ -1346,8 +1364,8 @@ test('UI17 full writing and empty translation prompts import, save and apply wit
   });
   await expect(await promptBody(editor)).toHaveValue(literal);
   await editor.getByLabel('프롬프트 이름').fill('UI17-full-main');
-  await dialog.getByRole('tab', { name: '봇·페르소나·모듈', exact: true }).click();
-  await dialog.getByRole('tab', { name: '프롬프트·창작 프리셋', exact: true }).click();
+  await selectChatSettingsSection(page, '봇·페르소나·모듈');
+  await selectChatSettingsSection(page, '프롬프트·창작 프리셋');
   await expect(await promptBody(editor)).toHaveValue(literal);
   await editor.getByRole('button', { name: '편집 영역 넓히기', exact: true }).click();
   expect(await editor.evaluate((element) => element.scrollWidth <= element.clientWidth + 1)).toBe(
@@ -1356,7 +1374,7 @@ test('UI17 full writing and empty translation prompts import, save and apply wit
   expect(await dialog.evaluate((element) => element.scrollWidth <= element.clientWidth + 1)).toBe(
     true
   );
-  await editor.getByRole('button', { name: '저장하고 이야기에 적용', exact: true }).click();
+  await editor.getByRole('button', { name: '저장하고 적용', exact: true }).click();
   await expect
     .poll(async () => (await data(request, chat.id)).profile?.prompts?.main?.revision)
     .toBe(1);
@@ -1374,7 +1392,7 @@ test('UI17 full writing and empty translation prompts import, save and apply wit
   await editor.getByLabel('프롬프트 이름').fill('UI17 empty translation');
   await (await promptBody(editor)).fill('');
   await expect(await promptBody(editor)).toHaveValue('');
-  await editor.getByRole('button', { name: '저장하고 이야기에 적용', exact: true }).click();
+  await editor.getByRole('button', { name: '저장하고 적용', exact: true }).click();
   await expect
     .poll(async () => Boolean((await data(request, chat.id)).profile?.prompts?.translation))
     .toBe(true);
@@ -1384,6 +1402,7 @@ test('UI17 full writing and empty translation prompts import, save and apply wit
   ).json();
   expect(translation.program).toEqual(createDefaultPromptProgram('', 'translation'));
   expect(translation.role).toBe('translation');
+  await openPromptActions(editor);
   await editor.getByRole('button', { name: '앱 기본 프롬프트 사용', exact: true }).click();
   await expect
     .poll(async () => (await data(request, chat.id)).profile!.prompts!.translation)
@@ -1451,7 +1470,7 @@ test('UI17 prompts use latest settings and concurrent edits preserve unsaved tex
   await page.goto(`/?chat=${chat.id}`);
   await page.getByRole('button', { name: '채팅 설정', exact: true }).click();
   const dialog = page.getByRole('dialog', { name: '채팅 설정', exact: true });
-  await dialog.getByRole('tab', { name: '프롬프트·창작 프리셋', exact: true }).click();
+  await selectChatSettingsSection(page, '프롬프트·창작 프리셋');
   const editor = dialog.getByTestId('prompt-editor');
   await expect(await promptBody(editor)).toHaveValue('Latest library writing prompt.');
   const edited = 'Unsaved custom full prompt.\n' + 'Keep my edited text intact.\n'.repeat(30);
@@ -1468,7 +1487,7 @@ test('UI17 prompts use latest settings and concurrent edits preserve unsaved tex
     },
   });
   expect(concurrent.ok()).toBeTruthy();
-  await editor.getByRole('button', { name: '기존 프롬프트 수정 저장', exact: true }).click();
+  await editor.getByRole('button', { name: '수정 저장', exact: true }).click();
   await expect(editor.getByRole('alert')).toContainText('다른 요청이 먼저 반영됐어요.');
   await expect(await promptBody(editor)).toHaveValue(edited);
   expect((await data(request, chat.id)).profile!.prompts!.main).toEqual({
@@ -1476,7 +1495,8 @@ test('UI17 prompts use latest settings and concurrent edits preserve unsaved tex
     revision: 3,
   });
   await editor.getByLabel('프롬프트 이름').fill('UI17 recovered copy');
-  await editor.getByRole('button', { name: '새 프롬프트로 저장', exact: true }).click();
+  await openPromptActions(editor);
+  await editor.getByRole('button', { name: '복사본으로 저장', exact: true }).click();
   await expect(
     editor.getByRole('status').filter({ hasText: '프롬프트를 저장했어요' })
   ).toBeVisible();
@@ -1496,7 +1516,7 @@ test('UI17 prompts use latest settings and concurrent edits preserve unsaved tex
   );
   expect(copy.program).toEqual(createDefaultPromptProgram(edited, 'main'));
   await (await promptBody(libraryEditor)).fill(edited + '\nRevised in library.');
-  await libraryEditor.getByRole('button', { name: '기존 프롬프트 수정 저장', exact: true }).click();
+  await libraryEditor.getByRole('button', { name: '수정 저장', exact: true }).click();
   await expect
     .poll(
       async () =>
@@ -1565,6 +1585,7 @@ test('UI18 translation is requested only by first view click, never by restore, 
   });
   expect(changed.ok()).toBeTruthy();
   await page.getByRole('button', { name: '채팅 설정', exact: true }).click();
+  await selectChatSettingsSection(page, '자동 후속 작업');
   await expect(
     page.getByText('저장한 설정은 다음 실행부터 적용해요.', { exact: true })
   ).toBeVisible();
@@ -1621,6 +1642,7 @@ test('UI18 source and translation edits preserve past snapshots and feed only fu
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto(`/?chat=${chat.id}`);
   const scene = page.locator(`[data-testid="source"][data-source-id="${source.id}"]`);
+  await openSourceActions(scene);
   await scene.getByRole('button', { name: '원문 수정', exact: true }).click();
   const edited = '  SYNTHETIC_EDITED_SOURCE\n\n직접 수정한 원문과 여백.\n  ';
   await scene.getByLabel('원문 수정 내용').fill(edited);
@@ -1641,6 +1663,7 @@ test('UI18 source and translation edits preserve past snapshots and feed only fu
     changed.jobs.filter((job) => job.kind === 'translation' && job.sourceRevision === source.id)
   ).toHaveLength(0);
   // Editing a translation immediately after a source edit uses the hidden slot's CAS value.
+  await openSourceActions(scene);
   await scene.getByRole('button', { name: '번역 수정', exact: true }).click();
   const manual = '  직접 고친 번역 {{literal_user}}\n\n사용자가 선택한 문장.\n  ';
   await scene.getByLabel('번역 수정 내용').fill(manual);
@@ -1656,6 +1679,7 @@ test('UI18 source and translation edits preserve past snapshots and feed only fu
   expect(manualJob.result!.text).toBe(manual);
   expect(manualJob.result!.manual).toBe(true);
   expect(authored.attempts).toEqual(original.attempts);
+  await openSourceActions(scene);
   await scene.getByRole('button', { name: '원문 수정', exact: true }).click();
   const finalText = edited + '\nFinal authored source.';
   await scene.getByLabel('원문 수정 내용').fill(finalText);
@@ -1720,8 +1744,10 @@ test('UI18 two-tab conflicts preserve reloadable drafts and manual translation s
   try {
     await page.goto(`/?chat=${chat.id}`);
     await second.goto(`/?chat=${chat.id}`);
-    for (const tab of [page, second])
+    for (const tab of [page, second]) {
+      await openSourceActions(tab.getByTestId('source'));
       await tab.getByRole('button', { name: '원문 수정', exact: true }).click();
+    }
     const draft = 'UNSAVED_TAB_ONE\n원문 충돌 뒤에도 남는 초안.';
     await page.getByLabel('원문 수정 내용').fill(draft);
     await page.route(`**/api/sources/${source.id}/text`, async (route) => {
@@ -1746,6 +1772,7 @@ test('UI18 two-tab conflicts preserve reloadable drafts and manual translation s
     await expect(page.getByLabel('원문 수정 내용')).toHaveValue(draft);
     await expect(page.getByText(/다른 요청이 먼저 반영됐어요/)).toBeVisible();
     await page.reload();
+    await openSourceActions(page.getByTestId('source'));
     await page.getByRole('button', { name: '원문 수정', exact: true }).click();
     await expect(page.getByLabel('원문 수정 내용')).toHaveValue(draft);
     await expect(page.getByRole('button', { name: '원문 저장', exact: true })).toBeDisabled();
@@ -1777,6 +1804,7 @@ test('UI18 two-tab conflicts preserve reloadable drafts and manual translation s
       .toBe('running');
     // Refreshing the second tab receives the active slot before opening its editor.
     await second.reload();
+    await openSourceActions(second.getByTestId('source'));
     await second.getByRole('button', { name: '번역 수정', exact: true }).click();
     const manual = 'MANUAL_WINS_AFTER_LATE_RESPONSE\n직접 저장한 번역.';
     await second.getByLabel('번역 수정 내용').fill(manual);
@@ -1821,25 +1849,41 @@ test('UI settings categories retain drafts and support keyboard navigation', asy
     await nav(page, '설정');
     const dialog = page.getByRole('dialog', { name: '설정', exact: true });
     const tabs = dialog.getByRole('tablist', { name: '설정 항목' });
+    if (viewport.width === 390) {
+      await expect(dialog.locator('.settings-navigation').filter({ visible: true })).toBeVisible();
+      await expect(dialog.getByRole('tabpanel')).toHaveCount(0);
+      await expect(dialog.getByLabel('앱 화면 테마')).toBeHidden();
+      await selectSettingsSection(page, '일반');
+    }
     await expect(dialog.getByRole('tabpanel')).toHaveCount(1);
     await expect(dialog.getByLabel('앱 화면 테마')).toBeVisible();
     await expect(dialog.getByTestId('connection-editor')).not.toBeVisible();
-    await tabs.getByRole('tab', { name: '연결과 모델', exact: true }).click();
-    await dialog.getByRole('button', { name: '빠른 연결 시작', exact: true }).click();
+    await selectSettingsSection(page, '연결과 모델');
+    await startProviderConnection(page);
     await dialog
       .getByRole('region', { name: '제공자 선택', exact: true })
       .getByRole('button', { name: /OpenAI · Responses/ })
       .click();
     await dialog.getByLabel('연결 이름', { exact: true }).fill('SYNTHETIC unsaved connection');
-    await tabs.getByRole('tab', { name: '데이터 관리', exact: true }).click();
+    await selectSettingsSection(page, '데이터 관리');
     await expect(dialog.getByRole('button', { name: 'JSON 내보내기', exact: true })).toBeVisible();
     await expect(dialog.getByLabel('연결 이름', { exact: true })).not.toBeVisible();
-    await tabs.getByRole('tab', { name: '접근 보안', exact: true }).click();
+    await selectSettingsSection(page, '접근 보안');
     await expect(dialog.getByRole('button', { name: '접속 해제', exact: true })).toBeVisible();
-    await tabs.getByRole('tab', { name: '접근 보안', exact: true }).press('Home');
-    await expect(tabs.getByRole('tab', { name: '일반', exact: true })).toBeFocused();
-    await page.keyboard.press('ArrowDown');
-    await expect(tabs.getByRole('tab', { name: '연결과 모델', exact: true })).toBeFocused();
+    if (viewport.width === 1440) {
+      await tabs.getByRole('tab', { name: '접근 보안', exact: true }).press('Home');
+      await expect(tabs.getByRole('tab', { name: '일반', exact: true })).toBeFocused();
+      await page.keyboard.press('ArrowDown');
+      await expect(tabs.getByRole('tab', { name: '연결과 모델', exact: true })).toBeFocused();
+    } else {
+      await dialog.getByRole('button', { name: '설정 목록으로', exact: true }).click();
+      const connection = dialog
+        .locator('.settings-navigation')
+        .getByRole('button', { name: '연결과 모델', exact: true });
+      await connection.focus();
+      await page.keyboard.press('Enter');
+      await expect(dialog.locator('.settings-navigation').filter({ visible: true })).toHaveCount(0);
+    }
     await expect(dialog.getByLabel('연결 이름', { exact: true })).toHaveValue(
       'SYNTHETIC unsaved connection'
     );
@@ -1855,10 +1899,13 @@ test('UI settings categories retain drafts and support keyboard navigation', asy
         .getByRole('tabpanel')
         .evaluate((node) => node.scrollWidth <= node.clientWidth + 1)
     ).toBe(true);
-    await tabs.getByRole('tab', { name: '일반', exact: true }).click();
+    await selectSettingsSection(page, '일반');
     await dialog.getByLabel('앱 화면 테마').selectOption('dark');
     await page.screenshot({ path: info.outputPath(`settings-categories-${viewport.width}.png`) });
     await page.keyboard.press('Escape');
+    const discard = page.getByRole('alertdialog', { name: '미저장 설정 확인', exact: true });
+    await expect(discard).toBeVisible();
+    await discard.getByRole('button', { name: '초안 버리고 닫기', exact: true }).click();
     await expect(dialog).not.toBeVisible();
   }
 });
@@ -1947,6 +1994,7 @@ test('UI translation chunk setting saves numeric and unlimited plans on mobile',
   await page.goto(`/?chat=${chat.id}`);
   const dialog = page.getByRole('dialog', { name: '채팅 설정', exact: true });
   await page.getByRole('button', { name: '채팅 설정', exact: true }).click();
+  await selectChatSettingsSection(page, '자동 후속 작업');
   const runtime = dialog.locator('section.settings');
   const size = runtime.getByLabel('번역 구간 기준 글자 수', { exact: true });
   await expect(size).toHaveValue('3000');
@@ -1969,6 +2017,7 @@ test('UI translation chunk setting saves numeric and unlimited plans on mobile',
   const split = (await data(request, chat.id)).jobs.find((job) => job.kind === 'translation')!;
   expect(split.translationPlan).toEqual({ maxChunkChars: 100, totalChunks: 2 });
   await page.getByRole('button', { name: '채팅 설정', exact: true }).click();
+  await selectChatSettingsSection(page, '자동 후속 작업');
   await runtime.getByLabel('번역 구간 무제한', { exact: true }).check();
   await expect(size).toBeDisabled();
   await runtime.getByRole('button', { name: '설정 저장', exact: true }).click();
@@ -1982,12 +2031,14 @@ test('UI translation chunk setting saves numeric and unlimited plans on mobile',
   ).toEqual(split.translationPlan);
   await page.reload();
   await page.getByRole('button', { name: '채팅 설정', exact: true }).click();
+  await selectChatSettingsSection(page, '자동 후속 작업');
   await expect(runtime.getByLabel('번역 구간 무제한', { exact: true })).toBeChecked();
   await close(page);
   page.once('dialog', async (confirmation) => {
     expect(confirmation.type()).toBe('confirm');
     await confirmation.accept();
   });
+  await openSourceActions(scene);
   await scene.getByRole('button', { name: '현재 설정으로 새 번역', exact: true }).click();
   await expect
     .poll(async () => {
@@ -2037,6 +2088,7 @@ test('UI translation chunk setting saves numeric and unlimited plans on mobile',
     const stopped = (await data(request, chat.id)).jobs.find((job) => job.id === split.id)!;
     const target = terminal === 'failed' ? 100 : null;
     await page.getByRole('button', { name: '채팅 설정', exact: true }).click();
+    await selectChatSettingsSection(page, '자동 후속 작업');
     await runtime.getByLabel('번역 구간 무제한', { exact: true }).setChecked(target === null);
     if (target !== null) await size.fill(String(target));
     await runtime.getByRole('button', { name: '설정 저장', exact: true }).click();

@@ -1,8 +1,10 @@
 import { ComposerMore, LoreResetChip } from './ComposerMore.js';
+import { IconButton } from './IconButton.js';
+import { subscribeAppHistory } from './app-history.js';
 import { ChatPromptOptions } from './ChatPromptOptions.js';
 import { ReaderPages } from './ReaderPages.js';
 import { SceneNavigator } from './SceneNavigator.js';
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { createRoot } from 'react-dom/client';
 import {
   ArrowUp,
@@ -28,13 +30,10 @@ import type { PackageRole } from '../core/content-package.js';
 import { SourceReader } from './SourceReader.js';
 import { TurnActivity } from './TurnActivity.js';
 import { PackageBehaviorPanel } from './PackageBehaviorPanel.js';
-import { StoryPanel } from './StoryPanel.js';
-import { AssetEditor } from './AssetEditor.js';
 import { SessionGate } from './SessionGate.js';
 import { Dialog } from './Dialog.js';
 import { BotNavigation, type ChatFolder } from './BotNavigation.js';
 import { completePendingStoryProfile } from './pendingStory.js';
-import { SettingsEditor } from './RuntimeSettings.js';
 import { useStory } from './useStory.js';
 import { useTestMode } from './useTestMode.js';
 import { ActivityStatus } from './ActivityStatus.js';
@@ -43,21 +42,58 @@ import './style.css';
 import './product.css';
 import './sidebar.css';
 
-const LibraryPanel = deferredPanel('서재', async () => ({
-  default: (await import('./LibraryPanel.js')).LibraryPanel,
-}));
-const PromptLibrary = deferredPanel('프롬프트', async () => ({
-  default: (await import('./PromptLibrary.js')).PromptLibrary,
-}));
-const ProfileEditor = deferredPanel('채팅 설정', async () => ({
-  default: (await import('./ProfileEditor.js')).ProfileEditor,
-}));
+function workspaceFallback(title: string, navigation: ReactNode, content: ReactNode) {
+  return (
+    <>
+      <header className="workspace-header">
+        {navigation}
+        <div className="header-title">
+          <h1>{title}</h1>
+        </div>
+      </header>
+      <div className="workspace-fallback-body">{content}</div>
+    </>
+  );
+}
+const LibraryPanel = deferredPanel(
+  '서재',
+  async () => ({
+    default: (await import('./LibraryPanel.js')).LibraryPanel,
+  }),
+  (content, props) => workspaceFallback('서재', props.headerLeading, content)
+);
+const PromptLibrary = deferredPanel(
+  '프롬프트',
+  async () => ({
+    default: (await import('./PromptLibrary.js')).PromptLibrary,
+  }),
+  (content, props) => workspaceFallback('프롬프트', props.headerLeading, content)
+);
+const ChatSettingsPanel = deferredPanel(
+  '채팅 설정',
+  async () => ({
+    default: (await import('./ChatSettingsPanel.js')).ChatSettingsPanel,
+  }),
+  (content, props) => (
+    <Dialog open title="채팅 설정" onClose={props.onClose} wide>
+      {content}
+    </Dialog>
+  )
+);
 const NewStory = deferredPanel('새 채팅', async () => ({
   default: (await import('./NewStory.js')).NewStory,
 }));
-const AppSettingsPanel = deferredPanel('설정', async () => ({
-  default: (await import('./WorkspacePanels.js')).AppSettingsPanel,
-}));
+const AppSettingsPanel = deferredPanel(
+  '설정',
+  async () => ({
+    default: (await import('./WorkspacePanels.js')).AppSettingsPanel,
+  }),
+  (content, props) => (
+    <Dialog open title="설정" onClose={props.onClose} wide>
+      {content}
+    </Dialog>
+  )
+);
 const BranchesPanel = deferredPanel('보관된 전개', async () => ({
   default: (await import('./WorkspacePanels.js')).BranchesPanel,
 }));
@@ -203,8 +239,7 @@ function App() {
   }, []);
   useEffect(() => {
     const onPop = () => setPanel('');
-    addEventListener('popstate', onPop);
-    return () => removeEventListener('popstate', onPop);
+    return subscribeAppHistory(onPop);
   }, []);
   function newStory(
     bot?: Content,
@@ -272,6 +307,84 @@ function App() {
       tasks={s.tasks}
     />
   );
+  const navigationControls = (
+    <>
+      <IconButton
+        className="sidebar-toggle"
+        label={sidebarCollapsed ? '좌측 패널 펼치기' : '좌측 패널 접기'}
+        icon={sidebarCollapsed ? PanelLeftOpen : PanelLeftClose}
+        aria-expanded={!sidebarCollapsed}
+        aria-controls="workspace-sidebar"
+        onClick={() => setSidebarCollapsed((value) => !value)}
+      />
+      <IconButton
+        className="mobile-menu"
+        label="탐색 메뉴"
+        icon={Menu}
+        onClick={() => setPanel('navigation')}
+      />
+    </>
+  );
+  function renderReadingSettings(onStartFocus: () => void) {
+    return (
+      <div className="settings-stack">
+        <label>
+          새 원고의 기본 보기
+          <select
+            aria-label="새 원고의 기본 보기"
+            value={readingLanguage}
+            onChange={(event) => setReadingLanguage(event.target.value)}
+          >
+            <option value="translation">한국어 번역</option>
+            <option value="original">원문</option>
+          </select>
+        </label>
+        <small>
+          번역이 없으면 원문을 먼저 보여 줘요. 번역 보기를 눌러 번역을 시작하고, 이미 저장된 번역은
+          다시 호출하지 않아요.
+        </small>
+        <label>
+          본문 글꼴
+          <select
+            aria-label="본문 글꼴"
+            value={font}
+            onChange={(event) => setFont(event.target.value)}
+          >
+            <option value="sans">기본 고딕</option>
+            <option value="serif">명조</option>
+          </select>
+        </label>
+        <label>
+          본문 크기
+          <input
+            aria-label="본문 크기"
+            type="range"
+            min={16}
+            max={22}
+            step={1}
+            value={fontSize}
+            onChange={(event) => setFontSize(Number(event.target.value))}
+          />
+          <span>{fontSize}px</span>
+        </label>
+        <label>
+          화면 테마
+          <select
+            aria-label="화면 테마"
+            value={theme}
+            onChange={(event) => setTheme(event.target.value as typeof theme)}
+          >
+            <option value="system">기기 설정</option>
+            <option value="dark">어두운 화면</option>
+            <option value="light">밝은 화면</option>
+          </select>
+        </label>
+        <button className="secondary" onClick={onStartFocus}>
+          집중 읽기 시작
+        </button>
+      </div>
+    );
+  }
   return (
     <div
       className={`app-shell ${focus ? 'focus-reading' : ''} ${sidebarCollapsed ? 'sidebar-collapsed' : ''} ${optionsOpen && s.destination === 'story' && s.selected ? 'options-open' : ''}`}
@@ -280,101 +393,84 @@ function App() {
         {navigation}
       </aside>
       <main className="story-workspace">
-        <header className="workspace-header">
-          <button
-            type="button"
-            className="icon-button sidebar-toggle"
-            aria-label={sidebarCollapsed ? '좌측 패널 펼치기' : '좌측 패널 접기'}
-            title={sidebarCollapsed ? '좌측 패널 펼치기' : '좌측 패널 접기'}
-            aria-expanded={!sidebarCollapsed}
-            aria-controls="workspace-sidebar"
-            onClick={() => setSidebarCollapsed((value) => !value)}
-          >
-            {sidebarCollapsed ? <PanelLeftOpen size={20} /> : <PanelLeftClose size={20} />}
-          </button>
-          <button
-            className="icon-button mobile-menu"
-            aria-label="탐색 메뉴"
-            onClick={() => setPanel('navigation')}
-          >
-            <Menu size={20} />
-          </button>
-          <div className="header-title">
-            <h1>
-              {s.destination === 'library'
-                ? { bot: '봇', persona: '페르소나', module: '모듈', prompts: '프롬프트' }[
-                    libraryTab
-                  ]
-                : s.detail?.chat.title || 'Uimori'}
-            </h1>
-            <small>
-              {s.destination === 'library'
-                ? libraryTab === 'prompts'
-                  ? '모델의 응답 방식과 프리셋'
-                  : '캐릭터와 세계를 모아 두는 서재'
-                : s.bot?.title || (s.selected ? '채팅을 이어가는 중' : '나의 채팅')}
-            </small>
-          </div>
-          <div className="header-actions">
-            {s.selected && s.destination === 'story' && (
-              <>
-                <button
-                  className="icon-button"
-                  aria-label="채팅 포크"
-                  title="여기까지 복사해서 새 채팅으로 이어가기"
-                  disabled={
-                    !s.sources.length || s.forking.some((key) => key.startsWith(`${s.selected}:`))
-                  }
-                  onClick={() => {
-                    const source = s.sources.at(-1);
-                    if (source) void s.fork(source.id);
-                  }}
-                >
-                  <Copy size={19} />
-                </button>
-                <button
-                  className="icon-button reading-button"
-                  aria-label="읽기 설정"
-                  title="읽기 설정"
-                  onClick={() => setPanel('reading')}
-                >
-                  <Type size={20} />
-                </button>
-                <button
-                  className="icon-button"
-                  aria-label={focus ? '집중 읽기 종료' : '집중 읽기'}
-                  title="집중 읽기"
-                  onClick={() => setFocus(!focus)}
-                >
-                  {focus ? <Minimize size={19} /> : <Maximize size={19} />}
-                </button>
-                <button
-                  className="icon-button"
-                  aria-label="채팅 설정"
-                  title="채팅 설정"
-                  onClick={() => setPanel('story')}
-                >
-                  <SlidersHorizontal size={20} />
-                </button>
-              </>
-            )}
-          </div>
-        </header>
+        {s.destination === 'story' && (
+          <header className="workspace-header">
+            {navigationControls}
+            <div className="header-title">
+              <h1>{s.detail?.chat.title || 'Uimori'}</h1>
+              <small>{s.bot?.title || (s.selected ? '채팅을 이어가는 중' : '나의 채팅')}</small>
+            </div>
+            <div className="header-actions">
+              {s.selected && s.destination === 'story' && (
+                <>
+                  <button
+                    className="icon-button"
+                    aria-label="채팅 포크"
+                    title="여기까지 복사해서 새 채팅으로 이어가기"
+                    disabled={
+                      !s.sources.length || s.forking.some((key) => key.startsWith(`${s.selected}:`))
+                    }
+                    onClick={() => {
+                      const source = s.sources.at(-1);
+                      if (source) void s.fork(source.id);
+                    }}
+                  >
+                    <Copy size={19} />
+                  </button>
+                  <button
+                    className="icon-button reading-button"
+                    aria-label="읽기 설정"
+                    title="읽기 설정"
+                    onClick={() => setPanel('reading')}
+                  >
+                    <Type size={20} />
+                  </button>
+                  <button
+                    className="icon-button"
+                    aria-label={focus ? '집중 읽기 종료' : '집중 읽기'}
+                    title="집중 읽기"
+                    onClick={() => setFocus(!focus)}
+                  >
+                    {focus ? <Minimize size={19} /> : <Maximize size={19} />}
+                  </button>
+                  <button
+                    className="icon-button"
+                    aria-label="채팅 설정"
+                    title="채팅 설정"
+                    onClick={() => setPanel('story')}
+                  >
+                    <SlidersHorizontal size={20} />
+                  </button>
+                </>
+              )}
+            </div>
+          </header>
+        )}
         {s.destination === 'library' ? (
           <div className="destination-scroll">
             {libraryTab === 'prompts' ? (
               s.library ? (
                 <PromptLibrary
+                  headerLeading={navigationControls}
                   library={s.library}
                   reload={s.loadLibrary}
                   onError={s.setError}
                   onDirtyChange={setLibraryDirty}
                 />
               ) : (
-                <p role="status">프롬프트를 불러오는 중이에요…</p>
+                workspaceFallback(
+                  '프롬프트',
+                  navigationControls,
+                  <p role="status">
+                    {s.error
+                      ? '프롬프트 목록을 불러오지 못했어요.'
+                      : '프롬프트를 불러오는 중이에요…'}
+                  </p>
+                )
               )
             ) : (
               <LibraryPanel
+                headerLeading={navigationControls}
                 library={s.library}
                 reload={s.loadLibrary}
                 onError={s.setError}
@@ -967,68 +1063,15 @@ function App() {
           </>
         )}
       </Dialog>
-      <Dialog
-        scopeKey={s.selected}
-        open={panel === 'story'}
-        title="채팅 설정"
-        onClose={() => setPanel('')}
-        wide
-      >
-        {s.detail && s.library && (
-          <>
-            {s.detail.profile && (
-              <ProfileEditor
-                ownerBotId={s.detail.chat.botId}
-                branchId={s.branch?.id}
-                key={s.selected}
-                profile={s.detail.profile}
-                library={s.library}
-                onSaved={() => s.refresh(s.selected)}
-                onError={s.setError}
-                onDirtyChange={s.setProfileDirty}
-                onLibraryChanged={s.loadLibrary}
-                nextRequest={s.pendingRequest ?? s.draft}
-                loreContextReset={s.loreContextReset}
-              />
-            )}
-            <StoryPanel
-              key={`story:${s.selected}`}
-              chatId={s.selected}
-              branchId={s.branch?.id ?? `main:${s.selected}`}
-              headRevision={s.branch?.headRevision ?? s.detail.chat.headRevision}
-              settingsRevision={s.detail.chat.settingsRevision}
-              profileRevision={s.detail.profile?.revision}
-              models={s.library.models}
-              connections={s.library.connections}
-              onChanged={() => {
-                void s.refresh(s.selected);
-              }}
-              onError={s.setError}
-            />
-            <AssetEditor
-              key={`assets:${s.selected}`}
-              chatId={s.selected}
-              assets={s.detail.assets ?? []}
-              refresh={() => s.refresh(s.selected)}
-              onError={s.setError}
-            />
-            <SettingsEditor
-              key={`runtime:${s.selected}`}
-              chat={s.detail.chat}
-              onSaved={() => s.refresh(s.selected)}
-              onError={s.setError}
-            />
-            <button className="secondary" onClick={() => setPanel('reading')}>
-              읽기 설정 열기
-            </button>
-            {s.error && (
-              <p role="alert" className="error">
-                {s.error}
-              </p>
-            )}
-          </>
-        )}
-      </Dialog>
+      {panel === 'story' && (
+        <ChatSettingsPanel
+          key={s.selected}
+          state={s}
+          onClose={() => setPanel('')}
+          renderReadingSettings={renderReadingSettings}
+          onFocusReading={() => setFocus(true)}
+        />
+      )}
       <Dialog open={panel === 'branches'} title="보관된 전개" onClose={() => setPanel('')}>
         <BranchesPanel state={s} onClose={() => setPanel('')} />
       </Dialog>
@@ -1049,94 +1092,22 @@ function App() {
         )}
       </Dialog>
       <Dialog open={panel === 'reading'} title="읽기 설정" onClose={() => setPanel('')}>
-        <div className="settings-stack">
-          <label>
-            새 원고의 기본 보기
-            <select
-              aria-label="새 원고의 기본 보기"
-              value={readingLanguage}
-              onChange={(event) => setReadingLanguage(event.target.value)}
-            >
-              <option value="translation">한국어 번역</option>
-              <option value="original">원문</option>
-            </select>
-          </label>
-          <small>
-            번역이 없으면 원문을 먼저 보여 줘요. 번역 보기를 눌러 번역을 시작하고, 이미 저장된
-            번역은 다시 호출하지 않아요.
-          </small>
-          <label>
-            본문 글꼴
-            <select
-              aria-label="본문 글꼴"
-              value={font}
-              onChange={(event) => setFont(event.target.value)}
-            >
-              <option value="sans">기본 고딕</option>
-              <option value="serif">명조</option>
-            </select>
-          </label>
-          <label>
-            본문 크기
-            <input
-              aria-label="본문 크기"
-              type="range"
-              min={16}
-              max={22}
-              step={1}
-              value={fontSize}
-              onChange={(event) => setFontSize(Number(event.target.value))}
-            />
-            <span>{fontSize}px</span>
-          </label>
-          <label>
-            화면 테마
-            <select
-              aria-label="화면 테마"
-              value={theme}
-              onChange={(event) => setTheme(event.target.value as typeof theme)}
-            >
-              <option value="system">기기 설정</option>
-              <option value="dark">어두운 화면</option>
-              <option value="light">밝은 화면</option>
-            </select>
-          </label>
-          <button
-            className="secondary"
-            onClick={() => {
-              setFocus(true);
-              setPanel('');
-            }}
-          >
-            집중 읽기 시작
-          </button>
-        </div>
+        {renderReadingSettings(() => {
+          setFocus(true);
+          setPanel('');
+        })}
       </Dialog>
-      <Dialog
-        open={panel === 'settings'}
-        title="설정"
-        onClose={() => setPanel('')}
-        wide
-        className="settings-dialog"
-      >
-        {panel === 'settings' && (
-          <>
-            <AppSettingsPanel
-              initialTab={settingsTab}
-              state={s}
-              theme={theme}
-              setTheme={setTheme}
-              enterSend={enterSend}
-              setEnterSend={setEnterSend}
-            />
-            {s.error && (
-              <p className="error" role="alert">
-                {s.error}
-              </p>
-            )}
-          </>
-        )}
-      </Dialog>
+      {panel === 'settings' && (
+        <AppSettingsPanel
+          onClose={() => setPanel('')}
+          initialTab={settingsTab}
+          state={s}
+          theme={theme}
+          setTheme={setTheme}
+          enterSend={enterSend}
+          setEnterSend={setEnterSend}
+        />
+      )}
     </div>
   );
 }

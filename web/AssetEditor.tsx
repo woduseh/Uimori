@@ -1,44 +1,63 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { Asset } from '../core/product.js';
 import { api } from './api.js';
 import { DeleteButton } from './DeleteButton.js';
+
+const emptyFields = {
+  title: '',
+  description: '',
+  actor: '',
+  outfit: '',
+  location: '',
+  allowedUse: 'both' as Asset['allowedUse'],
+};
 
 export function AssetEditor({
   chatId,
   assets,
   refresh,
   onError,
+  onDirtyChange,
+  expanded = false,
 }: {
   chatId: string;
   assets: Asset[];
   refresh: () => Promise<void>;
   onError: (error: string) => void;
+  onDirtyChange?: (dirty: boolean) => void;
+  expanded?: boolean;
 }) {
-  const [value, setValue] = useState({
-    title: '',
-    description: '',
-    actor: '',
-    outfit: '',
-    location: '',
-    allowedUse: 'both' as Asset['allowedUse'],
-  });
+  const [value, setValue] = useState({ ...emptyFields });
   const [file, setFile] = useState<File | null>(null);
+  const fileInput = useRef<HTMLInputElement>(null);
+  const uploadLock = useRef(false);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
   const [open, setOpen] = useState(false);
   const [page, setPage] = useState(0);
+  const hasUnsavedChanges =
+    busy ||
+    file !== null ||
+    value.title.length > 0 ||
+    value.description.length > 0 ||
+    value.actor.length > 0 ||
+    value.outfit.length > 0 ||
+    value.location.length > 0 ||
+    value.allowedUse !== 'both';
+  useEffect(() => {
+    onDirtyChange?.(hasUnsavedChanges);
+  }, [hasUnsavedChanges, onDirtyChange]);
+  useEffect(() => () => onDirtyChange?.(false), [onDirtyChange]);
+  const visible = expanded || open;
   const pageSize = 48;
   const start = Math.min(
     page * pageSize,
     Math.max(0, Math.ceil(assets.length / pageSize) - 1) * pageSize
   );
-  return (
-    <details className="workspace-tools" onToggle={(event) => setOpen(event.currentTarget.open)}>
-      <summary>
-        이 이야기의 이미지 <small>{assets.length}개</small>
-      </summary>
+  const content = (
+    <>
       <div className="asset-grid">
-        {open &&
+        {visible &&
           assets.slice(start, start + pageSize).map((asset) => (
             <figure key={asset.id}>
               <img src={asset.url} alt={asset.description || asset.title} loading="lazy" />
@@ -66,7 +85,7 @@ export function AssetEditor({
             </figure>
           ))}
       </div>
-      {open && assets.length > pageSize && (
+      {visible && assets.length > pageSize && (
         <nav aria-label="이미지 목록 구간" className="reader-pages">
           <button
             className="secondary"
@@ -88,11 +107,12 @@ export function AssetEditor({
         </nav>
       )}
       <form
-        className="editor-grid"
         onSubmit={async (event) => {
           event.preventDefault();
-          if (!file) return;
+          if (!file || uploadLock.current) return;
+          uploadLock.current = true;
           setBusy(true);
+          setMessage('');
           onError('');
           try {
             if (!['image/png', 'image/jpeg'].includes(file.type) || file.size > 2_000_000)
@@ -104,88 +124,114 @@ export function AssetEditor({
               reader.readAsDataURL(file);
             });
             await api(`/chats/${chatId}/assets`, { ...value, mime: file.type, base64 });
-            await refresh();
+            setFile(null);
+            setValue({ ...emptyFields });
+            if (fileInput.current) fileInput.current.value = '';
             setMessage('이미지를 등록했어요.');
+            try {
+              await refresh();
+            } catch (error) {
+              onError(
+                `이미지는 등록했지만 목록을 새로 불러오지 못했어요. ${(error as Error).message}`
+              );
+            }
           } catch (error) {
             onError((error as Error).message);
           } finally {
+            uploadLock.current = false;
             setBusy(false);
           }
         }}
       >
-        <label className="full">
-          PNG 또는 JPEG 이미지
-          <input
-            aria-label="PNG 또는 JPEG 이미지"
-            type="file"
-            accept="image/png,image/jpeg"
-            required
-            onChange={(event) => setFile(event.target.files?.[0] ?? null)}
-          />
-        </label>
-        <label>
-          이미지 이름
-          <input
-            aria-label="이미지 이름"
-            required
-            maxLength={160}
-            value={value.title}
-            onChange={(event) => setValue({ ...value, title: event.target.value })}
-          />
-        </label>
-        <label>
-          이미지 설명
-          <input
-            aria-label="이미지 설명"
-            required
-            maxLength={1000}
-            value={value.description}
-            onChange={(event) => setValue({ ...value, description: event.target.value })}
-          />
-        </label>
-        <label>
-          이미지 인물
-          <input
-            aria-label="이미지 인물"
-            value={value.actor}
-            onChange={(event) => setValue({ ...value, actor: event.target.value })}
-          />
-        </label>
-        <label>
-          이미지 의상
-          <input
-            aria-label="이미지 의상"
-            value={value.outfit}
-            onChange={(event) => setValue({ ...value, outfit: event.target.value })}
-          />
-        </label>
-        <label>
-          이미지 장소
-          <input
-            aria-label="이미지 장소"
-            value={value.location}
-            onChange={(event) => setValue({ ...value, location: event.target.value })}
-          />
-        </label>
-        <label>
-          이미지 용도
-          <select
-            aria-label="이미지 용도"
-            value={value.allowedUse}
-            onChange={(event) =>
-              setValue({ ...value, allowedUse: event.target.value as Asset['allowedUse'] })
-            }
-          >
-            <option value="both">프로필과 본문</option>
-            <option value="profile">프로필</option>
-            <option value="inline">본문</option>
-          </select>
-        </label>
-        <div className="form-actions full">
-          <button disabled={busy || !file}>이미지 등록</button>
-          <span role="status">{message}</span>
-        </div>
+        <fieldset className="editor-fields editor-grid" disabled={busy}>
+          <label className="full">
+            PNG 또는 JPEG 이미지
+            <input
+              ref={fileInput}
+              aria-label="PNG 또는 JPEG 이미지"
+              type="file"
+              accept="image/png,image/jpeg"
+              required
+              onChange={(event) => setFile(event.target.files?.[0] ?? null)}
+            />
+          </label>
+          <label>
+            이미지 이름
+            <input
+              aria-label="이미지 이름"
+              required
+              maxLength={160}
+              value={value.title}
+              onChange={(event) => setValue({ ...value, title: event.target.value })}
+            />
+          </label>
+          <label>
+            이미지 설명
+            <input
+              aria-label="이미지 설명"
+              required
+              maxLength={1000}
+              value={value.description}
+              onChange={(event) => setValue({ ...value, description: event.target.value })}
+            />
+          </label>
+          <label>
+            이미지 인물
+            <input
+              aria-label="이미지 인물"
+              value={value.actor}
+              onChange={(event) => setValue({ ...value, actor: event.target.value })}
+            />
+          </label>
+          <label>
+            이미지 의상
+            <input
+              aria-label="이미지 의상"
+              value={value.outfit}
+              onChange={(event) => setValue({ ...value, outfit: event.target.value })}
+            />
+          </label>
+          <label>
+            이미지 장소
+            <input
+              aria-label="이미지 장소"
+              value={value.location}
+              onChange={(event) => setValue({ ...value, location: event.target.value })}
+            />
+          </label>
+          <label>
+            이미지 용도
+            <select
+              aria-label="이미지 용도"
+              value={value.allowedUse}
+              onChange={(event) =>
+                setValue({ ...value, allowedUse: event.target.value as Asset['allowedUse'] })
+              }
+            >
+              <option value="both">프로필과 본문</option>
+              <option value="profile">프로필</option>
+              <option value="inline">본문</option>
+            </select>
+          </label>
+          <div className="form-actions full">
+            <button disabled={busy || !file}>이미지 등록</button>
+            <span role="status">{message}</span>
+          </div>
+        </fieldset>
       </form>
+    </>
+  );
+  return expanded ? (
+    <section className="workspace-tools" aria-label="이 이야기의 이미지">
+      <p className="muted">등록된 이미지 {assets.length}개</p>
+      {content}
+    </section>
+  ) : (
+    <details className="workspace-tools" onToggle={(event) => setOpen(event.currentTarget.open)}>
+      <summary>
+        이 이야기의 이미지 <small>{assets.length}개</small>
+      </summary>
+      {content}
     </details>
   );
 }

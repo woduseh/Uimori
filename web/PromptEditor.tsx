@@ -1,4 +1,8 @@
 import { DeleteButton } from './DeleteButton.js';
+import { ActionMenu } from './ActionMenu.js';
+import { IconButton } from './IconButton.js';
+import { CopyIcon } from './ui-icons.js';
+import { Maximize, Minimize, RotateCcw } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import type {
   ContentRef,
@@ -117,8 +121,8 @@ export function PromptEditor({
     Object.values(composerDirty).some(Boolean) ||
     [...Object.values(drafts), ...Object.values(draftCache.current)].some((draft) => draft.dirty);
   useEffect(() => {
-    onDirtyChange?.(dirty);
-  }, [dirty, onDirtyChange]);
+    onDirtyChange?.(dirty || busy);
+  }, [dirty, busy, onDirtyChange]);
   useEffect(() => () => onDirtyChange?.(false), [onDirtyChange]);
   useEffect(() => {
     let alive = true;
@@ -373,14 +377,12 @@ export function PromptEditor({
           />
         </label>
         <div className="prompt-editor-tools">
-          <button
-            type="button"
-            className="secondary"
+          <IconButton
+            label={expanded ? '편집 영역 줄이기' : '편집 영역 넓히기'}
+            icon={expanded ? Minimize : Maximize}
             aria-pressed={expanded}
             onClick={() => setExpanded((value) => !value)}
-          >
-            {expanded ? '편집 영역 줄이기' : '편집 영역 넓히기'}
-          </button>
+          />
         </div>
         <fieldset className="prompt-composer-frame" disabled={pendingSavedText}>
           <PromptComposer
@@ -449,106 +451,116 @@ export function PromptEditor({
           )}
         </fieldset>
         <div className="prompt-save-actions">
-          <small>
-            저장하면 이 프롬프트를 사용하는 채팅의 다음 실행부터 반영돼요. 이전 설정은 새 프롬프트로
-            저장해 둘 수 있어요.
+          <small className="prompt-save-scope">
+            {draft.base
+              ? '수정 저장은 이 프롬프트를 사용하는 채팅의 다음 실행부터 반영돼요.'
+              : '새 프롬프트로 저장해요. 사용할 채팅은 따로 선택해요.'}
+            {onApply && ' 이 채팅에 적용하면 현재 채팅의 프롬프트 선택을 바꿔요.'}
           </small>
           <div className="prompt-save-buttons">
             <button
               type="button"
               disabled={
-                pendingSavedText || pendingTemplate || !!collaborationIssue || !draft.title.trim()
+                pendingSavedText ||
+                pendingTemplate ||
+                !!collaborationIssue ||
+                !draft.title.trim() ||
+                (!!draft.base && !draft.dirty)
               }
-              onClick={() => void save(false, false)}
+              onClick={() => void save(!!draft.base, false)}
             >
-              새 프롬프트로 저장
+              {draft.base ? '수정 저장' : '새 프롬프트 저장'}
             </button>
-            {draft.base && (
-              <button
-                type="button"
-                className="secondary"
-                disabled={
-                  pendingTemplate || !!collaborationIssue || !draft.title.trim() || !draft.dirty
-                }
-                onClick={() => void save(true, false)}
-              >
-                기존 프롬프트 수정 저장
-              </button>
-            )}
-            {onApply && (
-              <>
-                <button
-                  type="button"
-                  className="secondary"
-                  disabled={pendingTemplate || !selected}
-                  onClick={() => void apply(null)}
-                >
-                  앱 기본 프롬프트 사용
-                </button>
+            {onApply &&
+              (draft.dirty ? (
                 <button
                   type="button"
                   className="secondary"
                   disabled={
-                    pendingSavedText || pendingTemplate || draft.dirty || draft.source === 'new'
+                    pendingSavedText ||
+                    pendingTemplate ||
+                    !!collaborationIssue ||
+                    !draft.title.trim()
                   }
+                  onClick={() => void save(Boolean(draft.base), true)}
+                >
+                  저장하고 적용
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  className="secondary"
+                  disabled={pendingSavedText || pendingTemplate || draft.source === 'new'}
                   onClick={() =>
                     void apply(
                       draft.base ? { id: draft.base.id, revision: draft.base.revision } : null
                     )
                   }
                 >
-                  이야기에 선택 적용
+                  이 채팅에 적용
                 </button>
-                {draft.dirty && (
+              ))}
+            {(draft.base || onApply) && (
+              <ActionMenu label="프롬프트 관리" className="prompt-management-menu">
+                {draft.base && (
                   <button
                     type="button"
+                    className="secondary"
                     disabled={
                       pendingSavedText ||
                       pendingTemplate ||
                       !!collaborationIssue ||
                       !draft.title.trim()
                     }
-                    onClick={() => void save(Boolean(draft.base), true)}
+                    onClick={() => void save(false, false)}
                   >
-                    저장하고 이야기에 적용
+                    <CopyIcon size={18} aria-hidden="true" /> 복사본으로 저장
                   </button>
                 )}
-              </>
-            )}
-          </div>
-          <div className="prompt-delete-action">
-            {draft.base && (
-              <DeleteButton
-                path={`/prompt-presets/${encodeURIComponent(draft.base.id)}`}
-                revision={draft.base.revision}
-                title={draft.base.title}
-                label="프롬프트 삭제"
-                disabled={busy}
-                onError={onError}
-                onDeleted={async () => {
-                  const removed = draft.base!.id;
-                  setLocalPresets((current) => current.filter((item) => item.id !== removed));
-                  for (const key of Object.keys(draftCache.current))
-                    if (draftCache.current[key].base?.id === removed)
-                      delete draftCache.current[key];
-                  setComposerDirty((current) =>
-                    Object.fromEntries(
-                      Object.entries(current).filter(([key]) => !key.includes(`:${removed}@`))
-                    )
-                  );
-                  setDrafts(
-                    (current) =>
-                      Object.fromEntries(
-                        roles.map((role) => [
-                          role,
-                          current[role].base?.id === removed ? draftFor(role) : current[role],
-                        ])
-                      ) as Record<PromptRole, Draft>
-                  );
-                  await reload?.();
-                  setStatus('프롬프트를 삭제했어요.');
-                }}
-              />
+                {onApply && (
+                  <button
+                    type="button"
+                    className="secondary"
+                    disabled={pendingTemplate || !selected}
+                    onClick={() => void apply(null)}
+                  >
+                    <RotateCcw size={18} aria-hidden="true" /> 앱 기본 프롬프트 사용
+                  </button>
+                )}
+                {draft.base && (
+                  <DeleteButton
+                    path={`/prompt-presets/${encodeURIComponent(draft.base.id)}`}
+                    revision={draft.base.revision}
+                    title={draft.base.title}
+                    label="프롬프트 삭제"
+                    disabled={busy}
+                    onError={onError}
+                    onDeleted={async () => {
+                      const removed = draft.base!.id;
+                      setLocalPresets((current) => current.filter((item) => item.id !== removed));
+                      for (const key of Object.keys(draftCache.current))
+                        if (draftCache.current[key].base?.id === removed)
+                          delete draftCache.current[key];
+                      setComposerDirty((current) =>
+                        Object.fromEntries(
+                          Object.entries(current).filter(([key]) => !key.includes(`:${removed}@`))
+                        )
+                      );
+                      setDrafts(
+                        (current) =>
+                          Object.fromEntries(
+                            roles.map((role) => [
+                              role,
+                              current[role].base?.id === removed ? draftFor(role) : current[role],
+                            ])
+                          ) as Record<PromptRole, Draft>
+                      );
+                      await reload?.();
+                      setStatus('프롬프트를 삭제했어요.');
+                    }}
+                  />
+                )}
+              </ActionMenu>
             )}
           </div>
         </div>

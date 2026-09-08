@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { subscribeAppHistory } from './app-history.js';
 import type { Chat, ReaderDetail, Run, Source } from '../core/types.js';
 import type { Content, Library } from '../core/product.js';
 import { api, ApiError, libraryChangedKey } from './api.js';
@@ -556,8 +557,7 @@ export function useStory() {
       setDestination('story');
       restoredView.current = '';
     };
-    addEventListener('popstate', onPop);
-    return () => removeEventListener('popstate', onPop);
+    return subscribeAppHistory(onPop);
   }, [savePosition, rememberCursor]);
   function showLibrary() {
     navigationEpoch.current++;

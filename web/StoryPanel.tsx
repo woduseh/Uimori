@@ -18,6 +18,9 @@ type PanelProps = {
   connections: Connection[];
   onChanged: () => void;
   onError: (message: string) => void;
+  onDirtyChange?: (dirty: boolean) => void;
+  active?: boolean;
+  hideHeading?: boolean;
 };
 const id = encodeURIComponent;
 const refKey = (value: ModelRef | null) => (value ? value.id : '');
@@ -230,6 +233,9 @@ function StoryPanelEditor({
   connections,
   onChanged,
   onError,
+  onDirtyChange,
+  active = true,
+  hideHeading = false,
 }: PanelProps) {
   const { canSelect } = useModelSelection(models, connections);
   const capture = useScope(
@@ -252,6 +258,18 @@ function StoryPanelEditor({
   const commandKey = useRef(crypto.randomUUID());
   const runKeys = useRef(new Map<string, string>());
   const base = `/chats/${id(chatId)}`;
+  const hasUnsavedChanges =
+    busy ||
+    dirty.current ||
+    author.length > 0 ||
+    declaration.length > 0 ||
+    retcon !== null ||
+    commandLabel.length > 0 ||
+    commandText.length > 0;
+  useEffect(() => {
+    onDirtyChange?.(hasUnsavedChanges);
+  }, [hasUnsavedChanges, onDirtyChange]);
+  useEffect(() => () => onDirtyChange?.(false), [onDirtyChange]);
   function report(caught: unknown) {
     const text = caught instanceof Error ? caught.message : '작업을 완료하지 못했어요.';
     setError(text);
@@ -269,17 +287,21 @@ function StoryPanelEditor({
       if (valid() && sequence === request.current) report(caught);
     }
   }
-  // biome-ignore lint/correctness/useExhaustiveDependencies: Scope revisions reset actions and reload; render-local load must not clear state on every render.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: Only scope revisions reset actions; toggling visibility must preserve drafts and pending actions.
   useEffect(() => {
     actionLock.current = false;
     setBusy(false);
     setConfirmReset(null);
     setDetail(null);
-    void load();
   }, [chatId, branchId, headRevision, settingsRevision, profileRevision]);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: Reload on scope changes or reactivation; render-local load must not replace drafts on every render.
+  useEffect(() => {
+    if (active) void load();
+  }, [active, chatId, branchId, headRevision, settingsRevision, profileRevision]);
   // biome-ignore lint/correctness/useExhaustiveDependencies: Pending snapshots and branch/head changes restart polling; local edits keep the existing timer.
   useEffect(() => {
     if (
+      !active ||
       !detail ||
       !(
         pending(detail.jobs) ||
@@ -291,7 +313,7 @@ function StoryPanelEditor({
       void load();
     }, 1500);
     return () => clearInterval(timer);
-  }, [detail, chatId, branchId, headRevision]);
+  }, [active, detail, chatId, branchId, headRevision]);
   function change(next: StoryConfig) {
     dirty.current = true;
     setDraft(next);
@@ -375,7 +397,7 @@ function StoryPanelEditor({
   }
   return (
     <section className="story-panel" aria-label="이야기 상태와 기억">
-      <h3>상태와 기억</h3>
+      {!hideHeading && <h3>상태와 기억</h3>}
       <p className="muted">
         필요한 기능만 켜고 다음 원고부터 적용해요. 상태 확인과 기억 정리는 각각 모델을 선택해요.
       </p>
@@ -719,6 +741,7 @@ function StoryPanelEditor({
                           if (retcon === entry.id) {
                             setRetcon(null);
                             setDeclaration('');
+                            setAuthor('');
                           }
                           await load();
                           onChanged();
@@ -739,6 +762,7 @@ function StoryPanelEditor({
                   () => {
                     setDeclaration('');
                     setRetcon(null);
+                    setAuthor('');
                   }
                 );
               }}
@@ -778,6 +802,7 @@ function StoryPanelEditor({
                     onClick={() => {
                       setRetcon(null);
                       setDeclaration('');
+                      setAuthor('');
                     }}
                   >
                     수정 취소

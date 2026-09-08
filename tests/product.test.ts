@@ -426,6 +426,36 @@ describe('M1 product data with actual file SQLite', () => {
     expect(product.attempts(chat.id).every((attempt) => attempt.costUsd === null)).toBe(true);
   });
 
+  test.each(['connection', 'folder'] as const)(
+    'P11 import status includes %s-only data and a prior empty result never authorizes overwriting it',
+    async (kind) => {
+      const { store, product } = await database();
+      const empty = product.export();
+      expect(product.importStatus()).toEqual({ canImport: true });
+      expect(product.export().tables).toEqual(empty.tables);
+      if (kind === 'connection')
+        product.connection({
+          title: 'Only a saved connection',
+          protocol: 'fixture-sse-v1',
+          endpoint: 'http://127.0.0.1:9/',
+          enabled: false,
+        });
+      else
+        store.libraryOrganization.createFolder({
+          expectedRevision: store.libraryOrganization.snapshot().revision,
+          category: 'bot',
+          title: 'Only an empty folder',
+        });
+      expect(store.chats()).toEqual([]);
+      expect(product.all('content')).toEqual([]);
+      const occupied = product.export().tables;
+      expect(product.importStatus()).toEqual({ canImport: false });
+      expect(() => product.import(empty)).toThrow('Restore requires an empty database');
+      expect(product.export().tables).toEqual(occupied);
+      expect(store.db.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
+    }
+  );
+
   test('P11 exports/restores source bytes, lineage and assets while disabling connections and unfinished work', async () => {
     const { store, product } = await database();
     const chat = createFixtureChat(store, 'archive-story');
@@ -665,6 +695,27 @@ async function terminalJob(url: string, chatId: string, id: string): Promise<Job
 }
 
 describe('M1 real HTTP application boundaries', () => {
+  test('P11 import status is uncached metadata and import rejects changes made after the read', async () => {
+    const { app, url } = await application();
+    const empty = app.store.product.export();
+    const response = await fetch(`${url}/api/import/status`);
+    expect(response.status).toBe(200);
+    expect(response.headers.get('cache-control')).toBe('no-store');
+    expect(await response.json()).toEqual({ canImport: true });
+    expect(app.store.product.export().tables).toEqual(empty.tables);
+    app.store.libraryOrganization.createFolder({
+      expectedRevision: app.store.libraryOrganization.snapshot().revision,
+      category: 'bot',
+      title: 'Saved after the status read',
+    });
+    const before = app.store.product.export().tables;
+    expect(await api(url, '/api/import/status')).toEqual({ canImport: false });
+    expect(await api(url, '/api/import', { archive: empty }, { status: 409 })).toEqual({
+      error: 'Restore requires an empty database',
+    });
+    expect(app.store.product.export().tables).toEqual(before);
+  });
+
   test('P07 P08 P12 explicit retry translates the whole scene with the current model and retains source-time references', async () => {
     const fixtureItem = await directory();
     const chunkRequests = new Map<string, number>();

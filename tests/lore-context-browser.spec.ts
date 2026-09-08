@@ -1,4 +1,8 @@
-import { editLibraryContent } from './ui-navigation.js';
+import {
+  editLibraryContent,
+  selectChatSettingsSection,
+  selectPackageSection,
+} from './ui-navigation.js';
 import {
   expect,
   test,
@@ -109,8 +113,8 @@ test('LCUI01 lore placement and invalid order drafts stay independent from folde
   await fields.getByLabel('로어 1 배치 묶음', { exact: true }).fill('장면 인물');
   await fields.getByLabel('로어 1 배치 순서', { exact: true }).fill('1.5');
   await expect(save).toBeDisabled();
-  await fields.getByRole('button', { name: '옵션', exact: true }).click();
-  await fields.getByRole('button', { name: '로어', exact: true }).click();
+  await selectPackageSection(page, '옵션');
+  await selectPackageSection(page, '로어');
   await expect(fields.getByLabel('로어 1 배치 순서', { exact: true })).toHaveValue('1.5');
   await expect(fields.getByLabel('로어 소속 폴더', { exact: true })).toHaveValue('folder_one');
   await fields.getByLabel('로어 1 배치 순서', { exact: true }).fill('-2');
@@ -173,16 +177,17 @@ test('LCUI02 policy drafts survive tabs and preview reflects the unsaved policy 
   await page.getByRole('button', { name: '입력창 더보기' }).click();
   await page.getByRole('checkbox', { name: '다음 생성에서 조회 로어 제외' }).click();
   await page.getByRole('button', { name: '채팅 설정', exact: true }).click();
+  await selectChatSettingsSection(page, '봇·페르소나·모듈');
   const editor = page.getByTestId('profile-editor'),
     policy = editor.getByRole('region', { name: '로어 문맥 정책', exact: true }),
-    save = editor.getByRole('button', { name: '콘텐츠와 제어 저장', exact: true });
+    save = editor.getByRole('button', { name: '채팅 설정 저장', exact: true });
   await expect(policy.getByLabel('조회 로어 문자 한도', { exact: true })).toHaveValue('48000');
   await expect(policy.getByLabel('고정 자료 문자 한도', { exact: true })).toHaveValue('200000');
   await policy.getByLabel('조회 로어 구간 한도', { exact: true }).fill('257');
   await expect(save).toBeDisabled();
-  await editor.getByRole('tab', { name: '모델', exact: true }).click();
+  await selectChatSettingsSection(page, '모델');
   await expect(save).toBeDisabled();
-  await editor.getByRole('tab', { name: '봇·페르소나·모듈', exact: true }).click();
+  await selectChatSettingsSection(page, '봇·페르소나·모듈');
   await expect(policy.getByLabel('조회 로어 구간 한도', { exact: true })).toHaveValue('257');
   await policy.getByLabel('조회 로어 구간 한도', { exact: true }).fill('8');
   await policy.getByLabel('조회 로어 문자 한도', { exact: true }).fill('1234');

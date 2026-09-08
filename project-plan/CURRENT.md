@@ -4,8 +4,12 @@
 
 2026-09-08 사용자 요청으로 검증된 협업·v13·UI 통합본을 원본 `main`에 반영했어요. 반영 전 전체 Git tree와 source 지문이 전용 브랜치 완료본과 같은지 확인하고 원본에서 품질 검사를 통과했어요. 아래의 전용 브랜치 검증·원본 미변경 설명은 이 반영 이전 검증 단계의 기록이에요. 실제 운영 재배포 결과는 별도 `output/oracle-update-2026-09-08/`에 보관해요.
 
+공통 UI·상세 화면 적용 후 사용자가 요청한 커밋·푸시·Oracle 재배포의 실제 결과는 [후속 배포 기록](../output/oracle-ui-deploy-2026-09-08/RESULTS.md)에서 확인해요. 아래의 미커밋·배포 미포함 설명은 각 구현 검증 당시의 기록이에요.
+
 ## 현재 구현
 
+- 채팅 설정 7개 분야와 고급 패키지 9개 분야에 모바일 목록→상세·데스크톱 병치를 적용했어요. 프롬프트 저장과 채팅 적용을 구별하고 관리·구성 도구와 장면 하단 작업은 메뉴로 모았어요. 분야 왕복·닫기·뒤로가기에서 초안·파일·커서·초점과 기존 저장 계약을 유지해요. [상세 화면 구현·검증](UI-DETAIL-IMPLEMENTATION.md)
+- 공통 UI·아이콘을 설정·서재·프롬프트·연결과 모델·데이터 관리에 적용했어요. 모바일 설정은 목록→상세로 이동하고 데스크톱은 나란히 보여줘요. 제목 중복·관리 도구의 기본 노출을 줄이고, 빈 상태·검색 복구·미저장 초안·뒤로가기·메뉴 안의 삭제 보호를 유지해요. 자료 조회/화면 로딩 실패에도 탐색을 제공해요. [구현·검증 결과](UI-COMPACT-IMPLEMENTATION.md) · [공통 원칙](../docs/UI-PRINCIPLES.md)
 - 메인 프롬프트의 **에이전트 협업**에서 지침·공유 옵션·모델·참여 시점과 조회 권한을 직접 설정해요. 기본은 OFF이며 생성 전 자문 또는 메인의 필요 시 호출을 지원해요. 예약된 Run에 설정·모델을 고정하고 전체 호출 한도·취소·원문 귀속을 유지해요. [협업 계약](../docs/AGENT-COLLABORATION.md)
 - 자료·프롬프트·공유 모듈은 같은 ID의 최신 저장 내용을 다음 실행에서 사용해요. 전역 옵션 조합은 현재 정의로 검증하고, 이미 예약한 실행과 과거 원문은 자체 snapshot을 유지해요. [현재 설정 계약](CURRENT-SETTINGS-PLAN.md) · [번역 구간과 재시도](TRANSLATION-CHUNKS.md)
 - **DB schema / 전체 JSON archive v13**예요. 봇·페르소나·모듈은 공통 패키지이며 서재의 분류별 폴더·대표 이미지와 별도의 프롬프트 관리를 제공해요. 분류·폴더 정리는 내용 개정 및 채팅에서 사용하는 역할과 독립적이에요. [서재 계약](../docs/LIBRARY.md)
@@ -20,6 +24,10 @@
 구형 DB·archive는 자동 이관하지 않아요. 최신 앱은 프로젝트 루트에서 `npm run dev`로 실행하고, 사용자 DB를 검증용으로 사용하지 않아요. 과거 미리보기 DB·고정 빌드는 현재 형식과 호환된다는 뜻이 아니에요.
 
 ## 마지막 검증
+
+상세 화면의 공통 UI 적용을 완료했어요. 채팅 설정·고급 패키지·프롬프트 저장/적용·장면 메뉴를 정리하고 작업 현황의 로딩 완료 화면을 검토했어요. `quality:full` **1,334 PASS · 1 opt-in skip**, 최종 품질·빌드 및 전체 브라우저 **163/163 PASS**예요. 단위 검사 후에는 공통 탐색의 줄바꿈 CSS와 브라우저 검사 진입·선택자만 보정했으며, 최종 UI 빌드를 전체 브라우저 검사와 대표 PNG 16장으로 확인했어요. 최종 source/build `47bbaa7ec72ff7702ca8fe30e2f7272e27d8ec899a1803b6457a0cacfda11dc1`, cleanup PASS예요. 미커밋 변경이며 실제 공급자·사용자 DB·휴대폰 실기기·배포는 검증 범위에 포함하지 않아요. [구현·초기 실패·최종 결과와 화면](UI-DETAIL-IMPLEMENTATION.md). 아래는 이 변경 이전 기록이에요.
+
+공통 UI·아이콘 적용을 원본 `main` 작업공간에서 완료했어요. `quality:full` **1,334 PASS · 1 opt-in skip**, 마지막 품질·빌드 및 전체 브라우저 **152/152 PASS**예요. 전체 단위 검사 뒤에는 브라우저 검사 선택자·서식만 수정했고 실행 산출물 지문은 같아요. 최종 source/build `f064957943728cd7b3f07f3b7d3647cdf5c1e914894aac9dbd9f92c85d352361`, 6개 폭의 대표 배치·390px/1440px 화면 검토·cleanup PASS를 확인했어요. 이번 변경은 미커밋이며 사용자 DB·실제 공급자·배포·push는 포함하지 않았어요. [구현·초기 실패·최종 검증과 화면](UI-COMPACT-IMPLEMENTATION.md). 아래는 이 변경 이전 기록이에요.
 
 전용 브랜치 `codex/main-agent-collaboration`에서 v13 설정 계약·UIUX 개선 완료본·커스텀 협업 에이전트의 통합을 완료했어요. `quality:full` **1,331 PASS · 1 opt-in skip**, 협업 화면 **2/2 PASS**, 최종 품질·빌드·전체 브라우저 **137/137 PASS**예요. 전체 단위 검사 뒤 브라우저 진입·문구와 협업 체크박스 CSS·캡처만 보정했어요. 최종 source/build `244b36200b7753993f68dd8da855c8bb3b40bbfb2b377a0275ad2c172564b9a6`과 실행 산출물 일치·390px/1440px 화면 검토·cleanup PASS를 확인했어요. 원본 main 작업공간·사용자 DB·실제 공급자·원격 push는 변경·사용하지 않았어요. [구현·통합 기준·최초 실패와 최종 검증](AGENT-COLLABORATION-RESULTS.md). 아래는 각 작업의 통합 전 기록이에요.
 
@@ -54,6 +62,7 @@ UIUX 테스트 후속 개선에서 새 채팅·입력창·모바일 서재·직�
 
 | 영역 | 기록 |
 | --- | --- |
+| 공통 UI·아이콘 | [상세 화면 구현과 검증](UI-DETAIL-IMPLEMENTATION.md) · [설정·서재·연결·데이터 구현과 검증](UI-COMPACT-IMPLEMENTATION.md) · [공통 원칙](../docs/UI-PRINCIPLES.md) · [화면 설계](../docs/UI-SCREEN-DESIGN.md) |
 | 서재·이미지·탐색 | [서재 결과](LIBRARY-RESULTS.md) · [탐색 결과](NAVIGATION-RESULTS.md) · [장면 탐색](SCENE-NAVIGATION.md) |
 | 공통 실행 구조·품질·삭제 | [구조 정리 결과](CODEBASE-CLEANUP-RESULTS.md) · [품질 도구](QUALITY-RESULTS.md) · [삭제 결과](DELETION-RESULTS.md) |
 | 모델·입력 한도·로어 통합 | [최종 통합](PROVIDER-PARAMETERS-RESULTS.md) · [공통 자료](SHARED-PACKAGE-RESULTS.md) · [로어 유지](LORE-CONTEXT-RESULTS.md) |

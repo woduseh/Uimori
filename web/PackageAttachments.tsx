@@ -53,12 +53,14 @@ export function PackageAttachments({
   onChange,
   onError,
   ownerBotId,
+  onPendingChange,
 }: {
   profile: ChatProfile;
   library: Library;
   onChange: (profile: ChatProfile) => void;
   onError: (message: string) => void;
   ownerBotId?: string;
+  onPendingChange?: (pending: boolean) => void;
 }) {
   const attachments = profile.packageAttachments ?? [],
     viewKey = requestKey(profile.chatId, attachments);
@@ -72,6 +74,12 @@ export function PackageAttachments({
   latest.current = { profile, onChange, onError, viewKey, library };
   const version = useRef(0),
     cache = useRef<typeof resolved>(null);
+  const [changing, setChanging] = useState(false);
+  const changeVersion = useRef(0);
+  useEffect(() => {
+    onPendingChange?.(selected !== '' || changing);
+  }, [selected, changing, onPendingChange]);
+  useEffect(() => () => onPendingChange?.(false), [onPendingChange]);
   // biome-ignore lint/correctness/useExhaustiveDependencies: viewKey includes all attachments and the chat; reload retries without reacting to array identity.
   useEffect(() => {
     const request = ++version.current;
@@ -112,6 +120,8 @@ export function PackageAttachments({
   async function changeAttachments(next: PackageAttachment[], personaChanged = false) {
     const initialKey = latest.current.viewKey,
       request = ++version.current;
+    changeVersion.current = request;
+    setChanging(true);
     setBusy(true);
     setLoadError('');
     try {
@@ -143,6 +153,7 @@ export function PackageAttachments({
         latest.current.onError(message);
       }
     } finally {
+      if (changeVersion.current === request) setChanging(false);
       if (version.current === request) setBusy(false);
     }
   }

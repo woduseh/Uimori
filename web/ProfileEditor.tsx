@@ -7,7 +7,7 @@ import { PackageAttachments } from './PackageAttachments.js';
 import { LoreContextPolicyEditor } from './LoreContextPolicyEditor.js';
 import './library.css';
 
-type ProfileSection = 'characters' | 'prompts' | 'models';
+export type ProfileSection = 'characters' | 'prompts' | 'models';
 const sections: { id: ProfileSection; title: string }[] = [
   { id: 'characters', title: '봇·페르소나·모듈' },
   { id: 'prompts', title: '프롬프트·창작 프리셋' },
@@ -22,6 +22,8 @@ export function ProfileEditor({
   onDirtyChange,
   onLibraryChanged,
   initialTab = 'characters',
+  activeTab,
+  hideNavigation = false,
   branchId,
   ownerBotId,
   nextRequest = '',
@@ -36,16 +38,20 @@ export function ProfileEditor({
   onDirtyChange?: (dirty: boolean) => void;
   onLibraryChanged?: () => Promise<void>;
   initialTab?: ProfileSection;
+  activeTab?: ProfileSection;
+  hideNavigation?: boolean;
   nextRequest?: string;
   loreContextReset?: boolean;
 }) {
   const [value, setValue] = useState(profile);
   const [dirty, setDirty] = useState(false);
   const [promptDirty, setPromptDirty] = useState(false);
+  const [attachmentPending, setAttachmentPending] = useState(false);
   const [lorePending, setLorePending] = useState(false),
     [loreResetVersion, setLoreResetVersion] = useState(0);
   const [saving, setSaving] = useState(false);
-  const [tab, setTab] = useState<ProfileSection>(initialTab);
+  const [localTab, setTab] = useState<ProfileSection>(initialTab);
+  const tab = activeTab ?? localTab;
   const [error, setError] = useState('');
   const [status, setStatus] = useState('');
   const { canSelect } = useModelSelection(library.models, library.connections);
@@ -58,8 +64,8 @@ export function ProfileEditor({
       );
   }, [profile, dirty, lorePending]);
   useEffect(() => {
-    onDirtyChange?.(dirty || promptDirty || lorePending);
-  }, [dirty, promptDirty, lorePending, onDirtyChange]);
+    onDirtyChange?.(dirty || promptDirty || lorePending || saving || attachmentPending);
+  }, [dirty, promptDirty, lorePending, saving, attachmentPending, onDirtyChange]);
   useEffect(() => () => onDirtyChange?.(false), [onDirtyChange]);
   const models = library.models;
   const sameRef = (item: ModelRef, selected: ModelRef | null) => item.id === selected?.id;
@@ -118,8 +124,11 @@ export function ProfileEditor({
       data-testid="profile-editor"
       aria-label="콘텐츠와 창작 제어"
     >
-      <p className="muted profile-intro">이 채팅에서 사용할 인물과 창작 방식을 정해요.</p>
+      {!hideNavigation && (
+        <p className="muted profile-intro">이 채팅에서 사용할 인물과 창작 방식을 정해요.</p>
+      )}
       <div
+        hidden={hideNavigation}
         className="profile-tabs"
         role="tablist"
         aria-label="채팅 설정 분류"
@@ -162,18 +171,23 @@ export function ProfileEditor({
           );
         }}
       >
-        <div id="profile-fields" role="tabpanel" aria-labelledby={`profile-tab-${tab}`}>
+        <div
+          id={hideNavigation ? undefined : 'profile-fields'}
+          role={hideNavigation ? undefined : 'tabpanel'}
+          aria-labelledby={hideNavigation ? undefined : `profile-tab-${tab}`}
+        >
           <fieldset className="profile-fields" disabled={saving}>
-            {tab === 'characters' && (
+            <div hidden={tab !== 'characters'}>
               <PackageAttachments
                 ownerBotId={ownerBotId}
                 profile={value}
                 library={library}
                 onChange={change}
                 onError={onError}
+                onPendingChange={setAttachmentPending}
               />
-            )}
-            {tab === 'characters' && (
+            </div>
+            <div hidden={tab !== 'characters'}>
               <label className="check">
                 <input
                   type="checkbox"
@@ -182,7 +196,7 @@ export function ProfileEditor({
                 />
                 본문에서 페르소나 참조
               </label>
-            )}
+            </div>
             <div hidden={tab !== 'characters'}>
               <LoreContextPolicyEditor
                 key={`${profile.chatId}:${loreResetVersion}`}
@@ -237,7 +251,7 @@ export function ProfileEditor({
                 }
               />
             </div>
-            {tab === 'models' && (
+            <div hidden={tab !== 'models'}>
               <fieldset className="control-grid">
                 <legend>역할별 모델</legend>
                 {(['main', 'translation', 'status', 'image'] as TaskRole[]).map((role, index) => (
@@ -313,7 +327,7 @@ export function ProfileEditor({
                   관리해요. 모델과 연결의 변경은 다음 신규 생성부터 적용돼요.
                 </small>
               </fieldset>
-            )}
+            </div>
           </fieldset>
         </div>
         {profile.revision > value.revision && dirty && (
@@ -327,9 +341,12 @@ export function ProfileEditor({
             {error} 입력한 내용은 유지했어요.
           </p>
         )}
-        <div className="profile-savebar form-actions">
+        <div
+          className="profile-savebar form-actions"
+          hidden={tab === 'prompts' && !dirty && !lorePending}
+        >
           <button disabled={saving || !dirty || lorePending}>
-            {saving ? '저장 중…' : '콘텐츠와 제어 저장'}
+            {saving ? '저장 중…' : '채팅 설정 저장'}
           </button>
           {(dirty || lorePending) && (
             <button
@@ -352,7 +369,9 @@ export function ProfileEditor({
           <span role="status">
             {status || (dirty || lorePending ? '저장하지 않은 변경이 있어요.' : '')}
           </span>
+          {(dirty || lorePending) && <small>인물·자료·모델의 변경 사항을 함께 저장해요.</small>}
         </div>
+        {tab === 'prompts' && !dirty && !lorePending && status && <p role="status">{status}</p>}
       </form>
     </section>
   );

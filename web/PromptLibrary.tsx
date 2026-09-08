@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { AddIcon } from './ui-icons.js';
 import type { Library, PromptPreset, PromptRole } from '../core/product.js';
 import type { LibraryItemKey, LibraryOrganization } from '../core/library-organization.js';
 import { libraryFolderOf } from '../core/library-organization.js';
@@ -20,11 +21,13 @@ export function PromptLibrary({
   reload,
   onError,
   onDirtyChange,
+  headerLeading,
 }: {
   library: Library | null;
   reload: () => Promise<void>;
   onError: (message: string) => void;
   onDirtyChange?: (dirty: boolean) => void;
+  headerLeading?: ReactNode;
 }) {
   const [folder, setFolder] = useState<FolderFilter>('all');
   const [query, setQuery] = useState('');
@@ -136,9 +139,9 @@ export function PromptLibrary({
       data-testid="prompt-library"
     >
       <header className="library-heading">
+        {headerLeading}
         <div>
           <h1>프롬프트</h1>
-          <p className="muted">모델의 응답 방식과 메시지 구성을 관리해요.</p>
         </div>
         {!editing && (
           <button
@@ -149,7 +152,7 @@ export function PromptLibrary({
               setEditing({ preset: null, role: role === 'translation' ? role : 'main' })
             }
           >
-            새 프롬프트
+            <AddIcon size={18} aria-hidden="true" /> 새 프롬프트
           </button>
         )}
       </header>

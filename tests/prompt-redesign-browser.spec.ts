@@ -1,3 +1,4 @@
+import { selectChatSettingsSection, openPromptActions } from './ui-navigation.js';
 import { postFixtureChat } from './fixtures/chat.js';
 import { test, expect } from '@playwright/test';
 import type { PromptProgram } from '../core/prompt-program.js';
@@ -52,7 +53,7 @@ test('PRUI01 optional template draft safety and reusable prompt-owned combinatio
   page.on('pageerror', (error) => errors.push(error.message));
   await page.goto(`/?chat=${chat.id}`);
   await page.getByRole('button', { name: '채팅 설정', exact: true }).click();
-  await page.getByRole('tab', { name: '프롬프트·창작 프리셋', exact: true }).click();
+  await selectChatSettingsSection(page, '프롬프트·창작 프리셋');
   const editor = page.getByTestId('prompt-editor'),
     composer = page.getByTestId('prompt-composer');
   await editor
@@ -77,18 +78,15 @@ test('PRUI01 optional template draft safety and reusable prompt-owned combinatio
   await block.getByRole('button', { name: '문법 초안 적용', exact: true }).click();
   await expect(source).toHaveValue('Line\n{{ options.missing }}');
   await expect(block.getByRole('alert')).toContainText('PROMPT_UNKNOWN_CONTROL (2:4)');
-  await expect(
-    editor.getByRole('button', { name: '새 프롬프트로 저장', exact: true })
-  ).toBeDisabled();
+  await openPromptActions(editor);
+  await expect(editor.getByRole('button', { name: '복사본으로 저장', exact: true })).toBeDisabled();
   await expect(editor.getByLabel('불러올 프롬프트', { exact: true })).toBeDisabled();
   await source.fill(
     '{% if options.detail >= 2 %}Detailed {{ options.detail }}{% else %}Brief{% endif %}'
   );
   await block.getByRole('button', { name: '문법 초안 적용', exact: true }).click();
-  await expect(
-    editor.getByRole('button', { name: '기존 프롬프트 수정 저장', exact: true })
-  ).toBeEnabled();
-  await editor.getByRole('button', { name: '기존 프롬프트 수정 저장', exact: true }).click();
+  await expect(editor.getByRole('button', { name: '수정 저장', exact: true })).toBeEnabled();
+  await editor.getByRole('button', { name: '수정 저장', exact: true }).click();
   await expect(editor.getByLabel('불러올 프롬프트', { exact: true })).toHaveValue(`${saved.id}@2`);
   await expect(global.locator('option')).toHaveCount(3);
   await expect(global.getByRole('option', { name: 'Reusable detailed', exact: true })).toHaveCount(

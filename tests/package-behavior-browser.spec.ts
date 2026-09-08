@@ -1,4 +1,10 @@
-import { editLibraryContent, revealLibraryEditor } from './ui-navigation.js';
+import {
+  editLibraryContent,
+  navigationAction,
+  revealLibraryEditor,
+  createLibraryContent,
+  selectPackageSection,
+} from './ui-navigation.js';
 import { expect, test, type APIRequestContext } from '@playwright/test';
 import type { ContentPackage } from '../core/content-package.js';
 import type { PackageBehavior } from '../core/package-behavior.js';
@@ -176,12 +182,12 @@ test('BUI02 behavior editor validates without discarding an invalid draft or oth
     .getByRole('button', { name: '서재', exact: true })
     .click();
   const library = page.getByTestId('library-panel');
-  await library.getByRole('button', { name: '새로 만들기', exact: true }).first().click();
+  await createLibraryContent(page);
   await revealLibraryEditor(page);
   await library.getByLabel('자료 이름', { exact: true }).fill('합성 동작 편집');
   await library.getByLabel('자료 본문', { exact: true }).fill('기존 본문 초안');
   const fields = library.getByRole('region', { name: '패키지 구성', exact: true });
-  await fields.getByRole('button', { name: '상태와 행동', exact: true }).click();
+  await selectPackageSection(page, '상태와 행동');
   await fields.getByRole('button', { name: '중립 시작 예제 넣기', exact: true }).click();
   await fields.getByText('제작자용 동작 JSON 편집', { exact: true }).click();
   const json = fields.getByLabel('동작 정의 JSON', { exact: true });
@@ -198,8 +204,8 @@ test('BUI02 behavior editor validates without discarding an invalid draft or oth
   await expect(guard).toBeVisible();
   await guard.getByRole('button', { name: '계속 편집', exact: true }).click();
   await expect(json).toHaveValue('{invalid');
-  await fields.getByRole('button', { name: '로어', exact: true }).click();
-  await fields.getByRole('button', { name: '상태와 행동', exact: true }).click();
+  await selectPackageSection(page, '로어');
+  await selectPackageSection(page, '상태와 행동');
   await expect(json).toHaveValue('{invalid');
   await json.fill(original);
   await fields.getByRole('button', { name: '동작 검증 후 적용', exact: true }).click();
@@ -221,19 +227,14 @@ test('BUI03 invocation methods persist, validate automatic input drafts and show
   page.on('pageerror', (error) => errors.push(error.message));
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto('/');
-  const menu = page.getByRole('button', { name: '탐색 메뉴', exact: true });
-  if (await menu.isVisible()) await menu.click();
-  await page
-    .getByRole('navigation', { name: '자료 탐색', exact: true })
-    .getByRole('button', { name: '서재', exact: true })
-    .click();
+  await navigationAction(page, '서재');
   const library = page.getByTestId('library-panel');
-  await library.getByRole('button', { name: '새로 만들기', exact: true }).first().click();
+  await createLibraryContent(page);
   await revealLibraryEditor(page);
   await library.getByLabel('자료 이름', { exact: true }).fill(title);
   await library.getByLabel('자료 본문', { exact: true }).fill('Synthetic invocation example.');
   const fields = library.getByRole('region', { name: '패키지 구성', exact: true });
-  await fields.getByRole('button', { name: '상태와 행동', exact: true }).click();
+  await selectPackageSection(page, '상태와 행동');
   await fields.getByRole('button', { name: '중립 시작 예제 넣기', exact: true }).click();
   const methods = fields.getByRole('group', { name: '횟수 기록 호출 방법', exact: true });
   await expect(methods.getByRole('checkbox', { name: /^사용자 버튼/ })).toBeChecked();
@@ -249,8 +250,8 @@ test('BUI03 invocation methods persist, validate automatic input drafts and show
   await expect(fields.getByRole('alert')).toContainText('형식을 확인해 주세요');
   const automatic = methods.getByLabel('횟수 기록 자동 실행 입력 JSON', { exact: true });
   await automatic.fill('{invalid');
-  await fields.getByRole('button', { name: '로어', exact: true }).click();
-  await fields.getByRole('button', { name: '상태와 행동', exact: true }).click();
+  await selectPackageSection(page, '로어');
+  await selectPackageSection(page, '상태와 행동');
   await expect(automatic).toHaveValue('{invalid');
   await fields.getByRole('button', { name: '동작 검증 후 적용', exact: true }).click();
   await expect(automatic).toHaveValue('{invalid');
@@ -273,7 +274,7 @@ test('BUI03 invocation methods persist, validate automatic input drafts and show
   });
   await library.getByRole('button', { name: '← 서재 목록', exact: true }).click();
   await editLibraryContent(page, `${title}`);
-  await fields.getByRole('button', { name: '상태와 행동', exact: true }).click();
+  await selectPackageSection(page, '상태와 행동');
   await expect(methods.getByRole('checkbox', { name: /^생성 전 자동 실행/ })).toBeChecked();
   await expect(automatic).toHaveValue('{\n  "value": 4\n}');
   await methods.getByRole('checkbox', { name: /^사용자 버튼/ }).uncheck();

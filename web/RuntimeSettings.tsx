@@ -55,10 +55,14 @@ export function SettingsEditor({
   chat,
   onSaved,
   onError,
+  onDirtyChange,
+  hideHeading = false,
 }: {
   chat: Chat;
   onSaved: () => Promise<void>;
   onError: (e: string) => void;
+  onDirtyChange?: (dirty: boolean) => void;
+  hideHeading?: boolean;
 }) {
   const [value, setValue] = useState<Settings>(chat.settings);
   const testMode = useTestMode();
@@ -67,6 +71,10 @@ export function SettingsEditor({
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState('');
   const [localError, setLocalError] = useState('');
+  useEffect(() => {
+    onDirtyChange?.(dirty || saving);
+  }, [dirty, saving, onDirtyChange]);
+  useEffect(() => () => onDirtyChange?.(false), [onDirtyChange]);
   useEffect(() => {
     if (!dirty && chat.settingsRevision >= revision) {
       setValue(chat.settings);
@@ -80,7 +88,7 @@ export function SettingsEditor({
   }
   return (
     <section className="settings">
-      <h3>자동 후속 작업</h3>
+      {!hideHeading && <h3>자동 후속 작업</h3>}
       <small>저장한 설정은 다음 실행부터 적용해요.</small>
       <form
         onSubmit={async (event) => {

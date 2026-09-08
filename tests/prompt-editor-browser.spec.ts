@@ -1,3 +1,4 @@
+import { selectChatSettingsSection, openPromptTools } from './ui-navigation.js';
 import { test, expect, type APIRequestContext, type Page } from '@playwright/test';
 import { randomUUID } from 'node:crypto';
 import { fixtureBotInput } from './fixtures/chat.js';
@@ -107,12 +108,13 @@ test('NUI01 native prompt import, draft preservation, roles, history and saved c
   const errors: string[] = [];
   page.on('pageerror', (e) => errors.push(e.message));
   await page.setViewportSize({ width: 1440, height: 1000 });
-  const dialog = await settings(page, c.id);
-  await dialog.getByRole('tab', { name: '프롬프트·창작 프리셋', exact: true }).click();
+  await settings(page, c.id);
+  await selectChatSettingsSection(page, '프롬프트·창작 프리셋');
   const editor = page.getByTestId('prompt-editor');
   await editor.getByRole('button', { name: '새 프롬프트 생성', exact: true }).click();
   await editor.getByLabel('프롬프트 이름', { exact: true }).fill('Synthetic native composed');
   const composer = page.getByTestId('prompt-composer');
+  await openPromptTools(composer);
   await composer.getByLabel('프롬프트 구성 JSON 불러오기', { exact: true }).setInputFiles({
     name: 'synthetic-native-pheme.json',
     mimeType: 'application/json',
@@ -141,7 +143,7 @@ test('NUI01 native prompt import, draft preservation, roles, history and saved c
   await jsonSection.getByRole('button', { name: '적용된 값으로 되돌리기', exact: true }).click();
   await expect(raw).toHaveValue(JSON.stringify(program, null, 2));
   await jsonSection.locator('summary').first().click();
-  await editor.getByRole('button', { name: '저장하고 이야기에 적용', exact: true }).click();
+  await editor.getByRole('button', { name: '저장하고 적용', exact: true }).click();
   await expect
     .poll(async () => (await detail(request, c.id)).profile?.prompts?.main?.id)
     .toBeTruthy();
@@ -229,7 +231,7 @@ test('NUI01 native prompt import, draft preservation, roles, history and saved c
   await page.screenshot({ path: info.outputPath('native-composer-mobile.png') });
   await page.reload();
   await page.getByRole('button', { name: '채팅 설정', exact: true }).click();
-  await page.getByRole('tab', { name: '프롬프트·창작 프리셋', exact: true }).click();
+  await selectChatSettingsSection(page, '프롬프트·창작 프리셋');
   await expect(
     page.getByTestId('prompt-composer').getByLabel('합성 분위기', { exact: true })
   ).toHaveValue('"calm"');

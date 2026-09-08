@@ -1,3 +1,4 @@
+import { createLibraryContent } from './ui-navigation.js';
 import { expect, test, type APIRequestContext, type Page } from '@playwright/test';
 import type { Content } from '../core/product.js';
 import type { LibraryOrganization } from '../core/library-organization.js';
@@ -49,18 +50,19 @@ for (const [index, width] of [390, 360].entries()) {
     await noHorizontalOverflow(page);
     await page.screenshot({ path: info.outputPath(`library-readable-${width}.png`) });
 
-    await panel.getByText('목록 관리', { exact: true }).click();
+    await panel.getByLabel('목록 관리', { exact: true }).click();
     await panel.getByRole('button', { name: '선택', exact: true }).click();
     await panel.getByLabel(`${seed.title} 선택`, { exact: true }).check();
-    await panel.getByText('목록 관리', { exact: true }).click();
-    await expect(panel.getByLabel('서재 검색', { exact: true })).toHaveValue(title);
+    await expect(panel.getByLabel('목록 관리', { exact: true })).toBeHidden();
+    await expect(panel.getByLabel('서재 검색', { exact: true })).toBeHidden();
     await expect(panel.getByLabel(`${seed.title} 선택`, { exact: true })).toBeChecked();
     await panel.getByRole('button', { name: '선택 취소', exact: true }).click();
-    await panel.getByRole('button', { name: '새로 만들기', exact: true }).click();
+    await expect(panel.getByLabel('서재 검색', { exact: true })).toHaveValue(title);
+    await createLibraryContent(page);
     await expect(panel.getByLabel('자료 이름', { exact: true })).toBeInViewport();
     await expect(panel.getByLabel('자료 본문', { exact: true })).toBeInViewport();
     await expect(panel.getByRole('region', { name: '대표 이미지 설정', exact: true })).toBeHidden();
-    await expect(panel.getByRole('group', { name: '패키지 편집 분류', exact: true })).toBeHidden();
+    await expect(panel.getByTestId('package-fields')).toBeHidden();
     await noHorizontalOverflow(page);
     await page.screenshot({ path: info.outputPath(`library-create-${width}.png`) });
     const createdTitle = `${title} 새 친구`,
@@ -140,7 +142,7 @@ test('LUSE03 empty persona and module folders explain their roles and offer the 
       .selectOption(folders[category]);
     await expect(panel.locator('.library-role-guide')).toHaveText(meaning);
     await expect(
-      panel.getByRole('heading', { name: `새 ${name} 만들기`, exact: true })
+      panel.getByRole('heading', { name: '이 폴더는 비어 있어요', exact: true })
     ).toBeVisible();
     await panel.getByRole('button', { name: `${name} 만들기`, exact: true }).click();
     await expect(panel.getByRole('heading', { name: `새 ${name}`, exact: true })).toBeVisible();

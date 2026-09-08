@@ -30,6 +30,27 @@
   gap: 8px;
   align-items: center;
 }
+.pc-composer-tools,
+.pc-block-tools {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
+  min-width: 0;
+}
+.pc-program-menu .pc-file {
+  flex-direction: row;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 8px;
+  background: transparent;
+  border: 0;
+  min-height: 44px;
+  font-size: 14px;
+}
+.pc-program-menu .pc-file:hover {
+  background: var(--hover);
+}
 .pc-actions button,
 .pc-actions .pc-file {
   font-size: 12px;
@@ -96,6 +117,13 @@
   min-width: 0;
   background: var(--panel);
   overflow: hidden;
+}
+.pc-block {
+  overflow: visible;
+}
+.pc-block:has(.action-menu[open]) {
+  position: relative;
+  z-index: 1;
 }
 .pc-block > summary {
   display: flex;

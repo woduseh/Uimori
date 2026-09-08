@@ -1,8 +1,8 @@
+import { selectSettingsSection, navigationAction } from './ui-navigation.js';
 import { test, expect } from '@playwright/test';
 import { fixtureBotInput } from './fixtures/chat.js';
-import { navigationAction } from './ui-navigation.js';
 
-test('UXUI01 compact composer, square avatar and one-row mobile settings preserve the draft', async ({
+test('UXUI01 compact composer, square avatar and mobile settings details preserve the draft', async ({
   page,
   request,
 }, info) => {
@@ -46,10 +46,12 @@ test('UXUI01 compact composer, square avatar and one-row mobile settings preserv
   }
   await navigationAction(page, '설정');
   const dialog = page.getByRole('dialog', { name: '설정', exact: true });
-  const nav = dialog.getByRole('tablist', { name: '설정 항목', exact: true });
-  const bounds = await nav.boundingBox();
-  expect(bounds!.height).toBeLessThan(70);
-  await dialog.getByRole('tab', { name: '데이터 관리', exact: true }).click();
+  const nav = dialog.locator('.settings-navigation').filter({ visible: true });
+  await expect(nav).toBeVisible();
+  await expect(dialog.getByLabel('앱 화면 테마')).toBeHidden();
+  await selectSettingsSection(page, '데이터 관리');
+  await expect(nav).toBeHidden();
+  await expect(dialog.getByRole('button', { name: '설정 목록으로', exact: true })).toBeVisible();
   await expect(dialog.getByRole('heading', { name: '백업 받기', exact: true })).toBeVisible();
   await expect(dialog.getByText(/SQLite 백업은 서버를 종료하고/)).toBeHidden();
   await page.screenshot({ path: info.outputPath('compact-settings-360.png') });

@@ -345,6 +345,9 @@ input[type="checkbox"] {
   min-width: 0;
   flex: 1;
 }
+.workspace-fallback-body {
+  padding: 16px 24px;
+}
 .header-title h1 {
   font-size: 15px;
   line-height: 1.5;
@@ -620,23 +623,8 @@ input[type="checkbox"] {
 }
 .source-actions {
   display: flex;
-  gap: 5px;
-  flex-wrap: wrap;
+  justify-content: flex-end;
   margin-top: 18px;
-}
-.source-actions button {
-  font-size: 12px;
-  background: transparent;
-  border: 0;
-  color: var(--muted);
-  padding: 8px 10px;
-}
-.source-actions button:first-child {
-  padding-left: 0;
-  color: var(--text);
-}
-.source-actions button:hover {
-  color: var(--text);
 }
 .source-job-details {
   font-size: 11px;
@@ -993,14 +981,6 @@ input[type="checkbox"] {
   .prose p {
     margin-bottom: 1.45em;
   }
-  .source-actions {
-    gap: 2px;
-  }
-  .source-actions button {
-    padding: 7px 8px;
-    min-height: 44px;
-    font-size: 11px;
-  }
   .composer-dock {
     padding: 8px 11px max(7px, env(safe-area-inset-bottom));
   }
@@ -1142,14 +1122,14 @@ input[type="checkbox"] {
     height: min(880px, calc(var(--app-height, 100dvh) - 64px));
   }
 }
-.settings-dialog .dialog-body {
+.settings-dialog > .dialog-body {
   display: flex;
   flex: 1;
   flex-direction: column;
   padding: 0;
   overflow: hidden;
 }
-.settings-dialog .dialog-body > .error {
+.settings-dialog > .dialog-body > .error {
   flex: none;
   margin: 0;
   padding: 12px 24px;
@@ -1170,7 +1150,7 @@ input[type="checkbox"] {
   border-right: 1px solid var(--line);
   overflow: auto;
 }
-.settings-navigation [role="tab"] {
+.settings-navigation > button {
   display: flex;
   align-items: center;
   gap: 12px;
@@ -1185,7 +1165,7 @@ input[type="checkbox"] {
   text-align: left;
   font-weight: 500;
 }
-.settings-navigation [role="tab"]:hover {
+.settings-navigation > button:hover {
   background: var(--panel);
   color: var(--text);
 }
@@ -1203,6 +1183,17 @@ input[type="checkbox"] {
   min-width: 0;
   min-height: 0;
   display: flex;
+}
+.settings-navigation[hidden],
+.settings-pages[hidden] {
+  display: none;
+}
+.settings-dialog > .dialog-header h2 {
+  flex: 1;
+  min-width: 0;
+}
+.settings-dialog > .dialog-header > .ui-icon-button {
+  flex-shrink: 0;
 }
 .settings-page {
   flex: 1;
@@ -1232,22 +1223,21 @@ input[type="checkbox"] {
     flex-direction: column;
   }
   .settings-navigation {
-    flex: none;
-    display: flex;
-    gap: 4px;
-    padding: 6px 10px;
-    overflow-x: auto;
+    flex: 1;
+    padding: 12px 16px;
+    overflow: auto;
     border-right: 0;
-    border-bottom: 1px solid var(--line);
+    background: var(--panel);
   }
-  .settings-navigation [role="tab"] {
-    flex: none;
-    width: auto;
-    white-space: nowrap;
-    margin: 0;
-    font-size: 13px;
-    padding: 10px;
-    gap: 8px;
+  .settings-navigation > button {
+    min-height: 56px;
+    width: 100%;
+    font-size: 16px;
+    padding: 12px;
+    gap: 14px;
+    color: var(--text);
+    border-bottom: 1px solid var(--line);
+    border-radius: 0;
   }
   .settings-page {
     padding: 16px 18px;
@@ -1256,6 +1246,72 @@ input[type="checkbox"] {
     margin-bottom: 14px;
     padding-bottom: 12px;
   }
+}
+.archive-backup-options {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(220px, 100%), 1fr));
+  gap: 12px;
+  margin-bottom: 28px;
+}
+.archive-backup-option {
+  display: grid;
+  align-content: start;
+  gap: 8px;
+  min-width: 0;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+}
+.archive-backup-option button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 8px;
+  min-height: 44px;
+  text-align: left;
+}
+.archive-backup-option p {
+  margin: 0;
+}
+.archive-file-field {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.archive-file-field > label {
+  flex: 1;
+  min-width: 0;
+}
+.archive-import-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.archive-import-status > p {
+  flex: 1;
+  margin: 0;
+  min-width: 0;
+}
+.archive-import-status > button {
+  flex-shrink: 0;
+}
+.archive-file-field input {
+  flex: 1;
+  min-width: 0;
+  width: 100%;
+  min-height: 44px;
+}
+.archive-file-field > button {
+  flex-shrink: 0;
+  align-self: flex-end;
+}
+.archive-import-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
 }
 .quick-controls > .content-picker {
   flex: 0 1 180px;

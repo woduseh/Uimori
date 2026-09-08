@@ -1,8 +1,19 @@
 import { DeleteButton } from './DeleteButton.js';
 import { ActivityDetails } from './ActivityStatus.js';
 import { CodexAgentSettings } from './CodexAgentSettings.js';
-import { useEffect, useId, useState } from 'react';
-import { Settings, Plug, Database, Shield } from 'lucide-react';
+import { useEffect, useId, useRef, useState } from 'react';
+import { Dialog } from './Dialog.js';
+import { IconButton } from './IconButton.js';
+import { useCompactLayout } from './useCompactLayout.js';
+import { useSettingsHistory } from './useSettingsHistory.js';
+import {
+  SettingsIcon,
+  ConnectionIcon,
+  AgentIcon,
+  DataIcon,
+  SecurityIcon,
+  BackIcon,
+} from './ui-icons.js';
 import type { Job } from '../core/types.js';
 import { branchLabel } from './storyLabels.js';
 import type { StoryState } from './useStory.js';
@@ -223,6 +234,7 @@ export function AppSettingsPanel({
   setTheme,
   enterSend,
   setEnterSend,
+  onClose,
 }: {
   initialTab?: string;
   state: StoryState;
@@ -230,163 +242,271 @@ export function AppSettingsPanel({
   setTheme: (theme: 'system' | 'dark' | 'light') => void;
   enterSend: boolean;
   setEnterSend: (value: boolean) => void;
+  onClose: () => void;
 }) {
   const [signingOut, setSigningOut] = useState(false);
   const [active, setActive] = useState(initialTab);
   const [visited, setVisited] = useState([initialTab]);
+  const compact = useCompactLayout();
+  const [detail, setDetail] = useState(initialTab !== 'general');
+  const [connectionDirty, setConnectionDirty] = useState(false);
+  const [archiveDirty, setArchiveDirty] = useState(false);
+  const [discard, setDiscard] = useState(false);
+  const dirty = connectionDirty || archiveDirty;
+  const root = useRef<HTMLElement>(null);
+  const wasCompact = useRef(compact);
   const id = useId();
   const categories = [
-    { key: 'general', label: '일반', icon: Settings },
-    { key: 'connections', label: '연결과 모델', icon: Plug },
-    { key: 'agents', label: '에이전트', icon: Plug },
-    { key: 'data', label: '데이터 관리', icon: Database },
-    { key: 'security', label: '접근 보안', icon: Shield },
+    { key: 'general', label: '일반', icon: SettingsIcon },
+    { key: 'connections', label: '연결과 모델', icon: ConnectionIcon },
+    { key: 'agents', label: '에이전트', icon: AgentIcon },
+    { key: 'data', label: '데이터 관리', icon: DataIcon },
+    { key: 'security', label: '접근 보안', icon: SecurityIcon },
   ];
+  const title = categories.find((item) => item.key === active)?.label ?? '일반';
+  const showingDetail = !compact || detail;
+  function backToList() {
+    setDetail(false);
+    requestAnimationFrame(() => document.getElementById(`${id}-${active}-tab`)?.focus());
+  }
+  const closeHistory = useSettingsHistory(() => {
+    const nested = root.current
+      ?.closest('dialog')
+      ?.querySelector<HTMLDialogElement>('dialog[open]');
+    if (nested) {
+      nested.dispatchEvent(new Event('cancel', { cancelable: true }));
+      return true;
+    }
+    if (compact && detail) {
+      backToList();
+      return true;
+    }
+    if (dirty) {
+      setDiscard(true);
+      return true;
+    }
+    return false;
+  }, onClose);
+  function requestClose() {
+    if (dirty) setDiscard(true);
+    else closeHistory();
+  }
+  useEffect(() => {
+    if (compact && !wasCompact.current) setDetail(true);
+    wasCompact.current = compact;
+    const frame = requestAnimationFrame(() => {
+      const focused = document.activeElement;
+      if (
+        focused instanceof HTMLElement &&
+        root.current?.contains(focused) &&
+        !focused.checkVisibility()
+      )
+        document.getElementById(`${id}-${active}-panel`)?.focus();
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [compact, active, id]);
+  useEffect(() => {
+    if (!dirty) return;
+    const guard = (event: BeforeUnloadEvent) => event.preventDefault();
+    addEventListener('beforeunload', guard);
+    return () => removeEventListener('beforeunload', guard);
+  }, [dirty]);
   function select(key: string) {
     setActive(key);
+    setDetail(true);
     setVisited((previous) => (previous.includes(key) ? previous : [...previous, key]));
+    if (compact)
+      requestAnimationFrame(() => document.getElementById(`${id}-${key}-panel`)?.focus());
   }
   return (
-    <section className="app-settings-panel" aria-label="앱 설정">
-      <div
-        className="settings-navigation"
-        role="tablist"
-        aria-label="설정 항목"
-        aria-orientation="vertical"
-        onKeyDown={(event) => {
-          const index = categories.findIndex((item) => item.key === active);
-          const next =
-            event.key === 'Home'
-              ? 0
-              : event.key === 'End'
-                ? categories.length - 1
-                : ['ArrowDown', 'ArrowRight'].includes(event.key)
-                  ? (index + 1) % categories.length
-                  : ['ArrowUp', 'ArrowLeft'].includes(event.key)
-                    ? (index + categories.length - 1) % categories.length
-                    : -1;
-          if (next < 0) return;
-          event.preventDefault();
-          select(categories[next].key);
-          event.currentTarget.querySelectorAll<HTMLButtonElement>('[role="tab"]')[next]?.focus();
-        }}
+    <Dialog
+      open
+      title="설정"
+      onClose={requestClose}
+      wide
+      className="settings-dialog"
+      headerTitle={compact && detail ? title : undefined}
+      headerLeading={
+        compact && detail ? (
+          <IconButton label="설정 목록으로" icon={BackIcon} onClick={backToList} />
+        ) : undefined
+      }
+    >
+      <section ref={root} className="app-settings-panel" aria-label="앱 설정">
+        <div
+          className="settings-navigation"
+          hidden={compact && detail}
+          role={compact ? 'navigation' : 'tablist'}
+          aria-label="설정 항목"
+          aria-orientation={compact ? undefined : 'vertical'}
+          onKeyDown={(event) => {
+            if (compact) return;
+            const index = categories.findIndex((item) => item.key === active);
+            const next =
+              event.key === 'Home'
+                ? 0
+                : event.key === 'End'
+                  ? categories.length - 1
+                  : ['ArrowDown', 'ArrowRight'].includes(event.key)
+                    ? (index + 1) % categories.length
+                    : ['ArrowUp', 'ArrowLeft'].includes(event.key)
+                      ? (index + categories.length - 1) % categories.length
+                      : -1;
+            if (next < 0) return;
+            event.preventDefault();
+            select(categories[next].key);
+            event.currentTarget.querySelectorAll<HTMLButtonElement>('[role="tab"]')[next]?.focus();
+          }}
+        >
+          {categories.map(({ key, label, icon: Icon }) => (
+            <button
+              type="button"
+              role={compact ? undefined : 'tab'}
+              key={key}
+              id={`${id}-${key}-tab`}
+              aria-controls={`${id}-${key}-panel`}
+              aria-selected={compact ? undefined : active === key}
+              tabIndex={compact || active === key ? 0 : -1}
+              onClick={() => select(key)}
+            >
+              <Icon size={18} aria-hidden="true" />
+              <span>{label}</span>
+            </button>
+          ))}
+        </div>
+        <div className="settings-pages" hidden={!showingDetail}>
+          {categories.map(({ key, label }) => (
+            <section
+              className="settings-page"
+              role="tabpanel"
+              id={`${id}-${key}-panel`}
+              aria-labelledby={`${id}-${key}-tab`}
+              hidden={active !== key || !showingDetail}
+              tabIndex={0}
+              key={key}
+            >
+              {visited.includes(key) && (
+                <>
+                  {!compact && <h3 className="settings-page-title">{label}</h3>}
+                  {key === 'general' && (
+                    <section className="settings-section">
+                      <h3>화면과 입력</h3>
+                      <label>
+                        화면 테마
+                        <select
+                          aria-label="앱 화면 테마"
+                          value={theme}
+                          onChange={(event) =>
+                            setTheme(event.target.value as 'system' | 'dark' | 'light')
+                          }
+                        >
+                          <option value="system">기기 설정 따르기</option>
+                          <option value="dark">어둡게</option>
+                          <option value="light">밝게</option>
+                        </select>
+                      </label>
+                      <label className="check">
+                        <input
+                          type="checkbox"
+                          checked={enterSend}
+                          onChange={(event) => setEnterSend(event.target.checked)}
+                        />
+                        Enter로 보내기
+                      </label>
+                      <small>
+                        {enterSend
+                          ? 'Enter로 보내고 Shift+Enter로 줄을 바꿔요.'
+                          : 'Enter는 줄바꿈, Ctrl/Cmd+Enter는 보내기예요.'}{' '}
+                        한글 조합 중에는 보내지 않아요.
+                      </small>
+                    </section>
+                  )}
+                  {key === 'connections' && (
+                    <div data-testid="connection-settings">
+                      {state.library ? (
+                        <ConnectionEditor
+                          library={state.library}
+                          reload={state.loadLibrary}
+                          onError={state.setError}
+                          onDirtyChange={setConnectionDirty}
+                        />
+                      ) : (
+                        <p role="status">연결 목록을 불러오는 중이에요…</p>
+                      )}
+                    </div>
+                  )}
+                  {key === 'agents' && (
+                    <CodexAgentSettings active={active === 'agents' && showingDetail} />
+                  )}
+                  {key === 'data' && (
+                    <ArchivePanel
+                      expanded
+                      active={active === 'data' && showingDetail}
+                      onImported={async () => {
+                        await Promise.all([state.loadChats(), state.loadLibrary()]);
+                        if (state.selected) await state.refresh(state.selected);
+                      }}
+                      onError={state.setError}
+                      onDirtyChange={setArchiveDirty}
+                    />
+                  )}
+                  {key === 'security' && (
+                    <section className="settings-section">
+                      <p className="muted">
+                        현재 브라우저의 접속 세션을 해제해요. 서버에서 진행 중인 생성은 취소되지
+                        않아요.
+                      </p>
+                      <button
+                        type="button"
+                        className="secondary"
+                        disabled={signingOut}
+                        onClick={() => {
+                          setSigningOut(true);
+                          void api('/session', {}, 'DELETE')
+                            .then(() => location.reload())
+                            .catch((error) => {
+                              state.setError(error.message);
+                              setSigningOut(false);
+                            });
+                        }}
+                      >
+                        접속 해제
+                      </button>
+                    </section>
+                  )}
+                </>
+              )}
+            </section>
+          ))}
+        </div>
+      </section>
+      {state.error && (
+        <p className="error" role="alert">
+          {state.error}
+        </p>
+      )}
+      <Dialog
+        open={discard}
+        title="미저장 설정 확인"
+        role="alertdialog"
+        onClose={() => setDiscard(false)}
       >
-        {categories.map(({ key, label, icon: Icon }) => (
+        <p>저장하지 않은 편집 내용이나 선택한 파일이 있어요. 닫으면 이 초안이 사라져요.</p>
+        <div className="form-actions">
+          <button type="button" className="secondary" onClick={() => setDiscard(false)}>
+            계속 편집
+          </button>
           <button
             type="button"
-            role="tab"
-            key={key}
-            id={`${id}-${key}-tab`}
-            aria-controls={`${id}-${key}-panel`}
-            aria-selected={active === key}
-            tabIndex={active === key ? 0 : -1}
-            onClick={() => select(key)}
+            onClick={() => {
+              setDiscard(false);
+              closeHistory();
+            }}
           >
-            <Icon size={18} aria-hidden="true" />
-            <span>{label}</span>
+            초안 버리고 닫기
           </button>
-        ))}
-      </div>
-      <div className="settings-pages">
-        {categories.map(({ key, label }) => (
-          <section
-            className="settings-page"
-            role="tabpanel"
-            id={`${id}-${key}-panel`}
-            aria-labelledby={`${id}-${key}-tab`}
-            hidden={active !== key}
-            tabIndex={0}
-            key={key}
-          >
-            {visited.includes(key) && (
-              <>
-                <h3 className="settings-page-title">{label}</h3>
-                {key === 'general' && (
-                  <section className="settings-section">
-                    <h3>화면과 입력</h3>
-                    <label>
-                      화면 테마
-                      <select
-                        aria-label="앱 화면 테마"
-                        value={theme}
-                        onChange={(event) =>
-                          setTheme(event.target.value as 'system' | 'dark' | 'light')
-                        }
-                      >
-                        <option value="system">기기 설정 따르기</option>
-                        <option value="dark">어둡게</option>
-                        <option value="light">밝게</option>
-                      </select>
-                    </label>
-                    <label className="check">
-                      <input
-                        type="checkbox"
-                        checked={enterSend}
-                        onChange={(event) => setEnterSend(event.target.checked)}
-                      />
-                      Enter로 보내기
-                    </label>
-                    <small>
-                      {enterSend
-                        ? 'Enter로 보내고 Shift+Enter로 줄을 바꿔요.'
-                        : 'Enter는 줄바꿈, Ctrl/Cmd+Enter는 보내기예요.'}{' '}
-                      한글 조합 중에는 보내지 않아요.
-                    </small>
-                  </section>
-                )}
-                {key === 'connections' && (
-                  <div data-testid="connection-settings">
-                    {state.library ? (
-                      <ConnectionEditor
-                        library={state.library}
-                        reload={state.loadLibrary}
-                        onError={state.setError}
-                      />
-                    ) : (
-                      <p role="status">연결 목록을 불러오는 중이에요…</p>
-                    )}
-                  </div>
-                )}
-                {key === 'agents' && <CodexAgentSettings active={active === 'agents'} />}
-                {key === 'data' && (
-                  <ArchivePanel
-                    expanded
-                    onImported={async () => {
-                      await Promise.all([state.loadChats(), state.loadLibrary()]);
-                      if (state.selected) await state.refresh(state.selected);
-                    }}
-                    onError={state.setError}
-                  />
-                )}
-                {key === 'security' && (
-                  <section className="settings-section">
-                    <p className="muted">
-                      현재 브라우저의 접속 세션을 해제해요. 서버에서 진행 중인 생성은 취소되지
-                      않아요.
-                    </p>
-                    <button
-                      type="button"
-                      className="secondary"
-                      disabled={signingOut}
-                      onClick={() => {
-                        setSigningOut(true);
-                        void api('/session', {}, 'DELETE')
-                          .then(() => location.reload())
-                          .catch((error) => {
-                            state.setError(error.message);
-                            setSigningOut(false);
-                          });
-                      }}
-                    >
-                      접속 해제
-                    </button>
-                  </section>
-                )}
-              </>
-            )}
-          </section>
-        ))}
-      </div>
-    </section>
+        </div>
+      </Dialog>
+    </Dialog>
   );
 }

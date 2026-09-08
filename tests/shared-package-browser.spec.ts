@@ -1,7 +1,13 @@
 import { test, expect, type Page, type APIRequestContext } from '@playwright/test';
 import type { Content, Library } from '../core/product.js';
 import type { ChatDetail } from '../core/types.js';
-import { editLibraryContent, revealLibraryEditor } from './ui-navigation.js';
+import {
+  editLibraryContent,
+  revealLibraryEditor,
+  createLibraryContent,
+  selectPackageSection,
+  openSourceActions,
+} from './ui-navigation.js';
 
 const png = Buffer.from(
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jG1sAAAAASUVORK5CYII=',
@@ -51,7 +57,7 @@ test('shared persona draft uploads an image and starts as a bot with an exact au
     if (item.method() === 'POST' && /\/api\/chats$/.test(item.url())) chatPosts++;
   });
   const library = await libraryFor(page, '페르소나');
-  await library.getByRole('button', { name: '새로 만들기', exact: true }).first().click();
+  await createLibraryContent(page);
   await library.getByText('패키지 가져오기·내보내기와 역할 사본', { exact: true }).click();
   await library.getByLabel('패키지 JSON 가져오기', { exact: true }).setInputFiles({
     name: 'persona.json',
@@ -60,8 +66,7 @@ test('shared persona draft uploads an image and starts as a bot with an exact au
   });
   await library.getByRole('button', { name: '가져온 패키지로 초안 바꾸기', exact: true }).click();
   await revealLibraryEditor(page);
-  const tabs = library.getByRole('group', { name: '패키지 편집 분류', exact: true });
-  await tabs.getByRole('button', { name: '이미지', exact: true }).click();
+  await selectPackageSection(page, '이미지');
   const images = library.getByRole('region', { name: '자료 이미지', exact: true });
   await images
     .getByLabel('자료 이미지 파일 추가', { exact: true })
@@ -70,7 +75,7 @@ test('shared persona draft uploads an image and starts as a bot with an exact au
   await images.getByLabel('선택한 이미지 이름', { exact: true }).fill('창가의 검');
   await images.getByLabel('자료의 대표 이미지로 사용', { exact: true }).check();
   await images.screenshot({ path: info.outputPath('shared-persona-images-desktop.png') });
-  await tabs.getByRole('button', { name: '시작', exact: true }).click();
+  await selectPackageSection(page, '시작');
   await library.locator('.package-start-editor > summary').click();
   await library.getByRole('button', { name: '시작 추가', exact: true }).click();
   await library.getByLabel('시작 이름', { exact: true }).fill('창가의 아침');
@@ -112,6 +117,7 @@ test('shared persona draft uploads an image and starts as a bot with an exact au
   expect((await savedContent(request, title)).kind).toBe('persona');
   expect(chatPosts).toBe(1);
   const source = page.getByTestId('source').filter({ has: page.getByTestId('authored-start') });
+  await openSourceActions(source);
   await source.getByRole('button', { name: '이미지 선택', exact: true }).click();
   await expect
     .poll(async () => {
@@ -176,10 +182,7 @@ test('shared package image editing pages large lists and preserves old revisions
   const first: Content = await response.json();
   const library = await libraryFor(page, '모듈');
   await editLibraryContent(page, title);
-  await library
-    .getByRole('group', { name: '패키지 편집 분류', exact: true })
-    .getByRole('button', { name: '이미지', exact: true })
-    .click();
+  await selectPackageSection(page, '이미지');
   const images = library.getByRole('region', { name: '자료 이미지', exact: true });
   await expect(images.getByRole('listitem')).toHaveCount(50);
   await images.getByRole('button', { name: '다음', exact: true }).click();

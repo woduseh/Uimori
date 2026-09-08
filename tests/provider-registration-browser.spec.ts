@@ -1,3 +1,4 @@
+import { selectSettingsSection } from './ui-navigation.js';
 import { test, expect, type Page, type APIRequestContext } from '@playwright/test';
 import type { Connection, Library, ModelPreset } from '../core/product.js';
 import type { RegistrationView } from '../core/provider-registration.js';
@@ -7,7 +8,7 @@ async function settings(page: Page) {
   if (!(await button.isVisible()))
     await page.getByRole('button', { name: '탐색 메뉴', exact: true }).click();
   await button.click();
-  await page.getByRole('tab', { name: '연결과 모델', exact: true }).click();
+  await selectSettingsSection(page, '연결과 모델');
   await page.getByTestId('provider-registration-assistant').locator('summary').first().click();
 }
 async function post<T>(request: APIRequestContext, path: string, data: unknown): Promise<T> {
