@@ -10,6 +10,7 @@ import {
   selectStartPrompt,
   selectChatSettingsSection,
   openSourceActions,
+  openChatMenu,
 } from './ui-navigation.js';
 import { postFixtureChat } from './fixtures/chat.js';
 import { test, expect, type Page, type APIRequestContext, type Locator } from '@playwright/test';
@@ -498,7 +499,9 @@ test('UI07 UI12 lost fork response reuses one new story and Back Forward preserv
   const priorChats = (await (await request.get('/api/chats')).json()) as Chat[];
   await page.goto(`/?chat=${chat.id}`);
   await expect(page.getByTestId('source')).toHaveCount(2);
+  await openChatMenu(page);
   await expect(page.getByRole('button', { name: '보관된 전개', exact: true })).toHaveCount(0);
+  await page.keyboard.press('Escape');
   await expect(page.getByRole('button', { name: '다른 응답', exact: true })).toHaveCount(0);
   await page.getByLabel('다음 장면 요청').fill('원본 이야기의 합성 초안');
   let accepted!: (chat: Chat) => void;
@@ -518,13 +521,18 @@ test('UI07 UI12 lost fork response reuses one new story and Back Forward preserv
   const failed = page.waitForEvent('requestfailed', (event) =>
     event.url().endsWith(`/api/chats/${chat.id}/fork`)
   );
-  await page.getByRole('button', { name: '채팅 포크', exact: true }).click();
+  const forkButton = page.getByRole('button', { name: '채팅 포크', exact: true });
+  await openChatMenu(page);
+  await forkButton.click();
   const fork = await acceptedChat;
   await failed;
-  await expect(page.getByRole('button', { name: '채팅 포크', exact: true })).toBeEnabled();
+  await openChatMenu(page);
+  await expect(forkButton).toBeEnabled();
+  await page.keyboard.press('Escape');
   await expect.poll(() => new URL(page.url()).searchParams.get('chat')).toBe(chat.id);
   await page.getByLabel('다음 장면 요청').fill('수락 확인 전에 새로 적은 원본 초안');
-  await page.getByRole('button', { name: '채팅 포크', exact: true }).click();
+  await openChatMenu(page);
+  await forkButton.click();
   await expect.poll(() => new URL(page.url()).searchParams.get('chat')).toBe(fork.id);
   const copied = await data(request, fork.id);
   expect(payloads).toHaveLength(2);
@@ -632,7 +640,9 @@ test('UI07 UI12 late accepted fork cannot navigate after A B A or replace the cu
     release();
     await (await response).finished();
     await expect(list.getByRole('button').filter({ hasText: fork.title })).toBeVisible();
+    await openChatMenu(page);
     await expect(page.getByRole('button', { name: '채팅 포크', exact: true })).toBeEnabled();
+    await page.keyboard.press('Escape');
     await expect(page).toHaveURL(selectedUrl);
     await expect(page.getByLabel('다음 장면 요청')).toHaveValue('돌아온 원본에 새로 작성한 초안');
     await expect(page.getByTestId('source')).toHaveAttribute('data-source-id', source.id);
@@ -1268,6 +1278,7 @@ test('UI07 UI09 legacy branches use one mobile selection and preserve reading wi
     .toBe(true);
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto(`/?chat=${chat.id}`);
+  await openChatMenu(page);
   await page.getByRole('button', { name: '보관된 전개', exact: true }).click();
   const dialog = page.getByRole('dialog', { name: '보관된 전개', exact: true });
   await expect
@@ -1515,6 +1526,7 @@ test('UI18 translation is requested only by first view click, never by restore, 
   await expect(page.getByTestId('source-text')).toBeVisible();
   await page.reload();
   await expect(page.getByTestId('source-text')).toBeVisible();
+  await openChatMenu(page);
   await page.getByRole('button', { name: '읽기 설정', exact: true }).click();
   await page.getByLabel('새 원고의 기본 보기').selectOption('original');
   await page.getByLabel('새 원고의 기본 보기').selectOption('translation');
@@ -1917,9 +1929,13 @@ test('UI common dialogs center on desktop and fill mobile without changing dismi
         });
       await page.keyboard.press('Escape');
       await expect(dialog).not.toBeVisible();
-      if (title === '채팅 설정' || width === 1440) await expect(opener).toBeFocused();
+      // Tasks open from the chat ⋯ menu, so focus returns to the menu button afterwards.
+      if (title === '작업 현황') {
+        if (width === 1440) await expect(page.locator('.chat-menu > summary')).toBeFocused();
+      } else await expect(opener).toBeFocused();
     }
     if (width === 1440) {
+      await openChatMenu(page);
       const opener = page.getByRole('button', { name: '읽기 설정', exact: true });
       await opener.click();
       const dialog = page.getByRole('dialog', { name: '읽기 설정', exact: true });
@@ -1930,7 +1946,8 @@ test('UI common dialogs center on desktop and fill mobile without changing dismi
         expect(Math.abs(box.y + box.height / 2 - height / 2)).toBeLessThanOrEqual(1);
       await page.mouse.click(8, 8);
       await expect(dialog).not.toBeVisible();
-      await expect(opener).toBeFocused();
+      // The opener lives in the closed ⋯ menu, so focus returns to the menu button.
+      await expect(page.locator('.chat-menu > summary')).toBeFocused();
     } else {
       const opener = page.getByRole('button', { name: '탐색 메뉴', exact: true });
       await opener.click();
@@ -1989,6 +2006,8 @@ test('UI whole-source translation retains completed results across retry and can
       await request.post('/api/test/control', { data: { action: 'hold', barrier: 'translation' } })
     ).ok()
   ).toBeTruthy();
+  await openSourceActions(scene);
+  page.once('dialog', (dialog) => dialog.accept());
   await scene.getByRole('button', { name: '현재 설정으로 새 번역', exact: true }).click();
   await expect.poll(async () => (await latest()).status).toBe('running');
   const pending = await latest();
@@ -2049,6 +2068,40 @@ test('UI whole-source translation retains completed results across retry and can
         path: info.outputPath(`translation-whole-source-${terminal}-retry-390.png`),
       });
   }
+});
+
+test('UI chat settings close right after saving does not warn while the refresh is pending', async ({
+  page,
+  request,
+}) => {
+  const chat = await seed(request, `저장 직후 닫기 ${Date.now()}`, 'Synthetic close after save.');
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto(`/?chat=${chat.id}`);
+  const dialog = page.getByRole('dialog', { name: '채팅 설정', exact: true });
+  await page.getByRole('button', { name: '채팅 설정', exact: true }).click();
+  await selectChatSettingsSection(page, '자동 후속 작업');
+  const runtime = dialog.locator('section.settings');
+  const statusEnabled = !(await data(request, chat.id)).chat.settings.status;
+  await runtime.getByLabel('장면 상태 자동 실행', { exact: true }).setChecked(statusEnabled);
+  // Hold the post-save reader refresh so the close arrives while it is still in flight.
+  let release!: () => void;
+  const held = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const reader = /\/api\/chats\/[^/]+\/reader/;
+  await page.route(reader, async (route) => {
+    await held;
+    await route.continue();
+  });
+  await runtime.getByRole('button', { name: '설정 저장', exact: true }).click();
+  await expect(runtime.getByRole('status')).toContainText('후속 작업 설정을 저장했어요.');
+  await page.keyboard.press('Escape');
+  await expect(dialog).toBeHidden();
+  await expect(page.getByRole('alertdialog', { name: '미저장 채팅 설정 확인' })).toHaveCount(0);
+  release();
+  await expect
+    .poll(async () => (await data(request, chat.id)).chat.settings.status)
+    .toBe(statusEnabled);
 });
 
 preservePromptWorkspace();

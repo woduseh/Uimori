@@ -14,13 +14,18 @@ import { auxiliaryErrorDiagnostic } from './auxiliary-error.js';
 import { Prose } from './Prose.js';
 import { LazyDiagnostics } from './LazyDiagnostics.js';
 import { ActionMenu } from './ActionMenu.js';
-import { CopyIcon, EditIcon, ImagesIcon } from './ui-icons.js';
+import { IconButton } from './IconButton.js';
+import { CopyIcon, EditIcon, ImagesIcon, RefreshIcon } from './ui-icons.js';
+import { GitFork } from 'lucide-react';
 import { SourceSegmentsReader } from './SourceSegmentsReader.js';
 import type { SourceSegmentPolicy } from '../core/source-segments.js';
+
 import { PackageStateCards, usePackagePresentation } from './PackagePresentation.js';
 import './source-edit.css';
 
 type ReaderMode = 'original' | 'translation';
+/** Scene header pieces the activity panel places inside its summary row. */
+export type SceneHeaderSlots = { leading: ReactNode; badges: ReactNode };
 type ReaderProps = {
   source: Source;
   index: number;
@@ -35,7 +40,8 @@ type ReaderProps = {
   request?: string;
   contextSummary?: ReaderRun['contextSummary'];
   packageStart?: { mode: 'authored' | 'generate'; title: string };
-  activity?: ReactNode;
+  /** Wraps the scene header in the per-response activity panel; falsy keeps a plain header. */
+  activity?: (slots: SceneHeaderSlots) => ReactNode;
   sourceSegments?: SourceSegmentPolicy;
   hasPackages?: boolean;
   presentationRefreshKey?: string | number;
@@ -303,6 +309,58 @@ function SourceReaderContent({
           </figure>
         ) : null;
       });
+  const showToggle = !!translation || mode === 'translation';
+  const leading = <span className="folio">장면 {index + 1}</span>;
+  const badges =
+    validTranslation?.manual && mode === 'translation' ? (
+      <span className="scene-badge">직접 수정한 번역</span>
+    ) : null;
+  const trailing = (
+    <div className="segmented compact" role="group" aria-label="원문과 번역 보기">
+      <button
+        type="button"
+        aria-label="번역 보기"
+        aria-pressed={mode === 'translation'}
+        disabled={pending === 'translation'}
+        onClick={viewTranslation}
+      >
+        {showToggle ? '번역' : '번역 보기'}
+      </button>
+      {showToggle && (
+        <button
+          type="button"
+          aria-label="원문 보기"
+          aria-pressed={mode === 'original'}
+          onClick={() => switchMode('original')}
+        >
+          원문
+        </button>
+      )}
+    </div>
+  );
+  const activityNode = activity?.({ leading, badges }) || null;
+  const canRetranslate = !!translation && !activeJob(translation) && !retryable(translation.status);
+  const retranslate = () => {
+    if (
+      !window.confirm(
+        '현재 모델과 프롬프트로 새 번역을 요청해요. 새 번역이 완료될 때까지 기존 번역을 표시해요. 계속할까요?'
+      )
+    )
+      return;
+    void action('translation', async () => {
+      await api(`/sources/${source.id}/retranslate`, {});
+      switchMode('translation');
+      await refresh();
+    });
+  };
+  const otherEditor: ReaderMode = mode === 'translation' ? 'original' : 'translation';
+  const editorLabel = (role: ReaderMode) => (role === 'translation' ? '번역 수정' : '원문 수정');
+  const copyCurrent = () =>
+    void action('copy', async () => {
+      const text = mode === 'translation' ? (validTranslation?.text ?? '') : source.text;
+      if (!navigator.clipboard) throw new Error('이 브라우저에서는 복사를 지원하지 않아요.');
+      await navigator.clipboard.writeText(text);
+    });
   return (
     <article
       ref={container}
@@ -318,7 +376,6 @@ function SourceReaderContent({
       )}
       {packageStart?.mode !== 'authored' && request && (
         <div className="request-message" data-testid="source-request">
-          <span className="request-label">내 요청</span>
           {request.length > 280 ? (
             <details>
               <summary>
@@ -331,54 +388,23 @@ function SourceReaderContent({
           )}
         </div>
       )}
-      {activity}
-      <div className="source-heading">
-        <span className="folio">장면 {index + 1}</span>
-        <small>{mode === 'translation' ? '한국어 번역' : '원문'}</small>
+      <div className="scene-header">
+        {activityNode ?? (
+          <div className="scene-header-lead">
+            {leading}
+            {badges}
+          </div>
+        )}
+        <div className="scene-header-tools">{trailing}</div>
       </div>
-      <div className="reader-toolbar">
-        <div className="segmented" role="group" aria-label="원문과 번역 보기">
-          <button
-            type="button"
-            className={mode === 'translation' ? '' : 'secondary'}
-            aria-pressed={mode === 'translation'}
-            disabled={pending === 'translation'}
-            onClick={viewTranslation}
-          >
-            번역 보기
-          </button>
-          <button
-            type="button"
-            className={mode === 'original' ? '' : 'secondary'}
-            aria-pressed={mode === 'original'}
-            onClick={() => switchMode('original')}
-          >
-            원문 보기
-          </button>
-        </div>
-      </div>
-      {translation && !activeJob(translation) && !retryable(translation.status) && (
-        <button
-          type="button"
-          className="secondary"
-          disabled={!!pending || !!editor}
-          onClick={() => {
-            void action('translation', async () => {
-              await api(`/sources/${source.id}/retranslate`, {});
-              switchMode('translation');
-              await refresh();
-            });
-          }}
-        >
-          현재 설정으로 새 번역
-        </button>
-      )}
-      {!activity && <ContextSummaryStatus summary={contextSummary} />}
+      {!activityNode && <ContextSummaryStatus summary={contextSummary} />}
+
       {editor && (
         <TextEditor
           key={editor}
           role={editor}
           source={source}
+          translation={translation}
           onCancel={closeEditor}
           onSaved={async () => {
             await refresh();
@@ -391,9 +417,6 @@ function SourceReaderContent({
       )}
       {validTranslation && translation?.status !== 'completed' && mode === 'translation' && (
         <p role="status">이전 완료 번역을 표시하고 있어요. 새 번역이 성공하면 교체돼요.</p>
-      )}
-      {validTranslation?.manual && mode === 'translation' && (
-        <p className="muted">직접 수정한 번역</p>
       )}
       {sourceSegments && mode === 'original' ? (
         <SourceSegmentBody
@@ -485,7 +508,7 @@ function SourceReaderContent({
           <span>{sceneStatus}</span>
         </aside>
       )}
-      {!activity && (
+      {!activityNode && (
         <div className="derived-summary" aria-label="이 장면의 후속 작업">
           {attentionJobs.length
             ? attentionJobs.map((job) => (
@@ -523,11 +546,23 @@ function SourceReaderContent({
               )}
         </div>
       )}
-      <StorySourceState
-        sourceId={source.id}
-        refreshKey={`${source.hash}:${jobs.map((job) => job.status).join(',')}`}
-      />
       <div className="source-actions">
+        <IconButton
+          label="본문 복사"
+          icon={CopyIcon}
+          size={18}
+          className="scene-action"
+          disabled={!!editor || !!pending}
+          onClick={copyCurrent}
+        />
+        <IconButton
+          label={editorLabel(mode)}
+          icon={EditIcon}
+          size={18}
+          className="scene-action"
+          disabled={!!editor || !!pending}
+          onClick={(event) => openEditor(mode, event.currentTarget)}
+        />
         <ActionMenu label="장면 작업 메뉴" placement="top">
           {onRetry && (
             <button
@@ -539,6 +574,17 @@ function SourceReaderContent({
               현재 설정으로 다시 요청
             </button>
           )}
+          {canRetranslate && (
+            <button
+              type="button"
+              className="secondary"
+              disabled={!!pending || !!editor}
+              onClick={retranslate}
+            >
+              <RefreshIcon size={18} aria-hidden="true" />
+              현재 설정으로 새 번역
+            </button>
+          )}
           <button
             type="button"
             className="secondary"
@@ -547,26 +593,17 @@ function SourceReaderContent({
               void action('fork', () => onFork(source.id));
             }}
           >
-            <CopyIcon size={18} aria-hidden="true" />
+            <GitFork size={18} aria-hidden="true" />
             {pending === 'fork' ? '이야기 복사 중…' : '여기서 새 이야기로 이어가기'}
           </button>
           <button
             type="button"
             className="secondary"
             disabled={!!editor || !!pending}
-            onClick={(event) => openEditor('original', event.currentTarget)}
+            onClick={(event) => openEditor(otherEditor, event.currentTarget)}
           >
             <EditIcon size={18} aria-hidden="true" />
-            원문 수정
-          </button>
-          <button
-            type="button"
-            className="secondary"
-            disabled={!!editor || !!pending}
-            onClick={(event) => openEditor('translation', event.currentTarget)}
-          >
-            <EditIcon size={18} aria-hidden="true" />
-            번역 수정
+            {editorLabel(otherEditor)}
           </button>
           <button
             type="button"
@@ -596,55 +633,61 @@ function SourceReaderContent({
                 : '이미지 선택'}
           </button>
         </ActionMenu>
+        <StorySourceState
+          sourceId={source.id}
+          refreshKey={`${source.hash}:${jobs.map((job) => job.status).join(',')}`}
+        />
+        <details
+          className="source-job-details"
+          onToggle={(event) => setDetailsOpen(event.currentTarget.open)}
+        >
+          <summary>
+            {activityNode
+              ? '원문 연결 정보'
+              : `작업 상세${jobs.length ? ` · ${jobs.length}개` : ''}`}
+          </summary>
+          {detailsOpen && (
+            <>
+              {!activityNode && (
+                <div className="derived">
+                  {displayJobs.map((job) => (
+                    <JobCard
+                      key={job.id}
+                      job={job}
+                      refresh={refresh}
+                      onError={setActionError}
+                      hideText={job.kind === 'translation'}
+                    />
+                  ))}
+                </div>
+              )}
+              <div className="inspector">
+                <dl>
+                  <dt>source revision</dt>
+                  <dd>{source.id}</dd>
+                  <dt>parent revision</dt>
+                  <dd>{source.parentRevision || '시작'}</dd>
+                  <dt>SHA-256</dt>
+                  <dd>{source.hash}</dd>
+                </dl>
+                <details>
+                  <summary>현재 원문</summary>
+                  <pre data-testid="source-raw">{source.text}</pre>
+                </details>
+                <p>
+                  제목·강조·목록·인용·링크·코드를 표시해요. 속성 없는 ruby의 본문과 rt만 읽기 표기로
+                  표시하고, 나머지 HTML과 Markdown 이미지는 문자로 남겨요.
+                </p>
+              </div>
+            </>
+          )}
+        </details>
       </div>
       {actionError && (
         <p className="error" role="alert">
           {actionError}
         </p>
       )}
-      <details
-        className="source-job-details"
-        onToggle={(event) => setDetailsOpen(event.currentTarget.open)}
-      >
-        <summary>
-          {activity ? '원문 연결 정보' : `작업 상세${jobs.length ? ` · ${jobs.length}개` : ''}`}
-        </summary>
-        {detailsOpen && (
-          <>
-            {!activity && (
-              <div className="derived">
-                {displayJobs.map((job) => (
-                  <JobCard
-                    key={job.id}
-                    job={job}
-                    refresh={refresh}
-                    onError={setActionError}
-                    hideText={job.kind === 'translation'}
-                  />
-                ))}
-              </div>
-            )}
-            <div className="inspector">
-              <dl>
-                <dt>source revision</dt>
-                <dd>{source.id}</dd>
-                <dt>parent revision</dt>
-                <dd>{source.parentRevision || '시작'}</dd>
-                <dt>SHA-256</dt>
-                <dd>{source.hash}</dd>
-              </dl>
-              <details>
-                <summary>현재 원문</summary>
-                <pre data-testid="source-raw">{source.text}</pre>
-              </details>
-              <p>
-                제목·강조·목록·인용·링크·코드를 표시해요. 속성 없는 ruby의 본문과 rt만 읽기 표기로
-                표시하고, 나머지 HTML과 Markdown 이미지는 문자로 남겨요.
-              </p>
-            </div>
-          </>
-        )}
-      </details>
     </article>
   );
 }
@@ -723,13 +766,7 @@ function TextEditor({
 }) {
   const key = draftKey(source.id, role);
   const displayed = displayTranslationJob(source, translation);
-  const savedText =
-    role === 'original'
-      ? source.text
-      : (displayed?.result?.text ??
-        displayed?.result?.segments?.map((segment) => segment.text).join('\n\n') ??
-        displayed?.result?.blocks?.map((block) => block.text).join('\n\n') ??
-        '');
+  const savedText = role === 'original' ? source.text : (displayed?.result?.text ?? '');
   const revision =
     role === 'original'
       ? (source.editRevision ?? 0)

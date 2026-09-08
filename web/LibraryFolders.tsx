@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { ArrowDown, ArrowUp, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
+import { ArrowDown, ArrowUp } from 'lucide-react';
 import type { Library } from '../core/product.js';
 import type {
   LibraryCategory,
@@ -11,7 +11,7 @@ import { api } from './api.js';
 import { Dialog } from './Dialog.js';
 import { DeleteButton } from './DeleteButton.js';
 import { ActionMenu } from './ActionMenu.js';
-import { EditIcon, FolderAddIcon, FolderIcon, MoreIcon } from './ui-icons.js';
+import { EditIcon, FolderAddIcon, MoreIcon } from './ui-icons.js';
 import './library-folders.css';
 
 export const categoryLabels: Record<LibraryCategory, string> = {
@@ -121,7 +121,6 @@ export function LibraryFolders({
   counts,
   reload,
   onError,
-  compactMobile = false,
 }: {
   category: LibraryCategory;
   organizer: LibraryOrganizer;
@@ -130,9 +129,7 @@ export function LibraryFolders({
   counts: Record<string, number>;
   reload: () => Promise<void>;
   onError: (error: string) => void;
-  compactMobile?: boolean;
 }) {
-  const [collapsed, setCollapsed] = useState(false);
   const [edit, setEdit] = useState<{ folder: LibraryFolder | null; revision: number } | null>(null);
   const [title, setTitle] = useState('');
   const { organization, busy, mutate } = organizer;
@@ -211,32 +208,7 @@ export function LibraryFolders({
   }
   const selectedFolder = folders.find((item) => item.id === value);
   return (
-    <aside
-      className={`library-folders ${collapsed ? 'is-collapsed' : ''} ${compactMobile ? 'library-folders-compact' : ''}`}
-      aria-label={`${categoryLabels[category]} 폴더`}
-    >
-      <div className="library-folders-heading">
-        <button
-          type="button"
-          className="secondary library-folder-collapse"
-          aria-label={collapsed ? '폴더 펼치기' : '폴더 접기'}
-          aria-expanded={!collapsed}
-          onClick={() => setCollapsed(!collapsed)}
-        >
-          {collapsed ? <PanelLeftOpen size={18} /> : <PanelLeftClose size={18} />}
-        </button>
-        {!collapsed && <strong>폴더</strong>}
-        <button
-          type="button"
-          className="secondary"
-          aria-label="새 폴더"
-          disabled={busy || !organization}
-          onClick={() => openEdit(null)}
-        >
-          <FolderAddIcon size={20} aria-hidden="true" />
-          <span className={compactMobile ? 'sr-only' : undefined}>새 폴더</span>
-        </button>
-      </div>
+    <aside className="library-folders" aria-label={`${categoryLabels[category]} 폴더`}>
       <label className="library-folder-mobile">
         <span className="sr-only">폴더 선택</span>
         <select value={value} onChange={(event) => onChange(event.target.value)}>
@@ -247,49 +219,17 @@ export function LibraryFolders({
           ))}
         </select>
       </label>
-      {compactMobile && (
-        <div className="library-mobile-folder-actions">
-          <LibraryItemMenu title="폴더 관리">
-            <button
-              type="button"
-              className="secondary"
-              disabled={busy || !organization}
-              onClick={() => openEdit(null)}
-            >
-              <FolderAddIcon size={18} aria-hidden="true" />새 폴더
-            </button>
-            {selectedFolder && folderActions(selectedFolder)}
-          </LibraryItemMenu>
-        </div>
-      )}
-      {
-        <div className="library-folder-list">
-          {options.map((item) => {
-            const index = folders.findIndex((folder) => folder.id === item.id);
-            const folder = folders[index];
-            return (
-              <div className="library-folder-row" key={item.id}>
-                <button
-                  type="button"
-                  className="secondary library-folder-choice"
-                  aria-pressed={value === item.id}
-                  onClick={() => onChange(item.id)}
-                  title={item.title}
-                >
-                  <FolderIcon size={18} aria-hidden="true" />
-                  <span>{item.title}</span>
-                  <small>{counts[item.id] ?? 0}</small>
-                </button>
-                {folder && (
-                  <LibraryItemMenu title={`${folder.title} 폴더 메뉴`}>
-                    {folderActions(folder)}
-                  </LibraryItemMenu>
-                )}
-              </div>
-            );
-          })}
-        </div>
-      }
+      <LibraryItemMenu title="폴더 관리">
+        <button
+          type="button"
+          className="secondary"
+          disabled={busy || !organization}
+          onClick={() => openEdit(null)}
+        >
+          <FolderAddIcon size={18} aria-hidden="true" />새 폴더
+        </button>
+        {selectedFolder && folderActions(selectedFolder)}
+      </LibraryItemMenu>
       <Dialog
         open={!!edit}
         title={edit?.folder ? '폴더 이름 변경' : '새 폴더'}

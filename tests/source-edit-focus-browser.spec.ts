@@ -95,7 +95,8 @@ for (const [label, viewport] of [
     await page.setViewportSize(viewport);
     await page.goto(`/?chat=${before.chat.id}`);
     const scene = page.locator(`[data-source-id="${source.id}"][data-testid="source"]`);
-    const opener = scene.getByLabel('장면 작업 메뉴', { exact: true });
+    // Editing the current view starts from the footer button; the menu holds the other editor.
+    const trigger = scene.getByRole('button', { name: '원문 수정', exact: true });
     const field = scene.getByRole('textbox', { name: '원문 수정 내용', exact: true });
     await expect(scene.getByTestId('source-text')).toContainText('Synthetic paragraph 40.');
     expect(
@@ -105,33 +106,32 @@ for (const [label, viewport] of [
       })
     ).toBe(true);
 
-    await opener.scrollIntoViewIfNeeded();
-    const offset = await readerOffset(opener);
-    await openSourceActions(scene);
-    await scene.getByRole('button', { name: '원문 수정', exact: true }).click();
+    await trigger.scrollIntoViewIfNeeded();
+    const offset = await readerOffset(trigger);
+    await trigger.click();
     await expect(field).toBeFocused();
     await insideReader(field);
     await field.fill('A cancelled synthetic edit.');
     await page.keyboard.press('Escape');
     await expect(field).toHaveCount(0);
-    await expect(opener).toBeFocused();
-    await insideReader(opener);
-    await expect.poll(async () => Math.abs((await readerOffset(opener)) - offset)).toBeLessThan(16);
+    await expect(trigger).toBeFocused();
+    await insideReader(trigger);
+    await expect
+      .poll(async () => Math.abs((await readerOffset(trigger)) - offset))
+      .toBeLessThan(16);
 
-    await openSourceActions(scene);
-    await scene.getByRole('button', { name: '원문 수정', exact: true }).click();
+    await trigger.click();
     await expect(field).toBeFocused();
     await expect(field).toHaveValue(source.text);
     await insideReader(field);
     await field.fill('A second cancelled synthetic edit.');
     await scene.getByRole('button', { name: '수정 취소', exact: true }).click();
     await expect(field).toHaveCount(0);
-    await expect(opener).toBeFocused();
-    await insideReader(opener);
+    await expect(trigger).toBeFocused();
+    await insideReader(trigger);
     expect((await detail(request, before.chat.id)).sources[0].text).toBe(source.text);
 
-    await openSourceActions(scene);
-    await scene.getByRole('button', { name: '원문 수정', exact: true }).click();
+    await trigger.click();
     await expect(field).toBeFocused();
     const edited = `${source.text}\n\nThe synthetic keeper returns to the lamp.`;
     await field.fill(edited);
@@ -139,15 +139,15 @@ for (const [label, viewport] of [
       await page.screenshot({ path: info.outputPath(`source-editor-${label}.png`) });
     await scene.getByRole('button', { name: '원문 저장', exact: true }).click();
     await expect(field).toHaveCount(0);
-    await expect(opener).toBeFocused();
-    await insideReader(opener);
+    await expect(trigger).toBeFocused();
+    await insideReader(trigger);
     await expect(scene.getByTestId('source-text')).toContainText('returns to the lamp.');
     const after = await detail(request, before.chat.id);
     expect(after.sources[0].text).toBe(edited);
     expect(after.runs).toEqual(before.runs);
     expect(after.attempts).toEqual(before.attempts);
 
-    await openSourceActions(scene);
+    const opener = await openSourceActions(scene);
     await scene.getByRole('button', { name: '번역 수정', exact: true }).click();
     const translation = scene.getByRole('textbox', { name: '번역 수정 내용', exact: true });
     await expect(translation).toBeFocused();
@@ -170,9 +170,8 @@ test('C04E failed source save keeps the draft available and a later save restore
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto(`/?chat=${before.chat.id}`);
   const scene = page.locator(`[data-source-id="${source.id}"][data-testid="source"]`);
-  const opener = scene.getByLabel('장면 작업 메뉴', { exact: true });
-  await openSourceActions(scene);
-  await scene.getByRole('button', { name: '원문 수정', exact: true }).click();
+  const trigger = scene.getByRole('button', { name: '원문 수정', exact: true });
+  await trigger.click();
   const field = scene.getByRole('textbox', { name: '원문 수정 내용', exact: true });
   await expect(field).toBeFocused();
   await insideReader(field);
@@ -192,8 +191,8 @@ test('C04E failed source save keeps the draft available and a later save restore
   await page.unroute(path);
   await scene.getByRole('button', { name: '원문 저장', exact: true }).click();
   await expect(field).toHaveCount(0);
-  await expect(opener).toBeFocused();
-  await insideReader(opener);
+  await expect(trigger).toBeFocused();
+  await insideReader(trigger);
   const after = await detail(request, before.chat.id);
   expect(after.sources[0].text).toBe(draft);
   expect(after.runs).toEqual(before.runs);

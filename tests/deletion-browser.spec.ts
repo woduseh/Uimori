@@ -5,6 +5,7 @@ import {
   editLibraryContent,
   navigationAction,
   openPromptActions,
+  openChatMenu,
 } from './ui-navigation.js';
 import { postFixtureChat } from './fixtures/chat.js';
 import { test, expect, type APIRequestContext, type Page } from '@playwright/test';
@@ -90,6 +91,7 @@ test('DEL01 library cancel, stale revision, dependent bot and actual deletion at
     if (visualReview)
       await page.screenshot({ path: info.outputPath(`content-header-${width}.png`) });
   }
+  await panel.getByLabel('자료 메뉴', { exact: true }).click();
   await panel.getByRole('button', { name: `${item.title} 자료 삭제`, exact: true }).click();
   const dialog = page.getByRole('alertdialog', { name: '삭제 확인', exact: true });
   await dialog.getByRole('button', { name: '취소', exact: true }).click();
@@ -303,6 +305,7 @@ test('DEL06 deleting the displayed branch returns to the default branch', async 
   expect(response.ok()).toBe(true);
   const branch = await response.json();
   await page.goto(`/?chat=${chat.id}&branch=${branch.id}`);
+  await openChatMenu(page);
   await page.getByRole('button', { name: '보관된 전개', exact: true }).click();
   const panel = page.getByRole('region', { name: '보관된 전개 목록', exact: true });
   await panel.getByRole('button', { name: /분기 삭제$/ }).click();

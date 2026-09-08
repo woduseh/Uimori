@@ -38,17 +38,7 @@
   font-size: 13px;
   min-height: 44px;
 }
-.quick-controls > .quick-model {
-  flex: 1;
-  max-width: none;
-}
-.quick-controls > .quick-model select {
-  font-size: 12px;
-  width: 100%;
-  min-height: 44px;
-}
-.composer[hidden],
-.composer-caption[hidden] {
+.composer[hidden] {
   display: none;
 }
 .quick-controls .composer-more-panel label {
@@ -75,7 +65,11 @@
   color: var(--muted);
 }
 .composer-request-chips {
-  padding: 10px 12px 0;
+  grid-area: chips;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 6px 8px 2px;
 }
 .composer .lore-reset-chip {
   display: inline-flex;

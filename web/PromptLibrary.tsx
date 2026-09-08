@@ -8,6 +8,7 @@ import { Dialog } from './Dialog.js';
 import { DeleteButton } from './DeleteButton.js';
 import { PromptEditor } from './PromptEditor.js';
 import { PromptWorkspaceEditor } from './PromptWorkspaceEditor.js';
+import { SlidersHorizontal } from 'lucide-react';
 import {
   LibraryFolders,
   LibraryItemMenu,
@@ -37,6 +38,7 @@ export function PromptLibrary({
   const [editing, setEditing] = useState<{ preset: PromptPreset | null; role: PromptRole } | null>(
     null
   );
+  const pendingEditing = useRef<typeof editing>(null);
   const [dirty, setDirty] = useState(false);
   const [discard, setDiscard] = useState(false);
   const [moving, setMoving] = useState<LibraryItemKey[] | null>(null);
@@ -99,9 +101,13 @@ export function PromptLibrary({
       );
     })
     .sort((a, b) => (sort === 'name-desc' ? -1 : 1) * a.title.localeCompare(b.title, 'ko'));
-  function close() {
+  function changeEditing(next: typeof editing) {
+    pendingEditing.current = next;
     if (dirty) setDiscard(true);
-    else setEditing(null);
+    else setEditing(next);
+  }
+  function close() {
+    changeEditing(null);
   }
   async function placeCreated(preset: PromptPreset, created: boolean) {
     if (!created || folder === 'all' || folder === 'unclassified') return;
@@ -151,7 +157,7 @@ export function PromptLibrary({
             className="secondary"
             disabled={!library}
             onClick={() =>
-              setEditing({ preset: null, role: role === 'translation' ? role : 'main' })
+              changeEditing({ preset: null, role: role === 'translation' ? role : 'main' })
             }
           >
             <AddIcon size={18} aria-hidden="true" /> 새 프롬프트
@@ -186,7 +192,7 @@ export function PromptLibrary({
             onClick={() => {
               setDiscard(false);
               setDirty(false);
-              setEditing(null);
+              setEditing(pendingEditing.current);
             }}
           >
             초안 버리고 이동
@@ -231,20 +237,20 @@ export function PromptLibrary({
         </div>
       ) : (
         <div className="library-workspace">
-          <LibraryFolders
-            category="prompts"
-            organizer={organizer}
-            value={folder}
-            onChange={(next) => {
-              setFolder(next);
-              setSelection([]);
-            }}
-            counts={counts}
-            reload={reload}
-            onError={onError}
-          />
           <div className="library-workspace-content">
             <div className="library-toolbar">
+              <LibraryFolders
+                category="prompts"
+                organizer={organizer}
+                value={folder}
+                onChange={(next) => {
+                  setFolder(next);
+                  setSelection([]);
+                }}
+                counts={counts}
+                reload={reload}
+                onError={onError}
+              />
               <label className="library-search-field">
                 <span className="sr-only">프롬프트 검색</span>
                 <input
@@ -255,49 +261,54 @@ export function PromptLibrary({
                   onChange={(event) => setQuery(event.target.value)}
                 />
               </label>
-              <label>
-                <span className="sr-only">프롬프트 역할 필터</span>
-                <select
-                  aria-label="프롬프트 역할 필터"
-                  value={role}
-                  onChange={(event) => setRole(event.target.value as typeof role)}
-                >
-                  <option value="all">모든 역할</option>
-                  <option value="main">작문</option>
-                  <option value="translation">번역</option>
-                </select>
-              </label>
-              <label>
-                <span className="sr-only">프롬프트 정렬</span>
-                <select
-                  aria-label="프롬프트 정렬"
-                  value={sort}
-                  onChange={(event) => setSort(event.target.value)}
-                >
-                  <option value="name">이름순</option>
-                  <option value="name-desc">이름 역순</option>
-                </select>
-              </label>
-              <button
-                type="button"
-                className="secondary"
-                aria-pressed={selecting}
-                onClick={() => {
-                  setSelecting(!selecting);
-                  setSelection([]);
-                }}
+              <LibraryItemMenu
+                title="목록 관리"
+                className="library-list-options"
+                icon={SlidersHorizontal}
               >
-                선택
-              </button>
+                <div className="library-list-options-body">
+                  <label>
+                    역할
+                    <select
+                      aria-label="프롬프트 역할 필터"
+                      value={role}
+                      onChange={(event) => setRole(event.target.value as typeof role)}
+                    >
+                      <option value="all">모든 역할</option>
+                      <option value="main">작문</option>
+                      <option value="translation">번역</option>
+                    </select>
+                  </label>
+                  <label>
+                    정렬
+                    <select
+                      aria-label="프롬프트 정렬"
+                      value={sort}
+                      onChange={(event) => setSort(event.target.value)}
+                    >
+                      <option value="name">이름순</option>
+                      <option value="name-desc">이름 역순</option>
+                    </select>
+                  </label>
+                  <button
+                    type="button"
+                    className="secondary"
+                    aria-pressed={selecting}
+                    onClick={() => {
+                      setSelecting(!selecting);
+                      setSelection([]);
+                    }}
+                  >
+                    선택
+                  </button>
+                </div>
+              </LibraryItemMenu>
             </div>
-            <p className="library-result-count muted">
-              {folder === 'all'
-                ? '전체'
-                : folder === 'unclassified'
-                  ? '미분류'
-                  : organizer.organization?.folders.find((item) => item.id === folder)?.title}{' '}
-              · {filtered.length}개
-            </p>
+            {!!query && (
+              <p className="library-result-count muted" role="status">
+                검색 결과 {filtered.length}개
+              </p>
+            )}
             {selecting && (
               <div className="library-bulk-toolbar">
                 <span>{selection.length}개 선택</span>
@@ -351,7 +362,7 @@ export function PromptLibrary({
                     type="button"
                     className="library-open-content"
                     aria-label={`${item.title} 프롬프트 편집`}
-                    onClick={() => setEditing({ preset: item, role: item.role })}
+                    onClick={() => changeEditing({ preset: item, role: item.role })}
                   >
                     <span className="library-prompt-icon" aria-hidden="true">
                       ≡
@@ -365,7 +376,7 @@ export function PromptLibrary({
                     <button
                       type="button"
                       className="secondary"
-                      onClick={() => setEditing({ preset: item, role: item.role })}
+                      onClick={() => changeEditing({ preset: item, role: item.role })}
                     >
                       편집
                     </button>
@@ -409,7 +420,7 @@ export function PromptLibrary({
                   type="button"
                   className="secondary"
                   onClick={() =>
-                    setEditing({ preset: null, role: role === 'translation' ? role : 'main' })
+                    changeEditing({ preset: null, role: role === 'translation' ? role : 'main' })
                   }
                 >
                   새 프롬프트

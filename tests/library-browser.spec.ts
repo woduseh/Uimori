@@ -110,12 +110,10 @@ test('LIBUI01 library folders move and classify without changing revisions or ow
   await expect(panel.getByRole('tab')).toHaveText(['봇', '페르소나', '모듈']);
   const folder = await createFolder(page, panel, `${prefix} Adventure`);
   const otherFolder = await createFolder(page, panel, `${prefix} Draft`);
-  await panel.getByLabel(`${otherFolder.title} 폴더 메뉴`, { exact: true }).click();
-  await panel
-    .getByLabel(`${otherFolder.title} 폴더 메뉴`, { exact: true })
-    .locator('..')
-    .getByRole('button', { name: '위로', exact: true })
-    .click();
+  // Folder actions live in the manage menu next to the dropdown and apply to the chosen folder.
+  await chooseFolder(panel, otherFolder.title);
+  await revealFolderActions(panel);
+  await panel.getByRole('button', { name: '위로', exact: true }).click();
   await expect
     .poll(async () =>
       (await organization(request)).folders
@@ -307,6 +305,11 @@ test('LIBUI04 role selection creates a chat with the selected persona and module
   await page
     .getByTestId('library-panel')
     .getByRole('button', { name: `${persona.title} 상세 보기`, exact: true })
+    .click();
+  // Other roles live in the detail's ⋯ menu; the primary action is the item's own category.
+  await page
+    .getByTestId('library-panel')
+    .getByLabel(`${persona.title} 메뉴`, { exact: true })
     .click();
   await page
     .getByTestId('library-panel')

@@ -3,7 +3,7 @@ import { selectSettingsSection, navigationAction } from './ui-navigation.js';
 import { test, expect } from '@playwright/test';
 import { fixtureBotInput } from './fixtures/chat.js';
 
-test('UXUI01 compact composer, square avatar and mobile settings details preserve the draft', async ({
+test('UXUI01 compact composer and mobile settings details preserve the draft', async ({
   page,
   request,
 }, info) => {
@@ -28,11 +28,8 @@ test('UXUI01 compact composer, square avatar and mobile settings details preserv
     await expect(input).toBeInViewport();
     await expect(page.getByLabel('빠른 본문 모델', { exact: true })).toBeInViewport();
     await expect(page.getByRole('button', { name: '원문 생성', exact: true })).toBeInViewport();
+    await expect(page.locator('.story-context')).toHaveCount(0);
     if (visualReview) {
-      const avatar = page.locator('.story-context > .content-avatar');
-      const bounds = await avatar.boundingBox();
-      expect(bounds).not.toBeNull();
-      expect(Math.abs(bounds!.width - bounds!.height)).toBeLessThan(1);
       const dock = await page.locator('.composer-dock').boundingBox();
       expect(dock!.height).toBeLessThan(190);
     }

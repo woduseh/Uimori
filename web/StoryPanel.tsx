@@ -77,6 +77,7 @@ function ModelChoice({
   value,
   original,
   models,
+  connections,
   canSelect,
   onChange,
 }: {
@@ -84,6 +85,7 @@ function ModelChoice({
   value: ModelRef | null;
   original: ModelRef | null;
   models: ModelPreset[];
+  connections: Connection[];
   canSelect: (model: ModelPreset) => boolean;
   onChange: (value: ModelRef | null) => void;
 }) {
@@ -130,7 +132,8 @@ function ModelChoice({
               value={refKey(model)}
             >
               {model.title} · {!canSelect(model) ? '비활성 · ' : ''}
-              {model.modelId}
+              {connections.find((entry) => entry.id === model.connectionId)?.title ??
+                '연결 확인 필요'}
             </option>
           ))}
       </select>
@@ -247,6 +250,8 @@ function StoryPanelEditor({
   const request = useRef(0);
   const actionLock = useRef(false);
   const [busy, setBusy] = useState(false);
+  // Only an in-flight write is an unsaved change; the reload after it is not.
+  const [writing, setWriting] = useState(false);
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
   const [confirmReset, setConfirmReset] = useState<number | null>(null);
@@ -259,7 +264,7 @@ function StoryPanelEditor({
   const runKeys = useRef(new Map<string, string>());
   const base = `/chats/${id(chatId)}`;
   const hasUnsavedChanges =
-    busy ||
+    writing ||
     dirty.current ||
     author.length > 0 ||
     declaration.length > 0 ||
@@ -325,11 +330,13 @@ function StoryPanelEditor({
     const valid = capture();
     actionLock.current = true;
     setBusy(true);
+    setWriting(true);
     setError('');
     setMessage('');
     try {
       await api(path, body, method);
       if (!valid()) return;
+      setWriting(false);
       success?.();
       await load();
       if (valid()) {
@@ -345,6 +352,7 @@ function StoryPanelEditor({
       if (valid()) {
         actionLock.current = false;
         setBusy(false);
+        setWriting(false);
       }
     }
   }
@@ -503,6 +511,7 @@ function StoryPanelEditor({
               value={draft.stateModel}
               original={detail?.config.stateModel ?? null}
               models={models}
+              connections={connections}
               canSelect={canSelect}
               onChange={(stateModel) => change({ ...draft, stateModel })}
             />
@@ -521,6 +530,7 @@ function StoryPanelEditor({
               value={draft.memory.model}
               original={detail?.config.memory.model ?? null}
               models={models}
+              connections={connections}
               canSelect={canSelect}
               onChange={(model) => change({ ...draft, memory: { ...draft.memory, model } })}
             />
