@@ -1,3 +1,4 @@
+import { readProviderHttpDiagnostic, type ProviderHttpDiagnostic } from './provider-http-error.js';
 import { createHash } from 'node:crypto';
 import { providerFetchOptions, transportFailureCode } from './provider-fetch.js';
 import { validateProviderEndpoint } from './product.js';
@@ -77,7 +78,7 @@ export async function executeNativeProvider(
   const signal = AbortSignal.any([options.signal, timeout]);
   let decoder: Decoder | undefined;
   let reader: ReadableStreamDefaultReader<Uint8Array> | undefined;
-  const failure = (code: string) => {
+  const failure = (code: string, diagnostic?: ProviderHttpDiagnostic) => {
     const result = decoder?.snapshot() ?? empty();
     result.status = options.signal.aborted
       ? 'cancelled'
@@ -88,6 +89,7 @@ export async function executeNativeProvider(
           : 'error';
     result.error = {
       code: options.signal.aborted ? 'CANCELLED' : timeout.aborted ? 'TIMEOUT' : code,
+      ...(diagnostic ? { diagnostic } : {}),
     };
     result.toolCalls = [];
     result.opaqueState = null;
@@ -174,8 +176,8 @@ export async function executeNativeProvider(
       providerFetchOptions({ method: 'POST', headers, body, signal, redirect: 'error' })
     );
     if (!response.ok) {
-      await response.body?.cancel();
-      return failure(`HTTP_${response.status}`);
+      const diagnostic = await readProviderHttpDiagnostic(response, signal, secret);
+      return failure(`HTTP_${response.status}`, diagnostic);
     }
     const contentType = response.headers.get('content-type')?.toLowerCase() ?? '';
     if (!response.body) return failure('INVALID_CONTENT_TYPE');

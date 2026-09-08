@@ -1,3 +1,4 @@
+import { readProviderHttpDiagnostic, type ProviderHttpDiagnostic } from './provider-http-error.js';
 import { createHash } from 'node:crypto';
 import { isVertexAdcReference } from './credential-reference.js';
 import { providerFetchOptions, transportFailureCode } from './provider-fetch.js';
@@ -134,7 +135,7 @@ export async function executeVertexProvider(
   const signal = AbortSignal.any([options.signal, timeout]);
   let decoder: VertexDecoder | undefined;
   let reader: ReadableStreamDefaultReader<Uint8Array> | undefined;
-  const failure = (code: string) => {
+  const failure = (code: string, diagnostic?: ProviderHttpDiagnostic) => {
     const result = decoder?.snapshot() ?? emptyResult();
     result.status = options.signal.aborted
       ? 'cancelled'
@@ -145,6 +146,7 @@ export async function executeVertexProvider(
           : 'error';
     result.error = {
       code: options.signal.aborted ? 'CANCELLED' : timeout.aborted ? 'TIMEOUT' : code,
+      ...(diagnostic ? { diagnostic } : {}),
     };
     return result;
   };
@@ -222,8 +224,8 @@ export async function executeVertexProvider(
       })
     );
     if (!response.ok) {
-      await response.body?.cancel();
-      return failure(`HTTP_${response.status}`);
+      const diagnostic = await readProviderHttpDiagnostic(response, signal, token);
+      return failure(`HTTP_${response.status}`, diagnostic);
     }
     if (
       !response.headers.get('content-type')?.toLowerCase().startsWith('text/event-stream') ||

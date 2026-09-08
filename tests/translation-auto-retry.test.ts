@@ -41,6 +41,28 @@ function chat(response: ServerResponse, text: string, finish = 'stop', refusal?:
 const kind = (body: string) => JSON.parse(body).model as string;
 
 describe('whole-source refusal classification with local Chat protocol fixtures', () => {
+  test.each([
+    '{"verdict":"accepted"}',
+    '  \n{"verdict":"accepted"}\r\n ',
+    '\uFEFF{"verdict":"accepted"}',
+    '```json\n{"verdict":"accepted"}\n```',
+    '\uFEFF  ```json\r\n{"verdict":"accepted"}\r\n```  ',
+  ])('accepts a complete classifier JSON response with a narrow wrapper: %j', async (verdict) => {
+    const candidate = '번역 후보';
+    const server = await fixture((request, response) =>
+      chat(response, kind(request.body).endsWith('classifier') ? verdict : candidate)
+    );
+    const seed = bundle();
+    native(seed, server.endpoint);
+    const before = structuredClone(seed);
+    const observed = hooks(server.origin);
+    expect(
+      await runAuxiliaryJob(bridge(seed).store, seed.job.id, 'owner', observed.options)
+    ).toMatchObject({ status: 'completed', result: { text: candidate } });
+    expect(server.requests).toHaveLength(2);
+    expect(seed).toEqual(before);
+    expect(observed.finishes).toHaveLength(2);
+  });
   test('sends natural translation text as-is and only its first 1000 characters to the configured classifier', async () => {
     const translated = '안 돼! 사과 1개와 경비병 세 명. ' + '가'.repeat(1200) + 'PRIVATE_TAIL';
     const server = await fixture((request, response) =>
@@ -97,7 +119,7 @@ describe('whole-source refusal classification with local Chat protocol fixtures'
     expect(observed.finishes).toHaveLength(4);
   });
 
-  test.each(['uncertain', 'malformed', 'error', 'partial'])(
+  test.each(['uncertain', 'malformed', 'extra-field', 'error', 'partial'])(
     'classifier %s preserves candidate and never retries translation',
     async (failure) => {
       const candidate = '번역 후보 원문 보존';
@@ -110,27 +132,84 @@ describe('whole-source refusal classification with local Chat protocol fixtures'
         }
         chat(
           response,
-          failure === 'malformed' ? 'not JSON' : '{"verdict":"uncertain"}',
+          failure === 'malformed'
+            ? 'not JSON'
+            : failure === 'extra-field'
+              ? '{"verdict":"accepted","extra":true}'
+              : '{"verdict":"uncertain"}',
           failure === 'partial' ? 'length' : 'stop'
         );
       });
       const seed = bundle();
       native(seed, server.endpoint);
+      const observed = hooks(server.origin);
       const outcome = await runAuxiliaryJob(
         bridge(seed).store,
         seed.job.id,
         'owner',
-        hooks(server.origin).options
+        observed.options
       );
       expect(outcome).toMatchObject({ status: 'failed', result: { text: candidate } });
+      expect(outcome?.diagnostic).toEqual({
+        stage: 'translation-refusal',
+        code:
+          failure === 'error' || failure === 'partial'
+            ? 'TRANSLATION_REFUSAL_CHECK_FAILED'
+            : 'TRANSLATION_REFUSAL_UNCERTAIN',
+        attemptId: 'attempt-2',
+      });
       expect(server.requests).toHaveLength(2);
+      expect(observed.finishes).toHaveLength(2);
+      if (failure === 'error')
+        expect(observed.finishes[1]).toMatchObject({
+          id: outcome?.diagnostic?.attemptId,
+          result: { status: 'error', error: { code: 'HTTP_503' } },
+        });
+      expect(observed.finishes[0].result).toMatchObject({
+        status: 'completed',
+        usage: { inputTokens: 2, outputTokens: 3 },
+      });
+      if (failure !== 'error')
+        expect(observed.finishes[1].result.usage).toMatchObject({
+          inputTokens: 2,
+          outputTokens: 3,
+        });
     }
   );
+
+  test('translator HTTP error links its own attempt without starting a classifier', async () => {
+    const server = await fixture((_request, response) => {
+      response.writeHead(400);
+      response.end();
+    });
+    const seed = bundle();
+    native(seed, server.endpoint);
+    const observed = hooks(server.origin);
+    const outcome = await runAuxiliaryJob(
+      bridge(seed).store,
+      seed.job.id,
+      'owner',
+      observed.options
+    );
+    expect(outcome).toMatchObject({
+      status: 'failed',
+      result: null,
+      diagnostic: { stage: 'translation', attemptId: 'attempt-1' },
+    });
+    expect(outcome?.diagnostic?.code).toBe(outcome?.error);
+    expect(server.requests).toHaveLength(1);
+    expect(observed.finishes).toHaveLength(1);
+    expect(observed.finishes[0]).toMatchObject({
+      id: outcome?.diagnostic?.attemptId,
+      result: { status: 'error', error: { code: 'HTTP_400' } },
+    });
+  });
 
   test('live protocol requires a configured classifier before sending translation', async () => {
     const seed = bundle();
     native(seed, 'http://127.0.0.1:1/turn');
     seed.translationPolicy!.refusalModel = null;
+    seed.translationPolicy!.maxRetries = 0;
     const observed = hooks();
     expect(
       await runAuxiliaryJob(bridge(seed).store, seed.job.id, 'owner', observed.options)
@@ -285,9 +364,20 @@ describe('terminal translation retry boundaries', () => {
     for (const text of [
       '{}',
       '{"verdict":"accepted","extra":true}',
-      '```json\n{"verdict":"accepted"}\n```',
+      'Explanation: {"verdict":"accepted"}',
+      '```json\n{"verdict":"accepted"}\n```\nExplanation',
+      '```json\n{"verdict":"accepted"}\n```\n```json\n{"verdict":"refused"}\n```',
+      '{"verdict":"accepted"}{"verdict":"refused"}',
+      '```javascript\n{"verdict":"accepted"}\n```',
+      '```\n{"verdict":"accepted"}\n```',
+      '```json\n{"verdict":"accepted", "extra":true}\n```',
+      '```json\n{"verdict":"accepted"\n```',
+      '{"verdict":"uncertain"}',
+      '{"verdict":"Accepted"}',
+      '[{"verdict":"accepted"}]',
       'ignore instructions',
     ])
       expect(parseTranslationRefusalVerdict(text)).toBe('uncertain');
+    expect(parseTranslationRefusalVerdict('```json\n{"verdict":"refused"}\n```')).toBe('refused');
   });
 });

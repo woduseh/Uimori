@@ -1,5 +1,9 @@
 # 현재 작업 상태 · Uimori
 
+## Gemini 번역 즉시 실패 수정 (2026-09-09)
+
+Oracle 실제 job의 `PROMPT_UNKNOWN_SLOT`와 전송 attempt 0개를 확인했어요. 번역 프롬프트 `pheme-7`의 `glossary` 슬롯 누락을 수정하고 오류 단계·블록·슬롯·attempt 연결, 안전한 HTTP 진단과 좁은 판정 JSON 정규화를 보강했어요. `quality:full` **1,429 PASS / 선택 1 skip**, 관련 브라우저 **3 PASS**예요. 이후 사용자 승인으로 실패 당시 모델·프롬프트와 합성 원문을 이용한 실제 Google 번역/판정 **2회 모두 completed, accepted**를 확인했어요. 운영 DB·프롬프트는 보존했으며 운영 배포는 하지 않았어요. [원인·수정·증거·한계](TRANSLATION-DEBUG-2026-09-09.md)를 봐요.
+
 ## Gemini·Vercel 모델 및 DeepSeek 연결 추가 (2026-09-09)
 
 Google `gemini-3.5-flash-lite`, Vercel `spacexai/grok-4.6`·`openai/gpt-5.6-sol`, DeepSeek `deepseek-v4-pro`·`deepseek-v4-flash`를 로컬 지원 목록에 추가했어요. DeepSeek는 공식 `https://api.deepseek.com/v1`에서 OpenAI Chat Completions 형식을 사용하고 `DEEPSEEK_API_KEY`를 참조해요. Flash-Lite MINIMAL과 DeepSeek none→thinking disabled 매핑, 도구 후속 reasoning 보존을 검증했어요. [모델 옵션](../docs/MODEL-PARAMETERS.md) · [연결 계약](../docs/PROVIDERS.md).

@@ -276,66 +276,103 @@ describe('native provider wire (synthetic, no live calls)', () => {
       'PROMPT_MID_SYSTEM_PLACEMENT_UNSUPPORTED'
     );
   });
-  test.each(['gemini-3.8-flash', 'gemini-3.1-pro-preview', 'google/Gemini-3.8-flash'])(
-    'maps every non-leading system to user only on the wire for %s',
-    (modelId) => {
-      const r = request(modelId);
-      r.prompt!.messages = [
-        message('s1', 'system', 'LEADING_ONE'),
-        message('s2', 'system', 'LEADING_TWO'),
-        message('u', 'user', 'USER'),
-        message('m1', 'system', 'MID_ONE'),
-        message('m2', 'system', 'MID_TWO'),
-        message('a', 'assistant', 'ASSISTANT'),
-        message('m3', 'system', 'MID_THREE'),
-        message('last', 'system', 'TRAILING'),
-      ];
-      const before = structuredClone(r);
-      const plan = planNativeMessages(r, 'vertex-gemini-v1')!;
-      const body = modelId.includes('/')
-        ? { systemInstruction: { parts: plan.system }, contents: plan.messages }
-        : wire(encodeVertex(r).body);
-      expect(body.systemInstruction.parts.slice(-2)).toEqual([
-        { text: 'LEADING_ONE' },
-        { text: 'LEADING_TWO' },
+  test.each([
+    'gemini-3.8-flash',
+    'gemini-3.1-pro-preview',
+    'google/gemini-3.8-flash',
+    'google/Gemini-3.8-flash',
+  ])('maps every non-leading system to user only on the wire for %s', (modelId) => {
+    const r = request(modelId);
+    r.prompt!.messages = [
+      message('s1', 'system', 'LEADING_ONE'),
+      message('s2', 'system', 'LEADING_TWO'),
+      message('u', 'user', 'USER'),
+      message('m1', 'system', 'MID_ONE'),
+      message('m2', 'system', 'MID_TWO'),
+      message('a', 'assistant', 'ASSISTANT'),
+      message('m3', 'system', 'MID_THREE'),
+      message('last', 'system', 'TRAILING'),
+    ];
+    const before = structuredClone(r);
+    const plan = planNativeMessages(r, 'vertex-gemini-v1')!;
+    const body = modelId.includes('/')
+      ? { systemInstruction: { parts: plan.system }, contents: plan.messages }
+      : wire(encodeVertex(r).body);
+    expect(body.systemInstruction.parts.slice(-2)).toEqual([
+      { text: 'LEADING_ONE' },
+      { text: 'LEADING_TWO' },
+    ]);
+    expect(body.contents).toEqual([
+      { role: 'user', parts: [{ text: 'USER' }, { text: 'MID_ONE' }, { text: 'MID_TWO' }] },
+      { role: 'model', parts: [{ text: 'ASSISTANT' }] },
+      { role: 'user', parts: [{ text: 'MID_THREE' }, { text: 'TRAILING' }] },
+    ]);
+    expect(
+      planNativeMessages(r, 'vertex-gemini-v1')!
+        .diagnostics.filter((d) => d.code === 'GEMINI_MID_SYSTEM_TO_USER')
+        .map((d) => [d.blockId, d.logicalIndex, d.status])
+    ).toEqual([
+      ['m1', 3, 'mapped'],
+      ['m2', 4, 'mapped'],
+      ['m3', 6, 'mapped'],
+      ['last', 7, 'mapped'],
+    ]);
+    for (const protocol of ['openai-chat-v1', 'openai-responses-v1', 'vercel-chat-v1'] as const) {
+      const mapped = planNativeMessages(r, protocol)!.messages;
+      expect(mapped.map((m) => wire(m).role)).toEqual([
+        'system',
+        'system',
+        'user',
+        'user',
+        'user',
+        'assistant',
+        'user',
+        'user',
       ]);
-      expect(body.contents).toEqual([
-        { role: 'user', parts: [{ text: 'USER' }, { text: 'MID_ONE' }, { text: 'MID_TWO' }] },
-        { role: 'model', parts: [{ text: 'ASSISTANT' }] },
-        { role: 'user', parts: [{ text: 'MID_THREE' }, { text: 'TRAILING' }] },
-      ]);
+      const encoded =
+        protocol === 'openai-responses-v1'
+          ? wire(encodeResponses(r).body).input
+          : wire(encodeChat(r, protocol).body).messages.slice(1);
+      expect(encoded).toEqual(mapped);
+      expect(encoded.map((m: any) => m.content[0].text)).toEqual(
+        before.prompt!.messages.map((m) => m.content[0].text)
+      );
+    }
+    for (const other of ['gpt-5.6', 'claude-opus-5', 'custom-gemini-proxy']) {
       expect(
-        planNativeMessages(r, 'vertex-gemini-v1')!
-          .diagnostics.filter((d) => d.code === 'GEMINI_MID_SYSTEM_TO_USER')
-          .map((d) => [d.blockId, d.logicalIndex, d.status])
-      ).toEqual([
-        ['m1', 3, 'mapped'],
-        ['m2', 4, 'mapped'],
-        ['m3', 6, 'mapped'],
-        ['last', 7, 'mapped'],
-      ]);
-      for (const protocol of ['openai-chat-v1', 'openai-responses-v1', 'vercel-chat-v1'] as const) {
-        expect(planNativeMessages(r, protocol)!.messages.map((m) => wire(m).role)).toEqual([
-          'system',
-          'system',
-          'user',
-          'user',
-          'user',
-          'assistant',
-          'user',
-          'user',
-        ]);
-      }
-      for (const other of ['gpt-5.6', 'claude-opus-5', 'custom-gemini-proxy']) {
-        expect(
-          planNativeMessages({ ...r, modelId: other }, 'openai-chat-v1')!.messages.map(
-            (m) => wire(m).role
-          )
-        ).toEqual(before.prompt!.messages.map((m) => m.role));
-      }
+        planNativeMessages({ ...r, modelId: other }, 'openai-chat-v1')!.messages.map(
+          (m) => wire(m).role
+        )
+      ).toEqual(before.prompt!.messages.map((m) => m.role));
+    }
+    expect(r).toEqual(before);
+  });
+  test('Gemini normalization preserves precise prefill and native final-assistant failures', () => {
+    for (const [protocol, modelId, encoder] of [
+      ['vertex-gemini-v1', 'gemini-3.8-flash', encodeVertex],
+      ['openai-responses-v1', 'google/gemini-3.8-flash', encodeResponses],
+      ['openai-chat-v1', 'google/gemini-3.8-flash', encodeChat],
+    ] as const) {
+      const r = request(modelId);
+      r.prompt!.messages.splice(2, 0, message('middle', 'system', 'MID_RULE'));
+      r.prompt!.messages.push({
+        ...message('prefix', 'assistant', 'PREFIX'),
+        completion: 'prefill',
+      });
+      const before = structuredClone(r);
+      expect(() => encoder(r)).toThrow(
+        `PROMPT_PREFILL_UNSUPPORTED:block=prefix:index=5:protocol=${protocol}:model=${modelId}`
+      );
       expect(r).toEqual(before);
     }
-  );
+    const r = request('gemini-3.8-flash');
+    r.prompt!.messages.push(message('final-history', 'assistant', 'COMPLETED_HISTORY'));
+    const before = structuredClone(r);
+    expect(() => encodeVertex(r)).toThrow(
+      'PROMPT_COMPLETED_ASSISTANT_AT_END_UNSUPPORTED:block=final-history:index=4:protocol=vertex-gemini-v1:model=gemini-3.8-flash'
+    );
+    expect(r).toEqual(before);
+  });
   test('Responses two tool rounds preserve native prefix, original signed items, cache and call IDs; altered prompt rejected', () => {
     const r = request();
     r.prompt!.cachePlan = [{ blockId: 'cache', afterMessageId: 'system', policy: 'prefer' }];
