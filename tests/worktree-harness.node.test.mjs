@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import http from 'node:http';
-import { mkdtemp } from 'node:fs/promises';
+import { mkdtemp, realpath } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
@@ -66,8 +66,12 @@ test('worktree setup rejects a failed chat admission before browser generation',
 
 for (const scenario of ['expected', 'wrong-source', 'wrong-chat', 'missing']) {
   test(`retained worktree SQLite evidence detects ${scenario}`, async (t) => {
-    const directory = await mkdtemp(path.join(tmpdir(), 'uimori-worktree-harness-'));
-    t.after(() => removeOwned(tmpdir(), directory));
+    // removeOwned refuses a cleanup parent whose realpath differs from itself.
+    // os.tmpdir() is an alias on Windows runners (8.3 short name) and macOS
+    // (/var -> /private/var), so anchor the fixture at the resolved directory.
+    const temp = await realpath(tmpdir());
+    const directory = await mkdtemp(path.join(temp, 'uimori-worktree-harness-'));
+    t.after(() => removeOwned(temp, directory));
     const file = path.join(directory, 'synthetic.sqlite');
     const db = new DatabaseSync(file);
     try {
