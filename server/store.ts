@@ -33,7 +33,7 @@ import { completeAuthoredPackageStartStatesInTransaction } from './package-start
 import { captureLogicalHistory, compileSnapshotPrompt } from './prompt-snapshot.js';
 import { seedContextPlan } from './context-planning.js';
 import { freezeLoreContext } from './lore-context.js';
-import { splitSource } from '../core/auxiliary.js';
+import { splitSource, validateSourceIdentity } from '../core/auxiliary.js';
 import { imageJobInput, mergedReaderAssets } from './package-images.js';
 import type {
   Settings,
@@ -242,25 +242,47 @@ export class Store {
   history(head: string | null): RunSnapshot['history'] {
     const history: RunSnapshot['history'] = [];
     const seen = new Set<string>();
+    // Execution history needs exact text/hash/policy, not Reader blocks or translation jobs.
+    // Keep source integrity checks while projecting the latest edit in one read per ancestor.
+    const read =
+      this.db.prepare(`SELECT s.id,s.chat_id AS chatId,s.parent_revision AS parentRevision,
+      s.text,s.hash,e.text AS editedText,e.hash AS editedHash,
+      json_extract(r.snapshot,'$.sourceSegments') AS policy
+      FROM sources s JOIN runs r ON r.id=s.run_id
+      LEFT JOIN source_edits e ON e.source_id=s.id
+        AND e.revision=(SELECT MAX(revision) FROM source_edits WHERE source_id=s.id)
+      WHERE s.id=?`);
     while (head) {
       if (seen.has(head)) throw new HttpError(400, 'Source ancestry cycle');
       seen.add(head);
-      const source = this.source(head);
-      const policyRow = this.db
-        .prepare("SELECT json_extract(snapshot,'$.sourceSegments') AS policy FROM runs WHERE id=?")
-        .get(source.runId) as { policy: string | null };
-      const sourceSegments = policyRow.policy ? parse(policyRow.policy) : undefined;
-      history.unshift({
+      const source = read.get(head) as
+        | {
+            id: string;
+            chatId: string;
+            parentRevision: string | null;
+            text: string;
+            hash: string;
+            editedText: string | null;
+            editedHash: string | null;
+            policy: string | null;
+          }
+        | undefined;
+      if (!source) throw new HttpError(404, 'Source not found');
+      validateSourceIdentity(source);
+      if (source.editedText !== null)
+        validateSourceIdentity({ ...source, text: source.editedText, hash: source.editedHash! });
+      const sourceSegments = source.policy ? parse(source.policy) : undefined;
+      history.push({
         revision: source.id,
-        text: source.text,
-        ...(source.hash !== this.sourceOriginal(source.id).hash
-          ? { contentHash: source.hash }
+        text: source.editedText ?? source.text,
+        ...(source.editedHash !== null && source.editedHash !== source.hash
+          ? { contentHash: source.editedHash }
           : {}),
         ...(sourceSegments ? { sourceSegments } : {}),
       });
       head = source.parentRevision;
     }
-    return history;
+    return history.reverse();
   }
   settings(id: string, expected: number, settings: Settings): Chat {
     return this.transaction(() => {

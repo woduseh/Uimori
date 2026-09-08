@@ -90,13 +90,13 @@ export type TranslationResult = {
   segments: TranslationSegment[];
 };
 
-function checkSource(source: AuxiliarySource) {
+export function validateSourceIdentity(source: AuxiliarySource) {
   if (!source.id || !source.chatId || !source.text.trim() || digest(source.text) !== source.hash)
     throw new Error('SOURCE_IDENTITY_INVALID');
 }
 /** Blank-line paragraph anchors are revision-scoped and preserve exact UTF-16 offsets. */
 export function splitSource(source: AuxiliarySource): SourceBlock[] {
-  checkSource(source);
+  validateSourceIdentity(source);
   const blocks: SourceBlock[] = [];
   // Fenced code may itself contain blank lines, so a fence is one source block.
   const lines = source.text.match(/.*(?:\r\n|\n|\r|$)/g)?.filter(Boolean) ?? [];

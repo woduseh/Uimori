@@ -11,6 +11,7 @@ import { buildMainProviderRequest, encodeMainPreview } from './main-request.js';
 import { HttpError, type Store } from './store.js';
 import { sourceRequestView } from '../core/source-context.js';
 import type { ModelSnapshot } from '../core/product.js';
+import { validateSourceIdentity, type AuxiliarySource } from '../core/auxiliary.js';
 
 /** Candidate output belongs to its new branch; prompt expressions still use the original input scope. */
 export function candidateCompilationSnapshot(
@@ -262,15 +263,32 @@ export function validateContextPlan(snapshot: RunSnapshot): void {
 }
 /** Completed ancestor checkpoints only, checked against today's exact source hashes and canon. */
 export function previousContextPlan(store: Store, snapshot: RunSnapshot): ContextPlan | undefined {
+  // Most ancestors have no reusable summary. Keep their cumulative snapshots,
+  // model inputs and tool events out of JS; fully validate only matching candidates.
+  const ancestor = store.db.prepare(
+    "SELECT s.id,s.chat_id AS chatId,s.text,s.hash,r.id AS runId,r.snapshot -> '$.contextPlan' AS contextPlan FROM sources s LEFT JOIN runs r ON r.id=s.run_id WHERE s.id=?"
+  );
+  const candidate = store.db.prepare('SELECT snapshot FROM runs WHERE id=?');
+  const eligible = (plan: ContextPlan | undefined) =>
+    plan?.status === 'ready' &&
+    plan.compacted.length > 0 &&
+    plan.dependencyKey === snapshot.contextPlan?.dependencyKey;
+  let currentRefs: ReturnType<typeof contextSourceRefs> | undefined;
   for (const source of [...snapshot.history].reverse()) {
-    const prior = store.run(store.sourceOriginal(source.revision).runId).snapshot;
+    const row = ancestor.get(source.revision) as
+      | (AuxiliarySource & { runId: string | null; contextPlan: string | null })
+      | undefined;
+    if (!row) throw new HttpError(404, 'Source not found');
+    validateSourceIdentity(row);
+    if (!row.runId) throw new HttpError(404, 'Run not found');
+    const projected =
+      row.contextPlan === null ? undefined : (JSON.parse(row.contextPlan) as ContextPlan);
+    if (!eligible(projected)) continue;
+    const stored = candidate.get(row.runId) as { snapshot: string } | undefined;
+    if (!stored) throw new HttpError(404, 'Run not found');
+    const prior = JSON.parse(stored.snapshot) as RunSnapshot;
     const plan = prior.contextPlan;
-    if (
-      plan?.status !== 'ready' ||
-      !plan.compacted.length ||
-      plan.dependencyKey !== snapshot.contextPlan?.dependencyKey
-    )
-      continue;
+    if (!plan || !eligible(plan)) continue;
     try {
       validateContextPlan(prior);
     } catch {
@@ -278,7 +296,7 @@ export function previousContextPlan(store: Store, snapshot: RunSnapshot): Contex
     }
     if (
       JSON.stringify(plan.compacted) ===
-      JSON.stringify(contextSourceRefs(snapshot).slice(0, plan.compacted.length))
+      JSON.stringify((currentRefs ??= contextSourceRefs(snapshot)).slice(0, plan.compacted.length))
     )
       return structuredClone(plan);
   }
