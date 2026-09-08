@@ -38,9 +38,17 @@ services:
         - --input-type=module
         - -e
         - >-
-          const response = await fetch('http://127.0.0.1:4310/api/session',
-          {headers: {host: new URL(process.env.NR_PUBLIC_ORIGIN).host}, signal: AbortSignal.timeout(3000)});
-          if (!response.ok || !(await response.json()).required) process.exit(1);
+          const {get} = await import('node:http');
+          setTimeout(() => process.exit(1), 3000);
+          get('http://127.0.0.1:4310/api/session',
+          {headers: {Host: new URL(process.env.NR_PUBLIC_ORIGIN).host}}, response => {
+          let body = ''; response.setEncoding('utf8');
+          response.on('data', chunk => body += chunk);
+          response.on('end', () => { try {
+          const session = JSON.parse(body);
+          process.exit(response.statusCode === 200 && session.required === true && session.authenticated === false ? 0 : 1);
+          } catch { process.exit(1); } });
+          }).on('error', () => process.exit(1));
       interval: 30s
       timeout: 5s
       retries: 3
