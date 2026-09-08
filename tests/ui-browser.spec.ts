@@ -1964,7 +1964,10 @@ test('UI common dialogs center on desktop and fill mobile without changing dismi
       });
       await page.keyboard.press('Escape');
       await expect(dialog).not.toBeVisible();
-      if (title === '채팅 설정' || width === 1440) await expect(opener).toBeFocused();
+      // Tasks open from the chat ⋯ menu, so focus returns to the menu button afterwards.
+      if (title === '작업 현황') {
+        if (width === 1440) await expect(page.locator('.chat-menu > summary')).toBeFocused();
+      } else await expect(opener).toBeFocused();
     }
     if (width === 1440) {
       await openChatMenu(page);

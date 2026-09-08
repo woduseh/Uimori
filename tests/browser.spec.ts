@@ -63,10 +63,9 @@ async function storySettings(page: Page) {
 }
 async function openWork(page: Page) {
   await closeDialog(page);
-  const button = page.getByRole('button', { name: /^작업 현황/ });
-  if (!(await button.isVisible()))
-    await page.getByRole('button', { name: '탐색 메뉴', exact: true }).click();
-  await button.click();
+  // The sidebar lists tasks only while something runs; the chat ⋯ menu always has the panel.
+  await page.locator('.chat-menu').getByLabel('채팅 메뉴').click();
+  await page.getByRole('button', { name: '작업 현황', exact: true }).click();
 }
 async function closeDialog(page: Page) {
   const dialog = page.getByRole('dialog').filter({ visible: true });

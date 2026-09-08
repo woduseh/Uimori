@@ -2,6 +2,7 @@ import {
   editLibraryContent,
   selectChatSettingsSection,
   selectPackageSection,
+  openChatMenu,
 } from './ui-navigation.js';
 import {
   expect,
@@ -289,6 +290,7 @@ test('LCUI03 a lost response freezes the one-shot reset through retry and expose
   const full = (await (await request.get(`/api/runs/${state.runs[0].id}`)).json()) as Run;
   expect(full.snapshot.loreContextReset).toBe(true);
   expect(full.snapshot.loreContext!.stats.reasons).toContain('new-scene');
+  await openChatMenu(page);
   await page.getByRole('button', { name: '작업 현황', exact: true }).click();
   await page.getByText('실행과 실제 입력 확인', { exact: true }).click();
   const result = page.getByRole('region', { name: '조회 로어 유지 결과', exact: true });
