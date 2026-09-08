@@ -1191,7 +1191,7 @@ input[type="checkbox"] {
     margin-right: 2px;
   }
   .model-chip select {
-    min-height: 40px;
+    min-height: 44px;
     font-size: 11px;
     padding: 4px 22px 4px 10px;
   }
@@ -1199,8 +1199,8 @@ input[type="checkbox"] {
     gap: 0;
   }
   .header-actions .icon-button {
-    width: 42px;
-    min-width: 42px;
+    width: 44px;
+    min-width: 44px;
   }
   .reader {
     padding: 24px 20px 36px;
