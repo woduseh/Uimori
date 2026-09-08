@@ -247,6 +247,8 @@ function StoryPanelEditor({
   const request = useRef(0);
   const actionLock = useRef(false);
   const [busy, setBusy] = useState(false);
+  // Only an in-flight write is an unsaved change; the reload after it is not.
+  const [writing, setWriting] = useState(false);
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
   const [confirmReset, setConfirmReset] = useState<number | null>(null);
@@ -259,7 +261,7 @@ function StoryPanelEditor({
   const runKeys = useRef(new Map<string, string>());
   const base = `/chats/${id(chatId)}`;
   const hasUnsavedChanges =
-    busy ||
+    writing ||
     dirty.current ||
     author.length > 0 ||
     declaration.length > 0 ||
@@ -325,11 +327,13 @@ function StoryPanelEditor({
     const valid = capture();
     actionLock.current = true;
     setBusy(true);
+    setWriting(true);
     setError('');
     setMessage('');
     try {
       await api(path, body, method);
       if (!valid()) return;
+      setWriting(false);
       success?.();
       await load();
       if (valid()) {
@@ -345,6 +349,7 @@ function StoryPanelEditor({
       if (valid()) {
         actionLock.current = false;
         setBusy(false);
+        setWriting(false);
       }
     }
   }

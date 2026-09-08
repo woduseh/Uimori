@@ -2004,6 +2004,7 @@ test('UI translation chunk setting saves numeric and unlimited plans on mobile',
   await expect
     .poll(async () => (await data(request, chat.id)).chat.settings.translationChunkChars)
     .toBe(100);
+  await expect(runtime.getByRole('status')).toContainText('후속 작업 설정을 저장했어요.');
   await page.screenshot({ path: info.outputPath('translation-chunks-numeric-390.png') });
   await close(page);
   const scene = page.locator(`[data-testid="source"][data-source-id="${source.id}"]`);
@@ -2024,6 +2025,7 @@ test('UI translation chunk setting saves numeric and unlimited plans on mobile',
   await expect
     .poll(async () => (await data(request, chat.id)).chat.settings.translationChunkChars)
     .toBeNull();
+  await expect(runtime.getByRole('status')).toContainText('후속 작업 설정을 저장했어요.');
   await page.screenshot({ path: info.outputPath('translation-chunks-unlimited-390.png') });
   await close(page);
   expect(
@@ -2095,6 +2097,7 @@ test('UI translation chunk setting saves numeric and unlimited plans on mobile',
     await expect
       .poll(async () => (await data(request, chat.id)).chat.settings.translationChunkChars)
       .toBe(target);
+    await expect(runtime.getByRole('status')).toContainText('후속 작업 설정을 저장했어요.');
     await close(page);
     const activity = scene.getByTestId('turn-activity');
     if ((await activity.getAttribute('open')) === null)
@@ -2142,4 +2145,37 @@ test('UI translation chunk setting saves numeric and unlimited plans on mobile',
       path: info.outputPath(`translation-chunks-${terminal}-retry-390.png`),
     });
   }
+});
+
+test('UI chat settings close right after saving does not warn while the refresh is pending', async ({
+  page,
+  request,
+}) => {
+  const chat = await seed(request, `저장 직후 닫기 ${Date.now()}`, 'Synthetic close after save.');
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto(`/?chat=${chat.id}`);
+  const dialog = page.getByRole('dialog', { name: '채팅 설정', exact: true });
+  await page.getByRole('button', { name: '채팅 설정', exact: true }).click();
+  await selectChatSettingsSection(page, '자동 후속 작업');
+  const runtime = dialog.locator('section.settings');
+  await runtime.getByLabel('번역 구간 무제한', { exact: true }).check();
+  // Hold the post-save reader refresh so the close arrives while it is still in flight.
+  let release!: () => void;
+  const held = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const reader = /\/api\/chats\/[^/]+\/reader/;
+  await page.route(reader, async (route) => {
+    await held;
+    await route.continue();
+  });
+  await runtime.getByRole('button', { name: '설정 저장', exact: true }).click();
+  await expect(runtime.getByRole('status')).toContainText('후속 작업 설정을 저장했어요.');
+  await page.keyboard.press('Escape');
+  await expect(dialog).toBeHidden();
+  await expect(page.getByRole('alertdialog', { name: '미저장 채팅 설정 확인' })).toHaveCount(0);
+  release();
+  await expect
+    .poll(async () => (await data(request, chat.id)).chat.settings.translationChunkChars)
+    .toBeNull();
 });
