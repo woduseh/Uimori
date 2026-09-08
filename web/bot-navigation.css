@@ -376,10 +376,10 @@
     height: 44px;
   }
   .bot-navigation .bot-row-actions > .icon-button {
-    width: 36px;
-    min-width: 36px;
-    height: 40px;
-    min-height: 40px;
+    width: 44px;
+    min-width: 44px;
+    height: 44px;
+    min-height: 44px;
   }
   .bot-chat-item > .bot-row-actions > .delete-control {
     display: none;
