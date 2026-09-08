@@ -1,3 +1,4 @@
+import { translationChunkChars } from '../core/translation-settings.js';
 import Fastify, { type FastifyInstance } from 'fastify';
 import fastifyStatic from '@fastify/static';
 import { existsSync } from 'node:fs';
@@ -83,10 +84,17 @@ function settings(body: RecordBody): Settings {
     typeof body.status !== 'boolean'
   )
     throw new HttpError(400, 'Invalid settings');
+  let chunkChars: number | null;
+  try {
+    chunkChars = translationChunkChars(body.translationChunkChars);
+  } catch (error) {
+    throw new HttpError(400, (error as Error).message);
+  }
   return {
     preset: body.preset as Settings['preset'],
     mode: body.mode as Settings['mode'],
     translation: body.translation,
+    translationChunkChars: chunkChars,
     status: body.status,
     maxCalls: integer(body.maxCalls, 'maxCalls', 1, 16),
   };
@@ -287,10 +295,21 @@ export async function createApp(options: AppOptions): Promise<App> {
             authorize: (connection) => store.product.authorize(connection),
             vertexRequestTier: options.vertexRequestTier,
             onAttemptStart: (wire) => {
+              if (controller.signal.aborted || store.run(id).status !== 'running')
+                throw new Error('Run cancelled');
               const target =
-                wire.role === 'memory'
-                  ? (run.snapshot.story?.models.memory ?? run.snapshot.profile?.models.main)
-                  : run.snapshot.profile?.models.main;
+                wire.agentId !== undefined
+                  ? run.snapshot.profile?.collaborationModels?.[wire.agentId]
+                  : wire.role === 'memory'
+                    ? (run.snapshot.story?.models.memory ?? run.snapshot.profile?.models.main)
+                    : run.snapshot.profile?.models.main;
+              if (
+                wire.agentId !== undefined &&
+                (!target ||
+                  target.modelId !== wire.modelId ||
+                  target.connectionId !== wire.connectionId)
+              )
+                throw new Error('Invalid advisor attempt');
               if (target) store.product.authorize(target.connection);
               return store.product.startAttempt(run.chatId, id, null, wire);
             },
@@ -655,7 +674,15 @@ export async function createApp(options: AppOptions): Promise<App> {
   );
   app.patch<{ Params: { id: string } }>('/api/chats/:id/settings', async (request) => {
     const body = object(request.body);
-    only(body, ['expectedSettingsRevision', 'preset', 'mode', 'translation', 'status', 'maxCalls']);
+    only(body, [
+      'expectedSettingsRevision',
+      'preset',
+      'mode',
+      'translation',
+      'translationChunkChars',
+      'status',
+      'maxCalls',
+    ]);
     const chat = store.settings(
       request.params.id,
       integer(body.expectedSettingsRevision, 'settings revision', 1, 1e9),
@@ -750,12 +777,8 @@ export async function createApp(options: AppOptions): Promise<App> {
   });
   app.post<{ Params: { id: string } }>('/api/jobs/:id/retry', async (request) => {
     const body = object(request.body ?? {});
-    only(body, ['chunkId']);
-    requireJobModel(request.params.id);
-    const job = store.retryJob(
-      request.params.id,
-      body.chunkId === undefined ? undefined : string(body.chunkId, 'chunk ID', 100)
-    );
+    only(body, []);
+    const job = store.retryJob(request.params.id, requireJobModel);
     publish(job.chatId);
     pumpJobs();
     return job;
@@ -764,6 +787,19 @@ export async function createApp(options: AppOptions): Promise<App> {
     const job = store.cancelJob(request.params.id);
     jobControllers.get(job.id)?.abort(new Error('Job cancelled'));
     publish(job.chatId);
+    return job;
+  });
+  app.post<{ Params: { id: string } }>('/api/sources/:id/status', async (request) => {
+    const body = object(request.body);
+    only(body, ['expectedSourceHash', 'expectedJobId']);
+    const job = store.requestStatus(
+      request.params.id,
+      string(body.expectedSourceHash, 'source hash', 64),
+      body.expectedJobId === null ? null : string(body.expectedJobId, 'status job', 100),
+      requireJobModel
+    );
+    publish(job.chatId);
+    pumpJobs();
     return job;
   });
   app.post<{ Params: { id: string } }>('/api/sources/:id/translation', async (request) => {

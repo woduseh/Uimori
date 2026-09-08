@@ -34,6 +34,7 @@ test('PLR01 persona picker excludes bots and modules while preserving no-persona
   await library.getByRole('searchbox', { name: '서재 검색', exact: true }).fill(bot.title);
   await library.getByRole('button', { name: `${bot.title} 새 채팅`, exact: true }).click();
   const newChat = page.getByRole('dialog', { name: '새 채팅', exact: true });
+  await newChat.locator('.new-story-options > summary').click();
   const trigger = newChat.getByRole('button', { name: '시작 페르소나', exact: true });
   await trigger.click();
   const picker = page.getByRole('dialog', { name: '시작 페르소나', exact: true });
@@ -49,7 +50,7 @@ test('PLR01 persona picker excludes bots and modules while preserving no-persona
   await expect(trigger).toContainText('페르소나 없음');
 });
 
-test('PLR02 every package category has direct editing in card and list views', async ({
+test('PLR02 every package category is editable from card and list controls', async ({
   page,
   request,
 }) => {
@@ -64,8 +65,18 @@ test('PLR02 every package category has direct editing in card and list views', a
     const library = page.getByTestId('library-panel');
     await library.getByRole('searchbox', { name: '서재 검색', exact: true }).fill(item.title);
     for (const view of ['카드', '목록']) {
+      const options = library.locator('.library-list-options > summary');
+      if (!(await options.evaluate((node) => (node.parentElement as HTMLDetailsElement).open)))
+        await options.click();
       await library.getByRole('button', { name: view, exact: true }).click();
-      await library.getByRole('button', { name: `${item.title} 편집`, exact: true }).click();
+      await options.click();
+      const directEdit = library.getByRole('button', { name: `${item.title} 편집`, exact: true });
+      if (await directEdit.isVisible()) await directEdit.click();
+      else {
+        const menu = library.getByLabel(`${item.title} 메뉴`, { exact: true });
+        await menu.click();
+        await menu.locator('..').getByRole('button', { name: '편집', exact: true }).click();
+      }
       await expect(library.getByLabel('자료 이름', { exact: true })).toHaveValue(item.title);
       await expect(library.getByLabel('자료 본문', { exact: true })).toHaveValue('Synthetic only.');
       await library.getByRole('button', { name: '← 서재 목록', exact: true }).click();

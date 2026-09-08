@@ -15,7 +15,7 @@ const labels: Record<string, string> = {
   profiles: '채팅 설정',
   chat_organization: '봇 소속 채팅',
   chat_folders: '봇 폴더·기본 페르소나',
-  story_configs: '상태·기억 설정 이력',
+  story_configs: '상태·기억 설정',
   runs: '생성 기록',
   jobs: '번역·이미지 작업',
   story_jobs: '상태·기억 작업',
@@ -70,7 +70,9 @@ export function libraryDeletionImpact(store: Store, kind: LibraryKind, id: strin
         continue;
       if (table === 'versions')
         conditions.push(
-          "(t.kind<>'registration-run' OR (json_extract(t.body,'$.status')='running' AND t.revision=(SELECT MAX(v.revision) FROM versions v WHERE v.kind=t.kind AND v.id=t.id)))"
+          "(t.kind<>'registration-run' OR (json_extract(t.body,'$.status')='running' AND t.revision=(SELECT MAX(v.revision) FROM versions v WHERE v.kind=t.kind AND v.id=t.id)))",
+          // Old advisor selections are execution evidence; runs carry their own model snapshots.
+          "(t.kind<>'prompt-preset' OR t.revision=(SELECT MAX(v.revision) FROM versions v WHERE v.kind=t.kind AND v.id=t.id))"
         );
     }
     // Exact JSON values include refs in arrays (relatedIds), nested package modules,

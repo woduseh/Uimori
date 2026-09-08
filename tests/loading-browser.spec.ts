@@ -264,7 +264,7 @@ test('LOADUI02 same-source tabs keep CAS drafts and isolate another chat, manual
   await third.close();
 });
 
-test('LOADUI03 large library uses summaries then fetches exact displayed revision on click', async ({
+test('LOADUI03 large library uses summaries then fetches current content on click', async ({
   page,
   request,
 }, info) => {
@@ -286,7 +286,8 @@ test('LOADUI03 large library uses summaries then fetches exact displayed revisio
   }
   const revisionRequests: string[] = [];
   page.on('request', (request) => {
-    if (request.url().includes('/revisions/content/')) revisionRequests.push(request.url());
+    if (request.method() === 'GET' && /\/api\/content\/[^/?]+$/.test(request.url()))
+      revisionRequests.push(request.url());
   });
   const summaryResponse = page.waitForResponse((response) =>
     response.url().includes('/api/library?')
@@ -308,7 +309,7 @@ test('LOADUI03 large library uses summaries then fetches exact displayed revisio
       kind: first.kind,
       title: first.title,
       description: first.description,
-      text: 'Revision two must not replace the displayed revision one.',
+      text: 'Current content replaces the earlier library summary on open.',
       loading: first.loading,
       relatedIds: first.relatedIds,
       expectedRevision: 1,
@@ -316,9 +317,11 @@ test('LOADUI03 large library uses summaries then fetches exact displayed revisio
   });
   expect(update.ok()).toBeTruthy();
   await editLibraryContent(page, `${first.title}`);
-  await expect(page.getByLabel('자료 본문')).toHaveValue(first.text);
+  await expect(page.getByLabel('자료 본문')).toHaveValue(
+    'Current content replaces the earlier library summary on open.'
+  );
   expect(revisionRequests).toHaveLength(1);
-  expect(revisionRequests[0]).toContain(`/revisions/content/${first.id}/1`);
+  expect(revisionRequests[0]).toContain(`/content/${first.id}`);
   await page.screenshot({ path: info.outputPath('loading-library.png') });
 });
 

@@ -1,3 +1,4 @@
+import { translationChunkChars } from '../core/translation-settings.js';
 import { createHash, randomUUID } from 'node:crypto';
 import { isDeepStrictEqual } from 'node:util';
 import { HttpError, type Store, type Source, type Job } from './store.js';
@@ -148,22 +149,15 @@ export function requestTranslation(
           /* Repair only on explicit demand. */
         }
       }
-      if (!force && ['failed', 'partial', 'interrupted', 'cancelled'].includes(latest.status)) {
-        validate?.(latest.id);
-        store.db
-          .prepare(
-            "UPDATE jobs SET status='queued',owner=NULL,error=NULL,retry_chunk=NULL,updated_at=? WHERE id=?"
-          )
-          .run(new Date().toISOString(), latest.id);
-        store.event(source.chatId, 'job.queued', latest.id);
-        return store.job(latest.id);
-      }
     }
     const profile = store.product.profile(source.chatId);
     const ref = profile.prompts?.translation;
     const controls = ref ? profile.promptControls?.[`${ref.id}@${ref.revision}`] : undefined;
     const selected = profile.routes.translation;
     const input = {
+      translationChunkChars: translationChunkChars(
+        store.chat(source.chatId).settings.translationChunkChars
+      ),
       promptSelection: { translation: ref ?? null },
       translationModelSelection: selected,
       ...(selected ? { translationModelSnapshot: store.product.modelSnapshot(selected.id) } : {}),
@@ -188,6 +182,58 @@ export function requestTranslation(
         .run(jobId, source.chatId, id, source.hash, JSON.stringify(input), time, time);
     store.event(source.chatId, 'job.queued', jobId);
     validate?.(jobId);
+    return store.job(jobId);
+  });
+}
+export function requestStatus(
+  store: Store,
+  id: string,
+  expectedSourceHash: string,
+  expectedJobId: string | null,
+  validate?: (id: string) => void
+): Job {
+  return store.transaction(() => {
+    const source = store.source(id);
+    const latest = store.db
+      .prepare(
+        "SELECT id,status FROM jobs WHERE source_revision=? AND kind='status' ORDER BY revision DESC,created_at DESC,id DESC LIMIT 1"
+      )
+      .get(id) as { id: string; status: string } | undefined;
+    if (source.hash !== expectedSourceHash || (latest?.id ?? null) !== expectedJobId)
+      throw new HttpError(409, 'Status source or job changed; refresh before creating a new job');
+    if (
+      store.db
+        .prepare(
+          "SELECT 1 FROM jobs WHERE source_revision=? AND kind='status' AND status IN ('queued','running')"
+        )
+        .get(id)
+    )
+      throw new HttpError(409, 'Status job is already active');
+    const profile = store.product.profile(source.chatId);
+    const selected = profile.routes.status;
+    const input = {
+      statusModelSelection: selected,
+      ...(selected ? { statusModelSnapshot: store.product.modelSnapshot(selected.id) } : {}),
+    };
+    store.product.resolveJobPrompt(store.run(source.runId).snapshot, input);
+    const jobId = randomUUID();
+    const time = new Date().toISOString();
+    store.db
+      .prepare(
+        "INSERT INTO jobs(id,chat_id,source_revision,source_hash,kind,status,revision,input,created_at,updated_at) VALUES(?,?,?,?,'status','queued',?,?,?,?)"
+      )
+      .run(
+        jobId,
+        source.chatId,
+        id,
+        source.hash,
+        latest ? (store.job(latest.id).revision ?? 1) + 1 : 1,
+        JSON.stringify(input),
+        time,
+        time
+      );
+    validate?.(jobId);
+    store.event(source.chatId, 'job.queued', jobId);
     return store.job(jobId);
   });
 }

@@ -1,6 +1,7 @@
 node_modules/
 dist/
 .local/
+.codex-remote-attachments/
 output/
 *.sqlite*
 .env*

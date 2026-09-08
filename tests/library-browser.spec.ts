@@ -40,12 +40,27 @@ async function organization(request: APIRequestContext) {
   return response.json() as Promise<LibraryOrganization>;
 }
 async function createFolder(page: Page, panel: Locator, title: string) {
+  await revealFolderActions(panel);
   await panel.getByRole('button', { name: '새 폴더', exact: true }).click();
   const dialog = page.getByRole('dialog', { name: '새 폴더', exact: true });
   await dialog.getByLabel('폴더 이름', { exact: true }).fill(title);
   await dialog.getByRole('button', { name: '폴더 만들기', exact: true }).click();
   await expect(dialog).toBeHidden();
   return (await organization(page.request)).folders.find((folder) => folder.title === title)!;
+}
+async function revealFolderActions(panel: Locator) {
+  await expect(panel.locator('.library-folders')).toBeVisible();
+  const summary = panel.getByLabel('폴더 관리', { exact: true });
+  if (
+    (await summary.isVisible()) &&
+    !(await summary.evaluate((node) => (node.parentElement as HTMLDetailsElement).open))
+  )
+    await summary.click();
+}
+async function revealListOptions(panel: Locator) {
+  const summary = panel.locator('.library-list-options > summary');
+  if (!(await summary.evaluate((node) => (node.parentElement as HTMLDetailsElement).open)))
+    await summary.click();
 }
 async function chooseFolder(panel: Locator, title: string) {
   const mobile = panel.getByRole('combobox', { name: '폴더 선택', exact: true });
@@ -67,7 +82,9 @@ async function moveItems(
   category: string,
   folder: LibraryFolder | null
 ) {
+  await revealListOptions(panel);
   await panel.getByRole('button', { name: '선택', exact: true }).click();
+  await panel.locator('.library-list-options > summary').click();
   for (const title of titles) await panel.getByLabel(`${title} 선택`, { exact: true }).check();
   await panel.getByRole('button', { name: '선택한 자료 이동', exact: true }).click();
   const dialog = page.getByRole('dialog', { name: '자료 이동', exact: true });
@@ -137,12 +154,14 @@ test('LIBUI01 library folders move and classify without changing revisions or ow
     panel.getByRole('button', { name: `${a.title} 상세 보기`, exact: true })
   ).toBeVisible();
   await expect(panel.locator('.library-list-item')).toHaveCount(1);
+  await revealListOptions(panel);
   await panel.getByRole('button', { name: '카드', exact: true }).click();
   await page.reload();
   await page
     .getByTestId('library-panel')
     .getByRole('tab', { name: '페르소나', exact: true })
     .click();
+  await revealListOptions(panel);
   await expect(panel.getByRole('button', { name: '카드', exact: true })).toHaveAttribute(
     'aria-pressed',
     'true'
@@ -170,11 +189,13 @@ test('LIBUI02 mobile folder deletion refreshes another page and stale moves requ
   await other.goto('/');
   const otherPanel = other.getByTestId('library-panel');
   await chooseFolder(otherPanel, folder.title);
+  await revealListOptions(otherPanel);
   await otherPanel.getByRole('button', { name: '선택', exact: true }).click();
+  await otherPanel.locator('.library-list-options > summary').click();
   await otherPanel.getByLabel(`${item.title} 선택`, { exact: true }).check();
   await page.bringToFront();
   await page.screenshot({ path: info.outputPath('library-folders-mobile.png') });
-  await panel.getByLabel(`${folder.title} 폴더 메뉴`, { exact: true }).click();
+  await revealFolderActions(panel);
   await panel.getByRole('button', { name: `${folder.title} 폴더 삭제`, exact: true }).click();
   const confirm = page.getByRole('alertdialog', { name: '삭제 확인', exact: true });
   await expect(confirm).toContainText('미분류');
@@ -291,6 +312,7 @@ test('LIBUI04 role selection creates a chat with the selected persona and module
     .getByRole('button', { name: '페르소나로 사용', exact: true })
     .click();
   const dialog = page.getByRole('dialog', { name: '새 채팅', exact: true });
+  await dialog.locator('.new-story-options > summary').click();
   await selectContent(page, '시작할 봇', bot.title);
   await expect(dialog.getByRole('button', { name: '시작 페르소나', exact: true })).toContainText(
     persona.title
@@ -327,6 +349,7 @@ test('LIBUI05 accepted folder creation closes even when the summary refresh fail
 }) => {
   await page.goto('/');
   const panel = page.getByTestId('library-panel');
+  await revealFolderActions(panel);
   await expect(panel.getByRole('button', { name: '새 폴더', exact: true })).toBeEnabled();
   let writes = 0;
   page.on('request', (request) => {

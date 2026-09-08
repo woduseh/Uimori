@@ -1,3 +1,67 @@
+.connection-editor {
+  min-width: 0;
+}
+.connection-editor .compact-card {
+  background: var(--surface-raised, #232923);
+  border-color: var(--border, #3a413a);
+  padding: 16px;
+  border-radius: 9px;
+}
+.connection-editor .compact-card > strong {
+  font-size: 14px;
+}
+.connection-editor .compact-card > button {
+  font-size: 12px;
+  min-height: 44px;
+}
+.connection-editor .editor-grid {
+  margin-top: 26px;
+}
+.connection-editor .editor-grid h3 {
+  font-size: 16px;
+}
+.connection-editor .editor-grid label {
+  font-size: 12px;
+}
+.connection-editor .editor-grid input,
+.connection-editor .editor-grid select {
+  width: 100%;
+}
+.connection-editor .editor-grid .check input {
+  width: 18px;
+  flex-shrink: 0;
+}
+.connection-editor form + form {
+  border-color: var(--border, #3a413a);
+}
+.registered-models {
+  margin-top: 30px;
+}
+.registered-models ul {
+  list-style: none;
+  display: grid;
+  gap: 10px;
+  padding: 0;
+  margin: 12px 0 0;
+}
+.registered-models li {
+  padding: 12px 0;
+  border-bottom: 1px solid var(--border, #3a413a);
+  overflow-wrap: anywhere;
+}
+.registered-models strong {
+  font-size: 13px;
+  display: block;
+}
+.registered-models small {
+  font-size: 11px;
+}
+@media (max-width: 600px) {
+  .connection-editor .editor-grid {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 15px;
+  }
+}
 .provider-section-heading {
   display: flex;
   align-items: center;
@@ -98,11 +162,6 @@
 }
 .provider-override-note {
   white-space: pre-wrap;
-}
-.provider-selection-reference {
-  font-size: 12px;
-  line-height: 1.7;
-  color: var(--muted);
 }
 .provider-next-step ol {
   margin: 0;
@@ -457,7 +516,8 @@
     padding-inline: 10px;
   }
   .provider-management-form > .provider-actions {
-    bottom: -22px;
+    position: static;
+    padding-block: 10px;
   }
 }
 .vertex-credential-upload {

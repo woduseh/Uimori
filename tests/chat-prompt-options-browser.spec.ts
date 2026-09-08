@@ -58,6 +58,14 @@ async function fixture(request: APIRequestContext) {
   });
   expect(promptResponse.ok()).toBe(true);
   const prompt = await promptResponse.json();
+  const combination = await request.post('/api/prompt-combinations', {
+    data: {
+      title: '합성 기본 창작 프리셋',
+      prompt: { id: prompt.id, revision: prompt.revision },
+      values: { language: 'ko', customLanguage: '', inner: false, detail: 1 },
+    },
+  });
+  expect(combination.ok()).toBe(true);
   const chatResponse = await postFixtureChat(request, { data: { title: '합성 창작 옵션 채팅' } });
   expect(chatResponse.ok()).toBe(true);
   const chat = await chatResponse.json();
@@ -94,6 +102,7 @@ test('chat creative options preserve drafts, apply explicitly and fit desktop/mo
   await page.setViewportSize({ width: 1440, height: 1000 });
   await page.goto(`/?chat=${chat.id}`);
   const open = page.getByRole('button', { name: '창작 옵션', exact: true });
+  await page.getByRole('button', { name: '입력창 더보기', exact: true }).click();
   await open.click();
   const panel = page.getByRole('region', { name: '창작 옵션 패널', exact: true });
   await expect(panel).toBeVisible();
@@ -113,6 +122,9 @@ test('chat creative options preserve drafts, apply explicitly and fit desktop/mo
   await page.getByRole('textbox', { name: '다음 장면 요청', exact: true }).fill('보존할 요청 초안');
   await panel.getByRole('button', { name: '창작 옵션 닫기', exact: true }).click();
   await expect(panel).toBeHidden();
+  await page.getByRole('button', { name: '입력창 더보기', exact: true }).click();
+  await expect(page.getByLabel('빠른 창작 프리셋', { exact: true })).toBeDisabled();
+  await expect(open).toBeFocused();
   await open.click();
   await expect(custom).toHaveValue('프랑스어');
   const navigation = page.getByRole('navigation', { name: '봇의 채팅 목록', exact: true });
@@ -149,6 +161,7 @@ test('chat creative options preserve drafts, apply explicitly and fit desktop/mo
   expect((await detail(request, chat.id)).profile).toEqual(saved);
   page.once('dialog', (dialog) => dialog.accept());
   await page.reload();
+  await page.getByRole('button', { name: '입력창 더보기', exact: true }).click();
   await open.click();
   await expect(custom).toHaveValue('프랑스어');
   await expect(inner).toBeChecked();
@@ -170,6 +183,7 @@ test('creative option CAS conflict preserves draft and server profile', async ({
 }) => {
   const { chat, key, before } = await fixture(request);
   await page.goto(`/?chat=${chat.id}`);
+  await page.getByRole('button', { name: '입력창 더보기', exact: true }).click();
   await page.getByRole('button', { name: '창작 옵션', exact: true }).click();
   const panel = page.getByRole('region', { name: '창작 옵션 패널', exact: true });
   await panel.getByLabel('응답 언어', { exact: true }).selectOption({ label: '직접 지정' });

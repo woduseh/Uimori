@@ -368,6 +368,7 @@ export function definePrompt<const C extends Record<string, Option>>(input: {
   controls: C;
   compose: (context: { options: OptionExpressions<C> }) => PromptBlock[];
   execution?: PromptProgram['execution'];
+  collaboration?: PromptProgram['collaboration'];
   provenance?: PromptProgram['provenance'];
 }): PromptProgram {
   const controls = Object.entries(input.controls).map(([id, value]) => ({
@@ -384,6 +385,7 @@ export function definePrompt<const C extends Record<string, Option>>(input: {
     controls,
     blocks,
     ...(input.execution === undefined ? {} : { execution: input.execution }),
+    ...(input.collaboration === undefined ? {} : { collaboration: input.collaboration }),
     ...(input.provenance === undefined ? {} : { provenance: input.provenance }),
   });
 }

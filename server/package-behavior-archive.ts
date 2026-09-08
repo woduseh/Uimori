@@ -83,6 +83,12 @@ function scopeOf(value: unknown): BehaviorScope {
     'schemaVersion',
   ]) as BehaviorScope;
 }
+const instanceScope = (scope: BehaviorScope) => [
+  scope.chatId,
+  scope.branchId,
+  scope.attachmentInstanceId,
+  scope.packageId,
+];
 function sourceHashInChat(store: Store, chatId: string, hash: string | null) {
   if (hash === null) return;
   digest(hash);
@@ -272,7 +278,6 @@ export function validatePackageBehaviorArchive(store: Store): void {
   for (const row of rows('package_behavior_journal')) {
     const owner = states.get(key(row.chat_id, row.branch_id, row.instance_id));
     if (!owner) reject('orphan journal');
-    const { scope, behavior: b } = owner;
     const r = object(JSON.parse(row.result), [
       'chatId',
       'branchId',
@@ -305,7 +310,11 @@ export function validatePackageBehaviorArchive(store: Store): void {
       'baseStateRevision',
       'sourceHash',
       'hostRuntime',
+      'previousScope',
     ]);
+    const scope = scopeOf(payload.scope),
+      b = definition(store, scope);
+    same(instanceScope(scope), instanceScope(owner.scope), 'journal instance scope');
     const hostRuntime = payload.hostRuntime ?? {};
     behaviorRecord(hostRuntime);
     inspectRuntimeValue(hostRuntime);
@@ -329,7 +338,12 @@ export function validatePackageBehaviorArchive(store: Store): void {
     revision(r.stateRevision, 1);
     if (r.stateRevision !== r.beforeStateRevision + 1 || r.stateRevision > owner.row.state_revision)
       reject('journal state revision');
-    validateBehaviorValue(b.stateSchema, r.beforeState);
+    if (Object.hasOwn(payload, 'previousScope') && r.provenance !== 'explicit-reset')
+      reject('unexpected previous scope');
+    const previousScope =
+      payload.previousScope === undefined ? scope : scopeOf(payload.previousScope);
+    same(instanceScope(previousScope), instanceScope(scope), 'reset previous instance');
+    validateBehaviorValue(definition(store, previousScope).stateSchema, r.beforeState);
     validateBehaviorValue(b.stateSchema, r.state);
     sourceHashInChat(store, scope.chatId, r.sourceHash);
     same(payload.provenance, r.provenance, 'journal provenance');
@@ -483,8 +497,13 @@ export function validatePackageBehaviorArchive(store: Store): void {
   }
   for (const [k, r] of latest) {
     const owner = states.get(k)!;
-    if (owner.row.state_revision === r.stateRevision)
+    if (owner.row.state_revision === r.stateRevision) {
       same(JSON.parse(owner.row.state), r.state, 'latest state journal');
+      const receiptScope = Object.fromEntries(
+        Object.keys(owner.scope).map((key) => [key, r[key]])
+      ) as unknown as BehaviorScope;
+      same(definition(store, receiptScope), owner.behavior, 'latest state definition');
+    }
   }
   for (const row of rows('package_behavior_heads')) {
     const owner = states.get(key(row.chat_id, row.branch_id, row.instance_id));

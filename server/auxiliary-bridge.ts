@@ -1,3 +1,4 @@
+import { translationChunkChars } from '../core/translation-settings.js';
 import type { Store } from './store.js';
 import { type AssetEntry } from '../core/auxiliary.js';
 import type { AuxiliaryStoreBridge } from './product-auxiliary.js';
@@ -45,6 +46,11 @@ export function auxiliaryBridge(
           ? { translationReferences: translationReferences(store, snapshot) }
           : {}),
         assets: job.kind === 'image' ? imageCatalog(job.input) : assets,
+        translationChunkChars: translationChunkChars(
+          job.input && typeof job.input === 'object'
+            ? (job.input as { translationChunkChars?: unknown }).translationChunkChars
+            : undefined
+        ),
         plan: store.product.plan(id) ?? undefined,
         chunks: store.product.chunks(id),
         ...(row.retry_chunk ? { retryChunkIds: [row.retry_chunk] } : {}),

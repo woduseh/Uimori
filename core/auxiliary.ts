@@ -74,6 +74,7 @@ export type TranslationChunk = {
   protectedSpans: ProtectedSpan[];
 };
 export type TranslationPlan = {
+  maxChunkChars: number | null;
   sourceRevision: string;
   sourceHash: string;
   chatId: string;
@@ -180,9 +181,12 @@ function protect(
 export function createTranslationPlan(
   source: AuxiliarySource,
   context: SourceTimeContext,
-  maxChunkChars = 3000
+  maxChunkChars: number | null = 3000
 ): TranslationPlan {
-  if (!Number.isSafeInteger(maxChunkChars) || maxChunkChars < 100 || maxChunkChars > 24000)
+  if (
+    maxChunkChars !== null &&
+    (!Number.isSafeInteger(maxChunkChars) || maxChunkChars < 100 || maxChunkChars > 24000)
+  )
     throw new Error('INVALID_CHUNK_LIMIT');
   const blocks = splitSource(source);
   const sequence = { value: 0 };
@@ -225,7 +229,7 @@ export function createTranslationPlan(
   for (const block of blocks) {
     let chunk = chunks.at(-1);
     // Whole paragraphs remain intact; an oversized paragraph is a single chunk.
-    if (!chunk || (size && size + block.text.length > maxChunkChars)) {
+    if (!chunk || (maxChunkChars !== null && size && size + block.text.length > maxChunkChars)) {
       chunk = {
         id: `t-${source.hash.slice(0, 12)}-${chunks.length}`,
         index: chunks.length,
@@ -243,6 +247,7 @@ export function createTranslationPlan(
     size += block.text.length;
   }
   return structuredClone({
+    maxChunkChars,
     sourceRevision: source.id,
     sourceHash: source.hash,
     chatId: source.chatId,
@@ -257,9 +262,10 @@ export function validateTranslationPlan(
   context: SourceTimeContext,
   value: unknown
 ): TranslationPlan {
-  const expected = createTranslationPlan(source, context, 24000);
   try {
     const plan = value as TranslationPlan;
+    if (!plan || !Object.hasOwn(plan, 'maxChunkChars')) throw new Error();
+    const expected = createTranslationPlan(source, context, plan.maxChunkChars);
     if (
       !plan ||
       plan.sourceRevision !== source.id ||
@@ -283,10 +289,8 @@ export function validateTranslationPlan(
         throw new Error();
     }
     if (
-      JSON.stringify(plan.chunks.flatMap((chunk) => chunk.blocks)) !==
-        JSON.stringify(expected.chunks.flatMap((chunk) => chunk.blocks)) ||
-      JSON.stringify(plan.chunks.flatMap((chunk) => chunk.protectedSpans)) !==
-        JSON.stringify(expected.chunks.flatMap((chunk) => chunk.protectedSpans))
+      plan.maxChunkChars !== expected.maxChunkChars ||
+      JSON.stringify(plan.chunks) !== JSON.stringify(expected.chunks)
     )
       throw new Error();
     return structuredClone(plan);

@@ -5,6 +5,7 @@ import { PromptEditor } from './PromptEditor.js';
 import { useModelSelection } from './model-selection.js';
 import { PackageAttachments } from './PackageAttachments.js';
 import { LoreContextPolicyEditor } from './LoreContextPolicyEditor.js';
+import './library.css';
 
 type ProfileSection = 'characters' | 'prompts' | 'models';
 const sections: { id: ProfileSection; title: string }[] = [
@@ -352,10 +353,6 @@ export function ProfileEditor({
             {status || (dirty || lorePending ? '저장하지 않은 변경이 있어요.' : '')}
           </span>
         </div>
-        <details className="profile-diagnostics">
-          <summary>설정 저장 정보</summary>
-          <small>장착 설정 v{value.revision}</small>
-        </details>
       </form>
     </section>
   );

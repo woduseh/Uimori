@@ -38,6 +38,19 @@ export async function editLibraryContent(page: Page, title: string) {
     .getByRole('button', { name: '편집', exact: true })
     .first()
     .click();
+  await revealLibraryEditor(page);
+}
+export async function revealLibraryEditor(page: Page) {
+  const sections = page
+    .getByTestId('library-panel')
+    .locator('summary')
+    .filter({
+      hasText: /^(대표 이미지 · 선택|고급 패키지 설정|분류·읽기 설정)$/,
+    });
+  for (const section of await sections.all()) {
+    if (!(await section.evaluate((node) => (node.parentElement as HTMLDetailsElement).open)))
+      await section.click();
+  }
 }
 export async function selectContent(page: Page, label: string, title: string) {
   await page.getByRole('button', { name: label, exact: true }).click();
@@ -94,10 +107,19 @@ export async function selectStartPrompt(
   page: Page,
   choice: Awaited<ReturnType<typeof createPromptChoice>>
 ) {
+  await openNewStoryOptions(page);
   await page
     .getByLabel('시작 프롬프트', { exact: true })
     .selectOption(`${choice.prompt.id}@${choice.prompt.revision}`);
   await page
     .getByLabel('시작 옵션 조합', { exact: true })
     .selectOption(`${choice.combination.id}@${choice.combination.revision}`);
+}
+
+export async function openNewStoryOptions(page: Page) {
+  const options = page
+    .getByRole('dialog', { name: '새 채팅', exact: true })
+    .locator('.new-story-options');
+  if (!(await options.evaluate((node) => (node as HTMLDetailsElement).open)))
+    await options.locator('summary').click();
 }

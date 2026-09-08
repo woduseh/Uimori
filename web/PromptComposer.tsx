@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import {
   compilePromptProgram,
   resolvePromptValues,
+  reconcilePromptValues,
   validateChatPromptControls,
   validatePromptProgram,
   type ChatPromptControls,
@@ -842,10 +843,7 @@ export function PromptComposer({
       collectSlots(block.template);
   }
   const globalCombinations = savedCombinations.filter(
-    (item) =>
-      promptReference &&
-      item.prompt.id === promptReference.id &&
-      item.prompt.revision === promptReference.revision
+    (item) => promptReference && item.prompt.id === promptReference.id
   );
   const [selectedGlobal, setSelectedGlobal] = useState('');
   const [savingGlobal, setSavingGlobal] = useState(false);
@@ -881,10 +879,16 @@ export function PromptComposer({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [status, setStatus] = useState('');
-  const undo = useRef<PromptProgram[]>([]);
+  const [undo, setUndo] = useState<PromptProgram[]>([]);
+  const lastCollaboration = useRef(program.collaboration);
+  useEffect(() => {
+    // The separate advisor editor owns these edits. An older body undo must not erase them.
+    if (lastCollaboration.current !== program.collaboration) setUndo([]);
+    lastCollaboration.current = program.collaboration;
+  }, [program.collaboration]);
   // biome-ignore lint/correctness/useExhaustiveDependencies: A prompt scope switch clears its undo history and imported combination.
   useEffect(() => {
-    undo.current = [];
+    setUndo([]);
     setImportedCombination(null);
   }, [scope]);
   const sequence = useRef(0);
@@ -902,8 +906,15 @@ export function PromptComposer({
     onError(message);
   };
   const change = (next: PromptProgram) => {
-    const validated = validatePromptProgram(next);
-    undo.current = [...undo.current.slice(-19), structuredClone(program)];
+    // Incomplete advisor fields remain an unsaved draft while the body stays editable.
+    // Save, preview, and JSON import still validate the complete program.
+    const { collaboration, ...body } = next;
+    const validated = {
+      ...validatePromptProgram(body),
+      ...(collaboration !== undefined ? { collaboration } : {}),
+    };
+    setUndo((current) => [...current.slice(-19), structuredClone(program)]);
+    lastCollaboration.current = collaboration;
     onChange(validated);
     setError('');
     setStatus('프롬프트 초안을 바꿨어요. 상위 편집기에서 저장할 수 있어요.');
@@ -974,7 +985,7 @@ export function PromptComposer({
       const resolved = resolvePromptValues(program, values);
       await onSaveCombination(title.trim(), resolved);
       setCombinationName('');
-      setStatus('이 프롬프트 버전의 전역 창작 조합으로 저장했어요.');
+      setStatus('이 프롬프트의 전역 창작 조합으로 저장했어요.');
     } catch (caught) {
       report(errorMessage(caught));
     } finally {
@@ -1135,10 +1146,12 @@ export function PromptComposer({
             <button
               type="button"
               className="ghost"
-              disabled={pendingTemplate || !undo.current.length}
+              disabled={pendingTemplate || !undo.length}
               onClick={() => {
-                const previous = undo.current.pop();
+                const previous = undo.at(-1);
                 if (previous) {
+                  setUndo((current) => current.slice(0, -1));
+                  lastCollaboration.current = previous.collaboration;
                   onChange(previous);
                   setStatus('이전 프롬프트 초안으로 되돌렸어요.');
                 }
@@ -1322,8 +1335,8 @@ export function PromptComposer({
               <div className="pc-control pc-combination-card">
                 <h4>전역 창작 조합</h4>
                 <p className="muted">
-                  현재 프롬프트의 저장된 버전에 속한 조합을 모든 이야기에서 다시 사용할 수 있어요.
-                  불러온 뒤 이야기 선택값을 저장하면 실행에 적용돼요.
+                  이 프롬프트의 조합을 모든 이야기에서 다시 사용할 수 있어요. 현재 옵션에 맞춰
+                  적용해요. 불러온 뒤 이야기 선택값을 저장하면 실행에 적용돼요.
                 </p>
                 <label>
                   전역 조합 선택
@@ -1336,13 +1349,15 @@ export function PromptComposer({
                       );
                       if (item)
                         safe(() => {
-                          resolvePromptValues(program, item.values);
+                          const reconciled = reconcilePromptValues(program, item.values);
                           editControls({
                             ...controls,
-                            values: structuredClone(item.values),
+                            values: reconciled.values,
                             selectedCombinationId: undefined,
                           });
                           setSelectedGlobal(item.id);
+                          if (reconciled.resetKeys.length)
+                            setStatus('현재 옵션과 맞지 않는 이전 선택값은 기본값으로 조정했어요.');
                         });
                       else setSelectedGlobal('');
                     }}

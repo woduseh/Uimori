@@ -115,6 +115,11 @@ export function ActivityStatus({
       otherBranch: false,
     });
   const serialized = JSON.stringify(items);
+  // An older settled result belongs to its response. Keep active work and uncertain
+  // admission visible, but do not let old failures replace the current turn's result.
+  const latestMainStart = items
+    .filter((item) => !item.otherBranch && ['main', 'request'].includes(item.kind))
+    .reduce((latest, item) => Math.max(latest, Date.parse(item.startedAt) || 0), 0);
   useEffect(() => {
     const snapshot = JSON.parse(serialized) as Item[];
     const previous = observed.current;
@@ -145,6 +150,9 @@ export function ActivityStatus({
   const running = items.filter((item) => active(item.status));
   const visibleNotices = notices.filter(
     (notice) =>
+      (notice.item.status === 'uncertain' ||
+        (!notice.item.otherBranch &&
+          (Date.parse(notice.item.startedAt) || 0) >= latestMainStart)) &&
       (notice.expiresAt === null || notice.expiresAt > now) &&
       !(success(notice.item.status) && hidden.includes(notice.item.key))
   );
@@ -168,8 +176,7 @@ export function ActivityStatus({
       (item) => active(item.status) && !item.otherBranch && ['main', 'request'].includes(item.kind)
     ) ??
     expanded.find((item) => active(item.status)) ??
-    expanded.find((item) => !success(item.status)) ??
-    expanded[0];
+    expanded.toSorted((a, b) => b.startedAt.localeCompare(a.startedAt))[0];
   const connectionIssue = !connected && running.length > 0;
   if (!candidates.length) return null;
   const hasIssue =

@@ -94,9 +94,9 @@ candidate는 원래 Run의 자동 결과·판정 기회를 사용하고, 새 분
 - 자동·모델 행동과 authoritative 출력 파서는 여러 패키지에 걸쳐 한 묶음으로 적용해요. 하나라도 실패하면 묶음 전체를 되돌리고 다음 authoritative 생성을 막아요. 완료된 원문 자체는 남아요.
 - annotation 출력 파서는 그 뒤 별도로 적용해요. annotation 파싱만 실패한 경우 이미 검증된 행동의 상태·추첨은 유지하고 해당 표시 상태만 실패로 기록해요. annotation 오류 자체는 다음 원문을 막지 않아요.
 - 원문 또는 이전 원문을 수정하면 관련 상태는 stale이에요. 자동 재파싱·과거 효과 재실행은 없어요. 화면에서 확인 후 **초깃값으로 복구**하면 현재 원문들을 기준으로 새 상태 revision을 만들고 이전 journal을 보존해요.
-- 같은 정의의 reset을 지원해요. package/behavior/schema revision 변경은 `BEHAVIOR_MIGRATION_REQUIRED`이며 자동 초기화하지 않아요. 현재는 정의를 고정해 진행하거나 새 채팅에서 새 정의를 사용해요. 임의 schema migration API는 아직 없어요.
+- 본문·로어 등만 수정하고 `behavior` 정의가 같으면 상태·추첨·journal을 유지해요. 동작·parser·schema·initialState·behavior revision이 바뀌면 `BEHAVIOR_MIGRATION_REQUIRED`로 차단하고 기존 상태를 보여 줘요. 사용자가 확인한 뒤 **초깃값으로 복구**하면 최신 정의로 재설정하며, 이전 상태와 정의 출처를 journal에 남겨 당시 schema로 검증해요. GET/preview는 저장·추첨을 하지 않아요. 임의 schema migration API는 제공하지 않아요.
 
-분기는 선택한 원문 직후 상태를 사용해요. 과거 원문이 바뀐 후보는 거부하고 새 분기의 상태는 stale로 유지해요. schema/archive **v11**은 현재 상태뿐 아니라 판정 기회·임시 실행·결과·출처의 일치도 검증해요. **정식 배포 전에는 구버전 DB·자료·채팅·백업과의 하위 호환성을 지원하지 않아요.** 개발 DB를 새로 시작하는 방법은 [개발 안내](DEVELOPMENT.md)를 봐요.
+분기는 선택한 원문 직후 상태를 사용해요. 과거 원문이 바뀐 후보는 거부하고 새 분기의 상태는 stale로 유지해요. schema/archive **v13**은 현재 상태뿐 아니라 판정 기회·임시 실행·결과·출처의 일치도 검증해요. **정식 배포 전에는 구버전 DB·자료·채팅·백업과의 하위 호환성을 지원하지 않아요.** 개발 DB를 새로 시작하는 방법은 [개발 안내](DEVELOPMENT.md)를 봐요.
 
 ## 제공 범위와 검증
 

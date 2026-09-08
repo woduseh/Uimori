@@ -9,6 +9,7 @@ import {
 import type { ContentPackage } from '../core/content-package.js';
 import type { Content } from '../core/product.js';
 import type { ChatDetail } from '../core/types.js';
+import { editLibraryContent } from './ui-navigation.js';
 
 async function seed(
   request: APIRequestContext,
@@ -55,11 +56,7 @@ async function openEditor(page: Page, content: Content) {
     await library
       .getByRole('tab', { name: content.kind === 'module' ? '모듈' : '페르소나', exact: true })
       .click();
-  await library.getByRole('button', { name: `${content.title} 상세 보기`, exact: true }).click();
-  await library
-    .locator('.library-detail-actions > button')
-    .filter({ hasText: /^편집$/ })
-    .click();
+  await editLibraryContent(page, content.title);
   return { library, fields: library.getByRole('region', { name: '패키지 구성', exact: true }) };
 }
 async function saveEditor(page: Page, library: Locator, id: string): Promise<Content> {
@@ -67,7 +64,7 @@ async function saveEditor(page: Page, library: Locator, id: string): Promise<Con
     (response) =>
       response.url().endsWith(`/api/content/${id}`) && response.request().method() === 'PUT'
   );
-  await library.getByRole('button', { name: '새 revision 저장', exact: true }).click();
+  await library.getByRole('button', { name: '변경사항 저장', exact: true }).click();
   const response = await pending;
   expect(response.ok(), await response.text()).toBe(true);
   return response.json();
@@ -115,7 +112,7 @@ test('PFUI01 option drafts survive tabs and validated authoring preserves templa
     ],
   });
   const { library, fields } = await openEditor(page, original),
-    save = library.getByRole('button', { name: '새 revision 저장', exact: true });
+    save = library.getByRole('button', { name: '변경사항 저장', exact: true });
   await fields.getByRole('button', { name: '옵션', exact: true }).click();
   await fields.getByRole('button', { name: '옵션 추가', exact: true }).click();
   await fields.getByLabel('옵션 2 이름', { exact: true }).fill('마법 계열');
@@ -310,9 +307,7 @@ test('PFUI03 generic source segment drafts validate before save and keep authore
   await features.getByRole('button', { name: '구간 설정을 초안에 적용', exact: true }).click();
   await expect(features.getByRole('alert')).toContainText('SEGMENT_DELIMITER_CONFLICT');
   await expect(features.getByLabel('끝 표식', { exact: true })).toHaveValue('[[record]]');
-  await expect(
-    library.getByRole('button', { name: '새 revision 저장', exact: true })
-  ).toBeDisabled();
+  await expect(library.getByRole('button', { name: '변경사항 저장', exact: true })).toBeDisabled();
   expect(
     (await (await request.get(`/api/revisions/content/${content.id}/${content.revision}`)).json())
       .package

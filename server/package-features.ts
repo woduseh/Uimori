@@ -11,17 +11,23 @@ import { fields, record } from './product-store.js';
 import { HttpError, type Store } from './store.js';
 import { assertPackageImages } from './package-images.js';
 
-/** Deterministic, revision-pinned module closure; shared requirements execute once. */
+/** Live links follow IDs; a frozen closure resolves dependencies from its captured refs. */
 export function resolvePackageModules(
   product: ProductStore,
-  roots: PackageAttachment[]
+  roots: PackageAttachment[],
+  options: { latest?: boolean; frozen?: PackageAttachment[] } = {}
 ): { attachments: PackageAttachment[]; packages: ContentPackage[] } {
   const attachments: PackageAttachment[] = [],
     packages: ContentPackage[] = [],
     seen = new Map<string, number>(),
     active = new Set<string>();
   const visit = (raw: PackageAttachment, depth: number) => {
-    const ref = validatePackageAttachment(raw),
+    const validated = validatePackageAttachment(raw);
+    const captured = options.frozen?.find((r) => r.id === raw.id && r.role === raw.role);
+    if (options.frozen && !captured) throw new HttpError(400, 'Frozen module dependency missing');
+    const ref = options.latest
+        ? { ...validated, revision: product.get<Content>('content', raw.id).revision }
+        : (captured ?? validated),
       key = `${ref.id}:${ref.role}`,
       identity = `${ref.id}@${ref.revision}`;
     if (active.has(identity)) throw new HttpError(400, 'Package module dependency cycle');
@@ -55,22 +61,12 @@ export function resolvePackageProfile(
   product: ProductStore,
   profile: ChatProfile
 ): Pick<ProfileSnapshot, 'packageAttachments' | 'packages'> {
-  const resolved = resolvePackageModules(product, profile.packageAttachments ?? []);
+  const resolved = resolvePackageModules(product, profile.packageAttachments ?? [], {
+    latest: true,
+  });
   return profile.packageAttachments !== undefined
     ? { packageAttachments: resolved.attachments, packages: resolved.packages }
     : {};
-}
-export function packagePersonaName(profile: ProfileSnapshot | undefined): string {
-  const ref = profile?.packageAttachments?.find((item) => item.role === 'persona');
-  const pkg = ref
-    ? profile?.packages?.find((item) => item.id === ref.id && item.revision === ref.revision)
-    : undefined;
-  return (
-    pkg?.identity?.name ||
-    pkg?.title ||
-    profile?.contents.find((item) => item.kind === 'persona')?.title ||
-    'User'
-  );
 }
 export function packageFeatureRoutes(app: FastifyInstance, store: Store) {
   app.post('/api/packages/resolve', async (request) => {
@@ -79,14 +75,11 @@ export function packageFeatureRoutes(app: FastifyInstance, store: Store) {
     if (!Array.isArray(b.attachments) || b.attachments.length > 100)
       throw new HttpError(400, 'Invalid package attachments');
     const roots = b.attachments.map(validatePackageAttachment),
-      resolved = resolvePackageModules(store.product, roots);
+      resolved = resolvePackageModules(store.product, roots, { latest: true });
     return {
       ...resolved,
       required: resolved.attachments.filter(
-        (ref) =>
-          !roots.some(
-            (root) => root.id === ref.id && root.revision === ref.revision && root.role === ref.role
-          )
+        (ref) => !roots.some((root) => root.id === ref.id && root.role === ref.role)
       ),
     };
   });

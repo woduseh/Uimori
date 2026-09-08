@@ -73,8 +73,8 @@ export class StoryStore {
   /** Joins Store's single transaction for the current empty database baseline. */
   initFresh() {
     this.db.exec(`
-      CREATE TABLE story_configs(chat_id TEXT NOT NULL REFERENCES chats(id),revision INTEGER NOT NULL,body TEXT NOT NULL,PRIMARY KEY(chat_id,revision));
-      CREATE TABLE story_jobs(id TEXT PRIMARY KEY,chat_id TEXT NOT NULL REFERENCES chats(id),source_revision TEXT NOT NULL REFERENCES sources(id),source_hash TEXT NOT NULL,kind TEXT NOT NULL CHECK(kind IN ('state','memory')),config_revision INTEGER NOT NULL,generation INTEGER NOT NULL DEFAULT 0,owner TEXT,status TEXT NOT NULL,snapshot TEXT NOT NULL,result TEXT,error TEXT,mock INTEGER NOT NULL,created_at TEXT NOT NULL,updated_at TEXT NOT NULL,dependency_key TEXT NOT NULL UNIQUE,inputs TEXT NOT NULL DEFAULT '[]',tool_events TEXT NOT NULL DEFAULT '[]',FOREIGN KEY(chat_id,config_revision) REFERENCES story_configs(chat_id,revision));
+      CREATE TABLE story_configs(chat_id TEXT PRIMARY KEY REFERENCES chats(id),revision INTEGER NOT NULL,body TEXT NOT NULL);
+      CREATE TABLE story_jobs(id TEXT PRIMARY KEY,chat_id TEXT NOT NULL REFERENCES chats(id),source_revision TEXT NOT NULL REFERENCES sources(id),source_hash TEXT NOT NULL,kind TEXT NOT NULL CHECK(kind IN ('state','memory')),config_revision INTEGER NOT NULL,generation INTEGER NOT NULL DEFAULT 0,owner TEXT,status TEXT NOT NULL,snapshot TEXT NOT NULL,result TEXT,error TEXT,mock INTEGER NOT NULL,created_at TEXT NOT NULL,updated_at TEXT NOT NULL,dependency_key TEXT NOT NULL UNIQUE,inputs TEXT NOT NULL DEFAULT '[]',tool_events TEXT NOT NULL DEFAULT '[]');
       CREATE INDEX story_jobs_queue ON story_jobs(status,created_at);
       CREATE TABLE story_states(id TEXT PRIMARY KEY,job_id TEXT NOT NULL UNIQUE REFERENCES story_jobs(id),chat_id TEXT NOT NULL REFERENCES chats(id),source_revision TEXT NOT NULL REFERENCES sources(id),source_hash TEXT NOT NULL,module_revision INTEGER NOT NULL,parent_state_id TEXT,body TEXT NOT NULL);
       CREATE INDEX story_states_source ON story_states(chat_id,source_revision,module_revision);
@@ -83,20 +83,12 @@ export class StoryStore {
       CREATE TABLE scene_commands(id TEXT PRIMARY KEY,chat_id TEXT NOT NULL REFERENCES chats(id),branch_id TEXT NOT NULL REFERENCES branches(id),request_key TEXT NOT NULL,label TEXT NOT NULL,request TEXT NOT NULL,status TEXT NOT NULL,run_id TEXT REFERENCES runs(id),source_revision TEXT REFERENCES sources(id),UNIQUE(chat_id,request_key));
     `);
   }
-  config(chatId: string, revision?: number): StoryConfig {
+  /** Current settings only; historical work owns its complete immutable story snapshot. */
+  config(chatId: string): StoryConfig {
     this.store.chat(chatId);
-    const row = (
-      revision === undefined
-        ? this.db
-            .prepare(
-              'SELECT body FROM story_configs WHERE chat_id=? ORDER BY revision DESC LIMIT 1'
-            )
-            .get(chatId)
-        : this.db
-            .prepare('SELECT body FROM story_configs WHERE chat_id=? AND revision=?')
-            .get(chatId, revision)
-    ) as Row | undefined;
-    if (!row && revision) throw new HttpError(400, 'Story configuration revision missing');
+    const row = this.db.prepare('SELECT body FROM story_configs WHERE chat_id=?').get(chatId) as
+      | Row
+      | undefined;
     return row ? parse(row.body) : defaultStoryConfig();
   }
   configForBranch(chatId: string, branchId?: string): StoryConfig {
@@ -149,16 +141,24 @@ export class StoryStore {
           module && { ...module, revision: 0 },
           old.module && { ...old.module, revision: 0 }
         );
-      const revision =
+      // A fork can omit the current configuration when its activation lies outside
+      // the selected ancestry. Do not reuse revisions retained by copied snapshots.
+      const previousRevision =
+        old.revision ||
         Number(
           (
             this.db
-              .prepare(
-                'SELECT COALESCE(MAX(revision),0) AS revision FROM story_configs WHERE chat_id=?'
-              )
-              .get(chatId) as Row
+              .prepare(`
+          SELECT COALESCE(MAX(revision),0) AS revision FROM (
+            SELECT config_revision AS revision FROM story_jobs WHERE chat_id=?
+            UNION ALL
+            SELECT json_extract(snapshot,'$.story.config.revision') AS revision FROM runs WHERE chat_id=?
+          )
+        `)
+              .get(chatId, chatId) as Row
           ).revision
-        ) + 1;
+        );
+      const revision = previousRevision + 1;
       if (module && changed) module.revision = revision;
       const head = branch.headRevision ? this.store.source(branch.headRevision) : null;
       const result: StoryConfig = {
@@ -178,7 +178,9 @@ export class StoryStore {
           : old.activatedAt,
       };
       this.db
-        .prepare('INSERT INTO story_configs VALUES(?,?,?)')
+        .prepare(
+          'INSERT INTO story_configs VALUES(?,?,?) ON CONFLICT(chat_id) DO UPDATE SET revision=excluded.revision,body=excluded.body'
+        )
         .run(chatId, revision, json(result));
 
       for (const row of this.db

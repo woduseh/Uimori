@@ -132,7 +132,7 @@ export function PackageInstructionsEditor({
       onChange(instructions);
       setDrafts(packageInstructionDrafts(instructions));
       setError('');
-      setNotice('지침을 적용했어요. 자료 저장으로 새 버전을 남겨 주세요.');
+      setNotice('지침을 적용했어요. 자료 저장으로 변경 사항을 남겨 주세요.');
     } catch (caught) {
       setError(
         `지침을 확인해 주세요. 초안과 마지막 적용값은 유지돼요. (${(caught as Error).message})`

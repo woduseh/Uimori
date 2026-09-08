@@ -7,6 +7,12 @@
 | 파일 | 내용 |
 | --- | --- |
 | [CURRENT.md](CURRENT.md) | 현재 구현, 검증 근거, 남은 작업 |
+| [커스텀 협업 결과](AGENT-COLLABORATION-RESULTS.md) · [사용·실행 계약](../docs/AGENT-COLLABORATION.md) | 프롬프트별 보조 지침·모델·공유 옵션, 제한된 자문 실행과 v13·UI 통합 |
+| [화면 지연 로딩·CI 결과](BUNDLE-CI-RESULTS.md) | 초기 JS 다운로드 감소, 빌드 경고와 CI 검사 순서·대량 fixture 수정 |
+| [코드·문서·하네스 유지보수](MAINTENANCE-RESULTS.md) | 현행 안내 정합성, 미사용 코드·중복 실행기 정리와 검증 |
+| [서재 정리 결과](LIBRARY-RESULTS.md) · [서재 계약](../docs/LIBRARY.md) | 서재·프롬프트 분리, 분류·폴더·대표 이미지와 v12 자료 계약 |
+| [코드베이스 정리 결과](CODEBASE-CLEANUP-RESULTS.md) · [원문 구간](../docs/SOURCE-SEGMENTS.md) | native/hidden 전용 경로를 공통 패키지·프롬프트로 통합한 당시 증거와 현재 구간 계약 |
+| [코드 품질 결과](QUALITY-RESULTS.md) · [검사 안내](../docs/QUALITY.md) | 서식·lint·타입·모듈 경계와 완료 검사 |
 | [Codex 결과](CODEX-RESULTS.md) · [Codex 연결](../docs/CODEX.md) | 공식 서버 에이전트의 역할별 연결·개인 구독 로그인·합성 검사·실제 실행 미확인 범위 |
 | [선택형 평가 도구](EVALUATION-TOOLS.md) | 모델 프리셋 opt-in, 네 도구 계약, 원본 비교와 provider 분리 |
 | [Self-host 결과](SELF-HOST-RESULTS.md) · [배포 안내](../docs/SELF-HOST.md) | 개인 HTTPS 서버 구성·인증과 로컬 검증, 실제 Linux/기기 미확인 범위 |

@@ -1,3 +1,4 @@
+import { translationChunkChars } from '../core/translation-settings.js';
 import {
   GENERATION_KEYS,
   generationFromModel,
@@ -58,6 +59,7 @@ import {
   validatePromptProgram,
   validateChatPromptControls,
   resolvePromptValues,
+  reconcilePromptValues,
 } from '../core/prompt-program.js';
 import { validateRunSnapshot } from './snapshot-archive.js';
 import { validatePackageRequests } from './package-requests.js';
@@ -227,6 +229,7 @@ export class ProductStore {
   initFresh() {
     this.db.exec(`
         CREATE TABLE versions (kind TEXT NOT NULL,id TEXT NOT NULL,revision INTEGER NOT NULL,body TEXT NOT NULL,PRIMARY KEY(kind,id,revision));
+        CREATE UNIQUE INDEX registration_run_current ON versions(kind,id) WHERE kind='registration-run';
         CREATE TABLE provider_settings (kind TEXT NOT NULL CHECK(kind IN ('connection','model')),id TEXT NOT NULL,revision INTEGER NOT NULL,body TEXT NOT NULL,PRIMARY KEY(kind,id));
         CREATE TABLE profiles (chat_id TEXT PRIMARY KEY REFERENCES chats(id),body TEXT NOT NULL);
         CREATE TABLE branches (id TEXT PRIMARY KEY,chat_id TEXT NOT NULL REFERENCES chats(id),title TEXT NOT NULL,head_revision TEXT REFERENCES sources(id),revision INTEGER NOT NULL,is_default INTEGER NOT NULL);
@@ -276,8 +279,30 @@ export class ProductStore {
   }
   /** Caller owns the transaction when reserving settings with an immutable registration receipt. */
   saveInTransaction(kind: string, value: Row, id?: string, expected?: number) {
-    const prior = id ? this.get<ContentRef>(kind, id) : null;
+    const prior = id ? this.get<Row & ContentRef>(kind, id) : null;
     if (prior && prior.revision !== expected) throw new HttpError(409, 'Revision conflict');
+    if (prior && (kind === 'content' || kind === 'prompt-preset')) {
+      const profiles = (this.db.prepare('SELECT body FROM profiles').all() as Row[]).map(
+        (row) => parse(row.body) as ChatProfile
+      );
+      if (
+        kind === 'prompt-preset' &&
+        prior.role !== value.role &&
+        profiles.some((p) => Object.values(p.prompts ?? {}).some((r) => r?.id === id))
+      )
+        throw new HttpError(409, 'A selected prompt must keep its role; save a separate prompt');
+      if (
+        kind === 'content' &&
+        !!prior.package !== !!value.package &&
+        (profiles.some((p) =>
+          [...p.attachments, ...(p.packageAttachments ?? [])].some((r) => r.id === id)
+        ) ||
+          this.all('content').some((content: Content) =>
+            content.package?.modules?.some((r) => r.id === id)
+          ))
+      )
+        throw new HttpError(409, 'Referenced content must keep its package structure');
+    }
     const result: Row & ContentRef = {
       ...value,
       id: id ?? randomUUID(),
@@ -303,7 +328,13 @@ export class ProductStore {
       this.db
         .prepare('INSERT INTO versions VALUES(?,?,?,?)')
         .run(kind, result.id, result.revision, json(result));
+    if (kind === 'content' && result.package)
+      resolvePackageModules(this, [{ id: result.id, revision: result.revision, role: 'module' }], {
+        latest: true,
+      });
     if (!prior) this.store.libraryOrganization.register(kind, result.id, result.kind);
+    if (kind === 'content' || kind === 'prompt-preset')
+      for (const chat of this.store.chats()) this.store.event(chat.id, 'profile.updated', chat.id);
     return result;
   }
   content(value: unknown, id?: string) {
@@ -361,6 +392,20 @@ export class ProductStore {
         : validatePromptProgram(
             createDefaultPromptProgram(text(b.text, 'prompt text', 200000, true), role)
           );
+    if (program.collaboration) {
+      if (role !== 'main') throw new HttpError(400, '협업은 작문 프롬프트에만 설정할 수 있어요.');
+      const previous = id
+        ? this.get<PromptPreset>('prompt-preset', id).program.collaboration
+        : undefined;
+      for (const agent of program.collaboration.agents) {
+        if (agent.model) this.get<ModelPreset>('model', agent.model.id);
+        assertModelSelection(
+          this,
+          agent.model,
+          previous?.agents.find((item) => item.id === agent.id)?.model
+        );
+      }
+    }
     return this.save(
       'prompt-preset',
       { title: text(b.title, 'title', 200), role, program },
@@ -477,7 +522,7 @@ export class ProductStore {
     const r = this.db.prepare('SELECT body FROM profiles WHERE chat_id=?').get(chatId) as
       | Row
       | undefined;
-    return r ? parse(r.body) : defaultProfile(chatId);
+    return currentProfile(this, r ? parse(r.body) : defaultProfile(chatId));
   }
   updateProfile(chatId: string, value: unknown): ChatProfile {
     const b = record(value);
@@ -497,7 +542,7 @@ export class ProductStore {
     fields(routes, ['main', 'translation', 'status', 'image']);
     if (!Array.isArray(b.attachments) || b.attachments.length > 300)
       throw new HttpError(400, 'Invalid attachments');
-    const attachments = b.attachments.map(ref);
+    const attachments = b.attachments.map((r) => currentRef(this, 'content', ref(r)));
     if (new Set(attachments.map((r) => r.id)).size !== attachments.length)
       throw new HttpError(400, 'Duplicate attachment');
     for (const r of attachments) this.get('content', r.id, r.revision);
@@ -511,9 +556,12 @@ export class ProductStore {
     const personaReference =
       b.personaReference === undefined ? undefined : boolean(b.personaReference);
     const image = boolean(b.image);
-    const requestedPrompts = b.prompts === undefined ? undefined : promptRefs(this, b.prompts);
+    const requestedPrompts =
+      b.prompts === undefined ? undefined : currentPromptRefs(this, b.prompts);
     const requestedControls =
-      b.promptControls === undefined ? undefined : promptControls(this, b.promptControls);
+      b.promptControls === undefined
+        ? undefined
+        : currentPromptControls(this, promptControls(this, b.promptControls)).controls;
     let requestedLore: ReturnType<typeof validateLoreContextPolicy> | undefined;
     try {
       requestedLore =
@@ -528,9 +576,14 @@ export class ProductStore {
       const packageAttachments =
         b.packageAttachments === undefined
           ? prior.packageAttachments
-          : packageRefs(this, b.packageAttachments);
+          : packageRefs(this, b.packageAttachments).map((r) => ({
+              ...r,
+              ...currentRef(this, 'content', r),
+            }));
       validateAttachmentRoles(this, attachments, packageAttachments);
-      const resolvedPackages = resolvePackageModules(this, packageAttachments ?? []);
+      const resolvedPackages = resolvePackageModules(this, packageAttachments ?? [], {
+        latest: true,
+      });
       const allowedPackageKeys = new Set(resolvedPackages.attachments.map(packageControlKey));
       const inheritedPackageValues =
         prior.packageValues === undefined
@@ -543,7 +596,7 @@ export class ProductStore {
       const packageValues =
         requestedPackageValues === undefined
           ? undefined
-          : packageControlValues(this, resolvedPackages.attachments, requestedPackageValues);
+          : currentPackageValues(this, resolvedPackages.attachments, requestedPackageValues).values;
       this.store.organization.assertBotAttachments(chatId, attachments, packageAttachments);
       for (const role of ['main', 'translation', 'status', 'image'] as const)
         assertModelSelection(this, selected[role], prior.routes[role]);
@@ -585,41 +638,48 @@ export class ProductStore {
     });
   }
   snapshot(chatId: string): ProfileSnapshot {
-    const p = this.profile(chatId);
+    const { optionAdjustments: _notices, ...p } = this.profile(chatId);
     const contents = p.attachments.map((r) => this.get<Content>('content', r.id, r.revision));
     const models: ProfileSnapshot['models'] = {};
     for (const role of ['main', 'translation', 'status', 'image'] as const) {
       const r = p.routes[role];
       if (r) models[role] = this.modelSnapshot(r.id);
     }
+    const promptPresets = p.prompts === undefined ? undefined : resolvedPrompts(this, p.prompts);
+    const collaboration = promptPresets?.main?.program.collaboration;
+    const collaborationModels: Record<string, ModelSnapshot> = {};
+    if (collaboration?.enabled)
+      for (const agent of collaboration.agents) {
+        const model = agent.model ? this.modelSnapshot(agent.model.id) : models.main;
+        if (!model) throw new HttpError(400, '협업을 사용하려면 작문 모델을 선택해 주세요.');
+        collaborationModels[agent.id] = structuredClone(model);
+      }
     return structuredClone({
       ...p,
       contents,
       models,
       ...resolvePackageProfile(this, p),
-      ...(p.prompts !== undefined ? { promptPresets: resolvedPrompts(this, p.prompts) } : {}),
+      ...(promptPresets !== undefined ? { promptPresets } : {}),
+      ...(collaboration?.enabled ? { collaborationModels } : {}),
     });
   }
   resolveJobPrompt(snapshot: RunSnapshot, input: unknown): RunSnapshot {
     const resolved = structuredClone(snapshot);
-    if (
-      input &&
-      typeof input === 'object' &&
-      !Array.isArray(input) &&
-      Object.hasOwn(input, 'translationModelSelection')
-    ) {
-      const selected = record(input).translationModelSelection;
+    for (const role of ['translation', 'status'] as const) {
+      const key = `${role}ModelSelection`;
+      if (!input || typeof input !== 'object' || Array.isArray(input) || !Object.hasOwn(input, key))
+        continue;
+      const selected = record(input)[key];
       resolved.profile ??= { ...defaultProfile(resolved.chatId), contents: [], models: {} };
       if (selected === null) {
-        delete resolved.profile.models.translation;
-        resolved.profile.routes.translation = null;
+        delete resolved.profile.models[role];
+        resolved.profile.routes[role] = null;
       } else {
         const reference = modelRef(selected);
-        const model = validateModelSnapshot(record(input).translationModelSnapshot);
-        if (model.id !== reference.id)
-          throw new HttpError(400, 'Translation model snapshot mismatch');
-        resolved.profile.models.translation = model;
-        resolved.profile.routes.translation = reference;
+        const model = validateModelSnapshot(record(input)[`${role}ModelSnapshot`]);
+        if (model.id !== reference.id) throw new HttpError(400, `${role} model snapshot mismatch`);
+        resolved.profile.models[role] = model;
+        resolved.profile.routes[role] = reference;
       }
     }
     if (
@@ -949,7 +1009,7 @@ export class ProductStore {
     );
     return {
       format: 'narrative-archive',
-      version: 12,
+      version: 13,
       createdAt: new Date().toISOString(),
       tables,
     };
@@ -975,7 +1035,7 @@ export class ProductStore {
     }
     const a = record(copy);
     fields(a, ['format', 'version', 'createdAt', 'tables']);
-    if (a.format !== 'narrative-archive' || a.version !== 12)
+    if (a.format !== 'narrative-archive' || a.version !== 13)
       throw new HttpError(400, 'Unsupported archive');
     const tables = record(a.tables);
     fields(tables, archiveTables);
@@ -1031,12 +1091,13 @@ export class ProductStore {
             if (table === 'assets') validateArchiveAsset(row);
             if (table === 'runs') {
               const snapshot = record(parse(row.snapshot));
-              if (snapshot.profile?.models)
-                for (const model of Object.values(record(snapshot.profile.models))) {
-                  const connection = record(record(model).connection);
-                  delete connection.credentialEnv;
-                  connection.enabled = false;
-                }
+              for (const group of [snapshot.profile?.models, snapshot.profile?.collaborationModels])
+                if (group)
+                  for (const model of Object.values(record(group))) {
+                    const connection = record(record(model).connection);
+                    delete connection.credentialEnv;
+                    connection.enabled = false;
+                  }
               row.snapshot = json(snapshot);
             }
             if (table === 'runs' && ['queued', 'running'].includes(row.status)) {
@@ -1050,15 +1111,13 @@ export class ProductStore {
             }
             if (table === 'jobs' && row.input) {
               const input = parse(row.input);
-              if (
-                input &&
-                typeof input === 'object' &&
-                !Array.isArray(input) &&
-                input.translationModelSnapshot
-              ) {
-                const connection = record(input.translationModelSnapshot.connection);
-                delete connection.credentialEnv;
-                connection.enabled = false;
+              if (input && typeof input === 'object' && !Array.isArray(input)) {
+                for (const key of ['translationModelSnapshot', 'statusModelSnapshot']) {
+                  if (!input[key]) continue;
+                  const connection = record(input[key].connection);
+                  delete connection.credentialEnv;
+                  connection.enabled = false;
+                }
                 row.input = json(input);
               }
             }
@@ -1139,6 +1198,110 @@ const archiveTables = [
 ];
 
 export const packageControlKey = (r: PackageAttachment) => `${r.id}@${r.revision}:${r.role}`;
+function currentRef(product: ProductStore, kind: string, reference: ContentRef): ContentRef {
+  const current = product.get<ContentRef>(kind, reference.id);
+  return { id: current.id, revision: current.revision };
+}
+function currentPromptRefs(product: ProductStore, value: unknown) {
+  const selected = promptRefs(product, value);
+  return promptRefs(
+    product,
+    Object.fromEntries(
+      Object.entries(selected).map(([role, r]) => [
+        role,
+        r ? currentRef(product, 'prompt-preset', r) : null,
+      ])
+    )
+  );
+}
+function currentPromptControls(
+  product: ProductStore,
+  saved: NonNullable<ChatProfile['promptControls']>
+) {
+  const controls: NonNullable<ChatProfile['promptControls']> = {};
+  const notices: string[] = [];
+  // A newer saved set wins if a pre-existing profile contains several sets for one ID.
+  for (const [key, value] of Object.entries(saved).sort(
+    ([a], [b]) => Number(a.split('@')[1]) - Number(b.split('@')[1])
+  )) {
+    const preset = product.get<PromptPreset>('prompt-preset', key.split('@')[0]);
+    const adjusted = reconcilePromptValues(preset.program, value.values);
+    const resetKeys = new Set(adjusted.resetKeys);
+    const combinations = value.combinations.map((combination) => {
+      const result = reconcilePromptValues(preset.program, combination.values);
+      result.resetKeys.forEach((key) => {
+        resetKeys.add(key);
+      });
+      return { ...combination, values: result.values };
+    });
+    controls[`${preset.id}@${preset.revision}`] = {
+      ...value,
+      values: adjusted.values,
+      combinations,
+    };
+    if (resetKeys.size) notices.push(`${preset.title}: ${[...resetKeys].join(', ')}`);
+  }
+  return { controls, notices };
+}
+function currentPackageValues(
+  product: ProductStore,
+  attachments: PackageAttachment[],
+  raw: unknown,
+  inherited = false
+) {
+  const values: NonNullable<ChatProfile['packageValues']> = {};
+  const notices: string[] = [];
+  for (const [key, saved] of Object.entries(record(raw)).sort(
+    ([a], [b]) => Number(a.split('@')[1]?.split(':')[0]) - Number(b.split('@')[1]?.split(':')[0])
+  )) {
+    const match = /^([^@]+)@([1-9][0-9]*):(bot|persona|module)$/u.exec(key);
+    if (!match) throw new HttpError(400, 'Invalid package control key');
+    const current = attachments.find((r) => r.id === match[1] && r.role === match[3]);
+    if (!current) {
+      if (inherited) continue;
+      throw new HttpError(400, 'Package controls outside attachment scope');
+    }
+    const original = { ...current, revision: Number(match[2]) };
+    packageControlValues(product, [original], { [key]: saved });
+    const pkg = product.get<Content>('content', current.id, current.revision).package!;
+    const adjusted = reconcilePromptValues(
+      { version: 1, controls: pkg.controls, blocks: [] },
+      record(saved)
+    );
+    values[packageControlKey(current)] = adjusted.values;
+    if (adjusted.resetKeys.length) notices.push(`${pkg.title}: ${adjusted.resetKeys.join(', ')}`);
+  }
+  return { values, notices };
+}
+/** Pure current-settings projection. Frozen Run/source profiles never pass through this path. */
+function currentProfile(product: ProductStore, saved: ChatProfile): ChatProfile {
+  const result = {
+    ...saved,
+    attachments: saved.attachments.map((r) => currentRef(product, 'content', r)),
+  };
+  const notices: string[] = [];
+  if (saved.prompts) result.prompts = currentPromptRefs(product, saved.prompts);
+  if (saved.promptControls) {
+    const adjusted = currentPromptControls(product, saved.promptControls);
+    result.promptControls = adjusted.controls;
+    notices.push(...adjusted.notices);
+  }
+  if (saved.packageAttachments)
+    result.packageAttachments = saved.packageAttachments.map((r) => ({
+      ...r,
+      ...currentRef(product, 'content', r),
+    }));
+  if (saved.packageValues) {
+    const resolved = resolvePackageModules(product, result.packageAttachments ?? [], {
+      latest: true,
+    });
+    const adjusted = currentPackageValues(product, resolved.attachments, saved.packageValues, true);
+    result.packageValues = adjusted.values;
+    notices.push(...adjusted.notices);
+  }
+  if (notices.length) result.optionAdjustments = notices;
+  return result;
+}
 function packageRefs(product: ProductStore, value: unknown): PackageAttachment[] {
   if (!Array.isArray(value) || value.length > 100)
     throw new HttpError(400, 'Invalid package attachments');
@@ -1217,10 +1380,11 @@ function archiveList(value: unknown, maximum = 300): any[] {
 }
 function archiveSettings(value: unknown) {
   const b = record(value);
-  fields(b, ['preset', 'mode', 'translation', 'status', 'maxCalls']);
+  fields(b, ['preset', 'mode', 'translation', 'translationChunkChars', 'status', 'maxCalls']);
   choice(b.preset, ['calm', 'vivid'], 'preset');
   choice(b.mode, ['direct', 'research'], 'mode');
   boolean(b.translation);
+  translationChunkChars(b.translationChunkChars);
   boolean(b.status);
   number(b.maxCalls, 'call limit', 1, 16);
 }
@@ -1324,7 +1488,9 @@ function validateArchiveVersion(row: Row, providerSetting = false) {
   } else if (row.kind === 'prompt-preset') {
     fields(body, ['id', 'revision', 'title', 'role', 'program']);
     choice(body.role, ['main', 'translation'], 'prompt role');
-    validatePromptProgram(body.program);
+    const program = validatePromptProgram(body.program);
+    if (program.collaboration && body.role !== 'main')
+      throw new HttpError(400, 'Collaboration requires the main prompt role');
   } else if (row.kind === 'prompt-combination') {
     fields(body, ['id', 'revision', 'title', 'prompt', 'values']);
     ref(body.prompt);
@@ -1466,7 +1632,7 @@ function validateArchiveProfile(
     'packageAttachments',
     'packageValues',
     'loreContext',
-    ...(frozen ? ['contents', 'models', 'promptPresets', 'packages'] : []),
+    ...(frozen ? ['contents', 'models', 'promptPresets', 'packages', 'collaborationModels'] : []),
   ]);
   if (p.loreContext !== undefined) validateLoreContextPolicy(p.loreContext);
   if (p.chatId !== chatId) throw new HttpError(400, 'Profile chat mismatch');
@@ -1497,11 +1663,41 @@ function validateArchiveProfile(
   const prompts = p.prompts === undefined ? undefined : promptRefs(product, p.prompts);
   if (p.promptControls !== undefined) promptControls(product, p.promptControls);
   const promptPresets = prompts === undefined ? undefined : resolvedPrompts(product, prompts);
+  if (frozen) {
+    const collaboration = promptPresets?.main?.program.collaboration;
+    if (collaboration?.enabled) {
+      const agentModels = record(p.collaborationModels);
+      fields(
+        agentModels,
+        collaboration.agents.map((agent) => agent.id)
+      );
+      for (const agent of collaboration.agents) {
+        const model = validateModelSnapshot(agentModels[agent.id]);
+        if (agent.model ? model.id !== agent.model.id : !isDeepStrictEqual(model, models.main))
+          throw new HttpError(400, 'Frozen collaboration model mismatch');
+      }
+    } else if (p.collaborationModels !== undefined)
+      throw new HttpError(400, 'Unexpected collaboration models');
+  }
   const packageAttachments =
     p.packageAttachments === undefined ? undefined : packageRefs(product, p.packageAttachments);
-  const resolvedPackages = resolvePackageModules(product, packageAttachments ?? []);
-  if (p.packageValues !== undefined)
-    packageControlValues(product, resolvedPackages.attachments, p.packageValues);
+  const resolvedPackages = resolvePackageModules(
+    product,
+    packageAttachments ?? [],
+    frozen ? { frozen: packageAttachments ?? [] } : { latest: true }
+  );
+  if (p.packageValues !== undefined) {
+    if (frozen) packageControlValues(product, resolvedPackages.attachments, p.packageValues);
+    else {
+      // An unsaved live profile can still contain options for its previous dependency graph.
+      const previous = resolvePackageModules(product, packageAttachments ?? []);
+      currentPackageValues(
+        product,
+        [...resolvedPackages.attachments, ...previous.attachments],
+        p.packageValues
+      );
+    }
+  }
   validateAttachmentRoles(product, attachments, packageAttachments);
   const packages = packageAttachments === undefined ? undefined : resolvedPackages.packages;
   if (
@@ -1544,6 +1740,9 @@ export function validateStoredChunk(plan: TranslationPlan, raw: unknown): Transl
   return validated;
 }
 function validateArchiveGraph(product: ProductStore) {
+  for (const preset of product.all('prompt-preset') as PromptPreset[])
+    for (const agent of preset.program.collaboration?.agents ?? [])
+      if (agent.model) product.get<ModelPreset>('model', agent.model.id);
   for (const row of product.db
     .prepare("SELECT body FROM versions WHERE kind='content'")
     .all() as Row[]) {
@@ -1732,16 +1931,40 @@ function validateArchiveGraph(product: ProductStore) {
     sameChat(job.source_revision, job.chat_id, sources);
     const source = product.store.sourceAtHash(job.source_revision, job.source_hash);
     const jobInput = parse(job.input);
-    if (
-      jobInput &&
-      typeof jobInput === 'object' &&
-      !Array.isArray(jobInput) &&
-      (Object.hasOwn(jobInput, 'promptSelection') ||
-        Object.hasOwn(jobInput, 'translationModelSelection') ||
-        Object.hasOwn(jobInput, 'promptControlSelection')) &&
-      job.kind !== 'translation'
-    )
-      throw new HttpError(400, 'Prompt selection requires a translation job');
+    if (jobInput && Object.hasOwn(jobInput, 'translationChunkChars')) {
+      if (job.kind !== 'translation')
+        throw new HttpError(400, 'Chunk settings require a translation job');
+      translationChunkChars(jobInput.translationChunkChars);
+      if (job.plan && JSON.parse(job.plan).maxChunkChars !== jobInput.translationChunkChars)
+        throw new HttpError(400, 'Translation chunk setting does not match plan');
+    }
+    if (jobInput && typeof jobInput === 'object' && !Array.isArray(jobInput)) {
+      if (
+        (Object.hasOwn(jobInput, 'promptSelection') ||
+          Object.hasOwn(jobInput, 'promptControlSelection')) &&
+        job.kind !== 'translation'
+      )
+        throw new HttpError(400, 'Prompt selection requires a translation job');
+      if (
+        Object.hasOwn(jobInput, 'statusModelSnapshot') &&
+        !Object.hasOwn(jobInput, 'statusModelSelection')
+      )
+        throw new HttpError(400, 'Status model snapshot requires selection');
+      for (const role of ['translation', 'status'] as const) {
+        if (
+          (Object.hasOwn(jobInput, `${role}ModelSelection`) ||
+            Object.hasOwn(jobInput, `${role}ModelSnapshot`) ||
+            (jobInput.promptSelection && Object.hasOwn(record(jobInput.promptSelection), role))) &&
+          job.kind !== role
+        )
+          throw new HttpError(400, 'Auxiliary selection does not match job kind');
+      }
+      if (
+        Object.hasOwn(jobInput, 'promptControlSelection') &&
+        !Object.hasOwn(jobInput, 'promptSelection')
+      )
+        throw new HttpError(400, 'Prompt controls require selection');
+    }
     const snapshot = product.resolveJobPrompt(product.store.run(source.runId).snapshot, jobInput);
     if (job.kind === 'image' && job.status !== 'stale')
       validateImageCatalog(product.store, job.chat_id, jobInput);
@@ -1900,6 +2123,24 @@ function validateArchiveGraph(product: ProductStore) {
     )
       throw new HttpError(400, 'Attempt role mismatch');
     const request = record(parse(attempt.request));
+    if (request.agentId !== undefined) {
+      const snapshot =
+        attempt.run_id === null
+          ? undefined
+          : (parse(runs.get(attempt.run_id)!.snapshot) as RunSnapshot);
+      const config = snapshot?.profile?.promptPresets?.main?.program.collaboration;
+      const agentId = text(request.agentId, 'advisor ID', 64);
+      const model = snapshot?.profile?.collaborationModels?.[agentId];
+      if (
+        !config?.enabled ||
+        !config.agents.some((agent) => agent.id === agentId) ||
+        !model ||
+        attempt.role !== 'main' ||
+        request.modelId !== model.modelId ||
+        request.connectionId !== model.connectionId
+      )
+        throw new HttpError(400, 'Advisor attempt attribution mismatch');
+    }
     if (attempt.status === 'mock') {
       fields(request, ['mock', 'input']);
       const input = record(request.input);

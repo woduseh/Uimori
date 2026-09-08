@@ -14,7 +14,7 @@ import { buildMainInput } from '../core/provider.js';
 import type { Content, PromptPreset } from '../core/product.js';
 import type { ContentPackage } from '../core/content-package.js';
 import type { PackageBehavior } from '../core/package-behavior.js';
-import type { BehaviorScope } from '../server/package-behavior-store.js';
+import { behaviorPayloadHash, type BehaviorScope } from '../server/package-behavior-store.js';
 import type { RunSnapshot } from '../core/types.js';
 
 const owned: { store: Store; app: FastifyInstance; dir: string }[] = [];
@@ -244,6 +244,125 @@ test('BINT01 GET and preview do not initialize, draw, journal or alter source-bo
   expect(base).toEqual(original);
   expect(tables(f)).toEqual(before);
   expect(f.store.product.attempts(f.chat.id)).toEqual([]);
+});
+
+test('compatible latest content preserves state and dice; incompatible behavior requires explicit reset and roundtrips', async () => {
+  const f = fixture();
+  expect((await action(f, 3)).statusCode).toBe(200);
+  const originalRun = run(f);
+  const source = complete(f, originalRun);
+  const frozen = structuredClone(f.store.run(originalRun.id).snapshot);
+  const prior = freezePackageStates(f.store, snapshot(f), false).packageStates![0];
+  const update = (content: Content, pkg: ContentPackage) =>
+    f.store.product.content(
+      {
+        kind: content.kind,
+        title: content.title,
+        description: content.description,
+        text: pkg.body,
+        loading: content.loading,
+        relatedIds: content.relatedIds,
+        package: pkg,
+        expectedRevision: content.revision,
+      },
+      content.id
+    ) as Content;
+  const latest = update(f.content, { ...f.content.package!, body: 'Updated prose only' });
+  const beforeReads = tables(f);
+  const detail = behaviorDetail(f.store, f.chat.id);
+  expect(detail.instances[0]).toMatchObject({
+    packageRevision: latest.revision,
+    state: prior.state,
+    stateRevision: prior.stateRevision,
+    status: 'ready',
+  });
+  const preview = freezePackageStates(f.store, snapshot(f), false).packageStates![0];
+  expect(preview).toMatchObject({
+    packageRevision: latest.revision,
+    state: prior.state,
+    draws: prior.draws,
+  });
+  expect(tables(f)).toEqual(beforeReads);
+  const next = run(f);
+  expect(next.snapshot.packageStates![0]).toMatchObject({
+    packageRevision: latest.revision,
+    state: prior.state,
+    draws: prior.draws,
+  });
+  complete(f, next);
+  expect(f.store.run(originalRun.id).snapshot).toEqual(frozen);
+  const fork = forkChat(f.store, f.chat.id, {
+    fromRevision: source.id,
+    idempotencyKey: randomUUID(),
+  });
+  expect(behaviorDetail(f.store, fork.id).instances[0]).toMatchObject({
+    status: 'ready',
+    state: prior.state,
+  });
+  const newerBehavior: PackageBehavior = {
+    revision: 2,
+    schemaVersion: 2,
+    mode: 'authoritative',
+    stateSchema: { type: 'record', properties: { label: { type: 'string', maxLength: 40 } } },
+    initialState: { label: 'reset explicitly' },
+    actions: [],
+    outputParsers: [],
+  };
+  update(latest, { ...latest.package!, behavior: newerBehavior, instructions: [] });
+  const stale = behaviorDetail(f.store, f.chat.id);
+  expect(stale.instances[0]).toMatchObject({
+    status: 'stale',
+    error: 'BEHAVIOR_MIGRATION_REQUIRED',
+    state: { count: 7 },
+  });
+  expectRunBlocked(f);
+  const beforeReset = tables(f);
+  expect(behaviorDetail(f.store, f.chat.id)).toEqual(stale);
+  expect(tables(f)).toEqual(beforeReset);
+  const rejected = await injectWithFixtureBot(f.app, {
+    method: 'POST',
+    url: `${f.endpoint}/${f.instanceId}/reset`,
+    payload: {
+      expectedStateRevision: stale.instances[0].stateRevision - 1,
+      expectedSourceHash: stale.sourceHash,
+      idempotencyKey: randomUUID(),
+    },
+  });
+  expect(rejected.statusCode).toBe(409);
+  expect(tables(f)).toEqual(beforeReset);
+  const reset = await injectWithFixtureBot(f.app, {
+    method: 'POST',
+    url: `${f.endpoint}/${f.instanceId}/reset`,
+    payload: {
+      expectedStateRevision: stale.instances[0].stateRevision,
+      expectedSourceHash: stale.sourceHash,
+      idempotencyKey: randomUUID(),
+    },
+  });
+  expect(reset.statusCode, reset.body).toBe(200);
+  expect(reset.json().instances[0]).toMatchObject({
+    status: 'ready',
+    state: newerBehavior.initialState,
+  });
+  expect(f.store.run(originalRun.id).snapshot).toEqual(frozen);
+  const archive = f.store.product.export();
+  // The empty target is separate from the fixture database holding the tested story.
+  const emptyDir = mkdtempSync(join(tmpdir(), 'uimori-behavior-integration-'));
+  const target = new Store(join(emptyDir, 'restored.sqlite'));
+  owned.push({ store: target, app: Fastify(), dir: emptyDir });
+  const forged = structuredClone(archive);
+  const receipt = forged.tables.package_behavior_journal.find(
+    (row) => JSON.parse(String(row.payload)).provenance === 'explicit-reset'
+  )!;
+  const payload = JSON.parse(String(receipt.payload));
+  payload.previousScope = payload.scope;
+  receipt.payload = JSON.stringify(payload);
+  receipt.payload_hash = behaviorPayloadHash(payload);
+  expect(() => target.product.import(forged)).toThrow();
+  expect(target.chats()).toHaveLength(0);
+  expect(target.product.import(archive)).toMatchObject({ restored: true, chats: 2 });
+  expect(behaviorDetail(target, f.chat.id)).toEqual(behaviorDetail(f.store, f.chat.id));
+  expect(target.run(originalRun.id).snapshot).toEqual(frozen);
 });
 
 test('BINT02 user action freezes state and recorded draw into Run and composed provider input', async () => {

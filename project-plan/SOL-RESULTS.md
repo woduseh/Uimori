@@ -10,7 +10,7 @@
 - SSE와 완료 JSON, 일반 텍스트와 `eval_submit_artifact`를 처리해요. 필수 notice의 본문은 제외하고 존재 여부·문자 수만 저장해요. 원래 reasoning/output item은 해당 실행의 후속 요청에서만 유지해요.
 - 전송 전에 attempt를 남기고 매 라운드 최신 enabled/endpoint/credential ref/origin을 재검사해요. 전체 timeout·호출 한도, 취소, 불확실 실행 자동 재생 금지, source/hash·CAS·owner/generation을 유지해요. 실제 금액을 모르는 비용은 `null`이에요.
 
-주소·credential 설정·원본과의 차이는 [사용법](SOL-RESPONSES.md), 참고 snapshot과 채택 근거는 [SOURCES](SOURCES.md#2026-09-07-sol-responses-provider)에 있어요.
+주소·credential 설정·원본과의 차이는 [사용법](SOL-RESPONSES.md), 참고 snapshot과 채택 근거는 [SOURCES](SOURCES.md#2026-09-07-sol-평가-도구-참고와-provider-분리)에 있어요.
 
 ## 실제 검증
 

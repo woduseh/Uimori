@@ -18,6 +18,38 @@
   color: var(--text);
   box-shadow: 0 8px 24px #0003;
   z-index: 20;
+  max-height: min(440px, calc(var(--app-height, 100dvh) - 200px));
+  overflow-y: auto;
+}
+.quick-controls .composer-extra-settings {
+  display: grid;
+  gap: 10px;
+  padding-bottom: 12px;
+  margin-bottom: 12px;
+  border-bottom: 1px solid var(--line);
+}
+.quick-controls .composer-extra-settings > label,
+.quick-controls .composer-extra-settings .content-picker {
+  width: 100%;
+  max-width: none;
+}
+.quick-controls .composer-extra-settings select,
+.quick-controls .composer-extra-settings button {
+  font-size: 13px;
+  min-height: 44px;
+}
+.quick-controls > .quick-model {
+  flex: 1;
+  max-width: none;
+}
+.quick-controls > .quick-model select {
+  font-size: 12px;
+  width: 100%;
+  min-height: 44px;
+}
+.composer[hidden],
+.composer-caption[hidden] {
+  display: none;
 }
 .quick-controls .composer-more-panel label {
   display: flex;
@@ -29,7 +61,7 @@
   line-height: 1.5;
   cursor: pointer;
 }
-.composer-more-panel input {
+.composer-more-panel input[type="checkbox"] {
   width: 16px;
   height: 16px;
   min-height: 16px;

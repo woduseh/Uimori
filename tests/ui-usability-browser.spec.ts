@@ -1,0 +1,60 @@
+import { test, expect } from '@playwright/test';
+import { fixtureBotInput } from './fixtures/chat.js';
+import { navigationAction } from './ui-navigation.js';
+
+test('UXUI01 compact composer, square avatar and one-row mobile settings preserve the draft', async ({
+  page,
+  request,
+}, info) => {
+  const created = await request.post('/api/content', {
+    data: fixtureBotInput('합성 UI 검사 · 긴 이름을 가진 바닷가 도서관 안내인'),
+  });
+  expect(created.ok()).toBe(true);
+  const bot = await created.json();
+  const response = await request.post('/api/chats', {
+    data: { botId: bot.id, title: '합성 화면 검사' },
+  });
+  expect(response.ok()).toBe(true);
+  const chat = await response.json();
+  expect(chat.settings.status).toBe(false);
+  const errors: string[] = [];
+  page.on('pageerror', (error) => errors.push(error.message));
+  await page.goto(`/?chat=${chat.id}`);
+  const input = page.getByLabel('다음 장면 요청', { exact: true });
+  await input.fill('아직 보내지 않은 합성 요청');
+  for (const width of [390, 360]) {
+    await page.setViewportSize({ width, height: 844 });
+    await expect(input).toBeInViewport();
+    await expect(page.getByLabel('빠른 본문 모델', { exact: true })).toBeInViewport();
+    await expect(page.getByRole('button', { name: '원문 생성', exact: true })).toBeInViewport();
+    const avatar = page.locator('.story-context > .content-avatar');
+    const bounds = await avatar.boundingBox();
+    expect(bounds).not.toBeNull();
+    expect(Math.abs(bounds!.width - bounds!.height)).toBeLessThan(1);
+    const dock = await page.locator('.composer-dock').boundingBox();
+    expect(dock!.height).toBeLessThan(190);
+    await expect(page.getByRole('button', { name: '빠른 페르소나', exact: true })).toHaveCount(0);
+    await page.getByRole('button', { name: '입력창 더보기', exact: true }).click();
+    await expect(page.getByRole('button', { name: '창작 옵션', exact: true })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: '빠른 페르소나', exact: true })).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(input).toHaveValue('아직 보내지 않은 합성 요청');
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
+      true
+    );
+    await page.screenshot({ path: info.outputPath(`compact-composer-${width}.png`) });
+  }
+  await navigationAction(page, '설정');
+  const dialog = page.getByRole('dialog', { name: '설정', exact: true });
+  const nav = dialog.getByRole('tablist', { name: '설정 항목', exact: true });
+  const bounds = await nav.boundingBox();
+  expect(bounds!.height).toBeLessThan(70);
+  await dialog.getByRole('tab', { name: '데이터 관리', exact: true }).click();
+  await expect(dialog.getByRole('heading', { name: '백업 받기', exact: true })).toBeVisible();
+  await expect(dialog.getByText(/SQLite 백업은 서버를 종료하고/)).toBeHidden();
+  await page.screenshot({ path: info.outputPath('compact-settings-360.png') });
+  const after = await (await request.get(`/api/chats/${chat.id}`)).json();
+  expect(after.runs).toHaveLength(0);
+  expect(after.jobs).toHaveLength(0);
+  expect(errors).toEqual([]);
+});

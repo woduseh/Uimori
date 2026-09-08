@@ -1,0 +1,180 @@
+.agent-collaboration {
+  min-width: 0;
+  padding: 18px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--panel);
+  display: grid;
+  gap: 16px;
+  overflow-wrap: anywhere;
+}
+.agent-collaboration h3,
+.agent-collaboration h4,
+.agent-collaboration p {
+  margin: 0;
+}
+.agent-collaboration p,
+.agent-collaboration small {
+  font-size: 12px;
+  line-height: 1.7;
+}
+.ac-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.ac-heading > div {
+  flex: 1 1 220px;
+  min-width: 0;
+}
+.ac-heading h3 {
+  margin-bottom: 6px;
+}
+.ac-settings,
+.ac-add,
+.ac-agents,
+.ac-agent-fields,
+.agent-collaboration .ac-field {
+  display: grid;
+  min-width: 0;
+  gap: 10px;
+}
+.ac-settings,
+.ac-agents {
+  gap: 18px;
+}
+.agent-collaboration .ac-field {
+  font-size: 13px;
+  gap: 7px;
+}
+.ac-budget {
+  max-width: 520px;
+}
+.ac-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+.agent-collaboration .ac-check {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  min-height: 44px;
+  min-width: 0;
+  gap: 8px;
+  font-size: 13px;
+  cursor: pointer;
+}
+.prompt-editor .agent-collaboration input[type="checkbox"] {
+  width: 18px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0;
+  margin: 0;
+  flex: 0 0 18px;
+  accent-color: var(--accent);
+}
+.agent-collaboration input:not([type="checkbox"]),
+.agent-collaboration select {
+  min-height: 44px;
+  min-width: 0;
+  width: 100%;
+}
+.prompt-editor .agent-collaboration textarea {
+  min-height: 110px;
+  height: auto;
+  max-height: 60dvh;
+  width: 100%;
+  min-width: 0;
+  resize: vertical;
+  font-family: inherit;
+}
+.ac-options {
+  min-width: 0;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 12px;
+  margin: 0;
+}
+.ac-options legend {
+  max-width: 100%;
+  font-size: 13px;
+  padding: 0 4px;
+}
+.ac-checks {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  column-gap: 16px;
+}
+.ac-templates {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+.ac-templates > button {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  min-height: 72px;
+  text-align: start;
+  white-space: normal;
+  padding: 12px;
+}
+.ac-templates > button span {
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--muted);
+}
+.ac-validation {
+  border-inline-start: 3px solid var(--accent);
+  padding: 8px 12px;
+  background: var(--surface-raised);
+}
+.ac-agent {
+  min-width: 0;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+.ac-agent > summary {
+  min-height: 44px;
+  padding: 12px;
+  cursor: pointer;
+  box-sizing: border-box;
+  font-size: 13px;
+}
+.ac-agent > summary > span {
+  margin-inline-start: 10px;
+  font-size: 12px;
+}
+.ac-agent-fields {
+  padding: 4px 12px 12px;
+  gap: 14px;
+}
+.ac-agent-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+.ac-agent-actions button {
+  min-height: 44px;
+  font-size: 12px;
+}
+@media (max-width: 600px) {
+  .agent-collaboration {
+    padding: 12px;
+  }
+  .ac-grid,
+  .ac-templates,
+  .ac-checks {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .agent-collaboration input:not([type="checkbox"]),
+  .agent-collaboration select,
+  .prompt-editor .agent-collaboration textarea {
+    font-size: 16px;
+  }
+  .ac-templates > button {
+    min-height: 64px;
+  }
+}

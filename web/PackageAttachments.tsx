@@ -5,6 +5,7 @@ import { api } from './api.js';
 import { PackageControlValues } from './PackageControlValues.js';
 import { ContentAvatar } from './ContentAvatar.js';
 import { ContentPicker } from './ContentPicker.js';
+import { reconcilePromptValues } from '../core/prompt-program.js';
 import './package-authoring.css';
 const keyOf = (ref: PackageAttachment) => `${ref.id}@${ref.revision}:${ref.role}`;
 const refValue = (ref: { id: string; revision: number }) => `${ref.id}@${ref.revision}`;
@@ -23,12 +24,23 @@ export function retainResolvedPackageValues(
   return Object.fromEntries(
     resolved.attachments.flatMap((ref, index) => {
       const scope = keyOf(ref);
-      if (!values || !Object.hasOwn(values, scope)) return [];
-      const allowed = new Set(resolved.packages[index].controls.map((control) => control.id));
+      const prior =
+        values?.[scope] ??
+        Object.entries(values ?? {})
+          .filter(([key]) => key.startsWith(`${ref.id}@`) && key.endsWith(`:${ref.role}`))
+          .sort(
+            ([a], [b]) =>
+              Number(b.split('@').at(-1)?.split(':')[0]) -
+              Number(a.split('@').at(-1)?.split(':')[0])
+          )[0]?.[1];
+      if (!prior) return [];
       return [
         [
           scope,
-          Object.fromEntries(Object.entries(values[scope]).filter(([key]) => allowed.has(key))),
+          reconcilePromptValues(
+            { version: 1, controls: resolved.packages[index].controls, blocks: [] },
+            prior
+          ).values,
         ],
       ];
     })
@@ -78,7 +90,7 @@ export function PackageAttachments({
       })
       .catch((caught) => {
         if (version.current === request && latest.current.viewKey === viewKey) {
-          const message = `필수 모듈과 고정 버전을 확인할 수 없어요. 자료가 누락되었거나 의존 관계가 충돌하는지 확인해 주세요. (${(caught as Error).message})`;
+          const message = `필수 모듈을 확인할 수 없어요. 자료가 누락되었거나 의존 관계가 충돌하는지 확인해 주세요. (${(caught as Error).message})`;
           setLoadError(message);
           latest.current.onError(message);
         }
@@ -126,7 +138,7 @@ export function PackageAttachments({
       setSelected('');
     } catch (caught) {
       if (version.current === request && latest.current.viewKey === initialKey) {
-        const message = `패키지 연결을 변경하지 않았어요. 필수 모듈의 누락·버전 충돌·순환 연결을 확인해 주세요. (${(caught as Error).message})`;
+        const message = `패키지 연결을 변경하지 않았어요. 필수 모듈의 누락·순환 연결을 확인해 주세요. (${(caught as Error).message})`;
         setLoadError(message);
         latest.current.onError(message);
       }
@@ -154,7 +166,13 @@ export function PackageAttachments({
     required = new Set(current?.required.map(keyOf) ?? []);
   return (
     <section className="package-attachments" aria-label="장착 패키지">
-      {busy && <p role="status">패키지와 필수 모듈의 고정 버전을 확인하는 중이에요…</p>}
+      {!!profile.optionAdjustments?.length && (
+        <p role="status">
+          현재 옵션과 맞지 않는 이전 선택값은 기본값으로 조정했어요.{' '}
+          {profile.optionAdjustments.join(' · ')}
+        </p>
+      )}
+      {busy && <p role="status">패키지와 필수 모듈을 확인하는 중이에요…</p>}
       {loadError && (
         <div>
           <p className="error" role="alert">
@@ -177,7 +195,7 @@ export function PackageAttachments({
         const pkg = current?.packages[index],
           scope = keyOf(ref),
           automatic = required.has(scope),
-          title = pkg?.title ?? '보관된 패키지';
+          title = pkg?.title ?? '연결한 패키지';
         return (
           <article className="package-attachment" key={scope}>
             <header>
@@ -225,7 +243,7 @@ export function PackageAttachments({
               )}
             </header>
             <small>
-              v{ref.revision} · 로어 {pkg?.lore.length ?? '…'}개
+              로어 {pkg?.lore.length ?? '…'}개
               {pkg?.instructions.length ? ` · 지침 ${pkg.instructions.length}개` : ''}
             </small>
             {automatic && (
@@ -302,8 +320,8 @@ export function PackageAttachments({
           패키지 장착
         </button>
         <small>
-          같은 자료를 다른 역할로 사용할 수 있어요. 요구하는 모듈도 고정 버전으로 함께 연결하며 공유
-          모듈은 한 번만 포함해요.
+          같은 자료를 다른 역할로 사용할 수 있어요. 요구하는 모듈도 함께 연결하며 공유 모듈은 한
+          번만 포함해요.
         </small>
       </fieldset>
     </section>

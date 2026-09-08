@@ -81,7 +81,7 @@ export function SettingsEditor({
   return (
     <section className="settings">
       <h3>자동 후속 작업</h3>
-      <small>저장된 설정 v{chat.settingsRevision} · 다음 원고부터 적용해요.</small>
+      <small>저장한 설정은 다음 실행부터 적용해요.</small>
       <form
         onSubmit={async (event) => {
           event.preventDefault();
@@ -110,6 +110,38 @@ export function SettingsEditor({
       >
         <fieldset className="editor-fields full" disabled={saving}>
           <small className="full">한국어 번역은 각 장면의 번역 보기를 누를 때 시작해요.</small>
+          <label className="full">
+            번역 구간 기준 글자 수
+            <input
+              aria-label="번역 구간 기준 글자 수"
+              type="number"
+              required
+              min={100}
+              max={24000}
+              step={1}
+              disabled={value.translationChunkChars === null}
+              value={
+                value.translationChunkChars === null ? '' : (value.translationChunkChars ?? 3000)
+              }
+              onChange={(event) => update('translationChunkChars', event.target.valueAsNumber)}
+            />
+          </label>
+          <label className="check">
+            <input
+              aria-label="번역 구간 무제한"
+              type="checkbox"
+              checked={value.translationChunkChars === null}
+              onChange={(event) =>
+                update('translationChunkChars', event.target.checked ? null : 3000)
+              }
+            />
+            무제한
+          </label>
+          <small className="full">
+            문단을 보존하므로 지정한 길이를 초과할 수 있어요. 무제한은 현재 장면의 원문 전체를 한
+            구간으로 번역해요. 모델의 입력·출력 한도와 timeout은 유지되며, 초과해도 자동으로
+            분할하지 않아요. 재시도도 현재 모델·프롬프트·구간 기준으로 장면 전체를 다시 번역해요.
+          </small>
           <label className="check">
             <input
               aria-label="장면 상태 자동 실행"

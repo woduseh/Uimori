@@ -387,17 +387,35 @@ describe('package behavior transactions', () => {
       f.db.close();
     }
   });
-  it('requires explicit migration for any definition revision change at a stable instance', () => {
+  it('keeps state across content revisions and requires reset for changed behavior definitions', () => {
     const f = fixture();
     try {
       f.store.ensure(scope, f.b);
-      expect(() => f.store.read({ ...scope, packageRevision: 2 }, f.b)).toThrow(
-        'MIGRATION_REQUIRED'
-      );
+      f.store.execute(scope, f.b, action);
+      const newerScope = { ...scope, packageRevision: 2 };
+      const before = f.db.prepare('SELECT total_changes() AS count').get();
+      expect(f.store.read(newerScope, f.b)).toMatchObject({
+        packageRevision: 2,
+        stateRevision: 1,
+        state: action.input,
+      });
+      expect(f.db.prepare('SELECT total_changes() AS count').get()).toEqual(before);
+      f.store.ensure(newerScope, f.b);
+      expect(f.store.journal(newerScope)[0].packageRevision).toBe(1);
       const newer = { ...f.b, revision: 2 };
       expect(() => f.store.read({ ...scope, behaviorRevision: 2 }, newer)).toThrow(
         'MIGRATION_REQUIRED'
       );
+      const resetScope = { ...newerScope, behaviorRevision: 2 };
+      const resetCommand = {
+        expectedStateRevision: 1,
+        expectedSourceHash: 'source',
+        idempotencyKey: 'reset-new',
+      };
+      const reset = f.store.reset(resetScope, newer, resetCommand);
+      expect(reset.state).toEqual(newer.initialState);
+      expect(reset.beforeState).toEqual(f.store.journal(resetScope)[0].state);
+      expect(f.store.reset(resetScope, newer, resetCommand)).toEqual(reset);
       expect(() => f.store.migrate()).toThrow('NOT_IMPLEMENTED');
     } finally {
       f.db.close();

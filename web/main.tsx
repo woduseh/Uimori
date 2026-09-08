@@ -2,7 +2,7 @@ import { ComposerMore, LoreResetChip } from './ComposerMore.js';
 import { ChatPromptOptions } from './ChatPromptOptions.js';
 import { ReaderPages } from './ReaderPages.js';
 import { SceneNavigator } from './SceneNavigator.js';
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import {
   ArrowUp,
@@ -18,13 +18,13 @@ import {
   Type,
 } from 'lucide-react';
 import type { Content } from '../core/product.js';
+import { reconcilePromptValues } from '../core/prompt-program.js';
 import { api } from './api.js';
-import { LibraryPanel, refValue } from './LibraryPanel.js';
-import { PromptLibrary } from './PromptLibrary.js';
+import { refValue } from './content-ref.js';
+import { deferredPanel } from './deferredPanel.js';
 import { ContentPicker } from './ContentPicker.js';
 import { ContentAvatar } from './ContentAvatar.js';
 import type { PackageRole } from '../core/content-package.js';
-import { ProfileEditor } from './ProfileEditor.js';
 import { SourceReader } from './SourceReader.js';
 import { TurnActivity } from './TurnActivity.js';
 import { PackageBehaviorPanel } from './PackageBehaviorPanel.js';
@@ -32,11 +32,9 @@ import { StoryPanel } from './StoryPanel.js';
 import { AssetEditor } from './AssetEditor.js';
 import { SessionGate } from './SessionGate.js';
 import { Dialog } from './Dialog.js';
-import { NewStory } from './NewStory.js';
 import { BotNavigation, type ChatFolder } from './BotNavigation.js';
 import { completePendingStoryProfile } from './pendingStory.js';
 import { SettingsEditor } from './RuntimeSettings.js';
-import { AppSettingsPanel, BranchesPanel, TasksPanel } from './WorkspacePanels.js';
 import { useStory } from './useStory.js';
 import { useTestMode } from './useTestMode.js';
 import { ActivityStatus } from './ActivityStatus.js';
@@ -44,6 +42,28 @@ import { modelLabel } from './storyLabels.js';
 import './style.css';
 import './product.css';
 import './sidebar.css';
+
+const LibraryPanel = deferredPanel('서재', async () => ({
+  default: (await import('./LibraryPanel.js')).LibraryPanel,
+}));
+const PromptLibrary = deferredPanel('프롬프트', async () => ({
+  default: (await import('./PromptLibrary.js')).PromptLibrary,
+}));
+const ProfileEditor = deferredPanel('채팅 설정', async () => ({
+  default: (await import('./ProfileEditor.js')).ProfileEditor,
+}));
+const NewStory = deferredPanel('새 채팅', async () => ({
+  default: (await import('./NewStory.js')).NewStory,
+}));
+const AppSettingsPanel = deferredPanel('설정', async () => ({
+  default: (await import('./WorkspacePanels.js')).AppSettingsPanel,
+}));
+const BranchesPanel = deferredPanel('보관된 전개', async () => ({
+  default: (await import('./WorkspacePanels.js')).BranchesPanel,
+}));
+const TasksPanel = deferredPanel('작업 현황', async () => ({
+  default: (await import('./WorkspacePanels.js')).TasksPanel,
+}));
 
 type Panel = '' | 'navigation' | 'new' | 'story' | 'branches' | 'tasks' | 'settings' | 'reading';
 function App() {
@@ -53,6 +73,13 @@ function App() {
   const [optionsOpen, setOptionsOpen] = useState(false),
     [optionsDirty, setOptionsDirty] = useState(false),
     [optionsBusy, setOptionsBusy] = useState(false);
+  const [editingSources, setEditingSources] = useState<string[]>([]);
+  const onSourceEditing = useCallback((sourceId: string, editing: boolean) => {
+    setEditingSources((current) =>
+      editing ? [...new Set([...current, sourceId])] : current.filter((id) => id !== sourceId)
+    );
+  }, []);
+  const sourceEditing = editingSources.length > 0;
   const optionsButton = useRef<HTMLButtonElement>(null);
   const [panel, setPanel] = useState<Panel>('');
   const [initialBot, setInitialBot] = useState<Content>();
@@ -96,6 +123,11 @@ function App() {
   const [libraryDirty, setLibraryDirty] = useState(false);
   const [pendingNavigation, setPendingNavigation] = useState<null | (() => void)>(null);
   const currentPrompt = s.detail?.profile?.prompts?.main;
+  const selectedPrompt = s.library?.promptPresets?.find((item) => item.id === currentPrompt?.id);
+  const hasCreativeOptions =
+    !!currentPrompt && (!selectedPrompt || selectedPrompt.program.controls.length > 0);
+  const creativePresets =
+    s.library?.promptCombinations?.filter((item) => item.prompt.id === currentPrompt?.id) ?? [];
   const recentChatByContent: Record<string, string> = {};
   const recentActivity: Record<string, string> = {};
   for (const chat of s.chats) {
@@ -108,20 +140,25 @@ function App() {
       recentChatByContent[chat.botId] = chat.id;
     }
   }
-  const currentCombination = s.library?.promptCombinations?.find(
-    (c) =>
-      currentPrompt &&
-      refValue(c.prompt) === refValue(currentPrompt) &&
-      JSON.stringify(c.values) ===
-        JSON.stringify(s.detail?.profile?.promptControls?.[refValue(c.prompt)]?.values)
-  );
+  const currentProgram = selectedPrompt?.program;
+  const currentCombination = s.library?.promptCombinations?.find((c) => {
+    if (!currentPrompt || !currentProgram || c.prompt.id !== currentPrompt.id) return false;
+    const currentValues = reconcilePromptValues(
+      currentProgram,
+      s.detail?.profile?.promptControls?.[refValue(currentPrompt)]?.values ?? {}
+    ).values;
+    const savedValues = reconcilePromptValues(currentProgram, c.values).values;
+    return currentProgram.controls.every(
+      (control) => currentValues[control.id] === savedValues[control.id]
+    );
+  });
   // biome-ignore lint/correctness/useExhaustiveDependencies: Resize the mounted input after draft or view changes; its ref is stable inside useStory.
   useLayoutEffect(() => {
     const node = s.input.current;
     if (!node) return;
     node.style.height = 'auto';
     node.style.height = `${Math.min(node.scrollHeight, 180)}px`;
-  }, [s.draft, s.viewKey, s.destination]);
+  }, [s.draft, s.viewKey, s.destination, sourceEditing]);
   const mainModel = s.library?.models.find(
     (item) => item.id === s.detail?.profile?.routes.main?.id
   );
@@ -392,7 +429,7 @@ function App() {
                             alt={s.profileAsset.description || s.profileAsset.title}
                           />
                         )}
-                        <span>
+                        <span className="story-context-name">
                           {s.bot?.title || '나의 채팅'}
                           {s.persona && ` · 페르소나 ${s.persona.title}`}
                         </span>
@@ -444,6 +481,7 @@ function App() {
                           refresh={() => s.refresh(s.selected)}
                           onError={s.setError}
                           onFork={s.fork}
+                          onEditingChange={onSourceEditing}
                           activity={(() => {
                             const run = s.detail!.runs.find((item) => item.id === source.runId);
                             return (
@@ -586,6 +624,7 @@ function App() {
                 />
                 <form
                   className="composer"
+                  hidden={sourceEditing}
                   onSubmit={(event) => {
                     event.preventDefault();
                     if (!optionsBusy) void s.generate();
@@ -649,72 +688,71 @@ function App() {
                           s.pendingProfile
                         }
                         onChange={s.editLoreContextReset}
-                      />
-                      <label>
-                        <span className="sr-only">빠른 창작 프리셋</span>
-                        <select
-                          aria-label="빠른 창작 프리셋"
-                          value={currentCombination ? refValue(currentCombination) : ''}
-                          disabled={
-                            s.quickBusy ||
-                            optionsBusy ||
-                            optionsDirty ||
-                            s.profileDirty ||
-                            !s.detail
-                          }
-                          onChange={(event) => {
-                            void s.quickChange('combination', event.target.value);
-                          }}
-                        >
-                          <option value="">창작 프리셋 · 현재 설정</option>
-                          {s.library?.promptCombinations
-                            ?.filter(
-                              (c) =>
-                                s.detail?.profile?.prompts?.main &&
-                                refValue(c.prompt) === refValue(s.detail.profile.prompts.main)
-                            )
-                            .map((item) => (
-                              <option value={refValue(item)} key={refValue(item)}>
-                                {item.title}
-                              </option>
-                            ))}
-                        </select>
-                      </label>
-                      <button
-                        ref={optionsButton}
-                        type="button"
-                        className="creative-options-button"
-                        aria-label="창작 옵션"
-                        aria-expanded={optionsOpen}
-                        aria-controls="chat-prompt-options"
-                        disabled={!s.detail}
-                        onClick={() => setOptionsOpen((value) => !value)}
                       >
-                        <SlidersHorizontal size={14} />
-                        창작 옵션{optionsDirty && ' · 미적용'}
-                      </button>
-                      {s.library && (
-                        <ContentPicker
-                          library={s.library}
-                          role="persona"
-                          label="빠른 페르소나"
-                          value={s.persona ? refValue(s.persona) : ''}
-                          selectedContent={s.persona}
-                          allowNone
-                          noneLabel={s.attachmentsReady ? '페르소나 없음' : '페르소나 확인 중…'}
-                          disabled={
-                            s.quickBusy ||
-                            optionsBusy ||
-                            optionsDirty ||
-                            s.profileDirty ||
-                            !s.detail ||
-                            !s.attachmentsReady
-                          }
-                          onChange={(value) => {
-                            void s.quickChange('persona', value);
-                          }}
-                        />
-                      )}
+                        {creativePresets.length > 0 && (
+                          <label>
+                            <span className="sr-only">빠른 창작 프리셋</span>
+                            <select
+                              aria-label="빠른 창작 프리셋"
+                              value={currentCombination ? refValue(currentCombination) : ''}
+                              disabled={
+                                s.quickBusy ||
+                                optionsBusy ||
+                                optionsDirty ||
+                                s.profileDirty ||
+                                !s.detail
+                              }
+                              onChange={(event) => {
+                                void s.quickChange('combination', event.target.value);
+                              }}
+                            >
+                              <option value="">창작 프리셋 · 현재 설정</option>
+                              {creativePresets.map((item) => (
+                                <option value={refValue(item)} key={refValue(item)}>
+                                  {item.title}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+                        )}
+                        {hasCreativeOptions && (
+                          <button
+                            ref={optionsButton}
+                            type="button"
+                            className="creative-options-button"
+                            aria-label="창작 옵션"
+                            aria-expanded={optionsOpen}
+                            aria-controls="chat-prompt-options"
+                            disabled={!s.detail}
+                            onClick={() => setOptionsOpen((value) => !value)}
+                          >
+                            <SlidersHorizontal size={14} />
+                            창작 옵션{optionsDirty && ' · 미적용'}
+                          </button>
+                        )}
+                        {s.library && (
+                          <ContentPicker
+                            library={s.library}
+                            role="persona"
+                            label="빠른 페르소나"
+                            value={s.persona ? refValue(s.persona) : ''}
+                            selectedContent={s.persona}
+                            allowNone
+                            noneLabel={s.attachmentsReady ? '페르소나 없음' : '페르소나 확인 중…'}
+                            disabled={
+                              s.quickBusy ||
+                              optionsBusy ||
+                              optionsDirty ||
+                              s.profileDirty ||
+                              !s.detail ||
+                              !s.attachmentsReady
+                            }
+                            onChange={(value) => {
+                              void s.quickChange('persona', value);
+                            }}
+                          />
+                        )}
+                      </ComposerMore>
                       <label className="quick-model">
                         <span className="sr-only">빠른 본문 모델</span>
                         <select
@@ -783,7 +821,20 @@ function App() {
                     )}
                   </div>
                 </form>
-                <div className="composer-caption">
+                {sourceEditing && s.active && (
+                  <button
+                    type="button"
+                    className="secondary"
+                    onClick={() => {
+                      void api(`/runs/${s.active!.id}/cancel`, {})
+                        .then(() => s.refresh(s.selected))
+                        .catch((e) => s.setError(e.message));
+                    }}
+                  >
+                    원문 생성 취소
+                  </button>
+                )}
+                <div className="composer-caption" hidden={sourceEditing}>
                   <span role="status">
                     {s.pendingRequest && !s.submitting.includes(s.viewKey)
                       ? '이전 전송의 수락을 확인해 주세요. 새 초안은 보존돼요.'
@@ -813,7 +864,11 @@ function App() {
         }
         onClose={() => {
           setOptionsOpen(false);
-          requestAnimationFrame(() => optionsButton.current?.focus());
+          requestAnimationFrame(() => {
+            const target = optionsButton.current;
+            if (target?.checkVisibility()) target.focus();
+            else document.querySelector<HTMLButtonElement>('[aria-label="입력창 더보기"]')?.focus();
+          });
         }}
         onSaved={s.refresh}
         onDirtyChange={setOptionsDirty}
@@ -825,10 +880,9 @@ function App() {
         onClose={() => setPendingNavigation(null)}
       >
         <p>저장하지 않은 자료 편집이 있어요.</p>
-        <button className="secondary" onClick={() => setPendingNavigation(null)}>
-          계속 편집
-        </button>
+        <button onClick={() => setPendingNavigation(null)}>계속 편집</button>
         <button
+          className="secondary"
           onClick={() => {
             const go = pendingNavigation;
             setPendingNavigation(null);

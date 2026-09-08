@@ -301,7 +301,7 @@ export function PackageImagesEditor({ value, onChange, onDirtyChange }: Props) {
                 className="package-image-remove"
               >
                 <p>
-                  “{removing.title}”을 이 자료의 새 버전에서 제거할까요? 저장된 이전 자료 버전과
+                  “{removing.title}”을 이 자료의 최신 내용에서 제거할까요? 저장된 과거 실행 자료와
                   과거 장면에서 쓰는 이미지는 보존돼요.
                 </p>
                 <button

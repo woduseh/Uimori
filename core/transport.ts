@@ -37,7 +37,6 @@ export type ProviderConnection = {
   endpoint: string;
   credentialEnv?: string;
 };
-export type ModelTarget = { connectionId: string; modelId: string };
 export type ProviderTool = { name: string; description: string; inputSchema: Json };
 export type ProviderRequest = {
   role: ProviderRole;
@@ -97,6 +96,8 @@ export type ProviderResult = {
   };
 };
 export type WireRecord = {
+  /** Host-only attribution. Never supplied by model output or serialized to the provider. */
+  agentId?: string;
   connectionId: string;
   protocol: ProviderConnection['protocol'];
   role: ProviderRole;

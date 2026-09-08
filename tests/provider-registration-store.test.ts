@@ -146,6 +146,12 @@ test('prepare and ready are proposal only; hash/revision CAS apply is atomic and
     Number((s.store.db.prepare('SELECT COUNT(*) AS n FROM versions').get() as { n: number }).n)
   ).toBe(versions);
   const run = ready(s);
+  expect(
+    s.store.db
+      .prepare("SELECT COUNT(*) AS n FROM versions WHERE kind='registration-run' AND id=?")
+      .get(run.id)
+  ).toMatchObject({ n: 1 });
+  expect(() => s.store.product.get('registration-run', run.id, run.revision - 1)).toThrow();
   expect(counts(s.store)).toEqual(before);
   expect(s.journal.view(run.id).usage?.costUsd).toBeNull();
   for (const body of [
@@ -159,6 +165,15 @@ test('prepare and ready are proposal only; hash/revision CAS apply is atomic and
     planHash: run.planHash,
   });
   expect(applied.status).toBe('applied');
+  expect(
+    s.store.db
+      .prepare("SELECT COUNT(*) AS n FROM versions WHERE kind='registration-run' AND id=?")
+      .get(run.id)
+  ).toMatchObject({ n: 1 });
+  expect(applied.attempts).toEqual(run.attempts);
+  expect(applied.targetSnapshot).toEqual(run.targetSnapshot);
+  expect(applied.plan).toEqual(run.plan);
+  expect(applied.planConnectionSnapshot).toEqual(run.planConnectionSnapshot);
   expect(counts(s.store)).toEqual({
     connections: before.connections + 1,
     models: before.models + 1,
@@ -177,12 +192,12 @@ test('prepare and ready are proposal only; hash/revision CAS apply is atomic and
   validateRegistrationGraph(s.store.product);
 });
 
-test('apply rolls back new connection/model inserts when final journal append fails', () => {
+test('apply rolls back new connection/model inserts when the current registration receipt update fails', () => {
   const s = setup(),
     run = ready(s),
     before = counts(s.store);
   s.store.db.exec(
-    "CREATE TRIGGER fail_registration_apply BEFORE INSERT ON versions WHEN NEW.kind='registration-run' AND json_extract(NEW.body,'$.status')='applied' BEGIN SELECT RAISE(ABORT,'Synthetic final-write failure'); END;"
+    "CREATE TRIGGER fail_registration_apply BEFORE UPDATE ON versions WHEN NEW.kind='registration-run' AND json_extract(NEW.body,'$.status')='applied' BEGIN SELECT RAISE(ABORT,'Synthetic final-write failure'); END;"
   );
   expect(() =>
     s.journal.apply(run.id, { expectedRevision: run.revision, planHash: run.planHash })
@@ -280,6 +295,11 @@ test('same key returns the same durable run without another attempt; crash reope
   const journal = new RegistrationStore(reopened.product);
   journal.recover();
   const recovered = journal.get(first.run.id);
+  expect(
+    reopened.db
+      .prepare("SELECT COUNT(*) AS n FROM versions WHERE kind='registration-run' AND id=?")
+      .get(first.run.id)
+  ).toMatchObject({ n: 1 });
   expect(recovered).toMatchObject({
     status: 'interrupted',
     error: 'SERVER_INTERRUPTED_NO_AUTOMATIC_REPLAY',

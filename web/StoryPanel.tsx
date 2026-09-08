@@ -562,9 +562,7 @@ function StoryPanelEditor({
                     className="secondary"
                     onClick={() => {
                       change({ ...draft, revision: detail.config.revision });
-                      setMessage(
-                        `저장된 설정 v${detail.config.revision}을 기준으로 현재 초안을 다시 저장할 수 있어요.`
-                      );
+                      setMessage('최신 설정을 기준으로 현재 초안을 다시 저장할 수 있어요.');
                     }}
                   >
                     현재 설정을 확인했어요 · 내 초안 유지
@@ -603,8 +601,8 @@ function StoryPanelEditor({
                       초기값으로 다시 시작해요. 이전 원문과 과거 상태는 보존해요.
                     </p>
                     <p>
-                      이 이야기의 설정 버전이 바뀌고, 상태 확인을 기다리던 요청은 취소돼요. 아래
-                      초기값을 확인한 뒤 적용해 주세요.
+                      이 이야기의 설정이 바뀌고, 상태 확인을 기다리던 요청은 취소돼요. 아래 초기값을
+                      확인한 뒤 적용해 주세요.
                     </p>
                     <dl className="story-state-values">
                       {Object.entries(detail.config.module.fields).map(([name, field]) => (

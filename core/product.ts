@@ -93,6 +93,8 @@ export type ModelPreset = ContentRef &
   };
 export type ModelSnapshot = ModelPreset & { connection: Connection };
 export type ChatProfile = {
+  /** Read-only notices from adapting saved options to current definitions. Never execution evidence. */
+  optionAdjustments?: string[];
   loreContext?: import('./lore-context.js').LoreContextPolicy;
   chatId: string;
   revision: number;
@@ -106,6 +108,8 @@ export type ChatProfile = {
   packageValues?: Record<string, Record<string, import('./prompt-program.js').PromptValue>>;
 };
 export type ProfileSnapshot = ChatProfile & {
+  /** Models resolved at reservation, keyed by the main prompt's advisor IDs. */
+  collaborationModels?: Record<string, ModelSnapshot>;
   contents: Content[];
   packages?: import('./content-package.js').ContentPackage[];
   models: Partial<Record<TaskRole, ModelPreset & { connection: Connection }>>;
@@ -159,7 +163,7 @@ export type Attempt = {
   response: unknown;
 };
 // Summary lists preserve content references and metadata; their text is a placeholder.
-// Fetch the immutable revision before opening a content editor.
+// Fetch current content before opening an editor; revisions still protect concurrent saves.
 export type Library = {
   organization?: import('./library-organization.js').LibraryOrganization;
   contentBodiesOmitted?: boolean;
@@ -181,7 +185,6 @@ export const defaultProfile = (chatId: string): ChatProfile => ({
 
 export const VERTEX_GEMINI_MODEL_ID = 'gemini-3.8-flash';
 export const VERTEX_GEMINI_MAX_OUTPUT_TOKENS = 65_536;
-export const VERTEX_GEMINI_DEFAULT_THINKING_LEVEL = 'MEDIUM' as const;
 export const VERTEX_GEMINI_DEFAULT_TIMEOUT_MS = 300_000;
 
 /** The first live adapter supports Google's global project endpoint only. */

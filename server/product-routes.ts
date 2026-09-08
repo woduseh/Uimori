@@ -155,6 +155,12 @@ export function productRoutes(
       return managementImpact(product, request.params.kind, request.params.id);
     }
   );
+  app.get<{ Params: { id: string } }>('/api/content/:id', async (request) =>
+    product.get('content', request.params.id)
+  );
+  app.get<{ Params: { id: string } }>('/api/prompt-presets/:id', async (request) =>
+    product.get('prompt-preset', request.params.id)
+  );
   app.post('/api/content', { bodyLimit: 5_000_000 }, async (request) =>
     product.content(request.body)
   );

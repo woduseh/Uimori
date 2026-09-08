@@ -28,7 +28,7 @@ async function api(
   app: App,
   url: string,
   body?: unknown,
-  method: 'GET' | 'POST' | 'PUT' = body === undefined ? 'GET' : 'POST',
+  method: 'GET' | 'POST' | 'PUT' | 'PATCH' = body === undefined ? 'GET' : 'POST',
   status = 200
 ): Promise<any> {
   const response = await injectWithFixtureBot(app, {
@@ -272,7 +272,13 @@ test('app routes every agent role through Codex and persists RPC attempts, propo
     maxOutputTokens: 1024,
     temperature: null,
   });
-  const chat = await api(app, '/api/chats', { title: 'Synthetic Codex story' });
+  const initial = await api(app, '/api/chats', { title: 'Synthetic Codex story' });
+  const chat = await api(
+    app,
+    `/api/chats/${initial.id}/settings`,
+    { expectedSettingsRevision: initial.settingsRevision, ...initial.settings, status: true },
+    'PATCH'
+  );
   const profile = await api(app, `/api/chats/${chat.id}/profile`);
   await api(
     app,

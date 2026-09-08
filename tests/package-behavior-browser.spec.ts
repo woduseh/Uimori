@@ -1,4 +1,4 @@
-import { editLibraryContent } from './ui-navigation.js';
+import { editLibraryContent, revealLibraryEditor } from './ui-navigation.js';
 import { expect, test, type APIRequestContext } from '@playwright/test';
 import type { ContentPackage } from '../core/content-package.js';
 import type { PackageBehavior } from '../core/package-behavior.js';
@@ -177,6 +177,7 @@ test('BUI02 behavior editor validates without discarding an invalid draft or oth
     .click();
   const library = page.getByTestId('library-panel');
   await library.getByRole('button', { name: '새로 만들기', exact: true }).first().click();
+  await revealLibraryEditor(page);
   await library.getByLabel('자료 이름', { exact: true }).fill('합성 동작 편집');
   await library.getByLabel('자료 본문', { exact: true }).fill('기존 본문 초안');
   const fields = library.getByRole('region', { name: '패키지 구성', exact: true });
@@ -228,6 +229,7 @@ test('BUI03 invocation methods persist, validate automatic input drafts and show
     .click();
   const library = page.getByTestId('library-panel');
   await library.getByRole('button', { name: '새로 만들기', exact: true }).first().click();
+  await revealLibraryEditor(page);
   await library.getByLabel('자료 이름', { exact: true }).fill(title);
   await library.getByLabel('자료 본문', { exact: true }).fill('Synthetic invocation example.');
   const fields = library.getByRole('region', { name: '패키지 구성', exact: true });
@@ -281,7 +283,7 @@ test('BUI03 invocation methods persist, validate automatic input drafts and show
     (response) =>
       response.url().endsWith(`/api/content/${added.id}`) && response.request().method() === 'PUT'
   );
-  await library.getByRole('button', { name: '새 revision 저장', exact: true }).click();
+  await library.getByRole('button', { name: '변경사항 저장', exact: true }).click();
   const revised = await (await revisedResponse).json();
   expect(revised.package.behavior.actions[0].triggers).toEqual(['model']);
   expect(revised.package.behavior.actions[0]).not.toHaveProperty('automaticInput');

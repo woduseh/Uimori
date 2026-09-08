@@ -2,7 +2,8 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import type { Chat, ReaderDetail, Run, Source } from '../core/types.js';
 import type { Content, Library } from '../core/product.js';
 import { api, ApiError, libraryChangedKey } from './api.js';
-import { refValue } from './LibraryPanel.js';
+import { reconcilePromptValues } from '../core/prompt-program.js';
+import { refValue } from './content-ref.js';
 import { useModelSelection } from './model-selection.js';
 
 function initialView() {
@@ -254,6 +255,8 @@ export function useStory() {
           });
           return;
         }
+        if (message.kind === 'profile.updated')
+          void loadLibrary().catch((e) => setError(e.message));
         if (message.kind === 'branch.deleted' && readerQuery.current.branch === message.entityId) {
           navigationEpoch.current++;
           readerCache.current = null;
@@ -323,7 +326,7 @@ export function useStory() {
       removeEventListener('offline', offline);
       removeEventListener('online', online);
     };
-  }, [selected, refresh, loadChats]);
+  }, [selected, refresh, loadChats, loadLibrary]);
   // biome-ignore lint/correctness/useExhaustiveDependencies: Branch and source navigation reload the query held by refresh's stable refs.
   useEffect(() => {
     let alive = true;
@@ -344,7 +347,7 @@ export function useStory() {
   ]
     .map(refValue)
     .join(',');
-  // biome-ignore lint/correctness/useExhaustiveDependencies: Archived reads follow pinned references, library changes and chat switches, not SSE profile object identity.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: Current content reads follow IDs/revisions, library changes and chat switches, not SSE object identity.
   useEffect(() => {
     let alive = true;
     if (!detail?.profile || !library) return;
@@ -352,9 +355,7 @@ export function useStory() {
       ...detail.profile.attachments,
       ...(detail.profile.packageAttachments ?? []),
     ].filter((ref) => !library.contents.some((item) => refValue(item) === refValue(ref)));
-    void Promise.all(
-      missing.map((ref) => api<Content>(`/revisions/content/${ref.id}/${ref.revision}`))
-    )
+    void Promise.all(missing.map((ref) => api<Content>(`/content/${ref.id}`)))
       .then((items) => {
         if (alive) setArchivedContents(items);
       })
@@ -749,7 +750,8 @@ export function useStory() {
       if (kind === 'combination') {
         const preset = library.promptCombinations?.find((c) => refValue(c) === value);
         const prompt = profile.prompts?.main;
-        if (!preset || !prompt || refValue(preset.prompt) !== refValue(prompt))
+        const currentPrompt = library.promptPresets?.find((p) => p.id === prompt?.id);
+        if (!preset || !prompt || preset.prompt.id !== prompt.id || !currentPrompt)
           throw new Error('현재 프롬프트의 창작 프리셋을 선택해 주세요.');
         const key = refValue(prompt);
         await api(
@@ -763,7 +765,7 @@ export function useStory() {
             promptControls: {
               ...profile.promptControls,
               [key]: {
-                values: preset.values,
+                values: reconcilePromptValues(currentPrompt.program, preset.values).values,
                 combinations: profile.promptControls?.[key]?.combinations ?? [],
               },
             },
@@ -778,12 +780,11 @@ export function useStory() {
           const id = value.slice(0, separator);
           const revision = Number(value.slice(separator + 1));
           if (separator <= 0 || !Number.isSafeInteger(revision) || revision < 1)
-            throw new Error('추가할 모듈 버전을 다시 선택해 주세요.');
-          // An immutable selection remains usable after a newer library revision is saved.
-          module = await api<Content>(`/revisions/content/${encodeURIComponent(id)}/${revision}`);
+            throw new Error('추가할 모듈을 다시 선택해 주세요.');
+          module = await api<Content>(`/content/${encodeURIComponent(id)}`);
         }
         if (current.current !== chatId || navigationEpoch.current !== epoch) return false;
-        if (refValue(module) !== value || (!module.package && !module.hasPackage))
+        if (!module.package && !module.hasPackage)
           throw new Error('추가할 모듈을 찾지 못했어요. 서재를 다시 확인해 주세요.');
         const existing = profile.packageAttachments ?? [];
         if (existing.some((item) => item.id === module.id && item.role === 'module'))
@@ -810,12 +811,10 @@ export function useStory() {
           const missing = profile.attachments.filter(
             (ref) => !contents.some((item) => refValue(item) === refValue(ref))
           );
-          // Resolve pinned revisions before classifying and replacing a persona.
+          // Resolve current content before classifying and replacing a persona.
           contents = [
             ...contents,
-            ...(await Promise.all(
-              missing.map((ref) => api<Content>(`/revisions/content/${ref.id}/${ref.revision}`))
-            )),
+            ...(await Promise.all(missing.map((ref) => api<Content>(`/content/${ref.id}`)))),
           ];
         }
         const persona = contents.find(

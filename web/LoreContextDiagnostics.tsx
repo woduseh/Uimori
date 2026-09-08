@@ -6,7 +6,7 @@ const reasons: Record<string, string> = {
   'new-scene': '새 장면 요청으로 조회 로어 정리',
   'source-or-canon-changed': '원문이나 확정 설정 변경',
   'provided-as-pinned': '고정 자료로 제공되어 조회 사본 제외',
-  'resource-scope-or-revision-changed': '자료의 사용 범위나 고정 버전 변경',
+  'resource-scope-or-revision-changed': '자료의 사용 범위나 자료 내용 변경',
   'retention-budget': '조회 로어 예산에 맞춰 정리',
 };
 

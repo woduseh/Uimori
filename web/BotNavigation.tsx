@@ -179,10 +179,7 @@ export function BotNavigation(props: Props) {
     const owner = bot.id;
     const version = epoch.current;
     try {
-      const full =
-        library?.contentBodiesOmitted || (bot.hasPackage && !bot.package)
-          ? await api<Content>(`/revisions/content/${encodeURIComponent(bot.id)}/${bot.revision}`)
-          : bot;
+      const full = await api<Content>(`/content/${encodeURIComponent(bot.id)}`);
       if (owner === currentBot.current && version === epoch.current) onNew(full, folder);
     } catch (reason) {
       const message = reason instanceof Error ? reason.message : '봇을 불러오지 못했어요.';
@@ -638,6 +635,7 @@ export function BotNavigation(props: Props) {
             </label>
             <div className="form-actions">
               <button
+                className="secondary"
                 disabled={busy || !!query || menuIndex <= 0}
                 onClick={() =>
                   moveChat(menuChat, menuChat.folderId ?? null, menuSiblings[menuIndex - 1].id)
@@ -646,6 +644,7 @@ export function BotNavigation(props: Props) {
                 위로 이동
               </button>
               <button
+                className="secondary"
                 disabled={busy || !!query || menuIndex >= menuSiblings.length - 1}
                 onClick={() =>
                   moveChat(
@@ -711,12 +710,19 @@ function FolderSettings({
     let current = true;
     setSelectedContent(null);
     if (personaId !== undefined && personaRevision !== undefined)
-      void api<Content>(`/revisions/content/${encodeURIComponent(personaId)}/${personaRevision}`)
+      void api<Content>(`/content/${encodeURIComponent(personaId)}`)
         .then((content) => {
-          if (current) setSelectedContent(content);
+          if (current) {
+            setSelectedContent(content);
+            setPersona((previous) =>
+              previous.slice(0, previous.lastIndexOf('@')) === personaId
+                ? reference(content)
+                : previous
+            );
+          }
         })
         .catch(() => {
-          /* The picker retains the missing pinned reference until explicitly replaced. */
+          /* Keep the missing selection visible until the user explicitly replaces it. */
         });
     return () => {
       current = false;
@@ -731,7 +737,12 @@ function FolderSettings({
       <form
         onSubmit={(event) => {
           event.preventDefault();
-          const selected = library?.contents.find((content) => reference(content) === persona);
+          const selected = [
+            ...(library?.contents ?? []),
+            ...(selectedContent ? [selectedContent] : []),
+          ]
+            .filter((content) => content.id === persona.slice(0, persona.lastIndexOf('@')))
+            .sort((a, b) => b.revision - a.revision)[0];
           void onSave({
             title,
             defaultPersona: selected

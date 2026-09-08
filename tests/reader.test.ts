@@ -7,6 +7,7 @@ import { randomUUID } from 'node:crypto';
 import { createApp, type App } from '../server/app.js';
 import { readerDetail } from '../server/reader.js';
 import type { Store } from '../server/store.js';
+import type { RunSnapshot } from '../core/types.js';
 
 const owned: { app: App; directory: string }[] = [];
 afterEach(async () => {
@@ -33,6 +34,18 @@ async function setup() {
   owned.push({ app, directory });
   return app;
 }
+test('new chats leave automatic status off until explicitly enabled', async () => {
+  const app = await setup();
+  const chat = createFixtureChat(app.store, 'Synthetic initial settings');
+  expect(chat.settings.status).toBe(false);
+  const result = source(app.store, chat.id);
+  expect(app.store.chat(chat.id).settingsRevision).toBe(1);
+  expect(
+    app.store.db
+      .prepare("SELECT COUNT(*) AS count FROM jobs WHERE source_revision=? AND kind='status'")
+      .get(result.id)
+  ).toEqual({ count: 0 });
+});
 function source(store: Store, chatId: string, text = 'Synthetic paragraph.', branchId?: string) {
   const chat = store.chat(chatId),
     branch = store.product.branch(chatId, branchId);
@@ -63,16 +76,74 @@ function source(store: Store, chatId: string, text = 'Synthetic paragraph.', bra
     run.snapshot.settings
   );
 }
+function readerSourceBatch(store: Store, chatId: string, texts: string[]) {
+  // This scale case checks persisted reader projection, not prompt compilation.
+  // Seed typed run snapshots once per source, retaining their complete ancestry;
+  // source hashing, branch updates and auxiliary reservations still use the host.
+  const chat = store.chat(chatId),
+    branch = store.product.branch(chatId),
+    history: RunSnapshot['history'] = store.history(branch.headRevision);
+  const insert = store.db.prepare(
+    "INSERT INTO runs(id,chat_id,parent_revision,status,request,snapshot,request_key,command,created_at,updated_at,branch_id) VALUES(?,?,?,'running',?,?,?,?,?,?,?)"
+  );
+  return store.transaction(() =>
+    texts.map((text) => {
+      const runId = randomUUID(),
+        time = new Date().toISOString(),
+        parentRevision = history.at(-1)?.revision ?? null;
+      const snapshot: RunSnapshot = {
+        chatId,
+        parentRevision,
+        settingsRevision: chat.settingsRevision,
+        settings: chat.settings,
+        request: 'Synthetic request',
+        history,
+        resources: [],
+        branchId: branch.id,
+      };
+      insert.run(
+        runId,
+        chatId,
+        parentRevision,
+        snapshot.request,
+        JSON.stringify(snapshot),
+        runId,
+        JSON.stringify({
+          request: snapshot.request,
+          expectedRevision: parentRevision,
+          expectedSettingsRevision: chat.settingsRevision,
+          branchId: branch.id,
+        }),
+        time,
+        time,
+        branch.id
+      );
+      store.event(chatId, 'run.queued', runId);
+      store.event(chatId, 'run.running', runId);
+      const completed = store.completeRunInTransaction(
+        runId,
+        text,
+        { modelCalls: 0, inputTokens: null, outputTokens: null, costUsd: null },
+        chat.settings
+      );
+      history.push({ revision: completed.id, text, contentHash: completed.hash });
+      return completed;
+    })
+  );
+}
 
 test('100-source HTTP reader pages retain order while execution snapshot and full detail stay intact', async () => {
   const app = await setup(),
     store = app.store,
     chat = createFixtureChat(store, '100 synthetic sources');
-  const sources = Array.from({ length: 100 }, (_, i) =>
-    source(store, chat.id, `Synthetic source ${i}.`)
+  const sources = readerSourceBatch(
+    store,
+    chat.id,
+    Array.from({ length: 100 }, (_, i) => `Synthetic source ${i}.`)
   );
   const frozen = store.run(sources[99].runId).snapshot;
   const full = store.detail(chat.id);
+  expect(store.db.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
   let next: string | null = null;
   const collected: string[] = [];
   do {
@@ -109,6 +180,13 @@ test('100-source HTTP reader pages retain order while execution snapshot and ful
   expect(store.detail(chat.id)).toEqual(full);
   expect(store.run(sources[99].runId).snapshot).toEqual(frozen);
   expect(frozen.history).toHaveLength(99);
+  expect(frozen.history).toEqual(
+    sources.slice(0, -1).map((item) => ({
+      revision: item.id,
+      text: item.text,
+      contentHash: item.hash,
+    }))
+  );
 });
 
 test('source cursors and supplied known IDs cannot cross branch or chat boundaries', async () => {
@@ -301,6 +379,7 @@ test('restoring any source retains its whole fixed page, including all of a shor
 test('activity remains page independent and retains active work beyond the terminal limit', async () => {
   const { store } = await setup(),
     chat = createFixtureChat(store, 'Activity');
+  store.settings(chat.id, chat.settingsRevision, { ...chat.settings, status: true });
   const items = Array.from({ length: 35 }, () => source(store, chat.id));
   const first = readerDetail(store, chat.id, {});
   const activities = first.reader.activity;
@@ -338,8 +417,9 @@ test('activity remains page independent and retains active work beyond the termi
 
 test('activity completion time ignores subsequent usage updates and retries restart queue time', async () => {
   const { store } = await setup(),
-    chat = createFixtureChat(store, 'Activity time'),
-    item = source(store, chat.id);
+    chat = createFixtureChat(store, 'Activity time');
+  store.settings(chat.id, chat.settingsRevision, { ...chat.settings, status: true });
+  const item = source(store, chat.id);
   const before = readerDetail(store, chat.id, {}).reader.activity.find((a) => a.id === item.runId)!;
   store.db
     .prepare('UPDATE runs SET updated_at=? WHERE id=?')
@@ -358,6 +438,7 @@ test('activity completion time ignores subsequent usage updates and retries rest
 test('response activity retains older page work without expanding global activity or other pages', async () => {
   const { store } = await setup(),
     chat = createFixtureChat(store, 'Response activity');
+  store.settings(chat.id, chat.settingsRevision, { ...chat.settings, status: true });
   const items = Array.from({ length: 35 }, () => source(store, chat.id));
   store.db
     .prepare("UPDATE jobs SET status='completed',updated_at='2000-01-01' WHERE chat_id=?")

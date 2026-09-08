@@ -114,7 +114,7 @@ export function PromptLibrary({
     mutation.current = true;
     setBusy(true);
     try {
-      const full = await api<PromptPreset>(`/revisions/prompt-preset/${item.id}/${item.revision}`);
+      const full = await api<PromptPreset>(`/prompt-presets/${item.id}`);
       const copy = await api<PromptPreset>('/prompt-presets', {
         title: `${full.title} 사본`,
         role: full.role,

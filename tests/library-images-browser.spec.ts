@@ -3,6 +3,7 @@ import type { ContentPackage } from '../core/content-package.js';
 import type { LibraryOrganization } from '../core/library-organization.js';
 import type { Content } from '../core/product.js';
 import type { ChatDetail } from '../core/types.js';
+import { revealLibraryEditor } from './ui-navigation.js';
 
 const png = Buffer.from(
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jG1sAAAAASUVORK5CYII=',
@@ -76,6 +77,7 @@ async function edit(page: Page, content: Content) {
     .locator('.library-detail-actions > button')
     .filter({ hasText: /^편집$/ })
     .click();
+  await revealLibraryEditor(page);
   return library;
 }
 async function save(page: Page, library: Locator, content: Content): Promise<Content> {
@@ -83,7 +85,7 @@ async function save(page: Page, library: Locator, content: Content): Promise<Con
     (response) =>
       response.url().endsWith(`/api/content/${content.id}`) && response.request().method() === 'PUT'
   );
-  await library.getByRole('button', { name: '새 revision 저장', exact: true }).click();
+  await library.getByRole('button', { name: '변경사항 저장', exact: true }).click();
   const response = await pending;
   expect(response.ok(), await response.text()).toBe(true);
   return response.json();
@@ -148,6 +150,7 @@ test('LIMG01 representative image upload, unset and existing inline selection pr
     .locator('.library-detail-actions > button')
     .filter({ hasText: /^편집$/ })
     .click();
+  await revealLibraryEditor(page);
   await portrait.getByRole('button', { name: '대표 이미지 해제', exact: true }).click();
   const unset = await save(page, library, uploaded);
   expect(unset.package!.portraitImageId).toBeUndefined();
@@ -237,6 +240,7 @@ test('LIMG02 persona folder picker supports keyboard selection and nested Escape
   await library.getByRole('searchbox', { name: '서재 검색', exact: true }).fill(bot.title);
   await library.getByRole('button', { name: `${bot.title} 새 채팅`, exact: true }).click();
   const newChat = page.getByRole('dialog', { name: '새 채팅', exact: true });
+  await newChat.locator('.new-story-options > summary').click();
   const trigger = newChat.getByRole('button', { name: '시작 페르소나', exact: true });
   await trigger.click();
   const picker = page.getByRole('dialog', { name: '시작 페르소나', exact: true });
@@ -298,7 +302,7 @@ test('LIMG03 cancelled and failed portrait uploads cannot change a saved draft o
   const original = await seed(request, 'bot', `업로드 취소 합성 ${Date.now()}`);
   const library = await edit(page, original),
     portrait = library.getByRole('region', { name: '대표 이미지 설정', exact: true }),
-    saveButton = library.getByRole('button', { name: '새 revision 저장', exact: true });
+    saveButton = library.getByRole('button', { name: '변경사항 저장', exact: true });
   let release!: () => void;
   const waiting = new Promise<void>((resolve) => {
     release = resolve;
@@ -341,7 +345,7 @@ test('LIMG03 cancelled and failed portrait uploads cannot change a saved draft o
   expect(after.package?.portraitImageId).toBeUndefined();
 });
 
-test('LIMG04 shared module references show their pinned portrait after the library image changes', async ({
+test('LIMG04 shared module references show current names and portraits while preserving archived evidence', async ({
   page,
   request,
 }) => {
@@ -370,17 +374,20 @@ test('LIMG04 shared module references show their pinned portrait after the libra
     .getByRole('button', { name: '연결과 기능', exact: true })
     .click();
   const features = library.getByLabel('패키지 모듈과 기능 편집', { exact: true });
-  const pinned = features.getByRole('group', { name: child.title, exact: true });
-  await expect(pinned).toBeVisible();
-  await expect(pinned.locator('img')).toHaveAttribute('src', `/api/package-image-blobs/${oldHash}`);
-  await expect(features.getByText(`${child.title} 새 이름`, { exact: true })).toHaveCount(0);
+  const current = features.getByRole('group', { name: `${child.title} 새 이름`, exact: true });
+  await expect(current).toBeVisible();
+  await expect(current.locator('img')).toHaveAttribute(
+    'src',
+    `/api/package-image-blobs/${newHash}`
+  );
+  await expect(features.getByText(child.title, { exact: true })).toHaveCount(0);
   const original: Content = await (
     await request.get(`/api/revisions/content/${child.id}/${child.revision}`)
   ).json();
   expect(original.package).toEqual(child.package);
 });
 
-test('LIMG05 quick persona selection preserves the pinned image while offering the latest revision separately', async ({
+test('LIMG05 quick persona selection shows one current selection after its image changes', async ({
   page,
   request,
 }) => {
@@ -428,30 +435,31 @@ test('LIMG05 quick persona selection preserves the pinned image while offering t
   expect(changed.ok(), await changed.text()).toBe(true);
   await page.setViewportSize({ width: 1440, height: 1000 });
   await page.goto(`/?chat=${chat.id}`);
+  await page.getByRole('button', { name: '입력창 더보기', exact: true }).click();
   const trigger = page.getByRole('button', { name: '빠른 페르소나', exact: true });
   await expect(trigger).toContainText(persona.title);
   await expect(trigger.locator('img')).toHaveAttribute(
     'src',
-    `/api/package-image-blobs/${oldHash}`
+    `/api/package-image-blobs/${newHash}`
   );
   await trigger.click();
   const picker = page.getByRole('dialog', { name: '빠른 페르소나', exact: true });
   await picker.getByRole('searchbox').fill(persona.title);
-  const pinned = picker
-      .getByRole('button')
-      .filter({ has: page.getByText(persona.title, { exact: true }) }),
-    latest = picker
-      .getByRole('button')
-      .filter({ has: page.getByText(`${persona.title} 최신`, { exact: true }) });
-  await expect(pinned).toHaveAttribute('aria-pressed', 'true');
-  await expect(pinned.locator('img')).toHaveAttribute('src', `/api/package-image-blobs/${oldHash}`);
-  await expect(latest).toHaveAttribute('aria-pressed', 'false');
-  await expect(latest.locator('img')).toHaveAttribute('src', `/api/package-image-blobs/${newHash}`);
+  const current = picker
+    .getByRole('button')
+    .filter({ has: page.getByText(`${persona.title} 최신`, { exact: true }) });
+  await expect(current).toHaveCount(1);
+  await expect(current).toHaveAttribute('aria-pressed', 'true');
+  await expect(current.locator('img')).toHaveAttribute(
+    'src',
+    `/api/package-image-blobs/${newHash}`
+  );
+  await expect(picker.getByText(persona.title, { exact: true })).toHaveCount(0);
   await page.keyboard.press('Escape');
   const after: ChatDetail = await (await request.get(`/api/chats/${chat.id}`)).json();
   expect(after.profile!.packageAttachments).toContainEqual({
     id: persona.id,
-    revision: persona.revision,
+    revision: persona.revision + 1,
     role: 'persona',
   });
   expect(after.runs).toHaveLength(0);

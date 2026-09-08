@@ -62,7 +62,7 @@ Fable 5.1은 Adaptive Thinking이 항상 켜져 있어요. 강제 도구 호출�
 
 ## 저장·실행 경계
 
-schema/archive v11는 연결의 구형 requestTier와 Claude 공통 reasoningEffort 저장 형식을 받지 않아요. 구버전 자동 이관·호환 UI·자동 백업은 없고 사용자 DB를 자동 초기화하지 않아요.
+현재 schema/archive는 v12이며 연결의 구형 requestTier와 Claude 공통 reasoningEffort 저장 형식을 받지 않아요. 구버전 자동 이관·호환 UI·자동 백업은 없고 사용자 DB를 자동 초기화하지 않아요.
 
 모델 revision은 생성 옵션과 검토한 capability revision을 보관해요. Run/job snapshot은 이를 고정하며, main/translation/status/image/state/memory/등록 보조는 공통 추출기로 같은 필드를 전달해요. 최신 연결 enabled·endpoint·인증·origin 권한은 호출마다 다시 확인해요. 평가 절약 모드는 명시 opt-in일 때만 출력 한도·effort를 줄이고 나머지 binding을 바꾸지 않아요.
 

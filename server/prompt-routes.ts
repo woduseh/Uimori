@@ -153,7 +153,8 @@ export function promptRoutes(app: FastifyInstance, store: Store) {
         };
         const translationPlan = createTranslationPlan(
           source,
-          sourceTimeContext(fixed, 'translation')
+          sourceTimeContext(fixed, 'translation'),
+          chat.settings.translationChunkChars
         );
         const input = translationInput(translationPlan, translationPlan.chunks[0].id, fixed);
         compilation = compileTranslationPrompt(

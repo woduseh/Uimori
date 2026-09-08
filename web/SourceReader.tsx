@@ -9,6 +9,7 @@ import type { Asset } from '../core/product.js';
 import type { Job, ReaderRun, Source } from '../core/types.js';
 import { ContextSummaryStatus } from './ContextSummaryStatus.js';
 import { api, labels } from './api.js';
+import { auxiliaryErrorDiagnostic } from './auxiliary-error.js';
 import { Prose } from './Prose.js';
 import { LazyDiagnostics } from './LazyDiagnostics.js';
 import { SourceSegmentsReader, type SegmentTranslationView } from './SourceSegmentsReader.js';
@@ -18,6 +19,7 @@ import {
   type SourceSegmentPolicy,
 } from '../core/source-segments.js';
 import { PackageStateCards, usePackagePresentation } from './PackagePresentation.js';
+import './source-edit.css';
 
 type ReaderMode = 'original' | 'translation';
 type ReaderProps = {
@@ -28,6 +30,7 @@ type ReaderProps = {
   refresh: () => Promise<void>;
   onError: (error: string) => void;
   onFork: (sourceId: string) => Promise<void>;
+  onEditingChange?: (sourceId: string, editing: boolean) => void;
   request?: string;
   contextSummary?: ReaderRun['contextSummary'];
   packageStart?: { mode: 'authored' | 'generate'; title: string };
@@ -37,6 +40,7 @@ type ReaderProps = {
   presentationRefreshKey?: string | number;
 };
 type AnchorPosition = { anchors: string[]; top: number; scrollport: HTMLElement };
+type EditorOrigin = { button: HTMLButtonElement; scrollport: HTMLElement; offset: number };
 
 function initialMode(sourceId: string, hasTranslation: boolean): ReaderMode {
   if (!hasTranslation) return 'original';
@@ -98,6 +102,7 @@ function SourceReaderContent({
   assets,
   refresh: refreshSource,
   onFork,
+  onEditingChange,
   request,
   contextSummary,
   packageStart,
@@ -119,6 +124,12 @@ function SourceReaderContent({
   const container = useRef<HTMLElement>(null);
   const restoreAnchor = useRef<AnchorPosition | undefined>(undefined);
   const translation = latestTranslation(source, jobs);
+  const latestStatus = jobs
+    .filter(
+      (job) =>
+        job.kind === 'status' && job.sourceRevision === source.id && job.sourceHash === source.hash
+    )
+    .sort((a, b) => (b.revision ?? 1) - (a.revision ?? 1))[0];
   const latestImageJob = jobs
     .filter((job) => job.kind === 'image' && job.sourceRevision === source.id)
     .sort((a, b) => (b.revision ?? 1) - (a.revision ?? 1))[0];
@@ -131,6 +142,46 @@ function SourceReaderContent({
   const projected = !sourceSegments ? presentation?.data : undefined;
   const [mode, setMode] = useState<ReaderMode>(() => initialMode(source.id, !!translation?.result));
   const [editor, setEditor] = useState<ReaderMode | null>(null);
+  const editorOrigin = useRef<EditorOrigin | undefined>(undefined);
+  const restoreEditor = useRef(false);
+  useLayoutEffect(() => {
+    if (!editor) return;
+    onEditingChange?.(source.id, true);
+    return () => onEditingChange?.(source.id, false);
+  }, [editor, onEditingChange, source.id]);
+  useLayoutEffect(() => {
+    if (editor || !restoreEditor.current) return;
+    restoreEditor.current = false;
+    const origin = editorOrigin.current;
+    editorOrigin.current = undefined;
+    if (!origin) return;
+    // The parent restores the composer when editing ends. Wait for that layout
+    // before returning to the control beside the passage the reader was viewing.
+    const frame = requestAnimationFrame(() => {
+      const { button, scrollport, offset } = origin;
+      if (!button.isConnected || !scrollport.isConnected) return;
+      scrollport.scrollTop +=
+        button.getBoundingClientRect().top - scrollport.getBoundingClientRect().top - offset;
+      button.focus({ preventScroll: true });
+      button.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'instant' });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [editor]);
+  const openEditor = (role: ReaderMode, button: HTMLButtonElement) => {
+    const scrollport = button.closest<HTMLElement>('[data-reader-scrollport]');
+    editorOrigin.current = scrollport
+      ? {
+          button,
+          scrollport,
+          offset: button.getBoundingClientRect().top - scrollport.getBoundingClientRect().top,
+        }
+      : undefined;
+    setEditor(role);
+  };
+  const closeEditor = () => {
+    restoreEditor.current = true;
+    setEditor(null);
+  };
   const requestPending = useRef(false);
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [pending, setPending] = useState('');
@@ -148,7 +199,9 @@ function SourceReaderContent({
     validTranslation?.blocks?.map((block) => ({ anchors: [block.anchor], text: block.text }));
   const displayJobs = jobs.filter(
     (job) =>
-      job.sourceHash === source.hash && (job.kind !== 'translation' || job.id === translation?.id)
+      job.sourceHash === source.hash &&
+      (job.kind !== 'translation' || job.id === translation?.id) &&
+      (job.kind !== 'status' || job.id === latestStatus?.id)
   );
   const attentionJobs = displayJobs.filter((job) => activeJob(job) || retryable(job.status));
   const image = jobs
@@ -167,7 +220,7 @@ function SourceReaderContent({
     image.result.sourceHash === source.hash
       ? (image.result.annotations ?? [])
       : [];
-  const status = jobs.filter((job) => job.kind === 'status' && job.status === 'completed').at(-1);
+  const status = latestStatus?.status === 'completed' ? latestStatus : undefined;
   const sceneStatus =
     status?.result?.sourceRevision === source.id && status.result.sourceHash === source.hash
       ? (status.result.label ?? status.result.text)
@@ -298,6 +351,28 @@ function SourceReaderContent({
           </button>
         </div>
       </div>
+      {translation && !activeJob(translation) && !retryable(translation.status) && (
+        <button
+          type="button"
+          className="secondary"
+          disabled={!!pending || !!editor}
+          onClick={() => {
+            if (
+              !window.confirm(
+                '현재 모델·프롬프트·구간 기준으로 새 번역을 요청해요. 기존 번역과 완료 구간이 교체돼요. 계속할까요?'
+              )
+            )
+              return;
+            void action('translation', async () => {
+              await api(`/sources/${source.id}/retranslate`, {});
+              switchMode('translation');
+              await refresh();
+            });
+          }}
+        >
+          현재 설정으로 새 번역
+        </button>
+      )}
       {!activity && <ContextSummaryStatus summary={contextSummary} />}
       {editor && (
         <TextEditor
@@ -305,11 +380,11 @@ function SourceReaderContent({
           role={editor}
           source={source}
           translation={translation}
-          onCancel={() => setEditor(null)}
+          onCancel={closeEditor}
           onSaved={async () => {
             await refresh();
             if (mounted.current) {
-              setEditor(null);
+              closeEditor();
               if (editor === 'translation') switchMode('translation');
             }
           }}
@@ -445,6 +520,30 @@ function SourceReaderContent({
                     {jobTitle(job)} · {labels[job.status]}
                     {retryable(job.status) ? ' · 원문 보존됨' : ''}
                   </span>
+                  {job.kind === 'translation' && job.translationPlan && (
+                    <small data-testid="translation-plan-summary">
+                      적용 구간 기준:{' '}
+                      {job.translationPlan.maxChunkChars === null
+                        ? '무제한'
+                        : `${job.translationPlan.maxChunkChars.toLocaleString()}자`}{' '}
+                      · 실제 {job.translationPlan.totalChunks}구간
+                    </small>
+                  )}
+                  {job.kind === 'translation' &&
+                    job.error &&
+                    /INPUT_CONTEXT_LIMIT_EXCEEDED|CONTEXT_WINDOW_EXCEEDED|TIMEOUT|AUXILIARY_PROVIDER_PARTIAL/.test(
+                      job.error
+                    ) && (
+                      <p className="error">
+                        {job.error.includes('TIMEOUT')
+                          ? '번역 제한 시간이 초과됐어요.'
+                          : job.error.includes('PARTIAL')
+                            ? '모델 응답이 끝까지 완료되지 않았어요. 출력 한도와 공급자 진단을 확인해 주세요.'
+                            : '번역 요청이 모델 입력 한도를 초과했어요.'}{' '}
+                        구간을 자동으로 나누지 않았어요. 모델 한도나 번역 구간 기준을 조정한 뒤 새
+                        번역을 요청해 주세요.
+                      </p>
+                    )}
                   <JobActions job={job} refresh={refresh} onError={setActionError} compact />
                 </div>
               ))
@@ -474,7 +573,7 @@ function SourceReaderContent({
           type="button"
           className="secondary"
           disabled={!!editor || !!pending}
-          onClick={() => setEditor('original')}
+          onClick={(event) => openEditor('original', event.currentTarget)}
         >
           원문 수정
         </button>
@@ -482,7 +581,7 @@ function SourceReaderContent({
           type="button"
           className="secondary"
           disabled={!!editor || !!pending}
-          onClick={() => setEditor('translation')}
+          onClick={(event) => openEditor('translation', event.currentTarget)}
         >
           번역 수정
         </button>
@@ -694,6 +793,17 @@ function TextEditor({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const busy = useRef(false);
+  const input = useRef<HTMLTextAreaElement>(null);
+  useLayoutEffect(() => {
+    const field = input.current;
+    field?.focus({ preventScroll: true });
+    // Focus stays in the user-triggered update so touch keyboards can open;
+    // scrolling waits for the parent to release the composer's screen space.
+    const frame = requestAnimationFrame(() =>
+      field?.form?.scrollIntoView({ block: 'start', inline: 'nearest', behavior: 'instant' })
+    );
+    return () => cancelAnimationFrame(frame);
+  }, []);
   const title = role === 'original' ? '원문' : '번역';
   const conflict = draft.expectedSourceHash !== source.hash || draft.expectedRevision !== revision;
   const persist = (next: Draft) => {
@@ -711,9 +821,21 @@ function TextEditor({
       /* Storage may be restricted. */
     }
   };
+  const cancel = () => {
+    if (busy.current) return;
+    clear();
+    onCancel();
+  };
   return (
     <form
       className="source-text-editor"
+      onKeyDown={(event) => {
+        if (event.key !== 'Escape' || event.nativeEvent.isComposing || event.keyCode === 229)
+          return;
+        event.preventDefault();
+        event.stopPropagation();
+        cancel();
+      }}
       onSubmit={async (event) => {
         event.preventDefault();
         if (busy.current) return;
@@ -743,6 +865,7 @@ function TextEditor({
       <label>
         {title} 수정
         <textarea
+          ref={input}
           aria-label={`${title} 수정 내용`}
           rows={12}
           maxLength={2000000}
@@ -784,15 +907,7 @@ function TextEditor({
         <button type="submit" disabled={saving || conflict || !draft.text.trim()}>
           {saving ? '저장 중…' : `${title} 저장`}
         </button>
-        <button
-          type="button"
-          className="secondary"
-          disabled={saving}
-          onClick={() => {
-            clear();
-            onCancel();
-          }}
-        >
+        <button type="button" className="secondary" disabled={saving} onClick={cancel}>
           수정 취소
         </button>
       </div>
@@ -818,16 +933,30 @@ function JobActions({
 }) {
   const [pending, setPending] = useState(false);
   const [error, setError] = useState('');
-  const perform = async (operation: 'retry' | 'cancel') => {
+  const perform = async (operation: 'retry' | 'cancel' | 'status') => {
+    if (
+      operation === 'retry' &&
+      job.kind === 'translation' &&
+      !window.confirm(
+        '현재 모델·프롬프트·구간 기준으로 장면 전체를 다시 번역해요. 기존 번역과 완료 구간이 교체돼요. 계속할까요?'
+      )
+    )
+      return;
     setPending(true);
     setError('');
+    onError('');
     try {
-      await api(`/jobs/${job.id}/${operation}`, {});
+      if (operation === 'status')
+        await api(`/sources/${job.sourceRevision}/status`, {
+          expectedSourceHash: job.sourceHash,
+          expectedJobId: job.id,
+        });
+      else await api(`/jobs/${job.id}/${operation}`, {});
       await refresh();
     } catch (error) {
       const message = error instanceof Error ? error.message : '요청을 완료하지 못했어요.';
       setError(message);
-      onError(message);
+      onError(`${jobTitle(job)}: ${message}`);
     } finally {
       setPending(false);
     }
@@ -843,11 +972,11 @@ function JobActions({
             void perform('retry');
           }}
         >
-          {compact
-            ? job.kind === 'translation'
-              ? '번역만 다시 시도'
-              : `${jobTitle(job)} 재시도`
-            : '이 작업만 재시도'}
+          {job.kind === 'translation'
+            ? '현재 설정으로 번역 재시도'
+            : compact
+              ? `${jobTitle(job)} 재시도`
+              : '이 작업만 재시도'}
         </button>
       )}
       {activeJob(job) && (
@@ -861,6 +990,24 @@ function JobActions({
         >
           {jobTitle(job)} 취소
         </button>
+      )}
+      {job.kind === 'status' && retryable(job.status) && (
+        <>
+          <button
+            type="button"
+            className="secondary"
+            disabled={pending}
+            onClick={() => void perform('status')}
+          >
+            현재 설정으로 장면 상태 새로 실행
+          </button>
+          {!compact && (
+            <small>
+              채팅 설정에서 표시 상태 모델을 저장한 뒤 새로 실행해요. 기존 작업 재시도는 당시 설정을
+              사용해요.
+            </small>
+          )}
+        </>
       )}
       {error && (
         <small className="error" role="alert">
@@ -901,7 +1048,31 @@ export function JobCard({
             (job.kind === 'image' ? `${job.result.annotations?.length ?? 0}개 이미지 표시` : '')}
         </p>
       )}
-      {job.error && <p className="error">보조 작업이 실패했어요. 원문은 보존돼요.</p>}
+      {job.error && <AuxiliaryError error={job.error} />}
+      {job.kind === 'translation' && job.translationPlan && (
+        <small data-testid="translation-plan-summary">
+          적용 구간 기준:{' '}
+          {job.translationPlan.maxChunkChars === null
+            ? '무제한'
+            : `${job.translationPlan.maxChunkChars.toLocaleString()}자`}{' '}
+          · 실제 {job.translationPlan.totalChunks}구간
+        </small>
+      )}
+      {job.kind === 'translation' &&
+        job.error &&
+        /INPUT_CONTEXT_LIMIT_EXCEEDED|CONTEXT_WINDOW_EXCEEDED|TIMEOUT|AUXILIARY_PROVIDER_PARTIAL/.test(
+          job.error
+        ) && (
+          <p className="error">
+            {job.error.includes('TIMEOUT')
+              ? '번역 제한 시간이 초과됐어요.'
+              : job.error.includes('PARTIAL')
+                ? '모델 응답이 끝까지 완료되지 않았어요. 출력 한도와 공급자 진단을 확인해 주세요.'
+                : '번역 요청이 모델 입력 한도를 초과했어요.'}{' '}
+            구간을 자동으로 나누지 않았어요. 모델 한도나 번역 구간 기준을 조정한 뒤 새 번역을 요청해
+            주세요.
+          </p>
+        )}
       <JobActions job={job} refresh={refresh} onError={onError} />
       {job.chunks && job.chunks.length > 1 && (
         <details className="chunk-details">
@@ -912,14 +1083,7 @@ export function JobCard({
                 <span>
                   구간 {index + 1} · {labels[chunk.status] || chunk.status} · 시도 {chunk.attempt}
                 </span>
-                {retryable(chunk.status) && (
-                  <ChunkRetry
-                    jobId={job.id}
-                    chunkId={chunk.id}
-                    refresh={refresh}
-                    onError={onError}
-                  />
-                )}
+                {chunk.error && <AuxiliaryError error={chunk.error} />}
               </li>
             ))}
           </ol>
@@ -937,6 +1101,7 @@ export function JobCard({
                 jobId: value.id,
                 sourceRevision: value.sourceRevision,
                 sourceHash: value.sourceHash,
+                error: auxiliaryErrorDiagnostic(value.error).code,
                 input: value.input,
                 chunks: value.chunks,
               },
@@ -953,32 +1118,13 @@ export function JobCard({
   );
 }
 
-function ChunkRetry({
-  jobId,
-  chunkId,
-  refresh,
-  onError,
-}: {
-  jobId: string;
-  chunkId: string;
-  refresh: () => Promise<void>;
-  onError: (error: string) => void;
-}) {
-  const [pending, setPending] = useState(false);
+function AuxiliaryError({ error }: { error: string }) {
+  const diagnostic = auxiliaryErrorDiagnostic(error);
   return (
-    <button
-      type="button"
-      className="secondary"
-      disabled={pending}
-      onClick={() => {
-        setPending(true);
-        void api(`/jobs/${jobId}/retry`, { chunkId })
-          .then(refresh)
-          .catch((error) => onError(error.message))
-          .finally(() => setPending(false));
-      }}
-    >
-      이 구간만 재시도
-    </button>
+    <div className="error" role="alert">
+      <p>{diagnostic.message} 원문은 보존돼요.</p>
+      <p>{diagnostic.action}</p>
+      {diagnostic.code && <small>오류 코드: {diagnostic.code}</small>}
+    </div>
   );
 }

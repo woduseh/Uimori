@@ -575,7 +575,7 @@ describe('M1 product data with actual file SQLite', () => {
     await writeFile(path, bytes);
     const reopened = new DatabaseSync(path, { readOnly: true });
     try {
-      expect(reopened.prepare('PRAGMA user_version').get()).toEqual({ user_version: 12 });
+      expect(reopened.prepare('PRAGMA user_version').get()).toEqual({ user_version: 13 });
       expect(
         reopened.prepare('SELECT id,text,hash FROM sources WHERE id=?').get(source.id)
       ).toEqual({ id: source.id, text: source.text, hash: source.hash });
@@ -665,9 +665,10 @@ async function terminalJob(url: string, chatId: string, id: string): Promise<Job
 }
 
 describe('M1 real HTTP application boundaries', () => {
-  test('P07 P08 P12 runs source-time translation through HTTP and file SQLite, retaining partial siblings and retrying only the failed chunk', async () => {
+  test('P07 P08 P12 explicit retry translates the whole scene with the current model and retains source-time references', async () => {
     const fixtureItem = await directory();
     const chunkRequests = new Map<string, number>();
+    let expectedTranslationModel = 'fixture-translator';
     let glossaryId = '';
     const originalText = ['First', 'Middle', 'Last']
       .map(
@@ -686,7 +687,7 @@ describe('M1 real HTTP application boundaries', () => {
         return;
       }
       expect(body.role).toBe('translation');
-      expect(body.modelId).toBe('fixture-translator');
+      expect(body.modelId).toBe(expectedTranslationModel);
       const source = body.input.source;
       expect(source.context.references).toMatchObject([
         { id: glossaryId, revision: 1, text: 'SOURCE_TIME_GLOSSARY_OLD' },
@@ -726,7 +727,7 @@ describe('M1 real HTTP application boundaries', () => {
         chunkId: source.chunkId,
         segments: source.blocks.map((block: { anchor: string; text: string }) => ({
           anchors: [block.anchor],
-          text: `[모의 번역 결과] ${block.text}`,
+          text: `[모의 번역 결과 ${body.modelId}] ${block.text}`,
         })),
       };
       await writeSse(response, [
@@ -824,7 +825,9 @@ describe('M1 real HTTP application boundaries', () => {
       .map((chunk) => structuredClone(chunk));
     const failedChunk = partial.chunks!.find((chunk) => chunk.status === 'failed')!;
     const beforeRetry = new Map(chunkRequests);
-    app.store.product.model(
+    await api(url, `/api/jobs/${jobId}/retry`, { chunkId: failedChunk.id }, { status: 400 });
+    expect(app.store.job(jobId).status).toBe('partial');
+    const updatedTranslation = app.store.product.model(
       {
         title: 'Future translator settings',
         connectionId: bound.id,
@@ -835,13 +838,14 @@ describe('M1 real HTTP application boundaries', () => {
       },
       translation.id
     );
-    await api(url, `/api/jobs/${jobId}/retry`, { chunkId: failedChunk.id });
+    expectedTranslationModel = 'future-translator';
+    await api(url, `/api/jobs/${jobId}/retry`, {});
     const completed = await terminalJob(url, chat.id, jobId);
     expect(completed.status).toBe('completed');
     expect(completed.result?.segments).toHaveLength(3);
     expect(app.store.job(jobId).input).toMatchObject({
       translationModelSelection: { id: translation.id },
-      translationModelSnapshot: { ...translation, connection: bound },
+      translationModelSnapshot: { ...updatedTranslation, connection: bound },
     });
     expect(app.store.product.get<ModelPreset>('model', translation.id).modelId).toBe(
       'future-translator'
@@ -850,11 +854,15 @@ describe('M1 real HTTP application boundaries', () => {
       source.blocks?.map((block) => block.anchor)
     );
     for (const chunk of successfulChunks) {
-      expect(completed.chunks?.find((value) => value.id === chunk.id)).toEqual(chunk);
-      expect(chunkRequests.get(chunk.id)).toBe(beforeRetry.get(chunk.id));
+      expect(completed.chunks?.find((value) => value.id === chunk.id)?.result).not.toEqual(
+        chunk.result
+      );
+      expect(chunkRequests.get(chunk.id)).toBe(
+        beforeRetry.get(chunk.id)! + (chunk.id.endsWith('-0') ? 2 : 1)
+      );
     }
     expect(chunkRequests.get(failedChunk.id)).toBe(beforeRetry.get(failedChunk.id)! + 1);
-    expect(completed.chunks?.find((chunk) => chunk.id === failedChunk.id)?.attempt).toBe(2);
+    expect(completed.chunks?.find((chunk) => chunk.id === failedChunk.id)?.attempt).toBe(1);
     expect(completed.result?.text?.match(/`KEEP_LITERAL`/g)).toHaveLength(3);
     expect(completed.result?.text).not.toContain('[[p_');
     expect(app.store.source(source.id).hash).toBe(source.hash);
@@ -862,7 +870,7 @@ describe('M1 real HTTP application boundaries', () => {
     expect(app.store.detail(other.id).jobs).toEqual([]);
     const ledger = app.store.product.attempts(chat.id);
     expect(ledger.filter((attempt) => attempt.role === 'main')).toHaveLength(1);
-    expect(ledger.filter((attempt) => attempt.role === 'translation')).toHaveLength(5);
+    expect(ledger.filter((attempt) => attempt.role === 'translation')).toHaveLength(8);
     expect(ledger.filter((attempt) => attempt.status === 'error')).toHaveLength(1);
     expect(ledger.every((attempt) => attempt.costUsd === null)).toBe(true);
     expect(
@@ -963,7 +971,13 @@ describe('M1 real HTTP application boundaries', () => {
     });
     fixtureItem.close = provider.close;
     const { app, url } = await application({ approvedOrigins: [provider.origin] });
-    const chat = await api<Chat>(url, '/api/chats', { title: 'HTTP provider chat' });
+    const initial = await api<Chat>(url, '/api/chats', { title: 'HTTP provider chat' });
+    const chat = await api<Chat>(
+      url,
+      `/api/chats/${initial.id}/settings`,
+      { expectedSettingsRevision: initial.settingsRevision, ...initial.settings, status: true },
+      { method: 'PATCH' }
+    );
     const bound = app.store.product.connection({
       title: 'Loopback selected',
       protocol: 'fixture-sse-v1',

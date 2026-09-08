@@ -24,8 +24,7 @@ export function PackageFeaturesEditor({
   const [library, setLibrary] = useState<Library | null>(null),
     [statuses, setStatuses] = useState<Record<string, ReferenceStatus>>({});
   const [selected, setSelected] = useState('');
-  const [revisionDrafts, setRevisionDrafts] = useState<Record<string, string>>({}),
-    [segmentsDirty, setSegmentsDirty] = useState(false),
+  const [segmentsDirty, setSegmentsDirty] = useState(false),
     [busy, setBusy] = useState(false),
     [loading, setLoading] = useState(false),
     [error, setError] = useState(''),
@@ -48,13 +47,12 @@ export function PackageFeaturesEditor({
   useEffect(() => {
     actionVersion.current++;
     setBusy(false);
-    setRevisionDrafts({});
     setSegmentsDirty(false);
     setSelected('');
   }, [scope]);
   useEffect(() => {
-    onDirtyChange?.(Object.keys(revisionDrafts).length > 0 || segmentsDirty || busy);
-  }, [revisionDrafts, segmentsDirty, busy, onDirtyChange]);
+    onDirtyChange?.(segmentsDirty || busy);
+  }, [segmentsDirty, busy, onDirtyChange]);
   // biome-ignore lint/correctness/useExhaustiveDependencies: Explicit reload retries the available module lists for this package.
   useEffect(() => {
     let active = true;
@@ -74,25 +72,20 @@ export function PackageFeaturesEditor({
       active = false;
     };
   }, [value.id, reload]);
-  // biome-ignore lint/correctness/useExhaustiveDependencies: Pinned reference keys, package switches and explicit reloads govern reads, not draft object identity.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: Module selections, package switches and explicit reloads govern reads, not draft object identity.
   useEffect(() => {
     let active = true;
     const refs = value.modules ?? [];
     Promise.all(
       refs.map(async (ref) => {
         try {
-          const content = await api<Content>(
-            `/revisions/content/${encodeURIComponent(ref.id)}/${ref.revision}`
-          );
+          const content = await api<Content>(`/content/${encodeURIComponent(ref.id)}`);
           return [
             referenceKey(ref),
-            content.package ? { content } : { error: '고정 버전이 공통 패키지가 아니에요.' },
+            content.package ? { content } : { error: '연결한 자료가 공통 패키지가 아니에요.' },
           ] as const;
         } catch {
-          return [
-            referenceKey(ref),
-            { error: '고정한 자료 버전을 찾거나 읽을 수 없어요.' },
-          ] as const;
+          return [referenceKey(ref), { error: '연결한 자료를 찾거나 읽을 수 없어요.' }] as const;
         }
       })
     ).then((items) => {
@@ -126,7 +119,7 @@ export function PackageFeaturesEditor({
     try {
       latest.current.onChange(validateContentPackage({ ...latest.current.value, ...part }));
       setError('');
-      setNotice('자료 초안에 반영했어요. 자료를 저장하면 새 버전으로 고정돼요.');
+      setNotice('자료 초안에 반영했어요. 저장하면 다음 실행부터 사용해요.');
       return true;
     } catch (caught) {
       setError((caught as Error).message);
@@ -137,9 +130,7 @@ export function PackageFeaturesEditor({
     const item = library?.contents.find((content) => referenceKey(content) === selected);
     if (!item) return;
     await act(async (request, id) => {
-      const content = await api<Content>(
-        `/revisions/content/${encodeURIComponent(item.id)}/${item.revision}`
-      );
+      const content = await api<Content>(`/content/${encodeURIComponent(item.id)}`);
       if (!currentAction(request, id)) return;
       if (!content.package) throw new Error('공통 패키지인 자료만 연결할 수 있어요.');
       const current = latest.current.value;
@@ -153,35 +144,6 @@ export function PackageFeaturesEditor({
         setSelected('');
     });
   }
-  async function applyRevision(ref: PackageModuleRef) {
-    const text = revisionDrafts[ref.id],
-      revision = Number(text);
-    if (!text?.trim() || !Number.isSafeInteger(revision) || revision < 1) {
-      setError('1 이상의 버전 번호를 입력해 주세요.');
-      return;
-    }
-    await act(async (request, id) => {
-      const content = await api<Content>(
-        `/revisions/content/${encodeURIComponent(ref.id)}/${revision}`
-      );
-      if (!currentAction(request, id)) return;
-      if (!content.package) throw new Error('공통 패키지인 자료 버전만 연결할 수 있어요.');
-      if (!latest.current.value.modules?.some((item) => referenceKey(item) === referenceKey(ref)))
-        return;
-      if (
-        update({
-          modules: latest.current.value.modules.map((item) =>
-            item.id === ref.id ? { id: ref.id, revision } : item
-          ),
-        })
-      )
-        setRevisionDrafts((current) => {
-          const next = { ...current };
-          delete next[ref.id];
-          return next;
-        });
-    });
-  }
   return (
     <div className="package-stack package-authoring-editor" aria-label="패키지 모듈과 기능 편집">
       <section className="package-stack">
@@ -191,72 +153,24 @@ export function PackageFeaturesEditor({
           포함하며 채팅별 선택값을 사용해요.
         </p>
         {(value.modules ?? []).map((ref) => {
-          const status = statuses[referenceKey(ref)],
-            draft = revisionDrafts[ref.id];
+          const status = statuses[referenceKey(ref)];
           return (
             <fieldset className="package-entry" key={ref.id}>
               <legend>{status?.content?.title ?? ref.id}</legend>
               <ContentAvatar content={status?.content} title={status?.content?.title ?? ref.id} />
-              <small>
-                {ref.id} · 고정 버전 v{ref.revision}
-              </small>
+              <small>현재 저장된 모듈을 사용해요.</small>
               {status?.error && (
                 <p className="error" role="alert">
-                  {status.error} 참조를 해제하거나 읽을 수 있는 버전으로 바꿔 주세요.
+                  {status.error} 자료를 다시 확인하거나 참조를 해제해 주세요.
                 </p>
               )}
-              <label>
-                고정 버전
-                <input
-                  aria-label={`${ref.id} 고정 버전`}
-                  type="number"
-                  min={1}
-                  disabled={busy}
-                  value={draft ?? String(ref.revision)}
-                  onChange={(event) =>
-                    setRevisionDrafts((current) => {
-                      const next = { ...current };
-                      if (event.target.value === String(ref.revision)) delete next[ref.id];
-                      else next[ref.id] = event.target.value;
-                      return next;
-                    })
-                  }
-                />
-              </label>
               <div className="package-role-actions">
-                <button
-                  type="button"
-                  className="secondary"
-                  disabled={draft === undefined || busy}
-                  onClick={() => void applyRevision(ref)}
-                >
-                  버전 확인 후 적용
-                </button>
-                <button
-                  type="button"
-                  className="ghost"
-                  disabled={draft === undefined || busy}
-                  onClick={() =>
-                    setRevisionDrafts((current) => {
-                      const next = { ...current };
-                      delete next[ref.id];
-                      return next;
-                    })
-                  }
-                >
-                  버전 초안 되돌리기
-                </button>
                 <button
                   type="button"
                   className="ghost"
                   disabled={busy}
                   onClick={() => {
-                    if (update({ modules: value.modules?.filter((item) => item.id !== ref.id) }))
-                      setRevisionDrafts((current) => {
-                        const next = { ...current };
-                        delete next[ref.id];
-                        return next;
-                      });
+                    update({ modules: value.modules?.filter((item) => item.id !== ref.id) });
                   }}
                 >
                   모듈 참조 해제
@@ -282,13 +196,11 @@ export function PackageFeaturesEditor({
         >
           필수 모듈 연결
         </button>
-        <small>
-          선택한 버전을 고정해요. 서재에서 모듈을 수정해도 연결한 버전은 자동으로 바뀌지 않아요.
-        </small>
+        <small>서재에서 모듈을 수정하면 다음 실행부터 최신 내용을 사용해요.</small>
       </section>
       <SourceSegmentsEditor value={value} onChange={onChange} onDirtyChange={setSegmentsDirty} />
       {loading && <p role="status">자료와 기능 목록을 확인하는 중이에요…</p>}
-      {busy && <p role="status">선택한 자료 버전을 확인하는 중이에요…</p>}
+      {busy && <p role="status">선택한 자료를 확인하는 중이에요…</p>}
       <button
         type="button"
         className="secondary"

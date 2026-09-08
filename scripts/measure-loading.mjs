@@ -1,11 +1,20 @@
 import path from 'node:path';
-import { mkdir, readFile, stat } from 'node:fs/promises';
+import { mkdir, stat } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 import { chromium } from '@playwright/test';
 import { Store } from '../dist/server/store.js';
-import { artifactRoot, newId, json, startServer, killOwned, browserPath } from './lib.mjs';
+import {
+  artifactRoot,
+  newId,
+  json,
+  assertBuild,
+  createOwnership,
+  startServer,
+  killOwned,
+  browserPath,
+} from './lib.mjs';
 
-// Measures the existing dist build. No provider calls; all prose and PNGs are synthetic.
+// Measures a source-matched dist build. No provider calls; all prose and PNGs are synthetic.
 // Run npm run build separately, then node scripts/measure-loading.mjs --label baseline|improved.
 const labelIndex = process.argv.indexOf('--label');
 const label = labelIndex < 0 ? 'measurement' : process.argv[labelIndex + 1];
@@ -23,6 +32,7 @@ const summary = {
   startedAt: new Date().toISOString(),
   environment: { node: process.version, platform: process.platform },
   measurements: {},
+  cleanup: { status: 'NOT_RUN', errors: [], livePids: [], measurementDbRetained: true },
   limitations: [
     'Local Windows desktop Chromium and SQLite only; not a mobile device or remote service measurement.',
     'No tokenizer used. Source sizes are UTF-16 code units and UTF-8 bytes; 8000-80000 characters are only a rough proxy for 2000-20000 tokens, not a token count.',
@@ -33,10 +43,12 @@ const summary = {
     'Timing is one run per phase, not a statistical latency guarantee. Heap readings are observed snapshots, not peak memory.',
   ],
 };
-let browser;
+const ownership = createOwnership(directory, summary.startedAt);
+await json(path.join(directory, 'ownership.json'), ownership);
+let browser, store;
 try {
-  summary.build = JSON.parse(await readFile('dist/build-identity.json', 'utf8'));
-  const store = new Store(dbPath);
+  summary.build = await assertBuild();
+  store = new Store(dbPath);
   const hash = (value) => createHash('sha256').update(value).digest('hex');
   const prose = (length) => {
     const paragraph =
@@ -85,15 +97,17 @@ try {
     snapshotBytes = 0;
   const sizes = Array.from({ length: 100 }, (_, index) => 8000 + (index % 10) * 8000);
   const time = '2026-09-07T00:00:00.000Z';
+  for (const chat of chats) {
+    const { chatId: _chatId, revision, ...profile } = store.product.profile(chat.id);
+    // updateProfile owns its transaction; retain the chat's required owning bot.
+    store.product.updateProfile(chat.id, {
+      ...profile,
+      attachments: [...profile.attachments, ...lore.map(({ id, revision }) => ({ id, revision }))],
+      expectedRevision: revision,
+    });
+  }
   store.transaction(() => {
     for (const [chatIndex, chat] of chats.entries()) {
-      const profile = store.product.profile(chat.id);
-      profile.attachments = lore.map(({ id, revision }) => ({
-        id,
-        revision,
-      }));
-      const { chatId: _chatId, revision, ...profileFields } = profile;
-      store.product.updateProfile(chat.id, { ...profileFields, expectedRevision: revision });
       let previous = null;
       const history = [];
       for (let index = 0; index < 100; index++) {
@@ -130,10 +144,11 @@ try {
             time,
             `main:${chat.id}`
           );
+        const contentHash = hash(text);
         store.db
           .prepare('INSERT INTO sources VALUES(?,?,?,?,?,?,?)')
-          .run(id, chat.id, run, previous, text, hash(text), time);
-        history.push({ revision: id, text });
+          .run(id, chat.id, run, previous, text, contentHash, time);
+        history.push({ revision: id, text, contentHash });
         previous = id;
       }
       store.db.prepare('UPDATE chats SET head_revision=? WHERE id=?').run(previous, chat.id);
@@ -170,6 +185,7 @@ try {
   if (store.db.prepare('PRAGMA foreign_key_check').all().length)
     throw new Error('Synthetic fixture foreign key check failed');
   store.close();
+  store = undefined;
   summary.fixture = {
     chats: 10,
     bots: 100,
@@ -192,6 +208,8 @@ try {
     NR_INSTANCE: runId,
     NR_BUILD_ID: summary.build.buildId,
     NR_TEST_MODE: '1',
+    NR_HOST: '127.0.0.1',
+    NR_PUBLIC_ORIGIN: undefined,
     NR_ACCESS_TOKEN: '',
     NR_PROVIDER_ORIGINS: '',
     TEMP: runtime,
@@ -199,6 +217,8 @@ try {
   };
   const server = await startServer(env, directory, children);
   summary.server = server.ready;
+  ownership.children.push({ pid: server.child.pid, dbPath, url: server.ready.url });
+  await json(path.join(directory, 'ownership.json'), ownership);
   browser = await chromium.launch({ executablePath: browserPath(), headless: true });
   const context = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
   const page = await context.newPage();
@@ -299,13 +319,38 @@ try {
   await page.screenshot({ path: path.join(directory, 'bottom.png') });
   summary.browserErrors = errors;
   if (errors.length) throw new Error('Browser emitted page errors');
+  if ((await assertBuild()).buildId !== summary.build.buildId)
+    throw new Error('Build changed while measuring loading');
   summary.status = 'PASS';
 } catch (error) {
   summary.error = error.stack;
   process.exitCode = 1;
 } finally {
-  if (browser) await browser.close();
-  for (const child of children) await killOwned(child);
+  for (const close of [() => store?.close(), () => browser?.close()]) {
+    try {
+      await close();
+    } catch (error) {
+      summary.cleanup.errors.push(error.message);
+    }
+  }
+  for (const child of children) {
+    try {
+      const result = await killOwned(child);
+      if (!result.exited) summary.cleanup.livePids.push(child.pid);
+    } catch (error) {
+      summary.cleanup.errors.push(error.message);
+      summary.cleanup.livePids.push(child.pid);
+    }
+  }
+  summary.cleanup.status =
+    summary.cleanup.errors.length || summary.cleanup.livePids.length ? 'FAIL' : 'PASS';
+  if (summary.cleanup.status !== 'PASS') {
+    summary.status = 'FAIL';
+    process.exitCode = 1;
+  }
+  ownership.active = false;
+  ownership.finishedAt = new Date().toISOString();
+  await json(path.join(directory, 'ownership.json'), ownership);
   summary.finishedAt = new Date().toISOString();
   await json(path.join(directory, 'summary.json'), summary);
   console.log(JSON.stringify({ directory, status: summary.status, error: summary.error }));

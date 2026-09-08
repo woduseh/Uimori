@@ -2,6 +2,8 @@
 
 프롬프트 제작 코드는 한 번 데이터 AST를 만들고, 요청마다 host가 넘긴 JSON context를 읽어 AST를 평가해요. `PromptProgram.version: 1`과 기존 scalar `PromptValue`/control 의미는 유지해요. 새 실행 값 `RuntimeValue`는 scalar, 배열, 문자열 key를 가진 객체를 지원해요. 외부 IO, 코드 실행, 상태 저장, 난수 생성은 이 평가기의 기능이 아니에요.
 
+작문 프롬프트의 선택적 `collaboration` 설정은 host가 제공하는 읽기 전용 에이전트를 구성해요. AST 평가 중 모델을 호출하지 않으며, [에이전트 협업](AGENT-COLLABORATION.md)의 별도 실행기가 Run의 호출 한도·snapshot·취소 계약으로 실행해요.
+
 ## 공개 API
 
 ### Gemini 중간 system 임시 호환 처리
@@ -101,6 +103,6 @@ state write·action idempotency·job dispatch·random draw 저장·reroll·sourc
 
 입력창의 `창작 옵션` 버튼은 현재 main 프롬프트의 옵션 패널을 열어요. 넓은 화면에서는 대화 옆에, 1100px 이하에서는 별도 시트로 표시해요. 프롬프트의 `group`과 `description`을 표시하고 `visiblePromptControls`로 조건을 평가해요. 숨긴 옵션의 값은 지우지 않아요. 프롬프트 편집기와 채팅 패널은 `web/PromptControlFields.tsx`의 입력을 공유해요.
 
-선택값은 `이 채팅에 적용`으로 명시 저장하며 프롬프트 ID/revision별 `promptControls`를 기존 profile CAS로 갱신해요. 과거 Run과 진행 중인 실행의 snapshot은 바뀌지 않아요. 저장 중에는 새 전송을 막고, 미적용 초안이 있을 때 생성하면 저장된 옵션을 사용한다고 표시해요. 기본값 복원도 적용 전에는 초안이에요. 패널 닫기·채팅 이동 시 초안은 현재 페이지 메모리에 유지하며 새로고침 후에는 저장된 값으로 시작해요. 동시 profile 변경은 초안을 유지하고 충돌을 알리며, 최신 설정에 내 옵션을 적용할지는 사용자가 선택해요.
+선택값은 `이 채팅에 적용`으로 명시 저장하며 프롬프트 ID별 최신 정의에 맞춘 `promptControls`를 기존 profile CAS로 갱신해요. 과거 Run과 진행 중인 실행의 snapshot은 바뀌지 않아요. 저장 중에는 새 전송을 막고, 미적용 초안이 있을 때 생성하면 저장된 옵션을 사용한다고 표시해요. 기본값 복원도 적용 전에는 초안이에요. 패널 닫기·채팅 이동 시 초안은 현재 페이지 메모리에 유지하며 새로고침 후에는 저장된 값으로 시작해요. 동시 profile 변경은 초안을 유지하고 충돌을 알리며, 최신 설정에 내 옵션을 적용할지는 사용자가 선택해요.
 
 검증: `node scripts/verify-chat-prompt-options.mjs`는 새 DB/port에서 옵션 입력·명시 저장·채팅 간 초안 분리·CAS 복구·390px 화면과 기존 P01 프롬프트 선택/Run snapshot 회귀를 확인해요. 실제 공급자나 개인 자료는 사용하지 않아요.

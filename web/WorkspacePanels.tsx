@@ -7,7 +7,7 @@ import type { Job } from '../core/types.js';
 import { branchLabel } from './storyLabels.js';
 import type { StoryState } from './useStory.js';
 import { api, labels } from './api.js';
-import { ConnectionEditor } from './LibraryPanel.js';
+import { ConnectionEditor } from './ProviderManagement.js';
 import { ArchivePanel } from './ArchivePanel.js';
 import { AttemptInspector } from './AttemptInspector.js';
 import { RunTaskDetails } from './RunTaskDetails.js';

@@ -1,5 +1,7 @@
 # 로어 배치·턴 사이 유지 결과
 
+2026-09-08 문서 점검 시 이 문서의 `output/` 링크 4개 대상은 현재 checkout에 없어 원본 증거를 재확인하지 못했어요. 아래 수치·source 지문·첫 실패 기록과 경로는 당시 이력으로 보존해요. 현재 검증 상태는 [CURRENT](CURRENT.md)를 확인해요.
+
 2026-09-08 main 합본의 최종 검증은 [공급자·컨텍스트·공통 자료 통합 결과](PROVIDER-PARAMETERS-RESULTS.md)를 확인해요. 아래는 이 브랜치의 병합 전 증거예요.
 
 2026-09-07, `5761bb2` 기반의 `codex/shared-package-authoring` 작업트리에서 앞선 공통 자료 구현 위에 [승인한 계획](LORE-CONTEXT-PLAN.md)을 구현했어요. 기존 미커밋 작업은 보존했고 별도 공급자·전체 문맥 압축 작업과 병합하지 않았어요. schema/archive v8의 JSON snapshot을 확장하며 DB 이관을 추가하지 않았어요.

@@ -95,6 +95,74 @@ function fixtureOutput(plan: TranslationPlan, chunkId = plan.chunks[0].id) {
 }
 
 describe('M1 source-bound auxiliary roles', () => {
+  test('translation chunk targets group whole paragraphs and unlimited preserves the entire source in one chunk', () => {
+    const paragraphs = ['가'.repeat(60), '나'.repeat(40), '다'.repeat(101), '라'.repeat(60)];
+    const raw = source(paragraphs.join('\n\n'));
+    const limited = createTranslationPlan(raw, context(), 100);
+    expect(limited.maxChunkChars).toBe(100);
+    expect(limited.chunks.map((chunk) => chunk.blocks.map((block) => block.text))).toEqual([
+      paragraphs.slice(0, 2),
+      [paragraphs[2]],
+      [paragraphs[3]],
+    ]);
+    expect(validateTranslationPlan(raw, context(), limited)).toEqual(limited);
+    const unlimited = createTranslationPlan(raw, context(), null);
+    expect(unlimited.maxChunkChars).toBeNull();
+    expect(unlimited.chunks).toHaveLength(1);
+    expect(unlimited.chunks[0].blocks.map((block) => block.text)).toEqual(paragraphs);
+    expect(unlimited.blocks).toEqual(limited.blocks);
+    expect(validateTranslationPlan(raw, context(), unlimited)).toEqual(unlimited);
+    expect(createTranslationPlan(raw, context()).maxChunkChars).toBe(3000);
+  });
+
+  test('oversized paragraphs and fenced blocks remain intact even beyond the largest numeric target', () => {
+    const paragraphs = [
+      '가'.repeat(25000),
+      `\`\`\`text\n${'나'.repeat(25000)}\n\n${'다'.repeat(100)}\n\`\`\``,
+      '끝',
+    ];
+    const raw = source(paragraphs.join('\r\n\r\n'));
+    const limited = createTranslationPlan(raw, context(), 24000);
+    expect(limited.blocks.map((block) => block.text)).toEqual(paragraphs);
+    expect(limited.chunks.map((chunk) => chunk.anchors)).toEqual(
+      limited.blocks.map((block) => [block.anchor])
+    );
+    expect(validateTranslationPlan(raw, context(), limited)).toEqual(limited);
+    const unlimited = createTranslationPlan(raw, context(), null);
+    expect(unlimited.chunks).toHaveLength(1);
+    expect(unlimited.chunks[0].anchors).toEqual(limited.blocks.map((block) => block.anchor));
+    expect(unlimited.chunks[0].protectedSpans[0].literal).toBe(paragraphs[1]);
+    expect(validateTranslationPlan(raw, context(), unlimited)).toEqual(unlimited);
+  });
+
+  test('persisted plans reject invalid targets and grouping that disagrees with their frozen target', () => {
+    const raw = source(['가'.repeat(80), '나'.repeat(80)].join('\n\n'));
+    const plan = createTranslationPlan(raw, context(), 100);
+    for (const maxChunkChars of [99, 24001, 100.5, NaN, Infinity, '100', false, undefined]) {
+      if (maxChunkChars !== undefined)
+        expect(() => createTranslationPlan(raw, context(), maxChunkChars as number)).toThrow(
+          'INVALID_CHUNK_LIMIT'
+        );
+      expect(() => validateTranslationPlan(raw, context(), { ...plan, maxChunkChars })).toThrow(
+        'SOURCE_TRANSLATION_PLAN_INVALID'
+      );
+    }
+    const { maxChunkChars: _limit, ...missingLimit } = plan;
+    expect(() => validateTranslationPlan(raw, context(), missingLimit)).toThrow(
+      'SOURCE_TRANSLATION_PLAN_INVALID'
+    );
+    expect(() => validateTranslationPlan(raw, context(), { ...plan, maxChunkChars: null })).toThrow(
+      'SOURCE_TRANSLATION_PLAN_INVALID'
+    );
+    expect(() => validateTranslationPlan(raw, context(), { ...plan, maxChunkChars: 200 })).toThrow(
+      'SOURCE_TRANSLATION_PLAN_INVALID'
+    );
+    const unlimited = createTranslationPlan(raw, context(), null);
+    expect(() =>
+      validateTranslationPlan(raw, context(), { ...unlimited, maxChunkChars: 100 })
+    ).toThrow('SOURCE_TRANSLATION_PLAN_INVALID');
+  });
+
   test('P07 freezes source-time identities and exposes legal unprefetched read results to translation only', async () => {
     const raw = source('Mira could not tell who stood beneath the green dome.');
     const capturedContext = context();

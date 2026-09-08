@@ -483,7 +483,9 @@ function BehaviorPanel({ chatId, branchId, refreshKey, onChange, onRunRequest }:
           )}
           {instance.error && (
             <p role="alert" className="error">
-              {instance.error}
+              {instance.error === 'BEHAVIOR_MIGRATION_REQUIRED'
+                ? '최신 자료의 상태 정의가 바뀌었어요. 기존 상태를 확인한 뒤 초깃값으로 복구해 주세요.'
+                : instance.error}
             </p>
           )}
           <StateValue value={instance.state} schema={instance.behavior.stateSchema} />

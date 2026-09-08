@@ -2,6 +2,7 @@ export type Settings = {
   preset: 'calm' | 'vivid';
   mode: 'direct' | 'research';
   translation: boolean;
+  translationChunkChars?: number | null;
   status: boolean;
   maxCalls: number;
 };
@@ -31,6 +32,7 @@ export type Resource = {
   relatedIds?: string[];
 };
 export type ModelInput = {
+  agentId?: string;
   role: 'main';
   contract: string;
   task: string;
@@ -161,6 +163,7 @@ export type Job = {
       caption?: string;
     }[];
   } | null;
+  translationPlan?: { maxChunkChars: number | null; totalChunks: number };
   chunks?: {
     id: string;
     status: string;

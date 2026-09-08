@@ -14,6 +14,7 @@ import {
   type PromptProgram,
 } from '../core/prompt-program.js';
 import { PromptComposer } from './PromptComposer.js';
+import { AgentCollaborationEditor, agentCollaborationIssue } from './AgentCollaborationEditor.js';
 import { createDefaultPromptProgram } from '../core/prompt-defaults.js';
 import { api } from './api.js';
 import './prompt-editor.css';
@@ -106,10 +107,11 @@ export function PromptEditor({
   const draftCache = useRef<Record<string, Draft>>({});
   const controlDraftCache = useRef<Record<string, ChatPromptControls>>({});
   const presets = [
-    ...(library.promptPresets ?? []),
-    ...localPresets.filter(
-      (item) => !library.promptPresets?.some((latest) => keyOf(latest) === keyOf(item))
-    ),
+    ...new Map(
+      [...(library.promptPresets ?? []), ...localPresets]
+        .sort((a, b) => a.revision - b.revision)
+        .map((item) => [item.id, item])
+    ).values(),
   ];
   const dirty =
     Object.values(composerDirty).some(Boolean) ||
@@ -120,18 +122,35 @@ export function PromptEditor({
   useEffect(() => () => onDirtyChange?.(false), [onDirtyChange]);
   useEffect(() => {
     let alive = true;
+    setDrafts((current) => {
+      let next = current;
+      for (const role of roles) {
+        const draft = current[role];
+        const latest = [...(library.promptPresets ?? []), ...localPresets]
+          .filter((item) => item.id === (draft.base?.id ?? draft.source.split('@')[0]))
+          .sort((a, b) => b.revision - a.revision)[0];
+        if (
+          latest &&
+          !draft.dirty &&
+          !composerDirty[`${role}:${draft.source}`] &&
+          keyOf(latest) !== keyOf(draft.base ?? { id: '', revision: 0 })
+        )
+          next = { ...next, [role]: draftFor(role, latest) };
+      }
+      return next;
+    });
     const missing = roles.flatMap((role) => {
       const ref = selections?.[role];
       return ref &&
-        !library.promptPresets?.some((item) => keyOf(item) === keyOf(ref)) &&
-        !localPresets.some((item) => keyOf(item) === keyOf(ref))
+        !library.promptPresets?.some((item) => item.id === ref.id) &&
+        !localPresets.some((item) => item.id === ref.id)
         ? [{ role, ref }]
         : [];
     });
     void Promise.all(
       missing.map(async ({ role, ref }) => ({
         role,
-        item: await api<PromptPreset>(`/revisions/prompt-preset/${ref.id}/${ref.revision}`),
+        item: await api<PromptPreset>(`/prompt-presets/${ref.id}`),
       }))
     )
       .then((results) => {
@@ -145,7 +164,7 @@ export function PromptEditor({
         setDrafts((current) => {
           const next = { ...current };
           for (const { role, item } of results)
-            if (!current[role].dirty && current[role].source === keyOf(item))
+            if (!current[role].dirty && current[role].source.split('@')[0] === item.id)
               next[role] = draftFor(role, item);
           return next;
         });
@@ -159,8 +178,12 @@ export function PromptEditor({
     return () => {
       alive = false;
     };
-  }, [selections, library.promptPresets, localPresets, onError]);
+  }, [selections, library.promptPresets, localPresets, composerDirty, onError]);
   const draft = drafts[role];
+  const collaborationIssue =
+    role === 'main'
+      ? agentCollaborationIssue(draft.program.collaboration, draft.program.controls)
+      : '';
   const edit = (changes: Partial<Draft>) => {
     setDrafts((current) => ({ ...current, [role]: { ...current[role], ...changes, dirty: true } }));
     setError('');
@@ -212,7 +235,8 @@ export function PromptEditor({
     }
   }
   async function save(update: boolean, alsoApply: boolean) {
-    if (pendingTemplate || !draft.title.trim() || (update && !draft.base)) return;
+    if (pendingTemplate || collaborationIssue || !draft.title.trim() || (update && !draft.base))
+      return;
     setBusy(true);
     setError('');
     setStatus('');
@@ -309,16 +333,13 @@ export function PromptEditor({
                   .map((item) => (
                     <option key={keyOf(item)} value={keyOf(item)}>
                       {item.title}
-                      {library.promptPresets?.some(
-                        (latest) => latest.id === item.id && latest.revision > item.revision
-                      )
-                        ? ' · 보관된 버전'
-                        : ''}{' '}
-                      · v{item.revision}
                     </option>
                   ))}
                 {pendingSavedText && (
                   <option value={draft.source}>선택한 프롬프트 불러오는 중…</option>
+                )}
+                {draft.base && !presets.some((item) => keyOf(item) === draft.source) && (
+                  <option value={draft.source}>{draft.title} · 편집 중</option>
                 )}
               </select>
             </label>
@@ -417,12 +438,27 @@ export function PromptEditor({
                 : undefined
             }
           />
+          {role === 'main' && (
+            <AgentCollaborationEditor
+              key={`collaboration:${role}:${draft.source}`}
+              value={draft.program.collaboration}
+              controls={draft.program.controls}
+              models={library.models}
+              onChange={(collaboration) => edit({ program: { ...draft.program, collaboration } })}
+            />
+          )}
         </fieldset>
         <div className="prompt-save-actions">
+          <small>
+            저장하면 이 프롬프트를 사용하는 채팅의 다음 실행부터 반영돼요. 이전 설정은 새 프롬프트로
+            저장해 둘 수 있어요.
+          </small>
           <div className="prompt-save-buttons">
             <button
               type="button"
-              disabled={pendingSavedText || pendingTemplate || !draft.title.trim()}
+              disabled={
+                pendingSavedText || pendingTemplate || !!collaborationIssue || !draft.title.trim()
+              }
               onClick={() => void save(false, false)}
             >
               새 프롬프트로 저장
@@ -431,7 +467,9 @@ export function PromptEditor({
               <button
                 type="button"
                 className="secondary"
-                disabled={pendingTemplate || !draft.dirty}
+                disabled={
+                  pendingTemplate || !!collaborationIssue || !draft.title.trim() || !draft.dirty
+                }
                 onClick={() => void save(true, false)}
               >
                 기존 프롬프트 수정 저장
@@ -464,7 +502,12 @@ export function PromptEditor({
                 {draft.dirty && (
                   <button
                     type="button"
-                    disabled={pendingSavedText || !draft.title.trim()}
+                    disabled={
+                      pendingSavedText ||
+                      pendingTemplate ||
+                      !!collaborationIssue ||
+                      !draft.title.trim()
+                    }
                     onClick={() => void save(Boolean(draft.base), true)}
                   >
                     저장하고 이야기에 적용

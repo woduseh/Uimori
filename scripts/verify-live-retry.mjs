@@ -38,7 +38,7 @@ for (let index = 2; index < process.argv.length; index++) {
   const arg = process.argv[index];
   if (arg === '--help') {
     console.log(
-      'node scripts/verify-live-retry.mjs --source <closed live evidence directory> --job <translation job ID> [--preflight | --execute]\nDefault is metadata/read-only preflight. --execute copies the closed evidence DB, preserves its attempts and sources, then submits one explicit failed-chunk retry. Per-run call, timeout and output limits remain in force. NR_VERTEX_REQUEST_TIER=flex is required. Credentials remain environment references.'
+      'node scripts/verify-live-retry.mjs --source <closed live evidence directory> --job <translation job ID> [--preflight | --execute]\nThis failed-chunk runner is BLOCKED in both modes after the whole-scene retry contract change. Historical behavior: --execute copies the closed evidence DB, preserves its attempts and sources, then submits one explicit failed-chunk retry. Per-run call, timeout and output limits remain in force. NR_VERTEX_REQUEST_TIER=flex is required. Credentials remain environment references.'
     );
     process.exit(0);
   }
@@ -131,6 +131,9 @@ const closedEvidence = async () => {
   check((await stat(sourceDb + '.owner.sqlite')).isFile(), 'LIVE_RETRY_SOURCE_MUTEX_MISSING');
 };
 try {
+  // This runner's approval and oracle cover failed chunks only. The app now restarts
+  // the whole scene with current settings; stop before reads/auth/copy/provider work.
+  fail('LIVE_RETRY_FAILED_CHUNK_CONTRACT_RETIRED');
   build = await assertBuild();
   sourceSummary = await readJson(path.join(sourceDirectory, 'summary.json'));
   sourceOwner = await readJson(path.join(sourceDirectory, 'ownership.json'));

@@ -4,6 +4,7 @@ import type { Content, ContentKind, Library } from '../core/product.js';
 import type { LibraryItemKey, LibraryOrganization } from '../core/library-organization.js';
 import { libraryCategory, libraryFolderOf } from '../core/library-organization.js';
 import { api } from './api.js';
+import { refValue } from './content-ref.js';
 import { PackageFields, packageFromContent } from './PackageFields.js';
 import { validateContentPackage, type ContentPackage } from '../core/content-package.js';
 import { DeleteButton } from './DeleteButton.js';
@@ -24,7 +25,6 @@ export const contentLabels: Record<ContentKind, string> = {
   persona: '페르소나',
   module: '모듈',
 };
-export const refValue = (item: { id: string; revision: number }) => `${item.id}@${item.revision}`;
 const freshContent = (kind: ContentKind): Omit<Content, 'id' | 'revision'> => ({
   kind,
   title: '',
@@ -45,10 +45,24 @@ const libraryTabs: { id: PrimaryLibraryTab; title: string }[] = [
   { id: 'persona', title: '페르소나' },
   { id: 'module', title: '모듈' },
 ];
+const contentGuidance: Record<PrimaryLibraryTab, { description: string; example: string }> = {
+  bot: {
+    description: '함께 이야기할 상대예요.',
+    example: '성격과 말투를 적어 나만의 대화 상대를 만들어 보세요.',
+  },
+  persona: {
+    description: '페르소나는 내가 맡을 인물이에요.',
+    example: '이름과 배경, 상대가 나를 어떻게 부를지 적어 보세요.',
+  },
+  module: {
+    description: '모듈은 대화에 더할 설정·지침이에요.',
+    example: '세계관, 문체, 함께 지킬 규칙을 만들어 여러 채팅에 더할 수 있어요.',
+  },
+};
 type ViewMode = 'cards' | 'list';
 function savedViews(): Record<PrimaryLibraryTab, ViewMode> {
   const defaults: Record<PrimaryLibraryTab, ViewMode> = {
-    bot: 'cards',
+    bot: window.matchMedia('(max-width: 760px)').matches ? 'list' : 'cards',
     persona: 'list',
     module: 'list',
   };
@@ -220,7 +234,7 @@ export function LibraryPanel({
       const full =
         cached ??
         (library?.contentBodiesOmitted || (item.hasPackage && !item.package)
-          ? await api<Content>(`/revisions/content/${item.id}/${item.revision}`)
+          ? await api<Content>(`/content/${item.id}`)
           : item);
       if (
         request !== opening.current ||
@@ -441,16 +455,26 @@ export function LibraryPanel({
                 type="button"
                 className={id === 'bot' ? '' : 'secondary'}
                 key={id}
+                aria-label={
+                  id === 'bot'
+                    ? '봇으로 새 채팅'
+                    : id === 'persona'
+                      ? '페르소나로 사용'
+                      : `${title}로 추가`
+                }
                 disabled={
                   loading || (id === 'bot' ? !onUseContent && !onStartStory : !onUseContent)
                 }
                 onClick={() => void openContent(detail, id)}
               >
-                {id === 'bot'
-                  ? '봇으로 새 채팅'
-                  : id === 'persona'
-                    ? '페르소나로 사용'
-                    : `${title}로 추가`}
+                <span>
+                  {id === 'bot'
+                    ? '봇으로 새 채팅'
+                    : id === 'persona'
+                      ? '페르소나로 사용'
+                      : `${title}로 추가`}
+                </span>
+                <small>{contentGuidance[id].description}</small>
               </button>
             ))}
             {recentChatByContent?.[detail.id] && onContinueChat && (
@@ -522,8 +546,10 @@ export function LibraryPanel({
               </button>
             ))}
           </div>
+          <p className="library-role-guide">{contentGuidance[tab].description}</p>
           <div className="library-workspace">
             <LibraryFolders
+              compactMobile
               category={tab}
               organizer={organizer}
               value={folder}
@@ -547,46 +573,51 @@ export function LibraryPanel({
                     onChange={(event) => setQuery(event.target.value)}
                   />
                 </label>
-                <label>
-                  <span className="sr-only">자료 정렬</span>
-                  <select
-                    aria-label="자료 정렬"
-                    value={sort}
-                    onChange={(event) => setSort(event.target.value)}
-                  >
-                    <option value="name">이름순</option>
-                    <option value="name-desc">이름 역순</option>
-                  </select>
-                </label>
-                <div className="library-view-buttons" role="group" aria-label="자료 보기">
-                  <button
-                    type="button"
-                    className="secondary"
-                    aria-pressed={views[tab] === 'cards'}
-                    onClick={() => setView('cards')}
-                  >
-                    카드
-                  </button>
-                  <button
-                    type="button"
-                    className="secondary"
-                    aria-pressed={views[tab] === 'list'}
-                    onClick={() => setView('list')}
-                  >
-                    목록
-                  </button>
-                </div>
-                <button
-                  type="button"
-                  className="secondary"
-                  aria-pressed={selecting}
-                  onClick={() => {
-                    setSelecting(!selecting);
-                    setSelectedIds([]);
-                  }}
-                >
-                  선택
-                </button>
+                <details className="library-list-options">
+                  <summary>목록 관리</summary>
+                  <div className="library-list-options-body">
+                    <label>
+                      <span className="sr-only">자료 정렬</span>
+                      <select
+                        aria-label="자료 정렬"
+                        value={sort}
+                        onChange={(event) => setSort(event.target.value)}
+                      >
+                        <option value="name">이름순</option>
+                        <option value="name-desc">이름 역순</option>
+                      </select>
+                    </label>
+                    <div className="library-view-buttons" role="group" aria-label="자료 보기">
+                      <button
+                        type="button"
+                        className="secondary"
+                        aria-pressed={views[tab] === 'cards'}
+                        onClick={() => setView('cards')}
+                      >
+                        카드
+                      </button>
+                      <button
+                        type="button"
+                        className="secondary"
+                        aria-pressed={views[tab] === 'list'}
+                        onClick={() => setView('list')}
+                      >
+                        목록
+                      </button>
+                    </div>
+                    <button
+                      type="button"
+                      className="secondary"
+                      aria-pressed={selecting}
+                      onClick={() => {
+                        setSelecting(!selecting);
+                        setSelectedIds([]);
+                      }}
+                    >
+                      선택
+                    </button>
+                  </div>
+                </details>
               </div>
               <p className="library-result-count muted">
                 {currentFolderTitle} · {filtered.length}개{query ? ` · “${query}” 검색` : ''}
@@ -680,7 +711,7 @@ export function LibraryPanel({
                     {tab === 'bot' && (onUseContent || onStartStory) && (
                       <button
                         type="button"
-                        className="secondary library-start-chat"
+                        className="library-start-chat"
                         disabled={loading}
                         aria-label={`${item.title} 새 채팅`}
                         onClick={() => void openContent(item, 'bot')}
@@ -692,11 +723,9 @@ export function LibraryPanel({
                 ))}
                 {filtered.length === 0 && (
                   <div className="library-empty">
-                    <h2>{query ? '찾는 자료가 없어요' : '이곳에 자료를 모아 보세요'}</h2>
+                    <h2>{query ? '찾는 자료가 없어요' : `새 ${contentLabels[tab]} 만들기`}</h2>
                     <p>
-                      {query
-                        ? '다른 이름이나 설명으로 찾아보세요.'
-                        : `${contentLabels[tab]} 자료를 만들거나 다른 폴더에서 옮길 수 있어요.`}
+                      {query ? '다른 이름이나 설명으로 찾아보세요.' : contentGuidance[tab].example}
                     </p>
                     {folder !== 'all' && (
                       <button type="button" className="secondary" onClick={() => setFolder('all')}>
@@ -704,7 +733,7 @@ export function LibraryPanel({
                       </button>
                     )}
                     <button type="button" className="secondary" onClick={openNew}>
-                      새로 만들기
+                      {contentLabels[tab]} 만들기
                     </button>
                   </div>
                 )}
@@ -792,7 +821,7 @@ function ContentEditor({
       setSelected(item);
       setValue(item);
       setBaseline(JSON.stringify(item));
-      setSaved(item.title + ' · v' + item.revision + ' 저장됨');
+      setSaved(item.title + ' 저장됨 · 다음 실행부터 사용해요.');
       if (!selected || copying) await onCreated?.(item);
       await reload();
     } catch (caught) {
@@ -809,18 +838,8 @@ function ContentEditor({
         <button type="button" className="secondary" disabled={busy} onClick={onClose}>
           ← 서재 목록
         </button>
-        <h2>{selected ? selected.title : '새 자료'}</h2>
+        <h2>{selected ? selected.title : `새 ${contentLabels[kind]}`}</h2>
         <div className="library-detail-actions">
-          {selected && (selected.kind === 'bot' || selected.package) && onStartStory && (
-            <button
-              type="button"
-              className="secondary"
-              disabled={busy || dirty || !!importedPackage || behaviorDraftDirty || portraitBusy}
-              onClick={() => onStartStory(selected)}
-            >
-              {selected.kind === 'bot' ? '채팅 시작' : '이 자료를 봇으로 시작'}
-            </button>
-          )}
           {selected && (
             <DeleteButton
               path={`/content/${encodeURIComponent(selected.id)}`}
@@ -829,7 +848,7 @@ function ContentEditor({
               label="자료 삭제"
               iconOnly
               disabled={busy}
-              description="이 자료의 모든 저장 버전과 현재 편집 초안을 삭제해요. 되돌릴 수 없고, 다른 자료나 채팅에서 사용 중이면 삭제할 수 없어요."
+              description="이 자료와 현재 편집 초안을 삭제해요. 되돌릴 수 없고, 다른 자료나 채팅에서 사용 중이면 삭제할 수 없어요."
               onError={onError}
               onDeleted={async () => {
                 onDeleted();
@@ -839,6 +858,9 @@ function ContentEditor({
           )}
         </div>
       </div>
+      <p className="library-editor-guide">
+        {contentGuidance[value.kind].description} {contentGuidance[value.kind].example}
+      </p>
       <form
         className="editor-grid"
         onSubmit={async (event) => {
@@ -847,43 +869,8 @@ function ContentEditor({
         }}
       >
         <fieldset className="editor-fields full" disabled={busy}>
-          {value.package && (
-            <div className="full">
-              <PackagePortraitEditor
-                value={value.package}
-                onChange={(pkg) => setValue((current) => ({ ...current, package: pkg }))}
-                onDirtyChange={setPortraitBusy}
-                disabled={busy}
-              />
-            </div>
-          )}
-          <label>
-            서재 분류
-            <select
-              aria-label="자료 종류"
-              value={selected ? libraryCategory(library, selected) : value.kind}
-              disabled={!!selected}
-              onChange={(event) => {
-                const next = event.target.value as ContentKind;
-                setValue({
-                  ...value,
-                  kind: next,
-                  loading: freshContent(next).loading,
-                  ...(!value.package && ['bot', 'persona', 'module'].includes(next)
-                    ? { package: packageFromContent(value) }
-                    : {}),
-                });
-              }}
-            >
-              {Object.entries(contentLabels).map(([key, title]) => (
-                <option key={key} value={key}>
-                  {title}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label>
-            자료 이름
+          <label className="full">
+            이름
             <input
               aria-label="자료 이름"
               value={value.title}
@@ -893,42 +880,109 @@ function ContentEditor({
             />
           </label>
           <label className="full">
-            자료 설명
-            <input
-              aria-label="자료 설명"
-              value={value.description}
-              maxLength={1000}
-              onChange={(event) => setValue({ ...value, description: event.target.value })}
-            />
-          </label>
-          <label className="full">
-            자료 본문
+            {value.kind === 'bot'
+              ? '성격과 대화 지침'
+              : value.kind === 'persona'
+                ? '내 인물의 설정'
+                : '더할 설정과 지침'}
             <textarea
               aria-label="자료 본문"
-              rows={10}
+              rows={5}
               value={value.text}
               maxLength={100000}
               required={!value.package}
               onChange={(event) => setValue({ ...value, text: event.target.value })}
             />
           </label>
-          {value.package ? (
-            <PackageFields
-              value={value.package}
-              onChange={(pkg) => setValue((current) => ({ ...current, package: pkg }))}
-              onBehaviorDraftChange={setBehaviorDraftDirty}
+          <label className="full">
+            짧은 소개 · 선택
+            <input
+              aria-label="자료 설명"
+              value={value.description}
+              maxLength={1000}
+              placeholder="서재 목록에 보여줄 한 줄 소개"
+              onChange={(event) => setValue({ ...value, description: event.target.value })}
             />
-          ) : (
-            ['bot', 'persona', 'module'].includes(value.kind) && (
-              <button
-                type="button"
-                className="secondary"
-                onClick={() => setValue({ ...value, package: packageFromContent(value) })}
-              >
-                공통 패키지로 확장
-              </button>
-            )
+          </label>
+          {value.package && (
+            <details className="library-editor-extra full">
+              <summary>대표 이미지 · 선택</summary>
+              <div className="library-editor-extra-body">
+                <PackagePortraitEditor
+                  value={value.package}
+                  onChange={(pkg) => setValue((current) => ({ ...current, package: pkg }))}
+                  onDirtyChange={setPortraitBusy}
+                  disabled={busy}
+                />
+              </div>
+            </details>
           )}
+          <details className="library-editor-extra full">
+            <summary>분류·읽기 설정</summary>
+            <div className="library-editor-extra-body">
+              <label>
+                서재 분류
+                <select
+                  aria-label="자료 종류"
+                  value={selected ? libraryCategory(library, selected) : value.kind}
+                  disabled={!!selected}
+                  onChange={(event) => {
+                    const next = event.target.value as ContentKind;
+                    setValue({
+                      ...value,
+                      kind: next,
+                      loading: freshContent(next).loading,
+                      ...(!value.package && ['bot', 'persona', 'module'].includes(next)
+                        ? { package: packageFromContent(value) }
+                        : {}),
+                    });
+                  }}
+                >
+                  {Object.entries(contentLabels).map(([key, title]) => (
+                    <option key={key} value={key}>
+                      {title}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                이 자료를 읽는 방법
+                <select
+                  aria-label="기본 로딩"
+                  value={value.loading}
+                  onChange={(event) =>
+                    setValue({ ...value, loading: event.target.value as Content['loading'] })
+                  }
+                >
+                  <option value="pinned">항상 포함</option>
+                  <option value="discoverable">모델이 필요할 때 읽기</option>
+                </select>
+              </label>
+            </div>
+          </details>
+          <details className="library-editor-extra full">
+            <summary>고급 패키지 설정</summary>
+            <div className="library-editor-extra-body">
+              <p className="muted">로어, 시작 장면, 역할별 지침과 동작을 더할 수 있어요.</p>
+              {value.package ? (
+                <PackageFields
+                  value={value.package}
+                  onChange={(pkg) => setValue((current) => ({ ...current, package: pkg }))}
+                  onBehaviorDraftChange={setBehaviorDraftDirty}
+                />
+              ) : (
+                ['bot', 'persona', 'module'].includes(value.kind) && (
+                  <button
+                    type="button"
+                    className="secondary"
+                    onClick={() => setValue({ ...value, package: packageFromContent(value) })}
+                  >
+                    공통 패키지로 확장
+                  </button>
+                )
+              )}
+            </div>
+          </details>
           <details className="library-package-tools full">
             <summary>패키지 가져오기·내보내기와 역할 사본</summary>
             <div className="library-package-tools-body">
@@ -993,19 +1047,6 @@ function ContentEditor({
               </section>
             </div>
           </details>
-          <label className="library-loading full">
-            이 자료를 읽는 방법
-            <select
-              aria-label="기본 로딩"
-              value={value.loading}
-              onChange={(event) =>
-                setValue({ ...value, loading: event.target.value as Content['loading'] })
-              }
-            >
-              <option value="pinned">항상 포함</option>
-              <option value="discoverable">모델이 필요할 때 읽기</option>
-            </select>
-          </label>
         </fieldset>
         {error && (
           <p className="error full" role="alert">
@@ -1018,17 +1059,32 @@ function ContentEditor({
           </p>
         )}
         <div className="library-savebar form-actions full">
-          <button disabled={busy || !!importedPackage || behaviorDraftDirty || portraitBusy}>
-            {busy ? '저장 중…' : selected ? '새 revision 저장' : '자료 등록'}
+          {selected && (selected.kind === 'bot' || selected.package) && onStartStory && (
+            <button
+              type="button"
+              disabled={busy || dirty || !!importedPackage || behaviorDraftDirty || portraitBusy}
+              onClick={() => onStartStory(selected)}
+            >
+              {selected.kind === 'bot' ? '채팅 시작' : '이 자료를 봇으로 시작'}
+            </button>
+          )}
+          <button
+            className={selected ? 'secondary' : ''}
+            disabled={busy || !!importedPackage || behaviorDraftDirty || portraitBusy}
+          >
+            {busy ? '저장 중…' : selected ? '변경사항 저장' : '자료 등록'}
           </button>
           <span role="status">{saved}</span>
         </div>
         {selected && (
           <>
-            <small className="full">서재에서 수정해도 기존 이야기에 장착된 버전은 유지돼요.</small>
+            <small className="full">
+              저장하면 이 자료를 사용하는 채팅의 다음 실행부터 반영돼요. 이전 설정을 유지하려면
+              복제해 주세요.
+            </small>
             <details className="library-diagnostics full">
               <summary>자료 저장 정보</summary>
-              <p>현재 버전 v{selected.revision}</p>
+
               <code>{selected.id}</code>
             </details>
           </>
@@ -1037,5 +1093,3 @@ function ContentEditor({
     </section>
   );
 }
-
-export { ConnectionEditor } from './ProviderSettings.js';

@@ -2,6 +2,8 @@
 
 이 문서의 마지막 통합 기록은 [Sol 통합 요약](../output/sol-provider/2026-09-07/summary.json)이에요. 당시 [기존 UI](../output/playwright/ui-2026-09-07T02-09-41-126Z-d7e26af4/summary.json) 9 unit + 19 browser와 [Sol 설정 UI](../output/playwright/sol-ui-2026-09-07T02-10-02-278Z-1a8f24c4/summary.json) 2 browser가 PASS예요. 아래는 단계별 고정 화면·측정 기록이며, 당시의 source/build·지원 범위·미커밋 설명을 현재 상태로 해석하지 않아요. 이후 UI 개편과 현재 검증 상태는 [CURRENT](CURRENT.md)를 확인해요. 실제 휴대폰·키보드/IME 검증은 별도예요.
 
+2026-09-08 정리에서 당시 화면 수집용 `scripts/ui-evidence.mjs`는 제거했어요. 현재 필수 봇·모델 선택과 달라진 화면을 지원하지 않는 일회성 스크립트였으며, 기존 스크린샷·manifest와 아래 기록은 보존해요. 새 브라우저 회귀는 `npm run verify:redesign`, 로딩 측정은 `node scripts/measure-loading.mjs`를 사용해요.
+
 # 번역·직접 편집 UI 후속 · 2026-09-07
 
 원문 우선 표시와 **번역 보기**의 명시 시작, 최신 번역 하나, **원문 수정 / 번역 수정** 편집기를 추가했어요. 초안 재복원·저장 충돌·이야기 간 비동기 응답 경계·직접 저장한 번역 보호를 실제 브라우저에서 확인했어요.

@@ -12,7 +12,6 @@ type Row = Record<string, any>;
 const reject = (message: string): never => {
   throw new HttpError(409, message);
 };
-export const packageRequestTables = ['package_requests'];
 export function initPackageRequests(store: Store) {
   store.db.exec(`CREATE TABLE IF NOT EXISTS package_requests(
     id TEXT PRIMARY KEY,chat_id TEXT NOT NULL REFERENCES chats(id),branch_id TEXT NOT NULL REFERENCES branches(id),

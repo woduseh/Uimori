@@ -55,6 +55,7 @@ export type AuxiliaryBundle = {
   assets?: AssetEntry[];
   translationReferences?: TranslationReference[];
   plan?: TranslationPlan;
+  translationChunkChars?: number | null;
   chunks?: AuxiliaryChunkRecord[];
   retryChunkIds?: string[];
 };
@@ -421,7 +422,13 @@ export async function runAuxiliaryJob(
     job.kind === 'translation'
       ? bundle.plan
         ? validateTranslationPlan(source, context, bundle.plan)
-        : createTranslationPlan(source, context, hooks.maxChunkChars)
+        : createTranslationPlan(
+            source,
+            context,
+            bundle.translationChunkChars === undefined
+              ? hooks.maxChunkChars
+              : bundle.translationChunkChars
+          )
       : undefined;
   if (
     plan &&

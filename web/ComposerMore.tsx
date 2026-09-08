@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
 import { Ellipsis, X } from 'lucide-react';
 import './composer-more.css';
 
@@ -21,7 +21,12 @@ export function LoreResetChip({ selected, disabled, onChange }: Props) {
   ) : null;
 }
 
-export function ComposerMore({ selected, disabled, onChange }: Props) {
+export function ComposerMore({
+  selected,
+  disabled,
+  onChange,
+  children,
+}: Props & { children?: ReactNode }) {
   const [open, setOpen] = useState(false);
   const root = useRef<HTMLDivElement>(null),
     trigger = useRef<HTMLButtonElement>(null),
@@ -29,7 +34,12 @@ export function ComposerMore({ selected, disabled, onChange }: Props) {
   const id = useId();
   useEffect(() => {
     if (!open) return;
-    choice.current?.focus();
+    const first = [
+      ...(root.current?.querySelectorAll<HTMLElement>(
+        '.composer-extra-settings button, .composer-extra-settings select'
+      ) ?? []),
+    ].find((node) => !node.matches(':disabled') && node.checkVisibility());
+    (first ?? choice.current)?.focus();
     const outside = (event: PointerEvent) => {
       if (!root.current?.contains(event.target as Node)) setOpen(false);
     };
@@ -47,6 +57,7 @@ export function ComposerMore({ selected, disabled, onChange }: Props) {
         if (!event.currentTarget.contains(event.relatedTarget)) setOpen(false);
       }}
       onKeyDown={(event) => {
+        if ((event.target as HTMLElement).closest('dialog[open]')) return;
         if (event.key === 'Escape' && open) {
           event.preventDefault();
           event.stopPropagation();
@@ -60,7 +71,7 @@ export function ComposerMore({ selected, disabled, onChange }: Props) {
         type="button"
         className="icon-button"
         aria-label="입력창 더보기"
-        title="더보기"
+        title="대화 설정과 이번 요청 옵션"
         aria-expanded={open}
         aria-controls={id}
         disabled={disabled}
@@ -70,6 +81,11 @@ export function ComposerMore({ selected, disabled, onChange }: Props) {
       </button>
       {open && (
         <div id={id} className="composer-more-panel" role="group" aria-label="이번 요청 옵션">
+          {children && (
+            <div className="composer-extra-settings" aria-label="대화 설정">
+              {children}
+            </div>
+          )}
           <label>
             <input
               ref={choice}

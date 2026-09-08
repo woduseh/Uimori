@@ -195,6 +195,10 @@ if (process.env.NR_SELF_HOST_BROWSER === '1')
         const bot = (await response.json()) as Content;
         await pc.reload();
         await pc.getByRole('button', { name: `${bot.title} 새 채팅`, exact: true }).click();
+        await pc
+          .getByRole('dialog', { name: '새 채팅', exact: true })
+          .locator('.new-story-options > summary')
+          .click();
         await pc.getByLabel('새 채팅 이름', { exact: true }).fill(title);
         const created = pc.waitForResponse(
           (item) =>

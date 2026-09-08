@@ -359,77 +359,7 @@ export function LoreEditor({
                   </select>
                 </label>
               </div>
-              <fieldset className="lore-placement-fields">
-                <legend>고정 포함 때의 배치</legend>
-                <label>
-                  배치
-                  <select
-                    aria-label={`로어 ${index + 1} 배치`}
-                    value={item.loreContext?.placement ?? 'background'}
-                    onChange={(event) =>
-                      changeItem({
-                        loreContext: {
-                          ...item.loreContext,
-                          placement: event.target.value as 'background' | 'scene',
-                        },
-                      })
-                    }
-                  >
-                    <option value="background">배경 · 앞쪽의 공통 설정</option>
-                    <option value="scene">장면 · 현재 요청 근처</option>
-                  </select>
-                </label>
-                <div className="lore-placement-row">
-                  <label>
-                    배치 묶음
-                    <input
-                      aria-label={`로어 ${index + 1} 배치 묶음`}
-                      maxLength={200}
-                      value={item.loreContext?.group ?? ''}
-                      onChange={(event) =>
-                        changeItem({
-                          loreContext: {
-                            placement: 'background',
-                            ...item.loreContext,
-                            group: event.target.value || undefined,
-                          },
-                        })
-                      }
-                    />
-                  </label>
-                  <label>
-                    묶음 안 순서
-                    <input
-                      aria-label={`로어 ${index + 1} 배치 순서`}
-                      inputMode="numeric"
-                      placeholder="0"
-                      value={
-                        orderDrafts[item.id] ??
-                        (item.loreContext?.order === undefined
-                          ? ''
-                          : String(item.loreContext.order))
-                      }
-                      onChange={(event) => changeOrder(event.target.value)}
-                      aria-invalid={Object.hasOwn(orderDrafts, item.id)}
-                    />
-                  </label>
-                </div>
-                <small className="muted">
-                  순서는 −1,000,000–1,000,000의 정수예요. 비우면 0으로 정렬해요.
-                </small>
-                {Object.hasOwn(orderDrafts, item.id) && (
-                  <p className="error" role="alert">
-                    정수 범위를 확인해 주세요. 입력한 초안은 유지돼요.
-                  </p>
-                )}
-                <small className="muted">
-                  자동 로어는 도구를 호출한 위치에서 읽어요. 다음 생성에 유지하는 구간은 처음 읽은
-                  이력 위치에 놓아요. 위 배치는 고정 로어에 사용해요.
-                </small>
-                <small className="muted">
-                  사용자가 만든 PromptProgram의 슬롯·역할·순서는 자동으로 바꾸지 않아요.
-                </small>
-              </fieldset>
+
               <label>
                 검색용 설명
                 <input
@@ -448,6 +378,79 @@ export function LoreEditor({
                   onChange={(event) => changeItem({ text: event.target.value })}
                 />
               </label>
+              {(item.loading === 'pinned' || Object.hasOwn(orderDrafts, item.id)) && (
+                <fieldset className="lore-placement-fields">
+                  <legend>고정 포함 때의 배치</legend>
+                  <label>
+                    배치
+                    <select
+                      aria-label={`로어 ${index + 1} 배치`}
+                      value={item.loreContext?.placement ?? 'background'}
+                      onChange={(event) =>
+                        changeItem({
+                          loreContext: {
+                            ...item.loreContext,
+                            placement: event.target.value as 'background' | 'scene',
+                          },
+                        })
+                      }
+                    >
+                      <option value="background">배경 · 앞쪽의 공통 설정</option>
+                      <option value="scene">장면 · 현재 요청 근처</option>
+                    </select>
+                  </label>
+                  <div className="lore-placement-row">
+                    <label>
+                      배치 묶음
+                      <input
+                        aria-label={`로어 ${index + 1} 배치 묶음`}
+                        maxLength={200}
+                        value={item.loreContext?.group ?? ''}
+                        onChange={(event) =>
+                          changeItem({
+                            loreContext: {
+                              placement: 'background',
+                              ...item.loreContext,
+                              group: event.target.value || undefined,
+                            },
+                          })
+                        }
+                      />
+                    </label>
+                    <label>
+                      묶음 안 순서
+                      <input
+                        aria-label={`로어 ${index + 1} 배치 순서`}
+                        inputMode="numeric"
+                        placeholder="0"
+                        value={
+                          orderDrafts[item.id] ??
+                          (item.loreContext?.order === undefined
+                            ? ''
+                            : String(item.loreContext.order))
+                        }
+                        onChange={(event) => changeOrder(event.target.value)}
+                        aria-invalid={Object.hasOwn(orderDrafts, item.id)}
+                      />
+                    </label>
+                  </div>
+                  <small className="muted">
+                    순서는 −1,000,000–1,000,000의 정수예요. 비우면 0으로 정렬해요.
+                  </small>
+                  {Object.hasOwn(orderDrafts, item.id) && (
+                    <p className="error" role="alert">
+                      정수 범위를 확인해 주세요. 입력한 초안은 유지돼요.
+                    </p>
+                  )}
+                  <small className="muted">
+                    자동 로어는 도구를 호출한 위치에서 읽어요. 다음 생성에 유지하는 구간은 처음 읽은
+                    이력 위치에 놓아요. 위 배치는 고정 로어에 사용해요.
+                  </small>
+                  <small className="muted">
+                    사용자가 만든 PromptProgram의 슬롯·역할·순서는 자동으로 바꾸지 않아요.
+                  </small>
+                </fieldset>
+              )}
               <small className="muted">
                 UTF-16 {item.text.length.toLocaleString()}자 · 자료를 저장하면 변경 사항이 함께
                 저장돼요.

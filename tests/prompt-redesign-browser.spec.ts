@@ -90,7 +90,14 @@ test('PRUI01 optional template draft safety and reusable prompt-owned combinatio
   ).toBeEnabled();
   await editor.getByRole('button', { name: '기존 프롬프트 수정 저장', exact: true }).click();
   await expect(editor.getByLabel('불러올 프롬프트', { exact: true })).toHaveValue(`${saved.id}@2`);
-  await expect(global.locator('option')).toHaveText(['직접 선택']);
+  await expect(global.locator('option')).toHaveCount(3);
+  await expect(global.getByRole('option', { name: 'Reusable detailed', exact: true })).toHaveCount(
+    1
+  );
+  await expect(global.getByRole('option', { name: 'Reusable medium', exact: true })).toHaveCount(1);
+  await expect(
+    global.getByRole('option', { name: 'Foreign combination', exact: true })
+  ).toHaveCount(0);
   const response = await request.get(`/api/revisions/prompt-preset/${saved.id}/2`);
   expect(response.ok()).toBe(true);
   const revised = await response.json();

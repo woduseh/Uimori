@@ -1,6 +1,7 @@
 import { test, expect, type Page, type APIRequestContext } from '@playwright/test';
 import type { Content, Library } from '../core/product.js';
 import type { ChatDetail } from '../core/types.js';
+import { editLibraryContent, revealLibraryEditor } from './ui-navigation.js';
 
 const png = Buffer.from(
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jG1sAAAAASUVORK5CYII=',
@@ -58,6 +59,7 @@ test('shared persona draft uploads an image and starts as a bot with an exact au
     buffer: Buffer.from(JSON.stringify(pkg)),
   });
   await library.getByRole('button', { name: '가져온 패키지로 초안 바꾸기', exact: true }).click();
+  await revealLibraryEditor(page);
   const tabs = library.getByRole('group', { name: '패키지 편집 분류', exact: true });
   await tabs.getByRole('button', { name: '이미지', exact: true }).click();
   const images = library.getByRole('region', { name: '자료 이미지', exact: true });
@@ -76,7 +78,9 @@ test('shared persona draft uploads an image and starts as a bot with an exact au
   await library.getByLabel('시작 본문', { exact: true }).fill(text);
   expect(chatPosts).toBe(0);
   await library.getByRole('button', { name: '자료 등록', exact: true }).click();
-  await expect(library.getByText(`${title} · v1 저장됨`, { exact: true })).toBeVisible();
+  await expect(
+    library.getByText(`${title} 저장됨 · 다음 실행부터 사용해요.`, { exact: true })
+  ).toBeVisible();
   const saved = await savedContent(request, title);
   expect(saved.kind).toBe('persona');
   expect(saved.package!.portraitImageId).toBe(saved.package!.images![0].id);
@@ -171,11 +175,7 @@ test('shared package image editing pages large lists and preserves old revisions
   expect(response.ok()).toBe(true);
   const first: Content = await response.json();
   const library = await libraryFor(page, '모듈');
-  await library.getByRole('button', { name: `${title} 상세 보기`, exact: true }).click();
-  await library
-    .locator('.library-detail-actions > button')
-    .filter({ hasText: /^편집$/ })
-    .click();
+  await editLibraryContent(page, title);
   await library
     .getByRole('group', { name: '패키지 편집 분류', exact: true })
     .getByRole('button', { name: '이미지', exact: true })
@@ -192,8 +192,10 @@ test('shared package image editing pages large lists and preserves old revisions
   await images.getByRole('button', { name: '이 자료에서 이미지 제거', exact: true }).click();
   await expect(images.getByRole('alertdialog')).toContainText('과거 장면');
   await images.getByRole('button', { name: '이미지 참조 제거', exact: true }).click();
-  await library.getByRole('button', { name: '새 revision 저장', exact: true }).click();
-  await expect(library.getByText(`${title} · v2 저장됨`, { exact: true })).toBeVisible();
+  await library.getByRole('button', { name: '변경사항 저장', exact: true }).click();
+  await expect(
+    library.getByText(`${title} 저장됨 · 다음 실행부터 사용해요.`, { exact: true })
+  ).toBeVisible();
   const second = await savedContent(request, title);
   expect(second.package!.images).toHaveLength(59);
   expect(second.package!.images![0]).toMatchObject({

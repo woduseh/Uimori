@@ -10,6 +10,17 @@ export const artifactRoot = path.join(root, 'output', 'playwright');
 export const canary = 'm0-secret-canary-do-not-record-73915';
 export const newId = () =>
   `${new Date().toISOString().replaceAll(/[:.]/g, '-')}-${randomUUID().slice(0, 8)}`;
+export function createOwnership(directory, startedAt) {
+  return {
+    runId: path.basename(directory),
+    ownerPid: process.pid,
+    root,
+    directory: path.resolve(directory),
+    active: true,
+    children: [],
+    startedAt,
+  };
+}
 export async function json(file, value) {
   await mkdir(path.dirname(file), { recursive: true });
   await writeFile(file, JSON.stringify(value, null, 2) + '\n');

@@ -1,5 +1,7 @@
 # 네이티브 요청과 제출 계약
 
+> 역사적 기록: 아래는 2026-09-07 native 통합 당시의 요청·provider 지원과 검증 기록이에요. 이후 전용 native/hidden 실행기와 Sol provider를 제거했으므로 `native.host-context`, hidden seed, non-Sol 분기, v8 및 당시 테스트 경로는 현행 사용 안내가 아니에요. 현재 실행 계약은 [프롬프트 실행](../docs/PROMPT-RUNTIME.md), [원문 구간](../docs/SOURCE-SEGMENTS.md), [공급자와 모델 설정](../docs/MODEL-PARAMETERS.md), [선택형 평가 도구](EVALUATION-TOOLS.md)를 확인해요. 현재 저장 형식과 검증 상태는 [CURRENT](CURRENT.md)를 따라요.
+
 2026-09-07의 `server/main-request.ts`는 실제 메인 실행과 무호출 미리보기의 ProviderRequest 구성을 공유해요. 미리보기의 `exact-request-body`는 그 미리보기 스냅샷에 대한 해당 프로토콜의 실제 인코더 본문이며, 인증 헤더·fetch·attempt 기록·과금은 없어요. 이후 실제 Run은 실행 ID와 hidden 선택 seed, 최신 자료·설정이 달라질 수 있으므로 미래 요청과 byte 동일하다는 의미는 아니에요. 번역/상태 대기 중의 `mapping-only`는 역할 변환만 보여주며 실제 보호 구간·도구·schema를 포함한 실행 본문이라는 주장을 하지 않아요.
 
 정적 host 권한 문구와 동적 자료를 구분해요. `native.host-context` user 메시지는 첫 history/current 직전에 들어가며 저장된 compilation에도 나타나요. 사용자 블록의 role/순서와 cache message ID는 유지해요. 구조화된 메인 프리셋의 memory는 선택한 memory 슬롯에만 들어가요. state 슬롯을 선언하면 state도 그 슬롯에만 들어가고, 구조화된 프리셋의 pinned 본문은 description/persona/lore 등의 슬롯이 소유해요. 원문 이력과 현재 요청을 host JSON으로 다시 보내지 않아요. 도구 결과는 후속 요청의 provider-native tool result로만 이어져요.

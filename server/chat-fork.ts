@@ -248,7 +248,7 @@ export function forkChat(store: Store, chatId: string, value: unknown): Chat {
         const input =
           job.kind === 'image'
             ? forkImageInput(oldInput, assetIds)
-            : job.kind === 'translation' && oldInput
+            : ['translation', 'status'].includes(job.kind) && oldInput
               ? structuredClone(
                   Object.fromEntries(
                     [
@@ -256,6 +256,9 @@ export function forkChat(store: Store, chatId: string, value: unknown): Chat {
                       'promptControlSelection',
                       'translationModelSelection',
                       'translationModelSnapshot',
+                      'translationChunkChars',
+                      'statusModelSelection',
+                      'statusModelSnapshot',
                     ]
                       .filter((key) => Object.hasOwn(oldInput, key))
                       .map((key) => [key, oldInput[key]])

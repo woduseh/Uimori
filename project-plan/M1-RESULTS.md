@@ -114,7 +114,7 @@
 | Q01/Q02/Q03/Q05 품질 | 미평가 — 구조/실행 성공이 품질 합격을 뜻하지 않음 |
 | M2 | 시작하지 않음 |
 
-연결·재시도 방법은 [공급자 연결 안내](../docs/PROVIDERS.md#vertex-ai-연결과-합성-시험), 공식 API와 Provider Manager/Gemini CLI의 source·직접 테스트·채택/비채택은 [SOURCES](SOURCES.md)에 있어요.
+연결·재시도 방법은 [공급자 연결 안내](../docs/PROVIDERS.md#google-agent-platform-연결과-합성-시험), 공식 API와 Provider Manager/Gemini CLI의 source·직접 테스트·채택/비채택은 [SOURCES](SOURCES.md)에 있어요.
 
 ## 이전 M1 로컬 완료 기록 · 보존
 

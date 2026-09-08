@@ -50,12 +50,7 @@ async function storySettings(page: Page) {
   return page.getByRole('dialog', { name: '채팅 설정', exact: true });
 }
 async function profileInfo(page: Page) {
-  const panel = page.getByTestId('profile-editor');
-  const info = panel
-    .locator('details')
-    .filter({ has: page.locator('summary', { hasText: '설정 저장 정보' }) });
-  if ((await info.getAttribute('open')) === null) await info.locator('summary').click();
-  return panel;
+  return page.getByTestId('profile-editor');
 }
 async function promptTab(page: Page) {
   const panel = page.getByTestId('profile-editor');
@@ -87,7 +82,7 @@ async function openDetails(page: Page, testId: string) {
   return profileInfo(page);
 }
 
-test('P01 package revisions stay pinned and prompt-owned creative choices replace prior values', async ({
+test('P01 packages use latest settings and prompt-owned creative choices replace prior values', async ({
   page,
   request,
 }) => {
@@ -148,14 +143,14 @@ test('P01 package revisions stay pinned and prompt-owned creative choices replac
   await page
     .getByLabel('자료 본문', { exact: true })
     .fill('Mira is a synthetic harbor keeper. Her compass is silver in this revision.');
-  await page.getByRole('button', { name: '새 revision 저장', exact: true }).click();
-  await expect(library.getByRole('status')).toContainText('v2 저장됨');
+  await page.getByRole('button', { name: '변경사항 저장', exact: true }).click();
+  await expect(library.getByRole('status')).toContainText('저장됨 · 다음 실행부터 사용해요.');
   await openDetails(page, 'profile-editor');
   await expect(
     profile
       .locator('.package-attachment')
       .filter({ has: page.getByRole('heading', { name: added.title, exact: true }) })
-  ).toContainText('v1');
+  ).not.toContainText('v1');
   const editor = await promptTab(page);
   await editor.getByLabel('불러올 프롬프트', { exact: true }).selectOption(`${choice.prompt.id}@1`);
   await editor.getByRole('button', { name: '이야기에 선택 적용', exact: true }).click();
@@ -184,11 +179,11 @@ test('P01 package revisions stay pinned and prompt-owned creative choices replac
     .toBe('completed');
   const saved = (await getDetail(request, chat.id)).runs.find((item) => item.id === run.id)!;
   expect(saved.snapshot.profile?.packages?.find((pkg) => pkg.id === added.id)?.body).toBe(
-    firstBody
+    'Mira is a synthetic harbor keeper. Her compass is silver in this revision.'
   );
   expect(saved.snapshot.profile?.packageAttachments).toEqual([
     owner,
-    { id: added.id, revision: 1, role: 'module' },
+    { id: added.id, revision: 2, role: 'module' },
   ]);
   expect(saved.snapshot.profile?.promptControls?.[`${choice.prompt.id}@1`]?.values).toEqual({
     detail: 1,
@@ -292,7 +287,7 @@ test('P04 manual model IDs and distinct main/translation routing preserve connec
   await page.getByLabel('원문 모델', { exact: true }).selectOption(`${modelRefs[0].id}`);
   await page.getByLabel('번역 모델', { exact: true }).selectOption(`${modelRefs[1].id}`);
   await page.getByRole('button', { name: '콘텐츠와 제어 저장', exact: true }).click();
-  await expect(page.getByText('장착 설정 v2')).toBeVisible();
+  await expect.poll(async () => (await getDetail(request, chat.id)).profile?.revision).toBe(2);
   const profile = (await getDetail(request, chat.id)).profile!;
   expect(profile.routes.main).toEqual({ id: modelRefs[0].id });
   expect(profile.routes.translation).toEqual({ id: modelRefs[1].id });
@@ -314,9 +309,19 @@ test('P09 P10 P13 fork from a completed scene preserves long prose and annotatio
   context,
   request,
 }, testInfo) => {
-  const chat = await createChat(page, `합성 P09-${Date.now()}`);
+  const initial = await createChat(page, `합성 P09-${Date.now()}`);
   const errors: string[] = [];
   page.on('pageerror', (error) => errors.push(error.message));
+  const settingsResponse = await request.patch(`/api/chats/${initial.id}/settings`, {
+    data: {
+      expectedSettingsRevision: initial.settingsRevision,
+      ...initial.settings,
+      status: true,
+    },
+  });
+  expect(settingsResponse.ok(), await settingsResponse.text()).toBe(true);
+  const chat = (await settingsResponse.json()) as Chat;
+  await page.reload();
   await storySettings(page);
   const imagePanel = page
     .locator('details')
@@ -372,7 +377,7 @@ test('P09 P10 P13 fork from a completed scene preserves long prose and annotatio
   await page.getByLabel('이미지 선택 모델', { exact: true }).selectOption(imageModel.id);
   await page.getByLabel('보조 이미지 표시', { exact: true }).check();
   await page.getByRole('button', { name: '콘텐츠와 제어 저장', exact: true }).click();
-  await expect(page.getByText('장착 설정 v2')).toBeVisible();
+  await expect.poll(async () => (await getDetail(request, chat.id)).profile?.revision).toBe(2);
   const first = await send(
     page,
     'SYNTHETIC_FORK: Mira waits at the pier.\n\n' +
@@ -739,7 +744,7 @@ test('P04 Vertex settings use service-account references and persist distinct ma
   await page.getByLabel('원문 모델', { exact: true }).selectOption(`${models[0].id}`);
   await page.getByLabel('번역 모델', { exact: true }).selectOption(`${models[1].id}`);
   await page.getByRole('button', { name: '콘텐츠와 제어 저장', exact: true }).click();
-  await expect(page.getByText('장착 설정 v2')).toBeVisible();
+  await expect.poll(async () => (await getDetail(request, chat.id)).profile?.revision).toBe(2);
   const detail = await getDetail(request, chat.id);
   expect(detail.profile?.routes).toMatchObject({
     main: { id: models[0].id },

@@ -55,32 +55,6 @@
   min-height: 44px;
   font-size: 12px;
 }
-.prompt-file {
-  position: relative;
-  overflow: hidden;
-  border: 1px solid var(--border);
-  background: var(--surface-raised);
-  border-radius: 8px;
-  padding: 10px 12px;
-  min-height: 44px;
-  display: flex;
-  align-items: center;
-  font-size: 12px;
-  box-sizing: border-box;
-  cursor: pointer;
-}
-.prompt-file input {
-  position: absolute;
-  inset: 0;
-  opacity: 0;
-  cursor: pointer;
-  width: 100%;
-  min-width: 0;
-}
-.prompt-file:focus-within {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
-}
 .prompt-editor textarea {
   min-height: 220px;
   height: min(42dvh, 440px);
@@ -97,12 +71,6 @@
 .prompt-editor-expanded textarea {
   height: 70dvh;
   max-height: 80dvh;
-}
-.prompt-text-note {
-  font-size: 11px;
-  line-height: 1.65;
-  color: var(--muted);
-  margin: 0;
 }
 .prompt-status {
   min-height: 1.6em;
@@ -141,8 +109,7 @@
     width: 100%;
     white-space: normal;
   }
-  .prompt-editor-tools > button,
-  .prompt-file {
+  .prompt-editor-tools > button {
     flex: 1 1 130px;
   }
   .prompt-editor-tools {

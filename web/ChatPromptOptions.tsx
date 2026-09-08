@@ -8,6 +8,7 @@ import type {
 } from '../core/product.js';
 import {
   resolvePromptValues,
+  reconcilePromptValues,
   validateChatPromptControls,
   type ChatPromptControls,
   type PromptValue,
@@ -37,19 +38,18 @@ export function ChatPromptOptions(props: Props) {
   const [loadError, setLoadError] = useState('');
   const [retry, setRetry] = useState(0);
   const reference = props.profile?.prompts?.main;
-  const referenceKey = reference ? keyOf(reference) : '';
-  const preset = [...(props.library?.promptPresets ?? []), ...revisions].find(
-    (item) => keyOf(item) === referenceKey
-  );
+  const preset = [...(props.library?.promptPresets ?? []), ...revisions]
+    .sort((a, b) => b.revision - a.revision)
+    .find((item) => item.id === reference?.id && item.revision >= (reference?.revision ?? 0));
   const referenceId = reference?.id,
     referenceRevision = reference?.revision,
     hasPreset = !!preset;
-  // biome-ignore lint/correctness/useExhaustiveDependencies: Retry explicitly reloads the same pinned prompt revision.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: Retry reloads the selected current prompt; reference changes invalidate previous reads.
   useEffect(() => {
     let alive = true;
     setLoadError('');
     if (referenceId !== undefined && !hasPreset)
-      void api<PromptPreset>(`/revisions/prompt-preset/${referenceId}/${referenceRevision}`)
+      void api<PromptPreset>(`/prompt-presets/${referenceId}`)
         .then((item) => {
           if (alive) setRevisions((current) => [...current, item]);
         })
@@ -127,9 +127,15 @@ export function ChatPromptOptions(props: Props) {
           <X size={20} />
         </button>
       </header>
+      {!!props.profile?.optionAdjustments?.length && (
+        <p role="status" className="chat-options-body">
+          현재 옵션과 맞지 않는 이전 선택값은 기본값으로 조정했어요.{' '}
+          {props.profile.optionAdjustments.join(' · ')}
+        </p>
+      )}
       {props.profile && preset ? (
         <OptionsEditor
-          key={`${props.profile.chatId}:${referenceKey}`}
+          key={`${props.profile.chatId}:${keyOf(preset)}`}
           {...props}
           profile={props.profile}
           preset={preset}
@@ -182,13 +188,13 @@ function OptionsEditor({
   const dirty = JSON.stringify(draft.state) !== JSON.stringify(baseline);
   const conflict = profile.revision > draft.base.revision;
   const combinations =
-    props.library?.promptCombinations?.filter((item) => keyOf(item.prompt) === promptKey) ?? [];
+    props.library?.promptCombinations?.filter((item) => item.prompt.id === preset.id) ?? [];
   const resolved = (values: Record<string, PromptValue>) =>
     resolvePromptValues(preset.program, values);
   const matches = (item: SavedPromptCombination) => {
     try {
       const a = resolved(draft.state.values),
-        b = resolved(item.values);
+        b = reconcilePromptValues(preset.program, item.values).values;
       return preset.program.controls.every((control) => a[control.id] === b[control.id]);
     } catch {
       return false;
@@ -282,15 +288,19 @@ function OptionsEditor({
               value={matching?.id ?? ''}
               onChange={(event) => {
                 const item = combinations.find((item) => item.id === event.target.value);
-                if (item)
+                if (item) {
+                  const reconciled = reconcilePromptValues(preset.program, item.values);
                   edit(
                     {
                       ...draft.state,
-                      values: structuredClone(item.values),
+                      values: reconciled.values,
                       selectedCombinationId: undefined,
                     },
                     item.id
                   );
+                  if (reconciled.resetKeys.length)
+                    setMessage('현재 옵션과 맞지 않는 이전 선택값은 기본값으로 조정했어요.');
+                }
               }}
             >
               <option value="">{origin ? `${origin.title} · 수정됨` : '직접 설정'}</option>

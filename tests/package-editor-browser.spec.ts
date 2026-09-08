@@ -1,4 +1,4 @@
-import { editLibraryContent, navigationAction } from './ui-navigation.js';
+import { editLibraryContent, navigationAction, revealLibraryEditor } from './ui-navigation.js';
 import { test, expect } from '@playwright/test';
 import type { Content, Library } from '../core/product.js';
 
@@ -42,6 +42,7 @@ test('PKUI04 hundreds of lore entries support folders, search, bulk move and per
     buffer: Buffer.from(JSON.stringify(pkg)),
   });
   await library.getByRole('button', { name: '가져온 패키지로 초안 바꾸기', exact: true }).click();
+  await revealLibraryEditor(page);
   const manager = library.locator('.lore-manager');
   await expect(manager.locator('.lore-row')).toHaveCount(50);
   await expect(manager.locator('textarea')).toHaveCount(1);
@@ -107,7 +108,7 @@ test('PKUI04 hundreds of lore entries support folders, search, bulk move and per
   await manager.locator('textarea').scrollIntoViewIfNeeded();
   await page.screenshot({ path: info.outputPath('lore-editor-mobile.png') });
   await library.getByRole('button', { name: '자료 등록', exact: true }).click();
-  await expect(library.getByRole('status')).toContainText('v1 저장됨');
+  await expect(library.getByRole('status')).toContainText('저장됨 · 다음 실행부터 사용해요.');
   const listing: Library = await (await request.get('/api/library')).json();
   const saved = listing.contents.find((row) => row.title === pkg.title)!;
   const content: Content = await (
@@ -134,8 +135,8 @@ test('PKUI04 hundreds of lore entries support folders, search, bulk move and per
   await expect(manager.getByRole('region', { name: '로어 목록', exact: true })).toContainText(
     '170개'
   );
-  await library.getByRole('button', { name: '새 revision 저장', exact: true }).click();
-  await expect(library.getByRole('status')).toContainText('v2 저장됨');
+  await library.getByRole('button', { name: '변경사항 저장', exact: true }).click();
+  await expect(library.getByRole('status')).toContainText('저장됨 · 다음 실행부터 사용해요.');
   await library.getByRole('button', { name: '← 서재 목록', exact: true }).click();
   await editLibraryContent(page, `${pkg.title}`);
   await expect(manager.getByLabel('로어 폴더 필터', { exact: true })).toContainText('미분류 · 170');
@@ -215,11 +216,12 @@ test('PKUI03 native JSON import remains a reviewed persona draft and preserves l
     'Unsaved native draft'
   );
   await library.getByRole('button', { name: '가져온 패키지로 초안 바꾸기', exact: true }).click();
+  await revealLibraryEditor(page);
   await expect(library.getByLabel('자료 종류', { exact: true })).toHaveValue('persona');
   const before: Library = await (await request.get('/api/library')).json();
   expect(before.contents.some((item) => item.title === pkg.title)).toBe(false);
   await library.getByRole('button', { name: '자료 등록', exact: true }).click();
-  await expect(library.getByRole('status')).toContainText('v1 저장됨');
+  await expect(library.getByRole('status')).toContainText('저장됨 · 다음 실행부터 사용해요.');
   const after: Library = await (await request.get('/api/library')).json();
   const saved = after.contents.find((item) => item.title === pkg.title)!;
   expect(saved.kind).toBe('persona');
@@ -247,6 +249,7 @@ test('PKUI01 package editing preserves internal lore, instructions, unsaved work
   const library = page.getByTestId('library-panel');
   await expect(library.getByRole('tab')).toHaveText(['봇', '페르소나', '모듈']);
   await library.getByRole('button', { name: '새로 만들기', exact: true }).first().click();
+  await revealLibraryEditor(page);
   await library.getByLabel('자료 이름', { exact: true }).fill('Synthetic package editor bot');
   await library.getByLabel('자료 본문', { exact: true }).fill('Synthetic common body.');
   const fields = library.getByRole('region', { name: '패키지 구성', exact: true });
@@ -290,7 +293,9 @@ test('PKUI01 package editing preserves internal lore, instructions, unsaved work
   );
   await fields.getByRole('button', { name: '지침 검증 후 적용', exact: true }).click();
   await library.getByRole('button', { name: '자료 등록', exact: true }).click();
-  await expect(library.locator('.library-savebar [role="status"]')).toContainText('v1 저장됨');
+  await expect(library.locator('.library-savebar [role="status"]')).toContainText(
+    '저장됨 · 다음 실행부터 사용해요.'
+  );
   const listingResponse = await request.get('/api/library');
   expect(listingResponse.ok()).toBe(true);
   const listing: Library = await listingResponse.json();
@@ -375,6 +380,7 @@ test('PKUI02 library exposes package roles and prompts with direct internal lore
   );
   await page.screenshot({ path: info.outputPath('package-library-mobile.png') });
   await library.getByRole('button', { name: '새로 만들기', exact: true }).first().click();
+  await revealLibraryEditor(page);
   await expect(library.getByLabel('자료 종류', { exact: true }).locator('option')).toHaveText([
     '봇',
     '페르소나',
@@ -392,7 +398,9 @@ test('PKUI02 library exposes package roles and prompts with direct internal lore
   await fields.getByLabel('지침 1 본문', { exact: true }).fill('Synthetic package instruction');
   await fields.getByRole('button', { name: '지침 검증 후 적용', exact: true }).click();
   await library.getByRole('button', { name: '자료 등록', exact: true }).click();
-  await expect(library.locator('.library-savebar [role="status"]')).toContainText('v1 저장됨');
+  await expect(library.locator('.library-savebar [role="status"]')).toContainText(
+    '저장됨 · 다음 실행부터 사용해요.'
+  );
   const listing: Library = await (await request.get('/api/library')).json();
   const item = listing.contents.find((item) => item.title === title)!;
   expect(item).toBeTruthy();

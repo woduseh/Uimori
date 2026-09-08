@@ -36,12 +36,13 @@ test('DEL01 library cancel, stale revision, dependent bot and actual deletion at
   browser,
 }, info) => {
   const item = await content(request);
+  await page.setViewportSize({ width: 1280, height: 900 });
   const panel = await library(page, '봇');
   await page.emulateMedia({ colorScheme: 'dark' });
-  await page.setViewportSize({ width: 1280, height: 900 });
   const card = panel
     .locator('.library-card')
     .filter({ has: page.getByRole('button', { name: `${item.title} 상세 보기`, exact: true }) });
+  await expect(card).toHaveCount(1);
   await expect(card.getByRole('button', { name: `${item.title} 삭제`, exact: true })).toBeHidden();
   await card.getByLabel(`${item.title} 메뉴`, { exact: true }).focus();
   await page.keyboard.press('Enter');

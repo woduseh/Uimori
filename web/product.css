@@ -14,6 +14,15 @@
 .workspace-tools[open] > summary {
   margin-bottom: 12px;
 }
+.editor-fields {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 16px;
+  min-width: 0;
+  border: 0;
+  margin: 0;
+  padding: 0;
+}
 .editor-grid {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
@@ -64,6 +73,19 @@
 }
 .check input {
   flex-shrink: 0;
+}
+.connection-notice {
+  padding: 16px;
+  border: 1px solid var(--border, #3a413a);
+  border-radius: 9px;
+  background: var(--surface-raised, #232923);
+  font-size: 13px;
+}
+.connection-notice p {
+  color: var(--muted, #b1b9af);
+  margin: 8px 0 0;
+  font-size: 12px;
+  line-height: 1.75;
 }
 .connection-list {
   display: grid;
@@ -276,11 +298,6 @@
   padding: 5px 8px;
   margin-left: 8px;
 }
-.branch-navigation {
-  display: grid;
-  gap: 18px;
-  margin: 20px 0;
-}
 .branch-list {
   display: grid;
   gap: 10px;
@@ -296,29 +313,6 @@
 .branch-choice.selected {
   border-color: var(--accent);
   background: var(--accent-soft);
-}
-.branch-scenes {
-  padding: 0;
-  list-style: none;
-  display: grid;
-  gap: 10px;
-}
-.branch-scenes button {
-  width: 100%;
-  text-align: left;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 5px;
-}
-.branch-scenes span {
-  font-size: 11px;
-  color: var(--muted);
-}
-.branch-scenes strong {
-  font-size: 13px;
-  font-weight: 500;
-  overflow-wrap: anywhere;
 }
 .branches-panel > .form-actions {
   margin-top: 20px;
@@ -356,18 +350,9 @@
     max-width: 100%;
   }
 }
-
-.branch-navigation {
-  grid-template-columns: minmax(0, 1fr);
-}
-.branch-navigation label,
 .branch-list,
-.branch-choice,
-.branch-scenes li {
+.branch-choice {
   min-width: 0;
-}
-.branch-navigation select {
-  width: 100%;
 }
 .branch-choice strong {
   overflow-wrap: anywhere;

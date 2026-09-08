@@ -183,7 +183,7 @@ function segmentFixture() {
   return { store, feature, bot, chat, policy };
 }
 
-test('shared requirements keep only roots in the profile and execute the pinned magic module once', () => {
+test('shared requirements follow latest modules once while preserving captured runs and archives', () => {
   const store = database(),
     f = sharedGraph(store),
     key = packageControlKey(ref(f.magic, 'module'));
@@ -213,7 +213,23 @@ test('shared requirements keep only roots in the profile and execute the pinned 
   expect(store.run(value.id).snapshot).toEqual(frozen);
   expect(
     store.product.snapshot(f.chat.id)!.packages!.find((item) => item.id === f.magic.id)!.revision
-  ).toBe(1);
+  ).toBe(2);
+  expect(store.product.snapshot(f.chat.id).packageValues?.[`${f.magic.id}@2:module`]).toEqual({
+    intensity: 4,
+  });
+  const next = run(store, f.chat.id);
+  complete(store, next);
+  const current = store.product.get<Content>('content', f.magic.id);
+  save(store, 'Later module', { ...current.package!, body: 'Version three.' }, current);
+  const restored = database();
+  restored.product.import(store.product.export());
+  expect(restored.run(value.id).snapshot).toEqual(frozen);
+  expect(
+    restored.run(next.id).snapshot.profile?.packages?.find((p) => p.id === f.magic.id)?.revision
+  ).toBe(2);
+  expect(
+    restored.product.snapshot(f.chat.id).packages?.find((p) => p.id === f.magic.id)?.revision
+  ).toBe(3);
   const before = store.product.profile(f.chat.id);
   expect(() =>
     update(store, f.chat.id, { packageValues: { 'outside@1:module': { intensity: 1 } } })
@@ -227,6 +243,38 @@ test('dependency revisions, missing packages, non-package references and cycles 
     revised = save(store, 'Shared magic revised', f.magic.package, f.magic);
   expect(() => resolvePackageModules(store.product, [...f.roots, ref(revised, 'module')])).toThrow(
     'Package module revision conflict'
+  );
+  expect(
+    resolvePackageModules(store.product, [...f.roots, ref(revised, 'module')], {
+      latest: true,
+    }).attachments.filter((r) => r.id === revised.id)
+  ).toEqual([ref(revised, 'module')]);
+  expect(() =>
+    save(
+      store,
+      'Cycle through current IDs',
+      { ...revised.package!, modules: [{ id: f.bot.id, revision: f.bot.revision }] },
+      revised
+    )
+  ).toThrow('Package module dependency cycle');
+  expect(store.product.get<Content>('content', revised.id)).toEqual(revised);
+  expect(() =>
+    store.product.content(
+      {
+        kind: 'module',
+        title: revised.title,
+        description: '',
+        text: 'Remove package',
+        loading: 'pinned',
+        relatedIds: [],
+        expectedRevision: revised.revision,
+      },
+      revised.id
+    )
+  ).toThrow('Referenced content must keep its package structure');
+  expect(store.product.get<Content>('content', revised.id)).toEqual(revised);
+  expect(store.product.snapshot(f.chat.id).packageAttachments).toContainEqual(
+    ref(revised, 'module')
   );
   expect(() =>
     save(store, 'Missing dependency', { modules: [{ id: 'missing-package', revision: 1 }] })

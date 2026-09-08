@@ -21,6 +21,7 @@ import {
   type BehaviorToolBinding,
 } from '../core/package-behavior-tools.js';
 import { BehaviorError } from '../core/package-behavior.js';
+import { createAgentCollaboration } from './agent-collaboration.js';
 
 export type MainResult = {
   status: 'completed' | 'refused' | 'partial' | 'error' | 'cancelled';
@@ -89,6 +90,9 @@ export async function runMain(snapshot: RunSnapshot, hooks: MainHooks): Promise<
     text = '',
     status: MainResult['status'] = hooks.signal.aborted ? 'cancelled' : text ? 'partial' : 'error'
   ): MainResult => ({ status, error, text, usage });
+  if (!Number.isSafeInteger(maxCalls) || maxCalls < 1) return fail('MODEL_CALL_BUDGET_EXHAUSTED');
+  const collaboration = createAgentCollaboration(fixed, hooks, usage);
+  await collaboration?.prepare();
   while (true) {
     if (hooks.signal.aborted) return fail('CANCELLED');
     if (
@@ -126,6 +130,7 @@ export async function runMain(snapshot: RunSnapshot, hooks: MainHooks): Promise<
           }
         : {}),
       ...(opaqueState !== undefined ? { opaqueState } : {}),
+      ...(collaboration ? { agentBootstrap: collaboration.bootstrap } : {}),
     });
     const { input, request } = built;
     if (evaluation && request.generation) {
@@ -179,7 +184,9 @@ export async function runMain(snapshot: RunSnapshot, hooks: MainHooks): Promise<
         usage,
       };
     // Validate the whole turn before executing: repeated IDs cannot alias earlier tool results.
-    const callIds = new Set(results.map((event) => event.callId));
+    const callIds = new Set(
+      [...results, ...(collaboration?.bootstrap ?? [])].map((event) => event.callId)
+    );
     for (const call of result.toolCalls) {
       if (callIds.has(call.id)) return fail('DUPLICATE_TOOL_ID');
       callIds.add(call.id);
@@ -276,7 +283,9 @@ export async function runMain(snapshot: RunSnapshot, hooks: MainHooks): Promise<
       const binding = behaviorTools.find((item) => item.tool.name === call.name);
       const action = { callId: call.id, name: call.name, args: call.arguments };
       let event: ToolEvent;
-      if (binding) {
+      if (call.name === 'agents.consult' && collaboration) {
+        event = await collaboration.consult(call.id, call.arguments);
+      } else if (binding) {
         event = hooks.onBehaviorTool
           ? await hooks.onBehaviorTool(
               { instanceId: binding.instanceId, actionId: binding.actionId },

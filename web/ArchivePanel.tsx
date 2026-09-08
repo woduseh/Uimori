@@ -36,6 +36,7 @@ export function ArchivePanel({
           내보내기와 복원 <small>원문 · 분기 · 자료 · 파생물</small>
         </summary>
       )}
+      <h3>백업 받기</h3>
       <div className="form-actions">
         <button
           className="secondary"
@@ -70,10 +71,19 @@ export function ArchivePanel({
           SQLite 백업 다운로드
         </button>
       </div>
+      <h3>백업에서 복원하기</h3>
       <p className="muted">
-        복원은 새 빈 데이터베이스에서 진행해요. 이미 자료가 있는 DB는 서버가 거절해요. SQLite 백업은
-        서버를 종료하고 새 NR_DB 경로에 보관해 다시 열 수 있어요.
+        복원하려면 서버 관리자가 준비한 새 빈 데이터베이스가 필요해요. 현재 자료에 덮어쓰거나 합치지
+        않아요.
       </p>
+      <details>
+        <summary>서버 관리자를 위한 복원 안내</summary>
+        <p className="muted">
+          JSON 파일은 새 빈 데이터베이스에서 아래 가져오기를 사용해요. SQLite 백업은 서버를 종료하고
+          새 NR_DB 경로에 보관해 다시 열 수 있어요. 이미 자료가 있는 DB로의 가져오기는 서버가
+          거절해요.
+        </p>
+      </details>
       <form
         className="editor-grid"
         onSubmit={(event) => {

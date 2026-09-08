@@ -143,6 +143,7 @@ export function LibraryFolders({
   counts,
   reload,
   onError,
+  compactMobile = false,
 }: {
   category: LibraryCategory;
   organizer: LibraryOrganizer;
@@ -151,6 +152,7 @@ export function LibraryFolders({
   counts: Record<string, number>;
   reload: () => Promise<void>;
   onError: (error: string) => void;
+  compactMobile?: boolean;
 }) {
   const [collapsed, setCollapsed] = useState(false);
   const [edit, setEdit] = useState<{ folder: LibraryFolder | null; revision: number } | null>(null);
@@ -170,9 +172,68 @@ export function LibraryFolders({
     { id: 'unclassified', title: '미분류' },
     ...folders,
   ];
+  function folderActions(folder: LibraryFolder) {
+    const index = folders.findIndex((item) => item.id === folder.id);
+    return (
+      <>
+        <button
+          type="button"
+          className="secondary"
+          disabled={busy}
+          onClick={() => openEdit(folder)}
+        >
+          이름 변경
+        </button>
+        <button
+          type="button"
+          className="secondary"
+          disabled={busy || index === 0}
+          onClick={() =>
+            void mutate(
+              `/library/folders/${encodeURIComponent(folder.id)}`,
+              { beforeFolderId: folders[index - 1]?.id },
+              'PATCH'
+            )
+          }
+        >
+          <ArrowUp size={14} />
+          위로
+        </button>
+        <button
+          type="button"
+          className="secondary"
+          disabled={busy || index === folders.length - 1}
+          onClick={() =>
+            void mutate(
+              `/library/folders/${encodeURIComponent(folder.id)}`,
+              { beforeFolderId: folders[index + 2]?.id ?? null },
+              'PATCH'
+            )
+          }
+        >
+          <ArrowDown size={14} />
+          아래로
+        </button>
+        <DeleteButton
+          path={`/library/folders/${encodeURIComponent(folder.id)}`}
+          revision={organization?.revision}
+          title={folder.title}
+          label="폴더 삭제"
+          description="폴더 안의 자료는 삭제하지 않고 이 분류의 미분류로 옮겨요."
+          disabled={busy}
+          onError={(message) => {
+            onError(message);
+            void reload();
+          }}
+          onDeleted={reload}
+        />
+      </>
+    );
+  }
+  const selectedFolder = folders.find((item) => item.id === value);
   return (
     <aside
-      className={`library-folders ${collapsed ? 'is-collapsed' : ''}`}
+      className={`library-folders ${collapsed ? 'is-collapsed' : ''} ${compactMobile ? 'library-folders-compact' : ''}`}
       aria-label={`${categoryLabels[category]} 폴더`}
     >
       <div className="library-folders-heading">
@@ -207,6 +268,21 @@ export function LibraryFolders({
           ))}
         </select>
       </label>
+      {compactMobile && (
+        <div className="library-mobile-folder-actions">
+          <LibraryItemMenu title="폴더 관리">
+            <button
+              type="button"
+              className="secondary"
+              disabled={busy || !organization}
+              onClick={() => openEdit(null)}
+            >
+              <FolderPlus size={17} />새 폴더
+            </button>
+            {selectedFolder && folderActions(selectedFolder)}
+          </LibraryItemMenu>
+        </div>
+      )}
       {
         <div className="library-folder-list">
           {options.map((item) => {
@@ -227,57 +303,7 @@ export function LibraryFolders({
                 </button>
                 {folder && (
                   <LibraryItemMenu title={`${folder.title} 폴더 메뉴`}>
-                    <button
-                      type="button"
-                      className="secondary"
-                      disabled={busy}
-                      onClick={() => openEdit(folder)}
-                    >
-                      이름 변경
-                    </button>
-                    <button
-                      type="button"
-                      className="secondary"
-                      disabled={busy || index === 0}
-                      onClick={() =>
-                        void mutate(
-                          `/library/folders/${encodeURIComponent(folder.id)}`,
-                          { beforeFolderId: folders[index - 1]?.id },
-                          'PATCH'
-                        )
-                      }
-                    >
-                      <ArrowUp size={14} />
-                      위로
-                    </button>
-                    <button
-                      type="button"
-                      className="secondary"
-                      disabled={busy || index === folders.length - 1}
-                      onClick={() =>
-                        void mutate(
-                          `/library/folders/${encodeURIComponent(folder.id)}`,
-                          { beforeFolderId: folders[index + 2]?.id ?? null },
-                          'PATCH'
-                        )
-                      }
-                    >
-                      <ArrowDown size={14} />
-                      아래로
-                    </button>
-                    <DeleteButton
-                      path={`/library/folders/${encodeURIComponent(folder.id)}`}
-                      revision={organization?.revision}
-                      title={folder.title}
-                      label="폴더 삭제"
-                      description="폴더 안의 자료는 삭제하지 않고 이 분류의 미분류로 옮겨요."
-                      disabled={busy}
-                      onError={(message) => {
-                        onError(message);
-                        void reload();
-                      }}
-                      onDeleted={reload}
-                    />
+                    {folderActions(folder)}
                   </LibraryItemMenu>
                 )}
               </div>

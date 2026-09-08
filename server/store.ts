@@ -7,6 +7,7 @@ import {
   editSource,
   editTranslation,
   requestTranslation,
+  requestStatus,
   latestTranslation,
   validateTranslationArtifact,
 } from './source-editing.js';
@@ -99,9 +100,9 @@ export class Store {
     }
     try {
       const version = Number((this.db.prepare('PRAGMA user_version').get() as Row).user_version);
-      if (![0, 12].includes(version))
+      if (![0, 13].includes(version))
         throw new Error(
-          `Unsupported database schema version ${version}; Uimori requires schema 12. For disposable default development data, stop the server and run npm run reset:dev.`
+          `Unsupported database schema version ${version}; Uimori requires schema 13. For disposable default development data, stop the server and run npm run reset:dev.`
         );
       if (
         version === 0 &&
@@ -147,7 +148,7 @@ export class Store {
           this.behavior.init();
           initBehaviorHost(this);
           initRunBehavior(this);
-          this.db.exec('PRAGMA user_version=12');
+          this.db.exec('PRAGMA user_version=13');
         });
     } catch (error) {
       this.db.close();
@@ -224,7 +225,7 @@ export class Store {
       preset,
       mode: 'direct',
       translation: true,
-      status: true,
+      status: false,
       maxCalls: 8,
     };
     this.transaction(() => {
@@ -699,6 +700,14 @@ export class Store {
   requestTranslation(id: string, validate?: (id: string) => void): Job {
     return requestTranslation(this, id, false, validate);
   }
+  requestStatus(
+    id: string,
+    expectedSourceHash: string,
+    expectedJobId: string | null,
+    validate?: (id: string) => void
+  ): Job {
+    return requestStatus(this, id, expectedSourceHash, expectedJobId, validate);
+  }
   job(id: string): Job {
     const row = this.db
       .prepare(
@@ -722,6 +731,14 @@ export class Store {
       updatedAt: row.updated_at,
       revision: row.revision,
       chunks: this.product.chunks(id),
+      ...(row.kind === 'translation' && row.plan
+        ? {
+            translationPlan: {
+              maxChunkChars: JSON.parse(row.plan).maxChunkChars,
+              totalChunks: JSON.parse(row.plan).chunks.length,
+            },
+          }
+        : {}),
     };
   }
   queuedJobs(): string[] {
@@ -739,6 +756,14 @@ export class Store {
   ): Job | null {
     return this.transaction(() => {
       const priorInput = this.job(id).input;
+      const statusSelection =
+        priorInput && typeof priorInput === 'object'
+          ? Object.fromEntries(
+              ['statusModelSelection', 'statusModelSnapshot']
+                .filter((key) => Object.hasOwn(priorInput, key))
+                .map((key) => [key, (priorInput as Record<string, unknown>)[key]])
+            )
+          : {};
       const translationModelSelection =
         priorInput &&
         typeof priorInput === 'object' &&
@@ -755,6 +780,15 @@ export class Store {
           ? {
               translationModelSnapshot: (priorInput as { translationModelSnapshot: unknown })
                 .translationModelSnapshot,
+            }
+          : {};
+      const chunkSelection =
+        priorInput &&
+        typeof priorInput === 'object' &&
+        Object.hasOwn(priorInput, 'translationChunkChars')
+          ? {
+              translationChunkChars: (priorInput as { translationChunkChars: unknown })
+                .translationChunkChars,
             }
           : {};
       const promptSelection =
@@ -779,8 +813,10 @@ export class Store {
           ? {
               ...input,
               ...promptSelection,
+              ...chunkSelection,
               ...translationModelSelection,
               ...translationModelSnapshot,
+              ...statusSelection,
               ...promptControlSelection,
               ...imageSelection,
             }
@@ -850,17 +886,31 @@ export class Store {
       if (changed.changes) this.event(this.job(id).chatId, 'job.failed', id);
     });
   }
-  retryJob(id: string, chunkId?: string): Job {
+  retryJob(id: string, validate?: (id: string) => void): Job {
+    const job = this.job(id);
+    if (
+      job.kind === 'translation' &&
+      ['failed', 'partial', 'interrupted', 'cancelled'].includes(job.status)
+    )
+      return requestTranslation(this, job.sourceRevision, true, validate);
     return this.transaction(() => {
       const job = this.job(id);
-      if (chunkId && !job.chunks?.some((c) => c.id === chunkId && c.status !== 'completed'))
-        throw new HttpError(409, 'Chunk is not retryable');
+      if (job.kind === 'status') {
+        const latest = this.db
+          .prepare(
+            "SELECT id FROM jobs WHERE source_revision=? AND kind='status' ORDER BY revision DESC,created_at DESC,id DESC LIMIT 1"
+          )
+          .get(job.sourceRevision) as { id: string } | undefined;
+        if (latest?.id !== id)
+          throw new HttpError(409, 'Status job was replaced; refresh before retrying');
+      }
+      validate?.(id);
       if (['failed', 'partial', 'interrupted', 'cancelled'].includes(job.status)) {
         this.db
           .prepare(
-            "UPDATE jobs SET status='queued',error=NULL,retry_chunk=?,updated_at=? WHERE id=?"
+            "UPDATE jobs SET status='queued',error=NULL,retry_chunk=NULL,updated_at=? WHERE id=?"
           )
-          .run(chunkId ?? null, now(), id);
+          .run(now(), id);
         this.event(job.chatId, 'job.queued', id);
       }
       return this.job(id);

@@ -124,6 +124,10 @@ test('EVALUI01 desktop preset evaluation opt-in persists selected story roles af
   });
   await page.keyboard.press('Escape');
   await navigation(page, '새 이야기');
+  await page
+    .getByRole('dialog', { name: '새 채팅', exact: true })
+    .locator('.new-story-options > summary')
+    .click();
   await page.getByLabel('새 채팅 이름').fill(title + ' 이야기');
   const ref = `${model.id}`;
   await page.getByLabel('시작 본문 모델').selectOption(ref);

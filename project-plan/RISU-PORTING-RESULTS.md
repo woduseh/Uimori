@@ -19,9 +19,11 @@
 자료 이름에 종속된 변환 코드 대신 [공통 이식 가이드](../docs/RISU-PORTING.md)를 사용해요. RisuToki 구조화 읽기와 필요한 스킬로 원본 의미를 조사하고, 에이전트가 native JSON·대응/손실 보고·검증 결과를 작성해요.
 
 - Phēmē 전용 변환기·실행 스크립트·전용 시험을 제거했어요. 히든 스토리의 Risu 해석 부분도 제거했어요.
-- 히든 native 타입과 실행 조립은 [hidden-story-runtime.ts](../core/hidden-story-runtime.ts)로 분리했어요. 기존 타입 선언과 `wireHiddenStoryInstructions` 및 seed 선택 구현은 이전 코드와 동일함을 비교했어요. 저장 형식·기존 자료·런타임은 변경하지 않았어요.
-- 히든 회귀는 [native 합성 fixture](../tests/fixtures/hidden-native.ts)를 직접 사용해요. 조건부 지침·옵션 문자열 비실행·고정 추첨·불변 버전·source 귀속·표시 검사는 유지하고 원본 파싱 시험은 제거했어요.
+- 히든 native 타입과 실행 조립은 당시 `core/hidden-story-runtime.ts`로 분리했어요. 기존 타입 선언과 `wireHiddenStoryInstructions` 및 seed 선택 구현은 이전 코드와 동일함을 비교했어요. 저장 형식·기존 자료·런타임은 변경하지 않았어요.
+- 히든 회귀는 당시 `tests/fixtures/hidden-native.ts` 합성 fixture를 직접 사용해요. 조건부 지침·옵션 문자열 비실행·고정 추첨·불변 버전·source 귀속·표시 검사는 유지하고 원본 파싱 시험은 제거했어요.
 - 공통 JSON/CHARX importer와 검증·등록은 유지해요. Agent handoff와 AGENTS 및 제작 문서에서 새 가이드를 연결했어요.
+
+2026-09-08 후속 정리에서는 위 두 파일을 포함한 전용 native/hidden 경로도 제거했어요. 현재 원문 표시·전송 제외는 [공통 원문 구간](../docs/SOURCE-SEGMENTS.md), 자료 이식은 [Risu 이식 가이드](../docs/RISU-PORTING.md)를 사용해요. 당시 결과와 현재 통합 증거는 [코드베이스 정리 결과](CODEBASE-CLEANUP-RESULTS.md)에서 구분해요.
 
 ## 검증
 

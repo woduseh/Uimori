@@ -213,7 +213,13 @@ describe('file SQLite HTTP runtime', () => {
   });
 
   it('F05 keeps delayed jobs on original revisions and retries result transactions without duplicate effects', async () => {
-    const { app, url, chat } = await setup();
+    const { app, url, chat: initial } = await setup();
+    const chat = await api<Chat>(
+      url,
+      `/api/chats/${initial.id}/settings`,
+      { expectedSettingsRevision: initial.settingsRevision, ...initial.settings, status: true },
+      'PATCH'
+    );
     await control(url, { action: 'hold', barrier: 'translation' });
     await control(url, { action: 'hold', barrier: 'status' });
     const first = await api<Run>(url, `/api/chats/${chat.id}/runs`, command(chat));
@@ -419,7 +425,13 @@ describe('built server process boundary', () => {
   it('F03 F05 restarts after source commit before worker wake, without regenerating source', async () => {
     const directory = await mkdtemp(join(tmpdir(), '서사 M0 crash '));
     const first = await startChild(directory);
-    const chat = await api<Chat>(first.url, '/api/chats', { title: '합성 커밋 경계' });
+    const initial = await api<Chat>(first.url, '/api/chats', { title: '합성 커밋 경계' });
+    const chat = await api<Chat>(
+      first.url,
+      `/api/chats/${initial.id}/settings`,
+      { expectedSettingsRevision: initial.settingsRevision, ...initial.settings, status: true },
+      'PATCH'
+    );
     await control(first.url, { action: 'hold', barrier: 'run' });
     const run = await api<Run>(first.url, `/api/chats/${chat.id}/runs`, command(chat));
     await control(first.url, { action: 'crash-after-source-commit' });

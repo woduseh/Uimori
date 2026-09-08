@@ -144,7 +144,7 @@ describe('package behavior archive v11', () => {
     const f = fixture(),
       archive = f.store.product.export(),
       before = structuredClone(archive);
-    expect(archive.version).toBe(12);
+    expect(archive.version).toBe(13);
     expect(archive.tables.package_behavior_journal).toHaveLength(2);
     const target = database();
     expect(target.product.import(archive)).toEqual({ restored: true, chats: 1 });

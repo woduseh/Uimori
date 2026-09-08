@@ -7,7 +7,11 @@ import type { RuntimeValue } from '../core/prompt-program.js';
 import { validatePackageBehavior } from '../core/package-behavior.js';
 import type { ContentPackage, PackageAttachment } from '../core/content-package.js';
 import type { RunSnapshot } from '../core/types.js';
-import type { BehaviorScope, BehaviorState } from './package-behavior-store.js';
+import {
+  behaviorPayloadHash,
+  type BehaviorScope,
+  type BehaviorState,
+} from './package-behavior-store.js';
 import { HttpError, type Store, type Run, type Source } from './store.js';
 import { captureLogicalHistory } from './prompt-snapshot.js';
 import { freezeSourceSegments } from '../core/package-source-segments.js';
@@ -142,7 +146,11 @@ export function behaviorDetail(store: Store, chatId: string, requestedBranch?: s
         state = store.behavior.read(d.scope, d.pkg.behavior!);
         availability = status(store, d.scope);
       } catch (error) {
-        state = { ...d.scope, stateRevision: 0, state: d.pkg.behavior!.initialState };
+        state = store.behavior.storedState(d.scope) ?? {
+          ...d.scope,
+          stateRevision: 0,
+          state: d.pkg.behavior!.initialState,
+        };
         availability = {
           status: 'stale',
           error: error instanceof Error ? error.message : String(error),
@@ -223,7 +231,9 @@ export function performBehaviorAction(
       throw new HttpError(409, 'BEHAVIOR_RUN_ACTIVE');
     const availability = status(store, d.scope);
     if (!reset && availability.status !== 'ready') throw new HttpError(409, availability.error!);
-    const beforeRevision = store.behavior.read(d.scope, d.pkg.behavior!).stateRevision;
+    const beforeRevision =
+      (reset ? store.behavior.storedState(d.scope) : undefined)?.stateRevision ??
+      store.behavior.read(d.scope, d.pkg.behavior!).stateRevision;
     if (reset) store.behavior.resetInTransaction(d.scope, d.pkg.behavior!, command);
     else {
       const chat = store.chat(chatId),
@@ -382,7 +392,6 @@ export function branchPackageStates(
 ) {
   const defs = definitions(store, chatId, branchId, candidate);
   for (const d of defs) {
-    store.behavior.ensureInTransaction(d.scope, d.pkg.behavior!);
     let saved = (candidate?.behaviorExecution?.baseStates ?? candidate?.packageStates)?.find(
       (s) => s.instanceId === d.scope.attachmentInstanceId
     );
@@ -411,13 +420,24 @@ export function branchPackageStates(
     )
       failure = 'BEHAVIOR_SOURCE_DEPENDENCY_CHANGED';
     if (saved) {
-      if (
-        saved.packageRevision !== d.ref.revision ||
-        saved.behaviorRevision !== d.scope.behaviorRevision ||
-        saved.schemaVersion !== d.scope.schemaVersion
-      )
-        throw new HttpError(409, 'BEHAVIOR_MIGRATION_REQUIRED');
-      store.behavior.ensureInTransaction(d.scope, d.pkg.behavior!);
+      const savedDefinition = validatePackageBehavior(
+        store.product.get<any>('content', d.ref.id, saved.packageRevision).package?.behavior
+      );
+      const compatible =
+        behaviorPayloadHash(savedDefinition) === behaviorPayloadHash(d.pkg.behavior!);
+      const restoreScope = compatible
+        ? d.scope
+        : {
+            ...d.scope,
+            packageRevision: saved.packageRevision,
+            behaviorRevision: saved.behaviorRevision,
+            schemaVersion: saved.schemaVersion,
+          };
+      store.behavior.ensureInTransaction(
+        restoreScope,
+        compatible ? d.pkg.behavior! : savedDefinition
+      );
+      if (!compatible) failure = 'BEHAVIOR_MIGRATION_REQUIRED';
       store.db
         .prepare(
           'UPDATE package_behavior_states SET state_revision=?,state=? WHERE chat_id=? AND branch_id=? AND instance_id=?'
@@ -429,7 +449,7 @@ export function branchPackageStates(
           branchId,
           d.scope.attachmentInstanceId
         );
-    }
+    } else store.behavior.ensureInTransaction(d.scope, d.pkg.behavior!);
     setHead(store, d.scope, failure ? 'failed' : 'ready', failure, saved?.draws ?? {});
   }
 }

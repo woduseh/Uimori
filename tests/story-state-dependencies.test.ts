@@ -8,6 +8,8 @@ import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 import { Store } from '../server/store.js';
 import { runStoryJob } from '../server/story-runner.js';
 import { forkChat } from '../server/chat-fork.js';
+import { validateStoryArchive } from '../server/story-archive.js';
+import { deleteLibraryItem } from '../server/library-deletion.js';
 import type { RunSnapshot } from '../core/types.js';
 import type { StateMode } from '../core/state.js';
 
@@ -135,6 +137,155 @@ function stateCount(store: Store, jobId: string) {
 }
 
 describe('S02 S03 actual Store continuity and activation dependencies', () => {
+  test('historical story model snapshots restore after current settings release the deleted model', async () => {
+    const store = await database(),
+      id = chat(store);
+    const initial = activate(store, id, 'authoritative');
+    const connection = store.product.connection({
+      title: 'Historical state connection',
+      protocol: 'fixture-sse-v1',
+      endpoint: 'http://127.0.0.1:44903/turn',
+      enabled: true,
+    });
+    const model = store.product.model({
+      title: 'Historical state model',
+      connectionId: connection.id,
+      modelId: 'fixture-historical-state',
+      maxOutputTokens: 1024,
+      temperature: null,
+    });
+    const selected = store.story.saveConfig(id, {
+      expectedRevision: initial.revision,
+      module: initial.module,
+      stateModel: { id: model.id },
+      memory: initial.memory,
+    });
+    const first = source(store, id, 'Historical model selection stays with this source.');
+    const reserved = job(store, id, first.id);
+    store.story.cancel(reserved.id);
+    const historical = structuredClone(store.story.bundle(reserved.id).snapshot);
+    store.story.saveConfig(id, {
+      expectedRevision: selected.revision,
+      module: selected.module,
+      stateModel: null,
+      memory: selected.memory,
+    });
+    deleteLibraryItem(store, 'model', model.id, { expectedRevision: model.revision });
+    deleteLibraryItem(store, 'connection', connection.id, {
+      expectedRevision: connection.revision,
+    });
+    const restored = await database();
+    expect(() => restored.product.import(store.product.export())).not.toThrow();
+    expect(restored.story.config(id).stateModel).toBeNull();
+    expect(restored.story.bundle(reserved.id).snapshot.story?.models.state).toEqual({
+      ...historical.story!.models.state,
+      connection: { ...historical.story!.models.state!.connection, enabled: false },
+    });
+    expect(globalThis.fetch).not.toHaveBeenCalled();
+  });
+
+  test('current story settings replace one row while completed jobs and Run snapshots survive archive and fork', async () => {
+    const store = await database(),
+      id = chat(store);
+    const originalConfig = activate(store, id, 'authoritative');
+    const first = source(store, id, 'Original configuration. [[event:purchase]]');
+    const firstJob = job(store, id, first.id);
+    await finish(store, firstJob.id);
+    const originalSnapshot = structuredClone(store.story.bundle(firstJob.id).snapshot);
+    const currentConfig = store.story.saveConfig(id, {
+      expectedRevision: originalConfig.revision,
+      module: originalConfig.module,
+      stateModel: originalConfig.stateModel,
+      memory: { ...originalConfig.memory, recentCount: 3 },
+    });
+    expect(currentConfig.module).toEqual(originalConfig.module);
+    expect(
+      store.db.prepare('SELECT COUNT(*) AS n FROM story_configs WHERE chat_id=?').get(id)
+    ).toMatchObject({ n: 1 });
+    expect(() =>
+      store.story.saveConfig(id, {
+        expectedRevision: originalConfig.revision,
+        module: originalConfig.module,
+        stateModel: originalConfig.stateModel,
+        memory: originalConfig.memory,
+      })
+    ).toThrow('Story settings revision conflict');
+    expect(store.story.bundle(firstJob.id).snapshot).toEqual(originalSnapshot);
+    const second = source(store, id, 'Current configuration.');
+    const secondJob = job(store, id, second.id);
+    await finish(store, secondJob.id);
+    expect(store.story.bundle(secondJob.id).snapshot.story?.config).toEqual(currentConfig);
+    const copy = forkChat(store, id, {
+      fromRevision: second.id,
+      title: 'Configuration snapshot fork',
+      idempotencyKey: randomUUID(),
+    });
+    expect(store.story.config(copy.id)).toEqual(currentConfig);
+    expect(
+      store.story
+        .detail(copy.id)
+        .jobs.map((item) => item.configRevision)
+        .sort()
+    ).toEqual([originalConfig.revision, currentConfig.revision]);
+    const restored = await database();
+    restored.product.import(store.product.export());
+    expect(restored.story.config(id)).toEqual(currentConfig);
+    expect(restored.story.bundle(firstJob.id).snapshot).toEqual(originalSnapshot);
+    expect(restored.story.config(copy.id)).toEqual(currentConfig);
+
+    // The obsolete configuration no longer has a settings row, but copies sharing
+    // its revision must still agree across the owning Run and auxiliary job.
+    const forged = structuredClone(originalSnapshot);
+    forged.story!.config.memory.recentCount = 99;
+    store.db
+      .prepare('UPDATE story_jobs SET snapshot=? WHERE id=?')
+      .run(JSON.stringify(forged), firstJob.id);
+    expect(() => validateStoryArchive(store)).toThrow('snapshot configuration mismatch');
+    expect(globalThis.fetch).not.toHaveBeenCalled();
+  });
+
+  test('fork omits a current activation outside its ancestry without reviving old settings or reusing snapshot revisions', async () => {
+    const store = await database(),
+      id = chat(store);
+    const originalConfig = activate(store, id, 'authoritative');
+    const first = source(store, id, 'Retained old state. [[event:purchase]]');
+    await finish(store, job(store, id, first.id).id);
+    const second = source(store, id, 'Activation outside the selected ancestry.');
+    await finish(store, job(store, id, second.id).id);
+    store.story.saveConfig(id, {
+      expectedRevision: originalConfig.revision,
+      module: originalConfig.module,
+      stateModel: originalConfig.stateModel,
+      memory: originalConfig.memory,
+      resetState: true,
+    });
+    const copy = forkChat(store, id, {
+      fromRevision: first.id,
+      title: 'Earlier configuration boundary',
+      idempotencyKey: randomUUID(),
+    });
+    expect(store.story.config(copy.id)).toMatchObject({
+      revision: 0,
+      module: null,
+      activatedAt: null,
+    });
+    const copiedJobs = store.story.detail(copy.id).jobs;
+    expect(copiedJobs).toHaveLength(1);
+    expect(store.story.bundle(copiedJobs[0].id).snapshot.story?.config).toEqual(originalConfig);
+    expect(store.events(copy.id, 0).some((event) => event.kind === 'story.fork.excluded')).toBe(
+      true
+    );
+    expect(() => validateStoryArchive(store)).not.toThrow();
+    const configured = activate(store, copy.id, 'authoritative');
+    expect(configured.revision).toBeGreaterThan(originalConfig.revision);
+    expect(configured.module!.revision).toBeGreaterThan(originalConfig.module!.revision);
+    expect(() => validateStoryArchive(store)).not.toThrow();
+    const restored = await database();
+    expect(() => restored.product.import(store.product.export())).not.toThrow();
+    expect(restored.story.config(copy.id)).toEqual(configured);
+    expect(globalThis.fetch).not.toHaveBeenCalled();
+  });
+
   test('model IDs use latest settings for new reservations and rebuilds while existing snapshots stay fixed', async () => {
     const store = await database(),
       id = chat(store);
@@ -281,7 +432,7 @@ describe('S02 S03 actual Store continuity and activation dependencies', () => {
     expect(store.story.stateAt(id, second.id)?.values).toEqual({ coins: 7 });
     const restored = await database();
     const archive = store.product.export();
-    expect(archive.version).toBe(12);
+    expect(archive.version).toBe(13);
     expect(restored.product.import(archive).restored).toBe(true);
     expect(restored.run(second.runId).snapshot).toEqual(originalRun);
     expect(restored.story.bundle(secondJob.id).snapshot.story?.state?.values).toEqual({ coins: 7 });
@@ -430,7 +581,11 @@ describe('S02 S03 actual Store continuity and activation dependencies', () => {
     expect(store.run(waiting.id).status).toBe('cancelled');
     expect(store.story.stateAt(id, first.id)?.values).toEqual({ coins: 10 });
     expect(store.story.stateAt(id, first.id, config)).toEqual(firstState);
-    expect(store.story.config(id, config.revision)).toEqual(config);
+    expect(store.story.config(id)).toEqual(reset);
+    expect(store.story.bundle(job(store, id, first.id).id).snapshot.story?.config).toEqual(config);
+    expect(
+      store.db.prepare('SELECT COUNT(*) AS n FROM story_configs WHERE chat_id=?').get(id)
+    ).toMatchObject({ n: 1 });
     const next = request(store, id, selected.id);
     expect(next.status).toBe('queued');
     expect(next.snapshot.story?.state).toMatchObject({

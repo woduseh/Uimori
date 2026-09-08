@@ -98,7 +98,12 @@ function entryScope(store: Store, chatId: string, entry: MemoryEntry): MemorySco
   });
   return { chatId, history };
 }
-function configValue(store: Store, value: unknown, chatId: string): StoryConfig {
+function configValue(
+  store: Store,
+  value: unknown,
+  chatId: string,
+  currentSelection = true
+): StoryConfig {
   const config = shape(value, ['revision', 'module', 'stateModel', 'memory', 'activatedAt']);
   integer(config.revision);
   if (config.module !== null) validateStateModule(config.module);
@@ -110,7 +115,7 @@ function configValue(store: Store, value: unknown, chatId: string): StoryConfig 
     if (value !== null) {
       const ref = shape(value, ['id']);
       id(ref.id);
-      store.product.get('model', ref.id);
+      if (currentSelection) store.product.get('model', ref.id);
     }
   if (config.activatedAt !== null) {
     const ref = shape(config.activatedAt, ['revision', 'hash']);
@@ -139,17 +144,30 @@ export function validateStoryArchive(store: Store): void {
   try {
     const configs = new Map<string, StoryConfig>();
     const modules = new Map<string, unknown>();
+    const currentRevisions = new Map<string, number>();
+    // Settings have one current row. Historical configurations are owned by their
+    // Run/job snapshots, which must still agree whenever they share a revision.
+    const rememberConfig = (chatId: string, config: StoryConfig) => {
+      const currentRevision = currentRevisions.get(chatId);
+      if (currentRevision !== undefined && config.revision > currentRevision)
+        reject('snapshot configuration is newer than current settings');
+      const key = `${chatId}:${config.revision}`;
+      if (configs.has(key)) same(configs.get(key), config, 'snapshot configuration mismatch');
+      configs.set(key, config);
+      if (config.module) {
+        const moduleKey = `${chatId}:${config.module.revision}`;
+        if (modules.has(moduleKey))
+          same(modules.get(moduleKey), config.module, 'module revision was mutated');
+        modules.set(moduleKey, config.module);
+      }
+    };
     for (const row of rows(store, 'story_configs')) {
       store.chat(row.chat_id);
       integer(row.revision, 1);
       const config = configValue(store, parse(row.body), row.chat_id);
       if (config.revision !== row.revision) reject('configuration revision mismatch');
-      configs.set(`${row.chat_id}:${row.revision}`, config);
-      if (config.module) {
-        const key = `${row.chat_id}:${config.module.revision}`;
-        if (modules.has(key)) same(modules.get(key), config.module, 'module revision was mutated');
-        modules.set(key, config.module);
-      }
+      currentRevisions.set(row.chat_id, row.revision);
+      rememberConfig(row.chat_id, config);
     }
     const jobs = new Map(rows(store, 'story_jobs').map((row) => [row.id, row]));
     const states = new Map(rows(store, 'story_states').map((row) => [row.id, row]));
@@ -178,13 +196,8 @@ export function validateStoryArchive(store: Store): void {
         ['config', 'state', 'waiting', 'lineageHash', 'canonHash', 'memory', 'models'],
         ['sceneCommandId']
       ) as StorySnapshot;
-      const config = configValue(store, story.config, chatId);
-      same(
-        config,
-        configs.get(`${chatId}:${config.revision}`) ??
-          (config.revision === 0 ? defaultStoryConfig() : null),
-        'snapshot configuration mismatch'
-      );
+      const config = configValue(store, story.config, chatId, false);
+      rememberConfig(chatId, config);
       if (typeof story.waiting !== 'boolean' || story.lineageHash !== lineageHash(snapshot.history))
         reject('snapshot lineage mismatch');
       if (story.waiting !== (config.module?.mode === 'authoritative' && story.state === null))
@@ -592,30 +605,26 @@ export function copyStoryFork(
       )
       .run(...columns.map((column) => row[column]));
   };
-  const configs = new Map<number, StoryConfig>();
+  const mapConfig = (config: StoryConfig): StoryConfig => ({
+    ...structuredClone(config),
+    activatedAt: config.activatedAt
+      ? { ...config.activatedAt, revision: sourceId(config.activatedAt.revision)! }
+      : null,
+  });
   for (const row of rows(store, 'story_configs').filter((row) => row.chat_id === originalChatId)) {
     const config = parse(row.body) as StoryConfig;
     if (!selected(config.activatedAt?.revision ?? null)) {
       exclude('config', 'activation outside selected ancestry');
       continue;
     }
-    const mapped: StoryConfig = {
-      ...structuredClone(config),
-      activatedAt: config.activatedAt
-        ? { ...config.activatedAt, revision: sourceId(config.activatedAt.revision)! }
-        : null,
-    };
-    configs.set(row.revision, mapped);
+    const mapped = mapConfig(config);
     insert('story_configs', { ...row, chat_id: newChatId, body: JSON.stringify(mapped) });
   }
   const allJobs = rows(store, 'story_jobs').filter((row) => row.chat_id === originalChatId);
   const allStates = rows(store, 'story_states').filter((row) => row.chat_id === originalChatId);
   const allMemories = rows(store, 'story_memories').filter((row) => row.chat_id === originalChatId);
   const candidates = allJobs.filter(
-    (row) =>
-      row.status === 'completed' &&
-      selected(row.source_revision) &&
-      configs.has(row.config_revision)
+    (row) => row.status === 'completed' && selected(row.source_revision)
   );
   const jobs = new Map(candidates.map((row) => [row.id, randomUUID()]));
   const states = new Map(
@@ -679,10 +688,7 @@ export function copyStoryFork(
         }
       : null;
   const mapStory = (story: StorySnapshot, history: RunSnapshot['history']): StorySnapshot => {
-    const config =
-      configs.get(story.config.revision) ??
-      (story.config.revision === 0 ? defaultStoryConfig() : null);
-    if (!config) throw new Error('unavailable configuration dependency');
+    const config = mapConfig(story.config);
     const mappedHistory = history.map((item) => ({ ...item, revision: sourceId(item.revision)! }));
     const memory = story.memory
       ? (() => {

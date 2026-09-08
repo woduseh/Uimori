@@ -18,11 +18,20 @@ async function control(
 async function detail(request: APIRequestContext, id: string): Promise<ChatDetail> {
   return (await request.get(`/api/chats/${id}`)).json();
 }
-async function newChat(page: Page, title: string): Promise<Chat> {
-  // Legacy M0 fixtures retain their revision-one default profile; UI03 separately exercises bot-first creation.
+async function newStatusChat(page: Page, title: string): Promise<Chat> {
+  // These M0 cases exercise automatic status jobs, so select that setting explicitly.
   const response = await postFixtureChat(page.request, { data: { title } });
   expect(response.ok()).toBeTruthy();
-  const chat = (await response.json()) as Chat;
+  const created = (await response.json()) as Chat;
+  const settings = await page.request.patch(`/api/chats/${created.id}/settings`, {
+    data: {
+      ...created.settings,
+      status: true,
+      expectedSettingsRevision: created.settingsRevision,
+    },
+  });
+  expect(settings.ok()).toBeTruthy();
+  const chat = (await settings.json()) as Chat;
   await page.goto(`/?chat=${chat.id}`);
   await expect(page.getByRole('heading', { name: title, exact: true })).toBeVisible();
   return chat;
@@ -94,13 +103,15 @@ test('F02 F03 F05 two contexts and two tabs keep commands, snapshots, source job
   // A new independent context needs the same explicit server URL, no shared browser storage.
   await bPage.goto(base);
   try {
-    const a = await newChat(page, '합성 A · 등대');
-    const b = await newChat(bPage, '합성 B · 정원');
+    const a = await newStatusChat(page, '합성 A · 등대');
+    const b = await newStatusChat(bPage, '합성 B · 정원');
     await storySettings(bPage);
     await bPage.getByLabel('서술 프리셋').selectOption('vivid');
     await bPage.getByLabel('모의 생성 경로').selectOption('research');
     await bPage.getByRole('button', { name: '설정 저장', exact: true }).click();
-    await expect(bPage.getByText('저장된 설정 v2')).toBeVisible();
+    await expect
+      .poll(async () => (await detail(request, b.id)).chat.settingsRevision)
+      .toBe(b.settingsRevision + 1);
 
     const aSecondTab = await context.newPage();
     await aSecondTab.goto(`/?chat=${a.id}`);
@@ -143,7 +154,9 @@ test('F02 F03 F05 two contexts and two tabs keep commands, snapshots, source job
     await storySettings(page);
     await page.getByLabel('서술 프리셋').selectOption('vivid');
     await page.getByRole('button', { name: '설정 저장', exact: true }).click();
-    await expect(page.getByText('저장된 설정 v2')).toBeVisible();
+    await expect
+      .poll(async () => (await detail(request, a.id)).chat.settingsRevision)
+      .toBe(a.settingsRevision + 1);
     await aSecondTab.getByRole('button', { name: '설정 저장', exact: true }).click();
     await expect(
       aSecondTab.getByRole('dialog', { name: '채팅 설정', exact: true }).getByRole('alert')
@@ -212,7 +225,7 @@ test('F02 F03 F05 two contexts and two tabs keep commands, snapshots, source job
       data: {
         request: 'old head',
         expectedRevision: null,
-        expectedSettingsRevision: 2,
+        expectedSettingsRevision: aDone.chat.settingsRevision,
         idempotencyKey: 'stale-after-complete',
       },
     });
@@ -270,7 +283,7 @@ test('F05 failed auxiliary result retries independently while a later source is 
   page,
   request,
 }) => {
-  const chat = await newChat(page, '합성 · 보조 재시도');
+  const chat = await newStatusChat(page, '합성 · 보조 재시도');
   await control(request, 'fail-next', { point: 'translation' });
   await send(page, 'SYNTHETIC_FIRST: A letter rests on the desk.');
   await expect(page.getByTestId('source')).toHaveCount(1);
@@ -283,11 +296,12 @@ test('F05 failed auxiliary result retries independently while a later source is 
   await send(page, 'SYNTHETIC_SECOND: The letter remains sealed.');
   await expect(page.getByTestId('source')).toHaveCount(2);
   await sourceDetails(page);
+  page.once('dialog', (dialog) => dialog.accept());
   await page
     .getByTestId('source')
     .getByTestId('job-translation')
     .filter({ hasText: '실패' })
-    .getByRole('button', { name: '이 작업만 재시도' })
+    .getByRole('button', { name: '현재 설정으로 번역 재시도' })
     .click();
   await expect
     .poll(
@@ -301,7 +315,10 @@ test('F05 failed auxiliary result retries independently while a later source is 
   for (const response of repeated) expect(response.ok()).toBeTruthy();
   const after = await detail(request, chat.id);
   expect(after.runs).toHaveLength(2);
-  expect(after.sources.find((s) => s.id === source.id)).toEqual(source);
+  expect(after.sources.find((s) => s.id === source.id)).toEqual({
+    ...source,
+    translationRevision: source.translationRevision! + 1,
+  });
   const later = after.sources.find((s) => s.id !== source.id)!;
   expect(later.parentRevision).toBe(source.id);
   expect(after.jobs.find((j) => j.id === failedJob.id)?.sourceRevision).toBe(source.id);
@@ -315,7 +332,7 @@ test('F03 F05 an older real HTTP response cannot hide a newly committed source',
   page,
   request,
 }) => {
-  const chat = await newChat(page, '합성 · 역순 응답');
+  const chat = await newStatusChat(page, '합성 · 역순 응답');
   // End the old document's SSE first: otherwise its last refresh can be
   // intercepted and then cancelled by navigation, so no delayed response arrives.
   await page.goto('about:blank');
@@ -359,7 +376,7 @@ test('F03 F05 an older real HTTP response cannot hide a newly committed source',
       data: {
         request: 'SYNTHETIC delayed HTTP response',
         expectedRevision: null,
-        expectedSettingsRevision: 1,
+        expectedSettingsRevision: chat.settingsRevision,
         idempotencyKey: 'reorder-source',
       },
     });

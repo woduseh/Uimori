@@ -271,3 +271,34 @@ test('ACTUI03 failure persists, cancellation expires and chat navigation does no
   await expect(status).toHaveCount(0);
   expect(state.writes).toEqual([]);
 });
+
+test('ACTUI05 old failure does not replace a later completion or cancellation', async ({
+  page,
+  request,
+}) => {
+  const seeded = await seed(request);
+  const failed = activity('old-failure', 'main', 'failed');
+  const next = { ...activity('next-main'), startedAt: iso(-1000), createdAt: iso(-1000) };
+  const state = await harness(page, seeded.chat.id, [failed]);
+  const status = page.getByTestId('activity-status');
+  await expect(status).toContainText('본문 실패');
+  await state.set([failed, next]);
+  await expect(status).toContainText('장면을 쓰는 중');
+  await state.set([failed, { ...next, status: 'completed', finishedAt: iso(0) }]);
+  await expect(status).toContainText('본문 완료');
+  await expect(status).not.toContainText('실패');
+  await page.clock.fastForward(4500);
+  await expect(status).toHaveCount(0);
+  await page.reload();
+  await expect(page.getByTestId('source')).toHaveCount(1);
+  await expect(status).toHaveCount(0);
+  const cancelled = { ...next, id: 'cancelled-newest', startedAt: iso(1000) };
+  await state.set([failed, cancelled]);
+  await expect(status).toContainText('장면을 쓰는 중');
+  await state.set([failed, { ...cancelled, status: 'cancelled', finishedAt: iso(2000) }]);
+  await expect(status).toContainText('본문 중단됨');
+  await page.clock.fastForward(4500);
+  await expect(status).toHaveCount(0);
+  expect(state.writes).toEqual([]);
+  expect((await detail(request, seeded.chat.id)).runs).toEqual(seeded.runs);
+});

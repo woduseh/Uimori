@@ -543,7 +543,7 @@ test('BRUN11 current-format archive and chat fork retain staged outcomes and ind
   });
   const archive = f.store.product.export(),
     restored = database();
-  expect(archive.version).toBe(12);
+  expect(archive.version).toBe(13);
   expect(restored.product.import(archive)).toMatchObject({ restored: true, chats: 2 });
   expect(restored.run(run.id).snapshot).toEqual(f.store.run(run.id).snapshot);
   expect(runBehaviorProgress(restored, run.id)).toEqual(runBehaviorProgress(f.store, run.id));

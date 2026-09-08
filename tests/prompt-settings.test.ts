@@ -7,7 +7,7 @@ import { tmpdir } from 'node:os';
 import { basename, isAbsolute, join, relative, resolve } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { createApp, type App } from '../server/app.js';
-import type { ChatProfile, PromptPreset } from '../core/product.js';
+import type { ChatProfile, PromptPreset, Connection, ModelPreset } from '../core/product.js';
 import type { RunSnapshot } from '../core/types.js';
 import { createTranslationPlan } from '../core/auxiliary.js';
 import { sourceTimeContext } from '../server/product-auxiliary.js';
@@ -121,6 +121,82 @@ function complete(app: App, run: ReturnType<typeof capture>) {
 }
 
 describe('literal user-editable main and translation prompt presets', () => {
+  test('current options carry valid values across schema edits without changing queued snapshots or reading writes', async () => {
+    const app = await application(),
+      product = app.store.product;
+    const chat = createFixtureChat(app.store, 'Synthetic current options');
+    const program = createDefaultPromptProgram('First prompt');
+    program.controls = [
+      { id: 'detail', label: 'Detail', type: 'number', default: 1, min: 0, max: 10 },
+      { id: 'tone', label: 'Tone', type: 'text', default: 'calm' },
+      { id: 'retired', label: 'Retired', type: 'boolean', default: false },
+    ];
+    const first = product.promptPreset({
+      title: 'Current option fixture',
+      role: 'main',
+      program,
+    }) as PromptPreset;
+    const values = { detail: 7, tone: 'dramatic', retired: true };
+    const combination = product.promptCombination({
+      title: 'Reusable',
+      prompt: reference(first),
+      values,
+    });
+    product.updateProfile(
+      chat.id,
+      profileBody(product.profile(chat.id), {
+        prompts: { main: reference(first) },
+        promptControls: {
+          [`${first.id}@1`]: { values, combinations: [{ id: 'local', title: 'Local', values }] },
+        },
+      })
+    );
+    const queued = capture(app, chat.id),
+      frozen = structuredClone(queued.snapshot);
+    const revisedProgram = createDefaultPromptProgram('New prompt');
+    revisedProgram.controls = [
+      program.controls[0],
+      { id: 'tone', label: 'Tone', type: 'boolean', default: false },
+      { id: 'added', label: 'Added', type: 'text', default: 'new default' },
+    ];
+    const second = product.promptPreset(
+      { title: first.title, role: 'main', program: revisedProgram, expectedRevision: 1 },
+      first.id
+    ) as PromptPreset;
+    const before = structuredClone(product.export().tables);
+    const current = product.profile(chat.id),
+      selected = current.promptControls![`${first.id}@2`];
+    expect(current.prompts?.main).toEqual(reference(second));
+    expect(selected.values).toEqual({ detail: 7, tone: false, added: 'new default' });
+    expect(selected.combinations[0].values).toEqual(selected.values);
+    expect(current.optionAdjustments?.join(' ')).toMatch(/tone/);
+    expect(current.optionAdjustments?.join(' ')).toMatch(/retired/);
+    expect(product.snapshot(chat.id)).not.toHaveProperty('optionAdjustments');
+    expect(product.snapshot(chat.id).promptPresets?.main).toEqual(second);
+    expect(product.export().tables).toEqual(before);
+    await request(
+      app,
+      `/prompt-presets/${first.id}`,
+      {
+        title: first.title,
+        role: 'translation',
+        program: revisedProgram,
+        expectedRevision: second.revision,
+      },
+      409,
+      'PUT'
+    );
+    expect(product.profile(chat.id)).toEqual(current);
+    expect(product.export().tables).toEqual(before);
+    expect(app.store.run(queued.id).snapshot).toEqual(frozen);
+    expect(product.get('prompt-combination', combination.id)).toEqual(combination);
+    await read(app, `/prompt-presets/${first.id}`);
+    const restored = await application();
+    restored.store.product.import(product.export());
+    expect(restored.store.run(queued.id).snapshot).toEqual(frozen);
+    expect(restored.store.product.profile(chat.id).promptControls).toEqual(current.promptControls);
+    expect(fetch).not.toHaveBeenCalled();
+  });
   test('rejects retired fixed creative controls and APIs while preserving explicit persona scope', async () => {
     const app = await application();
     const chat = createFixtureChat(app.store, 'Synthetic current profile');
@@ -467,6 +543,7 @@ describe('literal user-editable main and translation prompt presets', () => {
   test('rejects forged prompt versions, profile roles and frozen text with archive rollback', async () => {
     const source = await application();
     const chat = createFixtureChat(source.store, 'Synthetic archive binding');
+    source.store.settings(chat.id, chat.settingsRevision, { ...chat.settings, status: true });
     const main = await request<PromptPreset>(
       source,
       '/prompt-presets',
@@ -536,7 +613,7 @@ describe('literal user-editable main and translation prompt presets', () => {
     }
   });
 
-  test('stores the prompt chosen for explicit retranslation and keeps it across profile changes and failed-chunk retry', async () => {
+  test('explicit translation retry captures the current prompt while the original run stays frozen', async () => {
     const app = await application();
     const chat = createFixtureChat(app.store, 'Synthetic retranslation prompt');
     const product = app.store.product;
@@ -591,10 +668,10 @@ describe('literal user-editable main and translation prompt presets', () => {
       profileBody(profile, { prompts: { translation: null } })
     );
     const retried = app.store.retryJob(job.id);
-    expect(retried.input).toMatchObject({ promptSelection: { translation: reference(second) } });
+    expect(retried.input).toMatchObject({ promptSelection: { translation: null } });
     expect(
       product.resolveJobPrompt(run.snapshot, retried.input).profile?.promptPresets?.translation
-    ).toEqual(second);
+    ).toBeUndefined();
     const retryClaim = app.store.claimJob(job.id, 'retry-worker', retried.input)!;
     app.store.failJob(job.id, retryClaim.generation, 'retry-worker', 'Synthetic retry failure');
     const savedArchive = product.export();
@@ -609,11 +686,11 @@ describe('literal user-editable main and translation prompt presets', () => {
     const target = await application();
     expect(target.store.product.import(savedArchive)).toMatchObject({ restored: true, chats: 1 });
     const restored = target.store.job(job.id);
-    expect(restored.input).toMatchObject({ promptSelection: { translation: reference(second) } });
+    expect(restored.input).toMatchObject({ promptSelection: { translation: null } });
     expect(
       target.store.product.resolveJobPrompt(target.store.run(run.id).snapshot, restored.input)
         .profile?.promptPresets?.translation
-    ).toEqual(second);
+    ).toBeUndefined();
     expect(fetch).not.toHaveBeenCalled();
   });
 });
@@ -669,5 +746,115 @@ describe('translation prompt preview uses the job compiler without writes', () =
     expect(changed.compilation.messages[0].content[0].text).toContain('PREVIEW OVERRIDE');
     expect(app.store.db.prepare('SELECT total_changes() AS n').get()).toEqual(before);
     expect(fetch).not.toHaveBeenCalled();
+  });
+});
+
+describe('explicit status recovery with current model', () => {
+  test('freezes the new model, retains the original run and failed job, and rejects duplicate or superseded recovery', async () => {
+    const app = await application();
+    const store = app.store;
+    const chat = createFixtureChat(store, 'Synthetic status recovery');
+    store.settings(chat.id, chat.settingsRevision, { ...chat.settings, status: true });
+    const run = capture(app, chat.id);
+    const source = complete(app, run);
+    const original = store.detail(chat.id).jobs.find((job) => job.kind === 'status')!;
+    store.failQueuedJob(original.id, original.generation, 'MODEL_REQUIRED:status');
+    const frozenRun = store.run(run.id);
+    const frozenJob = store.job(original.id);
+    const connection = store.product.connection({
+      title: 'Synthetic status',
+      protocol: 'fixture-sse-v1',
+      endpoint: 'http://127.0.0.1:1',
+      enabled: true,
+    }) as Connection;
+    const model = store.product.model({
+      title: 'Synthetic status',
+      connectionId: connection.id,
+      modelId: 'fixture-status',
+      maxOutputTokens: 1024,
+      temperature: null,
+    }) as ModelPreset;
+    const profile = store.product.profile(chat.id);
+    store.product.updateProfile(
+      chat.id,
+      profileBody(profile, { routes: { ...profile.routes, status: { id: model.id } } })
+    );
+    const created = store.requestStatus(source.id, source.hash, original.id);
+    expect(created.id).not.toBe(original.id);
+    expect(created.input).toMatchObject({
+      statusModelSelection: { id: model.id },
+      statusModelSnapshot: { id: model.id },
+    });
+    expect(store.run(run.id)).toEqual(frozenRun);
+    expect(store.job(original.id)).toEqual(frozenJob);
+    expect(() => store.requestStatus(source.id, source.hash, original.id)).toThrow(/changed/);
+    expect(() => store.requestStatus(source.id, source.hash, created.id)).toThrow(/active/);
+    expect(() => store.retryJob(original.id)).toThrow(/replaced/);
+    const claimed = store.claimJob(created.id, 'synthetic-status-owner', {
+      inputs: [],
+      toolEvents: [],
+    })!;
+    expect(claimed.input).toMatchObject({ statusModelSelection: { id: model.id } });
+    store.failJob(created.id, claimed.generation, 'synthetic-status-owner', 'Synthetic failure');
+    const nextProfile = store.product.profile(chat.id);
+    store.product.updateProfile(
+      chat.id,
+      profileBody(nextProfile, { routes: { ...nextProfile.routes, status: null } })
+    );
+    expect(
+      store.product.resolveJobPrompt(run.snapshot, store.retryJob(created.id).input).profile?.models
+        .status?.id
+    ).toBe(model.id);
+    store.cancelJob(created.id);
+    const archived = store.product.export();
+    const restored = await application();
+    restored.store.product.import(archived);
+    const restoredInput = restored.store.job(created.id).input;
+    expect(restoredInput).toMatchObject({
+      statusModelSnapshot: { id: model.id, connection: { enabled: false } },
+    });
+    const malformed = structuredClone(archived);
+    const row = malformed.tables.jobs.find((row) => row.id === created.id)!;
+    const invalidInput = JSON.parse(row.input);
+    delete invalidInput.statusModelSelection;
+    row.input = JSON.stringify(invalidInput);
+    const rejected = await application();
+    expect(() => rejected.store.product.import(malformed)).toThrow(/requires selection/);
+  });
+
+  test('rolls back validation failures and rejects changed source or active older workers', async () => {
+    const app = await application();
+    const store = app.store;
+    const chat = createFixtureChat(store, 'Synthetic status safety');
+    store.settings(chat.id, chat.settingsRevision, { ...chat.settings, status: true });
+    const run = capture(app, chat.id);
+    const source = complete(app, run);
+    const original = store.detail(chat.id).jobs.find((job) => job.kind === 'status')!;
+    store.failQueuedJob(original.id, original.generation, 'MODEL_REQUIRED:status');
+    const before = store.detail(chat.id).jobs;
+    expect(() =>
+      store.requestStatus(source.id, source.hash, original.id, () => {
+        throw new Error('MODEL_REQUIRED:status');
+      })
+    ).toThrow('MODEL_REQUIRED:status');
+    expect(store.detail(chat.id).jobs).toEqual(before);
+    await request(
+      app,
+      `/sources/${source.id}/status`,
+      { expectedSourceHash: '0'.repeat(64), expectedJobId: original.id },
+      409
+    );
+    expect(store.detail(chat.id).jobs).toEqual(before);
+    const created = store.requestStatus(source.id, source.hash, original.id);
+    const claimed = store.claimJob(created.id, 'old-worker', {})!;
+    store.cancelJob(created.id);
+    const edited = store.editSource(source.id, { text: 'A changed source.', expectedRevision: 0 });
+    expect(() => store.requestStatus(source.id, source.hash, created.id)).toThrow(/changed/);
+    const replacement = store.requestStatus(source.id, edited.hash, created.id);
+    expect(replacement.sourceHash).toBe(edited.hash);
+    expect(store.completeJob(created.id, claimed.generation, 'old-worker', {})).toBe(false);
+    store.cancelJob(replacement.id);
+    store.db.prepare("UPDATE jobs SET status='running' WHERE id=?").run(original.id);
+    expect(() => store.requestStatus(source.id, edited.hash, replacement.id)).toThrow(/active/);
   });
 });

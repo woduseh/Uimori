@@ -106,16 +106,28 @@ export class RegistrationStore {
     if (!/^[A-Za-z0-9-]{8,120}$/u.test(key)) throw new HttpError(400, 'Invalid request key');
     return this.view('registration-' + hash(key).slice(0, 48));
   }
-  private append(body: RegistrationRun, expected?: number): RegistrationRun {
+  private persist(body: RegistrationRun, expected?: number): RegistrationRun {
     const row = this.db
-      .prepare('SELECT revision FROM versions WHERE kind=? AND id=? ORDER BY revision DESC LIMIT 1')
-      .get(kind, body.id) as { revision: number } | undefined;
+      .prepare('SELECT revision,body FROM versions WHERE kind=? AND id=?')
+      .get(kind, body.id) as { revision: number; body: string } | undefined;
     if ((row?.revision ?? 0) !== (expected ?? 0))
       throw new HttpError(409, 'Registration revision conflict');
     const next = { ...body, revision: (row?.revision ?? 0) + 1 };
-    this.db
-      .prepare('INSERT INTO versions VALUES(?,?,?,?)')
-      .run(kind, next.id, next.revision, JSON.stringify(next));
+    validateRegistrationTransition(
+      next,
+      row ? (JSON.parse(row.body) as RegistrationRun) : undefined
+    );
+    validateRegistrationArchive(next);
+    if (row) {
+      const updated = this.db
+        .prepare('UPDATE versions SET revision=?,body=? WHERE kind=? AND id=? AND revision=?')
+        .run(next.revision, JSON.stringify(next), kind, next.id, row.revision);
+      if (updated.changes !== 1) throw new HttpError(409, 'Registration revision conflict');
+    } else {
+      this.db
+        .prepare('INSERT INTO versions VALUES(?,?,?,?)')
+        .run(kind, next.id, next.revision, JSON.stringify(next));
+    }
     return next;
   }
   create(value: unknown): { run: RegistrationRun; created: boolean; target: ModelSnapshot } {
@@ -134,7 +146,7 @@ export class RegistrationStore {
     const id = 'registration-' + hash(key).slice(0, 48),
       intentHash = hash({ request, target: targetRef });
     const previous = this.db
-      .prepare('SELECT body FROM versions WHERE kind=? AND id=? ORDER BY revision DESC LIMIT 1')
+      .prepare('SELECT body FROM versions WHERE kind=? AND id=?')
       .get(kind, id) as { body: string } | undefined;
     if (previous) {
       const run = JSON.parse(previous.body) as RegistrationRun;
@@ -174,7 +186,7 @@ export class RegistrationStore {
       applied: null,
       appliedSnapshot: null,
     };
-    return { run: this.append(run), created: true, target: structuredClone(targetSnapshot) };
+    return { run: this.persist(run), created: true, target: structuredClone(targetSnapshot) };
   }
   startAttempt(id: string, wire: WireRecord): string {
     const run = this.get(id);
@@ -196,7 +208,7 @@ export class RegistrationStore {
       usage: null,
       error: null,
     };
-    this.append({ ...run, attempts: [...run.attempts, attempt] }, run.revision);
+    this.persist({ ...run, attempts: [...run.attempts, attempt] }, run.revision);
     return attempt.id;
   }
   finishAttempt(id: string, attemptId: string, result: ProviderResult) {
@@ -217,7 +229,7 @@ export class RegistrationStore {
         ? { ...item, status: result.status, usage, error: result.error?.code ?? null }
         : item
     );
-    this.append({ ...run, attempts }, run.revision);
+    this.persist({ ...run, attempts }, run.revision);
   }
   finish(
     id: string,
@@ -232,7 +244,7 @@ export class RegistrationStore {
       plan?.connection.kind === 'existing'
         ? this.product.get<Connection>('connection', plan.connection.id, plan.connection.revision)
         : null;
-    return this.append(
+    return this.persist(
       {
         ...run,
         status,
@@ -248,7 +260,7 @@ export class RegistrationStore {
   recover() {
     for (const run of this.product.all(kind) as RegistrationRun[])
       if (run.status === 'running')
-        this.append(
+        this.persist(
           {
             ...run,
             status: 'interrupted',
@@ -304,7 +316,7 @@ export class RegistrationStore {
         connectionId: connection.id,
       }).value;
       const model = this.product.saveInTransaction('model', prepared) as ModelPreset;
-      return this.append(
+      return this.persist(
         {
           ...run,
           status: 'applied',
@@ -464,10 +476,13 @@ export function validateRegistrationArchive(value: unknown) {
   code(b.error);
   if (!Array.isArray(b.attempts) || b.attempts.length > REGISTRATION_LIMITS.maxCalls)
     throw new HttpError(400, 'Invalid registration attempts');
+  const attemptIds = new Set<string>();
   for (const attempt of b.attempts) {
     const a = record(attempt);
     fields(a, ['id', 'request', 'status', 'usage', 'error']);
     text(a.id, 'attempt ID', 100);
+    if (attemptIds.has(a.id)) throw new HttpError(400, 'Duplicate registration attempt');
+    attemptIds.add(a.id);
     validateWire(a.request);
     if (!attemptStatuses.includes(a.status)) throw new HttpError(400, 'Invalid attempt status');
     code(a.error);
@@ -490,6 +505,11 @@ export function validateRegistrationArchive(value: unknown) {
     )
       throw new HttpError(400, 'Invalid attempt state');
   }
+  if (
+    ['ready', 'applied'].includes(b.status) &&
+    (b.attempts.length !== 1 || !['completed', 'tool_calls'].includes(b.attempts[0].status))
+  )
+    throw new HttpError(400, 'Registration proposal lacks completed attempt');
   if (b.plan === null) {
     if (
       b.planHash !== null ||
@@ -604,13 +624,15 @@ export function normalizeRegistrationArchiveRow(row: Record<string, any>): void 
 /** Validate historical plans against their captured review and application, never current settings. */
 export function validateRegistrationGraph(product: ProductStore) {
   const rows = product.db
-    .prepare("SELECT body FROM versions WHERE kind='registration-run' ORDER BY id,revision")
+    .prepare("SELECT body FROM versions WHERE kind='registration-run' ORDER BY id")
     .all() as { body: string }[];
-  const previous = new Map<string, RegistrationRun>();
+  const seen = new Set<string>();
   const applications = new Map<string, string>();
   for (const row of rows) {
     const run = JSON.parse(row.body) as RegistrationRun;
     validateRegistrationArchive(run);
+    if (seen.has(run.id)) throw new HttpError(400, 'Duplicate current registration');
+    seen.add(run.id);
     const target = run.targetSnapshot,
       connection = target.connection;
     for (const attempt of run.attempts) {
@@ -678,81 +700,76 @@ export function validateRegistrationGraph(product: ProductStore) {
       if (owner && owner !== run.id) throw new HttpError(400, 'Duplicate registration application');
       applications.set(m.id, run.id);
     }
-    const old = previous.get(run.id);
-    if (!old) {
-      if (run.revision !== 1 || run.status !== 'running' || run.attempts.length !== 0)
-        throw new HttpError(400, 'Missing initial registration revision');
-    } else {
+  }
+}
+
+/** Check immutable receipts before replacing the current row. */
+function validateRegistrationTransition(run: RegistrationRun, old?: RegistrationRun) {
+  if (!old) {
+    if (run.revision !== 1 || run.status !== 'running' || run.attempts.length !== 0)
+      throw new HttpError(400, 'Missing initial registration revision');
+  } else {
+    if (
+      run.revision !== old.revision + 1 ||
+      !isDeepStrictEqual(
+        [
+          run.intentHash,
+          run.request,
+          run.target,
+          run.connection,
+          run.targetSnapshot,
+          run.createdAt,
+        ],
+        [old.intentHash, old.request, old.target, old.connection, old.targetSnapshot, old.createdAt]
+      ) ||
+      run.attempts.length < old.attempts.length
+    )
+      throw new HttpError(400, 'Registration history mismatch');
+    for (let i = 0; i < old.attempts.length; i++) {
+      const a = old.attempts[i],
+        b = run.attempts[i];
       if (
-        run.revision !== old.revision + 1 ||
-        !isDeepStrictEqual(
-          [
-            run.intentHash,
-            run.request,
-            run.target,
-            run.connection,
-            run.targetSnapshot,
-            run.createdAt,
-          ],
-          [
-            old.intentHash,
-            old.request,
-            old.target,
-            old.connection,
-            old.targetSnapshot,
-            old.createdAt,
-          ]
-        ) ||
-        run.attempts.length < old.attempts.length
+        a.id !== b.id ||
+        !isDeepStrictEqual(a.request, b.request) ||
+        (a.status !== 'running' && !isDeepStrictEqual(a, b))
       )
-        throw new HttpError(400, 'Registration history mismatch');
-      for (let i = 0; i < old.attempts.length; i++) {
-        const a = old.attempts[i],
-          b = run.attempts[i];
-        if (
-          a.id !== b.id ||
-          !isDeepStrictEqual(a.request, b.request) ||
-          (a.status !== 'running' && !isDeepStrictEqual(a, b))
-        )
-          throw new HttpError(400, 'Registration attempt history mismatch');
-      }
-      if (
-        old.status !== 'running' &&
-        !(old.status === 'ready' && run.status === 'applied') &&
-        !isDeepStrictEqual(
-          [
-            old.status,
-            old.plan,
-            old.planHash,
-            old.planConnectionSnapshot,
-            old.applied,
-            old.appliedSnapshot,
-            old.error,
-            old.finishedAt,
-          ],
-          [
-            run.status,
-            run.plan,
-            run.planHash,
-            run.planConnectionSnapshot,
-            run.applied,
-            run.appliedSnapshot,
-            run.error,
-            run.finishedAt,
-          ]
-        )
-      )
-        throw new HttpError(400, 'Registration terminal history mismatch');
-      if (
-        old.status === 'ready' &&
-        run.status === 'applied' &&
-        !isDeepStrictEqual(
-          [old.plan, old.planHash, old.planConnectionSnapshot, old.finishedAt],
-          [run.plan, run.planHash, run.planConnectionSnapshot, run.finishedAt]
-        )
-      )
-        throw new HttpError(400, 'Registration review changed');
+        throw new HttpError(400, 'Registration attempt history mismatch');
     }
-    previous.set(run.id, run);
+    if (
+      old.status !== 'running' &&
+      !(old.status === 'ready' && run.status === 'applied') &&
+      !isDeepStrictEqual(
+        [
+          old.status,
+          old.plan,
+          old.planHash,
+          old.planConnectionSnapshot,
+          old.applied,
+          old.appliedSnapshot,
+          old.error,
+          old.finishedAt,
+        ],
+        [
+          run.status,
+          run.plan,
+          run.planHash,
+          run.planConnectionSnapshot,
+          run.applied,
+          run.appliedSnapshot,
+          run.error,
+          run.finishedAt,
+        ]
+      )
+    )
+      throw new HttpError(400, 'Registration terminal history mismatch');
+    if (
+      old.status === 'ready' &&
+      run.status === 'applied' &&
+      !isDeepStrictEqual(
+        [old.plan, old.planHash, old.planConnectionSnapshot, old.finishedAt],
+        [run.plan, run.planHash, run.planConnectionSnapshot, run.finishedAt]
+      )
+    )
+      throw new HttpError(400, 'Registration review changed');
   }
 }

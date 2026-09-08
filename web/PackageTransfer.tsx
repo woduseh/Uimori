@@ -68,8 +68,8 @@ export function PackageTransfer({
       <section className="library-transfer-card">
         <h3>파일로 내보내기</h3>
         <p className="muted">
-          현재 초안과 이미지 파일을 함께 보관해요. 연결한 모듈과 히든 스토리 자료는 가져올 서재에도
-          같은 개정이 있어야 해요.
+          현재 초안과 이미지 파일을 함께 보관해요. 연결한 모듈은 가져올 서재에도 같은 개정이 있어야
+          해요.
         </p>
         <button
           type="button"

@@ -173,7 +173,7 @@ test('SEGMENTUI01 package-defined source reader expands without writes and displ
   expect(translated.attempts).toEqual(translatedBaseline.attempts);
 });
 
-test('SEGMENTUI02 module revision changes preserve unapplied segment drafts and aggregate both dirty states', async ({
+test('SEGMENTUI02 current modules preserve unapplied segment drafts and existing Run snapshots', async ({
   page,
   request,
 }, info) => {
@@ -182,17 +182,6 @@ test('SEGMENTUI02 module revision changes preserve unapplied segment drafts and 
   const moduleResponse = await request.post('/api/content', { data: { ...input, kind: 'module' } });
   expect(moduleResponse.ok(), await moduleResponse.text()).toBe(true);
   const module = (await moduleResponse.json()) as Content;
-  const revisionResponse = await request.put(`/api/content/${module.id}`, {
-    data: {
-      ...input,
-      kind: 'module',
-      title: `${input.title} revised`,
-      package: module.package,
-      expectedRevision: module.revision,
-    },
-  });
-  expect(revisionResponse.ok(), await revisionResponse.text()).toBe(true);
-  const revised = (await revisionResponse.json()) as Content;
   const ownerInput = fixtureBotInput(`Synthetic segment authoring ${stamp}`);
   const ownerResponse = await request.post('/api/content', {
     data: {
@@ -206,6 +195,30 @@ test('SEGMENTUI02 module revision changes preserve unapplied segment drafts and 
   });
   expect(ownerResponse.ok(), await ownerResponse.text()).toBe(true);
   const owner = (await ownerResponse.json()) as Content;
+  const seededResponse = await request.post('/api/chats', {
+    data: { title: 'Synthetic preserved module run', botId: owner.id },
+  });
+  expect(seededResponse.ok()).toBe(true);
+  const seededChat = (await seededResponse.json()) as Chat;
+  await generate(request, seededChat.id);
+  const beforeRuns = (await detail(request, seededChat.id)).runs;
+  expect(beforeRuns[0].snapshot.profile?.packageAttachments).toContainEqual({
+    id: module.id,
+    revision: module.revision,
+    role: 'module',
+  });
+  const revisionResponse = await request.put(`/api/content/${module.id}`, {
+    data: {
+      ...input,
+      kind: 'module',
+      title: `${input.title} revised`,
+      package: module.package,
+      expectedRevision: module.revision,
+    },
+  });
+  expect(revisionResponse.ok(), await revisionResponse.text()).toBe(true);
+  const revised = (await revisionResponse.json()) as Content;
+
   await page.setViewportSize({ width: 1440, height: 1000 });
   await page.goto('/');
   await page
@@ -218,27 +231,18 @@ test('SEGMENTUI02 module revision changes preserve unapplied segment drafts and 
   await fields.getByRole('button', { name: '연결과 기능', exact: true }).click();
   const features = fields.getByLabel('패키지 모듈과 기능 편집', { exact: true });
   const name = features.getByLabel('구간 이름', { exact: true });
-  const moduleRevision = features.getByLabel(`${module.id} 고정 버전`, { exact: true });
-  const save = library.getByRole('button', { name: '새 revision 저장', exact: true });
+  const save = library.getByRole('button', { name: '변경사항 저장', exact: true });
   await name.fill('UNAPPLIED_SEGMENT_DRAFT');
-  await moduleRevision.fill(String(revised.revision));
-  await features.getByRole('button', { name: '버전 확인 후 적용', exact: true }).click();
-  await expect(
-    features.getByText(`${module.id} · 고정 버전 v${revised.revision}`, { exact: true })
-  ).toBeVisible();
-  await expect(
-    features.getByRole('button', { name: '버전 확인 후 적용', exact: true })
-  ).toBeDisabled();
+  await features.getByRole('button', { name: '자료와 기능 목록 새로고침', exact: true }).click();
+  await expect(features.getByText(revised.title, { exact: true }).first()).toBeVisible();
+  await expect(features.getByLabel(`${module.id} 고정 버전`, { exact: true })).toHaveCount(0);
   await expect(name).toHaveValue('UNAPPLIED_SEGMENT_DRAFT');
   await expect(save).toBeDisabled();
   await features.getByRole('button', { name: '구간 설정을 초안에 적용', exact: true }).click();
   await expect(save).toBeEnabled();
-  await moduleRevision.fill(String(module.revision));
   await name.fill('SECOND_UNAPPLIED_DRAFT');
   await features.getByRole('button', { name: '구간 초안 되돌리기', exact: true }).click();
   await expect(name).toHaveValue('UNAPPLIED_SEGMENT_DRAFT');
-  await expect(save).toBeDisabled();
-  await features.getByRole('button', { name: '버전 초안 되돌리기', exact: true }).click();
   await expect(save).toBeEnabled();
   const savedResponse = page.waitForResponse(
     (response) =>
@@ -248,12 +252,20 @@ test('SEGMENTUI02 module revision changes preserve unapplied segment drafts and 
   const response = await savedResponse;
   expect(response.ok(), await response.text()).toBe(true);
   const saved = (await response.json()) as Content;
-  expect(saved.package!.modules).toEqual([{ id: module.id, revision: revised.revision }]);
+  expect(saved.package!.modules).toEqual(owner.package!.modules);
   expect(saved.package!.sourceSegments!.rules[0].label).toBe('UNAPPLIED_SEGMENT_DRAFT');
-  expect(
-    (await (await request.get(`/api/revisions/content/${owner.id}/${owner.revision}`)).json())
-      .package
-  ).toEqual(owner.package);
+  expect((await detail(request, seededChat.id)).runs).toEqual(beforeRuns);
+  await generate(request, seededChat.id);
+  const afterRuns = (await detail(request, seededChat.id)).runs;
+  const nextRun = afterRuns.find((run) => !beforeRuns.some((previous) => previous.id === run.id))!;
+  expect(nextRun.snapshot.profile?.packageAttachments).toContainEqual({
+    id: module.id,
+    revision: revised.revision,
+    role: 'module',
+  });
+  for (const previous of beforeRuns)
+    expect(afterRuns.find((run) => run.id === previous.id)).toEqual(previous);
+
   await page.setViewportSize({ width: 390, height: 844 });
   await name.scrollIntoViewIfNeeded();
   await fits(page);

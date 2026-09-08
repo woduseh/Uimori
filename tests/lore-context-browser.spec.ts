@@ -103,7 +103,7 @@ test('LCUI01 lore placement and invalid order drafts stay independent from folde
   const library = page.getByTestId('library-panel');
   await editLibraryContent(page, `${original.title}`);
   const fields = library.getByRole('region', { name: '패키지 구성', exact: true }),
-    save = library.getByRole('button', { name: '새 revision 저장', exact: true });
+    save = library.getByRole('button', { name: '변경사항 저장', exact: true });
   await fields.getByLabel('사용 방법', { exact: true }).selectOption('pinned');
   await fields.getByLabel('로어 1 배치', { exact: true }).selectOption('scene');
   await fields.getByLabel('로어 1 배치 묶음', { exact: true }).fill('장면 인물');
@@ -115,7 +115,12 @@ test('LCUI01 lore placement and invalid order drafts stay independent from folde
   await expect(fields.getByLabel('로어 소속 폴더', { exact: true })).toHaveValue('folder_one');
   await fields.getByLabel('로어 1 배치 순서', { exact: true }).fill('-2');
   await fields.getByLabel('사용 방법', { exact: true }).selectOption('discoverable');
+  await expect(fields.getByLabel('로어 1 배치', { exact: true })).toHaveCount(0);
+  await fields.getByLabel('사용 방법', { exact: true }).selectOption('pinned');
   await expect(fields.getByLabel('로어 1 배치', { exact: true })).toHaveValue('scene');
+  await expect(fields.getByLabel('로어 1 배치 묶음', { exact: true })).toHaveValue('장면 인물');
+  await expect(fields.getByLabel('로어 1 배치 순서', { exact: true })).toHaveValue('-2');
+  await fields.getByLabel('사용 방법', { exact: true }).selectOption('discoverable');
   await expect(fields.getByRole('region', { name: '선택한 로어 편집', exact: true })).toContainText(
     'UTF-16 4자'
   );
@@ -139,7 +144,7 @@ test('LCUI01 lore placement and invalid order drafts stay independent from folde
   expect(
     (await (await request.get(`/api/revisions/content/${original.id}/1`)).json()).package
   ).toEqual(original.package);
-  await evidence(page, fields.getByLabel('로어 1 배치', { exact: true }), info, 'lore-placement');
+  await evidence(page, fields.getByLabel('로어 1 본문', { exact: true }), info, 'lore-placement');
   expect(errors).toEqual([]);
 });
 
@@ -300,7 +305,10 @@ test('LCUI04 rare request option stays hidden until selected and supports dismis
   await expect(chip).toHaveCount(0);
   await expect(choice).toHaveCount(0);
   await more.click();
-  await expect(choice).toBeFocused();
+  await expect(choice).toBeVisible();
+  await expect(
+    page.getByRole('group', { name: '이번 요청 옵션', exact: true }).locator(':focus')
+  ).toHaveCount(1);
   await page.keyboard.press('Escape');
   await expect(more).toBeFocused();
   await expect(choice).toHaveCount(0);

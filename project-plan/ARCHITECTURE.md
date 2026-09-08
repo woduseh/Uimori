@@ -1,6 +1,6 @@
 # 아키텍처 계약 v0.6.1
 
-> 2026-09-07 현행 연결: 문서 제목의 v0.6.1은 계약 문서 버전이며 현재 DB/archive는 v10이다. 구형 DB는 이관하지 않고 거부하며 개발 DB 초기화는 `npm run reset:dev`를 사용한다. 공통 패키지·Run 상태·기록된 난수는 [PACKAGE-BEHAVIOR](../docs/PACKAGE-BEHAVIOR.md), 개인 HTTPS 접속·세션은 [SELF-HOST](../docs/SELF-HOST.md), Risu 자료의 에이전트 이식은 [RISU-PORTING](../docs/RISU-PORTING.md)을 따른다. 아래 M1/M2 시점의 설명과 장기 설계는 각 단계의 계약이며 전체 구현 완료를 뜻하지 않는다. 실제 완료 범위는 [CURRENT](CURRENT.md)에서 확인한다.
+> 2026-09-08 현행 연결: 문서 제목의 v0.6.1은 계약 문서 버전이며 현재 DB/archive는 v12다. 구형 DB는 이관하지 않고 거부하며 개발 DB 초기화는 `npm run reset:dev`를 사용한다. 서재 분류·폴더와 자료 종류는 [LIBRARY](../docs/LIBRARY.md), 공통 패키지·Run 상태·기록된 난수는 [PACKAGE-BEHAVIOR](../docs/PACKAGE-BEHAVIOR.md), 개인 HTTPS 접속·세션은 [SELF-HOST](../docs/SELF-HOST.md), Risu 자료의 에이전트 이식은 [RISU-PORTING](../docs/RISU-PORTING.md)을 따른다. 아래 M1/M2 시점의 설명과 장기 설계는 각 단계의 계약이며 전체 구현 완료를 뜻하지 않는다. 실제 완료 범위는 [CURRENT](CURRENT.md)에서 확인한다.
 
 제안된 이름은 구현을 강제하는 클래스 목록이 아니다. 아래 경계와 동작을 유지하면 더 단순한 표현으로 구현할 수 있다.
 
@@ -182,7 +182,7 @@ Connection, protocol adapter, model catalog/capabilities, task-specific preset�
 
 ### M2 구현의 저장·실행 계약
 
-M2 당시 schema v4에서 도입해 현재 v10 새 DB에도 포함하는 `story_configs/jobs/states/memories/indexes/scene_commands`는 기존 원문·최신 번역과 별도이며, 원문 확정 transaction에서 적격 상태·기억 작업을 예약한다. `attempts.story_job_id`로 모든 역할의 전송을 기존 예산·사용량 기록에 합산한다. 사용량/비용 누락을 0으로 간주하지 않는다.
+M2 당시 schema v4에서 도입해 현재 v12 새 DB에도 포함하는 `story_configs/jobs/states/memories/indexes/scene_commands`는 기존 원문·최신 번역과 별도이며, 원문 확정 transaction에서 적격 상태·기억 작업을 예약한다. `attempts.story_job_id`로 모든 역할의 전송과 사용량을 기록한다. 현재 서버의 누적 호출 수·금액 제한과 단가 추정은 제거했으며 작업별 호출·시간·출력 한도를 유지한다. 사용량/비용 누락을 0으로 간주하지 않는다.
 
 state job은 source/hash·전체 ancestry·canon·모듈·직전 state·선택 model revision으로 식별한다. owner/generation은 늦은 완료와 중복 commit을 거절한다. continuity의 메인 Run snapshot은 상태 없이 확정될 수 있으나, 그 상태 job은 이전 상태를 받은 뒤 전송 전 별도 입력을 확정한다. authoritative 대기 Run은 해당 의존성·branch head를 재검사한 뒤 한 번 queued로 전환한다. annotation 값은 메인 canonical 입력에 넣지 않는다.
 

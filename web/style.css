@@ -282,22 +282,6 @@ input[type="checkbox"] {
   background: var(--hover);
   filter: none;
 }
-.recent-label {
-  color: var(--muted);
-  font-size: 11px;
-  font-weight: 600;
-  margin: 25px 12px 8px;
-}
-.story-list {
-  flex: 1;
-  min-height: 0;
-  overflow: auto;
-  scrollbar-width: thin;
-}
-.story-list > .muted {
-  font-size: 12px;
-  padding: 12px;
-}
 .chat-link {
   display: flex;
   flex-direction: column;
@@ -412,19 +396,9 @@ input[type="checkbox"] {
   margin-bottom: 26px;
   min-width: 0;
 }
-.story-context > span {
+.story-context > .story-context-name {
   flex: 1;
   overflow-wrap: anywhere;
-}
-.branch-pill {
-  font-size: 12px;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  max-width: 180px;
-  padding: 6px 10px;
-  min-height: 36px;
-  line-height: 1.4;
 }
 .profile-asset {
   width: 34px;
@@ -526,19 +500,6 @@ input[type="checkbox"] {
 .segmented button[aria-pressed="true"] {
   background: var(--surface);
   color: var(--text);
-}
-.translation-versions {
-  font-size: 11px;
-}
-.translation-versions summary {
-  padding: 8px;
-}
-.translation-versions label {
-  font-size: 11px;
-}
-.translation-versions select {
-  max-width: 190px;
-  font-size: 12px;
 }
 .prose {
   font-size: var(--reading);
@@ -815,12 +776,6 @@ input[type="checkbox"] {
 .run-outcome button {
   justify-self: start;
 }
-.partial-prose {
-  font-size: var(--reading);
-  line-height: 1.9;
-  white-space: pre-wrap;
-  color: var(--text);
-}
 .empty-state {
   padding: 16vh 10px 32px;
   text-align: center;
@@ -937,30 +892,6 @@ input[type="checkbox"] {
 .new-story > p {
   margin: 0;
 }
-.bot-picker {
-  display: grid;
-  gap: 8px;
-  max-height: 280px;
-  overflow: auto;
-}
-.bot-option {
-  text-align: left;
-  background: var(--panel);
-  color: var(--text);
-  border: 1px solid var(--line);
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 4px;
-}
-.bot-option small {
-  font-size: 12px;
-  line-height: 1.7;
-}
-.bot-option.chosen {
-  border-color: var(--accent);
-  background: var(--accent-soft);
-}
 .settings-stack {
   display: grid;
   gap: 22px;
@@ -1042,10 +973,6 @@ input[type="checkbox"] {
     font-size: 11px;
     gap: 7px;
   }
-  .branch-pill {
-    max-width: 115px;
-    font-size: 11px;
-  }
   .request-message {
     max-width: 94%;
     padding: 14px 15px;
@@ -1091,9 +1018,6 @@ input[type="checkbox"] {
   }
   .quick-controls label {
     max-width: 50%;
-  }
-  .quick-controls .quick-model {
-    display: none;
   }
   .quick-controls select {
     font-size: 10px;
@@ -1309,21 +1233,28 @@ input[type="checkbox"] {
   }
   .settings-navigation {
     flex: none;
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    display: flex;
     gap: 4px;
-    padding: 10px 12px;
+    padding: 6px 10px;
+    overflow-x: auto;
     border-right: 0;
     border-bottom: 1px solid var(--line);
   }
   .settings-navigation [role="tab"] {
+    flex: none;
+    width: auto;
+    white-space: nowrap;
     margin: 0;
     font-size: 13px;
     padding: 10px;
     gap: 8px;
   }
   .settings-page {
-    padding: 22px 18px;
+    padding: 16px 18px;
+  }
+  .settings-page-title {
+    margin-bottom: 14px;
+    padding-bottom: 12px;
   }
 }
 .quick-controls > .content-picker {

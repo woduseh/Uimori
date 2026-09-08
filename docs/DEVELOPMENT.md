@@ -1,20 +1,24 @@
 # 개발과 검증
 
-정식 배포 전에는 하위 호환성을 요구하지 않아요. 현재 DB·보관 형식은 **v11**이며 구버전 자료·채팅·백업을 자동 이관하거나 보존용 백업을 만들지 않아요. 개발 DB를 다시 시작하려면 실행 중인 서버를 종료한 뒤 `npm run reset:dev`를 실행해요. 이 명령은 저장소의 `.local/narrative.sqlite`와 해당 SQLite 부속 파일·알려진 구형 자동 백업만 삭제해요. 서버가 DB를 사용 중이거나 경로가 저장소 밖으로 연결되면 중단해요. 다른 검증 산출물과 credential 파일은 대상으로 삼지 않아요.
+정식 배포 전에는 하위 호환성을 요구하지 않아요. 현재 DB·보관 형식은 **v12**이며 구버전 자료·채팅·백업을 자동 이관하거나 보존용 백업을 만들지 않아요. 개발 DB를 다시 시작하려면 실행 중인 서버를 종료한 뒤 `npm run reset:dev`를 실행해요. 이 명령은 저장소의 `.local/narrative.sqlite`와 해당 SQLite 부속 파일·알려진 구형 자동 백업만 삭제해요. 서버가 DB를 사용 중이거나 경로가 저장소 밖으로 연결되면 중단해요. 다른 검증 산출물과 credential 파일은 대상으로 삼지 않아요.
 
-[시작하기](../README.md) · [검증 계약](../project-plan/VERIFICATION.md)
+[시작하기](../README.md) · [코드 품질](QUALITY.md) · [검증 계약](../project-plan/VERIFICATION.md)
 
 ## 변경과 검증
 
+수정 중에는 `npm run quality`, 완료·통합 전에는 `npm run quality:full`을 실행해요. `quality`는 서식·lint·모듈 경계·타입을 검사하고, `quality:full`은 전체 Vitest와 빌드를 더해요. UI를 바꿨다면 이 빌드에 해당하는 브라우저 검증을 추가해요. 아래는 작업에 따라 선택하는 명령이며 전체 목록을 매번 실행하는 절차가 아니에요.
+
 ```powershell
-npm run check
-npm test
-npm run build
+npm run quality
+npm run quality:full
 npm run verify:ui
 npm run verify:evaluation
 npm run verify:packages
 npm run verify:providers
 npm run verify:loading
+npm run verify:library
+npm run verify:navigation
+npm run verify:turn-activity
 npm run verify:redesign
 npm run verify:selfhost
 npm run verify -- --milestone M0
@@ -33,7 +37,9 @@ npm run cleanup -- --run <summary에 나온 run-id>
 
 `verify:selfhost`는 새 DB·포트·공개 합성 TLS 인증서로 HTTPS 프록시를 만들고 데스크톱/390px Chromium의 로그인·쿠키·원문 공유·SSE·탭 재진입·세션 해제 후 재로그인을 검사해요. 인증서 오류 무시는 이 검증에만 적용하며 실제 도메인·Linux·Docker·Nginx 실행이나 휴대폰 검증을 대신하지 않아요. `output/playwright/self-host-<run-id>/`에 summary·reporter·화면과 격리 DB 근거를 남겨요. Chromium이 없다면 Playwright의 브라우저를 설치하거나 `NR_BROWSER_PATH`로 지정해요. 서버 배포에는 브라우저 설치가 필요하지 않아요.
 
-`verify`는 doctor → typecheck/build → 새 서버 ready/build/DB identity 확인 → Vitest → Playwright → 실패 감지 selftest → 소유 프로세스 종료/임시 DB 정리를 실행해요. reporter JSON, 커밋 경계 DB 백업, 실제 입력·이벤트, 화면과 `summary.json`은 `output/playwright/<run-id>/`에 남아요. 핵심 검사는 retry 0이고, 필수 skip/0개/누락/실패를 성공으로 바꾸지 않아요. source와 build의 SHA-256은 실행 전후 확인해요. 같은 source의 오래된 다른 서버를 재사용하지 않아요.
+`verify`는 선택한 milestone·case에 맞춰 타입 검사·빌드, 새 서버의 ready/build/DB identity 확인, 해당 Vitest와 브라우저 검사를 실행하고 소유 프로세스·임시 DB를 정리해요. M0/M1의 doctor는 F01 또는 브라우저 case가 포함될 때 실행하고, M2는 별도 실행기에서 doctor를 실행해요. Playwright는 선택한 case에 브라우저 검사가 있을 때만, 실패 감지 selftest는 M0의 F06이 포함될 때만 실행해요. selftest만 확인하려면 `npm run verify:selftest`를 사용해요.
+
+reporter JSON, 커밋 경계 DB 백업, 실제 입력·이벤트, 해당 화면과 `summary.json`은 `output/playwright/<run-id>/`에 남아요. 핵심 검사는 retry 0이고, 필수 skip/0개/누락/실패를 성공으로 바꾸지 않아요. source와 build의 SHA-256은 실행 전후 확인해요. 같은 source의 오래된 다른 서버를 재사용하지 않아요.
 
 `M0`는 F01–F06 회귀와 검증기 selftest를 실행하고, `M1-local`은 P01–P13의 로컬 계약을 검사해요. `--milestone M1`은 같은 로컬 검사 후 미충족 live/device/quality 전제를 포함해 **BLOCKED와 nonzero exit**를 반환해요. M1-local PASS를 M1 전체 완료로 취급하지 않아요.
 
@@ -53,18 +59,24 @@ node scripts/verify-worktrees.mjs --a '<준비된 작업트리 A>' --b '<준비�
 
 | 명령 | 범위 |
 | --- | --- |
-| `npm test` | Vitest 단위·통합 검사. 브라우저·실제 공급자 검사를 대신하지 않아요. |
+| `npm test` | Vitest 단위·통합 검사. 서버 재시작 검사를 위해 최신 빌드가 필요해요. 브라우저·실제 공급자 검사를 대신하지 않아요. |
 | `npm run verify:packages` | 공통 프롬프트 조립·패키지 요청 예약·원문 구간 편집과 Reader·번역 표시. |
 | `npm run verify:providers` | 합성 공급자 등록·모델 선택·관리 화면 |
 | `npm run verify:loading` | 합성 자료의 로딩·페이지/SSE 갱신 화면 |
+| `npm run verify:library` | 서재·프롬프트 분리, 폴더·다중 이동·대표 이미지·선택 흐름 |
+| `npm run verify:navigation` | 봇별 채팅 폴더·순서 이동·진행 표시 |
+| `npm run verify:turn-activity` | 응답별 작업 이력 펼침·진단 조회·생성 완료 전환 |
+| `node scripts/verify-deletion.mjs` | 자료·설정·채팅·이미지 삭제와 참조·실행 보호 |
 
 검증 산출물인 `output/`, 사용자 데이터 `.local/`, 빌드 `dist/`는 Git에 포함하지 않아요. 결과 문서의 `output/` 링크는 해당 실행을 보관한 로컬 환경에서만 열려요.
 
+서재·탐색·삭제·패키지·전체 개편과 입력창 옵션/재시도 검증은 [공통 브라우저 실행기](../scripts/browser-verification.mjs)를 사용해요. 각 진입점은 검사 파일·필수 case·timeout을 선택하고, 실행기는 새 DB/포트, 소스·빌드 지문, reporter, 소유권·취소·cleanup과 증거 보관을 관리해요. 필수 검사 누락·0개·skip·재시도·cleanup 실패는 PASS로 처리하지 않아요. [하네스 회귀](../tests/harness.test.ts)는 이 실패 경계와 수동 cleanup 명령의 소유권 호환을 확인해요. 전용 HTTPS 등 다른 실행 계약의 하네스는 독립적으로 유지해요.
+
 ## 코드의 경계
 
-- `web/`: 봇별 탐색·채팅·패키지·프롬프트 편집, 안전한 원고 표시, 탭별 URL/초안/독서 위치, 페이지 읽기·SSE 갱신과 늦은 HTTP 응답 폐기.
-- `core/`: 공통 ContentPackage와 역할별 문맥, PromptProgram 데이터 AST·선택형 문법·TypeScript 제작 API, 콘텐츠 가져오기 변환, 공급자 adapter와 상태·기억·원문 회수, 번역·표현 검증. 개발용 지침과 앱 자료는 별개예요.
-- `server/`: schema/archive v11, SQLite WAL, revision/idempotency, 봇 소속·폴더, 분기, Run/job/chunk/attempt 수명, 판정 기회·임시 행동 상태, 인증·SSE·현재 형식 백업. DB 트랜잭션은 모델이나 브라우저를 기다리지 않아요.
+- `web/`: 서재·프롬프트 관리, 봇별 탐색·채팅·패키지 편집, 안전한 원고 표시, 탭별 URL/초안/독서 위치, 페이지 읽기·SSE 갱신과 늦은 HTTP 응답 폐기.
+- `core/`: 공통 ContentPackage와 역할별 문맥, PromptProgram 데이터 AST·선택형 문법·TypeScript 제작 API, native JSON 검증, 공급자 adapter와 상태·기억·원문 회수, 번역·표현 검증. 개발용 지침과 앱 자료는 별개예요.
+- `server/`: schema/archive v12, SQLite WAL, revision/idempotency, 봇 소속·채팅 폴더·서재 분류와 폴더, 분기, Run/job/chunk/attempt 수명, 판정 기회·임시 행동 상태, 인증·SSE·현재 형식 백업. DB 트랜잭션은 모델이나 브라우저를 기다리지 않아요.
 - `tests/`: 실제 파일 DB/HTTP/프로세스 재시작과 Playwright 브라우저 검사. `scripts/`는 기존 reporter와 작은 수명주기 코드를 연결해요.
 
 원문·Run 완료·적격 보조 예약은 한 트랜잭션에 저장하고 worker는 커밋 뒤에 실행해요. job 결과·완료도 한 트랜잭션이며 source/hash와 worker generation/owner를 검사해요. 재시작은 완료 원문을 다시 생성하지 않아요. 실행 중이던 메인 요청은 `interrupted`로 남고, 로컬 결정적 모의 job만 재개해요. 표시 상태는 다음 원고의 사실로 주입하지 않아요.

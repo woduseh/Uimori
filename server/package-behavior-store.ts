@@ -117,14 +117,32 @@ export class PackageBehaviorStore {
       )
       .get(s.chatId, s.branchId, s.attachmentInstanceId) as Record<string, any> | undefined;
   }
+  storedState(scope: BehaviorScope): BehaviorState | undefined {
+    const row = this.row(scope);
+    if (!row) return undefined;
+    const stored = JSON.parse(row.scope) as BehaviorScope;
+    if (
+      stored.chatId !== scope.chatId ||
+      stored.branchId !== scope.branchId ||
+      stored.attachmentInstanceId !== scope.attachmentInstanceId ||
+      stored.packageId !== scope.packageId
+    )
+      conflict('BEHAVIOR_SCOPE_VERSION');
+    return { ...stored, stateRevision: Number(row.state_revision), state: JSON.parse(row.state) };
+  }
   read(scope: BehaviorScope, definition: PackageBehavior): BehaviorState {
     const b = validatePackageBehavior(definition);
     checkScope(scope, b);
     const row = this.row(scope);
     if (!row) return { ...scope, stateRevision: 0, state: structuredClone(b.initialState) };
-    const stored = JSON.parse(row.scope) as BehaviorScope;
-    if (stable(stored) !== stable(scope) || row.definition_hash !== hash(b))
+    const stored = this.storedState(scope)!;
+    if (
+      stored.behaviorRevision !== scope.behaviorRevision ||
+      stored.schemaVersion !== scope.schemaVersion ||
+      row.definition_hash !== hash(b)
+    )
       conflict('BEHAVIOR_MIGRATION_REQUIRED');
+    checkScope(stored, b);
     return { ...scope, stateRevision: Number(row.state_revision), state: JSON.parse(row.state) };
   }
   ensure(scope: BehaviorScope, b: PackageBehavior) {
@@ -143,6 +161,19 @@ export class PackageBehaviorStore {
           hash(validatePackageBehavior(b)),
           0,
           JSON.stringify(state.state)
+        );
+    // Only the live definition reference advances. Historical journal receipts stay frozen.
+    else
+      this.db
+        .prepare(
+          'UPDATE package_behavior_states SET scope=? WHERE chat_id=? AND branch_id=? AND instance_id=? AND scope<>?'
+        )
+        .run(
+          JSON.stringify(scope),
+          scope.chatId,
+          scope.branchId,
+          scope.attachmentInstanceId,
+          JSON.stringify(scope)
         );
     return state;
   }
@@ -202,12 +233,36 @@ export class PackageBehaviorStore {
     >
   ): BehaviorJournalResult {
     const b = validatePackageBehavior(definition);
-    this.read(scope, b);
-    const payload = { scope, provenance: 'explicit-reset', ...command },
+    checkScope(scope, b);
+    const prior = this.storedState(scope);
+    const payload = {
+        scope,
+        provenance: 'explicit-reset',
+        ...command,
+        ...(prior
+          ? {
+              previousScope: Object.fromEntries(
+                Object.keys(scope).map((key) => [key, prior[key as keyof BehaviorScope]])
+              ),
+            }
+          : {}),
+      },
       cached = this.cached(scope, command.idempotencyKey, payload);
     if (cached) return cached;
-    const state = this.read(scope, b);
+    const state = prior ?? this.read(scope, b);
     this.expect(state, command.expectedStateRevision, command.expectedSourceHash);
+    if (prior)
+      this.db
+        .prepare(
+          'UPDATE package_behavior_states SET scope=?,definition_hash=? WHERE chat_id=? AND branch_id=? AND instance_id=?'
+        )
+        .run(
+          JSON.stringify(scope),
+          hash(b),
+          scope.chatId,
+          scope.branchId,
+          scope.attachmentInstanceId
+        );
     return this.commit(
       scope,
       b,
@@ -441,6 +496,11 @@ export class PackageBehaviorStore {
     const captured = JSON.parse(row.payload),
       candidate = { ...(payload as Record<string, unknown>) };
     if (Object.hasOwn(captured, 'hostRuntime')) candidate.hostRuntime = captured.hostRuntime;
+    if (captured.provenance === 'explicit-reset') {
+      delete candidate.previousScope;
+      if (Object.hasOwn(captured, 'previousScope'))
+        candidate.previousScope = captured.previousScope;
+    }
     if (row.payload_hash !== hash(candidate)) conflict('BEHAVIOR_IDEMPOTENCY_CONFLICT');
     return JSON.parse(row.result);
   }

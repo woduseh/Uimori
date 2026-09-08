@@ -1,4 +1,5 @@
 /** A data-only prompt language. Content cannot create tools, wire objects or executable code. */
+import { validateAgentCollaboration } from './agent-collaboration.js';
 import {
   PromptBudget,
   evaluationFail,
@@ -139,6 +140,7 @@ export type PromptProgram = {
   controls: PromptControl[];
   blocks: PromptBlock[];
   execution?: PromptExecution;
+  collaboration?: import('./agent-collaboration.js').AgentCollaboration;
   provenance?: { sourceHash: string; variant: string; conversionVersion: string; notes: string[] };
 };
 export type PromptCombination = { id: string; title: string; values: Record<string, PromptValue> };
@@ -490,7 +492,14 @@ export function validatePromptTemplate(
 }
 export function validatePromptProgram(value: unknown): PromptProgram {
   inspectAst(value);
-  const raw = object(value, ['version', 'controls', 'blocks', 'execution', 'provenance']);
+  const raw = object(value, [
+    'version',
+    'controls',
+    'blocks',
+    'execution',
+    'collaboration',
+    'provenance',
+  ]);
   if (
     raw.version !== 1 ||
     !Array.isArray(raw.controls) ||
@@ -537,6 +546,13 @@ export function validatePromptProgram(value: unknown): PromptProgram {
     validateControlValue(c as PromptControl, c.default);
   }
   // Presentation conditions can refer to controls declared later in the list.
+  if (raw.collaboration !== undefined) {
+    try {
+      validateAgentCollaboration(raw.collaboration, [...controls]);
+    } catch {
+      fail('PROMPT_INVALID_COLLABORATION');
+    }
+  }
   for (const c of raw.controls as PromptControl[])
     if (c.visibleWhen !== undefined) expression(c.visibleWhen, controls);
   if (raw.execution !== undefined) {
@@ -643,6 +659,28 @@ export function resolvePromptValues(
       return [c.id, value];
     })
   );
+}
+/** Reconcile live saved options with the current definition; frozen inputs remain strict. */
+export function reconcilePromptValues(
+  program: PromptProgram,
+  values: Record<string, PromptValue> = {}
+): { values: Record<string, PromptValue>; resetKeys: string[] } {
+  const resetKeys = Object.keys(values).filter(
+    (key) => !program.controls.some((c) => c.id === key)
+  );
+  const resolved = Object.fromEntries(
+    program.controls.map((control) => {
+      if (!Object.hasOwn(values, control.id)) return [control.id, control.default];
+      try {
+        validateControlValue(control, values[control.id]);
+        return [control.id, values[control.id]];
+      } catch {
+        resetKeys.push(control.id);
+        return [control.id, control.default];
+      }
+    })
+  );
+  return { values: resolved, resetKeys };
 }
 export function validateChatPromptControls(value: unknown): ChatPromptControls {
   const raw = object(value, ['values', 'combinations', 'selectedCombinationId']);

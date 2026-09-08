@@ -155,7 +155,7 @@ export function ContentPicker({
         {current && <ContentAvatar content={current} />}
         <span className="content-picker-current" title={current?.title}>
           {current?.title ??
-            (value ? '선택한 자료 버전 확인 필요' : allowNone ? noneLabel : '자료 선택')}
+            (value ? '선택한 자료 확인 필요' : allowNone ? noneLabel : '자료 선택')}
         </span>
         <ChevronDown size={16} />
       </button>

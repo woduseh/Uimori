@@ -8,6 +8,7 @@ import { createServer as createHttpsServer, request as httpsRequest } from 'node
 import { chromium } from '@playwright/test';
 import {
   root,
+  createOwnership,
   artifactRoot,
   newId,
   json,
@@ -45,13 +46,7 @@ const summary = {
     'Browser re-entry verifies stored results and independent sessions; mock generation is immediate and does not establish a long-running live-provider disconnect result.',
   ],
 };
-const ownership = {
-  runId,
-  root: directory,
-  active: true,
-  children: [],
-  startedAt: summary.startedAt,
-};
+const ownership = createOwnership(directory, summary.startedAt);
 await json(path.join(directory, 'ownership.json'), ownership);
 let environmentBlocked = false,
   proxy;
@@ -252,7 +247,6 @@ try {
     NR_TEST_MODE: '',
     NR_PUBLIC_ORIGIN: proxy.origin,
     NR_ACCESS_TOKEN: randomBytes(32).toString('hex'),
-    NR_ACCESS_TOKEN_FILE: '',
     NR_PROVIDER_ORIGINS: '',
     NR_ARTIFACT_DIR: directory,
     NR_BROWSER_OUTPUT: path.join(directory, 'browser'),
@@ -376,6 +370,7 @@ try {
   failures.push(...cleanupErrors);
   ownership.active = live.length > 0;
   ownership.finishedAt = new Date().toISOString();
+  ownership.cleanup = summary.cleanup;
   await json(path.join(directory, 'ownership.json'), ownership);
   try {
     summary.artifactScan = await artifactScan(directory);

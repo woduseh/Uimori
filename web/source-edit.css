@@ -1,0 +1,8 @@
+.source-text-editor {
+  scroll-margin-block: 12px;
+}
+
+.source-text-editor > label > textarea {
+  height: clamp(140px, calc(var(--app-height, 100dvh) - 300px), 360px);
+  min-height: 140px;
+}

@@ -184,7 +184,7 @@ export function PackageControlsEditor({
       onChange(controls);
       setDrafts(packageControlDrafts(controls));
       setError('');
-      setNotice('옵션을 적용했어요. 자료 저장으로 새 버전을 남겨 주세요.');
+      setNotice('옵션을 적용했어요. 자료 저장으로 변경 사항을 남겨 주세요.');
     } catch (caught) {
       setError(
         `옵션을 확인해 주세요. 초안과 마지막 적용값은 유지돼요. (${(caught as Error).message})`
