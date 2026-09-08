@@ -113,8 +113,11 @@ test('LOADUI06 scene navigator jumps across bounded pages and remains usable in 
   await page.getByRole('button', { name: '집중 읽기 종료', exact: true }).click();
 
   await page.setViewportSize({ width: 390, height: 844 });
-  await expect(navigator).toBeVisible();
-  await navigator.getByRole('button', { name: '장면 목록 열기', exact: true }).click();
+  // Compact widths replace the bar with the header title opener and a floating latest button.
+  await expect(navigator).toHaveCount(0);
+  const opener = page.getByRole('button', { name: '장면 목록 열기', exact: true });
+  await expect(opener).toBeVisible();
+  await opener.click();
   const choice = list.getByRole('button', { name: /^3번째 장면 · Synthetic page 3\./ });
   await expect(choice).toBeVisible();
   for (const control of [list, choice]) {
@@ -130,8 +133,13 @@ test('LOADUI06 scene navigator jumps across bounded pages and remains usable in 
   await choice.click();
   await expect(list).toHaveCount(0);
   await expect(article(page, ids[2])).toBeVisible();
-  await expect(navigator).toContainText('3 / 12');
+  await expect(page).toHaveURL(new RegExp(`source=${ids[2]}`));
   await expect(articles(page)).toHaveCount(5);
+  const latest = page.getByRole('button', { name: '최신 장면으로', exact: true });
+  await expect(latest).toBeVisible();
+  await latest.click();
+  await expect(article(page, ids[11])).toBeVisible();
+  await expect(latest).toHaveCount(0);
   const after = await detail(request, seeded.chat.id);
   expect(after.sources).toEqual(seeded.sources);
   expect(after.runs).toEqual(seeded.runs);
