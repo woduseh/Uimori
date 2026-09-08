@@ -705,6 +705,17 @@ export function BotNavigation(props: Props) {
                 ))}
               </select>
             </label>
+            <button
+              type="button"
+              className="secondary"
+              disabled={busy}
+              onClick={() => {
+                setMenuId(null);
+                setCreating(true);
+              }}
+            >
+              <FolderPlus size={16} aria-hidden="true" />새 폴더 만들기
+            </button>
             <div className="form-actions">
               <button
                 className="secondary"

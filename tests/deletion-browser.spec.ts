@@ -87,6 +87,7 @@ test('DEL01 library cancel, stale revision, dependent bot and actual deletion at
     await page.setViewportSize({ width, height: 900 });
     await page.screenshot({ path: info.outputPath(`content-header-${width}.png`) });
   }
+  await panel.getByLabel('자료 메뉴', { exact: true }).click();
   await panel.getByRole('button', { name: `${item.title} 자료 삭제`, exact: true }).click();
   const dialog = page.getByRole('alertdialog', { name: '삭제 확인', exact: true });
   await dialog.getByRole('button', { name: '취소', exact: true }).click();

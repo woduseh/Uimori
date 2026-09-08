@@ -24,6 +24,7 @@ import {
   SlidersHorizontal,
   Square,
   Type,
+  X,
 } from 'lucide-react';
 import type { Content } from '../core/product.js';
 import { reconcilePromptValues } from '../core/prompt-program.js';
@@ -38,6 +39,7 @@ import { TurnActivity } from './TurnActivity.js';
 import { PackageBehaviorPanel } from './PackageBehaviorPanel.js';
 import { SessionGate } from './SessionGate.js';
 import { Dialog } from './Dialog.js';
+import { DeleteButton } from './DeleteButton.js';
 import { BotNavigation, type ChatFolder } from './BotNavigation.js';
 import { completePendingStoryProfile } from './pendingStory.js';
 import { useStory } from './useStory.js';
@@ -606,6 +608,18 @@ function App() {
                         보관된 전개
                       </button>
                     )}
+                    {s.detail && (
+                      <DeleteButton
+                        path={`/chats/${encodeURIComponent(s.selected)}`}
+                        preparePath={`/chats/${encodeURIComponent(s.selected)}/deletion-impact`}
+                        title={s.detail.chat.title}
+                        label="채팅 삭제"
+                        description="이 채팅의 모든 분기, 원문, 번역, 이미지와 실행 기록을 영구 삭제해요. 실행 중인 작업은 먼저 취소하거나 완료해 주세요."
+                        disabled={!!s.active}
+                        onError={s.setError}
+                        onDeleted={() => s.loadChats()}
+                      />
+                    )}
                   </ActionMenu>
                 </>
               )}
@@ -902,6 +916,29 @@ function App() {
                   <div className="error" role="alert">
                     {s.error}
                   </div>
+                )}
+                {s.forkOrigin && s.forkOrigin.forkId === s.selected && (
+                  <p className="composer-status fork-notice" role="status">
+                    <span>「{s.forkOrigin.title}」에서 복사한 새 채팅이에요.</span>
+                    <button
+                      type="button"
+                      className="link-button"
+                      onClick={() => {
+                        const origin = s.forkOrigin!.id;
+                        s.dismissForkOrigin();
+                        select(origin);
+                      }}
+                    >
+                      원본으로 돌아가기
+                    </button>
+                    <IconButton
+                      label="알림 닫기"
+                      icon={X}
+                      size={14}
+                      className="fork-notice-close"
+                      onClick={s.dismissForkOrigin}
+                    />
+                  </p>
                 )}
                 <ActivityStatus
                   key={s.viewKey}
