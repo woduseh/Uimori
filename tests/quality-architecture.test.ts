@@ -1,5 +1,5 @@
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { builtinModules } from 'node:module';
 import { tmpdir } from 'node:os';
 import { dirname, isAbsolute, join, relative, resolve } from 'node:path';
@@ -8,6 +8,10 @@ import { afterAll, beforeAll, describe, expect, test } from 'vitest';
 
 const projectRoot = fileURLToPath(new URL('../', import.meta.url));
 const biomeCli = join(projectRoot, 'node_modules/@biomejs/biome/bin/biome');
+// Biome ignores fixture files when the project root is only an alias of the
+// real directory (macOS /var -> /private/var, Windows 8.3 short names), so
+// resolve the temporary directory before creating the fixture project.
+let temporaryRoot: string;
 let fixtureRoot: string;
 type Sample = { source: string; forbidden: boolean };
 type BiomeReport = {
@@ -22,7 +26,8 @@ type BiomeReport = {
 };
 
 beforeAll(() => {
-  fixtureRoot = mkdtempSync(join(tmpdir(), 'uimori-architecture-'));
+  temporaryRoot = realpathSync(tmpdir());
+  fixtureRoot = mkdtempSync(join(temporaryRoot, 'uimori-architecture-'));
   const configuration = JSON.parse(readFileSync(join(projectRoot, 'biome.json'), 'utf8'));
   // Keep the actual rules, overrides and file filters. Only disable Git discovery
   // because the temporary fixture project is outside the user's repository.
@@ -34,7 +39,7 @@ beforeAll(() => {
 
 afterAll(() => {
   if (!fixtureRoot) return;
-  const child = relative(resolve(tmpdir()), resolve(fixtureRoot));
+  const child = relative(temporaryRoot, resolve(fixtureRoot));
   if (isAbsolute(child) || !/^uimori-architecture-[^/\\]+$/.test(child)) {
     throw new Error(`Refusing cleanup outside the temporary fixture scope: ${fixtureRoot}`);
   }
