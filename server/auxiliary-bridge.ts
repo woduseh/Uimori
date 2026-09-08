@@ -4,7 +4,7 @@ import { type AssetEntry } from '../core/auxiliary.js';
 import type { AuxiliaryStoreBridge } from './product-auxiliary.js';
 import type { Controls } from './controls.js';
 import { translationReferences } from './translation-context.js';
-import { imageCatalog } from './package-images.js';
+import { imageCatalog, imageTargetSource } from './package-images.js';
 
 export function auxiliaryBridge(
   store: Store,
@@ -32,6 +32,7 @@ export function auxiliaryBridge(
         job,
         source,
         snapshot,
+        ...(job.kind === 'image' ? { imageSource: imageTargetSource(store, job, true) } : {}),
         ...(job.kind === 'translation'
           ? { translationReferences: translationReferences(store, snapshot) }
           : {}),

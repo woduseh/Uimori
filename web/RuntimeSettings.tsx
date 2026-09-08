@@ -1,56 +1,7 @@
 import { useEffect, useState } from 'react';
-import type { Run, Chat, Settings } from '../core/types.js';
+import type { Chat, Settings } from '../core/types.js';
 import { api } from './api.js';
 import { useTestMode } from './useTestMode.js';
-export function RunIssue({
-  run,
-  refresh,
-  onError,
-}: {
-  run: Pick<Run, 'id' | 'issue'>;
-  refresh: () => Promise<void>;
-  onError: (error: string) => void;
-}) {
-  const [note, setNote] = useState(run.issue ?? '');
-  const [busy, setBusy] = useState(false);
-  return (
-    <details className="inspector">
-      <summary>요청 충실성 기록</summary>
-      <form
-        className="editor-grid"
-        onSubmit={async (event) => {
-          event.preventDefault();
-          setBusy(true);
-          try {
-            await api(`/runs/${run.id}/issue`, { note });
-            await refresh();
-          } catch (error) {
-            onError((error as Error).message);
-          } finally {
-            setBusy(false);
-          }
-        }}
-      >
-        <label className="full">
-          요청 충실성 메모
-          <textarea
-            aria-label="요청 충실성 메모"
-            rows={2}
-            maxLength={2000}
-            value={note}
-            onChange={(event) => setNote(event.target.value)}
-            placeholder="전제·인물·장르가 달라진 부분을 기록해요."
-          />
-        </label>
-        <button className="secondary" disabled={busy}>
-          메모 저장
-        </button>
-        <small>메모는 원문을 자동 수정하거나 삭제하지 않아요.</small>
-      </form>
-    </details>
-  );
-}
-
 export function SettingsEditor({
   chat,
   onSaved,

@@ -1,3 +1,4 @@
+import { updateTestProfile } from './fixtures/model-workspace.js';
 import { injectWithFixtureBot, createFixtureChat } from './fixtures/chat.js';
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 import { mkdtemp, rm } from 'node:fs/promises';
@@ -410,10 +411,10 @@ describe('provider settings, catalogs and archive contracts', () => {
     );
     const chat = createFixtureChat(app.store, 'Mutable settings synthetic story'),
       initial = app.store.product.profile(chat.id);
-    const profile = app.store.product.updateProfile(chat.id, {
+    const profile = updateTestProfile(app.store.product, chat.id, {
       expectedRevision: initial.revision,
       attachments: initial.attachments,
-      personaReference: initial.personaReference,
+
       image: false,
       routes: { ...initial.routes, main: ref(model) },
     });
@@ -799,10 +800,10 @@ describe('provider settings, catalogs and archive contracts', () => {
     );
     const chat = createFixtureChat(source.store, 'Synthetic provider snapshot');
     const initial = product.profile(chat.id);
-    const profile = product.updateProfile(chat.id, {
+    const profile = updateTestProfile(product, chat.id, {
       expectedRevision: initial.revision,
       attachments: [],
-      personaReference: initial.personaReference,
+
       routes: {
         main: ref(models[0]),
         translation: ref(models[1]),

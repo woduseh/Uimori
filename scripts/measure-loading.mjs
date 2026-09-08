@@ -99,7 +99,12 @@ try {
   const sizes = Array.from({ length: 100 }, (_, index) => 8000 + (index % 10) * 8000);
   const time = '2026-09-07T00:00:00.000Z';
   for (const chat of chats) {
-    const { chatId: _chatId, revision, ...profile } = store.product.profile(chat.id);
+    const {
+      chatId: _chatId,
+      revision,
+      routes: _globalRoutes,
+      ...profile
+    } = store.product.profile(chat.id);
     // updateProfile owns its transaction; retain the chat's required owning bot.
     store.product.updateProfile(chat.id, {
       ...profile,

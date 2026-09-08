@@ -730,7 +730,7 @@ export async function createApp(options: AppOptions): Promise<App> {
   app.get<{ Params: { id: string } }>('/api/runs/:id', async (request) =>
     store.run(request.params.id)
   );
-  promptWorkspaceRoutes(app, store);
+  promptWorkspaceRoutes(app, store, publish);
   app.post<{ Params: { id: string } }>('/api/runs/:id/retry', async (request) => {
     const body = record(request.body);
     fields(body, ['idempotencyKey']);

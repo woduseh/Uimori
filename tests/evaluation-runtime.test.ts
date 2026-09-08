@@ -173,7 +173,7 @@ async function fixture(
     {
       expectedRevision: prior.revision,
       attachments: [ref(lore)],
-      personaReference: prior.personaReference,
+
       routes: { main: { id: model.id }, translation: { id: model.id }, status: null, image: null },
       image: false,
     },

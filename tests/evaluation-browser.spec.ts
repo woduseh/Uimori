@@ -1,9 +1,11 @@
+import { selectCurrentSettingsSection } from './ui-navigation.js';
+import { preservePromptWorkspace } from './fixtures/prompt-workspace.js';
+import { setCurrentModels } from './ui-navigation.js';
 import { visualReview } from './fixtures/visual-review.js';
 import {
   selectSettingsSection,
   startProviderConnection,
   navigationAction,
-  selectChatSettingsSection,
 } from './ui-navigation.js';
 import { test, expect, type Page, type APIRequestContext } from '@playwright/test';
 import type { Connection, Library, ModelPreset } from '../core/product.js';
@@ -129,7 +131,8 @@ test('EVALUI01 desktop preset evaluation opt-in persists selected story roles af
       outputRecovery: true,
     },
   });
-  await page.keyboard.press('Escape');
+  await setCurrentModels(request, { main: { id: model.id }, translation: { id: model.id } });
+  await page.reload();
   await navigation(page, '새 이야기');
   await page
     .getByRole('dialog', { name: '새 채팅', exact: true })
@@ -137,19 +140,17 @@ test('EVALUI01 desktop preset evaluation opt-in persists selected story roles af
     .click();
   await page.getByLabel('새 채팅 이름').fill(title + ' 이야기');
   const ref = `${model.id}`;
-  await page.getByLabel('시작 본문 모델').selectOption(ref);
-  await page.getByLabel('시작 번역 모델').selectOption(ref);
   await page.getByRole('button', { name: '채팅 만들기', exact: true }).click();
   await expect.poll(() => new URL(page.url()).searchParams.get('chat')).toBeTruthy();
   const storyUrl = page.url(),
     chatId = new URL(storyUrl).searchParams.get('chat')!;
   await page.reload();
-  await expect(page.getByLabel('빠른 본문 모델')).toHaveValue(ref);
+  await expect(page.getByRole('button', { name: /^현재 본문 모델/ })).toContainText(model.title);
   const reconnected = await context.newPage();
   await reconnected.setViewportSize({ width: 1440, height: 1000 });
   await reconnected.goto(storyUrl);
   await reconnected.getByRole('button', { name: '채팅 설정', exact: true }).click();
-  await selectChatSettingsSection(reconnected, '모델');
+  await selectCurrentSettingsSection(reconnected, '모델');
   await expect(reconnected.getByLabel('원문 모델', { exact: true })).toHaveValue(ref);
   await expect(reconnected.getByLabel('번역 모델', { exact: true })).toHaveValue(ref);
   if (visualReview)
@@ -279,3 +280,5 @@ test('EVALUI02 mobile 390px evaluation controls save only for opted-in presets a
     })
     .toEqual({ revision: model.revision + 1, evaluationTools: null });
 });
+
+preservePromptWorkspace();

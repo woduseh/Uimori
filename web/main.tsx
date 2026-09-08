@@ -1,3 +1,4 @@
+import { isModelSelectable } from './model-selection.js';
 import { DismissibleError } from './DismissibleError.js';
 import { ComposerMore, LoreResetChip } from './ComposerMore.js';
 import { IconButton } from './IconButton.js';
@@ -280,11 +281,15 @@ function App() {
     }
   }, [s.draft, s.viewKey, s.destination, sourceEditing, grown]);
   const mainModel = s.library?.models.find(
-    (item) => item.id === s.detail?.profile?.routes.main?.id
+    (item) => item.id === s.promptWorkspace?.modelRoutes.main?.id
   );
+  const mainAvailable =
+    !!mainModel &&
+    !!s.library &&
+    isModelSelectable(mainModel, s.library.models, s.library.connections);
   const mainDescription = mainModel
-    ? modelLabel(mainModel, s.library)
-    : s.detail?.profile?.routes.main
+    ? `${modelLabel(mainModel, s.library)}${mainAvailable ? '' : ' · 사용 불가'}`
+    : s.promptWorkspace?.modelRoutes.main
       ? '선택한 본문 모델 · 확인 필요'
       : '본문 모델을 선택해 주세요';
   const composerStatus = [
@@ -295,7 +300,6 @@ function App() {
   ]
     .filter(Boolean)
     .join(' · ');
-  const quickDisabled = s.quickBusy || optionsBusy || optionsDirty || s.profileDirty || !s.detail;
   useEffect(() => {
     const media = matchMedia('(prefers-color-scheme: dark)');
     const apply = () => {
@@ -504,35 +508,18 @@ function App() {
             <div className="header-actions">
               {s.selected && s.destination === 'story' && (
                 <>
-                  <label className="model-chip">
-                    <span className="sr-only">빠른 본문 모델</span>
-                    <select
-                      aria-label="빠른 본문 모델"
-                      title={mainDescription}
-                      value={s.detail?.profile?.routes.main?.id ?? ''}
-                      disabled={quickDisabled}
-                      onChange={(event) => {
-                        void s.quickChange('model', event.target.value);
-                      }}
-                    >
-                      <option value="">본문 모델을 선택해 주세요</option>
-                      {s.detail?.profile?.routes.main &&
-                        !s.quickModels.some(
-                          (item) => item.id === s.detail!.profile!.routes.main!.id
-                        ) && (
-                          <option value={s.detail.profile.routes.main.id}>
-                            {mainModel
-                              ? `${modelLabel(mainModel, s.library)} · 비활성`
-                              : '선택한 본문 모델 · 확인 필요'}
-                          </option>
-                        )}
-                      {s.quickModels.map((item) => (
-                        <option key={item.id} value={item.id}>
-                          {modelLabel(item, s.library)}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
+                  <button
+                    type="button"
+                    className="model-chip secondary"
+                    aria-label={`현재 본문 모델 · ${mainDescription}`}
+                    title="모든 채팅의 이후 요청에 적용되는 전역 모델 설정"
+                    onClick={() => {
+                      setSettingsTab('models');
+                      setPanel('settings');
+                    }}
+                  >
+                    <span>{mainDescription}</span>
+                  </button>
                   <button
                     className="icon-button focus-button"
                     aria-label={focus ? '집중 읽기 종료' : '집중 읽기'}
@@ -648,7 +635,7 @@ function App() {
                   '프롬프트',
                   navigationControls,
                   <p role="status">
-                    {s.error
+                    {s.libraryError
                       ? '프롬프트 목록을 불러오지 못했어요.'
                       : '프롬프트를 불러오는 중이에요…'}
                   </p>
@@ -730,6 +717,10 @@ function App() {
                       />
                       {s.sources.map((source, index) => (
                         <SourceReader
+                          onModelSettings={() => {
+                            setSettingsTab('models');
+                            setPanel('settings');
+                          }}
                           contextSummary={
                             s.detail!.runs.find((run) => run.id === source.runId)?.contextSummary
                           }
@@ -839,7 +830,7 @@ function App() {
                               {runFailed(run.status) && (
                                 <div className="turn-failure" role="group" aria-label="실패한 요청">
                                   <strong>{failureTitle(run.status)}</strong>
-                                  {(run.error || run.issue) && <p>{run.error || run.issue}</p>}
+                                  {run.error && <p>{run.error}</p>}
                                   <div className="turn-failure-actions">
                                     {s.canReuseRun(run.id) && (
                                       <>
@@ -865,7 +856,10 @@ function App() {
                                     <button
                                       type="button"
                                       className="secondary"
-                                      onClick={() => openChatSettings('models')}
+                                      onClick={() => {
+                                        setSettingsTab('models');
+                                        setPanel('settings');
+                                      }}
                                     >
                                       모델 설정
                                     </button>
@@ -927,6 +921,18 @@ function App() {
                   </div>
                 )}
                 <DismissibleError message={s.error} onDismiss={() => s.setError('')} />
+                {s.error.includes('전역 모델 설정') && (
+                  <button
+                    type="button"
+                    className="secondary"
+                    onClick={() => {
+                      setSettingsTab('models');
+                      setPanel('settings');
+                    }}
+                  >
+                    전역 모델 설정
+                  </button>
+                )}
                 {s.forkOrigin && s.forkOrigin.forkId === s.selected && (
                   <p className="composer-status fork-notice" role="status">
                     <span>「{s.forkOrigin.title}」에서 복사한 새 채팅이에요.</span>
@@ -960,6 +966,21 @@ function App() {
                   onDetails={() => inspect('')}
                   seenRunIds={seenRuns}
                 />
+                {!sourceEditing && !testMode && !mainAvailable && !s.pendingRequest && (
+                  <p className="muted" role="status">
+                    사용 가능한 전역 본문 모델을 선택해 주세요.{' '}
+                    <button
+                      type="button"
+                      className="secondary"
+                      onClick={() => {
+                        setSettingsTab('models');
+                        setPanel('settings');
+                      }}
+                    >
+                      전역 모델 설정
+                    </button>
+                  </p>
+                )}
                 <form
                   className={`composer${grown ? ' grown' : ''}`}
                   hidden={sourceEditing}
@@ -1125,7 +1146,7 @@ function App() {
                         (!s.draft.trim() && !s.pendingRequest) ||
                         !s.detail ||
                         s.pendingProfile ||
-                        (!testMode && !s.detail?.profile?.routes.main && !s.pendingRequest)
+                        (!testMode && !mainAvailable && !s.pendingRequest)
                       }
                     >
                       <ArrowUp size={21} />
@@ -1213,7 +1234,7 @@ function App() {
             initialPersona={initialPersona}
             initialModules={initialModules}
             onModelSettings={() => {
-              setSettingsTab('connections');
+              setSettingsTab('models');
               setPanel('settings');
             }}
             onCreated={async (chat) => {
@@ -1271,6 +1292,10 @@ function App() {
           state={s}
           onClose={() => setPanel('')}
           initialSection={settingsSection}
+          onGlobalSettings={(section) => {
+            setSettingsTab(section);
+            setPanel('settings');
+          }}
         />
       )}
       <Dialog open={panel === 'branches'} title="보관된 전개" onClose={() => setPanel('')}>

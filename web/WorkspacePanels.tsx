@@ -1,3 +1,5 @@
+import { ModelWorkspaceEditor } from './ModelWorkspaceEditor.js';
+import { PromptWorkspaceEditor } from './PromptWorkspaceEditor.js';
 import { DeleteButton } from './DeleteButton.js';
 import { ActivityDetails } from './ActivityStatus.js';
 import { CodexAgentSettings } from './CodexAgentSettings.js';
@@ -9,6 +11,8 @@ import { useSettingsHistory } from './useSettingsHistory.js';
 import {
   SettingsIcon,
   ConnectionIcon,
+  ModelIcon,
+  PromptIcon,
   AgentIcon,
   DataIcon,
   SecurityIcon,
@@ -250,14 +254,18 @@ export function AppSettingsPanel({
   const compact = useCompactLayout();
   const [detail, setDetail] = useState(initialTab !== 'general');
   const [connectionDirty, setConnectionDirty] = useState(false);
+  const [modelDirty, setModelDirty] = useState(false);
+  const [promptDirty, setPromptDirty] = useState(false);
   const [archiveDirty, setArchiveDirty] = useState(false);
   const [discard, setDiscard] = useState(false);
-  const dirty = connectionDirty || archiveDirty;
+  const dirty = connectionDirty || archiveDirty || modelDirty || promptDirty;
   const root = useRef<HTMLElement>(null);
   const wasCompact = useRef(compact);
   const id = useId();
   const categories = [
     { key: 'general', label: '일반', icon: SettingsIcon },
+    { key: 'models', label: '현재 모델', icon: ModelIcon },
+    { key: 'prompts', label: '현재 프롬프트', icon: PromptIcon },
     { key: 'connections', label: '연결과 모델', icon: ConnectionIcon },
     { key: 'agents', label: '에이전트', icon: AgentIcon },
     { key: 'data', label: '데이터 관리', icon: DataIcon },
@@ -420,6 +428,22 @@ export function AppSettingsPanel({
                         한글 조합 중에는 보내지 않아요.
                       </small>
                     </section>
+                  )}
+                  {key === 'models' && state.library && (
+                    <ModelWorkspaceEditor
+                      library={state.library}
+                      onDirtyChange={setModelDirty}
+                      onManage={() => select('connections')}
+                    />
+                  )}
+                  {key === 'prompts' && state.library && (
+                    <PromptWorkspaceEditor
+                      library={state.library}
+                      reload={state.loadLibrary}
+                      onDirtyChange={setPromptDirty}
+                      chatId={state.selected || undefined}
+                      branchId={state.branch?.id}
+                    />
                   )}
                   {key === 'connections' && (
                     <div data-testid="connection-settings">

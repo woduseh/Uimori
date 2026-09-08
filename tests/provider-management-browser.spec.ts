@@ -1,10 +1,12 @@
+import { selectCurrentSettingsSection } from './ui-navigation.js';
+import { preservePromptWorkspace } from './fixtures/prompt-workspace.js';
+import { setCurrentModels } from './ui-navigation.js';
 import { visualReview } from './fixtures/visual-review.js';
 import {
   openProviderMenu,
   revealProviderDiagnostics,
   selectSettingsSection,
   startProviderConnection,
-  selectChatSettingsSection,
 } from './ui-navigation.js';
 import { test, expect, type APIRequestContext, type Page } from '@playwright/test';
 import type { Connection, Library, ModelPreset } from '../core/product.js';
@@ -196,7 +198,7 @@ test('PMUI01 mobile template registration selects the connection, reports catalo
     source: { kind: 'manual', catalogUpdatedAt: null },
   });
   await expect(page.getByRole('region', { name: '등록한 모델 사용 방법' })).toContainText(
-    '기존 이야기는 이야기 설정 → 모델'
+    '설정 → 현재 모델에서 사용할 역할을 선택하고 저장해요.'
   );
   expect(observed.errors).toEqual([]);
   expect(observed.generations).toEqual([]);
@@ -292,20 +294,7 @@ test('PMUI03 model edits use the latest connection without changing role IDs; de
   const created = await postFixtureChat(request, { data: { title: title + ' 기존 이야기' } });
   expect(created.ok(), await created.text()).toBeTruthy();
   const chat = (await created.json()) as Chat;
-  const before = await api<ChatDetail>(request, `/chats/${chat.id}`);
-  const profile = before.profile!;
-  await api(
-    request,
-    `/chats/${chat.id}/profile`,
-    {
-      expectedRevision: profile.revision,
-      attachments: profile.attachments,
-      personaReference: profile.personaReference,
-      routes: { ...profile.routes, main: { id: original.id } },
-      image: false,
-    },
-    'PUT'
-  );
+  await setCurrentModels(request, { main: { id: original.id } });
   await api(
     request,
     `/connections/${connection.id}`,
@@ -359,7 +348,7 @@ test('PMUI03 model edits use the latest connection without changing role IDs; de
   await openProviderMenu(page, '모델', changed.title);
   await page.getByRole('button', { name: changed.title + ' 모델 비활성', exact: true }).click();
   const confirmation = page.getByRole('region', { name: '비활성 영향 확인' });
-  await expect(confirmation).toContainText('기존 이야기의 다음 실행이 차단');
+  await expect(confirmation).toContainText('이 모델을 사용하는 이후 실행이 차단');
   expect((await library(request)).models.find((item) => item.id === original.id)?.enabled).toBe(
     true
   );
@@ -372,20 +361,20 @@ test('PMUI03 model edits use the latest connection without changing role IDs; de
   await page.getByRole('button', { name: '연결 관리', exact: true }).click();
   await openProviderMenu(page, '연결', title + ' 연결 최신판');
   await page.getByRole('button', { name: title + ' 연결 최신판 연결 비활성', exact: true }).click();
-  await expect(confirmation).toContainText('기존 이야기의 다음 호출도 차단');
+  await expect(confirmation).toContainText('이 연결을 사용하는 이후 호출이 차단');
   await confirmation.getByRole('button', { name: '비활성 취소', exact: true }).click();
   expect(
     (await library(request)).connections.find((item) => item.id === connection.id)?.enabled
   ).toBe(true);
   await page.keyboard.press('Escape');
   await page.goto(`/?chat=${chat.id}`);
-  await expect(page.getByLabel('빠른 본문 모델')).toHaveValue(`${original.id}`);
+  await expect(page.getByRole('button', { name: /^현재 본문 모델/ })).toContainText(changed.title);
   await page.getByRole('button', { name: '채팅 설정', exact: true }).click();
-  await selectChatSettingsSection(page, '모델');
+  await selectCurrentSettingsSection(page, '모델');
   await expect(page.getByLabel('원문 모델', { exact: true })).toHaveValue(`${original.id}`);
   await expect(
     page.getByLabel('원문 모델', { exact: true }).locator('option:checked')
-  ).toContainText(changed.title + ' · 비활성');
+  ).toContainText(changed.title + ' · 모델 또는 연결 비활성');
   await expect(
     page.getByLabel('원문 모델', { exact: true }).locator('option:checked')
   ).not.toContainText(' · v');
@@ -1391,3 +1380,5 @@ test('PMUI16 endpoint guidance checks server policy before saving and ignores a 
   expect(after.connections).toEqual(before.connections);
   expect(after.models).toEqual(before.models);
 });
+
+preservePromptWorkspace();

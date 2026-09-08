@@ -1,5 +1,7 @@
 # 작업 지도
 
+- 현재 역할 모델은 `docs/GLOBAL-MODELS.md`, `server/prompt-workspace.ts`의 `/api/model-workspace`를 봐요. 본문·번역·거절 판정·표시 상태·이미지 모델과 번역 정책은 전역이며 `profile.routes`는 읽기 전용 projection이에요. 새 작업 예약 때 고정하고 기존 채팅 모델을 자동 채택하지 않아요. 번역 job 재시도는 현재 설정의 새 job, 표시 상태·이미지 job 재시도와 후보 실험은 원 snapshot을 유지해요. `npm run verify:global-models`는 390/1440px 합성 UI·예약 경계를 확인하며 실제 공급자를 호출하지 않아요.
+
 - 데스크톱·모바일 UI와 아이콘은 [docs/UI-PRINCIPLES.md](docs/UI-PRINCIPLES.md)를 기준으로 해요. 기능의 이름·아이콘·묶음을 공유하고 화면 폭에 맞춰 배치해요. 내용·주된 행동을 먼저 보여주고 관리 도구는 필요할 때 열어요. 터치 영역·취소·오류·초안 보호를 유지하며, 문서의 후속 적용안과 현재 구현·실기기 검증을 구분해요.
 
 - 커스텀 작문 보조는 `docs/AGENT-COLLABORATION.md`, `core/agent-collaboration.ts`, `server/agent-collaboration.ts`를 봐요. `PromptProgram.collaboration`은 기본 OFF이며 보조의 지침·공유 옵션·모델을 Run에 고정해요. 읽기 권한·전체 호출 한도·전송 전 attempt·취소를 유지하고 메인만 원문을 저장해요. `npm run verify:collaboration`은 설정·미리보기 합성 화면 검사이며 실제 창작 품질의 증거는 아니에요.

@@ -1,3 +1,4 @@
+import { updateTestProfile } from './fixtures/model-workspace.js';
 import { createFixtureChat, fixtureBotInput } from './fixtures/chat.js';
 import { afterEach, expect, test } from 'vitest';
 import { mkdtempSync, rmSync, mkdirSync, writeFileSync } from 'node:fs';
@@ -91,10 +92,10 @@ function configure(store: Store, chatId: string, endpoint: string) {
     temperature: null,
   }) as ModelPreset;
   const prior = store.product.profile(chatId);
-  store.product.updateProfile(chatId, {
+  updateTestProfile(store.product, chatId, {
     expectedRevision: prior.revision,
     attachments: prior.attachments,
-    personaReference: prior.personaReference,
+
     routes: { ...prior.routes, translation: { id: model.id } },
     image: false,
   });
@@ -425,10 +426,10 @@ test('translation searches and reads frozen bot/persona/modules even when absent
   );
   const chat = createFixtureChat(store, 'roles', 'calm', { botId: contents[0].id });
   const prior = store.product.profile(chat.id);
-  store.product.updateProfile(chat.id, {
+  updateTestProfile(store.product, chat.id, {
     expectedRevision: prior.revision,
     attachments: contents.slice(1).map(({ id, revision }) => ({ id, revision })),
-    personaReference: prior.personaReference,
+
     routes: prior.routes,
     image: false,
   });

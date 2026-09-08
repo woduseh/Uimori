@@ -100,7 +100,7 @@ test('RACOM01 source footer stays compact and its menu supports touch, keyboard 
       '현재 설정으로 다시 요청',
       '여기서 새 이야기로 이어가기',
       '번역 수정',
-      '이미지 선택',
+      '이미지 자동 배치',
     ]);
     const openTriggerBox = (await trigger.boundingBox())!;
     const menuBox = (await actions.boundingBox())!;

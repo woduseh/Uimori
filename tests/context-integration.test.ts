@@ -1,3 +1,4 @@
+import { updateTestProfile } from './fixtures/model-workspace.js';
 import { createFixtureChat, injectWithFixtureBot } from './fixtures/chat.js';
 import { randomUUID } from 'node:crypto';
 import { mkdtemp, rm } from 'node:fs/promises';
@@ -140,10 +141,10 @@ async function setup(options: { evaluated?: boolean; count?: number } = {}) {
       : {}),
   }) as ModelPreset;
   const profile = app.store.product.profile(chat.id);
-  app.store.product.updateProfile(chat.id, {
+  updateTestProfile(app.store.product, chat.id, {
     expectedRevision: profile.revision,
     attachments: [],
-    personaReference: profile.personaReference,
+
     routes: { main: { id: model.id }, translation: null, status: null, image: null },
     image: profile.image,
   });

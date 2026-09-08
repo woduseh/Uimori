@@ -56,6 +56,7 @@ test('PRUI01 optional template draft safety and reusable role-owned combinations
   await page.goto(`/?chat=${chat.id}`);
   await page.getByRole('button', { name: '채팅 설정', exact: true }).click();
   await selectChatSettingsSection(page, '프롬프트·창작 프리셋');
+  await page.getByRole('button', { name: '전역 프롬프트 설정', exact: true }).click();
   const editor = page.getByRole('region', { name: '현재 프롬프트 설정' }),
     composer = page.getByTestId('prompt-composer');
   const global = composer.getByLabel('전역 창작 조합', { exact: true });

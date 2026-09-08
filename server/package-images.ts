@@ -4,10 +4,12 @@ import { isDeepStrictEqual } from 'node:util';
 import type { FastifyInstance } from 'fastify';
 import { packageImages, PACKAGE_IMAGE_MIMES } from '../core/package-images.js';
 import type { Asset } from '../core/product.js';
-import type { RunSnapshot } from '../core/types.js';
-import { type AssetEntry } from '../core/auxiliary.js';
+import type { ImageTarget, RunSnapshot } from '../core/types.js';
+import { splitSource, type AssetEntry } from '../core/auxiliary.js';
 import type { ProductStore } from './product-store.js';
-import type { Store } from './store.js';
+import type { Store, Job, Source } from './store.js';
+import { successfulTranslation, validateTranslationArtifact } from './source-editing.js';
+import { promptWorkspace } from './prompt-workspace.js';
 import { validateContentPackage, type ContentPackage } from '../core/content-package.js';
 
 export type PackageImageBlob = {
@@ -104,8 +106,21 @@ export function assetEntry(asset: Asset): AssetEntry {
 export type ImageCatalog = { version: 1; hash: string; entries: AssetEntry[] };
 export function imageJobInput(store: Store, snapshot: RunSnapshot): { imageCatalog: ImageCatalog } {
   const entries = [
-    ...store.product.assets(snapshot.chatId).map(assetEntry),
-    ...(snapshot.profile ? packageImages(snapshot.profile).map(assetEntry) : []),
+    ...store.product
+      .assets(snapshot.chatId)
+      .filter((asset) => asset.allowedUse !== 'profile')
+      .map(assetEntry),
+    ...(snapshot.profile
+      ? packageImages(snapshot.profile)
+          .filter((asset) => {
+            const owner = asset.packageOwner;
+            const pkg = snapshot.profile?.packages?.find(
+              (item) => item.id === owner?.id && item.revision === owner?.revision
+            );
+            return asset.allowedUse !== 'profile' && pkg?.portraitImageId !== owner?.imageId;
+          })
+          .map(assetEntry)
+      : []),
   ];
   if (entries.length > 10_000) throw new HttpError(400, 'Image catalog limit');
   return {
@@ -213,12 +228,25 @@ export function mergedReaderAssets(store: Store, chatId: string, sourceIds?: str
 export function forkImageInput(
   input: unknown,
   assetIds: Map<string, string>
-): { imageCatalog: ImageCatalog } {
+): {
+  imageCatalog: ImageCatalog;
+  imageTarget?: ImageTarget;
+  imageModelSelection?: unknown;
+  imageModelSnapshot?: unknown;
+} {
   const entries = imageCatalog(input).map((entry) => {
     const id = assetIds.get(entry.ref);
     return id ? { ...entry, ref: id, url: `/api/assets/${id}` } : entry;
   });
+  const frozen = record(input);
   return {
+    ...(frozen.imageTarget ? { imageTarget: frozen.imageTarget as ImageTarget } : {}),
+    ...(Object.hasOwn(frozen, 'imageModelSelection')
+      ? {
+          imageModelSelection: frozen.imageModelSelection,
+          ...(frozen.imageModelSnapshot ? { imageModelSnapshot: frozen.imageModelSnapshot } : {}),
+        }
+      : {}),
     imageCatalog: {
       version: 1,
       hash: createHash('sha256').update(JSON.stringify(entries)).digest('hex'),
@@ -226,44 +254,222 @@ export function forkImageInput(
     },
   };
 }
+export function imageTargetSource(
+  store: Store,
+  job: Pick<Job, 'sourceRevision' | 'sourceHash' | 'input'>,
+  requireCurrent = false
+): Source {
+  const source = store.sourceAtHash(job.sourceRevision, job.sourceHash);
+  const raw = record(job.input).imageTarget;
+  const target = raw === undefined ? undefined : record(raw);
+  if (target) {
+    if (target.mode !== 'original' && target.mode !== 'translation')
+      throw new HttpError(400, 'Invalid image target');
+    fields(
+      target,
+      target.mode === 'original'
+        ? ['mode', 'textHash']
+        : ['mode', 'textHash', 'translationJobId', 'translationRevision']
+    );
+    if (typeof target.textHash !== 'string' || !/^[a-f0-9]{64}$/u.test(target.textHash))
+      throw new HttpError(400, 'Invalid image target hash');
+    if (
+      target.mode === 'translation' &&
+      (typeof target.translationJobId !== 'string' ||
+        !target.translationJobId.trim() ||
+        !Number.isSafeInteger(target.translationRevision) ||
+        target.translationRevision < 1)
+    )
+      throw new HttpError(400, 'Invalid translation image target');
+  }
+  if (!target || target.mode === 'original') {
+    if (target && target.textHash !== source.hash) throw new HttpError(409, 'Image target changed');
+    if (requireCurrent && store.source(source.id).hash !== source.hash)
+      throw new HttpError(409, 'Image target changed');
+    return source;
+  }
+  if (target.mode !== 'translation') throw new HttpError(400, 'Invalid image target');
+  const translation = store.job(target.translationJobId);
+  validateTranslationArtifact(store, translation, source);
+  const body = (translation.result as { text: string }).text;
+  if (
+    translation.sourceRevision !== source.id ||
+    (translation.status !== 'completed' && (requireCurrent || translation.status !== 'stale')) ||
+    translation.revision !== target.translationRevision ||
+    createHash('sha256').update(body).digest('hex') !== target.textHash
+  )
+    throw new HttpError(409, 'Translation image target changed');
+  if (
+    requireCurrent &&
+    (store.source(source.id).hash !== source.hash ||
+      successfulTranslation(store, source)?.id !== translation.id)
+  )
+    throw new HttpError(409, 'Translation image target changed');
+  const projected = { ...source, text: body, hash: target.textHash };
+  return { ...projected, blocks: splitSource(projected) };
+}
+export function frozenImageSelection(store: Store, snapshot: RunSnapshot) {
+  const selected = promptWorkspace(store).modelRoutes.image;
+  return {
+    ...imageJobInput(store, snapshot),
+    imageModelSelection: selected,
+    ...(selected ? { imageModelSnapshot: store.product.modelSnapshot(selected.id, 'image') } : {}),
+  };
+}
+export function automaticImageSelection(store: Store, snapshot: RunSnapshot) {
+  const catalog = imageJobInput(store, snapshot);
+  if (!catalog.imageCatalog.entries.length) return undefined;
+  try {
+    return frozenImageSelection(store, snapshot);
+  } catch {
+    return {
+      ...catalog,
+      imageModelSelection: null,
+      imageSelectionError: 'IMAGE_MODEL_UNAVAILABLE' as const,
+    };
+  }
+}
+export function latestImageJob(
+  store: Store,
+  sourceId: string,
+  mode: 'original' | 'translation'
+): Job | null {
+  const row = store.db
+    .prepare(
+      "SELECT id FROM jobs WHERE source_revision=? AND kind='image' AND COALESCE(json_extract(input,'$.imageTarget.mode'),'original')=? ORDER BY revision DESC LIMIT 1"
+    )
+    .get(sourceId, mode) as { id: string } | undefined;
+  return row ? store.job(row.id) : null;
+}
+export function invalidateTranslationImages(store: Store, sourceId: string) {
+  store.db
+    .prepare(
+      "UPDATE jobs SET status='stale',generation=generation+1,owner=NULL,error=NULL WHERE source_revision=? AND kind='image' AND json_extract(input,'$.imageTarget.mode')='translation'"
+    )
+    .run(sourceId);
+}
+export function reserveImageJob(
+  store: Store,
+  source: Source,
+  imageTarget: ImageTarget,
+  frozen: ReturnType<typeof frozenImageSelection> & { imageSelectionError?: string }
+): Job {
+  const previous = latestImageJob(store, source.id, imageTarget.mode);
+  const revision =
+    (
+      store.db
+        .prepare(
+          "SELECT MAX(revision) AS revision FROM jobs WHERE source_revision=? AND kind='image'"
+        )
+        .get(source.id) as { revision: number | null }
+    ).revision ?? 0;
+  const id = previous?.id ?? randomUUID(),
+    time = new Date().toISOString();
+  const input = { ...frozen, imageTarget };
+  if (previous) {
+    store.db.prepare('DELETE FROM job_results WHERE job_id=?').run(id);
+    store.db
+      .prepare(
+        "UPDATE jobs SET source_hash=?,status='queued',generation=generation+1,revision=?,owner=NULL,input=?,error=NULL,updated_at=? WHERE id=?"
+      )
+      .run(source.hash, revision + 1, JSON.stringify(input), time, id);
+  } else
+    store.db
+      .prepare(
+        "INSERT INTO jobs(id,chat_id,source_revision,source_hash,kind,status,revision,input,created_at,updated_at) VALUES(?,?,?,?,'image','queued',?,?,?,?)"
+      )
+      .run(
+        id,
+        source.chatId,
+        source.id,
+        source.hash,
+        revision + 1,
+        JSON.stringify(input),
+        time,
+        time
+      );
+  if (frozen.imageSelectionError) {
+    store.db
+      .prepare("UPDATE jobs SET status='failed',error=? WHERE id=?")
+      .run(frozen.imageSelectionError, id);
+    store.event(source.chatId, 'job.failed', id);
+  } else store.event(source.chatId, 'job.queued', id);
+  return store.job(id);
+}
+export function scheduleTranslationImages(store: Store, translation: Job) {
+  const input =
+    translation.input && typeof translation.input === 'object' ? record(translation.input) : {};
+  invalidateTranslationImages(store, translation.sourceRevision);
+  if (!input.translationImageSelection) return;
+  const frozen = record(input.translationImageSelection) as ReturnType<typeof frozenImageSelection>;
+  if (!imageCatalog(frozen).length) return;
+  const source = store.source(translation.sourceRevision);
+  const body = (translation.result as { text: string }).text;
+  reserveImageJob(
+    store,
+    source,
+    {
+      mode: 'translation',
+      textHash: createHash('sha256').update(body).digest('hex'),
+      translationJobId: translation.id,
+      translationRevision: translation.revision!,
+    },
+    frozen
+  );
+}
 export function requestImages(store: Store, sourceId: string, value: unknown) {
   const request = record(value);
-  fields(request, ['expectedSourceHash', 'expectedRevision']);
+  fields(request, [
+    'target',
+    'expectedSourceHash',
+    'expectedRevision',
+    'expectedTranslationJobId',
+    'expectedTranslationRevision',
+  ]);
+  const mode = request.target ?? 'original';
+  if (mode !== 'original' && mode !== 'translation')
+    throw new HttpError(400, 'Invalid image target');
   return store.transaction(() => {
     const source = store.source(sourceId);
-    const previous = store.db
-      .prepare(
-        "SELECT id FROM jobs WHERE source_revision=? AND kind='image' ORDER BY revision DESC LIMIT 1"
-      )
-      .get(sourceId) as { id: string } | undefined;
-    const job = previous ? store.job(previous.id) : undefined;
+    const job = latestImageJob(store, sourceId, mode);
     if (
       source.hash !== request.expectedSourceHash ||
       (job?.revision ?? 0) !== request.expectedRevision
     )
       throw new HttpError(409, 'Image selection revision conflict');
-    if (job && ['queued', 'running'].includes(job.status) && job.sourceHash === source.hash)
+    let target: ImageTarget = { mode: 'original', textHash: source.hash };
+    if (mode === 'translation') {
+      const translation = successfulTranslation(store, source);
+      if (
+        !translation ||
+        translation.id !== request.expectedTranslationJobId ||
+        translation.revision !== request.expectedTranslationRevision
+      )
+        throw new HttpError(409, 'Translation image target changed');
+      validateTranslationArtifact(store, translation, source);
+      target = {
+        mode,
+        translationJobId: translation.id,
+        translationRevision: translation.revision!,
+        textHash: createHash('sha256')
+          .update((translation.result as { text: string }).text)
+          .digest('hex'),
+      };
+    }
+    if (
+      job &&
+      ['queued', 'running'].includes(job.status) &&
+      isDeepStrictEqual(record(job.input).imageTarget, target)
+    )
       return job;
     const snapshot = store.run(source.runId).snapshot;
-    const profile = store.product.snapshot(source.chatId);
-    const input = imageJobInput(store, { ...snapshot, ...(profile ? { profile } : {}) });
-    const id = job?.id ?? randomUUID(),
-      time = new Date().toISOString();
-    if (job) {
-      store.db.prepare('DELETE FROM job_results WHERE job_id=?').run(id);
-      store.db
-        .prepare(
-          "UPDATE jobs SET source_hash=?,status='queued',generation=generation+1,revision=revision+1,owner=NULL,input=?,error=NULL,updated_at=? WHERE id=?"
-        )
-        .run(source.hash, JSON.stringify(input), time, id);
-    } else
-      store.db
-        .prepare(
-          "INSERT INTO jobs(id,chat_id,source_revision,source_hash,kind,status,input,created_at,updated_at) VALUES(?,?,?,?,'image','queued',?,?,?)"
-        )
-        .run(id, source.chatId, sourceId, source.hash, JSON.stringify(input), time, time);
-    store.event(source.chatId, 'job.queued', id);
-    return store.job(id);
+    const profile = store.product.snapshot(source.chatId, 'image');
+    return reserveImageJob(
+      store,
+      source,
+      target,
+      frozenImageSelection(store, { ...snapshot, ...(profile ? { profile } : {}) })
+    );
   });
 }
 export function packageImageRoutes(

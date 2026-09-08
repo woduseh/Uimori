@@ -1,3 +1,4 @@
+import { promptWorkspace } from './prompt-workspace.js';
 import { existsSync } from 'node:fs';
 import type { Connection, ModelRef, ModelPreset } from '../core/product.js';
 import type { ProductStore } from './product-store.js';
@@ -66,6 +67,8 @@ type ReferencingProfile = { chatId: string; title: string; roles: string[] };
 export type ManagementImpact = {
   kind: 'connection' | 'model';
   id: string;
+  /** Current global role references; every chat uses these on its next request. */
+  globalRoles: string[];
   profileCount: number;
   storyProfileCount: number;
   modelCount: number;
@@ -86,19 +89,23 @@ export function managementImpact(
     if (kind === 'model') return ref.id === id;
     return store.get<ModelPreset>('model', ref.id).connectionId === id;
   };
-  const profiles: ReferencingProfile[] = [];
-  const profileRows = store.db
-    .prepare(
-      "SELECT p.chat_id AS chatId,c.title,json_extract(p.body,'$.routes') AS routes FROM profiles p JOIN chats c ON c.id=p.chat_id ORDER BY p.chat_id"
-    )
-    .all() as { chatId: string; title: string; routes: string }[];
-  for (const row of profileRows) {
-    const routes = JSON.parse(row.routes) as Record<string, ModelRef | null>;
-    const roles = Object.entries(routes)
-      .filter(([, ref]) => matches(ref))
-      .map(([role]) => role);
-    if (roles.length) profiles.push({ chatId: row.chatId, title: row.title, roles });
-  }
+  const workspace = promptWorkspace(store.store);
+  const globalRoles = Object.entries({
+    ...workspace.modelRoutes,
+    'translation-refusal': workspace.translationPolicy.refusalModel,
+  })
+    .filter(([, ref]) => matches(ref))
+    .map(([role]) => role);
+  for (const agent of workspace.main.program.collaboration?.agents ?? [])
+    if (matches(agent.model)) globalRoles.push(`advisor:${agent.id}`);
+  const profiles: ReferencingProfile[] = globalRoles.length
+    ? (
+        store.db.prepare('SELECT id AS chatId,title FROM chats ORDER BY id').all() as {
+          chatId: string;
+          title: string;
+        }[]
+      ).map((chat) => ({ ...chat, roles: [...globalRoles] }))
+    : [];
   const storyProfiles: ReferencingProfile[] = [];
   const storyRows = store.db
     .prepare(
@@ -132,6 +139,7 @@ export function managementImpact(
   return {
     kind,
     id,
+    globalRoles,
     profileCount: profiles.length,
     storyProfileCount: storyProfiles.length,
     modelCount,

@@ -1,3 +1,4 @@
+import { updateTestProfile } from './fixtures/model-workspace.js';
 import { afterEach, expect, test } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -72,7 +73,7 @@ test('successful request repeats with current settings in a new branch and idemp
     oldChat = store.chat(chat.id);
   store.settings(chat.id, oldChat.settingsRevision, { ...oldChat.settings, maxCalls: 12 });
   const program = createDefaultPromptProgram('Current main instructions');
-  const current = updatePromptWorkspace(store, {
+  updatePromptWorkspace(store, {
     expectedRevision: promptWorkspace(store).revision,
     main: { title: 'Current', program, values: {} },
   });
@@ -90,7 +91,7 @@ test('successful request repeats with current settings in a new branch and idemp
     temperature: null,
   });
   const profile = store.product.profile(chat.id);
-  store.product.updateProfile(chat.id, {
+  updateTestProfile(store.product, chat.id, {
     expectedRevision: profile.revision,
     attachments: profile.attachments,
     routes: { ...profile.routes, main: { id: model.id } },
@@ -108,7 +109,7 @@ test('successful request repeats with current settings in a new branch and idemp
   expect(retry.run.snapshot).toMatchObject({
     settings: { maxCalls: 12 },
     profile: {
-      promptWorkspaceRevision: current.revision,
+      promptWorkspaceRevision: promptWorkspace(store).revision,
       models: { main: { id: model.id } },
       promptPresets: { main: { program } },
     },
@@ -117,7 +118,7 @@ test('successful request repeats with current settings in a new branch and idemp
   expect(store.chat(chat.id).headRevision).toBe(later.source.id);
   expect(store.run(selected.run.id)).toEqual(saved);
   updatePromptWorkspace(store, {
-    expectedRevision: current.revision,
+    expectedRevision: promptWorkspace(store).revision,
     main: {
       title: 'Later edit',
       program: createDefaultPromptProgram('Do not replace retried snapshot'),

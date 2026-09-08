@@ -1,3 +1,4 @@
+import { updateTestProfile } from './fixtures/model-workspace.js';
 import { createFixtureChat, injectWithFixtureBot } from './fixtures/chat.js';
 import { afterEach, expect, test } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
@@ -39,7 +40,7 @@ function fixture() {
     relatedIds: [],
   }) as Content;
   const { chatId: _id, revision, ...profile } = store.product.profile(chat.id);
-  store.product.updateProfile(chat.id, {
+  updateTestProfile(store.product, chat.id, {
     ...profile,
     expectedRevision: revision,
     attachments: [{ id: lore.id, revision: lore.revision }],
@@ -48,7 +49,7 @@ function fixture() {
 }
 function update(f: ReturnType<typeof fixture>, changes: Partial<ChatProfile>) {
   const { chatId: _id, revision, ...body } = f.store.product.profile(f.chat.id);
-  return f.store.product.updateProfile(f.chat.id, {
+  return updateTestProfile(f.store.product, f.chat.id, {
     ...body,
     ...changes,
     expectedRevision: revision,
@@ -271,7 +272,7 @@ test('resource revision and attachment removal remove retained text', () => {
   update(f, { attachments: [] });
   expect(queue(f).run.snapshot.loreContext!.entries).toEqual([]);
 });
-test('package revision and persona-reference exclusion invalidate only currently excluded reads', () => {
+test('package revision and persona detachment invalidate only currently excluded reads', () => {
   const f = fixture();
   const pkg: ContentPackage = {
     version: 1,
@@ -303,8 +304,15 @@ test('package revision and persona-reference exclusion invalidate only currently
   }) as Content;
   const owner = f.store.product.profile(f.chat.id).packageAttachments!;
   update(f, { packageAttachments: [...owner, { id: content.id, revision: 1, role: 'persona' }] });
+  f.store.db
+    .prepare('UPDATE profiles SET body=? WHERE chat_id=?')
+    .run(
+      JSON.stringify({ ...f.store.product.profile(f.chat.id), personaReference: false }),
+      f.chat.id
+    );
   const a = queue(f).run,
     id = `package:${content.id}:persona:lore:secret`;
+  expect(a.snapshot.profile).not.toHaveProperty('personaReference');
   f.store.tool(
     a.id,
     executeTool(a.snapshot, {
@@ -318,11 +326,11 @@ test('package revision and persona-reference exclusion invalidate only currently
   const b = queue(f).run;
   expect(b.snapshot.loreContext!.entries).toHaveLength(2);
   complete(f, b);
-  update(f, { personaReference: false });
+  update(f, { packageAttachments: owner });
   const c = queue(f).run;
   expect(c.snapshot.loreContext!.entries.map((e) => e.id)).toEqual([f.lore.id]);
   complete(f, c);
-  update(f, { personaReference: true });
+  update(f, { packageAttachments: [...owner, { id: content.id, revision: 1, role: 'persona' }] });
   const d = queue(f).run;
   expect(d.snapshot.loreContext!.entries.map((e) => e.id)).toEqual([f.lore.id]);
   f.store.tool(

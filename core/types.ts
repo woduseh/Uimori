@@ -115,7 +115,6 @@ export type Run = {
   inputs: ModelInput[];
   toolEvents: ToolEvent[];
   partialText?: string;
-  issue?: string | null;
 };
 export type Source = {
   editRevision?: number;
@@ -128,12 +127,26 @@ export type Source = {
   hash: string;
   blocks?: { anchor: string; index: number; text: string; start: number; end: number }[];
 };
+export type ImageTarget =
+  | { mode: 'original'; textHash: string }
+  | {
+      mode: 'translation';
+      textHash: string;
+      translationJobId: string;
+      translationRevision: number;
+    };
+export type TranslationLayout = {
+  textHash: string;
+  blocks: { anchor: string; index: number; text: string; start: number; end: number }[];
+};
 export type Job = {
   id: string;
   chatId: string;
   sourceRevision: string;
   sourceHash: string;
   kind: 'translation' | 'status' | 'image';
+  imageTarget?: ImageTarget;
+  translationLayout?: TranslationLayout;
   status:
     | 'queued'
     | 'running'
@@ -148,6 +161,7 @@ export type Job = {
   result: {
     mock: boolean;
     manual?: boolean;
+    imageTarget?: ImageTarget;
     text?: string;
     label?: string;
     sourceRevision: string;
@@ -164,7 +178,12 @@ export type Job = {
     }[];
   } | null;
   /** Last validated translation of this exact source, retained while a new request runs/fails. */
-  previousResult?: { jobId: string; revision: number; result: NonNullable<Job['result']> };
+  previousResult?: {
+    jobId: string;
+    revision: number;
+    result: NonNullable<Job['result']>;
+    translationLayout?: TranslationLayout;
+  };
   revision?: number;
 };
 export type ChatDetail = {

@@ -112,6 +112,7 @@ test('NUI01 native prompt import, draft preservation, roles, history and saved c
   await page.setViewportSize({ width: 1440, height: 1000 });
   await settings(page, c.id);
   await selectChatSettingsSection(page, '프롬프트·창작 프리셋');
+  await page.getByRole('button', { name: '전역 프롬프트 설정', exact: true }).click();
   const editor = page.getByRole('region', { name: '현재 프롬프트 설정' });
   await editor.getByLabel('현재 프롬프트 이름', { exact: true }).fill('Synthetic native composed');
   const composer = page.getByTestId('prompt-composer');
@@ -231,6 +232,7 @@ test('NUI01 native prompt import, draft preservation, roles, history and saved c
   await page.reload();
   await page.getByRole('button', { name: '채팅 설정', exact: true }).click();
   await selectChatSettingsSection(page, '프롬프트·창작 프리셋');
+  await page.getByRole('button', { name: '전역 프롬프트 설정', exact: true }).click();
   await expect(
     page.getByTestId('prompt-composer').getByLabel('합성 분위기', { exact: true })
   ).toHaveValue('"calm"');

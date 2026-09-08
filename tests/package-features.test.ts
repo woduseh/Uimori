@@ -1,3 +1,4 @@
+import { updateTestProfile } from './fixtures/model-workspace.js';
 import { afterEach, expect, test } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -71,7 +72,11 @@ const ref = (item: Content, role: PackageAttachment['role']): PackageAttachment 
 });
 function update(store: Store, chatId: string, change: Partial<ChatProfile>): ChatProfile {
   const { chatId: _chat, revision, ...body } = store.product.profile(chatId);
-  return store.product.updateProfile(chatId, { ...body, ...change, expectedRevision: revision });
+  return updateTestProfile(store.product, chatId, {
+    ...body,
+    ...change,
+    expectedRevision: revision,
+  });
 }
 function run(store: Store, chatId: string, branchId = `main:${chatId}`) {
   const chat = store.chat(chatId),

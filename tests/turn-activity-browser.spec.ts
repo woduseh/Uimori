@@ -158,16 +158,7 @@ test('TURNUI01 independent response panels, lazy inspector and reload persistenc
   await expect(first.locator('pre').last()).toContainText('snapshot');
   expect(state.runReads).toHaveLength(1);
   await first.getByText('실행과 실제 입력 확인', { exact: true }).click();
-  await first.getByText('요청 충실성 기록', { exact: true }).click();
-  await expect(first.getByRole('textbox')).toBeVisible();
-  const unsavedNote = 'SYNTHETIC unsaved note survives response collapse.';
-  await first.getByRole('textbox').fill(unsavedNote);
-  await first.locator(':scope > summary').click();
-  await expect(first).not.toHaveAttribute('open');
-  await first.locator(':scope > summary').click();
-  await expect(first.getByRole('textbox')).toHaveValue(unsavedNote);
-  expect(state.writes).toEqual([]);
-  await first.getByText('요청 충실성 기록', { exact: true }).click();
+  await expect(first.getByRole('textbox')).toHaveCount(0);
   await first.locator(':scope > summary').click();
   await page.reload();
   await expect(first).not.toHaveAttribute('open');
@@ -199,6 +190,23 @@ test('TURNUI02 folded auxiliary progress updates preserve explicit expansion and
         revision: 1,
       },
     ];
+    for (const mode of ['original', 'translation'] as const) {
+      body.jobs.push({
+        ...body.jobs[0],
+        id: `synthetic-image-${mode}-${source.id}`,
+        kind: 'image',
+        revision: mode === 'original' ? 1 : 2,
+        imageTarget:
+          mode === 'original'
+            ? { mode, textHash: source.hash }
+            : {
+                mode,
+                textHash: source.hash,
+                translationJobId: body.jobs[0].id,
+                translationRevision: 1,
+              },
+      });
+    }
     body.reader.responseActivity = [
       activity(source.id, 'translation', status),
       activity(source.id, 'state', status),
@@ -221,6 +229,8 @@ test('TURNUI02 folded auxiliary progress updates preserve explicit expansion and
   await expect(panel.locator(':scope > summary')).toContainText(/번역.*중/);
   await expect(panel.locator(':scope > summary')).toContainText('상태 정리 진행 중');
   await expect(panel.locator(':scope > summary')).toContainText('기억 정리 진행 중');
+  await expect(panel.locator(':scope > summary')).toContainText('원문 이미지 배치 진행 중');
+  await expect(panel.locator(':scope > summary')).toContainText('번역 이미지 배치 진행 중');
   await expect(panel).not.toHaveAttribute('open');
   await state.set(project('failed'));
   await expect(panel.locator(':scope > summary')).toContainText('번역 실패');

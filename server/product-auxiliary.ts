@@ -23,7 +23,7 @@ import {
   type ProviderTool,
   type WireRecord,
 } from '../core/transport.js';
-import type { RunSnapshot, ToolEvent } from '../core/types.js';
+import type { ImageTarget, RunSnapshot, ToolEvent } from '../core/types.js';
 import { createEvaluationToolSession } from './evaluation-session.js';
 import {
   translationPolicy,
@@ -40,14 +40,23 @@ import { PromptProgramError } from '../core/prompt-program.js';
 type MaybePromise<T> = T | Promise<T>;
 type JobKind = Exclude<TaskRole, 'main'>;
 export type AuxiliaryBundle = {
-  job: { id: string; kind: JobKind; status: string; sourceRevision: string; sourceHash: string };
+  job: {
+    id: string;
+    kind: JobKind;
+    status: string;
+    sourceRevision: string;
+    sourceHash: string;
+    imageTarget?: ImageTarget;
+  };
   source: AuxiliarySource;
+  imageSource?: AuxiliarySource;
   snapshot: RunSnapshot;
   assets?: AssetEntry[];
   translationReferences?: TranslationReference[];
   translationPolicy?: TranslationPolicy;
 };
 export type AuxiliaryJobResult = {
+  imageTarget?: ImageTarget;
   mock: boolean;
   sourceRevision: string;
   sourceHash: string;
@@ -376,6 +385,7 @@ export async function runAuxiliaryJob(
     source.chatId !== snapshot.chatId
   )
     throw new Error('SOURCE_DEPENDENCY_MISMATCH');
+  const imageSource = bundle.imageSource ?? source;
   const context = sourceTimeContext(snapshot, job.kind);
   const assets = bundle.assets ?? [];
   const policy = translationPolicy(bundle.translationPolicy);
@@ -384,7 +394,7 @@ export async function runAuxiliaryJob(
       ? translationInput(source, context, snapshot)
       : job.kind === 'status'
         ? displayInput(source, context, snapshot)
-        : presentationInput(source, context, snapshot, assets);
+        : presentationInput(imageSource, context, snapshot, assets);
   const generation = await store.claim(jobId, owner, { input });
   if (generation === null) return null;
   await hooks.onProgress?.();
@@ -638,11 +648,12 @@ export async function runAuxiliaryJob(
         display: validated.entries,
       };
     } else {
-      const validated = validatePresentation(source, output, assets);
+      const validated = validatePresentation(imageSource, output, assets);
       result = {
         mock,
         sourceRevision: source.id,
         sourceHash: source.hash,
+        ...(job.imageTarget ? { imageTarget: job.imageTarget } : {}),
         annotations: validated.entries.map((entry) => ({
           ...entry,
           caption: assets.find((asset) => asset.ref === entry.assetRef)?.caption,

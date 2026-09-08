@@ -1,60 +1,10 @@
-import type { ChatProfile, ContentRef, Library } from '../core/product.js';
+import type { ChatProfile, ContentRef } from '../core/product.js';
 import { api } from './api.js';
 import { validatePackageAttachment } from '../core/content-package.js';
 import { validatePackageStartRef, type PackageStartRef } from '../core/package-start.js';
 import { validateChatPromptControls } from '../core/prompt-program.js';
-import {
-  generationFromModel,
-  requireSupportedModel,
-  validateModelOptions,
-} from '../core/model-capabilities.js';
-
-export type NewStoryModelDefaults = {
-  main: string;
-  translation: string;
-  mainReason: 'recent' | 'only' | null;
-  eligibleIds: string[];
-};
-
-/** Suggestions need execution-compatible settings; manual selection keeps its existing contract. */
-export function newStoryModelDefaults(
-  library: Pick<Library, 'models' | 'connections'>,
-  remembered: unknown
-): NewStoryModelDefaults {
-  const eligible = library.models.filter((model) => {
-    const connection = library.connections.find((item) => item.id === model.connectionId);
-    if (
-      model.enabled === false ||
-      !connection?.enabled ||
-      (model.capabilityProtocol !== undefined && model.capabilityProtocol !== connection.protocol)
-    )
-      return false;
-    try {
-      const generation = generationFromModel(model, connection.protocol);
-      validateModelOptions(generation, connection.protocol, model.modelId);
-      requireSupportedModel(connection, model.modelId);
-      return true;
-    } catch {
-      return false;
-    }
-  });
-  const saved =
-    remembered && typeof remembered === 'object' && !Array.isArray(remembered)
-      ? (remembered as Record<string, unknown>)
-      : {};
-  const restore = (role: string) => eligible.find((item) => item.id === saved[role])?.id ?? '';
-  const recentMain = restore('main');
-  return {
-    main: recentMain || (eligible.length === 1 ? eligible[0].id : ''),
-    translation: restore('translation'),
-    mainReason: recentMain ? 'recent' : eligible.length === 1 ? 'only' : null,
-    eligibleIds: eligible.map((item) => item.id),
-  };
-}
-
 export type NewStoryProfileIntent = {
   attachments: ContentRef[];
-  models?: Pick<ChatProfile['routes'], 'main' | 'translation'>;
   packageAttachments?: ChatProfile['packageAttachments'];
   packageValues?: ChatProfile['packageValues'];
   packageStart?: PackageStartRef & {
@@ -93,28 +43,6 @@ function readIntent(raw: string): NewStoryProfileIntent {
     )
   ) {
     throw new Error('보관한 시작 설정을 읽을 수 없어요.');
-  }
-  let models: NewStoryProfileIntent['models'];
-  if (pending.models !== undefined) {
-    const value = pending.models;
-    const ref = (item: unknown) =>
-      item === null ||
-      (!!item &&
-        typeof item === 'object' &&
-        !Array.isArray(item) &&
-        typeof (item as ContentRef).id === 'string' &&
-        (item as ContentRef).id.length > 0 &&
-        Object.keys(item).every((key) => key === 'id'));
-    if (
-      !value ||
-      typeof value !== 'object' ||
-      Array.isArray(value) ||
-      !ref((value as Record<string, unknown>).main) ||
-      !ref((value as Record<string, unknown>).translation)
-    )
-      throw new Error('보관한 시작 모델을 읽을 수 없어요.');
-    const selected = value as NonNullable<NewStoryProfileIntent['models']>;
-    models = { main: selected.main, translation: selected.translation };
   }
   const packageAttachments =
     pending.packageAttachments === undefined
@@ -170,7 +98,6 @@ function readIntent(raw: string): NewStoryProfileIntent {
   }
   return {
     attachments: attachments as ContentRef[],
-    ...(models ? { models } : {}),
     ...(packageAttachments ? { packageAttachments } : {}),
     ...(packageValues ? { packageValues } : {}),
     ...(packageStart ? { packageStart } : {}),
@@ -202,12 +129,6 @@ async function applyPendingStoryProfile(chatId: string) {
     `/chats/${chatId}/profile`,
     {
       attachments: intent.attachments,
-      // Starting models belong only to the untouched new profile. A retry must not
-      // overwrite model choices saved by another tab after story creation.
-      routes:
-        current.revision === 1 && intent.models
-          ? { ...current.routes, ...intent.models }
-          : current.routes,
       image: current.image,
       ...(intent.packageAttachments ? { packageAttachments: intent.packageAttachments } : {}),
       ...(intent.packageValues ? { packageValues: intent.packageValues } : {}),

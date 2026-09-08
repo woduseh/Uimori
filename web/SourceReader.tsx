@@ -7,7 +7,7 @@ import {
 import { StorySourceState } from './StoryPanel.js';
 import { Fragment, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import type { Asset } from '../core/product.js';
-import type { Job, ReaderRun, Source } from '../core/types.js';
+import type { ImageTarget, Job, ReaderRun, Source } from '../core/types.js';
 import { ContextSummaryStatus } from './ContextSummaryStatus.js';
 import { api, labels } from './api.js';
 import { auxiliaryErrorDiagnostic } from './auxiliary-error.js';
@@ -35,6 +35,7 @@ type ReaderProps = {
   onError: (error: string) => void;
   onFork: (sourceId: string) => Promise<void>;
   onRetry?: () => Promise<void>;
+  onModelSettings?: () => void;
   retryDisabled?: boolean;
   onEditingChange?: (sourceId: string, editing: boolean) => void;
   request?: string;
@@ -85,7 +86,11 @@ const retryable = (status: string) =>
   ['failed', 'cancelled', 'partial', 'interrupted'].includes(status);
 const activeJob = (job: Job) => job.status === 'queued' || job.status === 'running';
 const jobTitle = (job: Job) =>
-  job.kind === 'translation' ? '한국어 번역' : job.kind === 'status' ? '장면 상태' : '이미지 표시';
+  job.kind === 'translation'
+    ? '한국어 번역'
+    : job.kind === 'status'
+      ? '장면 상태'
+      : `${job.imageTarget?.mode === 'translation' ? '번역' : '원문'} 이미지 배치`;
 
 export function SourceReader(props: ReaderProps) {
   return <SourceReaderContent key={props.source.id} {...props} />;
@@ -110,6 +115,7 @@ function SourceReaderContent({
   refresh: refreshSource,
   onFork,
   onRetry,
+  onModelSettings,
   retryDisabled,
   onEditingChange,
   request,
@@ -139,9 +145,6 @@ function SourceReaderContent({
       (job) =>
         job.kind === 'status' && job.sourceRevision === source.id && job.sourceHash === source.hash
     )
-    .sort((a, b) => (b.revision ?? 1) - (a.revision ?? 1))[0];
-  const latestImageJob = jobs
-    .filter((job) => job.kind === 'image' && job.sourceRevision === source.id)
     .sort((a, b) => (b.revision ?? 1) - (a.revision ?? 1))[0];
   const presentation = usePackagePresentation(
     source,
@@ -209,29 +212,54 @@ function SourceReaderContent({
   const blocks = source.blocks?.length
     ? source.blocks
     : [{ anchor: 'full', index: 0, text: source.text, start: 0, end: source.text.length }];
-  const displayJobs = jobs.filter(
-    (job) =>
-      job.sourceHash === source.hash &&
-      (job.kind !== 'translation' || job.id === translation?.id) &&
-      (job.kind !== 'status' || job.id === latestStatus?.id)
-  );
-  const attentionJobs = displayJobs.filter((job) => activeJob(job) || retryable(job.status));
-  const image = jobs
+  const imageTarget: ImageTarget | undefined =
+    mode === 'original'
+      ? { mode: 'original', textHash: source.hash }
+      : validTranslation && displayTranslation?.translationLayout
+        ? {
+            mode: 'translation',
+            textHash: displayTranslation.translationLayout.textHash,
+            translationJobId: displayTranslation.id,
+            translationRevision: displayTranslation.revision ?? 1,
+          }
+        : undefined;
+  const matchesImageTarget = (target?: ImageTarget) =>
+    !!imageTarget &&
+    !!target &&
+    target.mode === imageTarget.mode &&
+    target.textHash === imageTarget.textHash &&
+    (target.mode === 'original' ||
+      (imageTarget.mode === 'translation' &&
+        target.translationJobId === imageTarget.translationJobId &&
+        target.translationRevision === imageTarget.translationRevision));
+  const latestImageJob = jobs
     .filter(
       (job) =>
         job.kind === 'image' &&
         job.sourceRevision === source.id &&
-        job.sourceHash === source.hash &&
-        job.status !== 'stale'
+        (job.imageTarget?.mode ?? 'original') === mode
     )
-    .sort((a, b) => (b.revision ?? 1) - (a.revision ?? 1))
-    .at(0);
+    .sort((a, b) => (b.revision ?? 1) - (a.revision ?? 1))[0];
+  const displayJobs = jobs.filter(
+    (job) =>
+      job.sourceHash === source.hash &&
+      (job.kind !== 'translation' || job.id === translation?.id) &&
+      (job.kind !== 'status' || job.id === latestStatus?.id) &&
+      (job.kind !== 'image' ||
+        (job.id === latestImageJob?.id && matchesImageTarget(job.imageTarget)))
+  );
+  const attentionJobs = displayJobs.filter((job) => activeJob(job) || retryable(job.status));
+  const image =
+    latestImageJob && matchesImageTarget(latestImageJob.imageTarget) ? latestImageJob : undefined;
   const annotations =
     image?.status === 'completed' &&
     image.result?.sourceRevision === source.id &&
-    image.result.sourceHash === source.hash
+    image.result.sourceHash === source.hash &&
+    matchesImageTarget(image.result.imageTarget)
       ? (image.result.annotations ?? [])
       : [];
+  const translationText = validTranslation?.text ?? '';
+  const translationBlocks = displayTranslation?.translationLayout?.blocks ?? [];
   const status = latestStatus?.status === 'completed' ? latestStatus : undefined;
   const sceneStatus =
     status?.result?.sourceRevision === source.id && status.result.sourceHash === source.hash
@@ -473,13 +501,30 @@ function SourceReaderContent({
         </div>
       ) : validTranslation ? (
         <div className="prose translated" data-testid="translation-text">
-          <div className="source-block">
-            <Prose text={validTranslation.text ?? ''} />
-          </div>
-          {annotations.length > 0 && (
-            <p className="muted" role="status">
-              {IMAGE_POSITION_UNAVAILABLE}
-            </p>
+          {translationBlocks.length ? (
+            <>
+              {translationText.slice(0, translationBlocks[0].start)}
+              {translationBlocks.map((block, position) => (
+                <Fragment key={block.anchor}>
+                  <div className="source-block" data-block-anchor={block.anchor}>
+                    <Prose
+                      text={
+                        block.text +
+                        translationText.slice(
+                          block.end,
+                          translationBlocks[position + 1]?.start ?? translationText.length
+                        )
+                      }
+                    />
+                  </div>
+                  {inline(block.anchor)}
+                </Fragment>
+              ))}
+            </>
+          ) : (
+            <div className="source-block">
+              <Prose text={translationText} />
+            </div>
           )}
         </div>
       ) : (
@@ -571,6 +616,7 @@ function SourceReaderContent({
               disabled={!!editor || !!pending || retryDisabled}
               onClick={() => void action('retry', onRetry)}
             >
+              <RefreshIcon size={18} aria-hidden="true" />
               현재 설정으로 다시 요청
             </button>
           )}
@@ -608,29 +654,30 @@ function SourceReaderContent({
           <button
             type="button"
             className="secondary"
-            disabled={
-              !!editor ||
-              !!pending ||
-              (!!latestImageJob &&
-                activeJob(latestImageJob) &&
-                latestImageJob.sourceHash === source.hash)
-            }
+            disabled={!!editor || !!pending || !imageTarget || (!!image && activeJob(image))}
             onClick={() =>
               void action('images', async () => {
                 await api(`/sources/${source.id}/images`, {
+                  target: mode,
                   expectedSourceHash: source.hash,
                   expectedRevision: latestImageJob?.revision ?? 0,
+                  ...(imageTarget?.mode === 'translation'
+                    ? {
+                        expectedTranslationJobId: imageTarget.translationJobId,
+                        expectedTranslationRevision: imageTarget.translationRevision,
+                      }
+                    : {}),
                 });
                 await refresh();
               })
             }
           >
             <ImagesIcon size={18} aria-hidden="true" />
-            {pending === 'images'
-              ? '이미지 선택을 예약하는 중…'
-              : latestImageJob
-                ? '이미지 다시 선택'
-                : '이미지 선택'}
+            {pending === 'images' || (image && activeJob(image))
+              ? '이미지를 배치하는 중…'
+              : image?.status === 'completed'
+                ? '이미지 다시 배치'
+                : '이미지 자동 배치'}
           </button>
         </ActionMenu>
         <StorySourceState
@@ -686,6 +733,11 @@ function SourceReaderContent({
       {actionError && (
         <p className="error" role="alert">
           {actionError}
+          {onModelSettings && (
+            <button type="button" className="secondary" onClick={onModelSettings}>
+              전역 모델 설정
+            </button>
+          )}
         </p>
       )}
     </article>
@@ -979,8 +1031,8 @@ function JobActions({
           </button>
           {!compact && (
             <small>
-              채팅 설정에서 표시 상태 모델을 저장한 뒤 새로 실행해요. 기존 작업 재시도는 당시 설정을
-              사용해요.
+              전역 모델 설정에서 표시 상태 모델을 저장한 뒤 새로 실행해요. 기존 작업 재시도는 당시
+              설정을 사용해요.
             </small>
           )}
         </>

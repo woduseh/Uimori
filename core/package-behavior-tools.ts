@@ -1,3 +1,4 @@
+import { historicalPersonaExcluded } from './persona-scope.js';
 import { ContentPackageError, validateContentPackage } from './content-package.js';
 import { BehaviorError, type BehaviorSchema } from './package-behavior.js';
 import { packageInstanceId } from './execution-context.js';
@@ -79,7 +80,7 @@ export function listBehaviorTools(snapshot: RunSnapshot): BehaviorToolBinding[] 
     );
     if (!pkg) throw new ContentPackageError('PACKAGE_SNAPSHOT_REVISION_MISSING', ref.id);
     validateContentPackage(pkg);
-    if (ref.role === 'persona' && profile?.personaReference === false) continue;
+    if (historicalPersonaExcluded(profile, ref.role)) continue;
     for (const action of pkg.behavior?.actions ?? []) {
       if (!action.triggers?.includes('model')) continue;
       if (action.inputSchema.type !== 'record')

@@ -133,6 +133,20 @@ test('CSUI01 chat settings list and seven details fit six widths with accessible
         );
       }
       await expectNoOverflow(page, dialog);
+      if (name === '모델') {
+        await expect(dialog.getByLabel('원문 모델', { exact: true })).toHaveCount(0);
+        await expect(
+          dialog.getByRole('button', { name: '전역 모델 설정', exact: true })
+        ).toBeVisible();
+      }
+      if (name === '프롬프트·창작 프리셋') {
+        await expect(
+          dialog.getByRole('region', { name: '현재 프롬프트 설정', exact: true })
+        ).toHaveCount(0);
+        await expect(
+          dialog.getByRole('button', { name: '전역 프롬프트 설정', exact: true })
+        ).toBeVisible();
+      }
       if (name === '모델' && (width === 390 || width === 1440))
         if (visualReview)
           await page.screenshot({
@@ -161,13 +175,21 @@ test('CSUI02 section changes, browser Back and resizing preserve chat setting dr
   const nav = dialog.locator('.chat-settings-panel > .section-navigation');
   const confirm = page.getByRole('alertdialog', { name: '미저장 채팅 설정 확인', exact: true });
   await selectChatSettingsSection(page, sections[0]);
-  const persona = dialog.getByRole('checkbox', { name: '본문에서 페르소나 참조', exact: true });
-  const originalPersona = await persona.isChecked();
-  await persona.setChecked(!originalPersona);
+  await expect(
+    dialog.getByRole('checkbox', { name: '본문에서 페르소나 참조', exact: true })
+  ).toHaveCount(0);
   await selectChatSettingsSection(page, '모델');
-  const image = dialog.getByRole('checkbox', { name: '보조 이미지 표시', exact: true });
+  await expect(dialog.getByRole('button', { name: '전역 모델 설정', exact: true })).toBeVisible();
+  await selectChatSettingsSection(page, sections[0]);
+  const image = dialog.getByRole('checkbox', { name: '원문 이미지 자동 배치', exact: true });
+  const translationImage = dialog.getByRole('checkbox', {
+    name: '번역 이미지 자동 배치',
+    exact: true,
+  });
+  await expect(translationImage).toBeChecked();
   const originalImage = await image.isChecked();
   await image.setChecked(!originalImage);
+  await translationImage.uncheck();
   await selectChatSettingsSection(page, '자동 후속 작업');
   const status = dialog.getByRole('checkbox', { name: '장면 상태 자동 실행', exact: true });
   const originalStatus = await status.isChecked();
@@ -181,16 +203,17 @@ test('CSUI02 section changes, browser Back and resizing preserve chat setting dr
   await expect(page).toHaveURL(new RegExp(`chat=${chat.id}`));
   await confirm.getByRole('button', { name: '계속 편집', exact: true }).click();
   await selectChatSettingsSection(page, sections[0]);
-  await expect(persona).toBeChecked({ checked: !originalPersona });
-  await selectChatSettingsSection(page, '모델');
+  await selectChatSettingsSection(page, sections[0]);
   await expect(image).toBeChecked({ checked: !originalImage });
+  await expect(translationImage).not.toBeChecked();
   await selectChatSettingsSection(page, '자동 후속 작업');
   await expect(status).toBeChecked({ checked: !originalStatus });
   await status.focus();
   await page.setViewportSize({ width: 1440, height: 900 });
   await expect(status).toBeFocused();
-  await selectChatSettingsSection(page, '모델');
+  await selectChatSettingsSection(page, sections[0]);
   await expect(image).toBeChecked({ checked: !originalImage });
+  await expect(translationImage).not.toBeChecked();
   await selectChatSettingsSection(page, '자동 후속 작업');
   await expect(status).toBeChecked({ checked: !originalStatus });
   await status.focus();
@@ -211,9 +234,9 @@ test('CSUI02 section changes, browser Back and resizing preserve chat setting dr
   await expect(page).toHaveURL(new RegExp(`chat=${chat.id}`));
   await openSettings(page);
   await selectChatSettingsSection(page, sections[0]);
-  await expect(persona).toBeChecked({ checked: originalPersona });
-  await selectChatSettingsSection(page, '모델');
+  await selectChatSettingsSection(page, sections[0]);
   await expect(image).toBeChecked({ checked: originalImage });
+  await expect(translationImage).toBeChecked();
   await selectChatSettingsSection(page, '자동 후속 작업');
   await expect(status).toBeChecked({ checked: originalStatus });
   await dialog.getByRole('button', { name: '채팅 설정 닫기', exact: true }).click();
@@ -281,4 +304,92 @@ test('CSUI03 keyboard navigation and clean browser Back keep immediate reading p
   await page.keyboard.press('Escape');
   await expect(reading).toBeHidden();
   await expectUnchanged(request, before, writes, errors);
+});
+
+test('CSUI04 quick persona and chat settings share persisted attachments and none preserves the composer', async ({
+  page,
+  request,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  const title = `CSUI04 persona ${Date.now()}`;
+  const seeded = await request.post('/api/content', {
+    data: {
+      kind: 'persona',
+      title,
+      description: 'Synthetic persona',
+      text: 'CSUI04_PERSONA',
+      loading: 'pinned',
+      relatedIds: [],
+      package: {
+        version: 1,
+        id: 'csui04-persona',
+        revision: 1,
+        title,
+        description: 'Synthetic persona',
+        body: 'CSUI04_PERSONA',
+        lore: [],
+        instructions: [],
+        controls: [],
+        transforms: [],
+      },
+    },
+  });
+  expect(seeded.ok(), await seeded.text()).toBe(true);
+  const persona = await seeded.json();
+  const { chat, errors } = await prepare(page, request, title);
+  const composer = page.getByLabel('다음 장면 요청', { exact: true });
+  await composer.fill('페르소나를 바꿔도 보존할 요청 초안');
+  const quick = page.getByRole('button', { name: '빠른 페르소나', exact: true });
+  const picker = page.getByRole('dialog', { name: '빠른 페르소나', exact: true });
+  const read = async () =>
+    (await (await request.get(`/api/chats/${chat.id}`)).json()) as ChatDetail;
+  const selected = async () =>
+    (await read()).profile!.packageAttachments?.filter((ref) => ref.role === 'persona') ?? [];
+  async function choosePersona(none = false) {
+    if (!(await quick.isVisible()))
+      await page.getByRole('button', { name: '입력창 더보기', exact: true }).click();
+    await quick.click();
+    if (none) await picker.getByRole('button', { name: '페르소나 없음', exact: true }).click();
+    else {
+      await picker.getByRole('searchbox').fill(title);
+      await picker
+        .getByRole('button')
+        .filter({ has: page.getByText(title, { exact: true }) })
+        .click();
+    }
+    await expect(picker).toBeHidden();
+    await expect
+      .poll(selected)
+      .toEqual(none ? [] : [{ id: persona.id, revision: persona.revision, role: 'persona' }]);
+    await expect(composer).toHaveValue('페르소나를 바꿔도 보존할 요청 초안');
+  }
+  await choosePersona();
+  const dialog = await openSettings(page);
+  await selectChatSettingsSection(page, sections[0]);
+  await expect(
+    dialog.getByRole('checkbox', { name: '본문에서 페르소나 참조', exact: true })
+  ).toHaveCount(0);
+  const attached = dialog
+    .locator('.package-attachment')
+    .filter({ has: page.getByRole('heading', { name: title, exact: true }) });
+  await expect(attached).toBeVisible();
+  await attached.getByRole('button', { name: '해제', exact: true }).click();
+  await dialog.getByRole('button', { name: '채팅 설정 저장', exact: true }).click();
+  await expect(dialog.getByText('채팅 설정을 저장했어요.', { exact: true })).toBeVisible();
+  await dialog.getByRole('button', { name: '채팅 설정 닫기', exact: true }).click();
+  await expect.poll(selected).toEqual([]);
+  await page.getByRole('button', { name: '입력창 더보기', exact: true }).click();
+  await expect(quick).toContainText('페르소나 없음');
+  await choosePersona();
+  await choosePersona(true);
+  await page.reload();
+  await expect(composer).toBeVisible();
+  const reopened = await openSettings(page);
+  await selectChatSettingsSection(page, sections[0]);
+  await expect(reopened.getByRole('heading', { name: title, exact: true })).toHaveCount(0);
+  expect(await selected()).toEqual([]);
+  const after = await read();
+  expect(after.runs).toHaveLength(0);
+  expect(after.attempts ?? []).toHaveLength(0);
+  expect(errors).toEqual([]);
 });

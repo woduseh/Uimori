@@ -258,7 +258,7 @@ export function ConnectionEditor({
       revision={item.revision}
       title={item.title}
       label="연결 삭제"
-      description="이 연결을 사용하는 모델 프리셋을 먼저 삭제해 주세요. 서버에 등록한 인증 파일과 과거 실행 기록은 유지돼요."
+      description="이 연결과 소속 모델을 목록에서 제거하고 현재 전역 역할 선택을 해제해요. 이후 호출은 차단되며 서버 인증 파일과 과거 실행 기록은 유지돼요."
       disabled={busy}
       onDeleted={() => deletedConnection(item)}
       onError={onError}
@@ -270,7 +270,7 @@ export function ConnectionEditor({
       revision={item.revision}
       title={item.title}
       label="모델 삭제"
-      description="이 모델을 사용 중인 이야기 설정을 먼저 변경해 주세요. 과거 실행에 저장된 모델 설정은 유지돼요."
+      description="삭제하면 현재 전역 역할 선택에서 해제돼요. 해당 모델을 쓰는 작문 보조는 꺼지고 상태·기억도 새 작업 전에 모델 설정을 확인해야 해요. 과거 실행에 저장된 모델 설정은 유지돼요."
       disabled={busy}
       onDeleted={() => deletedModel(item)}
       onError={onError}
@@ -969,8 +969,8 @@ export function ConnectionEditor({
           <strong>{confirmation.title} · 비활성으로 바꿀까요?</strong>
           <p>
             {confirmation.kind === 'connection'
-              ? '이 연결을 사용하는 기존 이야기의 다음 호출도 차단돼요. 저장된 원고와 이야기의 모델 선택은 유지돼요.'
-              : '새 모델 선택과 기존 이야기의 다음 실행이 차단돼요. 저장된 모델 선택은 유지돼요.'}
+              ? '이 연결을 사용하는 이후 호출이 차단돼요. 저장된 원고와 전역 역할의 모델 선택은 유지돼요.'
+              : '새 모델 선택과 이 모델을 사용하는 이후 실행이 차단돼요. 전역 역할의 모델 선택은 유지돼요.'}
           </p>
           <p>이미 저장된 원문·번역과 과거 실행 기록은 바꾸지 않아요.</p>
           <div className="provider-actions">
@@ -1500,16 +1500,16 @@ export function ConnectionEditor({
           <strong>{registeredModel.title} · 다음으로 역할에 배정하세요</strong>
           <p>비활성 연결로 등록했다면 연결을 활성화한 뒤 역할에 배정해 주세요.</p>
           <ol>
-            <li>설정 창을 닫고 새 이야기에서 본문·번역 모델을 선택해요.</li>
+            <li>설정 → 현재 모델에서 사용할 역할을 선택하고 저장해요.</li>
             <li>
-              기존 이야기는 이야기 설정 → 모델에서 필요한 역할을 선택하고 저장해요. 상태·기억은
-              이야기 설정의 해당 작업 설정에서 선택해요.
+              모든 채팅의 이후 요청에 적용해요. 상태·기억의 독립 모델은 채팅 설정의 해당 작업
+              설정에서 선택해요.
             </li>
           </ol>
           <small>
             {registeredModel.enabled === false
               ? '지금은 새 선택에서 제외된 모델이에요. 활성화한 뒤 새로 배정할 수 있어요.'
-              : '역할 선택 전에는 기존 이야기의 모델을 바꾸지 않아요.'}
+              : '역할 선택 전에는 현재 전역 모델 설정을 바꾸지 않아요.'}
           </small>
         </section>
       )}

@@ -1,3 +1,4 @@
+import { updateTestProfile } from './fixtures/model-workspace.js';
 import { createFixtureChat, injectWithFixtureBot } from './fixtures/chat.js';
 import { afterEach, expect, test } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
@@ -213,10 +214,10 @@ test('active captured work survives library deletion with unchanged snapshots an
     temperature: null,
   });
   const p = s.product.profile(chat.id);
-  s.product.updateProfile(chat.id, {
+  updateTestProfile(s.product, chat.id, {
     expectedRevision: p.revision,
     attachments: [],
-    personaReference: p.personaReference,
+
     routes: { ...p.routes, main: { id: m.id } },
     image: false,
   });
@@ -241,10 +242,10 @@ test('active captured work survives library deletion with unchanged snapshots an
     })
   ).run;
   const current = s.product.profile(chat.id);
-  s.product.updateProfile(chat.id, {
+  updateTestProfile(s.product, chat.id, {
     expectedRevision: current.revision,
     attachments: [],
-    personaReference: current.personaReference,
+
     routes: p.routes,
     image: false,
   });
@@ -314,7 +315,7 @@ test.each(['model', 'connection'] as const)(
     const main = model(mainConnection.id, 'Main'),
       advisor = model(advisorConnection.id, 'Advisor');
     const profile = store.product.profile(chat.id);
-    store.product.updateProfile(chat.id, {
+    updateTestProfile(store.product, chat.id, {
       expectedRevision: profile.revision,
       attachments: profile.attachments,
       routes: { ...profile.routes, main: { id: main.id } },
@@ -327,7 +328,7 @@ test.each(['model', 'connection'] as const)(
       agents: [{ ...createAgentDefinition('character', 'advisor'), model: { id: advisor.id } }],
     };
     const before = updatePromptWorkspace(store, {
-      expectedRevision: 1,
+      expectedRevision: promptWorkspace(store).revision,
       main: { title: 'Current', program, values: {} },
       translationPolicy: { refusalModel: { id: advisor.id }, maxRetries: 1, maxCalls: 16 },
     });

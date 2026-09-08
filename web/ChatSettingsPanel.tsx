@@ -74,11 +74,13 @@ export function ChatSettingsPanel({
   state,
   onClose,
   initialSection,
+  onGlobalSettings,
 }: {
   state: StoryState;
   onClose: () => void;
   /** Open directly on this section (compact widths open its detail); the list is the default. */
   initialSection?: Section;
+  onGlobalSettings: (section: 'models' | 'prompts') => void;
 }) {
   const [active, setActive] = useState<Section>(initialSection ?? 'characters');
   const [profileTab, setProfileTab] = useState<ProfileSection>(
@@ -269,7 +271,7 @@ export function ChatSettingsPanel({
                 onSaved={() => state.refresh(state.selected)}
                 onError={state.setError}
                 onDirtyChange={setProfileDirty}
-                onLibraryChanged={state.loadLibrary}
+                onGlobalSettings={(section) => requestClose(() => onGlobalSettings(section))}
                 nextRequest={state.pendingRequest ?? state.draft}
                 loreContextReset={state.loreContextReset}
               />

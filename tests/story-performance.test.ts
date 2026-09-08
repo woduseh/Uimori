@@ -1,3 +1,4 @@
+import { updateTestProfile } from './fixtures/model-workspace.js';
 import { createFixtureChat } from './fixtures/chat.js';
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises';
@@ -175,7 +176,7 @@ function addLore(store: Store, chatId: string, start: number, end: number) {
     owner.id
   );
   const { chatId: _chatId, revision, ...profile } = store.product.profile(chatId);
-  store.product.updateProfile(chatId, {
+  updateTestProfile(store.product, chatId, {
     ...profile,
     expectedRevision: revision,
     packageAttachments: profile.packageAttachments!.map((attachment) =>

@@ -68,7 +68,13 @@ export type CurrentPrompt = {
   program: import('./prompt-program.js').PromptProgram;
   values: Record<string, import('./prompt-program.js').PromptValue>;
 };
+export type ModelWorkspace = {
+  revision: number;
+  routes: Record<TaskRole, ModelRef | null>;
+  translationPolicy: PromptWorkspace['translationPolicy'];
+};
 export type PromptWorkspace = {
+  modelRoutes: Record<TaskRole, ModelRef | null>;
   revision: number;
   main: CurrentPrompt;
   translation: CurrentPrompt;
@@ -116,13 +122,17 @@ export type ChatProfile = {
   chatId: string;
   revision: number;
   attachments: ContentRef[];
-  personaReference?: boolean;
+  /** Read-only current global selection; persisted only in execution snapshots. */
   routes: Record<TaskRole, ModelRef | null>;
   image: boolean;
+  /** Automatically place images after a model translation completes. Defaults to true. */
+  imageTranslation?: boolean;
   packageAttachments?: import('./content-package.js').PackageAttachment[];
   packageValues?: Record<string, Record<string, import('./prompt-program.js').PromptValue>>;
 };
 export type ProfileSnapshot = ChatProfile & {
+  /** Historical execution scope only. Current settings and new snapshots omit this field. */
+  personaReference?: boolean;
   /** Self-contained execution evidence; never a live library dependency. */
   prompts?: Partial<Record<PromptRole, ContentRef | null>>;
   promptControls?: Record<string, import('./prompt-program.js').ChatPromptControls>;
@@ -200,6 +210,7 @@ export const defaultProfile = (chatId: string): ChatProfile => ({
   attachments: [],
   routes: { main: null, translation: null, status: null, image: null },
   image: false,
+  imageTranslation: true,
 });
 
 export const VERTEX_GEMINI_MODEL_ID = 'gemini-3.8-flash';

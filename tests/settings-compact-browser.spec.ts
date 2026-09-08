@@ -70,13 +70,13 @@ test('SCUI01 settings list and details adapt at six widths with distinct icons a
   await navigationAction(page, '설정');
   const dialog = page.getByRole('dialog', { name: '설정', exact: true });
   const nav = dialog.locator('.settings-navigation');
-  await expect(nav.getByRole('button')).toHaveCount(5);
+  await expect(nav.getByRole('button')).toHaveCount(7);
   await expect(dialog.getByRole('tabpanel')).toHaveCount(0);
   if (visualReview) {
     const icons = await nav
       .locator('svg')
       .evaluateAll((nodes) => nodes.map((node) => node.innerHTML));
-    expect(new Set(icons).size).toBe(5);
+    expect(new Set(icons).size).toBe(7);
   }
   if (visualReview) await page.screenshot({ path: info.outputPath('settings-list-390.png') });
   await selectSettingsSection(page, '일반');
@@ -93,7 +93,7 @@ test('SCUI01 settings list and details adapt at six widths with distinct icons a
       expect(bounds!.height).toBeGreaterThanOrEqual(44);
     } else {
       await expect(nav).toBeVisible();
-      await expect(nav.getByRole('tab')).toHaveCount(5);
+      await expect(nav.getByRole('tab')).toHaveCount(7);
     }
     expect(
       await dialog.evaluate((node) => node.scrollWidth - node.clientWidth)

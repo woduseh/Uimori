@@ -20,10 +20,16 @@ for (const [role, label] of [
     [`MODEL_REQUIRED:${role}`],
     `${label} 모델이 지정되지 않았어요.`,
     role === 'status'
-      ? '채팅 설정에서 표시 상태 모델을 선택하고 저장한 뒤 현재 설정으로 장면 상태를 새로 실행해 주세요.'
-      : `채팅 설정에서 ${label} 모델을 선택하고 저장한 뒤 새 작업을 요청해 주세요.`
+      ? '전역 모델 설정에서 표시 상태 모델을 선택하고 저장한 뒤 현재 설정으로 장면 상태를 새로 실행해 주세요.'
+      : `전역 모델 설정에서 ${label} 모델을 선택하고 저장한 뒤 새 작업을 요청해 주세요.`
   );
 }
+
+define(
+  ['IMAGE_MODEL_UNAVAILABLE'],
+  '번역은 완료됐지만 이미지 배치 모델을 사용할 수 없어요.',
+  '전역 모델 설정에서 이미지 배치 모델을 확인한 뒤 장면 메뉴의 이미지 자동 배치를 눌러 주세요.'
+);
 
 define(
   [
@@ -78,7 +84,7 @@ define(
 define(
   ['TRANSLATION_REFUSAL_MODEL_REQUIRED', 'MODEL_REQUIRED:translation-refusal'],
   '번역 거절 판정 모델이 지정되지 않았어요.',
-  '현재 번역 프롬프트 설정에서 경량 판정 모델을 선택한 뒤 재번역해 주세요.'
+  '전역 모델 설정에서 경량 판정 모델을 선택한 뒤 재번역해 주세요.'
 );
 define(
   ['TRANSLATION_REFUSAL_CHECK_FAILED'],

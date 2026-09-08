@@ -1,3 +1,4 @@
+import { updateTestProfile } from './fixtures/model-workspace.js';
 import { promptWorkspace, updatePromptWorkspace } from '../server/prompt-workspace.js';
 import { randomUUID } from 'node:crypto';
 import { mkdtemp, rm } from 'node:fs/promises';
@@ -68,7 +69,7 @@ async function fixture(withSegments = false) {
       },
     }) as Content;
     const { chatId: _chatId, revision, ...profile } = store.product.profile(chat.id);
-    store.product.updateProfile(chat.id, {
+    updateTestProfile(store.product, chat.id, {
       ...profile,
       expectedRevision: revision,
       packageAttachments: [
@@ -199,7 +200,7 @@ test('source policies stay frozen after detaching a package and archive validati
   expect(firstPolicy?.rules.some((rule) => rule.kind === 'aside' && rule.exclude)).toBe(true);
   expect(second.run.snapshot.history[0].sourceSegments).toEqual(firstPolicy);
   const { chatId: _chatId, revision, ...profile } = store.product.profile(chat.id);
-  store.product.updateProfile(chat.id, {
+  updateTestProfile(store.product, chat.id, {
     ...profile,
     expectedRevision: revision,
     packageAttachments: profile.packageAttachments?.filter((ref) => ref.role !== 'module') ?? [],
@@ -255,7 +256,7 @@ async function candidateFixture() {
     program,
   }) as PromptPreset;
   const { chatId: _chatId, revision, ...profile } = state.store.product.profile(state.chat.id);
-  state.store.product.updateProfile(state.chat.id, {
+  updateTestProfile(state.store.product, state.chat.id, {
     ...profile,
     expectedRevision: revision,
   });
@@ -408,7 +409,7 @@ test.each(['ready', 'pending'] as const)(
       program,
     }) as PromptPreset;
     const { chatId: _chatId, revision, ...profile } = store.product.profile(chat.id);
-    store.product.updateProfile(chat.id, {
+    updateTestProfile(store.product, chat.id, {
       ...profile,
       expectedRevision: revision,
       routes: { ...profile.routes, main: { id: model.id } },

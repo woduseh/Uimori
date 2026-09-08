@@ -126,9 +126,11 @@ test('transformed prose suppresses unplaceable images and identifies an authored
     sourceRevision: source.id,
     sourceHash: source.hash,
     revision: 1,
+    imageTarget: { mode: 'original', textHash: source.hash },
     result: {
       sourceRevision: source.id,
       sourceHash: source.hash,
+      imageTarget: { mode: 'original', textHash: source.hash },
       annotations: [
         {
           blockAnchor: source.blocks[0].anchor,
@@ -189,7 +191,42 @@ test('transformed prose suppresses unplaceable images and identifies an authored
   expect(fullTranslation).toContain('합친 번역.');
   expect(fullTranslation).not.toContain('/api/assets/asset');
   expect(fullTranslation).not.toContain('data-block-anchor=');
-  expect(fullTranslation).toContain('이미지를 생략');
+  expect(fullTranslation).not.toContain('이미지를 생략');
+  const translatedSource = {
+    ...source,
+    text: translation.result!.text!,
+    hash: createHash('sha256').update(translation.result!.text!).digest('hex'),
+  };
+  const imageTarget = {
+    mode: 'translation' as const,
+    textHash: translatedSource.hash,
+    translationJobId: translation.id,
+    translationRevision: translation.revision!,
+  };
+  translation.translationLayout = {
+    textHash: translatedSource.hash,
+    blocks: splitSource(translatedSource),
+  };
+  const translationImage = {
+    ...job,
+    id: 'translated-image',
+    imageTarget,
+    result: {
+      ...job.result!,
+      imageTarget,
+      annotations: [
+        { ...job.result!.annotations![0], blockAnchor: splitSource(translatedSource)[0].anchor },
+      ],
+    },
+  } as Job;
+  expect(
+    renderToStaticMarkup(
+      createElement(SourceReader, {
+        ...props,
+        jobs: [job, translation, translationImage],
+      })
+    )
+  ).toContain('/api/assets/asset');
   projection.data = {
     sourceRevision: source.id,
     sourceHash: source.hash,
@@ -199,8 +236,9 @@ test('transformed prose suppresses unplaceable images and identifies an authored
     issues: [],
   };
   const translated = renderToStaticMarkup(
-    createElement(SourceReader, { ...props, jobs: [job, translation] })
+    createElement(SourceReader, { ...props, jobs: [job, translation, translationImage] })
   );
   expect(translated).toContain('표시용 번역.');
   expect(translated).not.toContain('/api/assets/asset');
+  expect(translated).toContain('이미지를 생략');
 });

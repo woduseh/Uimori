@@ -1,3 +1,4 @@
+import { selectChatSettingsSection } from './ui-navigation.js';
 import { visualReview } from './fixtures/visual-review.js';
 import { preservePromptWorkspace } from './fixtures/prompt-workspace.js';
 import { test, expect, type APIRequestContext, type Page } from '@playwright/test';
@@ -5,12 +6,7 @@ import { readFile } from 'node:fs/promises';
 import type { PromptPreset } from '../core/product.js';
 import type { PromptProgram } from '../core/prompt-program.js';
 import type { ChatDetail } from '../core/types.js';
-import {
-  navigationAction,
-  openPromptActions,
-  openPromptTools,
-  selectChatSettingsSection,
-} from './ui-navigation.js';
+import { navigationAction, openPromptActions, openPromptTools } from './ui-navigation.js';
 import { postFixtureChat } from './fixtures/chat.js';
 
 const program = (): PromptProgram => ({
@@ -138,6 +134,7 @@ test('PAUI02 saving and applying retain distinct scopes with compact actions on 
   await page.goto(`/?chat=${chat.id}`);
   await page.getByRole('button', { name: '채팅 설정', exact: true }).click();
   await selectChatSettingsSection(page, '프롬프트·창작 프리셋');
+  await page.getByRole('button', { name: '전역 프롬프트 설정', exact: true }).click();
   const editor = page.getByRole('region', { name: '현재 프롬프트 설정' });
   await editor.getByLabel('현재 프롬프트 프리셋', { exact: true }).selectOption(preset.id);
   await expect
@@ -177,8 +174,8 @@ test('PAUI02 saving and applying retain distinct scopes with compact actions on 
         path: info.outputPath(`prompt-actions-${width === 390 ? 'mobile' : 'desktop'}.png`),
       });
   }
-  await page.getByRole('button', { name: '채팅 설정 닫기', exact: true }).click();
-  const discard = page.getByRole('alertdialog', { name: '미저장 채팅 설정 확인', exact: true });
+  await page.getByRole('button', { name: '설정 닫기', exact: true }).click();
+  const discard = page.getByRole('alertdialog', { name: '미저장 설정 확인', exact: true });
   await expect(discard).toBeVisible();
   await discard.getByRole('button', { name: '계속 편집', exact: true }).click();
   await expect(name).toHaveValue(preset.title + ' 별도 사본');

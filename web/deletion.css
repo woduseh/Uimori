@@ -4,6 +4,7 @@
   gap: 6px;
   max-width: 100%;
 }
+.delete-button.secondary,
 .delete-button {
   display: inline-flex;
   align-items: center;

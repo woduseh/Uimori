@@ -1,3 +1,4 @@
+import { preservePromptWorkspace } from './fixtures/prompt-workspace.js';
 import { visualReview } from './fixtures/visual-review.js';
 import { test, expect, type Page, type APIRequestContext } from '@playwright/test';
 import type { Content, Library } from '../core/product.js';
@@ -9,6 +10,8 @@ import {
   selectPackageSection,
   openSourceActions,
 } from './ui-navigation.js';
+
+preservePromptWorkspace();
 
 const png = Buffer.from(
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jG1sAAAAASUVORK5CYII=',
@@ -39,6 +42,39 @@ test('shared persona draft uploads an image and starts as a bot with an exact au
   request,
 }, info) => {
   test.setTimeout(60000);
+  const endpoint = process.env.NR_REGISTRATION_FIXTURE_URL;
+  if (!endpoint) throw new Error('Dedicated image-placement loopback fixture is required');
+  const connectionReply = await request.post('/api/connections', {
+    data: {
+      title: `Shared image ${info.workerIndex}`,
+      protocol: 'fixture-sse-v1',
+      endpoint: new URL('presentation', endpoint).href,
+      enabled: true,
+    },
+  });
+  expect(connectionReply.ok(), await connectionReply.text()).toBe(true);
+  const connection = await connectionReply.json();
+  const modelReply = await request.post('/api/model-presets', {
+    data: {
+      title: `Shared image ${info.workerIndex}`,
+      connectionId: connection.id,
+      modelId: 'synthetic-image-selector',
+      maxOutputTokens: 512,
+      temperature: null,
+    },
+  });
+  expect(modelReply.ok(), await modelReply.text()).toBe(true);
+  const imageModel = await modelReply.json();
+  const workspace = await (await request.get('/api/model-workspace')).json();
+  const savedModels = await request.put('/api/model-workspace', {
+    data: {
+      expectedRevision: workspace.revision,
+      routes: { ...workspace.routes, image: { id: imageModel.id } },
+      translationPolicy: workspace.translationPolicy,
+    },
+  });
+  expect(savedModels.ok(), await savedModels.text()).toBe(true);
+
   const title = `Shared authored persona ${info.workerIndex}`,
     text = 'The ego sword woke beside the window.\n\n“Good morning,” it said.';
   const pkg = {
@@ -75,6 +111,13 @@ test('shared persona draft uploads an image and starts as a bot with an exact au
   await expect(images.getByRole('status')).toContainText('1개 이미지를 자료에 추가했어요');
   await images.getByLabel('선택한 이미지 이름', { exact: true }).fill('창가의 검');
   await images.getByLabel('자료의 대표 이미지로 사용', { exact: true }).check();
+  await images
+    .getByLabel('자료 이미지 파일 추가', { exact: true })
+    .setInputFiles({ name: 'sword-scene.png', mimeType: 'image/png', buffer: png });
+  await expect(images.getByLabel('선택한 이미지 이름', { exact: true })).toHaveValue('sword-scene');
+  await images.getByLabel('선택한 이미지 이름', { exact: true }).fill('창가의 아침 장면');
+  await expect(images.getByLabel('자료의 대표 이미지로 사용', { exact: true })).not.toBeChecked();
+  await images.getByLabel('선택한 이미지 사용 위치', { exact: true }).selectOption('inline');
   if (visualReview)
     await images.screenshot({ path: info.outputPath('shared-persona-images-desktop.png') });
   await selectPackageSection(page, '시작');
@@ -91,6 +134,7 @@ test('shared persona draft uploads an image and starts as a bot with an exact au
   const saved = await savedContent(request, title);
   expect(saved.kind).toBe('persona');
   expect(saved.package!.portraitImageId).toBe(saved.package!.images![0].id);
+  expect(saved.package!.images![1].allowedUse).toBe('inline');
   const chats = await (await request.get('/api/chats')).json();
   expect(chats.filter((chat: any) => chat.botId === saved.id)).toHaveLength(0);
   await library.getByRole('button', { name: '이 자료를 봇으로 시작', exact: true }).click();
@@ -120,7 +164,7 @@ test('shared persona draft uploads an image and starts as a bot with an exact au
   expect(chatPosts).toBe(1);
   const source = page.getByTestId('source').filter({ has: page.getByTestId('authored-start') });
   await openSourceActions(source);
-  await source.getByRole('button', { name: '이미지 선택', exact: true }).click();
+  await source.getByRole('button', { name: '이미지 자동 배치', exact: true }).click();
   await expect
     .poll(async () => {
       const current: ChatDetail = await (await request.get(`/api/chats/${chat.id}`)).json();
@@ -130,6 +174,86 @@ test('shared persona draft uploads an image and starts as a bot with an exact au
   const after: ChatDetail = await (await request.get(`/api/chats/${chat.id}`)).json();
   expect(after.sources[0].text).toBe(text);
   expect(after.jobs.some((job) => job.kind === 'translation')).toBe(false);
+  const originalImage = after.jobs.find((job) => job.kind === 'image')!;
+  expect(originalImage.result!.annotations!.length).toBeGreaterThan(0);
+  const portraitAssetId = `package:${saved.package!.id}:bot:${saved.package!.portraitImageId}`;
+  expect(after.assets!.some((asset) => asset.id === portraitAssetId)).toBe(false);
+  expect(
+    originalImage.result!.annotations!.every(
+      (annotation) => annotation.assetRef !== portraitAssetId
+    )
+  ).toBe(true);
+
+  expect(originalImage.imageTarget).toMatchObject({
+    mode: 'original',
+    textHash: after.sources[0].hash,
+  });
+  await expect(source.getByTestId('inline-annotation')).toHaveCount(
+    originalImage.result!.annotations!.length
+  );
+  await source.getByRole('button', { name: '번역 보기', exact: true }).click();
+  await expect
+    .poll(async () => {
+      const current: ChatDetail = await (await request.get(`/api/chats/${chat.id}`)).json();
+      return current.jobs.find(
+        (job) => job.kind === 'image' && job.imageTarget?.mode === 'translation'
+      )?.status;
+    })
+    .toBe('completed');
+  const translated: ChatDetail = await (await request.get(`/api/chats/${chat.id}`)).json();
+  const translation = translated.jobs.find((job) => job.kind === 'translation')!;
+  const translationImage = translated.jobs.find(
+    (job) => job.kind === 'image' && job.imageTarget?.mode === 'translation'
+  )!;
+  expect(translationImage.result!.annotations!.length).toBeGreaterThan(0);
+  expect(
+    translationImage.result!.annotations!.every(
+      (annotation) => annotation.assetRef !== portraitAssetId
+    )
+  ).toBe(true);
+  expect(translationImage.imageTarget).toMatchObject({
+    mode: 'translation',
+    translationJobId: translation.id,
+    translationRevision: translation.revision,
+    textHash: translation.translationLayout!.textHash,
+  });
+  await expect(source.getByTestId('translation-text')).toBeVisible();
+  await expect(source.getByTestId('inline-annotation')).toHaveCount(
+    translationImage.result!.annotations!.length
+  );
+  for (const figure of await source.getByTestId('inline-annotation').all()) {
+    expect(
+      await figure.evaluate((node) =>
+        node.previousElementSibling?.getAttribute('data-block-anchor')
+      )
+    ).toBeTruthy();
+  }
+  if (visualReview)
+    await source.screenshot({ path: info.outputPath('translation-image-placement.png') });
+  await openSourceActions(source);
+  await expect(source.getByRole('button', { name: '이미지 다시 배치', exact: true })).toBeVisible();
+  await page.keyboard.press('Escape');
+  await source.getByRole('button', { name: '원문 보기', exact: true }).click();
+  await expect(source.getByTestId('inline-annotation')).toHaveCount(
+    originalImage.result!.annotations!.length
+  );
+  expect(translated.sources[0].text).toBe(text);
+  await source.getByRole('button', { name: '번역 보기', exact: true }).click();
+  await source.getByRole('button', { name: '번역 수정', exact: true }).click();
+  await source
+    .getByRole('textbox', { name: '번역 수정 내용', exact: true })
+    .fill('직접 수정한 번역문이에요.\n\n문단 위치도 바뀌었어요.');
+  await source.getByRole('button', { name: '번역 저장', exact: true }).click();
+  await expect(source.getByTestId('translation-text')).toContainText('직접 수정한 번역문이에요.');
+  await expect(source.getByTestId('inline-annotation')).toHaveCount(0);
+  await openSourceActions(source);
+  await expect(source.getByRole('button', { name: '이미지 자동 배치', exact: true })).toBeEnabled();
+  await page.keyboard.press('Escape');
+  await source.getByRole('button', { name: '원문 보기', exact: true }).click();
+  await expect(source.getByTestId('inline-annotation')).toHaveCount(
+    originalImage.result!.annotations!.length
+  );
+
   await page.setViewportSize({ width: 390, height: 844 });
   await expect(page.getByTestId('authored-start')).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(

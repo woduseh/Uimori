@@ -185,7 +185,12 @@ export class ChatOrganizationStore {
       if (packageAttachments.length) profile.packageAttachments = packageAttachments;
       this.store.db
         .prepare('INSERT INTO profiles VALUES(?,?)')
-        .run(chatId, JSON.stringify(profile));
+        .run(
+          chatId,
+          JSON.stringify(
+            Object.fromEntries(Object.entries(profile).filter(([key]) => key !== 'routes'))
+          )
+        );
     }
   }
   copy(originalId: string, newId: string) {

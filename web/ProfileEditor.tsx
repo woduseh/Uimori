@@ -1,8 +1,7 @@
 import { useEffect, useState } from 'react';
-import type { ChatProfile, Library, ModelRef, TaskRole } from '../core/product.js';
+import type { ChatProfile, Library } from '../core/product.js';
 import { api } from './api.js';
-import { PromptWorkspaceEditor } from './PromptWorkspaceEditor.js';
-import { useModelSelection } from './model-selection.js';
+import { usePromptWorkspace } from './usePromptWorkspace.js';
 import { PackageAttachments } from './PackageAttachments.js';
 import { LoreContextPolicyEditor } from './LoreContextPolicyEditor.js';
 import './library.css';
@@ -20,7 +19,7 @@ export function ProfileEditor({
   onSaved,
   onError,
   onDirtyChange,
-  onLibraryChanged,
+  onGlobalSettings,
   initialTab = 'characters',
   activeTab,
   hideNavigation = false,
@@ -36,7 +35,7 @@ export function ProfileEditor({
   onSaved: () => Promise<void>;
   onError: (error: string) => void;
   onDirtyChange?: (dirty: boolean) => void;
-  onLibraryChanged?: () => Promise<void>;
+  onGlobalSettings: (section: 'models' | 'prompts') => void;
   initialTab?: ProfileSection;
   activeTab?: ProfileSection;
   hideNavigation?: boolean;
@@ -45,7 +44,7 @@ export function ProfileEditor({
 }) {
   const [value, setValue] = useState(profile);
   const [dirty, setDirty] = useState(false);
-  const [promptDirty, setPromptDirty] = useState(false);
+  const { workspace } = usePromptWorkspace();
   const [attachmentPending, setAttachmentPending] = useState(false);
   const [lorePending, setLorePending] = useState(false),
     [loreResetVersion, setLoreResetVersion] = useState(0);
@@ -54,7 +53,6 @@ export function ProfileEditor({
   const tab = activeTab ?? localTab;
   const [error, setError] = useState('');
   const [status, setStatus] = useState('');
-  const { canSelect } = useModelSelection(library.models, library.connections);
   useEffect(() => {
     if (!dirty && !lorePending)
       setValue((current) =>
@@ -64,18 +62,9 @@ export function ProfileEditor({
       );
   }, [profile, dirty, lorePending]);
   useEffect(() => {
-    onDirtyChange?.(dirty || promptDirty || lorePending || saving || attachmentPending);
-  }, [dirty, promptDirty, lorePending, saving, attachmentPending, onDirtyChange]);
+    onDirtyChange?.(dirty || lorePending || saving || attachmentPending);
+  }, [dirty, lorePending, saving, attachmentPending, onDirtyChange]);
   useEffect(() => () => onDirtyChange?.(false), [onDirtyChange]);
-  const models = library.models;
-  const sameRef = (item: ModelRef, selected: ModelRef | null) => item.id === selected?.id;
-  const retainedModelRefs = (role: TaskRole) => [
-    ...new Map(
-      [profile.routes[role], value.routes[role]]
-        .filter((ref): ref is ModelRef => ref !== null)
-        .map((ref) => [ref.id, ref])
-    ).values(),
-  ];
   const change = (next: ChatProfile) => {
     setValue(next);
     setDirty(true);
@@ -114,9 +103,8 @@ export function ProfileEditor({
   const profileBody = (next: ChatProfile) => ({
     expectedRevision: next.revision,
     attachments: next.attachments,
-    personaReference: next.personaReference,
-    routes: next.routes,
     image: next.image,
+    imageTranslation: next.imageTranslation !== false,
     ...(next.packageAttachments ? { packageAttachments: next.packageAttachments } : {}),
     ...(next.packageValues ? { packageValues: next.packageValues } : {}),
     ...(next.loreContext ? { loreContext: next.loreContext } : {}),
@@ -193,12 +181,28 @@ export function ProfileEditor({
             <div hidden={tab !== 'characters'}>
               <label className="check">
                 <input
+                  aria-label="원문 이미지 자동 배치"
                   type="checkbox"
-                  checked={value.personaReference !== false}
-                  onChange={(event) => change({ ...value, personaReference: event.target.checked })}
+                  checked={value.image}
+                  onChange={(event) => change({ ...value, image: event.target.checked })}
                 />
-                본문에서 페르소나 참조
+                원문 이미지 자동 배치
               </label>
+              <small>
+                새 원문이 완성되면 등록된 이미지 중 어울리는 이미지를 골라 문단 사이에 배치해요.
+              </small>
+              <label className="check">
+                <input
+                  type="checkbox"
+                  checked={value.imageTranslation !== false}
+                  onChange={(event) => change({ ...value, imageTranslation: event.target.checked })}
+                />
+                번역 이미지 자동 배치
+              </label>
+              <small>
+                새 번역이 완성되면 번역문에 맞춰 이미지를 별도로 배치해요. 꺼도 각 보기의 장면
+                메뉴에서 직접 실행할 수 있어요.
+              </small>
             </div>
             <div hidden={tab !== 'characters'}>
               <LoreContextPolicyEditor
@@ -214,91 +218,38 @@ export function ProfileEditor({
               />
             </div>
             <div hidden={tab !== 'prompts'}>
-              <PromptWorkspaceEditor
-                library={library}
-                reload={onLibraryChanged}
-                onDirtyChange={setPromptDirty}
-                chatId={profile.chatId}
-                branchId={branchId}
-              />
+              <p>모든 채팅의 이후 요청에 현재 전역 프롬프트와 옵션을 사용해요.</p>
+              <p>
+                작문: {workspace?.main.title ?? '불러오는 중…'} · 번역:{' '}
+                {workspace?.translation.title ?? '불러오는 중…'}
+              </p>
+              <button
+                type="button"
+                className="secondary"
+                onClick={() => onGlobalSettings('prompts')}
+              >
+                전역 프롬프트 설정
+              </button>
             </div>
             <div hidden={tab !== 'models'}>
-              <fieldset className="control-grid">
-                <legend>역할별 모델</legend>
-                {(['main', 'translation', 'status', 'image'] as TaskRole[]).map((role, index) => (
-                  <label key={role}>
-                    {['본문 모델', '번역 모델', '표시 상태 모델', '이미지 선택 모델'][index]}
-                    <select
-                      aria-label={
-                        ['원문 모델', '번역 모델', '표시 상태 모델', '이미지 선택 모델'][index]
-                      }
-                      value={value.routes[role] ? value.routes[role]!.id : ''}
-                      onChange={(event) => {
-                        const model =
-                          models.find((item) => item.id === event.target.value) ??
-                          retainedModelRefs(role).find((item) => item.id === event.target.value);
-                        change({
-                          ...value,
-                          routes: { ...value.routes, [role]: model ? { id: model.id } : null },
-                        });
-                      }}
-                    >
-                      <option value="">모델 미지정</option>
-                      {retainedModelRefs(role)
-                        .filter((ref) => !models.some((item) => sameRef(item, ref)))
-                        .map((ref) => (
-                          <option
-                            key={ref.id}
-                            disabled={!sameRef(ref, profile.routes[role])}
-                            value={ref.id}
-                          >
-                            선택한 모델 · 확인 필요
-                          </option>
-                        ))}
-                      {models
-                        .filter(
-                          (item) =>
-                            canSelect(item) ||
-                            sameRef(item, profile.routes[role]) ||
-                            sameRef(item, value.routes[role])
-                        )
-                        .map((item) => (
-                          <option
-                            disabled={!canSelect(item) && !sameRef(item, profile.routes[role])}
-                            key={item.id}
-                            value={item.id}
-                          >
-                            {item.title} · {!canSelect(item) ? '비활성 · ' : ''}
-                            {library.connections.find((entry) => entry.id === item.connectionId)
-                              ?.title ?? '연결 확인 필요'}
-                          </option>
-                        ))}
-                    </select>
-                    {value.routes[role] &&
-                      !models.some(
-                        (item) => sameRef(item, value.routes[role]) && canSelect(item)
-                      ) && (
-                        <small role="status">
-                          모델 또는 연결이 비활성이거나 권한 확인이 필요해요. 저장된 선택은
-                          유지되지만 새 실행은 차단돼요.
-                        </small>
-                      )}
-                  </label>
-                ))}
-                <label className="check">
-                  <input
-                    aria-label="보조 이미지 표시"
-                    type="checkbox"
-                    checked={value.image}
-                    onChange={(event) => change({ ...value, image: event.target.checked })}
-                  />
-                  보조 이미지 표시
-                </label>
-                <small>
-                  이미지는 원고와 별도로 표시해요. 재사용할 연결과 모델 프리셋은 앱 설정에서
-                  관리해요. 모델과 연결의 변경은 다음 신규 생성부터 적용돼요.
-                </small>
-              </fieldset>
+              <p>
+                모든 채팅의 이후 요청에 현재 전역 모델을 사용해요. 진행 중이거나 과거의 작업은
+                바뀌지 않아요.
+              </p>
+              {(['main', 'translation', 'status', 'image'] as const).map((role, index) => (
+                <p key={role}>
+                  {['본문 모델', '번역 모델', '표시 상태 모델', '이미지 배치 모델'][index]}:{' '}
+                  {library.models.find((item) => item.id === workspace?.modelRoutes[role]?.id)
+                    ?.title ?? '미지정 또는 확인 필요'}
+                </p>
+              ))}
+              <button
+                type="button"
+                className="secondary"
+                onClick={() => onGlobalSettings('models')}
+              >
+                전역 모델 설정
+              </button>
             </div>
           </fieldset>
         </div>
@@ -315,7 +266,7 @@ export function ProfileEditor({
         )}
         <div
           className="profile-savebar form-actions"
-          hidden={tab === 'prompts' && !dirty && !lorePending}
+          hidden={tab !== 'characters' && !dirty && !lorePending}
         >
           <button disabled={saving || !dirty || lorePending}>
             {saving ? '저장 중…' : '채팅 설정 저장'}
@@ -341,7 +292,7 @@ export function ProfileEditor({
           <span role="status">
             {status || (dirty || lorePending ? '저장하지 않은 변경이 있어요.' : '')}
           </span>
-          {(dirty || lorePending) && <small>인물·자료·모델의 변경 사항을 함께 저장해요.</small>}
+          {(dirty || lorePending) && <small>인물·자료의 변경 사항을 함께 저장해요.</small>}
         </div>
         {tab === 'prompts' && !dirty && !lorePending && status && <p role="status">{status}</p>}
       </form>

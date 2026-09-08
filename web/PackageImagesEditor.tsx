@@ -127,7 +127,7 @@ export function PackageImagesEditor({ value, onChange, onDirtyChange }: Props) {
   return (
     <section className="package-images" aria-label="자료 이미지">
       <p className="muted">
-        이미지를 올리고 알아보기 쉬운 이름을 붙여요. 이미지 선택 모델이 이름과 선택적 설명을 읽고
+        이미지를 올리고 알아보기 쉬운 이름을 붙여요. 이미지 배치 모델이 이름과 선택적 설명을 읽고
         원문의 적절한 위치를 골라요. 봇·페르소나·모듈로 사용할 때 같은 이미지를 쓸 수 있어요.
       </p>
       <div className="package-images-toolbar">

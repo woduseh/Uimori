@@ -1,3 +1,4 @@
+import { updateTestProfile } from './fixtures/model-workspace.js';
 import { createFixtureChat, fixtureBotInput } from './fixtures/chat.js';
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
@@ -322,7 +323,7 @@ test('archive cannot resurrect an evicted read when a later policy provides more
     maxRetainedEntries: 1,
     maxPinnedChars: 200000,
   };
-  store.product.updateProfile(chat.id, {
+  updateTestProfile(store.product, chat.id, {
     ...body,
     expectedRevision: revision,
     attachments: [
@@ -342,7 +343,7 @@ test('archive cannot resurrect an evicted read when a later policy provides more
     revision: currentRevision,
     ...current
   } = store.product.profile(chat.id);
-  store.product.updateProfile(chat.id, {
+  updateTestProfile(store.product, chat.id, {
     ...current,
     expectedRevision: currentRevision,
     loreContext: { ...policy, maxRetainedEntries: 2 },

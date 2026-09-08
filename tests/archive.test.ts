@@ -1,3 +1,4 @@
+import { updateTestProfile } from './fixtures/model-workspace.js';
 import { createFixtureChat } from './fixtures/chat.js';
 import { afterEach, describe, expect, test } from 'vitest';
 import { mkdtemp, rm } from 'node:fs/promises';
@@ -77,10 +78,10 @@ async function prepared() {
     relatedIds: [],
   }) as Content;
   const profile = store.product.profile(a.id);
-  store.product.updateProfile(a.id, {
+  updateTestProfile(store.product, a.id, {
     expectedRevision: profile.revision,
     attachments: [{ id: lore.id, revision: lore.revision }],
-    personaReference: profile.personaReference,
+
     routes: profile.routes,
     image: false,
   });
@@ -121,6 +122,24 @@ async function prepared() {
 }
 
 describe('M1 archive trust boundaries in a fresh file SQLite database', () => {
+  test('v14 archives preserve the retired issue column without exposing a run control', async () => {
+    const original = await prepared();
+    const runId = original.archive.tables.runs[0].id;
+    original.store.db
+      .prepare('UPDATE runs SET issue=? WHERE id=?')
+      .run('historical-issue-marker', runId);
+    const archive = original.store.product.export();
+    expect(archive.tables.runs.find((row) => row.id === runId)?.issue).toBe(
+      'historical-issue-marker'
+    );
+    const target = await database();
+    expect(target.product.import(archive)).toEqual({ restored: true, chats: 2 });
+    expect(target.product.export().tables.runs.find((row) => row.id === runId)?.issue).toBe(
+      'historical-issue-marker'
+    );
+    expect(target.run(runId)).not.toHaveProperty('issue');
+  });
+
   test('P11 restores complete plain translation text and normalizes asset URLs without mutating input', async () => {
     const original = await prepared();
     const archive = structuredClone(original.archive);

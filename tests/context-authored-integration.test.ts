@@ -1,3 +1,4 @@
+import { updateTestProfile } from './fixtures/model-workspace.js';
 import { createFixtureChat } from './fixtures/chat.js';
 import { afterEach, expect, test } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
@@ -151,7 +152,7 @@ test('real authored start and ordinary turns retain host provenance through comp
     temperature: null,
   }) as ModelPreset;
   const { chatId: _chatId, revision, ...profile } = store.product.profile(chat.id);
-  const saved = store.product.updateProfile(chat.id, {
+  const saved = updateTestProfile(store.product, chat.id, {
     ...profile,
     expectedRevision: revision,
     routes: { ...profile.routes, main: { id: model.id } },

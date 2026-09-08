@@ -1,3 +1,4 @@
+import { updateTestProfile } from './fixtures/model-workspace.js';
 import { afterEach, expect, test } from 'vitest';
 import { mkdtemp, readdir, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -127,10 +128,10 @@ test('invalid and stale order anchors roll back every position and revision', as
 });
 function attach(store: Store, chatId: string, attachments: { id: string; revision: number }[]) {
   const p = store.product.profile(chatId);
-  return store.product.updateProfile(chatId, {
+  return updateTestProfile(store.product, chatId, {
     expectedRevision: p.revision,
     attachments,
-    personaReference: p.personaReference,
+
     routes: p.routes,
     image: p.image,
   });

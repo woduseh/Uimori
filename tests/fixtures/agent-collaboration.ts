@@ -244,7 +244,7 @@ export async function fixture(
     {
       expectedRevision: prior.revision,
       attachments: [ref(lore)],
-      personaReference: prior.personaReference,
+
       routes: { main: { id: mainModel.id }, translation: null, status: null, image: null },
       image: false,
     },

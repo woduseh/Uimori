@@ -1,3 +1,4 @@
+import { historicalPersonaExcluded } from './persona-scope.js';
 import { createHash } from 'node:crypto';
 import type { ModelInput, Resource, RunSnapshot, ToolEvent, Usage } from './types.js';
 import { executeStoryRead, STORY_READ_NAMES } from './story-context.js';
@@ -39,8 +40,7 @@ function collectRoleResources(
     (item) =>
       item.chatId === snapshot.chatId &&
       !(snapshot.profile?.packageAttachments?.length && item.id.startsWith('package:')) &&
-      (role !== 'main' ||
-        !(item.sourceKind === 'persona' && snapshot.profile?.personaReference === false))
+      !historicalPersonaExcluded(snapshot.profile, item.sourceKind, role)
   );
   if (role === 'translation') {
     const ids = new Set(resources.map((item) => item.id));
@@ -123,7 +123,7 @@ export function buildMainInput(
   };
   if (snapshot.profile) {
     const contents = snapshot.profile.contents.filter(
-      (item) => !(item.kind === 'persona' && snapshot.profile!.personaReference === false)
+      (item) => !historicalPersonaExcluded(snapshot.profile, item.kind)
     );
     const pinned = contents.filter(
       (item) => item.loading === 'pinned' || ['bot', 'persona'].includes(item.kind)

@@ -1,3 +1,4 @@
+import { updateTestProfile } from './fixtures/model-workspace.js';
 import { promptWorkspace, updatePromptWorkspace } from '../server/prompt-workspace.js';
 import { createFixtureChat, injectWithFixtureBot } from './fixtures/chat.js';
 import { afterEach, expect, test } from 'vitest';
@@ -121,10 +122,10 @@ function fixture() {
     },
   }) as PromptPreset;
   const profile = store.product.profile(chat.id);
-  store.product.updateProfile(chat.id, {
+  updateTestProfile(store.product, chat.id, {
     expectedRevision: profile.revision,
     attachments: profile.attachments,
-    personaReference: profile.personaReference,
+
     routes: profile.routes,
     image: profile.image,
   });

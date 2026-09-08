@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import type {
   CurrentPrompt,
+  ModelWorkspace,
   PromptPreset,
   PromptRole,
   PromptWorkspace,
@@ -11,6 +12,7 @@ import { createDefaultPromptProgram } from '../core/prompt-defaults.js';
 import { DEFAULT_MAIN_PROMPT, DEFAULT_TRANSLATION_PROMPT } from '../core/prompts.js';
 import { resolvePromptValues, validatePromptProgram } from '../core/prompt-program.js';
 import { fields, HttpError, number, record, text } from './request-validation.js';
+import { assertModelSelection } from './provider-selection.js';
 import type { Store } from './store.js';
 
 const roles = ['main', 'translation'] as const;
@@ -34,7 +36,7 @@ export function validateCurrentPrompt(value: unknown, role: PromptRole): Current
 
 export function validatePromptWorkspace(value: unknown): PromptWorkspace {
   const b = record(value);
-  fields(b, ['revision', 'main', 'translation', 'translationPolicy']);
+  fields(b, ['revision', 'main', 'translation', 'translationPolicy', 'modelRoutes']);
   const policy = record(b.translationPolicy);
   fields(policy, ['refusalModel', 'maxRetries', 'maxCalls']);
   let refusalModel = null;
@@ -45,6 +47,9 @@ export function validatePromptWorkspace(value: unknown): PromptWorkspace {
   }
   return {
     revision: number(b.revision, 'prompt workspace revision'),
+    modelRoutes: validateModelRoutes(
+      Object.hasOwn(b, 'modelRoutes') ? b.modelRoutes : emptyModelRoutes()
+    ),
     main: validateCurrentPrompt(b.main, 'main'),
     translation: validateCurrentPrompt(b.translation, 'translation'),
     translationPolicy: {
@@ -58,6 +63,7 @@ export function validatePromptWorkspace(value: unknown): PromptWorkspace {
 export function defaultPromptWorkspace(): PromptWorkspace {
   return {
     revision: 1,
+    modelRoutes: emptyModelRoutes(),
     main: {
       title: '현재 작문 프롬프트',
       program: createDefaultPromptProgram(DEFAULT_MAIN_PROMPT),
@@ -76,7 +82,62 @@ export function promptWorkspace(store: Store): PromptWorkspace {
   const row = store.db.prepare('SELECT body FROM prompt_workspace WHERE id=1').get() as {
     body: string;
   };
-  return JSON.parse(row.body) as PromptWorkspace;
+  const saved = JSON.parse(row.body) as PromptWorkspace;
+  return {
+    ...saved,
+    modelRoutes: Object.hasOwn(saved, 'modelRoutes')
+      ? validateModelRoutes(saved.modelRoutes)
+      : emptyModelRoutes(),
+  };
+}
+
+export function emptyModelRoutes(): ModelWorkspace['routes'] {
+  return { main: null, translation: null, status: null, image: null };
+}
+function validateModelRoutes(value: unknown): ModelWorkspace['routes'] {
+  const input = record(value);
+  fields(input, ['main', 'translation', 'status', 'image']);
+  return Object.fromEntries(
+    Object.keys(emptyModelRoutes()).map((role) => {
+      if (input[role] === null) return [role, null];
+      const ref = record(input[role]);
+      fields(ref, ['id']);
+      return [role, { id: text(ref.id, 'model ID', 100) }];
+    })
+  ) as ModelWorkspace['routes'];
+}
+export function modelWorkspace(store: Store): ModelWorkspace {
+  const current = promptWorkspace(store);
+  return {
+    revision: current.revision,
+    routes: current.modelRoutes,
+    translationPolicy: current.translationPolicy,
+  };
+}
+export function updateModelWorkspace(store: Store, value: unknown): ModelWorkspace {
+  const input = record(value);
+  fields(input, ['expectedRevision', 'routes', 'translationPolicy']);
+  return store.transaction(() => {
+    const prior = promptWorkspace(store);
+    if (prior.revision !== number(input.expectedRevision, 'model workspace revision'))
+      throw new HttpError(409, '전역 설정이 변경됐어요. 새로고침한 뒤 저장해 주세요.');
+    const next = validatePromptWorkspace({
+      ...prior,
+      modelRoutes: validateModelRoutes(input.routes),
+      translationPolicy: input.translationPolicy,
+      revision: prior.revision + 1,
+    });
+    for (const role of Object.keys(emptyModelRoutes()) as (keyof ModelWorkspace['routes'])[])
+      assertModelSelection(store.product, next.modelRoutes[role], prior.modelRoutes[role]);
+    assertModelSelection(
+      store.product,
+      next.translationPolicy.refusalModel,
+      prior.translationPolicy.refusalModel
+    );
+    store.db.prepare('UPDATE prompt_workspace SET body=? WHERE id=1').run(JSON.stringify(next));
+    for (const chat of store.chats()) store.event(chat.id, 'prompt-workspace.updated', chat.id);
+    return modelWorkspace(store);
+  });
 }
 
 export function updatePromptWorkspace(store: Store, value: unknown): PromptWorkspace {
@@ -139,10 +200,22 @@ export function freezeCurrentPrompts(
   return { prompts, promptPresets, promptControls, promptWorkspaceRevision: workspace.revision };
 }
 
-export function promptWorkspaceRoutes(app: FastifyInstance, store: Store) {
+export function promptWorkspaceRoutes(
+  app: FastifyInstance,
+  store: Store,
+  publish: (chatId: string) => void
+) {
+  const publishResult = <T>(result: T): T => {
+    for (const chat of store.chats()) publish(chat.id);
+    return result;
+  };
+  app.get('/api/model-workspace', async () => modelWorkspace(store));
+  app.put('/api/model-workspace', async (request) =>
+    publishResult(updateModelWorkspace(store, request.body))
+  );
   app.get('/api/prompt-workspace', async () => promptWorkspace(store));
   app.put('/api/prompt-workspace', { bodyLimit: 2_000_000 }, async (request) =>
-    updatePromptWorkspace(store, request.body)
+    publishResult(updatePromptWorkspace(store, request.body))
   );
   app.post('/api/prompt-workspace/apply', async (request) => {
     const b = record(request.body);
@@ -154,10 +227,12 @@ export function promptWorkspaceRoutes(app: FastifyInstance, store: Store) {
       text(b.presetId, 'preset', 100)
     );
     if (preset.role !== role) throw new HttpError(400, 'Prompt role mismatch');
-    return updatePromptWorkspace(store, {
-      expectedRevision: b.expectedRevision,
-      [role]: { title: preset.title, program: preset.program, values: preset.values ?? {} },
-    });
+    return publishResult(
+      updatePromptWorkspace(store, {
+        expectedRevision: b.expectedRevision,
+        [role]: { title: preset.title, program: preset.program, values: preset.values ?? {} },
+      })
+    );
   });
   app.post('/api/prompt-workspace/apply-options', async (request) => {
     const b = record(request.body);
@@ -173,9 +248,11 @@ export function promptWorkspaceRoutes(app: FastifyInstance, store: Store) {
     );
     if (preset.role !== role) throw new HttpError(400, 'Prompt role mismatch');
     const current = promptWorkspace(store)[role];
-    return updatePromptWorkspace(store, {
-      expectedRevision: b.expectedRevision,
-      [role]: { ...current, values: preset.values },
-    });
+    return publishResult(
+      updatePromptWorkspace(store, {
+        expectedRevision: b.expectedRevision,
+        [role]: { ...current, values: preset.values },
+      })
+    );
   });
 }

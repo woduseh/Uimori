@@ -24,11 +24,9 @@
   margin: 0;
   font-size: 13px;
 }
-.new-story-main-model label,
 .new-story-options-content > label {
   min-width: 0;
 }
-.new-story-main-model select,
 .new-story-options-content select {
   width: 100%;
 }

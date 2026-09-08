@@ -219,7 +219,7 @@
   background: var(--hover);
   color: var(--text);
 }
-.bot-navigation .bot-row-actions > .delete-control > .delete-button:hover {
+.bot-navigation .bot-row-actions > .delete-control > .delete-button {
   color: var(--danger, #e88b8b);
 }
 .bot-row-actions .delete-control {
@@ -256,6 +256,8 @@
 }
 .bot-chat-item .chat-link {
   display: flex;
+  flex-direction: row;
+  align-items: center;
   flex: 1;
   width: auto;
   min-width: 0;
@@ -364,6 +366,12 @@
 }
 .bot-chat-menu > strong {
   overflow-wrap: anywhere;
+}
+.bot-chat-menu > button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
 }
 @media (hover: none), (pointer: coarse) {
   .bot-row-actions {

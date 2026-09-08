@@ -392,17 +392,16 @@ input[type="checkbox"] {
   gap: 1px;
   align-items: center;
 }
-/* Header model chip: the current main model is always visible and opens the model menu. */
+/* Current global main model opens application-wide role settings. */
 .model-chip {
   display: inline-flex;
   min-width: 0;
   max-width: 220px;
   margin-right: 6px;
 }
-.model-chip select {
-  width: 100%;
-  min-height: 36px;
-  padding: 4px 26px 4px 12px;
+.model-chip {
+  min-height: 44px;
+  padding: 4px 12px;
   border: 1px solid var(--line);
   border-radius: 18px;
   background-color: var(--panel);
@@ -411,7 +410,12 @@ input[type="checkbox"] {
   text-overflow: ellipsis;
   cursor: pointer;
 }
-.model-chip select:hover:not(:disabled) {
+.model-chip > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.model-chip:hover:not(:disabled) {
   border-color: var(--accent);
 }
 .chat-menu > .action-menu-body {
@@ -1190,7 +1194,7 @@ input[type="checkbox"] {
     max-width: 128px;
     margin-right: 2px;
   }
-  .model-chip select {
+  .model-chip {
     min-height: 44px;
     font-size: 11px;
     padding: 4px 22px 4px 10px;

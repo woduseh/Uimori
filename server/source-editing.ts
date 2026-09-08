@@ -1,5 +1,6 @@
 import { HttpError, fields, number, record, text } from './request-validation.js';
 import { translationPolicy } from '../core/translation-settings.js';
+import { automaticImageSelection, invalidateTranslationImages } from './package-images.js';
 import { promptWorkspace } from './prompt-workspace.js';
 import { createHash, randomUUID } from 'node:crypto';
 import type { Store, Source, Job } from './store.js';
@@ -98,18 +99,30 @@ export function requestTranslation(
         }
       }
     }
-    const profile = store.product.profile(source.chatId);
     const workspace = promptWorkspace(store);
-    const selected = profile.routes.translation;
+    const selected = workspace.modelRoutes.translation;
     const refusal = workspace.translationPolicy.refusalModel;
+    const profile = store.product.snapshot(source.chatId, 'translation');
+    const automatic = profile?.imageTranslation !== false;
+    const selection = automatic
+      ? automaticImageSelection(store, {
+          ...store.run(source.runId).snapshot,
+          ...(profile ? { profile } : {}),
+        })
+      : undefined;
     const input = {
+      ...(selection ? { translationImageSelection: selection } : {}),
       translationPrompt: structuredClone(workspace.translation),
       promptWorkspaceRevision: workspace.revision,
       translationModelSelection: selected,
-      ...(selected ? { translationModelSnapshot: store.product.modelSnapshot(selected.id) } : {}),
+      ...(selected
+        ? { translationModelSnapshot: store.product.modelSnapshot(selected.id, 'translation') }
+        : {}),
       translationPolicy: translationPolicy({
         ...workspace.translationPolicy,
-        refusalModel: refusal ? store.product.modelSnapshot(refusal.id) : null,
+        refusalModel: refusal
+          ? store.product.modelSnapshot(refusal.id, 'translation-refusal')
+          : null,
       }),
     };
     store.product.resolveJobPrompt(store.run(source.runId).snapshot, input);
@@ -158,11 +171,12 @@ export function requestStatus(
         .get(id)
     )
       throw new HttpError(409, 'Status job is already active');
-    const profile = store.product.profile(source.chatId);
-    const selected = profile.routes.status;
+    const selected = promptWorkspace(store).modelRoutes.status;
     const input = {
       statusModelSelection: selected,
-      ...(selected ? { statusModelSnapshot: store.product.modelSnapshot(selected.id) } : {}),
+      ...(selected
+        ? { statusModelSnapshot: store.product.modelSnapshot(selected.id, 'status') }
+        : {}),
     };
     store.product.resolveJobPrompt(store.run(source.runId).snapshot, input);
     const jobId = randomUUID();
@@ -198,6 +212,7 @@ export function editTranslation(store: Store, id: string, value: unknown): Job {
     if (source.hash !== b.expectedSourceHash || (latest?.revision ?? 0) !== expected)
       throw new HttpError(409, 'Translation revision conflict');
     stopTranslations(store, id);
+    invalidateTranslationImages(store, id);
     const jobId = randomUUID();
     const time = new Date().toISOString();
     store.db

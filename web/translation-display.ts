@@ -22,6 +22,7 @@ export function displayTranslationJob(
             revision: job.previousResult.revision,
             status: 'completed' as const,
             result: job.previousResult.result,
+            translationLayout: job.previousResult.translationLayout,
           }
         : undefined;
   return displayed?.result?.sourceRevision === source.id &&

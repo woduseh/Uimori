@@ -1,3 +1,4 @@
+import { updateTestProfile } from './fixtures/model-workspace.js';
 import { injectWithFixtureBot, createFixtureChat } from './fixtures/chat.js';
 import { afterEach, describe, expect, test, vi } from 'vitest';
 import { mkdtemp, rm } from 'node:fs/promises';
@@ -272,10 +273,10 @@ describe('Vertex connection and model settings with file SQLite', () => {
     );
     const chat = createFixtureChat(source.store, 'Synthetic Vertex snapshot');
     const initial = product.profile(chat.id);
-    const profile = product.updateProfile(chat.id, {
+    const profile = updateTestProfile(product, chat.id, {
       expectedRevision: initial.revision,
       attachments: [],
-      personaReference: initial.personaReference,
+
       routes: { main: ref(model), translation: ref(model), status: ref(oldModel), image: null },
       image: false,
     });

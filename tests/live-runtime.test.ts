@@ -1,3 +1,4 @@
+import { updateTestProfile } from './fixtures/model-workspace.js';
 import { fixtureBotInput } from './fixtures/chat.js';
 import { afterEach, expect, test, vi } from 'vitest';
 import { mkdtemp, rm } from 'node:fs/promises';
@@ -99,10 +100,10 @@ for (const observed of [
       temperature: null,
     }) as ModelPreset;
     const originalProfile = app.store.product.profile(chat.id);
-    const profile = app.store.product.updateProfile(chat.id, {
+    const profile = updateTestProfile(app.store.product, chat.id, {
       expectedRevision: originalProfile.revision,
       attachments: [],
-      personaReference: originalProfile.personaReference,
+
       routes: { ...originalProfile.routes, main: { id: model.id } },
       image: false,
     });
