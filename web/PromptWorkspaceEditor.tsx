@@ -1,4 +1,9 @@
-import { useEffect, useRef, useState } from 'react';
+import { Save, Copy, RotateCcw } from 'lucide-react';
+import { IconButton } from './IconButton.js';
+import { ActionMenu } from './ActionMenu.js';
+import './prompt-editor.css';
+import { DismissibleError } from './DismissibleError.js';
+import { useEffect, useId, useRef, useState } from 'react';
 import type { Library, PromptRole, PromptWorkspace } from '../core/product.js';
 import { api } from './api.js';
 import { usePromptWorkspace } from './usePromptWorkspace.js';
@@ -8,18 +13,17 @@ import { AgentCollaborationEditor } from './AgentCollaborationEditor.js';
 export function PromptWorkspaceEditor({
   library,
   reload,
-  onError,
   onDirtyChange,
   chatId,
   branchId,
 }: {
   library: Library;
   reload?: () => Promise<void>;
-  onError: (error: string) => void;
   onDirtyChange?: (dirty: boolean) => void;
   chatId?: string;
   branchId?: string;
 }) {
+  const saveTooltipId = useId();
   const { workspace, error, refresh } = usePromptWorkspace();
   const [draft, setDraft] = useState<PromptWorkspace | null>(null);
   const [role, setRole] = useState<PromptRole>('main');
@@ -45,10 +49,8 @@ export function PromptWorkspaceEditor({
     setSaveError('');
     try {
       await action();
-      onError('');
     } catch (caught) {
       setSaveError((caught as Error).message);
-      onError((caught as Error).message);
     } finally {
       lock.current = false;
       setBusy(false);
@@ -75,7 +77,7 @@ export function PromptWorkspaceEditor({
       <p>
         현재 프롬프트는 모든 채팅의 다음 요청에 사용해요. 프리셋을 불러오면 내용과 옵션을 복사해요.
       </p>
-      <fieldset disabled={busy}>
+      <fieldset className="prompt-editor-fields" disabled={busy}>
         <label>
           역할
           <select
@@ -147,7 +149,6 @@ export function PromptWorkspaceEditor({
             await reload?.();
           }}
           onChange={(program) => edit({ ...draft, [role]: { ...current, program } })}
-          onError={onError}
         />
         {role === 'main' && (
           <AgentCollaborationEditor
@@ -231,62 +232,70 @@ export function PromptWorkspaceEditor({
             </label>
           </fieldset>
         )}
-        <div className="form-actions">
-          <button
-            type="button"
-            disabled={!dirty || pending || conflict}
-            onClick={() =>
-              void work(async () => {
-                const accepted = await api<PromptWorkspace>(
-                  '/prompt-workspace',
-                  {
-                    expectedRevision: draft.revision,
-                    main: draft.main,
-                    translation: draft.translation,
-                    translationPolicy: draft.translationPolicy,
-                  },
-                  'PUT'
-                );
-                setDraft(accepted);
+        <div className="form-actions prompt-workspace-actions">
+          <span className="prompt-save-control">
+            <IconButton
+              label="현재 설정 저장"
+              icon={Save}
+              title=""
+              aria-describedby={saveTooltipId}
+              disabled={!dirty || pending || conflict}
+              onClick={() =>
+                void work(async () => {
+                  const accepted = await api<PromptWorkspace>(
+                    '/prompt-workspace',
+                    {
+                      expectedRevision: draft.revision,
+                      main: draft.main,
+                      translation: draft.translation,
+                      translationPolicy: draft.translationPolicy,
+                    },
+                    'PUT'
+                  );
+                  setDraft(accepted);
+                  setDirty(false);
+                  setEditorVersion((value) => value + 1);
+                  await refresh();
+                  setMessage('현재 프롬프트와 옵션을 저장했어요.');
+                })
+              }
+            />
+            <span id={saveTooltipId} className="prompt-save-tooltip" role="tooltip">
+              현재 설정 저장
+            </span>
+          </span>
+          <ActionMenu label="현재 프롬프트 저장 메뉴" placement="top">
+            <button
+              type="button"
+              disabled={pending || !current.title.trim()}
+              onClick={() =>
+                void work(async () => {
+                  await api('/prompt-presets', {
+                    role,
+                    title: current.title,
+                    program: current.program,
+                    values: current.values,
+                  });
+                  await reload?.();
+                  setMessage('독립된 프리셋으로 저장했어요.');
+                })
+              }
+            >
+              <Copy size={18} aria-hidden="true" /> 새 프리셋으로 저장
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setDraft(workspace);
                 setDirty(false);
+                setPending(false);
                 setEditorVersion((value) => value + 1);
-                await refresh();
-                setMessage('현재 프롬프트와 옵션을 저장했어요.');
-              })
-            }
-          >
-            현재 설정 저장
-          </button>
-          <button
-            type="button"
-            disabled={pending || !current.title.trim()}
-            onClick={() =>
-              void work(async () => {
-                await api('/prompt-presets', {
-                  role,
-                  title: current.title,
-                  program: current.program,
-                  values: current.values,
-                });
-                await reload?.();
-                setMessage('독립된 프리셋으로 저장했어요.');
-              })
-            }
-          >
-            현재 내용을 새 프리셋으로 저장
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              setDraft(workspace);
-              setDirty(false);
-              setPending(false);
-              setEditorVersion((value) => value + 1);
-              void refresh();
-            }}
-          >
-            저장된 설정 다시 불러오기
-          </button>
+                void refresh();
+              }}
+            >
+              <RotateCcw size={18} aria-hidden="true" /> 저장본으로 되돌리기
+            </button>
+          </ActionMenu>
         </div>
       </fieldset>
       {conflict && dirty && (
@@ -295,7 +304,10 @@ export function PromptWorkspaceEditor({
           적용해 주세요.
         </p>
       )}
-      {saveError && <p role="alert">{saveError} 초안은 유지했어요.</p>}
+      <DismissibleError
+        message={saveError ? `${saveError} 초안은 유지했어요.` : ''}
+        onDismiss={() => setSaveError('')}
+      />
       <p role="status">{message || error}</p>
     </section>
   );

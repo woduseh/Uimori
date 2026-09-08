@@ -86,7 +86,8 @@ export function DeleteButton({
         disabled={disabled || busy}
         onClick={() => void open()}
       >
-        {iconOnly ? <Trash2 size={14} aria-hidden="true" /> : label}
+        <Trash2 size={iconOnly ? 14 : 18} aria-hidden="true" />
+        {!iconOnly && <span>{label}</span>}
       </button>
       {!target && error && (
         <span className="error" role="alert">

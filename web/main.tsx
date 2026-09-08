@@ -1,3 +1,4 @@
+import { DismissibleError } from './DismissibleError.js';
 import { ComposerMore, LoreResetChip } from './ComposerMore.js';
 import { IconButton } from './IconButton.js';
 import { ActionMenu } from './ActionMenu.js';
@@ -192,6 +193,14 @@ function App() {
   const [initialModules, setInitialModules] = useState<Content[]>([]);
   const [moduleToUse, setModuleToUse] = useState<Content | null>(null);
   const [libraryTab, setLibraryTab] = useState<'bot' | 'persona' | 'module' | 'prompts'>('bot');
+  const errorScope = `${s.destination}:${libraryTab}:${s.viewKey}`;
+  const previousErrorScope = useRef(errorScope);
+  useEffect(() => {
+    if (previousErrorScope.current !== errorScope) {
+      previousErrorScope.current = errorScope;
+      s.setError('');
+    }
+  }, [errorScope, s.setError]);
   const [newKey, setNewKey] = useState(0);
   const [focus, setFocus] = useState(false);
   const [inspectedRun, setInspectedRun] = useState('');
@@ -660,11 +669,7 @@ function App() {
                 onDirtyChange={setLibraryDirty}
               />
             )}
-            {s.error && (
-              <p className="error" role="alert">
-                {s.error}
-              </p>
-            )}
+            <DismissibleError message={s.error} onDismiss={() => s.setError('')} />
           </div>
         ) : (
           <>
@@ -921,11 +926,7 @@ function App() {
                     </button>
                   </div>
                 )}
-                {s.error && (
-                  <div className="error" role="alert">
-                    {s.error}
-                  </div>
-                )}
+                <DismissibleError message={s.error} onDismiss={() => s.setError('')} />
                 {s.forkOrigin && s.forkOrigin.forkId === s.selected && (
                   <p className="composer-status fork-notice" role="status">
                     <span>「{s.forkOrigin.title}」에서 복사한 새 채팅이에요.</span>
@@ -1260,11 +1261,7 @@ function App() {
             >
               이 모듈로 새 채팅
             </button>
-            {s.error && (
-              <p className="error" role="alert">
-                {s.error}
-              </p>
-            )}
+            <DismissibleError message={s.error} onDismiss={() => s.setError('')} />
           </>
         )}
       </Dialog>

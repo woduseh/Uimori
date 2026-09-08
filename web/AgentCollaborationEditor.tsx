@@ -94,291 +94,303 @@ export function AgentCollaborationEditor({ value, controls, models, onChange }: 
 
   return (
     <section className="agent-collaboration" aria-labelledby={`${id}-heading`}>
-      <div className="ac-heading">
-        <div>
-          <h3 id={`${id}-heading`}>에이전트 협업</h3>
-          <p id={`${id}-description`} className="muted">
-            에이전트가 인물이나 설정에 관한 의견을 제안하고, 메인이 최종 문장을 써요.
-          </p>
-        </div>
-        <label className="ac-check ac-enable">
-          <input
-            type="checkbox"
-            role="switch"
-            checked={collaboration.enabled}
-            aria-describedby={`${id}-description`}
-            onChange={(event) => update({ enabled: event.target.checked })}
-          />
-          협업 사용
-        </label>
-      </div>
-      {!collaboration.enabled && (
-        <p className="muted">
-          {collaboration.agents.length
-            ? '협업을 꺼 두었어요. 아래 설정은 보관돼요.'
-            : '기본은 꺼져 있어요. 켠 뒤 함께할 에이전트를 골라 주세요.'}
-        </p>
-      )}
-      {(collaboration.enabled || value !== undefined) && (
-        <div className="ac-settings">
-          <label className="ac-field ac-budget">
-            전체 추가 호출 한도
-            <input
-              type="number"
-              min={1}
-              max={12}
-              step={1}
-              value={collaboration.maxCalls || ''}
-              aria-describedby={`${id}-budget-note`}
-              aria-label="전체 추가 호출 한도"
-              onChange={(event) => update({ maxCalls: Number(event.target.value) })}
-            />
-            <small id={`${id}-budget-note`} className="muted">
-              모든 에이전트가 나눠 쓰는 한도예요. 채팅의 전체 호출 한도에도 포함돼요.
-            </small>
-          </label>
-          <label className="ac-field">
-            함께 따를 지침
-            <textarea
-              rows={4}
-              maxLength={30_000}
-              value={collaboration.sharedInstructions}
-              placeholder="모든 에이전트가 함께 고려할 창작 방향을 적어 주세요."
-              onChange={(event) => update({ sharedInstructions: event.target.value })}
-            />
-          </label>
-          <fieldset className="ac-options">
-            <legend>공유할 프롬프트 옵션</legend>
-            <p className="muted">선택한 옵션의 현재 값을 에이전트에게 알려 줘요.</p>
-            {controls.length || missingControls.length ? (
-              <div className="ac-checks">
-                {controls.map((control) => (
-                  <label className="ac-check" key={control.id}>
-                    <input
-                      type="checkbox"
-                      checked={collaboration.sharedControls.includes(control.id)}
-                      disabled={
-                        collaboration.sharedControls.length >= 64 &&
-                        !collaboration.sharedControls.includes(control.id)
-                      }
-                      onChange={(event) => setSharedControl(control.id, event.target.checked)}
-                    />
-                    <span>{control.label}</span>
-                  </label>
-                ))}
-                {missingControls.map((controlId, index) => (
-                  <label className="ac-check" key={controlId}>
-                    <input
-                      type="checkbox"
-                      checked
-                      onChange={() => setSharedControl(controlId, false)}
-                    />
-                    <span>삭제된 옵션 {index + 1} · 선택을 해제해 주세요.</span>
-                  </label>
-                ))}
-              </div>
-            ) : (
-              <p className="muted">이 프롬프트에는 아직 공유할 옵션이 없어요.</p>
-            )}
-          </fieldset>
-          <div className="ac-add">
-            <div className="ac-heading">
-              <h4>함께할 에이전트</h4>
-              <span className="muted">{collaboration.agents.length} / 6명</span>
+      <details className="pc-composer-fold" open>
+        <summary>
+          <strong id={`${id}-heading`}>에이전트 협업</strong>
+          <small>{collaboration.enabled ? '사용 중' : '사용 안 함'}</small>
+        </summary>
+        <div className="ac-content">
+          <div className="ac-heading">
+            <div>
+              <p id={`${id}-description`} className="muted">
+                에이전트가 인물이나 설정에 관한 의견을 제안하고, 메인이 최종 문장을 써요.
+              </p>
             </div>
-            <p className="muted">템플릿으로 시작한 뒤 이름과 지침을 자유롭게 바꿀 수 있어요.</p>
-            <div className="ac-templates">
-              {templates.map((template) => (
-                <button
-                  type="button"
-                  className="secondary"
-                  key={template.kind}
-                  disabled={collaboration.agents.length >= 6}
-                  aria-label={`${template.title} 에이전트 추가`}
-                  onClick={() => {
-                    if (collaboration.agents.length >= 6) return;
-                    update({
-                      agents: [
-                        ...collaboration.agents,
-                        createAgentDefinition(template.kind, `agent-${crypto.randomUUID()}`),
-                      ],
-                    });
-                  }}
-                >
-                  <strong>{template.title}</strong>
-                  <span>{template.description}</span>
-                </button>
-              ))}
-            </div>
+            <label className="ac-check ac-enable">
+              <input
+                type="checkbox"
+                role="switch"
+                checked={collaboration.enabled}
+                aria-describedby={`${id}-description`}
+                onChange={(event) => update({ enabled: event.target.checked })}
+              />
+              협업 사용
+            </label>
           </div>
-          {issue && (
-            <p className="ac-validation" role="status">
-              {issue}
+          {!collaboration.enabled && (
+            <p className="muted">
+              {collaboration.agents.length
+                ? '협업을 꺼 두었어요. 설정은 보관돼요. 다시 켜면 이어서 편집할 수 있어요.'
+                : '기본은 꺼져 있어요. 켠 뒤 함께할 에이전트를 골라 주세요.'}
             </p>
           )}
-          <div className="ac-agents">
-            {collaboration.agents.map((agent, index) => {
-              const agentLabel = `${index + 1}번째 에이전트`;
-              const availableModel =
-                !agent.model || models.some((model) => model.id === agent.model?.id);
-              return (
-                <details className="ac-agent" key={agent.id} open>
-                  <summary>
-                    <strong>{agent.title || agentLabel}</strong>
-                    <span className="muted">
-                      {agent.trigger === 'before' ? '작성 전' : '메인이 필요할 때'}
-                    </span>
-                  </summary>
-                  <div className="ac-agent-fields">
-                    <div className="ac-grid">
-                      <label className="ac-field">
-                        이름
+          {collaboration.enabled && (
+            <div className="ac-settings">
+              <label className="ac-field ac-budget">
+                전체 추가 호출 한도
+                <input
+                  type="number"
+                  min={1}
+                  max={12}
+                  step={1}
+                  value={collaboration.maxCalls || ''}
+                  aria-describedby={`${id}-budget-note`}
+                  aria-label="전체 추가 호출 한도"
+                  onChange={(event) => update({ maxCalls: Number(event.target.value) })}
+                />
+                <small id={`${id}-budget-note`} className="muted">
+                  모든 에이전트가 나눠 쓰는 한도예요. 채팅의 전체 호출 한도에도 포함돼요.
+                </small>
+              </label>
+              <label className="ac-field">
+                함께 따를 지침
+                <textarea
+                  aria-label="함께 따를 지침"
+                  rows={4}
+                  maxLength={30_000}
+                  value={collaboration.sharedInstructions}
+                  placeholder="모든 에이전트가 함께 고려할 창작 방향을 적어 주세요."
+                  onChange={(event) => update({ sharedInstructions: event.target.value })}
+                />
+              </label>
+              <fieldset className="ac-options">
+                <legend>공유할 프롬프트 옵션</legend>
+                <p className="muted">선택한 옵션의 현재 값을 에이전트에게 알려 줘요.</p>
+                {controls.length || missingControls.length ? (
+                  <div className="ac-checks">
+                    {controls.map((control) => (
+                      <label className="ac-check" key={control.id}>
                         <input
-                          aria-label={`${agentLabel} 이름`}
-                          maxLength={120}
-                          value={agent.title}
-                          onChange={(event) => updateAgent(agent.id, { title: event.target.value })}
-                        />
-                      </label>
-                      <label className="ac-field">
-                        참여 시점
-                        <select
-                          aria-label={`${agentLabel} 참여 시점`}
-                          value={agent.trigger}
-                          onChange={(event) =>
-                            updateAgent(agent.id, {
-                              trigger: event.target.value as AgentDefinition['trigger'],
-                            })
+                          type="checkbox"
+                          checked={collaboration.sharedControls.includes(control.id)}
+                          disabled={
+                            collaboration.sharedControls.length >= 64 &&
+                            !collaboration.sharedControls.includes(control.id)
                           }
-                        >
-                          <option value="before">작성 전</option>
-                          <option value="on-demand">메인이 필요할 때</option>
-                        </select>
+                          onChange={(event) => setSharedControl(control.id, event.target.checked)}
+                        />
+                        <span>{control.label}</span>
                       </label>
-                    </div>
-                    <label className="ac-field">
-                      역할 설명
-                      <input
-                        aria-label={`${agentLabel} 역할 설명`}
-                        maxLength={2000}
-                        value={agent.description}
-                        onChange={(event) =>
-                          updateAgent(agent.id, { description: event.target.value })
-                        }
-                      />
-                    </label>
-                    <label className="ac-field">
-                      지침
-                      <textarea
-                        rows={6}
-                        maxLength={30_000}
-                        aria-label={`${agentLabel} 지침`}
-                        value={agent.instructions}
-                        onChange={(event) =>
-                          updateAgent(agent.id, { instructions: event.target.value })
-                        }
-                      />
-                    </label>
-                    <label className="ac-field">
-                      모델
-                      <select
-                        aria-label={`${agentLabel} 모델`}
-                        value={agent.model?.id ?? ''}
-                        onChange={(event) =>
-                          updateAgent(agent.id, {
-                            model: event.target.value ? { id: event.target.value } : null,
-                          })
-                        }
-                      >
-                        <option value="">메인 모델을 함께 사용해요</option>
-                        {!availableModel && (
-                          <option value={agent.model!.id}>
-                            찾을 수 없는 모델 · 다시 선택해 주세요
-                          </option>
-                        )}
-                        {models.map((model) => (
-                          <option key={model.id} value={model.id}>
-                            {model.title}
-                            {model.enabled === false ? ' · 사용 중지' : ''}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                    <fieldset className="ac-options">
-                      <legend>{agentLabel}의 추가 조회</legend>
-                      <p className="muted">
-                        현재 요청과 작문에 쓰는 문맥은 함께 받아요. 필요한 내용을 더 찾아볼 조회
-                        도구를 선택해요.
-                      </p>
-                      <div className="ac-checks">
-                        {toolScopes.map((scope) => (
-                          <label className="ac-check" key={scope.id}>
+                    ))}
+                    {missingControls.map((controlId, index) => (
+                      <label className="ac-check" key={controlId}>
+                        <input
+                          type="checkbox"
+                          checked
+                          onChange={() => setSharedControl(controlId, false)}
+                        />
+                        <span>삭제된 옵션 {index + 1} · 선택을 해제해 주세요.</span>
+                      </label>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="muted">이 프롬프트에는 아직 공유할 옵션이 없어요.</p>
+                )}
+              </fieldset>
+              <div className="ac-add">
+                <div className="ac-heading">
+                  <h4>함께할 에이전트</h4>
+                  <span className="muted">{collaboration.agents.length} / 6명</span>
+                </div>
+                <p className="muted">템플릿으로 시작한 뒤 이름과 지침을 자유롭게 바꿀 수 있어요.</p>
+                <div className="ac-templates">
+                  {templates.map((template) => (
+                    <button
+                      type="button"
+                      className="secondary"
+                      key={template.kind}
+                      disabled={collaboration.agents.length >= 6}
+                      aria-label={`${template.title} 에이전트 추가`}
+                      onClick={() => {
+                        if (collaboration.agents.length >= 6) return;
+                        update({
+                          agents: [
+                            ...collaboration.agents,
+                            createAgentDefinition(template.kind, `agent-${crypto.randomUUID()}`),
+                          ],
+                        });
+                      }}
+                    >
+                      <strong>{template.title}</strong>
+                      <span>{template.description}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+              {issue && (
+                <p className="ac-validation" role="status">
+                  {issue}
+                </p>
+              )}
+              <div className="ac-agents">
+                {collaboration.agents.map((agent, index) => {
+                  const agentLabel = `${index + 1}번째 에이전트`;
+                  const availableModel =
+                    !agent.model || models.some((model) => model.id === agent.model?.id);
+                  return (
+                    <details className="ac-agent" key={agent.id} open>
+                      <summary>
+                        <strong>{agent.title || agentLabel}</strong>
+                        <span className="muted">
+                          {agent.trigger === 'before' ? '작성 전' : '메인이 필요할 때'}
+                        </span>
+                      </summary>
+                      <div className="ac-agent-fields">
+                        <div className="ac-grid">
+                          <label className="ac-field">
+                            이름
                             <input
-                              type="checkbox"
-                              aria-label={`${agentLabel} ${scope.label} 읽기`}
-                              checked={agent.tools.includes(scope.id)}
+                              aria-label={`${agentLabel} 이름`}
+                              maxLength={120}
+                              value={agent.title}
+                              onChange={(event) =>
+                                updateAgent(agent.id, { title: event.target.value })
+                              }
+                            />
+                          </label>
+                          <label className="ac-field">
+                            참여 시점
+                            <select
+                              aria-label={`${agentLabel} 참여 시점`}
+                              value={agent.trigger}
                               onChange={(event) =>
                                 updateAgent(agent.id, {
-                                  tools: event.target.checked
-                                    ? [...agent.tools, scope.id]
-                                    : agent.tools.filter((tool) => tool !== scope.id),
+                                  trigger: event.target.value as AgentDefinition['trigger'],
+                                })
+                              }
+                            >
+                              <option value="before">작성 전</option>
+                              <option value="on-demand">메인이 필요할 때</option>
+                            </select>
+                          </label>
+                        </div>
+                        <label className="ac-field">
+                          역할 설명
+                          <input
+                            aria-label={`${agentLabel} 역할 설명`}
+                            maxLength={2000}
+                            value={agent.description}
+                            onChange={(event) =>
+                              updateAgent(agent.id, { description: event.target.value })
+                            }
+                          />
+                        </label>
+                        <label className="ac-field">
+                          지침
+                          <textarea
+                            rows={6}
+                            maxLength={30_000}
+                            aria-label={`${agentLabel} 지침`}
+                            value={agent.instructions}
+                            onChange={(event) =>
+                              updateAgent(agent.id, { instructions: event.target.value })
+                            }
+                          />
+                        </label>
+                        <label className="ac-field">
+                          모델
+                          <select
+                            aria-label={`${agentLabel} 모델`}
+                            value={agent.model?.id ?? ''}
+                            onChange={(event) =>
+                              updateAgent(agent.id, {
+                                model: event.target.value ? { id: event.target.value } : null,
+                              })
+                            }
+                          >
+                            <option value="">메인 모델을 함께 사용해요</option>
+                            {!availableModel && (
+                              <option value={agent.model!.id}>
+                                찾을 수 없는 모델 · 다시 선택해 주세요
+                              </option>
+                            )}
+                            {models.map((model) => (
+                              <option key={model.id} value={model.id}>
+                                {model.title}
+                                {model.enabled === false ? ' · 사용 중지' : ''}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                        <fieldset className="ac-options">
+                          <legend>{agentLabel}의 추가 조회</legend>
+                          <p className="muted">
+                            현재 요청과 작문에 쓰는 문맥은 함께 받아요. 필요한 내용을 더 찾아볼 조회
+                            도구를 선택해요.
+                          </p>
+                          <div className="ac-checks">
+                            {toolScopes.map((scope) => (
+                              <label className="ac-check" key={scope.id}>
+                                <input
+                                  type="checkbox"
+                                  aria-label={`${agentLabel} ${scope.label} 읽기`}
+                                  checked={agent.tools.includes(scope.id)}
+                                  onChange={(event) =>
+                                    updateAgent(agent.id, {
+                                      tools: event.target.checked
+                                        ? [...agent.tools, scope.id]
+                                        : agent.tools.filter((tool) => tool !== scope.id),
+                                    })
+                                  }
+                                />
+                                {scope.label}
+                              </label>
+                            ))}
+                          </div>
+                        </fieldset>
+                        <div className="ac-grid">
+                          <label className="ac-field">
+                            호출 한도 · 1~6회
+                            <input
+                              type="number"
+                              min={1}
+                              max={6}
+                              step={1}
+                              aria-label={`${agentLabel} 호출 한도`}
+                              value={agent.maxCalls || ''}
+                              onChange={(event) =>
+                                updateAgent(agent.id, { maxCalls: Number(event.target.value) })
+                              }
+                            />
+                          </label>
+                          <label className="ac-field">
+                            메인에게 전달할 최대 길이 · 글자 수
+                            <input
+                              type="number"
+                              min={500}
+                              max={20_000}
+                              step={1}
+                              aria-label={`${agentLabel} 최대 응답 길이`}
+                              value={agent.maxOutputChars || ''}
+                              onChange={(event) =>
+                                updateAgent(agent.id, {
+                                  maxOutputChars: Number(event.target.value),
                                 })
                               }
                             />
-                            {scope.label}
                           </label>
-                        ))}
+                        </div>
+                        <div className="ac-agent-actions">
+                          <button
+                            type="button"
+                            className="secondary"
+                            aria-label={`${agentLabel} 삭제`}
+                            onClick={() =>
+                              setRemoving({ id: agent.id, title: agent.title || agentLabel })
+                            }
+                          >
+                            에이전트 삭제
+                          </button>
+                        </div>
                       </div>
-                    </fieldset>
-                    <div className="ac-grid">
-                      <label className="ac-field">
-                        호출 한도 · 1~6회
-                        <input
-                          type="number"
-                          min={1}
-                          max={6}
-                          step={1}
-                          aria-label={`${agentLabel} 호출 한도`}
-                          value={agent.maxCalls || ''}
-                          onChange={(event) =>
-                            updateAgent(agent.id, { maxCalls: Number(event.target.value) })
-                          }
-                        />
-                      </label>
-                      <label className="ac-field">
-                        메인에게 전달할 최대 길이 · 글자 수
-                        <input
-                          type="number"
-                          min={500}
-                          max={20_000}
-                          step={1}
-                          aria-label={`${agentLabel} 최대 응답 길이`}
-                          value={agent.maxOutputChars || ''}
-                          onChange={(event) =>
-                            updateAgent(agent.id, { maxOutputChars: Number(event.target.value) })
-                          }
-                        />
-                      </label>
-                    </div>
-                    <div className="ac-agent-actions">
-                      <button
-                        type="button"
-                        className="secondary"
-                        aria-label={`${agentLabel} 삭제`}
-                        onClick={() =>
-                          setRemoving({ id: agent.id, title: agent.title || agentLabel })
-                        }
-                      >
-                        에이전트 삭제
-                      </button>
-                    </div>
-                  </div>
-                </details>
-              );
-            })}
-          </div>
+                    </details>
+                  );
+                })}
+              </div>
+            </div>
+          )}
         </div>
-      )}
+      </details>
       <Dialog
         open={!!removing}
         title="에이전트 삭제 확인"

@@ -79,10 +79,24 @@ test('AGENTUI01 collaboration stays editable through incomplete drafts, undo and
   if (visualReview)
     await page.screenshot({ path: info.outputPath('agent-collaboration-mobile.png') });
   await collaboration
-    .getByRole('heading', { name: '에이전트 협업', exact: true })
+    .locator('.pc-composer-fold > summary')
     .evaluate((element) => element.scrollIntoView({ block: 'start' }));
   if (visualReview)
     await page.screenshot({ path: info.outputPath('agent-collaboration-mobile-overview.png') });
+  const sharedInstructions = collaboration.getByLabel('함께 따를 지침', { exact: true });
+  const fold = collaboration.locator('.pc-composer-fold');
+  await fold.locator(':scope > summary').click();
+  await expect(enabled).toBeHidden();
+  await fold.locator(':scope > summary').click();
+  await expect(enabled).toBeChecked();
+  await enabled.uncheck();
+  await expect(sharedInstructions).toBeHidden();
+  await expect(collaboration.getByLabel('1번째 에이전트 이름', { exact: true })).toBeHidden();
+  await enabled.check();
+  await expect(sharedInstructions).toHaveValue('각 인물이 실제로 알고 있는 정보만 고려한다.');
+  await expect(collaboration.getByLabel('1번째 에이전트 이름', { exact: true })).toHaveValue(
+    '인물 관찰자'
+  );
   await enabled.uncheck();
   const updatedResponse = page.waitForResponse(
     (item) =>
@@ -94,6 +108,8 @@ test('AGENTUI01 collaboration stays editable through incomplete drafts, undo and
   await navigationAction(page, '프롬프트');
   await page.getByRole('button', { name: `${saved.title} 프롬프트 편집`, exact: true }).click();
   await expect(page.getByRole('switch', { name: '협업 사용' })).not.toBeChecked();
+  await expect(page.getByLabel('1번째 에이전트 이름', { exact: true })).toBeHidden();
+  await page.getByRole('switch', { name: '협업 사용' }).check();
   await expect(page.getByLabel('1번째 에이전트 이름', { exact: true })).toHaveValue('인물 관찰자');
   expect(pageErrors).toEqual([]);
 });
@@ -195,7 +211,7 @@ test('AGENTUI02 saved collaboration options reach the real preview API and trans
   if (visualReview)
     await page.screenshot({ path: info.outputPath('agent-collaboration-desktop.png') });
   await collaboration
-    .getByRole('heading', { name: '에이전트 협업', exact: true })
+    .locator('.pc-composer-fold > summary')
     .evaluate((element) => element.scrollIntoView({ block: 'start' }));
   if (visualReview)
     await page.screenshot({ path: info.outputPath('agent-collaboration-desktop-overview.png') });

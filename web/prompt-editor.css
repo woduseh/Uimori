@@ -41,7 +41,6 @@
   margin: 0;
   overflow-wrap: anywhere;
 }
-.prompt-editor-tools,
 .prompt-save-actions,
 .prompt-save-buttons {
   display: flex;
@@ -50,7 +49,6 @@
   align-items: center;
   min-width: 0;
 }
-.prompt-editor-tools > button,
 .prompt-save-buttons > button {
   min-height: 44px;
   font-size: 14px;
@@ -67,10 +65,6 @@
   white-space: pre-wrap;
   overflow-wrap: anywhere;
   tab-size: 2;
-}
-.prompt-editor-expanded textarea {
-  height: 70dvh;
-  max-height: 80dvh;
 }
 .prompt-status {
   min-height: 1.6em;
@@ -97,9 +91,6 @@
     font-size: 16px;
     min-height: 240px;
     height: 45dvh;
-  }
-  .prompt-editor-expanded textarea {
-    height: 72dvh;
   }
 }
 
@@ -148,4 +139,36 @@
     padding-inline: 10px;
     white-space: normal;
   }
+}
+
+.prompt-workspace-actions {
+  margin-top: 16px;
+}
+
+.prompt-save-control {
+  position: relative;
+  display: inline-flex;
+}
+.prompt-save-tooltip {
+  display: none;
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 0;
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--panel);
+  color: var(--text);
+  font-size: 12px;
+  white-space: nowrap;
+  z-index: 9;
+  pointer-events: none;
+}
+.prompt-save-control:hover > .prompt-save-tooltip,
+.prompt-save-control:focus-within > .prompt-save-tooltip {
+  display: block;
+}
+.prompt-workspace-actions .action-menu-body {
+  left: 0;
+  right: auto;
 }

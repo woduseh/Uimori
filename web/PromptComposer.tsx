@@ -1,3 +1,5 @@
+import { compileTranslationPreview } from '../core/translation-preview.js';
+import { DismissibleError } from './DismissibleError.js';
 import { PromptControlFields, ValueInput } from './PromptControlFields.js';
 import { ActionMenu } from './ActionMenu.js';
 import { IconButton } from './IconButton.js';
@@ -31,7 +33,6 @@ import type { SavedPromptCombination } from '../core/product.js';
 type Props = {
   program: PromptProgram;
   onChange: (program: PromptProgram) => void;
-  onError: (message: string) => void;
   chatId?: string;
   branchId?: string;
   role?: 'main' | 'translation';
@@ -41,6 +42,8 @@ type Props = {
   onSaveCombination?: (title: string, values: Record<string, PromptValue>) => Promise<void>;
   onDirtyChange?: (dirty: boolean) => void;
   onPendingDraftChange?: (dirty: boolean) => void;
+  initialPreviewRequest?: string;
+  onPreviewRequestChange?: (value: string) => void;
   initialControlDraft?: ChatPromptControls;
   onControlDraftChange?: (state: ChatPromptControls) => void;
 };
@@ -801,7 +804,6 @@ function ControlEditor({
 export function PromptComposer({
   program,
   onChange,
-  onError,
   chatId,
   branchId,
   role = 'main',
@@ -811,6 +813,8 @@ export function PromptComposer({
   onSaveCombination,
   onDirtyChange,
   onPendingDraftChange,
+  initialPreviewRequest,
+  onPreviewRequestChange,
   initialControlDraft,
   onControlDraftChange,
 }: Props) {
@@ -865,7 +869,18 @@ export function PromptComposer({
   const [importedCombination, setImportedCombination] = useState<
     ChatPromptControls['combinations'][number] | null
   >(null);
-  const [request, setRequest] = useState('다음 장면을 이어 써 주세요.');
+  const [requests, setRequests] = useState({
+    main:
+      role === 'main'
+        ? (initialPreviewRequest ?? '다음 장면을 이어 써 주세요.')
+        : '다음 장면을 이어 써 주세요.',
+    translation:
+      role === 'translation'
+        ? (initialPreviewRequest ?? 'The traveler returned home before sunset.')
+        : 'The traveler returned home before sunset.',
+  });
+  const request = requests[role];
+  const setRequest = (value: string) => setRequests((previous) => ({ ...previous, [role]: value }));
   const [preview, setPreview] = useState<{
     value: Preview;
     fingerprint: string;
@@ -907,6 +922,8 @@ export function PromptComposer({
   useEffect(() => {
     setUndo([]);
     setImportedCombination(null);
+    setError('');
+    setStatus('');
   }, [scope]);
   const sequence = useRef(0);
   const fingerprint = pretty({ program, values: controls.values, request, scope });
@@ -920,7 +937,6 @@ export function PromptComposer({
   );
   const report = (message: string) => {
     setError(message);
-    onError(message);
   };
   const change = (next: PromptProgram) => {
     // Incomplete advisor fields remain an unsaved draft while the body stays editable.
@@ -1062,7 +1078,12 @@ export function PromptComposer({
           ...(branchId ? { branchId } : {}),
           role,
         });
-      else {
+      else if (role === 'translation') {
+        result = {
+          compilation: await compileTranslationPreview(program, request, controls.values),
+          provider: null,
+        };
+      } else {
         const slots: Record<string, string> = { char: '합성 인물' };
         const walk = (nodes: PromptTemplate) => {
           for (const node of nodes) {
@@ -1215,83 +1236,88 @@ export function PromptComposer({
                 </option>
               ))}
             </datalist>
-            <div className="pc-block-list">
-              {program.blocks.map((block, index) => (
-                <details
-                  className={`pc-block${block.enabled === false ? ' pc-disabled' : ''}`}
-                  key={block.id}
-                  id={`prompt-block-${block.id}`}
-                >
-                  <summary>
-                    <span className="pc-order">{index + 1}</span>
-                    <span className="pc-block-title">
-                      {block.title || block.id}
-                      <small>
-                        {kindLabels[block.kind]}
-                        {'role' in block ? ` · ${block.role}` : ''}
-                        {block.when !== undefined ? ' · 조건 있음' : ''}
-                        {block.enabled === false ? ' · 사용 안 함' : ''}
-                      </small>
-                    </span>
-                  </summary>
-                  <div className="pc-block-body">
-                    <div className="pc-block-tools">
-                      <IconButton
-                        label={`${block.title} 위로`}
-                        icon={ArrowUp}
-                        data-block-move={-1}
-                        disabled={index === 0}
-                        onClick={() => move(index, -1)}
+            <details className="pc-section pc-blocks-section" open>
+              <summary aria-label="프롬프트 블록 접기/펼치기">
+                블록 · {program.blocks.length}개
+              </summary>
+              <div className="pc-block-list">
+                {program.blocks.map((block, index) => (
+                  <details
+                    className={`pc-block${block.enabled === false ? ' pc-disabled' : ''}`}
+                    key={block.id}
+                    id={`prompt-block-${block.id}`}
+                  >
+                    <summary>
+                      <span className="pc-order">{index + 1}</span>
+                      <span className="pc-block-title">
+                        {block.title || block.id}
+                        <small>
+                          {kindLabels[block.kind]}
+                          {'role' in block ? ` · ${block.role}` : ''}
+                          {block.when !== undefined ? ' · 조건 있음' : ''}
+                          {block.enabled === false ? ' · 사용 안 함' : ''}
+                        </small>
+                      </span>
+                    </summary>
+                    <div className="pc-block-body">
+                      <div className="pc-block-tools">
+                        <IconButton
+                          label={`${block.title} 위로`}
+                          icon={ArrowUp}
+                          data-block-move={-1}
+                          disabled={index === 0}
+                          onClick={() => move(index, -1)}
+                        />
+                        <IconButton
+                          label={`${block.title} 아래로`}
+                          icon={ArrowDown}
+                          data-block-move={1}
+                          disabled={index === program.blocks.length - 1}
+                          onClick={() => move(index, 1)}
+                        />
+                        <ActionMenu label={`${block.title || block.id} 블록 메뉴`}>
+                          <button
+                            type="button"
+                            className="secondary"
+                            disabled={pendingTemplate}
+                            onClick={() => removeBlock(index)}
+                          >
+                            <Trash2 size={18} aria-hidden="true" /> 블록 삭제
+                          </button>
+                        </ActionMenu>
+                      </div>
+                      <BlockEditor
+                        block={block}
+                        onChange={(next) => {
+                          if (pendingTemplate && next.kind !== block.kind)
+                            throw new Error('문법 초안을 먼저 적용하거나 되돌려 주세요.');
+                          editBlock(index, next);
+                        }}
+                        onError={report}
+                        controlIds={program.controls.map((control) => control.id)}
+                        slots={[...slotNames]}
+                        onPendingChange={(dirty) =>
+                          setPendingTemplates((current) => ({ ...current, [block.id]: dirty }))
+                        }
                       />
-                      <IconButton
-                        label={`${block.title} 아래로`}
-                        icon={ArrowDown}
-                        data-block-move={1}
-                        disabled={index === program.blocks.length - 1}
-                        onClick={() => move(index, 1)}
-                      />
-                      <ActionMenu label={`${block.title || block.id} 블록 메뉴`}>
-                        <button
-                          type="button"
-                          className="secondary"
-                          disabled={pendingTemplate}
-                          onClick={() => removeBlock(index)}
-                        >
-                          <Trash2 size={18} aria-hidden="true" /> 블록 삭제
-                        </button>
-                      </ActionMenu>
                     </div>
-                    <BlockEditor
-                      block={block}
-                      onChange={(next) => {
-                        if (pendingTemplate && next.kind !== block.kind)
-                          throw new Error('문법 초안을 먼저 적용하거나 되돌려 주세요.');
-                        editBlock(index, next);
-                      }}
-                      onError={report}
-                      controlIds={program.controls.map((control) => control.id)}
-                      slots={[...slotNames]}
-                      onPendingChange={(dirty) =>
-                        setPendingTemplates((current) => ({ ...current, [block.id]: dirty }))
-                      }
-                    />
-                  </div>
-                </details>
-              ))}
-            </div>
-            <div className="pc-actions">
-              <button
-                type="button"
-                className="secondary"
-                data-add-block
-                disabled={program.blocks.length >= 300}
-                onClick={() =>
-                  edit({ ...program, blocks: [...program.blocks, freshBlock('message')] })
-                }
-              >
-                블록 추가
-              </button>
-            </div>
+                  </details>
+                ))}
+              </div>
+              <div className="pc-actions">
+                <button
+                  type="button"
+                  className="secondary"
+                  data-add-block
+                  disabled={program.blocks.length >= 300}
+                  onClick={() =>
+                    edit({ ...program, blocks: [...program.blocks, freshBlock('message')] })
+                  }
+                >
+                  블록 추가
+                </button>
+              </div>
+            </details>
             <details className="pc-section">
               <summary>제어 정의 · {program.controls.length}개</summary>
               <div className="pc-stack">
@@ -1516,14 +1542,17 @@ export function PromptComposer({
               onError={report}
             />
           </details>
-          <details className="pc-preview" aria-label="프롬프트 미리보기">
+          <details className="pc-section pc-preview" aria-label="프롬프트 미리보기">
             <summary aria-label="전송 미리보기 접기/펼치기">전송 미리보기</summary>
             <label>
-              현재 요청
+              {role === 'translation' ? '미리보기 원문' : '현재 요청'}
               <textarea
-                aria-label="미리보기 현재 요청"
+                aria-label={role === 'translation' ? '미리보기 원문' : '미리보기 현재 요청'}
                 value={request}
-                onChange={(event) => setRequest(event.target.value)}
+                onChange={(event) => {
+                  setRequest(event.target.value);
+                  onPreviewRequestChange?.(event.target.value);
+                }}
               />
             </label>
             <div className="pc-actions">
@@ -1636,11 +1665,7 @@ export function PromptComposer({
           </details>
         </div>
       </details>
-      {error && (
-        <p className="error" role="alert">
-          {error}
-        </p>
-      )}
+      <DismissibleError message={error} onDismiss={() => setError('')} />
       <p className="pc-status" role="status">
         {status}
       </p>

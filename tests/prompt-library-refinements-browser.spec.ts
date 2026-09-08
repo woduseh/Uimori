@@ -97,7 +97,7 @@ test('PLR03 creation displays and saves role defaults and preview uses block nam
     expect((await persisted.json()).program).toEqual(createDefaultPromptProgram(text, role));
   }
   const fold = composer.getByLabel('전송 미리보기 접기/펼치기', { exact: true });
-  const input = composer.getByLabel('미리보기 현재 요청', { exact: true });
+  const input = composer.getByLabel('미리보기 원문', { exact: true });
   await expect(input).not.toBeVisible();
   await fold.click();
   await input.fill('합성 미리보기 접기 입력 보존');

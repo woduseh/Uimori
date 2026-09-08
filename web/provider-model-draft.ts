@@ -6,6 +6,7 @@ import {
 } from '../core/model-capabilities.js';
 import {
   defaultEvaluationToolOptions,
+  validateEvaluationToolOptions,
   type EvaluationToolOptions,
 } from '../core/evaluation-tool-config.js';
 
@@ -13,7 +14,7 @@ export type ModelDraft = {
   title: string;
   connectionRef: string;
   modelId: string;
-  maxOutputTokens: number;
+  maxOutputTokens: string;
   inputTokenLimit: string;
   temperature: string;
   topP: string;
@@ -33,14 +34,14 @@ export type ModelDraft = {
   thinkingBudgetTokens: number;
   enabled: boolean;
   evaluationToolsEnabled: boolean;
-  evaluationTools: EvaluationToolOptions;
+  evaluationTools: Omit<EvaluationToolOptions, 'maximumToolRounds'> & { maximumToolRounds: string };
   userOverrides?: { tools: boolean | null; structuredOutput: boolean | null; note: string };
 };
 export const initialModel = (): ModelDraft => ({
   title: '',
   connectionRef: '',
   modelId: '',
-  maxOutputTokens: 8192,
+  maxOutputTokens: '8192',
   inputTokenLimit: '',
   temperature: '',
   topP: '',
@@ -60,14 +61,17 @@ export const initialModel = (): ModelDraft => ({
   thinkingBudgetTokens: 2048,
   enabled: true,
   evaluationToolsEnabled: false,
-  evaluationTools: defaultEvaluationToolOptions(),
+  evaluationTools: {
+    ...defaultEvaluationToolOptions(),
+    maximumToolRounds: String(defaultEvaluationToolOptions().maximumToolRounds),
+  },
 });
 export function modelDraft(value: ModelPreset): ModelDraft {
   return {
     title: value.title,
     connectionRef: value.connectionId,
     modelId: value.modelId,
-    maxOutputTokens: value.maxOutputTokens,
+    maxOutputTokens: String(value.maxOutputTokens),
     inputTokenLimit: value.inputTokenLimit === undefined ? '' : String(value.inputTokenLimit),
     temperature: value.temperature === null ? '' : String(value.temperature),
     topP: value.topP === undefined ? '' : String(value.topP),
@@ -88,7 +92,12 @@ export function modelDraft(value: ModelPreset): ModelDraft {
     thinkingBudgetTokens: value.thinkingBudgetTokens ?? 2048,
     enabled: value.enabled !== false,
     evaluationToolsEnabled: value.evaluationTools !== undefined,
-    evaluationTools: structuredClone(value.evaluationTools ?? defaultEvaluationToolOptions()),
+    evaluationTools: {
+      ...structuredClone(value.evaluationTools ?? defaultEvaluationToolOptions()),
+      maximumToolRounds: String(
+        (value.evaluationTools ?? defaultEvaluationToolOptions()).maximumToolRounds
+      ),
+    },
     ...(value.userOverrides ? { userOverrides: structuredClone(value.userOverrides) } : {}),
   };
 }
@@ -101,7 +110,7 @@ export function modelPayload(draft: ModelDraft, connection: Connection) {
     title: draft.title,
     connectionId: connection.id,
     modelId: draft.modelId,
-    maxOutputTokens: draft.maxOutputTokens,
+    maxOutputTokens: Number(draft.maxOutputTokens),
     ...(draft.inputTokenLimit !== '' ? { inputTokenLimit: Number(draft.inputTokenLimit) } : {}),
     temperature: draft.temperature === '' ? null : Number(draft.temperature),
     enabled: draft.enabled,
@@ -131,7 +140,12 @@ export function modelPayload(draft: ModelDraft, connection: Connection) {
         }
       : {}),
     ...(draft.evaluationToolsEnabled
-      ? { evaluationTools: structuredClone(draft.evaluationTools) }
+      ? {
+          evaluationTools: {
+            ...structuredClone(draft.evaluationTools),
+            maximumToolRounds: Number(draft.evaluationTools.maximumToolRounds),
+          },
+        }
       : {}),
     ...(draft.userOverrides ? { userOverrides: structuredClone(draft.userOverrides) } : {}),
   };
@@ -154,6 +168,12 @@ export function modelDraftError(
   forcedVertexTier?: VertexRequestTier
 ): string {
   try {
+    if (!draft.maxOutputTokens.trim()) return '최대 출력 토큰을 입력해 주세요.';
+    if (draft.evaluationToolsEnabled) {
+      if (!draft.evaluationTools.maximumToolRounds.trim())
+        return '최대 평가 도구 라운드를 입력해 주세요.';
+      validateEvaluationToolOptions(modelPayload(draft, connection).evaluationTools);
+    }
     validateModelOptions(
       generationFromModel(modelPayload(draft, connection) as ModelPreset),
       connection.protocol,

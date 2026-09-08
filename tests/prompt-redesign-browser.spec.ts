@@ -81,9 +81,11 @@ test('PRUI01 optional template draft safety and reusable role-owned combinations
   await block.getByRole('button', { name: '문법 초안 적용', exact: true }).click();
   await expect(source).toHaveValue('Line\n{{ options.missing }}');
   await expect(block.getByRole('alert')).toContainText('PROMPT_UNKNOWN_CONTROL (2:4)');
+  await editor.getByLabel('현재 프롬프트 저장 메뉴', { exact: true }).click();
   await expect(
-    editor.getByRole('button', { name: '현재 내용을 새 프리셋으로 저장', exact: true })
+    editor.getByRole('button', { name: '새 프리셋으로 저장', exact: true })
   ).toBeDisabled();
+  await editor.getByLabel('현재 프롬프트 저장 메뉴', { exact: true }).click();
   await expect(editor.getByLabel('현재 프롬프트 프리셋', { exact: true })).toBeDisabled();
   await source.fill(
     '{% if options.detail >= 2 %}Detailed {{ options.detail }}{% else %}Brief{% endif %}'

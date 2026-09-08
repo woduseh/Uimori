@@ -1,8 +1,7 @@
+import { DismissibleError } from './DismissibleError.js';
 import { DeleteButton } from './DeleteButton.js';
 import { ActionMenu } from './ActionMenu.js';
-import { IconButton } from './IconButton.js';
 import { CopyIcon } from './ui-icons.js';
-import { Maximize, Minimize } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import type {
   ContentRef,
@@ -70,6 +69,7 @@ export function PromptEditor({
   branchId,
 }: Props) {
   const [role, setRole] = useState<PromptRole>(initialRole);
+  const previewRequestCache = useRef<Record<string, string>>({});
   const [localPresets, setLocalPresets] = useState<PromptPreset[]>([]);
   const [drafts, setDrafts] = useState<Record<PromptRole, Draft>>(
     () =>
@@ -90,7 +90,6 @@ export function PromptEditor({
   const [composerDirty, setComposerDirty] = useState<Record<string, boolean>>({});
   const [pendingTemplate, setPendingTemplate] = useState(false);
   const [localCombinations, setLocalCombinations] = useState<SavedPromptCombination[]>([]);
-  const [expanded, setExpanded] = useState(false);
   const [error, setError] = useState('');
   const [status, setStatus] = useState('');
   const draftCache = useRef<Record<string, Draft>>({});
@@ -168,7 +167,6 @@ export function PromptEditor({
     setBusy(true);
     setError('');
     setStatus('');
-    onError('');
     try {
       const accepted = await api<PromptPreset>(
         update ? `/prompt-presets/${draft.base!.id}` : '/prompt-presets',
@@ -188,6 +186,9 @@ export function PromptEditor({
         ...current.filter((item) => keyOf(item) !== keyOf(accepted)),
         accepted,
       ]);
+      const previewRequest = previewRequestCache.current[`${role}:${draft.source}`];
+      if (previewRequest !== undefined)
+        previewRequestCache.current[`${role}:${keyOf(accepted)}`] = previewRequest;
       const controlDraft = controlDraftCache.current[`${role}:${draft.source}`];
       if (controlDraft) controlDraftCache.current[`${role}:${keyOf(accepted)}`] = controlDraft;
       setComposerDirty((current) => {
@@ -204,18 +205,13 @@ export function PromptEditor({
     } catch (caught) {
       const message = (caught as Error).message;
       setError(message);
-      onError(message);
     } finally {
       setBusy(false);
     }
   }
   const pendingSavedText = draft.source !== 'builtin' && draft.source !== 'new' && !draft.base;
   return (
-    <section
-      className={`prompt-editor${expanded ? ' prompt-editor-expanded' : ''}`}
-      data-testid="prompt-editor"
-      aria-label="전체 프롬프트 편집"
-    >
+    <section className="prompt-editor" data-testid="prompt-editor" aria-label="전체 프롬프트 편집">
       <p className="muted">
         본문·메시지 구성과 옵션을 독립된 프리셋으로 저장해요. 현재 프롬프트에서 불러와 사용할 수
         있어요.
@@ -286,18 +282,14 @@ export function PromptEditor({
             onChange={(event) => edit({ title: event.target.value })}
           />
         </label>
-        <div className="prompt-editor-tools">
-          <IconButton
-            label={expanded ? '편집 영역 줄이기' : '편집 영역 넓히기'}
-            icon={expanded ? Minimize : Maximize}
-            aria-pressed={expanded}
-            onClick={() => setExpanded((value) => !value)}
-          />
-        </div>
         <fieldset className="prompt-composer-frame" disabled={pendingSavedText}>
           <PromptComposer
             key={`${role}:${draft.source}`}
             program={draft.program}
+            initialPreviewRequest={previewRequestCache.current[`${role}:${draft.source}`]}
+            onPreviewRequestChange={(value) => {
+              previewRequestCache.current[`${role}:${draft.source}`] = value;
+            }}
             initialControlDraft={controlDraftCache.current[`${role}:${draft.source}`]}
             onControlDraftChange={(state) => {
               controlDraftCache.current[`${role}:${draft.source}`] = state;
@@ -335,10 +327,6 @@ export function PromptEditor({
                 : undefined
             }
             onChange={(program) => edit({ program })}
-            onError={(message) => {
-              setError(message);
-              onError(message);
-            }}
             chatId={chatId}
             branchId={branchId}
             role={role}
@@ -472,11 +460,10 @@ export function PromptEditor({
       {draft.dirty && (
         <p className="muted prompt-unsaved">편집 중인 프롬프트를 아직 저장하지 않았어요.</p>
       )}
-      {error && (
-        <p className="error" role="alert">
-          {error} 편집 내용은 유지했어요.
-        </p>
-      )}
+      <DismissibleError
+        message={error ? `${error} 편집 내용은 유지했어요.` : ''}
+        onDismiss={() => setError('')}
+      />
     </section>
   );
 }

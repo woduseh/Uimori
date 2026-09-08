@@ -26,12 +26,79 @@
   line-height: 1.6;
 }
 .story-file {
-  display: grid;
-  gap: 0.4rem;
-  min-width: 0;
+  display: inline-flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  position: relative;
+  min-height: 44px;
+  padding: 9px 14px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  cursor: pointer;
+  overflow: hidden;
+}
+.story-file svg {
+  flex-shrink: 0;
+}
+.story-file:focus-within {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
 .story-file input {
-  max-width: 100%;
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  cursor: pointer;
+}
+.story-panel .story-config-fields {
+  display: grid;
+  gap: 24px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.story-config-fields > legend {
+  padding: 0 0 20px;
+  font-size: 15px;
+  font-weight: 600;
+}
+.story-config-section {
+  display: grid;
+  gap: 16px;
+  min-width: 0;
+}
+.story-config-section + .story-config-section,
+.story-config-actions {
+  border-top: 1px solid var(--border);
+  padding-top: 20px;
+}
+.story-config-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+.story-config-heading > div:first-child {
+  flex: 1 1 280px;
+  min-width: 0;
+}
+.story-config-heading p {
+  margin: 6px 0 0;
+  line-height: 1.6;
+}
+.story-config-section h4 {
+  margin: 0;
+  font-size: 14px;
+}
+.story-config-section > label:not(.toggle-row) {
+  width: min(100%, 420px);
+}
+.story-config-section > details {
+  margin-top: 0;
 }
 .story-module-preview {
   margin-top: 0.8rem;

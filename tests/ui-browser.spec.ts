@@ -1466,7 +1466,8 @@ test('UI17 prompts use latest settings and concurrent edits preserve unsaved tex
     createDefaultPromptProgram('Concurrent current prompt.', 'main')
   );
   await editor.getByLabel('현재 프롬프트 이름').fill('UI17 recovered copy');
-  await editor.getByRole('button', { name: '현재 내용을 새 프리셋으로 저장', exact: true }).click();
+  await editor.getByLabel('현재 프롬프트 저장 메뉴', { exact: true }).click();
+  await editor.getByRole('button', { name: '새 프리셋으로 저장', exact: true }).click();
   await expect(
     editor.getByRole('status').filter({ hasText: '독립된 프리셋으로 저장했어요.' })
   ).toBeVisible();

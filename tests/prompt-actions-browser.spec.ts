@@ -146,6 +146,11 @@ test('PAUI02 saving and applying retain distinct scopes with compact actions on 
   const name = editor.getByLabel('현재 프롬프트 이름', { exact: true });
   await name.fill(preset.title + ' 현재 수정');
   const snapshot = await (await request.get(`/api/prompt-presets/${preset.id}`)).json();
+  const saveIcon = editor.getByRole('button', { name: '현재 설정 저장', exact: true });
+  await expect(saveIcon.locator('svg')).toHaveCount(1);
+  await expect(saveIcon).toHaveText('');
+  await saveIcon.focus();
+  await expect(editor.getByRole('tooltip')).toBeVisible();
   await editor.getByRole('button', { name: '현재 설정 저장', exact: true }).click();
   await expect(
     editor.getByText('현재 프롬프트와 옵션을 저장했어요.', { exact: true })
@@ -153,7 +158,8 @@ test('PAUI02 saving and applying retain distinct scopes with compact actions on 
   expect(await (await request.get(`/api/prompt-presets/${preset.id}`)).json()).toEqual(snapshot);
   expect((await detail(request, chat.id)).profile).toEqual(before.profile);
   await name.fill(preset.title + ' 별도 사본');
-  await editor.getByRole('button', { name: '현재 내용을 새 프리셋으로 저장', exact: true }).click();
+  await editor.getByLabel('현재 프롬프트 저장 메뉴', { exact: true }).click();
+  await editor.getByRole('button', { name: '새 프리셋으로 저장', exact: true }).click();
   await expect(editor.getByText('독립된 프리셋으로 저장했어요.', { exact: true })).toBeVisible();
   expect((await (await request.get('/api/prompt-workspace')).json()).main.title).toBe(
     preset.title + ' 현재 수정'

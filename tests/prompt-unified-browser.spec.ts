@@ -78,6 +78,14 @@ test('PUNI01 structured editor preserves one AST; folding keeps drafts and compl
   await expect(save).toBeDisabled(); // Folding is not a prompt edit.
   const edited = 'SYNTHETIC_EDITED\n{{literal_text}}';
   await body.fill(edited);
+  const blockFold = composer.getByLabel('프롬프트 블록 접기/펼치기', { exact: true });
+  await blockFold.click();
+  await expect(body).not.toBeVisible();
+  await expect(composer.getByText('제어 정의 · 45개', { exact: true })).toBeVisible();
+  await expect(composer.getByLabel('전송 미리보기 접기/펼치기')).toBeVisible();
+  await blockFold.press('Enter');
+  await expect(body).toBeVisible();
+  await expect(body).toHaveValue(edited);
   const fold = composer.getByLabel('프롬프트 구성 접기/펼치기', { exact: true });
   await fold.click();
   await expect(body).not.toBeVisible();
@@ -185,4 +193,62 @@ test('PUNI02 file import edits one block and folded preview retains its snapshot
   const selected = expected.blocks[index];
   if (selected.kind === 'message') selected.template = [{ kind: 'text', text: imported }];
   expect(after.program).toEqual(expected);
+});
+
+test('PUNI03 translation list preview uses exact source and one current request; role and folding preserve drafts', async ({
+  page,
+}) => {
+  await page.goto('/');
+  await navigationAction(page, '프롬프트');
+  await page
+    .getByTestId('prompt-library')
+    .getByRole('button', { name: '새 프롬프트', exact: true })
+    .first()
+    .click();
+  const editor = page.getByTestId('prompt-editor');
+  const composer = editor.getByTestId('prompt-composer');
+  const fold = composer.getByLabel('전송 미리보기 접기/펼치기', { exact: true });
+  await fold.click();
+  await composer.getByLabel('미리보기 현재 요청', { exact: true }).fill('MAIN_DRAFT');
+  await editor.getByLabel('프롬프트 역할', { exact: true }).selectOption('translation');
+  await fold.click();
+  const source = '  Exact translation source.\n\n원문 한글  ';
+  await composer.getByLabel('미리보기 원문', { exact: true }).fill(source);
+  const writes: string[] = [];
+  page.on('request', (request) => {
+    if (request.method() !== 'GET') writes.push(`${request.method()} ${request.url()}`);
+  });
+  await composer.getByRole('button', { name: '미리보기 갱신', exact: true }).click();
+  const messages = composer.locator('.pc-message-list > li');
+  await expect(messages).toHaveCount(5);
+  await expect(composer.locator('.pc-preview-result')).not.toContainText('합성 이전');
+  const sourceMessage = messages.filter({ hasText: 'source:' });
+  await sourceMessage.locator('summary').click();
+  await expect(sourceMessage.locator('pre')).toHaveText(`source:\n${source}`);
+  const jsonSection = composer
+    .locator('details')
+    .filter({ has: page.locator(':scope > summary', { hasText: '전체 구성 JSON · 고급 편집' }) });
+  await jsonSection.locator(':scope > summary').click();
+  const json = jsonSection.getByLabel('전체 프롬프트 구성 JSON', { exact: true });
+  const program = JSON.parse(await json.inputValue()) as PromptProgram;
+  program.blocks = program.blocks.map((block) =>
+    block.kind === 'history' ? { id: 'current', title: 'Current', kind: 'current' } : block
+  );
+  await json.fill(JSON.stringify(program));
+  await jsonSection.getByRole('button', { name: 'JSON 적용', exact: true }).click();
+  await composer.getByRole('button', { name: '미리보기 갱신', exact: true }).click();
+  await expect(messages).toHaveCount(5);
+  await expect(composer).not.toContainText('PROMPT_HISTORY_OMITTED');
+  await fold.click();
+  await fold.click();
+  await expect(composer.getByLabel('미리보기 원문', { exact: true })).toHaveValue(source);
+  await editor.getByLabel('프롬프트 역할', { exact: true }).selectOption('main');
+  await fold.click();
+  await expect(composer.getByLabel('미리보기 현재 요청', { exact: true })).toHaveValue(
+    'MAIN_DRAFT'
+  );
+  await editor.getByLabel('프롬프트 역할', { exact: true }).selectOption('translation');
+  await fold.click();
+  await expect(composer.getByLabel('미리보기 원문', { exact: true })).toHaveValue(source);
+  expect(writes).toEqual([]);
 });

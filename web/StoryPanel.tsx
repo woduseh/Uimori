@@ -1,3 +1,5 @@
+import { Upload } from 'lucide-react';
+import { ToggleRow } from './ToggleRow.js';
 import { DeleteButton } from './DeleteButton.js';
 import { useEffect, useRef, useState } from 'react';
 import type { Connection, ModelRef, ModelPreset } from '../core/product.js';
@@ -439,37 +441,42 @@ function StoryPanelEditor({
             );
           }}
         >
-          <fieldset className="editor-fields editor-grid" disabled={busy}>
+          <fieldset className="story-config-fields" disabled={busy}>
             <legend>다음 원고에 적용할 설정</legend>
-            <div className="full">
-              <strong>상태 정의</strong>
-              <p>
-                {draft.module
-                  ? draft.module.name
-                  : '사용 안 함 · 상태 정의를 선택하면 사용할 수 있어요.'}
-              </p>
-              <div className="form-actions">
-                <label className="story-file">
-                  JSON 파일 불러오기
-                  <input
-                    type="file"
-                    accept=".json,application/json"
-                    aria-label="상태 정의 JSON 파일"
-                    onChange={(event) => {
-                      void importModule(event.target.files?.[0]);
-                      event.target.value = '';
-                    }}
-                  />
-                </label>
-                {draft.module && (
-                  <button
-                    type="button"
-                    className="secondary"
-                    onClick={() => change({ ...draft, module: null })}
-                  >
-                    상태 사용 안 함
-                  </button>
-                )}
+            <section className="story-config-section" aria-label="상태 설정">
+              <div className="story-config-heading">
+                <div>
+                  <h4>상태 정의</h4>
+                  <p className="muted">
+                    {draft.module
+                      ? draft.module.name
+                      : '사용 안 함 · JSON 파일을 불러오면 상태 확인을 사용할 수 있어요.'}
+                  </p>
+                </div>
+                <div className="form-actions">
+                  <label className="story-file secondary">
+                    <Upload size={18} aria-hidden="true" />
+                    <span>JSON 불러오기</span>
+                    <input
+                      type="file"
+                      accept=".json,application/json"
+                      aria-label="상태 정의 JSON 파일"
+                      onChange={(event) => {
+                        void importModule(event.target.files?.[0]);
+                        event.target.value = '';
+                      }}
+                    />
+                  </label>
+                  {draft.module && (
+                    <button
+                      type="button"
+                      className="secondary"
+                      onClick={() => change({ ...draft, module: null })}
+                    >
+                      상태 사용 안 함
+                    </button>
+                  )}
+                </div>
               </div>
               <details>
                 <summary>합성 예제 살펴보기</summary>
@@ -505,71 +512,70 @@ function StoryPanelEditor({
                   <pre>{JSON.stringify(draft.module, null, 2)}</pre>
                 </div>
               )}
-            </div>
-            <ModelChoice
-              label="상태 확인 모델"
-              value={draft.stateModel}
-              original={detail?.config.stateModel ?? null}
-              models={models}
-              connections={connections}
-              canSelect={canSelect}
-              onChange={(stateModel) => change({ ...draft, stateModel })}
-            />
-            <label className="check">
-              <input
-                type="checkbox"
-                checked={draft.memory.enabled}
-                onChange={(event) =>
-                  change({ ...draft, memory: { ...draft.memory, enabled: event.target.checked } })
-                }
+              <ModelChoice
+                label="상태 확인 모델"
+                value={draft.stateModel}
+                original={detail?.config.stateModel ?? null}
+                models={models}
+                connections={connections}
+                canSelect={canSelect}
+                onChange={(stateModel) => change({ ...draft, stateModel })}
               />
-              기억 자동 정리 사용
-            </label>
-            <ModelChoice
-              label="기억 정리 모델"
-              value={draft.memory.model}
-              original={detail?.config.memory.model ?? null}
-              models={models}
-              connections={connections}
-              canSelect={canSelect}
-              onChange={(model) => change({ ...draft, memory: { ...draft.memory, model } })}
-            />
-            <details className="full">
-              <summary>기억 분량 설정</summary>
-              <div className="editor-grid">
-                <label>
-                  원문으로 유지할 최근 장면 수
-                  <input
-                    type="number"
-                    min={0}
-                    max={20}
-                    value={draft.memory.recentCount}
-                    onChange={(event) =>
-                      change({
-                        ...draft,
-                        memory: { ...draft.memory, recentCount: Number(event.target.value) },
-                      })
-                    }
-                  />
-                </label>
-                <label>
-                  기억 입력 최대 글자 수
-                  <input
-                    type="number"
-                    min={1000}
-                    max={200000}
-                    value={draft.memory.maxPacketChars}
-                    onChange={(event) =>
-                      change({
-                        ...draft,
-                        memory: { ...draft.memory, maxPacketChars: Number(event.target.value) },
-                      })
-                    }
-                  />
-                </label>
-              </div>
-            </details>
-            <div className="form-actions full">
+            </section>
+            <section className="story-config-section" aria-label="기억 설정">
+              <h4>기억 정리</h4>
+              <ToggleRow
+                label="기억 자동 정리 사용"
+                description="최근 장면은 원문으로 유지하고 앞선 내용을 기억으로 정리해요."
+                checked={draft.memory.enabled}
+                onChange={(enabled) => change({ ...draft, memory: { ...draft.memory, enabled } })}
+              />
+              <ModelChoice
+                label="기억 정리 모델"
+                value={draft.memory.model}
+                original={detail?.config.memory.model ?? null}
+                models={models}
+                connections={connections}
+                canSelect={canSelect}
+                onChange={(model) => change({ ...draft, memory: { ...draft.memory, model } })}
+              />
+              <details className="full">
+                <summary>기억 분량 설정</summary>
+                <div className="editor-grid">
+                  <label>
+                    원문으로 유지할 최근 장면 수
+                    <input
+                      type="number"
+                      min={0}
+                      max={20}
+                      value={draft.memory.recentCount}
+                      onChange={(event) =>
+                        change({
+                          ...draft,
+                          memory: { ...draft.memory, recentCount: Number(event.target.value) },
+                        })
+                      }
+                    />
+                  </label>
+                  <label>
+                    기억 입력 최대 글자 수
+                    <input
+                      type="number"
+                      min={1000}
+                      max={200000}
+                      value={draft.memory.maxPacketChars}
+                      onChange={(event) =>
+                        change({
+                          ...draft,
+                          memory: { ...draft.memory, maxPacketChars: Number(event.target.value) },
+                        })
+                      }
+                    />
+                  </label>
+                </div>
+              </details>
+            </section>
+            <div className="form-actions story-config-actions">
               <button className="secondary" disabled={!dirty.current}>
                 상태와 기억 설정 저장
               </button>
