@@ -20,7 +20,7 @@ import {
 } from './ui-icons.js';
 import './chat-settings.css';
 
-type Section = ProfileSection | 'story' | 'images' | 'runtime';
+export type Section = ProfileSection | 'story' | 'images' | 'runtime';
 // Two groups: the basics every chat needs, then the advanced automation sections.
 // Reading settings live in their own dialog (chat ⋯ menu), not here.
 const categories = [
@@ -70,11 +70,22 @@ const categories = [
 const isProfile = (section: Section): section is ProfileSection =>
   ['characters', 'prompts', 'models'].includes(section);
 
-export function ChatSettingsPanel({ state, onClose }: { state: StoryState; onClose: () => void }) {
-  const [active, setActive] = useState<Section>('characters');
-  const [profileTab, setProfileTab] = useState<ProfileSection>('characters');
-  const [visited, setVisited] = useState<Section[]>(['characters']);
-  const [detailOpen, setDetailOpen] = useState(false);
+export function ChatSettingsPanel({
+  state,
+  onClose,
+  initialSection,
+}: {
+  state: StoryState;
+  onClose: () => void;
+  /** Open directly on this section (compact widths open its detail); the list is the default. */
+  initialSection?: Section;
+}) {
+  const [active, setActive] = useState<Section>(initialSection ?? 'characters');
+  const [profileTab, setProfileTab] = useState<ProfileSection>(
+    initialSection && isProfile(initialSection) ? initialSection : 'characters'
+  );
+  const [visited, setVisited] = useState<Section[]>([initialSection ?? 'characters']);
+  const [detailOpen, setDetailOpen] = useState(!!initialSection);
   const [profileDirty, setProfileDirty] = useState(false);
   const [storyDirty, setStoryDirty] = useState(false);
   const [imageDirty, setImageDirty] = useState(false);

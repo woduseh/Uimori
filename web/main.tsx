@@ -4,6 +4,7 @@ import { ActionMenu } from './ActionMenu.js';
 import { useCompactLayout } from './useCompactLayout.js';
 import { subscribeAppHistory } from './app-history.js';
 import { ChatPromptOptions } from './ChatPromptOptions.js';
+import type { Section as ChatSettingsSection } from './ChatSettingsPanel.js';
 import { ReaderPages } from './ReaderPages.js';
 import { SceneNavigator } from './SceneNavigator.js';
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
@@ -107,6 +108,17 @@ const TasksPanel = deferredPanel('작업 현황', async () => ({
 }));
 
 type Panel = '' | 'navigation' | 'new' | 'story' | 'branches' | 'tasks' | 'settings' | 'reading';
+const runActive = (status: string) => ['queued', 'running', 'waiting_for_state'].includes(status);
+const runFailed = (status: string) =>
+  ['failed', 'interrupted', 'refused', 'partial'].includes(status);
+const failureTitle = (status: string) =>
+  status === 'interrupted'
+    ? '생성이 중단됐어요'
+    : status === 'refused'
+      ? '모델이 요청을 거부했어요'
+      : status === 'partial'
+        ? '본문이 일부만 생성됐어요'
+        : '본문 생성에 실패했어요';
 function App() {
   const s = useStory();
   const testMode = useTestMode();
@@ -115,6 +127,29 @@ function App() {
   // Compact widths open the scene list from the header title; the rail owns it otherwise.
   const [sceneList, setSceneList] = useState(false);
   const sceneCount = s.detail?.reader.navigation.length ?? 0;
+  // Chat settings may open on a specific section (the failure card's 모델 설정).
+  const [settingsSection, setSettingsSection] = useState<ChatSettingsSection | undefined>();
+  const openChatSettings = (section?: ChatSettingsSection) => {
+    setSettingsSection(section);
+    setPanel('story');
+  };
+  // Pending turns the reader has scrolled into view: their failure card replaces the composer notice.
+  const [seenRuns, setSeenRuns] = useState<string[]>([]);
+  const pendingObserver = useRef<IntersectionObserver | null>(null);
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          const id = (entry.target as HTMLElement).dataset.runId;
+          if (id && entry.isIntersecting)
+            setSeenRuns((old) => (old.includes(id) ? old : [...old, id]));
+        }
+      },
+      { threshold: 0.4 }
+    );
+    pendingObserver.current = observer;
+    return () => observer.disconnect();
+  }, []);
   // A dialog opened from the chat ⋯ menu returns focus to the menu button, because the
   // menu item that opened it is hidden again by the time the dialog closes.
   const menuReturn = useRef<HTMLElement | null>(null);
@@ -135,8 +170,11 @@ function App() {
   const sourceEditing = editingSources.length > 0;
   const optionsButton = useRef<HTMLButtonElement>(null);
   const [panel, setPanel] = useState<Panel>('');
-  // biome-ignore lint/correctness/useExhaustiveDependencies: A new chat or branch starts with the list closed.
-  useEffect(() => setSceneList(false), [s.viewKey]);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: A new chat or branch starts with the list closed and nothing seen yet.
+  useEffect(() => {
+    setSceneList(false);
+    setSeenRuns([]);
+  }, [s.viewKey]);
   useEffect(() => {
     if (panel !== '' || !menuReturn.current) return;
     const target = menuReturn.current;
@@ -499,7 +537,7 @@ function App() {
                     className="icon-button"
                     aria-label="채팅 설정"
                     title="채팅 설정"
-                    onClick={() => setPanel('story')}
+                    onClick={() => openChatSettings()}
                   >
                     <SlidersHorizontal size={20} />
                   </button>
@@ -660,6 +698,9 @@ function App() {
                       )}
                       {!s.sources.length && !s.visibleRuns.length && !s.active && (
                         <div className="first-scene">
+                          {s.bot && (
+                            <ContentAvatar content={s.bot} className="first-scene-avatar" />
+                          )}
                           <h2>첫 장면을 들려주세요.</h2>
                           <p className="muted">
                             배경과 인물, 일어나길 바라는 일을 아래에 적어주세요.
@@ -741,7 +782,15 @@ function App() {
                       {s.visibleRuns
                         .filter((run) => !run.sourceRevision)
                         .map((run) => (
-                          <article className="pending-turn" key={run.id} data-testid="pending-run">
+                          <article
+                            className="pending-turn"
+                            key={run.id}
+                            data-testid="pending-run"
+                            data-run-id={run.id}
+                            ref={(node) => {
+                              if (node) pendingObserver.current?.observe(node);
+                            }}
+                          >
                             <div className="request-message">
                               <p>{run.request}</p>
                             </div>
@@ -755,34 +804,57 @@ function App() {
                                 revision={s.detail!.reader.cursor}
                                 refresh={() => s.refresh(s.selected)}
                                 onError={s.setError}
-                              >
-                                {s.canReuseRun(run.id) && (
-                                  <div className="form-actions">
+                              />
+                              {runActive(run.status) && (
+                                <div className="turn-skeleton" aria-hidden="true">
+                                  <span />
+                                  <span />
+                                  <span />
+                                </div>
+                              )}
+                              {runFailed(run.status) && (
+                                <div className="turn-failure" role="group" aria-label="실패한 요청">
+                                  <strong>{failureTitle(run.status)}</strong>
+                                  {(run.error || run.issue) && <p>{run.error || run.issue}</p>}
+                                  <div className="turn-failure-actions">
+                                    {s.canReuseRun(run.id) && (
+                                      <>
+                                        <button
+                                          type="button"
+                                          disabled={s.reuseBlocked || optionsBusy}
+                                          onClick={() => {
+                                            void s.generate(run.id);
+                                          }}
+                                        >
+                                          현재 설정으로 재시도
+                                        </button>
+                                        <button
+                                          type="button"
+                                          className="secondary"
+                                          disabled={s.reuseBlocked || optionsBusy}
+                                          onClick={() => s.editRunRequest(run.id)}
+                                        >
+                                          요청 다시 편집
+                                        </button>
+                                      </>
+                                    )}
                                     <button
                                       type="button"
                                       className="secondary"
-                                      disabled={s.reuseBlocked || optionsBusy}
-                                      onClick={() => s.editRunRequest(run.id)}
+                                      onClick={() => openChatSettings('models')}
                                     >
-                                      요청 다시 편집
+                                      모델 설정
                                     </button>
                                     <button
                                       type="button"
                                       className="secondary"
-                                      disabled={s.reuseBlocked || optionsBusy}
-                                      onClick={() => {
-                                        void s.generate(run.id);
-                                      }}
+                                      onClick={() => inspect(run.id)}
                                     >
-                                      현재 설정으로 재시도
+                                      상세
                                     </button>
-                                    <small>
-                                      현재 대화와 저장된 설정으로 새로 생성해요. 기존 실패 기록은
-                                      남아요.
-                                    </small>
                                   </div>
-                                )}
-                              </TurnActivity>
+                                </div>
+                              )}
                             </div>
                           </article>
                         ))}
@@ -839,6 +911,7 @@ function App() {
                   branchId={s.branch?.id}
                   connected={s.connected}
                   onDetails={() => inspect('')}
+                  seenRunIds={seenRuns}
                 />
                 <form
                   className={`composer${grown ? ' grown' : ''}`}
@@ -1151,7 +1224,12 @@ function App() {
         )}
       </Dialog>
       {panel === 'story' && (
-        <ChatSettingsPanel key={s.selected} state={s} onClose={() => setPanel('')} />
+        <ChatSettingsPanel
+          key={s.selected}
+          state={s}
+          onClose={() => setPanel('')}
+          initialSection={settingsSection}
+        />
       )}
       <Dialog open={panel === 'branches'} title="보관된 전개" onClose={() => setPanel('')}>
         <BranchesPanel state={s} onClose={() => setPanel('')} />
