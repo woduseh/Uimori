@@ -252,7 +252,10 @@ export function PackageAttachments({
                   className="ghost"
                   disabled={busy}
                   onClick={() =>
-                    void changeAttachments(attachments.filter((item) => keyOf(item) !== scope))
+                    void changeAttachments(
+                      attachments.filter((item) => keyOf(item) !== scope),
+                      ref.role === 'persona'
+                    )
                   }
                 >
                   해제

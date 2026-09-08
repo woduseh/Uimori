@@ -1,3 +1,4 @@
+import { historicalPersonaExcluded } from '../core/persona-scope.js';
 import { HttpError } from './request-validation.js';
 import { createHash } from 'node:crypto';
 import { isDeepStrictEqual } from 'node:util';
@@ -190,7 +191,7 @@ export function validatePackageBehaviorRunSnapshot(store: Store, snapshot: RunSn
     .map((r) => `${r.id}:${r.role}`);
   const expectsExecution = (snapshot.profile?.packageAttachments ?? []).some(
     (ref) =>
-      !(ref.role === 'persona' && snapshot.profile?.personaReference === false) &&
+      !historicalPersonaExcluded(snapshot.profile, ref.role) &&
       snapshot.profile?.packages
         ?.find((pkg) => pkg.id === ref.id && pkg.revision === ref.revision)
         ?.behavior?.actions.some((action) =>

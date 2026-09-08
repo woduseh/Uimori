@@ -1,3 +1,5 @@
+import { selectCurrentSettingsSection } from './ui-navigation.js';
+import { setCurrentModels } from './ui-navigation.js';
 import { visualReview } from './fixtures/visual-review.js';
 import { preservePromptWorkspace } from './fixtures/prompt-workspace.js';
 import {
@@ -222,8 +224,18 @@ test('UI01 UI02 UI04 UI05 UI09 long real sources keep composer accessible, safe 
   const translated = source.getByTestId('translation-text');
   await expect(translated).toBeVisible();
   await expect(translated).toContainText('황혼의 부두');
-  await expect(translated.locator('.source-block')).toHaveCount(1);
-  await expect(translated.locator('[data-block-anchor]')).toHaveCount(0);
+  const translation = before.jobs.find(
+    (job) => job.sourceRevision === before.sources[0].id && job.kind === 'translation'
+  )!;
+  const translationBlocks = translation.translationLayout!.blocks;
+  await expect(translated.locator('.source-block')).toHaveCount(translationBlocks.length);
+  expect(
+    await translated
+      .locator('[data-block-anchor]')
+      .evaluateAll((elements) =>
+        elements.map((element) => element.getAttribute('data-block-anchor'))
+      )
+  ).toEqual(translationBlocks.map((block) => block.anchor));
   await source.getByRole('button', { name: '원문 보기', exact: true }).click();
   await source.locator('details.source-job-details > summary').click();
   await expect(source.getByTestId('source-raw')).toHaveText(before.sources[0].text);
@@ -692,8 +704,7 @@ test('UI12 late failed SSE refresh from another story never publishes its error 
       data: {
         expectedRevision: profile.revision,
         attachments: profile.attachments,
-        personaReference: profile.personaReference,
-        routes: profile.routes,
+
         image: profile.image,
       },
     });
@@ -937,15 +948,13 @@ test('UI03 UI12 failed starting profile read survives reload and recovers frozen
   ).not.toBeNull();
   await close(page);
   const original = (await data(request, chat.id)).profile!;
-  const currentRoutes = { ...original.routes, main: { id: model.id } };
+  const currentModels = await setCurrentModels(request, { main: { id: model.id } });
   // Competing updates preserve permanent bot ownership while changing unrelated settings.
   const update = await request.put(`/api/chats/${chat.id}/profile`, {
     data: {
       expectedRevision: original.revision,
       attachments: original.attachments,
       ...(original.packageAttachments ? { packageAttachments: original.packageAttachments } : {}),
-      personaReference: original.personaReference,
-      routes: currentRoutes,
       image: true,
     },
   });
@@ -962,7 +971,7 @@ test('UI03 UI12 failed starting profile read survives reload and recovers frozen
   expect(await (await request.get('/api/prompt-workspace')).json()).toMatchObject({
     main: { values: choice.combination.values },
   });
-  expect(restored.profile!.routes).toEqual(currentRoutes);
+  expect(restored.profile!.routes).toEqual(currentModels.routes);
   expect(restored.profile!.image).toBe(true);
   expect(restored.profile!.revision).toBe(original.revision + 2);
   expect(restored.runs).toHaveLength(0);
@@ -1011,6 +1020,7 @@ test('UI03 starting without a model explains setup and creates a chat without ex
   request,
 }) => {
   const title = `UI no starting model ${Date.now()}`;
+  await setCurrentModels(request, { main: null, translation: null, status: null, image: null });
   await page.route('**/api/health', async (route) => {
     const response = await route.fetch();
     const health = await response.json();
@@ -1029,19 +1039,16 @@ test('UI03 starting without a model explains setup and creates a chat without ex
   await page.goto('/');
   await nav(page, '새 이야기');
   const dialog = page.getByRole('dialog', { name: '새 채팅', exact: true });
-  await expect(dialog.getByLabel('시작 본문 모델').locator('option:checked')).toHaveText(
-    '본문 모델을 선택해 주세요'
-  );
-  await expect(dialog).toContainText('모델은 나중에 선택하고 채팅만 먼저 만들 수도 있어요.');
-  await dialog.getByRole('button', { name: '모델 연결 설정', exact: true }).click();
+  await expect(dialog.getByLabel('시작 본문 모델')).toHaveCount(0);
+  await dialog.getByRole('button', { name: '전역 모델 설정', exact: true }).click();
   await expect(page.getByRole('dialog', { name: '설정', exact: true })).toBeVisible();
-  await expect(page.getByTestId('connection-editor')).toBeVisible();
+  await expect(page.getByLabel('원문 모델', { exact: true })).toBeVisible();
   const settings = page.getByRole('dialog', { name: '설정', exact: true });
-  const connectionTab = settings.getByRole('tab', { name: '연결과 모델', exact: true });
+  const connectionTab = settings.getByRole('tab', { name: '현재 모델', exact: true });
   if (await connectionTab.isVisible())
     await expect(connectionTab).toHaveAttribute('aria-selected', 'true');
   else {
-    await expect(settings.getByRole('heading', { name: '연결과 모델', exact: true })).toBeVisible();
+    await expect(settings.getByRole('heading', { name: '현재 모델', exact: true })).toBeVisible();
     await expect(
       settings.getByRole('button', { name: '설정 목록으로', exact: true })
     ).toBeVisible();
@@ -1064,22 +1071,24 @@ test('UI03 starting without a model explains setup and creates a chat without ex
   await expect(page.getByRole('button', { name: '원문 생성', exact: true })).toBeDisabled();
 });
 
-test('UI03 UI12 starting model choices are saved without execution, reused exactly and dropped when their connection is disabled', async ({
+test('UI03 UI12 global model choices survive chat creation and disabled connections stay explicit', async ({
   page,
   request,
 }, info) => {
   await page.setViewportSize({ width: 390, height: 844 });
-  const title = `UI start models ${Date.now()}`;
+  const title = `UI global models ${Date.now()}`;
   const { connection, models } = await startingModels(request, title);
-  const writes: string[] = [];
-  page.on('request', (item) => {
-    if (item.method() === 'POST') writes.push(item.url());
+  const workspace = await setCurrentModels(request, { main: models[0], translation: models[1] });
+  // Exercise normal admission UI while retaining the local synthetic server.
+  await page.route('**/api/health', async (route) => {
+    const response = await route.fetch();
+    const health = await response.json();
+    await route.fulfill({ response, json: { ...health, testMode: false } });
   });
   await page.goto('/');
   await nav(page, '새 이야기');
-  await page.getByLabel('시작 본문 모델').selectOption(`${models[0].id}`);
+  await expect(page.getByLabel('시작 본문 모델')).toHaveCount(0);
   await openNewStoryOptions(page);
-  await page.getByLabel('시작 번역 모델').selectOption(`${models[1].id}`);
   await page.getByLabel('새 채팅 이름').fill(title);
   const response = page.waitForResponse(
     (item) => /\/api\/chats$/.test(item.url()) && item.request().method() === 'POST'
@@ -1088,128 +1097,54 @@ test('UI03 UI12 starting model choices are saved without execution, reused exact
   const chat = (await (await response).json()) as Chat;
   await expect(page.getByRole('dialog', { name: '새 채팅', exact: true })).not.toBeVisible();
   const detail = await data(request, chat.id);
-  expect(detail.profile!.routes).toEqual({
-    main: models[0],
-    translation: models[1],
-    status: null,
-    image: null,
-  });
-  expect(detail.chat.settings.translation).toBe(true);
+  expect(detail.profile!.routes).toEqual(workspace.routes);
   expect(detail.runs).toHaveLength(0);
   expect(detail.attempts).toHaveLength(0);
-  expect(writes.filter((url) => /\/(?:runs|candidate)$/.test(url))).toEqual([]);
-  await nav(page, '새 이야기');
-  await openNewStoryOptions(page);
-  await expect(page.getByLabel('시작 본문 모델')).toHaveValue(`${models[0].id}`);
-  await expect(page.getByLabel('시작 번역 모델')).toHaveValue(`${models[1].id}`);
+  await page.getByRole('button', { name: /^현재 본문 모델/ }).click();
+  await expect(page.getByLabel('원문 모델', { exact: true })).toHaveValue(models[0].id);
+  await expect(page.getByLabel('번역 모델', { exact: true })).toHaveValue(models[1].id);
   if (visualReview) await page.screenshot({ path: info.outputPath('starting-models-mobile.png') });
-  await close(page);
-  // Editing the current connection keeps the remembered model IDs.
-  const renamed = await request.put(`/api/connections/${connection.id}`, {
-    data: {
-      expectedRevision: connection.revision,
-      title: `${title} renamed`,
-      protocol: 'fixture-sse-v1',
-      endpoint: 'http://127.0.0.1:9/no-provider',
-      enabled: true,
-    },
-  });
-  expect(renamed.ok()).toBeTruthy();
-  const renamedConnection = (await renamed.json()) as { revision: number };
-  await page.reload();
-  await nav(page, '새 이야기');
-  await openNewStoryOptions(page);
-  await expect(
-    page.getByLabel('시작 본문 모델').locator(`option[value="${models[0].id}"]`)
-  ).toBeEnabled();
-  await expect(
-    page.getByLabel('시작 번역 모델').locator(`option[value="${models[1].id}"]`)
-  ).toBeEnabled();
-  await expect(page.getByLabel('시작 본문 모델')).toHaveValue(`${models[0].id}`);
-  await expect(page.getByLabel('시작 번역 모델')).toHaveValue(`${models[1].id}`);
-  await close(page);
   const disabled = await request.put(`/api/connections/${connection.id}`, {
     data: {
-      expectedRevision: renamedConnection.revision,
-      title: `${title} disabled`,
+      expectedRevision: connection.revision,
+      title,
       protocol: 'fixture-sse-v1',
       endpoint: 'http://127.0.0.1:9/no-provider',
       enabled: false,
     },
   });
   expect(disabled.ok()).toBeTruthy();
-  await page.reload();
-  await nav(page, '새 이야기');
-  await openNewStoryOptions(page);
-  await expect(page.getByLabel('시작 본문 모델')).not.toHaveValue(models[0].id);
-  await expect(page.getByLabel('시작 번역 모델')).not.toHaveValue(models[1].id);
-  await expect(
-    page.getByLabel('시작 본문 모델').locator(`option[value="${models[0].id}"]`)
-  ).toHaveCount(0);
+  await page.goto(`/?chat=${chat.id}`);
+  await page.getByLabel('다음 장면 요청').fill('비활성 연결로 보내지 않는 요청');
+  await expect(page.getByRole('button', { name: '원문 생성', exact: true })).toBeDisabled();
+  expect((await (await request.get('/api/model-workspace')).json()).routes).toEqual(
+    workspace.routes
+  );
   expect((await data(request, chat.id)).attempts).toHaveLength(0);
 });
 
-test('UI03 UI12 pending starting models recover after a failed profile read without overwriting newer model choices', async ({
+test('UI03 UI12 creating a chat never overwrites newer global model choices', async ({
   page,
   request,
 }) => {
-  const title = `UI pending models ${Date.now()}`;
-  const { models } = await startingModels(request, title);
+  const { models } = await startingModels(request, `UI concurrent models ${Date.now()}`);
+  await setCurrentModels(request, { main: models[0], translation: models[1] });
   await page.goto('/');
   await nav(page, '새 이야기');
-  await page.getByLabel('시작 본문 모델').selectOption(`${models[0].id}`);
-  await openNewStoryOptions(page);
-  await page.getByLabel('시작 번역 모델').selectOption(`${models[1].id}`);
-  let fail = true;
-  await page.route('**/api/chats/*/profile', async (route) => {
-    if (route.request().method() === 'GET' && fail) {
-      fail = false;
-      return route.fulfill({
-        status: 500,
-        contentType: 'application/json',
-        body: JSON.stringify({ error: 'SYNTHETIC_START_MODELS_READ' }),
-      });
-    }
-    await route.continue();
-  });
+  const changed = await setCurrentModels(request, { main: models[1], translation: null });
   const accepted = page.waitForResponse(
     (response) => /\/api\/chats$/.test(response.url()) && response.request().method() === 'POST'
   );
   await page.getByRole('button', { name: '채팅 만들기', exact: true }).click();
   const chat = (await (await accepted).json()) as Chat;
-  await expect(page.getByRole('dialog').getByRole('alert')).toContainText('(500)');
-  const pending = await page.evaluate(
-    (id) => JSON.parse(sessionStorage.getItem(`pending-profile:${id}`)!),
-    chat.id
-  );
-  expect(pending.version).toBe(2);
-  expect(pending.models).toEqual({ main: models[0], translation: models[1] });
-  const original = (await data(request, chat.id)).profile!;
-  const changedRoutes = { ...original.routes, main: models[1], translation: null };
-  const updated = await request.put(`/api/chats/${chat.id}/profile`, {
-    data: {
-      ...original,
-      chatId: undefined,
-      expectedRevision: original.revision,
-      revision: undefined,
-      routes: changedRoutes,
-      image: true,
-    },
-  });
-  expect(updated.ok()).toBeTruthy();
-  await page.goto(`/?chat=${chat.id}`);
-  await page.getByLabel('다음 장면 요청').fill('설정 복구를 기다리는 초안');
-  await expect(page.getByRole('button', { name: '원문 생성', exact: true })).toBeDisabled();
-  await page.getByRole('button', { name: '시작 설정 다시 저장', exact: true }).click();
-  await expect(page.getByRole('button', { name: '시작 설정 다시 저장', exact: true })).toHaveCount(
-    0
-  );
+  await expect(page.getByRole('dialog', { name: '새 채팅', exact: true })).not.toBeVisible();
   const restored = await data(request, chat.id);
-  expect(restored.profile!.routes).toEqual(changedRoutes);
-  expect(restored.profile!.image).toBe(true);
+  expect(restored.profile!.routes).toEqual(changed.routes);
   expect(restored.runs).toHaveLength(0);
   expect(restored.attempts).toHaveLength(0);
-  await expect(page.getByLabel('다음 장면 요청')).toHaveValue('설정 복구를 기다리는 초안');
+  expect(
+    await page.evaluate((id) => sessionStorage.getItem(`pending-profile:${id}`), chat.id)
+  ).toBeNull();
 });
 
 test('UI02 UI04 UI12 sending a long request collapses the empty composer and preserves a later long draft on return', async ({
@@ -1323,8 +1258,7 @@ test('UI17 full writing and empty translation prompts import, save and apply wit
     data: {
       expectedRevision: initialProfile.revision,
       attachments: initialProfile.attachments,
-      personaReference: false,
-      routes: initialProfile.routes,
+
       image: initialProfile.image,
     },
   });
@@ -1337,8 +1271,8 @@ test('UI17 full writing and empty translation prompts import, save and apply wit
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto(`/?chat=${chat.id}`);
   await page.getByRole('button', { name: '채팅 설정', exact: true }).click();
-  const dialog = page.getByRole('dialog', { name: '채팅 설정', exact: true });
-  await selectChatSettingsSection(page, '프롬프트·창작 프리셋');
+  await selectCurrentSettingsSection(page, '프롬프트·창작 프리셋');
+  const dialog = page.getByRole('dialog', { name: '설정', exact: true });
   const editor = dialog.getByRole('region', { name: '현재 프롬프트 설정' });
   await expect(await promptBody(editor)).not.toHaveValue('');
   await promptBody(editor);
@@ -1353,8 +1287,8 @@ test('UI17 full writing and empty translation prompts import, save and apply wit
   });
   await expect(await promptBody(editor)).toHaveValue(literal);
   await editor.getByLabel('현재 프롬프트 이름').fill('UI17-full-main');
-  await selectChatSettingsSection(page, '봇·페르소나·모듈');
-  await selectChatSettingsSection(page, '프롬프트·창작 프리셋');
+  await editor.getByLabel('현재 프롬프트 역할').selectOption('translation');
+  await editor.getByLabel('현재 프롬프트 역할').selectOption('main');
   await expect(await promptBody(editor)).toHaveValue(literal);
   expect(await editor.evaluate((element) => element.scrollWidth <= element.clientWidth + 1)).toBe(
     true
@@ -1389,7 +1323,6 @@ test('UI17 full writing and empty translation prompts import, save and apply wit
   expect(after.attempts).toEqual(before.attempts);
   expect(after.sources).toEqual(before.sources);
   expect(after.profile!.attachments).toEqual(before.profile!.attachments);
-  expect(after.profile!.personaReference).toEqual(before.profile!.personaReference);
   expect(after.profile!.routes).toEqual(before.profile!.routes);
   expect(writes.some((url) => /\/(?:runs|candidate|retranslate|retry)(?:\?|$)/u.test(url))).toBe(
     false
@@ -1438,9 +1371,8 @@ test('UI17 prompts use latest settings and concurrent edits preserve unsaved tex
   });
   expect(latest.ok()).toBeTruthy();
   await page.goto(`/?chat=${chat.id}`);
-  await page.getByRole('button', { name: '채팅 설정', exact: true }).click();
-  const dialog = page.getByRole('dialog', { name: '채팅 설정', exact: true });
-  await selectChatSettingsSection(page, '프롬프트·창작 프리셋');
+  await selectCurrentSettingsSection(page, '프롬프트·창작 프리셋');
+  const dialog = page.getByRole('dialog', { name: '설정', exact: true });
   const editor = dialog.getByRole('region', { name: '현재 프롬프트 설정' });
   await expect(await promptBody(editor)).toHaveValue(originalText);
   const edited = 'Unsaved custom full prompt.\n' + 'Keep my edited text intact.\n'.repeat(30);
@@ -1459,8 +1391,8 @@ test('UI17 prompts use latest settings and concurrent edits preserve unsaved tex
     },
   });
   expect(concurrent.ok()).toBeTruthy();
-  await editor.getByRole('button', { name: '현재 설정 저장', exact: true }).click();
-  await expect(editor.getByRole('alert')).toContainText('다른 요청이 먼저 반영됐어요.');
+  await expect(editor.getByRole('alert')).toContainText('다른 곳에서 현재 프롬프트가 바뀌었어요.');
+  await expect(editor.getByRole('button', { name: '현재 설정 저장', exact: true })).toBeDisabled();
   await expect(await promptBody(editor)).toHaveValue(edited);
   expect((await (await request.get('/api/prompt-workspace')).json()).main.program).toEqual(
     createDefaultPromptProgram('Concurrent current prompt.', 'main')
@@ -1472,7 +1404,7 @@ test('UI17 prompts use latest settings and concurrent edits preserve unsaved tex
     editor.getByRole('status').filter({ hasText: '독립된 프리셋으로 저장했어요.' })
   ).toBeVisible();
   expect((await data(request, chat.id)).profile).toEqual(profile);
-  await page.getByRole('button', { name: '채팅 설정 닫기', exact: true }).click();
+  await page.getByRole('button', { name: '설정 닫기', exact: true }).click();
   await page.getByRole('button', { name: '초안 버리고 닫기', exact: true }).click();
   await nav(page, '프롬프트');
   await page
@@ -1844,8 +1776,10 @@ test('UI settings categories retain drafts and support keyboard navigation', asy
     if (viewport.width === 1440) {
       await tabs.getByRole('tab', { name: '접근 보안', exact: true }).press('Home');
       await expect(tabs.getByRole('tab', { name: '일반', exact: true })).toBeFocused();
-      await page.keyboard.press('ArrowDown');
-      await expect(tabs.getByRole('tab', { name: '연결과 모델', exact: true })).toBeFocused();
+      for (const section of ['현재 모델', '현재 프롬프트', '연결과 모델']) {
+        await page.keyboard.press('ArrowDown');
+        await expect(tabs.getByRole('tab', { name: section, exact: true })).toBeFocused();
+      }
     } else {
       await dialog.getByRole('button', { name: '설정 목록으로', exact: true }).click();
       const connection = dialog

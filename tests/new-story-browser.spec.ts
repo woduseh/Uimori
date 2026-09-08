@@ -1,10 +1,12 @@
+import { setCurrentModels } from './ui-navigation.js';
+import { preservePromptWorkspace } from './fixtures/prompt-workspace.js';
 import { visualReview } from './fixtures/visual-review.js';
 import { test, expect } from '@playwright/test';
 import type { Chat, ChatDetail } from '../core/types.js';
 import type { Connection, Content, Library, ModelPreset } from '../core/product.js';
 import { navigationAction } from './ui-navigation.js';
 
-test('NSUI01 a sole usable model reaches an empty chat on mobile and optional choices survive collapsing', async ({
+test('NSUI01 global model reaches an empty chat on mobile and optional choices survive collapsing', async ({
   page,
   request,
 }, info) => {
@@ -43,6 +45,7 @@ test('NSUI01 a sole usable model reaches an empty chat on mobile and optional ch
   });
   expect(savedModel.ok()).toBe(true);
   const model = (await savedModel.json()) as ModelPreset;
+  await setCurrentModels(request, { main: { id: model.id }, translation: null });
   // Other suites may already have saved models; this page deliberately sees one usable choice.
   await page.route(/\/api\/library(?:\?|$)/, async (route) => {
     const response = await route.fetch();
@@ -68,8 +71,8 @@ test('NSUI01 a sole usable model reaches an empty chat on mobile and optional ch
   await navigationAction(page, '새 채팅', bot.title);
   const dialog = page.getByRole('dialog', { name: '새 채팅', exact: true });
   const options = dialog.locator('.new-story-options');
-  await expect(dialog.getByLabel('시작 본문 모델', { exact: true })).toHaveValue(model.id);
-  await expect(dialog.getByText('사용 가능한 모델이 하나여서 미리 선택했어요.')).toBeVisible();
+  await expect(dialog.getByLabel('시작 본문 모델', { exact: true })).toHaveCount(0);
+  await expect(dialog.getByRole('button', { name: '전역 모델 설정', exact: true })).toBeVisible();
   await expect(options).not.toHaveAttribute('open');
   await expect(dialog.getByLabel('시작 번역 모델', { exact: true })).not.toBeVisible();
   await expect(dialog.getByLabel('새 채팅 이름', { exact: true })).not.toBeVisible();
@@ -103,17 +106,18 @@ test('NSUI01 a sole usable model reaches an empty chat on mobile and optional ch
   expect(detail.attempts).toHaveLength(0);
 
   await navigationAction(page, '새 채팅', bot.title);
-  await expect(dialog.getByLabel('시작 본문 모델', { exact: true })).toHaveValue(model.id);
-  await expect(dialog.getByText('최근 새 채팅에서 선택한 모델이에요.')).toBeVisible();
+  await expect(dialog.getByLabel('시작 본문 모델', { exact: true })).toHaveCount(0);
+  await expect(dialog.getByText('최근 새 채팅에서 선택한 모델이에요.')).toHaveCount(0);
   await options.locator('summary').click();
   const customTitle = '추가 설정에 남긴 합성 제목';
   await dialog.getByLabel('새 채팅 이름', { exact: true }).fill(customTitle);
-  await dialog.getByLabel('시작 본문 모델', { exact: true }).selectOption('');
   await options.locator('summary').click();
   await expect(dialog.getByLabel('새 채팅 이름', { exact: true })).not.toBeVisible();
-  await expect(dialog.getByLabel('시작 본문 모델', { exact: true })).toHaveValue('');
+  await expect(dialog.getByLabel('시작 본문 모델', { exact: true })).toHaveCount(0);
   await options.locator('summary').click();
   await expect(dialog.getByLabel('새 채팅 이름', { exact: true })).toHaveValue(customTitle);
-  await expect(dialog.getByLabel('시작 번역 모델', { exact: true })).toHaveValue('');
+  await expect(dialog.getByLabel('시작 번역 모델', { exact: true })).toHaveCount(0);
   expect(executionRequests).toEqual([]);
 });
+
+preservePromptWorkspace();

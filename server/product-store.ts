@@ -2,6 +2,7 @@ import { HttpError, fields, number, record, text } from './request-validation.js
 import { translationPolicy } from '../core/translation-settings.js';
 import {
   defaultPromptWorkspace,
+  emptyModelRoutes,
   promptWorkspace,
   freezeCurrentPrompts,
   validateCurrentPrompt,
@@ -93,6 +94,7 @@ import {
   validateImageBlob,
   validateImageCatalog,
   imageCatalog,
+  imageTargetSource,
 } from './package-images.js';
 import { validateArchivedPackageStart } from './package-start.js';
 import { validateLoreContextPolicy } from '../core/lore-context.js';
@@ -493,17 +495,26 @@ export class ProductStore {
     const prepared = this.prepareModel(value, id);
     return this.save('model', prepared.value, id, prepared.expectedRevision);
   }
-  modelSnapshot(id: string): ModelSnapshot {
-    this.assertAvailable('model', id);
-    const model = this.get<ModelPreset>('model', id);
-    if (model.enabled === false) throw new HttpError(403, 'Model disabled');
-    this.assertAvailable('connection', model.connectionId);
-    const connection = this.get<Connection>('connection', model.connectionId);
-    this.authorize(connection);
-    if (model.capabilityProtocol !== undefined && model.capabilityProtocol !== connection.protocol)
-      throw new HttpError(400, 'Connection protocol changed; review and save the model settings');
-    validateModelGeneration(model, connection.protocol);
-    return structuredClone({ ...model, connection });
+  modelSnapshot(id: string, role?: string): ModelSnapshot {
+    try {
+      this.assertAvailable('model', id);
+      const model = this.get<ModelPreset>('model', id);
+      if (model.enabled === false) throw new HttpError(403, 'Model disabled');
+      this.assertAvailable('connection', model.connectionId);
+      const connection = this.get<Connection>('connection', model.connectionId);
+      this.authorize(connection);
+      if (
+        model.capabilityProtocol !== undefined &&
+        model.capabilityProtocol !== connection.protocol
+      )
+        throw new HttpError(400, 'Connection protocol changed; review and save the model settings');
+      validateModelGeneration(model, connection.protocol);
+      return structuredClone({ ...model, connection });
+    } catch (error) {
+      if (role && error instanceof HttpError)
+        throw new HttpError(error.statusCode, `MODEL_UNAVAILABLE:${role}:${error.message}`);
+      throw error;
+    }
   }
   profile(chatId: string): ChatProfile {
     this.store.chat(chatId);
@@ -517,30 +528,18 @@ export class ProductStore {
     fields(b, [
       'expectedRevision',
       'attachments',
-      'personaReference',
-      'routes',
       'image',
+      'imageTranslation',
       'packageAttachments',
       'packageValues',
       'loreContext',
     ]);
-    const routes = record(b.routes);
-    fields(routes, ['main', 'translation', 'status', 'image']);
     if (!Array.isArray(b.attachments) || b.attachments.length > 300)
       throw new HttpError(400, 'Invalid attachments');
     const attachments = b.attachments.map((r) => currentRef(this, 'content', ref(r)));
     if (new Set(attachments.map((r) => r.id)).size !== attachments.length)
       throw new HttpError(400, 'Duplicate attachment');
     for (const r of attachments) this.get('content', r.id, r.revision);
-    const selected = Object.fromEntries(
-      ['main', 'translation', 'status', 'image'].map((role) => {
-        const r = routes[role] === null ? null : modelRef(routes[role]);
-        if (r) this.get('model', r.id);
-        return [role, r];
-      })
-    ) as ChatProfile['routes'];
-    const personaReference =
-      b.personaReference === undefined ? undefined : boolean(b.personaReference);
     const image = boolean(b.image);
     let requestedLore: ReturnType<typeof validateLoreContextPolicy> | undefined;
     try {
@@ -578,8 +577,6 @@ export class ProductStore {
           ? undefined
           : currentPackageValues(this, resolvedPackages.attachments, requestedPackageValues).values;
       this.store.organization.assertBotAttachments(chatId, attachments, packageAttachments);
-      for (const role of ['main', 'translation', 'status', 'image'] as const)
-        assertModelSelection(this, selected[role], prior.routes[role]);
       const result: ChatProfile = {
         ...((requestedLore ?? prior.loreContext)
           ? { loreContext: requestedLore ?? prior.loreContext }
@@ -587,9 +584,12 @@ export class ProductStore {
         chatId,
         revision: prior.revision + 1,
         attachments,
-        personaReference: personaReference ?? prior.personaReference ?? true,
-        routes: selected,
+        routes: prior.routes,
         image,
+        imageTranslation:
+          b.imageTranslation === undefined
+            ? (prior.imageTranslation ?? true)
+            : boolean(b.imageTranslation),
         ...(packageAttachments !== undefined ? { packageAttachments } : {}),
         ...(packageValues !== undefined ? { packageValues } : {}),
       };
@@ -604,12 +604,18 @@ export class ProductStore {
         .prepare(
           'INSERT INTO profiles VALUES(?,?) ON CONFLICT(chat_id) DO UPDATE SET body=excluded.body'
         )
-        .run(chatId, json(result));
+        .run(
+          chatId,
+          json(Object.fromEntries(Object.entries(result).filter(([key]) => key !== 'routes')))
+        );
       this.store.event(chatId, 'profile.updated', chatId);
       return result;
     });
   }
-  snapshot(chatId: string, requiredRole: 'main' | 'translation' = 'main'): ProfileSnapshot {
+  snapshot(
+    chatId: string,
+    requiredRole: 'main' | 'translation' | 'image' = 'main'
+  ): ProfileSnapshot {
     const { optionAdjustments: _notices, ...p } = this.profile(chatId);
     const contents = p.attachments.map((r) => this.get<Content>('content', r.id, r.revision));
     const models: ProfileSnapshot['models'] = {};
@@ -618,7 +624,7 @@ export class ProductStore {
       const r = p.routes[role];
       if (!r) continue;
       try {
-        models[role] = this.modelSnapshot(r.id);
+        models[role] = this.modelSnapshot(r.id, role);
       } catch (error) {
         if (role === requiredRole) throw error;
         routes[role] = null;
@@ -645,7 +651,7 @@ export class ProductStore {
   }
   resolveJobPrompt(snapshot: RunSnapshot, input: unknown): RunSnapshot {
     const resolved = structuredClone(snapshot);
-    for (const role of ['translation', 'status'] as const) {
+    for (const role of ['translation', 'status', 'image'] as const) {
       const key = `${role}ModelSelection`;
       if (
         input &&
@@ -1200,14 +1206,14 @@ function currentPackageValues(
 }
 /** Pure current-settings projection. Frozen Run/source profiles never pass through this path. */
 function currentProfile(product: ProductStore, saved: ChatProfile): ChatProfile {
+  // Ignore the retired setting without rewriting persisted profiles or historical snapshots.
+  const { personaReference: _historicalScope, ...current } = saved as ChatProfile & {
+    personaReference?: boolean;
+  };
   const result = {
-    ...saved,
-    routes: Object.fromEntries(
-      Object.entries(saved.routes).map(([role, ref]) => [
-        role,
-        ref && product.isHidden('model', ref.id) ? null : ref,
-      ])
-    ) as ChatProfile['routes'],
+    ...current,
+    imageTranslation: current.imageTranslation ?? true,
+    routes: structuredClone(promptWorkspace(product.store).modelRoutes),
     attachments: saved.attachments.map((r) => currentRef(product, 'content', r)),
   };
   const notices: string[] = [];
@@ -1500,6 +1506,7 @@ function validateArchiveProfile(
     'personaReference',
     'routes',
     'image',
+    'imageTranslation',
     'packageAttachments',
     'packageValues',
     'loreContext',
@@ -1521,11 +1528,12 @@ function validateArchiveProfile(
   number(p.revision, 'profile revision');
   if (p.personaReference !== undefined) boolean(p.personaReference);
   boolean(p.image);
+  if (p.imageTranslation !== undefined) boolean(p.imageTranslation);
   const attachments = archiveList(p.attachments).map(ref);
   if (new Set(attachments.map((r) => r.id)).size !== attachments.length)
     throw new HttpError(400, 'Duplicate attachment');
   const contents = attachments.map((r) => product.get<Content>('content', r.id, r.revision));
-  const routes = record(p.routes);
+  const routes = record(!frozen && !Object.hasOwn(p, 'routes') ? emptyModelRoutes() : p.routes);
   fields(routes, ['main', 'translation', 'status', 'image']);
   const models: ProfileSnapshot['models'] = {};
   if (frozen) fields(record(p.models), ['main', 'translation', 'status', 'image']);
@@ -1636,6 +1644,7 @@ function validateArchiveGraph(product: ProductStore) {
   // Option presets were validated as independent role/value copies by validateArchiveVersion.
   const workspace = promptWorkspace(product.store);
   for (const selected of [
+    ...Object.values(workspace.modelRoutes),
     workspace.translationPolicy.refusalModel,
     ...(workspace.main.program.collaboration?.agents ?? []).map((agent) => agent.model),
   ])
@@ -1829,7 +1838,7 @@ function validateArchiveGraph(product: ProductStore) {
     const source = product.store.sourceAtHash(job.source_revision, job.source_hash);
     const jobInput = parse(job.input);
     if (jobInput && typeof jobInput === 'object' && !Array.isArray(jobInput)) {
-      for (const role of ['translation', 'status'] as const) {
+      for (const role of ['translation', 'status', 'image'] as const) {
         if (
           (Object.hasOwn(jobInput, `${role}ModelSelection`) ||
             Object.hasOwn(jobInput, `${role}ModelSnapshot`)) &&
@@ -1841,8 +1850,25 @@ function validateArchiveGraph(product: ProductStore) {
         throw new HttpError(400, 'Translation settings require translation job');
     }
     product.resolveJobPrompt(product.store.run(source.runId).snapshot, jobInput);
+    if (jobInput?.translationImageSelection !== undefined) {
+      if (job.kind !== 'translation')
+        throw new HttpError(400, 'Automatic image settings require translation job');
+      validateImageCatalog(product.store, job.chat_id, jobInput.translationImageSelection);
+      if (
+        jobInput.translationImageSelection.imageSelectionError !== undefined &&
+        jobInput.translationImageSelection.imageSelectionError !== 'IMAGE_MODEL_UNAVAILABLE'
+      )
+        throw new HttpError(400, 'Invalid automatic image diagnostic');
+      product.resolveJobPrompt(
+        product.store.run(source.runId).snapshot,
+        jobInput.translationImageSelection
+      );
+    }
+    if (jobInput?.imageTarget !== undefined && job.kind !== 'image')
+      throw new HttpError(400, 'Image target requires image job');
     if (job.kind === 'image' && job.status !== 'stale')
       validateImageCatalog(product.store, job.chat_id, jobInput);
+    if (job.kind === 'image') imageTargetSource(product.store, product.store.job(job.id));
     if (job.source_hash !== source.hash) throw new HttpError(400, 'Job source hash mismatch');
     choice(job.kind, ['translation', 'status', 'image'], 'job kind');
     choice(
@@ -1871,8 +1897,11 @@ function validateArchiveGraph(product: ProductStore) {
     if (job.kind === 'translation' && job.status === 'completed')
       validateTranslationArtifact(product.store, product.store.job(job.id), source);
     if (result && job.kind === 'image') {
+      if (!isDeepStrictEqual(result.imageTarget, jobInput?.imageTarget))
+        throw new HttpError(400, 'Image result target mismatch');
       validateImageCatalog(product.store, job.chat_id, jobInput);
       const assets = imageCatalog(jobInput);
+      const imageSource = imageTargetSource(product.store, product.store.job(job.id));
       const entries = archiveList(result.annotations, 4).map((raw) => {
         const entry = record(raw);
         fields(entry, [
@@ -1887,8 +1916,8 @@ function validateArchiveGraph(product: ProductStore) {
         return annotation;
       });
       validatePresentation(
-        source,
-        { sourceRevision: source.id, sourceHash: source.hash, entries },
+        imageSource,
+        { sourceRevision: imageSource.id, sourceHash: imageSource.hash, entries },
         assets
       );
     }

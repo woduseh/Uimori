@@ -1,3 +1,4 @@
+import { updateTestProfile } from './fixtures/model-workspace.js';
 import { injectWithFixtureBot, createFixtureChat, fixtureBotInput } from './fixtures/chat.js';
 import { createDefaultPromptProgram } from '../core/prompt-defaults.js';
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
@@ -11,6 +12,7 @@ import { Store, HttpError, type Source } from '../server/store.js';
 import { Controls } from '../server/controls.js';
 import { auxiliaryBridge } from '../server/auxiliary-bridge.js';
 import { runAuxiliaryJob } from '../server/product-auxiliary.js';
+import { imageTargetSource } from '../server/package-images.js';
 import { promptWorkspace, updatePromptWorkspace } from '../server/prompt-workspace.js';
 import { successfulTranslation, validateTranslationArtifact } from '../server/source-editing.js';
 import type { Content, PromptPreset, ChatProfile } from '../core/product.js';
@@ -61,7 +63,7 @@ const ref = ({ id, revision }: { id: string; revision: number }) => ({ id, revis
 const profileBody = (prior: ChatProfile, changes: Record<string, unknown> = {}) => ({
   expectedRevision: prior.revision,
   attachments: prior.attachments,
-  personaReference: prior.personaReference,
+
   routes: prior.routes,
   image: prior.image,
   ...changes,
@@ -155,9 +157,10 @@ function finishOther(store: Store, revision: Source, assetId: string) {
             mock: true,
             sourceRevision: revision.id,
             sourceHash: revision.hash,
+            imageTarget: job.imageTarget,
             annotations: [
               {
-                blockAnchor: revision.blocks![0].anchor,
+                blockAnchor: imageTargetSource(store, store.job(job.id)).blocks![0].anchor,
                 assetRef: assetId,
                 assetRevision: 1,
                 assetHash: store.product.asset(assetId).asset.hash,
@@ -194,7 +197,8 @@ async function rich(app: App) {
     loading: 'discoverable',
     relatedIds: [],
   }) as Content;
-  store.product.updateProfile(
+  updateTestProfile(
+    store.product,
     chat.id,
     profileBody(store.product.profile(chat.id), {
       attachments: [ref(lore)],
@@ -306,7 +310,8 @@ describe('independent stored-story fork without generation', () => {
       bot.id
     ) as Content;
     const current = store.product.profile(chat.id);
-    store.product.updateProfile(
+    updateTestProfile(
+      store.product,
       chat.id,
       profileBody(current, {
         packageAttachments: current.packageAttachments!.map((attachment) =>
@@ -465,7 +470,9 @@ describe('independent stored-story fork without generation', () => {
         } else if (job.kind === 'image') {
           const annotation = job.result!.annotations![0];
           const copiedAsset = store.product.asset(annotation.assetRef);
-          expect(annotation.blockAnchor).toBe(newSource.blocks![0].anchor);
+          expect(annotation.blockAnchor).toBe(
+            imageTargetSource(store, store.job(job.id)).blocks![0].anchor
+          );
           expect(copiedAsset.asset.id).not.toBe(fixture.asset.id);
           expect(copiedAsset.asset.chatId).toBe(copy.id);
           expect(copiedAsset.asset.url).toBe('/api/assets/' + copiedAsset.asset.id);
@@ -489,10 +496,11 @@ describe('independent stored-story fork without generation', () => {
       chatId: originalProfile.chatId,
       revision: originalProfile.revision,
     }).toEqual(originalProfile);
-    store.product.updateProfile(
+    updateTestProfile(
+      store.product,
       copy.id,
       profileBody(copyProfile, {
-        personaReference: false,
+        image: !copyProfile.image,
       })
     );
     store.settings(copy.id, copy.settingsRevision, {

@@ -1,3 +1,4 @@
+import { selectCurrentSettingsSection } from './ui-navigation.js';
 import { visualReview } from './fixtures/visual-review.js';
 import { preservePromptWorkspace } from './fixtures/prompt-workspace.js';
 import {
@@ -66,9 +67,8 @@ async function profileInfo(page: Page) {
   return page.getByTestId('profile-editor');
 }
 async function promptTab(page: Page) {
-  const panel = page.getByTestId('profile-editor');
-  await selectChatSettingsSection(page, '프롬프트·창작 프리셋');
-  return panel.getByRole('region', { name: '현재 프롬프트 설정' });
+  await selectCurrentSettingsSection(page, '프롬프트·창작 프리셋');
+  return page.getByRole('region', { name: '현재 프롬프트 설정' });
 }
 async function send(page: Page, text: string): Promise<Run> {
   await closeDialog(page);
@@ -271,7 +271,7 @@ test('P04 manual model IDs and distinct main/translation routing preserve connec
   });
   expect((await request.get(`/api/revisions/connection/${connection.id}/1`)).ok()).toBe(false);
   await openDetails(page, 'profile-editor');
-  await selectChatSettingsSection(page, '모델');
+  await selectCurrentSettingsSection(page, '모델');
   // A model saved against a disabled connection is excluded from a new role selection.
   for (const roleLabel of ['원문 모델', '번역 모델'])
     for (const model of modelRefs) {
@@ -309,11 +309,13 @@ test('P04 manual model IDs and distinct main/translation routing preserve connec
   for (const model of modelRefs)
     expect(activatedModels.find((item) => item.id === model.id)).toEqual(model);
   await openDetails(page, 'profile-editor');
-  await selectChatSettingsSection(page, '모델');
+  await selectCurrentSettingsSection(page, '모델');
   await page.getByLabel('원문 모델', { exact: true }).selectOption(`${modelRefs[0].id}`);
   await page.getByLabel('번역 모델', { exact: true }).selectOption(`${modelRefs[1].id}`);
-  await page.getByRole('button', { name: '채팅 설정 저장', exact: true }).click();
-  await expect.poll(async () => (await getDetail(request, chat.id)).profile?.revision).toBe(2);
+  await page.getByRole('button', { name: '현재 모델 설정 저장', exact: true }).click();
+  await expect
+    .poll(async () => (await (await request.get('/api/model-workspace')).json()).routes.main)
+    .toEqual({ id: modelRefs[0].id });
   const profile = (await getDetail(request, chat.id)).profile!;
   expect(profile.routes.main).toEqual({ id: modelRefs[0].id });
   expect(profile.routes.translation).toEqual({ id: modelRefs[1].id });
@@ -398,9 +400,18 @@ test('P09 P10 P13 fork from a completed scene preserves long prose and annotatio
   const imageModel = (await modelReply.json()) as ModelPreset;
   await page.reload();
   await openDetails(page, 'profile-editor');
-  await selectChatSettingsSection(page, '모델');
-  await page.getByLabel('이미지 선택 모델', { exact: true }).selectOption(imageModel.id);
-  await page.getByLabel('보조 이미지 표시', { exact: true }).check();
+  await selectCurrentSettingsSection(page, '모델');
+  await page.getByLabel('이미지 배치 모델', { exact: true }).selectOption(imageModel.id);
+  await page.getByRole('button', { name: '현재 모델 설정 저장', exact: true }).click();
+  await expect
+    .poll(async () => (await (await request.get('/api/model-workspace')).json()).routes.image)
+    .toEqual({ id: imageModel.id });
+  await expect(
+    page.getByRole('region', { name: '현재 모델 설정', exact: true }).getByRole('status')
+  ).toContainText('현재 모델 설정을 저장했어요.');
+  await openDetails(page, 'profile-editor');
+  await selectChatSettingsSection(page, '봇·페르소나·모듈');
+  await page.getByLabel('원문 이미지 자동 배치', { exact: true }).check();
   await page.getByRole('button', { name: '채팅 설정 저장', exact: true }).click();
   await expect.poll(async () => (await getDetail(request, chat.id)).profile?.revision).toBe(2);
   // Close only after the panel has acknowledged the write; an in-flight save is still protected.
@@ -421,7 +432,7 @@ test('P09 P10 P13 fork from a completed scene preserves long prose and annotatio
     )
     .toBe('completed');
   await page.getByRole('button', { name: '번역 보기', exact: true }).click();
-  await expect.poll(async () => (await getDetail(request, chat.id)).jobs.length).toBe(3);
+  await expect.poll(async () => (await getDetail(request, chat.id)).jobs.length).toBe(4);
   await expect
     .poll(async () =>
       (await getDetail(request, chat.id)).jobs.every((job) => job.status === 'completed')
@@ -429,7 +440,10 @@ test('P09 P10 P13 fork from a completed scene preserves long prose and annotatio
     .toBe(true);
   const firstDetail = await getDetail(request, chat.id);
   const source = firstDetail.sources[0];
-  expect(firstDetail.jobs.find((job) => job.kind === 'image')!.result).toMatchObject({
+  expect(
+    firstDetail.jobs.find((job) => job.kind === 'image' && job.imageTarget?.mode === 'original')!
+      .result
+  ).toMatchObject({
     mock: true,
     sourceRevision: source.id,
     sourceHash: source.hash,
@@ -455,10 +469,18 @@ test('P09 P10 P13 fork from a completed scene preserves long prose and annotatio
     );
   expect(anchors).toEqual(source.blocks!.map((block) => block.anchor));
   await page.getByRole('button', { name: '번역 보기', exact: true }).click();
+  const savedTranslation = firstDetail.jobs.find((job) => job.kind === 'translation')!;
   await expect(page.getByTestId('translation-text').locator('.source-block')).toHaveText(
-    firstDetail.jobs.find((job) => job.kind === 'translation')!.result!.text!
+    savedTranslation.translationLayout!.blocks.map((block, index, blocks) =>
+      savedTranslation.result!.text!.slice(block.start, blocks[index + 1]?.start)
+    )
   );
-  await expect(page.getByTestId('translation-text').locator('[data-block-anchor]')).toHaveCount(0);
+  await expect(page.getByTestId('translation-text').locator('[data-block-anchor]')).toHaveCount(
+    savedTranslation.translationLayout!.blocks.length
+  );
+  await expect(
+    page.getByTestId('translation-text').getByTestId('inline-annotation').first()
+  ).toBeVisible();
   const laterOriginal = await send(
     page,
     'SYNTHETIC_ORIGINAL_ONLY: this later scene must not enter a fork from the first scene.'
@@ -475,7 +497,7 @@ test('P09 P10 P13 fork from a completed scene preserves long prose and annotatio
     .last()
     .getByRole('button', { name: '번역 보기', exact: true })
     .click();
-  await expect.poll(async () => (await getDetail(request, chat.id)).jobs.length).toBe(6);
+  await expect.poll(async () => (await getDetail(request, chat.id)).jobs.length).toBe(8);
   await expect
     .poll(async () =>
       (await getDetail(request, chat.id)).jobs.every((job) => job.status === 'completed')
@@ -519,7 +541,7 @@ test('P09 P10 P13 fork from a completed scene preserves long prose and annotatio
     expect(copied.sources).toHaveLength(1);
     expect(copied.runs).toHaveLength(1);
     expect(copied.attempts).toHaveLength(0);
-    expect(copied.jobs).toHaveLength(3);
+    expect(copied.jobs).toHaveLength(4);
     expect(
       copied.jobs.every(
         (job) =>
@@ -539,9 +561,15 @@ test('P09 P10 P13 fork from a completed scene preserves long prose and annotatio
     await page.getByRole('button', { name: '원문 보기', exact: true }).click();
     await expect(page.getByTestId('inline-annotation').first()).toBeVisible();
     await page.getByRole('button', { name: '번역 보기', exact: true }).click();
+    const copiedTranslation = copied.jobs.find((job) => job.kind === 'translation')!;
     await expect(page.getByTestId('translation-text').locator('.source-block')).toHaveText(
-      newTranslation.text!
+      copiedTranslation.translationLayout!.blocks.map((block, index, blocks) =>
+        newTranslation.text!.slice(block.start, blocks[index + 1]?.start)
+      )
     );
+    await expect(
+      page.getByTestId('translation-text').getByTestId('inline-annotation').first()
+    ).toBeVisible();
     await expect(otherTab.getByTestId('source')).toHaveCount(2);
     await expect(otherTab.getByLabel('다음 장면 요청')).toHaveValue(
       'SYNTHETIC independent other-tab draft'
@@ -560,6 +588,9 @@ test('P09 P10 P13 fork from a completed scene preserves long prose and annotatio
     await expect
       .poll(async () => (await (await request.get('/api/prompt-workspace')).json()).main.title)
       .toBe('Synthetic fork-only prompt');
+    await expect(
+      forkEditor.getByRole('status').filter({ hasText: '현재 프롬프트와 옵션을 저장했어요.' })
+    ).toBeVisible();
     expect((await getDetail(request, chat.id)).profile).toEqual(before.profile);
     const next = await send(
       page,
@@ -633,7 +664,7 @@ test('P09 P10 P13 fork from a completed scene preserves long prose and annotatio
   }
 });
 
-test('P06 P11 quality notes preserve source and export/backup downloads reject restore into an occupied DB', async ({
+test('P06 P11 export/backup downloads preserve source and reject restore into an occupied DB', async ({
   page,
   request,
 }) => {
@@ -648,14 +679,7 @@ test('P06 P11 quality notes preserve source and export/backup downloads reject r
   const source = (await getDetail(request, chat.id)).sources[0];
   const activity = page.locator(`[data-testid="turn-activity"][data-run-id="${run.id}"]`);
   await activity.locator(':scope > summary').click();
-  await activity.getByText('요청 충실성 기록', { exact: true }).click();
-  await activity
-    .getByLabel('요청 충실성 메모', { exact: true })
-    .fill('SYNTHETIC note: retain the sealed letter premise.');
-  await activity.getByRole('button', { name: '메모 저장', exact: true }).click();
-  await expect(
-    activity.getByText('요청 충실성 메모: SYNTHETIC note: retain the sealed letter premise.')
-  ).toBeVisible();
+  await expect(activity.getByText('요청 충실성 기록', { exact: true })).toHaveCount(0);
   const after = await getDetail(request, chat.id);
   expect(after.sources[0]).toEqual(source);
   await navigation(page, '설정');
@@ -770,11 +794,13 @@ test('P04 Vertex settings use service-account references and persist distinct ma
       fullPage: true,
     });
   await openDetails(page, 'profile-editor');
-  await selectChatSettingsSection(page, '모델');
+  await selectCurrentSettingsSection(page, '모델');
   await page.getByLabel('원문 모델', { exact: true }).selectOption(`${models[0].id}`);
   await page.getByLabel('번역 모델', { exact: true }).selectOption(`${models[1].id}`);
-  await page.getByRole('button', { name: '채팅 설정 저장', exact: true }).click();
-  await expect.poll(async () => (await getDetail(request, chat.id)).profile?.revision).toBe(2);
+  await page.getByRole('button', { name: '현재 모델 설정 저장', exact: true }).click();
+  await expect
+    .poll(async () => (await (await request.get('/api/model-workspace')).json()).routes.main)
+    .toEqual({ id: models[0].id });
   const detail = await getDetail(request, chat.id);
   expect(detail.profile?.routes).toMatchObject({
     main: { id: models[0].id },

@@ -72,6 +72,12 @@ export function forkChat(store: Store, chatId: string, value: unknown): Chat {
     }
     const sourceIds = new Map(ancestors.map((source) => [source.id, randomUUID()]));
     const runIds = new Map(ancestors.map((source) => [source.runId, randomUUID()]));
+    const translations = new Map(
+      ancestors.map((source) => [source.id, successfulTranslation(store, source)])
+    );
+    const translationIds = new Map(
+      [...translations.values()].filter((job) => job !== null).map((job) => [job.id, randomUUID()])
+    );
     const originalRuns = new Map(
       ancestors.map((source) => [source.runId, store.run(source.runId)])
     );
@@ -132,9 +138,16 @@ export function forkChat(store: Store, chatId: string, value: unknown): Chat {
       | Row
       | undefined;
     if (profile)
-      store.db
-        .prepare('INSERT INTO profiles VALUES(?,?)')
-        .run(id, json({ ...parse(profile.body), chatId: id, revision: 1 }));
+      store.db.prepare('INSERT INTO profiles VALUES(?,?)').run(
+        id,
+        json({
+          ...Object.fromEntries(
+            Object.entries(parse(profile.body)).filter(([key]) => key !== 'routes')
+          ),
+          chatId: id,
+          revision: 1,
+        })
+      );
     for (const [oldId, newId] of assetIds) {
       const { asset, bytes } = store.product.asset(oldId);
       const copied = { ...asset, id: newId, chatId: id, url: '/api/assets/' + newId };
@@ -205,6 +218,17 @@ export function forkChat(store: Store, chatId: string, value: unknown): Chat {
       const anchors = new Map(
         oldBlocks.map((block, index) => [block.anchor, newBlocks[index].anchor])
       );
+      const translation = translations.get(original.id);
+      if (translation?.result?.text) {
+        const translated = {
+          text: translation.result.text,
+          hash: createHash('sha256').update(translation.result.text).digest('hex'),
+        };
+        const before = splitSource({ ...original, ...translated });
+        const after = splitSource({ ...copiedSource, ...translated });
+        for (const [index, block] of before.entries())
+          anchors.set(block.anchor, after[index].anchor);
+      }
       // Rewrite identity fields, never prose, prompt text, protected literals or provider payloads.
       const artifact = (value: unknown, field = ''): any => {
         if (typeof value === 'string') {
@@ -213,6 +237,7 @@ export function forkChat(store: Store, chatId: string, value: unknown): Chat {
           if (field === 'anchor' || field === 'blockAnchor' || field === 'anchors')
             return anchors.get(value) ?? value;
           if (field === 'assetRef') return assetIds.get(value) ?? value;
+          if (field === 'translationJobId') return translationIds.get(value) ?? value;
           return value;
         }
         if (Array.isArray(value)) return value.map((item) => artifact(item, field));
@@ -234,11 +259,26 @@ export function forkChat(store: Store, chatId: string, value: unknown): Chat {
           if (successfulTranslation(store, original)?.id !== job.id) continue;
           validateTranslationArtifact(store, store.job(job.id), original);
         }
-        const jobId = randomUUID();
+        const jobId = translationIds.get(job.id) ?? randomUUID();
         const oldInput = parse(job.input);
+        if (job.kind === 'image') {
+          const target = oldInput?.imageTarget;
+          if (
+            target?.mode === 'translation' &&
+            (target.translationJobId !== translation?.id ||
+              target.translationRevision !== translation?.revision)
+          )
+            continue;
+          const latest = store.db
+            .prepare(
+              "SELECT id FROM jobs WHERE source_revision=? AND kind='image' AND COALESCE(json_extract(input,'$.imageTarget.mode'),'original')=? ORDER BY revision DESC LIMIT 1"
+            )
+            .get(original.id, target?.mode ?? 'original') as { id: string } | undefined;
+          if (latest?.id !== job.id) continue;
+        }
         const input =
           job.kind === 'image'
-            ? forkImageInput(oldInput, assetIds)
+            ? artifact(forkImageInput(oldInput, assetIds))
             : ['translation', 'status'].includes(job.kind) && oldInput
               ? structuredClone(
                   Object.fromEntries(

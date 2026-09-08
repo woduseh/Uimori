@@ -1,3 +1,4 @@
+import { updateTestProfile } from './fixtures/model-workspace.js';
 import { promptWorkspace, updatePromptWorkspace } from '../server/prompt-workspace.js';
 import { createFixtureChat } from './fixtures/chat.js';
 import { afterEach, expect, test } from 'vitest';
@@ -253,10 +254,10 @@ function dependentModule(f: Fixture, trigger: 'before-turn' | 'model') {
     },
   }) as Content;
   const profile = f.store.product.profile(f.chat.id);
-  f.store.product.updateProfile(f.chat.id, {
+  updateTestProfile(f.store.product, f.chat.id, {
     expectedRevision: profile.revision,
     attachments: profile.attachments,
-    personaReference: profile.personaReference,
+
     routes: profile.routes,
     image: profile.image,
     packageAttachments: [

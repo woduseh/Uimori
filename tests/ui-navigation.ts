@@ -239,3 +239,27 @@ export async function openNewStoryOptions(page: Page) {
   if (!(await options.evaluate((node) => (node as HTMLDetailsElement).open)))
     await options.locator('summary').click();
 }
+
+export async function setCurrentModels(
+  request: APIRequestContext,
+  routes: Record<string, { id: string } | null>
+) {
+  const current = await (await request.get('/api/model-workspace')).json();
+  const response = await request.put('/api/model-workspace', {
+    data: {
+      expectedRevision: current.revision,
+      routes: { ...current.routes, ...routes },
+      translationPolicy: current.translationPolicy,
+    },
+  });
+  expect(response.ok(), await response.text()).toBe(true);
+  return response.json();
+}
+
+export async function selectCurrentSettingsSection(
+  page: Page,
+  name: '모델' | '프롬프트·창작 프리셋'
+) {
+  await navigationAction(page, '설정');
+  await selectSettingsSection(page, name === '모델' ? '현재 모델' : '현재 프롬프트');
+}

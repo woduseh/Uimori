@@ -24,11 +24,35 @@ export async function api<T>(path: string, body?: unknown, method = 'POST'): Pro
       typeof window !== 'undefined'
     )
       window.dispatchEvent(new Event(sessionRequiredEvent));
+    const payload = (await response.json().catch(() => null)) as { error?: unknown } | null;
+    if (
+      typeof payload?.error === 'string' &&
+      /^MODEL_UNAVAILABLE:(main|translation|translation-refusal|status|image):/.test(payload.error)
+    )
+      throw new ApiError(
+        '선택한 모델 또는 연결을 사용할 수 없어요. 전역 모델 설정에서 역할별 모델을 확인하고 모델 프리셋·연결 관리에서 활성 상태, 인증과 지원 모델 설정을 확인해 주세요.',
+        response.status
+      );
+    const settingErrors = new Set([
+      'Model disabled',
+      'Connection disabled or authority changed',
+      'Connection protocol changed; review and save the model settings',
+      'Setting not found',
+      'UNVERIFIED_MODEL_CAPABILITY',
+      'MODEL_CAPABILITY_REVISION_MISMATCH',
+      'CONNECTION_NOT_AUTHORIZED',
+      'CREDENTIAL_UNAVAILABLE',
+      'ENDPOINT_NOT_APPROVED',
+    ]);
+    if (typeof payload?.error === 'string' && settingErrors.has(payload.error))
+      throw new ApiError(
+        '선택한 모델 또는 연결을 사용할 수 없어요. 전역 모델 설정에서 역할별 모델을 확인하고 모델 프리셋·연결 관리에서 활성 상태, 인증과 지원 모델 설정을 확인해 주세요.',
+        response.status
+      );
     if (response.status === 409) {
-      const payload = (await response.json().catch(() => null)) as { error?: unknown } | null;
       if (payload?.error === 'MODEL_REQUIRED:translation-refusal')
         throw new ApiError(
-          '현재 번역 프롬프트 설정에서 거절 판정 모델을 선택해 주세요.',
+          '전역 모델 설정에서 번역 거절 판정 모델을 선택해 주세요.',
           response.status
         );
       const requiredRole =
@@ -41,12 +65,12 @@ export async function api<T>(path: string, body?: unknown, method = 'POST'): Pro
           main: '본문',
           translation: '번역',
           status: '표시 상태',
-          image: '이미지 선택',
+          image: '이미지 배치',
           state: '상태',
           memory: '기억',
         };
         throw new ApiError(
-          `채팅 설정에서 ${roleNames[requiredRole]} 모델을 선택해 주세요.`,
+          `${['state', 'memory'].includes(requiredRole) ? '상태와 기억 설정' : '전역 모델 설정'}에서 ${roleNames[requiredRole]} 모델을 선택해 주세요.`,
           response.status
         );
       }
@@ -64,11 +88,14 @@ export async function api<T>(path: string, body?: unknown, method = 'POST'): Pro
     throw new ApiError(`${message} (${response.status})`, response.status);
   }
   const result = (await response.json()) as T;
+  const providerSettingsChanged =
+    body !== undefined && /^(?:\/model-presets|\/connections)(?:\/[^/]+)?$/.test(path);
   if (
     body !== undefined &&
-    /^(?:\/library\/(?:folders|organization)|\/content(?:\/|$)|\/prompt-presets?(?:\/|$)|\/prompt-workspace(?:\/|$)|\/prompt-combinations?(?:\/|$))/.test(
-      path
-    )
+    (providerSettingsChanged ||
+      /^(?:\/library\/(?:folders|organization)|\/content(?:\/|$)|\/prompt-presets?(?:\/|$)|\/(?:prompt-workspace|model-workspace)(?:\/|$)|\/prompt-combinations?(?:\/|$))/.test(
+        path
+      ))
   ) {
     try {
       localStorage.setItem(libraryChangedKey, `${Date.now()}:${Math.random()}`);
@@ -76,7 +103,12 @@ export async function api<T>(path: string, body?: unknown, method = 'POST'): Pro
       /* A successful save does not depend on browser storage. */
     }
   }
-  if (body !== undefined && path.startsWith('/prompt-workspace'))
+  if (
+    body !== undefined &&
+    (path.startsWith('/prompt-workspace') ||
+      path.startsWith('/model-workspace') ||
+      providerSettingsChanged)
+  )
     dispatchEvent(new Event('prompt-workspace-changed'));
   return result;
 }

@@ -12,7 +12,7 @@ describe('safe auxiliary error diagnostics', () => {
       const diagnostic = auxiliaryErrorDiagnostic(`MODEL_REQUIRED:${role}`);
       expect(diagnostic.code).toBe(`MODEL_REQUIRED:${role}`);
       expect(diagnostic.message).toContain(`${label} 모델`);
-      expect(diagnostic.action).toContain('채팅 설정');
+      expect(diagnostic.action).toContain('전역 모델 설정');
     }
     expect(auxiliaryErrorDiagnostic('MODEL_REQUIRED:secret').code).toBeNull();
   });

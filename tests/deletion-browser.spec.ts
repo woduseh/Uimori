@@ -1,3 +1,5 @@
+import { preservePromptWorkspace } from './fixtures/prompt-workspace.js';
+import { setCurrentModels } from './ui-navigation.js';
 import { visualReview } from './fixtures/visual-review.js';
 import {
   openProviderMenu,
@@ -251,7 +253,7 @@ test('DEL05 model is deleted before its connection and settings lists stay curre
         title: `삭제 연결 ${crypto.randomUUID()}`,
         protocol: 'fixture-sse-v1',
         endpoint: 'http://127.0.0.1:9/',
-        enabled: false,
+        enabled: true,
       },
     })
   ).json();
@@ -262,12 +264,21 @@ test('DEL05 model is deleted before its connection and settings lists stay curre
       modelId: 'synthetic',
       maxOutputTokens: 4096,
       temperature: null,
-      enabled: false,
+      enabled: true,
     },
   });
   expect(response.ok()).toBe(true);
   const model = await response.json();
-  await page.goto('/');
+  const chat = await (
+    await postFixtureChat(request, { data: { title: '전역 모델 삭제 반영' } })
+  ).json();
+  await setCurrentModels(request, { main: { id: model.id } });
+  await page.goto(`/?chat=${chat.id}`);
+  const chip = page.getByRole('button', { name: /^현재 본문 모델/ });
+  await expect(chip).toContainText(model.title);
+  const other = await page.context().newPage();
+  await other.goto(`/?chat=${chat.id}`);
+  await expect(other.getByRole('button', { name: /^현재 본문 모델/ })).toContainText(model.title);
   await page.getByRole('button', { name: '탐색 메뉴', exact: true }).click();
   await page.getByRole('button', { name: '설정', exact: true }).filter({ visible: true }).click();
   await selectSettingsSection(page, '연결과 모델');
@@ -280,6 +291,12 @@ test('DEL05 model is deleted before its connection and settings lists stay curre
   await editor.getByRole('button', { name: `${model.title} 모델 삭제`, exact: true }).click();
   await confirm(page);
   await expect(editor).toBeVisible();
+  await expect
+    .poll(async () => (await (await request.get('/api/model-workspace')).json()).routes.main)
+    .toBeNull();
+  await expect(other.getByRole('button', { name: /^현재 본문 모델/ })).toContainText(
+    '본문 모델을 선택해 주세요'
+  );
   await expect(
     editor.getByRole('button', { name: `${model.title} 모델 삭제`, exact: true })
   ).toHaveCount(0);
@@ -290,6 +307,9 @@ test('DEL05 model is deleted before its connection and settings lists stay curre
   await expect(
     editor.getByRole('button', { name: `${connection.title} 연결 삭제`, exact: true })
   ).toHaveCount(0);
+  await page.keyboard.press('Escape');
+  await expect(chip).toContainText('본문 모델을 선택해 주세요');
+  await other.close();
 });
 
 test('DEL06 deleting the displayed branch returns to the default branch', async ({
@@ -315,3 +335,5 @@ test('DEL06 deleting the displayed branch returns to the default branch', async 
   const detail = await (await request.get(`/api/chats/${chat.id}`)).json();
   expect(detail.branches).toHaveLength(1);
 });
+
+preservePromptWorkspace();

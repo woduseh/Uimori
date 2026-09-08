@@ -67,7 +67,7 @@ function TurnActivityContent({
   const visibleRevision = useRef(revision);
   if (open) visibleRevision.current = revision;
   const [now, setNow] = useState(Date.now);
-  // The reader owns current-source/hash projection. Keep only the latest auxiliary slot per kind.
+  // The reader owns current-source/hash projection. Image views have independent latest slots.
   const currentJobs = [
     ...new Map(
       jobs
@@ -75,7 +75,10 @@ function TurnActivityContent({
           (job) => source && job.sourceRevision === source.id && job.sourceHash === source.hash
         )
         .sort((a, b) => (a.revision ?? 1) - (b.revision ?? 1))
-        .map((job) => [job.kind, job])
+        .map((job) => [
+          job.kind === 'image' ? `image:${job.imageTarget?.mode ?? 'original'}` : job.kind,
+          job,
+        ])
     ).values(),
   ];
   const related = activities.filter((item) =>
@@ -91,7 +94,15 @@ function TurnActivityContent({
     (item) => !story.some((current) => current.id === item.id)
   );
   const entries = [
-    ...currentJobs.map((job) => ({ id: job.id, kind: job.kind, status: job.status })),
+    ...currentJobs.map((job) => ({
+      id: job.id,
+      kind: job.kind,
+      status: job.status,
+      label:
+        job.kind === 'image'
+          ? `${job.imageTarget?.mode === 'translation' ? '번역' : '원문'} 이미지 배치`
+          : names[job.kind],
+    })),
     ...story,
   ];
   const running = active(run.status) || entries.some((item) => active(item.status));
@@ -112,7 +123,10 @@ function TurnActivityContent({
   const important = entries.filter((item) => item.status !== 'completed');
   const summary = [
     mainLabel,
-    ...important.map((item) => `${names[item.kind]} ${labels[item.status] ?? item.status}`),
+    ...important.map(
+      (item) =>
+        `${'label' in item ? item.label : names[item.kind]} ${labels[item.status] ?? item.status}`
+    ),
   ].join(' · ');
   const timing =
     related.find((item) => item.kind === 'main' && active(item.status)) ??

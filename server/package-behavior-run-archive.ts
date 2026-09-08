@@ -1,3 +1,4 @@
+import { historicalPersonaExcluded } from '../core/persona-scope.js';
 import { HttpError } from './request-validation.js';
 import { createHash } from 'node:crypto';
 import { isDeepStrictEqual } from 'node:util';
@@ -208,7 +209,7 @@ export function validateRunBehaviorArchive(store: Store, checkState: CheckState)
         action = pkg?.behavior?.actions.find((action) => action.id === entry.actionId);
       if (
         !ref ||
-        (ref.role === 'persona' && snapshot.profile?.personaReference === false) ||
+        historicalPersonaExcluded(snapshot.profile, ref.role) ||
         !action ||
         !behaviorActionTriggers(action).includes(entry.trigger)
       )

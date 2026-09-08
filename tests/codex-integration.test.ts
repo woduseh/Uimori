@@ -291,12 +291,23 @@ test('app routes every agent role through Codex and persists RPC attempts, propo
     {
       expectedRevision: profile.revision,
       attachments: [],
-      personaReference: profile.personaReference,
+
       routes: { main: ref(model), translation: ref(model), status: ref(model), image: ref(model) },
       image: true,
+      imageTranslation: false,
     },
     'PUT'
   );
+  app.store.product.createAsset(chat.id, {
+    title: 'Synthetic inline scene',
+    description: 'Local synthetic image fixture',
+    mime: 'image/png',
+    base64: Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]).toString('base64'),
+    actor: '',
+    outfit: '',
+    location: '',
+    allowedUse: 'inline',
+  });
   await api(
     app,
     `/api/chats/${chat.id}/story/config`,

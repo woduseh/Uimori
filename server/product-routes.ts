@@ -356,17 +356,6 @@ export function productRoutes(
     options.publish(branch.chatId);
     return branch;
   });
-  app.post<{ Params: { id: string } }>('/api/runs/:id/issue', async (request) => {
-    const b = record(request.body);
-    fields(b, ['note']);
-    const run = store.run(request.params.id);
-    store.db
-      .prepare('UPDATE runs SET issue=? WHERE id=?')
-      .run(text(b.note, 'issue note', 4000), run.id);
-    store.event(run.chatId, 'run.issue', run.id);
-    options.publish(run.chatId);
-    return store.run(run.id);
-  });
   app.post<{ Params: { id: string } }>('/api/chats/:id/assets', async (request) => {
     const asset = product.createAsset(request.params.id, request.body);
     store.event(asset.chatId, 'asset.created', asset.id);

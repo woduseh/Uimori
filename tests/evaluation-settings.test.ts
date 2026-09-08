@@ -1,3 +1,4 @@
+import { updateTestProfile } from './fixtures/model-workspace.js';
 import { createFixtureChat } from './fixtures/chat.js';
 import { afterEach, expect, test } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
@@ -89,10 +90,10 @@ test('only selected model presets persist evaluation tools and captured runs ret
     expect(selected.evaluationTools).toEqual(defaultEvaluationToolOptions());
     const chat = createFixtureChat(store, `Synthetic ${protocol}`),
       prior = store.product.profile(chat.id);
-    store.product.updateProfile(chat.id, {
+    updateTestProfile(store.product, chat.id, {
       expectedRevision: prior.revision,
       attachments: prior.attachments,
-      personaReference: prior.personaReference,
+
       routes: { ...prior.routes, main: { id: selected.id } },
       image: false,
     });

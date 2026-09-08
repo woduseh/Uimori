@@ -26,7 +26,7 @@ test('UXUI01 compact composer and mobile settings details preserve the draft', a
   for (const width of visualReview ? [390, 360] : [390]) {
     await page.setViewportSize({ width, height: 844 });
     await expect(input).toBeInViewport();
-    await expect(page.getByLabel('빠른 본문 모델', { exact: true })).toBeInViewport();
+    await expect(page.getByRole('button', { name: /^현재 본문 모델/ })).toBeInViewport();
     await expect(page.getByRole('button', { name: '원문 생성', exact: true })).toBeInViewport();
     await expect(page.locator('.story-context')).toHaveCount(0);
     if (visualReview) {

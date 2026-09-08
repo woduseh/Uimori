@@ -1,3 +1,4 @@
+import { updateTestProfile } from './fixtures/model-workspace.js';
 import { createFixtureChat } from './fixtures/chat.js';
 import { afterEach, expect, test, vi } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
@@ -137,7 +138,7 @@ function fixture() {
   const profile = store.product.profile(chat.id),
     key = packageControlKey(profile.packageAttachments![0]);
   const { chatId: _chatId, revision, ...profileBody } = profile;
-  const saved = store.product.updateProfile(chat.id, {
+  const saved = updateTestProfile(store.product, chat.id, {
     ...profileBody,
     expectedRevision: revision,
     packageValues: { [key]: { job: 'researcher' } },
@@ -412,7 +413,9 @@ test('lost start response retries the saved command without another profile writ
     if (url.endsWith('/profile')) {
       if (options?.method === 'PUT') {
         profileWrites++;
-        return Response.json(f.store.product.updateProfile(f.chat.id, JSON.parse(options.body!)));
+        return Response.json(
+          updateTestProfile(f.store.product, f.chat.id, JSON.parse(options.body!))
+        );
       }
       return Response.json(f.store.product.profile(f.chat.id));
     }

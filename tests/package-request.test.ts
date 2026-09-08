@@ -1,3 +1,4 @@
+import { updateTestProfile } from './fixtures/model-workspace.js';
 import { createFixtureChat } from './fixtures/chat.js';
 import { afterEach, expect, test } from 'vitest';
 import { randomUUID } from 'node:crypto';
@@ -133,7 +134,7 @@ function rows(f: Fixture, table: string) {
 function setOptions(f: Fixture, responseSize: 'brief' | 'detailed') {
   const profile = f.store.product.profile(f.chatId),
     scope = `${f.content.id}@${f.content.revision}:bot`;
-  return f.store.product.updateProfile(f.chatId, {
+  return updateTestProfile(f.store.product, f.chatId, {
     expectedRevision: profile.revision,
     attachments: profile.attachments,
     routes: profile.routes,

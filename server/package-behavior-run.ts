@@ -1,3 +1,4 @@
+import { historicalPersonaExcluded } from '../core/persona-scope.js';
 import { HttpError } from './request-validation.js';
 import { createHash, randomBytes } from 'node:crypto';
 import { isDeepStrictEqual } from 'node:util';
@@ -70,7 +71,7 @@ function encode(value: unknown) {
 }
 function definitions(snapshot: RunSnapshot) {
   return (snapshot.profile?.packageAttachments ?? [])
-    .filter((ref) => ref.role !== 'persona' || snapshot.profile?.personaReference !== false)
+    .filter((ref) => !historicalPersonaExcluded(snapshot.profile, ref.role))
     .flatMap((ref) => {
       const pkg = snapshot.profile?.packages?.find(
         (p) => p.id === ref.id && p.revision === ref.revision

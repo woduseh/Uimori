@@ -714,7 +714,8 @@ export function BotNavigation(props: Props) {
                 setCreating(true);
               }}
             >
-              <FolderPlus size={16} aria-hidden="true" />새 폴더 만들기
+              <FolderPlus size={16} aria-hidden="true" />
+              <span>새 폴더 만들기</span>
             </button>
             <div className="form-actions">
               <button

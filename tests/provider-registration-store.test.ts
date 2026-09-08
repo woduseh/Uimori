@@ -1,3 +1,4 @@
+import { updateTestProfile } from './fixtures/model-workspace.js';
 import { createFixtureChat } from './fixtures/chat.js';
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 import { createHash, randomUUID } from 'node:crypto';
@@ -504,10 +505,10 @@ test('registration prepare/apply does not assign roles or modify a source and fr
   const s = setup();
   const chat = createFixtureChat(s.store, 'Synthetic role owner');
   const p = s.store.product.profile(chat.id);
-  s.store.product.updateProfile(chat.id, {
+  updateTestProfile(s.store.product, chat.id, {
     expectedRevision: p.revision,
     attachments: [],
-    personaReference: p.personaReference,
+
     routes: { ...p.routes, main: { id: s.model.id } },
     image: false,
   });

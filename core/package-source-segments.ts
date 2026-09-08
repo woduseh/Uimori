@@ -1,3 +1,4 @@
+import { historicalPersonaExcluded } from './persona-scope.js';
 import type { ProfileSnapshot } from './product.js';
 import {
   resolveSourceSegmentPolicy,
@@ -31,7 +32,7 @@ export function freezeSourceSegments(
 ): SourceSegmentPolicy | undefined {
   const rules: SourceSegmentPolicy['rules'] = [];
   for (const ref of profile?.packageAttachments ?? []) {
-    if (ref.role === 'persona' && profile?.personaReference === false) continue;
+    if (historicalPersonaExcluded(profile, ref.role)) continue;
     const pkg = profile?.packages?.find((p) => p.id === ref.id && p.revision === ref.revision);
     if (!pkg?.sourceSegments) continue;
     const instance = `${ref.id}@${ref.revision}:${ref.role}`;

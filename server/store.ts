@@ -36,7 +36,13 @@ import { captureLogicalHistory, compileSnapshotPrompt } from './prompt-snapshot.
 import { seedContextPlan } from './context-planning.js';
 import { freezeLoreContext } from './lore-context.js';
 import { splitSource, validateSourceIdentity } from '../core/auxiliary.js';
-import { imageJobInput, mergedReaderAssets } from './package-images.js';
+import {
+  imageJobInput,
+  mergedReaderAssets,
+  imageTargetSource,
+  scheduleTranslationImages,
+  latestImageJob,
+} from './package-images.js';
 import type {
   Settings,
   Chat as BaseChat,
@@ -117,6 +123,7 @@ export class Store {
         const branch = this.product.branch(chatId, branchId);
         return branch.headRevision ? this.source(branch.headRevision).hash : null;
       });
+      // Keep the retired runs.issue storage column while the archive schema remains v14.
       if (version === 0)
         this.transaction(() => {
           this.db.exec(`
@@ -550,7 +557,6 @@ export class Store {
       createdAt: row.created_at,
       updatedAt: row.updated_at,
       partialText: row.partial_text ?? '',
-      issue: row.issue,
       inputs: (
         this.db
           .prepare('SELECT input FROM model_inputs WHERE run_id=? ORDER BY seq')
@@ -670,6 +676,8 @@ export class Store {
     for (const kind of ['status', 'image'] as const) {
       if (run.snapshot.packageStart?.mode === 'authored') continue;
       if (!(kind === 'image' ? run.snapshot.profile?.image : settings[kind])) continue;
+      if (kind === 'image' && !imageJobInput(this, run.snapshot).imageCatalog.entries.length)
+        continue;
       const jobId = randomUUID();
       const time = now();
       this.db
@@ -682,7 +690,12 @@ export class Store {
           source.id,
           source.hash,
           kind,
-          kind === 'image' ? json(imageJobInput(this, run.snapshot)) : null,
+          kind === 'image'
+            ? json({
+                ...imageJobInput(this, run.snapshot),
+                imageTarget: { mode: 'original', textHash: source.hash },
+              })
+            : null,
           time,
           time
         );
@@ -797,6 +810,28 @@ export class Store {
       attempt: row.generation,
       generation: row.generation,
       input: parse(row.input),
+      ...(row.kind === 'image' && parse(row.input)?.imageTarget
+        ? { imageTarget: parse(row.input).imageTarget }
+        : {}),
+      ...(row.kind === 'translation' &&
+      row.status === 'completed' &&
+      typeof parse(row.result)?.text === 'string'
+        ? (() => {
+            const body = parse(row.result).text;
+            const textHash = createHash('sha256').update(body).digest('hex');
+            return {
+              translationLayout: {
+                textHash,
+                blocks: splitSource({
+                  id: row.source_revision,
+                  chatId: row.chat_id,
+                  text: body,
+                  hash: textHash,
+                }),
+              },
+            };
+          })()
+        : {}),
       result: parse(row.result ?? null),
       error: row.error,
       createdAt: row.created_at,
@@ -821,6 +856,7 @@ export class Store {
                 jobId: previous.id,
                 revision: previous.revision,
                 result: parse(previous.result),
+                translationLayout: saved.translationLayout,
               },
             };
           })()
@@ -836,7 +872,9 @@ export class Store {
   }
   claimJob(id: string, owner: string, input: unknown): Job | null {
     return this.transaction(() => {
-      const prior = this.job(id).input;
+      const pending = this.job(id);
+      if (pending.kind === 'image') imageTargetSource(this, pending, true);
+      const prior = pending.input;
       const claimedInput =
         input && typeof input === 'object' && !Array.isArray(input)
           ? {
@@ -869,6 +907,7 @@ export class Store {
       const source = this.source(row.source_revision);
       if (source.hash !== row.source_hash || source.chatId !== row.chat_id)
         throw new Error('Job source dependency changed');
+      if (row.kind === 'image') imageTargetSource(this, this.job(id), true);
       this.db
         .prepare(
           'INSERT INTO job_results VALUES(?,?,?,?) ON CONFLICT(job_id) DO UPDATE SET generation=excluded.generation,result=excluded.result,created_at=excluded.created_at'
@@ -876,6 +915,7 @@ export class Store {
         .run(id, generation, json(result), now());
       controls?.fail('job-transaction');
       this.db.prepare("UPDATE jobs SET status='completed',updated_at=? WHERE id=?").run(now(), id);
+      if (row.kind === 'translation') scheduleTranslationImages(this, this.job(id));
       this.event(row.chat_id, 'job.completed', id);
       return true;
     });
@@ -914,6 +954,12 @@ export class Store {
           .get(job.sourceRevision) as { id: string } | undefined;
         if (latest?.id !== id)
           throw new HttpError(409, 'Status job was replaced; refresh before retrying');
+      }
+      if (job.kind === 'image') {
+        imageTargetSource(this, job, true);
+        const mode = job.imageTarget?.mode ?? 'original';
+        if (latestImageJob(this, job.sourceRevision, mode)?.id !== id)
+          throw new HttpError(409, 'Image job replaced');
       }
       validate?.(id);
       if (['failed', 'partial', 'interrupted', 'cancelled'].includes(job.status)) {
@@ -957,6 +1003,7 @@ export class Store {
       const source = this.source(row.source_revision);
       if (source.hash !== row.source_hash || source.chatId !== row.chat_id)
         throw new Error('Job source dependency changed');
+      if (row.kind === 'image') imageTargetSource(this, this.job(id), true);
       if (value.result) {
         this.db
           .prepare(
@@ -968,6 +1015,8 @@ export class Store {
       this.db
         .prepare('UPDATE jobs SET status=?,error=?,updated_at=? WHERE id=?')
         .run(value.status, value.error, now(), id);
+      if (row.kind === 'translation' && value.status === 'completed')
+        scheduleTranslationImages(this, this.job(id));
       this.event(row.chat_id, `job.${value.status}`, id);
       return true;
     });

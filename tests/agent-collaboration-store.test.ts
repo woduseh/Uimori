@@ -1,3 +1,4 @@
+import { updateTestProfile } from './fixtures/model-workspace.js';
 import { afterEach, expect, test } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -87,7 +88,7 @@ function fixture() {
     program,
   }) as PromptPreset;
   const initial = product.profile(chat.id);
-  product.updateProfile(chat.id, {
+  updateTestProfile(product, chat.id, {
     ...profileBody(initial),
     routes: { ...initial.routes, main: { id: main.id } },
   });

@@ -1,3 +1,4 @@
+import { historicalPersonaExcluded } from './persona-scope.js';
 import { sourceLogicalHistoryForRequest } from './source-context.js';
 import type { PackageAttachment, PackageTarget } from './content-package.js';
 import { resolvePromptValues, type RuntimeValue } from './prompt-program.js';
@@ -45,7 +46,7 @@ export function executionContext(
     })
     .reverse();
   const refs = (profile?.packageAttachments ?? []).filter(
-    (ref) => target !== 'main' || ref.role !== 'persona' || profile?.personaReference !== false
+    (ref) => !historicalPersonaExcluded(profile, ref.role, target)
   );
   const packages = refs.map((ref) => {
     const pkg = profile?.packages?.find((p) => p.id === ref.id && p.revision === ref.revision);
@@ -88,7 +89,7 @@ export function executionContext(
   const bot = refs.find((r) => r.role === 'bot'),
     persona = refs.find((r) => r.role === 'persona');
   const identity = (ref: PackageAttachment | undefined, kind: string) => {
-    if (kind === 'persona' && target === 'main' && profile?.personaReference === false)
+    if (historicalPersonaExcluded(profile, kind, target))
       return { name: 'User', description: '', descriptionTruncated: false };
     const pkg =
       ref && profile?.packages?.find((p) => p.id === ref.id && p.revision === ref.revision);

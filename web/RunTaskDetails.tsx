@@ -4,7 +4,6 @@ import { api, labels } from './api.js';
 import { ContextSummaryStatus } from './ContextSummaryStatus.js';
 import { LazyDiagnostics } from './LazyDiagnostics.js';
 import { LoreContextDiagnostics } from './LoreContextDiagnostics.js';
-import { RunIssue } from './RuntimeSettings.js';
 import { JobCard } from './SourceReader.js';
 
 export function RunTaskDetails({
@@ -52,7 +51,6 @@ export function RunTaskDetails({
           <pre>{run.partialText}</pre>
         </details>
       )}
-      {run.issue && <p className="error">요청 충실성 메모: {run.issue}</p>}
       {canCancel && (
         <div className="form-actions">
           <button
@@ -78,7 +76,6 @@ export function RunTaskDetails({
         </div>
       )}
       {children}
-      <RunIssue run={run} refresh={refresh} onError={onError} />
       {jobs
         .filter((job) => run.sourceRevision && job.sourceRevision === run.sourceRevision)
         .map((job) =>

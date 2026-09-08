@@ -260,7 +260,7 @@ export function ProviderModelFields({
         </label>
         <ToggleRow
           label="새 모델 선택에 표시"
-          description="새로 모델을 고를 때 목록에 표시해요. 기존 채팅과 실행의 모델 설정은 유지돼요."
+          description="새로 모델을 고를 때 목록에 표시해요. 끄면 이 모델의 새 실행이 차단돼요. 전역 역할 선택과 과거 실행의 설정은 유지돼요."
           checked={value.enabled}
           onChange={(enabled) => update({ enabled })}
         />

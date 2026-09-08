@@ -1,3 +1,4 @@
+import { setCurrentModels } from './ui-navigation.js';
 import { visualReview } from './fixtures/visual-review.js';
 import { preservePromptWorkspace } from './fixtures/prompt-workspace.js';
 import { test, expect } from '@playwright/test';
@@ -173,16 +174,7 @@ test('AGENTUI02 saved collaboration options reach the real preview API and trans
   const chat = await (
     await postFixtureChat(request, { data: { title: '협업 미리보기 합성 채팅' } })
   ).json();
-  const profile = await (await request.get(`/api/chats/${chat.id}/profile`)).json();
-  const { chatId: _chatId, revision: _revision, ...fields } = profile;
-  const configured = await request.put(`/api/chats/${chat.id}/profile`, {
-    data: {
-      ...fields,
-      expectedRevision: profile.revision,
-      routes: { ...profile.routes, main: { id: model.id } },
-    },
-  });
-  expect(configured.ok(), await configured.text()).toBe(true);
+  await setCurrentModels(request, { main: { id: model.id } });
   const workspace = await (await request.get('/api/prompt-workspace')).json();
   expect(
     (

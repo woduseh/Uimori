@@ -1,3 +1,4 @@
+import { updateTestProfile } from './fixtures/model-workspace.js';
 import { createFixtureChat } from './fixtures/chat.js';
 import { afterEach, expect, test } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
@@ -56,10 +57,10 @@ function setup() {
 }
 function assign(s: Store, chatId: string, routes: Record<string, ModelRef | null>) {
   const p = s.product.profile(chatId);
-  return s.product.updateProfile(chatId, {
+  return updateTestProfile(s.product, chatId, {
     expectedRevision: p.revision,
     attachments: p.attachments,
-    personaReference: p.personaReference,
+
     image: p.image,
     routes: { ...p.routes, ...routes },
   });

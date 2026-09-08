@@ -163,75 +163,6 @@ export function PromptWorkspaceEditor({
             }
           />
         )}
-        {role === 'translation' && (
-          <fieldset>
-            <legend>번역 거절 감지와 재요청</legend>
-            <label>
-              거절 판정 모델
-              <select
-                aria-label="번역 거절 판정 모델"
-                value={draft.translationPolicy.refusalModel?.id ?? ''}
-                onChange={(event) =>
-                  edit({
-                    ...draft,
-                    translationPolicy: {
-                      ...draft.translationPolicy,
-                      refusalModel: event.target.value ? { id: event.target.value } : null,
-                    },
-                  })
-                }
-              >
-                <option value="">판정 모델 미지정</option>
-                {library.models.map((model) => (
-                  <option key={model.id} value={model.id}>
-                    {model.title} · {model.modelId}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label>
-              자동 재요청 횟수
-              <input
-                aria-label="번역 자동 재요청 횟수"
-                type="number"
-                min={0}
-                max={5}
-                step={1}
-                value={draft.translationPolicy.maxRetries}
-                onChange={(event) =>
-                  edit({
-                    ...draft,
-                    translationPolicy: {
-                      ...draft.translationPolicy,
-                      maxRetries: event.target.valueAsNumber,
-                    },
-                  })
-                }
-              />
-            </label>
-            <small>최초 번역 이후 추가 요청 횟수예요. 기본 1회, 0이면 자동 재요청을 꺼요.</small>
-            <label>
-              번역 작업 전체 호출 한도
-              <input
-                aria-label="번역 전체 호출 한도"
-                type="number"
-                min={2}
-                max={64}
-                step={1}
-                value={draft.translationPolicy.maxCalls}
-                onChange={(event) =>
-                  edit({
-                    ...draft,
-                    translationPolicy: {
-                      ...draft.translationPolicy,
-                      maxCalls: event.target.valueAsNumber,
-                    },
-                  })
-                }
-              />
-            </label>
-          </fieldset>
-        )}
         <div className="form-actions prompt-workspace-actions">
           <span className="prompt-save-control">
             <IconButton
@@ -248,7 +179,6 @@ export function PromptWorkspaceEditor({
                       expectedRevision: draft.revision,
                       main: draft.main,
                       translation: draft.translation,
-                      translationPolicy: draft.translationPolicy,
                     },
                     'PUT'
                   );

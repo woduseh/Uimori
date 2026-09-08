@@ -1,3 +1,4 @@
+import { updateTestProfile } from './fixtures/model-workspace.js';
 import { createFixtureChat, fixtureBotInput } from './fixtures/chat.js';
 import { afterEach, describe, expect, test } from 'vitest';
 import { mkdtemp, readdir, rm, writeFile } from 'node:fs/promises';
@@ -11,6 +12,7 @@ import { buildMainInput } from '../core/provider.js';
 import type { ChatProfile, Connection, Content, ModelPreset } from '../core/product.js';
 import type { Chat, ChatDetail, Job, Run, RunSnapshot, Usage } from '../core/types.js';
 import { runMain } from '../server/model-runner.js';
+import { compileSnapshotPrompt } from '../server/prompt-snapshot.js';
 import type { ProviderResult } from '../core/transport.js';
 import { loopbackProvider, writeSse } from './fixtures/loopback-provider.js';
 import { createApp } from '../server/app.js';
@@ -65,10 +67,10 @@ function profile(
   changes: Partial<ChatProfile> = {}
 ) {
   const prior = product.profile(chat.id);
-  return product.updateProfile(chat.id, {
+  return updateTestProfile(product, chat.id, {
     expectedRevision: prior.revision,
     attachments,
-    personaReference: prior.personaReference,
+
     routes: prior.routes,
     image: prior.image,
     ...changes,
@@ -135,7 +137,7 @@ const assetBody = {
 };
 
 describe('M1 product data with actual file SQLite', () => {
-  test('P01 P02 P03 freezes exact content/profile revisions and the explicit persona scope', async () => {
+  test('P01 P02 P03 freezes exact content/profile revisions and uses the selected persona', async () => {
     const { store, product } = await database();
     const bot = product.content(
       fixtureBotInput('Attached story owner', 'Ada is the keeper.')
@@ -147,10 +149,10 @@ describe('M1 product data with actual file SQLite', () => {
     const lore = product.content(
       contentBody('module', 'UNREAD_LORE_V1', 'discoverable')
     ) as Content;
-    const persona = product.content(contentBody('persona', 'EXCLUDED_READER_PERSONA')) as Content;
+    const persona = product.content(contentBody('persona', 'SELECTED_READER_PERSONA')) as Content;
     const first = profile(product, chat, [canon, lore, persona].map(reference));
-    const applied = profile(product, chat, first.attachments, { personaReference: false });
-    expect(applied.personaReference).toBe(false);
+    const applied = profile(product, chat, first.attachments);
+    expect(applied).not.toHaveProperty('personaReference');
     expect(applied.attachments).toEqual(first.attachments);
     expect(applied.routes).toEqual(first.routes);
     const run = queuedRun(store, product, chat.id);
@@ -163,9 +165,7 @@ describe('M1 product data with actual file SQLite', () => {
       lore.id
     ) as Content;
     expect(edited.revision).toBe(2);
-    profile(product, chat, [canon, edited, persona].map(reference), {
-      personaReference: true,
-    });
+    profile(product, chat, [canon, edited, persona].map(reference));
     expect(store.run(run.id).snapshot).toEqual(oldSnapshot);
     expect(store.run(run.id).snapshot.resources.find((item) => item.id === lore.id)?.text).toBe(
       'UNREAD_LORE_V1'
@@ -185,21 +185,68 @@ describe('M1 product data with actual file SQLite', () => {
     expect(input.catalog.find((item) => item.id === lore.id)).not.toHaveProperty('text');
     expect(JSON.stringify(input)).not.toContain('UNREAD_LORE_V1');
     expect(input).not.toHaveProperty('controls');
-    expect(JSON.stringify(input)).not.toContain('EXCLUDED_READER_PERSONA');
-    expect(product.profile(chat.id).personaReference).toBe(true);
-    expect(oldSnapshot.profile!.personaReference).toBe(false);
+    expect(JSON.stringify(input)).toContain('SELECTED_READER_PERSONA');
+    expect(product.profile(chat.id)).not.toHaveProperty('personaReference');
+    expect(oldSnapshot.profile!).not.toHaveProperty('personaReference');
     expect(() =>
       product.content({ ...contentBody('module', 'STALE_WRITE'), expectedRevision: 1 }, lore.id)
     ).toThrow('Revision conflict');
     expect(() =>
-      product.updateProfile(chat.id, {
+      updateTestProfile(product, chat.id, {
         expectedRevision: first.revision,
         attachments: applied.attachments,
-        personaReference: false,
         routes: applied.routes,
         image: applied.image,
       })
     ).toThrow('Profile revision conflict');
+  });
+
+  test('legacy persona OFF cannot suppress new requests, while historical snapshots and results stay frozen', async () => {
+    const { store, product } = await database();
+    const chat = createFixtureChat(store, 'legacy-persona');
+    const persona = product.content(contentBody('persona', 'LEGACY_SELECTED_PERSONA')) as Content;
+    const selected = profile(product, chat, [reference(persona)]);
+    const oldRun = queuedRun(store, product, chat.id);
+    const historical = structuredClone(oldRun.snapshot);
+    historical.profile!.personaReference = false;
+    historical.promptCompilation = compileSnapshotPrompt({
+      ...historical,
+      promptCompilation: undefined,
+    }).promptCompilation;
+    store.db
+      .prepare('UPDATE runs SET snapshot=? WHERE id=?')
+      .run(JSON.stringify(historical), oldRun.id);
+    store.startRun(oldRun.id);
+    const source = store.completeRun(
+      oldRun.id,
+      'Existing conversation remains.',
+      noUsage,
+      historical.settings
+    );
+    const frozenRun = store.run(oldRun.id);
+    store.db
+      .prepare('UPDATE profiles SET body=? WHERE chat_id=?')
+      .run(JSON.stringify({ ...selected, personaReference: false }), chat.id);
+    expect(product.profile(chat.id)).not.toHaveProperty('personaReference');
+    const next = queuedRun(store, product, chat.id);
+    expect(next.snapshot.profile).not.toHaveProperty('personaReference');
+    expect(JSON.stringify(buildMainInput(next.snapshot))).toContain(persona.text);
+    store.startRun(next.id);
+    store.completeRun(next.id, 'New selected-persona result.', noUsage, next.snapshot.settings);
+    const cleared = profile(product, chat, []);
+    expect(product.profile(chat.id)).toEqual(cleared);
+    expect(cleared.attachments).toEqual([]);
+    const without = queuedRun(store, product, chat.id);
+    expect(without.snapshot.resources.some((item) => item.id === persona.id)).toBe(false);
+    expect(JSON.stringify(buildMainInput(without.snapshot))).not.toContain(persona.text);
+    expect(without.snapshot.history.some((item) => item.revision === source.id)).toBe(true);
+    expect(store.run(oldRun.id)).toEqual(frozenRun);
+    expect(JSON.stringify(buildMainInput(frozenRun.snapshot))).not.toContain(persona.text);
+    const restored = await database();
+    restored.product.import(product.export());
+    expect(restored.store.run(oldRun.id)).toEqual(frozenRun);
+    expect(restored.store.run(oldRun.id).snapshot.profile!.personaReference).toBe(false);
+    expect(restored.product.profile(chat.id)).not.toHaveProperty('personaReference');
   });
 
   test('P04 keeps manual model IDs and credential references separate from content and transport options', async () => {
@@ -277,7 +324,7 @@ describe('M1 product data with actual file SQLite', () => {
       { ...contentBody('module', 'Later canon revision.'), expectedRevision: 1 },
       canon.id
     ) as Content;
-    profile(product, chat, [reference(changedCanon)], { personaReference: false });
+    profile(product, chat, [reference(changedCanon)]);
     store.settings(chat.id, store.chat(chat.id).settingsRevision, {
       ...store.chat(chat.id).settings,
       preset: 'vivid',

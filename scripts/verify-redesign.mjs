@@ -5,6 +5,7 @@ await runBrowserVerification({
   scope: 'Bot workspace and package redesign plus existing synthetic browser regression',
   registrationFixture: true,
   requiredCases: [
+    'GMUI01',
     'PWS01',
     'PWS02',
     'CSUI01',

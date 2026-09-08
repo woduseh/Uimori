@@ -1,17 +1,15 @@
 import { useEffect, useRef, useState } from 'react';
 import type { Chat } from '../core/types.js';
-import type { Content, Library, ModelPreset } from '../core/product.js';
+import type { Content, Library } from '../core/product.js';
 import { api } from './api.js';
 import { refValue } from './content-ref.js';
-import { modelLabel } from './storyLabels.js';
 import {
   completePendingStoryProfile,
-  newStoryModelDefaults,
   savePendingStoryProfile,
-  type NewStoryModelDefaults,
   type NewStoryProfileIntent,
 } from './pendingStory.js';
-import { useModelSelection } from './model-selection.js';
+import { usePromptWorkspace } from './usePromptWorkspace.js';
+import { isModelSelectable } from './model-selection.js';
 import type { ChatFolder } from './BotNavigation.js';
 import { PackageControlValues } from './PackageControlValues.js';
 import { resolvePackageStart, type PackageStartSnapshot } from '../core/package-start.js';
@@ -32,20 +30,10 @@ type StorySelection = {
   bot: Content | null;
   persona: Content | null;
   modules: Content[];
-  main: ModelPreset | null;
-  translation: ModelPreset | null;
   profile: NewStoryProfileIntent | null;
 };
 
-const modelsKey = 'uimori:new-story-models';
 const selectedId = (key: string) => key.slice(0, key.lastIndexOf('@'));
-function rememberedModels(): unknown {
-  try {
-    return JSON.parse(localStorage.getItem(modelsKey) || 'null');
-  } catch {
-    return null;
-  }
-}
 
 export function NewStory({
   library,
@@ -64,7 +52,10 @@ export function NewStory({
   onModelSettings: () => void;
   onCreated: (chat: Chat) => Promise<void>;
 }) {
-  const { choices } = useModelSelection(library.models, library.connections);
+  const { workspace } = usePromptWorkspace();
+  const mainModel = library.models.find((item) => item.id === workspace?.modelRoutes.main?.id);
+  const mainAvailable =
+    !!mainModel && isModelSelectable(mainModel, library.models, library.connections);
   const testMode = useTestMode();
   const [bot, setBot] = useState(initialBot ? refValue(initialBot) : '');
   const [persona, setPersona] = useState(
@@ -75,14 +66,6 @@ export function NewStory({
         : ''
   );
   const [modules, setModules] = useState(() => (initialModules ?? []).map(refValue));
-  const [remembered] = useState(rememberedModels);
-  const suggested = newStoryModelDefaults(library, remembered);
-  const [models, setModels] = useState(() => ({
-    main: suggested.main,
-    translation: suggested.translation,
-    mainReason: suggested.mainReason,
-  }));
-  const modelChanged = useRef({ main: false, translation: false });
   const [title, setTitle] = useState('');
   const [loadedContents, setLoadedContents] = useState<Record<string, Content>>({});
   const [packageLoading, setPackageLoading] = useState(false);
@@ -97,8 +80,6 @@ export function NewStory({
   const submitted = useRef<StorySelection | null>(null);
   const creating = useRef(false);
   const profileRecorded = useRef(false);
-  const availableModelKeys = JSON.stringify(choices.map((item) => item.id));
-  const modelDefaultsKey = JSON.stringify(suggested);
   useEffect(() => {
     if (initialBot && !submitted.current) setBot(refValue(initialBot));
   }, [initialBot]);
@@ -180,31 +161,6 @@ export function NewStory({
       current = false;
     };
   }, [bot, persona, modules, library, initialBot, initialPersona, initialModules]);
-  useEffect(() => {
-    // A submitted profile intent keeps its model IDs while settings remain editable.
-    if (submitted.current) return;
-    setModels((previous) => {
-      const available = new Set<string>(JSON.parse(availableModelKeys));
-      const defaults = JSON.parse(modelDefaultsKey) as NewStoryModelDefaults;
-      const eligible = new Set(defaults.eligibleIds);
-      const keepMain =
-        available.has(previous.main) && (modelChanged.current.main || eligible.has(previous.main));
-      const main = keepMain ? previous.main : modelChanged.current.main ? '' : defaults.main;
-      const mainReason = keepMain ? previous.mainReason : main ? defaults.mainReason : null;
-      const translation =
-        available.has(previous.translation) &&
-        (modelChanged.current.translation || eligible.has(previous.translation))
-          ? previous.translation
-          : modelChanged.current.translation
-            ? ''
-            : defaults.translation;
-      return main === previous.main &&
-        translation === previous.translation &&
-        mainReason === previous.mainReason
-        ? previous
-        : { main, translation, mainReason };
-    });
-  }, [availableModelKeys, modelDefaultsKey]);
   function captureSelection(): StorySelection {
     if (packageLoading) throw new Error('선택한 자료를 불러온 뒤 시작해 주세요.');
     const selectedBot = bot
@@ -223,15 +179,6 @@ export function NewStory({
     const selectedModules = modules.map((key) => loadedContents[key]);
     if (selectedModules.some((item) => !item))
       throw new Error('선택한 모듈을 불러온 뒤 시작해 주세요.');
-    const available = choices;
-    const main = models.main ? available.find((item) => item.id === models.main) : null;
-    const translation = models.translation
-      ? available.find((item) => item.id === models.translation)
-      : null;
-    if ((models.main && !main) || (models.translation && !translation))
-      throw new Error(
-        '선택한 모델을 사용할 수 없어요. 연결과 모델 목록을 확인한 뒤 다시 골라 주세요.'
-      );
     if (!selectedBot || (persona && !selectedPersona))
       throw new Error('채팅의 소속 봇을 선택해 주세요. 목록이 바뀌었다면 자료를 다시 골라 주세요.');
     if (
@@ -265,8 +212,8 @@ export function NewStory({
         ? resolvePackageStart(selectedBot.package, start, values[`${refValue(selectedBot)}:bot`])
         : null;
     if (start && !opening) throw new Error('선택한 시작을 다시 확인해 주세요.');
-    if (opening?.mode === 'generate' && !main && !testMode)
-      throw new Error('첫 장면을 생성하려면 본문 모델을 선택해 주세요.');
+    if (opening?.mode === 'generate' && !mainAvailable && !testMode)
+      throw new Error('첫 장면을 생성하려면 전역 모델 설정에서 본문 모델을 선택해 주세요.');
     const selectedContents = [selectedBot, selectedPersona, ...selectedModules].filter(
       (item): item is Content => !!item
     );
@@ -276,10 +223,8 @@ export function NewStory({
       bot: selectedBot ?? null,
       persona: selectedPersona ?? null,
       modules: selectedModules,
-      main: main ?? null,
-      translation: translation ?? null,
       profile:
-        selectedBot || selectedPersona || main || translation
+        selectedBot || selectedPersona
           ? {
               attachments: selectedContents
                 .filter((item) => !item.package && !item.hasPackage)
@@ -297,14 +242,6 @@ export function NewStory({
                       packageRevision: opening.packageRevision,
                       startId: opening.startId,
                       idempotencyKey: crypto.randomUUID(),
-                    },
-                  }
-                : {}),
-              ...(main || translation
-                ? {
-                    models: {
-                      main: main ? { id: main.id } : null,
-                      translation: translation ? { id: translation.id } : null,
                     },
                   }
                 : {}),
@@ -352,17 +289,6 @@ export function NewStory({
         }
         await completePendingStoryProfile(chat.id);
       }
-      try {
-        localStorage.setItem(
-          modelsKey,
-          JSON.stringify({
-            main: selection.main ? selection.main.id : '',
-            translation: selection.translation ? selection.translation.id : '',
-          })
-        );
-      } catch {
-        // Remembering a preference must not block an already-created chat.
-      }
       await onCreated(chat);
     } catch (err) {
       setError((err as Error).message);
@@ -381,8 +307,6 @@ export function NewStory({
   );
   for (const item of frozenContents)
     if (!contents.some((current) => refValue(current) === refValue(item))) contents.push(item);
-  for (const selected of [frozen?.main, frozen?.translation])
-    if (selected && !choices.some((item) => item.id === selected.id)) choices.push(selected);
   const activeBot =
     frozen?.bot ??
     loadedContents[bot] ??
@@ -440,7 +364,6 @@ export function NewStory({
   const additionalSummary = [
     activePersona ? '페르소나 선택됨' : '',
     modules.length ? `모듈 ${modules.length}개` : '',
-    models.translation ? '번역 모델 선택됨' : '',
     title.trim() ? '이름 지정됨' : '',
   ]
     .filter(Boolean)
@@ -465,7 +388,7 @@ export function NewStory({
         </div>
       ) : (
         <>
-          <p className="muted">함께할 봇과 본문 모델을 고르면 바로 시작할 수 있어요.</p>
+          <p className="muted">함께할 봇을 고르면 현재 전역 모델과 프롬프트로 시작해요.</p>
           <ContentPicker
             library={{ ...library, contents }}
             role="bot"
@@ -481,49 +404,16 @@ export function NewStory({
         </>
       )}
       <div className="new-story-main-model">
-        <label>
-          본문 모델
-          <select
-            aria-label="시작 본문 모델"
-            value={models.main}
-            onChange={(event) => {
-              modelChanged.current.main = true;
-              setModels((value) => ({ ...value, main: event.target.value, mainReason: null }));
-            }}
-            disabled={locked}
-          >
-            <option value="">본문 모델을 선택해 주세요</option>
-            {models.main && !choices.some((item) => item.id === models.main) && (
-              <option value={models.main} disabled>
-                이전 선택 · 연결 확인 또는 재선택 필요
-              </option>
-            )}
-            {choices.map((item) => (
-              <option key={item.id} value={item.id}>
-                {modelLabel(item, library)}
-              </option>
-            ))}
-          </select>
-        </label>
-        {models.mainReason && (
-          <p className="muted new-story-model-reason">
-            {models.mainReason === 'recent'
-              ? '최근 새 채팅에서 선택한 모델이에요.'
-              : '사용 가능한 모델이 하나여서 미리 선택했어요.'}
+        <p>모든 채팅에 현재 전역 모델과 프롬프트를 사용해요.</p>
+        <p>본문 모델: {mainModel?.title ?? '미지정'}</p>
+        {!mainAvailable && (
+          <p role="status">
+            본문 생성 전에 사용 가능한 전역 본문 모델을 선택해 주세요. 채팅만 먼저 만들 수도 있어요.
           </p>
         )}
-        {!models.main && (
-          <p className="muted">
-            {opening?.mode === 'generate'
-              ? '첫 장면을 생성하려면 본문 모델을 선택해 주세요.'
-              : '모델은 나중에 선택하고 채팅만 먼저 만들 수도 있어요.'}
-          </p>
-        )}
-        {!suggested.eligibleIds.length && (
-          <button type="button" className="secondary" disabled={locked} onClick={onModelSettings}>
-            모델 연결 설정
-          </button>
-        )}
+        <button type="button" className="secondary" disabled={locked} onClick={onModelSettings}>
+          전역 모델 설정
+        </button>
       </div>
       {packageLoading && <p role="status">시작 자료를 불러오는 중이에요…</p>}
       {!!activeBot?.package?.starts?.length && (
@@ -587,7 +477,7 @@ export function NewStory({
       <details className="new-story-options">
         <summary>
           <span>추가 설정</span>
-          <small>{additionalSummary || '페르소나, 모듈, 프롬프트, 번역, 채팅 이름'}</small>
+          <small>{additionalSummary || '페르소나, 모듈, 채팅 이름'}</small>
         </summary>
         <div className="new-story-options-content">
           <ContentPicker
@@ -638,31 +528,6 @@ export function NewStory({
           </fieldset>
           {packageSettings.slice(1)}
           <label>
-            한국어 번역 모델
-            <select
-              aria-label="시작 번역 모델"
-              value={models.translation}
-              onChange={(event) => {
-                modelChanged.current.translation = true;
-                setModels((value) => ({ ...value, translation: event.target.value }));
-              }}
-              disabled={locked}
-            >
-              <option value="">번역 모델 미지정</option>
-              {models.translation && !choices.some((item) => item.id === models.translation) && (
-                <option value={models.translation} disabled>
-                  이전 선택 · 연결 확인 또는 재선택 필요
-                </option>
-              )}
-              {choices.map((item) => (
-                <option key={item.id} value={item.id}>
-                  {modelLabel(item, library)}
-                </option>
-              ))}
-            </select>
-            <small>번역 보기를 누를 때 이 모델로 번역해요.</small>
-          </label>
-          <label>
             채팅 이름 <small>비워 두면 자동으로 정해요</small>
             <input
               aria-label="새 채팅 이름"
@@ -687,7 +552,7 @@ export function NewStory({
           !bot ||
           packageLoading ||
           !!openingError ||
-          (opening?.mode === 'generate' && !models.main && !testMode)
+          (opening?.mode === 'generate' && !mainAvailable && !testMode)
         }
       >
         {busy

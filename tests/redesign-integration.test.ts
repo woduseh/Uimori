@@ -1,3 +1,4 @@
+import { updateTestProfile } from './fixtures/model-workspace.js';
 import { promptWorkspace, updatePromptWorkspace } from '../server/prompt-workspace.js';
 import { createFixtureChat } from './fixtures/chat.js';
 import { afterEach, expect, test } from 'vitest';
@@ -76,10 +77,10 @@ function save(store: Store, pkg = packageBody(), prior?: Content) {
 }
 function update(store: Store, chatId: string, changes: Record<string, unknown>) {
   const p = store.product.profile(chatId);
-  return store.product.updateProfile(chatId, {
+  return updateTestProfile(store.product, chatId, {
     expectedRevision: p.revision,
     attachments: p.attachments,
-    personaReference: p.personaReference,
+
     routes: p.routes,
     image: p.image,
     ...changes,

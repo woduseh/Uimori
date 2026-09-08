@@ -1,3 +1,4 @@
+import { historicalPersonaExcluded } from './persona-scope.js';
 import {
   ContentPackageError,
   validateContentPackage,
@@ -20,7 +21,7 @@ export function compiledPackages(snapshot: RunSnapshot, target: PackageTarget): 
       (p) => p.id === attachment.id && p.revision === attachment.revision
     );
     if (!pkg) throw new ContentPackageError('PACKAGE_SNAPSHOT_REVISION_MISSING', attachment.id);
-    if (target === 'main' && attachment.role === 'persona' && profile?.personaReference === false) {
+    if (historicalPersonaExcluded(profile, attachment.role, target)) {
       validateContentPackage(pkg);
       return [];
     }
@@ -31,7 +32,7 @@ export function compiledPackages(snapshot: RunSnapshot, target: PackageTarget): 
       values:
         profile?.packageValues?.[`${attachment.id}@${attachment.revision}:${attachment.role}`],
     });
-    // Validate every attachment before filtering persona references from the main role.
+    // Historical exclusions still validate the frozen package above.
     return [
       { ...compiled, attachment: structuredClone(attachment), package: structuredClone(pkg) },
     ];

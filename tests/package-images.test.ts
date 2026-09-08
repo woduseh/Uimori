@@ -1,3 +1,4 @@
+import { updateTestProfile } from './fixtures/model-workspace.js';
 import { createFixtureChat, injectWithFixtureBot } from './fixtures/chat.js';
 import { resolveInlineImage } from '../web/image-placement.js';
 import { afterEach, expect, test } from 'vitest';
@@ -104,7 +105,7 @@ function attach(
   roles: PackageRole[] = ['bot', 'persona', 'module']
 ) {
   const { chatId: _id, revision, ...profile } = store.product.profile(chatId);
-  return store.product.updateProfile(chatId, {
+  return updateTestProfile(store.product, chatId, {
     ...profile,
     expectedRevision: revision,
     image: true,
@@ -164,6 +165,7 @@ function completeImage(store: Store, source: ReturnType<typeof finish>) {
       mock: true,
       sourceRevision: source.id,
       sourceHash: source.hash,
+      imageTarget: job.imageTarget,
       annotations: [
         {
           blockAnchor: splitSource(source)[0].anchor,
@@ -421,7 +423,7 @@ test('Reader and detail expose each explicitly selected fixture module, chat and
     { ...image(store), id: 'synthetic-scene', title: 'Explicit fixture scene' },
   ]);
   const { chatId: _id, revision, ...profile } = store.product.profile(chat.id);
-  store.product.updateProfile(chat.id, {
+  updateTestProfile(store.product, chat.id, {
     ...profile,
     expectedRevision: revision,
     packageAttachments: [
@@ -458,6 +460,7 @@ test('Reader and detail expose each explicitly selected fixture module, chat and
       mock: true,
       sourceRevision: source.id,
       sourceHash: source.hash,
+      imageTarget: job.imageTarget,
       annotations,
     })
   ).toBe(true);

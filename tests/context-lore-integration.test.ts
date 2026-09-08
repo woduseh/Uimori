@@ -1,3 +1,4 @@
+import { updateTestProfile } from './fixtures/model-workspace.js';
 import { createFixtureChat, injectWithFixtureBot } from './fixtures/chat.js';
 import { randomUUID } from 'node:crypto';
 import { mkdtemp, rm } from 'node:fs/promises';
@@ -158,7 +159,7 @@ async function fixture(kind: 'lore-pressure' | 'history-pressure') {
       }) as Content
   );
   const { chatId: _id, revision, ...profile } = app.store.product.profile(chat.id);
-  app.store.product.updateProfile(chat.id, {
+  updateTestProfile(app.store.product, chat.id, {
     ...profile,
     expectedRevision: revision,
     attachments: lore.map(({ id, revision }) => ({ id, revision })),
@@ -200,7 +201,7 @@ async function fixture(kind: 'lore-pressure' | 'history-pressure') {
     revision: currentRevision,
     ...current
   } = app.store.product.profile(chat.id);
-  app.store.product.updateProfile(chat.id, {
+  updateTestProfile(app.store.product, chat.id, {
     ...current,
     expectedRevision: currentRevision,
     routes: { ...current.routes, main: { id: model.id } },

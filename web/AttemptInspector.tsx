@@ -7,7 +7,7 @@ const roleLabels: Record<Attempt['role'], string> = {
   main: '원문',
   translation: '번역',
   status: '표시 상태',
-  image: '이미지 선택',
+  image: '이미지 배치',
   state: '서사 상태',
   memory: '장기 기억',
 };

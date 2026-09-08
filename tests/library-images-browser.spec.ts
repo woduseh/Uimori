@@ -412,7 +412,7 @@ test('LIMG05 quick persona selection shows one current selection after its image
         ...(originalProfile.packageAttachments ?? []),
         { id: persona.id, revision: persona.revision, role: 'persona' },
       ],
-      routes: originalProfile.routes,
+
       image: originalProfile.image,
     },
   });

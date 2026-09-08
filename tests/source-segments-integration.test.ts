@@ -1,3 +1,4 @@
+import { updateTestProfile } from './fixtures/model-workspace.js';
 import { afterEach, describe, expect, test } from 'vitest';
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -69,10 +70,10 @@ function fixture(memory = true) {
     },
   });
   const prior = store.product.profile(chat.id);
-  store.product.updateProfile(chat.id, {
+  updateTestProfile(store.product, chat.id, {
     expectedRevision: prior.revision,
     attachments: prior.attachments,
-    personaReference: prior.personaReference,
+
     routes: prior.routes,
     image: false,
   });
@@ -266,7 +267,7 @@ describe('Source segment memory, translation and fork provenance (synthetic only
     source(f, 'A later visible scene.');
 
     const { chatId: _chat, revision, ...body } = f.store.product.profile(f.chatId);
-    f.store.product.updateProfile(f.chatId, {
+    updateTestProfile(f.store.product, f.chatId, {
       ...body,
       expectedRevision: revision,
       packageValues: { [f.packageKey]: { 'exclude-asides': true, 'exclude-annotations': true } },

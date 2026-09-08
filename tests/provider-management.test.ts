@@ -1,3 +1,4 @@
+import { updateTestProfile } from './fixtures/model-workspace.js';
 import { createFixtureChat } from './fixtures/chat.js';
 import { afterEach, expect, test, vi } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
@@ -161,7 +162,7 @@ test('model metadata is server sourced and disabling blocks new selection while 
   expect(m.source).toEqual({ kind: 'catalog', catalogUpdatedAt: stamp });
   const profile = p.profile(chat.id);
   const { chatId: _chatId, revision: _revision, ...profileBody } = profile;
-  p.updateProfile(chat.id, {
+  updateTestProfile(p, chat.id, {
     ...profileBody,
     expectedRevision: profile.revision,
     routes: { ...profile.routes, main: ref(m) },
@@ -318,7 +319,7 @@ test('impact counts current profile model IDs after settings edits and exposes m
   const m = p.model(modelBody(c)) as ModelPreset;
   const profile = p.profile(chat.id);
   const { chatId: _chatId, revision: _revision, ...body } = profile;
-  p.updateProfile(chat.id, {
+  updateTestProfile(p, chat.id, {
     ...body,
     expectedRevision: profile.revision,
     routes: { ...profile.routes, main: ref(m), translation: ref(m) },

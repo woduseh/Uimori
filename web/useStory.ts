@@ -5,7 +5,6 @@ import type { Content, Library } from '../core/product.js';
 import { api, ApiError, libraryChangedKey } from './api.js';
 import { usePromptWorkspace } from './usePromptWorkspace.js';
 import { refValue } from './content-ref.js';
-import { useModelSelection } from './model-selection.js';
 
 function initialView() {
   const params = new URLSearchParams(location.search);
@@ -94,10 +93,7 @@ export function useStory() {
   const [readSource, setReadSource] = useState(() => initialView().source);
   const [loadedDetail, setDetail] = useState<ReaderDetail | null>(null);
   const [library, setLibrary] = useState<Library | null>(null);
-  const { choices: quickModels, canSelect: canSelectModel } = useModelSelection(
-    library?.models ?? [],
-    library?.connections ?? []
-  );
+  const [libraryError, setLibraryError] = useState('');
   const detail = loadedDetail?.chat.id === selected ? loadedDetail : null;
   const [archivedContents, setArchivedContents] = useState<Content[]>([]);
   const [draft, setDraft] = useState('');
@@ -205,8 +201,16 @@ export function useStory() {
   const libraryRequest = useRef(0);
   const loadLibrary = useCallback(async () => {
     const request = ++libraryRequest.current;
-    const value = await api<Library>('/library?view=summary');
-    if (libraryRequest.current === request) setLibrary(value);
+    try {
+      const value = await api<Library>('/library?view=summary');
+      if (libraryRequest.current === request) {
+        setLibrary(value);
+        setLibraryError('');
+      }
+    } catch (caught) {
+      if (libraryRequest.current === request) setLibraryError((caught as Error).message);
+      throw caught;
+    }
   }, []);
   useEffect(() => {
     const refreshLibrary = () => {
@@ -260,8 +264,12 @@ export function useStory() {
           });
           return;
         }
-        if (message.kind === 'profile.updated')
-          void loadLibrary().catch((e) => setError(e.message));
+        if (message.kind === 'prompt-workspace.updated')
+          dispatchEvent(new Event('prompt-workspace-changed'));
+        if (message.kind === 'profile.updated' || message.kind === 'prompt-workspace.updated')
+          void loadLibrary().catch((e) => {
+            if (alive) setError(e.message);
+          });
         if (message.kind === 'branch.deleted' && readerQuery.current.branch === message.entityId) {
           navigationEpoch.current++;
           readerCache.current = null;
@@ -754,7 +762,7 @@ export function useStory() {
     }
   }
   const quickLock = useRef(false);
-  async function quickChange(kind: 'combination' | 'persona' | 'model' | 'module', value: string) {
+  async function quickChange(kind: 'combination' | 'persona' | 'module', value: string) {
     if (
       !detail?.profile ||
       detail.chat.id !== selected ||
@@ -801,8 +809,6 @@ export function useStory() {
           {
             expectedRevision: profile.revision,
             attachments: profile.attachments,
-            personaReference: profile.personaReference,
-            routes: profile.routes,
             image: profile.image,
             packageAttachments: [
               ...existing,
@@ -828,18 +834,8 @@ export function useStory() {
           (item) =>
             (item.kind === 'persona' || item.package || item.hasPackage) && refValue(item) === value
         );
-        const model = library.models.find((item) => item.id === value);
-        if (
-          kind === 'model' &&
-          model &&
-          value !== (profile.routes.main?.id ?? '') &&
-          !canSelectModel(model)
-        )
-          throw new Error(
-            '비활성 모델이거나 연결 권한을 확인할 수 없어요. 모델 목록을 다시 확인해 주세요.'
-          );
-        if ((kind === 'persona' && value && !persona) || (kind === 'model' && value && !model))
-          throw new Error('선택한 설정을 찾지 못했어요. 목록을 다시 확인해 주세요.');
+        if (kind === 'persona' && value && !persona)
+          throw new Error('선택한 페르소나를 찾지 못했어요.');
         const packaged = !!persona && (!!persona.package || !!persona.hasPackage);
         const attachments =
           kind === 'persona'
@@ -866,17 +862,11 @@ export function useStory() {
         const packageKeys = new Set(
           packageAttachments?.map((r) => `${r.id}@${r.revision}:${r.role}`)
         );
-        const routes =
-          kind === 'model'
-            ? { ...profile.routes, main: model ? { id: model.id } : null }
-            : profile.routes;
         await api(
           `/chats/${chatId}/profile`,
           {
             expectedRevision: profile.revision,
             attachments,
-            personaReference: profile.personaReference,
-            routes,
             image: profile.image,
             ...(packageAttachments
               ? {
@@ -969,7 +959,7 @@ export function useStory() {
     readSource,
     detail,
     library,
-    quickModels,
+    libraryError,
     draft,
     error,
     notice,

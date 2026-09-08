@@ -367,7 +367,7 @@ export function ProviderRegistrationAssistant({
                 ))}
               </dl>
               <p>
-                기존 채팅의 모델과 과거 실행은 바꾸지 않아요. 새 모델 ID가 현재 프로토콜에서
+                현재 전역 모델 선택과 과거 실행은 바꾸지 않아요. 새 모델 ID가 현재 프로토콜에서
                 작동하는지, 옵션과 가격이 맞는지는 미확인이에요.
                 {draft
                   ? ' 새 연결의 서버 인증과 허용 주소를 준비한 뒤 직접 활성화해 주세요. 연결을 활성화하면 모델을 역할에 배정할 수 있어요.'
@@ -393,8 +393,7 @@ export function ProviderRegistrationAssistant({
               )}
               {run.status === 'applied' && (
                 <p role="status">
-                  설정 목록에 저장했어요. 새 이야기 또는 이야기 설정의 모델 탭에서 사용할 역할에
-                  배정해 주세요.
+                  설정 목록에 저장했어요. 설정 → 현재 모델에서 사용할 역할에 배정해 주세요.
                 </p>
               )}
             </>

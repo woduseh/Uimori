@@ -1,3 +1,4 @@
+import { isDeepStrictEqual } from 'node:util';
 import type { Content } from '../../core/product.js';
 import type { Settings } from '../../core/types.js';
 import type { Store } from '../../server/store.js';
@@ -35,6 +36,40 @@ export async function injectWithFixtureBot(
   app: Pick<FastifyInstance, 'inject'>,
   options: InjectOptions | string
 ) {
+  // Legacy scenario fixtures now issue two explicit writes: global model selection and chat data.
+  if (
+    typeof options !== 'string' &&
+    String(options.method).toUpperCase() === 'PUT' &&
+    /^\/api\/chats\/[^/]+\/profile$/.test(typeof options.url === 'string' ? options.url : '')
+  ) {
+    const body =
+      typeof options.payload === 'string' ? JSON.parse(options.payload) : options.payload;
+    if (body && typeof body === 'object' && !Array.isArray(body) && Object.hasOwn(body, 'routes')) {
+      const { routes, ...profile } = body as Record<string, unknown>;
+      const currentResponse = await app.inject({
+        method: 'GET',
+        url: '/api/model-workspace',
+        headers: options.headers,
+      });
+      if (currentResponse.statusCode === 200) {
+        const current = currentResponse.json();
+        const saved = isDeepStrictEqual(current.routes, routes)
+          ? currentResponse
+          : await app.inject({
+              method: 'PUT',
+              url: '/api/model-workspace',
+              headers: options.headers,
+              payload: {
+                expectedRevision: current.revision,
+                routes,
+                translationPolicy: current.translationPolicy,
+              },
+            });
+        if (saved.statusCode !== 200) return saved;
+        options = { ...options, payload: JSON.stringify(profile) };
+      }
+    }
+  }
   if (
     typeof options !== 'string' &&
     String(options.method ?? 'GET').toUpperCase() === 'POST' &&

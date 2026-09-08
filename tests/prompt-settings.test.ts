@@ -1,3 +1,4 @@
+import { updateTestProfile } from './fixtures/model-workspace.js';
 import { injectWithFixtureBot, createFixtureChat } from './fixtures/chat.js';
 import { DEFAULT_TRANSLATION_PROMPT } from '../core/prompts.js';
 import { createDefaultPromptProgram } from '../core/prompt-defaults.js';
@@ -76,7 +77,7 @@ const prompt = (role: 'main' | 'translation', text: string, title = 'Synthetic p
 const profileBody = (prior: ChatProfile, changes: Record<string, unknown> = {}) => ({
   expectedRevision: prior.revision,
   attachments: prior.attachments,
-  personaReference: prior.personaReference,
+
   routes: prior.routes,
   image: prior.image,
   ...changes,
@@ -130,7 +131,7 @@ async function apply(app: App, preset: PromptPreset) {
 }
 
 describe('global working prompts and independent library copies', () => {
-  test('rejects retired fixed creative controls and APIs while preserving explicit persona scope', async () => {
+  test('rejects retired fixed creative controls and APIs and retired persona scope', async () => {
     const app = await application();
     const chat = createFixtureChat(app.store, 'Synthetic current profile');
     const initial = app.store.product.profile(chat.id);
@@ -158,26 +159,22 @@ describe('global working prompts and independent library copies', () => {
       404
     );
     await read(app, '/revisions/preset/retired/1', 404);
-    const excluded = await request<ChatProfile>(
+    for (const personaReference of [false, true])
+      await request(
+        app,
+        `/chats/${chat.id}/profile`,
+        profileBody(initial, { personaReference }),
+        400,
+        'PUT'
+      );
+    const saved = await request<ChatProfile>(
       app,
       `/chats/${chat.id}/profile`,
-      profileBody(initial, { personaReference: false }),
+      profileBody(initial),
       200,
       'PUT'
     );
-    const preserved = await request<ChatProfile>(
-      app,
-      `/chats/${chat.id}/profile`,
-      {
-        expectedRevision: excluded.revision,
-        attachments: excluded.attachments,
-        routes: excluded.routes,
-        image: excluded.image,
-      },
-      200,
-      'PUT'
-    );
-    expect(preserved.personaReference).toBe(false);
+    expect(saved).not.toHaveProperty('personaReference');
     expect(fetch).not.toHaveBeenCalled();
   });
   test('saves exact whitespace, empty text and version history, rejecting stale writes and invalid shapes without generation', async () => {
@@ -502,7 +499,8 @@ describe('global working prompts and independent library copies', () => {
       temperature: null,
     }) as ModelPreset;
     const profile = app.store.product.profile(chat.id);
-    app.store.product.updateProfile(
+    updateTestProfile(
+      app.store.product,
       chat.id,
       profileBody(profile, { routes: { ...profile.routes, translation: { id: model.id } } })
     );
@@ -596,7 +594,8 @@ describe('explicit status recovery with current model', () => {
       temperature: null,
     }) as ModelPreset;
     const profile = store.product.profile(chat.id);
-    store.product.updateProfile(
+    updateTestProfile(
+      store.product,
       chat.id,
       profileBody(profile, { routes: { ...profile.routes, status: { id: model.id } } })
     );
@@ -618,7 +617,8 @@ describe('explicit status recovery with current model', () => {
     expect(claimed.input).toMatchObject({ statusModelSelection: { id: model.id } });
     store.failJob(created.id, claimed.generation, 'synthetic-status-owner', 'Synthetic failure');
     const nextProfile = store.product.profile(chat.id);
-    store.product.updateProfile(
+    updateTestProfile(
+      store.product,
       chat.id,
       profileBody(nextProfile, { routes: { ...nextProfile.routes, status: null } })
     );

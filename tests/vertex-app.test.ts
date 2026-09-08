@@ -271,7 +271,7 @@ async function setup(app: App, translation = true) {
     {
       expectedRevision: prior.revision,
       attachments: contents.filter((item) => item.kind !== 'bot').map(ref),
-      personaReference: prior.personaReference,
+
       routes: {
         main: { id: main.id },
         translation: translation ? { id: auxiliary.id } : null,
@@ -430,7 +430,6 @@ test('L01 P05 P07 P08 P09 preserves source-time Main/Aux snapshots, whole-source
       packageAttachments: edited
         .filter((item) => item.kind === 'bot')
         .map((item) => ({ ...ref(item), role: 'bot' })),
-      personaReference: false,
       routes: selected.profile.routes,
       image: false,
     },
