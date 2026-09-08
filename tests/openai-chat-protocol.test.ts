@@ -44,6 +44,51 @@ const chunk = (delta: Json, finishReason: string | null = null, usage: Json = nu
   choices: [{ index: 0, delta, finish_reason: finishReason }],
   usage,
 });
+test('DeepSeek uses max_tokens and preserves thinking across tool continuation', () => {
+  const input = request();
+  input.modelId = 'deepseek-v4-pro';
+  input.generation = { maxOutputTokens: 321, temperature: null, reasoningEffort: 'high' };
+  const encoded = encodeChat(input, 'deepseek-chat-v1');
+  expect(record(encoded.body)).toMatchObject({
+    max_tokens: 321,
+    thinking: { type: 'enabled' },
+    reasoning_effort: 'high',
+  });
+  expect(record(encoded.body)).not.toHaveProperty('max_completion_tokens');
+  const decoder = new ChatDecoder(encoded.context);
+  decoder.accept(
+    chunk({ reasoning_content: 'opaque reasoning', tool_calls: [tool()] }, 'tool_calls')
+  );
+  decoder.accept('[DONE]');
+  const result = decoder.finish();
+  expect(result.text).toBe('');
+  const continued = encodeChat(next(input, result), 'deepseek-chat-v1');
+  expect(record(continued.body).messages).toContainEqual(
+    expect.objectContaining({ reasoning_content: 'opaque reasoning' })
+  );
+  expect(JSON.stringify(diagnosticChatBody(continued.body))).not.toContain('opaque reasoning');
+  input.generation = { maxOutputTokens: 321, temperature: 0.7, reasoningEffort: 'none' };
+  const disabled = record(encodeChat(input, 'deepseek-chat-v1').body);
+  expect(disabled).toMatchObject({ thinking: { type: 'disabled' }, temperature: 0.7 });
+  expect(disabled).not.toHaveProperty('reasoning_effort');
+});
+test('DeepSeek normalizes authored text parts and bootstrap assistant reasoning', () => {
+  const input = request();
+  input.modelId = 'deepseek-v4-flash';
+  input.bootstrap = [
+    {
+      callId: 'bootstrap-1',
+      name: 'knowledge.read',
+      args: { id: 'lore-1' },
+      result: 'known',
+      denied: false,
+    },
+  ];
+  const encoded = record(encodeChat(input, 'deepseek-chat-v1').body);
+  expect(encoded.messages).toContainEqual(
+    expect.objectContaining({ role: 'assistant', reasoning_content: '' })
+  );
+});
 const tool = (
   index = 0,
   id = 'Call-A.Original',

@@ -13,6 +13,86 @@ import { defaultEvaluationToolOptions } from '../core/evaluation-tool-config.js'
 import type { ModelGeneration, ModelPreset } from '../core/product.js';
 
 const base: ModelGeneration = { maxOutputTokens: 8192, temperature: null };
+test('new provider models validate their own thinking modes and output boundaries', () => {
+  expect(() =>
+    validateModelOptions(
+      { ...base, thinkingLevel: 'MINIMAL' },
+      'vertex-gemini-v1',
+      'gemini-3.5-flash-lite'
+    )
+  ).not.toThrow();
+  expect(() =>
+    validateModelOptions({ ...base, temperature: 1 }, 'vertex-gemini-v1', 'gemini-3.5-flash-lite')
+  ).toThrow();
+  expect(() =>
+    validateModelOptions(
+      { ...base, thinkingLevel: 'LOW' },
+      'vertex-gemini-v1',
+      'gemini-3.5-flash-lite'
+    )
+  ).toThrow();
+  expect(() =>
+    validateModelOptions(
+      { ...base, maxOutputTokens: 500000, reasoningEffort: 'xhigh' },
+      'vercel-chat-v1',
+      'spacexai/grok-4.6'
+    )
+  ).not.toThrow();
+  expect(() =>
+    validateModelOptions(
+      { ...base, maxOutputTokens: 500001 },
+      'vercel-chat-v1',
+      'spacexai/grok-4.6'
+    )
+  ).toThrow();
+  expect(() =>
+    validateModelOptions(
+      { ...base, reasoningEffort: 'none' },
+      'vercel-chat-v1',
+      'spacexai/grok-4.6'
+    )
+  ).toThrow();
+  expect(() =>
+    validateModelOptions(
+      { ...base, maxOutputTokens: 128001 },
+      'vercel-chat-v1',
+      'openai/gpt-5.6-sol'
+    )
+  ).toThrow();
+  expect(() =>
+    validateModelOptions(
+      { ...base, reasoningEffort: 'none' },
+      'vercel-chat-v1',
+      'openai/gpt-5.6-sol'
+    )
+  ).not.toThrow();
+  expect(modelCapability('openai-chat-v1', 'spacexai/grok-4.6')).toBeUndefined();
+  for (const id of ['deepseek-v4-pro', 'deepseek-v4-flash']) {
+    expect(() =>
+      validateModelOptions(
+        { ...base, maxOutputTokens: 384000, reasoningEffort: 'max' },
+        'deepseek-chat-v1',
+        id
+      )
+    ).not.toThrow();
+    expect(() =>
+      validateModelOptions({ ...base, maxOutputTokens: 384001 }, 'deepseek-chat-v1', id)
+    ).toThrow();
+    expect(() =>
+      validateModelOptions(
+        { ...base, reasoningEffort: 'none', temperature: 0.5 },
+        'deepseek-chat-v1',
+        id
+      )
+    ).not.toThrow();
+    expect(() =>
+      validateModelOptions({ ...base, temperature: 0.5 }, 'deepseek-chat-v1', id)
+    ).toThrow('INCOMPATIBLE_THINKING_SAMPLING');
+    expect(() =>
+      validateModelOptions({ ...base, structuredOutput: true }, 'deepseek-chat-v1', id)
+    ).toThrow();
+  }
+});
 test('exact model support differentiates efforts, thinking defaults, Fable always-on and Gemini sampling', () => {
   expect(MODEL_SUPPORT_POLICY.supportWindowMonths).toBe(6);
   expect(modelCapability('vertex-gemini-v1', 'gemini-3.1-pro-preview')?.defaultThinkingLevel).toBe(

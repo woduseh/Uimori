@@ -19,8 +19,12 @@ function reject(code: string): never {
 }
 
 /** OpenAI's Chat Completions shape. Compatible servers choose their own model/capabilities. */
-export function encodeChat(request: ProviderRequest): { body: Json; context: OpenAITurn } {
-  const prepared = prepare(request, 'openai-chat-turn-v1');
+export function encodeChat(
+  request: ProviderRequest,
+  protocol: 'openai-chat-v1' | 'vercel-chat-v1' | 'deepseek-chat-v1' = 'openai-chat-v1'
+): { body: Json; context: OpenAITurn } {
+  const prepared = prepare(request, 'openai-chat-turn-v1', protocol);
+  const deepseek = protocol === 'deepseek-chat-v1';
   const { generation, aliases, previous, fresh, plan, bootstrap } = prepared;
   const bootstrapMessages: Json[] = [];
   for (const item of bootstrap as Record<string, Json>[]) {
@@ -65,6 +69,23 @@ export function encodeChat(request: ProviderRequest): { body: Json; context: Ope
               },
             ]),
       ];
+  if (deepseek) {
+    for (const message of messages) {
+      if (!object(message)) continue;
+      // DeepSeek's text assistant/system messages require strings, not content part arrays.
+      if (Array.isArray(message.content))
+        message.content = message.content
+          .map((part) => {
+            if (!object(part) || part.type !== 'text' || typeof part.text !== 'string')
+              return reject('UNSUPPORTED_CHAT_CONTENT');
+            return part.text;
+          })
+          .join('');
+      // Authored history and synthetic bootstrap calls have no provider reasoning to replay.
+      if (message.role === 'assistant' && aliases.length && message.reasoning_content === undefined)
+        message.reasoning_content = '';
+    }
+  }
   const body: Json = {
     model: request.modelId,
     messages,
@@ -73,11 +94,18 @@ export function encodeChat(request: ProviderRequest): { body: Json; context: Ope
     ...plan?.options,
     ...(generation
       ? {
-          max_completion_tokens: generation.maxOutputTokens,
+          [deepseek ? 'max_tokens' : 'max_completion_tokens']: generation.maxOutputTokens,
           ...(generation.temperature !== null ? { temperature: generation.temperature } : {}),
-          ...(generation.reasoningEffort !== undefined
-            ? { reasoning_effort: generation.reasoningEffort }
-            : {}),
+          ...(deepseek
+            ? {
+                thinking: { type: generation.reasoningEffort === 'none' ? 'disabled' : 'enabled' },
+                ...(generation.reasoningEffort && generation.reasoningEffort !== 'none'
+                  ? { reasoning_effort: generation.reasoningEffort }
+                  : {}),
+              }
+            : generation.reasoningEffort !== undefined
+              ? { reasoning_effort: generation.reasoningEffort }
+              : {}),
           ...(generation.serviceTier !== undefined ? { service_tier: generation.serviceTier } : {}),
         }
       : {}),

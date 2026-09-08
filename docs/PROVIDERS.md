@@ -92,6 +92,14 @@ node scripts/verify-live.mjs --preflight
 
 이전 후보 UI를 대상으로 한 `scripts/verify-live-journey.mjs`는 포크 간략화로 종료했어요. preflight/execute 모두 `LIVE_JOURNEY_LEGACY_CANDIDATE_UI_RETIRED`와 BLOCKED를 반환하며 DB 복사·인증·모델 호출 전에 멈춰요. 기존 실행 증거와 별도의 API 요청/번역 재시도 검증기는 보존해요.
 
+### DeepSeek · OpenAI 호환
+
+`deepseek-chat-v1` 연결은 `https://api.deepseek.com/v1/chat/completions`에 OpenAI Chat Completions JSON/SSE 형식으로 요청해요. 기본 인증 환경변수는 `DEEPSEEK_API_KEY`이고 공식 API root만 허용해요. `deepseek-v4-pro`와 `deepseek-v4-flash`를 로컬 지원 목록에서 선택할 수 있어요. 사용자 연결이나 모델 프리셋을 자동 생성하지 않아요.
+
+출력 한도는 `max_tokens`로 보내요. Reasoning Effort의 `none`은 `thinking.type=disabled`, `low/high/max`는 사고 활성화와 해당 effort로 보내며 기본값은 공급자의 high예요. temperature는 사고를 끈 경우에만 사용해요. 도구 후속 요청에 필요한 `reasoning_content`는 opaque continuation 안에서 보존하며 원문이나 진단 본문에 노출하지 않아요. usage의 input/output token과 `prompt_cache_hit_tokens`만 공급자 보고값으로 기록하고 비용을 추정하지 않아요.
+
+근거(2026-09-09): [모델 명세](https://api-docs.deepseek.com/quick_start/pricing/), [사고·도구 후속 계약](https://api-docs.deepseek.com/guides/thinking_mode/), [Chat Completions](https://api-docs.deepseek.com/api/create-chat-completion/). 로컬 합성 검사는 요청·응답 계약의 증거이며 실제 인증·계정 가용성·창작 품질은 별도예요.
+
 ### 업로드한 Vertex 키 보관
 
 키 파일은 `NR_DB` 파일 옆의 `<DB 파일명>.vertex-credentials/`에 저장돼요. 재시작 후에도 같은 DB 경로와 키 디렉터리가 필요해요. 기본 Compose는 `/data` 볼륨 안에 함께 보관해요. JSON 내보내기와 SQLite 백업에는 키 원문이 포함되지 않으므로 다른 서버로 복원하면 해당 서버에서 키 파일을 다시 등록하고 연결·모델을 선택해 주세요. 키 파일을 수동 이전하는 경우에도 서버의 보호된 위치와 동일한 DB 파일명을 유지해야 해요.

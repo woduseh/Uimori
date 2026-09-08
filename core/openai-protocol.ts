@@ -87,7 +87,11 @@ function readTurn(value: Json): OpenAITurn {
 function prepare(
   request: ProviderRequest,
   version: OpenAITurn['version'],
-  protocol: 'openai-responses-v1' | 'openai-chat-v1' = version === 'openai-chat-turn-v1'
+  protocol:
+    | 'openai-responses-v1'
+    | 'openai-chat-v1'
+    | 'vercel-chat-v1'
+    | 'deepseek-chat-v1' = version === 'openai-chat-turn-v1'
     ? 'openai-chat-v1'
     : 'openai-responses-v1'
 ) {

@@ -3,7 +3,7 @@ import { ProviderContractError } from './provider-errors.js';
 
 export const MODEL_SUPPORT_POLICY = {
   supportWindowMonths: 6,
-  checkedAt: '2026-09-07',
+  checkedAt: '2026-09-09',
   exceptions: [
     {
       id: 'gemini-3.1-pro-preview',
@@ -84,6 +84,68 @@ const openai = (id: string, name: string, astra = false): ModelCapability => ({
   ],
 });
 const capabilities: readonly ModelCapability[] = [
+  {
+    id: 'gemini-3.5-flash-lite',
+    name: 'Gemini 3.5 Flash-Lite',
+    revision: '2026-09-09.1',
+    releasedAt: '2026-07-21',
+    protocol: 'vertex-gemini-v1',
+    maxOutputTokens: 65_536,
+    temperature: false,
+    topP: false,
+    stopSequences: true,
+    thinkingLevels: ['MINIMAL', 'MEDIUM', 'HIGH'],
+    defaultThinkingLevel: 'MINIMAL',
+    serviceTiers: ['standard', 'flex'],
+    sources: [
+      'https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/gemini/3-5-flash-lite',
+    ],
+  },
+  {
+    id: 'spacexai/grok-4.6',
+    name: 'Grok 4.6',
+    revision: '2026-09-09.1',
+    protocol: 'vercel-chat-v1',
+    maxOutputTokens: 500_000,
+    temperature: true,
+    topP: false,
+    stopSequences: false,
+    reasoningEfforts: ['low', 'medium', 'high', 'xhigh'],
+    defaultReasoningEffort: 'high',
+    sources: ['https://vercel.com/ai-gateway/models/grok-4.6'],
+  },
+  {
+    id: 'openai/gpt-5.6-sol',
+    name: 'GPT-5.6 Sol',
+    revision: '2026-09-09.1',
+    protocol: 'vercel-chat-v1',
+    maxOutputTokens: 128_000,
+    temperature: false,
+    topP: false,
+    stopSequences: false,
+    reasoningEfforts: ['none', 'low', 'medium', 'high', 'xhigh'],
+    defaultReasoningEffort: 'medium',
+    sources: ['https://vercel.com/ai-gateway/models/gpt-5.6-sol'],
+  },
+  ...(['pro', 'flash'] as const).map(
+    (variant): ModelCapability => ({
+      id: `deepseek-v4-${variant}`,
+      name: `DeepSeek V4 ${variant === 'pro' ? 'Pro' : 'Flash'}`,
+      revision: '2026-09-09.1',
+      protocol: 'deepseek-chat-v1',
+      maxOutputTokens: 384_000,
+      temperature: true,
+      topP: false,
+      stopSequences: false,
+      reasoningEfforts: ['none', 'low', 'high', 'max'],
+      defaultReasoningEffort: 'high',
+      sources: [
+        'https://api-docs.deepseek.com/quick_start/pricing/',
+        'https://api-docs.deepseek.com/guides/thinking_mode/',
+        'https://api-docs.deepseek.com/api/create-chat-completion/',
+      ],
+    })
+  ),
   {
     id: 'gemini-3.8-flash',
     name: 'Gemini 3.8 Flash',
@@ -219,7 +281,7 @@ export function validateGenerationShape(value: unknown): asserts value is ModelG
   if (
     !Number.isSafeInteger(g.maxOutputTokens) ||
     g.maxOutputTokens < 1 ||
-    g.maxOutputTokens > 200_000
+    g.maxOutputTokens > 500_000
   )
     reject();
   if (
@@ -232,7 +294,7 @@ export function validateGenerationShape(value: unknown): asserts value is ModelG
     reject();
   if (g.structuredOutput !== undefined && typeof g.structuredOutput !== 'boolean') reject();
   const enums = {
-    thinkingLevel: ['LOW', 'MEDIUM', 'HIGH'],
+    thinkingLevel: ['MINIMAL', 'LOW', 'MEDIUM', 'HIGH'],
     reasoningEffort: ['none', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'],
     outputEffort: ['low', 'medium', 'high', 'xhigh', 'max'],
     thinkingMode: ['disabled', 'enabled', 'adaptive'],
@@ -319,8 +381,14 @@ export function validateModelOptions(
     )
       reject('INCOMPATIBLE_THINKING_EFFORT');
     if (protocol === 'vertex-gemini-v1' && g.structuredOutput !== undefined) reject();
+    if (protocol === 'deepseek-chat-v1') {
+      if (g.structuredOutput === true) reject();
+      if (g.reasoningEffort !== 'none' && g.temperature !== null)
+        reject('INCOMPATIBLE_THINKING_SAMPLING');
+    }
     return;
   }
+  if (g.maxOutputTokens > 200_000) reject();
   const allowed =
     protocol === 'fixture-sse-v1'
       ? ['thinkingLevel']
@@ -342,7 +410,9 @@ export function isOfficialModelConnection(connection: {
   endpoint: string;
 }): boolean {
   return (
-    ['vertex-gemini-v1', 'anthropic-messages-v1'].includes(connection.protocol) ||
+    ['vertex-gemini-v1', 'anthropic-messages-v1', 'deepseek-chat-v1'].includes(
+      connection.protocol
+    ) ||
     (['openai-responses-v1', 'openai-chat-v1'].includes(connection.protocol) &&
       connection.endpoint.replace(/\/$/u, '') === 'https://api.openai.com/v1')
   );

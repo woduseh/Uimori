@@ -192,7 +192,9 @@ export function ConnectionEditor({
   const codex = connection.protocol === 'codex-app-server-v1',
     definition = providerDefinition(connection.protocol),
     vertex = connection.protocol === 'vertex-gemini-v1';
-  const official = ['anthropic-messages-v1', 'vercel-chat-v1'].includes(connection.protocol);
+  const official = ['anthropic-messages-v1', 'vercel-chat-v1', 'deepseek-chat-v1'].includes(
+    connection.protocol
+  );
   const endpointLabel = codex
     ? 'Codex 실행 위치'
     : vertex

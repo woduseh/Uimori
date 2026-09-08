@@ -166,6 +166,21 @@ export const PROVIDER_DEFINITIONS: readonly ProviderDefinition[] = Object.freeze
     ],
   }),
   definition({
+    id: 'deepseek-chat-v1',
+    label: 'DeepSeek · OpenAI 호환',
+    endpointDefault: 'https://api.deepseek.com/v1',
+    credentialEnvDefault: 'DEEPSEEK_API_KEY',
+    auth: 'bearer',
+    catalog: 'remote',
+    optionKeys: ['maxOutputTokens', 'temperature', 'timeoutMs', 'reasoningEffort'],
+    reference: 'core/openai-chat-protocol.ts#encodeChat',
+    limitations: [
+      'DeepSeek 공식 주소에서 OpenAI Chat Completions 형식을 사용해요.',
+      'V4 Pro와 V4 Flash를 지원해요. Reasoning Effort의 none은 사고를 끄며 기본값은 high예요.',
+      '사고를 켜면 temperature를 사용할 수 없어요. 실제 외부 실행은 사용자가 확인해요.',
+    ],
+  }),
+  definition({
     id: 'openai-chat-v1',
     label: 'OpenAI 호환 · 별도 공급자',
     endpointDefault: '',

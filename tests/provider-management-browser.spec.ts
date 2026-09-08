@@ -1381,4 +1381,135 @@ test('PMUI16 endpoint guidance checks server policy before saving and ignores a 
   expect(after.models).toEqual(before.models);
 });
 
+test('PMUI17 new Google, Vercel and DeepSeek models are selectable locally and save reviewed options on mobile', async ({
+  page,
+  request,
+}, info) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  const prefix = 'PMUI17 ' + Date.now(),
+    observed = observe(page),
+    outboundActions: string[] = [];
+  page.on('request', (request) => {
+    if (/\/(?:catalog|test)$/.test(new URL(request.url()).pathname))
+      outboundActions.push(request.url());
+  });
+  await settings(page);
+  await startProviderConnection(page);
+  await page
+    .getByRole('region', { name: '제공자 선택', exact: true })
+    .getByRole('button', { name: /DeepSeek/ })
+    .click();
+  const connectionForm = page.getByRole('form', { name: '연결 편집 양식' });
+  await expect(connectionForm.getByLabel('연결 프로토콜')).toHaveValue('deepseek-chat-v1');
+  await expect(connectionForm.getByLabel('API 기본 주소')).toHaveValue(
+    'https://api.deepseek.com/v1'
+  );
+  await expect(connectionForm.getByLabel('서버 환경변수 이름')).toHaveValue('DEEPSEEK_API_KEY');
+  await expect(connectionForm.getByRole('status', { name: '연결 주소 확인' })).toContainText(
+    '공식 공급자 주소'
+  );
+  await connectionForm.getByLabel('연결 이름', { exact: true }).fill(prefix + ' DeepSeek');
+  await connectionForm.getByLabel('이 연결 사용').uncheck();
+  await connectionForm.getByRole('button', { name: '연결 등록', exact: true }).click();
+  await expect
+    .poll(async () =>
+      (await library(request)).connections.find((item) => item.title === prefix + ' DeepSeek')
+    )
+    .toMatchObject({
+      protocol: 'deepseek-chat-v1',
+      endpoint: 'https://api.deepseek.com/v1',
+      credentialEnv: 'DEEPSEEK_API_KEY',
+      enabled: false,
+    });
+  const cases = [
+    {
+      protocol: 'vertex-gemini-v1',
+      endpoint:
+        'https://aiplatform.googleapis.com/v1/projects/synthetic-new-models/locations/global/publishers/google/models',
+      modelId: 'gemini-3.5-flash-lite',
+      options: { 'Thinking Level': ['MINIMAL', 'MEDIUM', 'HIGH'] },
+      choices: { 'Thinking Level': 'MINIMAL' },
+      saved: { thinkingLevel: 'MINIMAL', temperature: null },
+    },
+    {
+      protocol: 'vercel-chat-v1',
+      endpoint: 'https://ai-gateway.vercel.sh/v1',
+      modelId: 'spacexai/grok-4.6',
+      options: { 'Reasoning Effort': ['low', 'medium', 'high', 'xhigh'] },
+      choices: { 'Reasoning Effort': 'xhigh' },
+      saved: { reasoningEffort: 'xhigh' },
+    },
+    {
+      protocol: 'vercel-chat-v1',
+      endpoint: 'https://ai-gateway.vercel.sh/v1',
+      modelId: 'openai/gpt-5.6-sol',
+      options: { 'Reasoning Effort': ['none', 'low', 'medium', 'high', 'xhigh'] },
+      choices: { 'Reasoning Effort': 'xhigh' },
+      saved: { reasoningEffort: 'xhigh' },
+    },
+    ...['deepseek-v4-pro', 'deepseek-v4-flash'].map((modelId) => ({
+      protocol: 'deepseek-chat-v1',
+      endpoint: 'https://api.deepseek.com/v1',
+      modelId,
+      options: { 'Reasoning Effort': ['none', 'low', 'high', 'max'] },
+      choices: { 'Reasoning Effort': modelId === 'deepseek-v4-pro' ? 'max' : 'none' },
+      saved: { reasoningEffort: modelId === 'deepseek-v4-pro' ? 'max' : 'none' },
+    })),
+  ];
+  for (const [index, item] of cases.entries()) {
+    const title = prefix + ' ' + item.modelId,
+      connection = await api<Connection>(request, '/connections', {
+        title,
+        protocol: item.protocol,
+        endpoint: item.endpoint,
+        credentialEnv: 'PM_SYNTHETIC_KEY',
+        enabled: false,
+      });
+    await settings(page);
+    await page.getByRole('button', { name: '새 모델 입력', exact: true }).click();
+    const form = page.getByRole('form', { name: '모델 편집 양식' });
+    await form.getByLabel('모델 연결').selectOption(`${connection.id}`);
+    await form.getByLabel('모델 목록 검색').fill(item.modelId);
+    const picker = form.getByRole('region', { name: '저장된 모델 목록에서 선택' });
+    await expect(picker).toContainText(
+      item.protocol === 'vercel-chat-v1' ? '참고 명세와 저장된 목록' : '지원 명세와 저장된 목록'
+    );
+    await expect(picker.getByRole('button')).toHaveCount(1);
+    await picker.getByRole('button').click();
+    await expect(form.getByLabel('모델 ID', { exact: true })).toHaveValue(item.modelId);
+    await form.getByLabel('모델 프리셋 이름').fill(title);
+    await form.getByRole('button', { name: '생성 설정', exact: true }).click();
+    for (const [label, values] of Object.entries(item.options)) {
+      const optionValues = await form
+        .getByLabel(label, { exact: true })
+        .locator('option')
+        .evaluateAll((options) =>
+          options.map((option) => (option as HTMLOptionElement).value).filter(Boolean)
+        );
+      expect(optionValues).toEqual(values);
+    }
+    for (const [label, value] of Object.entries(item.choices))
+      await form.getByLabel(label, { exact: true }).selectOption(value!);
+    if (item.modelId === 'gemini-3.5-flash-lite')
+      await expect(form.getByLabel('Temperature', { exact: true })).toHaveCount(0);
+    if (item.protocol === 'deepseek-chat-v1')
+      await expect(form.getByLabel('Thinking', { exact: true })).toHaveCount(0);
+    expect(
+      await page
+        .getByRole('dialog', { name: '설정', exact: true })
+        .evaluate((node) => node.scrollWidth <= node.clientWidth + 1)
+    ).toBe(true);
+    if (visualReview)
+      await form.screenshot({ path: info.outputPath(`provider-new-models-${index}-mobile.png`) });
+    await form.getByRole('button', { name: '모델 프리셋 등록', exact: true }).click();
+    await expect
+      .poll(async () => (await library(request)).models.find((model) => model.title === title))
+      .toMatchObject({ connectionId: connection.id, modelId: item.modelId, ...item.saved });
+  }
+  expect(outboundActions).toEqual([]);
+  expect(observed.errors).toEqual([]);
+  expect(observed.generations).toEqual([]);
+  expect(observed.legacyReads).toEqual([]);
+});
+
 preservePromptWorkspace();

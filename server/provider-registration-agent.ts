@@ -74,10 +74,10 @@ const proposalSchema = objectSchema({
     {
       title: shortString,
       modelId: shortString,
-      maxOutputTokens: { type: 'integer', minimum: 1, maximum: 200000 },
+      maxOutputTokens: { type: 'integer', minimum: 1, maximum: 500000 },
       temperature: { type: ['number', 'null'], minimum: 0, maximum: 2 },
       timeoutMs: { type: 'integer', minimum: 1, maximum: 1800000 },
-      thinkingLevel: { enum: ['LOW', 'MEDIUM', 'HIGH'] },
+      thinkingLevel: { enum: ['MINIMAL', 'LOW', 'MEDIUM', 'HIGH'] },
       structuredOutput: { type: 'boolean' },
       reasoningEffort: { enum: ['none', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'] },
       thinkingMode: { enum: ['disabled', 'adaptive'] },

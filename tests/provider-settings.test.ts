@@ -22,6 +22,7 @@ const roots: Record<ProviderProtocol, string> = {
   'codex-app-server-v1': 'codex://local',
   'anthropic-messages-v1': 'https://api.anthropic.com/v1',
   'vercel-chat-v1': 'https://ai-gateway.vercel.sh/v1',
+  'deepseek-chat-v1': 'https://api.deepseek.com/v1',
   'openai-chat-v1': 'https://synthetic.invalid/nested/v1',
 };
 const native = [

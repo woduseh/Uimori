@@ -376,8 +376,10 @@ export function encodeMainPreview(
         ? encodeAnthropic(checked).body
         : protocol === 'vertex-gemini-v1'
           ? encodeVertex(checked).body
-          : protocol === 'openai-chat-v1' || protocol === 'vercel-chat-v1'
-            ? encodeChat(checked).body
+          : protocol === 'openai-chat-v1' ||
+              protocol === 'vercel-chat-v1' ||
+              protocol === 'deepseek-chat-v1'
+            ? encodeChat(checked, protocol).body
             : protocol === 'codex-app-server-v1'
               ? buildCodexDescriptor(checked)
               : json(checked);
