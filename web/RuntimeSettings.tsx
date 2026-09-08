@@ -106,6 +106,8 @@ export function SettingsEditor({
             setDirty(false);
             setMessage('후속 작업 설정을 저장했어요.');
             onError('');
+            // Persisted; the refresh below is not an unsaved draft.
+            setSaving(false);
             await onSaved();
           } catch (error) {
             const text = (error as Error).message;

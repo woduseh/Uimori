@@ -57,7 +57,13 @@ export function BotNavigation(props: Props) {
     onTasks,
     tasks,
   } = props;
-  const [botId, setBotId] = useState('');
+  // Start on the selected chat's bot so the first paint never shows the bot list briefly;
+  // the effect below keeps the choice in sync afterwards.
+  const [botId, setBotId] = useState(() =>
+    selected && destination === 'story'
+      ? (chats.find((chat) => chat.id === selected)?.botId ?? '')
+      : ''
+  );
   const [query, setQuery] = useState('');
   const [folders, setFolders] = useState<ChatFolder[]>([]);
   const [loading, setLoading] = useState(false);

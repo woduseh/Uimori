@@ -95,7 +95,12 @@ export function ProfileEditor({
       setValue(accepted);
       setDirty(false);
       setStatus(message);
-      await onSaved();
+      // The write is persisted. The refresh below must not keep the panel counted as unsaved,
+      // or closing right after "저장했어요" asks to discard a draft that no longer exists.
+      setSaving(false);
+      // Refresh in the background: callers such as the prompt composer end their own
+      // saving state when this resolves, and that must not wait for the reload.
+      void onSaved().catch((caught) => onError((caught as Error).message));
       return true;
     } catch (caught) {
       const message = (caught as Error).message;
