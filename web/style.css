@@ -888,6 +888,30 @@ input[type="checkbox"] {
 .composer-status[hidden] {
   display: none;
 }
+.fork-notice {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+  margin-bottom: 6px;
+}
+.link-button {
+  min-height: 32px;
+  padding: 0 4px;
+  border: 0;
+  background: transparent;
+  color: var(--accent);
+  font-size: 12px;
+  text-decoration: underline;
+  box-shadow: none;
+}
+.fork-notice-close {
+  width: 32px;
+  min-width: 32px;
+  height: 32px;
+  min-height: 32px;
+  color: var(--muted);
+}
 .composer-dock > .error {
   margin-bottom: 8px;
   max-height: 130px;

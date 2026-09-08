@@ -947,20 +947,21 @@ function ContentEditor({
         <h2>{selected ? selected.title : `새 ${contentLabels[kind]}`}</h2>
         <div className="library-detail-actions">
           {selected && (
-            <DeleteButton
-              path={`/content/${encodeURIComponent(selected.id)}`}
-              revision={selected.revision}
-              title={selected.title}
-              label="자료 삭제"
-              iconOnly
-              disabled={busy}
-              description="이 자료와 현재 편집 초안을 삭제해요. 되돌릴 수 없고, 다른 자료나 채팅에서 사용 중이면 삭제할 수 없어요."
-              onError={onError}
-              onDeleted={async () => {
-                onDeleted();
-                await reload();
-              }}
-            />
+            <LibraryItemMenu title="자료 메뉴">
+              <DeleteButton
+                path={`/content/${encodeURIComponent(selected.id)}`}
+                revision={selected.revision}
+                title={selected.title}
+                label="자료 삭제"
+                disabled={busy}
+                description="이 자료와 현재 편집 초안을 삭제해요. 되돌릴 수 없고, 다른 자료나 채팅에서 사용 중이면 삭제할 수 없어요."
+                onError={onError}
+                onDeleted={async () => {
+                  onDeleted();
+                  await reload();
+                }}
+              />
+            </LibraryItemMenu>
           )}
         </div>
       </div>

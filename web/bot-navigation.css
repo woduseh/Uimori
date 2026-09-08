@@ -400,6 +400,15 @@
 .navigation-dialog .bot-navigation {
   min-height: 0;
 }
+/* The drawer keeps "탐색" as its accessible name only; the header shows just the close button. */
+.navigation-dialog > .dialog-header > h2 {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
 .bot-library-nav button,
 .bot-chat-item button {
   white-space: normal;
