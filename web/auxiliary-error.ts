@@ -10,6 +10,12 @@ const define = (codes: string[], message: string, action: string) => {
   for (const code of codes) diagnostics.set(code, { message, action });
 };
 
+define(
+  ['PROMPT_UNKNOWN_SLOT'],
+  '번역 프롬프트를 구성하는 데 필요한 입력 슬롯을 찾지 못했어요.',
+  '모델 전송 전 프롬프트 구성에서 중단됐어요. 작업 상세의 실패 기록에서 블록과 슬롯을 확인하고 프롬프트 또는 앱 버전을 점검해 주세요.'
+);
+
 for (const [role, label] of [
   ['main', '본문'],
   ['translation', '번역'],

@@ -992,7 +992,12 @@ export class Store {
     id: string,
     generation: number,
     owner: string,
-    value: { status: string; result: unknown; error: string | null },
+    value: {
+      status: string;
+      result: unknown;
+      error: string | null;
+      diagnostic?: import('../core/auxiliary-diagnostic.js').AuxiliaryFailureDiagnostic;
+    },
     controls?: Controls
   ) {
     return this.transaction(() => {
@@ -1004,6 +1009,12 @@ export class Store {
       if (source.hash !== row.source_hash || source.chatId !== row.chat_id)
         throw new Error('Job source dependency changed');
       if (row.kind === 'image') imageTargetSource(this, this.job(id), true);
+      if (value.diagnostic) {
+        const input = parse(row.input) ?? {};
+        this.db
+          .prepare('UPDATE jobs SET input=? WHERE id=?')
+          .run(json({ ...input, failureDiagnostic: value.diagnostic }), id);
+      }
       if (value.result) {
         this.db
           .prepare(

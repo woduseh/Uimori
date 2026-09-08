@@ -36,6 +36,7 @@ import {
   type TranslationReference,
 } from '../core/translation-context.js';
 import { PromptProgramError } from '../core/prompt-program.js';
+import type { AuxiliaryFailureDiagnostic } from '../core/auxiliary-diagnostic.js';
 
 type MaybePromise<T> = T | Promise<T>;
 type JobKind = Exclude<TaskRole, 'main'>;
@@ -76,6 +77,7 @@ export type AuxiliaryOutcome = {
   status: 'completed' | 'partial' | 'failed' | 'cancelled' | 'interrupted';
   result: AuxiliaryJobResult | null;
   error: string | null;
+  diagnostic?: AuxiliaryFailureDiagnostic;
 };
 /** Every mutating bridge method must check owner+generation and the source dependency. */
 export type AuxiliaryStoreBridge = {
@@ -407,12 +409,15 @@ export async function runAuxiliaryJob(
   const mock = !target || target.connection.protocol === 'fixture-sse-v1';
   const maxCalls = job.kind === 'translation' ? policy.maxCalls : snapshot.settings.maxCalls;
   let candidateText: string | undefined;
+  let stage: AuxiliaryFailureDiagnostic['stage'] = 'preparation';
+  let lastAttemptId: string | undefined;
   const cancelState = () => hooks.cancellationStatus ?? 'cancelled';
   const callProvider = async (
     target: ModelSnapshot,
     body: ProviderRequest,
     diagnostics?: ReturnType<typeof createEvaluationToolSession>
   ) => {
+    lastAttemptId = undefined;
     if (hooks.signal.aborted) throw new AuxiliaryExecutionError('AUXILIARY_CANCELLED');
     if (calls >= maxCalls)
       throw Object.assign(new Error('Auxiliary call budget exhausted'), { name: 'BudgetError' });
@@ -454,6 +459,7 @@ export async function runAuxiliaryJob(
           (target.connection.protocol === 'vertex-gemini-v1' ? 300_000 : undefined),
         onWire: async (wire) => {
           attemptId = await hooks.onAttemptStart(wire);
+          lastAttemptId = attemptId;
         },
       }
     );
@@ -473,6 +479,8 @@ export async function runAuxiliaryJob(
       };
     let opaqueState: Json | undefined;
     const request = async (next: AuxiliaryInput) => {
+      stage = 'preparation';
+      lastAttemptId = undefined;
       if (calls >= maxCalls)
         throw Object.assign(new Error('Auxiliary call budget exhausted'), { name: 'BudgetError' });
       if (evaluation && evaluation.remainingMs() === 0)
@@ -496,6 +504,7 @@ export async function runAuxiliaryJob(
       };
       const generationBinding = evaluation?.generationBinding(generation, completedToolResults);
       if (generationBinding) body.generationBinding = generationBinding;
+      stage = job.kind;
       const result = await callProvider(target, body, evaluation);
       if (job.kind === 'translation' && result.text) candidateText = result.text;
       if (result.status === 'tool_calls') {
@@ -598,6 +607,8 @@ export async function runAuxiliaryJob(
         }
         let verdict: 'accepted' | 'refused' | 'uncertain' = 'accepted';
         if (!mock) {
+          stage = 'translation-refusal';
+          lastAttemptId = undefined;
           const classifier = policy.refusalModel!;
           const classification = await callProvider(classifier, {
             role: 'translation',
@@ -665,13 +676,25 @@ export async function runAuxiliaryJob(
     await hooks.onProgress?.();
     return outcome;
   } catch (error) {
+    const code = hooks.signal.aborted ? 'AUXILIARY_CANCELLED' : safeError(error);
+    // IDs are local authored identifiers, not error messages or provider response excerpts.
+    const identifier = (value: unknown) =>
+      typeof value === 'string' && /^[A-Za-z0-9_.:-]{1,128}$/.test(value) ? value : undefined;
     const outcome: AuxiliaryOutcome = {
       status: hooks.signal.aborted ? cancelState() : 'failed',
       result:
         job.kind === 'translation' && candidateText
           ? { mock, sourceRevision: source.id, sourceHash: source.hash, text: candidateText }
           : null,
-      error: hooks.signal.aborted ? 'AUXILIARY_CANCELLED' : safeError(error),
+      error: code,
+      diagnostic: {
+        stage,
+        code,
+        ...(lastAttemptId ? { attemptId: lastAttemptId } : {}),
+        ...(error instanceof PromptProgramError
+          ? { blockId: identifier(error.blockId), slotName: identifier(error.slotName) }
+          : {}),
+      },
     };
     await store.finish(jobId, generation, owner, outcome);
     await hooks.onProgress?.();

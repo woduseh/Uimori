@@ -197,43 +197,65 @@ describe('whole-source authored translation prompts', () => {
       expect(input.sourceText).toBe(seed.source.text);
     }
   });
-  test('invalid frozen program values fail with their prompt code before an attempt is sent', async () => {
-    const seed = bundle();
-    seed.snapshot.profile!.promptControls!['translation-preset@4'].values.style = 'unrecognized';
-    seed.snapshot.profile!.models.translation = {
-      id: 'model',
-      revision: 1,
-      title: 'Fixture',
-      modelId: 'fixture',
-      connectionId: 'connection',
-      maxOutputTokens: 4096,
-      temperature: null,
-      connection: {
-        id: 'connection',
+  test.each(['control', 'slot'] as const)(
+    'invalid frozen program %s fails with its prompt diagnostic before an attempt is sent',
+    async (invalid) => {
+      const seed = bundle();
+      if (invalid === 'control')
+        seed.snapshot.profile!.promptControls!['translation-preset@4'].values.style =
+          'unrecognized';
+      else
+        seed.snapshot.profile!.promptPresets!.translation!.program.blocks.unshift({
+          id: 'pheme-7',
+          title: 'Missing slot',
+          kind: 'message',
+          role: 'user',
+          template: [{ kind: 'slot', name: 'missing' }],
+        });
+      seed.snapshot.profile!.models.translation = {
+        id: 'model',
         revision: 1,
         title: 'Fixture',
-        protocol: 'fixture-sse-v1',
-        endpoint: 'http://127.0.0.1:1',
-        enabled: true,
-        catalog: [],
-        catalogError: null,
-      },
-    };
-    const state = bridge(seed);
-    const options = hooks('http://127.0.0.1:1');
-    let attempts = 0;
-    options.onAttemptStart = () => {
-      attempts++;
-      return 'unexpected';
-    };
-    const outcome = await runAuxiliaryJob(state.store, seed.job.id, 'owner', options);
-    expect(outcome).toEqual({
-      status: 'failed',
-      result: null,
-      error: 'PROMPT_INVALID_CONTROL_VALUE',
-    });
-    expect(attempts).toBe(0);
-  });
+        modelId: 'fixture',
+        connectionId: 'connection',
+        maxOutputTokens: 4096,
+        temperature: null,
+        connection: {
+          id: 'connection',
+          revision: 1,
+          title: 'Fixture',
+          protocol: 'fixture-sse-v1',
+          endpoint: 'http://127.0.0.1:1',
+          enabled: true,
+          catalog: [],
+          catalogError: null,
+        },
+      };
+      const state = bridge(seed);
+      const options = hooks('http://127.0.0.1:1');
+      let attempts = 0;
+      options.onAttemptStart = () => {
+        attempts++;
+        return 'unexpected';
+      };
+      const outcome = await runAuxiliaryJob(state.store, seed.job.id, 'owner', options);
+      expect(outcome).toEqual({
+        status: 'failed',
+        result: null,
+        error: invalid === 'control' ? 'PROMPT_INVALID_CONTROL_VALUE' : 'PROMPT_UNKNOWN_SLOT',
+        diagnostic:
+          invalid === 'control'
+            ? { stage: 'preparation', code: 'PROMPT_INVALID_CONTROL_VALUE', blockId: 'style' }
+            : {
+                stage: 'preparation',
+                code: 'PROMPT_UNKNOWN_SLOT',
+                blockId: 'pheme-7',
+                slotName: 'missing',
+              },
+      });
+      expect(attempts).toBe(0);
+    }
+  );
   test('actual loopback requests preserve composed messages across source-time tools and freeze later mutations', async () => {
     const seed = bundle();
     let calls = 0;

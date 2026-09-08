@@ -2,6 +2,13 @@ import { describe, expect, it } from 'vitest';
 import { auxiliaryErrorDiagnostic } from '../web/auxiliary-error.js';
 
 describe('safe auxiliary error diagnostics', () => {
+  it('keeps a missing prompt slot visible instead of disguising it as a model connection failure', () => {
+    const diagnostic = auxiliaryErrorDiagnostic('PROMPT_UNKNOWN_SLOT');
+    expect(diagnostic.code).toBe('PROMPT_UNKNOWN_SLOT');
+    expect(diagnostic.message).toContain('슬롯');
+    expect(diagnostic.action).toContain('모델 전송 전');
+    expect(auxiliaryErrorDiagnostic('PROMPT_UNKNOWN_SLOT private text').code).toBeNull();
+  });
   it('identifies exactly the missing model role', () => {
     for (const [role, label] of [
       ['main', '본문'],

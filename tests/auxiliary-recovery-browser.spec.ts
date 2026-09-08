@@ -86,6 +86,15 @@ test('auxiliary failures show separate safe causes and recreate status with curr
   ).toBe(true);
   if (visualReview)
     await page.screenshot({ path: info.outputPath('auxiliary-recovery-mobile.png') });
+  jobs[1].error = 'PROMPT_UNKNOWN_SLOT';
+  await page.reload();
+  const activity = page.getByTestId('turn-activity').first();
+  await activity.locator(':scope > summary').click();
+  const promptFailure = activity.getByTestId('job-translation');
+  await expect(promptFailure).toContainText('PROMPT_UNKNOWN_SLOT');
+  await expect(promptFailure).toContainText('입력 슬롯');
+  await expect(promptFailure).toContainText('모델 전송 전');
+  await expect(promptFailure).not.toContainText('인증');
   const after: ChatDetail = await (await request.get(`/api/chats/${chat.id}`)).json();
   expect(after.sources).toEqual(detail!.sources);
 });

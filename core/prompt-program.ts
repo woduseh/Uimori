@@ -197,7 +197,8 @@ export class PromptProgramError extends Error {
   readonly statusCode = 400;
   constructor(
     readonly code: string,
-    readonly blockId?: string
+    readonly blockId?: string,
+    readonly slotName?: string
   ) {
     super(`${code}${blockId ? ` (${blockId})` : ''}`);
     this.name = 'PromptProgramError';
@@ -1225,7 +1226,8 @@ class PromptEvaluator {
       if (node.kind === 'text') append(node.text);
       else if (node.kind === 'value') append(this.display(this.evaluate(node.expression, locals)));
       else if (node.kind === 'slot') {
-        if (!Object.hasOwn(slots, node.name)) fail('PROMPT_UNKNOWN_SLOT', node.name);
+        if (!Object.hasOwn(slots, node.name))
+          throw new PromptProgramError('PROMPT_UNKNOWN_SLOT', undefined, node.name);
         if (slots[node.name].length) this.usedSlots.add(node.name);
         append(slots[node.name]);
       } else if (node.kind === 'if') {
@@ -1412,18 +1414,24 @@ export function compilePromptProgram(
       continue;
     }
     if (block.kind === 'message' || block.kind === 'slot') {
-      const slot =
-        block.kind === 'slot'
-          ? Object.hasOwn(context.slots, block.slot)
-            ? context.slots[block.slot]
-            : fail('PROMPT_UNKNOWN_SLOT', block.id)
-          : '';
+      if (block.kind === 'slot' && !Object.hasOwn(context.slots, block.slot))
+        throw new PromptProgramError('PROMPT_UNKNOWN_SLOT', block.id, block.slot);
+      const slot = block.kind === 'slot' ? context.slots[block.slot] : '';
+      const render = (nodes: PromptTemplate, slots: Record<string, string>) => {
+        try {
+          return evaluator.render(nodes, slots);
+        } catch (error) {
+          if (error instanceof PromptProgramError && error.code === 'PROMPT_UNKNOWN_SLOT')
+            throw new PromptProgramError(error.code, block.id, error.slotName);
+          throw error;
+        }
+      };
       const text =
         block.kind === 'message'
-          ? evaluator.render(block.template, context.slots)
+          ? render(block.template, context.slots)
           : slot.length
             ? block.template
-              ? evaluator.render(block.template, { ...context.slots, slot })
+              ? render(block.template, { ...context.slots, slot })
               : slot
             : '';
       if (

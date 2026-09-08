@@ -27,7 +27,10 @@ export function translationPolicy(value?: TranslationPolicy): TranslationPolicy 
 export type TranslationRefusalVerdict = 'accepted' | 'refused' | 'uncertain';
 export function parseTranslationRefusalVerdict(text: string): TranslationRefusalVerdict {
   try {
-    const value: unknown = JSON.parse(text);
+    // Accept only an outer wrapper, never extract JSON from explanatory prose.
+    const trimmed = text.trim();
+    const fence = /^```json[\t ]*\r?\n([\s\S]*?)\r?\n```$/.exec(trimmed);
+    const value: unknown = JSON.parse(fence ? fence[1].trim() : trimmed);
     if (
       !value ||
       typeof value !== 'object' ||

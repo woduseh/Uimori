@@ -1,3 +1,4 @@
+import type { ProviderHttpDiagnostic } from './provider-http-error.js';
 import {
   GENERATION_KEYS,
   validateGenerationShape,
@@ -85,7 +86,7 @@ export type ProviderResult = {
   text: string;
   toolCalls: ProviderToolCall[];
   refusal: string | null;
-  error: { code: string } | null;
+  error: { code: string; diagnostic?: ProviderHttpDiagnostic } | null;
   usage: ProviderUsage;
   opaqueState: Json;
   delivery?: {
