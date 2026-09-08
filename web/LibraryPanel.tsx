@@ -1,4 +1,5 @@
 import { PackageTransfer } from './PackageTransfer.js';
+import { SlidersHorizontal } from 'lucide-react';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import type { Content, ContentKind, Library } from '../core/product.js';
 import type { LibraryItemKey, LibraryOrganization } from '../core/library-organization.js';
@@ -373,6 +374,33 @@ export function LibraryPanel({
       </LibraryItemMenu>
     );
   }
+  const detailRole: PrimaryLibraryTab = detail
+    ? organizedLibrary
+      ? libraryCategory(organizedLibrary, detail)
+      : detail.kind === 'persona'
+        ? 'persona'
+        : detail.kind === 'module'
+          ? 'module'
+          : 'bot'
+    : tab;
+  const detailFolderId =
+    detail && organizedLibrary
+      ? libraryFolderOf(organizedLibrary, { kind: 'content', id: detail.id })
+      : null;
+  const detailFolder = detailFolderId
+    ? organizer.organization?.folders.find((item) => item.id === detailFolderId)?.title
+    : undefined;
+  const detailCounts = detail?.package
+    ? [
+        ['로어', detail.package.lore.length],
+        ['지침', detail.package.instructions.length],
+        ['이미지', detail.package.images?.length ?? 0],
+      ]
+        .filter(([, count]) => (count as number) > 0)
+        .map(([label, count]) => `${label} ${count}`)
+    : [];
+  const roleActionLabel = (id: PrimaryLibraryTab, title: string) =>
+    id === 'bot' ? '봇으로 새 채팅' : id === 'persona' ? '페르소나로 사용' : `${title}로 추가`;
   return (
     <section ref={panelRef} className="library-page" data-testid="library-panel" aria-label="서재">
       <header className="library-heading">
@@ -449,6 +477,15 @@ export function LibraryPanel({
             <button type="button" className="secondary" onClick={() => navigate(tab, true)}>
               ← 서재 목록
             </button>
+            <div className="library-detail-title">
+              <h2>{detail.title}</h2>
+              <small>
+                {organizedLibrary
+                  ? contentLabels[libraryCategory(organizedLibrary, detail)]
+                  : contentLabels[detail.kind]}
+                {detailFolder ? ` · ${detailFolder}` : ''}
+              </small>
+            </div>
             <div className="library-detail-actions">
               <button
                 type="button"
@@ -456,51 +493,79 @@ export function LibraryPanel({
                 disabled={loading}
                 onClick={() => void openContent(detail, 'edit')}
               >
+                <EditIcon size={18} aria-hidden="true" />
                 편집
               </button>
-              {itemMenu(detail)}
+              <LibraryItemMenu title={`${detail.title} 메뉴`}>
+                {libraryTabs
+                  .filter(({ id }) => id !== detailRole)
+                  .map(({ id, title }) => (
+                    <button
+                      type="button"
+                      className="secondary"
+                      key={id}
+                      aria-label={roleActionLabel(id, title)}
+                      disabled={
+                        loading || (id === 'bot' ? !onUseContent && !onStartStory : !onUseContent)
+                      }
+                      onClick={() => void openContent(detail, id)}
+                    >
+                      {roleActionLabel(id, title)}
+                    </button>
+                  ))}
+                <button
+                  type="button"
+                  className="secondary"
+                  disabled={loading}
+                  onClick={() => void openContent(detail, 'clone')}
+                >
+                  <CopyIcon size={18} aria-hidden="true" />
+                  복제
+                </button>
+                <button
+                  type="button"
+                  className="secondary"
+                  disabled={organizer.busy}
+                  onClick={() => setMoving([{ kind: 'content', id: detail.id }])}
+                >
+                  <MoveIcon size={18} aria-hidden="true" />
+                  분류·폴더 이동
+                </button>
+                <DeleteButton
+                  path={`/content/${encodeURIComponent(detail.id)}`}
+                  revision={detail.revision}
+                  title={detail.title}
+                  onDeleted={async () => {
+                    cancelOpening();
+                    await reload();
+                    navigate(tab, true);
+                  }}
+                  onError={onError}
+                />
+              </LibraryItemMenu>
             </div>
           </div>
           <div className="library-preview-heading">
             <ContentAvatar content={detail} className="library-preview-avatar" />
             <div>
-              <small>
-                {organizedLibrary
-                  ? contentLabels[libraryCategory(organizedLibrary, detail)]
-                  : contentLabels[detail.kind]}
-              </small>
               <h2>{detail.title}</h2>
               <p>{detail.description || '아직 소개가 없어요.'}</p>
             </div>
           </div>
           <div className="library-use-actions">
-            {libraryTabs.map(({ id, title }) => (
-              <button
-                type="button"
-                className={id === 'bot' ? '' : 'secondary'}
-                key={id}
-                aria-label={
-                  id === 'bot'
-                    ? '봇으로 새 채팅'
-                    : id === 'persona'
-                      ? '페르소나로 사용'
-                      : `${title}로 추가`
-                }
-                disabled={
-                  loading || (id === 'bot' ? !onUseContent && !onStartStory : !onUseContent)
-                }
-                onClick={() => void openContent(detail, id)}
-              >
-                <span>
-                  {id === 'bot'
-                    ? '봇으로 새 채팅'
-                    : id === 'persona'
-                      ? '페르소나로 사용'
-                      : `${title}로 추가`}
-                </span>
-                <small>{contentGuidance[id].description}</small>
-              </button>
-            ))}
+            <button
+              type="button"
+              aria-label={roleActionLabel(detailRole, contentLabels[detailRole])}
+              disabled={
+                loading || (detailRole === 'bot' ? !onUseContent && !onStartStory : !onUseContent)
+              }
+              onClick={() => void openContent(detail, detailRole)}
+            >
+              <NewChatIcon size={18} aria-hidden="true" />
+              {detailRole === 'bot'
+                ? '새 채팅'
+                : roleActionLabel(detailRole, contentLabels[detailRole])}
+            </button>
             {recentChatByContent?.[detail.id] && onContinueChat && (
               <button
                 type="button"
@@ -511,27 +576,10 @@ export function LibraryPanel({
               </button>
             )}
           </div>
-          <p className="muted">
-            선택한 역할로 사용해도 서재의 분류는 바뀌지 않아요. 역할별 지침은 편집에서 확인할 수
-            있어요.
-          </p>
-          {detail.text && <div className="library-preview-body">{detail.text}</div>}
-          {detail.package && (
-            <dl className="library-preview-facts">
-              <div>
-                <dt>로어</dt>
-                <dd>{detail.package.lore.length}개</dd>
-              </div>
-              <div>
-                <dt>지침</dt>
-                <dd>{detail.package.instructions.length}개</dd>
-              </div>
-              <div>
-                <dt>이미지</dt>
-                <dd>{detail.package.images?.length ?? 0}개</dd>
-              </div>
-            </dl>
+          {detail.package && detailCounts.length > 0 && (
+            <p className="library-preview-counts muted">{detailCounts.join(' · ')}</p>
           )}
+          {detail.text && <div className="library-preview-body">{detail.text}</div>}
         </section>
       ) : (
         <>
@@ -572,112 +620,125 @@ export function LibraryPanel({
             ))}
           </div>
           <div className="library-workspace">
-            <LibraryFolders
-              compactMobile
-              category={tab}
-              organizer={organizer}
-              value={folder}
-              onChange={(next) => {
-                setFolder(next);
-                setSelectedIds([]);
-              }}
-              counts={counts}
-              reload={reload}
-              onError={onError}
-            />
             <div className="library-workspace-content">
-              {selecting ? (
-                <div className="library-bulk-toolbar" role="group" aria-label="자료 선택 작업">
-                  <span role="status">{selectedIds.length}개 선택</span>
-                  <button
-                    type="button"
-                    className="secondary"
-                    aria-label="표시된 자료 전체 선택"
-                    onClick={() => setSelectedIds(filtered.map((item) => item.id))}
-                  >
-                    <SelectIcon size={18} aria-hidden="true" />
-                    <span>전체</span>
-                  </button>
-                  <button
-                    type="button"
-                    aria-label="선택한 자료 이동"
-                    disabled={!selectedIds.length || organizer.busy}
-                    onClick={() => setMoving(selectedIds.map((id) => ({ kind: 'content', id })))}
-                  >
-                    <MoveIcon size={18} aria-hidden="true" />
-                    <span>이동</span>
-                  </button>
-                  <IconButton
-                    ref={selectionExit}
-                    label="선택 취소"
-                    icon={CloseIcon}
-                    onClick={() => {
-                      setSelectedIds([]);
-                      setSelecting(false);
-                    }}
-                  />
-                </div>
-              ) : !categoryEmpty ? (
-                <div className="library-toolbar">
-                  <label className="library-search-field">
-                    <SearchIcon size={20} aria-hidden="true" />
-                    <span className="sr-only">서재 검색</span>
-                    <input
-                      type="search"
-                      aria-label="서재 검색"
-                      placeholder="이름이나 설명으로 찾기"
-                      value={query}
-                      onChange={(event) => setQuery(event.target.value)}
+              <div className="library-toolbar">
+                <LibraryFolders
+                  category={tab}
+                  organizer={organizer}
+                  value={folder}
+                  onChange={(next) => {
+                    setFolder(next);
+                    setSelectedIds([]);
+                  }}
+                  counts={counts}
+                  reload={reload}
+                  onError={onError}
+                />
+                {selecting ? (
+                  <div className="library-bulk-toolbar" role="group" aria-label="자료 선택 작업">
+                    <span role="status">{selectedIds.length}개 선택</span>
+                    <button
+                      type="button"
+                      className="secondary"
+                      aria-label="표시된 자료 전체 선택"
+                      onClick={() => setSelectedIds(filtered.map((item) => item.id))}
+                    >
+                      <SelectIcon size={18} aria-hidden="true" />
+                      <span>전체</span>
+                    </button>
+                    <button
+                      type="button"
+                      aria-label="선택한 자료 이동"
+                      disabled={!selectedIds.length || organizer.busy}
+                      onClick={() => setMoving(selectedIds.map((id) => ({ kind: 'content', id })))}
+                    >
+                      <MoveIcon size={18} aria-hidden="true" />
+                      <span>이동</span>
+                    </button>
+                    <IconButton
+                      ref={selectionExit}
+                      label="선택 취소"
+                      icon={CloseIcon}
+                      onClick={() => {
+                        setSelectedIds([]);
+                        setSelecting(false);
+                      }}
                     />
-                  </label>
-                  <LibraryItemMenu title="목록 관리" className="library-list-options">
-                    <div className="library-list-options-body">
-                      <label>
-                        정렬
-                        <select
-                          aria-label="자료 정렬"
-                          value={sort}
-                          onChange={(event) => setSort(event.target.value)}
+                  </div>
+                ) : (
+                  <>
+                    {!categoryEmpty && (
+                      <>
+                        <label className="library-search-field">
+                          <SearchIcon size={20} aria-hidden="true" />
+                          <span className="sr-only">서재 검색</span>
+                          <input
+                            type="search"
+                            aria-label="서재 검색"
+                            placeholder="이름이나 설명으로 찾기"
+                            value={query}
+                            onChange={(event) => setQuery(event.target.value)}
+                          />
+                        </label>
+                        <LibraryItemMenu
+                          title="목록 관리"
+                          className="library-list-options"
+                          icon={SlidersHorizontal}
                         >
-                          <option value="name">이름순</option>
-                          <option value="name-desc">이름 역순</option>
-                        </select>
-                      </label>
-                      <div className="library-view-buttons" role="group" aria-label="자료 보기">
-                        <button
-                          type="button"
-                          className="secondary"
-                          aria-pressed={views[tab] === 'cards'}
-                          onClick={() => setView('cards')}
-                        >
-                          <CardsIcon size={18} aria-hidden="true" />
-                          카드
-                        </button>
-                        <button
-                          type="button"
-                          className="secondary"
-                          aria-pressed={views[tab] === 'list'}
-                          onClick={() => setView('list')}
-                        >
-                          <ListIcon size={18} aria-hidden="true" />
-                          목록
-                        </button>
-                      </div>
-                      <button
-                        type="button"
-                        className="secondary"
-                        onClick={() => {
-                          setSelecting(true);
-                          setSelectedIds([]);
-                        }}
-                      >
-                        <SelectIcon size={18} aria-hidden="true" />
-                        선택
-                      </button>
-                    </div>
-                  </LibraryItemMenu>
-                </div>
-              ) : null}
+                          <div className="library-list-options-body">
+                            <label>
+                              정렬
+                              <select
+                                aria-label="자료 정렬"
+                                value={sort}
+                                onChange={(event) => setSort(event.target.value)}
+                              >
+                                <option value="name">이름순</option>
+                                <option value="name-desc">이름 역순</option>
+                              </select>
+                            </label>
+                            <div
+                              className="library-view-buttons"
+                              role="group"
+                              aria-label="자료 보기"
+                            >
+                              <button
+                                type="button"
+                                className="secondary"
+                                aria-pressed={views[tab] === 'cards'}
+                                onClick={() => setView('cards')}
+                              >
+                                <CardsIcon size={18} aria-hidden="true" />
+                                카드
+                              </button>
+                              <button
+                                type="button"
+                                className="secondary"
+                                aria-pressed={views[tab] === 'list'}
+                                onClick={() => setView('list')}
+                              >
+                                <ListIcon size={18} aria-hidden="true" />
+                                목록
+                              </button>
+                            </div>
+                            <button
+                              type="button"
+                              className="secondary"
+                              onClick={() => {
+                                setSelecting(true);
+                                setSelectedIds([]);
+                              }}
+                            >
+                              <SelectIcon size={18} aria-hidden="true" />
+                              선택
+                            </button>
+                          </div>
+                        </LibraryItemMenu>
+                      </>
+                    )}
+                  </>
+                )}
+              </div>
               {!!query && !selecting && (
                 <p className="library-result-count muted" role="status">
                   검색 결과 {filtered.length}개
