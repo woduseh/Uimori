@@ -7,7 +7,8 @@ Node **24.14 이상 24.x**와 `npm ci`를 사용해요. 프로젝트의 `strict`
 | 시점 | 명령 | 범위 |
 | --- | --- | --- |
 | 수정 중·리뷰 전 | `npm run quality` | 서식 + lint + 타입 + 모듈 의존성. 파일을 수정하지 않아요. |
-| 작업 완료·통합 전 | `npm run quality:full` | 위 검사 → 새 빌드 → 전체 Vitest. |
+| 검증 스크립트 변경 | `npm run test:tooling` | Node 기본 실행기의 하네스 회귀. 0개·skip·todo·취소·실패를 거부하고 보고서를 남겨요. |
+| 작업 완료·통합 전 | `npm run quality:full` | 위 품질 검사 → 하네스 회귀 → 새 빌드 → 전체 Vitest. |
 | UI 동작 변경 | 빌드 후 관련 `verify:*` 또는 `npm run verify:redesign` | 새 DB/port를 사용하는 기존 합성 브라우저 검증. |
 | 서식 수정 | `npm run format` | Biome가 지원하는 프로젝트 소스·설정의 서식만 수정해요. |
 | lint 수정 | `npm run lint:fix` | 도구가 안전하다고 분류한 수정만 적용해요. 해결되지 않은 진단은 실패로 남아요. |
@@ -15,7 +16,11 @@ Node **24.14 이상 24.x**와 `npm ci`를 사용해요. 프로젝트의 `strict`
 
 `quality`는 Biome의 서식·lint를 한 번에 실행해 중복 스캔을 줄여요. 기본 검사에는 서버 실행, 브라우저, 모델 호출, 네트워크 조회, 의존성 설치가 없어요. 매 저장·커밋마다 전체 테스트를 강제하는 Git hook은 설치하지 않아요. 작업에 필요한 검사가 통과하면 변경이나 새 실패 근거 없이 반복하지 않아요.
 
-`quality:full`은 빌드 산출물을 지우고 다시 만든 뒤 테스트해요. 서버 프로세스 재시작 테스트가 `dist/server/index.js`를 실행하므로 이 순서가 필요해요. 개별 `npm test`를 실행할 때도 서버 코드를 변경했거나 `dist`가 없으면 먼저 `npm run build`를 실행해요.
+`quality:full`은 새 빌드를 만든 뒤 Vitest를 실행해요. 서버 프로세스 재시작 테스트가 `dist/server/index.js`를 실행하므로 이 순서가 필요해요. 개별 `npm test`를 실행할 때도 서버 코드를 변경했거나 `dist`가 없으면 먼저 `npm run build`를 실행해요.
+
+`build`는 별도 `.build-*` 폴더에서 서버·웹을 모두 컴파일하고 소스 지문을 확인한 뒤 `dist`를 교체해요. 컴파일 실패·환경 차단·소스 변경이면 이전 빌드를 보존하며 `output/build/<run-id>/summary.json`과 단계별 로그를 남겨요. 보존된 빌드는 현재 소스의 검증 근거가 아니므로 브라우저 검증의 지문 검사는 그대로 적용해요. 같은 checkout의 동시 빌드는 `output/build/active.json`으로 거부해요. 강제 종료 후 잠금이 남았다면 기록된 PID와 해당 실행의 staging/이전 빌드 경로를 확인한 후에만 잠금을 정리해요.
+
+`test:tooling`은 자식 프로세스 없이 파일 보존·진단·HTTP fixture·SQLite 증거 판정을 검사해요. 결과는 `output/tooling/<run-id>/`에 남으며 전체 Vitest·앱 자식 실행·브라우저를 대체하지 않아요.
 
 VS Code에서는 권장 `biomejs.biome` 확장을 설치하면 지원 코드 파일을 저장할 때 서식을 맞출 수 있어요. 확장 설치는 선택 사항이며 CLI와 CI가 동일한 설정을 사용해요. `.editorconfig`와 기존 `.gitattributes`는 UTF-8·LF·공백 2칸 기준을 맞춰요.
 

@@ -1,10 +1,22 @@
 # 개발과 검증
 
-정식 배포 전에는 하위 호환성을 요구하지 않아요. 현재 DB·보관 형식은 **v12**이며 구버전 자료·채팅·백업을 자동 이관하거나 보존용 백업을 만들지 않아요. 개발 DB를 다시 시작하려면 실행 중인 서버를 종료한 뒤 `npm run reset:dev`를 실행해요. 이 명령은 저장소의 `.local/narrative.sqlite`와 해당 SQLite 부속 파일·알려진 구형 자동 백업만 삭제해요. 서버가 DB를 사용 중이거나 경로가 저장소 밖으로 연결되면 중단해요. 다른 검증 산출물과 credential 파일은 대상으로 삼지 않아요.
+정식 배포 전에는 하위 호환성을 요구하지 않아요. 현재 DB·보관 형식은 **v13**이며 구버전 자료·채팅·백업을 자동 이관하거나 보존용 백업을 만들지 않아요. 개발 DB를 다시 시작하려면 실행 중인 서버를 종료한 뒤 `npm run reset:dev`를 실행해요. 이 명령은 저장소의 `.local/narrative.sqlite`와 해당 SQLite 부속 파일·알려진 구형 자동 백업만 삭제해요. 서버가 DB를 사용 중이거나 경로가 저장소 밖으로 연결되면 중단해요. 다른 검증 산출물과 credential 파일은 대상으로 삼지 않아요.
 
 [시작하기](../README.md) · [코드 품질](QUALITY.md) · [검증 계약](../project-plan/VERIFICATION.md)
 
 ## 변경과 검증
+
+최소 앱 검증 진입점은 `npm run verify:smoke`예요. 기존 M0 실행기의 F02·F03·F06을 선택해 환경 진단 → 타입·빌드 → 새 서버의 ready/DB identity → 생성·중복/충돌·재접속의 단위/브라우저 검사 → 실패 감지 selftest → 종료·정리를 연결해요. 전체 M0·UI 회귀를 대신하지 않아요. 종료 코드를 확인하고 출력된 `summary.json`의 scope·scenarios·cleanup을 함께 읽어요.
+
+```powershell
+npm ci --offline --no-audit --no-fund
+npm run doctor
+npm run verify:smoke
+```
+
+오프라인 설치는 npm 캐시가 준비된 환경에서만 가능해요. 캐시가 없으면 허용된 네트워크 환경에서 `npm ci --no-audit --no-fund`가 필요해요. `doctor`는 Node **24.14 이상 24.x**, 자식 프로세스의 준비·종료, 파일 SQLite, loopback HTTP, 실제 Chromium 시작을 각각 확인해요. `npm run doctor -- --no-browser`는 API 환경 진단만 요청하며 브라우저를 `NOT_RUN`으로 표시해요. 전체 검증용 브라우저 전제는 기존 Chrome/Edge 또는 `NR_BROWSER_PATH`예요.
+
+2026-09-08 Windows의 현재 제한 환경에서는 새 소스 사본의 오프라인 설치와 품질·하네스 회귀가 통과했지만, Node/Chrome 자식 실행은 `EPERM`으로 차단됐어요. `verify:smoke`가 제품 검사를 시작하지 않고 BLOCKED·nonzero와 cleanup 근거를 남기는 것까지 확인했어요. 권한을 변경하지 않았으며, 이 결과는 브라우저 흐름 통과의 증거가 아니에요.
 
 수정 중에는 `npm run quality`, 완료·통합 전에는 `npm run quality:full`을 실행해요. `quality`는 서식·lint·모듈 경계·타입을 검사하고, `quality:full`은 전체 Vitest와 빌드를 더해요. UI를 바꿨다면 이 빌드에 해당하는 브라우저 검증을 추가해요. 아래는 작업에 따라 선택하는 명령이며 전체 목록을 매번 실행하는 절차가 아니에요.
 
@@ -76,7 +88,7 @@ node scripts/verify-worktrees.mjs --a '<준비된 작업트리 A>' --b '<준비�
 
 - `web/`: 서재·프롬프트 관리, 봇별 탐색·채팅·패키지 편집, 안전한 원고 표시, 탭별 URL/초안/독서 위치, 페이지 읽기·SSE 갱신과 늦은 HTTP 응답 폐기.
 - `core/`: 공통 ContentPackage와 역할별 문맥, PromptProgram 데이터 AST·선택형 문법·TypeScript 제작 API, native JSON 검증, 공급자 adapter와 상태·기억·원문 회수, 번역·표현 검증. 개발용 지침과 앱 자료는 별개예요.
-- `server/`: schema/archive v12, SQLite WAL, revision/idempotency, 봇 소속·채팅 폴더·서재 분류와 폴더, 분기, Run/job/chunk/attempt 수명, 판정 기회·임시 행동 상태, 인증·SSE·현재 형식 백업. DB 트랜잭션은 모델이나 브라우저를 기다리지 않아요.
+- `server/`: schema/archive v13, SQLite WAL, revision/idempotency, 봇 소속·채팅 폴더·서재 분류와 폴더, 분기, Run/job/chunk/attempt 수명, 판정 기회·임시 행동 상태, 인증·SSE·현재 형식 백업. DB 트랜잭션은 모델이나 브라우저를 기다리지 않아요.
 - `tests/`: 실제 파일 DB/HTTP/프로세스 재시작과 Playwright 브라우저 검사. `scripts/`는 기존 reporter와 작은 수명주기 코드를 연결해요.
 
 원문·Run 완료·적격 보조 예약은 한 트랜잭션에 저장하고 worker는 커밋 뒤에 실행해요. job 결과·완료도 한 트랜잭션이며 source/hash와 worker generation/owner를 검사해요. 재시작은 완료 원문을 다시 생성하지 않아요. 실행 중이던 메인 요청은 `interrupted`로 남고, 로컬 결정적 모의 job만 재개해요. 표시 상태는 다음 원고의 사실로 주입하지 않아요.

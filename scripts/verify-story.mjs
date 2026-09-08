@@ -3,6 +3,7 @@ import os from 'node:os';
 import { existsSync } from 'node:fs';
 import { mkdir, readdir, copyFile } from 'node:fs/promises';
 import { doctor } from './doctor.mjs';
+import { doctorFailureState } from './doctor-result.mjs';
 import {
   root,
   artifactRoot,
@@ -85,8 +86,9 @@ export async function verifyStory(selection) {
     const diagnostic = await doctor(directory);
     summary.environment.doctor = diagnostic;
     if (diagnostic.status !== 'PASS') {
-      environmentBlocked = true;
-      for (const scenario of Object.values(summary.scenarios)) scenario.status = 'BLOCKED';
+      const failure = doctorFailureState(diagnostic);
+      environmentBlocked = failure.status === 'BLOCKED';
+      for (const scenario of Object.values(summary.scenarios)) scenario.status = failure.status;
       throw new Error('Environment doctor ' + diagnostic.status + ': ' + diagnostic.error);
     }
     await run(['node_modules/typescript/bin/tsc', '--noEmit'], 'check');
@@ -97,11 +99,15 @@ export async function verifyStory(selection) {
     const env = {
       NR_DB: path.join(runtime, 'app.sqlite'),
       NR_PORT: '0',
+      NR_HOST: '127.0.0.1',
+      NR_PUBLIC_ORIGIN: undefined,
       NR_INSTANCE: runId,
       NR_BUILD_ID: summary.identity.buildId,
       NR_TEST_MODE: '1',
       NR_ACCESS_TOKEN: '',
       NR_PROVIDER_ORIGINS: '',
+      NR_CODEX_ENABLED: '0',
+      NR_CODEX_EXECUTABLE: undefined,
       NR_ARTIFACT_DIR: directory,
       NR_BROWSER_OUTPUT: path.join(directory, 'browser'),
       TEMP: temp,

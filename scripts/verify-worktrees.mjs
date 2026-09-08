@@ -1,9 +1,11 @@
 import path from 'node:path';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
+import { fileURLToPath } from 'node:url';
 import { mkdir, copyFile, readdir, realpath } from 'node:fs/promises';
 import { DatabaseSync } from 'node:sqlite';
 import { chromium, expect } from '@playwright/test';
+import { postFixtureChat } from '../tests/fixtures/chat.ts';
 import {
   artifactRoot,
   newId,
@@ -23,13 +25,34 @@ async function parallel(operations) {
   const failure = results.find((result) => result.status === 'rejected');
   if (failure) throw failure.reason;
 }
-const args = process.argv.slice(2);
-if (args.length !== 4 || args[0] !== '--a' || args[2] !== '--b') {
-  console.error(
-    'Usage: node scripts/verify-worktrees.mjs --a <prepared-clean-checkout> --b <prepared-clean-checkout>'
-  );
-  process.exitCode = 2;
-} else {
+export async function prepareWorktreeChat(request, title) {
+  const response = await postFixtureChat(request, { data: { title } });
+  if (!response.ok()) throw new Error(`Worktree fixture chat HTTP ${response.status()}`);
+  const chat = await response.json();
+  if (typeof chat.id !== 'string' || !chat.id || chat.title !== title)
+    throw new Error('Invalid worktree fixture chat identity');
+  return chat;
+}
+
+export function assertWorktreeDatabase(db, entry) {
+  const sources = db.prepare('SELECT id, chat_id FROM sources').all();
+  if (
+    sources.length !== 1 ||
+    sources[0].id !== entry.sourceId ||
+    sources[0].chat_id !== entry.chatId
+  )
+    throw new Error('Reopened file SQLite did not preserve the expected source and chat');
+  return sources.length;
+}
+
+async function main(args) {
+  if (args.length !== 4 || args[0] !== '--a' || args[2] !== '--b') {
+    console.error(
+      'Usage: node scripts/verify-worktrees.mjs --a <prepared-clean-checkout> --b <prepared-clean-checkout>'
+    );
+    process.exitCode = 2;
+    return;
+  }
   const id = `worktrees-${newId()}`;
   const directory = path.join(artifactRoot, id);
   await mkdir(directory, { recursive: true });
@@ -39,6 +62,12 @@ if (args.length !== 4 || args[0] !== '--a' || args[2] !== '--b') {
   const summary = {
     status: 'FAIL',
     case: 'F01',
+    scope:
+      'Two clean checkouts with synthetic bot/chat API setup, browser generation and isolated file SQLite persistence.',
+    limitations: [
+      'Chat creation UI is covered separately by tests/new-story-browser.spec.ts in npm run verify:redesign.',
+      'Local synthetic execution only; no external provider, Codex runtime, physical device or deployment proof.',
+    ],
     startedAt: new Date().toISOString(),
     entries,
     failures: [],
@@ -78,6 +107,12 @@ if (args.length !== 4 || args[0] !== '--a' || args[2] !== '--b') {
       const env = {
         NR_DB: path.join(runtime, 'app.sqlite'),
         NR_PORT: '0',
+        NR_HOST: '127.0.0.1',
+        NR_PUBLIC_ORIGIN: undefined,
+        NR_ACCESS_TOKEN: '',
+        NR_PROVIDER_ORIGINS: '',
+        NR_CODEX_ENABLED: '0',
+        NR_CODEX_EXECUTABLE: undefined,
         NR_BUILD_ID: manifest.buildId,
         NR_INSTANCE: `${id}-${index}`,
         NR_TEST_MODE: '1',
@@ -128,23 +163,32 @@ if (args.length !== 4 || args[0] !== '--a' || args[2] !== '--b') {
           executablePath: browserPath(),
           headless: true,
           viewport: { width: 390, height: 844 },
+          baseURL: entry.ready.url,
           env: { ...process.env, TEMP: entry.temp, TMP: entry.temp },
         });
         contexts.push(context);
         const page = context.pages()[0] || (await context.newPage());
-        await page.goto(entry.ready.url, { timeout: 10000 });
         const title = `F01 합성 작업트리 ${index}`;
-        await page.getByLabel('새 이야기 이름').fill(title);
-        await page.getByRole('button', { name: '이야기 만들기' }).click();
+        // Creation UI has its own browser regression. This check owns isolation
+        // from an explicit synthetic bot/chat through real UI generation to disk.
+        const chat = await prepareWorktreeChat(page.request, title);
+        await page.goto(`/?chat=${encodeURIComponent(chat.id)}`, { timeout: 10000 });
+        await expect(page.getByRole('heading', { name: title, exact: true })).toBeVisible();
         await page.getByLabel('다음 장면 요청').fill(`독립 작업트리 ${index}의 저녁 장면`);
         await page.getByRole('button', { name: '원문 생성', exact: true }).click();
         await expect(page.getByTestId('source')).toHaveCount(1, { timeout: 10000 });
         const response = await page.request.get(`${entry.ready.url}/api/chats`);
         const chats = await response.json();
-        if (!response.ok() || chats.length !== 1 || chats[0].title !== title)
+        if (
+          !response.ok() ||
+          chats.length !== 1 ||
+          chats[0].title !== title ||
+          chats[0].id !== chat.id
+        )
           throw new Error('Browser/API storage crossed worktree boundary');
         entry.chatId = chats[0].id;
         entry.sourceId = await page.getByTestId('source').getAttribute('data-source-id');
+        if (!entry.sourceId) throw new Error('Generated source identity missing from the UI');
         entry.browserVersion = context.browser().version();
         await page.screenshot({
           path: path.join(directory, `worktree-${index}.png`),
@@ -219,13 +263,7 @@ if (args.length !== 4 || args[0] !== '--a' || args[2] !== '--b') {
         if (entry.sourceId) {
           const db = new DatabaseSync(path.join(evidenceDir, 'app.sqlite'), { readOnly: true });
           try {
-            entry.persistedSourceCount = db
-              .prepare('SELECT COUNT(*) AS count FROM sources')
-              .get().count;
-            if (entry.persistedSourceCount !== 1) {
-              // biome-ignore lint/correctness/noUnsafeFinally: The runtime cleanup catch preserves this DB assertion alongside prior failures and retains the runtime.
-              throw new Error('Reopened file SQLite did not preserve source');
-            }
+            entry.persistedSourceCount = assertWorktreeDatabase(db, entry);
           } finally {
             db.close();
           }
@@ -264,3 +302,6 @@ if (args.length !== 4 || args[0] !== '--a' || args[2] !== '--b') {
     if (summary.status !== 'PASS') process.exitCode = 1;
   }
 }
+
+if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url))
+  await main(process.argv.slice(2));

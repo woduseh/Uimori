@@ -1,5 +1,6 @@
 node_modules/
 dist/
+.build-*/
 .local/
 .codex-remote-attachments/
 output/

@@ -3,6 +3,7 @@ import os from 'node:os';
 import { existsSync } from 'node:fs';
 import { mkdir, readdir, readFile, copyFile } from 'node:fs/promises';
 import { doctor } from './doctor.mjs';
+import { doctorFailureState } from './doctor-result.mjs';
 import {
   root,
   artifactRoot,
@@ -106,6 +107,8 @@ async function main(selection) {
   };
   let server;
   let browserBlocked = false;
+  let environmentStopped = false;
+  let executionFailed = false;
   const owner = {
     runId,
     ownerPid: process.pid,
@@ -158,12 +161,11 @@ async function main(selection) {
       const result = await doctor(directory);
       summary.environment.doctor = result;
       if (result.status !== 'PASS') {
-        browserBlocked =
-          result.checks.some((check) => check.name === 'file-sqlite-transaction-reopen') &&
-          result.checks.some((check) => check.name === 'localhost-bind-http') &&
-          result.cleanup?.status === 'PASS';
+        const diagnostic = doctorFailureState(result);
+        browserBlocked = diagnostic.browserOnly;
         if (!browserBlocked) {
-          for (const id of selection.cases) summary.scenarios[id].status = 'BLOCKED';
+          environmentStopped = diagnostic.status === 'BLOCKED';
+          for (const id of selection.cases) summary.scenarios[id].status = diagnostic.status;
           throw new Error(
             `Environment doctor ${result.status}: ${result.error || result.cleanup?.error}`
           );
@@ -194,11 +196,15 @@ async function main(selection) {
     const env = {
       NR_DB: path.join(runtime, 'app.sqlite'),
       NR_PORT: '0',
+      NR_HOST: '127.0.0.1',
+      NR_PUBLIC_ORIGIN: undefined,
       NR_INSTANCE: runId,
       NR_BUILD_ID: manifest.buildId,
       NR_TEST_MODE: '1',
       NR_ACCESS_TOKEN: '',
       NR_PROVIDER_ORIGINS: '',
+      NR_CODEX_ENABLED: '0',
+      NR_CODEX_EXECUTABLE: undefined,
       NR_ARTIFACT_DIR: directory,
       NR_BROWSER_OUTPUT: path.join(directory, 'browser'),
       NR_SECRET_CANARY: canary,
@@ -344,6 +350,7 @@ async function main(selection) {
       throw error;
     }
   } catch (error) {
+    executionFailed = !environmentStopped;
     failures.push(error.message);
   } finally {
     const cleanupErrors = [];
@@ -401,7 +408,10 @@ async function main(selection) {
       for (const scenario of Object.values(summary.scenarios))
         if (scenario.status === 'NOT_RUN') scenario.status = 'FAIL';
     summary.status = failures.length
-      ? Object.values(summary.scenarios).some((item) => item.status === 'BLOCKED')
+      ? !executionFailed &&
+        summary.cleanup.status === 'PASS' &&
+        summary.artifactScan.status === 'PASS' &&
+        Object.values(summary.scenarios).some((item) => item.status === 'BLOCKED')
         ? 'BLOCKED'
         : 'FAIL'
       : Object.values(summary.scenarios).every((item) => item.status === 'PASS')

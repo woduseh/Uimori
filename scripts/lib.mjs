@@ -62,7 +62,8 @@ export async function removeOwned(parent, target) {
   }
   await rm(target, { recursive: true, force: true });
 }
-export async function fingerprint() {
+export async function fingerprint(sourceRoot = root) {
+  const root = sourceRoot;
   const dirs = ['core', 'server', 'web', 'src', 'tests', 'scripts', 'fixtures'];
   const config = (await readdir(root)).filter((name) =>
     /^(package(?:-lock)?\.json|(?:tsconfig.*\.json)|(?:vite|vitest|playwright)\.config\.[cm]?[jt]s|biome\.json|\.gitattributes)$/.test(
@@ -89,11 +90,11 @@ export async function fingerprint() {
     lineEndings: 'text CRLF normalized to LF',
   };
 }
-export async function distHash() {
+export async function distHash(directory = path.join(root, 'dist')) {
   const hash = createHash('sha256');
-  for (const file of await filesBelow(path.join(root, 'dist'))) {
+  for (const file of await filesBelow(directory)) {
     if (path.basename(file) === 'build-identity.json') continue;
-    hash.update(path.relative(path.join(root, 'dist'), file).replaceAll('\\', '/') + '\0');
+    hash.update(path.relative(directory, file).replaceAll('\\', '/') + '\0');
     hash.update(await readFile(file));
     hash.update('\0');
   }
