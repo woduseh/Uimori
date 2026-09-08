@@ -370,6 +370,34 @@ input[type="checkbox"] {
   gap: 1px;
   align-items: center;
 }
+/* Header model chip: the current main model is always visible and opens the model menu. */
+.model-chip {
+  display: inline-flex;
+  min-width: 0;
+  max-width: 220px;
+  margin-right: 6px;
+}
+.model-chip select {
+  width: 100%;
+  min-height: 36px;
+  padding: 4px 26px 4px 12px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background-color: var(--panel);
+  color: var(--text);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  cursor: pointer;
+}
+.model-chip select:hover:not(:disabled) {
+  border-color: var(--accent);
+}
+.chat-menu > .action-menu-body {
+  min-width: 240px;
+}
+.action-menu-body > .compact-only {
+  display: none;
+}
 .mobile-menu {
   display: none;
 }
@@ -736,24 +764,49 @@ input[type="checkbox"] {
   max-width: 828px;
   margin: 0 auto;
 }
+/* Composer: one row while the draft fits, then the text takes the full width and the
+   buttons move to a row below (see the grown state). */
 .composer {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-areas:
+    "chips chips chips"
+    "more text send";
+  align-items: end;
+  column-gap: 2px;
+  padding: 5px 6px 5px 4px;
   background: var(--panel);
   border: 1px solid var(--line);
   border-radius: 17px;
-  overflow: hidden;
+}
+.composer.grown {
+  grid-template-areas:
+    "chips chips chips"
+    "text text text"
+    "more . send";
+}
+.composer > .quick-controls {
+  grid-area: more;
+}
+.composer > .send-button {
+  grid-area: send;
 }
 .composer textarea {
+  grid-area: text;
   width: 100%;
-  padding: 16px 17px 6px;
+  padding: 11px 8px;
   border: 0;
   resize: none;
-  min-height: 60px;
+  min-height: 44px;
   max-height: 180px;
   border-radius: 0;
   background: transparent;
   font-size: 14px;
-  line-height: 1.7;
+  line-height: 1.6;
   display: block;
+}
+.composer.grown textarea {
+  padding: 12px 14px 8px;
 }
 .composer textarea:focus {
   outline: none;
@@ -764,19 +817,10 @@ input[type="checkbox"] {
 .composer textarea::placeholder {
   color: var(--faint);
 }
-.composer-bottom {
-  display: flex;
-  align-items: flex-end;
-  gap: 8px;
-  padding: 8px 12px 10px 13px;
-}
 .quick-controls {
   display: flex;
-  flex: 1;
   min-width: 0;
   align-items: center;
-  gap: 3px;
-  flex-wrap: wrap;
 }
 .quick-controls label {
   min-width: 0;
@@ -808,20 +852,16 @@ input[type="checkbox"] {
   border-radius: 12px;
   flex-shrink: 0;
 }
-.composer-caption {
-  display: flex;
-  justify-content: space-between;
-  gap: 12px;
-  margin: 5px 5px 0;
-  font-size: 10px;
-  color: var(--faint);
-}
-.composer-caption span {
-  min-width: 0;
+/* Notices only: the model lives in the header chip and the shortcut in the placeholder. */
+.composer-status {
+  margin: 5px 8px 0;
+  font-size: 11px;
+  color: var(--muted);
   overflow-wrap: anywhere;
 }
-.composer-caption span:last-child {
-  text-align: right;
+.composer-status:empty,
+.composer-status[hidden] {
+  display: none;
 }
 .composer-dock > .error {
   margin-bottom: 8px;
@@ -986,16 +1026,6 @@ input[type="checkbox"] {
     padding-left: 18px;
     padding-right: 18px;
   }
-  .quick-controls label {
-    max-width: 45%;
-  }
-  .quick-model {
-    flex-basis: 100%;
-    max-width: 100%;
-  }
-  .composer-caption span:last-child {
-    display: none;
-  }
 }
 @media (max-width: 760px) {
   .app-shell {
@@ -1019,8 +1049,20 @@ input[type="checkbox"] {
   .header-title small {
     font-size: 10px;
   }
-  .reading-button {
+  .focus-button {
     display: none;
+  }
+  .action-menu-body > .compact-only {
+    display: flex;
+  }
+  .model-chip {
+    max-width: 128px;
+    margin-right: 2px;
+  }
+  .model-chip select {
+    min-height: 40px;
+    font-size: 11px;
+    padding: 4px 22px 4px 10px;
   }
   .header-actions {
     gap: 0;
@@ -1053,32 +1095,20 @@ input[type="checkbox"] {
   .composer-dock {
     padding: 8px 11px max(7px, env(safe-area-inset-bottom));
   }
+  .composer {
+    padding: 3px 4px 3px 2px;
+  }
   .composer textarea {
-    padding: 13px 14px 4px;
+    padding: 10px 6px;
     font-size: 15px;
-    min-height: 54px;
+    min-height: 44px;
   }
-  .composer-bottom {
-    padding: 6px 10px 9px 10px;
-    gap: 4px;
+  .composer.grown textarea {
+    padding: 11px 12px 6px;
   }
-  .quick-controls {
-    gap: 0;
-  }
-  .quick-controls label {
-    max-width: 50%;
-  }
-  .quick-controls select {
+  .composer-status {
     font-size: 10px;
-    min-height: 38px;
-    padding: 5px 15px 5px 4px;
-  }
-  .composer-caption {
-    font-size: 9px;
     margin-top: 4px;
-  }
-  .composer-caption span:last-child {
-    display: none;
   }
   .source + .source {
     margin-top: 22px;

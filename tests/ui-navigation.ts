@@ -63,6 +63,12 @@ export async function selectPackageSection(page: Page, name: string) {
   if (await tab.isVisible()) await tab.click();
   else await fields.getByRole('button', { name, exact: true }).click();
 }
+/** Opens the chat header's ⋯ menu (fork, reading settings, tasks, archived branches). */
+export async function openChatMenu(page: Page) {
+  const menu = page.locator('.chat-menu');
+  if ((await menu.getAttribute('open')) === null) await menu.getByLabel('채팅 메뉴').click();
+  return menu.locator('.action-menu-body');
+}
 export async function openSourceActions(source: Locator) {
   const menu = source.getByLabel('장면 작업 메뉴', { exact: true });
   await expect(menu).toBeVisible();

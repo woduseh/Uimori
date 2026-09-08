@@ -1,5 +1,7 @@
 import { ComposerMore, LoreResetChip } from './ComposerMore.js';
 import { IconButton } from './IconButton.js';
+import { ActionMenu } from './ActionMenu.js';
+import { useCompactLayout } from './useCompactLayout.js';
 import { subscribeAppHistory } from './app-history.js';
 import { ChatPromptOptions } from './ChatPromptOptions.js';
 import { ReaderPages } from './ReaderPages.js';
@@ -7,9 +9,11 @@ import { SceneNavigator } from './SceneNavigator.js';
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { createRoot } from 'react-dom/client';
 import {
+  Activity,
   ArrowUp,
   BookOpen,
-  Copy,
+  GitFork,
+  History,
   Maximize,
   Menu,
   Minimize,
@@ -105,6 +109,15 @@ type Panel = '' | 'navigation' | 'new' | 'story' | 'branches' | 'tasks' | 'setti
 function App() {
   const s = useStory();
   const testMode = useTestMode();
+  const compact = useCompactLayout();
+  const [grown, setGrown] = useState(false);
+  // A dialog opened from the chat ⋯ menu returns focus to the menu button, because the
+  // menu item that opened it is hidden again by the time the dialog closes.
+  const menuReturn = useRef<HTMLElement | null>(null);
+  const fromChatMenu = (event: { currentTarget: HTMLElement }) => {
+    menuReturn.current =
+      event.currentTarget.closest('.chat-menu')?.querySelector<HTMLElement>('summary') ?? null;
+  };
   const [settingsTab, setSettingsTab] = useState('general');
   const [optionsOpen, setOptionsOpen] = useState(false),
     [optionsDirty, setOptionsDirty] = useState(false),
@@ -118,6 +131,13 @@ function App() {
   const sourceEditing = editingSources.length > 0;
   const optionsButton = useRef<HTMLButtonElement>(null);
   const [panel, setPanel] = useState<Panel>('');
+  useEffect(() => {
+    if (panel !== '' || !menuReturn.current) return;
+    const target = menuReturn.current;
+    menuReturn.current = null;
+    const frame = requestAnimationFrame(() => target.focus());
+    return () => cancelAnimationFrame(frame);
+  }, [panel]);
   const [initialBot, setInitialBot] = useState<Content>();
   const [initialFolder, setInitialFolder] = useState<ChatFolder>();
   const [initialPersona, setInitialPersona] = useState<Content>();
@@ -194,7 +214,19 @@ function App() {
     if (!node) return;
     node.style.height = 'auto';
     node.style.height = `${Math.min(node.scrollHeight, 180)}px`;
-  }, [s.draft, s.viewKey, s.destination, sourceEditing]);
+    // One row while the draft fits beside the buttons; once it wraps, the text takes the full
+    // width and the buttons move below. Shrink back only when the draft is cleared, so typing
+    // near the boundary does not flip the layout on every keystroke.
+    if (!s.draft) setGrown(false);
+    else if (!grown) {
+      const style = getComputedStyle(node);
+      const single =
+        Number.parseFloat(style.lineHeight) +
+        Number.parseFloat(style.paddingTop) +
+        Number.parseFloat(style.paddingBottom);
+      if (s.draft.includes('\n') || node.scrollHeight > single + 1) setGrown(true);
+    }
+  }, [s.draft, s.viewKey, s.destination, sourceEditing, grown]);
   const mainModel = s.library?.models.find(
     (item) => item.id === s.detail?.profile?.routes.main?.id
   );
@@ -203,6 +235,15 @@ function App() {
     : s.detail?.profile?.routes.main
       ? '선택한 본문 모델 · 확인 필요'
       : '본문 모델을 선택해 주세요';
+  const composerStatus = [
+    s.pendingRequest && !s.submitting.includes(s.viewKey)
+      ? '이전 전송의 수락을 확인해 주세요. 새 초안은 보존돼요.'
+      : s.notice,
+    s.profileDirty ? '채팅 설정에 미저장 변경' : '',
+  ]
+    .filter(Boolean)
+    .join(' · ');
+  const quickDisabled = s.quickBusy || optionsBusy || optionsDirty || s.profileDirty || !s.detail;
   useEffect(() => {
     const media = matchMedia('(prefers-color-scheme: dark)');
     const apply = () => {
@@ -409,30 +450,37 @@ function App() {
             <div className="header-actions">
               {s.selected && s.destination === 'story' && (
                 <>
+                  <label className="model-chip">
+                    <span className="sr-only">빠른 본문 모델</span>
+                    <select
+                      aria-label="빠른 본문 모델"
+                      title={mainDescription}
+                      value={s.detail?.profile?.routes.main?.id ?? ''}
+                      disabled={quickDisabled}
+                      onChange={(event) => {
+                        void s.quickChange('model', event.target.value);
+                      }}
+                    >
+                      <option value="">본문 모델을 선택해 주세요</option>
+                      {s.detail?.profile?.routes.main &&
+                        !s.quickModels.some(
+                          (item) => item.id === s.detail!.profile!.routes.main!.id
+                        ) && (
+                          <option value={s.detail.profile.routes.main.id}>
+                            {mainModel
+                              ? `${modelLabel(mainModel, s.library)} · 비활성`
+                              : '선택한 본문 모델 · 확인 필요'}
+                          </option>
+                        )}
+                      {s.quickModels.map((item) => (
+                        <option key={item.id} value={item.id}>
+                          {modelLabel(item, s.library)}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
                   <button
-                    className="icon-button"
-                    aria-label="채팅 포크"
-                    title="여기까지 복사해서 새 채팅으로 이어가기"
-                    disabled={
-                      !s.sources.length || s.forking.some((key) => key.startsWith(`${s.selected}:`))
-                    }
-                    onClick={() => {
-                      const source = s.sources.at(-1);
-                      if (source) void s.fork(source.id);
-                    }}
-                  >
-                    <Copy size={19} />
-                  </button>
-                  <button
-                    className="icon-button reading-button"
-                    aria-label="읽기 설정"
-                    title="읽기 설정"
-                    onClick={() => setPanel('reading')}
-                  >
-                    <Type size={20} />
-                  </button>
-                  <button
-                    className="icon-button"
+                    className="icon-button focus-button"
                     aria-label={focus ? '집중 읽기 종료' : '집중 읽기'}
                     title="집중 읽기"
                     onClick={() => setFocus(!focus)}
@@ -447,6 +495,72 @@ function App() {
                   >
                     <SlidersHorizontal size={20} />
                   </button>
+                  <ActionMenu label="채팅 메뉴" className="chat-menu">
+                    <button
+                      type="button"
+                      className="secondary"
+                      aria-label="채팅 포크"
+                      title="현재 전개의 마지막 장면까지 복사해서 새 채팅으로 이어가요"
+                      disabled={
+                        !s.sources.length ||
+                        s.forking.some((key) => key.startsWith(`${s.selected}:`))
+                      }
+                      onClick={() => {
+                        const source = s.sources.at(-1);
+                        if (source) void s.fork(source.id);
+                      }}
+                    >
+                      <GitFork size={18} aria-hidden="true" />
+                      여기까지 새 채팅으로 복사
+                    </button>
+                    <button
+                      type="button"
+                      className="secondary"
+                      onClick={(event) => {
+                        fromChatMenu(event);
+                        setPanel('reading');
+                      }}
+                    >
+                      <Type size={18} aria-hidden="true" />
+                      읽기 설정
+                    </button>
+                    <button
+                      type="button"
+                      className="secondary compact-only"
+                      onClick={() => setFocus(!focus)}
+                    >
+                      {focus ? (
+                        <Minimize size={18} aria-hidden="true" />
+                      ) : (
+                        <Maximize size={18} aria-hidden="true" />
+                      )}
+                      {focus ? '집중 읽기 종료' : '집중 읽기'}
+                    </button>
+                    <button
+                      type="button"
+                      className="secondary"
+                      onClick={(event) => {
+                        fromChatMenu(event);
+                        inspect('');
+                      }}
+                    >
+                      <Activity size={18} aria-hidden="true" />
+                      작업 현황
+                    </button>
+                    {(s.detail?.branches?.length ?? 0) > 1 && (
+                      <button
+                        type="button"
+                        className="secondary"
+                        onClick={(event) => {
+                          fromChatMenu(event);
+                          setPanel('branches');
+                        }}
+                      >
+                        <History size={18} aria-hidden="true" />
+                        보관된 전개
+                      </button>
+                    )}
+                  </ActionMenu>
                 </>
               )}
             </div>
@@ -521,21 +635,14 @@ function App() {
                     <p role="status">채팅을 불러오는 중이에요…</p>
                   ) : (
                     <>
-                      {(s.profileAsset || (s.detail.branches?.length ?? 0) > 1) && (
+                      {s.profileAsset && (
                         <div className="story-context">
-                          {s.profileAsset && (
-                            <img
-                              className="profile-asset"
-                              data-testid="profile-asset"
-                              src={s.profileAsset.url}
-                              alt={s.profileAsset.description || s.profileAsset.title}
-                            />
-                          )}
-                          {(s.detail.branches?.length ?? 0) > 1 && (
-                            <button className="secondary" onClick={() => setPanel('branches')}>
-                              보관된 전개
-                            </button>
-                          )}
+                          <img
+                            className="profile-asset"
+                            data-testid="profile-asset"
+                            src={s.profileAsset.url}
+                            alt={s.profileAsset.description || s.profileAsset.title}
+                          />
                         </div>
                       )}
                       {!s.connected && (
@@ -723,7 +830,7 @@ function App() {
                   onDetails={() => inspect('')}
                 />
                 <form
-                  className="composer"
+                  className={`composer${grown ? ' grown' : ''}`}
                   hidden={sourceEditing}
                   onSubmit={(event) => {
                     event.preventDefault();
@@ -747,7 +854,7 @@ function App() {
                   <textarea
                     ref={s.input}
                     id="request"
-                    rows={2}
+                    rows={1}
                     maxLength={4000}
                     value={s.draft}
                     onCompositionStart={() => {
@@ -773,153 +880,126 @@ function App() {
                         if (!s.active && !optionsBusy) void s.generate();
                       }
                     }}
-                    placeholder="다음 장면을 부탁하거나, 채팅을 이어가세요…"
+                    placeholder={
+                      // A wrapping placeholder would grow the one-row composer on narrow screens.
+                      compact
+                        ? '다음 장면을 부탁해 보세요…'
+                        : `다음 장면을 부탁하거나, 채팅을 이어가세요… · ${enterSend ? 'Enter' : 'Ctrl+Enter'} 보내기`
+                    }
                   />
-                  <div className="composer-bottom">
-                    <div className="quick-controls">
-                      <ComposerMore
-                        key={s.viewKey}
-                        selected={s.loreContextReset}
-                        disabled={
-                          !!s.pendingRequest ||
-                          s.submitting.includes(s.viewKey) ||
-                          !!s.active ||
-                          !s.detail ||
-                          s.pendingProfile
-                        }
-                        onChange={s.editLoreContextReset}
-                      >
-                        {creativePresets.length > 0 && (
-                          <label>
-                            <span className="sr-only">빠른 창작 프리셋</span>
-                            <select
-                              aria-label="빠른 창작 프리셋"
-                              value={currentCombination ? refValue(currentCombination) : ''}
-                              disabled={
-                                s.quickBusy ||
-                                optionsBusy ||
-                                optionsDirty ||
-                                s.profileDirty ||
-                                !s.detail
-                              }
-                              onChange={(event) => {
-                                void s.quickChange('combination', event.target.value);
-                              }}
-                            >
-                              <option value="">창작 프리셋 · 현재 설정</option>
-                              {creativePresets.map((item) => (
-                                <option value={refValue(item)} key={refValue(item)}>
-                                  {item.title}
-                                </option>
-                              ))}
-                            </select>
-                          </label>
-                        )}
-                        {hasCreativeOptions && (
-                          <button
-                            ref={optionsButton}
-                            type="button"
-                            className="creative-options-button"
-                            aria-label="창작 옵션"
-                            aria-expanded={optionsOpen}
-                            aria-controls="chat-prompt-options"
-                            disabled={!s.detail}
-                            onClick={() => setOptionsOpen((value) => !value)}
-                          >
-                            <SlidersHorizontal size={14} />
-                            창작 옵션{optionsDirty && ' · 미적용'}
-                          </button>
-                        )}
-                        {s.library && (
-                          <ContentPicker
-                            library={s.library}
-                            role="persona"
-                            label="빠른 페르소나"
-                            value={s.persona ? refValue(s.persona) : ''}
-                            selectedContent={s.persona}
-                            allowNone
-                            noneLabel={s.attachmentsReady ? '페르소나 없음' : '페르소나 확인 중…'}
+                  <div className="quick-controls">
+                    <ComposerMore
+                      key={s.viewKey}
+                      selected={s.loreContextReset}
+                      disabled={
+                        !!s.pendingRequest ||
+                        s.submitting.includes(s.viewKey) ||
+                        !!s.active ||
+                        !s.detail ||
+                        s.pendingProfile
+                      }
+                      onChange={s.editLoreContextReset}
+                    >
+                      {creativePresets.length > 0 && (
+                        <label>
+                          <span className="sr-only">빠른 창작 프리셋</span>
+                          <select
+                            aria-label="빠른 창작 프리셋"
+                            value={currentCombination ? refValue(currentCombination) : ''}
                             disabled={
                               s.quickBusy ||
                               optionsBusy ||
                               optionsDirty ||
                               s.profileDirty ||
-                              !s.detail ||
-                              !s.attachmentsReady
+                              !s.detail
                             }
-                            onChange={(value) => {
-                              void s.quickChange('persona', value);
+                            onChange={(event) => {
+                              void s.quickChange('combination', event.target.value);
                             }}
-                          />
-                        )}
-                      </ComposerMore>
-                      <label className="quick-model">
-                        <span className="sr-only">빠른 본문 모델</span>
-                        <select
-                          aria-label="빠른 본문 모델"
-                          value={s.detail?.profile?.routes.main?.id ?? ''}
+                          >
+                            <option value="">창작 프리셋 · 현재 설정</option>
+                            {creativePresets.map((item) => (
+                              <option value={refValue(item)} key={refValue(item)}>
+                                {item.title}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                      )}
+                      {hasCreativeOptions && (
+                        <button
+                          ref={optionsButton}
+                          type="button"
+                          className="creative-options-button"
+                          aria-label="창작 옵션"
+                          aria-expanded={optionsOpen}
+                          aria-controls="chat-prompt-options"
+                          disabled={!s.detail}
+                          onClick={() => setOptionsOpen((value) => !value)}
+                        >
+                          <SlidersHorizontal size={14} />
+                          창작 옵션{optionsDirty && ' · 미적용'}
+                        </button>
+                      )}
+                      {s.library && (
+                        <ContentPicker
+                          library={s.library}
+                          role="persona"
+                          label="빠른 페르소나"
+                          value={s.persona ? refValue(s.persona) : ''}
+                          selectedContent={s.persona}
+                          allowNone
+                          noneLabel={s.attachmentsReady ? '페르소나 없음' : '페르소나 확인 중…'}
                           disabled={
                             s.quickBusy ||
                             optionsBusy ||
                             optionsDirty ||
                             s.profileDirty ||
-                            !s.detail
+                            !s.detail ||
+                            !s.attachmentsReady
                           }
-                          onChange={(event) => {
-                            void s.quickChange('model', event.target.value);
+                          onChange={(value) => {
+                            void s.quickChange('persona', value);
                           }}
-                        >
-                          <option value="">본문 모델을 선택해 주세요</option>
-                          {s.detail?.profile?.routes.main &&
-                            !s.quickModels.some(
-                              (item) => item.id === s.detail!.profile!.routes.main!.id
-                            ) && (
-                              <option value={s.detail.profile.routes.main.id}>
-                                {mainModel
-                                  ? `${modelLabel(mainModel, s.library)} · 비활성`
-                                  : '선택한 본문 모델 · 확인 필요'}
-                              </option>
-                            )}
-                          {s.quickModels.map((item) => (
-                            <option key={item.id} value={item.id}>
-                              {modelLabel(item, s.library)}
-                            </option>
-                          ))}
-                        </select>
-                      </label>
-                    </div>
-                    {s.active ? (
-                      <button
-                        type="button"
-                        className="send-button"
-                        aria-label="원문 생성 취소"
-                        title="원문 생성 중단"
-                        onClick={() => {
-                          void api(`/runs/${s.active!.id}/cancel`, {})
-                            .then(() => s.refresh(s.selected))
-                            .catch((e) => s.setError(e.message));
-                        }}
-                      >
-                        <Square size={18} />
-                      </button>
-                    ) : (
-                      <button
-                        className="send-button"
-                        aria-label={s.pendingRequest ? '이전 요청 확인' : '원문 생성'}
-                        title={s.pendingRequest ? '이전 전송의 수락 확인' : '보내기'}
-                        disabled={
-                          optionsBusy ||
-                          s.submitting.includes(s.viewKey) ||
-                          (!s.draft.trim() && !s.pendingRequest) ||
-                          !s.detail ||
-                          s.pendingProfile ||
-                          (!testMode && !s.detail?.profile?.routes.main && !s.pendingRequest)
-                        }
-                      >
-                        <ArrowUp size={21} />
-                      </button>
-                    )}
+                        />
+                      )}
+                    </ComposerMore>
                   </div>
+                  {s.active ? (
+                    <button
+                      type="button"
+                      className="send-button"
+                      aria-label="원문 생성 취소"
+                      title="원문 생성 중단"
+                      onClick={() => {
+                        void api(`/runs/${s.active!.id}/cancel`, {})
+                          .then(() => s.refresh(s.selected))
+                          .catch((e) => s.setError(e.message));
+                      }}
+                    >
+                      <Square size={18} />
+                    </button>
+                  ) : (
+                    <button
+                      className="send-button"
+                      aria-label={s.pendingRequest ? '이전 요청 확인' : '원문 생성'}
+                      title={
+                        s.pendingRequest
+                          ? '이전 전송의 수락 확인'
+                          : `보내기 · ${enterSend ? 'Enter' : 'Ctrl+Enter'}`
+                      }
+                      disabled={
+                        optionsBusy ||
+                        s.submitting.includes(s.viewKey) ||
+                        (!s.draft.trim() && !s.pendingRequest) ||
+                        !s.detail ||
+                        s.pendingProfile ||
+                        (!testMode && !s.detail?.profile?.routes.main && !s.pendingRequest)
+                      }
+                    >
+                      <ArrowUp size={21} />
+                    </button>
+                  )}
                 </form>
                 {sourceEditing && s.active && (
                   <button
@@ -934,17 +1014,9 @@ function App() {
                     원문 생성 취소
                   </button>
                 )}
-                <div className="composer-caption" hidden={sourceEditing}>
-                  <span role="status">
-                    {s.pendingRequest && !s.submitting.includes(s.viewKey)
-                      ? '이전 전송의 수락을 확인해 주세요. 새 초안은 보존돼요.'
-                      : s.notice || mainDescription}
-                    {s.profileDirty && ' · 채팅 설정에 미저장 변경'}
-                  </span>
-                  <span>
-                    {enterSend ? 'Enter 보내기 · Shift+Enter 줄바꿈' : 'Ctrl+Enter 보내기'}
-                  </span>
-                </div>
+                <p className="composer-status" role="status" hidden={sourceEditing}>
+                  {composerStatus}
+                </p>
               </div>
             )}
           </>
