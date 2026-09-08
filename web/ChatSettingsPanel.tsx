@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { Dialog } from './Dialog.js';
 import { IconButton } from './IconButton.js';
 import { SectionNavigation } from './SectionNavigation.js';
@@ -17,54 +17,60 @@ import {
   LoreIcon,
   ImagesIcon,
   BehaviorIcon,
-  DisplayIcon,
 } from './ui-icons.js';
 import './chat-settings.css';
 
-type Section = ProfileSection | 'story' | 'images' | 'runtime' | 'reading';
+type Section = ProfileSection | 'story' | 'images' | 'runtime';
+// Two groups: the basics every chat needs, then the advanced automation sections.
+// Reading settings live in their own dialog (chat ⋯ menu), not here.
 const categories = [
   {
     id: 'characters',
     title: '봇·페르소나·모듈',
     icon: BotIcon,
     description: '인물과 함께 사용할 자료',
+    group: '기본',
   },
   {
     id: 'prompts',
     title: '프롬프트·창작 프리셋',
     icon: PromptIcon,
     description: '작문 지침과 창작 옵션',
+    group: '기본',
   },
-  { id: 'models', title: '모델', icon: ModelIcon, description: '본문과 보조 작업의 모델' },
-  { id: 'story', title: '상태와 기억', icon: LoreIcon, description: '장면 상태와 기억 정리' },
-  { id: 'images', title: '이미지', icon: ImagesIcon, description: '이 채팅에 등록한 이미지' },
+  {
+    id: 'models',
+    title: '모델',
+    icon: ModelIcon,
+    description: '본문과 보조 작업의 모델',
+    group: '기본',
+  },
+  {
+    id: 'story',
+    title: '상태와 기억',
+    icon: LoreIcon,
+    description: '장면 상태와 기억 정리',
+    group: '고급',
+  },
+  {
+    id: 'images',
+    title: '이미지',
+    icon: ImagesIcon,
+    description: '이 채팅에 등록한 이미지',
+    group: '고급',
+  },
   {
     id: 'runtime',
     title: '자동 후속 작업',
     icon: BehaviorIcon,
     description: '번역 구간과 장면 상태 실행',
-  },
-  {
-    id: 'reading',
-    title: '읽기 설정',
-    icon: DisplayIcon,
-    description: '본문 보기와 글꼴, 화면 테마',
+    group: '고급',
   },
 ] as const;
 const isProfile = (section: Section): section is ProfileSection =>
   ['characters', 'prompts', 'models'].includes(section);
 
-export function ChatSettingsPanel({
-  state,
-  onClose,
-  renderReadingSettings,
-  onFocusReading,
-}: {
-  state: StoryState;
-  onClose: () => void;
-  renderReadingSettings: (startFocus: () => void) => ReactNode;
-  onFocusReading: () => void;
-}) {
+export function ChatSettingsPanel({ state, onClose }: { state: StoryState; onClose: () => void }) {
   const [active, setActive] = useState<Section>('characters');
   const [profileTab, setProfileTab] = useState<ProfileSection>('characters');
   const [visited, setVisited] = useState<Section[]>(['characters']);
@@ -310,8 +316,6 @@ export function ChatSettingsPanel({
                         onDirtyChange={setRuntimeDirty}
                       />
                     )}
-                    {section === 'reading' &&
-                      renderReadingSettings(() => requestClose(onFocusReading))}
                   </>
                 )}
               </section>

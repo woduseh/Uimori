@@ -414,18 +414,6 @@ function App() {
           />
           <span>{fontSize}px</span>
         </label>
-        <label>
-          화면 테마
-          <select
-            aria-label="화면 테마"
-            value={theme}
-            onChange={(event) => setTheme(event.target.value as typeof theme)}
-          >
-            <option value="system">기기 설정</option>
-            <option value="dark">어두운 화면</option>
-            <option value="light">밝은 화면</option>
-          </select>
-        </label>
         <button className="secondary" onClick={onStartFocus}>
           집중 읽기 시작
         </button>
@@ -1163,13 +1151,7 @@ function App() {
         )}
       </Dialog>
       {panel === 'story' && (
-        <ChatSettingsPanel
-          key={s.selected}
-          state={s}
-          onClose={() => setPanel('')}
-          renderReadingSettings={renderReadingSettings}
-          onFocusReading={() => setFocus(true)}
-        />
+        <ChatSettingsPanel key={s.selected} state={s} onClose={() => setPanel('')} />
       )}
       <Dialog open={panel === 'branches'} title="보관된 전개" onClose={() => setPanel('')}>
         <BranchesPanel state={s} onClose={() => setPanel('')} />
