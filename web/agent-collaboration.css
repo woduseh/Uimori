@@ -1,14 +1,13 @@
 .agent-collaboration {
   min-width: 0;
-  padding: 18px;
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  background: var(--panel);
-  display: grid;
-  gap: 16px;
   overflow-wrap: anywhere;
 }
-.agent-collaboration h3,
+.ac-content {
+  display: grid;
+  gap: 16px;
+  min-width: 0;
+  padding: 8px 0 16px;
+}
 .agent-collaboration h4,
 .agent-collaboration p {
   margin: 0;
@@ -28,9 +27,6 @@
 .ac-heading > div {
   flex: 1 1 220px;
   min-width: 0;
-}
-.ac-heading h3 {
-  margin-bottom: 6px;
 }
 .ac-settings,
 .ac-add,
@@ -161,9 +157,6 @@
   font-size: 12px;
 }
 @media (max-width: 600px) {
-  .agent-collaboration {
-    padding: 12px;
-  }
   .ac-grid,
   .ac-templates,
   .ac-checks {

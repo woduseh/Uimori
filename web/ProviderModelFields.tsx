@@ -1,3 +1,5 @@
+import { ToggleRow } from './ToggleRow.js';
+import { Plus } from 'lucide-react';
 import { useEffect, useRef } from 'react';
 import type { Connection, VertexRequestTier } from '../core/product.js';
 import {
@@ -217,7 +219,7 @@ export function ProviderModelFields({
     : [];
   const update = (next: Partial<ModelDraft>) => onChange({ ...value, ...next });
   const evaluation = value.evaluationTools;
-  const setEvaluation = (next: EvaluationToolOptions) => update({ evaluationTools: next });
+  const setEvaluation = (next: ModelDraft['evaluationTools']) => update({ evaluationTools: next });
   const override = (key: 'tools' | 'structuredOutput' | 'note', next: boolean | null | string) =>
     update({
       userOverrides: {
@@ -256,6 +258,12 @@ export function ProviderModelFields({
             옵션을 알려줘요.
           </small>
         </label>
+        <ToggleRow
+          label="새 모델 선택에 표시"
+          description="새로 모델을 고를 때 목록에 표시해요. 기존 채팅과 실행의 모델 설정은 유지돼요."
+          checked={value.enabled}
+          onChange={(enabled) => update({ enabled })}
+        />
         {value.modelId && (
           <p className="muted full">
             {capability
@@ -284,7 +292,7 @@ export function ProviderModelFields({
             max={capability?.maxOutputTokens ?? 200000}
             required
             value={value.maxOutputTokens}
-            onChange={(event) => update({ maxOutputTokens: Number(event.target.value) })}
+            onChange={(event) => update({ maxOutputTokens: event.target.value })}
           />
         </label>
         <label className="full">
@@ -427,14 +435,6 @@ export function ProviderModelFields({
             />
           </label>
         )}
-        <label className="check">
-          <input
-            type="checkbox"
-            checked={value.enabled}
-            onChange={(event) => update({ enabled: event.target.checked })}
-          />
-          새 모델 선택에 표시
-        </label>
         <small className="full">
           모델 기본값을 선택하면 해당 옵션을 보내지 않아요. 현재 설정이 맞지 않으면 값을 변경한 뒤
           저장하세요.
@@ -507,11 +507,11 @@ export function ProviderModelFields({
             {capability?.stopSequences && (
               <button
                 type="button"
-                className="secondary"
+                className="secondary provider-stop-add full"
                 disabled={value.stopSequences.length >= 4}
                 onClick={() => update({ stopSequences: [...value.stopSequences, ''] })}
               >
-                정지 문자열 추가
+                <Plus size={18} aria-hidden="true" /> 정지 문자열 추가
               </button>
             )}
             <small className="full">
@@ -563,14 +563,11 @@ export function ProviderModelFields({
         )}
         <fieldset className="editor-fields full">
           <legend>선택형 평가 도구</legend>
-          <label className="check full">
-            <input
-              type="checkbox"
-              checked={value.evaluationToolsEnabled}
-              onChange={(event) => update({ evaluationToolsEnabled: event.target.checked })}
-            />
-            이 모델 프리셋에 평가 도구 4개 사용
-          </label>
+          <ToggleRow
+            label="이 모델 프리셋에 평가 도구 4개 사용"
+            checked={value.evaluationToolsEnabled}
+            onChange={(evaluationToolsEnabled) => update({ evaluationToolsEnabled })}
+          />
           {value.evaluationToolsEnabled && value.userOverrides?.tools === false && (
             <p className="error full" role="alert">
               도구 호출을 미지원으로 설정했어요. 평가 도구를 끄거나 지원 판단을 수정한 뒤
@@ -630,7 +627,7 @@ export function ProviderModelFields({
                   required
                   value={evaluation.maximumToolRounds}
                   onChange={(event) =>
-                    setEvaluation({ ...evaluation, maximumToolRounds: Number(event.target.value) })
+                    setEvaluation({ ...evaluation, maximumToolRounds: event.target.value })
                   }
                 />
               </label>

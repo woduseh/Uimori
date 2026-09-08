@@ -1194,13 +1194,23 @@ export function ConnectionEditor({
             이 연결 사용
           </label>
           <small className="full">
-            {codex ? (
-              '설정 → 에이전트에서 Uimori 전용 Codex 로그인을 준비해 주세요. 서버의 공식 Codex로 실행하며 API 키 방식으로 자동 전환하지 않아요.'
-            ) : vertex && connection.credentialEnv.startsWith('NARRATIVE_PROVIDER_VERTEX_FILE_') ? (
-              <>
-                <span>
-                  등록한 JSON으로 인증해요. 프로젝트 ID는 키 파일의 프로젝트와 같아야 해요.
-                </span>
+            {codex
+              ? '설정 → 에이전트에서 Uimori 전용 Codex 로그인을 준비해 주세요. 서버의 공식 Codex로 실행하며 API 키 방식으로 자동 전환하지 않아요.'
+              : vertex && connection.credentialEnv.startsWith('NARRATIVE_PROVIDER_VERTEX_FILE_')
+                ? '등록한 JSON으로 인증해요. 프로젝트 ID는 키 파일의 프로젝트와 같아야 해요.'
+                : vertex
+                  ? '환경변수 이름을 비우면 서버의 GOOGLE_APPLICATION_CREDENTIALS 파일로 인증해요. global에서 Gemini 모델에 연결해요.'
+                  : connection.protocol === 'openai-chat-v1'
+                    ? '기본 주소 뒤에 /chat/completions를 붙여요. 인증 없는 로컬 서버는 환경변수 이름을 비워 두세요.'
+                    : '인증 키 값은 입력하지 마세요. 서버 환경변수에 인증 키를 설정하면 사용할 수 있어요. 주소 허용 상태는 위에서 확인해요.'}
+          </small>
+          {vertex && connection.credentialEnv.startsWith('NARRATIVE_PROVIDER_VERTEX_FILE_') && (
+            <details className="provider-auth-settings full">
+              <summary>고급 인증 설정</summary>
+              <div className="provider-auth-settings-body">
+                <small>
+                  서버에 설정된 인증을 사용할 때 변경해 주세요. 연결 변경을 저장하면 적용돼요.
+                </small>
                 <button
                   type="button"
                   className="secondary"
@@ -1208,15 +1218,9 @@ export function ConnectionEditor({
                 >
                   서버 ADC / 환경변수 방식으로 변경
                 </button>
-              </>
-            ) : vertex ? (
-              '환경변수 이름을 비우면 서버의 GOOGLE_APPLICATION_CREDENTIALS 파일로 인증해요. global에서 Gemini 모델에 연결해요.'
-            ) : connection.protocol === 'openai-chat-v1' ? (
-              '기본 주소 뒤에 /chat/completions를 붙여요. 인증 없는 로컬 서버는 환경변수 이름을 비워 두세요.'
-            ) : (
-              '인증 키 값은 입력하지 마세요. 서버 환경변수에 인증 키를 설정하면 사용할 수 있어요. 주소 허용 상태는 위에서 확인해요.'
-            )}
-          </small>
+              </div>
+            </details>
+          )}
           {connection.protocol === 'vercel-chat-v1' && (
             <small className="full">
               Vercel AI Gateway key를 환경변수에 넣고 모델 ID는 공급자/모델 형식으로 지정해요.

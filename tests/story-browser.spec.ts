@@ -396,3 +396,42 @@ test('S06 S07 text presentation keeps malicious HTML inert and asset catalog tra
     });
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
 });
+
+test('STUI01 state settings align on mobile and desktop while imported definitions remain drafts', async ({
+  page,
+  request,
+}, info) => {
+  const chat = await create(page, '상태 설정 배치 합성');
+  const section = await panel(page);
+  const fields = section.getByRole('group', { name: '다음 원고에 적용할 설정', exact: true });
+  for (const width of [1440, 390]) {
+    await page.setViewportSize({ width, height: 1000 });
+    await fields.scrollIntoViewIfNeeded();
+    await expect(fields.getByText('상태 정의', { exact: true })).toBeVisible();
+    await expect(fields.getByLabel('상태 정의 JSON 파일')).toHaveCount(1);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(
+      true
+    );
+    if (visualReview)
+      await page.screenshot({ path: info.outputPath(`story-settings-${width}.png`) });
+  }
+  await open(section, /합성 예제/);
+  await section.getByRole('button', { name: '합성 항구 예제를 초안에 넣기' }).click();
+  const module = JSON.parse(await section.locator('.story-module-preview pre').innerText());
+  module.name = '파일로 불러온 상태';
+  await fields.getByLabel('상태 정의 JSON 파일').setInputFiles({
+    name: 'state.json',
+    mimeType: 'application/json',
+    buffer: Buffer.from(JSON.stringify(module)),
+  });
+  await expect(section.locator('.story-module-preview')).toContainText(module.name);
+  expect((await story(request, chat.id)).config.module).toBeNull();
+  const memory = fields.getByRole('switch', { name: '기억 자동 정리 사용' });
+  await memory.check();
+  await expect(memory).toBeChecked();
+  await fields.getByRole('button', { name: '상태와 기억 설정 저장', exact: true }).click();
+  await expect
+    .poll(async () => (await story(request, chat.id)).config.module?.name)
+    .toBe(module.name);
+  expect((await story(request, chat.id)).config.memory.enabled).toBe(true);
+});

@@ -79,6 +79,16 @@
 .package-attachment h3 {
   margin: 0;
 }
+.package-attachment-fixed-bot header {
+  justify-content: flex-start;
+  gap: 12px;
+}
+.package-attachment-fixed-bot header > div {
+  min-width: 0;
+}
+.package-attachment-fixed-bot h3 {
+  overflow-wrap: anywhere;
+}
 @media (max-width: 760px) {
   .package-state-row {
     grid-template-columns: 1fr;

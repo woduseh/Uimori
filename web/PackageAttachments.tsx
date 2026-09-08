@@ -206,9 +206,15 @@ export function PackageAttachments({
         const pkg = current?.packages[index],
           scope = keyOf(ref),
           automatic = required.has(scope),
-          title = pkg?.title ?? '연결한 패키지';
+          title = pkg?.title ?? '연결한 패키지',
+          fixedBot = ref.role === 'bot',
+          Attachment = fixedBot ? 'fieldset' : 'article';
         return (
-          <article className="package-attachment" key={scope}>
+          <Attachment
+            className={`package-attachment${fixedBot ? ' package-entry package-attachment-fixed-bot' : ''}`}
+            key={scope}
+          >
+            {fixedBot && <legend>소속 봇 · 고정</legend>}
             <header>
               <ContentAvatar
                 content={
@@ -229,15 +235,15 @@ export function PackageAttachments({
                 title={title}
               />
               <div>
-                <small>
-                  {automatic
-                    ? '필수 모듈 · 자동 연결'
-                    : ref.role === 'bot'
-                      ? '소속 봇 · 고정'
+                {!fixedBot && (
+                  <small>
+                    {automatic
+                      ? '필수 모듈 · 자동 연결'
                       : ref.role === 'persona'
                         ? '내 페르소나'
                         : '추가 모듈'}
-                </small>
+                  </small>
+                )}
                 <h3>{title}</h3>
               </div>
               {!automatic && ref.role !== 'bot' && (
@@ -296,7 +302,7 @@ export function PackageAttachments({
                 }}
               />
             )}
-          </article>
+          </Attachment>
         );
       })}
       <fieldset className="package-entry" disabled={busy}>

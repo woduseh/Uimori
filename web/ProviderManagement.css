@@ -131,6 +131,26 @@
   font-size: 12px;
   line-height: 1.7;
 }
+.provider-auth-settings {
+  border-top: 1px solid var(--border, #3a413a);
+  font-size: 12px;
+}
+.provider-auth-settings > summary {
+  min-height: 44px;
+  padding: 12px 0;
+  cursor: pointer;
+}
+.provider-auth-settings-body {
+  display: grid;
+  justify-items: start;
+  gap: 12px;
+  padding: 4px 0 16px;
+}
+.provider-auth-settings-body > button {
+  max-width: 100%;
+  white-space: normal;
+  text-align: start;
+}
 .provider-definition dl {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
@@ -641,4 +661,11 @@
   width: 100%;
   min-width: 0;
   font-size: 12px;
+}
+
+.provider-stop-add {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  justify-self: start;
 }

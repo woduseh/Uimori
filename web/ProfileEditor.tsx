@@ -217,7 +217,6 @@ export function ProfileEditor({
               <PromptWorkspaceEditor
                 library={library}
                 reload={onLibraryChanged}
-                onError={onError}
                 onDirtyChange={setPromptDirty}
                 chatId={profile.chatId}
                 branchId={branchId}

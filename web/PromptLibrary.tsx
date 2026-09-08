@@ -167,12 +167,7 @@ export function PromptLibrary({
       {library && !editing && (
         <details>
           <summary>현재 작문·번역 프롬프트 설정</summary>
-          <PromptWorkspaceEditor
-            library={library}
-            reload={reload}
-            onError={onError}
-            onDirtyChange={setDirty}
-          />
+          <PromptWorkspaceEditor library={library} reload={reload} onDirtyChange={setDirty} />
         </details>
       )}
       <Dialog

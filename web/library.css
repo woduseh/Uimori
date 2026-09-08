@@ -1118,3 +1118,13 @@
     max-width: 860px;
   }
 }
+
+.library-detail-actions > button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+.library-detail-actions > button > svg {
+  flex: 0 0 auto;
+}

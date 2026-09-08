@@ -5,6 +5,10 @@
   max-width: 100%;
 }
 .delete-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
   color: var(--danger, #b33b43);
 }
 .delete-dialog.app-dialog {
@@ -43,4 +47,8 @@
 }
 .delete-button:not(.secondary):hover {
   background: #89202a;
+}
+
+.delete-button > svg {
+  flex: 0 0 auto;
 }

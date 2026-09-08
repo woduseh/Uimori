@@ -1,0 +1,17 @@
+.dismissible-error {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+.dismissible-error > div {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.dismissible-error p {
+  margin: 0;
+}
+.dismissible-error > button {
+  flex: 0 0 auto;
+  color: inherit;
+}

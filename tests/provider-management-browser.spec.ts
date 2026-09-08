@@ -128,9 +128,20 @@ test('PMUI01 mobile template registration selects the connection, reports catalo
   await expect(page.getByRole('status').filter({ hasText: '모델 목록 조회 완료' })).toHaveCount(0);
   await expect(modelForm.getByLabel('모델 ID', { exact: true })).toHaveValue('synthetic/manual-id');
   await modelForm.getByLabel('모델 프리셋 이름').fill(title + ' 수동 모델');
+  if (visualReview)
+    await modelForm
+      .locator('.toggle-row')
+      .filter({ hasText: '새 모델 선택에 표시' })
+      .screenshot({ path: info.outputPath('model-visibility-switch.png') });
   await modelForm.getByRole('button', { name: '고급 옵션', exact: true }).click();
   await expect(modelForm.getByLabel('이 모델 프리셋에 평가 도구 4개 사용')).not.toBeChecked();
   await modelForm.getByLabel('이 모델 프리셋에 평가 도구 4개 사용').check();
+  if (visualReview)
+    await modelForm
+      .locator('.toggle-row')
+      .filter({ hasText: '이 모델 프리셋에 평가 도구 4개 사용' })
+      .screenshot({ path: info.outputPath('model-evaluation-switch.png') });
+
   await modelForm.getByLabel('최대 평가 도구 라운드').fill('2');
   await modelForm.getByText('기능 확인과 사용자 판단', { exact: true }).click();
   await modelForm.getByLabel('도구 호출 지원 판단').selectOption('yes');
@@ -648,6 +659,18 @@ test('PMUI08 Vertex JSON upload validates locally and saves only the returned cr
   expect(uploads).toBe(1);
   expect(uploadBody).toEqual({ serviceAccount });
   await expect(form.getByLabel('서버 환경변수 이름')).toHaveValue(credentialEnv);
+  const authSettings = form.locator('.provider-auth-settings'),
+    changeAuth = form.getByRole('button', {
+      name: '서버 ADC / 환경변수 방식으로 변경',
+      exact: true,
+    });
+  await expect(form.getByText('등록한 JSON으로 인증해요.', { exact: false })).toBeVisible();
+  await expect(changeAuth).toBeHidden();
+  await authSettings.getByText('고급 인증 설정', { exact: true }).click();
+  await expect(changeAuth).toBeVisible();
+  await expect(form.getByLabel('서버 환경변수 이름')).toHaveValue(credentialEnv);
+  await authSettings.getByText('고급 인증 설정', { exact: true }).click();
+  await expect(changeAuth).toBeHidden();
   const endpoint = `https://aiplatform.googleapis.com/v1/projects/${projectId}/locations/global/publishers/google/models`;
   await expect(form.getByLabel('Google Agent Platform endpoint')).toHaveValue(endpoint);
   expect(
@@ -673,6 +696,17 @@ test('PMUI08 Vertex JSON upload validates locally and saves only the returned cr
     .poll(async () => (await library(request)).connections.find((item) => item.title === title))
     .toMatchObject({ credentialEnv, endpoint });
   expect(JSON.stringify(await library(request))).not.toContain('BEGIN PRIVATE KEY');
+  await page.getByRole('button', { name: '연결 관리', exact: true }).click();
+  await page.getByLabel('연결·모델 검색').fill(title);
+  await page.getByRole('button', { name: title + ' 연결 수정', exact: true }).click();
+  await expect(changeAuth).toBeHidden();
+  await authSettings.getByText('고급 인증 설정', { exact: true }).click();
+  await changeAuth.click();
+  await expect(form.getByLabel('서버 환경변수 이름')).toBeVisible();
+  await expect(form.getByLabel('서버 환경변수 이름')).toHaveValue('');
+  expect(
+    (await library(request)).connections.find((item) => item.title === title)?.credentialEnv
+  ).toBe(credentialEnv);
   expect(observed.errors).toEqual([]);
   expect(observed.generations).toEqual([]);
   expect(observed.legacyReads).toEqual([]);
@@ -715,7 +749,13 @@ test('PMUI09 invalid hidden model fields receive focus and old deactivation conf
   await form.getByLabel('모델 프리셋 이름').fill(title + ' 초안');
   await form.getByLabel('모델 ID', { exact: true }).fill('synthetic-model');
   await form.getByRole('button', { name: '생성 설정', exact: true }).click();
-  await form.getByLabel('최대 출력 토큰').fill('4096');
+  await form.getByLabel('최대 출력 토큰').fill('');
+  await expect(form.getByLabel('최대 출력 토큰')).toHaveValue('');
+  await form.getByRole('button', { name: '모델 프리셋 등록', exact: true }).click();
+  await expect(form.getByLabel('최대 출력 토큰')).toBeFocused();
+  expect(modelWrites).toBe(0);
+  await form.getByLabel('최대 출력 토큰').pressSequentially('4096');
+  await expect(form.getByLabel('최대 출력 토큰')).toHaveValue('4096');
   await form.getByLabel('최대 출력 토큰').fill('200001');
   await form.getByRole('button', { name: '기본 정보', exact: true }).click();
   await form.getByRole('button', { name: '모델 프리셋 등록', exact: true }).click();
@@ -744,8 +784,8 @@ test('PMUI09 invalid hidden model fields receive focus and old deactivation conf
   await settings(page);
   await page.getByRole('button', { name: a.title + ' 모델 수정', exact: true }).click();
   form = page.getByRole('form', { name: '모델 편집 양식' });
-  await form.getByRole('button', { name: '생성 설정', exact: true }).click();
-  await form.getByLabel('새 모델 선택에 표시').uncheck();
+  await form.getByRole('button', { name: '기본 정보', exact: true }).click();
+  await form.getByRole('switch', { name: '새 모델 선택에 표시' }).uncheck();
   await form.getByRole('button', { name: '모델 변경 저장', exact: true }).click();
   const confirmation = page.getByRole('region', { name: '비활성 영향 확인' });
   await expect(confirmation).toContainText(a.title);
