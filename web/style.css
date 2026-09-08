@@ -342,8 +342,30 @@ input[type="checkbox"] {
   gap: 9px;
 }
 .header-title {
+  position: relative;
   min-width: 0;
   flex: 1;
+}
+/* Compact widths: the whole title block opens the scene list. */
+.header-title-hit {
+  position: absolute;
+  inset: -4px -6px;
+  padding: 0;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  box-shadow: none;
+  min-height: 0;
+}
+.header-title-hit:hover,
+.header-title-hit:focus-visible {
+  background: var(--hover);
+}
+.header-title-caret {
+  display: inline-block;
+  vertical-align: -2px;
+  margin-left: 4px;
+  color: var(--muted);
 }
 .workspace-fallback-body {
   padding: 16px 24px;

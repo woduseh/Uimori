@@ -12,6 +12,7 @@ import {
   Activity,
   ArrowUp,
   BookOpen,
+  ChevronDown,
   GitFork,
   History,
   Maximize,
@@ -111,6 +112,9 @@ function App() {
   const testMode = useTestMode();
   const compact = useCompactLayout();
   const [grown, setGrown] = useState(false);
+  // Compact widths open the scene list from the header title; the rail owns it otherwise.
+  const [sceneList, setSceneList] = useState(false);
+  const sceneCount = s.detail?.reader.navigation.length ?? 0;
   // A dialog opened from the chat ⋯ menu returns focus to the menu button, because the
   // menu item that opened it is hidden again by the time the dialog closes.
   const menuReturn = useRef<HTMLElement | null>(null);
@@ -131,6 +135,8 @@ function App() {
   const sourceEditing = editingSources.length > 0;
   const optionsButton = useRef<HTMLButtonElement>(null);
   const [panel, setPanel] = useState<Panel>('');
+  // biome-ignore lint/correctness/useExhaustiveDependencies: A new chat or branch starts with the list closed.
+  useEffect(() => setSceneList(false), [s.viewKey]);
   useEffect(() => {
     if (panel !== '' || !menuReturn.current) return;
     const target = menuReturn.current;
@@ -438,7 +444,12 @@ function App() {
           <header className="workspace-header">
             {navigationControls}
             <div className="header-title">
-              <h1>{s.detail?.chat.title || 'Uimori'}</h1>
+              <h1>
+                {s.detail?.chat.title || 'Uimori'}
+                {compact && sceneCount > 0 && (
+                  <ChevronDown size={14} aria-hidden="true" className="header-title-caret" />
+                )}
+              </h1>
               <small>
                 {s.bot?.title
                   ? `${s.bot.title}${s.persona ? ` · 페르소나 ${s.persona.title}` : ''}`
@@ -446,6 +457,15 @@ function App() {
                     ? '채팅을 이어가는 중'
                     : '나의 채팅'}
               </small>
+              {compact && s.selected && sceneCount > 0 && (
+                <button
+                  type="button"
+                  className="header-title-hit"
+                  aria-label="장면 목록 열기"
+                  title="장면 목록"
+                  onClick={() => setSceneList(true)}
+                />
+              )}
             </div>
             <div className="header-actions">
               {s.selected && s.destination === 'story' && (
@@ -789,6 +809,9 @@ function App() {
                   reader={s.reader}
                   target={s.readSource}
                   onSelect={s.chooseSource}
+                  compact={compact}
+                  listOpen={sceneList}
+                  onListOpenChange={setSceneList}
                 />
               )}
             </div>
