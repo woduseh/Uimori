@@ -15,7 +15,8 @@ export function providerOriginApproval(
     if (
       protocol === 'vertex-gemini-v1' ||
       protocol === 'anthropic-messages-v1' ||
-      protocol === 'vercel-chat-v1'
+      protocol === 'vercel-chat-v1' ||
+      protocol === 'deepseek-chat-v1'
     )
       return 'official';
     if (

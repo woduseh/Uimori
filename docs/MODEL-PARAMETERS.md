@@ -12,11 +12,15 @@
 
 | 경로 | 검토한 모델 ID | 주요 옵션 |
 | --- | --- | --- |
-| Google Agent Platform | `gemini-3.8-flash`, `gemini-3.1-pro-preview` | Thinking Level, Standard/Flex, 출력 한도. 3.1 Pro만 temperature/top-p 제공 |
+| Google Agent Platform | `gemini-3.5-flash-lite`, `gemini-3.8-flash`, `gemini-3.1-pro-preview` | Thinking Level, Standard/Flex, 출력 한도. Flash-Lite는 MINIMAL(기본)/MEDIUM/HIGH. 3.1 Pro만 temperature/top-p 제공 |
 | OpenAI Responses | `gpt-5.6-sol`, `gpt-5.6-terra`, `gpt-5.6-luna`, `gpt-5.6`, `gpt-6-astra` | Reasoning Effort/Mode/Context, Verbosity, Service Tier(Flex 포함) |
 | Anthropic Messages | `claude-opus-5`, `claude-fable-5-1` | Output Effort, Thinking, Service Tier, 정지 문자열 |
 | OpenAI Chat | 위의 등록된 GPT ID | Reasoning Effort와 Service Tier(Flex 포함). Responses 전용 제어와 캐시 설정은 제공하지 않음 |
-| Vercel·별도 호환 주소 | 수동 모델 ID | 기존 Chat/Responses 기본 계약. 미등록 모델에 native 옵션을 추정하지 않음 |
+| Vercel AI Gateway | `spacexai/grok-4.6`, `openai/gpt-5.6-sol` | Grok low/medium/high/xhigh, Sol none/low/medium/high/xhigh. 출력 한도 500,000/128,000 |
+| DeepSeek · OpenAI 호환 Chat | `deepseek-v4-pro`, `deepseek-v4-flash` | none(추론 끄기)/low/high/max, 기본 high. 출력 한도 384,000. temperature는 none에서만 제공 |
+| 별도 호환 주소 | 수동 모델 ID | 기존 Chat/Responses 기본 계약. 미등록 모델에 native 옵션을 추정하지 않음 |
+
+2026-09-09 추가 모델은 [Google Flash-Lite](https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/gemini/3-5-flash-lite), [Vercel Grok](https://vercel.com/ai-gateway/models/grok-4.6), [Vercel Sol](https://vercel.com/ai-gateway/models/gpt-5.6-sol), [DeepSeek](https://api-docs.deepseek.com/quick_start/pricing/) 공식 명세를 확인했어요. 모델별 출력 상한을 유지하며 공통 등록 검증은 500,000까지 허용해요. 미등록 모델의 기존 200,000 상한은 유지해요. 이 값은 최대 허용량이며 기본 출력량을 늘리지 않아요. 실제 공급자 호출·계정 가용성은 별도 확인이 필요해요.
 
 공식 직접 연결의 미등록 ID는 보관·검토할 수 있지만 실행 전에 차단해요. 모델 목록 API는 ID 발견에 사용하고 옵션 지원의 근거로 삼지 않아요. 임의 호환 URL에 등록 모델 ID를 넣어도 공식 서버의 가용성을 보증하지 않아요.
 

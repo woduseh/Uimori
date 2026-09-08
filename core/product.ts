@@ -5,6 +5,7 @@ export const PROVIDER_PROTOCOLS = [
   'openai-responses-v1',
   'anthropic-messages-v1',
   'vercel-chat-v1',
+  'deepseek-chat-v1',
   'openai-chat-v1',
   'codex-app-server-v1',
 ] as const;
@@ -13,7 +14,7 @@ export type VertexRequestTier = 'standard' | 'flex';
 export type ModelGeneration = {
   maxOutputTokens: number;
   temperature: number | null;
-  thinkingLevel?: 'LOW' | 'MEDIUM' | 'HIGH';
+  thinkingLevel?: 'MINIMAL' | 'LOW' | 'MEDIUM' | 'HIGH';
   structuredOutput?: boolean;
   reasoningEffort?: 'none' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'max';
   outputEffort?: 'low' | 'medium' | 'high' | 'xhigh' | 'max';
@@ -257,6 +258,7 @@ export function validateProviderEndpoint(protocol: ProviderProtocol, value: stri
   const official = {
     'anthropic-messages-v1': 'https://api.anthropic.com/v1',
     'vercel-chat-v1': 'https://ai-gateway.vercel.sh/v1',
+    'deepseek-chat-v1': 'https://api.deepseek.com/v1',
   };
   const normalized = url.href.replace(/\/$/u, '');
   if (protocol !== 'openai-chat-v1' && protocol !== 'openai-responses-v1') {

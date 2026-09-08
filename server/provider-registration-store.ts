@@ -557,7 +557,7 @@ export function validateRegistrationArchive(value: unknown) {
     fields(model, modelFields);
     text(model.title, 'model title', 200);
     text(model.modelId, 'model ID', 300);
-    number(model.maxOutputTokens, 'output limit', 1, 200000);
+    number(model.maxOutputTokens, 'output limit', 1, 500000);
     if (
       model.temperature !== null &&
       (typeof model.temperature !== 'number' ||

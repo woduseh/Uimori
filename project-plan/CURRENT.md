@@ -1,5 +1,11 @@
 # 현재 작업 상태 · Uimori
 
+## Gemini·Vercel 모델 및 DeepSeek 연결 추가 (2026-09-09)
+
+Google `gemini-3.5-flash-lite`, Vercel `spacexai/grok-4.6`·`openai/gpt-5.6-sol`, DeepSeek `deepseek-v4-pro`·`deepseek-v4-flash`를 로컬 지원 목록에 추가했어요. DeepSeek는 공식 `https://api.deepseek.com/v1`에서 OpenAI Chat Completions 형식을 사용하고 `DEEPSEEK_API_KEY`를 참조해요. Flash-Lite MINIMAL과 DeepSeek none→thinking disabled 매핑, 도구 후속 reasoning 보존을 검증했어요. [모델 옵션](../docs/MODEL-PARAMETERS.md) · [연결 계약](../docs/PROVIDERS.md).
+
+`quality` PASS, `quality:full`의 도구 31 PASS·새 빌드 PASS·단위/통합 1,398 PASS / 1 FAIL / 1 opt-in skip 후, 신규 Gemini가 빠진 기존 목록 기대값을 수정해 관련 파일 5 PASS를 확인했어요. 제품 소스의 추가 수정은 없어요. 브라우저는 Vercel 참고 명세 문구 기대값을 수정한 뒤 `verify:providers` **17 PASS**, 종료 지문·cleanup PASS예요. 증거는 `output/playwright/provider-management-2026-09-08T18-24-39-041Z-e4907113/summary.json`, 빌드는 `output/build/build-2026-09-08T18-22-25-323Z-c91e6cae/summary.json`에 있어요. 사용자 DB·실제 공급자 호출·커밋·푸시·배포는 수행하지 않았어요.
+
 ## 전체 변경 통합 릴리스 검증 (2026-09-09)
 
 전역 모델·페르소나 선택·원문/번역 이미지 배치와 UI 정리를 함께 검증했어요. `quality:full` **1,384 PASS / 1 opt-in skip**이며, 전체 브라우저 168 PASS·1개 옛 기대값 실패 후 해당 검사를 수정해 1 PASS를 확인했어요. schema/archive v14의 저장 컬럼은 유지해 운영 DB를 보존해요. [통합 범위·검증·배포 절차](RELEASE-2026-09-09.md)를 봐요.

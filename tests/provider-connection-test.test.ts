@@ -601,7 +601,8 @@ describe('one-call provider connection diagnostics', () => {
           expect(request.generation?.reasoningEffort).toBe(
             cap.reasoningEfforts.includes('none') ? 'none' : 'low'
           );
-        if (cap.thinkingLevels) expect(request.generation?.thinkingLevel).toBe('LOW');
+        if (cap.thinkingLevels)
+          expect(request.generation?.thinkingLevel).toBe(cap.thinkingLevels[0]);
         if (cap.outputEfforts) expect(request.generation?.outputEffort).toBe('low');
         if (cap.cacheModes) expect(request.generation?.cacheMode).toBe('disabled');
       }

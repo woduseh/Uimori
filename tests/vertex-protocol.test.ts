@@ -242,6 +242,15 @@ describe('Vertex 3.8 request and continuation protocol', () => {
     }
   );
 
+  test('encodes Flash-Lite minimal thinking without sampling overrides', () => {
+    const input = request();
+    input.modelId = 'gemini-3.5-flash-lite';
+    input.generation = { maxOutputTokens: 65536, temperature: null, thinkingLevel: 'MINIMAL' };
+    expect(encodeVertex(input).body).toMatchObject({
+      generationConfig: { maxOutputTokens: 65536, thinkingConfig: { thinkingLevel: 'MINIMAL' } },
+    });
+  });
+
   test('rejects unselected models, unsupported thinking and duplicate declarations', () => {
     const input = request();
     input.modelId = 'gemini-unverified';

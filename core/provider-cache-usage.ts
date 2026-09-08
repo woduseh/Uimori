@@ -17,6 +17,8 @@ export function providerCacheUsage(
   const token = (item: unknown): number | null =>
     typeof item === 'number' && Number.isSafeInteger(item) && item >= 0 ? item : null;
   const raw = record(value);
+  if (protocol === 'deepseek-chat-v1')
+    return { readTokens: token(raw.prompt_cache_hit_tokens), writeTokens: null };
   if (protocol === 'anthropic-messages-v1') {
     const creation = record(raw.cache_creation);
     return {

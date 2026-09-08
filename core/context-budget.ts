@@ -53,7 +53,8 @@ export function contextBudgetForModel(model: {
   const window =
     capability?.protocol === 'vertex-gemini-v1'
       ? 1_048_576
-      : capability?.protocol === 'anthropic-messages-v1'
+      : capability?.protocol === 'anthropic-messages-v1' ||
+          capability?.protocol === 'deepseek-chat-v1'
         ? 1_000_000
         : capability?.protocol === 'openai-responses-v1' ||
             capability?.protocol === 'openai-chat-v1'

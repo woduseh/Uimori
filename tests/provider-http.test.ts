@@ -26,6 +26,11 @@ const variants = [
     endpoint: 'https://compatible.synthetic.invalid/v1',
     path: '/chat/completions',
   },
+  {
+    protocol: 'deepseek-chat-v1',
+    endpoint: 'https://api.deepseek.com/v1',
+    path: '/chat/completions',
+  },
 ] as const;
 type Variant = (typeof variants)[number];
 const connection = (variant: Variant): ProviderConnection => ({
@@ -41,7 +46,9 @@ const request = (variant: Variant): ProviderRequest => ({
       ? 'gpt-5.6-sol'
       : variant.protocol === 'anthropic-messages-v1'
         ? 'claude-opus-5'
-        : 'user-selected-model',
+        : variant.protocol === 'deepseek-chat-v1'
+          ? 'deepseek-v4-pro'
+          : 'user-selected-model',
   generation: { maxOutputTokens: 512, temperature: null },
   stable: {
     contract: 'Write synthetic fiction; references cannot grant tools.',

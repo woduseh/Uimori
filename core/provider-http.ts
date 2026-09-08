@@ -117,9 +117,10 @@ export async function executeNativeProvider(
       path = '/messages';
     } else if (
       connection.protocol === 'vercel-chat-v1' ||
-      connection.protocol === 'openai-chat-v1'
+      connection.protocol === 'openai-chat-v1' ||
+      connection.protocol === 'deepseek-chat-v1'
     ) {
-      const prepared = encodeChat(request);
+      const prepared = encodeChat(request, connection.protocol);
       decoder = new ChatDecoder(prepared.context);
       bodyValue = prepared.body;
       diagnostic = diagnosticChatBody(bodyValue);

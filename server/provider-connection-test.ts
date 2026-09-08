@@ -38,7 +38,7 @@ export function connectionTestRequest(model: ModelPreset, connection: Connection
   validateCapabilityRevision(model, connection.protocol);
   const cap = modelCapability(connection.protocol, model.modelId);
   const generation: ModelGeneration = { maxOutputTokens: 256, temperature: null };
-  if (cap?.thinkingLevels?.includes('LOW')) generation.thinkingLevel = 'LOW';
+  if (cap?.thinkingLevels?.length) generation.thinkingLevel = cap.thinkingLevels[0];
   if (cap?.reasoningEfforts)
     generation.reasoningEffort = cap.reasoningEfforts.includes('none')
       ? 'none'

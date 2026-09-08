@@ -219,6 +219,12 @@ describe('Vertex connection and model settings with file SQLite', () => {
     });
     expect(catalog.catalog).toEqual([
       {
+        id: 'gemini-3.5-flash-lite',
+        name: 'Gemini 3.5 Flash-Lite',
+        capabilities: { tools: true, structuredOutput: null },
+        priceRevision: null,
+      },
+      {
         id: VERTEX_GEMINI_MODEL_ID,
         name: 'Gemini 3.8 Flash',
         capabilities: { tools: true, structuredOutput: null },

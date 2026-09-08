@@ -11,6 +11,7 @@ const official: [ProviderProtocol, string][] = [
   ['openai-chat-v1', 'https://api.openai.com/v1'],
   ['anthropic-messages-v1', 'https://api.anthropic.com/v1'],
   ['vercel-chat-v1', 'https://ai-gateway.vercel.sh/v1'],
+  ['deepseek-chat-v1', 'https://api.deepseek.com/v1'],
 ];
 
 describe('provider origin approval', () => {
