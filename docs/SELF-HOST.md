@@ -4,6 +4,8 @@
 
 한 사람이 PC와 휴대폰에서 같은 작업실을 사용하는 구성이에요. Linux 서버의 Docker Compose가 **Nginx HTTPS → Uimori 한 프로세스 → 영구 SQLite**를 실행해요. 접속 토큰을 아는 기기는 같은 자료·채팅에 접근해요. 사용자별 계정·권한 분리는 없어요.
 
+호스트에 Tailscale이 있다면 [Tailscale 배포 안내](TAILSCALE-DEPLOY.md)의 별도 Compose로 Serve 또는 Funnel을 사용할 수도 있어요. Funnel은 휴대폰의 Tailscale 연결 없이 접속할 수 있는 공개 HTTPS 경로예요.
+
 ## 준비와 실행
 
 서버에 Docker Engine과 Compose 플러그인, 이 저장소의 코드가 필요해요. 설치는 사용 중인 배포판의 [Docker 공식 안내](https://docs.docker.com/engine/install/)를 따르세요. 호스트에 Node.js를 따로 설치할 필요는 없어요. 이미지는 Debian 기반 `node:24-bookworm-slim`을 사용하고 Node `>=24.14.0 <25`를 검사해요. 빌드 단계에서 `npm ci`와 빌드를 수행하고 실행 이미지에는 production 의존성과 `dist`를 복사해요. [Node 공식 이미지](https://github.com/nodejs/docker-node/blob/main/README.md), [Docker 다단계 빌드](https://docs.docker.com/build/building/multi-stage/)

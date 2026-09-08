@@ -1,0 +1,52 @@
+name: uimori
+
+# Run this file on its own. The host's Tailscale Serve/Funnel terminates HTTPS.
+# Keep the loopback binding: publishing 4310 on all interfaces bypasses TLS.
+services:
+  app:
+    build:
+      context: .
+      args:
+        UIMORI_CODEX_VERSION: ${UIMORI_CODEX_VERSION:-}
+    image: uimori:${UIMORI_IMAGE_TAG:-local}
+    scale: 1
+    init: true
+    restart: unless-stopped
+    stop_grace_period: 30s
+    env_file: .env.self-host
+    environment:
+      NODE_ENV: production
+      NR_HOST: 0.0.0.0
+      NR_PORT: "4310"
+      NR_DB: /data/narrative.sqlite
+      NR_PUBLIC_ORIGIN: ${NR_PUBLIC_ORIGIN:?Set the exact HTTPS origin in .env.self-host}
+      NR_ACCESS_TOKEN: ${NR_ACCESS_TOKEN:?Set a random access token of at least 32 characters}
+      NR_PROVIDER_ORIGINS: ${NR_PROVIDER_ORIGINS:-}
+    ports:
+      - "127.0.0.1:4310:4310"
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    volumes:
+      - data:/data
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - --input-type=module
+        - -e
+        - >-
+          const response = await fetch('http://127.0.0.1:4310/api/session',
+          {headers: {host: new URL(process.env.NR_PUBLIC_ORIGIN).host}, signal: AbortSignal.timeout(3000)});
+          if (!response.ok || !(await response.json()).required) process.exit(1);
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+
+volumes:
+  data:
