@@ -1,10 +1,9 @@
+import { HttpError, fields, record } from './request-validation.js';
 import type { FastifyInstance } from 'fastify';
 import type { Connection, ModelPreset, VertexRequestTier } from '../core/product.js';
 import { PROVIDER_DEFINITIONS } from '../core/provider-definitions.js';
 import { registrationJson, REGISTRATION_LIMITS } from '../core/provider-registration.js';
-import { fields, record } from './product-store.js';
 import type { Store } from './store.js';
-import { HttpError } from './store.js';
 import { RegistrationStore } from './provider-registration-store.js';
 import { runRegistrationAgent } from './provider-registration-agent.js';
 

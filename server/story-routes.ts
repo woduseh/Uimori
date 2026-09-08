@@ -1,6 +1,6 @@
+import { HttpError, fields, number, record, text } from './request-validation.js';
 import type { FastifyInstance } from 'fastify';
-import { HttpError, type Store } from './store.js';
-import { fields, record, text, number } from './product-store.js';
+import type { Store } from './store.js';
 import { presentText } from './presentation.js';
 import { searchAssets, resolveAsset } from '../core/asset-manifest.js';
 import type { RunSnapshot } from '../core/types.js';

@@ -1,3 +1,4 @@
+import { HttpError } from './request-validation.js';
 import { createHash } from 'node:crypto';
 import { isDeepStrictEqual } from 'node:util';
 import {
@@ -11,7 +12,7 @@ import { executionContext, type PackageExecutionState } from '../core/execution-
 import type { RunSnapshot } from '../core/types.js';
 import { behaviorPayloadHash, recordDraws } from './package-behavior-store.js';
 import type { RunBehaviorEntry, RunBehaviorProgress } from './package-behavior-run.js';
-import { HttpError, type Store } from './store.js';
+import type { Store } from './store.js';
 
 export const packageBehaviorRunTables = [
   'package_behavior_entropy',

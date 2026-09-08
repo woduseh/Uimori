@@ -1,8 +1,8 @@
+import { HttpError, fields, number, record, text } from './request-validation.js';
 import { randomUUID } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
 import { defaultProfile, type Content, type ContentRef, type ChatFolder } from '../core/product.js';
-import { HttpError, type Store } from './store.js';
-import { fields, number, record, text } from './product-store.js';
+import type { Store } from './store.js';
 
 export const organizationTables = ['chat_folders', 'chat_organization'];
 export type { ChatFolder } from '../core/product.js';

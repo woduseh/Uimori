@@ -1,6 +1,6 @@
+import { fields, number, record, text } from './request-validation.js';
 import type { FastifyInstance } from 'fastify';
 import type { Store } from './store.js';
-import { record, fields, text, number } from './product-store.js';
 import { behaviorDetail, performBehaviorAction } from './package-behavior-host.js';
 import { cancelPackageRequest } from './package-requests.js';
 

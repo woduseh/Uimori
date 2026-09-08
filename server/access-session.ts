@@ -1,5 +1,5 @@
+import { HttpError } from './request-validation.js';
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
-import { HttpError } from './store.js';
 
 const SESSION_LIFETIME_MS = 12 * 60 * 60 * 1000;
 const MAX_SESSIONS = 32;

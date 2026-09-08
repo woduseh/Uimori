@@ -143,19 +143,28 @@ test('browser harness preserves selected commands, verified identity and DB evid
   expect(existsSync(path.join(directory, 'evidence-db', 'app.sqlite'))).toBe(true);
 });
 
-test('local verification removes an inherited public origin at the real spawn boundary', async () => {
-  vi.stubEnv('NR_PUBLIC_ORIGIN', 'https://synthetic-self-host.example');
-  vi.stubEnv('NR_HOST', '0.0.0.0');
-  vi.stubEnv('NR_PORT', '4310');
-  vi.stubEnv('NR_ACCESS_TOKEN', 'synthetic-parent-token-for-harness-only');
-  vi.stubEnv('NR_PROVIDER_ORIGINS', 'https://synthetic-provider.example');
-  await run();
-  const env: NodeJS.ProcessEnv = lib.startServer.mock.calls[0][0];
-  const probe = await realLib.command(
-    [
-      '-e',
-      `process.stdout.write(JSON.stringify({
+test.each([false, true])(
+  'local verification isolates inherited self-host and Codex settings at the real spawn boundary (registration fixture: %s)',
+  async (registrationFixture) => {
+    vi.stubEnv('NR_PUBLIC_ORIGIN', 'https://synthetic-self-host.example');
+    vi.stubEnv('NR_HOST', '0.0.0.0');
+    vi.stubEnv('NR_PORT', '4310');
+    vi.stubEnv('NR_ACCESS_TOKEN', 'synthetic-parent-token-for-harness-only');
+    vi.stubEnv('NR_PROVIDER_ORIGINS', 'https://synthetic-provider.example');
+    vi.stubEnv('NR_CODEX_ENABLED', '1');
+    vi.stubEnv('NR_CODEX_EXECUTABLE', 'synthetic-parent-codex.exe');
+    await run({ registrationFixture });
+    const env: NodeJS.ProcessEnv = lib.startServer.mock.calls[0][0];
+    const providerOrigins = registrationFixture
+      ? new URL(env.NR_REGISTRATION_FIXTURE_URL!).origin
+      : '';
+    if (registrationFixture) expect(new URL(providerOrigins).hostname).toBe('127.0.0.1');
+    const probe = await realLib.command(
+      [
+        '-e',
+        `process.stdout.write(JSON.stringify({
         publicOriginPresent: Object.hasOwn(process.env, 'NR_PUBLIC_ORIGIN'),
+        codexExecutablePresent: Object.hasOwn(process.env, 'NR_CODEX_EXECUTABLE'),
         env: {
           NR_PUBLIC_ORIGIN: process.env.NR_PUBLIC_ORIGIN,
           NR_HOST: process.env.NR_HOST,
@@ -163,30 +172,36 @@ test('local verification removes an inherited public origin at the real spawn bo
           NR_TEST_MODE: process.env.NR_TEST_MODE,
           NR_ACCESS_TOKEN: process.env.NR_ACCESS_TOKEN,
           NR_PROVIDER_ORIGINS: process.env.NR_PROVIDER_ORIGINS,
+          NR_CODEX_ENABLED: process.env.NR_CODEX_ENABLED,
         },
       }));`,
-    ],
-    { env }
-  );
-  expect(probe.code, probe.output).toBe(0);
-  const child = JSON.parse(probe.output);
-  expect(child.publicOriginPresent).toBe(false);
-  expect(child.env).toEqual({
-    NR_HOST: '127.0.0.1',
-    NR_PORT: '0',
-    NR_TEST_MODE: '1',
-    NR_ACCESS_TOKEN: '',
-    NR_PROVIDER_ORIGINS: '',
-  });
-  const policy = networkPolicy({
-    publicOrigin: child.env.NR_PUBLIC_ORIGIN,
-    accessToken: child.env.NR_ACCESS_TOKEN,
-    testMode: child.env.NR_TEST_MODE === '1',
-  });
-  expect(policy).toEqual({});
-  expect(listenAddress(child.env, policy)).toEqual({ host: '127.0.0.1', port: 0 });
-  expect(process.env.NR_PUBLIC_ORIGIN).toBe('https://synthetic-self-host.example');
-});
+      ],
+      { env }
+    );
+    expect(probe.code, probe.output).toBe(0);
+    const child = JSON.parse(probe.output);
+    expect(child.publicOriginPresent).toBe(false);
+    expect(child.codexExecutablePresent).toBe(false);
+    expect(child.env).toEqual({
+      NR_HOST: '127.0.0.1',
+      NR_PORT: '0',
+      NR_TEST_MODE: '1',
+      NR_ACCESS_TOKEN: '',
+      NR_PROVIDER_ORIGINS: providerOrigins,
+      NR_CODEX_ENABLED: '0',
+    });
+    const policy = networkPolicy({
+      publicOrigin: child.env.NR_PUBLIC_ORIGIN,
+      accessToken: child.env.NR_ACCESS_TOKEN,
+      testMode: child.env.NR_TEST_MODE === '1',
+    });
+    expect(policy).toEqual({});
+    expect(listenAddress(child.env, policy)).toEqual({ host: '127.0.0.1', port: 0 });
+    expect(process.env.NR_PUBLIC_ORIGIN).toBe('https://synthetic-self-host.example');
+    expect(process.env.NR_CODEX_ENABLED).toBe('1');
+    expect(process.env.NR_CODEX_EXECUTABLE).toBe('synthetic-parent-codex.exe');
+  }
+);
 
 test.each(['missing', 'zero', 'skipped', 'retried', 'global'])(
   'browser harness rejects %s reporter evidence and still records cleanup',

@@ -1,3 +1,4 @@
+import { HttpError } from './request-validation.js';
 import { createHash } from 'node:crypto';
 import { isDeepStrictEqual } from 'node:util';
 import {
@@ -8,7 +9,7 @@ import {
 import { buildMainInput, executeTool, roleResources } from '../core/provider.js';
 import type { Resource, Run, RunSnapshot } from '../core/types.js';
 import { loreDependencies, selectLoreContext } from './lore-context.js';
-import { HttpError, type Store } from './store.js';
+import type { Store } from './store.js';
 
 const hash = (value: string) => createHash('sha256').update(value).digest('hex');
 const reject = (reason: string): never => {

@@ -12,6 +12,8 @@ import {
   validateTranslationArtifact,
 } from './source-editing.js';
 import { ProductStore } from './product-store.js';
+import { HttpError } from './request-validation.js';
+export { HttpError } from './request-validation.js';
 import { StoryStore } from './story-store.js';
 import { freezeSourceSegments } from '../core/package-source-segments.js';
 import { consumePackageRequestInTransaction } from './package-requests.js';
@@ -60,15 +62,6 @@ type Row = Record<string, any>;
 const json = (value: unknown) => JSON.stringify(value);
 const parse = (value: any) => (value === null ? null : JSON.parse(String(value)));
 const now = () => new Date().toISOString();
-export class HttpError extends Error {
-  constructor(
-    readonly statusCode: number,
-    message: string
-  ) {
-    super(message);
-  }
-}
-
 /** One server owns this file DB. No transaction spans provider or browser I/O. */
 export class Store {
   readonly db: DatabaseSync;

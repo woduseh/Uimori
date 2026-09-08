@@ -1,3 +1,4 @@
+import { HttpError, fields, number, record, text } from './request-validation.js';
 import { isDeepStrictEqual } from 'node:util';
 import type { Content } from '../core/product.js';
 import type { Run, RunSnapshot, Source } from '../core/types.js';
@@ -7,8 +8,8 @@ import {
   validatePackageStartRef,
   type PackageStartRef,
 } from '../core/package-start.js';
-import { HttpError, type Store } from './store.js';
-import { fields, number, packageControlKey, record, text } from './product-store.js';
+import type { Store } from './store.js';
+import { packageControlKey } from './product-store.js';
 import { freezePackageStates } from './package-behavior-host.js';
 import type { BehaviorScope } from './package-behavior-store.js';
 

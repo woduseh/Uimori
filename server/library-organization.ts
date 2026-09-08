@@ -1,3 +1,4 @@
+import { HttpError, fields, number, record, text } from './request-validation.js';
 import { randomUUID } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
 import type { Content } from '../core/product.js';
@@ -9,8 +10,7 @@ import type {
   LibraryPlacement,
 } from '../core/library-organization.js';
 import { libraryItemKey } from '../core/library-organization.js';
-import { fields, number, record, text } from './product-store.js';
-import { HttpError, type Store } from './store.js';
+import type { Store } from './store.js';
 
 export const libraryOrganizationTables = [
   'library_organization_state',

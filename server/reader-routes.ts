@@ -1,5 +1,6 @@
+import { HttpError } from './request-validation.js';
 import type { FastifyInstance } from 'fastify';
-import { HttpError, type Store } from './store.js';
+import type { Store } from './store.js';
 
 export function readerRoutes(app: FastifyInstance, store: Store) {
   app.get<{ Params: { id: string } }>('/api/chats/:id/attempts', async (request) => {

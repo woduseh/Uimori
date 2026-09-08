@@ -1,11 +1,11 @@
+import { HttpError, fields, record, text } from './request-validation.js';
 import type { FastifyInstance } from 'fastify';
 import { defaultProfile } from '../core/product.js';
 import { compilePromptProgram, validatePromptProgram } from '../core/prompt-program.js';
 import { planNativeMessages } from '../core/provider-messages.js';
 import { captureLogicalHistory, compileSnapshotPrompt, promptContext } from './prompt-snapshot.js';
 import { freezeSourceSegments } from '../core/package-source-segments.js';
-import { fields, record, text } from './product-store.js';
-import { HttpError, type Store } from './store.js';
+import type { Store } from './store.js';
 import type { RunSnapshot } from '../core/types.js';
 import { buildMainProviderRequest, encodeMainPreview } from './main-request.js';
 import { freezePackageStates } from './package-behavior-host.js';

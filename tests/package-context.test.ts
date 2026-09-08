@@ -94,6 +94,72 @@ describe('source-time package role context', () => {
         `${target.toUpperCase()}_ONLY`,
       ]);
   });
+  it('rebuilds controls and frozen state for each prompt while preserving earlier results', () => {
+    const s = snapshot(),
+      p = attach(s);
+    p.instructions[0].template = [
+      { kind: 'text', text: 'STATE=' },
+      { kind: 'value', expression: { context: ['state', 'count'] } },
+      { kind: 'text', text: ';DRAW=' },
+      { kind: 'value', expression: { context: ['draws', 'die'] } },
+    ];
+    s.packageStates = [
+      {
+        instanceId: 'pkg:bot',
+        packageId: p.id,
+        packageRevision: 1,
+        role: 'bot',
+        behaviorRevision: 1,
+        schemaVersion: 1,
+        stateRevision: 1,
+        state: { count: 0 },
+        draws: { die: 4 },
+      },
+    ];
+    const before = structuredClone(s),
+      first = compileSnapshotPrompt(s),
+      firstText = JSON.stringify(first.promptCompilation);
+    expect(firstText).toContain('STATE=0;DRAW=4');
+    expect(s).toEqual(before);
+
+    s.packageStates[0].state = { count: 2 };
+    s.packageStates[0].draws = { die: 6 };
+    p.title = 'Updated character';
+    expect(JSON.stringify(compileSnapshotPrompt(s).promptCompilation)).toContain('STATE=2;DRAW=6');
+    expect(promptContext(s).slots.char).toBe('Updated character');
+    s.profile!.packageValues = { 'pkg@1:bot': { on: false } };
+    expect(buildMainInput(s).facts).toEqual(['EXACT_BODY', 'EXACT_LORE']);
+    expect(JSON.stringify(compileSnapshotPrompt(s).promptCompilation)).not.toContain('STATE=');
+    expect(JSON.stringify(first.promptCompilation)).toBe(firstText);
+
+    s.profile!.packageAttachments![0].revision = 2;
+    for (const build of [buildMainInput, promptContext, compileSnapshotPrompt])
+      expect(() => build(s)).toThrow('PACKAGE_SNAPSHOT_REVISION_MISSING');
+  });
+  it('keeps catalog metadata separate from pinned references in main and translation inputs', () => {
+    const s = snapshot(),
+      p = attach(s);
+    p.lore[0].loreContext = { placement: 'scene', group: 'original', order: 1 };
+    const main = buildMainInput(s),
+      id = 'package:pkg:bot:lore:facts';
+    main.catalog.find((item) => item.id === id)!.loreContext!.group = 'changed';
+    expect(main.pinnedSources!.find((item) => item.id === id)!.loreContext!.group).toBe('original');
+    const plan = createTranslationPlan(
+      {
+        id: 'source',
+        hash: createHash('sha256').update('Original').digest('hex'),
+        chatId: s.chatId,
+        text: 'Original',
+      },
+      context
+    );
+    const translation = translationInput(plan, plan.chunks[0].id, s);
+    translation.catalog.find((item) => item.id === id)!.loreContext!.group = 'changed';
+    expect(
+      translation.context.packages!.pinned.find((item) => item.id === id)!.loreContext!.group
+    ).toBe('original');
+    expect(p.lore[0].loreContext.group).toBe('original');
+  });
   it('fails missing frozen revisions rather than returning partial context', () => {
     const s = snapshot();
     attach(s);

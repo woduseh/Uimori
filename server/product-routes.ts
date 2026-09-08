@@ -1,11 +1,11 @@
+import { HttpError, fields, number, record, text } from './request-validation.js';
 import { chatDeletionRoutes } from './chat-deletion.js';
 import { assetDeletionRoutes } from './asset-deletion.js';
 import { supportedModels } from '../core/model-capabilities.js';
 import type { FastifyInstance } from 'fastify';
-import { HttpError, type Store } from './store.js';
+import type { Store } from './store.js';
 import { AccessSessions, AccessSessionRateLimitError } from './access-session.js';
 import { forkChat } from './chat-fork.js';
-import { fields, record, text, number } from './product-store.js';
 import { validateVertexEndpoint, type Connection } from '../core/product.js';
 import { parseCatalog, validateConnection } from '../core/transport.js';
 import { promptRoutes } from './prompt-routes.js';

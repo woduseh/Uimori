@@ -1,3 +1,4 @@
+import { HttpError } from './request-validation.js';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join, basename } from 'node:path';
 import { createPrivateKey, randomBytes } from 'node:crypto';
@@ -13,7 +14,6 @@ import {
   VERTEX_FILE_PREFIX,
 } from '../core/credential-reference.js';
 import { validateVertexEndpoint } from '../core/product.js';
-import { HttpError } from './store.js';
 
 type ServiceAccount = {
   type: 'service_account';

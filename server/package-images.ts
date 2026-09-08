@@ -1,3 +1,4 @@
+import { HttpError, fields, record, text } from './request-validation.js';
 import { createHash, randomUUID } from 'node:crypto';
 import { isDeepStrictEqual } from 'node:util';
 import type { FastifyInstance } from 'fastify';
@@ -5,8 +6,8 @@ import { packageImages, PACKAGE_IMAGE_MIMES } from '../core/package-images.js';
 import type { Asset } from '../core/product.js';
 import type { RunSnapshot } from '../core/types.js';
 import { type AssetEntry } from '../core/auxiliary.js';
-import { fields, record, text, type ProductStore } from './product-store.js';
-import { HttpError, type Store } from './store.js';
+import type { ProductStore } from './product-store.js';
+import type { Store } from './store.js';
 import { validateContentPackage, type ContentPackage } from '../core/content-package.js';
 
 export type PackageImageBlob = {

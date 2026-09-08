@@ -18,6 +18,7 @@ import { TRANSLATION_READ_NAMES } from './translation-context.js';
 import {
   compiledPackages,
   packageContext,
+  packageContextFromCompiled,
   packageSlots,
   type PackageRoleContext,
 } from './package-context.js';
@@ -507,13 +508,14 @@ export function translationInput(
   const base = baseInput(plan.sourceRevision, plan.sourceHash, plan.context, snapshot);
   const previous = previousTranslation(plan, chunk, completed);
   const prompt = snapshot.profile?.promptPresets?.translation;
-  const packages = packageContext(snapshot, 'translation');
+  const compiled = compiledPackages(snapshot, 'translation'),
+    packages = packageContextFromCompiled(compiled);
   if (packages) {
     const ids = new Set(base.catalog.map((r) => r.id));
-    for (const pack of compiledPackages(snapshot, 'translation'))
+    for (const pack of compiled)
       for (const { text: _text, chatId: _chatId, ...r } of pack.resources)
         if (!ids.has(r.id)) {
-          base.catalog.push(r);
+          base.catalog.push(structuredClone(r));
           ids.add(r.id);
         }
   }

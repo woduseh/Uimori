@@ -1,6 +1,6 @@
+import { HttpError } from './request-validation.js';
 import type { Connection, ModelRef, ModelPreset } from '../core/product.js';
 import type { ProductStore } from './product-store.js';
-import { HttpError } from './store.js';
 
 /** Selection controls do not revoke existing role assignments or immutable snapshots. */
 export function assertModelSelection(

@@ -1,3 +1,4 @@
+import { HttpError, fields, number, record, text } from './request-validation.js';
 import {
   GENERATION_KEYS,
   generationFromModel,
@@ -25,8 +26,7 @@ import {
   type RegistrationView,
 } from '../core/provider-registration.js';
 import type { ProductStore } from './product-store.js';
-import { fields, record, number, text, validateModelSnapshot } from './product-store.js';
-import { HttpError } from './store.js';
+import { validateModelSnapshot } from './product-store.js';
 
 const kind = 'registration-run';
 const hash = (value: unknown) => createHash('sha256').update(JSON.stringify(value)).digest('hex');

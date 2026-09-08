@@ -1,3 +1,4 @@
+import { HttpError } from './request-validation.js';
 import { createHash } from 'node:crypto';
 import { isDeepStrictEqual } from 'node:util';
 import type { ContextPlan } from '../core/context-plan.js';
@@ -8,7 +9,7 @@ import {
   validateContextBudget,
 } from '../core/context-budget.js';
 import { buildMainProviderRequest, encodeMainPreview } from './main-request.js';
-import { HttpError, type Store } from './store.js';
+import type { Store } from './store.js';
 import { sourceRequestView } from '../core/source-context.js';
 import type { ModelSnapshot } from '../core/product.js';
 import { validateSourceIdentity, type AuxiliarySource } from '../core/auxiliary.js';

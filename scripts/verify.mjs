@@ -9,6 +9,7 @@ import {
   artifactRoot,
   newId,
   json,
+  localVerificationEnv,
   command,
   requireCommand,
   assertBuild,
@@ -193,25 +194,17 @@ async function main(selection) {
     summary.identity = manifest;
     const temp = path.join(runtime, 'temp');
     await mkdir(temp, { recursive: true });
-    const env = {
+    const env = localVerificationEnv({
       NR_DB: path.join(runtime, 'app.sqlite'),
-      NR_PORT: '0',
-      NR_HOST: '127.0.0.1',
-      NR_PUBLIC_ORIGIN: undefined,
       NR_INSTANCE: runId,
       NR_BUILD_ID: manifest.buildId,
-      NR_TEST_MODE: '1',
-      NR_ACCESS_TOKEN: '',
-      NR_PROVIDER_ORIGINS: '',
-      NR_CODEX_ENABLED: '0',
-      NR_CODEX_EXECUTABLE: undefined,
       NR_ARTIFACT_DIR: directory,
       NR_BROWSER_OUTPUT: path.join(directory, 'browser'),
       NR_SECRET_CANARY: canary,
       TEMP: temp,
       TMP: temp,
       ...(browserPath() ? { NR_BROWSER_PATH: browserPath() } : {}),
-    };
+    });
     server = await startServer(env, directory, children);
     env.NR_BASE_URL = server.ready.url;
     summary.server = server.ready;

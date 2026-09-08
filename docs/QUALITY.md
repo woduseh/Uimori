@@ -20,7 +20,9 @@ Node **24.14 이상 24.x**와 `npm ci`를 사용해요. 프로젝트의 `strict`
 
 `build`는 별도 `.build-*` 폴더에서 서버·웹을 모두 컴파일하고 소스 지문을 확인한 뒤 `dist`를 교체해요. 컴파일 실패·환경 차단·소스 변경이면 이전 빌드를 보존하며 `output/build/<run-id>/summary.json`과 단계별 로그를 남겨요. 보존된 빌드는 현재 소스의 검증 근거가 아니므로 브라우저 검증의 지문 검사는 그대로 적용해요. 같은 checkout의 동시 빌드는 `output/build/active.json`으로 거부해요. 강제 종료 후 잠금이 남았다면 기록된 PID와 해당 실행의 staging/이전 빌드 경로를 확인한 후에만 잠금을 정리해요.
 
-`test:tooling`은 자식 프로세스 없이 파일 보존·진단·HTTP fixture·SQLite 증거 판정을 검사해요. 결과는 `output/tooling/<run-id>/`에 남으며 전체 Vitest·앱 자식 실행·브라우저를 대체하지 않아요.
+`test:tooling`은 `tests/*.node.test.mjs`와 `scripts/*.test.mjs`를 자동으로 찾아 자식 프로세스 없이 파일 보존·진단·HTTP fixture·SQLite 증거 판정·합성 기억 평가 채점을 검사해요. 각 디렉터리에서 검사 파일이 발견돼야 하며 실행 파일마다 실제 선언한 검사가 있어야 해요. 결과는 `output/tooling/<run-id>/`에 남으며 전체 Vitest·앱 자식 실행·브라우저를 대체하지 않아요.
+
+합성 브라우저·milestone·worktree 검증과 로딩 측정은 `scripts/lib.mjs`의 `localVerificationEnv`로 무작위 loopback 포트·test mode·빈 인증·Codex 비활성화를 고정해요. 부모 프로세스의 self-host origin과 Codex 실행 경로는 자식 환경에서 제거하고, 등록 검사의 loopback fixture origin과 실행별 DB·temp·브라우저 경로는 유지해요. 실제 공급자와 self-host 검증은 각자의 실행 설정을 사용해요.
 
 VS Code에서는 권장 `biomejs.biome` 확장을 설치하면 지원 코드 파일을 저장할 때 서식을 맞출 수 있어요. 확장 설치는 선택 사항이며 CLI와 CI가 동일한 설정을 사용해요. `.editorconfig`와 기존 `.gitattributes`는 UTF-8·LF·공백 2칸 기준을 맞춰요.
 

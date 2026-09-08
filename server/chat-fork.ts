@@ -1,3 +1,4 @@
+import { HttpError, fields, record, text } from './request-validation.js';
 import { createHash, randomUUID } from 'node:crypto';
 import { forkImageInput } from './package-images.js';
 import { isDeepStrictEqual } from 'node:util';
@@ -10,8 +11,7 @@ import {
   type TranslationResult,
 } from '../core/auxiliary.js';
 import type { Resource, RunSnapshot } from '../core/types.js';
-import { HttpError, type Store, type Chat, type Source } from './store.js';
-import { fields, record, text } from './product-store.js';
+import type { Store, Chat, Source } from './store.js';
 import { latestTranslation, validateTranslationArtifact } from './source-editing.js';
 import { sourceTimeContext } from './product-auxiliary.js';
 import { mapForkSnapshot } from './snapshot-archive.js';

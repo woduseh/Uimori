@@ -1,9 +1,9 @@
+import { HttpError, fields, number, record, text } from './request-validation.js';
 import { createHash, randomUUID } from 'node:crypto';
 import { compileSnapshotPrompt, captureLogicalHistory } from './prompt-snapshot.js';
 import { freezeLoreContext } from './lore-context.js';
 import { isDeepStrictEqual } from 'node:util';
-import { HttpError, type Store, type Source, type Run } from './store.js';
-import { fields, record, text, number } from './product-store.js';
+import type { Store, Source, Run } from './store.js';
 import {
   initialState,
   reduceStateProposal,

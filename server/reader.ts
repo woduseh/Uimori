@@ -1,5 +1,6 @@
+import { HttpError } from './request-validation.js';
 import { latestTranslation, validateTranslationArtifact } from './source-editing.js';
-import { HttpError, type Store } from './store.js';
+import type { Store } from './store.js';
 import { mergedReaderAssets } from './package-images.js';
 import type { ReaderActivity } from '../core/types.js';
 

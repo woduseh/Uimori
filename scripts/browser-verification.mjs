@@ -7,6 +7,7 @@ import {
   newId,
   json,
   createOwnership,
+  localVerificationEnv,
   assertBuild,
   fingerprint,
   browserPath,
@@ -104,17 +105,10 @@ export async function runBrowserVerification({
     await mkdir(temp, { recursive: true });
     assertNotCancelled();
     if (registrationFixture) fixture = await startRegistrationFixture();
-    const env = {
+    const env = localVerificationEnv({
       NR_DB: path.join(runtime, 'app.sqlite'),
-      NR_PORT: '0',
-      NR_HOST: '127.0.0.1',
       NR_INSTANCE: runId,
       NR_BUILD_ID: identity.buildId,
-      NR_TEST_MODE: '1',
-      // Undefined removes an inherited self-host origin from the spawned env;
-      // the empty string is a configured invalid origin, not local mode.
-      NR_PUBLIC_ORIGIN: undefined,
-      NR_ACCESS_TOKEN: '',
       NR_PROVIDER_ORIGINS: fixture ? new URL(fixture.url).origin : '',
       ...(fixture ? { NR_REGISTRATION_FIXTURE_URL: fixture.url } : {}),
       NR_ARTIFACT_DIR: directory,
@@ -123,7 +117,7 @@ export async function runBrowserVerification({
       NR_BROWSER_PATH: browser,
       TEMP: temp,
       TMP: temp,
-    };
+    });
     assertNotCancelled();
     const server = await startServer(env, directory, children);
     env.NR_BASE_URL = server.ready.url;

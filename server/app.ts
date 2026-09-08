@@ -1,10 +1,11 @@
+import { HttpError, fields, number, record, text } from './request-validation.js';
 import { translationChunkChars } from '../core/translation-settings.js';
 import Fastify, { type FastifyInstance } from 'fastify';
 import fastifyStatic from '@fastify/static';
 import { existsSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
 import type { ServerResponse } from 'node:http';
-import { Store, HttpError } from './store.js';
+import { Store } from './store.js';
 import { readerDetail } from './reader.js';
 import { chatActivities } from './chat-activity.js';
 import { readerRoutes } from './reader-routes.js';
@@ -57,25 +58,6 @@ export type AppOptions = {
 };
 export type App = FastifyInstance & { store: Store; controls: Controls };
 type RecordBody = Record<string, unknown>;
-const object = (value: unknown): RecordBody => {
-  if (!value || typeof value !== 'object' || Array.isArray(value))
-    throw new HttpError(400, 'Expected an object');
-  return value as RecordBody;
-};
-const only = (body: RecordBody, keys: string[]) => {
-  if (Object.keys(body).some((key) => !keys.includes(key)))
-    throw new HttpError(400, 'Unknown request field');
-};
-const string = (value: unknown, name: string, max = 4000) => {
-  if (typeof value !== 'string' || !value.trim() || value.length > max)
-    throw new HttpError(400, `Invalid ${name}`);
-  return value;
-};
-const integer = (value: unknown, name: string, min: number, max: number) => {
-  if (!Number.isInteger(value) || Number(value) < min || Number(value) > max)
-    throw new HttpError(400, `Invalid ${name}`);
-  return Number(value);
-};
 function settings(body: RecordBody): Settings {
   if (
     !['calm', 'vivid'].includes(String(body.preset)) ||
@@ -96,7 +78,7 @@ function settings(body: RecordBody): Settings {
     translation: body.translation,
     translationChunkChars: chunkChars,
     status: body.status,
-    maxCalls: integer(body.maxCalls, 'maxCalls', 1, 16),
+    maxCalls: number(body.maxCalls, 'maxCalls', 1, 16),
   };
 }
 
@@ -650,18 +632,18 @@ export async function createApp(options: AppOptions): Promise<App> {
   app.get('/api/chats', async () => store.chats());
   app.get('/api/chat-activities', async () => chatActivities(store));
   app.post('/api/chats', async (request) => {
-    const body = object(request.body);
-    only(body, ['title', 'preset', 'botId', 'folderId']);
+    const body: RecordBody = record(request.body);
+    fields(body, ['title', 'preset', 'botId', 'folderId']);
     if (body.preset !== undefined && !['calm', 'vivid'].includes(String(body.preset)))
       throw new HttpError(400, 'Invalid preset');
     return store.createChat(
-      string(body.title, 'title', 120),
+      text(body.title, 'title', 120),
       body.preset as Settings['preset'] | undefined,
       {
-        ...(body.botId === undefined ? {} : { botId: string(body.botId, 'bot ID', 100) }),
+        ...(body.botId === undefined ? {} : { botId: text(body.botId, 'bot ID', 100) }),
         ...(body.folderId === undefined
           ? {}
-          : { folderId: body.folderId === null ? null : string(body.folderId, 'folder ID', 100) }),
+          : { folderId: body.folderId === null ? null : text(body.folderId, 'folder ID', 100) }),
       }
     );
   });
@@ -673,8 +655,8 @@ export async function createApp(options: AppOptions): Promise<App> {
     async (request) => readerDetail(store, request.params.id, request.query)
   );
   app.patch<{ Params: { id: string } }>('/api/chats/:id/settings', async (request) => {
-    const body = object(request.body);
-    only(body, [
+    const body: RecordBody = record(request.body);
+    fields(body, [
       'expectedSettingsRevision',
       'preset',
       'mode',
@@ -685,15 +667,15 @@ export async function createApp(options: AppOptions): Promise<App> {
     ]);
     const chat = store.settings(
       request.params.id,
-      integer(body.expectedSettingsRevision, 'settings revision', 1, 1e9),
+      number(body.expectedSettingsRevision, 'settings revision', 1, 1e9),
       settings(body)
     );
     publish(chat.id);
     return chat;
   });
   app.post<{ Params: { id: string } }>('/api/chats/:id/runs', async (request) => {
-    const body = object(request.body);
-    only(body, [
+    const body: RecordBody = record(request.body);
+    fields(body, [
       'request',
       'expectedRevision',
       'expectedSettingsRevision',
@@ -710,19 +692,17 @@ export async function createApp(options: AppOptions): Promise<App> {
         ? { loreContextReset: body.loreContextReset as boolean }
         : {}),
       ...(body.packageRequestId !== undefined
-        ? { packageRequestId: string(body.packageRequestId, 'package request', 120) }
+        ? { packageRequestId: text(body.packageRequestId, 'package request', 120) }
         : {}),
-      request: string(body.request, 'request'),
+      request: text(body.request, 'request'),
       expectedRevision:
-        body.expectedRevision === null
-          ? null
-          : string(body.expectedRevision, 'source revision', 100),
-      expectedSettingsRevision: integer(body.expectedSettingsRevision, 'settings revision', 1, 1e9),
-      idempotencyKey: string(body.idempotencyKey, 'idempotency key', 120),
-      ...(body.branchId !== undefined ? { branchId: string(body.branchId, 'branch ID', 100) } : {}),
+        body.expectedRevision === null ? null : text(body.expectedRevision, 'source revision', 100),
+      expectedSettingsRevision: number(body.expectedSettingsRevision, 'settings revision', 1, 1e9),
+      idempotencyKey: text(body.idempotencyKey, 'idempotency key', 120),
+      ...(body.branchId !== undefined ? { branchId: text(body.branchId, 'branch ID', 100) } : {}),
       ...(body.expectedProfileRevision !== undefined
         ? {
-            expectedProfileRevision: integer(
+            expectedProfileRevision: number(
               body.expectedProfileRevision,
               'profile revision',
               1,
@@ -755,12 +735,12 @@ export async function createApp(options: AppOptions): Promise<App> {
     store.run(request.params.id)
   );
   app.post<{ Params: { id: string } }>('/api/runs/:id/candidate', async (request) => {
-    const body = object(request.body);
-    only(body, ['idempotencyKey', 'title']);
+    const body: RecordBody = record(request.body);
+    fields(body, ['idempotencyKey', 'title']);
     const result = store.candidate(
       request.params.id,
-      string(body.idempotencyKey, 'idempotency key', 120),
-      body.title === undefined ? '후보 분기' : string(body.title, 'title', 200),
+      text(body.idempotencyKey, 'idempotency key', 120),
+      body.title === undefined ? '후보 분기' : text(body.title, 'title', 200),
       (snapshot) => requireModel(snapshot.profile?.models.main, 'main')
     );
     if (result.created) {
@@ -776,8 +756,8 @@ export async function createApp(options: AppOptions): Promise<App> {
     return run;
   });
   app.post<{ Params: { id: string } }>('/api/jobs/:id/retry', async (request) => {
-    const body = object(request.body ?? {});
-    only(body, []);
+    const body: RecordBody = record(request.body ?? {});
+    fields(body, []);
     const job = store.retryJob(request.params.id, requireJobModel);
     publish(job.chatId);
     pumpJobs();
@@ -790,12 +770,12 @@ export async function createApp(options: AppOptions): Promise<App> {
     return job;
   });
   app.post<{ Params: { id: string } }>('/api/sources/:id/status', async (request) => {
-    const body = object(request.body);
-    only(body, ['expectedSourceHash', 'expectedJobId']);
+    const body: RecordBody = record(request.body);
+    fields(body, ['expectedSourceHash', 'expectedJobId']);
     const job = store.requestStatus(
       request.params.id,
-      string(body.expectedSourceHash, 'source hash', 64),
-      body.expectedJobId === null ? null : string(body.expectedJobId, 'status job', 100),
+      text(body.expectedSourceHash, 'source hash', 64),
+      body.expectedJobId === null ? null : text(body.expectedJobId, 'status job', 100),
       requireJobModel
     );
     publish(job.chatId);
@@ -803,16 +783,16 @@ export async function createApp(options: AppOptions): Promise<App> {
     return job;
   });
   app.post<{ Params: { id: string } }>('/api/sources/:id/translation', async (request) => {
-    const body = object(request.body ?? {});
-    only(body, []);
+    const body: RecordBody = record(request.body ?? {});
+    fields(body, []);
     const job = store.requestTranslation(request.params.id, requireJobModel);
     publish(job.chatId);
     pumpJobs();
     return job;
   });
   app.post<{ Params: { id: string } }>('/api/sources/:id/retranslate', async (request) => {
-    const body = object(request.body ?? {});
-    only(body, []);
+    const body: RecordBody = record(request.body ?? {});
+    fields(body, []);
     const job = store.retranslate(request.params.id, requireJobModel);
     publish(job.chatId);
     pumpJobs();
@@ -822,11 +802,11 @@ export async function createApp(options: AppOptions): Promise<App> {
     '/api/sources/:id/text',
     { bodyLimit: 8 * 1024 * 1024 },
     async (request) => {
-      const body = object(request.body);
-      only(body, ['text', 'expectedRevision']);
+      const body: RecordBody = record(request.body);
+      fields(body, ['text', 'expectedRevision']);
       const source = store.editSource(request.params.id, {
-        text: string(body.text, 'source text', 2_000_000),
-        expectedRevision: integer(
+        text: text(body.text, 'source text', 2_000_000),
+        expectedRevision: number(
           body.expectedRevision,
           'source edit revision',
           0,
@@ -849,17 +829,17 @@ export async function createApp(options: AppOptions): Promise<App> {
     '/api/sources/:id/translation',
     { bodyLimit: 8 * 1024 * 1024 },
     async (request) => {
-      const body = object(request.body);
-      only(body, ['text', 'expectedRevision', 'expectedSourceHash']);
+      const body: RecordBody = record(request.body);
+      fields(body, ['text', 'expectedRevision', 'expectedSourceHash']);
       const job = store.editTranslation(request.params.id, {
-        text: string(body.text, 'translation text', 2_000_000),
-        expectedRevision: integer(
+        text: text(body.text, 'translation text', 2_000_000),
+        expectedRevision: number(
           body.expectedRevision,
           'translation revision',
           0,
           Number.MAX_SAFE_INTEGER
         ),
-        expectedSourceHash: string(body.expectedSourceHash, 'source hash', 64),
+        expectedSourceHash: text(body.expectedSourceHash, 'source hash', 64),
       });
       jobControllers.get(job.id)?.abort(new Error('Translation edited'));
       publish(job.chatId);
@@ -901,8 +881,8 @@ export async function createApp(options: AppOptions): Promise<App> {
   if (options.testMode) {
     app.get('/api/test/control', async () => controls.snapshot());
     app.post('/api/test/control', async (request) => {
-      const body = object(request.body);
-      only(body, ['action', 'barrier', 'point']);
+      const body: RecordBody = record(request.body);
+      fields(body, ['action', 'barrier', 'point']);
       if (body.action === 'hold' || body.action === 'release') {
         if (
           !['run', 'translation', 'status', 'image', 'state', 'memory'].includes(

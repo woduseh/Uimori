@@ -9,6 +9,7 @@ import {
   json,
   assertBuild,
   createOwnership,
+  localVerificationEnv,
   startServer,
   killOwned,
   browserPath,
@@ -202,19 +203,13 @@ try {
     chatId: chats[0].id,
   };
   await json(path.join(directory, 'summary.json'), summary);
-  const env = {
+  const env = localVerificationEnv({
     NR_DB: dbPath,
-    NR_PORT: '0',
     NR_INSTANCE: runId,
     NR_BUILD_ID: summary.build.buildId,
-    NR_TEST_MODE: '1',
-    NR_HOST: '127.0.0.1',
-    NR_PUBLIC_ORIGIN: undefined,
-    NR_ACCESS_TOKEN: '',
-    NR_PROVIDER_ORIGINS: '',
     TEMP: runtime,
     TMP: runtime,
-  };
+  });
   const server = await startServer(env, directory, children);
   summary.server = server.ready;
   ownership.children.push({ pid: server.child.pid, dbPath, url: server.ready.url });

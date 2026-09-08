@@ -1,6 +1,7 @@
+import { HttpError } from './request-validation.js';
 import { randomUUID } from 'node:crypto';
 import { isDeepStrictEqual } from 'node:util';
-import { HttpError, type Store } from './store.js';
+import type { Store } from './store.js';
 import { lineageHash, storyDependencyKey } from './story-store.js';
 import {
   activationRebuildState,

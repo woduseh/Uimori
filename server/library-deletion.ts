@@ -1,6 +1,6 @@
+import { HttpError, fields, number, record } from './request-validation.js';
 import type { FastifyInstance } from 'fastify';
-import { fields, number, record } from './product-store.js';
-import { HttpError, type Store } from './store.js';
+import type { Store } from './store.js';
 
 export type LibraryKind =
   | 'content'

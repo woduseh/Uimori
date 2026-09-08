@@ -1,6 +1,6 @@
+import { HttpError, fields, record } from './request-validation.js';
 import type { FastifyInstance } from 'fastify';
-import { fields, record } from './product-store.js';
-import { HttpError, type Store } from './store.js';
+import type { Store } from './store.js';
 
 /** Catalog entries are immutable archive dependencies, even when no image was displayed. */
 export function deleteChatAsset(store: Store, chatId: string, assetId: string, value: unknown) {

@@ -2,7 +2,11 @@ import { createHash } from 'node:crypto';
 import type { ModelInput, Resource, RunSnapshot, ToolEvent, Usage } from './types.js';
 import { executeStoryRead, STORY_READ_NAMES } from './story-context.js';
 import { sourceHistoryForRequest, sourceMemoryPlanForRequest } from './source-context.js';
-import { compiledPackages, packageContext } from './package-context.js';
+import {
+  compiledPackages,
+  packageContextFromCompiled,
+  type ResolvedPackage,
+} from './package-context.js';
 import { DEFAULT_LORE_CONTEXT, type LorePlacement } from './lore-context.js';
 import { listBehaviorTools } from './package-behavior-tools.js';
 
@@ -23,6 +27,13 @@ const hash = (text: string) => createHash('sha256').update(text).digest('hex');
 export function roleResources(
   snapshot: RunSnapshot,
   role: 'main' | 'translation' | 'status' | 'image' = 'main'
+) {
+  return collectRoleResources(snapshot, role, compiledPackages(snapshot, role));
+}
+function collectRoleResources(
+  snapshot: RunSnapshot,
+  role: 'main' | 'translation' | 'status' | 'image',
+  packages: readonly ResolvedPackage[]
 ) {
   const resources = snapshot.resources.filter(
     (item) =>
@@ -45,7 +56,7 @@ export function roleResources(
     }
   }
   const ids = new Set(resources.map((item) => item.id));
-  for (const pack of compiledPackages(snapshot, role))
+  for (const pack of packages)
     for (const item of pack.resources)
       if (!ids.has(item.id)) {
         resources.push(item);
@@ -95,7 +106,8 @@ export function buildMainInput(
   snapshot: RunSnapshot,
   results: readonly ToolEvent[] = []
 ): MainInput {
-  const resources = roleResources(snapshot);
+  const packages = compiledPackages(snapshot, 'main'),
+    resources = collectRoleResources(snapshot, 'main', packages);
   const allowedIds = new Set(resources.map((item) => item.id));
   const input: MainInput = {
     role: 'main',
@@ -135,7 +147,7 @@ export function buildMainInput(
     };
   }
 
-  const packageData = packageContext(snapshot, 'main');
+  const packageData = packageContextFromCompiled(packages);
   if (packageData) {
     const pinned = [
       ...packageData.pinned.map((r) => ({
@@ -143,7 +155,7 @@ export function buildMainInput(
         revision: r.revision,
         kind: r.sourceKind ?? r.kind,
         text: r.text,
-        ...(r.loreContext ? { loreContext: r.loreContext } : {}),
+        ...(r.loreContext ? { loreContext: structuredClone(r.loreContext) } : {}),
       })),
       ...packageData.instructions.map((n) => ({ ...n, kind: 'instruction' })),
     ].map((r) => ({ ...r, hash: hash(r.text) }));

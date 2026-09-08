@@ -1,5 +1,6 @@
+import { HttpError } from './request-validation.js';
 import type { FastifyInstance } from 'fastify';
-import { HttpError, type Store } from './store.js';
+import type { Store } from './store.js';
 import { latestTranslation, validateTranslationArtifact } from './source-editing.js';
 import { buildPackagePresentation } from './package-presentation.js';
 

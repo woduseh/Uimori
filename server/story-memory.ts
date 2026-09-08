@@ -1,3 +1,4 @@
+import { HttpError } from './request-validation.js';
 import { randomUUID } from 'node:crypto';
 import { isDeepStrictEqual } from 'node:util';
 import {
@@ -11,7 +12,7 @@ import {
   type MemoryScope,
 } from '../core/memory.js';
 import type { StoryConfig } from '../core/story.js';
-import { HttpError, type Store } from './store.js';
+import type { Store } from './store.js';
 import { sourceMemoryEntryAllowed } from '../core/source-context.js';
 
 type Row = Record<string, any>;

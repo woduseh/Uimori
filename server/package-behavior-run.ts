@@ -1,3 +1,4 @@
+import { HttpError } from './request-validation.js';
 import { createHash, randomBytes } from 'node:crypto';
 import { isDeepStrictEqual } from 'node:util';
 import {
@@ -19,7 +20,7 @@ import type { RuntimeValue } from '../core/prompt-program.js';
 import type { ToolAction } from '../core/provider.js';
 import type { RunSnapshot, ToolEvent } from '../core/types.js';
 import { behaviorPayloadHash, recordDraws } from './package-behavior-store.js';
-import { HttpError, type Run, type Store } from './store.js';
+import type { Run, Store } from './store.js';
 
 export type RunBehaviorEntry = {
   instanceId: string;

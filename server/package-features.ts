@@ -1,3 +1,4 @@
+import { HttpError, fields, record } from './request-validation.js';
 import type { FastifyInstance } from 'fastify';
 import {
   validateContentPackage,
@@ -7,8 +8,7 @@ import {
 } from '../core/content-package.js';
 import type { ChatProfile, Content, ProfileSnapshot } from '../core/product.js';
 import type { ProductStore } from './product-store.js';
-import { fields, record } from './product-store.js';
-import { HttpError, type Store } from './store.js';
+import type { Store } from './store.js';
 import { assertPackageImages } from './package-images.js';
 
 /** Live links follow IDs; a frozen closure resolves dependencies from its captured refs. */

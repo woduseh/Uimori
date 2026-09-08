@@ -45,7 +45,12 @@ export function packageContext(
   snapshot: RunSnapshot,
   target: PackageTarget
 ): PackageRoleContext | undefined {
-  const packages = compiledPackages(snapshot, target);
+  return packageContextFromCompiled(compiledPackages(snapshot, target));
+}
+/** Project one request's already validated packages without compiling their templates again. */
+export function packageContextFromCompiled(
+  packages: readonly ResolvedPackage[]
+): PackageRoleContext | undefined {
   if (!packages.length) return undefined;
   return {
     pinned: packages.flatMap((p) => p.pinned),

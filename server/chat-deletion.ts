@@ -1,7 +1,7 @@
+import { HttpError, fields, number, record, text } from './request-validation.js';
 import { isDeepStrictEqual } from 'node:util';
 import type { FastifyInstance } from 'fastify';
-import { fields, number, record, text } from './product-store.js';
-import { HttpError, type Store } from './store.js';
+import type { Store } from './store.js';
 
 type Row = Record<string, any>;
 const chatTables = [

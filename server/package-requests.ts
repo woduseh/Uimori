@@ -1,3 +1,4 @@
+import { HttpError } from './request-validation.js';
 import { randomUUID } from 'node:crypto';
 import { isDeepStrictEqual } from 'node:util';
 import { evaluatePromptExpression, type RuntimeValue } from '../core/prompt-program.js';
@@ -6,7 +7,7 @@ import type { BehaviorAction } from '../core/package-behavior.js';
 import type { PackageRequest } from '../core/package-request.js';
 import { behaviorPayloadHash, type BehaviorJournalResult } from './package-behavior-store.js';
 import type { Content } from '../core/product.js';
-import { HttpError, type Store } from './store.js';
+import type { Store } from './store.js';
 
 type Row = Record<string, any>;
 const reject = (message: string): never => {

@@ -10,6 +10,7 @@ import {
   artifactRoot,
   newId,
   json,
+  localVerificationEnv,
   command,
   requireCommand,
   startServer,
@@ -104,21 +105,13 @@ async function main(args) {
       const runtime = path.join(runDir, 'runtime');
       const temp = path.join(runtime, 'temp');
       await mkdir(temp, { recursive: true });
-      const env = {
+      const env = localVerificationEnv({
         NR_DB: path.join(runtime, 'app.sqlite'),
-        NR_PORT: '0',
-        NR_HOST: '127.0.0.1',
-        NR_PUBLIC_ORIGIN: undefined,
-        NR_ACCESS_TOKEN: '',
-        NR_PROVIDER_ORIGINS: '',
-        NR_CODEX_ENABLED: '0',
-        NR_CODEX_EXECUTABLE: undefined,
         NR_BUILD_ID: manifest.buildId,
         NR_INSTANCE: `${id}-${index}`,
-        NR_TEST_MODE: '1',
         TEMP: temp,
         TMP: temp,
-      };
+      });
       entries.push({
         cwd,
         commit: head.trim(),

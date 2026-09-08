@@ -10,6 +10,20 @@ export const artifactRoot = path.join(root, 'output', 'playwright');
 export const canary = 'm0-secret-canary-do-not-record-73915';
 export const newId = () =>
   `${new Date().toISOString().replaceAll(/[:.]/g, '-')}-${randomUUID().slice(0, 8)}`;
+export function localVerificationEnv(variables = {}) {
+  return {
+    ...variables,
+    NR_PORT: '0',
+    NR_HOST: '127.0.0.1',
+    NR_TEST_MODE: '1',
+    // Undefined removes inherited configuration at spawn; an empty origin is invalid.
+    NR_PUBLIC_ORIGIN: undefined,
+    NR_ACCESS_TOKEN: '',
+    NR_PROVIDER_ORIGINS: variables.NR_PROVIDER_ORIGINS ?? '',
+    NR_CODEX_ENABLED: '0',
+    NR_CODEX_EXECUTABLE: undefined,
+  };
+}
 export function createOwnership(directory, startedAt) {
   return {
     runId: path.basename(directory),

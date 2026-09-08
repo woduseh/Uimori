@@ -244,6 +244,35 @@ describe('package-authored source segments', () => {
     ).toContain('SEGMENT_EMPTY');
   });
 
+  test('translation diagnostics retain source and translated errors before structure mismatches', () => {
+    const raw = source('A<audit></audit>B');
+    const result = validateSegmentTranslation(raw, 'A\n[[aside: Unclosed\nbody', policy());
+    expect(result.ok).toBe(false);
+    expect(result.diagnostics.map((item) => item.code)).toEqual([
+      'SEGMENT_EMPTY',
+      'SEGMENT_UNCLOSED',
+      'SEGMENT_TRANSLATION_COVERAGE',
+      'SEGMENT_TRANSLATION_MARKERS',
+    ]);
+  });
+
+  test.each([
+    ['unclosed', 'A\n[[aside: Secret\nprivate text', 'SEGMENT_UNCLOSED'],
+    ['nested', 'A\n[[aside: Outer\n<audit>inner</audit>\n[[/aside]]\nB', 'SEGMENT_NESTED'],
+  ])('identical malformed translation still rejects %s blocks', (_label, text, code) => {
+    const raw = source(text);
+    const before = structuredClone(raw);
+    expect(validateSegmentTranslation(raw, text, policy())).toEqual({
+      ok: false,
+      diagnostics: [
+        expect.objectContaining({ code, severity: 'error' }),
+        expect.objectContaining({ code, severity: 'error' }),
+      ],
+    });
+    expect(segmentTranslationMarkers(raw, policy())).toEqual([]);
+    expect(raw).toEqual(before);
+  });
+
   test('retention uses explicit logical-message indices and the configured boundary', () => {
     const p = policy();
     p.rules[1].keepLastMessages = 2;

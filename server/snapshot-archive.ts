@@ -1,10 +1,11 @@
+import { HttpError } from './request-validation.js';
 import { freezeSourceSegments } from '../core/package-source-segments.js';
 import { isDeepStrictEqual } from 'node:util';
 import { validateProviderPrompt } from '../core/prompt-program.js';
 import type { RunSnapshot } from '../core/types.js';
 import { candidateCompilationSnapshot, validateContextPlan } from './context-planning.js';
 import { captureLogicalHistory, compileSnapshotPrompt } from './prompt-snapshot.js';
-import { HttpError, type Store } from './store.js';
+import type { Store } from './store.js';
 
 const reject = (message: string): never => {
   throw new HttpError(400, `Invalid snapshot archive: ${message}`);

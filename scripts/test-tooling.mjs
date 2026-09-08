@@ -20,12 +20,20 @@ function eventJson(event) {
 }
 
 async function defaultFiles() {
-  const tests = (await readdir(path.join(root, 'tests')))
-    .filter((name) => name.endsWith('.node.test.mjs'))
-    .sort()
-    .map((name) => path.join(root, 'tests', name));
-  if (!tests.length) throw new Error('No tests/*.node.test.mjs files discovered');
-  return [...tests, path.join(root, 'scripts', 'doctor.test.mjs')];
+  const groups = await Promise.all(
+    [
+      ['tests', '.node.test.mjs'],
+      ['scripts', '.test.mjs'],
+    ].map(async ([directory, suffix]) =>
+      (await readdir(path.join(root, directory), { withFileTypes: true }))
+        .filter((entry) => entry.isFile() && entry.name.endsWith(suffix))
+        .map((entry) => path.join(root, directory, entry.name))
+        .sort()
+    )
+  );
+  if (groups.some((files) => !files.length))
+    throw new Error('No tests/*.node.test.mjs or scripts/*.test.mjs files discovered');
+  return groups.flat();
 }
 
 export async function testTooling(files) {

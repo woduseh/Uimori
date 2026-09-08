@@ -1,3 +1,4 @@
+import { HttpError, fields, number, record, text } from './request-validation.js';
 import { translationChunkChars } from '../core/translation-settings.js';
 import {
   GENERATION_KEYS,
@@ -18,7 +19,7 @@ import { validateEvaluationToolOptions } from '../core/evaluation-tool-config.js
 import { existsSync, readFileSync, unlinkSync } from 'node:fs';
 import { isDeepStrictEqual } from 'node:util';
 import type { Store } from './store.js';
-import { HttpError } from './store.js';
+export { fields, number, record, text } from './request-validation.js';
 import {
   defaultProfile,
   validateProviderEndpoint,
@@ -103,25 +104,6 @@ import { validateArchivedLoreContext } from './lore-context-archive.js';
 type Row = Record<string, any>;
 const json = JSON.stringify;
 const parse = (s: any) => (s == null ? null : JSON.parse(String(s)));
-export const record = (v: unknown): Row => {
-  if (!v || typeof v !== 'object' || Array.isArray(v))
-    throw new HttpError(400, 'Expected an object');
-  return v as Row;
-};
-export const fields = (b: Row, keys: string[]) => {
-  if (Object.keys(b).some((k) => !keys.includes(k)))
-    throw new HttpError(400, 'Unknown request field');
-};
-export const text = (v: unknown, name: string, max = 4000, empty = false): string => {
-  if (typeof v !== 'string' || (!empty && !v.trim()) || v.length > max)
-    throw new HttpError(400, `Invalid ${name}`);
-  return v;
-};
-export const number = (v: unknown, name: string, min = 1, max = 1e9): number => {
-  if (!Number.isSafeInteger(v) || Number(v) < min || Number(v) > max)
-    throw new HttpError(400, `Invalid ${name}`);
-  return Number(v);
-};
 const choice = <T extends string>(v: unknown, values: T[], name: string): T => {
   if (!values.includes(v as T)) throw new HttpError(400, `Invalid ${name}`);
   return v as T;

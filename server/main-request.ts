@@ -176,7 +176,8 @@ function requestInput(snapshot: RunSnapshot, input: MainInput): ProviderRequest[
 /** Explicit dynamic data boundary. Existing user-authored roles, order and cache IDs stay unchanged. */
 export function attachMainHostContext(snapshot: RunSnapshot): RunSnapshot {
   if (!snapshot.promptCompilation) return snapshot;
-  const text = nativeHostContextText({ input: requestInput(snapshot, buildMainInput(snapshot)) });
+  const input = buildMainInput(snapshot),
+    text = nativeHostContextText({ input: requestInput(snapshot, input) });
   const compilation = structuredClone(snapshot.promptCompilation),
     existing = compilation.messages.find((message) => message.id === NATIVE_HOST_CONTEXT_ID);
   if (existing) {
@@ -201,7 +202,6 @@ export function attachMainHostContext(snapshot: RunSnapshot): RunSnapshot {
     provenance: { blockId: NATIVE_HOST_CONTEXT_ID, origin: 'prompt' },
   });
   const used = new Set(compilation.usedSlots ?? []);
-  const input = buildMainInput(snapshot);
   const delivered = new Set(
     [...used]
       .flatMap((slot) => pinnedSlotSources(input, slot))

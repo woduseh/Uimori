@@ -489,8 +489,15 @@ export function segmentTranslationMarkers(
   source: SegmentSource,
   policy?: SourceSegmentPolicy
 ): SegmentTranslationMarker[] {
-  const document = parseSourceSegments(source, policy),
-    markers: SegmentTranslationMarker[] = [];
+  const document = parseSourceSegments(source, policy);
+  return collectTranslationMarkers(source.text, document, policy);
+}
+function collectTranslationMarkers(
+  text: string,
+  document: SegmentDocument,
+  policy?: SourceSegmentPolicy
+): SegmentTranslationMarker[] {
+  const markers: SegmentTranslationMarker[] = [];
   const add = (
     segment: SourceSegment,
     range: SegmentRange,
@@ -498,7 +505,7 @@ export function segmentTranslationMarkers(
   ) =>
     markers.push({
       range,
-      literal: source.text.slice(range.start, range.end),
+      literal: text.slice(range.start, range.end),
       segmentId: segment.id,
       kind,
     });
@@ -512,7 +519,7 @@ export function segmentTranslationMarkers(
     if (segment.scene && scene) {
       // Scene labels are translatable prose; only their configured separators are structural.
       const range = segment.scene.range,
-        raw = source.text.slice(range.start, range.end);
+        raw = text.slice(range.start, range.end);
       const open = raw.indexOf(scene.open),
         close = raw.lastIndexOf(scene.close);
       add(
@@ -555,9 +562,9 @@ export function validateSegmentTranslation(
       .map((s) => [s.kind, s.ruleId]);
   if (JSON.stringify(shape(original, source.text)) !== JSON.stringify(shape(translated, text)))
     diagnostics.push({ code: 'SEGMENT_TRANSLATION_COVERAGE', severity: 'error' });
-  const markers = (s: SegmentSource) =>
-    segmentTranslationMarkers(s, policy).map((m) => [m.kind, m.literal]);
-  if (JSON.stringify(markers(source)) !== JSON.stringify(markers({ ...source, text })))
+  const markers = (document: SegmentDocument, body: string) =>
+    collectTranslationMarkers(body, document, policy).map((m) => [m.kind, m.literal]);
+  if (JSON.stringify(markers(original, source.text)) !== JSON.stringify(markers(translated, text)))
     diagnostics.push({ code: 'SEGMENT_TRANSLATION_MARKERS', severity: 'error' });
   return { ok: !diagnostics.length, diagnostics };
 }

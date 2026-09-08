@@ -13,7 +13,7 @@ import { sourceLogicalHistoryForRequest } from '../core/source-context.js';
 import type { RunSnapshot } from '../core/types.js';
 import type { Store } from './store.js';
 import { DEFAULT_MAIN_PROMPT } from '../core/prompts.js';
-import { packageSlots, compiledPackages } from '../core/package-context.js';
+import { compiledPackages, type ResolvedPackage } from '../core/package-context.js';
 import { executionContext } from '../core/execution-context.js';
 import { projectedLogicalHistory } from '../core/context-projection.js';
 
@@ -57,6 +57,9 @@ export function captureLogicalHistory(store: Store, snapshot: RunSnapshot): Prom
   });
 }
 export function promptContext(snapshot: RunSnapshot) {
+  return contextFromPackages(snapshot, compiledPackages(snapshot, 'main'));
+}
+function contextFromPackages(snapshot: RunSnapshot, packages: readonly ResolvedPackage[]) {
   const input = buildMainInput(snapshot);
   const contents = snapshot.profile?.contents ?? [];
   const body = (slot: string) =>
@@ -87,12 +90,13 @@ export function promptContext(snapshot: RunSnapshot) {
     catalog: JSON.stringify(input.catalog),
     source: '',
   };
-  const packages = packageSlots(snapshot, 'main');
-  if (packages.char) slots.char = packages.char;
+  const bot = packages.find((p) => p.attachment.role === 'bot')?.package;
+  const name = bot?.identity?.name ?? bot?.title;
+  if (name) slots.char = name;
   slots.description = slots.bot;
   slots.lorebook = slots.lore;
   slots.authornote = slots.authorNote;
-  for (const instruction of compiledPackages(snapshot, 'main').flatMap((p) => p.instructions))
+  for (const instruction of packages.flatMap((p) => p.instructions))
     if (instruction.position)
       slots[instruction.position] = [slots[instruction.position], instruction.text]
         .filter(Boolean)
@@ -138,9 +142,8 @@ export function compileSnapshotPrompt(
     program ??
     snapshot.profile?.promptPresets?.main?.program ??
     createDefaultPromptProgram(DEFAULT_MAIN_PROMPT);
-  const positioned = compiledPackages(snapshot, 'main')
-    .flatMap((p) => p.instructions)
-    .filter((n) => n.position);
+  const packages = compiledPackages(snapshot, 'main');
+  const positioned = packages.flatMap((p) => p.instructions).filter((n) => n.position);
   if (positioned.length) {
     const declared = new Set<string>();
     const walk = (nodes: PromptTemplate) => {
@@ -164,7 +167,7 @@ export function compileSnapshotPrompt(
       if (!declared.has(instruction.position!))
         throw new Error(`PACKAGE_INSERTION_SLOT_MISSING (${instruction.position})`);
   }
-  const context = promptContext(snapshot);
+  const context = contextFromPackages(snapshot, packages);
   const promptCompilation = compilePromptProgram(selected, {
     ...context,
     ...(values ? { values } : {}),

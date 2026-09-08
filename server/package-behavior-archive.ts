@@ -1,3 +1,4 @@
+import { HttpError } from './request-validation.js';
 import { createHash } from 'node:crypto';
 import { isDeepStrictEqual } from 'node:util';
 import {
@@ -16,7 +17,7 @@ import type { PackageExecutionState } from '../core/execution-context.js';
 import type { RunSnapshot } from '../core/types.js';
 import { assertBehaviorToolCapability } from '../core/package-behavior-tools.js';
 import { behaviorPayloadHash, recordDraws, type BehaviorScope } from './package-behavior-store.js';
-import { HttpError, type Store } from './store.js';
+import type { Store } from './store.js';
 import {
   packageBehaviorRunTables,
   validateRunBehaviorArchive,

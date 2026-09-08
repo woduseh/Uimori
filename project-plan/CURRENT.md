@@ -25,6 +25,8 @@
 
 ## 마지막 검증
 
+저장소 slop audit에서 공통 입력 검증의 중복·저장소 순환 의존, 패키지 재컴파일, 구간 번역 재파싱, 합성 검증 환경 설정 불일치와 Node 테스트 검색 누락을 정리했어요. 기존 API·오류 identity·snapshot 검증·초안 보호를 유지했고 테스트 삭제나 검사 약화는 없어요. 변경 전 `quality:full` **1,354 PASS·1 opt-in skip**에서 최종 **1,364 PASS·1 opt-in skip**, tooling **30/30**, 전체 브라우저 **163/163**, smoke **F02/F03/F06 PASS**를 확인했어요. 최종 source/build `5dc97f0dc4e8c5df636908f0cd5f2bba43503f9cd63bb19941c6df2f801ffeb5`, cleanup PASS예요. 실제 공급자·사용자 DB·실기기·배포는 포함하지 않았어요. [변경 근거·검증·보류 후보·한계](SLOP-AUDIT-2026-09-08.md)
+
 생성 준비의 이력·이전 요약 조회에서 화면용 문단 가공·중복 SQL·전체 Run 파싱을 줄였어요. 동일 합성 SQLite의 장면당 8,000자, 워밍업 3회·측정 9회에서 두 단계 결합 중앙값은 100장면 **178.46→66.55ms**, 300장면 **1316.66→698.55ms**예요. 원문·수정본 identity/hash·분기·요약 재사용 검증을 유지했고 캐시·스키마 변경은 없어요. `quality:full` **1,354 PASS·1 opt-in skip**, 하네스 **26/26 PASS**, `verify:smoke` **F02/F03/F06 PASS**, source/build 일치·cleanup PASS예요. 로컬 생성 준비 경로의 검증이며 전체 모델 응답시간·청구 비용의 측정은 아니에요. [원인·전후 원자료·검증·재현·한계](CONTEXT-STORAGE-PERFORMANCE.md)
 
 상세 화면의 공통 UI 적용을 완료했어요. 채팅 설정·고급 패키지·프롬프트 저장/적용·장면 메뉴를 정리하고 작업 현황의 로딩 완료 화면을 검토했어요. `quality:full` **1,334 PASS · 1 opt-in skip**, 최종 품질·빌드 및 전체 브라우저 **163/163 PASS**예요. 단위 검사 후에는 공통 탐색의 줄바꿈 CSS와 브라우저 검사 진입·선택자만 보정했으며, 최종 UI 빌드를 전체 브라우저 검사와 대표 PNG 16장으로 확인했어요. 최종 source/build `47bbaa7ec72ff7702ca8fe30e2f7272e27d8ec899a1803b6457a0cacfda11dc1`, cleanup PASS예요. 미커밋 변경이며 실제 공급자·사용자 DB·휴대폰 실기기·배포는 검증 범위에 포함하지 않아요. [구현·초기 실패·최종 결과와 화면](UI-DETAIL-IMPLEMENTATION.md). 아래는 이 변경 이전 기록이에요.

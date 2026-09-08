@@ -1,3 +1,4 @@
+import { HttpError } from './request-validation.js';
 import {
   executionContext,
   packageInstanceId,
@@ -12,7 +13,7 @@ import {
   type BehaviorScope,
   type BehaviorState,
 } from './package-behavior-store.js';
-import { HttpError, type Store, type Run, type Source } from './store.js';
+import type { Store, Run, Source } from './store.js';
 import { captureLogicalHistory } from './prompt-snapshot.js';
 import { freezeSourceSegments } from '../core/package-source-segments.js';
 import {
