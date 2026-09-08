@@ -118,10 +118,7 @@ export function readerDetail(store: Store, id: string, query: Record<string, str
         }
         return true;
       })
-      .map(({ input: _input, chunks, ...job }) => ({
-        ...job,
-        chunks: chunks?.map(({ id, status, attempt, error }) => ({ id, status, attempt, error })),
-      }));
+      .map(({ input: _input, ...job }) => job);
   });
   // JSON projection happens in SQLite: do not parse quadratic history or diagnostic bodies.
   const runs = (

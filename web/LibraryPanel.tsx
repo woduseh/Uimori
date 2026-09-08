@@ -893,7 +893,7 @@ function ContentEditor({
               label="자료 삭제"
               iconOnly
               disabled={busy}
-              description="이 자료와 현재 편집 초안을 삭제해요. 되돌릴 수 없고, 다른 자료나 채팅에서 사용 중이면 삭제할 수 없어요."
+              description="이 자료를 목록에서 삭제하고 현재 편집 초안을 닫아요. 과거 채팅과 실행이 사용하는 내용은 유지돼요."
               onError={onError}
               onDeleted={async () => {
                 onDeleted();

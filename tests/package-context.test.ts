@@ -6,7 +6,6 @@ import type { ContentPackage } from '../core/content-package.js';
 import type { RunSnapshot } from '../core/types.js';
 import { buildMainInput, executeTool } from '../core/provider.js';
 import {
-  createTranslationPlan,
   translationInput,
   compileTranslationPrompt,
   type SourceTimeContext,
@@ -68,17 +67,14 @@ describe('source-time package role context', () => {
     expect(compiledPackages(before, 'main')).toEqual([]);
     expect(JSON.stringify(buildMainInput(after))).toBe(JSON.stringify(buildMainInput(before)));
     expect(JSON.stringify(promptContext(after))).toBe(JSON.stringify(promptContext(before)));
-    const plan = createTranslationPlan(
-      {
-        id: 'src',
-        hash: createHash('sha256').update('Original').digest('hex'),
-        chatId: 'chat',
-        text: 'Original',
-      },
-      context
-    );
-    expect(JSON.stringify(translationInput(plan, plan.chunks[0].id, after))).toBe(
-      JSON.stringify(translationInput(plan, plan.chunks[0].id, before))
+    const source = {
+      id: 'src',
+      hash: createHash('sha256').update('Original').digest('hex'),
+      chatId: 'chat',
+      text: 'Original',
+    };
+    expect(JSON.stringify(translationInput(source, context, after))).toBe(
+      JSON.stringify(translationInput(source, context, before))
     );
   });
   it('freezes role instructions and control values independently of later package edits', () => {
@@ -144,16 +140,13 @@ describe('source-time package role context', () => {
       id = 'package:pkg:bot:lore:facts';
     main.catalog.find((item) => item.id === id)!.loreContext!.group = 'changed';
     expect(main.pinnedSources!.find((item) => item.id === id)!.loreContext!.group).toBe('original');
-    const plan = createTranslationPlan(
-      {
-        id: 'source',
-        hash: createHash('sha256').update('Original').digest('hex'),
-        chatId: s.chatId,
-        text: 'Original',
-      },
-      context
-    );
-    const translation = translationInput(plan, plan.chunks[0].id, s);
+    const source = {
+      id: 'source',
+      hash: createHash('sha256').update('Original').digest('hex'),
+      chatId: s.chatId,
+      text: 'Original',
+    };
+    const translation = translationInput(source, context, s);
     translation.catalog.find((item) => item.id === id)!.loreContext!.group = 'changed';
     expect(
       translation.context.packages!.pinned.find((item) => item.id === id)!.loreContext!.group
@@ -234,16 +227,13 @@ describe('source-time package role context', () => {
         },
       },
     };
-    const plan = createTranslationPlan(
-      {
-        id: 'source',
-        hash: createHash('sha256').update('Original').digest('hex'),
-        chatId: 'chat',
-        text: 'Original',
-      },
-      { ...context, instructionRevision: 'prompt:tr@1' }
-    );
-    const input = translationInput(plan, plan.chunks[0].id, s);
+    const source = {
+      id: 'source',
+      hash: createHash('sha256').update('Original').digest('hex'),
+      chatId: 'chat',
+      text: 'Original',
+    };
+    const input = translationInput(source, { ...context, instructionRevision: 'prompt:tr@1' }, s);
     expect(input.context.packages!.instructions.map((n) => n.text)).toEqual(['TRANSLATION_ONLY']);
     expect(JSON.stringify(input)).not.toContain('MAIN_ONLY');
     expect(JSON.stringify(compileTranslationPrompt(input, s, 'Translate'))).toContain('EXACT_BODY');

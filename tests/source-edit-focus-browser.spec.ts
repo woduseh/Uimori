@@ -1,3 +1,4 @@
+import { visualReview } from './fixtures/visual-review.js';
 import { openSourceActions } from './ui-navigation.js';
 import { test, expect, type APIRequestContext, type Locator } from '@playwright/test';
 import type { Chat, ChatDetail, Run } from '../core/types.js';
@@ -83,7 +84,7 @@ const readerOffset = (control: Locator) =>
 
 for (const [label, viewport] of [
   ['mobile', { width: 390, height: 844 }],
-  ['desktop', { width: 1280, height: 900 }],
+  ['desktop', { width: 1440, height: 900 }],
 ] as const) {
   test(`C04E ${label} long source editing focuses the visible editor and restores reading after Escape, cancel and save`, async ({
     page,
@@ -134,7 +135,8 @@ for (const [label, viewport] of [
     await expect(field).toBeFocused();
     const edited = `${source.text}\n\nThe synthetic keeper returns to the lamp.`;
     await field.fill(edited);
-    await page.screenshot({ path: info.outputPath(`source-editor-${label}.png`) });
+    if (visualReview)
+      await page.screenshot({ path: info.outputPath(`source-editor-${label}.png`) });
     await scene.getByRole('button', { name: '원문 저장', exact: true }).click();
     await expect(field).toHaveCount(0);
     await expect(opener).toBeFocused();
@@ -154,7 +156,8 @@ for (const [label, viewport] of [
     await expect(translation).toHaveCount(0);
     await expect(opener).toBeFocused();
     await insideReader(opener);
-    await page.screenshot({ path: info.outputPath(`source-reading-restored-${label}.png`) });
+    if (visualReview)
+      await page.screenshot({ path: info.outputPath(`source-reading-restored-${label}.png`) });
   });
 }
 

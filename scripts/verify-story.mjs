@@ -95,6 +95,7 @@ export async function verifyStory(selection) {
     await run(['node_modules/typescript/bin/tsc', '--noEmit'], 'check');
     await run(['scripts/build.mjs'], 'build');
     summary.identity = await assertBuild();
+    summary.verificationIdentity = await fingerprint();
     const temp = path.join(runtime, 'temp');
     await mkdir(temp, { recursive: true });
     const env = localVerificationEnv({
@@ -195,13 +196,13 @@ export async function verifyStory(selection) {
         reporters: ['vitest.json', ...(browser.length ? ['playwright.json'] : [])],
       };
     }
-    if (selection.cases.includes('S07')) {
+    if (selection.cases.includes('S07') && process.env.NR_BENCHMARK === '1') {
       if (!existsSync(path.join(directory, 'story-performance.json')))
         throw new Error('S07 performance measurements missing');
       summary.scenarios.S07.measurements = 'story-performance.json';
     }
     await assertBuild();
-    if ((await fingerprint()).hash !== summary.identity.sourceHash)
+    if ((await fingerprint()).hash !== summary.verificationIdentity.hash)
       throw new Error('Source changed during verification');
   } catch (error) {
     failures.push(error.message);

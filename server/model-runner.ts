@@ -1,3 +1,4 @@
+import { createToolCorrectionPolicy } from '../core/tool-outcome.js';
 import { executeMain, executeTool, type ToolAction } from '../core/provider.js';
 import type { Connection } from '../core/product.js';
 import {
@@ -77,6 +78,7 @@ export async function runMain(snapshot: RunSnapshot, hooks: MainHooks): Promise<
     return { status: 'completed', ...result, error: null };
   }
   const results: ToolEvent[] = [];
+  const correction = createToolCorrectionPolicy();
   const evaluation = createEvaluationToolSession(target, hooks.timeoutMs);
   const maxCalls = fixed.settings.maxCalls;
   const mainCallLimit = evaluation ? Math.min(maxCalls, evaluation.maxCalls) : maxCalls;
@@ -304,7 +306,9 @@ export async function runMain(snapshot: RunSnapshot, hooks: MainHooks): Promise<
           : executeTool(fixed, action, hooks.signal);
       results.push(event);
       await hooks.onToolEvent(structuredClone(event));
-      if (event.denied)
+      const outcome = correction(event, call.arguments);
+      if (outcome === 'exhausted') return fail('TOOL_CORRECTION_EXHAUSTED');
+      if (outcome === 'denied')
         return fail(
           binding || call.name.startsWith('behavior_') ? 'ACTION_TOOL_DENIED' : 'READ_TOOL_DENIED'
         );

@@ -60,13 +60,16 @@ test('tool options are explicit and independently validated', () => {
     terminalLateCorrections: false,
     outputRecovery: true,
   });
+  expect(validateEvaluationToolOptions(defaults)).toEqual(defaults);
   for (const invalid of [
+    undefined,
     null,
     {},
     { ...defaults, maximumToolRounds: 33 },
     { ...defaults, maximumToolRounds: -1 },
     { ...defaults, outputRecovery: undefined },
     { ...defaults, serviceTier: 'flex' },
+    { ...defaults, extra: true },
   ])
     expect(() => validateEvaluationToolOptions(invalid)).toThrow('INVALID_EVALUATION_TOOL_OPTIONS');
   expect(

@@ -7,8 +7,9 @@ import { join, resolve, relative, isAbsolute } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { Store } from '../server/store.js';
 import { forkChat } from '../server/chat-fork.js';
-import { runAuxiliaryJob, sourceTimeContext } from '../server/product-auxiliary.js';
-import { createTranslationPlan } from '../core/auxiliary.js';
+import { runAuxiliaryJob } from '../server/product-auxiliary.js';
+import { createDefaultPromptProgram } from '../core/prompt-defaults.js';
+import { promptWorkspace, updatePromptWorkspace } from '../server/prompt-workspace.js';
 import { auxiliaryBridge } from '../server/auxiliary-bridge.js';
 import { Controls } from '../server/controls.js';
 const owned: { store?: Store; dir: string }[] = [];
@@ -64,11 +65,12 @@ function source(
   );
 }
 
-function chunkSetting(store: Store, chatId: string, translationChunkChars: number | null) {
-  const chat = store.chat(chatId);
-  return store.settings(chatId, chat.settingsRevision, {
-    ...chat.settings,
-    translationChunkChars,
+function promptSetting(store: Store, title: string, maxRetries = 1) {
+  const workspace = promptWorkspace(store);
+  return updatePromptWorkspace(store, {
+    expectedRevision: workspace.revision,
+    translation: { title, program: createDefaultPromptProgram(title, 'translation'), values: {} },
+    translationPolicy: { ...workspace.translationPolicy, maxRetries },
   });
 }
 
@@ -76,7 +78,7 @@ async function translateFixture(store: Store, jobId: string) {
   await runAuxiliaryJob(
     auxiliaryBridge(store, new Controls(), new AbortController().signal),
     jobId,
-    'chunk-setting-owner',
+    'whole-source-owner',
     {
       signal: new AbortController().signal,
       approvedOrigins: [],
@@ -90,126 +92,133 @@ async function translateFixture(store: Store, jobId: string) {
   expect(store.job(jobId).status).toBe('completed');
 }
 
-test('new translation uses current chunk setting while an existing reservation remains frozen', async () => {
+test('new translation freezes the current prompt and retry policy while pending work keeps its reservation', async () => {
   vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('Live forbidden'));
   const store = database();
-  const chat = createFixtureChat(store, 'chunk settings');
-  const s = source(store, chat.id, ['A'.repeat(150), 'B'.repeat(150)].join('\n\n'));
-  const originalSnapshot = store.run(s.runId).snapshot;
-  expect(store.requestTranslation(s.id).input).toMatchObject({ translationChunkChars: 3000 });
-  const reserved = store.requestTranslation(s.id);
-  chunkSetting(store, chat.id, 100);
-  expect(store.requestTranslation(s.id).input).toEqual(reserved.input);
+  const chat = createFixtureChat(store, 'current translation');
+  const original = source(store, chat.id, 'A'.repeat(60000));
+  const originalSnapshot = store.run(original.runId).snapshot;
+  const firstSettings = promptSetting(store, 'First translation instructions');
+  const reserved = store.requestTranslation(original.id);
+  expect(reserved.input).toMatchObject({
+    promptWorkspaceRevision: firstSettings.revision,
+    translationPrompt: { title: 'First translation instructions' },
+    translationPolicy: { maxRetries: 1, maxCalls: 16 },
+  });
+  const nextSettings = promptSetting(store, 'Next instructions', 0);
+  expect(store.requestTranslation(original.id).input).toEqual(reserved.input);
   await translateFixture(store, reserved.id);
-  expect(store.product.plan(reserved.id).maxChunkChars).toBe(3000);
-  expect(store.product.chunks(reserved.id)).toHaveLength(1);
-  const split = store.retranslate(s.id);
-  expect(split.input).toMatchObject({ translationChunkChars: 100 });
-  await translateFixture(store, split.id);
-  expect(store.product.plan(split.id).maxChunkChars).toBe(100);
-  expect(store.product.chunks(split.id)).toHaveLength(2);
-  chunkSetting(store, chat.id, null);
-  expect(store.requestTranslation(s.id).revision).toBe(split.revision);
-  const unlimited = store.retranslate(s.id);
-  expect(unlimited.input).toMatchObject({ translationChunkChars: null });
-  await translateFixture(store, unlimited.id);
-  expect(store.product.plan(unlimited.id).maxChunkChars).toBeNull();
-  expect(store.product.chunks(unlimited.id)).toHaveLength(1);
-  expect(store.run(s.runId).snapshot).toEqual(originalSnapshot);
-  expect(store.job(unlimited.id).sourceHash).toBe(s.hash);
+  expect(store.job(reserved.id).result?.text).toBe(original.text);
+  const next = store.retranslate(original.id);
+  expect(next.id).not.toBe(reserved.id);
+  expect(next.input).toMatchObject({
+    promptWorkspaceRevision: nextSettings.revision,
+    translationPrompt: { title: 'Next instructions' },
+    translationPolicy: { maxRetries: 0 },
+  });
+  expect(next.previousResult).toMatchObject({
+    jobId: reserved.id,
+    result: { text: original.text },
+  });
+  await translateFixture(store, next.id);
+  expect(store.job(reserved.id).result?.text).toBe(original.text);
+  expect(store.job(next.id).previousResult).toBeUndefined();
+  expect(store.run(original.runId).snapshot).toEqual(originalSnapshot);
+  expect(
+    store.db.prepare("SELECT name FROM sqlite_master WHERE name='job_chunks'").get()
+  ).toBeUndefined();
 });
 
-test('explicit partial translation retry replaces completed chunks using the current setting', async () => {
-  vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('Live forbidden'));
+test('explicit retry creates a new current-policy job and preserves failed candidate plus last successful translation', async () => {
   const store = database();
-  const chat = createFixtureChat(store, 'partial chunk settings');
-  chunkSetting(store, chat.id, 100);
-  const s = source(store, chat.id, ['A'.repeat(150), 'B'.repeat(150)].join('\n\n'));
-  const job = store.requestTranslation(s.id);
-  const snapshot = store.product.resolveJobPrompt(store.run(s.runId).snapshot, job.input);
-  const plan = createTranslationPlan(s, sourceTimeContext(snapshot, 'translation'), 100);
-  const ownedJob = store.claimJob(job.id, 'partial-owner', {}, plan)!;
-  const first = plan.chunks[0];
-  const saved = {
-    sourceRevision: s.id,
-    sourceHash: s.hash,
-    chunkId: first.id,
-    segments: [{ anchors: first.anchors, text: '보존할 번역' }],
-  };
-  store.product.chunk(job.id, first.id, 'running');
-  store.product.chunk(job.id, first.id, 'completed', undefined, saved);
-  store.finishAuxiliary(job.id, ownedJob.generation, 'partial-owner', {
-    status: 'partial',
-    result: null,
-    error: 'Synthetic failure after one completed chunk',
+  const original = source(store);
+  const successful = store.editTranslation(original.id, {
+    text: 'Previous successful translation',
+    expectedRevision: 0,
+    expectedSourceHash: original.hash,
   });
-  chunkSetting(store, chat.id, null);
+  const job = store.retranslate(original.id);
+  const active = store.claimJob(job.id, 'failed-owner', {})!;
+  store.finishAuxiliary(job.id, active.generation, 'failed-owner', {
+    status: 'failed',
+    result: {
+      mock: true,
+      sourceRevision: original.id,
+      sourceHash: original.hash,
+      text: 'Uncertain candidate',
+    },
+    error: 'TRANSLATION_REFUSAL_UNCERTAIN',
+  });
   const prior = store.job(job.id);
+  expect(prior.previousResult).toMatchObject({
+    jobId: successful.id,
+    result: { text: 'Previous successful translation' },
+  });
+  const settings = promptSetting(store, 'Retry current instructions', 0);
+  const count = store.db.prepare('SELECT count(*) AS n FROM jobs').get();
   expect(() =>
     store.retryJob(job.id, () => {
-      throw new Error('Synthetic invalid current model');
+      throw new Error('Invalid current model');
     })
-  ).toThrow('Synthetic invalid current model');
+  ).toThrow('Invalid current model');
+  expect(store.db.prepare('SELECT count(*) AS n FROM jobs').get()).toEqual(count);
   expect(store.job(job.id)).toEqual(prior);
-  expect(store.product.plan(job.id)).toEqual(plan);
   const retried = store.retryJob(job.id);
-  expect(retried.input).toMatchObject({ translationChunkChars: null });
+  expect(retried.id).not.toBe(job.id);
   expect(retried.revision).toBe(prior.revision! + 1);
-  expect(store.product.plan(job.id)).toBeNull();
-  expect(store.product.chunks(job.id)).toHaveLength(0);
+  expect(retried.input).toMatchObject({
+    promptWorkspaceRevision: settings.revision,
+    translationPolicy: { maxRetries: 0 },
+  });
+  expect(retried.previousResult).toMatchObject({ jobId: successful.id });
   expect(store.retryJob(job.id)).toEqual(retried);
-  await translateFixture(store, job.id);
-  expect(store.product.chunks(job.id)).toHaveLength(1);
-  expect(store.product.plan(job.id).maxChunkChars).toBeNull();
-  expect(store.job(job.id).input).toMatchObject({ translationChunkChars: null });
-  expect(store.job(job.id).result?.text).not.toContain('보존할 번역');
+  expect(store.job(job.id).result?.text).toBe('Uncertain candidate');
+  await translateFixture(store, retried.id);
+  expect(store.job(job.id).result?.text).toBe('Uncertain candidate');
 });
 
-test.each([100, null])(
-  'archive and fork preserve translation chunk setting %s and reject inconsistent plans',
-  async (limit) => {
-    vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('Live forbidden'));
-    const store = database();
-    const chat = createFixtureChat(store, 'archive chunk settings');
-    chunkSetting(store, chat.id, limit);
-    const s = source(store, chat.id, ['A'.repeat(150), 'B'.repeat(150)].join('\n\n'));
-    const job = store.requestTranslation(s.id);
-    await translateFixture(store, job.id);
-    const plan = store.product.plan(job.id);
-    const archive = store.product.export();
-    const restored = database();
-    restored.product.import(archive);
-    expect(restored.chat(chat.id).settings.translationChunkChars).toBe(limit);
-    expect(restored.job(job.id).input).toMatchObject({ translationChunkChars: limit });
-    expect(restored.product.plan(job.id)).toEqual(plan);
-    const fork = forkChat(store, chat.id, { fromRevision: s.id, idempotencyKey: randomUUID() });
-    expect(fork.settings.translationChunkChars).toBe(limit);
-    const copied = store.detail(fork.id).jobs.find((item) => item.kind === 'translation')!;
-    expect(copied.input).toMatchObject({ translationChunkChars: limit });
-    expect(store.product.plan(copied.id)).toMatchObject({
-      maxChunkChars: limit,
-      sourceRevision: fork.headRevision,
-      sourceHash: s.hash,
-    });
-    expect(store.product.chunks(copied.id)).toHaveLength(plan.chunks.length);
-    const forged: any = structuredClone(archive);
-    const row = forged.tables.jobs.find((item: any) => item.id === job.id);
-    row.plan = JSON.stringify({
-      ...JSON.parse(row.plan),
-      maxChunkChars: limit === null ? 100 : null,
-    });
-    const target = database();
-    expect(() => target.product.import(forged)).toThrow();
-    expect(target.chats()).toHaveLength(0);
-    const invalidSettings: any = structuredClone(archive);
-    const chatRow = invalidSettings.tables.chats.find((item: any) => item.id === chat.id);
-    chatRow.settings = JSON.stringify({
-      ...JSON.parse(chatRow.settings),
-      translationChunkChars: 99,
-    });
-    expect(() => database().product.import(invalidSettings)).toThrow();
-  }
-);
+test('archive and fork preserve whole translation text and reject changed source identity', async () => {
+  const store = database();
+  const original = source(store);
+  const job = store.requestTranslation(original.id);
+  await translateFixture(store, job.id);
+  const archive = store.product.export();
+  const restored = database();
+  restored.product.import(archive);
+  expect(restored.job(job.id).result).toEqual(store.job(job.id).result);
+  expect(restored.job(job.id).input).toEqual(store.job(job.id).input);
+  const fork = forkChat(store, original.chatId, {
+    fromRevision: original.id,
+    idempotencyKey: randomUUID(),
+  });
+  const copied = store.detail(fork.id).jobs.find((item) => item.kind === 'translation')!;
+  expect(copied.result).toMatchObject({
+    sourceRevision: fork.headRevision,
+    sourceHash: original.hash,
+    text: original.text,
+  });
+  expect(copied.result).not.toHaveProperty('segments');
+  const forged: any = structuredClone(archive);
+  const row = forged.tables.job_results.find((item: any) => item.job_id === job.id);
+  row.result = JSON.stringify({ ...JSON.parse(row.result), sourceHash: 'wrong' });
+  const target = database();
+  expect(() => target.product.import(forged)).toThrow();
+  expect(target.chats()).toHaveLength(0);
+  const manual = store.editTranslation(original.id, {
+    text: 'Manual',
+    expectedRevision: job.revision!,
+    expectedSourceHash: original.hash,
+  });
+  const manualArchive: any = store.product.export();
+  const manualRow = manualArchive.tables.job_results.find((item: any) => item.job_id === manual.id);
+  manualRow.result = JSON.stringify({
+    ...JSON.parse(manualRow.result),
+    sourceRevision: 'wrong-source',
+  });
+  expect(() => target.product.import(manualArchive)).toThrow();
+  expect(target.chats()).toHaveLength(0);
+});
+
 test('completion never reserves translation; manual save and demand remain free', () => {
   const store = database();
   const s = source(store);
@@ -225,7 +234,7 @@ test('completion never reserves translation; manual save and demand remain free'
   expect(store.queuedJobs().includes(manual.id)).toBe(false);
   expect(store.product.attempts(s.chatId)).toHaveLength(0);
 });
-test('CAS manual edit fences a late owned job and keeps a single slot', () => {
+test('CAS manual edit fences a late owned job while preserving prior execution evidence', () => {
   const store = database();
   const s = source(store);
   const job = store.requestTranslation(s.id);
@@ -237,7 +246,8 @@ test('CAS manual edit fences a late owned job and keeps a single slot', () => {
     expectedSourceHash: s.hash,
   });
   expect(store.completeJob(job.id, active.generation, 'owner', { text: 'late' })).toBe(false);
-  expect(manual.generation).toBeGreaterThan(active.generation);
+  expect(manual.id).not.toBe(job.id);
+  expect(store.job(job.id).generation).toBeGreaterThan(active.generation);
   expect(() =>
     store.editTranslation(s.id, {
       text: 'conflict',
@@ -246,7 +256,8 @@ test('CAS manual edit fences a late owned job and keeps a single slot', () => {
     })
   ).toThrow('conflict');
   const forced = store.retranslate(s.id);
-  expect(forced.id).toBe(job.id);
+  expect(forced.id).not.toBe(job.id);
+  expect(forced.previousResult).toMatchObject({ jobId: manual.id, result: { text: 'Manual' } });
   expect(forced.revision).toBeGreaterThan(manual.revision!);
   expect(store.detail(s.chatId).jobs.filter((j) => j.kind === 'translation')).toHaveLength(1);
 });
@@ -281,7 +292,7 @@ test('versioned source restore and fork preserve edit history, manual translatio
     expectedSourceHash: edited.hash,
   });
   const archive = store.product.export();
-  expect(archive.version).toBe(13);
+  expect(archive.version).toBe(14);
   const restored = database();
   restored.product.import(archive);
   expect(restored.source(s.id).text).toBe('Edited');
@@ -296,13 +307,9 @@ test('versioned source restore and fork preserve edit history, manual translatio
   store.editSource(copied.id, { text: 'Fork only', expectedRevision: 1 });
   expect(store.source(s.id).text).toBe('Edited');
 });
-test('v2 archive rejects and invalid edit history rolls back', () => {
+test('invalid edit history rolls archive restoration back', () => {
   const store = database();
   const s = source(store);
-  const legacy: any = store.product.export();
-  legacy.version = 2;
-  delete legacy.tables.source_edits;
-  expect(() => database().product.import(legacy)).toThrow('Unsupported archive');
   store.editSource(s.id, { text: 'edited', expectedRevision: 0 });
   const bad: any = store.product.export();
   bad.tables.source_edits[0].revision = 3;
@@ -310,7 +317,7 @@ test('v2 archive rejects and invalid edit history rolls back', () => {
   expect(() => target.product.import(bad)).toThrow();
   expect(target.chats()).toHaveLength(0);
 });
-test('valid generated translation caches with zero further attempts; corruption repairs same slot', async () => {
+test('valid generated translation caches with zero further attempts; identity corruption creates a clean reservation', async () => {
   vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('Live forbidden'));
   const store = database();
   const s = source(store);
@@ -334,11 +341,14 @@ test('valid generated translation caches with zero further attempts; corruption 
   const count = store.product.attempts(s.chatId).length;
   expect(store.product.attempts(s.chatId)).toHaveLength(count);
   store.db
-    .prepare("UPDATE job_results SET result=json_set(result,'$.text','corrupt') WHERE job_id=?")
+    .prepare(
+      "UPDATE job_results SET result=json_set(result,'$.sourceHash','corrupt') WHERE job_id=?"
+    )
     .run(job.id);
   expect(store.detail(s.chatId).jobs.some((j) => j.id === job.id)).toBe(false);
   const repaired = store.requestTranslation(s.id);
-  expect(repaired.id).toBe(job.id);
+  expect(repaired.id).not.toBe(job.id);
+  expect(repaired.previousResult).toBeUndefined();
   expect(repaired.status).toBe('queued');
   expect(repaired.result).toBeNull();
 });
@@ -364,34 +374,9 @@ test('edited source exposes hidden slot CAS and rejects a stale translation edit
     expectedRevision: edited.translationRevision!,
     expectedSourceHash: edited.hash,
   });
-  expect(saved.id).toBe(old.id);
+  expect(saved.id).not.toBe(old.id);
   expect(store.requestTranslation(s.id).result?.text).toBe('Current');
 });
-test('legacy M0 translation remains cached and malformed manual archives are rejected', () => {
-  const store = database();
-  const s = source(store);
-  const job = store.requestTranslation(s.id);
-  const active = store.claimJob(job.id, 'legacy', {})!;
-  store.completeJob(job.id, active.generation, 'legacy', {
-    mock: true,
-    sourceRevision: s.id,
-    sourceHash: s.hash,
-    text: 'Legacy text',
-  });
-  expect(store.requestTranslation(s.id).status).toBe('completed');
-  const manual = store.editTranslation(s.id, {
-    text: 'Manual',
-    expectedRevision: job.revision!,
-    expectedSourceHash: s.hash,
-  });
-  const archive: any = store.product.export();
-  const row = archive.tables.job_results.find((r: any) => r.job_id === manual.id);
-  const result = JSON.parse(row.result);
-  result.segments[0].anchors.reverse();
-  row.result = JSON.stringify(result);
-  expect(() => database().product.import(archive)).toThrow();
-});
-
 test('unsupported v2 database refuses startup without rewriting translation reservations', () => {
   const store = database();
   const s = source(store);

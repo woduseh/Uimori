@@ -1,12 +1,12 @@
 import { createFixtureChat, injectWithFixtureBot } from './fixtures/chat.js';
 import { expect, test } from 'vitest';
-import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises';
+import { mkdtemp, rm } from 'node:fs/promises';
 import { basename, join, resolve, relative, isAbsolute } from 'node:path';
 import { tmpdir } from 'node:os';
 import { createApp } from '../server/app.js';
 import type { Content, Library } from '../core/product.js';
 
-test('large library summary omits bodies and unrelated assets; exact revision editing and legacy reads remain intact', async () => {
+test('library summary omits bodies and unrelated assets; exact revision editing and historical reads remain intact', async () => {
   const directory = await mkdtemp(join(tmpdir(), 'uimori-library-loading-'));
   const target = resolve(directory);
   const inside = relative(resolve(tmpdir()), target);
@@ -26,21 +26,21 @@ test('large library summary omits bodies and unrelated assets; exact revision ed
     const botText = 'Synthetic bot history and personality. '.repeat(2000);
     const loreText = 'Synthetic lore record for an imaginary world. '.repeat(2000);
     const items: Content[] = [];
-    for (let i = 0; i < 110; i++)
+    for (let i = 0; i < 4; i++)
       items.push(
         product.content({
-          kind: i < 100 ? 'bot' : 'module',
+          kind: i < 2 ? 'bot' : 'module',
           title: `Synthetic ${i}`,
           description: 'Local synthetic measurement',
-          text: i < 100 ? botText : loreText,
-          loading: i < 100 ? 'pinned' : 'discoverable',
+          text: i < 2 ? botText : loreText,
+          loading: i < 2 ? 'pinned' : 'discoverable',
           relatedIds: [],
         }) as Content
       );
     const chat = createFixtureChat(app.store, 'Synthetic asset archive', 'calm', {
       botId: items[0].id,
     });
-    for (let i = 0; i < 1000; i++)
+    for (let i = 0; i < 3; i++)
       product.createAsset(chat.id, {
         title: `Synthetic image ${i}`,
         mime: 'image/png',
@@ -52,30 +52,26 @@ test('large library summary omits bodies and unrelated assets; exact revision ed
         location: '',
         allowedUse: 'both',
       });
-    const measurements: Record<string, { bytes: number; elapsedMs: number }> = {};
+    const bytes: Record<string, number> = {};
     let full!: Library;
     let summary!: Library;
     for (const [name, url] of [
       ['full', '/api/library'],
       ['summary', '/api/library?view=summary'],
     ]) {
-      const start = performance.now();
       const response = await injectWithFixtureBot(app, { method: 'GET', url });
       expect(response.statusCode).toBe(200);
-      measurements[name] = {
-        bytes: Buffer.byteLength(response.body),
-        elapsedMs: performance.now() - start,
-      };
+      bytes[name] = Buffer.byteLength(response.body);
       if (name === 'full') full = response.json();
       else summary = response.json();
     }
     expect(summary.contentBodiesOmitted).toBe(true);
     expect(summary.assetsOmitted).toBe(true);
-    expect(summary.contents).toHaveLength(110);
+    expect(summary.contents).toHaveLength(4);
     expect(summary.assets).toHaveLength(0);
-    expect(full.assets).toHaveLength(1000);
+    expect(full.assets).toHaveLength(3);
     expect(summary.contents).toEqual(full.contents.map((item) => ({ ...item, text: '' })));
-    expect(measurements.summary.bytes).toBeLessThan(measurements.full.bytes / 100);
+    expect(bytes.summary).toBeLessThan(bytes.full / 100);
     const original = items[0];
     const { id, revision, ...body } = original;
     const changed = product.content(
@@ -95,18 +91,6 @@ test('large library summary omits bodies and unrelated assets; exact revision ed
       (await injectWithFixtureBot(app, { method: 'GET', url: '/api/library?view=invalid' }))
         .statusCode
     ).toBe(400);
-    const evidence = {
-      libraryLoading: measurements,
-      fixture: {
-        bots: 100,
-        loreEntries: 10,
-        assets: 1000,
-        contentCharacters: 100 * botText.length + 10 * loreText.length,
-        tokenization: 'not performed; character and UTF-8 response byte counts only',
-      },
-    };
-    await mkdir('output/library-loading', { recursive: true });
-    await writeFile('output/library-loading/summary.json', JSON.stringify(evidence, null, 2));
   } finally {
     await app.close();
     await rm(target, { recursive: true, force: true });

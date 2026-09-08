@@ -92,7 +92,7 @@ describe('safe prose rendering', () => {
   });
 });
 
-test('reader defaults to Korean, preserves source identity and many-to-one translation anchors without commands', () => {
+test('reader defaults to whole Korean translation without inferred anchors or commands', () => {
   const text = '# 실제 제목\n\n첫 번째 문단.\n\n두 번째 문단.';
   const source: Source = {
     editRevision: 0,
@@ -118,12 +118,7 @@ test('reader defaults to Korean, preserves source identity and many-to-one trans
       mock: true,
       sourceRevision: source.id,
       sourceHash: source.hash,
-      segments: [
-        {
-          anchors: source.blocks.map((block) => block.anchor),
-          text: '## 한국어 번역\n\n합쳐진 문단.',
-        },
-      ],
+      text: '## 한국어 번역\n\n합쳐진 문단.',
     },
   };
   let commands = 0;
@@ -144,9 +139,7 @@ test('reader defaults to Korean, preserves source identity and many-to-one trans
     })
   );
   expect(html).toContain('data-testid="translation-text"');
-  expect(html).toContain(
-    `data-block-anchor="${source.blocks.map((block) => block.anchor).join(' ')}"`
-  );
+  expect(html).not.toContain('data-block-anchor=');
   expect(html).toContain('<h2>한국어 번역</h2>');
   expect(html).toContain('요청 원문');
   expect(html).not.toContain('data-testid="job-translation"');

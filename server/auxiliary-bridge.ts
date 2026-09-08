@@ -1,4 +1,4 @@
-import { translationChunkChars } from '../core/translation-settings.js';
+import { translationPolicy, type TranslationPolicy } from '../core/translation-settings.js';
 import type { Store } from './store.js';
 import { type AssetEntry } from '../core/auxiliary.js';
 import type { AuxiliaryStoreBridge } from './product-auxiliary.js';
@@ -11,13 +11,6 @@ export function auxiliaryBridge(
   controls: Controls,
   signal: AbortSignal
 ): AuxiliaryStoreBridge {
-  const owns = (id: string, generation: number, owner: string) => {
-    if (!store.ownsJob(id, generation, owner)) throw new Error('Job ownership changed');
-    const job = store.job(id);
-    const source = store.source(job.sourceRevision);
-    if (source.hash !== job.sourceHash || source.chatId !== job.chatId)
-      throw new Error('SOURCE_DEPENDENCY_MISMATCH');
-  };
   return {
     load(id) {
       const job = store.job(id);
@@ -35,9 +28,6 @@ export function auxiliaryBridge(
         location: a.location,
         uses: a.allowedUse === 'both' ? ['profile', 'inline'] : [a.allowedUse],
       }));
-      const row = store.db.prepare('SELECT retry_chunk FROM jobs WHERE id=?').get(id) as {
-        retry_chunk: string | null;
-      };
       return {
         job,
         source,
@@ -46,40 +36,29 @@ export function auxiliaryBridge(
           ? { translationReferences: translationReferences(store, snapshot) }
           : {}),
         assets: job.kind === 'image' ? imageCatalog(job.input) : assets,
-        translationChunkChars: translationChunkChars(
-          job.input && typeof job.input === 'object'
-            ? (job.input as { translationChunkChars?: unknown }).translationChunkChars
-            : undefined
-        ),
-        plan: store.product.plan(id) ?? undefined,
-        chunks: store.product.chunks(id),
-        ...(row.retry_chunk ? { retryChunkIds: [row.retry_chunk] } : {}),
+        ...(job.kind === 'translation' &&
+        job.input &&
+        typeof job.input === 'object' &&
+        'translationPolicy' in job.input
+          ? {
+              translationPolicy: translationPolicy(
+                job.input.translationPolicy as TranslationPolicy
+              ),
+            }
+          : {}),
       };
     },
     async claim(id, owner, prepared) {
-      const job = store.claimJob(
-        id,
-        owner,
-        { initial: prepared.input, inputs: [], toolEvents: [] },
-        prepared.plan
-      );
+      const job = store.claimJob(id, owner, {
+        initial: prepared.input,
+        inputs: [],
+        toolEvents: [],
+      });
       if (!job) return null;
       await controls.wait(job.kind, signal);
       signal.throwIfAborted();
       controls.fail(job.kind);
       return job.generation;
-    },
-    beginChunk(id, chunk, generation, owner) {
-      owns(id, generation, owner);
-      store.product.chunk(id, chunk, 'running');
-    },
-    completeChunk(id, chunk, generation, owner, result) {
-      owns(id, generation, owner);
-      store.product.chunk(id, chunk, 'completed', undefined, result);
-    },
-    failChunk(id, chunk, generation, owner, code, status) {
-      if (store.ownsJob(id, generation, owner))
-        store.product.chunk(id, chunk, status, undefined, undefined, code);
     },
     finish(id, generation, owner, outcome) {
       store.finishAuxiliary(id, generation, owner, outcome, controls);

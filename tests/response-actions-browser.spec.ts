@@ -1,3 +1,4 @@
+import { reviewWidths, visualReview } from './fixtures/visual-review.js';
 import { expect, test, type APIRequestContext, type Locator, type Page } from '@playwright/test';
 import type { Chat, ChatDetail, Run } from '../core/types.js';
 import { postFixtureChat } from './fixtures/chat.js';
@@ -63,7 +64,7 @@ test('RACOM01 source footer stays compact and its menu supports touch, keyboard 
   const source = before.sources[0];
   const pageErrors: string[] = [];
   page.on('pageerror', (error) => pageErrors.push(error.message));
-  for (const width of [320, 360, 390, 412, 768, 1440]) {
+  for (const width of reviewWidths([320, 360, 390, 412, 768, 1440])) {
     await page.setViewportSize({ width, height: width >= 768 ? 1000 : 844 });
     await page.goto(`/?chat=${before.chat.id}`);
     const scene = page.locator(`[data-testid="source"][data-source-id="${source.id}"]`);
@@ -78,15 +79,17 @@ test('RACOM01 source footer stays compact and its menu supports touch, keyboard 
     const triggerBox = (await trigger.boundingBox())!;
     expect(triggerBox.width).toBeGreaterThanOrEqual(44);
     expect(triggerBox.height).toBeGreaterThanOrEqual(44);
-    expect((await footer.boundingBox())!.height).toBeLessThanOrEqual(52);
+    if (visualReview) expect((await footer.boundingBox())!.height).toBeLessThanOrEqual(52);
     await noHorizontalOverflow(page, scene);
-    await page.screenshot({ path: info.outputPath(`response-actions-${width}.png`) });
+    if (visualReview)
+      await page.screenshot({ path: info.outputPath(`response-actions-${width}.png`) });
 
     await trigger.focus();
     await trigger.press('Enter');
     await expect(menu).toHaveJSProperty('open', true);
     const actions = menu.locator('.action-menu-body');
     await expect(actions.getByRole('button')).toHaveText([
+      '현재 설정으로 다시 요청',
       '여기서 새 이야기로 이어가기',
       '원문 수정',
       '번역 수정',
@@ -99,7 +102,8 @@ test('RACOM01 source footer stays compact and its menu supports touch, keyboard 
     expect(menuBox.y).toBeGreaterThanOrEqual(0);
     expect(menuBox.y + menuBox.height).toBeLessThanOrEqual(openTriggerBox.y + 1);
     if (width === 390 || width === 1440)
-      await page.screenshot({ path: info.outputPath(`response-menu-${width}.png`) });
+      if (visualReview)
+        await page.screenshot({ path: info.outputPath(`response-menu-${width}.png`) });
     await page.keyboard.press('Tab');
     await expect(actions.getByRole('button').first()).toBeFocused();
     await page.keyboard.press('Escape');
@@ -183,7 +187,7 @@ test('TSKUI01 task overview screenshots wait for real run, job and attempt data 
     await expect(panel.getByRole('alert')).toHaveCount(0);
     await noHorizontalOverflow(page, dialog);
     await panel.locator('.panel-intro').scrollIntoViewIfNeeded();
-    await page.screenshot({ path: info.outputPath(`tasks-loaded-${width}.png`) });
+    if (visualReview) await page.screenshot({ path: info.outputPath(`tasks-loaded-${width}.png`) });
   }
   const after = await detail(request, before.chat.id);
   expect(after.runs).toEqual(before.runs);

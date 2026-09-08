@@ -39,6 +39,6 @@
 
 저장 원문·hash는 바꾸지 않아요. 모델 이력·조회·검색·요약·기억에는 같은 제외 범위와 파생 viewHash를 사용해요. 제외 대상인데 경계를 확인할 수 없는 손상은 빈 성공 결과로 통과시키지 않아요. 기억의 출처 범위와 원문시점 정책을 검증하며 구간 내용을 특정 인물이 안다고 추론하지 않아요. 패키지 설정 변경은 과거 Run의 정책을 바꾸지 않아요. 새 Run의 전송 범위는 현재 장착과 옵션으로 결정하므로 규칙을 해제하면 과거 원문의 해당 구간도 새 요청에 포함될 수 있어요. 이때 기존 요약은 변경된 범위와 viewHash 검증을 통과해야 재사용해요.
 
-번역은 원문시점 정책으로 마커와 대응 범위를 보호해요. 초상 참조는 그대로 유지하고 장면 설명은 번역할 수 있어요. 대응 구조가 손상되거나 source/hash가 맞지 않으면 정상 번역으로 표시하지 않아요. 구간 마커가 있는 본문에는 경계를 지울 수 있는 정규식 표시 변환을 적용하지 않아요. 보관 복원은 현재 Run과 과거 이력 항목의 정책을 각각 원래 snapshot과 대조하고, 포크는 source/run ID와 hash 관계를 함께 연결해요.
+번역은 전체 원문을 일반 텍스트로 번역하며 구간 마커·초상 참조·대응 범위의 보존을 성공 조건으로 검사하지 않아요. Reader는 번역문 전체를 표시하고 번역문 안에 원문의 구간·이미지 위치를 추정하지 않아요. source/hash 귀속은 계속 검사해요. 원문 보기의 구간 정책과 읽기 권한은 유지하며, 보관 복원은 현재 Run과 과거 이력 항목의 정책을 각각 원래 snapshot과 대조하고 포크는 source/run ID와 hash 관계를 함께 연결해요.
 
 구현은 `core/source-segments.ts`, `core/package-source-segments.ts`, `core/source-context.ts`, `web/SourceSegmentsReader.tsx`와 `server/snapshot-archive.ts`에 있어요. 합성 회귀는 `tests/source-segments.test.ts`, `tests/source-context.test.ts`, `tests/source-segments-integration.test.ts` 및 구간 Reader·브라우저 검사예요. 구형 전용 패키지의 자동 변환이나 실제 작품 의미 품질을 보장하지 않아요.

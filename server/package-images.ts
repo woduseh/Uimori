@@ -199,7 +199,10 @@ export function readerImageAssets(store: Store, chatId: string, sourceIds?: stri
 }
 /** A selected chat asset is already in the base list; keep one exact version. */
 export function mergedReaderAssets(store: Store, chatId: string, sourceIds?: string[]): Asset[] {
-  const assets = [...store.product.assets(chatId), ...readerImageAssets(store, chatId, sourceIds)];
+  const assets = [
+    ...store.product.assets(chatId, true),
+    ...readerImageAssets(store, chatId, sourceIds),
+  ];
   const unique = new Map<string, Asset>();
   for (const asset of assets) {
     const key = JSON.stringify([asset.id, asset.revision, asset.hash]);

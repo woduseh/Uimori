@@ -1,7 +1,7 @@
 import type { Store } from './store.js';
 import type { RunSnapshot } from '../core/types.js';
 import type { TranslationReference } from '../core/translation-context.js';
-import { latestTranslation, validateTranslationArtifact } from './source-editing.js';
+import { successfulTranslation, validateTranslationArtifact } from './source-editing.js';
 import { memoryHash } from '../core/memory.js';
 
 /** Only completed, currently valid wording for the exact frozen ancestry/hash is eligible. */
@@ -15,7 +15,7 @@ export function translationReferences(store: Store, snapshot: RunSnapshot): Tran
         source.hash !== (item.contentHash ?? memoryHash(item.text))
       )
         continue;
-      const job = latestTranslation(store, source.id);
+      const job = successfulTranslation(store, source);
       if (!job || job.status !== 'completed' || job.chatId !== snapshot.chatId) continue;
       validateTranslationArtifact(store, job, source);
       references.push({

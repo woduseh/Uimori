@@ -191,7 +191,7 @@ test('before advisors run in order with scoped reads, selected models and explic
   expect(result.source).toEqual({
     chatId: state.chat.id,
     parentRevision: null,
-    prompt: { id: state.prompt.id, revision: state.prompt.revision },
+    prompt: run.snapshot.profile!.prompts!.main,
   });
   const detail = await state.detail();
   expect(detail.sources).toHaveLength(1);
@@ -398,12 +398,17 @@ test('advisor recursive consult, state writes, final submission and ungranted re
       async (body, target, _number, wire) => {
         if (wire.agentId) {
           advisorRequests++;
-          expect(advisorRequests).toBe(1);
+          expect(advisorRequests).toBeLessThanOrEqual(forbidden === 'foreign-resource' ? 2 : 1);
           expect(JSON.stringify(body)).not.toContain(state.foreign.text);
           expect(body.tools).toHaveLength(2);
           if (forbidden === 'foreign-resource')
             await send(target, [
-              call(body, 'knowledge.read', { id: state.foreign.id }, 'excluded-read'),
+              call(
+                body,
+                'knowledge.read',
+                { id: state.foreign.id },
+                `excluded-read-${advisorRequests}`
+              ),
             ]);
           else {
             const args: Json =
@@ -425,14 +430,14 @@ test('advisor recursive consult, state writes, final submission and ungranted re
     );
     const run = await settled(state, (await state.start()).id);
     expect(run.status, forbidden).toBe('completed');
-    expect(advisorRequests).toBe(1);
-    expect(state.provider.requests).toHaveLength(2);
+    expect(advisorRequests).toBe(forbidden === 'foreign-resource' ? 2 : 1);
+    expect(state.provider.requests).toHaveLength(forbidden === 'foreign-resource' ? 3 : 2);
     expect(consults(run)[0].result.status).toBe('unavailable');
     const reads = run.toolEvents.filter((event) => event.name === 'agents.read');
     if (forbidden === 'foreign-resource') {
-      expect(reads).toHaveLength(1);
+      expect(reads).toHaveLength(2);
       expect(reads[0]).toMatchObject({ denied: true, result: { code: 'RESOURCE_UNAVAILABLE' } });
-      expect(consults(run)[0].result.error).toBe('ADVISOR_READ_DENIED');
+      expect(consults(run)[0].result.error).toBe('ADVISOR_TOOL_CORRECTION_EXHAUSTED');
     } else expect(reads).toEqual([]);
     expect(
       run.toolEvents.some((event) => /^(state\.|behavior_|story\.submit)/u.test(event.name))
@@ -610,6 +615,16 @@ test('model and prompt changes after reservation cannot replace frozen advisor c
     { title: state.prompt.title, role: 'main', program, expectedRevision: state.prompt.revision },
     'PUT'
   );
+  const current = await api<import('../core/product.js').PromptWorkspace>(
+    state.app,
+    '/api/prompt-workspace'
+  );
+  await api(
+    state.app,
+    '/api/prompt-workspace',
+    { expectedRevision: current.revision, main: { ...current.main, program } },
+    'PUT'
+  );
   expect(updatedModel.revision).toBeGreaterThan(state.advisorModel.revision);
   gate.release();
   const run = await settled(state, started.id);
@@ -621,10 +636,7 @@ test('model and prompt changes after reservation cannot replace frozen advisor c
     modelId: state.advisorModel.modelId,
     maxOutputTokens: 1024,
   });
-  expect(consults(run)[0].result.source.prompt).toEqual({
-    id: state.prompt.id,
-    revision: state.prompt.revision,
-  });
+  expect(consults(run)[0].result.source.prompt).toEqual(before.profile!.prompts!.main);
   expect(state.provider.requests).toHaveLength(3);
 });
 
@@ -676,4 +688,33 @@ test('current advisor connection authorization is checked again between read rou
   expect((await state.detail()).sources.map((source) => source.text)).toEqual([
     'Main completes with its separately enabled connection.',
   ]);
+});
+
+test('advisor can correct invalid search arguments while only successful reads become evidence', async () => {
+  let advisorRequests = 0;
+  const state = await fixture(
+    async (body, target, _number, wire) => {
+      if (!wire.agentId) {
+        expect(outputs(body)[0]).toMatchObject({ status: 'completed' });
+        await send(target, [message('Final scene after corrected advice.')]);
+        return;
+      }
+      advisorRequests++;
+      if (advisorRequests === 1)
+        await send(target, [call(body, 'knowledge.search', { limit: 101 }, 'invalid-search')]);
+      else if (advisorRequests === 2) {
+        expect(outputs(body)[0]).toMatchObject({ code: 'INVALID_ARGUMENTS' });
+        await send(target, [call(body, 'knowledge.read', { id: state.lore.id }, 'corrected-read')]);
+      } else {
+        expect(outputs(body).at(-1)).toMatchObject({ text: state.lore.text });
+        await send(target, [message('Advice based on the permitted reference.')]);
+      }
+    },
+    { collaboration: collaboration({ agents: [agent('advisor', { trigger: 'before' })] }) }
+  );
+  const run = await settled(state, (await state.start()).id);
+  expect(run.status).toBe('completed');
+  expect(advisorRequests).toBe(3);
+  const reads = run.toolEvents.filter((event) => event.name === 'agents.read');
+  expect(reads.map((event) => event.denied)).toEqual([true, false]);
 });

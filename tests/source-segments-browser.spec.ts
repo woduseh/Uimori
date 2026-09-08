@@ -1,3 +1,4 @@
+import { visualReview } from './fixtures/visual-review.js';
 import { editLibraryContent, selectPackageSection } from './ui-navigation.js';
 import { test, expect, type APIRequestContext, type Page } from '@playwright/test';
 import { createHash, randomUUID } from 'node:crypto';
@@ -84,10 +85,12 @@ test('SEGMENTUI01 package-defined source reader expands without writes and displ
   await expect(hidden.first().locator('dl')).toContainText('Tower');
   await expect(reader).toContainText('등장인물에게 정보가 전달되지는');
   await fits(page);
-  await page.screenshot({ path: info.outputPath('source-segments-reader-mobile.png') });
+  if (visualReview)
+    await page.screenshot({ path: info.outputPath('source-segments-reader-mobile.png') });
   await page.setViewportSize({ width: 1440, height: 1000 });
   await fits(page);
-  await page.screenshot({ path: info.outputPath('source-segments-reader-desktop.png') });
+  if (visualReview)
+    await page.screenshot({ path: info.outputPath('source-segments-reader-desktop.png') });
   await hidden.first().locator('summary').click();
   const after = await detail(request, c.id);
   expect(after.sources).toEqual(before.sources);
@@ -115,9 +118,6 @@ test('SEGMENTUI01 package-defined source reader expands without writes and displ
     mock: true,
     text,
   });
-  expect(translatedJob.result!.segments!.flatMap((segment) => segment.anchors)).toEqual(
-    before.sources[0].blocks!.map((block) => block.anchor)
-  );
   await expect(page.getByRole('button', { name: '번역 보기', exact: true })).toHaveAttribute(
     'aria-pressed',
     'true'
@@ -126,23 +126,21 @@ test('SEGMENTUI01 package-defined source reader expands without writes and displ
     'aria-pressed',
     'false'
   );
-  // Segment-aware mock translation echoes source text so marker placement survives. Check
-  // the validated translation slot, not a prefix that would corrupt its delimiters.
+  // Whole-source translations display independently from original segment syntax.
   await expect(page.getByTestId('source-text')).toHaveCount(0);
   const translatedBody = page.getByTestId('translation-text');
   await expect(translatedBody).toBeVisible();
-  const translatedReader = translatedBody.locator('.source-segments-reader');
-  await expect(translatedReader.locator('details.source-aside-segment')).toHaveCount(2);
-  await translatedReader.locator('details.source-aside-segment').first().locator('summary').click();
-  await expect(translatedReader).toContainText('Mira recalls a blue bell.');
+  await expect(translatedBody.locator('.source-segments-reader')).toHaveCount(0);
+  await expect(translatedBody).toContainText('Mira recalls a blue bell.');
   for (const [name, width, height] of [
     ['desktop', 1440, 1000],
     ['mobile', 390, 844],
   ] as const) {
     await page.setViewportSize({ width, height });
-    await translatedReader.evaluate((el) => el.scrollIntoView({ block: 'start' }));
+    await translatedBody.evaluate((el) => el.scrollIntoView({ block: 'start' }));
     await fits(page);
-    await page.screenshot({ path: info.outputPath(`source-segments-translation-${name}.png`) });
+    if (visualReview)
+      await page.screenshot({ path: info.outputPath(`source-segments-translation-${name}.png`) });
   }
   const translated = await detail(request, c.id);
   expect(translatedJob.revision).toBe((before.sources[0].translationRevision ?? 0) + 1);
@@ -171,6 +169,26 @@ test('SEGMENTUI01 package-defined source reader expands without writes and displ
   expect(translated.sources).toEqual(translatedBaseline.sources);
   expect(translated.jobs).toEqual(translatedBaseline.jobs);
   expect(translated.attempts).toEqual(translatedBaseline.attempts);
+  const changedMarkers = text
+    .replaceAll('@hsTitle:', 'Translated aside:')
+    .replaceAll('@hs', 'End aside.');
+  const manual = await request.put(`/api/sources/${source.id}/translation`, {
+    data: {
+      text: changedMarkers,
+      expectedRevision: translatedJob.revision,
+      expectedSourceHash: before.sources[0].hash,
+    },
+  });
+  expect(manual.ok(), await manual.text()).toBe(true);
+  await expect(translatedBody).toContainText('Translated aside:');
+  await expect(page.getByTestId('source-text')).toHaveCount(0);
+  await expect(translatedBody.locator('.source-segments-reader')).toHaveCount(0);
+  await expect(page.getByText('번역의 구간 경계를 확인할 수 없어', { exact: false })).toHaveCount(
+    0
+  );
+  const manuallyTranslated = await detail(request, c.id);
+  expect(manuallyTranslated.attempts).toEqual(translatedBaseline.attempts);
+  expect(manuallyTranslated.sources[0].text).toBe(text);
 });
 
 test('SEGMENTUI02 current modules preserve unapplied segment drafts and existing Run snapshots', async ({
@@ -269,5 +287,8 @@ test('SEGMENTUI02 current modules preserve unapplied segment drafts and existing
   await page.setViewportSize({ width: 390, height: 844 });
   await name.scrollIntoViewIfNeeded();
   await fits(page);
-  await page.screenshot({ path: info.outputPath('source-segments-draft-preservation-mobile.png') });
+  if (visualReview)
+    await page.screenshot({
+      path: info.outputPath('source-segments-draft-preservation-mobile.png'),
+    });
 });

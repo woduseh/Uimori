@@ -8,11 +8,8 @@ import { forkChat } from '../server/chat-fork.js';
 import { parseSourceSegments } from '../core/source-segments.js';
 import { createSourceSegmentFixture } from './fixtures/source-segments.js';
 import { fixtureBotInput, createFixtureChat } from './fixtures/chat.js';
-import {
-  createTranslationPlan,
-  validateTranslationChunk,
-  aggregateTranslation,
-} from '../core/auxiliary.js';
+import { translationInput } from '../core/auxiliary.js';
+import { promptWorkspace, updatePromptWorkspace } from '../server/prompt-workspace.js';
 import { sourceTimeContext } from '../server/product-auxiliary.js';
 import { validateTranslationArtifact } from '../server/source-editing.js';
 import { buildMainInput } from '../core/provider.js';
@@ -78,7 +75,10 @@ function fixture(memory = true) {
     personaReference: prior.personaReference,
     routes: prior.routes,
     image: false,
-    prompts: { main: { id: preset.id, revision: preset.revision } },
+  });
+  updatePromptWorkspace(store, {
+    expectedRevision: promptWorkspace(store).revision,
+    main: { title: preset.title, program: preset.program, values: {} },
   });
   const state = store.story.configForBranch(chat.id, branchId);
   store.story.saveConfig(chat.id, {
@@ -159,28 +159,14 @@ function remember(
 function translate(f: ReturnType<typeof fixture>, s: ReturnType<typeof source>) {
   const job = f.store.requestTranslation(s.id);
   const snapshot = f.store.product.resolveJobPrompt(f.store.run(s.runId).snapshot, job.input);
-  const plan = createTranslationPlan(s, sourceTimeContext(snapshot, 'translation'));
-  const claim = f.store.claimJob(job.id, 'synthetic-translation', {}, plan)!;
-  const results = plan.chunks.map((chunk) =>
-    validateTranslationChunk(plan, chunk.id, {
-      sourceRevision: s.id,
-      sourceHash: s.hash,
-      chunkId: chunk.id,
-      segments: chunk.blocks.map((block) => ({ anchors: [block.anchor], text: block.text })),
-    })
-  );
-  for (const result of results)
-    f.store.product.chunk(job.id, result.chunkId, 'completed', {}, result);
-  const aggregate = aggregateTranslation(plan, results);
+  const initial = translationInput(s, sourceTimeContext(snapshot, 'translation'), snapshot);
+  const claim = f.store.claimJob(job.id, 'synthetic-translation', { initial })!;
   expect(
     f.store.completeJob(job.id, claim.generation, 'synthetic-translation', {
       mock: true,
       sourceRevision: s.id,
       sourceHash: s.hash,
-      segments: aggregate.segments,
-      text: aggregate.segments.map((s) => s.text).join('\n\n'),
-      completedChunks: aggregate.completedChunks,
-      totalChunks: aggregate.totalChunks,
+      text: initial.sourceText,
     })
   ).toBe(true);
   validateTranslationArtifact(f.store, f.store.job(job.id), s);
@@ -250,10 +236,17 @@ describe('Source segment memory, translation and fork provenance (synthetic only
     const copiedSource = f.store.source(fork.headRevision!);
     const copied = f.store.detail(fork.id).jobs.find((j) => j.kind === 'translation')!;
     expect(copied.result!.text).toBe(original.result!.text);
-    const plan = f.store.product.plan(copied.id);
-    expect(plan.context.segmentKnowledge.sourceRevision).toBe(copiedSource.id);
-    expect(plan.context.segmentKnowledge.sourceHash).toBe(s.hash);
-    expect(plan.context.segmentKnowledge.segments.map((x: any) => x.range)).toEqual(
+    const snapshot = f.store.product.resolveJobPrompt(
+      f.store.run(copiedSource.runId).snapshot,
+      copied.input
+    );
+    const input = {
+      initial: translationInput(copiedSource, sourceTimeContext(snapshot, 'translation'), snapshot),
+    };
+    expect(copied.result).toMatchObject({ sourceRevision: copiedSource.id, sourceHash: s.hash });
+    expect(input.initial.context.segmentKnowledge!.sourceRevision).toBe(copiedSource.id);
+    expect(input.initial.context.segmentKnowledge!.sourceHash).toBe(s.hash);
+    expect(input.initial.context.segmentKnowledge!.segments.map((x: any) => x.range)).toEqual(
       parseSourceSegments(
         {
           sourceRevision: copiedSource.id,

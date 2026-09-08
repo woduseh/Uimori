@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import type { ChatProfile, Library, ModelRef, TaskRole } from '../core/product.js';
 import { api } from './api.js';
-import { PromptEditor } from './PromptEditor.js';
+import { PromptWorkspaceEditor } from './PromptWorkspaceEditor.js';
 import { useModelSelection } from './model-selection.js';
 import { PackageAttachments } from './PackageAttachments.js';
 import { LoreContextPolicyEditor } from './LoreContextPolicyEditor.js';
@@ -112,8 +112,6 @@ export function ProfileEditor({
     personaReference: next.personaReference,
     routes: next.routes,
     image: next.image,
-    ...(next.prompts ? { prompts: next.prompts } : {}),
-    ...(next.promptControls ? { promptControls: next.promptControls } : {}),
     ...(next.packageAttachments ? { packageAttachments: next.packageAttachments } : {}),
     ...(next.packageValues ? { packageValues: next.packageValues } : {}),
     ...(next.loreContext ? { loreContext: next.loreContext } : {}),
@@ -211,44 +209,13 @@ export function ProfileEditor({
               />
             </div>
             <div hidden={tab !== 'prompts'}>
-              <PromptEditor
-                chatId={profile.chatId}
-                branchId={branchId}
-                promptControls={value.promptControls}
-                onSaveControls={async (reference, state) => {
-                  const ok = await save(
-                    () =>
-                      api<ChatProfile>(
-                        `/chats/${profile.chatId}/profile`,
-                        profileBody({
-                          ...value,
-                          promptControls: {
-                            ...value.promptControls,
-                            [`${reference.id}@${reference.revision}`]: state,
-                          },
-                        }),
-                        'PUT'
-                      ),
-                    '선택값과 조합을 이 채팅에 저장했어요.'
-                  );
-                  if (!ok) throw new Error('선택값 저장에 실패했어요.');
-                }}
+              <PromptWorkspaceEditor
                 library={library}
                 reload={onLibraryChanged}
                 onError={onError}
-                selections={value.prompts}
                 onDirtyChange={setPromptDirty}
-                onApply={(role, reference) =>
-                  save(
-                    () =>
-                      api<ChatProfile>(
-                        `/chats/${profile.chatId}/profile`,
-                        profileBody({ ...value, prompts: { ...value.prompts, [role]: reference } }),
-                        'PUT'
-                      ),
-                    '프롬프트 선택을 이야기에 적용했어요.'
-                  )
-                }
+                chatId={profile.chatId}
+                branchId={branchId}
               />
             </div>
             <div hidden={tab !== 'models'}>

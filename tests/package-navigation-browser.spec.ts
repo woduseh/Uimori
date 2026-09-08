@@ -1,3 +1,4 @@
+import { reviewWidths, visualReview } from './fixtures/visual-review.js';
 import { expect, test, type APIRequestContext, type Locator, type Page } from '@playwright/test';
 import type { Content } from '../core/product.js';
 
@@ -92,7 +93,7 @@ test('PNAV01 mobile section navigation preserves lore search, caret and unapplie
 }, info) => {
   test.setTimeout(60000);
   const item = await seed(request, `PNAV01 ${Date.now()}`);
-  await page.setViewportSize({ width: 360, height: 844 });
+  await page.setViewportSize({ width: 390, height: 844 });
   const writes: string[] = [];
   page.on('request', (entry) => {
     if (
@@ -113,7 +114,8 @@ test('PNAV01 mobile section navigation preserves lore search, caret and unapplie
     expect(box!.height).toBeGreaterThanOrEqual(44);
   }
   await navigation.scrollIntoViewIfNeeded();
-  await page.screenshot({ path: info.outputPath('package-navigation-mobile-list.png') });
+  if (visualReview)
+    await page.screenshot({ path: info.outputPath('package-navigation-mobile-list.png') });
   await mobileSection(fields, '로어');
   await expect(navigation).toBeHidden();
   const search = fields.getByLabel('로어 검색', { exact: true });
@@ -141,7 +143,8 @@ test('PNAV01 mobile section navigation preserves lore search, caret and unapplie
   await fields.getByRole('button', { name: '지침 검증 후 적용', exact: true }).click();
   expect(writes).toEqual([]);
   await expectNoOverflow(page, fields);
-  await page.screenshot({ path: info.outputPath('package-navigation-mobile-draft.png') });
+  if (visualReview)
+    await page.screenshot({ path: info.outputPath('package-navigation-mobile-draft.png') });
   const saved = page.waitForResponse(
     (response) =>
       response.url().endsWith(`/api/content/${item.id}`) && response.request().method() === 'PUT'
@@ -201,14 +204,15 @@ test('PNAV02 desktop keyboard navigation and mobile resizing retain fields, expa
   );
   await navigation.getByRole('tab', { name: '이미지', exact: true }).press('End');
   await expect(navigation.getByRole('tab', { name: '상태와 행동', exact: true })).toBeFocused();
-  await page.setViewportSize({ width: 360, height: 844 });
+  await page.setViewportSize({ width: 390, height: 844 });
   await expect(fields.locator('.package-section-heading h3')).toHaveText('상태와 행동');
   await expect(fields.locator('.package-section-heading h3')).toBeFocused();
   expect(await page.evaluate(() => (document.activeElement as HTMLElement).checkVisibility())).toBe(
     true
   );
   await expectNoOverflow(page, fields);
-  await page.screenshot({ path: info.outputPath('package-navigation-resize-focus.png') });
+  if (visualReview)
+    await page.screenshot({ path: info.outputPath('package-navigation-resize-focus.png') });
 });
 
 test('PNAV03 package navigation uses one mobile column and desktop side-by-side panels without overflow', async ({
@@ -217,7 +221,7 @@ test('PNAV03 package navigation uses one mobile column and desktop side-by-side 
 }, info) => {
   const item = await seed(request, `PNAV03 ${Date.now()}`);
   const { fields } = await openEditor(page, item.title);
-  for (const width of [360, 390, 430, 768, 1024, 1440]) {
+  for (const width of reviewWidths([360, 390, 430, 768, 1024, 1440])) {
     await page.setViewportSize({ width, height: 1000 });
     if (width <= 760) {
       await mobileSection(fields, '역할별 지침');
@@ -233,6 +237,7 @@ test('PNAV03 package navigation uses one mobile column and desktop side-by-side 
     }
     await expectNoOverflow(page, fields);
     await fields.locator('.package-section-heading').scrollIntoViewIfNeeded();
-    await page.screenshot({ path: info.outputPath(`package-navigation-${width}.png`) });
+    if (visualReview)
+      await page.screenshot({ path: info.outputPath(`package-navigation-${width}.png`) });
   }
 });

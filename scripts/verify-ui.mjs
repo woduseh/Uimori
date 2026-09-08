@@ -12,6 +12,7 @@ import {
   requireCommand,
   assertBuild,
   fingerprint,
+  buildFingerprint,
   startServer,
   killOwned,
   readReport,
@@ -31,7 +32,7 @@ const requiredProseTitles = [
   'keeps fenced code, protected placeholders, template syntax and machine identifiers literal',
   'rejects unsafe and ambiguous URL schemes without accepting control-character obfuscation',
   'renders a long source without interpreting unsupported syntax as HTML',
-  'reader defaults to Korean, preserves source identity and many-to-one translation anchors without commands',
+  'reader defaults to whole Korean translation without inferred anchors or commands',
 ];
 const hasCase = (title, id) => new RegExp(`\\b${id}\\b`).test(title);
 
@@ -142,7 +143,8 @@ async function main() {
     summary.identity = await assertBuild();
     // The fingerprint includes this runner and all test/config inputs.
     const initialFingerprint = await fingerprint();
-    if (initialFingerprint.hash !== summary.identity.sourceHash)
+    summary.verificationIdentity = initialFingerprint;
+    if ((await buildFingerprint()).hash !== summary.identity.sourceHash)
       throw new Error('Source changed while checking the initial build identity');
     summary.expectedEvidence = {
       proseTitles: requiredProseTitles,

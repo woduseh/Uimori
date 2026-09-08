@@ -213,15 +213,10 @@ test('app routes every agent role through Codex and persists RPC attempts, propo
         };
       else if (request.role === 'memory') output = { entries: [] };
       else if (request.role === 'translation')
-        output = {
-          sourceRevision: source.sourceRevision,
-          sourceHash: source.sourceHash,
-          chunkId: source.chunkId,
-          segments: source.blocks.map((block: any) => ({
-            anchors: [block.anchor],
-            text: block.text,
-          })),
-        };
+        output =
+          request.input.controls.purpose === 'translation-refusal'
+            ? { verdict: 'accepted' }
+            : source.text;
       else
         output = {
           sourceRevision: source.sourceRevision,
@@ -272,6 +267,16 @@ test('app routes every agent role through Codex and persists RPC attempts, propo
     maxOutputTokens: 1024,
     temperature: null,
   });
+  const workspace = await api(app, '/api/prompt-workspace');
+  await api(
+    app,
+    '/api/prompt-workspace',
+    {
+      expectedRevision: workspace.revision,
+      translationPolicy: { refusalModel: ref(model), maxRetries: 1, maxCalls: 16 },
+    },
+    'PUT'
+  );
   const initial = await api(app, '/api/chats', { title: 'Synthetic Codex story' });
   const chat = await api(
     app,
@@ -336,7 +341,13 @@ test('app routes every agent role through Codex and persists RPC attempts, propo
         app.store.product.attempts(chat.id).filter((attempt) => attempt.status === 'running').length
     )
     .toBe(0);
-  expect(app.store.product.attempts(chat.id)).toHaveLength(6);
+  expect(app.store.product.attempts(chat.id)).toHaveLength(7);
+  const classifierCalls = calls.filter(
+    (call) => call.input.controls.purpose === 'translation-refusal'
+  );
+  expect(classifierCalls).toHaveLength(1);
+  expect(classifierCalls[0].stable.tools).toEqual([]);
+  expect(classifierCalls[0].input.source).toEqual({ prefix: 'The keeper opened the gate.' });
   for (const attempt of app.store.product.attempts(chat.id)) {
     expect(attempt.request).toMatchObject({
       method: 'RPC',

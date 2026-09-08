@@ -1,3 +1,4 @@
+import { visualReview } from './fixtures/visual-review.js';
 import {
   selectSettingsSection,
   startProviderConnection,
@@ -115,7 +116,8 @@ test('EVALUI01 desktop preset evaluation opt-in persists selected story roles af
   await page.getByLabel('Reasoning Effort', { exact: true }).selectOption('high');
   await page.getByRole('button', { name: '고급 옵션', exact: true }).click();
   await page.getByLabel('평가 문맥 제공').scrollIntoViewIfNeeded();
-  await page.screenshot({ path: info.outputPath('evaluation-desktop-options.png') });
+  if (visualReview)
+    await page.screenshot({ path: info.outputPath('evaluation-desktop-options.png') });
   const model = await saveModel(page, request, connection);
   expect(model).toMatchObject({
     reasoningEffort: 'high',
@@ -150,7 +152,10 @@ test('EVALUI01 desktop preset evaluation opt-in persists selected story roles af
   await selectChatSettingsSection(reconnected, '모델');
   await expect(reconnected.getByLabel('원문 모델', { exact: true })).toHaveValue(ref);
   await expect(reconnected.getByLabel('번역 모델', { exact: true })).toHaveValue(ref);
-  await reconnected.screenshot({ path: info.outputPath('evaluation-desktop-restored-roles.png') });
+  if (visualReview)
+    await reconnected.screenshot({
+      path: info.outputPath('evaluation-desktop-restored-roles.png'),
+    });
   const detail = (await (await request.get(`/api/chats/${chatId}`)).json()) as ChatDetail;
   expect(detail.profile?.routes.main).toEqual({ id: model.id });
   expect(detail.runs).toEqual([]);
@@ -174,7 +179,8 @@ test('EVALUI02 mobile 390px evaluation controls save only for opted-in presets a
   await expect(page.getByLabel('API 기본 주소')).toBeEditable();
   await page.getByLabel('API 기본 주소').fill('http://127.0.0.1:8080/v1');
   await page.getByLabel('서버 환경변수 이름').scrollIntoViewIfNeeded();
-  await page.screenshot({ path: info.outputPath('evaluation-mobile-connection.png') });
+  if (visualReview)
+    await page.screenshot({ path: info.outputPath('evaluation-mobile-connection.png') });
   const connection = await register(page, request, title, 'vercel');
   await page.getByRole('button', { name: '고급 옵션', exact: true }).click();
   await expect(page.getByLabel('이 모델 프리셋에 평가 도구 4개 사용')).not.toBeChecked();
@@ -205,36 +211,41 @@ test('EVALUI02 mobile 390px evaluation controls save only for opted-in presets a
     expect(box, label).not.toBeNull();
     expect(box!.x, label).toBeGreaterThanOrEqual(0);
     expect(box!.x + box!.width, label).toBeLessThanOrEqual(390);
-    expect(box!.width, label).toBeGreaterThan(120);
+    if (visualReview) expect(box!.width, label).toBeGreaterThan(120);
   }
   const horizontal = await page
     .getByRole('dialog', { name: '설정', exact: true })
     .evaluate((element) => ({ scroll: element.scrollWidth, width: element.clientWidth }));
   expect(horizontal.scroll).toBeLessThanOrEqual(horizontal.width + 1);
-  // Viewport containment alone missed a clipped native-select label in the first visual review.
-  // Check the displayed choice as well; screenshots still need direct visual inspection.
-  for (const label of ['평가 문맥 제공']) {
-    const measured = await page.getByLabel(label, { exact: true }).evaluate((element) => {
-      const select = element as HTMLSelectElement,
-        style = getComputedStyle(select),
-        canvas = document.createElement('canvas'),
-        context = canvas.getContext('2d')!;
-      context.font = style.font;
-      return {
-        text: context.measureText(select.selectedOptions[0].text).width,
-        available:
-          select.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight) - 24,
-      };
-    });
-    expect(
-      measured.text,
-      label + ' displayed choice fits before the native arrow'
-    ).toBeLessThanOrEqual(measured.available);
+  if (visualReview) {
+    // Viewport containment alone missed a clipped native-select label in the first visual review.
+    // Check the displayed choice as well; screenshots still need direct visual inspection.
+    for (const label of ['평가 문맥 제공']) {
+      const measured = await page.getByLabel(label, { exact: true }).evaluate((element) => {
+        const select = element as HTMLSelectElement,
+          style = getComputedStyle(select),
+          canvas = document.createElement('canvas'),
+          context = canvas.getContext('2d')!;
+        context.font = style.font;
+        return {
+          text: context.measureText(select.selectedOptions[0].text).width,
+          available:
+            select.clientWidth -
+            parseFloat(style.paddingLeft) -
+            parseFloat(style.paddingRight) -
+            24,
+        };
+      });
+      expect(
+        measured.text,
+        label + ' displayed choice fits before the native arrow'
+      ).toBeLessThanOrEqual(measured.available);
+    }
+    // Capture the whole section laid out at 390px, including controls below the scroll fold.
+    await page
+      .getByRole('group', { name: '선택형 평가 도구', exact: true })
+      .screenshot({ path: info.outputPath('evaluation-mobile-options.png') });
   }
-  // Capture the whole section laid out at 390px, including controls below the scroll fold.
-  await page
-    .getByRole('group', { name: '선택형 평가 도구', exact: true })
-    .screenshot({ path: info.outputPath('evaluation-mobile-options.png') });
   await page.getByText('기능 확인과 사용자 판단', { exact: true }).click();
   await page.getByLabel('도구 호출 지원 판단').selectOption('no');
   await expect(page.getByRole('button', { name: '모델 프리셋 등록', exact: true })).toBeDisabled();

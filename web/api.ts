@@ -26,6 +26,11 @@ export async function api<T>(path: string, body?: unknown, method = 'POST'): Pro
       window.dispatchEvent(new Event(sessionRequiredEvent));
     if (response.status === 409) {
       const payload = (await response.json().catch(() => null)) as { error?: unknown } | null;
+      if (payload?.error === 'MODEL_REQUIRED:translation-refusal')
+        throw new ApiError(
+          '현재 번역 프롬프트 설정에서 거절 판정 모델을 선택해 주세요.',
+          response.status
+        );
       const requiredRole =
         typeof payload?.error === 'string' &&
         /^MODEL_REQUIRED:(main|translation|status|image|state|memory)$/.test(payload.error)
@@ -61,7 +66,7 @@ export async function api<T>(path: string, body?: unknown, method = 'POST'): Pro
   const result = (await response.json()) as T;
   if (
     body !== undefined &&
-    /^(?:\/library\/(?:folders|organization)|\/content(?:\/|$)|\/prompt-presets?(?:\/|$)|\/prompt-combinations?(?:\/|$))/.test(
+    /^(?:\/library\/(?:folders|organization)|\/content(?:\/|$)|\/prompt-presets?(?:\/|$)|\/prompt-workspace(?:\/|$)|\/prompt-combinations?(?:\/|$))/.test(
       path
     )
   ) {
@@ -71,6 +76,8 @@ export async function api<T>(path: string, body?: unknown, method = 'POST'): Pro
       /* A successful save does not depend on browser storage. */
     }
   }
+  if (body !== undefined && path.startsWith('/prompt-workspace'))
+    dispatchEvent(new Event('prompt-workspace-changed'));
   return result;
 }
 

@@ -43,8 +43,9 @@ afterEach(async () => {
     await rm(path, { recursive: true, force: true });
   }
 });
-const SAMPLE_COUNT = 5;
-const WARMUP_COUNT = 1;
+const benchmark = process.env.NR_BENCHMARK === '1';
+const SAMPLE_COUNT = benchmark ? 5 : 1;
+const WARMUP_COUNT = benchmark ? 1 : 0;
 const baseline = { archivedSources: 10, loreCount: 50, manuscriptChars: 10000, assetCount: 10 };
 type Counts = typeof baseline;
 type Dimension = keyof Counts;
@@ -471,7 +472,7 @@ function condition(f: Awaited<ReturnType<typeof fixture>>, counts: Counts) {
   };
 }
 
-test('S07 independent archive/lore/manuscript/asset growth measures actual SQLite active context; S05 200k source roundtrips', async () => {
+test('S07 archive/lore/asset growth preserves active context and S05 200k source roundtrips; repeated timing is opt-in', async () => {
   const started = new Date().toISOString();
   const evidence: unknown[] = [];
   for (const { dimension, larger } of dimensions) {
@@ -496,6 +497,9 @@ test('S07 independent archive/lore/manuscript/asset growth measures actual SQLit
     if (dimension === 'assetCount') expect(large.output.input).toEqual(small.output.input);
     evidence.push({ dimension, baseline: small.evidence, larger: large.evidence });
   }
+  // Functional dimensions above always run. Timing/environment artifacts are opt-in,
+  // because no latency threshold is part of this regression contract.
+  if (!benchmark) return;
   const environment = {
     node: process.version,
     sqlite: process.versions.sqlite,

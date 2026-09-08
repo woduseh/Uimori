@@ -250,20 +250,8 @@ test('HTTP tool discovery/read reaches older-than-two source, typed authored mem
     }
     expect(results[5].result.text).toBe('앨런 선장이라고 불러 줘.');
     expect(results[4].result.entry.kind).toBe('author-canon');
-    const p = wire.input.source;
     await writeSse(res, [
-      {
-        type: 'text_delta',
-        delta: JSON.stringify({
-          sourceRevision: p.sourceRevision,
-          sourceHash: p.sourceHash,
-          chunkId: p.chunkId,
-          segments: p.blocks.map((b: any) => ({
-            anchors: [b.anchor],
-            text: '앨런 선장, 잠깐 기다려.',
-          })),
-        }),
-      },
+      { type: 'text_delta', delta: '앨런 선장, 잠깐 기다려.' },
       { type: 'done', reason: 'stop' },
     ]);
   });
@@ -283,9 +271,9 @@ test('HTTP tool discovery/read reaches older-than-two source, typed authored mem
   expect(server.requests).toHaveLength(3);
   expect(events).toHaveLength(6);
   expect(store.product.attempts(chat.id)).toHaveLength(3);
-  expect(store.product.chunks(job.id)[0].attempt).toBe(1);
+  expect(store.job(job.id).result?.text).toBe('앨런 선장, 잠깐 기다려.');
   expect(store.requestTranslation(target.id).status).toBe('completed');
-  const output = 'output/playwright/translation-context-20260907';
+  const output = `output/playwright/translation-context-${randomUUID()}`;
   mkdirSync(output, { recursive: true });
   writeFileSync(
     join(output, 'measurement.json'),
@@ -361,7 +349,7 @@ test('translation tools support empty memory with disabled indexing, bounded pag
 });
 
 test.each(['denied', 'budget', 'empty'] as const)(
-  'HTTP %s tool result preserves bounded execution and durable chunk status',
+  'HTTP %s tool result preserves bounded execution and durable job status',
   async (mode) => {
     const store = database();
     const chat = createFixtureChat(store, mode);
@@ -394,17 +382,11 @@ test.each(['denied', 'budget', 'empty'] as const)(
         await writeSse(res, [...actions, { type: 'done', reason: 'tool_calls' }]);
         return;
       }
-      const p = wire.input.source;
       expect(wire.input.results[0].result.total).toBe(0);
       await writeSse(res, [
         {
           type: 'text_delta',
-          delta: JSON.stringify({
-            sourceRevision: p.sourceRevision,
-            sourceHash: p.sourceHash,
-            chunkId: p.chunkId,
-            segments: p.blocks.map((b: any) => ({ anchors: [b.anchor], text: '조용히 기다렸다.' })),
-          }),
+          delta: '조용히 기다렸다.',
         },
         { type: 'done', reason: 'stop' },
       ]);
@@ -416,7 +398,7 @@ test.each(['denied', 'budget', 'empty'] as const)(
     const outcome = await execute(store, job.id, server.origin);
     expect(outcome?.status).toBe(mode === 'empty' ? 'completed' : 'failed');
     expect(count).toBe(mode === 'empty' ? 2 : 1);
-    expect(store.product.chunks(job.id)[0].attempt).toBe(1);
+    expect(store.job(job.id).result?.text).toBe(mode === 'empty' ? '조용히 기다렸다.' : undefined);
     if (mode === 'budget') expect(outcome?.error).toBe('TOOL_CONTEXT_BUDGET_EXHAUSTED');
   }
 );

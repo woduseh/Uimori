@@ -1,3 +1,4 @@
+import { promptWorkspace, updatePromptWorkspace } from '../server/prompt-workspace.js';
 import { createFixtureChat } from './fixtures/chat.js';
 import { afterEach, expect, test } from 'vitest';
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
@@ -136,14 +137,9 @@ function fixture(change?: (b: PackageBehavior) => void) {
       ],
     },
   }) as PromptPreset;
-  const profile = store.product.profile(chat.id);
-  store.product.updateProfile(chat.id, {
-    expectedRevision: profile.revision,
-    attachments: profile.attachments,
-    personaReference: profile.personaReference,
-    routes: profile.routes,
-    image: profile.image,
-    prompts: { main: { id: prompt.id, revision: prompt.revision } },
+  updatePromptWorkspace(store, {
+    expectedRevision: promptWorkspace(store).revision,
+    main: { title: prompt.title, program: prompt.program, values: {} },
   });
   return {
     store,
@@ -263,7 +259,6 @@ function dependentModule(f: Fixture, trigger: 'before-turn' | 'model') {
     personaReference: profile.personaReference,
     routes: profile.routes,
     image: profile.image,
-    prompts: profile.prompts,
     packageAttachments: [
       ...(profile.packageAttachments ?? []),
       { id: content.id, revision: 1, role: 'module' },
@@ -543,7 +538,7 @@ test('BRUN11 current-format archive and chat fork retain staged outcomes and ind
   });
   const archive = f.store.product.export(),
     restored = database();
-  expect(archive.version).toBe(13);
+  expect(archive.version).toBe(14);
   expect(restored.product.import(archive)).toMatchObject({ restored: true, chats: 2 });
   expect(restored.run(run.id).snapshot).toEqual(f.store.run(run.id).snapshot);
   expect(runBehaviorProgress(restored, run.id)).toEqual(runBehaviorProgress(f.store, run.id));

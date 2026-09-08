@@ -1,7 +1,7 @@
 import { HttpError } from './request-validation.js';
 import type { FastifyInstance } from 'fastify';
 import type { Store } from './store.js';
-import { latestTranslation, validateTranslationArtifact } from './source-editing.js';
+import { successfulTranslation, validateTranslationArtifact } from './source-editing.js';
 import { buildPackagePresentation } from './package-presentation.js';
 
 export function packagePresentationRoutes(app: FastifyInstance, store: Store) {
@@ -13,7 +13,7 @@ export function packagePresentationRoutes(app: FastifyInstance, store: Store) {
       if (source.chatId !== request.params.id) throw new HttpError(404, 'Source not found');
       const snapshot = structuredClone(store.run(source.runId).snapshot);
       if (snapshot.chatId !== source.chatId) throw new HttpError(409, 'Source run mismatch');
-      const job = latestTranslation(store, source.id);
+      const job = successfulTranslation(store, source);
       let translation: { text: string; sourceRevision: string; sourceHash: string } | undefined;
       if (job?.status === 'completed' && job.sourceHash === source.hash) {
         validateTranslationArtifact(store, job, source);

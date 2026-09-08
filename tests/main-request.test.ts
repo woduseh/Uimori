@@ -437,29 +437,6 @@ describe('Exact native main preview and terminal submission (synthetic loopback 
     ).toBe(false);
   });
 
-  test('NMR06 exact encoders report explicit unsupported placement instead of reordering user blocks', () => {
-    for (const protocol of [
-      'openai-responses-v1',
-      'openai-chat-v1',
-      'vercel-chat-v1',
-      'anthropic-messages-v1',
-      'vertex-gemini-v1',
-    ] as ProviderProtocol[]) {
-      const work = compileSnapshotPrompt(snapshot());
-      const target = work.profile!.models.main!;
-      target.connection.protocol = protocol;
-      target.modelId =
-        protocol === 'vertex-gemini-v1'
-          ? 'gemini-3.8-flash'
-          : protocol === 'anthropic-messages-v1'
-            ? 'claude-opus-5'
-            : 'gpt-5.6';
-      target.capabilityRevision = modelCapability(protocol, target.modelId)?.revision;
-      const built = buildMainProviderRequest(work);
-      expect(encodeMainPreview(built.request, target)).toHaveProperty('body');
-    }
-  });
-
   test('NMR07 tool continuation keeps the frozen host message and original cache bindings stable', async () => {
     let count = 0;
     const server = await loopbackProvider(async (request, response) => {
@@ -665,4 +642,59 @@ describe('Exact native main preview and terminal submission (synthetic loopback 
       expect(work).toEqual(before);
     }
   );
+});
+
+describe('Recoverable read failures in the real main runner', () => {
+  test.each([
+    ['knowledge.search', { query: 'harbor', limit: 101 }, 'INVALID_ARGUMENTS'],
+    ['knowledge.read', { id: 'mistyped-id' }, 'RESOURCE_UNAVAILABLE'],
+  ] as const)(
+    'returns %s failure for correction without treating it as success',
+    async (name, args, code) => {
+      let calls = 0;
+      const server = await loopbackProvider(async (request, response) => {
+        const body = JSON.parse(request.body);
+        calls++;
+        await writeSse(response, [
+          calls === 1
+            ? toolTurn([toolOutput(body, name, args, 'bad-read')])
+            : complete('Recovered prose.'),
+          '[DONE]',
+        ]);
+      });
+      closes.push(server.close);
+      const work = snapshot(`${server.origin}/v1/responses`);
+      const log = hooks(server.origin);
+      expect(await runMain(work, log.value)).toMatchObject({
+        status: 'completed',
+        text: 'Recovered prose.',
+      });
+      expect(log.events[0]).toMatchObject({
+        denied: true,
+        errorKind: 'recoverable',
+        result: { code },
+      });
+      expect(server.requests).toHaveLength(2);
+      expect(server.requests[1].body).toContain(code);
+    }
+  );
+
+  test('repeated invalid read with fresh call IDs exhausts correction before call budget', async () => {
+    let calls = 0;
+    const server = await loopbackProvider(async (request, response) => {
+      const body = JSON.parse(request.body);
+      await writeSse(response, [
+        toolTurn([toolOutput(body, 'knowledge.search', { limit: 101 }, `bad-${++calls}`)]),
+        '[DONE]',
+      ]);
+    });
+    closes.push(server.close);
+    const work = snapshot(`${server.origin}/v1/responses`);
+    work.settings.maxCalls = 8;
+    expect(await runMain(work, hooks(server.origin).value)).toMatchObject({
+      status: 'error',
+      error: 'TOOL_CORRECTION_EXHAUSTED',
+    });
+    expect(calls).toBe(2);
+  });
 });

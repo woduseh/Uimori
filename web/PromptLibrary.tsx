@@ -7,6 +7,7 @@ import { api } from './api.js';
 import { Dialog } from './Dialog.js';
 import { DeleteButton } from './DeleteButton.js';
 import { PromptEditor } from './PromptEditor.js';
+import { PromptWorkspaceEditor } from './PromptWorkspaceEditor.js';
 import {
   LibraryFolders,
   LibraryItemMenu,
@@ -122,6 +123,7 @@ export function PromptLibrary({
         title: `${full.title} 사본`,
         role: full.role,
         program: full.program,
+        values: full.values,
       });
       await placeCreated(copy, true);
       await reload();
@@ -156,6 +158,17 @@ export function PromptLibrary({
           </button>
         )}
       </header>
+      {library && !editing && (
+        <details>
+          <summary>현재 작문·번역 프롬프트 설정</summary>
+          <PromptWorkspaceEditor
+            library={library}
+            reload={reload}
+            onError={onError}
+            onDirtyChange={setDirty}
+          />
+        </details>
+      )}
       <Dialog
         open={discard}
         title="미저장 프롬프트 확인"

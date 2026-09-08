@@ -1,3 +1,4 @@
+import { visualReview } from './fixtures/visual-review.js';
 import {
   openProviderMenu,
   revealProviderDiagnostics,
@@ -97,7 +98,7 @@ test('PMUI01 mobile template registration selects the connection, reports catalo
   await expect(form.getByLabel('API 기본 주소')).toHaveValue('https://api.openai.com/v1');
   await form.getByText('연결 템플릿 정보', { exact: true }).click();
   await expect(form.getByText('openai-responses-v1', { exact: true })).toBeVisible();
-  await expect(form.getByText('2026-09-07', { exact: true })).toBeVisible();
+  await expect(form).toContainText(/\d{4}-\d{2}-\d{2}/);
   await form.getByLabel('API 기본 주소').fill('http://127.0.0.1:9/v1');
   await form.getByLabel('연결 이름', { exact: true }).fill(title);
   await form.getByLabel('서버 환경변수 이름').fill('PM_SYNTHETIC_KEY');
@@ -159,10 +160,12 @@ test('PMUI01 mobile template registration selects the connection, reports catalo
     expect(box!.x + box!.width).toBeLessThanOrEqual(390);
   }
   await modelForm.getByLabel('도구 호출 지원 판단').scrollIntoViewIfNeeded();
-  await page.screenshot({ path: info.outputPath('provider-management-mobile-capabilities.png') });
+  if (visualReview)
+    await page.screenshot({ path: info.outputPath('provider-management-mobile-capabilities.png') });
   await modelForm.getByRole('button', { name: '기본 정보', exact: true }).click();
   await modelForm.getByLabel('모델 프리셋 이름').scrollIntoViewIfNeeded();
-  await page.screenshot({ path: info.outputPath('provider-management-mobile-model.png') });
+  if (visualReview)
+    await page.screenshot({ path: info.outputPath('provider-management-mobile-model.png') });
   await modelForm.getByRole('button', { name: '모델 프리셋 등록', exact: true }).click();
   await expect(
     page.getByRole('status').filter({ hasText: title + ' 수동 모델 모델 프리셋 등록됨' })
@@ -244,7 +247,8 @@ test('PMUI02 connection clone requires review and stale edits retain their draft
   expect((await library(request)).connections.find((item) => item.id === original.id)).toEqual(
     changed
   );
-  await form.screenshot({ path: info.outputPath('provider-management-desktop-conflict.png') });
+  if (visualReview)
+    await form.screenshot({ path: info.outputPath('provider-management-desktop-conflict.png') });
   await form.getByRole('button', { name: '최신 연결 설정 불러오기', exact: true }).click();
   await expect(form.getByLabel('연결 이름', { exact: true })).toHaveValue(changed.title);
   await expect(form).not.toContainText('편집 기준');
@@ -374,7 +378,8 @@ test('PMUI03 model edits use the latest connection without changing role IDs; de
   await expect(
     page.getByLabel('원문 모델', { exact: true }).locator('option:checked')
   ).not.toContainText(' · v');
-  await page.screenshot({ path: info.outputPath('provider-management-current-model.png') });
+  if (visualReview)
+    await page.screenshot({ path: info.outputPath('provider-management-current-model.png') });
   const after = await api<ChatDetail>(request, `/chats/${chat.id}`);
   expect(after.profile?.routes.main).toEqual({ id: original.id });
   expect(after.runs).toEqual([]);
@@ -441,9 +446,10 @@ test('PMUI04 a delayed readiness response cannot replace the currently selected 
   await release();
   await expect(readiness).toContainText(second.title);
   await expect(readiness).not.toContainText('인증 참조 설정 필요');
-  await readiness.screenshot({
-    path: info.outputPath('provider-management-current-readiness.png'),
-  });
+  if (visualReview)
+    await readiness.screenshot({
+      path: info.outputPath('provider-management-current-readiness.png'),
+    });
 });
 
 test('PMUI07 quick setup selects a cached catalog model and keeps drafts across workspace pages', async ({
@@ -540,7 +546,8 @@ test('PMUI07 quick setup selects a cached catalog model and keeps drafts across 
     );
     const dialog = page.getByRole('dialog', { name: '설정', exact: true });
     expect(await dialog.evaluate((node) => node.scrollWidth <= node.clientWidth + 1)).toBe(true);
-    await page.screenshot({ path: info.outputPath(`provider-management-catalog-${width}.png`) });
+    if (visualReview)
+      await page.screenshot({ path: info.outputPath(`provider-management-catalog-${width}.png`) });
     await modelForm.getByRole('button', { name: '모델 프리셋 등록', exact: true }).click();
     await expect(page.getByRole('region', { name: '저장한 모델 프리셋' })).toBeVisible();
     await expect(modelForm).not.toBeVisible();
@@ -648,7 +655,10 @@ test('PMUI08 Vertex JSON upload validates locally and saves only the returned cr
   ).not.toContain(serviceAccount.private_key);
   await expect(file).toHaveValue('');
   await upload.scrollIntoViewIfNeeded();
-  await page.screenshot({ path: info.outputPath('provider-management-vertex-upload-mobile.png') });
+  if (visualReview)
+    await page.screenshot({
+      path: info.outputPath('provider-management-vertex-upload-mobile.png'),
+    });
   const posted = page.waitForRequest(
     (r) => r.method() === 'POST' && r.url().endsWith('/api/connections')
   );
@@ -875,10 +885,12 @@ test('PMUI11 reviewed provider options are visible and round-trip without genera
         .getByRole('dialog', { name: '설정', exact: true })
         .evaluate((node) => node.scrollWidth <= node.clientWidth + 1)
     ).toBe(true);
-    await form.screenshot({ path: info.outputPath(`provider-parameters-${index}-mobile.png`) });
+    if (visualReview)
+      await form.screenshot({ path: info.outputPath(`provider-parameters-${index}-mobile.png`) });
     if (item.choices['캐시 방식']) {
       await form.getByLabel('캐시 방식', { exact: true }).scrollIntoViewIfNeeded();
-      await page.screenshot({ path: info.outputPath(`provider-cache-${index}-mobile.png`) });
+      if (visualReview)
+        await page.screenshot({ path: info.outputPath(`provider-cache-${index}-mobile.png`) });
     }
     await form.getByRole('button', { name: '모델 프리셋 등록', exact: true }).click();
     await expect
@@ -931,9 +943,10 @@ test('PMUI12 changing the model preserves unsupported choices until the user exp
   await expect(form.getByLabel('Reasoning Effort', { exact: true })).toBeFocused();
   await expect(form).toContainText('현재 값은 이 모델에서 지원하지 않아요');
   expect((await library(request)).models.some((model) => model.title === title)).toBe(false);
-  await form.screenshot({
-    path: info.outputPath('provider-parameters-preserved-invalid-desktop.png'),
-  });
+  if (visualReview)
+    await form.screenshot({
+      path: info.outputPath('provider-parameters-preserved-invalid-desktop.png'),
+    });
   await form.getByLabel('Reasoning Effort', { exact: true }).selectOption('high');
   await form.getByLabel('Verbosity', { exact: true }).selectOption('');
   await form.getByLabel('캐시 방식').selectOption('automatic');
@@ -1037,7 +1050,8 @@ test('PMUI13 response tests are explicit and late results stay with the original
   await expect(result).toContainText('124 ms');
   await expect(result).toContainText('입력 7 · 출력 2');
   await expect(result).toContainText('미확인');
-  await result.screenshot({ path: info.outputPath('provider-response-test-mobile.png') });
+  if (visualReview)
+    await result.screenshot({ path: info.outputPath('provider-response-test-mobile.png') });
   expect(posts).toHaveLength(1);
   expect(observed.errors).toEqual([]);
   expect(observed.generations).toEqual([]);
@@ -1228,7 +1242,8 @@ test('PMUI10 Codex subscription login preserves drafts and saves a connection an
   await panel.getByRole('button', { name: 'Codex 상태 다시 확인' }).click();
   await expect(panel).toContainText('ChatGPT 구독으로 연결됐어요');
   await expect(panel).toContainText('사용 25%');
-  await page.screenshot({ path: info.outputPath('codex-subscription-settings-mobile.png') });
+  if (visualReview)
+    await page.screenshot({ path: info.outputPath('codex-subscription-settings-mobile.png') });
   await selectSettingsSection(page, '연결과 모델');
   await expect(form.getByLabel('연결 이름', { exact: true })).toHaveValue('보존할 Codex 초안');
   await form.getByRole('button', { name: '연결 등록', exact: true }).click();
@@ -1305,7 +1320,8 @@ test('PMUI16 endpoint guidance checks server policy before saving and ignores a 
     const box = await status.boundingBox();
     expect(box!.x).toBeGreaterThanOrEqual(0);
     expect(box!.x + box!.width).toBeLessThanOrEqual(width);
-    await status.screenshot({ path: info.outputPath(`endpoint-guidance-${width}.png`) });
+    if (visualReview)
+      await status.screenshot({ path: info.outputPath(`endpoint-guidance-${width}.png`) });
   }
   let release!: () => void, seen!: () => void;
   const pending = new Promise<void>((resolve) => {

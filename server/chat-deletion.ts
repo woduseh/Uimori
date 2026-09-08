@@ -91,7 +91,7 @@ function removeRunArtifacts(store: Store, runIds: string[], sourceIds: string[],
     removeIds(store, table, 'run_id', runIds);
   for (const table of ['source_edits', 'package_behavior_outputs'])
     removeIds(store, table, 'source_id', sourceIds);
-  for (const table of ['job_chunks', 'job_results']) removeIds(store, table, 'job_id', jobIds);
+  for (const table of ['job_results']) removeIds(store, table, 'job_id', jobIds);
 }
 
 export function deleteChat(store: Store, chatId: string, value: unknown) {

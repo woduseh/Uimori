@@ -1,3 +1,4 @@
+import { visualReview } from './fixtures/visual-review.js';
 import { expect, test, type APIRequestContext, type Locator, type Page } from '@playwright/test';
 import type { ContentPackage } from '../core/content-package.js';
 import type { LibraryOrganization } from '../core/library-organization.js';
@@ -189,7 +190,8 @@ test('LIMG01 representative image upload, unset and existing inline selection pr
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(
     true
   );
-  await page.screenshot({ path: info.outputPath('portrait-authoring-mobile.png') });
+  if (visualReview)
+    await page.screenshot({ path: info.outputPath('portrait-authoring-mobile.png') });
 });
 
 test('LIMG02 persona folder picker supports keyboard selection and nested Escape without creating a chat', async ({
@@ -243,6 +245,7 @@ test('LIMG02 persona folder picker supports keyboard selection and nested Escape
   const picker = page.getByRole('dialog', { name: '시작 페르소나', exact: true });
   await picker.getByRole('searchbox').fill('선택기');
   await expect(picker.getByText(persona.title, { exact: true })).toBeVisible();
+  await expect(picker.getByText(bot.title, { exact: true })).toHaveCount(0);
   await expect(picker.getByText(module.title, { exact: true })).toHaveCount(0);
   await picker
     .getByRole('combobox', { name: '시작 페르소나 폴더', exact: true })
@@ -276,7 +279,7 @@ test('LIMG02 persona folder picker supports keyboard selection and nested Escape
   expect(await picker.evaluate((element) => element.scrollWidth <= element.clientWidth + 1)).toBe(
     true
   );
-  await page.screenshot({ path: info.outputPath('persona-picker-mobile.png') });
+  if (visualReview) await page.screenshot({ path: info.outputPath('persona-picker-mobile.png') });
   await picker.getByRole('button', { name: '페르소나 없음', exact: true }).click();
   await expect(trigger).toContainText('페르소나 없음');
   await trigger.click();

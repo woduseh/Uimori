@@ -1,3 +1,4 @@
+import { visualReview } from './fixtures/visual-review.js';
 import { expect, test, type Page } from '@playwright/test';
 import type { Chat, ChatDetail } from '../core/types.js';
 import type { Content } from '../core/product.js';
@@ -142,7 +143,8 @@ if (process.env.NR_SELF_HOST_BROWSER === '1')
       expect(
         ((await list.json()) as Chat[]).some((chat) => chat.title === 'Must never be created')
       ).toBe(false);
-      await page.screenshot({ path: info.outputPath('https-authenticated-mobile-library.png') });
+      if (visualReview)
+        await page.screenshot({ path: info.outputPath('https-authenticated-mobile-library.png') });
       const logout = await page.request.delete('/api/session', {
         headers: mutationHeaders,
         data: {},
@@ -234,8 +236,10 @@ if (process.env.NR_SELF_HOST_BROWSER === '1')
         expect(await phone.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
           true
         );
-        await phone.screenshot({ path: info.outputPath('https-mobile-shared-source-390.png') });
-        await pc.screenshot({ path: info.outputPath('https-desktop-shared-source.png') });
+        if (visualReview)
+          await phone.screenshot({ path: info.outputPath('https-mobile-shared-source-390.png') });
+        if (visualReview)
+          await pc.screenshot({ path: info.outputPath('https-desktop-shared-source.png') });
 
         await phone.close();
         await pc

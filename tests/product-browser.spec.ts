@@ -1,3 +1,5 @@
+import { visualReview } from './fixtures/visual-review.js';
+import { preservePromptWorkspace } from './fixtures/prompt-workspace.js';
 import {
   selectSettingsSection,
   startProviderConnection,
@@ -15,6 +17,8 @@ import { createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import type { Chat, ChatDetail, Run } from '../core/types.js';
 import type { Asset, Connection, Content, Library, ModelPreset } from '../core/product.js';
+
+preservePromptWorkspace();
 
 async function getDetail(request: APIRequestContext, id: string): Promise<ChatDetail> {
   const response = await request.get(`/api/chats/${id}`);
@@ -64,7 +68,7 @@ async function profileInfo(page: Page) {
 async function promptTab(page: Page) {
   const panel = page.getByTestId('profile-editor');
   await selectChatSettingsSection(page, '프롬프트·창작 프리셋');
-  return panel.getByTestId('prompt-editor');
+  return panel.getByRole('region', { name: '현재 프롬프트 설정' });
 }
 async function send(page: Page, text: string): Promise<Run> {
   await closeDialog(page);
@@ -124,7 +128,7 @@ test('P01 packages use latest settings and prompt-owned creative choices replace
   const secondResponse = await request.post('/api/prompt-combinations', {
     data: {
       title: `Brief ${unique}`,
-      prompt: { id: choice.prompt.id, revision: choice.prompt.revision },
+      role: 'main',
       values: { detail: 1, coNarration: false },
     },
   });
@@ -174,18 +178,13 @@ test('P01 packages use latest settings and prompt-owned creative choices replace
       .filter({ has: page.getByRole('heading', { name: added.title, exact: true }) })
   ).not.toContainText('v1');
   const editor = await promptTab(page);
-  await editor.getByLabel('불러올 프롬프트', { exact: true }).selectOption(`${choice.prompt.id}@1`);
-  await editor.getByRole('button', { name: '이 채팅에 적용', exact: true }).click();
+  await editor.getByLabel('현재 프롬프트 프리셋', { exact: true }).selectOption(choice.prompt.id);
   const composer = editor.getByTestId('prompt-composer');
   for (const combination of [choice.combination, second]) {
     await composer.getByLabel('전역 창작 조합', { exact: true }).selectOption(combination.id);
-    await composer.getByRole('button', { name: '이야기 선택값과 조합 저장', exact: true }).click();
+    await editor.getByRole('button', { name: '현재 설정 저장', exact: true }).click();
     await expect
-      .poll(
-        async () =>
-          (await getDetail(request, chat.id)).profile?.promptControls?.[`${choice.prompt.id}@1`]
-            ?.values
-      )
+      .poll(async () => (await (await request.get('/api/prompt-workspace')).json()).main.values)
       .toEqual(combination.values);
   }
   await expect(
@@ -207,7 +206,7 @@ test('P01 packages use latest settings and prompt-owned creative choices replace
     owner,
     { id: added.id, revision: 2, role: 'module' },
   ]);
-  expect(saved.snapshot.profile?.promptControls?.[`${choice.prompt.id}@1`]?.values).toEqual({
+  expect(saved.snapshot.profile?.promptPresets?.main?.values).toEqual({
     detail: 1,
     coNarration: false,
   });
@@ -439,8 +438,8 @@ test('P09 P10 P13 fork from a completed scene preserves long prose and annotatio
   });
   expect(source.text.length).toBeGreaterThan(2000);
   await expect(page.getByTestId('profile-asset')).toBeVisible();
-  await expect(page.getByTestId('inline-annotation').first()).toBeVisible();
   await page.getByRole('button', { name: '원문 보기', exact: true }).click();
+  await expect(page.getByTestId('inline-annotation').first()).toBeVisible();
   const anchors = await page
     .getByTestId('source-text')
     .locator('[data-block-anchor]')
@@ -449,14 +448,10 @@ test('P09 P10 P13 fork from a completed scene preserves long prose and annotatio
     );
   expect(anchors).toEqual(source.blocks!.map((block) => block.anchor));
   await page.getByRole('button', { name: '번역 보기', exact: true }).click();
-  expect(
-    await page
-      .getByTestId('translation-text')
-      .locator('[data-block-anchor]')
-      .evaluateAll((elements) =>
-        elements.flatMap((element) => element.getAttribute('data-block-anchor')!.split(' '))
-      )
-  ).toEqual(anchors);
+  await expect(page.getByTestId('translation-text').locator('.source-block')).toHaveText(
+    firstDetail.jobs.find((job) => job.kind === 'translation')!.result!.text!
+  );
+  await expect(page.getByTestId('translation-text').locator('[data-block-anchor]')).toHaveCount(0);
   const laterOriginal = await send(
     page,
     'SYNTHETIC_ORIGINAL_ONLY: this later scene must not enter a fork from the first scene.'
@@ -534,16 +529,12 @@ test('P09 P10 P13 fork from a completed scene preserves long prose and annotatio
     );
     expect(newTranslation.text).toBe(oldTranslation.text);
     await expect(page.getByTestId('profile-asset')).toBeVisible();
+    await page.getByRole('button', { name: '원문 보기', exact: true }).click();
     await expect(page.getByTestId('inline-annotation').first()).toBeVisible();
     await page.getByRole('button', { name: '번역 보기', exact: true }).click();
-    expect(
-      await page
-        .getByTestId('translation-text')
-        .locator('[data-block-anchor]')
-        .evaluateAll((elements) =>
-          elements.flatMap((element) => element.getAttribute('data-block-anchor')!.split(' '))
-        )
-    ).toEqual(forkSource.blocks!.map((block) => block.anchor));
+    await expect(page.getByTestId('translation-text').locator('.source-block')).toHaveText(
+      newTranslation.text!
+    );
     await expect(otherTab.getByTestId('source')).toHaveCount(2);
     await expect(otherTab.getByLabel('다음 장면 요청')).toHaveValue(
       'SYNTHETIC independent other-tab draft'
@@ -551,18 +542,17 @@ test('P09 P10 P13 fork from a completed scene preserves long prose and annotatio
     expect(await getDetail(request, chat.id)).toEqual(before);
     await storySettings(page);
     const forkEditor = await promptTab(page);
-    await forkEditor.getByRole('button', { name: '새 프롬프트 생성', exact: true }).click();
     await forkEditor.locator('#prompt-block-instructions > summary').click();
     await forkEditor
-      .getByLabel('프롬프트 이름', { exact: true })
+      .getByLabel('현재 프롬프트 이름', { exact: true })
       .fill('Synthetic fork-only prompt');
     await forkEditor
       .getByLabel('지침 본문', { exact: true })
       .fill('Synthetic vivid narration for this fork.');
-    await forkEditor.getByRole('button', { name: '저장하고 적용', exact: true }).click();
+    await forkEditor.getByRole('button', { name: '현재 설정 저장', exact: true }).click();
     await expect
-      .poll(async () => Boolean((await getDetail(request, fork.id)).profile!.prompts?.main))
-      .toBe(true);
+      .poll(async () => (await (await request.get('/api/prompt-workspace')).json()).main.title)
+      .toBe('Synthetic fork-only prompt');
     expect((await getDetail(request, chat.id)).profile).toEqual(before.profile);
     const next = await send(
       page,
@@ -625,10 +615,11 @@ test('P09 P10 P13 fork from a completed scene preserves long prose and annotatio
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
       true
     );
-    await page.screenshot({
-      path: testInfo.outputPath('m1-mobile-fork-reader.png'),
-      fullPage: true,
-    });
+    if (visualReview)
+      await page.screenshot({
+        path: testInfo.outputPath('m1-mobile-fork-reader.png'),
+        fullPage: true,
+      });
     expect(errors).toEqual([]);
   } finally {
     await otherTab.close();
@@ -766,10 +757,11 @@ test('P04 Vertex settings use service-account references and persist distinct ma
     timeoutMs: 300000,
   });
   expect(models[1]).toMatchObject({ temperature: null, thinkingLevel: 'LOW', timeoutMs: 180000 });
-  await page.screenshot({
-    path: testInfo.outputPath('vertex-settings-mobile.png'),
-    fullPage: true,
-  });
+  if (visualReview)
+    await page.screenshot({
+      path: testInfo.outputPath('vertex-settings-mobile.png'),
+      fullPage: true,
+    });
   await openDetails(page, 'profile-editor');
   await selectChatSettingsSection(page, '모델');
   await page.getByLabel('원문 모델', { exact: true }).selectOption(`${models[0].id}`);
@@ -887,6 +879,7 @@ test('P04 named and custom providers save native options from mobile settings wi
   expect(detail.attempts).toHaveLength(0);
   expect(detail.runs).toHaveLength(0);
   expect(detail.sources).toHaveLength(0);
-  await page.screenshot({ path: testInfo.outputPath('provider-settings.png'), fullPage: true });
+  if (visualReview)
+    await page.screenshot({ path: testInfo.outputPath('provider-settings.png'), fullPage: true });
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
 });

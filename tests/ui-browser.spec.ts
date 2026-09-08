@@ -1,3 +1,5 @@
+import { visualReview } from './fixtures/visual-review.js';
+import { preservePromptWorkspace } from './fixtures/prompt-workspace.js';
 import {
   selectSettingsSection,
   startProviderConnection,
@@ -7,7 +9,6 @@ import {
   navigationAction,
   selectStartPrompt,
   selectChatSettingsSection,
-  openPromptActions,
   openSourceActions,
 } from './ui-navigation.js';
 import { postFixtureChat } from './fixtures/chat.js';
@@ -130,13 +131,18 @@ test('UI01 UI02 UI04 UI05 UI09 long real sources keep composer accessible, safe 
   const before = await data(request, chat.id);
   const errors: string[] = [];
   page.on('pageerror', (error) => errors.push(error.message));
-  for (const viewport of [
-    { width: 360, height: 800 },
-    { width: 390, height: 844 },
-    { width: 768, height: 1024 },
-    { width: 1024, height: 768 },
-    { width: 1440, height: 1000 },
-  ]) {
+  for (const viewport of visualReview
+    ? [
+        { width: 360, height: 800 },
+        { width: 390, height: 844 },
+        { width: 768, height: 1024 },
+        { width: 1024, height: 768 },
+        { width: 1440, height: 1000 },
+      ]
+    : [
+        { width: 390, height: 844 },
+        { width: 1440, height: 1000 },
+      ]) {
     await page.setViewportSize(viewport);
     await page.goto(`/?chat=${chat.id}`);
     await expect(page.getByTestId('source')).toHaveCount(3);
@@ -162,7 +168,8 @@ test('UI01 UI02 UI04 UI05 UI09 long real sources keep composer accessible, safe 
       ).toBe(true);
     }
     if ([390, 1440].includes(viewport.width))
-      await page.screenshot({ path: info.outputPath(`reader-${viewport.width}.png`) });
+      if (visualReview)
+        await page.screenshot({ path: info.outputPath(`reader-${viewport.width}.png`) });
     await page.getByRole('button', { name: '채팅 설정', exact: true }).click();
     const settingsDialog = page.getByRole('dialog', { name: '채팅 설정', exact: true });
     expect(
@@ -209,15 +216,13 @@ test('UI01 UI02 UI04 UI05 UI09 long real sources keep composer accessible, safe 
     .evaluateAll((elements) =>
       elements.map((element) => element.getAttribute('data-block-anchor'))
     );
+  expect(anchors).toEqual(before.sources[0].blocks!.map((block) => block.anchor));
   await source.getByRole('button', { name: '번역 보기', exact: true }).click();
-  await expect(source.getByTestId('translation-text')).toBeVisible();
-  const translated = await source
-    .getByTestId('translation-text')
-    .locator('[data-block-anchor]')
-    .evaluateAll((elements) =>
-      elements.flatMap((element) => element.getAttribute('data-block-anchor')!.split(' '))
-    );
-  expect(translated).toEqual(anchors);
+  const translated = source.getByTestId('translation-text');
+  await expect(translated).toBeVisible();
+  await expect(translated).toContainText('황혼의 부두');
+  await expect(translated.locator('.source-block')).toHaveCount(1);
+  await expect(translated.locator('[data-block-anchor]')).toHaveCount(0);
   await source.getByRole('button', { name: '원문 보기', exact: true }).click();
   await source.locator('details.source-job-details > summary').click();
   await expect(source.getByTestId('source-raw')).toHaveText(before.sources[0].text);
@@ -287,13 +292,9 @@ test('UI03 bot-first retry saves one story and complete profile before any gener
   const detail = await data(request, addedChats[0].id);
   expect(detail.chat.title).toBe(`${title}의 채팅`);
   expect(detail.profile!.attachments).toEqual([{ id: bot.id, revision: 1 }]);
-  expect(detail.profile!.prompts?.main).toEqual({
-    id: choice.prompt.id,
-    revision: choice.prompt.revision,
+  expect(await (await request.get('/api/prompt-workspace')).json()).toMatchObject({
+    main: { values: choice.combination.values },
   });
-  expect(
-    detail.profile!.promptControls?.[`${choice.prompt.id}@${choice.prompt.revision}`]?.values
-  ).toEqual(choice.combination.values);
   expect(detail.runs).toHaveLength(0);
   expect(writes.filter((item) => /\/api\/chats$/.test(item.url))).toHaveLength(1);
   await page.getByLabel('다음 장면 요청').fill('합성 첫 장면');
@@ -301,9 +302,7 @@ test('UI03 bot-first retry saves one story and complete profile before any gener
   await expect.poll(async () => (await data(request, addedChats[0].id)).runs.length).toBe(1);
   const run = (await data(request, addedChats[0].id)).runs[0];
   expect(run.snapshot.profile!.attachments).toEqual(detail.profile!.attachments);
-  expect(
-    run.snapshot.profile!.promptControls?.[`${choice.prompt.id}@${choice.prompt.revision}`]?.values
-  ).toEqual(choice.combination.values);
+  expect(run.snapshot.profile!.promptPresets?.main?.values).toEqual(choice.combination.values);
   const runIndex = writes.findIndex((item) => /\/runs$/.test(item.url));
   expect(runIndex).toBeGreaterThan(writes.findLastIndex((item) => /\/profile$/.test(item.url)));
 });
@@ -320,10 +319,7 @@ test('UI08 UI12 native dialog focus, composition, URL and draft selection stay l
   await settings.press('Enter');
   const dialog = page.getByRole('dialog', { name: '채팅 설정', exact: true });
   await expect(dialog).toBeVisible();
-  for (let index = 0; index < 15; index++) {
-    await page.keyboard.press('Tab');
-    expect(await dialog.evaluate((element) => element.contains(document.activeElement))).toBe(true);
-  }
+  // Common-dialog coverage owns focus wrapping; this case owns IME and caret persistence.
   await page.keyboard.press('Escape');
   await expect(dialog).not.toBeVisible();
   await expect(settings).toBeFocused();
@@ -418,14 +414,16 @@ test('UI05 UI10 late auxiliary completion and retry preserve source and current 
     )!;
     if ((await turnActivity.getAttribute('open')) === null)
       await turnActivity.locator(':scope > summary').click();
-    page.once('dialog', (confirmation) => confirmation.accept());
     await turnActivity
       .locator(`[data-testid="job-translation"][data-job-id="${failed.id}"]`)
       .getByRole('button', { name: '현재 설정으로 번역 재시도', exact: true })
       .click();
     await expect
       .poll(
-        async () => (await data(request, chat.id)).jobs.find((job) => job.id === failed.id)?.status
+        async () =>
+          (await data(request, chat.id)).jobs
+            .filter((job) => job.kind === 'translation' && job.id !== failed.id)
+            .sort((a, b) => (b.revision ?? 0) - (a.revision ?? 0))[0]?.status
       )
       .toBe('completed');
     const after = await data(request, chat.id);
@@ -818,8 +816,8 @@ test('UI03 UI12 new story retry retains selections, uses current content and loc
     expect
       .soft(await page.getByRole('button', { name: '시작 페르소나', exact: true }).isDisabled())
       .toBe(true);
-    expect.soft(await page.getByLabel('시작 프롬프트').isDisabled()).toBe(true);
-    expect.soft(await page.getByLabel('시작 옵션 조합').isDisabled()).toBe(true);
+    await expect(page.getByLabel('시작 프롬프트')).toHaveCount(0);
+    await expect(page.getByLabel('시작 옵션 조합')).toHaveCount(0);
     expect.soft(await page.getByLabel('새 채팅 이름').isDisabled()).toBe(true);
     releaseChat();
     await expect(dialog.getByRole('alert')).toContainText('하나만 만들었어요');
@@ -829,31 +827,15 @@ test('UI03 UI12 new story retry retains selections, uses current content and loc
         new URL(response.url()).searchParams.get('view') === 'summary'
     );
     releaseLibrary();
-    const latest = (await (await refreshed).json()) as { contents: Content[] };
-    expect(latest.contents.find((item) => item.id === bot.id)?.revision).toBe(2);
-    await page.evaluate(
-      () =>
-        new Promise<void>((resolve) =>
-          requestAnimationFrame(() => requestAnimationFrame(() => resolve()))
-        )
-    );
-    await expect(page.getByLabel('시작 프롬프트', { exact: true })).toHaveValue(
-      `${choice.prompt.id}@1`
-    );
-    await expect(page.getByLabel('시작 옵션 조합', { exact: true })).toHaveValue(
-      `${choice.combination.id}@1`
-    );
+    const latestLibrary = (await (await refreshed).json()) as { contents: Content[] };
+    expect(latestLibrary.contents.find((item) => item.id === bot.id)?.revision).toBe(2);
     await dialog.getByRole('button', { name: '설정 저장 다시 시도', exact: true }).click();
     await expect(dialog).not.toBeVisible();
     const detail = await data(request, chat.id);
     expect(detail.profile!.attachments).toEqual([{ id: bot.id, revision: 2 }]);
-    expect(detail.profile!.prompts?.main).toEqual({
-      id: choice.prompt.id,
-      revision: choice.prompt.revision + 1,
+    expect(await (await request.get('/api/prompt-workspace')).json()).toMatchObject({
+      main: { values: choice.combination.values },
     });
-    expect(
-      detail.profile!.promptControls?.[`${choice.prompt.id}@${choice.prompt.revision + 1}`]?.values
-    ).toEqual(choice.combination.values);
     expect(detail.runs).toHaveLength(0);
     expect(chatPosts).toBe(1);
     expect(savedProfiles).toHaveLength(2);
@@ -967,13 +949,9 @@ test('UI03 UI12 failed starting profile read survives reload and recovers frozen
   );
   const restored = await data(request, chat.id);
   expect(restored.profile!.attachments).toEqual([{ id: bot.id, revision: 1 }]);
-  expect(restored.profile!.prompts?.main).toEqual({
-    id: choice.prompt.id,
-    revision: choice.prompt.revision,
+  expect(await (await request.get('/api/prompt-workspace')).json()).toMatchObject({
+    main: { values: choice.combination.values },
   });
-  expect(
-    restored.profile!.promptControls?.[`${choice.prompt.id}@${choice.prompt.revision}`]?.values
-  ).toEqual(choice.combination.values);
   expect(restored.profile!.routes).toEqual(currentRoutes);
   expect(restored.profile!.image).toBe(true);
   expect(restored.profile!.revision).toBe(original.revision + 2);
@@ -1114,7 +1092,7 @@ test('UI03 UI12 starting model choices are saved without execution, reused exact
   await openNewStoryOptions(page);
   await expect(page.getByLabel('시작 본문 모델')).toHaveValue(`${models[0].id}`);
   await expect(page.getByLabel('시작 번역 모델')).toHaveValue(`${models[1].id}`);
-  await page.screenshot({ path: info.outputPath('starting-models-mobile.png') });
+  if (visualReview) await page.screenshot({ path: info.outputPath('starting-models-mobile.png') });
   await close(page);
   // Editing the current connection keeps the remembered model IDs.
   const renamed = await request.put(`/api/connections/${connection.id}`, {
@@ -1153,11 +1131,11 @@ test('UI03 UI12 starting model choices are saved without execution, reused exact
   await page.reload();
   await nav(page, '새 이야기');
   await openNewStoryOptions(page);
-  await expect(page.getByLabel('시작 본문 모델')).toHaveValue('');
-  await expect(page.getByLabel('시작 번역 모델')).toHaveValue('');
-  await expect(page.getByLabel('시작 본문 모델').locator('option:checked')).toHaveText(
-    '본문 모델을 선택해 주세요'
-  );
+  await expect(page.getByLabel('시작 본문 모델')).not.toHaveValue(models[0].id);
+  await expect(page.getByLabel('시작 번역 모델')).not.toHaveValue(models[1].id);
+  await expect(
+    page.getByLabel('시작 본문 모델').locator(`option[value="${models[0].id}"]`)
+  ).toHaveCount(0);
   expect((await data(request, chat.id)).attempts).toHaveLength(0);
 });
 
@@ -1245,7 +1223,8 @@ test('UI02 UI04 UI12 sending a long request collapses the empty composer and pre
     .poll(async () => (await input.boundingBox())!.height)
     .toBeLessThanOrEqual(initial + 1);
   await expect(page.getByTestId('source')).toHaveCount(1);
-  await page.screenshot({ path: info.outputPath('collapsed-composer-mobile.png') });
+  if (visualReview)
+    await page.screenshot({ path: info.outputPath('collapsed-composer-mobile.png') });
   const draft = '다음 장면은 전송하지 않은 긴 합성 초안이에요.\n'.repeat(12);
   await input.fill(draft);
   const draftHeight = (await input.boundingBox())!.height;
@@ -1301,7 +1280,7 @@ test('UI07 UI09 legacy branches use one mobile selection and preserve reading wi
       .locator(':scope > .dialog-body')
       .evaluate((element) => element.scrollWidth <= element.clientWidth + 1)
   ).toBe(true);
-  await page.screenshot({ path: info.outputPath('legacy-branches-mobile.png') });
+  if (visualReview) await page.screenshot({ path: info.outputPath('legacy-branches-mobile.png') });
   const before = await data(request, chat.id);
   await dialog
     .locator('.branch-choice')
@@ -1349,9 +1328,8 @@ test('UI17 full writing and empty translation prompts import, save and apply wit
   await page.getByRole('button', { name: '채팅 설정', exact: true }).click();
   const dialog = page.getByRole('dialog', { name: '채팅 설정', exact: true });
   await selectChatSettingsSection(page, '프롬프트·창작 프리셋');
-  const editor = dialog.getByTestId('prompt-editor');
+  const editor = dialog.getByRole('region', { name: '현재 프롬프트 설정' });
   await expect(await promptBody(editor)).not.toHaveValue('');
-  await editor.getByRole('button', { name: '새 프롬프트 생성', exact: true }).click();
   await promptBody(editor);
   const literal =
     '  FULL_PROMPT_UI17\n{{user}} {{#if exact}}literal CBS{{/if}}\n<script>globalThis.__promptExecuted=true</script>\n' +
@@ -1363,54 +1341,38 @@ test('UI17 full writing and empty translation prompts import, save and apply wit
     buffer: Buffer.from(literal),
   });
   await expect(await promptBody(editor)).toHaveValue(literal);
-  await editor.getByLabel('프롬프트 이름').fill('UI17-full-main');
+  await editor.getByLabel('현재 프롬프트 이름').fill('UI17-full-main');
   await selectChatSettingsSection(page, '봇·페르소나·모듈');
   await selectChatSettingsSection(page, '프롬프트·창작 프리셋');
   await expect(await promptBody(editor)).toHaveValue(literal);
-  await editor.getByRole('button', { name: '편집 영역 넓히기', exact: true }).click();
   expect(await editor.evaluate((element) => element.scrollWidth <= element.clientWidth + 1)).toBe(
     true
   );
   expect(await dialog.evaluate((element) => element.scrollWidth <= element.clientWidth + 1)).toBe(
     true
   );
-  await editor.getByRole('button', { name: '저장하고 적용', exact: true }).click();
+  await editor.getByRole('button', { name: '현재 설정 저장', exact: true }).click();
   await expect
-    .poll(async () => (await data(request, chat.id)).profile?.prompts?.main?.revision)
-    .toBe(1);
-  const mainProfile = (await data(request, chat.id)).profile!;
-  const mainRef = mainProfile.prompts!.main!;
-  const main = await (
-    await request.get(`/api/revisions/prompt-preset/${mainRef.id}/${mainRef.revision}`)
-  ).json();
+    .poll(async () => (await (await request.get('/api/prompt-workspace')).json()).main.title)
+    .toBe('UI17-full-main');
+  const main = (await (await request.get('/api/prompt-workspace')).json()).main;
   expect(main.program).toEqual(createDefaultPromptProgram(literal, 'main'));
-  expect(main.role).toBe('main');
-  await page.screenshot({ path: info.outputPath('full-prompt-mobile.png') });
-  await editor.getByLabel('프롬프트 역할').selectOption('translation');
-  await editor.getByRole('button', { name: '새 프롬프트 생성', exact: true }).click();
+  if (visualReview) await page.screenshot({ path: info.outputPath('full-prompt-mobile.png') });
+  await editor.getByLabel('현재 프롬프트 역할').selectOption('translation');
   await promptBody(editor);
-  await editor.getByLabel('프롬프트 이름').fill('UI17 empty translation');
+  await editor.getByLabel('현재 프롬프트 이름').fill('UI17 empty translation');
   await (await promptBody(editor)).fill('');
   await expect(await promptBody(editor)).toHaveValue('');
-  await editor.getByRole('button', { name: '저장하고 적용', exact: true }).click();
+  await editor.getByRole('button', { name: '현재 설정 저장', exact: true }).click();
   await expect
-    .poll(async () => Boolean((await data(request, chat.id)).profile?.prompts?.translation))
-    .toBe(true);
-  const selected = (await data(request, chat.id)).profile!.prompts!.translation!;
-  const translation = await (
-    await request.get(`/api/revisions/prompt-preset/${selected.id}/${selected.revision}`)
-  ).json();
+    .poll(async () => (await (await request.get('/api/prompt-workspace')).json()).translation.title)
+    .toBe('UI17 empty translation');
+  const translation = (await (await request.get('/api/prompt-workspace')).json()).translation;
   expect(translation.program).toEqual(createDefaultPromptProgram('', 'translation'));
-  expect(translation.role).toBe('translation');
-  await openPromptActions(editor);
-  await editor.getByRole('button', { name: '앱 기본 프롬프트 사용', exact: true }).click();
-  await expect
-    .poll(async () => (await data(request, chat.id)).profile!.prompts!.translation)
-    .toBeNull();
-  await editor.getByLabel('프롬프트 역할').selectOption('main');
+  await editor.getByLabel('현재 프롬프트 역할').selectOption('main');
   await expect(await promptBody(editor)).toHaveValue(literal);
   await page.setViewportSize({ width: 1440, height: 1000 });
-  await page.screenshot({ path: info.outputPath('full-prompt-desktop.png') });
+  if (visualReview) await page.screenshot({ path: info.outputPath('full-prompt-desktop.png') });
   const after = await data(request, chat.id);
   expect(after.runs).toEqual(before.runs);
   expect(after.attempts).toEqual(before.attempts);
@@ -1447,17 +1409,14 @@ test('UI17 prompts use latest settings and concurrent edits preserve unsaved tex
   });
   const chat = (await created.json()) as Chat;
   const profile = (await data(request, chat.id)).profile!;
-  const attached = await request.put(`/api/chats/${chat.id}/profile`, {
-    data: {
-      expectedRevision: profile.revision,
-      attachments: profile.attachments,
-      personaReference: profile.personaReference,
-      routes: profile.routes,
-      image: profile.image,
-      prompts: { main: { id: first.id, revision: first.revision } },
-    },
-  });
-  expect(attached.ok()).toBeTruthy();
+  const initialWorkspace = await (await request.get('/api/prompt-workspace')).json();
+  expect(
+    (
+      await request.post('/api/prompt-workspace/apply', {
+        data: { expectedRevision: initialWorkspace.revision, role: 'main', presetId: first.id },
+      })
+    ).ok()
+  ).toBeTruthy();
   const latest = await request.put(`/api/prompt-presets/${first.id}`, {
     data: {
       expectedRevision: 1,
@@ -1471,40 +1430,38 @@ test('UI17 prompts use latest settings and concurrent edits preserve unsaved tex
   await page.getByRole('button', { name: '채팅 설정', exact: true }).click();
   const dialog = page.getByRole('dialog', { name: '채팅 설정', exact: true });
   await selectChatSettingsSection(page, '프롬프트·창작 프리셋');
-  const editor = dialog.getByTestId('prompt-editor');
-  await expect(await promptBody(editor)).toHaveValue('Latest library writing prompt.');
+  const editor = dialog.getByRole('region', { name: '현재 프롬프트 설정' });
+  await expect(await promptBody(editor)).toHaveValue(originalText);
   const edited = 'Unsaved custom full prompt.\n' + 'Keep my edited text intact.\n'.repeat(30);
   await (await promptBody(editor)).fill(edited);
-  await editor.getByLabel('프롬프트 역할').selectOption('translation');
-  await editor.getByLabel('프롬프트 역할').selectOption('main');
+  await editor.getByLabel('현재 프롬프트 역할').selectOption('translation');
+  await editor.getByLabel('현재 프롬프트 역할').selectOption('main');
   await expect(await promptBody(editor)).toHaveValue(edited);
-  const concurrent = await request.put(`/api/prompt-presets/${first.id}`, {
+  const current = await (await request.get('/api/prompt-workspace')).json();
+  const concurrent = await request.put('/api/prompt-workspace', {
     data: {
-      expectedRevision: 2,
-      title: first.title,
-      role: 'main',
-      program: createDefaultPromptProgram('Concurrent current prompt.', 'main'),
+      expectedRevision: current.revision,
+      main: {
+        ...current.main,
+        program: createDefaultPromptProgram('Concurrent current prompt.', 'main'),
+      },
     },
   });
   expect(concurrent.ok()).toBeTruthy();
-  await editor.getByRole('button', { name: '수정 저장', exact: true }).click();
+  await editor.getByRole('button', { name: '현재 설정 저장', exact: true }).click();
   await expect(editor.getByRole('alert')).toContainText('다른 요청이 먼저 반영됐어요.');
   await expect(await promptBody(editor)).toHaveValue(edited);
-  expect((await data(request, chat.id)).profile!.prompts!.main).toEqual({
-    id: first.id,
-    revision: 3,
-  });
-  await editor.getByLabel('프롬프트 이름').fill('UI17 recovered copy');
-  await openPromptActions(editor);
-  await editor.getByRole('button', { name: '복사본으로 저장', exact: true }).click();
+  expect((await (await request.get('/api/prompt-workspace')).json()).main.program).toEqual(
+    createDefaultPromptProgram('Concurrent current prompt.', 'main')
+  );
+  await editor.getByLabel('현재 프롬프트 이름').fill('UI17 recovered copy');
+  await editor.getByRole('button', { name: '현재 내용을 새 프리셋으로 저장', exact: true }).click();
   await expect(
-    editor.getByRole('status').filter({ hasText: '프롬프트를 저장했어요' })
+    editor.getByRole('status').filter({ hasText: '독립된 프리셋으로 저장했어요.' })
   ).toBeVisible();
-  expect((await data(request, chat.id)).profile!.prompts!.main).toEqual({
-    id: first.id,
-    revision: 3,
-  });
-  await close(page);
+  expect((await data(request, chat.id)).profile).toEqual(profile);
+  await page.getByRole('button', { name: '채팅 설정 닫기', exact: true }).click();
+  await page.getByRole('button', { name: '초안 버리고 닫기', exact: true }).click();
   await nav(page, '프롬프트');
   await page
     .getByRole('button', { name: 'UI17 recovered copy 프롬프트 편집', exact: true })
@@ -1526,7 +1483,7 @@ test('UI17 prompts use latest settings and concurrent edits preserve unsaved tex
     )
     .toBe(2);
   const after = await data(request, chat.id);
-  expect(after.profile!.prompts!.main).toEqual({ id: first.id, revision: 3 });
+  expect(after.profile).toEqual(profile);
   expect(after.runs).toHaveLength(0);
   expect(after.attempts).toHaveLength(0);
 });
@@ -1651,7 +1608,7 @@ test('UI18 source and translation edits preserve past snapshots and feed only fu
       .locator('.source-text-editor')
       .evaluate((element) => element.scrollWidth <= element.clientWidth + 1)
   ).toBe(true);
-  await page.screenshot({ path: info.outputPath('source-editor-mobile.png') });
+  if (visualReview) await page.screenshot({ path: info.outputPath('source-editor-mobile.png') });
   await scene.getByRole('button', { name: '원문 저장', exact: true }).click();
   await expect(scene.getByLabel('원문 수정 내용')).toHaveCount(0);
   await expect(scene.getByTestId('source-text')).toContainText('SYNTHETIC_EDITED_SOURCE');
@@ -1667,7 +1624,8 @@ test('UI18 source and translation edits preserve past snapshots and feed only fu
   await scene.getByRole('button', { name: '번역 수정', exact: true }).click();
   const manual = '  직접 고친 번역 {{literal_user}}\n\n사용자가 선택한 문장.\n  ';
   await scene.getByLabel('번역 수정 내용').fill(manual);
-  await page.screenshot({ path: info.outputPath('translation-editor-mobile.png') });
+  if (visualReview)
+    await page.screenshot({ path: info.outputPath('translation-editor-mobile.png') });
   await scene.getByRole('button', { name: '번역 저장', exact: true }).click();
   await expect(scene.getByTestId('translation-text')).toContainText('직접 고친 번역');
   await expect(scene.getByText('직접 수정한 번역', { exact: true })).toBeVisible();
@@ -1675,7 +1633,7 @@ test('UI18 source and translation edits preserve past snapshots and feed only fu
   const manualJob = authored.jobs.find(
     (job) => job.kind === 'translation' && job.sourceRevision === source.id
   )!;
-  expect(manualJob.id).toBe(oldJob.id);
+  expect(manualJob.id).not.toBe(oldJob.id);
   expect(manualJob.result!.text).toBe(manual);
   expect(manualJob.result!.manual).toBe(true);
   expect(authored.attempts).toEqual(original.attempts);
@@ -1692,7 +1650,7 @@ test('UI18 source and translation edits preserve past snapshots and feed only fu
     (job) => job.kind === 'translation' && job.sourceRevision === source.id
   );
   expect(currentJobs).toHaveLength(1);
-  expect(currentJobs[0].id).toBe(oldJob.id);
+  expect(currentJobs[0].id).not.toBe(oldJob.id);
   expect(currentJobs[0].result!.manual).not.toBe(true);
   expect(currentJobs[0].sourceHash).toBe(createHash('sha256').update(finalText).digest('hex'));
   await expect(scene.getByRole('combobox')).toHaveCount(0);
@@ -1901,7 +1859,8 @@ test('UI settings categories retain drafts and support keyboard navigation', asy
     ).toBe(true);
     await selectSettingsSection(page, '일반');
     await dialog.getByLabel('앱 화면 테마').selectOption('dark');
-    await page.screenshot({ path: info.outputPath(`settings-categories-${viewport.width}.png`) });
+    if (visualReview)
+      await page.screenshot({ path: info.outputPath(`settings-categories-${viewport.width}.png`) });
     await page.keyboard.press('Escape');
     const discard = page.getByRole('alertdialog', { name: '미저장 설정 확인', exact: true });
     await expect(discard).toBeVisible();
@@ -1930,14 +1889,15 @@ test('UI common dialogs center on desktop and fill mobile without changing dismi
       expect(box.y).toBeGreaterThanOrEqual(0);
       expect(box.x + box.width).toBeLessThanOrEqual(width);
       expect(box.y + box.height).toBeLessThanOrEqual(height);
-      if (width === 390) {
+      if (visualReview && width === 390) {
         expect(box.x).toBe(0);
         expect(box.y).toBe(0);
         expect(box.width).toBe(width);
         expect(box.height).toBe(height);
-      } else {
+      } else if (visualReview) {
         expect(Math.abs(box.x + box.width / 2 - width / 2)).toBeLessThanOrEqual(1);
-        expect(Math.abs(box.y + box.height / 2 - height / 2)).toBeLessThanOrEqual(1);
+        if (visualReview)
+          expect(Math.abs(box.y + box.height / 2 - height / 2)).toBeLessThanOrEqual(1);
         expect(box.x).toBeGreaterThan(24);
         expect(box.y).toBeGreaterThanOrEqual(32);
       }
@@ -1945,11 +1905,16 @@ test('UI common dialogs center on desktop and fill mobile without changing dismi
       await dialog.getByRole('button', { name: title + ' 닫기', exact: true }).focus();
       await page.keyboard.press('Shift+Tab');
       expect(await dialog.evaluate((node) => node.contains(document.activeElement))).toBe(true);
-      await page.screenshot({
-        path: info.outputPath(
-          `common-dialog-${title === '작업 현황' ? 'tasks' : 'story'}-${width}.png`
-        ),
-      });
+      await page.keyboard.press('Tab');
+      await expect(
+        dialog.getByRole('button', { name: title + ' 닫기', exact: true })
+      ).toBeFocused();
+      if (visualReview)
+        await page.screenshot({
+          path: info.outputPath(
+            `common-dialog-${title === '작업 현황' ? 'tasks' : 'story'}-${width}.png`
+          ),
+        });
       await page.keyboard.press('Escape');
       await expect(dialog).not.toBeVisible();
       if (title === '채팅 설정' || width === 1440) await expect(opener).toBeFocused();
@@ -1959,9 +1924,10 @@ test('UI common dialogs center on desktop and fill mobile without changing dismi
       await opener.click();
       const dialog = page.getByRole('dialog', { name: '읽기 설정', exact: true });
       const box = (await dialog.boundingBox())!;
-      expect(box.width).toBe(560);
-      expect(box.height).toBeLessThan(880);
-      expect(Math.abs(box.y + box.height / 2 - height / 2)).toBeLessThanOrEqual(1);
+      if (visualReview) expect(box.width).toBe(560);
+      if (visualReview) expect(box.height).toBeLessThan(880);
+      if (visualReview)
+        expect(Math.abs(box.y + box.height / 2 - height / 2)).toBeLessThanOrEqual(1);
       await page.mouse.click(8, 8);
       await expect(dialog).not.toBeVisible();
       await expect(opener).toBeFocused();
@@ -1970,7 +1936,7 @@ test('UI common dialogs center on desktop and fill mobile without changing dismi
       await opener.click();
       const dialog = page.getByRole('dialog', { name: '탐색', exact: true });
       const box = (await dialog.boundingBox())!;
-      expect(box).toEqual({ x: 0, y: 0, width, height });
+      if (visualReview) expect(box).toEqual({ x: 0, y: 0, width, height });
       await page.keyboard.press('Escape');
       await expect(dialog).not.toBeVisible();
       await expect(opener).toBeFocused();
@@ -1978,168 +1944,111 @@ test('UI common dialogs center on desktop and fill mobile without changing dismi
   }
 });
 
-test('UI translation chunk setting saves numeric and unlimited plans on mobile', async ({
+test('UI whole-source translation retains completed results across retry and cancellation', async ({
   page,
   request,
 }, info) => {
-  const chat = await seed(request, `번역 구간 설정 ${Date.now()}`, 'Synthetic chunk settings.');
+  const chat = await seed(
+    request,
+    `전체 번역 ${Date.now()}`,
+    'Synthetic whole source translation.'
+  );
   const before = await data(request, chat.id);
   const source = before.sources[0];
   const original = ['A'.repeat(150), 'B'.repeat(150)].join('\n\n');
-  const edited = await request.put(`/api/sources/${source.id}/text`, {
-    data: { text: original, expectedRevision: source.editRevision ?? 0 },
-  });
-  expect(edited.ok()).toBeTruthy();
+  expect(
+    (
+      await request.put(`/api/sources/${source.id}/text`, {
+        data: { text: original, expectedRevision: source.editRevision ?? 0 },
+      })
+    ).ok()
+  ).toBeTruthy();
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto(`/?chat=${chat.id}`);
-  const dialog = page.getByRole('dialog', { name: '채팅 설정', exact: true });
   await page.getByRole('button', { name: '채팅 설정', exact: true }).click();
   await selectChatSettingsSection(page, '자동 후속 작업');
-  const runtime = dialog.locator('section.settings');
-  const size = runtime.getByLabel('번역 구간 기준 글자 수', { exact: true });
-  await expect(size).toHaveValue('3000');
-  await expect(runtime.getByText(/문단을 보존하므로 지정한 길이를 초과할 수 있어요/)).toBeVisible();
-  await size.fill('100');
-  await runtime.getByRole('button', { name: '설정 저장', exact: true }).click();
-  await expect
-    .poll(async () => (await data(request, chat.id)).chat.settings.translationChunkChars)
-    .toBe(100);
-  await page.screenshot({ path: info.outputPath('translation-chunks-numeric-390.png') });
+  await expect(page.getByLabel('번역 구간 기준 글자 수', { exact: true })).toHaveCount(0);
+  await expect(page.getByLabel('번역 구간 무제한', { exact: true })).toHaveCount(0);
+  if (visualReview)
+    await page.screenshot({ path: info.outputPath('translation-whole-source-settings-390.png') });
   await close(page);
   const scene = page.locator(`[data-testid="source"][data-source-id="${source.id}"]`);
   await scene.getByRole('button', { name: '번역 보기', exact: true }).click();
-  await expect
-    .poll(
-      async () =>
-        (await data(request, chat.id)).jobs.find((job) => job.kind === 'translation')?.status
-    )
-    .toBe('completed');
-  const split = (await data(request, chat.id)).jobs.find((job) => job.kind === 'translation')!;
-  expect(split.translationPlan).toEqual({ maxChunkChars: 100, totalChunks: 2 });
-  await page.getByRole('button', { name: '채팅 설정', exact: true }).click();
-  await selectChatSettingsSection(page, '자동 후속 작업');
-  await runtime.getByLabel('번역 구간 무제한', { exact: true }).check();
-  await expect(size).toBeDisabled();
-  await runtime.getByRole('button', { name: '설정 저장', exact: true }).click();
-  await expect
-    .poll(async () => (await data(request, chat.id)).chat.settings.translationChunkChars)
-    .toBeNull();
-  await page.screenshot({ path: info.outputPath('translation-chunks-unlimited-390.png') });
-  await close(page);
+  const latest = async () =>
+    (await data(request, chat.id)).jobs
+      .filter((job) => job.kind === 'translation')
+      .sort((a, b) => (b.revision ?? 0) - (a.revision ?? 0))[0];
+  await expect.poll(async () => (await latest())?.status).toBe('completed');
+  const first = await latest();
+  expect(first).not.toHaveProperty('chunks');
+  expect(first).not.toHaveProperty('translationPlan');
+  await expect(scene.getByTestId('translation-text')).toBeVisible();
+  const firstText = await scene.getByTestId('translation-text').innerText();
   expect(
-    (await data(request, chat.id)).jobs.find((job) => job.id === split.id)?.translationPlan
-  ).toEqual(split.translationPlan);
-  await page.reload();
-  await page.getByRole('button', { name: '채팅 설정', exact: true }).click();
-  await selectChatSettingsSection(page, '자동 후속 작업');
-  await expect(runtime.getByLabel('번역 구간 무제한', { exact: true })).toBeChecked();
-  await close(page);
-  page.once('dialog', async (confirmation) => {
-    expect(confirmation.type()).toBe('confirm');
-    await confirmation.accept();
-  });
-  await openSourceActions(scene);
+    (
+      await request.post('/api/test/control', { data: { action: 'hold', barrier: 'translation' } })
+    ).ok()
+  ).toBeTruthy();
   await scene.getByRole('button', { name: '현재 설정으로 새 번역', exact: true }).click();
-  await expect
-    .poll(async () => {
-      const job = (await data(request, chat.id)).jobs.find((item) => item.id === split.id);
-      return { status: job?.status, revision: job?.revision, plan: job?.translationPlan };
-    })
-    .toEqual({
-      status: 'completed',
-      revision: split.revision! + 1,
-      plan: { maxChunkChars: null, totalChunks: 1 },
-    });
-  const final = await data(request, chat.id);
-  expect(final.sources[0].text).toBe(original);
-  expect(final.jobs.find((item) => item.id === split.id)?.sourceHash).toBe(split.sourceHash);
-  await page.screenshot({ path: info.outputPath('translation-chunks-result-390.png') });
-
-  for (const terminal of ['failed', 'cancelled'] as const) {
-    const control = await request.post('/api/test/control', {
-      data:
-        terminal === 'failed'
-          ? { action: 'fail-next', point: 'translation' }
-          : { action: 'hold', barrier: 'translation' },
-    });
-    expect(control.ok()).toBeTruthy();
-    const restart = await request.post(`/api/sources/${source.id}/retranslate`, { data: {} });
-    expect(restart.ok()).toBeTruthy();
-    if (terminal === 'cancelled') {
-      await expect
-        .poll(
-          async () => (await data(request, chat.id)).jobs.find((job) => job.id === split.id)?.status
-        )
-        .toBe('running');
-      expect((await request.post(`/api/jobs/${split.id}/cancel`, { data: {} })).ok()).toBeTruthy();
+  await expect.poll(async () => (await latest()).status).toBe('running');
+  const pending = await latest();
+  expect(pending.id).not.toBe(first.id);
+  expect(pending.previousResult?.jobId).toBe(first.id);
+  await expect(scene.getByTestId('translation-text')).toHaveText(firstText);
+  expect((await request.post(`/api/jobs/${pending.id}/cancel`, { data: {} })).ok()).toBeTruthy();
+  expect(
+    (
+      await request.post('/api/test/control', {
+        data: { action: 'release', barrier: 'translation' },
+      })
+    ).ok()
+  ).toBeTruthy();
+  await expect.poll(async () => (await latest()).status).toBe('cancelled');
+  await expect(scene.getByTestId('translation-text')).toHaveText(firstText);
+  if (visualReview)
+    await page.screenshot({ path: info.outputPath('translation-previous-cancelled-390.png') });
+  for (const terminal of ['cancelled', 'failed'] as const) {
+    if (terminal === 'failed') {
       expect(
         (
           await request.post('/api/test/control', {
-            data: { action: 'release', barrier: 'translation' },
+            data: { action: 'fail-next', point: 'translation' },
           })
         ).ok()
       ).toBeTruthy();
+      expect(
+        (await request.post(`/api/sources/${source.id}/retranslate`, { data: {} })).ok()
+      ).toBeTruthy();
+      await expect.poll(async () => (await latest()).status).toBe('failed');
     }
-    await expect
-      .poll(
-        async () => (await data(request, chat.id)).jobs.find((job) => job.id === split.id)?.status
-      )
-      .toBe(terminal);
-    const stopped = (await data(request, chat.id)).jobs.find((job) => job.id === split.id)!;
-    const target = terminal === 'failed' ? 100 : null;
-    await page.getByRole('button', { name: '채팅 설정', exact: true }).click();
-    await selectChatSettingsSection(page, '자동 후속 작업');
-    await runtime.getByLabel('번역 구간 무제한', { exact: true }).setChecked(target === null);
-    if (target !== null) await size.fill(String(target));
-    await runtime.getByRole('button', { name: '설정 저장', exact: true }).click();
-    await expect
-      .poll(async () => (await data(request, chat.id)).chat.settings.translationChunkChars)
-      .toBe(target);
-    await close(page);
+    const stopped = await latest();
+    await expect(scene.getByTestId('translation-text')).toBeVisible();
     const activity = scene.getByTestId('turn-activity');
     if ((await activity.getAttribute('open')) === null)
       await activity.locator(':scope > summary').click();
-    const retry = activity
-      .locator(`[data-testid="job-translation"][data-job-id="${split.id}"]`)
-      .getByRole('button', { name: '현재 설정으로 번역 재시도', exact: true });
+    const retry = scene
+      .getByRole('button', { name: '현재 설정으로 번역 재시도', exact: true })
+      .filter({ visible: true })
+      .first();
     await expect(retry).toBeVisible();
-    page.once('dialog', async (confirmation) => {
-      expect(confirmation.type()).toBe('confirm');
-      await confirmation.dismiss();
-    });
     await retry.click();
-    expect((await data(request, chat.id)).jobs.find((job) => job.id === split.id)?.revision).toBe(
-      stopped.revision
-    );
-    page.once('dialog', async (confirmation) => {
-      expect(confirmation.type()).toBe('confirm');
-      await confirmation.accept();
-    });
-    const retryRequest = page.waitForRequest(
-      (sent) => sent.method() === 'POST' && sent.url().endsWith(`/api/jobs/${split.id}/retry`)
-    );
-    await retry.click();
-    expect((await retryRequest).postDataJSON()).toEqual({});
     await expect
       .poll(async () => {
-        const job = (await data(request, chat.id)).jobs.find((item) => item.id === split.id);
-        return { status: job?.status, revision: job?.revision, plan: job?.translationPlan };
+        const value = await latest();
+        return value.id !== stopped.id && value.status === 'completed';
       })
-      .toEqual({
-        status: 'completed',
-        revision: stopped.revision! + 1,
-        plan: { maxChunkChars: target, totalChunks: target === null ? 1 : 2 },
-      });
-    const retried = await data(request, chat.id);
-    const job = retried.jobs.find((item) => item.id === split.id)!;
-    expect(job.chunks).toHaveLength(target === null ? 1 : 2);
-    expect(job.chunks!.every((chunk) => chunk.status === 'completed' && chunk.attempt === 1)).toBe(
-      true
+      .toBe(true);
+    const retried = await latest();
+    expect(retried.sourceHash).toBe(first.sourceHash);
+    expect((await data(request, chat.id)).sources[0].text).toBe(original);
+    expect((await (await request.get(`/api/jobs/${first.id}`)).json()).result).toEqual(
+      first.result
     );
-    expect(job.sourceHash).toBe(split.sourceHash);
-    expect(retried.sources[0].text).toBe(original);
-    await page.screenshot({
-      path: info.outputPath(`translation-chunks-${terminal}-retry-390.png`),
-    });
+    if (visualReview)
+      await page.screenshot({
+        path: info.outputPath(`translation-whole-source-${terminal}-retry-390.png`),
+      });
   }
 });
+
+preservePromptWorkspace();

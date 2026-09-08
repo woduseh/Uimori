@@ -8,8 +8,11 @@ export function assertModelSelection(
   next: ModelRef | null,
   previous: ModelRef | null = null
 ): void {
-  if (!next || previous?.id === next.id) return;
+  if (!next) return;
+  store.assertAvailable('model', next.id);
   const latest = store.get<ModelPreset>('model', next.id);
+  store.assertAvailable('connection', latest.connectionId);
+  if (previous?.id === next.id) return;
   if (latest.enabled === false) throw new HttpError(400, '비활성 모델은 새로 선택할 수 없어요.');
   const current = store.get<Connection>('connection', latest.connectionId);
   if (!current.enabled) throw new HttpError(400, '비활성 연결의 모델은 새로 선택할 수 없어요.');

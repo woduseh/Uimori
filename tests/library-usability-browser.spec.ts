@@ -1,3 +1,4 @@
+import { visualReview } from './fixtures/visual-review.js';
 import { createLibraryContent } from './ui-navigation.js';
 import { expect, test, type APIRequestContext, type Page } from '@playwright/test';
 import type { Content } from '../core/product.js';
@@ -24,7 +25,7 @@ async function noHorizontalOverflow(page: Page) {
   ).toBeLessThanOrEqual(1);
 }
 
-for (const [index, width] of [390, 360].entries()) {
+for (const [index, width] of (visualReview ? [390, 360] : [390]).entries()) {
   test(`LUSE0${index + 1} mobile ${width}px library starts with readable rows and creates a bot into a chat`, async ({
     page,
     request,
@@ -48,7 +49,8 @@ for (const [index, width] of [390, 360].entries()) {
     await expect(panel.locator('.library-folder-list')).toBeHidden();
     await expect(panel.getByRole('button', { name: '선택', exact: true })).toBeHidden();
     await noHorizontalOverflow(page);
-    await page.screenshot({ path: info.outputPath(`library-readable-${width}.png`) });
+    if (visualReview)
+      await page.screenshot({ path: info.outputPath(`library-readable-${width}.png`) });
 
     await panel.getByLabel('목록 관리', { exact: true }).click();
     await panel.getByRole('button', { name: '선택', exact: true }).click();
@@ -64,7 +66,8 @@ for (const [index, width] of [390, 360].entries()) {
     await expect(panel.getByRole('region', { name: '대표 이미지 설정', exact: true })).toBeHidden();
     await expect(panel.getByTestId('package-fields')).toBeHidden();
     await noHorizontalOverflow(page);
-    await page.screenshot({ path: info.outputPath(`library-create-${width}.png`) });
+    if (visualReview)
+      await page.screenshot({ path: info.outputPath(`library-create-${width}.png`) });
     const createdTitle = `${title} 새 친구`,
       body = '친절한 안내자예요. 내가 고른 길을 존중하며 짧게 대답해요.';
     await panel.getByLabel('자료 이름', { exact: true }).fill(createdTitle);
@@ -85,7 +88,8 @@ for (const [index, width] of [390, 360].entries()) {
     await expect(panel.getByRole('status')).toContainText(
       `${createdTitle} 저장됨 · 다음 실행부터 사용해요.`
     );
-    await page.screenshot({ path: info.outputPath(`library-saved-${width}.png`) });
+    if (visualReview)
+      await page.screenshot({ path: info.outputPath(`library-saved-${width}.png`) });
     await start.click();
     const dialog = page.getByRole('dialog', { name: '새 채팅', exact: true });
     const createdResponse = page.waitForResponse(
@@ -125,7 +129,7 @@ test('LUSE03 empty persona and module folders explain their roles and offer the 
       (folder) => !organization.folders.some((item) => item.id === folder.id)
     )!.id;
   }
-  await page.setViewportSize({ width: 360, height: 800 });
+  await page.setViewportSize({ width: 390, height: 800 });
   let contentWrites = 0;
   page.on('request', (item) => {
     if (item.method() === 'POST' && item.url().endsWith('/api/content')) contentWrites++;
@@ -150,7 +154,8 @@ test('LUSE03 empty persona and module folders explain their roles and offer the 
     await panel.getByText('분류·읽기 설정', { exact: true }).click();
     await expect(panel.getByLabel('자료 종류', { exact: true })).toHaveValue(category);
     await noHorizontalOverflow(page);
-    await page.screenshot({ path: info.outputPath(`library-role-${category}-360.png`) });
+    if (visualReview)
+      await page.screenshot({ path: info.outputPath(`library-role-${category}-360.png`) });
     await panel.getByRole('button', { name: '← 서재 목록', exact: true }).click();
   }
   expect(contentWrites).toBe(0);

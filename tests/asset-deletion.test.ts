@@ -73,7 +73,7 @@ function begin(store: Store, chatId: string) {
   ).run;
 }
 
-test('unused upload deletion removes bytes, emits an event, and leaves archive valid', async () => {
+test('upload deletion hides catalog entry and retains bytes, emits an event, and leaves archive valid', async () => {
   const { store, app, chat, asset, published } = fixture();
   const before = store.product.export();
   const result = await injectWithFixtureBot(app, {
@@ -83,14 +83,14 @@ test('unused upload deletion removes bytes, emits an event, and leaves archive v
   });
   expect(result.statusCode).toBe(200);
   expect(result.json()).toEqual({ deleted: true, id: asset.id });
-  expect(() => store.product.asset(asset.id)).toThrow('Asset not found');
+  expect(store.product.asset(asset.id).bytes).toHaveLength(8);
   expect(store.product.assets(chat.id)).toEqual([]);
   expect(published).toEqual([chat.id]);
   expect(store.events(chat.id, 0)).toEqual(
     expect.arrayContaining([expect.objectContaining({ kind: 'asset.deleted', entityId: asset.id })])
   );
   expect(before.tables.assets).toHaveLength(1);
-  expect(store.product.export().tables.assets).toHaveLength(0);
+  expect(store.product.export().tables.assets).toHaveLength(1);
   const directory = mkdtempSync(join(tmpdir(), 'uimori-asset-deletion-')),
     target = new Store(join(directory, 'import.sqlite')),
     appForImport = Fastify();
@@ -123,10 +123,12 @@ test('cross-chat and malformed deletions preserve the uploaded bytes', async () 
   expect(published).toEqual([]);
 });
 
-test('active execution and immutable completed image catalogs prevent deletion', () => {
+test('deletion preserves active execution and immutable completed image catalogs', () => {
   const { store, chat, asset } = fixture(),
     run = begin(store, chat.id);
-  expect(() => deleteChatAsset(store, chat.id, asset.id, {})).toThrow('진행 중인');
+  const input = imageJobInput(store, run.snapshot);
+  expect(() => deleteChatAsset(store, chat.id, asset.id, {})).not.toThrow();
+  expect(store.product.assets(chat.id)).toEqual([]);
   store.startRun(run.id);
   const source = store.completeRun(
     run.id,
@@ -134,8 +136,7 @@ test('active execution and immutable completed image catalogs prevent deletion',
     { modelCalls: 0, inputTokens: null, outputTokens: null, costUsd: null },
     { ...run.snapshot.settings, translation: false, status: false }
   );
-  const input = imageJobInput(store, run.snapshot),
-    now = new Date().toISOString();
+  const now = new Date().toISOString();
   store.db
     .prepare(
       "INSERT INTO jobs(id,chat_id,source_revision,source_hash,kind,status,input,created_at,updated_at) VALUES(?,?,?,?,?,'completed',?,?,?)"
@@ -150,6 +151,7 @@ test('active execution and immutable completed image catalogs prevent deletion',
       now,
       now
     );
-  expect(() => deleteChatAsset(store, chat.id, asset.id, {})).toThrow('과거');
+  expect(store.job('frozen-image-job').input).toEqual(input);
+  expect(imageJobInput(store, run.snapshot)).not.toEqual(input);
   expect(store.product.asset(asset.id).bytes).toHaveLength(8);
 });

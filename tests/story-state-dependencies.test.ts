@@ -432,7 +432,7 @@ describe('S02 S03 actual Store continuity and activation dependencies', () => {
     expect(store.story.stateAt(id, second.id)?.values).toEqual({ coins: 7 });
     const restored = await database();
     const archive = store.product.export();
-    expect(archive.version).toBe(13);
+    expect(archive.version).toBe(14);
     expect(restored.product.import(archive).restored).toBe(true);
     expect(restored.run(second.runId).snapshot).toEqual(originalRun);
     expect(restored.story.bundle(secondJob.id).snapshot.story?.state?.values).toEqual({ coins: 7 });

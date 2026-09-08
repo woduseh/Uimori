@@ -9,6 +9,7 @@ import {
   createOwnership,
   localVerificationEnv,
   assertBuild,
+  buildFingerprint,
   fingerprint,
   browserPath,
   startServer,
@@ -38,6 +39,7 @@ export async function runBrowserVerification({
   limitations = [],
 }) {
   if (process.argv.length > 2) throw new Error(`verify-${name} accepts no arguments`);
+  const visualReview = process.env.NR_VISUAL_REVIEW === '1';
   const runId = `${prefix}-${newId()}`,
     directory = path.join(artifactRoot, runId),
     runtime = path.join(directory, 'runtime');
@@ -53,7 +55,8 @@ export async function runBrowserVerification({
     scope,
     requiredCases,
     requiredTitles,
-    requiredScreenshots,
+    visualReview,
+    requiredScreenshots: visualReview ? requiredScreenshots : [],
     failures,
     cleanup: { status: 'NOT_RUN' },
     limitations: [
@@ -99,7 +102,8 @@ export async function runBrowserVerification({
     const identity = await assertBuild(),
       before = await fingerprint();
     summary.identity = identity;
-    if (identity.sourceHash !== before.hash)
+    summary.verificationIdentity = before;
+    if (identity.sourceHash !== (await buildFingerprint()).hash)
       throw new Error('Source changed during initial build identity check');
     const temp = path.join(runtime, 'temp');
     await mkdir(temp, { recursive: true });
@@ -163,7 +167,7 @@ export async function runBrowserVerification({
       throw new Error(
         `Expected ${expectedCount} browser tests, received ${summary.report.executed}`
       );
-    if (requiredScreenshots.length) {
+    if (visualReview && requiredScreenshots.length) {
       const screenshots = (await filesBelow(env.NR_BROWSER_OUTPUT)).filter((file) =>
         file.endsWith('.png')
       );

@@ -76,17 +76,25 @@ export async function removeOwned(parent, target) {
   }
   await rm(target, { recursive: true, force: true });
 }
-export async function fingerprint(sourceRoot = root) {
+export async function fingerprint(sourceRoot = root, { buildOnly = false } = {}) {
   const root = sourceRoot;
-  const dirs = ['core', 'server', 'web', 'src', 'tests', 'scripts', 'fixtures'];
+  const dirs = buildOnly
+    ? ['core', 'server', 'web', 'src']
+    : ['core', 'server', 'web', 'src', 'tests', 'scripts', 'fixtures'];
   const config = (await readdir(root)).filter((name) =>
-    /^(package(?:-lock)?\.json|(?:tsconfig.*\.json)|(?:vite|vitest|playwright)\.config\.[cm]?[jt]s|biome\.json|\.gitattributes)$/.test(
-      name
-    )
+    (buildOnly
+      ? /^(package(?:-lock)?\.json|tsconfig(?:\.server)?\.json|vite\.config\.[cm]?[jt]s|\.gitattributes)$/
+      : /^(package(?:-lock)?\.json|(?:tsconfig.*\.json)|(?:vite|vitest|playwright)\.config\.[cm]?[jt]s|biome\.json|\.gitattributes)$/
+    ).test(name)
   );
   const files = [
     ...(await Promise.all(dirs.map((dir) => filesBelow(path.join(root, dir))))).flat(),
     ...config.map((name) => path.join(root, name)),
+    ...(buildOnly
+      ? ['scripts/build.mjs', 'scripts/build-runner.mjs', 'scripts/lib.mjs']
+          .map((name) => path.join(root, name))
+          .filter(existsSync)
+      : []),
   ].sort();
   const hash = createHash('sha256');
   for (const file of files) {
@@ -104,6 +112,10 @@ export async function fingerprint(sourceRoot = root) {
     lineEndings: 'text CRLF normalized to LF',
   };
 }
+// Tests and verification runners identify evidence, but are not compiler inputs.
+export async function buildFingerprint(sourceRoot = root) {
+  return fingerprint(sourceRoot, { buildOnly: true });
+}
 export async function distHash(directory = path.join(root, 'dist')) {
   const hash = createHash('sha256');
   for (const file of await filesBelow(directory)) {
@@ -118,7 +130,7 @@ export async function assertBuild() {
   const manifest = JSON.parse(
     await readFile(path.join(root, 'dist', 'build-identity.json'), 'utf8')
   );
-  if ((await fingerprint()).hash !== manifest.sourceHash)
+  if ((await buildFingerprint()).hash !== manifest.sourceHash)
     throw new Error('Source fingerprint differs from build. Run npm run build.');
   if ((await distHash()) !== manifest.distHash)
     throw new Error('Compiled build fingerprint mismatch.');

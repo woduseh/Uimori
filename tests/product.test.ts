@@ -605,7 +605,7 @@ describe('M1 product data with actual file SQLite', () => {
     await writeFile(path, bytes);
     const reopened = new DatabaseSync(path, { readOnly: true });
     try {
-      expect(reopened.prepare('PRAGMA user_version').get()).toEqual({ user_version: 13 });
+      expect(reopened.prepare('PRAGMA user_version').get()).toEqual({ user_version: 14 });
       expect(
         reopened.prepare('SELECT id,text,hash FROM sources WHERE id=?').get(source.id)
       ).toEqual({ id: source.id, text: source.text, hash: source.hash });
@@ -718,7 +718,8 @@ describe('M1 real HTTP application boundaries', () => {
 
   test('P07 P08 P12 explicit retry translates the whole scene with the current model and retains source-time references', async () => {
     const fixtureItem = await directory();
-    const chunkRequests = new Map<string, number>();
+    let translationCalls = 0;
+    let failTranslation = true;
     let expectedTranslationModel = 'fixture-translator';
     let glossaryId = '';
     const originalText = ['First', 'Middle', 'Last']
@@ -744,9 +745,9 @@ describe('M1 real HTTP application boundaries', () => {
         { id: glossaryId, revision: 1, text: 'SOURCE_TIME_GLOSSARY_OLD' },
       ]);
       expect(JSON.stringify(body)).not.toContain('FUTURE_GLOSSARY_NEW');
-      const count = (chunkRequests.get(source.chunkId) ?? 0) + 1;
-      chunkRequests.set(source.chunkId, count);
-      if (source.chunkId.endsWith('-0') && body.input.results.length === 0) {
+      expect(source.text).toBe(originalText);
+      translationCalls++;
+      if (body.input.results.length === 0) {
         await writeSse(response, [
           {
             type: 'tool_delta',
@@ -755,34 +756,24 @@ describe('M1 real HTTP application boundaries', () => {
             name: 'knowledge.read',
             argumentsDelta: JSON.stringify({ id: glossaryId }),
           },
-          { type: 'usage', inputTokens: 3, outputTokens: 1 },
           { type: 'done', reason: 'tool_calls' },
         ]);
         return;
       }
-      if (source.chunkId.endsWith('-0'))
-        expect(body.input.results[0]).toMatchObject({
-          callId: 'translation-read-glossary',
-          denied: false,
-          result: { text: 'SOURCE_TIME_GLOSSARY_OLD', source: { revision: 1 } },
-        });
-      if (source.chunkId.endsWith('-1') && count === 1) {
+      expect(body.input.results[0]).toMatchObject({
+        callId: 'translation-read-glossary',
+        denied: false,
+        result: { text: 'SOURCE_TIME_GLOSSARY_OLD', source: { revision: 1 } },
+      });
+      if (failTranslation) {
         await writeSse(response, [
           { type: 'error', message: 'One intentional technical fixture failure' },
         ]);
         return;
       }
-      const output = {
-        sourceRevision: source.sourceRevision,
-        sourceHash: source.sourceHash,
-        chunkId: source.chunkId,
-        segments: source.blocks.map((block: { anchor: string; text: string }) => ({
-          anchors: [block.anchor],
-          text: `[모의 번역 결과 ${body.modelId}] ${block.text}`,
-        })),
-      };
+      const output = '[모의 번역 결과 ' + body.modelId + '] ' + source.text;
       await writeSse(response, [
-        { type: 'text_delta', delta: JSON.stringify(output) },
+        { type: 'text_delta', delta: output },
         { type: 'usage', inputTokens: 4, outputTokens: 2 },
         { type: 'done', reason: 'stop' },
       ]);
@@ -858,26 +849,12 @@ describe('M1 real HTTP application boundaries', () => {
     await api(url, `/api/chats/${other.id}`);
     await api(url, '/api/test/control', { action: 'release', barrier: 'translation' });
     const partial = await terminalJob(url, chat.id, jobId);
-    expect(partial.status).toBe('partial');
-    expect(partial.chunks?.map((chunk) => chunk.status)).toEqual([
-      'completed',
-      'failed',
-      'completed',
-    ]);
+    expect(partial.status).toBe('failed');
+    expect(partial.result?.text ?? '').toBe('');
     expect(app.store.job(jobId).input).toMatchObject({
       translationModelSelection: { id: translation.id },
       translationModelSnapshot: { ...translation, connection: bound },
     });
-    expect(partial.result?.segments).toHaveLength(2);
-    expect(partial.result?.sourceRevision).toBe(source.id);
-    expect(partial.result?.mock).toBe(true);
-    const successfulChunks = partial
-      .chunks!.filter((chunk) => chunk.status === 'completed')
-      .map((chunk) => structuredClone(chunk));
-    const failedChunk = partial.chunks!.find((chunk) => chunk.status === 'failed')!;
-    const beforeRetry = new Map(chunkRequests);
-    await api(url, `/api/jobs/${jobId}/retry`, { chunkId: failedChunk.id }, { status: 400 });
-    expect(app.store.job(jobId).status).toBe('partial');
     const updatedTranslation = app.store.product.model(
       {
         title: 'Future translator settings',
@@ -890,38 +867,24 @@ describe('M1 real HTTP application boundaries', () => {
       translation.id
     );
     expectedTranslationModel = 'future-translator';
-    await api(url, `/api/jobs/${jobId}/retry`, {});
-    const completed = await terminalJob(url, chat.id, jobId);
+    failTranslation = false;
+    const retried = await api<Job>(url, `/api/jobs/${jobId}/retry`, {});
+    expect(retried.id).not.toBe(jobId);
+    const completed = await terminalJob(url, chat.id, retried.id);
     expect(completed.status).toBe('completed');
-    expect(completed.result?.segments).toHaveLength(3);
-    expect(app.store.job(jobId).input).toMatchObject({
+    expect(app.store.job(retried.id).input).toMatchObject({
       translationModelSelection: { id: translation.id },
       translationModelSnapshot: { ...updatedTranslation, connection: bound },
     });
-    expect(app.store.product.get<ModelPreset>('model', translation.id).modelId).toBe(
-      'future-translator'
-    );
-    expect(completed.result?.segments?.flatMap((segment) => segment.anchors)).toEqual(
-      source.blocks?.map((block) => block.anchor)
-    );
-    for (const chunk of successfulChunks) {
-      expect(completed.chunks?.find((value) => value.id === chunk.id)?.result).not.toEqual(
-        chunk.result
-      );
-      expect(chunkRequests.get(chunk.id)).toBe(
-        beforeRetry.get(chunk.id)! + (chunk.id.endsWith('-0') ? 2 : 1)
-      );
-    }
-    expect(chunkRequests.get(failedChunk.id)).toBe(beforeRetry.get(failedChunk.id)! + 1);
-    expect(completed.chunks?.find((chunk) => chunk.id === failedChunk.id)?.attempt).toBe(1);
+    expect(app.store.job(jobId).status).toBe('failed');
+    expect(translationCalls).toBe(4);
     expect(completed.result?.text?.match(/`KEEP_LITERAL`/g)).toHaveLength(3);
-    expect(completed.result?.text).not.toContain('[[p_');
     expect(app.store.source(source.id).hash).toBe(source.hash);
     expect(app.store.source(source.id).text).toBe(originalText);
     expect(app.store.detail(other.id).jobs).toEqual([]);
     const ledger = app.store.product.attempts(chat.id);
     expect(ledger.filter((attempt) => attempt.role === 'main')).toHaveLength(1);
-    expect(ledger.filter((attempt) => attempt.role === 'translation')).toHaveLength(8);
+    expect(ledger.filter((attempt) => attempt.role === 'translation')).toHaveLength(4);
     expect(ledger.filter((attempt) => attempt.status === 'error')).toHaveLength(1);
     expect(ledger.every((attempt) => attempt.costUsd === null)).toBe(true);
     expect(

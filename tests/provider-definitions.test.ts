@@ -11,7 +11,9 @@ describe('local provider definitions (no network or provider capability inferenc
     expect(new Set(PROVIDER_DEFINITIONS.map((item) => item.id))).toEqual(
       new Set(PROVIDER_PROTOCOLS)
     );
-    expect(new Set(PROVIDER_DEFINITIONS.map((item) => item.id)).size).toBe(7);
+    expect(new Set(PROVIDER_DEFINITIONS.map((item) => item.id)).size).toBe(
+      PROVIDER_DEFINITIONS.length
+    );
     for (const protocol of PROVIDER_PROTOCOLS)
       expect(providerDefinition(protocol).id).toBe(protocol);
     expect(() => providerDefinition('unregistered' as ProviderProtocol)).toThrow(
@@ -36,8 +38,12 @@ describe('local provider definitions (no network or provider capability inferenc
   });
   test('keeps adapter provenance separate from unknown model capabilities and prices', () => {
     for (const item of PROVIDER_DEFINITIONS) {
-      expect(item.revision).toBe(1);
-      expect(item.source).toMatchObject({ kind: 'adapter', checkedAt: '2026-09-07' });
+      expect(Number.isInteger(item.revision) && item.revision > 0).toBe(true);
+      expect(item.source.kind).toBe('adapter');
+      expect(item.source.checkedAt).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+      expect(new Date(item.source.checkedAt).toISOString().slice(0, 10)).toBe(
+        item.source.checkedAt
+      );
       expect(item.source.reference).toMatch(/^core\/[a-z-]+\.ts#[A-Za-z]+$/);
       expect(item.modelCapabilities).toEqual({ tools: null, structuredOutput: null });
       expect(item.price).toBe('unknown');

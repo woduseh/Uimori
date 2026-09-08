@@ -251,19 +251,38 @@ export function executeTool(
   role: 'main' | 'translation' | 'status' | 'image' = 'main'
 ): ToolEvent {
   checkAbort(signal);
-  if ((role === 'main' || role === 'translation') && STORY_READ_NAMES.includes(action.name))
-    return executeStoryRead(snapshot, action, role === 'translation' || !!snapshot.contextPlan);
+  if ((role === 'main' || role === 'translation') && STORY_READ_NAMES.includes(action.name)) {
+    const event = executeStoryRead(
+      snapshot,
+      action,
+      role === 'translation' || !!snapshot.contextPlan
+    );
+    // RESOURCE_UNAVAILABLE also masks source-integrity exceptions; never relax that boundary.
+    if (event.denied && (event.result as { code?: string }).code === 'INVALID_ARGUMENTS')
+      event.errorKind = 'recoverable';
+    return event;
+  }
   const denied = (code: string): ToolEvent => ({
     callId: action.callId,
     name: ALLOWED_TOOLS.includes(action.name) ? action.name : 'unapproved',
     args: {},
     result: { code },
     denied: true,
+    ...(['INVALID_ARGUMENTS', 'RESOURCE_UNAVAILABLE'].includes(code)
+      ? { errorKind: 'recoverable' as const }
+      : {}),
   });
   if (!ALLOWED_TOOLS.includes(action.name)) return denied('TOOL_NOT_ALLOWED');
   // Scope applies before search, counts, pagination, and individual reads alike.
   const scope = roleResources(snapshot, role);
   const { args } = action;
+  const search = action.name === 'knowledge.search' || action.name === 'skills.list';
+  if (
+    Object.keys(args).some(
+      (key) => !(search ? ['query', 'offset', 'limit'] : ['id', 'offset', 'limit']).includes(key)
+    )
+  )
+    return denied('INVALID_ARGUMENTS');
   if (action.name === 'knowledge.search' || action.name === 'skills.list') {
     if (args.query !== undefined && (typeof args.query !== 'string' || args.query.length > 512))
       return denied('INVALID_ARGUMENTS');

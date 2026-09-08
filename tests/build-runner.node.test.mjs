@@ -4,7 +4,7 @@ import path from 'node:path';
 import { existsSync } from 'node:fs';
 import { mkdir, mkdtemp, readFile, readdir, rename, writeFile } from 'node:fs/promises';
 import { build } from '../scripts/build-runner.mjs';
-import { root, distHash, fingerprint, removeOwned } from '../scripts/lib.mjs';
+import { root, distHash, fingerprint, buildFingerprint, removeOwned } from '../scripts/lib.mjs';
 
 async function fixture(t) {
   const parent = path.join(root, 'output', 'tooling-tests');
@@ -42,11 +42,23 @@ test('build promotes only complete outputs and keeps a matching manifest and log
   const result = await build({ cwd, run: compiler, progress() {} });
   assert.equal(result.status, 'PASS', JSON.stringify(result));
   assert.equal(existsSync(path.join(cwd, 'dist/old.js')), false);
-  assert.equal(result.identity.sourceHash, (await fingerprint(cwd)).hash);
+  assert.equal(result.identity.sourceHash, (await buildFingerprint(cwd)).hash);
   assert.equal(result.identity.distHash, await distHash(path.join(cwd, 'dist')));
   assert.equal(JSON.parse(await readFile(result.evidence, 'utf8')).status, 'PASS');
   assert.equal(result.steps.length, 2);
   await cleaned(cwd);
+});
+
+test('test edits change evidence identity without invalidating compiled inputs; product edits change both', async (t) => {
+  const { cwd } = await fixture(t);
+  await mkdir(path.join(cwd, 'tests'));
+  const compiled = await buildFingerprint(cwd);
+  const evidence = await fingerprint(cwd);
+  await writeFile(path.join(cwd, 'tests/example.test.ts'), 'test correction');
+  assert.equal((await buildFingerprint(cwd)).hash, compiled.hash);
+  assert.notEqual((await fingerprint(cwd)).hash, evidence.hash);
+  await writeFile(path.join(cwd, 'server/index.ts'), 'export const version = 2;');
+  assert.notEqual((await buildFingerprint(cwd)).hash, compiled.hash);
 });
 
 for (const failure of ['compiler', 'spawn', 'missing-output', 'source-change'])

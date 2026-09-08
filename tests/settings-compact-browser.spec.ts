@@ -1,3 +1,4 @@
+import { reviewWidths, visualReview } from './fixtures/visual-review.js';
 import { test, expect } from '@playwright/test';
 import { fixtureBotInput } from './fixtures/chat.js';
 import {
@@ -71,13 +72,15 @@ test('SCUI01 settings list and details adapt at six widths with distinct icons a
   const nav = dialog.locator('.settings-navigation');
   await expect(nav.getByRole('button')).toHaveCount(5);
   await expect(dialog.getByRole('tabpanel')).toHaveCount(0);
-  const icons = await nav
-    .locator('svg')
-    .evaluateAll((nodes) => nodes.map((node) => node.innerHTML));
-  expect(new Set(icons).size).toBe(5);
-  await page.screenshot({ path: info.outputPath('settings-list-390.png') });
+  if (visualReview) {
+    const icons = await nav
+      .locator('svg')
+      .evaluateAll((nodes) => nodes.map((node) => node.innerHTML));
+    expect(new Set(icons).size).toBe(5);
+  }
+  if (visualReview) await page.screenshot({ path: info.outputPath('settings-list-390.png') });
   await selectSettingsSection(page, '일반');
-  for (const width of [360, 390, 430, 768, 1024, 1440]) {
+  for (const width of reviewWidths([360, 390, 430, 768, 1024, 1440])) {
     await page.setViewportSize({ width, height: 900 });
     await expect(dialog.getByLabel('앱 화면 테마')).toBeVisible();
     await expect(dialog.getByRole('tabpanel')).toHaveCount(1);
@@ -99,7 +102,8 @@ test('SCUI01 settings list and details adapt at six widths with distinct icons a
       true
     );
     if (width === 390 || width === 1440)
-      await page.screenshot({ path: info.outputPath(`settings-general-${width}.png`) });
+      if (visualReview)
+        await page.screenshot({ path: info.outputPath(`settings-general-${width}.png`) });
   }
   await nav.getByRole('tab', { name: '일반', exact: true }).focus();
   await page.keyboard.press('End');
@@ -165,7 +169,7 @@ test('SCUI02 settings back, resize and close preserve provider and chat drafts u
   await expect(name).toBeVisible();
   await dialog.getByRole('button', { name: '설정 닫기', exact: true }).click();
   await expect(confirm).toBeVisible();
-  await page.screenshot({ path: info.outputPath('settings-unsaved-390.png') });
+  if (visualReview) await page.screenshot({ path: info.outputPath('settings-unsaved-390.png') });
   await page.keyboard.press('Escape');
   await expect(confirm).toBeHidden();
   await expect(name).toHaveValue('아직 저장하지 않은 합성 연결');

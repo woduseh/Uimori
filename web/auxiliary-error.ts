@@ -76,27 +76,43 @@ define(
   '연결 상태와 출력 토큰 한도를 확인해 주세요. 요청이 실행되었을 수 있으므로 확인 후 재시도해 주세요.'
 );
 define(
-  ['AUXILIARY_PROVIDER_REFUSED'],
-  '모델이 요청을 거절했어요.',
-  '해당 작업의 프롬프트와 입력 내용을 확인해 주세요.'
+  ['TRANSLATION_REFUSAL_MODEL_REQUIRED', 'MODEL_REQUIRED:translation-refusal'],
+  '번역 거절 판정 모델이 지정되지 않았어요.',
+  '현재 번역 프롬프트 설정에서 경량 판정 모델을 선택한 뒤 재번역해 주세요.'
 );
 define(
-  ['AUXILIARY_PROVIDER_EMPTY_COMPLETION', 'AUXILIARY_PROVIDER_EMPTY_RESPONSE'],
+  ['TRANSLATION_REFUSAL_CHECK_FAILED'],
+  '번역 거절 여부를 판정하는 모델 호출을 완료하지 못했어요.',
+  '생성된 응답은 보존했고 번역을 자동으로 다시 호출하지 않았어요. 판정 모델의 연결과 설정을 확인해 주세요.'
+);
+define(
+  ['TRANSLATION_REFUSAL_UNCERTAIN'],
+  '판정 모델이 번역 응답의 거절 여부를 확정하지 못했어요.',
+  '생성된 응답은 보존했고 번역을 자동으로 다시 호출하지 않았어요. 응답과 판정 모델 설정을 확인해 주세요.'
+);
+define(
+  ['TRANSLATION_REFUSAL_RETRIES_EXHAUSTED'],
+  '허용된 자동 재시도 범위에서 번역 거절이 해소되지 않았어요.',
+  '자동 호출을 중단했어요. 번역 모델과 프롬프트, 자동 재시도 횟수를 확인한 뒤 필요한 경우 새 작업을 요청해 주세요.'
+);
+define(
+  ['AUXILIARY_PROVIDER_REFUSED'],
+  '모델이 요청을 거절했어요.',
+  '모델이나 프롬프트를 변경한 뒤 수동으로 다시 요청할 수 있어요.'
+);
+define(
+  [
+    'AUXILIARY_PROVIDER_EMPTY_COMPLETION',
+    'AUXILIARY_PROVIDER_EMPTY_RESPONSE',
+    'AUXILIARY_PROVIDER_EMPTY',
+  ],
   '모델이 사용할 수 있는 내용을 반환하지 않았어요.',
   '해당 작업의 프롬프트와 모델 설정을 확인해 주세요.'
 );
 define(
-  [
-    'OUTPUT_SCHEMA_INVALID',
-    'CHUNK_COVERAGE_INVALID',
-    'PROTECTED_SPAN_INVALID',
-    'UNPROTECTED_SYNTAX_RETURNED',
-    'SEGMENT_TRANSLATION_INVALID',
-    'SEGMENT_TRANSLATION_COVERAGE',
-    'SEGMENT_TRANSLATION_MARKERS',
-  ],
-  '모델 응답이 필요한 출력 형식 또는 원문 보존 조건을 충족하지 못했어요.',
-  '해당 작업의 프롬프트가 지정된 출력 형식과 보호 표기를 유지하도록 확인한 뒤 다시 시도해 주세요.'
+  ['OUTPUT_SCHEMA_INVALID'],
+  '모델 응답이 해당 작업의 출력 형식을 충족하지 못했어요.',
+  '해당 작업의 프롬프트와 모델 설정을 확인한 뒤 다시 시도해 주세요.'
 );
 define(
   ['SOURCE_DEPENDENCY_MISMATCH'],
@@ -104,9 +120,19 @@ define(
   '최신 원문을 확인한 뒤 새 작업을 요청해 주세요.'
 );
 define(
-  ['AUXILIARY_CALL_BUDGET_EXHAUSTED', 'TOOL_CONTEXT_BUDGET_EXHAUSTED'],
-  '작업의 호출 횟수 또는 도구 문맥 한도에 도달했어요.',
-  '작업 한도와 프롬프트의 도구 사용 지침을 확인해 주세요.'
+  ['AUXILIARY_CALL_BUDGET_EXHAUSTED'],
+  '작업의 전체 모델 호출 한도에 도달했어요.',
+  '번역과 도구 후속 호출, 거절 판정은 같은 작업 한도를 사용해요. 호출 한도와 도구 사용 지침을 확인해 주세요.'
+);
+define(
+  ['TOOL_CONTEXT_BUDGET_EXHAUSTED'],
+  '도구에서 읽은 참고 자료가 작업의 문맥 한도에 도달했어요.',
+  '필요한 참고 자료만 조회하도록 프롬프트의 도구 사용 지침을 확인해 주세요.'
+);
+define(
+  ['TOOL_CORRECTION_EXHAUSTED'],
+  '도구 조회 오류가 반복되어 작업을 중단했어요.',
+  '참고 자료와 도구 사용 지침을 확인한 뒤 필요한 경우 새 작업을 요청해 주세요.'
 );
 define(
   ['AUXILIARY_CANCELLED'],

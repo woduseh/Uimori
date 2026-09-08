@@ -1,3 +1,5 @@
+import { visualReview } from './fixtures/visual-review.js';
+import { preservePromptWorkspace } from './fixtures/prompt-workspace.js';
 import { test, expect, type APIRequestContext, type Page } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
 import type { PromptPreset } from '../core/product.js';
@@ -136,77 +138,45 @@ test('PAUI02 saving and applying retain distinct scopes with compact actions on 
   await page.goto(`/?chat=${chat.id}`);
   await page.getByRole('button', { name: '채팅 설정', exact: true }).click();
   await selectChatSettingsSection(page, '프롬프트·창작 프리셋');
-  const editor = page.getByTestId('prompt-editor');
-  await editor
-    .getByLabel('불러올 프롬프트', { exact: true })
-    .selectOption(`${preset.id}@${preset.revision}`);
-  await editor.getByLabel('프롬프트 이름', { exact: true }).fill(preset.title + ' 수정');
-  await editor.getByRole('button', { name: '수정 저장', exact: true }).click();
-  await expect(editor.getByRole('button', { name: '수정 저장', exact: true })).toBeDisabled();
-  expect((await detail(request, chat.id)).profile?.prompts?.main ?? null).toEqual(
-    before.profile?.prompts?.main ?? null
-  );
-  await editor.getByRole('button', { name: '이 채팅에 적용', exact: true }).click();
+  const editor = page.getByRole('region', { name: '현재 프롬프트 설정' });
+  await editor.getByLabel('현재 프롬프트 프리셋', { exact: true }).selectOption(preset.id);
   await expect
-    .poll(async () => (await detail(request, chat.id)).profile?.prompts?.main?.id)
-    .toBe(preset.id);
-  await editor.getByLabel('프롬프트 이름', { exact: true }).fill(preset.title + ' 다시 수정');
-  await expect(editor.getByRole('button', { name: '이 채팅에 적용', exact: true })).toHaveCount(0);
+    .poll(async () => (await (await request.get('/api/prompt-workspace')).json()).main.title)
+    .toBe(preset.title);
+  const name = editor.getByLabel('현재 프롬프트 이름', { exact: true });
+  await name.fill(preset.title + ' 현재 수정');
+  const snapshot = await (await request.get(`/api/prompt-presets/${preset.id}`)).json();
+  await editor.getByRole('button', { name: '현재 설정 저장', exact: true }).click();
+  await expect(
+    editor.getByText('현재 프롬프트와 옵션을 저장했어요.', { exact: true })
+  ).toBeVisible();
+  expect(await (await request.get(`/api/prompt-presets/${preset.id}`)).json()).toEqual(snapshot);
+  expect((await detail(request, chat.id)).profile).toEqual(before.profile);
+  await name.fill(preset.title + ' 별도 사본');
+  await editor.getByRole('button', { name: '현재 내용을 새 프리셋으로 저장', exact: true }).click();
+  await expect(editor.getByText('독립된 프리셋으로 저장했어요.', { exact: true })).toBeVisible();
+  expect((await (await request.get('/api/prompt-workspace')).json()).main.title).toBe(
+    preset.title + ' 현재 수정'
+  );
   for (const width of [390, 1440]) {
     await page.setViewportSize({ width, height: 900 });
-    const actions = editor.locator('.prompt-save-actions');
-    await actions.scrollIntoViewIfNeeded();
-    const buttons = editor.locator('.prompt-save-buttons > button');
-    await expect(buttons).toHaveCount(2);
-    const geometry = await buttons.evaluateAll((nodes) =>
-      nodes.map((node) => {
-        const box = node.getBoundingClientRect();
-        return {
-          left: box.left,
-          right: box.right,
-          center: box.top + box.height / 2,
-          height: box.height,
-        };
-      })
-    );
-    expect(geometry.every((box) => box.left >= 0 && box.right <= width && box.height >= 44)).toBe(
+    await editor
+      .getByRole('button', { name: '현재 설정 저장', exact: true })
+      .scrollIntoViewIfNeeded();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(
       true
     );
-    expect(Math.abs(geometry[0].center - geometry[1].center)).toBeLessThanOrEqual(1);
-    await expect(actions).toContainText('이 프롬프트를 사용하는 채팅의 다음 실행');
-    await page.screenshot({
-      path: info.outputPath(`prompt-actions-${width === 390 ? 'mobile' : 'desktop'}.png`),
-    });
+    if (visualReview)
+      await page.screenshot({
+        path: info.outputPath(`prompt-actions-${width === 390 ? 'mobile' : 'desktop'}.png`),
+      });
   }
-  await editor.getByRole('button', { name: '저장하고 적용', exact: true }).click();
-  await expect(editor.getByRole('button', { name: '저장하고 적용', exact: true })).toHaveCount(0);
-  const after = await detail(request, chat.id);
-  expect(after.profile?.prompts?.main).toMatchObject({ id: preset.id });
-  expect(after.profile?.routes).toEqual(before.profile?.routes);
-  expect(after.runs).toEqual(before.runs);
-  expect(after.attempts).toEqual(before.attempts);
-  await openPromptActions(editor);
-  await editor.getByRole('button', { name: '앱 기본 프롬프트 사용', exact: true }).click();
-  await expect
-    .poll(async () => (await detail(request, chat.id)).profile?.prompts?.main ?? null)
-    .toBe(null);
-  const combinationSummary = editor
-    .locator('summary')
-    .filter({ hasText: /^프롬프트 창작 옵션과 조합$/ });
-  await expect(combinationSummary).toBeVisible();
-  if (
-    !(await combinationSummary.evaluate((node) => (node.parentElement as HTMLDetailsElement).open))
-  )
-    await combinationSummary.click();
-  const combinationName = editor.getByLabel('새 조합 이름', { exact: true });
-  await expect(combinationName).toBeVisible();
-  await combinationName.fill('이름만 작성한 합성 조합');
   await page.getByRole('button', { name: '채팅 설정 닫기', exact: true }).click();
   const discard = page.getByRole('alertdialog', { name: '미저장 채팅 설정 확인', exact: true });
   await expect(discard).toBeVisible();
   await discard.getByRole('button', { name: '계속 편집', exact: true }).click();
-  await expect(discard).not.toBeVisible();
-  await expect(combinationName).toHaveValue('이름만 작성한 합성 조합');
+  await expect(name).toHaveValue(preset.title + ' 별도 사본');
+  expect((await detail(request, chat.id)).runs).toEqual(before.runs);
   expect(observed.calls).toEqual([]);
   expect(observed.errors).toEqual([]);
 });
@@ -251,7 +221,8 @@ test('PAUI03 block tools preserve pending template drafts, focus and undo throug
   await source.fill('SYNTHETIC_UPDATED {{ options.tone }}');
   await block.getByRole('button', { name: '문법 초안 적용', exact: true }).click();
   await block.getByLabel('합성 지침 블록 메뉴', { exact: true }).click();
-  await page.screenshot({ path: info.outputPath('prompt-block-tools-mobile.png') });
+  if (visualReview)
+    await page.screenshot({ path: info.outputPath('prompt-block-tools-mobile.png') });
   await block.getByRole('button', { name: '블록 삭제', exact: true }).click();
   await expect(block).toHaveCount(0);
   await expect(composer.locator('#prompt-block-example > summary')).toBeFocused();
@@ -291,3 +262,5 @@ test('PAUI03 block tools preserve pending template drafts, focus and undo throug
   expect(observed.calls).toEqual([]);
   expect(observed.errors).toEqual([]);
 });
+
+preservePromptWorkspace();

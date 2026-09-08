@@ -10,6 +10,10 @@ Node **24.14 이상 24.x**와 `npm ci`를 사용해요. 프로젝트의 `strict`
 | 검증 스크립트 변경 | `npm run test:tooling` | Node 기본 실행기의 하네스 회귀. 0개·skip·todo·취소·실패를 거부하고 보고서를 남겨요. |
 | 작업 완료·통합 전 | `npm run quality:full` | 위 품질 검사 → 하네스 회귀 → 새 빌드 → 전체 Vitest. |
 | UI 동작 변경 | 빌드 후 관련 `verify:*` 또는 `npm run verify:redesign` | 새 DB/port를 사용하는 기존 합성 브라우저 검증. |
+| 기본 UI 연결 확인 | `npm run verify:browser-smoke` | 채팅 진입·생성 및 전역 프롬프트 설정의 작은 브라우저 묶음. 전체 기능 검사를 대신하지 않아요. |
+| 통합 UI 회귀 | `npm run verify:redesign` | 전체 기능 흐름. 대표 모바일/데스크톱 폭을 사용해요. |
+| 배치·반응형 시각 검토 | `npm run verify:visual` | 전체 기능 + 추가 화면 폭·정밀 배치·성공 PNG. 사람이 화면도 확인해야 해요. |
+| 반복 성능 측정 | `npm run benchmark:story` | 긴 본문 동작 검사에 warmup/반복 표본과 측정 산출물을 추가해요. |
 | 서식 수정 | `npm run format` | Biome가 지원하는 프로젝트 소스·설정의 서식만 수정해요. |
 | lint 수정 | `npm run lint:fix` | 도구가 안전하다고 분류한 수정만 적용해요. 해결되지 않은 진단은 실패로 남아요. |
 | 개별 검사 | `npm run lint`, `npm run format:check`, `npm run check`, `npm run lint:architecture` | 실패한 단계만 조사할 때 사용해요. |
@@ -17,6 +21,12 @@ Node **24.14 이상 24.x**와 `npm ci`를 사용해요. 프로젝트의 `strict`
 `quality`는 Biome의 서식·lint를 한 번에 실행해 중복 스캔을 줄여요. 기본 검사에는 서버 실행, 브라우저, 모델 호출, 네트워크 조회, 의존성 설치가 없어요. 매 저장·커밋마다 전체 테스트를 강제하는 Git hook은 설치하지 않아요. 작업에 필요한 검사가 통과하면 변경이나 새 실패 근거 없이 반복하지 않아요.
 
 `quality:full`은 새 빌드를 만든 뒤 Vitest를 실행해요. 서버 프로세스 재시작 테스트가 `dist/server/index.js`를 실행하므로 이 순서가 필요해요. 개별 `npm test`를 실행할 때도 서버 코드를 변경했거나 `dist`가 없으면 먼저 `npm run build`를 실행해요.
+
+수정 중에는 `npm test -- tests/관련.test.ts`와 해당 영역의 `verify:*`를 선택해요. 모든 UI 수정에 전체 브라우저 회귀를 반복하지 않아요. 완료·통합 시 전체 단위/통합 검사는 유지하고, 여러 영역을 함께 바꿨을 때 전체 브라우저 회귀를 실행해요. 검사별 유지·통합·선택 실행 이유는 [TESTING-AUDIT.md](TESTING-AUDIT.md)에 있어요.
+
+빌드 지문은 앱 소스와 실제 빌드 설정·실행기·의존성 파일을 포함해요. 테스트/검증 스크립트만 바꾸면 기존 앱 빌드를 재사용할 수 있어요. 브라우저와 milestone 결과에는 이와 별개로 테스트·검증 설정까지 포함한 전체 지문을 기록하고 실행 전후 동일성을 확인해요. 테스트를 실행 중에 고친 결과는 PASS로 남기지 않아요.
+
+기본 브라우저 검사는 기능·키보드·취소·초안·오류·터치 영역을 유지해요. 성공 화면 캡처·추가 폭 전수 반복·정밀 정렬은 `NR_VISUAL_REVIEW=1`에서 실행하며 실패 screenshot/trace는 항상 보존해요. 특정 도메인의 시각 검사만 필요하면 PowerShell에서 `$env:NR_VISUAL_REVIEW='1'`을 설정해 기존 `verify:*`를 실행한 뒤 환경변수를 제거해요. 기본 성능 단위검사는 큰 본문과 이력 격리 기능을 한 번씩 검사하며, 반복 측정·성능 파일은 `NR_BENCHMARK=1`에서만 만들어요.
 
 `build`는 별도 `.build-*` 폴더에서 서버·웹을 모두 컴파일하고 소스 지문을 확인한 뒤 `dist`를 교체해요. 컴파일 실패·환경 차단·소스 변경이면 이전 빌드를 보존하며 `output/build/<run-id>/summary.json`과 단계별 로그를 남겨요. 보존된 빌드는 현재 소스의 검증 근거가 아니므로 브라우저 검증의 지문 검사는 그대로 적용해요. 같은 checkout의 동시 빌드는 `output/build/active.json`으로 거부해요. 강제 종료 후 잠금이 남았다면 기록된 PID와 해당 실행의 staging/이전 빌드 경로를 확인한 후에만 잠금을 정리해요.
 

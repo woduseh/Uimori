@@ -1,3 +1,4 @@
+import { visualReview } from './fixtures/visual-review.js';
 import { postFixtureChat } from './fixtures/chat.js';
 import { test, expect, type APIRequestContext, type Page } from '@playwright/test';
 import type { Chat, ChatDetail, ReaderDetail, ReaderActivity, Run } from '../core/types.js';
@@ -134,14 +135,14 @@ test('ACTUI01 elapsed time, collapse, next task and completion expiry', async ({
   request,
 }, info) => {
   const seeded = await seed(request);
-  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.setViewportSize({ width: 1440, height: 900 });
   const state = await harness(page, seeded.chat.id, [activity('first')]);
   const status = page.getByTestId('activity-status');
   await expect(status).toContainText('장면을 쓰는 중');
   await expect(status).toContainText(/1[2-9]초/);
   await page.clock.fastForward(2000);
   await expect(status).toContainText(/1[4-9]초/);
-  await page.screenshot({ path: info.outputPath('activity-desktop.png') });
+  if (visualReview) await page.screenshot({ path: info.outputPath('activity-desktop.png') });
   await page.getByRole('button', { name: '작업 상태 숨기기', exact: true }).click();
   await expect(page.getByRole('button', { name: '작업 상태 펼치기', exact: true })).toBeVisible();
   await state.set([activity('first', 'main', 'completed')]);
@@ -229,7 +230,7 @@ test('ACTUI02 auxiliary concurrency, mobile bounds and connection uncertainty', 
   expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(390);
   expect(await status.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-  await page.screenshot({ path: info.outputPath('activity-mobile.png') });
+  if (visualReview) await page.screenshot({ path: info.outputPath('activity-mobile.png') });
   await page.getByRole('button', { name: '작업 상태 숨기기', exact: true }).click();
   await page.getByRole('button', { name: '작업 상태 펼치기', exact: true }).click();
   await expect(status).toContainText('번역하는 중');

@@ -59,45 +59,27 @@ test.each(['revision', 'hash'])(
   }
 );
 
-test('source reader keeps translated main and aside order, localized scene labels and original source identity', () => {
+test('source reader preserves original segment order, scene labels and source identity', () => {
   const raw = source(
-      'The reader enters the harbor.\r\n@hsTitle: Quiet Bell\r\n⟦Tower @ Dawn @ Mira⟧\r\nMira imagines a bell.\r\n@hs\r\nThe reader hears waves.'
-    ),
-    before = structuredClone(raw);
-  const record = { id: raw.sourceRevision, hash: raw.sourceHash, text: raw.text } as Source;
-  const translationText = raw.text
-    .replace('The reader enters the harbor.', '독자가 항구에 들어와요.')
-    .replace('Quiet Bell', '고요한 종')
-    .replace('Tower @ Dawn @ Mira', '탑 @ 새벽 @ 미라')
-    .replace('Mira imagines a bell.', '미라는 종을 상상해요.')
-    .replace('The reader hears waves.', '독자는 파도를 들어요.');
-  const props = {
-    source: record,
-    config: createSourceSegmentFixture(),
-    blocks: [{ anchor: 'all', start: 0, end: raw.text.length }],
-    inline: () => [],
-  };
-  const html = renderToStaticMarkup(
-    createElement(SourceSegmentBody, { ...props, translationText })
+    'The reader enters the harbor.\n@hsTitle: Quiet Bell\n⟦Tower @ Dawn @ Mira⟧\nMira imagines a bell.\n@hs\nThe reader hears waves.'
   );
-  expect(html).toContain('translation-text');
-  expect(html.indexOf('독자가 항구')).toBeLessThan(html.indexOf('고요한 종'));
-  expect(html.indexOf('고요한 종')).toBeLessThan(html.indexOf('미라는 종을 상상'));
-  expect(html.indexOf('미라는 종을 상상')).toBeLessThan(html.indexOf('독자는 파도를'));
-  expect(html).toContain('<dd>탑</dd>');
-  expect(html).toContain('<dd>새벽</dd>');
-  expect(html).not.toContain('@hsTitle:');
-  expect(raw).toEqual(before);
-  const broken = renderToStaticMarkup(
+  const before = structuredClone(raw);
+  const html = renderToStaticMarkup(
     createElement(SourceSegmentBody, {
-      ...props,
-      translationText: translationText.replace('@hsTitle:', ''),
+      source: { id: raw.sourceRevision, hash: raw.sourceHash, text: raw.text } as Source,
+      config: createSourceSegmentFixture(),
+      blocks: [{ anchor: 'all', start: 0, end: raw.text.length }],
+      inline: () => [],
     })
   );
-  expect(broken).toContain('구간 경계를 확인할 수 없어');
-  expect(broken).toContain('source-text');
-  expect(broken).toContain('The reader enters the harbor.');
-  expect(broken).not.toContain('독자가 항구에');
+  expect(html).toContain('source-text');
+  expect(html.indexOf('The reader enters')).toBeLessThan(html.indexOf('Quiet Bell'));
+  expect(html.indexOf('Quiet Bell')).toBeLessThan(html.indexOf('Mira imagines'));
+  expect(html.indexOf('Mira imagines')).toBeLessThan(html.indexOf('The reader hears'));
+  expect(html).toContain('<dd>Tower</dd>');
+  expect(html).toContain('<dd>Dawn</dd>');
+  expect(html).not.toContain('@hsTitle:');
+  expect(raw).toEqual(before);
 });
 
 test('malformed original markers remain visible with diagnostics and an invalid policy falls back to original prose', () => {
