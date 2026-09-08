@@ -77,6 +77,7 @@ function ModelChoice({
   value,
   original,
   models,
+  connections,
   canSelect,
   onChange,
 }: {
@@ -84,6 +85,7 @@ function ModelChoice({
   value: ModelRef | null;
   original: ModelRef | null;
   models: ModelPreset[];
+  connections: Connection[];
   canSelect: (model: ModelPreset) => boolean;
   onChange: (value: ModelRef | null) => void;
 }) {
@@ -130,7 +132,8 @@ function ModelChoice({
               value={refKey(model)}
             >
               {model.title} · {!canSelect(model) ? '비활성 · ' : ''}
-              {model.modelId}
+              {connections.find((entry) => entry.id === model.connectionId)?.title ??
+                '연결 확인 필요'}
             </option>
           ))}
       </select>
@@ -508,6 +511,7 @@ function StoryPanelEditor({
               value={draft.stateModel}
               original={detail?.config.stateModel ?? null}
               models={models}
+              connections={connections}
               canSelect={canSelect}
               onChange={(stateModel) => change({ ...draft, stateModel })}
             />
@@ -526,6 +530,7 @@ function StoryPanelEditor({
               value={draft.memory.model}
               original={detail?.config.memory.model ?? null}
               models={models}
+              connections={connections}
               canSelect={canSelect}
               onChange={(model) => change({ ...draft, memory: { ...draft.memory, model } })}
             />

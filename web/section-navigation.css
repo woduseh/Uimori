@@ -36,6 +36,15 @@
 .section-navigation-title {
   font-weight: 550;
 }
+.section-navigation-group {
+  padding: 10px 12px 2px;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: var(--faint);
+}
+.section-navigation-group:first-child {
+  padding-top: 2px;
+}
 .section-navigation small {
   font-size: 12px;
   line-height: 1.5;

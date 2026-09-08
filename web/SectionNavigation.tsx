@@ -1,3 +1,4 @@
+import { Fragment } from 'react';
 import type { LucideIcon } from 'lucide-react';
 import './section-navigation.css';
 
@@ -7,6 +8,8 @@ export type SectionNavigationItem<K extends string> = {
   icon?: LucideIcon;
   description?: string;
   panelId?: string;
+  /** Small separator label shown before the first item of each group. */
+  group?: string;
 };
 
 /** The parent owns panel visibility and draft lifetime; this only navigates between sections. */
@@ -50,26 +53,32 @@ export function SectionNavigation<K extends string>({
         event.currentTarget.querySelectorAll<HTMLButtonElement>('button')[next]?.focus();
       }}
     >
-      {items.map(({ id, title, icon: Icon, description, panelId }) => (
-        <button
-          type="button"
-          role={compact ? undefined : 'tab'}
-          id={`${idPrefix}-${id}-tab`}
-          aria-controls={panelId ?? `${idPrefix}-${id}-panel`}
-          aria-label={title}
-          aria-describedby={description ? `${idPrefix}-${id}-description` : undefined}
-          aria-selected={compact ? undefined : value === id}
-          aria-current={compact && value === id ? 'page' : undefined}
-          tabIndex={compact || value === id ? 0 : -1}
-          key={id}
-          onClick={() => onSelect(id)}
-        >
-          {Icon && <Icon size={20} aria-hidden="true" />}
-          <span>
-            <span className="section-navigation-title">{title}</span>
-            {description && <small id={`${idPrefix}-${id}-description`}>{description}</small>}
-          </span>
-        </button>
+      {items.map(({ id, title, icon: Icon, description, panelId, group }, index) => (
+        <Fragment key={id}>
+          {group && items[index - 1]?.group !== group && (
+            <span className="section-navigation-group" aria-hidden="true">
+              {group}
+            </span>
+          )}
+          <button
+            type="button"
+            role={compact ? undefined : 'tab'}
+            id={`${idPrefix}-${id}-tab`}
+            aria-controls={panelId ?? `${idPrefix}-${id}-panel`}
+            aria-label={title}
+            aria-describedby={description ? `${idPrefix}-${id}-description` : undefined}
+            aria-selected={compact ? undefined : value === id}
+            aria-current={compact && value === id ? 'page' : undefined}
+            tabIndex={compact || value === id ? 0 : -1}
+            onClick={() => onSelect(id)}
+          >
+            {Icon && <Icon size={20} aria-hidden="true" />}
+            <span>
+              <span className="section-navigation-title">{title}</span>
+              {description && <small id={`${idPrefix}-${id}-description`}>{description}</small>}
+            </span>
+          </button>
+        </Fragment>
       ))}
     </div>
   );

@@ -303,7 +303,8 @@ export function ProfileEditor({
                             value={item.id}
                           >
                             {item.title} · {!canSelect(item) ? '비활성 · ' : ''}
-                            {item.modelId}
+                            {library.connections.find((entry) => entry.id === item.connectionId)
+                              ?.title ?? '연결 확인 필요'}
                           </option>
                         ))}
                     </select>

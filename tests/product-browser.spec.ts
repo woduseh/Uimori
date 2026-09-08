@@ -150,7 +150,6 @@ test('P01 packages use latest settings and prompt-owned creative choices replace
     '상태와 기억',
     '이미지',
     '자동 후속 작업',
-    '읽기 설정',
   ]);
   await selectChatSettingsSection(page, '봇·페르소나·모듈');
   await selectContent(page, '추가할 패키지', added.title);
