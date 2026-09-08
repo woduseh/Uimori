@@ -48,14 +48,18 @@ async function openEditor(page: Page, content: Content) {
   await page.goto('/');
   await page
     .getByRole('navigation', { name: '자료 탐색', exact: true })
-    .getByRole('button', { name: '봇', exact: true })
+    .getByRole('button', { name: '서재', exact: true })
     .click();
   const library = page.getByTestId('library-panel');
   if (content.kind !== 'bot')
     await library
       .getByRole('tab', { name: content.kind === 'module' ? '모듈' : '페르소나', exact: true })
       .click();
-  await library.getByRole('button', { name: `${content.title} 자료 편집`, exact: true }).click();
+  await library.getByRole('button', { name: `${content.title} 상세 보기`, exact: true }).click();
+  await library
+    .locator('.library-detail-actions > button')
+    .filter({ hasText: /^편집$/ })
+    .click();
   return { library, fields: library.getByRole('region', { name: '패키지 구성', exact: true }) };
 }
 async function saveEditor(page: Page, library: Locator, id: string): Promise<Content> {
@@ -234,10 +238,14 @@ test('PFUI02 required module appears once and keeps chat options after another r
   await expect(magicRow.getByText('필수 모듈 · 자동 연결', { exact: true })).toBeVisible();
   await expect(magicRow.getByRole('button', { name: '해제', exact: true })).toHaveCount(0);
   await magicRow.getByLabel(`${magic.title} 마나`, { exact: true }).fill('42');
-  await panel
-    .getByLabel('추가할 패키지', { exact: true })
-    .selectOption(`${persona.id}@${persona.revision}`);
   await panel.getByLabel('패키지 장착 역할', { exact: true }).selectOption('persona');
+  await panel.getByRole('button', { name: '추가할 패키지', exact: true }).click();
+  const picker = page.getByRole('dialog', { name: '추가할 패키지', exact: true });
+  await picker.getByRole('searchbox').fill(persona.title);
+  await picker
+    .getByRole('button')
+    .filter({ has: page.getByText(persona.title, { exact: true }) })
+    .click();
   await panel.getByRole('button', { name: '패키지 장착', exact: true }).click();
   const personaRow = panel
     .locator('.package-attachment')

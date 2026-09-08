@@ -33,6 +33,9 @@ type Draft = {
   program: PromptProgram;
 };
 type Props = {
+  initialRole?: PromptRole;
+  initialPreset?: PromptPreset | null;
+  onSaved?: (preset: PromptPreset, created: boolean) => Promise<void>;
   library: Library;
   reload?: () => Promise<void>;
   onError: (message: string) => void;
@@ -55,6 +58,9 @@ const draftFor = (role: PromptRole, preset?: PromptPreset): Draft => ({
 });
 
 export function PromptEditor({
+  initialRole = 'main',
+  initialPreset,
+  onSaved,
   library,
   reload,
   onError,
@@ -66,12 +72,19 @@ export function PromptEditor({
   promptControls,
   onSaveControls,
 }: Props) {
-  const [role, setRole] = useState<PromptRole>('main');
+  const [role, setRole] = useState<PromptRole>(initialRole);
   const [localPresets, setLocalPresets] = useState<PromptPreset[]>([]);
   const [drafts, setDrafts] = useState<Record<PromptRole, Draft>>(
     () =>
       Object.fromEntries(
         roles.map((role) => {
+          if (initialPreset !== undefined && role === initialRole)
+            return [
+              role,
+              initialPreset
+                ? draftFor(role, initialPreset)
+                : { ...draftFor(role), source: 'new', title: '' },
+            ];
           const ref = selections?.[role];
           const preset = library.promptPresets?.find(
             (item) => item.role === role && ref && keyOf(item) === keyOf(ref)
@@ -169,7 +182,7 @@ export function PromptEditor({
                 base: null,
                 title: '',
                 dirty: true,
-                program: createDefaultPromptProgram('', role),
+                program: createDefaultPromptProgram(defaults[role], role),
               }
             : draftFor(role, preset)),
       };
@@ -230,6 +243,7 @@ export function PromptEditor({
       delete draftCache.current[`${role}:${draft.source}`];
       draftCache.current[`${role}:${keyOf(accepted)}`] = draftFor(role, accepted);
       setStatus('프롬프트를 저장했어요.');
+      await onSaved?.(accepted, !update);
       await reload?.();
       if (alsoApply && onApply) {
         const applied = await onApply(role, { id: accepted.id, revision: accepted.revision });
@@ -266,7 +280,7 @@ export function PromptEditor({
             역할
             <select
               aria-label="프롬프트 역할"
-              disabled={pendingTemplate}
+              disabled={pendingTemplate || !!initialPreset}
               value={role}
               onChange={(event) => {
                 setRole(event.target.value as PromptRole);
@@ -278,34 +292,47 @@ export function PromptEditor({
               <option value="translation">번역</option>
             </select>
           </label>
-          <label>
-            불러올 프롬프트
-            <select
-              aria-label="불러올 프롬프트"
+          {initialPreset === undefined && (
+            <label>
+              불러올 프롬프트
+              <select
+                aria-label="불러올 프롬프트"
+                disabled={pendingTemplate}
+                value={draft.source === 'builtin' || draft.source === 'new' ? '' : draft.source}
+                onChange={(event) => choose(event.target.value)}
+              >
+                <option value="" disabled>
+                  저장된 프롬프트 선택
+                </option>
+                {presets
+                  .filter((item) => item.role === role)
+                  .map((item) => (
+                    <option key={keyOf(item)} value={keyOf(item)}>
+                      {item.title}
+                      {library.promptPresets?.some(
+                        (latest) => latest.id === item.id && latest.revision > item.revision
+                      )
+                        ? ' · 보관된 버전'
+                        : ''}{' '}
+                      · v{item.revision}
+                    </option>
+                  ))}
+                {pendingSavedText && (
+                  <option value={draft.source}>선택한 프롬프트 불러오는 중…</option>
+                )}
+              </select>
+            </label>
+          )}
+          {initialPreset === undefined && (
+            <button
+              type="button"
+              className="secondary"
               disabled={pendingTemplate}
-              value={draft.source}
-              onChange={(event) => choose(event.target.value)}
+              onClick={() => choose('new')}
             >
-              <option value="builtin">앱 기본 프롬프트</option>
-              <option value="new">새 프롬프트</option>
-              {presets
-                .filter((item) => item.role === role)
-                .map((item) => (
-                  <option key={keyOf(item)} value={keyOf(item)}>
-                    {item.title}
-                    {library.promptPresets?.some(
-                      (latest) => latest.id === item.id && latest.revision > item.revision
-                    )
-                      ? ' · 보관된 버전'
-                      : ''}{' '}
-                    · v{item.revision}
-                  </option>
-                ))}
-              {pendingSavedText && (
-                <option value={draft.source}>선택한 프롬프트 불러오는 중…</option>
-              )}
-            </select>
-          </label>
+              새 프롬프트 생성
+            </button>
+          )}
         </div>
         {onApply && (
           <p className="prompt-applied">
@@ -392,85 +419,101 @@ export function PromptEditor({
           />
         </fieldset>
         <div className="prompt-save-actions">
-          <button
-            type="button"
-            disabled={pendingSavedText || pendingTemplate || !draft.title.trim()}
-            onClick={() => void save(false, false)}
-          >
-            새 프롬프트로 저장
-          </button>
-          {draft.base && (
+          <div className="prompt-save-buttons">
             <button
               type="button"
-              className="secondary"
-              disabled={pendingTemplate || !draft.dirty}
-              onClick={() => void save(true, false)}
+              disabled={pendingSavedText || pendingTemplate || !draft.title.trim()}
+              onClick={() => void save(false, false)}
             >
-              기존 프롬프트 수정 저장
+              새 프롬프트로 저장
             </button>
-          )}
-          {onApply && (
-            <>
+            {draft.base && (
               <button
                 type="button"
                 className="secondary"
-                disabled={
-                  pendingSavedText || pendingTemplate || draft.dirty || draft.source === 'new'
-                }
-                onClick={() =>
-                  void apply(
-                    draft.base ? { id: draft.base.id, revision: draft.base.revision } : null
-                  )
-                }
+                disabled={pendingTemplate || !draft.dirty}
+                onClick={() => void save(true, false)}
               >
-                이야기에 선택 적용
+                기존 프롬프트 수정 저장
               </button>
-              {draft.dirty && (
+            )}
+            {onApply && (
+              <>
                 <button
                   type="button"
-                  disabled={pendingSavedText || !draft.title.trim()}
-                  onClick={() => void save(Boolean(draft.base), true)}
+                  className="secondary"
+                  disabled={pendingTemplate || !selected}
+                  onClick={() => void apply(null)}
                 >
-                  저장하고 이야기에 적용
+                  앱 기본 프롬프트 사용
                 </button>
-              )}
-            </>
-          )}
+                <button
+                  type="button"
+                  className="secondary"
+                  disabled={
+                    pendingSavedText || pendingTemplate || draft.dirty || draft.source === 'new'
+                  }
+                  onClick={() =>
+                    void apply(
+                      draft.base ? { id: draft.base.id, revision: draft.base.revision } : null
+                    )
+                  }
+                >
+                  이야기에 선택 적용
+                </button>
+                {draft.dirty && (
+                  <button
+                    type="button"
+                    disabled={pendingSavedText || !draft.title.trim()}
+                    onClick={() => void save(Boolean(draft.base), true)}
+                  >
+                    저장하고 이야기에 적용
+                  </button>
+                )}
+              </>
+            )}
+          </div>
+          <div className="prompt-delete-action">
+            {draft.base && (
+              <DeleteButton
+                path={`/prompt-presets/${encodeURIComponent(draft.base.id)}`}
+                revision={draft.base.revision}
+                title={draft.base.title}
+                label="프롬프트 삭제"
+                disabled={busy}
+                onError={onError}
+                onDeleted={async () => {
+                  const removed = draft.base!.id;
+                  setLocalPresets((current) => current.filter((item) => item.id !== removed));
+                  for (const key of Object.keys(draftCache.current))
+                    if (draftCache.current[key].base?.id === removed)
+                      delete draftCache.current[key];
+                  setComposerDirty((current) =>
+                    Object.fromEntries(
+                      Object.entries(current).filter(([key]) => !key.includes(`:${removed}@`))
+                    )
+                  );
+                  setDrafts(
+                    (current) =>
+                      Object.fromEntries(
+                        roles.map((role) => [
+                          role,
+                          current[role].base?.id === removed ? draftFor(role) : current[role],
+                        ])
+                      ) as Record<PromptRole, Draft>
+                  );
+                  await reload?.();
+                  setStatus('프롬프트를 삭제했어요.');
+                }}
+              />
+            )}
+          </div>
         </div>
       </fieldset>
-      {draft.base && (
-        <DeleteButton
-          path={`/prompt-presets/${encodeURIComponent(draft.base.id)}`}
-          revision={draft.base.revision}
-          title={draft.base.title}
-          label="프롬프트 삭제"
-          disabled={busy}
-          onError={onError}
-          onDeleted={async () => {
-            const removed = draft.base!.id;
-            setLocalPresets((current) => current.filter((item) => item.id !== removed));
-            for (const key of Object.keys(draftCache.current))
-              if (draftCache.current[key].base?.id === removed) delete draftCache.current[key];
-            setComposerDirty((current) =>
-              Object.fromEntries(
-                Object.entries(current).filter(([key]) => !key.includes(`:${removed}@`))
-              )
-            );
-            setDrafts(
-              (current) =>
-                Object.fromEntries(
-                  roles.map((role) => [
-                    role,
-                    current[role].base?.id === removed ? draftFor(role) : current[role],
-                  ])
-                ) as Record<PromptRole, Draft>
-            );
-            await reload?.();
-            setStatus('프롬프트를 삭제했어요.');
-          }}
-        />
-      )}
-      <details>
+      <p role="status" className="prompt-status">
+        {busy ? '처리 중…' : status}
+      </p>
+      <details className="prompt-saved-management">
         <summary>저장된 창작 조합·프리셋 관리</summary>
         <div className="deletion-list">
           {[
@@ -513,9 +556,6 @@ export function PromptEditor({
           {error} 편집 내용은 유지했어요.
         </p>
       )}
-      <p role="status" className="prompt-status">
-        {busy ? '처리 중…' : status}
-      </p>
     </section>
   );
 }

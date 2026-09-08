@@ -1,10 +1,18 @@
+import { editLibraryContent } from './ui-navigation.js';
 import { postFixtureChat } from './fixtures/chat.js';
-import { test, expect, type Page, type APIRequestContext } from '@playwright/test';
+import { test, expect, type Page, type APIRequestContext, type Locator } from '@playwright/test';
 import { createHash } from 'node:crypto';
 import type { Chat, ChatDetail, Run } from '../core/types.js';
 import type { Content } from '../core/product.js';
 import { createDefaultPromptProgram } from '../core/prompt-defaults.js';
 import { createPromptChoice, navigationAction, selectStartPrompt } from './ui-navigation.js';
+
+async function promptBody(editor: Locator) {
+  const block = editor.locator('#prompt-block-instructions');
+  const body = block.getByLabel('지침 본문', { exact: true });
+  if (!(await body.isVisible())) await block.locator('summary').first().click();
+  return body;
+}
 
 async function data(request: APIRequestContext, id: string): Promise<ChatDetail> {
   const response = await request.get(`/api/chats/${id}`);
@@ -242,9 +250,12 @@ test('UI03 bot-first retry saves one story and complete profile before any gener
   });
   await page.goto('/');
   await nav(page, '서재');
-  await page.getByRole('button', { name: `${title} 봇으로 시작`, exact: true }).click();
+  await page.getByRole('button', { name: `${title} 새 채팅`, exact: true }).click();
   const dialog = page.getByRole('dialog', { name: '새 채팅', exact: true });
   await expect(dialog).toBeVisible();
+  await expect(dialog.getByLabel('시작할 봇 찾기')).toHaveCount(0);
+  await expect(dialog.getByRole('group', { name: '시작할 봇', exact: true })).toHaveCount(0);
+  await expect(dialog.getByLabel('채팅의 봇')).toContainText(title);
   await selectStartPrompt(page, choice);
   await expect(dialog.getByText('이전 창작 제어', { exact: true })).toHaveCount(0);
   await expect(page.getByLabel('새 채팅 이름')).toHaveValue('');
@@ -373,11 +384,19 @@ test('UI05 UI10 late auxiliary completion and retry preserve source and current 
       data: {},
     });
     expect(retried.ok()).toBeTruthy();
-    await expect(page.getByRole('button', { name: '번역만 다시 시도', exact: true })).toBeVisible();
+    const turnActivity = page
+      .locator(`[data-testid="source"][data-source-id="${before.sources[0].id}"]`)
+      .getByTestId('turn-activity');
+    await expect(turnActivity.locator(':scope > summary')).toContainText('번역 실패');
     const failed = (await data(request, chat.id)).jobs.findLast(
       (job) => job.kind === 'translation'
     )!;
-    await page.getByRole('button', { name: '번역만 다시 시도', exact: true }).click();
+    if ((await turnActivity.getAttribute('open')) === null)
+      await turnActivity.locator(':scope > summary').click();
+    await turnActivity
+      .locator(`[data-testid="job-translation"][data-job-id="${failed.id}"]`)
+      .getByRole('button', { name: '이 작업만 재시도', exact: true })
+      .click();
     await expect
       .poll(
         async () => (await data(request, chat.id)).jobs.find((job) => job.id === failed.id)?.status
@@ -696,7 +715,7 @@ test('UI03 UI12 new story retry freezes selected revisions across a late library
   const beforeChats = (await (await request.get('/api/chats')).json()) as Chat[];
   await page.goto('/');
   await nav(page, '서재');
-  await page.getByRole('button', { name: `${title} 자료 편집`, exact: true }).click();
+  await editLibraryContent(page, `${title}`);
   let releaseLibrary!: () => void;
   const libraryGate = new Promise<void>((resolve) => {
     releaseLibrary = resolve;
@@ -761,14 +780,17 @@ test('UI03 UI12 new story retry freezes selected revisions across a late library
     await navigationAction(page, '새 채팅', title);
     const dialog = page.getByRole('dialog', { name: '새 채팅', exact: true });
     await expect(dialog).toBeVisible();
-    await expect(dialog.locator('.bot-option.chosen')).toContainText(title);
+    await expect(dialog.getByLabel('채팅의 봇')).toContainText(title);
     await selectStartPrompt(page, choice);
     await page.getByLabel('새 채팅 이름').fill(`${title} story`);
     await dialog.getByRole('button', { name: '채팅 만들기', exact: true }).click();
     const chat = await chatWaiting;
     await expect(dialog.getByRole('button', { name: /준비하는 중/ })).toBeVisible();
-    expect.soft(await dialog.locator('.bot-option.chosen').isDisabled()).toBe(true);
-    expect.soft(await page.getByLabel('시작 페르소나').isDisabled()).toBe(true);
+    await expect(dialog.getByRole('group', { name: '시작할 봇', exact: true })).toHaveCount(0);
+    await expect(dialog.getByLabel('채팅의 봇')).toContainText(title);
+    expect
+      .soft(await page.getByRole('button', { name: '시작 페르소나', exact: true }).isDisabled())
+      .toBe(true);
     expect.soft(await page.getByLabel('시작 프롬프트').isDisabled()).toBe(true);
     expect.soft(await page.getByLabel('시작 옵션 조합').isDisabled()).toBe(true);
     expect.soft(await page.getByLabel('새 채팅 이름').isDisabled()).toBe(true);
@@ -870,7 +892,7 @@ test('UI03 UI12 failed starting profile read survives reload and recovers frozen
   });
   await page.goto('/');
   await nav(page, '서재');
-  await page.getByRole('button', { name: `${title} 봇으로 시작`, exact: true }).click();
+  await page.getByRole('button', { name: `${title} 새 채팅`, exact: true }).click();
   const dialog = page.getByRole('dialog', { name: '새 채팅', exact: true });
   await selectStartPrompt(page, choice);
   let rejectRead = true;
@@ -969,6 +991,56 @@ async function startingModels(request: APIRequestContext, title: string) {
   return { connection, models };
 }
 
+test('UI03 starting without a model explains setup and creates a chat without execution', async ({
+  page,
+  request,
+}) => {
+  const title = `UI no starting model ${Date.now()}`;
+  await page.route('**/api/health', async (route) => {
+    const response = await route.fetch();
+    const health = await response.json();
+    await route.fulfill({ response, json: { ...health, testMode: false } });
+  });
+  // Keep this empty-model UI fixture independent of models saved by earlier browser cases.
+  await page.route(/\/api\/library(?:\?|$)/, async (route) => {
+    const response = await route.fetch();
+    const library = await response.json();
+    await route.fulfill({ response, json: { ...library, models: [] } });
+  });
+  const writes: string[] = [];
+  page.on('request', (item) => {
+    if (item.method() === 'POST') writes.push(item.url());
+  });
+  await page.goto('/');
+  await nav(page, '새 이야기');
+  const dialog = page.getByRole('dialog', { name: '새 채팅', exact: true });
+  await expect(dialog.getByLabel('시작 본문 모델').locator('option:checked')).toHaveText(
+    '본문 모델을 선택해 주세요'
+  );
+  await expect(dialog).toContainText('채팅은 먼저 만들 수 있어요.');
+  await dialog.getByRole('button', { name: '모델 연결 설정', exact: true }).click();
+  await expect(page.getByRole('dialog', { name: '설정', exact: true })).toBeVisible();
+  await expect(page.getByRole('tab', { name: '연결과 모델', exact: true })).toHaveAttribute(
+    'aria-selected',
+    'true'
+  );
+  await nav(page, '새 이야기');
+  await dialog.getByLabel('새 채팅 이름').fill(title);
+  const accepted = page.waitForResponse(
+    (item) => /\/api\/chats$/.test(item.url()) && item.request().method() === 'POST'
+  );
+  await dialog.getByRole('button', { name: '채팅 만들기', exact: true }).click();
+  const chat = (await (await accepted).json()) as Chat;
+  await expect(dialog).not.toBeVisible();
+  const detail = await data(request, chat.id);
+  expect(detail.profile!.routes.main).toBeNull();
+  expect(detail.runs).toHaveLength(0);
+  expect(detail.attempts).toHaveLength(0);
+  expect(writes.filter((url) => /\/(?:runs|candidate)$/.test(url))).toEqual([]);
+  await page.getByLabel('다음 장면 요청').fill('모델 선택 전 합성 요청');
+  await expect(page.getByRole('button', { name: '원문 생성', exact: true })).toBeDisabled();
+});
+
 test('UI03 UI12 starting model choices are saved without execution, reused exactly and dropped when their connection is disabled', async ({
   page,
   request,
@@ -1045,7 +1117,7 @@ test('UI03 UI12 starting model choices are saved without execution, reused exact
   await expect(page.getByLabel('시작 본문 모델')).toHaveValue('');
   await expect(page.getByLabel('시작 번역 모델')).toHaveValue('');
   await expect(page.getByLabel('시작 본문 모델').locator('option:checked')).toHaveText(
-    '검사용 모의 생성 · 실제 모델 없음'
+    '본문 모델을 선택해 주세요'
   );
   expect((await data(request, chat.id)).attempts).toHaveLength(0);
 });
@@ -1238,22 +1310,23 @@ test('UI17 full writing and empty translation prompts import, save and apply wit
   const dialog = page.getByRole('dialog', { name: '채팅 설정', exact: true });
   await dialog.getByRole('tab', { name: '프롬프트·창작 프리셋', exact: true }).click();
   const editor = dialog.getByTestId('prompt-editor');
-  await expect(editor.getByLabel('메시지 본문', { exact: true })).not.toHaveValue('');
-  await editor.getByLabel('불러올 프롬프트').selectOption('new');
+  await expect(await promptBody(editor)).not.toHaveValue('');
+  await editor.getByRole('button', { name: '새 프롬프트 생성', exact: true }).click();
+  await promptBody(editor);
   const literal =
     '  FULL_PROMPT_UI17\n{{user}} {{#if exact}}literal CBS{{/if}}\n<script>globalThis.__promptExecuted=true</script>\n' +
     'Preserve this complete authored prompt and all tool data separately.\n'.repeat(90) +
     '\n  ';
-  await editor.getByLabel('메시지 본문 파일 불러오기', { exact: true }).setInputFiles({
+  await editor.getByLabel('지침 본문 파일 불러오기', { exact: true }).setInputFiles({
     name: 'UI17-full-main.md',
     mimeType: 'text/markdown',
     buffer: Buffer.from(literal),
   });
-  await expect(editor.getByLabel('메시지 본문', { exact: true })).toHaveValue(literal);
+  await expect(await promptBody(editor)).toHaveValue(literal);
   await editor.getByLabel('프롬프트 이름').fill('UI17-full-main');
   await dialog.getByRole('tab', { name: '봇·페르소나·모듈', exact: true }).click();
   await dialog.getByRole('tab', { name: '프롬프트·창작 프리셋', exact: true }).click();
-  await expect(editor.getByLabel('메시지 본문', { exact: true })).toHaveValue(literal);
+  await expect(await promptBody(editor)).toHaveValue(literal);
   await editor.getByRole('button', { name: '편집 영역 넓히기', exact: true }).click();
   expect(await editor.evaluate((element) => element.scrollWidth <= element.clientWidth + 1)).toBe(
     true
@@ -1274,9 +1347,11 @@ test('UI17 full writing and empty translation prompts import, save and apply wit
   expect(main.role).toBe('main');
   await page.screenshot({ path: info.outputPath('full-prompt-mobile.png') });
   await editor.getByLabel('프롬프트 역할').selectOption('translation');
-  await editor.getByLabel('불러올 프롬프트').selectOption('new');
+  await editor.getByRole('button', { name: '새 프롬프트 생성', exact: true }).click();
+  await promptBody(editor);
   await editor.getByLabel('프롬프트 이름').fill('UI17 empty translation');
-  await expect(editor.getByLabel('메시지 본문', { exact: true })).toHaveValue('');
+  await (await promptBody(editor)).fill('');
+  await expect(await promptBody(editor)).toHaveValue('');
   await editor.getByRole('button', { name: '저장하고 이야기에 적용', exact: true }).click();
   await expect
     .poll(async () => Boolean((await data(request, chat.id)).profile?.prompts?.translation))
@@ -1287,14 +1362,12 @@ test('UI17 full writing and empty translation prompts import, save and apply wit
   ).json();
   expect(translation.program).toEqual(createDefaultPromptProgram('', 'translation'));
   expect(translation.role).toBe('translation');
-  await editor.getByLabel('불러올 프롬프트').selectOption('builtin');
-  await expect(editor.getByLabel('메시지 본문', { exact: true })).not.toHaveValue('');
-  await editor.getByRole('button', { name: '이야기에 선택 적용', exact: true }).click();
+  await editor.getByRole('button', { name: '앱 기본 프롬프트 사용', exact: true }).click();
   await expect
     .poll(async () => (await data(request, chat.id)).profile!.prompts!.translation)
     .toBeNull();
   await editor.getByLabel('프롬프트 역할').selectOption('main');
-  await expect(editor.getByLabel('메시지 본문', { exact: true })).toHaveValue(literal);
+  await expect(await promptBody(editor)).toHaveValue(literal);
   await page.setViewportSize({ width: 1440, height: 1000 });
   await page.screenshot({ path: info.outputPath('full-prompt-desktop.png') });
   const after = await data(request, chat.id);
@@ -1358,15 +1431,15 @@ test('UI17 full prompt revisions stay pinned and conflict keeps the edited text'
   const dialog = page.getByRole('dialog', { name: '채팅 설정', exact: true });
   await dialog.getByRole('tab', { name: '프롬프트·창작 프리셋', exact: true }).click();
   const editor = dialog.getByTestId('prompt-editor');
-  await expect(editor.getByLabel('메시지 본문', { exact: true })).toHaveValue(originalText);
+  await expect(await promptBody(editor)).toHaveValue(originalText);
   const edited = 'Unsaved custom full prompt.\n' + 'Keep my edited text intact.\n'.repeat(30);
-  await editor.getByLabel('메시지 본문', { exact: true }).fill(edited);
+  await (await promptBody(editor)).fill(edited);
   await editor.getByLabel('프롬프트 역할').selectOption('translation');
   await editor.getByLabel('프롬프트 역할').selectOption('main');
-  await expect(editor.getByLabel('메시지 본문', { exact: true })).toHaveValue(edited);
+  await expect(await promptBody(editor)).toHaveValue(edited);
   await editor.getByRole('button', { name: '기존 프롬프트 수정 저장', exact: true }).click();
   await expect(editor.getByRole('alert')).toContainText('다른 요청이 먼저 반영됐어요.');
-  await expect(editor.getByLabel('메시지 본문', { exact: true })).toHaveValue(edited);
+  await expect(await promptBody(editor)).toHaveValue(edited);
   expect((await data(request, chat.id)).profile!.prompts!.main).toEqual({
     id: first.id,
     revision: 1,
@@ -1381,18 +1454,17 @@ test('UI17 full prompt revisions stay pinned and conflict keeps the edited text'
     revision: 1,
   });
   await close(page);
-  await nav(page, '서재');
-  await page.getByRole('tab', { name: '프롬프트', exact: true }).click();
-  const libraryEditor = page.getByTestId('library-panel').getByTestId('prompt-editor');
+  await nav(page, '프롬프트');
+  await page
+    .getByRole('button', { name: 'UI17 recovered copy 프롬프트 편집', exact: true })
+    .click();
+  const libraryEditor = page.getByTestId('prompt-library').getByTestId('prompt-editor');
   const library = await (await request.get('/api/library')).json();
   const copy = library.promptPresets.find(
     (item: { title: string }) => item.title === 'UI17 recovered copy'
   );
   expect(copy.program).toEqual(createDefaultPromptProgram(edited, 'main'));
-  await libraryEditor.getByLabel('불러올 프롬프트').selectOption(`${copy.id}@${copy.revision}`);
-  await libraryEditor
-    .getByLabel('메시지 본문', { exact: true })
-    .fill(edited + '\nRevised in library.');
+  await (await promptBody(libraryEditor)).fill(edited + '\nRevised in library.');
   await libraryEditor.getByRole('button', { name: '기존 프롬프트 수정 저장', exact: true }).click();
   await expect
     .poll(

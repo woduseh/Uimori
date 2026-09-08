@@ -83,7 +83,7 @@ function bundle(count = 5): AuxiliaryBundle {
           {
             id: 'names',
             revision: 5,
-            kind: 'glossary',
+            kind: 'module',
             title: 'Author names',
             description: 'Preferred form',
             text: 'Captain Arlen = 앨런 선장',
@@ -225,7 +225,7 @@ describe('same-source completed translation wording references', () => {
       text: 'Mira speaks informally with the traveler, an old friend.',
     });
     expect(current.context.persona).toMatchObject({ id: 'traveler', revision: 4 });
-    expect(current.context.glossary[0]).toMatchObject({ id: 'names', revision: 5 });
+    expect(current.context.references[0]).toMatchObject({ id: 'names', revision: 5 });
     expect(current.blocks.map((block) => block.anchor)).toEqual(plan.chunks[3].anchors);
     expect(JSON.stringify(plan)).toBe(before);
     expect(
@@ -304,11 +304,11 @@ describe('same-source completed translation wording references', () => {
     expect(observed[1].context.previousTranslation).toEqual(
       observed[0].context.previousTranslation
     );
-    expect(observed[0].context.glossary[0].text).toBe('Captain Arlen = 앨런 선장');
+    expect(observed[0].context.references[0].text).toBe('Captain Arlen = 앨런 선장');
     expect(input.contract).toBe('');
     const instructions = compileTranslationPrompt(input, seed.snapshot, 'Translate this chunk.')!
       .messages[0].content[0].text;
-    expect(instructions).toContain('author canon/glossary take precedence');
+    expect(instructions).toContain('source-time references take precedence');
     expect(instructions).toContain('never repeat reference passages');
   });
 

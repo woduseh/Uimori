@@ -1,7 +1,7 @@
 import { useLayoutEffect, useRef, useState } from 'react';
 import type { ContentPackage } from '../core/content-package.js';
 import { PACKAGE_IMAGE_MIMES, type PackageImage } from '../core/package-images.js';
-import { sessionRequiredEvent } from './api.js';
+import { maxPackageImages, uploadPackageImage } from './package-image-upload.js';
 import './package-images.css';
 
 type Props = {
@@ -71,7 +71,7 @@ export function PackageImagesEditor({ value, onChange, onDirtyChange }: Props) {
 
   async function addFiles(files: File[]) {
     if (!files.length || upload.current) return;
-    if ((latest.current.value.images?.length ?? 0) + files.length > 2000) {
+    if ((latest.current.value.images?.length ?? 0) + files.length > maxPackageImages) {
       setError('자료 하나에 이미지를 2,000개까지 등록할 수 있어요.');
       return;
     }
@@ -93,43 +93,9 @@ export function PackageImagesEditor({ value, onChange, onDirtyChange }: Props) {
       for (const [index, file] of files.entries()) {
         if (!current()) return;
         try {
-          if (
-            !PACKAGE_IMAGE_MIMES.includes(file.type as PackageImage['mime']) ||
-            file.size > 2_000_000 ||
-            file.size === 0
-          )
-            throw new Error('2MB 이하 PNG, JPEG 또는 WebP가 필요해요.');
-          const bytes = new Uint8Array(await file.arrayBuffer());
+          const image = await uploadPackageImage(file, controller.signal, 'both');
           if (!current()) return;
-          let binary = '';
-          for (let start = 0; start < bytes.length; start += 32_768)
-            binary += String.fromCharCode(...bytes.subarray(start, start + 32_768));
-          const response = await fetch('/api/package-image-blobs', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ mime: file.type, base64: btoa(binary) }),
-            signal: controller.signal,
-          });
-          if (!current()) return;
-          if (response.status === 401) window.dispatchEvent(new Event(sessionRequiredEvent));
-          if (!response.ok) throw new Error(`이미지를 업로드하지 못했어요. (${response.status})`);
-          const result: { hash: string; mime: PackageImage['mime'] } = await response.json();
-          if (!current()) return;
-          if (!/^[a-f0-9]{64}$/u.test(result.hash) || result.mime !== file.type)
-            throw new Error('이미지 응답을 확인할 수 없어요.');
-          const image: PackageImage = {
-            id: crypto.randomUUID(),
-            title:
-              file.name
-                .replace(/\.[^.]+$/u, '')
-                .trim()
-                .slice(0, 200) || '이미지',
-            description: '',
-            blobHash: result.hash,
-            mime: result.mime,
-            allowedUse: 'both',
-          };
-          if ((latest.current.value.images?.length ?? 0) >= 2000)
+          if ((latest.current.value.images?.length ?? 0) >= maxPackageImages)
             throw new Error('자료 하나에 이미지를 2,000개까지 등록할 수 있어요.');
           change([...(latest.current.value.images ?? []), image]);
           setSelected(image.id);

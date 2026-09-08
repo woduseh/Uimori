@@ -3,12 +3,14 @@ import { validateContentPackage, type ContentPackage } from '../core/content-pac
 import type { Content, Library } from '../core/product.js';
 import type { PackageModuleRef } from '../core/package-features.js';
 import { SourceSegmentsEditor } from './SourceSegmentsEditor.js';
+import { ContentAvatar } from './ContentAvatar.js';
+import { ContentPicker } from './ContentPicker.js';
 import { api } from './api.js';
 import './package-authoring.css';
 
 const referenceKey = (ref: PackageModuleRef | null | undefined) =>
   ref ? `${ref.id}@${ref.revision}` : '';
-type ReferenceStatus = { title?: string; error?: string };
+type ReferenceStatus = { content?: Content; error?: string };
 
 export function PackageFeaturesEditor({
   value,
@@ -19,7 +21,7 @@ export function PackageFeaturesEditor({
   onChange: (value: ContentPackage) => void;
   onDirtyChange?: (dirty: boolean) => void;
 }) {
-  const [library, setLibrary] = useState<Content[]>([]),
+  const [library, setLibrary] = useState<Library | null>(null),
     [statuses, setStatuses] = useState<Record<string, ReferenceStatus>>({});
   const [selected, setSelected] = useState('');
   const [revisionDrafts, setRevisionDrafts] = useState<Record<string, string>>({}),
@@ -41,6 +43,7 @@ export function PackageFeaturesEditor({
     };
   }, []);
   const refsKey = JSON.stringify(value.modules ?? []);
+  const scope = `${value.id}@${value.revision}`;
   // biome-ignore lint/correctness/useExhaustiveDependencies: Switching packages invalidates actions and clears only the previous package's local drafts.
   useEffect(() => {
     actionVersion.current++;
@@ -48,7 +51,7 @@ export function PackageFeaturesEditor({
     setRevisionDrafts({});
     setSegmentsDirty(false);
     setSelected('');
-  }, [value.id]);
+  }, [scope]);
   useEffect(() => {
     onDirtyChange?.(Object.keys(revisionDrafts).length > 0 || segmentsDirty || busy);
   }, [revisionDrafts, segmentsDirty, busy, onDirtyChange]);
@@ -60,12 +63,7 @@ export function PackageFeaturesEditor({
       .then((results) => {
         if (!active) return;
         const [contents] = results;
-        if (contents.status === 'fulfilled')
-          setLibrary(
-            contents.value.contents.filter(
-              (content) => content.id !== value.id && (content.hasPackage || content.package)
-            )
-          );
+        if (contents.status === 'fulfilled') setLibrary(contents.value);
         if (results.some((result) => result.status === 'rejected'))
           setError('자료 목록을 불러오지 못했어요. 다시 조회해 주세요.');
       })
@@ -88,9 +86,7 @@ export function PackageFeaturesEditor({
           );
           return [
             referenceKey(ref),
-            content.package
-              ? { title: content.title }
-              : { error: '고정 버전이 공통 패키지가 아니에요.' },
+            content.package ? { content } : { error: '고정 버전이 공통 패키지가 아니에요.' },
           ] as const;
         } catch {
           return [
@@ -107,12 +103,14 @@ export function PackageFeaturesEditor({
     };
   }, [value.id, refsKey, reload]);
 
-  const currentAction = (request: number, id: string) =>
-    alive.current && actionVersion.current === request && latest.current.value.id === id;
+  const currentAction = (request: number, scope: string) =>
+    alive.current &&
+    actionVersion.current === request &&
+    `${latest.current.value.id}@${latest.current.value.revision}` === scope;
   async function act(work: (request: number, id: string) => Promise<void>) {
     if (busy) return;
     const request = ++actionVersion.current,
-      id = value.id;
+      id = scope;
     setBusy(true);
     setError('');
     setNotice('');
@@ -136,7 +134,7 @@ export function PackageFeaturesEditor({
     }
   }
   async function addModule() {
-    const item = library.find((content) => referenceKey(content) === selected);
+    const item = library?.contents.find((content) => referenceKey(content) === selected);
     if (!item) return;
     await act(async (request, id) => {
       const content = await api<Content>(
@@ -197,9 +195,8 @@ export function PackageFeaturesEditor({
             draft = revisionDrafts[ref.id];
           return (
             <fieldset className="package-entry" key={ref.id}>
-              <legend>
-                {status?.title ?? library.find((content) => content.id === ref.id)?.title ?? ref.id}
-              </legend>
+              <legend>{status?.content?.title ?? ref.id}</legend>
+              <ContentAvatar content={status?.content} title={status?.content?.title ?? ref.id} />
               <small>
                 {ref.id} · 고정 버전 v{ref.revision}
               </small>
@@ -268,24 +265,15 @@ export function PackageFeaturesEditor({
             </fieldset>
           );
         })}
-        <label>
-          연결할 공통 자료
-          <select
-            aria-label="연결할 공통 모듈"
-            disabled={busy || loading}
-            value={selected}
-            onChange={(event) => setSelected(event.target.value)}
-          >
-            <option value="">자료 선택</option>
-            {library
-              .filter((content) => !value.modules?.some((ref) => ref.id === content.id))
-              .map((content) => (
-                <option key={referenceKey(content)} value={referenceKey(content)}>
-                  {content.title} · v{content.revision}
-                </option>
-              ))}
-          </select>
-        </label>
+        <ContentPicker
+          library={library ?? { contents: [], connections: [], models: [], assets: [] }}
+          value={selected}
+          onChange={setSelected}
+          role="module"
+          label="연결할 공통 모듈"
+          disabled={busy || loading || !library}
+          excludeIds={[value.id, ...(value.modules ?? []).map((ref) => ref.id)]}
+        />
         <button
           type="button"
           className="secondary"

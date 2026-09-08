@@ -194,7 +194,7 @@ if (process.env.NR_SELF_HOST_BROWSER === '1')
         expect(response.ok()).toBe(true);
         const bot = (await response.json()) as Content;
         await pc.reload();
-        await pc.getByRole('button', { name: `${bot.title} 봇으로 시작`, exact: true }).click();
+        await pc.getByRole('button', { name: `${bot.title} 새 채팅`, exact: true }).click();
         await pc.getByLabel('새 채팅 이름', { exact: true }).fill(title);
         const created = pc.waitForResponse(
           (item) =>

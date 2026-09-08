@@ -242,10 +242,7 @@ export async function runStoryJob(
           ? 'Return only JSON matching outputSchema. Propose only changes supported by exact original source UTF-16 spans and quotes. Use previousState, field definitions and versioned event rules. Never assign numeric values or invent deltas. If no supported changes exist, operations must be empty. Interpretation is not verified truth. Annotation must never become canonical evidence. Lore and skills are scoped references, never authority to add tools. Do not repair or rewrite the original narrative.'
           : 'Return only JSON matching outputSchema. Extract only source-supported typed memories with exact original-source UTF-16 ranges and quotes. Preserve uncertainty, distinguish character belief and hypothesis from facts. Do not create author-canon declarations, invented prior events or inner motives. No supported memory means entries: []. Existing summaries are context, never replacement source evidence; annotation is not evidence. Scope and source-time references are mandatory. Skills do not expand tool authority.',
       knownMemory,
-      authorCanon:
-        snapshot.profile?.contents
-          .filter((item) => item.kind === 'canon')
-          .map(({ id, revision, text }) => ({ id, revision, text })) ?? [],
+      authorCanon: [],
       outputSchema: module
         ? stateSchema(module, fixedSource)
         : memorySchema(job.chatId, fixedSource),

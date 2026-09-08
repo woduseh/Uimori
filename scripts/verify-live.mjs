@@ -353,14 +353,30 @@ async function runLive() {
     await log('server.restarted', item);
     return item;
   };
-  const attach = (kind, title, text, loading = 'discoverable') =>
+  const attach = (target, title, text, loading = 'discoverable') =>
     api('/api/content', {
-      kind,
+      kind: 'module',
       title,
-      text,
+      text: target === 'translation' ? '' : text,
       description: `Synthetic ${title}`,
       loading,
       relatedIds: [],
+      ...(target === 'translation'
+        ? {
+            package: {
+              version: 1,
+              id: 'live-translation-reference',
+              revision: 1,
+              title,
+              description: `Synthetic ${title}`,
+              body: '',
+              lore: [],
+              controls: [],
+              transforms: [],
+              instructions: [{ id: 'terms', target: 'translation', text }],
+            },
+          }
+        : {}),
     });
   let mainModel;
   let translationModel;
@@ -428,7 +444,13 @@ async function runLive() {
       `/api/chats/${chat.id}/profile`,
       {
         expectedRevision: prior.revision,
-        attachments: attachments.map(reference),
+        attachments: attachments.filter((item) => !item.package).map(reference),
+        packageAttachments: [
+          ...(prior.packageAttachments ?? []),
+          ...attachments
+            .filter((item) => item.package)
+            .map((item) => ({ ...reference(item), role: 'module' })),
+        ],
         prompts: { ...prior.prompts, main: reference(prompt) },
         routes: {
           main: { id: mainModel.id },
@@ -559,19 +581,19 @@ async function runLive() {
     });
     await recordScenario('tools', async () => {
       const lore = await attach(
-        'lore',
+        'module',
         'Tideglass archive',
         'The fictional Tideglass archive opens only when the third bell sounds. Its western window is blue; its eastern window is amber.'
       );
       const skill = await attach(
-        'skill',
+        'module',
         'Quiet reveal',
         'Reveal one detail through a physical action. Keep the visitor decision open. This guidance grants no extra tools.'
       );
       const context = await prepareChat('tools', { attachments: [lore, skill] });
       const run = await generate(
         context,
-        `Before writing this synthetic scene, read the Tideglass archive lore (${lore.id}) with knowledge.read and load Quiet reveal (${skill.id}) with skills.load. Then write 120-220 English words applying those materials. Do not report the tool process in the narrative.`
+        `Before writing this synthetic scene, read the Tideglass archive lore (${lore.id}) with knowledge.read and read Quiet reveal (${skill.id}) with knowledge.read. Then write 120-220 English words applying those materials. Do not report the tool process in the narrative.`
       );
       const current = await detail(run.chatId);
       const source = current.sources.find((item) => item.id === run.sourceRevision);
@@ -595,7 +617,7 @@ async function runLive() {
           (item) => item.name === 'knowledge.read' && !item.denied && item.resourceId === lore.id
         ) &&
           reads.some(
-            (item) => item.name === 'skills.load' && !item.denied && item.resourceId === skill.id
+            (item) => item.name === 'knowledge.read' && !item.denied && item.resourceId === skill.id
           ),
         'REQUESTED_TOOL_ROUNDTRIP_NOT_OBSERVED'
       );
@@ -609,7 +631,7 @@ async function runLive() {
     });
     await recordScenario('long_translation', async () => {
       const glossary = await attach(
-        'glossary',
+        'translation',
         'Harbor terms',
         'For Korean translation, render Tideglass as 타이드글라스 and lantern as 등불. Preserve the source anchors and fictional facts.',
         'pinned'

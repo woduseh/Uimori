@@ -135,7 +135,8 @@ function standalone(store: Store, chatId: string) {
       archive.tables.sources.filter((row) => row.chat_id === chatId).map((row) => row.id)
     );
   for (const [name, rows] of Object.entries(archive.tables)) {
-    if (name === 'versions' || name === 'package_behavior_entropy') continue;
+    if (name === 'versions' || name === 'package_behavior_entropy' || name.startsWith('library_'))
+      continue;
     archive.tables[name] = rows.filter((row) =>
       Object.hasOwn(row, 'chat_id')
         ? row.chat_id === chatId
@@ -294,7 +295,7 @@ test('archive cannot resurrect an evicted read when a later policy provides more
   const store = database(),
     chat = createFixtureChat(store, 'Synthetic eviction transition');
   const a = store.product.content({
-    kind: 'lore',
+    kind: 'module',
     title: 'Synthetic first lore',
     description: '',
     text: 'A synthetic first reference has several characters.',
@@ -302,7 +303,7 @@ test('archive cannot resurrect an evicted read when a later policy provides more
     relatedIds: [],
   });
   const b = store.product.content({
-    kind: 'lore',
+    kind: 'module',
     title: 'Synthetic second lore',
     description: '',
     text: 'A synthetic second reference has several characters.',

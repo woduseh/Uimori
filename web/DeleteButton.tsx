@@ -82,6 +82,7 @@ export function DeleteButton({
         type="button"
         className={`secondary delete-button ${iconOnly ? 'icon-only' : ''}`}
         aria-label={`${title} ${label}`}
+        title={iconOnly ? label : undefined}
         disabled={disabled || busy}
         onClick={() => void open()}
       >

@@ -142,9 +142,11 @@ describe('M1 product data with actual file SQLite', () => {
     ) as Content;
     const chat = createFixtureChat(store, 'attached-story', 'calm', { botId: bot.id });
     const canon = product.content(
-      contentBody('canon', 'The harbor has never had electricity.')
+      contentBody('module', 'The harbor has never had electricity.')
     ) as Content;
-    const lore = product.content(contentBody('lore', 'UNREAD_LORE_V1', 'discoverable')) as Content;
+    const lore = product.content(
+      contentBody('module', 'UNREAD_LORE_V1', 'discoverable')
+    ) as Content;
     const persona = product.content(contentBody('persona', 'EXCLUDED_READER_PERSONA')) as Content;
     const first = profile(product, chat, [canon, lore, persona].map(reference));
     const applied = profile(product, chat, first.attachments, { personaReference: false });
@@ -154,7 +156,10 @@ describe('M1 product data with actual file SQLite', () => {
     const run = queuedRun(store, product, chat.id);
     const oldSnapshot = structuredClone(run.snapshot);
     const edited = product.content(
-      { ...contentBody('lore', 'EDITED_LORE_V2', 'discoverable'), expectedRevision: lore.revision },
+      {
+        ...contentBody('module', 'EDITED_LORE_V2', 'discoverable'),
+        expectedRevision: lore.revision,
+      },
       lore.id
     ) as Content;
     expect(edited.revision).toBe(2);
@@ -171,7 +176,7 @@ describe('M1 product data with actual file SQLite', () => {
     );
     const input = buildMainInput(oldSnapshot);
     expect(input.facts).toContain(canon.text);
-    expect(input.pinnedSources?.find((item) => item.kind === 'canon')).toMatchObject({
+    expect(input.pinnedSources?.find((item) => item.id === canon.id)).toMatchObject({
       id: canon.id,
       revision: 1,
       hash: createHash('sha256').update(canon.text).digest('hex'),
@@ -184,7 +189,7 @@ describe('M1 product data with actual file SQLite', () => {
     expect(product.profile(chat.id).personaReference).toBe(true);
     expect(oldSnapshot.profile!.personaReference).toBe(false);
     expect(() =>
-      product.content({ ...contentBody('lore', 'STALE_WRITE'), expectedRevision: 1 }, lore.id)
+      product.content({ ...contentBody('module', 'STALE_WRITE'), expectedRevision: 1 }, lore.id)
     ).toThrow('Revision conflict');
     expect(() =>
       product.updateProfile(chat.id, {
@@ -262,14 +267,14 @@ describe('M1 product data with actual file SQLite', () => {
   test('P09 preserves sibling candidates from the exact original snapshot and each descendant ancestry with branch CAS', async () => {
     const { store, product } = await database();
     const chat = createFixtureChat(store, 'candidate-story');
-    const canon = product.content(contentBody('canon', 'Original canon revision.')) as Content;
+    const canon = product.content(contentBody('module', 'Original canon revision.')) as Content;
     profile(product, chat, [reference(canon)]);
     const base = completedSource(store, product, chat.id, 'BASE_SCENE');
     const original = queuedRun(store, product, chat.id, 'Same candidate request');
     store.startRun(original.id);
     const a = store.completeRun(original.id, 'CANDIDATE_A', noUsage, original.snapshot.settings);
     const changedCanon = product.content(
-      { ...contentBody('canon', 'Later canon revision.'), expectedRevision: 1 },
+      { ...contentBody('module', 'Later canon revision.'), expectedRevision: 1 },
       canon.id
     ) as Content;
     profile(product, chat, [reference(changedCanon)], { personaReference: false });
@@ -425,7 +430,7 @@ describe('M1 product data with actual file SQLite', () => {
     const { store, product } = await database();
     const chat = createFixtureChat(store, 'archive-story');
     const canon = product.content(
-      contentBody('canon', 'A portable author declaration.')
+      contentBody('module', 'A portable author declaration.')
     ) as Content;
     const bound = product.connection({
       title: 'Fixture',
@@ -527,7 +532,7 @@ describe('M1 product data with actual file SQLite', () => {
     expect(product.asset(asset.id).asset.hash).toBe(asset.hash);
   });
 
-  test.each([1, 2, 3, 4, 5, 6, 7, 8, 9, 10])(
+  test.each([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11])(
     'P11 rejects unsupported schema %i without automatic migration or backup',
     async (version) => {
       const item = await directory();
@@ -570,7 +575,7 @@ describe('M1 product data with actual file SQLite', () => {
     await writeFile(path, bytes);
     const reopened = new DatabaseSync(path, { readOnly: true });
     try {
-      expect(reopened.prepare('PRAGMA user_version').get()).toEqual({ user_version: 11 });
+      expect(reopened.prepare('PRAGMA user_version').get()).toEqual({ user_version: 12 });
       expect(
         reopened.prepare('SELECT id,text,hash FROM sources WHERE id=?').get(source.id)
       ).toEqual({ id: source.id, text: source.text, hash: source.hash });
@@ -683,7 +688,7 @@ describe('M1 real HTTP application boundaries', () => {
       expect(body.role).toBe('translation');
       expect(body.modelId).toBe('fixture-translator');
       const source = body.input.source;
-      expect(source.context.glossary).toMatchObject([
+      expect(source.context.references).toMatchObject([
         { id: glossaryId, revision: 1, text: 'SOURCE_TIME_GLOSSARY_OLD' },
       ]);
       expect(JSON.stringify(body)).not.toContain('FUTURE_GLOSSARY_NEW');
@@ -745,7 +750,7 @@ describe('M1 real HTTP application boundaries', () => {
       { method: 'PATCH' }
     );
     const glossary = app.store.product.content(
-      contentBody('glossary', 'SOURCE_TIME_GLOSSARY_OLD')
+      contentBody('module', 'SOURCE_TIME_GLOSSARY_OLD')
     ) as Content;
     glossaryId = glossary.id;
     const bound = app.store.product.connection({
@@ -793,7 +798,7 @@ describe('M1 real HTTP application boundaries', () => {
     const requested = await api<Job>(url, `/api/sources/${source.id}/translation`, {});
     const jobId = requested.id;
     const updatedGlossary = app.store.product.content(
-      { ...contentBody('glossary', 'FUTURE_GLOSSARY_NEW'), expectedRevision: glossary.revision },
+      { ...contentBody('module', 'FUTURE_GLOSSARY_NEW'), expectedRevision: glossary.revision },
       glossary.id
     ) as Content;
     profile(app.store.product, chat, [reference(updatedGlossary)], { routes: configured.routes });

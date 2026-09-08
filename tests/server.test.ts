@@ -87,24 +87,11 @@ async function setup(testMode = true) {
       loading: 'discoverable',
     },
   ];
+  bot.package.instructions = [
+    { id: 'scene-craft', target: 'main', text: 'Leave the reader choice open.' },
+  ];
   const owner = await api<{ id: string }>(url, '/api/content', bot);
   const chat = await api<Chat>(url, '/api/chats', { title: '합성 항구', botId: owner.id });
-  const skill = await api<{ id: string; revision: number }>(url, '/api/content', {
-    kind: 'skill',
-    title: 'Synthetic scene craft',
-    description: 'Local skill fixture',
-    text: 'Leave the reader choice open.',
-    loading: 'discoverable',
-    relatedIds: [],
-  });
-  const profile = app.store.product.profile(chat.id);
-  app.store.product.updateProfile(chat.id, {
-    expectedRevision: profile.revision,
-    attachments: [{ id: skill.id, revision: skill.revision }],
-    personaReference: profile.personaReference,
-    routes: profile.routes,
-    image: profile.image,
-  });
   return { app, url, chat, directory };
 }
 const command = (chat: Chat, key = randomUUID()) => ({
@@ -304,8 +291,19 @@ describe('file SQLite HTTP runtime', () => {
 
   it('F01 refuses another owner before recovery; F06 disables controls and prevents cross-origin writes', async () => {
     const { app, url, chat, directory } = await setup(false);
-    app.controls.hold('run');
-    const active = await api<Run>(url, `/api/chats/${chat.id}/runs`, command(chat));
+    // Seed an in-flight record directly: this case tests owner recovery, not model execution.
+    // Keep the public runtime in normal mode without invoking a provider or a scripted model.
+    const { run: active } = app.store.createRun(chat.id, command(chat), (current) => ({
+      chatId: current.id,
+      parentRevision: current.headRevision,
+      settingsRevision: current.settingsRevision,
+      settings: current.settings,
+      request: command(chat).request,
+      history: [],
+      resources: [],
+      profile: app.store.product.snapshot(current.id),
+    }));
+    expect(app.store.startRun(active.id)).toBe(true);
     await expect(
       createApp({ dbPath: join(directory, 'story.sqlite'), buildId: 'other' })
     ).rejects.toThrow('running server owner');
@@ -340,7 +338,7 @@ describe('file SQLite HTTP runtime', () => {
     expect(rebound.statusCode).toBe(403);
   });
 
-  it('F04 reads scoped SQLite resources through actual research calls and records the next input', async () => {
+  it('F04 reads scoped SQLite references through research calls and applies package main instructions', async () => {
     const { app, url, chat } = await setup();
     const other = await api<Chat>(url, '/api/chats', { title: '다른 자료 범위' });
     const configured = await api<Chat>(
@@ -350,20 +348,20 @@ describe('file SQLite HTTP runtime', () => {
       'PATCH'
     );
     const resourceRows = app.store.product.resources(chat.id, app.store.product.snapshot(chat.id));
-    expect(resourceRows).toHaveLength(3);
+    expect(resourceRows).toHaveLength(2);
     const run = await api<Run>(url, `/api/chats/${chat.id}/runs`, command(configured));
     const result = await completed(url, run.id);
-    expect(result.inputs).toHaveLength(4);
-    expect(result.usage.modelCalls).toBe(4);
+    expect(result.inputs).toHaveLength(3);
+    expect(result.usage.modelCalls).toBe(3);
     expect(result.inputs[0].prefetch).toEqual([]);
     expect(result.inputs[0].results).toEqual([]);
     expect(result.inputs[0].catalog.every((resource) => !('text' in resource))).toBe(true);
+    expect(result.inputs[0].facts).toContain('Leave the reader choice open.');
     expect(result.toolEvents.map((event) => event.name)).toEqual([
       'knowledge.search',
       'knowledge.read',
-      'skills.load',
     ]);
-    expect(result.inputs[3].results).toEqual(result.toolEvents);
+    expect(result.inputs[2].results).toEqual(result.toolEvents);
     expect(JSON.stringify(result.inputs)).not.toContain(other.id);
     expect(JSON.stringify(result.inputs)).not.toContain('previousState');
     expect(JSON.stringify(result.inputs)).not.toContain('schema');

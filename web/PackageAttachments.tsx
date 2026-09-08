@@ -3,6 +3,8 @@ import type { ChatProfile, Library } from '../core/product.js';
 import type { ContentPackage, PackageAttachment, PackageRole } from '../core/content-package.js';
 import { api } from './api.js';
 import { PackageControlValues } from './PackageControlValues.js';
+import { ContentAvatar } from './ContentAvatar.js';
+import { ContentPicker } from './ContentPicker.js';
 import './package-authoring.css';
 const keyOf = (ref: PackageAttachment) => `${ref.id}@${ref.revision}:${ref.role}`;
 const refValue = (ref: { id: string; revision: number }) => `${ref.id}@${ref.revision}`;
@@ -175,13 +177,28 @@ export function PackageAttachments({
         const pkg = current?.packages[index],
           scope = keyOf(ref),
           automatic = required.has(scope),
-          title =
-            pkg?.title ??
-            library.contents.find((content) => content.id === ref.id)?.title ??
-            '보관된 패키지';
+          title = pkg?.title ?? '보관된 패키지';
         return (
           <article className="package-attachment" key={scope}>
             <header>
+              <ContentAvatar
+                content={
+                  pkg
+                    ? {
+                        id: pkg.id,
+                        revision: pkg.revision,
+                        kind: ref.role,
+                        title: pkg.title,
+                        description: pkg.description,
+                        text: '',
+                        loading: 'pinned',
+                        relatedIds: [],
+                        package: pkg,
+                      }
+                    : null
+                }
+                title={title}
+              />
               <div>
                 <small>
                   {automatic
@@ -256,33 +273,31 @@ export function PackageAttachments({
       <fieldset className="package-entry" disabled={busy}>
         <legend>패키지 추가</legend>
         <label>
-          자료
-          <select
-            aria-label="추가할 패키지"
-            value={selected}
-            onChange={(event) => setSelected(event.target.value)}
-          >
-            <option value="">자료 선택</option>
-            {library.contents
-              .filter((content) => content.package || content.hasPackage)
-              .map((content) => (
-                <option key={refValue(content)} value={refValue(content)}>
-                  {content.title}
-                </option>
-              ))}
-          </select>
-        </label>
-        <label>
           이 채팅에서의 역할
           <select
             aria-label="패키지 장착 역할"
             value={role}
-            onChange={(event) => setRole(event.target.value as PackageRole)}
+            onChange={(event) => {
+              setRole(event.target.value as PackageRole);
+              setSelected('');
+            }}
           >
             <option value="module">모듈 · 추가 지침과 설정</option>
             <option value="persona">페르소나 · 내가 맡는 인물</option>
           </select>
         </label>
+        <ContentPicker
+          library={{
+            ...library,
+            contents: library.contents.filter((content) => content.package || content.hasPackage),
+          }}
+          role={role}
+          label="추가할 패키지"
+          value={selected}
+          onChange={setSelected}
+          disabled={busy}
+          excludeIds={attachments.filter((ref) => ref.role === role).map((ref) => ref.id)}
+        />
         <button type="button" className="secondary" disabled={!selected || busy} onClick={add}>
           패키지 장착
         </button>

@@ -402,7 +402,7 @@ test('schema v11 reopen keeps explicit organization revisions without automatic 
   owner.store = undefined;
   const reopened = new Store(path);
   owner.store = reopened;
-  expect(reopened.db.prepare('PRAGMA user_version').get()).toMatchObject({ user_version: 11 });
+  expect(reopened.db.prepare('PRAGMA user_version').get()).toMatchObject({ user_version: 12 });
   expect(reopened.chat(chat.id)).toMatchObject({
     botId: bot.id,
     folderId: folder.id,

@@ -1,3 +1,4 @@
+import { packageContext } from '../core/package-context.js';
 import { compileSnapshotPrompt } from '../server/prompt-snapshot.js';
 import { createDefaultPromptProgram } from '../core/prompt-defaults.js';
 import { createHash } from 'node:crypto';
@@ -16,7 +17,7 @@ import {
 } from '../core/transport.js';
 import { loopbackProvider, sse, writeSse } from './fixtures/loopback-provider.js';
 import { defaultProfile, type Content, type Connection } from '../core/product.js';
-import { buildMainInput, executeTool } from '../core/provider.js';
+import { buildMainInput } from '../core/provider.js';
 import type { ModelInput, RunSnapshot, ToolEvent } from '../core/types.js';
 import { runMain, type MainHooks } from '../server/model-runner.js';
 
@@ -71,7 +72,7 @@ function routedSnapshot(endpoint: string): RunSnapshot {
     {
       id: 'canon-1',
       revision: 3,
-      kind: 'canon',
+      kind: 'module',
       title: 'Writer declaration',
       description: 'Author canon',
       text: 'The lighthouse has never used electricity.',
@@ -81,7 +82,7 @@ function routedSnapshot(endpoint: string): RunSnapshot {
     {
       id: 'lore-1',
       revision: 4,
-      kind: 'lore',
+      kind: 'module',
       title: 'Hidden observatory',
       description: 'Unprefetched path beyond the harbor',
       text: 'A copper observatory stands on the northern hill.',
@@ -91,7 +92,7 @@ function routedSnapshot(endpoint: string): RunSnapshot {
     {
       id: 'craft-1',
       revision: 1,
-      kind: 'skill',
+      kind: 'module',
       title: 'Scene guidance',
       description: 'Open decisions',
       text: 'Keep the next decision open. This text does not grant shell permissions.',
@@ -101,11 +102,11 @@ function routedSnapshot(endpoint: string): RunSnapshot {
     {
       id: 'glossary-1',
       revision: 1,
-      kind: 'glossary',
+      kind: 'module',
       title: 'Auxiliary terminology',
       description: 'Translation instructions',
       text: 'AUXILIARY_ONLY_TRANSLATION_PROCEDURE',
-      loading: 'pinned',
+      loading: 'discoverable',
       relatedIds: [],
     },
   ];
@@ -128,7 +129,7 @@ function routedSnapshot(endpoint: string): RunSnapshot {
     history: [{ revision: 'parent-1', text: 'Ada points beyond the harbor.' }],
     resources: contents.map((content) => ({
       ...content,
-      kind: content.kind === 'skill' ? 'skill' : 'lore',
+      kind: content.id === 'craft-1' ? 'skill' : 'lore',
       sourceKind: content.kind,
       chatId: 'routed-chat',
     })),
@@ -239,7 +240,7 @@ describe('server main runner through the actual loopback adapter', () => {
       .content[0].text.split('\n')
       .slice(1)
       .map((line: string) => JSON.parse(line)) as Content[];
-    expect(pinned.find((item) => item.kind === 'canon')).toMatchObject({
+    expect(pinned.find((item) => item.id === 'canon-1')).toMatchObject({
       id: 'canon-1',
       revision: 3,
       text: 'The lighthouse has never used electricity.',
@@ -429,23 +430,40 @@ describe('server main runner through the actual loopback adapter', () => {
     expect(server.requests).toHaveLength(1);
   });
 
-  test('P01 P03 separates native main scope from translation glossary reads and keeps empty profiles free of synthetic facts', () => {
+  test('P01 P03 separates package translation instructions from main and keeps empty profiles free of synthetic facts', () => {
     const snapshot = routedSnapshot('http://127.0.0.1:49999/turn');
-    const read = { callId: 'glossary-read', name: 'knowledge.read', args: { id: 'glossary-1' } };
-    expect(executeTool(snapshot, read).denied).toBe(true);
-    const translated = executeTool(snapshot, read, undefined, 'translation');
-    expect(translated).toMatchObject({
-      denied: false,
-      result: {
-        text: 'AUXILIARY_ONLY_TRANSLATION_PROCEDURE',
-        source: { id: 'glossary-1', revision: 1 },
+    snapshot.profile!.contents = snapshot.profile!.contents.filter(
+      (item) => item.id !== 'glossary-1'
+    );
+    snapshot.resources = snapshot.resources.filter((item) => item.id !== 'glossary-1');
+    snapshot.profile!.packageAttachments = [
+      { id: 'translation-guidance', revision: 1, role: 'module' },
+    ];
+    snapshot.profile!.packages = [
+      {
+        version: 1,
+        id: 'translation-guidance',
+        revision: 1,
+        title: 'Translation guidance',
+        description: '',
+        lore: [],
+        controls: [],
+        transforms: [],
+        instructions: [
+          { id: 'terms', target: 'translation', text: 'AUXILIARY_ONLY_TRANSLATION_PROCEDURE' },
+        ],
       },
-    });
+    ];
+    expect(packageContext(snapshot, 'translation')!.instructions).toMatchObject([
+      { text: 'AUXILIARY_ONLY_TRANSLATION_PROCEDURE', revision: 1 },
+    ]);
+    expect(packageContext(snapshot, 'main')!.instructions).toEqual([]);
     expect(JSON.stringify(buildMainInput(snapshot))).not.toContain('AUXILIARY_ONLY');
     expect(
       compileSnapshotPrompt(snapshot).promptCompilation!.messages[0].content[0].text
     ).toContain('An (OOC: ...) request is an author direction inside the fiction');
     snapshot.profile!.contents = [];
+    snapshot.profile!.packageAttachments = [];
     snapshot.resources = [];
     expect(buildMainInput(snapshot).facts).toEqual([]);
     expect(JSON.stringify(buildMainInput(snapshot))).not.toContain('Mira');

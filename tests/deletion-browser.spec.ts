@@ -1,3 +1,4 @@
+import { editLibraryContent, navigationAction } from './ui-navigation.js';
 import { postFixtureChat } from './fixtures/chat.js';
 import { test, expect, type APIRequestContext, type Page } from '@playwright/test';
 import type { Content, Library } from '../core/product.js';
@@ -25,20 +26,58 @@ async function confirm(page: Page) {
 }
 async function library(page: Page, tab: string) {
   await page.goto('/');
-  await page.getByTestId('library-panel').getByRole('tab', { name: tab, exact: true }).click();
-  return page.getByTestId('library-panel');
+  await navigationAction(page, tab);
+  return page.getByTestId(tab === '프롬프트' ? 'prompt-library' : 'library-panel');
 }
 
 test('DEL01 library cancel, stale revision, dependent bot and actual deletion at mobile width', async ({
   page,
   request,
+  browser,
 }, info) => {
   const item = await content(request);
   const panel = await library(page, '봇');
-  await panel.getByRole('button', { name: `${item.title} 삭제`, exact: true }).click();
+  await page.emulateMedia({ colorScheme: 'dark' });
+  await page.setViewportSize({ width: 1280, height: 900 });
+  const card = panel
+    .locator('.library-card')
+    .filter({ has: page.getByRole('button', { name: `${item.title} 상세 보기`, exact: true }) });
+  await expect(card.getByRole('button', { name: `${item.title} 삭제`, exact: true })).toBeHidden();
+  await card.getByLabel(`${item.title} 메뉴`, { exact: true }).focus();
+  await page.keyboard.press('Enter');
+  await expect(card.getByRole('button', { name: `${item.title} 삭제`, exact: true })).toBeVisible();
+  await page.screenshot({ path: info.outputPath('library-card-delete-desktop.png') });
+  const touchContext = await browser.newContext({
+    baseURL: info.project.use.baseURL,
+    viewport: { width: 390, height: 844 },
+    hasTouch: true,
+    isMobile: true,
+    colorScheme: 'dark',
+  });
+  try {
+    const touchPage = await touchContext.newPage();
+    const touchPanel = await library(touchPage, '봇');
+    await touchPanel.getByLabel(`${item.title} 메뉴`, { exact: true }).click();
+    await expect(
+      touchPanel.getByRole('button', { name: `${item.title} 삭제`, exact: true })
+    ).toBeVisible();
+    await touchPage.screenshot({ path: info.outputPath('library-card-delete-touch.png') });
+  } finally {
+    await touchContext.close();
+  }
+  await card.getByLabel(`${item.title} 메뉴`, { exact: true }).press('Escape');
+  await editLibraryContent(page, item.title);
+  await expect(panel.getByRole('region', { name: '자료 상세', exact: true })).toBeVisible();
+  await page.emulateMedia({ colorScheme: 'dark' });
+  for (const width of [960, 390]) {
+    await page.setViewportSize({ width, height: 900 });
+    await page.screenshot({ path: info.outputPath(`content-header-${width}.png`) });
+  }
+  await panel.getByRole('button', { name: `${item.title} 자료 삭제`, exact: true }).click();
   const dialog = page.getByRole('alertdialog', { name: '삭제 확인', exact: true });
   await dialog.getByRole('button', { name: '취소', exact: true }).click();
   expect((await request.get(`/api/revisions/content/${item.id}/1`)).ok()).toBe(true);
+  await panel.getByRole('button', { name: '← 서재 목록', exact: true }).click();
   const changed = await request.put(`/api/content/${item.id}`, {
     data: {
       kind: item.kind,
@@ -51,11 +90,13 @@ test('DEL01 library cancel, stale revision, dependent bot and actual deletion at
     },
   });
   expect(changed.ok()).toBe(true);
+  await panel.getByLabel(`${item.title} 메뉴`, { exact: true }).click();
   await panel.getByRole('button', { name: `${item.title} 삭제`, exact: true }).click();
   await confirm(page);
   await expect(dialog.getByRole('alert')).toContainText('변경');
   await page.keyboard.press('Escape');
   await page.reload();
+  await panel.getByLabel(`${item.title} 메뉴`, { exact: true }).click();
   await panel.getByRole('button', { name: `${item.title} 삭제`, exact: true }).click();
   await page.screenshot({ path: info.outputPath('delete-confirm-mobile.png') });
   expect(
@@ -71,6 +112,7 @@ test('DEL01 library cancel, stale revision, dependent bot and actual deletion at
     (await request.post('/api/chats', { data: { title: '참조 검사 채팅', botId: owner.id } })).ok()
   ).toBe(true);
   await page.reload();
+  await panel.getByLabel(`${owner.title} 메뉴`, { exact: true }).click();
   await panel.getByRole('button', { name: `${owner.title} 삭제`, exact: true }).click();
   await confirm(page);
   await expect(dialog.getByRole('alert')).toContainText('봇 소속 채팅');
@@ -79,7 +121,7 @@ test('DEL01 library cancel, stale revision, dependent bot and actual deletion at
 test('DEL02 prompt combinations and presets have deletion and removed prompt does not reappear', async ({
   page,
   request,
-}) => {
+}, info) => {
   const response = await request.post('/api/prompt-presets', {
     data: {
       title: `삭제 프롬프트 ${crypto.randomUUID()}`,
@@ -98,7 +140,14 @@ test('DEL02 prompt combinations and presets have deletion and removed prompt doe
   });
   expect(combinationResponse.ok()).toBe(true);
   const panel = await library(page, '프롬프트');
-  await panel.getByLabel('불러올 프롬프트', { exact: true }).selectOption(`${prompt.id}@1`);
+  await panel.getByRole('button', { name: `${prompt.title} 프롬프트 편집`, exact: true }).click();
+  await page.emulateMedia({ colorScheme: 'dark' });
+  for (const width of [960, 390]) {
+    await page.setViewportSize({ width, height: 900 });
+    await panel.locator('.prompt-saved-management').scrollIntoViewIfNeeded();
+    await page.screenshot({ path: info.outputPath(`prompt-footer-${width}.png`) });
+  }
+
   await panel.getByText('저장된 창작 조합·프리셋 관리', { exact: true }).click();
   await panel.getByRole('button', { name: '삭제 전역 조합 삭제', exact: true }).click();
   await confirm(page);
@@ -107,11 +156,12 @@ test('DEL02 prompt combinations and presets have deletion and removed prompt doe
   );
   await panel.getByRole('button', { name: `${prompt.title} 프롬프트 삭제`, exact: true }).click();
   await confirm(page);
-  await expect(panel.getByLabel('불러올 프롬프트', { exact: true })).toHaveValue('builtin');
   await expect(
-    panel
-      .getByLabel('불러올 프롬프트', { exact: true })
-      .getByRole('option', { name: new RegExp(prompt.title) })
+    panel.getByRole('button', { name: `${prompt.title} 프롬프트 삭제`, exact: true })
+  ).toHaveCount(0);
+  await panel.getByRole('button', { name: '← 프롬프트 목록', exact: true }).click();
+  await expect(
+    panel.getByRole('button', { name: `${prompt.title} 프롬프트 편집`, exact: true })
   ).toHaveCount(0);
   await page.reload();
   const data: Library = await (await request.get('/api/library')).json();
@@ -146,31 +196,33 @@ test('DEL03 deleting selected chat clears reader and URL while preserving anothe
   await other.close();
 });
 
-test('DEL04 other standalone content kinds are discoverable and deletable', async ({
+test('DEL04 removed standalone types are rejected and personas/modules remain deletable', async ({
   page,
   request,
 }) => {
-  const items = await Promise.all(
-    ['lore', 'canon', 'skill', 'glossary', 'persona', 'module'].map((kind) =>
-      content(request, kind)
-    )
-  );
-  const panel = await library(page, '기타 자료');
-  for (const item of items.filter((item) =>
-    ['lore', 'canon', 'skill', 'glossary'].includes(item.kind)
-  )) {
-    await panel.getByRole('button', { name: `${item.title} 삭제`, exact: true }).click();
-    await confirm(page);
-    await expect(
-      panel.getByRole('button', { name: `${item.title} 삭제`, exact: true })
-    ).toHaveCount(0);
+  for (const kind of ['lore', 'canon', 'skill', 'glossary']) {
+    const response = await request.post('/api/content', {
+      data: {
+        kind,
+        title: 'Removed kind',
+        description: '',
+        text: 'Synthetic',
+        loading: 'pinned',
+        relatedIds: [],
+      },
+    });
+    expect(response.status()).toBe(400);
   }
+  const items = await Promise.all(['persona', 'module'].map((kind) => content(request, kind)));
+  const panel = await library(page, '페르소나');
+  await expect(panel.getByRole('tab', { name: '기타 자료', exact: true })).toHaveCount(0);
   for (const [kind, label] of [
     ['persona', '페르소나'],
     ['module', '모듈'],
   ]) {
     await panel.getByRole('tab', { name: label, exact: true }).click();
     const item = items.find((item) => item.kind === kind)!;
+    await panel.getByLabel(`${item.title} 메뉴`, { exact: true }).click();
     await panel.getByRole('button', { name: `${item.title} 삭제`, exact: true }).click();
     await confirm(page);
     expect((await request.get(`/api/revisions/content/${item.id}/1`)).status()).toBe(404);

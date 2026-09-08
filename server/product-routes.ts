@@ -12,6 +12,7 @@ import { promptRoutes } from './prompt-routes.js';
 import { readiness, managementImpact } from './provider-management.js';
 import { PROVIDER_DEFINITIONS } from '../core/provider-definitions.js';
 import { chatOrganizationRoutes } from './chat-organization.js';
+import { libraryOrganizationRoutes } from './library-organization.js';
 import { packagePresentationRoutes } from './package-presentation-routes.js';
 import { packageBehaviorRoutes } from './package-behavior-routes.js';
 import type { VertexCredentialStore } from './vertex-credentials.js';
@@ -44,6 +45,7 @@ export function productRoutes(
   chatDeletionRoutes(app, store, options.publish, options.onChatDeleted);
   assetDeletionRoutes(app, store, options.publish);
   chatOrganizationRoutes(app, store, options.publish);
+  libraryOrganizationRoutes(app, store);
   packagePresentationRoutes(app, store);
   packageBehaviorRoutes(app, store);
   app.post<{ Params: { id: string } }>('/api/chats/:id/fork', async (request) => {

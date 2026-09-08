@@ -203,7 +203,7 @@ async function setup(app: App, translation = true) {
   ] as const)
     contents.push(
       await api<Content>(app, '/api/content', {
-        kind,
+        kind: 'module',
         title: `Synthetic ${kind}`,
         description: `Fixture ${kind}`,
         text,
@@ -312,7 +312,10 @@ test('L01 P05 P07 P08 P09 preserves source-time Main/Aux snapshots, long chunks 
         }
         await writeSse(
           response,
-          read('main-read-lore', selected.contents.find((item) => item.kind === 'lore')!.id)
+          read(
+            'main-read-lore',
+            selected.contents.find((item) => item.title === 'Synthetic lore')!.id
+          )
         );
       } else {
         expect(last.parts[0].functionResponse).toMatchObject({
@@ -331,13 +334,15 @@ test('L01 P05 P07 P08 P09 preserves source-time Main/Aux snapshots, long chunks 
       expect(
         packet.source.context!.packages?.pinned.find((entry) => entry.sourceKind === 'bot')?.text
       ).toContain('ORIGINAL_BOT');
-      expect(packet.source.context!.glossary[0].text).toContain('ORIGINAL_GLOSSARY');
+      expect(
+        packet.source.context!.references.find((item) => item.text.includes('ORIGINAL_GLOSSARY'))
+      ).toBeDefined();
       if (body.contents.length === 1)
         await writeSse(
           response,
           read(
             `aux-${packet.source.chunkId}`,
-            selected.contents.find((item) => item.kind === 'glossary')!.id
+            selected.contents.find((item) => item.title === 'Synthetic glossary')!.id
           )
         );
       else {

@@ -1,3 +1,4 @@
+import { editLibraryContent, selectContent } from './ui-navigation.js';
 import { postFixtureChat } from './fixtures/chat.js';
 import { test, expect, type APIRequestContext, type Page } from '@playwright/test';
 import { createHash } from 'node:crypto';
@@ -135,7 +136,7 @@ test('P01 package revisions stay pinned and prompt-owned creative choices replac
     '프롬프트·창작 프리셋',
     '모델',
   ]);
-  await page.getByLabel('추가할 패키지', { exact: true }).selectOption(`${added.id}@1`);
+  await selectContent(page, '추가할 패키지', added.title);
   await page.getByRole('button', { name: '패키지 장착', exact: true }).click();
   await page.getByRole('button', { name: '콘텐츠와 제어 저장', exact: true }).click();
   await expect
@@ -143,7 +144,7 @@ test('P01 package revisions stay pinned and prompt-owned creative choices replac
     .toEqual([owner, { id: added.id, revision: 1, role: 'module' }]);
   const library = await openDetails(page, 'library-panel');
   await library.getByRole('tab', { name: '모듈', exact: true }).click();
-  await page.getByRole('button', { name: `Mira ${unique} 자료 편집`, exact: true }).click();
+  await editLibraryContent(page, `Mira ${unique}`);
   await page
     .getByLabel('자료 본문', { exact: true })
     .fill('Mira is a synthetic harbor keeper. Her compass is silver in this revision.');
@@ -521,12 +522,13 @@ test('P09 P10 P13 fork from a completed scene preserves long prose and annotatio
     expect(await getDetail(request, chat.id)).toEqual(before);
     await storySettings(page);
     const forkEditor = await promptTab(page);
-    await forkEditor.getByLabel('불러올 프롬프트', { exact: true }).selectOption('new');
+    await forkEditor.getByRole('button', { name: '새 프롬프트 생성', exact: true }).click();
+    await forkEditor.locator('#prompt-block-instructions > summary').click();
     await forkEditor
       .getByLabel('프롬프트 이름', { exact: true })
       .fill('Synthetic fork-only prompt');
     await forkEditor
-      .getByLabel('메시지 본문', { exact: true })
+      .getByLabel('지침 본문', { exact: true })
       .fill('Synthetic vivid narration for this fork.');
     await forkEditor.getByRole('button', { name: '저장하고 이야기에 적용', exact: true }).click();
     await expect

@@ -232,7 +232,7 @@ test('dependency revisions, missing packages, non-package references and cycles 
     save(store, 'Missing dependency', { modules: [{ id: 'missing-package', revision: 1 }] })
   ).toThrow();
   const plain = store.product.content({
-    kind: 'lore',
+    kind: 'module',
     title: 'Legacy plain lore',
     description: '',
     text: 'Synthetic lore',

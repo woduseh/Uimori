@@ -70,6 +70,7 @@ import {
 import { assertModelSelection } from './provider-selection.js';
 import { previousContextPlan, measureMainContext } from './context-planning.js';
 import { organizationTables } from './chat-organization.js';
+import { libraryOrganizationTables } from './library-organization.js';
 import {
   validateContentPackage,
   validatePackageAttachment,
@@ -302,6 +303,7 @@ export class ProductStore {
       this.db
         .prepare('INSERT INTO versions VALUES(?,?,?,?)')
         .run(kind, result.id, result.revision, json(result));
+    if (!prior) this.store.libraryOrganization.register(kind, result.id, result.kind);
     return result;
   }
   content(value: unknown, id?: string) {
@@ -328,11 +330,7 @@ export class ProductStore {
     return this.save(
       'content',
       {
-        kind: choice(
-          b.kind,
-          ['bot', 'persona', 'module', 'lore', 'canon', 'skill', 'glossary'],
-          'content kind'
-        ),
+        kind: choice(b.kind, ['bot', 'persona', 'module'], 'content kind'),
         title: text(b.title, 'title', 200),
         description: text(b.description, 'description', b.package ? 4000 : 2000, true),
         text: text(b.text, 'text', b.package ? 1_000_000 : 100000, !!b.package),
@@ -665,11 +663,11 @@ export class ProductStore {
   resources(chatId: string, p: ProfileSnapshot): Resource[] {
     return [
       ...p.contents
-        .filter((c) => ['lore', 'skill', 'glossary'].includes(c.kind))
+        .filter((c) => c.kind === 'module')
         .map((c) => ({
           ...c,
           chatId,
-          kind: c.kind === 'skill' ? ('skill' as const) : ('lore' as const),
+          kind: 'lore' as const,
           sourceKind: c.kind,
         })),
       ...(p.packageAttachments ?? []).flatMap(
@@ -931,6 +929,7 @@ export class ProductStore {
       : this.all('content');
     return {
       ...(summary ? { contentBodiesOmitted: true, assetsOmitted: true } : {}),
+      organization: this.store.libraryOrganization.snapshot(),
       promptPresets: this.all('prompt-preset'),
       promptCombinations: this.all('prompt-combination'),
       contents,
@@ -950,7 +949,7 @@ export class ProductStore {
     );
     return {
       format: 'narrative-archive',
-      version: 11,
+      version: 12,
       createdAt: new Date().toISOString(),
       tables,
     };
@@ -976,7 +975,7 @@ export class ProductStore {
     }
     const a = record(copy);
     fields(a, ['format', 'version', 'createdAt', 'tables']);
-    if (a.format !== 'narrative-archive' || a.version !== 11)
+    if (a.format !== 'narrative-archive' || a.version !== 12)
       throw new HttpError(400, 'Unsupported archive');
     const tables = record(a.tables);
     fields(tables, archiveTables);
@@ -985,14 +984,17 @@ export class ProductStore {
     if (
       archiveTables.some(
         (t) =>
-          t !== 'package_behavior_entropy' && this.db.prepare(`SELECT 1 FROM ${t} LIMIT 1`).get()
+          !['package_behavior_entropy', 'library_organization_state'].includes(t) &&
+          this.db.prepare(`SELECT 1 FROM ${t} LIMIT 1`).get()
       )
     )
       throw new HttpError(409, 'Restore requires an empty database');
     try {
       this.store.transaction(() => {
         this.db.exec('PRAGMA defer_foreign_keys=ON');
-        this.db.exec('DELETE FROM package_behavior_entropy');
+        this.db.exec(
+          'DELETE FROM package_behavior_entropy; DELETE FROM library_organization_state'
+        );
         for (const table of archiveTables) {
           const columns = (this.db.prepare(`PRAGMA table_info(${table})`).all() as Row[]).map(
             (r) => r.name as string
@@ -1103,6 +1105,7 @@ export class ProductStore {
         validatePackageRequests(this.store);
         validatePackageBehaviorArchive(this.store);
         this.store.organization.validateArchive();
+        this.store.libraryOrganization.validateArchive();
       });
     } catch (error) {
       if (error instanceof HttpError && error.statusCode === 400) throw error;
@@ -1131,6 +1134,7 @@ const archiveTables = [
   ...storyTables,
   'package_requests',
   ...organizationTables,
+  ...libraryOrganizationTables,
   ...packageBehaviorTables,
 ];
 
@@ -1301,11 +1305,7 @@ function validateArchiveVersion(row: Row, providerSetting = false) {
       'relatedIds',
       'package',
     ]);
-    choice(
-      body.kind,
-      ['bot', 'persona', 'module', 'lore', 'canon', 'skill', 'glossary'],
-      'content kind'
-    );
+    choice(body.kind, ['bot', 'persona', 'module'], 'content kind');
     text(body.description, 'description', body.package ? 4000 : 2000, true);
     text(body.text, 'content text', body.package ? 1_000_000 : 100000, !!body.package);
     choice(body.loading, ['pinned', 'discoverable'], 'loading');

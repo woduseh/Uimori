@@ -1,3 +1,4 @@
+import { editLibraryContent, navigationAction } from './ui-navigation.js';
 import { test, expect } from '@playwright/test';
 import type { Content, Library } from '../core/product.js';
 
@@ -30,7 +31,7 @@ test('PKUI04 hundreds of lore entries support folders, search, bulk move and per
   await page.goto('/');
   await page
     .getByRole('navigation', { name: '자료 탐색', exact: true })
-    .getByRole('button', { name: '봇', exact: true })
+    .getByRole('button', { name: '서재', exact: true })
     .click();
   const library = page.getByTestId('library-panel');
   await library.getByRole('button', { name: '새로 만들기', exact: true }).first().click();
@@ -136,7 +137,7 @@ test('PKUI04 hundreds of lore entries support folders, search, bulk move and per
   await library.getByRole('button', { name: '새 revision 저장', exact: true }).click();
   await expect(library.getByRole('status')).toContainText('v2 저장됨');
   await library.getByRole('button', { name: '← 서재 목록', exact: true }).click();
-  await library.getByRole('button', { name: `${pkg.title} 자료 편집`, exact: true }).click();
+  await editLibraryContent(page, `${pkg.title}`);
   await expect(manager.getByLabel('로어 폴더 필터', { exact: true })).toContainText('미분류 · 170');
   await expect(manager.getByLabel('로어 폴더 필터', { exact: true })).not.toContainText('등장인물');
 });
@@ -149,7 +150,7 @@ test('PKUI03 native JSON import remains a reviewed persona draft and preserves l
   await page.goto('/');
   await page
     .getByRole('navigation', { name: '자료 탐색', exact: true })
-    .getByRole('button', { name: '봇', exact: true })
+    .getByRole('button', { name: '서재', exact: true })
     .click();
   await expect(page.getByRole('button', { name: '자료 가져오기', exact: true })).toHaveCount(0);
   const library = page.getByTestId('library-panel');
@@ -241,16 +242,10 @@ test('PKUI01 package editing preserves internal lore, instructions, unsaved work
   await page.goto('/');
   await page
     .getByRole('navigation', { name: '자료 탐색', exact: true })
-    .getByRole('button', { name: '봇', exact: true })
+    .getByRole('button', { name: '서재', exact: true })
     .click();
   const library = page.getByTestId('library-panel');
-  await expect(library.getByRole('tab')).toHaveText([
-    '봇',
-    '페르소나',
-    '모듈',
-    '프롬프트',
-    '기타 자료',
-  ]);
+  await expect(library.getByRole('tab')).toHaveText(['봇', '페르소나', '모듈']);
   await library.getByRole('button', { name: '새로 만들기', exact: true }).first().click();
   await library.getByLabel('자료 이름', { exact: true }).fill('Synthetic package editor bot');
   await library.getByLabel('자료 본문', { exact: true }).fill('Synthetic common body.');
@@ -316,9 +311,7 @@ test('PKUI01 package editing preserves internal lore, instructions, unsaved work
     text: 'Mention visible actions before interpretation.',
   });
   await library.getByRole('button', { name: '← 서재 목록', exact: true }).click();
-  await library
-    .getByRole('button', { name: 'Synthetic package editor bot 자료 편집', exact: true })
-    .click();
+  await editLibraryContent(page, 'Synthetic package editor bot');
   await expect(fields.getByLabel('로어 1 본문', { exact: true })).toHaveValue(
     'A blue bell hangs by the synthetic harbor.'
   );
@@ -366,22 +359,17 @@ test('PKUI02 library exposes package roles and prompts with direct internal lore
   if (await menu.isVisible()) await menu.click();
   await page
     .getByRole('navigation', { name: '자료 탐색', exact: true })
-    .getByRole('button', { name: '봇', exact: true })
+    .getByRole('button', { name: '서재', exact: true })
     .click();
   const library = page.getByTestId('library-panel');
-  await expect(library.getByRole('tab')).toHaveText([
-    '봇',
-    '페르소나',
-    '모듈',
-    '프롬프트',
-    '기타 자료',
-  ]);
+  await expect(library.getByRole('tab')).toHaveText(['봇', '페르소나', '모듈']);
   await expect(library.getByText('이전 자료', { exact: true })).toHaveCount(0);
   for (const name of ['로어', '창작 프리셋', '작가 설정', '창작 스킬', '명칭집'])
     await expect(library.getByRole('button', { name, exact: true })).toHaveCount(0);
-  await library.getByRole('tab', { name: '프롬프트', exact: true }).click();
-  await expect(library.getByTestId('prompt-editor')).toBeVisible();
-  await library.getByRole('tab', { name: '봇', exact: true }).click();
+  await navigationAction(page, '프롬프트');
+  await expect(page.getByTestId('prompt-library')).toBeVisible();
+  await expect(page.getByTestId('library-panel')).toHaveCount(0);
+  await navigationAction(page, '서재');
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(
     true
   );
@@ -391,10 +379,6 @@ test('PKUI02 library exposes package roles and prompts with direct internal lore
     '봇',
     '페르소나',
     '모듈',
-    '로어',
-    '작가 설정',
-    '창작 스킬',
-    '명칭집',
   ]);
   await expect(library.getByLabel('관련 자료 검색', { exact: true })).toHaveCount(0);
   await library.getByLabel('자료 이름', { exact: true }).fill(title);

@@ -31,7 +31,7 @@ function fixture() {
   owned.push({ store, dir });
   const chat = createFixtureChat(store, 'Synthetic lore', 'calm');
   const lore = store.product.content({
-    kind: 'lore',
+    kind: 'module',
     title: 'Synthetic reference',
     description: '',
     text: '0123456789ABCDEFGHIJklmnopqrstUNREAD_TAIL',
@@ -251,7 +251,7 @@ test('resource revision and attachment removal remove retained text', () => {
   complete(f, a);
   const revision = f.store.product.content(
     {
-      kind: 'lore',
+      kind: 'module',
       title: f.lore.title,
       description: '',
       text: 'Different revision',
@@ -359,7 +359,7 @@ test('switching an attached reference to pinned supplies it once and removes the
   complete(f, a);
   const updated = f.store.product.content(
     {
-      kind: 'lore',
+      kind: 'module',
       title: f.lore.title,
       description: '',
       text: f.lore.text,

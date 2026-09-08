@@ -68,7 +68,6 @@ test('PRUI01 optional template draft safety and reusable prompt-owned combinatio
   await composer.getByRole('button', { name: '전역 창작 조합으로 저장', exact: true }).click();
   await expect(global.locator('option')).toHaveCount(3);
   await expect(global).toContainText('Reusable medium');
-  await composer.getByRole('button', { name: '구성 편집', exact: true }).click();
   const block = composer.locator('.pc-block').first();
   await block.locator('summary').first().click();
   await block.getByRole('button', { name: '템플릿 문법으로 편집 · 시험', exact: true }).click();

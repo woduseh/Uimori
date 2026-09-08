@@ -38,6 +38,8 @@ export function libraryDeletionImpact(store: Store, kind: LibraryKind, id: strin
     .prepare("SELECT name FROM sqlite_schema WHERE type='table' AND name NOT LIKE 'sqlite_%'")
     .all() as { name: string }[];
   for (const { name: table } of tables) {
+    // Placements are disposable organization metadata, not execution references.
+    if (table === 'library_placements') continue;
     const columns = store.db.prepare(`PRAGMA table_info(${identifier(table)})`).all() as {
       name: string;
       type: string;
@@ -112,6 +114,7 @@ export function deleteLibraryItem(store: Store, kind: LibraryKind, id: string, v
         `DELETE FROM ${providerKind(kind) ? 'provider_settings' : 'versions'} WHERE kind=? AND id=?`
       )
       .run(kind, id);
+    store.libraryOrganization.remove(kind, id);
     return { deleted: true, id };
   });
 }

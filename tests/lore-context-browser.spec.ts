@@ -1,3 +1,4 @@
+import { editLibraryContent } from './ui-navigation.js';
 import {
   expect,
   test,
@@ -97,10 +98,10 @@ test('LCUI01 lore placement and invalid order drafts stay independent from folde
   await page.goto('/');
   await page
     .getByRole('navigation', { name: '자료 탐색', exact: true })
-    .getByRole('button', { name: '봇', exact: true })
+    .getByRole('button', { name: '서재', exact: true })
     .click();
   const library = page.getByTestId('library-panel');
-  await library.getByRole('button', { name: `${original.title} 자료 편집`, exact: true }).click();
+  await editLibraryContent(page, `${original.title}`);
   const fields = library.getByRole('region', { name: '패키지 구성', exact: true }),
     save = library.getByRole('button', { name: '새 revision 저장', exact: true });
   await fields.getByLabel('사용 방법', { exact: true }).selectOption('pinned');

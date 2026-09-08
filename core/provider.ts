@@ -29,8 +29,7 @@ export function roleResources(
       item.chatId === snapshot.chatId &&
       !(snapshot.profile?.packageAttachments?.length && item.id.startsWith('package:')) &&
       (role !== 'main' ||
-        (item.sourceKind !== 'glossary' &&
-          !(item.sourceKind === 'persona' && snapshot.profile?.personaReference === false)))
+        !(item.sourceKind === 'persona' && snapshot.profile?.personaReference === false))
   );
   if (role === 'translation') {
     const ids = new Set(resources.map((item) => item.id));
@@ -39,7 +38,7 @@ export function roleResources(
       resources.push({
         ...item,
         chatId: snapshot.chatId,
-        kind: item.kind === 'skill' ? 'skill' : 'lore',
+        kind: 'lore',
         sourceKind: item.kind,
       });
       ids.add(item.id);
@@ -112,12 +111,10 @@ export function buildMainInput(
   };
   if (snapshot.profile) {
     const contents = snapshot.profile.contents.filter(
-      (item) =>
-        item.kind !== 'glossary' &&
-        !(item.kind === 'persona' && snapshot.profile!.personaReference === false)
+      (item) => !(item.kind === 'persona' && snapshot.profile!.personaReference === false)
     );
     const pinned = contents.filter(
-      (item) => item.loading === 'pinned' || ['bot', 'persona', 'canon'].includes(item.kind)
+      (item) => item.loading === 'pinned' || ['bot', 'persona'].includes(item.kind)
     );
     input.pinnedSources = pinned.map((item) => ({
       id: item.id,
@@ -126,7 +123,7 @@ export function buildMainInput(
       hash: hash(item.text),
       text: item.text,
     }));
-    input.facts = pinned.filter((item) => item.kind !== 'skill').map((item) => item.text);
+    input.facts = pinned.map((item) => item.text);
   }
   if (snapshot.story?.state?.canonical && snapshot.story.config.module) {
     const state = snapshot.story.state;

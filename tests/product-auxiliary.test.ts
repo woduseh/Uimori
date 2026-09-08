@@ -92,7 +92,7 @@ function bundle(text = 'Mira waited quietly beside the pier.'): AuxiliaryBundle 
           },
           {
             id: 'names',
-            kind: 'glossary',
+            kind: 'module',
             revision: 3,
             title: 'Name glossary',
             description: 'Translation names',
@@ -102,7 +102,7 @@ function bundle(text = 'Mira waited quietly beside the pier.'): AuxiliaryBundle 
           },
           {
             id: 'canon',
-            kind: 'canon',
+            kind: 'module',
             revision: 4,
             title: 'Author canon',
             description: 'Known facts',
@@ -289,7 +289,10 @@ describe('M1 durable auxiliary orchestration with actual fixture HTTP', () => {
     expect(first.input.source.context).toMatchObject({
       revision: 'chat-a@4',
       bot: { id: 'bot', revision: 2, text: 'Mira has not learned the keeper identity.' },
-      glossary: [{ id: 'names', revision: 3 }],
+      references: [
+        { id: 'names', revision: 3 },
+        { id: 'canon', revision: 4 },
+      ],
     });
     expect(first.input.source.context.modelPresetRevision).toBe('model-translation@5');
     expect(JSON.stringify(first)).not.toContain('SOURCE_TIME_GLOSSARY');
@@ -464,7 +467,10 @@ describe('M1 durable auxiliary orchestration with actual fixture HTTP', () => {
       observed.options
     );
     expect(annotation?.result?.display?.[0].summary).toContain('정사에 반영하지 않음');
-    expect(sourceTimeContext(seed.snapshot, 'image').glossary).toEqual([]);
+    expect(sourceTimeContext(seed.snapshot, 'image').references).toMatchObject([
+      { id: 'names', revision: 3 },
+      { id: 'canon', revision: 4 },
+    ]);
     const controller = new AbortController();
     controller.abort('PRIVATE_ABORT_REASON');
     observed.options.signal = controller.signal;

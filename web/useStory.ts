@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { Chat, ReaderDetail, Run, Source } from '../core/types.js';
 import type { Content, Library } from '../core/product.js';
-import { api, ApiError } from './api.js';
+import { api, ApiError, libraryChangedKey } from './api.js';
 import { refValue } from './LibraryPanel.js';
 import { useModelSelection } from './model-selection.js';
 
@@ -196,10 +196,27 @@ export function useStory() {
       history.replaceState(null, '', url);
     }
   }, []);
-  const loadLibrary = useCallback(
-    async () => setLibrary(await api<Library>('/library?view=summary')),
-    []
-  );
+  const libraryRequest = useRef(0);
+  const loadLibrary = useCallback(async () => {
+    const request = ++libraryRequest.current;
+    const value = await api<Library>('/library?view=summary');
+    if (libraryRequest.current === request) setLibrary(value);
+  }, []);
+  useEffect(() => {
+    const refreshLibrary = () => {
+      void loadLibrary().catch((caught) => setError(caught.message));
+    };
+    const onStorage = (event: StorageEvent) => {
+      if (event.key === libraryChangedKey) refreshLibrary();
+    };
+    addEventListener('storage', onStorage);
+    addEventListener('focus', refreshLibrary);
+    return () => {
+      removeEventListener('storage', onStorage);
+      removeEventListener('focus', refreshLibrary);
+      libraryRequest.current++;
+    };
+  }, [loadLibrary]);
   useEffect(() => {
     void Promise.all([loadChats(), loadLibrary()]).catch((e) => setError(e.message));
   }, [loadChats, loadLibrary]);
@@ -713,7 +730,7 @@ export function useStory() {
     }
   }
   const quickLock = useRef(false);
-  async function quickChange(kind: 'combination' | 'persona' | 'model', value: string) {
+  async function quickChange(kind: 'combination' | 'persona' | 'model' | 'module', value: string) {
     if (
       !detail?.profile ||
       detail.chat.id !== selected ||
@@ -753,6 +770,40 @@ export function useStory() {
           },
           'PUT'
         );
+      } else if (kind === 'module') {
+        const epoch = navigationEpoch.current;
+        let module = library.contents.find((item) => refValue(item) === value);
+        if (!module) {
+          const separator = value.lastIndexOf('@');
+          const id = value.slice(0, separator);
+          const revision = Number(value.slice(separator + 1));
+          if (separator <= 0 || !Number.isSafeInteger(revision) || revision < 1)
+            throw new Error('추가할 모듈 버전을 다시 선택해 주세요.');
+          // An immutable selection remains usable after a newer library revision is saved.
+          module = await api<Content>(`/revisions/content/${encodeURIComponent(id)}/${revision}`);
+        }
+        if (current.current !== chatId || navigationEpoch.current !== epoch) return false;
+        if (refValue(module) !== value || (!module.package && !module.hasPackage))
+          throw new Error('추가할 모듈을 찾지 못했어요. 서재를 다시 확인해 주세요.');
+        const existing = profile.packageAttachments ?? [];
+        if (existing.some((item) => item.id === module.id && item.role === 'module'))
+          throw new Error('이미 연결한 모듈이에요. 채팅 설정에서 확인해 주세요.');
+        await api(
+          `/chats/${chatId}/profile`,
+          {
+            expectedRevision: profile.revision,
+            attachments: profile.attachments,
+            personaReference: profile.personaReference,
+            routes: profile.routes,
+            image: profile.image,
+            packageAttachments: [
+              ...existing,
+              { id: module.id, revision: module.revision, role: 'module' },
+            ],
+            packageValues: profile.packageValues,
+          },
+          'PUT'
+        );
       } else {
         let contents = [...library.contents, ...archivedContents];
         if (kind === 'persona') {
@@ -768,7 +819,8 @@ export function useStory() {
           ];
         }
         const persona = contents.find(
-          (item) => item.kind === 'persona' && refValue(item) === value
+          (item) =>
+            (item.kind === 'persona' || item.package || item.hasPackage) && refValue(item) === value
         );
         const model = library.models.find((item) => item.id === value);
         if (
@@ -836,10 +888,12 @@ export function useStory() {
       }
       if (current.current === chatId) setNotice('다음 요청에 적용할 설정을 저장했어요.');
       await refresh(chatId);
+      return true;
     } catch (error) {
       if (current.current === chatId)
         setError(error instanceof Error ? error.message : '설정을 저장하지 못했어요.');
       await refresh(chatId).catch(() => undefined);
+      return false;
     } finally {
       quickLock.current = false;
       setQuickBusy(false);

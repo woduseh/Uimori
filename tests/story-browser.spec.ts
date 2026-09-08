@@ -126,7 +126,9 @@ test('S01 S02 state settings use synthetic rules, preserve readable original whi
       .toBe(true);
     const second = await send(page, 'SYNTHETIC_SECOND The traveler waits beside the harbor.');
     expect(second.status).toBe('waiting_for_state');
-    await expect(page.getByTestId('pending-run')).toContainText('상태 확인 대기');
+    await expect(
+      page.getByTestId('pending-run').getByTestId('turn-activity').locator(':scope > summary')
+    ).toContainText('상태 정리 대기');
     await expect(article.getByTestId('source-text')).toContainText('SYNTHETIC_FIRST');
     await page.getByTestId('pending-run').scrollIntoViewIfNeeded();
     await page.screenshot({

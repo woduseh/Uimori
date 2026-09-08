@@ -274,7 +274,39 @@ function TemplateEditor({
       setError(errorMessage(caught));
     }
   };
-  const plain = template.length === 0 || (template.length === 1 && template[0]!.kind === 'text');
+  const plain = template.every((node) => node.kind === 'text');
+  const latestTemplate = useRef({ template, onChange, pending });
+  latestTemplate.current = { template, onChange, pending };
+  const importSequence = useRef(0);
+  useEffect(
+    () => () => {
+      importSequence.current++;
+    },
+    []
+  );
+  async function importBody(file: File) {
+    const turn = ++importSequence.current;
+    const originalTemplate = pretty(template);
+    const originalChange = onChange;
+    try {
+      if (!/\.(?:txt|md)$/iu.test(file.name) || file.size > 800_000)
+        throw new Error('UTF-8 .txt 또는 .md 파일을 선택해 주세요.');
+      const text = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(
+        await file.arrayBuffer()
+      );
+      if (text.length > 200_000) throw new Error('메시지 본문은 200,000자까지 불러올 수 있어요.');
+      if (
+        turn !== importSequence.current ||
+        latestTemplate.current.pending ||
+        latestTemplate.current.onChange !== originalChange ||
+        pretty(latestTemplate.current.template) !== originalTemplate
+      )
+        return;
+      latestTemplate.current.onChange([{ kind: 'text', text }]);
+    } catch (caught) {
+      if (turn === importSequence.current) onError(errorMessage(caught));
+    }
+  }
   return (
     <div className="pc-template">
       <div className="pc-actions">
@@ -372,6 +404,22 @@ function TemplateEditor({
           <p className="muted">
             조건·값·참조가 있는 템플릿이에요. 아래 JSON에서 구조를 그대로 편집해요.
           </p>
+        )}
+        {plain && (
+          <label className="pc-file">
+            본문 파일 불러오기
+            <input
+              type="file"
+              aria-label={`${label} 파일 불러오기`}
+              accept=".txt,.md,text/plain,text/markdown"
+              disabled={pending}
+              onChange={(event) => {
+                const file = event.target.files?.[0];
+                event.target.value = '';
+                if (file) void importBody(file);
+              }}
+            />
+          </label>
         )}
         <details open={!plain}>
           <summary>템플릿 JSON · 고급 편집</summary>
@@ -763,18 +811,6 @@ export function PromptComposer({
   initialControlDraft,
   onControlDraftChange,
 }: Props) {
-  const [view, setView] = useState<'body' | 'structure'>('body');
-  const [bodyId, setBodyId] = useState('');
-  const messageBlocks = program.blocks.filter(
-    (block): block is Extract<PromptBlock, { kind: 'message' }> => block.kind === 'message'
-  );
-  const bodyBlock = messageBlocks.find((block) => block.id === bodyId) ?? messageBlocks[0];
-  const plainBody = bodyBlock?.template.every((node) => node.kind === 'text') ?? false;
-  const bodyText = plainBody
-    ? bodyBlock!.template.map((node) => (node.kind === 'text' ? node.text : '')).join('')
-    : '';
-  const bodySelection = useRef(bodyBlock?.id);
-  bodySelection.current = bodyBlock?.id;
   const [pendingTemplates, setPendingTemplates] = useState<Record<string, boolean>>({});
   const pendingTemplate = Object.values(pendingTemplates).some(Boolean);
   const slotNames = new Set<string>([
@@ -839,6 +875,7 @@ export function PromptComposer({
     value: Preview;
     fingerprint: string;
     synthetic: boolean;
+    blockNames: Record<string, string>;
   } | null>(null);
   const [previewBusy, setPreviewBusy] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -1014,7 +1051,17 @@ export function PromptComposer({
         };
       }
       if (turn === sequence.current && sourceFingerprint === latest.current.fingerprint) {
-        setPreview({ value: result, fingerprint: sourceFingerprint, synthetic: !chatId });
+        setPreview({
+          value: result,
+          fingerprint: sourceFingerprint,
+          synthetic: !chatId,
+          blockNames: Object.fromEntries(
+            program.blocks.map((block, index) => [
+              block.id,
+              `${index + 1}. ${block.title.trim() || kindLabels[block.kind]}`,
+            ])
+          ),
+        });
         setStatus('미리보기를 갱신했어요.');
       }
     } catch (caught) {
@@ -1051,36 +1098,6 @@ export function PromptComposer({
       report(errorMessage(caught));
     }
   }
-  async function importBody(file: File) {
-    const selected = bodyBlock,
-      sourceFingerprint = fingerprint;
-    const turn = ++sequence.current;
-    if (!selected || !plainBody || pendingTemplate) return;
-    try {
-      if (!/\.(?:txt|md)$/iu.test(file.name) || file.size > 800_000)
-        throw new Error('UTF-8 .txt 또는 .md 파일을 선택해 주세요.');
-      const text = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(
-        await file.arrayBuffer()
-      );
-      if (text.length > 200_000) throw new Error('메시지 본문은 200,000자까지 불러올 수 있어요.');
-      if (
-        turn !== sequence.current ||
-        latest.current.fingerprint !== sourceFingerprint ||
-        bodySelection.current !== selected.id
-      )
-        return;
-      change({
-        ...program,
-        blocks: program.blocks.map((block) =>
-          block.id === selected.id ? { ...selected, template: [{ kind: 'text', text }] } : block
-        ),
-      });
-      setStatus('선택한 메시지의 본문을 불러왔어요. 저장하면 적용돼요.');
-    } catch (caught) {
-      if (turn === sequence.current && latest.current.fingerprint === sourceFingerprint)
-        report(errorMessage(caught));
-    }
-  }
   return (
     <section className="prompt-composer" aria-label="프롬프트 구성" data-testid="prompt-composer">
       <details className="pc-composer-fold" open>
@@ -1093,27 +1110,6 @@ export function PromptComposer({
           {controlsDirty && <small>미저장 옵션</small>}
         </summary>
         <div className="pc-composer-content">
-          <p className="muted">간단 편집과 구성 편집은 같은 프롬프트를 수정해요.</p>
-          <div className="pc-actions" role="group" aria-label="프롬프트 편집 보기">
-            <button
-              type="button"
-              className={view === 'body' ? '' : 'secondary'}
-              aria-pressed={view === 'body'}
-              disabled={pendingTemplate}
-              onClick={() => setView('body')}
-            >
-              간단 편집
-            </button>
-            <button
-              type="button"
-              className={view === 'structure' ? '' : 'secondary'}
-              aria-pressed={view === 'structure'}
-              disabled={pendingTemplate}
-              onClick={() => setView('structure')}
-            >
-              구성 편집
-            </button>
-          </div>
           <div className="pc-actions">
             <label className="pc-file">
               JSON 불러오기
@@ -1151,108 +1147,7 @@ export function PromptComposer({
               이전 편집으로
             </button>
           </div>
-          <div className="pc-body-editor" hidden={view !== 'body'}>
-            {bodyBlock ? (
-              <>
-                <label>
-                  편집할 메시지
-                  <select
-                    aria-label="편집할 메시지"
-                    value={bodyBlock.id}
-                    onChange={(event) => setBodyId(event.target.value)}
-                  >
-                    {messageBlocks.map((block) => (
-                      <option key={block.id} value={block.id}>
-                        {block.title || block.id} · {block.role}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <p className="muted">
-                  선택한 메시지의 본문을 수정해요. 순서·역할·조건과 다른 메시지는 구성 편집에서
-                  확인할 수 있어요.
-                  {bodyBlock.when !== undefined ? ' 이 메시지에는 적용 조건이 있어요.' : ''}
-                  {bodyBlock.enabled === false ? ' 현재 사용하지 않는 메시지예요.' : ''}
-                </p>
-                {plainBody ? (
-                  <>
-                    <label>
-                      메시지 본문
-                      <textarea
-                        aria-label="메시지 본문"
-                        spellCheck={false}
-                        value={bodyText}
-                        rows={14}
-                        maxLength={200_000}
-                        onChange={(event) =>
-                          edit({
-                            ...program,
-                            blocks: program.blocks.map((block) =>
-                              block.id === bodyBlock.id
-                                ? {
-                                    ...bodyBlock,
-                                    template: [{ kind: 'text', text: event.target.value }],
-                                  }
-                                : block
-                            ),
-                          })
-                        }
-                      />
-                    </label>
-                    <div className="pc-actions">
-                      <label className="pc-file">
-                        본문 파일 불러오기
-                        <input
-                          type="file"
-                          aria-label="메시지 본문 파일 불러오기"
-                          accept=".txt,.md,text/plain,text/markdown"
-                          onChange={(event) => {
-                            const file = event.target.files?.[0];
-                            event.target.value = '';
-                            if (file) void importBody(file);
-                          }}
-                        />
-                      </label>
-                      <small>
-                        {bodyText.length.toLocaleString()}자 · 입력한 문장을 그대로 사용해요.
-                      </small>
-                    </div>
-                  </>
-                ) : (
-                  <div className="pc-body-guidance">
-                    <p>
-                      조건이나 참조가 포함된 본문이에요. 구성 편집에서 해당 메시지의 템플릿을 수정해
-                      주세요.
-                    </p>
-                    <button
-                      type="button"
-                      className="secondary"
-                      onClick={() => {
-                        setView('structure');
-                        requestAnimationFrame(() => {
-                          const element = document.getElementById(`prompt-block-${bodyBlock.id}`);
-                          if (element instanceof HTMLDetailsElement) {
-                            element.open = true;
-                            element.scrollIntoView({ block: 'nearest' });
-                          }
-                        });
-                      }}
-                    >
-                      이 메시지 구성 열기
-                    </button>
-                  </div>
-                )}
-              </>
-            ) : (
-              <div className="pc-body-guidance">
-                <p>편집할 본문 메시지가 없어요. 구성 편집에서 메시지를 추가할 수 있어요.</p>
-                <button type="button" className="secondary" onClick={() => setView('structure')}>
-                  메시지 추가하러 가기
-                </button>
-              </div>
-            )}
-          </div>
-          <div className="pc-structure-editor" hidden={view !== 'structure'}>
+          <div className="pc-structure-editor">
             <datalist id="pc-slot-names">
               {[
                 'description',
@@ -1695,7 +1590,7 @@ export function PromptComposer({
               </div>
             </div>
           </details>
-          <details className="pc-section" hidden={view !== 'structure'}>
+          <details className="pc-section">
             <summary>전체 구성 JSON · 고급 편집</summary>
             <JsonDraft
               label="전체 프롬프트 구성 JSON"
@@ -1707,8 +1602,8 @@ export function PromptComposer({
               onError={report}
             />
           </details>
-          <section className="pc-preview" aria-label="프롬프트 미리보기">
-            <h3>전송 미리보기</h3>
+          <details className="pc-preview" aria-label="프롬프트 미리보기">
+            <summary aria-label="전송 미리보기 접기/펼치기">전송 미리보기</summary>
             <label>
               현재 요청
               <textarea
@@ -1750,8 +1645,10 @@ export function PromptComposer({
                         <summary>
                           {index + 1}. {message.role} · {message.completion}
                           <small>
-                            {program.blocks.find((block) => block.id === message.provenance.blockId)
-                              ?.title ?? message.provenance.blockId}{' '}
+                            {preview.blockNames[message.provenance.blockId] ??
+                              (message.provenance.blockId === '__host_background_lore__'
+                                ? '공통 배경 자료'
+                                : '추가 실행 문맥')}{' '}
                             · {message.provenance.origin}
                           </small>
                         </summary>
@@ -1774,7 +1671,7 @@ export function PromptComposer({
                       <tbody>
                         {preview.value.compilation.trace.map((trace) => (
                           <tr key={trace.blockId}>
-                            <td>{trace.blockId}</td>
+                            <td>{preview.blockNames[trace.blockId] ?? '이름 없는 블록'}</td>
                             <td>
                               {trace.included
                                 ? '적용'
@@ -1822,7 +1719,7 @@ export function PromptComposer({
                 )}
               </div>
             )}
-          </section>
+          </details>
         </div>
       </details>
       {error && (

@@ -1,0 +1,408 @@
+import { useEffect, useRef, useState } from 'react';
+import type { Library, PromptPreset, PromptRole } from '../core/product.js';
+import type { LibraryItemKey, LibraryOrganization } from '../core/library-organization.js';
+import { libraryFolderOf } from '../core/library-organization.js';
+import { api } from './api.js';
+import { Dialog } from './Dialog.js';
+import { DeleteButton } from './DeleteButton.js';
+import { PromptEditor } from './PromptEditor.js';
+import {
+  LibraryFolders,
+  LibraryItemMenu,
+  LibraryMoveDialog,
+  useLibraryOrganization,
+  type FolderFilter,
+} from './LibraryFolders.js';
+import './library.css';
+
+export function PromptLibrary({
+  library,
+  reload,
+  onError,
+  onDirtyChange,
+}: {
+  library: Library | null;
+  reload: () => Promise<void>;
+  onError: (message: string) => void;
+  onDirtyChange?: (dirty: boolean) => void;
+}) {
+  const [folder, setFolder] = useState<FolderFilter>('all');
+  const [query, setQuery] = useState('');
+  const [role, setRole] = useState<'all' | PromptRole>('all');
+  const [sort, setSort] = useState('name');
+  const [editing, setEditing] = useState<{ preset: PromptPreset | null; role: PromptRole } | null>(
+    null
+  );
+  const [dirty, setDirty] = useState(false);
+  const [discard, setDiscard] = useState(false);
+  const [moving, setMoving] = useState<LibraryItemKey[] | null>(null);
+  const [selecting, setSelecting] = useState(false);
+  const [selection, setSelection] = useState<string[]>([]);
+  const organizer = useLibraryOrganization(library, reload, onError);
+  const mutation = useRef(false);
+  const [busy, setBusy] = useState(false);
+  const organized = library
+    ? { ...library, organization: organizer.organization ?? library.organization }
+    : null;
+  useEffect(() => {
+    onDirtyChange?.(dirty);
+  }, [dirty, onDirtyChange]);
+  useEffect(() => () => onDirtyChange?.(false), [onDirtyChange]);
+  useEffect(() => {
+    if (
+      folder !== 'all' &&
+      folder !== 'unclassified' &&
+      organizer.organization &&
+      !organizer.organization.folders.some(
+        (item) => item.id === folder && item.category === 'prompts'
+      )
+    )
+      setFolder('all');
+  }, [folder, organizer.organization]);
+  useEffect(() => {
+    const currentLibrary = library
+      ? { ...library, organization: organizer.organization ?? library.organization }
+      : null;
+    const available = new Set(
+      library?.promptPresets
+        ?.filter((item) => {
+          const folderId = libraryFolderOf(currentLibrary!, { kind: 'prompt-preset', id: item.id });
+          return (
+            folder === 'all' ||
+            (folder === 'unclassified' ? folderId === null : folderId === folder)
+          );
+        })
+        .map((item) => item.id) ?? []
+    );
+    setSelection((current) => current.filter((id) => available.has(id)));
+    setMoving((current) => (current?.some((item) => !available.has(item.id)) ? null : current));
+  }, [library, organizer.organization, folder]);
+  const presets = library?.promptPresets ?? [];
+  const counts: Record<string, number> = { all: presets.length };
+  for (const preset of presets) {
+    const key =
+      libraryFolderOf(organized!, { kind: 'prompt-preset', id: preset.id }) ?? 'unclassified';
+    counts[key] = (counts[key] ?? 0) + 1;
+  }
+  const filtered = presets
+    .filter((item) => {
+      const folderId = libraryFolderOf(organized!, { kind: 'prompt-preset', id: item.id });
+      return (
+        (folder === 'all' ||
+          (folder === 'unclassified' ? folderId === null : folderId === folder)) &&
+        (role === 'all' || item.role === role) &&
+        item.title.toLocaleLowerCase().includes(query.toLocaleLowerCase())
+      );
+    })
+    .sort((a, b) => (sort === 'name-desc' ? -1 : 1) * a.title.localeCompare(b.title, 'ko'));
+  function close() {
+    if (dirty) setDiscard(true);
+    else setEditing(null);
+  }
+  async function placeCreated(preset: PromptPreset, created: boolean) {
+    if (!created || folder === 'all' || folder === 'unclassified') return;
+    const current = await api<LibraryOrganization>('/library/organization');
+    await organizer.mutate(
+      '/library/organization/move',
+      { items: [{ kind: 'prompt-preset', id: preset.id }], category: 'prompts', folderId: folder },
+      'POST',
+      current.revision
+    );
+  }
+  async function clone(item: PromptPreset) {
+    if (mutation.current) return;
+    mutation.current = true;
+    setBusy(true);
+    try {
+      const full = await api<PromptPreset>(`/revisions/prompt-preset/${item.id}/${item.revision}`);
+      const copy = await api<PromptPreset>('/prompt-presets', {
+        title: `${full.title} 사본`,
+        role: full.role,
+        program: full.program,
+      });
+      await placeCreated(copy, true);
+      await reload();
+    } catch (error) {
+      onError((error as Error).message);
+    } finally {
+      mutation.current = false;
+      setBusy(false);
+    }
+  }
+  return (
+    <section
+      className="library-page prompt-library"
+      aria-label="프롬프트 관리"
+      data-testid="prompt-library"
+    >
+      <header className="library-heading">
+        <div>
+          <h1>프롬프트</h1>
+          <p className="muted">모델의 응답 방식과 메시지 구성을 관리해요.</p>
+        </div>
+        {!editing && (
+          <button
+            type="button"
+            className="secondary"
+            disabled={!library}
+            onClick={() =>
+              setEditing({ preset: null, role: role === 'translation' ? role : 'main' })
+            }
+          >
+            새 프롬프트
+          </button>
+        )}
+      </header>
+      <Dialog
+        open={discard}
+        title="미저장 프롬프트 확인"
+        role="alertdialog"
+        className="library-discard-dialog"
+        onClose={() => setDiscard(false)}
+      >
+        <p>저장하지 않은 프롬프트 편집 내용이 있어요.</p>
+        <div className="library-discard-actions">
+          <button type="button" className="secondary" onClick={() => setDiscard(false)}>
+            계속 편집
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setDiscard(false);
+              setDirty(false);
+              setEditing(null);
+            }}
+          >
+            초안 버리고 이동
+          </button>
+        </div>
+      </Dialog>
+      <LibraryMoveDialog
+        items={moving}
+        category="prompts"
+        organizer={organizer}
+        onClose={() => setMoving(null)}
+        onMoved={() => {
+          setMoving(null);
+          setSelection([]);
+          setSelecting(false);
+        }}
+      />
+      {!library ? (
+        <p role="status">프롬프트를 불러오는 중이에요…</p>
+      ) : editing ? (
+        <div className="library-prompt-editor">
+          <div className="library-detail-heading">
+            <button type="button" className="secondary" onClick={close}>
+              ← 프롬프트 목록
+            </button>
+            <h2>{editing.preset?.title ?? '새 프롬프트'}</h2>
+          </div>
+          <PromptEditor
+            key={
+              editing.preset
+                ? `${editing.preset.id}@${editing.preset.revision}`
+                : `new-${editing.role}`
+            }
+            library={library}
+            reload={reload}
+            onError={onError}
+            onDirtyChange={setDirty}
+            initialRole={editing.role}
+            initialPreset={editing.preset}
+            onSaved={placeCreated}
+          />
+        </div>
+      ) : (
+        <div className="library-workspace">
+          <LibraryFolders
+            category="prompts"
+            organizer={organizer}
+            value={folder}
+            onChange={(next) => {
+              setFolder(next);
+              setSelection([]);
+            }}
+            counts={counts}
+            reload={reload}
+            onError={onError}
+          />
+          <div className="library-workspace-content">
+            <div className="library-toolbar">
+              <label className="library-search-field">
+                <span className="sr-only">프롬프트 검색</span>
+                <input
+                  type="search"
+                  aria-label="프롬프트 검색"
+                  placeholder="이름으로 찾기"
+                  value={query}
+                  onChange={(event) => setQuery(event.target.value)}
+                />
+              </label>
+              <label>
+                <span className="sr-only">프롬프트 역할 필터</span>
+                <select
+                  aria-label="프롬프트 역할 필터"
+                  value={role}
+                  onChange={(event) => setRole(event.target.value as typeof role)}
+                >
+                  <option value="all">모든 역할</option>
+                  <option value="main">작문</option>
+                  <option value="translation">번역</option>
+                </select>
+              </label>
+              <label>
+                <span className="sr-only">프롬프트 정렬</span>
+                <select
+                  aria-label="프롬프트 정렬"
+                  value={sort}
+                  onChange={(event) => setSort(event.target.value)}
+                >
+                  <option value="name">이름순</option>
+                  <option value="name-desc">이름 역순</option>
+                </select>
+              </label>
+              <button
+                type="button"
+                className="secondary"
+                aria-pressed={selecting}
+                onClick={() => {
+                  setSelecting(!selecting);
+                  setSelection([]);
+                }}
+              >
+                선택
+              </button>
+            </div>
+            <p className="library-result-count muted">
+              {folder === 'all'
+                ? '전체'
+                : folder === 'unclassified'
+                  ? '미분류'
+                  : organizer.organization?.folders.find((item) => item.id === folder)?.title}{' '}
+              · {filtered.length}개
+            </p>
+            {selecting && (
+              <div className="library-bulk-toolbar">
+                <span>{selection.length}개 선택</span>
+                <button
+                  type="button"
+                  className="secondary"
+                  onClick={() => setSelection(filtered.map((item) => item.id))}
+                >
+                  표시된 자료 전체 선택
+                </button>
+                <button
+                  type="button"
+                  disabled={!selection.length || organizer.busy}
+                  onClick={() => setMoving(selection.map((id) => ({ kind: 'prompt-preset', id })))}
+                >
+                  선택한 자료 이동
+                </button>
+                <button
+                  type="button"
+                  className="secondary"
+                  onClick={() => {
+                    setSelecting(false);
+                    setSelection([]);
+                  }}
+                >
+                  선택 취소
+                </button>
+              </div>
+            )}
+            <div className="library-list">
+              {filtered.map((item) => (
+                <article className="library-list-item" key={item.id}>
+                  {selecting && (
+                    <label className="library-select-check">
+                      <span className="sr-only">{item.title} 선택</span>
+                      <input
+                        type="checkbox"
+                        aria-label={`${item.title} 선택`}
+                        checked={selection.includes(item.id)}
+                        onChange={(event) =>
+                          setSelection((current) =>
+                            event.target.checked
+                              ? [...current, item.id]
+                              : current.filter((id) => id !== item.id)
+                          )
+                        }
+                      />
+                    </label>
+                  )}
+                  <button
+                    type="button"
+                    className="library-open-content"
+                    aria-label={`${item.title} 프롬프트 편집`}
+                    onClick={() => setEditing({ preset: item, role: item.role })}
+                  >
+                    <span className="library-prompt-icon" aria-hidden="true">
+                      ≡
+                    </span>
+                    <span className="library-item-copy">
+                      <strong>{item.title}</strong>
+                      <span>{item.role === 'main' ? '작문' : '번역'} 프롬프트</span>
+                    </span>
+                  </button>
+                  <LibraryItemMenu title={`${item.title} 메뉴`}>
+                    <button
+                      type="button"
+                      className="secondary"
+                      onClick={() => setEditing({ preset: item, role: item.role })}
+                    >
+                      편집
+                    </button>
+                    <button
+                      type="button"
+                      className="secondary"
+                      disabled={organizer.busy}
+                      onClick={() => setMoving([{ kind: 'prompt-preset', id: item.id }])}
+                    >
+                      폴더 이동
+                    </button>
+                    <button
+                      type="button"
+                      className="secondary"
+                      disabled={busy}
+                      onClick={() => void clone(item)}
+                    >
+                      복제
+                    </button>
+                    <DeleteButton
+                      path={`/prompt-presets/${encodeURIComponent(item.id)}`}
+                      revision={item.revision}
+                      title={item.title}
+                      onDeleted={reload}
+                      onError={onError}
+                    />
+                  </LibraryItemMenu>
+                </article>
+              ))}
+            </div>
+            {!filtered.length && (
+              <div className="library-empty">
+                <h2>{query ? '찾는 프롬프트가 없어요' : '아직 프롬프트가 없어요'}</h2>
+                <p>작문과 번역에 사용할 지침을 만들어 보세요.</p>
+                {folder !== 'all' && (
+                  <button type="button" className="secondary" onClick={() => setFolder('all')}>
+                    전체에서 찾기
+                  </button>
+                )}
+                <button
+                  type="button"
+                  className="secondary"
+                  onClick={() =>
+                    setEditing({ preset: null, role: role === 'translation' ? role : 'main' })
+                  }
+                >
+                  새 프롬프트
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </section>
+  );
+}

@@ -20,6 +20,10 @@ import {
 import type { Content } from '../core/product.js';
 import { api } from './api.js';
 import { LibraryPanel, refValue } from './LibraryPanel.js';
+import { PromptLibrary } from './PromptLibrary.js';
+import { ContentPicker } from './ContentPicker.js';
+import { ContentAvatar } from './ContentAvatar.js';
+import type { PackageRole } from '../core/content-package.js';
 import { ProfileEditor } from './ProfileEditor.js';
 import { SourceReader } from './SourceReader.js';
 import { TurnActivity } from './TurnActivity.js';
@@ -34,6 +38,7 @@ import { completePendingStoryProfile } from './pendingStory.js';
 import { SettingsEditor } from './RuntimeSettings.js';
 import { AppSettingsPanel, BranchesPanel, TasksPanel } from './WorkspacePanels.js';
 import { useStory } from './useStory.js';
+import { useTestMode } from './useTestMode.js';
 import { ActivityStatus } from './ActivityStatus.js';
 import { modelLabel } from './storyLabels.js';
 import './style.css';
@@ -43,6 +48,8 @@ import './sidebar.css';
 type Panel = '' | 'navigation' | 'new' | 'story' | 'branches' | 'tasks' | 'settings' | 'reading';
 function App() {
   const s = useStory();
+  const testMode = useTestMode();
+  const [settingsTab, setSettingsTab] = useState('general');
   const [optionsOpen, setOptionsOpen] = useState(false),
     [optionsDirty, setOptionsDirty] = useState(false),
     [optionsBusy, setOptionsBusy] = useState(false);
@@ -50,6 +57,9 @@ function App() {
   const [panel, setPanel] = useState<Panel>('');
   const [initialBot, setInitialBot] = useState<Content>();
   const [initialFolder, setInitialFolder] = useState<ChatFolder>();
+  const [initialPersona, setInitialPersona] = useState<Content>();
+  const [initialModules, setInitialModules] = useState<Content[]>([]);
+  const [moduleToUse, setModuleToUse] = useState<Content | null>(null);
   const [libraryTab, setLibraryTab] = useState<'bot' | 'persona' | 'module' | 'prompts'>('bot');
   const [newKey, setNewKey] = useState(0);
   const [focus, setFocus] = useState(false);
@@ -86,6 +96,18 @@ function App() {
   const [libraryDirty, setLibraryDirty] = useState(false);
   const [pendingNavigation, setPendingNavigation] = useState<null | (() => void)>(null);
   const currentPrompt = s.detail?.profile?.prompts?.main;
+  const recentChatByContent: Record<string, string> = {};
+  const recentActivity: Record<string, string> = {};
+  for (const chat of s.chats) {
+    if (
+      chat.botId &&
+      chat.lastActivityAt &&
+      (!recentActivity[chat.botId] || chat.lastActivityAt > recentActivity[chat.botId])
+    ) {
+      recentActivity[chat.botId] = chat.lastActivityAt;
+      recentChatByContent[chat.botId] = chat.id;
+    }
+  }
   const currentCombination = s.library?.promptCombinations?.find(
     (c) =>
       currentPrompt &&
@@ -107,7 +129,7 @@ function App() {
     ? modelLabel(mainModel, s.library)
     : s.detail?.profile?.routes.main
       ? '선택한 본문 모델 · 확인 필요'
-      : '검사용 모의 생성 · 실제 모델 없음';
+      : '본문 모델을 선택해 주세요';
   useEffect(() => {
     const media = matchMedia('(prefers-color-scheme: dark)');
     const apply = () => {
@@ -147,9 +169,16 @@ function App() {
     addEventListener('popstate', onPop);
     return () => removeEventListener('popstate', onPop);
   }, []);
-  function newStory(bot?: Content, folder?: ChatFolder) {
+  function newStory(
+    bot?: Content,
+    folder?: ChatFolder,
+    persona?: Content,
+    modules: Content[] = []
+  ) {
     setInitialBot(bot);
     setInitialFolder(folder);
+    setInitialPersona(persona);
+    setInitialModules(modules);
     setNewKey((old) => old + 1);
     setPanel('new');
   }
@@ -158,13 +187,30 @@ function App() {
       s.select(id);
       setPanel('');
     };
-    if (libraryDirty && s.destination === 'library') setPendingNavigation(() => go);
-    else go();
+    if (libraryDirty && s.destination === 'library') {
+      setPanel('');
+      setPendingNavigation(() => go);
+    } else go();
   }
   function showLibrary(tab: 'bot' | 'persona' | 'module' | 'prompts' = 'bot') {
-    setLibraryTab(tab);
-    s.showLibrary();
-    setPanel('');
+    const go = () => {
+      setLibraryTab(tab);
+      s.showLibrary();
+      setPanel('');
+    };
+    if (
+      libraryDirty &&
+      s.destination === 'library' &&
+      (tab === 'prompts') !== (libraryTab === 'prompts')
+    ) {
+      setPanel('');
+      setPendingNavigation(() => go);
+    } else go();
+  }
+  function useContent(content: Content, role: PackageRole) {
+    if (role === 'bot') newStory(content);
+    else if (role === 'persona') newStory(undefined, undefined, content);
+    else setModuleToUse(content);
   }
   function inspect(id: string) {
     setInspectedRun(id);
@@ -181,7 +227,10 @@ function App() {
       onLibrary={showLibrary}
       onChatsChanged={s.loadChats}
       onError={s.setError}
-      onSettings={() => setPanel('settings')}
+      onSettings={() => {
+        setSettingsTab('general');
+        setPanel('settings');
+      }}
       onTasks={() => inspect('')}
       tasks={s.tasks}
     />
@@ -223,7 +272,9 @@ function App() {
             </h1>
             <small>
               {s.destination === 'library'
-                ? '내 자료와 창작 방식'
+                ? libraryTab === 'prompts'
+                  ? '모델의 응답 방식과 프리셋'
+                  : '캐릭터와 세계를 모아 두는 서재'
                 : s.bot?.title || (s.selected ? '채팅을 이어가는 중' : '나의 채팅')}
             </small>
           </div>
@@ -274,15 +325,31 @@ function App() {
         </header>
         {s.destination === 'library' ? (
           <div className="destination-scroll">
-            <LibraryPanel
-              library={s.library}
-              reload={s.loadLibrary}
-              onError={s.setError}
-              onStartStory={newStory}
-              initialTab={libraryTab}
-              onTabChange={setLibraryTab}
-              onDirtyChange={setLibraryDirty}
-            />
+            {libraryTab === 'prompts' ? (
+              s.library ? (
+                <PromptLibrary
+                  library={s.library}
+                  reload={s.loadLibrary}
+                  onError={s.setError}
+                  onDirtyChange={setLibraryDirty}
+                />
+              ) : (
+                <p role="status">프롬프트를 불러오는 중이에요…</p>
+              )
+            ) : (
+              <LibraryPanel
+                library={s.library}
+                reload={s.loadLibrary}
+                onError={s.setError}
+                onStartStory={newStory}
+                onUseContent={useContent}
+                recentChatByContent={recentChatByContent}
+                onContinueChat={select}
+                initialTab={libraryTab}
+                onTabChange={setLibraryTab}
+                onDirtyChange={setLibraryDirty}
+              />
+            )}
             {s.error && (
               <p className="error" role="alert">
                 {s.error}
@@ -316,6 +383,7 @@ function App() {
                   ) : (
                     <>
                       <div className="story-context">
+                        {s.bot && <ContentAvatar content={s.bot} />}
                         {s.profileAsset && (
                           <img
                             className="profile-asset"
@@ -625,11 +693,15 @@ function App() {
                         <SlidersHorizontal size={14} />
                         창작 옵션{optionsDirty && ' · 미적용'}
                       </button>
-                      <label>
-                        <span className="sr-only">빠른 페르소나</span>
-                        <select
-                          aria-label="빠른 페르소나"
+                      {s.library && (
+                        <ContentPicker
+                          library={s.library}
+                          role="persona"
+                          label="빠른 페르소나"
                           value={s.persona ? refValue(s.persona) : ''}
+                          selectedContent={s.persona}
+                          allowNone
+                          noneLabel={s.attachmentsReady ? '페르소나 없음' : '페르소나 확인 중…'}
                           disabled={
                             s.quickBusy ||
                             optionsBusy ||
@@ -638,22 +710,11 @@ function App() {
                             !s.detail ||
                             !s.attachmentsReady
                           }
-                          onChange={(event) => {
-                            void s.quickChange('persona', event.target.value);
+                          onChange={(value) => {
+                            void s.quickChange('persona', value);
                           }}
-                        >
-                          <option value="">
-                            {s.attachmentsReady ? '페르소나 없음' : '페르소나 확인 중…'}
-                          </option>
-                          {s.allContents
-                            .filter((item) => item.kind === 'persona')
-                            .map((item) => (
-                              <option key={refValue(item)} value={refValue(item)}>
-                                {item.title}
-                              </option>
-                            ))}
-                        </select>
-                      </label>
+                        />
+                      )}
                       <label className="quick-model">
                         <span className="sr-only">빠른 본문 모델</span>
                         <select
@@ -670,7 +731,7 @@ function App() {
                             void s.quickChange('model', event.target.value);
                           }}
                         >
-                          <option value="">검사용 모의 생성 · 실제 모델 없음</option>
+                          <option value="">본문 모델을 선택해 주세요</option>
                           {s.detail?.profile?.routes.main &&
                             !s.quickModels.some(
                               (item) => item.id === s.detail!.profile!.routes.main!.id
@@ -713,7 +774,8 @@ function App() {
                           s.submitting.includes(s.viewKey) ||
                           (!s.draft.trim() && !s.pendingRequest) ||
                           !s.detail ||
-                          s.pendingProfile
+                          s.pendingProfile ||
+                          (!testMode && !s.detail?.profile?.routes.main && !s.pendingRequest)
                         }
                       >
                         <ArrowUp size={21} />
@@ -792,11 +854,63 @@ function App() {
             library={s.library}
             initialBot={initialBot}
             initialFolder={initialFolder}
+            initialPersona={initialPersona}
+            initialModules={initialModules}
+            onModelSettings={() => {
+              setSettingsTab('connections');
+              setPanel('settings');
+            }}
             onCreated={async (chat) => {
               await s.loadChats();
               select(chat.id);
             }}
           />
+        )}
+      </Dialog>
+      <Dialog
+        open={!!moduleToUse}
+        title="모듈 사용"
+        onClose={() => !s.quickBusy && setModuleToUse(null)}
+      >
+        {moduleToUse && (
+          <>
+            <ContentAvatar content={moduleToUse} />
+            <p>{moduleToUse.title}을 사용할 채팅을 선택해요.</p>
+            {s.detail && (
+              <button
+                type="button"
+                disabled={s.quickBusy || s.profileDirty || optionsDirty || optionsBusy}
+                onClick={() => {
+                  const chatId = s.detail!.chat.id;
+                  void s.quickChange('module', refValue(moduleToUse)).then((saved) => {
+                    if (saved) {
+                      setModuleToUse(null);
+                      select(chatId);
+                    }
+                  });
+                }}
+              >
+                현재 채팅에 추가 · {s.detail.chat.title}
+              </button>
+            )}
+            <button
+              type="button"
+              className="secondary"
+              disabled={s.quickBusy}
+              onClick={() => {
+                const module = moduleToUse;
+                setModuleToUse(null);
+                newStory(undefined, undefined, undefined, [module]);
+              }}
+            >
+              이 모듈로 새 채팅
+            </button>
+            {s.error && (
+              <p className="error" role="alert">
+                {s.error}
+              </p>
+            )}
+          </>
         )}
       </Dialog>
       <Dialog
@@ -954,6 +1068,7 @@ function App() {
         {panel === 'settings' && (
           <>
             <AppSettingsPanel
+              initialTab={settingsTab}
               state={s}
               theme={theme}
               setTheme={setTheme}

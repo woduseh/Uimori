@@ -90,7 +90,7 @@ function bundle(text = 'Mira waited quietly beside the pier.'): AuxiliaryBundle 
           },
           {
             id: 'names',
-            kind: 'glossary',
+            kind: 'module',
             revision: 3,
             title: 'Name glossary',
             description: 'Translation names',
@@ -100,7 +100,7 @@ function bundle(text = 'Mira waited quietly beside the pier.'): AuxiliaryBundle 
           },
           {
             id: 'canon',
-            kind: 'canon',
+            kind: 'module',
             revision: 4,
             title: 'Author canon',
             description: 'Known facts',

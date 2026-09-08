@@ -21,11 +21,16 @@ import { PackageControlValues } from './PackageControlValues.js';
 import { resolvePackageStart, type PackageStartSnapshot } from '../core/package-start.js';
 import { resolvePromptValues, type PromptValue } from '../core/prompt-program.js';
 import './package-authoring.css';
+import { useTestMode } from './useTestMode.js';
+import { ContentAvatar } from './ContentAvatar.js';
+import { ContentPicker } from './ContentPicker.js';
+import type { PackageRole } from '../core/content-package.js';
 
 type StorySelection = {
   title: string;
   bot: Content | null;
   persona: Content | null;
+  modules: Content[];
   prompt: PromptPreset | null;
   combination: SavedPromptCombination | null;
   main: ModelPreset | null;
@@ -53,23 +58,34 @@ export function NewStory({
   library,
   initialBot,
   initialFolder,
+  initialPersona,
+  initialModules,
+  onModelSettings,
   onCreated,
 }: {
   library: Library;
   initialBot?: Content;
   initialFolder?: ChatFolder;
+  initialPersona?: Content;
+  initialModules?: Content[];
+  onModelSettings: () => void;
   onCreated: (chat: Chat) => Promise<void>;
 }) {
   const { choices } = useModelSelection(library.models, library.connections);
+  const testMode = useTestMode();
   const [bot, setBot] = useState(initialBot ? refValue(initialBot) : '');
   const [persona, setPersona] = useState(
-    initialFolder?.defaultPersona ? refValue(initialFolder.defaultPersona) : ''
+    initialPersona
+      ? refValue(initialPersona)
+      : initialFolder?.defaultPersona
+        ? refValue(initialFolder.defaultPersona)
+        : ''
   );
+  const [modules, setModules] = useState(() => (initialModules ?? []).map(refValue));
   const [prompt, setPrompt] = useState('');
   const [combination, setCombination] = useState('');
   const [models, setModels] = useState(() => rememberedModels(library));
   const [title, setTitle] = useState('');
-  const [search, setSearch] = useState('');
   const [loadedContents, setLoadedContents] = useState<Record<string, Content>>({});
   const [packageLoading, setPackageLoading] = useState(false);
   const [start, setStart] = useState('');
@@ -91,23 +107,30 @@ export function NewStory({
   useEffect(() => {
     if (submitted.current) return;
     let current = true;
-    const selected = [bot, persona].filter(Boolean);
-    const items = selected
-      .map((key) =>
-        [initialBot, ...library.contents].find((item) => item && refValue(item) === key)
-      )
-      .filter((item): item is Content => !!item);
+    const selected = [...new Set([bot, persona, ...modules].filter(Boolean))];
     setPackageLoading(true);
     void Promise.all(
-      items.map(async (item) => {
-        const key = refValue(item);
+      selected.map(async (key) => {
         if (loadedContents[key]) return loadedContents[key];
+        const item = [
+          initialBot,
+          initialPersona,
+          ...(initialModules ?? []),
+          ...library.contents,
+        ].find((item) => item && refValue(item) === key);
         if (
-          item === initialBot ||
-          (!library.contentBodiesOmitted && (!item.hasPackage || item.package))
+          item &&
+          (!item.hasPackage || item.package) &&
+          (item === initialBot ||
+            item === initialPersona ||
+            initialModules?.includes(item) ||
+            !library.contentBodiesOmitted)
         )
           return item;
-        return api<Content>(`/revisions/content/${item.id}/${item.revision}`);
+        const separator = key.lastIndexOf('@');
+        return api<Content>(
+          `/revisions/content/${encodeURIComponent(key.slice(0, separator))}/${key.slice(separator + 1)}`
+        );
       })
     )
       .then((items) => {
@@ -126,7 +149,7 @@ export function NewStory({
     return () => {
       current = false;
     };
-  }, [bot, persona, library, initialBot]);
+  }, [bot, persona, modules, library, initialBot, initialPersona, initialModules]);
   useEffect(() => {
     // A submitted profile intent keeps its model IDs while settings remain editable.
     if (submitted.current) return;
@@ -147,12 +170,16 @@ export function NewStory({
       : null;
     const selectedPersona = persona
       ? (loadedContents[persona] ??
-        library.contents.find(
+        [initialPersona, ...library.contents].find(
           (item) =>
+            item &&
             (item.kind === 'persona' || item.hasPackage || item.package) &&
             refValue(item) === persona
         ))
       : null;
+    const selectedModules = modules.map((key) => loadedContents[key]);
+    if (selectedModules.some((item) => !item))
+      throw new Error('선택한 모듈을 불러온 뒤 시작해 주세요.');
     const available = choices;
     const main = models.main ? available.find((item) => item.id === models.main) : null;
     const translation = models.translation
@@ -164,15 +191,19 @@ export function NewStory({
       );
     if (!selectedBot || (persona && !selectedPersona))
       throw new Error('채팅의 소속 봇을 선택해 주세요. 목록이 바뀌었다면 자료를 다시 골라 주세요.');
-    if ([selectedBot, selectedPersona].some((item) => item?.hasPackage && !item.package))
+    if (
+      [selectedBot, selectedPersona, ...selectedModules].some(
+        (item) => item?.hasPackage && !item.package
+      )
+    )
       throw new Error('선택한 패키지 본문을 불러오지 못했어요. 자료를 다시 골라 주세요.');
+    const roleContents: [PackageRole, Content | null | undefined][] = [
+      ['bot', selectedBot],
+      ['persona', selectedPersona],
+      ...selectedModules.map((item): [PackageRole, Content] => ['module', item]),
+    ];
     const values = Object.fromEntries(
-      (
-        [
-          ['bot', selectedBot],
-          ['persona', selectedPersona],
-        ] as const
-      ).flatMap(([role, item]) =>
+      roleContents.flatMap(([role, item]) =>
         item?.package
           ? [
               [
@@ -191,6 +222,8 @@ export function NewStory({
         ? resolvePackageStart(selectedBot.package, start, values[`${refValue(selectedBot)}:bot`])
         : null;
     if (start && !opening) throw new Error('선택한 시작을 다시 확인해 주세요.');
+    if (opening?.mode === 'generate' && !main && !testMode)
+      throw new Error('첫 장면을 생성하려면 본문 모델을 선택해 주세요.');
     const selectedPrompt = library.promptPresets?.find(
       (p) => refValue(p) === prompt && p.role === 'main'
     );
@@ -202,7 +235,7 @@ export function NewStory({
     );
     if ((prompt && !selectedPrompt) || (combination && !selectedCombination))
       throw new Error('프롬프트와 창작 프리셋의 조합을 다시 확인해 주세요.');
-    const selectedContents = [selectedBot, selectedPersona].filter(
+    const selectedContents = [selectedBot, selectedPersona, ...selectedModules].filter(
       (item): item is Content => !!item
     );
     return structuredClone({
@@ -210,6 +243,7 @@ export function NewStory({
         title.trim() || (selectedBot ? `${selectedBot.title}의 채팅`.slice(0, 100) : '새로운 채팅'),
       bot: selectedBot ?? null,
       persona: selectedPersona ?? null,
+      modules: selectedModules,
       prompt: selectedPrompt ?? null,
       combination: selectedCombination ?? null,
       main: main ?? null,
@@ -220,12 +254,7 @@ export function NewStory({
               attachments: selectedContents
                 .filter((item) => !item.package && !item.hasPackage)
                 .map(({ id, revision }) => ({ id, revision })),
-              packageAttachments: (
-                [
-                  ['bot', selectedBot],
-                  ['persona', selectedPersona],
-                ] as const
-              ).flatMap(([role, item]) =>
+              packageAttachments: roleContents.flatMap(([role, item]) =>
                 item && (item.package || item.hasPackage)
                   ? [{ id: item.id, revision: item.revision, role }]
                   : []
@@ -325,7 +354,9 @@ export function NewStory({
   }
   const frozen = submitted.current;
   const locked = busy || !!frozen;
-  const frozenContents = [frozen?.bot, frozen?.persona].filter((item): item is Content => !!item);
+  const frozenContents = [frozen?.bot, frozen?.persona, ...(frozen?.modules ?? [])].filter(
+    (item): item is Content => !!item
+  );
   const contents = library.contents.map(
     (item) => frozenContents.find((selected) => refValue(selected) === refValue(item)) ?? item
   );
@@ -342,20 +373,22 @@ export function NewStory({
     combinations.push(frozen.combination);
   for (const selected of [frozen?.main, frozen?.translation])
     if (selected && !choices.some((item) => item.id === selected.id)) choices.push(selected);
-  const bots = contents.filter(
-    (item) =>
-      (initialBot
-        ? item.id === initialBot.id
-        : item.kind === 'bot' || item.hasPackage || item.package) &&
-      `${item.title} ${item.description}`.toLowerCase().includes(search.toLowerCase())
-  );
   const activeBot =
     frozen?.bot ??
     loadedContents[bot] ??
     (initialBot && refValue(initialBot) === bot
       ? initialBot
       : contents.find((item) => refValue(item) === bot));
-  const activePersona = frozen?.persona ?? loadedContents[persona];
+  const activePersona = frozen
+    ? frozen.persona
+    : persona
+      ? (loadedContents[persona] ??
+        (initialPersona && refValue(initialPersona) === persona
+          ? initialPersona
+          : contents.find((item) => refValue(item) === persona)))
+      : null;
+  const activeModules =
+    frozen?.modules ?? modules.map((key) => loadedContents[key]).filter(Boolean);
   let opening: PackageStartSnapshot | null = null,
     openingError = '';
   if (start && activeBot?.package) {
@@ -377,52 +410,79 @@ export function NewStory({
         void create();
       }}
     >
-      <p className="muted">함께할 봇을 고르고, 첫 장면으로 시작해요.</p>
-      <label>
-        봇 찾기
-        <input
-          aria-label="시작할 봇 찾기"
-          value={search}
-          onChange={(event) => setSearch(event.target.value)}
-          disabled={locked}
-        />
-      </label>
-      <div className="bot-picker" role="group" aria-label="시작할 봇">
-        {bots.map((item) => (
-          <button
-            type="button"
-            key={refValue(item)}
-            className={`bot-option ${bot === refValue(item) ? 'chosen' : ''}`}
-            aria-pressed={bot === refValue(item)}
-            onClick={() => {
-              setBot(refValue(item));
+      {initialBot ? (
+        <div className="new-story-bot" aria-label="채팅의 봇">
+          <ContentAvatar content={activeBot ?? initialBot} />
+          <strong>{initialBot.title}</strong>
+          <p className="muted">
+            {initialFolder
+              ? `${initialFolder.title} 폴더에서 새 채팅을 시작해요.`
+              : '이 봇과 새 채팅을 시작해요.'}
+          </p>
+        </div>
+      ) : (
+        <>
+          <p className="muted">함께할 봇을 고르고, 첫 장면으로 시작해요.</p>
+          <ContentPicker
+            library={{ ...library, contents }}
+            role="bot"
+            label="시작할 봇"
+            value={bot}
+            selectedContent={activeBot}
+            onChange={(value) => {
+              setBot(value);
               setStart('');
             }}
-            disabled={locked || !!initialBot}
-          >
-            <strong>{item.title}</strong>
-            <small>{item.description || '이 자료를 봇으로 사용해 채팅을 시작해요'}</small>
-          </button>
-        ))}
-      </div>
-      <label>
-        페르소나
-        <select
-          aria-label="시작 페르소나"
-          value={persona}
-          onChange={(e) => setPersona(e.target.value)}
+            disabled={locked}
+          />
+        </>
+      )}
+      <ContentPicker
+        library={{ ...library, contents }}
+        role="persona"
+        label="시작 페르소나"
+        value={persona}
+        selectedContent={activePersona}
+        onChange={setPersona}
+        allowNone
+        noneLabel="페르소나 없음"
+        disabled={locked}
+      />
+      <fieldset>
+        <legend>함께 사용할 모듈</legend>
+        {modules.map((key) => {
+          const item = activeModules.find((item) => refValue(item) === key);
+          return (
+            <div className="new-story-module" key={key}>
+              <ContentAvatar content={item} title="모듈 확인 중" />
+              <span>{item?.title ?? '모듈 확인 중…'}</span>
+              <button
+                type="button"
+                className="ghost"
+                disabled={locked}
+                aria-label={`${item?.title ?? '모듈'} 선택 해제`}
+                onClick={() => setModules((values) => values.filter((value) => value !== key))}
+              >
+                해제
+              </button>
+            </div>
+          );
+        })}
+        <ContentPicker
+          library={{
+            ...library,
+            contents: contents.filter((item) => item.hasPackage || item.package),
+          }}
+          role="module"
+          label="추가할 시작 모듈"
+          value=""
+          onChange={(value) =>
+            setModules((values) => (values.includes(value) ? values : [...values, value]))
+          }
+          excludeIds={modules.map((key) => key.slice(0, key.lastIndexOf('@')))}
           disabled={locked}
-        >
-          <option value="">페르소나 없음</option>
-          {contents
-            .filter((item) => item.kind === 'persona' || item.hasPackage || item.package)
-            .map((item) => (
-              <option key={refValue(item)} value={refValue(item)}>
-                {item.title}
-              </option>
-            ))}
-        </select>
-      </label>
+        />
+      </fieldset>
       {packageLoading && <p role="status">시작 자료를 불러오는 중이에요…</p>}
       {!!activeBot?.package?.starts?.length && (
         <fieldset>
@@ -485,6 +545,7 @@ export function NewStory({
         [
           ['bot', activeBot, '봇'],
           ['persona', activePersona, '페르소나'],
+          ...activeModules.map((item) => ['module', item, '모듈'] as const),
         ] as const
       ).map(([role, item, label]) =>
         item?.package?.controls.length ? (
@@ -556,7 +617,7 @@ export function NewStory({
             onChange={(event) => setModels((value) => ({ ...value, main: event.target.value }))}
             disabled={locked}
           >
-            <option value="">검사용 모의 생성 · 실제 모델 없음</option>
+            <option value="">본문 모델을 선택해 주세요</option>
             {models.main && !choices.some((item) => item.id === models.main) && (
               <option value={models.main} disabled>
                 이전 선택 · 연결 확인 또는 재선택 필요
@@ -579,7 +640,7 @@ export function NewStory({
             }
             disabled={locked}
           >
-            <option value="">검사용 모의 번역 · 실제 모델 없음</option>
+            <option value="">번역 모델 미지정</option>
             {models.translation && !choices.some((item) => item.id === models.translation) && (
               <option value={models.translation} disabled>
                 이전 선택 · 연결 확인 또는 재선택 필요
@@ -592,9 +653,21 @@ export function NewStory({
             ))}
           </select>
         </label>
+        {!models.main && (
+          <p className="muted">
+            {opening?.mode === 'generate'
+              ? '첫 장면을 생성하려면 본문 모델을 선택해 주세요.'
+              : '채팅은 먼저 만들 수 있어요. 본문을 생성하려면 모델을 선택해 주세요.'}
+          </p>
+        )}
+        {!choices.length && (
+          <button type="button" className="secondary" disabled={locked} onClick={onModelSettings}>
+            모델 연결 설정
+          </button>
+        )}
         <small>
           선택한 모델은 다음 채팅에도 제안해요. 채팅을 만든 뒤 장면을 보내면 본문을 생성해요. 번역은
-          번역 보기를 눌렀을 때 시작해요.
+          번역 모델을 선택하고 번역 보기를 눌렀을 때 시작해요.
         </small>
       </fieldset>
       <label>
@@ -613,7 +686,16 @@ export function NewStory({
           {created.current && ' 채팅은 하나만 만들었어요. 설정 저장만 다시 시도해요.'}
         </p>
       )}
-      <button disabled={busy || uncertain.current || !bot || packageLoading || !!openingError}>
+      <button
+        disabled={
+          busy ||
+          uncertain.current ||
+          !bot ||
+          packageLoading ||
+          !!openingError ||
+          (opening?.mode === 'generate' && !models.main && !testMode)
+        }
+      >
         {busy
           ? '채팅을 준비하는 중…'
           : created.current

@@ -217,12 +217,14 @@ export function BranchesPanel({ state, onClose }: { state: StoryState; onClose: 
 }
 
 export function AppSettingsPanel({
+  initialTab = 'general',
   state,
   theme,
   setTheme,
   enterSend,
   setEnterSend,
 }: {
+  initialTab?: string;
   state: StoryState;
   theme: 'system' | 'dark' | 'light';
   setTheme: (theme: 'system' | 'dark' | 'light') => void;
@@ -230,8 +232,8 @@ export function AppSettingsPanel({
   setEnterSend: (value: boolean) => void;
 }) {
   const [signingOut, setSigningOut] = useState(false);
-  const [active, setActive] = useState('general');
-  const [visited, setVisited] = useState(['general']);
+  const [active, setActive] = useState(initialTab);
+  const [visited, setVisited] = useState([initialTab]);
   const id = useId();
   const categories = [
     { key: 'general', label: '일반', icon: Settings },

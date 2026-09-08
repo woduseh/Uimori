@@ -421,7 +421,7 @@ test.each(['denied', 'budget', 'empty'] as const)(
   }
 );
 
-test('translation searches and reads frozen bot/persona/canon even when absent from the lore catalog', () => {
+test('translation searches and reads frozen bot/persona/modules even when absent from the lore catalog', () => {
   const store = database();
   const contents = ['bot', 'persona', 'canon', 'glossary'].map(
     (kind) =>
@@ -429,7 +429,7 @@ test('translation searches and reads frozen bot/persona/canon even when absent f
         kind === 'bot'
           ? fixtureBotInput('bot', 'bot: Mira addresses Captain Arlen informally.')
           : {
-              kind,
+              kind: kind === 'persona' ? 'persona' : 'module',
               title: kind,
               description: 'Synthetic relationship',
               text:
@@ -466,7 +466,7 @@ test('translation searches and reads frozen bot/persona/canon even when absent f
       source: {
         id: i === 0 ? botResource.id : entry.id,
         revision: 1,
-        sourceKind: ['bot', 'persona', 'canon', 'glossary'][i],
+        sourceKind: ['bot', 'persona', 'module', 'module'][i],
       },
     });
   }

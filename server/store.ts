@@ -15,6 +15,7 @@ import { StoryStore } from './story-store.js';
 import { freezeSourceSegments } from '../core/package-source-segments.js';
 import { consumePackageRequestInTransaction } from './package-requests.js';
 import { ChatOrganizationStore } from './chat-organization.js';
+import { LibraryOrganizationStore } from './library-organization.js';
 import { PackageBehaviorStore } from './package-behavior-store.js';
 import {
   initBehaviorHost,
@@ -73,6 +74,7 @@ export class Store {
   readonly product: ProductStore;
   readonly story: StoryStore;
   readonly organization: ChatOrganizationStore;
+  readonly libraryOrganization: LibraryOrganizationStore;
   readonly behavior: PackageBehaviorStore;
   private readonly ownership: DatabaseSync;
   constructor(readonly path: string) {
@@ -97,9 +99,9 @@ export class Store {
     }
     try {
       const version = Number((this.db.prepare('PRAGMA user_version').get() as Row).user_version);
-      if (![0, 11].includes(version))
+      if (![0, 12].includes(version))
         throw new Error(
-          `Unsupported database schema version ${version}; Uimori requires schema 11. For disposable default development data, stop the server and run npm run reset:dev.`
+          `Unsupported database schema version ${version}; Uimori requires schema 12. For disposable default development data, stop the server and run npm run reset:dev.`
         );
       if (
         version === 0 &&
@@ -116,6 +118,7 @@ export class Store {
       this.product = new ProductStore(this);
       this.story = new StoryStore(this);
       this.organization = new ChatOrganizationStore(this);
+      this.libraryOrganization = new LibraryOrganizationStore(this);
       this.behavior = new PackageBehaviorStore(this.db, (chatId, branchId) => {
         const branch = this.product.branch(chatId, branchId);
         return branch.headRevision ? this.source(branch.headRevision).hash : null;
@@ -126,6 +129,7 @@ export class Store {
       CREATE TABLE IF NOT EXISTS chats (id TEXT PRIMARY KEY, title TEXT NOT NULL, head_revision TEXT, settings_revision INTEGER NOT NULL, settings TEXT NOT NULL, created_at TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS runs (id TEXT PRIMARY KEY, chat_id TEXT NOT NULL REFERENCES chats(id), parent_revision TEXT, status TEXT NOT NULL, request TEXT NOT NULL, snapshot TEXT NOT NULL, request_key TEXT NOT NULL, command TEXT NOT NULL, source_revision TEXT, error TEXT, usage TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, branch_id TEXT REFERENCES branches(id), partial_text TEXT, issue TEXT, UNIQUE(chat_id,request_key));
       CREATE UNIQUE INDEX IF NOT EXISTS one_active_run_per_branch ON runs(branch_id) WHERE status IN ('queued','running','waiting_for_state');
+      CREATE INDEX runs_chat_activity ON runs(chat_id,created_at DESC);
       CREATE TABLE IF NOT EXISTS sources (id TEXT PRIMARY KEY, chat_id TEXT NOT NULL REFERENCES chats(id), run_id TEXT NOT NULL UNIQUE REFERENCES runs(id), parent_revision TEXT REFERENCES sources(id), text TEXT NOT NULL, hash TEXT NOT NULL, created_at TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS jobs (id TEXT PRIMARY KEY, chat_id TEXT NOT NULL REFERENCES chats(id), source_revision TEXT NOT NULL REFERENCES sources(id), source_hash TEXT NOT NULL, kind TEXT NOT NULL CHECK(kind IN ('translation','status','image')), status TEXT NOT NULL, generation INTEGER NOT NULL DEFAULT 0, owner TEXT, input TEXT, error TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, revision INTEGER NOT NULL DEFAULT 1, plan TEXT, retry_chunk TEXT, UNIQUE(source_revision,kind,revision));
       CREATE TABLE IF NOT EXISTS job_results (job_id TEXT PRIMARY KEY REFERENCES jobs(id), generation INTEGER NOT NULL, result TEXT NOT NULL, created_at TEXT NOT NULL);
@@ -139,10 +143,11 @@ export class Store {
           this.product.initFresh();
           this.story.initFresh();
           this.organization.init();
+          this.libraryOrganization.init();
           this.behavior.init();
           initBehaviorHost(this);
           initRunBehavior(this);
-          this.db.exec('PRAGMA user_version=11');
+          this.db.exec('PRAGMA user_version=12');
         });
     } catch (error) {
       this.db.close();
@@ -187,18 +192,27 @@ export class Store {
       settingsRevision: row.settings_revision,
       settings: parse(row.settings),
       createdAt: row.created_at,
+      lastActivityAt: row.last_activity_at ?? row.created_at,
       ...organization,
     };
   }
   chat(id: string): Chat {
-    const row = this.db.prepare('SELECT * FROM chats WHERE id=?').get(id) as Row | undefined;
+    const row = this.db
+      .prepare(
+        'SELECT c.*, MAX(c.created_at, COALESCE((SELECT MAX(r.created_at) FROM runs r WHERE r.chat_id=c.id), c.created_at)) AS last_activity_at FROM chats c WHERE id=?'
+      )
+      .get(id) as Row | undefined;
     if (!row) throw new HttpError(404, 'Chat not found');
     return this.mapChat(row);
   }
   chats(): Chat[] {
-    return (this.db.prepare('SELECT * FROM chats ORDER BY created_at,id').all() as Row[]).map(
-      (row) => this.mapChat(row)
-    );
+    return (
+      this.db
+        .prepare(
+          'SELECT c.*, MAX(c.created_at, COALESCE((SELECT MAX(r.created_at) FROM runs r WHERE r.chat_id=c.id), c.created_at)) AS last_activity_at FROM chats c ORDER BY c.created_at,c.id'
+        )
+        .all() as Row[]
+    ).map((row) => this.mapChat(row));
   }
   createChat(
     title: string,
@@ -378,7 +392,12 @@ export class Store {
     this.event(chatId, `run.${status}`, id);
     return { run: this.run(id), created: true };
   }
-  candidate(runId: string, key: string, title: string): { run: Run; created: boolean } {
+  candidate(
+    runId: string,
+    key: string,
+    title: string,
+    validate?: (snapshot: RunSnapshot) => void
+  ): { run: Run; created: boolean } {
     return this.transaction(() => {
       const original = this.run(runId);
       if (original.snapshot.packageStart?.mode === 'authored')
@@ -394,6 +413,7 @@ export class Store {
           throw new HttpError(409, 'Idempotency key reused with different command');
         return { run: this.run(prior.id), created: false };
       }
+      validate?.(original.snapshot);
       const branch = this.product.createBranch(original.chatId, {
         title,
         fromRevision: original.parentRevision,
@@ -676,8 +696,8 @@ export class Store {
   ): Job {
     return editTranslation(this, id, value);
   }
-  requestTranslation(id: string): Job {
-    return requestTranslation(this, id);
+  requestTranslation(id: string, validate?: (id: string) => void): Job {
+    return requestTranslation(this, id, false, validate);
   }
   job(id: string): Job {
     const row = this.db
@@ -860,8 +880,8 @@ export class Store {
       return this.job(id);
     });
   }
-  retranslate(id: string): Job {
-    return requestTranslation(this, id, true);
+  retranslate(id: string, validate?: (id: string) => void): Job {
+    return requestTranslation(this, id, true, validate);
   }
   finishAuxiliary(
     id: string,

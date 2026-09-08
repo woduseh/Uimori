@@ -31,8 +31,8 @@ const context = (): SourceTimeContext => ({
   revision: 'source-time-4',
   bot: { id: 'mira', revision: 2, text: 'Mira has not learned who rang the bell.' },
   persona: { id: 'reader', revision: 3, text: 'The reader has not disclosed their title.' },
-  glossary: [{ id: 'names', revision: 5, text: 'Lark => 종달새. Bellkeeper => 종지기.' }],
-  canon: [
+  references: [
+    { id: 'names', revision: 5, text: 'Lark => 종달새. Bellkeeper => 종지기.' },
     { id: 'canon', revision: 4, text: 'At this point neither traveler knows the masked keeper.' },
   ],
   scene: 'A quiet harbor before the reveal.',
@@ -101,10 +101,10 @@ describe('M1 source-bound auxiliary roles', () => {
     const plan = createTranslationPlan(raw, capturedContext);
     const run = snapshot();
     capturedContext.bot!.text = 'FUTURE_REVEAL';
-    capturedContext.glossary[0].revision = 99;
+    capturedContext.references[0].revision = 99;
     const input = translationInput(plan, plan.chunks[0].id, run);
     expect(input.context.bot!.text).toBe('Mira has not learned who rang the bell.');
-    expect(input.context.glossary[0].revision).toBe(5);
+    expect(input.context.references[0].revision).toBe(5);
     expect(input.context.previousSources[0].revision).toBe('source-previous');
     expect(input.sourceRevision).toBe('source-before-reveal');
     expect(input.sourceHash).toBe(raw.hash);
@@ -267,7 +267,7 @@ describe('M1 source-bound auxiliary roles', () => {
       'SOURCE_TRANSLATION_PLAN_INVALID'
     );
     const changedTime = structuredClone(plan);
-    changedTime.context.glossary[0].revision = 999;
+    changedTime.context.references[0].revision = 999;
     expect(() => validateTranslationPlan(raw, context(), changedTime)).toThrow(
       'SOURCE_TRANSLATION_PLAN_INVALID'
     );
@@ -411,7 +411,7 @@ describe('M1 source-bound auxiliary roles', () => {
     );
     const before = JSON.stringify(raw);
     const ctx = context();
-    const canonBefore = JSON.stringify(ctx.canon);
+    const canonBefore = JSON.stringify(ctx.references);
     const blocks = splitSource(raw);
     const scenes = sourceScenes(blocks);
     const input = presentationInput(raw, ctx, snapshot(), BUILTIN_ASSETS, scenes);
@@ -507,7 +507,7 @@ describe('M1 source-bound auxiliary roles', () => {
       'SOURCE_DEPENDENCY_MISMATCH'
     );
     expect(JSON.stringify(raw)).toBe(before);
-    expect(JSON.stringify(ctx.canon)).toBe(canonBefore);
+    expect(JSON.stringify(ctx.references)).toBe(canonBefore);
   });
 
   test('P13 authored metadata does not require literal scene cues and display annotations cannot smuggle authoritative fields', async () => {

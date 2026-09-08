@@ -69,7 +69,7 @@ async function prepared() {
   const a = createFixtureChat(store, 'Synthetic archive A');
   const b = createFixtureChat(store, 'Synthetic archive B');
   const lore = store.product.content({
-    kind: 'lore',
+    kind: 'module',
     title: 'Synthetic lore',
     description: 'A scoped fixture',
     text: 'The distant tower has a green dome.',

@@ -26,7 +26,30 @@ export async function navigationAction(page: Page, name: string, botTitle?: stri
     await nav.getByRole('button', { name: '새 채팅', exact: true }).click();
     return;
   }
-  await nav.getByRole('button', { name: name === '서재' ? '봇' : name, exact: true }).click();
+  const libraryTab = ['봇', '페르소나', '모듈'].includes(name);
+  await nav.getByRole('button', { name: libraryTab ? '서재' : name, exact: true }).click();
+  if (libraryTab)
+    await page.getByTestId('library-panel').getByRole('tab', { name, exact: true }).click();
+}
+export async function editLibraryContent(page: Page, title: string) {
+  await page.getByRole('button', { name: `${title} 상세 보기`, exact: true }).click();
+  await page
+    .getByRole('region', { name: '자료 상세', exact: true })
+    .getByRole('button', { name: '편집', exact: true })
+    .first()
+    .click();
+}
+export async function selectContent(page: Page, label: string, title: string) {
+  await page.getByRole('button', { name: label, exact: true }).click();
+  const picker = page.getByRole('dialog', { name: label, exact: true });
+  const all = picker.getByRole('button', { name: '모든 자료', exact: true });
+  if (await all.count()) await all.click();
+  await picker.getByRole('searchbox', { name: `${label} 검색`, exact: true }).fill(title);
+  await picker
+    .locator('[data-content-choice]')
+    .filter({ has: page.locator('strong').filter({ hasText: title }) })
+    .first()
+    .click();
 }
 export async function createPromptChoice(request: APIRequestContext, title: string) {
   const program: PromptProgram = {

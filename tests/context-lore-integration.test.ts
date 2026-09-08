@@ -149,7 +149,7 @@ async function fixture(kind: 'lore-pressure' | 'history-pressure') {
   const lore = (kind === 'lore-pressure' ? ['A', 'B', 'C'] : ['A']).map(
     (label) =>
       app.store.product.content({
-        kind: 'lore',
+        kind: 'module',
         title: `Reference ${label}`,
         description: '',
         text: `LORE_${label}_RAW_BODY_ONLY\n${paragraph.repeat(kind === 'lore-pressure' ? 100 : 2)}`,

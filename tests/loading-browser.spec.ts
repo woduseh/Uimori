@@ -1,3 +1,4 @@
+import { editLibraryContent } from './ui-navigation.js';
 import { postFixtureChat } from './fixtures/chat.js';
 import { test, expect, type APIRequestContext, type Locator, type Page } from '@playwright/test';
 import type { Chat, ChatDetail, ReaderDetail, ReaderRun, Run } from '../core/types.js';
@@ -314,7 +315,7 @@ test('LOADUI03 large library uses summaries then fetches exact displayed revisio
     },
   });
   expect(update.ok()).toBeTruthy();
-  await page.getByRole('button', { name: `${first.title} 자료 편집`, exact: true }).click();
+  await editLibraryContent(page, `${first.title}`);
   await expect(page.getByLabel('자료 본문')).toHaveValue(first.text);
   expect(revisionRequests).toHaveLength(1);
   expect(revisionRequests[0]).toContain(`/revisions/content/${first.id}/1`);

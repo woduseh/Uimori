@@ -96,7 +96,8 @@ export function validateArchivedPackageStart(store: Store, run: Run, snapshot: R
 export function createPackageStart(
   store: Store,
   chatId: string,
-  value: unknown
+  value: unknown,
+  validateGenerated?: (snapshot: RunSnapshot) => void
 ): { run: Run; created: boolean } {
   const command = validatePackageStartCommand(value);
   const content = store.product.get<Content>('content', command.packageId, command.packageRevision);
@@ -159,6 +160,7 @@ export function createPackageStart(
           packageStart: selected,
           executionClock: { iso, unix: Math.floor(Date.parse(iso) / 1000) },
         };
+        if (selected.mode !== 'authored') validateGenerated?.(snapshot);
         if (selected.initialAction) {
           const behavior = content.package!.behavior!;
           const scope: BehaviorScope = {

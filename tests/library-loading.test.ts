@@ -29,7 +29,7 @@ test('large library summary omits bodies and unrelated assets; exact revision ed
     for (let i = 0; i < 110; i++)
       items.push(
         product.content({
-          kind: i < 100 ? 'bot' : 'lore',
+          kind: i < 100 ? 'bot' : 'module',
           title: `Synthetic ${i}`,
           description: 'Local synthetic measurement',
           text: i < 100 ? botText : loreText,

@@ -257,7 +257,7 @@ export function ProfileEditor({
                         });
                       }}
                     >
-                      <option value="">Scripted mock · 모의 생성</option>
+                      <option value="">모델 미지정</option>
                       {retainedModelRefs(role)
                         .filter((ref) => !models.some((item) => sameRef(item, ref)))
                         .map((ref) => (

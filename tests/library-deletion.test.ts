@@ -151,7 +151,27 @@ test('all supported kinds expose DELETE and read-only impact routes with strict 
   };
   try {
     for (const [kind, path] of Object.entries(routes)) {
-      const item = s.product.save(kind, { title: 'Synthetic minimal route fixture' });
+      const item =
+        kind === 'content'
+          ? s.product.content(content('Synthetic route module'))
+          : kind === 'prompt-preset'
+            ? s.product.promptPreset({
+                title: 'Synthetic route prompt',
+                role: 'main',
+                text: 'Write.',
+              })
+            : (() => {
+                const prompt = s.product.promptPreset({
+                  title: 'Combination source',
+                  role: 'main',
+                  text: 'Write.',
+                });
+                return s.product.promptCombination({
+                  title: 'Synthetic route combination',
+                  prompt: { id: prompt.id, revision: prompt.revision },
+                  values: {},
+                });
+              })();
       expect(
         (
           await injectWithFixtureBot(app, {

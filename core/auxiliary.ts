@@ -32,8 +32,7 @@ export type SourceTimeContext = {
   revision: string;
   bot: VersionedText | null;
   persona: VersionedText | null;
-  glossary: VersionedText[];
-  canon: VersionedText[];
+  references: VersionedText[];
   scene: string;
   previousSources: { revision: string; text: string }[];
   instructionRevision: string;
@@ -526,7 +525,7 @@ export function translationInput(
     },
     contract: '',
     referencePolicy:
-      'Optional story.search/read retrieves frozen prior originals; memory.search/read retrieves typed source-time evidence; translation.search/read retrieves prior wording, never new facts. Search names, forms of address and speaker register when useful, then read only needed ranges. Current source and author canon/glossary take precedence over prior translations, beliefs and summaries. Hidden viewpoints remain distinct: reference knowledge does not become a character’s knowledge. Empty search needs no retry; translation remains possible without tools. Total tool result budget is 96000 UTF-8 bytes per job.',
+      'Optional story.search/read retrieves frozen prior originals; memory.search/read retrieves typed source-time evidence; translation.search/read retrieves prior wording, never new facts. Search names, forms of address and speaker register when useful, then read only needed ranges. Current source and source-time references take precedence over prior translations, beliefs and summaries. Hidden viewpoints remain distinct: reference knowledge does not become a character’s knowledge. Empty search needs no retry; translation remains possible without tools. Total tool result budget is 96000 UTF-8 bytes per job.',
     ...(prompt ? { customPrompt: true } : {}),
     blocks: structuredClone(chunk.blocks),
     neighborBlocks: [
@@ -563,15 +562,10 @@ export function compileTranslationPrompt(
   )
     throw new Error('SOURCE_PROMPT_REVISION_MISMATCH');
   const contents = snapshot.profile?.contents ?? [];
-  const content = (kind: string) =>
-    contents
-      .filter((item) => item.kind === kind)
-      .map((item) => item.text)
-      .join('\n\n');
   const description = input.context.bot?.text ?? '';
   const lore = [
     ...contents
-      .filter((item) => ['lore', 'canon'].includes(item.kind) && item.loading === 'pinned')
+      .filter((item) => item.kind === 'module' && item.loading === 'pinned')
       .map((item) => item.text),
   ].join('\n\n');
   const slots: Record<string, string> = {
@@ -583,7 +577,6 @@ export function compileTranslationPrompt(
     lorebook: lore,
     memory: snapshot.story?.memory ? JSON.stringify(snapshot.story.memory) : '',
     state: snapshot.story?.state ? JSON.stringify(snapshot.story.state) : '',
-    glossary: content('glossary'),
     source: JSON.stringify(input.blocks),
     context: JSON.stringify(input.context),
     outputSchema: JSON.stringify(input.outputSchema),

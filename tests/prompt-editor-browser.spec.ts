@@ -110,9 +110,8 @@ test('NUI01 native prompt import, draft preservation, roles, history and saved c
   const dialog = await settings(page, c.id);
   await dialog.getByRole('tab', { name: '프롬프트·창작 프리셋', exact: true }).click();
   const editor = page.getByTestId('prompt-editor');
-  await editor.getByLabel('불러올 프롬프트', { exact: true }).selectOption('new');
+  await editor.getByRole('button', { name: '새 프롬프트 생성', exact: true }).click();
   await editor.getByLabel('프롬프트 이름', { exact: true }).fill('Synthetic native composed');
-  await editor.getByRole('button', { name: '구성 편집', exact: true }).click();
   const composer = page.getByTestId('prompt-composer');
   await composer.getByLabel('프롬프트 구성 JSON 불러오기', { exact: true }).setInputFiles({
     name: 'synthetic-native-pheme.json',
@@ -164,6 +163,7 @@ test('NUI01 native prompt import, draft preservation, roles, history and saved c
     expect.arrayContaining(['합성 권장', '차분한 장면'])
   );
   expect(after.profile!.routes.main).toEqual(before.profile!.routes.main);
+  await composer.getByLabel('전송 미리보기 접기/펼치기', { exact: true }).click();
   await composer.getByLabel('미리보기 현재 요청', { exact: true }).fill('Synthetic next turn.');
   await composer.getByRole('button', { name: '미리보기 갱신', exact: true }).click();
   // This authored program has no reference slots. Its owning package is delivered
@@ -184,14 +184,14 @@ test('NUI01 native prompt import, draft preservation, roles, history and saved c
     'user',
   ]);
   await expect(messages.locator('summary small')).toHaveText([
-    '합성 지침 · prompt',
-    '합성 예시 질문 · prompt',
-    '합성 예시 응답 · prompt',
-    '__host_background_lore__ · prompt',
-    '합성 대화 범위 · history',
-    '합성 대화 범위 · history',
-    'native.host-context · prompt',
-    '합성 대화 범위 · current',
+    '1. 합성 지침 · prompt',
+    '2. 합성 예시 질문 · prompt',
+    '3. 합성 예시 응답 · prompt',
+    '공통 배경 자료 · prompt',
+    '4. 합성 대화 범위 · history',
+    '4. 합성 대화 범위 · history',
+    '추가 실행 문맥 · prompt',
+    '4. 합성 대화 범위 · current',
   ]);
   await expect(messages.nth(3).locator('pre')).toContainText(botBody);
   await expect(messages.nth(4).locator('pre')).toHaveText('Synthetic harbor scene.');
@@ -201,7 +201,6 @@ test('NUI01 native prompt import, draft preservation, roles, history and saved c
   await expect(composer.locator('.pc-message-list pre').first()).toHaveText('SYNTHETIC TONE=calm');
   await fits(page);
   await page.screenshot({ path: info.outputPath('native-composer-desktop.png') });
-  await composer.getByRole('button', { name: '구성 편집', exact: true }).click();
   const firstBlock = composer.locator('.pc-block').first();
   await firstBlock.locator('summary').first().click();
   await expect(firstBlock.getByRole('combobox', { name: '메시지 역할', exact: true })).toHaveValue(

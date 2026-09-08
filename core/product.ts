@@ -28,7 +28,7 @@ export type ModelGeneration = {
   cacheMode?: 'disabled' | 'explicit' | 'automatic';
   cacheTtl?: '5m' | '30m' | '1h';
 };
-export type ContentKind = 'bot' | 'persona' | 'module' | 'lore' | 'canon' | 'skill' | 'glossary';
+export type ContentKind = 'bot' | 'persona' | 'module';
 export type ContentRef = { id: string; revision: number };
 export type ChatFolder = {
   id: string;
@@ -161,6 +161,7 @@ export type Attempt = {
 // Summary lists preserve content references and metadata; their text is a placeholder.
 // Fetch the immutable revision before opening a content editor.
 export type Library = {
+  organization?: import('./library-organization.js').LibraryOrganization;
   contentBodiesOmitted?: boolean;
   assetsOmitted?: boolean;
   promptPresets?: PromptPreset[];

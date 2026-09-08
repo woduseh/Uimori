@@ -96,6 +96,15 @@ export async function createApp(options: AppOptions): Promise<App> {
   const network = networkPolicy(options);
   const app = Fastify({ logger: false, bodyLimit: 4 * 1024 * 1024 }) as unknown as App;
   const store = new Store(options.dbPath);
+  const requireModel = (target: unknown, role: string) => {
+    if (!options.testMode && !target) throw new HttpError(409, `MODEL_REQUIRED:${role}`);
+  };
+  const requireJobModel = (id: string) => {
+    const job = store.job(id);
+    const source = store.sourceAtHash(job.sourceRevision, job.sourceHash);
+    const snapshot = store.product.resolveJobPrompt(store.run(source.runId).snapshot, job.input);
+    requireModel(snapshot.profile?.models[job.kind], job.kind);
+  };
   const credentials = new VertexCredentialStore(options.dbPath);
   const codex = options.codexRuntime ?? new CodexRuntime(options.dbPath, options.codex);
   const executeCodex: NonNullable<ProviderExecutionOptions['executeCodex']> = (
@@ -196,6 +205,7 @@ export async function createApp(options: AppOptions): Promise<App> {
               store.run(source.runId).snapshot,
               queued.input
             );
+            requireModel(snapshot.profile?.models[queued.kind], queued.kind);
             const log = (kind: 'inputs' | 'toolEvents', value: unknown) => {
               const current = store.job(id);
               if (current.status !== 'running') return;
@@ -227,7 +237,9 @@ export async function createApp(options: AppOptions): Promise<App> {
             if (!stopping.signal.aborted) {
               const current = store.job(id);
               const message =
-                error instanceof Error && error.message.startsWith('Injected failure:')
+                error instanceof Error &&
+                (error.message.startsWith('Injected failure:') ||
+                  error.message.startsWith('MODEL_REQUIRED:'))
                   ? error.message
                   : 'Auxiliary job failed';
               if (current.status === 'queued') store.failQueuedJob(id, current.generation, message);
@@ -256,6 +268,7 @@ export async function createApp(options: AppOptions): Promise<App> {
         const run = store.run(id);
         try {
           if (!store.startRun(id)) return;
+          requireModel(run.snapshot.profile?.models.main, 'main');
           publish(run.chatId);
           await controls.wait('run', controller.signal);
           const hooks: MainHooks = {
@@ -404,6 +417,7 @@ export async function createApp(options: AppOptions): Promise<App> {
             const safeError =
               message === 'Model call budget exhausted' ||
               message.startsWith('Injected failure:') ||
+              message.startsWith('MODEL_REQUIRED:') ||
               message.startsWith('CONTEXT_')
                 ? message
                 : controller.signal.aborted
@@ -438,6 +452,7 @@ export async function createApp(options: AppOptions): Promise<App> {
             publish(job.chatId);
             await controls.wait(job.kind, signal);
             controls.fail(job.kind);
+            requireModel(store.story.bundle(id).snapshot.story?.models[job.kind], job.kind);
             const result = await runStoryJob(store.story.bundle(id), {
               signal,
               approvedOrigins,
@@ -487,7 +502,9 @@ export async function createApp(options: AppOptions): Promise<App> {
           } catch (error) {
             if (job) {
               const safe =
-                error instanceof Error && error.message.startsWith('Injected failure:')
+                error instanceof Error &&
+                (error.message.startsWith('Injected failure:') ||
+                  error.message.startsWith('MODEL_REQUIRED:'))
                   ? error.message
                   : signal.aborted
                     ? '보조 작업이 중단됐어요.'
@@ -591,7 +608,9 @@ export async function createApp(options: AppOptions): Promise<App> {
   packageImageRoutes(app, store, { publish, pump: pumpJobs });
   packageFeatureRoutes(app, store);
   app.post<{ Params: { id: string } }>('/api/chats/:id/package-start', async (request) => {
-    const result = createPackageStart(store, request.params.id, request.body);
+    const result = createPackageStart(store, request.params.id, request.body, (snapshot) =>
+      requireModel(snapshot.profile?.models.main, 'main')
+    );
     if (result.created) {
       publish(result.run.chatId);
       if (result.run.status === 'queued') execute(result.run.id);
@@ -601,6 +620,7 @@ export async function createApp(options: AppOptions): Promise<App> {
   });
   app.get('/api/health', async () => ({
     ready: true,
+    testMode: options.testMode === true,
     buildId: options.buildId,
     instanceId,
     dbPath: options.dbPath,
@@ -686,6 +706,7 @@ export async function createApp(options: AppOptions): Promise<App> {
     };
     const result = store.createRun(request.params.id, command, (chat) => {
       const profile = store.product.snapshot(chat.id);
+      requireModel(profile.models.main, 'main');
       return {
         chatId: chat.id,
         parentRevision: chat.headRevision,
@@ -712,7 +733,8 @@ export async function createApp(options: AppOptions): Promise<App> {
     const result = store.candidate(
       request.params.id,
       string(body.idempotencyKey, 'idempotency key', 120),
-      body.title === undefined ? '후보 분기' : string(body.title, 'title', 200)
+      body.title === undefined ? '후보 분기' : string(body.title, 'title', 200),
+      (snapshot) => requireModel(snapshot.profile?.models.main, 'main')
     );
     if (result.created) {
       publish(result.run.chatId);
@@ -729,6 +751,7 @@ export async function createApp(options: AppOptions): Promise<App> {
   app.post<{ Params: { id: string } }>('/api/jobs/:id/retry', async (request) => {
     const body = object(request.body ?? {});
     only(body, ['chunkId']);
+    requireJobModel(request.params.id);
     const job = store.retryJob(
       request.params.id,
       body.chunkId === undefined ? undefined : string(body.chunkId, 'chunk ID', 100)
@@ -746,7 +769,7 @@ export async function createApp(options: AppOptions): Promise<App> {
   app.post<{ Params: { id: string } }>('/api/sources/:id/translation', async (request) => {
     const body = object(request.body ?? {});
     only(body, []);
-    const job = store.requestTranslation(request.params.id);
+    const job = store.requestTranslation(request.params.id, requireJobModel);
     publish(job.chatId);
     pumpJobs();
     return job;
@@ -754,7 +777,7 @@ export async function createApp(options: AppOptions): Promise<App> {
   app.post<{ Params: { id: string } }>('/api/sources/:id/retranslate', async (request) => {
     const body = object(request.body ?? {});
     only(body, []);
-    const job = store.retranslate(request.params.id);
+    const job = store.retranslate(request.params.id, requireJobModel);
     publish(job.chatId);
     pumpJobs();
     return job;

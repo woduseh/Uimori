@@ -291,9 +291,11 @@ export function sourceTimeContext(snapshot: RunSnapshot, kind: JobKind): SourceT
       : `${snapshot.chatId}@settings-${snapshot.settingsRevision}`,
     bot: versioned('bot')[0] ?? null,
     persona: versioned('persona')[0] ?? null,
-    glossary: kind === 'translation' ? versioned('glossary') : [],
-    canon: versioned('canon'),
-    scene: 'Use the supplied source blocks and source-time canon; later revisions are excluded.',
+    references: contents
+      .filter((item) => item.kind === 'module' && item.loading === 'pinned')
+      .map(({ id, revision, text }) => ({ id, revision, text })),
+    scene:
+      'Use the supplied source blocks and source-time references; later revisions are excluded.',
     previousSources: snapshot.history.slice(-2).map((item) => ({ ...item })),
     instructionRevision:
       kind === 'translation'

@@ -31,6 +31,7 @@
     "verify:loading": "node scripts/verify-loading.mjs",
     "verify:turn-activity": "node scripts/verify-turn-activity.mjs",
     "verify:navigation": "node scripts/verify-navigation.mjs",
+    "verify:library": "node scripts/verify-library.mjs",
     "verify:redesign": "node scripts/verify-redesign.mjs",
     "verify:selfhost": "node scripts/verify-self-host.mjs"
   },

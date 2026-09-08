@@ -386,7 +386,7 @@ async function measure(info) {
       if (variant.startsWith('plus')) {
         for (let i = 0; i < 150; i++)
           await api('/content', {
-            kind: i < 100 ? 'bot' : 'lore',
+            kind: i < 100 ? 'bot' : 'module',
             title: `UI14 합성 ${i < 100 ? '보관 봇' : '로어'} ${i}`,
             description: '화면 비용 측정 전용 합성 자료',
             text: 'Synthetic content for browser measurement. '.repeat(30),

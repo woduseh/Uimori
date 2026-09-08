@@ -10,18 +10,19 @@ import {
   LoaderCircle,
   FolderPlus,
   BookOpen,
-  Boxes,
   Clock3,
   Folder,
   Plus,
   Search,
   Settings2,
-  Users,
 } from 'lucide-react';
 import type { Content, Library } from '../core/product.js';
 import type { Chat } from '../core/types.js';
 import type { ChatFolder } from '../core/product.js';
 import { api } from './api.js';
+import { libraryCategory } from '../core/library-organization.js';
+import { ContentAvatar } from './ContentAvatar.js';
+import { ContentPicker } from './ContentPicker.js';
 import './bot-navigation.css';
 
 export type { ChatFolder } from '../core/product.js';
@@ -98,8 +99,9 @@ export function BotNavigation(props: Props) {
   const ownerIds = useMemo(() => new Set(chats.map((chat) => chat.botId)), [chats]);
   const bots = useMemo(
     () =>
-      library?.contents.filter((content) => content.kind === 'bot' || ownerIds.has(content.id)) ??
-      [],
+      library?.contents.filter(
+        (content) => libraryCategory(library, content) === 'bot' || ownerIds.has(content.id)
+      ) ?? [],
     [library, ownerIds]
   );
   const bot = bots.find((content) => content.id === botId);
@@ -109,10 +111,6 @@ export function BotNavigation(props: Props) {
   const visible = scoped.filter((chat) =>
     chat.title.toLocaleLowerCase().includes(query.toLocaleLowerCase())
   );
-  const personas =
-    library?.contents.filter(
-      (content) => content.kind === 'persona' || content.hasPackage || content.package
-    ) ?? [];
   useEffect(() => {
     const version = ++epoch.current;
     setFolders([]);
@@ -406,9 +404,7 @@ export function BotNavigation(props: Props) {
   const menuIndex = menuSiblings.findIndex((chat) => chat.id === menuId);
   const settingsFolder = folders.find((folder) => folder.id === settingsId);
   const navigation: [LibraryDestination, string, typeof BookOpen][] = [
-    ['bot', '봇', BookOpen],
-    ['persona', '페르소나', Users],
-    ['module', '모듈', Boxes],
+    ['bot', '서재', BookOpen],
     ['prompts', '프롬프트', BookOpen],
   ];
   return (
@@ -471,9 +467,7 @@ export function BotNavigation(props: Props) {
                       key={content.id}
                       onClick={() => chooseBot(content.id)}
                     >
-                      <span className="bot-choice-avatar" aria-hidden="true">
-                        {Array.from(content.title)[0] || '·'}
-                      </span>
+                      <ContentAvatar content={content} className="bot-choice-avatar" />
                       <span>
                         <strong>{content.title}</strong>
                         <small>
@@ -499,6 +493,7 @@ export function BotNavigation(props: Props) {
               <ArrowLeft size={16} />봇 목록
             </button>
             <div className="bot-owner-heading">
+              <ContentAvatar content={bot} />
               <h2>{bot?.title ?? '봇'}</h2>
               <small>채팅 {scoped.length}개</small>
             </div>
@@ -593,7 +588,7 @@ export function BotNavigation(props: Props) {
           <FolderSettings
             key={settingsFolder.id}
             folder={settingsFolder}
-            personas={personas}
+            library={library}
             busy={busy}
             onSave={(value) =>
               perform(() =>
@@ -691,13 +686,13 @@ export function BotNavigation(props: Props) {
 
 function FolderSettings({
   folder,
-  personas,
+  library,
   busy,
   onSave,
   onRemove,
 }: {
   folder: ChatFolder;
-  personas: Content[];
+  library: Library | null;
   busy: boolean;
   onSave: (value: {
     title: string;
@@ -709,8 +704,24 @@ function FolderSettings({
   const [persona, setPersona] = useState(
     folder.defaultPersona ? reference(folder.defaultPersona) : ''
   );
+  const [selectedContent, setSelectedContent] = useState<Content | null>(null);
   const personaId = folder.defaultPersona?.id,
     personaRevision = folder.defaultPersona?.revision;
+  useEffect(() => {
+    let current = true;
+    setSelectedContent(null);
+    if (personaId !== undefined && personaRevision !== undefined)
+      void api<Content>(`/revisions/content/${encodeURIComponent(personaId)}/${personaRevision}`)
+        .then((content) => {
+          if (current) setSelectedContent(content);
+        })
+        .catch(() => {
+          /* The picker retains the missing pinned reference until explicitly replaced. */
+        });
+    return () => {
+      current = false;
+    };
+  }, [personaId, personaRevision]);
   useEffect(() => {
     setTitle(folder.title);
     setPersona(personaId === undefined ? '' : `${personaId}@${personaRevision}`);
@@ -720,7 +731,7 @@ function FolderSettings({
       <form
         onSubmit={(event) => {
           event.preventDefault();
-          const selected = personas.find((content) => reference(content) === persona);
+          const selected = library?.contents.find((content) => reference(content) === persona);
           void onSave({
             title,
             defaultPersona: selected
@@ -741,24 +752,19 @@ function FolderSettings({
             onChange={(event) => setTitle(event.target.value)}
           />
         </label>
-        <label>
-          새 채팅 기본 페르소나
-          <select
-            aria-label={`${folder.title} 기본 페르소나`}
+        {library && (
+          <ContentPicker
+            library={library}
+            role="persona"
+            label={`${folder.title} 기본 페르소나`}
             value={persona}
-            onChange={(event) => setPersona(event.target.value)}
-          >
-            <option value="">지정 안 함</option>
-            {persona && !personas.some((content) => reference(content) === persona) && (
-              <option value={persona}>보관된 페르소나</option>
-            )}
-            {personas.map((content) => (
-              <option key={reference(content)} value={reference(content)}>
-                {content.title}
-              </option>
-            ))}
-          </select>
-        </label>
+            onChange={setPersona}
+            allowNone
+            noneLabel="지정 안 함"
+            selectedContent={selectedContent}
+            disabled={busy}
+          />
+        )}
         <small>앞으로 이 폴더에서 시작하는 채팅에 적용돼요.</small>
         <button className="secondary" disabled={busy || !title.trim()}>
           설정 저장

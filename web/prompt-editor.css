@@ -42,7 +42,8 @@
   overflow-wrap: anywhere;
 }
 .prompt-editor-tools,
-.prompt-save-actions {
+.prompt-save-actions,
+.prompt-save-buttons {
   display: flex;
   gap: 9px;
   flex-wrap: wrap;
@@ -50,7 +51,7 @@
   min-width: 0;
 }
 .prompt-editor-tools > button,
-.prompt-save-actions > button {
+.prompt-save-buttons > button {
   min-height: 44px;
   font-size: 12px;
 }
@@ -132,11 +133,11 @@
   .prompt-editor-expanded textarea {
     height: 72dvh;
   }
-  .prompt-save-actions {
+  .prompt-save-buttons {
     display: grid;
     grid-template-columns: minmax(0, 1fr);
   }
-  .prompt-save-actions > button {
+  .prompt-save-buttons > button {
     width: 100%;
     white-space: normal;
   }
@@ -146,5 +147,51 @@
   }
   .prompt-editor-tools {
     align-items: stretch;
+  }
+}
+
+.prompt-save-actions {
+  align-items: flex-start;
+  gap: 12px 24px;
+}
+.prompt-save-buttons {
+  flex: 1 1 300px;
+}
+.prompt-delete-action {
+  margin-inline-start: auto;
+}
+.prompt-delete-action:empty {
+  display: none;
+}
+.prompt-delete-action > .delete-control > button {
+  min-height: 44px;
+  font-size: 12px;
+}
+.prompt-saved-management {
+  margin-top: 16px;
+  border-top: 1px solid var(--line);
+}
+.prompt-saved-management > summary {
+  padding: 14px 0;
+  font-size: 13px;
+  color: var(--muted);
+  cursor: pointer;
+}
+.prompt-saved-management > summary:hover {
+  color: var(--text);
+}
+.prompt-saved-management > .deletion-list {
+  padding-bottom: 8px;
+}
+@media (max-width: 600px) {
+  .prompt-save-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .prompt-save-buttons {
+    flex: auto;
+  }
+  .prompt-delete-action {
+    align-self: flex-end;
   }
 }

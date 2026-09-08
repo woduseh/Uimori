@@ -8,6 +8,7 @@ export type Settings = {
 export type Chat = {
   id: string;
   title: string;
+  lastActivityAt?: string;
   headRevision: string | null;
   settingsRevision: number;
   settings: Settings;

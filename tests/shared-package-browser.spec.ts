@@ -11,7 +11,7 @@ async function libraryFor(page: Page, role: '페르소나' | '모듈') {
   await page.goto('/');
   await page
     .getByRole('navigation', { name: '자료 탐색', exact: true })
-    .getByRole('button', { name: '봇', exact: true })
+    .getByRole('button', { name: '서재', exact: true })
     .click();
   const library = page.getByTestId('library-panel');
   await library.getByRole('tab', { name: role, exact: true }).click();
@@ -171,7 +171,11 @@ test('shared package image editing pages large lists and preserves old revisions
   expect(response.ok()).toBe(true);
   const first: Content = await response.json();
   const library = await libraryFor(page, '모듈');
-  await library.getByRole('button', { name: `${title} 자료 편집`, exact: true }).click();
+  await library.getByRole('button', { name: `${title} 상세 보기`, exact: true }).click();
+  await library
+    .locator('.library-detail-actions > button')
+    .filter({ hasText: /^편집$/ })
+    .click();
   await library
     .getByRole('group', { name: '패키지 편집 분류', exact: true })
     .getByRole('button', { name: '이미지', exact: true })

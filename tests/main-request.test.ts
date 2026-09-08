@@ -534,11 +534,11 @@ describe('Exact native main preview and terminal submission (synthetic loopback 
       {
         id: 'canon',
         revision: 1,
-        kind: 'canon',
+        kind: 'module',
         title: 'Canon',
         description: '',
         text: 'SYNTHETIC_CANON_ALWAYS_PINNED',
-        loading: 'discoverable',
+        loading: 'pinned',
         relatedIds: [],
       },
     ];

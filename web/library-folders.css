@@ -1,0 +1,206 @@
+.library-workspace {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 24px;
+  align-items: start;
+  margin-top: 22px;
+}
+.library-workspace-content {
+  min-width: 0;
+}
+.library-folders {
+  width: 190px;
+  min-width: 0;
+  position: sticky;
+  top: 18px;
+}
+.library-folders.is-collapsed {
+  width: 48px;
+}
+.library-folders-heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+.library-folders-heading strong {
+  font-size: 13px;
+  flex: 1;
+}
+.library-folders-heading > button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px;
+  font-size: 12px;
+}
+.library-folders.is-collapsed .library-folders-heading span {
+  display: none;
+}
+.library-folder-list {
+  display: grid;
+  gap: 4px;
+}
+.library-folders.is-collapsed .library-folder-list {
+  display: none;
+}
+.library-folder-review {
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  padding: 12px;
+  font-size: 13px;
+}
+.library-folder-row {
+  display: flex;
+  align-items: center;
+  position: relative;
+  min-width: 0;
+}
+.library-folder-choice {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  min-width: 0;
+  gap: 8px;
+  text-align: left;
+  font-size: 13px;
+  padding: 9px;
+  border-color: transparent;
+  background: transparent;
+}
+.library-folder-choice > span {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.library-folder-choice > svg {
+  flex-shrink: 0;
+}
+.library-folder-choice[aria-pressed="true"] {
+  background: var(--accent-soft);
+  border-color: var(--border);
+}
+.library-folder-choice small {
+  font-size: 11px;
+  color: var(--muted);
+}
+.library-folder-mobile {
+  display: none;
+}
+.library-item-menu {
+  position: relative;
+  flex-shrink: 0;
+}
+.library-item-menu > summary {
+  list-style: none;
+  display: grid;
+  place-items: center;
+  width: 36px;
+  min-height: 44px;
+  cursor: pointer;
+  border-radius: 8px;
+  font-size: 20px;
+}
+.library-item-menu > summary::-webkit-details-marker {
+  display: none;
+}
+.library-item-menu > summary:hover,
+.library-item-menu[open] > summary {
+  background: var(--accent-soft);
+}
+.library-item-menu > div {
+  position: absolute;
+  right: 0;
+  top: 100%;
+  min-width: 158px;
+  z-index: 4;
+  display: grid;
+  gap: 4px;
+  padding: 6px;
+  background: var(--surface-raised, #232923);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: 0 12px 28px #0005;
+}
+.library-item-menu > div > button,
+.library-item-menu .delete-button {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  text-align: left;
+  padding: 9px 12px;
+  border: 0;
+  font-size: 13px;
+}
+.library-folder-form {
+  display: grid;
+  gap: 18px;
+}
+.library-folder-form input,
+.library-folder-form select {
+  width: 100%;
+}
+.library-bulk-toolbar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--accent-soft);
+  margin-bottom: 16px;
+}
+.library-bulk-toolbar > span {
+  margin-right: auto;
+  font-size: 13px;
+}
+@media (max-width: 760px) {
+  .library-workspace {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 14px;
+  }
+  .library-folders,
+  .library-folders.is-collapsed {
+    width: 100%;
+    position: static;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    align-items: center;
+  }
+  .library-folders-heading {
+    margin: 0;
+  }
+  .library-folders-heading > strong,
+  .library-folders-heading .library-folder-collapse {
+    display: none;
+  }
+  .library-folders.is-collapsed .library-folders-heading span {
+    display: inline;
+  }
+  .library-folder-mobile {
+    display: block;
+    flex: 1;
+    min-width: 120px;
+  }
+  .library-folder-mobile select {
+    width: 100%;
+  }
+  .library-folder-list,
+  .library-folders.is-collapsed .library-folder-list {
+    flex-basis: 100%;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+  }
+  .library-folder-row {
+    max-width: 100%;
+  }
+  .library-folder-row:not(:has([aria-pressed="true"])) {
+    display: none;
+  }
+}

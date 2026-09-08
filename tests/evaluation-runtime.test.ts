@@ -111,7 +111,7 @@ async function fixture(
     'PATCH'
   );
   const lore = await api<Content>(app, '/api/content', {
-    kind: 'lore',
+    kind: 'module',
     title: 'Copper observatory',
     description: 'Local synthetic reference',
     text: 'The copper observatory stands north of the harbor.',

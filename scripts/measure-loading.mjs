@@ -69,7 +69,7 @@ try {
   );
   const lore = Array.from({ length: 4 }, (_, index) =>
     store.product.content({
-      kind: 'lore',
+      kind: 'module',
       title: `Synthetic lore ${index + 1}`,
       description: 'One part of 400000-character synthetic lore',
       text: prose(100000),

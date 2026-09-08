@@ -126,12 +126,20 @@ export function editSource(store: Store, id: string, value: unknown): Source {
     return store.source(id);
   });
 }
-export function requestTranslation(store: Store, id: string, force = false): Job {
+export function requestTranslation(
+  store: Store,
+  id: string,
+  force = false,
+  validate?: (id: string) => void
+): Job {
   return store.transaction(() => {
     const source = store.source(id);
     const latest = latestTranslation(store, id);
     if (latest && latest.sourceHash === source.hash) {
-      if (['queued', 'running'].includes(latest.status)) return latest;
+      if (['queued', 'running'].includes(latest.status)) {
+        validate?.(latest.id);
+        return latest;
+      }
       if (!force && latest.status === 'completed') {
         try {
           validateTranslationArtifact(store, latest, source);
@@ -141,6 +149,7 @@ export function requestTranslation(store: Store, id: string, force = false): Job
         }
       }
       if (!force && ['failed', 'partial', 'interrupted', 'cancelled'].includes(latest.status)) {
+        validate?.(latest.id);
         store.db
           .prepare(
             "UPDATE jobs SET status='queued',owner=NULL,error=NULL,retry_chunk=NULL,updated_at=? WHERE id=?"
@@ -178,6 +187,7 @@ export function requestTranslation(store: Store, id: string, force = false): Job
         )
         .run(jobId, source.chatId, id, source.hash, JSON.stringify(input), time, time);
     store.event(source.chatId, 'job.queued', jobId);
+    validate?.(jobId);
     return store.job(jobId);
   });
 }

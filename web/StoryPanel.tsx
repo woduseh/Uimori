@@ -104,7 +104,7 @@ function ModelChoice({
           onChange(model ? { id: model.id } : null);
         }}
       >
-        <option value="">모의 처리 · 실제 모델 호출 없음</option>
+        <option value="">모델 미지정</option>
         {retained
           .filter((ref) => !models.some((model) => refKey(model) === refKey(ref)))
           .map((ref) => (

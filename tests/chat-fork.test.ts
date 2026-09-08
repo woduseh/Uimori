@@ -187,7 +187,7 @@ async function rich(app: App) {
     text: '  TRANSLATION exact\r\n',
   }) as PromptPreset;
   const lore = store.product.content({
-    kind: 'lore',
+    kind: 'module',
     title: 'Versioned lore',
     description: 'Synthetic',
     text: 'The lantern stands beside the sea.',
@@ -652,7 +652,8 @@ describe('independent stored-story fork without generation', () => {
       isolated.tables.jobs.filter((row) => row.chat_id === copy.id).map((row) => row.id)
     );
     for (const [name, rows] of Object.entries(isolated.tables)) {
-      if (name === 'versions' || name === 'package_behavior_entropy') continue;
+      if (name === 'versions' || name === 'package_behavior_entropy' || name.startsWith('library_'))
+        continue;
       isolated.tables[name] = rows.filter((row) =>
         Object.hasOwn(row, 'chat_id')
           ? row.chat_id === copy.id

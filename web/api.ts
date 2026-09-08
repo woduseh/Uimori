@@ -8,6 +8,7 @@ export class ApiError extends Error {
   }
 }
 export const sessionRequiredEvent = 'uimori-session-required';
+export const libraryChangedKey = 'uimori:library-change';
 
 export async function api<T>(path: string, body?: unknown, method = 'POST'): Promise<T> {
   const response = await fetch(
@@ -24,8 +25,27 @@ export async function api<T>(path: string, body?: unknown, method = 'POST'): Pro
     )
       window.dispatchEvent(new Event(sessionRequiredEvent));
     if (response.status === 409) {
+      const payload = (await response.json().catch(() => null)) as { error?: unknown } | null;
+      const requiredRole =
+        typeof payload?.error === 'string' &&
+        /^MODEL_REQUIRED:(main|translation|status|image|state|memory)$/.test(payload.error)
+          ? payload.error.split(':')[1]
+          : null;
+      if (requiredRole) {
+        const roleNames: Record<string, string> = {
+          main: '본문',
+          translation: '번역',
+          status: '표시 상태',
+          image: '이미지 선택',
+          state: '상태',
+          memory: '기억',
+        };
+        throw new ApiError(
+          `채팅 설정에서 ${roleNames[requiredRole]} 모델을 선택해 주세요.`,
+          response.status
+        );
+      }
       if (method === 'DELETE') {
-        const payload = (await response.json().catch(() => null)) as { error?: unknown } | null;
         if (typeof payload?.error === 'string' && payload.error.length <= 4000)
           throw new ApiError(payload.error, response.status);
       }
@@ -38,7 +58,20 @@ export async function api<T>(path: string, body?: unknown, method = 'POST'): Pro
       response.status >= 500 ? '서버 작업을 완료하지 못했어요.' : '요청을 처리할 수 없어요.';
     throw new ApiError(`${message} (${response.status})`, response.status);
   }
-  return response.json() as Promise<T>;
+  const result = (await response.json()) as T;
+  if (
+    body !== undefined &&
+    /^(?:\/library\/(?:folders|organization)|\/content(?:\/|$)|\/prompt-presets?(?:\/|$)|\/prompt-combinations?(?:\/|$))/.test(
+      path
+    )
+  ) {
+    try {
+      localStorage.setItem(libraryChangedKey, `${Date.now()}:${Math.random()}`);
+    } catch {
+      /* A successful save does not depend on browser storage. */
+    }
+  }
+  return result;
 }
 
 export const labels: Record<string, string> = {

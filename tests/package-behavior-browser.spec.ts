@@ -1,3 +1,4 @@
+import { editLibraryContent } from './ui-navigation.js';
 import { expect, test, type APIRequestContext } from '@playwright/test';
 import type { ContentPackage } from '../core/content-package.js';
 import type { PackageBehavior } from '../core/package-behavior.js';
@@ -172,7 +173,7 @@ test('BUI02 behavior editor validates without discarding an invalid draft or oth
   await page.goto('/');
   await page
     .getByRole('navigation', { name: '자료 탐색', exact: true })
-    .getByRole('button', { name: '봇', exact: true })
+    .getByRole('button', { name: '서재', exact: true })
     .click();
   const library = page.getByTestId('library-panel');
   await library.getByRole('button', { name: '새로 만들기', exact: true }).first().click();
@@ -223,7 +224,7 @@ test('BUI03 invocation methods persist, validate automatic input drafts and show
   if (await menu.isVisible()) await menu.click();
   await page
     .getByRole('navigation', { name: '자료 탐색', exact: true })
-    .getByRole('button', { name: '봇', exact: true })
+    .getByRole('button', { name: '서재', exact: true })
     .click();
   const library = page.getByTestId('library-panel');
   await library.getByRole('button', { name: '새로 만들기', exact: true }).first().click();
@@ -269,7 +270,7 @@ test('BUI03 invocation methods persist, validate automatic input drafts and show
     automaticInput: { value: 4 },
   });
   await library.getByRole('button', { name: '← 서재 목록', exact: true }).click();
-  await library.getByRole('button', { name: `${title} 자료 편집`, exact: true }).click();
+  await editLibraryContent(page, `${title}`);
   await fields.getByRole('button', { name: '상태와 행동', exact: true }).click();
   await expect(methods.getByRole('checkbox', { name: /^생성 전 자동 실행/ })).toBeChecked();
   await expect(automatic).toHaveValue('{\n  "value": 4\n}');
