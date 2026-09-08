@@ -14,15 +14,24 @@ export async function visibleNavigation(page: Page) {
 export async function navigationAction(page: Page, name: string, botTitle?: string) {
   const dialog = page.getByRole('dialog').filter({ visible: true });
   if (await dialog.count()) await page.keyboard.press('Escape');
+  if (name === '작업 현황') {
+    // The sidebar shows tasks only while something runs; the chat ⋯ menu always has the panel.
+    await openChatMenu(page);
+    await page.getByRole('button', { name: '작업 현황', exact: true }).click();
+    return;
+  }
   const nav = await visibleNavigation(page);
   if (name === '새 채팅' || name === '새 이야기') {
-    const back = nav.getByRole('button', { name: '봇 목록', exact: true });
-    if (await back.count()) await back.click();
-    const choice = botTitle
-      ? nav.locator('.bot-choice').filter({ has: page.locator('strong', { hasText: botTitle }) })
-      : nav.locator('.bot-choice').first();
-    await expect(choice).toBeVisible();
-    await choice.click();
+    // The bot switch row opens a popover; skip it when the wanted bot is already current.
+    const current = nav.locator('.bot-switch-button');
+    if (!botTitle || !(await current.filter({ hasText: botTitle }).count())) {
+      await current.click();
+      const choice = botTitle
+        ? nav.locator('.bot-choice').filter({ has: page.locator('strong', { hasText: botTitle }) })
+        : nav.locator('.bot-choice').first();
+      await expect(choice).toBeVisible();
+      await choice.click();
+    }
     await nav.getByRole('button', { name: '새 채팅', exact: true }).click();
     return;
   }

@@ -33,10 +33,11 @@ test('ORG01 mobile navigation groups by owner and preserves chats when a folder 
   await page.goto(`/?chat=${first.id}`);
   await page.getByRole('button', { name: '탐색 메뉴', exact: true }).click();
   const nav = page.getByTestId('bot-navigation').filter({ visible: true });
-  await expect(nav.getByRole('heading', { name: a.title, exact: true })).toBeVisible();
+  await expect(nav.locator('.bot-switch-button')).toContainText(a.title);
   await expect(nav.getByRole('button', { name: first.title, exact: true })).toBeVisible();
   await expect(nav.getByRole('button', { name: `B 채팅 ${suffix}`, exact: true })).toHaveCount(0);
-  await nav.getByRole('button', { name: '폴더 만들기', exact: true }).click();
+  await nav.getByRole('button', { name: '봇 목록', exact: true }).click();
+  await nav.getByRole('button', { name: '새 폴더', exact: true }).click();
   await page.getByLabel('새 폴더 이름', { exact: true }).fill(`폴더 ${suffix}`);
   await page.getByRole('button', { name: '폴더 추가', exact: true }).click();
   await expect(nav.getByRole('button', { name: `폴더 ${suffix} 폴더`, exact: true })).toBeVisible();

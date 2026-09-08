@@ -14,14 +14,80 @@
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 2px;
-  padding-bottom: 12px;
-  border-bottom: 1px solid var(--line);
 }
 .bot-library-nav .nav-button {
   font-size: 13px;
   padding: 8px;
   gap: 7px;
   min-width: 0;
+}
+.nav-progress svg {
+  animation: bot-working 1.2s linear infinite;
+}
+/* Bot switch row: avatar, name and a caret; the popover below lists bots by recent activity. */
+.bot-switch {
+  position: relative;
+}
+.bot-switch-button {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 44px;
+  padding: 4px 8px;
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+  border-radius: 8px;
+}
+.bot-switch-button:hover,
+.bot-switch-button[aria-expanded="true"] {
+  background: var(--hover);
+}
+.bot-switch-button strong {
+  flex: 1;
+  min-width: 0;
+  font-size: 13px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.bot-switch-button svg {
+  flex-shrink: 0;
+  color: var(--muted);
+}
+.bot-switch-panel {
+  position: absolute;
+  z-index: 12;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--panel);
+  box-shadow: 0 8px 24px var(--shade);
+  max-height: min(60vh, 520px);
+  overflow-y: auto;
+}
+.bot-switch-panel .story-search {
+  margin: 0 0 6px;
+}
+.bot-switch-tools {
+  display: grid;
+  gap: 4px;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--line);
+}
+.bot-switch-tools button {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 8px;
+  width: 100%;
+  min-height: 40px;
+  font-size: 12px;
 }
 .bot-navigation-scroll {
   flex: 1;
@@ -35,26 +101,11 @@
   padding-top: 8px;
   border-top: 1px solid var(--line);
 }
-.bot-list-heading,
-.bot-folder-heading,
-.bot-owner-heading {
+.bot-folder-heading {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 6px;
-}
-.bot-list-heading h2,
-.bot-owner-heading h2 {
-  font-size: 16px;
-  margin: 0;
-  overflow-wrap: anywhere;
-}
-.bot-owner-heading {
-  align-items: baseline;
-  margin: 12px 0;
-}
-.bot-owner-heading small {
-  white-space: nowrap;
 }
 .bot-choice {
   display: flex;
@@ -90,16 +141,8 @@
   font-size: 13px;
   color: var(--muted);
 }
-.bot-back {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  font-size: 12px;
-  padding: 7px 10px;
-  min-height: 40px;
-}
 .bot-navigation .story-search {
-  margin: 10px 0;
+  margin: 0;
 }
 .bot-navigation .story-search input {
   width: 100%;
@@ -187,12 +230,20 @@
   gap: 1px;
   padding-left: 18px;
 }
+/* Unfiled chats sit flat at the top without a heading or indentation. */
+.bot-folder-unfiled > .bot-chat-list {
+  padding-left: 0;
+}
+.bot-folder-unfiled.drop-folder {
+  outline: 1px solid var(--accent);
+  border-radius: 6px;
+}
 .bot-chat-item {
   position: relative;
   display: flex;
   align-items: center;
   min-width: 0;
-  height: 32px;
+  height: 34px;
   padding: 0 3px 0 0;
   border-radius: 6px;
   gap: 2px;
@@ -208,10 +259,10 @@
   flex: 1;
   width: auto;
   min-width: 0;
-  height: 32px;
-  min-height: 32px;
+  height: 34px;
+  min-height: 34px;
   margin: 0;
-  padding: 6px 5px;
+  padding: 6px 8px;
   background: transparent;
   border: 0;
   text-align: left;
@@ -272,20 +323,6 @@
   font-size: 11px;
   color: var(--faint);
   margin: 7px 5px;
-}
-.bot-folders-toolbar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  font-size: 11px;
-  color: var(--muted);
-  margin: 12px 4px 5px;
-}
-.bot-folders-toolbar .icon-button {
-  width: 28px;
-  min-height: 28px;
-  height: 28px;
-  padding: 4px;
 }
 .bot-organize-dialog.app-dialog {
   width: min(420px, calc(100vw - 24px));
@@ -354,6 +391,7 @@
 .bot-navigation-empty {
   padding: 16px 4px;
   font-size: 12px;
+  color: var(--muted);
 }
 .bot-navigation .error {
   font-size: 12px;
