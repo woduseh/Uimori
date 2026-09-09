@@ -182,3 +182,45 @@
   left: 0;
   right: auto;
 }
+
+.prompt-current-links {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.prompt-current-options {
+  display: grid;
+  gap: 16px;
+  padding-block: 16px;
+}
+.prompt-combination-toolbar {
+  display: flex;
+  align-items: end;
+  gap: 8px;
+  min-width: 0;
+}
+.prompt-combination-toolbar > label {
+  display: grid;
+  gap: 6px;
+  flex: 1;
+  min-width: 0;
+}
+.prompt-combination-toolbar > span {
+  flex: 1;
+}
+.prompt-current-settings .prompt-option-field textarea {
+  min-height: 72px;
+  height: auto;
+}
+
+.prompt-current-links > button {
+  background: transparent;
+  color: var(--muted);
+  border: 0;
+  font-weight: 500;
+  padding-inline: 8px;
+}
+.prompt-current-links > button:hover:not(:disabled) {
+  color: var(--text);
+}

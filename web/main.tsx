@@ -176,6 +176,7 @@ function App() {
       event.currentTarget.closest('.chat-menu')?.querySelector<HTMLElement>('summary') ?? null;
   };
   const [settingsTab, setSettingsTab] = useState('general');
+  const [promptToEdit, setPromptToEdit] = useState<string | null>(null);
   const [optionsOpen, setOptionsOpen] = useState(false),
     [optionsDirty, setOptionsDirty] = useState(false),
     [optionsBusy, setOptionsBusy] = useState(false);
@@ -660,6 +661,12 @@ function App() {
             {libraryTab === 'prompts' ? (
               s.library ? (
                 <PromptLibrary
+                  initialPresetId={promptToEdit}
+                  onInitialPresetHandled={() => setPromptToEdit(null)}
+                  onOpenCurrentPrompts={() => {
+                    setSettingsTab('prompts');
+                    setPanel('settings');
+                  }}
                   headerLeading={navigationControls}
                   library={s.library}
                   reload={s.loadLibrary}
@@ -1434,6 +1441,18 @@ function App() {
       </Dialog>
       {panel === 'settings' && (
         <AppSettingsPanel
+          onEditPrompt={(presetId) => {
+            const go = () => {
+              setPromptToEdit(presetId ?? null);
+              setLibraryTab('prompts');
+              s.showLibrary();
+              setPanel('');
+            };
+            if (libraryDirty && s.destination === 'library') {
+              setPanel('');
+              setPendingNavigation(() => go);
+            } else go();
+          }}
           onClose={() => setPanel('')}
           initialTab={settingsTab}
           state={s}

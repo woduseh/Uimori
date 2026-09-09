@@ -1,6 +1,6 @@
 import { SelectionCheckbox } from './BooleanControls.js';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { AddIcon } from './ui-icons.js';
+import { AddIcon, EditIcon, MoveIcon, CopyIcon, SettingsIcon } from './ui-icons.js';
 import type { Library, PromptPreset, PromptRole } from '../core/product.js';
 import type { LibraryItemKey, LibraryOrganization } from '../core/library-organization.js';
 import { libraryFolderOf } from '../core/library-organization.js';
@@ -9,7 +9,6 @@ import { Dialog } from './Dialog.js';
 import { DeleteButton } from './DeleteButton.js';
 import { PromptEditor } from './PromptEditor.js';
 import { discardActiveEditor } from './editor-workspace-context.js';
-import { PromptWorkspaceEditor } from './PromptWorkspaceEditor.js';
 import { SlidersHorizontal } from 'lucide-react';
 import {
   LibraryFolders,
@@ -26,12 +25,18 @@ export function PromptLibrary({
   onError,
   onDirtyChange,
   headerLeading,
+  onOpenCurrentPrompts,
+  initialPresetId,
+  onInitialPresetHandled,
 }: {
   library: Library | null;
   reload: () => Promise<void>;
   onError: (message: string) => void;
   onDirtyChange?: (dirty: boolean) => void;
   headerLeading?: ReactNode;
+  onOpenCurrentPrompts: () => void;
+  initialPresetId?: string | null;
+  onInitialPresetHandled?: () => void;
 }) {
   const [folder, setFolder] = useState<FolderFilter>('all');
   const [query, setQuery] = useState('');
@@ -41,6 +46,20 @@ export function PromptLibrary({
     null
   );
   const pendingEditing = useRef<typeof editing>(null);
+  const handledPreset = useRef<string | null>(null);
+  useEffect(() => {
+    if (!initialPresetId) {
+      handledPreset.current = null;
+      return;
+    }
+    if (!library || handledPreset.current === initialPresetId) return;
+    handledPreset.current = initialPresetId;
+    const preset = library.promptPresets?.find((item) => item.id === initialPresetId);
+    if (preset) setEditing({ preset, role: preset.role });
+    else onError('선택한 프롬프트를 찾을 수 없어요.');
+    onInitialPresetHandled?.();
+  }, [initialPresetId, library, onError, onInitialPresetHandled]);
+
   const [dirty, setDirty] = useState(false);
   const [discard, setDiscard] = useState(false);
   const [moving, setMoving] = useState<LibraryItemKey[] | null>(null);
@@ -150,13 +169,11 @@ export function PromptLibrary({
     >
       <header className="library-heading">
         {headerLeading}
-        <div>
-          <h1>프롬프트</h1>
-        </div>
-        {!editing && (
+        <h1>프롬프트</h1>
+        {!editing && (!library || filtered.length > 0 || !!query) && (
           <button
             type="button"
-            className="secondary"
+            className="library-create"
             disabled={!library}
             onClick={() =>
               changeEditing({ preset: null, role: role === 'translation' ? role : 'main' })
@@ -167,10 +184,14 @@ export function PromptLibrary({
         )}
       </header>
       {library && !editing && (
-        <details>
-          <summary>현재 작문·번역 프롬프트 설정</summary>
-          <PromptWorkspaceEditor library={library} reload={reload} onDirtyChange={setDirty} />
-        </details>
+        <button
+          type="button"
+          className="secondary prompt-settings-link"
+          onClick={onOpenCurrentPrompts}
+        >
+          <SettingsIcon size={18} aria-hidden="true" />
+          현재 프롬프트 설정
+        </button>
       )}
       <Dialog
         open={discard}
@@ -379,7 +400,7 @@ export function PromptLibrary({
                       className="secondary"
                       onClick={() => changeEditing({ preset: item, role: item.role })}
                     >
-                      편집
+                      <EditIcon size={18} aria-hidden="true" /> 편집
                     </button>
                     <button
                       type="button"
@@ -387,7 +408,7 @@ export function PromptLibrary({
                       disabled={organizer.busy}
                       onClick={() => setMoving([{ kind: 'prompt-preset', id: item.id }])}
                     >
-                      폴더 이동
+                      <MoveIcon size={18} aria-hidden="true" /> 폴더 이동
                     </button>
                     <button
                       type="button"
@@ -395,7 +416,7 @@ export function PromptLibrary({
                       disabled={busy}
                       onClick={() => void clone(item)}
                     >
-                      복제
+                      <CopyIcon size={18} aria-hidden="true" /> 복제
                     </button>
                     <DeleteButton
                       path={`/prompt-presets/${encodeURIComponent(item.id)}`}
@@ -419,7 +440,7 @@ export function PromptLibrary({
                 )}
                 <button
                   type="button"
-                  className="secondary"
+                  className="library-create"
                   onClick={() =>
                     changeEditing({ preset: null, role: role === 'translation' ? role : 'main' })
                   }

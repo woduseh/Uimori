@@ -1,5 +1,6 @@
 import { Switch, SelectionCheckbox } from './BooleanControls.js';
 import { useId, useState } from 'react';
+import { ChevronRight } from 'lucide-react';
 import {
   createAgentCollaboration,
   createAgentDefinition,
@@ -68,9 +69,18 @@ type Props = {
   controls: PromptControl[];
   models: ModelPreset[];
   onChange: (value: AgentCollaboration) => void;
+  expanded: boolean;
+  onExpandedChange: (expanded: boolean) => void;
 };
 
-export function AgentCollaborationEditor({ value, controls, models, onChange }: Props) {
+export function AgentCollaborationEditor({
+  value,
+  controls,
+  models,
+  onChange,
+  expanded,
+  onExpandedChange,
+}: Props) {
   const id = useId();
   const collaboration = value ?? createAgentCollaboration();
   const [removing, setRemoving] = useState<{ id: string; title: string } | null>(null);
@@ -95,27 +105,35 @@ export function AgentCollaborationEditor({ value, controls, models, onChange }: 
 
   return (
     <section className="agent-collaboration" aria-labelledby={`${id}-heading`}>
-      <details className="pc-composer-fold" open>
-        <summary>
+      <div className="ac-disclosure-heading">
+        <button
+          type="button"
+          className="secondary ac-disclosure"
+          aria-expanded={expanded}
+          aria-controls={`${id}-content`}
+          onClick={() => onExpandedChange(!expanded)}
+        >
+          <ChevronRight size={16} aria-hidden="true" />
           <strong id={`${id}-heading`}>에이전트 협업</strong>
-          <small>{collaboration.enabled ? '사용 중' : '사용 안 함'}</small>
-        </summary>
+        </button>
+        <label className="ac-check ac-enable">
+          <Switch
+            checked={collaboration.enabled}
+            onChange={(event) => update({ enabled: event.target.checked })}
+          />
+          <span className="sr-only">협업 사용</span>
+        </label>
+      </div>
+      {!expanded && issue && (
+        <p className="ac-validation" role="status">
+          {issue} 협업 상세를 펼쳐 확인해 주세요.
+        </p>
+      )}
+      <div id={`${id}-content`} hidden={!expanded}>
         <div className="ac-content">
-          <div className="ac-heading">
-            <div>
-              <p id={`${id}-description`} className="muted">
-                에이전트가 인물이나 설정에 관한 의견을 제안하고, 메인이 최종 문장을 써요.
-              </p>
-            </div>
-            <label className="ac-check ac-enable">
-              <Switch
-                checked={collaboration.enabled}
-                aria-describedby={`${id}-description`}
-                onChange={(event) => update({ enabled: event.target.checked })}
-              />
-              협업 사용
-            </label>
-          </div>
+          <p className="muted">
+            에이전트가 인물이나 설정에 관한 의견을 제안하고, 메인이 최종 문장을 써요.
+          </p>
           {!collaboration.enabled && (
             <p className="muted">
               {collaboration.agents.length
@@ -386,7 +404,7 @@ export function AgentCollaborationEditor({ value, controls, models, onChange }: 
             </div>
           )}
         </div>
-      </details>
+      </div>
       <Dialog
         open={!!removing}
         title="에이전트 삭제 확인"

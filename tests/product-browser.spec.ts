@@ -1,3 +1,4 @@
+import { createDefaultPromptProgram } from '../core/prompt-defaults.js';
 import { selectCurrentSettingsSection } from './ui-navigation.js';
 import { visualReview } from './fixtures/visual-review.js';
 import { preservePromptWorkspace } from './fixtures/prompt-workspace.js';
@@ -8,10 +9,10 @@ import {
   selectContent,
   createPromptChoice,
   navigationAction,
+  visibleNavigation,
   openProviderMenu,
   selectChatSettingsSection,
   openSourceActions,
-  openPromptBlocks,
 } from './ui-navigation.js';
 import { postFixtureChat } from './fixtures/chat.js';
 import { test, expect, type APIRequestContext, type Page } from '@playwright/test';
@@ -53,12 +54,10 @@ async function storySettings(page: Page) {
   if (!(await page.getByRole('button', { name: '채팅 설정', exact: true }).isVisible())) {
     const chatId = new URL(page.url()).searchParams.get('chat')!;
     const detail = await getDetail(page.request, chatId);
-    const menu = page.getByRole('button', { name: '탐색 메뉴', exact: true });
-    if (await menu.isVisible()) await menu.click();
-    await page
-      .getByRole('navigation', { name: '봇의 채팅 목록' })
-      .getByRole('button')
-      .filter({ hasText: detail.chat.title })
+    const navigation = await visibleNavigation(page);
+    await navigation
+      .getByRole('navigation', { name: '봇별 채팅', exact: true })
+      .getByRole('button', { name: detail.chat.title, exact: true })
       .click();
   }
   await page.getByRole('button', { name: '채팅 설정', exact: true }).click();
@@ -184,23 +183,20 @@ test('P01 packages use latest settings and prompt-owned creative choices replace
   ).not.toContainText('v1');
   const editor = await promptTab(page);
   await editor.getByLabel('현재 프롬프트 프리셋', { exact: true }).selectOption(choice.prompt.id);
-  const composer = editor.getByTestId('prompt-composer');
+  await editor.getByText('창작 옵션', { exact: true }).click();
+  const composer = editor;
   for (const combination of [choice.combination, second]) {
-    await composer
-      .getByLabel('이 프롬프트의 옵션 조합', { exact: true })
-      .selectOption(combination.id);
-    await editor.getByRole('button', { name: '현재 설정 저장', exact: true }).click();
+    await composer.getByLabel('옵션 조합', { exact: true }).selectOption(combination.id);
     await expect
       .poll(async () => (await (await request.get('/api/prompt-workspace')).json()).main.values)
       .toEqual(combination.values);
-    await expect(
-      editor.getByText('현재 프롬프트와 옵션을 저장했어요.', { exact: true })
-    ).toBeVisible();
+    await expect(editor.getByText('변경사항을 자동 저장했어요.', { exact: true })).toBeVisible();
   }
   await expect(
     composer.getByRole('switch', { name: '합성 공동 서술', exact: true })
   ).not.toBeChecked();
   await expect(composer.getByLabel('합성 상세도', { exact: true })).toHaveValue('1');
+  await expect(editor.getByLabel('현재 프롬프트 프리셋', { exact: true })).toBeEnabled();
   const run = await send(page, '(OOC: Continue the harbor scene.) SYNTHETIC_P01');
   await expect
     .poll(
@@ -582,23 +578,25 @@ test('P09 P10 P13 fork from a completed scene preserves long prose and annotatio
       'SYNTHETIC independent other-tab draft'
     );
     expect(await getDetail(request, chat.id)).toEqual(before);
+    const forkPrompt = await request.post('/api/prompt-presets', {
+      data: {
+        title: 'Synthetic fork-only prompt',
+        role: 'main',
+        program: createDefaultPromptProgram('Synthetic vivid narration for this fork.', 'main'),
+      },
+    });
+    expect(forkPrompt.ok()).toBeTruthy();
+    const forkPreset = await forkPrompt.json();
+    await page.reload();
     await storySettings(page);
     const forkEditor = await promptTab(page);
-    await openPromptBlocks(forkEditor);
-    await forkEditor.locator('#prompt-block-instructions > summary').click();
     await forkEditor
-      .getByLabel('현재 프롬프트 이름', { exact: true })
-      .fill('Synthetic fork-only prompt');
-    await forkEditor
-      .getByLabel('지침 본문', { exact: true })
-      .fill('Synthetic vivid narration for this fork.');
-    await forkEditor.getByRole('button', { name: '현재 설정 저장', exact: true }).click();
+      .getByLabel('현재 프롬프트 프리셋', { exact: true })
+      .selectOption(forkPreset.id);
     await expect
       .poll(async () => (await (await request.get('/api/prompt-workspace')).json()).main.title)
       .toBe('Synthetic fork-only prompt');
-    await expect(
-      forkEditor.getByRole('status').filter({ hasText: '현재 프롬프트와 옵션을 저장했어요.' })
-    ).toBeVisible();
+    await expect(forkEditor.getByLabel('현재 프롬프트 프리셋', { exact: true })).toBeEnabled();
     expect((await getDetail(request, chat.id)).profile).toEqual(before.profile);
     const next = await send(
       page,
@@ -631,7 +629,7 @@ test('P09 P10 P13 fork from a completed scene preserves long prose and annotatio
     const forkUrl = page.url();
     await page.getByRole('button', { name: '탐색 메뉴', exact: true }).click();
     await page
-      .getByRole('navigation', { name: '봇의 채팅 목록' })
+      .getByRole('navigation', { name: '봇별 채팅', exact: true })
       .getByRole('button')
       .filter({ hasText: chat.title })
       .filter({ hasNotText: fork.title })
@@ -642,7 +640,7 @@ test('P09 P10 P13 fork from a completed scene preserves long prose and annotatio
     );
     await page.getByRole('button', { name: '탐색 메뉴', exact: true }).click();
     await page
-      .getByRole('navigation', { name: '봇의 채팅 목록' })
+      .getByRole('navigation', { name: '봇별 채팅', exact: true })
       .getByRole('button')
       .filter({ hasText: fork.title })
       .click();

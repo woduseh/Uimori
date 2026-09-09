@@ -162,3 +162,33 @@
     min-height: 64px;
   }
 }
+
+.ac-disclosure-heading {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  border-block: 1px solid var(--border);
+}
+.ac-disclosure-heading .ac-disclosure {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1;
+  min-width: 0;
+  min-height: 52px;
+  padding: 8px 4px;
+  border: 0;
+  background: transparent;
+  text-align: start;
+}
+.ac-disclosure > svg {
+  flex-shrink: 0;
+  transition: transform 120ms;
+}
+.ac-disclosure[aria-expanded="true"] > svg {
+  transform: rotate(90deg);
+}
+.ac-disclosure-heading .ac-enable {
+  flex: 0 0 auto;
+  margin: 0;
+}

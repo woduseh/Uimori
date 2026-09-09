@@ -1,309 +1,501 @@
-import { Save, Copy, RotateCcw } from 'lucide-react';
-import { IconButton } from './IconButton.js';
-import './settings-actions.css';
-import { ActionMenu } from './ActionMenu.js';
-import './prompt-editor.css';
-import { DismissibleError } from './DismissibleError.js';
-import { useEffect, useId, useRef, useState } from 'react';
+import { ChevronRight, ExternalLink, RotateCcw } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
 import type { Library, PromptRole, PromptWorkspace } from '../core/product.js';
+import type { WorkspaceDraftModel } from '../core/edit-drafts.js';
+import { combinationOwner, matchesPromptCombination } from '../core/prompt-combinations.js';
+import { createDefaultPromptProgram } from '../core/prompt-defaults.js';
+import { resolvePromptValues } from '../core/prompt-program.js';
 import { api } from './api.js';
 import { usePromptWorkspace } from './usePromptWorkspace.js';
-import { PromptComposer } from './PromptComposer.js';
-import { AgentCollaborationEditor } from './AgentCollaborationEditor.js';
-import { combinationOwner } from '../core/prompt-combinations.js';
-import { booleanPromptDraft } from './prompt-boolean-draft.js';
+import { PromptControlFields } from './PromptControlFields.js';
+import { Switch } from './BooleanControls.js';
+import { ActionMenu } from './ActionMenu.js';
+import { DeleteButton } from './DeleteButton.js';
+import { Dialog } from './Dialog.js';
+import { IconButton } from './IconButton.js';
 import {
   EditorDraftProvider,
   EditorDraftStatus,
   useServerEditDraft,
 } from './editor-workspace-context.js';
-import type { WorkspaceDraftModel } from '../core/edit-drafts.js';
-import { createDefaultPromptProgram } from '../core/prompt-defaults.js';
+import './prompt-editor.css';
+import './prompt-composer.css';
+import './toggle-row.css';
 
 export function PromptWorkspaceEditor({
   library,
   reload,
   onDirtyChange,
-  chatId,
-  branchId,
+  onEditPrompt,
+  navigationDisabled = false,
 }: {
   library: Library;
   reload?: () => Promise<void>;
   onDirtyChange?: (dirty: boolean) => void;
+  onEditPrompt?: (presetId?: string) => void;
+  navigationDisabled?: boolean;
   chatId?: string;
   branchId?: string;
 }) {
-  const saveTooltipId = useId();
   const { workspace, error, refresh } = usePromptWorkspace();
   const [draft, setDraft] = useState<PromptWorkspace | null>(null);
+  const currentDraft = useRef(draft);
+  currentDraft.current = draft;
   const [role, setRole] = useState<PromptRole>('main');
   const [dirty, setDirty] = useState(false);
-  const [pending, setPending] = useState(false);
   const [busy, setBusy] = useState(false);
-  const lock = useRef(false);
-  const [message, setMessage] = useState('');
+  const [applying, setApplying] = useState(false);
   const [saveError, setSaveError] = useState('');
-  const [editorVersion, setEditorVersion] = useState(0);
-  const emptyModel = useMemoWorkspaceModel();
-  const model: WorkspaceDraftModel = draft
-    ? { main: draft.main, translation: draft.translation }
-    : emptyModel;
+  const [message, setMessage] = useState('');
+  const [generation, setGeneration] = useState(0);
+  const version = useRef(0);
+  const acknowledged = useRef(0);
+  const lock = useRef(false);
+  const [comboName, setComboName] = useState('');
+  const [savingCombo, setSavingCombo] = useState(false);
+  const [comboOpen, setComboOpen] = useState(false);
+  const [manageCombinations, setManageCombinations] = useState(false);
+  const [comboError, setComboError] = useState('');
+  const [selectedCombo, setSelectedCombo] = useState('');
+  const [emptyModel] = useState<WorkspaceDraftModel>(() => ({
+    main: { title: '', program: createDefaultPromptProgram('', 'main'), values: {} },
+    translation: { title: '', program: createDefaultPromptProgram('', 'translation'), values: {} },
+  }));
   const shared = useServerEditDraft({
     editorKey: 'prompt-workspace:current',
     kind: 'prompt-workspace',
     targetId: 'current',
-    model,
+    model: draft ? { main: draft.main, translation: draft.translation } : emptyModel,
     enabled: !!workspace,
     onRestore: (restored) => {
-      const current = workspace ?? draft;
-      if (!current) return;
-      const restoredModel = restored.model as WorkspaceDraftModel;
-      setDraft({ ...current, ...restoredModel, revision: restored.baseRevision! });
-      setDirty(JSON.stringify(restoredModel) !== JSON.stringify(restored.baseModel));
-      setEditorVersion((value) => value + 1);
+      if (lock.current) return;
+      const base = workspace ?? currentDraft.current;
+      if (!base) return;
+      const model = restored.model as WorkspaceDraftModel;
+      const next = { ...base, ...model, revision: restored.baseRevision! };
+      currentDraft.current = next;
+      setDraft(next);
+      const restoredDirty = JSON.stringify(model) !== JSON.stringify(restored.baseModel);
+      setDirty(restoredDirty);
+      if (!restoredDirty) {
+        acknowledged.current = version.current;
+        setSaveError('');
+      }
     },
   });
   useEffect(() => {
-    if (!shared.state.ready && !dirty && !busy && !pending) setDraft(workspace);
-  }, [workspace, dirty, busy, pending, shared.state.ready]);
+    if (!shared.state.ready && !dirty && !busy) setDraft(workspace);
+  }, [workspace, shared.state.ready, dirty, busy]);
   useEffect(() => {
-    onDirtyChange?.(dirty || pending || busy);
-  }, [dirty, pending, busy, onDirtyChange]);
+    onDirtyChange?.(dirty || busy);
+  }, [dirty, busy, onDirtyChange]);
   useEffect(() => () => onDirtyChange?.(false), [onDirtyChange]);
-  async function work(action: () => Promise<void>) {
-    if (lock.current) return;
+
+  // A save acknowledges only the input it sent. Restored drafts require explicit retry.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: save reads latest input via refs; edits and completed saves alone schedule a write.
+  useEffect(() => {
+    if (
+      !generation ||
+      generation <= acknowledged.current ||
+      busy ||
+      saveError ||
+      !shared.state.ready ||
+      shared.state.conflict
+    )
+      return;
+    const timer = setTimeout(() => {
+      void save();
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [generation, busy, saveError, shared.state.ready, shared.state.conflict]);
+
+  async function save() {
+    const next = currentDraft.current;
+    if (!next || lock.current || shared.state.conflict) return;
     lock.current = true;
     setBusy(true);
-    setMessage('');
     setSaveError('');
+    const sentVersion = version.current;
     try {
-      await action();
+      const accepted = (
+        await shared.session.save({ main: next.main, translation: next.translation })
+      ).saved as PromptWorkspace;
+      acknowledged.current = sentVersion;
+      const latest = currentDraft.current!;
+      const unsaved = shared.session.snapshot().dirty || version.current !== sentVersion;
+      if (unsaved && version.current === sentVersion) {
+        version.current++;
+        setGeneration(version.current);
+      }
+      const updated = unsaved
+        ? { ...accepted, main: latest.main, translation: latest.translation }
+        : accepted;
+      currentDraft.current = updated;
+      setDraft(updated);
+      setDirty(unsaved);
+      setMessage('변경사항을 자동 저장했어요.');
+      await refresh();
     } catch (caught) {
-      setSaveError((caught as Error).message);
+      setSaveError(`${(caught as Error).message} 선택한 옵션은 유지했어요.`);
+      await refresh();
     } finally {
       lock.current = false;
       setBusy(false);
     }
   }
+  function edit(next: PromptWorkspace) {
+    currentDraft.current = next;
+    setDraft(next);
+    setDirty(true);
+    setMessage('');
+    version.current++;
+    setGeneration(version.current);
+    shared.session.setModel({ main: next.main, translation: next.translation });
+  }
+  async function applyPreset(presetId: string) {
+    if (!draft || lock.current || dirty) return;
+    lock.current = true;
+    setBusy(true);
+    setApplying(true);
+    setSaveError('');
+    try {
+      await shared.session.flush();
+      const accepted = await api<PromptWorkspace>('/prompt-workspace/apply', {
+        expectedRevision: draft.revision,
+        role,
+        presetId,
+      });
+      await shared.session.reloadSaved();
+      const restored = shared.session.snapshot().draft!;
+      const reloaded = {
+        ...accepted,
+        ...(restored.model as WorkspaceDraftModel),
+        revision: restored.baseRevision!,
+      };
+      currentDraft.current = reloaded;
+      setDraft(reloaded);
+      setDirty(false);
+      setSelectedCombo('');
+      setMessage('프롬프트와 기본 옵션을 적용했어요.');
+      await refresh();
+    } catch (caught) {
+      setSaveError((caught as Error).message);
+    } finally {
+      lock.current = false;
+      setBusy(false);
+      setApplying(false);
+    }
+  }
   if (!draft || !shared.state.ready)
     return (
-      <p role="status" className="settings-loading-status">
+      <p role="status">
         {error || '현재 프롬프트를 불러오는 중이에요…'}{' '}
         <IconButton icon={RotateCcw} label="다시 불러오기" onClick={() => void refresh()} />
       </p>
     );
   const current = draft[role];
-  const conflict = !!workspace && workspace.revision > draft.revision;
-  const edit = (next: PromptWorkspace) => {
-    setDraft(next);
-    setDirty(true);
-    setMessage('');
-  };
+  const conflict = !!workspace && workspace.revision > draft.revision && !busy;
+  const preset = library.promptPresets?.find(
+    (item) => item.id === current.presetId && item.role === role
+  );
+  const combinations =
+    library.promptCombinations?.filter((item) =>
+      matchesPromptCombination(item, combinationOwner(current, role), role, current.program)
+    ) ?? [];
+  const defaultValues = resolvePromptValues(current.program, current.defaultValues ?? {});
+  const values = resolvePromptValues(current.program, current.values);
+  const selected = combinations.find((item) => item.id === selectedCombo);
+  const equalValues = (other: typeof values) =>
+    Object.keys(values).every((key) => JSON.stringify(values[key]) === JSON.stringify(other[key]));
+  const comboValue =
+    selected && equalValues(resolvePromptValues(current.program, selected.values))
+      ? selected.id
+      : equalValues(defaultValues)
+        ? 'default'
+        : 'custom';
+  const showRecovery =
+    shared.state.conflict || !!saveError || (dirty && generation <= acknowledged.current);
   return (
     <EditorDraftProvider value={shared}>
-      <section aria-label="현재 프롬프트 설정" className="prompt-editor">
-        <EditorDraftStatus value={shared} />
-        <p>
-          현재 프롬프트는 모든 채팅의 다음 요청에 사용해요. 프리셋을 불러오면 내용과 옵션을
-          복사해요.
-        </p>
-        <fieldset className="prompt-editor-fields" disabled={busy}>
+      <section aria-label="현재 프롬프트 설정" className="prompt-editor prompt-current-settings">
+        <p className="muted">변경사항은 자동 저장하며 모든 채팅의 다음 요청부터 사용해요.</p>
+        {showRecovery && <EditorDraftStatus value={shared} hideSyncError />}
+        <div className="prompt-editor-fields">
           <label>
             역할
             <select
               aria-label="현재 프롬프트 역할"
               value={role}
-              disabled={pending}
-              onChange={(event) => setRole(event.target.value as PromptRole)}
+              disabled={busy || dirty}
+              onChange={(event) => {
+                setRole(event.target.value as PromptRole);
+                setSelectedCombo('');
+              }}
             >
               <option value="main">작문</option>
               <option value="translation">번역</option>
             </select>
           </label>
           <label>
-            프리셋 불러오기
+            프롬프트
             <select
               aria-label="현재 프롬프트 프리셋"
-              value=""
-              disabled={dirty || pending || conflict}
+              value={preset?.id ?? ''}
+              disabled={busy || dirty || conflict}
               onChange={(event) => {
-                const presetId = event.target.value;
-                if (presetId)
-                  void work(async () => {
-                    await shared.session.flush();
-                    const accepted = await api<PromptWorkspace>('/prompt-workspace/apply', {
-                      expectedRevision: draft.revision,
-                      role,
-                      presetId,
-                    });
-                    setDraft(accepted);
-                    await shared.session.reloadSaved();
-                    setEditorVersion((value) => value + 1);
-                    await refresh();
-                    setMessage('프리셋의 내용과 옵션을 현재 프롬프트에 복사했어요.');
-                  });
+                if (event.target.value) void applyPreset(event.target.value);
               }}
             >
-              <option value="">저장된 프리셋 선택</option>
+              {!preset && <option value="">{current.title}</option>}
               {library.promptPresets
                 ?.filter((item) => item.role === role)
                 .map((item) => (
                   <option key={item.id} value={item.id}>
-                    {item.title}
+                    {item.id === current.presetId ? current.title : item.title}
                   </option>
                 ))}
             </select>
           </label>
-          <label>
-            현재 프롬프트 이름
-            <input
-              value={current.title}
-              maxLength={160}
-              onChange={(event) =>
-                edit({ ...draft, [role]: { ...current, title: event.target.value } })
-              }
-            />
-          </label>
-          <PromptComposer
-            key={`${role}:${editorVersion}`}
-            program={current.program}
-            role={role}
-            chatId={chatId}
-            branchId={branchId}
-            controlState={{ values: current.values, combinations: [] }}
-            savedCombinations={library.promptCombinations}
-            combinationOwner={combinationOwner(current, role)}
-            onPendingDraftChange={setPending}
-            onControlDraftChange={(state) =>
-              edit({ ...draft, [role]: { ...current, values: state.values } })
-            }
-            onSaveCombination={
-              workspace &&
-              !pending &&
-              !conflict &&
-              !current.program.controls.some(
-                (control) => control.type === 'boolean' && control.default === null
-              ) &&
-              current.presetId === workspace[role].presetId &&
-              JSON.stringify(current.program.controls) ===
-                JSON.stringify(workspace[role].program.controls)
-                ? async (title, values) => {
-                    await api('/prompt-combinations', {
-                      title,
-                      role,
-                      values,
-                      workspaceRevision: draft.revision,
-                    });
-                    await reload?.();
-                  }
-                : undefined
-            }
-            onChange={(program) => edit({ ...draft, [role]: { ...current, program } })}
-          />
+          <div className="prompt-current-links">
+            {preset && (
+              <button
+                type="button"
+                className="ghost"
+                disabled={busy || dirty || conflict}
+                onClick={() => void applyPreset(preset.id)}
+              >
+                최신 버전 적용
+              </button>
+            )}
+            {onEditPrompt && (
+              <button
+                type="button"
+                className="ghost"
+                disabled={busy || dirty || navigationDisabled}
+                onClick={() => onEditPrompt(preset?.id)}
+              >
+                <ExternalLink size={16} aria-hidden="true" /> 프롬프트 편집
+              </button>
+            )}
+          </div>
+          <details className="pc-composer-fold">
+            <summary>
+              <ChevronRight className="pc-disclosure-icon" size={16} aria-hidden="true" />
+              <strong>창작 옵션</strong>
+              <small>
+                {comboValue === 'default'
+                  ? '기본값'
+                  : comboValue === 'custom'
+                    ? '사용자 설정'
+                    : selected?.title}
+              </small>
+            </summary>
+            {current.program.controls.length || combinations.length ? (
+              <div className="prompt-current-options">
+                <div className="prompt-combination-toolbar">
+                  <label>
+                    옵션 조합
+                    <select
+                      aria-label="옵션 조합"
+                      value={comboValue}
+                      disabled={applying || !!saveError || conflict}
+                      onChange={(event) => {
+                        const id = event.target.value;
+                        if (id === 'custom') return;
+                        const item = combinations.find((entry) => entry.id === id);
+                        setSelectedCombo(item?.id ?? '');
+                        edit({
+                          ...currentDraft.current!,
+                          [role]: {
+                            ...currentDraft.current![role],
+                            values:
+                              id === 'default'
+                                ? defaultValues
+                                : resolvePromptValues(current.program, item!.values),
+                          },
+                        });
+                      }}
+                    >
+                      <option value="default">기본값</option>
+                      <option value="custom" disabled>
+                        사용자 설정
+                      </option>
+                      {combinations.map((item) => (
+                        <option key={item.id} value={item.id}>
+                          {item.title}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <ActionMenu label="옵션 조합 메뉴">
+                    <button
+                      type="button"
+                      disabled={dirty || busy || conflict}
+                      onClick={() => {
+                        setComboName('');
+                        setComboError('');
+                        setComboOpen(true);
+                      }}
+                    >
+                      현재 선택을 새 조합으로 저장
+                    </button>
+                    <button type="button" onClick={() => setManageCombinations(true)}>
+                      조합 관리
+                    </button>
+                  </ActionMenu>
+                </div>
+                <fieldset
+                  className="prompt-editor-fields"
+                  disabled={applying || conflict || shared.state.conflict}
+                >
+                  <PromptControlFields
+                    program={current.program}
+                    values={current.values}
+                    onChange={(id, value) => {
+                      setSelectedCombo('');
+                      edit({
+                        ...currentDraft.current!,
+                        [role]: {
+                          ...currentDraft.current![role],
+                          values: { ...currentDraft.current![role].values, [id]: value },
+                        },
+                      });
+                    }}
+                  />
+                </fieldset>
+              </div>
+            ) : (
+              <p className="muted">이 프롬프트에는 선택할 옵션이 없어요.</p>
+            )}
+          </details>
           {role === 'main' && (
-            <AgentCollaborationEditor
-              value={current.program.collaboration}
-              controls={current.program.controls}
-              models={library.models}
-              onChange={(collaboration) =>
-                edit({
-                  ...draft,
-                  main: { ...current, program: { ...current.program, collaboration } },
-                })
-              }
-            />
-          )}
-          <div className="form-actions prompt-workspace-actions">
-            <span className="prompt-save-control">
-              <IconButton
-                label="현재 설정 저장"
-                icon={Save}
-                title=""
-                aria-describedby={saveTooltipId}
-                disabled={!dirty || pending || conflict}
-                onClick={() =>
-                  void work(async () => {
-                    const accepted = (
-                      await shared.session.save({
-                        main: {
-                          ...draft.main,
-                          ...booleanPromptDraft(draft.main.program, draft.main.values),
+            <label className="toggle-row full">
+              <span className="toggle-row-text">
+                <span>에이전트 협업</span>
+                {!current.program.collaboration?.agents.length && (
+                  <small>프롬프트 편집에서 협업을 구성해 주세요.</small>
+                )}
+              </span>
+              <Switch
+                aria-label="협업 사용"
+                checked={current.program.collaboration?.enabled ?? false}
+                disabled={!current.program.collaboration?.agents.length || busy || conflict}
+                onChange={(event) =>
+                  edit({
+                    ...draft,
+                    main: {
+                      ...current,
+                      program: {
+                        ...current.program,
+                        collaboration: {
+                          ...current.program.collaboration!,
+                          enabled: event.target.checked,
                         },
-                        translation: {
-                          ...draft.translation,
-                          ...booleanPromptDraft(
-                            draft.translation.program,
-                            draft.translation.values
-                          ),
-                        },
-                      })
-                    ).saved as PromptWorkspace;
-                    setDraft(accepted);
-                    setDirty(false);
-                    setEditorVersion((value) => value + 1);
-                    await refresh();
-                    setMessage('현재 프롬프트와 옵션을 저장했어요.');
+                      },
+                    },
                   })
                 }
               />
-              <span id={saveTooltipId} className="prompt-save-tooltip" role="tooltip">
-                현재 설정 저장
-              </span>
-            </span>
-            <ActionMenu label="현재 프롬프트 저장 메뉴" placement="top">
-              <button
-                type="button"
-                disabled={pending || !current.title.trim()}
-                onClick={() =>
-                  void work(async () => {
-                    await shared.session.copy('prompt-preset', {
-                      role,
-                      title: current.title,
-                      ...booleanPromptDraft(current.program, current.values),
-                    });
-                    await reload?.();
-                    setMessage('독립된 프리셋으로 저장했어요.');
-                  })
-                }
-              >
-                <Copy size={18} aria-hidden="true" /> 새 프리셋으로 저장
-              </button>
-              <button
-                type="button"
-                onClick={() =>
-                  void work(async () => {
-                    await shared.session.reloadSaved();
-                    setDirty(false);
-                    setPending(false);
-                    await refresh();
-                  })
-                }
-              >
-                <RotateCcw size={18} aria-hidden="true" /> 저장본으로 되돌리기
-              </button>
-            </ActionMenu>
-          </div>
-        </fieldset>
-        {conflict && (
+            </label>
+          )}
+        </div>
+        {(conflict || saveError || shared.state.error) && (
           <p role="alert">
-            다른 곳에서 현재 프롬프트가 바뀌었어요. 현재 입력은 유지했어요. 편집 초안 메뉴에서 최신
-            저장본과 비교한 뒤 적용해 주세요.
+            {conflict
+              ? '다른 곳에서 현재 프롬프트가 바뀌었어요. 현재 선택을 보존했어요. 복구 메뉴에서 저장본을 확인해 주세요.'
+              : saveError || shared.state.error}
           </p>
         )}
-        <DismissibleError
-          message={saveError ? `${saveError} 초안은 유지했어요.` : ''}
-          onDismiss={() => setSaveError('')}
-        />
-        <p role="status">{message || error}</p>
+        {(saveError || (dirty && !busy && generation <= acknowledged.current)) && (
+          <button
+            type="button"
+            className="secondary"
+            disabled={busy || conflict || shared.state.conflict}
+            onClick={() => void save()}
+          >
+            다시 저장
+          </button>
+        )}
+        {conflict && !showRecovery && <EditorDraftStatus value={shared} hideSyncError />}
+        <p role="status" className="muted">
+          {busy || (dirty && !showRecovery) ? '저장 중…' : message || error}
+        </p>
+        <Dialog
+          open={manageCombinations}
+          title="옵션 조합 관리"
+          onClose={() => setManageCombinations(false)}
+        >
+          {combinations.length ? (
+            combinations.map((item) => (
+              <div key={item.id} className="prompt-combination-toolbar">
+                <span>{item.title}</span>
+                <DeleteButton
+                  path={`/prompt-combinations/${item.id}`}
+                  revision={item.revision}
+                  title={item.title}
+                  onDeleted={async () => {
+                    await reload?.();
+                  }}
+                />
+              </div>
+            ))
+          ) : (
+            <p>저장한 조합이 없어요.</p>
+          )}
+        </Dialog>
+        <Dialog
+          open={comboOpen}
+          title="옵션 조합 저장"
+          onClose={() => {
+            if (!savingCombo) setComboOpen(false);
+          }}
+        >
+          <label>
+            조합 이름
+            <input
+              aria-label="조합 이름"
+              value={comboName}
+              maxLength={200}
+              disabled={savingCombo}
+              onChange={(event) => setComboName(event.target.value)}
+            />
+          </label>
+          {comboError && <p role="alert">{comboError}</p>}
+          <div className="form-actions">
+            <button
+              type="button"
+              className="secondary"
+              disabled={savingCombo}
+              onClick={() => setComboOpen(false)}
+            >
+              취소
+            </button>
+            <button
+              type="button"
+              disabled={!comboName.trim() || savingCombo}
+              onClick={async () => {
+                setSavingCombo(true);
+                try {
+                  await api('/prompt-combinations', {
+                    title: comboName.trim(),
+                    role,
+                    values: current.values,
+                    workspaceRevision: draft.revision,
+                  });
+                  await reload?.();
+                  setComboOpen(false);
+                } catch (caught) {
+                  setComboError((caught as Error).message);
+                } finally {
+                  setSavingCombo(false);
+                }
+              }}
+            >
+              {savingCombo ? '저장 중…' : '저장'}
+            </button>
+          </div>
+        </Dialog>
       </section>
     </EditorDraftProvider>
   );
-}
-
-function useMemoWorkspaceModel(): WorkspaceDraftModel {
-  const [model] = useState<WorkspaceDraftModel>(() => ({
-    main: { title: '', program: createDefaultPromptProgram('', 'main'), values: {} },
-    translation: { title: '', program: createDefaultPromptProgram('', 'translation'), values: {} },
-  }));
-  return model;
 }
