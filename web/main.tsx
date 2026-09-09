@@ -49,7 +49,7 @@ import { PackageBehaviorPanel } from './PackageBehaviorPanel.js';
 import { SessionGate } from './SessionGate.js';
 import { Dialog } from './Dialog.js';
 import { DeleteButton } from './DeleteButton.js';
-import { BotNavigation, type ChatFolder } from './BotNavigation.js';
+import { BotNavigation, type ChatFolder } from './BotTreeNavigation.js';
 import { completePendingStoryProfile } from './pendingStory.js';
 import { useStory } from './useStory.js';
 import { useTestMode } from './useTestMode.js';
@@ -433,6 +433,7 @@ function App() {
       onNew={newStory}
       onLibrary={showLibrary}
       onChatsChanged={s.loadChats}
+      onLibraryChanged={s.loadLibrary}
       onError={s.setError}
       onSettings={() => {
         setSettingsTab('general');
@@ -523,7 +524,7 @@ function App() {
       className={`app-shell ${focus ? 'focus-reading' : ''} ${sidebarCollapsed ? 'sidebar-collapsed' : ''} ${optionsOpen && s.destination === 'story' && s.selected ? 'options-open' : ''} ${helperOpen ? 'helper-open' : ''}`}
     >
       <aside id="workspace-sidebar" className="sidebar" aria-label="탐색">
-        {navigation}
+        {!compact && panel !== 'navigation' && navigation}
       </aside>
       <main className="story-workspace">
         {s.destination === 'story' && (
@@ -1357,7 +1358,7 @@ function App() {
         onClose={() => setPanel('')}
         className="navigation-dialog"
       >
-        {navigation}
+        {panel === 'navigation' && navigation}
       </Dialog>
       <Dialog open={panel === 'new'} title="새 채팅" onClose={() => setPanel('')}>
         {s.library && (

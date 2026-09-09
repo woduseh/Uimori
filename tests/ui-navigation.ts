@@ -22,17 +22,18 @@ export async function navigationAction(page: Page, name: string, botTitle?: stri
   }
   const nav = await visibleNavigation(page);
   if (name === '새 채팅' || name === '새 이야기') {
-    // The bot switch row opens a popover; skip it when the wanted bot is already current.
-    const current = nav.locator('.bot-switch-button');
-    if (!botTitle || !(await current.filter({ hasText: botTitle }).count())) {
-      await current.click();
-      const choice = botTitle
-        ? nav.locator('.bot-choice').filter({ has: page.locator('strong', { hasText: botTitle }) })
-        : nav.locator('.bot-choice').first();
-      await expect(choice).toBeVisible();
-      await choice.click();
-    }
-    await nav.getByRole('button', { name: '새 채팅', exact: true }).click();
+    // Bots without chats intentionally live only in the library. Use that shared entry point.
+    await navigationAction(page, '서재');
+    const library = page.getByTestId('library-panel');
+    await library.getByRole('tab', { name: '봇', exact: true }).click();
+    if (botTitle) await library.getByLabel('서재 검색', { exact: true }).fill(botTitle);
+    const start = botTitle
+      ? library.getByRole('button', { name: `${botTitle} 새 채팅`, exact: true })
+      : library
+          .locator('.library-list-item')
+          .getByRole('button', { name: / 새 채팅$/ })
+          .first();
+    await start.click();
     return;
   }
   const libraryTab = ['봇', '페르소나', '모듈'].includes(name);
