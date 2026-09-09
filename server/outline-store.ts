@@ -28,13 +28,14 @@ const ACTIVE_RUN = ['queued', 'running', 'waiting_for_state'];
 const WRITTEN_LIMIT = 40;
 const BATCH_LIMIT = 200;
 
-export const OUTLINE_TABLES = ['outline_nodes'] as const;
+export const OUTLINE_TABLES = ['outline_nodes', 'outline_batches'] as const;
 
 /** Additive, idempotent table; a schema 15 database gains it on open and keeps its version. */
 export function initOutline(db: DatabaseSync) {
   db.exec(`
     CREATE TABLE IF NOT EXISTS outline_nodes (id TEXT PRIMARY KEY, chat_id TEXT NOT NULL REFERENCES chats(id), branch_id TEXT NOT NULL REFERENCES branches(id), parent_id TEXT REFERENCES outline_nodes(id), level TEXT NOT NULL, position INTEGER NOT NULL, title TEXT NOT NULL, intent TEXT NOT NULL, fixed INTEGER NOT NULL DEFAULT 0, revision INTEGER NOT NULL, command_id TEXT REFERENCES scene_commands(id), request_key TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, UNIQUE(chat_id,request_key));
     CREATE INDEX IF NOT EXISTS outline_nodes_branch ON outline_nodes(chat_id,branch_id,parent_id,position);
+    CREATE TABLE IF NOT EXISTS outline_batches (chat_id TEXT NOT NULL REFERENCES chats(id), branch_id TEXT NOT NULL REFERENCES branches(id), request_key TEXT NOT NULL, authority TEXT NOT NULL, operations TEXT NOT NULL, created TEXT NOT NULL, created_at TEXT NOT NULL, PRIMARY KEY(chat_id,request_key));
   `);
 }
 
@@ -84,12 +85,18 @@ export function parseOutlineOperations(value: unknown): OutlineOperation[] {
     throw new HttpError(400, '적용할 구성 변경이 필요해요.');
   if (value.length > BATCH_LIMIT)
     throw new HttpError(400, `한 번에 적용할 수 있는 구성 변경은 ${BATCH_LIMIT}개까지예요.`);
+  const refs = new Set<string>();
   return value.map((item) => {
     const body = record(item);
     if (body.op === 'create') {
       fields(body, ['op', 'ref', 'parentRef', 'parentId', 'level', 'title', 'intent', 'position']);
       if (body.parentRef !== undefined && body.parentId !== undefined)
         throw new HttpError(400, '상위 항목은 parentRef 또는 parentId 하나만 지정해 주세요.');
+      if (body.ref !== undefined) {
+        const ref = text(body.ref, 'outline ref', 100);
+        if (refs.has(ref)) throw new HttpError(400, `구성 참조 '${ref}'가 중복됐어요.`);
+        refs.add(ref);
+      }
       return {
         op: 'create' as const,
         ...(body.ref === undefined ? {} : { ref: text(body.ref, 'outline ref', 100) }),
@@ -277,21 +284,25 @@ export class OutlineStore {
         chatId,
         body.branchId === undefined ? undefined : text(body.branchId, 'branch', 100)
       );
+      const canonical = JSON.stringify(operations);
+      const prior = this.db
+        .prepare('SELECT * FROM outline_batches WHERE chat_id=? AND request_key=?')
+        .get(chatId, key) as Row | undefined;
+      if (prior) {
+        if (
+          prior.branch_id !== branch.id ||
+          prior.authority !== authority ||
+          prior.operations !== canonical
+        )
+          throw new HttpError(409, '구성 요청 키가 다른 내용이나 권한에 사용됐어요.');
+        return { detail: this.detail(chatId, branch.id), created: JSON.parse(prior.created) };
+      }
       const created: { ref?: string; id: string }[] = [];
       const refs = new Map<string, string>();
       const time = now();
       for (const operation of operations) {
         const live = () => this.nodes(chatId, branch.id);
         if (operation.op === 'create') {
-          const requestKey = `${key}:${operation.ref ?? created.length}`;
-          const prior = this.db
-            .prepare('SELECT id FROM outline_nodes WHERE chat_id=? AND request_key=?')
-            .get(chatId, requestKey) as Row | undefined;
-          if (prior) {
-            if (operation.ref) refs.set(operation.ref, prior.id);
-            created.push({ ...(operation.ref ? { ref: operation.ref } : {}), id: prior.id });
-            continue;
-          }
           const parentId =
             operation.parentRef !== undefined
               ? (refs.get(operation.parentRef) ??
@@ -307,8 +318,9 @@ export class OutlineStore {
                 `${OUTLINE_LEVEL_LABELS[operation.level]}은 ${OUTLINE_LEVEL_LABELS[expected]} 아래에 넣어 주세요.`
               );
           } else {
-            const parent = live().find((item) => item.id === parentId);
-            if (!parent) throw new HttpError(404, '상위 구성 항목을 찾을 수 없어요.');
+            const parent = this.node(parentId);
+            if (parent.chatId !== chatId || parent.branchId !== branch.id)
+              throw new HttpError(400, '다른 분기의 상위 구성 항목이에요.');
             if (expected === null || parent.level !== expected)
               throw new HttpError(
                 400,
@@ -330,7 +342,7 @@ export class OutlineStore {
               operation.position ?? this.siblingPosition(chatId, branch.id, parentId),
               operation.title,
               operation.intent,
-              requestKey,
+              null,
               time,
               time
             );
@@ -358,20 +370,18 @@ export class OutlineStore {
               operation.expectedRevision
             );
         } else if (operation.op === 'move') {
-          this.assertWritable(authority, node, '이동');
+          const siblings = live();
+          const descendants = this.descendants(siblings, node.id);
+          for (const item of [node, ...descendants]) this.assertWritable(authority, item, '이동');
           const parentId = operation.parentId === undefined ? node.parentId : operation.parentId;
           const expected = outlineParentLevel(node.level);
           if (parentId === null) {
             if (expected !== null) throw new HttpError(400, '이 수준은 상위 구성이 필요해요.');
           } else {
-            const siblings = live();
             const parent = siblings.find((item) => item.id === parentId);
             if (!parent || expected === null || parent.level !== expected)
               throw new HttpError(400, '상위 구성의 수준이 맞지 않아요.');
-            if (
-              parentId === node.id ||
-              this.descendants(siblings, node.id).some((i) => i.id === parentId)
-            )
+            if (parentId === node.id || descendants.some((i) => i.id === parentId))
               throw new HttpError(400, '구성 항목을 자신의 하위로 옮길 수 없어요.');
             this.assertWritable(authority, parent, '하위 구성 이동', 'children');
           }
@@ -400,6 +410,11 @@ export class OutlineStore {
           }
         }
       }
+      this.db
+        .prepare(
+          'INSERT INTO outline_batches(chat_id,branch_id,request_key,authority,operations,created,created_at) VALUES(?,?,?,?,?,?,?)'
+        )
+        .run(chatId, branch.id, key, authority, canonical, JSON.stringify(created), time);
       this.store.event(chatId, 'outline.updated', chatId);
       return { detail: this.detail(chatId, branch.id), created };
     });
@@ -420,11 +435,32 @@ export class OutlineStore {
           400,
           `${OUTLINE_LEVEL_LABELS[node.level]}은 한 번에 집필하는 단위가 아니에요. ${OUTLINE_LEVEL_LABELS.episode} 또는 ${OUTLINE_LEVEL_LABELS.beat}를 선택해 주세요.`
         );
+      const prior = this.db
+        .prepare('SELECT id FROM scene_commands WHERE chat_id=? AND request_key=?')
+        .get(node.chatId, key) as Row | undefined;
+      if (prior) {
+        if (prior.id !== node.progress.commandId)
+          throw new HttpError(409, '이 집필 요청 키는 다른 구성 예약에 사용됐어요.');
+        const command = this.store.story.command(prior.id);
+        if (
+          body.request !== undefined &&
+          text(body.request, 'scene request', 4000) !== command.request
+        )
+          throw new HttpError(409, '집필 요청 키가 다른 내용에 사용됐어요.');
+        return command;
+      }
       if (node.progress.state === 'written') throw new HttpError(409, '이미 집필한 구성이에요.');
       if (node.progress.state === 'writing')
         throw new HttpError(409, '이미 이 구성의 원문을 생성하고 있어요.');
-      if (node.progress.state === 'scheduled' && node.progress.commandId)
-        return this.store.story.command(node.progress.commandId);
+      if (node.progress.state === 'scheduled' && node.progress.commandId) {
+        const command = this.store.story.command(node.progress.commandId);
+        if (
+          body.request !== undefined &&
+          text(body.request, 'scene request', 4000) !== command.request
+        )
+          throw new HttpError(409, '이 구성은 다른 요청문으로 이미 예약됐어요.');
+        return command;
+      }
       const request =
         body.request === undefined
           ? [`${OUTLINE_LEVEL_LABELS[node.level]} 집필 요청: ${node.title}`, node.intent]
@@ -547,7 +583,13 @@ export function validateOutlineArchive(store: Store) {
   const rows = store.db.prepare('SELECT * FROM outline_nodes').all() as Row[];
   const byId = new Map(rows.map((row) => [String(row.id), row]));
   const keys = new Set<string>();
+  const commands = new Set<string>();
   for (const row of rows) {
+    text(row.id, 'outline node', 100);
+    text(row.title, 'outline title', OUTLINE_TITLE_MAX);
+    text(row.intent, 'outline intent', OUTLINE_INTENT_MAX, true);
+    number(row.position, 'outline position', 0, 1e6);
+    if (row.fixed !== 0 && row.fixed !== 1) reject('fixed');
     if (!(OUTLINE_LEVELS as readonly string[]).includes(row.level)) reject('level');
     if (!Number.isSafeInteger(Number(row.revision)) || Number(row.revision) < 1) reject('revision');
     if (row.request_key !== null) {
@@ -573,6 +615,8 @@ export function validateOutlineArchive(store: Store) {
         reject('parent level');
     }
     if (row.command_id) {
+      if (commands.has(row.command_id)) reject('duplicate scene command');
+      commands.add(row.command_id);
       const command = store.db
         .prepare('SELECT chat_id,branch_id FROM scene_commands WHERE id=?')
         .get(row.command_id) as Row | undefined;
@@ -589,5 +633,51 @@ export function validateOutlineArchive(store: Store) {
       seen.add(String(current.id));
       current = current.parent_id ? byId.get(String(current.parent_id)) : undefined;
     }
+  }
+  // Receipts describe historical operations. A node may since have been edited or deleted,
+  // but a surviving reference must still belong to the receipt's original chat and branch.
+  const createdIds = new Set<string>();
+  for (const batch of store.db.prepare('SELECT * FROM outline_batches').all() as Row[]) {
+    text(batch.request_key, 'outline key', 120);
+    if (batch.authority !== 'user' && batch.authority !== 'model') reject('batch authority');
+    const branch = store.db
+      .prepare('SELECT chat_id FROM branches WHERE id=?')
+      .get(batch.branch_id) as Row | undefined;
+    if (!branch || branch.chat_id !== batch.chat_id) reject('batch branch owner');
+    const operations = parseOutlineOperations(JSON.parse(batch.operations));
+    if (JSON.stringify(operations) !== batch.operations) reject('batch operations');
+    if (
+      batch.authority === 'model' &&
+      operations.some((operation) => operation.op === 'update' && 'fixed' in operation)
+    )
+      reject('batch pin authority');
+    const created: unknown = JSON.parse(batch.created);
+    const creates = operations.filter((operation) => operation.op === 'create');
+    if (!Array.isArray(created) || created.length !== creates.length)
+      reject('batch created entries');
+    const ownReference = (id: string) => {
+      const node = byId.get(id);
+      if (node && (node.chat_id !== batch.chat_id || node.branch_id !== batch.branch_id))
+        reject('batch node owner');
+    };
+    const refs = new Set<string>();
+    for (const operation of operations) {
+      if (operation.op === 'create') {
+        if (operation.parentRef !== undefined && !refs.has(operation.parentRef))
+          reject('batch parent ref');
+        if (operation.ref !== undefined) refs.add(operation.ref);
+      } else ownReference(operation.id);
+      if ('parentId' in operation && operation.parentId) ownReference(operation.parentId);
+    }
+    for (const [index, value] of (created as unknown[]).entries()) {
+      const entry = record(value);
+      fields(entry, ['id', 'ref']);
+      const id = text(entry.id, 'outline created node', 100);
+      if (entry.ref !== creates[index].ref || createdIds.has(id)) reject('batch created ref');
+      createdIds.add(id);
+      ownReference(id);
+    }
+    if (!Number.isFinite(Date.parse(text(batch.created_at, 'outline batch time', 100))))
+      reject('batch timestamp');
   }
 }

@@ -230,7 +230,18 @@ export async function createApp(options: AppOptions): Promise<App> {
   };
   const track = (promise: Promise<void>) => {
     work.add(promise);
-    void promise.finally(() => work.delete(promise));
+    void promise.then(
+      () => work.delete(promise),
+      () => {
+        work.delete(promise);
+        // A storage/finalization failure can escape a worker's own handler. Observe
+        // it without creating an unhandled child rejection or logging manuscript data.
+        app.log.error(
+          { code: 'BACKGROUND_TASK_FAILED' },
+          'Background task did not settle normally'
+        );
+      }
+    );
   };
   const streams = new ResponseStreamStore(store);
   const drafts = new EditDraftService(store);
@@ -463,6 +474,8 @@ export async function createApp(options: AppOptions): Promise<App> {
               signal,
               approvedOrigins,
               resolveCredential,
+              resolveComfyCredential: (name) => process.env[name],
+              cancelRemoteOnAbort: () => controller.signal.aborted && !stopping.signal.aborted,
               executeCodex,
               generateCodexImage,
               authorize: (connection) => store.product.authorize(connection),

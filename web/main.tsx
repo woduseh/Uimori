@@ -1440,7 +1440,13 @@ function App() {
         onClose={() => setPanel('')}
         wide
       >
-        {panel === 'outline' && <OutlinePanel state={s} onClose={() => setPanel('')} />}
+        {panel === 'outline' && (
+          <OutlinePanel
+            key={`${s.detail?.chat.id}:${s.branch?.id}`}
+            state={s}
+            onClose={() => setPanel('')}
+          />
+        )}
       </Dialog>
       <Dialog open={panel === 'branches'} title="보관된 전개" onClose={() => setPanel('')}>
         <BranchesPanel state={s} onClose={() => setPanel('')} />

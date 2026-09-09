@@ -1,11 +1,12 @@
 import { afterEach, describe, expect, test } from 'vitest';
 import { DatabaseSync } from 'node:sqlite';
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { Store } from '../server/store.js';
 import { HttpError } from '../server/request-validation.js';
 import {
   cancelIllustration,
   claimIllustration,
+  claimIllustrationForReconcile,
   completeIllustration,
   failIllustration,
   frozenIllustrationReferences,
@@ -34,10 +35,16 @@ import {
   illustrationDatabases,
   PNG_BASE64,
 } from './fixtures/illustration.js';
-import { FIXTURE_WORKFLOW } from './fixtures/comfyui-server.js';
+import { comfyUIFixture, FIXTURE_WORKFLOW } from './fixtures/comfyui-server.js';
+import { loopbackProvider, writeSse } from './fixtures/loopback-provider.js';
+import { runIllustrationJob } from '../server/illustration-runner.js';
 
 const databases = illustrationDatabases('uimori-illustration-store-');
-afterEach(() => databases.cleanup());
+const cleanups: (() => Promise<void>)[] = [];
+afterEach(async () => {
+  for (const close of cleanups.splice(0)) await close();
+  databases.cleanup();
+});
 const PNG = Buffer.from(PNG_BASE64, 'base64');
 const generated = (caption = '캡션') => [{ mime: 'image/png' as const, bytes: PNG, caption }];
 const diagnostic = () => ({ stage: 'store' as const, attempts: [], retries: [] });
@@ -73,6 +80,221 @@ function codexModel(store: Store) {
     temperature: null,
   }) as ModelPreset;
 }
+
+async function executedComfyIllustration() {
+  const store = databases.create();
+  const { chat, source } = chatWithSource(store);
+  const comfy = await comfyUIFixture({ authorization: 'Bearer synthetic' });
+  cleanups.push(comfy.close);
+  const provider = await loopbackProvider(async (_request, response) => {
+    await writeSse(response, [
+      {
+        type: 'text_delta',
+        delta: JSON.stringify({ prompt: 'synthetic lantern', caption: '등불' }),
+      },
+      { type: 'done', reason: 'stop' },
+    ]);
+  });
+  cleanups.push(provider.close);
+  const connection = store.product.connection({
+    title: 'Archive prompt provider',
+    protocol: 'fixture-sse-v1',
+    endpoint: provider.endpoint,
+    enabled: true,
+  }) as Connection;
+  const model = store.product.model({
+    title: 'Archive prompt model',
+    connectionId: connection.id,
+    modelId: 'archive-prompt',
+    maxOutputTokens: 512,
+    temperature: null,
+  }) as ModelPreset;
+  const { revision, ...body } = fixtureSettings({
+    generator: 'comfyui',
+    automatic: true,
+    comfyui: {
+      baseUrl: comfy.origin,
+      authorizationEnv: 'UIMORI_AUDIT_COMFY_SECRET',
+      workflow: FIXTURE_WORKFLOW,
+      promptModel: { id: model.id },
+      timeoutMs: 10_000,
+      pollIntervalMs: 250,
+    },
+  });
+  updateIllustrationSettings(store, { expectedRevision: revision, ...body }, true);
+  const job = reserveIllustration(store, source, 'manual');
+  const result = await runIllustrationJob(store, job.id, 'archive-worker', {
+    signal: new AbortController().signal,
+    approvedOrigins: [provider.origin],
+    resolveCredential: () => 'Bearer synthetic',
+    resolveComfyCredential: () => 'Bearer synthetic',
+    authorize: (value) => store.product.authorize(value),
+    onAttemptStart: (wire) => store.product.startAttempt(chat.id, null, null, wire),
+    onAttemptFinish: (id, value) => store.product.finishAttempt(id, value),
+  });
+  expect(result).toMatchObject({ status: 'completed', images: 1 });
+  expect(provider.requests).toHaveLength(1);
+  expect(comfy.prompts).toHaveLength(1);
+  return { store, chat, source, job: illustrationJob(store, job.id) };
+}
+
+describe('integrated illustration audit regressions', () => {
+  test('real provider attempts round-trip with a fork without duplicate ownership or replaying remote work', async () => {
+    const { store, chat, source, job } = await executedComfyIllustration();
+    const forked = forkChat(store, chat.id, {
+      fromRevision: source.id,
+      idempotencyKey: randomUUID(),
+    });
+    const copied = illustrationsForChat(store, forked.id)[0];
+    expect(copied.diagnostic?.attempts).toEqual([]);
+    const archive = store.product.export();
+    const restored = databases.create();
+    expect(() => restored.product.import(archive)).not.toThrow();
+    const attemptId = job.diagnostic!.attempts[0];
+    expect(
+      restored.db.prepare('SELECT role,status,cost_usd FROM attempts WHERE id=?').get(attemptId)
+    ).toMatchObject({ role: 'illustration', status: 'completed', cost_usd: null });
+    expect(illustrationsForChat(restored, chat.id)[0].images[0].hash).toBe(
+      illustrationsForChat(store, chat.id)[0].images[0].hash
+    );
+    expect(illustrationsForChat(restored, forked.id)[0].status).toBe('completed');
+    removeIllustration(restored, job.id);
+    expect(
+      restored.db.prepare('SELECT id FROM attempts WHERE id=?').get(attemptId)
+    ).toBeUndefined();
+    const again = databases.create();
+    expect(() => again.product.import(restored.product.export())).not.toThrow();
+  });
+
+  test('a real illustration attempt can be restored even without a fork', async () => {
+    const { store } = await executedComfyIllustration();
+    expect(() => databases.create().product.import(store.product.export())).not.toThrow();
+  });
+
+  test('restore disables global automation and removes ComfyUI authentication and frozen remote authority', () => {
+    const store = databases.create();
+    const { source } = chatWithSource(store);
+    const model = codexModel(store);
+    const { revision, ...body } = fixtureSettings({
+      generator: 'comfyui',
+      automatic: true,
+      comfyui: {
+        baseUrl: 'http://comfy.example.test:8188',
+        authorizationEnv: 'PRODUCTION_AUTH',
+        workflow: FIXTURE_WORKFLOW,
+        promptModel: { id: model.id },
+      },
+    });
+    updateIllustrationSettings(store, { expectedRevision: revision, ...body }, true);
+    const job = reserveIllustration(store, source, 'manual');
+    const restored = databases.create();
+    restored.product.import(store.product.export());
+    expect(illustrationSettings(restored)).toMatchObject({
+      generator: 'none',
+      automatic: false,
+      comfyui: { authorizationEnv: '' },
+    });
+    expect(illustrationJob(restored, job.id).input.comfyui).toMatchObject({
+      authorizationEnv: '',
+      disabled: true,
+    });
+  });
+
+  test.each(['mime', 'oversize', 'chat'] as const)(
+    'restore rejects illustration image %s tampering atomically',
+    (fault) => {
+      const store = databases.create();
+      const { source } = chatWithSource(store);
+      complete(
+        store,
+        reserveIllustration(store, source, 'manual', {
+          testMode: true,
+          settings: fixtureSettings(),
+        }).id
+      );
+      const other = chatWithSource(store, 'Other source');
+      const archive = store.product.export();
+      const row = archive.tables.illustration_images[0];
+      if (fault === 'mime') row.mime = 'image/jpeg';
+      if (fault === 'chat') row.chat_id = other.chat.id;
+      if (fault === 'oversize') {
+        const bytes = Buffer.concat([PNG, Buffer.alloc(16_000_001)]);
+        row.bytes = bytes.toString('base64');
+        row.hash = createHash('sha256').update(bytes).digest('hex');
+      }
+      const restored = databases.create();
+      expect(() => restored.product.import(archive)).toThrow();
+      expect(restored.db.prepare('SELECT COUNT(*) AS n FROM illustration_images').get()).toEqual({
+        n: 0,
+      });
+    }
+  );
+
+  test('retry and reconcile cannot bypass active work or the current per-source limit', () => {
+    const store = databases.create();
+    const { source } = chatWithSource(store);
+    const { revision, ...body } = fixtureSettings({ maxPerSource: 1 });
+    updateIllustrationSettings(store, { expectedRevision: revision, ...body }, true);
+    const old = reserveIllustration(store, source, 'manual', { testMode: true });
+    cancelIllustration(store, old.id);
+    store.db
+      .prepare(
+        "UPDATE illustration_jobs SET input=json_set(input,'$.generator','comfyui','$.comfyui',json(?)),diagnostic=json(?) WHERE id=?"
+      )
+      .run(
+        JSON.stringify({ baseUrl: 'http://comfy.example.test', authorizationEnv: '' }),
+        JSON.stringify({ ...diagnostic(), comfyui: { promptId: 'accepted-prompt' } }),
+        old.id
+      );
+    const active = reserveIllustration(store, source, 'manual', { testMode: true });
+    expect(() => claimIllustrationForReconcile(store, old.id, 'reconcile')).toThrow(
+      'ILLUSTRATION_ACTIVE'
+    );
+    complete(store, active.id);
+    expect(() => retryIllustration(store, old.id)).toThrow('ILLUSTRATION_LIMIT_REACHED');
+    expect(() => claimIllustrationForReconcile(store, old.id, 'reconcile')).toThrow(
+      'ILLUSTRATION_LIMIT_REACHED'
+    );
+    const current = illustrationSettings(store);
+    const { revision: currentRevision, ...currentBody } = current;
+    updateIllustrationSettings(
+      store,
+      { expectedRevision: currentRevision, ...currentBody, maxPerSource: 2 },
+      true
+    );
+    expect(claimIllustrationForReconcile(store, old.id, 'reconcile').job.status).toBe('running');
+  });
+
+  test('the final storage boundary rejects MIME mismatches and oversized bytes without partial storage', () => {
+    const store = databases.create();
+    const { source } = chatWithSource(store);
+    const job = reserveIllustration(store, source, 'manual', {
+      testMode: true,
+      settings: fixtureSettings(),
+    });
+    const claimed = claimIllustration(store, job.id, 'worker')!;
+    for (const invalid of [
+      { mime: 'image/jpeg' as const, bytes: PNG, caption: '' },
+      {
+        mime: 'image/png' as const,
+        bytes: Buffer.concat([PNG, Buffer.alloc(16_000_001)]),
+        caption: '',
+      },
+    ]) {
+      expect(() =>
+        completeIllustration(
+          store,
+          job.id,
+          claimed.job.generation,
+          'worker',
+          [...generated(), invalid],
+          diagnostic()
+        )
+      ).toThrow('ILLUSTRATION_IMAGE_INVALID');
+      expect(illustrationsForSources(store, [source.id])[0].images).toEqual([]);
+    }
+  });
+});
 
 describe('illustration storage on schema 15', () => {
   test('fresh databases create the tables and an existing schema 15 database gains them on open without a version bump', () => {
@@ -521,7 +743,12 @@ describe('illustration storage on schema 15', () => {
     );
     const restored = databases.create();
     restored.product.import(archive);
-    expect(illustrationSettings(restored)).toEqual(illustrationSettings(store));
+    expect(illustrationSettings(restored)).toEqual({
+      ...illustrationSettings(store),
+      generator: 'none',
+      automatic: false,
+      comfyui: { ...illustrationSettings(store).comfyui, authorizationEnv: '' },
+    });
     const restoredJobs = illustrationsForChat(restored, forked.id);
     expect(restoredJobs.map((item) => item.status).sort()).toEqual(['completed', 'interrupted']);
     expect(restoredJobs.find((item) => item.status === 'completed')?.images[0].hash).toBe(

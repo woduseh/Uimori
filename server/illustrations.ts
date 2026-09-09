@@ -14,6 +14,7 @@ import {
   ILLUSTRATION_MAX_PER_SOURCE,
   ILLUSTRATION_REFERENCE_ROLES,
   IllustrationError,
+  isValidIllustrationImage,
   parseComfyWorkflow,
   type FrozenIllustrationReference,
   type Illustration,
@@ -591,6 +592,8 @@ export function completeIllustration(
   return store.transaction(() => {
     const row = owned(store, id, generation, owner);
     if (!row || (!generated.length && typeof diagnostic.skipped !== 'string')) return false;
+    if (generated.some((image) => !isValidIllustrationImage(image.bytes, image.mime)))
+      throw new IllustrationError('ILLUSTRATION_IMAGE_INVALID');
     const time = now();
     generated.forEach((image, position) => {
       store.db
@@ -679,8 +682,16 @@ export function retryIllustration(store: Store, id: string): Illustration {
     if (!job.input.codex && !job.input.comfyui && !job.input.fixture)
       throw new HttpError(409, job.error ?? 'ILLUSTRATION_GENERATOR_UNCONFIGURED');
     store.sourceAtHash(job.sourceRevision, job.sourceHash);
-    if (illustrationSlots(store, job.sourceRevision).active > 0)
-      throw new HttpError(409, 'ILLUSTRATION_ACTIVE');
+    assertIllustrationSlot(store, job.sourceRevision);
+    if (job.input.comfyui?.disabled) throw new HttpError(409, 'CONNECTION_NOT_AUTHORIZED');
+    if (
+      job.input.generator === 'comfyui' &&
+      job.diagnostic?.comfyui &&
+      !['finished', 'rejected', 'not-sent'].includes(job.diagnostic.comfyui.submission ?? '') &&
+      !['COMFYUI_EXECUTION_FAILED', 'COMFYUI_NO_IMAGE'].includes(job.error ?? '') &&
+      (job.diagnostic.comfyui.promptId || job.diagnostic.comfyui.submission === 'uncertain')
+    )
+      throw new HttpError(409, 'COMFYUI_RESULT_UNAVAILABLE');
     const diagnostic: IllustrationDiagnostic = {
       stage: 'preparation',
       attempts: job.diagnostic?.attempts ?? [],
@@ -715,6 +726,8 @@ export function claimIllustrationForReconcile(
       throw new HttpError(409, 'ILLUSTRATION_NOT_RECONCILABLE');
     if (!RETRYABLE_STATUSES.includes(job.status))
       throw new HttpError(409, 'ILLUSTRATION_NOT_RECONCILABLE');
+    if (job.input.comfyui.disabled) throw new HttpError(409, 'CONNECTION_NOT_AUTHORIZED');
+    assertIllustrationSlot(store, job.sourceRevision);
     store.sourceAtHash(job.sourceRevision, job.sourceHash);
     store.db
       .prepare(
@@ -731,6 +744,22 @@ export function claimIllustrationForReconcile(
       },
     };
   });
+}
+function assertIllustrationSlot(store: Store, sourceId: string) {
+  const slots = illustrationSlots(store, sourceId);
+  if (slots.active > 0) throw new HttpError(409, 'ILLUSTRATION_ACTIVE');
+  if (slots.total >= illustrationSettings(store).maxPerSource)
+    throw new HttpError(409, 'ILLUSTRATION_LIMIT_REACHED');
+}
+function deleteIllustrationAttempts(store: Store, jobs: Row[]) {
+  for (const job of jobs) {
+    const ids = parse(job.diagnostic)?.attempts ?? [];
+    store.db
+      .prepare(
+        "DELETE FROM attempts WHERE chat_id=? AND role='illustration' AND run_id IS NULL AND job_id IS NULL AND story_job_id IS NULL AND id IN (SELECT value FROM json_each(?))"
+      )
+      .run(job.chat_id, json(ids));
+  }
 }
 /** Bumping the generation makes a late worker result fall through owner checks. */
 export function cancelIllustration(store: Store, id: string): Illustration {
@@ -754,6 +783,7 @@ export function removeIllustration(
   return store.transaction(() => {
     const job = illustrationJob(store, id);
     if (ACTIVE.includes(job.status)) throw new HttpError(409, 'ILLUSTRATION_ACTIVE');
+    deleteIllustrationAttempts(store, [{ chat_id: job.chatId, diagnostic: json(job.diagnostic) }]);
     store.db.prepare('DELETE FROM illustration_images WHERE job_id=?').run(id);
     store.db.prepare('DELETE FROM illustration_jobs WHERE id=?').run(id);
     store.event(job.chatId, 'source.illustrations', job.sourceRevision);
@@ -777,6 +807,14 @@ export function recoverIllustrations(store: Store): void {
 }
 export function deleteIllustrationsForSources(store: Store, sourceIds: string[]): void {
   if (!sourceIds.length) return;
+  deleteIllustrationAttempts(
+    store,
+    store.db
+      .prepare(
+        'SELECT chat_id,diagnostic FROM illustration_jobs WHERE source_revision IN (SELECT value FROM json_each(?))'
+      )
+      .all(json(sourceIds)) as Row[]
+  );
   store.db
     .prepare(
       'DELETE FROM illustration_images WHERE job_id IN (SELECT id FROM illustration_jobs WHERE source_revision IN (SELECT value FROM json_each(?)))'
@@ -802,6 +840,14 @@ export function copyIllustrationsForFork(
       .all(source.oldId, source.hash) as Row[];
     for (const job of jobs) {
       const jobId = randomUUID();
+      const originalDiagnostic = parse(job.diagnostic);
+      const copiedDiagnostic = originalDiagnostic
+        ? {
+            ...originalDiagnostic,
+            attempts: [],
+            copiedFrom: { jobId: job.id, attemptIds: originalDiagnostic.attempts ?? [] },
+          }
+        : null;
       store.db
         .prepare(
           "INSERT INTO illustration_jobs(id,chat_id,source_revision,source_hash,origin,status,generation,owner,attempt,input,diagnostic,error,created_at,updated_at) VALUES(?,?,?,?,?,'completed',?,NULL,?,?,?,NULL,?,?)"
@@ -815,7 +861,7 @@ export function copyIllustrationsForFork(
           job.generation,
           job.attempt,
           job.input,
-          job.diagnostic,
+          copiedDiagnostic === null ? null : json(copiedDiagnostic),
           job.created_at,
           job.updated_at
         );

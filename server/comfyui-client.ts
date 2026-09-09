@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { providerFetchOptions, transportFailureCode } from '../core/provider-fetch.js';
 import {
   detectImageMime,
+  isValidIllustrationImage,
   ILLUSTRATION_MAX_IMAGE_BYTES,
   IllustrationError,
   type ComfyWorkflow,
@@ -10,7 +11,7 @@ import {
 } from '../core/illustration.js';
 
 /** ComfyUI usually runs on another PC; the server, never the browser, talks to it. */
-export type ComfyUIConnection = { baseUrl: string; authorizationEnv: string };
+export type ComfyUIConnection = { baseUrl: string; authorizationEnv: string; disabled?: true };
 export type ComfyUIRequestOptions = {
   signal: AbortSignal;
   resolveCredential?: (
@@ -24,6 +25,8 @@ export type ComfyUIGenerateOptions = ComfyUIRequestOptions & {
   pollIntervalMs: number;
   maxImages?: number;
   onSubmitted?: (promptId: string) => void | Promise<void>;
+  onSubmitting?: () => void | Promise<void>;
+  cancelRemoteOnAbort?: () => boolean;
 };
 export type ComfyUIImage = { mime: IllustrationImageMime; bytes: Buffer; filename: string };
 type ComfyDiagnostic = NonNullable<IllustrationDiagnostic['comfyui']>;
@@ -64,6 +67,8 @@ async function headers(
   options: ComfyUIRequestOptions,
   json: boolean
 ): Promise<Record<string, string>> {
+  if (connection.disabled) throw new IllustrationError('CONNECTION_NOT_AUTHORIZED');
+  options.signal.throwIfAborted();
   const result: Record<string, string> = json ? { 'content-type': 'application/json' } : {};
   if (connection.authorizationEnv) {
     const secret = await (options.resolveCredential ?? ((name: string) => process.env[name]))(
@@ -72,6 +77,7 @@ async function headers(
       options.signal
     );
     if (!secret) throw new IllustrationError('COMFYUI_CREDENTIAL_UNAVAILABLE');
+    options.signal.throwIfAborted();
     result.authorization = secret;
   }
   return result;
@@ -80,10 +86,17 @@ async function send(
   connection: ComfyUIConnection,
   options: ComfyUIRequestOptions,
   path: string,
-  init: { method?: string; body?: unknown; query?: Record<string, string> } = {}
+  init: {
+    method?: string;
+    body?: unknown;
+    query?: Record<string, string>;
+    beforeSend?: () => void | Promise<void>;
+  } = {}
 ): Promise<Response> {
   const url = comfyUIUrl(connection.baseUrl, path, init.query);
   const requestHeaders = await headers(connection, options, init.body !== undefined);
+  options.signal.throwIfAborted();
+  await init.beforeSend?.();
   try {
     // Like the provider adapters, never follow a redirect: the approved base URL is the only target
     // and the Authorization header must not travel to another origin.
@@ -103,14 +116,42 @@ async function send(
       error instanceof Error ? (error.cause as { message?: unknown } | undefined) : undefined;
     if (/redirect/iu.test(String(cause?.message ?? (error instanceof Error ? error.message : ''))))
       throw new IllustrationError('COMFYUI_REDIRECT_REFUSED');
-    throw new IllustrationError('COMFYUI_UNREACHABLE', true, {
-      comfyui: { statusMessages: [transportFailureCode(error)] },
+    // Only connect/DNS failures prove that a POST never reached the server.
+    const preconnect = [
+      'ECONNREFUSED',
+      'ENOTFOUND',
+      'EAI_AGAIN',
+      'UND_ERR_CONNECT_TIMEOUT',
+    ].includes(String((cause as { code?: unknown } | undefined)?.code ?? ''));
+    throw new IllustrationError('COMFYUI_UNREACHABLE', preconnect, {
+      comfyui: {
+        statusMessages: [transportFailureCode(error)],
+        ...(preconnect ? { submission: 'not-sent' as const } : {}),
+      },
     });
   }
 }
+async function readBytes(response: Response, maximum: number): Promise<Buffer> {
+  const reader = response.body?.getReader();
+  if (!reader) return Buffer.alloc(0);
+  const parts: Uint8Array[] = [];
+  let length = 0;
+  try {
+    for (;;) {
+      const next = await reader.read();
+      if (next.done) break;
+      length += next.value.byteLength;
+      if (length > maximum) throw new IllustrationError('COMFYUI_RESPONSE_INVALID');
+      parts.push(next.value);
+    }
+    return Buffer.concat(parts, length);
+  } finally {
+    await reader.cancel().catch(() => {});
+    reader.releaseLock();
+  }
+}
 async function readJson(response: Response): Promise<unknown> {
-  const text = await response.text();
-  if (text.length > 8_000_000) throw new IllustrationError('COMFYUI_RESPONSE_INVALID');
+  const text = (await readBytes(response, 8_000_000)).toString('utf8');
   try {
     return JSON.parse(text);
   } catch {
@@ -217,36 +258,35 @@ export async function comfyUISystemStats(
   };
 }
 
-/** Is our prompt the one ComfyUI is executing right now? Unknown shapes answer false. */
-async function isRunning(
-  connection: ComfyUIConnection,
-  options: ComfyUIRequestOptions,
-  promptId: string
-): Promise<boolean> {
-  const response = await send(connection, options, 'queue');
-  if (!response.ok) return false;
-  const body = await readJson(response).catch(() => undefined);
-  if (!object(body) || !Array.isArray(body.queue_running)) return false;
-  return body.queue_running.some((entry) => Array.isArray(entry) && entry[1] === promptId);
-}
-/** Removes our pending prompt; interrupts only when our prompt is the one currently running. */
+/** Uses ComfyUI's atomic per-job cancel. Older servers only dequeue this ID. */
 export async function cancelComfyUIPrompt(
   connection: ComfyUIConnection,
   promptId: string,
   options: ComfyUIRequestOptions = { signal: AbortSignal.timeout(3000) }
-): Promise<{ removed: boolean; interrupted: boolean }> {
-  const result = { removed: false, interrupted: false };
+): Promise<{ removed: boolean; interrupted: boolean; targeted: boolean }> {
+  const result = { removed: false, interrupted: false, targeted: false };
   try {
-    if (await isRunning(connection, options, promptId)) {
-      const stop = await send(connection, options, 'interrupt', { method: 'POST', body: {} });
-      result.interrupted = stop.ok;
+    const stop = await send(
+      connection,
+      options,
+      `api/jobs/${encodeURIComponent(promptId)}/cancel`,
+      { body: {} }
+    );
+    if (stop.ok) {
+      const body = await readJson(stop);
+      result.targeted = object(body) && body.cancelled === true;
+      return result;
     }
+    await stop.body?.cancel();
+    if (![404, 405].includes(stop.status)) return result;
   } catch {
-    /* Cancellation is best effort; the local job state is already final. */
+    // Uncertain support/response is not permission to interrupt a shared queue.
+    return result;
   }
   try {
     const removed = await send(connection, options, 'queue', { body: { delete: [promptId] } });
     result.removed = removed.ok;
+    await removed.body?.cancel();
   } catch {
     /* Same. */
   }
@@ -264,6 +304,7 @@ export async function fetchComfyUIResult(
 ): Promise<ComfyUIResult> {
   const response = await send(connection, options, `history/${encodeURIComponent(promptId)}`);
   if (!response.ok) {
+    await response.body?.cancel();
     if (response.status >= 500)
       throw new IllustrationError('COMFYUI_HTTP_5XX', true, {
         comfyui: { promptId, httpStatus: response.status },
@@ -302,9 +343,16 @@ export async function fetchComfyUIResult(
       throw new IllustrationError('COMFYUI_IMAGE_INVALID', false, {
         comfyui: { promptId, httpStatus: view.status },
       });
-    const bytes = Buffer.from(await view.arrayBuffer());
+    let bytes: Buffer;
+    try {
+      bytes = await readBytes(view, ILLUSTRATION_MAX_IMAGE_BYTES);
+    } catch (error) {
+      if (error instanceof IllustrationError)
+        throw new IllustrationError('COMFYUI_IMAGE_INVALID', false, { comfyui: { promptId } });
+      throw error;
+    }
     const mime = detectImageMime(bytes);
-    if (!mime || bytes.length > ILLUSTRATION_MAX_IMAGE_BYTES)
+    if (!isValidIllustrationImage(bytes, mime))
       throw new IllustrationError('COMFYUI_IMAGE_INVALID', false, { comfyui: { promptId } });
     images.push({ mime, bytes, filename: file.filename });
   }
@@ -322,51 +370,89 @@ export async function generateWithComfyUI(
 ): Promise<{ promptId: string; images: ComfyUIImage[]; elapsedMs: number }> {
   const started = Date.now();
   const clientId = randomUUID();
-  const submitted = await send(connection, options, 'prompt', {
-    body: { prompt: workflow, client_id: clientId },
-  });
-  if (!submitted.ok) {
-    const body = await readJson(submitted).catch(() => undefined);
-    const diagnostic: ComfyDiagnostic = {
-      httpStatus: submitted.status,
-      nodeErrors: object(body) ? nodeErrors(body.node_errors) : undefined,
-      statusMessages:
-        object(body) && object(body.error)
-          ? [bounded(body.error.message, 400), bounded(body.error.details, 400)].filter(
-              (item): item is string => !!item
-            )
-          : [],
-    };
-    throw new IllustrationError(
-      submitted.status >= 500 ? 'COMFYUI_HTTP_5XX' : 'COMFYUI_PROMPT_REJECTED',
-      submitted.status >= 500,
-      { comfyui: diagnostic }
-    );
-  }
-  const accepted = await readJson(submitted);
-  if (!object(accepted) || typeof accepted.prompt_id !== 'string' || !accepted.prompt_id.trim())
-    throw new IllustrationError('COMFYUI_RESPONSE_INVALID', false, {
-      comfyui: { httpStatus: submitted.status },
-    });
-  const promptId = accepted.prompt_id;
-  await options.onSubmitted?.(promptId);
+  const deadline = AbortSignal.timeout(options.timeoutMs);
+  const execution = { ...options, signal: AbortSignal.any([options.signal, deadline]) };
+  let promptId: string | undefined;
+  let dispatched = false;
   try {
+    const submitted = await send(connection, execution, 'prompt', {
+      body: { prompt: workflow, client_id: clientId },
+      beforeSend: async () => {
+        await options.onSubmitting?.();
+        dispatched = true;
+      },
+    });
+    if (!submitted.ok) {
+      const body = await readJson(submitted).catch(() => undefined);
+      const diagnostic: ComfyDiagnostic = {
+        httpStatus: submitted.status,
+        submission: submitted.status >= 500 ? 'uncertain' : 'rejected',
+        nodeErrors: object(body) ? nodeErrors(body.node_errors) : undefined,
+        statusMessages:
+          object(body) && object(body.error)
+            ? [bounded(body.error.message, 400), bounded(body.error.details, 400)].filter(
+                (item): item is string => !!item
+              )
+            : [],
+      };
+      throw new IllustrationError(
+        submitted.status >= 500 ? 'COMFYUI_SUBMISSION_UNCERTAIN' : 'COMFYUI_PROMPT_REJECTED',
+        false,
+        { comfyui: diagnostic }
+      );
+    }
+    const accepted = await readJson(submitted);
+    if (
+      !object(accepted) ||
+      typeof accepted.prompt_id !== 'string' ||
+      !accepted.prompt_id.trim() ||
+      accepted.prompt_id.length > 200
+    )
+      throw new IllustrationError('COMFYUI_SUBMISSION_UNCERTAIN');
+    promptId = accepted.prompt_id;
+    await options.onSubmitted?.(promptId);
     for (;;) {
-      if (options.signal.aborted) throw new IllustrationError('ILLUSTRATION_CANCELLED');
-      if (Date.now() - started > options.timeoutMs)
-        throw new IllustrationError('COMFYUI_TIMEOUT', false, { comfyui: { promptId } });
-      const result = await fetchComfyUIResult(connection, promptId, options);
+      execution.signal.throwIfAborted();
+      const result = await fetchComfyUIResult(connection, promptId, execution);
       if (result.state === 'error')
         throw new IllustrationError('COMFYUI_EXECUTION_FAILED', true, {
-          comfyui: { promptId, statusMessages: result.statusMessages },
+          comfyui: { promptId, submission: 'finished', statusMessages: result.statusMessages },
         });
       if (result.state === 'completed')
         return { promptId, images: result.images, elapsedMs: Date.now() - started };
-      await sleep(options.pollIntervalMs, options.signal);
+      await sleep(options.pollIntervalMs, execution.signal);
     }
   } catch (error) {
-    if (error instanceof IllustrationError && error.code === 'ILLUSTRATION_CANCELLED')
-      await cancelComfyUIPrompt(connection, promptId);
-    throw error;
+    const detail = error instanceof IllustrationError ? error.diagnostic.comfyui : undefined;
+    const diagnostic: ComfyDiagnostic = {
+      submission: promptId ? 'accepted' : dispatched ? 'uncertain' : 'not-sent',
+      ...detail,
+      ...(promptId ? { promptId } : {}),
+    };
+    if (options.signal.aborted) {
+      if (promptId && (options.cancelRemoteOnAbort?.() ?? true))
+        await cancelComfyUIPrompt(connection, promptId, {
+          signal: AbortSignal.timeout(3000),
+          resolveCredential: options.resolveCredential,
+        });
+      throw new IllustrationError('ILLUSTRATION_CANCELLED', false, { comfyui: diagnostic });
+    }
+    if (deadline.aborted)
+      throw new IllustrationError('COMFYUI_TIMEOUT', false, { comfyui: diagnostic });
+    if (
+      error instanceof IllustrationError &&
+      (!dispatched ||
+        ['rejected', 'finished', 'not-sent'].includes(diagnostic.submission!) ||
+        ['COMFYUI_NO_IMAGE', 'COMFYUI_IMAGE_INVALID'].includes(error.code))
+    )
+      throw new IllustrationError(error.code, error.retryable, {
+        ...error.diagnostic,
+        comfyui: diagnostic,
+      });
+    throw new IllustrationError(
+      promptId ? 'COMFYUI_RESULT_UNAVAILABLE' : 'COMFYUI_SUBMISSION_UNCERTAIN',
+      false,
+      { comfyui: diagnostic }
+    );
   }
 }

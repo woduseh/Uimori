@@ -88,6 +88,8 @@ export type IllustrationJobInput = {
     pollIntervalMs: number;
     negativeGuidance: string;
     promptModel: ModelSnapshot;
+    /** Archive restores preserve the evidence but require a new explicitly configured request. */
+    disabled?: true;
   };
   /** Test-mode generator: synthetic PNG after the configured number of failures. */
   fixture?: { failures: number; delayMs: number };
@@ -111,11 +113,14 @@ export type IllustrationDiagnostic = {
   revisedPrompt?: string | null;
   comfyui?: {
     promptId?: string;
+    /** Whether a remote render may exist. This is persisted before the POST. */
+    submission?: 'not-sent' | 'uncertain' | 'accepted' | 'rejected' | 'finished';
     httpStatus?: number;
     nodeErrors?: { nodeId: string; classType: string; messages: string[] }[];
     statusMessages?: string[];
   };
   codex?: { usageLimit?: { limitId: string; resetsAt: number | null } };
+  copiedFrom?: { jobId: string; attemptIds: string[] };
 };
 export type IllustrationImage = {
   id: string;
@@ -154,30 +159,17 @@ export class IllustrationError extends Error {
     this.name = 'IllustrationError';
   }
 }
-/** Transport, timeout and remote execution failures may be re-queued; configuration and refusals are not. */
-// COMFYUI_TIMEOUT is deliberately absent: the remote prompt may still finish, so the user
-// reconciles the recorded prompt_id instead of the host queueing a second render.
+/** Only known-safe failures may start another render; a lost remote outcome is never replayed. */
 const retryableCodes = new Set([
-  'COMFYUI_UNREACHABLE',
   'COMFYUI_EXECUTION_FAILED',
-  'COMFYUI_HTTP_5XX',
   'CODEX_IMAGE_NOT_GENERATED',
-  'CODEX_TURN_FAILED',
-  'CODEX_EXECUTION_INTERRUPTED',
-  'CODEX_UNAVAILABLE',
   'CODEX_BUSY',
-  'TIMEOUT',
-  'TRANSPORT_ERROR',
   'ILLUSTRATION_PROMPT_FAILED',
   'ILLUSTRATION_PROMPT_INVALID',
   'FIXTURE_FAILURE',
 ]);
 export function isRetryableIllustrationCode(code: string): boolean {
-  return (
-    retryableCodes.has(code) ||
-    /^AUXILIARY_PROVIDER_HTTP_5\d\d$/u.test(code) ||
-    /^UND_ERR_/u.test(code)
-  );
+  return retryableCodes.has(code);
 }
 
 export function detectImageMime(bytes: Uint8Array): IllustrationImageMime | null {
@@ -194,6 +186,19 @@ export function detectImageMime(bytes: Uint8Array): IllustrationImageMime | null
   )
     return 'image/webp';
   return null;
+}
+
+/** Signature and byte-size validation, shared by adapters, storage and archive import. */
+export function isValidIllustrationImage(
+  bytes: Uint8Array,
+  mime: unknown
+): mime is IllustrationImageMime {
+  return (
+    ILLUSTRATION_IMAGE_MIMES.includes(mime as IllustrationImageMime) &&
+    bytes.length > 0 &&
+    bytes.length <= ILLUSTRATION_MAX_IMAGE_BYTES &&
+    detectImageMime(bytes) === mime
+  );
 }
 
 /** Long scenes are excerpted from the end, where the newest events usually are. */

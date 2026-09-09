@@ -185,7 +185,7 @@ test('automatic title enrollment needs explicit opt-in and a configured title mo
   expect(execute).not.toHaveBeenCalled();
 });
 
-test('completed HTTP runs invoke the automatic title helper exactly once', async () => {
+test('real transport completes HTTP runs and invokes the automatic title helper exactly once', async () => {
   const { app, create } = await setup();
   const connection = app.store.product.connection({
     title: 'Synthetic transport',
@@ -207,33 +207,26 @@ test('completed HTTP runs invoke the automatic title helper exactly once', async
     translationPolicy: workspace.translationPolicy,
     titleModel: { id: model.id },
   });
-  const execute = vi
-    .spyOn(transport, 'executeProvider')
-    .mockImplementation(async (currentConnection, request, options) => {
-      transport.validateConnection(currentConnection, options.approvedOrigins);
-      options.beforeTurn?.();
-      await options.onWire?.({
-        connectionId: currentConnection.id,
-        protocol: currentConnection.protocol,
-        role: request.role,
-        modelId: request.modelId,
-        method: 'POST',
-        url: currentConnection.endpoint,
-        headers: {},
-        body: {},
-        bodySha256: 'synthetic',
-        stablePrefixSha256: 'synthetic',
-      });
-      return {
-        status: 'completed',
-        text: request.role === 'title' ? '첫 만남의 기록' : 'Synthetic completed source.',
-        toolCalls: [],
-        refusal: null,
-        error: null,
-        usage: { inputTokens: 1, outputTokens: 2, costUsd: null, raw: null, priceRevision: null },
-        opaqueState: null,
-      };
+  const bodies: transport.ProviderRequest[] = [];
+  // Preserve executeProvider, validation, wire journaling, encoder and SSE parser; replace I/O only.
+  vi.spyOn(globalThis, 'fetch').mockImplementation(async (url, options) => {
+    expect(new URL(String(url)).origin).toBe('http://127.0.0.1:9');
+    expect(options?.method).toBe('POST');
+    const request = JSON.parse(String(options?.body)) as transport.ProviderRequest;
+    bodies.push(request);
+    expect(['main', 'title']).toContain(request.role);
+    const events = [
+      {
+        type: 'text_delta',
+        delta: request.role === 'title' ? '첫 만남의 기록' : 'Synthetic completed source.',
+      },
+      { type: 'usage', inputTokens: 1, outputTokens: 2, costUsd: null },
+      { type: 'done', reason: 'stop' },
+    ];
+    return new Response(events.map((event) => `data: ${JSON.stringify(event)}\n\n`).join(''), {
+      headers: { 'content-type': 'text/event-stream' },
     });
+  });
   const chat = await create({ autoTitle: true });
   async function complete() {
     const current = app.store.chat(chat.id);
@@ -258,8 +251,12 @@ test('completed HTTP runs invoke the automatic title helper exactly once', async
     app.store.product.attempts(chat.id).filter((attempt) => attempt.role === 'title')
   ).toMatchObject([{ role: 'title', status: 'completed', runId: firstRun }]);
   await complete();
-  expect(execute.mock.calls.filter(([, request]) => request.role === 'title')).toHaveLength(1);
-  expect(execute.mock.calls.filter(([, request]) => request.role === 'main')).toHaveLength(2);
+  expect(bodies.filter((request) => request.role === 'title')).toHaveLength(1);
+  expect(bodies.filter((request) => request.role === 'main')).toHaveLength(2);
+  expect(bodies.find((request) => request.role === 'title')).toMatchObject({
+    stable: { tools: [] },
+    generation: { maxOutputTokens: 256 },
+  });
   expect(
     app.store.product.attempts(chat.id).filter((attempt) => attempt.role === 'title')
   ).toHaveLength(1);

@@ -25,6 +25,7 @@ const chatTables = [
   'context_commands',
   'context_heads',
   'context_checkpoints',
+  'outline_batches',
   'outline_nodes',
   'scene_commands',
   'package_requests',
@@ -344,6 +345,7 @@ export function deleteBranch(store: Store, chatId: string, branchId: string, val
     removeIds(store, 'jobs', 'id', jobIds);
     deleteIllustrationsForSources(store, sourceIds);
     for (const table of [
+      'outline_batches',
       'outline_nodes',
       'scene_commands',
       'package_requests',

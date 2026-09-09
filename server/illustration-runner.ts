@@ -28,7 +28,11 @@ import {
   type IllustrationScene,
 } from '../core/illustration.js';
 import type { CodexImageRequest, CodexImageResult } from './codex-runtime.js';
-import { fetchComfyUIResult, generateWithComfyUI } from './comfyui-client.js';
+import {
+  fetchComfyUIResult,
+  generateWithComfyUI,
+  type ComfyUIRequestOptions,
+} from './comfyui-client.js';
 import {
   claimIllustration,
   claimIllustrationForReconcile,
@@ -48,6 +52,8 @@ export type IllustrationRunnerHooks = {
   signal: AbortSignal;
   approvedOrigins: readonly string[];
   resolveCredential?: Parameters<typeof executeProvider>[2]['resolveCredential'];
+  resolveComfyCredential?: ComfyUIRequestOptions['resolveCredential'];
+  cancelRemoteOnAbort?: () => boolean;
   executeCodex?: Parameters<typeof executeProvider>[2]['executeCodex'];
   generateCodexImage?: (
     connection: Connection,
@@ -101,14 +107,18 @@ function publicSceneText(source: Source, snapshot: RunSnapshot): string {
       { sourceRevision: source.id, sourceHash: source.hash, text: source.text },
       snapshot.sourceSegments
     );
+    if (document.diagnostics.some((item) => item.severity === 'error'))
+      throw new IllustrationError('ILLUSTRATION_SOURCE_SEGMENTS_INVALID');
     const main = document.segments
       .filter((segment) => segment.kind === 'main')
       .map((segment) => source.text.slice(segment.bodyRange.start, segment.bodyRange.end).trim())
       .filter(Boolean)
       .join('\n\n');
-    return main || source.text;
-  } catch {
-    return source.text;
+    if (!main) throw new IllustrationError('ILLUSTRATION_SOURCE_EMPTY');
+    return main;
+  } catch (error) {
+    if (error instanceof IllustrationError) throw error;
+    throw new IllustrationError('ILLUSTRATION_SOURCE_SEGMENTS_INVALID');
   }
 }
 function scene(
@@ -207,11 +217,32 @@ export async function runIllustrationJob(
     toResult: (value: T) => ProviderResult
   ): Promise<T> => {
     let attemptId: string | undefined;
-    const value = await run(async (wire) => {
-      attemptId = await hooks.onAttemptStart(wire);
-      diagnostic.attempts.push(attemptId);
-      updateIllustrationDiagnostic(store, jobId, generation, owner, diagnostic);
-    });
+    let value: T;
+    try {
+      value = await run(async (wire) => {
+        attemptId = await hooks.onAttemptStart(wire);
+        diagnostic.attempts.push(attemptId);
+        updateIllustrationDiagnostic(store, jobId, generation, owner, diagnostic);
+      });
+    } catch (error) {
+      if (attemptId !== undefined)
+        await hooks.onAttemptFinish(attemptId, {
+          status: hooks.signal.aborted ? 'cancelled' : 'error',
+          text: '',
+          toolCalls: [],
+          refusal: null,
+          error: { code: error instanceof IllustrationError ? error.code : 'ILLUSTRATION_FAILED' },
+          usage: {
+            inputTokens: null,
+            outputTokens: null,
+            costUsd: null,
+            raw: null,
+            priceRevision: null,
+          },
+          opaqueState: null,
+        });
+      throw error;
+    }
     if (attemptId !== undefined) await hooks.onAttemptFinish(attemptId, toResult(value));
     return value;
   };
@@ -300,6 +331,7 @@ export async function runIllustrationJob(
       }));
     } else if (input.generator === 'comfyui') {
       if (!input.comfyui) throw new IllustrationError('ILLUSTRATION_GENERATOR_UNCONFIGURED');
+      if (input.comfyui.disabled) throw new IllustrationError('CONNECTION_NOT_AUTHORIZED');
       const workflow = parseComfyWorkflow(input.comfyui.workflow);
       const model = input.comfyui.promptModel;
       const connection = await authorizedConnection(hooks, model);
@@ -350,15 +382,21 @@ export async function runIllustrationJob(
           filled,
           {
             signal: hooks.signal,
-            resolveCredential: hooks.resolveCredential,
+            resolveCredential: hooks.resolveComfyCredential,
             timeoutMs: input.comfyui.timeoutMs,
             pollIntervalMs: input.comfyui.pollIntervalMs,
+            cancelRemoteOnAbort: hooks.cancelRemoteOnAbort,
+            onSubmitting: async () => {
+              diagnostic.comfyui = { submission: 'uncertain' };
+              await progress();
+            },
             onSubmitted: async (promptId) => {
-              diagnostic.comfyui = { ...diagnostic.comfyui, promptId };
+              diagnostic.comfyui = { ...diagnostic.comfyui, promptId, submission: 'accepted' };
               await progress();
             },
           }
         );
+        diagnostic.comfyui = { ...diagnostic.comfyui, submission: 'finished' };
         generated = rendered.images.map((image) => ({
           mime: image.mime,
           bytes: image.bytes,
@@ -392,9 +430,7 @@ export async function runIllustrationJob(
     diagnostic.code = code;
     const retryable =
       !aborted &&
-      (error instanceof IllustrationError
-        ? error.retryable || isRetryableIllustrationCode(code)
-        : isRetryableIllustrationCode(code));
+      (error instanceof IllustrationError ? error.retryable : isRetryableIllustrationCode(code));
     if (aborted) {
       failIllustration(
         store,
@@ -427,7 +463,8 @@ export async function reconcileIllustrationJob(
   store: Store,
   jobId: string,
   owner: string,
-  hooks: Pick<IllustrationRunnerHooks, 'signal' | 'resolveCredential' | 'onProgress'>
+  hooks: Pick<IllustrationRunnerHooks, 'signal' | 'onProgress'> &
+    Pick<ComfyUIRequestOptions, 'resolveCredential'>
 ): Promise<Illustration> {
   const { job, promptId, previous } = claimIllustrationForReconcile(store, jobId, owner);
   const generation = job.generation;
@@ -447,6 +484,7 @@ export async function reconcileIllustrationJob(
     const connection = {
       baseUrl: job.input.comfyui!.baseUrl,
       authorizationEnv: job.input.comfyui!.authorizationEnv,
+      disabled: job.input.comfyui!.disabled,
     };
     const result = await fetchComfyUIResult(connection, promptId, {
       signal: hooks.signal,
@@ -457,7 +495,11 @@ export async function reconcileIllustrationJob(
       failIllustration(store, jobId, generation, owner, 'failed', 'COMFYUI_EXECUTION_FAILED', {
         ...diagnostic,
         code: 'COMFYUI_EXECUTION_FAILED',
-        comfyui: { ...diagnostic.comfyui, statusMessages: result.statusMessages },
+        comfyui: {
+          ...diagnostic.comfyui,
+          statusMessages: result.statusMessages,
+          submission: 'finished',
+        },
       });
     else {
       const caption = diagnostic.prompt?.caption ?? '';
@@ -473,7 +515,7 @@ export async function reconcileIllustrationJob(
           caption,
           ...(diagnostic.prompt ? { prompt: diagnostic.prompt.prompt } : {}),
         })),
-        { ...clean, stage: 'store' }
+        { ...clean, stage: 'store', comfyui: { ...clean.comfyui, submission: 'finished' } }
       );
     }
   } catch (error) {

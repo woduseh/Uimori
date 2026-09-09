@@ -56,12 +56,83 @@ export function directHelperGrants(
   request: string,
   editor?: { draftId: string }
 ): HelperGrant[] {
-  const instruction = request
+  const clauses = request
     .replace(/```[\s\S]*?```/gu, '')
     .replace(/^\s*>.*$/gmu, '')
     .replace(/\([^)]*\bOOC\s*:[^)]*\)/giu, '')
-    .replace(/"[^"\n]*"|'[^'\n]*'|“[^”]*”|‘[^’]*’|`[^`]*`/gu, '')
-    .trim();
+    .replace(/"[^"\n]*"|'[^'\n]*'|“[^”]*”|‘[^’]*’|`[^`]*`|「[^」]*」|『[^』]*』/gu, '')
+    // Keep the prohibited clause intact, so it can veto that action elsewhere in the request.
+    .replace(/지\s*말고\s*/gu, '지 말고. ')
+    .split(/[.!?。;,\n]+|\s+(?:그리고|하지만|그러나|but)\s+/iu)
+    .map((clause) => clause.trim())
+    .filter(Boolean);
+  const blocked = new Set<string>();
+  const grants: HelperGrant[] = [];
+  for (let instruction of clauses) {
+    // Discussing a command does not execute it, even when the quoted words have no delimiters.
+    if (
+      /(?:설명|번역|해석|추천|제안|분석|검토|평가|비교)\s*(?:좀\s*)?(?:해\s*(?:줘|주세요|줄래)|하(?:자|세요))$/u.test(
+        instruction
+      ) ||
+      /(?:방법|작성법|사용법|의미|뜻).*(?:보여|알려)\s*(?:줘|주세요|줄래)$/u.test(instruction)
+    )
+      continue;
+    const withoutSaving = /(?:저장|적용)\s*없이|without (?:saving|applying)/iu.test(instruction);
+    if (withoutSaving) {
+      blocked.add('draft.save').add('draft.create.save');
+      instruction = instruction
+        .replace(/(?:저장|적용)\s*없이|without (?:saving|applying)/giu, '')
+        .trim();
+    }
+    if (/지\s*(?:는\s*)?(?:마|말)|do not|don't|never/iu.test(instruction)) {
+      const forbidden: [RegExp, string[]][] = [
+        [/(?:저장|적용|save|apply)/iu, ['draft.save', 'draft.create.save']],
+        [/(?:수정|편집|변경|바꾸|고치|edit|change|update)/iu, ['draft.patch']],
+        [/(?:구성|개요|줄거리|플롯|outline|plan)/iu, ['outline.write']],
+        [/(?:장면|본문|가정|scene|prose|artifact)/iu, ['artifact.generate']],
+        [/(?:제목|title|rename)/iu, ['title.write']],
+        [/(?:요약|문맥|summary|context|compact)/iu, ['context.edit', 'context.compact']],
+        [/(?:메모|정정|note)/iu, ['notes.write']],
+        [/(?:로어|lore)/iu, ['chat.lore']],
+        [/(?:옵션|option)/iu, ['options.oneoff']],
+        [/(?:포크|분기|fork|branch)/iu, ['chat.fork']],
+        [/(?:폴더|서재|folder|organize)/iu, ['library.organize']],
+        [
+          /(?:봇|페르소나|모듈|프롬프트|bot|persona|module|prompt|create)/iu,
+          [
+            'draft.create:bot',
+            'draft.create:persona',
+            'draft.create:module',
+            'draft.create:prompt-preset',
+          ],
+        ],
+      ];
+      const actions = forbidden
+        .filter(([pattern]) => pattern.test(instruction))
+        .flatMap(([, actions]) => actions);
+      // An unspecified prohibition cannot safely be narrowed to a different action.
+      if (!actions.length) return [];
+      for (const action of actions) blocked.add(action);
+      continue;
+    }
+    grants.push(...instructionGrants(requestId, scope, instruction, editor));
+  }
+  const byTarget = new Map<string, HelperGrant>();
+  for (const grant of grants) {
+    const current = byTarget.get(grant.target) ?? { ...grant, actions: [] };
+    for (const action of grant.actions)
+      if (!blocked.has(action) && !current.actions.includes(action)) current.actions.push(action);
+    if (current.actions.length) byTarget.set(grant.target, current);
+  }
+  return [...byTarget.values()];
+}
+
+function instructionGrants(
+  requestId: string,
+  scope: HelperScope,
+  instruction: string,
+  editor?: { draftId: string }
+): HelperGrant[] {
   const imperative =
     /(?:해\s?줘(?:요)?|해\s?주세요|해\s?줄래|하자|바꿔\s?줘|고쳐\s?줘|남겨\s?줘|만들어\s?줘|써\s?줘|보여\s?줘|그려\s?줘|save|apply|compact|rename|fork)(?:[.!?。]\s*)?$/iu.test(
       instruction
@@ -69,13 +140,7 @@ export function directHelperGrants(
     /^(?:please\s+)?(?:save|apply|compact|rename|fork|edit|change|update|write|remove|add|create)\b/iu.test(
       instruction
     );
-  if (
-    !imperative ||
-    /(?:하지\s?마|하지\s?말|저장\s?없이|적용\s?없이|do not|don't|without saving)/iu.test(
-      instruction
-    )
-  )
-    return [];
+  if (!imperative) return [];
   const actions: string[] = [];
   if (
     /(?:가정|장면|만약|다면|라면|what.if|scene)/iu.test(instruction) &&
@@ -124,6 +189,11 @@ export function directHelperGrants(
     )
   )
     actions.push('outline.write');
+  // A scene's composition is a plan; its mutation does not authorize writing scene prose.
+  if (actions.includes('outline.write')) {
+    const artifact = actions.indexOf('artifact.generate');
+    if (artifact >= 0) actions.splice(artifact, 1);
+  }
   if (
     /(?:제목).*(?:(?:변경|수정|설정)(?:해\s*(?:줘|주세요|줄래)|하(?:고|자|세요))|바꿔\s*줘)|^(?:please\s+)?(?:rename|set (?:the )?title)/iu.test(
       instruction

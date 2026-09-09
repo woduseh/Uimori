@@ -194,17 +194,19 @@ describe('image bytes, excerpts, retry classes and defaults', () => {
     const excerpt = excerptScene('a'.repeat(10) + 'END', 5);
     expect(excerpt).toBe('…aEND');
   });
-  test('classifies transport and remote execution failures as retryable and configuration as final', () => {
-    for (const code of [
-      'COMFYUI_UNREACHABLE',
-      'COMFYUI_EXECUTION_FAILED',
-      'CODEX_IMAGE_NOT_GENERATED',
-      'AUXILIARY_PROVIDER_HTTP_503',
-      'UND_ERR_SOCKET',
-      'FIXTURE_FAILURE',
-    ])
+  test('retries known-safe failures and leaves uncertain remote outcomes final', () => {
+    for (const code of ['COMFYUI_EXECUTION_FAILED', 'CODEX_IMAGE_NOT_GENERATED', 'FIXTURE_FAILURE'])
       expect(isRetryableIllustrationCode(code)).toBe(true);
     for (const code of [
+      'COMFYUI_UNREACHABLE',
+      'COMFYUI_HTTP_5XX',
+      'TIMEOUT',
+      'TRANSPORT_ERROR',
+      'CODEX_UNAVAILABLE',
+      'CODEX_TURN_FAILED',
+      'CODEX_EXECUTION_INTERRUPTED',
+      'AUXILIARY_PROVIDER_HTTP_503',
+      'UND_ERR_SOCKET',
       'COMFYUI_PROMPT_REJECTED',
       'COMFYUI_TIMEOUT',
       'COMFYUI_WORKFLOW_INVALID',

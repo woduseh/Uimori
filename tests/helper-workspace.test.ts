@@ -165,6 +165,114 @@ test('direct grants exclude quoted instructions, fiction OOC and recommendations
     expect.objectContaining({ target: 'chat', actions: ['context.compact'] }),
   ]);
 });
+test.each([
+  ['장면의 구성만 만들어줘', ['outline.write']],
+  ['장면의 구성을 수정해줘', ['outline.write']],
+  ['구성을 만들어줘라는 문장을 설명해줘', []],
+  ['이 채팅의 로어를 수정하는 방법을 설명해줘', []],
+  ['장면 작성 방법을 보여줘', []],
+  ['구성을 만들어줘. 본문은 작성하지 마', ['outline.write']],
+  ['구성만 만들어줘, 본문은 작성하지 마', ['outline.write']],
+  ['메모를 추가해줘. 제목은 바꾸지 말아줘', ['notes.write']],
+  ['제목은 바꾸지 말고 메모를 남겨줘', ['notes.write']],
+  ['「구성을 만들어줘」를 번역해줘', []],
+  ['구성을 참고해서 가정 장면을 써줘', ['artifact.generate']],
+  ['구성을 만들어줘. 구성은 수정하지 마', []],
+  ['구성을 만들어줘라는 문장을 해석해줘', []],
+  ['구성을 만들어줘라는 말의 뜻을 알려줘', []],
+] as const)('direct grants keep only the requested chat action: %s', (request, actions) => {
+  const scope = { kind: 'chat' as const, chatId: 'chat', branchId: 'branch' };
+  expect(directHelperGrants('r', scope, request).flatMap((grant) => grant.actions)).toEqual(
+    actions
+  );
+});
+test('mixed draft requests preserve explicit patch and save independently of prohibitions and explanations', () => {
+  const scope = { kind: 'library' as const, workId: 'work' },
+    editor = { draftId: 'draft' };
+  for (const request of [
+    '현재 초안을 수정해줘. 저장하지 마',
+    '저장 없이 현재 초안만 수정해줘',
+    '저장하지 말고 현재 초안을 수정해줘',
+  ])
+    expect(directHelperGrants('r', scope, request, editor)).toEqual([
+      expect.objectContaining({ target: 'draft', actions: ['draft.patch'] }),
+    ]);
+  expect(directHelperGrants('r', scope, '수정하지 말고 현재 초안을 저장해줘', editor)).toEqual([
+    expect.objectContaining({ target: 'draft', actions: ['draft.save'] }),
+  ]);
+  expect(directHelperGrants('r', scope, '새 봇을 만들어줘라는 문장을 번역해줘')).toEqual([]);
+  expect(directHelperGrants('r', scope, '초안을 저장해줘. 저장하지 마', editor)).toEqual([]);
+});
+test('real transport permits requested outline writing while refusing an unsolicited artifact child', async () => {
+  const f = fixture(),
+    chat = createFixtureChat(f.store, '구성만 요청한 본편');
+  const conversation = f.workspace.open({
+    kind: 'chat',
+    chatId: chat.id,
+    branchId: `main:${chat.id}`,
+  });
+  const bodies: transport.ProviderRequest[] = [];
+  vi.spyOn(globalThis, 'fetch').mockImplementation(async (url, options) => {
+    expect(new URL(String(url)).origin).toBe('http://127.0.0.1:9');
+    expect(options?.method).toBe('POST');
+    const body = JSON.parse(String(options?.body)) as transport.ProviderRequest;
+    bodies.push(body);
+    expect(body.role).toBe('helper');
+    const events =
+      bodies.length === 1
+        ? [
+            {
+              type: 'tool_delta',
+              index: 0,
+              id: 'outline',
+              name: 'outline.write',
+              argumentsDelta: JSON.stringify({
+                operationId: 'outline',
+                operations: [{ op: 'create', level: 'theme', title: '계획만 저장', intent: '' }],
+              }),
+            },
+            {
+              type: 'tool_delta',
+              index: 1,
+              id: 'child',
+              name: 'artifact.generate',
+              argumentsDelta: JSON.stringify({
+                request: '허가하지 않은 장면',
+                operationId: 'child',
+              }),
+            },
+            { type: 'done', reason: 'tool_calls' },
+          ]
+        : [
+            { type: 'text_delta', delta: '구성을 저장했어요.' },
+            { type: 'done', reason: 'stop' },
+          ];
+    return new Response(events.map((event) => `data: ${JSON.stringify(event)}\n\n`).join(''), {
+      headers: { 'content-type': 'text/event-stream' },
+    });
+  });
+  const task = f.runtime.enqueue(conversation.id, 'outline-only', '장면의 구성만 만들어줘');
+  await Promise.all(f.work);
+  expect(f.workspace.task(task.id), f.workspace.task(task.id).error ?? '').toMatchObject({
+    status: 'completed',
+    usage: { modelCalls: 2 },
+  });
+  expect(bodies).toHaveLength(2);
+  const events = bodies[1].input.results as unknown as import('../core/types.js').ToolEvent[];
+  expect(events.find((event) => event.name === 'outline.write')).toMatchObject({ denied: false });
+  expect(events.find((event) => event.name === 'artifact.generate')).toMatchObject({
+    denied: true,
+  });
+  expect(f.store.outline.detail(chat.id).nodes.map((node) => node.title)).toEqual(['계획만 저장']);
+  expect(f.store.db.prepare('SELECT COUNT(*) AS n FROM helper_artifact_jobs').get()).toEqual({
+    n: 0,
+  });
+  expect(f.store.db.prepare('SELECT COUNT(*) AS n FROM runs').get()).toEqual({ n: 0 });
+  expect(f.store.product.attempts(chat.id)).toMatchObject([
+    { role: 'helper', status: 'tool_calls' },
+    { role: 'helper', status: 'completed' },
+  ]);
+});
 test('operation receipt and nested service mutation commit or roll back together', () => {
   const f = fixture(),
     chat = createFixtureChat(f.store, '원 제목');

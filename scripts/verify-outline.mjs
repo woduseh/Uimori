@@ -5,8 +5,8 @@ await runBrowserVerification({
   scope:
     'Hierarchical composition: five levels, level rules, targeted edits and writing one designated unit at mobile and desktop widths; synthetic provider only',
   files: ['tests/outline-browser.spec.ts'],
-  requiredCases: ['OUTUI01', 'OUTUI02'],
-  expectedCount: 4,
+  requiredCases: ['OUTUI01', 'OUTUI02', 'OUTUI03', 'OUTUI04'],
+  expectedCount: 8,
   requiredScreenshots: [
     'outline-panel-390.png',
     'outline-panel-1440.png',
