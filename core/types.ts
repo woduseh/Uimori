@@ -207,6 +207,10 @@ export type ChatDetail = {
 
 /** Reader summaries never stand in for frozen execution inputs. */
 export type ReaderRun = Omit<Run, 'snapshot' | 'inputs' | 'toolEvents'> & {
+  /** Stable admission order of the first request in this retry chain. */
+  requestOrder?: number;
+  retryOf?: string | null;
+  supersededBy?: string | null;
   estimatedCost?: {
     usd: number | null;
     subtotalUsd: number;
@@ -253,6 +257,8 @@ export type ReaderDetail = Omit<ChatDetail, 'runs' | 'attempts'> & {
   illustrations?: import('./illustration.js').Illustration[];
   reader: {
     navigation: ReaderNavigationItem[];
+    /** Source-less turns belonging to this page, plus active work. */
+    pendingRunIds?: string[];
     /** Candidate creation order is independent of the visible Run page. */
     candidateBranches?: string[];
     latestBranchRuns?: Record<string, string>;

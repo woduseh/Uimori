@@ -1,6 +1,9 @@
+import { RequestMessage } from './RequestMessage.js';
+import { RetryFailure } from './RetryFailure.js';
 import { isModelSelectable } from './model-selection.js';
 import { combinationOwner, matchesPromptCombination } from '../core/prompt-combinations.js';
 import { DismissibleError } from './DismissibleError.js';
+import { ChatComposer, ComposerInput } from './ChatComposer.js';
 import { ComposerMore, LoreResetChip } from './ComposerMore.js';
 import { IconButton } from './IconButton.js';
 import { ActionMenu } from './ActionMenu.js';
@@ -14,7 +17,7 @@ import { discardActiveEditor } from './editor-workspace-context.js';
 import type { Section as ChatSettingsSection } from './ChatSettingsPanel.js';
 import { ReaderPages } from './ReaderPages.js';
 import { SceneNavigator } from './SceneNavigator.js';
-import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { createRoot } from 'react-dom/client';
 import {
   Activity,
@@ -49,7 +52,7 @@ import { PackageBehaviorPanel } from './PackageBehaviorPanel.js';
 import { SessionGate } from './SessionGate.js';
 import { Dialog } from './Dialog.js';
 import { DeleteButton } from './DeleteButton.js';
-import { BotNavigation, type ChatFolder } from './BotNavigation.js';
+import { BotNavigation, type ChatFolder } from './BotTreeNavigation.js';
 import { completePendingStoryProfile } from './pendingStory.js';
 import { useStory } from './useStory.js';
 import { useTestMode } from './useTestMode.js';
@@ -134,21 +137,11 @@ type Panel =
 const runActive = (status: string) => ['queued', 'running', 'waiting_for_state'].includes(status);
 const runFailed = (status: string) =>
   ['failed', 'cancelled', 'interrupted', 'refused', 'partial'].includes(status);
-const failureTitle = (status: string) =>
-  status === 'cancelled'
-    ? '생성을 취소했어요'
-    : status === 'interrupted'
-      ? '생성이 중단됐어요'
-      : status === 'refused'
-        ? '모델이 요청을 거부했어요'
-        : status === 'partial'
-          ? '본문이 일부만 생성됐어요'
-          : '본문 생성에 실패했어요';
 function App() {
   const s = useStory();
   const testMode = useTestMode();
   const compact = useCompactLayout();
-  const [grown, setGrown] = useState(false);
+
   // Compact widths open the scene list from the header title; the rail owns it otherwise.
   const [sceneList, setSceneList] = useState(false);
   const sceneCount = s.detail?.reader.navigation.length ?? 0;
@@ -260,7 +253,7 @@ function App() {
   const [readingLanguage, setReadingLanguage] = useState(
     () => localStorage.getItem('uimori:reading-language') || 'translation'
   );
-  const composing = useRef(false);
+
   const [libraryDirty, setLibraryDirty] = useState(false);
   const [pendingNavigation, setPendingNavigation] = useState<null | (() => void)>(null);
   const [discardingNavigation, setDiscardingNavigation] = useState(false);
@@ -299,25 +292,6 @@ function App() {
       (control) => currentValues[control.id] === savedValues[control.id]
     );
   });
-  // biome-ignore lint/correctness/useExhaustiveDependencies: Resize the mounted input after draft or view changes; its ref is stable inside useStory.
-  useLayoutEffect(() => {
-    const node = s.input.current;
-    if (!node) return;
-    node.style.height = 'auto';
-    node.style.height = `${Math.min(node.scrollHeight, 180)}px`;
-    // One row while the draft fits beside the buttons; once it wraps, the text takes the full
-    // width and the buttons move below. Shrink back only when the draft is cleared, so typing
-    // near the boundary does not flip the layout on every keystroke.
-    if (!s.draft) setGrown(false);
-    else if (!grown) {
-      const style = getComputedStyle(node);
-      const single =
-        Number.parseFloat(style.lineHeight) +
-        Number.parseFloat(style.paddingTop) +
-        Number.parseFloat(style.paddingBottom);
-      if (s.draft.includes('\n') || node.scrollHeight > single + 1) setGrown(true);
-    }
-  }, [s.draft, s.viewKey, s.destination, sourceEditing, grown]);
   const mainModel = s.library?.models.find(
     (item) => item.id === s.promptWorkspace?.modelRoutes.main?.id
   );
@@ -433,6 +407,7 @@ function App() {
       onNew={newStory}
       onLibrary={showLibrary}
       onChatsChanged={s.loadChats}
+      onLibraryChanged={s.loadLibrary}
       onError={s.setError}
       onSettings={() => {
         setSettingsTab('general');
@@ -523,7 +498,7 @@ function App() {
       className={`app-shell ${focus ? 'focus-reading' : ''} ${sidebarCollapsed ? 'sidebar-collapsed' : ''} ${optionsOpen && s.destination === 'story' && s.selected ? 'options-open' : ''} ${helperOpen ? 'helper-open' : ''}`}
     >
       <aside id="workspace-sidebar" className="sidebar" aria-label="탐색">
-        {navigation}
+        {!compact && panel !== 'navigation' && navigation}
       </aside>
       <main className="story-workspace">
         {s.destination === 'story' && (
@@ -776,91 +751,188 @@ function App() {
                         head={s.branch?.headRevision ?? null}
                         onSelect={s.chooseSource}
                       />
-                      {s.sources.map((source, index) => (
-                        <SourceReader
-                          onModelSettings={() => {
-                            setSettingsTab('models');
-                            setPanel('settings');
-                          }}
-                          contextSummary={
-                            s.detail!.runs.find((run) => run.id === source.runId)?.contextSummary
-                          }
-                          estimatedCost={
-                            s.detail!.runs.find((run) => run.id === source.runId)?.estimatedCost
-                          }
-                          packageStart={
-                            s.detail!.runs.find((run) => run.id === source.runId)?.packageStart
-                          }
-                          hasPackages={
-                            !!s.detail!.runs.find((run) => run.id === source.runId)?.hasPackages
-                          }
-                          presentationRefreshKey={s.detail!.reader.cursor}
-                          sourceSegments={
-                            s.detail!.runs.find((run) => run.id === source.runId)?.sourceSegments
-                          }
-                          key={source.id}
-                          source={source}
-                          index={index + (s.detail?.reader?.start ?? 0)}
-                          request={s.detail!.runs.find((run) => run.id === source.runId)?.request}
-                          jobs={s.detail!.jobs.filter((job) => job.sourceRevision === source.id)}
-                          illustrations={(s.detail!.illustrations ?? []).filter(
-                            (item) => item.sourceRevision === source.id
-                          )}
-                          assets={s.detail!.assets ?? []}
-                          refresh={() => s.refresh(s.selected)}
-                          onError={s.setError}
-                          onFork={s.fork}
-                          onRetry={
-                            s.canReuseRun(source.runId)
-                              ? async () => {
-                                  await s.generate(source.runId);
-                                }
-                              : undefined
-                          }
-                          onEditRequest={
-                            s.canReuseRun(source.runId)
-                              ? (text) => s.generate(source.runId, text)
-                              : undefined
-                          }
-                          onCheckRequest={
-                            s.pendingEditedRunId === source.runId ? () => s.generate() : undefined
-                          }
-                          onAskHelper={(sourceId, text) => {
-                            setOptionsOpen(false);
-                            setHelperOpen(true);
-                            if (s.selected && s.branch)
-                              setHelperSelection({
-                                key: crypto.randomUUID(),
-                                sourceId,
-                                sourceHash: source.hash,
-                                text,
-                                scope: { kind: 'chat', chatId: s.selected, branchId: s.branch.id },
-                              });
-                          }}
-                          retryDisabled={s.reuseBlocked || optionsBusy}
-                          onEditingChange={onSourceEditing}
-                          activity={(slots) => {
-                            const run = s.detail!.runs.find((item) => item.id === source.runId);
-                            return (
-                              run && (
+                      {s.conversation.map((entry) => {
+                        if (entry.kind === 'source') {
+                          const { source, index } = entry;
+                          return (
+                            <SourceReader
+                              onModelSettings={() => {
+                                setSettingsTab('models');
+                                setPanel('settings');
+                              }}
+                              contextSummary={
+                                s.detail!.runs.find((run) => run.id === source.runId)
+                                  ?.contextSummary
+                              }
+                              estimatedCost={
+                                s.detail!.runs.find((run) => run.id === source.runId)?.estimatedCost
+                              }
+                              packageStart={
+                                s.detail!.runs.find((run) => run.id === source.runId)?.packageStart
+                              }
+                              hasPackages={
+                                !!s.detail!.runs.find((run) => run.id === source.runId)?.hasPackages
+                              }
+                              presentationRefreshKey={s.detail!.reader.cursor}
+                              sourceSegments={
+                                s.detail!.runs.find((run) => run.id === source.runId)
+                                  ?.sourceSegments
+                              }
+                              key={source.id}
+                              source={source}
+                              index={index + (s.detail?.reader?.start ?? 0)}
+                              request={
+                                s.detail!.runs.find((run) => run.id === source.runId)?.request
+                              }
+                              jobs={s.detail!.jobs.filter(
+                                (job) => job.sourceRevision === source.id
+                              )}
+                              illustrations={(s.detail!.illustrations ?? []).filter(
+                                (item) => item.sourceRevision === source.id
+                              )}
+                              assets={s.detail!.assets ?? []}
+                              refresh={() => s.refresh(s.selected)}
+                              onError={s.setError}
+                              onFork={s.fork}
+                              onRetry={
+                                s.canReuseRun(source.runId)
+                                  ? async () => {
+                                      await s.generate(source.runId);
+                                    }
+                                  : undefined
+                              }
+                              onEditRequest={
+                                s.canReuseRun(source.runId)
+                                  ? (text) => s.generate(source.runId, text)
+                                  : undefined
+                              }
+                              onCheckRequest={
+                                s.pendingEditedRunId === source.runId
+                                  ? () => s.generate()
+                                  : undefined
+                              }
+                              onAskHelper={(sourceId, text) => {
+                                setOptionsOpen(false);
+                                setHelperOpen(true);
+                                if (s.selected && s.branch)
+                                  setHelperSelection({
+                                    key: crypto.randomUUID(),
+                                    sourceId,
+                                    sourceHash: source.hash,
+                                    text,
+                                    scope: {
+                                      kind: 'chat',
+                                      chatId: s.selected,
+                                      branchId: s.branch.id,
+                                    },
+                                  });
+                              }}
+                              retryDisabled={s.reuseBlocked || optionsBusy}
+                              onEditingChange={onSourceEditing}
+                              activity={(slots) => {
+                                const run = s.detail!.runs.find((item) => item.id === source.runId);
+                                return (
+                                  run && (
+                                    <TurnActivity
+                                      leading={slots.leading}
+                                      badges={slots.badges}
+                                      run={run}
+                                      source={source}
+                                      jobs={s.detail!.jobs}
+                                      activities={s.detail!.reader.responseActivity ?? []}
+                                      connected={s.connected}
+                                      branchId={s.branch?.id}
+                                      revision={s.detail!.reader.cursor}
+                                      refresh={() => s.refresh(s.selected)}
+                                      onError={s.setError}
+                                    />
+                                  )
+                                );
+                              }}
+                            />
+                          );
+                        }
+                        const { run } = entry;
+                        return (
+                          <article
+                            className="pending-turn"
+                            key={run.id}
+                            data-testid="pending-run"
+                            data-run-id={run.id}
+                            ref={(node) => {
+                              if (node && runFailed(run.status)) {
+                                const observer = pendingObserver.current;
+                                observer?.observe(node);
+                                return () => observer?.unobserve(node);
+                              }
+                            }}
+                          >
+                            <RequestMessage
+                              runId={run.id}
+                              request={run.request}
+                              disabled={s.reuseBlocked || optionsBusy}
+                              editHint="수정한 요청을 현재 설정으로 다시 실행해요."
+                              onSubmit={
+                                s.canReuseRun(run.id)
+                                  ? (text) => s.generate(run.id, text)
+                                  : undefined
+                              }
+                              onConfirm={
+                                s.pendingEditedRunId === run.id ? () => s.generate() : undefined
+                              }
+                            />
+                            <div className="run-outcome">
+                              {!runFailed(run.status) && (
                                 <TurnActivity
-                                  leading={slots.leading}
-                                  badges={slots.badges}
                                   run={run}
-                                  source={source}
-                                  jobs={s.detail!.jobs}
-                                  activities={s.detail!.reader.responseActivity ?? []}
+                                  jobs={[]}
+                                  activities={s.detail!.reader.activity ?? []}
                                   connected={s.connected}
                                   branchId={s.branch?.id}
                                   revision={s.detail!.reader.cursor}
                                   refresh={() => s.refresh(s.selected)}
                                   onError={s.setError}
                                 />
-                              )
-                            );
-                          }}
-                        />
-                      ))}
+                              )}
+                              {runActive(run.status) && (
+                                <div className="turn-skeleton" aria-hidden="true">
+                                  <span />
+                                  <span />
+                                  <span />
+                                </div>
+                              )}
+                              <StreamingResponse
+                                taskKind="main"
+                                taskId={run.id}
+                                taskStatus={run.status}
+                              />
+                              {runFailed(run.status) && (
+                                <RetryFailure
+                                  status={run.status}
+                                  error={run.error}
+                                  disabled={s.reuseBlocked || optionsBusy}
+                                  onRetry={
+                                    s.canReuseRun(run.id)
+                                      ? () => {
+                                          void s.generate(run.id);
+                                        }
+                                      : undefined
+                                  }
+                                  onSettings={() => {
+                                    if (run.error?.includes('PROMPT_')) showLibrary('prompts');
+                                    else {
+                                      setSettingsTab('models');
+                                      setPanel('settings');
+                                    }
+                                  }}
+                                  onDetails={() => inspect(run.id)}
+                                  onHistory={() => setPanel('tasks')}
+                                />
+                              )}
+                            </div>
+                          </article>
+                        );
+                      })}
                       <ReaderPages
                         detail={s.detail}
                         head={s.branch?.headRevision ?? null}
@@ -881,101 +953,6 @@ function App() {
                           }}
                         />
                       )}
-                      {s.visibleRuns
-                        .filter((run) => !run.sourceRevision)
-                        .map((run) => (
-                          <article
-                            className="pending-turn"
-                            key={run.id}
-                            data-testid="pending-run"
-                            data-run-id={run.id}
-                            ref={(node) => {
-                              if (node && runFailed(run.status)) {
-                                const observer = pendingObserver.current;
-                                observer?.observe(node);
-                                return () => observer?.unobserve(node);
-                              }
-                            }}
-                          >
-                            <div className="request-message">
-                              <p>{run.request}</p>
-                            </div>
-                            <div className="run-outcome">
-                              <TurnActivity
-                                run={run}
-                                jobs={[]}
-                                activities={s.detail!.reader.activity ?? []}
-                                connected={s.connected}
-                                branchId={s.branch?.id}
-                                revision={s.detail!.reader.cursor}
-                                refresh={() => s.refresh(s.selected)}
-                                onError={s.setError}
-                              />
-                              {runActive(run.status) && (
-                                <div className="turn-skeleton" aria-hidden="true">
-                                  <span />
-                                  <span />
-                                  <span />
-                                </div>
-                              )}
-                              <StreamingResponse
-                                taskKind="main"
-                                taskId={run.id}
-                                taskStatus={run.status}
-                              />
-                              {runFailed(run.status) && (
-                                <div className="turn-failure" role="group" aria-label="실패한 요청">
-                                  <strong>{failureTitle(run.status)}</strong>
-                                  {run.error && <p>{run.error}</p>}
-                                  <div className="turn-failure-actions">
-                                    {s.canReuseRun(run.id) && (
-                                      <>
-                                        <button
-                                          type="button"
-                                          disabled={s.reuseBlocked || optionsBusy}
-                                          onClick={() => {
-                                            void s.generate(run.id);
-                                          }}
-                                        >
-                                          현재 설정으로 재시도
-                                        </button>
-                                        <button
-                                          type="button"
-                                          className="secondary"
-                                          disabled={s.reuseBlocked || optionsBusy}
-                                          onClick={() => s.editRunRequest(run.id)}
-                                        >
-                                          요청 다시 편집
-                                        </button>
-                                      </>
-                                    )}
-                                    <button
-                                      type="button"
-                                      className="secondary"
-                                      onClick={() => {
-                                        setSettingsTab('models');
-                                        setPanel('settings');
-                                      }}
-                                    >
-                                      모델 설정
-                                    </button>
-                                    <button
-                                      type="button"
-                                      className="secondary"
-                                      onClick={() => inspect(run.id)}
-                                    >
-                                      상세
-                                    </button>
-                                    <small>
-                                      원래 요청 위치에서 현재 설정으로 새 전개를 생성해요. 기존
-                                      기록은 남아요.
-                                    </small>
-                                  </div>
-                                </div>
-                              )}
-                            </div>
-                          </article>
-                        ))}
                     </>
                   )}
                 </section>
@@ -1078,8 +1055,7 @@ function App() {
                     </button>
                   </p>
                 )}
-                <form
-                  className={`composer${grown ? ' grown' : ''}`}
+                <ChatComposer
                   hidden={sourceEditing}
                   onSubmit={(event) => {
                     event.preventDefault();
@@ -1100,34 +1076,16 @@ function App() {
                   <label className="sr-only" htmlFor="request">
                     다음 장면 요청
                   </label>
-                  <textarea
-                    ref={s.input}
+                  <ComposerInput
+                    inputRef={s.input}
                     id="request"
-                    rows={1}
                     maxLength={4000}
                     value={s.draft}
-                    onCompositionStart={() => {
-                      composing.current = true;
-                    }}
-                    onCompositionEnd={() => {
-                      composing.current = false;
-                    }}
+                    enterSend={enterSend}
                     onSelect={s.rememberCursor}
-                    onChange={(event) => {
-                      s.editDraft(event.target.value);
-                    }}
-                    onKeyDown={(event) => {
-                      if (
-                        event.key !== 'Enter' ||
-                        event.nativeEvent.isComposing ||
-                        composing.current ||
-                        event.keyCode === 229
-                      )
-                        return;
-                      if (event.ctrlKey || event.metaKey || (enterSend && !event.shiftKey)) {
-                        event.preventDefault();
-                        if (!s.active && !optionsBusy) void s.generate();
-                      }
+                    onChange={(event) => s.editDraft(event.target.value)}
+                    onSend={() => {
+                      if (!s.active && !optionsBusy) void s.generate();
                     }}
                     placeholder={
                       // A wrapping placeholder would grow the one-row composer on narrow screens.
@@ -1252,7 +1210,7 @@ function App() {
                       <ArrowUp size={21} />
                     </button>
                   )}
-                </form>
+                </ChatComposer>
                 {sourceEditing && s.active && (
                   <button
                     type="button"
@@ -1300,6 +1258,7 @@ function App() {
         onBusyChange={setOptionsBusy}
       />
       <HelperPanel
+        enterSend={enterSend}
         open={helperOpen}
         selection={helperSelection}
         scope={
@@ -1357,7 +1316,7 @@ function App() {
         onClose={() => setPanel('')}
         className="navigation-dialog"
       >
-        {navigation}
+        {panel === 'navigation' && navigation}
       </Dialog>
       <Dialog open={panel === 'new'} title="새 채팅" onClose={() => setPanel('')}>
         {s.library && (

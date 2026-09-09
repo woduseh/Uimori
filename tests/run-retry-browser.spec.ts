@@ -37,21 +37,21 @@ test('failed request edit, draft protection and uncertain retry reuse one admiss
   await page.goto(`/?chat=${chat.id}`);
   const failureCard = page.getByRole('group', { name: '실패한 요청', exact: true });
   await expect(failureCard).toBeVisible();
-  await expect(page.getByTestId('pending-run').getByTestId('turn-activity')).not.toHaveAttribute(
-    'open'
-  );
-  const edit = page.getByRole('button', { name: '요청 다시 편집' });
-  const retry = page.getByRole('button', { name: '현재 설정으로 재시도' });
+  const edit = page
+    .getByTestId('pending-run')
+    .getByRole('button', { name: '요청 편집', exact: true });
+  const retry = failureCard.getByRole('button', { name: '다시 시도', exact: true });
   const input = page.getByRole('textbox', { name: '다음 장면 요청' });
-  await edit.click();
-  await expect(input).toHaveValue('다시 쓸 합성 요청');
-  await expect(input).toBeFocused();
-  await expect(page.getByRole('button', { name: '조회 로어 제외 해제' })).toBeVisible();
   await input.fill('보존할 초안');
-  page.once('dialog', (dialog) => dialog.dismiss());
   await edit.click();
+  const inline = page.getByRole('textbox', { name: '요청 수정 내용' });
+  await expect(inline).toHaveValue('다시 쓸 합성 요청');
+  await expect(inline).toBeFocused();
+  await inline.fill('수정 중인 요청');
   await expect(input).toHaveValue('보존할 초안');
-  await page.getByRole('button', { name: '조회 로어 제외 해제' }).click();
+  await page.getByRole('button', { name: '요청 수정 취소' }).click();
+  await expect(failureCard).toBeVisible();
+  await expect(input).toHaveValue('보존할 초안');
   if (visualReview) await page.screenshot({ path: info.outputPath('retry-mobile.png') });
   const payloads: Record<string, unknown>[] = [];
   await page.route(`**/api/runs/${failed.id}/retry`, async (route) => {
@@ -62,7 +62,6 @@ test('failed request edit, draft protection and uncertain retry reuse one admiss
   });
   await retry.click();
   await expect(page.getByRole('button', { name: '이전 요청 확인' })).toBeVisible();
-  await expect(retry).toBeDisabled();
   await expect(input).toHaveValue('보존할 초안');
   await page.reload();
   await page.getByRole('button', { name: '이전 요청 확인' }).click();
@@ -73,11 +72,64 @@ test('failed request edit, draft protection and uncertain retry reuse one admiss
   expect(await page.evaluate((id) => sessionStorage.getItem(`draft:${id}`), chat.id)).toBe(
     '보존할 초안'
   );
-  await expect(page.getByRole('button', { name: '조회 로어 제외 해제' })).not.toBeVisible();
+  await expect(failureCard).toHaveCount(0);
+  await page.reload();
+  await expect(failureCard).toHaveCount(0);
+  await expect(page.getByTestId('source-request')).toHaveCount(1);
   const saved = await (await request.get(`/api/chats/${chat.id}`)).json();
   expect(saved.runs).toHaveLength(2);
   const retried = saved.runs.find((run: { id: string }) => run.id !== failed.id);
   expect(retried.request).toBe('다시 쓸 합성 요청');
-  expect(new URL(page.url()).searchParams.get('branch')).toBe(retried.snapshot.branchId);
+  expect(retried.snapshot.branchId).toBe(failed.snapshot.branchId);
+  expect(retried.snapshot.loreContextReset).toBe(true);
+  expect(new URL(page.url()).searchParams.get('branch')).toBeNull();
+  await expect(input).toHaveValue('보존할 초안');
   expect(saved.runs.find((run: { id: string }) => run.id === failed.id).status).toBe('failed');
+});
+
+test('independent failed requests retain their positions when a later request succeeds', async ({
+  page,
+  request,
+}) => {
+  const chat = await (await postFixtureChat(request, { data: { title: 'Ordered retry' } })).json();
+  const requests = ['첫 번째 실패 요청', '두 번째 실패 요청'];
+  for (const text of requests) {
+    expect(
+      (
+        await request.post('/api/test/control', {
+          data: { action: 'fail-next', point: 'source-transaction' },
+        })
+      ).ok()
+    ).toBe(true);
+    const response = await request.post(`/api/chats/${chat.id}/runs`, {
+      data: {
+        request: text,
+        expectedRevision: null,
+        expectedSettingsRevision: chat.settingsRevision,
+        idempotencyKey: crypto.randomUUID(),
+      },
+    });
+    expect(response.ok()).toBe(true);
+    const run = await response.json();
+    await expect
+      .poll(
+        async () =>
+          (await (await request.get(`/api/chats/${chat.id}`)).json()).runs.find(
+            (item: { id: string }) => item.id === run.id
+          )?.status
+      )
+      .toBe('failed');
+  }
+  await page.goto(`/?chat=${chat.id}`);
+  await expect(page.getByTestId('source-request')).toHaveText(requests);
+  const second = page.getByTestId('pending-run').filter({ hasText: requests[1] });
+  await second.getByRole('button', { name: '다시 시도', exact: true }).click();
+  await expect
+    .poll(async () => (await (await request.get(`/api/chats/${chat.id}`)).json()).sources.length)
+    .toBe(1);
+  await expect(page.getByTestId('source-request')).toHaveText(requests);
+  await expect(page.getByRole('group', { name: '실패한 요청', exact: true })).toHaveCount(1);
+  await page.reload();
+  await expect(page.getByTestId('source-request')).toHaveText(requests);
+  await expect(page.getByRole('group', { name: '실패한 요청', exact: true })).toHaveCount(1);
 });
