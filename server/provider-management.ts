@@ -93,6 +93,7 @@ export function managementImpact(
   const globalRoles = Object.entries({
     ...workspace.modelRoutes,
     'translation-refusal': workspace.translationPolicy.refusalModel,
+    title: workspace.titleModel,
   })
     .filter(([, ref]) => matches(ref))
     .map(([role]) => role);

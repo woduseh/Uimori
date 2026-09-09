@@ -1,3 +1,4 @@
+import { Switch } from './BooleanControls.js';
 import { ModelWorkspaceEditor } from './ModelWorkspaceEditor.js';
 import { PromptWorkspaceEditor } from './PromptWorkspaceEditor.js';
 import { DeleteButton } from './DeleteButton.js';
@@ -414,8 +415,7 @@ export function AppSettingsPanel({
                         </select>
                       </label>
                       <label className="check">
-                        <input
-                          type="checkbox"
+                        <Switch
                           checked={enterSend}
                           onChange={(event) => setEnterSend(event.target.checked)}
                         />

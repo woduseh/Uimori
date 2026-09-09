@@ -117,6 +117,7 @@ const capabilities: readonly ModelCapability[] = [
   {
     id: 'openai/gpt-5.6-sol',
     name: 'GPT-5.6 Sol',
+    // Additive tier support must not invalidate existing no-tier Run/model snapshots.
     revision: '2026-09-09.1',
     protocol: 'vercel-chat-v1',
     maxOutputTokens: 128_000,
@@ -125,7 +126,11 @@ const capabilities: readonly ModelCapability[] = [
     stopSequences: false,
     reasoningEfforts: ['none', 'low', 'medium', 'high', 'xhigh'],
     defaultReasoningEffort: 'medium',
-    sources: ['https://vercel.com/ai-gateway/models/gpt-5.6-sol'],
+    serviceTiers: ['default', 'flex'],
+    sources: [
+      'https://vercel.com/ai-gateway/models/gpt-5.6-sol',
+      'https://vercel.com/docs/ai-gateway/models-and-providers/service-tiers',
+    ],
   },
   ...(['pro', 'flash'] as const).map(
     (variant): ModelCapability => ({

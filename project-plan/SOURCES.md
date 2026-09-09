@@ -1,5 +1,9 @@
 # 근거와 확인 범위 v0.6.1
 
+## 2026-09-09 Vercel Sol Flex
+
+Vercel [Sol 모델 페이지](https://vercel.com/ai-gateway/models/gpt-5.6-sol)와 [Service Tiers](https://vercel.com/docs/ai-gateway/models-and-providers/service-tiers)의 같은 날 공개 명세 → OpenAI raw Chat 요청의 `service_tier` → `core/model-capabilities.ts`의 Vercel Sol에 default/flex를 선언하고 기존 `encodeChat` 인코더를 재사용했어요. `tests/model-capabilities.test.ts`, `tests/openai-chat-protocol.test.ts`, PMUI11이 옵션 허용·전송·후속 호출 고정·UI 저장을 검증해요. Flex는 요청 힌트이며 실제 적용·과금은 공급자 응답/로그 기준이에요. 다른 Vercel 모델의 지원을 자동 확대하거나 가격 절감을 보장하지 않아요.
+
 문서 제목의 v0.6.1은 초기 계약 버전이에요. 각 절의 조사·채택·미구현·검증 문구는 그 절을 기록한 시점의 근거이며, 이후 구현으로 대체된 판단도 이력으로 남겨요. 현재 기능·schema·검증 범위는 [CURRENT](CURRENT.md), 공통 API는 [패키지 동작](../docs/PACKAGE-BEHAVIOR.md), 새 자료 이식은 [Risu 이식 가이드](../docs/RISU-PORTING.md)를 확인해요.
 
 ## 2026-09-07 로어 위치·유지와 캐시 경계

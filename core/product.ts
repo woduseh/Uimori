@@ -51,7 +51,12 @@ export type Content = ContentRef & {
   package?: import('./content-package.js').ContentPackage;
   hasPackage?: boolean;
 };
+export type PromptCombinationOwner =
+  | { kind: 'preset'; id: string }
+  | { kind: 'workspace'; role: PromptRole };
 export type SavedPromptCombination = ContentRef & {
+  owner?: PromptCombinationOwner;
+  controls?: import('./prompt-program.js').PromptProgram['controls'];
   title: string;
   role: PromptRole;
   values: Record<string, import('./prompt-program.js').PromptValue>;
@@ -65,16 +70,19 @@ export type PromptPreset = ContentRef & {
 };
 /** Editable, application-wide working copies. Applying a preset copies its content. */
 export type CurrentPrompt = {
+  presetId?: string;
   title: string;
   program: import('./prompt-program.js').PromptProgram;
   values: Record<string, import('./prompt-program.js').PromptValue>;
 };
 export type ModelWorkspace = {
+  titleModel?: ModelRef | null;
   revision: number;
   routes: Record<TaskRole, ModelRef | null>;
   translationPolicy: PromptWorkspace['translationPolicy'];
 };
 export type PromptWorkspace = {
+  titleModel?: ModelRef | null;
   modelRoutes: Record<TaskRole, ModelRef | null>;
   revision: number;
   main: CurrentPrompt;
@@ -179,7 +187,7 @@ export type Attempt = {
   runId: string | null;
   jobId: string | null;
   storyJobId?: string | null;
-  role: TaskRole | 'state' | 'memory';
+  role: TaskRole | 'state' | 'memory' | 'title';
   connectionId: string;
   modelId: string;
   status: string;

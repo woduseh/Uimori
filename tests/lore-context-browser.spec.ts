@@ -1,3 +1,4 @@
+import { navigationAction } from './ui-navigation.js';
 import { visualReview } from './fixtures/visual-review.js';
 import {
   editLibraryContent,
@@ -102,10 +103,7 @@ test('LCUI01 lore placement and invalid order drafts stay independent from folde
   });
   await page.setViewportSize({ width: 1440, height: 1000 });
   await page.goto('/');
-  await page
-    .getByRole('navigation', { name: '자료 탐색', exact: true })
-    .getByRole('button', { name: '서재', exact: true })
-    .click();
+  await navigationAction(page, '서재');
   const library = page.getByTestId('library-panel');
   await editLibraryContent(page, `${original.title}`);
   const fields = library.getByRole('region', { name: '패키지 구성', exact: true }),
@@ -177,7 +175,7 @@ test('LCUI02 policy drafts survive tabs and preview reflects the unsaved policy 
   await page.goto(`/?chat=${chat.id}`);
   await page.getByLabel('다음 장면 요청', { exact: true }).fill('합성 다음 장면');
   await page.getByRole('button', { name: '입력창 더보기' }).click();
-  await page.getByRole('checkbox', { name: '다음 생성에서 조회 로어 제외' }).click();
+  await page.getByRole('switch', { name: '다음 생성에서 조회 로어 제외' }).click();
   await page.getByRole('button', { name: '채팅 설정', exact: true }).click();
   await selectChatSettingsSection(page, '봇·페르소나·모듈');
   const editor = page.getByTestId('profile-editor'),
@@ -261,7 +259,7 @@ test('LCUI03 a lost response freezes the one-shot reset through retry and expose
   const reset = page.getByRole('button', { name: '조회 로어 제외 해제' });
   await page.getByLabel('다음 장면 요청', { exact: true }).fill('합성 처음 요청');
   await page.getByRole('button', { name: '입력창 더보기' }).click();
-  await page.getByRole('checkbox', { name: '다음 생성에서 조회 로어 제외' }).click();
+  await page.getByRole('switch', { name: '다음 생성에서 조회 로어 제외' }).click();
   await page.getByRole('button', { name: '원문 생성', exact: true }).click();
   await expect.poll(async () => (await detail(request, chat.id)).runs[0]?.status).toBe('completed');
   await expect(page.getByTestId('source')).toHaveCount(1);
@@ -308,7 +306,7 @@ test('LCUI04 rare request option stays hidden until selected and supports dismis
     chat = await createChat(request, bot);
   await page.goto(`/?chat=${chat.id}`);
   const more = page.getByRole('button', { name: '입력창 더보기' }),
-    choice = page.getByRole('checkbox', { name: '다음 생성에서 조회 로어 제외' }),
+    choice = page.getByRole('switch', { name: '다음 생성에서 조회 로어 제외' }),
     chip = page.getByRole('button', { name: '조회 로어 제외 해제' });
   await expect(chip).toHaveCount(0);
   await expect(choice).toHaveCount(0);

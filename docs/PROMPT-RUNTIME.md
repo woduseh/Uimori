@@ -6,6 +6,8 @@
 
 ## 공개 API
 
+프롬프트 편집·옵션 조합의 새 저장은 `validateEditablePromptProgram`과 `resolveEditablePromptValues`로 boolean 기본값/명시 값을 `true | false`로 제한해요. UI는 기존 boolean `null`을 꺼짐으로 보여주고 사용자가 저장할 때 `false`로 확정해요. 텍스트·숫자·선택 옵션의 `null`은 유지해요. 과거 Run·보관 파일을 읽고 평가하는 기존 검증/해석기는 변경하지 않으며 운영 DB를 자동 이관하지 않아요.
+
 ### Gemini 중간 system 임시 호환 처리
 
 2026-09-08: `core/provider-messages.ts`는 모델 ID가 `gemini-*`(게이트웨이의 `google/gemini-*` 등 마지막 경로 요소 포함)일 때 첫 non-system 메시지 이후의 모든 system 메시지를 전송 시 user로 바꿔요. 선두의 연속 system, 본문, 순서, 저장된 AST·Run snapshot은 보존하며 `GEMINI_MID_SYSTEM_TO_USER` 진단에 원래 block/index를 남겨요. Vertex는 기존 방식대로 연속 user의 parts를 합쳐요. 다른 모델의 role·지원 검사는 유지해요.
@@ -103,6 +105,6 @@ state write·action idempotency·job dispatch·random draw 저장·reroll·sourc
 
 입력창의 `창작 옵션` 버튼은 현재 main 프롬프트의 옵션 패널을 열어요. 넓은 화면에서는 대화 옆에, 1100px 이하에서는 별도 시트로 표시해요. 프롬프트의 `group`과 `description`을 표시하고 `visiblePromptControls`로 조건을 평가해요. 숨긴 옵션의 값은 지우지 않아요. 프롬프트 편집기와 채팅 패널은 `web/PromptControlFields.tsx`의 입력을 공유해요.
 
-선택값은 현재 전역 프롬프트 작업본에 명시 저장하며 workspace revision CAS로 동시 편집을 보호해요. 채팅별 프롬프트 선택·옵션 연결은 제거했어요. 프리셋은 프로그램과 선택값을 복사하며 후속 수정이나 삭제는 현재 작업본에 영향을 주지 않아요. 진행 중인 실행과 과거 Run snapshot은 유지해요. 충돌 시 초안을 보존하고 최신 설정을 다시 불러올 수 있어요. [현재 작업본·번역·재요청 계약](RUNTIME-SIMPLIFICATION.md)을 봐요.
+선택값은 현재 전역 프롬프트 작업본에 명시 저장하며 workspace revision CAS로 동시 편집을 보호해요. 채팅별 프롬프트 선택·옵션 연결은 제거했어요. 프리셋은 프로그램과 선택값을 복사하고 현재 작업본에 `presetId` 출처를 남기며 후속 수정이나 삭제는 현재 작업본에 영향을 주지 않아요. 저장 조합은 그 프리셋 또는 출처 없는 기본 작업본의 역할에 속해요. 같은 소속과 같은 옵션 정의인 조합만 선택값으로 적용하며, 다른 프리셋의 같은 control ID나 바뀐 정의에 이전 조합을 적용하지 않아요. 진행 중인 실행과 과거 Run snapshot은 유지해요. 충돌 시 초안을 보존하고 최신 설정을 다시 불러올 수 있어요. [현재 작업본·번역·재요청 계약](RUNTIME-SIMPLIFICATION.md)을 봐요.
 
 검증: `node scripts/verify-chat-prompt-options.mjs`는 새 DB/port에서 옵션 입력·명시 저장·채팅 간 현재 옵션 공유·CAS 복구·390px 화면과 기존 P01 프롬프트 선택/Run snapshot 회귀를 확인해요. 실제 공급자나 개인 자료는 사용하지 않아요.

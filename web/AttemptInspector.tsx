@@ -10,6 +10,7 @@ const roleLabels: Record<Attempt['role'], string> = {
   image: '이미지 배치',
   state: '서사 상태',
   memory: '장기 기억',
+  title: '채팅 제목',
 };
 type AttemptSummary = Omit<Attempt, 'request' | 'response' | 'rawUsage'>;
 const total = (attempts: AttemptSummary[], field: 'inputTokens' | 'outputTokens' | 'costUsd') =>
@@ -103,7 +104,15 @@ function AttemptTable({
           </thead>
           <tbody>
             {(
-              ['main', 'translation', 'status', 'image', 'state', 'memory'] as Attempt['role'][]
+              [
+                'main',
+                'translation',
+                'status',
+                'image',
+                'state',
+                'memory',
+                'title',
+              ] as Attempt['role'][]
             ).map((role) => {
               const selected = attempts.filter((attempt) => attempt.role === role);
               const cost = total(selected, 'costUsd');

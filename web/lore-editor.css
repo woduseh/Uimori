@@ -100,14 +100,6 @@
   align-items: center;
   gap: 8px;
 }
-.lore-manager input[type="checkbox"] {
-  width: 16px;
-  height: 16px;
-  min-height: 16px;
-  flex: none;
-  margin: 0;
-  accent-color: var(--accent);
-}
 .lore-rows {
   max-height: 490px;
   overflow: auto;

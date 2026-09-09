@@ -1,3 +1,4 @@
+import { SelectionCheckbox } from './BooleanControls.js';
 import { PackageTransfer } from './PackageTransfer.js';
 import { SlidersHorizontal } from 'lucide-react';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
@@ -764,8 +765,7 @@ export function LibraryPanel({
                     {selecting && (
                       <label className="library-select-check">
                         <span className="sr-only">{item.title} 선택</span>
-                        <input
-                          type="checkbox"
+                        <SelectionCheckbox
                           aria-label={`${item.title} 선택`}
                           checked={selectedIds.includes(item.id)}
                           onChange={(event) =>

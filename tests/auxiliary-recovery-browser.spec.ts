@@ -95,6 +95,24 @@ test('auxiliary failures show separate safe causes and recreate status with curr
   await expect(promptFailure).toContainText('입력 슬롯');
   await expect(promptFailure).toContainText('모델 전송 전');
   await expect(promptFailure).not.toContainText('인증');
+  for (const [code, message] of [
+    ['AUXILIARY_PROVIDER_PARTIAL', '모델 응답을 끝까지 받지 못했어요.'],
+    ['AUXILIARY_PROVIDER_TIMEOUT', '제한 시간 안에 모델 응답을 완료하지 못했어요.'],
+    ['AUXILIARY_PROVIDER_INPUT_CONTEXT_LIMIT_EXCEEDED', '요청이 모델의 입력 한도를 초과했어요.'],
+  ]) {
+    jobs[1].error = code;
+    await page.reload();
+    const activity = page.getByTestId('turn-activity').first();
+    await expect(activity).toBeVisible();
+    if (!(await activity.evaluate((element) => (element as HTMLDetailsElement).open)))
+      await activity.locator(':scope > summary').click();
+    const failure = activity.getByTestId('job-translation');
+    await expect(failure.locator('.error')).toHaveCount(1);
+    await expect(failure.getByRole('alert')).toContainText(message);
+    await expect(failure).toContainText(code);
+    await expect(failure).not.toContainText('구간을 자동');
+    await expect(failure.getByRole('button', { name: '현재 설정으로 번역 재시도' })).toBeVisible();
+  }
   const after: ChatDetail = await (await request.get(`/api/chats/${chat.id}`)).json();
   expect(after.sources).toEqual(detail!.sources);
 });

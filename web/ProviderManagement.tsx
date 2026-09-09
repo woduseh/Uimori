@@ -1,3 +1,4 @@
+import { Switch } from './BooleanControls.js';
 import { useEffect, useRef, useState } from 'react';
 import { ArrowLeft, ArrowRight, Plus, Plug, Power, Trash2 } from 'lucide-react';
 import { ActionMenu } from './ActionMenu.js';
@@ -1188,8 +1189,7 @@ export function ConnectionEditor({
             />
           </label>
           <label className="check">
-            <input
-              type="checkbox"
+            <Switch
               checked={connection.enabled}
               onChange={(event) => setConnection({ ...connection, enabled: event.target.checked })}
             />

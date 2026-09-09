@@ -1,3 +1,4 @@
+import { Switch } from './BooleanControls.js';
 import { useLayoutEffect, useRef, useState } from 'react';
 import type { ContentPackage } from '../core/content-package.js';
 import { PACKAGE_IMAGE_MIMES, type PackageImage } from '../core/package-images.js';
@@ -275,8 +276,7 @@ export function PackageImagesEditor({ value, onChange, onDirtyChange }: Props) {
               </select>
             </label>
             <label className="check">
-              <input
-                type="checkbox"
+              <Switch
                 aria-label="자료의 대표 이미지로 사용"
                 disabled={active.allowedUse === 'inline'}
                 checked={value.portraitImageId === active.id}

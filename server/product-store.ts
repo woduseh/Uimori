@@ -7,7 +7,9 @@ import {
   freezeCurrentPrompts,
   validateCurrentPrompt,
   validatePromptWorkspace,
+  validateCombinationOwner,
 } from './prompt-workspace.js';
+import { combinationOwner } from '../core/prompt-combinations.js';
 import {
   GENERATION_KEYS,
   generationFromModel,
@@ -58,6 +60,8 @@ import {
   validatePromptProgram,
   validateChatPromptControls,
   resolvePromptValues,
+  resolveEditablePromptValues,
+  validateEditablePromptProgram,
   reconcilePromptValues,
 } from '../core/prompt-program.js';
 import { validateRunSnapshot } from './snapshot-archive.js';
@@ -359,11 +363,48 @@ export class ProductStore {
   }
   promptCombination(value: unknown) {
     const b = record(value);
-    fields(b, ['title', 'role', 'values']);
+    fields(b, ['title', 'role', 'values', 'owner', 'expectedRevision', 'workspaceRevision']);
     const role = choice(b.role, ['main', 'translation'], 'prompt role');
-    const current = promptWorkspace(this.store)[role];
-    const values = resolvePromptValues(current.program, record(b.values));
-    return this.save('prompt-combination', { title: text(b.title, 'title', 200), role, values });
+    return this.store.transaction(() => {
+      const workspace = promptWorkspace(this.store);
+      const current = workspace[role];
+      const fromWorkspace = Object.hasOwn(b, 'workspaceRevision');
+      if (fromWorkspace && (Object.hasOwn(b, 'owner') || Object.hasOwn(b, 'expectedRevision')))
+        throw new HttpError(400, 'Choose one prompt combination source');
+      const owner = fromWorkspace
+        ? combinationOwner(current, role)
+        : validateCombinationOwner(b.owner);
+      let program = current.program;
+      if (fromWorkspace || owner.kind === 'workspace') {
+        if (owner.kind === 'workspace' && owner.role !== role)
+          throw new HttpError(400, 'Prompt role mismatch');
+        if (!fromWorkspace && current.presetId)
+          throw new HttpError(400, 'Current prompt belongs to a preset');
+        if (
+          workspace.revision !==
+          number(
+            fromWorkspace ? b.workspaceRevision : b.expectedRevision,
+            'prompt workspace revision'
+          )
+        )
+          throw new HttpError(409, 'Current prompts changed; refresh before saving');
+      } else {
+        this.assertAvailable('prompt-preset', owner.id);
+        const preset = this.get<PromptPreset>('prompt-preset', owner.id);
+        if (preset.role !== role) throw new HttpError(400, 'Prompt role mismatch');
+        if (preset.revision !== number(b.expectedRevision, 'prompt revision'))
+          throw new HttpError(409, 'Prompt preset changed; refresh before saving');
+        program = preset.program;
+      }
+      const values = resolveEditablePromptValues(program, record(b.values));
+      return this.saveInTransaction('prompt-combination', {
+        title: text(b.title, 'title', 200),
+        role,
+        values,
+        owner,
+        controls: structuredClone(program.controls),
+      });
+    });
   }
   promptPreset(value: unknown, id?: string) {
     const b = record(value);
@@ -371,8 +412,8 @@ export class ProductStore {
     const role = choice(b.role, ['main', 'translation'], 'prompt role');
     const program =
       b.program !== undefined
-        ? validatePromptProgram(b.program)
-        : validatePromptProgram(
+        ? validateEditablePromptProgram(b.program)
+        : validateEditablePromptProgram(
             createDefaultPromptProgram(text(b.text, 'prompt text', 200000, true), role)
           );
     if (program.collaboration) {
@@ -395,7 +436,10 @@ export class ProductStore {
         title: text(b.title, 'title', 200),
         role,
         program,
-        values: resolvePromptValues(program, b.values === undefined ? {} : record(b.values)),
+        values: resolveEditablePromptValues(
+          program,
+          b.values === undefined ? {} : record(b.values)
+        ),
       },
       id,
       id ? number(b.expectedRevision, 'revision') : undefined
@@ -1371,9 +1415,19 @@ function validateArchiveVersion(row: Row, providerSetting = false) {
     if (program.collaboration && body.role !== 'main')
       throw new HttpError(400, 'Collaboration requires the main prompt role');
   } else if (row.kind === 'prompt-combination') {
-    fields(body, ['id', 'revision', 'title', 'role', 'values']);
+    fields(body, ['id', 'revision', 'title', 'role', 'values', 'owner', 'controls']);
     choice(body.role, ['main', 'translation'], 'prompt role');
     validateChatPromptControls({ values: body.values, combinations: [] });
+    if (body.owner !== undefined || body.controls !== undefined) {
+      const owner = validateCombinationOwner(body.owner);
+      if (owner.kind === 'workspace' && owner.role !== body.role)
+        throw new HttpError(400, 'Prompt role mismatch');
+      const program = validatePromptProgram({
+        ...createDefaultPromptProgram(''),
+        controls: body.controls,
+      });
+      resolvePromptValues(program, record(body.values));
+    }
   } else if (row.kind === 'connection') {
     fields(body, [
       'id',
@@ -1645,6 +1699,7 @@ function validateArchiveGraph(product: ProductStore) {
   const workspace = promptWorkspace(product.store);
   for (const selected of [
     ...Object.values(workspace.modelRoutes),
+    workspace.titleModel,
     workspace.translationPolicy.refusalModel,
     ...(workspace.main.program.collaboration?.agents ?? []).map((agent) => agent.model),
   ])
@@ -1953,13 +2008,14 @@ function validateArchiveGraph(product: ProductStore) {
     }
     choice(
       attempt.role,
-      ['main', 'translation', 'status', 'image', 'state', 'memory'],
+      ['main', 'translation', 'status', 'image', 'state', 'memory', 'title'],
       'attempt role'
     );
     if (
       attempt.story_job_id === null &&
       (attempt.run_id !== null
         ? attempt.role !== 'main' &&
+          attempt.role !== 'title' &&
           !(attempt.role === 'memory' && parse(runs.get(attempt.run_id)!.snapshot).contextPlan)
         : jobs.get(attempt.job_id)?.kind !== attempt.role)
     )

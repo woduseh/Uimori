@@ -1,3 +1,4 @@
+import { Switch } from './BooleanControls.js';
 import { useEffect, useState } from 'react';
 import type { ContentPackage } from '../core/content-package.js';
 import { validateSourceSegmentPolicy, type SourceSegmentRule } from '../core/source-segments.js';
@@ -125,8 +126,7 @@ export function SourceSegmentsEditor({
             </select>
           </label>
           <label>
-            <input
-              type="checkbox"
+            <Switch
               checked={rule.title ?? false}
               disabled={rule.match === 'inline'}
               onChange={(event) => update(index, { title: event.target.checked })}
@@ -134,16 +134,14 @@ export function SourceSegmentsEditor({
             시작 표식 뒤의 글을 제목으로 사용
           </label>
           <label>
-            <input
-              type="checkbox"
+            <Switch
               checked={rule.expanded ?? false}
               onChange={(event) => update(index, { expanded: event.target.checked })}
             />
             처음부터 펼쳐 표시
           </label>
           <label>
-            <input
-              type="checkbox"
+            <Switch
               checked={rule.exclude ?? false}
               onChange={(event) => update(index, { exclude: event.target.checked })}
             />

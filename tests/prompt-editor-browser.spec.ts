@@ -149,11 +149,11 @@ test('NUI01 native prompt import, draft preservation, roles, history and saved c
     .toBe('Synthetic native composed');
   await composer.getByLabel('합성 분위기', { exact: true }).selectOption('"calm"');
   await composer.getByLabel('새 조합 이름', { exact: true }).fill('차분한 장면');
-  await composer.getByRole('button', { name: '전역 창작 조합으로 저장', exact: true }).click();
+  await composer.getByRole('button', { name: '옵션 조합 저장', exact: true }).click();
   await expect(composer.getByLabel('새 조합 이름', { exact: true })).toHaveValue('');
   await composer.getByLabel('합성 분위기', { exact: true }).selectOption('"bright"');
   await composer
-    .getByLabel('전역 창작 조합', { exact: true })
+    .getByLabel('이 프롬프트의 옵션 조합', { exact: true })
     .selectOption({ label: '차분한 장면' });
   await expect(composer.getByLabel('합성 분위기', { exact: true })).toHaveValue('"calm"');
   await editor.getByRole('button', { name: '현재 설정 저장', exact: true }).click();

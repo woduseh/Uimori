@@ -1,3 +1,4 @@
+import { Switch } from './BooleanControls.js';
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import {
   behaviorActionTriggers,
@@ -134,8 +135,7 @@ function InputField({
   if (schema.type === 'boolean')
     return (
       <label className="check">
-        <input
-          type="checkbox"
+        <Switch
           aria-label={label}
           checked={value === true}
           onChange={(e) => onChange(e.target.checked)}

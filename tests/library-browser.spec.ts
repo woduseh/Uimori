@@ -276,7 +276,7 @@ test('LIBUI03 prompts have independent folders and unsaved edits survive a cance
   await guard.getByRole('button', { name: '계속 편집', exact: true }).click();
   await expect(page.getByRole('dialog', { name: '탐색', exact: true })).toBeHidden();
   await expect(panel.getByLabel('프롬프트 이름', { exact: true })).toHaveValue(`${prefix} Unsaved`);
-  await panel.getByRole('button', { name: '수정 저장', exact: true }).click();
+  await panel.getByRole('button', { name: '저장', exact: true }).click();
   await expect
     .poll(
       async () =>

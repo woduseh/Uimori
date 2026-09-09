@@ -178,10 +178,7 @@ test('BUI02 behavior editor validates without discarding an invalid draft or oth
 }) => {
   await page.setViewportSize({ width: 1440, height: 1000 });
   await page.goto('/');
-  await page
-    .getByRole('navigation', { name: '자료 탐색', exact: true })
-    .getByRole('button', { name: '서재', exact: true })
-    .click();
+  await navigationAction(page, '서재');
   const library = page.getByTestId('library-panel');
   await createLibraryContent(page);
   await revealLibraryEditor(page);

@@ -188,7 +188,8 @@ test('TSKUI01 task overview screenshots wait for real run, job and attempt data 
     expect(attemptsResponse.ok()).toBe(true);
     const attempts = (await attemptsResponse.json()) as unknown[];
     await expect(usage.getByRole('table')).toBeVisible();
-    await expect(usage.getByRole('row')).toHaveCount(7);
+    await expect(usage.getByRole('row')).toHaveCount(8);
+    await expect(usage.getByRole('rowheader', { name: '채팅 제목', exact: true })).toBeVisible();
     await expect(usage.getByText(new RegExp(`^전송 시도 ${attempts.length}회`))).toBeVisible();
     await expect(panel.getByRole('status').filter({ hasText: /불러오는 중/ })).toHaveCount(0);
     await expect(panel.getByRole('alert')).toHaveCount(0);

@@ -1,4 +1,5 @@
 import { useId } from 'react';
+import { ToggleRow } from './ToggleRow.js';
 import {
   visiblePromptControls,
   type PromptControl,
@@ -22,19 +23,12 @@ export function ValueInput({
   return (
     <div className="prompt-option-field">
       {control.type === 'boolean' ? (
-        <label className="prompt-option-check">
-          <input
-            type="checkbox"
-            aria-label={label}
-            aria-describedby={describedBy}
-            checked={value === true}
-            ref={(node) => {
-              if (node) node.indeterminate = value === null;
-            }}
-            onChange={(event) => onChange(event.target.checked)}
-          />
-          {label}
-        </label>
+        <ToggleRow
+          label={label}
+          description={control.description}
+          checked={value === true}
+          onChange={onChange}
+        />
       ) : (
         <label>
           {label}
@@ -78,8 +72,10 @@ export function ValueInput({
           )}
         </label>
       )}
-      {control.description && <small id={descriptionId}>{control.description}</small>}
-      {control.type !== 'select' && (
+      {control.type !== 'boolean' && control.description && (
+        <small id={descriptionId}>{control.description}</small>
+      )}
+      {control.type !== 'select' && control.type !== 'boolean' && (
         <button
           type="button"
           className="ghost prompt-option-unset"

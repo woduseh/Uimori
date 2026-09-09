@@ -181,8 +181,8 @@ test('CSUI02 section changes, browser Back and resizing preserve chat setting dr
   await selectChatSettingsSection(page, '모델');
   await expect(dialog.getByRole('button', { name: '전역 모델 설정', exact: true })).toBeVisible();
   await selectChatSettingsSection(page, sections[0]);
-  const image = dialog.getByRole('checkbox', { name: '원문 이미지 자동 배치', exact: true });
-  const translationImage = dialog.getByRole('checkbox', {
+  const image = dialog.getByRole('switch', { name: '원문 이미지 자동 배치', exact: true });
+  const translationImage = dialog.getByRole('switch', {
     name: '번역 이미지 자동 배치',
     exact: true,
   });
@@ -191,7 +191,7 @@ test('CSUI02 section changes, browser Back and resizing preserve chat setting dr
   await image.setChecked(!originalImage);
   await translationImage.uncheck();
   await selectChatSettingsSection(page, '자동 후속 작업');
-  const status = dialog.getByRole('checkbox', { name: '장면 상태 자동 실행', exact: true });
+  const status = dialog.getByRole('switch', { name: '장면 상태 자동 실행', exact: true });
   const originalStatus = await status.isChecked();
   await status.setChecked(!originalStatus);
   await page.evaluate(() => history.back());

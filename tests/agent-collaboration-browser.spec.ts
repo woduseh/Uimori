@@ -8,6 +8,104 @@ import type { PromptPreset } from '../core/product.js';
 import { navigationAction, openPromptTools } from './ui-navigation.js';
 import { postFixtureChat } from './fixtures/chat.js';
 
+test('AGENTUI03 shared selections remain independent and binary switches fit and persist at 390 and 1440px', async ({
+  page,
+  request,
+}, info) => {
+  const program = createDefaultPromptProgram('Synthetic boolean controls.');
+  const longLabel = '인물의 선택과 관계를 충분히 설명하는 긴 창작 옵션 이름';
+  const description =
+    '긴 설명이 여러 줄로 표시되어도 스위치와 겹치거나 화면 밖으로 밀려나지 않아요.';
+  program.controls = [
+    { id: 'inner', label: longLabel, description, type: 'boolean', default: false },
+    { id: 'dialogue', label: '대화 중심 서술', type: 'boolean', default: false },
+  ];
+  const created = await request.post('/api/prompt-presets', {
+    data: { title: `Boolean UI ${crypto.randomUUID()}`, role: 'main', program },
+  });
+  expect(created.ok()).toBe(true);
+  const preset = (await created.json()) as PromptPreset;
+  await page.goto('/');
+  await navigationAction(page, '프롬프트');
+  await page.getByRole('button', { name: `${preset.title} 프롬프트 편집`, exact: true }).click();
+  const editor = page.getByTestId('prompt-editor');
+  const collaboration = editor.getByRole('region', { name: '에이전트 협업' });
+  const enabled = collaboration.getByRole('switch', { name: '협업 사용', exact: true });
+  const save = editor.getByRole('button', { name: /^(수정 )?저장$/ });
+  await enabled.check();
+  await collaboration.getByRole('button', { name: '인물 에이전트 추가', exact: true }).click();
+  await enabled.uncheck();
+  for (const width of [390, 1440]) {
+    await page.setViewportSize({ width, height: 1000 });
+    await enabled.focus();
+    await page.keyboard.press('Space');
+    await expect(enabled).toBeChecked();
+    const first = collaboration.getByRole('checkbox', { name: longLabel, exact: true });
+    const second = collaboration.getByRole('checkbox', { name: '대화 중심 서술', exact: true });
+    await first.uncheck();
+    await second.uncheck();
+    await first.focus();
+    await page.keyboard.press('Space');
+    await expect(first).toBeChecked();
+    await expect(second).not.toBeChecked();
+    await second.focus();
+    await page.keyboard.press('Space');
+    await expect(first).toBeChecked();
+    await expect(second).toBeChecked();
+    const value = editor.getByRole('switch', { name: longLabel, exact: true });
+    await expect(value).not.toBeChecked();
+    const field = value.locator(
+      'xpath=ancestor::*[contains(concat(" ",normalize-space(@class)," ")," prompt-option-field ")][1]'
+    );
+    await expect(field.getByRole('button', { name: /미설정/ })).toHaveCount(0);
+    await expect(field.getByText(description, { exact: true })).toBeVisible();
+    const textBox = await field.locator('.toggle-row-text').boundingBox();
+    const valueBox = await value.boundingBox();
+    expect(textBox).not.toBeNull();
+    expect(valueBox).not.toBeNull();
+    expect(textBox!.x + textBox!.width).toBeLessThanOrEqual(valueBox!.x);
+    for (const control of [enabled, value]) {
+      const box = await control.boundingBox();
+      expect(box).not.toBeNull();
+      expect(box!.width).toBe(44);
+      expect(box!.height).toBe(26);
+    }
+    for (const region of [field, collaboration, editor])
+      expect(
+        await region.evaluate((element) => element.scrollWidth <= element.clientWidth + 1)
+      ).toBe(true);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(
+      true
+    );
+    await save.click();
+    await expect
+      .poll(
+        async () =>
+          (await (await request.get(`/api/prompt-presets/${preset.id}`)).json()).program
+            .collaboration
+      )
+      .toMatchObject({ enabled: true, sharedControls: ['inner', 'dialogue'] });
+    await enabled.scrollIntoViewIfNeeded();
+    if (visualReview)
+      await page.screenshot({ path: info.outputPath(`boolean-controls-${width}.png`) });
+    await enabled.focus();
+    await page.keyboard.press('Space');
+    await expect(enabled).not.toBeChecked();
+    await save.click();
+    await expect
+      .poll(
+        async () =>
+          (await (await request.get(`/api/prompt-presets/${preset.id}`)).json()).program
+            .collaboration.enabled
+      )
+      .toBe(false);
+  }
+  await page.reload();
+  await navigationAction(page, '프롬프트');
+  await page.getByRole('button', { name: `${preset.title} 프롬프트 편집`, exact: true }).click();
+  await expect(enabled).not.toBeChecked();
+});
+
 test('AGENTUI01 collaboration stays editable through incomplete drafts, undo and JSON round trips at 390px', async ({
   page,
   request,
@@ -24,7 +122,7 @@ test('AGENTUI01 collaboration stays editable through incomplete drafts, undo and
     .getByLabel('프롬프트 이름', { exact: true })
     .fill(`협업 합성 UI ${crypto.randomUUID()}`);
   const enabled = collaboration.getByRole('switch', { name: '협업 사용' });
-  const save = editor.getByRole('button', { name: '새 프롬프트 저장', exact: true });
+  const save = editor.getByRole('button', { name: '저장', exact: true });
   await expect(enabled).not.toBeChecked();
   await enabled.check();
   await expect(save).toBeDisabled();
@@ -103,7 +201,7 @@ test('AGENTUI01 collaboration stays editable through incomplete drafts, undo and
     (item) =>
       item.url().endsWith(`/api/prompt-presets/${saved.id}`) && item.request().method() === 'PUT'
   );
-  await editor.getByRole('button', { name: '수정 저장', exact: true }).click();
+  await editor.getByRole('button', { name: '저장', exact: true }).click();
   expect((await (await updatedResponse).json()).program.collaboration.enabled).toBe(false);
   await page.reload();
   await navigationAction(page, '프롬프트');
@@ -144,7 +242,7 @@ test('AGENTUI02 saved collaboration options reach the real preview API and trans
     (item) =>
       item.url().endsWith(`/api/prompt-presets/${preset.id}`) && item.request().method() === 'PUT'
   );
-  await editor.getByRole('button', { name: '수정 저장', exact: true }).click();
+  await editor.getByRole('button', { name: '저장', exact: true }).click();
   const saved = (await (await updated).json()) as PromptPreset;
   expect(saved.program.collaboration).toMatchObject({
     maxCalls: 4,

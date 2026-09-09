@@ -86,6 +86,7 @@ test('prompt copies and chat contents survive preset deletion', () => {
   const s = database(),
     prompt = s.product.promptPreset({ title: 'Prompt', role: 'main', text: 'Write' });
   const combination = s.product.promptCombination({
+    workspaceRevision: promptWorkspace(s).revision,
     title: 'Options',
     role: 'main',
     values: {},
@@ -151,6 +152,7 @@ test('all supported kinds expose DELETE and read-only impact routes with strict 
               })
             : (() => {
                 return s.product.promptCombination({
+                  workspaceRevision: promptWorkspace(s).revision,
                   title: 'Synthetic route combination',
                   role: 'main',
                   values: {},

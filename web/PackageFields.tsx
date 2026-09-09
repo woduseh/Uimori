@@ -1,3 +1,4 @@
+import { SelectionCheckbox } from './BooleanControls.js';
 import { LoreEditor } from './LoreEditor.js';
 import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import type { Content } from '../core/product.js';
@@ -781,8 +782,7 @@ function BehaviorEditor({
                 {action.description && <p className="muted">{action.description}</p>}
                 {actionMethods.map((method) => (
                   <label className="check behavior-method-choice" key={method.id}>
-                    <input
-                      type="checkbox"
+                    <SelectionCheckbox
                       checked={triggers.includes(method.id)}
                       onChange={(e) => toggleMethod(index, action, method.id, e.target.checked)}
                     />

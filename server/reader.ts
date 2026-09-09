@@ -5,25 +5,41 @@ import { mergedReaderAssets } from './package-images.js';
 import type { ReaderActivity } from '../core/types.js';
 
 /** Metadata only; an explicit page scope includes its older completed work as well. */
-function readerActivity(store: Store, chatId: string, sourceIds?: string[]): ReaderActivity[] {
-  const selection = sourceIds
-    ? 'SELECT * FROM activity WHERE sourceRevision IN (SELECT value FROM json_each(?)) ORDER BY createdAt,id'
-    : "SELECT * FROM activity WHERE status IN ('queued','running','waiting_for_state') UNION ALL SELECT * FROM recent ORDER BY createdAt,id";
+function readerActivity(
+  store: Store,
+  chatId: string,
+  sourceIds?: string[],
+  page?: { before: [string, string] | null; limit: number }
+): ReaderActivity[] {
+  const selection = page
+    ? `SELECT * FROM activity ${page.before ? 'WHERE (updatedAt,id) < (?,?)' : ''} ORDER BY updatedAt DESC,id DESC LIMIT ?`
+    : sourceIds
+      ? 'SELECT * FROM activity WHERE sourceRevision IN (SELECT value FROM json_each(?)) ORDER BY createdAt,id'
+      : "SELECT * FROM activity WHERE status IN ('queued','running','waiting_for_state') UNION ALL SELECT * FROM recent ORDER BY createdAt,id";
   const rows = store.db
     .prepare(`WITH activity AS (
-    SELECT id,'main' AS kind,status,created_at AS createdAt,updated_at AS updatedAt,branch_id AS branchId,source_revision AS sourceRevision,0 AS generation FROM runs WHERE chat_id=?
+    SELECT id,'main' AS kind,status,created_at AS createdAt,updated_at AS updatedAt,branch_id AS branchId,source_revision AS sourceRevision,0 AS generation,NULL AS sourceHash,0 AS superseded,(status='interrupted' OR COALESCE(error,'') LIKE '%PROVIDER_UNCERTAIN%') AS executionUncertain FROM runs WHERE chat_id=?
     UNION ALL
-    SELECT j.id,j.kind,j.status,j.created_at,j.updated_at,r.branch_id,j.source_revision,j.generation FROM jobs j JOIN sources s ON s.id=j.source_revision JOIN runs r ON r.id=s.run_id
+    SELECT j.id,j.kind,j.status,j.created_at,j.updated_at,r.branch_id,j.source_revision,j.generation,j.source_hash,CASE WHEN j.kind='translation' AND j.status IN ('failed','partial','stale') AND COALESCE(j.error,'') NOT LIKE '%PROVIDER_UNCERTAIN%' THEN EXISTS(SELECT 1 FROM jobs newer WHERE newer.chat_id=j.chat_id AND newer.source_revision=j.source_revision AND newer.source_hash=j.source_hash AND newer.kind='translation' AND newer.status='completed' AND (newer.revision,newer.created_at,newer.id) > (j.revision,j.created_at,j.id)) ELSE 0 END,(j.status='interrupted' OR COALESCE(j.error,'') LIKE '%PROVIDER_UNCERTAIN%') FROM jobs j JOIN sources s ON s.id=j.source_revision JOIN runs r ON r.id=s.run_id
       WHERE j.chat_id=? AND j.source_hash=COALESCE((SELECT hash FROM source_edits WHERE source_id=s.id ORDER BY revision DESC LIMIT 1),s.hash)
     UNION ALL
-    SELECT j.id,j.kind,j.status,j.created_at,j.updated_at,COALESCE(json_extract(j.snapshot,'$.branchId'),r.branch_id),j.source_revision,j.generation FROM story_jobs j JOIN sources s ON s.id=j.source_revision JOIN runs r ON r.id=s.run_id
+    SELECT j.id,j.kind,j.status,j.created_at,j.updated_at,COALESCE(json_extract(j.snapshot,'$.branchId'),r.branch_id),j.source_revision,j.generation,j.source_hash,0,(j.status='interrupted' OR COALESCE(j.error,'') LIKE '%PROVIDER_UNCERTAIN%') FROM story_jobs j JOIN sources s ON s.id=j.source_revision JOIN runs r ON r.id=s.run_id
       WHERE j.chat_id=? AND j.source_hash=COALESCE((SELECT hash FROM source_edits WHERE source_id=s.id ORDER BY revision DESC LIMIT 1),s.hash)
   ), recent AS (SELECT * FROM activity WHERE status NOT IN ('queued','running','waiting_for_state') ORDER BY updatedAt DESC,id DESC LIMIT 30)
   ${selection}`)
-    .all(chatId, chatId, chatId, ...(sourceIds ? [JSON.stringify(sourceIds)] : [])) as Omit<
-    ReaderActivity,
-    'startedAt' | 'finishedAt'
-  >[];
+    .all(
+      chatId,
+      chatId,
+      chatId,
+      ...(page
+        ? [...(page.before ?? []), page.limit]
+        : sourceIds
+          ? [JSON.stringify(sourceIds)]
+          : [])
+    ) as (Omit<ReaderActivity, 'startedAt' | 'finishedAt' | 'superseded' | 'executionUncertain'> & {
+    superseded: number;
+    executionUncertain: number;
+  })[];
   const eventTimes = new Map<string, string>();
   const timeline = store.db
     .prepare(`SELECT entity_id,kind,at FROM events WHERE chat_id=? AND entity_id IN (SELECT value FROM json_each(?))
@@ -43,8 +59,55 @@ function readerActivity(store: Store, chatId: string, sourceIds?: string[]): Rea
     const finishedAt = ['queued', 'running', 'waiting_for_state'].includes(row.status)
       ? null
       : (time(row.status) ?? row.updatedAt);
-    return { ...row, startedAt, finishedAt };
+    return {
+      ...row,
+      superseded: !!row.superseded,
+      executionUncertain: !!row.executionUncertain,
+      startedAt,
+      finishedAt,
+    };
   });
+}
+
+/** Bounded metadata history; independent of the reader's latest thirty records. */
+export function readerActivities(
+  store: Store,
+  id: string,
+  query: Record<string, string | undefined>
+) {
+  store.chat(id);
+  const limit = query.limit === undefined ? 100 : Number(query.limit);
+  if (!Number.isSafeInteger(limit) || limit < 1 || limit > 100)
+    throw new HttpError(400, 'Invalid activity limit');
+  let before: [string, string] | null = null;
+  if (query.before !== undefined) {
+    try {
+      const parsed: unknown = JSON.parse(Buffer.from(query.before, 'base64url').toString('utf8'));
+      if (
+        !Array.isArray(parsed) ||
+        parsed.length !== 3 ||
+        parsed[0] !== id ||
+        typeof parsed[1] !== 'string' ||
+        !parsed[1] ||
+        typeof parsed[2] !== 'string' ||
+        !parsed[2]
+      )
+        throw new Error('Invalid cursor');
+      before = [parsed[1], parsed[2]];
+    } catch {
+      throw new HttpError(400, 'Invalid activity cursor');
+    }
+  }
+  const rows = readerActivity(store, id, undefined, { before, limit: limit + 1 });
+  const items = rows.slice(0, limit);
+  const last = items.at(-1);
+  return {
+    items,
+    nextCursor:
+      rows.length > limit && last
+        ? Buffer.from(JSON.stringify([id, last.updatedAt, last.id])).toString('base64url')
+        : null,
+  };
 }
 
 /** Read projection only. Frozen execution records remain available through detail/run APIs. */

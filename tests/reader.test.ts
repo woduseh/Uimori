@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { basename, isAbsolute, join, relative, resolve } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { createApp, type App } from '../server/app.js';
-import { readerDetail } from '../server/reader.js';
+import { readerActivities, readerDetail } from '../server/reader.js';
 import type { Store } from '../server/store.js';
 import type { RunSnapshot } from '../core/types.js';
 
@@ -411,6 +411,9 @@ test('activity remains page independent and retains active work beyond the termi
       'branchId',
       'sourceRevision',
       'generation',
+      'sourceHash',
+      'superseded',
+      'executionUncertain',
     ].sort()
   );
 });
@@ -490,4 +493,81 @@ test('response activity retains older page work without expanding global activit
   ).toBe(false);
   expect(editedActivity.some((a) => a.id === currentMemory)).toBe(true);
   expect(editedActivity.some((a) => a.id === items[0].runId)).toBe(true);
+});
+
+test('activity history pages past recent thirty and validates chat-scoped cursors', async () => {
+  const app = await setup();
+  const chat = createFixtureChat(app.store, 'Activity pagination');
+  for (let i = 0; i < 35; i++) source(app.store, chat.id);
+  expect(readerDetail(app.store, chat.id, {}).reader.activity).toHaveLength(30);
+  const first = readerActivities(app.store, chat.id, { limit: '20' });
+  expect(first.items).toHaveLength(20);
+  expect(first.nextCursor).not.toBeNull();
+  const second = readerActivities(app.store, chat.id, { before: first.nextCursor!, limit: '20' });
+  expect(second.items).toHaveLength(15);
+  expect(second.nextCursor).toBeNull();
+  expect(new Set([...first.items, ...second.items].map((item) => item.id)).size).toBe(35);
+  const other = createFixtureChat(app.store, 'Other activity');
+  expect(() => readerActivities(app.store, other.id, { before: first.nextCursor! })).toThrow(
+    'Invalid activity cursor'
+  );
+  for (const query of ['limit=101', 'limit=0', 'before=bad']) {
+    const response = await app.inject({
+      method: 'GET',
+      url: `/api/chats/${chat.id}/activities?${query}`,
+    });
+    expect(response.statusCode).toBe(400);
+  }
+  const response = await app.inject({
+    method: 'GET',
+    url: `/api/chats/${chat.id}/activities?limit=20`,
+  });
+  expect(response.statusCode).toBe(200);
+  expect(response.json()).toEqual(first);
+});
+
+test('translation resolution uses same source hash and revision beyond the recent window', async () => {
+  const { store } = await setup();
+  const chat = createFixtureChat(store, 'Activity resolution');
+  store.settings(chat.id, chat.settingsRevision, { ...chat.settings, status: true });
+  const item = source(store, chat.id);
+  const original = store.db.prepare('SELECT id FROM jobs WHERE source_revision=?').get(item.id) as {
+    id: string;
+  };
+  store.db
+    .prepare(
+      "UPDATE jobs SET kind='translation',status='failed',updated_at='2099-01-01' WHERE id=?"
+    )
+    .run(original.id);
+  const insert = store.db.prepare(
+    "INSERT INTO jobs(id,chat_id,source_revision,source_hash,kind,status,revision,created_at,updated_at) VALUES(?,?,?,?,'translation','completed',?,'2000-01-01','2000-01-01')"
+  );
+  insert.run(randomUUID(), chat.id, item.id, 'other-hash', 2);
+  expect(
+    readerDetail(store, chat.id, {}).reader.activity.find((a) => a.id === original.id)?.superseded
+  ).toBe(false);
+  insert.run(randomUUID(), chat.id, item.id, item.hash, 3);
+  for (let i = 0; i < 35; i++) source(store, chat.id);
+  const activity = readerDetail(store, chat.id, {}).reader.activity;
+  expect(activity.find((a) => a.id === original.id)).toMatchObject({
+    superseded: true,
+    sourceHash: item.hash,
+  });
+  expect(activity.some((a) => a.kind === 'translation' && a.status === 'completed')).toBe(false);
+  for (const status of ['partial', 'stale']) {
+    store.db.prepare('UPDATE jobs SET status=? WHERE id=?').run(status, original.id);
+    expect(
+      readerActivities(store, chat.id, {}).items.find((a) => a.id === original.id)
+    ).toMatchObject({ superseded: true, executionUncertain: false });
+  }
+  store.db
+    .prepare("UPDATE jobs SET status='failed',error='AUXILIARY_PROVIDER_UNCERTAIN' WHERE id=?")
+    .run(original.id);
+  expect(
+    readerActivities(store, chat.id, {}).items.find((a) => a.id === original.id)
+  ).toMatchObject({ superseded: false, executionUncertain: true });
+  store.db.prepare("UPDATE jobs SET status='interrupted' WHERE id=?").run(original.id);
+  expect(
+    readerActivities(store, chat.id, {}).items.find((a) => a.id === original.id)
+  ).toMatchObject({ superseded: false, executionUncertain: true });
 });

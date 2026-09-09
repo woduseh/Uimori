@@ -1,3 +1,4 @@
+import { Switch } from './BooleanControls.js';
 import { useEffect, useRef, useState } from 'react';
 import {
   DEFAULT_LORE_CONTEXT,
@@ -165,8 +166,7 @@ export function LoreContextPolicyEditor({
         오래 사용하지 않은 자료부터 정리해요.
       </p>
       <label className="check">
-        <input
-          type="checkbox"
+        <Switch
           aria-label="조회한 로어를 다음 생성에 유지"
           checked={draft.enabled}
           onChange={(event) => change({ ...draft, enabled: event.target.checked })}

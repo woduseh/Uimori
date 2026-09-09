@@ -1,3 +1,4 @@
+import { navigationAction } from './ui-navigation.js';
 import { visualReview } from './fixtures/visual-review.js';
 import { expect, test, type APIRequestContext, type Locator, type Page } from '@playwright/test';
 import type { ContentPackage } from '../core/content-package.js';
@@ -57,10 +58,7 @@ async function seed(
 async function openLibrary(page: Page, kind: Content['kind']) {
   await page.setViewportSize({ width: 1440, height: 1000 });
   await page.goto('/');
-  await page
-    .getByRole('navigation', { name: '자료 탐색', exact: true })
-    .getByRole('button', { name: '서재', exact: true })
-    .click();
+  await navigationAction(page, '서재');
   const library = page.getByTestId('library-panel');
   await library
     .getByRole('tab', {

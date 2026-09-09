@@ -1,4 +1,5 @@
 import { isModelSelectable } from './model-selection.js';
+import { combinationOwner, matchesPromptCombination } from '../core/prompt-combinations.js';
 import { DismissibleError } from './DismissibleError.js';
 import { ComposerMore, LoreResetChip } from './ComposerMore.js';
 import { IconButton } from './IconButton.js';
@@ -239,7 +240,16 @@ function App() {
   const currentPrompt = s.promptWorkspace?.main;
   const hasCreativeOptions = !!currentPrompt?.program.controls.length;
   const creativePresets =
-    s.library?.promptCombinations?.filter((item) => item.role === 'main') ?? [];
+    s.library?.promptCombinations?.filter(
+      (item) =>
+        currentPrompt &&
+        matchesPromptCombination(
+          item,
+          combinationOwner(currentPrompt, 'main'),
+          'main',
+          currentPrompt.program
+        )
+    ) ?? [];
   const recentChatByContent: Record<string, string> = {};
   const recentActivity: Record<string, string> = {};
   for (const chat of s.chats) {
@@ -253,7 +263,7 @@ function App() {
     }
   }
   const currentProgram = currentPrompt?.program;
-  const currentCombination = s.library?.promptCombinations?.find((c) => {
+  const currentCombination = creativePresets.find((c) => {
     if (!currentPrompt || !currentProgram || c.role !== 'main') return false;
     const currentValues = reconcilePromptValues(currentProgram, currentPrompt.values).values;
     const savedValues = reconcilePromptValues(currentProgram, c.values).values;
@@ -958,6 +968,7 @@ function App() {
                 )}
                 <ActivityStatus
                   key={s.viewKey}
+                  chatId={s.selected}
                   scope={s.viewKey}
                   activities={s.detail?.reader.activity ?? []}
                   request={s.requestActivity}
@@ -1054,9 +1065,9 @@ function App() {
                     >
                       {creativePresets.length > 0 && (
                         <label>
-                          <span className="sr-only">빠른 창작 프리셋</span>
+                          <span className="sr-only">빠른 옵션 조합</span>
                           <select
-                            aria-label="빠른 창작 프리셋"
+                            aria-label="빠른 옵션 조합"
                             value={currentCombination ? refValue(currentCombination) : ''}
                             disabled={
                               s.quickBusy ||
@@ -1069,7 +1080,7 @@ function App() {
                               void s.quickChange('combination', event.target.value);
                             }}
                           >
-                            <option value="">창작 프리셋 · 현재 설정</option>
+                            <option value="">옵션 조합 · 현재 선택값</option>
                             {creativePresets.map((item) => (
                               <option value={refValue(item)} key={refValue(item)}>
                                 {item.title}

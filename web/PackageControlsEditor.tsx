@@ -1,3 +1,4 @@
+import { Switch } from './BooleanControls.js';
 import { useEffect, useRef, useState } from 'react';
 import { validateContentPackage, type ContentPackage } from '../core/content-package.js';
 import type { PromptControl, PromptValue } from '../core/prompt-program.js';
@@ -104,9 +105,8 @@ function ScalarEditor({
       </label>
       {type === 'boolean' ? (
         <label className="check">
-          <input
+          <Switch
             aria-label={label}
-            type="checkbox"
             checked={value.text === 'true'}
             onChange={(event) => onChange({ ...value, text: String(event.target.checked) })}
           />

@@ -2,6 +2,9 @@ import { DismissibleError } from './DismissibleError.js';
 import { DeleteButton } from './DeleteButton.js';
 import { ActionMenu } from './ActionMenu.js';
 import { CopyIcon } from './ui-icons.js';
+import { Save } from 'lucide-react';
+import { matchesPromptCombination } from '../core/prompt-combinations.js';
+import { booleanPromptDraft } from './prompt-boolean-draft.js';
 import { useEffect, useRef, useState } from 'react';
 import type {
   ContentRef,
@@ -128,6 +131,18 @@ export function PromptEditor({
     });
   }, [library.promptPresets, localPresets, composerDirty]);
   const draft = drafts[role];
+  const ownedCombinations = [
+    ...(library.promptCombinations ?? []),
+    ...localCombinations.filter(
+      (item) => !library.promptCombinations?.some((saved) => saved.id === item.id)
+    ),
+  ].filter(
+    (item) =>
+      draft.base &&
+      item.role === role &&
+      item.owner?.kind === 'preset' &&
+      item.owner.id === draft.base.id
+  );
   const collaborationIssue =
     role === 'main'
       ? agentCollaborationIssue(draft.program.collaboration, draft.program.controls)
@@ -173,11 +188,10 @@ export function PromptEditor({
         {
           title: draft.title.trim(),
           role,
-          program: validatePromptProgram(draft.program),
-          values:
-            controlDraftCache.current[`${role}:${draft.source}`]?.values ??
-            draft.base?.values ??
-            {},
+          ...booleanPromptDraft(
+            validatePromptProgram(draft.program),
+            controlDraftCache.current[`${role}:${draft.source}`]?.values ?? draft.base?.values ?? {}
+          ),
           ...(update ? { expectedRevision: draft.base!.revision } : {}),
         },
         update ? 'PUT' : 'POST'
@@ -303,14 +317,14 @@ export function PromptEditor({
               )
             }
             onPendingDraftChange={setPendingTemplate}
-            savedCombinations={[
-              ...(library.promptCombinations ?? []),
-              ...localCombinations.filter(
-                (item) => !library.promptCombinations?.some((saved) => saved.id === item.id)
-              ),
-            ]}
+            savedCombinations={ownedCombinations}
+            combinationOwner={draft.base ? { kind: 'preset', id: draft.base.id } : undefined}
             onSaveCombination={
-              draft.base && !draft.dirty
+              draft.base &&
+              !draft.program.controls.some(
+                (control) => control.type === 'boolean' && control.default === null
+              ) &&
+              JSON.stringify(draft.program.controls) === JSON.stringify(draft.base.program.controls)
                 ? async (title, values) => {
                     const accepted = await api<SavedPromptCombination>(
                       '/prompt-combinations',
@@ -318,6 +332,8 @@ export function PromptEditor({
                         title,
                         role,
                         values,
+                        owner: { kind: 'preset', id: draft.base!.id },
+                        expectedRevision: draft.base!.revision,
                       },
                       'POST'
                     );
@@ -345,11 +361,6 @@ export function PromptEditor({
           )}
         </fieldset>
         <div className="prompt-save-actions">
-          <small className="prompt-save-scope">
-            {draft.base
-              ? '저장된 프리셋 사본을 수정해요. 현재 프롬프트는 바뀌지 않아요.'
-              : '새 프리셋으로 저장해요. 현재 프롬프트에 불러와서 사용할 수 있어요.'}
-          </small>
           <div className="prompt-save-buttons">
             <button
               type="button"
@@ -362,8 +373,13 @@ export function PromptEditor({
               }
               onClick={() => void save(!!draft.base)}
             >
-              {draft.base ? '수정 저장' : '새 프롬프트 저장'}
+              <Save size={18} aria-hidden="true" /> 저장
             </button>
+            <small className="prompt-save-scope">
+              {draft.base
+                ? '프리셋에 저장해요. 현재 프롬프트는 바뀌지 않아요.'
+                : '새 프리셋으로 저장해요. 현재 프롬프트에 불러와 사용할 수 있어요.'}
+            </small>
             {draft.base && (
               <ActionMenu label="프롬프트 관리" className="prompt-management-menu">
                 {draft.base && (
@@ -423,16 +439,20 @@ export function PromptEditor({
         {busy ? '처리 중…' : status}
       </p>
       <details className="prompt-saved-management">
-        <summary>저장된 창작 조합·프리셋 관리</summary>
+        <summary>이 프롬프트의 옵션 조합 관리</summary>
         <div className="deletion-list">
-          {[
-            ...(library.promptCombinations ?? []),
-            ...localCombinations.filter(
-              (item) => !library.promptCombinations?.some((saved) => saved.id === item.id)
-            ),
-          ].map((item) => (
+          {ownedCombinations.map((item) => (
             <div className="deletion-row" key={item.id}>
-              <span>{item.title} · 전역 조합</span>
+              <span>
+                {item.title} · 옵션 조합
+                {draft.base &&
+                  !matchesPromptCombination(
+                    item,
+                    { kind: 'preset', id: draft.base.id },
+                    role,
+                    draft.program
+                  ) && <small>옵션 정의가 변경되어 불러올 수 없어요.</small>}
+              </span>
               <DeleteButton
                 path={`/prompt-combinations/${encodeURIComponent(item.id)}`}
                 revision={item.revision}
@@ -447,8 +467,8 @@ export function PromptEditor({
               />
             </div>
           ))}
-          {!library.promptCombinations?.length && !localCombinations.length && (
-            <p className="muted">저장된 조합이 없어요.</p>
+          {!ownedCombinations.length && (
+            <p className="muted">이 프롬프트에 저장된 옵션 조합이 없어요.</p>
           )}
         </div>
       </details>

@@ -1,3 +1,4 @@
+import { SelectionCheckbox } from './BooleanControls.js';
 import { useEffect, useState } from 'react';
 import { Folder, Plus, Search } from 'lucide-react';
 import type { ContentPackage, PackageLore } from '../core/content-package.js';
@@ -206,8 +207,7 @@ export function LoreEditor({
         <section className="lore-list-pane" aria-label="로어 목록">
           <div className="lore-list-summary">
             <label>
-              <input
-                type="checkbox"
+              <SelectionCheckbox
                 aria-label="현재 페이지 로어 모두 선택"
                 checked={visible.length > 0 && visible.every((row) => checked.includes(row.id))}
                 onChange={(event) =>
@@ -248,8 +248,7 @@ export function LoreEditor({
           <div className="lore-rows">
             {visible.map((row) => (
               <div key={row.id} className={`lore-row ${item?.id === row.id ? 'selected' : ''}`}>
-                <input
-                  type="checkbox"
+                <SelectionCheckbox
                   aria-label={`${row.title || '이름 없는 로어'} 선택`}
                   checked={checked.includes(row.id)}
                   onChange={(event) =>

@@ -86,7 +86,7 @@ test('PLR03 creation displays and saves role defaults and preview uses block nam
       (response) =>
         response.url().endsWith('/api/prompt-presets') && response.request().method() === 'POST'
     );
-    await editor.getByRole('button', { name: '새 프롬프트 저장', exact: true }).click();
+    await editor.getByRole('button', { name: '저장', exact: true }).click();
     const response = await savedResponse;
     expect(response.ok()).toBe(true);
     const saved = await response.json();

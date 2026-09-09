@@ -1,21 +1,58 @@
 import { expect, test } from '@playwright/test';
-import type { PromptWorkspace } from '../../core/product.js';
+import type { ModelWorkspace, PromptWorkspace, PromptPreset } from '../../core/product.js';
 
 /** Restore global working settings at the test boundary, never on chat creation. */
 export function preservePromptWorkspace() {
-  let original: PromptWorkspace;
-  let originalModels: { routes: unknown; translationPolicy: unknown };
+  let original: PromptWorkspace | undefined;
+  let originalModels: ModelWorkspace | undefined;
   test.beforeEach(async ({ request }) => {
+    original = undefined;
+    originalModels = undefined;
     const response = await request.get('/api/prompt-workspace');
     expect(response.ok()).toBe(true);
-    original = await response.json();
+    let baseline = (await response.json()) as PromptWorkspace;
+    // Give anonymous fixture working copies a restorable owner through public APIs.
+    // Once established, later cases reuse that owner; user-facing PUT never gains reset authority.
+    for (const role of ['main', 'translation'] as const) {
+      if (baseline[role].presetId) continue;
+      const saved = baseline[role];
+      const created = await request.post('/api/prompt-presets', {
+        data: {
+          title: `검증 기준 프롬프트 · ${role}`,
+          role,
+          program: saved.program,
+          values: saved.values,
+        },
+      });
+      expect(created.ok(), await created.text()).toBe(true);
+      const preset = (await created.json()) as PromptPreset;
+      const applied = await request.post('/api/prompt-workspace/apply', {
+        data: { expectedRevision: baseline.revision, role, presetId: preset.id },
+      });
+      expect(applied.ok(), await applied.text()).toBe(true);
+      baseline = (await applied.json()) as PromptWorkspace;
+      const restored = await request.put('/api/prompt-workspace', {
+        data: { expectedRevision: baseline.revision, [role]: { ...saved, presetId: preset.id } },
+      });
+      expect(restored.ok(), await restored.text()).toBe(true);
+      baseline = (await restored.json()) as PromptWorkspace;
+    }
+    original = baseline;
     originalModels = await (await request.get('/api/model-workspace')).json();
   });
   test.afterEach(async ({ request, page }) => {
     // Drain synthetic response handlers before restoration emits fresh SSE requests.
     await page.unrouteAll({ behavior: 'wait' });
-    if (!original) return;
-    const current = (await (await request.get('/api/prompt-workspace')).json()) as PromptWorkspace;
+    if (!original || !originalModels) return;
+    let current = (await (await request.get('/api/prompt-workspace')).json()) as PromptWorkspace;
+    for (const role of ['main', 'translation'] as const) {
+      if (current[role].presetId === original[role].presetId) continue;
+      const applied = await request.post('/api/prompt-workspace/apply', {
+        data: { expectedRevision: current.revision, role, presetId: original[role].presetId },
+      });
+      expect(applied.ok(), await applied.text()).toBe(true);
+      current = (await applied.json()) as PromptWorkspace;
+    }
     const restored = await request.put('/api/prompt-workspace', {
       data: {
         expectedRevision: current.revision,
@@ -30,6 +67,7 @@ export function preservePromptWorkspace() {
       data: {
         expectedRevision: modelCurrent.revision,
         routes: originalModels.routes,
+        titleModel: originalModels.titleModel ?? null,
         translationPolicy: originalModels.translationPolicy,
       },
     });

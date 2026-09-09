@@ -240,6 +240,7 @@ test('prompt combinations reject nonprimitive values and controls from a differe
     p = prompt(store);
   expect(() =>
     store.product.promptCombination({
+      workspaceRevision: promptWorkspace(store).revision,
       title: 'Bad',
       role: 'main',
       values: { choice: { nested: true } },
@@ -248,6 +249,7 @@ test('prompt combinations reject nonprimitive values and controls from a differe
   prompt(store, 'different');
   expect(() =>
     store.product.promptCombination({
+      workspaceRevision: promptWorkspace(store).revision,
       title: 'Bad',
       role: 'main',
       values: { choice: true },
@@ -259,6 +261,7 @@ test('prompt combinations reject nonprimitive values and controls from a differe
   });
   expect(
     store.product.promptCombination({
+      workspaceRevision: promptWorkspace(store).revision,
       title: 'Saved',
       role: 'main',
       values: { choice: false },
@@ -277,6 +280,7 @@ test('current archive roundtrips package refs, large internal lore, empty body, 
   const chat = createFixtureChat(store, 'Story', 'calm', { botId: pkg.id, folderId: folder.id });
   prompt(store);
   const combination = store.product.promptCombination({
+    workspaceRevision: promptWorkspace(store).revision,
     title: 'Saved',
     role: 'main',
     values: { choice: false },

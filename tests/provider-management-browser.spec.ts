@@ -802,6 +802,15 @@ test('PMUI11 reviewed provider options are visible and round-trip without genera
     prefix = 'PMUI11 ' + Date.now();
   const cases = [
     {
+      protocol: 'vercel-chat-v1',
+      endpoint: 'https://ai-gateway.vercel.sh/v1',
+      modelId: 'openai/gpt-5.6-sol',
+      choices: { 'Reasoning Effort': 'high', 'Service Tier': 'flex' },
+      saved: { reasoningEffort: 'high', serviceTier: 'flex' },
+      absent: ['thinkingLevel'],
+      hidden: ['Thinking Level', 'Output Effort', 'Verbosity'],
+    },
+    {
       protocol: 'vertex-gemini-v1',
       endpoint:
         'https://aiplatform.googleapis.com/v1/projects/synthetic-parameters/locations/global/publishers/google/models',

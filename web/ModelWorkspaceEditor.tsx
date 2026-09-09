@@ -25,6 +25,7 @@ export function ModelWorkspaceEditor({
     if (workspace && !dirty && !busy)
       setDraft({
         revision: workspace.revision,
+        titleModel: workspace.titleModel ?? null,
         routes: workspace.modelRoutes,
         translationPolicy: workspace.translationPolicy,
       });
@@ -169,6 +170,15 @@ export function ModelWorkspaceEditor({
             )}
           </div>
         ))}
+        <div>
+          {selector('채팅 제목 모델', draft.titleModel ?? null, (ref) =>
+            change({ ...draft, titleModel: ref })
+          )}
+          <small>
+            새 채팅의 첫 응답이 성공하면 제목을 한 번 만들어요. 직접 바꾼 제목은 유지해요.
+            미지정하면 자동 제목을 만들지 않아요.
+          </small>
+        </div>
         <div className="form-actions">
           <button
             type="button"
@@ -193,6 +203,7 @@ export function ModelWorkspaceEditor({
                 {
                   expectedRevision: draft.revision,
                   routes: draft.routes,
+                  titleModel: draft.titleModel ?? null,
                   translationPolicy: draft.translationPolicy,
                 },
                 'PUT'

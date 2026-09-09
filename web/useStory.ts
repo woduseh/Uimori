@@ -4,6 +4,7 @@ import type { Chat, ReaderDetail, Run, Source } from '../core/types.js';
 import type { Content, Library } from '../core/product.js';
 import { api, ApiError, libraryChangedKey } from './api.js';
 import { usePromptWorkspace } from './usePromptWorkspace.js';
+import { combinationOwner, matchesPromptCombination } from '../core/prompt-combinations.js';
 import { refValue } from './content-ref.js';
 
 function initialView() {
@@ -780,8 +781,17 @@ export function useStory() {
     try {
       if (kind === 'combination') {
         const preset = library.promptCombinations?.find((c) => refValue(c) === value);
-        if (!preset || preset.role !== 'main' || !promptWorkspace)
-          throw new Error('작문 옵션 프리셋을 선택해 주세요.');
+        if (
+          !preset ||
+          !promptWorkspace ||
+          !matchesPromptCombination(
+            preset,
+            combinationOwner(promptWorkspace.main, 'main'),
+            'main',
+            promptWorkspace.main.program
+          )
+        )
+          throw new Error('현재 프롬프트와 옵션 정의가 일치하는 조합을 선택해 주세요.');
         await api('/prompt-workspace/apply-options', {
           expectedRevision: promptWorkspace.revision,
           role: 'main',

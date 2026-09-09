@@ -1,15 +1,16 @@
+import { Switch } from './BooleanControls.js';
+import { booleanPromptDraft } from './prompt-boolean-draft.js';
 import { compileTranslationPreview } from '../core/translation-preview.js';
 import { DismissibleError } from './DismissibleError.js';
 import { PromptControlFields, ValueInput } from './PromptControlFields.js';
 import { ActionMenu } from './ActionMenu.js';
 import { IconButton } from './IconButton.js';
 import { DownloadIcon, UploadIcon } from './ui-icons.js';
-import { ArrowUp, ArrowDown, Undo2, Trash2 } from 'lucide-react';
+import { ArrowUp, ArrowDown, Undo2, Trash2, GripVertical, ChevronRight } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import {
   compilePromptProgram,
   resolvePromptValues,
-  reconcilePromptValues,
   validateChatPromptControls,
   validatePromptProgram,
   type ChatPromptControls,
@@ -28,7 +29,8 @@ import {
   parsePromptTemplate,
   printPromptTemplate,
 } from '../core/prompt-language.js';
-import type { SavedPromptCombination } from '../core/product.js';
+import type { SavedPromptCombination, PromptCombinationOwner } from '../core/product.js';
+import { matchesPromptCombination } from '../core/prompt-combinations.js';
 
 type Props = {
   program: PromptProgram;
@@ -39,6 +41,7 @@ type Props = {
   controlState?: ChatPromptControls;
   onSaveControls?: (state: ChatPromptControls) => Promise<void>;
   savedCombinations?: SavedPromptCombination[];
+  combinationOwner?: PromptCombinationOwner;
   onSaveCombination?: (title: string, values: Record<string, PromptValue>) => Promise<void>;
   onDirtyChange?: (dirty: boolean) => void;
   onPendingDraftChange?: (dirty: boolean) => void;
@@ -429,7 +432,10 @@ function TemplateEditor({
           </label>
         )}
         <details open={!plain}>
-          <summary>템플릿 JSON · 고급 편집</summary>
+          <summary>
+            <ChevronRight className="pc-disclosure-icon" size={16} aria-hidden="true" />
+            템플릿 JSON · 고급 편집
+          </summary>
           <JsonDraft
             label={`${label} JSON`}
             value={template}
@@ -513,8 +519,7 @@ function BlockEditor({
         </button>
       )}
       <label className="pc-checkbox">
-        <input
-          type="checkbox"
+        <Switch
           checked={block.enabled !== false}
           onChange={(event) => onChange({ ...block, enabled: event.target.checked })}
         />
@@ -677,7 +682,10 @@ function BlockEditor({
         </div>
       )}
       <details>
-        <summary>블록 적용 조건</summary>
+        <summary>
+          <ChevronRight className="pc-disclosure-icon" size={16} aria-hidden="true" />
+          블록 적용 조건
+        </summary>
         <p className="muted">비워두면 항상 적용해요. 예: {'{"control":"control-id"}'}</p>
         <JsonDraft
           label={`${block.title || block.id} 조건 JSON`}
@@ -732,7 +740,7 @@ function ControlEditor({
                 id: control.id,
                 label: control.label,
                 type,
-                default: null,
+                default: type === 'boolean' ? false : null,
                 ...(control.description ? { description: control.description } : {}),
                 ...(type === 'select' ? { options: [{ label: '기본 선택', value: '0' }] } : {}),
               });
@@ -788,7 +796,10 @@ function ControlEditor({
         />
       </label>
       <details>
-        <summary>제어 정의 JSON</summary>
+        <summary>
+          <ChevronRight className="pc-disclosure-icon" size={16} aria-hidden="true" />
+          제어 정의 JSON
+        </summary>
         <JsonDraft
           label={`${control.label} 정의 JSON`}
           value={control}
@@ -810,6 +821,7 @@ export function PromptComposer({
   controlState,
   onSaveControls,
   savedCombinations = [],
+  combinationOwner,
   onSaveCombination,
   onDirtyChange,
   onPendingDraftChange,
@@ -848,9 +860,11 @@ export function PromptComposer({
     if ((block.kind === 'message' || block.kind === 'slot') && block.template)
       collectSlots(block.template);
   }
-  const globalCombinations = savedCombinations.filter((item) => item.role === role);
-  const [selectedGlobal, setSelectedGlobal] = useState('');
-  const [savingGlobal, setSavingGlobal] = useState(false);
+  const compatibleCombinations = savedCombinations.filter(
+    (item) => combinationOwner && matchesPromptCombination(item, combinationOwner, role, program)
+  );
+  const [selectedSavedCombination, setSelectedSavedCombination] = useState('');
+  const [savingCombination, setSavingCombination] = useState(false);
   const scope = role;
   const [drafts, setDrafts] = useState<Record<string, ChatPromptControls>>({});
   const [saved, setSaved] = useState<Record<string, string>>({});
@@ -895,7 +909,7 @@ export function PromptComposer({
         pendingTemplate ||
         combinationName.length > 0 ||
         importedCombination !== null ||
-        savingGlobal ||
+        savingCombination ||
         saving
     );
   }, [
@@ -903,7 +917,7 @@ export function PromptComposer({
     pendingTemplate,
     combinationName,
     importedCombination,
-    savingGlobal,
+    savingCombination,
     saving,
     onDirtyChange,
   ]);
@@ -911,6 +925,12 @@ export function PromptComposer({
   const [status, setStatus] = useState('');
   const [undo, setUndo] = useState<PromptProgram[]>([]);
   const root = useRef<HTMLElement>(null);
+  const draggingBlock = useRef<string | null>(null);
+  const [dropTarget, setDropTarget] = useState<{ id: string; after: boolean } | null>(null);
+  const clearDrag = () => {
+    draggingBlock.current = null;
+    setDropTarget(null);
+  };
   const lastBlockAction = useRef<string | undefined>(undefined);
   const lastCollaboration = useRef(program.collaboration);
   useEffect(() => {
@@ -1048,19 +1068,19 @@ export function PromptComposer({
       setSaving(false);
     }
   }
-  async function saveGlobal(title = combinationName, values = controls.values) {
+  async function saveCombination(title = combinationName, values = controls.values) {
     if (!onSaveCombination || !title.trim()) return;
-    setSavingGlobal(true);
+    setSavingCombination(true);
     setError('');
     try {
-      const resolved = resolvePromptValues(program, values);
+      const resolved = booleanPromptDraft(program, resolvePromptValues(program, values)).values;
       await onSaveCombination(title.trim(), resolved);
       setCombinationName('');
-      setStatus('이 프롬프트의 전역 창작 조합으로 저장했어요.');
+      setStatus('이 프롬프트의 옵션 조합을 저장했어요.');
     } catch (caught) {
       report(errorMessage(caught));
     } finally {
-      setSavingGlobal(false);
+      setSavingCombination(false);
     }
   }
   async function runPreview() {
@@ -1175,6 +1195,7 @@ export function PromptComposer({
     >
       <details className="pc-composer-fold" open>
         <summary aria-label="프롬프트 구성 접기/펼치기">
+          <ChevronRight className="pc-disclosure-icon" size={16} aria-hidden="true" />
           <strong>프롬프트 구성</strong>
           <span className="pc-badge">
             {program.blocks.length}개 블록 · {program.controls.length}개 제어
@@ -1238,16 +1259,76 @@ export function PromptComposer({
             </datalist>
             <details className="pc-section pc-blocks-section" open>
               <summary aria-label="프롬프트 블록 접기/펼치기">
+                <ChevronRight className="pc-disclosure-icon" size={16} aria-hidden="true" />
                 블록 · {program.blocks.length}개
               </summary>
               <div className="pc-block-list">
                 {program.blocks.map((block, index) => (
                   <details
                     className={`pc-block${block.enabled === false ? ' pc-disabled' : ''}`}
+                    data-drop-position={
+                      dropTarget?.id === block.id
+                        ? dropTarget.after
+                          ? 'after'
+                          : 'before'
+                        : undefined
+                    }
+                    onDragOver={(event) => {
+                      if (!draggingBlock.current) return;
+                      event.preventDefault();
+                      event.dataTransfer.dropEffect = 'move';
+                      const bounds = event.currentTarget.getBoundingClientRect();
+                      setDropTarget({
+                        id: block.id,
+                        after: event.clientY >= bounds.top + bounds.height / 2,
+                      });
+                    }}
+                    onDragLeave={(event) => {
+                      if (!event.currentTarget.contains(event.relatedTarget as Node | null))
+                        setDropTarget(null);
+                    }}
+                    onDrop={(event) => {
+                      const sourceId = draggingBlock.current;
+                      if (!sourceId) return;
+                      event.preventDefault();
+                      event.stopPropagation();
+                      const bounds = event.currentTarget.getBoundingClientRect();
+                      const after = event.clientY >= bounds.top + bounds.height / 2;
+                      clearDrag();
+                      if (sourceId === block.id) return;
+                      const source = program.blocks.find((item) => item.id === sourceId);
+                      if (!source) return;
+                      const blocks = program.blocks.filter((item) => item.id !== sourceId);
+                      const target = blocks.findIndex((item) => item.id === block.id);
+                      if (target < 0) return;
+                      blocks.splice(target + (after ? 1 : 0), 0, source);
+                      if (blocks.every((item, position) => item.id === program.blocks[position].id))
+                        return;
+                      lastBlockAction.current = sourceId;
+                      edit({ ...program, blocks });
+                      focusBlock(sourceId);
+                    }}
                     key={block.id}
                     id={`prompt-block-${block.id}`}
                   >
                     <summary>
+                      <ChevronRight className="pc-disclosure-icon" size={16} aria-hidden="true" />
+                      <button
+                        type="button"
+                        className="pc-drag-handle"
+                        draggable
+                        aria-label={`${block.title || block.id} 블록 드래그`}
+                        title="드래그하여 순서 변경 · 키보드는 블록 안의 위/아래 이동 사용"
+                        onClick={(event) => event.preventDefault()}
+                        onDragStart={(event) => {
+                          draggingBlock.current = block.id;
+                          event.dataTransfer.effectAllowed = 'move';
+                          event.dataTransfer.setData('text/plain', block.id);
+                        }}
+                        onDragEnd={clearDrag}
+                      >
+                        <GripVertical size={18} aria-hidden="true" />
+                      </button>
                       <span className="pc-order">{index + 1}</span>
                       <span className="pc-block-title">
                         {block.title || block.id}
@@ -1319,11 +1400,15 @@ export function PromptComposer({
               </div>
             </details>
             <details className="pc-section">
-              <summary>제어 정의 · {program.controls.length}개</summary>
+              <summary>
+                <ChevronRight className="pc-disclosure-icon" size={16} aria-hidden="true" />
+                제어 정의 · {program.controls.length}개
+              </summary>
               <div className="pc-stack">
                 {program.controls.map((control, index) => (
                   <details className="pc-control" key={control.id}>
                     <summary>
+                      <ChevronRight className="pc-disclosure-icon" size={16} aria-hidden="true" />
                       {control.label}
                       <small> · {control.type}</small>
                     </summary>
@@ -1360,7 +1445,7 @@ export function PromptComposer({
                       ...program,
                       controls: [
                         ...program.controls,
-                        { id: newId('control'), label: '새 제어', type: 'boolean', default: null },
+                        { id: newId('control'), label: '새 제어', type: 'boolean', default: false },
                       ],
                     })
                   }
@@ -1371,7 +1456,10 @@ export function PromptComposer({
             </details>
           </div>
           <details className="pc-section" open={program.controls.length > 0}>
-            <summary>프롬프트 창작 옵션과 조합</summary>
+            <summary>
+              <ChevronRight className="pc-disclosure-icon" size={16} aria-hidden="true" />
+              프롬프트 창작 옵션과 조합
+            </summary>
             <div className="pc-stack">
               <p className="muted">
                 값을 바꾼 뒤 저장 버튼을 눌러 적용해요. 프롬프트의 기본값은 제어 정의에서 바꿀 수
@@ -1389,43 +1477,41 @@ export function PromptComposer({
                 }
               />
               <div className="pc-control pc-combination-card">
-                <h4>전역 창작 조합</h4>
+                <h4>이 프롬프트의 옵션 조합</h4>
                 <p className="muted">
-                  저장된 옵션을 현재 프롬프트에 복사해요. 현재 설정을 저장하면 다음 요청에 적용돼요.
+                  같은 프롬프트에서 저장했고 옵션 정의가 일치하는 조합만 불러올 수 있어요. 불러온
+                  선택값은 초안에 반영되며 저장해야 적용돼요.
                 </p>
                 <label>
-                  전역 조합 선택
+                  옵션 조합 선택
                   <select
-                    aria-label="전역 창작 조합"
-                    value={selectedGlobal}
+                    aria-label="이 프롬프트의 옵션 조합"
+                    value={selectedSavedCombination}
                     onChange={(event) => {
-                      const item = globalCombinations.find(
+                      const item = compatibleCombinations.find(
                         (item) => item.id === event.target.value
                       );
                       if (item)
                         safe(() => {
-                          const reconciled = reconcilePromptValues(program, item.values);
                           editControls({
                             ...controls,
-                            values: reconciled.values,
+                            values: resolvePromptValues(program, item.values),
                             selectedCombinationId: undefined,
                           });
-                          setSelectedGlobal(item.id);
-                          if (reconciled.resetKeys.length)
-                            setStatus('현재 옵션과 맞지 않는 이전 선택값은 기본값으로 조정했어요.');
+                          setSelectedSavedCombination(item.id);
                         });
-                      else setSelectedGlobal('');
+                      else setSelectedSavedCombination('');
                     }}
                   >
                     <option value="">직접 선택</option>
-                    {globalCombinations.map((item) => (
+                    {compatibleCombinations.map((item) => (
                       <option key={item.id} value={item.id}>
                         {item.title}
                       </option>
                     ))}
                   </select>
                 </label>
-                {selectedGlobal && (
+                {selectedSavedCombination && (
                   <small>
                     {pretty(
                       Object.fromEntries(
@@ -1437,7 +1523,10 @@ export function PromptComposer({
                         ])
                       )
                     ) ===
-                    pretty(globalCombinations.find((item) => item.id === selectedGlobal)?.values)
+                    pretty(
+                      compatibleCombinations.find((item) => item.id === selectedSavedCombination)
+                        ?.values
+                    )
                       ? '불러온 조합'
                       : '불러온 조합에서 수정됨'}
                   </small>
@@ -1490,12 +1579,17 @@ export function PromptComposer({
                 </label>
                 <button
                   type="button"
-                  disabled={!onSaveCombination || !combinationName.trim() || savingGlobal}
-                  onClick={() => void saveGlobal()}
+                  disabled={!onSaveCombination || !combinationName.trim() || savingCombination}
+                  onClick={() => void saveCombination()}
                 >
-                  {savingGlobal ? '저장 중…' : '전역 창작 조합으로 저장'}
+                  {savingCombination ? '저장 중…' : '옵션 조합 저장'}
                 </button>
               </div>
+              {!onSaveCombination && (
+                <small className="muted">
+                  프롬프트와 옵션 정의를 먼저 저장하면 조합을 저장할 수 있어요.
+                </small>
+              )}
               {importedCombination && (
                 <button
                   type="button"
@@ -1531,7 +1625,10 @@ export function PromptComposer({
             </div>
           </details>
           <details className="pc-section">
-            <summary>전체 구성 JSON · 고급 편집</summary>
+            <summary>
+              <ChevronRight className="pc-disclosure-icon" size={16} aria-hidden="true" />
+              전체 구성 JSON · 고급 편집
+            </summary>
             <JsonDraft
               label="전체 프롬프트 구성 JSON"
               value={program}
@@ -1543,7 +1640,10 @@ export function PromptComposer({
             />
           </details>
           <details className="pc-section pc-preview" aria-label="프롬프트 미리보기">
-            <summary aria-label="전송 미리보기 접기/펼치기">전송 미리보기</summary>
+            <summary aria-label="전송 미리보기 접기/펼치기">
+              <ChevronRight className="pc-disclosure-icon" size={16} aria-hidden="true" />
+              전송 미리보기
+            </summary>
             <label>
               {role === 'translation' ? '미리보기 원문' : '현재 요청'}
               <textarea
@@ -1586,6 +1686,11 @@ export function PromptComposer({
                     <li key={message.id}>
                       <details>
                         <summary>
+                          <ChevronRight
+                            className="pc-disclosure-icon"
+                            size={16}
+                            aria-hidden="true"
+                          />
                           {index + 1}. {message.role} · {message.completion}
                           <small>
                             {preview.blockNames[message.provenance.blockId] ??
@@ -1601,7 +1706,10 @@ export function PromptComposer({
                   ))}
                 </ol>
                 <details>
-                  <summary>블록별 조건과 포함 결과</summary>
+                  <summary>
+                    <ChevronRight className="pc-disclosure-icon" size={16} aria-hidden="true" />
+                    블록별 조건과 포함 결과
+                  </summary>
                   <div className="pc-table-wrap">
                     <table>
                       <thead>
@@ -1630,7 +1738,10 @@ export function PromptComposer({
                   </div>
                 </details>
                 <details>
-                  <summary>캐시 기준과 지원 제한</summary>
+                  <summary>
+                    <ChevronRight className="pc-disclosure-icon" size={16} aria-hidden="true" />
+                    캐시 기준과 지원 제한
+                  </summary>
                   <pre>
                     {pretty({
                       cachePlan: preview.value.compilation.cachePlan,
@@ -1647,6 +1758,7 @@ export function PromptComposer({
                 {preview.value.provider ? (
                   <details>
                     <summary>
+                      <ChevronRight className="pc-disclosure-icon" size={16} aria-hidden="true" />
                       공급자 전송 구성 · {preview.value.provider.protocol} ·{' '}
                       {preview.value.provider.modelId}
                     </summary>

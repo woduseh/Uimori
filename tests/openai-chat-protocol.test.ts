@@ -126,6 +126,33 @@ function called(input = request()) {
 }
 
 describe('OpenAI-compatible Chat pure protocol (no live calls)', () => {
+  test('Vercel Sol sends Flex and preserves the selected tier across tool continuation', () => {
+    const input = request();
+    input.modelId = 'openai/gpt-5.6-sol';
+    input.generation = {
+      maxOutputTokens: 8192,
+      temperature: null,
+      reasoningEffort: 'high',
+      serviceTier: 'flex',
+    };
+    const original = structuredClone(input);
+    const encoded = encodeChat(input, 'vercel-chat-v1');
+    expect(record(encoded.body)).toMatchObject({
+      model: 'openai/gpt-5.6-sol',
+      service_tier: 'flex',
+      reasoning_effort: 'high',
+    });
+    expect(input).toEqual(original);
+    const decoder = new ChatDecoder(encoded.context);
+    decoder.accept(chunk({ tool_calls: [tool()] }, 'tool_calls'));
+    decoder.accept('[DONE]');
+    const continued = next(input, decoder.finish());
+    expect(record(encodeChat(continued, 'vercel-chat-v1').body).service_tier).toBe('flex');
+    continued.generation!.serviceTier = 'default';
+    expect(() => encodeChat(continued, 'vercel-chat-v1')).toThrow('OPENAI_CONTINUATION_MISMATCH');
+    delete input.generation!.serviceTier;
+    expect(record(encodeChat(input, 'vercel-chat-v1').body)).not.toHaveProperty('service_tier');
+  });
   test.each([
     { verbosity: 'low' },
     { reasoningMode: 'pro' },

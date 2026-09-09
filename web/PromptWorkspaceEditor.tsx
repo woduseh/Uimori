@@ -9,6 +9,8 @@ import { api } from './api.js';
 import { usePromptWorkspace } from './usePromptWorkspace.js';
 import { PromptComposer } from './PromptComposer.js';
 import { AgentCollaborationEditor } from './AgentCollaborationEditor.js';
+import { combinationOwner } from '../core/prompt-combinations.js';
+import { booleanPromptDraft } from './prompt-boolean-draft.js';
 
 export function PromptWorkspaceEditor({
   library,
@@ -140,14 +142,32 @@ export function PromptWorkspaceEditor({
           branchId={branchId}
           controlState={{ values: current.values, combinations: [] }}
           savedCombinations={library.promptCombinations}
+          combinationOwner={combinationOwner(current, role)}
           onPendingDraftChange={setPending}
           onControlDraftChange={(state) =>
             edit({ ...draft, [role]: { ...current, values: state.values } })
           }
-          onSaveCombination={async (title, values) => {
-            await api('/prompt-combinations', { title, role, values });
-            await reload?.();
-          }}
+          onSaveCombination={
+            workspace &&
+            !pending &&
+            !conflict &&
+            !current.program.controls.some(
+              (control) => control.type === 'boolean' && control.default === null
+            ) &&
+            current.presetId === workspace[role].presetId &&
+            JSON.stringify(current.program.controls) ===
+              JSON.stringify(workspace[role].program.controls)
+              ? async (title, values) => {
+                  await api('/prompt-combinations', {
+                    title,
+                    role,
+                    values,
+                    workspaceRevision: draft.revision,
+                  });
+                  await reload?.();
+                }
+              : undefined
+          }
           onChange={(program) => edit({ ...draft, [role]: { ...current, program } })}
         />
         {role === 'main' && (
@@ -177,8 +197,14 @@ export function PromptWorkspaceEditor({
                     '/prompt-workspace',
                     {
                       expectedRevision: draft.revision,
-                      main: draft.main,
-                      translation: draft.translation,
+                      main: {
+                        ...draft.main,
+                        ...booleanPromptDraft(draft.main.program, draft.main.values),
+                      },
+                      translation: {
+                        ...draft.translation,
+                        ...booleanPromptDraft(draft.translation.program, draft.translation.values),
+                      },
                     },
                     'PUT'
                   );
@@ -203,8 +229,7 @@ export function PromptWorkspaceEditor({
                   await api('/prompt-presets', {
                     role,
                     title: current.title,
-                    program: current.program,
-                    values: current.values,
+                    ...booleanPromptDraft(current.program, current.values),
                   });
                   await reload?.();
                   setMessage('독립된 프리셋으로 저장했어요.');

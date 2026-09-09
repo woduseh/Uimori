@@ -1,3 +1,4 @@
+import { Switch } from './BooleanControls.js';
 import { ToggleRow } from './ToggleRow.js';
 import { Plus } from 'lucide-react';
 import { useEffect, useRef } from 'react';
@@ -632,8 +633,7 @@ export function ProviderModelFields({
                 />
               </label>
               <label className="check">
-                <input
-                  type="checkbox"
+                <Switch
                   checked={evaluation.terminalLateCorrections}
                   onChange={(event) =>
                     setEvaluation({ ...evaluation, terminalLateCorrections: event.target.checked })
@@ -642,8 +642,7 @@ export function ProviderModelFields({
                 제출 원고의 정확한 문자열 교정 허용
               </label>
               <label className="check">
-                <input
-                  type="checkbox"
+                <Switch
                   checked={evaluation.outputRecovery}
                   onChange={(event) =>
                     setEvaluation({ ...evaluation, outputRecovery: event.target.checked })

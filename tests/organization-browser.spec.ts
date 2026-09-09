@@ -99,6 +99,71 @@ async function navigationFixture(request: APIRequestContext) {
 
 const rows = (nav: Locator) => nav.locator('.bot-chat-item');
 
+for (const width of [390, 1440]) {
+  test(`ORG05 ${width}px chat menu icons and manual titles preserve drafts and persist`, async ({
+    page,
+    request,
+  }, info) => {
+    await page.setViewportSize({ width, height: 900 });
+    const { chats, folder } = await navigationFixture(request);
+    const chat = chats[0];
+    await page.goto(`/?chat=${chat.id}`);
+    if (width === 390) await page.getByRole('button', { name: '탐색 메뉴', exact: true }).click();
+    const nav = page.getByTestId('bot-navigation').filter({ visible: true });
+    const row = nav.locator(`[data-chat-id="${chat.id}"]`);
+    await row.hover();
+    await row.getByRole('button', { name: /채팅 메뉴$/ }).click();
+    const menu = page.getByRole('dialog', { name: '채팅 메뉴', exact: true });
+    for (const label of ['위로 이동', '아래로 이동']) {
+      const button = menu.getByRole('button', { name: label, exact: true });
+      await expect(button).toHaveText('');
+      await expect(button).toHaveAttribute('title', label);
+    }
+    const deletion = menu.getByRole('button', { name: `${chat.title} 채팅 삭제`, exact: true });
+    await expect(deletion).toHaveText('');
+    await expect(deletion).toHaveAttribute('title', '채팅 삭제');
+    const actions = menu.locator('.bot-chat-menu-actions');
+    expect(
+      await actions.evaluate((element) => {
+        const buttons = [...element.querySelectorAll('button')].filter((button) =>
+          button.checkVisibility()
+        );
+        const boxes = buttons.map((button) => button.getBoundingClientRect());
+        return (
+          boxes.length === 3 &&
+          boxes.every(
+            (box) => Math.abs(box.top - boxes[0].top) < 2 && box.width >= 44 && box.height >= 44
+          )
+        );
+      })
+    ).toBe(true);
+    const title = menu.getByRole('textbox', { name: '채팅 제목', exact: true });
+    await title.fill('저장하지 않을 제목');
+    await menu.getByRole('button', { name: '취소', exact: true }).click();
+    await expect(title).toHaveValue(chat.title);
+    const renamed = `직접 정한 제목 ${width}`;
+    await title.fill(renamed);
+    // Organization refreshes the Chat object without discarding a title draft.
+    await menu.getByLabel(`${chat.title} 폴더 이동`, { exact: true }).selectOption(folder.id);
+    await expect
+      .poll(async () => (await (await request.get(`/api/chats/${chat.id}`)).json()).chat.folderId)
+      .toBe(folder.id);
+    await expect(title).toHaveValue(renamed);
+    await menu.getByRole('button', { name: '제목 저장', exact: true }).click();
+    await expect
+      .poll(async () => (await (await request.get(`/api/chats/${chat.id}`)).json()).chat.title)
+      .toBe(renamed);
+    await expect(menu.getByRole('button', { name: '제목 저장', exact: true })).toHaveCount(0);
+    expect(await menu.evaluate((element) => element.scrollWidth <= element.clientWidth + 1)).toBe(
+      true
+    );
+    if (visualReview) await page.screenshot({ path: info.outputPath(`chat-menu-${width}.png`) });
+    await page.reload();
+    if (width === 390) await page.getByRole('button', { name: '탐색 메뉴', exact: true }).click();
+    await expect(nav.getByRole('button', { name: renamed, exact: true })).toBeVisible();
+  });
+}
+
 test('ORG02 desktop compact rows support drag ordering, folder drops, collapse and persisted order', async ({
   page,
   request,
