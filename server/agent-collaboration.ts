@@ -40,6 +40,7 @@ export function buildAgentProviderRequest(
       tools: structuredClone(tools),
     },
     generation: generationFromModel(target),
+    pricingSnapshot: target.pricingSnapshot,
     contextBudget: contextBudgetForModel(target),
     input: {
       task: question,

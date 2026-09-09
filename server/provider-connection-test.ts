@@ -18,6 +18,8 @@ import {
 } from '../core/transport.js';
 import { contextBudgetForModel } from '../core/context-budget.js';
 import type { Store } from './store.js';
+import { resolveModelPricing } from '../core/model-pricing.js';
+import { estimateCost } from '../core/pricing-estimate.js';
 
 export const CONNECTION_TEST_TIMEOUT_MS = 25_000;
 const nullUsage = () => ({ inputTokens: null, outputTokens: null, costUsd: null });
@@ -48,6 +50,7 @@ export function connectionTestRequest(model: ModelPreset, connection: Connection
   return {
     role: 'main',
     modelId: model.modelId,
+    pricingSnapshot: resolveModelPricing(model, connection),
     generation,
     contextBudget: contextBudgetForModel({ ...model, connection }),
     stable: { contract: 'API 연결 테스트 중이니 OK만 답해주세요.', tools: [] },
@@ -137,7 +140,14 @@ export class ProviderConnectionTestStore {
     id: string,
     result: Pick<
       ProviderConnectionTest,
-      'status' | 'text' | 'truncated' | 'latencyMs' | 'error' | 'usage' | 'rejection'
+      | 'status'
+      | 'text'
+      | 'truncated'
+      | 'latencyMs'
+      | 'error'
+      | 'usage'
+      | 'rejection'
+      | 'estimatedCost'
     >
   ) {
     const current = this.get(id);
@@ -249,6 +259,11 @@ export function providerConnectionTestRoutes(
               const output = result.text || result.refusal || '';
               const rejection = providerRejection(result.error?.diagnostic);
               journal.finish(id, {
+                estimatedCost: estimateCost(
+                  input.pricingSnapshot,
+                  result.usage,
+                  admission.view.createdAt
+                ),
                 ...(rejection ? { rejection } : {}),
                 status:
                   result.status === 'tool_calls'

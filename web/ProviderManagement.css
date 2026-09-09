@@ -181,9 +181,6 @@
   color: var(--muted);
   text-align: center;
 }
-.provider-override-note {
-  white-space: pre-wrap;
-}
 .provider-next-step ol {
   margin: 0;
   padding-left: 20px;

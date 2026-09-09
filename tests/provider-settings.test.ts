@@ -581,6 +581,11 @@ describe('provider settings, catalogs and archive contracts', () => {
     expect(target.store.product.modelSnapshot(model.id)).toEqual({
       ...reviewed,
       connection: enabled,
+      pricingSnapshot: expect.objectContaining({
+        protocol: 'anthropic-messages-v1',
+        modelId: reviewed.modelId,
+        source: 'official',
+      }),
     });
     expect(fetch).not.toHaveBeenCalled();
   });

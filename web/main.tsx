@@ -734,6 +734,9 @@ function App() {
                           contextSummary={
                             s.detail!.runs.find((run) => run.id === source.runId)?.contextSummary
                           }
+                          estimatedCost={
+                            s.detail!.runs.find((run) => run.id === source.runId)?.estimatedCost
+                          }
                           packageStart={
                             s.detail!.runs.find((run) => run.id === source.runId)?.packageStart
                           }

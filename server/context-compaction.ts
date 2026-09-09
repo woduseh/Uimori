@@ -110,6 +110,7 @@ function summaryRequest(
   }
   return {
     role: 'memory',
+    pricingSnapshot: target.pricingSnapshot,
     modelId: target.modelId,
     stable: { contract: SUMMARY_CONTRACT, tools: [] },
     generation,

@@ -27,6 +27,8 @@ import {
   type ContextBudget,
 } from './context-budget.js';
 import { providerOriginApproval } from './provider-origin-policy.js';
+import { validatePricingSnapshot } from './model-pricing.js';
+import type { PricingSnapshot } from './pricing-types.js';
 export { ProviderContractError } from './provider-errors.js';
 
 /** This versioned loopback protocol is a local fixture, not a live API claim. */
@@ -47,6 +49,8 @@ export type ProviderConnection = {
 };
 export type ProviderTool = { name: string; description: string; inputSchema: Json };
 export type ProviderRequest = {
+  /** Frozen host pricing metadata; never serialized into a provider payload. */
+  pricingSnapshot?: PricingSnapshot;
   role: ProviderRole;
   modelId: string;
   stable: { contract: string; tools: ProviderTool[] };
@@ -104,6 +108,8 @@ export type ProviderResult = {
   };
 };
 export type WireRecord = {
+  pricingSnapshot?: PricingSnapshot;
+  pricingStartedAt?: string;
   /** Host-only attribution. Never supplied by model output or serialized to the provider. */
   agentId?: string;
   connectionId: string;
@@ -229,6 +235,7 @@ function validateGeneration(value: unknown): asserts value is ModelGeneration {
 
 export function validateRequest(value: unknown): ProviderRequest {
   keys(value, [
+    'pricingSnapshot',
     'role',
     'modelId',
     'stable',
@@ -241,6 +248,7 @@ export function validateRequest(value: unknown): ProviderRequest {
     'bootstrap',
     'toolChoice',
   ]);
+  if (value.pricingSnapshot !== undefined) validatePricingSnapshot(value.pricingSnapshot);
   if (value.prompt !== undefined) {
     try {
       validateProviderPrompt(value.prompt);
@@ -443,6 +451,35 @@ export async function executeProvider(
   requestValue: ProviderRequest,
   options: ProviderExecutionOptions
 ): Promise<ProviderResult> {
+  if (requestValue.pricingSnapshot) {
+    let pricingSnapshot = validatePricingSnapshot(requestValue.pricingSnapshot);
+    if (
+      pricingSnapshot.protocol !== connectionValue.protocol ||
+      pricingSnapshot.modelId !== requestValue.modelId
+    )
+      reject('PRICING_SNAPSHOT_MISMATCH');
+    if (
+      connectionValue.protocol === 'vertex-gemini-v1' &&
+      options.vertexRequestTier &&
+      options.vertexRequestTier !== pricingSnapshot.serviceTier
+    ) {
+      const forced = options.vertexRequestTier;
+      const rates = forced === 'flex' ? pricingSnapshot.flexRates : pricingSnapshot.standardRates;
+      pricingSnapshot = {
+        ...pricingSnapshot,
+        serviceTier: forced,
+        rates: rates ?? { input: null, cacheRead: null, cacheWrite: null, output: null },
+        longContext:
+          forced === 'flex' ? pricingSnapshot.flexLongContext : pricingSnapshot.longContext,
+      };
+    }
+    const onWire = options.onWire;
+    options = {
+      ...options,
+      onWire: (wire) =>
+        onWire?.({ ...wire, pricingSnapshot, pricingStartedAt: new Date().toISOString() }),
+    };
+  }
   if (connectionValue.protocol === 'codex-app-server-v1') {
     const connection = validateConnection(connectionValue, options.approvedOrigins),
       request = validateRequest(requestValue);

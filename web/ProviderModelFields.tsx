@@ -1,5 +1,6 @@
 import { Switch } from './BooleanControls.js';
 import { ToggleRow } from './ToggleRow.js';
+import { ModelPricingEditor } from './ModelPricingEditor.js';
 import { Plus } from 'lucide-react';
 import { useEffect, useRef } from 'react';
 import type { Connection, VertexRequestTier } from '../core/product.js';
@@ -319,16 +320,6 @@ export function ProviderModelFields({
   const update = (next: Partial<ModelDraft>) => onChange({ ...value, ...next });
   const evaluation = value.evaluationTools;
   const setEvaluation = (next: ModelDraft['evaluationTools']) => update({ evaluationTools: next });
-  const override = (key: 'tools' | 'structuredOutput' | 'note', next: boolean | null | string) =>
-    update({
-      userOverrides: {
-        tools: null,
-        structuredOutput: null,
-        note: '',
-        ...value.userOverrides,
-        [key]: next,
-      },
-    });
   return (
     <>
       <div
@@ -671,12 +662,6 @@ export function ProviderModelFields({
             checked={value.evaluationToolsEnabled}
             onChange={(evaluationToolsEnabled) => update({ evaluationToolsEnabled })}
           />
-          {value.evaluationToolsEnabled && value.userOverrides?.tools === false && (
-            <p className="error full" role="alert">
-              도구 호출을 미지원으로 설정했어요. 평가 도구를 끄거나 지원 판단을 수정한 뒤
-              저장하세요.
-            </p>
-          )}
           {value.evaluationToolsEnabled && (
             <>
               <label className="full">
@@ -761,58 +746,12 @@ export function ProviderModelFields({
             effort를 낮춰요. 별도 안내문은 원문에 합치지 않아요.
           </small>
         </fieldset>
-        <details className="full">
-          <summary>기능 확인과 사용자 판단</summary>
-          <div className="editor-grid">
-            <p className="full">
-              공급자의 모델별 기능과 가격은 미확인이에요. 아래 값은 사용자가 직접 확인한 판단으로
-              따로 기록하며 인증·권한을 추가하지 않아요.
-            </p>
-            {(['tools', 'structuredOutput'] as const).map((key, index) => (
-              <label key={key}>
-                {index === 0 ? '도구 호출 지원 판단' : '구조화 출력 지원 판단'}
-                <select
-                  aria-label={index === 0 ? '도구 호출 지원 판단' : '구조화 출력 지원 판단'}
-                  value={
-                    value.userOverrides?.[key] === true
-                      ? 'yes'
-                      : value.userOverrides?.[key] === false
-                        ? 'no'
-                        : 'unknown'
-                  }
-                  onChange={(event) =>
-                    override(
-                      key,
-                      event.target.value === 'unknown' ? null : event.target.value === 'yes'
-                    )
-                  }
-                >
-                  <option value="unknown">미확인</option>
-                  <option value="yes">사용자 확인 · 지원</option>
-                  <option value="no">사용자 확인 · 미지원</option>
-                </select>
-              </label>
-            ))}
-            <label className="full">
-              기능 판단 메모
-              <textarea
-                aria-label="기능 판단 메모"
-                maxLength={2000}
-                value={value.userOverrides?.note ?? ''}
-                onChange={(event) => override('note', event.target.value)}
-              />
-            </label>
-            {value.userOverrides && (
-              <button
-                type="button"
-                className="secondary"
-                onClick={() => update({ userOverrides: undefined })}
-              >
-                사용자 판단 지우기
-              </button>
-            )}
-          </div>
-        </details>
+        <ModelPricingEditor
+          value={value}
+          connection={connection}
+          forcedVertexTier={forcedVertexTier}
+          onChange={(pricing) => update({ pricing })}
+        />
       </div>
       {optionsError && (
         <p className="error full" role="alert">

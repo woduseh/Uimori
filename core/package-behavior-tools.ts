@@ -114,9 +114,8 @@ export function assertBehaviorToolCapability(
   const target = snapshot.profile?.models.main;
   if (
     target &&
-    (target.userOverrides?.tools === false ||
-      target.connection.catalog.find((model) => model.id === target.modelId)?.capabilities.tools ===
-        false)
+    target.connection.catalog.find((model) => model.id === target.modelId)?.capabilities.tools ===
+      false
   ) {
     throw new BehaviorError(400, 'BEHAVIOR_MODEL_TOOLS_UNSUPPORTED');
   }

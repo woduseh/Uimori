@@ -209,6 +209,24 @@ export function readerDetail(store: Store, id: string, query: Record<string, str
       });
   });
   // JSON projection happens in SQLite: do not parse quadratic history or diagnostic bodies.
+  const runCosts = new Map(
+    (
+      store.db
+        .prepare(`SELECT run_id AS runId,COUNT(*) AS attemptCount,
+    SUM(CASE WHEN json_extract(response,'$.estimatedCost.status')='estimated' AND json_type(response,'$.estimatedCost.usd') IN ('integer','real') THEN 0 ELSE 1 END) AS unknownCount,
+    SUM(COALESCE(json_extract(response,'$.estimatedCost.usd'),json_extract(response,'$.estimatedCost.subtotalUsd'),0)) AS subtotalUsd
+    FROM attempts WHERE chat_id=? AND run_id IS NOT NULL AND role!='title' GROUP BY run_id`)
+        .all(id) as {
+        runId: string;
+        attemptCount: number;
+        unknownCount: number;
+        subtotalUsd: number;
+      }[]
+    ).map(({ runId, ...cost }) => [
+      runId,
+      { ...cost, usd: cost.unknownCount ? null : cost.subtotalUsd },
+    ])
+  );
   const runs = (
     store.db
       .prepare(`SELECT id,chat_id AS chatId,parent_revision AS parentRevision,status,request,source_revision AS sourceRevision,error,usage,partial_text AS partialText,
@@ -220,6 +238,7 @@ export function readerDetail(store: Store, id: string, query: Record<string, str
       .all(id) as (Record<string, any> & { id: string; request: string })[]
   ).map((row) => ({
     ...row,
+    estimatedCost: runCosts.get(row.id),
     snapshot: {
       ...JSON.parse(row.snapshot),
       loreContextReset: !!JSON.parse(row.snapshot).loreContextReset,

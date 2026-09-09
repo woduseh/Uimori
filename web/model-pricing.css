@@ -1,0 +1,87 @@
+.model-pricing,
+.model-pricing-summary,
+.model-pricing-body {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.model-pricing-body {
+  display: grid;
+  gap: 12px;
+  padding-top: 12px;
+}
+.model-pricing-body p,
+.model-pricing-summary p {
+  margin: 0;
+}
+.model-pricing-body label:not(.toggle-row) {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+.model-pricing-body input:not([type="checkbox"]),
+.model-pricing-body select {
+  width: 100%;
+  min-width: 0;
+  min-height: 44px;
+}
+.model-pricing-inputs {
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+.model-pricing-input-grid,
+.model-pricing-rates {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+.model-pricing-optional {
+  margin-top: 8px;
+}
+.model-pricing-optional > summary {
+  min-height: 44px;
+  align-content: center;
+}
+.model-pricing-summary {
+  display: grid;
+  gap: 8px;
+}
+.model-pricing-rates {
+  margin: 0;
+}
+.model-pricing-rates > div {
+  min-width: 0;
+}
+.model-pricing-rates dt {
+  color: var(--muted);
+  font-size: 12px;
+}
+.model-pricing-rates dd {
+  margin: 3px 0 0;
+}
+.model-pricing-rates dd small {
+  display: block;
+  margin-top: 3px;
+}
+.model-pricing-notes {
+  margin: 0;
+  padding-left: 18px;
+  color: var(--muted);
+  font-size: 12px;
+}
+.attempt-pricing {
+  display: grid;
+  min-width: 0;
+  gap: 10px;
+  margin-block: 12px;
+  overflow-wrap: anywhere;
+}
+.attempt-pricing p {
+  margin: 0;
+}
+@media (max-width: 480px) {
+  .model-pricing-input-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

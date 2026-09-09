@@ -114,6 +114,20 @@ export type Connection = ContentRef & {
     limits?: { maxOutputTokens?: number; inputTokenLimit?: number };
     /** Option values the list API published, in this protocol's native vocabulary. */
     options?: { thinking?: string[]; thinkingModes?: string[] };
+    pricing?: {
+      rates: import('./pricing-types.js').TokenRates;
+      longContext?: { aboveInputTokens: number; rates: import('./pricing-types.js').TokenRates };
+      serviceTiers?: Record<
+        string,
+        {
+          rates: import('./pricing-types.js').TokenRates;
+          longContext?: {
+            aboveInputTokens: number;
+            rates: import('./pricing-types.js').TokenRates;
+          };
+        }
+      >;
+    };
   }[];
   catalogError: string | null;
   catalogUpdatedAt?: string | null;
@@ -128,10 +142,13 @@ export type ModelPreset = ContentRef &
     timeoutMs?: number;
     enabled?: boolean;
     evaluationTools?: EvaluationToolOptions;
-    userOverrides?: { tools: boolean | null; structuredOutput: boolean | null; note: string };
+    pricing?: import('./pricing-types.js').ModelPricing;
     source?: { kind: 'catalog' | 'manual'; catalogUpdatedAt: string | null };
   };
-export type ModelSnapshot = ModelPreset & { connection: Connection };
+export type ModelSnapshot = ModelPreset & {
+  connection: Connection;
+  pricingSnapshot?: import('./pricing-types.js').PricingSnapshot;
+};
 export type ChatProfile = {
   /** Read-only notices from adapting saved options to current definitions. Never execution evidence. */
   optionAdjustments?: string[];
@@ -158,7 +175,7 @@ export type ProfileSnapshot = ChatProfile & {
   collaborationModels?: Record<string, ModelSnapshot>;
   contents: Content[];
   packages?: import('./content-package.js').ContentPackage[];
-  models: Partial<Record<TaskRole, ModelPreset & { connection: Connection }>>;
+  models: Partial<Record<TaskRole, ModelSnapshot>>;
   promptPresets?: Partial<Record<PromptRole, PromptPreset>>;
 };
 export type Branch = {
@@ -202,6 +219,9 @@ export type Attempt = {
   inputTokens: number | null;
   outputTokens: number | null;
   costUsd: number | null;
+  estimatedCost?: import('./pricing-types.js').CostEstimate;
+  pricingSnapshot?: import('./pricing-types.js').PricingSnapshot;
+  pricingStartedAt?: string;
   rawUsage: unknown;
   priceRevision: string | null;
   error: string | null;

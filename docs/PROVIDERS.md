@@ -14,7 +14,7 @@
 
 저장 목록에서 연결 이름·주소·모델 ID를 검색하고 수정·복제·비활성화할 수 있어요. 수정은 같은 ID의 최신 설정을 갱신하며, 내부 revision은 편집 충돌 확인에만 사용해요. 역할별 모델 ID는 전역 설정에서 선택하고 모든 채팅의 새 실행·작업 예약에는 현재 전역 설정을 읽어요. 채팅별 선택은 없어요. 이미 예약된 작업과 과거 Run은 자기 모델·연결 snapshot을 유지해요. 연결의 활성 여부·주소·인증 참조·origin 권한은 호출마다 최신 상태로 다시 검사해요. 모델 비활성화는 새 선택에서 제외하고 해당 모델로 새 작업을 시작하지 못하게 해요. 전역 선택에는 복구할 대상을 표시하며 과거 snapshot은 보존해요. 연결의 프로토콜을 바꾸면 모델 설정을 검토·저장한 뒤 새 실행을 시작해요.
 
-조회 실패 시 마지막 모델 목록과 수동 ID를 유지해요. 편집 도중 다른 창에서 저장하면 409 충돌을 표시하고 입력을 보존해요. 최신 내용 다시 불러오기는 현재 초안을 교체하는 명시적 동작이에요. 모델 기능은 조회 결과·미확인·사용자 확인값을 구분하고 실제 가격은 추정하지 않아요.
+조회 실패 시 마지막 모델 목록과 수동 ID를 유지해요. 편집 도중 다른 창에서 저장하면 409 충돌을 표시하고 입력을 보존해요. 최신 내용 다시 불러오기는 현재 초안을 교체하는 명시적 동작이에요. 모델 기능은 공급자 목록·앱 확인 힌트·미확인 값을 구분해요. 고급 탭의 요금 설정과 별도 추정 비용은 [모델 요금](MODEL-PRICING.md)을 봐요.
 
 ## 새 모델 사용하기
 
@@ -45,7 +45,7 @@
 
 번역 JSON Schema는 Responses·Messages에서 기본 사용, Chat Completions 연결에서 기본 미사용이며 선택 옵션으로 바꿀 수 있어요. 호환 서버는 SSE, `max_completion_tokens`, 선택한 옵션과 function tools를 지원해야 해요. Vercel 등 여러 공급자를 연결하는 gateway에는 확인한 공통 옵션만 제공해요. OpenAI의 native 옵션을 다른 공급자 모델에도 전달한다고 보장하지 않아요. 별도 tokenizer 선택은 연결 설정에 필요하지 않으며 provider의 token usage와 실제 비용 미확인 상태를 보존해요.
 
-이 네 연결은 로컬 합성 프로토콜·HTTP·앱 검증 대상이며 실제 API 시험은 사용자가 진행해요. 서버의 누적 호출 수·금액 제한과 단가 추정은 제거했어요. 작업별 `maxCalls`, timeout, 최대 출력 토큰 한도는 유지하며 요청 기록과 provider가 보고한 usage를 보존해요. 비용을 보고하지 않는 공급자의 `costUsd`는 `null`로 남겨요.
+이 네 연결은 로컬 합성 프로토콜·HTTP·앱 검증 대상이며 실제 API 시험은 사용자가 진행해요. 서버의 누적 호출 수·금액 제한은 제거했어요. 추정 비용은 [모델 요금](MODEL-PRICING.md)의 별도 참고값이에요. 작업별 `maxCalls`, timeout, 최대 출력 토큰 한도는 유지하며 요청 기록과 provider가 보고한 usage를 보존해요. 비용을 보고하지 않는 공급자의 `costUsd`는 `null`로 남겨요.
 
 ## Google Agent Platform 연결과 합성 시험
 
@@ -67,7 +67,7 @@ Flex는 `shared`와 `flex` 요청 헤더를 함께 보내고 응답에서 적용
 
 목록 새로고침은 Gemini 목록용 키가 없으면 앱의 힌트 표를 보여주고, 키가 있으면 Gemini Developer API 목록을 받아와요. 어느 쪽도 Agent Platform 인증이나 모델 접근권한을 시험하지 않아요. 설정 저장만으로 모델 요청이 발생하지 않아요. 실제 요청은 매번 최신 연결 권한과 서버 origin 정책을 검사하고, attempt를 DB에 기록한 뒤 시작해요.
 
-과거 합성 시험에 사용한 DB 누적 예산·요청당 예약금·단가 유효기간 차단은 현행 실행 계약에서 제거했어요. `NR_LIVE_MAX_REQUESTS`·`NR_LIVE_MAX_USD`도 사용하지 않아요. 실제 청구 비용을 추정하지 않으며 보고되지 않은 `costUsd`는 `null`로 보존해요. 과거 시험의 호출 수·추정 금액·FAIL/INCOMPLETE 결과는 당시 기록으로 남아요.
+과거 합성 시험에 사용한 DB 누적 예산·요청당 예약금·단가 유효기간 차단은 현행 실행 계약에서 제거했어요. `NR_LIVE_MAX_REQUESTS`·`NR_LIVE_MAX_USD`도 사용하지 않아요. 참고용 추정 비용과 실제 청구 비용을 구분하며 보고되지 않은 `costUsd`는 `null`로 보존해요. 과거 시험의 호출 수·추정 금액·FAIL/INCOMPLETE 결과는 당시 기록으로 남아요.
 
 `scripts/verify-live.mjs --preflight`는 모델 요청 없이 설정·최신 빌드 메타데이터만 확인해요. 이전 유료 시나리오는 채팅 프롬프트 참조와 번역 구간·앵커를 전제로 하므로 종료했어요. 환경 준비 여부는 `environmentReady`로 별도 기록하며 preflight/execute 모두 `LIVE_VERIFY_CURRENT_CONTRACT_REVIEW_REQUIRED`와 BLOCKED를 반환해요. 현재 프롬프트·전체 번역·거절 판정 모델을 포함하는 새 live 평가 계획과 실행 승인은 별도 작업이에요.
 
@@ -90,7 +90,7 @@ node scripts/verify-live.mjs --preflight
 
 `deepseek-chat-v1` 연결은 `https://api.deepseek.com/v1/chat/completions`에 OpenAI Chat Completions JSON/SSE 형식으로 요청해요. 기본 인증 환경변수는 `DEEPSEEK_API_KEY`이고 공식 API root만 허용해요. `deepseek-v4-pro`와 `deepseek-v4-flash`를 로컬 지원 목록에서 선택할 수 있어요. 사용자 연결이나 모델 프리셋을 자동 생성하지 않아요.
 
-출력 한도는 `max_tokens`로 보내요. Reasoning Effort의 `none`은 `thinking.type=disabled`, `low/high/max`는 사고 활성화와 해당 effort로 보내며 기본값은 공급자의 high예요. temperature는 사고를 끈 경우에만 사용해요. 도구 후속 요청에 필요한 `reasoning_content`는 opaque continuation 안에서 보존하며 원문이나 진단 본문에 노출하지 않아요. usage의 input/output token과 `prompt_cache_hit_tokens`만 공급자 보고값으로 기록하고 비용을 추정하지 않아요.
+출력 한도는 `max_tokens`로 보내요. Reasoning Effort의 `none`은 `thinking.type=disabled`, `low/high/max`는 사고 활성화와 해당 effort로 보내며 기본값은 공급자의 high예요. temperature는 사고를 끈 경우에만 사용해요. 도구 후속 요청에 필요한 `reasoning_content`는 opaque continuation 안에서 보존하며 원문이나 진단 본문에 노출하지 않아요. usage의 input/output token과 `prompt_cache_hit_tokens`를 공급자 보고값으로 기록하고, 별도 추정 비용은 호출 당시 시간대와 고정 단가로 계산해요.
 
 근거(2026-09-09): [모델 명세](https://api-docs.deepseek.com/quick_start/pricing/), [사고·도구 후속 계약](https://api-docs.deepseek.com/guides/thinking_mode/), [Chat Completions](https://api-docs.deepseek.com/api/create-chat-completion/). 로컬 합성 검사는 요청·응답 계약의 증거이며 실제 인증·계정 가용성·창작 품질은 별도예요.
 

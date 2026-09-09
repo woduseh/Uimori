@@ -348,6 +348,7 @@ export async function runStoryJob(
       );
       return {
         contextBudget: contextBudgetForModel(target),
+        pricingSnapshot: target.pricingSnapshot,
         role: job.kind,
         modelId: target.modelId,
         stable: {

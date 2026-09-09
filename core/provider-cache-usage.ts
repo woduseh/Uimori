@@ -38,7 +38,7 @@ export function providerCacheUsage(
   if (protocol === 'openai-chat-v1' || protocol === 'vercel-chat-v1')
     return {
       readTokens: token(record(raw.prompt_tokens_details).cached_tokens),
-      writeTokens: null,
+      writeTokens: token(record(raw.prompt_tokens_details).cache_write_tokens),
     };
   if (protocol === 'vertex-gemini-v1')
     return { readTokens: token(raw.cachedContentTokenCount), writeTokens: null };

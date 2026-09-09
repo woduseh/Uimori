@@ -1,5 +1,9 @@
 # 근거와 확인 범위 v0.6.1
 
+## 2026-09-09 모델 요금과 추정 비용
+
+OpenAI·Claude·Google Agent Platform·DeepSeek 공식 가격표와 Vercel 공개 `/v1/models`의 같은 날 응답 → 토큰 버킷별 단가, 문맥·서비스 tier·시간대별 적용 규칙 → `core/model-pricing.ts`, `core/provider-catalog.ts`, `core/pricing-estimate.ts`에 단가 선택과 공급자 사용량 계산을 분리했어요. 전송 당시 가격을 고정하고 실제 비용과 추정을 분리하는 원리를 `ModelSnapshot.pricingSnapshot`과 attempt response에 적용했어요. 출처·지원 범위·실제 요금과의 차이는 [모델 요금](../docs/MODEL-PRICING.md)에 모았어요. 원본 코드 복사는 하지 않았어요. 로컬 계산/SQLite/HTTP 및 `verify:pricing`으로 검증하며 실제 billing 일치 주장은 하지 않아요.
+
 ## 2026-09-09 Vercel Sol Flex
 
 Vercel [Sol 모델 페이지](https://vercel.com/ai-gateway/models/gpt-5.6-sol)와 [Service Tiers](https://vercel.com/docs/ai-gateway/models-and-providers/service-tiers)의 같은 날 공개 명세 → OpenAI raw Chat 요청의 `service_tier` → `core/model-capabilities.ts`의 Vercel Sol에 default/flex를 선언하고 기존 `encodeChat` 인코더를 재사용했어요. `tests/model-capabilities.test.ts`, `tests/openai-chat-protocol.test.ts`, PMUI11이 옵션 허용·전송·후속 호출 고정·UI 저장을 검증해요. Flex는 요청 힌트이며 실제 적용·과금은 공급자 응답/로그 기준이에요. 다른 Vercel 모델의 지원을 자동 확대하거나 가격 절감을 보장하지 않아요.

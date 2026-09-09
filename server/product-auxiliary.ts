@@ -501,6 +501,7 @@ export async function runAuxiliaryJob(
           evaluation
         ),
         contextBudget: contextBudgetForModel(target),
+        pricingSnapshot: target.pricingSnapshot,
       };
       const generationBinding = evaluation?.generationBinding(generation, completedToolResults);
       if (generationBinding) body.generationBinding = generationBinding;
@@ -619,6 +620,7 @@ export async function runAuxiliaryJob(
               tools: [],
             },
             generation: generationFromModel(classifier),
+            pricingSnapshot: classifier.pricingSnapshot,
             contextBudget: contextBudgetForModel(classifier),
             input: {
               task: 'Classify the response prefix.',

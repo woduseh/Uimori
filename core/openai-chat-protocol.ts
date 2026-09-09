@@ -160,6 +160,7 @@ export class ChatDecoder {
   private readonly calls = new Map<number, Record<string, Json>>();
   private result = empty();
   private completionId: string | undefined;
+  private serviceTier: string | undefined;
   private finishReason: string | undefined;
   private done = false;
   constructor(context: OpenAITurn) {
@@ -305,8 +306,12 @@ export class ChatDecoder {
         reject('RESPONSE_ID_MISMATCH');
       this.completionId = event.id;
     }
-    if (event.usage !== undefined && event.usage !== null)
+    if (typeof event.service_tier === 'string') this.serviceTier = event.service_tier;
+    if (event.usage !== undefined && event.usage !== null) {
       this.result.usage = readUsage(event.usage, 'prompt_tokens', 'completion_tokens');
+      if (this.serviceTier !== undefined && object(this.result.usage.raw))
+        this.result.usage.raw.service_tier = this.serviceTier;
+    }
     if (!Array.isArray(event.choices)) reject('INVALID_CHAT_EVENT');
     if (!event.choices.length) {
       if (event.usage === undefined || event.usage === null) reject('INVALID_CHAT_EVENT');
