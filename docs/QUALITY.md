@@ -61,6 +61,8 @@ Biome `noRestrictedImports`를 디렉토리별로 적용해 다음 import/re-exp
 
 `.github/workflows/quality.yml`은 PR과 main push에서 Windows / Node 24.14.0으로 `npm ci` 후 **같은 `npm run quality:full`**을 실행해요. npm 다운로드 캐시를 재사용하고 같은 브랜치의 오래된 실행은 취소해요. 브라우저 전체 회귀는 수동 실행의 `browser` 옵션으로 추가할 수 있어요. 로컬 검증과 GitHub에서 실제 실행된 결과는 구분해요.
 
+`verify:redesign`은 모든 브라우저 spec을 한 번의 Playwright 명령으로 돌리므로 공용 기본값 600초로는 끝나지 않아요. 2026-09-10에 한 기계에서 잰 완주 시간은 9.2분과 11.8분이고, 그 이전 기록의 반복된 timeout FAIL도 같은 원인이에요. 그래서 이 검사만 30분 한도를 직접 지정하고 CI job 한도를 45분으로 두었어요. 두 값은 멈춤을 잡기 위한 상한이지 목표 실행 시간이 아니에요. 검사마다 자기 묶음에 맞는 한도를 지정하는 기존 방식을 따랐어요. 다른 `verify:*` 열여섯 개는 이미 120~360초로 기본값보다 좁혀 두었고, 기본값보다 늘리는 것은 이 검사뿐이에요. Windows CI에서의 실제 완주 시간은 아직 측정하지 않았어요.
+
 ## 채택 이유와 후속 범위
 
 도입 당시 TypeScript는 7.0.2이며, typescript-eslint 8.69.0의 공식 npm peer 범위는 `>=4.8.4 <6.1.0`이었어요. dependency-cruiser 18.2.0 역시 TypeScript 7에서 TS 파일 분석이 누락될 수 있음을 확인해 채택하지 않았어요. TypeScript를 내리거나 별도 파서 환경을 관리하는 대신, Biome와 기존 `tsc`를 조합했어요. typescript-eslint의 타입 기반 Promise 검사 전체와 동등한 범위를 주장하지 않아요. [typescript-eslint 지원 범위](https://typescript-eslint.io/users/dependency-versions/) · [Biome lint](https://biomejs.dev/linter/) · [Biome import 규칙](https://biomejs.dev/linter/rules/no-restricted-imports/).
