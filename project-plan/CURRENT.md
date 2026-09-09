@@ -294,4 +294,5 @@ UIUX 테스트 후속 개선에서 새 채팅·입력창·모바일 서재·직�
 | 패키지·프롬프트·화면 | [봇 중심 개편](REDESIGN-RESULTS.md) · [상태와 행동](PACKAGE-BEHAVIOR-RESULTS.md) · [자동 행동](ACTION-EXECUTION-RESULTS.md) · [프롬프트 편집](PROMPT-EDITOR-RESULTS.md) · [초기 UI](UI-RESULTS.md) |
 | 로딩·보조 문맥 | [로딩](LOADING-RESULTS.md) · [서재 로딩](LIBRARY-LOADING-RESULTS.md) · [번역 문맥](TRANSLATION-CONTEXT-RESULTS.md) · [기억 평가](MEMORY-EVALUATION-RESULTS.md) |
 | 배포·외부 이식 | [Self-host 구현](SELF-HOST-RESULTS.md) · [Risu 변환 경로 정리](RISU-PORTING-RESULTS.md) · [과거 native 통합](NATIVE-RESULTS.md) · [당시 자료 대응표](NATIVE-PORTING.md) |
+| 남은 후속 항목 | [후속 항목 2026-09-10](FOLLOW-UPS-2026-09-10.md) |
 | Milestone·기초 설계 | [M0](M0-RESULTS.md) · [M1](M1-RESULTS.md) · [M2](M2-RESULTS.md) · [제거 전 Sol](SOL-RESULTS.md) · [계획 지도](README.md) · [채택 근거](SOURCES.md) |
