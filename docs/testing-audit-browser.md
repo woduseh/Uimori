@@ -278,10 +278,9 @@ PWS01 새 채팅에도 적용되는 현재 옵션/profile 무변경, PWS02 번�
 
 ### `tests/provider-compact-browser.spec.ts`
 
-PCUI01 빈 연결/모델 진입, PCUI03 등록 요청 초안 폐기, PCUI02 목록/menu/search 복구를 유지해요. 6폭을 기본 2폭으로 줄이고 icon/tab 정밀 정렬은 시각 검토로 옮겼어요.
+PCUI01 빈 연결/모델 진입, PCUI02 목록/menu/search 복구를 유지해요. PCUI03 등록 요청 초안 폐기는 등록 보조 기능 제거(2026-09-09)와 함께 삭제했어요. 6폭을 기본 2폭으로 줄이고 icon/tab 정밀 정렬은 시각 검토로 옮겼어요.
 
 - 유지: `PCUI01 empty connections and empty models each expose one relevant starting action`
-- 유지: `PCUI03 registration request drafts require explicit discard when closing settings`
 - 유지: `PCUI02 compact provider lists align at six widths and retain accessible menus and search recovery`
 
 ### `tests/provider-management-browser.spec.ts`
@@ -305,10 +304,7 @@ PMUI01 template/manual/catalog 오류, 02 clone/CAS, 03 최신 연결/비활성,
 
 ### `tests/provider-registration-browser.spec.ts`
 
-PMUI05 제안 검토/재조회/한 번 적용/역할 선택, PMUI06 확정 거부 key 해제와 불확실 key 재사용을 유지해요. 모델 response test와 admission API가 달라요.
-
-- 유지: `PMUI05 agent proposal is reviewed, survives reload, and applies once before role assignment`
-- 유지: `PMUI06 rejected admission releases the request key while uncertain delivery reuses it without a second call`
+등록 보조 기능 제거(2026-09-09)와 함께 삭제했어요. PMUI05·PMUI06은 더 이상 없어요.
 
 ### `tests/response-actions-browser.spec.ts`
 

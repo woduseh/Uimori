@@ -204,8 +204,6 @@ describe('Anthropic Messages request and opaque continuation', () => {
       thinkingMode: 'adaptive',
       thinkingBudgetTokens: 2048,
     },
-    { maxOutputTokens: 8192, temperature: null, thinkingMode: 'disabled', outputEffort: 'xhigh' },
-    { maxOutputTokens: 8192, temperature: null, thinkingMode: 'disabled', outputEffort: 'max' },
     { maxOutputTokens: 8192, temperature: null, reasoningEffort: 'high' },
     { maxOutputTokens: 8192, temperature: null, outputEffort: 'none' },
     { maxOutputTokens: 8192, temperature: null, structuredOutput: 'yes' },
@@ -272,7 +270,7 @@ describe('Anthropic Messages request and opaque continuation', () => {
     }
   });
 
-  test('Fable 5.1 rejects forced tool selection and disabled thinking without changing user options', () => {
+  test('Fable 5.1 rejects forced tool selection; disabled thinking reaches the wire for the provider to judge', () => {
     const input = request();
     input.modelId = 'claude-fable-5-1';
     input.toolChoice = 'knowledge.read';
@@ -282,7 +280,7 @@ describe('Anthropic Messages request and opaque continuation', () => {
     input.toolChoice = 'auto';
     expect(native(encodeAnthropic(input).body).tool_choice).toEqual({ type: 'auto' });
     input.generation!.thinkingMode = 'disabled';
-    expect(() => encodeAnthropic(input)).toThrow('UNSUPPORTED_GENERATION_OPTIONS');
+    expect(native(encodeAnthropic(input).body).thinking).toEqual({ type: 'disabled' });
   });
 
   test.each(['explicit', 'automatic', 'disabled'] as const)(

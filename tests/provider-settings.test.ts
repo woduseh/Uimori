@@ -308,7 +308,7 @@ describe('provider settings, catalogs and archive contracts', () => {
         { thinkingMode: 'on' },
         { timeoutMs: 1800001 },
         { timeoutMs: null },
-        { maxOutputTokens: 200001 },
+        { maxOutputTokens: 500001 },
         { temperature: '1' },
       ])
         await request(app, '/model-presets', modelBody(connection, changes), 400);
@@ -585,7 +585,7 @@ describe('provider settings, catalogs and archive contracts', () => {
     expect(fetch).not.toHaveBeenCalled();
   });
 
-  test('reads native catalogs using their exact base path and auth headers while retaining unknown capabilities and pricing', async () => {
+  test('reads native catalogs using their exact base path and auth headers and keeps only published limits and option values', async () => {
     const app = await application();
     for (const protocol of native) {
       const credentialEnv =
@@ -595,13 +595,31 @@ describe('provider settings, catalogs and archive contracts', () => {
         '/connections',
         connectionBody(protocol, { credentialEnv })
       );
+      // One entry carries every provider's published shape; each protocol keeps only its own fields.
       vi.mocked(fetch).mockResolvedValueOnce(
         response({
           data: [
             {
               id: 'synthetic-model',
               display_name: 'Synthetic label',
-              capabilities: { tools: true },
+              capabilities: {
+                tools: true,
+                effort: {
+                  supported: true,
+                  low: { supported: true },
+                  medium: { supported: true },
+                  high: { supported: true },
+                  xhigh: { supported: false },
+                  max: { supported: true },
+                },
+                thinking: { supported: true, types: { adaptive: { supported: true } } },
+                structured_outputs: { supported: true },
+              },
+              max_tokens: 128000,
+              max_input_tokens: 0,
+              context_window: 400000,
+              tags: ['reasoning', 'tool-use'],
+              reasoning_options: [{ type: 'effort', values: ['low', 'high', 'ultra'] }],
               pricing: { input: '0.1' },
             },
           ],
@@ -614,10 +632,31 @@ describe('provider settings, catalogs and archive contracts', () => {
         {
           id: 'synthetic-model',
           name: 'Synthetic label',
-          capabilities: { tools: null, structuredOutput: null },
           priceRevision: null,
+          ...(protocol === 'anthropic-messages-v1'
+            ? {
+                capabilities: { tools: null, structuredOutput: true },
+                limits: { maxOutputTokens: 128000 },
+                options: {
+                  thinking: ['low', 'medium', 'high', 'max'],
+                  thinkingModes: ['adaptive'],
+                },
+              }
+            : protocol === 'vercel-chat-v1'
+              ? {
+                  capabilities: { tools: true, structuredOutput: null },
+                  limits: { maxOutputTokens: 128000, inputTokenLimit: 400000 },
+                  options: { thinking: ['low', 'high'] },
+                }
+              : { capabilities: { tools: null, structuredOutput: null } }),
         },
       ]);
+      const exported = app.store.product.export();
+      const restored = await application();
+      expect(restored.store.product.import(exported)).toMatchObject({ restored: true });
+      expect(restored.store.product.get<Connection>('connection', connection.id).catalog).toEqual(
+        result.catalog
+      );
       const [url, init] = vi.mocked(fetch).mock.calls.at(-1)!;
       const address = new URL(String(url));
       expect(address.origin + address.pathname).toBe(roots[protocol] + '/models');
@@ -924,7 +963,7 @@ describe('provider settings, catalogs and archive contracts', () => {
     }
   });
 
-  test('saves Fable, cache modes and pending IDs while rejecting invalid combinations and missing archive capability revisions', async () => {
+  test('saves Fable, cache modes and unlisted IDs while rejecting protocol-level invalid combinations', async () => {
     const app = await application(),
       connection = await request<Connection>(
         app,
@@ -944,10 +983,9 @@ describe('provider settings, catalogs and archive contracts', () => {
       thinkingMode: 'adaptive',
       cacheMode: 'automatic',
       cacheTtl: '1h',
-      capabilityRevision: expect.any(String),
     });
+    expect(model).not.toHaveProperty('capabilityRevision');
     for (const change of [
-      { thinkingMode: 'disabled' },
       { reasoningEffort: 'high' },
       { cacheMode: 'disabled' },
       {
@@ -966,21 +1004,20 @@ describe('provider settings, catalogs and archive contracts', () => {
       '/model-presets',
       modelBody(connection, { modelId: 'unreviewed-new-model' })
     );
-    expect(pending).not.toHaveProperty('capabilityRevision');
+    expect(pending).toMatchObject({ modelId: 'unreviewed-new-model' });
     const archive = app.store.product.export();
-    for (const revision of [undefined, 'unreviewed-revision']) {
+    // The retired per-model revision stamp is an unknown archive field, not a silently ignored one.
+    {
       const forged = structuredClone(archive),
         row = forged.tables.provider_settings.find(
           (row) => row.kind === 'model' && row.id === model.id
         )!;
-      row.body = JSON.stringify({ ...JSON.parse(row.body), capabilityRevision: revision });
-      const target = await application(),
+      row.body = JSON.stringify({ ...JSON.parse(row.body), capabilityRevision: 'legacy' });
+      const stale = await application(),
         before = JSON.stringify(forged);
-      expect(() => target.store.product.import(forged)).toThrow(
-        'MODEL_CAPABILITY_REVISION_MISMATCH'
-      );
+      expect(() => stale.store.product.import(forged)).toThrow();
       expect(JSON.stringify(forged)).toBe(before);
-      expect(target.store.product.all('model')).toEqual([]);
+      expect(stale.store.product.all('model')).toEqual([]);
     }
     const target = await application();
     expect(target.store.product.import(archive)).toMatchObject({ restored: true });

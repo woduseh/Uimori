@@ -160,17 +160,16 @@ describe('Vertex connection and model settings with file SQLite', () => {
     );
     expect(minimum).toMatchObject({ maxOutputTokens: 1, thinkingLevel: 'LOW', timeoutMs: 1 });
     for (const invalid of [
-      { temperature: 0.1 },
-      { maxOutputTokens: 65537 },
+      { maxOutputTokens: 500001 },
       { maxOutputTokens: 0 },
-      { thinkingLevel: 'MINIMAL' },
       { thinkingLevel: 'medium' },
       { thinkingLevel: null },
       { timeoutMs: 0 },
       { timeoutMs: 1800001 },
       { timeoutMs: 1.5 },
       { timeoutMs: null },
-      { topP: 0.9 },
+      { topP: 1.5 },
+      { reasoningEffort: 'high' },
     ])
       await request(app, '/model-presets', modelBody(connection, invalid), 400);
     const fixture = await request<Connection>(app, '/connections', {
@@ -250,6 +249,117 @@ describe('Vertex connection and model settings with file SQLite', () => {
       enabled: false,
     });
     expect(fetch).not.toHaveBeenCalled();
+  });
+
+  test('lists Gemini models through a Developer API key when a catalog credential is set, and keeps the list when the key is missing', async () => {
+    const app = await application();
+    vi.stubEnv('NARRATIVE_PROVIDER_GEMINI_LIST_TEST', 'SYNTHETIC_LIST_KEY');
+    const calls: { url: string; init?: RequestInit }[] = [];
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (url, init) => {
+      calls.push({ url: String(url), init });
+      const second = new URL(String(url)).searchParams.get('pageToken') === 'next';
+      const body = second
+        ? {
+            models: [
+              {
+                name: 'models/gemini-3.9-pro',
+                displayName: 'Gemini 3.9 Pro',
+                inputTokenLimit: 1048576,
+                outputTokenLimit: 65536,
+                supportedGenerationMethods: ['generateContent'],
+              },
+            ],
+          }
+        : {
+            models: [
+              {
+                name: 'models/gemini-3.8-flash',
+                displayName: 'Gemini 3.8 Flash',
+                inputTokenLimit: 1048576,
+                outputTokenLimit: 65536,
+                supportedGenerationMethods: ['generateContent', 'countTokens'],
+              },
+              { name: 'models/embedding-001', supportedGenerationMethods: ['embedContent'] },
+            ],
+            nextPageToken: 'next',
+          };
+      return new Response(JSON.stringify(body), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      });
+    });
+    const connection = await request<Connection>(
+      app,
+      '/connections',
+      vertexConnection({
+        enabled: false,
+        credentialEnv: 'NARRATIVE_PROVIDER_VERTEX_TEST',
+        catalogCredentialEnv: 'NARRATIVE_PROVIDER_GEMINI_LIST_TEST',
+      })
+    );
+    expect(connection.catalogCredentialEnv).toBe('NARRATIVE_PROVIDER_GEMINI_LIST_TEST');
+    const listed = await request<Connection>(app, `/connections/${connection.id}/catalog`, {});
+    expect(listed.catalogError).toBeNull();
+    expect(listed.catalog).toEqual([
+      {
+        id: 'gemini-3.8-flash',
+        name: 'Gemini 3.8 Flash',
+        capabilities: { tools: null, structuredOutput: null },
+        priceRevision: null,
+        limits: { maxOutputTokens: 65536, inputTokenLimit: 1048576 },
+      },
+      {
+        id: 'gemini-3.9-pro',
+        name: 'Gemini 3.9 Pro',
+        capabilities: { tools: null, structuredOutput: null },
+        priceRevision: null,
+        limits: { maxOutputTokens: 65536, inputTokenLimit: 1048576 },
+      },
+    ]);
+    expect(calls).toHaveLength(2);
+    for (const call of calls) {
+      const address = new URL(call.url);
+      expect(address.origin + address.pathname).toBe(
+        'https://generativelanguage.googleapis.com/v1beta/models'
+      );
+      expect(new Headers(call.init?.headers).get('x-goog-api-key')).toBe('SYNTHETIC_LIST_KEY');
+      expect(call.init).toMatchObject({ method: 'GET', redirect: 'error' });
+    }
+    expect(new URL(calls[1].url).searchParams.get('pageToken')).toBe('next');
+    expect(JSON.stringify(listed)).not.toContain('SYNTHETIC_LIST_KEY');
+    vi.stubEnv('NARRATIVE_PROVIDER_GEMINI_LIST_TEST', '');
+    const failed = await request<Connection>(app, `/connections/${connection.id}/catalog`, {});
+    expect(failed.catalogError).toBe('CATALOG_UNAVAILABLE');
+    expect(failed.catalog).toEqual(listed.catalog);
+    expect(calls).toHaveLength(2);
+    // The list key is Gemini-only and never a service-account file reference.
+    await request(
+      app,
+      '/connections',
+      {
+        title: 'Not Gemini',
+        protocol: 'openai-responses-v1',
+        endpoint: 'https://api.openai.com/v1',
+        enabled: false,
+        catalogCredentialEnv: 'NARRATIVE_PROVIDER_GEMINI_LIST_TEST',
+      },
+      400
+    );
+    await request(
+      app,
+      '/connections',
+      vertexConnection({
+        enabled: false,
+        catalogCredentialEnv: 'NARRATIVE_PROVIDER_VERTEX_FILE_' + 'A'.repeat(32),
+      }),
+      400
+    );
+    const archive = app.store.product.export();
+    const target = await application();
+    expect(target.store.product.import(archive)).toMatchObject({ restored: true });
+    expect(
+      target.store.product.get<Connection>('connection', connection.id).catalogCredentialEnv
+    ).toBe('NARRATIVE_PROVIDER_GEMINI_LIST_TEST');
   });
 
   test('exports and restores optional settings and immutable snapshots, with every connection disabled and credential reference removed', async () => {
@@ -366,10 +476,10 @@ describe('Vertex connection and model settings with file SQLite', () => {
     await request<ModelPreset>(source, '/model-presets', modelBody(connection));
     const archive = source.store.product.export();
     for (const changes of [
-      { modelId: 'unsupported-model' },
-      { temperature: 0.3 },
-      { maxOutputTokens: 65537 },
-      { thinkingLevel: 'MINIMAL' },
+      { temperature: 2.5 },
+      { maxOutputTokens: 500001 },
+      { thinkingLevel: 'medium' },
+      { structuredOutput: true },
       { timeoutMs: 1800001 },
     ]) {
       const forged = structuredClone(archive);

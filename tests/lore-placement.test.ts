@@ -1,6 +1,5 @@
 import { expect, test } from 'vitest';
 import { defaultProfile, VERTEX_GEMINI_MODEL_ID } from '../core/product.js';
-import { modelCapability } from '../core/model-capabilities.js';
 import { validateContentPackage, type ContentPackage } from '../core/content-package.js';
 import { compiledPackages } from '../core/package-context.js';
 import { buildMainInput } from '../core/provider.js';
@@ -198,7 +197,6 @@ test('four native wire codecs deliver pinned bodies once and preserve fixed pref
     connectionId: 'c',
     modelId: 'gpt-5.6',
     capabilityProtocol: 'openai-responses-v1',
-    capabilityRevision: modelCapability('openai-responses-v1', 'gpt-5.6')!.revision,
     maxOutputTokens: 1000,
     temperature: null,
     connection: {

@@ -107,16 +107,16 @@ test('EVALUI01 desktop preset evaluation opt-in persists selected story roles af
     page.getByLabel('연결 프로토콜').locator('option[value="sol-responses-v1"]')
   ).toHaveCount(0);
   const connection = await register(page, request, title, 'llm-gateway');
-  await page.getByRole('button', { name: '고급 옵션', exact: true }).click();
+  await page.getByRole('button', { name: '고급', exact: true }).click();
   await expect(page.getByLabel('이 모델 프리셋에 평가 도구 4개 사용')).not.toBeChecked();
   await page.getByLabel('이 모델 프리셋에 평가 도구 4개 사용').check();
   await page.getByLabel('평가 문맥 제공').selectOption('preloaded');
   await page.getByLabel('첫 case 라운드 추론').selectOption('economized');
   await page.getByLabel('최대 평가 도구 라운드').fill('3');
   await page.getByLabel('제출 원고의 정확한 문자열 교정 허용').check();
-  await page.getByRole('button', { name: '생성 설정', exact: true }).click();
-  await page.getByLabel('Reasoning Effort', { exact: true }).selectOption('high');
-  await page.getByRole('button', { name: '고급 옵션', exact: true }).click();
+  await page.getByRole('button', { name: '기본', exact: true }).click();
+  await page.getByLabel('사고 강도', { exact: true }).selectOption('high');
+  await page.getByRole('button', { name: '고급', exact: true }).click();
   await page.getByLabel('평가 문맥 제공').scrollIntoViewIfNeeded();
   if (visualReview)
     await page.screenshot({ path: info.outputPath('evaluation-desktop-options.png') });
@@ -183,7 +183,7 @@ test('EVALUI02 mobile 390px evaluation controls save only for opted-in presets a
   if (visualReview)
     await page.screenshot({ path: info.outputPath('evaluation-mobile-connection.png') });
   const connection = await register(page, request, title, 'vercel');
-  await page.getByRole('button', { name: '고급 옵션', exact: true }).click();
+  await page.getByRole('button', { name: '고급', exact: true }).click();
   await expect(page.getByLabel('이 모델 프리셋에 평가 도구 4개 사용')).not.toBeChecked();
   await page.getByLabel('이 모델 프리셋에 평가 도구 4개 사용').check();
   const labels = [
@@ -197,11 +197,7 @@ test('EVALUI02 mobile 390px evaluation controls save only for opted-in presets a
   for (const label of labels) {
     await page
       .getByRole('button', {
-        name: ['모델 프리셋 이름', '모델 ID'].includes(label)
-          ? '기본 정보'
-          : ['최대 출력 토큰', '응답 제한 시간 (초)'].includes(label)
-            ? '생성 설정'
-            : '고급 옵션',
+        name: ['모델 프리셋 이름', '모델 ID', '최대 출력 토큰'].includes(label) ? '기본' : '고급',
         exact: true,
       })
       .click();
@@ -268,7 +264,7 @@ test('EVALUI02 mobile 390px evaluation controls save only for opted-in presets a
   expect(observed.errors).toEqual([]);
   expect(observed.forbidden).toEqual([]);
   await page.getByRole('button', { name: title + ' 모델 모델 수정', exact: true }).click();
-  await page.getByRole('button', { name: '고급 옵션', exact: true }).click();
+  await page.getByRole('button', { name: '고급', exact: true }).click();
   await expect(page.getByLabel('이 모델 프리셋에 평가 도구 4개 사용')).toBeChecked();
   await page.getByLabel('이 모델 프리셋에 평가 도구 4개 사용').uncheck();
   await expect(page.getByLabel('평가 문맥 제공')).toHaveCount(0);

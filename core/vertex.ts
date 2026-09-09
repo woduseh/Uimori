@@ -3,7 +3,6 @@ import { createHash } from 'node:crypto';
 import { isVertexAdcReference } from './credential-reference.js';
 import { providerFetchOptions, transportFailureCode } from './provider-fetch.js';
 import { validateVertexEndpoint } from './product.js';
-import { modelCapability, requireSupportedModel } from './model-capabilities.js';
 import { assertContextBudget } from './context-budget.js';
 import { vertexAccessToken } from './vertex-auth.js';
 import {
@@ -153,12 +152,11 @@ export async function executeVertexProvider(
   try {
     const connection = validateConnection(connectionValue, options.approvedOrigins);
     const request = validateRequest(requestValue);
-    requireSupportedModel(connection, request.modelId);
     const prepared = encodeVertex(request);
     const requestedTier = request.generation?.serviceTier;
     const tier = options.vertexRequestTier ?? requestedTier ?? 'standard';
     if (
-      !modelCapability('vertex-gemini-v1', request.modelId)?.serviceTiers?.includes(tier) ||
+      !['standard', 'flex'].includes(tier) ||
       (options.vertexRequestTier !== undefined &&
         requestedTier !== undefined &&
         options.vertexRequestTier !== requestedTier)

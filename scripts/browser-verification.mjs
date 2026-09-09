@@ -1,7 +1,7 @@
 import path from 'node:path';
 import { existsSync } from 'node:fs';
 import { mkdir, readdir, copyFile, readFile } from 'node:fs/promises';
-import { startRegistrationFixture } from './provider-management-fixture.mjs';
+import { startProviderFixture } from './provider-management-fixture.mjs';
 import {
   artifactRoot,
   newId,
@@ -34,7 +34,7 @@ export async function runBrowserVerification({
   requiredTitles = [],
   requiredScreenshots = [],
   expectedCount,
-  registrationFixture = false,
+  providerFixture = false,
   timeout = 600_000,
   limitations = [],
 }) {
@@ -108,13 +108,13 @@ export async function runBrowserVerification({
     const temp = path.join(runtime, 'temp');
     await mkdir(temp, { recursive: true });
     assertNotCancelled();
-    if (registrationFixture) fixture = await startRegistrationFixture();
+    if (providerFixture) fixture = await startProviderFixture();
     const env = localVerificationEnv({
       NR_DB: path.join(runtime, 'app.sqlite'),
       NR_INSTANCE: runId,
       NR_BUILD_ID: identity.buildId,
       NR_PROVIDER_ORIGINS: fixture ? new URL(fixture.url).origin : '',
-      ...(fixture ? { NR_REGISTRATION_FIXTURE_URL: fixture.url } : {}),
+      ...(fixture ? { NR_PROVIDER_FIXTURE_URL: fixture.url } : {}),
       NR_ARTIFACT_DIR: directory,
       NR_BROWSER_OUTPUT: path.join(directory, 'browser'),
       NR_SECRET_CANARY: canary,
@@ -208,10 +208,8 @@ export async function runBrowserVerification({
       } catch (error) {
         cleanupErrors.push(error.message);
       } finally {
-        summary.registrationFixture = fixture.stats();
-        failures.push(
-          ...summary.registrationFixture.errors.map((message) => `Fixture: ${message}`)
-        );
+        summary.providerFixture = fixture.stats();
+        failures.push(...summary.providerFixture.errors.map((message) => `Fixture: ${message}`));
       }
     const live = [...children].filter(
       (child) => child.pid && child.exitCode === null && child.signalCode === null

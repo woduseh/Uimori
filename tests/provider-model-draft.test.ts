@@ -19,7 +19,7 @@ const connection: Connection = {
 };
 
 describe('model numeric drafts', () => {
-  test.each(['', ' ', '0', '-1', '1.5', 'NaN', 'Infinity', '200001'])(
+  test.each(['', ' ', '0', '-1', '1.5', 'NaN', 'Infinity', '500001'])(
     'rejects invalid required output tokens %j before saving',
     (maxOutputTokens) => {
       expect(modelDraftError({ ...initialModel(), maxOutputTokens }, connection)).not.toBe('');

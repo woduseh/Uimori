@@ -38,8 +38,6 @@ export async function api<T>(path: string, body?: unknown, method = 'POST'): Pro
       'Connection disabled or authority changed',
       'Connection protocol changed; review and save the model settings',
       'Setting not found',
-      'UNVERIFIED_MODEL_CAPABILITY',
-      'MODEL_CAPABILITY_REVISION_MISMATCH',
       'CONNECTION_NOT_AUTHORIZED',
       'CREDENTIAL_UNAVAILABLE',
       'ENDPOINT_NOT_APPROVED',

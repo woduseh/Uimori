@@ -4,7 +4,7 @@ await runBrowserVerification({
   name: 'library',
   scope:
     'Library folders, role selection, portraits, prompt management and guarded deletion synthetic browser regression',
-  registrationFixture: true,
+  providerFixture: true,
   files: [
     'tests/library-browser.spec.ts',
     'tests/library-images-browser.spec.ts',

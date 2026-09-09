@@ -42,7 +42,7 @@ test('shared persona draft uploads an image and starts as a bot with an exact au
   request,
 }, info) => {
   test.setTimeout(60000);
-  const endpoint = process.env.NR_REGISTRATION_FIXTURE_URL;
+  const endpoint = process.env.NR_PROVIDER_FIXTURE_URL;
   if (!endpoint) throw new Error('Dedicated image-placement loopback fixture is required');
   const connectionReply = await request.post('/api/connections', {
     data: {

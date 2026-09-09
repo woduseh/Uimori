@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { ModelPreset } from '../core/product.js';
 import type { ProviderConnectionTest } from '../core/provider-connection-test.js';
 import { api } from './api.js';
+import { ProviderRejectionNotice } from './provider-rejection.js';
 import './ProviderModelTest.css';
 
 type TestDisplay = {
@@ -169,6 +170,7 @@ export function ProviderModelTest({
           </dl>
           {result.text && <pre>{result.text}</pre>}
           {result.truncated && <small>긴 응답은 일부만 표시해요.</small>}
+          {result.rejection && <ProviderRejectionNotice rejection={result.rejection} />}
           {result.error && (
             <p className="error">
               {result.error === 'ENDPOINT_NOT_APPROVED'

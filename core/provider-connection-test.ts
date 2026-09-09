@@ -12,5 +12,7 @@ export type ProviderConnectionTest = {
   truncated: boolean;
   latencyMs: number | null;
   error: string | null;
+  /** Present when the provider rejected the request; names the app options it pointed at. */
+  rejection?: import('./provider-rejection.js').ProviderRejection;
   usage: { inputTokens: number | null; outputTokens: number | null; costUsd: number | null };
 };

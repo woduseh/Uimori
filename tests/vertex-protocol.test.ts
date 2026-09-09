@@ -225,15 +225,15 @@ describe('Vertex 3.8 request and continuation protocol', () => {
   });
 
   test.each([{ temperature: 0 }, { topP: 0.9 }])(
-    '3.8 Flash rejects ignored sampling %j',
+    'protocol sampling fields reach the wire for any Gemini model; the provider gives the verdict %j',
     (options) => {
       const input = request();
       Object.assign(input.generation!, options);
-      expect(() => encodeVertex(input)).toThrow('UNSUPPORTED_GENERATION_OPTIONS');
+      expect(bodyObject(encodeVertex(input).body).generationConfig).toMatchObject(options);
     }
   );
 
-  test.each([0, -1, 65_537, 1.5])(
+  test.each([0, -1, 500_001, 1.5])(
     'rejects unsupported max output %s before wire encoding',
     (maxOutputTokens) => {
       const input = request();
@@ -251,12 +251,15 @@ describe('Vertex 3.8 request and continuation protocol', () => {
     });
   });
 
-  test('rejects unselected models, unsupported thinking and duplicate declarations', () => {
+  test('encodes unlisted models with protocol options and rejects unknown thinking values and duplicate declarations', () => {
     const input = request();
     input.modelId = 'gemini-unverified';
-    expect(() => encodeVertex(input)).toThrow('UNSUPPORTED_VERTEX_MODEL');
+    input.generation = { maxOutputTokens: 4096, temperature: null, thinkingLevel: 'MINIMAL' };
+    expect(encodeVertex(input).body).toMatchObject({
+      generationConfig: { maxOutputTokens: 4096, thinkingConfig: { thinkingLevel: 'MINIMAL' } },
+    });
     input.modelId = 'gemini-3.8-flash';
-    input.generation!.thinkingLevel = 'MINIMAL' as 'LOW';
+    input.generation!.thinkingLevel = 'ULTRA' as 'LOW';
     expect(() => encodeVertex(input)).toThrow('UNSUPPORTED_GENERATION_OPTIONS');
     delete input.generation!.thinkingLevel;
     input.stable.tools.push(structuredClone(input.stable.tools[0]));

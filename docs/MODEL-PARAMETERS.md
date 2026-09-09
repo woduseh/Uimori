@@ -1,6 +1,8 @@
 # 모델 생성 설정과 연결 테스트
 
-2026-09-08 기준 구현 계약이에요. 모델과 설정은 `core/model-capabilities.ts`, 요청 변환은 각 공급자 encoder가 관리해요. 실제 공급자 요청·캐시 hit·청구액은 합성 검사만으로 확인하지 않아요.
+2026-09-09 기준 구현 계약이에요. 모델별 옵션 힌트와 프로토콜 단위 검증은 `core/model-capabilities.ts`, 요청 변환은 각 공급자 encoder가 관리해요. 실제 공급자 요청·캐시 hit·청구액은 합성 검사만으로 확인하지 않아요.
+
+모델 ID는 실행 조건이 아니에요. 이렇게 정한 근거는 [모델 등록 결정](MODEL-REGISTRATION.md)에 있어요. 앱의 힌트 표는 검토한 모델의 옵션 목록과 한도를 먼저 보여주는 용도이며, 표에 없는 ID나 값도 그대로 공급자에 보내요. 저장 검증은 프로토콜의 encoder가 보낼 수 있는 옵션과 값 어휘만 확인해요. 모델별 지원 여부는 공급자의 응답이 판정하고, 4xx 거절이 가리킨 옵션은 실패 턴 카드·보조 작업 카드·응답 테스트 결과에 이름으로 표시해요. 공급자 메시지 원문은 저장하거나 보여주지 않아요.
 
 모델·연결 편집은 최신 설정 한 벌을 갱신해요. 사용자가 고르는 버전이나 과거 설정 목록은 없어요. 내부 revision은 동시 편집 충돌을 막는 CAS 토큰이며, 새 생성·번역 예약·상태/기억 재구축은 모델 ID로 최신 설정을 읽어요. 진행 중인 작업과 과거 Run은 자기 모델·연결 snapshot을 유지해요. 연결의 프로토콜을 바꾸면 모델 설정을 다시 검토·저장하기 전까지 새 실행을 차단해요.
 
@@ -18,17 +20,17 @@
 | OpenAI Chat | 위의 등록된 GPT ID | Reasoning Effort와 Service Tier(Flex 포함). Responses 전용 제어와 캐시 설정은 제공하지 않음 |
 | Vercel AI Gateway | `spacexai/grok-4.6`, `openai/gpt-5.6-sol` | Grok low/medium/high/xhigh, Sol none/low/medium/high/xhigh. 출력 한도 500,000/128,000 |
 | DeepSeek · OpenAI 호환 Chat | `deepseek-v4-pro`, `deepseek-v4-flash` | none(추론 끄기)/low/high/max, 기본 high. 출력 한도 384,000. temperature는 none에서만 제공 |
-| 별도 호환 주소 | 수동 모델 ID | 기존 Chat/Responses 기본 계약. 미등록 모델에 native 옵션을 추정하지 않음 |
+| 표에 없는 모델 | 수동 모델 ID 또는 목록의 ID | 해당 프로토콜이 보낼 수 있는 옵션 전체. 지원 여부는 공급자 응답으로 확인 |
 
-2026-09-09 추가 모델은 [Google Flash-Lite](https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/gemini/3-5-flash-lite), [Vercel Grok](https://vercel.com/ai-gateway/models/grok-4.6), [Vercel Sol](https://vercel.com/ai-gateway/models/gpt-5.6-sol), [DeepSeek](https://api-docs.deepseek.com/quick_start/pricing/) 공식 명세를 확인했어요. 모델별 출력 상한을 유지하며 공통 등록 검증은 500,000까지 허용해요. 미등록 모델의 기존 200,000 상한은 유지해요. 이 값은 최대 허용량이며 기본 출력량을 늘리지 않아요. 실제 공급자 호출·계정 가용성은 별도 확인이 필요해요.
+2026-09-09 추가 모델은 [Google Flash-Lite](https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/gemini/3-5-flash-lite), [Vercel Grok](https://vercel.com/ai-gateway/models/grok-4.6), [Vercel Sol](https://vercel.com/ai-gateway/models/gpt-5.6-sol), [DeepSeek](https://api-docs.deepseek.com/quick_start/pricing/) 공식 명세를 확인했어요. 표의 출력 상한은 목록에서 모델을 고를 때 미리 채우는 값이고, 저장 검증은 모든 모델에 500,000까지 허용해요. 실제 상한은 공급자가 판정해요. 이 값은 최대 허용량이며 기본 출력량을 늘리지 않아요. 실제 공급자 호출·계정 가용성은 별도 확인이 필요해요.
 
-공식 직접 연결의 미등록 ID는 보관·검토할 수 있지만 실행 전에 차단해요. 모델 목록 API는 ID 발견에 사용하고 옵션 지원의 근거로 삼지 않아요. 임의 호환 URL에 등록 모델 ID를 넣어도 공식 서버의 가용성을 보증하지 않아요.
+표에 없는 ID도 저장·실행해요. 모델 목록 API는 ID 발견에 사용하고, 옵션 지원 근거는 표의 힌트와 공급자 응답이에요. 임의 호환 URL에 표의 모델 ID를 넣어도 공식 서버의 가용성을 보증하지 않아요.
 
 `모델 기본값`은 API 필드를 생략해요. `none`, `disabled`, 숫자 0은 명시값이에요. 모델 변경으로 부적합해진 값은 초안에 남겨 표시하고, 사용자가 수정하기 전 저장하지 않아요. provider 오류에 따른 effort 하향이나 Flex→Standard 자동 전환은 없어요.
 
 Fable 5.1은 Adaptive Thinking이 항상 켜져 있어요. 강제 도구 호출을 지원하지 않으므로 평가 도구의 `preloaded` 모드는 함께 저장할 수 없고 `model-selected`를 사용해요. Opus 5는 Thinking을 끌 수 있지만 Output Effort `xhigh/max`와 동시에 끌 수 없어요.
 
-지원 기간 6개월은 목록을 재검토하는 운영 기준이고 날짜가 지나면 자동 실행 차단하는 기능은 아니에요. Gemini 3.1 Pro는 사용자가 지정한 기준 모델 예외예요. 새로운 ID나 suffix는 명시 등록이 필요해요. API 출시일을 확인하지 못한 모델의 날짜는 추정하지 않아요.
+지원 기간 6개월은 힌트 표를 재검토하는 운영 기준이고 실행을 막는 기능은 아니에요. Gemini 3.1 Pro는 사용자가 지정한 기준 모델 예외예요. 새 ID나 suffix는 표에 없어도 바로 쓸 수 있고, 표에 추가하면 옵션 목록이 먼저 보여요. API 출시일을 확인하지 못한 모델의 날짜는 추정하지 않아요.
 
 ## 캐시 위치·자동 배치·유지 시간
 
@@ -58,17 +60,17 @@ Fable 5.1은 Adaptive Thinking이 항상 켜져 있어요. 강제 도구 호출�
 
 저장한 모델의 **응답 테스트** 버튼은 실제 요청을 한 번 보내요. 이 작업을 구현·검증하는 동안에는 합성 응답만 사용하며, 사용자가 버튼을 눌러야 실제 공급자 요청이 시작돼요.
 
-요청 문구는 **API 연결 테스트 중이니 OK만 답해주세요.**예요. 출력 한도 256토큰, 25초 제한, 사용 가능한 최저 추론·effort, 도구 없음, 재시도 없음으로 실행해요. 지원되는 경로에서는 캐시를 끄고, 모델의 Service Tier는 유지해요. 채팅·작품·프롬프트 자료는 보내지 않아요.
+요청 문구는 **API 연결 테스트 중이니 OK만 답해주세요.**예요. 프리셋에 저장한 생성 옵션을 그대로 보내되 출력 한도 256토큰, 25초 제한, 도구 없음, 재시도 없음으로 실행해요. 캐시 모드를 지원하는 프로토콜에서는 캐시를 끄고, Service Tier와 사고 강도는 프리셋 값을 유지해요. 그래서 테스트 결과는 그 프리셋 옵션에 대한 공급자의 판정이에요. 채팅·작품·프롬프트 자료는 보내지 않아요.
 
-결과에는 실제 텍스트(최대 2,000자), 상태·오류·지연·토큰 usage가 있어요. 응답이 일부만 왔거나 시간 초과인 경우 완료와 구분해요. 실제 응답을 받았다는 사실이 긴 창작·도구 호출·Flex 가용성·캐시 hit 전체를 보증하지 않아요.
+결과에는 실제 텍스트(최대 2,000자), 상태·오류·지연·토큰 usage가 있어요. 공급자가 요청을 거절하면 거절된 옵션 이름과 공급자 코드를 함께 표시해요. 응답이 일부만 왔거나 시간 초과인 경우 완료와 구분해요. 실제 응답을 받았다는 사실이 긴 창작·도구 호출·Flex 가용성·캐시 hit 전체를 보증하지 않아요.
 
 서버는 전송 전에 별도 로컬 진단을 기록해요. 같은 idempotency key는 재전송하지 않고, 같은 모델의 동시 테스트는 하나로 제한해요. 재시작으로 미완료된 테스트는 interrupted로 끝내며 자동 재생하지 않아요. `provider_connection_tests`는 작품 JSON archive에서 제외하고 전체 SQLite 백업에는 포함해요.
 
 ## 저장·실행 경계
 
-현재 schema/archive는 v12이며 연결의 구형 requestTier와 Claude 공통 reasoningEffort 저장 형식을 받지 않아요. 구버전 자동 이관·호환 UI·자동 백업은 없고 사용자 DB를 자동 초기화하지 않아요.
+현재 schema/archive는 v14이며 연결의 구형 requestTier, Claude 공통 reasoningEffort, 모델의 capabilityRevision 저장 형식을 받지 않아요. 구버전 자동 이관·호환 UI·자동 백업은 없고 사용자 DB를 자동 초기화하지 않아요.
 
-모델 revision은 생성 옵션과 검토한 capability revision을 보관해요. Run/job snapshot은 이를 고정하며, main/translation/status/image/state/memory/등록 보조는 공통 추출기로 같은 필드를 전달해요. 최신 연결 enabled·endpoint·인증·origin 권한은 호출마다 다시 확인해요. 평가 절약 모드는 명시 opt-in일 때만 출력 한도·effort를 줄이고 나머지 binding을 바꾸지 않아요.
+모델 revision은 생성 옵션을 보관해요. Run/job snapshot은 이를 고정하며, main/translation/status/image/state/memory는 공통 추출기로 같은 필드를 전달해요. 최신 연결 enabled·endpoint·인증·origin 권한은 호출마다 다시 확인해요. 평가 절약 모드는 명시 opt-in일 때만 출력 한도·effort를 줄이고 나머지 binding을 바꾸지 않아요.
 
 누적 호출 횟수와 추정 금액으로 차단하던 ProviderBudget은 제거됐어요. 요청별 출력·시간·도구 반복 한도, 전송 전 기록, 취소·중복 방지, 원문/hash 귀속, 실제 usage와 `costUsd=null`은 유지해요.
 

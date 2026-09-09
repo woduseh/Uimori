@@ -12,7 +12,6 @@ import { compileSnapshotPrompt } from '../server/prompt-snapshot.js';
 import { promptRoutes } from '../server/prompt-routes.js';
 import { runMain, type MainHooks } from '../server/model-runner.js';
 import { defaultProfile, type ProviderProtocol } from '../core/product.js';
-import { modelCapability } from '../core/model-capabilities.js';
 import { defaultStoryConfig } from '../core/story.js';
 import { planMemoryContext, memoryHash } from '../core/memory.js';
 import type { PromptProgram } from '../core/prompt-program.js';
@@ -88,7 +87,6 @@ function snapshot(
           connectionId: 'connection',
           connectionRevision: 1,
           modelId: 'gpt-5.6',
-          capabilityRevision: modelCapability('openai-chat-v1', 'gpt-5.6')!.revision,
           maxOutputTokens: 1024,
           temperature: null,
           connection: {
@@ -315,10 +313,6 @@ describe('Exact native main preview and terminal submission (synthetic loopback 
       models: {},
     };
     work.profile!.models.main!.connection.protocol = 'openai-responses-v1';
-    work.profile!.models.main!.capabilityRevision = modelCapability(
-      'openai-responses-v1',
-      work.profile!.models.main!.modelId
-    )!.revision;
     const built = buildMainProviderRequest(compileSnapshotPrompt(work)),
       body = encodeMainPreview(built.request, work.profile!.models.main!).body as Record<
         string,
@@ -479,16 +473,11 @@ describe('Exact native main preview and terminal submission (synthetic loopback 
       target = work.profile!.models.main!;
     target.connection.protocol = 'openai-responses-v1';
     target.modelId = 'gpt-5.9';
-    delete target.capabilityRevision;
     const built = buildMainProviderRequest(work),
       preview = encodeMainPreview(built.request, target);
     expect(preview.diagnostics.some((d) => d.code === 'PROMPT_CACHE_NOT_APPLIED')).toBe(true);
     expect((preview.body as Record<string, Json>).prompt_cache_options).toBeUndefined();
     target.modelId = 'gpt-6-astra';
-    target.capabilityRevision = modelCapability(
-      target.connection.protocol,
-      target.modelId
-    )!.revision;
     const supported = encodeMainPreview(buildMainProviderRequest(work).request, target);
     expect(
       supported.diagnostics.some((d) => d.code === 'CACHE_BREAKPOINT_ENCODED_HIT_UNVERIFIED')
@@ -609,10 +598,6 @@ describe('Exact native main preview and terminal submission (synthetic loopback 
       target.connection.protocol = 'anthropic-messages-v1';
       target.connection.credentialEnv = 'NARRATIVE_PROVIDER_NATIVE_TEST';
       target.modelId = 'claude-opus-5';
-      target.capabilityRevision = modelCapability(
-        target.connection.protocol,
-        target.modelId
-      )!.revision;
       target.stopSequences = ['END_SCENE'];
       const nativeFetch = globalThis.fetch;
       vi.stubGlobal(
