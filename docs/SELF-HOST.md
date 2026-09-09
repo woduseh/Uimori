@@ -86,7 +86,7 @@ docker compose --env-file .env.self-host exec proxy nginx -t
 docker compose --env-file .env.self-host restart proxy
 ```
 
-데이터를 유지하려면 `down`에 `-v`를 붙이지 마세요. Compose 프로젝트 이름은 기본 `uimori`로 고정돼요. 데이터 전환과 복구에서는 이미지 태그와 호환되는 `UIMORI_DATA_VOLUME`을 함께 지정해요. 이번 운영 v14 복사본에 한정한 이관 절차는 [유지보수 도구](../scripts/maintenance/README.md)에 있어요.
+데이터를 유지하려면 `down`에 `-v`를 붙이지 마세요. Compose 프로젝트 이름은 기본 `uimori`로 고정돼요. 데이터 전환과 복구에서는 이미지 태그와 호환되는 `UIMORI_DATA_VOLUME`을 함께 지정해요. 구버전 데이터를 사용하지 않기로 결정했다면 새 볼륨에서 현재 schema의 빈 DB를 초기화해요. 자동 이관은 제공하지 않아요.
 
 프로그램과 Docker 서비스가 정상적으로 재시작되면 `restart: unless-stopped`가 앱·프록시를 다시 시작해요. 서버 중지로 끊긴 모델 작업은 자동 재호출하지 않아요. 브라우저만 닫았다면 서버의 생성 작업은 계속 진행되고, 다시 로그인해 저장된 진행 상태와 결과를 볼 수 있어요.
 
