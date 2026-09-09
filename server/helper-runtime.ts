@@ -14,6 +14,7 @@ import {
   type ProviderExecutionOptions,
   type ProviderRequest,
   type ProviderTool,
+  transportConnection,
 } from '../core/transport.js';
 import { promptWorkspace } from './prompt-workspace.js';
 import { captureLogicalHistory, compileSnapshotPrompt } from './prompt-snapshot.js';
@@ -659,7 +660,7 @@ export class HelperRuntime {
     hooks: MainHooks
   ) {
     let attempt: string | undefined;
-    return await executeProvider(target.connection, request, {
+    return await executeProvider(transportConnection(target.connection), request, {
       ...this.options,
       signal: hooks.signal,
       timeoutMs: target.timeoutMs,

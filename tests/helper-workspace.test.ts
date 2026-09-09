@@ -53,7 +53,7 @@ function fixture() {
   const controller = new AbortController(),
     streams = new ResponseStreamStore(store);
   const runtime = new HelperRuntime(store, {
-    approvedOrigins: [],
+    approvedOrigins: ['http://127.0.0.1:9'],
     owner: 'test-owner',
     signal: controller.signal,
     track: (p) => work.push(p),
@@ -83,6 +83,8 @@ function mockSend(
   return vi
     .spyOn(transport, 'executeProvider')
     .mockImplementation(async (connection, request, options) => {
+      // The mock stands in for the wire, not for the transport boundary contract.
+      transport.validateConnection(connection, options.approvedOrigins);
       options.beforeTurn?.();
       await options.onWire?.({
         connectionId: connection.id,

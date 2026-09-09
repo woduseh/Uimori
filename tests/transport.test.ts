@@ -8,6 +8,7 @@ import {
   parseCatalog,
   refreshCatalog,
   registerManualModel,
+  transportConnection,
   validateConnection,
   validateRequest,
   type Json,
@@ -756,6 +757,34 @@ describe('fixture HTTP transport (no live provider compatibility claim)', () => 
     expect(() =>
       validateConnection(connection('https://example.com/turn'), ['https://example.com'])
     ).toThrow('FIXTURE_REQUIRES_LOOPBACK');
+  });
+
+  test('stored connection settings reach the transport only through the narrowing helper', () => {
+    const origins = ['http://127.0.0.1:9'];
+    const stored: Connection = {
+      id: 'local-fixture',
+      revision: 3,
+      title: 'Fixture connection',
+      protocol: 'fixture-sse-v1',
+      endpoint: 'http://127.0.0.1:9/turn',
+      credentialEnv: 'NARRATIVE_PROVIDER_FIXTURE',
+      enabled: true,
+      catalog: [],
+      catalogError: null,
+      catalogUpdatedAt: null,
+    };
+    // Management fields make an otherwise valid stored setting unusable at the transport boundary.
+    expect(() => validateConnection(stored, origins)).toThrow('UNSUPPORTED_OPTIONS');
+    const narrowed = transportConnection(stored);
+    expect(narrowed).toEqual({
+      id: stored.id,
+      protocol: stored.protocol,
+      endpoint: stored.endpoint,
+      credentialEnv: stored.credentialEnv,
+    });
+    expect(validateConnection(narrowed, origins)).toEqual(narrowed);
+    const { credentialEnv: _anonymous, ...withoutCredential } = stored;
+    expect(transportConnection(withoutCredential)).not.toHaveProperty('credentialEnv');
   });
 
   test('P05 P06 keeps refusal, trailing usage, partial output and remote errors distinct without retry', async () => {

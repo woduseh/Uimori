@@ -22,6 +22,7 @@ import {
   type ProviderResult,
   type ProviderTool,
   type WireRecord,
+  transportConnection,
 } from '../core/transport.js';
 import type { ImageTarget, RunSnapshot, ToolEvent } from '../core/types.js';
 import { createEvaluationToolSession } from './evaluation-session.js';
@@ -437,31 +438,22 @@ export async function runAuxiliaryJob(
     let attemptId: string | undefined;
     const remainingTimeout = diagnostics?.remainingMs();
     if (remainingTimeout === 0) throw new AuxiliaryExecutionError('AUXILIARY_PROVIDER_TIMEOUT');
-    const result = await executeProvider(
-      {
-        id: authorized.id,
-        protocol: authorized.protocol,
-        endpoint: authorized.endpoint,
-        ...(authorized.credentialEnv ? { credentialEnv: authorized.credentialEnv } : {}),
+    const result = await executeProvider(transportConnection(authorized), body, {
+      approvedOrigins: hooks.approvedOrigins,
+      signal: hooks.signal,
+      resolveCredential: hooks.resolveCredential,
+      executeCodex: hooks.executeCodex,
+      vertexRequestTier: hooks.vertexRequestTier,
+      timeoutMs:
+        remainingTimeout ??
+        hooks.timeoutMs ??
+        target.timeoutMs ??
+        (target.connection.protocol === 'vertex-gemini-v1' ? 300_000 : undefined),
+      onWire: async (wire) => {
+        attemptId = await hooks.onAttemptStart(wire);
+        lastAttemptId = attemptId;
       },
-      body,
-      {
-        approvedOrigins: hooks.approvedOrigins,
-        signal: hooks.signal,
-        resolveCredential: hooks.resolveCredential,
-        executeCodex: hooks.executeCodex,
-        vertexRequestTier: hooks.vertexRequestTier,
-        timeoutMs:
-          remainingTimeout ??
-          hooks.timeoutMs ??
-          target.timeoutMs ??
-          (target.connection.protocol === 'vertex-gemini-v1' ? 300_000 : undefined),
-        onWire: async (wire) => {
-          attemptId = await hooks.onAttemptStart(wire);
-          lastAttemptId = attemptId;
-        },
-      }
-    );
+    });
     // Keep diagnostic output and usage even when a refusal or malformed body cannot become an artifact.
     if (attemptId !== undefined)
       await hooks.onAttemptFinish(

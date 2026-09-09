@@ -22,6 +22,7 @@ import {
   type ProviderRequest,
   type ProviderResult,
   type WireRecord,
+  transportConnection,
 } from '../core/transport.js';
 import { createEvaluationToolSession } from './evaluation-session.js';
 import { packageContext, type PackageRoleContext } from '../core/package-context.js';
@@ -383,32 +384,23 @@ export async function runStoryJob(
       let attempt: string | undefined;
       const remainingTimeout = evaluation?.remainingMs();
       if (remainingTimeout === 0) return fail('TIMEOUT');
-      const response = await executeProvider(
-        {
-          id: connection.id,
-          protocol: connection.protocol,
-          endpoint: connection.endpoint,
-          ...(connection.credentialEnv ? { credentialEnv: connection.credentialEnv } : {}),
+      const response = await executeProvider(transportConnection(connection), request, {
+        signal: hooks.signal,
+        approvedOrigins: hooks.approvedOrigins,
+        vertexRequestTier: hooks.vertexRequestTier,
+        resolveCredential: hooks.resolveCredential,
+        executeCodex: hooks.executeCodex,
+        timeoutMs:
+          remainingTimeout ??
+          hooks.timeoutMs ??
+          target.timeoutMs ??
+          (connection.protocol === 'vertex-gemini-v1' ? 300000 : undefined),
+        onWire: async (wire) => {
+          attempt = await hooks.onAttemptStart({ ...wire, body: redactOpaque(wire.body) });
+          calls++;
+          roleCalls++;
         },
-        request,
-        {
-          signal: hooks.signal,
-          approvedOrigins: hooks.approvedOrigins,
-          vertexRequestTier: hooks.vertexRequestTier,
-          resolveCredential: hooks.resolveCredential,
-          executeCodex: hooks.executeCodex,
-          timeoutMs:
-            remainingTimeout ??
-            hooks.timeoutMs ??
-            target.timeoutMs ??
-            (connection.protocol === 'vertex-gemini-v1' ? 300000 : undefined),
-          onWire: async (wire) => {
-            attempt = await hooks.onAttemptStart({ ...wire, body: redactOpaque(wire.body) });
-            calls++;
-            roleCalls++;
-          },
-        }
-      );
+      });
       if (attempt !== undefined)
         await hooks.onAttemptFinish(attempt, {
           ...(evaluation ? evaluation.diagnosticResult(response) : structuredClone(response)),

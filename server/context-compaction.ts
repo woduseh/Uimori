@@ -16,6 +16,7 @@ import {
   type Json,
   type ProviderRequest,
   type ProviderResult,
+  transportConnection,
 } from '../core/transport.js';
 import type { RunSnapshot, Usage } from '../core/types.js';
 import {
@@ -283,12 +284,7 @@ export async function prepareInputContext(
       let attempt: string | undefined, boundaryError: string | undefined, result: ProviderResult;
       try {
         result = await executeProvider(
-          {
-            id: authorized.id,
-            protocol: authorized.protocol,
-            endpoint: authorized.endpoint,
-            ...(authorized.credentialEnv ? { credentialEnv: authorized.credentialEnv } : {}),
-          },
+          transportConnection(authorized),
           summaryRequest(target, summary, fragments, fixed.story?.notes ?? []),
           {
             approvedOrigins: hooks.approvedOrigins,

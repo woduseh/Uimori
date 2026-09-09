@@ -28,6 +28,7 @@ async function setup() {
     dbPath: join(path, 'test.sqlite'),
     buildId: 'title-api',
     testMode: true,
+    approvedOrigins: ['http://127.0.0.1:9'],
   });
   owned.push({ path, close: () => app.close() });
   const bot = app.store.product.content(fixtureBotInput());
@@ -209,6 +210,7 @@ test('completed HTTP runs invoke the automatic title helper exactly once', async
   const execute = vi
     .spyOn(transport, 'executeProvider')
     .mockImplementation(async (currentConnection, request, options) => {
+      transport.validateConnection(currentConnection, options.approvedOrigins);
       options.beforeTurn?.();
       await options.onWire?.({
         connectionId: currentConnection.id,
