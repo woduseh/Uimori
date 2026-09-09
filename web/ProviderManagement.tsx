@@ -1,6 +1,6 @@
 import { Switch } from './BooleanControls.js';
 import { useEffect, useRef, useState } from 'react';
-import { ArrowLeft, ArrowRight, Plus, Plug, Power, Save, Trash2, X } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Plus, Plug, Power, Save, X } from 'lucide-react';
 import { ActionMenu } from './ActionMenu.js';
 import { IconButton } from './IconButton.js';
 import { ConnectionIcon, CopyIcon, ModelIcon, RefreshIcon, SearchIcon } from './ui-icons.js';
@@ -24,14 +24,11 @@ import {
   modelPayload,
   ProviderModelFields,
   selectModelConnection,
-  sourceLabels,
 } from './ProviderModelFields.js';
 import { ProviderEndpointStatus } from './ProviderEndpointStatus.js';
 import { DeleteButton } from './DeleteButton.js';
 import { ProviderReadiness } from './ProviderReadiness.js';
 import { ProviderModelTest, useProviderModelTests } from './ProviderModelTest.js';
-import { resolveModelPricing } from '../core/model-pricing.js';
-import { PricingSummary } from './ModelPricingEditor.js';
 import './ProviderManagement.css';
 import './settings-actions.css';
 
@@ -240,7 +237,7 @@ export function ConnectionEditor({
     setConflict(null);
     setError('');
     onError('');
-    setMessage(item.title + ' 연결을 삭제했어요.');
+    setMessage(item.title + ' 프로바이더를 삭제했어요.');
     await reload();
   }
   async function deletedModel(item: ModelPreset) {
@@ -266,8 +263,8 @@ export function ConnectionEditor({
       path={`/connections/${encodeURIComponent(item.id)}`}
       revision={item.revision}
       title={item.title}
-      label="연결 삭제"
-      description="이 연결과 소속 모델을 목록에서 제거하고 현재 전역 역할 선택을 해제해요. 이후 호출은 차단되며 서버 인증 파일과 과거 실행 기록은 유지돼요."
+      label="프로바이더 삭제"
+      description="이 프로바이더와 소속 모델을 목록에서 제거하고 현재 전역 역할 선택을 해제해요. 이후 호출은 차단되며 서버 인증 파일과 과거 실행 기록은 유지돼요."
       disabled={busy}
       onDeleted={() => deletedConnection(item)}
       onError={onError}
@@ -385,7 +382,7 @@ export function ConnectionEditor({
       }
     }
     setConfirmation(undefined);
-    setMessage(saved.title + (id ? ' 연결 변경 저장됨' : ' 연결 등록됨'));
+    setMessage(saved.title + (id ? ' 프로바이더 변경 저장됨' : ' 프로바이더 등록됨'));
   }
   async function saveModel(body: Record<string, unknown>, id?: string, fromForm = true) {
     const saved = await api<ModelPreset>(
@@ -444,7 +441,7 @@ export function ConnectionEditor({
     const fresh = await api<Library>('/library');
     if (kind === 'connection' && editingConnection) {
       const value = fresh.connections.find((item) => item.id === editingConnection.id);
-      if (!value) throw new Error('연결을 찾지 못했어요.');
+      if (!value) throw new Error('프로바이더를 찾지 못했어요.');
       showConnection(value, false, true);
     }
     if (kind === 'model' && editingModel) {
@@ -508,7 +505,11 @@ export function ConnectionEditor({
   }
 
   return (
-    <section className="connection-editor" data-testid="connection-editor" aria-label="연결과 모델">
+    <section
+      className="connection-editor"
+      data-testid="connection-editor"
+      aria-label="프로바이더와 모델"
+    >
       {discard && (
         <section
           className="provider-impact"
@@ -518,7 +519,7 @@ export function ConnectionEditor({
           ref={discardPanel}
         >
           <strong>
-            저장하지 않은 {discard.kind === 'connection' ? '연결' : '모델'} 초안이 있어요
+            저장하지 않은 {discard.kind === 'connection' ? '프로바이더' : '모델'} 초안이 있어요
           </strong>
           <p>다른 항목을 편집하면 현재 초안이 교체돼요.</p>
           <div className="provider-actions">
@@ -547,7 +548,7 @@ export function ConnectionEditor({
         </section>
       )}
       <div className="provider-workspace-heading" ref={heading} tabIndex={-1}>
-        <div className="provider-workspace-navigation" aria-label="연결과 모델 화면">
+        <div className="provider-workspace-navigation" aria-label="프로바이더와 모델 화면">
           <button
             type="button"
             className={screen === 'models' ? 'selected' : 'secondary'}
@@ -565,7 +566,7 @@ export function ConnectionEditor({
           <button
             type="button"
             className={screen === 'connections' ? 'selected' : 'secondary'}
-            aria-label="연결 관리"
+            aria-label="프로바이더 관리"
             aria-pressed={screen === 'connections'}
             disabled={busy}
             onClick={() => {
@@ -574,7 +575,7 @@ export function ConnectionEditor({
             }}
           >
             <ConnectionIcon size={18} aria-hidden="true" />
-            연결
+            프로바이더
           </button>
           <IconButton
             label="목록 새로고침"
@@ -598,11 +599,11 @@ export function ConnectionEditor({
                 <SearchIcon size={18} aria-hidden="true" />
                 <input
                   type="search"
-                  aria-label="연결·모델 검색"
+                  aria-label="프로바이더·모델 검색"
                   placeholder={
                     screen === 'models'
                       ? '프리셋 이름, 모델 ID로 검색'
-                      : '연결 이름, 제공자, 주소로 검색'
+                      : '프로바이더 이름, 제공자, 주소로 검색'
                   }
                   value={query}
                   onChange={(event) => setQuery(event.target.value)}
@@ -611,12 +612,12 @@ export function ConnectionEditor({
               <div className="provider-actions">
                 <button
                   type="button"
-                  aria-label={screen === 'connections' ? '새 연결 입력' : '새 모델 입력'}
+                  aria-label={screen === 'connections' ? '새 프로바이더 입력' : '새 모델 입력'}
                   disabled={busy}
                   onClick={() => (screen === 'connections' ? newConnection() : newModel())}
                 >
                   <Plus size={18} aria-hidden="true" />
-                  <span>{screen === 'connections' ? '새 연결 입력' : '새 모델 입력'}</span>
+                  <span>{screen === 'connections' ? '새 프로바이더 입력' : '새 모델 입력'}</span>
                 </button>
               </div>
             </div>
@@ -628,7 +629,7 @@ export function ConnectionEditor({
               disabled={busy}
               onClick={() => navigate('connection')}
             >
-              연결 편집 이어서 · {connection.title || '이름 없는 초안'}
+              프로바이더 편집 이어서 · {connection.title || '이름 없는 초안'}
             </button>
           )}
           {screen === 'models' && modelStarted && (
@@ -644,10 +645,10 @@ export function ConnectionEditor({
           {!library.connections.length && (
             <div className="provider-welcome">
               <ConnectionIcon size={28} aria-hidden="true" />
-              <h4>첫 연결을 준비해요</h4>
-              <p>제공자에 연결한 뒤 사용할 모델을 등록해요.</p>
+              <h4>첫 프로바이더를 준비해요</h4>
+              <p>프로바이더를 추가한 뒤 사용할 모델을 등록해요.</p>
               <button type="button" disabled={busy} onClick={newConnection}>
-                연결 시작 <ArrowRight size={18} aria-hidden="true" />
+                프로바이더 추가 <ArrowRight size={18} aria-hidden="true" />
               </button>
             </div>
           )}
@@ -655,7 +656,7 @@ export function ConnectionEditor({
             <div className="provider-welcome">
               <ModelIcon size={28} aria-hidden="true" />
               <h4>사용할 모델을 등록해요</h4>
-              <p>준비된 연결을 선택하고 모델과 생성 설정을 저장해요.</p>
+              <p>준비된 프로바이더를 선택하고 모델과 생성 설정을 저장해요.</p>
               <button type="button" disabled={busy} onClick={() => newModel()}>
                 <Plus size={18} aria-hidden="true" /> 새 모델 입력
               </button>
@@ -678,9 +679,9 @@ export function ConnectionEditor({
             목록으로
           </button>
           {setup && (
-            <ol className="provider-steps" aria-label="빠른 연결 진행">
+            <ol className="provider-steps" aria-label="빠른 프로바이더 진행">
               <li aria-current={screen === 'providers' ? 'step' : undefined}>1 제공자</li>
-              <li aria-current={screen === 'connection' ? 'step' : undefined}>2 연결</li>
+              <li aria-current={screen === 'connection' ? 'step' : undefined}>2 프로바이더</li>
               <li aria-current={screen === 'model' ? 'step' : undefined}>3 모델</li>
             </ol>
           )}
@@ -688,9 +689,9 @@ export function ConnectionEditor({
       )}
       {screen === 'providers' && (
         <section className="provider-selection" aria-label="제공자 선택">
-          <h4>어디에 연결할까요?</h4>
+          <h4>프로바이더를 선택하세요.</h4>
           <p className="muted">
-            현재 지원하는 연결 방식이에요. 선택하면 주소와 인증 참조의 기본값을 채워요.
+            현재 지원하는 프로바이더 방식이에요. 선택하면 주소와 인증 참조의 기본값을 채워요.
           </p>
           <div className="provider-template-grid">
             {PROVIDER_DEFINITIONS.filter((item) => item.id !== 'fixture-sse-v1').map((item) => (
@@ -709,7 +710,7 @@ export function ConnectionEditor({
                   {item.id === 'codex-app-server-v1'
                     ? '개인 ChatGPT 구독 · 서버 실행'
                     : item.id === 'vertex-gemini-v1'
-                      ? 'Gemini 모델 연결 · global'
+                      ? 'Gemini 프로바이더 · global'
                       : item.id === 'openai-chat-v1'
                         ? '호환 API 또는 로컬 서버'
                         : '서버 API 키 인증'}
@@ -719,7 +720,7 @@ export function ConnectionEditor({
             ))}
           </div>
           <details className="provider-test-template">
-            <summary>개발·검사용 연결</summary>
+            <summary>개발·검사용 프로바이더</summary>
             <button
               type="button"
               className="secondary"
@@ -730,20 +731,20 @@ export function ConnectionEditor({
           </details>
         </section>
       )}
-      <section hidden={screen !== 'connections'} aria-label="저장한 연결">
+      <section hidden={screen !== 'connections'} aria-label="저장한 프로바이더">
         <div className="connection-list provider-saved-list">
           {connections.map((item) => (
             <article
               className="provider-saved-item"
               key={versionRef(item)}
-              aria-label={item.title + ' 연결'}
+              aria-label={item.title + ' 프로바이더'}
             >
               <div className="provider-item-heading">
                 <button
                   type="button"
                   className="provider-item-open secondary"
                   disabled={busy}
-                  aria-label={item.title + ' 연결 수정'}
+                  aria-label={item.title + ' 프로바이더 수정'}
                   data-provider-id={item.id}
                   onClick={() => showConnection(item)}
                 >
@@ -754,12 +755,12 @@ export function ConnectionEditor({
                     {!item.enabled && ' · 비활성'}
                   </span>
                 </button>
-                <ActionMenu label={item.title + ' 연결 메뉴'}>
+                <ActionMenu label={item.title + ' 프로바이더 메뉴'}>
                   <button
                     type="button"
                     className="secondary"
                     disabled={busy}
-                    aria-label={item.title + ' 연결 복제'}
+                    aria-label={item.title + ' 프로바이더 복제'}
                     onClick={() => showConnection(item, true)}
                   >
                     <CopyIcon size={18} aria-hidden="true" /> 복제
@@ -768,7 +769,7 @@ export function ConnectionEditor({
                     type="button"
                     className="secondary"
                     disabled={busy}
-                    aria-label={item.title + ' 연결 ' + (item.enabled ? '비활성' : '활성화')}
+                    aria-label={item.title + ' 프로바이더 ' + (item.enabled ? '비활성' : '활성화')}
                     onClick={() => statusConnection(item)}
                   >
                     <Power size={18} aria-hidden="true" /> {item.enabled ? '비활성' : '활성화'}
@@ -805,10 +806,7 @@ export function ConnectionEditor({
                       ? '로컬 지원 모델 확인'
                       : '모델 목록 새로고침'}
                   </button>
-                  <span className="provider-menu-delete">
-                    <Trash2 size={18} aria-hidden="true" />
-                    {deleteConnection(item)}
-                  </span>
+                  {deleteConnection(item)}
                 </ActionMenu>
               </div>
               {item.catalogError && (
@@ -820,7 +818,7 @@ export function ConnectionEditor({
           ))}
           {connections.length === 0 && library.connections.length > 0 && (
             <div className="provider-empty" role="status">
-              <p>검색 조건에 맞는 연결이 없어요.</p>
+              <p>검색 조건에 맞는 프로바이더가 없어요.</p>
               <button type="button" className="secondary" onClick={() => setQuery('')}>
                 검색 지우기
               </button>
@@ -854,12 +852,12 @@ export function ConnectionEditor({
                   <strong>{item.title}</strong>
                   <span className="provider-item-subtitle">
                     {library.connections.find((c) => c.id === item.connectionId)?.title ??
-                      '연결 확인 필요'}
+                      '프로바이더 확인 필요'}
                     {item.enabled === false
                       ? ' · 비활성'
                       : library.connections.find((c) => c.id === item.connectionId)?.enabled ===
                           false
-                        ? ' · 연결 비활성'
+                        ? ' · 프로바이더 비활성'
                         : ''}
                   </span>
                 </button>
@@ -887,96 +885,21 @@ export function ConnectionEditor({
                     <Power size={18} aria-hidden="true" />{' '}
                     {item.enabled === false ? '활성화' : '비활성'}
                   </button>
-                  <span className="provider-menu-delete">
-                    <Trash2 size={18} aria-hidden="true" />
-                    {deleteModel(item)}
-                  </span>
+                  {deleteModel(item)}
                 </ActionMenu>
               </div>
-              <details
-                className="provider-item-details"
-                open={!!modelTests.records[versionRef(item)]}
-              >
-                <summary>
-                  진단과 상세
-                  {modelTests.records[versionRef(item)] && (
-                    <span className="provider-status">
-                      {modelTests.records[versionRef(item)].pending
-                        ? ' · 응답 확인 중'
-                        : modelTests.records[versionRef(item)].error
-                          ? ' · 테스트 상태 확인 필요'
-                          : modelTests.records[versionRef(item)].result?.status === 'completed'
-                            ? ' · 응답 완료'
-                            : ' · 테스트 결과 확인'}
-                    </span>
-                  )}
-                </summary>
-                <p className="provider-model-definition">
-                  {item.modelId} ·{' '}
-                  {library.connections.find((c) => c.id === item.connectionId)?.protocol ===
-                  'codex-app-server-v1'
-                    ? '출력 목표'
-                    : '최대'}{' '}
-                  {item.maxOutputTokens.toLocaleString()} 토큰
-                  {item.timeoutMs !== undefined && ` · 제한 ${item.timeoutMs / 1000}초`}
-                  {(() => {
-                    const connection = library.connections.find((c) => c.id === item.connectionId);
-                    return connection
-                      ? ` · 옵션 ${sourceLabels[modelHints(connection, item.modelId).source]}`
-                      : '';
-                  })()}
-                </p>
-                <ProviderModelTest
-                  model={item}
-                  record={modelTests.records[versionRef(item)]}
-                  available={
-                    item.enabled !== false &&
-                    library.connections.some(
-                      (connection) => connection.id === item.connectionId && connection.enabled
-                    )
-                  }
-                  busy={busy}
-                  onStart={modelTests.start}
-                />
-                <details className="provider-capabilities">
-                  <summary>추정 비용 요금·출처</summary>
-                  {(() => {
-                    const connection = library.connections.find(
-                      (entry) => entry.id === item.connectionId
-                    );
-                    return (
-                      <PricingSummary
-                        snapshot={
-                          connection
-                            ? resolveModelPricing(
-                                {
-                                  ...item,
-                                  ...(connection.protocol === 'vertex-gemini-v1' && forcedVertexTier
-                                    ? { serviceTier: forcedVertexTier }
-                                    : {}),
-                                },
-                                connection
-                              )
-                            : undefined
-                        }
-                      />
-                    );
-                  })()}
-                  <p className="muted">
-                    단위: USD / 100만 토큰. 참고용 추정 금액이며 실제 청구액과 다를 수 있어요.
-                  </p>
-                  <p>
-                    등록 출처:{' '}
-                    {item.source?.kind === 'catalog'
-                      ? '목록에서 선택'
-                      : item.source?.kind === 'manual'
-                        ? '직접 입력'
-                        : '미기록'}
-                    <br />
-                    목록 확인일: {item.source?.catalogUpdatedAt ?? '미확인'}
-                  </p>
-                </details>
-              </details>
+              <ProviderModelTest
+                model={item}
+                record={modelTests.records[versionRef(item)]}
+                available={
+                  item.enabled !== false &&
+                  library.connections.some(
+                    (connection) => connection.id === item.connectionId && connection.enabled
+                  )
+                }
+                busy={busy}
+                onStart={modelTests.start}
+              />
             </article>
           ))}
           {models.length === 0 && library.models.length > 0 && (
@@ -994,7 +917,7 @@ export function ConnectionEditor({
           <strong>{confirmation.title} · 비활성으로 바꿀까요?</strong>
           <p>
             {confirmation.kind === 'connection'
-              ? '이 연결을 사용하는 이후 호출이 차단돼요. 저장된 원고와 전역 역할의 모델 선택은 유지돼요.'
+              ? '이 프로바이더를 사용하는 이후 호출이 차단돼요. 저장된 원고와 전역 역할의 모델 선택은 유지돼요.'
               : '새 모델 선택과 이 모델을 사용하는 이후 실행이 차단돼요. 전역 역할의 모델 선택은 유지돼요.'}
           </p>
           <p>이미 저장된 원문·번역과 과거 실행 기록은 바꾸지 않아요.</p>
@@ -1012,7 +935,7 @@ export function ConnectionEditor({
                 );
               }}
             >
-              {confirmation.kind === 'connection' ? '연결' : '모델'} 비활성 확인
+              {confirmation.kind === 'connection' ? '프로바이더' : '모델'} 비활성 확인
             </button>
             <button
               type="button"
@@ -1046,7 +969,7 @@ export function ConnectionEditor({
         hidden={screen !== 'connection'}
         ref={connectionForm}
         className="editor-grid provider-management-form"
-        aria-label="연결 편집 양식"
+        aria-label="프로바이더 편집 양식"
         onSubmit={(event) => {
           event.preventDefault();
           const body = {
@@ -1067,7 +990,11 @@ export function ConnectionEditor({
         }}
       >
         <h3 className="full">
-          {editingConnection ? '연결 수정' : connectionCopy ? '연결 복제 검토' : '연결 등록'}
+          {editingConnection
+            ? '프로바이더 수정'
+            : connectionCopy
+              ? '프로바이더 복제 검토'
+              : '프로바이더 등록'}
         </h3>
         {editingConnection && (
           <div className="provider-draft-note full">
@@ -1077,7 +1004,7 @@ export function ConnectionEditor({
             </p>
             {library.connections.find((item) => item.id === editingConnection.id)?.revision !==
               editingConnection.revision && (
-              <p>다른 곳에서 연결이 변경됐어요. 입력한 초안은 유지했어요.</p>
+              <p>다른 곳에서 프로바이더가 변경됐어요. 입력한 초안은 유지했어요.</p>
             )}
             <button
               type="button"
@@ -1087,7 +1014,7 @@ export function ConnectionEditor({
                 void perform(() => latest('connection'), 'connection');
               }}
             >
-              최신 연결 설정 불러오기
+              최신 프로바이더 설정 불러오기
             </button>
           </div>
         )}
@@ -1099,14 +1026,14 @@ export function ConnectionEditor({
         )}
         {conflict === 'connection' && (
           <p className="error full" role="alert">
-            다른 곳에서 연결이 변경됐어요. 초안은 유지했어요. 최신 설정을 불러와 주세요.
+            다른 곳에서 프로바이더가 변경됐어요. 초안은 유지했어요. 최신 설정을 불러와 주세요.
           </p>
         )}
         <fieldset className="editor-fields full" disabled={busy || !!confirmation}>
           <label>
-            연결 이름
+            프로바이더 이름
             <input
-              aria-label="연결 이름"
+              aria-label="프로바이더 이름"
               required
               maxLength={160}
               value={connection.title}
@@ -1114,9 +1041,9 @@ export function ConnectionEditor({
             />
           </label>
           <label>
-            연결 프로토콜
+            프로바이더 프로토콜
             <select
-              aria-label="연결 프로토콜"
+              aria-label="프로바이더 프로토콜"
               value={connection.protocol}
               onChange={(event) => {
                 const protocol = event.target.value as ProviderProtocol,
@@ -1235,7 +1162,7 @@ export function ConnectionEditor({
               checked={connection.enabled}
               onChange={(event) => setConnection({ ...connection, enabled: event.target.checked })}
             />
-            이 연결 사용
+            이 프로바이더 사용
           </label>
           <small className="full">
             {codex
@@ -1253,7 +1180,7 @@ export function ConnectionEditor({
               <summary>고급 인증 설정</summary>
               <div className="provider-auth-settings-body">
                 <small>
-                  서버에 설정된 인증을 사용할 때 변경해 주세요. 연결 변경을 저장하면 적용돼요.
+                  서버에 설정된 인증을 사용할 때 변경해 주세요. 프로바이더 변경을 저장하면 적용돼요.
                 </small>
                 <button
                   type="button"
@@ -1271,7 +1198,7 @@ export function ConnectionEditor({
             </small>
           )}
           <details className="provider-definition full">
-            <summary>연결 템플릿 정보</summary>
+            <summary>프로바이더 템플릿 정보</summary>
             <dl>
               <dt>정의</dt>
               <dd>{definition.id}</dd>
@@ -1297,12 +1224,12 @@ export function ConnectionEditor({
                 <li key={item}>{item}</li>
               ))}
             </ul>
-            <p>연결 템플릿은 로컬 구현의 설명이에요. 모델별 기능과 가격은 미확인이에요.</p>
+            <p>프로바이더 템플릿은 로컬 구현의 설명이에요. 모델별 기능과 가격은 미확인이에요.</p>
           </details>
         </fieldset>
         <div className="provider-actions full">
           <button disabled={busy || !!confirmation}>
-            {editingConnection ? '연결 변경 저장' : '연결 등록'}
+            {editingConnection ? '프로바이더 변경 저장' : '프로바이더 등록'}
           </button>
           <button
             type="button"
@@ -1310,7 +1237,7 @@ export function ConnectionEditor({
             disabled={busy}
             onClick={() => navigate('connections')}
           >
-            연결 편집 끝내기
+            프로바이더 편집 끝내기
           </button>
           {editingConnection && deleteConnection(editingConnection)}
         </div>
@@ -1379,32 +1306,29 @@ export function ConnectionEditor({
               ? '모델 프리셋 복제 검토'
               : '모델 프리셋 등록'}
         </h3>
-        {editingModel && (
-          <div className="provider-draft-note full">
-            <p>
-              저장한 변경은 이 모델을 사용하는 다음 신규 생성부터 적용돼요. 진행 중이거나 완료된
-              실행의 설정은 유지돼요.
-            </p>
-            {library.models.find((item) => item.id === editingModel.id)?.revision !==
-              editingModel.revision && (
-              <p>다른 곳에서 모델이 변경됐어요. 입력한 초안은 유지했어요.</p>
-            )}
-            <button
-              type="button"
-              className="secondary"
-              disabled={busy}
-              onClick={() => {
-                void perform(() => latest('model'), 'model');
-              }}
-            >
-              최신 모델 설정 불러오기
-            </button>
-          </div>
-        )}
+        {editingModel &&
+          (conflict === 'model' ||
+            library.models.find((item) => item.id === editingModel.id)?.revision !==
+              editingModel.revision) && (
+            <div className="provider-draft-note full">
+              {library.models.find((item) => item.id === editingModel.id)?.revision !==
+                editingModel.revision && (
+                <p>다른 곳에서 모델이 변경됐어요. 입력한 초안은 유지했어요.</p>
+              )}
+              <button
+                type="button"
+                className="secondary"
+                disabled={busy}
+                onClick={() => {
+                  void perform(() => latest('model'), 'model');
+                }}
+              >
+                최신 모델 설정 불러오기
+              </button>
+            </div>
+          )}
         {modelCopy && (
-          <p className="provider-draft-note full">
-            설정과 연결을 검토하고 새 ID로 등록해요. 원래 모델과 이야기의 선택은 바뀌지 않아요.
-          </p>
+          <p className="provider-draft-note full">설정을 검토한 뒤 새 프리셋으로 저장해요.</p>
         )}
         {conflict === 'model' && (
           <p className="error full" role="alert">
@@ -1426,6 +1350,7 @@ export function ConnectionEditor({
         </div>
         <fieldset className="editor-fields full" disabled={busy || !!confirmation}>
           <div className="provider-model-section full" hidden={modelSection !== 'basic'}>
+            <h4 className="provider-field-heading full">모델 선택</h4>
             <label className="full">
               모델 프리셋 이름
               <input
@@ -1437,9 +1362,9 @@ export function ConnectionEditor({
               />
             </label>
             <label className="full">
-              모델 연결
+              프로바이더
               <select
-                aria-label="모델 연결"
+                aria-label="프로바이더"
                 required
                 value={model.connectionRef}
                 onChange={(event) => {
@@ -1448,10 +1373,10 @@ export function ConnectionEditor({
                   else setModel({ ...model, connectionRef: '' });
                 }}
               >
-                <option value="">연결 선택</option>
+                <option value="">프로바이더 선택</option>
                 {model.connectionRef && !chosen && (
                   <option value={model.connectionRef} disabled>
-                    연결 확인 필요
+                    프로바이더 확인 필요
                   </option>
                 )}
                 {modelConnections.map((item) => (
@@ -1466,12 +1391,12 @@ export function ConnectionEditor({
               <>
                 {!chosen.enabled && (
                   <p className="provider-draft-note full">
-                    비활성 연결을 사용하는 모델은 새로 실행할 수 없어요. 연결을 활성화하면 다시
-                    사용할 수 있어요.
+                    비활성 프로바이더를 사용하는 모델은 새로 실행할 수 없어요. 프로바이더를
+                    활성화하면 다시 사용할 수 있어요.
                   </p>
                 )}
                 <details className="provider-readiness-details full">
-                  <summary>연결 준비 상태와 목록 새로고침</summary>
+                  <summary>프로바이더 준비 상태와 목록 새로고침</summary>
                   <ProviderReadiness
                     key={versionRef(chosen)}
                     connection={chosen}
@@ -1552,7 +1477,7 @@ export function ConnectionEditor({
       {registeredModel && screen === 'models' && (
         <section className="provider-next-step" aria-label="등록한 모델 사용 방법">
           <strong>{registeredModel.title} · 다음으로 역할에 배정하세요</strong>
-          <p>비활성 연결로 등록했다면 연결을 활성화한 뒤 역할에 배정해 주세요.</p>
+          <p>비활성 프로바이더로 등록했다면 프로바이더를 활성화한 뒤 역할에 배정해 주세요.</p>
           <ol>
             <li>설정 → 현재 모델에서 사용할 역할을 선택하고 저장해요.</li>
             <li>

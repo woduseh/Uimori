@@ -17,7 +17,7 @@ export const formatUsd = (value: number | null | undefined) =>
 const estimateNotes: Record<string, string> = {
   PRICING_UNAVAILABLE: '이 호출에 사용할 요금을 확인하지 못했어요.',
   PRICING_VERSION_UNSUPPORTED: '저장된 요금 형식을 현재 추정 계산에서 지원하지 않아요.',
-  PRICING_PROTOCOL_UNSUPPORTED: '이 연결 방식의 토큰 요금 계산은 아직 지원하지 않아요.',
+  PRICING_PROTOCOL_UNSUPPORTED: '이 프로바이더의 토큰 요금 계산은 아직 지원하지 않아요.',
   SERVICE_TIER_MISMATCH:
     '공급자가 보고한 요청 등급이 고정된 요금의 등급과 달라 금액을 추정하지 않았어요.',
   INCONSISTENT_INPUT_USAGE:
