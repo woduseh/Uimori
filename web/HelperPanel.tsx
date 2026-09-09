@@ -7,6 +7,10 @@ import type {
   HelperSelection,
 } from '../core/helper.js';
 import { api, ApiError } from './api.js';
+import { RetryFailure } from './RetryFailure.js';
+import { RequestMessage } from './RequestMessage.js';
+import { ActionMenu } from './ActionMenu.js';
+import { ChatComposer, ComposerInput } from './ChatComposer.js';
 import { IconButton } from './IconButton.js';
 import { StreamingResponse } from './StreamingResponse.js';
 import { HelperArtifactCard } from './HelperArtifactCard.js';
@@ -22,6 +26,7 @@ import {
 import './helper.css';
 
 type Props = {
+  enterSend: boolean;
   open: boolean;
   scope: HelperScope;
   selection?: HelperSelection & { key: string; scope?: HelperScope };
@@ -29,6 +34,7 @@ type Props = {
   onModelSettings: () => void;
 };
 type Outbox = {
+  retryOf?: string;
   requestKey: string;
   text: string;
   scope: string;
@@ -110,7 +116,13 @@ export function HelperPanel(props: Props) {
   currentScope.current = scopeKey;
   const data = useHelperConversation(props.open, scope);
   const conversation = data.current?.conversation ?? null;
-  const messages = data.current?.messages ?? [];
+  const messages = (data.current?.messages ?? [])
+    .filter((message) => !message.latestTaskId || message.latestTaskId === message.taskId)
+    .sort((a, b) =>
+      a.requestOrder === undefined || b.requestOrder === undefined
+        ? 0
+        : a.requestOrder - b.requestOrder || (a.role === b.role ? 0 : a.role === 'user' ? -1 : 1)
+    );
   const tasks = data.current?.tasks ?? [];
   const taskMap = new Map(tasks.map((task) => [task.id, task]));
   const running = tasks.find((task) => task.status === 'running');
@@ -123,6 +135,8 @@ export function HelperPanel(props: Props) {
   const [busyScopes, setBusyScopes] = useState<Record<string, boolean>>({});
   const [editor, setEditor] = useState<ActiveEditorContext | null>(null);
   const [settings, setSettings] = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
+  const [detailTask, setDetailTask] = useState<string | null>(null);
   const [personas, setPersonas] = useState<
     Record<string, { text: string; revision: number; limits: HelperConversation['limits'] }>
   >({});
@@ -286,12 +300,13 @@ export function HelperPanel(props: Props) {
     observer.observe(content.current);
     return () => observer.disconnect();
   }, [props.open]);
-  async function send(saved?: Outbox) {
-    if (locks.current.has(scopeKey) || (!saved && (!conversation || !draft.trim()))) return;
-    if (!saved && outbox) return;
+  async function send(saved?: Outbox): Promise<boolean> {
+    if (locks.current.has(scopeKey) || (!saved && (!conversation || !draft.trim()))) return false;
+    if (!saved && outbox) return false;
     const text = saved?.text ?? draft,
       owner = scopeKey;
-    if (saved && (saved.scope !== owner || saved.targetConversationId !== conversation?.id)) return;
+    if (saved && (saved.scope !== owner || saved.targetConversationId !== conversation?.id))
+      return false;
     locks.current.add(owner);
     setBusyScopes((old) => ({ ...old, [owner]: true }));
     setError('');
@@ -326,18 +341,20 @@ export function HelperPanel(props: Props) {
         `/helper/conversations/${encodeURIComponent(request.targetConversationId)}/messages`,
         {
           requestKey: request.requestKey,
+          ...(request.retryOf ? { retryOf: request.retryOf } : {}),
           text: request.text,
           ...(request.editor ? { editor: request.editor } : {}),
           ...(request.selection ? { selection: request.selection } : {}),
         }
       );
       setOutbox(owner, null);
-      setDrafts((old) => {
-        const existing = old[owner] ?? local(`uimori:helper-input:${owner}`) ?? '';
-        if (existing !== text) return old;
-        saveLocal(`uimori:helper-input:${owner}`, '');
-        return { ...old, [owner]: '' };
-      });
+      if (!request.retryOf)
+        setDrafts((old) => {
+          const existing = old[owner] ?? local(`uimori:helper-input:${owner}`) ?? '';
+          if (existing !== text) return old;
+          saveLocal(`uimori:helper-input:${owner}`, '');
+          return { ...old, [owner]: '' };
+        });
       setSelections((old) => {
         const existing = old[owner] === undefined ? storedSelection(owner) : old[owner];
         if (JSON.stringify(existing ?? null) !== JSON.stringify(request.selection ?? null))
@@ -348,6 +365,7 @@ export function HelperPanel(props: Props) {
       data.updateTask(task);
       if (currentScope.current === owner) following.current = true;
       if (conversation) await data.refresh(conversation);
+      return true;
     } catch (cause) {
       if (cause instanceof ApiError && cause.status < 500 && ![408, 429].includes(cause.status))
         setOutbox(owner, null);
@@ -355,6 +373,7 @@ export function HelperPanel(props: Props) {
         ...old,
         [owner]: cause instanceof Error ? cause.message : '요청을 보내지 못했어요.',
       }));
+      return false;
     } finally {
       locks.current.delete(owner);
       setBusyScopes((old) => ({ ...old, [owner]: false }));
@@ -370,12 +389,26 @@ export function HelperPanel(props: Props) {
       setError(cause instanceof Error ? cause.message : '작업을 취소하지 못했어요.');
     }
   }
+  async function retry(task: HelperTaskView, text = task.request) {
+    if (!conversation || outbox || busy || locks.current.has(scopeKey)) return false;
+    const request: Outbox = {
+      requestKey: crypto.randomUUID(),
+      text,
+      scope: scopeKey,
+      targetConversationId: conversation.id,
+      retryOf: task.id,
+    };
+    try {
+      setOutbox(scopeKey, request);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : '요청을 보관하지 못했어요.');
+      return false;
+    }
+    return send(request);
+  }
   const taskStatus = (task: HelperTaskView) => (
     <div className="helper-task" data-task-id={task.id}>
-      <p role="status">
-        {statusLabel[task.status]}
-        {task.error ? ` · ${task.error}` : ''}
-      </p>
+      {active(task) && <p role="status">{statusLabel[task.status]}</p>}
       {task.status !== 'queued' && (
         <StreamingResponse taskKind="helper" taskId={task.id} taskStatus={task.status} />
       )}
@@ -383,20 +416,18 @@ export function HelperPanel(props: Props) {
         <button type="button" className="secondary" onClick={() => void cancel(task)}>
           이 대기 요청 취소
         </button>
-      ) : (
-        !active(task) && (
-          <button
-            type="button"
-            className="secondary"
-            onClick={() => {
-              editDraft(task.request);
-              input.current?.focus();
-            }}
-          >
-            요청 다시 편집
-          </button>
-        )
-      )}
+      ) : !active(task) && task.status !== 'completed' ? (
+        <RetryFailure
+          status={task.status}
+          error={task.error}
+          disabled={busy || Boolean(outbox)}
+          onRetry={() => void retry(task)}
+          onSettings={props.onModelSettings}
+          onDetails={() => setDetailTask(detailTask === task.id ? null : task.id)}
+          onHistory={() => setShowHistory(true)}
+        />
+      ) : null}
+      {detailTask === task.id && task.error && <p role="note">{task.error}</p>}
     </div>
   );
   return (
@@ -662,11 +693,27 @@ export function HelperPanel(props: Props) {
           {messages.map((message) => (
             <article
               key={message.id}
-              className={`helper-message ${message.role}`}
+              className={`helper-message ${message.role === 'user' ? 'request' : message.role}`}
               data-message-id={message.id}
             >
-              <strong>{message.role === 'user' ? '나' : '도우미'}</strong>
-              <div className="helper-prose">{message.text}</div>
+              {message.role === 'user' ? (
+                <RequestMessage
+                  runId={message.taskId}
+                  request={message.text}
+                  maxLength={100000}
+                  editHint="수정한 요청으로 같은 자리에서 다시 시도해요."
+                  disabled={busy || Boolean(outbox)}
+                  onSubmit={
+                    taskMap.get(message.taskId) &&
+                    !active(taskMap.get(message.taskId)!) &&
+                    taskMap.get(message.taskId)!.status !== 'completed'
+                      ? (text) => retry(taskMap.get(message.taskId)!, text)
+                      : undefined
+                  }
+                />
+              ) : (
+                <div className="helper-prose">{message.text}</div>
+              )}
               {message.artifacts.map((artifact) => (
                 <HelperArtifactCard
                   key={`${artifact.id}:${artifact.revision}`}
@@ -685,9 +732,12 @@ export function HelperPanel(props: Props) {
                 taskStatus(taskMap.get(message.taskId)!)}
             </article>
           ))}
-          {tasks.length > 0 && (
-            <details className="helper-task-history">
-              <summary>작업 기록 · {tasks.length}개</summary>
+          {showHistory && tasks.length > 0 && (
+            <section className="helper-task-history" aria-label="도우미 작업 기록">
+              <h3>작업 기록 · {tasks.length}개</h3>
+              <button type="button" onClick={() => setShowHistory(false)}>
+                작업 기록 닫기
+              </button>
               <ol>
                 {tasks.map((task) => (
                   <li key={task.id}>
@@ -695,18 +745,7 @@ export function HelperPanel(props: Props) {
                     <small>
                       {statusLabel[task.status]} · 호출 {task.usage.modelCalls}회
                     </small>
-                    {task.status !== 'completed' && !active(task) && (
-                      <button
-                        type="button"
-                        className="secondary"
-                        onClick={() => {
-                          editDraft(task.request);
-                          input.current?.focus();
-                        }}
-                      >
-                        요청 다시 편집
-                      </button>
-                    )}
+                    {task.error && <small>{task.error}</small>}
                   </li>
                 ))}
               </ol>
@@ -720,7 +759,7 @@ export function HelperPanel(props: Props) {
                   이전 작업 불러오기
                 </button>
               )}
-            </details>
+            </section>
           )}
         </div>
       </div>
@@ -788,43 +827,56 @@ export function HelperPanel(props: Props) {
             </button>
           </div>
         )}
-        <form
+        <ChatComposer
           onSubmit={(event) => {
             event.preventDefault();
             void send();
           }}
         >
-          <textarea
-            ref={input}
+          <ComposerInput
+            inputRef={input}
+            enterSend={props.enterSend}
             aria-label="도우미에게 요청"
             value={draft}
             placeholder="도우미에게 요청하기"
             maxLength={100000}
-            rows={3}
             onChange={(event) => editDraft(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) {
-                event.preventDefault();
-                void send();
-              }
-            }}
+            onSend={() => void send()}
           />
-          {running && (
-            <IconButton
-              label="진행 중인 도우미 작업 취소"
-              icon={Square}
+          <div className="quick-controls">
+            <ActionMenu label="도우미 대화 더보기" placement="top" viewport>
+              <button type="button" onClick={() => setShowHistory(true)}>
+                작업 기록
+              </button>
+            </ActionMenu>
+            {running && draft.trim() && (
+              <IconButton
+                label="진행 중인 도우미 작업 취소"
+                icon={Square}
+                onClick={() => void cancel(running)}
+              />
+            )}
+          </div>
+          {running && !draft.trim() ? (
+            <button
+              className="send-button"
+              type="button"
+              aria-label="진행 중인 도우미 작업 취소"
               onClick={() => void cancel(running)}
-            />
+            >
+              <Square size={18} />
+            </button>
+          ) : (
+            <button
+              className="send-button"
+              type="submit"
+              aria-label="도우미 요청 보내기"
+              disabled={busy || data.loading || !conversation || !draft.trim() || Boolean(outbox)}
+            >
+              <ArrowUp size={20} />
+            </button>
           )}
-          <button
-            className="icon-button"
-            type="submit"
-            aria-label="도우미 요청 보내기"
-            disabled={busy || data.loading || !conversation || !draft.trim() || Boolean(outbox)}
-          >
-            <ArrowUp size={20} />
-          </button>
-        </form>
+        </ChatComposer>
       </footer>
     </aside>
   );

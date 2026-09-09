@@ -322,12 +322,18 @@ export class HelperWorkspace {
     return (
       this.store.db
         .prepare(
-          `SELECT * FROM helper_messages WHERE conversation_id=? ${before ? 'AND rowid < (SELECT rowid FROM helper_messages WHERE id=?)' : ''} ORDER BY rowid DESC LIMIT 100`
+          `SELECT m.*, COALESCE(json_extract(t.snapshot,'$.requestGroupId'), t.id) AS request_group_id, root.rowid AS request_order,
+          (SELECT latest.id FROM helper_tasks latest WHERE latest.conversation_id=m.conversation_id AND COALESCE(json_extract(latest.snapshot,'$.requestGroupId'),latest.id)=root.id ORDER BY latest.rowid DESC LIMIT 1) AS latest_task_id
+          FROM helper_messages m JOIN helper_tasks t ON t.id=m.task_id JOIN helper_tasks root ON root.id=COALESCE(json_extract(t.snapshot,'$.requestGroupId'), t.id)
+          WHERE m.conversation_id=? ${before ? 'AND m.rowid < (SELECT rowid FROM helper_messages WHERE id=?)' : ''} ORDER BY m.rowid DESC LIMIT 100`
         )
         .all(...(before ? [id, before] : [id])) as Row[]
     )
       .reverse()
       .map((row) => ({
+        requestGroupId: row.request_group_id,
+        latestTaskId: row.latest_task_id,
+        requestOrder: row.request_order,
         id: row.id,
         conversationId: id,
         taskId: row.task_id,
@@ -389,18 +395,33 @@ export class HelperWorkspace {
         .all(...(before ? [id, before, id] : [id])) as Row[]
     ).map((r) => this.task(r.id));
   }
-  existing(conversationId: string, key: string, request: string) {
+  existing(conversationId: string, key: string, request: string, retryOf?: string) {
     const row = this.store.db
       .prepare('SELECT id,request FROM helper_tasks WHERE conversation_id=? AND request_key=?')
       .get(conversationId, key) as Row | undefined;
-    if (row && row.request !== request)
+    if (row && (row.request !== request || this.task(row.id).snapshot.retryOf !== retryOf))
       throw new HttpError(409, '같은 요청 키로 다른 작업을 보낼 수 없어요.');
     return row ? this.task(row.id) : undefined;
   }
   enqueue(conversationId: string, key: string, request: string, snapshot: HelperTaskSnapshot) {
     return this.store.transaction(() => {
-      const prior = this.existing(conversationId, key, request);
+      const prior = this.existing(conversationId, key, request, snapshot.retryOf);
       if (prior) return prior;
+      if (snapshot.retryOf) {
+        const previous = this.task(snapshot.retryOf);
+        if (previous.conversationId !== conversationId)
+          throw new HttpError(403, '다른 대화의 요청은 재시도할 수 없어요.');
+        if (!['failed', 'cancelled', 'interrupted'].includes(previous.status))
+          throw new HttpError(409, '종료된 실패 요청만 재시도할 수 있어요.');
+        snapshot.requestGroupId = previous.snapshot.requestGroupId ?? previous.id;
+        const latest = this.store.db
+          .prepare(
+            "SELECT id FROM helper_tasks WHERE conversation_id=? AND COALESCE(json_extract(snapshot, '$.requestGroupId'),id)=? ORDER BY rowid DESC LIMIT 1"
+          )
+          .get(conversationId, snapshot.requestGroupId);
+        if (latest?.id !== previous.id)
+          throw new HttpError(409, '이미 다시 시도한 요청이에요. 최신 결과를 확인해 주세요.');
+      }
       const id = randomUUID(),
         time = now();
       this.store.db

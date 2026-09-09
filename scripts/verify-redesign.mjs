@@ -9,6 +9,7 @@ await runBrowserVerification({
     'HELPUI02',
     'HELPUI03',
     'HELPUI04',
+    'HELPUI05',
     'CTXUI01',
     'CTXUI02',
     'CTXUI03',

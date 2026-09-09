@@ -54,12 +54,6 @@
   font-size: 12px;
   color: var(--muted);
 }
-.helper-message.user {
-  padding: 12px;
-  background: var(--accent-soft);
-  border-radius: 12px;
-  margin-left: 24px;
-}
 .helper-prose,
 .streaming-text {
   white-space: pre-wrap;
@@ -101,22 +95,6 @@
   flex-shrink: 0;
   border-top: 1px solid var(--line);
   padding: 12px 16px max(12px, env(safe-area-inset-bottom));
-}
-.helper-composer form {
-  display: flex;
-  align-items: flex-end;
-  gap: 8px;
-}
-.helper-composer textarea {
-  flex: 1;
-  min-width: 0;
-  resize: vertical;
-  max-height: 35dvh;
-  font-size: 16px;
-  margin: 0;
-}
-.helper-composer form > button {
-  flex-shrink: 0;
 }
 .helper-editor {
   display: flex;
@@ -214,8 +192,7 @@
   width: 100%;
   min-width: 0;
 }
-.helper-limits summary,
-.helper-task-history > summary {
+.helper-limits summary {
   min-height: 44px;
   align-content: center;
 }
@@ -279,9 +256,6 @@
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
-.helper-message.user:has(.helper-task) {
-  margin-left: 0;
-}
 @media (max-width: 1100px) {
   .app-shell.helper-open {
     grid-template-columns: var(--nav-w) minmax(0, 1fr);
@@ -310,4 +284,11 @@
   .helper-messages {
     padding: 16px;
   }
+}
+
+.helper-task-history h3 {
+  font-size: 14px;
+}
+.helper-message.request .request-message-wrap {
+  margin-top: 0;
 }

@@ -55,6 +55,9 @@ export function useHelperConversation(open: boolean, scope: HelperScope) {
       if (!alive.current || versions.current.get(key) !== version) return;
       const previous = cache.current.get(key);
       const messageIds = new Set(messages.map((message) => message.id));
+      const latestGroups = new Map(
+        messages.map((message) => [message.requestGroupId, message.latestTaskId])
+      );
       const taskIds = new Set(tasks.map((task) => task.id));
       write(key, {
         conversation:
@@ -62,7 +65,13 @@ export function useHelperConversation(open: boolean, scope: HelperScope) {
             ? previous.conversation
             : conversation,
         messages: [
-          ...(previous?.messages ?? []).filter((message) => !messageIds.has(message.id)),
+          ...(previous?.messages ?? []).filter(
+            (message) =>
+              !messageIds.has(message.id) &&
+              (!message.requestGroupId ||
+                !latestGroups.has(message.requestGroupId) ||
+                latestGroups.get(message.requestGroupId) === message.taskId)
+          ),
           ...messages,
         ],
         tasks: [...tasks, ...(previous?.tasks ?? []).filter((task) => !taskIds.has(task.id))],

@@ -1,0 +1,38 @@
+.bot-tree-section-heading,
+.bot-tree-folder-heading {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  gap: 2px;
+}
+.bot-tree-section-heading > .bot-folder-toggle,
+.bot-tree-folder-heading > .bot-folder-toggle {
+  flex: 1;
+  min-width: 0;
+}
+.bot-tree-folder-contents {
+  padding-left: 8px;
+}
+.bot-tree-folder {
+  margin-bottom: 6px;
+}
+.bot-tree-order {
+  display: flex;
+  gap: 4px;
+}
+.bot-tree-move {
+  display: grid;
+  gap: 6px;
+}
+.bot-tree-navigation .action-menu-body select {
+  width: 100%;
+  min-width: 0;
+}
+.bot-tree-navigation .action-menu-body small {
+  white-space: normal;
+}
+.bot-tree-folder-heading .bot-folder-toggle span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

@@ -1,3 +1,4 @@
+import { readerConversation } from '../core/reader-conversation.js';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { subscribeAppHistory } from './app-history.js';
 import type { Chat, ReaderDetail, Run, Source } from '../core/types.js';
@@ -475,8 +476,20 @@ export function useStory() {
   const visibleRuns =
     detail?.runs.filter(
       (run) =>
-        !branch || (!run.snapshot.branchId && branch.default) || run.snapshot.branchId === branch.id
+        !run.supersededBy &&
+        (!branch ||
+          (!run.snapshot.branchId && branch.default) ||
+          run.snapshot.branchId === branch.id)
     ) ?? [];
+  const conversation = readerConversation(
+    sources,
+    (detail?.runs ?? []).filter(
+      (run) =>
+        run.sourceRevision ||
+        (visibleRuns.some((visible) => visible.id === run.id) &&
+          (!detail?.reader.pendingRunIds || detail.reader.pendingRunIds.includes(run.id)))
+    )
+  );
   useLayoutEffect(() => {
     if (
       !detail ||
@@ -610,16 +623,6 @@ export function useStory() {
     !detail ||
     !!sessionStorage.getItem(`pending-profile:${selected}`) ||
     !!readCommand(`command:${selected}${viewedBranch ? `:${viewedBranch}` : ''}`);
-  function editRunRequest(id: string) {
-    if (reuseBlocked || !canReuseRun(id) || submitLocks.current.has(viewKey)) return;
-    const run = visibleRuns.find((run) => run.id === id)!;
-    if (draft && draft !== run.request && !window.confirm('작성 중인 입력을 이 요청으로 바꿀까요?'))
-      return;
-    editDraft(run.request);
-    editLoreContextReset(run.snapshot.loreContextReset === true);
-    setNotice('이전 요청을 가져왔어요. 편집 후 보내면 현재 설정으로 새로 생성해요.');
-    input.current?.focus();
-  }
   async function generate(retryRunId?: string, editedRequest?: string): Promise<boolean> {
     if (
       !detail ||
@@ -707,7 +710,12 @@ export function useStory() {
               : '이전 요청의 수락을 확인했어요.'
             : ''
         );
-      if (payload.retryOf && admitted.snapshot.branchId && currentView.current === sentView)
+      if (
+        payload.retryOf &&
+        admitted.snapshot.branchId &&
+        admitted.snapshot.branchId !== branch?.id &&
+        currentView.current === sentView
+      )
         chooseBranch(admitted.snapshot.branchId);
     } catch (error) {
       track(definiteRejection(error) ? 'failed' : 'uncertain');
@@ -1011,6 +1019,7 @@ export function useStory() {
     branch,
     sources,
     visibleRuns,
+    conversation,
     submitting,
     attachmentsReady,
     pendingRequest,
@@ -1036,7 +1045,6 @@ export function useStory() {
     generate,
     canReuseRun,
     reuseBlocked,
-    editRunRequest,
     fork,
     quickChange,
   };

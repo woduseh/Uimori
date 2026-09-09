@@ -494,16 +494,14 @@ test('LOADUI05 context summary status fits mobile reader and run details without
         ? '필수 지침과 최신 원문만으로 입력 컨텍스트 한도를 넘었어요. 입력 한도를 높이거나 자료를 줄여 주세요.'
         : null,
   });
-  await page.route(`**/api/chats/${seeded.chat.id}/reader?*`, async (route) => {
-    const response = await route.fetch();
-    const body = (await response.json()) as ReaderDetail;
-    const base = body.runs.find((run) => run.id === source.runId)!;
-    body.runs = body.runs.map((run) => ({
+  const projectRuns = (runs: ReaderRun[]) => {
+    const base = runs.find((run) => run.id === source.runId)!;
+    const projected = runs.map((run) => ({
       ...run,
       contextSummary: stage === 'ready' || stage === 'unknown' ? summary() : undefined,
     }));
     if (stage === 'pending' || stage === 'failed')
-      body.runs.push({
+      projected.push({
         ...base,
         id: `${base.id}-context-status-fixture`,
         request: 'Synthetic context status preview',
@@ -513,7 +511,25 @@ test('LOADUI05 context summary status fits mobile reader and run details without
         error: null,
         contextSummary: summary(),
       });
+    return projected;
+  };
+  await page.route(`**/api/chats/${seeded.chat.id}/reader?*`, async (route) => {
+    const response = await route.fetch();
+    const body = (await response.json()) as ReaderDetail;
+    body.runs = projectRuns(body.runs);
+    if (stage === 'pending' || stage === 'failed')
+      body.reader.pendingRunIds = [
+        ...(body.reader.pendingRunIds ?? []),
+        `${source.runId}-context-status-fixture`,
+      ];
     await route.fulfill({ response, json: body });
+  });
+  // The failure detail action opens the durable run inspector, whose summaries
+  // are fetched separately from the visible reader projection.
+  await page.route(`**/api/chats/${seeded.chat.id}/reader-runs`, async (route) => {
+    const response = await route.fetch();
+    const runs = (await response.json()) as ReaderRun[];
+    await route.fulfill({ response, json: projectRuns(runs) });
   });
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto(`/?chat=${seeded.chat.id}`);
@@ -543,8 +559,13 @@ test('LOADUI05 context summary status fits mobile reader and run details without
 
   stage = 'failed';
   await page.reload();
-  await openActivity(page.getByTestId('pending-run'));
-  const failed = page.getByTestId('pending-run').getByTestId('context-summary');
+  const failedRequest = page.getByTestId('pending-run');
+  await expect(failedRequest.getByRole('group', { name: '실패한 요청' })).toBeVisible();
+  await expect(failedRequest.getByTestId('context-summary')).toHaveCount(0);
+  await failedRequest.locator('summary[aria-label="실패한 요청 더보기"]').click();
+  await failedRequest.getByRole('button', { name: '오류 상세', exact: true }).click();
+  const inspector = page.getByRole('dialog', { name: '작업 현황', exact: true });
+  const failed = inspector.getByTestId('run').getByTestId('context-summary');
   await expect(failed).toHaveAttribute('role', 'alert');
   await expect(failed).toContainText('컨텍스트 확인에 실패했어요.');
   await expect(failed).toContainText('필수 지침과 최신 원문만으로 입력 컨텍스트 한도를 넘었어요.');

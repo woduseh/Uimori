@@ -10,7 +10,11 @@ export function RequestMessage({
   onSubmit,
   onConfirm,
   onEditingChange,
+  editHint = '수정한 요청으로 새 분기에서 생성해요.',
+  maxLength = 4000,
 }: {
+  editHint?: string;
+  maxLength?: number;
   runId: string;
   request: string;
   disabled?: boolean;
@@ -33,13 +37,17 @@ export function RequestMessage({
       /* Keep editing available when browser storage is restricted. */
     }
   };
+  const editingCallback = useRef(onEditingChange);
+  useLayoutEffect(() => {
+    editingCallback.current = onEditingChange;
+  });
   useLayoutEffect(() => {
     if (!editing) return;
     input.current?.focus({ preventScroll: true });
     input.current?.scrollIntoView({ block: 'nearest' });
-    onEditingChange?.(true);
-    return () => onEditingChange?.(false);
-  }, [editing, onEditingChange]);
+    editingCallback.current?.(true);
+    return () => editingCallback.current?.(false);
+  }, [editing]);
   const close = () => {
     if (lock.current) return;
     if (!onConfirm) saveDraft();
@@ -78,7 +86,7 @@ export function RequestMessage({
             ref={input}
             aria-label="요청 수정 내용"
             rows={5}
-            maxLength={4000}
+            maxLength={maxLength}
             value={draft}
             disabled={busy || !!onConfirm}
             onChange={(event) => {
@@ -90,7 +98,7 @@ export function RequestMessage({
             <small>
               {onConfirm
                 ? '이전 전송의 수락 여부를 확인해 주세요. 같은 요청으로 확인해요.'
-                : '수정한 요청으로 새 분기에서 생성해요.'}
+                : editHint}
             </small>
             <div className="request-edit-buttons">
               <IconButton

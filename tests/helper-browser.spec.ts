@@ -191,6 +191,16 @@ async function harness(page: Page, seedCount = 0) {
             view.tasks.some((task) => task.status === 'running') ? 'queued' : 'running'
           );
         if (!previous) {
+          if (body.retryOf) {
+            const old = view.messages.find((message) => message.taskId === body.retryOf)!;
+            const group = old.requestGroupId ?? old.taskId;
+            for (const item of view.messages)
+              if (item.taskId === task.id || (item.requestGroupId ?? item.taskId) === group) {
+                item.requestGroupId = group;
+                item.latestTaskId = task.id;
+                item.requestOrder = old.requestOrder ?? 1;
+              }
+          }
           receipts.set(body.requestKey, task);
           event(view, task, 'task.queued');
           streams.set(task.id, {
@@ -295,6 +305,12 @@ async function harness(page: Page, seedCount = 0) {
       const view = views.get(task.conversationId)!;
       task.status = 'completed';
       message(view, task, 'assistant', '합성 완료 응답');
+      const user = view.messages.find((item) => item.taskId === task.id)!;
+      Object.assign(view.messages.at(-1)!, {
+        requestGroupId: user.requestGroupId,
+        latestTaskId: user.latestTaskId,
+        requestOrder: user.requestOrder,
+      });
       event(view, task, 'task.completed');
       const stream = streams.get(task.id)!;
       stream.status = 'completed';
@@ -460,9 +476,10 @@ test('HELPUI03 library work selection, older pages and direct artifact edit pres
   await expect(panel.getByRole('region', { name: '독립 가정 장면' })).toBeVisible();
   await panel.getByRole('button', { name: '이전 메시지 불러오기' }).click();
   await expect(panel.getByText('합성 요청 1', { exact: true }).first()).toBeVisible();
-  await panel.locator('.helper-task-history > summary').click();
+  await panel.locator('summary[aria-label="도우미 대화 더보기"]').click();
+  await panel.getByRole('button', { name: '작업 기록', exact: true }).click();
   await panel.getByRole('button', { name: '이전 작업 불러오기' }).click();
-  await expect(panel.locator('.helper-task-history > summary')).toHaveText('작업 기록 · 55개');
+  await expect(panel.locator('.helper-task-history > h3')).toHaveText('작업 기록 · 55개');
   const card = panel.getByRole('region', { name: '독립 가정 장면' });
   await card.getByRole('button', { name: '직접 편집', exact: true }).click();
   await card.getByLabel('가정 장면 직접 편집').fill('내 장면 편집 초안');
@@ -485,7 +502,7 @@ test('HELPUI03 library work selection, older pages and direct artifact edit pres
   await panel.getByLabel('도우미에게 요청').fill('새 작업의 초안');
   await panel.getByLabel('서재 작업 선택').selectOption(view.conversation.id);
   await expect(panel.getByLabel('도우미에게 요청')).toHaveValue('별도로 유지할 요청 초안');
-  await expect(panel.locator('.helper-task-history > summary')).toHaveText('작업 기록 · 55개');
+  await expect(panel.locator('.helper-task-history > h3')).toHaveText('작업 기록 · 55개');
 });
 
 test('HELPUI04 selected source is frozen in the request and a terminal missing stream does not reconnect', async ({
@@ -557,4 +574,34 @@ test('HELPUI04 selected source is frozen in the request and a terminal missing s
   expect(
     ((await (await request.get(`/api/chats/${chat.id}`)).json()) as ChatDetail).sources
   ).toEqual(saved.sources);
+});
+
+test('HELPUI05 retry edits in place, preserves composer and hides historical failure after reload', async ({
+  page,
+  request,
+}) => {
+  const chat = await create(request),
+    state = await harness(page);
+  await page.goto(`/?chat=${chat.id}`);
+  let panel = await open(page);
+  state.addFailed(state.current());
+  await page.reload();
+  panel = await open(page);
+  await panel.getByLabel('도우미에게 요청').fill('새 요청 작성 중');
+  await panel.getByRole('button', { name: '요청 편집', exact: true }).click();
+  await panel.getByLabel('요청 수정 내용').fill('고친 요청');
+  await panel.getByRole('button', { name: '수정한 요청 보내기', exact: true }).click();
+  await expect(panel.getByLabel('도우미에게 요청')).toHaveValue('새 요청 작성 중');
+  await expect(panel.getByRole('group', { name: '실패한 요청' })).toHaveCount(0);
+  state.complete(state.current().tasks[0]);
+  await expect(panel.getByText('합성 완료 응답', { exact: true })).toBeVisible();
+  await page.reload();
+  panel = await open(page);
+  await expect(panel.locator('[data-testid="source-request"]')).toHaveCount(1);
+  await expect(panel.getByText('고친 요청', { exact: true })).toBeVisible();
+  await expect(panel.getByRole('group', { name: '실패한 요청' })).toHaveCount(0);
+  await panel.locator('summary[aria-label="도우미 대화 더보기"]').click();
+  await panel.getByRole('button', { name: '작업 기록', exact: true }).click();
+  await expect(panel.locator('.helper-task-history li')).toHaveCount(2);
+  await expect(panel.locator('.helper-task-history').getByText('SYNTHETIC_FAILURE')).toBeVisible();
 });

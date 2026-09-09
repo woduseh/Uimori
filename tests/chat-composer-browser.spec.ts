@@ -1,0 +1,70 @@
+import { expect, test } from '@playwright/test';
+import { postFixtureChat } from './fixtures/chat.js';
+
+test('shared composer preserves Korean composition and Shift+Enter without sending', async ({
+  page,
+  request,
+}) => {
+  const created = await postFixtureChat(request, { data: { title: '입력창 키보드 합성 검사' } });
+  expect(created.ok()).toBe(true);
+  const chat = await created.json();
+  await page.addInitScript(() => localStorage.setItem('uimori:enter-send', 'true'));
+  await page.goto(`/?chat=${chat.id}`);
+  const input = page.getByRole('textbox', { name: '다음 장면 요청' });
+  await input.fill('한글 조합 중');
+  await input.dispatchEvent('compositionstart');
+  await input.press('Enter');
+  await input.dispatchEvent('compositionend');
+  await expect(input).toHaveValue('한글 조합 중\n');
+  await input.fill('한글 입력');
+  await input.dispatchEvent('keydown', { key: 'Enter', code: 'Enter', isComposing: true });
+  await input.dispatchEvent('keydown', { key: 'Enter', code: 'Enter', keyCode: 229 });
+  await expect(input).toHaveValue('한글 입력');
+  await input.press('Shift+Enter');
+  await expect(input).toHaveValue('한글 입력\n');
+  await page.keyboard.insertText('가');
+  await expect(input).toHaveValue('한글 입력\n가');
+  const detail = await (await request.get(`/api/chats/${chat.id}`)).json();
+  expect(detail.runs).toHaveLength(0);
+  await expect(page.getByRole('button', { name: '원문 생성', exact: true })).toBeEnabled();
+});
+
+test('shared composer grows at narrow widths and resets after clearing', async ({
+  page,
+  request,
+}) => {
+  const created = await postFixtureChat(request, { data: { title: '입력창 크기 합성 검사' } });
+  expect(created.ok()).toBe(true);
+  const chat = await created.json();
+  const observerErrors: string[] = [];
+  page.on('pageerror', (error) => {
+    if (/ResizeObserver/u.test(error.message)) observerErrors.push(error.message);
+  });
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto(`/?chat=${chat.id}`);
+  const input = page.getByRole('textbox', { name: '다음 장면 요청' });
+  const form = page.locator('form.composer').filter({ has: input });
+  await expect(input).toBeVisible();
+  await input.fill('짧은 요청');
+  await expect(form).not.toHaveClass(/grown/u);
+  await input.fill('장면의 인물과 배경을 이어서 묘사해 주세요. '.repeat(25));
+  await expect(form).toHaveClass(/grown/u);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect
+    .poll(async () => input.evaluate((node) => node.getBoundingClientRect().height))
+    .toBeLessThanOrEqual(180);
+  await expect
+    .poll(async () => input.evaluate((node) => node.scrollHeight > node.clientHeight))
+    .toBe(true);
+  await expect
+    .poll(async () =>
+      form.evaluate((node) => node.getBoundingClientRect().right <= window.innerWidth)
+    )
+    .toBe(true);
+  await input.fill('');
+  await expect(form).not.toHaveClass(/grown/u);
+  await expect
+    .poll(async () => input.evaluate((node) => node.getBoundingClientRect().height))
+    .toBeLessThanOrEqual(48);
+  expect(observerErrors).toEqual([]);
+});

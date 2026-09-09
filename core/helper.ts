@@ -31,6 +31,8 @@ export type HelperGrant = {
 export type HelperEditor = { draftId: string; revision: number; title: string; kind: string };
 export type HelperSelection = { sourceId: string; sourceHash: string; text: string };
 export type HelperTaskSnapshot = {
+  retryOf?: string;
+  requestGroupId?: string;
   scope: HelperScope;
   model: ModelSnapshot;
   contextModel?: ModelSnapshot;
@@ -54,6 +56,9 @@ export type HelperTask = {
   snapshot: HelperTaskSnapshot;
 };
 export type HelperMessage = {
+  requestOrder?: number;
+  requestGroupId?: string;
+  latestTaskId?: string;
   id: string;
   conversationId: string;
   taskId: string;

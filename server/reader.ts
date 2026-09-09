@@ -39,7 +39,7 @@ function readerActivity(
       : "SELECT * FROM activity WHERE status IN ('queued','running','waiting_for_state') UNION ALL SELECT * FROM recent ORDER BY createdAt,id";
   const rows = store.db
     .prepare(`WITH activity AS (
-    SELECT id,'main' AS kind,status,created_at AS createdAt,updated_at AS updatedAt,branch_id AS branchId,source_revision AS sourceRevision,0 AS generation,NULL AS sourceHash,0 AS superseded,(status='interrupted' OR COALESCE(error,'') LIKE '%PROVIDER_UNCERTAIN%') AS executionUncertain FROM runs WHERE chat_id=?
+    SELECT id,'main' AS kind,status,created_at AS createdAt,updated_at AS updatedAt,branch_id AS branchId,source_revision AS sourceRevision,0 AS generation,NULL AS sourceHash,CASE WHEN source_revision IS NULL THEN EXISTS(SELECT 1 FROM runs newer WHERE newer.chat_id=runs.chat_id AND json_extract(newer.command,'$.retryOf')=runs.id) ELSE 0 END AS superseded,(status='interrupted' OR COALESCE(error,'') LIKE '%PROVIDER_UNCERTAIN%') AS executionUncertain FROM runs WHERE chat_id=?
     UNION ALL
     SELECT j.id,j.kind,j.status,j.created_at,j.updated_at,r.branch_id,j.source_revision,j.generation,j.source_hash,CASE WHEN j.kind='translation' AND j.status IN ('failed','partial','stale') AND COALESCE(j.error,'') NOT LIKE '%PROVIDER_UNCERTAIN%' THEN EXISTS(SELECT 1 FROM jobs newer WHERE newer.chat_id=j.chat_id AND newer.source_revision=j.source_revision AND newer.source_hash=j.source_hash AND newer.kind='translation' AND newer.status='completed' AND (newer.revision,newer.created_at,newer.id) > (j.revision,j.created_at,j.id)) ELSE 0 END,(j.status='interrupted' OR COALESCE(j.error,'') LIKE '%PROVIDER_UNCERTAIN%') FROM jobs j JOIN sources s ON s.id=j.source_revision JOIN runs r ON r.id=s.run_id
       WHERE j.chat_id=? AND j.source_hash=COALESCE((SELECT hash FROM source_edits WHERE source_id=s.id ORDER BY revision DESC LIMIT 1),s.hash)
@@ -166,6 +166,8 @@ export function readerRuns(store: Store, id: string, scope?: string[]) {
   const runs = (
     store.db
       .prepare(`SELECT id,chat_id AS chatId,parent_revision AS parentRevision,status,request,source_revision AS sourceRevision,error,usage,partial_text AS partialText,
+    json_extract(command,'$.retryOf') AS retryOf,
+    CASE WHEN source_revision IS NULL THEN (SELECT newer.id FROM runs newer WHERE newer.chat_id=runs.chat_id AND json_extract(newer.command,'$.retryOf')=runs.id ORDER BY newer.created_at DESC,newer.id DESC LIMIT 1) END AS supersededBy,
     json_extract(snapshot,'$.settingsRevision') AS settingsRevision,CASE WHEN json_extract(snapshot,'$.packageStart.mode')='authored' THEN NULL ELSE json_extract(snapshot,'$.profile.models.main.title') END AS modelTitle,json_extract(snapshot,'$.sourceSegments') AS sourceSegments,COALESCE(json_array_length(snapshot,'$.profile.packageAttachments'),0)>0 AS hasPackages,
     CASE WHEN json_type(snapshot,'$.packageStart') IS NOT NULL THEN json_object('mode',json_extract(snapshot,'$.packageStart.mode'),'title',json_extract(snapshot,'$.packageStart.title')) END AS packageStart,
     CASE WHEN json_type(snapshot,'$.contextPlan')='object' THEN json_object('status',json_extract(snapshot,'$.contextPlan.status'),'inputTokenLimit',json_extract(snapshot,'$.contextPlan.budget.inputTokenLimit'),'estimatedInputTokens',json_extract(snapshot,'$.contextPlan.estimatedInputTokens'),'compactedSources',json_array_length(snapshot,'$.contextPlan.compacted'),'summaryCalls',json_extract(snapshot,'$.contextPlan.summaryCalls'),'error',json_extract(snapshot,'$.contextPlan.error')) END AS contextSummary,
@@ -174,6 +176,8 @@ export function readerRuns(store: Store, id: string, scope?: string[]) {
       .all(id, ...(scope ? [JSON.stringify(scope)] : [])) as (Record<string, any> & {
       id: string;
       request: string;
+      retryOf: string | null;
+      supersededBy: string | null;
       sourceRevision: string | null;
     })[]
   ).map((row) => ({
@@ -284,7 +288,7 @@ export function readerDetail(store: Store, id: string, query: Record<string, str
   // One metadata scan serves navigation, selection and branch labels. Off-branch requests
   // and off-page execution diagnostics need not be materialized for the reader.
   const indexRows = store.db
-    .prepare(`SELECT id,source_revision AS sourceRevision,status,branch_id AS branchId,
+    .prepare(`SELECT id,rowid AS admissionOrder,json_extract(command,'$.retryOf') AS retryOf,source_revision AS sourceRevision,status,branch_id AS branchId,
     CASE WHEN id IN (SELECT value FROM json_each(?)) THEN request ELSE NULL END AS request,
     json_extract(snapshot,'$.packageStart.mode') AS startMode,
     json_extract(snapshot,'$.candidateOf') AS candidateOf
@@ -294,10 +298,24 @@ export function readerDetail(store: Store, id: string, query: Record<string, str
     sourceRevision: string | null;
     status: string;
     branchId: string | null;
+    admissionOrder: number;
+    retryOf: string | null;
     candidateOf: string | null;
     request: string | null;
     startMode: string | null;
   }[];
+  const requestRows = new Map(indexRows.map((run) => [run.id, run]));
+  const requestOrder = (id: string): number => {
+    let row = requestRows.get(id);
+    const seen = new Set<string>();
+    while (row?.retryOf && !seen.has(row.id)) {
+      seen.add(row.id);
+      const parent = requestRows.get(row.retryOf);
+      if (!parent) break;
+      row = parent;
+    }
+    return row?.admissionOrder ?? Number.MAX_SAFE_INTEGER;
+  };
   // The complete task panel loads readerRuns independently when opened.
   const pageIds = new Set(order);
   const runs = readerRuns(
@@ -312,6 +330,28 @@ export function readerDetail(store: Store, id: string, query: Record<string, str
       )
       .map((run) => run.id)
   );
+  for (const run of runs) Object.assign(run, { requestOrder: requestOrder(run.id) });
+  const previousOrder = start > 0 ? requestOrder(byId.get(chain[start - 1])!.runId) : -Infinity;
+  const finalOrder =
+    start + order.length < chain.length
+      ? requestOrder(byId.get(order[order.length - 1])!.runId)
+      : Infinity;
+  const pendingRunIds = runs
+    .filter((run) => {
+      if (
+        run.sourceRevision ||
+        run.supersededBy ||
+        (run.snapshot.branchId ? run.snapshot.branchId !== branch.id : !branch.default)
+      )
+        return false;
+      return (
+        ['queued', 'running', 'waiting_for_state'].includes(
+          requestRows.get(run.id)?.status ?? ''
+        ) ||
+        (requestOrder(run.id) > previousOrder && requestOrder(run.id) <= finalOrder)
+      );
+    })
+    .map((run) => run.id);
   const runsById = new Map(indexRows.map((run) => [run.id, run]));
   // Requests label the branch's complete index without loading off-page source bodies.
   // Authored starts have no user request; never substitute generated or hidden content.
@@ -362,6 +402,7 @@ export function readerDetail(store: Store, id: string, query: Record<string, str
     ...(assetsChanged ? { assets: mergedReaderAssets(store, id, order) } : {}),
     reader: {
       navigation,
+      pendingRunIds,
       latestBranchRuns: Object.fromEntries(
         indexRows.filter((run) => run.branchId !== null).map((run) => [run.branchId!, run.id])
       ),

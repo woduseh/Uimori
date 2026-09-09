@@ -15,7 +15,7 @@ const refs = (history: HelperTaskSnapshot['history']) =>
 export function helperHistory(store: Store, conversationId: string): HelperTaskSnapshot['history'] {
   return store.db
     .prepare(
-      "SELECT m.id,m.role,m.text FROM helper_messages m JOIN helper_tasks t ON t.id=m.task_id WHERE m.conversation_id=? ORDER BY t.rowid,CASE m.role WHEN 'user' THEN 0 ELSE 1 END"
+      "SELECT m.id,m.role,m.text FROM helper_messages m JOIN helper_tasks t ON t.id=m.task_id WHERE m.conversation_id=? AND NOT EXISTS (SELECT 1 FROM helper_tasks next WHERE next.conversation_id=t.conversation_id AND json_extract(next.snapshot,'$.retryOf')=t.id) ORDER BY (SELECT root.rowid FROM helper_tasks root WHERE root.id=COALESCE(json_extract(t.snapshot,'$.requestGroupId'),t.id)),CASE m.role WHEN 'user' THEN 0 ELSE 1 END"
     )
     .all(conversationId)
     .map((row) => ({

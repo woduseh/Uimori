@@ -520,10 +520,22 @@ export class Store {
         throw new HttpError(409, 'Authored opening has no model request to repeat');
       const profile = this.product.snapshot(original.chatId);
       const chat = this.chat(original.chatId);
-      const branch = this.product.createBranch(original.chatId, {
-        title: requestEdited ? '요청 수정' : '다시 요청',
-        fromRevision: original.parentRevision,
-      });
+      const originalBranch = this.product.branch(original.chatId, original.snapshot.branchId);
+      if (
+        !original.sourceRevision &&
+        this.db
+          .prepare("SELECT id FROM runs WHERE chat_id=? AND json_extract(command,'$.retryOf')=?")
+          .get(original.chatId, original.id)
+      )
+        throw new HttpError(409, 'This request already has a newer attempt');
+      // Keep the unchanged failed turn's position and preserve each execution.
+      const branch =
+        !original.sourceRevision && originalBranch.headRevision === original.parentRevision
+          ? originalBranch
+          : this.product.createBranch(original.chatId, {
+              title: requestEdited ? '요청 수정' : '다시 요청',
+              fromRevision: original.parentRevision,
+            });
       return this.createRunInTransaction(
         original.chatId,
         {
@@ -534,6 +546,7 @@ export class Store {
           branchId: branch.id,
           idempotencyKey: key,
           retryOf: runId,
+          ...(original.snapshot.loreContextReset ? { loreContextReset: true } : {}),
           ...(requestEdited ? { requestEdited: true } : {}),
         },
         (current) => {

@@ -99,7 +99,7 @@ export function helperRoutes(app: FastifyInstance, runtime: HelperRuntime) {
   );
   app.post<{ Params: { id: string } }>('/api/helper/conversations/:id/messages', (request) => {
     const body = record(request.body);
-    fields(body, ['requestKey', 'text', 'editor', 'selection']);
+    fields(body, ['requestKey', 'text', 'editor', 'selection', 'retryOf']);
     let editor: HelperEditor | undefined;
     if (body.editor !== undefined) {
       const input = record(body.editor);
@@ -127,7 +127,8 @@ export function helperRoutes(app: FastifyInstance, runtime: HelperRuntime) {
                 sourceHash: text(selection.sourceHash, 'source hash', 64),
                 text: text(selection.text, 'selected text', 100_000),
               };
-            })()
+            })(),
+        body.retryOf === undefined ? undefined : text(body.retryOf, 'retry task ID', 100)
       )
     );
   });

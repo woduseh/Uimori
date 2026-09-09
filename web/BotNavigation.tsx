@@ -1,12 +1,11 @@
 import { Dialog } from './Dialog.js';
 import { ActionMenu } from './ActionMenu.js';
-import { useChatActivities } from './useChatActivities.js';
-import type { DragEvent } from 'react';
+import type { useChatActivities } from './useChatActivities.js';
+import type { DragEvent, ReactNode } from 'react';
 import { DeleteButton } from './DeleteButton.js';
 import { IconButton } from './IconButton.js';
-import { useEffect, useId, useMemo, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
-  ChevronDown,
   ChevronRight,
   MoreHorizontal,
   LoaderCircle,
@@ -14,22 +13,22 @@ import {
   Folder,
   Plus,
   Search,
+  FolderInput,
   ArrowUp,
   ArrowDown,
 } from 'lucide-react';
-import { LibraryIcon, PromptIcon, SettingsIcon } from './ui-icons.js';
+import { LibraryIcon } from './ui-icons.js';
 import type { Content, Library } from '../core/product.js';
 import type { Chat } from '../core/types.js';
 import type { ChatFolder } from '../core/product.js';
 import { api } from './api.js';
-import { libraryCategory } from '../core/library-organization.js';
 import { ContentAvatar } from './ContentAvatar.js';
 import { ContentPicker } from './ContentPicker.js';
 import './bot-navigation.css';
 
 export type { ChatFolder } from '../core/product.js';
 type LibraryDestination = 'bot' | 'persona' | 'module' | 'prompts';
-type Props = {
+export type Props = {
   library: Library | null;
   chats: Chat[];
   selected: string;
@@ -45,7 +44,15 @@ type Props = {
 };
 const reference = (value: { id: string; revision: number }) => `${value.id}@${value.revision}`;
 
-export function BotNavigation(props: Props) {
+export function BotBranch(
+  props: Props & {
+    botId: string;
+    expanded: boolean;
+    onToggle: () => void;
+    managementActions?: ReactNode;
+    activities: ReturnType<typeof useChatActivities>;
+  }
+) {
   const {
     library,
     chats,
@@ -56,32 +63,16 @@ export function BotNavigation(props: Props) {
     onLibrary,
     onChatsChanged,
     onError,
-    onSettings,
-    onTasks,
     tasks,
+    botId,
+    expanded,
+    onToggle,
+    managementActions,
+    activities,
   } = props;
-  // Start on the selected chat's bot so the first paint never shows the bot list briefly;
-  // the effect below keeps the choice in sync afterwards.
-  const [botId, setBotId] = useState(() =>
-    selected && destination === 'story'
-      ? (chats.find((chat) => chat.id === selected)?.botId ?? '')
-      : ''
-  );
   const [query, setQuery] = useState('');
-  // Bot switch row: one popover replaces the bot list screen, the back button and the count.
-  const [switching, setSwitching] = useState(false);
-  const [botQuery, setBotQuery] = useState('');
-  const switchRoot = useRef<HTMLDivElement>(null);
-  const switchButton = useRef<HTMLButtonElement>(null);
-  const switchId = useId();
-  useEffect(() => {
-    if (!switching) return;
-    const outside = (event: PointerEvent) => {
-      if (!switchRoot.current?.contains(event.target as Node)) setSwitching(false);
-    };
-    document.addEventListener('pointerdown', outside);
-    return () => document.removeEventListener('pointerdown', outside);
-  }, [switching]);
+  const [searching, setSearching] = useState(false);
+  const [movingId, setMovingId] = useState<string | null>(null);
   const [folders, setFolders] = useState<ChatFolder[]>([]);
   const [loading, setLoading] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -90,7 +81,25 @@ export function BotNavigation(props: Props) {
   const [creating, setCreating] = useState(false);
   const [settingsId, setSettingsId] = useState<string | null>(null);
   const [menuId, setMenuId] = useState<string | null>(null);
-  const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
+  const [collapsed, setCollapsed] = useState<Record<string, boolean>>(() => {
+    try {
+      const value: unknown = JSON.parse(
+        localStorage.getItem(`uimori.chat-folders.${botId}`) ?? '{}'
+      );
+      return value && typeof value === 'object' && !Array.isArray(value)
+        ? Object.fromEntries(Object.entries(value).filter(([, flag]) => typeof flag === 'boolean'))
+        : {};
+    } catch {
+      return {};
+    }
+  });
+  useEffect(() => {
+    try {
+      localStorage.setItem(`uimori.chat-folders.${botId}`, JSON.stringify(collapsed));
+    } catch {
+      /* Optional navigation storage. */
+    }
+  }, [botId, collapsed]);
   const [dragId, setDragId] = useState<string | null>(null);
   const [dropTarget, setDropTarget] = useState<{
     folderId: string | null;
@@ -99,7 +108,6 @@ export function BotNavigation(props: Props) {
   const expandTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const expandKey = useRef<string | null>(null);
   const dragChat = useRef<Chat | null>(null);
-  const activities = useChatActivities();
   useEffect(
     () => () => {
       if (expandTimer.current) clearTimeout(expandTimer.current);
@@ -111,45 +119,27 @@ export function BotNavigation(props: Props) {
   currentBot.current = botId;
   const epoch = useRef(0);
   const operation = useRef(false);
-  const selectedOwner = chats.find((chat) => chat.id === selected)?.botId ?? '';
+  const selectedChatFolder = chats.find(
+    (chat) => chat.id === selected && chat.botId === botId
+  )?.folderId;
   useEffect(() => {
-    if (selected && destination === 'story') {
-      setBotId(selectedOwner);
-      setQuery('');
-    }
-  }, [selected, selectedOwner, destination]);
-  const ownerIds = useMemo(() => new Set(chats.map((chat) => chat.botId)), [chats]);
-  const bots = useMemo(
-    () =>
-      library?.contents.filter(
-        (content) => libraryCategory(library, content) === 'bot' || ownerIds.has(content.id)
-      ) ?? [],
-    [library, ownerIds]
-  );
-  const bot = bots.find((content) => content.id === botId);
-  // Most recently active bot first, then by title.
-  const recentBots = useMemo(() => {
-    const latest = new Map<string, string>();
-    for (const chat of chats) {
-      const at = chat.lastActivityAt ?? '';
-      if (at > (latest.get(chat.botId) ?? '')) latest.set(chat.botId, at);
-    }
-    return [...bots].sort(
-      (a, b) =>
-        (latest.get(b.id) ?? '').localeCompare(latest.get(a.id) ?? '') ||
-        a.title.localeCompare(b.title)
-    );
-  }, [bots, chats]);
+    if (selected && destination === 'story' && selectedChatFolder)
+      setCollapsed((value) => ({ ...value, [`${botId}:${selectedChatFolder}`]: false }));
+  }, [selected, selectedChatFolder, destination, botId]);
+  const bot = library?.contents.find((content) => content.id === botId);
   const scoped = chats
     .filter((chat) => chat.botId === botId)
     .sort((a, b) => (a.sortPosition ?? 0) - (b.sortPosition ?? 0));
-  const visible = scoped.filter((chat) =>
-    chat.title.toLocaleLowerCase().includes(query.toLocaleLowerCase())
-  );
+  const visible = scoped;
+  const shouldLoad = expanded || searching || creating || !!movingId;
+  const [requested, setRequested] = useState(false);
   useEffect(() => {
+    if (shouldLoad) setRequested(true);
+  }, [shouldLoad]);
+  useEffect(() => {
+    if (!requested) return;
     const version = ++epoch.current;
     setFolders([]);
-    setCreating(false);
     setSettingsId(null);
     setMenuId(null);
     setDragId(null);
@@ -175,7 +165,7 @@ export function BotNavigation(props: Props) {
     return () => {
       alive = false;
     };
-  }, [botId]);
+  }, [botId, requested]);
   async function perform(action: () => Promise<unknown>) {
     if (operation.current) return;
     operation.current = true;
@@ -225,10 +215,6 @@ export function BotNavigation(props: Props) {
       setBusy(false);
     }
   }
-  function chooseBot(id: string) {
-    setBotId(id);
-    setQuery('');
-  }
   function clearDrag() {
     setDragId(null);
     dragChat.current = null;
@@ -238,7 +224,7 @@ export function BotNavigation(props: Props) {
     expandKey.current = null;
   }
   function moveChat(chat: Chat, folderId: string | null, beforeId: string | null = null) {
-    if (beforeId === chat.id || (query && (chat.folderId ?? null) === folderId)) return;
+    if (beforeId === chat.id) return;
     void perform(() =>
       api(
         `/chats/${encodeURIComponent(chat.id)}/organization`,
@@ -303,7 +289,6 @@ export function BotNavigation(props: Props) {
         {items.map((chat, index) => {
           const selectedChat = selected === chat.id && destination === 'story';
           function target(event: DragEvent) {
-            if (query) return null;
             const box = event.currentTarget.getBoundingClientRect();
             return event.clientY < box.top + box.height / 2
               ? chat.id
@@ -339,14 +324,26 @@ export function BotNavigation(props: Props) {
               </button>
               {status(activity(chat)?.label)}
               <div className="bot-row-actions">
-                <button
-                  className="icon-button"
-                  aria-label={`${chat.title} 채팅 메뉴`}
-                  title="채팅 메뉴"
-                  onClick={() => setMenuId(chat.id)}
-                >
-                  <MoreHorizontal size={16} />
-                </button>
+                <ActionMenu label={`${chat.title} 채팅 메뉴`} viewport>
+                  <button
+                    type="button"
+                    onClick={(event) => {
+                      const menu = event.currentTarget.closest('details');
+                      if (menu) {
+                        menu.open = false;
+                        menu.querySelector('summary')?.focus();
+                      }
+                      setMenuId(chat.id);
+                    }}
+                  >
+                    이름 변경
+                  </button>
+                </ActionMenu>
+                <IconButton
+                  label={`${chat.title} 채팅 이동`}
+                  icon={FolderInput}
+                  onClick={() => setMovingId(chat.id)}
+                />
                 <DeleteButton
                   path={`/chats/${encodeURIComponent(chat.id)}`}
                   preparePath={`/chats/${encodeURIComponent(chat.id)}/deletion-impact`}
@@ -365,10 +362,8 @@ export function BotNavigation(props: Props) {
         {dropTarget?.folderId === folderId && dropTarget.beforeId === null && (
           <div className="bot-drop-end" aria-hidden="true" />
         )}
-        {!items.length && (
-          <p className="bot-empty-folder">
-            {dragId ? '여기로 이동' : query ? '검색 결과가 없어요.' : '채팅이 없어요.'}
-          </p>
+        {!items.length && (folderId !== null || folders.length === 0 || dragId) && (
+          <p className="bot-empty-folder">{dragId ? '여기로 이동' : '채팅이 없어요.'}</p>
         )}
       </div>
     );
@@ -377,7 +372,7 @@ export function BotNavigation(props: Props) {
     const id = folder?.id ?? null,
       title = folder?.title ?? '미분류';
     const key = `${botId}:${id ?? ''}`;
-    const expanded = query.length > 0 || !collapsed[key];
+    const expanded = !collapsed[key];
     const count = scoped
       .filter((chat) => (chat.folderId ?? null) === id)
       .reduce((sum, chat) => sum + (activity(chat)?.count ?? 0), 0);
@@ -442,19 +437,16 @@ export function BotNavigation(props: Props) {
     );
   }
   const menuChat = scoped.find((chat) => chat.id === menuId);
+  const movingChat = scoped.find((chat) => chat.id === movingId);
   const menuSiblings = scoped.filter(
-    (chat) => (chat.folderId ?? null) === (menuChat?.folderId ?? null)
+    (chat) => (chat.folderId ?? null) === (movingChat?.folderId ?? null)
   );
-  const menuIndex = menuSiblings.findIndex((chat) => chat.id === menuId);
+  const menuIndex = menuSiblings.findIndex((chat) => chat.id === movingId);
   const settingsFolder = folders.find((folder) => folder.id === settingsId);
-  const navigation: [LibraryDestination, string, typeof LibraryIcon][] = [
-    ['bot', '서재', LibraryIcon],
-    ['prompts', '프롬프트', PromptIcon],
-  ];
   return (
     <div
-      className="bot-navigation"
-      data-testid="bot-navigation"
+      className="bot-branch"
+      data-bot-id={botId}
       onKeyDown={(event) => {
         if (event.key === 'Escape') clearDrag();
       }}
@@ -466,157 +458,118 @@ export function BotNavigation(props: Props) {
         }
       }}
     >
-      <div className="brand">Uimori</div>
-      {bot && (
+      <div className="bot-branch-heading">
         <button
-          className="new-story-button secondary"
-          disabled={busy}
-          onClick={() => {
-            void start();
-          }}
+          className="bot-branch-toggle"
+          aria-label={`${bot?.title ?? '봇'} 채팅 목록`}
+          aria-expanded={expanded}
+          onClick={onToggle}
+          title={bot?.title}
         >
-          <Plus size={17} />새 채팅
+          <ChevronRight size={12} className={expanded ? 'expanded' : ''} />
+          {bot && <ContentAvatar content={bot} className="bot-choice-avatar" />}
+          <strong>{bot?.title ?? '봇'}</strong>
         </button>
-      )}
-      <label className="story-search">
-        <Search size={16} />
-        <input
-          aria-label="채팅 검색"
-          placeholder={bot ? '이 봇의 채팅 검색' : '채팅 검색'}
-          value={query}
-          onChange={(event) => setQuery(event.target.value)}
-        />
-      </label>
-      <div
-        className="bot-switch"
-        ref={switchRoot}
-        onBlur={(event) => {
-          if (!event.currentTarget.contains(event.relatedTarget)) setSwitching(false);
-        }}
-        onKeyDown={(event) => {
-          if (event.key === 'Escape' && switching) {
-            event.preventDefault();
-            event.stopPropagation();
-            setSwitching(false);
-            switchButton.current?.focus();
-          }
-        }}
-      >
-        <button
-          ref={switchButton}
-          type="button"
-          className="bot-switch-button"
-          aria-label="봇 목록"
-          title={bot ? `${bot.title} · 다른 봇으로 전환` : '봇 선택'}
-          aria-expanded={switching}
-          aria-controls={switchId}
-          onClick={() => {
-            setBotQuery('');
-            setSwitching((value) => !value);
-          }}
-        >
-          {bot ? (
-            <ContentAvatar content={bot} className="bot-choice-avatar" />
+        <div className="bot-branch-actions">
+          <IconButton
+            label={`${bot?.title ?? '봇'} 채팅 검색`}
+            icon={Search}
+            onClick={() => {
+              setQuery('');
+              setSearching(true);
+            }}
+          />
+          <ActionMenu label={`${bot?.title ?? '봇'} 관리`} viewport>
+            <button
+              type="button"
+              disabled={busy}
+              onClick={(event) => {
+                const menu = event.currentTarget.closest('details');
+                if (menu) {
+                  menu.open = false;
+                  menu.querySelector('summary')?.focus();
+                }
+                setCreating(true);
+              }}
+            >
+              <FolderPlus size={16} />새 폴더
+            </button>
+            <button
+              type="button"
+              onClick={(event) => {
+                const menu = event.currentTarget.closest('details');
+                if (menu) menu.open = false;
+                onLibrary('bot');
+              }}
+            >
+              <LibraryIcon size={16} />
+              서재에서 관리
+            </button>
+            {managementActions}
+          </ActionMenu>
+          <IconButton
+            label={`${bot?.title ?? '봇'} 새 채팅`}
+            icon={Plus}
+            disabled={busy}
+            onClick={() => void start()}
+          />
+        </div>
+      </div>
+      {expanded && (
+        <div className="bot-branch-chats">
+          {loading ? (
+            <p role="status">폴더를 불러오는 중이에요…</p>
           ) : (
-            <span className="bot-choice-avatar" aria-hidden="true">
-              ?
-            </span>
+            <nav aria-label={`${bot?.title ?? '봇'}의 채팅 목록`}>
+              {folderSection(null)}
+              {folders.map((folder) => folderSection(folder))}
+            </nav>
           )}
-          <strong>{bot?.title ?? '봇 선택'}</strong>
-          <ChevronDown size={16} aria-hidden="true" />
-        </button>
-        {switching && (
-          <div id={switchId} className="bot-switch-panel" role="group" aria-label="봇 목록">
-            <label className="story-search">
-              <Search size={16} />
-              <input
-                aria-label="봇 검색"
-                placeholder="봇 검색"
-                value={botQuery}
-                onChange={(event) => setBotQuery(event.target.value)}
-              />
-            </label>
-            {!library ? (
-              <p role="status">봇을 불러오는 중이에요…</p>
-            ) : (
-              <nav aria-label="봇별 채팅">
-                {recentBots
-                  .filter((content) =>
-                    content.title.toLocaleLowerCase().includes(botQuery.toLocaleLowerCase())
-                  )
-                  .map((content) => (
-                    <button
-                      className="bot-choice"
-                      key={content.id}
-                      aria-current={content.id === botId ? 'true' : undefined}
-                      onClick={() => {
-                        chooseBot(content.id);
-                        setSwitching(false);
-                      }}
-                    >
-                      <ContentAvatar content={content} className="bot-choice-avatar" />
-                      <span>
-                        <strong>{content.title}</strong>
-                      </span>
-                    </button>
-                  ))}
-                {!bots.length && (
-                  <div className="bot-navigation-empty">
-                    <p>첫 봇을 준비해 보세요.</p>
-                  </div>
-                )}
-              </nav>
-            )}
-            <div className="bot-switch-tools">
-              {bot && (
-                <button
-                  type="button"
-                  className="secondary"
-                  disabled={busy}
-                  onClick={() => {
-                    setSwitching(false);
-                    setCreating(true);
-                  }}
-                >
-                  <FolderPlus size={16} aria-hidden="true" />새 폴더
-                </button>
-              )}
+        </div>
+      )}
+      {error && (
+        <p className="error" role="alert">
+          {error}
+        </p>
+      )}
+      <Dialog
+        open={searching}
+        title="이 봇의 채팅 검색"
+        onClose={() => setSearching(false)}
+        className="bot-organize-dialog"
+      >
+        <label className="story-search">
+          <Search size={16} />
+          <input
+            aria-label="채팅 검색"
+            placeholder="채팅 이름 검색"
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+          />
+        </label>
+        <nav className="bot-search-results" aria-label="채팅 검색 결과">
+          {scoped
+            .filter((chat) => chat.title.toLocaleLowerCase().includes(query.toLocaleLowerCase()))
+            .map((chat) => (
               <button
-                type="button"
-                className="secondary"
+                key={chat.id}
+                data-chat-id={chat.id}
                 onClick={() => {
-                  setSwitching(false);
-                  onLibrary('bot');
+                  setSearching(false);
+                  onSelect(chat.id);
                 }}
               >
-                <LibraryIcon size={16} aria-hidden="true" />
-                서재에서 관리
+                <strong>{chat.title}</strong>
+                <small>
+                  {folders.find((folder) => folder.id === chat.folderId)?.title ?? '미분류'}
+                </small>
               </button>
-            </div>
-          </div>
-        )}
-      </div>
-      <div className="bot-navigation-scroll">
-        {!bot ? (
-          <p className="bot-navigation-empty">
-            {library && !bots.length
-              ? '서재에서 첫 봇을 만들어 주세요.'
-              : '봇을 선택하면 채팅 목록이 여기에 보여요.'}
-          </p>
-        ) : loading ? (
-          <p role="status">폴더를 불러오는 중이에요…</p>
-        ) : (
-          <nav aria-label="봇의 채팅 목록">
-            {folderSection(null)}
-            {folders.map((folder) => folderSection(folder))}
-          </nav>
-        )}
-        {error && (
-          <p className="error" role="alert">
-            {error}
-          </p>
-        )}
-      </div>
+            ))}
+          {!scoped.some((chat) =>
+            chat.title.toLocaleLowerCase().includes(query.toLocaleLowerCase())
+          ) && <p>검색 결과가 없어요.</p>}
+        </nav>
+      </Dialog>
       <Dialog
         open={creating}
         title="폴더 만들기"
@@ -686,7 +639,7 @@ export function BotNavigation(props: Props) {
       </Dialog>
       <Dialog
         open={!!menuChat}
-        title="채팅 메뉴"
+        title="채팅 이름 변경"
         onClose={() => setMenuId(null)}
         className="bot-organize-dialog"
       >
@@ -697,14 +650,26 @@ export function BotNavigation(props: Props) {
               chat={menuChat}
               disabled={busy}
               onChatsChanged={onChatsChanged}
+              onClose={() => setMenuId(null)}
             />
+          </div>
+        )}
+      </Dialog>
+      <Dialog
+        open={!!movingChat}
+        title="채팅 이동"
+        onClose={() => setMovingId(null)}
+        className="bot-organize-dialog"
+      >
+        {movingChat && (
+          <div className="bot-chat-menu">
             <label>
               폴더로 이동
               <select
-                aria-label={`${menuChat.title} 폴더 이동`}
-                value={menuChat.folderId ?? ''}
+                aria-label={`${movingChat.title} 폴더 이동`}
+                value={movingChat.folderId ?? ''}
                 disabled={busy || loading}
-                onChange={(event) => moveChat(menuChat, event.target.value || null)}
+                onChange={(event) => moveChat(movingChat, event.target.value || null)}
               >
                 <option value="">미분류</option>
                 {folders.map((folder) => (
@@ -714,83 +679,31 @@ export function BotNavigation(props: Props) {
                 ))}
               </select>
             </label>
-            <button
-              type="button"
-              className="secondary"
-              disabled={busy}
-              onClick={() => {
-                setMenuId(null);
-                setCreating(true);
-              }}
-            >
-              <FolderPlus size={16} aria-hidden="true" />
-              <span>새 폴더 만들기</span>
-            </button>
             <div className="bot-chat-menu-actions">
               <IconButton
                 label="위로 이동"
                 icon={ArrowUp}
-                disabled={busy || !!query || menuIndex <= 0}
+                disabled={busy || menuIndex <= 0}
                 onClick={() =>
-                  moveChat(menuChat, menuChat.folderId ?? null, menuSiblings[menuIndex - 1].id)
+                  moveChat(movingChat, movingChat.folderId ?? null, menuSiblings[menuIndex - 1].id)
                 }
               />
               <IconButton
                 label="아래로 이동"
                 icon={ArrowDown}
-                disabled={busy || !!query || menuIndex >= menuSiblings.length - 1}
+                disabled={busy || menuIndex >= menuSiblings.length - 1}
                 onClick={() =>
                   moveChat(
-                    menuChat,
-                    menuChat.folderId ?? null,
+                    movingChat,
+                    movingChat.folderId ?? null,
                     menuSiblings[menuIndex + 2]?.id ?? null
                   )
                 }
-              />
-              <DeleteButton
-                path={`/chats/${encodeURIComponent(menuChat.id)}`}
-                preparePath={`/chats/${encodeURIComponent(menuChat.id)}/deletion-impact`}
-                title={menuChat.title}
-                label="채팅 삭제"
-                iconOnly
-                disabled={busy}
-                onError={onError}
-                onDeleted={onChatsChanged}
               />
             </div>
           </div>
         )}
       </Dialog>
-      <div className="nav-bottom">
-        {tasks > 0 && (
-          <button className="nav-button nav-progress" aria-label="작업 현황" onClick={onTasks}>
-            <LoaderCircle size={17} aria-hidden="true" />
-            진행 중 {tasks}
-          </button>
-        )}
-        <nav className="sidebar-app-actions" aria-label="앱 탐색">
-          <button type="button" className="nav-button" onClick={onSettings}>
-            <SettingsIcon size={19} aria-hidden="true" />
-            설정
-          </button>
-          <ActionMenu label="앱 메뉴" placement="top" className="sidebar-app-menu">
-            {navigation.map(([tab, label, Icon]) => (
-              <button
-                type="button"
-                key={tab}
-                onClick={(event) => {
-                  const menu = event.currentTarget.closest('details');
-                  if (menu) menu.open = false;
-                  onLibrary(tab);
-                }}
-              >
-                <Icon size={17} aria-hidden="true" />
-                {label}
-              </button>
-            ))}
-          </ActionMenu>
-        </nav>
-      </div>
     </div>
   );
 }
@@ -799,10 +712,12 @@ function ChatTitleEditor({
   chat,
   disabled,
   onChatsChanged,
+  onClose,
 }: {
   chat: Chat;
   disabled: boolean;
   onChatsChanged: () => Promise<void>;
+  onClose: () => void;
 }) {
   const [draft, setDraft] = useState(chat.title);
   const [baseTitle, setBaseTitle] = useState(chat.title);
@@ -838,6 +753,7 @@ function ChatTitleEditor({
       setBaseTitle(updated.title);
       setBaseTitleRevision(updated.titleRevision ?? 0);
       await onChatsChanged();
+      onClose();
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : '채팅 제목을 저장하지 못했어요.');
     } finally {
@@ -864,26 +780,25 @@ function ChatTitleEditor({
           onChange={(event) => setDraft(event.target.value)}
         />
       </label>
-      {dirty && (
-        <div className="form-actions">
-          <button disabled={disabled || saving || !draft.trim()}>
-            {saving ? '저장 중…' : '제목 저장'}
-          </button>
-          <button
-            type="button"
-            className="secondary"
-            disabled={saving}
-            onClick={() => {
-              setDraft(chat.title);
-              setBaseTitle(chat.title);
-              setBaseTitleRevision(chat.titleRevision ?? 0);
-              setError('');
-            }}
-          >
-            취소
-          </button>
-        </div>
-      )}
+      <div className="form-actions">
+        <button disabled={disabled || saving || !dirty || !draft.trim()}>
+          {saving ? '저장 중…' : '제목 저장'}
+        </button>
+        <button
+          type="button"
+          className="secondary"
+          disabled={saving}
+          onClick={() => {
+            setDraft(chat.title);
+            setBaseTitle(chat.title);
+            setBaseTitleRevision(chat.titleRevision ?? 0);
+            setError('');
+            onClose();
+          }}
+        >
+          취소
+        </button>
+      </div>
       {dirty && (chat.titleRevision ?? 0) !== baseTitleRevision && (
         <small>
           제목이 다른 곳에서 변경됐어요. 입력한 내용은 유지돼요. 취소하면 최신 제목을 불러와요.

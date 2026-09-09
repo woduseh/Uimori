@@ -1,0 +1,16 @@
+.turn-failure.chat-retry-failure {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  padding: 8px 0;
+  gap: 10px;
+}
+.turn-failure.chat-retry-failure > p {
+  display: block;
+  color: var(--muted);
+  overflow: visible;
+  font-size: 14px;
+}
+.chat-retry-failure .turn-failure-actions {
+  align-items: center;
+}

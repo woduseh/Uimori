@@ -42,6 +42,7 @@
     "verify:library": "node scripts/verify-library.mjs",
     "verify:redesign": "node scripts/verify-redesign.mjs",
     "verify:browser-smoke": "node scripts/verify-browser-smoke.mjs",
+    "verify:chat-unification": "node scripts/verify-chat-unification.mjs",
     "verify:visual": "node scripts/verify-visual.mjs",
     "verify:selfhost": "node scripts/verify-self-host.mjs"
   },

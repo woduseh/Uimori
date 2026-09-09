@@ -321,10 +321,18 @@ export class HelperRuntime {
     requestKey: string,
     request: string,
     editor?: HelperEditor,
-    selection?: HelperSelection
+    selection?: HelperSelection,
+    retryOf?: string
   ) {
-    const prior = this.workspace.existing(conversationId, requestKey, request);
+    const prior = this.workspace.existing(conversationId, requestKey, request, retryOf);
     if (prior) return prior;
+    if (retryOf) {
+      const previous = this.workspace.task(retryOf);
+      if (previous.conversationId !== conversationId)
+        throw new HttpError(403, '다른 대화의 요청은 재시도할 수 없어요.');
+      editor ??= previous.snapshot.editor;
+      selection ??= previous.snapshot.selection;
+    }
     const conversation = this.workspace.conversation(conversationId),
       workspace = promptWorkspace(this.store);
     if (!workspace.helperModel) throw new HttpError(409, 'MODEL_REQUIRED:helper');
@@ -352,6 +360,7 @@ export class HelperRuntime {
     }
     const history = helperHistory(this.store, conversationId);
     const task = this.workspace.enqueue(conversationId, requestKey, request, {
+      ...(retryOf ? { retryOf } : {}),
       scope,
       model,
       history,

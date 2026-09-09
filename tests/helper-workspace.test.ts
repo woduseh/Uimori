@@ -770,3 +770,58 @@ test('completed tool exchanges compact into durable helper checkpoints and disca
     n: 1,
   });
 });
+
+test('helper retries retain attempts but project the latest response at the original request position', async () => {
+  const f = fixture();
+  mockSend((_request, _options, index) =>
+    index < 2
+      ? { ...structuredClone(success), status: 'error', text: '', error: { code: 'HTTP_429' } }
+      : structuredClone(success)
+  );
+  const first = f.runtime.enqueue(f.conversation.id, 'attempt-1', '원래 요청');
+  await Promise.all(f.work);
+  const second = f.runtime.enqueue(
+    f.conversation.id,
+    'attempt-2',
+    '수정한 요청',
+    undefined,
+    undefined,
+    first.id
+  );
+  await Promise.all(f.work);
+  const third = f.runtime.enqueue(
+    f.conversation.id,
+    'attempt-3',
+    '수정한 요청',
+    undefined,
+    undefined,
+    second.id
+  );
+  await Promise.all(f.work);
+  expect(f.workspace.task(third.id).status).toBe('completed');
+  expect(
+    f.runtime.enqueue(
+      f.conversation.id,
+      'attempt-3',
+      '수정한 요청',
+      undefined,
+      undefined,
+      second.id
+    ).id
+  ).toBe(third.id);
+  expect(() =>
+    f.runtime.enqueue(f.conversation.id, 'stale', '원래 요청', undefined, undefined, first.id)
+  ).toThrow('이미 다시 시도');
+  expect(() =>
+    f.runtime.enqueue(f.conversation.id, 'attempt-3', '수정한 요청', undefined, undefined, first.id)
+  ).toThrow('같은 요청 키');
+  const reloaded = new HelperWorkspace(f.store);
+  const messages = reloaded.messages(f.conversation.id);
+  const visible = messages.filter((message) => message.latestTaskId === message.taskId);
+  expect(visible.map((message) => message.role)).toEqual(['user', 'assistant']);
+  expect(visible[0].text).toBe('수정한 요청');
+  expect(visible[0].requestGroupId).toBe(first.id);
+  expect(visible[0].requestOrder).toBe(messages[0].requestOrder);
+  expect(reloaded.tasks(f.conversation.id)).toHaveLength(3);
+  expect(reloaded.task(first.id).status).toBe('failed');
+});
