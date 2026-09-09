@@ -194,7 +194,10 @@ async function fixture(kind: 'lore-pressure' | 'history-pressure') {
     connectionId: connection.id,
     modelId: 'synthetic-context-lore',
     maxOutputTokens: 8192,
-    inputTokenLimit: 8192,
+    // Every body carries per-run UUIDs and hashes, and the o200k estimate of the same
+    // body shape moves about 70 tokens between runs. Both fixtures must stay far from the
+    // 85% trigger and 75% target, or the estimate decides compaction by chance.
+    inputTokenLimit: 10_000,
     temperature: null,
   }) as ModelPreset;
   const {
@@ -285,7 +288,11 @@ describe('automatic summary and retained lore at the same input boundary', () =>
     const oldestFirst = [f.lore[1].id, f.lore[2].id, f.lore[0].id],
       removed = new Set(oldestFirst.slice(0, candidates.length - retained.length));
     expect(retained).toEqual(candidates.filter((entry) => !removed.has(entry.id)));
-    expect(run.snapshot.contextPlan!.summaryCalls).toBe(0);
+    const plan = run.snapshot.contextPlan!;
+    // Reference eviction alone must carry this case, so the retained input keeps a margin
+    // below the automatic-summary trigger instead of landing on it.
+    expect(plan.estimatedInputTokens!).toBeLessThan(plan.budget.inputTokenLimit * 0.8);
+    expect(plan.summaryCalls).toBe(0);
     expect(f.bodies.map((body) => body.role)).toEqual(['main']);
     for (const entry of candidates.filter((entry) => removed.has(entry.id)))
       expect(JSON.stringify(f.bodies[0])).not.toContain(entry.text);
