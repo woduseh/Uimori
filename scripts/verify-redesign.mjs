@@ -4,6 +4,10 @@ await runBrowserVerification({
   name: 'redesign',
   scope: 'Bot workspace and package redesign plus existing synthetic browser regression',
   providerFixture: true,
+  // Every browser spec runs in one Playwright command, so the shared 600s default cannot
+  // finish this suite: 2026-09-10 measurements on one machine were 9.2 and 11.8 minutes.
+  // This bound still stops a hang; it is not a runtime target.
+  timeout: 1_800_000,
   requiredCases: [
     'HELPUI01',
     'HELPUI02',
