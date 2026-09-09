@@ -139,14 +139,14 @@ describe('one-call provider connection diagnostics', () => {
       expect(row.sent_at).toBeTypeOf('string');
       expect(JSON.parse(row.body).status).toBe('running');
       const body = JSON.parse(String(options?.body));
+      // The preset's own options travel so the provider's answer is a verdict on them; only size is capped.
       expect(body).toMatchObject({
         stable: { tools: [] },
-        generation: { maxOutputTokens: 256, temperature: null },
+        generation: { maxOutputTokens: 256, temperature: 1, thinkingLevel: 'HIGH' },
         input: { task: 'API 연결 테스트 중이니 OK만 답해주세요.', controls: {} },
       });
       for (const field of ['history', 'source', 'catalog', 'results'])
         expect(body.input).not.toHaveProperty(field);
-      expect(body.generation).not.toHaveProperty('thinkingLevel');
       return new Promise<Response>((resolve) => {
         release = resolve;
       });
@@ -556,7 +556,7 @@ describe('one-call provider connection diagnostics', () => {
     }
   });
 
-  test('all registered models use valid minimum test effort, no tools, cache disabled, and the selected service tier', () => {
+  test('the test request carries the preset options with a 256-token cap, no tools and cache off', () => {
     for (const protocol of [
       'vertex-gemini-v1',
       'openai-responses-v1',
@@ -588,7 +588,12 @@ describe('one-call provider connection diagnostics', () => {
           maxOutputTokens: 10000,
           temperature: null,
           serviceTier: cap.serviceTiers?.at(-1),
-          capabilityRevision: cap.revision,
+          ...(cap.reasoningEfforts ? { reasoningEffort: cap.reasoningEfforts.at(-1) } : {}),
+          ...(cap.outputEfforts ? { outputEffort: 'max' as const } : {}),
+          ...(cap.thinkingLevels ? { thinkingLevel: cap.thinkingLevels.at(-1) } : {}),
+          ...(cap.cacheModes
+            ? { cacheMode: 'automatic' as const, cacheTtl: cap.cacheTtls![0] }
+            : {}),
         };
         const request = connectionTestRequest(model, connection);
         expect(request.generation).toMatchObject({
@@ -598,14 +603,38 @@ describe('one-call provider connection diagnostics', () => {
         });
         expect(request.stable.tools).toEqual([]);
         if (cap.reasoningEfforts)
-          expect(request.generation?.reasoningEffort).toBe(
-            cap.reasoningEfforts.includes('none') ? 'none' : 'low'
-          );
-        if (cap.thinkingLevels)
-          expect(request.generation?.thinkingLevel).toBe(cap.thinkingLevels[0]);
-        if (cap.outputEfforts) expect(request.generation?.outputEffort).toBe('low');
-        if (cap.cacheModes) expect(request.generation?.cacheMode).toBe('disabled');
+          expect(request.generation?.reasoningEffort).toBe(model.reasoningEffort);
+        if (cap.thinkingLevels) expect(request.generation?.thinkingLevel).toBe(model.thinkingLevel);
+        if (cap.outputEfforts) expect(request.generation?.outputEffort).toBe('max');
+        if (cap.cacheModes) {
+          expect(request.generation?.cacheMode).toBe('disabled');
+          expect(request.generation?.cacheTtl).toBeUndefined();
+        }
       }
     }
+    // An unlisted model on an official connection is testable; the provider gives the verdict.
+    const unlisted = connectionTestRequest(
+      {
+        id: 'm',
+        revision: 1,
+        title: 'm',
+        connectionId: 'c',
+        modelId: 'gpt-future',
+        maxOutputTokens: 4096,
+        temperature: null,
+        reasoningEffort: 'xhigh',
+      },
+      {
+        id: 'c',
+        revision: 1,
+        title: 'c',
+        protocol: 'openai-responses-v1',
+        endpoint: 'https://api.openai.com/v1',
+        enabled: true,
+        catalog: [],
+        catalogError: null,
+      }
+    );
+    expect(unlisted.generation).toMatchObject({ maxOutputTokens: 256, reasoningEffort: 'xhigh' });
   });
 });

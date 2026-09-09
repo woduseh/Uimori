@@ -1,6 +1,5 @@
 import { afterEach, describe, expect, test, vi } from 'vitest';
 import { defaultProfile, type ProviderProtocol } from '../core/product.js';
-import { modelCapability } from '../core/model-capabilities.js';
 import type { ContentPackage } from '../core/content-package.js';
 import type { PackageBehavior } from '../core/package-behavior.js';
 import { behaviorInputJsonSchema, listBehaviorTools } from '../core/package-behavior-tools.js';
@@ -278,7 +277,6 @@ describe('Author-selected behavior tool surface', () => {
     if (protocol === 'vertex-gemini-v1') {
       const target = work.profile!.models.main!;
       target.modelId = 'gemini-3.8-flash';
-      target.capabilityRevision = modelCapability(protocol, target.modelId)!.revision;
     }
     const selected = listBehaviorTools(work)[0],
       built = buildMainProviderRequest(work);

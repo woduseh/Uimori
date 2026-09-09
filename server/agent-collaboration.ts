@@ -39,7 +39,7 @@ export function buildAgentProviderRequest(
       contract: `${CONTRACT}\nKeep the final advice within ${agent.maxOutputChars} characters.\n\nShared instructions:\n${collaboration.sharedInstructions}\n\nAdvisor instructions:\n${agent.instructions}`,
       tools: structuredClone(tools),
     },
-    generation: generationFromModel(target, target.connection.protocol),
+    generation: generationFromModel(target),
     contextBudget: contextBudgetForModel(target),
     input: {
       task: question,

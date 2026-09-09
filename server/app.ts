@@ -23,7 +23,6 @@ import { executeRunBehaviorTool } from './package-behavior-run.js';
 import { runAuxiliaryJob } from './product-auxiliary.js';
 import { auxiliaryBridge } from './auxiliary-bridge.js';
 import { productRoutes } from './product-routes.js';
-import { registrationRoutes } from './provider-registration-routes.js';
 import { providerConnectionTestRoutes } from './provider-connection-test.js';
 import { storyRoutes } from './story-routes.js';
 import { packageImageRoutes } from './package-images.js';
@@ -590,15 +589,6 @@ export async function createApp(options: AppOptions): Promise<App> {
     },
   });
   readerRoutes(app, store);
-  registrationRoutes(app, store, {
-    approvedOrigins,
-    resolveCredential,
-    executeCodex,
-    signal: stopping.signal,
-    vertexRequestTier: options.vertexRequestTier,
-    track,
-    authenticated: session.authenticated,
-  });
   providerConnectionTestRoutes(app, store, {
     approvedOrigins,
     resolveCredential,

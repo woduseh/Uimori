@@ -330,7 +330,7 @@ export function buildMainProviderRequest(
         ...(options.evaluation?.definitions.map((tool) => structuredClone(tool)) ?? []),
       ],
     },
-    generation: generationFromModel(target, target.connection.protocol),
+    generation: generationFromModel(target),
     contextBudget: contextBudgetForModel(target),
     input: requestInput(fixed, input),
     ...(options.evaluation?.bootstrap.length || options.agentBootstrap?.length

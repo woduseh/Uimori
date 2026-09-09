@@ -2,7 +2,6 @@ import { describe, expect, test } from 'vitest';
 import { createHash } from 'node:crypto';
 import { createDefaultPromptProgram } from '../core/prompt-defaults.js';
 import { defaultProfile, type ProviderProtocol } from '../core/product.js';
-import { modelCapability } from '../core/model-capabilities.js';
 import { DEFAULT_MAIN_PROMPT, DEFAULT_TRANSLATION_PROMPT } from '../core/prompts.js';
 import { compileTranslationPrompt, translationInput } from '../core/auxiliary.js';
 import { sourceTimeContext } from '../server/product-auxiliary.js';
@@ -36,7 +35,6 @@ function snapshot(protocol: ProviderProtocol): RunSnapshot {
     connectionId: 'connection',
     connectionRevision: 1,
     modelId,
-    capabilityRevision: modelCapability(protocol, modelId)?.revision,
     maxOutputTokens: 1024,
     temperature: null,
     connection: {

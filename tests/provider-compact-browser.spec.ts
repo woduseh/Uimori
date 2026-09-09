@@ -40,9 +40,7 @@ async function projectLibrary(
   page.on('request', (request) => {
     if (
       request.method() === 'POST' &&
-      /\/(?:catalog|test|runs|translation|retranslate|registrations)$/.test(
-        new URL(request.url()).pathname
-      )
+      /\/(?:catalog|test|runs|translation|retranslate)$/.test(new URL(request.url()).pathname)
     )
       calls.push(request.url());
   });
@@ -89,38 +87,6 @@ test('PCUI01 empty connections and empty models each expose one relevant startin
   await expect(
     editor.getByRole('form', { name: '모델 편집 양식' }).getByLabel('모델 연결')
   ).toHaveValue(connection.id);
-  expect(observed.calls).toEqual([]);
-  expect(observed.errors).toEqual([]);
-});
-
-test('PCUI03 registration request drafts require explicit discard when closing settings', async ({
-  page,
-}) => {
-  await page.setViewportSize({ width: 390, height: 844 });
-  const observed = await projectLibrary(page, { connections: [connection], models: [model] });
-  await openProviders(page);
-  const assistant = page.getByTestId('provider-registration-assistant');
-  await assistant.locator('summary').click();
-  await assistant.getByLabel('등록을 도울 모델', { exact: true }).selectOption(model.id);
-  await assistant
-    .getByLabel('등록 요청', { exact: true })
-    .fill('아직 요청하지 않은 합성 모델 등록 초안');
-  await page.getByRole('button', { name: '설정 닫기', exact: true }).click();
-  const confirmation = page.getByRole('alertdialog', { name: '미저장 설정 확인', exact: true });
-  await expect(confirmation).toBeVisible();
-  await confirmation.getByRole('button', { name: '계속 편집', exact: true }).click();
-  await expect(assistant.getByLabel('등록 요청', { exact: true })).toHaveValue(
-    '아직 요청하지 않은 합성 모델 등록 초안'
-  );
-  await expect(assistant.getByLabel('등록을 도울 모델', { exact: true })).toHaveValue(model.id);
-  await page.getByRole('button', { name: '설정 닫기', exact: true }).click();
-  await confirmation.getByRole('button', { name: '초안 버리고 닫기', exact: true }).click();
-  await expect(page.getByRole('dialog', { name: '설정', exact: true })).toHaveCount(0);
-  await navigationAction(page, '설정');
-  await selectSettingsSection(page, '연결과 모델');
-  await assistant.locator('summary').click();
-  await expect(assistant.getByLabel('등록 요청', { exact: true })).toHaveValue('');
-  await expect(assistant.getByLabel('등록을 도울 모델', { exact: true })).toHaveValue('');
   expect(observed.calls).toEqual([]);
   expect(observed.errors).toEqual([]);
 });

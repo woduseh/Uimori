@@ -651,54 +651,9 @@
 | preserves the supported global Vertex contract and rejects unimplemented regions | KEEP | 위 계약 그룹의 고유 경계 유지 |
 | leaves local Codex authorization with the dedicated connection contract | KEEP | 위 계약 그룹의 고유 경계 유지 |
 
-### provider-registration-agent.test.ts
+### provider-registration-agent.test.ts · provider-registration-routes.test.ts · provider-registration-store.test.ts
 
-정적 선언 8개. 등록 전용 1회 모델 호출·도구 제한·journal·응답 검증·취소·권한 철회.
-
-| case 제목 | 결정 | 흡수 대상·이유 |
-|---|---|---|
-| one proposal call records attempt before HTTP and sends only registration metadata | KEEP | 위 계약 그룹의 고유 경계 유지 |
-| native Chat completed JSON preserves selected generation options and unknown usage | KEEP | 위 계약 그룹의 고유 경계 유지 |
-| registration exposes only its proposal tool even on evaluation-enabled presets | KEEP | 위 계약 그룹의 고유 경계 유지 |
-| unsupported/multiple tools, malformed/oversized output, partial completion and enabled drafts never normalize or retry | KEEP | 위 계약 그룹의 고유 경계 유지 |
-| initial disabled/preloaded/invalid requests and failed attempt persistence cannot send HTTP | KEEP | 위 계약 그룹의 고유 경계 유지 |
-| authority is checked again after journal admission and after the model response | KEEP | 위 계약 그룹의 고유 경계 유지 |
-| real HTTP timeout and user cancellation cannot produce a proposal or a replay | KEEP | 위 계약 그룹의 고유 경계 유지 |
-| normalization and journal-finalization failures preserve one attempt but cannot return ready | KEEP | 위 계약 그룹의 고유 경계 유지 |
-
-### provider-registration-routes.test.ts
-
-정적 선언 8개. 등록 HTTP ready/apply의 명시 적용·key 중복·세션·동시 catalog 응답·restart.
-
-| case 제목 | 결정 | 흡수 대상·이유 |
-|---|---|---|
-| registration routes produce a reviewable plan then explicitly apply once without changing any role | KEEP | 위 계약 그룹의 고유 경계 유지 |
-| same registration key reuses running and ready results; different input conflicts without another call | KEEP | 위 계약 그룹의 고유 경계 유지 |
-| unknown target and unsupported provider proposal cannot write connection/model settings | KEEP | 위 계약 그룹의 고유 경계 유지 |
-| readiness reports only environment presence and rejects foreign Host/Origin or missing session | KEEP | 위 계약 그룹의 고유 경계 유지 |
-| logout and connection revocation during held response prevent adopting an otherwise valid proposal | KEEP | 위 계약 그룹의 고유 경계 유지 |
-| cancel endpoint stops a pending registration without settings writes or automatic replay | KEEP | 위 계약 그룹의 고유 경계 유지 |
-| graceful restart preserves a stopped uncertain provider attempt and GET/duplicate POST never replays it | KEEP | 위 계약 그룹의 고유 경계 유지 |
-| real catalog failure keeps prior list and a concurrent connection edit rejects the stale catalog response | KEEP | 위 계약 그룹의 고유 경계 유지 |
-
-### provider-registration-store.test.ts
-
-정적 선언 12개. 등록 receipt/hash/CAS·apply rollback·역사 snapshot·archive graph와 과금/시도 불확실성.
-
-| case 제목 | 결정 | 흡수 대상·이유 |
-|---|---|---|
-| prepare and ready are proposal only; hash/revision CAS apply is atomic and idempotent | KEEP | 위 계약 그룹의 고유 경계 유지 |
-| apply rolls back new connection/model inserts when the current registration receipt update fails | KEEP | 위 계약 그룹의 고유 경계 유지 |
-| existing connection edits make apply stale, while archived historical plans remain valid | KEEP | 위 계약 그룹의 고유 경계 유지 |
-| known model proposals validate against the reviewed connection without storing capability metadata in the proposal | KEEP | 위 계약 그룹의 고유 경계 유지 |
-| untrusted protocol/options/credential values/overrides cannot become proposals or settings | KEEP | 위 계약 그룹의 고유 경계 유지 |
-| same key returns the same durable run without another attempt; crash reopening never replays | KEEP | 위 계약 그룹의 고유 경계 유지 |
-| JSON and SQLite backup roundtrip retain null accounting without raw response, key or continuation | KEEP | 위 계약 그룹의 고유 경계 유지 |
-| archive schemas and graph reject poisoned plans, applied refs, fractional tokens and dropped attempts | KEEP | 위 계약 그룹의 고유 경계 유지 |
-| registration retains its per-run attempt limit and durable usage across independent runs and archive restore | KEEP | 위 계약 그룹의 고유 경계 유지 |
-| edits replace current settings while registration replay and applied snapshots remain frozen | KEEP | 위 계약 그룹의 고유 경계 유지 |
-| registration prepare/apply does not assign roles or modify a source and frozen run | KEEP | 위 계약 그룹의 고유 경계 유지 |
-| fixture root endpoints compare the normalized transport URL during archive validation | KEEP | 위 계약 그룹의 고유 경계 유지 |
+등록 보조 기능 제거(2026-09-09)와 함께 세 파일을 삭제했어요. 대신 `provider-rejection.test.ts`가 4xx 거절의 필드 매핑을, `provider-http.test.ts`·`vertex-transport.test.ts`가 표에 없는 모델의 전송과 거절 필드 추출을 확인해요.
 
 ### provider-selection.test.ts
 

@@ -2,20 +2,15 @@ import { runBrowserVerification } from './browser-verification.mjs';
 
 await runBrowserVerification({
   name: 'provider-management',
-  scope: 'Provider management and registration assistant synthetic UI',
-  registrationFixture: true,
-  files: [
-    'tests/provider-management-browser.spec.ts',
-    'tests/provider-registration-browser.spec.ts',
-  ],
+  scope: 'Provider management synthetic UI',
+  providerFixture: true,
+  files: ['tests/provider-management-browser.spec.ts'],
   requiredCases: [
     'PMUI16',
     'PMUI01',
     'PMUI02',
     'PMUI03',
     'PMUI04',
-    'PMUI05',
-    'PMUI06',
     'PMUI10',
     'PMUI11',
     'PMUI12',
@@ -31,8 +26,6 @@ await runBrowserVerification({
     'endpoint-guidance-390.png',
     'endpoint-guidance-1440.png',
     'provider-management-current-readiness.png',
-    'provider-registration-mobile-review.png',
-    'provider-registration-applied.png',
     'codex-subscription-settings-mobile.png',
     'provider-parameters-0-mobile.png',
     'provider-parameters-1-mobile.png',

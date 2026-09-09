@@ -185,25 +185,7 @@ test('app routes every agent role through Codex and persists RPC attempts, propo
       });
       const source = request.input.source as any;
       let output: unknown;
-      if (request.stable.tools.some((tool) => tool.name === 'registration.propose'))
-        output = {
-          connection: {
-            kind: 'new',
-            draft: {
-              title: 'Proposed Codex',
-              protocol: 'codex-app-server-v1',
-              endpoint: 'codex://local',
-              enabled: false,
-            },
-          },
-          model: {
-            title: 'Proposed model',
-            modelId: 'synthetic-new',
-            maxOutputTokens: 1024,
-            temperature: null,
-          },
-        };
-      else if (request.role === 'main') output = 'The keeper opened the gate.';
+      if (request.role === 'main') output = 'The keeper opened the gate.';
       else if (request.role === 'state')
         output = {
           sourceRevision: source.revision,
@@ -367,17 +349,6 @@ test('app routes every agent role through Codex and persists RPC attempts, propo
     });
     expect(attempt.costUsd).toBeNull();
   }
-  const registration = await api(app, '/api/provider-management/registrations', {
-    key: randomUUID(),
-    request: 'Create a model proposal.',
-    target: { id: model.id, revision: model.revision },
-  });
-  await expect
-    .poll(
-      async () =>
-        (await api(app, `/api/provider-management/registrations/${registration.id}`)).status
-    )
-    .toBe('ready');
   const archive = await api(app, '/api/export');
   const restoredItem = {
     directory: await mkdtemp(join(tmpdir(), 'uimori-codex-integration-')),
@@ -399,29 +370,4 @@ test('app routes every agent role through Codex and persists RPC attempts, propo
     expect(
       app.store.product.attempts(chat.id).find((attempt) => attempt.role === role)?.storyJobId
     ).toEqual(expect.any(String));
-  const count = calls.length;
-  await api(
-    app,
-    `/api/connections/${connection.id}`,
-    {
-      title: connection.title,
-      protocol: connection.protocol,
-      endpoint: connection.endpoint,
-      enabled: false,
-      expectedRevision: connection.revision,
-    },
-    'PUT'
-  );
-  await api(
-    app,
-    '/api/provider-management/registrations',
-    {
-      key: randomUUID(),
-      request: 'Must not run.',
-      target: { id: model.id, revision: model.revision },
-    },
-    'POST',
-    403
-  );
-  expect(calls).toHaveLength(count);
 });

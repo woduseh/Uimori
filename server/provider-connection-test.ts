@@ -4,11 +4,11 @@ import type { FastifyInstance } from 'fastify';
 import type { Connection, ModelGeneration, ModelPreset } from '../core/product.js';
 import type { ProviderConnectionTest } from '../core/provider-connection-test.js';
 import {
-  modelCapability,
-  requireSupportedModel,
-  validateCapabilityRevision,
+  generationFromModel,
+  protocolOptionKeys,
   validateModelOptions,
 } from '../core/model-capabilities.js';
+import { providerRejection } from '../core/provider-rejection.js';
 import {
   executeProvider,
   ProviderContractError,
@@ -32,30 +32,19 @@ type TestOptions = Pick<
   authenticated: (cookie?: string) => boolean;
 };
 
-/** A fixed tiny prompt and one transport call; saved creative controls and tools never enter this request. */
+/**
+ * A fixed tiny prompt and one transport call with the preset's own options, so the provider's
+ * answer is a verdict on those options. Only output size, cache and tools are trimmed; saved
+ * creative controls never enter this request.
+ */
 export function connectionTestRequest(model: ModelPreset, connection: Connection): ProviderRequest {
-  requireSupportedModel(connection, model.modelId);
-  validateCapabilityRevision(model, connection.protocol);
-  const cap = modelCapability(connection.protocol, model.modelId);
-  const generation: ModelGeneration = { maxOutputTokens: 256, temperature: null };
-  if (cap?.thinkingLevels?.length) generation.thinkingLevel = cap.thinkingLevels[0];
-  if (cap?.reasoningEfforts)
-    generation.reasoningEffort = cap.reasoningEfforts.includes('none')
-      ? 'none'
-      : cap.reasoningEfforts.includes('low')
-        ? 'low'
-        : cap.reasoningEfforts[0];
-  else if (connection.protocol === 'codex-app-server-v1') generation.reasoningEffort = 'low';
-  if (cap?.outputEfforts?.includes('low')) generation.outputEffort = 'low';
-  if (cap?.thinkingModes)
-    generation.thinkingMode = cap.thinkingModes.includes('disabled')
-      ? 'disabled'
-      : cap.thinkingModes[0];
-  if (cap?.verbosities?.includes('low')) generation.verbosity = 'low';
-  if (cap?.reasoningModes?.includes('standard')) generation.reasoningMode = 'standard';
-  if (cap?.cacheModes?.includes('disabled')) generation.cacheMode = 'disabled';
-  if (model.serviceTier !== undefined) generation.serviceTier = model.serviceTier;
-  validateModelOptions(generation, connection.protocol, model.modelId);
+  const generation: ModelGeneration = { ...generationFromModel(model), maxOutputTokens: 256 };
+  delete generation.thinkingBudgetTokens;
+  if (protocolOptionKeys(connection.protocol).includes('cacheMode')) {
+    generation.cacheMode = 'disabled';
+    delete generation.cacheTtl;
+  }
+  validateModelOptions(generation, connection.protocol);
   return {
     role: 'main',
     modelId: model.modelId,
@@ -148,7 +137,7 @@ export class ProviderConnectionTestStore {
     id: string,
     result: Pick<
       ProviderConnectionTest,
-      'status' | 'text' | 'truncated' | 'latencyMs' | 'error' | 'usage'
+      'status' | 'text' | 'truncated' | 'latencyMs' | 'error' | 'usage' | 'rejection'
     >
   ) {
     const current = this.get(id);
@@ -258,7 +247,9 @@ export function providerConnectionTestRoutes(
               if (boundaryError) throw new ProviderContractError(boundaryError);
               authorize();
               const output = result.text || result.refusal || '';
+              const rejection = providerRejection(result.error?.diagnostic);
               journal.finish(id, {
+                ...(rejection ? { rejection } : {}),
                 status:
                   result.status === 'tool_calls'
                     ? 'error'

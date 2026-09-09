@@ -31,7 +31,6 @@ export type ModelDraft = {
   cacheMode: string;
   cacheTtl: string;
   thinkingMode: string;
-  thinkingBudgetTokens: number;
   enabled: boolean;
   evaluationToolsEnabled: boolean;
   evaluationTools: Omit<EvaluationToolOptions, 'maximumToolRounds'> & { maximumToolRounds: string };
@@ -58,7 +57,6 @@ export const initialModel = (): ModelDraft => ({
   cacheMode: '',
   cacheTtl: '',
   thinkingMode: '',
-  thinkingBudgetTokens: 2048,
   enabled: true,
   evaluationToolsEnabled: false,
   evaluationTools: {
@@ -89,7 +87,6 @@ export function modelDraft(value: ModelPreset): ModelDraft {
     cacheMode: value.cacheMode ?? '',
     cacheTtl: value.cacheTtl ?? '',
     thinkingMode: value.thinkingMode ?? '',
-    thinkingBudgetTokens: value.thinkingBudgetTokens ?? 2048,
     enabled: value.enabled !== false,
     evaluationToolsEnabled: value.evaluationTools !== undefined,
     evaluationTools: {
@@ -131,14 +128,7 @@ export function modelPayload(draft: ModelDraft, connection: Connection) {
     ...(draft.serviceTier ? { serviceTier: draft.serviceTier } : {}),
     ...(draft.cacheMode ? { cacheMode: draft.cacheMode } : {}),
     ...(draft.cacheTtl ? { cacheTtl: draft.cacheTtl } : {}),
-    ...(draft.thinkingMode
-      ? {
-          thinkingMode: draft.thinkingMode,
-          ...(draft.thinkingMode === 'enabled'
-            ? { thinkingBudgetTokens: draft.thinkingBudgetTokens }
-            : {}),
-        }
-      : {}),
+    ...(draft.thinkingMode ? { thinkingMode: draft.thinkingMode } : {}),
     ...(draft.evaluationToolsEnabled
       ? {
           evaluationTools: {
@@ -176,8 +166,7 @@ export function modelDraftError(
     }
     validateModelOptions(
       generationFromModel(modelPayload(draft, connection) as ModelPreset),
-      connection.protocol,
-      draft.modelId
+      connection.protocol
     );
     const tierError = forcedServiceTierError(draft, connection, forcedVertexTier);
     if (tierError) return tierError;
@@ -186,7 +175,7 @@ export function modelDraftError(
       draft.evaluationTools.contextMode === 'preloaded' &&
       modelCapability(connection.protocol, draft.modelId)?.forcedTools === false
     )
-      return '이 모델은 문맥을 먼저 제공하는 평가 방식을 지원하지 않아요. 고급 옵션에서 평가 문맥을 모델이 도구를 선택하는 방식으로 변경하세요.';
+      return '이 모델은 문맥을 먼저 제공하는 평가 방식을 지원하지 않아요. 고급에서 평가 문맥을 모델이 도구를 선택하는 방식으로 변경하세요.';
     return '';
   } catch (error) {
     return `생성 설정을 확인해 주세요. ${error instanceof Error ? error.message : '모델이 지원하지 않는 옵션이에요.'}`;
