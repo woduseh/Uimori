@@ -2,6 +2,7 @@ import { HttpError, fields, number, record, text } from './request-validation.js
 import { chatDeletionRoutes } from './chat-deletion.js';
 import { assetDeletionRoutes } from './asset-deletion.js';
 import { supportedModels } from '../core/model-capabilities.js';
+import { catalogEntryMetadata, geminiListEntry } from '../core/provider-catalog.js';
 import type { FastifyInstance } from 'fastify';
 import type { Store } from './store.js';
 import { AccessSessions, AccessSessionRateLimitError } from './access-session.js';
@@ -218,6 +219,44 @@ export function productRoutes(
         if (!options.codex) throw new Error('Codex unavailable');
         catalog = await options.codex.catalog();
         product.authorize(previous);
+      } else if (previous.protocol === 'vertex-gemini-v1' && previous.catalogCredentialEnv) {
+        // Agent Platform has no parameter-bearing list API; the Gemini Developer API key lists
+        // Gemini models and limits only. It never authorizes generation requests.
+        validateVertexEndpoint(previous.endpoint);
+        const key = process.env[previous.catalogCredentialEnv];
+        if (!key || /[\r\n]/u.test(key)) throw new Error('Credential unavailable');
+        const signal = AbortSignal.timeout(5000);
+        const collected: Connection['catalog'] = [];
+        const ids = new Set<string>();
+        let pageToken: string | undefined;
+        for (let page = 0; page < 5; page++) {
+          const url = new URL('https://generativelanguage.googleapis.com/v1beta/models');
+          url.searchParams.set('pageSize', '1000');
+          if (pageToken) url.searchParams.set('pageToken', pageToken);
+          const response = await fetch(url, {
+            method: 'GET',
+            signal,
+            redirect: 'error',
+            headers: { Accept: 'application/json', 'x-goog-api-key': key },
+          });
+          if (!response.ok) throw new Error('Catalog unavailable');
+          const raw = await response.text();
+          if (raw.length > 1000000) throw new Error('Catalog too large');
+          const payload = record(JSON.parse(raw));
+          if (!Array.isArray(payload.models) || collected.length + payload.models.length > 5000)
+            throw new Error('Invalid model catalog');
+          for (const item of payload.models) {
+            const entry = geminiListEntry(record(item));
+            if (!entry) continue;
+            if (ids.has(entry.id)) throw new Error('Duplicate model ID');
+            ids.add(entry.id);
+            collected.push(entry);
+          }
+          if (payload.nextPageToken === undefined || payload.nextPageToken === '') break;
+          if (page === 4) throw new Error('Incomplete model catalog');
+          pageToken = text(payload.nextPageToken, 'model cursor', 2000);
+        }
+        catalog = collected;
       } else if (previous.protocol === 'vertex-gemini-v1') {
         // This is the adapter's local support list, not a provider availability probe.
         validateVertexEndpoint(previous.endpoint);
@@ -310,8 +349,8 @@ export function productRoutes(
             collected.push({
               id,
               name,
-              capabilities: { tools: null, structuredOutput: null },
               priceRevision: null,
+              ...catalogEntryMetadata(c.protocol, model),
             });
           }
           if (

@@ -1,5 +1,11 @@
 # 현재 작업 상태 · Uimori
 
+## 모델 등록 개편 · 실행 게이트 제거와 공급자 판정 표시 (2026-09-09)
+
+모델 ID 코드표를 실행 조건으로 쓰던 `requireSupportedModel`과 프리셋의 `capabilityRevision` 각인을 없앴어요. 표에 없는 모델 ID와 값도 저장·실행하며, 저장 검증은 프로토콜 encoder가 보낼 수 있는 옵션·값 어휘만 거절해요. 공급자의 4xx 거절에서 화이트리스트 필드 이름만 추출해 실패 턴 카드·보조 작업 카드·응답 테스트에 거절된 설정 이름으로 표시하고 메시지 원문은 저장하지 않아요. 응답 테스트는 프리셋 옵션을 그대로 보내되 출력 256토큰·캐시 끄기·도구 없음이에요. Anthropic·Vercel 모델 목록의 한도·옵션 값을 `Connection.catalog`에 저장하고 목록에서 고르면 한도를 미리 채워요. Gemini 연결은 선택한 API 키 환경변수가 있으면 Gemini Developer API 목록에서 Gemini 모델과 한도를 받아와요. state·memory 작업의 4xx 거절도 같은 안내로 표시해요. 모델 편집은 **기본 / 고급** 두 탭이며 노출 조절은 **사고 강도** 하나예요. 문서로 확인한 값을 먼저, 나머지 프로토콜 값을 미확인으로 보여주고 어느 요청 필드로 나가는지 표시해요. 에이전트 등록 보조 기능과 관련 저장소·라우트·UI·테스트는 삭제했어요. 계약은 [연결 계약](../docs/PROVIDERS.md)과 [모델 옵션](../docs/MODEL-PARAMETERS.md)에 있고, 근거와 버린 대안은 [모델 등록 결정](../docs/MODEL-REGISTRATION.md)에 있어요.
+
+검증은 CI와 같은 Node 24.14.0·resolved TMPDIR로 실행했어요. `quality` PASS, 새 빌드 PASS, 단위·통합 **1,409 PASS / 1 opt-in skip**, 도구 검사 PASS, `verify:providers` **15 PASS**(마지막 재실행 `provider-management-2026-09-09T01-28-29-631Z-23f36d36`, 다른 프로토콜 연결로 바꿔도 이전 옵션이 보이고 지울 수 있는지 PMUI12에서 확인), `verify:evaluation` **2 PASS**, `verify:browser-smoke` **3 PASS**, product-browser P04 세 case는 세션용 임시 runner로 **3 PASS**예요. 증거는 `output/playwright/provider-management-2026-09-09T01-04-14-855Z-ebb0a399/summary.json`, `output/playwright/product-p04-scratch-2026-09-09T01-07-35-168Z-45a504da/summary.json`이에요. 실제 공급자 호출·운영 DB·커밋·푸시·배포는 수행하지 않았어요. Google Agent Platform 목록 API 유무의 직접 대조와 실제 키로 확인하는 거절 필드 형태는 남은 항목이에요.
+
 ## Gemini 번역 즉시 실패 수정 (2026-09-09)
 
 Oracle 실제 job의 `PROMPT_UNKNOWN_SLOT`와 전송 attempt 0개를 확인했어요. 번역 프롬프트 `pheme-7`의 `glossary` 슬롯 누락을 수정하고 오류 단계·블록·슬롯·attempt 연결, 안전한 HTTP 진단과 좁은 판정 JSON 정규화를 보강했어요. `quality:full` **1,429 PASS / 선택 1 skip**, 관련 브라우저 **3 PASS**예요. 이후 사용자 승인으로 실패 당시 모델·프롬프트와 합성 원문을 이용한 실제 Google 번역/판정 **2회 모두 completed, accepted**를 확인했어요. 운영 DB·프롬프트는 보존했으며 운영 배포는 하지 않았어요. [원인·수정·증거·한계](TRANSLATION-DEBUG-2026-09-09.md)를 봐요.

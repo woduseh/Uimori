@@ -5,6 +5,7 @@ import { IconButton } from './IconButton.js';
 import { ConnectionIcon, CopyIcon, ModelIcon, RefreshIcon, SearchIcon } from './ui-icons.js';
 import { VertexCredentialUpload } from './VertexCredentialUpload.js';
 import { ProviderCatalogPicker } from './ProviderCatalogPicker.js';
+import { modelHints } from '../core/model-hints.js';
 import type {
   Connection,
   Library,
@@ -22,11 +23,11 @@ import {
   modelPayload,
   ProviderModelFields,
   selectModelConnection,
+  sourceLabels,
 } from './ProviderModelFields.js';
 import { ProviderEndpointStatus } from './ProviderEndpointStatus.js';
 import { DeleteButton } from './DeleteButton.js';
 import { ProviderReadiness } from './ProviderReadiness.js';
-import { ProviderRegistrationAssistant } from './ProviderRegistrationAssistant.js';
 import { ProviderModelTest, useProviderModelTests } from './ProviderModelTest.js';
 import './ProviderManagement.css';
 
@@ -36,6 +37,7 @@ type ConnectionDraft = {
   protocol: ProviderProtocol;
   endpoint: string;
   credentialEnv: string;
+  catalogCredentialEnv: string;
   enabled: boolean;
 };
 const initialConnection = (): ConnectionDraft => ({
@@ -43,6 +45,7 @@ const initialConnection = (): ConnectionDraft => ({
   protocol: 'fixture-sse-v1',
   endpoint: '',
   credentialEnv: '',
+  catalogCredentialEnv: '',
   enabled: false,
 });
 const connectionDraft = (item: Connection): ConnectionDraft => ({
@@ -50,6 +53,7 @@ const connectionDraft = (item: Connection): ConnectionDraft => ({
   protocol: item.protocol,
   endpoint: item.endpoint,
   credentialEnv: item.credentialEnv ?? '',
+  catalogCredentialEnv: item.catalogCredentialEnv ?? '',
   enabled: item.enabled,
 });
 function connectionPayload(value: ConnectionDraft) {
@@ -59,6 +63,9 @@ function connectionPayload(value: ConnectionDraft) {
     endpoint: value.protocol === 'codex-app-server-v1' ? 'codex://local' : value.endpoint,
     ...(value.protocol !== 'codex-app-server-v1' && value.credentialEnv.trim()
       ? { credentialEnv: value.credentialEnv.trim() }
+      : {}),
+    ...(value.protocol === 'vertex-gemini-v1' && value.catalogCredentialEnv.trim()
+      ? { catalogCredentialEnv: value.catalogCredentialEnv.trim() }
       : {}),
     enabled: value.enabled,
   };
@@ -107,7 +114,7 @@ export function ConnectionEditor({
   const [setup, setSetup] = useState(false),
     [connectionStarted, setConnectionStarted] = useState(false),
     [modelStarted, setModelStarted] = useState(false);
-  const [modelSection, setModelSection] = useState<'basic' | 'generation' | 'advanced'>('basic');
+  const [modelSection, setModelSection] = useState<'basic' | 'advanced'>('basic');
   const heading = useRef<HTMLDivElement>(null);
   const returnItem = useRef<{ screen: 'models' | 'connections'; id: string } | undefined>(
     undefined
@@ -156,14 +163,12 @@ export function ConnectionEditor({
     else proceed();
   }
   const [uploadingCredential, setUploadingCredential] = useState(false);
-  const [registrationDirty, setRegistrationDirty] = useState(false);
   const [operationBusy, setOperationBusy] = useState(false),
     [message, setMessage] = useState(''),
     [error, setError] = useState('');
   const busy = operationBusy || uploadingCredential;
   const dirty =
     busy ||
-    registrationDirty ||
     (connectionStarted && JSON.stringify(connection) !== connectionBaseline) ||
     (modelStarted && JSON.stringify(model) !== modelBaseline);
   useEffect(() => {
@@ -404,7 +409,7 @@ export function ConnectionEditor({
     if (result.catalogError)
       throw new Error('모델 목록을 확인하지 못했어요. 마지막 저장 목록과 수동 모델 ID를 유지해요.');
     setMessage(
-      result.protocol === 'vertex-gemini-v1'
+      result.protocol === 'vertex-gemini-v1' && !result.catalogCredentialEnv
         ? '로컬 지원 모델 목록 확인 완료 · 공급자 조회 없음'
         : '모델 목록 조회 완료'
     );
@@ -426,14 +431,7 @@ export function ConnectionEditor({
     else void perform(() => saveConnection(body, item.id, false));
   }
   function statusModel(item: ModelPreset) {
-    const {
-      id,
-      revision,
-      source: _,
-      capabilityProtocol: _protocol,
-      capabilityRevision: _capability,
-      ...body
-    } = item;
+    const { id, revision, source: _, capabilityProtocol: _protocol, ...body } = item;
     const updated = { ...body, enabled: item.enabled === false, expectedRevision: revision };
     if (item.enabled !== false)
       setConfirmation({ kind: 'model', id, title: item.title, body: updated, fromForm: false });
@@ -918,6 +916,12 @@ export function ConnectionEditor({
                     : '최대'}{' '}
                   {item.maxOutputTokens.toLocaleString()} 토큰
                   {item.timeoutMs !== undefined && ` · 제한 ${item.timeoutMs / 1000}초`}
+                  {(() => {
+                    const connection = library.connections.find((c) => c.id === item.connectionId);
+                    return connection
+                      ? ` · 옵션 ${sourceLabels[modelHints(connection, item.modelId).source]}`
+                      : '';
+                  })()}
                 </p>
                 <ProviderModelTest
                   model={item}
@@ -1187,6 +1191,26 @@ export function ConnectionEditor({
               }
             />
           </label>
+          {vertex && (
+            <label className="full">
+              Gemini 목록용 API 키 환경변수 이름 (선택)
+              <input
+                aria-label="Gemini 목록용 API 키 환경변수 이름"
+                autoComplete="off"
+                pattern={CREDENTIAL_ENV_PATTERN}
+                placeholder="GEMINI_API_KEY"
+                value={connection.catalogCredentialEnv}
+                onChange={(event) =>
+                  setConnection({ ...connection, catalogCredentialEnv: event.target.value })
+                }
+              />
+              <small>
+                비우면 앱 힌트 표만 목록으로 써요. 서버 환경변수 이름을 넣으면 모델 목록 새로고침이
+                Gemini Developer API로 Gemini 모델과 토큰 한도를 받아와요. Agent Platform 실행
+                인증과 별개인 API 키이며 생성 요청에는 쓰지 않아요.
+              </small>
+            </label>
+          )}
           <label className="check">
             <input
               type="checkbox"
@@ -1303,7 +1327,7 @@ export function ConnectionEditor({
           if (!chosen) return;
           const optionError = modelDraftError(model, chosen, forcedVertexTier);
           if (optionError) {
-            setModelSection('generation');
+            setModelSection('advanced');
             setError(optionError);
             onError(optionError);
             requestAnimationFrame(() =>
@@ -1370,7 +1394,7 @@ export function ConnectionEditor({
           </p>
         )}
         <div className="provider-model-tabs full" aria-label="모델 편집 항목">
-          {(['basic', 'generation', 'advanced'] as const).map((section, index) => (
+          {(['basic', 'advanced'] as const).map((section, index) => (
             <button
               type="button"
               className={modelSection === section ? 'selected' : 'secondary'}
@@ -1378,7 +1402,7 @@ export function ConnectionEditor({
               key={section}
               onClick={() => setModelSection(section)}
             >
-              {['기본 정보', '생성 설정', '고급 옵션'][index]}
+              {['기본', '고급'][index]}
             </button>
           ))}
         </div>
@@ -1447,17 +1471,27 @@ export function ConnectionEditor({
               selectedId={model.modelId}
               busy={busy}
               onChoose={(item) =>
-                setModel((current) => ({
-                  ...current,
-                  modelId: item.id,
-                  title:
-                    !current.title ||
-                    current.title === current.modelId ||
-                    current.title ===
-                      chosen?.catalog.find((entry) => entry.id === current.modelId)?.name
-                      ? item.name
-                      : current.title,
-                }))
+                setModel((current) => {
+                  // Picking from the list is an explicit choice: published limits prefill and stay editable.
+                  const hints = chosen ? modelHints(chosen, item.id) : undefined;
+                  return {
+                    ...current,
+                    modelId: item.id,
+                    title:
+                      !current.title ||
+                      current.title === current.modelId ||
+                      current.title ===
+                        chosen?.catalog.find((entry) => entry.id === current.modelId)?.name
+                        ? item.name
+                        : current.title,
+                    ...(hints?.maxOutputTokens !== undefined
+                      ? { maxOutputTokens: String(hints.maxOutputTokens) }
+                      : {}),
+                    ...(hints?.inputTokenLimit !== undefined
+                      ? { inputTokenLimit: String(hints.inputTokenLimit) }
+                      : {}),
+                  };
+                })
               }
             />
           </div>
@@ -1515,14 +1549,6 @@ export function ConnectionEditor({
           </small>
         </section>
       )}
-      <div hidden={screen !== 'models' || library.connections.length === 0}>
-        <ProviderRegistrationAssistant
-          library={library}
-          reload={reload}
-          onError={onError}
-          onDirtyChange={setRegistrationDirty}
-        />
-      </div>
     </section>
   );
 }

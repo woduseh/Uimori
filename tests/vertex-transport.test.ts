@@ -502,16 +502,45 @@ describe('Vertex Flex admission (synthetic HTTP only)', () => {
       connection.endpoint + '/gemini-3.1-pro-preview:streamGenerateContent?alt=sse',
     ]);
   });
-  test('unreviewed Google models fail before resolving credentials or fetching', async () => {
-    const fetch = vi.fn();
+  test('unlisted Google models are sent and a rejected generation field is surfaced', async () => {
+    const body = {
+      error: {
+        code: 400,
+        message: `Invalid value ${token}`,
+        status: 'INVALID_ARGUMENT',
+        details: [
+          {
+            '@type': 'type.googleapis.com/google.rpc.BadRequest',
+            fieldViolations: [
+              { field: 'generationConfig.thinkingConfig.thinkingLevel', description: token },
+            ],
+          },
+        ],
+      },
+    };
+    const fetch = vi.fn(
+      async () =>
+        new Response(JSON.stringify(body), {
+          status: 400,
+          headers: { 'content-type': 'application/json' },
+        })
+    );
     const resolveCredential = vi.fn(() => token);
     vi.stubGlobal('fetch', fetch);
     const input = request();
     input.modelId = 'gemini-unreviewed';
-    expect(
-      (await executeProvider(connection, input, options({ resolveCredential }))).error?.code
-    ).toBe('UNVERIFIED_MODEL_CAPABILITY');
-    expect(resolveCredential).not.toHaveBeenCalled();
-    expect(fetch).not.toHaveBeenCalled();
+    input.generation = { maxOutputTokens: 1024, temperature: null, thinkingLevel: 'MINIMAL' };
+    const result = await executeProvider(connection, input, options({ resolveCredential }));
+    expect(resolveCredential).toHaveBeenCalledTimes(1);
+    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(result.error).toMatchObject({
+      code: 'HTTP_400',
+      diagnostic: {
+        httpStatus: 400,
+        providerStatus: 'INVALID_ARGUMENT',
+        fields: ['generationConfig.thinkingConfig.thinkingLevel'],
+      },
+    });
+    expect(JSON.stringify(result)).not.toContain(token);
   });
 });

@@ -3,177 +3,107 @@ import {
   MODEL_SUPPORT_POLICY,
   generationFromModel,
   modelCapability,
-  requireSupportedModel,
-  validateCapabilityRevision,
+  protocolOptionKeys,
+  supportedModels,
   validateModelOptions,
 } from '../core/model-capabilities.js';
+import { PROVIDER_PROTOCOLS, type ModelGeneration, type ModelPreset } from '../core/product.js';
 import { validateRequest } from '../core/transport.js';
 import { createEvaluationToolSession } from '../server/evaluation-session.js';
 import { defaultEvaluationToolOptions } from '../core/evaluation-tool-config.js';
-import type { ModelGeneration, ModelPreset } from '../core/product.js';
 
 const base: ModelGeneration = { maxOutputTokens: 8192, temperature: null };
-test('new provider models validate their own thinking modes and output boundaries', () => {
+
+test('validation is protocol-level: any listed or unlisted model may use every option its encoder sends', () => {
+  // Unlisted values on reviewed models and reviewed values on unlisted models both pass locally.
   expect(() =>
-    validateModelOptions(
-      { ...base, thinkingLevel: 'MINIMAL' },
-      'vertex-gemini-v1',
-      'gemini-3.5-flash-lite'
-    )
+    validateModelOptions({ ...base, thinkingLevel: 'LOW' }, 'vertex-gemini-v1')
   ).not.toThrow();
   expect(() =>
-    validateModelOptions({ ...base, temperature: 1 }, 'vertex-gemini-v1', 'gemini-3.5-flash-lite')
-  ).toThrow();
-  expect(() =>
-    validateModelOptions(
-      { ...base, thinkingLevel: 'LOW' },
-      'vertex-gemini-v1',
-      'gemini-3.5-flash-lite'
-    )
-  ).toThrow();
-  expect(() =>
-    validateModelOptions(
-      { ...base, maxOutputTokens: 500000, reasoningEffort: 'xhigh' },
-      'vercel-chat-v1',
-      'spacexai/grok-4.6'
-    )
+    validateModelOptions({ ...base, temperature: 1, topP: 0.5 }, 'vertex-gemini-v1')
   ).not.toThrow();
   expect(() =>
     validateModelOptions(
-      { ...base, maxOutputTokens: 500001 },
-      'vercel-chat-v1',
-      'spacexai/grok-4.6'
-    )
-  ).toThrow();
-  expect(() =>
-    validateModelOptions(
-      { ...base, reasoningEffort: 'none' },
-      'vercel-chat-v1',
-      'spacexai/grok-4.6'
-    )
-  ).toThrow();
-  expect(() =>
-    validateModelOptions(
-      { ...base, maxOutputTokens: 128001 },
-      'vercel-chat-v1',
-      'openai/gpt-5.6-sol'
-    )
-  ).toThrow();
-  expect(() =>
-    validateModelOptions(
-      { ...base, reasoningEffort: 'none' },
-      'vercel-chat-v1',
-      'openai/gpt-5.6-sol'
-    )
-  ).not.toThrow();
-  expect(modelCapability('openai-chat-v1', 'spacexai/grok-4.6')).toBeUndefined();
-  for (const id of ['deepseek-v4-pro', 'deepseek-v4-flash']) {
-    expect(() =>
-      validateModelOptions(
-        { ...base, maxOutputTokens: 384000, reasoningEffort: 'max' },
-        'deepseek-chat-v1',
-        id
-      )
-    ).not.toThrow();
-    expect(() =>
-      validateModelOptions({ ...base, maxOutputTokens: 384001 }, 'deepseek-chat-v1', id)
-    ).toThrow();
-    expect(() =>
-      validateModelOptions(
-        { ...base, reasoningEffort: 'none', temperature: 0.5 },
-        'deepseek-chat-v1',
-        id
-      )
-    ).not.toThrow();
-    expect(() =>
-      validateModelOptions({ ...base, temperature: 0.5 }, 'deepseek-chat-v1', id)
-    ).toThrow('INCOMPATIBLE_THINKING_SAMPLING');
-    expect(() =>
-      validateModelOptions({ ...base, structuredOutput: true }, 'deepseek-chat-v1', id)
-    ).toThrow();
-  }
-});
-test('exact model support differentiates efforts, thinking defaults, Fable always-on and Gemini sampling', () => {
-  expect(MODEL_SUPPORT_POLICY.supportWindowMonths).toBe(6);
-  expect(modelCapability('vertex-gemini-v1', 'gemini-3.1-pro-preview')?.defaultThinkingLevel).toBe(
-    'HIGH'
-  );
-  expect(modelCapability('vertex-gemini-v1', 'gemini-3.8-flash')?.defaultThinkingLevel).toBe(
-    'MEDIUM'
-  );
-  expect(() =>
-    validateModelOptions(
-      { ...base, temperature: 0, topP: 0 },
-      'vertex-gemini-v1',
-      'gemini-3.1-pro-preview'
+      { ...base, maxOutputTokens: 500000, reasoningEffort: 'max' },
+      'vercel-chat-v1'
     )
   ).not.toThrow();
   expect(() =>
-    validateModelOptions({ ...base, temperature: 0 }, 'vertex-gemini-v1', 'gemini-3.8-flash')
-  ).toThrow();
-  expect(() =>
-    validateModelOptions(
-      { ...base, reasoningEffort: 'none', verbosity: 'low', serviceTier: 'flex' },
-      'openai-responses-v1',
-      'gpt-5.6-sol'
-    )
+    validateModelOptions({ ...base, reasoningEffort: 'none', temperature: 0.5 }, 'deepseek-chat-v1')
   ).not.toThrow();
   expect(() =>
-    validateModelOptions({ ...base, reasoningEffort: 'none' }, 'openai-responses-v1', 'gpt-6-astra')
-  ).toThrow();
-  expect(() =>
-    validateModelOptions(
-      { ...base, thinkingMode: 'disabled', outputEffort: 'high' },
-      'anthropic-messages-v1',
-      'claude-opus-5'
-    )
+    validateModelOptions({ ...base, reasoningEffort: 'high', temperature: 0.5 }, 'deepseek-chat-v1')
   ).not.toThrow();
   expect(() =>
     validateModelOptions(
       { ...base, thinkingMode: 'disabled', outputEffort: 'xhigh' },
-      'anthropic-messages-v1',
-      'claude-opus-5'
+      'anthropic-messages-v1'
     )
-  ).toThrow('INCOMPATIBLE_THINKING_EFFORT');
+  ).not.toThrow();
   expect(() =>
     validateModelOptions(
-      { ...base, thinkingMode: 'disabled', outputEffort: 'low' },
-      'anthropic-messages-v1',
-      'claude-fable-5-1'
+      { ...base, reasoningEffort: 'none', verbosity: 'low', serviceTier: 'flex' },
+      'openai-responses-v1'
     )
-  ).toThrow();
+  ).not.toThrow();
   expect(() =>
-    validateModelOptions(
-      { ...base, thinkingMode: 'adaptive', outputEffort: 'max' },
-      'anthropic-messages-v1',
-      'claude-fable-5-1'
-    )
+    validateModelOptions({ ...base, serviceTier: 'flex' }, 'openai-chat-v1')
   ).not.toThrow();
 });
 
-test('unreviewed IDs do not inherit official capabilities and a saved capability revision is required', () => {
-  const id = 'gpt-5.6-sol',
-    protocol = 'openai-responses-v1',
-    revision = modelCapability(protocol, id)!.revision;
-  expect(modelCapability(protocol, id + '-future')).toBeUndefined();
+test('options the encoder cannot send and values outside the protocol vocabulary are rejected', () => {
   expect(() =>
-    requireSupportedModel({ protocol, endpoint: 'https://api.openai.com/v1' }, id + '-future')
-  ).toThrow('UNVERIFIED_MODEL_CAPABILITY');
-  expect(() =>
-    requireSupportedModel({ protocol, endpoint: 'https://synthetic.invalid/v1' }, 'custom-model')
-  ).not.toThrow();
-  expect(() => validateCapabilityRevision({ modelId: id }, protocol)).toThrow(
-    'MODEL_CAPABILITY_REVISION_MISMATCH'
-  );
-  expect(() =>
-    validateCapabilityRevision({ modelId: id, capabilityRevision: 'future' }, protocol)
+    validateModelOptions({ ...base, maxOutputTokens: 500001 }, 'vercel-chat-v1')
   ).toThrow();
   expect(() =>
-    validateCapabilityRevision({ modelId: id, capabilityRevision: revision }, protocol)
-  ).not.toThrow();
-  expect(
-    generationFromModel({ ...base, modelId: id, capabilityRevision: revision }, protocol)
-  ).toEqual(base);
+    validateModelOptions({ ...base, temperature: 0 }, 'anthropic-messages-v1')
+  ).toThrow();
+  expect(() => validateModelOptions({ ...base, temperature: 0 }, 'codex-app-server-v1')).toThrow();
+  expect(() =>
+    validateModelOptions({ ...base, structuredOutput: true }, 'vertex-gemini-v1')
+  ).toThrow();
+  expect(() =>
+    validateModelOptions({ ...base, thinkingLevel: 'HIGH' }, 'openai-responses-v1')
+  ).toThrow();
+  expect(() =>
+    validateModelOptions({ ...base, reasoningEffort: 'high' }, 'anthropic-messages-v1')
+  ).toThrow();
+  expect(() => validateModelOptions({ ...base, verbosity: 'low' }, 'openai-chat-v1')).toThrow();
+  expect(() =>
+    validateModelOptions({ ...base, thinkingMode: 'enabled' }, 'anthropic-messages-v1')
+  ).toThrow();
+  expect(() =>
+    validateModelOptions(
+      { ...base, thinkingMode: 'adaptive', thinkingBudgetTokens: 2048 },
+      'anthropic-messages-v1'
+    )
+  ).toThrow();
+  expect(() =>
+    validateModelOptions({ ...base, thinkingLevel: 'ULTRA' as 'LOW' }, 'vertex-gemini-v1')
+  ).toThrow('UNSUPPORTED_GENERATION_OPTIONS');
+  for (const protocol of PROVIDER_PROTOCOLS)
+    expect(protocolOptionKeys(protocol)).not.toContain('timeoutMs');
+});
+
+test('the hint table still describes reviewed models but never gates unlisted IDs', () => {
+  expect(MODEL_SUPPORT_POLICY.supportWindowMonths).toBe(6);
+  expect(modelCapability('vertex-gemini-v1', 'gemini-3.1-pro-preview')?.defaultThinkingLevel).toBe(
+    'HIGH'
+  );
+  expect(modelCapability('vertex-gemini-v1', 'gemini-3.8-flash')?.thinkingLevels).toEqual([
+    'LOW',
+    'MEDIUM',
+    'HIGH',
+  ]);
+  expect(modelCapability('anthropic-messages-v1', 'claude-fable-5-1')?.thinkingModes).toEqual([
+    'adaptive',
+  ]);
+  expect(modelCapability('openai-responses-v1', 'gpt-5.6-sol-future')).toBeUndefined();
+  expect(modelCapability('openai-chat-v1', 'spacexai/grok-4.6')).toBeUndefined();
+  expect(supportedModels('openai-chat-v1').every((item) => item.cacheModes === undefined)).toBe(
+    true
+  );
+  expect(generationFromModel({ ...base, modelId: 'gpt-5.6-sol' } as ModelGeneration)).toEqual(base);
 });
 
 test('cache times are explicit, provider-specific, and incompatible with OFF', () => {
@@ -181,40 +111,24 @@ test('cache times are explicit, provider-specific, and incompatible with OFF', (
     expect(() =>
       validateModelOptions(
         { ...base, cacheMode: 'automatic', cacheTtl: ttl },
-        'anthropic-messages-v1',
-        'claude-fable-5-1'
+        'anthropic-messages-v1'
       )
     ).not.toThrow();
   expect(() =>
-    validateModelOptions(
-      { ...base, cacheMode: 'explicit', cacheTtl: '30m' },
-      'openai-responses-v1',
-      'gpt-5.6-luna'
-    )
+    validateModelOptions({ ...base, cacheMode: 'explicit', cacheTtl: '30m' }, 'openai-responses-v1')
   ).not.toThrow();
   expect(() =>
-    validateModelOptions(
-      { ...base, cacheMode: 'explicit', cacheTtl: '5m' },
-      'openai-responses-v1',
-      'gpt-5.6-luna'
-    )
+    validateModelOptions({ ...base, cacheMode: 'explicit', cacheTtl: '5m' }, 'openai-responses-v1')
   ).toThrow();
   for (const cacheMode of [undefined, 'disabled'] as const)
     expect(() =>
-      validateModelOptions(
-        { ...base, cacheMode, cacheTtl: '1h' },
-        'anthropic-messages-v1',
-        'claude-opus-5'
-      )
+      validateModelOptions({ ...base, cacheMode, cacheTtl: '1h' }, 'anthropic-messages-v1')
     ).toThrow('CACHE_TTL_REQUIRES_CACHE_MODE');
   expect(() =>
-    validateModelOptions({ ...base, cacheMode: 'disabled' }, 'vertex-gemini-v1', 'gemini-3.8-flash')
+    validateModelOptions({ ...base, cacheMode: 'disabled' }, 'vertex-gemini-v1')
   ).toThrow();
   expect(() =>
-    validateModelOptions({ ...base, serviceTier: 'flex' }, 'openai-chat-v1', 'gpt-6-astra')
-  ).not.toThrow();
-  expect(() =>
-    validateModelOptions({ ...base, cacheMode: 'disabled' }, 'openai-chat-v1', 'gpt-6-astra')
+    validateModelOptions({ ...base, cacheMode: 'disabled' }, 'openai-chat-v1')
   ).toThrow();
 });
 

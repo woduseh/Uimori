@@ -29,7 +29,7 @@ Node suite는 기존 30개에서 새 지문 회귀 1개를 더한 31개예요. �
 | 파일 | 전체 case / 계약 묶음 | 판단과 이유 |
 | --- | --- | --- |
 | `tests/harness.test.ts` | selected command / identity / retained DB / cleanup-compatible ownership | KEEP. 실행기와 cleanup 명령의 실제 연결을 확인해요. |
-| 같은 파일 | inherited self-host/Codex env isolation, registration fixture false/true | KEEP. 실제 자식 환경에서 두 origin 경로를 확인해요. |
+| 같은 파일 | inherited self-host/Codex env isolation, provider fixture false/true | KEEP. 실제 자식 환경에서 두 origin 경로를 확인해요. |
 | 같은 파일 | missing / zero / skipped / retried / global reporter faults | KEEP. 보고서 오판 방지. 서로 다른 reporter 상태예요. |
 | 같은 파일 | command / timeout / source failures despite passing assertions | KEEP. assertion 성공만으로 전체 성공을 판정하지 않아요. |
 | 같은 파일 | tests changed during verification; functional mode separate identity + no required design PNG | ADD. 재빌드 분리 후에도 실행 중 테스트 변경은 실패하고 기능 모드에서 시각 산출물은 필수가 아니에요. |

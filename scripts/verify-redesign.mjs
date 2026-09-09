@@ -3,7 +3,7 @@ import { runBrowserVerification } from './browser-verification.mjs';
 await runBrowserVerification({
   name: 'redesign',
   scope: 'Bot workspace and package redesign plus existing synthetic browser regression',
-  registrationFixture: true,
+  providerFixture: true,
   requiredCases: [
     'GMUI01',
     'PWS01',

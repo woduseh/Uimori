@@ -4,6 +4,7 @@ import type { Store } from './store.js';
 import { presentText } from './presentation.js';
 import { searchAssets, resolveAsset } from '../core/asset-manifest.js';
 import type { RunSnapshot } from '../core/types.js';
+import { attemptRejection } from './reader.js';
 
 export function storyRoutes(
   app: FastifyInstance,
@@ -28,9 +29,13 @@ export function storyRoutes(
   app.get<{ Params: { id: string } }>('/api/sources/:id/story', async (request) =>
     store.story.sourceDetail(request.params.id)
   );
-  app.get<{ Params: { id: string } }>('/api/story-jobs/:id', async (request) =>
-    store.story.job(request.params.id)
-  );
+  app.get<{ Params: { id: string } }>('/api/story-jobs/:id', async (request) => {
+    const job = store.story.job(request.params.id);
+    const rejection = /^HTTP_4\d\d$/u.test(job.error ?? '')
+      ? attemptRejection(store, 'story_job_id', job.id)
+      : undefined;
+    return rejection ? { ...job, rejection } : job;
+  });
   app.post<{ Params: { id: string } }>('/api/story-jobs/:id/retry', async (request) => {
     fields(record(request.body ?? {}), []);
     const job = store.story.retry(request.params.id);

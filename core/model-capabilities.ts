@@ -1,6 +1,8 @@
-import type { ModelGeneration, ModelPreset, ProviderProtocol } from './product.js';
+import type { ModelGeneration, ProviderProtocol } from './product.js';
+import { providerDefinition } from './provider-definitions.js';
 import { ProviderContractError } from './provider-errors.js';
 
+/** Operating guideline for reviewing the hint table; it never blocks execution. */
 export const MODEL_SUPPORT_POLICY = {
   supportWindowMonths: 6,
   checkedAt: '2026-09-09',
@@ -30,10 +32,14 @@ export const GENERATION_KEYS = [
   'cacheMode',
   'cacheTtl',
 ] as const;
+/**
+ * Reviewed per-model hints: which options a known model documents and their allowed values.
+ * The UI uses them to order choices and prefill limits. Execution never requires an entry;
+ * the provider's own response is the verdict for unknown models and unlisted values.
+ */
 export type ModelCapability = Readonly<{
   id: string;
   name: string;
-  revision: string;
   protocol: ProviderProtocol;
   preview?: boolean;
   releasedAt?: string;
@@ -58,11 +64,9 @@ export type ModelCapability = Readonly<{
   midSystem?: boolean;
   sources: readonly string[];
 }>;
-const revision = '2026-09-07.1';
 const openai = (id: string, name: string, astra = false): ModelCapability => ({
   id,
   name,
-  revision,
   protocol: 'openai-responses-v1',
   maxOutputTokens: 128_000,
   temperature: false,
@@ -87,7 +91,6 @@ const capabilities: readonly ModelCapability[] = [
   {
     id: 'gemini-3.5-flash-lite',
     name: 'Gemini 3.5 Flash-Lite',
-    revision: '2026-09-09.1',
     releasedAt: '2026-07-21',
     protocol: 'vertex-gemini-v1',
     maxOutputTokens: 65_536,
@@ -104,7 +107,6 @@ const capabilities: readonly ModelCapability[] = [
   {
     id: 'spacexai/grok-4.6',
     name: 'Grok 4.6',
-    revision: '2026-09-09.1',
     protocol: 'vercel-chat-v1',
     maxOutputTokens: 500_000,
     temperature: true,
@@ -117,7 +119,6 @@ const capabilities: readonly ModelCapability[] = [
   {
     id: 'openai/gpt-5.6-sol',
     name: 'GPT-5.6 Sol',
-    revision: '2026-09-09.1',
     protocol: 'vercel-chat-v1',
     maxOutputTokens: 128_000,
     temperature: false,
@@ -131,7 +132,6 @@ const capabilities: readonly ModelCapability[] = [
     (variant): ModelCapability => ({
       id: `deepseek-v4-${variant}`,
       name: `DeepSeek V4 ${variant === 'pro' ? 'Pro' : 'Flash'}`,
-      revision: '2026-09-09.1',
       protocol: 'deepseek-chat-v1',
       maxOutputTokens: 384_000,
       temperature: true,
@@ -149,7 +149,6 @@ const capabilities: readonly ModelCapability[] = [
   {
     id: 'gemini-3.8-flash',
     name: 'Gemini 3.8 Flash',
-    revision,
     protocol: 'vertex-gemini-v1',
     maxOutputTokens: 65_536,
     temperature: false,
@@ -166,7 +165,6 @@ const capabilities: readonly ModelCapability[] = [
     id: 'gemini-3.1-pro-preview',
     name: 'Gemini 3.1 Pro (Preview)',
     preview: true,
-    revision,
     protocol: 'vertex-gemini-v1',
     maxOutputTokens: 65_536,
     temperature: true,
@@ -190,7 +188,6 @@ const capabilities: readonly ModelCapability[] = [
     id: 'claude-fable-5-1',
     name: 'Claude Fable 5.1',
     releasedAt: '2026-09-01',
-    revision,
     protocol: 'anthropic-messages-v1',
     maxOutputTokens: 128_000,
     temperature: false,
@@ -212,7 +209,6 @@ const capabilities: readonly ModelCapability[] = [
   {
     id: 'claude-opus-5',
     name: 'Claude Opus 5',
-    revision,
     protocol: 'anthropic-messages-v1',
     maxOutputTokens: 128_000,
     temperature: false,
@@ -252,15 +248,7 @@ export function modelCapability(
 ): ModelCapability | undefined {
   return supportedModels(protocol).find((item) => item.id === modelId);
 }
-export function generationFromModel(
-  model: ModelGeneration & { modelId?: string; capabilityRevision?: string },
-  protocol?: ProviderProtocol
-): ModelGeneration {
-  if (protocol && model.modelId)
-    validateCapabilityRevision(
-      { modelId: model.modelId, capabilityRevision: model.capabilityRevision },
-      protocol
-    );
+export function generationFromModel(model: ModelGeneration): ModelGeneration {
   return structuredClone(
     Object.fromEntries(
       GENERATION_KEYS.filter((key) => model[key] !== undefined).map((key) => [key, model[key]])
@@ -270,6 +258,45 @@ export function generationFromModel(
 const reject = (code = 'UNSUPPORTED_GENERATION_OPTIONS'): never => {
   throw new ProviderContractError(code);
 };
+/** Values each protocol's encoder can express. A model may reject a value; the provider says so. */
+export const PROTOCOL_OPTION_VALUES = {
+  thinkingLevel: ['MINIMAL', 'LOW', 'MEDIUM', 'HIGH'],
+  reasoningEffort: ['none', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'],
+  outputEffort: ['low', 'medium', 'high', 'xhigh', 'max'],
+  thinkingMode: ['disabled', 'adaptive'],
+  verbosity: ['low', 'medium', 'high'],
+  reasoningMode: ['standard', 'pro'],
+  reasoningContext: ['auto', 'all_turns', 'current_turn'],
+  cacheMode: ['disabled', 'explicit', 'automatic'],
+} as const;
+const cacheTtls: Partial<
+  Record<ProviderProtocol, readonly NonNullable<ModelGeneration['cacheTtl']>[]>
+> = {
+  'openai-responses-v1': ['30m'],
+  'anthropic-messages-v1': ['5m', '1h'],
+};
+/** Generation option keys the protocol's encoder sends. Everything else cannot reach the provider. */
+export function protocolOptionKeys(protocol: ProviderProtocol): readonly string[] {
+  return providerDefinition(protocol).optionKeys.filter((key) => key !== 'timeoutMs');
+}
+/** Cache retention values the protocol's API accepts. */
+export function protocolCacheTtls(
+  protocol: ProviderProtocol
+): readonly NonNullable<ModelGeneration['cacheTtl']>[] | undefined {
+  return cacheTtls[protocol];
+}
+/** Service tiers to suggest; Gemini's two tiers are enforced by its transport, the rest are provider strings. */
+export function protocolServiceTiers(protocol: ProviderProtocol): readonly string[] | undefined {
+  return protocol === 'vertex-gemini-v1'
+    ? ['standard', 'flex']
+    : protocol === 'anthropic-messages-v1'
+      ? ['auto', 'standard_only']
+      : ['openai-responses-v1', 'openai-chat-v1', 'vercel-chat-v1', 'deepseek-chat-v1'].includes(
+            protocol
+          )
+        ? ['auto', 'default', 'flex', 'priority']
+        : undefined;
+}
 
 export function validateGenerationShape(value: unknown): asserts value is ModelGeneration {
   if (!value || typeof value !== 'object' || Array.isArray(value)) reject();
@@ -293,17 +320,7 @@ export function validateGenerationShape(value: unknown): asserts value is ModelG
   )
     reject();
   if (g.structuredOutput !== undefined && typeof g.structuredOutput !== 'boolean') reject();
-  const enums = {
-    thinkingLevel: ['MINIMAL', 'LOW', 'MEDIUM', 'HIGH'],
-    reasoningEffort: ['none', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'],
-    outputEffort: ['low', 'medium', 'high', 'xhigh', 'max'],
-    thinkingMode: ['disabled', 'enabled', 'adaptive'],
-    verbosity: ['low', 'medium', 'high'],
-    reasoningMode: ['standard', 'pro'],
-    reasoningContext: ['auto', 'all_turns', 'current_turn'],
-    cacheMode: ['disabled', 'explicit', 'automatic'],
-    cacheTtl: ['5m', '30m', '1h'],
-  } as const;
+  const enums = { ...PROTOCOL_OPTION_VALUES, cacheTtl: ['5m', '30m', '1h'] } as const;
   for (const [key, values] of Object.entries(enums))
     if (
       g[key as keyof ModelGeneration] !== undefined &&
@@ -337,97 +354,20 @@ export function validateGenerationShape(value: unknown): asserts value is ModelG
   )
     reject();
 }
-/** Storage may retain unreviewed model IDs. Official execution additionally requires a registered ID. */
-export function validateModelOptions(
-  g: ModelGeneration,
-  protocol: ProviderProtocol,
-  modelId: string
-): void {
+/**
+ * Protocol-level validation only: the option must be one the encoder sends and the value one it
+ * can express. Model-specific support is not checked here; an unsupported combination is answered
+ * by the provider and surfaced as a rejected option.
+ */
+export function validateModelOptions(g: ModelGeneration, protocol: ProviderProtocol): void {
   validateGenerationShape(g);
-  if (g.cacheTtl !== undefined && !['explicit', 'automatic'].includes(g.cacheMode ?? ''))
-    reject('CACHE_TTL_REQUIRES_CACHE_MODE');
-  const cap = modelCapability(protocol, modelId);
-  if (cap) {
-    if (
-      g.maxOutputTokens > cap.maxOutputTokens ||
-      (g.temperature !== null && !cap.temperature) ||
-      (g.topP !== undefined && !cap.topP) ||
-      (g.stopSequences !== undefined && !cap.stopSequences) ||
-      g.thinkingBudgetTokens !== undefined
-    )
-      reject();
-    const fields = {
-      thinkingLevel: cap.thinkingLevels,
-      reasoningEffort: cap.reasoningEfforts,
-      outputEffort: cap.outputEfforts,
-      thinkingMode: cap.thinkingModes,
-      verbosity: cap.verbosities,
-      reasoningMode: cap.reasoningModes,
-      reasoningContext: cap.reasoningContexts,
-      serviceTier: cap.serviceTiers,
-      cacheMode: cap.cacheModes,
-      cacheTtl: cap.cacheTtls,
-    };
-    for (const [key, values] of Object.entries(fields))
-      if (
-        g[key as keyof ModelGeneration] !== undefined &&
-        !(values as readonly unknown[] | undefined)?.includes(g[key as keyof ModelGeneration])
-      )
-        reject();
-    if (
-      protocol === 'anthropic-messages-v1' &&
-      g.thinkingMode === 'disabled' &&
-      ['xhigh', 'max'].includes(g.outputEffort ?? cap.defaultOutputEffort!)
-    )
-      reject('INCOMPATIBLE_THINKING_EFFORT');
-    if (protocol === 'vertex-gemini-v1' && g.structuredOutput !== undefined) reject();
-    if (protocol === 'deepseek-chat-v1') {
-      if (g.structuredOutput === true) reject();
-      if (g.reasoningEffort !== 'none' && g.temperature !== null)
-        reject('INCOMPATIBLE_THINKING_SAMPLING');
-    }
-    return;
+  const keys = protocolOptionKeys(protocol);
+  for (const key of Object.keys(g))
+    if (key !== 'maxOutputTokens' && key !== 'temperature' && !keys.includes(key)) reject();
+  if (g.temperature !== null && !keys.includes('temperature')) reject();
+  if (g.cacheTtl !== undefined) {
+    if (!['explicit', 'automatic'].includes(g.cacheMode ?? ''))
+      reject('CACHE_TTL_REQUIRES_CACHE_MODE');
+    if (!cacheTtls[protocol]?.includes(g.cacheTtl)) reject();
   }
-  if (g.maxOutputTokens > 200_000) reject();
-  const allowed =
-    protocol === 'fixture-sse-v1'
-      ? ['thinkingLevel']
-      : protocol === 'codex-app-server-v1'
-        ? ['reasoningEffort']
-        : ['openai-responses-v1', 'openai-chat-v1', 'vercel-chat-v1'].includes(protocol)
-          ? ['structuredOutput', 'reasoningEffort']
-          : [];
-  if (
-    ['codex-app-server-v1', 'vertex-gemini-v1', 'anthropic-messages-v1'].includes(protocol) &&
-    g.temperature !== null
-  )
-    reject();
-  if (Object.keys(g).some((key) => !['maxOutputTokens', 'temperature', ...allowed].includes(key)))
-    reject();
-}
-export function isOfficialModelConnection(connection: {
-  protocol: ProviderProtocol;
-  endpoint: string;
-}): boolean {
-  return (
-    ['vertex-gemini-v1', 'anthropic-messages-v1', 'deepseek-chat-v1'].includes(
-      connection.protocol
-    ) ||
-    (['openai-responses-v1', 'openai-chat-v1'].includes(connection.protocol) &&
-      connection.endpoint.replace(/\/$/u, '') === 'https://api.openai.com/v1')
-  );
-}
-export function requireSupportedModel(
-  connection: { protocol: ProviderProtocol; endpoint: string },
-  modelId: string
-): void {
-  if (isOfficialModelConnection(connection) && !modelCapability(connection.protocol, modelId))
-    reject('UNVERIFIED_MODEL_CAPABILITY');
-}
-export function validateCapabilityRevision(
-  model: Pick<ModelPreset, 'modelId' | 'capabilityRevision'>,
-  protocol: ProviderProtocol
-): void {
-  if (model.capabilityRevision !== modelCapability(protocol, model.modelId)?.revision)
-    reject('MODEL_CAPABILITY_REVISION_MISMATCH');
 }

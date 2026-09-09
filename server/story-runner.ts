@@ -337,7 +337,7 @@ export async function runStoryJob(
       results: ToolEvent[],
       opaqueState?: Json
     ): ProviderRequest => {
-      const configuredGeneration = generationFromModel(target, target.connection.protocol);
+      const configuredGeneration = generationFromModel(target);
       const generationBinding = evaluation?.generationBinding(configuredGeneration, results.length);
       const kept = new Set(
         context.contextPlan?.recentSourceRevisions ??

@@ -375,7 +375,7 @@ test('P09 P10 P13 fork from a completed scene preserves long prose and annotatio
   const uploaded = (await (await upload).json()) as Asset;
   await expect(imagePanel.getByRole('status')).toContainText('이미지를 등록했어요');
   expect(uploaded.hash).toBe(createHash('sha256').update(png).digest('hex'));
-  const endpoint = process.env.NR_REGISTRATION_FIXTURE_URL;
+  const endpoint = process.env.NR_PROVIDER_FIXTURE_URL;
   if (!endpoint) throw new Error('Dedicated image-selection loopback fixture is required');
   const connectionReply = await request.post('/api/connections', {
     data: {
@@ -767,11 +767,11 @@ test('P04 Vertex settings use service-account references and persist distinct ma
     await page.getByLabel('모델 연결', { exact: true }).selectOption(`${latest.id}`);
     await page.getByLabel('모델 ID', { exact: true }).fill('gemini-3.8-flash');
     await expect(page.getByLabel('모델 ID', { exact: true })).toBeEditable();
-    await expect(page.getByLabel('Temperature', { exact: true })).toHaveCount(0);
-    await editor.getByRole('button', { name: '생성 설정', exact: true }).click();
+    await expect(page.getByLabel('Temperature', { exact: true })).toBeHidden();
     await page
-      .getByLabel('Thinking Level', { exact: true })
+      .getByLabel('사고 강도', { exact: true })
       .selectOption(role === 'main' ? 'MEDIUM' : 'LOW');
+    await editor.getByRole('button', { name: '고급', exact: true }).click();
     await page
       .getByLabel('응답 제한 시간 (초)', { exact: true })
       .fill(role === 'main' ? '300' : '180');
@@ -875,17 +875,11 @@ test('P04 named and custom providers save native options from mobile settings wi
     await page.getByLabel('모델 연결', { exact: true }).selectOption(`${connection.id}`);
     await page.getByLabel('모델 프리셋 이름', { exact: true }).fill(item.modelId);
     await page.getByLabel('모델 ID', { exact: true }).fill(item.modelId);
-    await page.getByRole('button', { name: '생성 설정', exact: true }).click();
+    await page.getByLabel('사고 강도', { exact: true }).selectOption('high');
+    await page.getByRole('button', { name: '고급', exact: true }).click();
     await page.getByLabel('응답 제한 시간 (초)', { exact: true }).fill('900');
-    await page
-      .getByLabel(
-        item.protocol === 'anthropic-messages-v1' ? 'Output Effort' : 'Reasoning Effort',
-        { exact: true }
-      )
-      .selectOption('high');
     if (item.protocol === 'anthropic-messages-v1')
-      await page.getByLabel('Thinking', { exact: true }).selectOption('adaptive');
-    await page.getByRole('button', { name: '고급 옵션', exact: true }).click();
+      await page.getByLabel('사고 모드', { exact: true }).selectOption('adaptive');
     await page.getByLabel('번역 구조화 출력', { exact: true }).selectOption('on');
     const savedModel = page.waitForResponse(
       (r) => r.url().endsWith('/api/model-presets') && r.request().method() === 'POST'

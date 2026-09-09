@@ -14,7 +14,6 @@ import {
   modelCapability,
   validateGenerationShape,
   validateModelOptions,
-  validateCapabilityRevision,
 } from '../core/model-capabilities.js';
 import { createDefaultPromptProgram } from '../core/prompt-defaults.js';
 import { randomUUID, createHash } from 'node:crypto';
@@ -63,11 +62,6 @@ import {
 import { validateRunSnapshot } from './snapshot-archive.js';
 import { validatePackageRequests } from './package-requests.js';
 import { freezeSourceSegments } from '../core/package-source-segments.js';
-import {
-  validateRegistrationArchive,
-  validateRegistrationGraph,
-  normalizeRegistrationArchiveRow,
-} from './provider-registration-store.js';
 import { assertModelSelection } from './provider-selection.js';
 import { previousContextPlan, measureMainContext } from './context-planning.js';
 import { organizationTables } from './chat-organization.js';
@@ -168,11 +162,7 @@ function validateModelMetadata(value: Row) {
     catalogTimestamp(source.catalogUpdatedAt);
   }
 }
-function validateModelGeneration(
-  value: Row,
-  protocol?: Connection['protocol'],
-  checkCapability = true
-) {
+function validateModelGeneration(value: Row, protocol?: Connection['protocol']) {
   if (value.inputTokenLimit !== undefined)
     number(value.inputTokenLimit, 'input context limit', 8192, 1000000);
   if (value.evaluationTools !== undefined)
@@ -186,8 +176,7 @@ function validateModelGeneration(
   const generation = generationFromModel(value as ModelPreset);
   try {
     if (protocol) {
-      validateModelOptions(generation, protocol, value.modelId);
-      if (checkCapability) validateCapabilityRevision(value as ModelPreset, protocol);
+      validateModelOptions(generation, protocol);
       if (
         modelCapability(protocol, value.modelId)?.forcedTools === false &&
         value.evaluationTools?.contextMode === 'preloaded'
@@ -210,7 +199,6 @@ export class ProductStore {
   initFresh() {
     this.db.exec(`
         CREATE TABLE versions (kind TEXT NOT NULL,id TEXT NOT NULL,revision INTEGER NOT NULL,body TEXT NOT NULL,PRIMARY KEY(kind,id,revision));
-        CREATE UNIQUE INDEX registration_run_current ON versions(kind,id) WHERE kind='registration-run';
         CREATE TABLE provider_settings (kind TEXT NOT NULL CHECK(kind IN ('connection','model')),id TEXT NOT NULL,revision INTEGER NOT NULL,body TEXT NOT NULL,PRIMARY KEY(kind,id));
         CREATE TABLE profiles (chat_id TEXT PRIMARY KEY REFERENCES chats(id),body TEXT NOT NULL);
         CREATE TABLE branches (id TEXT PRIMARY KEY,chat_id TEXT NOT NULL REFERENCES chats(id),title TEXT NOT NULL,head_revision TEXT REFERENCES sources(id),revision INTEGER NOT NULL,is_default INTEGER NOT NULL);
@@ -266,7 +254,7 @@ export class ProductStore {
   save(kind: string, value: Row, id?: string, expected?: number) {
     return this.store.transaction(() => this.saveInTransaction(kind, value, id, expected));
   }
-  /** Caller owns the transaction when reserving settings with an immutable registration receipt. */
+  /** Caller owns the transaction. */
   saveInTransaction(kind: string, value: Row, id?: string, expected?: number) {
     if (id) this.assertAvailable(kind, id);
     const prior = id ? this.get<Row & ContentRef>(kind, id) : null;
@@ -403,9 +391,27 @@ export class ProductStore {
   }
   prepareConnection(value: unknown, id?: string) {
     const b = record(value);
-    fields(b, ['title', 'protocol', 'endpoint', 'credentialEnv', 'enabled', 'expectedRevision']);
+    fields(b, [
+      'title',
+      'protocol',
+      'endpoint',
+      'credentialEnv',
+      'catalogCredentialEnv',
+      'enabled',
+      'expectedRevision',
+    ]);
     const protocol = choice(b.protocol, [...PROVIDER_PROTOCOLS], 'protocol');
     const endpoint = connectionEndpoint(b.endpoint, protocol);
+    const catalogCredentialEnv =
+      b.catalogCredentialEnv === undefined || b.catalogCredentialEnv === ''
+        ? undefined
+        : text(b.catalogCredentialEnv, 'catalog credential reference', 200);
+    if (catalogCredentialEnv !== undefined) {
+      if (protocol !== 'vertex-gemini-v1')
+        throw new HttpError(400, 'Catalog credential applies to Gemini connections only');
+      if (!validCredentialEnv(catalogCredentialEnv) || isVertexFileReference(catalogCredentialEnv))
+        throw new HttpError(400, 'Invalid catalog credential reference');
+    }
     if (protocol === 'codex-app-server-v1' && b.credentialEnv !== undefined)
       throw new HttpError(400, 'Codex uses official local login');
     const credentialEnv =
@@ -432,6 +438,7 @@ export class ProductStore {
       protocol,
       endpoint,
       ...(credentialEnv ? { credentialEnv } : {}),
+      ...(catalogCredentialEnv ? { catalogCredentialEnv } : {}),
       enabled: boolean(b.enabled),
       catalog: sameAuthority ? structuredClone(prior.catalog) : [],
       catalogError: sameAuthority ? prior.catalogError : null,
@@ -464,7 +471,7 @@ export class ProductStore {
       throw new HttpError(400, 'Validation connection mismatch');
     const connection = validationConnection ?? this.get<Connection>('connection', connectionId);
     const modelId = text(b.modelId, 'model ID', 300);
-    validateModelGeneration(b, connection.protocol, false);
+    validateModelGeneration(b, connection.protocol);
     const vertex = connection.protocol === 'vertex-gemini-v1';
     const prepared: Omit<ModelPreset, 'id' | 'revision'> = {
       title: text(b.title, 'title', 200),
@@ -473,9 +480,6 @@ export class ProductStore {
       ...generationFromModel(b as ModelPreset),
       capabilityProtocol: connection.protocol,
       ...(b.inputTokenLimit !== undefined ? { inputTokenLimit: b.inputTokenLimit } : {}),
-      ...(modelCapability(connection.protocol, modelId)
-        ? { capabilityRevision: modelCapability(connection.protocol, modelId)!.revision }
-        : {}),
       ...(vertex || b.timeoutMs !== undefined
         ? { timeoutMs: b.timeoutMs ?? VERTEX_GEMINI_DEFAULT_TIMEOUT_MS }
         : {}),
@@ -1041,7 +1045,6 @@ export class ProductStore {
               throw new HttpError(400, 'Invalid archive column');
             if (table === 'versions') {
               validateArchiveVersion(row);
-              if (row.kind === 'registration-run') normalizeRegistrationArchiveRow(row);
             }
             if (table === 'provider_settings') {
               if (!isProviderSetting(row.kind))
@@ -1326,10 +1329,6 @@ function validateArchiveVersion(row: Row, providerSetting = false) {
   number(row.revision, 'version');
   if (body.id !== row.id || body.revision !== row.revision)
     throw new HttpError(400, 'Version identity mismatch');
-  if (row.kind === 'registration-run') {
-    validateRegistrationArchive(body);
-    return;
-  }
   if (row.kind === 'package-image') {
     validateImageBlob(body);
     return;
@@ -1382,12 +1381,19 @@ function validateArchiveVersion(row: Row, providerSetting = false) {
       'protocol',
       'endpoint',
       'credentialEnv',
+      'catalogCredentialEnv',
       'enabled',
       'catalog',
       'catalogError',
       'catalogUpdatedAt',
     ]);
     const protocol = choice(body.protocol, [...PROVIDER_PROTOCOLS], 'protocol');
+    if (
+      body.catalogCredentialEnv !== undefined &&
+      (protocol !== 'vertex-gemini-v1' ||
+        !validCredentialEnv(text(body.catalogCredentialEnv, 'catalog credential reference', 200)))
+    )
+      throw new HttpError(400, 'Invalid catalog credential reference');
     if (body.catalogUpdatedAt !== undefined) catalogTimestamp(body.catalogUpdatedAt);
     connectionEndpoint(body.endpoint, protocol);
     if (protocol === 'codex-app-server-v1' && body.credentialEnv !== undefined)
@@ -1400,13 +1406,29 @@ function validateArchiveVersion(row: Row, providerSetting = false) {
       throw new HttpError(400, 'Invalid credential reference');
     archiveList(body.catalog, 5000).forEach((raw) => {
       const model = record(raw);
-      fields(model, ['id', 'name', 'capabilities', 'priceRevision']);
+      fields(model, ['id', 'name', 'capabilities', 'priceRevision', 'limits', 'options']);
       text(model.id, 'catalog ID', 300);
       text(model.name, 'catalog name', 400);
       const capabilities = record(model.capabilities);
       if (Object.values(capabilities).some((v) => v !== null && typeof v !== 'boolean'))
         throw new HttpError(400, 'Invalid catalog capabilities');
       if (model.priceRevision !== null) text(model.priceRevision, 'price revision', 200);
+      if (model.limits !== undefined) {
+        const limits = record(model.limits);
+        fields(limits, ['maxOutputTokens', 'inputTokenLimit']);
+        for (const value of Object.values(limits))
+          if (!Number.isSafeInteger(value) || Number(value) < 1 || Number(value) > 100_000_000)
+            throw new HttpError(400, 'Invalid catalog limit');
+      }
+      if (model.options !== undefined) {
+        const options = record(model.options);
+        fields(options, ['thinking', 'thinkingModes']);
+        for (const list of Object.values(options)) {
+          if (!Array.isArray(list) || list.length > 20)
+            throw new HttpError(400, 'Invalid catalog options');
+          for (const item of list) text(item, 'catalog option', 40);
+        }
+      }
     });
     if (body.catalogError !== null) text(body.catalogError, 'catalog error', 2000);
   } else if (row.kind === 'model') {
@@ -1422,7 +1444,6 @@ function validateArchiveVersion(row: Row, providerSetting = false) {
       'enabled',
       'userOverrides',
       'source',
-      'capabilityRevision',
       'capabilityProtocol',
     ]);
     archiveId(body.connectionId);
@@ -2006,5 +2027,4 @@ function validateArchiveGraph(product: ProductStore) {
     )
       throw new HttpError(400, 'Attempt identity mismatch');
   }
-  validateRegistrationGraph(product);
 }

@@ -59,7 +59,10 @@ export function readiness(
     enabled: connection.enabled,
     originApproved,
     credentialStatus,
-    catalogKind: connection.protocol === 'vertex-gemini-v1' ? 'local-support' : 'remote',
+    catalogKind:
+      connection.protocol === 'vertex-gemini-v1' && !connection.catalogCredentialEnv
+        ? 'local-support'
+        : 'remote',
   };
 }
 

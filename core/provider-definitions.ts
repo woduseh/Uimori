@@ -158,7 +158,7 @@ export const PROVIDER_DEFINITIONS: readonly ProviderDefinition[] = Object.freeze
     credentialEnvDefault: 'VERCEL_API_KEY',
     auth: 'bearer',
     catalog: 'remote',
-    optionKeys: responsesOptions,
+    optionKeys: [...responsesOptions, 'serviceTier'],
     reference: 'core/openai-chat-protocol.ts#encodeChat',
     limitations: [
       'Vercel의 공식 API 기본 주소에서 Chat Completions 형식을 사용해요.',
@@ -172,7 +172,7 @@ export const PROVIDER_DEFINITIONS: readonly ProviderDefinition[] = Object.freeze
     credentialEnvDefault: 'DEEPSEEK_API_KEY',
     auth: 'bearer',
     catalog: 'remote',
-    optionKeys: ['maxOutputTokens', 'temperature', 'timeoutMs', 'reasoningEffort'],
+    optionKeys: ['maxOutputTokens', 'temperature', 'timeoutMs', 'reasoningEffort', 'serviceTier'],
     reference: 'core/openai-chat-protocol.ts#encodeChat',
     limitations: [
       'DeepSeek 공식 주소에서 OpenAI Chat Completions 형식을 사용해요.',
@@ -187,7 +187,7 @@ export const PROVIDER_DEFINITIONS: readonly ProviderDefinition[] = Object.freeze
     credentialEnvDefault: 'PROVIDER_API_KEY',
     auth: 'bearer',
     catalog: 'remote',
-    optionKeys: responsesOptions,
+    optionKeys: [...responsesOptions, 'serviceTier'],
     reference: 'core/openai-chat-protocol.ts#encodeChat',
     limitations: [
       '서버에서 허용한 HTTPS 주소나 이 컴퓨터의 로컬 HTTP 주소를 사용할 수 있어요.',

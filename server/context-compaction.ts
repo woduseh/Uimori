@@ -94,7 +94,7 @@ function summaryRequest(
   previousSummary: string | null,
   fragments: Fragment[]
 ): ProviderRequest {
-  const generation = generationFromModel(target, target.connection.protocol);
+  const generation = generationFromModel(target);
   generation.maxOutputTokens = Math.min(generation.maxOutputTokens, 4096);
   // A smaller output cap must not leave an inherited thinking budget above that cap.
   if (

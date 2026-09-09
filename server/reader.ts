@@ -3,6 +3,26 @@ import { latestTranslation, validateTranslationArtifact } from './source-editing
 import type { Store } from './store.js';
 import { mergedReaderAssets } from './package-images.js';
 import type { ReaderActivity } from '../core/types.js';
+import { providerRejection } from '../core/provider-rejection.js';
+
+/** The failing attempt's stored provider diagnostic, read only for 4xx failures being displayed. */
+export function attemptRejection(
+  store: Store,
+  column: 'run_id' | 'job_id' | 'story_job_id',
+  id: string
+) {
+  const row = store.db
+    .prepare(
+      `SELECT json_extract(response,'$.error.diagnostic') AS diagnostic FROM attempts WHERE ${column}=? AND json_extract(response,'$.error.diagnostic') IS NOT NULL ORDER BY rowid DESC LIMIT 1`
+    )
+    .get(id) as { diagnostic: string | null } | undefined;
+  if (!row?.diagnostic) return undefined;
+  try {
+    return providerRejection(JSON.parse(row.diagnostic));
+  } catch {
+    return undefined;
+  }
+}
 
 /** Metadata only; an explicit page scope includes its older completed work as well. */
 function readerActivity(store: Store, chatId: string, sourceIds?: string[]): ReaderActivity[] {
@@ -118,7 +138,12 @@ export function readerDetail(store: Store, id: string, query: Record<string, str
         }
         return true;
       })
-      .map(({ input: _input, ...job }) => job);
+      .map(({ input: _input, ...job }) => {
+        const rejection = /AUXILIARY_PROVIDER_HTTP_4\d\d$/u.test(job.error ?? '')
+          ? attemptRejection(store, 'job_id', job.id)
+          : undefined;
+        return rejection ? { ...job, rejection } : job;
+      });
   });
   // JSON projection happens in SQLite: do not parse quadratic history or diagnostic bodies.
   const runs = (
@@ -142,6 +167,9 @@ export function readerDetail(store: Store, id: string, query: Record<string, str
     usage: row.usage
       ? JSON.parse(row.usage)
       : { modelCalls: 0, inputTokens: null, outputTokens: null, costUsd: null },
+    ...(/^HTTP_4\d\d$/u.test(String(row.error ?? ''))
+      ? { rejection: attemptRejection(store, 'run_id', row.id) }
+      : {}),
   }));
   const runsById = new Map(runs.map((run) => [run.id, run]));
   // Requests label the branch's complete index without loading off-page source bodies.

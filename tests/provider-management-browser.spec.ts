@@ -135,7 +135,7 @@ test('PMUI01 mobile template registration selects the connection, reports catalo
       .locator('.toggle-row')
       .filter({ hasText: '새 모델 선택에 표시' })
       .screenshot({ path: info.outputPath('model-visibility-switch.png') });
-  await modelForm.getByRole('button', { name: '고급 옵션', exact: true }).click();
+  await modelForm.getByRole('button', { name: '고급', exact: true }).click();
   await expect(modelForm.getByLabel('이 모델 프리셋에 평가 도구 4개 사용')).not.toBeChecked();
   await modelForm.getByLabel('이 모델 프리셋에 평가 도구 4개 사용').check();
   if (visualReview)
@@ -159,9 +159,7 @@ test('PMUI01 mobile template registration selects the connection, reports catalo
   ]) {
     await modelForm
       .getByRole('button', {
-        name: ['모델 프리셋 이름', '모델 연결', '모델 ID'].includes(label)
-          ? '기본 정보'
-          : '고급 옵션',
+        name: ['모델 프리셋 이름', '모델 연결', '모델 ID'].includes(label) ? '기본' : '고급',
         exact: true,
       })
       .click();
@@ -175,7 +173,7 @@ test('PMUI01 mobile template registration selects the connection, reports catalo
   await modelForm.getByLabel('도구 호출 지원 판단').scrollIntoViewIfNeeded();
   if (visualReview)
     await page.screenshot({ path: info.outputPath('provider-management-mobile-capabilities.png') });
-  await modelForm.getByRole('button', { name: '기본 정보', exact: true }).click();
+  await modelForm.getByRole('button', { name: '기본', exact: true }).click();
   await modelForm.getByLabel('모델 프리셋 이름').scrollIntoViewIfNeeded();
   if (visualReview)
     await page.screenshot({ path: info.outputPath('provider-management-mobile-model.png') });
@@ -311,7 +309,6 @@ test('PMUI03 model edits use the latest connection without changing role IDs; de
   );
   await expect(form).not.toContainText('보관된 버전');
   await form.getByLabel('모델 프리셋 이름').fill(title + ' 수정 모델');
-  await form.getByRole('button', { name: '생성 설정', exact: true }).click();
   await form.getByLabel('최대 출력 토큰').fill('4096');
   await form.getByRole('button', { name: '모델 변경 저장', exact: true }).click();
   await expect
@@ -531,7 +528,6 @@ test('PMUI07 quick setup selects a cached catalog model and keeps drafts across 
     await expect(modelForm.getByLabel('모델 ID', { exact: true })).toHaveValue(
       'synthetic/catalog-beta'
     );
-    await modelForm.getByRole('button', { name: '생성 설정', exact: true }).click();
     await modelForm.getByLabel('최대 출력 토큰').fill('1024');
     await page.getByRole('button', { name: '연결 관리', exact: true }).click();
     await expect(modelForm).not.toBeVisible();
@@ -540,7 +536,6 @@ test('PMUI07 quick setup selects a cached catalog model and keeps drafts across 
       .getByRole('button', { name: '모델 편집 이어서 · ' + title + ' Beta', exact: true })
       .click();
     await expect(modelForm.getByLabel('최대 출력 토큰')).toHaveValue('1024');
-    await modelForm.getByRole('button', { name: '기본 정보', exact: true }).click();
     await expect(modelForm.getByLabel('모델 ID', { exact: true })).toHaveValue(
       'synthetic/catalog-beta'
     );
@@ -719,7 +714,6 @@ test('PMUI09 invalid hidden model fields receive focus and old deactivation conf
   await form.getByLabel('모델 연결').selectOption(`${connection.id}`);
   await form.getByLabel('모델 프리셋 이름').fill('');
   await form.getByLabel('모델 ID', { exact: true }).fill('');
-  await form.getByRole('button', { name: '생성 설정', exact: true }).click();
   await form.getByLabel('최대 출력 토큰').fill('0');
   let modelWrites = 0;
   page.on('request', (r) => {
@@ -730,14 +724,13 @@ test('PMUI09 invalid hidden model fields receive focus and old deactivation conf
       modelWrites++;
   });
   await form.getByRole('button', { name: '모델 프리셋 등록', exact: true }).click();
-  await expect(form.getByRole('button', { name: '기본 정보', exact: true })).toHaveAttribute(
+  await expect(form.getByRole('button', { name: '기본', exact: true })).toHaveAttribute(
     'aria-pressed',
     'true'
   );
   await expect(form.getByLabel('모델 프리셋 이름')).toBeFocused();
   await form.getByLabel('모델 프리셋 이름').fill(title + ' 초안');
   await form.getByLabel('모델 ID', { exact: true }).fill('synthetic-model');
-  await form.getByRole('button', { name: '생성 설정', exact: true }).click();
   await form.getByLabel('최대 출력 토큰').fill('');
   await expect(form.getByLabel('최대 출력 토큰')).toHaveValue('');
   await form.getByRole('button', { name: '모델 프리셋 등록', exact: true }).click();
@@ -745,14 +738,23 @@ test('PMUI09 invalid hidden model fields receive focus and old deactivation conf
   expect(modelWrites).toBe(0);
   await form.getByLabel('최대 출력 토큰').pressSequentially('4096');
   await expect(form.getByLabel('최대 출력 토큰')).toHaveValue('4096');
-  await form.getByLabel('최대 출력 토큰').fill('200001');
-  await form.getByRole('button', { name: '기본 정보', exact: true }).click();
+  await form.getByLabel('최대 출력 토큰').fill('500001');
   await form.getByRole('button', { name: '모델 프리셋 등록', exact: true }).click();
-  await expect(form.getByRole('button', { name: '생성 설정', exact: true })).toHaveAttribute(
+  await expect(form.getByLabel('최대 출력 토큰')).toBeFocused();
+  expect(modelWrites).toBe(0);
+  await form.getByLabel('최대 출력 토큰').fill('4096');
+  // An unsendable combination hidden in the other tab still receives focus with its tab opened.
+  await form.getByRole('button', { name: '고급', exact: true }).click();
+  await form.getByLabel('캐시 방식', { exact: true }).selectOption('automatic');
+  await form.getByLabel('캐시 유지 시간', { exact: true }).selectOption('1h');
+  await form.getByLabel('캐시 방식', { exact: true }).selectOption('');
+  await form.getByRole('button', { name: '기본', exact: true }).click();
+  await form.getByRole('button', { name: '모델 프리셋 등록', exact: true }).click();
+  await expect(form.getByRole('button', { name: '고급', exact: true })).toHaveAttribute(
     'aria-pressed',
     'true'
   );
-  await expect(form.getByLabel('최대 출력 토큰')).toBeFocused();
+  await expect(form.getByLabel('캐시 유지 시간', { exact: true })).toBeFocused();
   expect(modelWrites).toBe(0);
   const a = await api<ModelPreset>(request, '/model-presets', {
     title: title + ' A',
@@ -773,7 +775,7 @@ test('PMUI09 invalid hidden model fields receive focus and old deactivation conf
   await settings(page);
   await page.getByRole('button', { name: a.title + ' 모델 수정', exact: true }).click();
   form = page.getByRole('form', { name: '모델 편집 양식' });
-  await form.getByRole('button', { name: '기본 정보', exact: true }).click();
+  await form.getByRole('button', { name: '기본', exact: true }).click();
   await form.getByRole('switch', { name: '새 모델 선택에 표시' }).uncheck();
   await form.getByRole('button', { name: '모델 변경 저장', exact: true }).click();
   const confirmation = page.getByRole('region', { name: '비활성 영향 확인' });
@@ -793,13 +795,14 @@ test('PMUI09 invalid hidden model fields receive focus and old deactivation conf
   expect(modelWrites).toBe(0);
 });
 
-test('PMUI11 reviewed provider options are visible and round-trip without generation, including GPT Flex and Fable', async ({
+test('PMUI11 documented provider options lead each select, round-trip without generation, and include GPT Flex and Fable', async ({
   page,
   request,
 }, info) => {
   await page.setViewportSize({ width: 390, height: 844 });
   const observed = observe(page),
     prefix = 'PMUI11 ' + Date.now();
+  const tabFor = (label: string) => (label === '사고 강도' ? '기본' : '고급');
   const cases = [
     {
       protocol: 'vertex-gemini-v1',
@@ -809,24 +812,24 @@ test('PMUI11 reviewed provider options are visible and round-trip without genera
       choices: { 'Service Tier': 'flex' },
       saved: { serviceTier: 'flex' },
       absent: ['thinkingLevel'],
-      hidden: ['Reasoning Effort', 'Output Effort', 'Verbosity'],
+      hidden: ['Verbosity', '사고 모드'],
     },
     {
       protocol: 'vertex-gemini-v1',
       endpoint:
         'https://aiplatform.googleapis.com/v1/projects/synthetic-parameters/locations/global/publishers/google/models',
       modelId: 'gemini-3.8-flash',
-      choices: { 'Thinking Level': 'HIGH', 'Service Tier': 'flex' },
+      choices: { '사고 강도': 'HIGH', 'Service Tier': 'flex' },
       saved: { thinkingLevel: 'HIGH', serviceTier: 'flex' },
       absent: ['outputEffort'],
-      hidden: ['Reasoning Effort', 'Output Effort', 'Verbosity'],
+      hidden: ['Verbosity', '사고 모드'],
     },
     {
       protocol: 'openai-responses-v1',
       endpoint: 'https://api.openai.com/v1',
       modelId: 'gpt-5.6-sol',
       choices: {
-        'Reasoning Effort': 'none',
+        '사고 강도': 'none',
         Verbosity: 'high',
         'Service Tier': 'flex',
         '캐시 방식': 'automatic',
@@ -840,15 +843,15 @@ test('PMUI11 reviewed provider options are visible and round-trip without genera
         cacheTtl: '30m',
       },
       absent: ['outputEffort'],
-      hidden: ['Output Effort', 'Thinking'],
+      hidden: ['사고 모드'],
     },
     {
       protocol: 'anthropic-messages-v1',
       endpoint: 'https://api.anthropic.com/v1',
       modelId: 'claude-opus-5',
       choices: {
-        'Output Effort': 'high',
-        Thinking: 'disabled',
+        '사고 강도': 'high',
+        '사고 모드': 'disabled',
         '캐시 방식': 'explicit',
         '캐시 유지 시간': '5m',
       },
@@ -859,16 +862,16 @@ test('PMUI11 reviewed provider options are visible and round-trip without genera
         cacheTtl: '5m',
       },
       absent: ['reasoningEffort'],
-      hidden: ['Reasoning Effort', 'Verbosity'],
+      hidden: ['Verbosity'],
     },
     {
       protocol: 'anthropic-messages-v1',
       endpoint: 'https://api.anthropic.com/v1',
       modelId: 'claude-fable-5-1',
-      choices: { 'Output Effort': 'max', '캐시 방식': 'automatic', '캐시 유지 시간': '1h' },
+      choices: { '사고 강도': 'max', '캐시 방식': 'automatic', '캐시 유지 시간': '1h' },
       saved: { outputEffort: 'max', cacheMode: 'automatic', cacheTtl: '1h' },
       absent: ['reasoningEffort', 'thinkingMode'],
-      hidden: ['Reasoning Effort', 'Verbosity'],
+      hidden: ['Verbosity'],
     },
   ];
   for (const [index, item] of cases.entries()) {
@@ -887,9 +890,11 @@ test('PMUI11 reviewed provider options are visible and round-trip without genera
     await form.getByLabel('모델 프리셋 이름').fill(title);
     await form.getByLabel('모델 ID', { exact: true }).fill(item.modelId);
     await expect(form.getByLabel('모델 ID', { exact: true })).toBeEditable();
-    await form.getByRole('button', { name: '생성 설정', exact: true }).click();
-    for (const [label, value] of Object.entries(item.choices))
+    await expect(form.getByTestId('model-hint-source')).toContainText('옵션 출처 앱 확인');
+    for (const [label, value] of Object.entries(item.choices)) {
+      await form.getByRole('button', { name: tabFor(label), exact: true }).click();
       await form.getByLabel(label, { exact: true }).selectOption(value!);
+    }
     for (const label of item.hidden)
       await expect(form.getByLabel(label, { exact: true })).toHaveCount(0);
     if (item.choices['Service Tier'])
@@ -897,18 +902,22 @@ test('PMUI11 reviewed provider options are visible and round-trip without genera
         'Flex'
       );
     if (item.modelId === 'claude-fable-5-1') {
-      await expect(form).toContainText('Adaptive Thinking은 항상 켜져 있어요');
+      await form.getByRole('button', { name: '고급', exact: true }).click();
+      // Fable documents adaptive thinking only; disabling stays selectable as an unverified value.
+      const mode = form.getByLabel('사고 모드', { exact: true });
+      await expect(mode.locator('optgroup[label="문서로 확인한 값"] option')).toHaveText([
+        '적응형 · adaptive',
+      ]);
       await expect(
-        form.getByLabel('Thinking', { exact: true }).locator('option[value="disabled"]')
-      ).toHaveCount(0);
-      await form.getByRole('button', { name: '고급 옵션', exact: true }).click();
+        mode.locator('optgroup[label="미확인 값 · 공급자가 판정"] option[value="disabled"]')
+      ).toHaveCount(1);
       await form.getByLabel('이 모델 프리셋에 평가 도구 4개 사용').check();
       await expect(
         form.getByLabel('평가 문맥 제공').locator('option[value="preloaded"]')
       ).toHaveJSProperty('disabled', true);
       await expect(form.getByLabel('평가 문맥 제공')).toHaveValue('model-selected');
-      await form.getByRole('button', { name: '생성 설정', exact: true }).click();
     }
+    await form.getByRole('button', { name: '기본', exact: true }).click();
     expect(
       await page
         .getByRole('dialog', { name: '설정', exact: true })
@@ -917,6 +926,7 @@ test('PMUI11 reviewed provider options are visible and round-trip without genera
     if (visualReview)
       await form.screenshot({ path: info.outputPath(`provider-parameters-${index}-mobile.png`) });
     if (item.choices['캐시 방식']) {
+      await form.getByRole('button', { name: '고급', exact: true }).click();
       await form.getByLabel('캐시 방식', { exact: true }).scrollIntoViewIfNeeded();
       if (visualReview)
         await page.screenshot({ path: info.outputPath(`provider-cache-${index}-mobile.png`) });
@@ -929,16 +939,17 @@ test('PMUI11 reviewed provider options are visible and round-trip without genera
     for (const key of item.absent) expect(saved).not.toHaveProperty(key);
     expect(connection).not.toHaveProperty('requestTier');
     await page.getByRole('button', { name: title + ' 모델 수정', exact: true }).click();
-    await form.getByRole('button', { name: '생성 설정', exact: true }).click();
-    for (const [label, value] of Object.entries(item.choices))
+    for (const [label, value] of Object.entries(item.choices)) {
+      await form.getByRole('button', { name: tabFor(label), exact: true }).click();
       await expect(form.getByLabel(label, { exact: true })).toHaveValue(value!);
+    }
   }
   expect(observed.errors).toEqual([]);
   expect(observed.generations).toEqual([]);
   expect(observed.legacyReads).toEqual([]);
 });
 
-test('PMUI12 changing the model preserves unsupported choices until the user explicitly replaces them', async ({
+test('PMUI12 changing the model or connection keeps choices visible as unverified or unsendable, and only unsendable values block saving', async ({
   page,
   request,
 }, info) => {
@@ -951,6 +962,13 @@ test('PMUI12 changing the model preserves unsupported choices until the user exp
       endpoint: 'https://api.openai.com/v1',
       credentialEnv: 'PM_SYNTHETIC_KEY',
       enabled: false,
+    }),
+    anthropic = await api<Connection>(request, '/connections', {
+      title: title + ' Anthropic',
+      protocol: 'anthropic-messages-v1',
+      endpoint: 'https://api.anthropic.com/v1',
+      credentialEnv: 'PM_SYNTHETIC_KEY',
+      enabled: false,
     });
   await settings(page);
   await page.getByRole('button', { name: '새 모델 입력', exact: true }).click();
@@ -958,26 +976,41 @@ test('PMUI12 changing the model preserves unsupported choices until the user exp
   await form.getByLabel('모델 연결').selectOption(`${connection.id}`);
   await form.getByLabel('모델 프리셋 이름').fill(title);
   await form.getByLabel('모델 ID', { exact: true }).fill('gpt-5.6-sol');
-  await form.getByRole('button', { name: '생성 설정', exact: true }).click();
-  await form.getByLabel('Reasoning Effort', { exact: true }).selectOption('none');
+  const strength = form.getByLabel('사고 강도', { exact: true });
+  await strength.selectOption('none');
+  await form.getByRole('button', { name: '고급', exact: true }).click();
   await form.getByLabel('Verbosity', { exact: true }).selectOption('low');
-  await form.getByRole('button', { name: '기본 정보', exact: true }).click();
+  // Switching to another protocol keeps the choices visible as unsendable until the user clears them.
+  await form.getByRole('button', { name: '기본', exact: true }).click();
+  await form.getByLabel('모델 연결').selectOption(`${anthropic.id}`);
+  const stale = form.getByLabel('이전 연결의 사고 강도 · reasoningEffort', { exact: true });
+  await expect(stale).toHaveValue('none');
+  await expect(form).toContainText('이 연결에서 보낼 수 없어요');
+  await form.getByRole('button', { name: '고급', exact: true }).click();
+  await expect(form.getByLabel('Verbosity', { exact: true })).toHaveValue('low');
+  await form.getByLabel('Verbosity', { exact: true }).selectOption('');
+  await expect(form.getByLabel('Verbosity', { exact: true })).toHaveCount(0);
+  await form.getByRole('button', { name: '기본', exact: true }).click();
+  await stale.selectOption('');
+  await expect(stale).toHaveCount(0);
+  await form.getByLabel('모델 연결').selectOption(`${connection.id}`);
+  await form.getByLabel('모델 ID', { exact: true }).fill('gpt-5.6-sol');
+  await strength.selectOption('none');
+  await form.getByRole('button', { name: '고급', exact: true }).click();
+  await form.getByLabel('Verbosity', { exact: true }).selectOption('low');
+  await form.getByRole('button', { name: '기본', exact: true }).click();
   await form.getByLabel('모델 ID', { exact: true }).fill('gpt-6-astra');
-  await form.getByRole('button', { name: '모델 프리셋 등록', exact: true }).click();
-  await expect(form.getByRole('button', { name: '생성 설정', exact: true })).toHaveAttribute(
-    'aria-pressed',
-    'true'
-  );
-  await expect(form.getByLabel('Reasoning Effort', { exact: true })).toHaveValue('none');
-  await expect(form.getByLabel('Reasoning Effort', { exact: true })).toBeFocused();
-  await expect(form).toContainText('현재 값은 이 모델에서 지원하지 않아요');
-  expect((await library(request)).models.some((model) => model.title === title)).toBe(false);
+  // Astra documents no `none`: the choice is kept and marked unverified rather than rewritten or blocked.
+  await expect(strength).toHaveValue('none');
+  await expect(
+    strength.locator('optgroup[label="미확인 값 · 공급자가 판정"] option[value="none"]')
+  ).toHaveCount(1);
+  await expect(form).toContainText('문서로 확인한 값이 아니에요');
   if (visualReview)
     await form.screenshot({
       path: info.outputPath('provider-parameters-preserved-invalid-desktop.png'),
     });
-  await form.getByLabel('Reasoning Effort', { exact: true }).selectOption('high');
-  await form.getByLabel('Verbosity', { exact: true }).selectOption('');
+  await form.getByRole('button', { name: '고급', exact: true }).click();
   await form.getByLabel('캐시 방식').selectOption('automatic');
   await form.getByLabel('캐시 유지 시간').selectOption('30m');
   await form.getByLabel('캐시 방식').selectOption('disabled');
@@ -990,9 +1023,13 @@ test('PMUI12 changing the model preserves unsupported choices until the user exp
   await form.getByRole('button', { name: '모델 프리셋 등록', exact: true }).click();
   await expect
     .poll(async () => (await library(request)).models.find((model) => model.title === title))
-    .toMatchObject({ modelId: 'gpt-6-astra', reasoningEffort: 'high', cacheMode: 'disabled' });
+    .toMatchObject({
+      modelId: 'gpt-6-astra',
+      reasoningEffort: 'none',
+      verbosity: 'low',
+      cacheMode: 'disabled',
+    });
   const saved = (await library(request)).models.find((model) => model.title === title);
-  expect(saved).not.toHaveProperty('verbosity');
   expect(saved).not.toHaveProperty('cacheTtl');
   expect(observed.errors).toEqual([]);
   expect(observed.generations).toEqual([]);
@@ -1178,7 +1215,7 @@ test('PMUI15 a forced Google service tier is shown and conflicting saved choices
   await page.getByLabel('연결·모델 검색').fill(title);
   await page.getByRole('button', { name: title + ' 모델 수정', exact: true }).click();
   const form = page.getByRole('form', { name: '모델 편집 양식' });
-  await form.getByRole('button', { name: '생성 설정', exact: true }).click();
+  await form.getByRole('button', { name: '고급', exact: true }).click();
   await expect(form).toContainText('서버에서 Service Tier를 Flex로 제한해요');
   await expect(form.getByLabel('Service Tier')).toHaveValue('standard');
   await form.getByRole('button', { name: '모델 변경 저장', exact: true }).click();
@@ -1290,7 +1327,6 @@ test('PMUI10 Codex subscription login preserves drafts and saves a connection an
   expect(savedConnection).not.toHaveProperty('requestTier');
   await modelForm.getByLabel('모델 프리셋 이름', { exact: true }).fill('PMUI10 Codex 모델');
   await modelForm.getByLabel('모델 ID', { exact: true }).fill('synthetic-codex-model');
-  await modelForm.getByRole('button', { name: '생성 설정', exact: true }).click();
   await modelForm.getByLabel('출력 목표 토큰', { exact: true }).fill('2048');
   await expect(modelForm.getByLabel('Temperature', { exact: true })).toBeHidden();
   await modelForm.getByRole('button', { name: '모델 프리셋 등록', exact: true }).click();
@@ -1427,32 +1463,32 @@ test('PMUI17 new Google, Vercel and DeepSeek models are selectable locally and s
       endpoint:
         'https://aiplatform.googleapis.com/v1/projects/synthetic-new-models/locations/global/publishers/google/models',
       modelId: 'gemini-3.5-flash-lite',
-      options: { 'Thinking Level': ['MINIMAL', 'MEDIUM', 'HIGH'] },
-      choices: { 'Thinking Level': 'MINIMAL' },
+      options: { '사고 강도': ['MINIMAL', 'MEDIUM', 'HIGH'] },
+      choices: { '사고 강도': 'MINIMAL' },
       saved: { thinkingLevel: 'MINIMAL', temperature: null },
     },
     {
       protocol: 'vercel-chat-v1',
       endpoint: 'https://ai-gateway.vercel.sh/v1',
       modelId: 'spacexai/grok-4.6',
-      options: { 'Reasoning Effort': ['low', 'medium', 'high', 'xhigh'] },
-      choices: { 'Reasoning Effort': 'xhigh' },
+      options: { '사고 강도': ['low', 'medium', 'high', 'xhigh'] },
+      choices: { '사고 강도': 'xhigh' },
       saved: { reasoningEffort: 'xhigh' },
     },
     {
       protocol: 'vercel-chat-v1',
       endpoint: 'https://ai-gateway.vercel.sh/v1',
       modelId: 'openai/gpt-5.6-sol',
-      options: { 'Reasoning Effort': ['none', 'low', 'medium', 'high', 'xhigh'] },
-      choices: { 'Reasoning Effort': 'xhigh' },
+      options: { '사고 강도': ['none', 'low', 'medium', 'high', 'xhigh'] },
+      choices: { '사고 강도': 'xhigh' },
       saved: { reasoningEffort: 'xhigh' },
     },
     ...['deepseek-v4-pro', 'deepseek-v4-flash'].map((modelId) => ({
       protocol: 'deepseek-chat-v1',
       endpoint: 'https://api.deepseek.com/v1',
       modelId,
-      options: { 'Reasoning Effort': ['none', 'low', 'high', 'max'] },
-      choices: { 'Reasoning Effort': modelId === 'deepseek-v4-pro' ? 'max' : 'none' },
+      options: { '사고 강도': ['none', 'low', 'high', 'max'] },
+      choices: { '사고 강도': modelId === 'deepseek-v4-pro' ? 'max' : 'none' },
       saved: { reasoningEffort: modelId === 'deepseek-v4-pro' ? 'max' : 'none' },
     })),
   ];
@@ -1471,18 +1507,16 @@ test('PMUI17 new Google, Vercel and DeepSeek models are selectable locally and s
     await form.getByLabel('모델 연결').selectOption(`${connection.id}`);
     await form.getByLabel('모델 목록 검색').fill(item.modelId);
     const picker = form.getByRole('region', { name: '저장된 모델 목록에서 선택' });
-    await expect(picker).toContainText(
-      item.protocol === 'vercel-chat-v1' ? '참고 명세와 저장된 목록' : '지원 명세와 저장된 목록'
-    );
+    await expect(picker).toContainText('앱 확인 모델과 저장된 목록');
     await expect(picker.getByRole('button')).toHaveCount(1);
     await picker.getByRole('button').click();
     await expect(form.getByLabel('모델 ID', { exact: true })).toHaveValue(item.modelId);
     await form.getByLabel('모델 프리셋 이름').fill(title);
-    await form.getByRole('button', { name: '생성 설정', exact: true }).click();
+    // Documented values lead; the rest of the protocol vocabulary stays selectable as unverified.
     for (const [label, values] of Object.entries(item.options)) {
       const optionValues = await form
         .getByLabel(label, { exact: true })
-        .locator('option')
+        .locator('optgroup[label="문서로 확인한 값"] option')
         .evaluateAll((options) =>
           options.map((option) => (option as HTMLOptionElement).value).filter(Boolean)
         );
@@ -1490,10 +1524,9 @@ test('PMUI17 new Google, Vercel and DeepSeek models are selectable locally and s
     }
     for (const [label, value] of Object.entries(item.choices))
       await form.getByLabel(label, { exact: true }).selectOption(value!);
-    if (item.modelId === 'gemini-3.5-flash-lite')
-      await expect(form.getByLabel('Temperature', { exact: true })).toHaveCount(0);
+    await expect(form.getByTestId('model-hint-source')).toContainText('옵션 출처 앱 확인');
     if (item.protocol === 'deepseek-chat-v1')
-      await expect(form.getByLabel('Thinking', { exact: true })).toHaveCount(0);
+      await expect(form.getByLabel('사고 모드', { exact: true })).toHaveCount(0);
     expect(
       await page
         .getByRole('dialog', { name: '설정', exact: true })

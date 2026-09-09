@@ -91,12 +91,21 @@ export type Connection = ContentRef & {
   protocol: ProviderProtocol;
   endpoint: string;
   credentialEnv?: string;
+  /**
+   * Gemini connections only: server environment variable holding a Gemini Developer API key used
+   * solely to list Gemini models and limits. Never used for generation requests.
+   */
+  catalogCredentialEnv?: string;
   enabled: boolean;
   catalog: {
     id: string;
     name: string;
     capabilities: Record<string, boolean | null>;
     priceRevision: string | null;
+    /** Limits the provider's list API published for this model; absent when it publishes none. */
+    limits?: { maxOutputTokens?: number; inputTokenLimit?: number };
+    /** Option values the list API published, in this protocol's native vocabulary. */
+    options?: { thinking?: string[]; thinkingModes?: string[] };
   }[];
   catalogError: string | null;
   catalogUpdatedAt?: string | null;
@@ -108,7 +117,6 @@ export type ModelPreset = ContentRef &
     modelId: string;
     inputTokenLimit?: number;
     capabilityProtocol?: ProviderProtocol;
-    capabilityRevision?: string;
     timeoutMs?: number;
     enabled?: boolean;
     evaluationTools?: EvaluationToolOptions;

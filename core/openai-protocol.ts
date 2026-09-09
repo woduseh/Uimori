@@ -97,7 +97,7 @@ function prepare(
 ) {
   if (!nonempty(request.modelId) || request.modelId.length > 200) reject('INVALID_MODEL_ID');
   const generation = request.generation;
-  if (generation) validateModelOptions(generation, protocol, request.modelId);
+  if (generation) validateModelOptions(generation, protocol);
   const { results: rawResults, ...input } = request.input;
   const results = copy(rawResults ?? [], 'TOOL_RESULT_MISMATCH');
   if (!Array.isArray(results)) return reject('TOOL_RESULT_MISMATCH');

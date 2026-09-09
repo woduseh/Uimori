@@ -4,6 +4,7 @@ import { api, labels } from './api.js';
 import { ContextSummaryStatus } from './ContextSummaryStatus.js';
 import { LazyDiagnostics } from './LazyDiagnostics.js';
 import { LoreContextDiagnostics } from './LoreContextDiagnostics.js';
+import { ProviderRejectionNotice } from './provider-rejection.js';
 import { JobCard } from './SourceReader.js';
 
 export function RunTaskDetails({
@@ -42,6 +43,7 @@ export function RunTaskDetails({
         !(run.contextSummary?.status === 'failed' && run.contextSummary.error === run.error) && (
           <p className="error">{run.error}</p>
         )}
+      {run.rejection && <ProviderRejectionNotice rejection={run.rejection} />}
       {run.status === 'refused' && (
         <p className="error">요청에 대한 생성이 거절됐어요. 대체 원고를 자동 생성하지 않았어요.</p>
       )}

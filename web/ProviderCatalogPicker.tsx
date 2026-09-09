@@ -1,11 +1,9 @@
 import { useState } from 'react';
 import { Check, Search } from 'lucide-react';
 import type { Connection } from '../core/product.js';
-import {
-  supportedModels,
-  modelCapability,
-  isOfficialModelConnection,
-} from '../core/model-capabilities.js';
+import { supportedModels } from '../core/model-capabilities.js';
+import { modelHints } from '../core/model-hints.js';
+import { sourceLabels } from './ProviderModelFields.js';
 
 type CatalogModel = Connection['catalog'][number];
 /** Local support metadata and cached catalog selection. Refresh alone owns network access. */
@@ -28,13 +26,12 @@ export function ProviderCatalogPicker({
         연결을 먼저 선택해 주세요. 새 연결이 필요하면 목록의 ‘빠른 연결 시작’을 이용해요.
       </p>
     );
-  const official = isOfficialModelConnection(connection),
-    local: CatalogModel[] = supportedModels(connection.protocol).map((item) => ({
-      id: item.id,
-      name: item.name,
-      capabilities: {},
-      priceRevision: null,
-    }));
+  const local: CatalogModel[] = supportedModels(connection.protocol).map((item) => ({
+    id: item.id,
+    name: item.name,
+    capabilities: {},
+    priceRevision: null,
+  }));
   const catalog = [
     ...new Map([...local, ...connection.catalog].map((item) => [item.id, item])).values(),
   ];
@@ -48,11 +45,7 @@ export function ProviderCatalogPicker({
         <h4>모델 목록에서 선택</h4>
         <small>
           {catalog.length.toLocaleString()}개 ·{' '}
-          {local.length
-            ? official
-              ? '지원 명세와 저장된 목록'
-              : '참고 명세와 저장된 목록'
-            : '저장된 목록'}
+          {local.length ? '앱 확인 모델과 저장된 목록' : '저장된 목록'}
         </small>
       </div>
       {catalog.length > 0 ? (
@@ -83,11 +76,12 @@ export function ProviderCatalogPicker({
                 <strong>{item.name}</strong>
                 <small>{item.id}</small>
                 <small>
-                  {modelCapability(connection.protocol, item.id)
-                    ? official
-                      ? '파라미터 지원 명세 있음'
-                      : '참고 명세 · 연결 지원 미확인'
-                    : '모델별 옵션 미확인'}
+                  {(() => {
+                    const source = modelHints(connection, item.id).source;
+                    return source === 'none'
+                      ? '옵션 미확인 · 시도해서 확인'
+                      : `옵션 ${sourceLabels[source]}`;
+                  })()}
                 </small>
                 {selectedId === item.id && <Check size={16} aria-hidden="true" />}
               </button>

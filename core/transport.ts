@@ -435,8 +435,7 @@ export async function executeProvider(
   if (connectionValue.protocol === 'codex-app-server-v1') {
     const connection = validateConnection(connectionValue, options.approvedOrigins),
       request = validateRequest(requestValue);
-    if (request.generation)
-      validateModelOptions(request.generation, connection.protocol, request.modelId);
+    if (request.generation) validateModelOptions(request.generation, connection.protocol);
     if (options.executeCodex) return options.executeCodex(connection, request, options);
     return {
       status: 'error',

@@ -88,11 +88,12 @@ function readTurn(value: Json): VertexTurn {
 
 /** Pure REST encoding. The host owns connection authority and executes all requested tools. */
 export function encodeVertex(request: ProviderRequest): { body: Json; context: VertexTurn } {
-  const capability = modelCapability('vertex-gemini-v1', request.modelId);
-  if (!capability) reject('UNSUPPORTED_VERTEX_MODEL');
   const generation = request.generation;
-  if (generation) validateModelOptions(generation, 'vertex-gemini-v1', request.modelId);
-  const maxOutputTokens = generation?.maxOutputTokens ?? capability.maxOutputTokens;
+  if (generation) validateModelOptions(generation, 'vertex-gemini-v1');
+  const maxOutputTokens =
+    generation?.maxOutputTokens ??
+    modelCapability('vertex-gemini-v1', request.modelId)?.maxOutputTokens ??
+    8192;
   const { results: rawResults, ...input } = request.input;
   const results = copy(rawResults ?? [], 'TOOL_RESULT_MISMATCH');
   if (!Array.isArray(results)) reject('TOOL_RESULT_MISMATCH');
