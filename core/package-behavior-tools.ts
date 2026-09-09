@@ -71,6 +71,7 @@ export function behaviorInputJsonSchema(schema: BehaviorSchema): Json {
 
 /** Frozen main attachments alone grant action tools. Read tools and auxiliary roles grant no such permission. */
 export function listBehaviorTools(snapshot: RunSnapshot): BehaviorToolBinding[] {
+  if (snapshot.executionPurpose === 'artifact') return [];
   const profile = snapshot.profile,
     bindings: BehaviorToolBinding[] = [],
     names = new Set<string>();

@@ -1,0 +1,49 @@
+.editor-draft-surface {
+  min-width: 0;
+}
+.editor-draft-status {
+  margin-block: 0.5rem;
+  min-width: 0;
+}
+.editor-draft-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+.editor-draft-toolbar small {
+  color: var(--text-muted, #767b88);
+}
+.editor-draft-review {
+  margin-block: 0.65rem;
+  padding: 0.8rem;
+  border: 1px solid var(--border, #d7d9de);
+  border-radius: 0.65rem;
+  min-width: 0;
+}
+.editor-draft-review pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  max-height: 18rem;
+  overflow: auto;
+  font-size: 0.78rem;
+}
+.editor-draft-review details {
+  margin-block: 0.65rem;
+}
+.editor-draft-review button {
+  margin: 0.25rem 0.35rem 0.25rem 0;
+}
+.editor-draft-changes {
+  padding-left: 1.2rem;
+}
+.editor-draft-changes > li {
+  padding-block: 0.4rem;
+}
+.editor-draft-changes code {
+  overflow-wrap: anywhere;
+}
+.editor-draft-changes p {
+  margin-block: 0.25rem;
+  font-size: 0.8rem;
+}

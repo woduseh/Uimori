@@ -102,6 +102,12 @@ export async function openPromptTools(editor: Locator) {
   if (!(await menu.evaluate((node) => (node.parentElement as HTMLDetailsElement).open)))
     await menu.click();
 }
+export async function openPromptBlocks(editor: Locator) {
+  const fold = editor.getByLabel('프롬프트 블록 접기/펼치기', { exact: true });
+  await expect(fold).toBeVisible();
+  if (!(await fold.evaluate((node) => (node.parentElement as HTMLDetailsElement).open)))
+    await fold.click();
+}
 export async function startProviderConnection(page: Page) {
   const editor = page.getByTestId('connection-editor');
   await expect(editor).toBeVisible();

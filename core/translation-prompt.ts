@@ -36,7 +36,7 @@ export function compileTranslationPrompt(
     lorebook: lore,
     // No separate glossary category exists. Source-time modules remain in lore/context.references.
     glossary: '',
-    memory: snapshot.story?.memory ? JSON.stringify(snapshot.story.memory) : '',
+    notes: snapshot.story?.notes ? JSON.stringify(snapshot.story.notes) : '',
     state: snapshot.story?.state ? JSON.stringify(snapshot.story.state) : '',
     source: input.sourceText ?? JSON.stringify(input.blocks),
     context: JSON.stringify(input.context),

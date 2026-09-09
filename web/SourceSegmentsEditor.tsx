@@ -1,5 +1,6 @@
 import { Switch } from './BooleanControls.js';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { useBufferedEditorState, useUnappliedEditorField } from './editor-workspace-context.js';
 import type { ContentPackage } from '../core/content-package.js';
 import { validateSourceSegmentPolicy, type SourceSegmentRule } from '../core/source-segments.js';
 
@@ -12,19 +13,25 @@ export function SourceSegmentsEditor({
   onChange: (value: ContentPackage) => void;
   onDirtyChange?: (dirty: boolean) => void;
 }) {
-  const [rules, setRules] = useState<SourceSegmentRule[]>(() =>
-      structuredClone(value.sourceSegments?.rules ?? [])
+  const [rules, setRules] = useBufferedEditorState<SourceSegmentRule[]>(
+      'package.sourceSegments.rules',
+      () => structuredClone(value.sourceSegments?.rules ?? [])
     ),
-    [dirty, setDirty] = useState(false),
+    [dirty, setDirty] = useBufferedEditorState('package.sourceSegments.pending', false),
     [error, setError] = useState('');
   // Parent validation clones the package while unrelated module drafts are applied.
   // Reset only when this package or its saved segment definition actually changes.
   const definitionKey = JSON.stringify({ id: value.id, rules: value.sourceSegments?.rules ?? [] });
+  const previousDefinition = useRef(definitionKey);
   useEffect(() => {
+    if (previousDefinition.current === definitionKey) return;
+    previousDefinition.current = definitionKey;
+    if (dirty) return;
     setRules((JSON.parse(definitionKey) as { rules: SourceSegmentRule[] }).rules);
     setDirty(false);
     setError('');
-  }, [definitionKey]);
+  }, [definitionKey, dirty, setDirty, setRules]);
+  useUnappliedEditorField('package.sourceSegments.rules', dirty);
   useEffect(() => onDirtyChange?.(dirty), [dirty, onDirtyChange]);
   const change = (next: SourceSegmentRule[]) => {
     setRules(next);

@@ -1,4 +1,7 @@
 import { Switch } from './BooleanControls.js';
+import { Save } from 'lucide-react';
+import { IconButton } from './IconButton.js';
+import './settings-actions.css';
 import { useEffect, useState } from 'react';
 import type { Chat, Settings } from '../core/types.js';
 import { api } from './api.js';
@@ -118,10 +121,7 @@ export function SettingsEditor({
               </div>
             </details>
           )}
-          <div className="form-actions full">
-            <button className="secondary" disabled={!dirty}>
-              설정 저장
-            </button>
+          <div className="form-actions full settings-save-actions">
             {dirty && (
               <button
                 type="button"
@@ -137,6 +137,14 @@ export function SettingsEditor({
                 저장된 설정 다시 불러오기
               </button>
             )}
+            <IconButton
+              type="submit"
+              icon={Save}
+              label="설정 저장"
+              className="settings-save-button"
+              disabled={!dirty || saving}
+              aria-busy={saving}
+            />
           </div>
         </fieldset>
         {message && (

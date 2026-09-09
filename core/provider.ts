@@ -2,7 +2,7 @@ import { historicalPersonaExcluded } from './persona-scope.js';
 import { createHash } from 'node:crypto';
 import type { ModelInput, Resource, RunSnapshot, ToolEvent, Usage } from './types.js';
 import { executeStoryRead, STORY_READ_NAMES } from './story-context.js';
-import { sourceHistoryForRequest, sourceMemoryPlanForRequest } from './source-context.js';
+import { sourceHistoryForRequest } from './source-context.js';
 import {
   compiledPackages,
   packageContextFromCompiled,
@@ -80,7 +80,7 @@ export type MainInput = ModelInput & {
     moduleRevision: number;
     constraints: import('./state.js').StateModule;
   };
-  memory?: Omit<import('./memory.js').MemoryContextPlan, 'recentHistory'>;
+  notes?: import('./notes.js').AuthorNote[];
   catalogPage?: { total: number; listed: number; remaining: string };
 };
 /** Slot bodies and fallback suppression share this exact source selection. */
@@ -185,16 +185,9 @@ export function buildMainInput(
       .filter((item) => item.kind !== 'skill')
       .map((item) => item.text);
   }
-  if (snapshot.story?.memory) {
-    const { recentHistory, ...memory } = sourceMemoryPlanForRequest(
-      snapshot,
-      snapshot.story.memory.plan
-    );
-    if (!memory.ready && !snapshot.contextPlan) throw new Error('Memory context budget exceeded');
-    input.history = structuredClone(recentHistory);
-    input.memory = structuredClone(memory);
-    input.tools.push(...STORY_READ_NAMES);
-  } else if (snapshot.sourceSegments) input.history = sourceHistoryForRequest(snapshot);
+  if (snapshot.story?.notes.length) input.notes = structuredClone(snapshot.story.notes);
+  input.history = sourceHistoryForRequest(snapshot);
+  input.tools.push(...STORY_READ_NAMES);
   if (snapshot.contextPlan) {
     const kept = new Set(snapshot.contextPlan.recentSourceRevisions);
     input.history = structuredClone(
@@ -205,7 +198,7 @@ export function buildMainInput(
   }
   if (snapshot.sourceSegments)
     input.contract +=
-      '\nHidden segment visibility is for the reader. A memory kind alone never establishes world truth or actor knowledge: respect knowledge.worldStatus and knownByActorIds; unspecified/null remains unknown. Never infer actor knowledge from a portrait or from the reader opening a panel.';
+      '\nHidden segment visibility is for the reader. Quoted perspectives and user notes do not establish a character knowledge state; unspecified actor knowledge remains unknown. Never infer actor knowledge from a portrait or from the reader opening a panel.';
   if (input.catalog.length > 100) {
     input.catalogPage = {
       total: input.catalog.length,

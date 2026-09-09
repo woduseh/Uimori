@@ -1,21 +1,19 @@
 import type { ModelRef, ModelSnapshot } from './product.js';
 import type { StateModule, StateValues, StateProposal } from './state.js';
-import type { MemoryEntry, MemoryCheckpoint, MemoryContextPlan } from './memory.js';
-import { memoryHash } from './memory.js';
+import type { AuthorNote } from './notes.js';
+import { sourceHash } from './source-history.js';
 import { initialState } from './state.js';
 
 export type StoryConfig = {
   revision: number;
   module: StateModule | null;
   stateModel: ModelRef | null;
-  memory: { enabled: boolean; model: ModelRef | null; recentCount: number; maxPacketChars: number };
   activatedAt: { revision: string; hash: string } | null;
 };
 export const defaultStoryConfig = (): StoryConfig => ({
   revision: 0,
   module: null,
   stateModel: null,
-  memory: { enabled: false, model: null, recentCount: 2, maxPacketChars: 60000 },
   activatedAt: null,
 });
 export type StoryState = {
@@ -38,7 +36,7 @@ export function activationRebuildState(
   return {
     id: `initial:${chatId}:${config.module.revision}:rebuild:${source.hash}`,
     sourceRevision: parent?.revision ?? null,
-    sourceHash: parent ? memoryHash(parent.text) : null,
+    sourceHash: parent ? sourceHash(parent.text) : null,
     moduleRevision: config.module.revision,
     values: initialState(config.module),
     canonical: config.module.mode !== 'annotation',
@@ -50,8 +48,8 @@ export type StorySnapshot = {
   waiting: boolean;
   lineageHash: string;
   canonHash: string;
-  memory: { entries: MemoryEntry[]; checkpoint: MemoryCheckpoint; plan: MemoryContextPlan } | null;
-  models: Partial<Record<'state' | 'memory', ModelSnapshot>>;
+  notes: AuthorNote[];
+  models: Partial<Record<'state' | 'context', ModelSnapshot>>;
   sceneCommandId?: string;
 };
 export type StoryJob = {
@@ -59,7 +57,7 @@ export type StoryJob = {
   chatId: string;
   sourceRevision: string;
   sourceHash: string;
-  kind: 'state' | 'memory';
+  kind: 'state';
   configRevision: number;
   generation: number;
   owner: string | null;
@@ -70,7 +68,7 @@ export type StoryJob = {
   mock: boolean;
   createdAt: string;
   updatedAt: string;
-  result: StateProposal | { entries: MemoryEntry[] } | null;
+  result: StateProposal | null;
   inputs?: unknown[];
   toolEvents?: unknown[];
 };
@@ -89,7 +87,7 @@ export type StoryDetail = {
   state: StoryState | null;
   stateStatus: 'disabled' | 'ready' | 'pending' | 'stale';
   jobs: StoryJob[];
-  memory: MemoryEntry[];
-  checkpoint: MemoryCheckpoint;
+  notes: AuthorNote[];
+  notesRevision: number;
   commands: SceneCommand[];
 };

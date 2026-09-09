@@ -70,36 +70,31 @@ export const MAIN_READ_TOOLS: ProviderTool[] = [
       additionalProperties: false,
     },
   },
-  ...(['memory', 'story'] as const).flatMap(
+  ...(['notes', 'story'] as const).flatMap(
     (kind) =>
       [
         {
-          name: `${kind}.search`,
+          name: kind === 'notes' ? 'notes.list' : 'story.search',
           description:
-            kind === 'memory'
-              ? 'Search typed memories in this exact story ancestry; belief and summaries are not author declarations.'
+            kind === 'notes'
+              ? 'List explicit user notes and corrections valid in this exact story ancestry.'
               : 'Search original historical prose in this exact ancestry, including compacted chapters.',
           inputSchema: {
             type: 'object',
             properties: { query: { type: 'string', maxLength: 512 }, ...pagination(100) },
-            required: ['query'],
+            required: kind === 'notes' ? [] : ['query'],
             additionalProperties: false,
           },
         },
         {
           name: `${kind}.read`,
           description:
-            'Read a discovered ID with exact source provenance, character range and continuation. For memory provenance pages, follow sourceContinuation with sourceOffset.',
+            'Read a discovered ID with exact source provenance, character range and continuation. User notes are explicit instructions, not original story evidence.',
           inputSchema: {
             type: 'object',
             properties: {
               id: { type: 'string', maxLength: 200 },
               ...pagination(16000),
-              ...(kind === 'memory'
-                ? {
-                    sourceOffset: { type: 'integer', minimum: 0, maximum: Number.MAX_SAFE_INTEGER },
-                  }
-                : {}),
             },
             required: ['id'],
             additionalProperties: false,
@@ -166,7 +161,7 @@ function requestInput(snapshot: RunSnapshot, input: MainInput): ProviderRequest[
           }
         : {}),
       ...(input.state && !stateSlot ? { state: input.state } : {}),
-      ...(input.memory && !used.has('memory') ? { memory: input.memory } : {}),
+      ...(input.notes && !used.has('notes') ? { notes: input.notes } : {}),
       ...(input.catalogPage ? { catalogPage: input.catalogPage } : {}),
       ...(snapshot.behaviorExecution?.automaticResults.length
         ? { automaticResults: snapshot.behaviorExecution.automaticResults }

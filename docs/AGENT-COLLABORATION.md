@@ -9,7 +9,7 @@
 - **작성 전**: 등록한 순서대로 한 번 의견을 받고 메인에 전달해요.
 - **메인이 필요할 때**: 메인이 `agents.consult({agentId, question})`로 질문해요. 같은 에이전트에 다시 요청하면 처음 질문의 결과를 반환하며 새 모델 호출을 하지 않아요.
 - **함께 따를 지침**과 선택한 **프롬프트 옵션의 현재 값**을 메인과 보조가 함께 받아요. 메인 프롬프트 전체를 자동으로 복사하거나 특정 옵션 ID를 추정하지 않아요.
-- 보조는 예약된 Run의 사용자 요청, 작문용 원문 projection, 고정 자료, 상태·기억·요약 문맥을 받아요. 추가 조회는 선택한 `knowledge`, `skills`, `memory`, `story` 도구와 기존 메인 조회 권한의 교집합이에요. 체크박스는 기본 문맥을 제거하는 필터가 아니라 추가 조회 도구 선택이에요.
+- 보조는 예약된 Run의 사용자 요청, 작문용 원문 projection, 고정 자료, 상태·메모·요약 문맥을 받아요. 추가 조회는 선택한 `knowledge`, `skills`, `notes`, `story` 도구와 기존 메인 조회 권한의 교집합이에요. 체크박스는 기본 문맥을 제거하는 필터가 아니라 추가 조회 도구 선택이에요.
 
 보조 결과는 근거와 가설을 구분하는 참고 의견이에요. 메인이 최종 창작 결정을 맡아요. 자동 후처리나 원문 재작성은 없으며 보조는 원문·정사·상태를 저장하거나 추첨을 실행하지 않아요. 다른 보조를 부르거나 `story.submit`, 패키지 상태 도구, 평가 도구를 호출할 수 없어요. 모델 프리셋의 `evaluationTools` 설정도 보조의 읽기 권한을 늘리지 않아요.
 
@@ -30,7 +30,7 @@ type AgentCollaboration = {
     instructions: string;
     model: { id: string } | null; // null이면 메인 모델 상속
     trigger: 'before' | 'on-demand';
-    tools: ('knowledge' | 'skills' | 'memory' | 'story')[];
+    tools: ('knowledge' | 'skills' | 'notes' | 'story')[];
     maxCalls: number; // 한 에이전트의 전체 조회 왕복 포함 1~6회
     maxOutputChars: number; // 메인에 전달할 최대 길이 500~20,000
   }[]; // 최대 6명
@@ -51,7 +51,7 @@ API는 기존 `POST/PUT /api/prompt-presets`의 `program`을 사용하며 수정
 
 Run의 `agents.consult` tool event에 의견·상태·호출량·질문·출처를 남겨요. `agents.read`에는 실제 읽기 결과를 남기고, 모델 입력은 `agentId`로 구분해요. 원문에는 메인의 최종 응답만 저장해요. 보조가 읽은 본문을 다음 Run의 유지 로어로 자동 승격하지 않아요.
 
-schema/archive v14의 JSON 필드를 확장해요. 새 DB 테이블이나 구형 DB 이관은 없어요. 복원은 에이전트 모델 귀속을 검사하고 메인·보조 snapshot의 인증 참조를 제거하며 연결을 비활성화해요. 현재 프롬프트나 진행 중 Run이 참조한 모델은 삭제를 막아요. 현재 연결을 해제하고 Run이 종료되면 오래된 프롬프트의 모델 선택만으로 삭제를 막지 않으며 과거 Run의 자체 모델 snapshot은 보존해요.
+협업 설정은 현재 schema/archive v15의 JSON 필드에 보관해요. 협업 전용 DB 테이블이나 구형 DB 이관은 없어요. 복원은 에이전트 모델 귀속을 검사하고 메인·보조 snapshot의 인증 참조를 제거하며 연결을 비활성화해요. 현재 프롬프트나 진행 중 Run이 참조한 모델은 삭제를 막아요. 현재 연결을 해제하고 Run이 종료되면 오래된 프롬프트의 모델 선택만으로 삭제를 막지 않으며 과거 Run의 자체 모델 snapshot은 보존해요.
 
 ## 검증 범위
 

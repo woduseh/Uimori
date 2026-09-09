@@ -93,15 +93,17 @@ export function ValueInput({
 export function PromptControlFields({
   program,
   values,
+  visibilityValues = values,
   onChange,
 }: {
   program: PromptProgram;
   values: Record<string, PromptValue>;
+  visibilityValues?: Record<string, PromptValue>;
   onChange: (id: string, value: PromptValue) => void;
 }) {
   let controls: PromptControl[];
   try {
-    controls = visiblePromptControls(program.controls, values);
+    controls = visiblePromptControls(program.controls, visibilityValues);
   } catch {
     return (
       <p role="alert" className="error">

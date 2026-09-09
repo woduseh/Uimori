@@ -37,11 +37,9 @@ async function panel(page: Page) {
   const dialog = page.getByRole('dialog', { name: '채팅 설정', exact: true });
   if (!(await dialog.isVisible()))
     await page.getByRole('button', { name: '채팅 설정', exact: true }).click();
-  await selectChatSettingsSection(page, '상태와 기억');
-  const section = dialog.getByRole('region', { name: '이야기 상태와 기억', exact: true });
-  await expect(
-    section.getByRole('button', { name: '상태와 기억 설정 저장', exact: true })
-  ).toBeVisible();
+  await selectChatSettingsSection(page, '상태와 문맥');
+  const section = dialog.getByRole('region', { name: '이야기 상태와 문맥', exact: true });
+  await expect(section.getByRole('button', { name: '상태 설정 저장', exact: true })).toBeVisible();
   return section;
 }
 async function open(section: Locator, title: RegExp) {
@@ -94,7 +92,7 @@ function storedSource(source: Source) {
 }
 
 test.afterEach(async ({ request }) => {
-  for (const barrier of ['run', 'state', 'memory']) await control(request, 'release', { barrier });
+  for (const barrier of ['run', 'state']) await control(request, 'release', { barrier });
 });
 
 test('S01 S02 state settings use synthetic rules, preserve readable original while waiting, then compile persisted state', async ({
@@ -109,11 +107,12 @@ test('S01 S02 state settings use synthetic rules, preserve readable original whi
   await section.getByRole('button', { name: '합성 항구 예제를 초안에 넣기' }).click();
   await expect(section.getByRole('heading', { name: '저장 전 미리보기' })).toBeVisible();
   expect((await story(request, chat.id)).config.module).toBeNull(); // Preview is not activation.
-  await section.getByLabel('기억 자동 정리 사용').check();
   await expect(section.getByLabel('상태 확인 모델')).toHaveValue('');
-  await expect(section.getByLabel('기억 정리 모델')).toHaveValue('');
-  await section.getByRole('button', { name: '상태와 기억 설정 저장', exact: true }).click();
-  await expect.poll(async () => (await story(request, chat.id)).config.memory.enabled).toBe(true);
+  await expect(section.getByLabel('기억 정리 모델')).toHaveCount(0);
+  await section.getByRole('button', { name: '상태 설정 저장', exact: true }).click();
+  await expect
+    .poll(async () => (await story(request, chat.id)).config.module?.name)
+    .toBe('합성 항구 예제');
   await expect(section.getByRole('status')).toContainText('반영했어요.');
   await control(request, 'hold', { barrier: 'state' });
   try {
@@ -183,43 +182,36 @@ test('S01 S02 state settings use synthetic rules, preserve readable original whi
   }
 });
 
-test('S04 explicit author declaration and retcon remain distinct memory after reload', async ({
+test('S04 explicit user note and correction remain separate from prose after reload', async ({
   page,
   request,
 }, testInfo) => {
-  const chat = await create(page, 'S04 합성 작가 선언');
-  const section = await panel(page);
-  const memory = await open(section, /^기억과 작가 선언/);
-  await memory.getByLabel('선언 작성자').fill('합성 작가');
-  await memory.getByLabel('새 작가 선언').fill('항구의 종은 파란색이다.');
-  await memory.getByRole('button', { name: '작가 선언 추가', exact: true }).click();
+  const chat = await create(page, 'S04 합성 사용자 메모');
+  const notes = await open(await panel(page), /^사용자 메모·정정/);
+  await notes.getByRole('button', { name: '메모 추가', exact: true }).click();
+  await notes.getByLabel('메모 작성자').fill('합성 작가');
+  await notes.getByLabel('메모·정정 내용').fill('항구의 종은 파란색이다.');
+  await notes.getByRole('button', { name: '새 메모 저장', exact: true }).click();
+  await expect.poll(async () => (await story(request, chat.id)).notes.length).toBe(1);
+  await notes
+    .getByRole('button', { name: '메모 수정: 항구의 종은 파란색이다.', exact: true })
+    .click();
+  await notes.getByLabel('메모·정정 내용').fill('항구의 종은 초록색이다.');
+  await notes.getByRole('button', { name: '메모 수정 저장', exact: true }).click();
   await expect
-    .poll(
-      async () =>
-        (await story(request, chat.id)).memory.filter((entry) => entry.kind === 'author-canon')
-          .length
-    )
-    .toBe(1);
-  await expect(memory.getByText('작가 선언', { exact: true })).toBeVisible();
-  await memory.getByRole('button', { name: '이 선언 고치기', exact: true }).click();
-  await memory.getByLabel('기존 선언을 대신할 작가 선언').fill('항구의 종은 초록색이다.');
-  await memory.getByRole('button', { name: '수정 선언 저장', exact: true }).click();
-  await expect
-    .poll(async () => (await story(request, chat.id)).memory.map((entry) => entry.text))
-    .toContain('항구의 종은 초록색이다.');
-  expect(
-    (await story(request, chat.id)).memory.some((entry) => entry.text === '항구의 종은 파란색이다.')
-  ).toBe(false);
+    .poll(async () => (await story(request, chat.id)).notes.map((entry) => entry.text))
+    .toEqual(['항구의 종은 초록색이다.']);
   await page.reload();
-  const reloaded = await open(await panel(page), /^기억과 작가 선언/);
+  const reloaded = await open(await panel(page), /^사용자 메모·정정/);
   await expect(reloaded.getByText('항구의 종은 초록색이다.', { exact: true })).toBeVisible();
   await expect(reloaded.getByText('항구의 종은 파란색이다.', { exact: true })).toHaveCount(0);
-  expect(
-    (await story(request, chat.id)).memory.find((entry) => entry.text === '항구의 종은 초록색이다.')
-  ).toMatchObject({ kind: 'author-canon', declaration: { author: '합성 작가' } });
+  expect((await story(request, chat.id)).notes[0]).toMatchObject({
+    kind: 'author-note',
+    declaration: { author: '합성 작가' },
+  });
   if (visualReview)
     await page.screenshot({
-      path: testInfo.outputPath('S04-mobile-author-memory.png'),
+      path: testInfo.outputPath('S04-mobile-author-notes.png'),
       fullPage: true,
     });
 });
@@ -282,7 +274,7 @@ test('S06 scene commands distinguish successful original, failed original and ca
     });
 });
 
-test('S06 S07 text presentation keeps malicious HTML inert and asset catalog transfers metadata without preloading bytes', async ({
+test('S06 S07 presentation API preserves literal text and source; asset catalog does not preload bytes', async ({
   page,
   request,
 }, testInfo) => {
@@ -358,16 +350,19 @@ test('S06 S07 text presentation keeps malicious HTML inert and asset catalog tra
   const run = await send(page, 'SYNTHETIC_RENDER Mira waits at the harbor.');
   const source = await complete(request, chat.id, run.id);
   const article = await original(page, source);
-  const preview = await open(article, /^표시 문구 바꾸기$/);
+  await expect(article.getByText('표시 문구 바꾸기', { exact: true })).toHaveCount(0);
   const malicious =
     '<img src=x onerror="window.XSS=1"><script>window.XSS=2</script><iframe srcdoc="<script>parent.XSS=3</script>"></iframe>';
-  await preview.getByLabel('찾을 정규식').fill('Mira');
-  await preview.getByLabel('넣을 문자열').fill(malicious);
-  await preview.getByRole('button', { name: '텍스트 미리보기', exact: true }).click();
-  const rendered = preview.getByLabel('표시 문구 미리보기');
-  await expect(rendered).toContainText(malicious);
-  await expect(rendered.locator('script, img, iframe')).toHaveCount(0);
-  expect(await page.evaluate(() => (window as Window & { XSS?: number }).XSS)).toBeUndefined();
+  // This retained API check covers literal replacement, not a product preview or DOM rendering.
+  expect(source.text).toContain('Mira');
+  const presentation = await request.post(`/api/sources/${source.id}/presentation`, {
+    data: { rules: [{ pattern: 'Mira', flags: 'g', replacement: malicious }] },
+  });
+  expect(presentation.ok()).toBe(true);
+  expect(await presentation.json()).toMatchObject({
+    ok: true,
+    text: source.text.replaceAll('Mira', malicious),
+  });
   expect(
     (await detail(request, chat.id)).sources.find((item) => item.id === source.id)
   ).toMatchObject({ text: source.text, hash: source.hash });
@@ -391,7 +386,7 @@ test('S06 S07 text presentation keeps malicious HTML inert and asset catalog tra
   expect(uploadedLoads).toEqual([]);
   if (visualReview)
     await page.screenshot({
-      path: testInfo.outputPath('S06-mobile-inert-text-preview.png'),
+      path: testInfo.outputPath('S07-mobile-asset-catalog-reader.png'),
       fullPage: true,
     });
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
@@ -426,12 +421,9 @@ test('STUI01 state settings align on mobile and desktop while imported definitio
   });
   await expect(section.locator('.story-module-preview')).toContainText(module.name);
   expect((await story(request, chat.id)).config.module).toBeNull();
-  const memory = fields.getByRole('switch', { name: '기억 자동 정리 사용' });
-  await memory.check();
-  await expect(memory).toBeChecked();
-  await fields.getByRole('button', { name: '상태와 기억 설정 저장', exact: true }).click();
+  await expect(fields.getByRole('switch', { name: '기억 자동 정리 사용' })).toHaveCount(0);
+  await fields.getByRole('button', { name: '상태 설정 저장', exact: true }).click();
   await expect
     .poll(async () => (await story(request, chat.id)).config.module?.name)
     .toBe(module.name);
-  expect((await story(request, chat.id)).config.memory.enabled).toBe(true);
 });

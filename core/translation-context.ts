@@ -1,6 +1,6 @@
 import type { RunSnapshot, ToolEvent } from './types.js';
 import type { ToolAction } from './provider.js';
-import { memoryHash } from './memory.js';
+import { sourceHash } from './source-history.js';
 
 export const TRANSLATION_READ_NAMES = ['translation.search', 'translation.read'];
 export type TranslationReference = {
@@ -17,7 +17,7 @@ export function translationReader(
   references: readonly TranslationReference[]
 ) {
   const hashes = new Map(
-    snapshot.history.map((item) => [item.revision, item.contentHash ?? memoryHash(item.text)])
+    snapshot.history.map((item) => [item.revision, item.contentHash ?? sourceHash(item.text)])
   );
   const originals = new Map(snapshot.history.map((item) => [item.revision, item.text]));
   const scope = structuredClone(
@@ -52,7 +52,7 @@ export function translationReader(
       return denied('INVALID_ARGUMENTS');
     const metadata = ({ text, ...item }: TranslationReference) => ({
       ...item,
-      translationHash: memoryHash(text),
+      translationHash: sourceHash(text),
       totalChars: text.length,
       use: 'wording-reference-only',
     });

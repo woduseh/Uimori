@@ -152,6 +152,18 @@ for (const [label, viewport] of [
     const translation = scene.getByRole('textbox', { name: '번역 수정 내용', exact: true });
     await expect(translation).toBeFocused();
     await insideReader(translation);
+    await translation.fill('저장 버튼 배치를 확인하는 합성 번역이에요.');
+    const translationSave = scene.getByRole('button', { name: '번역 저장', exact: true });
+    const translationCancel = scene.getByRole('button', { name: '수정 취소', exact: true });
+    for (const button of [translationSave, translationCancel]) {
+      await expect(button.locator('svg')).toHaveCount(1);
+      expect((await button.innerText()).trim()).toBe('');
+      const bounds = await button.boundingBox();
+      expect(bounds!.width).toBeGreaterThanOrEqual(44);
+      expect(bounds!.height).toBeGreaterThanOrEqual(44);
+    }
+    if (visualReview)
+      await page.screenshot({ path: info.outputPath(`translation-editor-${label}.png`) });
     await page.keyboard.press('Escape');
     await expect(translation).toHaveCount(0);
     await expect(opener).toBeFocused();

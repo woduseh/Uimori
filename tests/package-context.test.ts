@@ -34,7 +34,7 @@ function attach(s: RunSnapshot): ContentPackage {
     description: 'metadata',
     body: 'EXACT_BODY',
     lore: [{ id: 'facts', title: 'Facts', description: '', text: 'EXACT_LORE', loading: 'pinned' }],
-    instructions: ['main', 'translation', 'state', 'memory', 'status', 'image'].map((target) => ({
+    instructions: ['main', 'translation', 'state', 'status', 'image'].map((target) => ({
       id: target,
       target: target as 'main',
       text: `${target.toUpperCase()}_ONLY`,
@@ -85,7 +85,7 @@ describe('source-time package role context', () => {
     current.profile!.packageValues = { 'pkg@1:bot': { on: false } };
     expect(packageContext(old, 'main')!.instructions.map((n) => n.text)).toEqual(['MAIN_ONLY']);
     expect(packageContext(current, 'main')!.instructions).toEqual([]);
-    for (const target of ['translation', 'state', 'memory', 'status', 'image'] as const)
+    for (const target of ['translation', 'state', 'status', 'image'] as const)
       expect(packageContext(old, target)!.instructions.map((n) => n.text)).toEqual([
         `${target.toUpperCase()}_ONLY`,
       ]);

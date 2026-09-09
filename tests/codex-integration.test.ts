@@ -193,7 +193,7 @@ test('app routes every agent role through Codex and persists RPC attempts, propo
           moduleRevision: source.module.revision,
           operations: [],
         };
-      else if (request.role === 'memory') output = { entries: [] };
+      else if (request.role === 'context') output = 'The keeper remains at the gate.';
       else if (request.role === 'translation')
         output =
           request.input.controls.purpose === 'translation-refusal'
@@ -304,7 +304,6 @@ test('app routes every agent role through Codex and persists RPC attempts, propo
         rules: {},
       },
       stateModel: ref(model),
-      memory: { enabled: true, model: ref(model), recentCount: 2, maxPacketChars: 60000 },
     },
     'PUT'
   );
@@ -327,14 +326,14 @@ test('app routes every agent role through Codex and persists RPC attempts, propo
   await api(app, `/api/sources/${source.id}/translation`, {});
   await expect
     .poll(() => [...new Set(calls.map((call) => call.role))].sort())
-    .toEqual(['image', 'main', 'memory', 'state', 'status', 'translation']);
+    .toEqual(['image', 'main', 'state', 'status', 'translation']);
   await expect
     .poll(
       () =>
         app.store.product.attempts(chat.id).filter((attempt) => attempt.status === 'running').length
     )
     .toBe(0);
-  expect(app.store.product.attempts(chat.id)).toHaveLength(7);
+  expect(app.store.product.attempts(chat.id)).toHaveLength(6);
   const classifierCalls = calls.filter(
     (call) => call.input.controls.purpose === 'translation-refusal'
   );
@@ -366,7 +365,7 @@ test('app routes every agent role through Codex and persists RPC attempts, propo
   await api(restored, '/api/import', { archive });
   expect(JSON.stringify(archive)).toContain('codex://local');
   expect(restored.store.product.attempts(chat.id)).toEqual(app.store.product.attempts(chat.id));
-  for (const role of ['state', 'memory'])
+  for (const role of ['state'])
     expect(
       app.store.product.attempts(chat.id).find((attempt) => attempt.role === role)?.storyJobId
     ).toEqual(expect.any(String));

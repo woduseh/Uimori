@@ -20,7 +20,7 @@ const templates = [
 const toolScopes: { id: AgentDefinition['tools'][number]; label: string }[] = [
   { id: 'knowledge', label: '자료' },
   { id: 'skills', label: '지침' },
-  { id: 'memory', label: '기억' },
+  { id: 'notes', label: '사용자 메모' },
   { id: 'story', label: '이야기' },
 ];
 const inRange = (value: number, min: number, max: number) =>

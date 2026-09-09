@@ -288,7 +288,7 @@ test('current archive roundtrips package refs, large internal lore, empty body, 
   update(store, chat.id, { packageValues: { [`${pkg.id}@1:persona`]: { enabled: false } } });
   const run = capture(store, chat.id);
   const archive = store.product.export();
-  expect(archive.version).toBe(14);
+  expect(archive.version).toBe(15);
   const before = JSON.stringify(archive);
   const restored = db();
   expect(restored.product.import(archive)).toEqual({ restored: true, chats: 1 });

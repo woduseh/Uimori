@@ -22,7 +22,8 @@ import {
 } from '../core/story.js';
 import type { RunSnapshot } from '../core/types.js';
 import type { ModelPreset, Connection, ModelRef } from '../core/product.js';
-import { StoryMemory } from './story-memory.js';
+import { StoryNotes } from './story-notes.js';
+import { promptWorkspace } from './prompt-workspace.js';
 import { assertModelSelection } from './provider-selection.js';
 
 type Row = Record<string, any>;
@@ -35,7 +36,7 @@ export const lineageHash = (history: RunSnapshot['history']) =>
     history.map((item) => [item.revision, createHash('sha256').update(item.text).digest('hex')])
   );
 export const storyDependencyKey = (
-  kind: 'state' | 'memory',
+  kind: 'state',
   source: { id: string; hash: string },
   snapshot: RunSnapshot
 ) => {
@@ -46,9 +47,7 @@ export const storyDependencyKey = (
     source.hash,
     lineageHash(snapshot.history),
     snapshot.story?.canonHash,
-    kind === 'state'
-      ? [snapshot.story?.config.module, snapshot.story?.state, snapshot.story?.config.stateModel]
-      : snapshot.story?.config.memory.model,
+    [snapshot.story?.config.module, snapshot.story?.state, snapshot.story?.config.stateModel],
     model ? [model.id, model.revision, model.connection.id, model.connection.revision] : null,
   ]);
 };
@@ -56,16 +55,17 @@ export const storyTables = [
   'story_configs',
   'story_jobs',
   'story_states',
-  'story_memories',
-  'story_indexes',
+  'author_notes',
+  'author_note_heads',
+  'author_note_commands',
   'scene_commands',
 ];
 
-/** Durable state and memory are separate from the single-slot reading translation. */
+/** Durable state and user notes are separate from the single-slot reading translation. */
 export class StoryStore {
-  readonly memory: StoryMemory;
+  readonly notes: StoryNotes;
   constructor(readonly store: Store) {
-    this.memory = new StoryMemory(store);
+    this.notes = new StoryNotes(store);
   }
   get db() {
     return this.store.db;
@@ -74,14 +74,13 @@ export class StoryStore {
   initFresh() {
     this.db.exec(`
       CREATE TABLE story_configs(chat_id TEXT PRIMARY KEY REFERENCES chats(id),revision INTEGER NOT NULL,body TEXT NOT NULL);
-      CREATE TABLE story_jobs(id TEXT PRIMARY KEY,chat_id TEXT NOT NULL REFERENCES chats(id),source_revision TEXT NOT NULL REFERENCES sources(id),source_hash TEXT NOT NULL,kind TEXT NOT NULL CHECK(kind IN ('state','memory')),config_revision INTEGER NOT NULL,generation INTEGER NOT NULL DEFAULT 0,owner TEXT,status TEXT NOT NULL,snapshot TEXT NOT NULL,result TEXT,error TEXT,mock INTEGER NOT NULL,created_at TEXT NOT NULL,updated_at TEXT NOT NULL,dependency_key TEXT NOT NULL UNIQUE,inputs TEXT NOT NULL DEFAULT '[]',tool_events TEXT NOT NULL DEFAULT '[]');
+      CREATE TABLE story_jobs(id TEXT PRIMARY KEY,chat_id TEXT NOT NULL REFERENCES chats(id),source_revision TEXT NOT NULL REFERENCES sources(id),source_hash TEXT NOT NULL,kind TEXT NOT NULL CHECK(kind='state'),config_revision INTEGER NOT NULL,generation INTEGER NOT NULL DEFAULT 0,owner TEXT,status TEXT NOT NULL,snapshot TEXT NOT NULL,result TEXT,error TEXT,mock INTEGER NOT NULL,created_at TEXT NOT NULL,updated_at TEXT NOT NULL,dependency_key TEXT NOT NULL UNIQUE,inputs TEXT NOT NULL DEFAULT '[]',tool_events TEXT NOT NULL DEFAULT '[]');
       CREATE INDEX story_jobs_queue ON story_jobs(status,created_at);
       CREATE TABLE story_states(id TEXT PRIMARY KEY,job_id TEXT NOT NULL UNIQUE REFERENCES story_jobs(id),chat_id TEXT NOT NULL REFERENCES chats(id),source_revision TEXT NOT NULL REFERENCES sources(id),source_hash TEXT NOT NULL,module_revision INTEGER NOT NULL,parent_state_id TEXT,body TEXT NOT NULL);
       CREATE INDEX story_states_source ON story_states(chat_id,source_revision,module_revision);
-      CREATE TABLE story_memories(id TEXT PRIMARY KEY,chat_id TEXT NOT NULL REFERENCES chats(id),job_id TEXT REFERENCES story_jobs(id),entry TEXT NOT NULL,retired_at TEXT,replaces_id TEXT REFERENCES story_memories(id));
-      CREATE TABLE story_indexes(chat_id TEXT NOT NULL REFERENCES chats(id),source_revision TEXT NOT NULL REFERENCES sources(id),source_hash TEXT NOT NULL,job_id TEXT NOT NULL REFERENCES story_jobs(id),PRIMARY KEY(chat_id,source_revision,source_hash));
       CREATE TABLE scene_commands(id TEXT PRIMARY KEY,chat_id TEXT NOT NULL REFERENCES chats(id),branch_id TEXT NOT NULL REFERENCES branches(id),request_key TEXT NOT NULL,label TEXT NOT NULL,request TEXT NOT NULL,status TEXT NOT NULL,run_id TEXT REFERENCES runs(id),source_revision TEXT REFERENCES sources(id),UNIQUE(chat_id,request_key));
     `);
+    this.notes.initFresh();
   }
   /** Current settings only; historical work owns its complete immutable story snapshot. */
   config(chatId: string): StoryConfig {
@@ -105,14 +104,10 @@ export class StoryStore {
   }
   saveConfig(chatId: string, value: unknown): StoryConfig {
     const body = record(value);
-    fields(body, ['expectedRevision', 'module', 'stateModel', 'memory', 'branchId', 'resetState']);
+    fields(body, ['expectedRevision', 'module', 'stateModel', 'branchId', 'resetState']);
     if (body.resetState !== undefined && typeof body.resetState !== 'boolean')
       throw new HttpError(400, 'Invalid state reset');
-    const memory = record(body.memory);
-    fields(memory, ['enabled', 'model', 'recentCount', 'maxPacketChars']);
-    if (typeof memory.enabled !== 'boolean') throw new HttpError(400, 'Invalid memory setting');
     const stateModel = this.model(body.stateModel);
-    const memoryModel = this.model(memory.model);
     return this.store.transaction(() => {
       const branch = this.store.product.branch(
         chatId,
@@ -123,7 +118,6 @@ export class StoryStore {
       if (old.revision !== number(body.expectedRevision, 'story revision', 0))
         throw new HttpError(409, 'Story settings revision conflict');
       assertModelSelection(this.store.product, stateModel, old.stateModel);
-      assertModelSelection(this.store.product, memoryModel, old.memory.model);
       let module: StoryConfig['module'] = null;
       if (body.module !== null) {
         try {
@@ -165,12 +159,6 @@ export class StoryStore {
         revision,
         module,
         stateModel,
-        memory: {
-          enabled: memory.enabled,
-          model: memoryModel,
-          recentCount: number(memory.recentCount, 'recent source count', 1, 100),
-          maxPacketChars: number(memory.maxPacketChars, 'memory packet limit', 1000, 2_000_000),
-        },
         activatedAt: changed
           ? head
             ? { revision: head.id, hash: head.hash }
@@ -188,7 +176,7 @@ export class StoryStore {
           "SELECT id,kind,snapshot FROM story_jobs WHERE chat_id=? AND status IN ('queued','running')"
         )
         .all(chatId) as Row[]) {
-        if (row.kind === 'state' ? changed : !result.memory.enabled) {
+        if (changed) {
           this.db
             .prepare(
               "UPDATE story_jobs SET status='cancelled',generation=generation+1,owner=NULL,error='보조 설정이 변경되어 작업을 중단했어요.',updated_at=? WHERE id=?"
@@ -220,7 +208,7 @@ export class StoryStore {
     const result: StorySnapshot['models'] = {};
     for (const [kind, ref] of [
       ['state', config.stateModel],
-      ['memory', config.memory.model],
+      ['context', promptWorkspace(this.store).contextModel],
     ] as const)
       if (ref) {
         const model = this.store.product.get<ModelPreset>('model', ref.id);
@@ -269,23 +257,16 @@ export class StoryStore {
   prepare(snapshot: RunSnapshot): StorySnapshot | undefined {
     const config = this.configForBranch(snapshot.chatId, snapshot.branchId);
     const scope = { chatId: snapshot.chatId, history: snapshot.history };
-    const authored = this.memory.entries(scope).some((entry) => entry.kind === 'author-canon');
-    if (!config.module && !config.memory.enabled && !authored) return undefined;
+    const notes = this.notes.entries(scope);
+    if (!config.module && !notes.length) return undefined;
     const state = this.stateAt(snapshot.chatId, snapshot.parentRevision, config);
-    const memory =
-      config.memory.enabled || authored ? this.memory.plan(scope, config.memory) : null;
-    if (memory && !memory.plan.ready && !snapshot.profile?.models.main)
-      throw new HttpError(
-        409,
-        '필수 작가 설정과 원문 문맥이 한도를 넘었어요. 기억 작업을 복구하거나 한도를 조정해 주세요.'
-      );
     return {
       config,
       state,
       waiting: config.module?.mode === 'authoritative' && state === null,
       lineageHash: lineageHash(snapshot.history),
-      canonHash: this.memory.canonHash(scope),
-      memory,
+      canonHash: this.notes.canonHash(scope),
+      notes,
       models: this.models(config),
     };
   }
@@ -316,7 +297,7 @@ export class StoryStore {
       )
         return false;
       if (
-        this.memory.canonHash({ chatId: job.chatId, history: snapshot.history }) !== story.canonHash
+        this.notes.canonHash({ chatId: job.chatId, history: snapshot.history }) !== story.canonHash
       )
         return false;
       if (
@@ -347,16 +328,9 @@ export class StoryStore {
     this.finishCommandInTransaction(run.id, 'consumed', source.id);
     const story = run.snapshot.story;
     if (!story) return;
-    for (const kind of ['state', 'memory'] as const) {
-      if (kind === 'state' ? !story.config.module : !story.config.memory.enabled) continue;
-      this.scheduleInTransaction(kind, source, run.snapshot);
-    }
+    if (story.config.module) this.scheduleInTransaction('state', source, run.snapshot);
   }
-  private scheduleInTransaction(
-    kind: 'state' | 'memory',
-    source: Source,
-    snapshot: RunSnapshot
-  ): StoryJob {
+  private scheduleInTransaction(kind: 'state', source: Source, snapshot: RunSnapshot): StoryJob {
     const key = storyDependencyKey(kind, source, snapshot);
     const prior = this.db.prepare('SELECT id FROM story_jobs WHERE dependency_key=?').get(key) as
       | Row
@@ -384,7 +358,7 @@ export class StoryStore {
     this.store.event(source.chatId, 'story.job.queued', id);
     return this.job(id);
   }
-  rebuildSource(id: string, kind: 'state' | 'memory', branchId?: string): StoryJob {
+  rebuildSource(id: string, kind: 'state', branchId?: string): StoryJob {
     return this.store.transaction(() => {
       const source = this.store.source(id);
       const original = this.store.run(source.runId).snapshot;
@@ -395,8 +369,7 @@ export class StoryStore {
       )
         throw new HttpError(409, 'Source is outside the selected branch');
       const config = this.configForBranch(source.chatId, branch.id);
-      if (kind === 'state' ? !config.module : !config.memory.enabled)
-        throw new HttpError(409, '해당 보조 기능이 꺼져 있어요.');
+      if (!config.module) throw new HttpError(409, '해당 보조 기능이 꺼져 있어요.');
       const history = this.store.history(source.parentRevision);
       const scope = { chatId: source.chatId, history };
       let state =
@@ -417,20 +390,14 @@ export class StoryStore {
           state,
           waiting: false,
           lineageHash: lineageHash(history),
-          canonHash: this.memory.canonHash(scope),
-          memory: this.memory.plan(scope, config.memory),
+          canonHash: this.notes.canonHash(scope),
+          notes: this.notes.entries(scope),
           models: this.models(config),
         },
       };
       snapshot.logicalHistory = captureLogicalHistory(this.store, snapshot);
       return this.scheduleInTransaction(kind, source, snapshot);
     });
-  }
-  indexHistory(chatId: string, branchId?: string): StoryJob[] {
-    const branch = this.store.product.branch(chatId, branchId);
-    return this.store
-      .history(branch.headRevision)
-      .map((item) => this.rebuildSource(item.revision, 'memory', branch.id));
   }
   job(id: string): StoryJob {
     const row = this.db.prepare('SELECT * FROM story_jobs WHERE id=?').get(id) as Row | undefined;
@@ -587,22 +554,6 @@ export class StoryStore {
               story.state?.id ?? null,
               json(state)
             );
-        } else {
-          const result = record(outcome.result);
-          fields(result, ['entries']);
-          if (!Array.isArray(result.entries)) throw new HttpError(400, 'Invalid memory result');
-          outcome = {
-            ...outcome,
-            result: {
-              entries: this.memory.completeInTransaction(
-                id,
-                job.chatId,
-                source,
-                this.sourceHistory(job, snapshot),
-                result.entries
-              ),
-            },
-          };
         }
       }
       this.db
@@ -621,7 +572,7 @@ export class StoryStore {
       if (!this.valid(job))
         throw new HttpError(
           409,
-          '원문 또는 규칙이 변경된 작업이에요. 현재 원문에서 새 기억·상태 작업을 요청해 주세요.'
+          '원문 또는 규칙이 변경된 작업이에요. 현재 원문에서 새 상태 작업을 요청해 주세요.'
         );
       this.db
         .prepare(
@@ -671,7 +622,7 @@ export class StoryStore {
         if (
           branch.headRevision !== run.parentRevision ||
           lineageHash(this.store.history(run.parentRevision)) !== story.lineageHash ||
-          this.memory.canonHash({ chatId: run.chatId, history: run.snapshot.history }) !==
+          this.notes.canonHash({ chatId: run.chatId, history: run.snapshot.history }) !==
             story.canonHash
         ) {
           this.db
@@ -743,7 +694,7 @@ export class StoryStore {
   }
   detail(chatId: string, branchId?: string): StoryDetail {
     const branch = this.store.product.branch(chatId, branchId);
-    const scope = this.memory.scope(chatId, branch.headRevision);
+    const scope = this.notes.scope(chatId, branch.headRevision);
     const config = this.configForBranch(chatId, branch.id);
     const state = this.stateAt(chatId, branch.headRevision, config);
     const jobs = (
@@ -762,8 +713,8 @@ export class StoryStore {
             ? 'stale'
             : 'pending',
       jobs,
-      memory: this.memory.entries(scope),
-      checkpoint: this.memory.checkpoint(scope),
+      notes: this.notes.entries(scope),
+      notesRevision: this.notes.revision(chatId),
       commands: this.commands(chatId, branch.id),
     };
   }

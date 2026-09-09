@@ -1,7 +1,6 @@
-import { memoryHash, type MemoryEntry, type MemoryContextPlan } from './memory.js';
+import { sourceHash as hashSource } from './source-history.js';
 import {
   filterSourceSegments,
-  parseSourceSegments,
   SourceSegmentError,
   type SegmentRange,
   type SegmentRequestView,
@@ -15,7 +14,7 @@ export function sourceRequestView(snapshot: Scope, revision: string): SegmentReq
   const index = snapshot.history.findIndex((item) => item.revision === revision),
     item = snapshot.history[index];
   if (!item) throw new SourceSegmentError('SEGMENT_SOURCE_UNAVAILABLE');
-  const sourceHash = memoryHash(item.text);
+  const sourceHash = hashSource(item.text);
   if (item.contentHash !== undefined && item.contentHash !== sourceHash)
     throw new SourceSegmentError('SEGMENT_SOURCE_HASH_MISMATCH');
   const source = { sourceRevision: revision, sourceHash, text: item.text };
@@ -60,54 +59,6 @@ export function sourceLogicalHistoryForRequest(
       throw new SourceSegmentError('SEGMENT_SOURCE_HASH_MISMATCH');
     return { ...message, text: view.text, sourceHash: view.sourceHash };
   });
-}
-export function sourceMemoryEntryAllowed(snapshot: Scope, entry: MemoryEntry): boolean {
-  if (entry.kind === 'author-canon' || !snapshot.sourceSegments) return true;
-  try {
-    return entry.sources.every((ref) => {
-      const item = snapshot.history.find((item) => item.revision === ref.revision),
-        view = sourceRequestView(snapshot, ref.revision);
-      if (
-        !item ||
-        view.sourceHash !== ref.hash ||
-        view.excluded.some((excluded) => overlaps(excluded.range, ref))
-      )
-        return false;
-      const document = parseSourceSegments(
-        { sourceRevision: ref.revision, sourceHash: view.sourceHash, text: item.text },
-        snapshot.sourceSegments
-      );
-      if (document.diagnostics.some((d) => d.severity === 'error')) return false;
-      // validateMemoryEntry supplies host-derived unknown knowledge; the existing kind is retained.
-      return true;
-    });
-  } catch {
-    return false;
-  }
-}
-export function sourceMemoryPlanForRequest(
-  snapshot: Scope,
-  plan: MemoryContextPlan
-): MemoryContextPlan {
-  if (!snapshot.sourceSegments) return structuredClone(plan);
-  const allowed = plan.memories.filter((entry) => sourceMemoryEntryAllowed(snapshot, entry));
-  const recentIds = new Set(plan.recentHistory.map((item) => item.revision));
-  const recentHistory = sourceHistoryForRequest(snapshot).filter((item) =>
-    recentIds.has(item.revision)
-  );
-  const packetChars = JSON.stringify({
-    watermark: plan.watermark,
-    recentHistory,
-    memories: allowed,
-  }).length;
-  return {
-    ...structuredClone(plan),
-    memories: allowed,
-    recentHistory,
-    packetChars,
-    ready: packetChars <= plan.maxPacketChars,
-    diagnostics: [...plan.diagnostics, 'SEGMENT_REQUEST_RANGES_APPLIED'],
-  };
 }
 export function sourceReadRange(snapshot: Scope, revision: string, start: number, end: number) {
   const view = sourceRequestView(snapshot, revision),

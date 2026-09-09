@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from 'vitest';
-import { memoryHash, type MemoryEntry } from '../core/memory.js';
+import { sourceHash as memoryHash } from '../core/source-history.js';
 import { defaultProfile, type ModelSnapshot } from '../core/product.js';
 import { defaultStoryConfig, type StoryJob, type StorySnapshot } from '../core/story.js';
 import type { Json, ProviderResult, WireRecord } from '../core/transport.js';
@@ -73,7 +73,7 @@ function selected(endpoint: string, role: string, inputTokenLimit = 8192): Model
   };
 }
 function bundle(
-  kind: 'state' | 'memory',
+  kind: 'state',
   endpoint: string,
   options: {
     texts?: string[];
@@ -97,19 +97,13 @@ function bundle(
     hash: memoryHash(text),
   };
   const stateModel = selected(endpoint, 'state', options.inputTokenLimit),
-    memoryModel = selected(endpoint, 'memory', options.inputTokenLimit),
+    memoryModel = selected(endpoint, 'context', options.inputTokenLimit),
     mainModel = selected(endpoint, 'main', options.mainInputTokenLimit);
   const story: StorySnapshot = {
     config: {
       ...defaultStoryConfig(),
       revision: 1,
       stateModel: { id: stateModel.id },
-      memory: {
-        enabled: true,
-        model: { id: memoryModel.id },
-        recentCount: 2,
-        maxPacketChars: 60000,
-      },
       module: {
         id: 'coin-module',
         revision: 1,
@@ -135,8 +129,8 @@ function bundle(
       values: { coins: 10 },
       canonical: true,
     },
-    memory: null,
-    models: { state: stateModel, memory: memoryModel },
+    notes: [],
+    models: { state: stateModel, context: memoryModel },
     waiting: false,
     lineageHash: 'synthetic-lineage',
     canonHash: memoryHash('[]'),
@@ -170,6 +164,7 @@ function bundle(
       ...defaultProfile(source.chatId),
       contents: [],
       models: { main: mainModel },
+      contextModel: memoryModel,
       routes: { main: { id: mainModel.id }, translation: null, status: null, image: null },
       promptPresets: {
         main: {
@@ -275,32 +270,6 @@ function stateResult(source: Source) {
     ],
   };
 }
-function memoryResult(work: ReturnType<typeof bundle>): { entries: MemoryEntry[] } {
-  const old = work.snapshot.history[0],
-    quote = old.text.split('\n')[0];
-  return {
-    entries: [
-      {
-        id: 'observed-memory',
-        chatId: work.source.chatId,
-        atRevision: work.source.id,
-        atHash: work.source.hash,
-        kind: 'observed-story',
-        text: '미라는 오래된 단서를 확인한 뒤 항구에서 동전 세 개를 썼어요.',
-        sources: [
-          { revision: old.revision, hash: old.contentHash!, start: 0, end: quote.length, quote },
-          {
-            revision: work.source.id,
-            hash: work.source.hash,
-            start: 0,
-            end: work.source.text.length,
-            quote: work.source.text,
-          },
-        ],
-      },
-    ],
-  };
-}
 const latestPlan = (log: ReturnType<typeof observed>) =>
   log.inputs.findLast((input) => input.contextPlan?.status === 'ready')!.contextPlan!;
 function strings(value: unknown): string[] {
@@ -333,7 +302,7 @@ describe('story runner uses input compaction without shrinking source evidence o
     const server = await fixture(async (body, response) => {
       expect(log.attempts).toHaveLength(server.requests.length);
       if (isSummary(body)) {
-        expect(body.role).toBe('memory');
+        expect(body.role).toBe('context');
         summaries.push(body);
         await writeSse(response, finishText(summary(body)));
         return;
@@ -366,7 +335,7 @@ describe('story runner uses input compaction without shrinking source evidence o
     expect(summaries.length).toBeGreaterThan(0);
     expect(stateBodies).toHaveLength(1);
     expect(log.attempts.map((attempt) => attempt.wire.role)).toEqual([
-      ...summaries.map(() => 'memory'),
+      ...summaries.map(() => 'context'),
       'state',
     ]);
     const plan = latestPlan(log);
@@ -392,53 +361,6 @@ describe('story runner uses input compaction without shrinking source evidence o
     ).toBe(false);
     expect(log.attempts.every((attempt) => attempt.result?.usage.costUsd === null)).toBe(true);
     expect(log.attempts.length).toBeLessThanOrEqual(work.snapshot.settings.maxCalls);
-    expect(work).toEqual(original);
-  });
-
-  test('memory extraction validates compacted-ancestor quotes and hashes against the full original ancestry', async () => {
-    let mode: 'valid' | 'bad-quote' | 'bad-hash' = 'valid';
-    const extracted: Body[] = [];
-    const server = await fixture(async (body, response) => {
-      if (isSummary(body)) {
-        await writeSse(response, finishText(summary(body)));
-        return;
-      }
-      expect(body.role).toBe('memory');
-      extracted.push(body);
-      expect(
-        body.input.history!.some((item) => item.revision === work.snapshot.history[0].revision)
-      ).toBe(false);
-      const output = memoryResult(work),
-        entry = output.entries[0];
-      if (entry.kind === 'observed-story') {
-        if (mode === 'bad-quote') entry.sources[0].quote = 'INVENTED_QUOTE';
-        if (mode === 'bad-hash') entry.sources[0].hash = 'f'.repeat(64);
-      }
-      await writeSse(response, finish(output));
-    });
-    const work = bundle('memory', server.endpoint),
-      original = structuredClone(work),
-      log = observed(server.origin);
-    expect(await runStoryJob(work, log.hooks)).toMatchObject({
-      status: 'completed',
-      result: memoryResult(work),
-      error: null,
-    });
-    expect(latestPlan(log).compacted[0].revision).toBe(work.snapshot.history[0].revision);
-    mode = 'bad-quote';
-    expect(await runStoryJob(work, observed(server.origin).hooks)).toMatchObject({
-      status: 'failed',
-      result: null,
-      error: 'MEMORY_INVALID_SOURCE_RANGE',
-    });
-    mode = 'bad-hash';
-    expect(await runStoryJob(work, observed(server.origin).hooks)).toMatchObject({
-      status: 'failed',
-      result: null,
-      error: 'MEMORY_OUT_OF_SCOPE',
-    });
-    expect(server.failures).toEqual([]);
-    expect(extracted).toHaveLength(3);
     expect(work).toEqual(original);
   });
 
@@ -560,7 +482,9 @@ describe('story runner uses input compaction without shrinking source evidence o
     expect(plan.summaryCalls).toBeGreaterThan(0);
     expect(plan.compacted.length).toBeGreaterThan(0);
     expect(log.attempts.at(-1)!.wire.role).toBe('state');
-    expect(log.attempts.slice(0, -1).every((attempt) => attempt.wire.role === 'memory')).toBe(true);
+    expect(log.attempts.slice(0, -1).every((attempt) => attempt.wire.role === 'context')).toBe(
+      true
+    );
     expect(work).toEqual(original);
   });
 });

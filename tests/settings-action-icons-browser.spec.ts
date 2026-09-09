@@ -1,0 +1,101 @@
+import { test, expect, type Locator } from '@playwright/test';
+import { postFixtureChat } from './fixtures/chat.js';
+import {
+  navigationAction,
+  selectChatSettingsSection,
+  selectSettingsSection,
+} from './ui-navigation.js';
+
+async function icon(button: Locator) {
+  await expect(button).toBeVisible();
+  await expect(button.locator('svg')).toHaveCount(1);
+  expect((await button.innerText()).trim()).toBe('');
+  const box = await button.boundingBox();
+  expect(box!.width).toBeGreaterThanOrEqual(44);
+  expect(box!.height).toBeGreaterThanOrEqual(44);
+}
+for (const width of [390, 1440]) {
+  test(`SICON01 ${width} settings actions stay beside their forms with compact accessible controls`, async ({
+    page,
+    request,
+  }, info) => {
+    const response = await postFixtureChat(request, {
+      data: { title: `설정 아이콘 합성 ${width}` },
+    });
+    expect(response.ok()).toBe(true);
+    const chat = await response.json();
+    await page.setViewportSize({ width, height: 900 });
+    await page.goto(`/?chat=${chat.id}`);
+    await page.getByRole('button', { name: '채팅 설정', exact: true }).click();
+    const dialog = page.getByRole('dialog', { name: '채팅 설정', exact: true });
+    await selectChatSettingsSection(page, '봇·페르소나·모듈');
+    const save = dialog.getByRole('button', { name: '채팅 설정 저장', exact: true });
+    await save.scrollIntoViewIfNeeded();
+    await icon(save);
+    await page.screenshot({ path: info.outputPath(`chat-save-${width}.png`) });
+    await selectChatSettingsSection(page, '프롬프트·창작 프리셋');
+    const description = dialog
+      .getByRole('tabpanel')
+      .locator('p')
+      .filter({ hasText: /^작문:/ });
+    await expect(description.locator('br')).toHaveCount(1);
+    await selectChatSettingsSection(page, '자동 후속 작업');
+    const runtimeSave = dialog.getByRole('button', { name: '설정 저장', exact: true });
+    await icon(runtimeSave);
+    await dialog.getByRole('switch', { name: '장면 상태 자동 실행' }).click();
+    await expect(runtimeSave).toBeEnabled();
+    await runtimeSave.click();
+    await expect(dialog.getByText('후속 작업 설정을 저장했어요.', { exact: true })).toBeVisible();
+    await page.screenshot({ path: info.outputPath(`runtime-save-${width}.png`) });
+    await selectChatSettingsSection(page, '이미지');
+    await icon(dialog.getByRole('button', { name: '이미지 등록', exact: true }));
+    await page.screenshot({ path: info.outputPath(`image-register-${width}.png`) });
+    await page.keyboard.press('Escape');
+    // Both panels fetch the shared workspace. Hold it to inspect and use the loading retry.
+    let ready = false;
+    await page.route('**/api/prompt-workspace', async (route) => {
+      if (ready) await route.continue();
+      else
+        await route.fulfill({
+          status: 503,
+          contentType: 'application/json',
+          body: JSON.stringify({ message: '합성 일시 오류' }),
+        });
+    });
+    await navigationAction(page, '설정');
+    await selectSettingsSection(page, '현재 모델');
+    const settings = page.getByRole('dialog', { name: '설정', exact: true });
+    const reload = settings.getByRole('button', { name: '다시 불러오기', exact: true });
+    await icon(reload);
+    ready = true;
+    await reload.click();
+    const models = settings.getByRole('region', { name: '현재 모델 설정', exact: true });
+    await expect(models).toBeVisible();
+    const modelSave = models.getByRole('button', { name: '현재 모델 설정 저장', exact: true });
+    await modelSave.scrollIntoViewIfNeeded();
+    await icon(modelSave);
+    await expect(models).not.toContainText('새 채팅의 첫 응답이 성공하면');
+    await expect(models).not.toContainText('명확한 거절일 때만 추가 번역');
+    await page.screenshot({ path: info.outputPath(`model-save-${width}.png`) });
+    ready = false;
+    await selectSettingsSection(page, '현재 프롬프트');
+    await icon(reload);
+    ready = true;
+    await reload.click();
+    await expect(settings.locator('.pc-blocks-section')).not.toHaveAttribute('open');
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(
+      true
+    );
+    await page.screenshot({ path: info.outputPath(`prompt-fold-${width}.png`) });
+    const add = settings.getByRole('button', { name: '블록 추가', exact: true });
+    await icon(add);
+    const blocks = settings.locator('.pc-blocks-section .pc-block');
+    const count = await blocks.count();
+    await add.click();
+    await expect(blocks).toHaveCount(count + 1);
+    await expect(settings.locator('.pc-blocks-section')).toHaveAttribute('open');
+    await expect(blocks.last()).toHaveAttribute('open');
+    await expect(blocks.last().locator('input').first()).toBeFocused();
+    await page.screenshot({ path: info.outputPath(`prompt-add-${width}.png`) });
+  });
+}

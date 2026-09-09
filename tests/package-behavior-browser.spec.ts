@@ -1,4 +1,5 @@
 import { visualReview } from './fixtures/visual-review.js';
+import { waitForContentDraftSave } from './fixtures/edit-draft-save.js';
 import {
   editLibraryContent,
   navigationAction,
@@ -262,12 +263,10 @@ test('BUI03 invocation methods persist, validate automatic input drafts and show
   );
   if (visualReview)
     await methods.screenshot({ path: info.outputPath('behavior-method-editor-mobile.png') });
-  const addedResponse = page.waitForResponse(
-    (response) => response.url().endsWith('/api/content') && response.request().method() === 'POST'
-  );
+  const addedResponse = waitForContentDraftSave(page);
   await library.getByRole('button', { name: '자료 등록', exact: true }).click();
-  const added = await (await addedResponse).json();
-  expect(added.package.behavior.actions[0]).toMatchObject({
+  const added = await addedResponse;
+  expect(added.package!.behavior!.actions[0]).toMatchObject({
     triggers: ['user', 'before-turn', 'model'],
     automaticInput: { value: 4 },
   });
@@ -279,14 +278,11 @@ test('BUI03 invocation methods persist, validate automatic input drafts and show
   await methods.getByRole('checkbox', { name: /^사용자 버튼/ }).uncheck();
   await methods.getByRole('checkbox', { name: /^생성 전 자동 실행/ }).uncheck();
   await fields.getByRole('button', { name: '동작 검증 후 적용', exact: true }).click();
-  const revisedResponse = page.waitForResponse(
-    (response) =>
-      response.url().endsWith(`/api/content/${added.id}`) && response.request().method() === 'PUT'
-  );
+  const revisedResponse = waitForContentDraftSave(page, added.id);
   await library.getByRole('button', { name: '변경사항 저장', exact: true }).click();
-  const revised = await (await revisedResponse).json();
-  expect(revised.package.behavior.actions[0].triggers).toEqual(['model']);
-  expect(revised.package.behavior.actions[0]).not.toHaveProperty('automaticInput');
+  const revised = await revisedResponse;
+  expect(revised.package!.behavior!.actions[0].triggers).toEqual(['model']);
+  expect(revised.package!.behavior!.actions[0]).not.toHaveProperty('automaticInput');
   const stored = await (
     await request.get(`/api/revisions/content/${revised.id}/${revised.revision}`)
   ).json();

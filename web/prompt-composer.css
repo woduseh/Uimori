@@ -421,6 +421,12 @@ details[open] > summary > .pc-disclosure-icon {
   min-height: 46px;
   padding-block: 4px;
 }
+.pc-blocks-section > summary {
+  padding-block: 1px;
+}
+.pc-blocks-section > summary > .pc-add-block {
+  margin-left: auto;
+}
 @media (max-width: 600px) {
   .pc-composer-fold > summary > .pc-badge {
     display: none;

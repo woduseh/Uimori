@@ -70,7 +70,7 @@ docker compose --env-file .env.self-host -f compose.yaml -f deploy/compose.verte
 
 ## 저장과 운영
 
-DB는 Compose의 `data` named volume 안의 `/data/narrative.sqlite`에 저장돼요. 초기 volume은 이미지에서 준비한 UID 1000 소유 디렉터리를 사용해요. 프로그램 이미지를 다시 빌드하거나 컨테이너를 교체해도 volume은 유지돼요. 같은 DB를 여러 앱 프로세스에 연결하거나 `app`을 복제하지 마세요. [Docker volume의 수명과 초기 복사](https://docs.docker.com/engine/storage/volumes/)
+DB는 Compose의 `data` named volume 안의 `/data/narrative.sqlite`에 저장돼요. 실제 볼륨 이름은 `.env.self-host`의 `UIMORI_DATA_VOLUME`이며 기본값은 기존 `uimori_data`예요. 초기 volume은 이미지에서 준비한 UID 1000 소유 디렉터리를 사용해요. 프로그램 이미지를 다시 빌드하거나 컨테이너를 교체해도 volume은 유지돼요. 같은 DB를 여러 앱 프로세스에 연결하거나 `app`을 복제하지 마세요. [Docker volume의 수명과 초기 복사](https://docs.docker.com/engine/storage/volumes/)
 
 ```sh
 # 중지: DB volume 유지
@@ -86,7 +86,7 @@ docker compose --env-file .env.self-host exec proxy nginx -t
 docker compose --env-file .env.self-host restart proxy
 ```
 
-데이터를 유지하려면 `down`에 `-v`를 붙이지 마세요. Compose 프로젝트 이름은 기본 `uimori`로 고정돼요. 프로젝트 이름을 바꾸면 다른 volume을 보게 되므로 기존 데이터가 사라진 것처럼 보일 수 있어요.
+데이터를 유지하려면 `down`에 `-v`를 붙이지 마세요. Compose 프로젝트 이름은 기본 `uimori`로 고정돼요. 데이터 전환과 복구에서는 이미지 태그와 호환되는 `UIMORI_DATA_VOLUME`을 함께 지정해요. 이번 운영 v14 복사본에 한정한 이관 절차는 [유지보수 도구](../scripts/maintenance/README.md)에 있어요.
 
 프로그램과 Docker 서비스가 정상적으로 재시작되면 `restart: unless-stopped`가 앱·프록시를 다시 시작해요. 서버 중지로 끊긴 모델 작업은 자동 재호출하지 않아요. 브라우저만 닫았다면 서버의 생성 작업은 계속 진행되고, 다시 로그인해 저장된 진행 상태와 결과를 볼 수 있어요.
 

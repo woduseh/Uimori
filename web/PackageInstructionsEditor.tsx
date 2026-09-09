@@ -1,5 +1,6 @@
 import { Switch, SelectionCheckbox } from './BooleanControls.js';
 import { useEffect, useRef, useState } from 'react';
+import { useBufferedEditorState, useUnappliedEditorField } from './editor-workspace-context.js';
 import {
   PACKAGE_ROLES,
   PACKAGE_TARGETS,
@@ -63,7 +64,6 @@ const targetLabels: Record<PackageInstruction['target'], string> = {
   main: '본문 창작',
   translation: '번역',
   state: '상태 계산',
-  memory: '기억 정리',
   status: '표시 상태',
   image: '이미지 배치',
 };
@@ -79,7 +79,9 @@ export function PackageInstructionsEditor({
   onDirtyChange?: (dirty: boolean) => void;
 }) {
   const baseline = JSON.stringify(packageInstructionDrafts(value.instructions));
-  const [drafts, setDrafts] = useState(() => packageInstructionDrafts(value.instructions)),
+  const [drafts, setDrafts] = useBufferedEditorState('package.instructions', () =>
+      packageInstructionDrafts(value.instructions)
+    ),
     [error, setError] = useState(''),
     [notice, setNotice] = useState('');
   const previous = useRef(baseline);
@@ -89,8 +91,9 @@ export function PackageInstructionsEditor({
       setDrafts((current) => (JSON.stringify(current) === prior ? JSON.parse(baseline) : current));
       previous.current = baseline;
     }
-  }, [baseline]);
+  }, [baseline, setDrafts]);
   const dirty = JSON.stringify(drafts) !== baseline;
+  useUnappliedEditorField('package.instructions', dirty);
   useEffect(() => {
     onDirtyChange?.(dirty);
   }, [dirty, onDirtyChange]);

@@ -1,3 +1,4 @@
+import { modelWorkspace, updateModelWorkspace } from '../server/prompt-workspace.js';
 import { updateTestProfile } from './fixtures/model-workspace.js';
 import { createFixtureChat } from './fixtures/chat.js';
 import { afterEach, expect, test } from 'vitest';
@@ -85,7 +86,7 @@ test('real authored start and ordinary turns retain host provenance through comp
   const server = await loopbackProvider(async (request, response) => {
     try {
       const body = JSON.parse(request.body);
-      expect(body.role).toBe('memory');
+      expect(body.role).toBe('context');
       expect(body.stable.tools).toEqual([]);
       expect(request.body).not.toContain('sourceKind');
       fragments.push(...body.input.source.fragments);
@@ -156,6 +157,13 @@ test('real authored start and ordinary turns retain host provenance through comp
     ...profile,
     expectedRevision: revision,
     routes: { ...profile.routes, main: { id: model.id } },
+  });
+  const workspace = modelWorkspace(store);
+  updateModelWorkspace(store, {
+    expectedRevision: workspace.revision,
+    routes: workspace.routes,
+    translationPolicy: workspace.translationPolicy,
+    contextModel: { id: model.id },
   });
   const authored = createPackageStart(store, chat.id, {
     packageId: content.id,
@@ -234,7 +242,10 @@ test('real authored start and ordinary turns retain host provenance through comp
   expect(JSON.stringify(providerRequest)).not.toContain('authored-start');
   store.db
     .prepare('UPDATE runs SET snapshot=? WHERE id=?')
-    .run(JSON.stringify(prepared.snapshot), continuation.id);
+    .run(
+      JSON.stringify(store.context.publishPrepared(prepared.snapshot, { origin: 'automatic' })),
+      continuation.id
+    );
   store.finishRun(
     continuation.id,
     'cancelled',

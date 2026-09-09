@@ -1,7 +1,10 @@
 import { visualReview } from './fixtures/visual-review.js';
-import { navigationAction } from './ui-navigation.js';
+import { isolatePromptDrafts } from './fixtures/prompt-workspace.js';
+import { navigationAction, openPromptBlocks } from './ui-navigation.js';
 import { test, expect } from '@playwright/test';
 import type { PromptProgram } from '../core/prompt-program.js';
+
+isolatePromptDrafts();
 
 const complexProgram = (): PromptProgram => ({
   version: 1,
@@ -67,6 +70,7 @@ test('PUNI01 structured editor preserves one AST; folding keeps drafts and compl
   const editor = page.getByTestId('prompt-editor'),
     composer = editor.getByTestId('prompt-composer');
   const firstBlock = composer.locator('#prompt-block-instructions');
+  await openPromptBlocks(composer);
   await firstBlock.locator('summary').first().click();
   const body = firstBlock.getByLabel('기본 지침 본문', { exact: true });
   await expect(body).toHaveValue('SYNTHETIC_ORIGINAL');
@@ -155,6 +159,7 @@ test('PUNI02 file import edits one block and folded preview retains its snapshot
   const editor = page.getByTestId('prompt-editor'),
     composer = editor.getByTestId('prompt-composer');
   const block = composer.locator('#prompt-block-message-3');
+  await openPromptBlocks(composer);
   await block.locator('summary').first().click();
   const imported = '  BODY FILE\n{{slot}} is literal.  ';
   await block
@@ -216,7 +221,12 @@ test('PUNI03 translation list preview uses exact source and one current request;
   await composer.getByLabel('미리보기 원문', { exact: true }).fill(source);
   const writes: string[] = [];
   page.on('request', (request) => {
-    if (request.method() !== 'GET') writes.push(`${request.method()} ${request.url()}`);
+    // Editing raw JSON syncs its draft; preview must not publish or invoke a model.
+    const draftOnly =
+      (/\/api\/edit-drafts$/.test(request.url()) && request.method() === 'POST') ||
+      (/\/api\/edit-drafts\/[^/]+$/.test(request.url()) && request.method() === 'PATCH');
+    if (request.method() !== 'GET' && !draftOnly)
+      writes.push(`${request.method()} ${request.url()}`);
   });
   await composer.getByRole('button', { name: '미리보기 갱신', exact: true }).click();
   const messages = composer.locator('.pc-message-list > li');

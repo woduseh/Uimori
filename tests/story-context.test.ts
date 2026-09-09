@@ -1,219 +1,135 @@
 import { describe, expect, test } from 'vitest';
 import { executeStoryRead, STORY_RESULT_MAX_BYTES } from '../core/story-context.js';
-import {
-  memoryHash,
-  planMemoryContext,
-  type MemoryEntry,
-  type MemorySourceRef,
-} from '../core/memory.js';
+import { sourceHash } from '../core/source-history.js';
+import { validateAuthorNote, type AuthorNote } from '../core/notes.js';
 import { defaultStoryConfig } from '../core/story.js';
 import type { RunSnapshot } from '../core/types.js';
 
-const sourceText = 'Actual source evidence. '.repeat(600);
-const sourceHash = memoryHash(sourceText);
-const ref: MemorySourceRef = {
-  revision: 'source-1',
-  hash: sourceHash,
-  start: 0,
-  end: 10000,
-  quote: sourceText.slice(0, 10000),
-};
-const note: MemoryEntry = {
-  id: 'memory-1',
+const sourceText = 'Exact source evidence. '.repeat(1000);
+const note = (id = 'note', text = 'The harbor is blue.'): AuthorNote => ({
+  id,
   chatId: 'chat',
-  atRevision: 'source-1',
-  atHash: sourceHash,
-  kind: 'character-belief',
-  actor: 'Alice',
-  text: 'Alice believes the door is locked. '.repeat(400),
-  sources: [ref],
-};
-function snapshot(entries: MemoryEntry[], text = sourceText): RunSnapshot {
-  const history = [{ revision: 'source-1', text }];
-  const scope = { chatId: 'chat', history };
-  const checkpoint = { chatId: 'chat', indexed: [] };
-  return {
-    chatId: 'chat',
-    parentRevision: 'source-1',
-    settingsRevision: 1,
-    settings: { preset: 'calm', mode: 'direct', translation: false, status: false, maxCalls: 8 },
-    request: 'Continue.',
-    resources: [],
-    history,
-    story: {
-      config: {
-        ...defaultStoryConfig(),
-        memory: { enabled: true, model: null, recentCount: 2, maxPacketChars: 2000000 },
-      },
-      state: null,
-      waiting: false,
-      lineageHash: memoryHash(JSON.stringify(history)),
-      canonHash: memoryHash('[]'),
-      models: {},
-      memory: {
-        entries,
-        checkpoint,
-        plan: planMemoryContext({ scope, entries, checkpoint, maxPacketChars: 2000000 }),
-      },
-    },
-  };
-}
+  atRevision: null,
+  atHash: null,
+  kind: 'author-note',
+  text,
+  declaration: { author: 'user', text },
+});
+const snapshot = (notes: AuthorNote[] = [], text = sourceText): RunSnapshot => ({
+  chatId: 'chat',
+  parentRevision: 'source',
+  settingsRevision: 1,
+  settings: { preset: 'calm', mode: 'direct', translation: false, status: false, maxCalls: 8 },
+  request: 'Continue.',
+  resources: [],
+  history: [{ revision: 'source', text, contentHash: sourceHash(text) }],
+  story: {
+    config: defaultStoryConfig(),
+    state: null,
+    waiting: false,
+    lineageHash: 'synthetic',
+    canonHash: sourceHash('[]'),
+    models: {},
+    notes,
+  },
+});
 function read(fixed: RunSnapshot, name: string, args: Record<string, unknown>) {
-  const event = executeStoryRead(fixed, { callId: 'test-call', name, args });
+  const event = executeStoryRead(fixed, { callId: 'read', name, args });
   expect(event.denied, JSON.stringify(event)).toBe(false);
-  expect(Buffer.byteLength(JSON.stringify(event.result), 'utf8')).toBeLessThanOrEqual(
+  expect(Buffer.byteLength(JSON.stringify(event.result))).toBeLessThanOrEqual(
     STORY_RESULT_MAX_BYTES
-  );
-  expect(Buffer.byteLength(JSON.stringify(event), 'utf8')).toBeLessThan(
-    STORY_RESULT_MAX_BYTES + 2000
   );
   return event.result as any;
 }
-
-describe('S04/S05 bounded memory and original-source tool responses', () => {
-  test('memory.read limit1 never injects the 10000-character evidence quote through provenance', () => {
-    const result = read(snapshot([note]), 'memory.read', { id: note.id, limit: 1 });
+describe('bounded source reads and explicit notes', () => {
+  test('notes.read returns one requested range without repeating the full declaration in metadata', () => {
+    const entry = note('long', 'An explicit correction. '.repeat(1200));
+    const result = read(snapshot([entry]), 'notes.read', { id: entry.id, limit: 1 });
     expect(result.text).toBe('A');
     expect(result.nextOffset).toBe(1);
-    expect(result.entry).toMatchObject({
-      kind: 'character-belief',
-      actor: 'Alice',
-      sources: [{ revision: ref.revision, hash: ref.hash, start: ref.start, end: ref.end }],
-    });
-    expect(JSON.stringify(result)).not.toContain('Actual source evidence.');
-    expect(JSON.stringify(result)).not.toContain('"quote":');
-    expect(Buffer.byteLength(JSON.stringify(result))).toBeLessThan(1200);
-    const search = read(snapshot([note]), 'memory.search', { query: 'Alice', limit: 1 });
-    expect(search.results[0].excerpt).toHaveLength(240);
-    expect(search.results[0].kind).toBe('character-belief');
-    expect(JSON.stringify(search)).not.toContain('Actual source evidence.');
-  });
-
-  test('authored declaration metadata does not repeat the entire canonical text', () => {
-    const text = 'A mandatory authored world fact. '.repeat(500);
-    const canon: MemoryEntry = {
-      id: 'canon',
-      chatId: 'chat',
-      kind: 'author-canon',
+    expect(result).toMatchObject({
+      id: entry.id,
+      kind: 'author-note',
+      author: 'user',
       atRevision: null,
       atHash: null,
-      text,
-      declaration: { author: 'user', text },
-    };
-    const result = read(snapshot([canon]), 'memory.read', { id: canon.id, limit: 1 });
-    expect(result.text).toBe('A');
-    expect(result.entry.declaration).toEqual({ author: 'user' });
-    expect(result.sourceCount).toBe(0);
-    expect(result.sourceContinuation).toBeNull();
-    expect(JSON.stringify(result)).not.toContain('mandatory authored');
-    expect(Buffer.byteLength(JSON.stringify(result))).toBeLessThan(900);
+    });
+    expect(JSON.stringify(result)).not.toContain('explicit correction');
+    expect(JSON.stringify(result)).not.toContain('Exact source evidence');
   });
-
-  test('large provenance is explicitly paginated and every exact source coordinate remains recoverable', () => {
-    const sources = Array.from({ length: 70 }, (_, index) => ({
-      revision: ref.revision,
-      hash: ref.hash,
-      start: index,
-      end: index + 5,
-      quote: sourceText.slice(index, index + 5),
-    }));
-    const fixed = snapshot([{ ...note, sources }]);
-    let sourceOffset: number | null = 0;
-    const recovered: unknown[] = [];
-    let pages = 0;
-    while (sourceOffset !== null) {
-      const result = read(fixed, 'memory.read', { id: note.id, limit: 1, sourceOffset });
-      expect(result.sourceCount).toBe(70);
-      expect(result.text).toBe('A');
-      recovered.push(...result.entry.sources);
-      sourceOffset = result.sourceContinuation?.sourceOffset ?? null;
-      pages++;
-      expect(pages).toBeLessThan(20);
-    }
-    expect(pages).toBeGreaterThan(1);
-    expect(recovered).toEqual(sources.map(({ quote: _quote, ...coordinates }) => coordinates));
-  });
-
-  test('memory.search honors the actual result byte budget and continuation retrieves every matching item', () => {
-    const sources = Array.from({ length: 25 }, (_, index) => ({
-      revision: ref.revision,
-      hash: ref.hash,
-      start: index,
-      end: index + 5,
-      quote: sourceText.slice(index, index + 5),
-    }));
-    const entries: MemoryEntry[] = Array.from({ length: 100 }, (_, index) => ({
-      ...note,
-      id: `memory-${index}`,
-      sources,
-    }));
+  test('notes.list honors byte pagination and every matching note remains discoverable', () => {
+    const entries = Array.from({ length: 100 }, (_, i) =>
+      note('note-' + i, '🌙'.repeat(500) + ' marker')
+    );
     const fixed = snapshot(entries);
     let offset: number | null = 0;
-    const recovered: string[] = [];
-    let pages = 0;
+    const ids: string[] = [];
     while (offset !== null) {
-      const result = read(fixed, 'memory.search', { query: 'Alice', offset, limit: 100 });
-      expect(result.total).toBe(100);
-      expect(result.results.length).toBeGreaterThan(0);
-      expect(
-        result.results.every(
-          (entry: any) => entry.sourceContinuation !== null && entry.provenanceTruncated
-        )
-      ).toBe(true);
-      recovered.push(...result.results.map((entry: any) => entry.id));
-      offset = result.nextOffset;
-      pages++;
-      expect(pages).toBeLessThan(100);
+      const page = read(fixed, 'notes.list', { query: 'marker', offset, limit: 100 });
+      ids.push(...page.results.map((entry: AuthorNote) => entry.id));
+      offset = page.nextOffset;
     }
-    expect(pages).toBeGreaterThan(1);
-    expect(recovered).toEqual(entries.map((entry) => entry.id));
+    expect(ids).toEqual(entries.map((entry) => entry.id));
+    expect(read(fixed, 'notes.list', {}).total).toBe(100);
   });
-
-  test('Unicode and JSON-escaped source/memory bodies use byte-aware text continuation without data loss', () => {
-    const text = '한글😀\u0000'.repeat(5000);
-    const hash = memoryHash(text);
-    const entry: MemoryEntry = {
-      ...note,
-      text,
-      atHash: hash,
-      sources: [{ revision: 'source-1', hash, start: 0, end: text.length, quote: text }],
-    };
-    const fixed = snapshot([entry], text);
-    for (const name of ['memory.read', 'story.read']) {
-      let offset: number | null = 0;
-      let recovered = '';
-      let pages = 0;
+  test('Unicode and escaped content roundtrips through bounded source and note ranges', () => {
+    const text = '🌙 "quoted" \n'.repeat(1500),
+      entry = note('unicode', text),
+      fixed = snapshot([entry], text);
+    for (const [name, id] of [
+      ['notes.read', entry.id],
+      ['story.read', 'source'],
+    ]) {
+      let offset: number | null = 0,
+        recovered = '';
       while (offset !== null) {
-        const result = read(fixed, name, {
-          id: name === 'memory.read' ? entry.id : 'source-1',
-          offset,
-          limit: 16000,
-        });
-        expect(result.text.length).toBeGreaterThan(0);
-        expect(result.text.length).toBeLessThan(16000);
-        recovered += result.text;
-        offset = result.nextOffset;
-        pages++;
-        expect(pages).toBeLessThan(20);
+        const page = read(fixed, name, { id, offset, limit: 16000 });
+        recovered += page.text;
+        offset = page.nextOffset;
       }
-      expect(pages).toBeGreaterThan(1);
       expect(recovered).toBe(text);
     }
   });
-
-  test('individual memory reads apply the same current ancestry and chat validation as search counts', () => {
-    const fixed = snapshot([{ ...note, chatId: 'private-chat' }]);
+  test('source tools are available without extraction settings and cannot read another branch', () => {
+    const fixed = snapshot();
+    delete fixed.story;
+    expect(read(fixed, 'story.search', { query: 'Exact source' }).total).toBe(1);
+    expect(read(fixed, 'story.read', { id: 'source', limit: 5 }).text).toBe('Exact');
     expect(
-      executeStoryRead(fixed, { callId: 'hidden', name: 'memory.read', args: { id: note.id } })
-        .denied
-    ).toBe(true);
-    expect(read(fixed, 'memory.search', { query: 'Alice' }).total).toBe(0);
-    expect(
-      executeStoryRead(snapshot([note]), {
-        callId: 'invalid',
-        name: 'memory.read',
-        args: { id: note.id, sourceOffset: -1 },
+      executeStoryRead(fixed, {
+        callId: 'foreign',
+        name: 'story.read',
+        args: { id: 'other-branch' },
       }).denied
     ).toBe(true);
+    expect(
+      executeStoryRead(fixed, { callId: 'old', name: 'memory.read', args: { id: 'source' } }).denied
+    ).toBe(true);
+  });
+  test('notes are filtered by exact source ancestry, chat and hash', () => {
+    const anchored = { ...note('anchored'), atRevision: 'source', atHash: sourceHash(sourceText) };
+    const fixed = snapshot([
+      anchored,
+      { ...note('foreign'), chatId: 'other' },
+      { ...note('future'), atRevision: 'future', atHash: sourceHash('future') },
+    ]);
+    expect(read(fixed, 'notes.list', {}).results.map((entry: AuthorNote) => entry.id)).toEqual([
+      'anchored',
+    ]);
+    fixed.history[0] = { revision: 'source', text: 'edited', contentHash: sourceHash('edited') };
+    expect(read(fixed, 'notes.list', {}).total).toBe(0);
+    expect(
+      executeStoryRead(fixed, { callId: 'retired', name: 'notes.read', args: { id: 'anchored' } })
+        .denied
+    ).toBe(true);
+  });
+  test('an extraction result cannot become an explicit note', () => {
+    const scope = { chatId: 'chat', history: [] };
+    expect(() =>
+      validateAuthorNote({ ...note(), kind: 'observed-story', sources: [] }, scope)
+    ).toThrow('STORY_NOTE_INVALID');
+    expect(() =>
+      validateAuthorNote({ ...note(), declaration: { author: 'user', text: 'different' } }, scope)
+    ).toThrow('STORY_NOTE_INVALID');
   });
 });

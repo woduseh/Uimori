@@ -7,7 +7,6 @@ import { basename, isAbsolute, join, relative, resolve } from 'node:path';
 import { Store } from '../server/store.js';
 import { readiness, managementImpact } from '../server/provider-management.js';
 import type { Connection, ModelPreset } from '../core/product.js';
-import { defaultStoryConfig } from '../core/story.js';
 
 const owned: { directory: string; store: Store }[] = [];
 const database = () => {
@@ -333,18 +332,15 @@ test('impact counts current profile model IDs after settings edits and exposes m
     expectedRevision: profile.revision,
     routes: { ...profile.routes, main: ref(m), translation: ref(m) },
   });
-  const config = defaultStoryConfig();
   s.story.saveConfig(chat.id, {
     expectedRevision: 0,
     module: null,
     stateModel: ref(m),
-    memory: { ...config.memory, model: ref(m) },
   });
   s.story.saveConfig(chat.id, {
     expectedRevision: 1,
     module: null,
-    stateModel: null,
-    memory: { ...config.memory, model: ref(m) },
+    stateModel: ref(m),
   });
   p.model(modelBody(c, { expectedRevision: m.revision, enabled: false }), m.id);
   const impact = managementImpact(p, 'connection', c.id);
@@ -353,7 +349,7 @@ test('impact counts current profile model IDs after settings edits and exposes m
     storyProfileCount: 1,
     modelCount: 1,
     profiles: [{ chatId: chat.id, title: chat.title, roles: ['main', 'translation'] }],
-    storyProfiles: [{ chatId: chat.id, title: chat.title, roles: ['memory'] }],
+    storyProfiles: [{ chatId: chat.id, title: chat.title, roles: ['state'] }],
   });
   expect(managementImpact(p, 'model', m.id)).not.toHaveProperty('archivedRevisionCount');
   expect(Object.keys(impact.profiles[0]).sort()).toEqual(['chatId', 'roles', 'title']);

@@ -12,7 +12,7 @@ export const DEFAULT_PROMPT_SLOTS = [
   'persona',
   'description',
   'lorebook',
-  'memory',
+  'notes',
   'authorNote',
   'postEverything',
   'slot',

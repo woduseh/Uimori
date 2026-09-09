@@ -7,6 +7,10 @@ import { ActionMenu } from './ActionMenu.js';
 import { useCompactLayout } from './useCompactLayout.js';
 import { subscribeAppHistory } from './app-history.js';
 import { ChatPromptOptions } from './ChatPromptOptions.js';
+import { HelperPanel } from './HelperPanel.js';
+import type { HelperScope } from '../core/helper.js';
+import { StreamingResponse } from './StreamingResponse.js';
+import { discardActiveEditor } from './editor-workspace-context.js';
 import type { Section as ChatSettingsSection } from './ChatSettingsPanel.js';
 import { ReaderPages } from './ReaderPages.js';
 import { SceneNavigator } from './SceneNavigator.js';
@@ -21,6 +25,7 @@ import {
   History,
   Maximize,
   Menu,
+  MessageCircle,
   Minimize,
   PanelLeftClose,
   PanelLeftOpen,
@@ -168,6 +173,14 @@ function App() {
   const [optionsOpen, setOptionsOpen] = useState(false),
     [optionsDirty, setOptionsDirty] = useState(false),
     [optionsBusy, setOptionsBusy] = useState(false);
+  const [helperOpen, setHelperOpen] = useState(false);
+  const [helperSelection, setHelperSelection] = useState<{
+    key: string;
+    sourceId: string;
+    sourceHash: string;
+    text: string;
+    scope: HelperScope;
+  }>();
   const [editingSources, setEditingSources] = useState<string[]>([]);
   const onSourceEditing = useCallback((sourceId: string, editing: boolean) => {
     setEditingSources((current) =>
@@ -237,6 +250,8 @@ function App() {
   const composing = useRef(false);
   const [libraryDirty, setLibraryDirty] = useState(false);
   const [pendingNavigation, setPendingNavigation] = useState<null | (() => void)>(null);
+  const [discardingNavigation, setDiscardingNavigation] = useState(false);
+  const [navigationDiscardError, setNavigationDiscardError] = useState('');
   const currentPrompt = s.promptWorkspace?.main;
   const hasCreativeOptions = !!currentPrompt?.program.controls.length;
   const creativePresets =
@@ -430,6 +445,16 @@ function App() {
         icon={Menu}
         onClick={() => setPanel('navigation')}
       />
+      <IconButton
+        label="도우미 열기"
+        icon={MessageCircle}
+        aria-expanded={helperOpen}
+        aria-controls="helper-panel"
+        onClick={() => {
+          setOptionsOpen(false);
+          setHelperOpen((value) => !value);
+        }}
+      />
     </>
   );
   function renderReadingSettings(onStartFocus: () => void) {
@@ -482,7 +507,7 @@ function App() {
   }
   return (
     <div
-      className={`app-shell ${focus ? 'focus-reading' : ''} ${sidebarCollapsed ? 'sidebar-collapsed' : ''} ${optionsOpen && s.destination === 'story' && s.selected ? 'options-open' : ''}`}
+      className={`app-shell ${focus ? 'focus-reading' : ''} ${sidebarCollapsed ? 'sidebar-collapsed' : ''} ${optionsOpen && s.destination === 'story' && s.selected ? 'options-open' : ''} ${helperOpen ? 'helper-open' : ''}`}
     >
       <aside id="workspace-sidebar" className="sidebar" aria-label="탐색">
         {navigation}
@@ -757,8 +782,32 @@ function App() {
                           onError={s.setError}
                           onFork={s.fork}
                           onRetry={
-                            s.canReuseRun(source.runId) ? () => s.generate(source.runId) : undefined
+                            s.canReuseRun(source.runId)
+                              ? async () => {
+                                  await s.generate(source.runId);
+                                }
+                              : undefined
                           }
+                          onEditRequest={
+                            s.canReuseRun(source.runId)
+                              ? (text) => s.generate(source.runId, text)
+                              : undefined
+                          }
+                          onCheckRequest={
+                            s.pendingEditedRunId === source.runId ? () => s.generate() : undefined
+                          }
+                          onAskHelper={(sourceId, text) => {
+                            setOptionsOpen(false);
+                            setHelperOpen(true);
+                            if (s.selected && s.branch)
+                              setHelperSelection({
+                                key: crypto.randomUUID(),
+                                sourceId,
+                                sourceHash: source.hash,
+                                text,
+                                scope: { kind: 'chat', chatId: s.selected, branchId: s.branch.id },
+                              });
+                          }}
                           retryDisabled={s.reuseBlocked || optionsBusy}
                           onEditingChange={onSourceEditing}
                           activity={(slots) => {
@@ -840,6 +889,11 @@ function App() {
                                   <span />
                                 </div>
                               )}
+                              <StreamingResponse
+                                taskKind="main"
+                                taskId={run.id}
+                                taskStatus={run.status}
+                              />
                               {runFailed(run.status) && (
                                 <div className="turn-failure" role="group" aria-label="실패한 요청">
                                   <strong>{failureTitle(run.status)}</strong>
@@ -1101,7 +1155,10 @@ function App() {
                           aria-expanded={optionsOpen}
                           aria-controls="chat-prompt-options"
                           disabled={!s.detail}
-                          onClick={() => setOptionsOpen((value) => !value)}
+                          onClick={() => {
+                            setHelperOpen(false);
+                            setOptionsOpen((value) => !value);
+                          }}
                         >
                           <SlidersHorizontal size={14} />
                           창작 옵션{optionsDirty && ' · 미적용'}
@@ -1189,6 +1246,8 @@ function App() {
         )}
       </main>
       <ChatPromptOptions
+        chatId={s.selected || undefined}
+        branchId={s.branch?.id}
         open={optionsOpen && s.destination === 'story' && !!s.selected}
         workspace={s.promptWorkspace}
         library={s.library}
@@ -1211,20 +1270,53 @@ function App() {
         onDirtyChange={setOptionsDirty}
         onBusyChange={setOptionsBusy}
       />
+      <HelperPanel
+        open={helperOpen}
+        selection={helperSelection}
+        scope={
+          s.destination === 'story' && s.selected && s.branch
+            ? { kind: 'chat', chatId: s.selected, branchId: s.branch.id }
+            : { kind: 'library', workId: `library:${libraryTab}` }
+        }
+        onClose={() => setHelperOpen(false)}
+        onModelSettings={() => {
+          setSettingsTab('models');
+          setPanel('settings');
+        }}
+      />
       <Dialog
         open={!!pendingNavigation}
         title="편집 중인 자료"
-        onClose={() => setPendingNavigation(null)}
+        onClose={() => {
+          if (!discardingNavigation) setPendingNavigation(null);
+        }}
       >
         <p>저장하지 않은 자료 편집이 있어요.</p>
-        <button onClick={() => setPendingNavigation(null)}>계속 편집</button>
+        {navigationDiscardError && (
+          <p role="alert" className="error">
+            {navigationDiscardError}
+          </p>
+        )}
+        <button disabled={discardingNavigation} onClick={() => setPendingNavigation(null)}>
+          계속 편집
+        </button>
         <button
           className="secondary"
-          onClick={() => {
-            const go = pendingNavigation;
-            setPendingNavigation(null);
-            setLibraryDirty(false);
-            go?.();
+          disabled={discardingNavigation}
+          onClick={async () => {
+            setDiscardingNavigation(true);
+            setNavigationDiscardError('');
+            try {
+              await discardActiveEditor();
+              const go = pendingNavigation;
+              setPendingNavigation(null);
+              setLibraryDirty(false);
+              go?.();
+            } catch (error) {
+              setNavigationDiscardError((error as Error).message);
+            } finally {
+              setDiscardingNavigation(false);
+            }
           }}
         >
           초안 버리고 이동

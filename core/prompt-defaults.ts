@@ -37,7 +37,7 @@ export function createDefaultPromptProgram(text: string, role: PromptRole = 'mai
       ...(role === 'main'
         ? [
             { id: 'history', title: 'History', kind: 'history' as const, from: 0, to: -1 },
-            ...['memory', 'sceneLore'].map((slot) => ({
+            ...['notes', 'sceneLore'].map((slot) => ({
               id: slot,
               title: slot,
               kind: 'slot' as const,

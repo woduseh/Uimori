@@ -32,7 +32,8 @@ test('PWS01 current options apply globally without changing chat profiles', asyn
   await page.goto(`/?chat=${chat.id}`);
   await page.getByRole('button', { name: '입력창 더보기', exact: true }).click();
   await page.getByRole('button', { name: '창작 옵션', exact: true }).click();
-  const panel = page.getByRole('region', { name: '창작 옵션 패널' });
+  await page.getByRole('tab', { name: '모든 채팅', exact: true }).click();
+  const panel = page.getByRole('tabpanel', { name: '모든 채팅 옵션', exact: true });
   await panel.getByLabel('합성 문체', { exact: true }).fill('간결하게');
   await panel.getByRole('button', { name: '현재 옵션 적용', exact: true }).click();
   await expect(panel.getByRole('button', { name: '현재 옵션 적용' })).toBeDisabled();
@@ -42,15 +43,16 @@ test('PWS01 current options apply globally without changing chat profiles', asyn
   expect((await (await request.get(`/api/chats/${chat.id}`)).json()).profile).toEqual(profile);
   if (visualReview)
     await page.screenshot({ path: info.outputPath('prompt-workspace-options.png') });
-  await panel.getByRole('button', { name: '창작 옵션 닫기' }).click();
+  await page.getByRole('button', { name: '창작 옵션 닫기' }).click();
   const other = await (
     await postFixtureChat(request, { data: { title: '다른 채팅 현재 옵션' } })
   ).json();
   await page.goto(`/?chat=${other.id}`);
   await page.getByRole('button', { name: '입력창 더보기', exact: true }).click();
   await page.getByRole('button', { name: '창작 옵션', exact: true }).click();
+  await page.getByRole('tab', { name: '모든 채팅', exact: true }).click();
   await expect(
-    page.getByRole('region', { name: '창작 옵션 패널' }).getByLabel('합성 문체', { exact: true })
+    page.getByRole('tabpanel', { name: '모든 채팅 옵션' }).getByLabel('합성 문체', { exact: true })
   ).toHaveValue('간결하게');
 });
 
@@ -107,6 +109,60 @@ test('PWS02 translation policy and prompt options save in the independent worksp
 
   if (visualReview)
     await page.screenshot({ path: info.outputPath('prompt-workspace-translation.png') });
+});
+
+test('PWS03 pristine workspace drafts adopt newer settings while edited drafts retain their conflict', async ({
+  page,
+  request,
+}) => {
+  await page.goto('/');
+  await navigationAction(page, '설정');
+  await selectSettingsSection(page, '현재 프롬프트');
+  const editor = page.getByRole('region', { name: '현재 프롬프트 설정' });
+  const title = editor.getByLabel('현재 프롬프트 이름', { exact: true });
+  await expect(title).toBeVisible();
+  const current = (await (await request.get('/api/prompt-workspace')).json()) as PromptWorkspace;
+  const updated = await request.put('/api/prompt-workspace', {
+    data: {
+      expectedRevision: current.revision,
+      main: { ...current.main, title: 'PWS03 another tab saved' },
+    },
+  });
+  expect(updated.ok(), await updated.text()).toBe(true);
+  const saved = (await updated.json()) as PromptWorkspace;
+  await page.evaluate(() => dispatchEvent(new Event('focus')));
+  await expect(title).toHaveValue(saved.main.title);
+  await expect(editor.getByLabel('현재 프롬프트 프리셋', { exact: true })).toBeEnabled();
+  await expect(editor.getByRole('button', { name: '현재 설정 저장', exact: true })).toBeDisabled();
+  expect((await (await request.get('/api/prompt-workspace')).json()).revision).toBe(saved.revision);
+
+  await title.fill('PWS03 my unsaved input');
+  await expect
+    .poll(async () => {
+      const drafts = await (
+        await request.get('/api/edit-drafts?editorKey=prompt-workspace%3Acurrent')
+      ).json();
+      return drafts[0]?.model.main.title;
+    })
+    .toBe('PWS03 my unsaved input');
+  const changed = await request.put('/api/prompt-workspace', {
+    data: {
+      expectedRevision: saved.revision,
+      main: { ...saved.main, title: 'PWS03 newer external title' },
+    },
+  });
+  expect(changed.ok(), await changed.text()).toBe(true);
+  await page.evaluate(() => dispatchEvent(new Event('focus')));
+  await expect(title).toHaveValue('PWS03 my unsaved input');
+  await expect(editor.getByRole('alert')).toContainText('다른 곳에서 현재 프롬프트가 바뀌었어요.');
+  await expect(editor.getByRole('button', { name: '현재 설정 저장', exact: true })).toBeDisabled();
+  expect((await (await request.get('/api/prompt-workspace')).json()).main.title).toBe(
+    'PWS03 newer external title'
+  );
+  await page.reload();
+  await navigationAction(page, '설정');
+  await selectSettingsSection(page, '현재 프롬프트');
+  await expect(title).toHaveValue('PWS03 my unsaved input');
 });
 
 preservePromptWorkspace();

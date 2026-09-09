@@ -55,7 +55,16 @@ export function validateCombinationOwner(value: unknown): PromptCombinationOwner
 
 export function validatePromptWorkspace(value: unknown): PromptWorkspace {
   const b = record(value);
-  fields(b, ['revision', 'main', 'translation', 'translationPolicy', 'modelRoutes', 'titleModel']);
+  fields(b, [
+    'revision',
+    'main',
+    'translation',
+    'translationPolicy',
+    'modelRoutes',
+    'titleModel',
+    'helperModel',
+    'contextModel',
+  ]);
   const policy = record(b.translationPolicy);
   fields(policy, ['refusalModel', 'maxRetries', 'maxCalls']);
   let refusalModel = null;
@@ -67,6 +76,8 @@ export function validatePromptWorkspace(value: unknown): PromptWorkspace {
   return {
     revision: number(b.revision, 'prompt workspace revision'),
     titleModel: validateTitleModel(b.titleModel ?? null),
+    helperModel: validateTitleModel(b.helperModel ?? null),
+    contextModel: validateTitleModel(b.contextModel ?? null),
     modelRoutes: validateModelRoutes(
       Object.hasOwn(b, 'modelRoutes') ? b.modelRoutes : emptyModelRoutes()
     ),
@@ -84,6 +95,8 @@ export function defaultPromptWorkspace(): PromptWorkspace {
   return {
     revision: 1,
     titleModel: null,
+    helperModel: null,
+    contextModel: null,
     modelRoutes: emptyModelRoutes(),
     main: {
       title: '현재 작문 프롬프트',
@@ -107,6 +120,8 @@ export function promptWorkspace(store: Store): PromptWorkspace {
   return {
     ...saved,
     titleModel: validateTitleModel(saved.titleModel ?? null),
+    helperModel: validateTitleModel(saved.helperModel ?? null),
+    contextModel: validateTitleModel(saved.contextModel ?? null),
     modelRoutes: Object.hasOwn(saved, 'modelRoutes')
       ? validateModelRoutes(saved.modelRoutes)
       : emptyModelRoutes(),
@@ -139,13 +154,22 @@ export function modelWorkspace(store: Store): ModelWorkspace {
   return {
     revision: current.revision,
     titleModel: current.titleModel ?? null,
+    helperModel: current.helperModel ?? null,
+    contextModel: current.contextModel ?? null,
     routes: current.modelRoutes,
     translationPolicy: current.translationPolicy,
   };
 }
 export function updateModelWorkspace(store: Store, value: unknown): ModelWorkspace {
   const input = record(value);
-  fields(input, ['expectedRevision', 'routes', 'translationPolicy', 'titleModel']);
+  fields(input, [
+    'expectedRevision',
+    'routes',
+    'translationPolicy',
+    'titleModel',
+    'helperModel',
+    'contextModel',
+  ]);
   return store.transaction(() => {
     const prior = promptWorkspace(store);
     if (prior.revision !== number(input.expectedRevision, 'model workspace revision'))
@@ -155,6 +179,12 @@ export function updateModelWorkspace(store: Store, value: unknown): ModelWorkspa
       titleModel: Object.hasOwn(input, 'titleModel')
         ? validateTitleModel(input.titleModel)
         : (prior.titleModel ?? null),
+      helperModel: Object.hasOwn(input, 'helperModel')
+        ? validateTitleModel(input.helperModel)
+        : (prior.helperModel ?? null),
+      contextModel: Object.hasOwn(input, 'contextModel')
+        ? validateTitleModel(input.contextModel)
+        : (prior.contextModel ?? null),
       modelRoutes: validateModelRoutes(input.routes),
       translationPolicy: input.translationPolicy,
       revision: prior.revision + 1,
@@ -162,6 +192,8 @@ export function updateModelWorkspace(store: Store, value: unknown): ModelWorkspa
     for (const role of Object.keys(emptyModelRoutes()) as (keyof ModelWorkspace['routes'])[])
       assertModelSelection(store.product, next.modelRoutes[role], prior.modelRoutes[role]);
     assertModelSelection(store.product, next.titleModel ?? null, prior.titleModel ?? null);
+    assertModelSelection(store.product, next.helperModel ?? null, prior.helperModel ?? null);
+    assertModelSelection(store.product, next.contextModel ?? null, prior.contextModel ?? null);
     assertModelSelection(
       store.product,
       next.translationPolicy.refusalModel,
@@ -176,12 +208,13 @@ export function updateModelWorkspace(store: Store, value: unknown): ModelWorkspa
 export function updatePromptWorkspace(
   store: Store,
   value: unknown,
-  appliedPreset?: { role: PromptRole; id: string }
+  appliedPreset?: { role: PromptRole; id: string },
+  inTransaction = false
 ): PromptWorkspace {
   const b = record(value);
   fields(b, ['expectedRevision', 'main', 'translation', 'translationPolicy']);
   const expected = number(b.expectedRevision, 'prompt workspace revision');
-  return store.transaction(() => {
+  const apply = () => {
     const prior = promptWorkspace(store);
     if (prior.revision !== expected)
       throw new HttpError(409, 'Current prompts changed; refresh before saving');
@@ -217,7 +250,8 @@ export function updatePromptWorkspace(
     store.db.prepare('UPDATE prompt_workspace SET body=? WHERE id=1').run(JSON.stringify(result));
     for (const chat of store.chats()) store.event(chat.id, 'prompt-workspace.updated', chat.id);
     return result;
-  });
+  };
+  return inTransaction ? apply() : store.transaction(apply);
 }
 
 /** IDs here identify a working slot and revision, not a retained preset dependency. */
@@ -225,7 +259,7 @@ export function freezeCurrentPrompts(
   workspace: PromptWorkspace
 ): Pick<
   ProfileSnapshot,
-  'prompts' | 'promptPresets' | 'promptControls' | 'promptWorkspaceRevision'
+  'prompts' | 'promptPresets' | 'promptControls' | 'promptWorkspaceRevision' | 'promptOptionOwner'
 > {
   const promptPresets: NonNullable<ProfileSnapshot['promptPresets']> = {};
   const prompts: NonNullable<ProfileSnapshot['prompts']> = {};
@@ -245,7 +279,15 @@ export function freezeCurrentPrompts(
       combinations: [],
     };
   }
-  return { prompts, promptPresets, promptControls, promptWorkspaceRevision: workspace.revision };
+  return {
+    prompts,
+    promptPresets,
+    promptControls,
+    promptWorkspaceRevision: workspace.revision,
+    promptOptionOwner: workspace.main.presetId
+      ? `preset:${workspace.main.presetId}`
+      : 'workspace:main',
+  };
 }
 
 export function promptWorkspaceRoutes(

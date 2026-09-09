@@ -11,6 +11,7 @@ import {
   openProviderMenu,
   selectChatSettingsSection,
   openSourceActions,
+  openPromptBlocks,
 } from './ui-navigation.js';
 import { postFixtureChat } from './fixtures/chat.js';
 import { test, expect, type APIRequestContext, type Page } from '@playwright/test';
@@ -153,7 +154,7 @@ test('P01 packages use latest settings and prompt-owned creative choices replace
     '봇·페르소나·모듈',
     '프롬프트·창작 프리셋',
     '모델',
-    '상태와 기억',
+    '상태와 문맥',
     '이미지',
     '자동 후속 작업',
   ]);
@@ -172,7 +173,9 @@ test('P01 packages use latest settings and prompt-owned creative choices replace
     .getByLabel('자료 본문', { exact: true })
     .fill('Mira is a synthetic harbor keeper. Her compass is silver in this revision.');
   await page.getByRole('button', { name: '변경사항 저장', exact: true }).click();
-  await expect(library.getByRole('status')).toContainText('저장됨 · 다음 실행부터 사용해요.');
+  await expect(library.locator('.library-savebar [role="status"]')).toContainText(
+    '저장됨 · 다음 실행부터 사용해요.'
+  );
   await openDetails(page, 'profile-editor');
   await expect(
     profile
@@ -581,6 +584,7 @@ test('P09 P10 P13 fork from a completed scene preserves long prose and annotatio
     expect(await getDetail(request, chat.id)).toEqual(before);
     await storySettings(page);
     const forkEditor = await promptTab(page);
+    await openPromptBlocks(forkEditor);
     await forkEditor.locator('#prompt-block-instructions > summary').click();
     await forkEditor
       .getByLabel('현재 프롬프트 이름', { exact: true })

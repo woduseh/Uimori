@@ -1,3 +1,4 @@
+import { writeNote } from './fixtures/notes.js';
 import { updateTestProfile } from './fixtures/model-workspace.js';
 import { createFixtureChat, fixtureBotInput } from './fixtures/chat.js';
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
@@ -472,7 +473,7 @@ test('source edits preserve historical archive proof but invalidate inherited re
 test('authored canon identities remap for a fresh fork, while a later retcon cannot revive past reads', () => {
   const store = database();
   const { chat, id } = createLoreChat(store, 'Synthetic canon scope');
-  const declaration = store.story.memory.authored(chat.id, {
+  const declaration = writeNote(store, chat.id, {
     text: 'The synthetic beacon is blue.',
     author: 'Synthetic author',
   });
@@ -489,7 +490,8 @@ test('authored canon identities remap for a fresh fork, while a later retcon can
   const restored = database();
   restored.product.import(standalone(store, copy.id));
   expect(complete(restored, copy.id).snapshot.loreContext!.stats.retainedChars).toBe(30);
-  store.story.memory.authored(
+  writeNote(
+    store,
     chat.id,
     { text: 'The synthetic beacon is now red.', author: 'Synthetic author' },
     declaration.id
@@ -510,7 +512,7 @@ test('a changed canon at the root keeps historical fork contexts invalid instead
     title: 'Synthetic retcon root',
     fromRevision: null,
   });
-  f.store.story.memory.authored(f.chat.id, {
+  writeNote(f.store, f.chat.id, {
     text: 'Synthetic root declaration added after those reads.',
     author: 'Synthetic author',
     branchId: root.id,
@@ -522,7 +524,7 @@ test('a changed canon at the root keeps historical fork contexts invalid instead
   const copied = f.store.run(f.store.sourceOriginal(copy.headRevision!).runId);
   expect(copied.snapshot.loreContext!.canonHash).not.toBe(oldCanon);
   expect(copied.snapshot.loreContext!.canonHash).not.toBe(
-    f.store.story.memory.canonHash(f.store.story.memory.scope(copy.id, copied.parentRevision))
+    f.store.story.notes.canonHash(f.store.story.notes.scope(copy.id, copied.parentRevision))
   );
   const restored = database();
   restored.product.import(standalone(f.store, copy.id));
@@ -543,7 +545,6 @@ test('an authoritative state wait resumes with the same retained read provenance
       rules: {},
     },
     stateModel: null,
-    memory: { enabled: false, model: null, recentCount: 2, maxPacketChars: 60000 },
   });
   const first = complete(store, chat.id, [{ id, offset: 0, limit: 30 }]);
   const waiting = queued(store, chat.id);

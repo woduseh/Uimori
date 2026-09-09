@@ -45,7 +45,7 @@ export function loreRunIsCurrent(store: Store, run: Run): boolean {
       original.runId === run.id &&
       original.hash === current.hash &&
       run.snapshot.loreContext.canonHash ===
-        store.story.memory.canonHash(store.story.memory.scope(run.chatId, run.parentRevision))
+        store.story.notes.canonHash(store.story.notes.scope(run.chatId, run.parentRevision))
     );
   } catch {
     return false;
@@ -209,8 +209,8 @@ export function selectLoreContext(
 
 /** Read-only selection. The host freezes the returned context in the Run transaction. */
 export function freezeLoreContext(store: Store, snapshot: RunSnapshot): RunSnapshot {
-  const canonHash = store.story.memory.canonHash(
-    store.story.memory.scope(snapshot.chatId, snapshot.parentRevision)
+  const canonHash = store.story.notes.canonHash(
+    store.story.notes.scope(snapshot.chatId, snapshot.parentRevision)
   );
   const parent = snapshot.parentRevision
     ? store.run(store.source(snapshot.parentRevision).runId)

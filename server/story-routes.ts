@@ -53,44 +53,12 @@ export function storyRoutes(
   app.post<{ Params: { id: string } }>('/api/sources/:id/story/rebuild', async (request) => {
     const body = record(request.body);
     fields(body, ['kind']);
-    if (body.kind !== 'state' && body.kind !== 'memory')
-      throw new HttpError(400, 'Invalid story job kind');
+    if (body.kind !== 'state') throw new HttpError(400, 'Invalid story job kind');
     const job = store.story.rebuildSource(request.params.id, body.kind);
     hooks.publish(job.chatId);
     hooks.pump();
     return job;
   });
-  app.post<{ Params: { id: string } }>('/api/chats/:id/story/index', async (request) => {
-    const body = record(request.body ?? {});
-    fields(body, ['branchId']);
-    const jobs = store.story.indexHistory(request.params.id, body.branchId);
-    hooks.publish(request.params.id);
-    hooks.pump();
-    return jobs;
-  });
-  const authored = (chatId: string, body: unknown, replaces?: string) => {
-    const input = record(body);
-    fields(input, ['text', 'author', 'branchId']);
-    const entry = store.story.memory.authored(
-      chatId,
-      {
-        text: input.text,
-        author: input.author,
-        ...(input.branchId ? { branchId: input.branchId } : {}),
-      },
-      replaces
-    );
-    hooks.publish(chatId);
-    hooks.pump();
-    return entry;
-  };
-  app.post<{ Params: { id: string } }>('/api/chats/:id/story/memory', async (request) =>
-    authored(request.params.id, request.body)
-  );
-  app.post<{ Params: { id: string; memoryId: string } }>(
-    '/api/chats/:id/story/memory/:memoryId/retcon',
-    async (request) => authored(request.params.id, request.body, request.params.memoryId)
-  );
   app.post<{ Params: { id: string } }>('/api/chats/:id/scene-commands', async (request) => {
     const command = store.story.createCommand(request.params.id, request.body);
     hooks.publish(command.chatId);

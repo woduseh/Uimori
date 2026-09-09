@@ -48,7 +48,7 @@ export async function verifyStory(selection) {
       Q04: {
         status: 'BLOCKED',
         reason:
-          'Live state/memory semantics, longitudinal quality and total paid cost require an approved evaluation scope; this verifier uses synthetic local data only.',
+          'Live state/context semantics, longitudinal quality and total paid cost require an approved evaluation scope; this verifier uses synthetic local data only.',
       },
       nativePort: {
         status: 'SEPARATE_EVIDENCE',
@@ -57,7 +57,7 @@ export async function verifyStory(selection) {
       },
     },
     limitations: [
-      'Local scripted extraction and localhost protocol fixtures do not establish live extraction quality.',
+      'Local state/context fixtures and localhost protocols do not establish live semantic quality.',
       'Long synthetic corpus and measured fixture paths do not establish whole-app performance or physical-device latency.',
     ],
     failures,

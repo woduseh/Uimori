@@ -5,7 +5,7 @@ import {
   IMAGE_POSITION_UNAVAILABLE,
 } from './image-placement.js';
 import { StorySourceState } from './StoryPanel.js';
-import { Fragment, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
+import { Fragment, useCallback, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import type { Asset } from '../core/product.js';
 import type { ImageTarget, Job, ReaderRun, Source } from '../core/types.js';
 import { ContextSummaryStatus } from './ContextSummaryStatus.js';
@@ -18,12 +18,14 @@ import { LazyDiagnostics } from './LazyDiagnostics.js';
 import { ActionMenu } from './ActionMenu.js';
 import { IconButton } from './IconButton.js';
 import { CopyIcon, EditIcon, ImagesIcon, RefreshIcon } from './ui-icons.js';
-import { GitFork } from 'lucide-react';
+import { GitFork, Info, MessageCircleQuestion, ReceiptText, Save, X } from 'lucide-react';
+import { Dialog } from './Dialog.js';
 import { SourceSegmentsReader } from './SourceSegmentsReader.js';
 import type { SourceSegmentPolicy } from '../core/source-segments.js';
 
 import { PackageStateCards, usePackagePresentation } from './PackagePresentation.js';
 import './source-edit.css';
+import { RequestMessage } from './RequestMessage.js';
 
 type ReaderMode = 'original' | 'translation';
 /** Scene header pieces the activity panel places inside its summary row. */
@@ -41,6 +43,9 @@ type ReaderProps = {
   retryDisabled?: boolean;
   onEditingChange?: (sourceId: string, editing: boolean) => void;
   request?: string;
+  onEditRequest?: (text: string) => Promise<boolean>;
+  onCheckRequest?: () => Promise<boolean>;
+  onAskHelper?: (sourceId: string, text: string) => void;
   contextSummary?: ReaderRun['contextSummary'];
   estimatedCost?: ReaderRun['estimatedCost'];
   packageStart?: { mode: 'authored' | 'generate'; title: string };
@@ -122,6 +127,9 @@ function SourceReaderContent({
   retryDisabled,
   onEditingChange,
   request,
+  onEditRequest,
+  onCheckRequest,
+  onAskHelper,
   contextSummary,
   estimatedCost,
   packageStart,
@@ -130,6 +138,12 @@ function SourceReaderContent({
   hasPackages,
   presentationRefreshKey,
 }: ReaderProps) {
+  const onRequestEditing = useCallback(
+    (editing: boolean) => {
+      onEditingChange?.(`${source.id}:request`, editing);
+    },
+    [onEditingChange, source.id]
+  );
   const mounted = useRef(true);
   useLayoutEffect(() => {
     mounted.current = true;
@@ -206,6 +220,16 @@ function SourceReaderContent({
   };
   const requestPending = useRef(false);
   const [detailsOpen, setDetailsOpen] = useState(false);
+  const [costOpen, setCostOpen] = useState(false);
+  const openInfo = (button: HTMLButtonElement, kind: 'details' | 'cost') => {
+    const menu = button.closest<HTMLDetailsElement>('.action-menu');
+    if (menu) {
+      menu.open = false;
+      menu.querySelector('summary')?.focus({ preventScroll: true });
+    }
+    if (kind === 'details') setDetailsOpen(true);
+    else setCostOpen(true);
+  };
   const [pending, setPending] = useState('');
   const [actionError, setActionError] = useState('');
   const validTranslation =
@@ -407,18 +431,14 @@ function SourceReaderContent({
         </p>
       )}
       {packageStart?.mode !== 'authored' && request && (
-        <div className="request-message" data-testid="source-request">
-          {request.length > 280 ? (
-            <details>
-              <summary>
-                {request.slice(0, 240)}… <span>전체 보기</span>
-              </summary>
-              <p>{request}</p>
-            </details>
-          ) : (
-            <p>{request}</p>
-          )}
-        </div>
+        <RequestMessage
+          runId={source.runId}
+          request={request}
+          onSubmit={onEditRequest}
+          onConfirm={onCheckRequest}
+          disabled={retryDisabled}
+          onEditingChange={onRequestEditing}
+        />
       )}
       <div className="scene-header">
         {activityNode ?? (
@@ -599,6 +619,26 @@ function SourceReaderContent({
           onClick={(event) => openEditor(mode, event.currentTarget)}
         />
         <ActionMenu label="장면 작업 메뉴" placement="top">
+          {onAskHelper && (
+            <button
+              type="button"
+              className="secondary"
+              onClick={() => {
+                const selection = window.getSelection();
+                const selected =
+                  selection?.anchorNode &&
+                  container.current?.contains(selection.anchorNode) &&
+                  selection.focusNode &&
+                  container.current?.contains(selection.focusNode)
+                    ? selection.toString().trim()
+                    : '';
+                onAskHelper(source.id, selected || source.text);
+              }}
+            >
+              <MessageCircleQuestion size={18} aria-hidden="true" />
+              도우미에게 물어보기
+            </button>
+          )}
           {onRetry && (
             <button
               type="button"
@@ -669,20 +709,35 @@ function SourceReaderContent({
                 ? '이미지 다시 배치'
                 : '이미지 자동 배치'}
           </button>
+          <button
+            type="button"
+            className="secondary"
+            onClick={(event) => openInfo(event.currentTarget, 'details')}
+          >
+            <Info size={18} aria-hidden="true" />
+            {activityNode ? '원문 연결 정보' : '작업 상세'}
+          </button>
+          {estimatedCost && estimatedCost.attemptCount > 0 && (
+            <button
+              type="button"
+              className="secondary"
+              onClick={(event) => openInfo(event.currentTarget, 'cost')}
+            >
+              <ReceiptText size={18} aria-hidden="true" />
+              본문 추정 비용
+            </button>
+          )}
         </ActionMenu>
         <StorySourceState
           sourceId={source.id}
           refreshKey={`${source.hash}:${jobs.map((job) => job.status).join(',')}`}
         />
-        <details
-          className="source-job-details"
-          onToggle={(event) => setDetailsOpen(event.currentTarget.open)}
+        <Dialog
+          open={detailsOpen}
+          onClose={() => setDetailsOpen(false)}
+          title={activityNode ? '원문 연결 정보' : '작업 상세'}
+          className="source-info-dialog"
         >
-          <summary>
-            {activityNode
-              ? '원문 연결 정보'
-              : `작업 상세${jobs.length ? ` · ${jobs.length}개` : ''}`}
-          </summary>
           {detailsOpen && (
             <>
               {!activityNode && (
@@ -718,16 +773,20 @@ function SourceReaderContent({
               </div>
             </>
           )}
-        </details>
+        </Dialog>
       </div>
       {estimatedCost && estimatedCost.attemptCount > 0 && (
-        <details className="source-estimated-cost">
-          <summary>
-            본문 추정 비용{' '}
+        <Dialog
+          open={costOpen}
+          onClose={() => setCostOpen(false)}
+          title="본문 추정 비용"
+          className="source-info-dialog"
+        >
+          <p className="source-cost-value">
             {estimatedCost.usd !== null && estimatedCost.unknownCount === 0
               ? formatUsd(estimatedCost.usd)
               : `· 확인분 부분합 ${estimatedCost.subtotalUsd === 0 && estimatedCost.unknownCount === estimatedCost.attemptCount ? '미확인' : formatUsd(estimatedCost.subtotalUsd)} · 미확인 ${estimatedCost.unknownCount}회 포함`}
-          </summary>
+          </p>
           <p>
             호출 후 공급자가 보고한 토큰과 호출에 고정된 요금으로 계산해요. 참고용 추정 금액이며
             실제 청구액과 다를 수 있어요.
@@ -736,10 +795,10 @@ function SourceReaderContent({
           {estimatedCost.unknownCount > 0 && (
             <p>부분합은 확인된 금액만 더한 값이며 전체 추정 비용은 아직 미확인이에요.</p>
           )}
-        </details>
+        </Dialog>
       )}
       {actionError && (
-        <p className="error" role="alert">
+        <p className="error source-action-error" role="alert">
           {actionError}
           {onModelSettings && (
             <button type="button" className="secondary" onClick={onModelSettings}>
@@ -947,13 +1006,21 @@ function TextEditor({
           </button>
         </div>
       )}
-      <div className="form-actions">
-        <button type="submit" disabled={saving || conflict || !draft.text.trim()}>
-          {saving ? '저장 중…' : `${title} 저장`}
-        </button>
-        <button type="button" className="secondary" disabled={saving} onClick={cancel}>
-          수정 취소
-        </button>
+      <div className="form-actions source-edit-actions">
+        <IconButton
+          icon={X}
+          label="수정 취소"
+          className="secondary"
+          disabled={saving}
+          onClick={cancel}
+        />
+        <IconButton
+          icon={Save}
+          className="source-edit-save"
+          label={saving ? '저장 중…' : `${title} 저장`}
+          type="submit"
+          disabled={saving || conflict || !draft.text.trim()}
+        />
       </div>
       {error && (
         <p className="error" role="alert">

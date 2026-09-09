@@ -303,6 +303,37 @@ test('PMUI03 model edits use the latest connection without changing role IDs; de
     title + ' 연결 최신판'
   );
   await expect(form).not.toContainText('보관된 버전');
+  const actions = form.locator('.provider-model-save-actions');
+  const saveAction = actions.getByRole('button', { name: '모델 변경 저장', exact: true });
+  const closeAction = actions.getByRole('button', { name: '모델 편집 끝내기', exact: true });
+  const deleteAction = actions.getByRole('button', {
+    name: original.title + ' 모델 삭제',
+    exact: true,
+  });
+  for (const width of [390, 1440]) {
+    await page.setViewportSize({ width, height: width === 390 ? 844 : 1000 });
+    await actions.scrollIntoViewIfNeeded();
+    for (const action of [saveAction, closeAction, deleteAction]) {
+      await expect(action).toBeVisible();
+      await expect(action.locator('svg')).toHaveCount(1);
+      await expect(action).toHaveText('');
+      const box = await action.boundingBox();
+      expect(box).not.toBeNull();
+      expect(box!.width).toBeCloseTo(44, 0);
+      expect(box!.height).toBeCloseTo(44, 0);
+    }
+    const saveBox = (await saveAction.boundingBox())!;
+    const closeBox = (await closeAction.boundingBox())!;
+    const deleteBox = (await deleteAction.boundingBox())!;
+    const actionsBox = (await actions.boundingBox())!;
+    expect(deleteBox.x).toBeLessThan(closeBox.x);
+    expect(closeBox.x + closeBox.width).toBeLessThanOrEqual(saveBox.x);
+    expect(saveBox.x + saveBox.width).toBeCloseTo(actionsBox.x + actionsBox.width, 0);
+    expect(deleteBox.y).toBeCloseTo(saveBox.y, 0);
+    expect(closeBox.y).toBeCloseTo(saveBox.y, 0);
+    if (visualReview)
+      await page.screenshot({ path: info.outputPath(`provider-model-action-icons-${width}.png`) });
+  }
   await form.getByLabel('모델 프리셋 이름').fill(title + ' 수정 모델');
   await form.getByLabel('최대 출력 토큰').fill('4096');
   await form.getByRole('button', { name: '모델 변경 저장', exact: true }).click();

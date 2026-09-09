@@ -1,13 +1,15 @@
 type Listener = (event: PopStateEvent) => void;
 type Interceptor = (event: PopStateEvent) => boolean;
 const listeners = new Set<Listener>();
-let interceptor: Interceptor | undefined;
+const interceptors: Interceptor[] = [];
 let attached = false;
 
 function dispatch(event: PopStateEvent) {
-  if (interceptor?.(event)) {
-    event.stopImmediatePropagation();
-    return;
+  for (const interceptor of [...interceptors].reverse()) {
+    if (interceptor(event)) {
+      event.stopImmediatePropagation();
+      return;
+    }
   }
   for (const listener of listeners) listener(event);
 }
@@ -17,7 +19,7 @@ function attach() {
   attached = true;
 }
 function release() {
-  if (listeners.size || interceptor) return;
+  if (listeners.size || interceptors.length) return;
   removeEventListener('popstate', dispatch);
   attached = false;
 }
@@ -31,10 +33,11 @@ export function subscribeAppHistory(listener: Listener) {
 }
 /** Modal handling runs before route subscribers, regardless of lazy panel mount order. */
 export function interceptAppHistory(handler: Interceptor) {
-  interceptor = handler;
+  interceptors.push(handler);
   attach();
   return () => {
-    if (interceptor === handler) interceptor = undefined;
+    const index = interceptors.lastIndexOf(handler);
+    if (index >= 0) interceptors.splice(index, 1);
     release();
   };
 }

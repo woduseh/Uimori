@@ -121,7 +121,9 @@ export function encodeAnthropic(request: ProviderRequest): { body: Json; context
   if (
     !nonempty(request.modelId) ||
     request.modelId.length > 200 ||
-    !['main', 'translation', 'status', 'image', 'state', 'memory', 'title'].includes(request.role)
+    !['main', 'translation', 'status', 'image', 'state', 'context', 'helper', 'title'].includes(
+      request.role
+    )
   )
     reject('INVALID_ANTHROPIC_REQUEST');
   const generation = request.generation;
@@ -651,11 +653,14 @@ export class AnthropicDecoder {
       });
     }
   }
-  snapshot(): ProviderResult {
-    const text = this.blocks
+  publicText(): string {
+    return this.blocks
       .filter((block) => block.content.type === 'text')
       .map((block) => block.content.text as string)
       .join('');
+  }
+  snapshot(): ProviderResult {
+    const text = this.publicText();
     let status: ProviderResult['status'] = text || this.blocks.length ? 'partial' : 'error';
     let error: { code: string } | null = this.fault ? { code: this.fault } : null;
     let refusal: string | null = null;

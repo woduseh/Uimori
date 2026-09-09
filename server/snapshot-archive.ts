@@ -6,6 +6,8 @@ import type { RunSnapshot } from '../core/types.js';
 import { candidateCompilationSnapshot, validateContextPlan } from './context-planning.js';
 import { captureLogicalHistory, compileSnapshotPrompt } from './prompt-snapshot.js';
 import type { Store } from './store.js';
+import { mapForkChatOverrideSnapshot } from './chat-overrides.js';
+import { mapForkChatOptionSnapshot } from './chat-options.js';
 
 const reject = (message: string): never => {
   throw new HttpError(400, `Invalid snapshot archive: ${message}`);
@@ -55,6 +57,8 @@ export function mapForkSnapshot(
   sources: Map<string, string>,
   runs: Map<string, string>
 ): void {
+  mapForkChatOverrideSnapshot(snapshot.profile, snapshot.chatId, sources);
+  mapForkChatOptionSnapshot(snapshot.profile, snapshot.chatId);
   const source = (id: string | undefined) =>
     id ? (sources.get(id) ?? reject('fork source dependency')) : undefined;
   const run = (id: string | undefined) =>

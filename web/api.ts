@@ -10,12 +10,22 @@ export class ApiError extends Error {
 export const sessionRequiredEvent = 'uimori-session-required';
 export const libraryChangedKey = 'uimori:library-change';
 
-export async function api<T>(path: string, body?: unknown, method = 'POST'): Promise<T> {
+export async function api<T>(
+  path: string,
+  body?: unknown,
+  method = 'POST',
+  signal?: AbortSignal
+): Promise<T> {
   const response = await fetch(
     `/api${path}`,
     body === undefined
-      ? undefined
-      : { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }
+      ? { signal }
+      : {
+          method,
+          signal,
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        }
   );
   if (!response.ok) {
     if (
@@ -27,7 +37,9 @@ export async function api<T>(path: string, body?: unknown, method = 'POST'): Pro
     const payload = (await response.json().catch(() => null)) as { error?: unknown } | null;
     if (
       typeof payload?.error === 'string' &&
-      /^MODEL_UNAVAILABLE:(main|translation|translation-refusal|status|image):/.test(payload.error)
+      /^MODEL_UNAVAILABLE:(main|translation|translation-refusal|status|image|context|helper):/.test(
+        payload.error
+      )
     )
       throw new ApiError(
         '선택한 모델 또는 연결을 사용할 수 없어요. 전역 모델 설정에서 역할별 모델을 확인하고 모델 프리셋·연결 관리에서 활성 상태, 인증과 지원 모델 설정을 확인해 주세요.',
@@ -55,7 +67,7 @@ export async function api<T>(path: string, body?: unknown, method = 'POST'): Pro
         );
       const requiredRole =
         typeof payload?.error === 'string' &&
-        /^MODEL_REQUIRED:(main|translation|status|image|state|memory)$/.test(payload.error)
+        /^MODEL_REQUIRED:(main|translation|status|image|state|context|helper)$/.test(payload.error)
           ? payload.error.split(':')[1]
           : null;
       if (requiredRole) {
@@ -65,10 +77,11 @@ export async function api<T>(path: string, body?: unknown, method = 'POST'): Pro
           status: '표시 상태',
           image: '이미지 배치',
           state: '상태',
-          memory: '기억',
+          context: '문맥 압축',
+          helper: '도우미',
         };
         throw new ApiError(
-          `${['state', 'memory'].includes(requiredRole) ? '상태와 기억 설정' : '전역 모델 설정'}에서 ${roleNames[requiredRole]} 모델을 선택해 주세요.`,
+          `${requiredRole === 'state' ? '상태와 문맥 설정' : '전역 모델 설정'}에서 ${roleNames[requiredRole]} 모델을 선택해 주세요.`,
           response.status
         );
       }

@@ -1,3 +1,4 @@
+import { writeNote } from './fixtures/notes.js';
 import { createFixtureChat } from './fixtures/chat.js';
 import { randomUUID } from 'node:crypto';
 import { mkdtemp, rm } from 'node:fs/promises';
@@ -13,7 +14,7 @@ import {
 import { forkChat } from '../server/chat-fork.js';
 import { runStoryJob } from '../server/story-runner.js';
 import { storyDependencyKey, storyTables } from '../server/story-store.js';
-import { memoryHash } from '../core/memory.js';
+import { sourceHash as memoryHash } from '../core/source-history.js';
 import type { RunSnapshot } from '../core/types.js';
 
 type Row = Record<string, any>;
@@ -58,7 +59,6 @@ function configure(store: Store, chatId: string) {
       fields: { coins: { type: 'number', initial: 10, min: 0, max: 100 } },
       rules: { spend: { field: 'coins', delta: -3 } },
     },
-    memory: { enabled: true, model: null, recentCount: 2, maxPacketChars: 60000 },
   });
 }
 function completeSource(store: Store, chatId: string, text: string, branchId?: string) {
@@ -144,6 +144,30 @@ function fork(store: Store, chatId: string, fromRevision: string) {
 }
 
 describe('M2 archive graph and selected-ancestry fork with actual isolated file SQLite', () => {
+  test('standalone writing snapshots reuse the source, state, notes and configuration revision validators', async () => {
+    const { store, chat, second } = await prepared();
+    const note = writeNote(store, chat.id, { text: 'The moon is blue.', author: 'user' });
+    const original = store.run(second.runId).snapshot;
+    const snapshot = store.story.prepareRunInTransaction({
+      ...structuredClone(original),
+      parentRevision: second.id,
+      history: store.history(second.id),
+      executionPurpose: 'artifact',
+    });
+    const validateSnapshot = validateStoryArchive(store);
+    expect(() => validateSnapshot(snapshot)).not.toThrow();
+    expect(snapshot.story?.notes[0].id).toBe(note.id);
+    const changedNote = structuredClone(snapshot);
+    changedNote.story!.notes[0].text = 'A forged correction.';
+    changedNote.story!.notes[0].declaration.text = 'A forged correction.';
+    expect(() => validateSnapshot(changedNote)).toThrow('snapshot note differs from stored entry');
+    const changedState = structuredClone(snapshot);
+    changedState.story!.state!.values.coins = 99;
+    expect(() => validateSnapshot(changedState)).toThrow('parent state snapshot mismatch');
+    const changedConfig = structuredClone(snapshot);
+    changedConfig.story!.config.module!.name = 'A forged module revision.';
+    expect(() => validateSnapshot(changedConfig)).toThrow('snapshot configuration mismatch');
+  });
   test('S03 R03 completed state is recomputed; immutable snapshots and historical edited sources remain valid', async () => {
     const { store, first } = await prepared();
     expect(() => validateStoryArchive(store)).not.toThrow();
@@ -159,16 +183,14 @@ describe('M2 archive graph and selected-ancestry fork with actual isolated file 
     ).toBe(true);
     expect(() => validateStoryArchive(store)).not.toThrow();
     expect(all(store, 'story_states').map((row) => row.body)).toEqual(before);
-    expect(
-      store.story.memory.checkpoint(store.story.memory.scope(first.chatId, first.id)).indexed
-    ).toEqual([]);
   });
 
   test('S03 R03 poisoned state, config, source identity, immutable dependency and memory evidence reject with rollback', async () => {
     const { store, first } = await prepared();
     const state = all(store, 'story_states')[0];
     const job = all(store, 'story_jobs').find((row) => row.kind === 'state')!;
-    const memory = all(store, 'story_memories')[0];
+    writeNote(store, first.chatId, { text: 'Synthetic correction', author: 'user' });
+    const memory = all(store, 'author_notes')[0];
     const attacks: (() => void)[] = [
       () => {
         const body = JSON.parse(state.body);
@@ -211,15 +233,10 @@ describe('M2 archive graph and selected-ancestry fork with actual isolated file 
       },
       () => {
         const entry = JSON.parse(memory.entry);
-        entry.sources[0].quote = 'invented';
+        entry.atHash = memoryHash('invented');
         store.db
-          .prepare('UPDATE story_memories SET entry=? WHERE id=?')
+          .prepare('UPDATE author_notes SET entry=? WHERE id=?')
           .run(JSON.stringify(entry), memory.id);
-      },
-      () => {
-        store.db
-          .prepare('UPDATE story_indexes SET job_id=? WHERE source_revision=?')
-          .run(job.id, first.id);
       },
     ];
     for (const attack of attacks) {
@@ -237,16 +254,17 @@ describe('M2 archive graph and selected-ancestry fork with actual isolated file 
   test('S03 retcon ownership, ancestry and cycles reject without altering authored text', async () => {
     const { store, chat } = await prepared();
     const other = createFixtureChat(store, 'Other');
-    const old = store.story.memory.authored(chat.id, {
+    const old = writeNote(store, chat.id, {
       text: 'Original authored declaration',
       author: 'fixture',
     });
-    const replacement = store.story.memory.authored(
+    const replacement = writeNote(
+      store,
       chat.id,
       { text: 'Changed authored declaration', author: 'fixture' },
       old.id
     );
-    const foreign = store.story.memory.authored(other.id, {
+    const foreign = writeNote(store, other.id, {
       text: 'Other chat',
       author: 'fixture',
     });
@@ -254,7 +272,7 @@ describe('M2 archive graph and selected-ancestry fork with actual isolated file 
     expect(() =>
       store.transaction(() => {
         store.db
-          .prepare('UPDATE story_memories SET replaces_id=? WHERE id=?')
+          .prepare('UPDATE author_notes SET replaces_id=? WHERE id=?')
           .run(foreign.id, replacement.id);
         validateStoryArchive(store);
       })
@@ -262,13 +280,13 @@ describe('M2 archive graph and selected-ancestry fork with actual isolated file 
     expect(() =>
       store.transaction(() => {
         store.db
-          .prepare('UPDATE story_memories SET replaces_id=? WHERE id=?')
+          .prepare('UPDATE author_notes SET replaces_id=? WHERE id=?')
           .run(replacement.id, old.id);
         validateStoryArchive(store);
       })
     ).toThrow('cycle');
     expect(
-      JSON.parse(all(store, 'story_memories').find((row) => row.id === old.id)!.entry).text
+      JSON.parse(all(store, 'author_notes').find((row) => row.id === old.id)!.entry).text
     ).toBe(old.text);
   });
 
@@ -368,7 +386,6 @@ describe('M2 archive graph and selected-ancestry fork with actual isolated file 
       expectedRevision: config.revision,
       module: config.module,
       stateModel: { id: model.id },
-      memory: config.memory,
     });
     completeSource(store, chat.id, 'Unfinished requests must not replay.');
     store.product.model(
@@ -453,7 +470,7 @@ describe('M2 archive graph and selected-ancestry fork with actual isolated file 
       )
     ).toEqual(before);
     const copiedJobs = all(store, 'story_jobs').filter((row) => row.chat_id === copy.id);
-    expect(copiedJobs).toHaveLength(4);
+    expect(copiedJobs).toHaveLength(2);
     expect(all(store, 'attempts').filter((row) => row.chat_id === copy.id)).toHaveLength(0);
     for (const row of copiedJobs) {
       const snapshot = JSON.parse(row.snapshot);
@@ -470,24 +487,24 @@ describe('M2 archive graph and selected-ancestry fork with actual isolated file 
       store.history(second.id).map((item) => item.text)
     );
     expect(store.story.detail(copy.id).state?.values).toEqual({ coins: 7 });
-    expect(store.story.detail(copy.id).checkpoint.indexed).toHaveLength(2);
+    expect(store.story.detail(copy.id).notes).toEqual([]);
     expect(globalThis.fetch).not.toHaveBeenCalled();
   });
 
   test('R03 fork excludes sibling retcons and preserves only selected ancestry', async () => {
     const { store, chat, first, second } = await prepared();
-    const declaration = store.story.memory.authored(chat.id, {
+    const declaration = writeNote(store, chat.id, {
       text: 'A declaration anchored after the selected source.',
       author: 'fixture',
     });
     const copy = fork(store, chat.id, first.id);
     expect(store.history(copy.headRevision)).toHaveLength(1);
     expect(
-      all(store, 'story_memories')
+      all(store, 'author_notes')
         .filter((row) => row.chat_id === copy.id)
         .some((row) => JSON.parse(row.entry).text === declaration.text)
     ).toBe(false);
-    expect(all(store, 'story_jobs').filter((row) => row.chat_id === copy.id)).toHaveLength(2);
+    expect(all(store, 'story_jobs').filter((row) => row.chat_id === copy.id)).toHaveLength(1);
     expect(
       all(store, 'story_jobs')
         .filter((row) => row.chat_id === copy.id)

@@ -587,7 +587,11 @@ describe('independent stored-story fork without generation', () => {
       { id: chat.botId, revision: 1, role: 'bot' },
     ]);
     for (const run of store.detail(copy.id).runs) {
-      expect(run.snapshot.profile).toEqual(copiedProfile);
+      const originalRun = store.run(run.snapshot.history.length ? alternative.runId : first.runId);
+      expect(run.snapshot.profile).toEqual({
+        ...copiedProfile,
+        chatOptions: originalRun.snapshot.profile?.chatOptions,
+      });
       expect(run.snapshot.resources).toEqual(store.product.resources(copy.id, copiedProfile));
     }
     expect(store.detail(chat.id)).toEqual(before);

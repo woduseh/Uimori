@@ -1,9 +1,12 @@
 import { visualReview } from './fixtures/visual-review.js';
+import { isolatePromptDrafts } from './fixtures/prompt-workspace.js';
 import { test, expect, type APIRequestContext } from '@playwright/test';
 import type { Content } from '../core/product.js';
 import { DEFAULT_MAIN_PROMPT, DEFAULT_TRANSLATION_PROMPT } from '../core/prompts.js';
 import { createDefaultPromptProgram } from '../core/prompt-defaults.js';
-import { navigationAction } from './ui-navigation.js';
+import { navigationAction, openPromptBlocks } from './ui-navigation.js';
+
+isolatePromptDrafts();
 
 async function seed(request: APIRequestContext, kind: Content['kind'], title: string) {
   const response = await request.post('/api/content', {
@@ -77,6 +80,7 @@ test('PLR03 creation displays and saves role defaults and preview uses block nam
   ] as const) {
     await editor.getByLabel('프롬프트 역할', { exact: true }).selectOption(role);
     const instructions = editor.locator('#prompt-block-instructions');
+    await openPromptBlocks(editor);
     if (!(await instructions.evaluate((node) => (node as HTMLDetailsElement).open)))
       await instructions.locator(':scope > summary').click();
     await expect(instructions.getByLabel('지침 본문', { exact: true })).toHaveValue(text);
@@ -84,12 +88,13 @@ test('PLR03 creation displays and saves role defaults and preview uses block nam
     await editor.getByLabel('프롬프트 이름', { exact: true }).fill(title);
     const savedResponse = page.waitForResponse(
       (response) =>
-        response.url().endsWith('/api/prompt-presets') && response.request().method() === 'POST'
+        /\/api\/edit-drafts\/[^/]+\/save$/.test(response.url()) &&
+        response.request().method() === 'POST'
     );
     await editor.getByRole('button', { name: '저장', exact: true }).click();
     const response = await savedResponse;
     expect(response.ok()).toBe(true);
-    const saved = await response.json();
+    const saved = (await response.json()).saved;
     const persisted = await request.get(
       `/api/revisions/prompt-preset/${saved.id}/${saved.revision}`
     );

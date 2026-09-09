@@ -122,7 +122,7 @@ test('a 4xx main run carries the rejected options read from its stored attempt; 
   ).not.toContain('unsupported_parameter');
 });
 
-test('a 4xx state or memory job carries the rejected options of the attempt linked to it', async () => {
+test('a 4xx state job carries the rejected options of the attempt linked to it', async () => {
   const app = await setup(),
     store = app.store;
   const chat = createFixtureChat(store, 'Story rejection projection');
@@ -137,7 +137,7 @@ test('a 4xx state or memory job carries the rejected options of the attempt link
     now = new Date().toISOString();
   store.db
     .prepare(
-      "INSERT INTO story_jobs(id,chat_id,source_revision,source_hash,kind,config_revision,generation,owner,status,snapshot,result,error,mock,created_at,updated_at,dependency_key) VALUES(?,?,?,?,'memory',1,1,NULL,'failed',?,NULL,'HTTP_400',0,?,?,?)"
+      "INSERT INTO story_jobs(id,chat_id,source_revision,source_hash,kind,config_revision,generation,owner,status,snapshot,result,error,mock,created_at,updated_at,dependency_key) VALUES(?,?,?,?,'state',1,1,NULL,'failed',?,NULL,'HTTP_400',0,?,?,?)"
     )
     .run(
       jobId,
@@ -149,7 +149,7 @@ test('a 4xx state or memory job carries the rejected options of the attempt link
       now,
       'dependency-' + jobId
     );
-  const attempt = store.product.startAttempt(chat.id, null, null, wire());
+  const attempt = store.product.startAttempt(chat.id, null, null, { ...wire(), role: 'state' });
   store.db.prepare('UPDATE attempts SET story_job_id=? WHERE id=?').run(jobId, attempt);
   store.product.finishAttempt(attempt, failure('HTTP_400', ['output_config.effort']));
   const response = await injectWithFixtureBot(app, {

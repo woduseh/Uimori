@@ -1,3 +1,4 @@
+import { writeNote } from './fixtures/notes.js';
 import { updateTestProfile } from './fixtures/model-workspace.js';
 import { createFixtureChat, injectWithFixtureBot } from './fixtures/chat.js';
 import { afterEach, expect, test } from 'vitest';
@@ -239,7 +240,7 @@ test('retcon invalidates lore while preserving past snapshots; failed and altern
   expect(other.snapshot.loreContext!.entries).toEqual([]);
   read(f, other, 20, 4);
   complete(f, other);
-  f.store.story.memory.authored(f.chat.id, { text: 'Synthetic canon changed.', author: 'Fixture' });
+  writeNote(f.store, f.chat.id, { text: 'Synthetic canon changed.', author: 'Fixture' });
   const b = queue(f).run;
   expect(b.snapshot.loreContext!.entries).toEqual([]);
   expect(b.snapshot.loreContext!.stats.reasons).toContain('source-or-canon-changed');

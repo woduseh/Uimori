@@ -75,8 +75,8 @@ test('RACOM01 source footer stays compact and its menu supports touch, keyboard 
     await page.getByLabel('다음 장면 요청', { exact: true }).fill('메뉴를 닫아도 남는 합성 초안');
     await trigger.scrollIntoViewIfNeeded();
     await expect(menu).toHaveJSProperty('open', false);
-    // Quiet footer row: copy, edit the current view, the scene menu, then two small disclosures.
-    await expect(footer.locator('button, summary').filter({ visible: true })).toHaveCount(5);
+    // Copy, edit and the menu stay on the row; detail and cost disclosures live in the menu.
+    await expect(footer.locator('button, summary').filter({ visible: true })).toHaveCount(3);
     await expect(footer.getByRole('button', { name: '본문 복사', exact: true })).toBeVisible();
     await expect(footer.getByRole('button', { name: '원문 수정', exact: true })).toBeVisible();
     for (const control of await footer.locator('button, summary').filter({ visible: true }).all()) {
@@ -97,10 +97,15 @@ test('RACOM01 source footer stays compact and its menu supports touch, keyboard 
     const actions = menu.locator('.action-menu-body');
     // The row already edits the current view, so the menu offers the other editor only.
     await expect(actions.getByRole('button')).toHaveText([
+      '도우미에게 물어보기',
       '현재 설정으로 다시 요청',
       '여기서 새 이야기로 이어가기',
       '번역 수정',
       '이미지 자동 배치',
+      '원문 연결 정보',
+      ...(before.attempts?.some((attempt) => attempt.runId === source.runId)
+        ? ['본문 추정 비용']
+        : []),
     ]);
     const openTriggerBox = (await trigger.boundingBox())!;
     const menuBox = (await actions.boundingBox())!;
@@ -123,7 +128,7 @@ test('RACOM01 source footer stays compact and its menu supports touch, keyboard 
     await expect(menu).toHaveJSProperty('open', false);
     await expect(composer).toBeFocused();
     await expect(composer).toHaveValue('메뉴를 닫아도 남는 합성 초안');
-    await expect(footer.locator('button, summary').filter({ visible: true })).toHaveCount(5);
+    await expect(footer.locator('button, summary').filter({ visible: true })).toHaveCount(3);
   }
   const after = await detail(request, before.chat.id);
   expect(after.sources).toEqual(before.sources);
@@ -188,7 +193,16 @@ test('TSKUI01 task overview screenshots wait for real run, job and attempt data 
     expect(attemptsResponse.ok()).toBe(true);
     const attempts = (await attemptsResponse.json()) as unknown[];
     await expect(usage.getByRole('table')).toBeVisible();
-    await expect(usage.getByRole('row')).toHaveCount(8);
+    await expect(usage.getByRole('rowheader')).toHaveText([
+      '원문',
+      '번역',
+      '표시 상태',
+      '이미지 배치',
+      '서사 상태',
+      '문맥 압축',
+      '도우미',
+      '채팅 제목',
+    ]);
     await expect(usage.getByRole('rowheader', { name: '채팅 제목', exact: true })).toBeVisible();
     await expect(usage.getByText(new RegExp(`^전송 시도 ${attempts.length}회`))).toBeVisible();
     await expect(panel.getByRole('status').filter({ hasText: /불러오는 중/ })).toHaveCount(0);

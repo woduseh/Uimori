@@ -183,8 +183,7 @@ function NotificationDetail({ item, onRead }: { item: ActivityNoticeItem; onRead
   const { kind, runId, generation } = item;
   useEffect(() => {
     let current = true;
-    const collection =
-      kind === 'main' ? 'runs' : ['state', 'memory'].includes(kind) ? 'story-jobs' : 'jobs';
+    const collection = kind === 'main' ? 'runs' : kind === 'state' ? 'story-jobs' : 'jobs';
     void api<{ status: string; error?: string | null; attempt?: number; generation?: number }>(
       `/${collection}/${encodeURIComponent(runId)}`
     )

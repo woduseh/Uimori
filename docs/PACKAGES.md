@@ -2,7 +2,7 @@
 
 봇·페르소나·모듈은 동일한 `ContentPackage` 형식을 써요. 패키지에 인물 정보가 있어야 할 필요는 없어요. 지침·옵션·정규식만 있는 패키지도 유효해요. 채팅에 붙일 때 `{id, revision, role: "bot" | "persona" | "module"}`로 역할을 정해요. 같은 패키지를 다른 역할로 붙여도 본문을 다시 작성하거나 인물의 의미를 자동으로 바꾸지 않아요.
 
-현재 DB schema와 전체 archive는 v14예요. 서재의 분류·폴더는 자료 ID에 붙는 별도 정리 정보이며, 프롬프트 관리는 분리돼요. 분류 이동은 패키지 내용·개정이나 장착 역할을 바꾸지 않아요. 독립 로어·작가 설정·창작 스킬·명칭집 종류는 제거했고 패키지 내부 로어·대상별 지침과 원문시점 참조는 유지해요. 저장·CAS·보관 계약은 [서재와 프롬프트 관리](LIBRARY.md)를 봐요.
+현재 DB schema와 전체 archive는 v15예요. 서재의 분류·폴더는 자료 ID에 붙는 별도 정리 정보이며, 프롬프트 관리는 분리돼요. 분류 이동은 패키지 내용·개정이나 장착 역할을 바꾸지 않아요. 독립 로어·작가 설정·창작 스킬·명칭집 종류는 제거했고 패키지 내부 로어·대상별 지침과 원문시점 참조는 유지해요. 저장·CAS·보관 계약은 [서재와 프롬프트 관리](LIBRARY.md)를 봐요.
 
 스키마와 검증은 [content-package.ts](../core/content-package.ts), 요청 투영·상태 표시 descriptor는 [package-runtime.ts](../core/package-runtime.ts)에 있어요. 아래는 인물이 없는 작은 패키지예요.
 
@@ -38,10 +38,10 @@
 - `body`, 선택적 `identity: {name, description}`, 선택적 `roleBindings`는 원문 그대로 보관해요. 역할별 binding은 작성자가 직접 넣는 지침이에요.
 - 로어는 패키지 내부 배열이에요. `pinned`는 고정 공급, `discoverable`은 모델이 검색·조회할 자료예요. 내부 `relatedIds`는 같은 패키지의 실제 로어 ID만 참조해요. Risu 트리거 키를 자동 실행하지 않아요.
 - `loreContext`로 고정 로어의 배경/장면 배치·그룹·순서를 정해요. 실제 읽은 자동 로어의 다음 턴 유지와 정리 정책은 [로어 문맥](LORE-CONTEXT.md)에 있어요.
-- `instructions.target`은 `main`, `translation`, `state`, `memory`, `status`, `image` 중 하나예요. `attachmentRoles`로 적용할 부착 역할을 선택할 수 있어요. 생략하면 모든 부착 역할에 적용돼요.
+- `instructions.target`은 `main`, `translation`, `state`, `status`, `image` 중 하나예요. `attachmentRoles`로 적용할 부착 역할을 선택할 수 있어요. 생략하면 모든 부착 역할에 적용돼요.
 - `controls`는 기존 `PromptControl` 형식을 재사용해요. 지침은 `when` 조건 및 선택적 `template` AST를 지원해요. `template`이 있으면 실행에 사용하며 보관된 `text`는 그대로 유지해요. 패키지 템플릿의 외부 slot은 현재 제공하지 않으므로 사용하면 `PROMPT_UNKNOWN_SLOT` 오류가 나요.
 - `compilePackageAttachment`는 `{resources, pinned, instructions, controls, values, stateView?, transforms}`를 반환해요. resource ID에는 패키지 ID·부착 역할·내부 ID가 포함돼 서로 충돌하지 않아요. 패키지 ID 및 내부 ID는 64자 이내이며 이 조합은 읽기 도구의 200자 ID 한도 안에 있어요. 호스트가 이 투영을 역할 입력에 연결하며 패키지는 도구 권한을 만들지 못해요.
-- [package-context.ts](../core/package-context.ts)의 `compiledPackages`는 Run에 고정된 `profile.packageAttachments/packages/packageValues`만 읽어요. 값의 키는 `id@revision:role`이에요. 누락된 개정은 오류이며 현재 라이브러리로 대체하지 않아요. 메인·번역·상태·기억·표시·이미지에는 각각의 대상 지침만 제공해요. 메인에서 persona 참조를 끄면 해당 persona 패키지의 본문과 내부 로어도 제외해요. 번역은 원문시점 persona 자료를 계속 참고할 수 있어요.
+- [package-context.ts](../core/package-context.ts)의 `compiledPackages`는 Run에 고정된 `profile.packageAttachments/packages/packageValues`만 읽어요. 값의 키는 `id@revision:role`이에요. 누락된 개정은 오류이며 현재 라이브러리로 대체하지 않아요. 메인·번역·상태·표시·이미지에는 각각의 대상 지침만 제공해요. 메인에서 persona 참조를 끄면 해당 persona 패키지의 본문과 내부 로어도 제외해요. 번역은 원문시점 persona 자료를 계속 참고할 수 있어요.
 - `stateView`는 키·이름·값 형식·접미사를 지정하는 표시 descriptor예요. `renderPackageStateView`는 문자열과 누락 여부를 반환해요. `0`과 `false`는 누락으로 취급하지 않아요. 상태 계산·canon 변경·HTML 실행은 하지 않아요. UI는 값을 텍스트로 표시해야 해요.
 
 ## 정규식 표시 변환
@@ -68,7 +68,7 @@ Reader는 패키지를 사용한 원고에만 `GET /api/chats/:id/sources/:sourc
 
 `modules?: {id, revision}[]`는 공통 모듈을 연결해요. 현재 연결은 ID로 최신 저장 내용을 따라가며 일반 화면에서 개정 번호를 입력하지 않아요. 여러 봇이나 페르소나가 같은 모듈을 요구하면 `module` 역할에서는 한 번 장착해요. 최신 ID 그래프의 순환 참조, 깊이 20·총 100개 제한을 넘는 연결은 거부해요. 채팅에는 사용자가 고른 루트 장착만 저장하고, 새 Run snapshot에는 확장한 전체 패키지와 실제 선택한 개정을 고정해요. 과거 복원은 이 snapshot의 참조로 의존성을 검증하며 현재 서재로 대체하지 않아요. 필수 모듈은 이를 요구하는 루트를 해제해야 제거돼요. 공유 정의의 상태는 채팅·분기·장착 인스턴스 범위로 분리돼요.
 
-`sourceSegments?: {version:1,rules:[...]}`는 자료가 사용하는 원문 경계와 접힘·요청 제외·유지 길이를 선언해요. **연결과 기능**에서 규칙을 편집하거나 native JSON으로 조건식을 작성해요. 마커·지침·옵션의 이름과 개수는 자료가 정하며, 전용 Hidden 자료 연결이나 고정 35개 옵션은 없어요. 여러 장착 자료의 충돌하는 선언은 거부하고 Run에는 당시 옵션으로 평가한 규칙을 고정해요. 구조와 원문·번역·기억 보호는 [원문 구간](SOURCE-SEGMENTS.md)을 봐요.
+`sourceSegments?: {version:1,rules:[...]}`는 자료가 사용하는 원문 경계와 접힘·요청 제외·유지 길이를 선언해요. **연결과 기능**에서 규칙을 편집하거나 native JSON으로 조건식을 작성해요. 마커·지침·옵션의 이름과 개수는 자료가 정하며, 전용 Hidden 자료 연결이나 고정 35개 옵션은 없어요. 여러 장착 자료의 충돌하는 선언은 거부하고 Run에는 당시 옵션으로 평가한 규칙을 고정해요. 구조와 원문·번역·요약 보호는 [원문 구간](SOURCE-SEGMENTS.md)을 봐요.
 
 ## 공통 이미지
 
@@ -88,7 +88,7 @@ Reader의 **이미지 자동 배치 / 이미지 다시 배치**는 현재 보고
 
 `starts`는 최대 20개의 `{id, title, description?, mode, text, values?, initialAction?}` 선택지예요. `authored`는 작성된 원문을 정확히 저장하며 100,000자까지, `generate`는 4,000자까지의 요청을 기존 메인 실행기에 전달해요. 새 채팅 화면에서 미리보기·이번 채팅 옵션을 확인하고 확정해요. 단순 미리보기는 Run·상태·모델 호출을 만들지 않아요.
 
-작성된 도입문은 모델 attempt, 상태·기억 보조 예약이나 자동 이미지 작업을 만들지 않아요. Reader에는 작성된 도입문으로 표시하고, 다음 모델 대화에서는 실제 도입문만 assistant 이력에 들어가요. 초기 행동은 기존 타입 검증·상태 실행 계약으로 한 번 실행하며 채팅 옵션·원문 귀속을 유지해요. 확정 요청의 idempotency key는 응답 유실 시 같은 결과를 돌려주고, 다른 시작을 다시 확정하는 요청은 거부해요. 실행 옵션과 초기 상태는 채팅에 속하며 페르소나나 패키지 원본을 수정하지 않아요.
+작성된 도입문은 모델 attempt, 상태 보조 예약이나 자동 이미지 작업을 만들지 않아요. Reader에는 작성된 도입문으로 표시하고, 다음 모델 대화에서는 실제 도입문만 assistant 이력에 들어가요. 초기 행동은 기존 타입 검증·상태 실행 계약으로 한 번 실행하며 채팅 옵션·원문 귀속을 유지해요. 확정 요청의 idempotency key는 응답 유실 시 같은 결과를 돌려주고, 다른 시작을 다시 확정하는 요청은 거부해요. 실행 옵션과 초기 상태는 채팅에 속하며 페르소나나 패키지 원본을 수정하지 않아요.
 
 ## 검증
 

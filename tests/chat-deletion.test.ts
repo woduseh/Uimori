@@ -1,3 +1,4 @@
+import { writeNote } from './fixtures/notes.js';
 import { createFixtureChat, injectWithFixtureBot } from './fixtures/chat.js';
 import { afterEach, expect, test } from 'vitest';
 import { mkdtemp, rm } from 'node:fs/promises';
@@ -9,7 +10,6 @@ import {
   chatDeletionImpact,
   deleteBranch,
   deleteChat,
-  deleteMemory,
   deleteSceneCommand,
 } from '../server/chat-deletion.js';
 import { createApp } from '../server/app.js';
@@ -184,20 +184,15 @@ test('exclusive branch history is deleted while shared ancestor and default snap
 test('unused author canon and scene commands can be deleted; referenced and retcon entries remain', async () => {
   const store = await fixture(),
     chat = createFixtureChat(store, 'Story');
-  const first = store.story.memory.authored(chat.id, {
+  const first = writeNote(store, chat.id, {
     text: 'Synthetic unused canon',
     author: 'Author',
   });
-  deleteMemory(store, chat.id, first.id, {});
-  expect(store.story.detail(chat.id).memory).toEqual([]);
-  const prior = store.story.memory.authored(chat.id, { text: 'Old canon', author: 'Author' });
-  const replacement = store.story.memory.authored(
-    chat.id,
-    { text: 'New canon', author: 'Author' },
-    prior.id
-  );
-  expect(() => deleteMemory(store, chat.id, prior.id, {})).toThrow('정사 수정');
-  expect(() => deleteMemory(store, chat.id, replacement.id, {})).toThrow('정사 수정');
+  writeNote(store, chat.id, { text: '', author: 'Author', retired: true }, first.id);
+  expect(store.story.detail(chat.id).notes).toEqual([]);
+  const prior = writeNote(store, chat.id, { text: 'Old canon', author: 'Author' });
+  const replacement = writeNote(store, chat.id, { text: 'New canon', author: 'Author' }, prior.id);
+  expect(store.story.detail(chat.id).notes).toContainEqual(replacement);
   const command = store.story.createCommand(chat.id, {
     label: 'Scene',
     request: 'Synthetic request',
@@ -205,12 +200,13 @@ test('unused author canon and scene commands can be deleted; referenced and retc
   });
   expect(deleteSceneCommand(store, command.id, {}).deleted).toBe(true);
   expect(store.story.commands(chat.id, `main:${chat.id}`)).toEqual([]);
-  const canon = store.story.memory.authored(chat.id, { text: 'Used canon', author: 'Author' });
+  const canon = writeNote(store, chat.id, { text: 'Used canon', author: 'Author' });
   run(store, chat.id);
-  expect(() => deleteMemory(store, chat.id, canon.id, {})).toThrow('저장된 실행');
+  writeNote(store, chat.id, { text: '', author: 'Author', retired: true }, canon.id);
+  expect(store.story.detail(chat.id).notes).not.toContainEqual(canon);
   const restored = await fixture();
   restored.product.import(store.product.export());
-  expect(restored.story.detail(chat.id).memory).toEqual(store.story.detail(chat.id).memory);
+  expect(restored.story.detail(chat.id).notes).toEqual(store.story.detail(chat.id).notes);
 });
 
 test('deleting a branch preserves shared configuration and removes its package receipts', async () => {
@@ -252,7 +248,6 @@ test('branch with an active global story configuration anchor is retained', asyn
       rules: {},
     },
     stateModel: null,
-    memory: { enabled: false, model: null, recentCount: 2, maxPacketChars: 60000 },
   });
   expect(() =>
     deleteBranch(store, chat.id, branch.id, {
@@ -313,16 +308,24 @@ test('HTTP deletion impact and delete routes return errors before mutation and s
         })
       ).statusCode
     ).toBe(409);
-    const canon = app.store.story.memory.authored(chat.id, {
+    const canon = writeNote(app.store, chat.id, {
       text: 'Unused canon',
       author: 'Author',
     });
     expect(
       (
         await injectWithFixtureBot(app, {
-          method: 'DELETE',
-          url: `/api/chats/${chat.id}/story/memory/${canon.id}`,
-          payload: {},
+          method: 'POST',
+          url: `/api/chats/${chat.id}/notes`,
+          payload: {
+            text: '',
+            author: 'Author',
+            retired: true,
+            replacesId: canon.id,
+            expectedRevision: app.store.story.notes.revision(chat.id),
+            expectedHeadRevision: app.store.chat(chat.id).headRevision,
+            idempotencyKey: 'retire-note',
+          },
         })
       ).statusCode
     ).toBe(200);

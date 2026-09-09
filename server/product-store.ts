@@ -73,7 +73,27 @@ import { validateRunSnapshot } from './snapshot-archive.js';
 import { validatePackageRequests } from './package-requests.js';
 import { freezeSourceSegments } from '../core/package-source-segments.js';
 import { assertModelSelection } from './provider-selection.js';
-import { previousContextPlan, measureMainContext } from './context-planning.js';
+import { measureMainContext } from './context-planning.js';
+import { CONTEXT_TABLES } from './context-store.js';
+import { editDraftTables, validateEditDraftArchive } from './edit-drafts.js';
+import {
+  chatOverrideTables,
+  freezeChatOverrides,
+  validateChatOverrideArchive,
+  validateChatOverrideSnapshot,
+} from './chat-overrides.js';
+import { projectChatPackageCompilation } from '../core/chat-overrides.js';
+import {
+  chatOptionTables,
+  validateChatOptionArchive,
+  validateChatOptionSnapshot,
+} from './chat-options.js';
+import { HELPER_TABLES } from './helper-workspace.js';
+import { normalizeHelperArchiveRow, validateHelperArchive } from './helper-archive.js';
+import {
+  normalizeResponseStreamArchiveRow,
+  validateResponseStreamArchive,
+} from './response-stream.js';
 import { organizationTables } from './chat-organization.js';
 import { libraryOrganizationTables } from './library-organization.js';
 import {
@@ -213,7 +233,7 @@ export class ProductStore {
         CREATE UNIQUE INDEX default_branch ON branches(chat_id) WHERE is_default=1;
         CREATE TABLE prompt_workspace (id INTEGER PRIMARY KEY CHECK(id=1),body TEXT NOT NULL);
         CREATE TABLE library_hidden (kind TEXT NOT NULL,id TEXT NOT NULL,PRIMARY KEY(kind,id));
-        CREATE TABLE attempts (id TEXT PRIMARY KEY,chat_id TEXT NOT NULL REFERENCES chats(id),run_id TEXT REFERENCES runs(id),job_id TEXT REFERENCES jobs(id),role TEXT NOT NULL,connection_id TEXT NOT NULL,model_id TEXT NOT NULL,status TEXT NOT NULL,request TEXT NOT NULL,response TEXT,input_tokens INTEGER,output_tokens INTEGER,cost_usd REAL,raw_usage TEXT,price_revision TEXT,error TEXT,story_job_id TEXT REFERENCES story_jobs(id));
+        CREATE TABLE attempts (id TEXT PRIMARY KEY,chat_id TEXT REFERENCES chats(id),run_id TEXT REFERENCES runs(id),job_id TEXT REFERENCES jobs(id),role TEXT NOT NULL,connection_id TEXT NOT NULL,model_id TEXT NOT NULL,status TEXT NOT NULL,request TEXT NOT NULL,response TEXT,input_tokens INTEGER,output_tokens INTEGER,cost_usd REAL,raw_usage TEXT,price_revision TEXT,error TEXT,story_job_id TEXT REFERENCES story_jobs(id));
         CREATE TABLE assets (id TEXT PRIMARY KEY,chat_id TEXT NOT NULL REFERENCES chats(id),body TEXT NOT NULL,bytes BLOB NOT NULL);
         CREATE TABLE source_edits(source_id TEXT NOT NULL REFERENCES sources(id),revision INTEGER NOT NULL,text TEXT NOT NULL,hash TEXT NOT NULL,created_at TEXT NOT NULL,PRIMARY KEY(source_id,revision));
       `);
@@ -317,7 +337,7 @@ export class ProductStore {
       for (const chat of this.store.chats()) this.store.event(chat.id, 'profile.updated', chat.id);
     return result;
   }
-  content(value: unknown, id?: string) {
+  content(value: unknown, id?: string, inTransaction = false) {
     const b = record(value);
     fields(b, [
       'kind',
@@ -338,7 +358,8 @@ export class ProductStore {
       this.db.prepare('SELECT 1 FROM chat_organization WHERE bot_id=? LIMIT 1').get(id)
     )
       throw new HttpError(400, 'A chat owner must remain available as a bot or package');
-    return this.save(
+    return (inTransaction ? this.saveInTransaction : this.save).call(
+      this,
       'content',
       {
         kind: choice(b.kind, ['bot', 'persona', 'module'], 'content kind'),
@@ -398,7 +419,7 @@ export class ProductStore {
       });
     });
   }
-  promptPreset(value: unknown, id?: string) {
+  promptPreset(value: unknown, id?: string, inTransaction = false) {
     const b = record(value);
     fields(b, ['title', 'role', 'text', 'program', 'values', 'expectedRevision']);
     const role = choice(b.role, ['main', 'translation'], 'prompt role');
@@ -422,7 +443,8 @@ export class ProductStore {
         );
       }
     }
-    return this.save(
+    return (inTransaction ? this.saveInTransaction : this.save).call(
+      this,
       'prompt-preset',
       {
         title: text(b.title, 'title', 200),
@@ -547,20 +569,24 @@ export class ProductStore {
     const prepared = this.prepareModel(value, id);
     return this.save('model', prepared.value, id, prepared.expectedRevision);
   }
-  modelSnapshot(id: string, role?: string): ModelSnapshot {
+  modelSnapshot(id: string, role?: string, authorize = true): ModelSnapshot {
     try {
       this.assertAvailable('model', id);
-      const model = this.get<ModelPreset>('model', id);
-      if (model.enabled === false) throw new HttpError(403, 'Model disabled');
+      // New executions use the current contract; stored settings and historical snapshots stay intact.
+      const { capabilityRevision: _retiredRevision, ...model } = this.get<
+        ModelPreset & { capabilityRevision?: unknown }
+      >('model', id);
+      if (authorize && model.enabled === false) throw new HttpError(403, 'Model disabled');
       this.assertAvailable('connection', model.connectionId);
       const connection = this.get<Connection>('connection', model.connectionId);
-      this.authorize(connection);
+      if (authorize) this.authorize(connection);
       if (
+        authorize &&
         model.capabilityProtocol !== undefined &&
         model.capabilityProtocol !== connection.protocol
       )
         throw new HttpError(400, 'Connection protocol changed; review and save the model settings');
-      validateModelGeneration(model, connection.protocol);
+      if (authorize) validateModelGeneration(model, connection.protocol);
       const pricingSnapshot = resolveModelPricing(model, connection);
       return structuredClone({
         ...model,
@@ -671,7 +697,8 @@ export class ProductStore {
   }
   snapshot(
     chatId: string,
-    requiredRole: 'main' | 'translation' | 'image' = 'main'
+    requiredRole: 'main' | 'translation' | 'image' | 'inspect' = 'main',
+    headRevision: string | null = this.store.chat(chatId).headRevision
   ): ProfileSnapshot {
     const { optionAdjustments: _notices, ...p } = this.profile(chatId);
     const contents = p.attachments.map((r) => this.get<Content>('content', r.id, r.revision));
@@ -681,30 +708,47 @@ export class ProductStore {
       const r = p.routes[role];
       if (!r) continue;
       try {
-        models[role] = this.modelSnapshot(r.id, role);
+        models[role] = this.modelSnapshot(r.id, role, requiredRole !== 'inspect');
       } catch (error) {
         if (role === requiredRole) throw error;
         routes[role] = null;
       }
     }
-    const frozen = freezeCurrentPrompts(promptWorkspace(this.store));
+    const workspace = promptWorkspace(this.store);
+    const frozen = freezeCurrentPrompts(workspace);
+    const contextModel = workspace.contextModel
+      ? this.modelSnapshot(workspace.contextModel.id, undefined, false)
+      : undefined;
     const collaboration = frozen.promptPresets?.main?.program.collaboration;
     const collaborationModels: Record<string, ModelSnapshot> = {};
-    if (collaboration?.enabled && requiredRole === 'main')
+    if (collaboration?.enabled && (requiredRole === 'main' || requiredRole === 'inspect'))
       for (const agent of collaboration.agents) {
-        const model = agent.model ? this.modelSnapshot(agent.model.id) : models.main;
+        const model = agent.model
+          ? this.modelSnapshot(agent.model.id, undefined, requiredRole !== 'inspect')
+          : models.main;
         if (!model) throw new HttpError(400, '협업을 사용하려면 작문 모델을 선택해 주세요.');
         collaborationModels[agent.id] = structuredClone(model);
       }
-    return structuredClone({
+    const profile: ProfileSnapshot = {
       ...p,
       routes,
       contents,
       models,
       ...resolvePackageProfile(this, p),
       ...frozen,
-      ...(collaboration?.enabled && requiredRole === 'main' ? { collaborationModels } : {}),
-    });
+      ...(contextModel ? { contextModel } : {}),
+      ...(collaboration?.enabled && (requiredRole === 'main' || requiredRole === 'inspect')
+        ? { collaborationModels }
+        : {}),
+    };
+    const overrides = freezeChatOverrides(
+      this.store,
+      profile,
+      p.packageAttachments ?? [],
+      headRevision
+    );
+    if (overrides) profile.chatOverrides = overrides;
+    return structuredClone(profile);
   }
   resolveJobPrompt(snapshot: RunSnapshot, input: unknown): RunSnapshot {
     const resolved = structuredClone(snapshot);
@@ -777,19 +821,18 @@ export class ProductStore {
           kind: 'lore' as const,
           sourceKind: c.kind,
         })),
-      ...(p.packageAttachments ?? []).flatMap(
-        (r) =>
-          compilePackageAttachment(
-            p.packages!.find((pkg) => pkg.id === r.id && pkg.revision === r.revision)!,
-            r,
-            {
-              chatId,
-              target: 'main',
-              resourcesOnly: true,
-              values: p.packageValues?.[packageControlKey(r)],
-            }
-          ).resources
-      ),
+      ...(p.packageAttachments ?? []).flatMap((ref) => {
+        const pkg = p.packages!.find(
+          (item) => item.id === ref.id && item.revision === ref.revision
+        )!;
+        const compiled = compilePackageAttachment(pkg, ref, {
+          chatId,
+          target: 'main',
+          resourcesOnly: true,
+          values: p.packageValues?.[packageControlKey(ref)],
+        });
+        return projectChatPackageCompilation(p, ref, pkg, compiled).compiled.resources;
+      }),
     ];
   }
   authorize(connection: Connection) {
@@ -843,7 +886,12 @@ export class ProductStore {
       throw error;
     }
   }
-  startAttempt(chatId: string, runId: string | null, jobId: string | null, request: WireRecord) {
+  startAttempt(
+    chatId: string | null,
+    runId: string | null,
+    jobId: string | null,
+    request: WireRecord
+  ) {
     const id = randomUUID();
     const safe = structuredClone(request);
     if (
@@ -1040,7 +1088,7 @@ export class ProductStore {
     );
     return {
       format: 'narrative-archive',
-      version: 14,
+      version: 15,
       createdAt: new Date().toISOString(),
       tables,
     };
@@ -1082,7 +1130,7 @@ export class ProductStore {
     }
     const a = record(copy);
     fields(a, ['format', 'version', 'createdAt', 'tables']);
-    if (a.format !== 'narrative-archive' || a.version !== 14)
+    if (a.format !== 'narrative-archive' || a.version !== 15)
       throw new HttpError(400, 'Unsupported archive');
     const tables = record(a.tables);
     fields(tables, archiveTables);
@@ -1191,6 +1239,8 @@ export class ProductStore {
                 row.raw_usage = json(scrubArchiveSecrets(parse(row.raw_usage)));
             }
             normalizeStoryArchiveRow(table, row);
+            normalizeHelperArchiveRow(table, row);
+            normalizeResponseStreamArchiveRow(table, row);
             this.db
               .prepare(
                 `INSERT INTO ${table}(${columns.join(',')}) VALUES(${columns.map(() => '?').join(',')})`
@@ -1207,7 +1257,13 @@ export class ProductStore {
         if (this.db.prepare('PRAGMA foreign_key_check').all().length)
           throw new HttpError(400, 'Archive references invalid');
         validateArchiveGraph(this);
-        validateStoryArchive(this.store);
+        const validateStorySnapshot = validateStoryArchive(this.store);
+        this.store.context.validateArchive();
+        validateEditDraftArchive(this.store);
+        validateHelperArchive(this.store, validateStorySnapshot);
+        validateResponseStreamArchive(this.store);
+        validateChatOverrideArchive(this.store);
+        validateChatOptionArchive(this.store);
         validatePackageRequests(this.store);
         validatePackageBehaviorArchive(this.store);
         this.store.organization.validateArchive();
@@ -1239,6 +1295,13 @@ const archiveTables = [
   'attempts',
   'assets',
   ...storyTables,
+  ...CONTEXT_TABLES,
+  ...editDraftTables,
+  ...chatOverrideTables,
+  ...chatOptionTables,
+  ...HELPER_TABLES,
+  'response_stream_tasks',
+  'response_stream_chunks',
   'package_requests',
   ...organizationTables,
   ...libraryOrganizationTables,
@@ -1671,6 +1734,10 @@ function validateArchiveProfile(
           'promptWorkspaceRevision',
           'packages',
           'collaborationModels',
+          'contextModel',
+          'chatOverrides',
+          'chatOptions',
+          'promptOptionOwner',
         ]
       : []),
   ]);
@@ -1732,6 +1799,7 @@ function validateArchiveProfile(
       number(p.promptWorkspaceRevision, 'prompt workspace revision');
   }
   if (frozen) {
+    if (p.contextModel !== undefined) validateModelSnapshot(p.contextModel);
     const collaboration = promptPresets?.main?.program.collaboration;
     if (collaboration?.enabled) {
       const agentModels = record(p.collaborationModels);
@@ -1780,6 +1848,8 @@ function validateArchiveProfile(
     throw new HttpError(400, 'Frozen prompt revision mismatch');
   if (frozen && (!isDeepStrictEqual(p.contents, contents) || !isDeepStrictEqual(p.models, models)))
     throw new HttpError(400, 'Frozen profile revision mismatch');
+  if (frozen) validateChatOverrideSnapshot(product.store, p as ProfileSnapshot);
+  if (frozen) validateChatOptionSnapshot(p as ProfileSnapshot);
   return p as ProfileSnapshot | ChatProfile;
 }
 function validateArchiveGraph(product: ProductStore) {
@@ -1797,6 +1867,8 @@ function validateArchiveGraph(product: ProductStore) {
   for (const selected of [
     ...Object.values(workspace.modelRoutes),
     workspace.titleModel,
+    workspace.helperModel,
+    workspace.contextModel,
     workspace.translationPolicy.refusalModel,
     ...(workspace.main.program.collaboration?.agents ?? []).map((agent) => agent.model),
   ])
@@ -1935,6 +2007,8 @@ function validateArchiveGraph(product: ProductStore) {
         String(resource.id).startsWith('package:')
       );
     }
+    if (snapshot.executionPurpose !== undefined)
+      throw new HttpError(400, 'Artifact snapshot cannot own a main Run');
     validateRunSnapshot(product.store, snapshot as RunSnapshot, run.id);
     const context = (snapshot as RunSnapshot).contextPlan;
     if (context?.status === 'ready') {
@@ -1946,7 +2020,7 @@ function validateArchiveGraph(product: ProductStore) {
       if (!snapshot.forkedFrom) {
         const summaries = db
           .prepare(
-            "SELECT status,response FROM attempts WHERE run_id=? AND role='memory' ORDER BY rowid"
+            "SELECT status,response FROM attempts WHERE run_id=? AND role='context' ORDER BY rowid"
           )
           .all(run.id) as Row[];
         if (summaries.length !== context.summaryCalls)
@@ -1955,20 +2029,8 @@ function validateArchiveGraph(product: ProductStore) {
           const last = summaries.at(-1)!;
           if (last.status !== 'completed' || parse(last.response)?.text.trim() !== context.summary)
             throw new HttpError(400, 'Context summary receipt mismatch');
-        } else if (context.summary !== null) {
-          const previous = previousContextPlan(product.store, snapshot as RunSnapshot),
-            candidate = snapshot.candidateOf
-              ? product.store.run(snapshot.candidateOf).snapshot.contextPlan
-              : undefined;
-          if (
-            previous?.summary !== context.summary &&
-            !(
-              candidate?.summary === context.summary &&
-              JSON.stringify(candidate.compacted) === JSON.stringify(context.compacted)
-            )
-          )
-            throw new HttpError(400, 'Context checkpoint receipt missing');
         }
+        product.store.context.assertSnapshot(snapshot as RunSnapshot);
       }
     }
     validatePackageBehaviorRunSnapshot(product.store, snapshot as RunSnapshot);
@@ -1979,6 +2041,7 @@ function validateArchiveGraph(product: ProductStore) {
         run.chat_id,
         true
       ) as ProfileSnapshot;
+      validateChatOverrideSnapshot(product.store, profile, (snapshot as RunSnapshot).history);
       if (!isDeepStrictEqual(resources, product.resources(run.chat_id, profile)))
         throw new HttpError(400, 'Snapshot resource revision mismatch');
     }
@@ -2084,17 +2147,23 @@ function validateArchiveGraph(product: ProductStore) {
   for (const attempt of rows('attempts')) {
     sameChat(attempt.run_id, attempt.chat_id, runs);
     sameChat(attempt.job_id, attempt.chat_id, jobs);
-    if (
-      [attempt.run_id, attempt.job_id, attempt.story_job_id].filter((id) => id !== null).length !==
-      1
-    )
+    const helperOwner = product.db
+      .prepare('SELECT task_id FROM helper_task_attempts WHERE attempt_id=?')
+      .get(attempt.id);
+    const contextOwner = product.db
+      .prepare('SELECT job_id FROM context_job_attempts WHERE attempt_id=?')
+      .get(attempt.id);
+    const primaryOwners = [attempt.run_id, attempt.job_id, attempt.story_job_id].filter(
+      (id) => id !== null
+    ).length;
+    if (primaryOwners + (helperOwner || contextOwner ? 1 : 0) !== 1)
       throw new HttpError(400, 'Attempt target mismatch');
     if (attempt.story_job_id !== null) {
       const target = product.db
         .prepare('SELECT chat_id,kind,inputs FROM story_jobs WHERE id=?')
         .get(attempt.story_job_id) as Row | undefined;
       const compaction =
-        attempt.role === 'memory' &&
+        attempt.role === 'context' &&
         parse(target?.inputs ?? '[]')?.some((input: Row) => input.contextPlan);
       if (
         !target ||
@@ -2105,15 +2174,17 @@ function validateArchiveGraph(product: ProductStore) {
     }
     choice(
       attempt.role,
-      ['main', 'translation', 'status', 'image', 'state', 'memory', 'title'],
+      ['main', 'translation', 'status', 'image', 'state', 'context', 'helper', 'title'],
       'attempt role'
     );
     if (
       attempt.story_job_id === null &&
+      !helperOwner &&
+      !contextOwner &&
       (attempt.run_id !== null
         ? attempt.role !== 'main' &&
           attempt.role !== 'title' &&
-          !(attempt.role === 'memory' && parse(runs.get(attempt.run_id)!.snapshot).contextPlan)
+          !(attempt.role === 'context' && parse(runs.get(attempt.run_id)!.snapshot).contextPlan)
         : jobs.get(attempt.job_id)?.kind !== attempt.role)
     )
       throw new HttpError(400, 'Attempt role mismatch');

@@ -6,6 +6,7 @@ import {
   type Json,
   type ProviderResult,
   type WireRecord,
+  type ProviderProgress,
 } from '../core/transport.js';
 import type { ModelInput, RunSnapshot, ToolEvent, Usage } from '../core/types.js';
 import { createEvaluationToolSession } from './evaluation-session.js';
@@ -47,6 +48,9 @@ export type MainHooks = {
   authorize: (connection: Connection) => Connection | Promise<Connection>;
   onAttemptStart: (request: WireRecord) => string | Promise<string>;
   onAttemptFinish: (id: string, result: ProviderResult) => void | Promise<void>;
+  onResponseProgress?: (
+    progress: ProviderProgress & { attemptId: string; segment: number }
+  ) => void | Promise<void>;
 };
 
 function addUsage(total: Usage, result: ProviderResult) {
@@ -169,6 +173,10 @@ export async function runMain(snapshot: RunSnapshot, hooks: MainHooks): Promise<
           // Persistence completes before fetch. A crash leaves an uncertain attempt, not a queued replay.
           usage.modelCalls++;
           mainCalls++;
+        },
+        onProgress: async (progress) => {
+          if (attemptId !== undefined && !hooks.signal.aborted)
+            await hooks.onResponseProgress?.({ ...progress, attemptId, segment: 0 });
         },
       }
     );

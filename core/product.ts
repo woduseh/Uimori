@@ -77,12 +77,16 @@ export type CurrentPrompt = {
 };
 export type ModelWorkspace = {
   titleModel?: ModelRef | null;
+  helperModel?: ModelRef | null;
+  contextModel?: ModelRef | null;
   revision: number;
   routes: Record<TaskRole, ModelRef | null>;
   translationPolicy: PromptWorkspace['translationPolicy'];
 };
 export type PromptWorkspace = {
   titleModel?: ModelRef | null;
+  helperModel?: ModelRef | null;
+  contextModel?: ModelRef | null;
   modelRoutes: Record<TaskRole, ModelRef | null>;
   revision: number;
   main: CurrentPrompt;
@@ -165,12 +169,17 @@ export type ChatProfile = {
   packageValues?: Record<string, Record<string, import('./prompt-program.js').PromptValue>>;
 };
 export type ProfileSnapshot = ChatProfile & {
+  chatOptions?: import('./chat-options.js').ChatOptionResolution;
+  /** Text-only per-link projection; the original packages below remain revision-exact. */
+  chatOverrides?: import('./chat-overrides.js').ChatOverrideSnapshot;
+  contextModel?: ModelSnapshot;
   /** Historical execution scope only. Current settings and new snapshots omit this field. */
   personaReference?: boolean;
   /** Self-contained execution evidence; never a live library dependency. */
   prompts?: Partial<Record<PromptRole, ContentRef | null>>;
   promptControls?: Record<string, import('./prompt-program.js').ChatPromptControls>;
   promptWorkspaceRevision?: number;
+  promptOptionOwner?: string;
   /** Models resolved at reservation, keyed by the main prompt's advisor IDs. */
   collaborationModels?: Record<string, ModelSnapshot>;
   contents: Content[];
@@ -212,7 +221,7 @@ export type Attempt = {
   runId: string | null;
   jobId: string | null;
   storyJobId?: string | null;
-  role: TaskRole | 'state' | 'memory' | 'title';
+  role: TaskRole | 'state' | 'context' | 'helper' | 'title';
   connectionId: string;
   modelId: string;
   status: string;

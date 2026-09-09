@@ -235,7 +235,7 @@ test('ACTUI02 auxiliary concurrency, mobile bounds and connection uncertainty', 
   const state = await harness(page, seeded.chat.id, [
     activity('translation', 'translation'),
     activity('image', 'image'),
-    activity('memory', 'memory'),
+    activity('context', 'context'),
   ]);
   const status = page.getByTestId('activity-status');
   await expect(status).toContainText('번역하는 중');

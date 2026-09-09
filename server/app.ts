@@ -7,6 +7,13 @@ import { randomUUID } from 'node:crypto';
 import type { ServerResponse } from 'node:http';
 import { Store } from './store.js';
 import { ChatTitleService } from './chat-title.js';
+import { HelperRuntime, helperWritingSnapshot } from './helper-runtime.js';
+import { helperRoutes } from './helper-routes.js';
+import { contextRoutes } from './context-routes.js';
+import { EditDraftService, editDraftRoutes } from './edit-drafts.js';
+import { ChatOverridesStore, chatOverrideRoutes } from './chat-overrides.js';
+import { chatOptionRoutes } from './chat-options.js';
+import { ResponseStreamStore, responseStreamRoutes } from './response-stream.js';
 import { readerActivities, readerDetail } from './reader.js';
 import { chatActivities } from './chat-activity.js';
 import { readerRoutes } from './reader-routes.js';
@@ -173,6 +180,134 @@ export async function createApp(options: AppOptions): Promise<App> {
     work.add(promise);
     void promise.finally(() => work.delete(promise));
   };
+  const streams = new ResponseStreamStore(store);
+  const drafts = new EditDraftService(store);
+  const helper: HelperRuntime = new HelperRuntime(store, {
+    owner: instanceId,
+    approvedOrigins,
+    resolveCredential,
+    executeCodex,
+    vertexRequestTier: options.vertexRequestTier,
+    signal: stopping.signal,
+    track,
+    streams,
+    services: {
+      readDraft: (editor) => {
+        const draft = drafts.get(editor.draftId);
+        if (draft.status !== 'active') throw new HttpError(409, '편집 초안이 폐기됐어요.');
+        return draft;
+      },
+      changeDraft: (task, name, args) => {
+        const draftId = args.draftId ?? task.snapshot.editor?.draftId;
+        const operationId = `${task.id}:${text(args.operationId, 'operation ID', 100)}`;
+        const authority = {
+          requestId: task.id,
+          assert: (intent: { action: string; draftId: string | null }) => {
+            if (name === 'draft.create' && intent.action === 'create') return;
+            if (intent.draftId !== draftId) throw new HttpError(403, 'DRAFT_OUTSIDE_SCOPE');
+            helper.workspace.authorize(task.id, draftId, `draft.${intent.action}`);
+          },
+        };
+        if (name === 'draft.create')
+          return drafts.create(
+            {
+              kind: args.kind,
+              targetId: null,
+              editorKey: `helper:${task.conversationId}:${args.operationId}`,
+              model: args.model,
+              operationId,
+            },
+            authority
+          );
+        const { draftId: _draft, ...inputArgs } = args;
+        const input = { ...inputArgs, operationId };
+        return name === 'draft.patch'
+          ? drafts.patch(draftId, input, authority)
+          : drafts.save(draftId, input, authority);
+      },
+      context: async (task, name, args, hooks) => {
+        const scope = task.snapshot.scope;
+        if (scope.kind !== 'chat') throw new HttpError(403, 'CHAT_SCOPE_REQUIRED');
+        const current = store.context.detail(scope.chatId, scope.branchId);
+        if (name === 'context.read')
+          return {
+            ...current,
+            notes: store.story.notes.entries({
+              chatId: scope.chatId,
+              history: store.history(current.headRevision),
+            }),
+          };
+        const key = `helper:${task.id}:${text(args.operationId, 'operation ID', 64)}`;
+        const base = {
+          branchId: scope.branchId,
+          expectedHeadRevision: task.snapshot.writing!.parentRevision,
+          idempotencyKey: key,
+        };
+        if (name === 'notes.write')
+          return store.story.notes.write(scope.chatId, {
+            ...record(args.body),
+            ...base,
+            author: '사용자 도우미 요청',
+          });
+        const snapshot = helperWritingSnapshot(store, scope.chatId, scope.branchId, 'context');
+        if (name === 'context.edit')
+          return store.context.edit(
+            scope.chatId,
+            {
+              ...base,
+              expectedRevision: number(args.expectedRevision, 'context revision', 0),
+              summary: text(args.summary, 'summary', 200000),
+            },
+            snapshot
+          );
+        const job = store.context.schedule(
+          scope.chatId,
+          { ...base, expectedRevision: number(args.expectedRevision, 'context revision', 0) },
+          snapshot
+        );
+        if (job.status !== 'queued') return job;
+        if (!store.context.start(job.id)) return store.context.job(job.id);
+        try {
+          const remaining =
+            task.snapshot.limits.totalCalls - helper.workspace.task(task.id).usage.modelCalls;
+          const prepared = await prepareInputContext(
+            {
+              ...job.snapshot,
+              settings: {
+                ...job.snapshot.settings,
+                maxCalls: Math.min(job.snapshot.settings.maxCalls, remaining),
+              },
+            },
+            {
+              ...hooks,
+              reason: 'manual',
+              reserveCalls: 1,
+              onResponseProgress: undefined,
+              onProgress: () => {},
+              onAttemptStart: async (wire) => {
+                const attempt = await hooks.onAttemptStart(wire);
+                store.db
+                  .prepare('INSERT INTO context_job_attempts VALUES(?,?)')
+                  .run(job.id, attempt);
+                return attempt;
+              },
+            },
+            store.context.previous(job.snapshot)
+          );
+          hooks.signal.throwIfAborted();
+          return store.context.finish(job.id, prepared.snapshot);
+        } catch (error) {
+          if (hooks.signal.aborted) store.context.cancel(scope.chatId, job.id);
+          else
+            store.context.fail(
+              job.id,
+              error instanceof Error ? error.message : 'CONTEXT_COMPACTION_FAILED'
+            );
+          throw error;
+        }
+      },
+    },
+  });
   const titles = new ChatTitleService(store, {
     approvedOrigins,
     resolveCredential,
@@ -262,13 +397,22 @@ export async function createApp(options: AppOptions): Promise<App> {
     track(
       (async () => {
         const run = store.run(id);
+        let response: ReturnType<ResponseStreamStore['createWriter']> | undefined;
         try {
           if (!store.startRun(id)) return;
+          response = streams.createWriter({
+            taskKind: 'main',
+            taskId: id,
+            chatId: run.chatId,
+            signal: controller.signal,
+            isActive: () => store.run(id).status === 'running',
+          });
           requireModel(run.snapshot.profile?.models.main, 'main');
           publish(run.chatId);
           await controls.wait('run', controller.signal);
           const hooks: MainHooks = {
             signal: controller.signal,
+            onResponseProgress: response.progress,
             onInput: (input) => {
               store.input(id, input);
               if (run.snapshot.profile && !run.snapshot.profile.models.main)
@@ -288,8 +432,8 @@ export async function createApp(options: AppOptions): Promise<App> {
               const target =
                 wire.agentId !== undefined
                   ? run.snapshot.profile?.collaborationModels?.[wire.agentId]
-                  : wire.role === 'memory'
-                    ? (run.snapshot.story?.models.memory ?? run.snapshot.profile?.models.main)
+                  : wire.role === 'context'
+                    ? run.snapshot.profile?.contextModel
                     : run.snapshot.profile?.models.main;
               if (
                 wire.agentId !== undefined &&
@@ -319,7 +463,7 @@ export async function createApp(options: AppOptions): Promise<App> {
                     })
                   ) ||
                 (run.snapshot.story &&
-                  store.story.memory.canonHash({
+                  store.story.notes.canonHash({
                     chatId: run.chatId,
                     history: run.snapshot.history,
                   }) !== run.snapshot.story.canonHash)
@@ -366,6 +510,9 @@ export async function createApp(options: AppOptions): Promise<App> {
               prepared.snapshot.branchId = executionSnapshot.branchId;
               store.transaction(() => {
                 assertCurrent();
+                prepared.snapshot = store.context.publishPrepared(prepared.snapshot, {
+                  origin: 'automatic',
+                });
                 validateContextPlan(prepared.snapshot);
                 store.db
                   .prepare('UPDATE runs SET snapshot=?,updated_at=? WHERE id=?')
@@ -377,6 +524,7 @@ export async function createApp(options: AppOptions): Promise<App> {
             }
           }
           const result = await runMain(executionSnapshot, hooks);
+          response.flush();
           if (controller.signal.aborted) {
             // Cancellation owns the terminal state; late provider usage is accounting only.
             store.settleCancelledUsage(id, result.usage);
@@ -435,6 +583,12 @@ export async function createApp(options: AppOptions): Promise<App> {
             publish(run.chatId);
           }
         } finally {
+          const status = store.run(id).status;
+          response?.finish(
+            status === 'queued' || status === 'running' || status === 'waiting_for_state'
+              ? 'interrupted'
+              : status
+          );
           runs.delete(id);
           stopping.signal.removeEventListener('abort', onStop);
         }
@@ -478,8 +632,7 @@ export async function createApp(options: AppOptions): Promise<App> {
                   )
                     throw new Error('STORY_JOB_STALE');
                   const models = store.story.bundle(id).snapshot.story!.models;
-                  const target =
-                    wire.role === 'memory' ? (models.memory ?? models[job.kind]) : models[job.kind];
+                  const target = wire.role === 'context' ? models.context : models[job.kind];
                   if (target) store.product.authorize(target.connection);
                   const attempt = store.product.startAttempt(job.chatId, null, null, wire);
                   store.db
@@ -516,7 +669,7 @@ export async function createApp(options: AppOptions): Promise<App> {
                   ? error.message
                   : signal.aborted
                     ? '보조 작업이 중단됐어요.'
-                    : '상태·기억 결과를 검증하지 못했어요.';
+                    : '상태 결과를 검증하지 못했어요.';
               store.story.finish(id, job.generation, instanceId, {
                 status: signal.aborted ? 'interrupted' : 'failed',
                 result: null,
@@ -589,6 +742,51 @@ export async function createApp(options: AppOptions): Promise<App> {
     },
   });
   readerRoutes(app, store);
+  helperRoutes(app, helper);
+  chatOptionRoutes(app, store);
+  contextRoutes(app, store, {
+    signal: stopping.signal,
+    track,
+    snapshot: (chatId, branchId) =>
+      helperWritingSnapshot(store, chatId, store.product.branch(chatId, branchId).id, 'context'),
+    execute: async (job, signal) => {
+      const hooks: MainHooks = {
+        signal: AbortSignal.any([signal, stopping.signal]),
+        approvedOrigins,
+        resolveCredential,
+        executeCodex,
+        vertexRequestTier: options.vertexRequestTier,
+        authorize: (connection) => store.product.authorize(connection),
+        onInput: () => {},
+        onToolEvent: () => {},
+        onAttemptStart: (wire) =>
+          store.transaction(() => {
+            if (
+              signal.aborted ||
+              stopping.signal.aborted ||
+              store.context.job(job.id).status !== 'running'
+            )
+              throw new Error('CONTEXT_CANCELLED');
+            const target = job.snapshot.profile?.contextModel;
+            if (!target) throw new Error('MODEL_REQUIRED:context');
+            store.product.authorize(target.connection);
+            const attempt = store.product.startAttempt(job.chatId, null, null, wire);
+            store.db.prepare('INSERT INTO context_job_attempts VALUES(?,?)').run(job.id, attempt);
+            return attempt;
+          }),
+        onAttemptFinish: (id, result) => store.product.finishAttempt(id, result),
+      };
+      const prepared = await prepareInputContext(
+        job.snapshot,
+        { ...hooks, reason: 'manual', reserveCalls: 0, onProgress: () => {} },
+        store.context.previous(job.snapshot)
+      );
+      return prepared.snapshot;
+    },
+  });
+  editDraftRoutes(app, drafts);
+  chatOverrideRoutes(app, new ChatOverridesStore(store), publish);
+  responseStreamRoutes(app, streams, { authenticated: session.authenticated });
   providerConnectionTestRoutes(app, store, {
     approvedOrigins,
     resolveCredential,
@@ -755,11 +953,12 @@ export async function createApp(options: AppOptions): Promise<App> {
   promptWorkspaceRoutes(app, store, publish);
   app.post<{ Params: { id: string } }>('/api/runs/:id/retry', async (request) => {
     const body = record(request.body);
-    fields(body, ['idempotencyKey']);
+    fields(body, ['idempotencyKey', 'request']);
     const result = store.retryRun(
       request.params.id,
       text(body.idempotencyKey, 'idempotency key', 120),
-      (snapshot) => requireModel(snapshot.profile?.models.main, 'main')
+      (snapshot) => requireModel(snapshot.profile?.models.main, 'main'),
+      body.request === undefined ? undefined : text(body.request, 'request')
     );
     if (result.created) {
       publish(result.run.chatId);
@@ -918,7 +1117,7 @@ export async function createApp(options: AppOptions): Promise<App> {
       fields(body, ['action', 'barrier', 'point']);
       if (body.action === 'hold' || body.action === 'release') {
         if (
-          !['run', 'translation', 'status', 'image', 'state', 'memory'].includes(
+          !['run', 'translation', 'status', 'image', 'state', 'context'].includes(
             String(body.barrier)
           )
         )
@@ -933,7 +1132,7 @@ export async function createApp(options: AppOptions): Promise<App> {
             'status',
             'image',
             'state',
-            'memory',
+            'context',
           ].includes(String(body.point))
         )
           throw new HttpError(400, 'Invalid failure point');
@@ -962,6 +1161,8 @@ export async function createApp(options: AppOptions): Promise<App> {
   app.addHook('onClose', async () => store.close());
   store.recover();
   store.story.recover();
+  helper.workspace.interrupt();
+  streams.recover();
   app.addHook('onListen', async () => {
     pumpJobs();
     pumpStory();

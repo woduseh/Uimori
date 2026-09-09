@@ -9,6 +9,8 @@ import { mapForkSnapshot } from './snapshot-archive.js';
 import { contextDependencyKey, measureMainContext } from './context-planning.js';
 import { compileSnapshotPrompt } from './prompt-snapshot.js';
 import { copyStoryFork } from './story-archive.js';
+import { copyChatOverridesInTransaction } from './chat-overrides.js';
+import { copyChatOptionsInTransaction } from './chat-options.js';
 import { copyPackageFork } from './package-behavior-host.js';
 import { historicalRunLoreReads } from './lore-context-archive.js';
 import type { RetainedLore } from '../core/lore-context.js';
@@ -323,20 +325,22 @@ export function forkChat(store: Store, chatId: string, value: unknown): Chat {
     const head = sourceIds.get(fromRevision)!;
     store.db.prepare('UPDATE chats SET head_revision=? WHERE id=?').run(head, id);
     store.db.prepare('UPDATE branches SET head_revision=? WHERE id=?').run(head, branchId);
-    copyStoryFork(store, chatId, id, sourceIds, runIds);
+    copyChatOverridesInTransaction(store, chatId, id, sourceIds);
+    copyChatOptionsInTransaction(store, chatId, id, branchId, sourceIds, runIds);
+    const storyFork = copyStoryFork(store, chatId, id, sourceIds, runIds);
     copyPackageFork(store, id, branchId, sourceIds, head);
     const canonHashes = new Map<string, string>();
     for (const original of originalRuns.values()) {
       const canon = original.snapshot.loreContext?.canonHash;
       if (!canon) continue;
-      const current = store.story.memory.canonHash(
-        store.story.memory.scope(chatId, original.parentRevision)
+      const current = store.story.notes.canonHash(
+        store.story.notes.scope(chatId, original.parentRevision)
       );
       if (canon === current) {
         const copied = store.run(runIds.get(original.id)!);
         canonHashes.set(
           canon,
-          store.story.memory.canonHash(store.story.memory.scope(id, copied.parentRevision))
+          store.story.notes.canonHash(store.story.notes.scope(id, copied.parentRevision))
         );
       }
     }
@@ -369,7 +373,50 @@ export function forkChat(store: Store, chatId: string, value: unknown): Chat {
           measureMainContext(snapshot).estimatedInputTokens;
       store.db.prepare('UPDATE runs SET snapshot=? WHERE id=?').run(json(snapshot), copiedId);
     }
-    // These are inherited main-context fields, not state/memory tool authority or execution logs.
+    store.context.forkInTransaction(
+      chatId,
+      id,
+      (original) => {
+        const sourceId = (old: string | null): string | null => {
+          if (old === null) return null;
+          const mapped = sourceIds.get(old);
+          if (!mapped) throw new Error('Checkpoint outside fork ancestry');
+          return mapped;
+        };
+        let mapped: RunSnapshot = {
+          ...structuredClone(original),
+          chatId: id,
+          branchId,
+          parentRevision: sourceId(original.parentRevision),
+          history: original.history.map((item) => ({
+            ...item,
+            revision: sourceId(item.revision)!,
+          })),
+        };
+        delete mapped.candidateOf;
+        if (original.story) mapped.story = storyFork.mapStory(original.story, original.history);
+        if (mapped.profile) {
+          mapped.profile.chatId = id;
+          mapped.resources = store.product.resources(id, mapped.profile);
+        } else mapped.resources = mapped.resources.map(resource);
+        if (mapped.loreContext)
+          mapped.loreContext = {
+            ...mapped.loreContext,
+            dependencies: loreDependencies(mapped.loreContext.dependencies),
+            entries: mapped.loreContext.entries.map(loreEntry),
+            canonHash: loreCanon(mapped.loreContext.canonHash),
+          };
+        mapForkSnapshot(mapped, sourceIds, runIds);
+        if (mapped.contextPlan) mapped.contextPlan.dependencyKey = contextDependencyKey(mapped);
+        mapped = compileSnapshotPrompt({ ...mapped, promptCompilation: undefined });
+        if (mapped.contextPlan?.status === 'ready')
+          mapped.contextPlan.estimatedInputTokens = measureMainContext(mapped).estimatedInputTokens;
+        return mapped;
+      },
+      runIds,
+      store.context.scope(chatId, originalRuns.get(selected.runId)!.snapshot.branchId).scopeKey
+    );
+    // These are inherited main-context fields, not state tool authority or execution logs.
     // Reuse the remapped main metadata so cached lore references cannot retain original identities.
     for (const row of store.db
       .prepare('SELECT id,source_revision,snapshot FROM story_jobs WHERE chat_id=?')
@@ -382,6 +429,8 @@ export function forkChat(store: Store, chatId: string, value: unknown): Chat {
         'forkedLoreReads',
         'logicalHistory',
         'promptCompilation',
+        'contextPlan',
+        'contextBase',
       ] as const) {
         delete snapshot[field];
         if (main[field] !== undefined)

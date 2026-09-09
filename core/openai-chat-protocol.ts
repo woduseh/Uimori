@@ -344,6 +344,9 @@ export class ChatDecoder {
       this.finalize();
     }
   }
+  publicText(): string {
+    return this.result.text;
+  }
   snapshot(): ProviderResult {
     return withState(this.result, this.context, [copy(this.assistant)]);
   }

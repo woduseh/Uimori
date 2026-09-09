@@ -64,7 +64,10 @@ export type Usage = {
   costUsd: number | null;
 };
 export type RunSnapshot = {
+  /** Independent writing artifact: read-only tools and no host source/state commit. */
+  executionPurpose?: 'artifact';
   contextPlan?: import('./context-plan.js').ContextPlan;
+  contextBase?: import('./context-plan.js').ContextBase;
   loreContext?: import('./lore-context.js').LoreContextSnapshot;
   loreContextReset?: boolean;
   forkedLoreReads?: import('./lore-context.js').ForkedLoreReads;
@@ -229,7 +232,7 @@ export type ReaderActivity = {
   superseded?: boolean;
   executionUncertain?: boolean;
   id: string;
-  kind: 'main' | 'translation' | 'image' | 'status' | 'state' | 'memory';
+  kind: 'main' | 'translation' | 'image' | 'status' | 'state' | 'context';
   status: string;
   createdAt: string;
   updatedAt: string;

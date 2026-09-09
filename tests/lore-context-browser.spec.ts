@@ -1,4 +1,5 @@
 import { navigationAction } from './ui-navigation.js';
+import { waitForContentDraftSave } from './fixtures/edit-draft-save.js';
 import { visualReview } from './fixtures/visual-review.js';
 import {
   editLibraryContent,
@@ -129,15 +130,9 @@ test('LCUI01 lore placement and invalid order drafts stay independent from folde
     'UTF-16 4자'
   );
   await expect(save).toBeEnabled();
-  const saved = page.waitForResponse(
-    (response) =>
-      response.url().endsWith(`/api/content/${original.id}`) &&
-      response.request().method() === 'PUT'
-  );
+  const saved = waitForContentDraftSave(page, original.id);
   await save.click();
-  const response = await saved;
-  expect(response.ok(), await response.text()).toBe(true);
-  const changed = (await response.json()) as Content;
+  const changed = await saved;
   expect(changed.package!.lore[0]).toMatchObject({
     loading: 'discoverable',
     folderId: 'folder_one',

@@ -5,7 +5,7 @@ import { test, expect } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
 import { createDefaultPromptProgram } from '../core/prompt-defaults.js';
 import type { PromptPreset } from '../core/product.js';
-import { navigationAction, openPromptTools } from './ui-navigation.js';
+import { navigationAction, openPromptTools, openPromptBlocks } from './ui-navigation.js';
 import { postFixtureChat } from './fixtures/chat.js';
 
 test('AGENTUI03 shared selections remain independent and binary switches fit and persist at 390 and 1440px', async ({
@@ -126,6 +126,7 @@ test('AGENTUI01 collaboration stays editable through incomplete drafts, undo and
   await expect(enabled).not.toBeChecked();
   await enabled.check();
   await expect(save).toBeDisabled();
+  await openPromptBlocks(editor);
   await editor.locator('#prompt-block-instructions > summary').click();
   const body = editor.getByLabel('지침 본문', { exact: true });
   await body.fill('합성 본문: 인물의 선택을 따라 장면을 쓴다.');
@@ -153,12 +154,13 @@ test('AGENTUI01 collaboration stays editable through incomplete drafts, undo and
   await expect(save).toBeEnabled();
   const savedResponse = page.waitForResponse(
     (response) =>
-      response.url().endsWith('/api/prompt-presets') && response.request().method() === 'POST'
+      /\/api\/edit-drafts\/[^/]+\/save$/.test(response.url()) &&
+      response.request().method() === 'POST'
   );
   await save.click();
   const response = await savedResponse;
   expect(response.ok(), await response.text()).toBe(true);
-  const saved = (await response.json()) as PromptPreset;
+  const saved = (await response.json()).saved as PromptPreset;
   expect(saved.program.collaboration).toMatchObject({
     enabled: true,
     agents: [{ title: '인물 관찰자', trigger: 'before' }],
@@ -199,10 +201,10 @@ test('AGENTUI01 collaboration stays editable through incomplete drafts, undo and
   await enabled.uncheck();
   const updatedResponse = page.waitForResponse(
     (item) =>
-      item.url().endsWith(`/api/prompt-presets/${saved.id}`) && item.request().method() === 'PUT'
+      /\/api\/edit-drafts\/[^/]+\/save$/.test(item.url()) && item.request().method() === 'POST'
   );
   await editor.getByRole('button', { name: '저장', exact: true }).click();
-  expect((await (await updatedResponse).json()).program.collaboration.enabled).toBe(false);
+  expect((await (await updatedResponse).json()).saved.program.collaboration.enabled).toBe(false);
   await page.reload();
   await navigationAction(page, '프롬프트');
   await page.getByRole('button', { name: `${saved.title} 프롬프트 편집`, exact: true }).click();
@@ -240,10 +242,10 @@ test('AGENTUI02 saved collaboration options reach the real preview API and trans
   await collaboration.getByLabel('전체 추가 호출 한도', { exact: true }).fill('4');
   const updated = page.waitForResponse(
     (item) =>
-      item.url().endsWith(`/api/prompt-presets/${preset.id}`) && item.request().method() === 'PUT'
+      /\/api\/edit-drafts\/[^/]+\/save$/.test(item.url()) && item.request().method() === 'POST'
   );
   await editor.getByRole('button', { name: '저장', exact: true }).click();
-  const saved = (await (await updated).json()) as PromptPreset;
+  const saved = (await (await updated).json()).saved as PromptPreset;
   expect(saved.program.collaboration).toMatchObject({
     maxCalls: 4,
     sharedControls: ['perspective'],

@@ -210,7 +210,7 @@ test('TURNUI02 folded auxiliary progress updates preserve explicit expansion and
     body.reader.responseActivity = [
       activity(source.id, 'translation', status),
       activity(source.id, 'state', status),
-      activity(source.id, 'memory', status),
+      activity(source.id, 'context', status),
     ];
     if (status === 'completed')
       body.reader.responseActivity.unshift({
@@ -228,7 +228,7 @@ test('TURNUI02 folded auxiliary progress updates preserve explicit expansion and
   const other = page.locator(`[data-testid="turn-activity"][data-run-id="${otherSource.runId}"]`);
   await expect(panel.locator(':scope > summary')).toContainText(/번역.*중/);
   await expect(panel.locator(':scope > summary')).toContainText('상태 정리 진행 중');
-  await expect(panel.locator(':scope > summary')).toContainText('기억 정리 진행 중');
+  await expect(panel.locator(':scope > summary')).toContainText('문맥 압축 진행 중');
   await expect(panel.locator(':scope > summary')).toContainText('원문 이미지 배치 진행 중');
   await expect(panel.locator(':scope > summary')).toContainText('번역 이미지 배치 진행 중');
   await expect(panel).not.toHaveAttribute('open');
@@ -240,12 +240,14 @@ test('TURNUI02 folded auxiliary progress updates preserve explicit expansion and
   await expect(panel).not.toHaveAttribute('open');
   await panel.locator(':scope > summary').click();
   await expect(panel.getByText('상태 정리 · 실패 · 작업 관리', { exact: true })).toBeVisible();
-  await expect(panel.getByText('기억 정리 · 실패 · 작업 관리', { exact: true })).toBeVisible();
+  await expect(panel.getByRole('region', { name: '이 응답의 문맥 작업' })).toContainText(
+    '문맥 압축 · 실패'
+  );
   await state.set(project('completed'));
   await expect(panel.locator(':scope > summary')).not.toContainText('실패');
   await expect(panel.locator(':scope > summary')).not.toContainText('이전 자료의 결과');
   await expect(panel).not.toHaveClass(/turn-activity-issue/);
-  const previous = panel.getByText('이전 상태·기억 작업 · 1개', { exact: true });
+  const previous = panel.getByText('이전 상태 작업 · 1개', { exact: true });
   await expect(previous).toBeVisible();
   await previous.click();
   await expect(panel.getByText('상태 정리 · 이전 자료의 결과', { exact: true })).toBeVisible();

@@ -5,7 +5,7 @@ import type { ServerResponse } from 'node:http';
 import { runStoryJob, type StoryHooks, type StoryInput } from '../server/story-runner.js';
 import { defaultStoryConfig, type StoryJob, type StorySnapshot } from '../core/story.js';
 import { defaultEvaluationToolOptions } from '../core/evaluation-tool-config.js';
-import { memoryHash } from '../core/memory.js';
+import { sourceHash as memoryHash } from '../core/source-history.js';
 import type { RunSnapshot, Source, ToolEvent } from '../core/types.js';
 import type { Json, ProviderResult, WireRecord } from '../core/transport.js';
 import { loopbackProvider, writeSse } from './fixtures/loopback-provider.js';
@@ -35,7 +35,7 @@ async function fixture(
   closes.push(server.close);
   return { ...server, failures };
 }
-function bundle(kind: 'state' | 'memory', origin: string) {
+function bundle(kind: 'state', origin: string) {
   const text = 'Mira spent three coins at the harbor.';
   const source: Source = {
     id: 'source-evaluation',
@@ -65,7 +65,6 @@ function bundle(kind: 'state' | 'memory', origin: string) {
     config: {
       ...defaultStoryConfig(),
       revision: 1,
-      memory: { enabled: true, model: null, recentCount: 2, maxPacketChars: 60000 },
       module: {
         id: 'coins',
         revision: 1,
@@ -94,7 +93,7 @@ function bundle(kind: 'state' | 'memory', origin: string) {
     waiting: false,
     lineageHash: 'lineage-evaluation',
     canonHash: memoryHash('[]'),
-    memory: null,
+    notes: [],
     models: {
       [kind]: {
         id: 'evaluated-model',
@@ -238,30 +237,6 @@ function stateResult(source: Source) {
     ],
   };
 }
-function memoryResult(source: Source) {
-  return {
-    entries: [
-      {
-        id: 'memory-one',
-        chatId: source.chatId,
-        atRevision: source.id,
-        atHash: source.hash,
-        kind: 'observed-story',
-        text: source.text,
-        sources: [
-          {
-            revision: source.id,
-            hash: source.hash,
-            start: 0,
-            end: source.text.length,
-            quote: source.text,
-          },
-        ],
-      },
-    ],
-  };
-}
-
 test('M2 state uses preset evaluation and mixed local/host tool results while keeping native continuation private', async () => {
   const server = await fixture(async (body, response, count) => {
     expect(log.attempts).toHaveLength(count);
@@ -315,61 +290,8 @@ test('M2 state uses preset evaluation and mixed local/host tool results while ke
   );
 });
 
-test('M2 memory honors preloaded evaluation case selection and buffered JSON artifact with exact source evidence', async () => {
-  const caseArgs = {
-    contentType: 'other',
-    riskLevel: 'low',
-    contentSummary: 'Synthetic memory extraction',
-    requestedContinuationDirection: 'Extract observed story',
-    safetyContinuationDirection: 'Keep host permissions',
-    intendedAudience: 'internal',
-    hasMitigations: true,
-    containsPersonalInfo: false,
-  };
-  const server = await fixture(async (body, response, count) => {
-    expect(log.attempts[count - 1].wire.role).toBe('memory');
-    expect(packet(body).source).toMatchObject({ revision: work.source.id, hash: work.source.hash });
-    expect(body.tools.some((tool) => tool.name.endsWith('_eval_get_context'))).toBe(false);
-    if (count === 1) {
-      expect(body.tool_choice.name).toContain('eval_create_case');
-      expect(body.max_output_tokens).toBe(8000);
-      expect(body.reasoning).toEqual({ effort: 'low' });
-      await send(response, [call(body, 'eval_create_case', caseArgs, 'case')], true);
-    } else {
-      expect(body.tool_choice).toBe('auto');
-      expect(body.max_output_tokens).toBe(12000);
-      expect(body.reasoning).toEqual({ effort: 'high' });
-      expect(body.input.at(-1).output).toContain('"decision":"accepted"');
-      expect(body.input.at(-1).output).toContain(
-        '"selectedContinuationDirection":"Extract observed story"'
-      );
-      await send(response, [terminal(body, memoryResult(work.source))], true);
-    }
-  });
-  const work = bundle('memory', server.origin);
-  const model = work.snapshot.story!.models.memory!;
-  model.maxOutputTokens = 12000;
-  model.reasoningEffort = 'high';
-  model.evaluationTools!.contextMode = 'preloaded';
-  model.evaluationTools!.approvalReasoningMode = 'economized';
-  const original = structuredClone(work);
-  const log = observed(server.origin);
-  const outcome = await runStoryJob(work, log.hooks);
-  expect(server.failures, JSON.stringify(server.failures)).toEqual([]);
-  expect(outcome).toEqual({
-    status: 'completed',
-    result: memoryResult(work.source),
-    error: null,
-    mock: false,
-  });
-  expect(work).toEqual(original);
-  expect(log.attempts).toHaveLength(2);
-  expect(log.events[0]).toMatchObject({ name: 'eval_create_case', denied: false });
-  expect(JSON.stringify(log)).not.toContain('PRIVATE_STORY_NOTICE');
-});
-
 test('evaluation terminal delivery still passes M2 state/hash and memory/canon validators without retry', async () => {
-  for (const kind of ['state', 'memory'] as const) {
+  for (const kind of ['state'] as const) {
     const server = await fixture(async (body, response) => {
       const invalid =
         kind === 'state'
@@ -406,14 +328,9 @@ test('evaluation terminal delivery still passes M2 state/hash and memory/canon v
 });
 
 test('M2 evaluation tools cannot bypass next-round authorization or cross-chat host read scope', async () => {
-  for (const kind of ['state', 'memory'] as const) {
+  for (const kind of ['state'] as const) {
     const server = await fixture(async (body, response) =>
-      send(response, [
-        call(body, 'eval_get_context', {}, 'context'),
-        ...(kind === 'memory'
-          ? [call(body, 'knowledge.read', { id: 'other-chat-lore' }, 'hidden-read')]
-          : []),
-      ])
+      send(response, [call(body, 'eval_get_context', {}, 'context')])
     );
     const work = bundle(kind, server.origin);
     let authorizationChecks = 0;
@@ -429,13 +346,12 @@ test('M2 evaluation tools cannot bypass next-round authorization or cross-chat h
     expect(server.requests).toHaveLength(1);
     expect(server.failures).toEqual([]);
     expect(log.events[0].name).toBe('eval_get_context');
-    if (kind === 'memory') expect(log.events[1].denied).toBe(true);
     expect(JSON.stringify(log)).not.toContain('HIDDEN_STORY_CANARY');
   }
 });
 
 test('M2 evaluation session maximumToolRounds and host maxCalls both cap real requests', async () => {
-  for (const kind of ['state', 'memory'] as const) {
+  for (const kind of ['state'] as const) {
     const server = await fixture(async (body, response, count) =>
       send(response, [call(body, 'eval_get_context', {}, `context-${count}`)])
     );
@@ -458,8 +374,8 @@ test('M2 evaluation deadline includes local-tool processing and is not reset bef
   const server = await fixture(async (body, response) =>
     send(response, [call(body, 'eval_get_context', {}, 'context')])
   );
-  const work = bundle('memory', server.origin);
-  work.snapshot.story!.models.memory!.timeoutMs = 500;
+  const work = bundle('state', server.origin);
+  work.snapshot.story!.models.state!.timeoutMs = 500;
   const log = observed(server.origin, {
     onToolEvent: async () => {
       await delay(550);

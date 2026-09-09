@@ -1,5 +1,5 @@
 /** Data-only collaboration settings. Read scopes never grant mutation or execution tools. */
-export type AgentReadScope = 'knowledge' | 'skills' | 'memory' | 'story';
+export type AgentReadScope = 'knowledge' | 'skills' | 'notes' | 'story';
 export type AgentDefinition = {
   id: string;
   title: string;
@@ -28,7 +28,7 @@ export class AgentCollaborationError extends Error {
 }
 
 const unsafeIds = new Set(['__proto__', 'prototype', 'constructor']);
-const readScopes: readonly AgentReadScope[] = ['knowledge', 'skills', 'memory', 'story'];
+const readScopes: readonly AgentReadScope[] = ['knowledge', 'skills', 'notes', 'story'];
 function fail(code: string): never {
   throw new AgentCollaborationError(`AGENT_COLLABORATION_${code}`);
 }
@@ -227,7 +227,7 @@ export function createAgentDefinition(
       '갈등 해소나 사건 진행을 강요하지 않고, 사용자가 제시하지 않은 선택을 대신 확정하지 않는다.',
       '자료와 대화를 읽고 참고 의견만 전달하며, 최종 서술은 메인 에이전트에 맡긴다.',
     ].join('\n');
-    agent.tools = ['knowledge', 'memory', 'story'];
+    agent.tools = ['knowledge', 'notes', 'story'];
   } else if (kind === 'lore') {
     agent.title = '설정 근거 협업자';
     agent.description = '출처가 있는 사실과 인물의 믿음, 아직 확인하지 못한 가정을 구분해요.';
@@ -238,7 +238,7 @@ export function createAgentDefinition(
       '추측을 확정된 설정으로 바꾸거나 자료를 수정하지 않고 참고 의견만 전달한다.',
       '도덕적 결론이나 인물의 합리성, 사건 진행을 요구하지 않으며 최종 서술은 메인 에이전트에 맡긴다.',
     ].join('\n');
-    agent.tools = ['knowledge', 'memory', 'story'];
+    agent.tools = ['knowledge', 'notes', 'story'];
   } else if (kind !== 'custom') fail('INVALID_TEMPLATE');
   return agent;
 }

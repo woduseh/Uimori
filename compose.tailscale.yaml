@@ -58,3 +58,4 @@ services:
 
 volumes:
   data:
+    name: ${UIMORI_DATA_VOLUME:-uimori_data}

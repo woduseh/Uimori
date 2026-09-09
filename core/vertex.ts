@@ -4,6 +4,7 @@ import { isVertexAdcReference } from './credential-reference.js';
 import { providerFetchOptions, transportFailureCode } from './provider-fetch.js';
 import { validateVertexEndpoint } from './product.js';
 import { assertContextBudget } from './context-budget.js';
+import { createPublicTextProgress } from './provider-progress.js';
 import { vertexAccessToken } from './vertex-auth.js';
 import {
   encodeVertex,
@@ -50,7 +51,7 @@ function scrub(value: Json, token: string): Json {
 /** Strict SSE framing: byte boundaries, CRLF, comments and multiline data are independent of JSON. */
 export async function consumeSse(
   reader: ReadableStreamDefaultReader<Uint8Array>,
-  onData: (value: unknown) => void,
+  onData: (value: unknown) => void | Promise<void>,
   signal: AbortSignal,
   allowDone = false
 ): Promise<void> {
@@ -59,7 +60,7 @@ export async function consumeSse(
   let data: string[] = [];
   let dataBytes = 0;
   let totalBytes = 0;
-  const dispatch = () => {
+  const dispatch = async () => {
     if (!data.length) return;
     const payload = data.join('\n');
     data = [];
@@ -70,11 +71,11 @@ export async function consumeSse(
     } catch {
       throw new ProviderContractError('INVALID_EVENT');
     }
-    onData(value);
+    await onData(value);
   };
-  const line = (raw: string) => {
+  const line = async (raw: string) => {
     const value = raw.replace(/\r$/u, '');
-    if (!value) dispatch();
+    if (!value) await dispatch();
     else if (value.startsWith('data:')) {
       const part = value.slice(5).replace(/^ /u, '');
       data.push(part);
@@ -98,8 +99,8 @@ export async function consumeSse(
         } catch {
           throw new ProviderContractError('INVALID_UTF8');
         }
-        if (buffer.length) line(buffer);
-        dispatch();
+        if (buffer.length) await line(buffer);
+        await dispatch();
         return;
       }
       totalBytes += next.value.byteLength;
@@ -111,7 +112,7 @@ export async function consumeSse(
       }
       let newline: number;
       while ((newline = buffer.indexOf('\n')) >= 0) {
-        line(buffer.slice(0, newline));
+        await line(buffer.slice(0, newline));
         buffer = buffer.slice(newline + 1);
       }
       if (buffer.length > 1_000_000) throw new ProviderContractError('EVENT_TOO_LARGE');
@@ -233,7 +234,15 @@ export async function executeVertexProvider(
       return failure('INVALID_CONTENT_TYPE');
     }
     reader = response.body.getReader();
-    await consumeSse(reader, (value) => decoder!.accept(value), signal);
+    const progress = createPublicTextProgress(request, connection.protocol, { ...options, signal });
+    await consumeSse(
+      reader,
+      async (value) => {
+        decoder!.accept(value);
+        await progress(decoder!.publicText());
+      },
+      signal
+    );
     if (signal.aborted) return failure('CANCELLED');
     const result = decoder.finish();
     const raw = result.usage.raw;

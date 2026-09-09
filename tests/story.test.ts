@@ -1,3 +1,4 @@
+import { writeNote } from './fixtures/notes.js';
 import { createFixtureChat, injectWithFixtureBot } from './fixtures/chat.js';
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 import { mkdtemp, rm } from 'node:fs/promises';
@@ -8,8 +9,7 @@ import { Store } from '../server/store.js';
 import { Controls } from '../server/controls.js';
 import { createApp, type App } from '../server/app.js';
 import { runStoryJob } from '../server/story-runner.js';
-import { buildMainInput, executeTool } from '../core/provider.js';
-import { resolveMemoryCheckpoint } from '../core/memory.js';
+import { buildMainInput } from '../core/provider.js';
 import type { RunSnapshot, Run } from '../core/types.js';
 import type { StateModule } from '../core/state.js';
 
@@ -62,8 +62,7 @@ const module: StateModule = {
   fields: { coins: { type: 'number', initial: 10, min: 0, max: 100 } },
   rules: { 'buy-ticket': { field: 'coins', delta: -3 } },
 };
-const memoryConfig = { enabled: true, model: null, recentCount: 2, maxPacketChars: 60000 };
-function chat(store: Store, state = true, memory = true) {
+function chat(store: Store, state = true, _memory = true) {
   const created = createFixtureChat(store, 'Synthetic M2 contract');
   store.settings(created.id, created.settingsRevision, {
     ...created.settings,
@@ -74,7 +73,6 @@ function chat(store: Store, state = true, memory = true) {
     expectedRevision: 0,
     module: state ? module : null,
     stateModel: null,
-    memory: { ...memoryConfig, enabled: memory },
   });
   return created.id;
 }
@@ -120,7 +118,7 @@ function source(
     run.snapshot.settings
   );
 }
-function jobFor(store: Store, chatId: string, revision: string, kind: 'state' | 'memory') {
+function jobFor(store: Store, chatId: string, revision: string, kind: 'state') {
   const job = store.story
     .detail(chatId)
     .jobs.find((item) => item.sourceRevision === revision && item.kind === kind);
@@ -267,7 +265,9 @@ describe('M2 S01–S06 actual file SQLite integration', () => {
     const id = chat(store);
     const original = source(store, id);
     const state = jobFor(store, id, original.id, 'state');
-    const memory = jobFor(store, id, original.id, 'memory');
+    const queuedChat = chat(store);
+    const queuedSource = source(store, queuedChat);
+    const queuedState = jobFor(store, queuedChat, queuedSource.id, 'state');
     store.story.claim(state.id, 'process-before-restart');
     const path = store.path;
     store.close();
@@ -276,8 +276,8 @@ describe('M2 S01–S06 actual file SQLite integration', () => {
     reopened.recover();
     reopened.story.recover();
     expect(reopened.story.job(state.id).status).toBe('interrupted');
-    expect(reopened.story.queued()).toEqual([memory.id]);
-    await extract(reopened, memory.id);
+    expect(reopened.story.queued()).toEqual([queuedState.id]);
+    await extract(reopened, queuedState.id);
     expect(reopened.story.job(state.id).status).toBe('interrupted');
     expect(reopened.story.stateAt(id, original.id)).toBeNull();
     reopened.story.retry(state.id);
@@ -285,64 +285,11 @@ describe('M2 S01–S06 actual file SQLite integration', () => {
     expect(reopened.story.stateAt(id, original.id)?.values).toEqual({ coins: 7 });
   });
 
-  test('S05 out-of-order memory completion preserves holes and main tools recover actual compacted historical text', async () => {
-    const { store } = await database();
-    const id = chat(store, false, true);
-    const revisions = Array.from({ length: 6 }, (_, index) =>
-      source(
-        store,
-        id,
-        `chapter-${index}\n${'Long synthetic scene. '.repeat(400)}\nending-${index}`
-      )
-    );
-    for (const revision of revisions.slice(1))
-      await extract(store, jobFor(store, id, revision.id, 'memory').id);
-    let scope = store.story.memory.scope(id, revisions.at(-1)!.id);
-    expect(
-      resolveMemoryCheckpoint(scope, store.story.memory.checkpoint(scope)).watermark
-    ).toBeNull();
-    await extract(store, jobFor(store, id, revisions[0].id, 'memory').id);
-    scope = store.story.memory.scope(id, revisions.at(-1)!.id);
-    expect(resolveMemoryCheckpoint(scope, store.story.memory.checkpoint(scope)).watermark).toBe(
-      revisions.at(-1)!.id
-    );
-    const next = queued(store, id);
-    const input = buildMainInput(next.snapshot);
-    expect(input.history).toHaveLength(2);
-    expect(next.snapshot.history).toHaveLength(6);
-    const search = executeTool(next.snapshot, {
-      callId: 'search-old',
-      name: 'story.search',
-      args: { query: 'ending-0' },
-    });
-    expect(search.denied).toBe(false);
-    expect(JSON.stringify(search.result)).toContain(revisions[0].id);
-    let offset: number | null = 0;
-    let recovered = '';
-    while (offset !== null) {
-      const read = executeTool(next.snapshot, {
-        callId: `read-${offset}`,
-        name: 'story.read',
-        args: { id: revisions[0].id, offset, limit: 997 },
-      });
-      expect(read.denied).toBe(false);
-      const result = read.result as {
-        text: string;
-        nextOffset?: number | null;
-        continuation?: { offset: number } | null;
-      };
-      recovered += result.text;
-      offset = result.nextOffset ?? result.continuation?.offset ?? null;
-    }
-    expect(recovered).toBe(revisions[0].text);
-    expect(store.source(revisions[0].id).text).toBe(revisions[0].text);
-  });
-
   test('S04 stored author canon retcon is branch scoped and does not rewrite earlier Run snapshots', async () => {
     const { store } = await database();
     const id = chat(store, false, false);
     const first = source(store, id, 'The shared beginning.');
-    const original = store.story.memory.authored(id, { text: 'The moon is blue.', author: 'user' });
+    const original = writeNote(store, id, { text: 'The moon is blue.', author: 'user' });
     const right = store.product.createBranch(id, {
       title: 'Right candidate',
       fromRevision: first.id,
@@ -350,74 +297,21 @@ describe('M2 S01–S06 actual file SQLite integration', () => {
     const leftSource = source(store, id, 'Left continuation.');
     const rightSource = source(store, id, 'Right continuation.', right.id);
     const earlierSnapshot = structuredClone(store.run(leftSource.runId).snapshot);
-    const replacement = store.story.memory.authored(
+    const replacement = writeNote(
+      store,
       id,
       { text: 'The moon is red.', author: 'user' },
       original.id
     );
-    expect(store.story.memory.entries(store.story.memory.scope(id, leftSource.id))).toEqual([
+    expect(store.story.notes.entries(store.story.notes.scope(id, leftSource.id))).toEqual([
       replacement,
     ]);
-    expect(store.story.memory.entries(store.story.memory.scope(id, rightSource.id))).toEqual([
+    expect(store.story.notes.entries(store.story.notes.scope(id, rightSource.id))).toEqual([
       original,
     ]);
     expect(store.run(leftSource.runId).snapshot).toEqual(earlierSnapshot);
     const separate = chat(store, false, false);
-    expect(() => store.story.memory.scope(separate, leftSource.id)).toThrow();
-  });
-
-  test('S04 persisted character belief retains actor and evidence without leaking into a sibling candidate', async () => {
-    const { store } = await database();
-    const id = chat(store, false, true);
-    const first = source(store, id, 'A shared beginning.');
-    const right = store.product.createBranch(id, {
-      title: 'Other candidate',
-      fromRevision: first.id,
-    });
-    const left = source(store, id, 'Alice believes the sealed door is safe.');
-    const sibling = source(store, id, 'Bob waits at a different door.', right.id);
-    const job = jobFor(store, id, left.id, 'memory');
-    const claimed = store.story.claim(job.id, 'belief-fixture')!;
-    const result = {
-      entries: [
-        {
-          id: 'untrusted-provider-id',
-          chatId: id,
-          atRevision: left.id,
-          atHash: left.hash,
-          kind: 'character-belief',
-          actor: 'Alice',
-          text: 'Alice believes the sealed door is safe.',
-          sources: [
-            {
-              revision: left.id,
-              hash: left.hash,
-              start: 0,
-              end: left.text.length,
-              quote: left.text,
-            },
-          ],
-        },
-      ],
-    };
-    const completed = store.story.finish(job.id, claimed.generation, 'belief-fixture', {
-      status: 'completed',
-      result,
-      error: null,
-      mock: true,
-    });
-    const entries = store.story.memory.entries(store.story.memory.scope(id, left.id));
-    expect(entries).toHaveLength(1);
-    expect(entries[0]).toMatchObject({
-      kind: 'character-belief',
-      actor: 'Alice',
-      text: left.text,
-      sources: [{ revision: left.id, hash: left.hash, quote: left.text }],
-    });
-    expect(entries[0].id).not.toBe('untrusted-provider-id');
-    expect(completed.result).toEqual({ entries });
-    expect(store.story.memory.entries(store.story.memory.scope(id, sibling.id))).toEqual([]);
-    expect(store.story.memory.entries(store.story.memory.scope(id, first.id))).toEqual([]);
+    expect(() => store.story.notes.scope(separate, leftSource.id)).toThrow();
   });
 
   test('S01 source transaction failure rolls back original, Run completion and all durable story reservations', async () => {
@@ -515,7 +409,6 @@ describe('M2 HTTP state controls and authored memory', () => {
       expectedRevision: 0,
       module,
       stateModel: null,
-      memory: { ...memoryConfig, enabled: false },
     });
     await api(app, 'POST', '/api/test/control', { action: 'hold', barrier: 'state' });
     const send = (request: string) => {
@@ -568,52 +461,46 @@ describe('M2 HTTP state controls and authored memory', () => {
     });
   });
 
-  test('S04 HTTP author declarations do not need transcripts and retcon preserves the old stored record', async () => {
+  test('explicit notes need no transcripts, use CAS and preserve their replaced records without provider calls', async () => {
     const app = await application();
-    const created = await api(app, 'POST', '/api/chats', { title: 'Synthetic authored canon' });
-    const first = await api(app, 'POST', `/api/chats/${created.id}/story/memory`, {
+    const created = await api(app, 'POST', '/api/chats', { title: 'Synthetic notes' });
+    const first = await api(app, 'POST', `/api/chats/${created.id}/notes`, {
       text: 'The sea is silver.',
       author: 'user',
+      expectedRevision: 0,
+      expectedHeadRevision: null,
+      idempotencyKey: 'note-one',
     });
-    expect(first).toMatchObject({ kind: 'author-canon', atRevision: null, atHash: null });
-    const replacement = await api(
-      app,
-      'POST',
-      `/api/chats/${created.id}/story/memory/${first.id}/retcon`,
-      { text: 'The sea is violet.', author: 'user' }
-    );
+    expect(first.note).toMatchObject({ kind: 'author-note', atRevision: null, atHash: null });
+    const replacement = await api(app, 'POST', `/api/chats/${created.id}/notes`, {
+      text: 'The sea is violet.',
+      author: 'user',
+      replacesId: first.note.id,
+      expectedRevision: 1,
+      expectedHeadRevision: null,
+      idempotencyKey: 'note-two',
+    });
     const detail = await api(app, 'GET', `/api/chats/${created.id}/story`);
-    expect(detail.memory).toEqual([replacement]);
+    expect(detail.notes).toEqual([replacement.note]);
+    expect(detail.notesRevision).toBe(2);
     expect(
-      app.store.db
-        .prepare('SELECT count(*) AS n FROM story_memories WHERE chat_id=?')
-        .get(created.id)?.n
+      app.store.db.prepare('SELECT count(*) AS n FROM author_notes WHERE chat_id=?').get(created.id)
+        ?.n
     ).toBe(2);
     expect(app.store.detail(created.id).sources).toEqual([]);
     expect(app.store.detail(created.id).attempts).toEqual([]);
-    await api(app, 'PUT', `/api/chats/${created.id}/story/config`, {
-      expectedRevision: 0,
-      module: null,
-      stateModel: null,
-      memory: { ...memoryConfig, enabled: false, maxPacketChars: 1000 },
-    });
-    await api(app, 'POST', `/api/chats/${created.id}/story/memory`, {
-      text: 'Mandatory authored constraint. '.repeat(100),
-      author: 'user',
-    });
-    const current = app.store.chat(created.id);
     await api(
       app,
       'POST',
-      `/api/chats/${created.id}/runs`,
+      `/api/chats/${created.id}/notes`,
       {
-        request: 'Continue under authored constraints.',
-        expectedRevision: null,
-        expectedSettingsRevision: current.settingsRevision,
-        idempotencyKey: randomUUID(),
+        text: 'Stale correction',
+        author: 'user',
+        expectedRevision: 0,
+        expectedHeadRevision: null,
+        idempotencyKey: 'stale-note',
       },
       409
     );
-    expect(app.store.detail(created.id).runs).toEqual([]);
   });
 });
