@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { ArrowDown, ArrowUp } from 'lucide-react';
+import { ArrowDown, ArrowUp, Folder } from 'lucide-react';
 import type { Library } from '../core/product.js';
 import type {
   LibraryCategory,
@@ -121,7 +121,9 @@ export function LibraryFolders({
   counts,
   reload,
   onError,
+  presentation = 'toolbar',
 }: {
+  presentation?: 'toolbar' | 'cards' | 'breadcrumb';
   category: LibraryCategory;
   organizer: LibraryOrganizer;
   value: FolderFilter;
@@ -208,28 +210,69 @@ export function LibraryFolders({
   }
   const selectedFolder = folders.find((item) => item.id === value);
   return (
-    <aside className="library-folders" aria-label={`${categoryLabels[category]} 폴더`}>
-      <label className="library-folder-mobile">
-        <span className="sr-only">폴더 선택</span>
-        <select value={value} onChange={(event) => onChange(event.target.value)}>
-          {options.map((item) => (
-            <option value={item.id} key={item.id}>
-              {item.title} ({counts[item.id] ?? 0})
-            </option>
-          ))}
-        </select>
-      </label>
-      <LibraryItemMenu title="폴더 관리">
-        <button
-          type="button"
-          className="secondary"
-          disabled={busy || !organization}
-          onClick={() => openEdit(null)}
-        >
-          <FolderAddIcon size={18} aria-hidden="true" />새 폴더
-        </button>
-        {selectedFolder && folderActions(selectedFolder)}
-      </LibraryItemMenu>
+    <aside
+      className={presentation === 'cards' ? 'library-folder-grid' : 'library-folders'}
+      aria-label={`${categoryLabels[category]} 폴더`}
+    >
+      {presentation === 'cards' ? (
+        folders.map((folder) => (
+          <article className="library-folder-card" key={folder.id}>
+            <button
+              type="button"
+              className="secondary library-folder-open"
+              aria-label={`${folder.title} 폴더 열기`}
+              onClick={() => onChange(folder.id)}
+            >
+              <Folder size={28} aria-hidden="true" />
+              <span>
+                <strong title={folder.title}>{folder.title}</strong>
+                <small>{counts[folder.id] ?? 0}개</small>
+              </span>
+            </button>
+            <LibraryItemMenu title={`${folder.title} 폴더 메뉴`}>
+              {folderActions(folder)}
+            </LibraryItemMenu>
+          </article>
+        ))
+      ) : (
+        <>
+          {presentation === 'breadcrumb' ? (
+            <nav className="library-breadcrumb" aria-label="서재 위치">
+              <button type="button" className="secondary" onClick={() => onChange('all')}>
+                전체
+              </button>
+              {value !== 'all' && (
+                <>
+                  <span aria-hidden="true">/</span>
+                  <span aria-current="page">{selectedFolder?.title ?? '미분류'}</span>
+                </>
+              )}
+            </nav>
+          ) : (
+            <label className="library-folder-mobile">
+              <span className="sr-only">폴더 선택</span>
+              <select value={value} onChange={(event) => onChange(event.target.value)}>
+                {options.map((item) => (
+                  <option value={item.id} key={item.id}>
+                    {item.title} ({counts[item.id] ?? 0})
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
+          <LibraryItemMenu title="폴더 관리">
+            <button
+              type="button"
+              className="secondary"
+              disabled={busy || !organization}
+              onClick={() => openEdit(null)}
+            >
+              <FolderAddIcon size={18} aria-hidden="true" />새 폴더
+            </button>
+            {selectedFolder && folderActions(selectedFolder)}
+          </LibraryItemMenu>
+        </>
+      )}
       <Dialog
         open={!!edit}
         title={edit?.folder ? '폴더 이름 변경' : '새 폴더'}

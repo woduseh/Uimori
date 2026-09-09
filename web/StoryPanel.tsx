@@ -128,12 +128,14 @@ function ModelChoice({
             >
               {model.title} · {!canSelect(model) ? '비활성 · ' : ''}
               {connections.find((entry) => entry.id === model.connectionId)?.title ??
-                '연결 확인 필요'}
+                '프로바이더 확인 필요'}
             </option>
           ))}
       </select>
       {selected && !models.some((model) => refKey(model) === selected && canSelect(model)) && (
-        <small>저장된 선택은 유지되지만 새 실행은 차단돼요. 모델과 연결을 활성화해 주세요.</small>
+        <small>
+          저장된 선택은 유지되지만 새 실행은 차단돼요. 모델과 프로바이더를 활성화해 주세요.
+        </small>
       )}
     </label>
   );

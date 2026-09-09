@@ -1,4 +1,3 @@
-import { visibleNavigation } from './ui-navigation.js';
 import { visualReview } from './fixtures/visual-review.js';
 import { preservePromptWorkspace } from './fixtures/prompt-workspace.js';
 import { postFixtureChat } from './fixtures/chat.js';
@@ -132,14 +131,11 @@ test('chat creative options preserve drafts, apply explicitly and fit desktop/mo
   await expect(open).toBeFocused();
   await open.click();
   await expect(custom).toHaveValue('프랑스어');
-  const navigation = (await visibleNavigation(page)).getByRole('navigation', {
-    name: '봇별 채팅',
-    exact: true,
-  });
-  await navigation.getByRole('button', { name: other.title, exact: true }).click();
+  const navigation = page.getByTestId('bot-navigation').filter({ visible: true });
+  await navigation.locator(`[data-chat-id="${other.id}"] .chat-link`).click();
   await expect(page.getByRole('heading', { name: other.title, exact: true })).toBeVisible();
   await expect(panel.getByLabel('직접 지정 언어', { exact: true })).toHaveValue('프랑스어');
-  await navigation.getByRole('button', { name: chat.title, exact: true }).click();
+  await navigation.locator(`[data-chat-id="${chat.id}"] .chat-link`).click();
   await expect(custom).toHaveValue('프랑스어');
   await expect(inner).toBeChecked();
   expect((await detail(request, chat.id)).profile).toEqual(before);

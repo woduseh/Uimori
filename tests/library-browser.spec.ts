@@ -64,6 +64,15 @@ async function revealListOptions(panel: Locator) {
     await summary.click();
 }
 async function chooseFolder(panel: Locator, title: string) {
+  if ((await panel.getAttribute('data-testid')) === 'library-panel') {
+    await panel
+      .getByRole('navigation', { name: '서재 위치', exact: true })
+      .getByRole('button', { name: '전체', exact: true })
+      .click();
+    if (title !== '전체')
+      await panel.getByRole('button', { name: `${title} 폴더 열기`, exact: true }).click();
+    return;
+  }
   const mobile = panel.getByRole('combobox', { name: '폴더 선택', exact: true });
   await expect(panel.locator('.library-folder-mobile select')).toBeAttached();
   if (await mobile.isVisible()) {
@@ -85,7 +94,8 @@ async function moveItems(
 ) {
   await revealListOptions(panel);
   await panel.getByRole('button', { name: '선택', exact: true }).click();
-  for (const title of titles) await panel.getByLabel(`${title} 선택`, { exact: true }).check();
+  for (const title of titles)
+    await panel.getByRole('checkbox', { name: `${title} 선택`, exact: true }).check();
   await panel.getByRole('button', { name: '선택한 자료 이동', exact: true }).click();
   const dialog = page.getByRole('dialog', { name: '자료 이동', exact: true });
   await dialog.getByLabel('이동할 분류', { exact: true }).selectOption(category);
@@ -165,6 +175,7 @@ test('LIBUI01 library folders move and classify without changing revisions or ow
     'aria-pressed',
     'true'
   );
+  await chooseFolder(panel, personas.title);
   await expect(
     panel.getByRole('button', { name: `${a.title} 상세 보기`, exact: true })
   ).toBeVisible();
@@ -190,7 +201,7 @@ test('LIBUI02 mobile folder deletion refreshes another page and stale moves requ
   await chooseFolder(otherPanel, folder.title);
   await revealListOptions(otherPanel);
   await otherPanel.getByRole('button', { name: '선택', exact: true }).click();
-  await otherPanel.getByLabel(`${item.title} 선택`, { exact: true }).check();
+  await otherPanel.getByRole('checkbox', { name: `${item.title} 선택`, exact: true }).check();
   await page.bringToFront();
   if (visualReview) await page.screenshot({ path: info.outputPath('library-folders-mobile.png') });
   await revealFolderActions(panel);
@@ -199,11 +210,9 @@ test('LIBUI02 mobile folder deletion refreshes another page and stale moves requ
   await expect(confirm).toContainText('미분류');
   await confirm.getByRole('button', { name: '영구 삭제', exact: true }).click();
   await expect(confirm).toBeHidden();
-  await expect(otherPanel.getByRole('combobox', { name: '폴더 선택', exact: true })).toHaveValue(
-    'all'
-  );
+  await expect(otherPanel.getByRole('checkbox', { name: `${item.title} 선택` })).toHaveCount(1);
   await expect(
-    otherPanel.getByRole('button', { name: `${item.title} 상세 보기`, exact: true })
+    otherPanel.getByRole('button', { name: `${item.title} 선택`, exact: true })
   ).toBeVisible();
   expect(
     (await organization(request)).items.find((entry) => entry.id === item.id)?.folderId
@@ -235,7 +244,9 @@ test('LIBUI02 mobile folder deletion refreshes another page and stale moves requ
   await move.getByRole('button', { name: '최신 상태 확인', exact: true }).click();
   await move.getByRole('button', { name: '이동', exact: true }).click();
   await expect(move).toBeHidden();
-  await expect(otherPanel.getByLabel(`${item.title} 선택`, { exact: true })).toHaveCount(0);
+  await expect(
+    otherPanel.getByRole('checkbox', { name: `${item.title} 선택`, exact: true })
+  ).toHaveCount(0);
   await other.close();
 });
 
@@ -386,3 +397,85 @@ test('LIBUI05 accepted folder creation closes even when the summary refresh fail
     (await organization(request)).folders.filter((folder) => folder.title === title)
   ).toHaveLength(1);
 });
+
+for (const width of [390, 1440]) {
+  test(`LIBUI06 folder overview and scoped selection at ${width}px`, async ({
+    page,
+    request,
+  }, info) => {
+    const prefix = `LIBUI06 ${width} ${Date.now()}`;
+    const loose = await createContent(request, `${prefix} Loose`);
+    const filed = await createContent(request, `${prefix} Filed`);
+    const before = await organization(request);
+    const created = await request.post('/api/library/folders', {
+      data: { expectedRevision: before.revision, category: 'bot', title: `${prefix} Folder` },
+    });
+    expect(created.ok()).toBe(true);
+    const folders = (await created.json()) as LibraryOrganization;
+    const folder = folders.folders.find((entry) => entry.title === `${prefix} Folder`)!;
+    const moved = await request.post('/api/library/organization/move', {
+      data: {
+        expectedRevision: folders.revision,
+        items: [{ kind: 'content', id: filed.id }],
+        category: 'bot',
+        folderId: folder.id,
+      },
+    });
+    expect(moved.ok()).toBe(true);
+    await page.setViewportSize({ width, height: 900 });
+    await page.goto('/');
+    const panel = page.getByTestId('library-panel');
+    const search = panel.getByRole('searchbox', { name: '서재 검색', exact: true });
+    await expect(
+      panel.getByRole('button', { name: `${folder.title} 폴더 열기`, exact: true })
+    ).toBeVisible();
+    await expect(
+      panel.getByRole('button', { name: `${loose.title} 상세 보기`, exact: true })
+    ).toBeVisible();
+    await expect(
+      panel.getByRole('button', { name: `${filed.title} 상세 보기`, exact: true })
+    ).toHaveCount(0);
+    if (visualReview)
+      await page.screenshot({ path: info.outputPath(`library-overview-${width}.png`) });
+    await search.fill(prefix);
+    await expect(
+      panel.getByRole('button', { name: `${filed.title} 상세 보기`, exact: true })
+    ).toBeVisible();
+    await expect(
+      panel.locator('.library-list-item').filter({ hasText: filed.title })
+    ).toContainText(folder.title);
+    await revealListOptions(panel);
+    await panel.getByRole('button', { name: '카드', exact: true }).click();
+    await panel.getByRole('button', { name: '선택', exact: true }).click();
+    const card = panel.getByRole('button', { name: `${filed.title} 선택`, exact: true });
+    await card.click();
+    await expect(card).toHaveAttribute('aria-pressed', 'true');
+    await expect(
+      panel.getByRole('checkbox', { name: `${filed.title} 선택`, exact: true })
+    ).toBeChecked();
+    await panel.getByRole('button', { name: '표시된 자료 전체 선택', exact: true }).click();
+    await expect(panel.getByRole('group', { name: '자료 선택 작업', exact: true })).toContainText(
+      '2개 선택'
+    );
+    expect(
+      await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)
+    ).toBeLessThanOrEqual(1);
+    if (visualReview)
+      await page.screenshot({ path: info.outputPath(`library-selection-${width}.png`) });
+    await panel.getByRole('button', { name: '완료', exact: true }).click();
+    await expect(search).toHaveValue(prefix);
+    await search.fill('');
+    await panel.getByLabel(`${folder.title} 폴더 메뉴`, { exact: true }).click();
+    await panel.getByRole('button', { name: `${folder.title} 폴더 삭제`, exact: true }).click();
+    const confirm = page.getByRole('alertdialog', { name: '삭제 확인', exact: true });
+    await expect(confirm).toContainText('미분류');
+    await confirm.getByRole('button', { name: '영구 삭제', exact: true }).click();
+    await expect(confirm).toBeHidden();
+    await expect(
+      panel.getByRole('button', { name: `${filed.title} 상세 보기`, exact: true })
+    ).toBeVisible();
+    expect(
+      (await organization(request)).items.find((entry) => entry.id === filed.id)?.folderId
+    ).toBeNull();
+  });
+}

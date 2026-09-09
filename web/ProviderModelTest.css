@@ -1,14 +1,12 @@
 .provider-model-test {
-  margin-top: 14px;
-  padding-top: 14px;
-  border-top: 1px solid var(--line);
+  margin: 4px 8px 12px;
   display: grid;
-  gap: 10px;
+  gap: 8px;
   min-width: 0;
 }
 .provider-model-test > small,
 .provider-model-test .provider-actions small {
-  font-size: 11px;
+  font-size: 12px;
   line-height: 1.6;
   color: var(--muted);
 }
@@ -17,35 +15,18 @@
 }
 .provider-test-result {
   display: grid;
-  gap: 8px;
+  gap: 6px;
   min-width: 0;
-  font-size: 12px;
+  font-size: 13px;
   line-height: 1.6;
-}
-.provider-test-result strong {
   overflow-wrap: anywhere;
 }
-.provider-test-result dl {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  gap: 4px 12px;
-  margin: 0;
-}
-.provider-test-result dt {
+.provider-test-result summary {
+  cursor: pointer;
+  min-height: 44px;
+  padding-block: 12px;
   color: var(--muted);
 }
-.provider-test-result dd {
-  margin: 0;
-  overflow-wrap: anywhere;
-}
-.provider-test-result pre {
-  margin: 0;
-  padding: 10px;
-  background: var(--bg);
-  border-radius: 6px;
+.provider-test-result details p {
   white-space: pre-wrap;
-  overflow-wrap: anywhere;
-  font-family: inherit;
-  max-height: 240px;
-  overflow: auto;
 }

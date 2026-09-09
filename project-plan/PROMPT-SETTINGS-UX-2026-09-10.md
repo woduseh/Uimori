@@ -52,3 +52,9 @@ await runBrowserVerification({
   requiredScreenshots: ['prompt-settings-overview.png', 'prompt-actions-mobile.png'],
 });
 ```
+
+## 메인 통합 검증
+
+- 최신 로컬 main `2e2318d`를 작업 브랜치에 먼저 병합했어요. 브라우저 탐색 검사는 메인의 ID 기반 선택을 유지하고 프롬프트 설정 링크 CSS와 새 서재 폴더 스타일을 함께 보존했어요.
+- 통합 후 `npm run quality:full` PASS: tooling 27개, 단위·통합 1,716개 PASS / 기존 opt-in 1 SKIP, 빌드 PASS.
+- 통합 후 관련 합성 브라우저 21개 PASS: [요약](../output/playwright/prompt-settings-merge-2026-09-09T17-42-08-342Z-4d675ace/summary.json).

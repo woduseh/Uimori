@@ -1,3 +1,4 @@
+import { DraftDiscardActions } from './DraftDiscardActions.js';
 import { SelectionCheckbox } from './BooleanControls.js';
 import { PackageTransfer } from './PackageTransfer.js';
 import {
@@ -20,12 +21,10 @@ import { DeleteButton } from './DeleteButton.js';
 import { Dialog } from './Dialog.js';
 import { ContentAvatar } from './ContentAvatar.js';
 import { PackagePortraitEditor } from './PackagePortraitEditor.js';
-import { IconButton } from './IconButton.js';
 import {
   AddIcon,
   BotIcon,
   CardsIcon,
-  CloseIcon,
   CopyIcon,
   EditIcon,
   ListIcon,
@@ -150,7 +149,6 @@ export function LibraryPanel({
   const opening = useRef(0);
   const latestLibrary = useRef(library);
   latestLibrary.current = library;
-  const continueButton = useRef<HTMLButtonElement>(null);
   const externalTab = useRef(initialTab);
   const organizer = useLibraryOrganization(library, reload, onError);
   const organizedLibrary = library
@@ -162,9 +160,6 @@ export function LibraryPanel({
       panelRef.current?.querySelector<HTMLElement>('.library-list-options > summary')?.focus();
     wasSelecting.current = selecting;
   }, [selecting]);
-  useEffect(() => {
-    if (pendingNavigation) continueButton.current?.focus();
-  }, [pendingNavigation]);
   useEffect(() => {
     onDirtyChange?.(dirty);
   }, [dirty, onDirtyChange]);
@@ -207,7 +202,7 @@ export function LibraryPanel({
           const folderId = libraryFolderOf(currentLibrary, { kind: 'content', id: item.id });
           return (
             libraryCategory(currentLibrary, item) === tab &&
-            (folder === 'all' ||
+            ((folder === 'all' && (!!query.trim() || folderId === null)) ||
               (folder === 'unclassified' ? folderId === null : folderId === folder))
           );
         })
@@ -218,7 +213,7 @@ export function LibraryPanel({
     setDetail((current) =>
       current && !library.contents.some((item) => item.id === current.id) ? null : current
     );
-  }, [library, organizer.organization, tab, folder]);
+  }, [library, organizer.organization, tab, folder, query]);
   function cancelOpening() {
     opening.current++;
     setLoading(false);
@@ -323,12 +318,24 @@ export function LibraryPanel({
     .filter((item) => {
       const folderId = libraryFolderOf(organizedLibrary!, { kind: 'content', id: item.id });
       return (
-        (folder === 'all' ||
+        ((folder === 'all' && (!!query.trim() || folderId === null)) ||
           (folder === 'unclassified' ? folderId === null : folderId === folder)) &&
         `${item.title} ${item.description}`.toLocaleLowerCase().includes(query.toLocaleLowerCase())
       );
     })
     .sort((a, b) => (sort === 'name-desc' ? -1 : 1) * a.title.localeCompare(b.title, 'ko'));
+  const folders = organizer.organization?.folders.filter((item) => item.category === tab) ?? [];
+  const showFolders = folder === 'all' && !query.trim() && !selecting;
+  function changeFolder(next: FolderFilter) {
+    setFolder(next);
+    setQuery('');
+    setSelectedIds([]);
+  }
+  function toggleSelection(id: string) {
+    setSelectedIds((current) =>
+      current.includes(id) ? current.filter((value) => value !== id) : [...current, id]
+    );
+  }
   const categoryEmpty = !!library && categoryItems.length === 0 && !query;
   function setView(mode: ViewMode) {
     const next = { ...views, [tab]: mode };
@@ -428,33 +435,22 @@ export function LibraryPanel({
         className="library-discard-dialog"
         onClose={continueEditing}
       >
-        <p>저장하지 않은 편집 내용이 있어요.</p>
-        <p className="muted">이동하면 현재 초안이 사라져요.</p>
-        <div className="library-discard-actions">
-          <button
-            type="button"
-            className="secondary"
-            ref={continueButton}
-            onClick={continueEditing}
-          >
-            계속 편집
-          </button>
-          <button
-            type="button"
-            onClick={async () => {
-              if (!pendingNavigation) return;
-              try {
-                await discardActiveEditor();
-                switchTab(pendingNavigation.tab, pendingNavigation.closeOnly);
-                setPendingNavigation(null);
-              } catch (error) {
-                onError((error as Error).message);
-              }
-            }}
-          >
-            초안 버리고 이동
-          </button>
-        </div>
+        <p>이동하면 저장하지 않은 편집 내용이 사라져요.</p>
+        <DraftDiscardActions
+          open={!!pendingNavigation}
+          onContinue={continueEditing}
+          onDiscard={async () => {
+            if (!pendingNavigation) return;
+            try {
+              await discardActiveEditor();
+              switchTab(pendingNavigation.tab, pendingNavigation.closeOnly);
+              setPendingNavigation(null);
+            } catch (error) {
+              onError((error as Error).message);
+            }
+          }}
+          discardLabel="초안 버리고 이동"
+        />
       </Dialog>
       <LibraryMoveDialog
         items={moving}
@@ -635,18 +631,18 @@ export function LibraryPanel({
           <div className="library-workspace">
             <div className="library-workspace-content">
               <div className="library-toolbar">
-                <LibraryFolders
-                  category={tab}
-                  organizer={organizer}
-                  value={folder}
-                  onChange={(next) => {
-                    setFolder(next);
-                    setSelectedIds([]);
-                  }}
-                  counts={counts}
-                  reload={reload}
-                  onError={onError}
-                />
+                {!selecting && (
+                  <LibraryFolders
+                    presentation="breadcrumb"
+                    category={tab}
+                    organizer={organizer}
+                    value={folder}
+                    onChange={changeFolder}
+                    counts={counts}
+                    reload={reload}
+                    onError={onError}
+                  />
+                )}
                 {selecting ? (
                   <div className="library-bulk-toolbar" role="group" aria-label="자료 선택 작업">
                     <span role="status">{selectedIds.length}개 선택</span>
@@ -657,7 +653,7 @@ export function LibraryPanel({
                       onClick={() => setSelectedIds(filtered.map((item) => item.id))}
                     >
                       <SelectIcon size={18} aria-hidden="true" />
-                      <span>전체</span>
+                      <span>전체 선택</span>
                     </button>
                     <button
                       type="button"
@@ -668,15 +664,17 @@ export function LibraryPanel({
                       <MoveIcon size={18} aria-hidden="true" />
                       <span>이동</span>
                     </button>
-                    <IconButton
+                    <button
+                      type="button"
+                      className="secondary"
                       ref={selectionExit}
-                      label="선택 취소"
-                      icon={CloseIcon}
                       onClick={() => {
                         setSelectedIds([]);
                         setSelecting(false);
                       }}
-                    />
+                    >
+                      완료
+                    </button>
                   </div>
                 ) : (
                   <>
@@ -757,6 +755,24 @@ export function LibraryPanel({
                   검색 결과 {filtered.length}개
                 </p>
               )}
+              {showFolders && folders.length > 0 && (
+                <section className="library-folder-section" aria-label="폴더 목록">
+                  <h2>폴더</h2>
+                  <LibraryFolders
+                    presentation="cards"
+                    category={tab}
+                    organizer={organizer}
+                    value={folder}
+                    onChange={changeFolder}
+                    counts={counts}
+                    reload={reload}
+                    onError={onError}
+                  />
+                </section>
+              )}
+              {folder === 'all' && !query.trim() && folders.length > 0 && (
+                <h2 className="library-section-title">미분류 {contentLabels[tab]}</h2>
+              )}
               <div
                 id="library-results"
                 role="tabpanel"
@@ -773,6 +789,8 @@ export function LibraryPanel({
                         : 'library-list-item'
                     }
                     key={item.id}
+                    data-selected={selecting && selectedIds.includes(item.id) ? 'true' : undefined}
+                    data-selecting={selecting ? 'true' : undefined}
                   >
                     {selecting && (
                       <label className="library-select-check">
@@ -793,14 +811,26 @@ export function LibraryPanel({
                     <button
                       type="button"
                       className="library-open-content"
-                      aria-label={`${item.title} 상세 보기`}
-                      onClick={() => void openContent(item)}
+                      aria-label={`${item.title} ${selecting ? '선택' : '상세 보기'}`}
+                      aria-pressed={selecting ? selectedIds.includes(item.id) : undefined}
+                      onClick={() =>
+                        selecting ? toggleSelection(item.id) : void openContent(item)
+                      }
                       disabled={loading}
                     >
                       <ContentAvatar content={item} className="library-item-avatar" />
                       <span className="library-item-copy">
                         <strong title={item.title}>{item.title}</strong>
                         <span>{item.description || '아직 소개가 없어요.'}</span>
+                        {!!query.trim() && folder === 'all' && (
+                          <small className="library-result-folder">
+                            {folders.find(
+                              (entry) =>
+                                entry.id ===
+                                libraryFolderOf(organizedLibrary!, { kind: 'content', id: item.id })
+                            )?.title ?? '미분류'}
+                          </small>
+                        )}
                       </span>
                     </button>
                     {!selecting && tab === 'bot' && (onUseContent || onStartStory) && (
@@ -825,7 +855,9 @@ export function LibraryPanel({
                         ? '찾는 자료가 없어요'
                         : folder !== 'all'
                           ? '이 폴더는 비어 있어요'
-                          : `새 ${contentLabels[tab]} 만들기`}
+                          : folders.length > 0
+                            ? '미분류 자료가 없어요'
+                            : `새 ${contentLabels[tab]} 만들기`}
                     </h2>
                     {!query && (
                       <p className="library-role-guide">{contentGuidance[tab].description}</p>
@@ -837,22 +869,28 @@ export function LibraryPanel({
                           ? '자료를 만들거나 다른 폴더의 자료를 옮겨 보세요.'
                           : contentGuidance[tab].example}
                     </p>
-                    {query && (
-                      <button type="button" className="secondary" onClick={() => setQuery('')}>
-                        검색 지우기
-                      </button>
-                    )}
-                    {folder !== 'all' && (
-                      <button type="button" className="secondary" onClick={() => setFolder('all')}>
-                        이 탭 전체에서 찾기
-                      </button>
-                    )}
-                    {!query && (
-                      <button type="button" onClick={openNew}>
-                        <AddIcon size={20} aria-hidden="true" />
-                        {contentLabels[tab]} 만들기
-                      </button>
-                    )}
+                    <div className="library-empty-actions">
+                      {query && (
+                        <button type="button" className="secondary" onClick={() => setQuery('')}>
+                          검색 지우기
+                        </button>
+                      )}
+                      {folder !== 'all' && (
+                        <button
+                          type="button"
+                          className="secondary"
+                          onClick={() => changeFolder('all')}
+                        >
+                          전체 보기
+                        </button>
+                      )}
+                      {!query && (
+                        <button type="button" onClick={openNew}>
+                          <AddIcon size={20} aria-hidden="true" />
+                          {contentLabels[tab]} 만들기
+                        </button>
+                      )}
+                    </div>
                   </div>
                 )}
               </div>
