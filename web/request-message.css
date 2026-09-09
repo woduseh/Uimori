@@ -1,0 +1,55 @@
+.request-message-wrap {
+  margin-bottom: 14px;
+}
+.request-message-wrap > .request-message {
+  margin-bottom: 0;
+}
+.request-message .request-preview {
+  color: inherit;
+}
+.request-message .request-collapse,
+.request-message details[open] .request-preview {
+  display: none;
+}
+.request-message details[open] .request-collapse {
+  display: inline;
+}
+.request-message-actions {
+  display: flex;
+  justify-content: flex-end;
+  opacity: 0;
+}
+.request-message-wrap:hover .request-message-actions,
+.request-message-wrap:focus-within .request-message-actions {
+  opacity: 1;
+}
+.request-message-editor textarea {
+  width: 100%;
+  min-height: 120px;
+  resize: vertical;
+}
+.request-edit-footer,
+.request-edit-buttons {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.request-edit-footer {
+  justify-content: space-between;
+  margin-top: 8px;
+}
+.request-edit-footer small {
+  color: var(--muted);
+}
+.request-edit-buttons {
+  flex-shrink: 0;
+}
+.request-edit-buttons > button[type="submit"] {
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+@media (hover: none), (pointer: coarse), (max-width: 600px) {
+  .request-message-actions {
+    opacity: 1;
+  }
+}

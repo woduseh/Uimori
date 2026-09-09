@@ -46,10 +46,16 @@ async function sourceDetails(page: Page) {
     const activity = source.getByTestId('turn-activity');
     if ((await activity.count()) && (await activity.getAttribute('open')) === null)
       await activity.locator(':scope > summary').click();
-    const details = source.locator('details.source-job-details');
-    if ((await details.count()) && (await details.getAttribute('open')) === null)
-      await details.locator(':scope > summary').click();
   }
+}
+async function expectSourceRaw(page: Page, text: string) {
+  const source = page.getByTestId('source').first();
+  await source.getByLabel('장면 작업 메뉴', { exact: true }).click();
+  await source.getByRole('button', { name: '원문 연결 정보', exact: true }).click();
+  const dialog = page.getByRole('dialog', { name: '원문 연결 정보', exact: true });
+  await dialog.getByText('현재 원문', { exact: true }).click();
+  await expect(dialog.getByTestId('source-raw')).toHaveText(text);
+  await dialog.getByRole('button', { name: '원문 연결 정보 닫기' }).click();
 }
 async function storySettings(page: Page) {
   const dialog = page.getByRole('dialog', { name: '채팅 설정', exact: true });
@@ -193,7 +199,7 @@ test('F02 F03 F05 two contexts and two tabs keep commands, snapshots, source job
     // Original source is already readable while BOTH auxiliary workers remain held.
     await closeDialog(aSecondTab);
     await sourceDetails(aSecondTab);
-    await expect(aSecondTab.getByTestId('source-raw')).toHaveText(aSource.text);
+    await expectSourceRaw(aSecondTab, aSource.text);
     expect(aDone.jobs.some((job) => job.kind === 'translation')).toBe(false);
     await aSecondTab.getByRole('button', { name: '번역 보기', exact: true }).click();
     await expect(aSecondTab.getByTestId('source').getByTestId('job-translation')).toContainText(
@@ -218,7 +224,7 @@ test('F02 F03 F05 two contexts and two tabs keep commands, snapshots, source job
     await expect(returned.getByTestId('run')).toHaveAttribute('data-run-id', aRun.id);
     await closeDialog(returned);
     await sourceDetails(returned);
-    await expect(returned.getByTestId('source-raw')).toHaveText(aSource.text);
+    await expectSourceRaw(returned, aSource.text);
     await expect(returned.getByTestId('source').getByTestId('job-status')).toHaveAttribute(
       'data-source-id',
       aSource.id
@@ -362,7 +368,13 @@ test('F05 failed auxiliary result retries independently while a later source is 
   }
   expect(after.jobs.filter((j) => j.sourceRevision === source.id)).toHaveLength(2);
   expect(after.runs.find((r) => r.sourceRevision === later.id)?.inputs[0].history).toEqual([
-    { revision: source.id, text: source.text },
+    {
+      revision: source.id,
+      text: source.text,
+      contentHash: source.hash,
+      requestRanges: [{ start: 0, end: source.text.length }],
+      excludedRanges: [],
+    },
   ]);
 });
 
@@ -445,7 +457,7 @@ test('F03 F05 an older real HTTP response cannot hide a newly committed source',
         )
     );
     await page.getByLabel('다음 장면 요청').fill('local draft after the stale response');
-    await expect(page.getByTestId('source-raw')).toHaveText(source.text);
+    await expectSourceRaw(page, source.text);
     await sourceDetails(page);
     await expect(page.getByTestId('source').getByTestId('job-status')).toContainText('완료');
   } finally {

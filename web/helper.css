@@ -1,0 +1,313 @@
+.app-shell.helper-open {
+  grid-template-columns: var(--nav-w) minmax(0, 1fr) 390px;
+}
+.app-shell.sidebar-collapsed.helper-open,
+.app-shell.focus-reading.helper-open {
+  grid-template-columns: minmax(0, 1fr) 390px;
+}
+.helper-panel {
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+  border-left: 1px solid var(--line);
+  overflow: hidden;
+}
+.helper-panel[hidden] {
+  display: none;
+}
+.helper-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--line);
+}
+.helper-header > div {
+  flex: 1;
+  min-width: 0;
+}
+.helper-header h2 {
+  font-size: 17px;
+  margin: 0;
+}
+.helper-header small {
+  color: var(--muted);
+}
+.helper-messages {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+}
+.helper-message {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.helper-message > strong {
+  font-size: 12px;
+  color: var(--muted);
+}
+.helper-message.user {
+  padding: 12px;
+  background: var(--accent-soft);
+  border-radius: 12px;
+  margin-left: 24px;
+}
+.helper-prose,
+.streaming-text {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  line-height: 1.7;
+}
+.helper-prose {
+  margin-top: 6px;
+}
+.helper-empty {
+  color: var(--muted);
+  line-height: 1.8;
+}
+.helper-task {
+  font-size: 13px;
+}
+.helper-task > button {
+  margin-top: 8px;
+}
+.helper-artifact {
+  margin-top: 16px;
+  border-top: 1px solid var(--line);
+  padding-top: 12px;
+}
+.helper-artifact header,
+.helper-artifact footer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.helper-artifact header small {
+  color: var(--muted);
+}
+.helper-artifact footer {
+  margin-top: 12px;
+}
+.helper-composer {
+  flex-shrink: 0;
+  border-top: 1px solid var(--line);
+  padding: 12px 16px max(12px, env(safe-area-inset-bottom));
+}
+.helper-composer form {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+}
+.helper-composer textarea {
+  flex: 1;
+  min-width: 0;
+  resize: vertical;
+  max-height: 35dvh;
+  font-size: 16px;
+  margin: 0;
+}
+.helper-composer form > button {
+  flex-shrink: 0;
+}
+.helper-editor {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 8px;
+  min-width: 0;
+  font-size: 12px;
+}
+.helper-editor span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+}
+.helper-editor button {
+  font-size: 12px;
+  padding: 4px 8px;
+}
+.helper-composer [role="alert"] {
+  max-height: 20dvh;
+  overflow: auto;
+  font-size: 13px;
+  margin-bottom: 8px;
+}
+.helper-composer [role="alert"] p {
+  margin: 0 0 6px;
+}
+.helper-settings {
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--line);
+  max-height: 35dvh;
+  overflow: auto;
+}
+.helper-settings textarea {
+  min-height: 70px;
+  font-size: 16px;
+}
+.helper-settings button {
+  margin-right: 8px;
+}
+.streaming-response {
+  margin-top: 10px;
+}
+.streaming-response > small {
+  font-size: 12px;
+  color: var(--muted);
+}
+.streaming-text + .streaming-text {
+  border-top: 1px solid var(--line);
+  padding-top: 12px;
+  margin-top: 12px;
+}
+.run-outcome:has(.streaming-response) .turn-skeleton {
+  display: none;
+}
+.helper-thread-content {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+  min-width: 0;
+}
+.helper-work-selector {
+  display: flex;
+  gap: 8px;
+  align-items: flex-end;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--line);
+}
+.helper-work-selector label {
+  flex: 1;
+  min-width: 0;
+  font-size: 12px;
+  display: grid;
+  gap: 4px;
+}
+.helper-work-selector select {
+  min-width: 0;
+  width: 100%;
+  font-size: 14px;
+}
+.helper-settings > label,
+.helper-limits label {
+  display: grid;
+  gap: 6px;
+}
+.helper-limits {
+  margin: 12px 0;
+}
+.helper-limits label {
+  margin-top: 10px;
+  font-size: 13px;
+}
+.helper-limits input {
+  width: 100%;
+  min-width: 0;
+}
+.helper-limits summary,
+.helper-task-history > summary {
+  min-height: 44px;
+  align-content: center;
+}
+.helper-task-history {
+  font-size: 13px;
+  min-width: 0;
+}
+.helper-task-history ol {
+  padding-left: 20px;
+}
+.helper-task-history li {
+  margin-bottom: 16px;
+  overflow-wrap: anywhere;
+}
+.helper-task-history li > strong,
+.helper-task-history li > small {
+  display: block;
+  line-height: 1.6;
+}
+.helper-selection {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 8px;
+  font-size: 12px;
+}
+.helper-selection span {
+  flex: 1;
+  min-width: 0;
+}
+.helper-selection button {
+  font-size: 12px;
+}
+.helper-queue,
+.helper-outbox {
+  font-size: 13px;
+  line-height: 1.6;
+  margin: 0 0 8px;
+}
+.helper-outbox p {
+  margin: 0 0 8px;
+}
+.helper-artifact-editor {
+  display: grid;
+  gap: 12px;
+  margin-top: 16px;
+}
+.helper-artifact-editor label {
+  display: grid;
+  gap: 8px;
+}
+.helper-artifact-editor textarea {
+  width: 100%;
+  min-width: 0;
+  max-height: 65dvh;
+  resize: vertical;
+  font-size: 16px;
+  line-height: 1.7;
+}
+.helper-task p {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.helper-message.user:has(.helper-task) {
+  margin-left: 0;
+}
+@media (max-width: 1100px) {
+  .app-shell.helper-open {
+    grid-template-columns: var(--nav-w) minmax(0, 1fr);
+  }
+  .app-shell.sidebar-collapsed.helper-open,
+  .app-shell.focus-reading.helper-open {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .helper-panel {
+    position: fixed;
+    inset: 0 0 0 auto;
+    width: min(440px, 100vw);
+    height: min(var(--app-height, 100dvh), 100dvh);
+    z-index: 32;
+    box-shadow: -8px 0 30px var(--shade);
+  }
+}
+@media (max-width: 760px) {
+  .app-shell.helper-open {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .helper-panel {
+    width: 100vw;
+    border-left: 0;
+  }
+  .helper-messages {
+    padding: 16px;
+  }
+}

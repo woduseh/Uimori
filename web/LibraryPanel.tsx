@@ -1,5 +1,12 @@
 import { SelectionCheckbox } from './BooleanControls.js';
 import { PackageTransfer } from './PackageTransfer.js';
+import {
+  EditorDraftProvider,
+  EditorDraftStatus,
+  discardActiveEditor,
+  useServerEditDraft,
+} from './editor-workspace-context.js';
+import type { ContentDraftModel } from '../core/edit-drafts.js';
 import { SlidersHorizontal } from 'lucide-react';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import type { Content, ContentKind, Library } from '../core/product.js';
@@ -434,10 +441,15 @@ export function LibraryPanel({
           </button>
           <button
             type="button"
-            onClick={() => {
+            onClick={async () => {
               if (!pendingNavigation) return;
-              switchTab(pendingNavigation.tab, pendingNavigation.closeOnly);
-              setPendingNavigation(null);
+              try {
+                await discardActiveEditor();
+                switchTab(pendingNavigation.tab, pendingNavigation.closeOnly);
+                setPendingNavigation(null);
+              } catch (error) {
+                onError((error as Error).message);
+              }
             }}
           >
             초안 버리고 이동
@@ -882,6 +894,50 @@ function ContentEditor({
   const [importedPackage, setImportedPackage] = useState<ContentPackage | null>(null);
   const [behaviorDraftDirty, setBehaviorDraftDirty] = useState(false);
   const [portraitBusy, setPortraitBusy] = useState(false);
+  const hasShownEditor = useRef(false);
+  const editableModel: ContentDraftModel = {
+    kind: value.kind,
+    title: value.title,
+    description: value.description,
+    text: value.text,
+    loading: value.loading,
+    relatedIds: value.relatedIds,
+    ...(value.package ? { package: value.package } : {}),
+  };
+  const shared = useServerEditDraft({
+    editorKey: selected ? `content:${selected.id}` : `new:content:${kind}`,
+    kind: 'content',
+    targetId: selected?.id ?? null,
+    model: editableModel,
+    onRestore: (draft) => {
+      const model = draft.model as ContentDraftModel;
+      setValue(model);
+      setBaseline(JSON.stringify(draft.baseModel));
+      setSelected(
+        draft.targetId
+          ? {
+              ...(draft.baseModel as ContentDraftModel),
+              id: draft.targetId,
+              revision: draft.baseRevision!,
+            }
+          : null
+      );
+      try {
+        setImportedPackage(
+          JSON.parse(draft.rawFields['package.import'] ?? 'null') as ContentPackage | null
+        );
+      } catch {
+        setImportedPackage(null);
+      }
+    },
+  });
+  if (shared.state.ready) hasShownEditor.current = true;
+  const editorUnavailable = busy || !shared.state.ready;
+  const updateImportedPackage = (pkg: ContentPackage | null) => {
+    setImportedPackage(pkg);
+    shared.session.setField('package.import', JSON.stringify(pkg));
+    shared.session.pendingField('package.import', !!pkg);
+  };
   const dirty = JSON.stringify(value) !== baseline;
   useEffect(() => {
     onDirtyChange(dirty || !!importedPackage || behaviorDraftDirty || portraitBusy);
@@ -894,7 +950,7 @@ function ContentEditor({
       body: value.text,
     });
   async function saveContent(copyKind?: 'bot' | 'persona' | 'module') {
-    if (portraitBusy) return;
+    if (editorUnavailable || portraitBusy) return;
     if (behaviorDraftDirty) {
       setError('패키지의 초안을 먼저 검증하고 적용해 주세요.');
       return;
@@ -910,20 +966,19 @@ function ContentEditor({
         : copying
           ? packageFromContent(value)
           : undefined;
-      const item = await api<Content>(
-        !copying && selected ? '/content/' + selected.id : '/content',
-        {
-          kind: copyKind ?? value.kind,
-          title: copying ? value.title + ' 사본' : value.title,
-          description: value.description,
-          text: value.text,
-          loading: value.loading,
-          relatedIds: [],
-          ...(pkg ? { package: pkg } : {}),
-          ...(!copying && selected ? { expectedRevision: selected.revision } : {}),
-        },
-        !copying && selected ? 'PUT' : 'POST'
-      );
+      const model: ContentDraftModel = {
+        kind: copyKind ?? value.kind,
+        title: copying ? value.title + ' 사본' : value.title,
+        description: value.description,
+        text: value.text,
+        loading: value.loading,
+        relatedIds: [],
+        ...(pkg ? { package: pkg } : {}),
+      };
+      let item: Content;
+      if (copying) {
+        item = (await shared.session.copy('content', model)).saved as Content;
+      } else item = (await shared.session.save(model)).saved as Content;
       setSelected(item);
       setValue(item);
       setBaseline(JSON.stringify(item));
@@ -938,265 +993,286 @@ function ContentEditor({
       setBusy(false);
     }
   }
+  if (!hasShownEditor.current) return <EditorDraftStatus value={shared} />;
   return (
-    <section className="library-detail" aria-label="자료 상세">
-      <div className="library-detail-heading">
-        <button type="button" className="secondary" disabled={busy} onClick={onClose}>
-          ← 서재 목록
-        </button>
-        <h2>{selected ? selected.title : `새 ${contentLabels[kind]}`}</h2>
-        <div className="library-detail-actions">
-          {selected && (
-            <LibraryItemMenu title="자료 메뉴">
-              <DeleteButton
-                path={`/content/${encodeURIComponent(selected.id)}`}
-                revision={selected.revision}
-                title={selected.title}
-                label="자료 삭제"
-                disabled={busy}
-                description="이 자료를 목록에서 삭제하고 현재 편집 초안을 닫아요. 과거 채팅과 실행이 사용하는 내용은 유지돼요."
-                onError={onError}
-                onDeleted={async () => {
-                  onDeleted();
-                  await reload();
-                }}
-              />
-            </LibraryItemMenu>
-          )}
-        </div>
-      </div>
-      <p className="library-editor-guide">
-        {contentGuidance[value.kind].description} {contentGuidance[value.kind].example}
-      </p>
-      <form
-        className="editor-grid"
-        onSubmit={async (event) => {
-          event.preventDefault();
-          await saveContent();
-        }}
-      >
-        <fieldset className="editor-fields full" disabled={busy}>
-          <label className="full">
-            이름
-            <input
-              aria-label="자료 이름"
-              value={value.title}
-              maxLength={160}
-              required
-              onChange={(event) => setValue({ ...value, title: event.target.value })}
-            />
-          </label>
-          <label className="full">
-            {value.kind === 'bot'
-              ? '성격과 대화 지침'
-              : value.kind === 'persona'
-                ? '내 인물의 설정'
-                : '더할 설정과 지침'}
-            <textarea
-              aria-label="자료 본문"
-              rows={5}
-              value={value.text}
-              maxLength={100000}
-              required={!value.package}
-              onChange={(event) => setValue({ ...value, text: event.target.value })}
-            />
-          </label>
-          <label className="full">
-            짧은 소개 · 선택
-            <input
-              aria-label="자료 설명"
-              value={value.description}
-              maxLength={1000}
-              placeholder="서재 목록에 보여줄 한 줄 소개"
-              onChange={(event) => setValue({ ...value, description: event.target.value })}
-            />
-          </label>
-          {value.package && (
-            <details className="library-editor-extra full">
-              <summary>대표 이미지 · 선택</summary>
-              <div className="library-editor-extra-body">
-                <PackagePortraitEditor
-                  value={value.package}
-                  onChange={(pkg) => setValue((current) => ({ ...current, package: pkg }))}
-                  onDirtyChange={setPortraitBusy}
-                  disabled={busy}
-                />
-              </div>
-            </details>
-          )}
-          <details className="library-editor-extra full">
-            <summary>분류·읽기 설정</summary>
-            <div className="library-editor-extra-body">
-              <label>
-                서재 분류
-                <select
-                  aria-label="자료 종류"
-                  value={selected ? libraryCategory(library, selected) : value.kind}
-                  disabled={!!selected}
-                  onChange={(event) => {
-                    const next = event.target.value as ContentKind;
-                    setValue({
-                      ...value,
-                      kind: next,
-                      loading: freshContent(next).loading,
-                      ...(!value.package && ['bot', 'persona', 'module'].includes(next)
-                        ? { package: packageFromContent(value) }
-                        : {}),
-                    });
+    <EditorDraftProvider value={shared}>
+      <section className="library-detail" aria-label="자료 상세" aria-busy={editorUnavailable}>
+        <EditorDraftStatus value={shared} />
+        <div className="library-detail-heading">
+          <button
+            type="button"
+            className="secondary"
+            disabled={editorUnavailable}
+            onClick={onClose}
+          >
+            ← 서재 목록
+          </button>
+          <h2>{selected ? selected.title : `새 ${contentLabels[kind]}`}</h2>
+          <div className="library-detail-actions">
+            {selected && (
+              <LibraryItemMenu title="자료 메뉴">
+                <DeleteButton
+                  path={`/content/${encodeURIComponent(selected.id)}`}
+                  revision={selected.revision}
+                  title={selected.title}
+                  label="자료 삭제"
+                  disabled={editorUnavailable}
+                  description="이 자료를 목록에서 삭제하고 현재 편집 초안을 닫아요. 과거 채팅과 실행이 사용하는 내용은 유지돼요."
+                  onError={onError}
+                  onDeleted={async () => {
+                    onDeleted();
+                    await reload();
                   }}
-                >
-                  {Object.entries(contentLabels).map(([key, title]) => (
-                    <option key={key} value={key}>
-                      {title}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label>
-                이 자료를 읽는 방법
-                <select
-                  aria-label="기본 로딩"
-                  value={value.loading}
-                  onChange={(event) =>
-                    setValue({ ...value, loading: event.target.value as Content['loading'] })
-                  }
-                >
-                  <option value="pinned">항상 포함</option>
-                  <option value="discoverable">모델이 필요할 때 읽기</option>
-                </select>
-              </label>
-            </div>
-          </details>
-          <details className="library-editor-extra full">
-            <summary>고급 패키지 설정</summary>
-            <div className="library-editor-extra-body">
-              <p className="muted">로어, 시작 장면, 역할별 지침과 동작을 더할 수 있어요.</p>
-              {value.package ? (
-                <PackageFields
-                  value={value.package}
-                  onChange={(pkg) => setValue((current) => ({ ...current, package: pkg }))}
-                  onBehaviorDraftChange={setBehaviorDraftDirty}
                 />
-              ) : (
-                ['bot', 'persona', 'module'].includes(value.kind) && (
-                  <button
-                    type="button"
-                    className="secondary"
-                    onClick={() => setValue({ ...value, package: packageFromContent(value) })}
-                  >
-                    공통 패키지로 확장
-                  </button>
-                )
-              )}
-            </div>
-          </details>
-          <details className="library-package-tools full">
-            <summary>패키지 가져오기·내보내기와 역할 사본</summary>
-            <div className="library-package-tools-body">
-              <PackageTransfer
-                getPackage={packageSnapshot}
-                onPrepared={(pkg) => {
-                  setImportedPackage(pkg);
-                  setError('');
-                }}
-                onError={setError}
-                disabled={behaviorDraftDirty}
+              </LibraryItemMenu>
+            )}
+          </div>
+        </div>
+        <p className="library-editor-guide">
+          {contentGuidance[value.kind].description} {contentGuidance[value.kind].example}
+        </p>
+        <form
+          className="editor-grid"
+          onSubmit={async (event) => {
+            event.preventDefault();
+            await saveContent();
+          }}
+        >
+          <fieldset className="editor-fields full" disabled={editorUnavailable}>
+            <label className="full">
+              이름
+              <input
+                aria-label="자료 이름"
+                value={value.title}
+                maxLength={160}
+                required
+                onChange={(event) => setValue({ ...value, title: event.target.value })}
               />
-              {importedPackage && (
-                <div className="library-import-preview">
-                  <p>
-                    {importedPackage.title} · 로어 {importedPackage.lore.length}개 · 지침{' '}
-                    {importedPackage.instructions.length}개
-                  </p>
-                  <button
-                    type="button"
-                    onClick={() => {
+            </label>
+            <label className="full">
+              {value.kind === 'bot'
+                ? '성격과 대화 지침'
+                : value.kind === 'persona'
+                  ? '내 인물의 설정'
+                  : '더할 설정과 지침'}
+              <textarea
+                aria-label="자료 본문"
+                rows={5}
+                value={value.text}
+                maxLength={100000}
+                required={!value.package}
+                onChange={(event) => setValue({ ...value, text: event.target.value })}
+              />
+            </label>
+            <label className="full">
+              짧은 소개 · 선택
+              <input
+                aria-label="자료 설명"
+                value={value.description}
+                maxLength={1000}
+                placeholder="서재 목록에 보여줄 한 줄 소개"
+                onChange={(event) => setValue({ ...value, description: event.target.value })}
+              />
+            </label>
+            {value.package && (
+              <details className="library-editor-extra full">
+                <summary>대표 이미지 · 선택</summary>
+                <div className="library-editor-extra-body">
+                  <PackagePortraitEditor
+                    value={value.package}
+                    onChange={(pkg) => setValue((current) => ({ ...current, package: pkg }))}
+                    onDirtyChange={setPortraitBusy}
+                    disabled={editorUnavailable}
+                  />
+                </div>
+              </details>
+            )}
+            <details className="library-editor-extra full">
+              <summary>분류·읽기 설정</summary>
+              <div className="library-editor-extra-body">
+                <label>
+                  서재 분류
+                  <select
+                    aria-label="자료 종류"
+                    value={selected ? libraryCategory(library, selected) : value.kind}
+                    disabled={!!selected}
+                    onChange={(event) => {
+                      const next = event.target.value as ContentKind;
                       setValue({
                         ...value,
-                        title: importedPackage.title,
-                        description: importedPackage.description,
-                        text: importedPackage.body ?? '',
-                        package: importedPackage,
+                        kind: next,
+                        loading: freshContent(next).loading,
+                        ...(!value.package && ['bot', 'persona', 'module'].includes(next)
+                          ? { package: packageFromContent(value) }
+                          : {}),
                       });
-                      setImportedPackage(null);
                     }}
                   >
-                    가져온 패키지로 초안 바꾸기
-                  </button>
-                  <button type="button" className="ghost" onClick={() => setImportedPackage(null)}>
-                    가져오기 취소
-                  </button>
-                </div>
-              )}
-              <section className="library-package-copies">
-                <h3>다른 역할로 사본 만들기</h3>
-                <p className="muted">
-                  로어와 지침을 함께 복사해요. 인물 관점과 역할별 지침은 직접 조정해 주세요.
-                </p>
-                {!value.title.trim() && (
-                  <p className="muted">자료 이름을 입력하면 사본을 만들 수 있어요.</p>
-                )}
-                <div className="form-actions">
-                  {(['bot', 'persona', 'module'] as const)
-                    .filter((role) => role !== value.kind)
-                    .map((role) => (
-                      <button
-                        type="button"
-                        className="secondary"
-                        key={role}
-                        disabled={!value.title.trim()}
-                        onClick={() => void saveContent(role)}
-                      >
-                        {contentLabels[role]}로 사본 만들기
-                      </button>
+                    {Object.entries(contentLabels).map(([key, title]) => (
+                      <option key={key} value={key}>
+                        {title}
+                      </option>
                     ))}
-                </div>
-              </section>
-            </div>
-          </details>
-        </fieldset>
-        {error && (
-          <p className="error full" role="alert">
-            {error} 입력한 내용은 유지했어요.
-          </p>
-        )}
-        {behaviorDraftDirty && (
-          <p className="full muted">
-            패키지에 미적용 초안이 있어요. 검증 후 적용하면 자료를 저장할 수 있어요.
-          </p>
-        )}
-        <div className="library-savebar form-actions full">
-          {selected && (selected.kind === 'bot' || selected.package) && onStartStory && (
-            <button
-              type="button"
-              disabled={busy || dirty || !!importedPackage || behaviorDraftDirty || portraitBusy}
-              onClick={() => onStartStory(selected)}
-            >
-              {selected.kind === 'bot' ? '채팅 시작' : '이 자료를 봇으로 시작'}
-            </button>
-          )}
-          <button
-            className={selected ? 'secondary' : ''}
-            disabled={busy || !!importedPackage || behaviorDraftDirty || portraitBusy}
-          >
-            {busy ? '저장 중…' : selected ? '변경사항 저장' : '자료 등록'}
-          </button>
-          <span role="status">{saved}</span>
-        </div>
-        {selected && (
-          <>
-            <small className="full">
-              저장하면 이 자료를 사용하는 채팅의 다음 실행부터 반영돼요. 이전 설정을 유지하려면
-              복제해 주세요.
-            </small>
-            <details className="library-diagnostics full">
-              <summary>자료 저장 정보</summary>
-
-              <code>{selected.id}</code>
+                  </select>
+                </label>
+                <label>
+                  이 자료를 읽는 방법
+                  <select
+                    aria-label="기본 로딩"
+                    value={value.loading}
+                    onChange={(event) =>
+                      setValue({ ...value, loading: event.target.value as Content['loading'] })
+                    }
+                  >
+                    <option value="pinned">항상 포함</option>
+                    <option value="discoverable">모델이 필요할 때 읽기</option>
+                  </select>
+                </label>
+              </div>
             </details>
-          </>
-        )}
-      </form>
-    </section>
+            <details className="library-editor-extra full">
+              <summary>고급 패키지 설정</summary>
+              <div className="library-editor-extra-body">
+                <p className="muted">로어, 시작 장면, 역할별 지침과 동작을 더할 수 있어요.</p>
+                {value.package ? (
+                  <PackageFields
+                    value={value.package}
+                    onChange={(pkg) => setValue((current) => ({ ...current, package: pkg }))}
+                    onBehaviorDraftChange={setBehaviorDraftDirty}
+                  />
+                ) : (
+                  ['bot', 'persona', 'module'].includes(value.kind) && (
+                    <button
+                      type="button"
+                      className="secondary"
+                      onClick={() => setValue({ ...value, package: packageFromContent(value) })}
+                    >
+                      공통 패키지로 확장
+                    </button>
+                  )
+                )}
+              </div>
+            </details>
+            <details className="library-package-tools full">
+              <summary>패키지 가져오기·내보내기와 역할 사본</summary>
+              <div className="library-package-tools-body">
+                <PackageTransfer
+                  getPackage={packageSnapshot}
+                  onPrepared={(pkg) => {
+                    updateImportedPackage(pkg);
+                    setError('');
+                  }}
+                  onError={setError}
+                  disabled={behaviorDraftDirty}
+                />
+                {importedPackage && (
+                  <div className="library-import-preview">
+                    <p>
+                      {importedPackage.title} · 로어 {importedPackage.lore.length}개 · 지침{' '}
+                      {importedPackage.instructions.length}개
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setValue({
+                          ...value,
+                          title: importedPackage.title,
+                          description: importedPackage.description,
+                          text: importedPackage.body ?? '',
+                          package: importedPackage,
+                        });
+                        updateImportedPackage(null);
+                      }}
+                    >
+                      가져온 패키지로 초안 바꾸기
+                    </button>
+                    <button
+                      type="button"
+                      className="ghost"
+                      onClick={() => updateImportedPackage(null)}
+                    >
+                      가져오기 취소
+                    </button>
+                  </div>
+                )}
+                <section className="library-package-copies">
+                  <h3>다른 역할로 사본 만들기</h3>
+                  <p className="muted">
+                    로어와 지침을 함께 복사해요. 인물 관점과 역할별 지침은 직접 조정해 주세요.
+                  </p>
+                  {!value.title.trim() && (
+                    <p className="muted">자료 이름을 입력하면 사본을 만들 수 있어요.</p>
+                  )}
+                  <div className="form-actions">
+                    {(['bot', 'persona', 'module'] as const)
+                      .filter((role) => role !== value.kind)
+                      .map((role) => (
+                        <button
+                          type="button"
+                          className="secondary"
+                          key={role}
+                          disabled={!value.title.trim()}
+                          onClick={() => void saveContent(role)}
+                        >
+                          {contentLabels[role]}로 사본 만들기
+                        </button>
+                      ))}
+                  </div>
+                </section>
+              </div>
+            </details>
+          </fieldset>
+          {error && (
+            <p className="error full" role="alert">
+              {error} 입력한 내용은 유지했어요.
+            </p>
+          )}
+          {behaviorDraftDirty && (
+            <p className="full muted">
+              패키지에 미적용 초안이 있어요. 검증 후 적용하면 자료를 저장할 수 있어요.
+            </p>
+          )}
+          <div className="library-savebar form-actions full">
+            {selected && (selected.kind === 'bot' || selected.package) && onStartStory && (
+              <button
+                type="button"
+                disabled={
+                  editorUnavailable ||
+                  dirty ||
+                  !!importedPackage ||
+                  behaviorDraftDirty ||
+                  portraitBusy
+                }
+                onClick={() => onStartStory(selected)}
+              >
+                {selected.kind === 'bot' ? '채팅 시작' : '이 자료를 봇으로 시작'}
+              </button>
+            )}
+            <button
+              className={selected ? 'secondary' : ''}
+              disabled={
+                editorUnavailable || !!importedPackage || behaviorDraftDirty || portraitBusy
+              }
+            >
+              {busy ? '저장 중…' : selected ? '변경사항 저장' : '자료 등록'}
+            </button>
+            <span role="status">{saved}</span>
+          </div>
+          {selected && (
+            <>
+              <small className="full">
+                저장하면 이 자료를 사용하는 채팅의 다음 실행부터 반영돼요. 이전 설정을 유지하려면
+                복제해 주세요.
+              </small>
+              <details className="library-diagnostics full">
+                <summary>자료 저장 정보</summary>
+
+                <code>{selected.id}</code>
+              </details>
+            </>
+          )}
+        </form>
+      </section>
+    </EditorDraftProvider>
   );
 }

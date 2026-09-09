@@ -8,6 +8,7 @@ import { api } from './api.js';
 import { Dialog } from './Dialog.js';
 import { DeleteButton } from './DeleteButton.js';
 import { PromptEditor } from './PromptEditor.js';
+import { discardActiveEditor } from './editor-workspace-context.js';
 import { PromptWorkspaceEditor } from './PromptWorkspaceEditor.js';
 import { SlidersHorizontal } from 'lucide-react';
 import {
@@ -185,10 +186,15 @@ export function PromptLibrary({
           </button>
           <button
             type="button"
-            onClick={() => {
-              setDiscard(false);
-              setDirty(false);
-              setEditing(pendingEditing.current);
+            onClick={async () => {
+              try {
+                await discardActiveEditor();
+                setDiscard(false);
+                setDirty(false);
+                setEditing(pendingEditing.current);
+              } catch (error) {
+                onError((error as Error).message);
+              }
             }}
           >
             초안 버리고 이동

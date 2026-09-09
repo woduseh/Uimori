@@ -18,7 +18,7 @@
 | `scripts/doctor.test.mjs` | supported versions; aggregate status | KEEP. 버전 경계 및 FAIL/BLOCKED/NOT_RUN 우선순위. |
 | 같은 파일 | child ready marker / exit / timeout | KEEP. 프로세스 생성만 성공으로 오인하지 않아요. |
 | 같은 파일 | blocked child + independent real SQLite/HTTP/cleanup; unsupported runtime + malformed child | KEEP. 개별 probe 결과와 전체 상태가 독립적으로 기록되는 실제 조합이에요. |
-| `scripts/memory-evaluation.test.mjs` | deterministic distributed hash-bound corpus at two endpoints | KEEP. 두 끝점은 평가 corpus 크기 경계이고 실제 공급자 평가가 아니에요. |
+| 이전 `scripts/memory-evaluation.test.mjs` | deterministic distributed hash-bound corpus at two endpoints | REMOVED 2026-09-09. 기억 추출 제품 경로와 구형 평가 실행기를 함께 제거했어요. 현재 의미 평가 범위는 [도우미·문맥 계획](../project-plan/HELPER-CONTEXT-PLAN.md)의 승인 경계를 따라요. |
 | 같은 파일 | omissions / contamination / ordering / forged evidence; distinct gold citations vs duplicate citation | KEEP. 종합 점수가 누락시키기 쉬운 서로 다른 오판을 검출해요. |
 | 같은 파일 | offline preflight authorization / token scope / budgets | KEEP. 준비 상태를 유료 실행 승인이나 실제 token/cost로 오인하지 않아요. |
 

@@ -2,7 +2,7 @@ import type { Store } from './store.js';
 import type { RunSnapshot } from '../core/types.js';
 import type { TranslationReference } from '../core/translation-context.js';
 import { successfulTranslation, validateTranslationArtifact } from './source-editing.js';
-import { memoryHash } from '../core/memory.js';
+import { sourceHash } from '../core/source-history.js';
 
 /** Only completed, currently valid wording for the exact frozen ancestry/hash is eligible. */
 export function translationReferences(store: Store, snapshot: RunSnapshot): TranslationReference[] {
@@ -12,7 +12,7 @@ export function translationReferences(store: Store, snapshot: RunSnapshot): Tran
       const source = store.source(item.revision);
       if (
         source.chatId !== snapshot.chatId ||
-        source.hash !== (item.contentHash ?? memoryHash(item.text))
+        source.hash !== (item.contentHash ?? sourceHash(item.text))
       )
         continue;
       const job = successfulTranslation(store, source);

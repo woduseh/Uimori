@@ -13,6 +13,7 @@ import {
   selectChatSettingsSection,
   openSourceActions,
   openChatMenu,
+  openPromptBlocks,
 } from './ui-navigation.js';
 import { postFixtureChat } from './fixtures/chat.js';
 import { test, expect, type Page, type APIRequestContext, type Locator } from '@playwright/test';
@@ -22,6 +23,7 @@ import type { Content } from '../core/product.js';
 import { createDefaultPromptProgram } from '../core/prompt-defaults.js';
 
 async function promptBody(editor: Locator) {
+  await openPromptBlocks(editor);
   const block = editor.locator('#prompt-block-instructions');
   const body = block.getByLabel('지침 본문', { exact: true });
   if (!(await body.isVisible())) await block.locator('summary').first().click();
@@ -237,8 +239,12 @@ test('UI01 UI02 UI04 UI05 UI09 long real sources keep composer accessible, safe 
       )
   ).toEqual(translationBlocks.map((block) => block.anchor));
   await source.getByRole('button', { name: '원문 보기', exact: true }).click();
-  await source.locator('details.source-job-details > summary').click();
-  await expect(source.getByTestId('source-raw')).toHaveText(before.sources[0].text);
+  await openSourceActions(source);
+  await source.getByRole('button', { name: '원문 연결 정보', exact: true }).click();
+  const sourceInfo = page.getByRole('dialog', { name: '원문 연결 정보', exact: true });
+  await sourceInfo.getByText('현재 원문', { exact: true }).click();
+  await expect(sourceInfo.getByTestId('source-raw')).toHaveText(before.sources[0].text);
+  await sourceInfo.getByRole('button', { name: '원문 연결 정보 닫기' }).click();
   const after = await data(request, chat.id);
   expect(after.sources).toEqual(before.sources);
   expect(after.runs).toEqual(before.runs);
@@ -1406,6 +1412,13 @@ test('UI17 prompts use latest settings and concurrent edits preserve unsaved tex
   expect((await data(request, chat.id)).profile).toEqual(profile);
   await page.getByRole('button', { name: '설정 닫기', exact: true }).click();
   await page.getByRole('button', { name: '초안 버리고 닫기', exact: true }).click();
+  await expect
+    .poll(
+      async () =>
+        (await (await request.get('/api/edit-drafts?editorKey=prompt-workspace%3Acurrent')).json())
+          .length
+    )
+    .toBe(0);
   await nav(page, '프롬프트');
   await page
     .getByRole('button', { name: 'UI17 recovered copy 프롬프트 편집', exact: true })

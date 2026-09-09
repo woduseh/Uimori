@@ -180,6 +180,57 @@ function runnerHooks(origin: string, extra: Partial<MainHooks> = {}) {
 }
 
 describe('server main runner through the actual loopback adapter', () => {
+  test('public response progress keeps tool announcements and final output under separate durable attempt IDs', async () => {
+    let calls = 0;
+    const server = await fixture(async (_captured, response) => {
+      if (++calls === 1)
+        await writeSse(response, [
+          { type: 'text_delta', delta: '자료를 확인할게요.' },
+          {
+            type: 'tool_delta',
+            index: 0,
+            id: 'read-1',
+            name: 'knowledge.read',
+            argumentsDelta: '{"id":"lore-1"}',
+          },
+          { type: 'opaque_state', state: 'PRIVATE_CONTINUATION' },
+          { type: 'done', reason: 'tool_calls' },
+        ]);
+      else
+        await writeSse(response, [
+          { type: 'text_delta', delta: '등대의 ' },
+          { type: 'text_delta', delta: '불이 켜졌다.' },
+          { type: 'done', reason: 'stop' },
+        ]);
+    });
+    const progress: Parameters<NonNullable<MainHooks['onResponseProgress']>>[0][] = [];
+    const observed = runnerHooks(server.origin, {
+      onResponseProgress: (item) => {
+        expect(observed.attempts.some((attempt) => attempt.id === item.attemptId)).toBe(true);
+        progress.push(item);
+      },
+    });
+    const result = await runMain(routedSnapshot(server.endpoint), observed.hooks);
+    expect(result.status).toBe('completed');
+    expect(result.text).toBe('등대의 불이 켜졌다.');
+    expect(progress).toEqual([
+      {
+        attemptId: 'attempt-1',
+        segment: 0,
+        text: '자료를 확인할게요.',
+        offset: '자료를 확인할게요.'.length,
+      },
+      { attemptId: 'attempt-2', segment: 0, text: '등대의 ', offset: 4 },
+      {
+        attemptId: 'attempt-2',
+        segment: 0,
+        text: '불이 켜졌다.',
+        offset: '등대의 불이 켜졌다.'.length,
+      },
+    ]);
+    expect(JSON.stringify(progress)).not.toContain('PRIVATE_CONTINUATION');
+    expect(JSON.stringify(progress)).not.toContain('lore-1');
+  });
   test('P01 P02 P05 pins attached canon, compiles active controls and journals real tool turns before fetch', async () => {
     let count = 0;
     const server = await fixture(async (captured, response) => {
@@ -944,6 +995,10 @@ test('custom main prompt remains literal across tools after the caller changes i
       'knowledge.read',
       'skills.list',
       'skills.load',
+      'notes.list',
+      'notes.read',
+      'story.search',
+      'story.read',
     ]);
     expect(captured.body).not.toContain('FUTURE PROMPT');
   }

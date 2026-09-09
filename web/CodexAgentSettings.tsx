@@ -198,7 +198,7 @@ export function CodexAgentSettings({ active = true }: { active?: boolean }) {
       </button>
       <p>
         로그인 후 ‘연결과 모델’에서 Codex 연결과 모델 프리셋을 저장해요. 본문·번역·장면 상태·이미지
-        작업·상태·기억과 모델 등록 요청에서 역할별로 선택할 수 있어요. 실제 요청은 구독 한도를
+        작업·상태·문맥 정리와 도우미 요청에서 역할별로 선택할 수 있어요. 실제 요청은 구독 한도를
         사용해요.
       </p>
       {error && (

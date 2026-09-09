@@ -26,9 +26,17 @@ const request = (): ProviderRequest => ({
 const encode = (kind: string, text: string, toolCalls: unknown[] = []) =>
   JSON.stringify({ kind, text, toolCalls });
 
-test('all six roles use injected Codex execution without HTTP authority or credentials', async () => {
+test('all provider roles use injected Codex execution without HTTP authority or credentials', async () => {
   const run = vi.fn(async () => decodeCodexOutput(encode('final', 'result'), request()));
-  for (const role of ['main', 'translation', 'status', 'image', 'state', 'memory'] as const) {
+  for (const role of [
+    'main',
+    'translation',
+    'status',
+    'image',
+    'state',
+    'context',
+    'helper',
+  ] as const) {
     const result = await executeProvider(
       connection,
       { ...request(), role },
@@ -37,7 +45,7 @@ test('all six roles use injected Codex execution without HTTP authority or crede
     expect(result.status).toBe('completed');
     expect(result.usage.costUsd).toBeNull();
   }
-  expect(run).toHaveBeenCalledTimes(6);
+  expect(run).toHaveBeenCalledTimes(7);
   expect(
     (
       await executeProvider(connection, request(), {

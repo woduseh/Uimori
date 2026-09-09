@@ -1,4 +1,4 @@
-import { selectChatSettingsSection } from './ui-navigation.js';
+import { selectChatSettingsSection, openPromptBlocks } from './ui-navigation.js';
 import { visualReview } from './fixtures/visual-review.js';
 import { preservePromptWorkspace } from './fixtures/prompt-workspace.js';
 import { test, expect, type APIRequestContext, type Page } from '@playwright/test';
@@ -43,6 +43,11 @@ test('PAUI05 prompt hierarchy aligns disclosures and compact tools while folding
   const composer = editor.getByTestId('prompt-composer');
   const parent = composer.locator('.pc-composer-fold > summary');
   const block = composer.locator('#prompt-block-instructions');
+  await expect(composer.locator('.pc-blocks-section')).not.toHaveAttribute('open');
+  await expect(block.locator(':scope > summary')).not.toBeVisible();
+  await expect(editor.getByRole('button', { name: '저장', exact: true })).toBeDisabled();
+  await openPromptBlocks(composer);
+  await expect(editor.getByRole('button', { name: '저장', exact: true })).toBeDisabled();
   await block.locator(':scope > summary').click();
   const body = block.getByLabel('합성 지침 본문', { exact: true });
   const draft = 'SYNTHETIC_HIERARCHY_UNSAVED';
@@ -130,6 +135,7 @@ test('PAUI04 desktop block drag preserves content, supports undo and persists bo
   const editor = page.getByTestId('prompt-editor'),
     composer = editor.getByTestId('prompt-composer');
   const blocks = composer.locator('.pc-block');
+  await openPromptBlocks(composer);
   const order = () => blocks.evaluateAll((items) => items.map((item) => item.id));
   const initial = ['prompt-block-instructions', 'prompt-block-example', 'prompt-block-history'];
   await expect.poll(order).toEqual(initial);
@@ -163,8 +169,8 @@ test('PAUI04 desktop block drag preserves content, supports undo and persists bo
   await expect.poll(order).toEqual(expected);
   const updatedResponse = page.waitForResponse(
     (response) =>
-      response.url().endsWith(`/api/prompt-presets/${preset.id}`) &&
-      response.request().method() === 'PUT'
+      /\/api\/edit-drafts\/[^/]+\/save$/.test(new URL(response.url()).pathname) &&
+      response.request().method() === 'POST'
   );
   await editor.getByRole('button', { name: '저장', exact: true }).click();
   expect((await updatedResponse).ok()).toBe(true);
@@ -183,6 +189,7 @@ test('PAUI04 desktop block drag preserves content, supports undo and persists bo
   await navigationAction(page, '프롬프트');
   await page.getByRole('button', { name: `${preset.title} 프롬프트 편집`, exact: true }).click();
   await expect.poll(order).toEqual(expected);
+  await openPromptBlocks(composer);
   await instruction.locator(':scope > summary').click();
   await expect(instruction.getByLabel('합성 지침 본문', { exact: true })).toHaveValue(
     'SYNTHETIC_INSTRUCTIONS'
@@ -236,14 +243,15 @@ test('PAUI01 editing updates the same prompt while copy and deletion stay in the
   await editor.getByLabel('프롬프트 이름', { exact: true }).fill(title);
   const updatedResponse = page.waitForResponse(
     (response) =>
-      response.url().endsWith(`/api/prompt-presets/${preset.id}`) &&
-      response.request().method() === 'PUT'
+      /\/api\/edit-drafts\/[^/]+\/save$/.test(new URL(response.url()).pathname) &&
+      response.request().method() === 'POST'
   );
   await save.click();
   const update = await updatedResponse;
   expect(update.ok()).toBe(true);
-  expect(update.request().postDataJSON().expectedRevision).toBe(preset.revision);
-  const updated = (await update.json()) as PromptPreset;
+  const updateResult = await update.json();
+  expect(updateResult.draft.revision).toBe(update.request().postDataJSON().expectedRevision + 1);
+  const updated = updateResult.saved as PromptPreset;
   expect(updated).toMatchObject({ id: preset.id, revision: preset.revision + 1, title });
   await expect(save).toBeDisabled();
   const menu = editor.getByLabel('프롬프트 관리', { exact: true });
@@ -265,12 +273,15 @@ test('PAUI01 editing updates the same prompt while copy and deletion stay in the
   await openPromptActions(editor);
   const copiedResponse = page.waitForResponse(
     (response) =>
-      response.url().endsWith('/api/prompt-presets') && response.request().method() === 'POST'
+      /\/api\/edit-drafts\/[^/]+\/save$/.test(new URL(response.url()).pathname) &&
+      response.request().method() === 'POST'
   );
   await copy.click();
   const response = await copiedResponse;
   expect(response.ok()).toBe(true);
-  const copied = (await response.json()) as PromptPreset;
+  const copyResult = await response.json();
+  expect(copyResult.created).toBe(true);
+  const copied = copyResult.saved as PromptPreset;
   expect(copied.id).not.toBe(preset.id);
   expect(copied.program).toEqual(updated.program);
   expect((await (await request.get(`/api/prompt-presets/${preset.id}`)).json()).revision).toBe(
@@ -358,6 +369,7 @@ test('PAUI03 block tools preserve pending template drafts, focus and undo throug
   const editor = page.getByTestId('prompt-editor'),
     composer = editor.getByTestId('prompt-composer');
   const block = composer.locator('#prompt-block-instructions');
+  await openPromptBlocks(composer);
   await block.locator(':scope > summary').click();
   await block.getByRole('button', { name: '템플릿 문법으로 편집 · 시험', exact: true }).click();
   const source = block.getByLabel('합성 지침 본문 문법', { exact: true });

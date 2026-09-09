@@ -75,21 +75,21 @@ test('sidebar activity groups all chats, excludes settled and stale work, and ex
   store.db
     .prepare("INSERT INTO story_configs(chat_id,revision,body) VALUES(?,1,'{}')")
     .run(first.id);
-  const add = (kind: 'state' | 'memory', hash: string, status: string) => {
+  const add = (kind: 'state', hash: string, status: string) => {
     const id = randomUUID();
     store.db
       .prepare(`INSERT INTO story_jobs(id,chat_id,source_revision,source_hash,kind,config_revision,status,snapshot,mock,created_at,updated_at,dependency_key)
         VALUES(?,?,?,?,?,1,?,'{}',1,'2026-09-08','2026-09-08',?)`)
       .run(id, first.id, source.id, hash, kind, status, id);
   };
-  add('memory', source.hash, 'queued');
-  add('memory', source.hash, 'running');
+  add('state', source.hash, 'queued');
+  add('state', source.hash, 'running');
   add('state', source.hash, 'failed');
   add('state', 'old-source-hash', 'running');
   const active = (await app.inject('/api/chat-activities')).json();
   expect(active).toEqual(
     [
-      { chatId: first.id, kind: 'memory', count: 2 },
+      { chatId: first.id, kind: 'state', count: 2 },
       { chatId: second.id, kind: 'main', count: 1 },
     ].sort((a, b) => a.chatId.localeCompare(b.chatId))
   );

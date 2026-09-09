@@ -1,5 +1,6 @@
 import { Switch } from './BooleanControls.js';
 import { useEffect, useRef, useState } from 'react';
+import { useBufferedEditorState, useUnappliedEditorField } from './editor-workspace-context.js';
 import { validateContentPackage, type ContentPackage } from '../core/content-package.js';
 import type { PromptControl, PromptValue } from '../core/prompt-program.js';
 import { PackageControlValues } from './PackageControlValues.js';
@@ -139,7 +140,9 @@ export function PackageControlsEditor({
   onDirtyChange?: (dirty: boolean) => void;
 }) {
   const baseline = JSON.stringify(packageControlDrafts(value.controls));
-  const [drafts, setDrafts] = useState(() => packageControlDrafts(value.controls)),
+  const [drafts, setDrafts] = useBufferedEditorState('package.controls', () =>
+      packageControlDrafts(value.controls)
+    ),
     [error, setError] = useState(''),
     [notice, setNotice] = useState('');
   const [previewValues, setPreviewValues] = useState<Record<string, PromptValue>>({});
@@ -150,8 +153,9 @@ export function PackageControlsEditor({
       setDrafts((current) => (JSON.stringify(current) === prior ? JSON.parse(baseline) : current));
       previous.current = baseline;
     }
-  }, [baseline]);
+  }, [baseline, setDrafts]);
   const dirty = JSON.stringify(drafts) !== baseline;
+  useUnappliedEditorField('package.controls', dirty);
   useEffect(() => {
     onDirtyChange?.(dirty);
   }, [dirty, onDirtyChange]);

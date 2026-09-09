@@ -1,4 +1,9 @@
 import { DatabaseSync } from 'node:sqlite';
+import { initHelperWorkspace } from './helper-workspace.js';
+import { initEditDrafts } from './edit-drafts.js';
+import { initChatOverrides, freezeChatOverrides } from './chat-overrides.js';
+import { initChatOptions, ChatOptionsStore } from './chat-options.js';
+import { initResponseStreams } from './response-stream.js';
 import { createHash, randomUUID } from 'node:crypto';
 import { basename, dirname, join } from 'node:path';
 import { existsSync, mkdirSync, realpathSync } from 'node:fs';
@@ -12,7 +17,7 @@ import {
   validateTranslationArtifact,
 } from './source-editing.js';
 import { ProductStore } from './product-store.js';
-import { HttpError } from './request-validation.js';
+import { HttpError, text } from './request-validation.js';
 export { HttpError } from './request-validation.js';
 import { StoryStore } from './story-store.js';
 import { freezeSourceSegments } from '../core/package-source-segments.js';
@@ -33,7 +38,7 @@ import {
 } from './package-behavior-run.js';
 import { completeAuthoredPackageStartStatesInTransaction } from './package-start.js';
 import { captureLogicalHistory, compileSnapshotPrompt } from './prompt-snapshot.js';
-import { seedContextPlan } from './context-planning.js';
+import { ContextStore } from './context-store.js';
 import { freezeLoreContext } from './lore-context.js';
 import { splitSource, validateSourceIdentity } from '../core/auxiliary.js';
 import {
@@ -73,6 +78,7 @@ export class Store {
   readonly db: DatabaseSync;
   readonly product: ProductStore;
   readonly story: StoryStore;
+  readonly context: ContextStore;
   readonly organization: ChatOrganizationStore;
   readonly libraryOrganization: LibraryOrganizationStore;
   readonly behavior: PackageBehaviorStore;
@@ -99,9 +105,9 @@ export class Store {
     }
     try {
       const version = Number((this.db.prepare('PRAGMA user_version').get() as Row).user_version);
-      if (![0, 14].includes(version))
+      if (![0, 15].includes(version))
         throw new Error(
-          `Unsupported database schema version ${version}; Uimori requires schema 14. For disposable default development data, stop the server and run npm run reset:dev.`
+          `Unsupported database schema version ${version}; Uimori requires schema 15. For disposable default development data, stop the server and run npm run reset:dev.`
         );
       if (
         version === 0 &&
@@ -117,13 +123,14 @@ export class Store {
       this.db.exec('PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON; PRAGMA busy_timeout=3000;');
       this.product = new ProductStore(this);
       this.story = new StoryStore(this);
+      this.context = new ContextStore(this);
       this.organization = new ChatOrganizationStore(this);
       this.libraryOrganization = new LibraryOrganizationStore(this);
       this.behavior = new PackageBehaviorStore(this.db, (chatId, branchId) => {
         const branch = this.product.branch(chatId, branchId);
         return branch.headRevision ? this.source(branch.headRevision).hash : null;
       });
-      // Keep the retired runs.issue storage column while the archive schema remains v14.
+      // Keep the retired runs.issue storage column as an unused diagnostic field.
       if (version === 0)
         this.transaction(() => {
           this.db.exec(`
@@ -143,12 +150,18 @@ export class Store {
       `);
           this.product.initFresh();
           this.story.initFresh();
+          this.context.initFresh();
           this.organization.init();
           this.libraryOrganization.init();
           this.behavior.init();
           initBehaviorHost(this);
           initRunBehavior(this);
-          this.db.exec('PRAGMA user_version=14');
+          initHelperWorkspace(this);
+          initEditDrafts(this);
+          initChatOverrides(this);
+          initChatOptions(this);
+          initResponseStreams(this.db);
+          this.db.exec('PRAGMA user_version=15');
         });
     } catch (error) {
       this.db.close();
@@ -161,6 +174,18 @@ export class Store {
     this.ownership.close();
   }
   transaction<T>(fn: () => T): T {
+    if (this.db.isTransaction) {
+      const savepoint = `nested_${randomUUID().replaceAll('-', '')}`;
+      this.db.exec(`SAVEPOINT ${savepoint}`);
+      try {
+        const value = fn();
+        this.db.exec(`RELEASE ${savepoint}`);
+        return value;
+      } catch (error) {
+        this.db.exec(`ROLLBACK TO ${savepoint}; RELEASE ${savepoint}`);
+        throw error;
+      }
+    }
     this.db.exec('BEGIN IMMEDIATE');
     try {
       const value = fn();
@@ -326,6 +351,7 @@ export class Store {
       loreContextReset?: boolean;
       packageStart?: import('../core/package-start.js').PackageStartRef;
       retryOf?: string;
+      requestEdited?: boolean;
     },
     snapshot: (chat: Chat) => RunSnapshot
   ): { run: Run; created: boolean } {
@@ -350,6 +376,7 @@ export class Store {
       ...(command.packageStart ? { packageStart: command.packageStart } : {}),
       ...(command.loreContextReset ? { loreContextReset: true } : {}),
       ...(command.retryOf ? { retryOf: command.retryOf } : {}),
+      ...(command.requestEdited ? { requestEdited: true } : {}),
     });
     const prior = this.db
       .prepare('SELECT id,command FROM runs WHERE chat_id=? AND request_key=?')
@@ -386,6 +413,21 @@ export class Store {
       executionClock: { iso: time, unix: Math.floor(Date.parse(time) / 1000) },
       branchId: branch.id,
     };
+    if (base.profile) {
+      new ChatOptionsStore(this).freeze(base.profile, branch.id, id);
+      const roots =
+        base.profile.chatOverrides?.roots ?? this.product.profile(chatId).packageAttachments ?? [];
+      const overrides = freezeChatOverrides(this, base.profile, roots, branch.headRevision);
+      if (overrides) base.profile.chatOverrides = overrides;
+      else delete base.profile.chatOverrides;
+      if (base.profile.packageAttachments?.length)
+        base.resources = [
+          ...base.resources.filter((resource) => !resource.id.startsWith('package:')),
+          ...this.product
+            .resources(chatId, base.profile)
+            .filter((resource) => resource.id.startsWith('package:')),
+        ];
+    }
     const sourceSegments = freezeSourceSegments(base.profile);
     const authored = base.packageStart?.mode === 'authored';
     let frozen = authored
@@ -400,7 +442,7 @@ export class Store {
       true
     );
     frozen = freezeLoreContext(this, authored ? frozen : prepareRunBehavior(this, id, frozen));
-    frozen = compileSnapshotPrompt(authored ? frozen : seedContextPlan(frozen));
+    frozen = compileSnapshotPrompt(authored ? frozen : this.context.prepareRun(frozen));
     const status = frozen.story?.waiting ? 'waiting_for_state' : 'queued';
     this.db
       .prepare(
@@ -436,15 +478,23 @@ export class Store {
   retryRun(
     runId: string,
     key: string,
-    validate?: (snapshot: RunSnapshot) => void
+    validate?: (snapshot: RunSnapshot) => void,
+    editedRequest?: string
   ): { run: Run; created: boolean } {
     return this.transaction(() => {
       const original = this.run(runId);
+      const requestEdited = editedRequest !== undefined;
+      const nextRequest = requestEdited ? text(editedRequest, 'request') : original.request;
       const prior = this.db
         .prepare('SELECT id,command FROM runs WHERE chat_id=? AND request_key=?')
         .get(original.chatId, key) as Row | undefined;
       if (prior) {
-        if (parse(prior.command).retryOf !== runId)
+        const command = parse(prior.command);
+        if (
+          command.retryOf !== runId ||
+          (command.requestEdited === true) !== requestEdited ||
+          command.request !== nextRequest
+        )
           throw new HttpError(409, 'Idempotency key reused with different command');
         return { run: this.run(prior.id), created: false };
       }
@@ -455,19 +505,20 @@ export class Store {
       const profile = this.product.snapshot(original.chatId);
       const chat = this.chat(original.chatId);
       const branch = this.product.createBranch(original.chatId, {
-        title: '다시 요청',
+        title: requestEdited ? '요청 수정' : '다시 요청',
         fromRevision: original.parentRevision,
       });
       return this.createRunInTransaction(
         original.chatId,
         {
-          request: original.request,
+          request: nextRequest,
           expectedRevision: original.parentRevision,
           expectedSettingsRevision: chat.settingsRevision,
           expectedProfileRevision: profile.revision,
           branchId: branch.id,
           idempotencyKey: key,
           retryOf: runId,
+          ...(requestEdited ? { requestEdited: true } : {}),
         },
         (current) => {
           const snapshot: RunSnapshot = {
@@ -475,7 +526,7 @@ export class Store {
             parentRevision: current.headRevision,
             settingsRevision: current.settingsRevision,
             settings: current.settings,
-            request: original.request,
+            request: nextRequest,
             history: this.history(current.headRevision),
             resources: this.product.resources(current.id, profile),
             profile,

@@ -1,4 +1,6 @@
 import { Switch } from './BooleanControls.js';
+import { Save } from 'lucide-react';
+import { IconButton } from './IconButton.js';
 import { useEffect, useState } from 'react';
 import type { ChatProfile, Library } from '../core/product.js';
 import { api } from './api.js';
@@ -6,6 +8,7 @@ import { usePromptWorkspace } from './usePromptWorkspace.js';
 import { PackageAttachments } from './PackageAttachments.js';
 import { LoreContextPolicyEditor } from './LoreContextPolicyEditor.js';
 import './library.css';
+import './settings-actions.css';
 
 export type ProfileSection = 'characters' | 'prompts' | 'models';
 const sections: { id: ProfileSection; title: string }[] = [
@@ -219,8 +222,9 @@ export function ProfileEditor({
             <div hidden={tab !== 'prompts'}>
               <p>모든 채팅의 이후 요청에 현재 전역 프롬프트와 옵션을 사용해요.</p>
               <p>
-                작문: {workspace?.main.title ?? '불러오는 중…'} · 번역:{' '}
-                {workspace?.translation.title ?? '불러오는 중…'}
+                작문: {workspace?.main.title ?? '불러오는 중…'}
+                <br />
+                번역: {workspace?.translation.title ?? '불러오는 중…'}
               </p>
               <button
                 type="button"
@@ -264,12 +268,9 @@ export function ProfileEditor({
           </p>
         )}
         <div
-          className="profile-savebar form-actions"
+          className="profile-savebar form-actions settings-save-actions"
           hidden={tab !== 'characters' && !dirty && !lorePending}
         >
-          <button disabled={saving || !dirty || lorePending}>
-            {saving ? '저장 중…' : '채팅 설정 저장'}
-          </button>
           {(dirty || lorePending) && (
             <button
               type="button"
@@ -289,9 +290,19 @@ export function ProfileEditor({
             </button>
           )}
           <span role="status">
-            {status || (dirty || lorePending ? '저장하지 않은 변경이 있어요.' : '')}
+            {saving
+              ? '저장 중…'
+              : status || (dirty || lorePending ? '저장하지 않은 변경이 있어요.' : '')}
           </span>
           {(dirty || lorePending) && <small>인물·자료의 변경 사항을 함께 저장해요.</small>}
+          <IconButton
+            type="submit"
+            icon={Save}
+            label="채팅 설정 저장"
+            className="settings-save-button"
+            disabled={saving || !dirty || lorePending}
+            aria-busy={saving}
+          />
         </div>
         {tab === 'prompts' && !dirty && !lorePending && status && <p role="status">{status}</p>}
       </form>

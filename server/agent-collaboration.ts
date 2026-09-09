@@ -51,7 +51,7 @@ export function buildAgentProviderRequest(
         pinnedSources: input.pinnedSources ?? [],
         contextSummary: input.contextSummary,
         state: input.state,
-        memory: input.memory,
+        notes: input.notes,
         sharedOptions,
       }),
       catalog: asJson(tools.length ? input.catalog : []),
@@ -254,7 +254,7 @@ export function createAgentCollaboration(
           ...(event.name === 'story.read'
             ? { source, keptRanges: read?.keptRanges, excludedRanges: read?.excludedRanges }
             : {}),
-          ...(event.name === 'memory.read'
+          ...(event.name === 'notes.read'
             ? {
                 entry: read?.entry,
                 sourceCount: read?.sourceCount,

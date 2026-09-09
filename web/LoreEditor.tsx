@@ -1,5 +1,6 @@
 import { SelectionCheckbox } from './BooleanControls.js';
 import { useEffect, useState } from 'react';
+import { useBufferedEditorState, useUnappliedEditorField } from './editor-workspace-context.js';
 import { Folder, Plus, Search } from 'lucide-react';
 import type { ContentPackage, PackageLore } from '../core/content-package.js';
 import { Dialog } from './Dialog.js';
@@ -23,10 +24,17 @@ export function LoreEditor({
   const [selected, setSelected] = useState(value.lore[0]?.id ?? '');
   const [checked, setChecked] = useState<string[]>([]);
   const [page, setPage] = useState(0);
-  const [folderEdit, setFolderEdit] = useState<{ id?: string; name: string } | null>(null);
+  const [folderEdit, setFolderEdit] = useBufferedEditorState<{ id?: string; name: string } | null>(
+    'package.lore.folder-editor',
+    null
+  );
   const [deleteLore, setDeleteLore] = useState<string | null>(null);
-  const [orderDrafts, setOrderDrafts] = useState<Record<string, string>>({});
+  const [orderDrafts, setOrderDrafts] = useBufferedEditorState<Record<string, string>>(
+    'package.lore.order',
+    {}
+  );
   const pendingOrders = value.lore.filter((row) => Object.hasOwn(orderDrafts, row.id));
+  useUnappliedEditorField('package.lore.order', pendingOrders.length > 0);
   useEffect(() => {
     onDraftChange?.(pendingOrders.length > 0);
   }, [pendingOrders.length, onDraftChange]);

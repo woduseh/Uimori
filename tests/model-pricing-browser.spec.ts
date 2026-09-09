@@ -1,7 +1,7 @@
 import { test, expect, type APIRequestContext, type Page } from '@playwright/test';
 import type { Attempt, Connection, Library } from '../core/product.js';
 import type { Chat, ChatDetail, ReaderDetail, Run } from '../core/types.js';
-import { navigationAction, selectSettingsSection } from './ui-navigation.js';
+import { navigationAction, openSourceActions, selectSettingsSection } from './ui-navigation.js';
 import { postFixtureChat } from './fixtures/chat.js';
 import { preservePromptWorkspace } from './fixtures/prompt-workspace.js';
 
@@ -241,12 +241,18 @@ test('PRICECOST01 source and attempt cost disclosures separate actual, estimated
   for (const width of [390, 1440]) {
     await page.setViewportSize({ width, height: 1000 });
     await page.goto(`/?chat=${chat.id}`);
-    const sourceCost = page.locator('.source-estimated-cost');
+    const source = page.getByTestId('source').first();
+    await expect(
+      source.getByRole('button', { name: '본문 추정 비용', exact: true })
+    ).not.toBeVisible();
+    await openSourceActions(source);
+    await source.getByRole('button', { name: '본문 추정 비용', exact: true }).click();
+    const sourceCost = page.getByRole('dialog', { name: '본문 추정 비용', exact: true });
     await expect(sourceCost).toContainText('확인분 부분합 $0.004995 · 미확인 1회 포함');
-    await sourceCost.locator('summary').click();
     await expect(sourceCost).toContainText('실제 청구액과 다를 수 있어요');
     await expect(sourceCost).toContainText('전체 추정 비용은 아직 미확인');
     await sourceCost.screenshot({ path: info.outputPath(`estimate-cost-source-${width}.png`) });
+    await sourceCost.getByRole('button', { name: '본문 추정 비용 닫기' }).click();
     await navigationAction(page, '작업 현황');
     const dialog = page.getByRole('dialog', { name: '작업 현황', exact: true });
     const usage = dialog.getByTestId('usage-inspector');

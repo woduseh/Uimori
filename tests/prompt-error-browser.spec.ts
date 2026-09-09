@@ -1,6 +1,9 @@
 import { test, expect } from '@playwright/test';
+import { isolatePromptDrafts } from './fixtures/prompt-workspace.js';
 import { navigationAction } from './ui-navigation.js';
 import type { PromptProgram } from '../core/prompt-program.js';
+
+isolatePromptDrafts();
 
 test('PERR01 preview errors stay local, can be dismissed and clear after recovery', async ({
   page,

@@ -290,6 +290,17 @@ test('LIBUI03 prompts have independent folders and unsaved edits survive a cance
   expect((await organization(request)).items.find((item) => item.id === prompt.id)?.folderId).toBe(
     folder.id
   );
+  await panel.getByLabel('프롬프트 이름', { exact: true }).fill(`${prefix} Discard this draft`);
+  await navigationAction(page, '서재');
+  await expect(guard).toBeVisible();
+  await guard.getByRole('button', { name: '초안 버리고 이동', exact: true }).click();
+  await expect(page.getByTestId('library-panel')).toBeVisible();
+  expect(
+    await (await request.get(`/api/edit-drafts?editorKey=prompt-preset:${prompt.id}`)).json()
+  ).toEqual([]);
+  await navigationAction(page, '프롬프트');
+  await panel.getByRole('button', { name: `${prefix} Unsaved 프롬프트 편집`, exact: true }).click();
+  await expect(panel.getByLabel('프롬프트 이름', { exact: true })).toHaveValue(`${prefix} Unsaved`);
 });
 
 test('LIBUI04 role selection creates a chat with the selected persona and module without reclassifying them', async ({

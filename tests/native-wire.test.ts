@@ -485,8 +485,8 @@ describe('native provider wire (synthetic, no live calls)', () => {
     vr.prompt!.messages[0].content[0].text = 'changed';
     expect(() => encodeVertex(vr)).toThrow('VERTEX_CONTINUATION_MISMATCH');
   });
-  test('Anthropic accepts M2 state and memory roles without enabling a model call', () => {
-    for (const role of ['state', 'memory'] as const)
+  test('Anthropic accepts state, context and helper roles without enabling a model call', () => {
+    for (const role of ['state', 'context', 'helper'] as const)
       expect(
         wire(encodeAnthropic({ ...request('claude-opus-5'), role }).body).messages
       ).toHaveLength(3);

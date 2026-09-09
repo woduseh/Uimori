@@ -1,0 +1,64 @@
+.context-panel {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+  border-top: 1px solid var(--border);
+  padding-top: 20px;
+}
+.context-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.context-panel .context-heading h4,
+.context-panel > p {
+  margin: 0;
+}
+.context-text {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  max-height: 24rem;
+  overflow: auto;
+  line-height: 1.6;
+  margin: 8px 0;
+}
+.context-summary-editor {
+  display: grid;
+  gap: 12px;
+}
+.context-summary-editor label {
+  display: grid;
+  gap: 8px;
+}
+.context-panel textarea {
+  width: 100%;
+  min-width: 0;
+  resize: vertical;
+}
+.context-conflict {
+  border-inline-start: 3px solid var(--accent);
+  padding-inline-start: 12px;
+}
+.context-conflict p {
+  line-height: 1.6;
+}
+.context-notes blockquote {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  margin: 12px 0;
+  padding-inline-start: 12px;
+  border-inline-start: 2px solid var(--border);
+}
+.context-panel summary {
+  min-height: 44px;
+  box-sizing: border-box;
+  align-content: center;
+}
+@media (max-width: 620px) {
+  .context-panel input,
+  .context-panel textarea {
+    font-size: 16px;
+  }
+}

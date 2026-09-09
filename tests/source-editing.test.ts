@@ -347,7 +347,7 @@ test('versioned source restore and fork preserve edit history, manual translatio
     expectedSourceHash: edited.hash,
   });
   const archive = store.product.export();
-  expect(archive.version).toBe(14);
+  expect(archive.version).toBe(15);
   const restored = database();
   restored.product.import(archive);
   expect(restored.source(s.id).text).toBe('Edited');

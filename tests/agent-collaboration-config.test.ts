@@ -63,7 +63,7 @@ describe('collaboration defaults and editable templates', () => {
     expect(agent.instructions).toMatch(/[가-힣]/u);
     expect(agent.tools.length).toBeGreaterThan(0);
     expect(
-      agent.tools.every((scope) => ['knowledge', 'skills', 'memory', 'story'].includes(scope))
+      agent.tools.every((scope) => ['knowledge', 'skills', 'notes', 'story'].includes(scope))
     ).toBe(true);
     agent.title = '직접 편집한 이름';
     agent.instructions = '직접 작성한 지침';
@@ -202,7 +202,7 @@ describe('collaboration limits and references', () => {
     for (const trigger of ['before', 'on-demand'] as const) {
       const value = config({
         trigger,
-        tools: ['knowledge', 'skills', 'memory', 'story'],
+        tools: ['knowledge', 'skills', 'notes', 'story'],
         model: { id: 'Model.Preset:1' },
       });
       expect(validateAgentCollaboration(value)).toEqual(value);
@@ -326,7 +326,7 @@ describe('strict JSON validation and detached output', () => {
     expect(result.agents[0].tools).not.toBe(agent.tools);
     expect(result.sharedControls).not.toBe(value.sharedControls);
     result.sharedControls.push('another');
-    result.agents[0].tools.push('memory');
+    result.agents[0].tools.push('notes');
     result.agents[0].model!.id = 'another-model';
     result.agents[0].instructions = '수정';
     result.agents.push(createAgentDefinition('custom', 'new'));

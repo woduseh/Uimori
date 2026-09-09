@@ -482,6 +482,9 @@ export class VertexDecoder {
       ...(typeof call.id === 'string' ? { providerId: call.id } : {}),
     });
   }
+  publicText(): string {
+    return this.text;
+  }
   snapshot(): ProviderResult {
     let status: ProviderResult['status'] = this.text || this.parts.length ? 'partial' : 'error';
     let error: { code: string } | null = this.fault ? { code: this.fault } : null;

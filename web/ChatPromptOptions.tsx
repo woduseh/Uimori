@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { X } from 'lucide-react';
 import type { Library, PromptWorkspace } from '../core/product.js';
 import { resolvePromptValues, reconcilePromptValues } from '../core/prompt-program.js';
@@ -6,17 +6,52 @@ import { combinationOwner, matchesPromptCombination } from '../core/prompt-combi
 import { booleanPromptDraft } from './prompt-boolean-draft.js';
 import { api } from './api.js';
 import { PromptControlFields } from './PromptControlFields.js';
+import { ChatOptionSettings } from './ChatOptionSettings.js';
 import './chat-prompt-options.css';
 type Props = {
   open: boolean;
   workspace: PromptWorkspace | null;
   library: Library | null;
   disabled: boolean;
+  chatId?: string;
+  branchId?: string;
   onClose: () => void;
   onDirtyChange: (dirty: boolean) => void;
   onBusyChange: (busy: boolean) => void;
 };
 export function ChatPromptOptions(props: Props) {
+  const contextKey = props.chatId && props.branchId ? `${props.chatId}:${props.branchId}` : '';
+  const [scope, setScope] = useState<'global' | 'chat'>('chat');
+  const [contexts, setContexts] = useState<{ key: string; chatId: string; branchId: string }[]>([]);
+  const [dirtyScopes, setDirtyScopes] = useState<Record<string, boolean>>({});
+  const [busyScopes, setBusyScopes] = useState<Record<string, boolean>>({});
+  const reportDirty = useCallback((key: string, value: boolean) => {
+    setDirtyScopes((current) => (current[key] === value ? current : { ...current, [key]: value }));
+  }, []);
+  const reportBusy = useCallback((key: string, value: boolean) => {
+    setBusyScopes((current) => (current[key] === value ? current : { ...current, [key]: value }));
+  }, []);
+  const globalDirty = useCallback((value: boolean) => reportDirty('global', value), [reportDirty]);
+  const globalBusy = useCallback((value: boolean) => reportBusy('global', value), [reportBusy]);
+  useEffect(() => {
+    if (!props.open || !contextKey || !props.chatId || !props.branchId) return;
+    const chatId = props.chatId,
+      branchId = props.branchId;
+    setContexts((current) =>
+      current.some((item) => item.key === contextKey)
+        ? current
+        : [...current, { key: contextKey, chatId, branchId }]
+    );
+  }, [props.open, contextKey, props.chatId, props.branchId]);
+  useEffect(
+    () => props.onDirtyChange(Object.values(dirtyScopes).some(Boolean)),
+    [dirtyScopes, props.onDirtyChange]
+  );
+  useEffect(
+    () => props.onBusyChange(Object.values(busyScopes).some(Boolean)),
+    [busyScopes, props.onBusyChange]
+  );
+  const selectedScope = contextKey ? scope : 'global';
   const closeButton = useRef<HTMLButtonElement>(null);
   useEffect(() => {
     if (props.open) closeButton.current?.focus();
@@ -72,7 +107,7 @@ export function ChatPromptOptions(props: Props) {
       <header className="chat-options-header">
         <div>
           <h2>창작 옵션</h2>
-          <small>모든 채팅 · 다음 생성부터 적용</small>
+          <small>{selectedScope === 'chat' ? '이 채팅' : '모든 채팅'} · 다음 생성부터 적용</small>
         </div>
         <button
           ref={closeButton}
@@ -84,12 +119,125 @@ export function ChatPromptOptions(props: Props) {
           <X size={20} />
         </button>
       </header>
-      {props.workspace ? (
-        <OptionsEditor {...props} workspace={props.workspace} />
-      ) : (
-        <p role="status">현재 프롬프트를 불러오는 중이에요…</p>
+      {contextKey && (
+        <div
+          className="chat-options-scope"
+          role="tablist"
+          aria-label="창작 옵션 범위"
+          onKeyDown={(event) => {
+            if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
+            event.preventDefault();
+            const next =
+              event.key === 'Home'
+                ? 'global'
+                : event.key === 'End'
+                  ? 'chat'
+                  : selectedScope === 'chat'
+                    ? 'global'
+                    : 'chat';
+            setScope(next);
+            event.currentTarget
+              .querySelectorAll<HTMLButtonElement>('button')
+              [next === 'global' ? 0 : 1]?.focus();
+          }}
+        >
+          {(['global', 'chat'] as const).map((value) => (
+            <button
+              key={value}
+              type="button"
+              role="tab"
+              id={`chat-options-${value}-tab`}
+              aria-controls={
+                value === 'chat'
+                  ? `chat-options-chat-panel-${contextKey}`
+                  : 'chat-options-global-panel'
+              }
+              aria-selected={selectedScope === value}
+              tabIndex={selectedScope === value ? 0 : -1}
+              onClick={() => setScope(value)}
+            >
+              {value === 'global' ? '모든 채팅' : '이 채팅'}
+            </button>
+          ))}
+        </div>
       )}
+      <div
+        id="chat-options-global-panel"
+        className="chat-options-scope-panel"
+        role="tabpanel"
+        aria-label="모든 채팅 옵션"
+        hidden={selectedScope !== 'global'}
+      >
+        {props.workspace ? (
+          <OptionsEditor
+            {...props}
+            workspace={props.workspace}
+            onDirtyChange={globalDirty}
+            onBusyChange={globalBusy}
+          />
+        ) : (
+          <p role="status">현재 프롬프트를 불러오는 중이에요…</p>
+        )}
+      </div>
+      {contexts.map((context) => (
+        <ChatScopeEditor
+          key={context.key}
+          context={context}
+          active={props.open && selectedScope === 'chat' && context.key === contextKey}
+          visible={selectedScope === 'chat' && context.key === contextKey}
+          disabled={props.disabled}
+          workspaceRevision={props.workspace?.revision}
+          onDirtyChange={reportDirty}
+          onBusyChange={reportBusy}
+        />
+      ))}
     </aside>
+  );
+}
+
+function ChatScopeEditor({
+  context,
+  active,
+  visible,
+  disabled,
+  workspaceRevision,
+  onDirtyChange,
+  onBusyChange,
+}: {
+  context: { key: string; chatId: string; branchId: string };
+  active: boolean;
+  visible: boolean;
+  disabled: boolean;
+  workspaceRevision?: number;
+  onDirtyChange: (key: string, value: boolean) => void;
+  onBusyChange: (key: string, value: boolean) => void;
+}) {
+  const dirty = useCallback(
+    (value: boolean) => onDirtyChange(context.key, value),
+    [context.key, onDirtyChange]
+  );
+  const busy = useCallback(
+    (value: boolean) => onBusyChange(context.key, value),
+    [context.key, onBusyChange]
+  );
+  return (
+    <div
+      id={`chat-options-chat-panel-${context.key}`}
+      className="chat-options-scope-panel"
+      role="tabpanel"
+      aria-label="이 채팅 옵션"
+      hidden={!visible}
+    >
+      <ChatOptionSettings
+        chatId={context.chatId}
+        branchId={context.branchId}
+        active={active}
+        disabled={disabled}
+        workspaceRevision={workspaceRevision}
+        onDirtyChange={dirty}
+        onBusyChange={busy}
+      />
+    </div>
   );
 }
 

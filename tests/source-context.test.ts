@@ -1,12 +1,7 @@
 import { createHash } from 'node:crypto';
 import { expect, test } from 'vitest';
-import {
-  sourceHistoryForRequest,
-  sourceLogicalHistoryForRequest,
-  sourceMemoryEntryAllowed,
-} from '../core/source-context.js';
+import { sourceHistoryForRequest, sourceLogicalHistoryForRequest } from '../core/source-context.js';
 import { executeStoryRead } from '../core/story-context.js';
-import { validateMemoryEntry } from '../core/memory.js';
 import type { RunSnapshot } from '../core/types.js';
 import { createSourceSegmentFixture } from './fixtures/source-segments.js';
 
@@ -69,46 +64,4 @@ test('excluded source ranges remain out of history, search and reads while curre
   expect(result.text).toBe(history[0].text);
   expect(result.source.hash).toBe(f.sourceHash);
   expect(result.keptRanges.map((r) => f.text.slice(r.start, r.end)).join('')).toBe(result.text);
-});
-test('memory knowledge comes from the source-time policy and cannot grant actor knowledge or change the extracted kind', () => {
-  const f = fixture(),
-    start = f.text.indexOf('Mira believes'),
-    end = f.text.indexOf('\r\n@hs', start),
-    scope = { chatId: 'synthetic', history: f.history };
-  const input = {
-    id: 'memory',
-    chatId: scope.chatId,
-    atRevision: 'source',
-    atHash: f.sourceHash,
-    kind: 'observed-story',
-    text: 'Synthetic observation',
-    sources: [
-      { revision: 'source', hash: f.sourceHash, start, end, quote: f.text.slice(start, end) },
-    ],
-  };
-  const entry = validateMemoryEntry(input, scope);
-  expect(entry.kind).toBe('observed-story');
-  expect(entry.knowledge).toMatchObject({
-    readerVisible: true,
-    worldStatus: 'unspecified',
-    knownByActorIds: null,
-  });
-  expect(entry.knowledge?.segments[0].kind).toBe('aside');
-  expect(input).not.toHaveProperty('knowledge');
-  expect(() =>
-    validateMemoryEntry(
-      { ...entry, knowledge: { ...entry.knowledge, knownByActorIds: ['everyone'] } },
-      scope
-    )
-  ).toThrow('SEGMENT_KNOWLEDGE_MISMATCH');
-  expect(sourceMemoryEntryAllowed(f.snapshot, entry)).toBe(false);
-  expect(
-    sourceMemoryEntryAllowed({ ...f.snapshot, sourceSegments: createSourceSegmentFixture() }, entry)
-  ).toBe(true);
-  const unconfigured = {
-    chatId: scope.chatId,
-    history: f.history.map(({ sourceSegments: _policy, ...source }) => source),
-  };
-  expect(validateMemoryEntry(input, unconfigured)).not.toHaveProperty('knowledge');
-  expect(() => validateMemoryEntry(entry, unconfigured)).toThrow('SEGMENT_KNOWLEDGE_MISMATCH');
 });

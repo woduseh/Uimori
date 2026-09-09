@@ -17,7 +17,7 @@ const names: Record<string, string> = {
   image: '이미지',
   status: '장면 상태',
   state: '상태 정리',
-  memory: '기억 정리',
+  context: '문맥 압축',
 };
 
 type Props = {
@@ -86,10 +86,17 @@ function TurnActivityContent({
   );
   const storyHistory = related.filter(
     (item) =>
-      (item.kind === 'state' || item.kind === 'memory') &&
+      item.kind === 'state' &&
       (!item.branchId || item.branchId === (branchId ?? run.snapshot.branchId))
   );
   const story = [...new Map(storyHistory.map((item) => [item.kind, item])).values()];
+  const context = related
+    .filter(
+      (item) =>
+        item.kind === 'context' &&
+        (!item.branchId || item.branchId === (branchId ?? run.snapshot.branchId))
+    )
+    .at(-1);
   const previousStory = storyHistory.filter(
     (item) => !story.some((current) => current.id === item.id)
   );
@@ -104,6 +111,7 @@ function TurnActivityContent({
           : names[job.kind],
     })),
     ...story,
+    ...(context ? [context] : []),
   ];
   const running = active(run.status) || entries.some((item) => active(item.status));
   useEffect(() => {
@@ -214,7 +222,7 @@ function TurnActivityContent({
             {children}
           </RunTaskDetails>
           {source && story.length > 0 && (
-            <section aria-label="이 응답의 상태와 기억 작업">
+            <section aria-label="이 응답의 상태 작업">
               {story.map((item) => (
                 <LazyDiagnostics<StoryJob>
                   key={item.id}
@@ -227,7 +235,7 @@ function TurnActivityContent({
               ))}
               {previousStory.length > 0 && (
                 <details>
-                  <summary>이전 상태·기억 작업 · {previousStory.length}개</summary>
+                  <summary>이전 상태 작업 · {previousStory.length}개</summary>
                   {previousStory.map((item) => (
                     <LazyDiagnostics<StoryJob>
                       key={item.id}
@@ -245,6 +253,12 @@ function TurnActivityContent({
                   ))}
                 </details>
               )}
+            </section>
+          )}
+          {context && (
+            <section aria-label="이 응답의 문맥 작업">
+              <p>문맥 압축 · {labels[context.status] ?? context.status}</p>
+              <small>요약과 작업 관리는 채팅 설정의 상태와 문맥에서 확인해요.</small>
             </section>
           )}
         </div>

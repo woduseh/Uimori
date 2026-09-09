@@ -72,7 +72,7 @@ function contextFromPackages(snapshot: RunSnapshot, packages: readonly ResolvedP
     description: body('description'),
     persona: body('persona'),
     lore: body('lore'),
-    memory: input.memory ? JSON.stringify(input.memory) : '',
+    notes: input.notes ? JSON.stringify(input.notes) : '',
     state: input.state ? JSON.stringify(input.state) : '',
     globalNote: '',
     authorNote: '',

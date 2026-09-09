@@ -6,8 +6,13 @@ import { PromptControlFields, ValueInput } from './PromptControlFields.js';
 import { ActionMenu } from './ActionMenu.js';
 import { IconButton } from './IconButton.js';
 import { DownloadIcon, UploadIcon } from './ui-icons.js';
-import { ArrowUp, ArrowDown, Undo2, Trash2, GripVertical, ChevronRight } from 'lucide-react';
+import { ArrowUp, ArrowDown, Undo2, Trash2, GripVertical, ChevronRight, Plus } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
+import {
+  EditorDraftFieldScope,
+  useBufferedEditorState,
+  useUnappliedEditorField,
+} from './editor-workspace-context.js';
 import {
   compilePromptProgram,
   resolvePromptValues,
@@ -103,12 +108,14 @@ function freshBlock(
 
 /** Each JSON field owns its unaccepted text. Failed parsing never changes the applied value. */
 function JsonDraft({
+  fieldKey,
   label,
   value,
   onApply,
   onError,
   allowEmpty = false,
 }: {
+  fieldKey: string;
   label: string;
   value: unknown;
   onApply: (value: unknown) => void;
@@ -116,8 +123,9 @@ function JsonDraft({
   allowEmpty?: boolean;
 }) {
   const serialized = value === undefined ? '' : pretty(value);
-  const [draft, setDraft] = useState(serialized);
-  const [dirty, setDirty] = useState(false);
+  const [draft, setDraft] = useBufferedEditorState(fieldKey, serialized);
+  const [dirty, setDirty] = useBufferedEditorState(`${fieldKey}.pending`, false);
+  useUnappliedEditorField(fieldKey, dirty);
   const [error, setError] = useState('');
   const original = useRef(serialized);
   useEffect(() => {
@@ -125,7 +133,7 @@ function JsonDraft({
       setDraft(serialized);
       original.current = serialized;
     }
-  }, [serialized, dirty]);
+  }, [serialized, dirty, setDraft]);
   function apply() {
     try {
       const parsed = allowEmpty && !draft.trim() ? undefined : JSON.parse(draft);
@@ -184,22 +192,25 @@ function JsonDraft({
   );
 }
 function FieldDraft({
+  fieldKey,
   label,
   value,
   onApply,
   onError,
 }: {
+  fieldKey: string;
   label: string;
   value: string;
   onApply: (value: string) => void;
   onError: (message: string) => void;
 }) {
-  const [draft, setDraft] = useState(value);
-  const [dirty, setDirty] = useState(false);
+  const [draft, setDraft] = useBufferedEditorState(fieldKey, value);
+  const [dirty, setDirty] = useBufferedEditorState(`${fieldKey}.pending`, false);
+  useUnappliedEditorField(fieldKey, dirty);
   const [error, setError] = useState('');
   useEffect(() => {
     if (!dirty) setDraft(value);
-  }, [value, dirty]);
+  }, [value, dirty, setDraft]);
   const apply = () => {
     if (!dirty) return;
     try {
@@ -237,6 +248,7 @@ function FieldDraft({
   );
 }
 function TemplateEditor({
+  fieldKey,
   template,
   onChange,
   onError,
@@ -245,6 +257,7 @@ function TemplateEditor({
   slots,
   onPendingChange,
 }: {
+  fieldKey: string;
   template: PromptTemplate;
   onChange: (template: PromptTemplate) => void;
   onError: (message: string) => void;
@@ -253,9 +266,16 @@ function TemplateEditor({
   slots: string[];
   onPendingChange: (dirty: boolean) => void;
 }) {
-  const [mode, setMode] = useState<'existing' | 'source'>('existing');
-  const [source, setSource] = useState('');
-  const [pending, setPending] = useState(false);
+  const [mode, setMode] = useBufferedEditorState<'existing' | 'source'>(
+    `${fieldKey}.mode`,
+    'existing'
+  );
+  const [source, setSource] = useBufferedEditorState(`${fieldKey}.source`, '');
+  const [pending, setPending] = useBufferedEditorState(`${fieldKey}.pending`, false);
+  useUnappliedEditorField(fieldKey, pending);
+  const pendingCallback = useRef(onPendingChange);
+  pendingCallback.current = onPendingChange;
+  useEffect(() => pendingCallback.current(pending), [pending]);
   const [error, setError] = useState('');
   const original = useRef('');
   useEffect(() => {
@@ -268,7 +288,7 @@ function TemplateEditor({
         setError(errorMessage(caught));
       }
     }
-  }, [template, mode, pending]);
+  }, [template, mode, pending, setSource]);
   const setPendingDraft = (value: boolean) => {
     setPending(value);
     onPendingChange(value);
@@ -437,6 +457,7 @@ function TemplateEditor({
             템플릿 JSON · 고급 편집
           </summary>
           <JsonDraft
+            fieldKey={`${fieldKey}.json`}
             label={`${label} JSON`}
             value={template}
             onApply={(value) => onChange(value as PromptTemplate)}
@@ -565,6 +586,7 @@ function BlockEditor({
             </label>
           )}
           <TemplateEditor
+            fieldKey={`blocks.${block.id}.template`}
             label={`${block.title || block.id} 본문`}
             template={block.template}
             onChange={(template) => commit({ ...block, template })}
@@ -588,6 +610,7 @@ function BlockEditor({
           <p className="muted">참조가 비어 있으면 블록 전체를 생략해요.</p>
           {block.template ? (
             <TemplateEditor
+              fieldKey={`blocks.${block.id}.wrapper`}
               label={`${block.title || block.id} 감싸는 템플릿`}
               template={block.template}
               onChange={(template) => commit({ ...block, template })}
@@ -611,6 +634,7 @@ function BlockEditor({
         <>
           <div className="pc-grid">
             <FieldDraft
+              fieldKey={`blocks.${block.id}.from`}
               label="시작 위치"
               value={String(block.from)}
               onError={onError}
@@ -620,6 +644,7 @@ function BlockEditor({
               }}
             />
             <FieldDraft
+              fieldKey={`blocks.${block.id}.to`}
               label="끝 위치"
               value={String(block.to)}
               onError={onError}
@@ -645,6 +670,7 @@ function BlockEditor({
       {block.kind === 'cache' && (
         <div className="pc-grid">
           <FieldDraft
+            fieldKey={`blocks.${block.id}.depth`}
             label="앞에서 찾을 메시지 수"
             value={String(block.depth)}
             onError={onError}
@@ -688,6 +714,7 @@ function BlockEditor({
         </summary>
         <p className="muted">비워두면 항상 적용해요. 예: {'{"control":"control-id"}'}</p>
         <JsonDraft
+          fieldKey={`blocks.${block.id}.when`}
           label={`${block.title || block.id} 조건 JSON`}
           value={block.when}
           allowEmpty
@@ -761,6 +788,7 @@ function ControlEditor({
       />
       {control.type === 'select' && (
         <JsonDraft
+          fieldKey={`controls.${control.id}.options`}
           label={`${control.label} 선택지 JSON`}
           value={control.options ?? []}
           onApply={(value) => commit({ ...control, options: value as PromptControl['options'] })}
@@ -801,6 +829,7 @@ function ControlEditor({
           제어 정의 JSON
         </summary>
         <JsonDraft
+          fieldKey={`controls.${control.id}.definition`}
           label={`${control.label} 정의 JSON`}
           value={control}
           onApply={(value) => commit(value as PromptControl)}
@@ -1187,600 +1216,625 @@ export function PromptComposer({
     }
   }
   return (
-    <section
-      ref={root}
-      className="prompt-composer"
-      aria-label="프롬프트 구성"
-      data-testid="prompt-composer"
-    >
-      <details className="pc-composer-fold" open>
-        <summary aria-label="프롬프트 구성 접기/펼치기">
-          <ChevronRight className="pc-disclosure-icon" size={16} aria-hidden="true" />
-          <strong>프롬프트 구성</strong>
-          <span className="pc-badge">
-            {program.blocks.length}개 블록 · {program.controls.length}개 제어
-          </span>
-          {pendingTemplate && <small>미적용 문법</small>}
-          {controlsDirty && <small>미저장 옵션</small>}
-        </summary>
-        <div className="pc-composer-content">
-          <div className="pc-composer-tools">
-            <IconButton
-              label="이전 편집으로"
-              icon={Undo2}
-              disabled={pendingTemplate || !undo.length}
-              onClick={undoEdit}
-            />
-            <ActionMenu label="프롬프트 구성 도구" className="pc-program-menu">
-              <label className="pc-file">
-                <UploadIcon size={18} aria-hidden="true" /> JSON 불러오기
-                <input
-                  aria-label="프롬프트 구성 JSON 불러오기"
-                  type="file"
-                  disabled={pendingTemplate}
-                  accept=".json,application/json"
-                  onChange={(event) => {
-                    const file = event.target.files?.[0];
-                    event.target.value = '';
-                    if (file) void importFile(file);
-                  }}
-                />
-              </label>
-              <button
-                type="button"
-                className="secondary"
-                onClick={() => saveDownload('uimori-prompt-program.json', program)}
-              >
-                <DownloadIcon size={18} aria-hidden="true" /> JSON 내보내기
-              </button>
-            </ActionMenu>
-          </div>
-          <div className="pc-structure-editor">
-            <datalist id="pc-slot-names">
-              {[
-                'description',
-                'persona',
-                'lorebook',
-                'references',
-                'memory',
-                'authorNote',
-                'globalNote',
-                'postEverything',
-                'char',
-                'source',
-                'context',
-                'outputSchema',
-                'catalog',
-              ].map((name) => (
-                <option key={name} value={name}>
-                  {name === 'references' ? '기본 자료 (출처 포함)' : name}
-                </option>
-              ))}
-            </datalist>
-            <details className="pc-section pc-blocks-section" open>
-              <summary aria-label="프롬프트 블록 접기/펼치기">
-                <ChevronRight className="pc-disclosure-icon" size={16} aria-hidden="true" />
-                블록 · {program.blocks.length}개
-              </summary>
-              <div className="pc-block-list">
-                {program.blocks.map((block, index) => (
-                  <details
-                    className={`pc-block${block.enabled === false ? ' pc-disabled' : ''}`}
-                    data-drop-position={
-                      dropTarget?.id === block.id
-                        ? dropTarget.after
-                          ? 'after'
-                          : 'before'
-                        : undefined
-                    }
-                    onDragOver={(event) => {
-                      if (!draggingBlock.current) return;
-                      event.preventDefault();
-                      event.dataTransfer.dropEffect = 'move';
-                      const bounds = event.currentTarget.getBoundingClientRect();
-                      setDropTarget({
-                        id: block.id,
-                        after: event.clientY >= bounds.top + bounds.height / 2,
-                      });
+    <EditorDraftFieldScope prefix={`prompt.${role}`}>
+      <section
+        ref={root}
+        className="prompt-composer"
+        aria-label="프롬프트 구성"
+        data-testid="prompt-composer"
+      >
+        <details className="pc-composer-fold" open>
+          <summary aria-label="프롬프트 구성 접기/펼치기">
+            <ChevronRight className="pc-disclosure-icon" size={16} aria-hidden="true" />
+            <strong>프롬프트 구성</strong>
+            <span className="pc-badge">
+              {program.blocks.length}개 블록 · {program.controls.length}개 제어
+            </span>
+            {pendingTemplate && <small>미적용 문법</small>}
+            {controlsDirty && <small>미저장 옵션</small>}
+          </summary>
+          <div className="pc-composer-content">
+            <div className="pc-composer-tools">
+              <IconButton
+                label="이전 편집으로"
+                icon={Undo2}
+                disabled={pendingTemplate || !undo.length}
+                onClick={undoEdit}
+              />
+              <ActionMenu label="프롬프트 구성 도구" className="pc-program-menu">
+                <label className="pc-file">
+                  <UploadIcon size={18} aria-hidden="true" /> JSON 불러오기
+                  <input
+                    aria-label="프롬프트 구성 JSON 불러오기"
+                    type="file"
+                    disabled={pendingTemplate}
+                    accept=".json,application/json"
+                    onChange={(event) => {
+                      const file = event.target.files?.[0];
+                      event.target.value = '';
+                      if (file) void importFile(file);
                     }}
-                    onDragLeave={(event) => {
-                      if (!event.currentTarget.contains(event.relatedTarget as Node | null))
-                        setDropTarget(null);
-                    }}
-                    onDrop={(event) => {
-                      const sourceId = draggingBlock.current;
-                      if (!sourceId) return;
-                      event.preventDefault();
-                      event.stopPropagation();
-                      const bounds = event.currentTarget.getBoundingClientRect();
-                      const after = event.clientY >= bounds.top + bounds.height / 2;
-                      clearDrag();
-                      if (sourceId === block.id) return;
-                      const source = program.blocks.find((item) => item.id === sourceId);
-                      if (!source) return;
-                      const blocks = program.blocks.filter((item) => item.id !== sourceId);
-                      const target = blocks.findIndex((item) => item.id === block.id);
-                      if (target < 0) return;
-                      blocks.splice(target + (after ? 1 : 0), 0, source);
-                      if (blocks.every((item, position) => item.id === program.blocks[position].id))
-                        return;
-                      lastBlockAction.current = sourceId;
-                      edit({ ...program, blocks });
-                      focusBlock(sourceId);
-                    }}
-                    key={block.id}
-                    id={`prompt-block-${block.id}`}
-                  >
-                    <summary>
-                      <ChevronRight className="pc-disclosure-icon" size={16} aria-hidden="true" />
-                      <button
-                        type="button"
-                        className="pc-drag-handle"
-                        draggable
-                        aria-label={`${block.title || block.id} 블록 드래그`}
-                        title="드래그하여 순서 변경 · 키보드는 블록 안의 위/아래 이동 사용"
-                        onClick={(event) => event.preventDefault()}
-                        onDragStart={(event) => {
-                          draggingBlock.current = block.id;
-                          event.dataTransfer.effectAllowed = 'move';
-                          event.dataTransfer.setData('text/plain', block.id);
-                        }}
-                        onDragEnd={clearDrag}
-                      >
-                        <GripVertical size={18} aria-hidden="true" />
-                      </button>
-                      <span className="pc-order">{index + 1}</span>
-                      <span className="pc-block-title">
-                        {block.title || block.id}
-                        <small>
-                          {kindLabels[block.kind]}
-                          {'role' in block ? ` · ${block.role}` : ''}
-                          {block.when !== undefined ? ' · 조건 있음' : ''}
-                          {block.enabled === false ? ' · 사용 안 함' : ''}
-                        </small>
-                      </span>
-                    </summary>
-                    <div className="pc-block-body">
-                      <div className="pc-block-tools">
-                        <IconButton
-                          label={`${block.title} 위로`}
-                          icon={ArrowUp}
-                          data-block-move={-1}
-                          disabled={index === 0}
-                          onClick={() => move(index, -1)}
-                        />
-                        <IconButton
-                          label={`${block.title} 아래로`}
-                          icon={ArrowDown}
-                          data-block-move={1}
-                          disabled={index === program.blocks.length - 1}
-                          onClick={() => move(index, 1)}
-                        />
-                        <ActionMenu label={`${block.title || block.id} 블록 메뉴`}>
-                          <button
-                            type="button"
-                            className="secondary"
-                            disabled={pendingTemplate}
-                            onClick={() => removeBlock(index)}
-                          >
-                            <Trash2 size={18} aria-hidden="true" /> 블록 삭제
-                          </button>
-                        </ActionMenu>
-                      </div>
-                      <BlockEditor
-                        block={block}
-                        onChange={(next) => {
-                          if (pendingTemplate && next.kind !== block.kind)
-                            throw new Error('문법 초안을 먼저 적용하거나 되돌려 주세요.');
-                          editBlock(index, next);
-                        }}
-                        onError={report}
-                        controlIds={program.controls.map((control) => control.id)}
-                        slots={[...slotNames]}
-                        onPendingChange={(dirty) =>
-                          setPendingTemplates((current) => ({ ...current, [block.id]: dirty }))
-                        }
-                      />
-                    </div>
-                  </details>
-                ))}
-              </div>
-              <div className="pc-actions">
+                  />
+                </label>
                 <button
                   type="button"
                   className="secondary"
-                  data-add-block
-                  disabled={program.blocks.length >= 300}
-                  onClick={() =>
-                    edit({ ...program, blocks: [...program.blocks, freshBlock('message')] })
-                  }
+                  onClick={() => saveDownload('uimori-prompt-program.json', program)}
                 >
-                  블록 추가
+                  <DownloadIcon size={18} aria-hidden="true" /> JSON 내보내기
                 </button>
+              </ActionMenu>
+            </div>
+            <div className="pc-structure-editor">
+              <datalist id="pc-slot-names">
+                {[
+                  'description',
+                  'persona',
+                  'lorebook',
+                  'references',
+                  'notes',
+                  'authorNote',
+                  'globalNote',
+                  'postEverything',
+                  'char',
+                  'source',
+                  'context',
+                  'outputSchema',
+                  'catalog',
+                ].map((name) => (
+                  <option key={name} value={name}>
+                    {name === 'references' ? '기본 자료 (출처 포함)' : name}
+                  </option>
+                ))}
+              </datalist>
+              <details className="pc-section pc-blocks-section">
+                <summary aria-label="프롬프트 블록 접기/펼치기">
+                  <ChevronRight className="pc-disclosure-icon" size={16} aria-hidden="true" />
+                  블록 · {program.blocks.length}개
+                  <IconButton
+                    icon={Plus}
+                    label="블록 추가"
+                    className="pc-add-block"
+                    data-add-block
+                    disabled={program.blocks.length >= 300}
+                    onClick={(event) => {
+                      event.preventDefault();
+                      event.stopPropagation();
+                      const section = event.currentTarget.closest('details');
+                      if (section) section.open = true;
+                      const block = freshBlock('message');
+                      edit({ ...program, blocks: [...program.blocks, block] });
+                      requestAnimationFrame(() => {
+                        const added = root.current?.querySelector<HTMLDetailsElement>(
+                          `#prompt-block-${CSS.escape(block.id)}`
+                        );
+                        if (!added) return;
+                        added.open = true;
+                        const input = added.querySelector<HTMLInputElement>('input');
+                        input?.focus({ preventScroll: true });
+                        input?.scrollIntoView({ block: 'nearest' });
+                      });
+                    }}
+                  />
+                </summary>
+                <div className="pc-block-list">
+                  {program.blocks.map((block, index) => (
+                    <details
+                      className={`pc-block${block.enabled === false ? ' pc-disabled' : ''}`}
+                      data-drop-position={
+                        dropTarget?.id === block.id
+                          ? dropTarget.after
+                            ? 'after'
+                            : 'before'
+                          : undefined
+                      }
+                      onDragOver={(event) => {
+                        if (!draggingBlock.current) return;
+                        event.preventDefault();
+                        event.dataTransfer.dropEffect = 'move';
+                        const bounds = event.currentTarget.getBoundingClientRect();
+                        setDropTarget({
+                          id: block.id,
+                          after: event.clientY >= bounds.top + bounds.height / 2,
+                        });
+                      }}
+                      onDragLeave={(event) => {
+                        if (!event.currentTarget.contains(event.relatedTarget as Node | null))
+                          setDropTarget(null);
+                      }}
+                      onDrop={(event) => {
+                        const sourceId = draggingBlock.current;
+                        if (!sourceId) return;
+                        event.preventDefault();
+                        event.stopPropagation();
+                        const bounds = event.currentTarget.getBoundingClientRect();
+                        const after = event.clientY >= bounds.top + bounds.height / 2;
+                        clearDrag();
+                        if (sourceId === block.id) return;
+                        const source = program.blocks.find((item) => item.id === sourceId);
+                        if (!source) return;
+                        const blocks = program.blocks.filter((item) => item.id !== sourceId);
+                        const target = blocks.findIndex((item) => item.id === block.id);
+                        if (target < 0) return;
+                        blocks.splice(target + (after ? 1 : 0), 0, source);
+                        if (
+                          blocks.every((item, position) => item.id === program.blocks[position].id)
+                        )
+                          return;
+                        lastBlockAction.current = sourceId;
+                        edit({ ...program, blocks });
+                        focusBlock(sourceId);
+                      }}
+                      key={block.id}
+                      id={`prompt-block-${block.id}`}
+                    >
+                      <summary>
+                        <ChevronRight className="pc-disclosure-icon" size={16} aria-hidden="true" />
+                        <button
+                          type="button"
+                          className="pc-drag-handle"
+                          draggable
+                          aria-label={`${block.title || block.id} 블록 드래그`}
+                          title="드래그하여 순서 변경 · 키보드는 블록 안의 위/아래 이동 사용"
+                          onClick={(event) => event.preventDefault()}
+                          onDragStart={(event) => {
+                            draggingBlock.current = block.id;
+                            event.dataTransfer.effectAllowed = 'move';
+                            event.dataTransfer.setData('text/plain', block.id);
+                          }}
+                          onDragEnd={clearDrag}
+                        >
+                          <GripVertical size={18} aria-hidden="true" />
+                        </button>
+                        <span className="pc-order">{index + 1}</span>
+                        <span className="pc-block-title">
+                          {block.title || block.id}
+                          <small>
+                            {kindLabels[block.kind]}
+                            {'role' in block ? ` · ${block.role}` : ''}
+                            {block.when !== undefined ? ' · 조건 있음' : ''}
+                            {block.enabled === false ? ' · 사용 안 함' : ''}
+                          </small>
+                        </span>
+                      </summary>
+                      <div className="pc-block-body">
+                        <div className="pc-block-tools">
+                          <IconButton
+                            label={`${block.title} 위로`}
+                            icon={ArrowUp}
+                            data-block-move={-1}
+                            disabled={index === 0}
+                            onClick={() => move(index, -1)}
+                          />
+                          <IconButton
+                            label={`${block.title} 아래로`}
+                            icon={ArrowDown}
+                            data-block-move={1}
+                            disabled={index === program.blocks.length - 1}
+                            onClick={() => move(index, 1)}
+                          />
+                          <ActionMenu label={`${block.title || block.id} 블록 메뉴`}>
+                            <button
+                              type="button"
+                              className="secondary"
+                              disabled={pendingTemplate}
+                              onClick={() => removeBlock(index)}
+                            >
+                              <Trash2 size={18} aria-hidden="true" /> 블록 삭제
+                            </button>
+                          </ActionMenu>
+                        </div>
+                        <BlockEditor
+                          block={block}
+                          onChange={(next) => {
+                            if (pendingTemplate && next.kind !== block.kind)
+                              throw new Error('문법 초안을 먼저 적용하거나 되돌려 주세요.');
+                            editBlock(index, next);
+                          }}
+                          onError={report}
+                          controlIds={program.controls.map((control) => control.id)}
+                          slots={[...slotNames]}
+                          onPendingChange={(dirty) =>
+                            setPendingTemplates((current) => ({ ...current, [block.id]: dirty }))
+                          }
+                        />
+                      </div>
+                    </details>
+                  ))}
+                </div>
+              </details>
+              <details className="pc-section">
+                <summary>
+                  <ChevronRight className="pc-disclosure-icon" size={16} aria-hidden="true" />
+                  제어 정의 · {program.controls.length}개
+                </summary>
+                <div className="pc-stack">
+                  {program.controls.map((control, index) => (
+                    <details className="pc-control" key={control.id}>
+                      <summary>
+                        <ChevronRight className="pc-disclosure-icon" size={16} aria-hidden="true" />
+                        {control.label}
+                        <small> · {control.type}</small>
+                      </summary>
+                      <ControlEditor
+                        control={control}
+                        onError={report}
+                        onChange={(next) =>
+                          change({
+                            ...program,
+                            controls: program.controls.map((item, i) =>
+                              i === index ? next : item
+                            ),
+                          })
+                        }
+                      />
+                      <button
+                        type="button"
+                        className="ghost"
+                        onClick={() =>
+                          edit({
+                            ...program,
+                            controls: program.controls.filter((_, i) => i !== index),
+                          })
+                        }
+                      >
+                        제어 삭제
+                      </button>
+                    </details>
+                  ))}
+                  <button
+                    type="button"
+                    className="secondary"
+                    disabled={program.controls.length >= 150}
+                    onClick={() =>
+                      edit({
+                        ...program,
+                        controls: [
+                          ...program.controls,
+                          {
+                            id: newId('control'),
+                            label: '새 제어',
+                            type: 'boolean',
+                            default: false,
+                          },
+                        ],
+                      })
+                    }
+                  >
+                    제어 추가
+                  </button>
+                </div>
+              </details>
+            </div>
+            <details className="pc-section" open={program.controls.length > 0}>
+              <summary>
+                <ChevronRight className="pc-disclosure-icon" size={16} aria-hidden="true" />
+                프롬프트 창작 옵션과 조합
+              </summary>
+              <div className="pc-stack">
+                <p className="muted">
+                  값을 바꾼 뒤 저장 버튼을 눌러 적용해요. 프롬프트의 기본값은 제어 정의에서 바꿀 수
+                  있어요.
+                </p>
+                <PromptControlFields
+                  program={program}
+                  values={controls.values}
+                  onChange={(id, value) =>
+                    editControls({
+                      ...controls,
+                      values: { ...controls.values, [id]: value },
+                      selectedCombinationId: undefined,
+                    })
+                  }
+                />
+                <div className="pc-control pc-combination-card">
+                  <h4>이 프롬프트의 옵션 조합</h4>
+                  <p className="muted">
+                    같은 프롬프트에서 저장했고 옵션 정의가 일치하는 조합만 불러올 수 있어요. 불러온
+                    선택값은 초안에 반영되며 저장해야 적용돼요.
+                  </p>
+                  <label>
+                    옵션 조합 선택
+                    <select
+                      aria-label="이 프롬프트의 옵션 조합"
+                      value={selectedSavedCombination}
+                      onChange={(event) => {
+                        const item = compatibleCombinations.find(
+                          (item) => item.id === event.target.value
+                        );
+                        if (item)
+                          safe(() => {
+                            editControls({
+                              ...controls,
+                              values: resolvePromptValues(program, item.values),
+                              selectedCombinationId: undefined,
+                            });
+                            setSelectedSavedCombination(item.id);
+                          });
+                        else setSelectedSavedCombination('');
+                      }}
+                    >
+                      <option value="">직접 선택</option>
+                      {compatibleCombinations.map((item) => (
+                        <option key={item.id} value={item.id}>
+                          {item.title}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  {selectedSavedCombination && (
+                    <small>
+                      {pretty(
+                        Object.fromEntries(
+                          program.controls.map((control) => [
+                            control.id,
+                            Object.hasOwn(controls.values, control.id)
+                              ? controls.values[control.id]
+                              : control.default,
+                          ])
+                        )
+                      ) ===
+                      pretty(
+                        compatibleCombinations.find((item) => item.id === selectedSavedCombination)
+                          ?.values
+                      )
+                        ? '불러온 조합'
+                        : '불러온 조합에서 수정됨'}
+                    </small>
+                  )}
+                </div>
+                <div className="pc-actions">
+                  <button
+                    type="button"
+                    className="ghost"
+                    onClick={() =>
+                      editControls({ ...controls, values: {}, selectedCombinationId: undefined })
+                    }
+                  >
+                    선택값을 프롬프트 기본값으로
+                  </button>
+                </div>
+                {hasRemovedValues && (
+                  <div className="pc-stack">
+                    <p className="muted">현재 프롬프트에 없는 제어의 선택값이 남아 있어요.</p>
+                    <button
+                      type="button"
+                      className="secondary"
+                      onClick={() => {
+                        const keep = (values: Record<string, PromptValue>) =>
+                          Object.fromEntries(
+                            Object.entries(values).filter(([id]) => knownControls.has(id))
+                          );
+                        editControls({
+                          ...controls,
+                          values: keep(controls.values),
+                          combinations: controls.combinations.map((combination) => ({
+                            ...combination,
+                            values: keep(combination.values),
+                          })),
+                        });
+                      }}
+                    >
+                      정의가 없는 선택값만 정리
+                    </button>
+                  </div>
+                )}
+                <div className="pc-grid">
+                  <label>
+                    새 조합 이름
+                    <input
+                      value={combinationName}
+                      maxLength={200}
+                      onChange={(event) => setCombinationName(event.target.value)}
+                    />
+                  </label>
+                  <button
+                    type="button"
+                    disabled={!onSaveCombination || !combinationName.trim() || savingCombination}
+                    onClick={() => void saveCombination()}
+                  >
+                    {savingCombination ? '저장 중…' : '옵션 조합 저장'}
+                  </button>
+                </div>
+                {!onSaveCombination && (
+                  <small className="muted">
+                    프롬프트와 옵션 정의를 먼저 저장하면 조합을 저장할 수 있어요.
+                  </small>
+                )}
+                {importedCombination && (
+                  <button
+                    type="button"
+                    className="secondary"
+                    disabled={controls.combinations.length >= 50}
+                    onClick={() =>
+                      safe(() => {
+                        resolvePromptValues(program, importedCombination.values);
+                        editControls({
+                          ...controls,
+                          values: structuredClone(importedCombination.values),
+                        });
+                        setImportedCombination(null);
+                      })
+                    }
+                  >
+                    가져온 권장 옵션 적용
+                  </button>
+                )}
+                <div className="pc-actions">
+                  <button
+                    type="button"
+                    disabled={!onSaveControls || !controlsDirty || saving}
+                    onClick={() => void saveControls()}
+                  >
+                    {saving ? '저장 중…' : '현재 옵션 저장'}
+                  </button>
+                  {controlsDirty && <small>미저장 변경 있음</small>}
+                  {!onSaveControls && (
+                    <small>편집기 아래의 저장 버튼으로 옵션을 함께 저장해요.</small>
+                  )}
+                </div>
               </div>
             </details>
             <details className="pc-section">
               <summary>
                 <ChevronRight className="pc-disclosure-icon" size={16} aria-hidden="true" />
-                제어 정의 · {program.controls.length}개
+                전체 구성 JSON · 고급 편집
               </summary>
-              <div className="pc-stack">
-                {program.controls.map((control, index) => (
-                  <details className="pc-control" key={control.id}>
-                    <summary>
-                      <ChevronRight className="pc-disclosure-icon" size={16} aria-hidden="true" />
-                      {control.label}
-                      <small> · {control.type}</small>
-                    </summary>
-                    <ControlEditor
-                      control={control}
-                      onError={report}
-                      onChange={(next) =>
-                        change({
-                          ...program,
-                          controls: program.controls.map((item, i) => (i === index ? next : item)),
-                        })
-                      }
-                    />
-                    <button
-                      type="button"
-                      className="ghost"
-                      onClick={() =>
-                        edit({
-                          ...program,
-                          controls: program.controls.filter((_, i) => i !== index),
-                        })
-                      }
-                    >
-                      제어 삭제
-                    </button>
-                  </details>
-                ))}
-                <button
-                  type="button"
-                  className="secondary"
-                  disabled={program.controls.length >= 150}
-                  onClick={() =>
-                    edit({
-                      ...program,
-                      controls: [
-                        ...program.controls,
-                        { id: newId('control'), label: '새 제어', type: 'boolean', default: false },
-                      ],
-                    })
-                  }
-                >
-                  제어 추가
-                </button>
-              </div>
-            </details>
-          </div>
-          <details className="pc-section" open={program.controls.length > 0}>
-            <summary>
-              <ChevronRight className="pc-disclosure-icon" size={16} aria-hidden="true" />
-              프롬프트 창작 옵션과 조합
-            </summary>
-            <div className="pc-stack">
-              <p className="muted">
-                값을 바꾼 뒤 저장 버튼을 눌러 적용해요. 프롬프트의 기본값은 제어 정의에서 바꿀 수
-                있어요.
-              </p>
-              <PromptControlFields
-                program={program}
-                values={controls.values}
-                onChange={(id, value) =>
-                  editControls({
-                    ...controls,
-                    values: { ...controls.values, [id]: value },
-                    selectedCombinationId: undefined,
-                  })
-                }
-              />
-              <div className="pc-control pc-combination-card">
-                <h4>이 프롬프트의 옵션 조합</h4>
-                <p className="muted">
-                  같은 프롬프트에서 저장했고 옵션 정의가 일치하는 조합만 불러올 수 있어요. 불러온
-                  선택값은 초안에 반영되며 저장해야 적용돼요.
-                </p>
-                <label>
-                  옵션 조합 선택
-                  <select
-                    aria-label="이 프롬프트의 옵션 조합"
-                    value={selectedSavedCombination}
-                    onChange={(event) => {
-                      const item = compatibleCombinations.find(
-                        (item) => item.id === event.target.value
-                      );
-                      if (item)
-                        safe(() => {
-                          editControls({
-                            ...controls,
-                            values: resolvePromptValues(program, item.values),
-                            selectedCombinationId: undefined,
-                          });
-                          setSelectedSavedCombination(item.id);
-                        });
-                      else setSelectedSavedCombination('');
-                    }}
-                  >
-                    <option value="">직접 선택</option>
-                    {compatibleCombinations.map((item) => (
-                      <option key={item.id} value={item.id}>
-                        {item.title}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                {selectedSavedCombination && (
-                  <small>
-                    {pretty(
-                      Object.fromEntries(
-                        program.controls.map((control) => [
-                          control.id,
-                          Object.hasOwn(controls.values, control.id)
-                            ? controls.values[control.id]
-                            : control.default,
-                        ])
-                      )
-                    ) ===
-                    pretty(
-                      compatibleCombinations.find((item) => item.id === selectedSavedCombination)
-                        ?.values
-                    )
-                      ? '불러온 조합'
-                      : '불러온 조합에서 수정됨'}
-                  </small>
-                )}
-              </div>
-              <div className="pc-actions">
-                <button
-                  type="button"
-                  className="ghost"
-                  onClick={() =>
-                    editControls({ ...controls, values: {}, selectedCombinationId: undefined })
-                  }
-                >
-                  선택값을 프롬프트 기본값으로
-                </button>
-              </div>
-              {hasRemovedValues && (
-                <div className="pc-stack">
-                  <p className="muted">현재 프롬프트에 없는 제어의 선택값이 남아 있어요.</p>
-                  <button
-                    type="button"
-                    className="secondary"
-                    onClick={() => {
-                      const keep = (values: Record<string, PromptValue>) =>
-                        Object.fromEntries(
-                          Object.entries(values).filter(([id]) => knownControls.has(id))
-                        );
-                      editControls({
-                        ...controls,
-                        values: keep(controls.values),
-                        combinations: controls.combinations.map((combination) => ({
-                          ...combination,
-                          values: keep(combination.values),
-                        })),
-                      });
-                    }}
-                  >
-                    정의가 없는 선택값만 정리
-                  </button>
-                </div>
-              )}
-              <div className="pc-grid">
-                <label>
-                  새 조합 이름
-                  <input
-                    value={combinationName}
-                    maxLength={200}
-                    onChange={(event) => setCombinationName(event.target.value)}
-                  />
-                </label>
-                <button
-                  type="button"
-                  disabled={!onSaveCombination || !combinationName.trim() || savingCombination}
-                  onClick={() => void saveCombination()}
-                >
-                  {savingCombination ? '저장 중…' : '옵션 조합 저장'}
-                </button>
-              </div>
-              {!onSaveCombination && (
-                <small className="muted">
-                  프롬프트와 옵션 정의를 먼저 저장하면 조합을 저장할 수 있어요.
-                </small>
-              )}
-              {importedCombination && (
-                <button
-                  type="button"
-                  className="secondary"
-                  disabled={controls.combinations.length >= 50}
-                  onClick={() =>
-                    safe(() => {
-                      resolvePromptValues(program, importedCombination.values);
-                      editControls({
-                        ...controls,
-                        values: structuredClone(importedCombination.values),
-                      });
-                      setImportedCombination(null);
-                    })
-                  }
-                >
-                  가져온 권장 옵션 적용
-                </button>
-              )}
-              <div className="pc-actions">
-                <button
-                  type="button"
-                  disabled={!onSaveControls || !controlsDirty || saving}
-                  onClick={() => void saveControls()}
-                >
-                  {saving ? '저장 중…' : '현재 옵션 저장'}
-                </button>
-                {controlsDirty && <small>미저장 변경 있음</small>}
-                {!onSaveControls && (
-                  <small>편집기 아래의 저장 버튼으로 옵션을 함께 저장해요.</small>
-                )}
-              </div>
-            </div>
-          </details>
-          <details className="pc-section">
-            <summary>
-              <ChevronRight className="pc-disclosure-icon" size={16} aria-hidden="true" />
-              전체 구성 JSON · 고급 편집
-            </summary>
-            <JsonDraft
-              label="전체 프롬프트 구성 JSON"
-              value={program}
-              onApply={(value) => {
-                if (pendingTemplate) throw new Error('문법 초안을 먼저 적용하거나 되돌려 주세요.');
-                change(validatePromptProgram(value));
-              }}
-              onError={report}
-            />
-          </details>
-          <details className="pc-section pc-preview" aria-label="프롬프트 미리보기">
-            <summary aria-label="전송 미리보기 접기/펼치기">
-              <ChevronRight className="pc-disclosure-icon" size={16} aria-hidden="true" />
-              전송 미리보기
-            </summary>
-            <label>
-              {role === 'translation' ? '미리보기 원문' : '현재 요청'}
-              <textarea
-                aria-label={role === 'translation' ? '미리보기 원문' : '미리보기 현재 요청'}
-                value={request}
-                onChange={(event) => {
-                  setRequest(event.target.value);
-                  onPreviewRequestChange?.(event.target.value);
+              <JsonDraft
+                fieldKey={`program.${role}`}
+                label="전체 프롬프트 구성 JSON"
+                value={program}
+                onApply={(value) => {
+                  if (pendingTemplate)
+                    throw new Error('문법 초안을 먼저 적용하거나 되돌려 주세요.');
+                  change(validatePromptProgram(value));
                 }}
+                onError={report}
               />
-            </label>
-            <div className="pc-actions">
-              <button
-                type="button"
-                disabled={previewBusy || !request.trim()}
-                onClick={() => void runPreview()}
-              >
-                {previewBusy ? '구성 중…' : '미리보기 갱신'}
-              </button>
-              <small>
-                {chatId
-                  ? '이 이야기의 자료와 대화를 사용해요. 모델을 호출하지 않아요.'
-                  : '합성 자료와 대화로 구성 순서를 확인해요.'}
-              </small>
-            </div>
-            {preview && (
-              <div className="pc-preview-result">
-                {preview.fingerprint !== fingerprint && (
-                  <p className="pc-stale" role="status">
-                    설정이나 요청이 바뀌었어요. 아래는 이전 미리보기예요.
+            </details>
+            <details className="pc-section pc-preview" aria-label="프롬프트 미리보기">
+              <summary aria-label="전송 미리보기 접기/펼치기">
+                <ChevronRight className="pc-disclosure-icon" size={16} aria-hidden="true" />
+                전송 미리보기
+              </summary>
+              <label>
+                {role === 'translation' ? '미리보기 원문' : '현재 요청'}
+                <textarea
+                  aria-label={role === 'translation' ? '미리보기 원문' : '미리보기 현재 요청'}
+                  value={request}
+                  onChange={(event) => {
+                    setRequest(event.target.value);
+                    onPreviewRequestChange?.(event.target.value);
+                  }}
+                />
+              </label>
+              <div className="pc-actions">
+                <button
+                  type="button"
+                  disabled={previewBusy || !request.trim()}
+                  onClick={() => void runPreview()}
+                >
+                  {previewBusy ? '구성 중…' : '미리보기 갱신'}
+                </button>
+                <small>
+                  {chatId
+                    ? '이 이야기의 자료와 대화를 사용해요. 모델을 호출하지 않아요.'
+                    : '합성 자료와 대화로 구성 순서를 확인해요.'}
+                </small>
+              </div>
+              {preview && (
+                <div className="pc-preview-result">
+                  {preview.fingerprint !== fingerprint && (
+                    <p className="pc-stale" role="status">
+                      설정이나 요청이 바뀌었어요. 아래는 이전 미리보기예요.
+                    </p>
+                  )}
+                  <p className="muted">
+                    {preview.synthetic ? '합성 미리보기' : '이야기 미리보기'} · 메시지{' '}
+                    {preview.value.compilation.messages.length}개 · 캐시 기준{' '}
+                    {preview.value.compilation.cachePlan.length}개
                   </p>
-                )}
-                <p className="muted">
-                  {preview.synthetic ? '합성 미리보기' : '이야기 미리보기'} · 메시지{' '}
-                  {preview.value.compilation.messages.length}개 · 캐시 기준{' '}
-                  {preview.value.compilation.cachePlan.length}개
-                </p>
-                <ol className="pc-message-list">
-                  {preview.value.compilation.messages.map((message, index) => (
-                    <li key={message.id}>
-                      <details>
-                        <summary>
-                          <ChevronRight
-                            className="pc-disclosure-icon"
-                            size={16}
-                            aria-hidden="true"
-                          />
-                          {index + 1}. {message.role} · {message.completion}
-                          <small>
-                            {preview.blockNames[message.provenance.blockId] ??
-                              (message.provenance.blockId === '__host_background_lore__'
-                                ? '공통 배경 자료'
-                                : '추가 실행 문맥')}{' '}
-                            · {message.provenance.origin}
-                          </small>
-                        </summary>
-                        <pre>{message.content.map((part) => part.text).join('\n')}</pre>
-                      </details>
-                    </li>
-                  ))}
-                </ol>
-                <details>
-                  <summary>
-                    <ChevronRight className="pc-disclosure-icon" size={16} aria-hidden="true" />
-                    블록별 조건과 포함 결과
-                  </summary>
-                  <div className="pc-table-wrap">
-                    <table>
-                      <thead>
-                        <tr>
-                          <th>블록</th>
-                          <th>결과</th>
-                          <th>메시지 수</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {preview.value.compilation.trace.map((trace) => (
-                          <tr key={trace.blockId}>
-                            <td>{preview.blockNames[trace.blockId] ?? '이름 없는 블록'}</td>
-                            <td>
-                              {trace.included
-                                ? '적용'
-                                : trace.reason === 'disabled'
-                                  ? '사용 안 함'
-                                  : '조건 불일치'}
-                            </td>
-                            <td>{trace.messageIds.length}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </details>
-                <details>
-                  <summary>
-                    <ChevronRight className="pc-disclosure-icon" size={16} aria-hidden="true" />
-                    캐시 기준과 지원 제한
-                  </summary>
-                  <pre>
-                    {pretty({
-                      cachePlan: preview.value.compilation.cachePlan,
-                      warnings: preview.value.compilation.warnings,
-                      providerDiagnostics: preview.value.provider?.diagnostics ?? null,
-                    })}
-                  </pre>
-                </details>
-                {preview.value.error && (
-                  <p className="error" role="alert">
-                    {preview.value.error}
-                  </p>
-                )}
-                {preview.value.provider ? (
+                  <ol className="pc-message-list">
+                    {preview.value.compilation.messages.map((message, index) => (
+                      <li key={message.id}>
+                        <details>
+                          <summary>
+                            <ChevronRight
+                              className="pc-disclosure-icon"
+                              size={16}
+                              aria-hidden="true"
+                            />
+                            {index + 1}. {message.role} · {message.completion}
+                            <small>
+                              {preview.blockNames[message.provenance.blockId] ??
+                                (message.provenance.blockId === '__host_background_lore__'
+                                  ? '공통 배경 자료'
+                                  : '추가 실행 문맥')}{' '}
+                              · {message.provenance.origin}
+                            </small>
+                          </summary>
+                          <pre>{message.content.map((part) => part.text).join('\n')}</pre>
+                        </details>
+                      </li>
+                    ))}
+                  </ol>
                   <details>
                     <summary>
                       <ChevronRight className="pc-disclosure-icon" size={16} aria-hidden="true" />
-                      공급자 전송 구성 · {preview.value.provider.protocol} ·{' '}
-                      {preview.value.provider.modelId}
+                      블록별 조건과 포함 결과
                     </summary>
-                    <p className="muted">
-                      {preview.value.provider.kind === 'exact-request-body'
-                        ? '현재 미리보기 스냅샷의 인코더 본문이에요. 실제 실행에서는 실행 ID와 무작위 선택, 최신 설정이 달라질 수 있어요. 인증 정보는 없고, 전송이나 과금은 발생하지 않아요.'
-                        : '역할 변환만 확인하는 미리보기예요. 실행 시 보호된 번역 구간·도구·출력 형식이 추가되므로 실제 요청 본문과 달라요.'}
-                    </p>
-                    <pre>{pretty(preview.value.provider)}</pre>
+                    <div className="pc-table-wrap">
+                      <table>
+                        <thead>
+                          <tr>
+                            <th>블록</th>
+                            <th>결과</th>
+                            <th>메시지 수</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {preview.value.compilation.trace.map((trace) => (
+                            <tr key={trace.blockId}>
+                              <td>{preview.blockNames[trace.blockId] ?? '이름 없는 블록'}</td>
+                              <td>
+                                {trace.included
+                                  ? '적용'
+                                  : trace.reason === 'disabled'
+                                    ? '사용 안 함'
+                                    : '조건 불일치'}
+                              </td>
+                              <td>{trace.messageIds.length}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
                   </details>
-                ) : (
-                  <p className="muted">공급자별 전송 구성은 표시되지 않았어요.</p>
-                )}
-              </div>
-            )}
-          </details>
-        </div>
-      </details>
-      <DismissibleError message={error} onDismiss={() => setError('')} />
-      <p className="pc-status" role="status">
-        {status}
-      </p>
-    </section>
+                  <details>
+                    <summary>
+                      <ChevronRight className="pc-disclosure-icon" size={16} aria-hidden="true" />
+                      캐시 기준과 지원 제한
+                    </summary>
+                    <pre>
+                      {pretty({
+                        cachePlan: preview.value.compilation.cachePlan,
+                        warnings: preview.value.compilation.warnings,
+                        providerDiagnostics: preview.value.provider?.diagnostics ?? null,
+                      })}
+                    </pre>
+                  </details>
+                  {preview.value.error && (
+                    <p className="error" role="alert">
+                      {preview.value.error}
+                    </p>
+                  )}
+                  {preview.value.provider ? (
+                    <details>
+                      <summary>
+                        <ChevronRight className="pc-disclosure-icon" size={16} aria-hidden="true" />
+                        공급자 전송 구성 · {preview.value.provider.protocol} ·{' '}
+                        {preview.value.provider.modelId}
+                      </summary>
+                      <p className="muted">
+                        {preview.value.provider.kind === 'exact-request-body'
+                          ? '현재 미리보기 스냅샷의 인코더 본문이에요. 실제 실행에서는 실행 ID와 무작위 선택, 최신 설정이 달라질 수 있어요. 인증 정보는 없고, 전송이나 과금은 발생하지 않아요.'
+                          : '역할 변환만 확인하는 미리보기예요. 실행 시 보호된 번역 구간·도구·출력 형식이 추가되므로 실제 요청 본문과 달라요.'}
+                      </p>
+                      <pre>{pretty(preview.value.provider)}</pre>
+                    </details>
+                  ) : (
+                    <p className="muted">공급자별 전송 구성은 표시되지 않았어요.</p>
+                  )}
+                </div>
+              )}
+            </details>
+          </div>
+        </details>
+        <DismissibleError message={error} onDismiss={() => setError('')} />
+        <p className="pc-status" role="status">
+          {status}
+        </p>
+      </section>
+    </EditorDraftFieldScope>
   );
 }

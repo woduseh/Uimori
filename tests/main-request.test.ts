@@ -13,7 +13,7 @@ import { promptRoutes } from '../server/prompt-routes.js';
 import { runMain, type MainHooks } from '../server/model-runner.js';
 import { defaultProfile, type ProviderProtocol } from '../core/product.js';
 import { defaultStoryConfig } from '../core/story.js';
-import { planMemoryContext, memoryHash } from '../core/memory.js';
+import { sourceHash as memoryHash } from '../core/source-history.js';
 import type { PromptProgram } from '../core/prompt-program.js';
 import type { RunSnapshot, ToolEvent } from '../core/types.js';
 import type { Json, ProviderResult, WireRecord } from '../core/transport.js';
@@ -56,7 +56,7 @@ function program(terminal = false): PromptProgram {
         role: 'all',
         policy: 'prefer',
       },
-      { id: 'memory', title: 'Memory', kind: 'slot', role: 'user', slot: 'memory' },
+      { id: 'memory', title: 'Memory', kind: 'slot', role: 'user', slot: 'notes' },
       { id: 'conversation', title: 'Conversation', kind: 'history', from: 0, to: 'end' },
     ],
     ...(terminal
@@ -257,7 +257,7 @@ describe('Exact native main preview and terminal submission (synthetic loopback 
       native: { snapshot: () => undefined },
       story: {
         prepareRunInTransaction: (value: RunSnapshot) => value,
-        memory: {
+        notes: {
           scope: () => ({ chatId: work.chatId, history: [] }),
           canonHash: () => memoryHash('[]'),
         },
@@ -298,18 +298,17 @@ describe('Exact native main preview and terminal submission (synthetic loopback 
         chatId: work.chatId,
         atRevision: null,
         atHash: null,
-        kind: 'author-canon' as const,
+        kind: 'author-note' as const,
         text: 'SYNTHETIC_MEMORY_SENTINEL',
         declaration: { author: 'Synthetic author', text: 'SYNTHETIC_MEMORY_SENTINEL' },
-      },
-      plan = planMemoryContext({ scope: { chatId: work.chatId, history: [] }, entries: [entry] });
+      };
     work.story = {
       config: { ...defaultStoryConfig(), revision: 1 },
       state: null,
       waiting: false,
       lineageHash: 'synthetic',
       canonHash: 'synthetic',
-      memory: { entries: [entry], checkpoint: { chatId: work.chatId, indexed: [] }, plan },
+      notes: [entry],
       models: {},
     };
     work.profile!.models.main!.connection.protocol = 'openai-responses-v1';
@@ -547,7 +546,7 @@ describe('Exact native main preview and terminal submission (synthetic loopback 
       waiting: false,
       lineageHash: 'synthetic',
       canonHash: 'synthetic',
-      memory: null,
+      notes: [],
       models: {},
     };
     const built = buildMainProviderRequest(compileSnapshotPrompt(work)),

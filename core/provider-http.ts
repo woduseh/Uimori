@@ -4,6 +4,7 @@ import { providerFetchOptions, transportFailureCode } from './provider-fetch.js'
 import { validateProviderEndpoint } from './product.js';
 import { validateModelOptions } from './model-capabilities.js';
 import { assertContextBudget } from './context-budget.js';
+import { createPublicTextProgress } from './provider-progress.js';
 import { consumeSse } from './vertex.js';
 import {
   encodeResponses,
@@ -35,6 +36,7 @@ import {
 
 type Decoder = {
   accept(value: unknown): void;
+  publicText(): string;
   snapshot(): ProviderResult;
   finish(): ProviderResult;
 };
@@ -98,6 +100,7 @@ export async function executeNativeProvider(
   try {
     const connection = validateConnection(connectionValue, options.approvedOrigins);
     const request = validateRequest(requestValue);
+    const progress = createPublicTextProgress(request, connection.protocol, { ...options, signal });
     if (request.generation) validateModelOptions(request.generation, connection.protocol);
     let bodyValue: Json;
     let diagnostic: Json;
@@ -181,7 +184,15 @@ export async function executeNativeProvider(
     if (!response.body) return failure('INVALID_CONTENT_TYPE');
     if (contentType.startsWith('text/event-stream')) {
       reader = response.body.getReader();
-      await consumeSse(reader, (value) => decoder!.accept(value), signal, allowDone);
+      await consumeSse(
+        reader,
+        async (value) => {
+          decoder!.accept(value);
+          await progress(decoder!.publicText());
+        },
+        signal,
+        allowDone
+      );
     } else if (
       connection.protocol === 'openai-responses-v1' &&
       contentType.startsWith('application/json')
@@ -200,6 +211,7 @@ export async function executeNativeProvider(
         type: `response.${String((value as Record<string, unknown>).status)}`,
         response: value,
       });
+      await progress(decoder.publicText());
     } else {
       await response.body.cancel();
       return failure('INVALID_CONTENT_TYPE');

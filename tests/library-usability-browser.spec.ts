@@ -1,4 +1,5 @@
 import { visualReview } from './fixtures/visual-review.js';
+import { isEditDraftSaveRequest, waitForContentDraftSave } from './fixtures/edit-draft-save.js';
 import { createLibraryContent } from './ui-navigation.js';
 import { expect, test, type APIRequestContext, type Page } from '@playwright/test';
 import type { Content } from '../core/product.js';
@@ -72,22 +73,17 @@ for (const [index, width] of (visualReview ? [390, 360] : [390]).entries()) {
       body = '친절한 안내자예요. 내가 고른 길을 존중하며 짧게 대답해요.';
     await panel.getByLabel('자료 이름', { exact: true }).fill(createdTitle);
     await panel.getByLabel('자료 본문', { exact: true }).fill(body);
-    const savedResponse = page.waitForResponse(
-      (response) =>
-        response.url().endsWith('/api/content') && response.request().method() === 'POST'
-    );
+    const savedResponse = waitForContentDraftSave(page);
     await panel.getByRole('button', { name: '자료 등록', exact: true }).click();
-    const response = await savedResponse;
-    expect(response.ok(), await response.text()).toBe(true);
-    const saved = (await response.json()) as Content;
+    const saved = await savedResponse;
     expect(saved.text).toBe(body);
     expect(saved.package?.body).toBe(body);
     const start = panel.getByRole('button', { name: '채팅 시작', exact: true });
     await expect(start).toBeEnabled();
     await expect(start).toBeInViewport();
-    await expect(panel.getByRole('status')).toContainText(
-      `${createdTitle} 저장됨 · 다음 실행부터 사용해요.`
-    );
+    await expect(
+      panel.getByRole('status').filter({ hasText: '저장됨 · 다음 실행부터 사용해요.' })
+    ).toContainText(`${createdTitle} 저장됨 · 다음 실행부터 사용해요.`);
     if (visualReview)
       await page.screenshot({ path: info.outputPath(`library-saved-${width}.png`) });
     await start.click();
@@ -132,7 +128,12 @@ test('LUSE03 empty persona and module folders explain their roles and offer the 
   await page.setViewportSize({ width: 390, height: 800 });
   let contentWrites = 0;
   page.on('request', (item) => {
-    if (item.method() === 'POST' && item.url().endsWith('/api/content')) contentWrites++;
+    if (
+      isEditDraftSaveRequest(item) ||
+      (['POST', 'PUT'].includes(item.method()) &&
+        /^\/api\/content(?:\/[^/]+)?$/u.test(new URL(item.url()).pathname))
+    )
+      contentWrites++;
   });
   await page.goto('/');
   const panel = page.getByTestId('library-panel');

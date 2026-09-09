@@ -31,6 +31,131 @@
   font-size: 17px;
   margin: 0;
 }
+.chat-options-scope {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 4px;
+  padding: 8px 18px;
+  border-bottom: 1px solid var(--line);
+  flex-shrink: 0;
+}
+.chat-options-scope button {
+  min-height: 44px;
+  background: transparent;
+  color: var(--muted);
+}
+.chat-options-scope button[aria-selected="true"] {
+  background: var(--accent-soft);
+  color: var(--text);
+}
+.chat-options-scope-panel {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+}
+.chat-options-scope-panel[hidden] {
+  display: none;
+}
+.chat-specific-options > section + details,
+.chat-specific-options > details + section,
+.chat-specific-options > details + details,
+.chat-specific-options > section + section {
+  margin-top: 22px;
+}
+.chat-specific-options h3 {
+  margin: 0 0 8px;
+}
+.chat-specific-options p {
+  overflow-wrap: anywhere;
+}
+.chat-specific-options button,
+.chat-options-footer button,
+.chat-specific-options summary {
+  min-height: 44px;
+}
+.chat-specific-options button {
+  white-space: normal;
+}
+.chat-specific-options .prompt-option-field .prompt-option-unset {
+  min-height: 44px;
+}
+.chat-options-extra {
+  border-top: 1px solid var(--line);
+  padding-top: 4px;
+}
+.chat-options-extra > summary {
+  font-weight: 600;
+}
+.chat-selective-values {
+  display: grid;
+  gap: 14px;
+}
+.chat-option-choice {
+  min-width: 0;
+  border-bottom: 1px solid var(--line);
+  padding-bottom: 10px;
+}
+.chat-option-selection {
+  min-height: 44px;
+  font-size: 13px;
+}
+.chat-option-selection > span {
+  overflow-wrap: anywhere;
+}
+.chat-option-value {
+  border: 0;
+  padding: 0;
+  margin: 0;
+  min-width: 0;
+}
+.chat-option-value .prompt-option-group {
+  padding: 0;
+  border: 0;
+}
+.chat-option-value .prompt-option-group > summary {
+  display: none;
+}
+.chat-option-value .pc-control-values {
+  padding: 0 0 6px;
+}
+.chat-option-value:disabled {
+  opacity: 0.65;
+}
+.chat-delegation-fields {
+  gap: 6px;
+}
+.chat-delegation-fields legend {
+  padding: 16px 0 4px;
+  font-weight: 600;
+}
+.chat-option-record {
+  display: grid;
+  gap: 6px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--line);
+  overflow-wrap: anywhere;
+}
+.chat-option-record p,
+.chat-option-record dl {
+  margin: 0;
+}
+.chat-option-record button {
+  justify-self: start;
+}
+.chat-option-values > div {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 10px;
+}
+.chat-option-values dd {
+  margin: 0;
+}
+.chat-options-revocations {
+  margin-top: 16px;
+}
 .chat-options-body {
   overflow: auto;
   min-height: 0;

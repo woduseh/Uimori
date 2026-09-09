@@ -1,6 +1,6 @@
 import { visualReview } from './fixtures/visual-review.js';
 import { preservePromptWorkspace } from './fixtures/prompt-workspace.js';
-import { selectChatSettingsSection } from './ui-navigation.js';
+import { selectChatSettingsSection, openPromptBlocks } from './ui-navigation.js';
 import { postFixtureChat } from './fixtures/chat.js';
 import { test, expect } from '@playwright/test';
 import type { PromptProgram } from '../core/prompt-program.js';
@@ -100,6 +100,7 @@ test('PRUI01 template drafts retain same-owner combinations and reject identical
   await composer.getByRole('button', { name: '옵션 조합 저장', exact: true }).click();
   await expect(global).toContainText('Reusable medium');
   const block = composer.locator('.pc-block').first();
+  await openPromptBlocks(composer);
   await block.locator('summary').first().click();
   await block.getByRole('button', { name: '템플릿 문법으로 편집 · 시험', exact: true }).click();
   const source = block.getByLabel('합성 지침 본문 문법', { exact: true });

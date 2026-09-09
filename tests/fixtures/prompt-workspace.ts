@@ -1,8 +1,37 @@
-import { expect, test } from '@playwright/test';
+import { expect, test, type APIRequestContext } from '@playwright/test';
 import type { ModelWorkspace, PromptWorkspace, PromptPreset } from '../../core/product.js';
+import type { EditDraft } from '../../core/edit-drafts.js';
+
+/** Shared synthetic drafts now survive browser contexts; test boundaries explicitly discard them. */
+async function discardSharedPromptDrafts(request: APIRequestContext) {
+  const keys = [
+    'prompt-workspace:current',
+    'new:prompt-preset:main:builtin',
+    'new:prompt-preset:main:new',
+    'new:prompt-preset:translation:builtin',
+    'new:prompt-preset:translation:new',
+  ];
+  for (const editorKey of keys) {
+    const listed = await request.get(`/api/edit-drafts?editorKey=${encodeURIComponent(editorKey)}`);
+    expect(listed.ok(), await listed.text()).toBe(true);
+    for (const draft of (await listed.json()) as EditDraft[]) {
+      expect(draft.editorKey).toBe(editorKey);
+      expect(draft.targetId).toBe(editorKey === 'prompt-workspace:current' ? 'current' : null);
+      const discarded = await request.delete(`/api/edit-drafts/${draft.id}`, {
+        data: { expectedRevision: draft.revision, operationId: crypto.randomUUID() },
+      });
+      expect(discarded.ok(), await discarded.text()).toBe(true);
+    }
+  }
+}
+
+export function isolatePromptDrafts() {
+  test.beforeEach(async ({ request }) => discardSharedPromptDrafts(request));
+}
 
 /** Restore global working settings at the test boundary, never on chat creation. */
 export function preservePromptWorkspace() {
+  isolatePromptDrafts();
   let original: PromptWorkspace | undefined;
   let originalModels: ModelWorkspace | undefined;
   test.beforeEach(async ({ request }) => {
@@ -68,6 +97,8 @@ export function preservePromptWorkspace() {
         expectedRevision: modelCurrent.revision,
         routes: originalModels.routes,
         titleModel: originalModels.titleModel ?? null,
+        helperModel: originalModels.helperModel ?? null,
+        contextModel: originalModels.contextModel ?? null,
         translationPolicy: originalModels.translationPolicy,
       },
     });

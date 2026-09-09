@@ -47,9 +47,9 @@ const categories = [
   },
   {
     id: 'story',
-    title: '상태와 기억',
+    title: '상태와 문맥',
     icon: LoreIcon,
-    description: '장면 상태와 기억 정리',
+    description: '장면 상태와 문맥 관리',
     group: '고급',
   },
   {
@@ -295,6 +295,7 @@ export function ChatSettingsPanel({
                     {section === 'story' && (
                       <StoryPanel
                         chatId={state.selected}
+                        refreshKey={state.detail?.reader.cursor ?? 0}
                         branchId={state.branch?.id ?? `main:${state.selected}`}
                         headRevision={state.branch?.headRevision ?? detail.chat.headRevision}
                         settingsRevision={detail.chat.settingsRevision}

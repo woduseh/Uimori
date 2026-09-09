@@ -449,7 +449,7 @@ test('response activity retains older page work without expanding global activit
   store.db
     .prepare("INSERT INTO story_configs(chat_id,revision,body) VALUES(?,1,'{}')")
     .run(chat.id);
-  const storyJob = (index: number, kind: 'state' | 'memory', hash = items[index].hash): string => {
+  const storyJob = (index: number, kind: 'state', hash = items[index].hash): string => {
     const id = randomUUID();
     store.db
       .prepare(`INSERT INTO story_jobs(id,chat_id,source_revision,source_hash,kind,config_revision,status,snapshot,mock,created_at,updated_at,dependency_key)
@@ -458,15 +458,17 @@ test('response activity retains older page work without expanding global activit
     return id;
   };
   const state = storyJob(0, 'state'),
-    memory = storyJob(0, 'memory'),
+    secondState = storyJob(0, 'state'),
     offPage = storyJob(5, 'state'),
-    stale = storyJob(0, 'memory', 'stale-hash');
+    stale = storyJob(0, 'state', 'stale-hash');
   const page = readerDetail(store, chat.id, {});
   expect(page.reader.activity).toHaveLength(30);
-  expect(page.reader.activity.some((a) => [state, memory, offPage].includes(a.id))).toBe(false);
+  expect(page.reader.activity.some((a) => [state, secondState, offPage].includes(a.id))).toBe(
+    false
+  );
   const activity = page.reader.responseActivity;
   expect(activity.some((a) => a.id === state)).toBe(true);
-  expect(activity.some((a) => a.id === memory)).toBe(true);
+  expect(activity.some((a) => a.id === secondState)).toBe(true);
   expect(activity.some((a) => [offPage, stale].includes(a.id))).toBe(false);
   expect(activity.every((a) => page.reader.order.includes(a.sourceRevision!))).toBe(true);
   expect(new Set(activity.map((a) => a.id)).size).toBe(activity.length);
@@ -478,7 +480,7 @@ test('response activity retains older page work without expanding global activit
   expect(delta.reader.responseActivity).toEqual(activity);
   const next = readerDetail(store, chat.id, { source: items[5].id });
   expect(next.reader.responseActivity.some((a) => a.id === offPage)).toBe(true);
-  expect(next.reader.responseActivity.some((a) => [state, memory].includes(a.id))).toBe(false);
+  expect(next.reader.responseActivity.some((a) => [state, secondState].includes(a.id))).toBe(false);
   expect(next.reader.activity).toEqual(page.reader.activity);
 
   const oldJobs = store.db
@@ -486,12 +488,12 @@ test('response activity retains older page work without expanding global activit
     .all(items[0].id) as { id: string }[];
   expect(oldJobs.length).toBeGreaterThan(0);
   const edited = store.editSource(items[0].id, { text: 'Edited response', expectedRevision: 0 });
-  const currentMemory = storyJob(0, 'memory', edited.hash);
+  const currentState = storyJob(0, 'state', edited.hash);
   const editedActivity = readerDetail(store, chat.id, {}).reader.responseActivity;
   expect(
-    editedActivity.some((a) => [state, memory, ...oldJobs.map((j) => j.id)].includes(a.id))
+    editedActivity.some((a) => [state, secondState, ...oldJobs.map((j) => j.id)].includes(a.id))
   ).toBe(false);
-  expect(editedActivity.some((a) => a.id === currentMemory)).toBe(true);
+  expect(editedActivity.some((a) => a.id === currentState)).toBe(true);
   expect(editedActivity.some((a) => a.id === items[0].runId)).toBe(true);
 });
 

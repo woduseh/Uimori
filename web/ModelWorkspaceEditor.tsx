@@ -3,6 +3,9 @@ import type { Library, ModelRef, ModelWorkspace, TaskRole } from '../core/produc
 import { api } from './api.js';
 import { usePromptWorkspace } from './usePromptWorkspace.js';
 import { useModelSelection } from './model-selection.js';
+import { RefreshCw, Save } from 'lucide-react';
+import { IconButton } from './IconButton.js';
+import './settings-actions.css';
 
 export function ModelWorkspaceEditor({
   library,
@@ -26,6 +29,8 @@ export function ModelWorkspaceEditor({
       setDraft({
         revision: workspace.revision,
         titleModel: workspace.titleModel ?? null,
+        helperModel: workspace.helperModel ?? null,
+        contextModel: workspace.contextModel ?? null,
         routes: workspace.modelRoutes,
         translationPolicy: workspace.translationPolicy,
       });
@@ -36,11 +41,14 @@ export function ModelWorkspaceEditor({
   useEffect(() => () => onDirtyChange(false), [onDirtyChange]);
   if (!draft)
     return (
-      <p role="status">
+      <p role="status" className="settings-loading-status">
         {error || '현재 모델 설정을 불러오는 중이에요…'}{' '}
-        <button type="button" onClick={() => void refresh()}>
-          다시 불러오기
-        </button>
+        <IconButton
+          icon={RefreshCw}
+          label="다시 불러오기"
+          className="secondary"
+          onClick={() => void refresh()}
+        />
       </p>
     );
   const conflict = !!workspace && workspace.revision > draft.revision;
@@ -134,9 +142,6 @@ export function ModelWorkspaceEditor({
                 }
               />
             </label>
-            <small>
-              명확한 거절일 때만 추가 번역을 요청해요. 기본 1회, 0이면 자동 재요청을 꺼요.
-            </small>
             <label>
               번역 작업 전체 호출 한도
               <input
@@ -171,17 +176,47 @@ export function ModelWorkspaceEditor({
           </div>
         ))}
         <div>
+          {selector('도우미 모델', draft.helperModel ?? null, (ref) =>
+            change({ ...draft, helperModel: ref })
+          )}
+          <small>
+            작품 질문과 자료 작업에 사용해요. 미지정하면 도우미의 모델 실행을 시작하지 않아요.
+          </small>
+        </div>
+        <div>
+          {selector('문맥 요약 모델', draft.contextModel ?? null, (ref) =>
+            change({ ...draft, contextModel: ref })
+          )}
+          <small>
+            자동·수동 요약에 사용해요. 미지정하면 압축이 필요한 작업만 멈추며 다른 모델로 대체하지
+            않아요.
+          </small>
+        </div>
+        <div>
           {selector('채팅 제목 모델', draft.titleModel ?? null, (ref) =>
             change({ ...draft, titleModel: ref })
           )}
-          <small>
-            새 채팅의 첫 응답이 성공하면 제목을 한 번 만들어요. 직접 바꾼 제목은 유지해요.
-            미지정하면 자동 제목을 만들지 않아요.
-          </small>
         </div>
-        <div className="form-actions">
-          <button
+        <div className="form-actions settings-save-actions full">
+          {(dirty || conflict) && (
+            <button
+              type="button"
+              className="secondary"
+              onClick={() => {
+                setDirty(false);
+                setSaveError('');
+                void refresh();
+              }}
+            >
+              최신 설정 다시 불러오기
+            </button>
+          )}
+          <IconButton
             type="button"
+            icon={Save}
+            label="현재 모델 설정 저장"
+            className="settings-save-button"
+            aria-busy={busy}
             disabled={
               !dirty ||
               conflict ||
@@ -204,6 +239,8 @@ export function ModelWorkspaceEditor({
                   expectedRevision: draft.revision,
                   routes: draft.routes,
                   titleModel: draft.titleModel ?? null,
+                  helperModel: draft.helperModel ?? null,
+                  contextModel: draft.contextModel ?? null,
                   translationPolicy: draft.translationPolicy,
                 },
                 'PUT'
@@ -220,22 +257,7 @@ export function ModelWorkspaceEditor({
                   setBusy(false);
                 });
             }}
-          >
-            {busy ? '저장 중…' : '현재 모델 설정 저장'}
-          </button>
-          {(dirty || conflict) && (
-            <button
-              type="button"
-              className="secondary"
-              onClick={() => {
-                setDirty(false);
-                setSaveError('');
-                void refresh();
-              }}
-            >
-              최신 설정 다시 불러오기
-            </button>
-          )}
+          />
         </div>
       </fieldset>
       {conflict && dirty && (

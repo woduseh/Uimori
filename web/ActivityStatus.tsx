@@ -32,7 +32,7 @@ const names: Record<string, string> = {
   image: '이미지 만드는 중',
   status: '상태 정리 중',
   state: '상태 정리 중',
-  memory: '기억 정리 중',
+  context: '문맥 압축 중',
 };
 const doneNames: Record<string, string> = {
   main: '본문',
@@ -40,7 +40,7 @@ const doneNames: Record<string, string> = {
   image: '이미지',
   status: '상태 정리',
   state: '상태 정리',
-  memory: '기억 정리',
+  context: '문맥 압축',
   request: '요청',
 };
 export function elapsedLabel(start: string, end: number) {

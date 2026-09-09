@@ -5,6 +5,7 @@ import { test, expect, type APIRequestContext } from '@playwright/test';
 import type { PromptWorkspace } from '../core/product.js';
 import type { ChatDetail } from '../core/types.js';
 import type { PromptProgram } from '../core/prompt-program.js';
+import type { ChatOptionState } from '../core/chat-options.js';
 
 async function detail(request: APIRequestContext, id: string): Promise<ChatDetail> {
   const response = await request.get(`/api/chats/${id}`);
@@ -106,7 +107,8 @@ test('chat creative options preserve drafts, apply explicitly and fit desktop/mo
   const open = page.getByRole('button', { name: '창작 옵션', exact: true });
   await page.getByRole('button', { name: '입력창 더보기', exact: true }).click();
   await open.click();
-  const panel = page.getByRole('region', { name: '창작 옵션 패널', exact: true });
+  await page.getByRole('tab', { name: '모든 채팅', exact: true }).click();
+  const panel = page.getByRole('tabpanel', { name: '모든 채팅 옵션', exact: true });
   await expect(panel).toBeVisible();
   await expect(panel.getByText('합성 창작 옵션', { exact: true })).toBeVisible();
   await expect(panel.locator('summary').filter({ hasText: '기본 설정' })).toBeVisible();
@@ -122,7 +124,7 @@ test('chat creative options preserve drafts, apply explicitly and fit desktop/mo
   expect((await detail(request, chat.id)).profile).toEqual(before);
   // The panel is non-modal: the actual request draft remains editable while it is open.
   await page.getByRole('textbox', { name: '다음 장면 요청', exact: true }).fill('보존할 요청 초안');
-  await panel.getByRole('button', { name: '창작 옵션 닫기', exact: true }).click();
+  await page.getByRole('button', { name: '창작 옵션 닫기', exact: true }).click();
   await expect(panel).toBeHidden();
   await page.getByRole('button', { name: '입력창 더보기', exact: true }).click();
   await expect(page.getByLabel('빠른 옵션 조합', { exact: true })).toBeDisabled();
@@ -164,6 +166,7 @@ test('chat creative options preserve drafts, apply explicitly and fit desktop/mo
   await page.reload();
   await page.getByRole('button', { name: '입력창 더보기', exact: true }).click();
   await open.click();
+  await page.getByRole('tab', { name: '모든 채팅', exact: true }).click();
   await expect(custom).toHaveValue('프랑스어');
   await expect(inner).toBeChecked();
   await page.setViewportSize({ width: 390, height: 844 });
@@ -186,7 +189,8 @@ test('creative option CAS conflict preserves draft and server profile', async ({
   await page.goto(`/?chat=${chat.id}`);
   await page.getByRole('button', { name: '입력창 더보기', exact: true }).click();
   await page.getByRole('button', { name: '창작 옵션', exact: true }).click();
-  const panel = page.getByRole('region', { name: '창작 옵션 패널', exact: true });
+  await page.getByRole('tab', { name: '모든 채팅', exact: true }).click();
+  const panel = page.getByRole('tabpanel', { name: '모든 채팅 옵션', exact: true });
   await panel.getByLabel('응답 언어', { exact: true }).selectOption({ label: '직접 지정' });
   await panel.getByLabel('직접 지정 언어', { exact: true }).fill('스페인어');
   let concurrent!: PromptWorkspace;
@@ -227,6 +231,158 @@ test('creative option CAS conflict preserves draft and server profile', async ({
   expect((await (await request.get('/api/prompt-workspace')).json()).main.title).toBe(
     '동시 수정 이름'
   );
+});
+
+test('chat creative options scope fixed values, oneoff reservations and revocable delegation', async ({
+  page,
+  request,
+}, info) => {
+  const { chat, workspace } = await fixture(request);
+  const state = async () =>
+    (await (await request.get(`/api/chats/${chat.id}/options`)).json()) as ChatOptionState;
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.goto(`/?chat=${chat.id}`);
+  await page.getByRole('button', { name: '입력창 더보기', exact: true }).click();
+  await page.getByRole('button', { name: '창작 옵션', exact: true }).click();
+  await expect(page.getByRole('tab', { name: '이 채팅', exact: true })).toHaveAttribute(
+    'aria-selected',
+    'true'
+  );
+  const panel = page.getByRole('tabpanel', { name: '이 채팅 옵션', exact: true });
+  const fixed = panel.getByRole('region', { name: '이 채팅 고정 옵션', exact: true });
+  await expect(fixed.getByLabel('서술 상세도', { exact: true })).toBeDisabled();
+  await fixed.getByRole('checkbox', { name: '서술 상세도 이 채팅에 고정', exact: true }).check();
+  await fixed.getByLabel('서술 상세도', { exact: true }).fill('9');
+  await expect(fixed.getByLabel('서술 상세도', { exact: true })).toHaveValue('9');
+  await fixed.getByLabel('서술 상세도', { exact: true }).fill('3');
+  expect((await state()).fixedValues).toEqual({});
+  await page.getByRole('tab', { name: '모든 채팅', exact: true }).click();
+  await page.getByRole('tab', { name: '이 채팅', exact: true }).click();
+  await expect(fixed.getByLabel('서술 상세도', { exact: true })).toHaveValue('3');
+  await panel.getByRole('button', { name: '채팅 고정 옵션 저장', exact: true }).click();
+  await expect.poll(async () => (await state()).fixedValues).toEqual({ detail: 3 });
+  expect(await (await request.get('/api/prompt-workspace')).json()).toEqual(workspace);
+  const oneoff = panel
+    .locator('details')
+    .filter({ has: page.locator(':scope > summary', { hasText: /^다음 생성에만 적용$/ }) });
+  await oneoff.locator(':scope > summary').click();
+  await oneoff
+    .getByRole('checkbox', { name: '서술 상세도 다음 생성에만 적용', exact: true })
+    .check();
+  await oneoff.getByLabel('서술 상세도', { exact: true }).fill('2');
+  await oneoff.getByRole('button', { name: '1회 옵션 예약', exact: true }).click();
+  await expect
+    .poll(async () => (await state()).pending.map((item) => item.values))
+    .toEqual([{ detail: 2 }]);
+  await panel
+    .getByRole('region', { name: '다음 생성 옵션 예약', exact: true })
+    .getByRole('button', { name: '예약 취소', exact: true })
+    .click();
+  await expect.poll(async () => (await state()).pending).toHaveLength(0);
+  await oneoff.locator(':scope > summary').click();
+  const delegation = panel
+    .locator('details')
+    .filter({ has: page.locator(':scope > summary', { hasText: /^도우미에게 옵션 조정 위임$/ }) });
+  await delegation.locator(':scope > summary').click();
+  await delegation.getByRole('checkbox', { name: '내면 서술 강조', exact: true }).check();
+  await delegation.getByRole('button', { name: '선택한 옵션 지속 위임', exact: true }).click();
+  await expect
+    .poll(async () => (await state()).delegations.map((item) => item.fields))
+    .toEqual([['inner']]);
+  await expect(delegation.getByText('지속 위임 중', { exact: true })).toBeVisible();
+  await delegation.getByRole('button', { name: '지속 위임 해제', exact: true }).click();
+  await expect.poll(async () => (await state()).delegations[0]?.revokedAt).not.toBeNull();
+  await delegation.getByText('해제한 위임 1개', { exact: true }).click();
+  await expect(delegation.locator('.chat-options-revocations .chat-option-record')).toHaveCount(1);
+  for (const width of [1440, 390]) {
+    await page.setViewportSize({ width, height: width === 390 ? 844 : 1000 });
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(
+      true
+    );
+    expect(await panel.evaluate((element) => element.scrollWidth <= element.clientWidth + 1)).toBe(
+      true
+    );
+    await expect(
+      panel.getByRole('button', { name: '채팅 고정 옵션 저장', exact: true })
+    ).toBeInViewport();
+    const targets = await panel
+      .locator('button, summary, label:has(> input[type="checkbox"])')
+      .evaluateAll((elements) =>
+        elements
+          .filter((element) => element.checkVisibility())
+          .map((element) => element.getBoundingClientRect().height)
+      );
+    expect(targets.every((height) => height >= 44)).toBe(true);
+    if (visualReview)
+      await page.screenshot({ path: info.outputPath(`chat-scoped-options-${width}.png`) });
+  }
+  expect((await detail(request, chat.id)).runs).toHaveLength(0);
+});
+
+test('chat creative options retry an uncertain save with the same operation and preserve a CAS draft', async ({
+  page,
+  request,
+}) => {
+  const { chat } = await fixture(request);
+  const state = async () =>
+    (await (await request.get(`/api/chats/${chat.id}/options`)).json()) as ChatOptionState;
+  await page.goto(`/?chat=${chat.id}`);
+  await page.getByRole('button', { name: '입력창 더보기', exact: true }).click();
+  await page.getByRole('button', { name: '창작 옵션', exact: true }).click();
+  const panel = page.getByRole('tabpanel', { name: '이 채팅 옵션', exact: true });
+  const fixed = panel.getByRole('region', { name: '이 채팅 고정 옵션', exact: true });
+  await fixed.getByRole('checkbox', { name: '서술 상세도 이 채팅에 고정', exact: true }).check();
+  await fixed.getByLabel('서술 상세도', { exact: true }).fill('3');
+  const operations: string[] = [];
+  await page.route(`**/api/chats/${chat.id}/options/fixed`, async (route) => {
+    operations.push(route.request().postDataJSON().operationId);
+    if (operations.length !== 1) return route.continue();
+    const applied = await route.fetch();
+    expect(applied.ok()).toBe(true);
+    await route.abort('failed');
+  });
+  await panel.getByRole('button', { name: '채팅 고정 옵션 저장', exact: true }).click();
+  await expect(
+    panel.getByRole('button', { name: '같은 요청 다시 확인', exact: true })
+  ).toBeVisible();
+  const firstSaved = await state();
+  expect(firstSaved.fixedValues).toEqual({ detail: 3 });
+  await panel.getByRole('button', { name: '같은 요청 다시 확인', exact: true }).click();
+  await expect(panel.getByRole('button', { name: '같은 요청 다시 확인', exact: true })).toHaveCount(
+    0
+  );
+  expect(operations).toHaveLength(2);
+  expect(operations[0]).toBe(operations[1]);
+  expect((await state()).revision).toBe(firstSaved.revision);
+  await page.unroute(`**/api/chats/${chat.id}/options/fixed`);
+  await fixed.getByLabel('서술 상세도', { exact: true }).fill('1');
+  let interleaved = false;
+  await page.route(`**/api/chats/${chat.id}/options/fixed`, async (route) => {
+    if (interleaved) return route.continue();
+    interleaved = true;
+    const currentState = await state();
+    const concurrent = await request.post(`/api/chats/${chat.id}/options/fixed`, {
+      data: {
+        branchId: currentState.branchId,
+        expectedRevision: currentState.revision,
+        binding: currentState.binding,
+        values: { detail: 2 },
+        operationId: crypto.randomUUID(),
+      },
+    });
+    expect(concurrent.ok()).toBe(true);
+    await route.continue();
+  });
+  await panel.getByRole('button', { name: '채팅 고정 옵션 저장', exact: true }).click();
+  await expect(
+    panel.getByRole('button', { name: '최신 정의에 초안 유지', exact: true })
+  ).toBeVisible();
+  await expect(fixed.getByLabel('서술 상세도', { exact: true })).toHaveValue('1');
+  expect((await state()).fixedValues).toEqual({ detail: 2 });
+  await panel.getByRole('button', { name: '최신 정의에 초안 유지', exact: true }).click();
+  await panel.getByRole('button', { name: '채팅 고정 옵션 저장', exact: true }).click();
+  await expect.poll(async () => (await state()).fixedValues).toEqual({ detail: 1 });
+  expect((await detail(request, chat.id)).runs).toHaveLength(0);
 });
 
 preservePromptWorkspace();

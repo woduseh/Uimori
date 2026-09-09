@@ -9,6 +9,7 @@ import {
 import { compilePackageAttachment, type CompiledPackageAttachment } from './package-runtime.js';
 import type { Resource, RunSnapshot } from './types.js';
 import { executionContext } from './execution-context.js';
+import { projectChatPackageCompilation } from './chat-overrides.js';
 
 export type ResolvedPackage = CompiledPackageAttachment & {
   attachment: PackageAttachment;
@@ -32,9 +33,20 @@ export function compiledPackages(snapshot: RunSnapshot, target: PackageTarget): 
       values:
         profile?.packageValues?.[`${attachment.id}@${attachment.revision}:${attachment.role}`],
     });
+    const projected = projectChatPackageCompilation(
+      profile!,
+      attachment,
+      pkg,
+      compiled,
+      (role) => !historicalPersonaExcluded(profile, role, target)
+    );
     // Historical exclusions still validate the frozen package above.
     return [
-      { ...compiled, attachment: structuredClone(attachment), package: structuredClone(pkg) },
+      {
+        ...projected.compiled,
+        attachment: structuredClone(attachment),
+        package: structuredClone(projected.package),
+      },
     ];
   });
 }

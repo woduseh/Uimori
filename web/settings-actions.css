@@ -1,0 +1,39 @@
+.settings-save-actions {
+  justify-content: flex-end;
+}
+.settings-save-actions > .settings-save-button {
+  margin-left: auto;
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+.profile-savebar.settings-save-actions > [role="status"] {
+  width: auto;
+}
+.settings-loading-status {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.provider-model-save-actions {
+  justify-content: flex-end;
+}
+.provider-model-save-actions > .delete-control {
+  margin-right: auto;
+}
+.provider-model-save-actions > .ui-icon-button,
+.provider-model-save-actions > .delete-control > .icon-only {
+  flex: none;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+}
+.provider-model-save-actions > .settings-save-button {
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+.provider-model-save-actions > .delete-control > .icon-only > svg {
+  width: 20px;
+  height: 20px;
+  stroke-width: 1.7;
+}

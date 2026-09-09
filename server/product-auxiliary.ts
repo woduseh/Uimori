@@ -133,10 +133,10 @@ const safeError = (error: unknown) => {
   return 'AUXILIARY_EXECUTION_FAILED';
 };
 const toolSchemas: ProviderTool[] = [
-  ...(['story', 'memory', 'translation'] as const).flatMap((kind): ProviderTool[] => [
+  ...(['story', 'notes', 'translation'] as const).flatMap((kind): ProviderTool[] => [
     {
-      name: `${kind}.search`,
-      description: `Search scoped ${kind} evidence; empty query lists metadata. Translation is wording only, memory retains epistemic kind.`,
+      name: kind === 'notes' ? 'notes.list' : `${kind}.search`,
+      description: `Search scoped ${kind} evidence; empty query lists metadata. Translation is wording only, notes contain explicit user corrections.`,
       inputSchema: {
         type: 'object',
         properties: {
@@ -151,14 +151,13 @@ const toolSchemas: ProviderTool[] = [
     {
       name: `${kind}.read`,
       description:
-        'Read discovered evidence with exact source provenance and range. Follow nextOffset; memory sourceContinuation uses sourceOffset.',
+        'Read discovered evidence with exact source provenance and range. Follow nextOffset for the next range.',
       inputSchema: {
         type: 'object',
         properties: {
           id: { type: 'string' },
           offset: { type: 'integer' },
           limit: { type: 'integer' },
-          ...(kind === 'memory' ? { sourceOffset: { type: 'integer' } } : {}),
         },
         required: ['id'],
         additionalProperties: false,

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useBufferedEditorState, useUnappliedEditorField } from './editor-workspace-context.js';
 import type { ContentPackage } from '../core/content-package.js';
 import { behaviorActionTriggers, type BehaviorSchema } from '../core/package-behavior.js';
 import { validatePackageStarts, type PackageStart } from '../core/package-start.js';
@@ -33,8 +34,15 @@ export function PackageStartsEditor({
   onChange: (value: ContentPackage) => void;
   onDraftChange?: (dirty: boolean) => void;
 }) {
-  const [selected, setSelected] = useState(value.starts?.[0]?.id ?? '');
-  const [draft, setDraft] = useState<{ id: string; text: string } | null>(null);
+  const [selected, setSelected] = useBufferedEditorState(
+    'package.starts.selected',
+    value.starts?.[0]?.id ?? ''
+  );
+  const [draft, setDraft] = useBufferedEditorState<{ id: string; text: string } | null>(
+    'package.starts.input',
+    null
+  );
+  useUnappliedEditorField('package.starts.input', !!draft);
   const [error, setError] = useState('');
   useEffect(() => {
     onDraftChange?.(!!draft);

@@ -18,7 +18,7 @@ import { performance } from 'node:perf_hooks';
 import { randomUUID } from 'node:crypto';
 import { Store } from '../server/store.js';
 import { buildMainInput, executeTool } from '../core/provider.js';
-import { memoryHash } from '../core/memory.js';
+import { sourceHash as memoryHash } from '../core/source-history.js';
 import { resolveAsset, searchAssets } from '../core/asset-manifest.js';
 import type { RunSnapshot } from '../core/types.js';
 import type { Content } from '../core/product.js';
@@ -199,20 +199,6 @@ function addAssets(store: Store, chatId: string, start: number, end: number) {
       });
   });
 }
-function indexAll(store: Store, chatId: string) {
-  for (const job of store.story.indexHistory(chatId)) {
-    if (job.status === 'completed') continue;
-    const claim = store.story.claim(job.id, 'S07-no-facts-fixture');
-    expect(claim).not.toBeNull();
-    const result = store.story.finish(job.id, claim!.generation, 'S07-no-facts-fixture', {
-      status: 'completed',
-      result: { entries: [] },
-      error: null,
-      mock: true,
-    });
-    expect(result.status).toBe('completed');
-  }
-}
 async function fixture() {
   const directory = await mkdtemp(join(tmpdir(), 'Uimori S07 measured '));
   const store = new Store(join(directory, 'story.sqlite'));
@@ -226,9 +212,7 @@ async function fixture() {
     expectedRevision: 0,
     module: null,
     stateModel: null,
-    memory: { enabled: true, model: null, recentCount: 2, maxPacketChars: 60000 },
   });
-  indexAll(store, chat.id);
   addArchived(store, chat.id, 0, baseline.archivedSources);
   addLore(store, chat.id, 0, baseline.loreCount);
   addAssets(store, chat.id, 0, baseline.assetCount);
@@ -364,14 +348,9 @@ function validateOutput(
   f: Awaited<ReturnType<typeof fixture>>,
   counts: Counts
 ) {
-  expect(result.input.history).toHaveLength(2);
+  expect(result.input.history).toHaveLength(6);
   expect(result.snapshot.history).toHaveLength(6);
-  expect(result.input.memory).toMatchObject({
-    indexedCount: 6,
-    totalSources: 6,
-    unprocessedCount: 0,
-    ready: true,
-  });
+  expect(result.input.notes).toBeUndefined();
   expect(result.roundtrip).toBe(f.store.source(f.firstRevision).text);
   expect(result.roundtrip.length).toBe(counts.manuscriptChars);
   expect(f.store.sourceOriginal(f.firstRevision).text).toBe(f.originalText);
@@ -486,7 +465,6 @@ test('S07 archive/lore/asset growth preserves active context and S05 200k source
     else if (dimension === 'assetCount') addAssets(f.store, f.chatId, baseline.assetCount, larger);
     else {
       f.store.editSource(f.firstRevision, { text: manuscript(larger), expectedRevision: 0 });
-      indexAll(f.store, f.chatId);
     }
     const large = condition(f, largeCounts);
     if (dimension === 'archivedSources') {

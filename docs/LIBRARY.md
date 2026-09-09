@@ -68,13 +68,13 @@
 
 ## 제거한 독립 자료 종류와 공통 참조
 
-현재 `ContentKind`는 `bot | persona | module`뿐이에요. 독립 `lore`, `canon`, `skill`, `glossary` 종류와 기타 자료 분류는 생성·보관 복원에서 거부해요. 세계관은 패키지 내부 `lore`, 창작·번역 지침은 `instructions`와 대상 역할로 작성해요. 패키지 내부 로어, 공통 읽기 도구와 원문·상태·기억의 출처 검증은 유지해요.
+현재 `ContentKind`는 `bot | persona | module`뿐이에요. 독립 `lore`, `canon`, `skill`, `glossary` 종류와 기타 자료 분류는 생성·보관 복원에서 거부해요. 세계관은 패키지 내부 `lore`, 창작·번역 지침은 `instructions`와 대상 역할로 작성해요. 패키지 내부 로어, 공통 읽기 도구와 원문·상태·메모의 출처 검증은 유지해요.
 
-보조 실행의 `SourceTimeContext`에는 구형 독립 glossary/canon 필드 대신 `references: {id, revision, text}[]`를 사용해요. 원문 Run의 `profile.contents`에서 `module`이며 `pinned`인 본문만 이 배열에 고정해요. 패키지의 대상별 지침·로어는 기존 `packages` 투영으로 제공하고, 조회 자료는 원문 시점에 허용된 자료와 읽기 도구 범위를 유지해요. 현재 서재의 편집 내용이 이미 생성한 원문의 번역·이미지·상태 문맥에 끼어들지 않아요. 이야기의 정사 선언·canon hash, source/hash 귀속과 불확실 실행의 자동 재생 금지 규칙은 그대로예요.
+보조 실행의 `SourceTimeContext`에는 구형 독립 glossary/canon 필드 대신 `references: {id, revision, text}[]`를 사용해요. 원문 Run의 `profile.contents`에서 `module`이며 `pinned`인 본문만 이 배열에 고정해요. 패키지의 대상별 지침·로어는 기존 `packages` 투영으로 제공하고, 조회 자료는 원문 시점에 허용된 자료와 읽기 도구 범위를 유지해요. 현재 서재의 편집 내용이 이미 생성한 원문의 번역·이미지·상태 문맥에 끼어들지 않아요. 사용자 메모·정정 의존성 hash, source/hash 귀속과 불확실 실행의 자동 재생 금지 규칙은 그대로예요.
 
 ## 저장 형식과 검증 범위
 
-현재 DB schema와 전체 `narrative-archive` 버전은 13예요. `library_organization_state`, `library_folders`, `library_placements`를 전체 보관에 포함하며 SQLite backup에도 저장해요. 복원은 폴더 순서, 분류 일치, 모든 항목의 배치, 존재하는 자료 참조와 전역 revision을 검증하고 오류 시 전체 transaction을 되돌려요.
+현재 DB schema와 전체 `narrative-archive` 버전은 15예요. `library_organization_state`, `library_folders`, `library_placements`를 전체 보관에 포함하며 SQLite backup에도 저장해요. 복원은 폴더 순서, 분류 일치, 모든 항목의 배치, 존재하는 자료 참조와 전역 revision을 검증하고 오류 시 전체 transaction을 되돌려요.
 
 구형 DB·archive는 이관하지 않아요. 개발 DB 초기화가 필요하면 서버를 멈추고 고정된 기본 개발 DB만 대상으로 하는 `npm run reset:dev`를 사용해요. 단일 패키지 JSON에는 전역 서재 폴더를 넣지 않으며 새로 저장한 자료는 미분류에서 시작해요.
 

@@ -1,3 +1,4 @@
+import { modelWorkspace, updateModelWorkspace } from '../server/prompt-workspace.js';
 import { updateTestProfile } from './fixtures/model-workspace.js';
 import { createFixtureChat, injectWithFixtureBot } from './fixtures/chat.js';
 import { randomUUID } from 'node:crypto';
@@ -206,6 +207,13 @@ async function fixture(kind: 'lore-pressure' | 'history-pressure') {
     expectedRevision: currentRevision,
     routes: { ...current.routes, main: { id: model.id } },
   });
+  const workspace = modelWorkspace(app.store);
+  updateModelWorkspace(app.store, {
+    expectedRevision: workspace.revision,
+    routes: workspace.routes,
+    translationPolicy: workspace.translationPolicy,
+    contextModel: { id: model.id },
+  });
   const bodies: Body[] = [];
   vi.mocked(fetch).mockImplementation(async (url, options) => {
     expect(String(url)).toBe(endpoint);
@@ -215,7 +223,7 @@ async function fixture(kind: 'lore-pressure' | 'history-pressure') {
     expect(estimateContextTokens(body)).toBeLessThanOrEqual(
       app.store.product.get<ModelPreset>('model', model.id).inputTokenLimit!
     );
-    return complete(body.role === 'memory' ? summaryText : finalText);
+    return complete(body.role === 'context' ? summaryText : finalText);
   });
   return { app, chatId: chat.id, sources, lore, model, bodies };
 }
@@ -333,7 +341,7 @@ describe('automatic summary and retained lore at the same input boundary', () =>
       originals = structuredClone(started.snapshot.logicalHistory);
     const run = await terminal(f.app, started.id),
       plan = run.snapshot.contextPlan!,
-      summaries = f.bodies.filter((body) => body.role === 'memory');
+      summaries = f.bodies.filter((body) => body.role === 'context');
     expect(summaries.length).toBeGreaterThan(0);
     expect(plan.compacted.some((ref) => ref.revision === f.sources[0].id)).toBe(true);
     expect(run.snapshot.loreContext!.entries).toEqual(started.snapshot.loreContext!.entries);

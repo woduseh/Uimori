@@ -72,7 +72,7 @@ export function executionContext(
     ? packages.find((p) => p.instanceId === packageInstanceId(attachment))
     : undefined;
   const model =
-    target === 'state' || target === 'memory'
+    target === 'state'
       ? snapshot.story?.models[target]
       : profile?.models[
           target === 'translation'

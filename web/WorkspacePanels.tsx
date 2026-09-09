@@ -1,6 +1,7 @@
 import { Switch } from './BooleanControls.js';
 import { ModelWorkspaceEditor } from './ModelWorkspaceEditor.js';
 import { PromptWorkspaceEditor } from './PromptWorkspaceEditor.js';
+import { discardActiveEditor } from './editor-workspace-context.js';
 import { DeleteButton } from './DeleteButton.js';
 import { ActivityDetails } from './ActivityStatus.js';
 import { CodexAgentSettings } from './CodexAgentSettings.js';
@@ -259,6 +260,8 @@ export function AppSettingsPanel({
   const [promptDirty, setPromptDirty] = useState(false);
   const [archiveDirty, setArchiveDirty] = useState(false);
   const [discard, setDiscard] = useState(false);
+  const [discarding, setDiscarding] = useState(false);
+  const [discardError, setDiscardError] = useState('');
   const dirty = connectionDirty || archiveDirty || modelDirty || promptDirty;
   const root = useRef<HTMLElement>(null);
   const wasCompact = useRef(compact);
@@ -513,18 +516,40 @@ export function AppSettingsPanel({
         open={discard}
         title="미저장 설정 확인"
         role="alertdialog"
-        onClose={() => setDiscard(false)}
+        onClose={() => {
+          if (!discarding) setDiscard(false);
+        }}
       >
         <p>저장하지 않은 편집 내용이나 선택한 파일이 있어요. 닫으면 이 초안이 사라져요.</p>
+        {discardError && (
+          <p role="alert" className="error">
+            {discardError}
+          </p>
+        )}
         <div className="form-actions">
-          <button type="button" className="secondary" onClick={() => setDiscard(false)}>
+          <button
+            type="button"
+            className="secondary"
+            disabled={discarding}
+            onClick={() => setDiscard(false)}
+          >
             계속 편집
           </button>
           <button
             type="button"
-            onClick={() => {
-              setDiscard(false);
-              closeHistory();
+            disabled={discarding}
+            onClick={async () => {
+              setDiscarding(true);
+              setDiscardError('');
+              try {
+                if (promptDirty) await discardActiveEditor('prompt-workspace:current');
+                setDiscard(false);
+                closeHistory();
+              } catch (error) {
+                setDiscardError((error as Error).message);
+              } finally {
+                setDiscarding(false);
+              }
             }}
           >
             초안 버리고 닫기

@@ -1,12 +1,11 @@
-export type Barrier = 'run' | 'translation' | 'status' | 'image' | 'state' | 'memory';
+export type Barrier = 'run' | 'translation' | 'status' | 'image' | 'state';
 export type FailurePoint =
   | 'source-transaction'
   | 'job-transaction'
   | 'translation'
   | 'status'
   | 'image'
-  | 'state'
-  | 'memory';
+  | 'state';
 
 /** Explicit deterministic controls. Never registered outside NR_TEST_MODE. */
 export class Controls {

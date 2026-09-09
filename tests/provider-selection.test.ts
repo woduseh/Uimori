@@ -8,7 +8,6 @@ import { basename, isAbsolute, join, relative, resolve } from 'node:path';
 import { Store } from '../server/store.js';
 import { assertModelSelection } from '../server/provider-selection.js';
 import { isModelSelectable } from '../web/model-selection.js';
-import { defaultStoryConfig } from '../core/story.js';
 import type { Connection, ModelRef, ModelPreset } from '../core/product.js';
 
 const owned: { directory: string; store: Store }[] = [];
@@ -173,39 +172,26 @@ test('ID-based selections follow current connections while protocol changes requ
   expect(isModelSelectable(vm, [flex], [vertex])).toBe(true);
 });
 
-test('state and memory retain selected IDs while rejecting a disabled model newly assigned to another role', () => {
+test('state retains its selected ID while rejecting a disabled model newly assigned in another chat', () => {
   const { s, chat, c, m } = setup();
-  const defaults = defaultStoryConfig();
   s.story.saveConfig(chat.id, {
     expectedRevision: 0,
     module: null,
     stateModel: ref(m),
-    memory: defaults.memory,
   });
   s.product.model(modelBody(c, { expectedRevision: m.revision, enabled: false }), m.id);
-  expect(() =>
-    s.story.saveConfig(chat.id, {
-      expectedRevision: 1,
-      module: null,
-      stateModel: ref(m),
-      memory: { ...defaults.memory, model: ref(m) },
-    })
-  ).toThrow('비활성');
   const saved = s.story.saveConfig(chat.id, {
     expectedRevision: 1,
     module: null,
     stateModel: ref(m),
-    memory: { ...defaults.memory, recentCount: 3 },
   });
   expect(saved.stateModel).toEqual(ref(m));
-  expect(saved.memory.recentCount).toBe(3);
   const other = createFixtureChat(s, 'Other');
   expect(() =>
     s.story.saveConfig(other.id, {
       expectedRevision: 0,
       module: null,
       stateModel: ref(m),
-      memory: defaults.memory,
     })
   ).toThrow('비활성');
 });

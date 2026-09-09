@@ -1,11 +1,10 @@
 import { ProviderRejectionNotice } from './provider-rejection.js';
 import { Upload } from 'lucide-react';
-import { ToggleRow } from './ToggleRow.js';
 import { DeleteButton } from './DeleteButton.js';
 import { useEffect, useRef, useState } from 'react';
 import type { Connection, ModelRef, ModelPreset } from '../core/product.js';
 import type { StateModule } from '../core/state.js';
-import type { MemoryEntry } from '../core/memory.js';
+import { ContextPanel } from './ContextPanel.js';
 import type { StoryConfig, StoryDetail, StoryJob, StoryState } from '../core/story.js';
 import { api, ApiError, labels } from './api.js';
 import './story.css';
@@ -24,6 +23,7 @@ type PanelProps = {
   onDirtyChange?: (dirty: boolean) => void;
   active?: boolean;
   hideHeading?: boolean;
+  refreshKey?: unknown;
 };
 const id = encodeURIComponent;
 const refKey = (value: ModelRef | null) => (value ? value.id : '');
@@ -36,14 +36,6 @@ const readiness: Record<string, string> = {
   stale: '이전 원고의 상태',
   historical: '이전 원고에 연결된 상태',
   completed: '확인 완료',
-};
-const memoryNames: Record<MemoryEntry['kind'], string> = {
-  'author-canon': '작가 선언',
-  'observed-story': '본문에서 확인한 사실',
-  'derived-summary': '요약',
-  preference: '선호',
-  'character-belief': '인물의 믿음 · 사실과 구분',
-  hypothesis: '가설 · 미확정',
 };
 const sampleModule: StateModule = {
   id: 'synthetic-harbor',
@@ -173,15 +165,14 @@ export function StoryJobList({
   jobs: StoryJob[];
   busy: boolean;
   act?: (path: string) => void;
-  rebuild?: (sourceId: string, kind: 'state' | 'memory') => void;
+  rebuild?: (sourceId: string, kind: 'state') => void;
 }) {
   return (
     <ul className="story-records">
       {jobs.map((job) => (
         <li key={job.id}>
           <div>
-            <strong>{job.kind === 'state' ? '상태 확인' : '기억 정리'}</strong> ·{' '}
-            {labels[job.status] ?? job.status}
+            <strong>상태 확인</strong> · {labels[job.status] ?? job.status}
             {job.mock && <small> · 모의 처리</small>}
           </div>
           {job.error && <p className="error">{job.error}</p>}
@@ -243,6 +234,7 @@ function StoryPanelEditor({
   onDirtyChange,
   active = true,
   hideHeading = false,
+  refreshKey,
 }: PanelProps) {
   const { canSelect } = useModelSelection(models, connections);
   const capture = useScope(
@@ -259,22 +251,14 @@ function StoryPanelEditor({
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
   const [confirmReset, setConfirmReset] = useState<number | null>(null);
-  const [author, setAuthor] = useState('');
-  const [declaration, setDeclaration] = useState('');
-  const [retcon, setRetcon] = useState<string | null>(null);
+  const [contextDirty, setContextDirty] = useState(false);
   const [commandLabel, setCommandLabel] = useState('');
   const [commandText, setCommandText] = useState('');
   const commandKey = useRef(crypto.randomUUID());
   const runKeys = useRef(new Map<string, string>());
   const base = `/chats/${id(chatId)}`;
   const hasUnsavedChanges =
-    writing ||
-    dirty.current ||
-    author.length > 0 ||
-    declaration.length > 0 ||
-    retcon !== null ||
-    commandLabel.length > 0 ||
-    commandText.length > 0;
+    writing || dirty.current || contextDirty || commandLabel.length > 0 || commandText.length > 0;
   useEffect(() => {
     onDirtyChange?.(hasUnsavedChanges);
   }, [hasUnsavedChanges, onDirtyChange]);
@@ -306,7 +290,7 @@ function StoryPanelEditor({
   // biome-ignore lint/correctness/useExhaustiveDependencies: Reload on scope changes or reactivation; render-local load must not replace drafts on every render.
   useEffect(() => {
     if (active) void load();
-  }, [active, chatId, branchId, headRevision, settingsRevision, profileRevision]);
+  }, [active, chatId, branchId, headRevision, settingsRevision, profileRevision, refreshKey]);
   // biome-ignore lint/correctness/useExhaustiveDependencies: Pending snapshots and branch/head changes restart polling; local edits keep the existing timer.
   useEffect(() => {
     if (
@@ -408,10 +392,10 @@ function StoryPanelEditor({
     );
   }
   return (
-    <section className="story-panel" aria-label="이야기 상태와 기억">
-      {!hideHeading && <h3>상태와 기억</h3>}
+    <section className="story-panel" aria-label="이야기 상태와 문맥">
+      {!hideHeading && <h3>상태와 문맥</h3>}
       <p className="muted">
-        필요한 기능만 켜고 다음 원고부터 적용해요. 상태 확인과 기억 정리는 각각 모델을 선택해요.
+        장면 상태와 다음 요청에 사용할 요약·메모를 관리해요. 문맥을 정리해도 원문은 보존해요.
       </p>
       {error && (
         <p className="error" role="alert">
@@ -434,7 +418,6 @@ function StoryPanelEditor({
                 branchId,
                 module: draft.module,
                 stateModel: draft.stateModel,
-                memory: draft.memory,
               },
               () => {
                 dirty.current = false;
@@ -524,62 +507,9 @@ function StoryPanelEditor({
                 onChange={(stateModel) => change({ ...draft, stateModel })}
               />
             </section>
-            <section className="story-config-section" aria-label="기억 설정">
-              <h4>기억 정리</h4>
-              <ToggleRow
-                label="기억 자동 정리 사용"
-                description="최근 장면은 원문으로 유지하고 앞선 내용을 기억으로 정리해요."
-                checked={draft.memory.enabled}
-                onChange={(enabled) => change({ ...draft, memory: { ...draft.memory, enabled } })}
-              />
-              <ModelChoice
-                label="기억 정리 모델"
-                value={draft.memory.model}
-                original={detail?.config.memory.model ?? null}
-                models={models}
-                connections={connections}
-                canSelect={canSelect}
-                onChange={(model) => change({ ...draft, memory: { ...draft.memory, model } })}
-              />
-              <details className="full">
-                <summary>기억 분량 설정</summary>
-                <div className="editor-grid">
-                  <label>
-                    원문으로 유지할 최근 장면 수
-                    <input
-                      type="number"
-                      min={0}
-                      max={20}
-                      value={draft.memory.recentCount}
-                      onChange={(event) =>
-                        change({
-                          ...draft,
-                          memory: { ...draft.memory, recentCount: Number(event.target.value) },
-                        })
-                      }
-                    />
-                  </label>
-                  <label>
-                    기억 입력 최대 글자 수
-                    <input
-                      type="number"
-                      min={1000}
-                      max={200000}
-                      value={draft.memory.maxPacketChars}
-                      onChange={(event) =>
-                        change({
-                          ...draft,
-                          memory: { ...draft.memory, maxPacketChars: Number(event.target.value) },
-                        })
-                      }
-                    />
-                  </label>
-                </div>
-              </details>
-            </section>
             <div className="form-actions story-config-actions">
               <button className="secondary" disabled={!dirty.current}>
-                상태와 기억 설정 저장
+                상태 설정 저장
               </button>
               {dirty.current && detail && draft.revision !== detail.config.revision && (
                 <div>
@@ -589,10 +519,7 @@ function StoryPanelEditor({
                   </p>
                   <details>
                     <summary>현재 저장된 설정 확인</summary>
-                    <p>
-                      상태: {detail.config.module?.name ?? '사용 안 함'} · 기억:{' '}
-                      {detail.config.memory.enabled ? '사용' : '사용 안 함'}
-                    </p>
+                    <p>상태: {detail.config.module?.name ?? '사용 안 함'}</p>
                     <pre className="story-text-preview">
                       {JSON.stringify(detail.config, null, 2)}
                     </pre>
@@ -613,6 +540,19 @@ function StoryPanelEditor({
           </fieldset>
         </form>
       )}
+      <ContextPanel
+        chatId={chatId}
+        branchId={branchId}
+        headRevision={headRevision}
+        notes={detail?.notes}
+        notesRevision={detail?.notesRevision}
+        active={active}
+        refreshKey={refreshKey}
+        onRefreshStory={load}
+        onChanged={onChanged}
+        onError={onError}
+        onDirtyChange={setContextDirty}
+      />
       {detail && (
         <>
           <section>
@@ -665,7 +605,6 @@ function StoryPanelEditor({
                               branchId,
                               module: detail.config.module,
                               stateModel: detail.config.stateModel,
-                              memory: detail.config.memory,
                               resetState: true,
                             },
                             () => {
@@ -696,7 +635,7 @@ function StoryPanelEditor({
               ['failed', 'stale', 'interrupted'].includes(job.status)
             )}
           >
-            <summary>상태·기억 작업 {detail.jobs.length}개</summary>
+            <summary>상태 작업 {detail.jobs.length}개</summary>
             <StoryJobList
               jobs={detail.jobs}
               busy={busy}
@@ -706,128 +645,6 @@ function StoryPanelEditor({
               }
             />
             {!detail.jobs.length && <p className="muted">아직 실행한 작업이 없어요.</p>}
-          </details>
-          <details>
-            <summary>기억과 작가 선언 {detail.memory.length}개</summary>
-            <p>
-              인물의 믿음과 가설은 확인된 사실과 구분해요. 작가 선언은 직접 입력한 내용만 저장해요.
-            </p>
-            {detail.config.memory.enabled && headRevision && (
-              <button
-                type="button"
-                className="secondary"
-                disabled={
-                  busy ||
-                  detail.jobs.some(
-                    (job) => job.kind === 'memory' && ['queued', 'running'].includes(job.status)
-                  )
-                }
-                onClick={() => void act(`${base}/story/index`, { branchId })}
-              >
-                기존 원고의 기억 정리
-              </button>
-            )}
-            <ul className="story-records">
-              {detail.memory.map((entry) => (
-                <li key={entry.id}>
-                  <strong>{memoryNames[entry.kind]}</strong>
-                  {'actor' in entry && <span> · {entry.actor}</span>}
-                  <p>{entry.text}</p>
-                  {entry.kind === 'author-canon' && (
-                    <>
-                      <small>작성자: {entry.declaration.author}</small>
-                      <button
-                        type="button"
-                        className="secondary"
-                        disabled={busy}
-                        onClick={() => {
-                          setRetcon(entry.id);
-                          setDeclaration(entry.text);
-                          setAuthor(entry.declaration.author);
-                        }}
-                      >
-                        이 선언 고치기
-                      </button>
-                      <DeleteButton
-                        path={`${base}/story/memory/${id(entry.id)}`}
-                        title={entry.text.slice(0, 60)}
-                        label="선언 삭제"
-                        disabled={busy}
-                        description="아직 실행에 사용되지 않은 작가 선언을 삭제해요. 정사 수정 이력이나 실행 기록에서 참조하면 분기·채팅과 함께 삭제해야 해요."
-                        onError={onError}
-                        onDeleted={async () => {
-                          if (retcon === entry.id) {
-                            setRetcon(null);
-                            setDeclaration('');
-                            setAuthor('');
-                          }
-                          await load();
-                          onChanged();
-                        }}
-                      />
-                    </>
-                  )}
-                </li>
-              ))}
-            </ul>
-            <form
-              className="editor-grid"
-              onSubmit={(event) => {
-                event.preventDefault();
-                void act(
-                  `${base}/story/memory${retcon ? `/${id(retcon)}/retcon` : ''}`,
-                  { text: declaration, author, branchId },
-                  () => {
-                    setDeclaration('');
-                    setRetcon(null);
-                    setAuthor('');
-                  }
-                );
-              }}
-            >
-              <label>
-                선언 작성자
-                <input
-                  required
-                  maxLength={160}
-                  value={author}
-                  onChange={(event) => setAuthor(event.target.value)}
-                  disabled={busy}
-                />
-              </label>
-              <label className="full">
-                {retcon ? '기존 선언을 대신할 작가 선언' : '새 작가 선언'}
-                <textarea
-                  required
-                  maxLength={10000}
-                  value={declaration}
-                  onChange={(event) => setDeclaration(event.target.value)}
-                  disabled={busy}
-                />
-              </label>
-              <div className="form-actions full">
-                <button
-                  className="secondary"
-                  disabled={busy || !author.trim() || !declaration.trim()}
-                >
-                  {retcon ? '수정 선언 저장' : '작가 선언 추가'}
-                </button>
-                {retcon && (
-                  <button
-                    type="button"
-                    className="secondary"
-                    disabled={busy}
-                    onClick={() => {
-                      setRetcon(null);
-                      setDeclaration('');
-                      setAuthor('');
-                    }}
-                  >
-                    수정 취소
-                  </button>
-                )}
-              </div>
-            </form>
           </details>
           <details>
             <summary>장면 예약 {detail.commands.length}개</summary>
@@ -967,11 +784,6 @@ function SourceState({ sourceId, refreshKey }: { sourceId: string; refreshKey?: 
     jobs: StoryJob[];
   } | null>(null);
   const [error, setError] = useState('');
-  const [busy, setBusy] = useState(false);
-  const [pattern, setPattern] = useState('');
-  const [flags, setFlags] = useState('g');
-  const [replacement, setReplacement] = useState('');
-  const [preview, setPreview] = useState<string | null>(null);
   async function load() {
     const valid = capture(),
       current = ++generation.current;
@@ -987,7 +799,6 @@ function SourceState({ sourceId, refreshKey }: { sourceId: string; refreshKey?: 
   }
   // biome-ignore lint/correctness/useExhaustiveDependencies: Source changes and host refreshes reload state; render-local load must not retrigger its own results.
   useEffect(() => {
-    setBusy(false);
     void load();
   }, [sourceId, refreshKey]);
   // biome-ignore lint/correctness/useExhaustiveDependencies: Pending snapshots and source changes restart polling; local edits keep the existing timer.
@@ -1012,81 +823,9 @@ function SourceState({ sourceId, refreshKey }: { sourceId: string; refreshKey?: 
         <details>
           <summary>이 원고의 상태 · {readiness[detail.status] ?? detail.status}</summary>
           <StateValues state={detail.state} />
-          <StoryJobList jobs={detail.jobs} busy={busy} />
+          <StoryJobList jobs={detail.jobs} busy={false} />
         </details>
       )}
-      <details>
-        <summary>표시 문구 바꾸기</summary>
-        <p className="muted">
-          원문을 보존하는 텍스트 미리보기예요. 정규식 치환은 입력한 문자열을 그대로 넣어요($1 등
-          치환 기호 미지원). HTML도 글자로 표시해요.
-        </p>
-        <form
-          className="editor-grid"
-          onSubmit={async (event) => {
-            event.preventDefault();
-            if (busy) return;
-            const valid = capture();
-            setBusy(true);
-            setPreview(null);
-            setError('');
-            try {
-              const result = await api<{ ok: boolean; text: string; error?: string }>(
-                `/sources/${id(sourceId)}/presentation`,
-                { rules: [{ pattern, flags, replacement }] }
-              );
-              if (valid()) {
-                setPreview(result.text);
-                if (!result.ok)
-                  setError(
-                    `표시 변환을 적용하지 못했어요. 원문을 유지해요. (${result.error ?? '오류'})`
-                  );
-              }
-            } catch (caught) {
-              if (valid()) setError((caught as Error).message);
-            } finally {
-              if (valid()) setBusy(false);
-            }
-          }}
-        >
-          <label>
-            찾을 정규식
-            <input
-              required
-              maxLength={512}
-              value={pattern}
-              onChange={(event) => setPattern(event.target.value)}
-              disabled={busy}
-            />
-          </label>
-          <label>
-            옵션 (g, i, m, s, u)
-            <input
-              maxLength={5}
-              value={flags}
-              onChange={(event) => setFlags(event.target.value)}
-              disabled={busy}
-            />
-          </label>
-          <label className="full">
-            넣을 문자열
-            <input
-              maxLength={2048}
-              value={replacement}
-              onChange={(event) => setReplacement(event.target.value)}
-              disabled={busy}
-            />
-          </label>
-          <button className="secondary" disabled={busy || !pattern}>
-            {busy ? '미리보기 만드는 중' : '텍스트 미리보기'}
-          </button>
-        </form>
-        {preview !== null && (
-          <pre className="story-text-preview" aria-label="표시 문구 미리보기">
-            {preview}
-          </pre>
-        )}
-      </details>
     </div>
   );
 }

@@ -243,7 +243,7 @@ export function translationInput(
     },
     contract: '',
     referencePolicy:
-      'Optional story.search/read retrieves frozen prior originals; memory.search/read retrieves typed source-time evidence; translation.search/read retrieves prior wording, never new facts. Search names, forms of address and speaker register when useful, then read only needed ranges. Current source and source-time references take precedence over prior translations, beliefs and summaries. Hidden viewpoints remain distinct: reference knowledge does not become a character’s knowledge. Empty search needs no retry; translation remains possible without tools. Total tool result budget is 96000 UTF-8 bytes per job.',
+      'Optional story.search/read retrieves frozen prior originals; notes.list/read retrieves typed source-time evidence; translation.search/read retrieves prior wording, never new facts. Search names, forms of address and speaker register when useful, then read only needed ranges. Current source and source-time references take precedence over prior translations, beliefs and summaries. Hidden viewpoints remain distinct: reference knowledge does not become a character’s knowledge. Empty search needs no retry; translation remains possible without tools. Total tool result budget is 96000 UTF-8 bytes per job.',
     ...(snapshot.profile?.promptPresets?.translation ? { customPrompt: true } : {}),
     outputSchema: {},
   };

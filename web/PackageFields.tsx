@@ -1,6 +1,7 @@
 import { SelectionCheckbox } from './BooleanControls.js';
 import { LoreEditor } from './LoreEditor.js';
 import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
+import { useBufferedEditorState, useUnappliedEditorField } from './editor-workspace-context.js';
 import type { Content } from '../core/product.js';
 import type { ContentPackage, PackageRole } from '../core/content-package.js';
 import './package.css';
@@ -381,6 +382,7 @@ export function PackageFields({
           </div>
           <div {...visiblePanel('display')}>
             <div className="package-stack">
+              <h4>표시 문구 바꾸기</h4>
               <p className="muted">
                 정규식은 읽기 화면의 표현에만 적용해요. 저장된 원문과 번역은 그대로 남아요.
               </p>
@@ -435,6 +437,7 @@ export function PackageFields({
                   <label>
                     바꿀 내용
                     <textarea
+                      aria-label={`표시 변환 ${index + 1} 바꿀 내용`}
                       rows={3}
                       value={rule.replacement}
                       onChange={(e) =>
@@ -651,10 +654,13 @@ function BehaviorEditor({
   onDirtyChange?: (dirty: boolean) => void;
 }) {
   const serialized = value ? JSON.stringify(value, null, 2) : '';
-  const [draft, setDraft] = useState(serialized),
+  const [draft, setDraft] = useBufferedEditorState('package.behavior', serialized),
     [error, setError] = useState(''),
     [notice, setNotice] = useState('');
-  const [automaticDrafts, setAutomaticDrafts] = useState<Record<string, string>>({});
+  const [automaticDrafts, setAutomaticDrafts] = useBufferedEditorState<Record<string, string>>(
+    'package.behavior.automatic-inputs',
+    {}
+  );
   const previous = useRef(serialized);
   useEffect(() => {
     if (serialized !== previous.current) {
@@ -662,8 +668,9 @@ function BehaviorEditor({
       setDraft((current) => (current === prior ? serialized : current));
       previous.current = serialized;
     }
-  }, [serialized]);
+  }, [serialized, setDraft]);
   const dirty = draft !== serialized || Object.keys(automaticDrafts).length > 0;
+  useUnappliedEditorField('package.behavior', dirty);
   const editable = editableBehaviorDraft(draft);
   useEffect(() => {
     onDirtyChange?.(dirty);

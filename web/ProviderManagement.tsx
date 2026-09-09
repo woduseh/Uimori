@@ -1,6 +1,6 @@
 import { Switch } from './BooleanControls.js';
 import { useEffect, useRef, useState } from 'react';
-import { ArrowLeft, ArrowRight, Plus, Plug, Power, Trash2 } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Plus, Plug, Power, Save, Trash2, X } from 'lucide-react';
 import { ActionMenu } from './ActionMenu.js';
 import { IconButton } from './IconButton.js';
 import { ConnectionIcon, CopyIcon, ModelIcon, RefreshIcon, SearchIcon } from './ui-icons.js';
@@ -33,6 +33,7 @@ import { ProviderModelTest, useProviderModelTests } from './ProviderModelTest.js
 import { resolveModelPricing } from '../core/model-pricing.js';
 import { PricingSummary } from './ModelPricingEditor.js';
 import './ProviderManagement.css';
+import './settings-actions.css';
 
 const versionRef = (item: { id: string; revision: number }) => `${item.id}@${item.revision}`;
 type ConnectionDraft = {
@@ -272,13 +273,14 @@ export function ConnectionEditor({
       onError={onError}
     />
   );
-  const deleteModel = (item: ModelPreset) => (
+  const deleteModel = (item: ModelPreset, iconOnly = false) => (
     <DeleteButton
       path={`/model-presets/${encodeURIComponent(item.id)}`}
       revision={item.revision}
       title={item.title}
       label="모델 삭제"
-      description="삭제하면 현재 전역 역할 선택에서 해제돼요. 해당 모델을 쓰는 작문 보조는 꺼지고 상태·기억도 새 작업 전에 모델 설정을 확인해야 해요. 과거 실행에 저장된 모델 설정은 유지돼요."
+      iconOnly={iconOnly}
+      description="삭제하면 현재 전역 역할 선택에서 해제돼요. 해당 모델을 쓰는 작문 보조는 꺼지고 상태 계산도 새 작업 전에 모델 설정을 확인해야 해요. 과거 실행에 저장된 모델 설정은 유지돼요."
       disabled={busy}
       onDeleted={() => deletedModel(item)}
       onError={onError}
@@ -1519,19 +1521,26 @@ export function ConnectionEditor({
             forcedVertexTier={forcedVertexTier}
           />
         </fieldset>
-        <div className="provider-actions full">
-          <button disabled={busy || !!confirmation || !chosen}>
-            {editingModel ? '모델 변경 저장' : '모델 프리셋 등록'}
-          </button>
-          <button
-            type="button"
-            className="secondary"
+        <div className="provider-actions full provider-model-save-actions">
+          {editingModel && deleteModel(editingModel, true)}
+          <IconButton
+            icon={X}
+            label="모델 편집 끝내기"
             disabled={busy}
             onClick={() => navigate('models')}
-          >
-            모델 편집 끝내기
-          </button>
-          {editingModel && deleteModel(editingModel)}
+          />
+          {editingModel ? (
+            <IconButton
+              type="submit"
+              icon={Save}
+              label="모델 변경 저장"
+              className="settings-save-button"
+              disabled={busy || !!confirmation || !chosen}
+              aria-busy={busy}
+            />
+          ) : (
+            <button disabled={busy || !!confirmation || !chosen}>모델 프리셋 등록</button>
+          )}
         </div>
       </form>
       {error && (
@@ -1547,7 +1556,7 @@ export function ConnectionEditor({
           <ol>
             <li>설정 → 현재 모델에서 사용할 역할을 선택하고 저장해요.</li>
             <li>
-              모든 채팅의 이후 요청에 적용해요. 상태·기억의 독립 모델은 채팅 설정의 해당 작업
+              모든 채팅의 이후 요청에 적용해요. 상태 계산의 독립 모델은 채팅 설정의 해당 작업
               설정에서 선택해요.
             </li>
           </ol>

@@ -1,3 +1,4 @@
+import { writeNote } from './fixtures/notes.js';
 import { updateTestProfile } from './fixtures/model-workspace.js';
 import { createFixtureChat, fixtureBotInput } from './fixtures/chat.js';
 import { afterEach, expect, test } from 'vitest';
@@ -178,7 +179,7 @@ test('HTTP tool discovery/read reaches older-than-two source, typed authored mem
     expectedRevision: 0,
     expectedSourceHash: first.hash,
   });
-  const canon = store.story.memory.authored(chat.id, {
+  const canon = writeNote(store, chat.id, {
     text: 'Captain Arlen is addressed as 앨런 선장. Mira speaks informally.',
     author: 'synthetic-author',
   });
@@ -205,7 +206,7 @@ test('HTTP tool discovery/read reaches older-than-two source, typed authored mem
           type: 'tool_delta',
           index: 1,
           id: 'm',
-          name: 'memory.search',
+          name: 'notes.list',
           argumentsDelta: JSON.stringify({ query: 'Captain' }),
         },
         {
@@ -221,7 +222,7 @@ test('HTTP tool discovery/read reaches older-than-two source, typed authored mem
     }
     if (results.length === 3) {
       expect(results[0].result.results[0].source.revision).toBe(first.id);
-      expect(results[1].result.results[0].kind).toBe('author-canon');
+      expect(results[1].result.results[0].kind).toBe('author-note');
       expect(results[2].result.items[0].id).toBe(wording.id);
       await writeSse(res, [
         {
@@ -235,7 +236,7 @@ test('HTTP tool discovery/read reaches older-than-two source, typed authored mem
           type: 'tool_delta',
           index: 1,
           id: 'mr',
-          name: 'memory.read',
+          name: 'notes.read',
           argumentsDelta: JSON.stringify({ id: canon.id }),
         },
         {
@@ -250,7 +251,7 @@ test('HTTP tool discovery/read reaches older-than-two source, typed authored mem
       return;
     }
     expect(results[5].result.text).toBe('앨런 선장이라고 불러 줘.');
-    expect(results[4].result.entry.kind).toBe('author-canon');
+    expect(results[4].result.kind).toBe('author-note');
     await writeSse(res, [
       { type: 'text_delta', delta: '앨런 선장, 잠깐 기다려.' },
       { type: 'done', reason: 'stop' },
@@ -311,8 +312,7 @@ test('translation tools support empty memory with disabled indexing, bounded pag
       .denied
   ).toBe(false);
   expect(
-    executeTool(snapshot, call('memory.search', { query: 'absent' }), undefined, 'translation')
-      .result
+    executeTool(snapshot, call('notes.list', { query: 'absent' }), undefined, 'translation').result
   ).toMatchObject({ total: 0 });
   expect(
     executeTool(snapshot, call('story.read', { id: 'future' }), undefined, 'translation').denied

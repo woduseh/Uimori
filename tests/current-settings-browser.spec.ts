@@ -113,7 +113,8 @@ test('CURRENTUI01 changed control definitions exclude old combinations and rejec
   await page.goto(`/?chat=${chat.id}`);
   await page.getByRole('button', { name: '입력창 더보기', exact: true }).click();
   await page.getByRole('button', { name: '창작 옵션', exact: true }).click();
-  const panel = page.getByRole('region', { name: '창작 옵션 패널', exact: true });
+  await page.getByRole('tab', { name: '모든 채팅', exact: true }).click();
+  const panel = page.getByRole('tabpanel', { name: '모든 채팅 옵션', exact: true });
   await expect(panel.getByRole('option', { name: '보존한 창작 조합', exact: true })).toHaveCount(0);
   const currentWorkspace = await (await request.get('/api/prompt-workspace')).json();
   expect(currentWorkspace.main.presetId).toBe(prompt.id);
@@ -143,7 +144,7 @@ test('CURRENTUI01 changed control definitions exclude old combinations and rejec
     .toEqual({ detail: 3, style: 'current', added: false });
   if (visualReview)
     await page.screenshot({ path: info.outputPath('current-prompt-options-mobile.png') });
-  await panel.getByRole('button', { name: '창작 옵션 닫기', exact: true }).click();
+  await page.getByRole('button', { name: '창작 옵션 닫기', exact: true }).click();
   const savedWorkspace = await (await request.get('/api/prompt-workspace')).json();
   const owner = await (await request.get(`/api/content/${chat.botId}`)).json();
   await navigationAction(page, '새 채팅', owner.title);

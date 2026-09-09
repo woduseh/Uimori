@@ -12,14 +12,7 @@ import { validatePackageModules, type PackageModuleRef } from './package-feature
 
 export const PACKAGE_ROLES = ['bot', 'persona', 'module'] as const;
 export type PackageRole = (typeof PACKAGE_ROLES)[number];
-export const PACKAGE_TARGETS = [
-  'main',
-  'translation',
-  'state',
-  'memory',
-  'status',
-  'image',
-] as const;
+export const PACKAGE_TARGETS = ['main', 'translation', 'state', 'status', 'image'] as const;
 export type PackageTarget = (typeof PACKAGE_TARGETS)[number];
 export type PackageAttachment = { id: string; revision: number; role: PackageRole };
 /** Flat authoring folders only; folder membership does not change loading or runtime order. */

@@ -97,6 +97,8 @@ export function managementImpact(
     ...workspace.modelRoutes,
     'translation-refusal': workspace.translationPolicy.refusalModel,
     title: workspace.titleModel,
+    helper: workspace.helperModel,
+    context: workspace.contextModel,
   })
     .filter(([, ref]) => matches(ref))
     .map(([role]) => role);
@@ -113,23 +115,16 @@ export function managementImpact(
   const storyProfiles: ReferencingProfile[] = [];
   const storyRows = store.db
     .prepare(
-      "SELECT s.chat_id AS chatId,c.title,json_extract(s.body,'$.stateModel') AS stateModel,json_extract(s.body,'$.memory.model') AS memoryModel FROM story_configs s JOIN chats c ON c.id=s.chat_id WHERE s.revision=(SELECT MAX(n.revision) FROM story_configs n WHERE n.chat_id=s.chat_id) ORDER BY s.chat_id"
+      "SELECT s.chat_id AS chatId,c.title,json_extract(s.body,'$.stateModel') AS stateModel FROM story_configs s JOIN chats c ON c.id=s.chat_id WHERE s.revision=(SELECT MAX(n.revision) FROM story_configs n WHERE n.chat_id=s.chat_id) ORDER BY s.chat_id"
     )
     .all() as {
     chatId: string;
     title: string;
     stateModel: string | null;
-    memoryModel: string | null;
   }[];
   for (const row of storyRows) {
-    const roles = (['state', 'memory'] as const).filter((role) =>
-      matches(
-        JSON.parse(
-          (role === 'state' ? row.stateModel : row.memoryModel) ?? 'null'
-        ) as ModelRef | null
-      )
-    );
-    if (roles.length) storyProfiles.push({ chatId: row.chatId, title: row.title, roles });
+    if (matches(JSON.parse(row.stateModel ?? 'null') as ModelRef | null))
+      storyProfiles.push({ chatId: row.chatId, title: row.title, roles: ['state'] });
   }
   const count = (query: string, ...params: string[]) =>
     Number((store.db.prepare(query).get(...params) as { count: number }).count);

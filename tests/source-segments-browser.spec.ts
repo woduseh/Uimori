@@ -1,4 +1,5 @@
 import { navigationAction } from './ui-navigation.js';
+import { waitForContentDraftSave } from './fixtures/edit-draft-save.js';
 import { visualReview } from './fixtures/visual-review.js';
 import { editLibraryContent, selectPackageSection } from './ui-navigation.js';
 import { test, expect, type APIRequestContext, type Page } from '@playwright/test';
@@ -260,14 +261,9 @@ test('SEGMENTUI02 current modules preserve unapplied segment drafts and existing
   await features.getByRole('button', { name: '구간 초안 되돌리기', exact: true }).click();
   await expect(name).toHaveValue('UNAPPLIED_SEGMENT_DRAFT');
   await expect(save).toBeEnabled();
-  const savedResponse = page.waitForResponse(
-    (response) =>
-      response.url().endsWith(`/api/content/${owner.id}`) && response.request().method() === 'PUT'
-  );
+  const savedResponse = waitForContentDraftSave(page, owner.id);
   await save.click();
-  const response = await savedResponse;
-  expect(response.ok(), await response.text()).toBe(true);
-  const saved = (await response.json()) as Content;
+  const saved = await savedResponse;
   expect(saved.package!.modules).toEqual(owner.package!.modules);
   expect(saved.package!.sourceSegments!.rules[0].label).toBe('UNAPPLIED_SEGMENT_DRAFT');
   expect((await detail(request, seededChat.id)).runs).toEqual(beforeRuns);

@@ -760,6 +760,9 @@ export class ResponsesDecoder {
     } else reject('UNSUPPORTED_RESPONSES_EVENT');
     this.refresh(false);
   }
+  publicText(): string {
+    return this.result.text;
+  }
   snapshot(): ProviderResult {
     return withState(
       this.result,

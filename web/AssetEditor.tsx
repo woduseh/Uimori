@@ -1,4 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
+import { ImagePlus } from 'lucide-react';
+import { IconButton } from './IconButton.js';
+import './settings-actions.css';
 import type { Asset } from '../core/product.js';
 import { api } from './api.js';
 import { DeleteButton } from './DeleteButton.js';
@@ -213,9 +216,16 @@ export function AssetEditor({
               <option value="inline">본문</option>
             </select>
           </label>
-          <div className="form-actions full">
-            <button disabled={busy || !file}>이미지 등록</button>
+          <div className="form-actions full settings-save-actions">
             <span role="status">{message}</span>
+            <IconButton
+              type="submit"
+              icon={ImagePlus}
+              label="이미지 등록"
+              className="settings-save-button"
+              disabled={busy || !file}
+              aria-busy={busy}
+            />
           </div>
         </fieldset>
       </form>

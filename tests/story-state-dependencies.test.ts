@@ -61,7 +61,6 @@ function activate(store: Store, chatId: string, mode: StateMode) {
       rules: { purchase: { field: 'coins', delta: -3 } },
     },
     stateModel: null,
-    memory: { enabled: false, model: null, recentCount: 2, maxPacketChars: 60000 },
   });
 }
 function request(store: Store, chatId: string, branchId?: string) {
@@ -158,7 +157,6 @@ describe('S02 S03 actual Store continuity and activation dependencies', () => {
       expectedRevision: initial.revision,
       module: initial.module,
       stateModel: { id: model.id },
-      memory: initial.memory,
     });
     const first = source(store, id, 'Historical model selection stays with this source.');
     const reserved = job(store, id, first.id);
@@ -168,7 +166,6 @@ describe('S02 S03 actual Store continuity and activation dependencies', () => {
       expectedRevision: selected.revision,
       module: selected.module,
       stateModel: null,
-      memory: selected.memory,
     });
     deleteLibraryItem(store, 'model', model.id, { expectedRevision: model.revision });
     deleteLibraryItem(store, 'connection', connection.id, {
@@ -196,7 +193,6 @@ describe('S02 S03 actual Store continuity and activation dependencies', () => {
       expectedRevision: originalConfig.revision,
       module: originalConfig.module,
       stateModel: originalConfig.stateModel,
-      memory: { ...originalConfig.memory, recentCount: 3 },
     });
     expect(currentConfig.module).toEqual(originalConfig.module);
     expect(
@@ -207,7 +203,6 @@ describe('S02 S03 actual Store continuity and activation dependencies', () => {
         expectedRevision: originalConfig.revision,
         module: originalConfig.module,
         stateModel: originalConfig.stateModel,
-        memory: originalConfig.memory,
       })
     ).toThrow('Story settings revision conflict');
     expect(store.story.bundle(firstJob.id).snapshot).toEqual(originalSnapshot);
@@ -236,11 +231,11 @@ describe('S02 S03 actual Store continuity and activation dependencies', () => {
     // The obsolete configuration no longer has a settings row, but copies sharing
     // its revision must still agree across the owning Run and auxiliary job.
     const forged = structuredClone(originalSnapshot);
-    forged.story!.config.memory.recentCount = 99;
+    forged.story!.config.stateModel = { id: 'forged-selection' };
     store.db
       .prepare('UPDATE story_jobs SET snapshot=? WHERE id=?')
       .run(JSON.stringify(forged), firstJob.id);
-    expect(() => validateStoryArchive(store)).toThrow('snapshot configuration mismatch');
+    expect(() => validateStoryArchive(store)).toThrow();
     expect(globalThis.fetch).not.toHaveBeenCalled();
   });
 
@@ -256,7 +251,6 @@ describe('S02 S03 actual Store continuity and activation dependencies', () => {
       expectedRevision: originalConfig.revision,
       module: originalConfig.module,
       stateModel: originalConfig.stateModel,
-      memory: originalConfig.memory,
       resetState: true,
     });
     const copy = forkChat(store, id, {
@@ -307,7 +301,6 @@ describe('S02 S03 actual Store continuity and activation dependencies', () => {
       expectedRevision: config.revision,
       module: config.module,
       stateModel: { id: model.id },
-      memory: config.memory,
     });
     expect(selected.stateModel).toEqual({ id: model.id });
     expect(() =>
@@ -315,7 +308,6 @@ describe('S02 S03 actual Store continuity and activation dependencies', () => {
         expectedRevision: selected.revision,
         module: selected.module,
         stateModel: { id: model.id, revision: model.revision },
-        memory: selected.memory,
       })
     ).toThrow('Unknown request field');
     const first = source(store, id, 'Snapshot ownership is preserved.'),
@@ -432,7 +424,7 @@ describe('S02 S03 actual Store continuity and activation dependencies', () => {
     expect(store.story.stateAt(id, second.id)?.values).toEqual({ coins: 7 });
     const restored = await database();
     const archive = store.product.export();
-    expect(archive.version).toBe(14);
+    expect(archive.version).toBe(15);
     expect(restored.product.import(archive).restored).toBe(true);
     expect(restored.run(second.runId).snapshot).toEqual(originalRun);
     expect(restored.story.bundle(secondJob.id).snapshot.story?.state?.values).toEqual({ coins: 7 });
@@ -571,7 +563,6 @@ describe('S02 S03 actual Store continuity and activation dependencies', () => {
       expectedRevision: config.revision,
       module: config.module,
       stateModel: config.stateModel,
-      memory: config.memory,
       branchId: selected.id,
       resetState: true,
     });

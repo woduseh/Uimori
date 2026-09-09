@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, test } from 'vitest';
 import { runStoryJob, type StoryHooks, type StoryInput } from '../server/story-runner.js';
 import { defaultStoryConfig, type StoryJob, type StorySnapshot } from '../core/story.js';
-import { memoryHash } from '../core/memory.js';
+import { sourceHash as memoryHash } from '../core/source-history.js';
 import type { RunSnapshot, Source, ToolEvent } from '../core/types.js';
 import type { Json, ProviderResult, WireRecord } from '../core/transport.js';
 import { loopbackProvider, writeSse } from './fixtures/loopback-provider.js';
@@ -16,7 +16,7 @@ async function fixture(handler: Parameters<typeof loopbackProvider>[0]) {
   return server;
 }
 function bundle(
-  kind: 'state' | 'memory' = 'state',
+  kind: 'state' = 'state',
   endpoint?: string,
   text = 'Mira spent three coins at the harbor.'
 ) {
@@ -48,7 +48,6 @@ function bundle(
     config: {
       ...defaultStoryConfig(),
       revision: 1,
-      memory: { enabled: true, model: null, recentCount: 2, maxPacketChars: 60000 },
       module: {
         id: 'coins',
         revision: 1,
@@ -77,7 +76,7 @@ function bundle(
     waiting: false,
     lineageHash: 'lineage-1',
     canonHash: memoryHash('[]'),
-    memory: null,
+    notes: [],
     models: endpoint
       ? {
           [kind]: {
@@ -393,62 +392,6 @@ describe('M2 story runner actual localhost request evidence (synthetic, no live 
     expect(server.requests).toHaveLength(3);
   });
 
-  test('R03 memory provider returns validated source-bound entries and cannot forge author canon or wrong scope', async () => {
-    let mode = 'valid';
-    const server = await fixture(async (request, response) => {
-      expect(JSON.parse(request.body).role).toBe('memory');
-      const entry = {
-        id: 'memory-1',
-        chatId: mode === 'wrong-chat' ? 'chat-2' : work.job.chatId,
-        atRevision: work.source.id,
-        atHash: work.source.hash,
-        text: work.source.text,
-        kind: 'observed-story',
-        sources: [
-          {
-            revision: work.source.id,
-            hash: work.source.hash,
-            start: 0,
-            end: work.source.text.length,
-            quote: work.source.text,
-          },
-        ],
-      };
-      await writeSse(
-        response,
-        finish({
-          entries:
-            mode === 'canon'
-              ? [
-                  {
-                    id: entry.id,
-                    chatId: entry.chatId,
-                    atRevision: entry.atRevision,
-                    atHash: entry.atHash,
-                    text: entry.text,
-                    kind: 'author-canon',
-                    declaration: { author: 'model', text: entry.text },
-                  },
-                ]
-              : mode === 'empty'
-                ? []
-                : [entry],
-        })
-      );
-    });
-    const work = bundle('memory', server.endpoint);
-    const log = observed(server.origin);
-    expect((await runStoryJob(work, log.hooks)).result).toMatchObject({
-      entries: [{ kind: 'observed-story', atRevision: work.source.id }],
-    });
-    mode = 'canon';
-    expect((await runStoryJob(work, log.hooks)).error).toBe('STORY_MEMORY_OUTPUT_INVALID');
-    mode = 'wrong-chat';
-    expect((await runStoryJob(work, log.hooks)).status).toBe('failed');
-    mode = 'empty';
-    expect((await runStoryJob(work, log.hooks)).result).toEqual({ entries: [] });
-  });
-
   test('S01 R03 mock is explicit: numeric events need literal markers and memory is extractive with safe UTF16 evidence', async () => {
     const log = observed();
     const noEvent = bundle();
@@ -465,14 +408,6 @@ describe('M2 story runner actual localhost request evidence (synthetic, no live 
           evidence: { start: 0, end: 21, quote: '[[event:spend-three]]' },
         },
       ],
-    });
-    const memory = bundle('memory', undefined, `${'a'.repeat(999)}🌙 end`);
-    const result = await runStoryJob(memory, log.hooks);
-    expect(result).toMatchObject({
-      mock: true,
-      result: {
-        entries: [{ kind: 'derived-summary', text: 'a'.repeat(999), sources: [{ end: 999 }] }],
-      },
     });
     expect(log.attempts).toHaveLength(0);
   });

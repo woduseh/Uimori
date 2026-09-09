@@ -1,3 +1,4 @@
+import { modelWorkspace, updateModelWorkspace } from '../server/prompt-workspace.js';
 import { updateTestProfile } from './fixtures/model-workspace.js';
 import { createFixtureChat, injectWithFixtureBot } from './fixtures/chat.js';
 import { randomUUID } from 'node:crypto';
@@ -74,7 +75,7 @@ async function directory() {
   owned.push(item);
   return item;
 }
-async function setup(options: { evaluated?: boolean; count?: number } = {}) {
+async function setup(options: { evaluated?: boolean; count?: number; short?: boolean } = {}) {
   const item = await directory();
   const app = (item.app = await createApp({
     dbPath: join(item.directory, 'story.sqlite'),
@@ -116,7 +117,7 @@ async function setup(options: { evaluated?: boolean; count?: number } = {}) {
     sources.push(
       app.store.completeRun(
         run.id,
-        `과거 장면 ${index}.\n${paragraph.repeat(60)}`,
+        `과거 장면 ${index}.\n${paragraph.repeat(options.short ? 1 : 60)}`,
         usage,
         run.snapshot.settings
       )
@@ -147,6 +148,13 @@ async function setup(options: { evaluated?: boolean; count?: number } = {}) {
 
     routes: { main: { id: model.id }, translation: null, status: null, image: null },
     image: profile.image,
+  });
+  const workspace = modelWorkspace(app.store);
+  updateModelWorkspace(app.store, {
+    expectedRevision: workspace.revision,
+    routes: workspace.routes,
+    translationPolicy: workspace.translationPolicy,
+    contextModel: { id: model.id },
   });
   return { app, chatId: chat.id, sources, model, connection };
 }
@@ -186,7 +194,7 @@ function recordRequests(
   bodies: Body[],
   respond: (body: Body, options: RequestInit | undefined) => Response | Promise<Response> = (
     body
-  ) => complete(body.role === 'memory' ? summary : finalText)
+  ) => complete(body.role === 'context' ? summary : finalText)
 ) {
   vi.mocked(fetch).mockImplementation(async (url, options) => {
     expect(String(url)).toBe(endpoint);
@@ -235,7 +243,7 @@ describe('automatic input summaries through real App and file SQLite', () => {
           .map((message) => message.role)
       ).toEqual(['user', 'assistant']);
     }
-    const summaries = bodies.filter((body) => body.role === 'memory'),
+    const summaries = bodies.filter((body) => body.role === 'context'),
       main = bodies.filter((body) => body.role === 'main');
     expect(summaries.length).toBeGreaterThan(0);
     expect(main).toHaveLength(1);
@@ -262,7 +270,7 @@ describe('automatic input summaries through real App and file SQLite', () => {
       .attempts(chatId)
       .filter((attempt) => attempt.runId === run.id);
     expect(attempts.map((attempt) => attempt.role)).toEqual([
-      ...summaries.map(() => 'memory'),
+      ...summaries.map(() => 'context'),
       'main',
     ]);
     expect(run.usage).toEqual({
@@ -299,7 +307,7 @@ describe('automatic input summaries through real App and file SQLite', () => {
     bodies.length = 0;
     const next = await terminal(app, (await start(app, chatId)).id);
     expect(next.status, next.error ?? '').toBe('completed');
-    const summaries = bodies.filter((body) => body.role === 'memory');
+    const summaries = bodies.filter((body) => body.role === 'context');
     expect(summaries.length).toBeGreaterThan(0);
     expect(summaries[0].input.source!.previousSummary).toBeNull();
     expect(
@@ -316,7 +324,7 @@ describe('automatic input summaries through real App and file SQLite', () => {
       bodies: Body[] = [];
     let stream!: ReadableStreamDefaultController<Uint8Array>;
     recordRequests(app, bodies, (body, options) => {
-      expect(body.role).toBe('memory');
+      expect(body.role).toBe('context');
       const response = new ReadableStream<Uint8Array>({
         start(controller) {
           stream = controller;
@@ -360,7 +368,7 @@ describe('automatic input summaries through real App and file SQLite', () => {
     });
     expect(cancelled.sourceRevision).toBeNull();
     expect(app.store.chat(chatId).headRevision).toBe(sources.at(-1)!.id);
-    expect(bodies.map((body) => body.role)).toEqual(['memory']);
+    expect(bodies.map((body) => body.role)).toEqual(['context']);
   });
 
   test('an edit while summary completes prevents the main call and retains its incurred attempt', async () => {
@@ -368,7 +376,7 @@ describe('automatic input summaries through real App and file SQLite', () => {
       bodies: Body[] = [];
     let release!: (response: Response) => void;
     recordRequests(app, bodies, (body) => {
-      expect(body.role).toBe('memory');
+      expect(body.role).toBe('context');
       return new Promise<Response>((resolve) => {
         release = resolve;
       });
@@ -392,8 +400,8 @@ describe('automatic input summaries through real App and file SQLite', () => {
     });
     expect(
       app.store.product.attempts(chatId).filter((attempt) => attempt.runId === failed.id)
-    ).toMatchObject([{ role: 'memory', status: 'completed' }]);
-    expect(bodies.map((body) => body.role)).toEqual(['memory']);
+    ).toMatchObject([{ role: 'context', status: 'completed' }]);
+    expect(bodies.map((body) => body.role)).toEqual(['context']);
     expect(app.store.chat(chatId).headRevision).toBe(sources.at(-1)!.id);
   });
 
@@ -451,5 +459,411 @@ describe('automatic input summaries through real App and file SQLite', () => {
     expect(bodies.filter((body) => body.role === 'main')).toHaveLength(1);
     expect(run.usage.modelCalls).toBe(bodies.length);
     expect(bodies.length).toBeLessThanOrEqual(run.snapshot.settings.maxCalls);
+  });
+});
+
+async function contextApi(
+  app: App,
+  chatId: string,
+  method: 'GET' | 'PUT' | 'POST',
+  path: string,
+  body?: unknown,
+  status = 200
+) {
+  const result = await app.inject({
+    method,
+    url: '/api/chats/' + chatId + path,
+    headers: { host: '127.0.0.1' },
+    ...(body === undefined
+      ? {}
+      : {
+          payload: JSON.stringify(body),
+          headers: { host: '127.0.0.1', 'content-type': 'application/json' },
+        }),
+  });
+  expect(result.statusCode, result.body).toBe(status);
+  return result.json();
+}
+const contextCommand = (
+  detail: { activeRevision: number; headRevision: string | null },
+  key: string = randomUUID()
+) => ({
+  expectedRevision: detail.activeRevision,
+  expectedHeadRevision: detail.headRevision,
+  idempotencyKey: key,
+});
+async function contextTerminal(app: App, id: string) {
+  await vi.waitFor(
+    () =>
+      expect(['completed', 'failed', 'cancelled', 'interrupted']).toContain(
+        app.store.context.job(id).status
+      ),
+    { timeout: 5000, interval: 10 }
+  );
+  return app.store.context.job(id);
+}
+describe('standalone context summaries and explicit corrections', () => {
+  test('an unset main model rejects new summary operations while preserving accepted command receipts', async () => {
+    const { app, chatId } = await setup({ count: 0 });
+    const initial = await contextApi(app, chatId, 'GET', '/context');
+    const editCommand = { ...contextCommand(initial), summary: '모델 해제 뒤에도 보존할 요약' };
+    const saved = await contextApi(app, chatId, 'PUT', '/context/summary', editCommand);
+    const compactCommand = contextCommand(saved);
+    const queued = await contextApi(app, chatId, 'POST', '/context/compact', compactCommand);
+    const completed = await contextTerminal(app, queued.id);
+    expect(completed).toMatchObject({ status: 'completed', noop: true });
+    const workspace = modelWorkspace(app.store);
+    updateModelWorkspace(app.store, {
+      expectedRevision: workspace.revision,
+      routes: { ...workspace.routes, main: null },
+      translationPolicy: workspace.translationPolicy,
+    });
+    expect(await contextApi(app, chatId, 'PUT', '/context/summary', editCommand)).toEqual(saved);
+    expect(await contextApi(app, chatId, 'POST', '/context/compact', compactCommand)).toMatchObject(
+      { id: completed.id, status: 'completed', noop: true }
+    );
+    const before = await contextApi(app, chatId, 'GET', '/context');
+    expect(
+      await contextApi(
+        app,
+        chatId,
+        'PUT',
+        '/context/summary',
+        { ...contextCommand(before), summary: '저장되면 안 되는 새 요약' },
+        409
+      )
+    ).toMatchObject({ error: 'MODEL_REQUIRED:main' });
+    expect(
+      await contextApi(app, chatId, 'POST', '/context/compact', contextCommand(before), 409)
+    ).toMatchObject({ error: 'MODEL_REQUIRED:main' });
+    expect(await contextApi(app, chatId, 'GET', '/context')).toEqual(before);
+    expect(app.store.product.attempts(chatId)).toEqual([]);
+    expect(fetch).not.toHaveBeenCalled();
+  });
+  test('a manual job can use its entire one-call budget and its attempt survives archive restore', async () => {
+    const { app, chatId } = await setup({ count: 4, short: true }),
+      bodies: Body[] = [];
+    recordRequests(app, bodies);
+    const chat = app.store.chat(chatId);
+    app.store.settings(chatId, chat.settingsRevision, { ...chat.settings, maxCalls: 1 });
+    const detail = await contextApi(app, chatId, 'GET', '/context');
+    const job = await contextTerminal(
+      app,
+      (await contextApi(app, chatId, 'POST', '/context/compact', contextCommand(detail))).id
+    );
+    expect(job.status, job.error ?? '').toBe('completed');
+    expect(job.snapshot.contextPlan!.summaryCalls).toBe(1);
+    expect(bodies).toHaveLength(1);
+    const copy = await restored(app.store.product.export());
+    expect(copy.context.job(job.id).snapshot.contextPlan).toEqual(job.snapshot.contextPlan);
+  });
+  test('an unset context model permits short main input and a no-op but blocks required compaction', async () => {
+    const short = await setup({ count: 1, short: true });
+    const workspace = modelWorkspace(short.app.store);
+    updateModelWorkspace(short.app.store, {
+      expectedRevision: workspace.revision,
+      routes: workspace.routes,
+      translationPolicy: workspace.translationPolicy,
+      contextModel: null,
+    });
+    const bodies: Body[] = [];
+    recordRequests(short.app, bodies);
+    expect((await terminal(short.app, (await start(short.app, short.chatId)).id)).status).toBe(
+      'completed'
+    );
+    expect(bodies.map((body) => body.role)).toEqual(['main']);
+    const detail = await contextApi(short.app, short.chatId, 'GET', '/context');
+    const noop = await contextTerminal(
+      short.app,
+      (
+        await contextApi(
+          short.app,
+          short.chatId,
+          'POST',
+          '/context/compact',
+          contextCommand(detail)
+        )
+      ).id
+    );
+    expect(noop.status).toBe('completed');
+    expect(noop.noop).toBe(true);
+    expect(bodies).toHaveLength(1);
+    const long = await setup();
+    const next = modelWorkspace(long.app.store);
+    updateModelWorkspace(long.app.store, {
+      expectedRevision: next.revision,
+      routes: next.routes,
+      translationPolicy: next.translationPolicy,
+      contextModel: null,
+    });
+    const failed = await terminal(long.app, (await start(long.app, long.chatId)).id);
+    expect(failed.status).toBe('failed');
+    expect(failed.error).toContain('MODEL_REQUIRED:context');
+    expect(bodies).toHaveLength(1);
+    expect(long.app.store.product.attempts(long.chatId)).toHaveLength(0);
+  });
+  test('explicit notes enter both summary input and the next real main body without extraction jobs', async () => {
+    const { app, chatId } = await setup({ count: 4, short: true }),
+      bodies: Body[] = [];
+    recordRequests(app, bodies);
+    const detail = await contextApi(app, chatId, 'GET', '/context'),
+      noteText = 'USER_CORRECTION_CANARY: The lighthouse is red, not blue.';
+    await contextApi(app, chatId, 'POST', '/notes', {
+      text: noteText,
+      author: 'user',
+      expectedRevision: 0,
+      expectedHeadRevision: detail.headRevision,
+      idempotencyKey: randomUUID(),
+    });
+    const manual = await contextTerminal(
+      app,
+      (await contextApi(app, chatId, 'POST', '/context/compact', contextCommand(detail))).id
+    );
+    expect(manual.status, manual.error ?? '').toBe('completed');
+    expect(JSON.stringify(bodies.find((body) => body.role === 'context')?.input.source)).toContain(
+      noteText
+    );
+    const main = await terminal(app, (await start(app, chatId)).id);
+    expect(main.status, main.error ?? '').toBe('completed');
+    expect(JSON.stringify(bodies.find((body) => body.role === 'main'))).toContain(noteText);
+    expect(main.snapshot.story?.notes[0].text).toBe(noteText);
+    expect(
+      app.store.db.prepare('SELECT COUNT(*) AS n FROM story_jobs WHERE chat_id=?').get(chatId)?.n
+    ).toBe(0);
+  });
+  test('cancelling a manual request rejects late completion and emits only one terminal event', async () => {
+    const { app, chatId } = await setup({ count: 4, short: true });
+    let release!: (value: Response) => void, announce!: () => void;
+    const waiting = new Promise<void>((resolve) => (announce = resolve)),
+      pending = new Promise<Response>((resolve) => (release = resolve));
+    vi.mocked(fetch).mockImplementation(async () => {
+      announce();
+      return pending;
+    });
+    const detail = await contextApi(app, chatId, 'GET', '/context'),
+      queued = await contextApi(app, chatId, 'POST', '/context/compact', contextCommand(detail));
+    await waiting;
+    await contextApi(app, chatId, 'POST', `/context/jobs/${queued.id}/cancel`, {});
+    release(complete(summary));
+    await vi.waitFor(
+      () => expect(app.store.product.attempts(chatId)[0].status).not.toBe('running'),
+      { timeout: 5000 }
+    );
+    expect(app.store.context.job(queued.id).status).toBe('cancelled');
+    expect(app.store.context.detail(chatId).checkpoint).toBeNull();
+    app.store.context.fail(queued.id, 'LATE_FAILURE');
+    app.store.context.cancel(chatId, queued.id);
+    expect(
+      app.store.db
+        .prepare(
+          "SELECT kind FROM events WHERE entity_id=? AND kind IN ('context.job.completed','context.job.failed','context.job.cancelled')"
+        )
+        .all(queued.id)
+        .map((row) => row.kind)
+    ).toEqual(['context.job.cancelled']);
+    const copy = await restored(app.store.product.export());
+    expect(copy.context.job(queued.id).status).toBe('cancelled');
+    expect(copy.context.detail(chatId).checkpoint).toBeNull();
+  });
+  test('manual compaction works below automatic threshold, repeated compact is a no-op, and neither creates a main Run', async () => {
+    const { app, chatId, sources } = await setup({ count: 4, short: true }),
+      bodies: Body[] = [];
+    recordRequests(app, bodies);
+    const before = app.store.detail(chatId).runs.length,
+      detail = await contextApi(app, chatId, 'GET', '/context');
+    const queued = await contextApi(
+      app,
+      chatId,
+      'POST',
+      '/context/compact',
+      contextCommand(detail)
+    );
+    const job = await contextTerminal(app, queued.id);
+    expect(job.status, job.error ?? '').toBe('completed');
+    expect(job.noop).toBe(false);
+    expect(job.snapshot.contextPlan!.compacted).toHaveLength(2);
+    expect(job.snapshot.contextPlan!.recentSourceRevisions).toEqual(
+      sources.slice(-2).map((s) => s.id)
+    );
+    expect(bodies.length).toBeGreaterThan(0);
+    expect(bodies.every((body) => body.role === 'context')).toBe(true);
+    expect(app.store.detail(chatId).runs).toHaveLength(before);
+    expect(app.store.chat(chatId).headRevision).toBe(sources.at(-1)!.id);
+    const nextDetail = await contextApi(app, chatId, 'GET', '/context');
+    expect(nextDetail.usable).toBe(true);
+    const calls = bodies.length;
+    const noop = await contextTerminal(
+      app,
+      (await contextApi(app, chatId, 'POST', '/context/compact', contextCommand(nextDetail))).id
+    );
+    expect(noop.status).toBe('completed');
+    expect(noop.noop).toBe(true);
+    expect(bodies).toHaveLength(calls);
+    expect(noop.checkpoint).toEqual(job.checkpoint);
+    const copy = await restored(app.store.product.export());
+    expect(copy.context.detail(chatId).checkpoint?.plan.summary).toBe(summary);
+    expect(copy.context.job(job.id).status).toBe('completed');
+  });
+  test('summary editing and restoration need no Run and exact replay creates no duplicate revision', async () => {
+    const { app, chatId } = await setup({ count: 0 });
+    const d = await contextApi(app, chatId, 'GET', '/context');
+    const firstCommand = { ...contextCommand(d, 'edit-one'), summary: 'A user-authored summary.' };
+    const first = await contextApi(app, chatId, 'PUT', '/context/summary', firstCommand);
+    expect(first.activeRevision).toBe(1);
+    expect(first.checkpoint.origin).toBe('edit');
+    expect(first.usable).toBe(true);
+    const changed = await contextApi(app, chatId, 'PUT', '/context/summary', {
+      ...contextCommand(first),
+      summary: 'The corrected summary.',
+    });
+    expect(changed.activeRevision).toBe(2);
+    const replay = await contextApi(app, chatId, 'PUT', '/context/summary', firstCommand);
+    expect(replay.checkpoint.id).toBe(first.checkpoint.id);
+    expect(app.store.context.detail(chatId).activeRevision).toBe(2);
+    const reverted = await contextApi(app, chatId, 'PUT', '/context/summary', {
+      ...contextCommand(changed),
+      restoreCheckpoint: {
+        id: first.checkpoint.id,
+        revision: first.checkpoint.revision,
+        hash: first.checkpoint.hash,
+      },
+    });
+    expect(reverted.activeRevision).toBe(3);
+    expect(reverted.checkpoint.plan.summary).toBe(firstCommand.summary);
+    await contextApi(
+      app,
+      chatId,
+      'PUT',
+      '/context/summary',
+      { ...contextCommand(first), summary: 'Stale update' },
+      409
+    );
+    expect(app.store.detail(chatId).runs).toEqual([]);
+    expect(app.store.product.attempts(chatId)).toEqual([]);
+    expect(fetch).not.toHaveBeenCalled();
+    const copy = await restored(app.store.product.export());
+    expect(copy.context.detail(chatId).checkpoint?.plan.summary).toBe(firstCommand.summary);
+  });
+  test('a late automatic result remains an immutable candidate after an authored summary edit wins CAS', async () => {
+    const { app, chatId } = await setup();
+    let release!: (value: Response) => void, announced!: () => void;
+    const started = new Promise<void>((resolve) => (announced = resolve)),
+      pending = new Promise<Response>((resolve) => (release = resolve));
+    let delayed = false;
+    vi.mocked(fetch).mockImplementation(async (_url, options) => {
+      const body = JSON.parse(String(options?.body));
+      if (body.role === 'context' && !delayed) {
+        delayed = true;
+        announced();
+        return pending;
+      }
+      return complete(body.role === 'context' ? summary : finalText);
+    });
+    const run = await start(app, chatId);
+    await started;
+    const detail = await contextApi(app, chatId, 'GET', '/context');
+    const edited = await contextApi(app, chatId, 'PUT', '/context/summary', {
+      ...contextCommand(detail),
+      summary: 'User correction takes precedence as the active summary.',
+    });
+    release(complete(summary));
+    const completed = await terminal(app, run.id);
+    expect(completed.status, completed.error ?? '').toBe('completed');
+    const current = await contextApi(app, chatId, 'GET', '/context');
+    expect(current.checkpoint.id).toBe(edited.checkpoint.id);
+    expect(current.activeRevision).toBe(edited.activeRevision);
+    expect(completed.snapshot.contextPlan!.checkpoint?.id).not.toBe(edited.checkpoint.id);
+    expect(
+      app.store.context.checkpoint(completed.snapshot.contextPlan!.checkpoint!).activated
+    ).toBe(false);
+    expect(completed.snapshot.contextPlan!.summary).toBe(summary);
+    const copy = await restored(app.store.product.export());
+    expect(copy.run(run.id).snapshot.contextPlan).toEqual(completed.snapshot.contextPlan);
+  });
+  test('source-anchored notes enforce revision and head CAS, retire by replacement, and invalidate active summary reuse', async () => {
+    const { app, chatId } = await setup({ count: 3, short: true });
+    const base = await contextApi(app, chatId, 'GET', '/context');
+    const edited = await contextApi(app, chatId, 'PUT', '/context/summary', {
+      ...contextCommand(base),
+      summary: 'Earlier derived summary.',
+    });
+    const command = {
+      text: 'The lighthouse is red, as explicitly corrected by the user.',
+      author: 'user',
+      expectedRevision: 0,
+      expectedHeadRevision: base.headRevision,
+      idempotencyKey: 'note-one',
+    };
+    const note = await contextApi(app, chatId, 'POST', '/notes', command);
+    expect(note.note.kind).toBe('author-note');
+    expect(note.note.atRevision).toBe(base.headRevision);
+    expect(await contextApi(app, chatId, 'POST', '/notes', command)).toEqual(note);
+    const invalid = await contextApi(app, chatId, 'GET', '/context');
+    expect(invalid.checkpoint.id).toBe(edited.checkpoint.id);
+    expect(invalid.usable).toBe(false);
+    expect(invalid.invalidReason).toBeTruthy();
+    await contextApi(
+      app,
+      chatId,
+      'POST',
+      '/notes',
+      { ...command, idempotencyKey: 'stale', text: 'Stale' },
+      409
+    );
+    await contextApi(
+      app,
+      chatId,
+      'POST',
+      '/notes',
+      { ...command, expectedRevision: 1, expectedHeadRevision: null, idempotencyKey: 'wrong-head' },
+      409
+    );
+    await contextApi(app, chatId, 'POST', '/notes', {
+      ...command,
+      text: '',
+      retired: true,
+      replacesId: note.note.id,
+      expectedRevision: 1,
+      idempotencyKey: 'retire',
+    });
+    expect(app.store.story.detail(chatId).notes).toEqual([]);
+    expect(app.store.story.notes.revision(chatId)).toBe(2);
+    expect(
+      app.store.db.prepare('SELECT COUNT(*) AS n FROM author_notes WHERE chat_id=?').get(chatId)?.n
+    ).toBe(2);
+    const copy = await restored(app.store.product.export());
+    expect(copy.story.detail(chatId).notes).toEqual([]);
+    expect(fetch).not.toHaveBeenCalled();
+  });
+  test('manual checkpoints created after the selected fork point are excluded while eligible summary edits remap', async () => {
+    const { app, chatId, sources } = await setup({ count: 4, short: true });
+    const detail = await contextApi(app, chatId, 'GET', '/context');
+    const edited = await contextApi(app, chatId, 'PUT', '/context/summary', {
+      ...contextCommand(detail),
+      summary: 'Eligible manual summary.',
+    });
+    const copy = forkChat(app.store, chatId, {
+      fromRevision: sources.at(-1)!.id,
+      idempotencyKey: 'copy-checkpoint',
+    });
+    const copied = app.store.context.detail(copy.id);
+    expect(copied.checkpoint?.plan.summary).toBe('Eligible manual summary.');
+    expect(copied.checkpoint?.id).not.toBe(edited.checkpoint.id);
+    expect(copied.usable).toBe(true);
+    expect(
+      copied.checkpoint?.plan.compacted.every(
+        (ref) => app.store.source(ref.revision).chatId === copy.id
+      )
+    ).toBe(true);
+    const old = forkChat(app.store, chatId, {
+      fromRevision: sources[0].id,
+      idempotencyKey: 'earlier-checkpoint',
+    });
+    expect(app.store.context.detail(old.id).checkpoint).toBeNull();
+    const restoredCopy = await restored(app.store.product.export());
+    expect(restoredCopy.context.detail(copy.id).checkpoint?.plan.summary).toBe(
+      'Eligible manual summary.'
+    );
+    expect(fetch).not.toHaveBeenCalled();
   });
 });

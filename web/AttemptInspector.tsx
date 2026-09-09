@@ -11,7 +11,8 @@ const roleLabels: Record<Attempt['role'], string> = {
   status: '표시 상태',
   image: '이미지 배치',
   state: '서사 상태',
-  memory: '장기 기억',
+  context: '문맥 압축',
+  helper: '도우미',
   title: '채팅 제목',
 };
 type AttemptSummary = Omit<Attempt, 'request' | 'response' | 'rawUsage'>;
@@ -221,7 +222,8 @@ function AttemptTable({
                 'status',
                 'image',
                 'state',
-                'memory',
+                'context',
+                'helper',
                 'title',
               ] as Attempt['role'][]
             ).map((role) => {

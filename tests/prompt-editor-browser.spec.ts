@@ -1,6 +1,6 @@
 import { visualReview } from './fixtures/visual-review.js';
 import { preservePromptWorkspace } from './fixtures/prompt-workspace.js';
-import { selectChatSettingsSection, openPromptTools } from './ui-navigation.js';
+import { selectChatSettingsSection, openPromptTools, openPromptBlocks } from './ui-navigation.js';
 import { test, expect, type APIRequestContext, type Page } from '@playwright/test';
 import { randomUUID } from 'node:crypto';
 import { fixtureBotInput } from './fixtures/chat.js';
@@ -202,6 +202,7 @@ test('NUI01 native prompt import, draft preservation, roles, history and saved c
   await fits(page);
   if (visualReview) await page.screenshot({ path: info.outputPath('native-composer-desktop.png') });
   const firstBlock = composer.locator('.pc-block').first();
+  await openPromptBlocks(composer);
   await firstBlock.locator('summary').first().click();
   await expect(firstBlock.getByRole('combobox', { name: '메시지 역할', exact: true })).toHaveValue(
     'system'

@@ -1,4 +1,5 @@
 import { navigationAction } from './ui-navigation.js';
+import { waitForContentDraftSave } from './fixtures/edit-draft-save.js';
 import { visualReview } from './fixtures/visual-review.js';
 import {
   expect,
@@ -63,14 +64,9 @@ async function openEditor(page: Page, content: Content) {
   return { library, fields: library.getByRole('region', { name: '패키지 구성', exact: true }) };
 }
 async function saveEditor(page: Page, library: Locator, id: string): Promise<Content> {
-  const pending = page.waitForResponse(
-    (response) =>
-      response.url().endsWith(`/api/content/${id}`) && response.request().method() === 'PUT'
-  );
+  const pending = waitForContentDraftSave(page, id);
   await library.getByRole('button', { name: '변경사항 저장', exact: true }).click();
-  const response = await pending;
-  expect(response.ok(), await response.text()).toBe(true);
-  return response.json();
+  return pending;
 }
 async function evidence(page: Page, target: Locator, info: TestInfo, name: string) {
   for (const [suffix, width, height] of [

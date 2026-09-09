@@ -53,7 +53,7 @@ function fixture(sourceSegments?: SourceSegmentPolicy) {
   const directory = mkdtempSync(join(tmpdir(), 'uimori-checkpoints-'));
   const store = new Store(join(directory, 'synthetic.sqlite'));
   owned.push({ store, directory });
-  const chat = createFixtureChat(store, 'Synthetic checkpoint ancestry');
+  const chat = createFixtureChat(store, 'Synthetic checkpoint storage');
   const history: RunSnapshot['history'] = [];
   const snapshot = (): RunSnapshot =>
     seedContextPlan({
@@ -99,16 +99,20 @@ function fixture(sourceSegments?: SourceSegmentPolicy) {
     store.db
       .prepare('INSERT INTO sources VALUES(?,?,?,?,?,?,?)')
       .run(sourceId, chat.id, runId, prior.parentRevision, text, hash(text), time);
-    history.push({ revision: sourceId, text, contentHash: hash(text) });
+    history.push({ revision: sourceId, text });
   }
+  store.db
+    .prepare('UPDATE branches SET head_revision=? WHERE id=?')
+    .run('source-3', `main:${chat.id}`);
+  store.db.prepare('UPDATE chats SET head_revision=? WHERE id=?').run('source-3', chat.id);
   const save = (index: number, value: RunSnapshot) => {
     snapshots[index] = structuredClone(value);
     store.db
       .prepare('UPDATE runs SET snapshot=? WHERE id=?')
       .run(JSON.stringify(value), `run-${index}`);
   };
-  const checkpoint = (index: number, summary: string) => {
-    const value = structuredClone(snapshots[index]);
+  const candidate = (index: number, summary: string) => {
+    const value = store.context.prepareRun(structuredClone(snapshots[index]));
     value.contextPlan = {
       ...value.contextPlan!,
       status: 'ready',
@@ -118,14 +122,22 @@ function fixture(sourceSegments?: SourceSegmentPolicy) {
       estimatedInputTokens: 100,
     };
     validateContextPlan(value);
-    save(index, value);
     return value;
   };
-  return { store, current: snapshot(), snapshots, save, checkpoint };
+  const checkpoint = (index: number, summary: string) => {
+    const published = store.context.publishPrepared(candidate(index, summary), {
+      origin: 'automatic',
+    });
+    save(index, published);
+    expect(store.context.checkpoint(published.contextPlan!.checkpoint!).activated).toBe(true);
+    return published;
+  };
+  const capture = () => store.context.prepareRun(snapshot());
+  return { store, current: capture(), capture, snapshots, save, candidate, checkpoint };
 }
 
 describe('stored context checkpoint selection', () => {
-  test('returns no checkpoint for unsummarized ancestors, including absent and null plans', () => {
+  test('uses only the captured active reference, even when an ancestor has a summary', () => {
     const f = fixture();
     delete f.snapshots[0].contextPlan;
     f.save(0, f.snapshots[0]);
@@ -137,48 +149,59 @@ describe('stored context checkpoint selection', () => {
     ready.contextPlan!.estimatedInputTokens = 100;
     validateContextPlan(ready);
     f.save(2, ready);
+    f.save(3, f.candidate(3, '공통 checkpoint로 발행하지 않은 요약'));
     expect(previousContextPlan(f.store, f.current)).toBeUndefined();
+    expect(previousContextPlan(f.store, f.capture())).toBeUndefined();
   });
 
-  test('uses ancestry order, skips a newer unsummarized run and returns independent copies', () => {
+  test('keeps the captured immutable checkpoint after activation changes and returns copies', () => {
     const f = fixture();
-    f.checkpoint(1, '오래된 유효 요약');
+    const old = f.checkpoint(1, '오래된 유효 요약');
+    const captured = f.capture();
     const newest = f.checkpoint(2, '최신 유효 요약');
     f.store.db
       .prepare('UPDATE runs SET created_at=?,updated_at=? WHERE id=?')
       .run('9999-01-01', '9999-01-01', 'run-1');
-    const selected = previousContextPlan(f.store, f.current)!;
+    expect(previousContextPlan(f.store, captured)).toEqual(old.contextPlan);
+    const latest = f.capture();
+    const selected = previousContextPlan(f.store, latest)!;
     expect(selected).toEqual(newest.contextPlan);
     selected.summary = '호출자 변경';
     selected.compacted[0].hash = '호출자 변경';
-    expect(previousContextPlan(f.store, f.current)).toEqual(newest.contextPlan);
+    expect(previousContextPlan(f.store, latest)).toEqual(newest.contextPlan);
+    expect(previousContextPlan(f.store, captured)).toEqual(old.contextPlan);
     expect(f.store.run('run-2').snapshot.contextPlan).toEqual(newest.contextPlan);
+    expect(previousContextPlan(f.store, f.current)).toBeUndefined();
   });
 
   test.each(['invalid-source', 'invalid-budget', 'dependency', 'pending', 'failed'])(
-    'falls back to an older valid checkpoint after a newer %s candidate',
+    'rejects a %s candidate without changing the active checkpoint',
     (reason) => {
       const f = fixture();
       const old = f.checkpoint(1, '오래된 유효 요약');
-      const newer = f.checkpoint(2, '선택하면 안 되는 요약');
+      const newer = f.candidate(2, '선택하면 안 되는 요약');
       const plan = newer.contextPlan!;
       if (reason === 'invalid-source') plan.compacted[0].hash = 'wrong-hash';
       else if (reason === 'invalid-budget') plan.budget.inputTokenLimit = 100;
       else if (reason === 'dependency') plan.dependencyKey = 'other-canon';
       else plan.status = reason === 'pending' ? 'pending' : 'failed';
-      f.save(2, newer);
-      expect(previousContextPlan(f.store, f.current)).toEqual(old.contextPlan);
+      expect(() => f.store.context.publishPrepared(newer, { origin: 'automatic' })).toThrow();
+      expect(previousContextPlan(f.store, f.capture())).toEqual(old.contextPlan);
+      expect(
+        f.store.db.prepare('SELECT COUNT(*) AS count FROM context_checkpoints').get()!.count
+      ).toBe(1);
     }
   );
 
   test('rejects reuse after current source edits or changed semantic dependencies', () => {
     const f = fixture();
     f.checkpoint(1, '과거 원문 요약');
-    const edited = structuredClone(f.current);
+    const current = f.capture();
+    const edited = structuredClone(current);
     edited.history[0].text = '사용자가 수정한 원문';
     edited.history[0].contentHash = hash(edited.history[0].text);
     expect(previousContextPlan(f.store, edited)).toBeUndefined();
-    const changed = structuredClone(f.current);
+    const changed = structuredClone(current);
     changed.profile!.contents.push({
       id: 'new-canon',
       revision: 1,
@@ -200,11 +223,38 @@ describe('stored context checkpoint selection', () => {
     const current = contextSourceRefs(f.current)[0];
     expect(current.hash).toBe(old.contextPlan!.compacted[0].hash);
     expect(current.viewHash).not.toBe(old.contextPlan!.compacted[0].viewHash);
-    expect(previousContextPlan(f.store, f.current)).toBeUndefined();
+    expect(previousContextPlan(f.store, f.capture())).toBeUndefined();
+  });
+
+  test.each(['id', 'revision', 'hash', 'scope'] as const)(
+    'rejects a captured checkpoint with mismatched %s',
+    (part) => {
+      const f = fixture();
+      f.checkpoint(1, '검증한 요약');
+      const captured = f.capture();
+      if (part === 'scope') captured.contextBase!.scopeKey += ':other-branch';
+      else if (part === 'revision') captured.contextBase!.checkpoint!.revision++;
+      else captured.contextBase!.checkpoint![part] = 'missing-or-altered';
+      expect(() => previousContextPlan(f.store, captured)).toThrow(
+        part === 'scope' ? 'CONTEXT_CHECKPOINT_SCOPE_MISMATCH' : 'CONTEXT_CHECKPOINT_MISSING'
+      );
+    }
+  );
+
+  test('rejects a stored checkpoint whose projection no longer matches its hash', () => {
+    const f = fixture();
+    f.checkpoint(1, '저장된 불변 요약');
+    const captured = f.capture();
+    f.store.db
+      .prepare("UPDATE context_checkpoints SET plan=json_set(plan,'$.summary',?) WHERE id=?")
+      .run('외부 변조', captured.contextBase!.checkpoint!.id);
+    expect(() => previousContextPlan(f.store, captured)).toThrow(
+      'CONTEXT_CHECKPOINT_HASH_MISMATCH'
+    );
   });
 
   test.each(['id', 'chatId', 'blank', 'hash'])(
-    'still rejects invalid source identity: %s',
+    'rejects invalid source identity at source capture: %s',
     (part) => {
       const f = fixture();
       const current = f.current.history.at(-1)!;
@@ -217,23 +267,24 @@ describe('stored context checkpoint selection', () => {
         .prepare('UPDATE sources SET id=?,chat_id=?,text=?,hash=? WHERE id=?')
         .run(id, chatId, text, sourceHash, current.revision);
       f.store.db.exec('PRAGMA foreign_keys=ON');
-      current.revision = id;
-      expect(() => previousContextPlan(f.store, f.current)).toThrow('SOURCE_IDENTITY_INVALID');
+      expect(() => f.store.source(id)).toThrow('SOURCE_IDENTITY_INVALID');
+      if (part !== 'id') expect(() => f.store.history(id)).toThrow('SOURCE_IDENTITY_INVALID');
     }
   );
 
-  test('preserves 404 errors for missing ancestors and missing originating runs', () => {
+  test('preserves missing-source and missing-run errors at their storage boundaries', () => {
     const f = fixture();
-    const missing = structuredClone(f.current);
-    missing.history.at(-1)!.revision = 'missing-source';
-    expect(() => previousContextPlan(f.store, missing)).toThrow(
+    expect(() => f.store.history('missing-source')).toThrow(
       expect.objectContaining({ statusCode: 404, message: 'Source not found' })
     );
     f.store.db.exec('PRAGMA foreign_keys=OFF');
     f.store.db.prepare('DELETE FROM runs WHERE id=?').run('run-3');
     f.store.db.exec('PRAGMA foreign_keys=ON');
-    expect(() => previousContextPlan(f.store, f.current)).toThrow(
+    expect(() => f.store.run('run-3')).toThrow(
       expect.objectContaining({ statusCode: 404, message: 'Run not found' })
+    );
+    expect(() => f.store.history('source-3')).toThrow(
+      expect.objectContaining({ statusCode: 404, message: 'Source not found' })
     );
   });
 });

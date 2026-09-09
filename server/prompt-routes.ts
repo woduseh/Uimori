@@ -44,7 +44,11 @@ export function promptRoutes(app: FastifyInstance, store: Store) {
         chat.id,
         b.branchId === undefined ? undefined : text(b.branchId, 'branch ID', 100)
       );
-      const profile = store.product.snapshot(chat.id, role as 'main' | 'translation') ?? {
+      const profile = store.product.snapshot(
+        chat.id,
+        role as 'main' | 'translation',
+        branch.headRevision
+      ) ?? {
         ...defaultProfile(chat.id),
         contents: [],
         models: {},

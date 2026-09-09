@@ -114,7 +114,15 @@ test('PKUI04 hundreds of lore entries support folders, search, bulk move and per
   await manager.locator('textarea').scrollIntoViewIfNeeded();
   if (visualReview) await page.screenshot({ path: info.outputPath('lore-editor-mobile.png') });
   await library.getByRole('button', { name: '자료 등록', exact: true }).click();
-  await expect(library.getByRole('status')).toContainText('저장됨 · 다음 실행부터 사용해요.');
+  await expect(library.locator('.library-savebar [role="status"]')).toContainText(
+    '저장됨 · 다음 실행부터 사용해요.'
+  );
+  await expect(
+    library.getByText('고급 패키지 설정', { exact: true }).locator('..')
+  ).toHaveAttribute('open', '');
+  await expect(library.locator('.library-package-tools')).toHaveAttribute('open', '');
+  await expect(manager).toBeVisible();
+  await expect(manager.locator('.lore-row')).toHaveCount(50);
   const listing: Library = await (await request.get('/api/library')).json();
   const saved = listing.contents.find((row) => row.title === pkg.title)!;
   const content: Content = await (
@@ -142,7 +150,9 @@ test('PKUI04 hundreds of lore entries support folders, search, bulk move and per
     '170개'
   );
   await library.getByRole('button', { name: '변경사항 저장', exact: true }).click();
-  await expect(library.getByRole('status')).toContainText('저장됨 · 다음 실행부터 사용해요.');
+  await expect(library.locator('.library-savebar [role="status"]')).toContainText(
+    '저장됨 · 다음 실행부터 사용해요.'
+  );
   await library.getByRole('button', { name: '← 서재 목록', exact: true }).click();
   await editLibraryContent(page, `${pkg.title}`);
   await expect(manager.getByLabel('로어 폴더 필터', { exact: true })).toContainText('미분류 · 170');
@@ -228,7 +238,9 @@ test('PKUI03 native JSON import remains a reviewed persona draft and preserves l
   const before: Library = await (await request.get('/api/library')).json();
   expect(before.contents.some((item) => item.title === pkg.title)).toBe(false);
   await library.getByRole('button', { name: '자료 등록', exact: true }).click();
-  await expect(library.getByRole('status')).toContainText('저장됨 · 다음 실행부터 사용해요.');
+  await expect(library.locator('.library-savebar [role="status"]')).toContainText(
+    '저장됨 · 다음 실행부터 사용해요.'
+  );
   const after: Library = await (await request.get('/api/library')).json();
   const saved = after.contents.find((item) => item.title === pkg.title)!;
   expect(saved.kind).toBe('persona');
@@ -306,6 +318,13 @@ test('PKUI01 package editing preserves internal lore, instructions, unsaved work
     'Mention visible actions before interpretation.'
   );
   await fields.getByRole('button', { name: '지침 검증 후 적용', exact: true }).click();
+  await selectPackageSection(page, '표현');
+  await expect(
+    fields.getByRole('heading', { name: '표시 문구 바꾸기', exact: true })
+  ).toBeVisible();
+  await fields.getByRole('button', { name: '정규식 표시 변환 추가', exact: true }).click();
+  await fields.getByLabel('표시 변환 1 패턴', { exact: true }).fill('Synthetic');
+  await fields.getByLabel('표시 변환 1 바꿀 내용', { exact: true }).fill('합성');
   await library.getByRole('button', { name: '자료 등록', exact: true }).click();
   await expect(library.locator('.library-savebar [role="status"]')).toContainText(
     '저장됨 · 다음 실행부터 사용해요.'
@@ -321,6 +340,9 @@ test('PKUI01 package editing preserves internal lore, instructions, unsaved work
   expect(fullResponse.ok()).toBe(true);
   const original: Content = await fullResponse.json();
   expect(original.relatedIds).toEqual([]);
+  expect(original.package?.transforms).toEqual([
+    expect.objectContaining({ target: 'source', pattern: 'Synthetic', replacement: '합성' }),
+  ]);
   expect(original.package?.lore[0]).toMatchObject({
     title: 'Synthetic harbor',
     text: 'A blue bell hangs by the synthetic harbor.',
@@ -342,6 +364,20 @@ test('PKUI01 package editing preserves internal lore, instructions, unsaved work
   await library.getByText('패키지 가져오기·내보내기와 역할 사본', { exact: true }).click();
   await library.getByRole('button', { name: '페르소나로 사본 만들기', exact: true }).click();
   await expect(library.getByLabel('자료 종류', { exact: true })).toHaveValue('persona');
+  await expect(
+    library.getByText('고급 패키지 설정', { exact: true }).locator('..')
+  ).toHaveAttribute('open', '');
+  await expect(library.locator('.library-package-tools')).toHaveAttribute('open', '');
+  await expect(fields.getByLabel('지침 1 본문', { exact: true })).toBeVisible();
+  await expect(fields.getByLabel('지침 1 본문', { exact: true })).toHaveValue(
+    'Mention visible actions before interpretation.'
+  );
+  await selectPackageSection(page, '표현');
+  await expect(
+    fields.getByRole('heading', { name: '표시 문구 바꾸기', exact: true })
+  ).toBeVisible();
+  await expect(fields.getByLabel('표시 변환 1 패턴', { exact: true })).toHaveValue('Synthetic');
+  await expect(fields.getByLabel('표시 변환 1 바꿀 내용', { exact: true })).toHaveValue('합성');
   await expect(library.getByLabel('자료 이름', { exact: true })).toHaveValue(
     'Synthetic package editor bot 사본'
   );
@@ -355,6 +391,7 @@ test('PKUI01 package editing preserves internal lore, instructions, unsaved work
   const copied: Content = await copyResponse.json();
   expect(copied.package?.lore).toEqual(original.package?.lore);
   expect(copied.package?.instructions).toEqual(original.package?.instructions);
+  expect(copied.package?.transforms).toEqual(original.package?.transforms);
   expect(copied.package?.id).toBe(copy.id);
   const unchangedResponse = await request.get(
     `/api/revisions/content/${original.id}/${original.revision}`

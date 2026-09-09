@@ -29,6 +29,8 @@ import {
 import { providerOriginApproval } from './provider-origin-policy.js';
 import { validatePricingSnapshot } from './model-pricing.js';
 import type { PricingSnapshot } from './pricing-types.js';
+import { createPublicTextProgress, type ProviderProgress } from './provider-progress.js';
+export type { ProviderProgress } from './provider-progress.js';
 export { ProviderContractError } from './provider-errors.js';
 
 /** This versioned loopback protocol is a local fixture, not a live API claim. */
@@ -39,7 +41,8 @@ export type ProviderRole =
   | 'status'
   | 'image'
   | 'state'
-  | 'memory'
+  | 'context'
+  | 'helper'
   | 'title';
 export type ProviderConnection = {
   id: string;
@@ -257,7 +260,7 @@ export function validateRequest(value: unknown): ProviderRequest {
     }
   }
   if (
-    !['main', 'translation', 'status', 'image', 'state', 'memory', 'title'].includes(
+    !['main', 'translation', 'status', 'image', 'state', 'context', 'helper', 'title'].includes(
       value.role as string
     )
   )
@@ -445,6 +448,8 @@ export type ProviderExecutionOptions = {
   /** Synchronous host authorization after Codex thread setup and immediately before turn/start; never records another attempt. */
   beforeTurn?: () => void;
   onWire?: (record: WireRecord) => void | Promise<void>;
+  /** Decoder-selected public answer deltas; excludes tools, reasoning and final-only envelopes. */
+  onProgress?: (progress: ProviderProgress) => void | Promise<void>;
 };
 export async function executeProvider(
   connectionValue: ProviderConnection,
@@ -484,7 +489,8 @@ export async function executeProvider(
     const connection = validateConnection(connectionValue, options.approvedOrigins),
       request = validateRequest(requestValue);
     if (request.generation) validateModelOptions(request.generation, connection.protocol);
-    if (options.executeCodex) return options.executeCodex(connection, request, options);
+    if (options.executeCodex)
+      return options.executeCodex(connection, request, { ...options, onProgress: undefined });
     return {
       status: 'error',
       text: '',
@@ -538,6 +544,7 @@ export async function executeProvider(
   try {
     const connection = validateConnection(connectionValue, options.approvedOrigins);
     const request = validateRequest(requestValue);
+    const progress = createPublicTextProgress(request, connection.protocol, { ...options, signal });
     if (signal.aborted) return failure('CANCELLED');
     // Stable prefix precedes dynamic controls and sources in the serialized body.
     const stablePrefix = JSON.stringify({
@@ -606,7 +613,7 @@ export async function executeProvider(
     let data: string[] = [];
     let dataLength = 0;
     let total = 0;
-    const dispatch = (): boolean => {
+    const dispatch = async (): Promise<boolean> => {
       if (!data.length) return false;
       let event: Record<string, unknown>;
       try {
@@ -622,6 +629,7 @@ export async function executeProvider(
         case 'text_delta':
           if (typeof event.delta !== 'string') reject('INVALID_EVENT');
           result.text += event.delta;
+          await progress(result.text);
           break;
         case 'tool_delta': {
           if (
@@ -711,7 +719,9 @@ export async function executeProvider(
       return false;
     };
     while (true) {
+      if (signal.aborted) return failure('CANCELLED');
       const chunk = await reader.read();
+      if (signal.aborted) return failure('CANCELLED');
       if (chunk.done) {
         decoder.decode();
         return failure('UNEXPECTED_EOF');
@@ -725,7 +735,7 @@ export async function executeProvider(
         const line = buffer.slice(0, newline).replace(/\r$/u, '');
         buffer = buffer.slice(newline + 1);
         if (line === '') {
-          if (dispatch()) return result;
+          if (await dispatch()) return signal.aborted ? failure('CANCELLED') : result;
         } else if (line.startsWith('data:')) {
           const value = line.slice(5).replace(/^ /u, '');
           data.push(value);

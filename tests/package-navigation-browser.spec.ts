@@ -1,4 +1,5 @@
 import { reviewWidths, visualReview } from './fixtures/visual-review.js';
+import { isEditDraftBufferRequest, waitForEditDraftSave } from './fixtures/edit-draft-save.js';
 import { expect, test, type APIRequestContext, type Locator, type Page } from '@playwright/test';
 import type { Content } from '../core/product.js';
 
@@ -98,6 +99,7 @@ test('PNAV01 mobile section navigation preserves lore search, caret and unapplie
   page.on('request', (entry) => {
     if (
       entry.url().includes('/api/') &&
+      !isEditDraftBufferRequest(entry) &&
       ['POST', 'PUT', 'PATCH', 'DELETE'].includes(entry.method())
     )
       writes.push(`${entry.method()} ${new URL(entry.url()).pathname}`);
@@ -142,20 +144,17 @@ test('PNAV01 mobile section navigation preserves lore search, caret and unapplie
   await expect(instruction).toHaveValue(editedInstruction);
   await fields.getByRole('button', { name: '지침 검증 후 적용', exact: true }).click();
   expect(writes).toEqual([]);
+  expect(await (await request.get(`/api/content/${item.id}`)).json()).toEqual(item);
   await expectNoOverflow(page, fields);
   if (visualReview)
     await page.screenshot({ path: info.outputPath('package-navigation-mobile-draft.png') });
-  const saved = page.waitForResponse(
-    (response) =>
-      response.url().endsWith(`/api/content/${item.id}`) && response.request().method() === 'PUT'
-  );
+  const saved = waitForEditDraftSave(page, 'content', item.id);
   await library.getByRole('button', { name: '변경사항 저장', exact: true }).click();
-  const response = await saved;
-  expect(response.ok()).toBe(true);
-  const current = (await response.json()) as Content;
+  const receipt = await saved;
+  const current = receipt.saved as Content;
   expect(current.package!.lore[1].text).toBe(editedLore);
   expect(current.package!.instructions[0].text).toBe(editedInstruction);
-  expect(writes).toEqual([`PUT /api/content/${item.id}`]);
+  expect(writes).toEqual([`POST /api/edit-drafts/${receipt.draft.id}/save`]);
   expect(
     (await (
       await request.get(`/api/revisions/content/${item.id}/${item.revision}`)

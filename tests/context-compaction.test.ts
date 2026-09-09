@@ -89,6 +89,7 @@ function snapshot(texts: string[] = []): RunSnapshot {
       ...defaultProfile('synthetic-compaction-chat'),
       contents: [],
       models: { main: target },
+      contextModel: target,
       routes: { main: { id: target.id }, translation: null, status: null, image: null },
       promptPresets: {
         main: {
@@ -172,7 +173,7 @@ function respondWithMergedSummary(log: ReturnType<typeof observed>) {
     expect(log.events.at(-1)).toBe('start');
     log.events.push('send');
     const wire = JSON.parse(String(options?.body));
-    expect(wire.role).toBe('memory');
+    expect(wire.role).toBe('context');
     expect(wire.stable.tools).toEqual([]);
     expect(wire).not.toHaveProperty('opaqueState');
     expect(wire).not.toHaveProperty('contextBudget');
@@ -278,7 +279,7 @@ describe('input context projection and durable summary calls', () => {
     });
     expect(log.results).toHaveLength(payloads.length);
     expect(log.results.every((result) => result.opaqueState === null)).toBe(true);
-    expect(log.wires.every((wire) => wire.role === 'memory')).toBe(true);
+    expect(log.wires.every((wire) => wire.role === 'context')).toBe(true);
     expect(source).toEqual(original);
     expect(result.snapshot.history).toEqual(original.history);
     expect(result.snapshot.logicalHistory).toEqual(original.logicalHistory);
@@ -344,7 +345,7 @@ describe('input context projection and durable summary calls', () => {
       (plan) => plan.summaryCalls > 0 && plan.summaryCalls < payloads.length
     ))
       expect(plan).toMatchObject({ compacted: [], summary: null });
-    expect(log.wires.every((wire) => wire.role === 'memory')).toBe(true);
+    expect(log.wires.every((wire) => wire.role === 'context')).toBe(true);
     expect(source.history[0].text).toBe(text);
   });
 
@@ -534,7 +535,7 @@ describe('input context projection and durable summary calls', () => {
         error: code,
       });
       expect(fetch).toHaveBeenCalledTimes(1);
-      expect(log.wires.map((wire) => wire.role)).toEqual(['memory']);
+      expect(log.wires.map((wire) => wire.role)).toEqual(['context']);
       expect(log.results).toHaveLength(1);
       expect(JSON.stringify(error.plan)).not.toContain('PRIVATE_ERROR_BODY');
       expect(log.progress.at(-1)).toEqual(error.plan);
@@ -644,9 +645,10 @@ describe('input context projection and durable summary calls', () => {
       waiting: false,
       lineageHash: 'lineage',
       canonHash: 'canon',
-      memory: null,
-      models: { memory },
+      notes: [],
+      models: { context: memory },
     };
+    source.profile!.contextModel = memory;
     const original = structuredClone(source),
       log = observed();
     vi.mocked(fetch).mockImplementation(async (_url, options) => {

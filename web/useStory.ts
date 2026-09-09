@@ -27,6 +27,7 @@ function ancestry(sources: Source[], head: string | null) {
 }
 type RunPayload = {
   retryOf?: string;
+  editedRequest?: boolean;
   packageRequestId?: string;
   loreContextReset?: boolean;
   request: string;
@@ -68,6 +69,8 @@ function readCommand(key: string): { record: PendingCommand; payload: RunPayload
     )
       return null;
     if (payload.retryOf !== undefined && (typeof payload.retryOf !== 'string' || !payload.retryOf))
+      return null;
+    if (payload.editedRequest !== undefined && (payload.editedRequest !== true || !payload.retryOf))
       return null;
     if (payload.loreContextReset !== undefined && typeof payload.loreContextReset !== 'boolean')
       return null;
@@ -610,26 +613,28 @@ export function useStory() {
     setNotice('이전 요청을 가져왔어요. 편집 후 보내면 현재 설정으로 새로 생성해요.');
     input.current?.focus();
   }
-  async function generate(retryRunId?: string) {
+  async function generate(retryRunId?: string, editedRequest?: string): Promise<boolean> {
     if (
       !detail ||
       detail.chat.id !== selected ||
       submitLocks.current.has(viewKey) ||
       sessionStorage.getItem(`pending-profile:${selected}`)
     )
-      return;
-    if (activeRun() || (retryRunId && (reuseBlocked || !canReuseRun(retryRunId)))) return;
+      return false;
+    if (activeRun() || (retryRunId && (reuseBlocked || !canReuseRun(retryRunId)))) return false;
+    if (editedRequest !== undefined && (!retryRunId || !editedRequest.trim())) return false;
     const retryRun = retryRunId ? visibleRuns.find((run) => run.id === retryRunId)! : undefined;
     const chat = detail.chat;
     const sentKey = draftKey;
     const sentView = viewKey;
     const commandKey = `command:${chat.id}${viewedBranch ? `:${viewedBranch}` : ''}`;
     const previous = readCommand(commandKey);
-    if (!previous && !retryRun && !draft.trim()) return;
+    if (!previous && !retryRun && !draft.trim()) return false;
     // An uncertain request keeps its original snapshot as well as its key.
     // A newer draft is never silently sent after recovering that earlier request.
     const payload: RunPayload = previous?.payload ?? {
-      request: retryRun?.request ?? draft,
+      request: editedRequest ?? retryRun?.request ?? draft,
+      ...(editedRequest !== undefined ? { editedRequest: true } : {}),
       ...(retryRun ? { retryOf: retryRun.id } : {}),
       ...((retryRun ? retryRun.snapshot.loreContextReset : loreResetDraft)
         ? { loreContextReset: true }
@@ -668,11 +673,16 @@ export function useStory() {
     let accepted = false;
     try {
       const admitted = payload.retryOf
-        ? await api<Run>(`/runs/${encodeURIComponent(payload.retryOf)}/retry`, { idempotencyKey })
+        ? await api<Run>(`/runs/${encodeURIComponent(payload.retryOf)}/retry`, {
+            idempotencyKey,
+            ...(payload.editedRequest ? { request: payload.request } : {}),
+          })
         : await api<Run>(`/chats/${chat.id}/runs`, { ...payload, idempotencyKey });
       track('accepted', admitted.id);
       accepted = true;
       clearCommand(commandKey, idempotencyKey);
+      if (payload.editedRequest && payload.retryOf)
+        sessionStorage.removeItem(`request-edit:${payload.retryOf}`);
       if (!preserveDraft && payload.loreContextReset) {
         sessionStorage.removeItem(`lore-reset:${sentKey}`);
         if (currentDraftKey.current === sentKey) setLoreResetDraft(false);
@@ -712,6 +722,7 @@ export function useStory() {
       submitLocks.current.delete(sentView);
       setSubmitting([...submitLocks.current]);
     }
+    return accepted;
   }
   const forkLocks = useRef(new Set<string>());
   const [forking, setForking] = useState<string[]>([]);
@@ -919,6 +930,9 @@ export function useStory() {
     ? readCommand(`command:${selected}${viewedBranch ? `:${viewedBranch}` : ''}`)
     : null;
   const pendingRequest = pendingCommand?.payload.request ?? null;
+  const pendingEditedRunId = pendingCommand?.payload.editedRequest
+    ? pendingCommand.payload.retryOf
+    : undefined;
   const loreContextReset = pendingCommand
     ? pendingCommand.payload.loreContextReset === true
     : loreResetDraft;
@@ -993,6 +1007,7 @@ export function useStory() {
     submitting,
     attachmentsReady,
     pendingRequest,
+    pendingEditedRunId,
     loreContextReset,
     forking,
     forkOrigin,

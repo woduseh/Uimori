@@ -16,14 +16,8 @@ import {
   validateStateModule,
   validateStateValues,
 } from '../core/state.js';
-import {
-  memoryHash,
-  planMemoryContext,
-  validateMemoryEntry,
-  validateMemoryCheckpoint,
-  type MemoryEntry,
-  type MemoryScope,
-} from '../core/memory.js';
+import { sourceHash, type SourceScope } from '../core/source-history.js';
+import { validateAuthorNote, type AuthorNote } from '../core/notes.js';
 import { validateModelSnapshot } from './product-store.js';
 import type { RunSnapshot } from '../core/types.js';
 
@@ -57,34 +51,22 @@ function same(left: unknown, right: unknown, reason: string) {
 }
 const rows = (store: Store, table: string): Row[] =>
   store.db.prepare(`SELECT * FROM ${table}`).all() as Row[];
-const canonHash = (entries: MemoryEntry[]) =>
-  memoryHash(
-    JSON.stringify(
-      entries
-        .filter((entry) => entry.kind === 'author-canon')
-        .sort((a, b) => a.id.localeCompare(b.id))
-    )
-  );
+const canonHash = (entries: AuthorNote[]) =>
+  sourceHash(JSON.stringify([...entries].sort((a, b) => a.id.localeCompare(b.id))));
 
 function sourceRef(store: Store, chatId: string, revision: unknown, hash: unknown) {
   id(revision);
   id(hash);
   const source = store.sourceAtHash(revision, hash);
-  if (source.chatId !== chatId || memoryHash(source.text) !== hash)
+  if (source.chatId !== chatId || sourceHash(source.text) !== hash)
     reject('source reference outside chat');
   return source;
 }
 /** Retains historical edits. Ancestry is immutable; each entry selects its own preserved content hash. */
-function entryScope(store: Store, chatId: string, entry: MemoryEntry): MemoryScope {
+function entryScope(store: Store, chatId: string, entry: AuthorNote): SourceScope {
   if (entry.atRevision === null) return { chatId, history: [] };
   const anchor = sourceRef(store, chatId, entry.atRevision, entry.atHash);
   const references = new Map<string, string>([[anchor.id, anchor.hash]]);
-  if ('sources' in entry)
-    for (const ref of entry.sources) {
-      if (references.has(ref.revision) && references.get(ref.revision) !== ref.hash)
-        reject('inconsistent source hashes');
-      references.set(ref.revision, ref.hash);
-    }
   const history = store.history(anchor.id).map((item) => {
     const source = references.has(item.revision)
       ? sourceRef(store, chatId, item.revision, references.get(item.revision))
@@ -105,14 +87,10 @@ function configValue(
   chatId: string,
   currentSelection = true
 ): StoryConfig {
-  const config = shape(value, ['revision', 'module', 'stateModel', 'memory', 'activatedAt']);
+  const config = shape(value, ['revision', 'module', 'stateModel', 'activatedAt']);
   integer(config.revision);
   if (config.module !== null) validateStateModule(config.module);
-  const memory = shape(config.memory, ['enabled', 'model', 'recentCount', 'maxPacketChars']);
-  if (typeof memory.enabled !== 'boolean') reject('invalid memory setting');
-  integer(memory.recentCount, 1, 100);
-  integer(memory.maxPacketChars, 1000, 2_000_000);
-  for (const value of [config.stateModel, memory.model])
+  for (const value of [config.stateModel])
     if (value !== null) {
       const ref = shape(value, ['id']);
       id(ref.id);
@@ -140,8 +118,11 @@ function initial(config: StoryConfig, chatId: string): StoryState | null {
     : null;
 }
 
-/** Validate after base archive graph checks, inside the importing transaction. Never compares historical rows to today's effective source. */
-export function validateStoryArchive(store: Store): void {
+export type StorySnapshotArchiveValidator = (snapshot: RunSnapshot) => void;
+
+/** Validate after base archive graph checks, inside the importing transaction. The returned
+ * validator shares the same source/state/note and configuration revision ledger for other owners. */
+export function validateStoryArchive(store: Store): StorySnapshotArchiveValidator {
   try {
     const configs = new Map<string, StoryConfig>();
     const modules = new Map<string, unknown>();
@@ -172,8 +153,7 @@ export function validateStoryArchive(store: Store): void {
     }
     const jobs = new Map(rows(store, 'story_jobs').map((row) => [row.id, row]));
     const states = new Map(rows(store, 'story_states').map((row) => [row.id, row]));
-    const memories = new Map(rows(store, 'story_memories').map((row) => [row.id, row]));
-    const indexes = rows(store, 'story_indexes');
+    const notes = new Map(rows(store, 'author_notes').map((row) => [row.id, row]));
     const snapshots = new Map<string, RunSnapshot>();
     const snapshotValue = (
       value: unknown,
@@ -194,7 +174,7 @@ export function validateStoryArchive(store: Store): void {
       if (!snapshot.story) reject('story snapshot missing');
       const story = shape(
         snapshot.story,
-        ['config', 'state', 'waiting', 'lineageHash', 'canonHash', 'memory', 'models'],
+        ['config', 'state', 'waiting', 'lineageHash', 'canonHash', 'notes', 'models'],
         ['sceneCommandId']
       ) as StorySnapshot;
       const config = configValue(store, story.config, chatId, false);
@@ -203,11 +183,8 @@ export function validateStoryArchive(store: Store): void {
         reject('snapshot lineage mismatch');
       if (story.waiting !== (config.module?.mode === 'authoritative' && story.state === null))
         reject('state barrier mismatch');
-      const modelMap = shape(story.models, [], ['state', 'memory']);
-      for (const [kind, ref] of [
-        ['state', config.stateModel],
-        ['memory', config.memory.model],
-      ] as const) {
+      const modelMap = shape(story.models, [], ['state', 'context']);
+      for (const [kind, ref] of [['state', config.stateModel]] as const) {
         if (!ref) {
           if (modelMap[kind] !== undefined) reject('unselected model snapshot');
           continue;
@@ -215,6 +192,7 @@ export function validateStoryArchive(store: Store): void {
         const selected = validateModelSnapshot(modelMap[kind]);
         if (selected.id !== ref.id) reject('model snapshot selection mismatch');
       }
+      if (modelMap.context !== undefined) validateModelSnapshot(modelMap.context);
       if (story.state !== null) {
         const state = shape(story.state, [
           'id',
@@ -246,7 +224,7 @@ export function validateStoryArchive(store: Store): void {
           if (
             !snapshot.history.some(
               (item) =>
-                item.revision === state.sourceRevision && memoryHash(item.text) === state.sourceHash
+                item.revision === state.sourceRevision && sourceHash(item.text) === state.sourceHash
             )
           )
             reject('parent state not in ancestry');
@@ -255,59 +233,22 @@ export function validateStoryArchive(store: Store): void {
           state.sourceRevision !== null &&
           !snapshot.history.some(
             (item) =>
-              item.revision === state.sourceRevision && memoryHash(item.text) === state.sourceHash
+              item.revision === state.sourceRevision && sourceHash(item.text) === state.sourceHash
           )
         )
           reject('state anchor not in ancestry');
       }
-      if (story.memory !== null) {
-        const memory = shape(story.memory, ['entries', 'checkpoint', 'plan']);
-        if (!Array.isArray(memory.entries)) reject('invalid snapshot memories');
-        const scope = { chatId, history: snapshot.history };
-        const seen = new Set<string>();
-        for (const raw of memory.entries) {
-          const entry = validateMemoryEntry(raw, scope);
-          const stored = memories.get(entry.id);
-          if (seen.has(entry.id) || !stored || stored.chat_id !== chatId)
-            reject('snapshot memory missing or duplicated');
-          seen.add(entry.id);
-          same(entry, parse(stored.entry), 'snapshot memory differs from stored entry');
-        }
-        const checkpoint = validateMemoryCheckpoint(memory.checkpoint);
-        if (checkpoint.chatId !== chatId) reject('checkpoint outside chat');
-        for (const ref of checkpoint.indexed) {
-          if (
-            !snapshot.history.some(
-              (item) => item.revision === ref.revision && memoryHash(item.text) === ref.hash
-            )
-          )
-            reject('snapshot checkpoint outside history');
-          if (
-            ![...jobs.values()].some(
-              (job) =>
-                job.chat_id === chatId &&
-                job.source_revision === ref.revision &&
-                job.source_hash === ref.hash &&
-                job.kind === 'memory' &&
-                ['completed', 'stale'].includes(job.status)
-            )
-          )
-            reject('snapshot checkpoint receipt missing');
-        }
-        same(
-          memory.plan,
-          planMemoryContext({
-            scope,
-            entries: memory.entries,
-            checkpoint,
-            recentCount: config.memory.recentCount,
-            maxPacketChars: config.memory.maxPacketChars,
-          }),
-          'snapshot memory plan mismatch'
-        );
+      if (!Array.isArray(story.notes)) reject('invalid snapshot notes');
+      const seenNotes = new Set<string>();
+      for (const raw of story.notes) {
+        const note = validateAuthorNote(raw, { chatId, history: snapshot.history });
+        const stored = notes.get(note.id);
+        if (seenNotes.has(note.id) || !stored || stored.chat_id !== chatId || note.retired)
+          reject('snapshot note missing or duplicated');
+        seenNotes.add(note.id);
+        same(note, parse(stored.entry), 'snapshot note differs from stored entry');
       }
-      if (story.canonHash !== canonHash(story.memory?.entries ?? []))
-        reject('snapshot canon hash mismatch');
+      if (story.canonHash !== canonHash(story.notes)) reject('snapshot note hash mismatch');
       if (story.sceneCommandId !== undefined) {
         const command = store.db
           .prepare('SELECT chat_id FROM scene_commands WHERE id=?')
@@ -321,7 +262,7 @@ export function validateStoryArchive(store: Store): void {
       integer(row.generation);
       integer(row.config_revision, 1);
       if (
-        !['state', 'memory'].includes(row.kind) ||
+        row.kind !== 'state' ||
         !['completed', 'failed', 'stale', 'cancelled', 'interrupted'].includes(row.status) ||
         ![0, 1].includes(row.mock) ||
         row.owner !== null
@@ -344,12 +285,7 @@ export function validateStoryArchive(store: Store): void {
         reject('job dependency key mismatch');
       if (snapshot.story!.config.revision !== row.config_revision)
         reject('job configuration mismatch');
-      if (
-        row.kind === 'state'
-          ? !snapshot.story!.config.module
-          : !snapshot.story!.config.memory.enabled
-      )
-        reject('job role disabled');
+      if (!snapshot.story!.config.module) reject('job role disabled');
       if (row.status === 'completed' && row.result === null) reject('completed job lacks result');
       const stateRows = [...states.values()].filter((state) => state.job_id === row.id);
       if (
@@ -357,16 +293,6 @@ export function validateStoryArchive(store: Store): void {
         (row.kind !== 'state' && stateRows.length)
       )
         reject('state completion mismatch');
-      if (row.status === 'completed' && row.kind === 'memory') {
-        const result = shape(parse(row.result), ['entries']);
-        if (!Array.isArray(result.entries)) reject('invalid memory result');
-        const owned = [...memories.values()]
-          .filter((memory) => memory.job_id === row.id)
-          .map((memory) => parse(memory.entry));
-        same(result.entries, owned, 'memory result differs from committed entries');
-        if (!indexes.some((index) => index.job_id === row.id))
-          reject('completed memory receipt missing');
-      }
     }
     for (const row of states.values()) {
       const job = jobs.get(row.job_id);
@@ -406,58 +332,43 @@ export function validateStoryArchive(store: Store): void {
         'state reducer result mismatch'
       );
     }
-    for (const row of memories.values()) {
+    for (const row of notes.values()) {
       id(row.id);
       store.chat(row.chat_id);
-      const entry = object(parse(row.entry)) as MemoryEntry;
-      if (entry.id !== row.id || entry.chatId !== row.chat_id) reject('memory identity mismatch');
-      validateMemoryEntry(entry, entryScope(store, row.chat_id, entry));
-      if (row.job_id !== null) {
-        const job = jobs.get(row.job_id);
-        if (
-          !job ||
-          job.kind !== 'memory' ||
-          !['completed', 'stale'].includes(job.status) ||
-          job.chat_id !== row.chat_id ||
-          entry.atRevision !== job.source_revision ||
-          entry.atHash !== job.source_hash ||
-          entry.kind === 'author-canon'
-        )
-          reject('memory job scope mismatch');
-      } else if (entry.kind !== 'author-canon') reject('extracted memory has no job');
+      const note = object(parse(row.entry)) as AuthorNote;
+      if (note.id !== row.id || note.chatId !== row.chat_id) reject('note identity mismatch');
+      validateAuthorNote(note, entryScope(store, row.chat_id, note));
       if (row.replaces_id !== null) {
-        const replaced = memories.get(row.replaces_id);
-        const prior = replaced ? (parse(replaced.entry) as MemoryEntry) : null;
-        if (
-          !replaced ||
-          replaced.chat_id !== row.chat_id ||
-          !prior ||
-          entry.kind !== 'author-canon' ||
-          prior.kind !== 'author-canon'
-        )
-          reject('retcon ownership mismatch');
-        validateMemoryEntry(prior, entryScope(store, row.chat_id, entry));
+        const prior = notes.get(row.replaces_id);
+        if (!prior || prior.chat_id !== row.chat_id) reject('note replacement outside chat');
+        validateAuthorNote(parse(prior.entry), entryScope(store, row.chat_id, note));
       }
       const seen = new Set<string>();
       let cursor: Row | undefined = row;
       while (cursor) {
-        if (seen.has(cursor.id)) reject('retcon cycle');
+        if (seen.has(cursor.id)) reject('note replacement cycle');
         seen.add(cursor.id);
-        cursor = cursor.replaces_id === null ? undefined : memories.get(cursor.replaces_id);
+        cursor = cursor.replaces_id === null ? undefined : notes.get(cursor.replaces_id);
       }
     }
-    for (const row of indexes) {
-      const job = jobs.get(row.job_id);
-      sourceRef(store, row.chat_id, row.source_revision, row.source_hash);
+    for (const row of rows(store, 'author_note_heads')) {
+      store.chat(row.chat_id);
+      integer(row.revision, 1);
+    }
+    for (const row of rows(store, 'author_note_commands')) {
+      store.chat(row.chat_id);
+      id(row.request_key);
+      const command = object(parse(row.command)),
+        result = object(parse(row.result)),
+        saved = notes.get(result.note?.id);
       if (
-        !job ||
-        job.chat_id !== row.chat_id ||
-        job.source_revision !== row.source_revision ||
-        job.source_hash !== row.source_hash ||
-        job.kind !== 'memory' ||
-        !['completed', 'stale'].includes(job.status)
+        !saved ||
+        saved.chat_id !== row.chat_id ||
+        command.idempotencyKey !== row.request_key ||
+        result.revision !== command.expectedRevision + 1
       )
-        reject('index receipt mismatch');
+        reject('invalid note command receipt');
+      same(parse(saved.entry), result.note, 'note command result mismatch');
     }
     for (const row of rows(store, 'runs')) {
       const snapshot = parse(row.snapshot);
@@ -496,6 +407,15 @@ export function validateStoryArchive(store: Store): void {
       if (row.status === 'consumed' && (row.source_revision === null || row.run_id === null))
         reject('consumed command lacks source');
     }
+    return (snapshot) => {
+      try {
+        if (snapshot.story !== undefined)
+          snapshotValue(snapshot, snapshot.chatId, snapshot.parentRevision);
+      } catch (error) {
+        if (error instanceof HttpError && error.statusCode === 400) throw error;
+        reject('invalid graph or source evidence');
+      }
+    };
   } catch (error) {
     if (error instanceof HttpError && error.statusCode === 400) throw error;
     reject('invalid graph or source evidence');
@@ -518,7 +438,10 @@ function normalizeSnapshot(value: unknown): Row {
   for (const section of [snapshot.profile, snapshot.story])
     if (section && typeof section === 'object') {
       stripEnvelope(section);
-      for (const raw of Object.values(section.models ?? {})) {
+      for (const raw of [
+        ...Object.values(section.models ?? {}),
+        ...(section.contextModel ? [section.contextModel] : []),
+      ]) {
         const model = object(raw);
         stripEnvelope(model);
         const connection = object(model.connection);
@@ -542,11 +465,15 @@ function normalizeToolEvent(value: unknown) {
 }
 /** Called on a detached archive row before insertion. No prose or typed state fields are rewritten. */
 export function normalizeStoryArchiveRow(table: string, row: Row): void {
-  if (table === 'runs' || table === 'story_jobs')
+  if (['runs', 'story_jobs', 'context_checkpoints', 'context_jobs'].includes(table))
     row.snapshot = JSON.stringify(normalizeSnapshot(parse(row.snapshot)));
   if (table === 'runs' && row.status === 'waiting_for_state') {
     row.status = 'interrupted';
     row.error = 'Restored state-dependent run; explicit retry required';
+  }
+  if (table === 'context_jobs' && ['queued', 'running'].includes(row.status)) {
+    row.status = 'interrupted';
+    row.error = 'Restored uncertain context job; explicit retry required';
   }
   if (table === 'story_jobs') {
     if (['queued', 'running'].includes(row.status)) {
@@ -585,7 +512,7 @@ export function copyStoryFork(
   newChatId: string,
   sourceIds: Map<string, string>,
   runIds: Map<string, string>
-): void {
+): { mapStory: (story: StorySnapshot, history: RunSnapshot['history']) => StorySnapshot } {
   store.db.exec('PRAGMA defer_foreign_keys=ON');
   const excluded: { kind: string; reason: string }[] = [];
   const exclude = (kind: string, reason: string) => {
@@ -623,7 +550,7 @@ export function copyStoryFork(
   }
   const allJobs = rows(store, 'story_jobs').filter((row) => row.chat_id === originalChatId);
   const allStates = rows(store, 'story_states').filter((row) => row.chat_id === originalChatId);
-  const allMemories = rows(store, 'story_memories').filter((row) => row.chat_id === originalChatId);
+  const allNotes = rows(store, 'author_notes').filter((row) => row.chat_id === originalChatId);
   const candidates = allJobs.filter(
     (row) => row.status === 'completed' && selected(row.source_revision)
   );
@@ -631,12 +558,9 @@ export function copyStoryFork(
   const states = new Map(
     allStates.filter((row) => jobs.has(row.job_id)).map((row) => [row.id, randomUUID()])
   );
-  const memories = new Map(
-    allMemories
-      .filter(
-        (row) =>
-          selected(parse(row.entry).atRevision) && (row.job_id === null || jobs.has(row.job_id))
-      )
+  const notes = new Map(
+    allNotes
+      .filter((row) => selected(parse(row.entry).atRevision))
       .map((row) => [row.id, randomUUID()])
   );
   const commandRows = rows(store, 'scene_commands').filter(
@@ -656,29 +580,15 @@ export function copyStoryFork(
     if (!mapped) throw new Error('unavailable parent state dependency');
     return mapped;
   };
-  const mapEntry = (entry: MemoryEntry): MemoryEntry => {
-    const mapped = memories.get(entry.id);
-    if (!mapped) throw new Error('unavailable memory dependency');
+  const mapEntry = (entry: AuthorNote): AuthorNote => {
+    const mapped = notes.get(entry.id);
+    if (!mapped) throw new Error('unavailable note dependency');
     return {
       ...structuredClone(entry),
       id: mapped,
       chatId: newChatId,
       atRevision: sourceId(entry.atRevision),
-      ...('sources' in entry
-        ? { sources: entry.sources.map((ref) => ({ ...ref, revision: sourceId(ref.revision)! })) }
-        : {}),
-      ...(entry.knowledge
-        ? {
-            knowledge: {
-              ...structuredClone(entry.knowledge),
-              segments: entry.knowledge.segments.map((segment) => ({
-                ...segment,
-                sourceRevision: sourceId(segment.sourceRevision)!,
-              })),
-            },
-          }
-        : {}),
-    } as MemoryEntry;
+    };
   };
   const mapState = (state: StoryState | null): StoryState | null =>
     state
@@ -691,45 +601,14 @@ export function copyStoryFork(
   const mapStory = (story: StorySnapshot, history: RunSnapshot['history']): StorySnapshot => {
     const config = mapConfig(story.config);
     const mappedHistory = history.map((item) => ({ ...item, revision: sourceId(item.revision)! }));
-    const memory = story.memory
-      ? (() => {
-          const entries = story.memory.entries.map(mapEntry);
-          const checkpoint = {
-            chatId: newChatId,
-            indexed: story.memory.checkpoint.indexed.map((ref) => {
-              if (
-                !candidates.some(
-                  (job) =>
-                    jobs.has(job.id) &&
-                    job.kind === 'memory' &&
-                    job.source_revision === ref.revision &&
-                    job.source_hash === ref.hash
-                )
-              )
-                throw new Error('unavailable memory receipt dependency');
-              return { ...ref, revision: sourceId(ref.revision)! };
-            }),
-          };
-          return {
-            entries,
-            checkpoint,
-            plan: planMemoryContext({
-              scope: { chatId: newChatId, history: mappedHistory },
-              entries,
-              checkpoint,
-              recentCount: config.memory.recentCount,
-              maxPacketChars: config.memory.maxPacketChars,
-            }),
-          };
-        })()
-      : null;
+    const mappedNotes = story.notes.map(mapEntry);
     const result: StorySnapshot = {
       ...structuredClone(story),
       config: structuredClone(config),
       state: mapState(story.state),
-      memory,
+      notes: mappedNotes,
       lineageHash: lineageHash(mappedHistory),
-      canonHash: canonHash(memory?.entries ?? []),
+      canonHash: canonHash(mappedNotes),
     };
     if (story.sceneCommandId !== undefined) {
       const mapped = commands.get(story.sceneCommandId);
@@ -750,8 +629,6 @@ export function copyStoryFork(
         jobs.delete(row.id);
         for (const state of allStates.filter((state) => state.job_id === row.id))
           states.delete(state.id);
-        for (const memory of allMemories.filter((memory) => memory.job_id === row.id))
-          memories.delete(memory.id);
         exclude(row.kind, 'unavailable immutable dependency');
         changed = true;
       }
@@ -760,22 +637,22 @@ export function copyStoryFork(
   for (const row of allJobs)
     if (selected(row.source_revision) && row.status !== 'completed')
       exclude(row.kind, 'only completed stored jobs are copied');
-  for (const row of allMemories)
-    if (memories.has(row.id)) {
+  for (const row of allNotes)
+    if (notes.has(row.id)) {
       const entry = mapEntry(parse(row.entry));
-      const replacementCopied = allMemories.some(
-        (candidate) => candidate.replaces_id === row.id && memories.has(candidate.id)
+      const replacementCopied = allNotes.some(
+        (candidate) => candidate.replaces_id === row.id && notes.has(candidate.id)
       );
-      insert('story_memories', {
+      insert('author_notes', {
         ...row,
         id: entry.id,
         chat_id: newChatId,
-        job_id: row.job_id === null ? null : jobs.get(row.job_id),
         entry: JSON.stringify(entry),
-        replaces_id: row.replaces_id === null ? null : (memories.get(row.replaces_id) ?? null),
+        replaces_id: row.replaces_id === null ? null : (notes.get(row.replaces_id) ?? null),
         retired_at: replacementCopied ? row.retired_at : null,
       });
     }
+  if (notes.size) insert('author_note_heads', { chat_id: newChatId, revision: notes.size });
   for (const row of candidates.filter((row) => jobs.has(row.id))) {
     const snapshot = parse(row.snapshot) as RunSnapshot;
     const originalSource = store.sourceOriginal(row.source_revision);
@@ -795,10 +672,10 @@ export function copyStoryFork(
         : {}),
     };
     delete mapped.candidateOf;
-    let result = parse(row.result);
-    if (row.kind === 'state')
-      result = { ...result, sourceRevision: sourceId(result.sourceRevision) };
-    else result = { entries: result.entries.map(mapEntry) };
+    const result = {
+      ...parse(row.result),
+      sourceRevision: sourceId(parse(row.result).sourceRevision),
+    };
     const copied = {
       ...row,
       id: jobs.get(row.id),
@@ -829,15 +706,6 @@ export function copyStoryFork(
       body: JSON.stringify(body),
     });
   }
-  for (const row of rows(store, 'story_indexes').filter(
-    (row) => row.chat_id === originalChatId && jobs.has(row.job_id)
-  ))
-    insert('story_indexes', {
-      ...row,
-      chat_id: newChatId,
-      source_revision: sourceId(row.source_revision),
-      job_id: jobs.get(row.job_id),
-    });
   for (const row of commandRows)
     insert('scene_commands', {
       ...row,
@@ -861,4 +729,5 @@ export function copyStoryFork(
     store.db.prepare('UPDATE runs SET snapshot=? WHERE id=?').run(JSON.stringify(mapped), newRun);
   }
   if (excluded.length) store.event(newChatId, 'story.fork.excluded', JSON.stringify(excluded));
+  return { mapStory };
 }

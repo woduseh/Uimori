@@ -91,7 +91,7 @@ describe('whole-source translation continuity', () => {
       /LATER_RELATIONSHIP|LATER_SOURCE|previousTranslation|chunkId/
     );
   });
-  test('default prompt receives the full original once and offers prior source, memory and wording reads', async () => {
+  test('default prompt receives the full original once and offers prior source, notes and wording reads', async () => {
     const seed = bundle(20);
     const input = translationInput(
       seed.source,
@@ -108,8 +108,8 @@ describe('whole-source translation continuity', () => {
       expect.arrayContaining([
         'story.search',
         'story.read',
-        'memory.search',
-        'memory.read',
+        'notes.list',
+        'notes.read',
         'translation.search',
         'translation.read',
       ])
