@@ -1,5 +1,15 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { existsSync, mkdtempSync, readdirSync, readFileSync, realpathSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  realpathSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs';
 import { rm } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -8,6 +18,7 @@ import type { ProviderRequest, WireRecord } from '../core/transport.js';
 import {
   CODEX_ILLUSTRATION_INSTRUCTIONS,
   CODEX_ILLUSTRATION_OUTPUT_SCHEMA,
+  ILLUSTRATION_MAX_IMAGE_BYTES,
 } from '../core/illustration.js';
 import { PNG_BASE64 } from './fixtures/illustration.js';
 
@@ -27,7 +38,10 @@ const request = (references: CodexImageRequest['references'] = []): CodexImageRe
 });
 const instances: CodexRuntime[] = [],
   roots: string[] = [];
-function setup(mode: string, extra: NodeJS.ProcessEnv = {}) {
+function setup(
+  mode: string,
+  extra: NodeJS.ProcessEnv | ((directory: string) => NodeJS.ProcessEnv) = {}
+) {
   const dir = mkdtempSync(join(realpathSync(tmpdir()), 'uimori-codex-image-test-'));
   roots.push(dir);
   const log = join(dir, 'requests.jsonl');
@@ -40,7 +54,7 @@ function setup(mode: string, extra: NodeJS.ProcessEnv = {}) {
         UIMORI_CODEX_FIXTURE_MODE: mode,
         UIMORI_CODEX_FIXTURE_OUTPUT: '{"caption":"강 위의 등불"}',
         UIMORI_CODEX_FIXTURE_LOG: log,
-        ...extra,
+        ...(typeof extra === 'function' ? extra(dir) : extra),
       },
     },
   });
@@ -99,7 +113,7 @@ describe('Codex illustration turns through the synthetic app-server', () => {
       {
         mime: 'image/png',
         bytes: Buffer.from(PNG_BASE64, 'base64').length,
-        sha256: expect.stringMatching(/^[a-f0-9]{64}$/u),
+        sha256: createHash('sha256').update(Buffer.from(PNG_BASE64, 'base64')).digest('hex'),
       },
     ]);
   });
@@ -187,5 +201,113 @@ describe('Codex illustration turns through the synthetic app-server', () => {
     });
     expect(cancelled.status).toBe('cancelled');
     expect(records()).toEqual([]);
+  });
+
+  it.each(['unsupported-mime', 'mime-mismatch', 'invalid-base64', 'oversize'] as const)(
+    'rejects %s reference bytes before opening any RPC',
+    async (fault) => {
+      const { runtime, records } = setup('image');
+      const png = Buffer.from(PNG_BASE64, 'base64');
+      const base64 =
+        fault === 'invalid-base64'
+          ? `!${PNG_BASE64}`
+          : fault === 'oversize'
+            ? Buffer.concat([
+                png,
+                Buffer.alloc(ILLUSTRATION_MAX_IMAGE_BYTES + 1 - png.length),
+              ]).toString('base64')
+            : PNG_BASE64;
+      const mime =
+        fault === 'unsupported-mime'
+          ? 'image/svg+xml'
+          : fault === 'mime-mismatch'
+            ? 'image/jpeg'
+            : 'image/png';
+      const result = await runtime.generateImage(connection, request([{ mime, base64 }]), {
+        approvedOrigins: [],
+        signal: new AbortController().signal,
+      });
+      expect(result.error?.code).toBe('CODEX_IMAGE_INVALID_REFERENCE');
+      expect(result.images).toEqual([]);
+      expect(records()).toEqual([]);
+    }
+  );
+
+  it.each(['outside', 'junction'] as const)(
+    'refuses a saved image reached through %s and leaves the external file untouched',
+    async (kind) => {
+      let outside = '';
+      const { runtime } = setup('image-saved-path', (dir) => {
+        const directory = join(dir, 'outside-codex-home');
+        mkdirSync(directory);
+        outside = join(directory, 'external.png');
+        writeFileSync(outside, Buffer.from(PNG_BASE64, 'base64'));
+        if (kind === 'outside') return { UIMORI_CODEX_FIXTURE_SAVED_PATH: outside };
+        const codexHome = join(dir, 'db.sqlite.codex');
+        mkdirSync(codexHome);
+        const link = join(codexHome, 'linked-images');
+        symlinkSync(directory, link, 'junction');
+        return { UIMORI_CODEX_FIXTURE_SAVED_PATH: join(link, 'external.png') };
+      });
+      const result = await runtime.generateImage(connection, request(), {
+        approvedOrigins: [],
+        signal: new AbortController().signal,
+      });
+      expect(result.error?.code).toBe('CODEX_IMAGE_NOT_GENERATED');
+      expect(result.images).toEqual([]);
+      expect(existsSync(outside)).toBe(true);
+    }
+  );
+
+  it('rejects an oversized saved file before reading it and preserves the rejected artifact', async () => {
+    let saved = '';
+    const { runtime } = setup('image-saved-path', (dir) => {
+      const codexHome = join(dir, 'db.sqlite.codex');
+      mkdirSync(codexHome);
+      saved = join(codexHome, 'oversized.png');
+      const png = Buffer.from(PNG_BASE64, 'base64');
+      writeFileSync(
+        saved,
+        Buffer.concat([png, Buffer.alloc(ILLUSTRATION_MAX_IMAGE_BYTES + 1 - png.length)])
+      );
+      return { UIMORI_CODEX_FIXTURE_SAVED_PATH: saved };
+    });
+    const result = await runtime.generateImage(connection, request(), {
+      approvedOrigins: [],
+      signal: new AbortController().signal,
+    });
+    expect(result.error?.code).toBe('CODEX_IMAGE_NOT_GENERATED');
+    expect(result.images).toEqual([]);
+    await runtime.close();
+    expect(existsSync(saved)).toBe(true);
+  });
+
+  it('uses a valid inline image without reading or deleting an unrelated savedPath', async () => {
+    let saved = '';
+    const { runtime } = setup('image', (dir) => {
+      const codexHome = join(dir, 'db.sqlite.codex');
+      mkdirSync(codexHome);
+      saved = join(codexHome, 'local-settings.json');
+      writeFileSync(saved, '{"syntheticSetting":"keep"}');
+      return { UIMORI_CODEX_FIXTURE_SAVED_PATH: saved };
+    });
+    const result = await runtime.generateImage(connection, request(), {
+      approvedOrigins: [],
+      signal: new AbortController().signal,
+    });
+    expect(result.status).toBe('completed');
+    await runtime.close();
+    expect(readFileSync(saved, 'utf8')).toBe('{"syntheticSetting":"keep"}');
+  });
+
+  it('rejects inline image data whose declared MIME disagrees with its bytes', async () => {
+    const { runtime } = setup('image', {
+      UIMORI_CODEX_FIXTURE_IMAGE: `data:image/jpeg;base64,${PNG_BASE64}`,
+    });
+    const result = await runtime.generateImage(connection, request(), {
+      approvedOrigins: [],
+      signal: new AbortController().signal,
+    });
+    expect(result.error?.code).toBe('CODEX_IMAGE_NOT_GENERATED');
   });
 });

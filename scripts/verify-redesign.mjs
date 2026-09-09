@@ -45,6 +45,8 @@ await runBrowserVerification({
     'NUI01',
     'OUTUI01',
     'OUTUI02',
+    'OUTUI03',
+    'OUTUI04',
     'PREQUESTUI01',
     'PREQUESTUI02',
     'SEGMENTUI01',

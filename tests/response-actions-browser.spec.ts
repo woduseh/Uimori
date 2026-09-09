@@ -102,6 +102,7 @@ test('RACOM01 source footer stays compact and its menu supports touch, keyboard 
       '여기서 새 이야기로 이어가기',
       '번역 수정',
       '이미지 자동 배치',
+      '삽화 생성',
       '원문 연결 정보',
       ...(before.attempts?.some((attempt) => attempt.runId === source.runId)
         ? ['본문 추정 비용']

@@ -10,6 +10,7 @@ import { forkChat } from '../server/chat-fork.js';
 import { directHelperGrants } from '../server/helper-workspace.js';
 import { buildMainProviderRequest } from '../server/main-request.js';
 import { OUTLINE_LEVEL_LABELS } from '../core/outline.js';
+import { initOutline } from '../server/outline-store.js';
 import type { RunSnapshot } from '../core/types.js';
 import type { Connection, ModelPreset } from '../core/product.js';
 
@@ -289,6 +290,351 @@ describe('hierarchical composition', () => {
     expect(second.detail.nodes).toHaveLength(first.detail.nodes.length);
   });
 
+  test('batch receipts bind the complete payload, branch and authority before replay', async () => {
+    const store = await database();
+    const chat = createFixtureChat(store, '배치 영수증 검사');
+    const branch = store.product.createBranch(chat.id, { title: '다른 분기', fromRevision: null });
+    const body = {
+      idempotencyKey: randomUUID(),
+      operations: [{ op: 'create', ref: 'root', level: 'theme', title: '처음 계획', intent: '' }],
+    };
+    const first = store.outline.apply(chat.id, body, 'user');
+    for (const [changed, authority] of [
+      [{ ...body, operations: [{ ...body.operations[0], title: '다른 계획' }] }, 'user'],
+      [{ ...body, branchId: branch.id }, 'user'],
+      [body, 'model'],
+    ] as const)
+      expect(failure(() => store.outline.apply(chat.id, changed, authority)).statusCode).toBe(409);
+    expect(store.outline.detail(chat.id).nodes).toEqual(first.detail.nodes);
+    expect(store.outline.detail(chat.id, branch.id).nodes).toEqual([]);
+  });
+
+  test('duplicate refs and late mixed-operation errors reject the whole batch', async () => {
+    const store = await database();
+    const chat = createFixtureChat(store, '배치 원자성 검사');
+    const create = { op: 'create', ref: 'same', level: 'theme', title: '계획', intent: '' };
+    expect(
+      failure(() =>
+        store.outline.apply(
+          chat.id,
+          {
+            idempotencyKey: randomUUID(),
+            operations: [create, { ...create, title: '다른 계획' }],
+          },
+          'user'
+        )
+      ).statusCode
+    ).toBe(400);
+    expect(store.outline.detail(chat.id).nodes).toEqual([]);
+    expect(
+      failure(() =>
+        store.outline.apply(
+          chat.id,
+          {
+            idempotencyKey: randomUUID(),
+            operations: [
+              create,
+              {
+                op: 'create',
+                level: 'episode',
+                parentRef: 'missing',
+                title: '잘못된 회차',
+                intent: '',
+              },
+            ],
+          },
+          'user'
+        )
+      ).statusCode
+    ).toBe(400);
+    expect(store.outline.detail(chat.id).nodes).toEqual([]);
+    const [node] = store.outline.apply(
+      chat.id,
+      {
+        idempotencyKey: randomUUID(),
+        operations: [create],
+      },
+      'user'
+    ).detail.nodes;
+    expect(
+      failure(() =>
+        store.outline.apply(
+          chat.id,
+          {
+            idempotencyKey: randomUUID(),
+            operations: [
+              { op: 'update', id: node.id, expectedRevision: node.revision, title: '롤백할 수정' },
+              { op: 'remove', id: node.id, expectedRevision: node.revision },
+            ],
+          },
+          'user'
+        )
+      ).statusCode
+    ).toBe(409);
+    expect(store.outline.node(node.id)).toEqual(node);
+  });
+
+  test('a completed batch can be confirmed after later edits or deletion without replaying writes', async () => {
+    const store = await database();
+    const chat = createFixtureChat(store, '과거 요청 재확인');
+    const createBody = {
+      idempotencyKey: randomUUID(),
+      operations: [{ op: 'create', level: 'theme', title: '처음 계획', intent: '' }],
+    };
+    const first = store.outline.apply(chat.id, createBody, 'user');
+    const node = first.detail.nodes[0];
+    const updateBody = {
+      idempotencyKey: randomUUID(),
+      operations: [
+        { op: 'update', id: node.id, expectedRevision: node.revision, title: '사용자 정정' },
+      ],
+    };
+    store.outline.apply(chat.id, updateBody, 'user');
+    expect(store.outline.apply(chat.id, updateBody, 'user').detail.nodes[0].revision).toBe(2);
+    const removeBody = {
+      idempotencyKey: randomUUID(),
+      operations: [{ op: 'remove', id: node.id, expectedRevision: 2 }],
+    };
+    store.outline.apply(chat.id, removeBody, 'user');
+    expect(store.outline.apply(chat.id, removeBody, 'user').detail.nodes).toEqual([]);
+    expect(store.outline.apply(chat.id, createBody, 'user')).toEqual({
+      detail: { ...first.detail, nodes: [] },
+      created: first.created,
+    });
+  });
+
+  test('a model cannot move an ancestor of fixed or written composition', async () => {
+    const store = await database();
+    const chat = createFixtureChat(store, '하위 보호 이동 검사');
+    compose(store, chat.id);
+    const arc = find(store, chat.id, '지하 서고의 발견');
+    const beat = find(store, chat.id, '열쇠 없는 자물쇠');
+    store.outline.apply(
+      chat.id,
+      {
+        idempotencyKey: randomUUID(),
+        operations: [{ op: 'update', id: beat.id, expectedRevision: beat.revision, fixed: true }],
+      },
+      'user'
+    );
+    const move = () =>
+      store.outline.apply(
+        chat.id,
+        {
+          idempotencyKey: randomUUID(),
+          operations: [{ op: 'move', id: arc.id, expectedRevision: arc.revision, position: 10 }],
+        },
+        'model'
+      );
+    expect(failure(move).statusCode).toBe(409);
+    expect(store.outline.node(arc.id)).toEqual(arc);
+    const pinned = store.outline.node(beat.id);
+    store.outline.apply(
+      chat.id,
+      {
+        idempotencyKey: randomUUID(),
+        operations: [
+          { op: 'update', id: beat.id, expectedRevision: pinned.revision, fixed: false },
+        ],
+      },
+      'user'
+    );
+    const command = store.outline.sceneCommand(beat.id, { idempotencyKey: randomUUID() });
+    write(store, chat.id, command.id, '자물쇠에는 열쇠 구멍이 없었다.');
+    expect(failure(move).statusCode).toBe(409);
+    expect(store.outline.node(arc.id)).toEqual(arc);
+    for (const authority of ['user', 'model'] as const)
+      expect(
+        failure(() =>
+          store.outline.apply(
+            chat.id,
+            {
+              idempotencyKey: randomUUID(),
+              operations: [{ op: 'remove', id: arc.id, expectedRevision: arc.revision }],
+            },
+            authority
+          )
+        ).statusCode
+      ).toBe(409);
+  });
+
+  test('scene-command acknowledgement can be replayed after its run commits', async () => {
+    const store = await database();
+    const chat = createFixtureChat(store, '집필 응답 유실 검사');
+    compose(store, chat.id);
+    const episode = find(store, chat.id, '1화 잠긴 문');
+    const key = randomUUID();
+    const command = store.outline.sceneCommand(episode.id, { idempotencyKey: key });
+    const completed = write(store, chat.id, command.id, '문은 잠겨 있었다.');
+    expect(store.outline.sceneCommand(episode.id, { idempotencyKey: key })).toMatchObject({
+      id: command.id,
+      runId: completed.run.id,
+      status: 'consumed',
+    });
+    expect(store.detail(chat.id).runs).toHaveLength(1);
+    expect(
+      failure(() =>
+        store.outline.sceneCommand(episode.id, {
+          idempotencyKey: key,
+          request: '다른 집필 요청',
+        })
+      ).statusCode
+    ).toBe(409);
+  });
+
+  test('a scene-command key cannot bind an identically named second unit', async () => {
+    const store = await database();
+    const chat = createFixtureChat(store, '장면 요청 소유 검사');
+    compose(store, chat.id);
+    const episode = find(store, chat.id, '1화 잠긴 문');
+    const second = store.outline.apply(
+      chat.id,
+      {
+        idempotencyKey: randomUUID(),
+        operations: [
+          {
+            op: 'create',
+            parentId: episode.parentId,
+            level: 'episode',
+            title: episode.title,
+            intent: episode.intent,
+          },
+        ],
+      },
+      'user'
+    ).created[0].id;
+    const key = randomUUID();
+    store.outline.sceneCommand(episode.id, { idempotencyKey: key });
+    expect(
+      failure(() => store.outline.sceneCommand(second, { idempotencyKey: key })).statusCode
+    ).toBe(409);
+    expect(store.outline.node(second).progress.state).toBe('planned');
+    expect(store.story.detail(chat.id).commands).toHaveLength(1);
+  });
+
+  test('same-version databases and archives without the additive outline tables preserve the story', async () => {
+    const store = await database();
+    const chat = createFixtureChat(store, '이전 v15 보존 검사');
+    const command = store.story.createCommand(chat.id, {
+      idempotencyKey: randomUUID(),
+      label: '기존 장면',
+      request: '기존 장면을 집필해요.',
+    });
+    const { source } = write(store, chat.id, command.id, '구성 기능이 없던 때의 원문이에요.');
+    const before = store.product.export();
+    const tables = before.tables as Record<string, unknown>;
+    for (const table of Object.keys(tables).filter((name) => name.startsWith('outline_')))
+      delete tables[table];
+    const restored = await database();
+    restored.product.import(before);
+    expect(restored.chat(chat.id)).toEqual(store.chat(chat.id));
+    expect(restored.outline.detail(chat.id).nodes).toEqual([]);
+    restored.db.exec('DROP TABLE IF EXISTS outline_batches; DROP TABLE outline_nodes');
+    initOutline(restored.db);
+    initOutline(restored.db);
+    expect(restored.chat(chat.id)).toEqual(store.chat(chat.id));
+    expect(restored.db.prepare('PRAGMA user_version').get()).toMatchObject({ user_version: 15 });
+    expect(restored.db.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
+    restored.db.exec('DROP TABLE IF EXISTS outline_batches; DROP TABLE outline_nodes');
+    restored.close();
+    const reopened = new Store(restored.path);
+    owned.find((item) => item.store === restored)!.store = reopened;
+    expect(reopened.source(source.id)).toEqual(store.source(source.id));
+    expect(reopened.chat(chat.id)).toEqual(store.chat(chat.id));
+    expect(reopened.outline.detail(chat.id).nodes).toEqual([]);
+    expect(reopened.db.prepare('PRAGMA user_version').get()).toMatchObject({ user_version: 15 });
+  });
+
+  test('receipts survive restore after deletion and reject forged references to another chat', async () => {
+    const store = await database();
+    const chat = createFixtureChat(store, '삭제된 구성 영수증');
+    const other = createFixtureChat(store, '다른 채팅');
+    const body = {
+      idempotencyKey: randomUUID(),
+      operations: [{ op: 'create', ref: 'root', level: 'theme', title: '처음 계획', intent: '' }],
+    };
+    const first = store.outline.apply(chat.id, body, 'user');
+    const node = first.detail.nodes[0];
+    store.outline.apply(
+      chat.id,
+      {
+        idempotencyKey: randomUUID(),
+        operations: [{ op: 'remove', id: node.id, expectedRevision: node.revision }],
+      },
+      'user'
+    );
+    const foreign = store.outline.apply(
+      other.id,
+      {
+        ...body,
+        idempotencyKey: randomUUID(),
+      },
+      'user'
+    ).detail.nodes[0];
+    const archive = store.product.export();
+    const restored = await database();
+    restored.product.import(archive);
+    expect(restored.outline.apply(chat.id, body, 'user')).toEqual({
+      detail: { ...first.detail, nodes: [] },
+      created: first.created,
+    });
+    expect(restored.db.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
+    for (const tamper of ['created', 'operation', 'authority'] as const) {
+      const forged = structuredClone(archive);
+      const receipt = forged.tables.outline_batches.find(
+        (row) => row.chat_id === chat.id && row.request_key === body.idempotencyKey
+      )!;
+      if (tamper === 'created') receipt.created = JSON.stringify([{ ref: 'root', id: foreign.id }]);
+      if (tamper === 'operation')
+        receipt.operations = JSON.stringify([
+          {
+            op: 'create',
+            ref: 'root',
+            parentId: foreign.id,
+            level: 'theme',
+            title: '처음 계획',
+            intent: '',
+          },
+        ]);
+      if (tamper === 'authority') receipt.authority = 'unrestricted';
+      const refused = await database();
+      expect(failure(() => refused.product.import(forged)).statusCode).toBe(400);
+      expect(refused.db.prepare('SELECT id FROM chats').all()).toEqual([]);
+    }
+  });
+
+  test('the largest allowed batch commits once, and an oversized batch commits nothing', async () => {
+    const store = await database();
+    const chat = createFixtureChat(store, '배치 한도 검사');
+    const operations = Array.from({ length: 200 }, (_, index) => ({
+      op: 'create',
+      ref: `root-${index}`,
+      level: 'theme',
+      title: `계획 ${index}`,
+      intent: '',
+    }));
+    const body = { idempotencyKey: randomUUID(), operations };
+    const applied = store.outline.apply(chat.id, body, 'user');
+    expect(applied.created).toHaveLength(200);
+    expect(store.outline.apply(chat.id, body, 'user').created).toEqual(applied.created);
+    expect(
+      failure(() =>
+        store.outline.apply(
+          chat.id,
+          {
+            idempotencyKey: randomUUID(),
+            operations: [...operations, { ...operations[0], ref: 'extra' }],
+          },
+          'user'
+        )
+      ).statusCode
+    ).toBe(400);
+    expect(store.outline.detail(chat.id).nodes).toHaveLength(200);
+    expect(store.db.prepare('SELECT COUNT(*) AS count FROM outline_batches').get()).toMatchObject({
+      count: 1,
+    });
+  });
+
   test('writing one episode carries the upper intent into the real generation input', async () => {
     const store = await database();
     const chat = chatWithMainModel(store, '집필 연결 검사');
@@ -551,6 +897,15 @@ describe('hierarchical composition', () => {
     // The second episode was written after the fork point on the original line only.
     expect(forkedSecond?.progress.state).toBe('planned');
     expect(forkedSecond?.progress.sourceRevision).toBeNull();
+    // Request receipts keep their original target and are never copied into a new chat.
+    expect(
+      store.db.prepare('SELECT * FROM outline_batches WHERE chat_id=?').all(forked.id)
+    ).toEqual([]);
+    const restored = await database();
+    restored.product.import(store.product.export());
+    expect(restored.outline.detail(forked.id)).toEqual(store.outline.detail(forked.id));
+    expect(restored.outline.detail(chat.id)).toEqual(store.outline.detail(chat.id));
+    expect(restored.db.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
   });
 
   test('a pin protects its own wording, not the planning beneath it', async () => {

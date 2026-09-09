@@ -1,5 +1,9 @@
 # 근거와 확인 범위 v0.6.1
 
+## 2026-09-09 통합 감사의 ComfyUI 취소 경계
+
+공식 [Comfy-Org/ComfyUI server.py](https://github.com/Comfy-Org/ComfyUI/blob/master/server.py)의 2026-09-09 조회 snapshot(master, 별도 commit 고정 없음) → `/api/jobs/{job_id}/cancel`·`interrupt_if_running` → 대상 ID 확인과 취소를 서버에서 원자적으로 수행하는 원리 → `server/comfyui-client.ts`의 대상별 취소와 404/405일 때 해당 ID 대기 삭제만 하는 fallback → `tests/comfyui-client.test.ts`의 합성 HTTP·대상 전환·shutdown·timeout 회귀로 확인했어요. 원본 코드를 복사하지 않았고 설치된 사용자 서버의 버전 지원은 미검증이에요. queue 조회 뒤 전역 interrupt를 보내는 기존 방식은 조회와 실행 사이 경쟁 상태 때문에 제거했어요. 통합 결과와 실서비스 인수 조건은 [통합 감사](INTEGRATED-AUDIT-2026-09-09.md)에 있어요.
+
 ## 2026-09-09 모델 주도 문맥 메모·전환
 
 사용자가 제공한 Astra 컨텍스트 관리 설명과 그 브리프가 확인한 openai/codex `rust-v0.153.0`의 `codex-rs/core/src/session/token_budget.rs`, `codex-rs/core/src/context/token_budget_context.rs`, `codex-rs/core/src/tools/handlers/new_context_window.rs`, `codex-rs/ext/history-notes/src/tools.rs`, `codex-rs/app-server/tests/suite/v2/history_notes_extension.rs` → 남은 예산 알림, 모델이 관리하는 메모, 모델이 요청하는 새 컨텍스트 창, 이전 이력 검색·읽기라는 원리 → Uimori `core/context-tools.ts`(도구 정의·알림 등급), `server/context-tools.ts`(저장·재투영), `server/model-runner.ts`(세그먼트 경계), 기존 `context_checkpoints`(`origin: 'model'`)와 `story.list`. 이 세션에서는 브리프가 정리한 파일·계약 설명을 근거로 삼았고 Codex 저장소를 직접 열거나 코드를 복사하지 않았어요. `/root/notes/latest.md` 같은 테스트 문자열은 Uimori의 저장 형식으로 채택하지 않았어요. 검증은 `tests/context-tools.test.ts`, `tests/context-model-driven-integration.test.ts`의 합성 실행이며 실제 모델이 알림을 따라 메모·전환·회수를 수행하는 품질은 미검증이에요. 결정과 비채택 대안은 [입력 문맥의 결정 기록](../docs/CONTEXT-LIMITS.md#결정-기록-2026-09-09)에 있어요.

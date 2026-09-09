@@ -1,6 +1,17 @@
 import { execFile } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync } from 'node:fs';
+import {
+  closeSync,
+  existsSync,
+  fstatSync,
+  mkdirSync,
+  mkdtempSync,
+  openSync,
+  readSync,
+  realpathSync,
+  statSync,
+  unlinkSync,
+} from 'node:fs';
 import { rm } from 'node:fs/promises';
 import { delimiter, dirname, extname, isAbsolute, join, relative, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -10,6 +21,7 @@ import type { Connection, ModelGeneration } from '../core/product.js';
 import {
   detectImageMime,
   ILLUSTRATION_MAX_IMAGE_BYTES,
+  isValidIllustrationImage,
   type IllustrationImageMime,
 } from '../core/illustration.js';
 import {
@@ -38,6 +50,20 @@ const boundedString = (v: unknown, max = 300): v is string =>
   typeof v === 'string' && !!v.trim() && v.length <= max;
 const integer = (v: unknown): v is number => Number.isSafeInteger(v) && Number(v) >= 0;
 const hash = (value: string) => createHash('sha256').update(value).digest('hex');
+/** Bound allocation before decoding; Buffer.from alone silently accepts malformed base64. */
+function decodeIllustrationBase64(value: unknown): Buffer | undefined {
+  if (
+    typeof value !== 'string' ||
+    !value.length ||
+    value.length > 4 * Math.ceil(ILLUSTRATION_MAX_IMAGE_BYTES / 3) ||
+    value.length % 4 !== 0
+  )
+    return undefined;
+  const bytes = Buffer.from(value, 'base64');
+  return bytes.length <= ILLUSTRATION_MAX_IMAGE_BYTES && bytes.toString('base64') === value
+    ? bytes
+    : undefined;
+}
 const error = (code: string): never => {
   throw new ProviderContractError(code);
 };
@@ -665,18 +691,16 @@ export class CodexRuntime implements CodexRuntimeService {
       assertCodexConnection(connection);
       if (!boundedString(request.modelId)) error('CODEX_INVALID_MODEL');
       if (request.references.length > 8) error('CODEX_IMAGE_TOO_MANY_REFERENCES');
-      for (const reference of request.references)
-        if (
-          !boundedString(reference.mime, 80) ||
-          typeof reference.base64 !== 'string' ||
-          reference.base64.length > 4 * ILLUSTRATION_MAX_IMAGE_BYTES
-        )
-          error('CODEX_IMAGE_INVALID_REFERENCE');
-      const attachments = request.references.map((reference) => ({
-        mime: reference.mime,
-        bytes: Buffer.byteLength(reference.base64, 'base64'),
-        sha256: hash(reference.base64),
-      }));
+      const attachments = request.references.map((reference) => {
+        const bytes = decodeIllustrationBase64(reference.base64);
+        if (!bytes || !isValidIllustrationImage(bytes, reference.mime))
+          return error('CODEX_IMAGE_INVALID_REFERENCE');
+        return {
+          mime: reference.mime,
+          bytes: bytes.length,
+          sha256: createHash('sha256').update(bytes).digest('hex'),
+        };
+      });
       plan = {
         role: 'illustration',
         modelId: request.modelId,
@@ -755,29 +779,70 @@ export class CodexRuntime implements CodexRuntimeService {
       text: outcome.output,
     });
   }
-  /** Accepts inline base64 or the CLI's saved file inside the dedicated Codex home only. */
+  /** Prefer validated inline bytes. Only accepted files inside the real Codex home are removed. */
   private decodeGeneratedImage(
     item: Record<string, unknown>
   ): CodexImageResult['images'][number] | undefined {
-    const candidates: Buffer[] = [];
-    if (typeof item.result === 'string' && item.result.length <= 4 * ILLUSTRATION_MAX_IMAGE_BYTES) {
-      const encoded = item.result.replace(/^data:[^,]*,/u, '');
-      if (/^[A-Za-z0-9+/=\s]+$/u.test(encoded)) candidates.push(Buffer.from(encoded, 'base64'));
-    }
-    if (typeof item.savedPath === 'string' && isAbsolute(item.savedPath)) {
-      const inside = relative(this.home, item.savedPath);
-      if (inside && !inside.startsWith('..') && !isAbsolute(inside) && existsSync(item.savedPath)) {
-        try {
-          candidates.push(readFileSync(item.savedPath));
-        } catch {
-          /* The inline result may still decode. */
-        }
-        void rm(item.savedPath, { force: true }).catch(() => {});
+    if (
+      typeof item.result === 'string' &&
+      item.result.length <= 4 * Math.ceil(ILLUSTRATION_MAX_IMAGE_BYTES / 3) + 100
+    ) {
+      const data = /^data:(image\/(?:png|jpeg|webp));base64,/u.exec(item.result);
+      const bytes =
+        item.result.startsWith('data:') && !data
+          ? undefined
+          : decodeIllustrationBase64(data ? item.result.slice(data[0].length) : item.result);
+      if (bytes) {
+        const mime = data?.[1] ?? detectImageMime(bytes);
+        if (isValidIllustrationImage(bytes, mime)) return { mime, bytes };
       }
     }
-    for (const bytes of candidates) {
+    if (typeof item.savedPath !== 'string' || !isAbsolute(item.savedPath)) return undefined;
+    let descriptor: number | undefined;
+    try {
+      const path = realpathSync(item.savedPath);
+      const inside = relative(realpathSync(this.home), path);
+      if (!inside || inside.startsWith('..') || isAbsolute(inside)) return undefined;
+      descriptor = openSync(path, 'r');
+      const before = fstatSync(descriptor);
+      if (!before.isFile() || before.size < 1 || before.size > ILLUSTRATION_MAX_IMAGE_BYTES)
+        return undefined;
+      const opened = statSync(path);
+      if (realpathSync(path) !== path || opened.dev !== before.dev || opened.ino !== before.ino)
+        return undefined;
+      // Read through the checked descriptor and a fixed-size buffer: a growing file cannot
+      // turn an accepted stat into an unbounded readFile allocation.
+      const bytes = Buffer.alloc(before.size);
+      let offset = 0;
+      while (offset < bytes.length) {
+        const count = readSync(descriptor, bytes, offset, bytes.length - offset, offset);
+        if (!count) return undefined;
+        offset += count;
+      }
+      const after = fstatSync(descriptor);
+      if (after.size !== before.size || after.mtimeMs !== before.mtimeMs) return undefined;
       const mime = detectImageMime(bytes);
-      if (mime && bytes.length <= ILLUSTRATION_MAX_IMAGE_BYTES) return { mime, bytes };
+      if (!isValidIllustrationImage(bytes, mime)) return undefined;
+      closeSync(descriptor);
+      descriptor = undefined;
+      try {
+        const current = statSync(path);
+        if (
+          realpathSync(path) === path &&
+          current.dev === before.dev &&
+          current.ino === before.ino &&
+          current.size === before.size &&
+          current.mtimeMs === before.mtimeMs
+        )
+          unlinkSync(path);
+      } catch {
+        /* A replaced, moved or locked file must not discard the validated result. */
+      }
+      return { mime, bytes };
+    } catch {
+      /* An unreadable or out-of-home result remains an image-generation failure. */
+    } finally {
+      if (descriptor !== undefined) closeSync(descriptor);
     }
     return undefined;
   }

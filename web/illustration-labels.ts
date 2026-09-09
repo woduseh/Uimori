@@ -13,6 +13,11 @@ const messages: Record<string, string> = {
   ILLUSTRATION_PROMPT_MODEL_REQUIRED: '설정 → 삽화에서 ComfyUI용 프롬프트 모델을 선택해 주세요.',
   ILLUSTRATION_SOURCE_CHANGED: '원문이 바뀌었어요. 새로고침한 뒤 다시 요청해 주세요.',
   ILLUSTRATION_SOURCE_UNAVAILABLE: '요청 당시의 원문을 더 읽을 수 없어요.',
+  ILLUSTRATION_SOURCE_EMPTY: '삽화에 사용할 공개 본문이 없어요. 제외 구간은 전송하지 않아요.',
+  ILLUSTRATION_SOURCE_SEGMENTS_INVALID:
+    '원문의 구간 표시가 맞지 않아 삽화 생성을 멈췄어요. 원문을 확인해 주세요.',
+  ILLUSTRATION_IMAGE_INVALID:
+    '이미지 형식이나 크기가 맞지 않아요. PNG·JPEG·WebP 16MB 이하만 저장해요.',
   ILLUSTRATION_NOT_RETRYABLE: '완료되거나 진행 중인 삽화는 다시 요청할 수 없어요.',
   ILLUSTRATION_CANCELLED: '삽화 생성을 취소했어요.',
   ILLUSTRATION_INTERRUPTED: '서버가 중단돼 결과를 확인할 수 없어요. 자동으로 다시 생성하지 않아요.',
@@ -57,11 +62,15 @@ const messages: Record<string, string> = {
   COMFYUI_TIMEOUT:
     'ComfyUI 응답을 제한 시간 안에 받지 못했어요. 원격 작업이 끝났으면 결과 확인으로 가져올 수 있어요.',
   COMFYUI_RESULT_PENDING: 'ComfyUI에 아직 결과가 없어요. 잠시 후 결과 확인을 다시 눌러 주세요.',
+  COMFYUI_RESULT_UNAVAILABLE:
+    '접수된 원격 작업의 결과를 확인하지 못했어요. 새로 생성하지 않고 결과 확인으로 다시 조회해 주세요.',
+  COMFYUI_SUBMISSION_UNCERTAIN:
+    'ComfyUI의 접수 여부를 확인하지 못했어요. 자동으로 다시 생성하지 않아요. 원격 작업 목록을 먼저 확인해 주세요.',
   ILLUSTRATION_NOT_RECONCILABLE:
     '기록된 ComfyUI 작업 ID가 있는 미완료 삽화만 결과를 확인할 수 있어요.',
   COMFYUI_NO_IMAGE: 'ComfyUI 실행은 끝났지만 출력 이미지가 없어요. SaveImage 노드를 확인해 주세요.',
   COMFYUI_IMAGE_INVALID:
-    'ComfyUI가 보낸 이미지를 읽을 수 없어요. PNG·JPEG·WebP 8MB 이하만 저장해요.',
+    'ComfyUI가 보낸 이미지를 읽을 수 없어요. PNG·JPEG·WebP 16MB 이하만 저장해요.',
   COMFYUI_RESPONSE_INVALID: 'ComfyUI 응답 형식을 해석할 수 없어요.',
   COMFYUI_HTTP_5XX: 'ComfyUI 서버 오류가 났어요.',
   COMFYUI_HTTP_ERROR: 'ComfyUI 요청이 거절됐어요. 주소와 인증 설정을 확인해 주세요.',
@@ -91,15 +100,21 @@ export const illustrationGeneratorLabels: Record<Illustration['generator'], stri
 };
 export const illustrationActive = (item: Pick<Illustration, 'status'>) =>
   item.status === 'queued' || item.status === 'running';
-export const illustrationRetryable = (item: Pick<Illustration, 'status'>) =>
+const terminalFailure = (item: Pick<Illustration, 'status'>) =>
   ['failed', 'cancelled', 'interrupted'].includes(item.status);
+export const illustrationRetryable = (
+  item: Pick<Illustration, 'status' | 'generator' | 'diagnostic'>
+) =>
+  terminalFailure(item) &&
+  !(
+    item.generator === 'comfyui' &&
+    (item.diagnostic?.comfyui?.submission === 'uncertain' ||
+      (!!item.diagnostic?.comfyui?.promptId && item.diagnostic.comfyui.submission !== 'finished'))
+  );
 /** An accepted remote prompt can be re-read without rendering again. */
 export const illustrationReconcilable = (
   item: Pick<Illustration, 'status' | 'generator' | 'diagnostic'>
-) =>
-  item.generator === 'comfyui' &&
-  !!item.diagnostic?.comfyui?.promptId &&
-  illustrationRetryable(item);
+) => item.generator === 'comfyui' && !!item.diagnostic?.comfyui?.promptId && terminalFailure(item);
 export const illustrationSkipped = (item: Pick<Illustration, 'status' | 'images' | 'diagnostic'>) =>
   item.status === 'completed' &&
   !item.images.length &&

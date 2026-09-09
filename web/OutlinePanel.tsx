@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { api, ApiError } from './api.js';
 import { IconButton } from './IconButton.js';
+import { DismissibleError } from './DismissibleError.js';
 import './outline.css';
 import { Plus, PenLine, Trash2, Pin } from 'lucide-react';
 import {
@@ -26,25 +27,62 @@ const progressLabels: Record<OutlineProgress['state'], string> = {
   failed: '집필 실패',
   cancelled: '집필 취소',
 };
-type Draft = { title: string; intent: string };
-
-/** One durable key per node so an uncertain send is confirmed instead of duplicated. */
-const writeKey = (nodeId: string) => `outline-write:${nodeId}`;
-function reserveKeys(nodeId: string) {
-  const stored = sessionStorage.getItem(writeKey(nodeId));
-  if (stored) {
-    try {
-      const parsed = JSON.parse(stored) as { command?: unknown; run?: unknown };
-      if (typeof parsed.command === 'string' && typeof parsed.run === 'string')
-        return parsed as { command: string; run: string };
-    } catch {
-      // A malformed local record is replaced below rather than reused.
-    }
+type Draft = { title: string; intent: string; revision?: number };
+function readDraft(key: string, fallback: Draft): Draft {
+  try {
+    const value = JSON.parse(sessionStorage.getItem(key) ?? 'null') as Draft | null;
+    if (value && typeof value.title === 'string' && typeof value.intent === 'string') return value;
+  } catch {
+    /* The empty form remains usable when browser storage is unavailable. */
   }
-  const keys = { command: crypto.randomUUID(), run: crypto.randomUUID() };
-  sessionStorage.setItem(writeKey(nodeId), JSON.stringify(keys));
-  return keys;
+  return fallback;
 }
+function keepDraft(key: string, value: Draft | null) {
+  try {
+    if (value) sessionStorage.setItem(key, JSON.stringify(value));
+    else sessionStorage.removeItem(key);
+  } catch {
+    /* In-memory editing still works; sending requires its own durable receipt. */
+  }
+}
+
+type Pending =
+  | { kind: 'apply'; body: { branchId?: string; idempotencyKey: string; operations: unknown[] } }
+  | {
+      kind: 'write';
+      nodeId: string;
+      title: string;
+      commandKey: string;
+      commandId?: string;
+      body: {
+        expectedRevision: string | null;
+        expectedSettingsRevision: number;
+        expectedProfileRevision?: number;
+        idempotencyKey: string;
+      };
+    };
+
+/** Keep the complete request, not just its key: refreshes can change the CAS fields. */
+function readPending(key: string): Pending | null {
+  try {
+    const value = JSON.parse(sessionStorage.getItem(key) ?? 'null') as Pending | null;
+    if (
+      value &&
+      typeof value.body?.idempotencyKey === 'string' &&
+      ((value.kind === 'apply' && Array.isArray(value.body.operations)) ||
+        (value.kind === 'write' &&
+          typeof value.nodeId === 'string' &&
+          typeof value.commandKey === 'string'))
+    )
+      return value;
+  } catch {
+    /* A malformed browser record is never sent. */
+  }
+  return null;
+}
+
+const definitelyRejected = (error: unknown) =>
+  error instanceof ApiError && error.status >= 400 && error.status < 500 && error.status !== 408;
 
 /** Editors stay at module scope: a nested component gets a new type each render and would
  * remount its own fields, dropping focus after every keystroke. */
@@ -52,10 +90,12 @@ function OutlineFields({
   draft,
   titleLabel,
   onChange,
+  disabled,
 }: {
   draft: Draft;
   titleLabel: string;
   onChange: (next: Draft) => void;
+  disabled: boolean;
 }) {
   return (
     <>
@@ -63,6 +103,7 @@ function OutlineFields({
         <span>{titleLabel}</span>
         <input
           value={draft.title}
+          disabled={disabled}
           maxLength={OUTLINE_TITLE_MAX}
           required
           onChange={(event) => onChange({ ...draft, title: event.target.value })}
@@ -72,6 +113,7 @@ function OutlineFields({
         <span>이 수준에서 정한 의도</span>
         <textarea
           value={draft.intent}
+          disabled={disabled}
           maxLength={OUTLINE_INTENT_MAX}
           rows={3}
           onChange={(event) => onChange({ ...draft, intent: event.target.value })}
@@ -87,14 +129,16 @@ function OutlineAddForm({
   busy,
   apply,
   onDone,
+  storageKey,
 }: {
   level: OutlineLevel;
   parentId: string | null;
   busy: string;
   apply: (operations: unknown[]) => Promise<boolean>;
   onDone: () => void;
+  storageKey: string;
 }) {
-  const [draft, setDraft] = useState<Draft>({ title: '', intent: '' });
+  const [draft, setDraft] = useState<Draft>(() => readDraft(storageKey, { title: '', intent: '' }));
   return (
     <form
       className="outline-form"
@@ -105,6 +149,7 @@ function OutlineAddForm({
           { op: 'create', level, parentId, title: draft.title, intent: draft.intent },
         ]);
         if (ok) {
+          keepDraft(storageKey, null);
           setDraft({ title: '', intent: '' });
           onDone();
         }
@@ -112,11 +157,22 @@ function OutlineAddForm({
     >
       <OutlineFields
         draft={draft}
+        disabled={!!busy}
         titleLabel={`${OUTLINE_LEVEL_LABELS[level]} 이름`}
-        onChange={setDraft}
+        onChange={(value) => {
+          keepDraft(storageKey, value);
+          setDraft(value);
+        }}
       />
       <div className="outline-form-actions">
-        <button type="button" className="secondary" onClick={onDone}>
+        <button
+          type="button"
+          className="secondary"
+          onClick={() => {
+            keepDraft(storageKey, null);
+            onDone();
+          }}
+        >
           취소
         </button>
         <button type="submit" disabled={!!busy}>
@@ -129,13 +185,14 @@ function OutlineAddForm({
 
 type EntryActions = {
   busy: string;
+  draftKey: string;
   runActive: boolean;
   editing: string | null;
   adding: string | null;
   drafts: Record<string, Draft>;
   setEditing: (id: string | null) => void;
   setAdding: (id: string | null) => void;
-  setDraft: (id: string, draft: Draft) => void;
+  setDraft: (id: string, draft: Draft | null) => void;
   apply: (operations: unknown[]) => Promise<boolean>;
   onWrite: (node: OutlineNode) => void;
   onRead: (sourceRevision: string) => void;
@@ -151,7 +208,13 @@ function OutlineEntry({
   actions: EntryActions;
 }) {
   const children = nodes.filter((item) => item.parentId === node.id);
-  const draft = actions.drafts[node.id] ?? { title: node.title, intent: node.intent };
+  const draft =
+    actions.drafts[node.id] ??
+    readDraft(`${actions.draftKey}:${node.id}`, {
+      title: node.title,
+      intent: node.intent,
+      revision: node.revision,
+    });
   const writable = outlineWritable(node.level) && node.progress.state !== 'written';
   const child = outlineChildLevel(node.level);
   const editing = actions.editing === node.id;
@@ -171,17 +234,20 @@ function OutlineEntry({
             <IconButton
               label={`${OUTLINE_LEVEL_LABELS[child]} 추가`}
               icon={Plus}
+              disabled={!!actions.busy}
               onClick={() => actions.setAdding(actions.adding === node.id ? null : node.id)}
             />
           )}
           <IconButton
             label="구성 수정"
             icon={PenLine}
+            disabled={!!actions.busy}
             onClick={() => actions.setEditing(editing ? null : node.id)}
           />
           <IconButton
             label={node.fixed ? '고정 해제' : '이 구성 고정'}
             icon={Pin}
+            disabled={!!actions.busy}
             className={node.fixed ? 'outline-pinned' : ''}
             onClick={() =>
               actions.apply([
@@ -193,6 +259,7 @@ function OutlineEntry({
             <IconButton
               label="구성 삭제"
               icon={Trash2}
+              disabled={!!actions.busy}
               onClick={() =>
                 actions.apply([{ op: 'remove', id: node.id, expectedRevision: node.revision }])
               }
@@ -229,7 +296,7 @@ function OutlineEntry({
               {
                 op: 'update',
                 id: node.id,
-                expectedRevision: node.revision,
+                expectedRevision: draft.revision ?? node.revision,
                 title: draft.title,
                 intent: draft.intent,
               },
@@ -239,11 +306,21 @@ function OutlineEntry({
         >
           <OutlineFields
             draft={draft}
+            disabled={!!actions.busy}
             titleLabel={`${OUTLINE_LEVEL_LABELS[node.level]} 이름`}
-            onChange={(next) => actions.setDraft(node.id, next)}
+            onChange={(next) =>
+              actions.setDraft(node.id, { ...next, revision: draft.revision ?? node.revision })
+            }
           />
           <div className="outline-form-actions">
-            <button type="button" className="secondary" onClick={() => actions.setEditing(null)}>
+            <button
+              type="button"
+              className="secondary"
+              onClick={() => {
+                actions.setDraft(node.id, null);
+                actions.setEditing(null);
+              }}
+            >
               취소
             </button>
             <button type="submit" disabled={!!actions.busy}>
@@ -256,6 +333,7 @@ function OutlineEntry({
         <OutlineAddForm
           level={child}
           parentId={node.id}
+          storageKey={`${actions.draftKey}:add:${node.id}`}
           busy={actions.busy}
           apply={actions.apply}
           onDone={() => actions.setAdding(null)}
@@ -276,12 +354,16 @@ export function OutlinePanel({ state, onClose }: { state: StoryState; onClose: (
   const detail = state.detail;
   const chatId = detail?.chat.id ?? '';
   const branchId = state.branch?.id;
+  const pendingKey = `outline-pending:${chatId}:${branchId ?? 'main'}`;
+  const [pending, setPending] = useState<Pending | null>(() => readPending(pendingKey));
   const [outline, setOutline] = useState<OutlineDetail | null>(null);
   const [busy, setBusy] = useState('');
   const [editing, setEditing] = useState<string | null>(null);
   const [drafts, setDrafts] = useState<Record<string, Draft>>({});
   const [adding, setAdding] = useState<string | null>(null);
   const request = useRef(0);
+  const mounted = useRef(true);
+  const sending = useRef(false);
   const titleId = useId();
 
   const load = useCallback(async () => {
@@ -298,7 +380,12 @@ export function OutlinePanel({ state, onClose }: { state: StoryState; onClose: (
     }
   }, [chatId, branchId, state.setError]);
   useEffect(() => {
+    mounted.current = true;
     void load();
+    return () => {
+      mounted.current = false;
+      request.current++;
+    };
   }, [load]);
 
   if (!detail) return <p className="muted">먼저 이야기를 열어 주세요.</p>;
@@ -307,74 +394,153 @@ export function OutlinePanel({ state, onClose }: { state: StoryState; onClose: (
   const nodes = outline?.nodes ?? [];
   const roots = nodes.filter((node) => node.parentId === null);
 
-  async function write(action: string, run: () => Promise<unknown>) {
-    if (busy) return false;
-    setBusy(action);
+  function remember(next: Pending | null, key: string, requireCurrent = true) {
+    const current = readPending(pendingKey);
+    // A closed panel's late response cannot replace or clear a newer request.
+    if (current ? current.body.idempotencyKey !== key : requireCurrent) return false;
+    // Refuse a new request if the browser cannot retain its recovery record.
+    if (next) sessionStorage.setItem(pendingKey, JSON.stringify(next));
+    else sessionStorage.removeItem(pendingKey);
+    if (mounted.current) setPending(next);
+    return true;
+  }
+
+  async function send(operation: Pending) {
+    if (sending.current) return false;
+    sending.current = true;
+    setBusy(operation.kind === 'apply' ? 'apply' : `write:${operation.nodeId}`);
     state.setError('');
     try {
-      await run();
-      await load();
+      const current = readPending(pendingKey);
+      if (current?.body.idempotencyKey === operation.body.idempotencyKey) operation = current;
+      if (!remember(operation, operation.body.idempotencyKey, false)) return false;
+      if (operation.kind === 'apply') {
+        const saved = await api<{ detail: OutlineDetail }>(
+          `/chats/${chatId}/outline`,
+          operation.body
+        );
+        if (readPending(pendingKey)?.body.idempotencyKey !== operation.body.idempotencyKey)
+          return false;
+        // POST already returns the committed tree. A second GET must not decide save success.
+        ++request.current;
+        if (mounted.current) {
+          setOutline(saved.detail);
+          const edits = operation.body.operations as {
+            op?: string;
+            id?: string;
+            parentId?: string;
+            title?: string;
+            intent?: string;
+            fixed?: boolean;
+          }[];
+          const textEdits = edits.filter(
+            (edit) => edit.op === 'remove' || edit.title !== undefined || edit.intent !== undefined
+          );
+          const preserved: Record<string, Draft> = {};
+          for (const edit of edits)
+            if (edit.id && edit.fixed !== undefined && !textEdits.includes(edit)) {
+              const node = saved.detail.nodes.find((item) => item.id === edit.id);
+              if (!node) continue;
+              const value = {
+                ...readDraft(`${pendingKey}:draft:${edit.id}`, {
+                  title: node.title,
+                  intent: node.intent,
+                }),
+                revision: node.revision,
+              };
+              preserved[edit.id] = value;
+              keepDraft(`${pendingKey}:draft:${edit.id}`, value);
+            }
+          for (const edit of textEdits)
+            if (edit.id) keepDraft(`${pendingKey}:draft:${edit.id}`, null);
+          for (const edit of edits)
+            if (edit.op === 'create')
+              keepDraft(`${pendingKey}:draft:add:${edit.parentId ?? 'root'}`, null);
+          if (edits.some((edit) => edit.op === 'create')) setAdding(null);
+          setEditing((current) => (textEdits.some((edit) => edit.id === current) ? null : current));
+          setDrafts((current) => ({
+            ...Object.fromEntries(
+              Object.entries(current).filter(([id]) => !textEdits.some((edit) => edit.id === id))
+            ),
+            ...preserved,
+          }));
+        }
+      } else {
+        if (!operation.commandId) {
+          const command = await api<SceneCommand>(
+            `/outline-nodes/${operation.nodeId}/scene-command`,
+            { idempotencyKey: operation.commandKey }
+          );
+          operation = { ...operation, commandId: command.id };
+          if (!remember(operation, operation.body.idempotencyKey)) return false;
+        }
+        await api<Run>(`/scene-commands/${operation.commandId}/run`, operation.body);
+      }
+      if (!remember(null, operation.body.idempotencyKey)) return false;
+      if (operation.kind === 'write' && mounted.current) {
+        await state.refresh(chatId);
+        if (mounted.current) onClose();
+      }
       return true;
     } catch (error) {
-      state.setError((error as Error).message);
+      if (definitelyRejected(error)) {
+        remember(null, operation.body.idempotencyKey);
+        if (mounted.current) await load();
+      }
+      if (mounted.current) state.setError((error as Error).message);
       return false;
     } finally {
-      setBusy('');
+      sending.current = false;
+      if (mounted.current) setBusy('');
     }
   }
-  const apply = (operations: unknown[]) =>
-    write('apply', () =>
-      api(`/chats/${chatId}/outline`, {
+  const apply = (operations: unknown[]) => {
+    if (pending) return Promise.resolve(false);
+    return send({
+      kind: 'apply',
+      body: {
         ...(branchId ? { branchId } : {}),
         idempotencyKey: crypto.randomUUID(),
         operations,
-      })
-    );
+      },
+    });
+  };
 
   /** Compose then write: the scene command reserves the unit, the existing run path writes it. */
   async function writeUnit(node: OutlineNode) {
-    const keys = reserveKeys(node.id);
-    const done = await write(`write:${node.id}`, async () => {
-      const command = await api<SceneCommand>(
-        `/outline-nodes/${node.id}/scene-command`,
-        { idempotencyKey: keys.command },
-        'POST'
-      );
-      try {
-        await api<Run>(`/scene-commands/${command.id}/run`, {
-          expectedRevision: state.branch ? state.branch.headRevision : chat.headRevision,
-          expectedSettingsRevision: chat.settingsRevision,
-          ...(profileRevision === undefined ? {} : { expectedProfileRevision: profileRevision }),
-          idempotencyKey: keys.run,
-        });
-      } catch (error) {
-        // Keep the reserved keys unless the server definitely rejected the request.
-        if (
-          error instanceof ApiError &&
-          error.status >= 400 &&
-          error.status !== 408 &&
-          error.status < 500
-        )
-          sessionStorage.removeItem(writeKey(node.id));
-        throw error;
-      }
-      sessionStorage.removeItem(writeKey(node.id));
+    if (pending) return;
+    await send({
+      kind: 'write',
+      nodeId: node.id,
+      title: node.title,
+      commandKey: crypto.randomUUID(),
+      body: {
+        expectedRevision: state.branch ? state.branch.headRevision : chat.headRevision,
+        expectedSettingsRevision: chat.settingsRevision,
+        ...(profileRevision === undefined ? {} : { expectedProfileRevision: profileRevision }),
+        idempotencyKey: crypto.randomUUID(),
+      },
     });
-    if (done) {
-      await state.refresh(chatId);
-      onClose();
-    }
   }
 
   const actions: EntryActions = {
-    busy,
+    busy: busy || (pending ? 'pending' : ''),
+    draftKey: `${pendingKey}:draft`,
     runActive: !!state.active,
     editing,
     adding,
     drafts,
     setEditing,
     setAdding,
-    setDraft: (id, draft) => setDrafts((old) => ({ ...old, [id]: draft })),
+    setDraft: (id, draft) => {
+      keepDraft(`${pendingKey}:draft:${id}`, draft);
+      setDrafts((old) => {
+        const next = { ...old };
+        if (draft) next[id] = draft;
+        else delete next[id];
+        return next;
+      });
+    },
     apply,
     onWrite: (node) => void writeUnit(node),
     onRead: (sourceRevision) => {
@@ -392,6 +558,23 @@ export function OutlinePanel({ state, onClose }: { state: StoryState; onClose: (
         전체 주제부터 작은 사건까지 구성해요. 구성은 계획이며, 집필을 누른 단위만 실제 원문이 돼요.
         상위에서 정한 의도는 그 단위를 집필할 때 생성 입력에 함께 들어가요.
       </p>
+      <DismissibleError message={state.error} onDismiss={() => state.setError('')} />
+      {!outline && state.error && (
+        <button type="button" onClick={() => void load()}>
+          구성 다시 불러오기
+        </button>
+      )}
+      {pending && !busy && (
+        <div className="outline-pending" role="status">
+          <p>
+            {pending.kind === 'apply' ? '구성 저장' : `“${pending.title}” 집필`} 결과를 아직
+            확인하지 못했어요. 같은 요청으로 확인해 주세요.
+          </p>
+          <button type="button" onClick={() => void send(pending)}>
+            요청 결과 확인
+          </button>
+        </div>
+      )}
       {!outline && <p role="status">구성을 불러오는 중이에요…</p>}
       {outline && !roots.length && (
         <p className="muted">아직 구성이 없어요. 전체 주제부터 추가하거나 도우미에게 요청해요.</p>
@@ -407,12 +590,18 @@ export function OutlinePanel({ state, onClose }: { state: StoryState; onClose: (
         <OutlineAddForm
           level="theme"
           parentId={null}
-          busy={busy}
+          storageKey={`${pendingKey}:draft:add:root`}
+          busy={busy || (pending ? 'pending' : '')}
           apply={apply}
           onDone={() => setAdding(null)}
         />
       ) : (
-        <button type="button" className="secondary" onClick={() => setAdding('root')}>
+        <button
+          type="button"
+          className="secondary"
+          disabled={!!busy || !!pending}
+          onClick={() => setAdding('root')}
+        >
           {OUTLINE_LEVEL_LABELS.theme} 추가
         </button>
       )}

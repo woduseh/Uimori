@@ -65,6 +65,7 @@ import {
   validateIllustrationSettings,
 } from './illustrations.js';
 import { defaultIllustrationSettings } from '../core/illustration.js';
+import { validateIllustrationArchive } from './illustration-archive.js';
 import { OUTLINE_TABLES, validateOutlineArchive } from './outline-store.js';
 import { normalizeStoryArchiveRow, validateStoryArchive } from './story-archive.js';
 
@@ -1210,6 +1211,11 @@ export class ProductStore {
                   testMode: true,
                 })
               );
+              const restored = parse(row.body);
+              restored.automatic = false;
+              restored.generator = 'none';
+              restored.comfyui.authorizationEnv = '';
+              row.body = json(restored);
             }
             if (table === 'illustration_images') {
               archiveId(row.id);
@@ -1235,9 +1241,14 @@ export class ProductStore {
                 record(input.comfyui ?? {}).promptModel,
               ]) {
                 if (!snapshot) continue;
+                validateModelSnapshot(snapshot);
                 const connection = record(record(snapshot).connection);
                 delete connection.credentialEnv;
                 connection.enabled = false;
+              }
+              if (input.comfyui) {
+                input.comfyui.authorizationEnv = '';
+                input.comfyui.disabled = true;
               }
               row.input = json(input);
             }
@@ -2212,6 +2223,7 @@ function validateArchiveGraph(product: ProductStore) {
         entries: result.display,
       });
   }
+  const illustrationOwners = validateIllustrationArchive(product.store);
   for (const attempt of rows('attempts')) {
     sameChat(attempt.run_id, attempt.chat_id, runs);
     sameChat(attempt.job_id, attempt.chat_id, jobs);
@@ -2221,11 +2233,26 @@ function validateArchiveGraph(product: ProductStore) {
     const contextOwner = product.db
       .prepare('SELECT job_id FROM context_job_attempts WHERE attempt_id=?')
       .get(attempt.id);
+    const illustrationOwner = illustrationOwners.get(attempt.id);
     const primaryOwners = [attempt.run_id, attempt.job_id, attempt.story_job_id].filter(
       (id) => id !== null
     ).length;
-    if (primaryOwners + (helperOwner || contextOwner ? 1 : 0) !== 1)
+    if (
+      primaryOwners +
+        Number(!!helperOwner) +
+        Number(!!contextOwner) +
+        Number(!!illustrationOwner) !==
+      1
+    )
       throw new HttpError(400, 'Attempt target mismatch');
+    if (
+      illustrationOwner &&
+      (attempt.role !== 'illustration' ||
+        attempt.chat_id !== illustrationOwner.chatId ||
+        attempt.connection_id !== illustrationOwner.connectionId ||
+        attempt.model_id !== illustrationOwner.modelId)
+    )
+      throw new HttpError(400, 'Illustration attempt identity mismatch');
     if (attempt.story_job_id !== null) {
       const target = product.db
         .prepare('SELECT chat_id,kind,inputs FROM story_jobs WHERE id=?')
@@ -2242,13 +2269,24 @@ function validateArchiveGraph(product: ProductStore) {
     }
     choice(
       attempt.role,
-      ['main', 'translation', 'status', 'image', 'state', 'context', 'helper', 'title'],
+      [
+        'main',
+        'translation',
+        'status',
+        'image',
+        'state',
+        'context',
+        'helper',
+        'title',
+        'illustration',
+      ],
       'attempt role'
     );
     if (
       attempt.story_job_id === null &&
       !helperOwner &&
       !contextOwner &&
+      !illustrationOwner &&
       (attempt.run_id !== null
         ? attempt.role !== 'main' &&
           attempt.role !== 'title' &&

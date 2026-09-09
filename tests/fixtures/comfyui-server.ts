@@ -30,12 +30,20 @@ export async function comfyUIFixture(
     imageBytes?: Buffer;
     imageCount?: number;
     authorization?: string;
+    /** Inject after accepting a prompt, or while reading its history/image response. */
+    fault?: {
+      path: 'prompt' | 'history' | 'view';
+      kind: 'headers' | 'body' | 'disconnect' | 'http-5xx';
+    };
+    targetedCancel?: boolean;
   } = {}
 ) {
   const behavior = options.behavior ?? 'success';
   const requests: ComfyCapturedRequest[] = [];
   const prompts: { id: string; workflow: Record<string, unknown>; clientId: string }[] = [];
   const polls = new Map<string, number>();
+  let fault = options.fault;
+  const waiters: { path: string; resolve: () => void }[] = [];
   let origin = '';
   const server = createServer(async (request, response) => {
     const chunks: Buffer[] = [];
@@ -48,9 +56,25 @@ export async function comfyUIFixture(
       headers: request.headers,
       body,
     });
+    for (const waiter of waiters.splice(0)) {
+      if (url.pathname.startsWith(waiter.path)) waiter.resolve();
+      else waiters.push(waiter);
+    }
     const json = (status: number, value: unknown) => {
       response.writeHead(status, { 'content-type': 'application/json' });
       response.end(JSON.stringify(value));
+    };
+    const injectFault = (path: NonNullable<typeof fault>['path']) => {
+      if (fault?.path !== path) return false;
+      if (fault.kind === 'disconnect') response.destroy();
+      else if (fault.kind === 'body') {
+        response.writeHead(200, {
+          'content-type': path === 'view' ? 'image/png' : 'application/json',
+        });
+        response.write(path === 'view' ? FIXTURE_PNG.subarray(0, 8) : '{');
+      } else if (fault.kind === 'http-5xx')
+        json(503, { error: 'synthetic transient response failure' });
+      return true;
     };
     if (options.authorization && request.headers.authorization !== options.authorization)
       return json(401, { error: 'unauthorized' });
@@ -95,10 +119,12 @@ export async function comfyUIFixture(
       const id = randomUUID();
       prompts.push({ id, workflow: parsed.prompt ?? {}, clientId: String(parsed.client_id ?? '') });
       polls.set(id, 0);
+      if (injectFault('prompt')) return;
       return json(200, { prompt_id: id, number: prompts.length, node_errors: {} });
     }
     const history = /^\/history\/([^/]+)$/u.exec(url.pathname);
     if (history) {
+      if (injectFault('history')) return;
       const id = decodeURIComponent(history[1]);
       if (!polls.has(id)) return json(200, {});
       const count = (polls.get(id) ?? 0) + 1;
@@ -140,9 +166,14 @@ export async function comfyUIFixture(
       });
     }
     if (url.pathname === '/view') {
+      if (injectFault('view')) return;
       response.writeHead(200, { 'content-type': 'image/png' });
       return response.end(options.imageBytes ?? FIXTURE_PNG);
     }
+    if (/^\/api\/jobs\/[^/]+\/cancel$/u.test(url.pathname))
+      return options.targetedCancel
+        ? json(200, { cancelled: true })
+        : json(404, { error: 'unsupported' });
     if (url.pathname === '/queue' && request.method === 'GET')
       return json(200, {
         queue_running:
@@ -162,6 +193,13 @@ export async function comfyUIFixture(
     origin,
     requests,
     prompts,
+    clearFault: () => {
+      fault = undefined;
+    },
+    waitForRequest: (path: string) =>
+      requests.some((request) => request.url.startsWith(path))
+        ? Promise.resolve()
+        : new Promise<void>((resolve) => waiters.push({ path, resolve })),
     close: async () => {
       server.closeAllConnections();
       await new Promise<void>((resolve, reject) =>

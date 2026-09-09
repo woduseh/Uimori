@@ -1,4 +1,9 @@
-import { modelWorkspace, updateModelWorkspace } from '../server/prompt-workspace.js';
+import {
+  modelWorkspace,
+  updateModelWorkspace,
+  promptWorkspace,
+  updatePromptWorkspace,
+} from '../server/prompt-workspace.js';
 import { updateTestProfile } from './fixtures/model-workspace.js';
 import { createFixtureChat, injectWithFixtureBot } from './fixtures/chat.js';
 import { randomUUID } from 'node:crypto';
@@ -12,7 +17,18 @@ import { forkChat } from '../server/chat-fork.js';
 import type { ContextDetail } from '../core/context-plan.js';
 import type { Connection, ModelPreset } from '../core/product.js';
 import type { Run, RunSnapshot, Source, ToolEvent } from '../core/types.js';
-import type { Json } from '../core/transport.js';
+import type { Json, ProviderRequest } from '../core/transport.js';
+import { encodeChat } from '../core/openai-chat-protocol.js';
+import { HelperWorkspace } from '../server/helper-workspace.js';
+import type { HelperConversation, HelperTask } from '../core/helper.js';
+import type { OutlineDetail } from '../core/outline.js';
+import { fixtureSettings } from './fixtures/illustration.js';
+import {
+  illustrationJob,
+  illustrationsForSources,
+  reserveIllustration,
+} from '../server/illustrations.js';
+import { runIllustrationJob } from '../server/illustration-runner.js';
 
 const endpoint = 'http://127.0.0.1:44996/turn',
   origin = 'http://127.0.0.1:44996';
@@ -243,6 +259,291 @@ async function restored(archive: unknown) {
 }
 
 describe('model-written summary and window switch through the real App and file SQLite', () => {
+  test.each([false, true])(
+    'outline slot=%s survives a real window switch with frozen plan, notes and request',
+    async (useSlot) => {
+      const { app, chatId, model } = await setup();
+      const workspace = promptWorkspace(app.store);
+      updatePromptWorkspace(app.store, {
+        expectedRevision: workspace.revision,
+        main: {
+          ...workspace.main,
+          program: {
+            version: 1,
+            controls: [],
+            blocks: [
+              {
+                id: 'instructions',
+                title: '지침',
+                kind: 'message',
+                role: 'system',
+                template: [{ kind: 'text', text: 'CUSTOM_STYLE_CANARY: 담백한 문체를 유지해요.' }],
+              },
+              ...(useSlot
+                ? [{ id: 'outline', title: '구성', kind: 'slot', role: 'user', slot: 'outline' }]
+                : []),
+              { id: 'history', title: '이력', kind: 'history', from: 0, to: -1 },
+              { id: 'current', title: '요청', kind: 'current' },
+            ],
+          },
+        },
+      });
+      const context = await contextApi(app, chatId, 'GET', '/context');
+      await contextApi(app, chatId, 'POST', '/notes', {
+        text: 'USER_PLAN_CORRECTION_CANARY: 등불 약속의 조건은 아직 미정이에요.',
+        author: 'user',
+        expectedRevision: 0,
+        expectedHeadRevision: context.headRevision,
+        idempotencyKey: randomUUID(),
+      });
+      const created = await app.inject({
+        method: 'POST',
+        url: `/api/chats/${chatId}/outline`,
+        payload: {
+          idempotencyKey: randomUUID(),
+          operations: [
+            {
+              op: 'create',
+              ref: 'theme',
+              level: 'theme',
+              title: 'PLAN_THEME_CANARY',
+              intent: '전체 의도',
+            },
+            {
+              op: 'create',
+              ref: 'main',
+              parentRef: 'theme',
+              level: 'mainStory',
+              title: 'PLAN_MAIN_CANARY',
+              intent: '아직 이루어지지 않은 계획',
+            },
+            {
+              op: 'create',
+              ref: 'arc',
+              parentRef: 'main',
+              level: 'arc',
+              title: 'PLAN_ARC_CANARY',
+              intent: 'PLAN_FROZEN_INTENT_CANARY',
+            },
+            {
+              op: 'create',
+              ref: 'episode',
+              parentRef: 'arc',
+              level: 'episode',
+              title: 'PLAN_EPISODE_CANARY',
+              intent: '등불 약속을 다뤄요.',
+            },
+            {
+              op: 'create',
+              parentRef: 'episode',
+              level: 'beat',
+              title: 'PLAN_CHILD_CANARY',
+              intent: '아직 결말을 공개하지 않아요.',
+            },
+            {
+              op: 'create',
+              parentRef: 'arc',
+              level: 'episode',
+              title: 'UNWRITTEN_SIBLING_CANARY',
+              intent: '이 요청에 들어가지 않는 후속 계획',
+            },
+          ],
+        },
+      });
+      expect(created.statusCode, created.body).toBe(200);
+      const nodes = app.store.outline.detail(chatId).nodes;
+      const episode = nodes.find((node) => node.level === 'episode')!;
+      const arc = nodes.find((node) => node.level === 'arc')!;
+      const command = await app.inject({
+        method: 'POST',
+        url: `/api/outline-nodes/${episode.id}/scene-command`,
+        payload: {
+          idempotencyKey: randomUUID(),
+          request: 'CURRENT_PLAN_REQUEST_CANARY: 지금 회차만 써 주세요.',
+        },
+      });
+      expect(command.statusCode, command.body).toBe(200);
+      const bodies = script([
+        async () => {
+          const changed = await app.inject({
+            method: 'POST',
+            url: `/api/chats/${chatId}/outline`,
+            payload: {
+              idempotencyKey: randomUUID(),
+              operations: [
+                {
+                  op: 'update',
+                  id: arc.id,
+                  expectedRevision: arc.revision,
+                  intent: 'LATER_PLAN_EDIT_CANARY',
+                },
+              ],
+            },
+          });
+          expect(changed.statusCode, changed.body).toBe(200);
+          return toolTurn(
+            [{ id: 'save', name: 'context.write', args: { summary: workingSummary } }],
+            'OPAQUE_BEFORE_OUTLINE_SWITCH'
+          );
+        },
+        () =>
+          toolTurn(
+            [{ id: 'switch', name: 'context.new', args: { keepRecent: 1 } }],
+            'OPAQUE_DISCARDED'
+          ),
+        () => complete(finalText),
+      ]);
+      const chat = app.store.chat(chatId);
+      const started = await app.inject({
+        method: 'POST',
+        url: `/api/scene-commands/${command.json<{ id: string }>().id}/run`,
+        payload: {
+          expectedRevision: chat.headRevision,
+          expectedSettingsRevision: chat.settingsRevision,
+          idempotencyKey: randomUUID(),
+        },
+      });
+      expect(started.statusCode, started.body).toBe(200);
+      const admitted = started.json<Run>();
+      const run = await terminal(app, admitted.id);
+      expect(run.status, run.error ?? '').toBe('completed');
+      expect(bodies).toHaveLength(3);
+      expect(run.usage.modelCalls).toBe(3);
+      expect(run.snapshot.outline).toEqual(admitted.snapshot.outline);
+      expect(app.store.outline.node(arc.id).intent).toBe('LATER_PLAN_EDIT_CANARY');
+      for (const body of bodies) {
+        expect(body.input.source.outline).toEqual(useSlot ? undefined : admitted.snapshot.outline);
+        expect(body.input.source.notes).toMatchObject([
+          { text: expect.stringContaining('USER_PLAN_CORRECTION_CANARY') },
+        ]);
+        // Fixture opaque state is protocol-specific; only fresh requests can be encoded for another protocol.
+        if (body.opaqueState !== undefined) continue;
+        // The fixture body preserves diagnostics plus prompt; native encoding removes consumed slots.
+        const native = JSON.stringify(
+          encodeChat({ ...body, modelId: 'gpt-5.6' } as unknown as ProviderRequest).body
+        );
+        for (const marker of [
+          'CUSTOM_STYLE_CANARY',
+          'CURRENT_PLAN_REQUEST_CANARY',
+          'PLAN_FROZEN_INTENT_CANARY',
+          'PLAN_CHILD_CANARY',
+        ])
+          expect(native.split(marker), marker).toHaveLength(2);
+        expect(native).toContain('USER_PLAN_CORRECTION_CANARY');
+        expect(native).not.toContain('UNWRITTEN_SIBLING_CANARY');
+        expect(native).not.toContain('LATER_PLAN_EDIT_CANARY');
+        expect(native).toContain('planning, not story that already happened');
+      }
+      expect(bodies[2]).not.toHaveProperty('opaqueState');
+      expect(bodies[2].input.results).toEqual([]);
+      expect(bodies[2].bootstrap?.map((event) => event.name)).toEqual(['context.new']);
+      expect(promptText(bodies[2])).not.toContain('CHAPTER_0_CANARY');
+      expect(promptText(bodies[2])).toContain(workingSummary);
+      expect(app.store.context.detail(chatId).checkpoint).toMatchObject({
+        origin: 'model',
+        plan: { summaryCalls: 0 },
+      });
+
+      if (!useSlot) return;
+      // One archive includes actual main/context tools, helper attempts, composition and a local fixture image.
+      const models = modelWorkspace(app.store);
+      updateModelWorkspace(app.store, {
+        expectedRevision: models.revision,
+        routes: models.routes,
+        translationPolicy: models.translationPolicy,
+        helperModel: { id: model.id },
+      });
+      const helperBodies: ProviderRequest[] = [];
+      vi.mocked(fetch).mockImplementation(async (url, options) => {
+        expect(String(url)).toBe(endpoint);
+        const body = JSON.parse(String(options?.body)) as ProviderRequest;
+        helperBodies.push(body);
+        expect(body.role).toBe('helper');
+        return complete('HELPER_ARCHIVE_CANARY: 현재 계획을 확인했어요.');
+      });
+      const opened = await app.inject({
+        method: 'POST',
+        url: '/api/helper/conversations',
+        payload: { scope: { kind: 'chat', chatId, branchId: `main:${chatId}` } },
+      });
+      expect(opened.statusCode, opened.body).toBe(200);
+      const conversation = opened.json<HelperConversation>();
+      const accepted = await app.inject({
+        method: 'POST',
+        url: `/api/helper/conversations/${conversation.id}/messages`,
+        payload: { requestKey: randomUUID(), text: '현재 계획을 설명해줘' },
+      });
+      expect(accepted.statusCode, accepted.body).toBe(200);
+      const task = accepted.json<HelperTask>();
+      const helper = new HelperWorkspace(app.store);
+      await vi.waitFor(() => expect(helper.task(task.id).status).toBe('completed'), {
+        timeout: 3000,
+        interval: 10,
+      });
+      expect(helperBodies).toHaveLength(1);
+      const source = app.store.source(run.sourceRevision!);
+      const job = reserveIllustration(app.store, source, 'manual', {
+        testMode: true,
+        settings: fixtureSettings(),
+      });
+      expect(
+        await runIllustrationJob(app.store, job.id, 'integrated-fixture-worker', {
+          signal: new AbortController().signal,
+          approvedOrigins: [],
+          allowFixture: true,
+          authorize: (connection) => app.store.product.authorize(connection),
+          onAttemptStart: () => {
+            throw new Error('The deterministic image fixture must not send a provider request');
+          },
+          onAttemptFinish: () => {
+            throw new Error('The deterministic image fixture has no provider attempt');
+          },
+        })
+      ).toMatchObject({ status: 'completed', images: 1 });
+      const currentOutline: OutlineDetail = app.store.outline.detail(chatId);
+      const copy = await restored(JSON.parse(JSON.stringify(app.store.product.export())));
+      expect(copy.run(run.id).snapshot.outline).toEqual(run.snapshot.outline);
+      expect(copy.outline.detail(chatId)).toEqual(currentOutline);
+      expect(copy.outline.node(episode.id).progress).toMatchObject({
+        state: 'written',
+        sourceRevision: source.id,
+      });
+      expect(copy.context.detail(chatId).checkpoint?.plan.summary).toBe(workingSummary);
+      expect(new HelperWorkspace(copy).messages(conversation.id)).toEqual(
+        helper.messages(conversation.id)
+      );
+      expect(
+        copy.product.attempts(chatId).map((attempt) => [attempt.role, attempt.status])
+      ).toEqual([
+        ['main', 'tool_calls'],
+        ['main', 'tool_calls'],
+        ['main', 'completed'],
+        ['helper', 'completed'],
+      ]);
+      expect(illustrationJob(copy, job.id)).toMatchObject({
+        status: 'completed',
+        sourceRevision: source.id,
+        sourceHash: source.hash,
+      });
+      expect(illustrationsForSources(copy, [source.id])[0].images).toHaveLength(1);
+      expect(
+        await runIllustrationJob(copy, job.id, 'restored-worker', {
+          signal: new AbortController().signal,
+          approvedOrigins: [],
+          allowFixture: true,
+          authorize: () => {
+            throw new Error('Completed jobs do not reauthorize or resend');
+          },
+          onAttemptStart: () => {
+            throw new Error('Completed jobs do not resend');
+          },
+          onAttemptFinish: () => {},
+        })
+      ).toBeNull();
+      expect(copy.sourceOriginal(source.id).text).toBe(finalText);
+    }
+  );
+
   test('a run saves a model checkpoint, switches windows, recovers a compacted original, and the next run reuses it without a summary model', async () => {
     const { app, chatId, sources } = await setup();
     const compactedId = sources[0].id;

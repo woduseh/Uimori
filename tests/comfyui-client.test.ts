@@ -37,6 +37,132 @@ async function failure(promise: Promise<unknown>): Promise<IllustrationError> {
 }
 
 describe('remote ComfyUI client against a synthetic HTTP server', () => {
+  test.each(['prompt', 'history', 'view'] as const)(
+    'the total deadline includes stalled %s response bodies',
+    async (path) => {
+      const server = await fixture({ fault: { path, kind: 'body' } });
+      const error = await failure(
+        generateWithComfyUI({ baseUrl: server.origin, authorizationEnv: '' }, workflow(), {
+          signal: AbortSignal.timeout(600),
+          timeoutMs: 60,
+          pollIntervalMs: 10,
+        })
+      );
+      expect(error.code).toBe('COMFYUI_TIMEOUT');
+      expect(error.retryable).toBe(false);
+      expect(server.prompts).toHaveLength(1);
+      expect(
+        server.requests.some(
+          (request) =>
+            ['/queue', '/interrupt'].includes(request.url) || request.url.endsWith('/cancel')
+        )
+      ).toBe(false);
+    }
+  );
+
+  test.each(['headers', 'disconnect', 'http-5xx'] as const)(
+    'a %s failure after submission never authorizes automatic resubmission',
+    async (kind) => {
+      const server = await fixture({ fault: { path: 'prompt', kind } });
+      const error = await failure(
+        generateWithComfyUI({ baseUrl: server.origin, authorizationEnv: '' }, workflow(), {
+          signal: AbortSignal.timeout(600),
+          timeoutMs: 60,
+          pollIntervalMs: 10,
+        })
+      );
+      expect(error.retryable).toBe(false);
+      expect(error.diagnostic.comfyui?.submission).toBe('uncertain');
+      expect(server.prompts).toHaveLength(1);
+    }
+  );
+
+  test('accepted prompt history errors preserve the prompt ID and use result retrieval instead of a new render', async () => {
+    const server = await fixture({ fault: { path: 'history', kind: 'http-5xx' } });
+    const error = await failure(
+      generateWithComfyUI({ baseUrl: server.origin, authorizationEnv: '' }, workflow(), {
+        signal: signal(),
+        timeoutMs: 1000,
+        pollIntervalMs: 10,
+      })
+    );
+    expect(error).toMatchObject({ code: 'COMFYUI_RESULT_UNAVAILABLE', retryable: false });
+    expect(error.diagnostic.comfyui?.promptId).toBe(server.prompts[0].id);
+    server.clearFault();
+    expect(
+      (
+        await fetchComfyUIResult(
+          { baseUrl: server.origin, authorizationEnv: '' },
+          server.prompts[0].id,
+          { signal: signal() }
+        )
+      ).state
+    ).toBe('completed');
+    expect(server.prompts).toHaveLength(1);
+  });
+
+  test('authenticated user cancellation uses only the targeted endpoint and retains the credential resolver', async () => {
+    const server = await fixture({
+      behavior: 'hang',
+      authorization: 'Bearer callback-only',
+      targetedCancel: true,
+    });
+    const controller = new AbortController();
+    const pending = failure(
+      generateWithComfyUI(
+        { baseUrl: server.origin, authorizationEnv: 'NOT_IN_PROCESS_ENV' },
+        workflow(),
+        {
+          signal: controller.signal,
+          timeoutMs: 1000,
+          pollIntervalMs: 10,
+          resolveCredential: () => 'Bearer callback-only',
+        }
+      )
+    );
+    await server.waitForRequest('/history');
+    controller.abort();
+    expect((await pending).code).toBe('ILLUSTRATION_CANCELLED');
+    const cancel = server.requests.find((request) => request.url.endsWith('/cancel'));
+    expect(cancel?.url).toBe(`/api/jobs/${server.prompts[0].id}/cancel`);
+    expect(cancel?.headers.authorization).toBe('Bearer callback-only');
+    expect(server.requests.some((request) => request.url === '/interrupt')).toBe(false);
+  });
+
+  test('server shutdown aborts local waits without cancelling the accepted remote prompt', async () => {
+    const server = await fixture({ behavior: 'hang' });
+    const controller = new AbortController();
+    const pending = failure(
+      generateWithComfyUI({ baseUrl: server.origin, authorizationEnv: '' }, workflow(), {
+        signal: controller.signal,
+        timeoutMs: 1000,
+        pollIntervalMs: 10,
+        cancelRemoteOnAbort: () => false,
+      })
+    );
+    await server.waitForRequest('/history');
+    controller.abort();
+    await pending;
+    expect(
+      server.requests.some(
+        (request) =>
+          ['/queue', '/interrupt'].includes(request.url) || request.url.endsWith('/cancel')
+      )
+    ).toBe(false);
+  });
+
+  test('old servers receive only a targeted queue deletion even if a different prompt starts meanwhile', async () => {
+    const server = await fixture({ behavior: 'hang' });
+    await generateWithComfyUI({ baseUrl: server.origin, authorizationEnv: '' }, workflow(), {
+      signal: signal(),
+      timeoutMs: 30,
+      pollIntervalMs: 10,
+    }).catch(() => {});
+    const id = server.prompts[0].id;
+    await cancelComfyUIPrompt({ baseUrl: server.origin, authorizationEnv: '' }, id);
+    expect(server.requests.some((request) => request.url === '/interrupt')).toBe(false);
+    expect(JSON.parse(server.requests.at(-1)!.body)).toEqual({ delete: [id] });
+  });
   test('normalizes remote base URLs and rejects credentials, queries or other schemes', () => {
     expect(validateComfyBaseUrl('http://192.168.0.10:8188/')).toBe('http://192.168.0.10:8188');
     expect(validateComfyBaseUrl('https://comfy.example.test/api/')).toBe(
@@ -104,7 +230,7 @@ describe('remote ComfyUI client against a synthetic HTTP server', () => {
     expect(paths.at(-1)).toBe('/view');
     expect(server.requests.at(-1)?.url).toContain('filename=ComfyUI_00001_.png');
   });
-  test('surfaces node errors from a rejected prompt without retrying and keeps 5xx retryable', async () => {
+  test('surfaces rejected node errors and treats a submission 5xx as uncertain', async () => {
     const rejected = await fixture({ behavior: 'reject' });
     const error = await failure(
       generateWithComfyUI({ baseUrl: rejected.origin, authorizationEnv: '' }, workflow(), {
@@ -128,7 +254,7 @@ describe('remote ComfyUI client against a synthetic HTTP server', () => {
         pollIntervalMs: 10,
       })
     );
-    expect(serverError).toMatchObject({ code: 'COMFYUI_HTTP_5XX', retryable: true });
+    expect(serverError).toMatchObject({ code: 'COMFYUI_SUBMISSION_UNCERTAIN', retryable: false });
   });
   test('reports execution errors, missing outputs, timeouts with cancellation and unreachable hosts', async () => {
     const errored = await fixture({ behavior: 'error' });
@@ -206,8 +332,9 @@ describe('remote ComfyUI client against a synthetic HTTP server', () => {
     await new Promise((resolve) => setTimeout(resolve, 60));
     controller.abort();
     expect((await pending).code).toBe('ILLUSTRATION_CANCELLED');
-    const tail = hanging.requests.slice(-3).map((request) => `${request.method} ${request.url}`);
-    expect(tail).toEqual(['GET /queue', 'POST /interrupt', 'POST /queue']);
+    const tail = hanging.requests.slice(-2).map((request) => `${request.method} ${request.url}`);
+    expect(tail).toEqual([`POST /api/jobs/${hanging.prompts[0].id}/cancel`, 'POST /queue']);
+    expect(hanging.requests.some((request) => request.url === '/interrupt')).toBe(false);
     expect(JSON.parse(hanging.requests.at(-1)!.body)).toEqual({ delete: [hanging.prompts[0].id] });
     // A finished prompt that is no longer running is only removed from the queue, never interrupted.
     const idle = await fixture({ delayPolls: 0 });
@@ -218,7 +345,7 @@ describe('remote ComfyUI client against a synthetic HTTP server', () => {
     });
     await cancelComfyUIPrompt({ baseUrl: idle.origin, authorizationEnv: '' }, idle.prompts[0].id);
     expect(idle.requests.slice(-2).map((request) => `${request.method} ${request.url}`)).toEqual([
-      'GET /queue',
+      `POST /api/jobs/${idle.prompts[0].id}/cancel`,
       'POST /queue',
     ]);
     const done = await fetchComfyUIResult(

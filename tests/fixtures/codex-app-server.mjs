@@ -241,9 +241,12 @@ input.on('line', (line) => {
           });
         else if (mode === 'image-saved-path') {
           const folder = join(process.env.CODEX_HOME, 'generated_images', threadId);
-          mkdirSync(folder, { recursive: true });
-          const savedPath = join(folder, itemId + '.png');
-          writeFileSync(savedPath, Buffer.from(png, 'base64'));
+          const savedPath =
+            process.env.UIMORI_CODEX_FIXTURE_SAVED_PATH ?? join(folder, itemId + '.png');
+          if (!process.env.UIMORI_CODEX_FIXTURE_SAVED_PATH) {
+            mkdirSync(folder, { recursive: true });
+            writeFileSync(savedPath, Buffer.from(png, 'base64'));
+          }
           send({
             method: 'item/completed',
             params: {
@@ -273,6 +276,9 @@ input.on('line', (line) => {
                 revisedPrompt: 'fixture revised prompt',
                 result: png,
                 failure: null,
+                ...(process.env.UIMORI_CODEX_FIXTURE_SAVED_PATH
+                  ? { savedPath: process.env.UIMORI_CODEX_FIXTURE_SAVED_PATH }
+                  : {}),
               },
             },
           });

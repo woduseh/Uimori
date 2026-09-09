@@ -19,8 +19,8 @@
 | --- | --- | --- |
 | 생성기 | `none` / `codex` / `comfyui` (`fixture`는 테스트 모드 전용) | 미지정이면 요청이 `ILLUSTRATION_GENERATOR_UNCONFIGURED`로 거절돼요. |
 | 자동 생성 | 켜기/끄기 | 새 본문 저장 직후 예약. 후보 응답(candidate)·작성된 도입문·포크 복사본은 예약하지 않아요. |
-| 장면당 최대 삽화 개수 | 1~8 | 완료 + 진행 중 개수가 한도에 닿으면 `ILLUSTRATION_LIMIT_REACHED`. 삽화를 삭제하면 다시 요청할 수 있어요. |
-| 자동 재요청 횟수 | 0~5 | 연결 실패·원격 실행 오류·5xx처럼 새로 그려도 되는 실패만 같은 작업을 다시 큐에 넣어요. 설정 오류·거절·사용량 한도는 바로 실패예요. ComfyUI 시간 초과는 원격 렌더가 계속될 수 있어 새로 그리지 않고 **결과 확인**으로 넘겨요. |
+| 장면당 최대 삽화 개수 | 1~8 | 이미지가 있는 완료 작업 + 진행 중 작업 수예요. 한 작업이 여러 이미지를 반환해도 1개로 세요. 최초 예약·수동 재요청·결과 회수 모두 현재 한도를 적용하며, 한도를 높이거나 기존 삽화를 삭제하면 다시 시도할 수 있어요. |
+| 자동 재요청 횟수 | 0~5 | 접수 전 연결 실패가 확인됐거나 원격 실행 실패가 확정된 경우 등 안전한 실패에만 적용해요. 전송 후 timeout·연결 단절·ComfyUI POST 5xx는 접수 불확실로 남기고 자동 재생성하지 않아요. 설정 오류·거절·사용량 한도도 바로 실패예요. |
 | 그림 지침 | 2,000자 | Codex에는 그대로, ComfyUI에는 프롬프트 모델에 전달해요. |
 
 한 장면에는 동시에 하나의 삽화 작업만 진행돼요(`ILLUSTRATION_ACTIVE`). 설정은 **예약 시점에 작업 안에 고정**되며, 저장을 바꿔도 진행 중인 작업과 과거 결과는 바뀌지 않아요. 새 삽화 생성이 실패해도 이전에 완료된 삽화는 그대로 남아요.
@@ -35,6 +35,8 @@
 - Reader(`GET /api/chats/:id/reader`)는 페이지 안 장면의 `illustrations`를 돌려 주고, SSE 이벤트 `illustration.*`는 해당 장면만 갱신해요. 작업 현황(`reader.activity`)에는 `kind: 'illustration'`으로 나타나며 `activeJobs` 계산에는 넣지 않아 본문 진행 표시를 막지 않아요.
 - 포크는 복사한 원문의 **완료된** 삽화만 함께 복사하고, 채팅·분기 삭제는 삽화 표도 함께 지워요. JSON archive(v15)는 네 표를 포함하며 표가 없는 예전 archive도 복원돼요. 복원 시 고정된 모델 연결은 다른 snapshot처럼 비활성화·비밀키 참조 제거 처리를 해요.
 - 참조 이미지는 예약 시 `{ref, role, title, mime, hash, url}`로 고정하고 실행 시 hash가 같은 bytes만 보내요. 사이에 삭제된 이미지는 빠지고 작업은 계속돼요.
+- JSON 복원은 전역 자동 생성을 끄고 생성기를 미지정으로 바꾸며 ComfyUI 인증 환경변수 참조도 제거해요. 과거 ComfyUI 입력은 비활성화되어 재전송·결과 회수를 하지 않아요. 원격 연결을 다시 설정한 뒤 새 요청으로 사용해요. 완료 이미지와 실제 attempt의 사용량·비용은 보존하고, 포크는 실행 attempt 소유권을 복제하지 않아요.
+- 이미지 저장과 archive 복원은 PNG·JPEG·WebP의 MIME과 실제 파일 서명, 16MB 한도, hash와 채팅 귀속을 확인해요. 완전한 이미지 디코더로 손상 여부까지 검사하는 계약은 아니에요.
 
 ## Codex 경로
 
@@ -49,11 +51,11 @@
 
 - 원격 주소는 `http://`·`https://`만 허용하고 인증 정보·쿼리를 포함할 수 없어요. 프록시 인증이 필요하면 서버 환경변수 이름을 **인증 헤더 환경변수**에 적어 두면 그 값을 `Authorization` 헤더로 보내요. 브라우저는 ComfyUI에 직접 접근하지 않아요.
 - 실행 순서: 프롬프트 모델 호출(장면 → `{prompt, negativePrompt, caption}` JSON, 자동 예약이면 `{decision:'skip', reason}` 허용) → 워크플로의 `{{prompt}}`·`{{negative}}`·`{{seed}}` 치환 → `POST /prompt` → `GET /history/{prompt_id}` 폴링 → `GET /view`로 이미지 다운로드.
-- 취소는 사용자의 명시 취소일 때만 원격에 닿아요. `GET /queue`의 `queue_running`에 우리 `prompt_id`가 있을 때만 `POST /interrupt`를 보내고, 대기 중인 항목은 `POST /queue {delete:[id]}`로만 지워요. 공유 ComfyUI의 다른 작업을 끊지 않기 위해서예요.
+- 취소는 사용자의 명시 취소일 때만 원격에 닿아요. `POST /api/jobs/{prompt_id}/cancel`의 대상별 취소를 사용해요. 해당 API가 없는 서버(404/405)는 `POST /queue {delete:[id]}`로 대기 항목만 제거하고, 실행 중인 원격 렌더는 계속될 수 있어요. 전역 `/interrupt`는 호출하지 않아요. 서버 종료·timeout은 원격 취소를 보내지 않으며 로컬 generation 보호가 늦은 저장을 막아요.
 - **시간 초과(`COMFYUI_TIMEOUT`)는 원격 렌더를 건드리지 않아요.** 작업은 `prompt_id`를 보존한 채 실패로 남고, 삽화 카드의 **결과 확인**(`POST /api/illustrations/:id/reconcile`)이 `GET /history/{prompt_id}`를 한 번 읽어 끝난 결과를 저장해요. 결과 확인은 새로 그리지 않으며, 아직 결과가 없으면 이전 상태로 되돌려요. 서버 재시작으로 `interrupted`가 된 ComfyUI 작업도 같은 버튼으로 회수해요.
 - 워크플로는 API 형식(`노드 ID → {class_type, inputs}`)만 받아요. UI 형식(`nodes`/`links`)은 `COMFYUI_WORKFLOW_UI_FORMAT`으로 거절해요. 문자열 입력 안의 자리표시자만 바꾸고 노드 구조는 그대로예요. `{{seed}}`만 있는 문자열은 숫자로 바꿔요.
 - 출력은 `outputs[*].images` 중 `type: 'output'`을 우선해 최대 4장까지 저장해요. 프롬프트 모델이 쓴 캡션을 삽화 캡션으로 써요.
-- 실패 코드와 진단: `COMFYUI_PROMPT_REJECTED`는 노드 ID·class_type·오류 문구를 `diagnostic.comfyui.nodeErrors`에, `COMFYUI_EXECUTION_FAILED`는 `execution_error` 메시지를 `statusMessages`에 담아요. ComfyUI는 사용자의 서버이므로 이 문구는 화면의 **생성 상세**에 표시해요. `COMFYUI_UNREACHABLE`·`COMFYUI_TIMEOUT`·`COMFYUI_HTTP_5XX`·`COMFYUI_EXECUTION_FAILED`는 자동 재요청 대상이에요.
+- 실패 코드와 진단: `COMFYUI_PROMPT_REJECTED`는 노드 오류를, `COMFYUI_EXECUTION_FAILED`는 실행 오류를 **생성 상세**에 표시해요. 접수 여부는 전송 전부터 기록하며 `COMFYUI_SUBMISSION_UNCERTAIN`은 새 렌더를 자동 제출하지 않아요. 접수 후 조회 실패는 `COMFYUI_RESULT_UNAVAILABLE`과 prompt ID를 보존해 **결과 확인**을 제공해요. 요청 전체 deadline은 응답 헤더뿐 아니라 JSON·이미지 body 읽기에도 적용해요.
 - 참조 이미지 업로드(`POST /upload/image`)는 이번 구현에 없어요. 작업 입력에는 참조 목록이 그대로 고정되므로 나중에 ComfyUI 어댑터만 확장하면 돼요.
 
 ## API
@@ -82,7 +84,7 @@ npx vitest run tests/illustration-core.test.ts tests/comfyui-client.test.ts test
 | 검사 | 확인 내용 |
 | --- | --- |
 | `illustration-core` | 워크플로 파싱·치환, 프롬프트 JSON 해석, 캡션 envelope, 이미지 형식 감지, 재요청 분류 |
-| `comfyui-client` | 합성 ComfyUI 서버로 `/prompt`·`/history`·`/view`·인증 헤더·노드 오류·실행 오류·시간 초과(원격 미접촉)·실행 중일 때만 interrupt·결과 단건 조회·미연결 |
+| `comfyui-client` | 합성 HTTP 서버로 인증·접수/조회/이미지 body 정체·응답 유실·5xx·대상별 취소와 구버전 대기 삭제·shutdown 미접촉·결과 회수 검사 |
 | `codex-image` | 합성 app-server로 `features.image_generation`, data URL 첨부, base64/저장 파일 결과, 사용량 한도, 이미지 없음, 텍스트 턴의 이미지 차단 |
 | `illustration-store` | v15 DB 표 추가, 설정 CAS·검증, 예약 한도·동시 1개, 자동 예약과 설정 오류 표시, 재요청·취소·복구, 참조 고정, 포크·삭제·archive |
 | `illustration-runner` | 모의 생성기의 자동 재요청·한도·취소, Codex 턴 입력·attempt·캡션, 프롬프트 모델+ComfyUI 전체 경로와 실패 분류, 자동 예약의 생략(skip)과 직접 요청의 생략 금지, 시간 초과 후 결과 확인(reconcile) |
@@ -102,6 +104,6 @@ npx vitest run tests/illustration-core.test.ts tests/comfyui-client.test.ts test
 - **참조 이미지는 Codex 우선**: 채팅별 역할 지정을 예약 시 고정하고 Codex 입력에 role 라벨과 함께 첨부해요. ComfyUI 업로드는 어댑터 확장 지점으로 남겨요.
 - **비채택**: 실패 시 다른 생성기로 자동 우회, 프롬프트 자동 변형, 범용 플러그인 시스템, 외부 큐 서비스, NovelAI. RisuAI의 `stableDiff.ts`는 ComfyUI 흐름(`/prompt`→`/history` 1초 폴링→`/view`, 자리표시자 치환, 시드 무작위화)만 원리로 참고했고 코드는 복사하지 않았어요.
 - **오류 문구 정책**: LLM 공급자 문구는 기존처럼 코드만 보여 주지만, ComfyUI 노드 오류·실행 오류 문구는 사용자의 서버가 낸 진단이므로 길이를 제한해 표시해요.
-- **새 생성과 결과 확인의 분리**(검토서 14장 반영): ComfyUI 시간 초과·서버 재시작은 자동으로 다시 POST하지 않고 `prompt_id` 조회만 허용해요. 자동 재요청은 새로 그려도 안전한 실패(미연결·5xx·실행 오류)에만 적용해요.
+- **새 생성과 결과 확인의 분리**(통합 감사에서 보완): ComfyUI 시간 초과·서버 재시작·접수 후 조회 실패는 자동으로 다시 POST하지 않아요. POST 5xx도 서버 접수를 배제할 수 없으므로 자동 재요청에서 제외해요. 접수 전 연결 실패나 원격 실행 실패가 확인된 경우만 재생성할 수 있어요.
 - **자동 생략**(검토서 3.1·7장 반영): 자동 예약에서만 모델이 `skip`을 돌려줄 수 있고, 생략은 이미지 없는 완료로 기록해 한도를 쓰지 않아요. 직접 요청은 `allowSkip=false`로 보내 항상 그리게 해요.
 - **미채택·후속**: 수동 요청의 request key(현재는 장면당 동시 1개와 화면의 진행 잠금으로 이중 요청을 막아요), 첫 이미지 수신 즉시 Codex 턴 중단, 최근 삽화 요약을 계획 입력에 넣기, ComfyUI WebSocket 진행 표시, 표시용 축소본, 문단 사이 배치, NovelAI. 참고 설계 문서(`~/Downloads`의 계획·검토서)는 인수 뒤 확인했고, 위 결정은 그 문서의 불변 조건을 현재 코드에 맞춰 적용한 결과예요.

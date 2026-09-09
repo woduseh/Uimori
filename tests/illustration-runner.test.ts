@@ -18,6 +18,7 @@ import { loopbackProvider, writeSse } from './fixtures/loopback-provider.js';
 import { comfyUIFixture, FIXTURE_WORKFLOW } from './fixtures/comfyui-server.js';
 import {
   chatWithSource,
+  completedSource,
   fixtureSettings,
   illustrationDatabases,
   PNG_BASE64,
@@ -30,6 +31,63 @@ afterEach(async () => {
   databases.cleanup();
 });
 const PNG = Buffer.from(PNG_BASE64, 'base64');
+test.each(['TIMEOUT', 'throw'] as const)(
+  'Codex %s after dispatch finishes its attempt without automatic replay',
+  async (fault) => {
+    const store = databases.create();
+    const { source } = chatWithSource(store);
+    const model = codexModel(store);
+    const job = reserveIllustration(store, source, 'manual', {
+      settings: fixtureSettings({
+        generator: 'codex',
+        maxAutoRetries: 5,
+        codex: { model: { id: model.id } },
+      }),
+    });
+    const observed = hooks(store, {
+      generateCodexImage: async (connection, request, options) => {
+        await options.onWire({
+          connectionId: connection.id,
+          protocol: connection.protocol,
+          role: 'illustration',
+          modelId: request.modelId,
+          method: 'RPC',
+          url: 'codex://local',
+          headers: {},
+          body: { method: 'turn/start' },
+          bodySha256: 'a'.repeat(64),
+          stablePrefixSha256: 'b'.repeat(64),
+        });
+        if (fault === 'throw') throw new Error('synthetic connection lost');
+        return {
+          status: 'error',
+          images: [],
+          revisedPrompt: null,
+          text: '',
+          error: { code: fault },
+          usage: {
+            inputTokens: null,
+            outputTokens: null,
+            costUsd: null,
+            raw: null,
+            priceRevision: null,
+          },
+        };
+      },
+    });
+    expect(await runIllustrationJob(store, job.id, 'worker', observed.options)).toMatchObject({
+      status: 'failed',
+    });
+    expect(illustrationJob(store, job.id)).toMatchObject({ status: 'failed', attempt: 1 });
+    expect(observed.wires).toHaveLength(1);
+    expect(observed.finishes).toHaveLength(1);
+    expect(observed.finishes[0].result).toMatchObject({
+      status: 'error',
+      usage: { costUsd: null },
+    });
+    expect(await runIllustrationJob(store, job.id, 'worker', observed.options)).toBeNull();
+  }
+);
 function hooks(store: Store, extra: Partial<IllustrationRunnerHooks> = {}) {
   const wires: WireRecord[] = [];
   const finishes: { id: string; result: ProviderResult }[] = [];
@@ -488,6 +546,156 @@ function cancel(store: Store, id: string) {
 }
 
 describe('skip decisions and reconcile of accepted remote prompts', () => {
+  test('accepted history failures never requeue and reconcile uses the same authenticated remote job', async () => {
+    const store = databases.create();
+    const { source } = chatWithSource(store);
+    const { provider, model } = await promptModel(store, () =>
+      JSON.stringify({ prompt: 'one render', caption: '한 번' })
+    );
+    const comfy = await comfyUIFixture({
+      fault: { path: 'history', kind: 'http-5xx' },
+      authorization: 'Bearer callback-only',
+    });
+    cleanups.push(comfy.close);
+    const job = reserveIllustration(store, source, 'manual', {
+      settings: fixtureSettings({
+        generator: 'comfyui',
+        maxAutoRetries: 3,
+        comfyui: {
+          baseUrl: comfy.origin,
+          authorizationEnv: 'CALLBACK_ONLY',
+          workflow: FIXTURE_WORKFLOW,
+          promptModel: { id: model.id },
+          timeoutMs: 1000,
+          pollIntervalMs: 10,
+        },
+      }),
+    });
+    const observed = hooks(store, {
+      approvedOrigins: [provider.origin],
+      resolveCredential: () => 'Bearer callback-only',
+      resolveComfyCredential: () => 'Bearer callback-only',
+    });
+    expect(await runIllustrationJob(store, job.id, 'worker', observed.options)).toEqual({
+      status: 'failed',
+      code: 'COMFYUI_RESULT_UNAVAILABLE',
+      images: 0,
+    });
+    expect(illustrationJob(store, job.id).diagnostic?.comfyui?.promptId).toBe(comfy.prompts[0].id);
+    expect(await runIllustrationJob(store, job.id, 'worker', observed.options)).toBeNull();
+    comfy.clearFault();
+    const recovered = await reconcileIllustrationJob(store, job.id, 'worker', {
+      signal: new AbortController().signal,
+      resolveCredential: () => 'Bearer callback-only',
+    });
+    expect(recovered.status).toBe('completed');
+    expect(provider.requests).toHaveLength(1);
+    expect(comfy.prompts).toHaveLength(1);
+  });
+
+  test.each([
+    ['<private>excluded only</private>', 'ILLUSTRATION_SOURCE_EMPTY'],
+    ['public\n<private>unclosed hidden detail', 'ILLUSTRATION_SOURCE_SEGMENTS_INVALID'],
+    ['<private>'.repeat(2001), 'ILLUSTRATION_SOURCE_SEGMENTS_INVALID'],
+  ])('excluded or malformed scene %s fails before any provider receives it', async (text, code) => {
+    const store = databases.create();
+    const { chat } = chatWithSource(store);
+    const source = completedSource(store, chat.id, text);
+    const snapshot = store.run(source.runId).snapshot;
+    snapshot.sourceSegments = {
+      version: 1,
+      rules: [
+        {
+          id: 'private',
+          kind: 'aside',
+          open: '<private>',
+          close: '</private>',
+          match: 'inline',
+          label: 'Private',
+          exclude: true,
+        },
+      ],
+    };
+    store.db
+      .prepare('UPDATE runs SET snapshot=? WHERE id=?')
+      .run(JSON.stringify(snapshot), source.runId);
+    const model = codexModel(store);
+    const job = reserveIllustration(store, source, 'manual', {
+      settings: fixtureSettings({ generator: 'codex', codex: { model: { id: model.id } } }),
+    });
+    let calls = 0;
+    const observed = hooks(store, {
+      generateCodexImage: async () => {
+        calls++;
+        return {
+          status: 'completed',
+          images: [{ mime: 'image/png', bytes: PNG }],
+          text: '{"caption":"image"}',
+          revisedPrompt: null,
+          usage: { inputTokens: 1, outputTokens: 1, costUsd: null, raw: null, priceRevision: null },
+          error: null,
+        };
+      },
+    });
+    expect(await runIllustrationJob(store, job.id, 'worker', observed.options)).toMatchObject({
+      status: 'failed',
+      code,
+    });
+    expect(calls).toBe(0);
+    expect(illustrationJob(store, job.id).diagnostic?.attempts).toEqual([]);
+  });
+
+  test('a valid segmented scene sends only public main text to the generator', async () => {
+    const store = databases.create();
+    const { chat } = chatWithSource(store);
+    const source = completedSource(
+      store,
+      chat.id,
+      'public lantern\n<private>never send this</private>\npublic river'
+    );
+    const snapshot = store.run(source.runId).snapshot;
+    snapshot.sourceSegments = {
+      version: 1,
+      rules: [
+        {
+          id: 'private',
+          kind: 'aside',
+          open: '<private>',
+          close: '</private>',
+          match: 'inline',
+          label: 'Private',
+          exclude: true,
+        },
+      ],
+    };
+    store.db
+      .prepare('UPDATE runs SET snapshot=? WHERE id=?')
+      .run(JSON.stringify(snapshot), source.runId);
+    const model = codexModel(store);
+    const job = reserveIllustration(store, source, 'manual', {
+      settings: fixtureSettings({ generator: 'codex', codex: { model: { id: model.id } } }),
+    });
+    let sent = '';
+    const observed = hooks(store, {
+      generateCodexImage: async (_connection, request) => {
+        sent = request.text;
+        return {
+          status: 'completed',
+          images: [{ mime: 'image/png', bytes: PNG }],
+          text: '{"caption":"image"}',
+          revisedPrompt: null,
+          usage: { inputTokens: 1, outputTokens: 1, costUsd: null, raw: null, priceRevision: null },
+          error: null,
+        };
+      },
+    });
+    expect(await runIllustrationJob(store, job.id, 'worker', observed.options)).toMatchObject({
+      status: 'completed',
+    });
+    expect(sent).toContain('public lantern');
+    expect(sent).toContain('public river');
+    expect(sent).not.toContain('never send this');
+  });
   test('automatic runs may skip through the prompt model without touching ComfyUI; manual runs must draw', async () => {
     const store = databases.create();
     const { chat, source } = chatWithSource(store);
