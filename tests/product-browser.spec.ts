@@ -8,6 +8,7 @@ import {
   selectContent,
   createPromptChoice,
   navigationAction,
+  visibleNavigation,
   openProviderMenu,
   selectChatSettingsSection,
   openSourceActions,
@@ -48,18 +49,19 @@ async function closeDialog(page: Page) {
 async function navigation(page: Page, name: string) {
   await navigationAction(page, name);
 }
+async function selectStoredChat(page: Page, chat: Chat) {
+  const navigation = await visibleNavigation(page);
+  const branch = navigation.locator(`[data-bot-id="${chat.botId}"]`);
+  const toggle = branch.locator('.bot-branch-toggle');
+  if ((await toggle.getAttribute('aria-expanded')) === 'false') await toggle.click();
+  await branch.locator(`[data-chat-id="${chat.id}"] .chat-link`).click();
+}
 async function storySettings(page: Page) {
   await closeDialog(page);
   if (!(await page.getByRole('button', { name: '채팅 설정', exact: true }).isVisible())) {
     const chatId = new URL(page.url()).searchParams.get('chat')!;
     const detail = await getDetail(page.request, chatId);
-    const menu = page.getByRole('button', { name: '탐색 메뉴', exact: true });
-    if (await menu.isVisible()) await menu.click();
-    await page
-      .getByRole('navigation', { name: '봇의 채팅 목록' })
-      .getByRole('button')
-      .filter({ hasText: detail.chat.title })
-      .click();
+    await selectStoredChat(page, detail.chat);
   }
   await page.getByRole('button', { name: '채팅 설정', exact: true }).click();
   return page.getByRole('dialog', { name: '채팅 설정', exact: true });
@@ -629,23 +631,12 @@ test('P09 P10 P13 fork from a completed scene preserves long prose and annotatio
     ).toEqual([source.text]);
     await page.getByLabel('다음 장면 요청').fill('SYNTHETIC independent fork draft');
     const forkUrl = page.url();
-    await page.getByRole('button', { name: '탐색 메뉴', exact: true }).click();
-    await page
-      .getByRole('navigation', { name: '봇의 채팅 목록' })
-      .getByRole('button')
-      .filter({ hasText: chat.title })
-      .filter({ hasNotText: fork.title })
-      .click();
+    await selectStoredChat(page, chat);
     await expect.poll(() => new URL(page.url()).searchParams.get('chat')).toBe(chat.id);
     await expect(page.getByLabel('다음 장면 요청')).toHaveValue(
       'SYNTHETIC retained original draft'
     );
-    await page.getByRole('button', { name: '탐색 메뉴', exact: true }).click();
-    await page
-      .getByRole('navigation', { name: '봇의 채팅 목록' })
-      .getByRole('button')
-      .filter({ hasText: fork.title })
-      .click();
+    await selectStoredChat(page, fork);
     await expect(page).toHaveURL(forkUrl);
     await expect(page.getByLabel('다음 장면 요청')).toHaveValue('SYNTHETIC independent fork draft');
     await page.reload();

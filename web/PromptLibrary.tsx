@@ -1,3 +1,4 @@
+import { DraftDiscardActions } from './DraftDiscardActions.js';
 import { SelectionCheckbox } from './BooleanControls.js';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { AddIcon } from './ui-icons.js';
@@ -179,27 +180,22 @@ export function PromptLibrary({
         className="library-discard-dialog"
         onClose={() => setDiscard(false)}
       >
-        <p>저장하지 않은 프롬프트 편집 내용이 있어요.</p>
-        <div className="library-discard-actions">
-          <button type="button" className="secondary" onClick={() => setDiscard(false)}>
-            계속 편집
-          </button>
-          <button
-            type="button"
-            onClick={async () => {
-              try {
-                await discardActiveEditor();
-                setDiscard(false);
-                setDirty(false);
-                setEditing(pendingEditing.current);
-              } catch (error) {
-                onError((error as Error).message);
-              }
-            }}
-          >
-            초안 버리고 이동
-          </button>
-        </div>
+        <p>이동하면 저장하지 않은 프롬프트 편집 내용이 사라져요.</p>
+        <DraftDiscardActions
+          open={discard}
+          onContinue={() => setDiscard(false)}
+          onDiscard={async () => {
+            try {
+              await discardActiveEditor();
+              setDiscard(false);
+              setDirty(false);
+              setEditing(pendingEditing.current);
+            } catch (error) {
+              onError((error as Error).message);
+            }
+          }}
+          discardLabel="초안 버리고 이동"
+        />
       </Dialog>
       <LibraryMoveDialog
         items={moving}
