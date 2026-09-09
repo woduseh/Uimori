@@ -10,6 +10,7 @@ import { mapForkSnapshot } from './snapshot-archive.js';
 import { contextDependencyKey, measureMainContext } from './context-planning.js';
 import { compileSnapshotPrompt } from './prompt-snapshot.js';
 import { copyStoryFork } from './story-archive.js';
+import { copyOutlineFork } from './outline-store.js';
 import { copyChatOverridesInTransaction } from './chat-overrides.js';
 import { copyChatOptionsInTransaction } from './chat-options.js';
 import { copyPackageFork } from './package-behavior-host.js';
@@ -338,6 +339,14 @@ export function forkChat(store: Store, chatId: string, value: unknown): Chat {
     copyChatOverridesInTransaction(store, chatId, id, sourceIds);
     copyChatOptionsInTransaction(store, chatId, id, branchId, sourceIds, runIds);
     const storyFork = copyStoryFork(store, chatId, id, sourceIds, runIds);
+    copyOutlineFork(
+      store,
+      chatId,
+      originalRuns.get(selected.runId)!.snapshot.branchId ?? `main:${chatId}`,
+      id,
+      branchId,
+      storyFork.commands
+    );
     copyPackageFork(store, id, branchId, sourceIds, head);
     const canonHashes = new Map<string, string>();
     for (const original of originalRuns.values()) {

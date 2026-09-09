@@ -23,6 +23,7 @@ import {
   ChevronDown,
   GitFork,
   History,
+  ListTree,
   Maximize,
   Menu,
   MessageCircle,
@@ -116,8 +117,20 @@ const BranchesPanel = deferredPanel('보관된 전개', async () => ({
 const TasksPanel = deferredPanel('작업 현황', async () => ({
   default: (await import('./WorkspacePanels.js')).TasksPanel,
 }));
+const OutlinePanel = deferredPanel('계층형 구성', async () => ({
+  default: (await import('./OutlinePanel.js')).OutlinePanel,
+}));
 
-type Panel = '' | 'navigation' | 'new' | 'story' | 'branches' | 'tasks' | 'settings' | 'reading';
+type Panel =
+  | ''
+  | 'navigation'
+  | 'new'
+  | 'story'
+  | 'branches'
+  | 'tasks'
+  | 'settings'
+  | 'reading'
+  | 'outline';
 const runActive = (status: string) => ['queued', 'running', 'waiting_for_state'].includes(status);
 const runFailed = (status: string) =>
   ['failed', 'cancelled', 'interrupted', 'refused', 'partial'].includes(status);
@@ -612,6 +625,19 @@ function App() {
                       )}
                       {focus ? '집중 읽기 종료' : '집중 읽기'}
                     </button>
+                    {s.detail && (
+                      <button
+                        type="button"
+                        className="secondary"
+                        onClick={(event) => {
+                          fromChatMenu(event);
+                          setPanel('outline');
+                        }}
+                      >
+                        <ListTree size={18} aria-hidden="true" />
+                        계층형 구성
+                      </button>
+                    )}
                     <button
                       type="button"
                       className="secondary"
@@ -1407,6 +1433,15 @@ function App() {
           }}
         />
       )}
+      <Dialog
+        scopeKey={`${s.selected}:${s.viewedBranch}`}
+        open={panel === 'outline'}
+        title="계층형 구성"
+        onClose={() => setPanel('')}
+        wide
+      >
+        {panel === 'outline' && <OutlinePanel state={s} onClose={() => setPanel('')} />}
+      </Dialog>
       <Dialog open={panel === 'branches'} title="보관된 전개" onClose={() => setPanel('')}>
         <BranchesPanel state={s} onClose={() => setPanel('')} />
       </Dialog>

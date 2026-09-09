@@ -38,6 +38,7 @@
     "verify:turn-activity": "node scripts/verify-turn-activity.mjs",
     "verify:illustration": "node scripts/verify-illustration.mjs",
     "verify:navigation": "node scripts/verify-navigation.mjs",
+    "verify:outline": "node scripts/verify-outline.mjs",
     "verify:library": "node scripts/verify-library.mjs",
     "verify:redesign": "node scripts/verify-redesign.mjs",
     "verify:browser-smoke": "node scripts/verify-browser-smoke.mjs",

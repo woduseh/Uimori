@@ -20,6 +20,7 @@ import { ProductStore } from './product-store.js';
 import { HttpError, text } from './request-validation.js';
 export { HttpError } from './request-validation.js';
 import { StoryStore } from './story-store.js';
+import { OutlineStore, freezeOutline, initOutline } from './outline-store.js';
 import { freezeSourceSegments } from '../core/package-source-segments.js';
 import { consumePackageRequestInTransaction } from './package-requests.js';
 import { ChatOrganizationStore } from './chat-organization.js';
@@ -83,6 +84,7 @@ export class Store {
   readonly db: DatabaseSync;
   readonly product: ProductStore;
   readonly story: StoryStore;
+  readonly outline: OutlineStore;
   readonly context: ContextStore;
   readonly organization: ChatOrganizationStore;
   readonly libraryOrganization: LibraryOrganizationStore;
@@ -128,6 +130,7 @@ export class Store {
       this.db.exec('PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON; PRAGMA busy_timeout=3000;');
       this.product = new ProductStore(this);
       this.story = new StoryStore(this);
+      this.outline = new OutlineStore(this);
       this.context = new ContextStore(this);
       this.organization = new ChatOrganizationStore(this);
       this.libraryOrganization = new LibraryOrganizationStore(this);
@@ -167,10 +170,14 @@ export class Store {
           initChatOptions(this);
           initResponseStreams(this.db);
           initIllustrations(this.db);
+          initOutline(this.db);
           this.db.exec('PRAGMA user_version=15');
         });
-      // Additive illustration tables; a schema 15 database keeps its version and data.
-      else initIllustrations(this.db);
+      // Additive illustration and outline tables; a schema 15 database keeps its version and data.
+      else {
+        initIllustrations(this.db);
+        initOutline(this.db);
+      }
     } catch (error) {
       this.db.close();
       this.ownership.close();
@@ -444,6 +451,7 @@ export class Store {
           ...base,
           ...(sourceSegments ? { sourceSegments } : {}),
         });
+    if (command.sceneCommandId) frozen = freezeOutline(this, command.sceneCommandId, frozen);
     frozen = freezePackageStates(
       this,
       { ...frozen, logicalHistory: captureLogicalHistory(this, frozen) },

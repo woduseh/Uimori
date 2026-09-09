@@ -183,6 +183,7 @@ function requestInput(snapshot: RunSnapshot, input: MainInput): ProviderRequest[
         : {}),
       ...(input.state && !stateSlot ? { state: input.state } : {}),
       ...(input.notes && !used.has('notes') ? { notes: input.notes } : {}),
+      ...(input.outline && !used.has('outline') ? { outline: input.outline } : {}),
       ...(input.catalogPage ? { catalogPage: input.catalogPage } : {}),
       ...(snapshot.behaviorExecution?.automaticResults.length
         ? { automaticResults: snapshot.behaviorExecution.automaticResults }

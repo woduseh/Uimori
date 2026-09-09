@@ -10,6 +10,7 @@ import {
 } from './package-context.js';
 import { DEFAULT_LORE_CONTEXT, type LorePlacement } from './lore-context.js';
 import { listBehaviorTools } from './package-behavior-tools.js';
+import { OUTLINE_CONTRACT, type OutlineSnapshot } from './outline.js';
 
 // These are host permissions, never instructions read from a content package.
 const ALLOWED_TOOLS = Object.freeze([
@@ -81,6 +82,7 @@ export type MainInput = ModelInput & {
     constraints: import('./state.js').StateModule;
   };
   notes?: import('./notes.js').AuthorNote[];
+  outline?: OutlineSnapshot;
   catalogPage?: { total: number; listed: number; remaining: string };
 };
 /** Slot bodies and fallback suppression share this exact source selection. */
@@ -195,6 +197,10 @@ export function buildMainInput(
     );
     if (snapshot.contextPlan.summary) input.contextSummary = snapshot.contextPlan.summary;
     for (const tool of STORY_READ_NAMES) if (!input.tools.includes(tool)) input.tools.push(tool);
+  }
+  if (snapshot.outline) {
+    input.outline = structuredClone(snapshot.outline);
+    input.contract += `\n${OUTLINE_CONTRACT}`;
   }
   if (snapshot.sourceSegments)
     input.contract +=

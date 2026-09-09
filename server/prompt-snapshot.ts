@@ -74,6 +74,7 @@ function contextFromPackages(snapshot: RunSnapshot, packages: readonly ResolvedP
     lore: body('lore'),
     notes: input.notes ? JSON.stringify(input.notes) : '',
     state: input.state ? JSON.stringify(input.state) : '',
+    outline: input.outline ? JSON.stringify(input.outline) : '',
     globalNote: '',
     authorNote: '',
     postEverything: '',

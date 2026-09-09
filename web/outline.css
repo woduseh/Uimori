@@ -1,0 +1,127 @@
+.outline-panel {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+.outline-panel > p {
+  margin: 0;
+  line-height: 1.6;
+}
+.outline-tree,
+.outline-children {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+.outline-children {
+  margin-top: 8px;
+}
+.outline-entry {
+  min-width: 0;
+  border-left: 3px solid var(--border);
+  padding-left: 12px;
+}
+.outline-entry.level-episode,
+.outline-entry.level-beat {
+  border-left-color: var(--accent);
+}
+.outline-entry.progress-written {
+  border-left-style: double;
+}
+.outline-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-width: 0;
+}
+.outline-heading {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-width: 0;
+  flex: 1 1 14rem;
+}
+.outline-title {
+  overflow-wrap: anywhere;
+}
+.outline-level,
+.outline-progress,
+.outline-pin-badge {
+  font-size: 0.8rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 1px 8px;
+  white-space: nowrap;
+}
+.outline-progress.state-written {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.outline-progress.state-writing,
+.outline-progress.state-scheduled {
+  font-weight: 600;
+}
+.outline-pin-badge {
+  border-style: dashed;
+}
+.outline-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.outline-actions .outline-pinned {
+  color: var(--accent);
+}
+.outline-intent {
+  margin: 6px 0 0;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.outline-read {
+  margin-top: 8px;
+}
+.outline-form {
+  display: grid;
+  gap: 8px;
+  margin: 8px 0;
+  min-width: 0;
+}
+.outline-form label {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+.outline-form input,
+.outline-form textarea {
+  width: 100%;
+  min-width: 0;
+}
+.outline-form textarea {
+  resize: vertical;
+}
+.outline-form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+/* Deep levels stop indenting on narrow screens so the text keeps its width. */
+@media (max-width: 760px) {
+  .outline-entry {
+    padding-left: 8px;
+  }
+  .outline-actions {
+    width: 100%;
+  }
+  .outline-write {
+    flex: 1 1 auto;
+  }
+}

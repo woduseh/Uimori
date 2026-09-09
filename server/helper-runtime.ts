@@ -170,6 +170,48 @@ const TOOLS: ProviderTool[] = [
     ),
   },
   {
+    name: 'outline.read',
+    description:
+      "Read this chat branch's hierarchical composition: theme, main story, arcs, episodes and beats, with each item's exact id, revision, pinned flag and derived writing progress. Read before proposing or writing composition.",
+    inputSchema: schema({}),
+  },
+  {
+    name: 'outline.write',
+    description:
+      "Apply composition changes the user requested: create, update, move or remove items. One call may build a whole tree by giving each new item a ref and naming its parent with parentRef; create a parent before the items that name it. This writes composition only, never story prose, and never marks anything as written. Update, move and remove need the item's exact current revision. A pinned item or one that is already written is reported as a conflict instead of being changed.",
+    inputSchema: schema(
+      {
+        operations: {
+          type: 'array',
+          minItems: 1,
+          maxItems: 200,
+          items: {
+            type: 'object',
+            properties: {
+              op: { type: 'string', enum: ['create', 'update', 'move', 'remove'] },
+              ref: str,
+              parentRef: str,
+              parentId: { type: ['string', 'null'] },
+              level: {
+                type: 'string',
+                enum: ['theme', 'mainStory', 'arc', 'episode', 'beat'],
+              },
+              title: str,
+              intent: str,
+              position: { type: 'integer', minimum: 0 },
+              id: str,
+              expectedRevision: { type: 'integer', minimum: 1 },
+            },
+            required: ['op'],
+            additionalProperties: false,
+          },
+        },
+        operationId: str,
+      },
+      ['operations', 'operationId']
+    ),
+  },
+  {
     name: 'notes.write',
     description:
       'Save a user note or correction, with truthful source provenance. Requires a user request.',
@@ -887,6 +929,23 @@ export class HelperRuntime {
           if (args.action === 'move') return this.store.libraryOrganization.move(args.body);
           throw new HttpError(400, 'INVALID_LIBRARY_ACTION');
         }
+      );
+    }
+    if (name === 'outline.read' || name === 'outline.write') {
+      if (scope.kind !== 'chat') throw new HttpError(403, 'CHAT_SCOPE_REQUIRED');
+      if (name === 'outline.read') return this.store.outline.detail(scope.chatId, scope.branchId);
+      this.workspace.authorize(task.id, scope.chatId, 'outline.write');
+      const operationId = text(args.operationId, 'operation ID', 100);
+      return this.workspace.operation(task.id, `${task.id}:${operationId}`, { name, args }, () =>
+        this.store.outline.apply(
+          scope.chatId,
+          {
+            branchId: scope.branchId,
+            operations: args.operations,
+            idempotencyKey: `helper:${task.id}:${operationId}`,
+          },
+          'model'
+        )
       );
     }
     if (name.startsWith('context.') || name === 'notes.write') {

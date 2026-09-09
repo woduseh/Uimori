@@ -65,6 +65,7 @@ import {
   validateIllustrationSettings,
 } from './illustrations.js';
 import { defaultIllustrationSettings } from '../core/illustration.js';
+import { OUTLINE_TABLES, validateOutlineArchive } from './outline-store.js';
 import { normalizeStoryArchiveRow, validateStoryArchive } from './story-archive.js';
 
 import {
@@ -1145,8 +1146,8 @@ export class ProductStore {
     if (a.format !== 'narrative-archive' || a.version !== 15)
       throw new HttpError(400, 'Unsupported archive');
     const tables = record(a.tables);
-    // Illustration tables were added to schema 15 later; archives without them restore normally.
-    for (const table of ILLUSTRATION_TABLES) tables[table] ??= [];
+    // Illustration and outline tables were added to schema 15 later; older archives restore normally.
+    for (const table of [...ILLUSTRATION_TABLES, ...OUTLINE_TABLES]) tables[table] ??= [];
     fields(tables, archiveTables);
     if (archiveTables.some((t) => !Array.isArray(tables[t]) || tables[t].length > 100000))
       throw new HttpError(400, 'Missing or oversized archive table');
@@ -1330,6 +1331,7 @@ export class ProductStore {
         validateChatOptionArchive(this.store);
         validatePackageRequests(this.store);
         validatePackageBehaviorArchive(this.store);
+        validateOutlineArchive(this.store);
         this.store.organization.validateArchive();
         this.store.libraryOrganization.validateArchive();
       });
@@ -1371,6 +1373,7 @@ const archiveTables = [
   ...libraryOrganizationTables,
   ...packageBehaviorTables,
   ...ILLUSTRATION_TABLES,
+  ...OUTLINE_TABLES,
 ];
 
 export const packageControlKey = (r: PackageAttachment) => `${r.id}@${r.revision}:${r.role}`;

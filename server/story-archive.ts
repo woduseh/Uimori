@@ -512,7 +512,10 @@ export function copyStoryFork(
   newChatId: string,
   sourceIds: Map<string, string>,
   runIds: Map<string, string>
-): { mapStory: (story: StorySnapshot, history: RunSnapshot['history']) => StorySnapshot } {
+): {
+  mapStory: (story: StorySnapshot, history: RunSnapshot['history']) => StorySnapshot;
+  commands: Map<string, string>;
+} {
   store.db.exec('PRAGMA defer_foreign_keys=ON');
   const excluded: { kind: string; reason: string }[] = [];
   const exclude = (kind: string, reason: string) => {
@@ -729,5 +732,5 @@ export function copyStoryFork(
     store.db.prepare('UPDATE runs SET snapshot=? WHERE id=?').run(JSON.stringify(mapped), newRun);
   }
   if (excluded.length) store.event(newChatId, 'story.fork.excluded', JSON.stringify(excluded));
-  return { mapStory };
+  return { mapStory, commands };
 }

@@ -32,6 +32,7 @@ import { auxiliaryBridge } from './auxiliary-bridge.js';
 import { productRoutes } from './product-routes.js';
 import { providerConnectionTestRoutes } from './provider-connection-test.js';
 import { storyRoutes } from './story-routes.js';
+import { outlineRoutes } from './outline-routes.js';
 import { packageImageRoutes } from './package-images.js';
 import { packageFeatureRoutes } from './package-features.js';
 import { reconcileIllustrationJob, runIllustrationJob } from './illustration-runner.js';
@@ -934,6 +935,7 @@ export async function createApp(options: AppOptions): Promise<App> {
     execute,
     abort: (id) => storyControllers.get(id)?.abort(),
   });
+  outlineRoutes(app, store, { publish });
   packageImageRoutes(app, store, { publish, pump: pumpJobs });
   illustrationRoutes(app, store, {
     publish,
