@@ -376,18 +376,6 @@
 .library-discard-dialog .dialog-body > p {
   margin: 0 0 8px;
 }
-.library-discard-actions {
-  display: flex;
-  justify-content: flex-end;
-  flex-wrap: wrap;
-  gap: 10px;
-  margin-top: 24px;
-}
-.library-discard-actions button {
-  flex: 1;
-  min-height: 44px;
-  white-space: nowrap;
-}
 
 .library-package-tools {
   border: 1px solid var(--line);

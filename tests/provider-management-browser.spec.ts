@@ -1287,9 +1287,11 @@ test('PMUI10 Codex subscription login preserves drafts and saves a connection an
     pending = false,
     available = true;
   const mutations: string[] = [];
+  let statusGate: Promise<void> | undefined;
   await page.route('**/api/agent-runtimes/codex**', async (route) => {
     const request = route.request(),
       path = new URL(request.url()).pathname;
+    if (request.method() === 'GET') await statusGate;
     if (request.method() !== 'GET') mutations.push(`${request.method()} ${path}`);
     if (path.endsWith('/login/cancel')) pending = false;
     else if (path.endsWith('/login')) pending = true;
@@ -1302,7 +1304,7 @@ test('PMUI10 Codex subscription login preserves drafts and saves a connection an
         available,
         authenticated,
         authMode: authenticated ? 'chatgpt' : null,
-        error: null,
+        error: available ? null : 'CODEX_DISABLED',
         login: pending
           ? {
               id: 'synthetic-login',
@@ -1330,25 +1332,45 @@ test('PMUI10 Codex subscription login preserves drafts and saves a connection an
   await expect(form.getByLabel('서버 환경변수 이름')).toBeHidden();
   await selectSettingsSection(page, '에이전트');
   const panel = page.getByRole('region', { name: 'Codex 에이전트 연결' });
-  await expect(panel).toContainText('ChatGPT 로그인이 필요해요');
+  await expect(panel).toContainText('로그인 필요');
+  const help = panel.locator('details');
+  await expect(help).not.toHaveAttribute('open', '');
+  const executionHelp = help.getByText('Codex는 Uimori 서버에서 실행해요.', { exact: false });
+  await expect(executionHelp).toBeHidden();
+  await help.locator('summary').click();
+  await expect(executionHelp).toBeVisible();
+  await help.locator('summary').click();
+  const refresh = panel.getByRole('button', { name: 'Codex 상태 다시 확인' });
+  await expect(refresh).toHaveText('');
+  let releaseStatus!: () => void;
+  statusGate = new Promise<void>((resolve) => {
+    releaseStatus = resolve;
+  });
+  await refresh.click();
+  await expect(refresh).toBeDisabled();
+  await expect(refresh).toHaveAttribute('aria-busy', 'true');
+  releaseStatus();
+  statusGate = undefined;
+  await expect(refresh).toBeEnabled();
+  await expect(refresh).toHaveAttribute('aria-busy', 'false');
   expect(mutations).toEqual([]);
-  await panel.getByRole('button', { name: 'ChatGPT로 Codex 로그인', exact: true }).click();
-  await expect(panel.getByRole('link', { name: '공식 Codex 로그인 페이지 열기' })).toHaveAttribute(
+  await panel.getByRole('button', { name: 'ChatGPT로 로그인', exact: true }).click();
+  await expect(panel.getByRole('link', { name: '로그인 페이지 열기' })).toHaveAttribute(
     'href',
     'https://auth.openai.com/codex/device'
   );
   await expect(panel).toContainText('ABCD-1234');
-  await panel.getByRole('button', { name: 'Codex 로그인 취소', exact: true }).click();
+  await panel.getByRole('button', { name: '로그인 취소', exact: true }).click();
   await expect(panel.getByRole('region', { name: 'Codex 로그인 코드' })).toBeHidden();
-  await panel.getByRole('button', { name: 'ChatGPT로 Codex 로그인', exact: true }).click();
+  await panel.getByRole('button', { name: 'ChatGPT로 로그인', exact: true }).click();
   authenticated = true;
   pending = false;
   await panel.getByRole('button', { name: 'Codex 상태 다시 확인' }).click();
-  await expect(panel).toContainText('ChatGPT 구독으로 연결됐어요');
+  await expect(panel).toContainText('연결됨');
   await expect(panel).toContainText('사용 25%');
   if (visualReview)
     await page.screenshot({ path: info.outputPath('codex-subscription-settings-mobile.png') });
-  await selectSettingsSection(page, '연결과 모델');
+  await panel.getByRole('button', { name: '연결과 모델', exact: true }).click();
   await expect(form.getByLabel('연결 이름', { exact: true })).toHaveValue('보존할 Codex 초안');
   await form.getByRole('button', { name: '연결 등록', exact: true }).click();
   const modelForm = page.getByRole('form', { name: '모델 편집 양식' });
@@ -1381,11 +1403,13 @@ test('PMUI10 Codex subscription login preserves drafts and saves a connection an
     temperature: null,
   });
   await selectSettingsSection(page, '에이전트');
-  await panel.getByRole('button', { name: 'Codex 연결 해제', exact: true }).click();
-  await expect(panel).toContainText('ChatGPT 로그인이 필요해요');
+  await panel.getByRole('button', { name: '연결 해제', exact: true }).click();
+  await expect(panel).toContainText('로그인 필요');
   available = false;
   await panel.getByRole('button', { name: 'Codex 상태 다시 확인' }).click();
-  await expect(panel).toContainText('서버에 Codex 실행 설정이 필요해요');
+  await expect(panel).toContainText('서버 설정 필요');
+  await expect(panel.getByText('서버에서 Codex 연결 기능을 활성화해 주세요.')).toBeVisible();
+  await expect(panel.getByRole('alert')).toHaveCount(0);
   expect(mutations).toEqual([
     'POST /api/agent-runtimes/codex/login',
     'POST /api/agent-runtimes/codex/login/cancel',

@@ -1,3 +1,4 @@
+import { DraftDiscardActions } from './DraftDiscardActions.js';
 import { SelectionCheckbox } from './BooleanControls.js';
 import { PackageTransfer } from './PackageTransfer.js';
 import {
@@ -150,7 +151,6 @@ export function LibraryPanel({
   const opening = useRef(0);
   const latestLibrary = useRef(library);
   latestLibrary.current = library;
-  const continueButton = useRef<HTMLButtonElement>(null);
   const externalTab = useRef(initialTab);
   const organizer = useLibraryOrganization(library, reload, onError);
   const organizedLibrary = library
@@ -162,9 +162,6 @@ export function LibraryPanel({
       panelRef.current?.querySelector<HTMLElement>('.library-list-options > summary')?.focus();
     wasSelecting.current = selecting;
   }, [selecting]);
-  useEffect(() => {
-    if (pendingNavigation) continueButton.current?.focus();
-  }, [pendingNavigation]);
   useEffect(() => {
     onDirtyChange?.(dirty);
   }, [dirty, onDirtyChange]);
@@ -428,33 +425,22 @@ export function LibraryPanel({
         className="library-discard-dialog"
         onClose={continueEditing}
       >
-        <p>저장하지 않은 편집 내용이 있어요.</p>
-        <p className="muted">이동하면 현재 초안이 사라져요.</p>
-        <div className="library-discard-actions">
-          <button
-            type="button"
-            className="secondary"
-            ref={continueButton}
-            onClick={continueEditing}
-          >
-            계속 편집
-          </button>
-          <button
-            type="button"
-            onClick={async () => {
-              if (!pendingNavigation) return;
-              try {
-                await discardActiveEditor();
-                switchTab(pendingNavigation.tab, pendingNavigation.closeOnly);
-                setPendingNavigation(null);
-              } catch (error) {
-                onError((error as Error).message);
-              }
-            }}
-          >
-            초안 버리고 이동
-          </button>
-        </div>
+        <p>이동하면 저장하지 않은 편집 내용이 사라져요.</p>
+        <DraftDiscardActions
+          open={!!pendingNavigation}
+          onContinue={continueEditing}
+          onDiscard={async () => {
+            if (!pendingNavigation) return;
+            try {
+              await discardActiveEditor();
+              switchTab(pendingNavigation.tab, pendingNavigation.closeOnly);
+              setPendingNavigation(null);
+            } catch (error) {
+              onError((error as Error).message);
+            }
+          }}
+          discardLabel="초안 버리고 이동"
+        />
       </Dialog>
       <LibraryMoveDialog
         items={moving}

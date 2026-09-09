@@ -165,8 +165,93 @@ test('ILUI02 mobile settings save illustration limits with CAS and expose the ge
   await section.getByRole('button', { name: '삽화 설정 저장', exact: true }).click();
   await expect(section.getByRole('alert').filter({ hasText: '초안은 유지했어요' })).toBeVisible();
   await expect(limit).toHaveValue('4');
-  await section.getByRole('button', { name: '최신 설정 다시 불러오기', exact: true }).click();
+  await section.getByRole('button', { name: '저장된 설정 다시 불러오기', exact: true }).click();
+  const reloadDialog = page.getByRole('alertdialog', { name: '삽화 설정 다시 불러오기' });
+  await expect(reloadDialog.getByRole('button', { name: '계속 편집' })).toBeFocused();
+  await reloadDialog.getByRole('button', { name: '계속 편집' }).click();
+  await expect(limit).toHaveValue('4');
+  await section.getByRole('button', { name: '저장된 설정 다시 불러오기', exact: true }).click();
+  await page.route('**/api/illustration-settings', async (route) => {
+    if (route.request().method() === 'GET')
+      await route.fulfill({ status: 503, body: 'unavailable' });
+    else await route.continue();
+  });
+  await reloadDialog.getByRole('button', { name: '초안 버리고 불러오기' }).click();
+  await expect(reloadDialog.getByRole('alert')).toContainText('초안은 유지했어요');
+  await expect(limit).toHaveValue('4');
+  await page.unroute('**/api/illustration-settings');
+  await reloadDialog.getByRole('button', { name: '초안 버리고 불러오기' }).click();
   await expect(section.getByLabel('삽화 그림 지침', { exact: true })).toHaveValue('ink wash');
   await expect(page.locator('body')).not.toHaveCSS('overflow-x', 'scroll');
   await page.screenshot({ path: info.outputPath('illustration-settings-mobile.png') });
+});
+
+test('ILUI03 illustration editors use full width and seconds preserve stored milliseconds', async ({
+  page,
+  request,
+}, info) => {
+  await seed(request);
+  await settings(request, { generator: 'none' });
+  await page.goto('/');
+  await navigationAction(page, '설정');
+  await selectSettingsSection(page, '삽화');
+  const section = page.getByRole('region', { name: '삽화 설정', exact: true });
+  await section.getByLabel('삽화 생성기', { exact: true }).selectOption('comfyui');
+  for (const width of [1440, 390]) {
+    await page.setViewportSize({ width, height: 1000 });
+    for (const label of [
+      '삽화 그림 지침',
+      'ComfyUI 네거티브 프롬프트 지침',
+      'ComfyUI 워크플로 JSON',
+    ]) {
+      const field = section.getByLabel(label, { exact: true });
+      const bounds = await field.evaluate((node) => {
+        const fieldset = node.closest('fieldset')!;
+        const css = getComputedStyle(fieldset);
+        return {
+          actual: node.getBoundingClientRect().width,
+          available:
+            fieldset.clientWidth - parseFloat(css.paddingLeft) - parseFloat(css.paddingRight),
+        };
+      });
+      expect(Math.abs(bounds.actual - bounds.available)).toBeLessThan(3);
+    }
+    const toggle = section.getByRole('switch', { name: '응답 완료 후 자동 삽화 생성' });
+    const offset = await toggle.evaluate((node) => {
+      const a = node.getBoundingClientRect(),
+        b = node.parentElement!.getBoundingClientRect();
+      return Math.abs(a.y + a.height / 2 - b.y - b.height / 2);
+    });
+    expect(offset).toBeLessThan(2);
+    await page.screenshot({ path: info.outputPath(`illustration-form-${width}.png`) });
+    await section.getByLabel('확인 간격 (초)', { exact: true }).scrollIntoViewIfNeeded();
+    await page.screenshot({ path: info.outputPath(`illustration-comfyui-${width}.png`) });
+  }
+  await section.getByLabel('시간 제한 (초)', { exact: true }).fill('60');
+  await section.getByLabel('확인 간격 (초)', { exact: true }).fill('0.25');
+  await section.getByLabel('삽화 생성기', { exact: true }).selectOption('none');
+  await section.getByRole('button', { name: '삽화 설정 저장', exact: true }).click();
+  await expect(
+    section.getByRole('status').filter({ hasText: '삽화 설정을 저장했어요' })
+  ).toBeVisible();
+  const saved = await (await request.get('/api/illustration-settings')).json();
+  expect(saved.comfyui).toMatchObject({ timeoutMs: 60000, pollIntervalMs: 250 });
+  await page.route('**/api/illustration-settings', (route) =>
+    route.fulfill({ status: 503, body: 'unavailable' })
+  );
+  await section.getByRole('button', { name: '저장된 설정 다시 불러오기' }).click();
+  await expect(section.getByRole('status')).toContainText('설정을 불러오지 못했어요');
+  await page.unroute('**/api/illustration-settings');
+  await section.getByLabel('삽화 그림 지침').fill('preserve draft');
+  await section.getByRole('button', { name: '저장된 설정 다시 불러오기' }).click();
+  const guard = page.getByRole('alertdialog', { name: '삽화 설정 다시 불러오기' });
+  for (const width of [390, 1440]) {
+    await page.setViewportSize({ width, height: 900 });
+    await page.emulateMedia({ colorScheme: 'dark' });
+    await expect(guard.getByRole('button', { name: '계속 편집' })).toBeFocused();
+    await page.screenshot({ path: info.outputPath(`illustration-discard-${width}.png`) });
+  }
+  await page.keyboard.press('Escape');
+  await expect(guard).toBeHidden();
+  await expect(section.getByLabel('삽화 그림 지침')).toHaveValue('preserve draft');
 });
