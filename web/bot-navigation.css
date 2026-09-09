@@ -22,71 +22,6 @@
 .nav-progress svg {
   animation: bot-working 1.2s linear infinite;
 }
-/* Bot switch row: avatar, name and a caret; the popover below lists bots by recent activity. */
-.bot-switch {
-  position: relative;
-}
-.bot-switch-button {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  width: 100%;
-  min-height: 44px;
-  padding: 4px 8px;
-  background: transparent;
-  color: var(--text);
-  text-align: left;
-  border-radius: 8px;
-}
-.bot-switch-button:hover,
-.bot-switch-button[aria-expanded="true"] {
-  background: var(--hover);
-}
-.bot-switch-button strong {
-  flex: 1;
-  min-width: 0;
-  font-size: 13px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.bot-switch-button svg {
-  flex-shrink: 0;
-  color: var(--muted);
-}
-.bot-switch-panel {
-  position: absolute;
-  z-index: 12;
-  top: calc(100% + 4px);
-  left: 0;
-  right: 0;
-  padding: 8px;
-  border: 1px solid var(--line);
-  border-radius: 12px;
-  background: var(--panel);
-  box-shadow: 0 8px 24px var(--shade);
-  max-height: min(60vh, 520px);
-  overflow-y: auto;
-}
-.bot-switch-panel .story-search {
-  margin: 0 0 6px;
-}
-.bot-switch-tools {
-  display: grid;
-  gap: 4px;
-  margin-top: 8px;
-  padding-top: 8px;
-  border-top: 1px solid var(--line);
-}
-.bot-switch-tools button {
-  display: flex;
-  align-items: center;
-  justify-content: flex-start;
-  gap: 8px;
-  width: 100%;
-  min-height: 40px;
-  font-size: 12px;
-}
 .bot-navigation-scroll {
   flex: 1;
   overflow: auto;
@@ -415,9 +350,7 @@
     height: 44px;
     min-height: 44px;
   }
-  .bot-chat-item > .bot-row-actions > .delete-control {
-    display: none;
-  }
+
   .bot-folder-toggle {
     min-height: 44px;
   }
@@ -453,4 +386,97 @@
 }
 .bot-row-actions dialog[open] {
   pointer-events: auto;
+}
+
+.bot-branch {
+  min-width: 0;
+}
+.bot-branch-heading,
+.bot-branch-actions {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+.bot-branch-heading {
+  min-height: 44px;
+  gap: 2px;
+}
+.bot-branch-toggle {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex: 1;
+  min-width: 0;
+  padding: 4px 2px;
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+}
+.bot-branch-toggle strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+}
+.bot-branch-toggle svg {
+  flex-shrink: 0;
+}
+.bot-branch-toggle .expanded {
+  transform: rotate(90deg);
+}
+.bot-branch-toggle .bot-choice-avatar {
+  width: 24px;
+  height: 28px;
+  border-radius: 5px;
+}
+.bot-branch-actions {
+  flex-shrink: 0;
+}
+.bot-branch-actions > .icon-button,
+.bot-branch-actions > .action-menu > summary,
+.bot-row-actions > .action-menu > summary {
+  width: 28px;
+  min-width: 28px;
+  height: 32px;
+  min-height: 32px;
+  padding: 0;
+}
+.bot-branch-chats {
+  padding-left: 8px;
+}
+.bot-row-actions:has(details[open]) {
+  opacity: 1;
+  pointer-events: auto;
+}
+.bot-search-results {
+  display: grid;
+  gap: 4px;
+  margin-top: 12px;
+}
+.bot-search-results > button {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  text-align: left;
+  background: transparent;
+  color: var(--text);
+}
+.bot-search-results strong {
+  overflow-wrap: anywhere;
+  min-width: 0;
+}
+.bot-search-results small {
+  color: var(--muted);
+  flex-shrink: 0;
+}
+@media (hover: none), (pointer: coarse) {
+  .bot-branch-actions > .icon-button,
+  .bot-branch-actions > .action-menu > summary,
+  .bot-row-actions > .action-menu > summary,
+  .bot-navigation .bot-row-actions > .delete-control > .delete-button {
+    width: 44px;
+    min-width: 44px;
+    height: 44px;
+    min-height: 44px;
+  }
 }

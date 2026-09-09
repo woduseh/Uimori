@@ -10,5 +10,6 @@ await runBrowserVerification({
     'tests/deletion-browser.spec.ts',
     'tests/activity-browser.spec.ts',
   ],
-  requiredCases: ['ORG01', 'ORG02', 'ORG03', 'ORG04', 'DEL03'],
+  requiredScreenshots: ['bot-tree-390.png', 'bot-tree-1440.png'],
+  requiredCases: ['ORG01', 'ORG02', 'ORG03', 'ORG04', 'ORG05', 'ORG06', 'ORG07', 'DEL03'],
 });
