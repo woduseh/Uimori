@@ -11,6 +11,7 @@ import type { ImageTarget, Job, ReaderRun, Source } from '../core/types.js';
 import { ContextSummaryStatus } from './ContextSummaryStatus.js';
 import { api, labels } from './api.js';
 import { auxiliaryErrorDiagnostic } from './auxiliary-error.js';
+import { ProviderRejectionNotice } from './provider-rejection.js';
 import { Prose } from './Prose.js';
 import { LazyDiagnostics } from './LazyDiagnostics.js';
 import { ActionMenu } from './ActionMenu.js';
@@ -1063,7 +1064,7 @@ export function JobCard({
         </p>
       )}
       {job.error && <AuxiliaryError error={job.error} />}
-
+      {job.rejection && <ProviderRejectionNotice rejection={job.rejection} />}
       <JobActions job={job} refresh={refresh} onError={onError} />
       <LazyDiagnostics<Job & { input?: unknown }>
         path={`/jobs/${job.id}`}

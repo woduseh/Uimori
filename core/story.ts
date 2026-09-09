@@ -65,6 +65,8 @@ export type StoryJob = {
   owner: string | null;
   status: 'queued' | 'running' | 'completed' | 'failed' | 'stale' | 'cancelled' | 'interrupted';
   error: string | null;
+  /** Read-time projection of the failing attempt's provider verdict; never stored on the job. */
+  rejection?: import('./provider-rejection.js').ProviderRejection;
   mock: boolean;
   createdAt: string;
   updatedAt: string;

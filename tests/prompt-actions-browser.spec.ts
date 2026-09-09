@@ -209,7 +209,7 @@ function observe(page: Page) {
   page.on('request', (request) => {
     if (
       request.method() === 'POST' &&
-      /\/(?:runs|translation|retranslate|test|registrations)$/.test(new URL(request.url()).pathname)
+      /\/(?:runs|translation|retranslate|test)$/.test(new URL(request.url()).pathname)
     )
       calls.push(request.url());
   });

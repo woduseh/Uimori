@@ -2,7 +2,7 @@ import { readProviderHttpDiagnostic, type ProviderHttpDiagnostic } from './provi
 import { createHash } from 'node:crypto';
 import { providerFetchOptions, transportFailureCode } from './provider-fetch.js';
 import { validateProviderEndpoint } from './product.js';
-import { requireSupportedModel, validateModelOptions } from './model-capabilities.js';
+import { validateModelOptions } from './model-capabilities.js';
 import { assertContextBudget } from './context-budget.js';
 import { consumeSse } from './vertex.js';
 import {
@@ -98,9 +98,7 @@ export async function executeNativeProvider(
   try {
     const connection = validateConnection(connectionValue, options.approvedOrigins);
     const request = validateRequest(requestValue);
-    requireSupportedModel(connection, request.modelId);
-    if (request.generation)
-      validateModelOptions(request.generation, connection.protocol, request.modelId);
+    if (request.generation) validateModelOptions(request.generation, connection.protocol);
     let bodyValue: Json;
     let diagnostic: Json;
     let path: string;

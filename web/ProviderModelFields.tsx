@@ -4,10 +4,13 @@ import { Plus } from 'lucide-react';
 import { useEffect, useRef } from 'react';
 import type { Connection, VertexRequestTier } from '../core/product.js';
 import {
-  isOfficialModelConnection,
-  modelCapability,
+  PROTOCOL_OPTION_VALUES,
+  protocolCacheTtls,
+  protocolOptionKeys,
+  protocolServiceTiers,
   supportedModels,
 } from '../core/model-capabilities.js';
+import { modelHints, type ModelHints } from '../core/model-hints.js';
 import type { EvaluationToolOptions } from '../core/evaluation-tool-config.js';
 import {
   forcedServiceTierError,
@@ -32,88 +35,143 @@ const tierLabels: Record<string, string> = {
   standard_only: 'Standard',
 };
 const tierLabel = (value: string) => tierLabels[value] ?? value;
+const strengthLabels: Record<string, string> = {
+  none: '끄기',
+  minimal: '최소',
+  low: '낮음',
+  medium: '보통',
+  high: '높음',
+  xhigh: '매우 높음',
+  max: '최대',
+  MINIMAL: '최소',
+  LOW: '낮음',
+  MEDIUM: '보통',
+  HIGH: '높음',
+};
+const strengthLabel = (value: string) =>
+  strengthLabels[value] ? `${strengthLabels[value]} · ${value}` : value;
+const modeLabel = (value: string) =>
+  value === 'adaptive' ? '적응형 · adaptive' : value === 'disabled' ? '끄기 · disabled' : value;
+export const sourceLabels: Record<ModelHints['source'], string> = {
+  catalog: '공급자 목록 확인',
+  reviewed: '앱 확인',
+  none: '미확인',
+};
+const UNDOCUMENTED =
+  '문서로 확인한 값이 아니에요. 공급자가 거절하면 실패 이유에 그 이름을 표시해요.';
+
+/**
+ * One select for any enumerated option. `choices` are the documented values, `vocabulary` is what
+ * the encoder can send. Undocumented vocabulary values stay selectable under a separate group; a
+ * value outside the vocabulary cannot be sent and blocks saving.
+ */
 function ModelOptionSelect({
   label,
   value,
   choices,
+  vocabulary,
   onChange,
   format = (item: string) => item,
   defaultLabel = '모델 기본값',
   invalidMessage,
   validationError,
+  note,
+  full,
 }: {
   label: string;
   value: string;
   choices: readonly string[] | undefined;
+  vocabulary?: readonly string[];
   onChange: (value: string) => void;
   format?: (value: string) => string;
   defaultLabel?: string;
   invalidMessage?: string;
   validationError?: string;
+  /** Always-visible explanation of what the selection becomes on the wire. */
+  note?: string;
+  full?: boolean;
 }) {
-  const ref = useRef<HTMLSelectElement>(null),
-    unsupported = value !== '' && !choices?.includes(value),
-    invalid = unsupported || !!validationError;
+  const ref = useRef<HTMLSelectElement>(null);
+  const all = vocabulary ?? choices;
+  const unsendable = value !== '' && !!vocabulary && !vocabulary.includes(value);
+  const undocumented = value !== '' && !unsendable && !!choices && !choices.includes(value);
   const error =
     validationError ||
-    (unsupported
+    (unsendable
       ? (invalidMessage ??
-        `${label}의 현재 값은 이 모델에서 지원하지 않아요. ${defaultLabel}이나 지원하는 값으로 변경하세요.`)
+        `${label}의 현재 값은 이 연결에서 보낼 수 없어요. ${defaultLabel}이나 목록의 값으로 변경하세요.`)
       : '');
   useEffect(() => {
     ref.current?.setCustomValidity(error);
   }, [error]);
-  if (!choices?.length && !value) return null;
+  if (!all?.length && !value) return null;
+  const documented = choices ? (all ?? []).filter((item) => choices.includes(item)) : (all ?? []);
+  const rest = choices ? (all ?? []).filter((item) => !choices.includes(item)) : [];
+  const option = (item: string) => (
+    <option key={item} value={item}>
+      {format(item)}
+    </option>
+  );
   return (
-    <label>
+    <label className={full ? 'full' : undefined}>
       {label}
       <select
         ref={ref}
         aria-label={label}
-        aria-invalid={invalid || undefined}
+        aria-invalid={!!error || undefined}
         value={value}
         onChange={(event) => onChange(event.target.value)}
       >
         <option value="">{defaultLabel}</option>
-        {unsupported && (
+        {unsendable && (
           <option value={value} disabled>
-            {format(value)} · 미지원
+            {format(value)} · 보낼 수 없음
           </option>
         )}
-        {choices?.map((item) => (
-          <option key={item} value={item}>
-            {format(item)}
-          </option>
-        ))}
+        {choices && rest.length > 0 ? (
+          <>
+            <optgroup label="문서로 확인한 값">{documented.map(option)}</optgroup>
+            <optgroup label="미확인 값 · 공급자가 판정">{rest.map(option)}</optgroup>
+          </>
+        ) : (
+          documented.map(option)
+        )}
       </select>
-      {error && <small className="error">{error}</small>}
+      {error ? (
+        <small className="error">{error}</small>
+      ) : undocumented ? (
+        <small className="provider-undocumented">{UNDOCUMENTED}</small>
+      ) : null}
+      {note && <small className="provider-wire">{note}</small>}
     </label>
   );
 }
 function OptionalNumber({
   label,
   value,
-  supported,
+  sendable,
+  documented,
   onChange,
   min,
   max,
 }: {
   label: string;
   value: string;
-  supported: boolean;
+  sendable: boolean;
+  documented: boolean | undefined;
   onChange: (value: string) => void;
   min: number;
   max: number;
 }) {
   const ref = useRef<HTMLInputElement>(null),
-    invalid = value !== '' && !supported;
+    invalid = value !== '' && !sendable;
   const error = invalid
-    ? `${label}은 이 모델에서 지원하지 않아요. 값을 비워 모델 기본값을 사용하세요.`
+    ? `${label}은 이 연결에서 보낼 수 없어요. 값을 비워 모델 기본값을 사용하세요.`
     : '';
   useEffect(() => {
     ref.current?.setCustomValidity(error);
   }, [error]);
-  if (!supported && value === '') return null;
+  if (!sendable && value === '') return null;
   return (
     <label>
       {label}
@@ -129,25 +187,29 @@ function OptionalNumber({
         value={value}
         onChange={(event) => onChange(event.target.value)}
       />
-      {error && <small className="error">{error}</small>}
+      {error ? (
+        <small className="error">{error}</small>
+      ) : documented === false && value !== '' ? (
+        <small className="provider-undocumented">{UNDOCUMENTED}</small>
+      ) : null}
     </label>
   );
 }
 function StopSequence({
   value,
   index,
-  supported,
+  sendable,
   onChange,
   onRemove,
 }: {
   value: string;
   index: number;
-  supported: boolean;
+  sendable: boolean;
   onChange: (value: string) => void;
   onRemove: () => void;
 }) {
   const ref = useRef<HTMLTextAreaElement>(null),
-    error = supported ? '' : '이 모델은 정지 문자열을 지원하지 않아요. 이 항목을 삭제하세요.';
+    error = sendable ? '' : '이 연결은 정지 문자열을 보낼 수 없어요. 이 항목을 삭제하세요.';
   useEffect(() => {
     ref.current?.setCustomValidity(error);
   }, [error]);
@@ -158,7 +220,7 @@ function StopSequence({
         <textarea
           ref={ref}
           aria-label={`정지 문자열 ${index + 1}`}
-          aria-invalid={!supported || undefined}
+          aria-invalid={!sendable || undefined}
           maxLength={1000}
           required
           value={value}
@@ -172,6 +234,53 @@ function StopSequence({
     </div>
   );
 }
+/** The one strength control every protocol has, stored in that protocol's native field. */
+function ThinkingSelect({
+  hints,
+  value,
+  onChange,
+}: {
+  hints: ModelHints;
+  value: ModelDraft;
+  onChange: (next: Partial<ModelDraft>) => void;
+}) {
+  const thinking = hints.thinking;
+  // The native value is what gets sent; a gateway receives its own field and maps it onward.
+  const note = thinking?.gateway
+    ? `전송 필드 ${thinking.wire} · 게이트웨이나 호환 서버가 모델 공급자의 값으로 변환해요. 모델 공급자의 필드를 직접 지정하려면 그 공급자 연결을 사용하세요.`
+    : `전송 필드 ${thinking?.wire} · 선택한 값을 그대로 보내요.`;
+  // A value kept from another connection's protocol stays visible so the user can clear it.
+  const stale = (['thinkingLevel', 'reasoningEffort', 'outputEffort'] as const).filter(
+    (field) => field !== thinking?.field && value[field] !== ''
+  );
+  return (
+    <>
+      {thinking && (
+        <ModelOptionSelect
+          label="사고 강도"
+          value={value[thinking.field]}
+          choices={thinking.known}
+          vocabulary={thinking.all}
+          onChange={(next) => onChange({ [thinking.field]: next })}
+          format={strengthLabel}
+          note={note}
+          full
+        />
+      )}
+      {stale.map((field) => (
+        <ModelOptionSelect
+          key={field}
+          label={`이전 연결의 사고 강도 · ${field}`}
+          value={value[field]}
+          choices={undefined}
+          vocabulary={[]}
+          onChange={(next) => onChange({ [field]: next })}
+          format={strengthLabel}
+        />
+      ))}
+    </>
+  );
+}
 
 export function ProviderModelFields({
   value,
@@ -180,31 +289,20 @@ export function ProviderModelFields({
   section,
   forcedVertexTier,
 }: {
-  section: 'basic' | 'generation' | 'advanced';
+  section: 'basic' | 'advanced';
   value: ModelDraft;
   onChange: (value: ModelDraft) => void;
   connection: Connection | undefined;
   forcedVertexTier?: VertexRequestTier;
 }) {
-  const vertex = connection?.protocol === 'vertex-gemini-v1',
-    fixture = connection?.protocol === 'fixture-sse-v1',
-    codex = connection?.protocol === 'codex-app-server-v1';
-  const capability = connection ? modelCapability(connection.protocol, value.modelId) : undefined;
-  const official = connection && isOfficialModelConnection(connection);
-  const compatible =
-    connection?.protocol === 'openai-chat-v1' ||
-    connection?.protocol === 'vercel-chat-v1' ||
-    (connection?.protocol === 'openai-responses-v1' && !official);
-  const thinkingLevels =
-    capability?.thinkingLevels ?? (fixture ? ['LOW', 'MEDIUM', 'HIGH'] : undefined);
-  const reasoningEfforts =
-    capability?.reasoningEfforts ??
-    (codex
-      ? ['none', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max']
-      : compatible
-        ? ['none', 'minimal', 'low', 'medium', 'high', 'xhigh']
-        : undefined);
-  const temperature = capability?.temperature ?? (fixture || compatible);
+  const protocol = connection?.protocol;
+  const vertex = protocol === 'vertex-gemini-v1',
+    fixture = protocol === 'fixture-sse-v1',
+    codex = protocol === 'codex-app-server-v1';
+  const keys = protocol ? protocolOptionKeys(protocol) : [];
+  const sends = (key: string) => keys.includes(key);
+  const hints = connection ? modelHints(connection, value.modelId) : undefined;
+  const capability = hints?.capability;
   const cacheTtlAvailable = value.cacheMode === 'explicit' || value.cacheMode === 'automatic';
   const optionsError =
     connection && value.modelId ? modelDraftError(value, connection, forcedVertexTier) : '';
@@ -255,8 +353,8 @@ export function ProviderModelFields({
             ))}
           </datalist>
           <small>
-            목록에서 고르거나 모델 ID를 직접 입력해요. 모델을 바꾸면 기존 설정을 유지하고 맞지 않는
-            옵션을 알려줘요.
+            목록에서 고르거나 모델 ID를 직접 입력해요. 표에 없는 모델도 그대로 보내고 지원 여부는
+            공급자가 답해요.
           </small>
         </label>
         <ToggleRow
@@ -265,37 +363,41 @@ export function ProviderModelFields({
           checked={value.enabled}
           onChange={(enabled) => update({ enabled })}
         />
-        {value.modelId && (
-          <p className="muted full">
-            {capability
-              ? `${capability.name} · ${official ? '파라미터 지원 명세 확인' : '참고 명세 있음 · 이 연결의 모델 지원은 미확인'}`
-              : compatible
-                ? '호환 API의 기본 옵션을 제공해요. 선택한 공급자와 모델의 지원 여부는 미확인이에요.'
-                : codex
-                  ? 'Codex 실행기의 모델과 추론 옵션을 확인해 주세요.'
-                  : fixture
-                    ? '로컬 합성 검사용 모델이에요.'
-                    : '이 모델의 파라미터 지원 명세는 미확인이에요. ID 등록만으로 실행 지원이 확인되지는 않아요.'}
+        {value.modelId && hints && (
+          <p className="muted full" data-testid="model-hint-source">
+            {hints.source === 'none'
+              ? codex
+                ? 'Codex 실행기의 모델이에요. 사고 강도는 Codex가 받는 값으로 보내요.'
+                : fixture
+                  ? '로컬 합성 검사용 모델이에요.'
+                  : '옵션 출처 미확인 · 이 연결이 보낼 수 있는 옵션을 모두 고를 수 있고 지원 여부는 공급자가 판정해요.'
+              : `옵션 출처 ${sourceLabels[hints.source]}${capability ? ` · ${capability.name}` : ''} · 확인한 값을 먼저 보여주고 나머지는 미확인으로 표시해요.`}
           </p>
         )}
-      </div>
-      <div
-        className="provider-model-section full"
-        data-model-section="generation"
-        hidden={section !== 'generation'}
-      >
         <label>
           {codex ? '출력 목표 토큰' : '최대 출력 토큰'}
           <input
             aria-label={codex ? '출력 목표 토큰' : '최대 출력 토큰'}
             type="number"
             min={1}
-            max={capability?.maxOutputTokens ?? 200000}
+            max={500000}
             required
             value={value.maxOutputTokens}
             onChange={(event) => update({ maxOutputTokens: event.target.value })}
           />
+          {hints?.maxOutputTokens !== undefined && (
+            <small>
+              {sourceLabels[hints.source]} 상한 {hints.maxOutputTokens.toLocaleString()} 토큰
+            </small>
+          )}
         </label>
+        {hints && <ThinkingSelect hints={hints} value={value} onChange={update} />}
+      </div>
+      <div
+        className="provider-model-section full"
+        data-model-section="advanced"
+        hidden={section !== 'advanced'}
+      >
         <label className="full">
           입력 컨텍스트 한도
           <input
@@ -311,62 +413,75 @@ export function ProviderModelFields({
           <small>
             비우면 기본값 272,000토큰을 사용해요. o200k 기반 토큰 추정치예요. 한도에 가까워지면 앞선
             대화를 요약하고 최근 대화를 유지해요. 출력 토큰 한도와 별개예요.
+            {hints?.inputTokenLimit !== undefined &&
+              ` 공급자 목록 기준 ${hints.inputTokenLimit.toLocaleString()}토큰이에요.`}
           </small>
         </label>
-        <ModelOptionSelect
-          label="Thinking Level"
-          value={value.thinkingLevel}
-          choices={thinkingLevels}
-          onChange={(thinkingLevel) => update({ thinkingLevel })}
-        />
-        <ModelOptionSelect
-          label="Reasoning Effort"
-          value={value.reasoningEffort}
-          choices={reasoningEfforts}
-          onChange={(reasoningEffort) => update({ reasoningEffort })}
-        />
-        <ModelOptionSelect
-          label="Verbosity"
-          value={value.verbosity}
-          choices={capability?.verbosities}
-          onChange={(verbosity) => update({ verbosity })}
-        />
-        <ModelOptionSelect
-          label="Output Effort"
-          value={value.outputEffort}
-          choices={capability?.outputEfforts}
-          onChange={(outputEffort) => update({ outputEffort })}
-        />
-        <ModelOptionSelect
-          label="Thinking"
-          value={value.thinkingMode}
-          choices={capability?.thinkingModes}
-          onChange={(thinkingMode) => update({ thinkingMode })}
-        />
-        {capability?.thinkingModes?.length === 1 && capability.thinkingModes[0] === 'adaptive' && (
-          <p className="muted full">Adaptive Thinking은 항상 켜져 있어요.</p>
+        {/* Options the protocol cannot send stay visible while a value is set, so it can be cleared. */}
+        {(hints?.thinkingModes || value.thinkingMode) && (
+          <ModelOptionSelect
+            label="사고 모드"
+            value={value.thinkingMode}
+            choices={hints?.thinkingModes?.known}
+            vocabulary={hints?.thinkingModes?.all ?? []}
+            onChange={(thinkingMode) => update({ thinkingMode })}
+            format={modeLabel}
+          />
         )}
-        <ModelOptionSelect
-          label="Service Tier"
-          value={value.serviceTier}
-          choices={capability?.serviceTiers}
-          onChange={(serviceTier) => update({ serviceTier })}
-          format={tierLabel}
-          validationError={forcedServiceTierError(value, connection, forcedVertexTier)}
-        />
+        {(sends('verbosity') || value.verbosity) && (
+          <ModelOptionSelect
+            label="Verbosity"
+            value={value.verbosity}
+            choices={capability?.verbosities}
+            vocabulary={sends('verbosity') ? PROTOCOL_OPTION_VALUES.verbosity : []}
+            onChange={(verbosity) => update({ verbosity })}
+          />
+        )}
+        {(sends('reasoningMode') || value.reasoningMode) && (
+          <ModelOptionSelect
+            label="Reasoning Mode"
+            value={value.reasoningMode}
+            choices={capability?.reasoningModes}
+            vocabulary={sends('reasoningMode') ? PROTOCOL_OPTION_VALUES.reasoningMode : []}
+            onChange={(reasoningMode) => update({ reasoningMode })}
+          />
+        )}
+        {(sends('reasoningContext') || value.reasoningContext) && (
+          <ModelOptionSelect
+            label="Reasoning Context"
+            value={value.reasoningContext}
+            choices={capability?.reasoningContexts}
+            vocabulary={sends('reasoningContext') ? PROTOCOL_OPTION_VALUES.reasoningContext : []}
+            onChange={(reasoningContext) => update({ reasoningContext })}
+          />
+        )}
+        {protocol && (sends('serviceTier') || value.serviceTier) && (
+          <ModelOptionSelect
+            label="Service Tier"
+            value={value.serviceTier}
+            choices={capability?.serviceTiers ?? protocolServiceTiers(protocol)}
+            vocabulary={
+              !sends('serviceTier') ? [] : vertex ? protocolServiceTiers(protocol) : undefined
+            }
+            onChange={(serviceTier) => update({ serviceTier })}
+            format={tierLabel}
+            validationError={forcedServiceTierError(value, connection, forcedVertexTier)}
+          />
+        )}
         {vertex && forcedVertexTier && (
           <p className="muted full">
             서버에서 Service Tier를 {tierLabel(forcedVertexTier)}로 제한해요. 모델 기본값도{' '}
             {tierLabel(forcedVertexTier)}로 실행돼요.
           </p>
         )}
-        {(capability?.cacheModes || value.cacheMode || value.cacheTtl) && (
+        {protocol && (sends('cacheMode') || value.cacheMode || value.cacheTtl) && (
           <fieldset className="editor-fields full">
             <legend>프롬프트 캐시</legend>
             <ModelOptionSelect
               label="캐시 방식"
               value={value.cacheMode}
               choices={capability?.cacheModes}
+              vocabulary={sends('cacheMode') ? PROTOCOL_OPTION_VALUES.cacheMode : []}
               onChange={(cacheMode) => update({ cacheMode })}
               defaultLabel="프롬프트 기준 / 공급자 기본값"
               format={(mode) =>
@@ -382,7 +497,14 @@ export function ProviderModelFields({
             <ModelOptionSelect
               label="캐시 유지 시간"
               value={value.cacheTtl}
-              choices={cacheTtlAvailable ? capability?.cacheTtls : undefined}
+              choices={
+                cacheTtlAvailable
+                  ? (capability?.cacheTtls ?? protocolCacheTtls(protocol))
+                  : undefined
+              }
+              vocabulary={
+                cacheTtlAvailable && sends('cacheMode') ? protocolCacheTtls(protocol) : []
+              }
               onChange={(cacheTtl) => update({ cacheTtl })}
               defaultLabel="공급자 기본값"
               format={(ttl) =>
@@ -418,8 +540,63 @@ export function ProviderModelFields({
             Gemini는 공급자의 자동 캐시를 사용해요. 캐시 끄기와 유지 시간을 직접 지정하지 않아요.
           </small>
         )}
-        {(compatible || codex) && !capability?.cacheModes && (
+        {protocol && !vertex && !sends('cacheMode') && (
           <small className="full">이 연결에서는 서비스 자체의 캐싱을 직접 제어하지 않아요.</small>
+        )}
+        <OptionalNumber
+          label="Temperature"
+          value={value.temperature}
+          sendable={sends('temperature')}
+          documented={capability?.temperature}
+          min={0}
+          max={2}
+          onChange={(temperature) => update({ temperature })}
+        />
+        <OptionalNumber
+          label="Top P"
+          value={value.topP}
+          sendable={sends('topP')}
+          documented={capability?.topP}
+          min={0}
+          max={1}
+          onChange={(topP) => update({ topP })}
+        />
+        {(sends('stopSequences') || value.stopSequences.length > 0) && (
+          <fieldset className="editor-fields full">
+            <legend>정지 문자열</legend>
+            {value.stopSequences.map((stop, index) => (
+              <StopSequence
+                key={index}
+                index={index}
+                value={stop}
+                sendable={sends('stopSequences')}
+                onChange={(next) =>
+                  update({
+                    stopSequences: value.stopSequences.map((item, i) =>
+                      i === index ? next : item
+                    ),
+                  })
+                }
+                onRemove={() =>
+                  update({ stopSequences: value.stopSequences.filter((_, i) => i !== index) })
+                }
+              />
+            ))}
+            {sends('stopSequences') && (
+              <button
+                type="button"
+                className="secondary provider-stop-add full"
+                disabled={value.stopSequences.length >= 4}
+                onClick={() => update({ stopSequences: [...value.stopSequences, ''] })}
+              >
+                <Plus size={18} aria-hidden="true" /> 정지 문자열 추가
+              </button>
+            )}
+            <small className="full">
+              최대 4개예요. 각 항목의 문자열이 생성되면 응답을 멈춰요. 줄바꿈도 문자열에 포함돼요.
+              {capability?.stopSequences === false && ` ${UNDOCUMENTED}`}
+            </small>
+          </fieldset>
         )}
         {!fixture && (
           <label>
@@ -436,96 +613,12 @@ export function ProviderModelFields({
             />
           </label>
         )}
-        <small className="full">
-          모델 기본값을 선택하면 해당 옵션을 보내지 않아요. 현재 설정이 맞지 않으면 값을 변경한 뒤
-          저장하세요.
-        </small>
-        {codex && (
-          <small className="full">
-            출력 목표 토큰은 Uimori의 출력 목표이며 Codex 내부 hard budget을 보장하지 않아요.
-          </small>
-        )}
-        {optionsError && (
-          <p className="error full" role="alert">
-            {optionsError}
-          </p>
-        )}
-      </div>
-      <div
-        className="provider-model-section full"
-        data-model-section="advanced"
-        hidden={section !== 'advanced'}
-      >
-        <ModelOptionSelect
-          label="Reasoning Mode"
-          value={value.reasoningMode}
-          choices={capability?.reasoningModes}
-          onChange={(reasoningMode) => update({ reasoningMode })}
-        />
-        <ModelOptionSelect
-          label="Reasoning Context"
-          value={value.reasoningContext}
-          choices={capability?.reasoningContexts}
-          onChange={(reasoningContext) => update({ reasoningContext })}
-        />
-        <OptionalNumber
-          label="Temperature"
-          value={value.temperature}
-          supported={temperature}
-          min={0}
-          max={2}
-          onChange={(temperature) => update({ temperature })}
-        />
-        <OptionalNumber
-          label="Top P"
-          value={value.topP}
-          supported={capability?.topP === true}
-          min={0}
-          max={1}
-          onChange={(topP) => update({ topP })}
-        />
-        {(capability?.stopSequences || value.stopSequences.length > 0) && (
-          <fieldset className="editor-fields full">
-            <legend>정지 문자열</legend>
-            {value.stopSequences.map((stop, index) => (
-              <StopSequence
-                key={index}
-                index={index}
-                value={stop}
-                supported={capability?.stopSequences === true}
-                onChange={(next) =>
-                  update({
-                    stopSequences: value.stopSequences.map((item, i) =>
-                      i === index ? next : item
-                    ),
-                  })
-                }
-                onRemove={() =>
-                  update({ stopSequences: value.stopSequences.filter((_, i) => i !== index) })
-                }
-              />
-            ))}
-            {capability?.stopSequences && (
-              <button
-                type="button"
-                className="secondary provider-stop-add full"
-                disabled={value.stopSequences.length >= 4}
-                onClick={() => update({ stopSequences: [...value.stopSequences, ''] })}
-              >
-                <Plus size={18} aria-hidden="true" /> 정지 문자열 추가
-              </button>
-            )}
-            <small className="full">
-              최대 4개예요. 각 항목의 문자열이 생성되면 응답을 멈춰요. 줄바꿈도 문자열에 포함돼요.
-            </small>
-          </fieldset>
-        )}
         {connection && !fixture && (
           <>
             {codex ? (
               <p className="full">Codex 번역은 고정된 구조화 출력 계약을 사용해요.</p>
             ) : (
-              !vertex && (
+              sends('structuredOutput') && (
                 <label>
                   번역 구조화 출력
                   <select
@@ -550,7 +643,7 @@ export function ProviderModelFields({
             </small>
           </>
         )}
-        {(codex || vertex || fixture) && value.structuredOutput !== 'default' && (
+        {protocol && !sends('structuredOutput') && value.structuredOutput !== 'default' && (
           <p className="error full">
             이 연결은 번역 출력 형식을 직접 지정할 수 없어요.{' '}
             <button
@@ -561,6 +654,15 @@ export function ProviderModelFields({
               번역 출력 형식 기본값 사용
             </button>
           </p>
+        )}
+        <small className="full">
+          모델 기본값을 선택하면 해당 옵션을 보내지 않아요. 미확인 값은 그대로 보내고 공급자가
+          거절하면 그 이름을 알려줘요.
+        </small>
+        {codex && (
+          <small className="full">
+            출력 목표 토큰은 Uimori의 출력 목표이며 Codex 내부 hard budget을 보장하지 않아요.
+          </small>
         )}
         <fieldset className="editor-fields full">
           <legend>선택형 평가 도구</legend>
@@ -712,6 +814,11 @@ export function ProviderModelFields({
           </div>
         </details>
       </div>
+      {optionsError && (
+        <p className="error full" role="alert">
+          {optionsError}
+        </p>
+      )}
     </>
   );
 }

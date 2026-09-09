@@ -74,11 +74,26 @@ const fieldParts = new Set([
   'thinkingConfig',
   'thinkingBudget',
   'thinkingLevel',
+  'thinking',
+  'type',
+  'budget_tokens',
   'reasoning',
+  'reasoning_effort',
   'effort',
+  'mode',
+  'context',
+  'output_config',
+  'verbosity',
+  'stop_sequences',
+  'stopSequences',
+  'stop',
   'service_tier',
   'cache_control',
   'cachedContent',
+  'prompt_cache_options',
+  'prompt_cache_breakpoint',
+  'prompt_cache_retention',
+  'ttl',
 ]);
 const object = (value: unknown): Record<string, unknown> | undefined =>
   value !== null && typeof value === 'object' && !Array.isArray(value)
@@ -169,6 +184,15 @@ export async function readProviderHttpDiagnostic(
         fields.push(value);
     };
     addField(error.param);
+    // Messages are never stored; only a leading `path:` or a quoted identifier that is entirely
+    // whitelisted field names is kept, so a provider that names the rejected field in prose still
+    // yields a field.
+    if (typeof error.message === 'string' && error.message.length <= 4000) {
+      const leading = /^\s*([A-Za-z_][A-Za-z0-9_.[\]]{0,127})\s*:/u.exec(error.message);
+      if (leading) addField(leading[1]);
+      for (const quoted of error.message.matchAll(/['"`]([A-Za-z_][A-Za-z0-9_.[\]]{0,127})['"`]/gu))
+        addField(quoted[1]);
+    }
     if (Array.isArray(error.details))
       for (const detail of error.details.slice(0, 8)) {
         const violations = object(detail)?.fieldViolations;

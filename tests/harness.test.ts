@@ -147,8 +147,8 @@ test('browser harness preserves selected commands, verified identity and DB evid
 });
 
 test.each([false, true])(
-  'local verification isolates inherited self-host and Codex settings at the real spawn boundary (registration fixture: %s)',
-  async (registrationFixture) => {
+  'local verification isolates inherited self-host and Codex settings at the real spawn boundary (provider fixture: %s)',
+  async (providerFixture) => {
     vi.stubEnv('NR_PUBLIC_ORIGIN', 'https://synthetic-self-host.example');
     vi.stubEnv('NR_HOST', '0.0.0.0');
     vi.stubEnv('NR_PORT', '4310');
@@ -156,12 +156,10 @@ test.each([false, true])(
     vi.stubEnv('NR_PROVIDER_ORIGINS', 'https://synthetic-provider.example');
     vi.stubEnv('NR_CODEX_ENABLED', '1');
     vi.stubEnv('NR_CODEX_EXECUTABLE', 'synthetic-parent-codex.exe');
-    await run({ registrationFixture });
+    await run({ providerFixture });
     const env: NodeJS.ProcessEnv = lib.startServer.mock.calls[0][0];
-    const providerOrigins = registrationFixture
-      ? new URL(env.NR_REGISTRATION_FIXTURE_URL!).origin
-      : '';
-    if (registrationFixture) expect(new URL(providerOrigins).hostname).toBe('127.0.0.1');
+    const providerOrigins = providerFixture ? new URL(env.NR_PROVIDER_FIXTURE_URL!).origin : '';
+    if (providerFixture) expect(new URL(providerOrigins).hostname).toBe('127.0.0.1');
     const probe = await realLib.command(
       [
         '-e',
@@ -332,7 +330,7 @@ test('passing browser assertions cannot hide errors from the actual loopback pro
   const originalCommand = lib.command.getMockImplementation();
   lib.command.mockImplementation(
     async (args: string[], options: { env: Record<string, string> }) => {
-      const response = await fetch(options.env.NR_REGISTRATION_FIXTURE_URL!, {
+      const response = await fetch(options.env.NR_PROVIDER_FIXTURE_URL!, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ protocol: 'unexpected-fixture-request', input: {} }),
@@ -342,10 +340,10 @@ test('passing browser assertions cannot hide errors from the actual loopback pro
       return originalCommand(args, options);
     }
   );
-  const { summary } = await run({ registrationFixture: true });
+  const { summary } = await run({ providerFixture: true });
   expect(summary.report.passed).toBe(1);
   expect(summary.status).toBe('FAIL');
-  expect(summary.registrationFixture.errors).toEqual(['Unexpected fixture purpose']);
+  expect(summary.providerFixture.errors).toEqual(['Unexpected fixture purpose']);
   expect(summary.failures).toContain('Fixture: Unexpected fixture purpose');
   expect(summary.cleanup).toMatchObject({ status: 'PASS', runtimeRemoved: true });
   expect(process.exitCode).toBe(1);

@@ -1,5 +1,15 @@
 # 현재 작업 상태 · Uimori
 
+## 로컬 UI 개선과 원격 모델 개편 통합 (2026-09-09)
+
+로컬 `f896bf2`에 누적 UI·프롬프트·알림 작업을 보존하고 원격 `436e9b4`를 병합했어요. 모델 옵션 검증은 원격의 프로토콜 단위 계약을 따르고 Vercel Sol Flex 힌트와 로컬 번역 오류 통합을 유지했어요. `quality:full` **1,430 PASS / 선택 1 skip**, 관련 합성 브라우저 **18 PASS / 옛 라벨 검사 1 FAIL** 후 PMUI11을 새 ‘사고 강도’ 라벨로 수정해 **1 PASS**를 확인했어요. 증거는 `output/playwright/model-merge-2026-09-09T01-33-46-918Z-3b1fc5a4/summary.json`과 `output/playwright/model-merge-followup-2026-09-09T01-35-55-850Z-6cf62099/summary.json`이에요. 푸시·운영 배포는 하지 않았어요.
+
+## 모델 등록 개편 · 실행 게이트 제거와 공급자 판정 표시 (2026-09-09)
+
+모델 ID 코드표를 실행 조건으로 쓰던 `requireSupportedModel`과 프리셋의 `capabilityRevision` 각인을 없앴어요. 표에 없는 모델 ID와 값도 저장·실행하며, 저장 검증은 프로토콜 encoder가 보낼 수 있는 옵션·값 어휘만 거절해요. 공급자의 4xx 거절에서 화이트리스트 필드 이름만 추출해 실패 턴 카드·보조 작업 카드·응답 테스트에 거절된 설정 이름으로 표시하고 메시지 원문은 저장하지 않아요. 응답 테스트는 프리셋 옵션을 그대로 보내되 출력 256토큰·캐시 끄기·도구 없음이에요. Anthropic·Vercel 모델 목록의 한도·옵션 값을 `Connection.catalog`에 저장하고 목록에서 고르면 한도를 미리 채워요. Gemini 연결은 선택한 API 키 환경변수가 있으면 Gemini Developer API 목록에서 Gemini 모델과 한도를 받아와요. state·memory 작업의 4xx 거절도 같은 안내로 표시해요. 모델 편집은 **기본 / 고급** 두 탭이며 노출 조절은 **사고 강도** 하나예요. 문서로 확인한 값을 먼저, 나머지 프로토콜 값을 미확인으로 보여주고 어느 요청 필드로 나가는지 표시해요. 에이전트 등록 보조 기능과 관련 저장소·라우트·UI·테스트는 삭제했어요. 계약은 [연결 계약](../docs/PROVIDERS.md)과 [모델 옵션](../docs/MODEL-PARAMETERS.md)에 있고, 근거와 버린 대안은 [모델 등록 결정](../docs/MODEL-REGISTRATION.md)에 있어요.
+
+검증은 CI와 같은 Node 24.14.0·resolved TMPDIR로 실행했어요. `quality` PASS, 새 빌드 PASS, 단위·통합 **1,409 PASS / 1 opt-in skip**, 도구 검사 PASS, `verify:providers` **15 PASS**(마지막 재실행 `provider-management-2026-09-09T01-28-29-631Z-23f36d36`, 다른 프로토콜 연결로 바꿔도 이전 옵션이 보이고 지울 수 있는지 PMUI12에서 확인), `verify:evaluation` **2 PASS**, `verify:browser-smoke` **3 PASS**, product-browser P04 세 case는 세션용 임시 runner로 **3 PASS**예요. 증거는 `output/playwright/provider-management-2026-09-09T01-04-14-855Z-ebb0a399/summary.json`, `output/playwright/product-p04-scratch-2026-09-09T01-07-35-168Z-45a504da/summary.json`이에요. 실제 공급자 호출·운영 DB·커밋·푸시·배포는 수행하지 않았어요. Google Agent Platform 목록 API 유무의 직접 대조와 실제 키로 확인하는 거절 필드 형태는 남은 항목이에요.
+
 ## boolean 스위치와 복수 선택 구분 (2026-09-09)
 
 창작 boolean 옵션과 협업 사용 등 켜기/끄기 설정을 공통 `Switch`로 통일하고, 공유할 옵션·역할·목록 선택은 사각형 `SelectionCheckbox`로 구분했어요. boolean 옵션의 미설정 버튼을 제거하고 새 정의·값 저장은 true/false만 허용해요. 기존 null은 편집에서 꺼짐으로 보이며 명시 저장 때 false로 확정해요. 다른 타입의 null과 과거 Run·보관 해석은 유지하고 운영 DB는 변경하지 않았어요.

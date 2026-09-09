@@ -158,8 +158,8 @@ describe('OpenAI-compatible Chat pure protocol (no live calls)', () => {
     { reasoningMode: 'pro' },
     { reasoningContext: 'all_turns' },
     { outputEffort: 'high' },
-    { serviceTier: 'flex' },
-  ])('does not silently send or discard unreviewed native option %j', (options) => {
+    { thinkingLevel: 'HIGH' },
+  ])('does not silently send or discard foreign native option %j', (options) => {
     const input = request();
     Object.assign(input.generation!, options);
     expect(() => encodeChat(input)).toThrow();

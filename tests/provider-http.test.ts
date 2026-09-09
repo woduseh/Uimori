@@ -193,23 +193,57 @@ afterEach(() => {
 // fetch is always replaced. No live network, provider SDK, real credential environment or paid call.
 describe('native provider HTTP boundary with synthetic fetch', () => {
   test.each(variants.slice(0, 2))(
-    '$protocol rejects unreviewed official models before reading credentials',
+    '$protocol sends unlisted official models and surfaces the rejected option field',
     async (variant) => {
-      const fetch = vi.fn();
+      const responses = variant.protocol === 'openai-responses-v1';
+      const body = responses
+        ? {
+            error: {
+              type: 'invalid_request_error',
+              code: 'unsupported_parameter',
+              param: 'reasoning.effort',
+              message: `Unsupported parameter ${secret}`,
+            },
+          }
+        : {
+            type: 'error',
+            error: {
+              type: 'invalid_request_error',
+              message: `output_config.effort: Input should be low ${secret}`,
+            },
+          };
+      const fetch = vi.fn(
+        async () =>
+          new Response(JSON.stringify(body), {
+            status: 400,
+            headers: { 'content-type': 'application/json' },
+          })
+      );
       const resolveCredential = vi.fn(() => secret);
       const onWire = vi.fn();
       vi.stubGlobal('fetch', fetch);
       const input = request(variant);
       input.modelId = 'unreviewed-future-model';
+      input.generation = responses
+        ? { ...input.generation!, reasoningEffort: 'xhigh' }
+        : { ...input.generation!, outputEffort: 'xhigh' };
       const result = await executeProvider(connection(variant), input, {
         ...options(variant),
         resolveCredential,
         onWire,
       });
-      expect(result.error?.code).toBe('UNVERIFIED_MODEL_CAPABILITY');
-      expect(resolveCredential).not.toHaveBeenCalled();
-      expect(onWire).not.toHaveBeenCalled();
-      expect(fetch).not.toHaveBeenCalled();
+      expect(resolveCredential).toHaveBeenCalledTimes(1);
+      expect(onWire).toHaveBeenCalledTimes(1);
+      expect(fetch).toHaveBeenCalledTimes(1);
+      expect(result.status).toBe('error');
+      expect(result.error).toMatchObject({
+        code: 'HTTP_400',
+        diagnostic: {
+          httpStatus: 400,
+          fields: [responses ? 'reasoning.effort' : 'output_config.effort'],
+        },
+      });
+      expect(JSON.stringify(result)).not.toContain(secret);
     }
   );
 

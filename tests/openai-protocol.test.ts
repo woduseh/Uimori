@@ -480,7 +480,7 @@ describe('native Responses pure protocol (no live calls)', () => {
     expect(() => encodeResponses(continued)).toThrow('OPENAI_CONTINUATION_MISMATCH');
   });
 
-  test('omits unselected reasoning and verbosity while rejecting unsupported Astra effort', () => {
+  test('omits unselected reasoning and verbosity and forwards an unlisted Astra effort for the provider to judge', () => {
     const input = request();
     input.modelId = 'gpt-6-astra';
     input.generation = { maxOutputTokens: 8192, temperature: null };
@@ -489,7 +489,7 @@ describe('native Responses pure protocol (no live calls)', () => {
     expect(wire).not.toHaveProperty('text');
     expect(wire).not.toHaveProperty('service_tier');
     input.generation.reasoningEffort = 'none';
-    expect(() => encodeResponses(input)).toThrow();
+    expect(record(encodeResponses(input).body).reasoning).toEqual({ effort: 'none' });
   });
 
   test.each(['explicit', 'automatic', 'disabled'] as const)(

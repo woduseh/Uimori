@@ -1582,3 +1582,14 @@ input[type="checkbox"] {
   min-width: 0;
   overflow-wrap: anywhere;
 }
+/* A provider's verdict on saved options; the app reports it and never rewrites the option. */
+.provider-rejection {
+  margin: 8px 0;
+  padding: 8px 12px;
+  border-left: 3px solid var(--accent);
+  line-height: 1.6;
+}
+.provider-rejection small {
+  display: block;
+  color: var(--muted);
+}

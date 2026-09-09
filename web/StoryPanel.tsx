@@ -1,3 +1,4 @@
+import { ProviderRejectionNotice } from './provider-rejection.js';
 import { Upload } from 'lucide-react';
 import { ToggleRow } from './ToggleRow.js';
 import { DeleteButton } from './DeleteButton.js';
@@ -184,6 +185,7 @@ export function StoryJobList({
             {job.mock && <small> · 모의 처리</small>}
           </div>
           {job.error && <p className="error">{job.error}</p>}
+          {job.rejection && <ProviderRejectionNotice rejection={job.rejection} />}
           {act && (
             <div className="form-actions">
               {['failed', 'interrupted', 'cancelled'].includes(job.status) && (

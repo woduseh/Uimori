@@ -159,6 +159,8 @@ export type Job = {
     | 'interrupted';
   attempt: number;
   error: string | null;
+  /** Read-time projection of the failing attempt's provider verdict; never stored on the job. */
+  rejection?: import('./provider-rejection.js').ProviderRejection;
   result: {
     mock: boolean;
     manual?: boolean;
@@ -210,6 +212,8 @@ export type ReaderRun = Omit<Run, 'snapshot' | 'inputs' | 'toolEvents'> & {
     error: string | null;
   };
   modelTitle?: string;
+  /** Read-time projection of the failing attempt's provider verdict; never stored on the run. */
+  rejection?: import('./provider-rejection.js').ProviderRejection;
   packageStart?: Pick<import('./package-start.js').PackageStartSnapshot, 'mode' | 'title'>;
   hasPackages?: boolean;
   sourceSegments?: import('./source-segments.js').SourceSegmentPolicy;

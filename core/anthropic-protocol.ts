@@ -125,7 +125,7 @@ export function encodeAnthropic(request: ProviderRequest): { body: Json; context
   )
     reject('INVALID_ANTHROPIC_REQUEST');
   const generation = request.generation;
-  if (generation) validateModelOptions(generation, 'anthropic-messages-v1', request.modelId);
+  if (generation) validateModelOptions(generation, 'anthropic-messages-v1');
   if (
     request.toolChoice !== undefined &&
     request.toolChoice !== 'auto' &&

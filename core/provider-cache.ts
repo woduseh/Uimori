@@ -17,10 +17,13 @@ export function planProviderCache(
 ): ProviderCachePlan {
   const generation = request.generation;
   if (generation && (generation.cacheMode !== undefined || generation.cacheTtl !== undefined))
-    validateModelOptions(generation, protocol, request.modelId);
-  const capability = modelCapability(protocol, request.modelId);
-  const supported = capability?.cacheModes?.includes('explicit') === true;
+    validateModelOptions(generation, protocol);
   const mode = generation?.cacheMode;
+  // A reviewed model documents cache support; an explicit user choice is honored on any model and
+  // the provider answers if it disagrees. Unset mode on an unknown model leaves the provider default.
+  const supported =
+    modelCapability(protocol, request.modelId)?.cacheModes?.includes('explicit') === true ||
+    mode !== undefined;
   const disabled = mode === 'disabled';
   const automatic = mode === 'automatic';
   const authoredPoints = new Set(
