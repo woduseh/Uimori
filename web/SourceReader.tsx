@@ -7,7 +7,10 @@ import {
 import { StorySourceState } from './StoryPanel.js';
 import { Fragment, useCallback, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import type { Asset } from '../core/product.js';
+import type { Illustration } from '../core/illustration.js';
 import type { ImageTarget, Job, ReaderRun, Source } from '../core/types.js';
+import { IllustrationStrip } from './IllustrationStrip.js';
+import { illustrationActive } from './illustration-labels.js';
 import { ContextSummaryStatus } from './ContextSummaryStatus.js';
 import { formatUsd } from './pricing-display.js';
 import { api, labels } from './api.js';
@@ -17,7 +20,7 @@ import { Prose } from './Prose.js';
 import { LazyDiagnostics } from './LazyDiagnostics.js';
 import { ActionMenu } from './ActionMenu.js';
 import { IconButton } from './IconButton.js';
-import { CopyIcon, EditIcon, ImagesIcon, RefreshIcon } from './ui-icons.js';
+import { CopyIcon, EditIcon, IllustrationIcon, ImagesIcon, RefreshIcon } from './ui-icons.js';
 import { GitFork, Info, MessageCircleQuestion, ReceiptText, Save, X } from 'lucide-react';
 import { Dialog } from './Dialog.js';
 import { SourceSegmentsReader } from './SourceSegmentsReader.js';
@@ -34,6 +37,8 @@ type ReaderProps = {
   source: Source;
   index: number;
   jobs: Job[];
+  /** Scene illustrations attached to this response; absent while the feature is unused. */
+  illustrations?: Illustration[];
   assets: Asset[];
   refresh: () => Promise<void>;
   onError: (error: string) => void;
@@ -119,6 +124,7 @@ function SourceReaderContent({
   source,
   index,
   jobs,
+  illustrations = [],
   assets,
   refresh: refreshSource,
   onFork,
@@ -565,6 +571,13 @@ function SourceReaderContent({
           </button>
         </div>
       )}
+      <IllustrationStrip
+        sourceId={source.id}
+        sourceHash={source.hash}
+        illustrations={illustrations}
+        refresh={refresh}
+        onError={setActionError}
+      />
       {presentation?.error && (
         <p className="error" role="alert">
           {presentation.error}
@@ -708,6 +721,27 @@ function SourceReaderContent({
               : image?.status === 'completed'
                 ? '이미지 다시 배치'
                 : '이미지 자동 배치'}
+          </button>
+          <button
+            type="button"
+            className="secondary"
+            data-testid="illustrate"
+            disabled={!!editor || !!pending || illustrations.some(illustrationActive)}
+            onClick={() =>
+              void action('illustrate', async () => {
+                await api(`/sources/${source.id}/illustrations`, {
+                  expectedSourceHash: source.hash,
+                });
+                await refresh();
+              })
+            }
+          >
+            <IllustrationIcon size={18} aria-hidden="true" />
+            {pending === 'illustrate' || illustrations.some(illustrationActive)
+              ? '삽화를 만드는 중…'
+              : illustrations.some((item) => item.status === 'completed')
+                ? '새 삽화 생성'
+                : '삽화 생성'}
           </button>
           <button
             type="button"

@@ -14,6 +14,7 @@ const roleLabels: Record<Attempt['role'], string> = {
   context: '문맥 압축',
   helper: '도우미',
   title: '채팅 제목',
+  illustration: '삽화',
 };
 type AttemptSummary = Omit<Attempt, 'request' | 'response' | 'rawUsage'>;
 const total = (attempts: AttemptSummary[], field: 'inputTokens' | 'outputTokens' | 'costUsd') =>

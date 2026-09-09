@@ -59,6 +59,12 @@ import type { ProviderResult, WireRecord } from '../core/transport.js';
 import { validateDisplayAnnotation, validatePresentation } from '../core/auxiliary.js';
 import { validateTranslationArtifact } from './source-editing.js';
 import { storyTables } from './story-store.js';
+import {
+  ILLUSTRATION_TABLES,
+  illustrationSettings,
+  validateIllustrationSettings,
+} from './illustrations.js';
+import { defaultIllustrationSettings } from '../core/illustration.js';
 import { normalizeStoryArchiveRow, validateStoryArchive } from './story-archive.js';
 
 import {
@@ -1085,7 +1091,9 @@ export class ProductStore {
       archiveTables.map((t) => [
         t,
         (this.db.prepare(`SELECT * FROM ${t}`).all() as Row[]).map((r) =>
-          t === 'assets' ? { ...r, bytes: Buffer.from(r.bytes).toString('base64') } : r
+          t === 'assets' || t === 'illustration_images'
+            ? { ...r, bytes: Buffer.from(r.bytes).toString('base64') }
+            : r
         ),
       ])
     );
@@ -1118,6 +1126,7 @@ export class ProductStore {
               'package_behavior_entropy',
               'library_organization_state',
               'prompt_workspace',
+              'illustration_settings',
             ].includes(table) && this.db.prepare(`SELECT 1 FROM ${table} LIMIT 1`).get()
         ),
     };
@@ -1136,9 +1145,13 @@ export class ProductStore {
     if (a.format !== 'narrative-archive' || a.version !== 15)
       throw new HttpError(400, 'Unsupported archive');
     const tables = record(a.tables);
+    // Illustration tables were added to schema 15 later; archives without them restore normally.
+    for (const table of ILLUSTRATION_TABLES) tables[table] ??= [];
     fields(tables, archiveTables);
     if (archiveTables.some((t) => !Array.isArray(tables[t]) || tables[t].length > 100000))
       throw new HttpError(400, 'Missing or oversized archive table');
+    if (tables.illustration_settings.length > 1)
+      throw new HttpError(400, 'Archive requires at most one illustration settings row');
     if (tables.prompt_workspace.length !== 1)
       throw new HttpError(400, 'Archive requires exactly one prompt workspace');
     try {
@@ -1147,7 +1160,7 @@ export class ProductStore {
           throw new HttpError(409, 'Restore requires an empty database');
         this.db.exec('PRAGMA defer_foreign_keys=ON');
         this.db.exec(
-          'DELETE FROM package_behavior_entropy; DELETE FROM library_organization_state; DELETE FROM prompt_workspace'
+          'DELETE FROM package_behavior_entropy; DELETE FROM library_organization_state; DELETE FROM prompt_workspace; DELETE FROM illustration_settings'
         );
         for (const table of archiveTables) {
           const columns = (this.db.prepare(`PRAGMA table_info(${table})`).all() as Row[]).map(
@@ -1186,6 +1199,47 @@ export class ProductStore {
               validatePromptWorkspace(parse(row.body));
             }
             if (table === 'assets') validateArchiveAsset(row);
+            if (table === 'illustration_settings') {
+              if (row.id !== 1) throw new HttpError(400, 'Invalid illustration settings row');
+              const body = record(parse(row.body));
+              const { revision, ...rest } = body;
+              row.body = json(
+                validateIllustrationSettings(rest, {
+                  revision: number(revision, 'illustration settings revision'),
+                  testMode: true,
+                })
+              );
+            }
+            if (table === 'illustration_images') {
+              archiveId(row.id);
+              archiveId(row.job_id);
+              archiveId(row.chat_id);
+              const bytes = Buffer.from(text(row.bytes, 'illustration bytes', 24e6), 'base64');
+              if (createHash('sha256').update(bytes).digest('hex') !== row.hash)
+                throw new HttpError(400, 'Illustration image hash mismatch');
+              record(parse(row.body));
+            }
+            if (table === 'illustration_jobs') {
+              archiveId(row.id);
+              archiveId(row.chat_id);
+              archiveId(row.source_revision);
+              if (['queued', 'running'].includes(row.status)) {
+                row.status = 'interrupted';
+                row.owner = null;
+                row.error = 'ILLUSTRATION_INTERRUPTED';
+              }
+              const input = record(parse(row.input));
+              for (const snapshot of [
+                record(input.codex ?? {}).model,
+                record(input.comfyui ?? {}).promptModel,
+              ]) {
+                if (!snapshot) continue;
+                const connection = record(record(snapshot).connection);
+                delete connection.credentialEnv;
+                connection.enabled = false;
+              }
+              row.input = json(input);
+            }
             if (table === 'runs') {
               const snapshot = record(parse(row.snapshot));
               for (const group of [snapshot.profile?.models, snapshot.profile?.collaborationModels])
@@ -1252,11 +1306,18 @@ export class ProductStore {
                 ...columns.map((k) =>
                   table === 'assets' && k === 'bytes'
                     ? Buffer.from(text(row[k], 'asset bytes', 3e6), 'base64')
-                    : row[k]
+                    : table === 'illustration_images' && k === 'bytes'
+                      ? Buffer.from(text(row[k], 'illustration bytes', 24e6), 'base64')
+                      : row[k]
                 )
               );
           }
         }
+        if (!tables.illustration_settings.length)
+          this.db
+            .prepare('INSERT INTO illustration_settings(id,body) VALUES(1,?)')
+            .run(json(defaultIllustrationSettings()));
+        illustrationSettings(this.store);
         if (this.db.prepare('PRAGMA foreign_key_check').all().length)
           throw new HttpError(400, 'Archive references invalid');
         validateArchiveGraph(this);
@@ -1309,6 +1370,7 @@ const archiveTables = [
   ...organizationTables,
   ...libraryOrganizationTables,
   ...packageBehaviorTables,
+  ...ILLUSTRATION_TABLES,
 ];
 
 export const packageControlKey = (r: PackageAttachment) => `${r.id}@${r.revision}:${r.role}`;

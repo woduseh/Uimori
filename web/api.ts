@@ -1,3 +1,5 @@
+import { illustrationErrorMessage } from './illustration-labels.js';
+
 export class ApiError extends Error {
   constructor(
     message: string,
@@ -37,7 +39,12 @@ export async function api<T>(
     const payload = (await response.json().catch(() => null)) as { error?: unknown } | null;
     if (
       typeof payload?.error === 'string' &&
-      /^MODEL_UNAVAILABLE:(main|translation|translation-refusal|status|image|context|helper):/.test(
+      /^(?:ILLUSTRATION_|COMFYUI_|CODEX_IMAGE_)[A-Z0-9_]+$/.test(payload.error)
+    )
+      throw new ApiError(illustrationErrorMessage(payload.error), response.status);
+    if (
+      typeof payload?.error === 'string' &&
+      /^MODEL_UNAVAILABLE:(main|translation|translation-refusal|status|image|context|helper|illustration):/.test(
         payload.error
       )
     )
@@ -67,7 +74,9 @@ export async function api<T>(
         );
       const requiredRole =
         typeof payload?.error === 'string' &&
-        /^MODEL_REQUIRED:(main|translation|status|image|state|context|helper)$/.test(payload.error)
+        /^MODEL_REQUIRED:(main|translation|status|image|state|context|helper|illustration)$/.test(
+          payload.error
+        )
           ? payload.error.split(':')[1]
           : null;
       if (requiredRole) {
@@ -79,6 +88,7 @@ export async function api<T>(
           state: '상태',
           context: '문맥 압축',
           helper: '도우미',
+          illustration: '삽화',
         };
         throw new ApiError(
           `${requiredRole === 'state' ? '상태와 문맥 설정' : '전역 모델 설정'}에서 ${roleNames[requiredRole]} 모델을 선택해 주세요.`,

@@ -1,12 +1,17 @@
 import { execFile } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { existsSync, mkdirSync, mkdtempSync, realpathSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync } from 'node:fs';
 import { rm } from 'node:fs/promises';
-import { delimiter, dirname, extname, isAbsolute, join, resolve } from 'node:path';
+import { delimiter, dirname, extname, isAbsolute, join, relative, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 import { promisify } from 'node:util';
 import type { CodexRuntimeStatus } from '../core/agent-runtime.js';
-import type { Connection } from '../core/product.js';
+import type { Connection, ModelGeneration } from '../core/product.js';
+import {
+  detectImageMime,
+  ILLUSTRATION_MAX_IMAGE_BYTES,
+  type IllustrationImageMime,
+} from '../core/illustration.js';
 import {
   buildCodexDescriptor,
   buildCodexTurn,
@@ -16,10 +21,12 @@ import {
 import { assertContextBudget } from '../core/context-budget.js';
 import {
   ProviderContractError,
+  type Json,
   type ProviderConnection,
   type ProviderExecutionOptions,
   type ProviderRequest,
   type ProviderResult,
+  type ProviderRole,
   type ProviderUsage,
 } from '../core/transport.js';
 import { CodexProcess, CodexProcessError } from './codex-process.js';
@@ -63,6 +70,24 @@ export type CodexRuntimeOptions = {
   launch?: { command: string; args: string[]; env?: NodeJS.ProcessEnv };
 };
 export type CodexExecutionOptions = ProviderExecutionOptions & { beforeTurn?: () => void };
+/** One illustration turn: the official image generation tool renders, Uimori stores the bytes. */
+export type CodexImageRequest = {
+  modelId: string;
+  reasoningEffort?: ModelGeneration['reasoningEffort'];
+  developerInstructions: string;
+  text: string;
+  outputSchema: Json;
+  references: { mime: string; base64: string }[];
+};
+export type CodexImageResult = {
+  status: 'completed' | 'error' | 'cancelled';
+  images: { mime: IllustrationImageMime; bytes: Buffer }[];
+  revisedPrompt: string | null;
+  /** Final agent message text; the caller parses the caption envelope. */
+  text: string;
+  usage: ProviderUsage;
+  error: { code: string; usageLimit?: { limitId: string; resetsAt: number | null } } | null;
+};
 export interface CodexRuntimeService {
   status(): Promise<CodexRuntimeStatus>;
   login(): Promise<CodexRuntimeStatus>;
@@ -74,7 +99,79 @@ export interface CodexRuntimeService {
     request: ProviderRequest,
     options: CodexExecutionOptions
   ): Promise<ProviderResult>;
+  generateImage(
+    connection: ProviderConnection,
+    request: CodexImageRequest,
+    options: CodexExecutionOptions
+  ): Promise<CodexImageResult>;
   close(): Promise<void>;
+}
+type TurnPlan = {
+  role: ProviderRole;
+  modelId: string;
+  effort?: string;
+  developerInstructions: string;
+  input: Json[];
+  outputSchema: Json;
+  /** Attempt record body; never carries attachment bytes or image results. */
+  descriptor: Json;
+  stablePrefix: string;
+  config: Record<string, unknown>;
+  maxLineBytes?: number;
+  allowedItems: readonly string[];
+  onItem?: (item: Record<string, unknown>, method: 'item/started' | 'item/completed') => void;
+};
+type TurnOutcome =
+  | { ok: true; output: string; usage: ProviderUsage }
+  | { ok: false; code: string; usage: ProviderUsage };
+/** Bounded concurrent processes with a bounded, cancellable wait queue. */
+class Slots {
+  occupied = 0;
+  private waiters: { resolve(): void; reject(error: Error): void; cleanup(): void }[] = [];
+  constructor(
+    readonly limit: number,
+    private readonly maxWaiting: number
+  ) {}
+  async acquire(signal: AbortSignal, closed: boolean): Promise<void> {
+    if (signal.aborted) error('CANCELLED');
+    if (closed) error('CODEX_CLOSED');
+    if (this.occupied < this.limit) {
+      this.occupied++;
+      return;
+    }
+    if (this.waiters.length >= this.maxWaiting) error('CODEX_BUSY');
+    await new Promise<void>((resolve, reject) => {
+      const aborted = () => {
+        const index = this.waiters.indexOf(waiter);
+        if (index >= 0) this.waiters.splice(index, 1);
+        waiter.cleanup();
+        reject(new ProviderContractError('CANCELLED'));
+      };
+      const waiter = {
+        resolve,
+        reject,
+        cleanup: () => signal.removeEventListener('abort', aborted),
+      };
+      this.waiters.push(waiter);
+      signal.addEventListener('abort', aborted, { once: true });
+      if (signal.aborted) aborted();
+    });
+  }
+  release(): void {
+    this.occupied--;
+    const waiter = this.waiters.shift();
+    if (waiter) {
+      waiter.cleanup();
+      this.occupied++;
+      waiter.resolve();
+    }
+  }
+  rejectWaiting(code: string): void {
+    for (const waiter of this.waiters.splice(0)) {
+      waiter.cleanup();
+      waiter.reject(new ProviderContractError(code));
+    }
+  }
 }
 
 /** The command comes from server configuration, never a browser, model or saved connection. */
@@ -195,7 +292,15 @@ export const CODEX_RUNTIME_CONFIG = {
   'features.request_permissions': false,
   'features.request_permissions_tool': false,
   'features.unbounded_connection_retries': false,
+  'features.image_generation': false,
 } as const;
+/** Illustration turns enable only the official image generation tool on top of the text policy. */
+export const CODEX_ILLUSTRATION_CONFIG = {
+  ...CODEX_RUNTIME_CONFIG,
+  'features.image_generation': true,
+} as const;
+const ILLUSTRATION_LINE_BYTES = 64 * 1024 * 1024;
+const TEXT_ITEMS = ['userMessage', 'agentMessage', 'reasoning'] as const;
 
 /** Owns one Uimori-specific login and isolated, disposable agent turns. */
 export class CodexRuntime implements CodexRuntimeService {
@@ -205,13 +310,8 @@ export class CodexRuntime implements CodexRuntimeService {
   private managerStart?: Promise<CodexProcess>;
   private installation?: Promise<{ command: string; args: string[] }>;
   private active = new Set<CodexProcess>();
-  private occupied = 0;
-  private waiters: {
-    resolve(): void;
-    reject(error: Error): void;
-    signal: AbortSignal;
-    cleanup(): void;
-  }[] = [];
+  private readonly textSlots: Slots;
+  private readonly imageSlots = new Slots(1, 8);
   private closed = false;
   private closing?: Promise<void>;
   private revision = 0;
@@ -232,47 +332,14 @@ export class CodexRuntime implements CodexRuntimeService {
         options.maxConcurrent > 8)
     )
       error('CODEX_INVALID_CONCURRENCY');
+    this.textSlots = new Slots(options.maxConcurrent ?? 2, 32);
   }
-  private async acquire(signal: AbortSignal): Promise<void> {
-    if (signal.aborted) error('CANCELLED');
-    if (this.closed) error('CODEX_CLOSED');
-    if (this.occupied < (this.options.maxConcurrent ?? 2)) {
-      this.occupied++;
-      return;
-    }
-    if (this.waiters.length >= 32) error('CODEX_BUSY');
-    await new Promise<void>((resolve, reject) => {
-      const aborted = () => {
-        const index = this.waiters.indexOf(waiter);
-        if (index >= 0) this.waiters.splice(index, 1);
-        waiter.cleanup();
-        reject(new ProviderContractError('CANCELLED'));
-      };
-      const waiter = {
-        resolve,
-        reject,
-        signal,
-        cleanup: () => signal.removeEventListener('abort', aborted),
-      };
-      this.waiters.push(waiter);
-      signal.addEventListener('abort', aborted, { once: true });
-      if (signal.aborted) aborted();
-    });
-  }
-  private release(): void {
-    this.occupied--;
-    const waiter = this.waiters.shift();
-    if (waiter) {
-      waiter.cleanup();
-      this.occupied++;
-      waiter.resolve();
-    }
+  private get occupied(): number {
+    return this.textSlots.occupied + this.imageSlots.occupied;
   }
   private rejectWaiting(code: string): void {
-    for (const waiter of this.waiters.splice(0)) {
-      waiter.cleanup();
-      waiter.reject(new ProviderContractError(code));
-    }
+    this.textSlots.rejectWaiting(code);
+    this.imageSlots.rejectWaiting(code);
   }
 
   private async launch(): Promise<{ command: string; args: string[] }> {
@@ -310,7 +377,10 @@ export class CodexRuntime implements CodexRuntimeService {
       });
     return this.installation;
   }
-  private async process(): Promise<CodexProcess> {
+  private async process(
+    config: Record<string, unknown> = CODEX_RUNTIME_CONFIG,
+    maxLineBytes?: number
+  ): Promise<CodexProcess> {
     const launch = await this.launch();
     if (this.closed) error('CODEX_CLOSED');
     const args = [
@@ -318,7 +388,7 @@ export class CodexRuntime implements CodexRuntimeService {
       'app-server',
       '--listen',
       'stdio://',
-      ...Object.entries(CODEX_RUNTIME_CONFIG).flatMap(([key, value]) => [
+      ...Object.entries(config).flatMap(([key, value]) => [
         '-c',
         `${key}=${JSON.stringify(value)}`,
       ]),
@@ -330,6 +400,7 @@ export class CodexRuntime implements CodexRuntimeService {
       env: { ...codexEnvironment(this.home, this.work!), ...this.options.launch?.env },
       timeoutMs: 15_000,
       experimentalApi: true,
+      ...(maxLineBytes ? { maxLineBytes } : {}),
     });
   }
   private async control(): Promise<CodexProcess> {
@@ -541,9 +612,185 @@ export class CodexRuntime implements CodexRuntimeService {
   ): Promise<ProviderResult> {
     if (options.signal.aborted) return failure('CANCELLED');
     if (this.authAction || this.loginValue) return failure('CODEX_BUSY');
+    let plan: TurnPlan;
+    try {
+      assertCodexConnection(connection);
+      const built = buildCodexTurn(request);
+      const descriptor = buildCodexDescriptor(request, built);
+      assertContextBudget(descriptor, request.contextBudget);
+      plan = {
+        role: request.role,
+        modelId: request.modelId,
+        effort: request.generation?.reasoningEffort,
+        developerInstructions: built.developerInstructions,
+        input: [{ type: 'text', text: built.inputText, text_elements: [] }],
+        outputSchema: built.outputSchema,
+        descriptor,
+        stablePrefix: built.developerInstructions,
+        config: CODEX_RUNTIME_CONFIG,
+        allowedItems: TEXT_ITEMS,
+      };
+    } catch (caught) {
+      return failure(options.signal.aborted ? 'CANCELLED' : safeError(caught));
+    }
+    const outcome = await this.runTurn(connection, plan, options, this.textSlots);
+    if (!outcome.ok) return failure(outcome.code, outcome.usage);
+    return { ...decodeCodexOutput(outcome.output, request), usage: outcome.usage };
+  }
+  async generateImage(
+    connection: ProviderConnection,
+    request: CodexImageRequest,
+    options: CodexExecutionOptions
+  ): Promise<CodexImageResult> {
+    const result = (
+      status: CodexImageResult['status'],
+      usage: ProviderUsage,
+      error: CodexImageResult['error'],
+      partial: Partial<CodexImageResult> = {}
+    ): CodexImageResult => ({
+      status,
+      images: [],
+      revisedPrompt: null,
+      text: '',
+      ...partial,
+      usage,
+      error,
+    });
+    if (options.signal.aborted) return result('cancelled', emptyUsage(), { code: 'CANCELLED' });
+    if (this.authAction || this.loginValue)
+      return result('error', emptyUsage(), { code: 'CODEX_BUSY' });
+    const generated: Record<string, unknown>[] = [];
+    let plan: TurnPlan;
+    try {
+      assertCodexConnection(connection);
+      if (!boundedString(request.modelId)) error('CODEX_INVALID_MODEL');
+      if (request.references.length > 8) error('CODEX_IMAGE_TOO_MANY_REFERENCES');
+      for (const reference of request.references)
+        if (
+          !boundedString(reference.mime, 80) ||
+          typeof reference.base64 !== 'string' ||
+          reference.base64.length > 4 * ILLUSTRATION_MAX_IMAGE_BYTES
+        )
+          error('CODEX_IMAGE_INVALID_REFERENCE');
+      const attachments = request.references.map((reference) => ({
+        mime: reference.mime,
+        bytes: Buffer.byteLength(reference.base64, 'base64'),
+        sha256: hash(reference.base64),
+      }));
+      plan = {
+        role: 'illustration',
+        modelId: request.modelId,
+        effort: request.reasoningEffort,
+        developerInstructions: request.developerInstructions,
+        input: [
+          { type: 'text', text: request.text, text_elements: [] },
+          ...request.references.map(
+            (reference): Json => ({
+              type: 'image',
+              url: `data:${reference.mime};base64,${reference.base64}`,
+            })
+          ),
+        ],
+        outputSchema: request.outputSchema,
+        descriptor: {
+          method: 'turn/start',
+          role: 'illustration',
+          model: request.modelId,
+          ...(request.reasoningEffort ? { effort: request.reasoningEffort } : {}),
+          developerInstructions: request.developerInstructions,
+          input: [{ type: 'text', text: request.text }],
+          attachments,
+          outputSchema: request.outputSchema,
+          imageGeneration: true,
+          environmentAccess: false,
+          ephemeral: true,
+        },
+        stablePrefix: request.developerInstructions,
+        config: CODEX_ILLUSTRATION_CONFIG,
+        maxLineBytes: ILLUSTRATION_LINE_BYTES,
+        allowedItems: [...TEXT_ITEMS, 'imageGeneration'],
+        onItem: (item, method) => {
+          if (method === 'item/completed' && item.type === 'imageGeneration') generated.push(item);
+        },
+      };
+    } catch (caught) {
+      return result('error', emptyUsage(), {
+        code: options.signal.aborted ? 'CANCELLED' : safeError(caught),
+      });
+    }
+    const outcome = await this.runTurn(connection, plan, options, this.imageSlots);
+    if (!outcome.ok)
+      return result(outcome.code === 'CANCELLED' ? 'cancelled' : 'error', outcome.usage, {
+        code: outcome.code,
+      });
+    const images: CodexImageResult['images'] = [];
+    let revisedPrompt: string | null = null;
+    let usageLimit: NonNullable<CodexImageResult['error']>['usageLimit'];
+    for (const item of generated) {
+      if (object(item.failure)) {
+        if (item.failure.type === 'usageLimitExceeded')
+          usageLimit = {
+            limitId: boundedString(item.failure.limitId, 200) ? item.failure.limitId : 'codex',
+            resetsAt: integer(item.failure.resetsAt) ? item.failure.resetsAt : null,
+          };
+        continue;
+      }
+      if (boundedString(item.revisedPrompt, 20_000)) revisedPrompt = item.revisedPrompt;
+      const decoded = this.decodeGeneratedImage(item);
+      if (decoded) images.push(decoded);
+    }
+    if (!images.length)
+      return result(
+        'error',
+        outcome.usage,
+        {
+          code: usageLimit ? 'CODEX_IMAGE_USAGE_LIMIT' : 'CODEX_IMAGE_NOT_GENERATED',
+          ...(usageLimit ? { usageLimit } : {}),
+        },
+        { revisedPrompt, text: outcome.output }
+      );
+    return result('completed', outcome.usage, null, {
+      images,
+      revisedPrompt,
+      text: outcome.output,
+    });
+  }
+  /** Accepts inline base64 or the CLI's saved file inside the dedicated Codex home only. */
+  private decodeGeneratedImage(
+    item: Record<string, unknown>
+  ): CodexImageResult['images'][number] | undefined {
+    const candidates: Buffer[] = [];
+    if (typeof item.result === 'string' && item.result.length <= 4 * ILLUSTRATION_MAX_IMAGE_BYTES) {
+      const encoded = item.result.replace(/^data:[^,]*,/u, '');
+      if (/^[A-Za-z0-9+/=\s]+$/u.test(encoded)) candidates.push(Buffer.from(encoded, 'base64'));
+    }
+    if (typeof item.savedPath === 'string' && isAbsolute(item.savedPath)) {
+      const inside = relative(this.home, item.savedPath);
+      if (inside && !inside.startsWith('..') && !isAbsolute(inside) && existsSync(item.savedPath)) {
+        try {
+          candidates.push(readFileSync(item.savedPath));
+        } catch {
+          /* The inline result may still decode. */
+        }
+        void rm(item.savedPath, { force: true }).catch(() => {});
+      }
+    }
+    for (const bytes of candidates) {
+      const mime = detectImageMime(bytes);
+      if (mime && bytes.length <= ILLUSTRATION_MAX_IMAGE_BYTES) return { mime, bytes };
+    }
+    return undefined;
+  }
+  private async runTurn(
+    connection: ProviderConnection,
+    plan: TurnPlan,
+    options: CodexExecutionOptions,
+    slots: Slots
+  ): Promise<TurnOutcome> {
+    const fail = (code: string, usage: ProviderUsage): TurnOutcome => ({ ok: false, code, usage });
     const duration = options.timeoutMs ?? 300_000;
     if (!Number.isSafeInteger(duration) || duration < 1 || duration > 1_800_000)
-      return failure('INVALID_TIMEOUT');
+      return fail('INVALID_TIMEOUT', emptyUsage());
     const timeout = AbortSignal.timeout(duration),
       signal = AbortSignal.any([options.signal, timeout]);
     let process: CodexProcess | undefined,
@@ -571,50 +818,40 @@ export class CodexRuntime implements CodexRuntimeService {
       aborted();
       void stopProcess();
     };
+    const abortCode = () =>
+      options.signal.aborted ? 'CANCELLED' : timeout.aborted ? 'TIMEOUT' : 'CODEX_AUTH_CHANGED';
     try {
-      if (
-        connection.protocol !== 'codex-app-server-v1' ||
-        connection.endpoint !== CODEX_ENDPOINT ||
-        connection.credentialEnv
-      )
-        error('CODEX_INVALID_CONNECTION');
-      const built = buildCodexTurn(request),
-        revision = this.revision;
-      const descriptor = buildCodexDescriptor(request, built);
-      assertContextBudget(descriptor, request.contextBudget);
-      await this.acquire(signal);
+      const revision = this.revision;
+      await slots.acquire(signal, this.closed);
       slot = true;
       if (revision !== this.revision) error('CODEX_AUTH_CHANGED');
-      process = await this.process();
-      if (revision !== this.revision || this.authAction) return failure('CODEX_AUTH_CHANGED');
+      process = await this.process(plan.config, plan.maxLineBytes);
+      if (revision !== this.revision || this.authAction) return fail('CODEX_AUTH_CHANGED', usage);
       this.active.add(process);
       signal.addEventListener('abort', stopOnAbort, { once: true });
-      if (signal.aborted) return failure(options.signal.aborted ? 'CANCELLED' : 'TIMEOUT');
+      if (signal.aborted) return fail(options.signal.aborted ? 'CANCELLED' : 'TIMEOUT', usage);
       await process.start();
       if ((await this.account(process, signal)).type !== 'chatgpt') error('CODEX_LOGIN_REQUIRED');
       if (revision !== this.revision) error('CODEX_AUTH_CHANGED');
-      if (signal.aborted) return failure(options.signal.aborted ? 'CANCELLED' : 'TIMEOUT');
-      const serialized = JSON.stringify(descriptor);
+      if (signal.aborted) return fail(options.signal.aborted ? 'CANCELLED' : 'TIMEOUT', usage);
+      const serialized = JSON.stringify(plan.descriptor);
       await options.onWire?.({
         connectionId: connection.id,
         protocol: connection.protocol,
-        role: request.role,
-        modelId: request.modelId,
+        role: plan.role,
+        modelId: plan.modelId,
         method: 'RPC',
         url: CODEX_ENDPOINT,
         headers: {},
-        body: descriptor,
+        body: plan.descriptor,
         bodySha256: hash(serialized),
-        stablePrefixSha256: hash(built.developerInstructions),
+        stablePrefixSha256: hash(plan.stablePrefix),
       });
-      if (signal.aborted || revision !== this.revision)
-        return failure(
-          options.signal.aborted ? 'CANCELLED' : timeout.aborted ? 'TIMEOUT' : 'CODEX_AUTH_CHANGED'
-        );
+      if (signal.aborted || revision !== this.revision) return fail(abortCode(), usage);
       const started = await process.request<unknown>(
         'thread/start',
         {
-          model: request.modelId,
+          model: plan.modelId,
           modelProvider: 'openai',
           cwd: this.work,
           ephemeral: true,
@@ -623,8 +860,8 @@ export class CodexRuntime implements CodexRuntimeService {
           sandbox: 'read-only',
           environments: [],
           selectedCapabilityRoots: [],
-          developerInstructions: built.developerInstructions,
-          config: CODEX_RUNTIME_CONFIG,
+          developerInstructions: plan.developerInstructions,
+          config: plan.config,
         },
         { signal }
       );
@@ -632,7 +869,7 @@ export class CodexRuntime implements CodexRuntimeService {
         !object(started) ||
         !object(started.thread) ||
         !boundedString(started.thread.id) ||
-        started.model !== request.modelId
+        started.model !== plan.modelId
       )
         error('CODEX_INVALID_THREAD');
       threadId = (started as { thread: { id: string } }).thread.id;
@@ -685,7 +922,7 @@ export class CodexRuntime implements CodexRuntimeService {
         }
         if ((method === 'item/started' || method === 'item/completed') && object(params.item)) {
           const item = params.item;
-          if (!['userMessage', 'agentMessage', 'reasoning'].includes(String(item.type))) {
+          if (!plan.allowedItems.includes(String(item.type))) {
             rejectTurn(new ProviderContractError('CODEX_TOOL_NOT_ALLOWED'));
             return;
           }
@@ -705,6 +942,12 @@ export class CodexRuntime implements CodexRuntimeService {
             }
             outputItem = item.id;
             output = item.text;
+          }
+          try {
+            plan.onItem?.(item, method);
+          } catch {
+            rejectTurn(new ProviderContractError('CODEX_INVALID_OUTPUT'));
+            return;
           }
         }
         if (method === 'turn/completed') {
@@ -730,14 +973,12 @@ export class CodexRuntime implements CodexRuntimeService {
         'turn/start',
         {
           threadId,
-          model: request.modelId,
-          input: [{ type: 'text', text: built.inputText, text_elements: [] }],
-          outputSchema: built.outputSchema,
+          model: plan.modelId,
+          input: plan.input,
+          outputSchema: plan.outputSchema,
           approvalPolicy: 'never',
           sandboxPolicy: { type: 'readOnly', networkAccess: false },
-          ...(request.generation?.reasoningEffort
-            ? { effort: request.generation.reasoningEffort }
-            : {}),
+          ...(plan.effort ? { effort: plan.effort } : {}),
         },
         { signal }
       );
@@ -750,14 +991,10 @@ export class CodexRuntime implements CodexRuntimeService {
         error('CODEX_EVENT_MISMATCH');
       turnId = (turn as { turn: { id: string } }).turn.id;
       await completed;
-      if (signal.aborted || revision !== this.revision)
-        return failure(
-          options.signal.aborted ? 'CANCELLED' : timeout.aborted ? 'TIMEOUT' : 'CODEX_AUTH_CHANGED',
-          usage
-        );
-      return { ...decodeCodexOutput(output, request), usage };
+      if (signal.aborted || revision !== this.revision) return fail(abortCode(), usage);
+      return { ok: true, output, usage };
     } catch (caught) {
-      return failure(
+      return fail(
         options.signal.aborted ? 'CANCELLED' : timeout.aborted ? 'TIMEOUT' : safeError(caught),
         usage
       );
@@ -773,7 +1010,7 @@ export class CodexRuntime implements CodexRuntimeService {
         else await process.close();
         this.active.delete(process);
       }
-      if (slot) this.release();
+      if (slot) slots.release();
     }
   }
   close(): Promise<void> {
@@ -798,6 +1035,14 @@ export class CodexRuntime implements CodexRuntimeService {
   }
 }
 
+function assertCodexConnection(connection: ProviderConnection): void {
+  if (
+    connection.protocol !== 'codex-app-server-v1' ||
+    connection.endpoint !== CODEX_ENDPOINT ||
+    connection.credentialEnv
+  )
+    error('CODEX_INVALID_CONNECTION');
+}
 function parseRateLimits(value: unknown): CodexRuntimeStatus['limits'] {
   if (!object(value)) return [];
   const snapshots = object(value.rateLimitsByLimitId)

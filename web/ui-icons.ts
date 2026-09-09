@@ -35,4 +35,5 @@ export {
   SlidersHorizontal as OptionsIcon,
   Eye as DisplayIcon,
   Workflow as BehaviorIcon,
+  Palette as IllustrationIcon,
 } from 'lucide-react';

@@ -21,6 +21,8 @@ export interface CodexProcessOptions {
   env: NodeJS.ProcessEnv;
   timeoutMs?: number;
   experimentalApi?: boolean;
+  /** Line budget for stdio JSON; image turns carry base64 attachments and results. */
+  maxLineBytes?: number;
 }
 type Pending = { resolve(value: unknown): void; reject(error: Error): void; cleanup(): void };
 const MAX_LINE_BYTES = 8 * 1024 * 1024;
@@ -38,7 +40,13 @@ export class CodexProcess {
   private pending = new Map<number, Pending>();
   private notifications = new Set<(method: string, params: unknown) => void>();
   private exits = new Set<() => void>();
-  constructor(private readonly options: CodexProcessOptions) {}
+  private readonly maxLineBytes: number;
+  constructor(private readonly options: CodexProcessOptions) {
+    const limit = options.maxLineBytes ?? MAX_LINE_BYTES;
+    if (!Number.isSafeInteger(limit) || limit < 1024 || limit > 256 * 1024 * 1024)
+      throw new CodexProcessError('CODEX_START_FAILED');
+    this.maxLineBytes = limit;
+  }
 
   start(): Promise<void> {
     if (this.closed) return Promise.reject(new CodexProcessError('CODEX_CLOSED'));
@@ -142,8 +150,8 @@ export class CodexProcess {
       throw new CodexProcessError('CODEX_REQUEST_FAILED');
     }
     if (
-      Buffer.byteLength(line) > MAX_LINE_BYTES ||
-      this.child.stdin.writableLength > MAX_LINE_BYTES
+      Buffer.byteLength(line) > this.maxLineBytes ||
+      this.child.stdin.writableLength > this.maxLineBytes
     ) {
       this.fail('CODEX_PROTOCOL_ERROR');
       throw new CodexProcessError('CODEX_PROTOCOL_ERROR');
@@ -156,7 +164,7 @@ export class CodexProcess {
     while (start < data.length && !this.closed) {
       const newline = data.indexOf(10, start);
       const end = newline < 0 ? data.length : newline;
-      if (this.buffer.length + end - start > MAX_LINE_BYTES) {
+      if (this.buffer.length + end - start > this.maxLineBytes) {
         this.fail('CODEX_PROTOCOL_ERROR');
         return;
       }

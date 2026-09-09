@@ -36,6 +36,7 @@ npm run dev
 | [Native JSON 가져오기](docs/RISU-IMPORT.md) | 자료·프롬프트 편집기에서 검증·검토 후 저장 |
 | [에이전트의 Risu 자료 이식](docs/RISU-PORTING.md) | RisuToki MCP·스킬로 조사하고 native JSON·손실 보고·검증 결과 작성 |
 | [패키지](docs/PACKAGES.md) · [상태와 행동](docs/PACKAGE-BEHAVIOR.md) | 역할별 자료·옵션, 상태 전이·자동/사용자/모델 행동·기록된 추첨 |
+| [장면 삽화](docs/ILLUSTRATIONS.md) | Codex 이미지 생성·원격 ComfyUI로 응답별 삽화 생성, 자동 생성·재요청·개수 한도 |
 | [프롬프트 제작 방식](docs/PROMPT-AUTHORING.md) | 선택형 템플릿 문법과 TypeScript 제작 API 비교 |
 | [공급자 연결](docs/PROVIDERS.md) | Vertex, Responses·Chat 호환, Anthropic, Vercel, Codex 연결과 선택형 평가 도구·합성 시험 |
 | [개발과 검증](docs/DEVELOPMENT.md) · [코드 품질](docs/QUALITY.md) | 검사·정리 명령, 격리 실행, 코드 구조와 증거 보관 |

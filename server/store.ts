@@ -48,6 +48,11 @@ import {
   scheduleTranslationImages,
   latestImageJob,
 } from './package-images.js';
+import {
+  initIllustrations,
+  recoverIllustrations,
+  scheduleAutomaticIllustration,
+} from './illustrations.js';
 import type {
   Settings,
   Chat as BaseChat,
@@ -161,8 +166,11 @@ export class Store {
           initChatOverrides(this);
           initChatOptions(this);
           initResponseStreams(this.db);
+          initIllustrations(this.db);
           this.db.exec('PRAGMA user_version=15');
         });
+      // Additive illustration tables; a schema 15 database keeps its version and data.
+      else initIllustrations(this.db);
     } catch (error) {
       this.db.close();
       this.ownership.close();
@@ -772,6 +780,8 @@ export class Store {
     else {
       this.story.reserveSourceInTransaction(source, run);
       completePackageOutputs(this, run, source);
+      // Illustrations never block the source commit; reservation problems become visible jobs.
+      if (!run.snapshot.candidateOf) scheduleAutomaticIllustration(this, source);
     }
     this.event(source.chatId, 'source.ready', source.id);
     this.event(source.chatId, 'run.completed', id);
@@ -1140,6 +1150,7 @@ export class Store {
           "UPDATE attempts SET status='interrupted',error='Provider outcome uncertain; not replayed' WHERE status='running'"
         )
         .run();
+      recoverIllustrations(this);
     });
   }
   detail(id: string) {

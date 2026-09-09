@@ -170,6 +170,13 @@ export function useStory() {
           ),
           ...value.jobs,
         ],
+        illustrations: [
+          ...(cached?.illustrations ?? []).filter(
+            (item) =>
+              !changed.has(item.sourceRevision) && value.reader!.order.includes(item.sourceRevision)
+          ),
+          ...(value.illustrations ?? []),
+        ],
       };
       readerCache.current = { key: query.key, detail: merged };
       setDetail(merged);

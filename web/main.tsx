@@ -777,6 +777,9 @@ function App() {
                           index={index + (s.detail?.reader?.start ?? 0)}
                           request={s.detail!.runs.find((run) => run.id === source.runId)?.request}
                           jobs={s.detail!.jobs.filter((job) => job.sourceRevision === source.id)}
+                          illustrations={(s.detail!.illustrations ?? []).filter(
+                            (item) => item.sourceRevision === source.id
+                          )}
                           assets={s.detail!.assets ?? []}
                           refresh={() => s.refresh(s.selected)}
                           onError={s.setError}

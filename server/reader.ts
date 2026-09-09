@@ -2,6 +2,7 @@ import { HttpError } from './request-validation.js';
 import { latestTranslation, validateTranslationArtifact } from './source-editing.js';
 import type { Store } from './store.js';
 import { mergedReaderAssets } from './package-images.js';
+import { illustrationsForSources } from './illustrations.js';
 import type { ReaderActivity } from '../core/types.js';
 import { providerRejection } from '../core/provider-rejection.js';
 
@@ -45,9 +46,13 @@ function readerActivity(
     UNION ALL
     SELECT j.id,j.kind,j.status,j.created_at,j.updated_at,COALESCE(json_extract(j.snapshot,'$.branchId'),r.branch_id),j.source_revision,j.generation,j.source_hash,0,(j.status='interrupted' OR COALESCE(j.error,'') LIKE '%PROVIDER_UNCERTAIN%') FROM story_jobs j JOIN sources s ON s.id=j.source_revision JOIN runs r ON r.id=s.run_id
       WHERE j.chat_id=? AND j.source_hash=COALESCE((SELECT hash FROM source_edits WHERE source_id=s.id ORDER BY revision DESC LIMIT 1),s.hash)
+    UNION ALL
+    SELECT j.id,'illustration',j.status,j.created_at,j.updated_at,r.branch_id,j.source_revision,j.generation,j.source_hash,0,(j.status='interrupted') FROM illustration_jobs j JOIN sources s ON s.id=j.source_revision JOIN runs r ON r.id=s.run_id
+      WHERE j.chat_id=?
   ), recent AS (SELECT * FROM activity WHERE status NOT IN ('queued','running','waiting_for_state') ORDER BY updatedAt DESC,id DESC LIMIT 30)
   ${selection}`)
     .all(
+      chatId,
       chatId,
       chatId,
       chatId,
@@ -71,7 +76,14 @@ function readerActivity(
   }[];
   for (const event of timeline) eventTimes.set(`${event.entity_id}:${event.kind}`, event.at);
   return rows.map((row) => {
-    const prefix = row.kind === 'main' ? 'run' : row.kind === 'state' ? 'story.job' : 'job';
+    const prefix =
+      row.kind === 'main'
+        ? 'run'
+        : row.kind === 'state'
+          ? 'story.job'
+          : row.kind === 'illustration'
+            ? 'illustration'
+            : 'job';
     const time = (status: string) => eventTimes.get(`${row.id}:${prefix}.${status}`);
     // A retry can reuse a job ID; queue time identifies that new user-visible execution.
     const startedAt = row.kind === 'main' ? row.createdAt : (time('queued') ?? row.createdAt);
@@ -172,6 +184,12 @@ export function readerDetail(store: Store, id: string, query: Record<string, str
     if (event.kind.startsWith('job.')) {
       const job = store.db
         .prepare('SELECT source_revision FROM jobs WHERE id=? AND chat_id=?')
+        .get(event.entityId, id) as { source_revision: string } | undefined;
+      if (job) changed.add(job.source_revision);
+    }
+    if (event.kind.startsWith('illustration.')) {
+      const job = store.db
+        .prepare('SELECT source_revision FROM illustration_jobs WHERE id=? AND chat_id=?')
         .get(event.entityId, id) as { source_revision: string } | undefined;
       if (job) changed.add(job.source_revision);
     }
@@ -291,6 +309,10 @@ export function readerDetail(store: Store, id: string, query: Record<string, str
     runs,
     sources,
     jobs,
+    illustrations: illustrationsForSources(
+      store,
+      sources.map((source) => source.id)
+    ),
     profile: store.product.profile(id),
     branches: store.product.branches(id),
     ...(assetsChanged ? { assets: mergedReaderAssets(store, id, order) } : {}),

@@ -66,6 +66,9 @@ test('runtime HTTP routes enforce authentication and Origin and redact failures 
     execute: async () => {
       throw new Error('Unexpected execute');
     },
+    generateImage: async () => {
+      throw new Error('Unexpected generateImage');
+    },
     close: async () => {},
   };
   const item = {
@@ -168,6 +171,9 @@ test('app routes every agent role through Codex and persists RPC attempts, propo
     logout: status,
     catalog: async () => [],
     close: async () => {},
+    generateImage: async () => {
+      throw new Error('Unexpected generateImage');
+    },
     execute: async (connection, request, options) => {
       calls.push(structuredClone(request));
       const body = { method: 'turn/start', role: request.role, model: request.modelId };

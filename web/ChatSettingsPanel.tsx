@@ -5,6 +5,7 @@ import { SectionNavigation } from './SectionNavigation.js';
 import { ProfileEditor, type ProfileSection } from './ProfileEditor.js';
 import { StoryPanel } from './StoryPanel.js';
 import { AssetEditor } from './AssetEditor.js';
+import { IllustrationReferencesEditor } from './IllustrationReferences.js';
 import { SettingsEditor } from './RuntimeSettings.js';
 import { useCompactLayout } from './useCompactLayout.js';
 import { useSettingsHistory } from './useSettingsHistory.js';
@@ -56,7 +57,7 @@ const categories = [
     id: 'images',
     title: '이미지',
     icon: ImagesIcon,
-    description: '이 채팅에 등록한 이미지',
+    description: '이 채팅에 등록한 이미지와 삽화 참조',
     group: '고급',
   },
   {
@@ -91,9 +92,10 @@ export function ChatSettingsPanel({
   const [profileDirty, setProfileDirty] = useState(false);
   const [storyDirty, setStoryDirty] = useState(false);
   const [imageDirty, setImageDirty] = useState(false);
+  const [referenceDirty, setReferenceDirty] = useState(false);
   const [runtimeDirty, setRuntimeDirty] = useState(false);
   const [discard, setDiscard] = useState(false);
-  const dirty = profileDirty || storyDirty || imageDirty || runtimeDirty;
+  const dirty = profileDirty || storyDirty || imageDirty || referenceDirty || runtimeDirty;
   const compact = useCompactLayout();
   const showingDetail = !compact || detailOpen;
   const root = useRef<HTMLElement>(null);
@@ -312,14 +314,22 @@ export function ChatSettingsPanel({
                       />
                     )}
                     {section === 'images' && (
-                      <AssetEditor
-                        chatId={state.selected}
-                        assets={detail.assets ?? []}
-                        expanded
-                        refresh={() => state.refresh(state.selected)}
-                        onError={state.setError}
-                        onDirtyChange={setImageDirty}
-                      />
+                      <>
+                        <AssetEditor
+                          chatId={state.selected}
+                          assets={detail.assets ?? []}
+                          expanded
+                          refresh={() => state.refresh(state.selected)}
+                          onError={state.setError}
+                          onDirtyChange={setImageDirty}
+                        />
+                        <IllustrationReferencesEditor
+                          chatId={state.selected}
+                          refreshKey={`${detail.profile?.revision ?? 0}:${(detail.assets ?? []).length}`}
+                          onDirtyChange={setReferenceDirty}
+                          onError={state.setError}
+                        />
+                      </>
                     )}
                     {section === 'runtime' && (
                       <SettingsEditor

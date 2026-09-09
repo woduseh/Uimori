@@ -1,5 +1,6 @@
 import { createInterface } from 'node:readline';
-import { appendFileSync } from 'node:fs';
+import { appendFileSync, mkdirSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
 if (process.argv.includes('--version')) {
   process.stdout.write(
     'codex-cli ' + (process.env.UIMORI_CODEX_FIXTURE_VERSION ?? '0.153.0') + '\n'
@@ -201,6 +202,81 @@ input.on('line', (line) => {
         method: 'thread/tokenUsage/updated',
         params: { threadId, turnId, tokenUsage: { total: { inputTokens: 100, outputTokens: 30 } } },
       });
+      // Image generation modes emit the official imageGeneration item before the caption message.
+      if (mode.startsWith('image')) {
+        const png =
+          process.env.UIMORI_CODEX_FIXTURE_IMAGE ??
+          'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jG1sAAAAASUVORK5CYII=';
+        const itemId = 'fixture-image-' + turnId;
+        send({
+          method: 'item/started',
+          params: {
+            threadId,
+            turnId,
+            item: {
+              type: 'imageGeneration',
+              id: itemId,
+              status: 'in_progress',
+              revisedPrompt: null,
+              result: '',
+              failure: null,
+            },
+          },
+        });
+        if (mode === 'image-usage-limit')
+          send({
+            method: 'item/completed',
+            params: {
+              threadId,
+              turnId,
+              item: {
+                type: 'imageGeneration',
+                id: itemId,
+                status: 'failed',
+                revisedPrompt: null,
+                result: '',
+                failure: { type: 'usageLimitExceeded', limitId: 'image_gen', resetsAt: 1800000000 },
+              },
+            },
+          });
+        else if (mode === 'image-saved-path') {
+          const folder = join(process.env.CODEX_HOME, 'generated_images', threadId);
+          mkdirSync(folder, { recursive: true });
+          const savedPath = join(folder, itemId + '.png');
+          writeFileSync(savedPath, Buffer.from(png, 'base64'));
+          send({
+            method: 'item/completed',
+            params: {
+              threadId,
+              turnId,
+              item: {
+                type: 'imageGeneration',
+                id: itemId,
+                status: 'completed',
+                revisedPrompt: 'fixture revised prompt (saved)',
+                result: '',
+                failure: null,
+                savedPath,
+              },
+            },
+          });
+        } else if (mode !== 'image-none')
+          send({
+            method: 'item/completed',
+            params: {
+              threadId,
+              turnId,
+              item: {
+                type: 'imageGeneration',
+                id: itemId,
+                status: 'completed',
+                revisedPrompt: 'fixture revised prompt',
+                result: png,
+                failure: null,
+              },
+            },
+          });
+      }
       send({
         method: 'item/agentMessage/delta',
         params: { threadId, turnId, itemId: 'fixture-item-' + turnId, delta: text },

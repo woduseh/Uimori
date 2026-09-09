@@ -1,0 +1,146 @@
+.illustrations {
+  display: grid;
+  gap: 12px;
+  margin: 14px 0;
+}
+.illustration {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  padding: 12px 14px;
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+}
+.illustration-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+  font-size: 13px;
+}
+.illustration-head strong {
+  font-weight: 600;
+}
+.illustration-head small {
+  color: var(--muted);
+}
+.illustration-images {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr));
+  gap: 12px;
+}
+.illustration-images figure {
+  margin: 0;
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+.illustration-images a {
+  display: block;
+  line-height: 0;
+}
+.illustration-images img {
+  display: block;
+  max-width: 100%;
+  width: auto;
+  height: auto;
+  max-height: min(70vh, 640px);
+  margin: 0 auto;
+  border-radius: 8px;
+  background: var(--surface);
+}
+.illustration-images figcaption {
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+.illustration-progress {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+}
+.illustration-progress svg {
+  animation: illustration-spin 1s linear infinite;
+}
+@keyframes illustration-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.illustration .error {
+  margin: 0;
+}
+.illustration-skipped {
+  padding: 8px 14px;
+  gap: 4px;
+}
+.illustration-skip-note {
+  margin: 0;
+  font-size: 13px;
+}
+.illustration-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+.illustration-actions button {
+  font-size: 12px;
+  min-height: 36px;
+}
+.illustration-diagnostic {
+  font-size: 12px;
+  color: var(--muted);
+}
+.illustration-diagnostic summary {
+  cursor: pointer;
+}
+.illustration-diagnostic ul {
+  margin: 6px 0 0;
+  padding-left: 18px;
+}
+.illustration-diagnostic li {
+  overflow-wrap: anywhere;
+}
+.illustration-diagnostic pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  max-height: 240px;
+  overflow: auto;
+  font-size: 11px;
+}
+.illustration-settings textarea {
+  min-height: 160px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+}
+.illustration-settings .illustration-test {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+.illustration-settings .illustration-test-result {
+  font-size: 12px;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+.illustration-references {
+  display: grid;
+  gap: 10px;
+  margin-top: 20px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+.illustration-references .asset-grid figure {
+  display: grid;
+  gap: 6px;
+}
+.illustration-references select {
+  width: 100%;
+  font-size: 12px;
+}
