@@ -4,7 +4,12 @@ import type { Connection, ModelSnapshot } from '../core/product.js';
 import { generationFromModel } from '../core/model-capabilities.js';
 import { contextBudgetForModel } from '../core/context-budget.js';
 import { buildMainInput, executeTool } from '../core/provider.js';
-import { executeProvider, type Json, type ProviderRequest } from '../core/transport.js';
+import {
+  executeProvider,
+  type Json,
+  type ProviderRequest,
+  transportConnection,
+} from '../core/transport.js';
 import type { RunSnapshot, ToolEvent, Usage } from '../core/types.js';
 import type { MainHooks } from './model-runner.js';
 import { MAIN_READ_TOOLS } from './main-request.js';
@@ -179,29 +184,20 @@ export function createAgentCollaboration(
         tools: request.stable.tools.map((tool) => tool.name),
       });
       let attempt: string | undefined;
-      const result = await executeProvider(
-        {
-          id: authorized.id,
-          protocol: authorized.protocol,
-          endpoint: authorized.endpoint,
-          ...(authorized.credentialEnv ? { credentialEnv: authorized.credentialEnv } : {}),
+      const result = await executeProvider(transportConnection(authorized), request, {
+        approvedOrigins: hooks.approvedOrigins,
+        signal: hooks.signal,
+        resolveCredential: hooks.resolveCredential,
+        executeCodex: hooks.executeCodex,
+        vertexRequestTier: hooks.vertexRequestTier,
+        timeoutMs: Math.max(1, deadline - Date.now()),
+        onWire: async (wire) => {
+          attempt = await hooks.onAttemptStart({ ...wire, agentId: agent.id });
+          usage.modelCalls++;
+          spentCalls++;
+          totalUsage.modelCalls++;
         },
-        request,
-        {
-          approvedOrigins: hooks.approvedOrigins,
-          signal: hooks.signal,
-          resolveCredential: hooks.resolveCredential,
-          executeCodex: hooks.executeCodex,
-          vertexRequestTier: hooks.vertexRequestTier,
-          timeoutMs: Math.max(1, deadline - Date.now()),
-          onWire: async (wire) => {
-            attempt = await hooks.onAttemptStart({ ...wire, agentId: agent.id });
-            usage.modelCalls++;
-            spentCalls++;
-            totalUsage.modelCalls++;
-          },
-        }
-      );
+      });
       if (attempt !== undefined) await hooks.onAttemptFinish(attempt, structuredClone(result));
       for (const key of ['inputTokens', 'outputTokens', 'costUsd'] as const) {
         const value = result.usage[key];

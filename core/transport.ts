@@ -51,6 +51,18 @@ export type ProviderConnection = {
   endpoint: string;
   credentialEnv?: string;
 };
+/**
+ * Narrows a stored connection setting to the transport shape. Host records carry title, revision,
+ * catalog and other management fields that `validateConnection` rejects as UNSUPPORTED_OPTIONS.
+ */
+export function transportConnection(connection: ProviderConnection): ProviderConnection {
+  return {
+    id: connection.id,
+    protocol: connection.protocol,
+    endpoint: connection.endpoint,
+    ...(connection.credentialEnv ? { credentialEnv: connection.credentialEnv } : {}),
+  };
+}
 export type ProviderTool = { name: string; description: string; inputSchema: Json };
 export type ProviderRequest = {
   /** Frozen host pricing metadata; never serialized into a provider payload. */

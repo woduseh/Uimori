@@ -1,4 +1,9 @@
-import { executeProvider, type ProviderResult, type WireRecord } from '../core/transport.js';
+import {
+  executeProvider,
+  type ProviderResult,
+  transportConnection,
+  type WireRecord,
+} from '../core/transport.js';
 import { generationFromModel } from '../core/model-capabilities.js';
 import { contextBudgetForModel } from '../core/context-budget.js';
 import { packageContext } from '../core/package-context.js';
@@ -303,12 +308,7 @@ export async function runIllustrationJob(
       const promptResult = await attempt(
         (onWire) =>
           executeProvider(
-            {
-              id: connection.id,
-              protocol: connection.protocol,
-              endpoint: connection.endpoint,
-              ...(connection.credentialEnv ? { credentialEnv: connection.credentialEnv } : {}),
-            },
+            transportConnection(connection),
             {
               ...illustrationPromptRequest(model, context, generationFromModel(model)),
               contextBudget: contextBudgetForModel(model),

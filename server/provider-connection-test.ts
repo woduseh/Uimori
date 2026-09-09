@@ -15,6 +15,7 @@ import {
   type ProviderExecutionOptions,
   type ProviderRequest,
   type ProviderResult,
+  transportConnection,
 } from '../core/transport.js';
 import { contextBudgetForModel } from '../core/context-budget.js';
 import type { Store } from './store.js';
@@ -223,37 +224,28 @@ export function providerConnectionTestRoutes(
             };
             try {
               authorize();
-              result = await executeProvider(
-                {
-                  id: connection.id,
-                  protocol: connection.protocol,
-                  endpoint: connection.endpoint,
-                  ...(connection.credentialEnv ? { credentialEnv: connection.credentialEnv } : {}),
+              result = await executeProvider(transportConnection(connection), input, {
+                approvedOrigins: options.approvedOrigins,
+                signal,
+                timeoutMs: CONNECTION_TEST_TIMEOUT_MS,
+                vertexRequestTier: options.vertexRequestTier,
+                resolveCredential: options.resolveCredential,
+                executeCodex: options.executeCodex,
+                beforeTurn: authorize,
+                onWire: () => {
+                  try {
+                    authorize();
+                    journal.sent(id);
+                    authorize();
+                  } catch (error) {
+                    boundaryError =
+                      error instanceof ProviderContractError
+                        ? error.code
+                        : 'CONNECTION_TEST_RECORD_FAILED';
+                    throw error;
+                  }
                 },
-                input,
-                {
-                  approvedOrigins: options.approvedOrigins,
-                  signal,
-                  timeoutMs: CONNECTION_TEST_TIMEOUT_MS,
-                  vertexRequestTier: options.vertexRequestTier,
-                  resolveCredential: options.resolveCredential,
-                  executeCodex: options.executeCodex,
-                  beforeTurn: authorize,
-                  onWire: () => {
-                    try {
-                      authorize();
-                      journal.sent(id);
-                      authorize();
-                    } catch (error) {
-                      boundaryError =
-                        error instanceof ProviderContractError
-                          ? error.code
-                          : 'CONNECTION_TEST_RECORD_FAILED';
-                      throw error;
-                    }
-                  },
-                }
-              );
+              });
               if (boundaryError) throw new ProviderContractError(boundaryError);
               authorize();
               const output = result.text || result.refusal || '';

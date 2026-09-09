@@ -5,6 +5,7 @@ import {
   ProviderContractError,
   type ProviderExecutionOptions,
   type ProviderResult,
+  transportConnection,
 } from '../core/transport.js';
 import { connectionTestRequest } from './provider-connection-test.js';
 import { promptWorkspace } from './prompt-workspace.js';
@@ -118,7 +119,7 @@ export class ChatTitleService {
         }),
         controls: {},
       };
-      result = await executeProvider(connection, request, {
+      result = await executeProvider(transportConnection(connection), request, {
         ...this.options,
         signal,
         timeoutMs: 25_000,

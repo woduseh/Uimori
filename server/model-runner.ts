@@ -15,6 +15,7 @@ import {
   type ProviderResult,
   type WireRecord,
   type ProviderProgress,
+  transportConnection,
 } from '../core/transport.js';
 import type { ModelInput, RunSnapshot, ToolEvent, Usage } from '../core/types.js';
 import { createEvaluationToolSession } from './evaluation-session.js';
@@ -179,37 +180,28 @@ export async function runMain(snapshot: RunSnapshot, hooks: MainHooks): Promise<
     let attemptId: string | undefined;
     const remainingTimeout = evaluation?.remainingMs();
     if (remainingTimeout === 0) return fail('TIMEOUT');
-    const result = await executeProvider(
-      {
-        id: authorized.id,
-        protocol: authorized.protocol,
-        endpoint: authorized.endpoint,
-        ...(authorized.credentialEnv ? { credentialEnv: authorized.credentialEnv } : {}),
+    const result = await executeProvider(transportConnection(authorized), request, {
+      approvedOrigins: hooks.approvedOrigins,
+      signal: hooks.signal,
+      resolveCredential: hooks.resolveCredential,
+      executeCodex: hooks.executeCodex,
+      vertexRequestTier: hooks.vertexRequestTier,
+      timeoutMs:
+        remainingTimeout ??
+        hooks.timeoutMs ??
+        target.timeoutMs ??
+        (target.connection.protocol === 'vertex-gemini-v1' ? 300_000 : undefined),
+      onWire: async (wire) => {
+        attemptId = await hooks.onAttemptStart(wire);
+        // Persistence completes before fetch. A crash leaves an uncertain attempt, not a queued replay.
+        usage.modelCalls++;
+        mainCalls++;
       },
-      request,
-      {
-        approvedOrigins: hooks.approvedOrigins,
-        signal: hooks.signal,
-        resolveCredential: hooks.resolveCredential,
-        executeCodex: hooks.executeCodex,
-        vertexRequestTier: hooks.vertexRequestTier,
-        timeoutMs:
-          remainingTimeout ??
-          hooks.timeoutMs ??
-          target.timeoutMs ??
-          (target.connection.protocol === 'vertex-gemini-v1' ? 300_000 : undefined),
-        onWire: async (wire) => {
-          attemptId = await hooks.onAttemptStart(wire);
-          // Persistence completes before fetch. A crash leaves an uncertain attempt, not a queued replay.
-          usage.modelCalls++;
-          mainCalls++;
-        },
-        onProgress: async (progress) => {
-          if (attemptId !== undefined && !hooks.signal.aborted)
-            await hooks.onResponseProgress?.({ ...progress, attemptId, segment: 0 });
-        },
-      }
-    );
+      onProgress: async (progress) => {
+        if (attemptId !== undefined && !hooks.signal.aborted)
+          await hooks.onResponseProgress?.({ ...progress, attemptId, segment: 0 });
+      },
+    });
     if (attemptId !== undefined)
       await hooks.onAttemptFinish(
         attemptId,
