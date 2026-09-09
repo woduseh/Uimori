@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react';
-import { Trash2 } from 'lucide-react';
+import { DeleteIcon } from './ui-icons.js';
 import { api } from './api.js';
 import { Dialog } from './Dialog.js';
 import './deletion.css';
@@ -86,7 +86,7 @@ export function DeleteButton({
         disabled={disabled || busy}
         onClick={() => void open()}
       >
-        <Trash2 size={iconOnly ? 14 : 18} aria-hidden="true" />
+        <DeleteIcon size={iconOnly ? 14 : 18} aria-hidden="true" />
         {!iconOnly && <span>{label}</span>}
       </button>
       {!target && error && (

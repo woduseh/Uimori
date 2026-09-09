@@ -14,6 +14,18 @@ async function icon(button: Locator) {
   expect(box!.width).toBeGreaterThanOrEqual(44);
   expect(box!.height).toBeGreaterThanOrEqual(44);
 }
+/** Confirming actions keep the shared glyph but say what they do. The visible word is part
+    of the accessible name, so speech input and the screen agree. */
+async function named(button: Locator, text: string) {
+  await expect(button).toBeVisible();
+  await expect(button.locator('svg')).toHaveCount(1);
+  expect((await button.innerText()).trim()).toBe(text);
+  const label = await button.getAttribute('aria-label');
+  expect(label).toContain(text);
+  const box = await button.boundingBox();
+  expect(box!.width).toBeGreaterThanOrEqual(44);
+  expect(box!.height).toBeGreaterThanOrEqual(44);
+}
 for (const width of [390, 1440]) {
   test(`SICON01 ${width} settings actions stay beside their forms with compact accessible controls`, async ({
     page,
@@ -31,7 +43,7 @@ for (const width of [390, 1440]) {
     await selectChatSettingsSection(page, '봇·페르소나·모듈');
     const save = dialog.getByRole('button', { name: '채팅 설정 저장', exact: true });
     await save.scrollIntoViewIfNeeded();
-    await icon(save);
+    await named(save, '저장');
     await page.screenshot({ path: info.outputPath(`chat-save-${width}.png`) });
     await selectChatSettingsSection(page, '프롬프트·창작 프리셋');
     const description = dialog
@@ -41,14 +53,14 @@ for (const width of [390, 1440]) {
     await expect(description.locator('br')).toHaveCount(1);
     await selectChatSettingsSection(page, '자동 후속 작업');
     const runtimeSave = dialog.getByRole('button', { name: '설정 저장', exact: true });
-    await icon(runtimeSave);
+    await named(runtimeSave, '저장');
     await dialog.getByRole('switch', { name: '장면 상태 자동 실행' }).click();
     await expect(runtimeSave).toBeEnabled();
     await runtimeSave.click();
     await expect(dialog.getByText('후속 작업 설정을 저장했어요.', { exact: true })).toBeVisible();
     await page.screenshot({ path: info.outputPath(`runtime-save-${width}.png`) });
     await selectChatSettingsSection(page, '이미지');
-    await icon(dialog.getByRole('button', { name: '이미지 등록', exact: true }));
+    await named(dialog.getByRole('button', { name: '이미지 등록', exact: true }), '등록');
     await page.screenshot({ path: info.outputPath(`image-register-${width}.png`) });
     await page.keyboard.press('Escape');
     // Both panels fetch the shared workspace. Hold it to inspect and use the loading retry.
@@ -73,7 +85,7 @@ for (const width of [390, 1440]) {
     await expect(models).toBeVisible();
     const modelSave = models.getByRole('button', { name: '현재 모델 설정 저장', exact: true });
     await modelSave.scrollIntoViewIfNeeded();
-    await icon(modelSave);
+    await named(modelSave, '저장');
     await expect(models).not.toContainText('새 채팅의 첫 응답이 성공하면');
     await expect(models).not.toContainText('명확한 거절일 때만 추가 번역');
     await page.screenshot({ path: info.outputPath(`model-save-${width}.png`) });

@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowDown, ArrowUp, ChevronRight, Folder, FolderPlus, LoaderCircle } from 'lucide-react';
 import type { Content } from '../core/product.js';
 import {
   libraryCategory,
@@ -10,7 +9,17 @@ import { BotBranch, type Props } from './BotNavigation.js';
 import { ActionMenu } from './ActionMenu.js';
 import { Dialog } from './Dialog.js';
 import { IconButton } from './IconButton.js';
-import { LibraryIcon, PromptIcon, SettingsIcon } from './ui-icons.js';
+import {
+  DownIcon,
+  ExpandIcon,
+  FolderAddIcon,
+  FolderIcon,
+  LibraryIcon,
+  PromptIcon,
+  RunningIcon,
+  SettingsIcon,
+  UpIcon,
+} from './ui-icons.js';
 import { api } from './api.js';
 import { useChatActivities } from './useChatActivities.js';
 import './bot-tree-navigation.css';
@@ -144,13 +153,13 @@ export function BotNavigation(props: Props & { onLibraryChanged: () => Promise<v
         <div className="bot-tree-order">
           <IconButton
             label={`${entry.title} 위로 이동`}
-            icon={ArrowUp}
+            icon={UpIcon}
             disabled={index === 0}
             onClick={() => move(-1)}
           />
           <IconButton
             label={`${entry.title} 아래로 이동`}
-            icon={ArrowDown}
+            icon={DownIcon}
             disabled={index === siblings.length - 1}
             onClick={() => move(1)}
           />
@@ -232,7 +241,7 @@ export function BotNavigation(props: Props & { onLibraryChanged: () => Promise<v
           aria-expanded={!!view.open.section}
           onClick={() => toggle('section')}
         >
-          봇<ChevronRight size={14} className={view.open.section ? 'expanded' : ''} />
+          봇<ExpandIcon size={14} className={view.open.section ? 'expanded' : ''} />
         </button>
         <ActionMenu label="봇 목록 메뉴" viewport>
           <label>
@@ -257,7 +266,7 @@ export function BotNavigation(props: Props & { onLibraryChanged: () => Promise<v
               setEditing('new');
             }}
           >
-            <FolderPlus size={16} />새 봇 폴더
+            <FolderAddIcon size={16} />새 봇 폴더
           </button>
           <button onClick={() => onLibrary('bot')}>
             <LibraryIcon size={16} />
@@ -284,8 +293,8 @@ export function BotNavigation(props: Props & { onLibraryChanged: () => Promise<v
                       aria-expanded={!!view.open[entry.key]}
                       onClick={() => toggle(entry.key)}
                     >
-                      <ChevronRight size={12} className={view.open[entry.key] ? 'expanded' : ''} />
-                      <Folder size={16} />
+                      <ExpandIcon size={12} className={view.open[entry.key] ? 'expanded' : ''} />
+                      <FolderIcon size={16} />
                       <span>{entry.title}</span>
                     </button>
                     <ActionMenu label={`${entry.title} 봇 폴더 메뉴`} viewport>
@@ -372,7 +381,7 @@ export function BotNavigation(props: Props & { onLibraryChanged: () => Promise<v
       <div className="nav-bottom">
         {tasks > 0 && (
           <button className="nav-button nav-progress" aria-label="작업 현황" onClick={onTasks}>
-            <LoaderCircle size={17} />
+            <RunningIcon size={17} />
             진행 중 {tasks}
           </button>
         )}

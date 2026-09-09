@@ -512,7 +512,7 @@ ET01의 중복 옵션 입력 검사만 evaluation-settings로 흡수했어요. �
 
 ### `library-deletion.test.ts` — 8개 선언
 
-숨김 revision CAS와 현재 연결 권한 취소·과거 diagnostics/snapshot 보존, bot HTTP 404, current workspace model 선택 해제를 확인해요.
+숨김 revision CAS와 현재 프로바이더 권한 취소·과거 diagnostics/snapshot 보존, bot HTTP 404, current workspace model 선택 해제를 확인해요.
 
 | 현재 case | 판단 |
 |---|---|

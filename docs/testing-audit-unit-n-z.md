@@ -669,7 +669,7 @@
 
 ### provider-settings.test.ts
 
-정적 선언 15개. 설정 API 입력/옵션·최신 연결을 쓰는 새 Run·catalog 페이지·archive capability 검증.
+정적 선언 15개. 설정 API 입력/옵션·최신 프로바이더를 쓰는 새 Run·catalog 페이지·archive capability 검증.
 
 | case 제목 | 결정 | 흡수 대상·이유 |
 |---|---|---|

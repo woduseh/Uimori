@@ -198,7 +198,7 @@ test('BUI02 behavior editor validates without discarding an invalid draft or oth
   );
   await expect(json).toHaveValue('{invalid');
   await expect(library.getByRole('button', { name: '자료 등록', exact: true })).toBeDisabled();
-  await library.getByRole('button', { name: '← 서재 목록', exact: true }).click();
+  await library.getByRole('button', { name: '서재 목록', exact: true }).click();
   const guard = library.getByRole('alertdialog', { name: '미저장 자료 확인', exact: true });
   await expect(guard).toBeVisible();
   await guard.getByRole('button', { name: '계속 편집', exact: true }).click();
@@ -270,7 +270,7 @@ test('BUI03 invocation methods persist, validate automatic input drafts and show
     triggers: ['user', 'before-turn', 'model'],
     automaticInput: { value: 4 },
   });
-  await library.getByRole('button', { name: '← 서재 목록', exact: true }).click();
+  await library.getByRole('button', { name: '서재 목록', exact: true }).click();
   await editLibraryContent(page, `${title}`);
   await selectPackageSection(page, '상태와 행동');
   await expect(methods.getByRole('checkbox', { name: /^생성 전 자동 실행/ })).toBeChecked();

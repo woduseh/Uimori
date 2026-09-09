@@ -1,7 +1,7 @@
 import { Switch } from './BooleanControls.js';
 import { ToggleRow } from './ToggleRow.js';
 import { ModelPricingEditor } from './ModelPricingEditor.js';
-import { Plus, X } from 'lucide-react';
+import { AddIcon, CloseIcon } from './ui-icons.js';
 import { useEffect, useRef } from 'react';
 import type { Connection, VertexRequestTier } from '../core/product.js';
 import {
@@ -228,7 +228,7 @@ function StopSequence({
         title={`생성 중단 문자열 ${index + 1} 삭제`}
         onClick={onRemove}
       >
-        <X size={18} aria-hidden="true" />
+        <CloseIcon size={18} aria-hidden="true" />
       </button>
     </div>
   );
@@ -535,7 +535,7 @@ export function ProviderModelFields({
                   disabled={value.stopSequences.length >= 4}
                   onClick={() => update({ stopSequences: [...value.stopSequences, ''] })}
                 >
-                  <Plus size={18} aria-hidden="true" /> 추가
+                  <AddIcon size={18} aria-hidden="true" /> 추가
                 </button>
               )}
               <small className="full">

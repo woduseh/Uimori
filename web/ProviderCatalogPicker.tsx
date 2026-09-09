@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Check, Search } from 'lucide-react';
+import { CheckIcon, SearchIcon } from './ui-icons.js';
 import type { Connection } from '../core/product.js';
 import { supportedModels } from '../core/model-capabilities.js';
 
@@ -40,7 +40,7 @@ export function ProviderCatalogPicker({
       {catalog.length > 0 ? (
         <>
           <label className="provider-search">
-            <Search size={16} aria-hidden="true" />
+            <SearchIcon size={16} aria-hidden="true" />
             <input
               type="search"
               aria-label="모델 목록 검색"
@@ -65,7 +65,7 @@ export function ProviderCatalogPicker({
                 <strong>{item.name}</strong>
                 <small>{item.id}</small>
 
-                {selectedId === item.id && <Check size={16} aria-hidden="true" />}
+                {selectedId === item.id && <CheckIcon size={16} aria-hidden="true" />}
               </button>
             ))}
           </div>

@@ -1,6 +1,6 @@
 import { Switch, SelectionCheckbox } from './BooleanControls.js';
 import { useId, useState } from 'react';
-import { ChevronRight } from 'lucide-react';
+import { ExpandIcon } from './ui-icons.js';
 import {
   createAgentCollaboration,
   createAgentDefinition,
@@ -113,7 +113,7 @@ export function AgentCollaborationEditor({
           aria-controls={`${id}-content`}
           onClick={() => onExpandedChange(!expanded)}
         >
-          <ChevronRight size={16} aria-hidden="true" />
+          <ExpandIcon size={16} aria-hidden="true" />
           <strong id={`${id}-heading`}>에이전트 협업</strong>
         </button>
         <label className="ac-check ac-enable">

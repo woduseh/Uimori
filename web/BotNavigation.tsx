@@ -6,18 +6,18 @@ import { DeleteButton } from './DeleteButton.js';
 import { IconButton } from './IconButton.js';
 import { useEffect, useRef, useState } from 'react';
 import {
-  ChevronRight,
-  MoreHorizontal,
-  LoaderCircle,
-  FolderPlus,
-  Folder,
-  Plus,
-  Search,
-  FolderInput,
-  ArrowUp,
-  ArrowDown,
-} from 'lucide-react';
-import { LibraryIcon } from './ui-icons.js';
+  AddIcon,
+  DownIcon,
+  ExpandIcon,
+  FolderAddIcon,
+  FolderIcon,
+  LibraryIcon,
+  MoreIcon,
+  MoveIcon,
+  RunningIcon,
+  SearchIcon,
+  UpIcon,
+} from './ui-icons.js';
 import type { Content, Library } from '../core/product.js';
 import type { Chat } from '../core/types.js';
 import type { ChatFolder } from '../core/product.js';
@@ -278,7 +278,7 @@ export function BotBranch(
   function status(label?: string) {
     return label ? (
       <span className="bot-chat-status" tabIndex={0} role="img" aria-label={label} title={label}>
-        <LoaderCircle size={14} aria-hidden="true" />
+        <RunningIcon size={14} aria-hidden="true" />
       </span>
     ) : null;
   }
@@ -341,7 +341,7 @@ export function BotBranch(
                 </ActionMenu>
                 <IconButton
                   label={`${chat.title} 채팅 이동`}
-                  icon={FolderInput}
+                  icon={MoveIcon}
                   onClick={() => setMovingId(chat.id)}
                 />
                 <DeleteButton
@@ -403,8 +403,8 @@ export function BotBranch(
             aria-expanded={expanded}
             onClick={() => setCollapsed((value) => ({ ...value, [key]: expanded }))}
           >
-            <ChevronRight size={12} className={expanded ? 'expanded' : ''} />
-            <Folder size={15} />
+            <ExpandIcon size={12} className={expanded ? 'expanded' : ''} />
+            <FolderIcon size={15} />
             <span>{title}</span>
           </button>
           {!expanded && status(count ? `폴더 안에서 작업 ${count}개 진행 중` : undefined)}
@@ -417,7 +417,7 @@ export function BotBranch(
                 disabled={busy}
                 onClick={() => void start(folder ?? undefined)}
               >
-                <Plus size={16} />
+                <AddIcon size={16} />
               </button>
             )}
             {folder && (
@@ -427,7 +427,7 @@ export function BotBranch(
                 title="폴더 설정"
                 onClick={() => setSettingsId(folder.id)}
               >
-                <MoreHorizontal size={16} />
+                <MoreIcon size={16} />
               </button>
             )}
           </div>
@@ -466,20 +466,24 @@ export function BotBranch(
           onClick={onToggle}
           title={bot?.title}
         >
-          <ChevronRight size={12} className={expanded ? 'expanded' : ''} />
+          <ExpandIcon size={12} className={expanded ? 'expanded' : ''} />
           {bot && <ContentAvatar content={bot} className="bot-choice-avatar" />}
           <strong>{bot?.title ?? '봇'}</strong>
         </button>
         <div className="bot-branch-actions">
-          <IconButton
-            label={`${bot?.title ?? '봇'} 채팅 검색`}
-            icon={Search}
-            onClick={() => {
-              setQuery('');
-              setSearching(true);
-            }}
-          />
           <ActionMenu label={`${bot?.title ?? '봇'} 관리`} viewport>
+            <button
+              type="button"
+              onClick={(event) => {
+                const menu = event.currentTarget.closest('details');
+                if (menu) menu.open = false;
+                setQuery('');
+                setSearching(true);
+              }}
+            >
+              <SearchIcon size={18} aria-hidden="true" />
+              채팅 검색
+            </button>
             <button
               type="button"
               disabled={busy}
@@ -492,7 +496,7 @@ export function BotBranch(
                 setCreating(true);
               }}
             >
-              <FolderPlus size={16} />새 폴더
+              <FolderAddIcon size={18} aria-hidden="true" />새 폴더
             </button>
             <button
               type="button"
@@ -502,14 +506,14 @@ export function BotBranch(
                 onLibrary('bot');
               }}
             >
-              <LibraryIcon size={16} />
+              <LibraryIcon size={18} aria-hidden="true" />
               서재에서 관리
             </button>
             {managementActions}
           </ActionMenu>
           <IconButton
             label={`${bot?.title ?? '봇'} 새 채팅`}
-            icon={Plus}
+            icon={AddIcon}
             disabled={busy}
             onClick={() => void start()}
           />
@@ -539,7 +543,7 @@ export function BotBranch(
         className="bot-organize-dialog"
       >
         <label className="story-search">
-          <Search size={16} />
+          <SearchIcon size={16} />
           <input
             aria-label="채팅 검색"
             placeholder="채팅 이름 검색"
@@ -682,7 +686,7 @@ export function BotBranch(
             <div className="bot-chat-menu-actions">
               <IconButton
                 label="위로 이동"
-                icon={ArrowUp}
+                icon={UpIcon}
                 disabled={busy || menuIndex <= 0}
                 onClick={() =>
                   moveChat(movingChat, movingChat.folderId ?? null, menuSiblings[menuIndex - 1].id)
@@ -690,7 +694,7 @@ export function BotBranch(
               />
               <IconButton
                 label="아래로 이동"
-                icon={ArrowDown}
+                icon={DownIcon}
                 disabled={busy || menuIndex >= menuSiblings.length - 1}
                 onClick={() =>
                   moveChat(

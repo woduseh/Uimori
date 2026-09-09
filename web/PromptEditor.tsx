@@ -1,8 +1,7 @@
 import { DismissibleError } from './DismissibleError.js';
 import { DeleteButton } from './DeleteButton.js';
 import { ActionMenu } from './ActionMenu.js';
-import { CopyIcon } from './ui-icons.js';
-import { Save } from 'lucide-react';
+import { CopyIcon, SaveIcon } from './ui-icons.js';
 import { booleanPromptDraft } from './prompt-boolean-draft.js';
 import { useEffect, useRef, useState } from 'react';
 import type { ContentRef, Library, PromptPreset, PromptRole } from '../core/product.js';
@@ -416,7 +415,7 @@ export function PromptEditor({
                 }
                 onClick={() => void save(!!draft.base)}
               >
-                <Save size={18} aria-hidden="true" /> 저장
+                <SaveIcon size={18} aria-hidden="true" /> 저장
               </button>
               <small className="prompt-save-scope">
                 {draft.base

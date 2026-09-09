@@ -1,13 +1,13 @@
 # 장면 삽화 생성
 
-완성된 응답의 장면을 골라 삽화를 만들어 그 응답 아래에 표시하는 기능이에요. 삽화 생성은 본문 작성·번역·상태 작업과 별도 작업 큐에서 실행되며, 생성 중이거나 실패해도 읽기·쓰기·번역은 계속돼요. 생성기는 **Codex 연결의 공식 이미지 생성 도구**와 **원격 PC의 ComfyUI API** 두 가지이며, NovelAI는 이번 범위에 없어요.
+완성된 응답의 장면을 골라 삽화를 만들어 그 응답 아래에 표시하는 기능이에요. 삽화 생성은 본문 작성·번역·상태 작업과 별도 작업 큐에서 실행되며, 생성 중이거나 실패해도 읽기·쓰기·번역은 계속돼요. 생성기는 **Codex 프로바이더의 공식 이미지 생성 도구**와 **원격 PC의 ComfyUI API** 두 가지이며, NovelAI는 이번 범위에 없어요.
 
 기존 **이미지 배치**(`image` 역할, 등록된 이미지를 문단 사이에 고르는 기능)와는 다른 기능이에요. 삽화는 새 이미지를 만들고, 배치는 이미 있는 이미지를 골라요. 두 기능은 저장 표·작업 큐·설정이 분리되어 있어요.
 
 ## 사용 흐름
 
 1. **설정 → 삽화**에서 생성기를 고르고 저장해요.
-   - Codex: **설정 → 에이전트**에서 ChatGPT 구독으로 로그인한 뒤, Codex 연결의 모델 프리셋을 **Codex 삽화 모델**로 선택해요.
+   - Codex: **설정 → 에이전트**에서 ChatGPT 구독으로 로그인한 뒤, Codex 프로바이더의 모델 프리셋을 **Codex 삽화 모델**로 선택해요.
    - ComfyUI: 원격 PC의 주소(`http://192.168.0.10:8188` 같은 형식), ComfyUI에서 **Export (API)**로 저장한 워크플로 JSON, 장면을 그림 설명으로 옮기는 **프롬프트 모델**(어떤 텍스트 모델 프리셋이든 가능)을 지정해요. **ComfyUI 연결 확인** 버튼은 `GET /system_stats`만 호출해 버전·장치를 보여줘요.
 2. 자동 생성을 켜면 새 본문이 저장될 때마다 장면당 삽화 1개를 예약해요. 자동 예약에서는 장면을 읽는 모델(Codex 또는 프롬프트 모델)이 그릴 순간이 없다고 판단하면 **생략**할 수 있고, 생략은 실패가 아니라 한 줄 안내로만 표시하며 개수 한도를 쓰지 않아요. 끄면 각 장면의 ⋯ 메뉴에서 **삽화 생성**을 눌러요. 직접 요청은 항상 그리려고 시도해요. 완료된 삽화가 있으면 **새 삽화 생성**으로 추가 삽화를 요청해요.
 3. 결과는 해당 장면 아래 삽화 영역에 표시돼요. 실패한 삽화는 원인 코드와 안내를 보여 주고 **다시 요청**·**삽화 삭제**를 제공해요. 진행 중인 삽화는 **취소**할 수 있어요.
@@ -33,7 +33,7 @@
 - 상태는 `queued → running → completed | failed | cancelled | interrupted`예요. 취소는 `generation`을 올려 늦게 도착한 결과를 버리고, 서버 재시작은 `running`을 `interrupted`로 바꾸며 자동 재생하지 않아요(`queued`는 다시 실행해요).
 - 이미지 bytes는 SQLite `illustration_images`에 PNG·JPEG·WebP 16MB 이하로 저장하고 `/api/illustration-images/:id`로 읽어요. 캡션·프롬프트·Codex의 revised prompt는 함께 저장해요. 자동 생략은 이미지 없는 `completed`이며 `diagnostic.skipped`에 이유를 남겨요.
 - Reader(`GET /api/chats/:id/reader`)는 페이지 안 장면의 `illustrations`를 돌려 주고, SSE 이벤트 `illustration.*`는 해당 장면만 갱신해요. 작업 현황(`reader.activity`)에는 `kind: 'illustration'`으로 나타나며 `activeJobs` 계산에는 넣지 않아 본문 진행 표시를 막지 않아요.
-- 포크는 복사한 원문의 **완료된** 삽화만 함께 복사하고, 채팅·분기 삭제는 삽화 표도 함께 지워요. JSON archive(v15)는 네 표를 포함하며 표가 없는 예전 archive도 복원돼요. 복원 시 고정된 모델 연결은 다른 snapshot처럼 비활성화·비밀키 참조 제거 처리를 해요.
+- 포크는 복사한 원문의 **완료된** 삽화만 함께 복사하고, 채팅·분기 삭제는 삽화 표도 함께 지워요. JSON archive(v15)는 네 표를 포함하며 표가 없는 예전 archive도 복원돼요. 복원 시 고정된 모델 프로바이더는 다른 snapshot처럼 비활성화·비밀키 참조 제거 처리를 해요.
 - 참조 이미지는 예약 시 `{ref, role, title, mime, hash, url}`로 고정하고 실행 시 hash가 같은 bytes만 보내요. 사이에 삭제된 이미지는 빠지고 작업은 계속돼요.
 - JSON 복원은 전역 자동 생성을 끄고 생성기를 미지정으로 바꾸며 ComfyUI 인증 환경변수 참조도 제거해요. 과거 ComfyUI 입력은 비활성화되어 재전송·결과 회수를 하지 않아요. 원격 연결을 다시 설정한 뒤 새 요청으로 사용해요. 완료 이미지와 실제 attempt의 사용량·비용은 보존하고, 포크는 실행 attempt 소유권을 복제하지 않아요.
 - 이미지 저장과 archive 복원은 PNG·JPEG·WebP의 MIME과 실제 파일 서명, 16MB 한도, hash와 채팅 귀속을 확인해요. 완전한 이미지 디코더로 손상 여부까지 검사하는 계약은 아니에요.
@@ -44,7 +44,7 @@
 - 입력은 `{task, styleGuidance, characterNotes, illustrationInstructions, attachedReferences, scene}` JSON 텍스트와 참조 이미지(`{type:'image', url:'data:...'}`)예요. 장면은 끝에서 24,000자까지 보내요. 패키지의 `instructions.target: 'image'` 지침과 봇·페르소나 본문을 인물 참고로 함께 넣어요.
 - 결과는 `item/completed`의 `imageGeneration` 항목에서 읽어요. `result`(base64)를 우선 쓰고, 비어 있으면 전용 Codex home 안의 `savedPath` 파일을 읽은 뒤 삭제해요. 최종 `agentMessage`는 `{caption}` JSON으로 제약해요.
 - 실패 코드: `CODEX_IMAGE_USAGE_LIMIT`(항목의 `failure.usageLimitExceeded`, 자동 재요청 없음), `CODEX_IMAGE_NOT_GENERATED`(이미지 항목 없음, 재요청 가능), 기존 Codex 코드(`CODEX_LOGIN_REQUIRED`, `CODEX_TURN_FAILED` 등).
-- 삽화 턴은 텍스트 턴의 동시 실행 슬롯과 별도 슬롯(동시 1개, 대기 8개)을 써요. Codex 로그인·연결 권한은 텍스트 턴과 같은 검사를 거치며 attempt는 `role: 'illustration'`으로 기록하고 첨부 bytes는 attempt에 넣지 않아요.
+- 삽화 턴은 텍스트 턴의 동시 실행 슬롯과 별도 슬롯(동시 1개, 대기 8개)을 써요. Codex 로그인·프로바이더 권한은 텍스트 턴과 같은 검사를 거치며 attempt는 `role: 'illustration'`으로 기록하고 첨부 bytes는 attempt에 넣지 않아요.
 - 이미지 크기·품질 옵션은 Codex가 정해요. 사용량은 ChatGPT 구독 한도에 포함되고 비용·내부 호출 수는 `null`이에요.
 
 ## ComfyUI 경로

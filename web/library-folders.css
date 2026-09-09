@@ -12,18 +12,6 @@
   gap: 4px;
   min-width: 0;
 }
-.library-folder-mobile {
-  display: block;
-  min-width: 0;
-}
-.library-folder-mobile select {
-  max-width: 220px;
-  min-height: 44px;
-  padding: 8px 30px 8px 12px;
-  border-radius: 10px;
-  font-size: 13px;
-  text-overflow: ellipsis;
-}
 .library-folder-review {
   border: 1px solid var(--border);
   border-radius: 9px;
@@ -61,7 +49,7 @@
   display: grid;
   gap: 4px;
   padding: 6px;
-  background: var(--surface-raised, #232923);
+  background: var(--surface-raised);
   border: 1px solid var(--border);
   border-radius: 10px;
   box-shadow: 0 12px 28px #0005;
@@ -104,8 +92,5 @@
 @media (max-width: 760px) {
   .library-workspace {
     margin-top: 12px;
-  }
-  .library-folder-mobile select {
-    max-width: 200px;
   }
 }

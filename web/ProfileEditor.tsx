@@ -1,6 +1,5 @@
 import { Switch } from './BooleanControls.js';
-import { Save } from 'lucide-react';
-import { IconButton } from './IconButton.js';
+import { SaveButton } from './SaveButton.js';
 import { useEffect, useState } from 'react';
 import type { ChatProfile, Library } from '../core/product.js';
 import { api } from './api.js';
@@ -295,11 +294,8 @@ export function ProfileEditor({
               : status || (dirty || lorePending ? '저장하지 않은 변경이 있어요.' : '')}
           </span>
           {(dirty || lorePending) && <small>인물·자료의 변경 사항을 함께 저장해요.</small>}
-          <IconButton
-            type="submit"
-            icon={Save}
+          <SaveButton
             label="채팅 설정 저장"
-            className="settings-save-button"
             disabled={saving || !dirty || lorePending}
             aria-busy={saving}
           />

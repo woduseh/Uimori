@@ -153,7 +153,7 @@
   color: var(--text);
 }
 .bot-navigation .bot-row-actions > .delete-control > .delete-button {
-  color: var(--danger, #e88b8b);
+  color: var(--error);
 }
 .bot-row-actions .delete-control {
   display: flex;
@@ -335,7 +335,8 @@
   gap: 8px;
 }
 @media (hover: none), (pointer: coarse) {
-  .bot-row-actions {
+  .bot-row-actions,
+  .bot-branch-actions {
     opacity: 1;
     pointer-events: auto;
   }
@@ -429,8 +430,19 @@
   height: 28px;
   border-radius: 5px;
 }
+/* The bot name gets the row. Its actions appear on hover, focus or an open menu; touch and
+   compact widths keep them visible through the rule below. */
 .bot-branch-actions {
   flex-shrink: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+.bot-branch-heading:hover .bot-branch-actions,
+.bot-branch-heading:focus-within .bot-branch-actions,
+.bot-branch-actions:has(details[open]),
+.bot-branch-actions:has(dialog[open]) {
+  opacity: 1;
+  pointer-events: auto;
 }
 .bot-branch-actions > .icon-button,
 .bot-branch-actions > .action-menu > summary,

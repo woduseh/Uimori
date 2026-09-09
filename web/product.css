@@ -76,13 +76,13 @@
 }
 .connection-notice {
   padding: 16px;
-  border: 1px solid var(--border, #3a413a);
+  border: 1px solid var(--border);
   border-radius: 9px;
-  background: var(--surface-raised, #232923);
+  background: var(--surface-raised);
   font-size: 13px;
 }
 .connection-notice p {
-  color: var(--muted, #b1b9af);
+  color: var(--muted);
   margin: 8px 0 0;
   font-size: 12px;
   line-height: 1.75;

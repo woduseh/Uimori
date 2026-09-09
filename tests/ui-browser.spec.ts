@@ -120,6 +120,7 @@ test.beforeEach(async ({ request }) => {
   expect(response.ok()).toBeTruthy();
 });
 
+const chatListName = /의 채팅 목록$/;
 test('UI01 UI02 UI04 UI05 UI09 long real sources keep composer accessible, safe prose and zero-call view changes', async ({
   page,
   request,
@@ -645,7 +646,8 @@ test('UI07 UI12 late accepted fork cannot navigate after A B A or replace the cu
     await openSourceActions(page.getByTestId('source'));
     await page.getByRole('button', { name: '여기서 새 이야기로 이어가기', exact: true }).click();
     const fork = await acceptedChat;
-    const list = page.getByRole('navigation', { name: '봇의 채팅 목록' });
+    // The list is named after its own bot so several expanded bots stay distinguishable.
+    const list = page.getByRole('navigation', { name: chatListName });
     await list.getByRole('button').filter({ hasText: other.title }).click();
     await expect.poll(() => new URL(page.url()).searchParams.get('chat')).toBe(other.id);
     await list.getByRole('button').filter({ hasText: chat.title }).click();
@@ -717,7 +719,7 @@ test('UI12 late failed SSE refresh from another story never publishes its error 
     expect(update.ok()).toBeTruthy();
     await held;
     await page
-      .getByRole('navigation', { name: '봇의 채팅 목록', exact: true })
+      .getByRole('navigation', { name: chatListName })
       .getByRole('button')
       .filter({ hasText: chatB.title })
       .click();
@@ -1315,7 +1317,7 @@ test('UI17 full writing and empty translation prompts import, save and apply wit
   await expect(await promptBody(editor)).toHaveValue(literal);
   await page.setViewportSize({ width: 1440, height: 1000 });
   if (visualReview) await page.screenshot({ path: info.outputPath('full-prompt-desktop.png') });
-  await page.getByRole('button', { name: '← 프롬프트 목록', exact: true }).click();
+  await page.getByRole('button', { name: '프롬프트 목록', exact: true }).click();
   await page.getByRole('button', { name: '현재 프롬프트 설정', exact: true }).click();
   const settings = page.getByRole('region', { name: '현재 프롬프트 설정' });
   const library = await (await request.get('/api/library')).json();
@@ -1467,13 +1469,13 @@ test('UI18 translation is requested only by first view click, never by restore, 
   await page.getByLabel('새 원고의 기본 보기').selectOption('translation');
   await close(page);
   await page
-    .getByRole('navigation', { name: '봇의 채팅 목록' })
+    .getByRole('navigation', { name: chatListName })
     .getByRole('button')
     .filter({ hasText: other.title })
     .click();
   await expect(page.getByTestId('source-text')).toBeVisible();
   await page
-    .getByRole('navigation', { name: '봇의 채팅 목록' })
+    .getByRole('navigation', { name: chatListName })
     .getByRole('button')
     .filter({ hasText: chat.title })
     .click();

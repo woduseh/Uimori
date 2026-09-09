@@ -318,7 +318,7 @@ test('PMUI03 model edits use the latest connection without changing role IDs; de
   for (const width of [390, 1440]) {
     await page.setViewportSize({ width, height: width === 390 ? 844 : 1000 });
     await actions.scrollIntoViewIfNeeded();
-    for (const action of [saveAction, closeAction, deleteAction]) {
+    for (const action of [closeAction, deleteAction]) {
       await expect(action).toBeVisible();
       await expect(action.locator('svg')).toHaveCount(1);
       await expect(action).toHaveText('');
@@ -327,6 +327,13 @@ test('PMUI03 model edits use the latest connection without changing role IDs; de
       expect(box!.width).toBeCloseTo(44, 0);
       expect(box!.height).toBeCloseTo(44, 0);
     }
+    // Saving is the confirming action, so it keeps the glyph and says the word.
+    await expect(saveAction).toBeVisible();
+    await expect(saveAction.locator('svg')).toHaveCount(1);
+    await expect(saveAction).toHaveText('저장');
+    const saveBounds = (await saveAction.boundingBox())!;
+    expect(saveBounds.width).toBeGreaterThanOrEqual(44);
+    expect(saveBounds.height).toBeCloseTo(44, 0);
     const saveBox = (await saveAction.boundingBox())!;
     const closeBox = (await closeAction.boundingBox())!;
     const deleteBox = (await deleteAction.boundingBox())!;

@@ -52,7 +52,7 @@ test('PLR02 every package category is editable from card and list controls', asy
       }
       await expect(library.getByLabel('자료 이름', { exact: true })).toHaveValue(item.title);
       await expect(library.getByLabel('자료 본문', { exact: true })).toHaveValue('Synthetic only.');
-      await library.getByRole('button', { name: '← 서재 목록', exact: true }).click();
+      await library.getByRole('button', { name: '서재 목록', exact: true }).click();
     }
   }
 });

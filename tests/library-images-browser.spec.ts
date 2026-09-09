@@ -134,7 +134,7 @@ test('LIMG01 representative image upload, unset and existing inline selection pr
     'src',
     `/api/package-image-blobs/${profile.blobHash}`
   );
-  await library.getByRole('button', { name: '← 서재 목록', exact: true }).click();
+  await library.getByRole('button', { name: '서재 목록', exact: true }).click();
   const card = library.getByRole('button', { name: `${original.title} 상세 보기`, exact: true });
   await expect(card.locator('img')).toHaveAttribute(
     'src',

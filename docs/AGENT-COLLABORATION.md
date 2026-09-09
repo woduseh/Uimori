@@ -39,7 +39,7 @@ type AgentCollaboration = {
 
 API는 기존 `POST/PUT /api/prompt-presets`의 `program`을 사용하며 수정은 `expectedRevision` CAS로 보호해요. 잘못된 편집 초안은 화면에서 보존하지만 저장·미리보기·JSON import 전에 검증해요. 별도 협업 편집 후 오래된 본문 undo가 협업 설정을 지우지 않아요.
 
-현재 프롬프트와 모델을 Run 예약 시 고정해요. `ProfileSnapshot.collaborationModels`에 에이전트 ID별 모델·연결·파라미터를 보관하므로 진행 중 설정 수정은 다음 Run부터 적용돼요. 매 호출에 최신 연결 권한을 다시 검사하고 전송 전에 attempt를 기록해요. 기존 `role: main` 전송을 사용하되 attempt의 host 전용 `agentId`로 보조 호출을 구분해요. 이 ID는 공급자에게 보내거나 모델 출력에서 받지 않아요.
+현재 프롬프트와 모델을 Run 예약 시 고정해요. `ProfileSnapshot.collaborationModels`에 에이전트 ID별 모델·프로바이더·파라미터를 보관하므로 진행 중 설정 수정은 다음 Run부터 적용돼요. 매 호출에 최신 프로바이더 권한을 다시 검사하고 전송 전에 attempt를 기록해요. 기존 `role: main` 전송을 사용하되 attempt의 host 전용 `agentId`로 보조 호출을 구분해요. 이 ID는 공급자에게 보내거나 모델 출력에서 받지 않아요.
 
 모든 보조 호출은 요약·메인과 같은 `settings.maxCalls`에 포함돼요. 보조 전체 한도와 각 에이전트 한도도 동시에 적용하며 메인의 다음 호출 1회분을 남겨요. 기본 전체 추가 호출 한도는 3회, 템플릿별 한도는 2회예요. 최종 작문이 더 많은 도구 왕복을 요구하면 기존 전체 한도에서 끝날 수 있어요. 켜진 협업은 호출 여부와 별개로 도구 설명·공유 지침만큼 메인 입력이 늘어나요.
 
@@ -51,7 +51,7 @@ API는 기존 `POST/PUT /api/prompt-presets`의 `program`을 사용하며 수정
 
 Run의 `agents.consult` tool event에 의견·상태·호출량·질문·출처를 남겨요. `agents.read`에는 실제 읽기 결과를 남기고, 모델 입력은 `agentId`로 구분해요. 원문에는 메인의 최종 응답만 저장해요. 보조가 읽은 본문을 다음 Run의 유지 로어로 자동 승격하지 않아요.
 
-협업 설정은 현재 schema/archive v15의 JSON 필드에 보관해요. 협업 전용 DB 테이블이나 구형 DB 이관은 없어요. 복원은 에이전트 모델 귀속을 검사하고 메인·보조 snapshot의 인증 참조를 제거하며 연결을 비활성화해요. 현재 프롬프트나 진행 중 Run이 참조한 모델은 삭제를 막아요. 현재 연결을 해제하고 Run이 종료되면 오래된 프롬프트의 모델 선택만으로 삭제를 막지 않으며 과거 Run의 자체 모델 snapshot은 보존해요.
+협업 설정은 현재 schema/archive v15의 JSON 필드에 보관해요. 협업 전용 DB 테이블이나 구형 DB 이관은 없어요. 복원은 에이전트 모델 귀속을 검사하고 메인·보조 snapshot의 인증 참조를 제거하며 프로바이더를 비활성화해요. 현재 프롬프트나 진행 중 Run이 참조한 모델은 삭제를 막아요. 현재 프로바이더를 해제하고 Run이 종료되면 오래된 프롬프트의 모델 선택만으로 삭제를 막지 않으며 과거 Run의 자체 모델 snapshot은 보존해요.
 
 ## 검증 범위
 

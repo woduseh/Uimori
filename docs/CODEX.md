@@ -1,13 +1,13 @@
 # Codex 에이전트 연결
 
-Uimori 서버에서 공식 Codex CLI의 App Server를 실행하고 개인 ChatGPT 구독으로 로그인해요. 프로토콜은 `codex-app-server-v1`, 연결 주소는 고정값 `codex://local`이에요. 본문·번역·장면 상태 표시·이미지 작업 지시·상태 계산·문맥 정리·도우미에서 같은 Codex 모델 프리셋을 선택할 수 있어요. 이미지 역할은 기존 Uimori의 이미지 작업 지시(배치)를 만들어요. Codex의 공식 이미지 생성 도구는 **설정 → 삽화**의 장면 삽화 생성에서만 사용하며, 텍스트 판단 턴에는 `features.image_generation=false`를 명시해요. 삽화 턴의 계약은 [장면 삽화](ILLUSTRATIONS.md)를 봐요.
+Uimori 서버에서 공식 Codex CLI의 App Server를 실행하고 개인 ChatGPT 구독으로 로그인해요. 프로토콜은 `codex-app-server-v1`, 프로바이더 주소는 고정값 `codex://local`이에요. 본문·번역·장면 상태 표시·이미지 작업 지시·상태 계산·문맥 정리·도우미에서 같은 Codex 모델 프리셋을 선택할 수 있어요. 이미지 역할은 기존 Uimori의 이미지 작업 지시(배치)를 만들어요. Codex의 공식 이미지 생성 도구는 **설정 → 삽화**의 장면 삽화 생성에서만 사용하며, 텍스트 판단 턴에는 `features.image_generation=false`를 명시해요. 삽화 턴의 계약은 [장면 삽화](ILLUSTRATIONS.md)를 봐요.
 
 ## 준비와 로그인
 
-1. 서버에 공식 Codex CLI **0.153.0 이상**을 설치해요. 현재 연결 계약은 설치된 0.153.0에서 생성한 공식 schema를 기준으로 구현했어요. 버전을 올릴 때는 아래 사전 검사를 다시 실행하세요.
+1. 서버에 공식 Codex CLI **0.153.0 이상**을 설치해요. 현재 프로바이더 계약은 설치된 0.153.0에서 생성한 공식 schema를 기준으로 구현했어요. 버전을 올릴 때는 아래 사전 검사를 다시 실행하세요.
 2. 서버 환경에 `NR_CODEX_ENABLED=1`을 설정하고 앱을 시작해요. 기본값은 비활성이에요. PATH의 네이티브 실행 파일과 일반적인 npm 설치를 탐색해요. 자동 탐색이 안 되면 `NR_CODEX_EXECUTABLE`에 실제 `codex`/`codex.exe`의 절대 경로를 지정해요. `.cmd`, `.bat`, `.ps1` 래퍼나 명령 문자열은 허용하지 않아요.
 3. **설정 → 에이전트 → ChatGPT로 Codex 로그인**을 눌러요. 표시된 코드를 공식 `https://auth.openai.com/codex/device` 페이지에 직접 입력해요. 로그인은 공식 Codex 프로세스가 처리해요. 계정에서 device-code 로그인을 허용해야 하며 Uimori는 토큰 붙여넣기나 기존 CLI 로그인 가져오기를 제공하지 않아요.
-4. **연결과 모델**에서 **Codex · ChatGPT 구독** 연결을 저장하고 모델 목록을 조회해 프리셋을 저장해요. 각 기능의 모델 선택에서 해당 프리셋을 선택해요. 모델 목록 조회는 생성 요청을 보내지 않아요.
+4. **프로바이더와 모델**에서 **Codex · ChatGPT 구독** 프로바이더를 저장하고 모델 목록을 조회해 프리셋을 저장해요. 각 기능의 모델 선택에서 해당 프리셋을 선택해요. 모델 목록 조회는 생성 요청을 보내지 않아요.
 
 연결은 브라우저가 아닌 서버에 속해요. PC·휴대폰은 같은 Uimori 로그인과 같은 서버 Codex 구독 한도를 사용해요. 다중 사용자 구독 중계 서비스로 설계하지 않았어요. **Codex 연결 해제**는 진행 중인 Codex 작업과 대기를 중단하고 Uimori 전용 로그인을 해제해요. 이미 공급자에서 시작한 작업의 처리·사용량까지 되돌린다는 뜻은 아니에요.
 
@@ -50,6 +50,6 @@ npx vitest run tests/codex-installed.test.ts
 Remove-Item Env:NR_CODEX_PREFLIGHT
 ```
 
-설치 사전 검사 결과는 `output/codex-preflight/summary.json`에 남아요. 합성 stdio 검사는 인증 취소·오류 가림·정상 이벤트·시간 초과·종료 경합·도구 차단·대기 취소·attempt 선기록을 확인해요. 앱 통합 검사는 6개 역할과 등록 제안, export/import, 비활성 연결 및 인증/Origin 경계를 확인해요. `npm run verify:providers`에는 390px의 Codex 설정·모의 로그인·취소·연결 해제 검사가 포함돼요. 이 검사들은 실제 구독 모델 응답 품질·소모량을 입증하지 않아요.
+설치 사전 검사 결과는 `output/codex-preflight/summary.json`에 남아요. 합성 stdio 검사는 인증 취소·오류 가림·정상 이벤트·시간 초과·종료 경합·도구 차단·대기 취소·attempt 선기록을 확인해요. 앱 통합 검사는 6개 역할과 등록 제안, export/import, 비활성 프로바이더 및 인증/Origin 경계를 확인해요. `npm run verify:providers`에는 390px의 Codex 설정·모의 로그인·취소·연결 해제 검사가 포함돼요. 이 검사들은 실제 구독 모델 응답 품질·소모량을 입증하지 않아요.
 
 공식 계약: [App Server](https://learn.chatgpt.com/docs/app-server), [인증](https://learn.chatgpt.com/docs/auth), [설정 schema](https://learn.chatgpt.com/config-schema.json). 버전별 실제 생성 타입과 채택 근거는 [SOURCES](../project-plan/SOURCES.md)에 기록해요.

@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react';
-import { LoaderCircle, RefreshCw, X } from 'lucide-react';
+import { CloseIcon, RefreshIcon, RunningIcon } from './ui-icons.js';
 import type { Illustration } from '../core/illustration.js';
 import { api } from './api.js';
 import { DeleteButton } from './DeleteButton.js';
@@ -119,7 +119,7 @@ function IllustrationCard({
               disabled={busy}
               onClick={() => void act(`/illustrations/${encodeURIComponent(item.id)}/cancel`)}
             >
-              <X size={16} aria-hidden="true" /> 취소
+              <CloseIcon size={16} aria-hidden="true" /> 취소
             </button>
           )}
           {illustrationReconcilable(item) && (
@@ -130,7 +130,7 @@ function IllustrationCard({
               title="ComfyUI에 접수된 작업의 결과만 읽어요. 새로 그리지 않아요."
               onClick={() => void act(`/illustrations/${encodeURIComponent(item.id)}/reconcile`)}
             >
-              <RefreshCw size={16} aria-hidden="true" /> 결과 확인
+              <RefreshIcon size={16} aria-hidden="true" /> 결과 확인
             </button>
           )}
           {illustrationRetryable(item) && (
@@ -140,7 +140,7 @@ function IllustrationCard({
               disabled={busy}
               onClick={() => void act(`/illustrations/${encodeURIComponent(item.id)}/retry`)}
             >
-              <RefreshCw size={16} aria-hidden="true" /> 다시 요청
+              <RefreshIcon size={16} aria-hidden="true" /> 다시 요청
             </button>
           )}
           {!active && (
@@ -159,7 +159,7 @@ function IllustrationCard({
       </div>
       {active && (
         <p className="illustration-progress" role="status">
-          <LoaderCircle size={16} aria-hidden="true" />
+          <RunningIcon size={16} aria-hidden="true" />
           {item.status === 'queued'
             ? '삽화 생성을 기다리고 있어요. 본문 읽기와 다음 요청은 계속할 수 있어요.'
             : item.diagnostic?.stage === 'prompt'

@@ -4,7 +4,7 @@
   margin: 0 auto;
   padding: 16px 24px 48px;
   min-width: 0;
-  color: var(--text, #e8ede6);
+  color: var(--text);
 }
 .library-heading {
   display: flex;
@@ -55,7 +55,7 @@
 .profile-tabs {
   display: flex;
   gap: 5px;
-  border-bottom: 1px solid var(--border, #3a413a);
+  border-bottom: 1px solid var(--border);
   padding-bottom: 12px;
   overflow-x: auto;
   scrollbar-width: thin;
@@ -66,16 +66,16 @@
   white-space: nowrap;
   border: 1px solid transparent;
   background: transparent;
-  color: var(--muted, #b1b9af);
+  color: var(--muted);
   padding: 9px 13px;
   font-size: 13px;
   min-height: 44px;
 }
 .library-tabs > button[aria-selected="true"],
 .profile-tabs > button[aria-selected="true"] {
-  background: var(--accent-soft, #303b30);
-  color: var(--text, #e8ede6);
-  border-color: var(--border, #3a413a);
+  background: var(--accent-soft);
+  color: var(--text);
+  border-color: var(--border);
 }
 .library-page .library-tabs {
   gap: 16px;
@@ -125,9 +125,9 @@
   align-items: flex-start;
   min-width: 0;
   padding: 20px 18px 18px;
-  border: 1px solid var(--border, #3a413a);
+  border: 1px solid var(--border);
   border-radius: 12px;
-  background: var(--surface-raised, #232923);
+  background: var(--surface-raised);
   gap: 12px;
 }
 .library-card h2 {
@@ -140,7 +140,7 @@
 .library-card > p {
   font-size: 13px;
   line-height: 1.7;
-  color: var(--muted, #b1b9af);
+  color: var(--muted);
   margin: 0;
   display: -webkit-box;
   -webkit-line-clamp: 3;
@@ -169,7 +169,7 @@
 }
 .library-empty p {
   font-size: 14px;
-  color: var(--muted, #b1b9af);
+  color: var(--muted);
   margin: 12px 0 22px;
 }
 .library-detail {
@@ -213,7 +213,7 @@
   color: var(--muted);
 }
 .library-detail-actions > .delete-control > .delete-button:hover {
-  color: var(--danger, #e88b8b);
+  color: var(--error);
 }
 @media (max-width: 600px) {
   .library-detail-actions {
@@ -244,7 +244,7 @@
 }
 .library-detail .control-grid {
   background: transparent;
-  border-color: var(--border, #3a413a);
+  border-color: var(--border);
 }
 .profile-editor {
   min-width: 0;
@@ -270,14 +270,14 @@
   margin: 6px 0 0;
 }
 .profile-fields .control-grid {
-  border-color: var(--border, #3a413a);
+  border-color: var(--border);
   background: transparent;
 }
 .profile-fields .control-grid legend {
   font-size: 13px;
 }
 .profile-savebar {
-  border-top: 1px solid var(--border, #3a413a);
+  border-top: 1px solid var(--border);
   padding: 18px 0 4px;
   margin-top: 24px;
 }
@@ -288,12 +288,12 @@
 .profile-savebar > span {
   width: 100%;
   font-size: 12px;
-  color: var(--muted, #b1b9af);
+  color: var(--muted);
 }
 .profile-diagnostics {
   margin-top: 16px;
   font-size: 11px;
-  color: var(--muted, #b1b9af);
+  color: var(--muted);
 }
 @media (max-width: 600px) {
   .library-page {
@@ -425,22 +425,10 @@
   min-width: 0;
 }
 .library-transfer-card input[type="file"] {
-  font: inherit;
   min-height: 44px;
-  padding: 6px;
   min-width: 0;
   max-width: 100%;
   background: var(--panel);
-}
-.library-transfer-card input[type="file"]::file-selector-button {
-  font: inherit;
-  color: var(--text);
-  background: var(--accent-soft);
-  border: 1px solid var(--line);
-  border-radius: 6px;
-  padding: 6px 10px;
-  margin-right: 10px;
-  cursor: pointer;
 }
 .library-package-copies {
   display: grid;
@@ -521,7 +509,7 @@
   opacity: 1;
 }
 .library-card > .delete-control > .delete-button:hover {
-  color: var(--danger, #e88b8b);
+  color: var(--error);
 }
 /* Tool row: folder chooser, search, list options. */
 .library-toolbar {
@@ -618,7 +606,7 @@
   padding: 8px 8px 8px 12px;
   border: 1px solid var(--border);
   border-radius: 12px;
-  background: var(--surface-raised, #232923);
+  background: var(--surface-raised);
   min-width: 0;
 }
 /* Row actions stay quiet until the row is hovered or focused; touch shows them fully. */
@@ -721,7 +709,7 @@
   position: absolute;
   top: 16px;
   right: 16px;
-  background: var(--surface-raised, #232923);
+  background: var(--surface-raised);
   border-radius: 9px;
 }
 .library-portrait-card > .library-select-check {
@@ -730,7 +718,7 @@
   left: 16px;
   padding: 0 8px;
   border-radius: 8px;
-  background: var(--surface-raised, #232923);
+  background: var(--surface-raised);
   z-index: 1;
 }
 .library-portrait-card > .library-edit-content,
@@ -848,7 +836,6 @@
   flex-shrink: 0;
   background: var(--accent-soft);
   border-radius: 10px;
-  font-size: 23px;
   color: var(--accent);
 }
 .library-empty > button + button {
@@ -945,9 +932,6 @@
   font-size: 14px;
   min-height: 44px;
 }
-.library-mobile-folder-actions {
-  display: none;
-}
 .library-editor-extra {
   min-width: 0;
   border: 1px solid var(--line);
@@ -983,27 +967,6 @@
   .library-page {
     padding: 12px 16px 32px;
   }
-  .library-page .library-folders-compact {
-    flex-wrap: nowrap;
-    gap: 8px;
-  }
-  .library-page .library-folders-compact .library-folders-heading,
-  .library-page .library-folders-compact .library-folder-list {
-    display: none;
-  }
-  .library-page .library-folders-compact .library-mobile-folder-actions {
-    display: block;
-    flex-shrink: 0;
-  }
-  .library-page .library-folders-compact .library-folder-mobile {
-    min-width: 0;
-  }
-  .library-page .library-folders-compact select {
-    min-height: 44px;
-    font-size: 16px;
-    line-height: 1.5;
-    padding-block: 8px;
-  }
   .library-page .library-workspace {
     gap: 8px;
   }
@@ -1013,12 +976,6 @@
   }
   .library-page .library-toolbar > .library-folders {
     flex: 1 1 100%;
-  }
-  .library-page .library-toolbar > .library-folders .library-folder-mobile {
-    flex: 1;
-  }
-  .library-page .library-toolbar > .library-folders select {
-    max-width: none;
   }
   .library-page .library-toolbar .library-search-field {
     flex: 1 1 0;

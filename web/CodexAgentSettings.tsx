@@ -1,4 +1,4 @@
-import { RefreshCw } from 'lucide-react';
+import { RefreshIcon } from './ui-icons.js';
 import { IconButton } from './IconButton.js';
 import './codex-agent-settings.css';
 import { useEffect, useRef, useState } from 'react';
@@ -101,7 +101,7 @@ export function CodexAgentSettings({
       <div className="codex-agent-heading">
         <h3>Codex</h3>
         <IconButton
-          icon={RefreshCw}
+          icon={RefreshIcon}
           label="Codex 상태 다시 확인"
           disabled={busy || checking}
           aria-busy={checking}

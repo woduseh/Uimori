@@ -63,27 +63,14 @@ async function revealListOptions(panel: Locator) {
   if (!(await summary.evaluate((node) => (node.parentElement as HTMLDetailsElement).open)))
     await summary.click();
 }
+/** Content and prompts share one folder control: a breadcrumb back to 전체 and folder cards. */
 async function chooseFolder(panel: Locator, title: string) {
-  if ((await panel.getAttribute('data-testid')) === 'library-panel') {
-    await panel
-      .getByRole('navigation', { name: '서재 위치', exact: true })
-      .getByRole('button', { name: '전체', exact: true })
-      .click();
-    if (title !== '전체')
-      await panel.getByRole('button', { name: `${title} 폴더 열기`, exact: true }).click();
-    return;
-  }
-  const mobile = panel.getByRole('combobox', { name: '폴더 선택', exact: true });
-  await expect(panel.locator('.library-folder-mobile select')).toBeAttached();
-  if (await mobile.isVisible()) {
-    const options = await mobile.locator('option').allTextContents();
-    const label = options.find((value) => value.startsWith(`${title} (`))!;
-    await mobile.selectOption({ label });
-  } else
-    await panel
-      .locator('.library-folder-choice')
-      .filter({ has: panel.page().locator('span', { hasText: new RegExp(`^${title}$`) }) })
-      .click();
+  await panel
+    .getByRole('navigation', { name: '현재 폴더', exact: true })
+    .getByRole('button', { name: '전체', exact: true })
+    .click();
+  if (title !== '전체')
+    await panel.getByRole('button', { name: `${title} 폴더 열기`, exact: true }).click();
 }
 async function moveItems(
   page: Page,
@@ -278,6 +265,8 @@ test('LIBUI03 prompts have independent folders and unsaved edits survive a cance
   await move.getByLabel('이동할 폴더').selectOption(folder.id);
   await move.getByRole('button', { name: '이동', exact: true }).click();
   await expect(move).toBeHidden();
+  // Folder cards are the way into a folder, and a search spans every folder, so clear it first.
+  await panel.getByLabel('프롬프트 검색', { exact: true }).fill('');
   await chooseFolder(panel, folder.title);
   await panel.getByRole('button', { name: `${prefix} 프롬프트 편집`, exact: true }).click();
   await panel.getByLabel('프롬프트 이름', { exact: true }).fill(`${prefix} Unsaved`);

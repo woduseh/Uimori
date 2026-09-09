@@ -10,7 +10,7 @@
   align-items: center;
   justify-content: center;
   gap: 8px;
-  color: var(--danger, #b33b43);
+  color: var(--error);
 }
 .delete-dialog.app-dialog {
   width: min(480px, calc(100vw - 32px));
@@ -42,12 +42,9 @@
 }
 
 .delete-button:not(.secondary) {
-  background: #a52932;
-  color: #fff;
-  border-color: #a52932;
-}
-.delete-button:not(.secondary):hover {
-  background: #89202a;
+  background: var(--error);
+  color: var(--error-ink);
+  border-color: var(--error);
 }
 
 .delete-button > svg {

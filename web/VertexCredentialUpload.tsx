@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { FileKey, Upload } from 'lucide-react';
+import { CredentialFileIcon, UploadIcon } from './ui-icons.js';
 import { api, ApiError } from './api.js';
 
 type RegisteredCredential = { credentialEnv: string; projectId: string; clientEmail: string };
@@ -29,7 +29,7 @@ export function VertexCredentialUpload({
     <section className="vertex-credential-upload full" aria-label="Google 서비스 계정 JSON">
       <div className="provider-section-heading">
         <strong>
-          <FileKey size={18} aria-hidden="true" />
+          <CredentialFileIcon size={18} aria-hidden="true" />
           서비스 계정 JSON
         </strong>
         <span className="provider-status">{stored ? 'JSON 인증 선택됨' : '파일로 간편 등록'}</span>
@@ -40,7 +40,7 @@ export function VertexCredentialUpload({
       </p>
       <label className="vertex-upload-field">
         <span>
-          <Upload size={16} aria-hidden="true" />
+          <UploadIcon size={16} aria-hidden="true" />
           {uploading
             ? '서버에 등록하는 중…'
             : stored

@@ -345,7 +345,7 @@ test('PAUI02 saving and applying retain distinct scopes with compact actions on 
   await expect(
     page.getByTestId('prompt-editor').getByLabel('프롬프트 이름', { exact: true })
   ).toHaveValue(preset.title);
-  await page.getByRole('button', { name: '← 프롬프트 목록', exact: true }).click();
+  await page.getByRole('button', { name: '프롬프트 목록', exact: true }).click();
   await page.getByRole('button', { name: '현재 프롬프트 설정', exact: true }).click();
   await editor.getByRole('button', { name: '프롬프트 편집', exact: true }).click();
   await expect(

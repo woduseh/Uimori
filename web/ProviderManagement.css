@@ -2,8 +2,8 @@
   min-width: 0;
 }
 .connection-editor .compact-card {
-  background: var(--surface-raised, #232923);
-  border-color: var(--border, #3a413a);
+  background: var(--surface-raised);
+  border-color: var(--border);
   padding: 16px;
   border-radius: 9px;
 }
@@ -32,7 +32,7 @@
   flex-shrink: 0;
 }
 .connection-editor form + form {
-  border-color: var(--border, #3a413a);
+  border-color: var(--border);
 }
 .registered-models {
   margin-top: 0;
@@ -46,7 +46,7 @@
 }
 .registered-models li {
   padding: 12px 0;
-  border-bottom: 1px solid var(--border, #3a413a);
+  border-bottom: 1px solid var(--border);
   overflow-wrap: anywhere;
 }
 .registered-models strong {
@@ -132,7 +132,7 @@
   line-height: 1.7;
 }
 .provider-auth-settings {
-  border-top: 1px solid var(--border, #3a413a);
+  border-top: 1px solid var(--border);
   font-size: 12px;
 }
 .provider-auth-settings > summary {

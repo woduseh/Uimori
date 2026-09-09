@@ -335,7 +335,7 @@ test('AGENTUI02 saved collaboration options reach the real preview API and trans
   // Saved presets keep their role. Check translation on a new draft through the normal UI.
   await expect(editor.getByLabel('프롬프트 역할', { exact: true })).toBeDisabled();
   const library = page.getByTestId('prompt-library');
-  await library.getByRole('button', { name: '← 프롬프트 목록', exact: true }).click();
+  await library.getByRole('button', { name: '프롬프트 목록', exact: true }).click();
   await library.getByRole('button', { name: '새 프롬프트', exact: true }).first().click();
   await editor.getByLabel('프롬프트 역할', { exact: true }).selectOption('translation');
   await expect(editor.getByRole('region', { name: '에이전트 협업' })).toHaveCount(0);

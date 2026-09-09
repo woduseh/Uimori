@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { RefreshCw, Save } from 'lucide-react';
+import { RefreshIcon } from './ui-icons.js';
 import type { Library, ModelRef } from '../core/product.js';
 import type { IllustrationSettings } from '../core/illustration.js';
 import { api, ApiError } from './api.js';
 import { IconButton } from './IconButton.js';
+import { SaveButton } from './SaveButton.js';
 import { Switch } from './BooleanControls.js';
 import { Dialog } from './Dialog.js';
 import { DraftDiscardActions } from './DraftDiscardActions.js';
@@ -67,7 +68,7 @@ export function IllustrationSettingsEditor({
       <p role="status" className="settings-loading-status">
         {loadError || '삽화 설정을 불러오는 중이에요…'}{' '}
         <IconButton
-          icon={RefreshCw}
+          icon={RefreshIcon}
           label="다시 불러오기"
           className="secondary"
           onClick={() => void load()}
@@ -423,17 +424,15 @@ export function IllustrationSettingsEditor({
         )}
         <div className="form-actions settings-save-actions full">
           <IconButton
-            icon={RefreshCw}
+            icon={RefreshIcon}
             label="저장된 설정 다시 불러오기"
             className="secondary"
             aria-busy={busy}
             onClick={() => (dirty ? setConfirmReload(true) : void reload())}
           />
-          <IconButton
+          <SaveButton
             type="button"
-            icon={Save}
             label="삽화 설정 저장"
-            className="settings-save-button"
             aria-busy={busy}
             disabled={!dirty || conflict || !valid}
             onClick={save}

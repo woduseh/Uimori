@@ -3,7 +3,7 @@ import { api, ApiError } from './api.js';
 import { IconButton } from './IconButton.js';
 import { DismissibleError } from './DismissibleError.js';
 import './outline.css';
-import { Plus, PenLine, Trash2, Pin } from 'lucide-react';
+import { AddIcon, DeleteIcon, EditIcon, PinIcon } from './ui-icons.js';
 import {
   OUTLINE_INTENT_MAX,
   OUTLINE_LEVEL_LABELS,
@@ -233,20 +233,20 @@ function OutlineEntry({
           {child && (
             <IconButton
               label={`${OUTLINE_LEVEL_LABELS[child]} 추가`}
-              icon={Plus}
+              icon={AddIcon}
               disabled={!!actions.busy}
               onClick={() => actions.setAdding(actions.adding === node.id ? null : node.id)}
             />
           )}
           <IconButton
             label="구성 수정"
-            icon={PenLine}
+            icon={EditIcon}
             disabled={!!actions.busy}
             onClick={() => actions.setEditing(editing ? null : node.id)}
           />
           <IconButton
             label={node.fixed ? '고정 해제' : '이 구성 고정'}
-            icon={Pin}
+            icon={PinIcon}
             disabled={!!actions.busy}
             className={node.fixed ? 'outline-pinned' : ''}
             onClick={() =>
@@ -258,7 +258,7 @@ function OutlineEntry({
           {node.progress.state !== 'written' && (
             <IconButton
               label="구성 삭제"
-              icon={Trash2}
+              icon={DeleteIcon}
               disabled={!!actions.busy}
               onClick={() =>
                 actions.apply([{ op: 'remove', id: node.id, expectedRevision: node.revision }])

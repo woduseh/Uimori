@@ -1,7 +1,18 @@
 import { DraftDiscardActions } from './DraftDiscardActions.js';
 import { SelectionCheckbox } from './BooleanControls.js';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { AddIcon, EditIcon, MoveIcon, CopyIcon, SettingsIcon } from './ui-icons.js';
+import {
+  AddIcon,
+  BackIcon,
+  CopyIcon,
+  EditIcon,
+  MoveIcon,
+  OptionsIcon,
+  PromptIcon,
+  SearchIcon,
+  SelectIcon,
+  SettingsIcon,
+} from './ui-icons.js';
 import type { Library, PromptPreset, PromptRole } from '../core/product.js';
 import type { LibraryItemKey, LibraryOrganization } from '../core/library-organization.js';
 import { libraryFolderOf } from '../core/library-organization.js';
@@ -10,7 +21,6 @@ import { Dialog } from './Dialog.js';
 import { DeleteButton } from './DeleteButton.js';
 import { PromptEditor } from './PromptEditor.js';
 import { discardActiveEditor } from './editor-workspace-context.js';
-import { SlidersHorizontal } from 'lucide-react';
 import {
   LibraryFolders,
   LibraryItemMenu,
@@ -123,6 +133,10 @@ export function PromptLibrary({
       );
     })
     .sort((a, b) => (sort === 'name-desc' ? -1 : 1) * a.title.localeCompare(b.title, 'ko'));
+  const folders =
+    organizer.organization?.folders.filter((item) => item.category === 'prompts') ?? [];
+  const showFolders = folder === 'all' && !query.trim() && !selecting;
+  const categoryEmpty = !!library && presets.length === 0 && !query;
   function changeEditing(next: typeof editing) {
     pendingEditing.current = next;
     if (dirty) setDiscard(true);
@@ -235,7 +249,8 @@ export function PromptLibrary({
         <div className="library-prompt-editor">
           <div className="library-detail-heading">
             <button type="button" className="secondary" onClick={close}>
-              ← 프롬프트 목록
+              <BackIcon size={18} aria-hidden="true" />
+              프롬프트 목록
             </button>
             <h2>{editing.preset?.title ?? '새 프롬프트'}</h2>
           </div>
@@ -258,105 +273,142 @@ export function PromptLibrary({
         <div className="library-workspace">
           <div className="library-workspace-content">
             <div className="library-toolbar">
-              <LibraryFolders
-                category="prompts"
-                organizer={organizer}
-                value={folder}
-                onChange={(next) => {
-                  setFolder(next);
-                  setSelection([]);
-                }}
-                counts={counts}
-                reload={reload}
-                onError={onError}
-              />
-              <label className="library-search-field">
-                <span className="sr-only">프롬프트 검색</span>
-                <input
-                  type="search"
-                  aria-label="프롬프트 검색"
-                  placeholder="이름으로 찾기"
-                  value={query}
-                  onChange={(event) => setQuery(event.target.value)}
+              {!selecting && (
+                <LibraryFolders
+                  presentation="breadcrumb"
+                  category="prompts"
+                  organizer={organizer}
+                  value={folder}
+                  onChange={(next) => {
+                    setFolder(next);
+                    setSelection([]);
+                  }}
+                  counts={counts}
+                  reload={reload}
+                  onError={onError}
                 />
-              </label>
-              <LibraryItemMenu
-                title="목록 관리"
-                className="library-list-options"
-                icon={SlidersHorizontal}
-              >
-                <div className="library-list-options-body">
-                  <label>
-                    역할
-                    <select
-                      aria-label="프롬프트 역할 필터"
-                      value={role}
-                      onChange={(event) => setRole(event.target.value as typeof role)}
-                    >
-                      <option value="all">모든 역할</option>
-                      <option value="main">작문</option>
-                      <option value="translation">번역</option>
-                    </select>
-                  </label>
-                  <label>
-                    정렬
-                    <select
-                      aria-label="프롬프트 정렬"
-                      value={sort}
-                      onChange={(event) => setSort(event.target.value)}
-                    >
-                      <option value="name">이름순</option>
-                      <option value="name-desc">이름 역순</option>
-                    </select>
-                  </label>
+              )}
+              {selecting ? (
+                <div className="library-bulk-toolbar" role="group" aria-label="프롬프트 선택 작업">
+                  <span role="status">{selection.length}개 선택</span>
                   <button
                     type="button"
                     className="secondary"
-                    aria-pressed={selecting}
+                    aria-label="표시된 프롬프트 전체 선택"
+                    onClick={() => setSelection(filtered.map((item) => item.id))}
+                  >
+                    <SelectIcon size={18} aria-hidden="true" />
+                    <span>전체 선택</span>
+                  </button>
+                  <button
+                    type="button"
+                    aria-label="선택한 프롬프트 이동"
+                    disabled={!selection.length || organizer.busy}
+                    onClick={() =>
+                      setMoving(selection.map((id) => ({ kind: 'prompt-preset', id })))
+                    }
+                  >
+                    <MoveIcon size={18} aria-hidden="true" />
+                    <span>이동</span>
+                  </button>
+                  <button
+                    type="button"
+                    className="secondary"
                     onClick={() => {
-                      setSelecting(!selecting);
+                      setSelecting(false);
                       setSelection([]);
                     }}
                   >
-                    선택
+                    완료
                   </button>
                 </div>
-              </LibraryItemMenu>
+              ) : (
+                !categoryEmpty && (
+                  <>
+                    <label className="library-search-field">
+                      <SearchIcon size={20} aria-hidden="true" />
+                      <span className="sr-only">프롬프트 검색</span>
+                      <input
+                        type="search"
+                        aria-label="프롬프트 검색"
+                        placeholder="이름으로 찾기"
+                        value={query}
+                        onChange={(event) => setQuery(event.target.value)}
+                      />
+                    </label>
+                    <LibraryItemMenu
+                      title="목록 관리"
+                      className="library-list-options"
+                      icon={OptionsIcon}
+                    >
+                      <div className="library-list-options-body">
+                        <label>
+                          역할
+                          <select
+                            aria-label="프롬프트 역할 필터"
+                            value={role}
+                            onChange={(event) => setRole(event.target.value as typeof role)}
+                          >
+                            <option value="all">모든 역할</option>
+                            <option value="main">작문</option>
+                            <option value="translation">번역</option>
+                          </select>
+                        </label>
+                        <label>
+                          정렬
+                          <select
+                            aria-label="프롬프트 정렬"
+                            value={sort}
+                            onChange={(event) => setSort(event.target.value)}
+                          >
+                            <option value="name">이름순</option>
+                            <option value="name-desc">이름 역순</option>
+                          </select>
+                        </label>
+                        <button
+                          type="button"
+                          className="secondary"
+                          onClick={() => {
+                            setSelecting(true);
+                            setSelection([]);
+                          }}
+                        >
+                          <SelectIcon size={18} aria-hidden="true" />
+                          선택
+                        </button>
+                      </div>
+                    </LibraryItemMenu>
+                  </>
+                )
+              )}
             </div>
-            {!!query && (
+            {!!query && !selecting && (
               <p className="library-result-count muted" role="status">
                 검색 결과 {filtered.length}개
               </p>
             )}
-            {selecting && (
-              <div className="library-bulk-toolbar">
-                <span>{selection.length}개 선택</span>
-                <button
-                  type="button"
-                  className="secondary"
-                  onClick={() => setSelection(filtered.map((item) => item.id))}
-                >
-                  표시된 자료 전체 선택
-                </button>
-                <button
-                  type="button"
-                  disabled={!selection.length || organizer.busy}
-                  onClick={() => setMoving(selection.map((id) => ({ kind: 'prompt-preset', id })))}
-                >
-                  선택한 자료 이동
-                </button>
-                <button
-                  type="button"
-                  className="secondary"
-                  onClick={() => {
-                    setSelecting(false);
+            {showFolders && folders.length > 0 && (
+              <section className="library-folder-section" aria-label="폴더 목록">
+                <h2>폴더</h2>
+                <LibraryFolders
+                  presentation="cards"
+                  category="prompts"
+                  organizer={organizer}
+                  value={folder}
+                  onChange={(next) => {
+                    setFolder(next);
                     setSelection([]);
                   }}
-                >
-                  선택 취소
-                </button>
-              </div>
+                  counts={counts}
+                  reload={reload}
+                  onError={onError}
+                />
+              </section>
             )}
+            {showFolders && folders.length > 0 && (
+              <h2 className="library-section-title">미분류 프롬프트</h2>
+            )}
+
             <div className="library-list">
               {filtered.map((item) => (
                 <article className="library-list-item" key={item.id}>
@@ -383,7 +435,7 @@ export function PromptLibrary({
                     onClick={() => changeEditing({ preset: item, role: item.role })}
                   >
                     <span className="library-prompt-icon" aria-hidden="true">
-                      ≡
+                      <PromptIcon size={20} />
                     </span>
                     <span className="library-item-copy">
                       <strong>{item.title}</strong>

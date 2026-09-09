@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { X } from 'lucide-react';
+import { CloseIcon } from './ui-icons.js';
 import type { Library, PromptWorkspace } from '../core/product.js';
 import { resolvePromptValues, reconcilePromptValues } from '../core/prompt-program.js';
 import { combinationOwner, matchesPromptCombination } from '../core/prompt-combinations.js';
@@ -116,7 +116,7 @@ export function ChatPromptOptions(props: Props) {
           aria-label="창작 옵션 닫기"
           onClick={props.onClose}
         >
-          <X size={20} />
+          <CloseIcon size={20} />
         </button>
       </header>
       {contextKey && (
