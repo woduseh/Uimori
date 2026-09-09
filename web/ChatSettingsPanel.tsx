@@ -1,3 +1,4 @@
+import { DraftDiscardActions } from './DraftDiscardActions.js';
 import { useEffect, useId, useRef, useState } from 'react';
 import { Dialog } from './Dialog.js';
 import { IconButton } from './IconButton.js';
@@ -361,27 +362,18 @@ export function ChatSettingsPanel({
         }}
       >
         <p>저장하지 않은 편집 내용이나 선택한 파일이 있어요. 닫으면 이 초안이 사라져요.</p>
-        <div className="form-actions">
-          <button
-            type="button"
-            className="secondary"
-            onClick={() => {
-              setDiscard(false);
-              afterClose.current = null;
-            }}
-          >
-            계속 편집
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              setDiscard(false);
-              closeHistory();
-            }}
-          >
-            초안 버리고 닫기
-          </button>
-        </div>
+        <DraftDiscardActions
+          open={discard}
+          onContinue={() => {
+            setDiscard(false);
+            afterClose.current = null;
+          }}
+          onDiscard={() => {
+            setDiscard(false);
+            closeHistory();
+          }}
+          discardLabel="초안 버리고 닫기"
+        />
       </Dialog>
     </Dialog>
   );

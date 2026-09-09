@@ -1,3 +1,4 @@
+import { DraftDiscardActions } from './DraftDiscardActions.js';
 import { RequestMessage } from './RequestMessage.js';
 import { RetryFailure } from './RetryFailure.js';
 import { isModelSelectable } from './model-selection.js';
@@ -1279,19 +1280,17 @@ function App() {
           if (!discardingNavigation) setPendingNavigation(null);
         }}
       >
-        <p>저장하지 않은 자료 편집이 있어요.</p>
+        <p>이동하면 저장하지 않은 편집 내용이 사라져요.</p>
         {navigationDiscardError && (
           <p role="alert" className="error">
             {navigationDiscardError}
           </p>
         )}
-        <button disabled={discardingNavigation} onClick={() => setPendingNavigation(null)}>
-          계속 편집
-        </button>
-        <button
-          className="secondary"
+        <DraftDiscardActions
+          open={!!pendingNavigation}
           disabled={discardingNavigation}
-          onClick={async () => {
+          onContinue={() => setPendingNavigation(null)}
+          onDiscard={async () => {
             setDiscardingNavigation(true);
             setNavigationDiscardError('');
             try {
@@ -1306,9 +1305,8 @@ function App() {
               setDiscardingNavigation(false);
             }
           }}
-        >
-          초안 버리고 이동
-        </button>
+          discardLabel="초안 버리고 이동"
+        />
       </Dialog>
       <Dialog
         open={panel === 'navigation'}

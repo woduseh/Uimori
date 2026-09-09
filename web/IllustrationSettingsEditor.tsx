@@ -5,6 +5,8 @@ import type { IllustrationSettings } from '../core/illustration.js';
 import { api, ApiError } from './api.js';
 import { IconButton } from './IconButton.js';
 import { Switch } from './BooleanControls.js';
+import { Dialog } from './Dialog.js';
+import { DraftDiscardActions } from './DraftDiscardActions.js';
 import { useModelSelection } from './model-selection.js';
 import { useTestMode } from './useTestMode.js';
 import { illustrationErrorMessage } from './illustration-labels.js';
@@ -31,6 +33,7 @@ export function IllustrationSettingsEditor({
   const [saved, setSaved] = useState<IllustrationSettings | null>(null);
   const [draft, setDraft] = useState<Draft | null>(null);
   const [dirty, setDirty] = useState(false);
+  const [confirmReload, setConfirmReload] = useState(false);
   const [busy, setBusy] = useState(false);
   const [loadError, setLoadError] = useState('');
   const [saveError, setSaveError] = useState('');
@@ -176,6 +179,27 @@ export function IllustrationSettingsEditor({
         setBusy(false);
       });
   };
+  const reload = async () => {
+    if (lock.current) return;
+    lock.current = true;
+    setBusy(true);
+    setLoadError('');
+    setMessage('');
+    try {
+      const value = await api<IllustrationSettings>('/illustration-settings');
+      setSaved(value);
+      setDraft(structuredClone(value));
+      setDirty(false);
+      setSaveError('');
+      setMessage('');
+      setConfirmReload(false);
+    } catch {
+      setLoadError('설정을 불러오지 못했어요. 초안은 유지했어요.');
+    } finally {
+      lock.current = false;
+      setBusy(false);
+    }
+  };
   const runTest = async () => {
     setTesting(true);
     setTest(null);
@@ -204,11 +228,7 @@ export function IllustrationSettingsEditor({
   };
   return (
     <section aria-label="삽화 설정" className="settings-section illustration-settings">
-      <p>
-        완성된 응답의 장면을 골라 삽화를 만들어요. 삽화 생성은 본문 작성·번역과 별도 작업이며,
-        실패해도 본문은 그대로 유지돼요. 설정은 새로 예약하는 작업부터 적용하고 진행 중인 작업은
-        예약 당시 값을 유지해요.
-      </p>
+      <p>완성된 장면의 삽화를 만들어요. 설정은 새 작업부터 적용해요.</p>
       <fieldset disabled={busy} className="control-grid">
         <label>
           삽화 생성기
@@ -236,22 +256,16 @@ export function IllustrationSettingsEditor({
             checked={draft.automatic}
             onChange={(event) => change({ ...draft, automatic: event.target.checked })}
           />
-          응답이 완성되면 자동으로 삽화 생성
+          자동 생성
         </label>
-        <small className="full">
-          자동 생성은 새 본문이 저장된 뒤 장면당 1개를 예약해요. 끄면 각 장면의 ⋯ 메뉴에서 직접
-          요청해요.
-        </small>
+        <small className="full">응답이 완성되면 삽화를 만들어요.</small>
         {numberField('장면당 최대 삽화 개수', draft.maxPerSource, 1, 8, (value) =>
           change({ ...draft, maxPerSource: value })
         )}
         {numberField('자동 재요청 횟수', draft.maxAutoRetries, 0, 5, (value) =>
           change({ ...draft, maxAutoRetries: value })
         )}
-        <small className="full">
-          연결·시간 초과·원격 실행 오류처럼 다시 시도할 수 있는 실패만 자동으로 재요청해요. 설정
-          오류와 거절은 바로 실패로 표시하고, 직접 다시 요청할 수 있어요.
-        </small>
+        <small className="full">일시적인 오류가 나면 설정한 횟수만큼 다시 시도해요.</small>
         <label className="full">
           그림 지침
           <textarea
@@ -273,10 +287,7 @@ export function IllustrationSettingsEditor({
               (ref) => change({ ...draft, codex: { ...draft.codex, model: ref } }),
               codexModels.length ? '모델 미지정' : 'Codex 연결의 모델 프리셋이 없어요'
             )}
-            <small className="full">
-              Codex 연결(설정 → 에이전트)에 로그인한 뒤 그 연결의 모델 프리셋을 선택해요. 이미지는
-              Codex의 공식 이미지 생성 도구가 만들고, 결과 파일만 Uimori가 저장해요.
-            </small>
+            <small className="full">에이전트에서 로그인한 Codex 연결의 모델을 선택해요.</small>
             <label className="check">
               <Switch
                 aria-label="채팅의 참조 이미지 사용"
@@ -288,7 +299,7 @@ export function IllustrationSettingsEditor({
                   })
                 }
               />
-              채팅 설정의 캐릭터 디자인·그림체 참조 이미지를 함께 보내기
+              채팅의 참조 이미지 사용
             </label>
           </fieldset>
         )}
@@ -322,10 +333,7 @@ export function IllustrationSettingsEditor({
                 }
               />
             </label>
-            <small className="full">
-              서버 환경변수 값을 Authorization 헤더로 그대로 보내요. 프록시 뒤의 ComfyUI에 인증이
-              필요할 때만 사용해요.
-            </small>
+            <small className="full">인증이 필요한 서버에서만 입력해요.</small>
             <div className="illustration-test full">
               <button
                 type="button"
@@ -345,16 +353,10 @@ export function IllustrationSettingsEditor({
                 </span>
               )}
             </div>
-            {selector(
-              '프롬프트 모델 (장면 → 그림 설명)',
-              draft.comfyui.promptModel,
-              library.models,
-              (ref) => change({ ...draft, comfyui: { ...draft.comfyui, promptModel: ref } })
+            {selector('프롬프트 모델', draft.comfyui.promptModel, library.models, (ref) =>
+              change({ ...draft, comfyui: { ...draft.comfyui, promptModel: ref } })
             )}
-            <small className="full">
-              ComfyUI는 글을 읽지 못하므로 텍스트 모델이 장면을 읽고 영어 프롬프트·네거티브
-              프롬프트·캡션 JSON을 써요. 본문·번역 모델과 같은 프리셋을 선택할 수 있어요.
-            </small>
+            <small className="full">장면을 그림 설명으로 바꿀 모델이에요.</small>
             <label className="full">
               네거티브 프롬프트 지침
               <textarea
@@ -377,48 +379,56 @@ export function IllustrationSettingsEditor({
                 aria-label="ComfyUI 워크플로 JSON"
                 rows={10}
                 value={draft.comfyui.workflow}
-                placeholder='ComfyUI에서 "Export (API)"로 저장한 JSON을 붙여 넣고, 긍정 프롬프트 자리에 {{prompt}}, 네거티브 자리에 {{negative}}, 시드 자리에 {{seed}}를 넣어요.'
+                placeholder="ComfyUI에서 내보낸 API 형식 JSON을 넣어요."
                 onChange={(event) =>
                   change({ ...draft, comfyui: { ...draft.comfyui, workflow: event.target.value } })
                 }
               />
             </label>
-            <small className="full">
-              문자열 입력 안의 {'{{prompt}}'}, {'{{negative}}'}, {'{{seed}}'}만 바꿔요. 노드
-              구성·모델·해상도는 워크플로에서 정하고, 출력은 SaveImage 노드의 이미지를 가져와요.
-            </small>
+            <details className="full">
+              <summary>워크플로 작성 도움말</summary>
+              <p>ComfyUI에서 API 형식으로 내보낸 JSON을 사용해요.</p>
+              <p>
+                문자열 입력의 {'{{prompt}}'}는 그림 설명, {'{{negative}}'}는 네거티브 프롬프트,
+                {'{{seed}}'}는 시드로 바뀌어요. 모델·해상도는 워크플로에서 정하고 SaveImage 노드의
+                이미지를 가져와요.
+              </p>
+              <p>인증 환경변수의 값은 Authorization 헤더로 보내요.</p>
+            </details>
             {numberField(
-              '전체 제한 시간 (ms)',
-              draft.comfyui.timeoutMs,
-              10_000,
-              1_800_000,
-              (value) => change({ ...draft, comfyui: { ...draft.comfyui, timeoutMs: value } }),
-              1000
+              '시간 제한 (초)',
+              draft.comfyui.timeoutMs / 1000,
+              10,
+              1800,
+              (value) =>
+                change({
+                  ...draft,
+                  comfyui: { ...draft.comfyui, timeoutMs: Math.round(value * 1000) },
+                }),
+              1
             )}
             {numberField(
-              '진행 확인 간격 (ms)',
-              draft.comfyui.pollIntervalMs,
-              250,
-              10_000,
-              (value) => change({ ...draft, comfyui: { ...draft.comfyui, pollIntervalMs: value } }),
-              250
+              '확인 간격 (초)',
+              draft.comfyui.pollIntervalMs / 1000,
+              0.25,
+              10,
+              (value) =>
+                change({
+                  ...draft,
+                  comfyui: { ...draft.comfyui, pollIntervalMs: Math.round(value * 1000) },
+                }),
+              0.25
             )}
           </fieldset>
         )}
         <div className="form-actions settings-save-actions full">
-          {(dirty || conflict) && (
-            <button
-              type="button"
-              className="secondary"
-              onClick={() => {
-                setDirty(false);
-                setSaveError('');
-                void load();
-              }}
-            >
-              최신 설정 다시 불러오기
-            </button>
-          )}
+          <IconButton
+            icon={RefreshCw}
+            label="저장된 설정 다시 불러오기"
+            className="secondary"
+            aria-busy={busy}
+            onClick={() => (dirty ? setConfirmReload(true) : void reload())}
+          />
           <IconButton
             type="button"
             icon={Save}
@@ -430,6 +440,28 @@ export function IllustrationSettingsEditor({
           />
         </div>
       </fieldset>
+      <Dialog
+        open={confirmReload}
+        title="삽화 설정 다시 불러오기"
+        role="alertdialog"
+        onClose={() => {
+          if (!busy) setConfirmReload(false);
+        }}
+      >
+        <p>저장된 설정을 불러오면 현재 초안이 사라져요.</p>
+        {loadError && (
+          <p role="alert" className="error">
+            {loadError}
+          </p>
+        )}
+        <DraftDiscardActions
+          open={confirmReload}
+          disabled={busy}
+          onContinue={() => setConfirmReload(false)}
+          onDiscard={reload}
+          discardLabel="초안 버리고 불러오기"
+        />
+      </Dialog>
       {conflict && dirty && (
         <p role="alert">
           다른 곳에서 삽화 설정이 바뀌었어요. 초안은 유지했어요. 최신 설정을 불러온 뒤 다시 적용해
