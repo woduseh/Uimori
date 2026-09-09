@@ -1,5 +1,5 @@
 import { visualReview } from './fixtures/visual-review.js';
-import { editLibraryContent, openSourceActions } from './ui-navigation.js';
+import { editLibraryContent, openChatMenu, openSourceActions } from './ui-navigation.js';
 import { postFixtureChat } from './fixtures/chat.js';
 import { test, expect, type APIRequestContext, type Locator, type Page } from '@playwright/test';
 import type { Chat, ChatDetail, ReaderDetail, ReaderRun, Run } from '../core/types.js';
@@ -169,6 +169,7 @@ test('LOADUI06 scene navigator jumps across bounded pages and remains usable in 
   await expect(article(page, ids[7])).toBeVisible();
   await expect(navigator).toContainText('8 / 12');
 
+  await openChatMenu(page);
   await page.getByRole('button', { name: '집중 읽기', exact: true }).click();
   await expect(navigator).toBeVisible();
   await expect(currentMark).toBeVisible();
@@ -558,6 +559,11 @@ test('LOADUI05 context summary status fits mobile reader and run details without
   );
 
   stage = 'failed';
+  // The earlier stage opened this response's diagnostics; the reader restores that per session.
+  await page.evaluate(() => {
+    for (const key of Object.keys(sessionStorage))
+      if (key.startsWith('turn-activity:')) sessionStorage.removeItem(key);
+  });
   await page.reload();
   const failedRequest = page.getByTestId('pending-run');
   await expect(failedRequest.getByRole('group', { name: '실패한 요청' })).toBeVisible();

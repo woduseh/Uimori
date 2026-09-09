@@ -306,6 +306,33 @@ function App() {
     : s.promptWorkspace?.modelRoutes.main
       ? '선택한 본문 모델 · 확인 필요'
       : '본문 모델을 선택해 주세요';
+  const helperModel = s.library?.models.find(
+    (item) => item.id === s.promptWorkspace?.helperModel?.id
+  );
+  const helperAvailable =
+    !!helperModel &&
+    !!s.library &&
+    isModelSelectable(helperModel, s.library.models, s.library.connections);
+  const helperDescription = helperModel
+    ? `${modelLabel(helperModel, s.library)}${helperAvailable ? '' : ' · 사용 불가'}`
+    : s.promptWorkspace?.helperModel
+      ? '선택한 도우미 모델 · 확인 필요'
+      : '도우미 모델을 선택해 주세요';
+  // Wide widths keep the model in the header; compact widths show it beside the send action.
+  const mainModelChip = (
+    <button
+      type="button"
+      className="model-chip secondary"
+      aria-label={`현재 본문 모델 · ${mainDescription}`}
+      title="모든 채팅의 이후 요청에 적용되는 전역 모델 설정"
+      onClick={() => {
+        setSettingsTab('models');
+        setPanel('settings');
+      }}
+    >
+      <span>{mainDescription}</span>
+    </button>
+  );
   const composerStatus = [
     s.pendingRequest && !s.submitting.includes(s.viewKey)
       ? '이전 전송의 수락을 확인해 주세요. 새 초안은 보존돼요.'
@@ -533,26 +560,17 @@ function App() {
             <div className="header-actions">
               {s.selected && s.destination === 'story' && (
                 <>
-                  <button
-                    type="button"
-                    className="model-chip secondary"
-                    aria-label={`현재 본문 모델 · ${mainDescription}`}
-                    title="모든 채팅의 이후 요청에 적용되는 전역 모델 설정"
-                    onClick={() => {
-                      setSettingsTab('models');
-                      setPanel('settings');
-                    }}
-                  >
-                    <span>{mainDescription}</span>
-                  </button>
-                  <button
-                    className="icon-button focus-button"
-                    aria-label={focus ? '집중 읽기 종료' : '집중 읽기'}
-                    title="집중 읽기"
-                    onClick={() => setFocus(!focus)}
-                  >
-                    {focus ? <Minimize size={19} /> : <Maximize size={19} />}
-                  </button>
+                  {!compact && mainModelChip}
+                  {focus && (
+                    <button
+                      className="icon-button"
+                      aria-label="집중 읽기 종료"
+                      title="집중 읽기 종료"
+                      onClick={() => setFocus(false)}
+                    >
+                      <Minimize size={19} />
+                    </button>
+                  )}
                   <button
                     className="icon-button"
                     aria-label="채팅 설정"
@@ -590,18 +608,12 @@ function App() {
                       <Type size={18} aria-hidden="true" />
                       읽기 설정
                     </button>
-                    <button
-                      type="button"
-                      className="secondary compact-only"
-                      onClick={() => setFocus(!focus)}
-                    >
-                      {focus ? (
-                        <Minimize size={18} aria-hidden="true" />
-                      ) : (
+                    {!focus && (
+                      <button type="button" className="secondary" onClick={() => setFocus(true)}>
                         <Maximize size={18} aria-hidden="true" />
-                      )}
-                      {focus ? '집중 읽기 종료' : '집중 읽기'}
-                    </button>
+                        집중 읽기
+                      </button>
+                    )}
                     {s.detail && (
                       <button
                         type="button"
@@ -890,18 +902,18 @@ function App() {
                               }
                             />
                             <div className="run-outcome">
-                              {!runFailed(run.status) && (
-                                <TurnActivity
-                                  run={run}
-                                  jobs={[]}
-                                  activities={s.detail!.reader.activity ?? []}
-                                  connected={s.connected}
-                                  branchId={s.branch?.id}
-                                  revision={s.detail!.reader.cursor}
-                                  refresh={() => s.refresh(s.selected)}
-                                  onError={s.setError}
-                                />
-                              )}
+                              {/* Every turn, settled or not, carries the same status row as the
+                                  helper conversation; the failure card adds the recovery actions. */}
+                              <TurnActivity
+                                run={run}
+                                jobs={[]}
+                                activities={s.detail!.reader.activity ?? []}
+                                connected={s.connected}
+                                branchId={s.branch?.id}
+                                revision={s.detail!.reader.cursor}
+                                refresh={() => s.refresh(s.selected)}
+                                onError={s.setError}
+                              />
                               {runActive(run.status) && (
                                 <div className="turn-skeleton" aria-hidden="true">
                                   <span />
@@ -1037,6 +1049,7 @@ function App() {
                     />
                   </p>
                 )}
+                {compact && <div className="composer-model">{mainModelChip}</div>}
                 <ActivityStatus
                   key={s.viewKey}
                   chatId={s.selected}
@@ -1267,6 +1280,7 @@ function App() {
       />
       <HelperPanel
         enterSend={enterSend}
+        modelDescription={helperDescription}
         open={helperOpen}
         selection={helperSelection}
         scope={

@@ -36,4 +36,8 @@ export {
   Eye as DisplayIcon,
   Workflow as BehaviorIcon,
   Palette as IllustrationIcon,
+  LoaderCircle as RunningIcon,
+  Check as DoneIcon,
+  TriangleAlert as IssueIcon,
+  CircleHelp as UncertainIcon,
 } from 'lucide-react';
