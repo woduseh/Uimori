@@ -87,9 +87,10 @@ function readerSourceBatch(store: Store, chatId: string, texts: string[]) {
     "INSERT INTO runs(id,chat_id,parent_revision,status,request,snapshot,request_key,command,created_at,updated_at,branch_id) VALUES(?,?,?,'running',?,?,?,?,?,?,?)"
   );
   return store.transaction(() =>
-    texts.map((text) => {
+    texts.map((text, index) => {
+      // Give this ordered fixture distinct timestamps; same-millisecond UUID ties are unordered.
       const runId = randomUUID(),
-        time = new Date().toISOString(),
+        time = new Date(Date.UTC(2020, 0, 1) + index).toISOString(),
         parentRevision = history.at(-1)?.revision ?? null;
       const snapshot: RunSnapshot = {
         chatId,

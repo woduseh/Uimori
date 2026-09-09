@@ -114,9 +114,21 @@
   font-size: 11px;
 }
 .illustration-settings textarea {
+  width: 100%;
   min-height: 160px;
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 12px;
+}
+.illustration-settings label.full {
+  max-width: none;
+  min-width: 0;
+}
+.illustration-settings label.check {
+  align-self: center;
+  margin: 0;
+}
+.illustration-settings details p + p {
+  margin-top: 8px;
 }
 .illustration-settings .illustration-test {
   display: flex;

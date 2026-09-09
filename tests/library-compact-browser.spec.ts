@@ -75,8 +75,18 @@ test('LCOM01 compact library keeps row actions aligned across mobile and desktop
   }
   await page.setViewportSize({ width: 390, height: 900 });
   await panel.getByRole('searchbox').fill('');
-  if (visualReview)
-    expect((await panel.locator('.library-list-item').first().boundingBox())!.y).toBeLessThan(245);
+  if (visualReview) {
+    const folders = panel.locator('.library-folder-section');
+    if (await folders.count()) {
+      const section = (await folders.boundingBox())!;
+      expect((await panel.locator('.library-list-item').first().boundingBox())!.y).toBeGreaterThan(
+        section.y + section.height
+      );
+    } else
+      expect((await panel.locator('.library-list-item').first().boundingBox())!.y).toBeLessThan(
+        245
+      );
+  }
 });
 
 test('LCOM02 empty categories hide unused tools while empty folders and searches retain recovery', async ({
@@ -88,7 +98,14 @@ test('LCOM02 empty categories hide unused tools while empty folders and searches
   await page.route('**/api/library?view=summary', async (route) => {
     const response = await route.fetch();
     const library = (await response.json()) as Library;
-    await route.fulfill({ response, json: { ...library, contents: [] } });
+    await route.fulfill({
+      response,
+      json: {
+        ...library,
+        contents: [],
+        organization: { ...library.organization, folders: [], items: [] },
+      },
+    });
   });
   await page.goto('/');
   const panel = page.getByTestId('library-panel');
@@ -112,13 +129,28 @@ test('LCOM02 empty categories hide unused tools while empty folders and searches
   const folder = updated.folders.find((entry) => entry.title === `${title} 빈 폴더`)!;
   await page.reload();
   await panel.getByRole('tab', { name: '모듈', exact: true }).click();
-  await panel.getByRole('combobox', { name: '폴더 선택', exact: true }).selectOption(folder.id);
+  await panel.getByRole('button', { name: `${folder.title} 폴더 열기`, exact: true }).click();
   await expect(
     panel.getByRole('heading', { name: '이 폴더는 비어 있어요', exact: true })
   ).toBeVisible();
   await expect(panel.getByRole('searchbox', { name: '서재 검색', exact: true })).toBeVisible();
   await expect(panel.getByLabel('목록 관리', { exact: true })).toBeVisible();
-  await panel.getByRole('button', { name: '이 탭 전체에서 찾기', exact: true }).click();
+  for (const width of [390, 1440]) {
+    await page.setViewportSize({ width, height: 900 });
+    const back = await panel.getByRole('button', { name: '전체 보기', exact: true }).boundingBox();
+    const create = await panel
+      .getByRole('button', { name: '모듈 만들기', exact: true })
+      .boundingBox();
+    expect(back).not.toBeNull();
+    expect(create).not.toBeNull();
+    expect(Math.abs(back!.height - create!.height)).toBeLessThanOrEqual(1);
+    if (Math.abs(back!.y - create!.y) < 10)
+      expect(Math.abs(back!.y - create!.y)).toBeLessThanOrEqual(1);
+    await expectNoOverflow(page);
+    if (visualReview)
+      await page.screenshot({ path: info.outputPath(`library-empty-folder-${width}.png`) });
+  }
+  await panel.getByRole('button', { name: '전체 보기', exact: true }).click();
   const search = panel.getByRole('searchbox', { name: '서재 검색', exact: true });
   await search.fill(`${title} 없는 자료`);
   await expect(
@@ -148,16 +180,18 @@ test('LCOM03 selection replaces list tools and retains search and saved view acr
   await panel.getByRole('button', { name: '선택', exact: true }).click();
   await expect(search).toHaveCount(0);
   await expect(options).toHaveCount(0);
-  await expect(panel.getByRole('button', { name: '선택 취소', exact: true })).toBeFocused();
-  await panel.getByLabel(`${item.title} 선택`, { exact: true }).check();
+  await expect(panel.getByRole('button', { name: '완료', exact: true })).toBeFocused();
+  await panel.getByRole('checkbox', { name: `${item.title} 선택`, exact: true }).check();
   await page.setViewportSize({ width: 1440, height: 900 });
-  await expect(panel.getByLabel(`${item.title} 선택`, { exact: true })).toBeChecked();
+  await expect(
+    panel.getByRole('checkbox', { name: `${item.title} 선택`, exact: true })
+  ).toBeChecked();
   await expect(panel.getByRole('group', { name: '자료 선택 작업', exact: true })).toContainText(
     '1개 선택'
   );
   if (visualReview)
     await page.screenshot({ path: info.outputPath('library-compact-selection.png') });
-  await panel.getByRole('button', { name: '선택 취소', exact: true }).click();
+  await panel.getByRole('button', { name: '완료', exact: true }).click();
   await expect(search).toHaveValue(title);
   await expect(options).toBeFocused();
   await options.press('Enter');

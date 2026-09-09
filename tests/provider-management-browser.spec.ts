@@ -61,7 +61,7 @@ async function settings(page: Page) {
   if (!(await button.isVisible()))
     await page.getByRole('button', { name: '탐색 메뉴', exact: true }).click();
   await button.click();
-  await selectSettingsSection(page, '연결과 모델');
+  await selectSettingsSection(page, '프로바이더와 모델');
   await expect(page.getByTestId('connection-editor')).toBeVisible();
 }
 function observe(page: Page) {
@@ -89,31 +89,33 @@ test('PMUI01 mobile template registration selects the connection, reports catalo
   const title = 'PMUI01 ' + Date.now(),
     observed = observe(page);
   await settings(page);
-  const form = page.getByRole('form', { name: '연결 편집 양식' }),
+  const form = page.getByRole('form', { name: '프로바이더 편집 양식' }),
     modelForm = page.getByRole('form', { name: '모델 편집 양식' });
   await startProviderConnection(page);
   await page
     .getByRole('region', { name: '제공자 선택', exact: true })
     .getByRole('button', { name: /OpenAI · Responses/ })
     .click();
-  await form.getByLabel('연결 프로토콜').selectOption('openai-responses-v1');
+  await form.getByLabel('프로바이더 프로토콜').selectOption('openai-responses-v1');
   await expect(form.getByLabel('API 기본 주소')).toHaveValue('https://api.openai.com/v1');
-  await form.getByText('연결 템플릿 정보', { exact: true }).click();
+  await form.getByText('프로바이더 템플릿 정보', { exact: true }).click();
   await expect(form.getByText('openai-responses-v1', { exact: true })).toBeVisible();
   await expect(form).toContainText(/\d{4}-\d{2}-\d{2}/);
   await form.getByLabel('API 기본 주소').fill('http://127.0.0.1:9/v1');
-  await form.getByLabel('연결 이름', { exact: true }).fill(title);
+  await form.getByLabel('프로바이더 이름', { exact: true }).fill(title);
   await form.getByLabel('서버 환경변수 이름').fill('PM_SYNTHETIC_KEY');
-  await form.getByLabel('이 연결 사용').check();
-  await form.getByRole('button', { name: '연결 등록', exact: true }).click();
-  await expect(page.getByRole('status').filter({ hasText: title + ' 연결 등록됨' })).toBeVisible();
+  await form.getByLabel('이 프로바이더 사용').check();
+  await form.getByRole('button', { name: '프로바이더 등록', exact: true }).click();
+  await expect(
+    page.getByRole('status').filter({ hasText: title + ' 프로바이더 등록됨' })
+  ).toBeVisible();
   const connection = (await library(request)).connections.find((item) => item.title === title)!;
   expect(connection).toBeTruthy();
-  await expect(modelForm.getByLabel('모델 연결')).toHaveValue(`${connection.id}`);
-  await modelForm.getByText('연결 준비 상태와 목록 새로고침', { exact: true }).click();
-  await expect(modelForm.getByRole('region', { name: '선택한 연결 준비 상태' })).toContainText(
-    '사용 전 설정 확인이 필요해요'
-  );
+  await expect(modelForm.getByLabel('프로바이더', { exact: true })).toHaveValue(`${connection.id}`);
+  await modelForm.getByText('프로바이더 준비 상태와 목록 새로고침', { exact: true }).click();
+  await expect(
+    modelForm.getByRole('region', { name: '선택한 프로바이더 준비 상태' })
+  ).toContainText('사용 전 설정 확인이 필요해요');
   // Only the UI's error handling is mocked; no outbound catalog request is sent.
   await page.route(`**/api/connections/${connection.id}/catalog`, (route) =>
     route.fulfill({
@@ -153,7 +155,7 @@ test('PMUI01 mobile template registration selects the connection, reports catalo
   await modelForm.getByLabel('Standard 출력 요금', { exact: true }).fill('8');
   for (const label of [
     '모델 프리셋 이름',
-    '모델 연결',
+    '프로바이더',
     '모델 ID',
     '평가 문맥 제공',
     'Standard 입력 요금',
@@ -161,7 +163,7 @@ test('PMUI01 mobile template registration selects the connection, reports catalo
   ]) {
     await modelForm
       .getByRole('button', {
-        name: ['모델 프리셋 이름', '모델 연결', '모델 ID'].includes(label) ? '기본' : '고급',
+        name: ['모델 프리셋 이름', '프로바이더', '모델 ID'].includes(label) ? '기본' : '고급',
         exact: true,
       })
       .click();
@@ -210,20 +212,20 @@ test('PMUI02 connection clone requires review and stale edits retain their draft
     observed = observe(page);
   const original = await api<Connection>(request, '/connections', connectionInput(title));
   await settings(page);
-  const form = page.getByRole('form', { name: '연결 편집 양식' });
-  await page.getByRole('button', { name: '연결 관리', exact: true }).click();
-  await page.getByLabel('연결·모델 검색').fill(title);
-  await openProviderMenu(page, '연결', title);
-  await page.getByRole('button', { name: title + ' 연결 복제', exact: true }).click();
-  await expect(form.getByLabel('연결 이름', { exact: true })).toHaveValue(title + ' 복사');
-  await expect(form.getByLabel('이 연결 사용')).not.toBeChecked();
+  const form = page.getByRole('form', { name: '프로바이더 편집 양식' });
+  await page.getByRole('button', { name: '프로바이더 관리', exact: true }).click();
+  await page.getByLabel('프로바이더·모델 검색').fill(title);
+  await openProviderMenu(page, '프로바이더', title);
+  await page.getByRole('button', { name: title + ' 프로바이더 복제', exact: true }).click();
+  await expect(form.getByLabel('프로바이더 이름', { exact: true })).toHaveValue(title + ' 복사');
+  await expect(form.getByLabel('이 프로바이더 사용')).not.toBeChecked();
   await expect(form.getByLabel('서버 환경변수 이름')).toHaveValue('PM_SYNTHETIC_KEY');
   expect(
     (await library(request)).connections.filter((item) => item.title.startsWith(title))
   ).toHaveLength(1);
-  await form.getByRole('button', { name: '연결 등록', exact: true }).click();
+  await form.getByRole('button', { name: '프로바이더 등록', exact: true }).click();
   await expect(
-    page.getByRole('status').filter({ hasText: title + ' 복사 연결 등록됨' })
+    page.getByRole('status').filter({ hasText: title + ' 복사 프로바이더 등록됨' })
   ).toBeVisible();
   const copied = (await library(request)).connections.find(
     (item) => item.title === title + ' 복사'
@@ -233,9 +235,9 @@ test('PMUI02 connection clone requires review and stale edits retain their draft
   expect((await library(request)).connections.find((item) => item.id === original.id)).toEqual(
     original
   );
-  await page.getByRole('button', { name: '연결 관리', exact: true }).click();
-  await page.getByRole('button', { name: title + ' 연결 수정', exact: true }).click();
-  await form.getByLabel('연결 이름', { exact: true }).fill(title + ' 내 초안');
+  await page.getByRole('button', { name: '프로바이더 관리', exact: true }).click();
+  await page.getByRole('button', { name: title + ' 프로바이더 수정', exact: true }).click();
+  await form.getByLabel('프로바이더 이름', { exact: true }).fill(title + ' 내 초안');
   const changed = await api<Connection>(
     request,
     `/connections/${original.id}`,
@@ -244,25 +246,25 @@ test('PMUI02 connection clone requires review and stale edits retain their draft
   );
   await page.getByRole('button', { name: '목록 새로고침', exact: true }).click();
   await expect(page.getByRole('status').filter({ hasText: '목록을 새로 읽었어요' })).toBeVisible();
-  await expect(form.getByLabel('연결 이름', { exact: true })).toHaveValue(title + ' 내 초안');
-  await expect(form).toContainText('다른 곳에서 연결이 변경됐어요');
+  await expect(form.getByLabel('프로바이더 이름', { exact: true })).toHaveValue(title + ' 내 초안');
+  await expect(form).toContainText('다른 곳에서 프로바이더가 변경됐어요');
   const put = page.waitForRequest(
     (request) => request.method() === 'PUT' && request.url().endsWith(`/connections/${original.id}`)
   );
-  await form.getByRole('button', { name: '연결 변경 저장', exact: true }).click();
+  await form.getByRole('button', { name: '프로바이더 변경 저장', exact: true }).click();
   expect((await put).postDataJSON().expectedRevision).toBe(1);
   await expect(form.getByRole('alert')).toContainText('초안은 유지했어요');
-  await expect(form.getByLabel('연결 이름', { exact: true })).toHaveValue(title + ' 내 초안');
+  await expect(form.getByLabel('프로바이더 이름', { exact: true })).toHaveValue(title + ' 내 초안');
   expect((await library(request)).connections.find((item) => item.id === original.id)).toEqual(
     changed
   );
   if (visualReview)
     await form.screenshot({ path: info.outputPath('provider-management-desktop-conflict.png') });
-  await form.getByRole('button', { name: '최신 연결 설정 불러오기', exact: true }).click();
-  await expect(form.getByLabel('연결 이름', { exact: true })).toHaveValue(changed.title);
+  await form.getByRole('button', { name: '최신 프로바이더 설정 불러오기', exact: true }).click();
+  await expect(form.getByLabel('프로바이더 이름', { exact: true })).toHaveValue(changed.title);
   await expect(form).not.toContainText('편집 기준');
-  await form.getByLabel('연결 이름', { exact: true }).fill(title + ' 검토 완료');
-  await form.getByRole('button', { name: '연결 변경 저장', exact: true }).click();
+  await form.getByLabel('프로바이더 이름', { exact: true }).fill(title + ' 검토 완료');
+  await form.getByRole('button', { name: '프로바이더 변경 저장', exact: true }).click();
   await expect
     .poll(
       async () =>
@@ -298,13 +300,13 @@ test('PMUI03 model edits use the latest connection without changing role IDs; de
     'PUT'
   );
   await settings(page);
-  await page.getByLabel('연결·모델 검색').fill(title);
+  await page.getByLabel('프로바이더·모델 검색').fill(title);
   await page.getByRole('button', { name: original.title + ' 모델 수정', exact: true }).click();
   const form = page.getByRole('form', { name: '모델 편집 양식' });
-  await expect(form.getByLabel('모델 연결')).toHaveValue(`${connection.id}`);
-  await expect(form.getByLabel('모델 연결').locator('option:checked')).toContainText(
-    title + ' 연결 최신판'
-  );
+  await expect(form.getByLabel('프로바이더', { exact: true })).toHaveValue(`${connection.id}`);
+  await expect(
+    form.getByLabel('프로바이더', { exact: true }).locator('option:checked')
+  ).toContainText(title + ' 연결 최신판');
   await expect(form).not.toContainText('보관된 버전');
   const actions = form.locator('.provider-model-save-actions');
   const saveAction = actions.getByRole('button', { name: '모델 변경 저장', exact: true });
@@ -384,10 +386,12 @@ test('PMUI03 model edits use the latest connection without changing role IDs; de
       async () => (await library(request)).models.find((item) => item.id === original.id)?.enabled
     )
     .toBe(false);
-  await page.getByRole('button', { name: '연결 관리', exact: true }).click();
-  await openProviderMenu(page, '연결', title + ' 연결 최신판');
-  await page.getByRole('button', { name: title + ' 연결 최신판 연결 비활성', exact: true }).click();
-  await expect(confirmation).toContainText('이 연결을 사용하는 이후 호출이 차단');
+  await page.getByRole('button', { name: '프로바이더 관리', exact: true }).click();
+  await openProviderMenu(page, '프로바이더', title + ' 연결 최신판');
+  await page
+    .getByRole('button', { name: title + ' 연결 최신판 프로바이더 비활성', exact: true })
+    .click();
+  await expect(confirmation).toContainText('이 프로바이더를 사용하는 이후 호출이 차단');
   await confirmation.getByRole('button', { name: '비활성 취소', exact: true }).click();
   expect(
     (await library(request)).connections.find((item) => item.id === connection.id)?.enabled
@@ -400,7 +404,7 @@ test('PMUI03 model edits use the latest connection without changing role IDs; de
   await expect(page.getByLabel('원문 모델', { exact: true })).toHaveValue(`${original.id}`);
   await expect(
     page.getByLabel('원문 모델', { exact: true }).locator('option:checked')
-  ).toContainText(changed.title + ' · 모델 또는 연결 비활성');
+  ).toContainText(changed.title + ' · 모델 또는 프로바이더 비활성');
   await expect(
     page.getByLabel('원문 모델', { exact: true }).locator('option:checked')
   ).not.toContainText(' · v');
@@ -462,11 +466,11 @@ test('PMUI04 a delayed readiness response cannot replace the currently selected 
   await settings(page);
   await page.getByRole('button', { name: '새 모델 입력', exact: true }).click();
   const form = page.getByRole('form', { name: '모델 편집 양식' });
-  await form.getByLabel('모델 연결').selectOption(`${first.id}`);
+  await form.getByLabel('프로바이더', { exact: true }).selectOption(`${first.id}`);
   await firstRequested;
-  await form.getByText('연결 준비 상태와 목록 새로고침', { exact: true }).click();
-  await form.getByLabel('모델 연결').selectOption(`${second.id}`);
-  const readiness = form.getByRole('region', { name: '선택한 연결 준비 상태' });
+  await form.getByText('프로바이더 준비 상태와 목록 새로고침', { exact: true }).click();
+  await form.getByLabel('프로바이더', { exact: true }).selectOption(`${second.id}`);
+  const readiness = form.getByRole('region', { name: '선택한 프로바이더 준비 상태' });
   await expect(readiness).toContainText(second.title);
   await expect(readiness).toContainText('서버 설정 준비됨');
   await release();
@@ -500,20 +504,24 @@ test('PMUI07 quick setup selects a cached catalog model and keeps drafts across 
     await page.setViewportSize({ width, height: width === 390 ? 844 : 1000 });
     await settings(page);
     const title = `PMUI07 ${width} ${Date.now()}`,
-      form = page.getByRole('form', { name: '연결 편집 양식' }),
+      form = page.getByRole('form', { name: '프로바이더 편집 양식' }),
       modelForm = page.getByRole('form', { name: '모델 편집 양식' });
     await startProviderConnection(page);
-    await expect(page.getByRole('list', { name: '빠른 연결 진행' })).toContainText('1 제공자');
-    await page.getByText('개발·검사용 연결', { exact: true }).click();
+    await expect(page.getByRole('list', { name: '빠른 프로바이더 진행' })).toContainText(
+      '1 제공자'
+    );
+    await page.getByText('개발·검사용 프로바이더', { exact: true }).click();
     await page.getByRole('button', { name: '로컬 fixture로 설정', exact: true }).click();
-    await form.getByLabel('연결 이름', { exact: true }).fill(title);
+    await form.getByLabel('프로바이더 이름', { exact: true }).fill(title);
     await form.getByLabel('로컬 endpoint').fill('http://127.0.0.1:9/turn');
     await page.getByRole('button', { name: '모델 프리셋', exact: true }).click();
     await expect(form).not.toBeVisible();
-    await page.getByRole('button', { name: '연결 관리', exact: true }).click();
-    await page.getByRole('button', { name: '연결 편집 이어서 · ' + title, exact: true }).click();
-    await expect(form.getByLabel('연결 이름', { exact: true })).toHaveValue(title);
-    await form.getByRole('button', { name: '연결 등록', exact: true }).click();
+    await page.getByRole('button', { name: '프로바이더 관리', exact: true }).click();
+    await page
+      .getByRole('button', { name: '프로바이더 편집 이어서 · ' + title, exact: true })
+      .click();
+    await expect(form.getByLabel('프로바이더 이름', { exact: true })).toHaveValue(title);
+    await form.getByRole('button', { name: '프로바이더 등록', exact: true }).click();
     await expect(modelForm).toBeVisible();
     const connection = (await library(request)).connections.find((item) => item.title === title)!;
     expect(connection).toBeTruthy();
@@ -547,7 +555,7 @@ test('PMUI07 quick setup selects a cached catalog model and keeps drafts across 
         body: JSON.stringify({ ...connection, ...snapshot }),
       });
     });
-    await modelForm.getByText('연결 준비 상태와 목록 새로고침', { exact: true }).click();
+    await modelForm.getByText('프로바이더 준비 상태와 목록 새로고침', { exact: true }).click();
     await modelForm.getByRole('button', { name: '모델 목록 새로고침', exact: true }).click();
     await modelForm.getByLabel('모델 목록 검색').fill('catalog-beta');
     const picker = modelForm.getByRole('region', { name: '저장된 모델 목록에서 선택' });
@@ -558,7 +566,7 @@ test('PMUI07 quick setup selects a cached catalog model and keeps drafts across 
       'synthetic/catalog-beta'
     );
     await modelForm.getByLabel('최대 출력 토큰').fill('1024');
-    await page.getByRole('button', { name: '연결 관리', exact: true }).click();
+    await page.getByRole('button', { name: '프로바이더 관리', exact: true }).click();
     await expect(modelForm).not.toBeVisible();
     await page.getByRole('button', { name: '모델 프리셋', exact: true }).click();
     await page
@@ -604,12 +612,12 @@ test('PMUI08 Vertex JSON upload validates locally and saves only the returned cr
     .getByRole('region', { name: '제공자 선택', exact: true })
     .getByRole('button', { name: /Google Agent Platform/ })
     .click();
-  const form = page.getByRole('form', { name: '연결 편집 양식' }),
+  const form = page.getByRole('form', { name: '프로바이더 편집 양식' }),
     upload = form.getByRole('region', { name: 'Google 서비스 계정 JSON' }),
     file = upload.getByLabel('Google 키 JSON 파일');
   const originalEndpoint =
     'https://aiplatform.googleapis.com/v1/projects/synthetic-original/locations/global/publishers/google/models';
-  await form.getByLabel('연결 이름', { exact: true }).fill(title);
+  await form.getByLabel('프로바이더 이름', { exact: true }).fill(title);
   await form.getByLabel('Google Agent Platform endpoint').fill(originalEndpoint);
   await form.getByLabel('서버 환경변수 이름').fill('NARRATIVE_PROVIDER_SYNTHETIC_ORIGINAL');
   const projectId = 'synthetic-project',
@@ -633,7 +641,7 @@ test('PMUI08 Vertex JSON upload validates locally and saves only the returned cr
       buffer: Buffer.from(body),
     });
     await expect(upload.getByRole('alert')).toContainText(message);
-    await expect(form.getByLabel('연결 이름', { exact: true })).toHaveValue(title);
+    await expect(form.getByLabel('프로바이더 이름', { exact: true })).toHaveValue(title);
     await expect(form.getByLabel('Google Agent Platform endpoint')).toHaveValue(originalEndpoint);
     await expect(form.getByLabel('서버 환경변수 이름')).toHaveValue(
       'NARRATIVE_PROVIDER_SYNTHETIC_ORIGINAL'
@@ -698,7 +706,7 @@ test('PMUI08 Vertex JSON upload validates locally and saves only the returned cr
   const posted = page.waitForRequest(
     (r) => r.method() === 'POST' && r.url().endsWith('/api/connections')
   );
-  await form.getByRole('button', { name: '연결 등록', exact: true }).click();
+  await form.getByRole('button', { name: '프로바이더 등록', exact: true }).click();
   expect((await posted).postDataJSON()).toMatchObject({
     credentialEnv,
     endpoint,
@@ -709,9 +717,9 @@ test('PMUI08 Vertex JSON upload validates locally and saves only the returned cr
     .poll(async () => (await library(request)).connections.find((item) => item.title === title))
     .toMatchObject({ credentialEnv, endpoint });
   expect(JSON.stringify(await library(request))).not.toContain('BEGIN PRIVATE KEY');
-  await page.getByRole('button', { name: '연결 관리', exact: true }).click();
-  await page.getByLabel('연결·모델 검색').fill(title);
-  await page.getByRole('button', { name: title + ' 연결 수정', exact: true }).click();
+  await page.getByRole('button', { name: '프로바이더 관리', exact: true }).click();
+  await page.getByLabel('프로바이더·모델 검색').fill(title);
+  await page.getByRole('button', { name: title + ' 프로바이더 수정', exact: true }).click();
   await expect(changeAuth).toBeHidden();
   await authSettings.getByText('고급 인증 설정', { exact: true }).click();
   await changeAuth.click();
@@ -740,7 +748,7 @@ test('PMUI09 invalid hidden model fields receive focus and old deactivation conf
   await settings(page);
   await page.getByRole('button', { name: '새 모델 입력', exact: true }).click();
   let form = page.getByRole('form', { name: '모델 편집 양식' });
-  await form.getByLabel('모델 연결').selectOption(`${connection.id}`);
+  await form.getByLabel('프로바이더', { exact: true }).selectOption(`${connection.id}`);
   await form.getByLabel('모델 프리셋 이름').fill('');
   await form.getByLabel('모델 ID', { exact: true }).fill('');
   await form.getByLabel('최대 출력 토큰').fill('0');
@@ -831,13 +839,14 @@ test('PMUI11 documented provider options lead each select, round-trip without ge
   await page.setViewportSize({ width: 390, height: 844 });
   const observed = observe(page),
     prefix = 'PMUI11 ' + Date.now();
-  const tabFor = (label: string) => (label === '사고 강도' ? '기본' : '고급');
+  const tabFor = (label: string) =>
+    ['사고 강도', '서비스 등급'].includes(label) ? '기본' : '고급';
   const cases = [
     {
       protocol: 'vercel-chat-v1',
       endpoint: 'https://ai-gateway.vercel.sh/v1',
       modelId: 'openai/gpt-5.6-sol',
-      choices: { '사고 강도': 'high', 'Service Tier': 'flex' },
+      choices: { '사고 강도': 'high', '서비스 등급': 'flex' },
       saved: { reasoningEffort: 'high', serviceTier: 'flex' },
       absent: ['thinkingLevel'],
       hidden: ['Thinking Level', 'Output Effort', 'Verbosity'],
@@ -847,7 +856,7 @@ test('PMUI11 documented provider options lead each select, round-trip without ge
       endpoint:
         'https://aiplatform.googleapis.com/v1/projects/synthetic-parameters/locations/global/publishers/google/models',
       modelId: 'gemini-3.1-pro-preview',
-      choices: { 'Service Tier': 'flex' },
+      choices: { '서비스 등급': 'flex' },
       saved: { serviceTier: 'flex' },
       absent: ['thinkingLevel'],
       hidden: ['Verbosity', '사고 모드'],
@@ -857,7 +866,7 @@ test('PMUI11 documented provider options lead each select, round-trip without ge
       endpoint:
         'https://aiplatform.googleapis.com/v1/projects/synthetic-parameters/locations/global/publishers/google/models',
       modelId: 'gemini-3.8-flash',
-      choices: { '사고 강도': 'HIGH', 'Service Tier': 'flex' },
+      choices: { '사고 강도': 'HIGH', '서비스 등급': 'flex' },
       saved: { thinkingLevel: 'HIGH', serviceTier: 'flex' },
       absent: ['outputEffort'],
       hidden: ['Verbosity', '사고 모드'],
@@ -869,7 +878,7 @@ test('PMUI11 documented provider options lead each select, round-trip without ge
       choices: {
         '사고 강도': 'none',
         Verbosity: 'high',
-        'Service Tier': 'flex',
+        '서비스 등급': 'flex',
         '캐시 방식': 'automatic',
         '캐시 유지 시간': '30m',
       },
@@ -924,19 +933,19 @@ test('PMUI11 documented provider options lead each select, round-trip without ge
     await settings(page);
     await page.getByRole('button', { name: '새 모델 입력', exact: true }).click();
     const form = page.getByRole('form', { name: '모델 편집 양식' });
-    await form.getByLabel('모델 연결').selectOption(`${connection.id}`);
+    await form.getByLabel('프로바이더', { exact: true }).selectOption(`${connection.id}`);
     await form.getByLabel('모델 프리셋 이름').fill(title);
     await form.getByLabel('모델 ID', { exact: true }).fill(item.modelId);
     await expect(form.getByLabel('모델 ID', { exact: true })).toBeEditable();
-    await expect(form.getByTestId('model-hint-source')).toContainText('옵션 출처 앱 확인');
+    await expect(form.getByTestId('model-hint-source')).toHaveCount(0);
     for (const [label, value] of Object.entries(item.choices)) {
       await form.getByRole('button', { name: tabFor(label), exact: true }).click();
       await form.getByLabel(label, { exact: true }).selectOption(value!);
     }
     for (const label of item.hidden)
       await expect(form.getByLabel(label, { exact: true })).toHaveCount(0);
-    if (item.choices['Service Tier'])
-      await expect(form.getByLabel('Service Tier').locator('option[value="flex"]')).toHaveText(
+    if (item.choices['서비스 등급'])
+      await expect(form.getByLabel('서비스 등급').locator('option[value="flex"]')).toHaveText(
         'Flex'
       );
     if (item.modelId === 'claude-fable-5-1') {
@@ -1011,7 +1020,7 @@ test('PMUI12 changing the model or connection keeps choices visible as unverifie
   await settings(page);
   await page.getByRole('button', { name: '새 모델 입력', exact: true }).click();
   const form = page.getByRole('form', { name: '모델 편집 양식' });
-  await form.getByLabel('모델 연결').selectOption(`${connection.id}`);
+  await form.getByLabel('프로바이더', { exact: true }).selectOption(`${connection.id}`);
   await form.getByLabel('모델 프리셋 이름').fill(title);
   await form.getByLabel('모델 ID', { exact: true }).fill('gpt-5.6-sol');
   const strength = form.getByLabel('사고 강도', { exact: true });
@@ -1020,10 +1029,10 @@ test('PMUI12 changing the model or connection keeps choices visible as unverifie
   await form.getByLabel('Verbosity', { exact: true }).selectOption('low');
   // Switching to another protocol keeps the choices visible as unsendable until the user clears them.
   await form.getByRole('button', { name: '기본', exact: true }).click();
-  await form.getByLabel('모델 연결').selectOption(`${anthropic.id}`);
-  const stale = form.getByLabel('이전 연결의 사고 강도 · reasoningEffort', { exact: true });
+  await form.getByLabel('프로바이더', { exact: true }).selectOption(`${anthropic.id}`);
+  const stale = form.getByLabel('이전 프로바이더의 사고 강도 · reasoningEffort', { exact: true });
   await expect(stale).toHaveValue('none');
-  await expect(form).toContainText('이 연결에서 보낼 수 없어요');
+  await expect(form).toContainText('이 프로바이더에서 보낼 수 없어요');
   await form.getByRole('button', { name: '고급', exact: true }).click();
   await expect(form.getByLabel('Verbosity', { exact: true })).toHaveValue('low');
   await form.getByLabel('Verbosity', { exact: true }).selectOption('');
@@ -1031,7 +1040,7 @@ test('PMUI12 changing the model or connection keeps choices visible as unverifie
   await form.getByRole('button', { name: '기본', exact: true }).click();
   await stale.selectOption('');
   await expect(stale).toHaveCount(0);
-  await form.getByLabel('모델 연결').selectOption(`${connection.id}`);
+  await form.getByLabel('프로바이더', { exact: true }).selectOption(`${connection.id}`);
   await form.getByLabel('모델 ID', { exact: true }).fill('gpt-5.6-sol');
   await strength.selectOption('none');
   await form.getByRole('button', { name: '고급', exact: true }).click();
@@ -1043,7 +1052,7 @@ test('PMUI12 changing the model or connection keeps choices visible as unverifie
   await expect(
     strength.locator('optgroup[label="미확인 값 · 공급자가 판정"] option[value="none"]')
   ).toHaveCount(1);
-  await expect(form).toContainText('문서로 확인한 값이 아니에요');
+  await expect(form).toContainText('이 모델의 지원 여부가 확인되지 않은 값이에요.');
   if (visualReview)
     await form.screenshot({
       path: info.outputPath('provider-parameters-preserved-invalid-desktop.png'),
@@ -1131,7 +1140,7 @@ test('PMUI13 response tests are explicit and late results stay with the original
     });
   });
   await settings(page);
-  await page.getByLabel('연결·모델 검색').fill(title);
+  await page.getByLabel('프로바이더·모델 검색').fill(title);
   expect(posts).toEqual([]);
   await revealProviderDiagnostics(page, a.title);
   const button = page.getByRole('button', { name: a.title + ' 응답 테스트', exact: true });
@@ -1141,19 +1150,20 @@ test('PMUI13 response tests are explicit and late results stay with the original
   expect(posts).toHaveLength(1);
   expect(posts[0]).toMatchObject({ expectedRevision: a.revision });
   expect(posts[0].idempotencyKey).toMatch(/^[0-9a-f-]{36}$/i);
-  await page.getByLabel('연결·모델 검색').fill(b.title);
+  await page.getByLabel('프로바이더·모델 검색').fill(b.title);
   await page.getByRole('button', { name: b.title + ' 모델 수정', exact: true }).click();
   const form = page.getByRole('form', { name: '모델 편집 양식' });
   await expect(form.getByLabel('모델 프리셋 이름')).toHaveValue(b.title);
   release();
   await expect(form).not.toContainText('A_ONLY_OK');
   await page.getByRole('button', { name: '모델 프리셋', exact: true }).click();
-  await page.getByLabel('연결·모델 검색').fill(a.title);
+  await page.getByLabel('프로바이더·모델 검색').fill(a.title);
   const result = page.getByRole('region', { name: a.title + ' 응답 테스트 결과', exact: true });
-  await expect(result).toContainText('A_ONLY_OK');
-  await expect(result).toContainText('124 ms');
-  await expect(result).toContainText('입력 7 · 출력 2');
-  await expect(result).toContainText('미확인');
+  await expect(result).toContainText('응답에 성공했어요.');
+  await expect(result).not.toContainText('A_ONLY_OK');
+  await expect(result).not.toContainText('124 ms');
+  await expect(result).not.toContainText('입력 7 · 출력 2');
+  await expect(result).not.toContainText('미확인');
   if (visualReview)
     await result.screenshot({ path: info.outputPath('provider-response-test-mobile.png') });
   expect(posts).toHaveLength(1);
@@ -1196,14 +1206,16 @@ test('PMUI14 an uncertain response test reuses its key until an explicit new tes
         });
   });
   await settings(page);
-  await page.getByLabel('연결·모델 검색').fill(title);
+  await page.getByLabel('프로바이더·모델 검색').fill(title);
   await revealProviderDiagnostics(page, title);
   const button = page.getByRole('button', { name: title + ' 응답 테스트', exact: true }),
     result = page.getByRole('region', { name: title + ' 응답 테스트 결과', exact: true });
   await button.click();
-  await expect(result.getByRole('alert')).toContainText('새 요청을 자동으로 보내지 않아요');
+  await expect(result.getByRole('alert')).toContainText('실행 결과를 확인하지 못했어요.');
+  await result.getByText('오류 상세', { exact: true }).click();
+  await expect(result.locator('details p')).not.toBeEmpty();
   await button.click();
-  await expect(result).toContainText('응답 완료');
+  await expect(result).toContainText('응답에 성공했어요.');
   expect(keys).toHaveLength(2);
   expect(keys[1]).toBe(keys[0]);
   await button.click();
@@ -1250,19 +1262,22 @@ test('PMUI15 a forced Google service tier is shown and conflicting saved choices
       writes++;
   });
   await settings(page);
-  await page.getByLabel('연결·모델 검색').fill(title);
+  await page.getByLabel('프로바이더·모델 검색').fill(title);
   await page.getByRole('button', { name: title + ' 모델 수정', exact: true }).click();
   const form = page.getByRole('form', { name: '모델 편집 양식' });
-  await form.getByRole('button', { name: '고급', exact: true }).click();
-  await expect(form).toContainText('서버에서 Service Tier를 Flex로 제한해요');
-  await expect(form.getByLabel('Service Tier')).toHaveValue('standard');
+  await expect(form.getByRole('button', { name: '기본', exact: true })).toHaveAttribute(
+    'aria-pressed',
+    'true'
+  );
+  await expect(form).toContainText('서버에서 서비스 등급을 Flex로 제한해요');
+  await expect(form.getByLabel('서비스 등급')).toHaveValue('standard');
   await form.getByRole('button', { name: '모델 변경 저장', exact: true }).click();
-  await expect(form.getByLabel('Service Tier')).toBeFocused();
+  await expect(form.getByLabel('서비스 등급')).toBeFocused();
   expect(writes).toBe(0);
   expect((await library(request)).models.find((item) => item.id === model.id)?.serviceTier).toBe(
     'standard'
   );
-  await form.getByLabel('Service Tier').selectOption('');
+  await form.getByLabel('서비스 등급').selectOption('');
   await expect(form).toContainText('모델 기본값도 Flex로 실행돼요');
   await form.getByRole('button', { name: '모델 변경 저장', exact: true }).click();
   await expect
@@ -1287,9 +1302,11 @@ test('PMUI10 Codex subscription login preserves drafts and saves a connection an
     pending = false,
     available = true;
   const mutations: string[] = [];
+  let statusGate: Promise<void> | undefined;
   await page.route('**/api/agent-runtimes/codex**', async (route) => {
     const request = route.request(),
       path = new URL(request.url()).pathname;
+    if (request.method() === 'GET') await statusGate;
     if (request.method() !== 'GET') mutations.push(`${request.method()} ${path}`);
     if (path.endsWith('/login/cancel')) pending = false;
     else if (path.endsWith('/login')) pending = true;
@@ -1302,7 +1319,7 @@ test('PMUI10 Codex subscription login preserves drafts and saves a connection an
         available,
         authenticated,
         authMode: authenticated ? 'chatgpt' : null,
-        error: null,
+        error: available ? null : 'CODEX_DISABLED',
         login: pending
           ? {
               id: 'synthetic-login',
@@ -1323,34 +1340,56 @@ test('PMUI10 Codex subscription login preserves drafts and saves a connection an
     .getByRole('region', { name: '제공자 선택', exact: true })
     .getByRole('button', { name: /Codex/ })
     .click();
-  const form = page.getByRole('form', { name: '연결 편집 양식' });
-  await form.getByLabel('연결 이름', { exact: true }).fill('보존할 Codex 초안');
+  const form = page.getByRole('form', { name: '프로바이더 편집 양식' });
+  await form.getByLabel('프로바이더 이름', { exact: true }).fill('보존할 Codex 초안');
   await expect(form.getByLabel('Codex 실행 위치')).toHaveValue('codex://local');
   await expect(form.getByLabel('Codex 실행 위치')).toHaveAttribute('readonly', '');
   await expect(form.getByLabel('서버 환경변수 이름')).toBeHidden();
   await selectSettingsSection(page, '에이전트');
   const panel = page.getByRole('region', { name: 'Codex 에이전트 연결' });
-  await expect(panel).toContainText('ChatGPT 로그인이 필요해요');
+  await expect(panel).toContainText('로그인 필요');
+  const help = panel.locator('details');
+  await expect(help).not.toHaveAttribute('open', '');
+  const executionHelp = help.getByText('Codex는 Uimori 서버에서 실행해요.', { exact: false });
+  await expect(executionHelp).toBeHidden();
+  await help.locator('summary').click();
+  await expect(executionHelp).toBeVisible();
+  await help.locator('summary').click();
+  const refresh = panel.getByRole('button', { name: 'Codex 상태 다시 확인' });
+  await expect(refresh).toHaveText('');
+  let releaseStatus!: () => void;
+  statusGate = new Promise<void>((resolve) => {
+    releaseStatus = resolve;
+  });
+  await refresh.click();
+  await expect(refresh).toBeDisabled();
+  await expect(refresh).toHaveAttribute('aria-busy', 'true');
+  releaseStatus();
+  statusGate = undefined;
+  await expect(refresh).toBeEnabled();
+  await expect(refresh).toHaveAttribute('aria-busy', 'false');
   expect(mutations).toEqual([]);
-  await panel.getByRole('button', { name: 'ChatGPT로 Codex 로그인', exact: true }).click();
-  await expect(panel.getByRole('link', { name: '공식 Codex 로그인 페이지 열기' })).toHaveAttribute(
+  await panel.getByRole('button', { name: 'ChatGPT로 로그인', exact: true }).click();
+  await expect(panel.getByRole('link', { name: '로그인 페이지 열기' })).toHaveAttribute(
     'href',
     'https://auth.openai.com/codex/device'
   );
   await expect(panel).toContainText('ABCD-1234');
-  await panel.getByRole('button', { name: 'Codex 로그인 취소', exact: true }).click();
+  await panel.getByRole('button', { name: '로그인 취소', exact: true }).click();
   await expect(panel.getByRole('region', { name: 'Codex 로그인 코드' })).toBeHidden();
-  await panel.getByRole('button', { name: 'ChatGPT로 Codex 로그인', exact: true }).click();
+  await panel.getByRole('button', { name: 'ChatGPT로 로그인', exact: true }).click();
   authenticated = true;
   pending = false;
   await panel.getByRole('button', { name: 'Codex 상태 다시 확인' }).click();
-  await expect(panel).toContainText('ChatGPT 구독으로 연결됐어요');
+  await expect(panel).toContainText('연결됨');
   await expect(panel).toContainText('사용 25%');
   if (visualReview)
     await page.screenshot({ path: info.outputPath('codex-subscription-settings-mobile.png') });
-  await selectSettingsSection(page, '연결과 모델');
-  await expect(form.getByLabel('연결 이름', { exact: true })).toHaveValue('보존할 Codex 초안');
-  await form.getByRole('button', { name: '연결 등록', exact: true }).click();
+  await panel.getByRole('button', { name: '프로바이더와 모델', exact: true }).click();
+  await expect(form.getByLabel('프로바이더 이름', { exact: true })).toHaveValue(
+    '보존할 Codex 초안'
+  );
+  await form.getByRole('button', { name: '프로바이더 등록', exact: true }).click();
   const modelForm = page.getByRole('form', { name: '모델 편집 양식' });
   await expect(modelForm).toBeVisible();
   const savedConnection = (await library(request)).connections.find(
@@ -1381,11 +1420,13 @@ test('PMUI10 Codex subscription login preserves drafts and saves a connection an
     temperature: null,
   });
   await selectSettingsSection(page, '에이전트');
-  await panel.getByRole('button', { name: 'Codex 연결 해제', exact: true }).click();
-  await expect(panel).toContainText('ChatGPT 로그인이 필요해요');
+  await panel.getByRole('button', { name: '연결 해제', exact: true }).click();
+  await expect(panel).toContainText('로그인 필요');
   available = false;
   await panel.getByRole('button', { name: 'Codex 상태 다시 확인' }).click();
-  await expect(panel).toContainText('서버에 Codex 실행 설정이 필요해요');
+  await expect(panel).toContainText('서버 설정 필요');
+  await expect(panel.getByText('서버에서 Codex 연결 기능을 활성화해 주세요.')).toBeVisible();
+  await expect(panel.getByRole('alert')).toHaveCount(0);
   expect(mutations).toEqual([
     'POST /api/agent-runtimes/codex/login',
     'POST /api/agent-runtimes/codex/login/cancel',
@@ -1408,9 +1449,9 @@ test('PMUI16 endpoint guidance checks server policy before saving and ignores a 
     .getByRole('region', { name: '제공자 선택', exact: true })
     .getByRole('button', { name: /OpenAI · Responses/ })
     .click();
-  const form = page.getByRole('form', { name: '연결 편집 양식' }),
+  const form = page.getByRole('form', { name: '프로바이더 편집 양식' }),
     address = form.getByLabel('API 기본 주소'),
-    status = form.getByRole('status', { name: '연결 주소 확인' });
+    status = form.getByRole('status', { name: '프로바이더 주소 확인' });
   await expect(status).toContainText('별도 주소 허용 설정 없이');
   const before = await library(request);
   await address.fill('https://custom.example/v1');
@@ -1447,7 +1488,7 @@ test('PMUI16 endpoint guidance checks server policy before saving and ignores a 
   await expect(status).toContainText('공식 공급자 주소');
   release();
   await expect(status).not.toContainText('delayed.example');
-  await form.getByLabel('연결 프로토콜').selectOption('vertex-gemini-v1');
+  await form.getByLabel('프로바이더 프로토콜').selectOption('vertex-gemini-v1');
   await form.getByLabel('Google Cloud 프로젝트 ID').fill('synthetic-project');
   await expect(status).toContainText('공식 공급자 주소');
   const after = await library(request);
@@ -1473,18 +1514,18 @@ test('PMUI17 new Google, Vercel and DeepSeek models are selectable locally and s
     .getByRole('region', { name: '제공자 선택', exact: true })
     .getByRole('button', { name: /DeepSeek/ })
     .click();
-  const connectionForm = page.getByRole('form', { name: '연결 편집 양식' });
-  await expect(connectionForm.getByLabel('연결 프로토콜')).toHaveValue('deepseek-chat-v1');
+  const connectionForm = page.getByRole('form', { name: '프로바이더 편집 양식' });
+  await expect(connectionForm.getByLabel('프로바이더 프로토콜')).toHaveValue('deepseek-chat-v1');
   await expect(connectionForm.getByLabel('API 기본 주소')).toHaveValue(
     'https://api.deepseek.com/v1'
   );
   await expect(connectionForm.getByLabel('서버 환경변수 이름')).toHaveValue('DEEPSEEK_API_KEY');
-  await expect(connectionForm.getByRole('status', { name: '연결 주소 확인' })).toContainText(
+  await expect(connectionForm.getByRole('status', { name: '프로바이더 주소 확인' })).toContainText(
     '공식 공급자 주소'
   );
-  await connectionForm.getByLabel('연결 이름', { exact: true }).fill(prefix + ' DeepSeek');
-  await connectionForm.getByLabel('이 연결 사용').uncheck();
-  await connectionForm.getByRole('button', { name: '연결 등록', exact: true }).click();
+  await connectionForm.getByLabel('프로바이더 이름', { exact: true }).fill(prefix + ' DeepSeek');
+  await connectionForm.getByLabel('이 프로바이더 사용').uncheck();
+  await connectionForm.getByRole('button', { name: '프로바이더 등록', exact: true }).click();
   await expect
     .poll(async () =>
       (await library(request)).connections.find((item) => item.title === prefix + ' DeepSeek')
@@ -1542,10 +1583,10 @@ test('PMUI17 new Google, Vercel and DeepSeek models are selectable locally and s
     await settings(page);
     await page.getByRole('button', { name: '새 모델 입력', exact: true }).click();
     const form = page.getByRole('form', { name: '모델 편집 양식' });
-    await form.getByLabel('모델 연결').selectOption(`${connection.id}`);
+    await form.getByLabel('프로바이더', { exact: true }).selectOption(`${connection.id}`);
     await form.getByLabel('모델 목록 검색').fill(item.modelId);
     const picker = form.getByRole('region', { name: '저장된 모델 목록에서 선택' });
-    await expect(picker).toContainText('앱 확인 모델과 저장된 목록');
+    await expect(picker).toContainText('모델 목록에서 선택');
     await expect(picker.getByRole('button')).toHaveCount(1);
     await picker.getByRole('button').click();
     await expect(form.getByLabel('모델 ID', { exact: true })).toHaveValue(item.modelId);
@@ -1562,7 +1603,7 @@ test('PMUI17 new Google, Vercel and DeepSeek models are selectable locally and s
     }
     for (const [label, value] of Object.entries(item.choices))
       await form.getByLabel(label, { exact: true }).selectOption(value!);
-    await expect(form.getByTestId('model-hint-source')).toContainText('옵션 출처 앱 확인');
+    await expect(form.getByTestId('model-hint-source')).toHaveCount(0);
     if (item.protocol === 'deepseek-chat-v1')
       await expect(form.getByLabel('사고 모드', { exact: true })).toHaveCount(0);
     expect(

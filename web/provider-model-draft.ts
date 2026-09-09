@@ -204,7 +204,7 @@ export function forcedServiceTierError(
     forcedVertexTier &&
     draft.serviceTier &&
     draft.serviceTier !== forcedVertexTier
-    ? `서버에서 Service Tier를 ${forcedVertexTier === 'flex' ? 'Flex' : 'Standard'}로 제한해요. 모델 기본값이나 서버와 같은 값을 선택하세요.`
+    ? `서버에서 서비스 등급을 ${forcedVertexTier === 'flex' ? 'Flex' : 'Standard'}로 제한해요. 모델 기본값이나 서버와 같은 값을 선택하세요.`
     : '';
 }
 export function modelDraftError(

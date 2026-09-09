@@ -1,0 +1,33 @@
+.codex-agent-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.codex-agent-heading h3 {
+  margin: 0;
+}
+.codex-agent-status {
+  font-weight: 600;
+}
+.codex-agent-help {
+  margin-top: 20px;
+}
+.codex-agent-help summary {
+  cursor: pointer;
+  min-height: 44px;
+  align-content: center;
+}
+.codex-agent-refreshing svg {
+  animation: codex-agent-spin 1s linear infinite;
+}
+@keyframes codex-agent-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .codex-agent-refreshing svg {
+    animation: none;
+  }
+}
