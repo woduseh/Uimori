@@ -55,11 +55,13 @@ for (const [index, width] of (visualReview ? [390, 360] : [390]).entries()) {
 
     await panel.getByLabel('목록 관리', { exact: true }).click();
     await panel.getByRole('button', { name: '선택', exact: true }).click();
-    await panel.getByLabel(`${seed.title} 선택`, { exact: true }).check();
+    await panel.getByRole('checkbox', { name: `${seed.title} 선택`, exact: true }).check();
     await expect(panel.getByLabel('목록 관리', { exact: true })).toBeHidden();
     await expect(panel.getByLabel('서재 검색', { exact: true })).toBeHidden();
-    await expect(panel.getByLabel(`${seed.title} 선택`, { exact: true })).toBeChecked();
-    await panel.getByRole('button', { name: '선택 취소', exact: true }).click();
+    await expect(
+      panel.getByRole('checkbox', { name: `${seed.title} 선택`, exact: true })
+    ).toBeChecked();
+    await panel.getByRole('button', { name: '완료', exact: true }).click();
     await expect(panel.getByLabel('서재 검색', { exact: true })).toHaveValue(title);
     await createLibraryContent(page);
     await expect(panel.getByLabel('자료 이름', { exact: true })).toBeInViewport();
@@ -123,7 +125,7 @@ test('LUSE03 empty persona and module folders explain their roles and offer the 
     const updated = (await response.json()) as LibraryOrganization;
     folders[category] = updated.folders.find(
       (folder) => !organization.folders.some((item) => item.id === folder.id)
-    )!.id;
+    )!.title;
   }
   await page.setViewportSize({ width: 390, height: 800 });
   let contentWrites = 0;
@@ -143,8 +145,8 @@ test('LUSE03 empty persona and module folders explain their roles and offer the 
   ]) {
     await panel.getByRole('tab', { name, exact: true }).click();
     await panel
-      .getByRole('combobox', { name: '폴더 선택', exact: true })
-      .selectOption(folders[category]);
+      .getByRole('button', { name: `${folders[category]} 폴더 열기`, exact: true })
+      .click();
     await expect(panel.locator('.library-role-guide')).toHaveText(meaning);
     await expect(
       panel.getByRole('heading', { name: '이 폴더는 비어 있어요', exact: true })
