@@ -84,6 +84,7 @@ export type ModelDraft = {
   enabled: boolean;
   evaluationToolsEnabled: boolean;
   evaluationTools: Omit<EvaluationToolOptions, 'maximumToolRounds'> & { maximumToolRounds: string };
+  contextToolsEnabled: boolean;
   pricing: PricingDraft;
 };
 export const initialModel = (): ModelDraft => ({
@@ -113,6 +114,7 @@ export const initialModel = (): ModelDraft => ({
     ...defaultEvaluationToolOptions(),
     maximumToolRounds: String(defaultEvaluationToolOptions().maximumToolRounds),
   },
+  contextToolsEnabled: false,
   pricing: pricingDraft(),
 });
 export function modelDraft(value: ModelPreset): ModelDraft {
@@ -146,6 +148,7 @@ export function modelDraft(value: ModelPreset): ModelDraft {
         (value.evaluationTools ?? defaultEvaluationToolOptions()).maximumToolRounds
       ),
     },
+    contextToolsEnabled: value.contextTools === true,
     pricing: pricingDraft(value.pricing),
   };
 }
@@ -188,6 +191,7 @@ export function modelPayload(draft: ModelDraft, connection: Connection) {
           },
         }
       : {}),
+    ...(draft.contextToolsEnabled ? { contextTools: true } : {}),
     pricing: pricingPayload(draft.pricing),
   };
 }

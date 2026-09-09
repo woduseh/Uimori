@@ -16,7 +16,7 @@
 
 - 최소 앱 검증은 `npm run verify:smoke`(M0 F02·F03·F06), 검증 도구 변경은 `npm run test:tooling`이에요. 환경 진단의 BLOCKED와 미실행 검사를 PASS로 해석하지 않아요. 빌드 실패 로그·이전 산출물 보존과 잠금 복구는 `docs/QUALITY.md`를 봐요.
 
-- 모델·연결은 `provider_settings`의 최신 한 벌이며 ModelRef는 `{id}`예요. 내부 revision은 CAS용이고 과거 Run/번역/등록 snapshot은 자체 모델·연결을 보존해요. 입력 한도·요약은 `docs/CONTEXT-LIMITS.md`, `core/context-budget.ts`, `server/context-planning.ts`, `server/context-compaction.ts`를 봐요. full history와 전송 projection을 분리하고 source/hash·히든 viewHash·정사 의존성을 유지해요. 요약 호출도 전체 maxCalls에 포함하며 불확실 실행을 자동 재생하지 않아요.
+- 모델·연결은 `provider_settings`의 최신 한 벌이며 ModelRef는 `{id}`예요. 내부 revision은 CAS용이고 과거 Run/번역/등록 snapshot은 자체 모델·연결을 보존해요. 입력 한도·요약은 `docs/CONTEXT-LIMITS.md`, `core/context-budget.ts`, `server/context-planning.ts`, `server/context-compaction.ts`를 봐요. 모델 프리셋 `contextTools` 선택 기능(본문 모델의 `context.read/write/new`, `story.list`, 도구 결과의 `contextWindow` 알림)은 `core/context-tools.ts`, `server/context-tools.ts`, `server/model-runner.ts`의 세그먼트 경계에 있고 모델 요약은 `origin: 'model'` checkpoint로 저장해요. Run snapshot은 예약 입력이며 실행 중 바꾸지 않아요. full history와 전송 projection을 분리하고 source/hash·히든 viewHash·정사 의존성을 유지해요. 요약 호출도 전체 maxCalls에 포함하며 불확실 실행을 자동 재생하지 않아요.
 
 - 공통 자료의 이미지·시작·옵션·공유 모듈은 `docs/PACKAGES.md`, 로어 배치·조회 유지·새 장면은 `docs/LORE-CONTEXT.md`를 봐요. 조회 문맥은 직전 Run의 유지 항목과 새 성공 읽기만 상속하고 예산 정리로 뺀 과거 읽기를 부활시키지 않아요. 원문 대화 요약에 로어 본문을 섞지 않으며 authored 시작문은 사용자 요청 없는 출처로 보존해요.
 

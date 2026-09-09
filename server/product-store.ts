@@ -160,6 +160,7 @@ const modelOptionKeys = [
   ...GENERATION_KEYS.filter((key) => !['maxOutputTokens', 'temperature'].includes(key)),
   'timeoutMs',
   'evaluationTools',
+  'contextTools',
   'inputTokenLimit',
 ];
 function catalogTimestamp(value: unknown): string | null {
@@ -199,6 +200,7 @@ function validateModelGeneration(value: Row, protocol?: Connection['protocol']) 
     } catch {
       throw new HttpError(400, 'Invalid evaluation tool options');
     }
+  if (value.contextTools !== undefined) boolean(value.contextTools);
   if (value.timeoutMs !== undefined)
     number(value.timeoutMs, 'timeout', 1, protocol === 'fixture-sse-v1' ? 600000 : 1800000);
   const generation = generationFromModel(value as ModelPreset);
@@ -556,6 +558,7 @@ export class ProductStore {
       ...(b.evaluationTools !== undefined
         ? { evaluationTools: validateEvaluationToolOptions(b.evaluationTools) }
         : {}),
+      ...(b.contextTools === true ? { contextTools: true } : {}),
       ...(b.enabled !== undefined ? { enabled: boolean(b.enabled) } : {}),
       ...(b.pricing !== undefined ? { pricing: modelPricing(b.pricing) } : {}),
       source: {

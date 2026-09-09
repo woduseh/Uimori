@@ -58,6 +58,20 @@ export function readStorySource(
     nextOffset: end < source.text.length ? end : null,
   };
 }
+const fold = (text: string) => text.normalize('NFKC').toLocaleLowerCase('en');
+/** Whitespace-separated terms, matched case-insensitively; every term must occur in the span. */
+export function searchTerms(query: string): string[] {
+  return fold(query).split(/\s+/u).filter(Boolean);
+}
+/** UTF-16 offset of the first term's first occurrence when all terms occur, otherwise -1.
+ * Folding keeps offsets aligned for the common case; only exact-length folds are trusted for excerpts. */
+export function matchSourceSpan(text: string, terms: readonly string[]): number {
+  if (!terms.length) return -1;
+  const folded = fold(text);
+  if (!terms.every((term) => folded.includes(term))) return -1;
+  const index = folded.indexOf(terms[0]);
+  return folded.length === text.length ? index : Math.max(0, text.indexOf(terms[0]));
+}
 export function searchStorySources(
   scope: SourceScope,
   request: { query: string; offset?: number; limit?: number; excerptChars?: number }
@@ -65,11 +79,15 @@ export function searchStorySources(
   if (!request.query?.trim()) return fail('QUERY_REQUIRED');
   const offset = request.offset ?? 0,
     limit = limitValue(request.limit, 10, 100),
-    excerptChars = limitValue(request.excerptChars, 240, 4000);
+    excerptChars = limitValue(request.excerptChars, 240, 4000),
+    terms = searchTerms(request.query);
   if (!Number.isSafeInteger(offset) || offset < 0) fail('INVALID_OFFSET');
-  const matches = validateSourceHistory(scope).filter((item) => item.text.includes(request.query));
-  const results = matches.slice(offset, offset + limit).map((item) => {
-    const start = Math.max(0, item.text.indexOf(request.query) - Math.floor(excerptChars / 4)),
+  const matches = validateSourceHistory(scope).flatMap((item) => {
+    const index = matchSourceSpan(item.text, terms);
+    return index < 0 ? [] : [{ item, index }];
+  });
+  const results = matches.slice(offset, offset + limit).map(({ item, index }) => {
+    const start = Math.max(0, index - Math.floor(excerptChars / 4)),
       end = Math.min(item.text.length, start + excerptChars),
       quote = item.text.slice(start, end);
     return {
