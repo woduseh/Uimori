@@ -83,14 +83,14 @@ export function ModelWorkspaceEditor({
                 {canSelect(item)
                   ? library.connections.find((connection) => connection.id === item.connectionId)
                       ?.title
-                  : '모델 또는 연결 비활성'}
+                  : '모델 또는 프로바이더 비활성'}
               </option>
             ))}
         </select>
         {selected && (!model || !canSelect(model)) && (
           <small role="status">
-            이 모델을 사용할 수 없어 새 작업을 시작할 수 없어요. 모델 프리셋과 연결을 확인하거나
-            다른 모델을 선택해 주세요.
+            이 모델을 사용할 수 없어 새 작업을 시작할 수 없어요. 모델 프리셋과 프로바이더를
+            확인하거나 다른 모델을 선택해 주세요.
           </small>
         )}
       </label>
@@ -269,7 +269,7 @@ export function ModelWorkspaceEditor({
       {saveError && <p role="alert">{saveError} 초안은 유지했어요.</p>}
       <p role="status">{message || error}</p>
       <button type="button" className="secondary" onClick={onManage}>
-        모델 프리셋·연결 관리
+        모델 프리셋·프로바이더 관리
       </button>
     </section>
   );

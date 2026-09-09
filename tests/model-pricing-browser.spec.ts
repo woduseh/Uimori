@@ -11,7 +11,7 @@ async function settings(page: Page) {
   if (!(await button.isVisible()))
     await page.getByRole('button', { name: '탐색 메뉴', exact: true }).click();
   await button.click();
-  await selectSettingsSection(page, '연결과 모델');
+  await selectSettingsSection(page, '프로바이더와 모델');
 }
 
 async function library(request: APIRequestContext): Promise<Library> {
@@ -51,11 +51,11 @@ for (const width of [390, 1440]) {
     await settings(page);
     await page.getByRole('button', { name: '새 모델 입력', exact: true }).click();
     const form = page.getByRole('form', { name: '모델 편집 양식' });
-    await form.getByLabel('모델 연결').selectOption(connection.id);
+    await form.getByLabel('프로바이더', { exact: true }).selectOption(connection.id);
     await form.getByLabel('모델 프리셋 이름').fill(title);
     await form.getByLabel('모델 ID', { exact: true }).fill('gpt-5.6-sol');
+    await form.getByLabel('서비스 등급', { exact: true }).selectOption('flex');
     await form.getByRole('button', { name: '고급', exact: true }).click();
-    await form.getByLabel('Service Tier', { exact: true }).selectOption('flex');
     const pricing = form.getByTestId('model-pricing-editor');
     await pricing.locator('summary').first().click();
     await expect(pricing).toContainText('공식 요금');
@@ -96,7 +96,7 @@ for (const width of [390, 1440]) {
         },
       });
     await settings(page);
-    await page.getByLabel('연결·모델 검색').fill(title);
+    await page.getByLabel('프로바이더·모델 검색').fill(title);
     await page.getByRole('button', { name: title + ' 모델 수정', exact: true }).click();
     await form.getByRole('button', { name: '고급', exact: true }).click();
     await pricing.locator('summary').first().click();

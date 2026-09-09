@@ -21,14 +21,14 @@ async function library(request: APIRequestContext): Promise<Library> {
 }
 async function settings(page: Page) {
   await navigation(page, '설정');
-  await selectSettingsSection(page, '연결과 모델');
+  await selectSettingsSection(page, '프로바이더와 모델');
   await startProviderConnection(page);
   await page
     .getByRole('region', { name: '제공자 선택', exact: true })
     .getByRole('button', { name: /OpenAI · Responses/ })
     .click();
-  await expect(page.getByLabel('연결 프로토콜')).toBeVisible();
-  await page.getByLabel('연결 프로토콜').selectOption('openai-responses-v1');
+  await expect(page.getByLabel('프로바이더 프로토콜')).toBeVisible();
+  await page.getByLabel('프로바이더 프로토콜').selectOption('openai-responses-v1');
 }
 function observe(page: Page) {
   const errors: string[] = [],
@@ -50,18 +50,20 @@ async function register(
     .fill(
       gateway === 'vercel' ? 'https://ai-gateway.vercel.sh/v1' : 'https://api.llmgateway.io/v1'
     );
-  await page.getByLabel('연결 이름', { exact: true }).fill(title);
+  await page.getByLabel('프로바이더 이름', { exact: true }).fill(title);
   await page.getByLabel('서버 환경변수 이름').fill('Evaluation_Browser_Key');
-  await page.getByLabel('이 연결 사용').check();
-  await page.getByRole('button', { name: '연결 등록', exact: true }).click();
-  await expect(page.getByRole('status').filter({ hasText: title + ' 연결 등록됨' })).toBeVisible();
+  await page.getByLabel('이 프로바이더 사용').check();
+  await page.getByRole('button', { name: '프로바이더 등록', exact: true }).click();
+  await expect(
+    page.getByRole('status').filter({ hasText: title + ' 프로바이더 등록됨' })
+  ).toBeVisible();
   const connection = (await library(request)).connections.find((item) => item.title === title)!;
   expect(connection).toMatchObject({
     protocol: 'openai-responses-v1',
     credentialEnv: 'Evaluation_Browser_Key',
     enabled: true,
   });
-  await page.getByLabel('모델 연결').selectOption(`${connection.id}`);
+  await page.getByLabel('프로바이더', { exact: true }).selectOption(`${connection.id}`);
   await page.getByLabel('모델 프리셋 이름').fill(title + ' 모델');
   await page
     .getByLabel('모델 ID', { exact: true })
@@ -104,7 +106,7 @@ test('EVALUI01 desktop preset evaluation opt-in persists selected story roles af
   await expect(page.getByLabel('API 기본 주소')).toHaveValue('https://api.openai.com/v1');
   await expect(page.getByLabel('API 기본 주소')).toBeEditable();
   await expect(
-    page.getByLabel('연결 프로토콜').locator('option[value="sol-responses-v1"]')
+    page.getByLabel('프로바이더 프로토콜').locator('option[value="sol-responses-v1"]')
   ).toHaveCount(0);
   const connection = await register(page, request, title, 'llm-gateway');
   await page.getByRole('button', { name: '고급', exact: true }).click();
@@ -240,7 +242,7 @@ test('EVALUI02 mobile 390px evaluation controls save only for opted-in presets a
     }
     // Capture the whole section laid out at 390px, including controls below the scroll fold.
     await page
-      .getByRole('group', { name: '선택형 평가 도구', exact: true })
+      .getByRole('group', { name: '평가 도구', exact: true })
       .screenshot({ path: info.outputPath('evaluation-mobile-options.png') });
   }
   await expect(page.getByText('기능 확인과 사용자 판단', { exact: true })).toHaveCount(0);
@@ -255,7 +257,7 @@ test('EVALUI02 mobile 390px evaluation controls save only for opted-in presets a
   });
   await page.reload();
   await navigation(page, '설정');
-  await selectSettingsSection(page, '연결과 모델');
+  await selectSettingsSection(page, '프로바이더와 모델');
   await expect(page.getByText(title + ' 모델', { exact: true })).toBeVisible();
   expect((await library(request)).models.find((item) => item.id === model.id)).toEqual(model);
   expect(observed.errors).toEqual([]);

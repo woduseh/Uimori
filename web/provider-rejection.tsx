@@ -6,8 +6,8 @@ export const rejectedOptionLabels: Record<RejectedOption, string> = {
   temperature: 'Temperature',
   topP: 'Top-p',
   maxOutputTokens: '최대 출력 토큰',
-  stopSequences: '정지 문자열',
-  serviceTier: 'Service Tier',
+  stopSequences: '생성 중단 문자열',
+  serviceTier: '서비스 등급',
   cache: '프롬프트 캐시',
   structuredOutput: '구조화 출력',
   verbosity: 'Verbosity',
@@ -31,7 +31,7 @@ export function ProviderRejectionNotice({ rejection }: { rejection: ProviderReje
       {rejectionMessage(rejection)}{' '}
       {optionNamed
         ? '모델 프리셋에서 해당 설정을 다른 값이나 모델 기본값으로 바꾼 뒤 다시 시도해 주세요.'
-        : '모델 ID와 연결 주소, 생성 설정을 확인해 주세요.'}
+        : '모델 ID와 프로바이더 주소, 생성 설정을 확인해 주세요.'}
       {rejection.providerCode && <small> 공급자 코드 {rejection.providerCode}</small>}
     </p>
   );

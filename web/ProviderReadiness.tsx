@@ -41,7 +41,10 @@ export function ProviderReadiness({
       })
       .catch(() => {
         if (current)
-          setState({ key, error: '준비 상태를 읽지 못했어요. 등록한 연결과 모델 ID는 유지돼요.' });
+          setState({
+            key,
+            error: '준비 상태를 읽지 못했어요. 등록한 프로바이더와 모델 ID는 유지돼요.',
+          });
       });
     return () => {
       current = false;
@@ -54,9 +57,12 @@ export function ProviderReadiness({
     ['configured', 'not-required', 'adc-configured'].includes(value.credentialStatus);
   if (connection.protocol === 'codex-app-server-v1')
     return (
-      <section className="provider-readiness full" aria-label="선택한 연결 준비 상태">
-        <strong>{connection.title} · Codex 연결</strong>
-        <p>{connection.enabled ? '연결 사용 허용' : '연결 비활성'} · Uimori 서버에서 실행해요.</p>
+      <section className="provider-readiness full" aria-label="선택한 프로바이더 준비 상태">
+        <strong>{connection.title} · Codex 프로바이더</strong>
+        <p>
+          {connection.enabled ? '프로바이더 사용 허용' : '프로바이더 비활성'} · Uimori 서버에서
+          실행해요.
+        </p>
         <p>
           설정 → 에이전트에서 Codex 로그인과 구독 한도를 확인해 주세요. 준비 상태 확인 자체는 실제
           모델을 호출하지 않아요.
@@ -80,7 +86,7 @@ export function ProviderReadiness({
       </section>
     );
   return (
-    <section className="provider-readiness full" aria-label="선택한 연결 준비 상태">
+    <section className="provider-readiness full" aria-label="선택한 프로바이더 준비 상태">
       <div className="provider-section-heading">
         <strong>{connection.title} · 준비 상태</strong>
         <button
@@ -102,7 +108,7 @@ export function ProviderReadiness({
         <>
           <p>{prepared ? '서버 설정 준비됨' : '사용 전 설정 확인이 필요해요'}</p>
           <ul>
-            <li>{value.enabled ? '연결 사용 허용' : '연결 비활성'}</li>
+            <li>{value.enabled ? '프로바이더 사용 허용' : '프로바이더 비활성'}</li>
             <li>{value.originApproved ? '서버에서 주소 허용됨' : '요청 주소 설정 확인 필요'}</li>
             <li>{credentials[value.credentialStatus]}</li>
           </ul>
@@ -133,7 +139,7 @@ export function ProviderReadiness({
         <small>
           {connection.protocol === 'vertex-gemini-v1'
             ? '로컬 지원 목록만 확인해요.'
-            : '누르면 이 연결의 공급자에 모델 목록을 요청해요. 수동 ID 입력도 가능해요.'}
+            : '누르면 이 프로바이더에 모델 목록을 요청해요. 수동 ID 입력도 가능해요.'}
         </small>
       </div>
     </section>

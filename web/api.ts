@@ -49,7 +49,7 @@ export async function api<T>(
       )
     )
       throw new ApiError(
-        '선택한 모델 또는 연결을 사용할 수 없어요. 전역 모델 설정에서 역할별 모델을 확인하고 모델 프리셋·연결 관리에서 활성 상태, 인증과 지원 모델 설정을 확인해 주세요.',
+        '선택한 모델 또는 프로바이더를 사용할 수 없어요. 전역 모델 설정에서 역할별 모델을 확인하고 모델 프리셋·프로바이더 관리에서 활성 상태, 인증과 지원 모델 설정을 확인해 주세요.',
         response.status
       );
     const settingErrors = new Set([
@@ -63,7 +63,7 @@ export async function api<T>(
     ]);
     if (typeof payload?.error === 'string' && settingErrors.has(payload.error))
       throw new ApiError(
-        '선택한 모델 또는 연결을 사용할 수 없어요. 전역 모델 설정에서 역할별 모델을 확인하고 모델 프리셋·연결 관리에서 활성 상태, 인증과 지원 모델 설정을 확인해 주세요.',
+        '선택한 모델 또는 프로바이더를 사용할 수 없어요. 전역 모델 설정에서 역할별 모델을 확인하고 모델 프리셋·프로바이더 관리에서 활성 상태, 인증과 지원 모델 설정을 확인해 주세요.',
         response.status
       );
     if (response.status === 409) {
