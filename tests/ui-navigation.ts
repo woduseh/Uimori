@@ -112,15 +112,15 @@ export async function openPromptBlocks(editor: Locator) {
 export async function startProviderConnection(page: Page) {
   const editor = page.getByTestId('connection-editor');
   await expect(editor).toBeVisible();
-  const start = editor.getByRole('button', { name: '연결 시작', exact: true });
+  const start = editor.getByRole('button', { name: '프로바이더 추가', exact: true });
   if (await start.isVisible()) await start.click();
   else {
-    await editor.getByRole('button', { name: '연결 관리', exact: true }).click();
-    await editor.getByRole('button', { name: '새 연결 입력', exact: true }).click();
+    await editor.getByRole('button', { name: '프로바이더 관리', exact: true }).click();
+    await editor.getByRole('button', { name: '새 프로바이더 입력', exact: true }).click();
   }
   await expect(editor.getByRole('region', { name: '제공자 선택', exact: true })).toBeVisible();
 }
-export async function openProviderMenu(page: Page, kind: '모델' | '연결', title: string) {
+export async function openProviderMenu(page: Page, kind: '모델' | '프로바이더', title: string) {
   const menu = page
     .getByTestId('connection-editor')
     .getByLabel(`${title} ${kind} 메뉴`, { exact: true });
@@ -129,12 +129,11 @@ export async function openProviderMenu(page: Page, kind: '모델' | '연결', ti
     await menu.click();
 }
 export async function revealProviderDiagnostics(page: Page, title: string) {
-  const summary = page
-    .getByRole('article', { name: `${title} 모델`, exact: true })
-    .getByText('진단과 상세', { exact: true });
-  await expect(summary).toBeVisible();
-  if (!(await summary.evaluate((node) => (node.parentElement as HTMLDetailsElement).open)))
-    await summary.click();
+  const card = page.getByRole('article', { name: `${title} 모델`, exact: true });
+  await expect(card.getByText('진단과 상세', { exact: true })).toHaveCount(0);
+  await expect(
+    card.getByRole('button', { name: `${title} 응답 테스트`, exact: true })
+  ).toBeVisible();
 }
 export async function editLibraryContent(page: Page, title: string) {
   await page.getByRole('button', { name: `${title} 상세 보기`, exact: true }).click();

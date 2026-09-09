@@ -231,19 +231,19 @@ test('P04 manual model IDs and distinct main/translation routing preserve connec
   const unique = `P04-${Date.now()}`;
   const chat = await createChat(page, `합성 ${unique}`);
   await navigation(page, '설정');
-  await selectSettingsSection(page, '연결과 모델');
+  await selectSettingsSection(page, '프로바이더와 모델');
   const library = page.getByTestId('connection-editor');
   await startProviderConnection(page);
-  await library.getByText('개발·검사용 연결', { exact: true }).click();
+  await library.getByText('개발·검사용 프로바이더', { exact: true }).click();
   await library.getByRole('button', { name: '로컬 fixture로 설정', exact: true }).click();
-  await page.getByLabel('연결 이름', { exact: true }).fill(`격리 연결 ${unique}`);
+  await page.getByLabel('프로바이더 이름', { exact: true }).fill(`격리 연결 ${unique}`);
   await page.getByLabel('로컬 endpoint').fill('http://127.0.0.1:9/turn');
   await page.getByLabel('서버 환경변수 이름').fill('NARRATIVE_PROVIDER_SYNTHETIC');
   const connectionResponse = page.waitForResponse(
     (response) =>
       response.url().endsWith('/api/connections') && response.request().method() === 'POST'
   );
-  await page.getByRole('button', { name: '연결 등록', exact: true }).click();
+  await page.getByRole('button', { name: '프로바이더 등록', exact: true }).click();
   const connection = (await (await connectionResponse).json()) as Connection;
   expect(connection.enabled).toBe(false);
   const modelRefs: ModelPreset[] = [];
@@ -251,7 +251,7 @@ test('P04 manual model IDs and distinct main/translation routing preserve connec
     await library.getByRole('button', { name: '모델 프리셋', exact: true }).click();
     await library.getByRole('button', { name: '새 모델 입력', exact: true }).click();
     await page.getByLabel('모델 프리셋 이름', { exact: true }).fill(`${role} ${unique}`);
-    await page.getByLabel('모델 연결', { exact: true }).selectOption(`${connection.id}`);
+    await page.getByLabel('프로바이더', { exact: true }).selectOption(`${connection.id}`);
     await page.getByLabel('모델 ID', { exact: true }).fill(`synthetic-${role}-unlisted`);
     const response = page.waitForResponse(
       (response) =>
@@ -260,12 +260,12 @@ test('P04 manual model IDs and distinct main/translation routing preserve connec
     await page.getByRole('button', { name: '모델 프리셋 등록', exact: true }).click();
     modelRefs.push((await (await response).json()) as ModelPreset);
   }
-  await library.getByRole('button', { name: '연결 관리', exact: true }).click();
+  await library.getByRole('button', { name: '프로바이더 관리', exact: true }).click();
   const connectionCard = library.getByRole('article', {
-    name: `${connection.title} 연결`,
+    name: `${connection.title} 프로바이더`,
     exact: true,
   });
-  await openProviderMenu(page, '연결', connection.title);
+  await openProviderMenu(page, '프로바이더', connection.title);
   await connectionCard
     .getByRole('button', { name: `${connection.title} 모델 목록 새로고침`, exact: true })
     .click();
@@ -291,16 +291,16 @@ test('P04 manual model IDs and distinct main/translation routing preserve connec
     translation: null,
   });
   await navigation(page, '설정');
-  await selectSettingsSection(page, '연결과 모델');
-  await library.getByRole('button', { name: '연결 관리', exact: true }).click();
+  await selectSettingsSection(page, '프로바이더와 모델');
+  await library.getByRole('button', { name: '프로바이더 관리', exact: true }).click();
   const enabledResponse = page.waitForResponse(
     (response) =>
       response.url().endsWith(`/api/connections/${connection.id}`) &&
       response.request().method() === 'PUT'
   );
-  await openProviderMenu(page, '연결', connection.title);
+  await openProviderMenu(page, '프로바이더', connection.title);
   await library
-    .getByRole('button', { name: `${connection.title} 연결 활성화`, exact: true })
+    .getByRole('button', { name: `${connection.title} 프로바이더 활성화`, exact: true })
     .click();
   const enabledReply = await enabledResponse;
   expect(enabledReply.ok()).toBe(true);
@@ -735,34 +735,34 @@ test('P04 Vertex settings use service-account references and persist distinct ma
   const pageErrors: string[] = [];
   page.on('pageerror', (error) => pageErrors.push(error.message));
   await navigation(page, '설정');
-  await selectSettingsSection(page, '연결과 모델');
+  await selectSettingsSection(page, '프로바이더와 모델');
   const editor = page.getByTestId('connection-editor');
   await startProviderConnection(page);
   await editor
     .getByRole('region', { name: '제공자 선택', exact: true })
     .getByRole('button', { name: /Google Agent Platform/ })
     .click();
-  await page.getByLabel('연결 프로토콜', { exact: true }).selectOption('vertex-gemini-v1');
-  await page.getByLabel('연결 이름', { exact: true }).fill(unique);
+  await page.getByLabel('프로바이더 프로토콜', { exact: true }).selectOption('vertex-gemini-v1');
+  await page.getByLabel('프로바이더 이름', { exact: true }).fill(unique);
   await page
     .getByLabel('Google Agent Platform endpoint', { exact: true })
     .fill(
       'https://aiplatform.googleapis.com/v1/projects/synthetic-project/locations/global/publishers/google/models'
     );
-  await page.getByLabel('이 연결 사용', { exact: true }).check();
+  await page.getByLabel('이 프로바이더 사용', { exact: true }).check();
   await expect(page.getByLabel('서버 환경변수 이름', { exact: true })).toHaveValue('');
   const connectionResponse = page.waitForResponse(
     (response) =>
       response.url().endsWith('/api/connections') && response.request().method() === 'POST'
   );
-  await page.getByRole('button', { name: '연결 등록', exact: true }).click();
+  await page.getByRole('button', { name: '프로바이더 등록', exact: true }).click();
   const connection = (await (await connectionResponse).json()) as Connection;
   expect(connection).toMatchObject({ protocol: 'vertex-gemini-v1', enabled: true });
   expect(connection).not.toHaveProperty('credentialEnv');
-  await editor.getByRole('button', { name: '연결 관리', exact: true }).click();
-  await openProviderMenu(page, '연결', unique);
+  await editor.getByRole('button', { name: '프로바이더 관리', exact: true }).click();
+  await openProviderMenu(page, '프로바이더', unique);
   await editor
-    .getByRole('article', { name: `${unique} 연결`, exact: true })
+    .getByRole('article', { name: `${unique} 프로바이더`, exact: true })
     .getByRole('button', { name: `${unique} 로컬 지원 모델 확인`, exact: true })
     .click();
   await expect(editor.getByRole('status')).toContainText('공급자 조회 없음');
@@ -772,7 +772,7 @@ test('P04 Vertex settings use service-account references and persist distinct ma
     await editor.getByRole('button', { name: '모델 프리셋', exact: true }).click();
     await editor.getByRole('button', { name: '새 모델 입력', exact: true }).click();
     await page.getByLabel('모델 프리셋 이름', { exact: true }).fill(`${unique}-${role}`);
-    await page.getByLabel('모델 연결', { exact: true }).selectOption(`${latest.id}`);
+    await page.getByLabel('프로바이더', { exact: true }).selectOption(`${latest.id}`);
     await page.getByLabel('모델 ID', { exact: true }).fill('gemini-3.8-flash');
     await expect(page.getByLabel('모델 ID', { exact: true })).toBeEditable();
     await expect(page.getByLabel('Temperature', { exact: true })).toBeHidden();
@@ -826,7 +826,7 @@ test('P04 named and custom providers save native options from mobile settings wi
 }, testInfo) => {
   const chat = await createChat(page, `공급자 설정 ${Date.now()}`);
   await navigation(page, '설정');
-  await selectSettingsSection(page, '연결과 모델');
+  await selectSettingsSection(page, '프로바이더와 모델');
   const cases = [
     {
       protocol: 'openai-responses-v1',
@@ -859,19 +859,19 @@ test('P04 named and custom providers save native options from mobile settings wi
       .getByRole('region', { name: '제공자 선택', exact: true })
       .getByRole('button', { name: /OpenAI · Responses/ })
       .click();
-    await page.getByLabel('연결 프로토콜', { exact: true }).selectOption(item.protocol);
-    await page.getByLabel('연결 이름', { exact: true }).fill(item.protocol);
+    await page.getByLabel('프로바이더 프로토콜', { exact: true }).selectOption(item.protocol);
+    await page.getByLabel('프로바이더 이름', { exact: true }).fill(item.protocol);
     const endpoint = page.getByLabel('API 기본 주소', { exact: true });
     if (item.protocol === 'openai-chat-v1') await endpoint.fill(item.endpoint);
     else await expect(endpoint).toHaveValue(item.endpoint);
     await expect(page.getByLabel('서버 환경변수 이름', { exact: true })).toHaveValue(
       item.credential
     );
-    await page.getByLabel('이 연결 사용', { exact: true }).check();
+    await page.getByLabel('이 프로바이더 사용', { exact: true }).check();
     const saved = page.waitForResponse(
       (r) => r.url().endsWith('/api/connections') && r.request().method() === 'POST'
     );
-    await page.getByRole('button', { name: '연결 등록', exact: true }).click();
+    await page.getByRole('button', { name: '프로바이더 등록', exact: true }).click();
     const connection = (await (await saved).json()) as Connection;
     expect(connection).toMatchObject({
       protocol: item.protocol,
@@ -880,7 +880,7 @@ test('P04 named and custom providers save native options from mobile settings wi
       enabled: true,
     });
     await expect(page.getByRole('form', { name: '모델 편집 양식' })).toBeVisible();
-    await page.getByLabel('모델 연결', { exact: true }).selectOption(`${connection.id}`);
+    await page.getByLabel('프로바이더', { exact: true }).selectOption(`${connection.id}`);
     await page.getByLabel('모델 프리셋 이름', { exact: true }).fill(item.modelId);
     await page.getByLabel('모델 ID', { exact: true }).fill(item.modelId);
     await page.getByLabel('사고 강도', { exact: true }).selectOption('high');
