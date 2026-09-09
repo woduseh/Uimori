@@ -83,7 +83,7 @@
 
 ## 추정과 검증 범위
 
-`tiktoken@1.0.22`의 로컬 WASM `o200k_base`를 사용해 최대 4,096 UTF-16 단위의 조각으로 계산하고 같은 요청의 동일 조각은 재사용해요. 합계에 10% 여유를 더해요. 문자열·키·토큰을 외부 계산 서비스로 보내지 않아요. 다른 모델 tokenizer·공급자 내부 포맷·조각 경계 차이가 있으므로 실제 청구 토큰이나 상한 보장은 아니에요.
+`tiktoken@1.0.22`의 로컬 WASM `o200k_base`를 사용해 최대 4,096 UTF-16 단위의 조각으로 계산하고 같은 요청의 동일 조각은 재사용해요. 합계에 10% 여유를 더해요. 문자열·키·토큰을 외부 계산 서비스로 보내지 않아요. 다른 모델 tokenizer·공급자 내부 포맷·조각 경계 차이가 있으므로 실제 청구 토큰이나 상한 보장은 아니에요. 같은 내용의 body라도 실행마다 새로 만드는 Run·메시지 ID와 해시 때문에 추정값이 조금씩 달라져요. 관측한 예로 직렬화 길이가 15,887 UTF-16 단위로 동일한 body에서 추정값이 6,943–7,011 토큰(약 1%) 범위로 움직였어요. 85%·75% 판정은 이 편차보다 큰 여유가 있을 때만 결정적이므로, 합성 검사도 픽스처를 경계 1% 안쪽에 두지 않아요.
 
 구현은 `core/context-budget.ts`, `core/context-plan.ts`, `core/context-projection.ts`, `core/context-tools.ts`, `core/notes.ts`, `core/story-context.ts`, `server/context-planning.ts`, `server/context-compaction.ts`, `server/context-tools.ts`, `server/context-store.ts`, `server/story-notes.ts`에 있어요. `tests/context-integration.test.ts`와 관련 context/story 검사는 실제 앱 경로와 fresh SQLite, 합성 provider body로 경합·취소·입력 귀속·보관을 확인해요. 모델 주도 경로는 `tests/context-tools.test.ts`(도구 루프·세그먼트 경계·네 native 인코더의 새 요청 형식)와 `tests/context-model-driven-integration.test.ts`(실제 App·SQLite에서 저장·전환·회수·다음 Run 재사용·사용자 편집 우선·archive/fork)로 확인해요. 실제 요약의 의미 품질·공급자 인증·계정별 문맥 상한·물리적 휴대폰 검증은 별도예요.
 
