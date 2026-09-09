@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { Check, CircleHelp, LoaderCircle, TriangleAlert } from 'lucide-react';
 import type { Job, ReaderActivity, ReaderRun, Source } from '../core/types.js';
 import type { StoryJob } from '../core/story.js';
 import { RunTaskDetails } from './RunTaskDetails.js';
@@ -7,7 +6,7 @@ import { LazyDiagnostics } from './LazyDiagnostics.js';
 import { StoryJobList } from './StoryPanel.js';
 import { api, labels } from './api.js';
 import { elapsedLabel } from './ActivityStatus.js';
-import './turn-activity.css';
+import { TurnStatus } from './TurnStatus.js';
 
 const active = (status: string) => ['queued', 'running', 'waiting_for_state'].includes(status);
 const attention = (status: string) =>
@@ -64,7 +63,6 @@ function TurnActivityContent({
       return false;
     }
   });
-  const [visited, setVisited] = useState(open);
   const visibleRevision = useRef(revision);
   if (open) visibleRevision.current = revision;
   const [now, setNow] = useState(Date.now);
@@ -120,7 +118,8 @@ function TurnActivityContent({
   const running = active(run.status) || entries.some((item) => active(item.status));
   useEffect(() => {
     if (!running) return;
-    const timer = setInterval(() => setNow(Date.now()), 1000);
+    // Same cadence as the composer status row, so the two never disagree by a second.
+    const timer = setInterval(() => setNow(Date.now()), 250);
     return () => clearInterval(timer);
   }, [running]);
   const mainLabel = run.snapshot.forkedFrom
@@ -149,133 +148,94 @@ function TurnActivityContent({
   const uncertain = !connected && running;
   const hasIssue = attention(run.status) || entries.some((item) => attention(item.status));
   const tone = uncertain ? 'uncertain' : hasIssue ? 'issue' : running ? 'running' : 'done';
-  const Glyph =
-    tone === 'uncertain'
-      ? CircleHelp
-      : tone === 'issue'
-        ? TriangleAlert
-        : tone === 'running'
-          ? LoaderCircle
-          : Check;
   // A finished response shows only the check; its text stays for assistive technology.
   const quiet = tone === 'done' && !!source;
   const text = uncertain ? '연결 확인 중 · 진행 상태 미확인' : summary;
-  const persist = (next: boolean) => {
-    setOpen(next);
-    if (next) setVisited(true);
-    try {
-      sessionStorage.setItem(storageKey, next ? 'open' : 'closed');
-    } catch {
-      /* Current view still works. */
-    }
-  };
   return (
-    <details
-      className={`turn-activity${hasIssue ? ' turn-activity-issue' : ''}`}
-      data-testid="turn-activity"
-      data-run-id={run.id}
-      open={open}
-      onToggle={(event) => {
-        // Nested diagnostic disclosures must not change this response's state.
-        if (event.target !== event.currentTarget) return;
-        persist(event.currentTarget.open);
-      }}
+    <TurnStatus
+      tone={tone}
+      text={text}
+      elapsed={elapsed}
+      leading={leading}
+      badges={badges}
+      quiet={quiet}
+      issue={hasIssue}
+      storageKey={storageKey}
+      onOpenChange={setOpen}
+      dataProps={{ 'data-testid': 'turn-activity', 'data-run-id': run.id }}
     >
-      <summary
-        onClick={(event) => {
-          // Toggle through React state instead of the native activation: the browser fires
-          // toggle asynchronously, so a reload right after closing would otherwise bring the
-          // panel back, and React's controlled attribute would double-toggle the native change.
-          event.preventDefault();
-          persist(!open);
-        }}
-      >
-        <span className="turn-activity-lead">
-          {leading}
-          <span className={`turn-status turn-status-${tone}`} aria-hidden="true">
-            <Glyph size={15} />
-          </span>
-          <span className={quiet ? 'sr-only' : 'turn-activity-text'}>
-            {quiet ? `작업 현황 · ${text}` : text}
-          </span>
-          {elapsed && <small>{elapsed}</small>}
-          {badges}
-        </span>
-      </summary>
-      {visited && (
-        <div className="turn-activity-body">
-          {!connected && (
-            <p className="connection-notice" role="status">
-              연결을 다시 확인하는 중이에요. 아래는 마지막으로 확인한 상태예요.
-            </p>
-          )}
-          {source && source.editRevision && source.editRevision > 0 ? (
-            <p className="muted">
-              본문 생성 기록은 생성 당시 원문 기준이에요. 후속 작업은 현재 수정본에 연결된 항목을
-              보여줘요.
-            </p>
-          ) : null}
-          <RunTaskDetails
-            run={run}
-            jobs={currentJobs}
-            inlineJobs={currentJobs}
-            revision={visibleRevision.current}
-            refresh={refresh}
-            onError={onError}
-          >
-            {children}
-          </RunTaskDetails>
-          {source && story.length > 0 && (
-            <section aria-label="이 응답의 상태 작업">
-              {story.map((item) => (
-                <LazyDiagnostics<StoryJob>
-                  key={item.id}
-                  path={`/story-jobs/${item.id}`}
-                  revision={visibleRevision.current}
-                  title={`${names[item.kind]} · ${labels[item.status] ?? item.status} · 작업 관리`}
-                >
-                  {(job) => <StoryTask job={job} refresh={refresh} onError={onError} />}
-                </LazyDiagnostics>
-              ))}
-              {previousStory.length > 0 && (
-                <details>
-                  <summary>이전 상태 작업 · {previousStory.length}개</summary>
-                  {previousStory.map((item) => (
-                    <LazyDiagnostics<StoryJob>
-                      key={item.id}
-                      path={`/story-jobs/${item.id}`}
-                      revision={visibleRevision.current}
-                      title={`${names[item.kind]} · ${labels[item.status] ?? item.status}`}
-                    >
-                      {(job) => (
-                        <>
-                          <p>{job.error}</p>
-                          <small>이전 실행 기록이에요. 새 작업은 현재 항목에서 관리해요.</small>
-                        </>
-                      )}
-                    </LazyDiagnostics>
-                  ))}
-                </details>
-              )}
-            </section>
-          )}
-          {context && (
-            <section aria-label="이 응답의 문맥 작업">
-              <p>문맥 압축 · {labels[context.status] ?? context.status}</p>
-              <small>요약과 작업 관리는 채팅 설정의 상태와 문맥에서 확인해요.</small>
-            </section>
-          )}
-          {illustrations.length > 0 && (
-            <section aria-label="이 응답의 삽화 작업">
-              {illustrations.map((item) => (
-                <p key={item.id}>삽화 · {labels[item.status] ?? item.status}</p>
-              ))}
-              <small>삽화 결과와 다시 요청·삭제는 장면 아래 삽화 영역에서 확인해요.</small>
-            </section>
-          )}
-        </div>
-      )}
-    </details>
+      <>
+        {!connected && (
+          <p className="connection-notice" role="status">
+            연결을 다시 확인하는 중이에요. 아래는 마지막으로 확인한 상태예요.
+          </p>
+        )}
+        {source && source.editRevision && source.editRevision > 0 ? (
+          <p className="muted">
+            본문 생성 기록은 생성 당시 원문 기준이에요. 후속 작업은 현재 수정본에 연결된 항목을
+            보여줘요.
+          </p>
+        ) : null}
+        <RunTaskDetails
+          run={run}
+          jobs={currentJobs}
+          inlineJobs={currentJobs}
+          revision={visibleRevision.current}
+          refresh={refresh}
+          onError={onError}
+        >
+          {children}
+        </RunTaskDetails>
+        {source && story.length > 0 && (
+          <section aria-label="이 응답의 상태 작업">
+            {story.map((item) => (
+              <LazyDiagnostics<StoryJob>
+                key={item.id}
+                path={`/story-jobs/${item.id}`}
+                revision={visibleRevision.current}
+                title={`${names[item.kind]} · ${labels[item.status] ?? item.status} · 작업 관리`}
+              >
+                {(job) => <StoryTask job={job} refresh={refresh} onError={onError} />}
+              </LazyDiagnostics>
+            ))}
+            {previousStory.length > 0 && (
+              <details>
+                <summary>이전 상태 작업 · {previousStory.length}개</summary>
+                {previousStory.map((item) => (
+                  <LazyDiagnostics<StoryJob>
+                    key={item.id}
+                    path={`/story-jobs/${item.id}`}
+                    revision={visibleRevision.current}
+                    title={`${names[item.kind]} · ${labels[item.status] ?? item.status}`}
+                  >
+                    {(job) => (
+                      <>
+                        <p>{job.error}</p>
+                        <small>이전 실행 기록이에요. 새 작업은 현재 항목에서 관리해요.</small>
+                      </>
+                    )}
+                  </LazyDiagnostics>
+                ))}
+              </details>
+            )}
+          </section>
+        )}
+        {context && (
+          <section aria-label="이 응답의 문맥 작업">
+            <p>문맥 압축 · {labels[context.status] ?? context.status}</p>
+            <small>요약과 작업 관리는 채팅 설정의 상태와 문맥에서 확인해요.</small>
+          </section>
+        )}
+        {illustrations.length > 0 && (
+          <section aria-label="이 응답의 삽화 작업">
+            {illustrations.map((item) => (
+              <p key={item.id}>삽화 · {labels[item.status] ?? item.status}</p>
+            ))}
+            <small>삽화 결과와 다시 요청·삭제는 장면 아래 삽화 영역에서 확인해요.</small>
+          </section>
+        )}
+      </>
+    </TurnStatus>
   );
 }
 

@@ -423,9 +423,6 @@ input[type="checkbox"] {
 .chat-menu > .action-menu-body {
   min-width: 240px;
 }
-.action-menu-body > .compact-only {
-  display: none;
-}
 .mobile-menu {
   display: none;
 }
@@ -918,6 +915,15 @@ input[type="checkbox"] {
   min-height: 32px;
   color: var(--muted);
 }
+/* Compact widths: the model that will run the next request sits beside the send action. */
+.composer-model {
+  display: flex;
+  margin-bottom: 2px;
+}
+.composer-model .model-chip {
+  max-width: 100%;
+  margin-right: 0;
+}
 .composer-dock > .error {
   margin-bottom: 8px;
   max-height: 130px;
@@ -1185,16 +1191,6 @@ input[type="checkbox"] {
   }
   .header-title small {
     font-size: 10px;
-  }
-  .focus-button {
-    display: none;
-  }
-  .action-menu-body > .compact-only {
-    display: flex;
-  }
-  .model-chip {
-    max-width: 128px;
-    margin-right: 2px;
   }
   .model-chip {
     min-height: 44px;

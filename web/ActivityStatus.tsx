@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
-import { Check, ChevronDown, ChevronUp, CircleAlert, LoaderCircle } from 'lucide-react';
 import type { ReaderActivity } from '../core/types.js';
 import type { RequestActivity } from './useStory.js';
 import { ActivityNotifications } from './ActivityNotifications.js';
+import { ActivityBar } from './ActivityBar.js';
 import {
   activityActive as active,
   activitySuccess as success,
@@ -259,7 +259,13 @@ export function ActivityStatus({
     (item
       ? !active(item.status) && !success(item.status)
       : candidates.some((item) => !active(item.status) && !success(item.status)));
-  const Icon = hasIssue ? CircleAlert : running.length ? LoaderCircle : Check;
+  const tone = connectionIssue
+    ? 'uncertain'
+    : hasIssue
+      ? 'issue'
+      : running.length
+        ? 'running'
+        : 'done';
   const label = connectionIssue
     ? '연결 확인 중 · 진행 여부를 확인할 수 없어요'
     : item
@@ -294,58 +300,28 @@ export function ActivityStatus({
   return (
     <>
       {!!candidates.length && (
-        <div
-          className={`activity-status ${hasIssue ? 'activity-issue' : ''}`}
-          data-testid="activity-status"
-        >
-          <span className="sr-only" role="status" aria-live="polite">
-            {label}
-          </span>
-          <button
-            type="button"
-            className="activity-toggle"
-            aria-label={
-              issueSelected ? '작업 알림 보기' : item ? '작업 상태 숨기기' : '작업 상태 펼치기'
-            }
-            aria-expanded={issueSelected ? notificationsOpen : !!item}
-            title={
-              issueSelected
-                ? '확인할 작업 알림을 열어요.'
-                : item
-                  ? '상태 표시만 숨겨요. 작업은 계속 진행돼요.'
-                  : '작업 상태 펼치기'
-            }
-            onClick={issueSelected ? () => setNotificationsOpen(true) : item ? hide : expand}
-          >
-            <Icon
-              size={16}
-              aria-hidden="true"
-              className={running.length && !hasIssue ? 'activity-spinner' : ''}
-            />
-            <span className="activity-label">{label}</span>
-            {elapsed && (
-              <span className="activity-elapsed" aria-hidden="true">
-                {elapsed}
-              </span>
-            )}
-            {item && candidates.length > 1 && (
-              <span className="activity-count">외 {candidates.length - 1}개</span>
-            )}
-            {item ? (
-              <ChevronDown size={14} aria-hidden="true" />
-            ) : (
-              <ChevronUp size={14} aria-hidden="true" />
-            )}
-          </button>
-          <button
-            type="button"
-            className="activity-details"
-            onClick={() => setNotificationsOpen(true)}
-            aria-label="작업 상세 보기"
-          >
-            상세
-          </button>
-        </div>
+        <ActivityBar
+          tone={tone}
+          issue={hasIssue}
+          label={label}
+          elapsed={elapsed}
+          extra={item && candidates.length > 1 ? candidates.length - 1 : 0}
+          expanded={issueSelected ? notificationsOpen : !!item}
+          collapsed={!item}
+          toggleLabel={
+            issueSelected ? '작업 알림 보기' : item ? '작업 상태 숨기기' : '작업 상태 펼치기'
+          }
+          toggleTitle={
+            issueSelected
+              ? '확인할 작업 알림을 열어요.'
+              : item
+                ? '상태 표시만 숨겨요. 작업은 계속 진행돼요.'
+                : '작업 상태 펼치기'
+          }
+          onToggle={issueSelected ? () => setNotificationsOpen(true) : item ? hide : expand}
+          onDetails={() => setNotificationsOpen(true)}
+          testId="activity-status"
+        />
       )}
       <ActivityNotifications
         open={notificationsOpen}

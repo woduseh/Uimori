@@ -70,8 +70,8 @@
 .helper-task {
   font-size: 13px;
 }
-.helper-task > button {
-  margin-top: 8px;
+.helper-task .turn-activity {
+  margin-bottom: 4px;
 }
 .helper-artifact {
   margin-top: 16px;
@@ -196,21 +196,12 @@
   min-height: 44px;
   align-content: center;
 }
-.helper-task-history {
-  font-size: 13px;
-  min-width: 0;
-}
-.helper-task-history ol {
-  padding-left: 20px;
-}
-.helper-task-history li {
-  margin-bottom: 16px;
+.helper-task-history .task-request {
+  margin: 8px 0 0;
   overflow-wrap: anywhere;
 }
-.helper-task-history li > strong,
-.helper-task-history li > small {
-  display: block;
-  line-height: 1.6;
+.helper-task-history .activity-notification-heading strong {
+  font-size: 14px;
 }
 .helper-selection {
   display: flex;
@@ -226,7 +217,6 @@
 .helper-selection button {
   font-size: 12px;
 }
-.helper-queue,
 .helper-outbox {
   font-size: 13px;
   line-height: 1.6;
@@ -286,9 +276,22 @@
   }
 }
 
-.helper-task-history h3 {
-  font-size: 14px;
-}
 .helper-message.request .request-message-wrap {
   margin-top: 0;
+}
+.helper-header h2,
+.helper-header small {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+/* The panel is always narrow, so the model gets its own row under the panel title. */
+.helper-model {
+  display: flex;
+  padding: 8px 16px;
+  border-bottom: 1px solid var(--line);
+}
+.helper-model .model-chip {
+  max-width: 100%;
+  margin-right: 0;
 }

@@ -53,6 +53,10 @@ export type HelperTask = {
   generation: number;
   error: string | null;
   usage: Usage;
+  /** Queue time. `startedAt` is null until the worker claims the task. */
+  createdAt: string;
+  startedAt: string | null;
+  updatedAt: string;
   snapshot: HelperTaskSnapshot;
 };
 export type HelperMessage = {

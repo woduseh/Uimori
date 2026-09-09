@@ -269,6 +269,8 @@ test('TURNUI04 expanded pending run preserves disclosure when its source arrives
     body.runs = body.runs.map((item) =>
       item.id === run.id ? { ...item, sourceRevision: null, status: 'running', error: null } : item
     );
+    // The reader lists a source-less attempt only while it is an admitted pending run.
+    body.reader.pendingRunIds = [run.id];
     body.reader.responseActivity = [];
     body.reader.activity = [];
     body.reader.order = [];
@@ -314,6 +316,8 @@ test('TURNUI03 failed response without source keeps inline diagnostics readable 
     body.reader.total = 0;
     body.reader.latest = null;
     body.reader.activeJobs = 0;
+    // The reader lists a source-less attempt only while it is an admitted pending run.
+    body.reader.pendingRunIds = [run.id];
   });
   const pending = page.getByTestId('pending-run');
   await expect(pending).toHaveCount(1);
@@ -323,7 +327,7 @@ test('TURNUI03 failed response without source keeps inline diagnostics readable 
   await panel.locator(':scope > summary').click();
   await expect(panel.getByText(failure, { exact: true })).toHaveCount(1);
   await expect(panel.getByText(failure, { exact: true })).toBeVisible();
-  await expect(pending.getByRole('button', { name: '요청 다시 편집', exact: true })).toBeVisible();
+  await expect(pending.getByRole('button', { name: '요청 편집', exact: true })).toBeVisible();
   const bounds = await panel.boundingBox();
   expect(bounds).not.toBeNull();
   expect(bounds!.x).toBeGreaterThanOrEqual(0);

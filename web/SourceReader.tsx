@@ -402,13 +402,9 @@ function SourceReaderContent({
   );
   const activityNode = activity?.({ leading, badges }) || null;
   const canRetranslate = !!translation && !activeJob(translation) && !retryable(translation.status);
+  // The menu entry names the scope, the existing translation stays until the new one lands,
+  // and the turn's task panel cancels a running translation. No extra confirmation step.
   const retranslate = () => {
-    if (
-      !window.confirm(
-        '현재 모델과 프롬프트로 새 번역을 요청해요. 새 번역이 완료될 때까지 기존 번역을 표시해요. 계속할까요?'
-      )
-    )
-      return;
     void action('translation', async () => {
       await api(`/sources/${source.id}/retranslate`, {});
       switchMode('translation');

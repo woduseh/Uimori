@@ -65,6 +65,7 @@ async function harness(page: Page, seedCount = 0) {
       createdAt: new Date().toISOString(),
     });
   const add = (view: View, text: string, status: HelperTaskView['status']) => {
+    const time = new Date().toISOString();
     const task: HelperTaskView = {
       id: randomUUID(),
       conversationId: view.conversation.id,
@@ -73,6 +74,9 @@ async function harness(page: Page, seedCount = 0) {
       generation: status === 'queued' ? 0 : 1,
       error: null,
       usage: { ...usage },
+      createdAt: time,
+      startedAt: status === 'queued' ? null : time,
+      updatedAt: time,
     };
     view.tasks.unshift(task);
     message(view, task, 'user', text);
@@ -413,9 +417,9 @@ test('HELPUI02 cursor HTTP deltas stay sequential and queued followups recover o
   expect(state.eventStreamReads).toBe(0);
   await input.fill('뒤이어 처리할 작업');
   await panel.getByRole('button', { name: '도우미 요청 보내기' }).click();
-  await expect(
-    panel.getByText('대기 중인 요청 1개 · 입력은 계속할 수 있어요.', { exact: true })
-  ).toBeVisible();
+  const activity = panel.locator('[data-testid="helper-activity-status"]');
+  await expect(activity.locator('.activity-label')).toHaveText('처리 중이에요');
+  await expect(activity.locator('.activity-count')).toHaveText('외 1개');
   state.loseNext();
   await input.fill('접수 응답을 잃은 작업');
   await panel.getByRole('button', { name: '도우미 요청 보내기' }).click();
@@ -478,8 +482,10 @@ test('HELPUI03 library work selection, older pages and direct artifact edit pres
   await expect(panel.getByText('합성 요청 1', { exact: true }).first()).toBeVisible();
   await panel.locator('summary[aria-label="도우미 대화 더보기"]').click();
   await panel.getByRole('button', { name: '작업 기록', exact: true }).click();
-  await panel.getByRole('button', { name: '이전 작업 불러오기' }).click();
-  await expect(panel.locator('.helper-task-history > h3')).toHaveText('작업 기록 · 55개');
+  await panel.getByRole('button', { name: '이전 작업 더 보기' }).click();
+  await expect(panel.locator('.helper-task-history h2')).toHaveText('도우미 작업 기록');
+  await expect(panel.locator('[data-testid="helper-task-record"]')).toHaveCount(55);
+  await panel.getByRole('button', { name: '도우미 작업 기록 닫기', exact: true }).click();
   const card = panel.getByRole('region', { name: '독립 가정 장면' });
   await card.getByRole('button', { name: '직접 편집', exact: true }).click();
   await card.getByLabel('가정 장면 직접 편집').fill('내 장면 편집 초안');
@@ -502,7 +508,9 @@ test('HELPUI03 library work selection, older pages and direct artifact edit pres
   await panel.getByLabel('도우미에게 요청').fill('새 작업의 초안');
   await panel.getByLabel('서재 작업 선택').selectOption(view.conversation.id);
   await expect(panel.getByLabel('도우미에게 요청')).toHaveValue('별도로 유지할 요청 초안');
-  await expect(panel.locator('.helper-task-history > h3')).toHaveText('작업 기록 · 55개');
+  await panel.locator('summary[aria-label="도우미 대화 더보기"]').click();
+  await panel.getByRole('button', { name: '작업 기록', exact: true }).click();
+  await expect(panel.locator('[data-testid="helper-task-record"]')).toHaveCount(55);
 });
 
 test('HELPUI04 selected source is frozen in the request and a terminal missing stream does not reconnect', async ({
@@ -602,6 +610,6 @@ test('HELPUI05 retry edits in place, preserves composer and hides historical fai
   await expect(panel.getByRole('group', { name: '실패한 요청' })).toHaveCount(0);
   await panel.locator('summary[aria-label="도우미 대화 더보기"]').click();
   await panel.getByRole('button', { name: '작업 기록', exact: true }).click();
-  await expect(panel.locator('.helper-task-history li')).toHaveCount(2);
+  await expect(panel.locator('[data-testid="helper-task-record"]')).toHaveCount(2);
   await expect(panel.locator('.helper-task-history').getByText('SYNTHETIC_FAILURE')).toBeVisible();
 });

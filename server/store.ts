@@ -1,5 +1,5 @@
 import { DatabaseSync } from 'node:sqlite';
-import { initHelperWorkspace } from './helper-workspace.js';
+import { initHelperTaskTiming, initHelperWorkspace } from './helper-workspace.js';
 import { initEditDrafts } from './edit-drafts.js';
 import { initChatOverrides, freezeChatOverrides } from './chat-overrides.js';
 import { initChatOptions, ChatOptionsStore } from './chat-options.js';
@@ -178,6 +178,7 @@ export class Store {
         initIllustrations(this.db);
         initOutline(this.db);
       }
+      initHelperTaskTiming(this);
     } catch (error) {
       this.db.close();
       this.ownership.close();

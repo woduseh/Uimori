@@ -31,10 +31,18 @@ export const HELPER_TABLES = [
   'helper_artifacts',
   'helper_delegations',
 ] as const;
+/** Additive helper task claim time; a schema 15 database keeps its version and its rows. */
+export function initHelperTaskTiming(store: Store) {
+  const columns = (store.db.prepare('PRAGMA table_info(helper_tasks)').all() as Row[]).map((row) =>
+    String(row.name)
+  );
+  if (!columns.includes('started_at'))
+    store.db.exec('ALTER TABLE helper_tasks ADD COLUMN started_at TEXT');
+}
 export function initHelperWorkspace(store: Store) {
   store.db.exec(`
     CREATE TABLE helper_conversations(id TEXT PRIMARY KEY,scope_key TEXT NOT NULL UNIQUE,chat_id TEXT REFERENCES chats(id) ON DELETE CASCADE,branch_id TEXT REFERENCES branches(id) ON DELETE CASCADE,scope TEXT NOT NULL,revision INTEGER NOT NULL,persona TEXT NOT NULL,created_at TEXT NOT NULL,limits TEXT NOT NULL DEFAULT '{"totalCalls":24,"helperCalls":12,"artifacts":1}');
-    CREATE TABLE helper_tasks(id TEXT PRIMARY KEY,conversation_id TEXT NOT NULL REFERENCES helper_conversations(id) ON DELETE CASCADE,request_key TEXT NOT NULL,request TEXT NOT NULL,status TEXT NOT NULL,generation INTEGER NOT NULL DEFAULT 0,owner TEXT,snapshot TEXT NOT NULL,error TEXT,usage TEXT NOT NULL,created_at TEXT NOT NULL,updated_at TEXT NOT NULL,UNIQUE(conversation_id,request_key));
+    CREATE TABLE helper_tasks(id TEXT PRIMARY KEY,conversation_id TEXT NOT NULL REFERENCES helper_conversations(id) ON DELETE CASCADE,request_key TEXT NOT NULL,request TEXT NOT NULL,status TEXT NOT NULL,generation INTEGER NOT NULL DEFAULT 0,owner TEXT,snapshot TEXT NOT NULL,error TEXT,usage TEXT NOT NULL,created_at TEXT NOT NULL,started_at TEXT,updated_at TEXT NOT NULL,UNIQUE(conversation_id,request_key));
     CREATE UNIQUE INDEX helper_one_active_task ON helper_tasks(conversation_id) WHERE status='running';
     CREATE TABLE helper_messages(id TEXT PRIMARY KEY,conversation_id TEXT NOT NULL REFERENCES helper_conversations(id) ON DELETE CASCADE,task_id TEXT NOT NULL REFERENCES helper_tasks(id) ON DELETE CASCADE,role TEXT NOT NULL,text TEXT NOT NULL,artifacts TEXT NOT NULL,created_at TEXT NOT NULL,UNIQUE(task_id,role));
     CREATE TABLE helper_events(seq INTEGER PRIMARY KEY AUTOINCREMENT,conversation_id TEXT NOT NULL REFERENCES helper_conversations(id) ON DELETE CASCADE,task_id TEXT REFERENCES helper_tasks(id) ON DELETE CASCADE,kind TEXT NOT NULL,data TEXT NOT NULL);
@@ -382,6 +390,9 @@ export class HelperWorkspace {
       generation: row.generation,
       error: row.error,
       usage: JSON.parse(row.usage),
+      createdAt: row.created_at,
+      startedAt: row.started_at ?? null,
+      updatedAt: row.updated_at,
       snapshot: JSON.parse(row.snapshot),
     };
   }
@@ -464,11 +475,12 @@ export class HelperWorkspace {
       )
       .get(task.conversationId);
     if (next?.id !== id) return false;
+    const claimed = now();
     return !!this.store.db
       .prepare(
-        "UPDATE helper_tasks SET status='running',owner=?,generation=generation+1,updated_at=? WHERE id=? AND status='queued'"
+        "UPDATE helper_tasks SET status='running',owner=?,generation=generation+1,started_at=?,updated_at=? WHERE id=? AND status='queued'"
       )
-      .run(owner, now(), id).changes;
+      .run(owner, claimed, claimed, id).changes;
   }
   active(id: string, owner: string, generation: number) {
     return !!this.store.db

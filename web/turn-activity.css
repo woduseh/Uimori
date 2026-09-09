@@ -51,6 +51,7 @@
 .turn-activity > summary small {
   font-size: 12px;
   white-space: nowrap;
+  font-variant-numeric: tabular-nums;
 }
 .turn-activity-body {
   margin: 4px 0 14px;

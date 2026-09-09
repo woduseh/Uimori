@@ -10,6 +10,10 @@ import { api, ApiError } from './api.js';
 import { RetryFailure } from './RetryFailure.js';
 import { RequestMessage } from './RequestMessage.js';
 import { ActionMenu } from './ActionMenu.js';
+import { ActivityBar } from './ActivityBar.js';
+import { Dialog } from './Dialog.js';
+import { elapsedLabel } from './ActivityStatus.js';
+import { TurnStatus, type StatusTone } from './TurnStatus.js';
 import { ChatComposer, ComposerInput } from './ChatComposer.js';
 import { IconButton } from './IconButton.js';
 import { StreamingResponse } from './StreamingResponse.js';
@@ -32,6 +36,8 @@ type Props = {
   selection?: HelperSelection & { key: string; scope?: HelperScope };
   onClose: () => void;
   onModelSettings: () => void;
+  /** Current global helper model, worded like the reader's main-model chip. */
+  modelDescription: string;
 };
 type Outbox = {
   retryOf?: string;
@@ -43,6 +49,18 @@ type Outbox = {
   selection?: HelperSelection;
 };
 const active = (task: HelperTaskView) => task.status === 'queued' || task.status === 'running';
+// The reader treats an explicit cancellation as a settled turn; the helper reads the same way.
+const attention = (task: HelperTaskView) => ['failed', 'interrupted'].includes(task.status);
+const tone = (task: HelperTaskView): StatusTone =>
+  attention(task) ? 'issue' : active(task) ? 'running' : 'done';
+/** Queue wait for a task that has not started; otherwise the measured execution time. */
+function taskElapsed(task: HelperTaskView, now: number) {
+  if (task.status === 'queued') return elapsedLabel(task.createdAt, now);
+  if (!task.startedAt) return '';
+  const measured = elapsedLabel(task.startedAt, active(task) ? now : Date.parse(task.updatedAt));
+  // A finished task that took under a second has no meaningful duration to show.
+  return !active(task) && measured === '0초' ? '' : measured;
+}
 const statusLabel: Record<string, string> = {
   queued: '요청을 접수했어요 · 앞선 작업을 기다려요',
   running: '처리 중이에요',
@@ -126,7 +144,12 @@ export function HelperPanel(props: Props) {
   const tasks = data.current?.tasks ?? [];
   const taskMap = new Map(tasks.map((task) => [task.id, task]));
   const running = tasks.find((task) => task.status === 'running');
-  const queued = tasks.filter((task) => task.status === 'queued');
+  // A stored answer owns the text; the live buffer must not repeat it under the request.
+  const answered = new Set(
+    (data.current?.messages ?? [])
+      .filter((message) => message.role === 'assistant')
+      .map((message) => message.taskId)
+  );
   const [works, setWorks] = useState<(HelperConversation & { title?: string })[]>([]);
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [outboxes, setOutboxes] = useState<Record<string, Outbox | null>>({});
@@ -135,8 +158,9 @@ export function HelperPanel(props: Props) {
   const [busyScopes, setBusyScopes] = useState<Record<string, boolean>>({});
   const [editor, setEditor] = useState<ActiveEditorContext | null>(null);
   const [settings, setSettings] = useState(false);
-  const [showHistory, setShowHistory] = useState(false);
-  const [detailTask, setDetailTask] = useState<string | null>(null);
+  const [taskHistory, setTaskHistory] = useState<{ taskId?: string } | null>(null);
+  const [now, setNow] = useState(Date.now);
+  const [hiddenActivity, setHiddenActivity] = useState<string[]>([]);
   const [personas, setPersonas] = useState<
     Record<string, { text: string; revision: number; limits: HelperConversation['limits'] }>
   >({});
@@ -166,6 +190,13 @@ export function HelperPanel(props: Props) {
     (conversation
       ? { text: conversation.persona, revision: conversation.revision, limits: conversation.limits }
       : { text: '', revision: 0, limits: { totalCalls: 24, helperCalls: 12, artifacts: 1 } });
+  const recorded = taskHistory?.taskId
+    ? tasks.filter((task) => task.id === taskHistory.taskId)
+    : tasks;
+  // Hiding a progress row never changes or cancels the server task behind it.
+  const pending = tasks.filter(active);
+  const shownPending = pending.filter((task) => !hiddenActivity.includes(task.id));
+  const summarized = shownPending.find((task) => task.status === 'running') ?? shownPending[0];
   const setError = (message: string) => setErrors((old) => ({ ...old, [scopeKey]: message }));
   const editDraft = useCallback(
     (text: string) => {
@@ -211,6 +242,13 @@ export function HelperPanel(props: Props) {
     addEventListener(editorContextChanged, update);
     return () => removeEventListener(editorContextChanged, update);
   }, []);
+  const ticking = tasks.some(active);
+  useEffect(() => {
+    if (!ticking) return;
+    // Same cadence as the reader's status row so both counters read the same second.
+    const timer = setInterval(() => setNow(Date.now()), 250);
+    return () => clearInterval(timer);
+  }, [ticking]);
   // biome-ignore lint/correctness/useExhaustiveDependencies: A newly opened server conversation must appear in the saved-work selector.
   useEffect(() => {
     if (!props.open || scope.kind !== 'library') return;
@@ -408,26 +446,49 @@ export function HelperPanel(props: Props) {
   }
   const taskStatus = (task: HelperTaskView) => (
     <div className="helper-task" data-task-id={task.id}>
-      {active(task) && <p role="status">{statusLabel[task.status]}</p>}
-      {task.status !== 'queued' && (
-        <StreamingResponse taskKind="helper" taskId={task.id} taskStatus={task.status} />
+      <TurnStatus
+        tone={tone(task)}
+        text={statusLabel[task.status] ?? task.status}
+        elapsed={taskElapsed(task, now)}
+        storageKey={`helper-task-activity:${task.conversationId}:${task.id}`}
+        dataProps={{ 'data-testid': 'helper-task-activity', 'data-task-id': task.id }}
+      >
+        <p>
+          모델 호출 {task.usage.modelCalls}회 · 입력 {task.usage.inputTokens ?? '미확인'} / 출력{' '}
+          {task.usage.outputTokens ?? '미확인'} 토큰
+        </p>
+        {task.error && <p className="error">{task.error}</p>}
+        {active(task) && (
+          <div className="form-actions">
+            <button type="button" className="secondary" onClick={() => void cancel(task)}>
+              {task.status === 'queued' ? '이 대기 요청 취소' : '진행 중인 도우미 작업 취소'}
+            </button>
+          </div>
+        )}
+      </TurnStatus>
+      {task.status !== 'queued' && !answered.has(task.id) && (
+        <div className="run-outcome">
+          {task.status === 'running' && (
+            <div className="turn-skeleton" aria-hidden="true">
+              <span />
+              <span />
+              <span />
+            </div>
+          )}
+          <StreamingResponse taskKind="helper" taskId={task.id} taskStatus={task.status} />
+        </div>
       )}
-      {task.status === 'queued' ? (
-        <button type="button" className="secondary" onClick={() => void cancel(task)}>
-          이 대기 요청 취소
-        </button>
-      ) : !active(task) && task.status !== 'completed' ? (
+      {!active(task) && task.status !== 'completed' && (
         <RetryFailure
           status={task.status}
           error={task.error}
           disabled={busy || Boolean(outbox)}
           onRetry={() => void retry(task)}
           onSettings={props.onModelSettings}
-          onDetails={() => setDetailTask(detailTask === task.id ? null : task.id)}
-          onHistory={() => setShowHistory(true)}
+          onDetails={() => setTaskHistory({ taskId: task.id })}
+          onHistory={() => setTaskHistory({})}
         />
-      ) : null}
-      {detailTask === task.id && task.error && <p role="note">{task.error}</p>}
+      )}
     </div>
   );
   return (
@@ -481,6 +542,17 @@ export function HelperPanel(props: Props) {
           <X size={20} />
         </button>
       </header>
+      <div className="helper-model">
+        <button
+          type="button"
+          className="model-chip secondary"
+          aria-label={`현재 도우미 모델 · ${props.modelDescription}`}
+          title="모든 채팅의 도우미 요청에 적용되는 전역 모델 설정"
+          onClick={props.onModelSettings}
+        >
+          <span>{props.modelDescription}</span>
+        </button>
+      </div>
       {scope.kind === 'library' && (
         <div className="helper-work-selector">
           <label>
@@ -732,37 +804,55 @@ export function HelperPanel(props: Props) {
                 taskStatus(taskMap.get(message.taskId)!)}
             </article>
           ))}
-          {showHistory && tasks.length > 0 && (
-            <section className="helper-task-history" aria-label="도우미 작업 기록">
-              <h3>작업 기록 · {tasks.length}개</h3>
-              <button type="button" onClick={() => setShowHistory(false)}>
-                작업 기록 닫기
-              </button>
-              <ol>
-                {tasks.map((task) => (
-                  <li key={task.id}>
-                    <strong>{task.request.slice(0, 140)}</strong>
-                    <small>
-                      {statusLabel[task.status]} · 호출 {task.usage.modelCalls}회
-                    </small>
-                    {task.error && <small>{task.error}</small>}
-                  </li>
-                ))}
-              </ol>
-              {data.current?.hasOlderTasks && (
-                <button
-                  type="button"
-                  className="secondary"
-                  disabled={data.loadingEarlier}
-                  onClick={() => void data.earlier('tasks')}
-                >
-                  이전 작업 불러오기
-                </button>
-              )}
-            </section>
-          )}
         </div>
       </div>
+      <Dialog
+        open={!!taskHistory}
+        title="도우미 작업 기록"
+        className="helper-task-history"
+        scopeKey={taskHistory?.taskId ?? 'all'}
+        onClose={() => setTaskHistory(null)}
+      >
+        <div className="activity-notification-toolbar">
+          <p>대화에는 최신 시도를 표시해요. 이전 시도와 호출 수는 여기에 남아요.</p>
+          {taskHistory?.taskId && (
+            <button type="button" className="secondary" onClick={() => setTaskHistory({})}>
+              전체 작업 보기
+            </button>
+          )}
+        </div>
+        <ul className="activity-notification-items">
+          {recorded.map((task) => (
+            <li key={task.id} data-testid="helper-task-record" data-task-id={task.id}>
+              <div className="activity-notification-heading">
+                <div>
+                  <strong>{statusLabel[task.status] ?? task.status}</strong>
+                  <small>
+                    <time dateTime={task.createdAt}>
+                      {new Date(task.createdAt).toLocaleString()}
+                    </time>{' '}
+                    · 호출 {task.usage.modelCalls}회
+                    {taskElapsed(task, now) && ` · ${taskElapsed(task, now)}`}
+                  </small>
+                </div>
+              </div>
+              <p className="task-request">{task.request}</p>
+              {task.error && <p className="error">{task.error}</p>}
+            </li>
+          ))}
+        </ul>
+        {!recorded.length && <p role="status">확인할 작업이 없어요.</p>}
+        {!taskHistory?.taskId && data.current?.hasOlderTasks && (
+          <button
+            type="button"
+            className="secondary"
+            disabled={data.loadingEarlier}
+            onClick={() => void data.earlier('tasks')}
+          >
+            이전 작업 더 보기
+          </button>
+        )}
+      </Dialog>
       <footer className="helper-composer">
         {editor && (
           <div className="helper-editor">
@@ -803,10 +893,35 @@ export function HelperPanel(props: Props) {
             </button>
           </div>
         )}
-        {queued.length > 0 && (
-          <p className="helper-queue" role="status">
-            대기 중인 요청 {queued.length}개 · 입력은 계속할 수 있어요.
-          </p>
+        {pending.length > 0 && (
+          <ActivityBar
+            tone="running"
+            issue={false}
+            label={
+              summarized
+                ? (statusLabel[summarized.status] ?? summarized.status)
+                : `진행 중인 요청 ${pending.length}개`
+            }
+            elapsed={summarized ? taskElapsed(summarized, now) : ''}
+            extra={summarized && pending.length > 1 ? pending.length - 1 : 0}
+            expanded={!!summarized}
+            collapsed={!summarized}
+            toggleLabel={summarized ? '작업 상태 숨기기' : '작업 상태 펼치기'}
+            toggleTitle={
+              summarized
+                ? '상태 표시만 숨겨요. 작업은 계속 진행되고 입력도 계속할 수 있어요.'
+                : '작업 상태 펼치기'
+            }
+            onToggle={() =>
+              setHiddenActivity((old) =>
+                summarized
+                  ? [...new Set([...old, ...pending.map((task) => task.id)])]
+                  : old.filter((id) => !pending.some((task) => task.id === id))
+              )
+            }
+            onDetails={() => setTaskHistory({})}
+            testId="helper-activity-status"
+          />
         )}
         {error && (
           <div role="alert">
@@ -845,7 +960,7 @@ export function HelperPanel(props: Props) {
           />
           <div className="quick-controls">
             <ActionMenu label="도우미 대화 더보기" placement="top" viewport>
-              <button type="button" onClick={() => setShowHistory(true)}>
+              <button type="button" onClick={() => setTaskHistory({})}>
                 작업 기록
               </button>
             </ActionMenu>

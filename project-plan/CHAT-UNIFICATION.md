@@ -46,3 +46,45 @@
 - 기존 작업트리 검증 로그·화면·실패 기록을 메인의 같은 output 경로에 복사하고 주요 파일 해시가 같은지 확인했다. 전체 redesign의 과거 timeout 기록은 그대로 보존한다.
 - 작업트리 파일과 Git 등록, `codex/chat-unification` 임시 브랜치를 제거했다. `git worktree list`에는 main만 남았다. Windows 프로세스 잠금 때문에 내용이 없는 `C:\Users\wodus\.codex\worktrees\da27\uimori` 폴더 자체는 남았다.
 - 원격 push와 배포는 하지 않았다.
+
+## 진행 표시·작업 기록 통일 (2026-09-10)
+
+사용자 요청으로 앞선 작업에서 남은 차이를 정리했다. 입력창·요청 편집·실패 표시에 이어 **진행 표시와 작업 기록**을 공유한다.
+
+### 확정한 사용자 경험
+
+- 진행·완료·실패·확인 필요는 메인과 도우미가 같은 도상 네 개와 같은 문장 위치를 쓴다. 도상 어휘는 `web/ui-icons.ts`의 `RunningIcon`·`DoneIcon`·`IssueIcon`·`UncertainIcon`이다.
+- 모든 턴은 상태 행을 가진다. 실패한 턴도 상태 행을 유지하고, 실패 카드는 그 아래에서 다시 시도·오류 상세·작업 기록을 제공한다.
+- 요청 처리 중에는 회전 도상과 경과 시간을 상태 행과 입력창 위 상태줄에 함께 보여준다. 두 표시는 같은 갱신 간격을 사용하므로 서로 다른 초를 보여주지 않는다.
+- 작업 기록은 양쪽 모두 대화 흐름 밖의 모달이다. 항목마다 상태·시각·모델 호출 수·소요 시간·오류를 보여주고 이전 작업을 페이지로 더 불러온다.
+- 저장된 답변이 있으면 스트림 버퍼를 함께 표시하지 않는다. 실패·부분 종료에서 같은 본문이 두 번 보이지 않는다.
+- 도우미도 현재 전역 도우미 모델을 패널에서 확인하고 눌러서 모델 설정으로 이동한다.
+- 기능에 필요한 차이는 유지한다. 메인의 원고 렌더링·장면 번호·번역 보기·삽화·포크와 도우미의 권한 대상·가정 장면 카드·말투 설정은 그대로다.
+
+### 헤더와 재번역
+
+- 집중 읽기 시작은 채팅 메뉴로 옮기고, 모드 중일 때만 헤더에 종료 버튼을 둔다. 모드 해제는 한 번의 조작으로 유지한다.
+- 좁은 화면에서는 본문 모델 칩을 헤더에서 입력창 위로 옮긴다. 375px에서 채팅 제목이 잘리지 않고 모델은 보내기 버튼 옆에서 확인한다.
+- `현재 설정으로 새 번역`의 브라우저 `confirm`을 없앴다. 메뉴 항목 이름이 범위를 말하고, 기존 번역은 새 번역이 끝날 때까지 유지되며, 진행 중 번역은 해당 턴의 작업 현황에서 취소한다. 형제 동작인 `현재 설정으로 다시 요청`과 같은 절차가 된다.
+
+### 구현 경계
+
+`web/TurnStatus.tsx`가 상태 행과 접히는 진단을, `web/ActivityBar.tsx`가 입력창 위 상태줄을 담당한다. `TurnActivity`와 `ActivityStatus`, `HelperPanel`이 이 둘을 공유한다. 세션에 저장하는 펼침 상태와 숨김 상태는 표시만 바꾸며 서버 작업을 취소하지 않는다.
+
+도우미 작업의 실행 시작 시각은 `helper_tasks.started_at`에 저장한다. 이 열은 v15 DB에 없으면 추가하며 스키마 버전은 유지한다(`initHelperTaskTiming`). 대기 중 작업은 접수 시각부터의 대기 시간을, 실행·종료 작업은 시작 시각부터의 실행 시간을 보여준다.
+
+### 검증
+
+- `npm run quality`: PASS. 단위·통합은 Node 24에서 1,716 PASS / 1 SKIP(기본 비활성 Codex preflight). 로컬 Node 26에서는 `tests/harness.test.ts`가 BLOCKED, `tests/server.test.ts`의 F03이 SSE 첫 프레임 분할로 실패하며 둘 다 Node 24에서 통과한다.
+- `npm run verify:chat-unification`: 14/14 PASS.
+- `npm run verify:turn-activity`: 4/4 PASS. 변경 전 트리에서는 TURNUI03·TURNUI04가 실패했고 이번 변경으로 통과한다.
+- `npm run verify:loading`: 8/8 PASS. `npm run verify:global-models`: 2/2 PASS. `npm run verify:deletion`: 19/19 PASS. `npm run verify:evaluation`: 2/2 PASS. `npm run verify:provider-management`: 15/15 PASS.
+- 실기기 검증과 실제 공급자 호출은 하지 않았다. 화면 확인은 합성 fixture 모델과 1440·390px 로컬 브라우저다.
+
+### 남은 선행 실패
+
+아래는 변경 전 `HEAD` 트리에서 같은 명령으로 재현했고 이번 범위에서 고치지 않았다.
+
+- `verify:activity`의 ACTUI08: 재시도한 작업의 이전 세대 알림이 새 세대와 함께 남아 `data-activity-id`가 두 개가 된다. 알림 조정 로직의 문제다.
+- `verify:ui`의 UI07·UI12·UI03·UI18: 테스트가 기대하는 `봇의 채팅 목록` 탐색 이름이 현재 쓰는 `BotTreeNavigation`에 없다. 앞선 절에 기록한 선택자 불일치가 그대로 남아 있다.
+- `verify:turn-activity`의 TURNUI03은 `1ae82fd` 이후 실패 턴의 진단·버튼 이름이 바뀌어 정지해 있었다. 상태 행 복원과 버튼 이름 갱신으로 이번에 되살렸다.
