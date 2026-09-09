@@ -35,3 +35,14 @@
 - 최초 sandbox 빌드와 임시 검증 폴더 rename의 EPERM은 실패 로그를 보존하고 승인된 새 실행으로 재검증했다. 차단된 실행은 PASS에 포함하지 않았다.
 
 실제 모델·실기기 검증, 다른 스레드 변경과 병합·커밋·배포는 수행하지 않았다. 다음 통합 시 생성 시점부터 포함된 탐색 변경과 이번 `web/main.tsx`의 입력창·대화 목록 변경을 구분해 병합하고 전체 탐색 회귀를 갱신해야 한다.
+
+## 메인 병합 (2026-09-10)
+
+사용자 요청으로 `a350748`의 탐색 UI와 충돌 없이 통합하고 main을 `024f9f8`로 fast-forward했다. 작업 구현 커밋은 `1ae82fd`다. 아래 검증은 병합된 메인 checkout에서 다시 실행했다.
+
+- `quality:full`: PASS, 1,710 PASS / Codex preflight opt-in 1 SKIP. `output/chat-unification/merge-quality-full.log`.
+- `verify:chat-unification`: 14/14 PASS. `output/playwright/chat-unification-2026-09-09T16-31-47-246Z-3833cdb9/summary.json`.
+- `verify:navigation`: 24/24 PASS. `output/playwright/navigation-2026-09-09T16-31-45-590Z-04da68ef/summary.json`.
+- 기존 작업트리 검증 로그·화면·실패 기록을 메인의 같은 output 경로에 복사하고 주요 파일 해시가 같은지 확인했다. 전체 redesign의 과거 timeout 기록은 그대로 보존한다.
+- 작업트리 파일과 Git 등록, `codex/chat-unification` 임시 브랜치를 제거했다. `git worktree list`에는 main만 남았다. Windows 프로세스 잠금 때문에 내용이 없는 `C:\Users\wodus\.codex\worktrees\da27\uimori` 폴더 자체는 남았다.
+- 원격 push와 배포는 하지 않았다.
