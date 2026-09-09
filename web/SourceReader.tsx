@@ -9,6 +9,7 @@ import { Fragment, useLayoutEffect, useRef, useState, type ReactNode } from 'rea
 import type { Asset } from '../core/product.js';
 import type { ImageTarget, Job, ReaderRun, Source } from '../core/types.js';
 import { ContextSummaryStatus } from './ContextSummaryStatus.js';
+import { formatUsd } from './pricing-display.js';
 import { api, labels } from './api.js';
 import { auxiliaryErrorDiagnostic } from './auxiliary-error.js';
 import { ProviderRejectionNotice } from './provider-rejection.js';
@@ -41,6 +42,7 @@ type ReaderProps = {
   onEditingChange?: (sourceId: string, editing: boolean) => void;
   request?: string;
   contextSummary?: ReaderRun['contextSummary'];
+  estimatedCost?: ReaderRun['estimatedCost'];
   packageStart?: { mode: 'authored' | 'generate'; title: string };
   /** Wraps the scene header in the per-response activity panel; falsy keeps a plain header. */
   activity?: (slots: SceneHeaderSlots) => ReactNode;
@@ -121,6 +123,7 @@ function SourceReaderContent({
   onEditingChange,
   request,
   contextSummary,
+  estimatedCost,
   packageStart,
   activity,
   sourceSegments,
@@ -717,6 +720,24 @@ function SourceReaderContent({
           )}
         </details>
       </div>
+      {estimatedCost && estimatedCost.attemptCount > 0 && (
+        <details className="source-estimated-cost">
+          <summary>
+            본문 추정 비용{' '}
+            {estimatedCost.usd !== null && estimatedCost.unknownCount === 0
+              ? formatUsd(estimatedCost.usd)
+              : `· 확인분 부분합 ${estimatedCost.subtotalUsd === 0 && estimatedCost.unknownCount === estimatedCost.attemptCount ? '미확인' : formatUsd(estimatedCost.subtotalUsd)} · 미확인 ${estimatedCost.unknownCount}회 포함`}
+          </summary>
+          <p>
+            호출 후 공급자가 보고한 토큰과 호출에 고정된 요금으로 계산해요. 참고용 추정 금액이며
+            실제 청구액과 다를 수 있어요.
+          </p>
+          <p>본문과 작문 보조 호출 기준 · 번역·제목 등 후속 작업은 작업 현황에서 확인해요.</p>
+          {estimatedCost.unknownCount > 0 && (
+            <p>부분합은 확인된 금액만 더한 값이며 전체 추정 비용은 아직 미확인이에요.</p>
+          )}
+        </details>
+      )}
       {actionError && (
         <p className="error" role="alert">
           {actionError}

@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest';
-import { catalogEntryMetadata, geminiListEntry } from '../core/provider-catalog.js';
+import { catalogEntryMetadata, catalogPricing, geminiListEntry } from '../core/provider-catalog.js';
 import { modelHints, thinkingField, thinkingWireField } from '../core/model-hints.js';
 import type { Connection } from '../core/product.js';
 
@@ -7,6 +7,108 @@ const connection = (
   protocol: Connection['protocol'],
   catalog: Connection['catalog'] = []
 ): Pick<Connection, 'protocol' | 'catalog'> => ({ protocol, catalog });
+
+const gatewayPricing = () => ({
+  input: '0.000002',
+  output: '0.00001',
+  input_cache_read: '0.0000002',
+  input_cache_write: '0.0000025',
+  input_tiers: [
+    { cost: '0.000002', min: 0, max: 272000 },
+    { cost: '0.000004', min: 272000 },
+  ],
+  output_tiers: [
+    { cost: '0.00001', min: 0, max: 272000 },
+    { cost: '0.000015', min: 272000 },
+  ],
+  input_cache_read_tiers: [
+    { cost: '0.0000002', min: 0, max: 272000 },
+    { cost: '0.0000004', min: 272000 },
+  ],
+  input_cache_write_tiers: [
+    { cost: '0.0000025', min: 0, max: 272000 },
+    { cost: '0.000005', min: 272000 },
+  ],
+  service_tiers: {
+    flex: {
+      input: '0.000001',
+      output: '0.000005',
+      input_cache_read: '0.0000001',
+      long_context: {
+        threshold: 272000,
+        input: '0.000002',
+        output: '0.0000075',
+        input_cache_read: '0.0000002',
+      },
+    },
+  },
+  varies_by_provider: true,
+});
+
+test('Gateway public snake-case prices preserve cache buckets, context tiers and explicit Flex rates', () => {
+  expect(catalogPricing(gatewayPricing())).toEqual({
+    rates: { input: 2, output: 10, cacheRead: 0.2, cacheWrite: 2.5 },
+    longContext: {
+      aboveInputTokens: 272000,
+      rates: { input: 4, output: 15, cacheRead: 0.4, cacheWrite: 5 },
+    },
+    serviceTiers: {
+      flex: {
+        rates: { input: 1, output: 5, cacheRead: 0.1, cacheWrite: null },
+        longContext: {
+          aboveInputTokens: 272000,
+          rates: { input: 2, output: 7.5, cacheRead: 0.2, cacheWrite: null },
+        },
+      },
+    },
+  });
+  const metadata = catalogEntryMetadata('vercel-chat-v1', {
+    pricing: gatewayPricing(),
+    tags: ['tool-use'],
+    max_tokens: 128000,
+  });
+  expect(metadata.pricing).toEqual(catalogPricing(gatewayPricing()));
+  expect(metadata.capabilities.tools).toBe(true);
+  expect(
+    catalogPricing({
+      input: '0.000002',
+      output: '0.000006',
+      input_cache_read: '0.0000005',
+      input_tiers: [
+        { min: 0, max: 200000, cost: '0.000002' },
+        { min: 200001, cost: '0.000004' },
+      ],
+    })
+  ).toMatchObject({ longContext: { aboveInputTokens: 200000, rates: { input: 4 } } });
+});
+
+test('Gateway malformed or complex pricing is omitted without losing other model metadata', () => {
+  for (const bad of ['', ' ', '-1', '0x10', 'Infinity', 2, Infinity, NaN, {}, true]) {
+    expect(catalogPricing({ input: bad, output: '0.01' })).toBeUndefined();
+  }
+  expect(catalogPricing({ input: '0', output: '0' })?.rates).toEqual({
+    input: 0,
+    output: 0,
+    cacheRead: null,
+    cacheWrite: null,
+  });
+  const conflicting = gatewayPricing();
+  conflicting.output_tiers[0].max = 300000;
+  conflicting.output_tiers[1].min = 300000;
+  expect(catalogPricing(conflicting)).toBeUndefined();
+  const complex = gatewayPricing();
+  complex.input_tiers.push({ min: 500000, cost: '0.000006' });
+  expect(catalogPricing(complex)).toBeUndefined();
+  const metadata = catalogEntryMetadata('vercel-chat-v1', {
+    pricing: conflicting,
+    tags: ['tool-use'],
+    max_tokens: 128000,
+  });
+  expect(metadata).toEqual({
+    capabilities: { tools: true, structuredOutput: null },
+    limits: { maxOutputTokens: 128000 },
+  });
+});
 
 test('Anthropic list metadata yields supported effort levels, adaptive thinking and limits; zero means unknown', () => {
   expect(

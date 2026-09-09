@@ -30,6 +30,8 @@ import { ProviderEndpointStatus } from './ProviderEndpointStatus.js';
 import { DeleteButton } from './DeleteButton.js';
 import { ProviderReadiness } from './ProviderReadiness.js';
 import { ProviderModelTest, useProviderModelTests } from './ProviderModelTest.js';
+import { resolveModelPricing } from '../core/model-pricing.js';
+import { PricingSummary } from './ModelPricingEditor.js';
 import './ProviderManagement.css';
 
 const versionRef = (item: { id: string; revision: number }) => `${item.id}@${item.revision}`;
@@ -80,8 +82,6 @@ type Confirmation = {
 };
 const matches = (query: string, ...values: (string | undefined)[]) =>
   !query || values.some((value) => value?.toLocaleLowerCase().includes(query));
-const capability = (value: boolean | null | undefined) =>
-  value === true ? '사용자 확인 · 지원' : value === false ? '사용자 확인 · 미지원' : '미확인';
 
 export function ConnectionEditor({
   library,
@@ -937,16 +937,32 @@ export function ConnectionEditor({
                   onStart={modelTests.start}
                 />
                 <details className="provider-capabilities">
-                  <summary>기능·출처·가격 확인</summary>
-                  <p>모델별 공급자 기능: 미확인 · 가격: 미확인</p>
-                  <p>
-                    도구 호출: {capability(item.userOverrides?.tools)}
-                    <br />
-                    구조화 출력: {capability(item.userOverrides?.structuredOutput)}
+                  <summary>추정 비용 요금·출처</summary>
+                  {(() => {
+                    const connection = library.connections.find(
+                      (entry) => entry.id === item.connectionId
+                    );
+                    return (
+                      <PricingSummary
+                        snapshot={
+                          connection
+                            ? resolveModelPricing(
+                                {
+                                  ...item,
+                                  ...(connection.protocol === 'vertex-gemini-v1' && forcedVertexTier
+                                    ? { serviceTier: forcedVertexTier }
+                                    : {}),
+                                },
+                                connection
+                              )
+                            : undefined
+                        }
+                      />
+                    );
+                  })()}
+                  <p className="muted">
+                    단위: USD / 100만 토큰. 참고용 추정 금액이며 실제 청구액과 다를 수 있어요.
                   </p>
-                  {item.userOverrides?.note && (
-                    <p className="provider-override-note">사용자 메모: {item.userOverrides.note}</p>
-                  )}
                   <p>
                     등록 출처:{' '}
                     {item.source?.kind === 'catalog'
@@ -1504,14 +1520,7 @@ export function ConnectionEditor({
           />
         </fieldset>
         <div className="provider-actions full">
-          <button
-            disabled={
-              busy ||
-              !!confirmation ||
-              !chosen ||
-              (model.evaluationToolsEnabled && model.userOverrides?.tools === false)
-            }
-          >
+          <button disabled={busy || !!confirmation || !chosen}>
             {editingModel ? '모델 변경 저장' : '모델 프리셋 등록'}
           </button>
           <button

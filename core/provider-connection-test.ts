@@ -15,4 +15,5 @@ export type ProviderConnectionTest = {
   /** Present when the provider rejected the request; names the app options it pointed at. */
   rejection?: import('./provider-rejection.js').ProviderRejection;
   usage: { inputTokens: number | null; outputTokens: number | null; costUsd: number | null };
+  estimatedCost?: import('./pricing-types.js').CostEstimate;
 };

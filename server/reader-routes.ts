@@ -5,11 +5,15 @@ import type { Store } from './store.js';
 export function readerRoutes(app: FastifyInstance, store: Store) {
   app.get<{ Params: { id: string } }>('/api/chats/:id/attempts', async (request) => {
     store.chat(request.params.id);
-    return store.db
+    const rows = store.db
       .prepare(
-        `SELECT id,run_id AS runId,job_id AS jobId,story_job_id AS storyJobId,role,connection_id AS connectionId,model_id AS modelId,status,input_tokens AS inputTokens,output_tokens AS outputTokens,cost_usd AS costUsd,price_revision AS priceRevision,error FROM attempts WHERE chat_id=? ORDER BY rowid`
+        `SELECT id,run_id AS runId,job_id AS jobId,story_job_id AS storyJobId,role,connection_id AS connectionId,model_id AS modelId,status,input_tokens AS inputTokens,output_tokens AS outputTokens,cost_usd AS costUsd,price_revision AS priceRevision,error,json_extract(response,'$.estimatedCost') AS estimateJson FROM attempts WHERE chat_id=? ORDER BY rowid`
       )
       .all(request.params.id);
+    return rows.map(({ estimateJson, ...row }) => ({
+      ...row,
+      ...(typeof estimateJson === 'string' ? { estimatedCost: JSON.parse(estimateJson) } : {}),
+    }));
   });
   app.get<{ Params: { id: string } }>('/api/attempts/:id', async (request) => {
     const row = store.db
@@ -23,6 +27,12 @@ export function readerRoutes(app: FastifyInstance, store: Store) {
       request: row.request == null ? null : JSON.parse(String(row.request)),
       response: row.response == null ? null : JSON.parse(String(row.response)),
       rawUsage: row.rawUsage == null ? null : JSON.parse(String(row.rawUsage)),
+      estimatedCost:
+        row.response == null ? undefined : JSON.parse(String(row.response)).estimatedCost,
+      pricingSnapshot:
+        row.request == null ? undefined : JSON.parse(String(row.request)).pricingSnapshot,
+      pricingStartedAt:
+        row.request == null ? undefined : JSON.parse(String(row.request)).pricingStartedAt,
     };
   });
   app.get<{ Params: { id: string } }>('/api/chats/:id/jobs', async (request) => {

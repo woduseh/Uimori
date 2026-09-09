@@ -20,7 +20,7 @@ await runBrowserVerification({
   ],
   requiredScreenshots: [
     'provider-management-mobile-model.png',
-    'provider-management-mobile-capabilities.png',
+    'provider-management-mobile-pricing.png',
     'provider-management-desktop-conflict.png',
     'provider-management-current-model.png',
     'endpoint-guidance-390.png',

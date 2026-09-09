@@ -202,6 +202,12 @@ export type ChatDetail = {
 
 /** Reader summaries never stand in for frozen execution inputs. */
 export type ReaderRun = Omit<Run, 'snapshot' | 'inputs' | 'toolEvents'> & {
+  estimatedCost?: {
+    usd: number | null;
+    subtotalUsd: number;
+    unknownCount: number;
+    attemptCount: number;
+  };
   snapshot: Pick<RunSnapshot, 'branchId' | 'candidateOf' | 'forkedFrom' | 'loreContextReset'>;
   contextSummary?: {
     status: 'pending' | 'ready' | 'failed';

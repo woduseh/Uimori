@@ -230,24 +230,17 @@ describe('Author-selected behavior tool surface', () => {
       error: 'BEHAVIOR_MODEL_ACTION_LIMIT',
       usage: { modelCalls: 0 },
     });
-    for (const kind of ['catalog', 'override'] as const) {
+    {
       const unsupported = snapshot(),
         target = unsupported.profile!.models.main!;
-      if (kind === 'catalog')
-        target.connection.catalog = [
-          {
-            id: target.modelId,
-            name: target.modelId,
-            capabilities: { tools: false },
-            priceRevision: null,
-          },
-        ];
-      else
-        target.userOverrides = {
-          tools: false,
-          structuredOutput: null,
-          note: 'Synthetic unsupported route',
-        };
+      target.connection.catalog = [
+        {
+          id: target.modelId,
+          name: target.modelId,
+          capabilities: { tools: false },
+          priceRevision: null,
+        },
+      ];
       expect(() => buildMainProviderRequest(unsupported)).toThrow(
         'BEHAVIOR_MODEL_TOOLS_UNSUPPORTED'
       );

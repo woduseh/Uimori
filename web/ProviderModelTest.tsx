@@ -161,13 +161,22 @@ export function ProviderModelTest({
             <dd>
               입력 {tokens(result.usage.inputTokens)} · 출력 {tokens(result.usage.outputTokens)}
             </dd>
-            <dt>비용</dt>
+            <dt>공급자 보고 비용</dt>
             <dd>
               {result.usage.costUsd === null
                 ? '미확인'
                 : `USD ${result.usage.costUsd.toLocaleString(undefined, { maximumFractionDigits: 6 })}`}
             </dd>
+            <dt>추정 비용</dt>
+            <dd>
+              {result.estimatedCost?.usd != null
+                ? `USD ${result.estimatedCost.usd.toLocaleString(undefined, { maximumFractionDigits: 6 })}`
+                : '미확인'}
+            </dd>
           </dl>
+          <small>
+            공급자가 보고한 사용량 기준의 참고용 추정 금액이며 실제 청구액과 다를 수 있어요.
+          </small>
           {result.text && <pre>{result.text}</pre>}
           {result.truncated && <small>긴 응답은 일부만 표시해요.</small>}
           {result.rejection && <ProviderRejectionNotice rejection={result.rejection} />}

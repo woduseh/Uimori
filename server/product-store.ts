@@ -1,4 +1,10 @@
 import { HttpError, fields, number, record, text } from './request-validation.js';
+import {
+  resolveModelPricing,
+  validateModelPricing,
+  validatePricingSnapshot,
+} from '../core/model-pricing.js';
+import { estimateCost } from '../core/pricing-estimate.js';
 import { translationPolicy } from '../core/translation-settings.js';
 import {
   defaultPromptWorkspace,
@@ -147,18 +153,16 @@ function catalogTimestamp(value: unknown): string | null {
     throw new HttpError(400, 'Invalid catalog timestamp');
   return value;
 }
-function userOverrides(value: unknown): NonNullable<ModelPreset['userOverrides']> {
-  const b = record(value);
-  fields(b, ['tools', 'structuredOutput', 'note']);
-  return {
-    tools: b.tools === null ? null : boolean(b.tools),
-    structuredOutput: b.structuredOutput === null ? null : boolean(b.structuredOutput),
-    note: text(b.note, 'override note', 2000, true),
-  };
+function modelPricing(value: unknown) {
+  try {
+    return validateModelPricing(value);
+  } catch {
+    throw new HttpError(400, 'Invalid model pricing');
+  }
 }
 function validateModelMetadata(value: Row) {
   if (value.enabled !== undefined) boolean(value.enabled);
-  if (value.userOverrides !== undefined) userOverrides(value.userOverrides);
+  if (value.pricing !== undefined) modelPricing(value.pricing);
   if (value.source !== undefined) {
     const source = record(value.source);
     fields(source, ['kind', 'catalogUpdatedAt']);
@@ -504,7 +508,7 @@ export class ProductStore {
       'temperature',
       ...modelOptionKeys,
       'enabled',
-      'userOverrides',
+      'pricing',
       'expectedRevision',
     ]);
     const expectedRevision = id ? number(b.expectedRevision, 'revision') : undefined;
@@ -531,7 +535,7 @@ export class ProductStore {
         ? { evaluationTools: validateEvaluationToolOptions(b.evaluationTools) }
         : {}),
       ...(b.enabled !== undefined ? { enabled: boolean(b.enabled) } : {}),
-      ...(b.userOverrides !== undefined ? { userOverrides: userOverrides(b.userOverrides) } : {}),
+      ...(b.pricing !== undefined ? { pricing: modelPricing(b.pricing) } : {}),
       source: {
         kind: connection.catalog.some((item) => item.id === modelId) ? 'catalog' : 'manual',
         catalogUpdatedAt: connection.catalogUpdatedAt ?? null,
@@ -557,7 +561,12 @@ export class ProductStore {
       )
         throw new HttpError(400, 'Connection protocol changed; review and save the model settings');
       validateModelGeneration(model, connection.protocol);
-      return structuredClone({ ...model, connection });
+      const pricingSnapshot = resolveModelPricing(model, connection);
+      return structuredClone({
+        ...model,
+        connection,
+        ...(pricingSnapshot ? { pricingSnapshot } : {}),
+      });
     } catch (error) {
       if (role && error instanceof HttpError)
         throw new HttpError(error.statusCode, `MODEL_UNAVAILABLE:${role}:${error.message}`);
@@ -861,8 +870,25 @@ export class ProductStore {
     return id;
   }
   finishAttempt(id: string, result: ProviderResult) {
+    const row = this.db.prepare('SELECT request FROM attempts WHERE id=?').get(id) as
+      | Row
+      | undefined;
+    const request = row ? parse(row.request) : null;
+    const estimatedCost = estimateCost(
+      request?.pricingSnapshot,
+      result.usage,
+      request?.pricingStartedAt ?? '',
+      typeof result.usage.raw === 'object' &&
+        result.usage.raw !== null &&
+        !Array.isArray(result.usage.raw)
+        ? typeof result.usage.raw.service_tier === 'string'
+          ? result.usage.raw.service_tier
+          : undefined
+        : undefined
+    );
     const safe = {
       ...structuredClone(result),
+      estimatedCost,
       opaqueState: result.opaqueState === null ? null : '[provider continuation withheld]',
     };
     this.db
@@ -911,6 +937,9 @@ export class ProductStore {
       inputTokens: r.input_tokens,
       outputTokens: r.output_tokens,
       costUsd: r.cost_usd,
+      estimatedCost: parse(r.response)?.estimatedCost,
+      pricingSnapshot: parse(r.request)?.pricingSnapshot,
+      pricingStartedAt: parse(r.request)?.pricingStartedAt,
       rawUsage: parse(r.raw_usage),
       priceRevision: r.price_revision,
       error: r.error,
@@ -1460,13 +1489,52 @@ function validateArchiveVersion(row: Row, providerSetting = false) {
       throw new HttpError(400, 'Invalid credential reference');
     archiveList(body.catalog, 5000).forEach((raw) => {
       const model = record(raw);
-      fields(model, ['id', 'name', 'capabilities', 'priceRevision', 'limits', 'options']);
+      fields(model, [
+        'id',
+        'name',
+        'capabilities',
+        'priceRevision',
+        'limits',
+        'options',
+        'pricing',
+      ]);
       text(model.id, 'catalog ID', 300);
       text(model.name, 'catalog name', 400);
       const capabilities = record(model.capabilities);
       if (Object.values(capabilities).some((v) => v !== null && typeof v !== 'boolean'))
         throw new HttpError(400, 'Invalid catalog capabilities');
       if (model.priceRevision !== null) text(model.priceRevision, 'price revision', 200);
+      if (model.pricing !== undefined) {
+        const pricing = record(model.pricing);
+        fields(pricing, ['rates', 'longContext', 'serviceTiers']);
+        const validateRateSet = (entry: Row) => {
+          fields(entry, ['rates', 'longContext']);
+          modelPricing({ mode: 'manual', rates: entry.rates });
+          if (entry.longContext !== undefined) {
+            const long = record(entry.longContext);
+            fields(long, ['aboveInputTokens', 'rates']);
+            number(long.aboveInputTokens, 'pricing threshold', 1, 100_000_000);
+            modelPricing({ mode: 'manual', rates: long.rates });
+          }
+        };
+        validateRateSet({
+          rates: pricing.rates,
+          ...(pricing.longContext ? { longContext: pricing.longContext } : {}),
+        });
+        if (pricing.serviceTiers !== undefined) {
+          const tiers = record(pricing.serviceTiers);
+          if (
+            Object.keys(tiers).length > 20 ||
+            Object.keys(tiers).some(
+              (tier) =>
+                !/^[a-z][a-z0-9_-]{0,39}$/.test(tier) ||
+                ['constructor', 'prototype', '__proto__'].includes(tier)
+            )
+          )
+            throw new HttpError(400, 'Invalid catalog pricing tiers');
+          for (const value of Object.values(tiers)) validateRateSet(record(value));
+        }
+      }
       if (model.limits !== undefined) {
         const limits = record(model.limits);
         fields(limits, ['maxOutputTokens', 'inputTokenLimit']);
@@ -1496,7 +1564,7 @@ function validateArchiveVersion(row: Row, providerSetting = false) {
       'temperature',
       ...modelOptionKeys,
       'enabled',
-      'userOverrides',
+      'pricing',
       'source',
       'capabilityProtocol',
     ]);
@@ -1514,7 +1582,7 @@ function validateArchiveVersion(row: Row, providerSetting = false) {
 /** Execution snapshots are self-contained evidence, independent of later setting edits. */
 export function validateModelSnapshot(value: unknown): ModelSnapshot {
   const snapshot = record(value),
-    { connection: rawConnection, ...model } = snapshot,
+    { connection: rawConnection, pricingSnapshot, ...model } = snapshot,
     connection = record(rawConnection);
   validateArchiveVersion(
     { kind: 'model', id: model.id, revision: model.revision, body: json(model) },
@@ -1534,6 +1602,14 @@ export function validateModelSnapshot(value: unknown): ModelSnapshot {
   if (model.capabilityProtocol !== undefined && model.capabilityProtocol !== connection.protocol)
     throw new HttpError(400, 'Model snapshot protocol mismatch');
   validateModelGeneration(model, connection.protocol);
+  if (pricingSnapshot !== undefined) {
+    validatePricingSnapshot(pricingSnapshot);
+    if (
+      pricingSnapshot.modelId !== model.modelId ||
+      pricingSnapshot.protocol !== connection.protocol
+    )
+      throw new HttpError(400, 'Pricing snapshot model mismatch');
+  }
   return structuredClone(snapshot) as ModelSnapshot;
 }
 function validateArchiveAsset(row: Row) {
@@ -2042,6 +2118,28 @@ function validateArchiveGraph(product: ProductStore) {
     )
       throw new HttpError(400, 'Attempt role mismatch');
     const request = record(parse(attempt.request));
+    if (request.pricingSnapshot !== undefined) {
+      const pricing = validatePricingSnapshot(request.pricingSnapshot);
+      if (pricing.protocol !== request.protocol || pricing.modelId !== attempt.model_id)
+        throw new HttpError(400, 'Attempt pricing identity mismatch');
+      catalogTimestamp(request.pricingStartedAt);
+      if (typeof request.pricingStartedAt !== 'string')
+        throw new HttpError(400, 'Attempt pricing timestamp missing');
+    }
+    const response = parse(attempt.response);
+    if (response?.estimatedCost !== undefined) {
+      const calculated = estimateCost(
+        request.pricingSnapshot,
+        {
+          inputTokens: attempt.input_tokens,
+          outputTokens: attempt.output_tokens,
+          raw: parse(attempt.raw_usage),
+        },
+        request.pricingStartedAt ?? ''
+      );
+      if (!isDeepStrictEqual(response.estimatedCost, calculated))
+        throw new HttpError(400, 'Attempt cost estimate mismatch');
+    }
     if (request.agentId !== undefined) {
       const snapshot =
         attempt.run_id === null

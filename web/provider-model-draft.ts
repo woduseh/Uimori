@@ -1,4 +1,6 @@
 import type { Connection, ModelPreset, VertexRequestTier } from '../core/product.js';
+import type { ModelPricing, TokenRates } from '../core/pricing-types.js';
+import { validateModelPricing } from '../core/model-pricing.js';
 import {
   generationFromModel,
   modelCapability,
@@ -9,6 +11,54 @@ import {
   validateEvaluationToolOptions,
   type EvaluationToolOptions,
 } from '../core/evaluation-tool-config.js';
+
+export type RateDraft = Record<keyof Required<TokenRates>, string>;
+export type PricingDraft = {
+  mode: 'official' | 'manual';
+  rates: RateDraft;
+  flexEnabled: boolean;
+  flexRates: RateDraft;
+};
+export const emptyRateDraft = (): RateDraft => ({
+  input: '',
+  cacheRead: '',
+  cacheWrite: '',
+  output: '',
+  cacheWrite1h: '',
+});
+function rateDraft(rates?: TokenRates): RateDraft {
+  const draft = emptyRateDraft();
+  for (const key of Object.keys(draft) as (keyof RateDraft)[])
+    draft[key] = rates?.[key] === undefined || rates[key] === null ? '' : String(rates[key]);
+  return draft;
+}
+export function pricingDraft(pricing?: ModelPricing): PricingDraft {
+  return {
+    mode: pricing?.mode ?? 'official',
+    rates: rateDraft(pricing?.mode === 'manual' ? pricing.rates : undefined),
+    flexEnabled: pricing?.mode === 'manual' && pricing.flexRates !== undefined,
+    flexRates: rateDraft(pricing?.mode === 'manual' ? pricing.flexRates : undefined),
+  };
+}
+export function pricingPayload(draft: PricingDraft): ModelPricing {
+  const rates = (value: RateDraft): TokenRates => {
+    const amount = (key: keyof RateDraft) => (value[key].trim() === '' ? null : Number(value[key]));
+    return {
+      input: amount('input'),
+      cacheRead: amount('cacheRead'),
+      cacheWrite: amount('cacheWrite'),
+      output: amount('output'),
+      ...(value.cacheWrite1h.trim() ? { cacheWrite1h: amount('cacheWrite1h') } : {}),
+    };
+  };
+  return draft.mode === 'official'
+    ? { mode: 'official' }
+    : {
+        mode: 'manual',
+        rates: rates(draft.rates),
+        ...(draft.flexEnabled ? { flexRates: rates(draft.flexRates) } : {}),
+      };
+}
 
 export type ModelDraft = {
   title: string;
@@ -34,7 +84,7 @@ export type ModelDraft = {
   enabled: boolean;
   evaluationToolsEnabled: boolean;
   evaluationTools: Omit<EvaluationToolOptions, 'maximumToolRounds'> & { maximumToolRounds: string };
-  userOverrides?: { tools: boolean | null; structuredOutput: boolean | null; note: string };
+  pricing: PricingDraft;
 };
 export const initialModel = (): ModelDraft => ({
   title: '',
@@ -63,6 +113,7 @@ export const initialModel = (): ModelDraft => ({
     ...defaultEvaluationToolOptions(),
     maximumToolRounds: String(defaultEvaluationToolOptions().maximumToolRounds),
   },
+  pricing: pricingDraft(),
 });
 export function modelDraft(value: ModelPreset): ModelDraft {
   return {
@@ -95,12 +146,12 @@ export function modelDraft(value: ModelPreset): ModelDraft {
         (value.evaluationTools ?? defaultEvaluationToolOptions()).maximumToolRounds
       ),
     },
-    ...(value.userOverrides ? { userOverrides: structuredClone(value.userOverrides) } : {}),
+    pricing: pricingDraft(value.pricing),
   };
 }
 export function selectModelConnection(draft: ModelDraft, connection: Connection): ModelDraft {
   // Switching a connection does not silently rewrite the user's generation choices.
-  return { ...draft, connectionRef: connection.id, modelId: '', userOverrides: undefined };
+  return { ...draft, connectionRef: connection.id, modelId: '' };
 }
 export function modelPayload(draft: ModelDraft, connection: Connection) {
   return {
@@ -137,7 +188,7 @@ export function modelPayload(draft: ModelDraft, connection: Connection) {
           },
         }
       : {}),
-    ...(draft.userOverrides ? { userOverrides: structuredClone(draft.userOverrides) } : {}),
+    pricing: pricingPayload(draft.pricing),
   };
 }
 export function forcedServiceTierError(
@@ -158,6 +209,7 @@ export function modelDraftError(
   forcedVertexTier?: VertexRequestTier
 ): string {
   try {
+    validateModelPricing(pricingPayload(draft.pricing));
     if (!draft.maxOutputTokens.trim()) return '최대 출력 토큰을 입력해 주세요.';
     if (draft.evaluationToolsEnabled) {
       if (!draft.evaluationTools.maximumToolRounds.trim())

@@ -153,12 +153,12 @@ test('model metadata is server sourced and disabling blocks new selection while 
     c.id,
     c.revision
   ) as Connection;
-  const overrides = {
-    tools: false,
-    structuredOutput: null,
-    note: 'User confirmed; no provider claim',
+  const pricing = {
+    mode: 'manual',
+    rates: { input: 2, output: 8, cacheRead: 0.5, cacheWrite: 3 },
   };
-  const m = p.model(modelBody(cached, { enabled: true, userOverrides: overrides })) as ModelPreset;
+  const m = p.model(modelBody(cached, { enabled: true, pricing })) as ModelPreset;
+  expect(m.pricing).toEqual(pricing);
   expect(m.source).toEqual({ kind: 'catalog', catalogUpdatedAt: stamp });
   const profile = p.profile(chat.id);
   const { chatId: _chatId, revision: _revision, ...profileBody } = profile;
@@ -189,21 +189,30 @@ test('model metadata is server sourced and disabling blocks new selection while 
   ).run;
   const frozen = structuredClone(run.snapshot);
   p.model(
-    modelBody(cached, { enabled: false, expectedRevision: m.revision, userOverrides: overrides }),
+    modelBody(cached, {
+      enabled: false,
+      expectedRevision: m.revision,
+      pricing: { ...pricing, rates: { ...pricing.rates, input: 4 } },
+    }),
     m.id
   );
   expect(() => p.snapshot(chat.id)).toThrow('Model disabled');
   expect(s.run(run.id).snapshot).toEqual(frozen);
   expect(s.run(run.id).snapshot.profile?.models.main).toMatchObject({ ...m, connection: cached });
+  expect(s.run(run.id).snapshot.profile?.models.main?.pricingSnapshot).toMatchObject({
+    source: 'manual',
+    rates: pricing.rates,
+  });
+  expect(p.get<ModelPreset>('model', m.id).pricing).toMatchObject({ rates: { input: 4 } });
   expect(p.profile(chat.id).routes.main).toEqual({ id: m.id });
   expect(p.authorize(cached)).toEqual(cached);
-  for (const userOverrides of [
+  for (const pricing of [
     null,
-    { tools: true, structuredOutput: null },
-    { tools: 1, structuredOutput: null, note: '' },
-    { tools: null, structuredOutput: null, note: '', grant: true },
+    { mode: 'manual' },
+    { mode: 'manual', rates: { input: -1, output: 8, cacheRead: 0.5, cacheWrite: 3 } },
+    { mode: 'manual', rates: { input: 2, output: 8, cacheRead: 0.5, cacheWrite: 3 }, grant: true },
   ])
-    expect(() => p.model(modelBody(cached, { userOverrides }))).toThrow();
+    expect(() => p.model(modelBody(cached, { pricing }))).toThrow();
   expect(() => p.model(modelBody(cached, { source: m.source }))).toThrow('Unknown request field');
   expect(() => p.model(modelBody(cached, { enabled: null }))).toThrow('Invalid boolean');
 });
@@ -217,7 +226,7 @@ test('archive roundtrip retains management metadata, strips authority, and rejec
   const m = p.model(
     modelBody(c, {
       enabled: false,
-      userOverrides: { tools: null, structuredOutput: false, note: 'manual verification' },
+      pricing: { mode: 'manual', rates: { input: 2, output: 8, cacheRead: 0.5, cacheWrite: 3 } },
     })
   ) as ModelPreset;
   const archive = p.export();
@@ -238,7 +247,7 @@ test('archive roundtrip retains management metadata, strips authority, and rejec
       body.source.kind = 'forged-catalog';
     },
     (body: any) => {
-      body.userOverrides.tools = 'yes';
+      body.pricing.rates.input = 'free';
     },
     (body: any) => {
       body.source.catalogUpdatedAt = '2026-02-30T00:00:00.000Z';
@@ -258,7 +267,7 @@ test('archive roundtrip retains management metadata, strips authority, and rejec
     const body = JSON.parse(row.body);
     delete body.source;
     delete body.enabled;
-    delete body.userOverrides;
+    delete body.pricing;
     delete body.catalogUpdatedAt;
     if (row.kind === 'connection') body.enabled = true;
     row.body = JSON.stringify(body);

@@ -24,6 +24,10 @@
 
 ## 파일별 현재 case 또는 계약 그룹
 
+### `tests/model-pricing-browser.spec.ts`
+
+PRICEUI390·PRICEUI1440은 공식 요금·Flex 표시, 직접 입력의 무료 0/미확인 빈칸 구분, 저장·재조회·공식 복원과 잘못된 입력을 확인해요. PRICECOST01은 합성 비용 응답으로 공급자 보고 비용과 추정 금액의 분리, 캐시 항목·부분합·미확인 및 본문 안내를 390/1440px에서 확인해요. `npm run verify:pricing`으로 실행하며 실제 계산·저장·전송은 pricing 단위·통합 검사 소관이에요. 실제 청구액의 증거는 아니에요.
+
 ### `tests/activity-browser.spec.ts`
 
 ACTUI01 수락 이후 경과/접기/다음 작업/만료, ACTUI04 수락 이전 타이머, ACTUI02 보조 병렬 작업/연결 불확실, ACTUI03 실패 잔류/취소 만료/탐색, ACTUI05 오래된 실패 역전을 각각 유지해요. 응답별 TURNUI와 대상 상태가 달라요.

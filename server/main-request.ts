@@ -318,6 +318,7 @@ export function buildMainProviderRequest(
   const request: ProviderRequest = {
     role: 'main',
     modelId: target.modelId,
+    pricingSnapshot: target.pricingSnapshot,
     stable: {
       contract,
       tools: [

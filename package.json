@@ -31,6 +31,7 @@
     "verify:collaboration": "node scripts/verify-collaboration.mjs",
     "verify:evaluation": "node scripts/verify-evaluation.mjs",
     "verify:providers": "node scripts/verify-provider-management.mjs",
+    "verify:pricing": "node scripts/verify-model-pricing.mjs",
     "verify:global-models": "node scripts/verify-global-models.mjs",
     "verify:packages": "node scripts/verify-package-ui.mjs",
     "verify:loading": "node scripts/verify-loading.mjs",

@@ -145,17 +145,17 @@ test('PMUI01 mobile template registration selects the connection, reports catalo
       .screenshot({ path: info.outputPath('model-evaluation-switch.png') });
 
   await modelForm.getByLabel('최대 평가 도구 라운드').fill('2');
-  await modelForm.getByText('기능 확인과 사용자 판단', { exact: true }).click();
-  await modelForm.getByLabel('도구 호출 지원 판단').selectOption('yes');
-  await modelForm.getByLabel('구조화 출력 지원 판단').selectOption('no');
-  await modelForm.getByLabel('기능 판단 메모').fill('합성 사용자 판단 · 공급자 검증 결과 아님');
+  await modelForm.getByText('요금과 추정 비용', { exact: true }).click();
+  await modelForm.getByLabel('요금 기준', { exact: true }).selectOption('manual');
+  await modelForm.getByLabel('Standard 입력 요금', { exact: true }).fill('2');
+  await modelForm.getByLabel('Standard 출력 요금', { exact: true }).fill('8');
   for (const label of [
     '모델 프리셋 이름',
     '모델 연결',
     '모델 ID',
     '평가 문맥 제공',
-    '도구 호출 지원 판단',
-    '구조화 출력 지원 판단',
+    'Standard 입력 요금',
+    'Standard 출력 요금',
   ]) {
     await modelForm
       .getByRole('button', {
@@ -170,9 +170,9 @@ test('PMUI01 mobile template registration selects the connection, reports catalo
     expect(box!.x).toBeGreaterThanOrEqual(0);
     expect(box!.x + box!.width).toBeLessThanOrEqual(390);
   }
-  await modelForm.getByLabel('도구 호출 지원 판단').scrollIntoViewIfNeeded();
+  await modelForm.getByLabel('Standard 입력 요금').scrollIntoViewIfNeeded();
   if (visualReview)
-    await page.screenshot({ path: info.outputPath('provider-management-mobile-capabilities.png') });
+    await page.screenshot({ path: info.outputPath('provider-management-mobile-pricing.png') });
   await modelForm.getByRole('button', { name: '기본', exact: true }).click();
   await modelForm.getByLabel('모델 프리셋 이름').scrollIntoViewIfNeeded();
   if (visualReview)
@@ -188,11 +188,6 @@ test('PMUI01 mobile template registration selects the connection, reports catalo
     connectionId: connection.id,
     modelId: 'synthetic/manual-id',
     evaluationTools: { maximumToolRounds: 2 },
-    userOverrides: {
-      tools: true,
-      structuredOutput: false,
-      note: '합성 사용자 판단 · 공급자 검증 결과 아님',
-    },
     source: { kind: 'manual', catalogUpdatedAt: null },
   });
   await expect(page.getByRole('region', { name: '등록한 모델 사용 방법' })).toContainText(

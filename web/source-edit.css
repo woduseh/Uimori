@@ -6,3 +6,28 @@
   height: clamp(140px, calc(var(--app-height, 100dvh) - 300px), 360px);
   min-height: 140px;
 }
+
+.source-estimated-cost {
+  min-width: 0;
+  max-width: 100%;
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+.source-estimated-cost > summary {
+  min-height: 32px;
+  padding-block: 5px;
+  cursor: pointer;
+  white-space: normal;
+}
+.source-estimated-cost > p {
+  margin: 6px 0;
+}
+@media (hover: none), (pointer: coarse) {
+  .source-estimated-cost > summary {
+    min-height: 44px;
+    align-content: center;
+  }
+}

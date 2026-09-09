@@ -473,6 +473,7 @@ export class ResponsesDecoder {
   private result = empty();
   private terminal = false;
   private responseId: string | undefined;
+  private serviceTier: string | undefined;
   private sequence: number | undefined;
   constructor(context: OpenAITurn) {
     this.context = structuredClone(context);
@@ -622,8 +623,12 @@ export class ResponsesDecoder {
         reject('RESPONSE_ID_MISMATCH');
       this.responseId = responseId;
     }
-    if (response?.usage !== undefined && response.usage !== null)
+    if (typeof response?.service_tier === 'string') this.serviceTier = response.service_tier;
+    if (response?.usage !== undefined && response.usage !== null) {
       this.result.usage = readUsage(response.usage, 'input_tokens', 'output_tokens');
+      if (this.serviceTier !== undefined && object(this.result.usage.raw))
+        this.result.usage.raw.service_tier = this.serviceTier;
+    }
     if (['response.created', 'response.in_progress', 'response.queued'].includes(event.type))
       return;
     if (event.type === 'error' || object(event.error)) {

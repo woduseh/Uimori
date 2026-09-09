@@ -243,11 +243,8 @@ test('EVALUI02 mobile 390px evaluation controls save only for opted-in presets a
       .getByRole('group', { name: '선택형 평가 도구', exact: true })
       .screenshot({ path: info.outputPath('evaluation-mobile-options.png') });
   }
-  await page.getByText('기능 확인과 사용자 판단', { exact: true }).click();
-  await page.getByLabel('도구 호출 지원 판단').selectOption('no');
-  await expect(page.getByRole('button', { name: '모델 프리셋 등록', exact: true })).toBeDisabled();
-  await expect(page.getByRole('alert').filter({ hasText: '도구 호출을 미지원' })).toBeVisible();
-  await page.getByLabel('도구 호출 지원 판단').selectOption('unknown');
+  await expect(page.getByText('기능 확인과 사용자 판단', { exact: true })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: '모델 프리셋 등록', exact: true })).toBeEnabled();
   const model = await saveModel(page, request, connection);
   expect(model.evaluationTools).toEqual({
     contextMode: 'model-selected',
