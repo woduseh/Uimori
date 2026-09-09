@@ -147,9 +147,15 @@
 
 `CSUI04`는 그 커밋 이전부터 단독 실행에서 깨져 있었고 오히려 그 커밋에서 통과해요. `UXUI01`은 양쪽 모두 단독으로 통과하니 **전체 실행에서만 나타나는 실행 간 상호작용**이에요.
 
-`UXUI01`의 메커니즘은 좁혀 뒀어요. `창작 옵션` 버튼의 조건인 `hasCreativeOptions`(`web/main.tsx:263`)가 채팅별 상태가 아니라 **전역 프롬프트 작업본**의 `main.program.controls`를 읽어요. `verify:redesign`은 56개 spec이 서버와 DB 하나를 공유하고, `UXUI01`은 220개 케이스 중 219번째로 **가장 마지막**에 실행돼요. 앞선 spec이 전역 main 프롬프트에 control을 남기면 그 뒤 모든 화면에 버튼이 나타나요. `/api/prompt-workspace/apply`는 프리셋의 program을 controls까지 전역 작업본에 복사하고, 10개 spec이 이 경로를 써요.
+`UXUI01`의 원인은 확정했어요. `창작 옵션` 버튼의 조건인 `hasCreativeOptions`(`web/main.tsx:263`)가 채팅별 상태가 아니라 **전역 프롬프트 작업본**의 `main.program.controls`를 읽어요. `verify:redesign`은 56개 spec이 서버와 DB 하나를 공유하고, `UXUI01`은 220개 케이스 중 219번째로 가장 마지막에 실행돼요.
 
-다만 범인은 확정하지 못했어요. `prompt-workspace`를 쓰는 후보 7개(`agent-collaboration`·`chat-prompt-options`·`current-settings`·`prompt-editor`·`prompt-actions`·`prompt-redesign`·`product`)를 하나씩 돌린 뒤 전역 main의 controls를 세어 보면 모두 0으로 정리돼요. `prompt-workspace-browser.spec.ts`도 스스로 되돌려서 범인이 아니에요. 순서나 중간 실패에 따라 남는 경우로 보이고, 확정하려면 전체 순서를 재생하며 각 spec 뒤의 controls를 측정해야 해요.
+harness가 보존한 evidence DB로 종료 시점 상태를 직접 읽었어요. `redesign-2026-09-09T22-53-24-717Z-d14bdc59/evidence-db/app.sqlite`의 `prompt_workspace(id=1)`에 **control 두 개가 남아 있어요** — `detail`(합성 상세도)과 `coNarration`(합성 공동 서술)이에요. 그래서 버튼이 렌더되고, `tests/ui-usability-browser.spec.ts:38`의 "0개" 기대가 깨져요.
+
+이 둘은 `tests/ui-navigation.ts:178`의 `createPromptChoice()`가 만드는 프로그램의 control과 정확히 같아요. 이 helper를 쓰는 spec은 `product-browser.spec.ts`와 `ui-browser.spec.ts` 둘뿐이고, 둘 다 그 프롬프트를 전역 작업본에 적용해요. 두 spec을 단독으로 돌리면 뒤처리가 되어 controls가 0으로 정리돼요.
+
+**그래서 이 실패는 같은 실행의 다른 실패와 이어져 있어요.** `ui-browser.spec.ts`의 `UI03 UI12 new story retry`가 전역 작업본을 되돌리는 `afterEach`에서 timeout으로 끝나요(`tests/ui-browser.spec.ts:72`). 복원이 끝나지 않으면 적용된 control이 남고, 이후 모든 화면에 `창작 옵션`이 보여요. 남은 6건 중 둘이 하나의 원인으로 묶이는 셈이에요. 확정 수정은 이번 범위 밖이라 후속으로 남겨요.
+
+전체 순서를 재생하지 않아도 evidence DB가 종료 시점 전역 상태를 보존한다는 점은 앞으로도 쓸 만한 방법이에요.
 
 ### 갱신한 검사
 
