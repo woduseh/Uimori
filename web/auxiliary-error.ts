@@ -78,11 +78,20 @@ define(
   '연결 상태와 작업 제한 시간을 확인해 주세요. 요청이 실행되었을 수 있으므로 확인 후 재시도해 주세요.'
 );
 define(
+  ['AUXILIARY_PROVIDER_INPUT_CONTEXT_LIMIT_EXCEEDED', 'AUXILIARY_PROVIDER_CONTEXT_WINDOW_EXCEEDED'],
+  '요청이 모델의 입력 한도를 초과했어요.',
+  '입력 한도가 더 큰 모델을 선택하거나 요청에 포함할 참고 자료를 줄여 주세요.'
+);
+define(
+  ['AUXILIARY_PROVIDER_PARTIAL'],
+  '모델 응답을 끝까지 받지 못했어요.',
+  '작업 상세의 호출 기록에서 중단 원인을 확인해 주세요. 응답 제한 시간이나 출력 한도를 초과했을 수 있어요.'
+);
+define(
   [
     'AUXILIARY_PROVIDER_TRANSPORT_ERROR',
     'AUXILIARY_PROVIDER_UND_ERR_SOCKET',
     'AUXILIARY_PROVIDER_UNEXPECTED_EOF',
-    'AUXILIARY_PROVIDER_PARTIAL',
   ],
   '모델 응답이 중간에 끝났거나 연결이 끊겼어요.',
   '연결 상태와 출력 토큰 한도를 확인해 주세요. 요청이 실행되었을 수 있으므로 확인 후 재시도해 주세요.'

@@ -17,36 +17,3 @@
   color: var(--muted);
   line-height: 1.6;
 }
-.toggle-row input[type="checkbox"] {
-  appearance: none;
-  flex: 0 0 44px;
-  width: 44px;
-  height: 26px;
-  min-height: 26px;
-  margin: 0;
-  padding: 3px;
-  border: 1px solid var(--muted);
-  border-radius: 20px;
-  background: var(--surface);
-  cursor: pointer;
-}
-.toggle-row input[type="checkbox"]::before {
-  content: "";
-  display: block;
-  width: 18px;
-  height: 18px;
-  border-radius: 50%;
-  background: var(--muted);
-}
-.toggle-row input[type="checkbox"]:checked {
-  background: var(--accent);
-  border-color: var(--accent);
-}
-.toggle-row input[type="checkbox"]:checked::before {
-  transform: translateX(18px);
-  background: var(--accent-ink);
-}
-.toggle-row input[type="checkbox"]:disabled {
-  opacity: 0.5;
-  cursor: default;
-}

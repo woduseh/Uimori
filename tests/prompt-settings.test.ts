@@ -8,11 +8,279 @@ import { tmpdir } from 'node:os';
 import { basename, isAbsolute, join, relative, resolve } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { createApp, type App } from '../server/app.js';
-import type { ChatProfile, PromptPreset, Connection, ModelPreset } from '../core/product.js';
+import type {
+  ChatProfile,
+  PromptPreset,
+  Connection,
+  ModelPreset,
+  SavedPromptCombination,
+} from '../core/product.js';
 import type { RunSnapshot } from '../core/types.js';
 import { compileSnapshotPrompt } from '../server/prompt-snapshot.js';
+import { combinationOwner, matchesPromptCombination } from '../core/prompt-combinations.js';
 
 const owned: { directory: string; app?: App }[] = [];
+test('explicit prompt writes reject unset boolean defaults and values while reads retain legacy nulls', async () => {
+  const app = await application();
+  const program = createDefaultPromptProgram('Switch');
+  program.controls = [{ id: 'enabled', label: 'Enabled', type: 'boolean', default: false }];
+  const invalid = structuredClone(program);
+  invalid.controls[0].default = null;
+  await request(
+    app,
+    '/prompt-presets',
+    { title: 'Unset default', role: 'main', program: invalid },
+    400
+  );
+  await request(
+    app,
+    '/prompt-presets',
+    { title: 'Unset value', role: 'main', program, values: { enabled: null } },
+    400
+  );
+  let current = await workspace(app);
+  await request(
+    app,
+    '/prompt-workspace',
+    {
+      expectedRevision: current.revision,
+      main: { title: 'Unset default', program: invalid, values: {} },
+    },
+    400,
+    'PUT'
+  );
+  current = await request(
+    app,
+    '/prompt-workspace',
+    {
+      expectedRevision: current.revision,
+      main: { title: 'Switch', program, values: { enabled: false } },
+    },
+    200,
+    'PUT'
+  );
+  await request(
+    app,
+    '/prompt-workspace',
+    {
+      expectedRevision: current.revision,
+      main: { title: 'Unset value', program, values: { enabled: null } },
+    },
+    400,
+    'PUT'
+  );
+  await request(
+    app,
+    '/prompt-combinations',
+    {
+      title: 'Unset switch',
+      role: 'main',
+      workspaceRevision: current.revision,
+      values: { enabled: null },
+    },
+    400
+  );
+  const legacy = {
+    ...current,
+    main: { title: 'Legacy', program: invalid, values: { enabled: null } },
+  };
+  app.store.db.prepare('UPDATE prompt_workspace SET body=? WHERE id=1').run(JSON.stringify(legacy));
+  expect((await workspace(app)).main).toEqual(legacy.main);
+  const unchanged = await request(
+    app,
+    '/prompt-workspace',
+    { expectedRevision: legacy.revision, translationPolicy: legacy.translationPolicy },
+    200,
+    'PUT'
+  );
+  expect(unchanged.main).toEqual(legacy.main);
+  expect(
+    JSON.parse(
+      String(app.store.db.prepare('SELECT body FROM prompt_workspace WHERE id=1').get()?.body)
+    ).main
+  ).toEqual(legacy.main);
+});
+test('option combinations bind to a prompt owner and exact control meanings while preserving working source identity', async () => {
+  const app = await application();
+  const program = createDefaultPromptProgram('Options');
+  program.controls = [{ id: 'tone', label: 'Narration tone', type: 'text', default: 'quiet' }];
+  const first = await request<PromptPreset>(app, '/prompt-presets', {
+    title: 'First',
+    role: 'main',
+    program,
+  });
+  const second = await request<PromptPreset>(app, '/prompt-presets', {
+    title: 'Second',
+    role: 'main',
+    program,
+  });
+  const options = await request(app, '/prompt-combinations', {
+    title: 'Bold',
+    role: 'main',
+    values: { tone: 'bold' },
+    owner: { kind: 'preset', id: first.id },
+    expectedRevision: first.revision,
+  });
+  expect(options).toMatchObject({
+    owner: { kind: 'preset', id: first.id },
+    controls: program.controls,
+  });
+  await request(
+    app,
+    '/prompt-combinations',
+    {
+      title: 'Stale',
+      role: 'main',
+      values: {},
+      owner: { kind: 'preset', id: first.id },
+      expectedRevision: 99,
+    },
+    409
+  );
+  await request(
+    app,
+    '/prompt-combinations',
+    {
+      title: 'Wrong role',
+      role: 'translation',
+      values: {},
+      owner: { kind: 'preset', id: first.id },
+      expectedRevision: first.revision,
+    },
+    400
+  );
+  let current = await apply(app, second);
+  expect(current.main.presetId).toBe(second.id);
+  await request(
+    app,
+    '/prompt-workspace/apply-options',
+    { expectedRevision: current.revision, role: 'main', combinationId: options.id },
+    409
+  );
+  current = await apply(app, first);
+  current = await request(app, '/prompt-workspace/apply-options', {
+    expectedRevision: current.revision,
+    role: 'main',
+    combinationId: options.id,
+  });
+  expect(current.main.values).toEqual({ tone: 'bold' });
+  await request(
+    app,
+    '/prompt-workspace',
+    { expectedRevision: current.revision, main: { ...current.main, presetId: second.id } },
+    400,
+    'PUT'
+  );
+  const changedProgram = structuredClone(program);
+  changedProgram.controls[0].label = 'An unrelated meaning with the same ID';
+  current = await request(
+    app,
+    '/prompt-workspace',
+    {
+      expectedRevision: current.revision,
+      main: { title: 'Edited working copy', program: changedProgram, values: {} },
+    },
+    200,
+    'PUT'
+  );
+  expect(current.main.presetId).toBe(first.id);
+  expect(
+    matchesPromptCombination(
+      options,
+      combinationOwner(current.main, 'main'),
+      'main',
+      current.main.program
+    )
+  ).toBe(false);
+  await request(
+    app,
+    '/prompt-workspace/apply-options',
+    { expectedRevision: current.revision, role: 'main', combinationId: options.id },
+    409
+  );
+  const working = await request(app, '/prompt-combinations', {
+    title: 'Current meaning',
+    role: 'main',
+    values: { tone: 'new' },
+    workspaceRevision: current.revision,
+  });
+  expect(working).toMatchObject({
+    owner: { kind: 'preset', id: first.id },
+    controls: changedProgram.controls,
+  });
+  expect(
+    matchesPromptCombination(
+      working,
+      combinationOwner(current.main, 'main'),
+      'main',
+      current.main.program
+    )
+  ).toBe(true);
+  await request(
+    app,
+    '/prompt-combinations',
+    { title: 'Stale workspace', role: 'main', values: {}, workspaceRevision: current.revision - 1 },
+    409
+  );
+  await request(
+    app,
+    '/prompt-combinations',
+    {
+      title: 'Forged controls',
+      role: 'main',
+      values: {},
+      workspaceRevision: current.revision,
+      controls: [],
+    },
+    400
+  );
+  await request(
+    app,
+    '/prompt-combinations',
+    {
+      title: 'Mixed owner',
+      role: 'main',
+      values: {},
+      workspaceRevision: current.revision,
+      owner: { kind: 'preset', id: first.id },
+      expectedRevision: 1,
+    },
+    400
+  );
+  const legacy = app.store.product.save('prompt-combination', {
+    title: 'Legacy unbound',
+    role: 'main',
+    values: { tone: 'old' },
+  });
+  expect(
+    matchesPromptCombination(
+      legacy as SavedPromptCombination,
+      combinationOwner(current.main, 'main'),
+      'main',
+      current.main.program
+    )
+  ).toBe(false);
+  await request(
+    app,
+    '/prompt-workspace/apply-options',
+    { expectedRevision: current.revision, role: 'main', combinationId: legacy.id },
+    409
+  );
+  const before = current;
+  current = await request(app, '/prompt-workspace/apply-options', {
+    expectedRevision: current.revision,
+    role: 'main',
+    combinationId: working.id,
+  });
+  expect(current.main.values).toEqual({ tone: 'new' });
+  expect(current.main.presetId).toBe(first.id);
+  await request(
+    app,
+    '/prompt-workspace/apply-options',
+    { expectedRevision: before.revision, role: 'main', combinationId: working.id },
+    409
+  );
+});
 beforeEach(() => {
   vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('No network in prompt settings tests'));
 });
@@ -360,6 +628,7 @@ describe('global working prompts and independent library copies', () => {
       'PUT'
     );
     const options = await request(app, '/prompt-combinations', {
+      workspaceRevision: updated.revision,
       title: 'Bold option',
       role: 'main',
       values: { tone: 'bold' },

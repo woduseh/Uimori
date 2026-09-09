@@ -1417,7 +1417,7 @@ test('UI17 prompts use latest settings and concurrent edits preserve unsaved tex
   );
   expect(copy.program).toEqual(createDefaultPromptProgram(edited, 'main'));
   await (await promptBody(libraryEditor)).fill(edited + '\nRevised in library.');
-  await libraryEditor.getByRole('button', { name: '수정 저장', exact: true }).click();
+  await libraryEditor.getByRole('button', { name: '저장', exact: true }).click();
   await expect
     .poll(
       async () =>

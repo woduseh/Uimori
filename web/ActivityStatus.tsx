@@ -2,22 +2,30 @@ import { useEffect, useRef, useState } from 'react';
 import { Check, ChevronDown, ChevronUp, CircleAlert, LoaderCircle } from 'lucide-react';
 import type { ReaderActivity } from '../core/types.js';
 import type { RequestActivity } from './useStory.js';
+import { ActivityNotifications } from './ActivityNotifications.js';
+import {
+  activityActive as active,
+  activitySuccess as success,
+  activityAcknowledgementKey,
+  canAcknowledge,
+  readAcknowledgements,
+  translationResolved,
+  type ActivityNoticeItem as Item,
+} from './activity-notices.js';
 import './activity-status.css';
 
-type Item = {
-  key: string;
-  status: string;
-  startedAt: string;
-  finishedAt: string | null;
-  kind: string;
-  otherBranch: boolean;
-  /** Activity (run) id, so a stored notice can be matched against turns seen on screen. */
-  runId: string;
-};
 type Notice = { item: Item; expiresAt: number | null };
-const active = (status: string) =>
-  ['sending', 'accepted', 'queued', 'running', 'waiting_for_state'].includes(status);
-const success = (status: string) => ['completed', 'cancelled'].includes(status);
+
+function reconcileHistory(history: ReaderActivity[], current: ReaderActivity[]) {
+  const live = new Map(current.map((item) => [item.id, item]));
+  const next = history.flatMap((item) => {
+    const updated = live.get(item.id);
+    // The reader includes every active job. A historical active snapshot cannot
+    // keep a spinner alive after the job leaves that authoritative projection.
+    return updated ? [updated] : active(item.status) ? [] : [item];
+  });
+  return JSON.stringify(next) === JSON.stringify(history) ? history : next;
+}
 const names: Record<string, string> = {
   main: '장면을 쓰는 중',
   translation: '번역하는 중',
@@ -75,6 +83,7 @@ function message(item: Item) {
 
 /** Status feedback only; hiding never changes or cancels server work. */
 export function ActivityStatus({
+  chatId,
   activities,
   request,
   branchId,
@@ -83,6 +92,7 @@ export function ActivityStatus({
   scope,
   seenRunIds = [],
 }: {
+  chatId: string;
   activities: ReaderActivity[];
   request?: RequestActivity;
   branchId?: string;
@@ -101,19 +111,39 @@ export function ActivityStatus({
     }
   });
   const [notices, setNotices] = useState<Notice[]>([]);
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const [history, setHistory] = useState<ReaderActivity[]>([]);
+  const [acknowledged, setAcknowledged] = useState<string[]>(() => readAcknowledgements(chatId));
   const observed = useRef<Map<string, string> | null>(null);
-  const items: Item[] = activities.map((item) => ({
+  useEffect(() => {
+    setHistory((old) => reconcileHistory(old, activities));
+  }, [activities]);
+  const merged = new Map(reconcileHistory(history, activities).map((item) => [item.id, item]));
+  for (const item of activities) {
+    const previous = merged.get(item.id);
+    if (!previous || item.generation > previous.generation || item.updatedAt >= previous.updatedAt)
+      merged.set(item.id, item);
+  }
+  const items: Item[] = [...merged.values()].map((item) => ({
     key: request?.runId === item.id ? request.id : `${item.id}:${item.startedAt}`,
+    acknowledgementKey: activityAcknowledgementKey(item),
     status: item.status,
     startedAt: request?.runId === item.id ? request.startedAt : item.startedAt,
     finishedAt: item.finishedAt,
     kind: item.kind,
     otherBranch: !!item.branchId && !!branchId && item.branchId !== branchId,
     runId: item.id,
+    sourceRevision: item.sourceRevision,
+    sourceHash: item.sourceHash,
+    branchId: item.branchId,
+    generation: item.generation,
+    superseded: item.superseded,
+    executionUncertain: item.executionUncertain,
   }));
   if (request && !activities.some((item) => item.id === request.runId))
     items.unshift({
       key: request.id,
+      acknowledgementKey: `request:${request.id}`,
       status: request.status,
       startedAt: request.startedAt,
       finishedAt: null,
@@ -122,6 +152,20 @@ export function ActivityStatus({
       runId: request.runId ?? request.id,
     });
   const serialized = JSON.stringify(items);
+  const resolved = items.filter((item) => translationResolved(item, items));
+  const resolvedKeys = JSON.stringify(resolved.map((item) => item.acknowledgementKey));
+  useEffect(() => {
+    const keys = JSON.parse(resolvedKeys) as string[];
+    if (keys.length) setAcknowledged((old) => [...new Set([...old, ...keys])]);
+  }, [resolvedKeys]);
+  useEffect(() => {
+    try {
+      // Do not evict old confirmations: paging or reloading must not resurrect them.
+      sessionStorage.setItem(`activity-acknowledged:${chatId}`, JSON.stringify(acknowledged));
+    } catch {
+      /* Confirmation still works in this view when browser storage is unavailable. */
+    }
+  }, [acknowledged, chatId]);
   // An older settled result belongs to its response. Keep active work and uncertain
   // admission visible, but do not let old failures replace the current turn's result.
   const latestMainStart = items
@@ -133,14 +177,19 @@ export function ActivityStatus({
     const time = Date.now();
     setNotices((old) => {
       const next = old.filter((notice) =>
-        snapshot.some((item) => item.key === notice.item.key && !active(item.status))
+        snapshot.some(
+          (item) =>
+            item.acknowledgementKey === notice.item.acknowledgementKey &&
+            item.status === notice.item.status &&
+            !active(item.status)
+        )
       );
       for (const item of snapshot) {
         if (active(item.status)) continue;
         // Do not replay old successful work on opening a chat. Failures remain actionable.
         const newlyFinished = active(previous?.get(item.key) ?? '');
         if (
-          !next.some((notice) => notice.item.key === item.key) &&
+          !next.some((notice) => notice.item.acknowledgementKey === item.acknowledgementKey) &&
           (!success(item.status) || newlyFinished)
         ) {
           next.push({
@@ -149,18 +198,29 @@ export function ActivityStatus({
           });
         }
       }
-      return next;
+      return next.map((notice) => ({
+        ...notice,
+        item:
+          snapshot.find((item) => item.acknowledgementKey === notice.item.acknowledgementKey) ??
+          notice.item,
+      }));
     });
     observed.current = new Map(snapshot.map((item) => [item.key, item.status]));
     setNow(time);
   }, [serialized]);
   const running = items.filter((item) => active(item.status));
-  const visibleNotices = notices.filter(
+  const unresolvedNotices = notices.filter(
+    (notice) =>
+      (notice.expiresAt === null || notice.expiresAt > now) &&
+      !resolved.some((item) => item.acknowledgementKey === notice.item.acknowledgementKey)
+  );
+  const visibleNotices = unresolvedNotices.filter(
     (notice) =>
       (notice.item.status === 'uncertain' ||
         (!notice.item.otherBranch &&
           (Date.parse(notice.item.startedAt) || 0) >= latestMainStart)) &&
       (notice.expiresAt === null || notice.expiresAt > now) &&
+      !acknowledged.includes(notice.item.acknowledgementKey) &&
       !(success(notice.item.status) && hidden.includes(notice.item.key)) &&
       // The failed turn's own card is on screen; the composer row must not repeat it.
       !(
@@ -191,7 +251,7 @@ export function ActivityStatus({
     expanded.find((item) => active(item.status)) ??
     expanded.toSorted((a, b) => b.startedAt.localeCompare(a.startedAt))[0];
   const connectionIssue = !connected && running.length > 0;
-  if (!candidates.length) return null;
+  if (!candidates.length && !notificationsOpen) return null;
   const hasIssue =
     connectionIssue ||
     (item
@@ -217,51 +277,95 @@ export function ActivityStatus({
   function expand() {
     setHidden((old) => old.filter((key) => !candidates.some((item) => item.key === key)));
   }
+  function acknowledge(displayed: Item[]) {
+    const keys = displayed
+      .filter((candidate) => {
+        const current = items.find(
+          (item) => item.acknowledgementKey === candidate.acknowledgementKey
+        );
+        return current && canAcknowledge(current);
+      })
+      .map((item) => item.acknowledgementKey);
+    setAcknowledged((old) => [...new Set([...old, ...keys])]);
+  }
+  const issueSelected = !!item && !active(item.status) && !success(item.status);
   return (
-    <div
-      className={`activity-status ${hasIssue ? 'activity-issue' : ''}`}
-      data-testid="activity-status"
-    >
-      <span className="sr-only" role="status" aria-live="polite">
-        {label}
-      </span>
-      <button
-        type="button"
-        className="activity-toggle"
-        aria-label={item ? '작업 상태 숨기기' : '작업 상태 펼치기'}
-        aria-expanded={!!item}
-        title={item ? '상태 표시만 숨겨요. 작업은 계속 진행돼요.' : '작업 상태 펼치기'}
-        onClick={item ? hide : expand}
-      >
-        <Icon
-          size={16}
-          aria-hidden="true"
-          className={running.length && !hasIssue ? 'activity-spinner' : ''}
-        />
-        <span className="activity-label">{label}</span>
-        {elapsed && (
-          <span className="activity-elapsed" aria-hidden="true">
-            {elapsed}
+    <>
+      {!!candidates.length && (
+        <div
+          className={`activity-status ${hasIssue ? 'activity-issue' : ''}`}
+          data-testid="activity-status"
+        >
+          <span className="sr-only" role="status" aria-live="polite">
+            {label}
           </span>
-        )}
-        {item && candidates.length > 1 && (
-          <span className="activity-count">외 {candidates.length - 1}개</span>
-        )}
-        {item ? (
-          <ChevronDown size={14} aria-hidden="true" />
-        ) : (
-          <ChevronUp size={14} aria-hidden="true" />
-        )}
-      </button>
-      <button
-        type="button"
-        className="activity-details"
-        onClick={onDetails}
-        aria-label="작업 상세 보기"
-      >
-        상세
-      </button>
-    </div>
+          <button
+            type="button"
+            className="activity-toggle"
+            aria-label={
+              issueSelected ? '작업 알림 보기' : item ? '작업 상태 숨기기' : '작업 상태 펼치기'
+            }
+            aria-expanded={issueSelected ? notificationsOpen : !!item}
+            title={
+              issueSelected
+                ? '확인할 작업 알림을 열어요.'
+                : item
+                  ? '상태 표시만 숨겨요. 작업은 계속 진행돼요.'
+                  : '작업 상태 펼치기'
+            }
+            onClick={issueSelected ? () => setNotificationsOpen(true) : item ? hide : expand}
+          >
+            <Icon
+              size={16}
+              aria-hidden="true"
+              className={running.length && !hasIssue ? 'activity-spinner' : ''}
+            />
+            <span className="activity-label">{label}</span>
+            {elapsed && (
+              <span className="activity-elapsed" aria-hidden="true">
+                {elapsed}
+              </span>
+            )}
+            {item && candidates.length > 1 && (
+              <span className="activity-count">외 {candidates.length - 1}개</span>
+            )}
+            {item ? (
+              <ChevronDown size={14} aria-hidden="true" />
+            ) : (
+              <ChevronUp size={14} aria-hidden="true" />
+            )}
+          </button>
+          <button
+            type="button"
+            className="activity-details"
+            onClick={() => setNotificationsOpen(true)}
+            aria-label="작업 상세 보기"
+          >
+            상세
+          </button>
+        </div>
+      )}
+      <ActivityNotifications
+        open={notificationsOpen}
+        chatId={chatId}
+        items={[...running, ...unresolvedNotices.map((notice) => notice.item)]}
+        acknowledged={acknowledged}
+        message={message}
+        onAcknowledge={acknowledge}
+        onHistory={(page) =>
+          setHistory((old) => {
+            const next = new Map(old.map((item) => [item.id, item]));
+            for (const item of page) next.set(item.id, item);
+            return reconcileHistory([...next.values()], activities);
+          })
+        }
+        onClose={() => setNotificationsOpen(false)}
+        onRecords={() => {
+          setNotificationsOpen(false);
+          onDetails();
+        }}
+      />
+    </>
   );
 }
 
@@ -289,6 +393,7 @@ export function ActivityDetails({
             <span>
               {message({
                 key: item.id,
+                acknowledgementKey: activityAcknowledgementKey(item),
                 kind: item.kind,
                 status: item.status,
                 startedAt: item.startedAt,

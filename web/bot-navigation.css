@@ -10,15 +10,13 @@
 .bot-navigation .brand {
   margin-bottom: 0;
 }
-.bot-library-nav {
+.sidebar-app-actions {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 2px;
+  grid-template-columns: minmax(0, 1fr) 44px;
+  align-items: center;
+  gap: 4px;
 }
-.bot-library-nav .nav-button {
-  font-size: 13px;
-  padding: 8px;
-  gap: 7px;
+.sidebar-app-actions > .nav-button {
   min-width: 0;
 }
 .nav-progress svg {
@@ -349,6 +347,7 @@
 .bot-folder-settings input,
 .bot-folder-settings select,
 .bot-folder-create input,
+.bot-chat-menu input,
 .bot-chat-menu select {
   width: 100%;
   min-width: 0;
@@ -366,6 +365,33 @@
 }
 .bot-chat-menu > strong {
   overflow-wrap: anywhere;
+}
+.bot-chat-title-editor {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+.bot-chat-title-editor small {
+  color: var(--muted);
+  line-height: 1.5;
+}
+.bot-chat-menu-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding-top: 8px;
+  border-top: 1px solid var(--line);
+}
+.bot-chat-menu-actions > .delete-control {
+  margin-left: auto;
+}
+.bot-chat-menu-actions > .delete-control > .delete-button {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0;
 }
 .bot-chat-menu > button {
   display: inline-flex;
@@ -417,7 +443,6 @@
   clip: rect(0 0 0 0);
   white-space: nowrap;
 }
-.bot-library-nav button,
 .bot-chat-item button {
   white-space: normal;
 }

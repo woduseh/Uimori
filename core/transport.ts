@@ -31,7 +31,14 @@ export { ProviderContractError } from './provider-errors.js';
 
 /** This versioned loopback protocol is a local fixture, not a live API claim. */
 export type Json = null | boolean | number | string | Json[] | { [key: string]: Json };
-export type ProviderRole = 'main' | 'translation' | 'status' | 'image' | 'state' | 'memory';
+export type ProviderRole =
+  | 'main'
+  | 'translation'
+  | 'status'
+  | 'image'
+  | 'state'
+  | 'memory'
+  | 'title';
 export type ProviderConnection = {
   id: string;
   protocol: ProviderProtocol;
@@ -241,7 +248,11 @@ export function validateRequest(value: unknown): ProviderRequest {
       reject(error instanceof Error ? error.message : 'INVALID_PROMPT');
     }
   }
-  if (!['main', 'translation', 'status', 'image', 'state', 'memory'].includes(value.role as string))
+  if (
+    !['main', 'translation', 'status', 'image', 'state', 'memory', 'title'].includes(
+      value.role as string
+    )
+  )
     reject('INVALID_ROLE');
   string(value.modelId);
   if (value.generation !== undefined) validateGeneration(value.generation);

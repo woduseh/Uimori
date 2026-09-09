@@ -47,6 +47,10 @@ export function deleteLibraryItem(store: Store, kind: LibraryKind, id: string, v
     if (kind === 'model' || kind === 'connection') {
       const workspace = promptWorkspace(store);
       let changed = false;
+      if (workspace.titleModel && store.product.isHidden('model', workspace.titleModel.id)) {
+        workspace.titleModel = null;
+        changed = true;
+      }
       for (const role of ['main', 'translation', 'status', 'image'] as const) {
         const selected = workspace.modelRoutes[role];
         if (selected && store.product.isHidden('model', selected.id)) {

@@ -97,11 +97,21 @@
 .prompt-save-actions {
   display: grid;
   gap: 12px;
-  padding-top: 16px;
-  border-top: 1px solid var(--line);
+}
+.prompt-editor .prompt-composer {
+  margin-bottom: 0;
 }
 .prompt-save-scope {
   line-height: 1.7;
+  flex: 1;
+  min-width: 0;
+}
+.prompt-save-buttons > button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  flex-shrink: 0;
 }
 .prompt-save-buttons {
   display: flex;

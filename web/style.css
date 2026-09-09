@@ -395,6 +395,8 @@ input[type="checkbox"] {
 /* Current global main model opens application-wide role settings. */
 .model-chip {
   display: inline-flex;
+  align-items: center;
+  justify-content: center;
   min-width: 0;
   max-width: 220px;
   margin-right: 6px;
@@ -1197,7 +1199,7 @@ input[type="checkbox"] {
   .model-chip {
     min-height: 44px;
     font-size: 11px;
-    padding: 4px 22px 4px 10px;
+    padding: 4px 10px;
   }
   .header-actions {
     gap: 0;

@@ -1,3 +1,4 @@
+import { Switch } from './BooleanControls.js';
 import { useEffect, useState } from 'react';
 import type { ChatProfile, Library } from '../core/product.js';
 import { api } from './api.js';
@@ -180,9 +181,8 @@ export function ProfileEditor({
             </div>
             <div hidden={tab !== 'characters'}>
               <label className="check">
-                <input
+                <Switch
                   aria-label="원문 이미지 자동 배치"
-                  type="checkbox"
                   checked={value.image}
                   onChange={(event) => change({ ...value, image: event.target.checked })}
                 />
@@ -192,8 +192,7 @@ export function ProfileEditor({
                 새 원문이 완성되면 등록된 이미지 중 어울리는 이미지를 골라 문단 사이에 배치해요.
               </small>
               <label className="check">
-                <input
-                  type="checkbox"
+                <Switch
                   checked={value.imageTranslation !== false}
                   onChange={(event) => change({ ...value, imageTranslation: event.target.checked })}
                 />

@@ -2,6 +2,20 @@ import { describe, expect, it } from 'vitest';
 import { auxiliaryErrorDiagnostic } from '../web/auxiliary-error.js';
 
 describe('safe auxiliary error diagnostics', () => {
+  it('keeps partial response and input limit guidance in the shared message without obsolete chunking advice', () => {
+    const partial = auxiliaryErrorDiagnostic('AUXILIARY_PROVIDER_PARTIAL');
+    expect(partial.message).toContain('끝까지 받지 못했어요');
+    expect(partial.action).toContain('호출 기록');
+    expect(partial.action).toContain('응답 제한 시간');
+    const limit = auxiliaryErrorDiagnostic('AUXILIARY_PROVIDER_INPUT_CONTEXT_LIMIT_EXCEEDED');
+    expect(limit.message).toContain('입력 한도');
+    for (const diagnostic of [
+      partial,
+      limit,
+      auxiliaryErrorDiagnostic('AUXILIARY_PROVIDER_TIMEOUT'),
+    ])
+      expect(JSON.stringify(diagnostic)).not.toContain('구간');
+  });
   it('keeps a missing prompt slot visible instead of disguising it as a model connection failure', () => {
     const diagnostic = auxiliaryErrorDiagnostic('PROMPT_UNKNOWN_SLOT');
     expect(diagnostic.code).toBe('PROMPT_UNKNOWN_SLOT');

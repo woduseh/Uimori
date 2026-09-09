@@ -129,6 +129,8 @@ test('P01 packages use latest settings and prompt-owned creative choices replace
     data: {
       title: `Brief ${unique}`,
       role: 'main',
+      owner: { kind: 'preset', id: choice.prompt.id },
+      expectedRevision: choice.prompt.revision,
       values: { detail: 1, coNarration: false },
     },
   });
@@ -181,7 +183,9 @@ test('P01 packages use latest settings and prompt-owned creative choices replace
   await editor.getByLabel('현재 프롬프트 프리셋', { exact: true }).selectOption(choice.prompt.id);
   const composer = editor.getByTestId('prompt-composer');
   for (const combination of [choice.combination, second]) {
-    await composer.getByLabel('전역 창작 조합', { exact: true }).selectOption(combination.id);
+    await composer
+      .getByLabel('이 프롬프트의 옵션 조합', { exact: true })
+      .selectOption(combination.id);
     await editor.getByRole('button', { name: '현재 설정 저장', exact: true }).click();
     await expect
       .poll(async () => (await (await request.get('/api/prompt-workspace')).json()).main.values)
@@ -191,7 +195,7 @@ test('P01 packages use latest settings and prompt-owned creative choices replace
     ).toBeVisible();
   }
   await expect(
-    composer.getByRole('checkbox', { name: '합성 공동 서술', exact: true })
+    composer.getByRole('switch', { name: '합성 공동 서술', exact: true })
   ).not.toBeChecked();
   await expect(composer.getByLabel('합성 상세도', { exact: true })).toHaveValue('1');
   const run = await send(page, '(OOC: Continue the harbor scene.) SYNTHETIC_P01');

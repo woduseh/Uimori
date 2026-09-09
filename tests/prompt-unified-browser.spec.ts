@@ -70,7 +70,7 @@ test('PUNI01 structured editor preserves one AST; folding keeps drafts and compl
   await firstBlock.locator('summary').first().click();
   const body = firstBlock.getByLabel('기본 지침 본문', { exact: true });
   await expect(body).toHaveValue('SYNTHETIC_ORIGINAL');
-  const save = editor.getByRole('button', { name: '수정 저장', exact: true });
+  const save = editor.getByRole('button', { name: '저장', exact: true });
   await expect(save).toBeDisabled();
   await expect(composer.getByRole('button', { name: '간단 편집', exact: true })).toHaveCount(0);
   await firstBlock.locator('summary').first().click();
@@ -181,7 +181,7 @@ test('PUNI02 file import edits one block and folded preview retains its snapshot
   await previewFold.press('Enter');
   await expect(traceName).toBeVisible();
   await expect(composer.getByLabel('미리보기 현재 요청')).toHaveValue('SYNTHETIC_SINGLE_REQUEST');
-  await editor.getByRole('button', { name: '수정 저장', exact: true }).click();
+  await editor.getByRole('button', { name: '저장', exact: true }).click();
   await expect
     .poll(
       async () => (await (await request.get(`/api/prompt-presets/${saved.id}`)).json()).revision

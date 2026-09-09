@@ -4,7 +4,7 @@ await runBrowserVerification({
   name: 'collaboration',
   scope: 'Custom writing advisors: saved prompt configuration, API preview and responsive editing',
   files: ['tests/agent-collaboration-browser.spec.ts'],
-  requiredCases: ['AGENTUI01', 'AGENTUI02'],
+  requiredCases: ['AGENTUI01', 'AGENTUI02', 'AGENTUI03'],
   requiredScreenshots: ['agent-collaboration-mobile.png', 'agent-collaboration-desktop.png'],
-  expectedCount: 2,
+  expectedCount: 3,
 });

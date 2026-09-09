@@ -1,3 +1,4 @@
+import { Switch, SelectionCheckbox } from './BooleanControls.js';
 import { useId, useState } from 'react';
 import {
   createAgentCollaboration,
@@ -107,9 +108,7 @@ export function AgentCollaborationEditor({ value, controls, models, onChange }: 
               </p>
             </div>
             <label className="ac-check ac-enable">
-              <input
-                type="checkbox"
-                role="switch"
+              <Switch
                 checked={collaboration.enabled}
                 aria-describedby={`${id}-description`}
                 onChange={(event) => update({ enabled: event.target.checked })}
@@ -160,8 +159,7 @@ export function AgentCollaborationEditor({ value, controls, models, onChange }: 
                   <div className="ac-checks">
                     {controls.map((control) => (
                       <label className="ac-check" key={control.id}>
-                        <input
-                          type="checkbox"
+                        <SelectionCheckbox
                           checked={collaboration.sharedControls.includes(control.id)}
                           disabled={
                             collaboration.sharedControls.length >= 64 &&
@@ -174,8 +172,7 @@ export function AgentCollaborationEditor({ value, controls, models, onChange }: 
                     ))}
                     {missingControls.map((controlId, index) => (
                       <label className="ac-check" key={controlId}>
-                        <input
-                          type="checkbox"
+                        <SelectionCheckbox
                           checked
                           onChange={() => setSharedControl(controlId, false)}
                         />
@@ -321,8 +318,7 @@ export function AgentCollaborationEditor({ value, controls, models, onChange }: 
                           <div className="ac-checks">
                             {toolScopes.map((scope) => (
                               <label className="ac-check" key={scope.id}>
-                                <input
-                                  type="checkbox"
+                                <SelectionCheckbox
                                   aria-label={`${agentLabel} ${scope.label} 읽기`}
                                   checked={agent.tools.includes(scope.id)}
                                   onChange={(event) =>

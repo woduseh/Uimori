@@ -1,3 +1,4 @@
+import { Switch } from './BooleanControls.js';
 import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
 import { Ellipsis, X } from 'lucide-react';
 import './composer-more.css';
@@ -87,9 +88,8 @@ export function ComposerMore({
             </div>
           )}
           <label>
-            <input
+            <Switch
               ref={choice}
-              type="checkbox"
               checked={selected}
               aria-describedby={`${id}-description`}
               onChange={(event) => {

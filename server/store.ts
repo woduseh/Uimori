@@ -189,6 +189,7 @@ export class Store {
     return {
       id: row.id,
       title: row.title,
+      titleRevision: row.title_revision ?? 0,
       headRevision: row.head_revision,
       settingsRevision: row.settings_revision,
       settings: parse(row.settings),
@@ -200,7 +201,7 @@ export class Store {
   chat(id: string): Chat {
     const row = this.db
       .prepare(
-        'SELECT c.*, MAX(c.created_at, COALESCE((SELECT MAX(r.created_at) FROM runs r WHERE r.chat_id=c.id), c.created_at)) AS last_activity_at FROM chats c WHERE id=?'
+        "SELECT c.*, COALESCE((SELECT MAX(seq) FROM events WHERE chat_id=c.id AND kind IN ('chat.title.manual','chat.title.generated')),0) AS title_revision, MAX(c.created_at, COALESCE((SELECT MAX(r.created_at) FROM runs r WHERE r.chat_id=c.id), c.created_at)) AS last_activity_at FROM chats c WHERE id=?"
       )
       .get(id) as Row | undefined;
     if (!row) throw new HttpError(404, 'Chat not found');
@@ -210,7 +211,7 @@ export class Store {
     return (
       this.db
         .prepare(
-          'SELECT c.*, MAX(c.created_at, COALESCE((SELECT MAX(r.created_at) FROM runs r WHERE r.chat_id=c.id), c.created_at)) AS last_activity_at FROM chats c ORDER BY c.created_at,c.id'
+          "SELECT c.*, COALESCE((SELECT MAX(seq) FROM events WHERE chat_id=c.id AND kind IN ('chat.title.manual','chat.title.generated')),0) AS title_revision, MAX(c.created_at, COALESCE((SELECT MAX(r.created_at) FROM runs r WHERE r.chat_id=c.id), c.created_at)) AS last_activity_at FROM chats c ORDER BY c.created_at,c.id"
         )
         .all() as Row[]
     ).map((row) => this.mapChat(row));
@@ -238,6 +239,20 @@ export class Store {
       this.organization.create(id, organization);
     });
     return this.chat(id);
+  }
+  renameChat(id: string, title: string, expectedTitleRevision: number): Chat {
+    return this.transaction(() => {
+      const prior = this.chat(id);
+      if (prior.titleRevision !== expectedTitleRevision)
+        throw new HttpError(
+          409,
+          '채팅 제목이 다른 곳에서 변경됐어요. 취소 후 최신 제목을 확인해 주세요.'
+        );
+      this.db.prepare('UPDATE chats SET title=? WHERE id=?').run(title, id);
+      // Even saving the same text records manual intent and prevents an automatic overwrite.
+      this.event(id, 'chat.title.manual', id);
+      return this.chat(id);
+    });
   }
   history(head: string | null): RunSnapshot['history'] {
     const history: RunSnapshot['history'] = [];

@@ -8,6 +8,7 @@ export type Settings = {
 export type Chat = {
   id: string;
   title: string;
+  titleRevision?: number;
   lastActivityAt?: string;
   headRevision: string | null;
   settingsRevision: number;
@@ -214,6 +215,9 @@ export type ReaderRun = Omit<Run, 'snapshot' | 'inputs' | 'toolEvents'> & {
   sourceSegments?: import('./source-segments.js').SourceSegmentPolicy;
 };
 export type ReaderActivity = {
+  sourceHash?: string | null;
+  superseded?: boolean;
+  executionUncertain?: boolean;
   id: string;
   kind: 'main' | 'translation' | 'image' | 'status' | 'state' | 'memory';
   status: string;

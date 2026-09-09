@@ -661,6 +661,28 @@ export function resolvePromptValues(
     })
   );
 }
+/** New edits require binary switches; historical programs and frozen null values remain unchanged. */
+export function validateEditablePromptProgram(value: unknown): PromptProgram {
+  const program = validatePromptProgram(value);
+  for (const control of program.controls)
+    if (control.type === 'boolean' && typeof control.default !== 'boolean')
+      fail('PROMPT_INVALID_CONTROL_VALUE', control.id);
+  return program;
+}
+/** Use only at explicit write boundaries, never when reading or replaying frozen inputs. */
+export function resolveEditablePromptValues(
+  program: PromptProgram,
+  values: Record<string, PromptValue> = {}
+): Record<string, PromptValue> {
+  const resolved = resolvePromptValues(program, values);
+  for (const control of program.controls)
+    if (
+      control.type === 'boolean' &&
+      (typeof control.default !== 'boolean' || typeof resolved[control.id] !== 'boolean')
+    )
+      fail('PROMPT_INVALID_CONTROL_VALUE', control.id);
+  return resolved;
+}
 /** Reconcile live saved options with the current definition; frozen inputs remain strict. */
 export function reconcilePromptValues(
   program: PromptProgram,

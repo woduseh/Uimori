@@ -28,6 +28,8 @@
 
 ACTUI01 수락 이후 경과/접기/다음 작업/만료, ACTUI04 수락 이전 타이머, ACTUI02 보조 병렬 작업/연결 불확실, ACTUI03 실패 잔류/취소 만료/탐색, ACTUI05 오래된 실패 역전을 각각 유지해요. 응답별 TURNUI와 대상 상태가 달라요.
 
+ACTUI06은 30개 밖 누적 알림·일괄 확인·새 오류와 회차·새로고침 보존, ACTUI07은 원문/hash별 번역 성공 정리·상세 조회 성공/실패의 확인 경계, ACTUI08은 과거 조회의 진행 상태가 최신 reader에서 제거된 뒤 부활하지 않는 경계를 확인해요. 모바일·데스크톱 알림 목록 PNG를 함께 남겨요.
+
 - 유지: `ACTUI01 elapsed time, collapse, next task and completion expiry`
 - 유지: `ACTUI04 sending timer starts before admission and continues after accepted request`
 - 유지: `ACTUI02 auxiliary concurrency, mobile bounds and connection uncertainty`
@@ -40,6 +42,7 @@ AGENTUI01 불완전 초안/undo/JSON 왕복, AGENTUI02 실제 로컬 preview API
 
 - 유지: `AGENTUI01 collaboration stays editable through incomplete drafts, undo and JSON round trips at 390px`
 - 유지: `AGENTUI02 saved collaboration options reach the real preview API and translation stays separate on desktop`
+- 추가: `AGENTUI03`은 390/1440px에서 공통 스위치와 복수 선택의 모양·긴 라벨·가로 넘침, Space 조작과 독립 선택, 저장/재조회 및 boolean 미지정 버튼 제거를 검사해요.
 
 ### `tests/archive-compact-browser.spec.ts`
 
@@ -239,6 +242,8 @@ P01 최신 package/조합의 Run snapshot, P04 수동 모델/연결 권한/역�
 
 PAUI01 동일 preset 수정/복사/삭제, PAUI02 저장/적용 scope, PAUI03 block 이동/삭제/undo의 template draft/focus를 유지해요.
 
+PAUI04는 양방향 블록 드래그·실행 취소·저장/재조회, PAUI05는 390/1440px 계층 정렬·펼침 아이콘·상위 도구 배치와 접힘 뒤 초안 보존을 확인해요.
+
 - 유지: `PAUI01 editing updates the same prompt while copy and deletion stay in the named management menu`
 - 유지: `PAUI02 saving and applying retain distinct scopes with compact actions on desktop and mobile`
 - 유지: `PAUI03 block tools preserve pending template drafts, focus and undo through move and delete`
@@ -258,7 +263,7 @@ PLR02 각 자료 종류 card/list 수정 진입을 유지해요. PLR03에 PLR04�
 
 ### `tests/prompt-redesign-browser.spec.ts`
 
-PRUI01 선택적 template draft 안전과 main/translation 역할별 조합을 유지해요. 개별 prompt 소속이라는 구형 가정의 무관한 preset fixture/빈 text 필드를 제거하고 역할 기준 제목으로 고쳤어요.
+PRUI01 선택적 template draft 안전 검사를 유지해요. 앞선 감사에서는 역할 기준 조합으로 단순화했지만, 현재 계약은 같은 프리셋 소속과 같은 옵션 정의를 모두 요구해요. 서로 다른 프리셋이 동일한 control ID·정의를 사용해도 조합을 표시·적용하지 않는 경계와 본문만 수정했을 때 같은 소속 조합을 유지하는 경계를 함께 확인해요. CURRENTUI01은 정의가 바뀐 이전 조합의 목록 제외와 직접 적용 거부를 확인해요.
 
 - 유지: `PRUI01 optional template draft safety and reusable role-owned combinations`
 

@@ -1,4 +1,5 @@
 import { useId } from 'react';
+import { Switch } from './BooleanControls.js';
 import './toggle-row.css';
 
 export function ToggleRow({
@@ -19,9 +20,7 @@ export function ToggleRow({
         <span>{label}</span>
         {description && <small id={id}>{description}</small>}
       </span>
-      <input
-        type="checkbox"
-        role="switch"
+      <Switch
         aria-label={label}
         aria-describedby={description ? id : undefined}
         checked={checked}

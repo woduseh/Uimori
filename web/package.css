@@ -233,9 +233,6 @@
 }
 .behavior-method-editor .behavior-method-choice input {
   flex: none;
-  width: 18px;
-  height: 18px;
-  min-height: 18px;
   margin-top: 3px;
 }
 .behavior-method-choice span {

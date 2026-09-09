@@ -5,7 +5,7 @@ import { postFixtureChat } from './fixtures/chat.js';
 import { test, expect } from '@playwright/test';
 import type { PromptProgram } from '../core/prompt-program.js';
 
-test('PRUI01 optional template draft safety and reusable role-owned combinations', async ({
+test('PRUI01 template drafts retain same-owner combinations and reject identical controls from another preset', async ({
   page,
   request,
 }, info) => {
@@ -40,12 +40,38 @@ test('PRUI01 optional template draft safety and reusable role-owned combinations
       })
     ).ok()
   ).toBe(true);
-  for (const title of ['Reusable detailed', 'Foreign combination']) {
+  const foreignResponse = await request.post('/api/prompt-presets', {
+    data: { title: 'Different prompt with identical controls', role: 'main', program },
+  });
+  expect(foreignResponse.ok()).toBe(true);
+  const foreign = await foreignResponse.json();
+  let foreignCombinationId = '';
+  for (const [title, owner] of [
+    ['Reusable detailed', saved],
+    ['Foreign combination', foreign],
+  ] as const) {
     const response = await request.post('/api/prompt-combinations', {
-      data: { title, role: 'main', values: { detail: 3 } },
+      data: {
+        title,
+        role: 'main',
+        values: { detail: 3 },
+        owner: { kind: 'preset', id: owner.id },
+        expectedRevision: owner.revision,
+      },
     });
     expect(response.ok()).toBe(true);
+    if (owner.id === foreign.id) foreignCombinationId = (await response.json()).id;
   }
+  const beforeForeign = await (await request.get('/api/prompt-workspace')).json();
+  const denied = await request.post('/api/prompt-workspace/apply-options', {
+    data: {
+      expectedRevision: beforeForeign.revision,
+      role: 'main',
+      combinationId: foreignCombinationId,
+    },
+  });
+  expect(denied.status()).toBe(409);
+  expect(await (await request.get('/api/prompt-workspace')).json()).toEqual(beforeForeign);
   const chatResponse = await postFixtureChat(request, {
     data: { title: 'Synthetic prompt redesign browser' },
   });
@@ -59,19 +85,19 @@ test('PRUI01 optional template draft safety and reusable role-owned combinations
   await page.getByRole('button', { name: '전역 프롬프트 설정', exact: true }).click();
   const editor = page.getByRole('region', { name: '현재 프롬프트 설정' }),
     composer = page.getByTestId('prompt-composer');
-  const global = composer.getByLabel('전역 창작 조합', { exact: true });
+  const global = composer.getByLabel('이 프롬프트의 옵션 조합', { exact: true });
   await expect(global.getByRole('option', { name: 'Reusable detailed', exact: true })).toHaveCount(
     1
   );
   await expect(
     global.getByRole('option', { name: 'Foreign combination', exact: true })
-  ).toHaveCount(1);
+  ).toHaveCount(0);
   await global.selectOption({ label: 'Reusable detailed' });
   await expect(composer.getByLabel('합성 상세도', { exact: true })).toHaveValue('3');
   await composer.getByLabel('합성 상세도', { exact: true }).fill('2');
   await expect(composer.getByText('불러온 조합에서 수정됨', { exact: true })).toBeVisible();
   await composer.getByLabel('새 조합 이름', { exact: true }).fill('Reusable medium');
-  await composer.getByRole('button', { name: '전역 창작 조합으로 저장', exact: true }).click();
+  await composer.getByRole('button', { name: '옵션 조합 저장', exact: true }).click();
   await expect(global).toContainText('Reusable medium');
   const block = composer.locator('.pc-block').first();
   await block.locator('summary').first().click();
@@ -101,9 +127,10 @@ test('PRUI01 optional template draft safety and reusable role-owned combinations
   await expect(global.getByRole('option', { name: 'Reusable medium', exact: true })).toHaveCount(1);
   await expect(
     global.getByRole('option', { name: 'Foreign combination', exact: true })
-  ).toHaveCount(1);
+  ).toHaveCount(0);
   const revised = (await (await request.get('/api/prompt-workspace')).json()).main;
   expect(revised.program.blocks[0].template[0].kind).toBe('if');
+  expect(revised.presetId).toBe(saved.id);
   await expect(composer.getByLabel('합성 상세도', { exact: true })).toHaveValue('2');
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(
     true

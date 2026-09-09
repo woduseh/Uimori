@@ -4,10 +4,24 @@ await runBrowserVerification({
   name: 'activity',
   prefix: 'activity-ui',
   scope:
-    'Synthetic reader activity timers, collapse, completion expiry, failures and mobile layout',
+    'Synthetic reader activity timers, paginated notifications, acknowledgment, translation recovery and mobile layout',
   files: ['tests/activity-browser.spec.ts'],
-  requiredCases: ['ACTUI01', 'ACTUI02', 'ACTUI03', 'ACTUI04', 'ACTUI05'],
-  requiredScreenshots: ['activity-desktop.png', 'activity-mobile.png'],
+  requiredCases: [
+    'ACTUI01',
+    'ACTUI02',
+    'ACTUI03',
+    'ACTUI04',
+    'ACTUI05',
+    'ACTUI06',
+    'ACTUI07',
+    'ACTUI08',
+  ],
+  requiredScreenshots: [
+    'activity-desktop.png',
+    'activity-mobile.png',
+    'activity-notifications-mobile.png',
+    'activity-notifications-desktop.png',
+  ],
   timeout: 180000,
   limitations: [
     'This runner does not replace provider codec, loopback transport, M0 or M1-local verification.',

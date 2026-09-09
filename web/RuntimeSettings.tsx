@@ -1,3 +1,4 @@
+import { Switch } from './BooleanControls.js';
 import { useEffect, useState } from 'react';
 import type { Chat, Settings } from '../core/types.js';
 import { api } from './api.js';
@@ -73,9 +74,8 @@ export function SettingsEditor({
           <small className="full">한국어 번역은 각 장면의 번역 보기를 누를 때 시작해요.</small>
           <small className="full">번역은 원문 전체를 현재 번역 프롬프트와 설정으로 요청해요.</small>
           <label className="check">
-            <input
+            <Switch
               aria-label="장면 상태 자동 실행"
-              type="checkbox"
               checked={value.status}
               onChange={(event) => update('status', event.target.checked)}
             />

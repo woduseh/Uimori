@@ -36,6 +36,11 @@ export async function navigationAction(page: Page, name: string, botTitle?: stri
     return;
   }
   const libraryTab = ['봇', '페르소나', '모듈'].includes(name);
+  if (libraryTab || name === '서재' || name === '프롬프트') {
+    const menu = nav.locator('.sidebar-app-menu');
+    if ((await menu.getAttribute('open')) === null)
+      await menu.getByLabel('앱 메뉴', { exact: true }).click();
+  }
   await nav.getByRole('button', { name: libraryTab ? '서재' : name, exact: true }).click();
   if (libraryTab)
     await page.getByTestId('library-panel').getByRole('tab', { name, exact: true }).click();
@@ -204,6 +209,8 @@ export async function createPromptChoice(request: APIRequestContext, title: stri
     data: {
       title: `${title} choices`,
       role: 'main',
+      owner: { kind: 'preset', id: prompt.id },
+      expectedRevision: prompt.revision,
       values: { detail: 3, coNarration: true },
     },
   });

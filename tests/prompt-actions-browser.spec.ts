@@ -30,6 +30,166 @@ const program = (): PromptProgram => ({
     { id: 'history', title: '합성 대화', kind: 'history', from: 0, to: 'end' },
   ],
 });
+
+test('PAUI05 prompt hierarchy aligns disclosures and compact tools while folding preserves drafts', async ({
+  page,
+  request,
+}, info) => {
+  const preset = await seed(request);
+  await page.goto('/');
+  await navigationAction(page, '프롬프트');
+  await page.getByRole('button', { name: `${preset.title} 프롬프트 편집`, exact: true }).click();
+  const editor = page.getByTestId('prompt-editor');
+  const composer = editor.getByTestId('prompt-composer');
+  const parent = composer.locator('.pc-composer-fold > summary');
+  const block = composer.locator('#prompt-block-instructions');
+  await block.locator(':scope > summary').click();
+  const body = block.getByLabel('합성 지침 본문', { exact: true });
+  const draft = 'SYNTHETIC_HIERARCHY_UNSAVED';
+  await body.fill(draft);
+  await parent.click();
+  await expect(body).not.toBeVisible();
+  await parent.click();
+  await expect(body).toHaveValue(draft);
+  await expect(editor.getByRole('button', { name: '저장', exact: true })).toBeEnabled();
+  const sections = composer.locator('.pc-section');
+  for (let index = 0; index < (await sections.count()); index++) {
+    const section = sections.nth(index);
+    if ((await section.getAttribute('open')) !== null)
+      await section.locator(':scope > summary').click();
+  }
+  for (const width of [390, 1440]) {
+    await page.setViewportSize({ width, height: 1000 });
+    await parent.scrollIntoViewIfNeeded();
+    const children = composer.locator('.pc-section > summary').filter({ visible: true });
+    expect(await children.count()).toBeGreaterThanOrEqual(4);
+    const childBoxes = await children.evaluateAll((items) =>
+      items.map((item) => {
+        const box = item.getBoundingClientRect();
+        return { x: box.x, height: box.height };
+      })
+    );
+    expect(childBoxes.every((box) => box.height >= 44)).toBe(true);
+    expect(childBoxes.every((box) => Math.abs(box.x - childBoxes[0].x) < 1)).toBe(true);
+    const parentLabel = await parent.locator('strong').boundingBox();
+    expect(parentLabel).not.toBeNull();
+    const childIconPositions = await children
+      .locator(':scope > .pc-disclosure-icon')
+      .evaluateAll((items) => items.map((item) => item.getBoundingClientRect().x));
+    expect(childIconPositions.every((x) => Math.abs(x - parentLabel!.x) < 1)).toBe(true);
+    const disclosureIcons = composer.locator('.pc-disclosure-icon').filter({ visible: true });
+    expect(await disclosureIcons.count()).toBeGreaterThanOrEqual((await children.count()) + 1);
+    const iconBoxes = await disclosureIcons.evaluateAll((items) =>
+      items.map((item) => {
+        const box = item.getBoundingClientRect();
+        return { width: box.width, height: box.height };
+      })
+    );
+    expect(
+      iconBoxes.every((box) => Math.abs(box.width - 16) < 1 && Math.abs(box.height - 16) < 1)
+    ).toBe(true);
+    const tools = composer.locator('.pc-composer-tools');
+    await expect(tools).toBeVisible();
+    await expect(tools).toHaveCSS('position', 'absolute');
+    const parentBox = await parent.boundingBox();
+    const toolsBox = await tools.boundingBox();
+    expect(parentBox).not.toBeNull();
+    expect(toolsBox).not.toBeNull();
+    expect(
+      Math.abs(parentBox!.y + parentBox!.height / 2 - toolsBox!.y - toolsBox!.height / 2)
+    ).toBeLessThanOrEqual(2);
+    expect(toolsBox!.x).toBeGreaterThan(parentBox!.x + parentBox!.width / 2);
+    if (width === 390) await expect(parent.locator('.pc-badge')).not.toBeVisible();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(
+      true
+    );
+    expect(
+      await composer.evaluate((element) => element.scrollWidth <= element.clientWidth + 1)
+    ).toBe(true);
+    if (visualReview)
+      await page.screenshot({ path: info.outputPath(`prompt-hierarchy-${width}.png`) });
+  }
+  await composer.getByLabel('프롬프트 블록 접기/펼치기', { exact: true }).click();
+  await expect(body).toHaveValue(draft);
+  const saved = (await (
+    await request.get(`/api/prompt-presets/${preset.id}`)
+  ).json()) as PromptPreset;
+  expect(saved.program).toEqual(preset.program);
+});
+
+test('PAUI04 desktop block drag preserves content, supports undo and persists both drop directions', async ({
+  page,
+  request,
+}, info) => {
+  const preset = await seed(request),
+    observed = observe(page);
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.goto('/');
+  await navigationAction(page, '프롬프트');
+  await page.getByRole('button', { name: `${preset.title} 프롬프트 편집`, exact: true }).click();
+  const editor = page.getByTestId('prompt-editor'),
+    composer = editor.getByTestId('prompt-composer');
+  const blocks = composer.locator('.pc-block');
+  const order = () => blocks.evaluateAll((items) => items.map((item) => item.id));
+  const initial = ['prompt-block-instructions', 'prompt-block-example', 'prompt-block-history'];
+  await expect.poll(order).toEqual(initial);
+  const instruction = composer.locator('#prompt-block-instructions');
+  const history = composer.locator('#prompt-block-history');
+  const handle = instruction.getByRole('button', { name: '합성 지침 블록 드래그', exact: true });
+  await expect(handle).toHaveAttribute('draggable', 'true');
+  const historyBox = await history.boundingBox();
+  expect(historyBox).not.toBeNull();
+  await handle.dragTo(history, { targetPosition: { x: 30, y: historyBox!.height - 2 } });
+  await expect
+    .poll(order)
+    .toEqual(['prompt-block-example', 'prompt-block-history', 'prompt-block-instructions']);
+  // Existing explicit controls remain available alongside the drag handle.
+  await instruction.locator(':scope > summary').click();
+  await expect(
+    instruction.getByRole('button', { name: '합성 지침 위로', exact: true })
+  ).toBeEnabled();
+  await expect(
+    instruction.getByRole('button', { name: '합성 지침 아래로', exact: true })
+  ).toBeDisabled();
+  await instruction.locator(':scope > summary').click();
+  await composer.getByRole('button', { name: '이전 편집으로', exact: true }).click();
+  await expect.poll(order).toEqual(initial);
+  await history
+    .getByRole('button', { name: '합성 대화 블록 드래그', exact: true })
+    .dragTo(instruction, {
+      targetPosition: { x: 30, y: 2 },
+    });
+  const expected = ['prompt-block-history', 'prompt-block-instructions', 'prompt-block-example'];
+  await expect.poll(order).toEqual(expected);
+  const updatedResponse = page.waitForResponse(
+    (response) =>
+      response.url().endsWith(`/api/prompt-presets/${preset.id}`) &&
+      response.request().method() === 'PUT'
+  );
+  await editor.getByRole('button', { name: '저장', exact: true }).click();
+  expect((await updatedResponse).ok()).toBe(true);
+  const saved = (await (
+    await request.get(`/api/prompt-presets/${preset.id}`)
+  ).json()) as PromptPreset;
+  expect(saved.program).toEqual({
+    ...preset.program,
+    blocks: [preset.program.blocks[2], preset.program.blocks[0], preset.program.blocks[1]],
+  });
+  if (visualReview) {
+    await blocks.first().scrollIntoViewIfNeeded();
+    await page.screenshot({ path: info.outputPath('prompt-block-drag-desktop.png') });
+  }
+  await page.reload();
+  await navigationAction(page, '프롬프트');
+  await page.getByRole('button', { name: `${preset.title} 프롬프트 편집`, exact: true }).click();
+  await expect.poll(order).toEqual(expected);
+  await instruction.locator(':scope > summary').click();
+  await expect(instruction.getByLabel('합성 지침 본문', { exact: true })).toHaveValue(
+    'SYNTHETIC_INSTRUCTIONS'
+  );
+  expect(observed.calls).toEqual([]);
+  expect(observed.errors).toEqual([]);
+});
 async function seed(request: APIRequestContext) {
   const response = await request.post('/api/prompt-presets', {
     data: { title: `PAUI 합성 ${crypto.randomUUID()}`, role: 'main', program: program() },
@@ -67,7 +227,7 @@ test('PAUI01 editing updates the same prompt while copy and deletion stay in the
   await navigationAction(page, '프롬프트');
   await page.getByRole('button', { name: `${preset.title} 프롬프트 편집`, exact: true }).click();
   const editor = page.getByTestId('prompt-editor');
-  const save = editor.getByRole('button', { name: '수정 저장', exact: true });
+  const save = editor.getByRole('button', { name: '저장', exact: true });
   await expect(save).toBeDisabled();
   await expect(
     editor.getByRole('button', { name: '복사본으로 저장', exact: true })
@@ -209,7 +369,7 @@ test('PAUI03 block tools preserve pending template drafts, focus and undo throug
     'prompt-block-instructions'
   );
   await expect(block.getByRole('button', { name: '합성 지침 아래로', exact: true })).toBeFocused();
-  await expect(editor.getByRole('button', { name: '수정 저장', exact: true })).toBeDisabled();
+  await expect(editor.getByRole('button', { name: '저장', exact: true })).toBeDisabled();
   await expect(composer.getByRole('button', { name: '이전 편집으로', exact: true })).toBeDisabled();
   await block.getByLabel('합성 지침 블록 메뉴', { exact: true }).click();
   await expect(block.getByRole('button', { name: '블록 삭제', exact: true })).toBeDisabled();

@@ -36,10 +36,7 @@ test('PKUI04 hundreds of lore entries support folders, search, bulk move and per
   };
   await page.setViewportSize({ width: 1440, height: 1000 });
   await page.goto('/');
-  await page
-    .getByRole('navigation', { name: '자료 탐색', exact: true })
-    .getByRole('button', { name: '서재', exact: true })
-    .click();
+  await navigationAction(page, '서재');
   const library = page.getByTestId('library-panel');
   await createLibraryContent(page);
   await library.getByText('패키지 가져오기·내보내기와 역할 사본', { exact: true }).click();
@@ -158,10 +155,7 @@ test('PKUI03 native JSON import remains a reviewed persona draft and preserves l
 }, info) => {
   await page.setViewportSize({ width: 1440, height: 1000 });
   await page.goto('/');
-  await page
-    .getByRole('navigation', { name: '자료 탐색', exact: true })
-    .getByRole('button', { name: '서재', exact: true })
-    .click();
+  await navigationAction(page, '서재');
   await expect(page.getByRole('button', { name: '자료 가져오기', exact: true })).toHaveCount(0);
   const library = page.getByTestId('library-panel');
   await library.getByRole('tab', { name: '페르소나', exact: true }).click();
@@ -255,10 +249,7 @@ test('PKUI01 package editing preserves internal lore, instructions, unsaved work
   const errors: string[] = [];
   page.on('pageerror', (error) => errors.push(error.message));
   await page.goto('/');
-  await page
-    .getByRole('navigation', { name: '자료 탐색', exact: true })
-    .getByRole('button', { name: '서재', exact: true })
-    .click();
+  await navigationAction(page, '서재');
   const library = page.getByTestId('library-panel');
   await expect(library.getByRole('tab')).toHaveText(['봇', '페르소나', '모듈']);
   await navigationAction(page, '프롬프트');

@@ -1,7 +1,9 @@
 import { Dialog } from './Dialog.js';
+import { ActionMenu } from './ActionMenu.js';
 import { useChatActivities } from './useChatActivities.js';
 import type { DragEvent } from 'react';
 import { DeleteButton } from './DeleteButton.js';
+import { IconButton } from './IconButton.js';
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import {
   ChevronDown,
@@ -12,6 +14,8 @@ import {
   Folder,
   Plus,
   Search,
+  ArrowUp,
+  ArrowDown,
 } from 'lucide-react';
 import { LibraryIcon, PromptIcon, SettingsIcon } from './ui-icons.js';
 import type { Content, Library } from '../core/product.js';
@@ -688,7 +692,12 @@ export function BotNavigation(props: Props) {
       >
         {menuChat && (
           <div className="bot-chat-menu">
-            <strong>{menuChat.title}</strong>
+            <ChatTitleEditor
+              key={menuChat.id}
+              chat={menuChat}
+              disabled={busy}
+              onChatsChanged={onChatsChanged}
+            />
             <label>
               폴더로 이동
               <select
@@ -717,18 +726,18 @@ export function BotNavigation(props: Props) {
               <FolderPlus size={16} aria-hidden="true" />
               <span>새 폴더 만들기</span>
             </button>
-            <div className="form-actions">
-              <button
-                className="secondary"
+            <div className="bot-chat-menu-actions">
+              <IconButton
+                label="위로 이동"
+                icon={ArrowUp}
                 disabled={busy || !!query || menuIndex <= 0}
                 onClick={() =>
                   moveChat(menuChat, menuChat.folderId ?? null, menuSiblings[menuIndex - 1].id)
                 }
-              >
-                위로 이동
-              </button>
-              <button
-                className="secondary"
+              />
+              <IconButton
+                label="아래로 이동"
+                icon={ArrowDown}
                 disabled={busy || !!query || menuIndex >= menuSiblings.length - 1}
                 onClick={() =>
                   moveChat(
@@ -737,19 +746,18 @@ export function BotNavigation(props: Props) {
                     menuSiblings[menuIndex + 2]?.id ?? null
                   )
                 }
-              >
-                아래로 이동
-              </button>
+              />
+              <DeleteButton
+                path={`/chats/${encodeURIComponent(menuChat.id)}`}
+                preparePath={`/chats/${encodeURIComponent(menuChat.id)}/deletion-impact`}
+                title={menuChat.title}
+                label="채팅 삭제"
+                iconOnly
+                disabled={busy}
+                onError={onError}
+                onDeleted={onChatsChanged}
+              />
             </div>
-            <DeleteButton
-              path={`/chats/${encodeURIComponent(menuChat.id)}`}
-              preparePath={`/chats/${encodeURIComponent(menuChat.id)}/deletion-impact`}
-              title={menuChat.title}
-              label="채팅 삭제"
-              disabled={busy}
-              onError={onError}
-              onDeleted={onChatsChanged}
-            />
           </div>
         )}
       </Dialog>
@@ -760,20 +768,133 @@ export function BotNavigation(props: Props) {
             진행 중 {tasks}
           </button>
         )}
-        <nav className="bot-library-nav" aria-label="자료 탐색">
-          {navigation.map(([tab, label, Icon]) => (
-            <button type="button" className="nav-button" key={tab} onClick={() => onLibrary(tab)}>
-              <Icon size={17} />
-              {label}
-            </button>
-          ))}
+        <nav className="sidebar-app-actions" aria-label="앱 탐색">
+          <button type="button" className="nav-button" onClick={onSettings}>
+            <SettingsIcon size={19} aria-hidden="true" />
+            설정
+          </button>
+          <ActionMenu label="앱 메뉴" placement="top" className="sidebar-app-menu">
+            {navigation.map(([tab, label, Icon]) => (
+              <button
+                type="button"
+                key={tab}
+                onClick={(event) => {
+                  const menu = event.currentTarget.closest('details');
+                  if (menu) menu.open = false;
+                  onLibrary(tab);
+                }}
+              >
+                <Icon size={17} aria-hidden="true" />
+                {label}
+              </button>
+            ))}
+          </ActionMenu>
         </nav>
-        <button className="nav-button" onClick={onSettings}>
-          <SettingsIcon size={19} aria-hidden="true" />
-          설정
-        </button>
       </div>
     </div>
+  );
+}
+
+function ChatTitleEditor({
+  chat,
+  disabled,
+  onChatsChanged,
+}: {
+  chat: Chat;
+  disabled: boolean;
+  onChatsChanged: () => Promise<void>;
+}) {
+  const [draft, setDraft] = useState(chat.title);
+  const [baseTitle, setBaseTitle] = useState(chat.title);
+  const [baseTitleRevision, setBaseTitleRevision] = useState(chat.titleRevision ?? 0);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+  const lock = useRef(false);
+  const observedTitleRevision = useRef(chat.titleRevision ?? 0);
+  const dirty = draft !== baseTitle;
+  // Background refreshes may publish an automatic title while the user is typing.
+  // Only adopt it when there is no manual draft to preserve.
+  useEffect(() => {
+    const changed = observedTitleRevision.current !== (chat.titleRevision ?? 0);
+    observedTitleRevision.current = chat.titleRevision ?? 0;
+    if (changed && !dirty && !saving) {
+      setDraft(chat.title);
+      setBaseTitle(chat.title);
+      setBaseTitleRevision(chat.titleRevision ?? 0);
+    }
+  }, [chat.title, chat.titleRevision, dirty, saving]);
+  async function save() {
+    if (lock.current || !draft.trim()) return;
+    lock.current = true;
+    setSaving(true);
+    setError('');
+    try {
+      const updated = await api<Chat>(
+        `/chats/${encodeURIComponent(chat.id)}/title`,
+        { title: draft.trim(), expectedTitleRevision: baseTitleRevision },
+        'PATCH'
+      );
+      setDraft(updated.title);
+      setBaseTitle(updated.title);
+      setBaseTitleRevision(updated.titleRevision ?? 0);
+      await onChatsChanged();
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : '채팅 제목을 저장하지 못했어요.');
+    } finally {
+      lock.current = false;
+      setSaving(false);
+    }
+  }
+  return (
+    <form
+      className="bot-chat-title-editor"
+      onSubmit={(event) => {
+        event.preventDefault();
+        void save();
+      }}
+    >
+      <label>
+        채팅 제목
+        <input
+          aria-label="채팅 제목"
+          value={draft}
+          maxLength={200}
+          required
+          disabled={disabled || saving}
+          onChange={(event) => setDraft(event.target.value)}
+        />
+      </label>
+      {dirty && (
+        <div className="form-actions">
+          <button disabled={disabled || saving || !draft.trim()}>
+            {saving ? '저장 중…' : '제목 저장'}
+          </button>
+          <button
+            type="button"
+            className="secondary"
+            disabled={saving}
+            onClick={() => {
+              setDraft(chat.title);
+              setBaseTitle(chat.title);
+              setBaseTitleRevision(chat.titleRevision ?? 0);
+              setError('');
+            }}
+          >
+            취소
+          </button>
+        </div>
+      )}
+      {dirty && (chat.titleRevision ?? 0) !== baseTitleRevision && (
+        <small>
+          제목이 다른 곳에서 변경됐어요. 입력한 내용은 유지돼요. 취소하면 최신 제목을 불러와요.
+        </small>
+      )}
+      {error && (
+        <p className="error" role="alert">
+          {error}
+        </p>
+      )}
+    </form>
   );
 }
 

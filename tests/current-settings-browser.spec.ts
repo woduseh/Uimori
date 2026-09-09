@@ -3,7 +3,7 @@ import { preservePromptWorkspace } from './fixtures/prompt-workspace.js';
 import { test, expect, type APIRequestContext } from '@playwright/test';
 import { fixtureBotInput } from './fixtures/chat.js';
 import type { ChatDetail } from '../core/types.js';
-import type { PromptPreset } from '../core/product.js';
+import type { Library, PromptPreset } from '../core/product.js';
 import type { PromptProgram } from '../core/prompt-program.js';
 import { navigationAction, openNewStoryOptions } from './ui-navigation.js';
 
@@ -13,7 +13,7 @@ async function detail(request: APIRequestContext, chatId: string): Promise<ChatD
   return response.json();
 }
 
-test('CURRENTUI01 saved creative combinations follow current prompt controls without revision choices', async ({
+test('CURRENTUI01 changed control definitions exclude old combinations and reject direct application', async ({
   page,
   request,
 }, info) => {
@@ -59,6 +59,8 @@ test('CURRENTUI01 saved creative combinations follow current prompt controls wit
       title: '보존한 창작 조합',
       role: 'main',
       values: { detail: 3, style: 'old', removed: true },
+      owner: { kind: 'preset', id: prompt.id },
+      expectedRevision: prompt.revision,
     },
   });
   expect(combinationResponse.ok()).toBe(true);
@@ -112,14 +114,29 @@ test('CURRENTUI01 saved creative combinations follow current prompt controls wit
   await page.getByRole('button', { name: '입력창 더보기', exact: true }).click();
   await page.getByRole('button', { name: '창작 옵션', exact: true }).click();
   const panel = page.getByRole('region', { name: '창작 옵션 패널', exact: true });
-  await panel.getByLabel('창작 옵션 프리셋', { exact: true }).selectOption(combination.id);
-  await expect(panel.getByLabel('합성 서술량', { exact: true })).toHaveValue('3');
+  await expect(panel.getByRole('option', { name: '보존한 창작 조합', exact: true })).toHaveCount(0);
+  const currentWorkspace = await (await request.get('/api/prompt-workspace')).json();
+  expect(currentWorkspace.main.presetId).toBe(prompt.id);
+  const rejected = await request.post('/api/prompt-workspace/apply-options', {
+    data: {
+      expectedRevision: currentWorkspace.revision,
+      role: 'main',
+      combinationId: combination.id,
+    },
+  });
+  expect(rejected.status()).toBe(409);
+  expect(await (await request.get('/api/prompt-workspace')).json()).toEqual(currentWorkspace);
+  const library = (await (await request.get('/api/library')).json()) as Library;
+  expect(library.promptCombinations?.find((item) => item.id === combination.id)).toEqual(
+    combination
+  );
+  await expect(panel.getByLabel('합성 서술량', { exact: true })).toHaveValue('1');
   await expect(panel.getByLabel('합성 문체', { exact: true })).toHaveValue(
     JSON.stringify('current')
   );
   await expect(panel.getByLabel('새 합성 옵션', { exact: true })).not.toBeChecked();
   await expect(panel.getByLabel('제거할 옵션', { exact: true })).toHaveCount(0);
-  await expect(panel).toContainText('현재 옵션과 맞지 않는 이전 선택값은 기본값으로 조정했어요.');
+  await panel.getByLabel('합성 서술량', { exact: true }).fill('3');
   await panel.getByRole('button', { name: '현재 옵션 적용', exact: true }).click();
   await expect
     .poll(async () => (await (await request.get('/api/prompt-workspace')).json()).main.values)

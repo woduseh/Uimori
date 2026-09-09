@@ -1,3 +1,4 @@
+import { navigationAction } from './ui-navigation.js';
 import { visualReview } from './fixtures/visual-review.js';
 import { editLibraryContent, selectPackageSection } from './ui-navigation.js';
 import { test, expect, type APIRequestContext, type Page } from '@playwright/test';
@@ -239,10 +240,7 @@ test('SEGMENTUI02 current modules preserve unapplied segment drafts and existing
 
   await page.setViewportSize({ width: 1440, height: 1000 });
   await page.goto('/');
-  await page
-    .getByRole('navigation', { name: '자료 탐색', exact: true })
-    .getByRole('button', { name: '서재', exact: true })
-    .click();
+  await navigationAction(page, '서재');
   const library = page.getByTestId('library-panel');
   await editLibraryContent(page, `${owner.title}`);
   const fields = library.getByRole('region', { name: '패키지 구성', exact: true });

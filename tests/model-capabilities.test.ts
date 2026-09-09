@@ -67,6 +67,19 @@ test('new provider models validate their own thinking modes and output boundarie
     )
   ).not.toThrow();
   expect(modelCapability('openai-chat-v1', 'spacexai/grok-4.6')).toBeUndefined();
+  for (const serviceTier of ['default', 'flex'])
+    expect(() =>
+      validateModelOptions({ ...base, serviceTier }, 'vercel-chat-v1', 'openai/gpt-5.6-sol')
+    ).not.toThrow();
+  const existingSol = {
+    ...base,
+    modelId: 'openai/gpt-5.6-sol',
+    capabilityRevision: '2026-09-09.1',
+  };
+  expect(generationFromModel(existingSol, 'vercel-chat-v1')).toEqual(base);
+  expect(() =>
+    validateModelOptions({ ...base, serviceTier: 'flex' }, 'vercel-chat-v1', 'spacexai/grok-4.6')
+  ).toThrow();
   for (const id of ['deepseek-v4-pro', 'deepseek-v4-flash']) {
     expect(() =>
       validateModelOptions(

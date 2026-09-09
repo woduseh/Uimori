@@ -73,6 +73,8 @@ async function fixture(request: APIRequestContext) {
     data: {
       title: '합성 기본 창작 프리셋',
       role: 'main',
+      owner: { kind: 'preset', id: prompt.id },
+      expectedRevision: prompt.revision,
       values: { language: 'ko', customLanguage: '', inner: false, detail: 1 },
     },
   });
@@ -114,7 +116,7 @@ test('chat creative options preserve drafts, apply explicitly and fit desktop/mo
   await expect(custom).toBeHidden();
   await language.selectOption({ label: '직접 지정' });
   await custom.fill('프랑스어');
-  const inner = panel.getByRole('checkbox', { name: '내면 서술 강조', exact: true });
+  const inner = panel.getByRole('switch', { name: '내면 서술 강조', exact: true });
   await expect(inner).not.toBeChecked();
   await inner.check();
   expect((await detail(request, chat.id)).profile).toEqual(before);
@@ -123,7 +125,7 @@ test('chat creative options preserve drafts, apply explicitly and fit desktop/mo
   await panel.getByRole('button', { name: '창작 옵션 닫기', exact: true }).click();
   await expect(panel).toBeHidden();
   await page.getByRole('button', { name: '입력창 더보기', exact: true }).click();
-  await expect(page.getByLabel('빠른 창작 프리셋', { exact: true })).toBeDisabled();
+  await expect(page.getByLabel('빠른 옵션 조합', { exact: true })).toBeDisabled();
   await expect(open).toBeFocused();
   await open.click();
   await expect(custom).toHaveValue('프랑스어');

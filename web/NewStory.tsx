@@ -27,6 +27,7 @@ import './new-story.css';
 
 type StorySelection = {
   title: string;
+  autoTitle: boolean;
   bot: Content | null;
   persona: Content | null;
   modules: Content[];
@@ -220,6 +221,7 @@ export function NewStory({
     return structuredClone({
       title:
         title.trim() || (selectedBot ? `${selectedBot.title}의 채팅`.slice(0, 100) : '새로운 채팅'),
+      autoTitle: !title.trim(),
       bot: selectedBot ?? null,
       persona: selectedPersona ?? null,
       modules: selectedModules,
@@ -264,6 +266,7 @@ export function NewStory({
         uncertain.current = true;
         created.current = await api<Chat>('/chats', {
           title: selection.title,
+          autoTitle: selection.autoTitle,
           botId: selection.bot!.id,
           folderId: initialFolder?.id ?? null,
         });

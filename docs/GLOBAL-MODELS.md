@@ -14,7 +14,7 @@
 
 ## 저장과 실행 경계
 
-`GET /api/model-workspace`는 `{revision, routes, translationPolicy}`를 반환하고, `PUT`은 `expectedRevision`으로 동시 편집을 보호해요. 현재 프롬프트와 같은 `prompt_workspace` JSON 행에 저장하므로 모델·프롬프트의 동시 저장 충돌도 CAS로 처리해요. 프리셋을 적용하면 현재 작업본으로 복사하며, 프리셋 후속 수정·삭제가 현재 작업본이나 과거 실행을 바꾸지 않아요.
+`GET /api/model-workspace`는 `{revision, routes, translationPolicy, titleModel}`을 반환하고, `PUT`은 `expectedRevision`으로 동시 편집을 보호해요. `titleModel`은 선택적인 `{id}` 참조 또는 `null`이며, PUT에서 생략하면 기존 값을 유지해요. 현재 프롬프트와 같은 `prompt_workspace` JSON 행에 저장하므로 모델·프롬프트의 동시 저장 충돌도 CAS로 처리해요. 프리셋을 적용하면 현재 작업본으로 복사하며, 프리셋 후속 수정·삭제가 현재 작업본이나 과거 실행을 바꾸지 않아요.
 
 기존 v14 DB에 역할 설정이 없으면 모두 미지정으로 읽어요. 기존 채팅 body의 모델 값은 전역 기본값으로 채택하지 않아요. 운영 DB 초기화·일괄 이관·삭제는 하지 않아요. API의 채팅 `profile.routes`는 현재 전역 설정을 보여 주는 읽기 전용 projection이며 채팅별 선택 저장 경로가 아니에요. 보관된 Run의 `snapshot.profile.routes/models`는 과거 실행의 고정 정보예요.
 
@@ -33,6 +33,9 @@ source/hash·revision/CAS·idempotency·worker 소유권·취소·중복 방지 
 
 ## 별도 기능 모델
 
+- 채팅 제목 모델은 설정 → 현재 모델의 선택 항목 `titleModel`이에요. 기본은 미지정이며 자동 제목 생성을 끄고, 본문 모델로 대체하지 않아요. 지정하면 새 채팅의 첫 성공 응답 뒤 제목을 한 번 생성하며 사용자가 직접 바꾼 제목은 덮어쓰지 않아요. 본문·번역·표시 상태·이미지의 `TaskRole`이나 채팅 `profile.routes`에는 추가하지 않아요.
+  - 새 채팅에서 제목을 직접 입력한 경우와 기존 채팅·포크는 자동 생성 대상이 아니에요. 생성 시작 시 모델·연결과 첫 응답을 고정하고 최대 1회·25초·출력 256토큰으로 실행해요. 전송 전 attempt를 기록하며 실패·재시작 후 자동 재호출하지 않아요. 수동 제목 저장·원문 변경·채팅 삭제가 발생하면 늦은 결과를 적용하지 않아요.
+  - 채팅 메뉴에서 제목을 200자까지 반복 수정할 수 있어요. `PATCH /api/chats/:id/title`의 `expectedTitleRevision`은 제목 이벤트 revision을 사용해 같은 문자열로 저장한 수동 의사와 ABA 충돌도 보호해요. 제목 변경은 원문·설정·폴더 revision을 바꾸지 않아요.
 - 표시 상태 역할과 작품 상태 추적은 서로 다른 기능이에요. `StoryConfig.stateModel`과 `memory.model`은 작품의 상태·기억 기능 설정이며 기능 활성화·상태 모듈·출처 및 checkpoint와 함께 관리해요. 일반 본문·번역을 쓰기 위해 다시 설정할 필요는 없어요.
 - 작문 보조의 전용 모델은 전역 현재 작문 프롬프트의 `collaboration.agents[].model`에 있어요. 전용 모델이 없으면 해당 Run의 본문 모델을 사용해요. 보조 지침·모델·공유 권한은 Run에 고정하고 메인만 원문을 저장해요.
 - 문맥 요약은 명시된 요약 모델, 해당 Run에 고정한 기억 모델, 고정한 본문 모델 순으로 사용해요. 전역 설정을 호출 도중 다시 읽지 않아요. 모델 프리셋의 평가 도구와 등록 보조도 각 기능의 독립 설정이며, 이번 전역화로 권한이나 호출 한도를 확장하지 않아요.

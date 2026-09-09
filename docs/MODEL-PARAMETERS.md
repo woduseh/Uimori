@@ -16,7 +16,7 @@
 | OpenAI Responses | `gpt-5.6-sol`, `gpt-5.6-terra`, `gpt-5.6-luna`, `gpt-5.6`, `gpt-6-astra` | Reasoning Effort/Mode/Context, Verbosity, Service Tier(Flex 포함) |
 | Anthropic Messages | `claude-opus-5`, `claude-fable-5-1` | Output Effort, Thinking, Service Tier, 정지 문자열 |
 | OpenAI Chat | 위의 등록된 GPT ID | Reasoning Effort와 Service Tier(Flex 포함). Responses 전용 제어와 캐시 설정은 제공하지 않음 |
-| Vercel AI Gateway | `spacexai/grok-4.6`, `openai/gpt-5.6-sol` | Grok low/medium/high/xhigh, Sol none/low/medium/high/xhigh. 출력 한도 500,000/128,000 |
+| Vercel AI Gateway | `spacexai/grok-4.6`, `openai/gpt-5.6-sol` | Grok low/medium/high/xhigh, Sol none/low/medium/high/xhigh 및 Service Tier default/flex. 출력 한도 500,000/128,000 |
 | DeepSeek · OpenAI 호환 Chat | `deepseek-v4-pro`, `deepseek-v4-flash` | none(추론 끄기)/low/high/max, 기본 high. 출력 한도 384,000. temperature는 none에서만 제공 |
 | 별도 호환 주소 | 수동 모델 ID | 기존 Chat/Responses 기본 계약. 미등록 모델에 native 옵션을 추정하지 않음 |
 

@@ -6,7 +6,8 @@ import { existsSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
 import type { ServerResponse } from 'node:http';
 import { Store } from './store.js';
-import { readerDetail } from './reader.js';
+import { ChatTitleService } from './chat-title.js';
+import { readerActivities, readerDetail } from './reader.js';
 import { chatActivities } from './chat-activity.js';
 import { readerRoutes } from './reader-routes.js';
 import { Controls, type Barrier, type FailurePoint } from './controls.js';
@@ -173,6 +174,15 @@ export async function createApp(options: AppOptions): Promise<App> {
     work.add(promise);
     void promise.finally(() => work.delete(promise));
   };
+  const titles = new ChatTitleService(store, {
+    approvedOrigins,
+    resolveCredential,
+    executeCodex,
+    vertexRequestTier: options.vertexRequestTier,
+    signal: stopping.signal,
+    track,
+    publish,
+  });
   const pumpJobs = () => {
     if (stopping.signal.aborted) return;
     for (const id of store.queuedJobs()) {
@@ -390,6 +400,7 @@ export async function createApp(options: AppOptions): Promise<App> {
           publish(run.chatId);
           pumpJobs();
           pumpStory();
+          titles.afterSource(id);
         } catch (error) {
           if (!stopping.signal.aborted) {
             if (error instanceof ContextCompactionError) {
@@ -566,6 +577,7 @@ export async function createApp(options: AppOptions): Promise<App> {
     publicOrigin: network.publicOrigin,
     publish,
     onChatDeleted: (chatId) => {
+      titles.cancel(chatId);
       for (const response of subscribers.get(chatId)?.keys() ?? []) {
         if (streamAuthority.get(response)?.() !== false)
           response.write(`data: ${JSON.stringify({ kind: 'chat.deleted', chatId })}\n\n`);
@@ -630,10 +642,12 @@ export async function createApp(options: AppOptions): Promise<App> {
   app.get('/api/chat-activities', async () => chatActivities(store));
   app.post('/api/chats', async (request) => {
     const body: RecordBody = record(request.body);
-    fields(body, ['title', 'preset', 'botId', 'folderId']);
+    fields(body, ['title', 'preset', 'botId', 'folderId', 'autoTitle']);
+    if (body.autoTitle !== undefined && typeof body.autoTitle !== 'boolean')
+      throw new HttpError(400, 'Invalid automatic title choice');
     if (body.preset !== undefined && !['calm', 'vivid'].includes(String(body.preset)))
       throw new HttpError(400, 'Invalid preset');
-    return store.createChat(
+    const chat = store.createChat(
       text(body.title, 'title', 120),
       body.preset as Settings['preset'] | undefined,
       {
@@ -643,6 +657,20 @@ export async function createApp(options: AppOptions): Promise<App> {
           : { folderId: body.folderId === null ? null : text(body.folderId, 'folder ID', 100) }),
       }
     );
+    if (body.autoTitle === true) titles.enroll(chat.id);
+    return chat;
+  });
+  app.patch<{ Params: { id: string } }>('/api/chats/:id/title', async (request) => {
+    const body = record(request.body);
+    fields(body, ['title', 'expectedTitleRevision']);
+    const chat = store.renameChat(
+      request.params.id,
+      text(body.title, 'chat title', 200),
+      number(body.expectedTitleRevision, 'title revision', 0)
+    );
+    titles.cancel(chat.id);
+    publish(chat.id);
+    return chat;
   });
   app.get<{ Params: { id: string } }>('/api/chats/:id', async (request) =>
     store.detail(request.params.id)
@@ -650,6 +678,10 @@ export async function createApp(options: AppOptions): Promise<App> {
   app.get<{ Params: { id: string }; Querystring: Record<string, string | undefined> }>(
     '/api/chats/:id/reader',
     async (request) => readerDetail(store, request.params.id, request.query)
+  );
+  app.get<{ Params: { id: string }; Querystring: Record<string, string | undefined> }>(
+    '/api/chats/:id/activities',
+    async (request) => readerActivities(store, request.params.id, request.query)
   );
   app.patch<{ Params: { id: string } }>('/api/chats/:id/settings', async (request) => {
     const body: RecordBody = record(request.body);

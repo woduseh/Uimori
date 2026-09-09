@@ -1,3 +1,4 @@
+import { Switch, SelectionCheckbox } from './BooleanControls.js';
 import { useEffect, useRef, useState } from 'react';
 import {
   PACKAGE_ROLES,
@@ -249,8 +250,7 @@ export function PackageInstructionsEditor({
               <fieldset className="package-instruction-roles">
                 <legend>이 자료를 다음 역할로 사용할 때</legend>
                 <label className="check">
-                  <input
-                    type="checkbox"
+                  <Switch
                     checked={instruction.attachmentRoles === undefined}
                     onChange={(event) =>
                       editInstruction(index, {
@@ -263,8 +263,7 @@ export function PackageInstructionsEditor({
                 {instruction.attachmentRoles !== undefined &&
                   PACKAGE_ROLES.map((role) => (
                     <label className="check" key={role}>
-                      <input
-                        type="checkbox"
+                      <SelectionCheckbox
                         checked={instruction.attachmentRoles?.includes(role) ?? false}
                         onChange={(event) =>
                           editInstruction(index, {

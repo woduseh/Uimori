@@ -77,11 +77,6 @@
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
-.prompt-option-check {
-  flex-direction: row;
-  align-items: center;
-  min-height: 44px;
-}
 .prompt-option-field .prompt-option-unset {
   align-self: flex-start;
   padding: 2px 5px;

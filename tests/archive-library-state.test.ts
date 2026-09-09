@@ -10,6 +10,8 @@ import {
 } from '../server/prompt-workspace.js';
 import { createDefaultPromptProgram } from '../core/prompt-defaults.js';
 import { deleteLibraryItem } from '../server/library-deletion.js';
+import { combinationOwner, matchesPromptCombination } from '../core/prompt-combinations.js';
+import type { SavedPromptCombination } from '../core/product.js';
 
 const owned: { path: string; store: Store }[] = [];
 function database() {
@@ -94,6 +96,7 @@ test('independent option copies and removed library entries round-trip without a
     main: { title: 'Working', program, values: { tone: 'quiet' } },
   });
   const options = source.product.promptCombination({
+    workspaceRevision: promptWorkspace(source).revision,
     title: 'Saved options',
     role: 'main',
     values: { tone: 'bold' },
@@ -116,4 +119,59 @@ test('independent option copies and removed library entries round-trip without a
   expect(target.product.all('content')).toEqual([]);
   expect(target.product.get('content', content.id, 1)).toEqual(content);
   expect(promptWorkspace(target)).toEqual(promptWorkspace(source));
+});
+
+test('archive validates owned option definitions and keeps unbound historical options inactive', () => {
+  const source = database();
+  const options = source.product.promptCombination({
+    title: 'Owned',
+    role: 'main',
+    values: {},
+    workspaceRevision: 1,
+  });
+  const legacy = source.product.save('prompt-combination', {
+    title: 'Unbound',
+    role: 'main',
+    values: {},
+  });
+  const archive = source.product.export();
+  const target = database();
+  target.product.import(archive);
+  const current = promptWorkspace(target).main;
+  expect(
+    matchesPromptCombination(
+      target.product.get<SavedPromptCombination>('prompt-combination', legacy.id),
+      combinationOwner(current, 'main'),
+      'main',
+      current.program
+    )
+  ).toBe(false);
+  for (const attack of [
+    (body: Record<string, unknown>) => {
+      body.controls = undefined;
+    },
+    (body: Record<string, unknown>) => {
+      body.owner = undefined;
+    },
+    (body: Record<string, unknown>) => {
+      body.owner = { kind: 'workspace', role: 'translation' };
+    },
+    (body: Record<string, unknown>) => {
+      body.controls = [{ id: 'x', type: 'invalid' }];
+    },
+    (body: Record<string, unknown>) => {
+      body.values = { absent: true };
+    },
+  ]) {
+    const damaged = structuredClone(archive);
+    const row = damaged.tables.versions.find(
+      (item) => item.kind === 'prompt-combination' && item.id === options.id
+    )!;
+    const body = JSON.parse(row.body);
+    attack(body);
+    row.body = JSON.stringify(body);
+    const empty = database();
+    expect(() => empty.product.import(damaged)).toThrow();
+    expect(empty.product.all('prompt-combination')).toEqual([]);
+  }
 });

@@ -72,6 +72,7 @@ for (const width of [390, 1440]) {
       '번역 거절 판정 모델',
       '표시 상태 모델',
       '이미지 배치 모델',
+      '채팅 제목 모델',
     ])
       await editor.getByLabel(label, { exact: true }).selectOption(ids[0]);
     const policy = editor.locator('details');
@@ -81,6 +82,7 @@ for (const width of [390, 1440]) {
     await editor.getByRole('button', { name: '현재 모델 설정 저장', exact: true }).click();
     await expect.poll(async () => (await models(request)).routes.main?.id).toBe(ids[0]);
     const selected = await models(request);
+    expect(selected.titleModel).toEqual({ id: ids[0] });
     expect(selected.translationPolicy).toEqual({
       refusalModel: { id: ids[0] },
       maxRetries: 2,

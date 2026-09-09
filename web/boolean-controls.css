@@ -1,0 +1,90 @@
+:root input.ui-switch[type="checkbox"][role="switch"] {
+  appearance: none;
+  display: inline-block;
+  position: relative;
+  flex: 0 0 44px;
+  width: 44px;
+  height: 26px;
+  min-height: 26px;
+  margin: 0;
+  padding: 3px;
+  border: 1px solid var(--muted);
+  border-radius: 20px;
+  background: var(--surface);
+  cursor: pointer;
+  vertical-align: middle;
+}
+:root input.ui-switch[type="checkbox"][role="switch"]::before {
+  content: "";
+  display: block;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--muted);
+}
+:root input.ui-switch[type="checkbox"][role="switch"]:checked {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+:root input.ui-switch[type="checkbox"][role="switch"]:checked::before {
+  transform: translateX(18px);
+  background: var(--accent-ink);
+}
+:root input.ui-selection-checkbox[type="checkbox"] {
+  appearance: none;
+  position: relative;
+  flex: 0 0 18px;
+  width: 18px;
+  height: 18px;
+  min-height: 18px;
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--muted);
+  border-radius: 4px;
+  background: var(--surface);
+  vertical-align: middle;
+  cursor: pointer;
+}
+:root input.ui-selection-checkbox:checked,
+:root input.ui-selection-checkbox:indeterminate {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+:root input.ui-selection-checkbox:checked::before {
+  content: "";
+  position: absolute;
+  width: 5px;
+  height: 9px;
+  left: 5px;
+  top: 1px;
+  border: solid var(--accent-ink);
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+:root input.ui-selection-checkbox:indeterminate::before {
+  content: "";
+  position: absolute;
+  inset: 7px 3px;
+  background: var(--accent-ink);
+  border: 0;
+  transform: none;
+}
+:root input.ui-switch:focus-visible,
+:root input.ui-selection-checkbox:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+:root input.ui-switch:disabled,
+:root input.ui-selection-checkbox:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+:root label:has(> .ui-switch),
+:root label:has(> .ui-selection-checkbox) {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  min-height: 44px;
+}

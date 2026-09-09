@@ -1,3 +1,4 @@
+import { SelectionCheckbox } from './BooleanControls.js';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { AddIcon } from './ui-icons.js';
 import type { Library, PromptPreset, PromptRole } from '../core/product.js';
@@ -339,8 +340,7 @@ export function PromptLibrary({
                   {selecting && (
                     <label className="library-select-check">
                       <span className="sr-only">{item.title} 선택</span>
-                      <input
-                        type="checkbox"
+                      <SelectionCheckbox
                         aria-label={`${item.title} 선택`}
                         checked={selection.includes(item.id)}
                         onChange={(event) =>

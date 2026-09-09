@@ -1,3 +1,4 @@
+import { navigationAction } from './ui-navigation.js';
 import { preservePromptWorkspace } from './fixtures/prompt-workspace.js';
 import { visualReview } from './fixtures/visual-review.js';
 import { test, expect, type Page, type APIRequestContext } from '@playwright/test';
@@ -20,10 +21,7 @@ const png = Buffer.from(
 async function libraryFor(page: Page, role: '페르소나' | '모듈') {
   await page.setViewportSize({ width: 1440, height: 1000 });
   await page.goto('/');
-  await page
-    .getByRole('navigation', { name: '자료 탐색', exact: true })
-    .getByRole('button', { name: '서재', exact: true })
-    .click();
+  await navigationAction(page, '서재');
   const library = page.getByTestId('library-panel');
   await library.getByRole('tab', { name: role, exact: true }).click();
   return library;

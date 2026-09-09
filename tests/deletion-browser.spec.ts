@@ -159,6 +159,8 @@ test('DEL02 prompt combinations and presets have deletion and removed prompt doe
     data: {
       title: '삭제 전역 조합',
       role: 'main',
+      owner: { kind: 'preset', id: prompt.id },
+      expectedRevision: prompt.revision,
       values: {},
     },
   });
@@ -173,7 +175,7 @@ test('DEL02 prompt combinations and presets have deletion and removed prompt doe
       await page.screenshot({ path: info.outputPath(`prompt-footer-${width}.png`) });
   }
 
-  await panel.getByText('저장된 창작 조합·프리셋 관리', { exact: true }).click();
+  await panel.getByText('이 프롬프트의 옵션 조합 관리', { exact: true }).click();
   await panel.getByRole('button', { name: '삭제 전역 조합 삭제', exact: true }).click();
   await confirm(page);
   await expect(panel.getByRole('button', { name: '삭제 전역 조합 삭제', exact: true })).toHaveCount(

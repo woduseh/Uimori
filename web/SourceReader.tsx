@@ -566,21 +566,7 @@ function SourceReaderContent({
                     {jobTitle(job)} · {labels[job.status]}
                     {retryable(job.status) ? ' · 원문 보존됨' : ''}
                   </span>
-                  {job.kind === 'translation' &&
-                    job.error &&
-                    /INPUT_CONTEXT_LIMIT_EXCEEDED|CONTEXT_WINDOW_EXCEEDED|TIMEOUT|AUXILIARY_PROVIDER_PARTIAL/.test(
-                      job.error
-                    ) && (
-                      <p className="error">
-                        {job.error.includes('TIMEOUT')
-                          ? '번역 제한 시간이 초과됐어요.'
-                          : job.error.includes('PARTIAL')
-                            ? '모델 응답이 끝까지 완료되지 않았어요. 출력 한도와 공급자 진단을 확인해 주세요.'
-                            : '번역 요청이 모델 입력 한도를 초과했어요.'}{' '}
-                        구간을 자동으로 나누지 않았어요. 모델의 입력·출력 한도를 확인한 뒤 새 번역을
-                        요청해 주세요.
-                      </p>
-                    )}
+                  {job.error && <AuxiliaryError error={job.error} />}
                   <JobActions job={job} refresh={refresh} onError={setActionError} compact />
                 </div>
               ))
@@ -1077,21 +1063,7 @@ export function JobCard({
         </p>
       )}
       {job.error && <AuxiliaryError error={job.error} />}
-      {job.kind === 'translation' &&
-        job.error &&
-        /INPUT_CONTEXT_LIMIT_EXCEEDED|CONTEXT_WINDOW_EXCEEDED|TIMEOUT|AUXILIARY_PROVIDER_PARTIAL/.test(
-          job.error
-        ) && (
-          <p className="error">
-            {job.error.includes('TIMEOUT')
-              ? '번역 제한 시간이 초과됐어요.'
-              : job.error.includes('PARTIAL')
-                ? '모델 응답이 끝까지 완료되지 않았어요. 출력 한도와 공급자 진단을 확인해 주세요.'
-                : '번역 요청이 모델 입력 한도를 초과했어요.'}{' '}
-            구간을 자동으로 나누지 않았어요. 모델의 입력·출력 한도를 확인한 뒤 새 번역을 요청해
-            주세요.
-          </p>
-        )}
+
       <JobActions job={job} refresh={refresh} onError={onError} />
       <LazyDiagnostics<Job & { input?: unknown }>
         path={`/jobs/${job.id}`}

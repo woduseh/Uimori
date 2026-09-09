@@ -1,3 +1,4 @@
+import { Switch } from './BooleanControls.js';
 import {
   visiblePromptControls,
   type PromptControl,
@@ -26,8 +27,7 @@ export function PackageControlInput({
     >
       {control.type === 'boolean' ? (
         <>
-          <input
-            type="checkbox"
+          <Switch
             aria-label={label}
             disabled={disabled}
             checked={value === true}

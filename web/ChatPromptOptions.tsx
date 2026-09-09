@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
 import { X } from 'lucide-react';
 import type { Library, PromptWorkspace } from '../core/product.js';
-import { reconcilePromptValues } from '../core/prompt-program.js';
+import { resolvePromptValues, reconcilePromptValues } from '../core/prompt-program.js';
+import { combinationOwner, matchesPromptCombination } from '../core/prompt-combinations.js';
+import { booleanPromptDraft } from './prompt-boolean-draft.js';
 import { api } from './api.js';
 import { PromptControlFields } from './PromptControlFields.js';
 import './chat-prompt-options.css';
@@ -100,6 +102,10 @@ function OptionsEditor({ workspace, ...props }: Props & { workspace: PromptWorks
   const lock = useRef(false);
   const dirty = JSON.stringify(values) !== JSON.stringify(base.main.values);
   const conflict = workspace.revision > base.revision;
+  const combinations =
+    props.library?.promptCombinations?.filter((item) =>
+      matchesPromptCombination(item, combinationOwner(base.main, 'main'), 'main', base.main.program)
+    ) ?? [];
   useEffect(() => {
     if (!dirty && !busy) {
       setBase(workspace);
@@ -125,7 +131,10 @@ function OptionsEditor({ workspace, ...props }: Props & { workspace: PromptWorks
     try {
       const accepted = await api<PromptWorkspace>(
         '/prompt-workspace',
-        { expectedRevision: base.revision, main: { ...base.main, values } },
+        {
+          expectedRevision: base.revision,
+          main: { ...base.main, ...booleanPromptDraft(base.main.program, values) },
+        },
         'PUT'
       );
       setBase(accepted);
@@ -144,33 +153,24 @@ function OptionsEditor({ workspace, ...props }: Props & { workspace: PromptWorks
         <h3>{base.main.title}</h3>
         <fieldset disabled={busy || props.disabled} className="chat-options-fields">
           <label>
-            창작 프리셋
+            이 프롬프트의 옵션 조합
             <select
-              aria-label="창작 옵션 프리셋"
+              aria-label="이 프롬프트의 옵션 조합"
               value=""
               onChange={(event) => {
-                const preset = props.library?.promptCombinations?.find(
-                  (item) => item.id === event.target.value
-                );
+                const preset = combinations.find((item) => item.id === event.target.value);
                 if (preset) {
-                  const reconciled = reconcilePromptValues(base.main.program, preset.values);
-                  setValues(reconciled.values);
-                  setMessage(
-                    reconciled.resetKeys.length
-                      ? '현재 옵션과 맞지 않는 이전 선택값은 기본값으로 조정했어요.'
-                      : ''
-                  );
+                  setValues(resolvePromptValues(base.main.program, preset.values));
+                  setMessage('이 프롬프트의 옵션 조합을 불러왔어요. 저장하면 적용돼요.');
                 }
               }}
             >
               <option value="">현재 옵션에 불러오기</option>
-              {props.library?.promptCombinations
-                ?.filter((item) => item.role === 'main')
-                .map((item) => (
-                  <option key={item.id} value={item.id}>
-                    {item.title}
-                  </option>
-                ))}
+              {combinations.map((item) => (
+                <option key={item.id} value={item.id}>
+                  {item.title}
+                </option>
+              ))}
             </select>
           </label>
           <PromptControlFields

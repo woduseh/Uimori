@@ -1,4 +1,5 @@
 .prompt-composer {
+  position: relative;
   display: grid;
   gap: 16px;
   min-width: 0;
@@ -120,6 +121,38 @@
 }
 .pc-block {
   overflow: visible;
+  position: relative;
+}
+.pc-block[data-drop-position]::after {
+  content: "";
+  position: absolute;
+  inset-inline: 0;
+  height: 3px;
+  background: var(--accent);
+  border-radius: 2px;
+  pointer-events: none;
+}
+.pc-block[data-drop-position="before"]::after {
+  top: -7px;
+}
+.pc-block[data-drop-position="after"]::after {
+  bottom: -7px;
+}
+.pc-drag-handle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 44px;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  cursor: grab;
+}
+.pc-drag-handle:active {
+  cursor: grabbing;
 }
 .pc-block:has(.action-menu[open]) {
   position: relative;
@@ -131,13 +164,6 @@
   gap: 10px;
   padding: 12px 14px;
   list-style: none;
-}
-.pc-block > summary::before {
-  content: "▸";
-  color: var(--muted);
-}
-.pc-block[open] > summary::before {
-  content: "▾";
 }
 .pc-block[open] > summary {
   border-bottom: 1px solid var(--border);
@@ -202,7 +228,7 @@
 }
 .pc-section {
   border-top: 1px solid var(--border);
-  padding-top: 8px;
+  padding-top: 0;
   min-width: 0;
 }
 .pc-section > summary {
@@ -292,6 +318,9 @@
   color: var(--muted);
   font-size: 12px;
 }
+.pc-status:empty {
+  display: none;
+}
 .prompt-composer .error {
   font-size: 12px;
   overflow-wrap: anywhere;
@@ -343,15 +372,8 @@
   flex-wrap: wrap;
   gap: 10px;
   min-height: 52px;
-  padding: 10px 4px;
+  padding: 4px 104px 4px 4px;
   list-style: none;
-}
-.pc-composer-fold > summary::before {
-  content: "▸";
-  color: var(--muted);
-}
-.pc-composer-fold[open] > summary::before {
-  content: "▾";
 }
 .pc-composer-fold > summary > strong {
   flex: 1;
@@ -363,14 +385,46 @@
 }
 .pc-composer-content {
   display: grid;
-  gap: 16px;
-  padding-bottom: 16px;
+  gap: 0;
+  padding: 0 0 12px 28px;
   min-width: 0;
 }
 .pc-structure-editor:not([hidden]) {
   display: grid;
-  gap: 14px;
+  gap: 0;
   min-width: 0;
+}
+.pc-composer-tools {
+  position: absolute;
+  top: 5px;
+  right: 4px;
+}
+.prompt-composer summary:has(> .pc-disclosure-icon) {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  list-style: none;
+}
+.prompt-composer summary:has(> .pc-disclosure-icon)::-webkit-details-marker {
+  display: none;
+}
+.pc-disclosure-icon {
+  flex: 0 0 16px;
+  width: 16px;
+  height: 16px;
+  color: var(--muted);
+}
+details[open] > summary > .pc-disclosure-icon {
+  transform: rotate(90deg);
+}
+.pc-section > summary {
+  min-height: 46px;
+  padding-block: 4px;
+}
+@media (max-width: 600px) {
+  .pc-composer-fold > summary > .pc-badge {
+    display: none;
+  }
 }
 .pc-structure-editor[hidden],
 .pc-section[hidden] {
@@ -390,11 +444,6 @@
   min-height: 180px;
   font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
   white-space: pre;
-}
-.prompt-editor .prompt-composer input[type="checkbox"] {
-  width: 18px;
-  height: 18px;
-  min-height: 18px;
 }
 .prompt-editor .prompt-composer .pc-file input[type="file"] {
   width: 100%;

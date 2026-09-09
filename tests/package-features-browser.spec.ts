@@ -1,3 +1,4 @@
+import { navigationAction } from './ui-navigation.js';
 import { visualReview } from './fixtures/visual-review.js';
 import {
   expect,
@@ -52,10 +53,7 @@ async function seed(
 async function openEditor(page: Page, content: Content) {
   await page.setViewportSize({ width: 1440, height: 1000 });
   await page.goto('/');
-  await page
-    .getByRole('navigation', { name: '자료 탐색', exact: true })
-    .getByRole('button', { name: '서재', exact: true })
-    .click();
+  await navigationAction(page, '서재');
   const library = page.getByTestId('library-panel');
   if (content.kind !== 'bot')
     await library
