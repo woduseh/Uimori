@@ -1,5 +1,11 @@
 # 현재 작업 상태 · Uimori
 
+## 모델 주도 문맥 메모·전환 · 선택 기능 (2026-09-09)
+
+기준은 origin/main `150f5d4`예요. 모델 프리셋 고급 설정에 **선택형 문맥 도구**를 추가했어요. 켠 프리셋이 본문 역할이면 `context.read/write/new`를 제공하고, 본문 모델이 작업 요약을 직접 저장한 뒤 같은 요청 안에서 오래된 장면과 이전 도구 결과를 뺀 새 컨텍스트 창을 열 수 있어요. 모델 요약은 기존 불변 checkpoint(`origin: 'model'`)로 저장해 조회·편집·되돌리기·포크·archive와 사용자 편집 우선 CAS를 그대로 재사용하고, 스키마는 v15 그대로예요. 읽기 도구 결과에 `contextWindow`(추정 토큰·한도·비율, 70%/80% 알림)를 붙이며 85% 호스트 자동 정리는 대체 경로로 유지해요. 목록 탐색 `story.list`를 모든 본문·상태 실행에 추가했고 `story.search`는 대소문자 무시·다중 용어 매칭이에요. 기본값은 꺼져 있고 기존 채팅 동작은 바뀌지 않아요. 계약·결정 기록·비채택 대안은 [입력 문맥](../docs/CONTEXT-LIMITS.md#선택형-모델-주도-메모전환), 참고 출처는 [SOURCES](SOURCES.md)에 있어요.
+
+로컬 검증(Node 24.14.0, 이 Mac): `npm run quality` PASS, `npm run build` PASS, 전체 Vitest **1,573 PASS / 선택 1 skip**, `test:tooling` PASS. 새 검사는 `tests/context-tools.test.ts`(도구 루프·세그먼트 경계·거절·네 native 인코더의 새 요청 형식·알림 등급)와 `tests/context-model-driven-integration.test.ts`(실제 App·SQLite에서 저장·전환·압축된 원문 회수·다음 Run의 checkpoint 재사용·문맥 모델 없는 실행·사용자 편집 우선·archive/fork·프리셋 검증)이고, `tests/story-context.test.ts`에 `story.list`·관대한 검색을 추가했어요. 실제 모델이 알림에 따라 요약을 쓰고 전환·회수를 수행하는 창작 품질, 기존 경로와의 비용·지연 비교, 실제 공급자 호출은 수행하지 않았어요(구조 검증 완료·창작 품질 미검증). 이번 변경은 미커밋이에요.
+
 ## 도우미·통합 문맥과 fresh v15 (2026-09-09)
 
 별도 도우미 대화·서재 작업, 같은 서버 초안과 명시 요청의 수정/저장, 사용자 메모·정정과 공통 요약의 자동/수동 압축·직접 편집, 독립 가정 장면, 연결별 로어 변경·옵션 위임을 구현했어요. 매 턴 기억 추출을 제거했고 본문·도우미·산출물의 공개 답변 스트리밍과 durable 재접속을 연결했어요. DB/archive는 fresh v15이며 과거 DB 이관·운영 초기화는 하지 않았어요. 상세 계약·검사·제한은 [도우미·문맥 결과](HELPER-CONTEXT-RESULTS.md), 사용법은 [USAGE](../docs/USAGE.md)를 봐요.

@@ -1,6 +1,8 @@
 # 입력 문맥·요약·메모
 
-원문 전체 이력은 보존하고, 실제 전송에는 **유효한 요약 + 아직 요약하지 않은 원문 + 사용자 메모·정정**을 사용해요. 모델이 매 장면 기억 항목을 추출하는 기능과 색인 watermark는 제거했어요. 오래된 원문은 같은 전개 범위의 `story.search/read`, 명시적 메모는 `notes.list/read`로 조회해요.
+원문 전체 이력은 보존하고, 실제 전송에는 **유효한 요약 + 아직 요약하지 않은 원문 + 사용자 메모·정정**을 사용해요. 모델이 매 장면 기억 항목을 추출하는 기능과 색인 watermark는 제거했어요. 오래된 원문은 같은 전개 범위의 `story.list/search/read`, 명시적 메모는 `notes.list/read`로 조회해요.
+
+요약을 만드는 경로는 두 가지예요. 기본은 아래의 **호스트 자동 정리**(전역 문맥 정리 모델이 요약)이고, 모델 프리셋에서 켜는 선택 기능인 [모델 주도 메모·전환](#선택형-모델-주도-메모전환)에서는 본문 모델이 작업 요약을 직접 쓰고 같은 요청 안에서 컨텍스트 창을 넘겨요. 두 경로는 같은 불변 checkpoint 형식과 조회·편집 화면을 사용해요.
 
 ## 입력 한도와 자동 정리
 
@@ -33,6 +35,40 @@
 
 유효한 메모는 Run에 고정하며 `notes` 프롬프트 슬롯에 제공해요. 슬롯이 없으면 host가 별도로 넣어요. `notes.list/read`와 원문 검색은 같은 채팅·선택 전개 범위를 사용해요. 원문 anchor의 hash가 바뀐 메모는 다음 입력에서 제외하고 과거 snapshot의 내용은 유지해요. `StoryConfig.memory`, `memory` 슬롯, `memory.search/read`, 기억 추출 job과 재색인 API는 지원하지 않아요. 사용자 메모를 본문에서 추출한 사실이나 상태 변경 결과로 바꾸지 않아요.
 
+## 선택형 모델 주도 메모·전환
+
+**모델 프리셋 편집 → 고급 → 선택형 문맥 도구 → 이 모델 프리셋에 문맥 메모·전환 도구 사용**을 켠 프리셋이 본문 역할에 배정되면, 해당 Run에 다음 도구를 추가해요. 기본은 꺼져 있고 기존 채팅의 동작은 바뀌지 않아요. 평가 도구를 켠 프리셋과 독립 가정 장면(artifact) 실행에는 추가하지 않아요.
+
+| 도구 | 역할 |
+| --- | --- |
+| `context.read` | 저장된 작업 요약, 현재 창에서 빠진 원문(compacted)과 남은 원문(retained), 마지막 checkpoint 참조를 돌려줘요. |
+| `context.write {summary}` | 작업 요약을 저장·교체해요. 결과가 돌아오기 전에 checkpoint(`origin: 'model'`)로 저장되며 **현재 창은 바꾸지 않고** 다음 창과 다음 턴에 반영돼요. |
+| `context.new {keepRecent?, summary?}` | 새 컨텍스트 창을 열어요. 최근 `keepRecent`개(기본 2, 최대 8) 이전의 원문 교환과 **이전 도구 결과 전부**가 전송 입력에서 빠지고, 저장된(또는 이번에 넘긴) 요약이 그 자리를 대신해요. 정리할 원문이 있으면 요약이 필수예요. 같은 라운드에 다른 도구와 함께 부르면 거절해요. |
+| `story.list {offset?, limit?}` | 정확한 표현을 모를 때 쓰는 목록 탐색이에요. 전개 순서대로 index·id·hash·글자 수·짧은 미리보기와 현재 창 포함 여부를 돌려줘요. 이 도구는 플래그와 무관하게 본문·상태 역할에 항상 제공해요. |
+
+`story.search`는 공백으로 나눈 모든 용어가 같은 원문에 등장하면 대소문자 구분 없이 찾도록 바꿨어요(NFKC 정규화). 결과 형식과 원문 구간 정책은 그대로예요.
+
+동작 순서는 다음과 같아요.
+
+1. Run 예약과 사전 자동 정리는 기존과 같아요. 활성 checkpoint가 모델이 쓴 것이면 그 요약과 compacted 범위를 그대로 재사용하므로 문맥 정리 모델을 호출하지 않아요.
+2. 매 호출 직전 하네스가 실제 전송 body를 추정해요. 읽기 도구(`story.*`, `notes.*`, `knowledge.*`, `skills.*`, `context.read/write`) 결과에 `contextWindow: { inputTokenLimit, estimatedInputTokens, usedRatio, level, notice? }`를 붙여요. `level`은 70% 이상이면 `notice`, 80% 이상이면 `urgent`예요. 호스트 문맥(host context)에는 한도·compacted/retained 개수·요약 길이 같은 고정값만 넣고 추정치는 넣지 않아요. 추정치를 프롬프트에 넣으면 측정 대상이 바뀌어 archive 검증과 어긋나기 때문이에요.
+3. `context.new`가 성공하면 같은 Run 안에서 **세그먼트 경계**를 만들어요. 새 요약·compacted 범위로 프롬프트를 다시 컴파일하고, 공급자 opaque 연속과 이전 도구 결과를 버린 새 요청을 보내요. 완료된 `context.new` 호출·결과 한 쌍만 bootstrap으로 넘겨 모델이 전환 사실과 회수 방법을 알 수 있게 해요. 전환 후 입력이 한도를 넘으면 전환하지 않고 `CONTEXT_FIXED_INPUT_TOO_LARGE`로 거절해요.
+4. 모델이 제때 요청하지 않아 다음 턴 입력이 85%를 넘으면 기존 호스트 자동 정리가 그대로 동작해요. 문맥 정리 모델이 없으면 기존처럼 그 작업만 멈춰요.
+
+저장·CAS 규칙은 기존 checkpoint와 같아요. 모델 checkpoint도 `context_checkpoints`에 `origin: 'model'`로 저장하고, 예약 시점의 활성 revision·메모 revision·원문 prefix가 그대로일 때만 활성화해요. 사용자가 실행 도중 요약이나 메모를 고치면 모델의 늦은 저장은 비활성 후보로 남고 결과에도 `activated: false`로 표시해요. 같은 Run이 이미 자신의 checkpoint를 활성화했다면 뒤따르는 저장은 그 위에 이어서 활성화해요(`ContextStore.rebase`). **Run snapshot은 예약 시점의 입력이며 실행 중 바꾸지 않아요.** 모델의 저장·전환은 `tool_events`와 checkpoint에 남고, 다음 Run이 활성 checkpoint를 통해 이어받아요. 화면의 요약 출처 표시는 `모델 작성`이고 편집·되돌리기·수동 압축은 모델 요약에도 그대로 적용돼요.
+
+거절 코드: 인자 오류·빈 요약은 `INVALID_ARGUMENTS`/`SUMMARY_INVALID`, 정리 대상이 있는데 요약이 없으면 `SUMMARY_REQUIRED`, 다른 도구와 함께 부르면 `CONTEXT_NEW_MUST_BE_ALONE`, 저장 실패는 `CONTEXT_WRITE_FAILED`, 크기 초과가 아닌 재투영 실패는 `CONTEXT_PROJECTION_FAILED`예요. 이들은 재시도 가능한 거절이라 모델이 고쳐서 다시 부를 수 있고, 반복되면 기존 도구 정정 한도에서 실행이 끝나요. 저장에 실패한 요약을 저장된 것처럼 참조하지 않아요.
+
+지원 경로: 일반 API 프로토콜(Responses·Chat·Anthropic·Vertex·fixture)은 새 창을 bootstrap이 있는 새 요청으로 보내고, Codex 실행기는 같은 JSON envelope에 도구·bootstrap을 담아요. 어느 경로든 컨텍스트 관리 소유자는 Uimori 하나예요. Codex 자체의 메모·컨텍스트 기능은 사용하지 않아요.
+
+### 결정 기록 (2026-09-09)
+
+- **채택**: 모델 주도 메모·전환·회수를 선택 기능으로 추가하고, 메모를 별도 저장소 대신 기존 요약 checkpoint로 저장했어요. 이유: 사용자 편집 우선·되돌리기·포크·archive 검증을 그대로 재사용하고, 스키마를 바꾸지 않아 v15 데이터가 그대로 유지돼요. 새 창은 Run 안의 세그먼트 경계로 구현해 기존 도구 루프·attempt·usage 계약을 유지했어요.
+- **채택**: 한도 알림은 도구 결과에만 붙여요. 이유: 호스트 문맥이나 bootstrap을 라운드마다 바꾸면 opaque 연속의 binding hash가 깨지고 archive의 재측정 검증과 어긋나요.
+- **비채택**: 별도 메모 파일·테이블, 매 턴 기억 추출 모델, 임베딩 검색 추가, 기존 자동 요약의 제거나 전체 기본값 전환. 기존 키워드 검색에 목록 탐색과 관대한 매칭을 더하는 것으로 충분한지 먼저 확인해요.
+- **참고**: 공개 openai/codex `rust-v0.153.0`의 토큰 예산 알림·`notes.*`·`new_context`·`history.*` 구조를 참고했어요. 코드는 복사하지 않았고 Uimori 저장·권한·CAS 계약으로 독립 구현했어요. 참고 사실과 Uimori에서의 효과 검증은 별개예요.
+- **미검증**: 실제 모델이 알림을 보고 적시에 요약을 쓰고 전환을 요청하는지, 전환 뒤 이전 주제로 돌아왔을 때 스스로 원문을 회수하는지는 합성 검사로 확인할 수 없어요. 구조 검증만 완료했고 창작 품질·비용은 별도 실모델 평가가 필요해요.
+
 ## 재사용·실패·복원
 
 - 다음 요청은 예약 때 캡처한 활성 checkpoint를 원문 prefix/hash, 자료·메모 의존성, 구간 `viewHash`로 검증해요. 현재 활성 포인터를 다시 읽어 과거 Run의 입력을 재해석하지 않아요. 모델을 바꾸면 새 모델 예산으로 재측정해요.
@@ -49,7 +85,7 @@
 
 `tiktoken@1.0.22`의 로컬 WASM `o200k_base`를 사용해 최대 4,096 UTF-16 단위의 조각으로 계산하고 같은 요청의 동일 조각은 재사용해요. 합계에 10% 여유를 더해요. 문자열·키·토큰을 외부 계산 서비스로 보내지 않아요. 다른 모델 tokenizer·공급자 내부 포맷·조각 경계 차이가 있으므로 실제 청구 토큰이나 상한 보장은 아니에요.
 
-구현은 `core/context-budget.ts`, `core/context-plan.ts`, `core/context-projection.ts`, `core/notes.ts`, `server/context-planning.ts`, `server/context-compaction.ts`, `server/context-store.ts`, `server/story-notes.ts`에 있어요. `tests/context-integration.test.ts`와 관련 context/story 검사는 실제 앱 경로와 fresh SQLite, 합성 provider body로 경합·취소·입력 귀속·보관을 확인해요. 실제 요약의 의미 품질·공급자 인증·계정별 문맥 상한·물리적 휴대폰 검증은 별도예요.
+구현은 `core/context-budget.ts`, `core/context-plan.ts`, `core/context-projection.ts`, `core/context-tools.ts`, `core/notes.ts`, `core/story-context.ts`, `server/context-planning.ts`, `server/context-compaction.ts`, `server/context-tools.ts`, `server/context-store.ts`, `server/story-notes.ts`에 있어요. `tests/context-integration.test.ts`와 관련 context/story 검사는 실제 앱 경로와 fresh SQLite, 합성 provider body로 경합·취소·입력 귀속·보관을 확인해요. 모델 주도 경로는 `tests/context-tools.test.ts`(도구 루프·세그먼트 경계·네 native 인코더의 새 요청 형식)와 `tests/context-model-driven-integration.test.ts`(실제 App·SQLite에서 저장·전환·회수·다음 Run 재사용·사용자 편집 우선·archive/fork)로 확인해요. 실제 요약의 의미 품질·공급자 인증·계정별 문맥 상한·물리적 휴대폰 검증은 별도예요.
 
 ## 전체 원문 번역
 

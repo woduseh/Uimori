@@ -421,6 +421,20 @@ export async function createApp(options: AppOptions): Promise<App> {
             onToolEvent: (event) => store.tool(id, event),
             onBehaviorTool: (binding, action) =>
               executeRunBehaviorTool(store, id, binding, action, controller.signal),
+            persistContext: (prepared, own) =>
+              store.transaction(() => {
+                if (controller.signal.aborted || store.run(id).status !== 'running')
+                  throw new Error('Run cancelled');
+                const published = store.context.publishPrepared(
+                  store.context.rebase(prepared, own),
+                  { origin: 'model' }
+                );
+                const checkpoint = published.contextPlan?.checkpoint;
+                return {
+                  snapshot: published,
+                  activated: checkpoint ? store.context.checkpoint(checkpoint).activated : false,
+                };
+              }),
             approvedOrigins,
             resolveCredential,
             executeCodex,

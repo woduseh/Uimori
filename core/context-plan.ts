@@ -27,7 +27,7 @@ export type ContextPlan = {
 export type ContextCheckpoint = ContextCheckpointRef & {
   scopeKey: string;
   chatId: string | null;
-  origin: 'automatic' | 'manual' | 'edit';
+  origin: 'automatic' | 'manual' | 'edit' | 'model';
   plan: ContextPlan;
   createdAt: string;
   activated: boolean;

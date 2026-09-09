@@ -13,7 +13,12 @@ type ContextJob = Omit<StoredContextJob, 'snapshot'>;
 type SummaryDraft = { text: string; revision: number; headRevision: string | null };
 const id = encodeURIComponent;
 const pending = (job: ContextJob) => job.status === 'queued' || job.status === 'running';
-const origins = { automatic: '자동 압축', manual: '수동 압축', edit: '직접 편집' };
+const origins = {
+  automatic: '자동 압축',
+  manual: '수동 압축',
+  edit: '직접 편집',
+  model: '모델 작성',
+};
 const checkpointKey = (checkpoint?: CheckpointRef | null) =>
   checkpoint ? `${checkpoint.id}/${checkpoint.revision}/${checkpoint.hash}` : '';
 

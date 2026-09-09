@@ -997,6 +997,7 @@ test('custom main prompt remains literal across tools after the caller changes i
       'skills.load',
       'notes.list',
       'notes.read',
+      'story.list',
       'story.search',
       'story.read',
     ]);

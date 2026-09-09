@@ -746,6 +746,20 @@ export function ProviderModelFields({
             effort를 낮춰요. 별도 안내문은 원문에 합치지 않아요.
           </small>
         </fieldset>
+        <fieldset className="editor-fields full">
+          <legend>선택형 문맥 도구</legend>
+          <ToggleRow
+            label="이 모델 프리셋에 문맥 메모·전환 도구 사용"
+            checked={value.contextToolsEnabled}
+            onChange={(contextToolsEnabled) => update({ contextToolsEnabled })}
+          />
+          <small className="full">
+            본문 모델이 context.read, context.write, context.new와 story.list로 작업 요약을 직접
+            쓰고 같은 요청 안에서 컨텍스트 창을 넘길 수 있어요. 요약은 기존 문맥 요약 checkpoint로
+            저장되어 채팅 설정 → 상태와 문맥에서 확인·편집할 수 있고, 85% 자동 압축은 그대로 대체
+            경로로 남아요. 평가 도구를 켠 프리셋에서는 사용하지 않아요.
+          </small>
+        </fieldset>
         <ModelPricingEditor
           value={value}
           connection={connection}

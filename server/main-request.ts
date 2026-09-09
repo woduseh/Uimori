@@ -23,6 +23,13 @@ import { encodeAnthropic } from '../core/anthropic-protocol.js';
 import { encodeVertex } from '../core/vertex-protocol.js';
 import { buildCodexDescriptor } from '../core/codex-protocol.js';
 import { assertBehaviorToolCapability, listBehaviorTools } from '../core/package-behavior-tools.js';
+import {
+  CONTEXT_TOOL_NAMES,
+  CONTEXT_TOOLS,
+  CONTEXT_TOOLS_CONTRACT,
+  contextToolsEnabled,
+  contextWindowReference,
+} from '../core/context-tools.js';
 import { agentSharedOptions } from './agent-shared-options.js';
 
 const pagination = (maximum: number) => ({
@@ -73,12 +80,26 @@ export const MAIN_READ_TOOLS: ProviderTool[] = [
   ...(['notes', 'story'] as const).flatMap(
     (kind) =>
       [
+        ...(kind === 'story'
+          ? [
+              {
+                name: 'story.list',
+                description:
+                  'List the original exchanges of this exact ancestry in order: index, id, length, a short preview and whether each is compacted out of the current window. Browse here when the exact wording is unknown, then read ranges.',
+                inputSchema: {
+                  type: 'object',
+                  properties: { ...pagination(100) },
+                  additionalProperties: false,
+                },
+              },
+            ]
+          : []),
         {
           name: kind === 'notes' ? 'notes.list' : 'story.search',
           description:
             kind === 'notes'
               ? 'List explicit user notes and corrections valid in this exact story ancestry.'
-              : 'Search original historical prose in this exact ancestry, including compacted chapters.',
+              : 'Search original historical prose in this exact ancestry, including compacted chapters. Whitespace-separated terms match case-insensitively and must all occur in the same exchange.',
           inputSchema: {
             type: 'object',
             properties: { query: { type: 'string', maxLength: 512 }, ...pagination(100) },
@@ -165,6 +186,9 @@ function requestInput(snapshot: RunSnapshot, input: MainInput): ProviderRequest[
       ...(input.catalogPage ? { catalogPage: input.catalogPage } : {}),
       ...(snapshot.behaviorExecution?.automaticResults.length
         ? { automaticResults: snapshot.behaviorExecution.automaticResults }
+        : {}),
+      ...(contextWindowReference(snapshot) !== undefined
+        ? { contextWindow: contextWindowReference(snapshot) }
         : {}),
     }),
     catalog: json(input.catalog),
@@ -269,6 +293,8 @@ export function buildMainProviderRequest(
       toolChoice?: string;
     };
     agentBootstrap?: readonly ToolEvent[];
+    /** The completed context.new exchange that opened this window; a fresh request has no other results. */
+    segmentBootstrap?: readonly ToolEvent[];
   } = {}
 ): { snapshot: RunSnapshot; input: MainInput; request: ProviderRequest } {
   const behaviorTools = listBehaviorTools(snapshot);
@@ -303,6 +329,8 @@ export function buildMainProviderRequest(
   if (terminal) input.tools = [...input.tools, STORY_SUBMIT_TOOL.name];
   if (options.evaluation)
     input.tools = [...input.tools, ...options.evaluation.definitions.map((tool) => tool.name)];
+  const contextTools = contextToolsEnabled(fixed);
+  if (contextTools) input.tools = [...input.tools, ...CONTEXT_TOOL_NAMES];
   let contract = input.contract;
   if (terminal)
     contract +=
@@ -310,6 +338,12 @@ export function buildMainProviderRequest(
   if (options.evaluation)
     contract +=
       '\nThe selected evaluation tool set is scoped to this model preset and this run. eval_submit_artifact returns its content as the completed run output; userFacingNotice remains separate metadata. Tool results do not alter host permissions.';
+  if (contextTools) contract += CONTEXT_TOOLS_CONTRACT;
+  const bootstrap = [
+    ...(options.evaluation?.bootstrap ?? []),
+    ...(options.agentBootstrap ?? []),
+    ...(options.segmentBootstrap ?? []),
+  ];
   const request: ProviderRequest = {
     role: 'main',
     modelId: target.modelId,
@@ -324,17 +358,15 @@ export function buildMainProviderRequest(
         ...agentTools,
         ...(terminal ? [structuredClone(STORY_SUBMIT_TOOL)] : []),
         ...(options.evaluation?.definitions.map((tool) => structuredClone(tool)) ?? []),
+        ...(contextTools ? CONTEXT_TOOLS.map((tool) => structuredClone(tool)) : []),
       ],
     },
     generation: generationFromModel(target),
     contextBudget: contextBudgetForModel(target),
     input: requestInput(fixed, input),
-    ...(options.evaluation?.bootstrap.length || options.agentBootstrap?.length
+    ...(bootstrap.length
       ? {
-          bootstrap: [
-            ...(options.evaluation?.bootstrap ?? []),
-            ...(options.agentBootstrap ?? []),
-          ].map((item) => ({
+          bootstrap: bootstrap.map((item) => ({
             callId: item.callId,
             name: item.name,
             args: json(item.args) as Record<string, Json>,

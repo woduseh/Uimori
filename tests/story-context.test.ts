@@ -133,3 +133,85 @@ describe('bounded source reads and explicit notes', () => {
     ).toThrow('STORY_NOTE_INVALID');
   });
 });
+
+describe('ancestry listing and lenient search for model-driven retrieval', () => {
+  const chapters = [
+    'Mira promised the Captain a lantern before the storm.',
+    'The captain left the harbor at dawn.\nNobody saw the lantern again.',
+    'A quiet evening. Mira wrote a letter.',
+  ];
+  const listed = (): RunSnapshot => {
+    const fixed = snapshot();
+    fixed.history = chapters.map((text, index) => ({
+      revision: `chapter-${index}`,
+      text,
+      contentHash: sourceHash(text),
+    }));
+    fixed.parentRevision = 'chapter-2';
+    return fixed;
+  };
+  test('story.list walks the exact ancestry in order with previews and window membership', () => {
+    const fixed = listed();
+    fixed.contextPlan = {
+      version: 1,
+      status: 'ready',
+      budget: { inputTokenLimit: 8192, estimator: 'o200k_base-v1' },
+      dependencyKey: 'synthetic',
+      estimatedInputTokens: 10,
+      compacted: [{ revision: 'chapter-0', hash: sourceHash(chapters[0]) }],
+      recentSourceRevisions: ['chapter-1', 'chapter-2'],
+      summary: 'derived',
+      summaryCalls: 0,
+      usage: { modelCalls: 0, inputTokens: 0, outputTokens: 0, costUsd: 0 },
+      error: null,
+    };
+    const page = read(fixed, 'story.list', {});
+    expect(page.total).toBe(3);
+    expect(page.results.map((item: { revision: string }) => item.revision)).toEqual([
+      'chapter-0',
+      'chapter-1',
+      'chapter-2',
+    ]);
+    expect(page.results[0]).toMatchObject({
+      index: 0,
+      hash: sourceHash(chapters[0]),
+      chars: chapters[0].length,
+      compacted: true,
+    });
+    expect(page.results[1]).toMatchObject({ index: 1, compacted: false });
+    expect(page.results[1].preview).toBe(
+      'The captain left the harbor at dawn. Nobody saw the lantern again.'
+    );
+    const second = read(fixed, 'story.list', { offset: 1, limit: 1 });
+    expect(second.results.map((item: { revision: string }) => item.revision)).toEqual([
+      'chapter-1',
+    ]);
+    expect(second.nextOffset).toBe(2);
+    expect(
+      executeStoryRead(fixed, { callId: 'q', name: 'story.list', args: { query: 'x' } }).denied
+    ).toBe(true);
+    delete fixed.contextPlan;
+    expect(
+      read(fixed, 'story.list', {}).results.every((item: { compacted: boolean }) => !item.compacted)
+    ).toBe(true);
+  });
+  test('story.search matches every whitespace-separated term case-insensitively inside one exchange', () => {
+    const fixed = listed();
+    const both = read(fixed, 'story.search', { query: 'CAPTAIN' });
+    expect(both.total).toBe(2);
+    expect(both.results.map((item: { revision: string }) => item.revision)).toEqual([
+      'chapter-0',
+      'chapter-1',
+    ]);
+    expect(both.results[0].source.start).toBe(0);
+    expect(both.results[0].text).toContain('Captain');
+    const narrowed = read(fixed, 'story.search', { query: 'lantern captain' });
+    expect(narrowed.total).toBe(2);
+    expect(read(fixed, 'story.search', { query: 'lantern storm' }).total).toBe(1);
+    expect(read(fixed, 'story.search', { query: 'lantern letter' }).total).toBe(0);
+    expect(
+      executeStoryRead(fixed, { callId: 'blank', name: 'story.search', args: { query: '   ' } })
+        .denied
+    ).toBe(true);
+  });
+});

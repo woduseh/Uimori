@@ -1,4 +1,12 @@
 import { createToolCorrectionPolicy } from '../core/tool-outcome.js';
+import { estimateContextTokens } from '../core/context-budget.js';
+import {
+  CONTEXT_TOOL_NAMES,
+  CONTEXT_WINDOW_RESULT_TOOLS,
+  contextToolsEnabled,
+  contextWindowStatus,
+  type ContextWindowStatus,
+} from '../core/context-tools.js';
 import { executeMain, executeTool, type ToolAction } from '../core/provider.js';
 import type { Connection } from '../core/product.js';
 import {
@@ -14,9 +22,15 @@ import { createHash } from 'node:crypto';
 import {
   attachMainHostContext,
   buildMainProviderRequest,
+  encodeMainPreview,
   storySubmissionEnabled,
   STORY_SUBMIT_MAX_CHARS,
 } from './main-request.js';
+import {
+  executeContextTool,
+  type ContextPersistence,
+  type ContextToolState,
+} from './context-tools.js';
 import {
   assertBehaviorToolCapability,
   listBehaviorTools,
@@ -42,6 +56,8 @@ export type MainHooks = {
     binding: Pick<BehaviorToolBinding, 'instanceId' | 'actionId'>,
     action: ToolAction
   ) => ToolEvent | Promise<ToolEvent>;
+  /** Durable owner of model-written context checkpoints; absent owners deny context.write/new. */
+  persistContext?: ContextPersistence;
   approvedOrigins: readonly string[];
   timeoutMs?: number;
   vertexRequestTier?: 'standard' | 'flex';
@@ -75,12 +91,20 @@ export async function runMain(snapshot: RunSnapshot, hooks: MainHooks): Promise<
       usage: { modelCalls: 0, inputTokens: 0, outputTokens: 0, costUsd: 0 },
     };
   }
-  const fixed = attachMainHostContext(structuredClone(snapshot));
+  // Reassigned only at a model-requested window boundary; every segment is one frozen projection.
+  let fixed = attachMainHostContext(structuredClone(snapshot));
   const target = fixed.profile?.models.main;
   if (!target) {
     const result = await executeMain(fixed, hooks);
     return { status: 'completed', ...result, error: null };
   }
+  const contextTools = contextToolsEnabled(fixed);
+  const contextState: ContextToolState = {
+    workingSummary: fixed.contextPlan?.summary ?? null,
+    checkpoint: fixed.contextPlan?.checkpoint ?? null,
+  };
+  let segmentBootstrap: ToolEvent[] = [];
+  let windowStatus: ContextWindowStatus | undefined;
   const results: ToolEvent[] = [];
   const correction = createToolCorrectionPolicy();
   const evaluation = createEvaluationToolSession(target, hooks.timeoutMs);
@@ -137,8 +161,14 @@ export async function runMain(snapshot: RunSnapshot, hooks: MainHooks): Promise<
         : {}),
       ...(opaqueState !== undefined ? { opaqueState } : {}),
       ...(collaboration ? { agentBootstrap: collaboration.bootstrap } : {}),
+      ...(segmentBootstrap.length ? { segmentBootstrap } : {}),
     });
     const { input, request } = built;
+    if (contextTools)
+      windowStatus = contextWindowStatus(
+        estimateContextTokens(encodeMainPreview(request, target).body),
+        fixed.contextPlan!.budget.inputTokenLimit
+      );
     if (evaluation && request.generation) {
       const configured = request.generation;
       request.generation = evaluation.generation(configured, results.length);
@@ -195,7 +225,9 @@ export async function runMain(snapshot: RunSnapshot, hooks: MainHooks): Promise<
       };
     // Validate the whole turn before executing: repeated IDs cannot alias earlier tool results.
     const callIds = new Set(
-      [...results, ...(collaboration?.bootstrap ?? [])].map((event) => event.callId)
+      [...results, ...(collaboration?.bootstrap ?? []), ...segmentBootstrap].map(
+        (event) => event.callId
+      )
     );
     for (const call of result.toolCalls) {
       if (callIds.has(call.id)) return fail('DUPLICATE_TOOL_ID');
@@ -287,6 +319,7 @@ export async function runMain(snapshot: RunSnapshot, hooks: MainHooks): Promise<
       return { status: 'completed', text: submitted.artifact.text, error: null, usage };
     }
     opaqueState = result.opaqueState;
+    let boundary: { snapshot: RunSnapshot; event: ToolEvent } | undefined;
     for (const call of result.toolCalls) {
       if (hooks.signal.aborted) return fail('CANCELLED');
       // Transport only decodes. Exact frozen bindings separate state actions from read permissions.
@@ -295,6 +328,16 @@ export async function runMain(snapshot: RunSnapshot, hooks: MainHooks): Promise<
       let event: ToolEvent;
       if (call.name === 'agents.consult' && collaboration) {
         event = await collaboration.consult(call.id, call.arguments);
+      } else if (contextTools && (CONTEXT_TOOL_NAMES as readonly string[]).includes(call.name)) {
+        const outcome = await executeContextTool(fixed, action, {
+          state: contextState,
+          alone: result.toolCalls.length === 1,
+          pendingResults: results.length,
+          reservedBootstrap: collaboration?.bootstrap.length ?? 0,
+          persist: hooks.persistContext,
+        });
+        event = outcome.event;
+        if (outcome.switched) boundary = { snapshot: outcome.switched, event };
       } else if (binding) {
         event = hooks.onBehaviorTool
           ? await hooks.onBehaviorTool(
@@ -312,6 +355,15 @@ export async function runMain(snapshot: RunSnapshot, hooks: MainHooks): Promise<
         event = evaluation?.allNames.includes(call.name as (typeof evaluation.allNames)[number])
           ? evaluation.execute(call)
           : executeTool(fixed, action, hooks.signal);
+      if (
+        windowStatus &&
+        !event.denied &&
+        CONTEXT_WINDOW_RESULT_TOOLS.has(event.name) &&
+        event.result &&
+        typeof event.result === 'object' &&
+        !Array.isArray(event.result)
+      )
+        event = { ...event, result: { ...event.result, contextWindow: windowStatus } };
       results.push(event);
       await hooks.onToolEvent(structuredClone(event));
       const outcome = correction(event, call.arguments);
@@ -320,6 +372,14 @@ export async function runMain(snapshot: RunSnapshot, hooks: MainHooks): Promise<
         return fail(
           binding || call.name.startsWith('behavior_') ? 'ACTION_TOOL_DENIED' : 'READ_TOOL_DENIED'
         );
+    }
+    if (boundary) {
+      // A new window is a fresh provider request: no opaque continuation, no prior results.
+      // The completed context.new exchange is the only carried-over tool history.
+      fixed = boundary.snapshot;
+      results.length = 0;
+      opaqueState = undefined;
+      segmentBootstrap = [structuredClone(boundary.event)];
     }
   }
 }

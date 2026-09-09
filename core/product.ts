@@ -146,6 +146,8 @@ export type ModelPreset = ContentRef &
     timeoutMs?: number;
     enabled?: boolean;
     evaluationTools?: EvaluationToolOptions;
+    /** Opt-in main-role context tools: model-written working summary, window switch and story.list. */
+    contextTools?: boolean;
     pricing?: import('./pricing-types.js').ModelPricing;
     source?: { kind: 'catalog' | 'manual'; catalogUpdatedAt: string | null };
   };

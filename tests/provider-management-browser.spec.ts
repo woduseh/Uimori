@@ -145,6 +145,8 @@ test('PMUI01 mobile template registration selects the connection, reports catalo
       .screenshot({ path: info.outputPath('model-evaluation-switch.png') });
 
   await modelForm.getByLabel('최대 평가 도구 라운드').fill('2');
+  await expect(modelForm.getByLabel('이 모델 프리셋에 문맥 메모·전환 도구 사용')).not.toBeChecked();
+  await modelForm.getByLabel('이 모델 프리셋에 문맥 메모·전환 도구 사용').check();
   await modelForm.getByText('요금과 추정 비용', { exact: true }).click();
   await modelForm.getByLabel('요금 기준', { exact: true }).selectOption('manual');
   await modelForm.getByLabel('Standard 입력 요금', { exact: true }).fill('2');
@@ -188,6 +190,7 @@ test('PMUI01 mobile template registration selects the connection, reports catalo
     connectionId: connection.id,
     modelId: 'synthetic/manual-id',
     evaluationTools: { maximumToolRounds: 2 },
+    contextTools: true,
     source: { kind: 'manual', catalogUpdatedAt: null },
   });
   await expect(page.getByRole('region', { name: '등록한 모델 사용 방법' })).toContainText(

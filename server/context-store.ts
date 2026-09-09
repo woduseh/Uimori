@@ -131,6 +131,17 @@ export class ContextStore {
       return undefined;
     return { ...structuredClone(plan), checkpoint: ref(checkpoint) };
   }
+  /** A run that already activated its own checkpoint keeps activating later ones; a foreign head stays authoritative. */
+  rebase(snapshot: RunSnapshot, own: ContextCheckpointRef | null): RunSnapshot {
+    const base = snapshot.contextBase;
+    if (!base || !own) return snapshot;
+    const head = this.head(base.scopeKey);
+    if (head.checkpointId !== own.id) return snapshot;
+    return {
+      ...snapshot,
+      contextBase: { ...base, activeRevision: head.revision, checkpoint: own },
+    };
+  }
   assertSnapshot(snapshot: RunSnapshot) {
     const selected = snapshot.contextPlan?.checkpoint;
     if (!selected) {
@@ -559,7 +570,7 @@ export class ContextStore {
       this.store.chat(row.chat_id);
       const cp = this.checkpoint({ id: row.id, revision: row.revision, hash: row.hash });
       if (
-        !['automatic', 'manual', 'edit'].includes(cp.origin) ||
+        !['automatic', 'manual', 'edit', 'model'].includes(cp.origin) ||
         !Number.isSafeInteger(cp.revision) ||
         cp.revision < 1 ||
         ![0, 1].includes(row.activated)

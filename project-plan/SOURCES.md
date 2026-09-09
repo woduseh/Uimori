@@ -1,5 +1,9 @@
 # 근거와 확인 범위 v0.6.1
 
+## 2026-09-09 모델 주도 문맥 메모·전환
+
+사용자가 제공한 Astra 컨텍스트 관리 설명과 그 브리프가 확인한 openai/codex `rust-v0.153.0`의 `codex-rs/core/src/session/token_budget.rs`, `codex-rs/core/src/context/token_budget_context.rs`, `codex-rs/core/src/tools/handlers/new_context_window.rs`, `codex-rs/ext/history-notes/src/tools.rs`, `codex-rs/app-server/tests/suite/v2/history_notes_extension.rs` → 남은 예산 알림, 모델이 관리하는 메모, 모델이 요청하는 새 컨텍스트 창, 이전 이력 검색·읽기라는 원리 → Uimori `core/context-tools.ts`(도구 정의·알림 등급), `server/context-tools.ts`(저장·재투영), `server/model-runner.ts`(세그먼트 경계), 기존 `context_checkpoints`(`origin: 'model'`)와 `story.list`. 이 세션에서는 브리프가 정리한 파일·계약 설명을 근거로 삼았고 Codex 저장소를 직접 열거나 코드를 복사하지 않았어요. `/root/notes/latest.md` 같은 테스트 문자열은 Uimori의 저장 형식으로 채택하지 않았어요. 검증은 `tests/context-tools.test.ts`, `tests/context-model-driven-integration.test.ts`의 합성 실행이며 실제 모델이 알림을 따라 메모·전환·회수를 수행하는 품질은 미검증이에요. 결정과 비채택 대안은 [입력 문맥의 결정 기록](../docs/CONTEXT-LIMITS.md#결정-기록-2026-09-09)에 있어요.
+
 ## 2026-09-09 모델 요금과 추정 비용
 
 OpenAI·Claude·Google Agent Platform·DeepSeek 공식 가격표와 Vercel 공개 `/v1/models`의 같은 날 응답 → 토큰 버킷별 단가, 문맥·서비스 tier·시간대별 적용 규칙 → `core/model-pricing.ts`, `core/provider-catalog.ts`, `core/pricing-estimate.ts`에 단가 선택과 공급자 사용량 계산을 분리했어요. 전송 당시 가격을 고정하고 실제 비용과 추정을 분리하는 원리를 `ModelSnapshot.pricingSnapshot`과 attempt response에 적용했어요. 출처·지원 범위·실제 요금과의 차이는 [모델 요금](../docs/MODEL-PRICING.md)에 모았어요. 원본 코드 복사는 하지 않았어요. 로컬 계산/SQLite/HTTP 및 `verify:pricing`으로 검증하며 실제 billing 일치 주장은 하지 않아요.

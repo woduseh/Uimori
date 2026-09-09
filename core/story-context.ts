@@ -1,9 +1,21 @@
-import { readStorySource, searchStorySources } from './source-history.js';
+import {
+  matchSourceSpan,
+  readStorySource,
+  searchStorySources,
+  searchTerms,
+} from './source-history.js';
 import { visibleAuthorNotes } from './notes.js';
 import type { RunSnapshot, ToolEvent } from './types.js';
 import type { ToolAction } from './provider.js';
 import { sourceReadRange, sourceRequestView } from './source-context.js';
-export const STORY_READ_NAMES = ['notes.list', 'notes.read', 'story.search', 'story.read'];
+export const STORY_READ_NAMES = [
+  'notes.list',
+  'notes.read',
+  'story.list',
+  'story.search',
+  'story.read',
+];
+const LIST_PREVIEW_CHARS = 160;
 export const STORY_RESULT_MAX_BYTES = 24000;
 const bytes = (value: unknown) => Buffer.byteLength(JSON.stringify(value), 'utf8');
 function boundedRead<T>(start: number, desiredEnd: number, build: (end: number) => T): T {
@@ -43,13 +55,33 @@ function boundedSearch(total: number, offset: number, candidates: unknown[]) {
   return result();
 }
 
+/** Ordered ancestry index: position, id, size, a short preview and window membership. */
+function listStorySources(snapshot: RunSnapshot, offset: number, limit: number) {
+  const compacted = new Set(snapshot.contextPlan?.compacted.map((ref) => ref.revision) ?? []);
+  const items = snapshot.history.map((item, index) => {
+    const view = snapshot.sourceSegments ? sourceRequestView(snapshot, item.revision) : undefined;
+    const text = view?.text ?? item.text;
+    const preview = text.replace(/\s+/gu, ' ').trim().slice(0, LIST_PREVIEW_CHARS);
+    return {
+      index,
+      revision: item.revision,
+      hash: view?.sourceHash ?? item.contentHash,
+      chars: text.length,
+      preview,
+      compacted: compacted.has(item.revision),
+    };
+  });
+  return { total: items.length, results: items.slice(offset, offset + limit) };
+}
+
 /** Search only inside a kept source span: a query cannot cross an omitted hidden region. */
 function searchHiddenSources(snapshot: RunSnapshot, query: string, offset: number, limit: number) {
-  if (!query.trim()) throw new Error('QUERY_REQUIRED');
+  const terms = searchTerms(query);
+  if (!terms.length) throw new Error('QUERY_REQUIRED');
   const matches = snapshot.history.flatMap((item) => {
     const view = sourceRequestView(snapshot, item.revision);
     for (const range of view.keptRanges) {
-      const match = item.text.slice(range.start, range.end).indexOf(query);
+      const match = matchSourceSpan(item.text.slice(range.start, range.end), terms);
       if (match < 0) continue;
       const start = Math.max(range.start, range.start + match - 60),
         end = Math.min(range.end, start + 240),
@@ -89,12 +121,13 @@ export function executeStoryRead(
   const scope = { chatId: snapshot.chatId, history: snapshot.history },
     args = action.args;
   const search = action.name.endsWith('.search') || action.name.endsWith('.list');
-  if (
-    Object.keys(args).some(
-      (key) => !(search ? ['query', 'offset', 'limit'] : ['id', 'offset', 'limit']).includes(key)
-    )
-  )
-    return denied('INVALID_ARGUMENTS');
+  const allowed =
+    action.name === 'story.list'
+      ? ['offset', 'limit']
+      : search
+        ? ['query', 'offset', 'limit']
+        : ['id', 'offset', 'limit'];
+  if (Object.keys(args).some((key) => !allowed.includes(key))) return denied('INVALID_ARGUMENTS');
   const offset = args.offset === undefined ? 0 : Number(args.offset),
     limit = args.limit === undefined ? (search ? 20 : 4096) : Number(args.limit);
   if (
@@ -107,7 +140,10 @@ export function executeStoryRead(
     return denied('INVALID_ARGUMENTS');
   try {
     let result: unknown;
-    if (search) {
+    if (action.name === 'story.list') {
+      const listed = listStorySources(snapshot, offset, limit);
+      result = boundedSearch(listed.total, offset, listed.results);
+    } else if (search) {
       const query = args.query === undefined && action.name === 'notes.list' ? '' : args.query;
       if (typeof query !== 'string' || query.length > 512) return denied('INVALID_ARGUMENTS');
       if (action.name === 'story.search') {
