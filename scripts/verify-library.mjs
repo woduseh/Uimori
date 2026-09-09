@@ -7,6 +7,7 @@ await runBrowserVerification({
   providerFixture: true,
   files: [
     'tests/library-browser.spec.ts',
+    'tests/library-compact-browser.spec.ts',
     'tests/library-images-browser.spec.ts',
     'tests/package-features-browser.spec.ts',
     'tests/shared-package-browser.spec.ts',
@@ -18,6 +19,10 @@ await runBrowserVerification({
     'LIBUI03',
     'LIBUI04',
     'LIBUI05',
+    'LIBUI06',
+    'LCOM01',
+    'LCOM02',
+    'LCOM03',
     'LIMG01',
     'LIMG02',
     'LIMG03',
