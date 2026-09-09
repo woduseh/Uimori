@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { ModelPreset } from '../core/product.js';
 import type { ProviderConnectionTest } from '../core/provider-connection-test.js';
 import { api } from './api.js';
-import { ProviderRejectionNotice } from './provider-rejection.js';
+import { ProviderRejectionNotice, rejectionMessage } from './provider-rejection.js';
 import './ProviderModelTest.css';
 
 type TestDisplay = {
@@ -98,15 +98,14 @@ export function useProviderModelTests() {
 }
 
 const statusLabel: Record<ProviderConnectionTest['status'], string> = {
-  running: '응답 확인 중',
-  completed: '응답 완료',
-  refused: '공급자 거절',
-  partial: '부분 응답',
-  error: '오류',
-  cancelled: '취소됨',
-  interrupted: '중단됨',
+  running: '응답 확인 중…',
+  completed: '응답에 성공했어요.',
+  refused: '모델이 응답을 거절했어요.',
+  partial: '응답이 끝까지 도착하지 않았어요.',
+  error: '응답에 실패했어요.',
+  cancelled: '테스트가 취소됐어요.',
+  interrupted: '실행 결과를 확인하지 못했어요.',
 };
-const tokens = (value: number | null) => (value === null ? '미확인' : value.toLocaleString());
 export function ProviderModelTest({
   model,
   record,
@@ -139,55 +138,39 @@ export function ProviderModelTest({
               ? '테스트 상태 다시 확인'
               : '응답 테스트'}
         </button>
-        <small>실제 API 요청 1회를 보내요. 공급자 요금이 적용될 수 있어요.</small>
+        <small>요금이 발생할 수 있어요.</small>
       </div>
-      {!available && <small>저장한 모델과 연결이 활성화되어 있어야 테스트할 수 있어요.</small>}
-      {record?.error && (
-        <p className="error" role="alert">
-          {record.error} 실행 상태를 다시 확인할 수 있어요. 새 요청을 자동으로 보내지 않아요.
-        </p>
-      )}
-      {result && (
-        <div className="provider-test-result" role="status">
-          <strong>
-            {statusLabel[result.status]} · {result.providerModelId}
-          </strong>
-          <dl>
-            <dt>응답 시간</dt>
-            <dd>
-              {result.latencyMs === null ? '측정 중' : `${result.latencyMs.toLocaleString()} ms`}
-            </dd>
-            <dt>사용 토큰</dt>
-            <dd>
-              입력 {tokens(result.usage.inputTokens)} · 출력 {tokens(result.usage.outputTokens)}
-            </dd>
-            <dt>공급자 보고 비용</dt>
-            <dd>
-              {result.usage.costUsd === null
-                ? '미확인'
-                : `USD ${result.usage.costUsd.toLocaleString(undefined, { maximumFractionDigits: 6 })}`}
-            </dd>
-            <dt>추정 비용</dt>
-            <dd>
-              {result.estimatedCost?.usd != null
-                ? `USD ${result.estimatedCost.usd.toLocaleString(undefined, { maximumFractionDigits: 6 })}`
-                : '미확인'}
-            </dd>
-          </dl>
-          <small>
-            공급자가 보고한 사용량 기준의 참고용 추정 금액이며 실제 청구액과 다를 수 있어요.
-          </small>
-          {result.text && <pre>{result.text}</pre>}
-          {result.truncated && <small>긴 응답은 일부만 표시해요.</small>}
-          {result.rejection && <ProviderRejectionNotice rejection={result.rejection} />}
-          {result.error && (
-            <p className="error">
-              {result.error === 'ENDPOINT_NOT_APPROVED'
-                ? '요청 주소가 허용되지 않았어요. 연결 편집에서 주소 확인 안내를 확인해 주세요. (ENDPOINT_NOT_APPROVED)'
-                : result.error}
-            </p>
-          )}
+      {!available && <small>모델과 프로바이더를 활성화해 주세요.</small>}
+      {record?.error ? (
+        <div className="provider-test-result" role="alert">
+          <p>실행 결과를 확인하지 못했어요. 상태를 다시 확인해 주세요.</p>
+          <details>
+            <summary>오류 상세</summary>
+            <p>{record.error}</p>
+          </details>
         </div>
+      ) : (
+        result && (
+          <div className="provider-test-result" role="status">
+            <p>{statusLabel[result.status]}</p>
+            {result.status !== 'completed' && result.status !== 'running' && (
+              <>
+                {result.rejection ? (
+                  <p>{rejectionMessage(result.rejection)}</p>
+                ) : result.error === 'ENDPOINT_NOT_APPROVED' ? (
+                  <p>프로바이더 편집에서 요청 주소를 확인해 주세요.</p>
+                ) : null}
+                {(result.error || result.rejection) && (
+                  <details>
+                    <summary>오류 상세</summary>
+                    {result.rejection && <ProviderRejectionNotice rejection={result.rejection} />}
+                    {result.error && <p className="error">{result.error}</p>}
+                  </details>
+                )}
+              </>
+            )}
+          </div>
+        )
       )}
     </section>
   );

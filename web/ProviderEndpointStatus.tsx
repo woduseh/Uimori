@@ -37,14 +37,16 @@ export function ProviderEndpointStatus({
   if (!endpoint.trim() || protocol === 'codex-app-server-v1') return null;
   const value = state?.key === key ? state.value : undefined;
   return (
-    <div className="provider-draft-note full" role="status" aria-label="연결 주소 확인">
+    <div className="provider-draft-note full" role="status" aria-label="프로바이더 주소 확인">
       {value?.status === 'official' ? (
         <p>공식 공급자 주소예요. 별도 주소 허용 설정 없이 사용할 수 있어요.</p>
       ) : value?.status === 'configured' ? (
         <p>서버에서 허용한 사용자 지정 주소예요.</p>
       ) : value?.status === 'needs-approval' ? (
         <>
-          <p>사용자 지정 주소는 서버에서 한 번 허용해야 해요. 연결 초안은 저장할 수 있어요.</p>
+          <p>
+            사용자 지정 주소는 서버에서 한 번 허용해야 해요. 프로바이더 초안은 저장할 수 있어요.
+          </p>
           <p>
             <code>NR_PROVIDER_ORIGINS</code>에 <code>{value.origin}</code>을 추가하고 서버를 다시
             시작해 주세요. 기존 주소가 있다면 쉼표로 구분해 추가해요.
@@ -55,8 +57,9 @@ export function ProviderEndpointStatus({
         </>
       ) : value?.status === 'invalid' ? (
         <p>
-          이 연결 방식에 맞는 API 기본 주소를 입력해 주세요. 사용자명·비밀번호·쿼리·#fragment는
-          포함할 수 없어요.{protocol === 'vertex-gemini-v1' && ' Gemini는 global 주소를 지원해요.'}
+          이 프로바이더 방식에 맞는 API 기본 주소를 입력해 주세요.
+          사용자명·비밀번호·쿼리·#fragment는 포함할 수 없어요.
+          {protocol === 'vertex-gemini-v1' && ' Gemini는 global 주소를 지원해요.'}
         </p>
       ) : state?.key === key && state.error ? (
         <p>주소 허용 상태를 확인하지 못했어요. 입력한 초안은 유지돼요.</p>

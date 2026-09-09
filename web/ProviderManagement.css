@@ -529,45 +529,6 @@
   margin: 8px;
   font-size: 13px;
 }
-.provider-item-details {
-  margin-inline: 8px;
-  font-size: 13px;
-}
-.provider-item-details > summary {
-  font-size: 12px;
-  color: var(--muted);
-}
-.provider-item-details > .provider-model-test {
-  margin-top: 8px;
-}
-.provider-model-definition {
-  margin-block: 8px;
-  overflow-wrap: anywhere;
-}
-.provider-menu-delete {
-  position: relative;
-  display: flex;
-  align-items: center;
-}
-.provider-menu-delete > svg {
-  position: absolute;
-  left: 12px;
-  pointer-events: none;
-}
-.provider-menu-delete > .delete-control {
-  width: 100%;
-}
-.provider-menu-delete .delete-control > button {
-  display: flex;
-  align-items: center;
-  width: 100%;
-  min-height: 44px;
-  padding: 10px 12px 10px 38px;
-  border: 0;
-  color: var(--error);
-  text-align: left;
-  font-size: 14px;
-}
 @media (max-width: 600px) {
   .provider-toolbar {
     gap: 8px;
@@ -628,8 +589,59 @@
   display: block;
   color: var(--muted);
 }
-.provider-wire {
-  display: block;
-  color: var(--muted);
-  overflow-wrap: anywhere;
+
+.connection-editor .provider-field-heading {
+  margin: 12px 0 0;
+  padding-top: 20px;
+  border-top: 1px solid var(--line);
+  font-size: 14px;
+  font-weight: 600;
+}
+.connection-editor .provider-model-section > .provider-field-heading:first-child {
+  margin-top: 0;
+}
+.connection-editor .provider-model-section > fieldset {
+  margin: 8px 0 0;
+  padding: 20px 0 0;
+  border: 0;
+  border-top: 1px solid var(--line);
+  border-radius: 0;
+  min-width: 0;
+}
+.connection-editor .provider-model-section > fieldset > legend {
+  font-size: 14px;
+  font-weight: 600;
+  padding-right: 12px;
+}
+.provider-stop-sequences {
+  min-width: 0;
+  border-top: 1px solid var(--line);
+}
+.provider-stop-sequences > summary {
+  padding-block: 14px;
+  min-height: 44px;
+  cursor: pointer;
+  font-size: 14px;
+}
+.provider-stop-sequences-body {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+.provider-stop-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: end;
+}
+.provider-stop-row textarea {
+  width: 100%;
+  min-height: 64px;
+}
+.provider-stop-row > .error {
+  grid-column: 1 / -1;
+}
+.provider-stop-add {
+  width: auto;
+  min-height: 44px;
 }

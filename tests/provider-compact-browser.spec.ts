@@ -50,7 +50,7 @@ async function projectLibrary(
 async function openProviders(page: Page) {
   await page.goto('/');
   await navigationAction(page, '설정');
-  await selectSettingsSection(page, '연결과 모델');
+  await selectSettingsSection(page, '프로바이더와 모델');
   await expect(page.getByTestId('connection-editor')).toBeVisible();
 }
 
@@ -65,27 +65,29 @@ test('PCUI01 empty connections and empty models each expose one relevant startin
   const observed = await projectLibrary(page, value);
   await openProviders(page);
   const editor = page.getByTestId('connection-editor');
-  await expect(editor.getByRole('searchbox', { name: '연결·모델 검색' })).toHaveCount(0);
-  await expect(editor.getByRole('button', { name: '연결 시작', exact: true })).toHaveCount(1);
+  await expect(editor.getByRole('searchbox', { name: '프로바이더·모델 검색' })).toHaveCount(0);
+  await expect(editor.getByRole('button', { name: '프로바이더 추가', exact: true })).toHaveCount(1);
   await expect(editor.getByRole('button', { name: '새 모델 입력', exact: true })).toHaveCount(0);
-  const start = await editor.getByRole('button', { name: '연결 시작', exact: true }).boundingBox();
+  const start = await editor
+    .getByRole('button', { name: '프로바이더 추가', exact: true })
+    .boundingBox();
   expect(start!.y + start!.height).toBeLessThan(844);
   if (visualReview)
     await page.screenshot({ path: info.outputPath('provider-compact-empty-mobile.png') });
-  await editor.getByRole('button', { name: '연결 관리', exact: true }).click();
-  await expect(editor.getByRole('button', { name: '연결 시작', exact: true })).toHaveCount(1);
-  await editor.getByRole('button', { name: '연결 시작', exact: true }).click();
+  await editor.getByRole('button', { name: '프로바이더 관리', exact: true }).click();
+  await expect(editor.getByRole('button', { name: '프로바이더 추가', exact: true })).toHaveCount(1);
+  await editor.getByRole('button', { name: '프로바이더 추가', exact: true }).click();
   await expect(editor.getByRole('region', { name: '제공자 선택', exact: true })).toBeVisible();
   await editor.getByRole('button', { name: '목록으로', exact: true }).click();
   value.connections = [connection];
   await editor.getByRole('button', { name: '목록 새로고침', exact: true }).click();
   await editor.getByRole('button', { name: '모델 프리셋', exact: true }).click();
   await expect(editor.getByRole('button', { name: '새 모델 입력', exact: true })).toHaveCount(1);
-  await expect(editor.getByRole('button', { name: '연결 시작', exact: true })).toHaveCount(0);
-  await expect(editor.getByRole('searchbox', { name: '연결·모델 검색' })).toHaveCount(0);
+  await expect(editor.getByRole('button', { name: '프로바이더 추가', exact: true })).toHaveCount(0);
+  await expect(editor.getByRole('searchbox', { name: '프로바이더·모델 검색' })).toHaveCount(0);
   await editor.getByRole('button', { name: '새 모델 입력', exact: true }).click();
   await expect(
-    editor.getByRole('form', { name: '모델 편집 양식' }).getByLabel('모델 연결')
+    editor.getByRole('form', { name: '모델 편집 양식' }).getByLabel('프로바이더', { exact: true })
   ).toHaveValue(connection.id);
   expect(observed.calls).toEqual([]);
   expect(observed.errors).toEqual([]);
@@ -95,10 +97,13 @@ test('PCUI02 compact provider lists align at six widths and retain accessible me
   page,
 }, info) => {
   test.setTimeout(60000);
-  const observed = await projectLibrary(page, { connections: [connection], models: [model] });
+  const observed = await projectLibrary(page, {
+    connections: [{ ...connection, protocol: 'anthropic-messages-v1' }],
+    models: [model],
+  });
   await openProviders(page);
   const editor = page.getByTestId('connection-editor');
-  const search = editor.getByRole('searchbox', { name: '연결·모델 검색' });
+  const search = editor.getByRole('searchbox', { name: '프로바이더·모델 검색' });
   const item = editor.getByRole('article', { name: model.title + ' 모델', exact: true });
   for (const width of reviewWidths([360, 390, 430, 768, 1024, 1440])) {
     await page.setViewportSize({ width, height: 900 });
@@ -138,6 +143,7 @@ test('PCUI02 compact provider lists align at six widths and retain accessible me
   await menu.focus();
   await page.keyboard.press('Enter');
   await expect(copy).toBeVisible();
+  await expect(item.locator('.action-menu-body > .delete-control > button > svg')).toHaveCount(1);
   await copy.focus();
   await page.keyboard.press('Escape');
   await expect(copy).not.toBeVisible();
@@ -151,20 +157,58 @@ test('PCUI02 compact provider lists align at six widths and retain accessible me
   await expect(search).toHaveValue('찾을 수 없는 합성 검색어');
   await editor.getByRole('button', { name: '검색 지우기', exact: true }).click();
   await expect(item).toBeVisible();
-  await expect(
-    item.getByRole('button', { name: model.title + ' 응답 테스트', exact: true })
-  ).not.toBeVisible();
-  await item.getByText('진단과 상세', { exact: true }).click();
+  await expect(item.getByText('진단과 상세', { exact: true })).toHaveCount(0);
+  await expect(item).not.toContainText(model.modelId);
+  await expect(item).not.toContainText('4096');
+  await expect(item).not.toContainText('옵션 앱 확인');
   await expect(
     item.getByRole('button', { name: model.title + ' 응답 테스트', exact: true })
   ).toBeVisible();
-  await editor.getByRole('button', { name: '연결 관리', exact: true }).click();
+  await editor.getByRole('button', { name: '프로바이더 관리', exact: true }).click();
   await search.fill('찾을 수 없는 합성 검색어');
-  await expect(editor.getByText('검색 조건에 맞는 연결이 없어요.', { exact: true })).toBeVisible();
+  await expect(
+    editor.getByText('검색 조건에 맞는 프로바이더가 없어요.', { exact: true })
+  ).toBeVisible();
   await editor.getByRole('button', { name: '검색 지우기', exact: true }).click();
   await expect(
-    editor.getByRole('article', { name: connection.title + ' 연결', exact: true })
+    editor.getByRole('article', { name: connection.title + ' 프로바이더', exact: true })
   ).toBeVisible();
+  const provider = editor.getByRole('article', {
+    name: connection.title + ' 프로바이더',
+    exact: true,
+  });
+  await provider.getByLabel(connection.title + ' 프로바이더 메뉴', { exact: true }).click();
+  await expect(provider.locator('.action-menu-body > .delete-control > button > svg')).toHaveCount(
+    1
+  );
+  await editor.getByRole('button', { name: '모델 프리셋', exact: true }).click();
+  await item.getByRole('button', { name: model.title + ' 모델 수정', exact: true }).click();
+  const form = editor.getByRole('form', { name: '모델 편집 양식' });
+  await form.getByRole('button', { name: '고급', exact: true }).click();
+  const stops = form.locator('.provider-stop-sequences');
+  await expect(stops).toHaveJSProperty('open', false);
+  await stops.locator('summary').click();
+  const add = stops.getByRole('button', { name: '추가', exact: true });
+  await add.click();
+  await stops.locator('summary').click();
+  await form.getByRole('button', { name: '모델 변경 저장', exact: true }).click();
+  await expect(stops).toHaveJSProperty('open', true);
+  await expect(form.getByLabel('생성 중단 문자열 1', { exact: true })).toBeFocused();
+  await form.getByLabel('생성 중단 문자열 1', { exact: true }).fill('END');
+  await form.getByRole('button', { name: '기본', exact: true }).click();
+  await form.getByRole('button', { name: '고급', exact: true }).click();
+  await expect(stops).toHaveJSProperty('open', true);
+  await expect(form.getByLabel('생성 중단 문자열 1', { exact: true })).toHaveValue('END');
+  if (visualReview) {
+    for (const width of [390, 1440]) {
+      await page.setViewportSize({ width, height: 900 });
+      const button = await add.boundingBox(),
+        section = await stops.boundingBox();
+      expect(button!.width).toBeLessThan(section!.width / 2);
+      expect(button!.height).toBeGreaterThanOrEqual(44);
+      await stops.screenshot({ path: info.outputPath(`provider-stop-controls-${width}.png`) });
+    }
+  }
   expect(observed.calls).toEqual([]);
   expect(observed.errors).toEqual([]);
 });

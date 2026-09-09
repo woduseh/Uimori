@@ -39,12 +39,12 @@ test('SCUI03 multi-entry browser back keeps the address and chat consistent with
   await next.click();
   await expect(composer).toHaveValue('두번째 채팅의 미전송 요청');
   await navigationAction(page, '설정');
-  await selectSettingsSection(page, '연결과 모델');
+  await selectSettingsSection(page, '프로바이더와 모델');
   await startProviderConnection(page);
   await page.getByRole('button', { name: /OpenAI · Responses/ }).click();
   const name = page
-    .getByRole('form', { name: '연결 편집 양식' })
-    .getByLabel('연결 이름', { exact: true });
+    .getByRole('form', { name: '프로바이더 편집 양식' })
+    .getByLabel('프로바이더 이름', { exact: true });
   await name.fill('이력을 건너뛰어도 보존할 초안');
   await page.evaluate(() => history.go(-2));
   const confirm = page.getByRole('alertdialog', { name: '미저장 설정 확인', exact: true });
@@ -143,12 +143,12 @@ test('SCUI02 settings back, resize and close preserve provider and chat drafts u
   const composer = page.getByLabel('다음 장면 요청', { exact: true });
   await composer.fill('계속 보존할 사용자 요청');
   await navigationAction(page, '설정');
-  await selectSettingsSection(page, '연결과 모델');
+  await selectSettingsSection(page, '프로바이더와 모델');
   await startProviderConnection(page);
   await page.getByRole('button', { name: /OpenAI · Responses/ }).click();
   const name = page
-    .getByRole('form', { name: '연결 편집 양식' })
-    .getByLabel('연결 이름', { exact: true });
+    .getByRole('form', { name: '프로바이더 편집 양식' })
+    .getByLabel('프로바이더 이름', { exact: true });
   await name.fill('아직 저장하지 않은 합성 연결');
   await page.goBack();
   const dialog = page.getByRole('dialog', { name: '설정', exact: true });
@@ -158,13 +158,13 @@ test('SCUI02 settings back, resize and close preserve provider and chat drafts u
   const confirm = page.getByRole('alertdialog', { name: '미저장 설정 확인', exact: true });
   await expect(confirm).toBeVisible();
   await confirm.getByRole('button', { name: '계속 편집', exact: true }).click();
-  await selectSettingsSection(page, '연결과 모델');
+  await selectSettingsSection(page, '프로바이더와 모델');
   await expect(name).toHaveValue('아직 저장하지 않은 합성 연결');
   await name.focus();
   await page.setViewportSize({ width: 1440, height: 900 });
   await expect(name).toBeFocused();
   await selectSettingsSection(page, '일반');
-  await selectSettingsSection(page, '연결과 모델');
+  await selectSettingsSection(page, '프로바이더와 모델');
   await expect(name).toHaveValue('아직 저장하지 않은 합성 연결');
   await page.setViewportSize({ width: 390, height: 844 });
   await expect(name).toBeVisible();
