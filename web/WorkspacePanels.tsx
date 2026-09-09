@@ -22,7 +22,7 @@ import {
   BackIcon,
   IllustrationIcon,
 } from './ui-icons.js';
-import type { Job } from '../core/types.js';
+import type { Job, ReaderRun } from '../core/types.js';
 import { branchLabel } from './storyLabels.js';
 import type { StoryState } from './useStory.js';
 import { api, labels } from './api.js';
@@ -48,6 +48,41 @@ export function TasksPanel({
     Pick<Job, 'id' | 'sourceRevision' | 'kind' | 'status' | 'error' | 'attempt'>[] | null
   >(null);
   const [jobsError, setJobsError] = useState('');
+  const [runList, setRunList] = useState<{
+    chatId: string;
+    runs: ReaderRun[] | null;
+    loading: boolean;
+    error: string;
+  } | null>(null);
+  const [runRetry, setRunRetry] = useState(0);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: Full summaries are fetched only while this panel is mounted, on chat/event changes or explicit retry.
+  useEffect(() => {
+    if (!detail) return;
+    let alive = true;
+    const chatId = detail.chat.id;
+    setRunList((old) => ({
+      chatId,
+      runs: old?.chatId === chatId ? old.runs : null,
+      loading: true,
+      error: '',
+    }));
+    void api<ReaderRun[]>(`/chats/${chatId}/reader-runs`)
+      .then((runs) => {
+        if (alive) setRunList({ chatId, runs, loading: false, error: '' });
+      })
+      .catch((error) => {
+        if (alive)
+          setRunList((old) => ({
+            chatId,
+            runs: old?.chatId === chatId ? old.runs : null,
+            loading: false,
+            error: error.message,
+          }));
+      });
+    return () => {
+      alive = false;
+    };
+  }, [detail?.chat.id, detail?.reader.cursor, runRetry]);
   // biome-ignore lint/correctness/useExhaustiveDependencies: Job reads follow the chat and event cursor, not unrelated reader snapshot changes.
   useEffect(() => {
     let alive = true;
@@ -68,7 +103,11 @@ export function TasksPanel({
     };
   }, [detail?.chat.id, detail?.reader.cursor]);
   if (!detail) return <p className="muted">이야기를 열면 실행한 작업을 확인할 수 있어요.</p>;
-  const runs = inspectedRun ? detail.runs.filter((run) => run.id === inspectedRun) : detail.runs;
+  const listed = runList?.chatId === detail.chat.id ? runList : null;
+  const allRuns = listed?.runs ?? null;
+  const runs = inspectedRun
+    ? (allRuns?.filter((run) => run.id === inspectedRun) ?? [])
+    : (allRuns ?? []);
   const refresh = () => state.refresh(detail.chat.id);
   async function perform(key: string, operation: () => Promise<unknown>) {
     if (pending.includes(key)) return;
@@ -98,7 +137,24 @@ export function TasksPanel({
         </p>
       )}
       <ActivityDetails activities={detail.reader.activity ?? []} branchId={state.branch?.id} />
-      {!runs.length && <p className="muted">아직 실행한 작업이 없어요.</p>}
+      {(!listed || listed.loading) && <p role="status">작업 목록을 불러오는 중이에요…</p>}
+      {listed?.error && (
+        <div role="alert">
+          <p>작업 목록: {listed.error}</p>
+          <button
+            type="button"
+            className="secondary"
+            onClick={() => setRunRetry((value) => value + 1)}
+          >
+            작업 목록 다시 불러오기
+          </button>
+        </div>
+      )}
+      {allRuns && !listed?.loading && !listed?.error && !runs.length && (
+        <p className="muted">
+          {inspectedRun ? '선택한 작업을 찾을 수 없어요.' : '아직 실행한 작업이 없어요.'}
+        </p>
+      )}
       <div className="runs">
         {runs.map((run) => (
           <article key={run.id} data-testid="run" data-run-id={run.id} className="run">
@@ -121,7 +177,7 @@ export function TasksPanel({
                         detail.branches?.find((item) => item.id === run.snapshot.branchId) ??
                         detail.branches?.find((item) => item.default);
                       if (branch && branch.id !== state.branch?.id)
-                        state.chooseBranch(branch.default ? '' : branch.id);
+                        state.chooseBranch(branch.default ? '' : branch.id, run.sourceRevision!);
                       else state.chooseSource(run.sourceRevision!);
                       onClose();
                     }}
@@ -155,12 +211,14 @@ export function TasksPanel({
       </div>
       {jobsError && <p role="alert">보조 작업 목록: {jobsError}</p>}
       {!jobs && !jobsError && <p role="status">보조 작업 목록을 불러오는 중이에요…</p>}
-      <AttemptInspector
-        key={detail.chat.id}
-        chatId={detail.chat.id}
-        revision={detail.reader.cursor}
-        runs={detail.runs}
-      />
+      {allRuns && (
+        <AttemptInspector
+          key={detail.chat.id}
+          chatId={detail.chat.id}
+          revision={detail.reader.cursor}
+          runs={allRuns}
+        />
+      )}
     </section>
   );
 }
@@ -169,7 +227,10 @@ export function BranchesPanel({ state, onClose }: { state: StoryState; onClose: 
   const detail = state.detail;
   if (!detail) return <p className="muted">먼저 이야기를 열어 주세요.</p>;
   function preview(branchId: string, head: string | null) {
-    const latestRun = detail!.runs.findLast((run) => run.snapshot.branchId === branchId);
+    const latestId = detail!.reader.latestBranchRuns?.[branchId];
+    const latestRun = detail!.reader.latestBranchRuns
+      ? detail!.runs.find((run) => run.id === latestId)
+      : detail!.runs.findLast((run) => run.snapshot.branchId === branchId);
     if (latestRun && !latestRun.sourceRevision)
       return `새 응답 ${labels[latestRun.status]} · ${latestRun.request.slice(0, 90)}`;
     const source = detail!.sources.find((item) => item.id === head);

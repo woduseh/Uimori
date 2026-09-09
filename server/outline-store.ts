@@ -27,6 +27,36 @@ const ACTIVE_RUN = ['queued', 'running', 'waiting_for_state'];
 /** One request's frozen input keeps a bounded amount of already-written history. */
 const WRITTEN_LIMIT = 40;
 const BATCH_LIMIT = 200;
+type OutlineSelection = { path: OutlineNode[]; children: OutlineNode[] };
+
+/** The same path and direct children feed both a reservation check and the eventual Run. */
+function outlineSelection(nodes: readonly OutlineNode[]) {
+  const byId = new Map(nodes.map((node) => [node.id, node]));
+  const children = new Map<string, OutlineNode[]>();
+  for (const node of nodes) {
+    if (node.parentId === null) continue;
+    const siblings = children.get(node.parentId) ?? [];
+    siblings.push(node);
+    children.set(node.parentId, siblings);
+  }
+  return (id: string): OutlineSelection => {
+    const path: OutlineNode[] = [];
+    for (let node = byId.get(id); node; ) {
+      path.unshift(node);
+      node = node.parentId === null ? undefined : byId.get(node.parentId);
+    }
+    return { path, children: children.get(id) ?? [] };
+  };
+}
+
+/** Binding a command changes revision/progress, but not the plan the request was written for. */
+function plannedContent(selection: OutlineSelection) {
+  const content = (node: OutlineNode) => [node.id, node.level, node.title, node.intent, node.fixed];
+  return JSON.stringify({
+    path: selection.path.map(content),
+    children: selection.children.map(content),
+  });
+}
 
 export const OUTLINE_TABLES = ['outline_nodes', 'outline_batches'] as const;
 
@@ -297,6 +327,12 @@ export class OutlineStore {
           throw new HttpError(409, '구성 요청 키가 다른 내용이나 권한에 사용됐어요.');
         return { detail: this.detail(chatId, branch.id), created: JSON.parse(prior.created) };
       }
+      const pending = this.db
+        .prepare(
+          "SELECT n.id,n.command_id FROM outline_nodes n JOIN scene_commands c ON c.id=n.command_id WHERE n.chat_id=? AND n.branch_id=? AND c.status='pending' AND c.run_id IS NULL"
+        )
+        .all(chatId, branch.id) as { id: string; command_id: string }[];
+      const before = pending.length ? outlineSelection(this.nodes(chatId, branch.id)) : null;
       const created: { ref?: string; id: string }[] = [];
       const refs = new Map<string, string>();
       const time = now();
@@ -410,6 +446,15 @@ export class OutlineStore {
           }
         }
       }
+      if (before) {
+        const after = outlineSelection(this.nodes(chatId, branch.id));
+        for (const item of pending) {
+          // Explicit node removal already deletes its unexecuted command.
+          const current = after(item.id);
+          if (current.path.length && plannedContent(before(item.id)) !== plannedContent(current))
+            this.store.story.cancelCommand(item.command_id);
+        }
+      }
       this.db
         .prepare(
           'INSERT INTO outline_batches(chat_id,branch_id,request_key,authority,operations,created,created_at) VALUES(?,?,?,?,?,?,?)'
@@ -495,12 +540,12 @@ export class OutlineStore {
     const nodes = this.nodes(row.chat_id, row.branch_id);
     const target = nodes.find((item) => item.id === row.id);
     if (!target) return undefined;
-    const path: OutlineNode[] = [];
-    for (let current: OutlineNode | undefined = target; current; ) {
-      path.unshift(current);
-      const parentId: string | null = current.parentId;
-      current = parentId === null ? undefined : nodes.find((item) => item.id === parentId);
-    }
+    if (target.progress.state === 'cancelled' && !target.progress.runId)
+      throw new HttpError(
+        409,
+        '구성의 집필 예약이 취소됐어요. 최신 구성을 확인하고 다시 집필해 주세요.'
+      );
+    const { path, children } = outlineSelection(nodes)(target.id);
     const ancestry = new Set(snapshot.history.map((entry) => entry.revision));
     const written = nodes
       .filter(
@@ -520,7 +565,7 @@ export class OutlineStore {
     return sealOutlineSnapshot({
       version: 1,
       path: path.map(outlineSnapshotNode),
-      children: nodes.filter((item) => item.parentId === target.id).map(outlineSnapshotNode),
+      children: children.map(outlineSnapshotNode),
       written,
     });
   }

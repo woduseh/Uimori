@@ -247,11 +247,15 @@ export type ReaderActivity = {
 export type ReaderNavigationItem = { id: string; number: number; label: string };
 
 export type ReaderDetail = Omit<ChatDetail, 'runs' | 'attempts'> & {
+  /** Current page, all active Runs and source-less responses; full task history is fetched separately. */
   runs: ReaderRun[];
   /** Scene illustrations for the returned sources; older pages keep their cached entries. */
   illustrations?: import('./illustration.js').Illustration[];
   reader: {
     navigation: ReaderNavigationItem[];
+    /** Candidate creation order is independent of the visible Run page. */
+    candidateBranches?: string[];
+    latestBranchRuns?: Record<string, string>;
     activity?: ReaderActivity[];
     responseActivity?: ReaderActivity[];
     headSourceHash?: string | null;

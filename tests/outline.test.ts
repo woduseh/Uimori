@@ -150,20 +150,20 @@ const find = (store: Store, chatId: string, title: string) => {
   return node;
 };
 
-/** Reserve and complete one run through the existing main writing path. */
-function write(store: Store, chatId: string, commandId: string, text: string) {
+/** Reserve through the same Store boundary used by the scene-command run route. */
+function reserve(store: Store, chatId: string, commandId: string, key = randomUUID()) {
   const chat = store.chat(chatId);
   const profile = store.product.snapshot(chatId);
   const branch = store.product.branch(chatId);
   const command = store.story.command(commandId);
-  const run = store.createRun(
+  return store.createRun(
     chatId,
     {
       request: command.request,
       expectedRevision: branch.headRevision,
       expectedSettingsRevision: chat.settingsRevision,
       expectedProfileRevision: store.product.profile(chatId).revision,
-      idempotencyKey: randomUUID(),
+      idempotencyKey: key,
       branchId: command.branchId,
       sceneCommandId: command.id,
     },
@@ -179,6 +179,11 @@ function write(store: Store, chatId: string, commandId: string, text: string) {
         ...(profile ? { profile } : {}),
       }) satisfies RunSnapshot
   ).run;
+}
+
+/** Reserve and complete one run through the existing main writing path. */
+function write(store: Store, chatId: string, commandId: string, text: string) {
+  const run = reserve(store, chatId, commandId);
   store.startRun(run.id);
   const source = store.completeRun(
     run.id,
@@ -510,6 +515,217 @@ describe('hierarchical composition', () => {
     ).toBe(409);
     expect(store.outline.node(second).progress.state).toBe('planned');
     expect(store.story.detail(chat.id).commands).toHaveLength(1);
+  });
+
+  test.each([
+    ['target', '1화 잠긴 문'],
+    ['ancestor', '지하 서고의 발견'],
+    ['direct child', '열쇠 없는 자물쇠'],
+  ])(
+    'a changed %s plan rejects the old reservation and a fresh reservation uses the new plan',
+    async (_, title) => {
+      const store = await database();
+      const chat = chatWithMainModel(store, '예약 뒤 구성 변경');
+      compose(store, chat.id);
+      const episode = find(store, chat.id, '1화 잠긴 문');
+      const key = randomUUID();
+      const old = store.outline.sceneCommand(episode.id, { idempotencyKey: key });
+      const target = find(store, chat.id, title);
+      store.outline.apply(
+        chat.id,
+        {
+          idempotencyKey: randomUUID(),
+          operations: [
+            {
+              op: 'update',
+              id: target.id,
+              expectedRevision: target.revision,
+              intent: '예약 뒤 확정한 새로운 계획',
+            },
+          ],
+        },
+        'user'
+      );
+      expect(store.story.command(old.id)).toMatchObject({
+        status: 'cancelled',
+        request: old.request,
+        runId: null,
+      });
+      expect(store.outline.sceneCommand(episode.id, { idempotencyKey: key }).id).toBe(old.id);
+      expect(failure(() => reserve(store, chat.id, old.id)).statusCode).toBe(409);
+      expect(store.detail(chat.id).runs).toEqual([]);
+      expect(store.db.prepare('SELECT id FROM attempts').all()).toEqual([]);
+      const fresh = store.outline.sceneCommand(episode.id, { idempotencyKey: randomUUID() });
+      expect(fresh.id).not.toBe(old.id);
+      // The old command stays cancelled even after a new command owns the outline node.
+      expect(failure(() => reserve(store, chat.id, old.id)).statusCode).toBe(409);
+      const { run } = write(store, chat.id, fresh.id, '새 계획으로 집필한 원문');
+      expect(JSON.stringify(run.snapshot.outline)).toContain('예약 뒤 확정한 새로운 계획');
+      const input = JSON.stringify(buildMainProviderRequest(run.snapshot).request);
+      expect(input).toContain('예약 뒤 확정한 새로운 계획');
+      expect(input).not.toContain(target.intent);
+      expect(store.story.command(old.id).request).toBe(old.request);
+    }
+  );
+
+  test('a reserved custom request stays intact when a child is added and unrelated siblings stay writable', async () => {
+    const store = await database();
+    const chat = createFixtureChat(store, '직접 요청문 보존');
+    compose(store, chat.id);
+    const episode = find(store, chat.id, '1화 잠긴 문');
+    const sibling = find(store, chat.id, '2화 장부의 첫 장');
+    const request = '직접 지정한 요청: 대사는 한 줄만 쓰고 열쇠를 보여 주세요.';
+    const key = randomUUID();
+    const command = store.outline.sceneCommand(episode.id, { idempotencyKey: key, request });
+    const other = store.outline.sceneCommand(sibling.id, { idempotencyKey: randomUUID() });
+    store.outline.apply(
+      chat.id,
+      {
+        idempotencyKey: randomUUID(),
+        operations: [
+          {
+            op: 'create',
+            level: 'beat',
+            parentId: episode.id,
+            title: '새 세부 사건',
+            intent: '열쇠가 빛난다.',
+          },
+        ],
+      },
+      'model'
+    );
+    expect(store.story.command(command.id)).toMatchObject({ request, status: 'cancelled' });
+    expect(store.outline.sceneCommand(episode.id, { idempotencyKey: key, request }).request).toBe(
+      request
+    );
+    expect(store.story.command(other.id).status).toBe('pending');
+    const fresh = store.outline.sceneCommand(episode.id, { idempotencyKey: randomUUID(), request });
+    expect(fresh.request).toBe(request);
+    const cancelledRun = reserve(store, chat.id, fresh.id);
+    store.finishRun(cancelledRun.id, 'cancelled', 'User cancelled an accepted outline run');
+    expect(store.story.command(fresh.id)).toMatchObject({
+      status: 'cancelled',
+      runId: cancelledRun.id,
+    });
+    // A new attempt of an already accepted, user-cancelled Run remains an explicit retry.
+    const first = write(store, chat.id, fresh.id, '열쇠가 빛났다.');
+    const second = write(store, chat.id, other.id, '다음 회차가 이어졌다.');
+    expect(first.run.request).toBe(request);
+    expect(second.run.snapshot.outline?.path.at(-1)?.id).toBe(sibling.id);
+    const restored = await database();
+    restored.product.import(store.product.export());
+    expect(restored.story.command(command.id)).toMatchObject({ status: 'cancelled', request });
+    expect(restored.run(first.run.id).request).toBe(request);
+  });
+
+  test('an accepted run is replayed with its original plan after later composition edits', async () => {
+    const store = await database();
+    const chat = createFixtureChat(store, '접수된 집필 응답 재확인');
+    compose(store, chat.id);
+    const episode = find(store, chat.id, '1화 잠긴 문');
+    const commandKey = randomUUID();
+    const command = store.outline.sceneCommand(episode.id, { idempotencyKey: commandKey });
+    const runKey = randomUUID();
+    const run = reserve(store, chat.id, command.id, runKey);
+    const original = JSON.parse(
+      (store.db.prepare('SELECT command FROM runs WHERE id=?').get(run.id) as { command: string })
+        .command
+    );
+    const arc = find(store, chat.id, '지하 서고의 발견');
+    store.outline.apply(
+      chat.id,
+      {
+        idempotencyKey: randomUUID(),
+        operations: [
+          {
+            op: 'update',
+            id: arc.id,
+            expectedRevision: arc.revision,
+            intent: '이미 접수된 Run 이후 계획',
+          },
+        ],
+      },
+      'user'
+    );
+    expect(store.story.command(command.id).status).toBe('pending');
+    const replay = () =>
+      store.createRun(chat.id, { ...original, idempotencyKey: runKey }, () => {
+        throw new Error('Replaying an accepted run must not compile a new snapshot');
+      });
+    expect(replay()).toMatchObject({ created: false, run: { id: run.id, snapshot: run.snapshot } });
+    store.startRun(run.id);
+    store.completeRun(
+      run.id,
+      '원래 계획으로 집필한 원문',
+      { modelCalls: 0, inputTokens: null, outputTokens: null, costUsd: null },
+      run.snapshot.settings
+    );
+    expect(replay().run.snapshot.outline).toEqual(run.snapshot.outline);
+    expect(store.outline.sceneCommand(episode.id, { idempotencyKey: commandKey }).runId).toBe(
+      run.id
+    );
+    expect(store.detail(chat.id).runs).toHaveLength(1);
+  });
+
+  test('only the committed final plan cancels a reservation, not intermediate edits or rolled-back batches', async () => {
+    const store = await database();
+    const chat = createFixtureChat(store, '배치 최종 계획 비교');
+    compose(store, chat.id);
+    const episode = find(store, chat.id, '1화 잠긴 문');
+    const command = store.outline.sceneCommand(episode.id, { idempotencyKey: randomUUID() });
+    const node = store.outline.node(episode.id);
+    store.outline.apply(
+      chat.id,
+      {
+        idempotencyKey: randomUUID(),
+        operations: [
+          {
+            op: 'update',
+            id: node.id,
+            expectedRevision: node.revision,
+            intent: '배치 안의 임시 수정',
+          },
+          { op: 'update', id: node.id, expectedRevision: node.revision + 1, intent: node.intent },
+        ],
+      },
+      'user'
+    );
+    expect(store.story.command(command.id).status).toBe('pending');
+    const current = store.outline.node(node.id);
+    expect(
+      failure(() =>
+        store.outline.apply(
+          chat.id,
+          {
+            idempotencyKey: randomUUID(),
+            operations: [
+              {
+                op: 'update',
+                id: node.id,
+                expectedRevision: current.revision,
+                intent: '롤백해야 할 변경',
+              },
+              {
+                op: 'create',
+                level: 'beat',
+                parentRef: 'missing',
+                title: '실패할 항목',
+                intent: '',
+              },
+            ],
+          },
+          'user'
+        )
+      ).statusCode
+    ).toBe(400);
+    expect(store.outline.node(node.id)).toEqual(current);
+    expect(store.story.command(command.id)).toMatchObject({
+      status: 'pending',
+      request: command.request,
+    });
+    const { run } = write(store, chat.id, command.id, '최종 계획이 같은 원문');
+    expect(run.snapshot.outline?.path.at(-1)?.intent).toBe(node.intent);
+    expect(run.snapshot.outline?.path.at(-1)?.revision).toBe(current.revision);
   });
 
   test('same-version databases and archives without the additive outline tables preserve the story', async () => {
