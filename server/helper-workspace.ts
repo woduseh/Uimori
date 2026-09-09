@@ -119,6 +119,12 @@ export function directHelperGrants(
   )
     actions.push('notes.write');
   if (
+    /(?:구성|개요|줄거리|플롯).*(?:(?:구성|작성|수정|변경|정리|추가|삭제)(?:해\s*(?:줘|주세요|줄래)|하(?:고|자|세요))|(?:만들어|짜|바꿔|고쳐)\s*(?:줘|주세요|줄래))|구성해\s*(?:줘|주세요|줄래)|^(?:please\s+)?(?:outline|plan)\b/iu.test(
+      instruction
+    )
+  )
+    actions.push('outline.write');
+  if (
     /(?:제목).*(?:(?:변경|수정|설정)(?:해\s*(?:줘|주세요|줄래)|하(?:고|자|세요))|바꿔\s*줘)|^(?:please\s+)?(?:rename|set (?:the )?title)/iu.test(
       instruction
     )

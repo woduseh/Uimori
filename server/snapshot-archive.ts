@@ -8,6 +8,7 @@ import { captureLogicalHistory, compileSnapshotPrompt } from './prompt-snapshot.
 import type { Store } from './store.js';
 import { mapForkChatOverrideSnapshot } from './chat-overrides.js';
 import { mapForkChatOptionSnapshot } from './chat-options.js';
+import { sealOutlineSnapshot } from '../core/outline.js';
 
 const reject = (message: string): never => {
   throw new HttpError(400, `Invalid snapshot archive: ${message}`);
@@ -81,6 +82,16 @@ export function mapForkSnapshot(
       (id) => source(id)!
     );
   }
+  if (snapshot.outline)
+    snapshot.outline = sealOutlineSnapshot({
+      version: snapshot.outline.version,
+      path: snapshot.outline.path,
+      children: snapshot.outline.children,
+      written: snapshot.outline.written.map((item) => ({
+        ...item,
+        sourceRevision: source(item.sourceRevision)!,
+      })),
+    });
   if (snapshot.promptCompilation) {
     const ids = new Map<string, string>();
     for (const message of snapshot.promptCompilation.messages) {

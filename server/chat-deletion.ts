@@ -25,6 +25,7 @@ const chatTables = [
   'context_commands',
   'context_heads',
   'context_checkpoints',
+  'outline_nodes',
   'scene_commands',
   'package_requests',
   'package_behavior_states',
@@ -343,6 +344,7 @@ export function deleteBranch(store: Store, chatId: string, branchId: string, val
     removeIds(store, 'jobs', 'id', jobIds);
     deleteIllustrationsForSources(store, sourceIds);
     for (const table of [
+      'outline_nodes',
       'scene_commands',
       'package_requests',
       'package_behavior_states',
@@ -385,6 +387,11 @@ export function deleteSceneCommand(store: Store, id: string, value: unknown) {
         '실행 기록에 연결된 새 장면 요청이에요. 해당 분기 또는 채팅과 함께 삭제해 주세요.'
       );
     assertUnreferencedStoryEntry(store, command.chatId, id);
+    if (store.db.prepare('SELECT 1 FROM outline_nodes WHERE command_id=?').get(id))
+      throw new HttpError(
+        409,
+        '구성 항목에 연결된 새 장면 요청이에요. 구성에서 먼저 분리하거나 구성 항목을 삭제해 주세요.'
+      );
     store.db.prepare('DELETE FROM scene_commands WHERE id=?').run(id);
     store.event(command.chatId, 'scene.command.deleted', id);
     return { deleted: true, chatId: command.chatId };

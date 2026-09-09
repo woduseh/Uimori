@@ -43,6 +43,8 @@ await runBrowserVerification({
     'PKUI01',
     'PRUI01',
     'NUI01',
+    'OUTUI01',
+    'OUTUI02',
     'PREQUESTUI01',
     'PREQUESTUI02',
     'SEGMENTUI01',
@@ -124,5 +126,9 @@ await runBrowserVerification({
     'archive-cleared-mobile.png',
     'archive-import-error-mobile.png',
     'archive-accepted-refresh-error.png',
+    'outline-panel-390.png',
+    'outline-panel-1440.png',
+    'outline-written-390.png',
+    'outline-written-1440.png',
   ],
 });

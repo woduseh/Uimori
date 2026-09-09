@@ -66,6 +66,8 @@ export type Usage = {
 export type RunSnapshot = {
   /** Independent writing artifact: read-only tools and no host source/state commit. */
   executionPurpose?: 'artifact';
+  /** Frozen author-side composition for the unit this run writes; planning, never story fact. */
+  outline?: import('./outline.js').OutlineSnapshot;
   contextPlan?: import('./context-plan.js').ContextPlan;
   contextBase?: import('./context-plan.js').ContextBase;
   loreContext?: import('./lore-context.js').LoreContextSnapshot;
