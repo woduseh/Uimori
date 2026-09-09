@@ -328,6 +328,13 @@ GPL 코드나 개인 패키지의 본문·스크립트를 복사하지 않고 �
 - 비채택: 기존 사용자 auth.json 재사용·토큰 추출·비공식 ChatGPT HTTP 중계·Codex의 코딩/파일/MCP 실행은 가져오지 않아요. 공식 CLI 자체 지침은 제거할 수 없으므로 논리 메시지를 native provider role과 동일하다고 주장하지 않아요. 0.153 CLI는 내장 openai provider retry override를 거절하므로 해당 설정을 제거했어요. Uimori는 불확실 요청을 재생하지 않지만 CLI 내부 재시도와 내부 모델 호출 수는 제어·계수하지 못해요. maxOutputTokens는 출력 목표이고 cost/modelCalls는 미확인 값을 유지해요.
 - 운영 절차·구체적인 기능 한계: [Codex 연결](../docs/CODEX.md).
 
+## 장면 삽화 · Codex 이미지 생성과 ComfyUI API (2026-09-09)
+
+- 공식 소스: 설치된 `codex-cli 0.153.4`의 `codex features list`(`image_generation` stable)와 `codex app-server generate-ts --experimental` 출력의 `ImageGenerationItem.ts`(`{id, status, revisedPrompt, result, transparentBackground?, failure, savedPath?}`), `ImageGenerationFailure.ts`(`usageLimitExceeded`), `v2/ThreadItem.ts`의 `imageGeneration` variant, `v2/UserInput.ts`의 `image`/`localImage` 입력, `v2/ModelProviderCapabilitiesReadResponse.ts`의 `imageGeneration`. 실행 파일은 실행만 하고 코드를 복사하지 않았어요. 참고 설계 문서 3종(`Uimori-Codex-Illustration-Plan.ko.md` 등)은 인수 시 이 PC에 없어 코드베이스와 브리프 기준으로 판단했어요.
+- ComfyUI 공식 [서버 라우트 문서](https://docs.comfy.org/development/comfyui-server/comms_routes): `POST /prompt {prompt, client_id} → {prompt_id, number, node_errors}`, `GET /history/{prompt_id}`의 `outputs[node].images[{filename, subfolder, type}]`·`status`, `GET /view?filename&subfolder&type`, `POST /interrupt`, `GET /queue`·`POST /queue {delete}`, `GET /system_stats`. WebSocket `/ws`는 채택하지 않고 폴링을 써요.
+- RisuAI [`src/ts/process/stableDiff.ts`](https://github.com/kwaroran/RisuAI/blob/main/src/ts/process/stableDiff.ts)(main, 2026-09-09 조회): ComfyUI는 `/prompt` 제출 → `/history` 1초 폴링 → `/view` 다운로드, 워크플로 문자열의 `{{risu_prompt}}`/`{{risu_neg}}` 치환과 시드 무작위화라는 원리만 참고했어요. Uimori는 `{{prompt}}`/`{{negative}}`/`{{seed}}` 자리표시자, 서버 측 실행, 취소 시 `/queue`·`/interrupt` 정리, 노드 오류 진단 보존으로 독립 구현했고 NovelAI zip 경로는 채택하지 않았어요. GPL 코드는 복사하지 않았어요.
+- 적용 위치와 검증: `core/illustration.ts`(계약·치환·해석), `server/codex-runtime.ts`(`generateImage`, 텍스트 턴 `features.image_generation=false`), `server/comfyui-client.ts`, `server/illustrations.ts`, `server/illustration-runner.ts`, `web/IllustrationStrip.tsx`·`IllustrationSettingsEditor.tsx`·`IllustrationReferences.tsx`. 검증은 합성 app-server fixture의 `image*` 모드와 `tests/fixtures/comfyui-server.ts`로 하며 실제 구독·원격 PC 호출은 사용자 확인 항목이에요. 결정과 비채택은 [장면 삽화](../docs/ILLUSTRATIONS.md#결정-기록-2026-09-09)에 있어요.
+
 ## 2026-09-07 공급자별 생성 파라미터 개편 조사
 
 - 검토용 제안은 [공급자·모델 파라미터 계획](PROVIDER-PARAMETERS-PLAN.md)이에요. 후속 사용자 결정에 따라 Google은 global만 유지하고, 기존 누적 호출·금액 예산 제한은 제거 대상으로 확정했어요. 계획 검토 후 사용자가 병행 구현을 요청했고, Fable 5.1·GPT Flex·캐시 ON/OFF/TTL·짧은 연결 테스트를 추가로 지정했어요. 현재 구현 계약은 [모델 파라미터](../docs/MODEL-PARAMETERS.md)에 있어요. 실제 외부 모델 호출은 하지 않았어요.

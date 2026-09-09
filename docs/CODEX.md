@@ -1,6 +1,6 @@
 # Codex 에이전트 연결
 
-Uimori 서버에서 공식 Codex CLI의 App Server를 실행하고 개인 ChatGPT 구독으로 로그인해요. 프로토콜은 `codex-app-server-v1`, 연결 주소는 고정값 `codex://local`이에요. 본문·번역·장면 상태 표시·이미지 작업 지시·상태 계산·문맥 정리·도우미에서 같은 Codex 모델 프리셋을 선택할 수 있어요. 이미지 역할은 기존 Uimori의 이미지 작업 지시를 만들며 Codex 이미지 생성 기능을 추가한 것은 아니에요.
+Uimori 서버에서 공식 Codex CLI의 App Server를 실행하고 개인 ChatGPT 구독으로 로그인해요. 프로토콜은 `codex-app-server-v1`, 연결 주소는 고정값 `codex://local`이에요. 본문·번역·장면 상태 표시·이미지 작업 지시·상태 계산·문맥 정리·도우미에서 같은 Codex 모델 프리셋을 선택할 수 있어요. 이미지 역할은 기존 Uimori의 이미지 작업 지시(배치)를 만들어요. Codex의 공식 이미지 생성 도구는 **설정 → 삽화**의 장면 삽화 생성에서만 사용하며, 텍스트 판단 턴에는 `features.image_generation=false`를 명시해요. 삽화 턴의 계약은 [장면 삽화](ILLUSTRATIONS.md)를 봐요.
 
 ## 준비와 로그인
 
@@ -34,6 +34,7 @@ Linux Docker의 실제 이미지 빌드·기동과 실계정 로그인·구독 �
 - App Server `initialize`, `account/*`, `model/list`, `thread/start`, `turn/start`를 사용해요. 각 판단 요청은 새 ephemeral thread와 별도 프로세스로 실행하며 opaque continuation은 저장하지 않아요.
 - 전용 Codex home과 빈 임시 작업 폴더를 사용해요. 기존 사용자 home/config와 서버의 provider API 키 환경변수를 넘기지 않아요. `environments: []`, `selectedCapabilityRoots: []`, read-only/never 정책과 기능 비활성화로 Codex의 파일·터미널·웹·MCP·앱·스킬 접근을 차단해요. 예상하지 않은 도구 실행은 실패로 처리해요.
 - Codex는 JSON으로 최종 응답 또는 허용된 Uimori 도구 요청을 반환해요. 실제 도구 권한·자료 조회·검증·저장은 기존 Uimori 하네스가 담당해요. 각 역할의 기존 원문/hash/revision·취소·작업 귀속 계약을 유지해요.
+- 삽화 턴은 같은 프로세스 격리 안에서 `features.image_generation=true`만 더해 `imageGeneration` 항목을 받아요. 결과 base64 또는 전용 home의 `savedPath` 파일만 읽고 다른 도구 항목은 계속 거절해요. 텍스트 턴과 별도 동시 실행 슬롯(1개)을 써요.
 - PromptProgram의 논리적 역할·순서·빈 메시지를 JSON으로 전달해요. Codex 자체 지침이 추가되므로 native API message role과 동일한 처리는 보장하지 않아요. assistant prefill과 필수 cache는 실행 전에 거절해요.
 - `reasoningEffort`와 timeout을 전달해요. `maxOutputTokens`는 출력 목표이며 공급자의 강제 토큰 한도가 아니에요. temperature는 허용하지 않아요. 구조화 출력은 항상 외부 JSON envelope로 검증하며 내부 역할별 결과 검증도 유지해요.
 - 전송 전에 RPC attempt를 기록해요. 동시 실행은 2개, 대기는 최대 32개이며 취소할 수 있어요. Uimori는 재시작·전송 실패·불확실한 실행을 자동 재생하지 않아요. 다만 공식 CLI 내부의 통신 재시도 정책은 Uimori가 제어하지 못해요. 0.153은 내장 OpenAI provider의 retry 설정 덮어쓰기를 거절하므로 내부 재시도 0회나 upstream exactly-once는 보장하지 않아요. 기존 하네스의 명시적 재요청 및 정상 종료된 결과에 대한 제한된 재시도는 별도 판단 요청으로 기록돼요.

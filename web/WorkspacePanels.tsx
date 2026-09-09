@@ -5,6 +5,7 @@ import { discardActiveEditor } from './editor-workspace-context.js';
 import { DeleteButton } from './DeleteButton.js';
 import { ActivityDetails } from './ActivityStatus.js';
 import { CodexAgentSettings } from './CodexAgentSettings.js';
+import { IllustrationSettingsEditor } from './IllustrationSettingsEditor.js';
 import { useEffect, useId, useRef, useState } from 'react';
 import { Dialog } from './Dialog.js';
 import { IconButton } from './IconButton.js';
@@ -19,6 +20,7 @@ import {
   DataIcon,
   SecurityIcon,
   BackIcon,
+  IllustrationIcon,
 } from './ui-icons.js';
 import type { Job } from '../core/types.js';
 import { branchLabel } from './storyLabels.js';
@@ -259,10 +261,11 @@ export function AppSettingsPanel({
   const [modelDirty, setModelDirty] = useState(false);
   const [promptDirty, setPromptDirty] = useState(false);
   const [archiveDirty, setArchiveDirty] = useState(false);
+  const [illustrationDirty, setIllustrationDirty] = useState(false);
   const [discard, setDiscard] = useState(false);
   const [discarding, setDiscarding] = useState(false);
   const [discardError, setDiscardError] = useState('');
-  const dirty = connectionDirty || archiveDirty || modelDirty || promptDirty;
+  const dirty = connectionDirty || archiveDirty || modelDirty || promptDirty || illustrationDirty;
   const root = useRef<HTMLElement>(null);
   const wasCompact = useRef(compact);
   const id = useId();
@@ -272,6 +275,7 @@ export function AppSettingsPanel({
     { key: 'prompts', label: '현재 프롬프트', icon: PromptIcon },
     { key: 'connections', label: '연결과 모델', icon: ConnectionIcon },
     { key: 'agents', label: '에이전트', icon: AgentIcon },
+    { key: 'illustrations', label: '삽화', icon: IllustrationIcon },
     { key: 'data', label: '데이터 관리', icon: DataIcon },
     { key: 'security', label: '접근 보안', icon: SecurityIcon },
   ];
@@ -464,6 +468,12 @@ export function AppSettingsPanel({
                   )}
                   {key === 'agents' && (
                     <CodexAgentSettings active={active === 'agents' && showingDetail} />
+                  )}
+                  {key === 'illustrations' && state.library && (
+                    <IllustrationSettingsEditor
+                      library={state.library}
+                      onDirtyChange={setIllustrationDirty}
+                    />
                   )}
                   {key === 'data' && (
                     <ArchivePanel

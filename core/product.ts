@@ -223,7 +223,7 @@ export type Attempt = {
   runId: string | null;
   jobId: string | null;
   storyJobId?: string | null;
-  role: TaskRole | 'state' | 'context' | 'helper' | 'title';
+  role: TaskRole | 'state' | 'context' | 'helper' | 'title' | 'illustration';
   connectionId: string;
   modelId: string;
   status: string;

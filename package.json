@@ -36,6 +36,7 @@
     "verify:packages": "node scripts/verify-package-ui.mjs",
     "verify:loading": "node scripts/verify-loading.mjs",
     "verify:turn-activity": "node scripts/verify-turn-activity.mjs",
+    "verify:illustration": "node scripts/verify-illustration.mjs",
     "verify:navigation": "node scripts/verify-navigation.mjs",
     "verify:library": "node scripts/verify-library.mjs",
     "verify:redesign": "node scripts/verify-redesign.mjs",

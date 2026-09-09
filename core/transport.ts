@@ -43,7 +43,8 @@ export type ProviderRole =
   | 'state'
   | 'context'
   | 'helper'
-  | 'title';
+  | 'title'
+  | 'illustration';
 export type ProviderConnection = {
   id: string;
   protocol: ProviderProtocol;
@@ -260,9 +261,17 @@ export function validateRequest(value: unknown): ProviderRequest {
     }
   }
   if (
-    !['main', 'translation', 'status', 'image', 'state', 'context', 'helper', 'title'].includes(
-      value.role as string
-    )
+    ![
+      'main',
+      'translation',
+      'status',
+      'image',
+      'state',
+      'context',
+      'helper',
+      'title',
+      'illustration',
+    ].includes(value.role as string)
   )
     reject('INVALID_ROLE');
   string(value.modelId);

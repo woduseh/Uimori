@@ -18,6 +18,7 @@ const names: Record<string, string> = {
   status: '장면 상태',
   state: '상태 정리',
   context: '문맥 압축',
+  illustration: '삽화',
 };
 
 type Props = {
@@ -100,6 +101,8 @@ function TurnActivityContent({
   const previousStory = storyHistory.filter(
     (item) => !story.some((current) => current.id === item.id)
   );
+  // Illustrations attach to the response text; the reader strip owns their actions.
+  const illustrations = related.filter((item) => item.kind === 'illustration');
   const entries = [
     ...currentJobs.map((job) => ({
       id: job.id,
@@ -112,6 +115,7 @@ function TurnActivityContent({
     })),
     ...story,
     ...(context ? [context] : []),
+    ...illustrations,
   ];
   const running = active(run.status) || entries.some((item) => active(item.status));
   useEffect(() => {
@@ -259,6 +263,14 @@ function TurnActivityContent({
             <section aria-label="이 응답의 문맥 작업">
               <p>문맥 압축 · {labels[context.status] ?? context.status}</p>
               <small>요약과 작업 관리는 채팅 설정의 상태와 문맥에서 확인해요.</small>
+            </section>
+          )}
+          {illustrations.length > 0 && (
+            <section aria-label="이 응답의 삽화 작업">
+              {illustrations.map((item) => (
+                <p key={item.id}>삽화 · {labels[item.status] ?? item.status}</p>
+              ))}
+              <small>삽화 결과와 다시 요청·삭제는 장면 아래 삽화 영역에서 확인해요.</small>
             </section>
           )}
         </div>

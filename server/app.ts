@@ -34,6 +34,8 @@ import { providerConnectionTestRoutes } from './provider-connection-test.js';
 import { storyRoutes } from './story-routes.js';
 import { packageImageRoutes } from './package-images.js';
 import { packageFeatureRoutes } from './package-features.js';
+import { reconcileIllustrationJob, runIllustrationJob } from './illustration-runner.js';
+import { illustrationJob, illustrationRoutes, queuedIllustrations } from './illustrations.js';
 import { createPackageStart } from './package-start.js';
 import { runStoryJob } from './story-runner.js';
 import { deniedBrowserRequest, networkPolicy } from './network-policy.js';
@@ -44,8 +46,13 @@ import {
   type CodexRuntimeService,
 } from './codex-runtime.js';
 import { agentRuntimeRoutes } from './agent-runtime-routes.js';
-import { ProviderContractError, type ProviderExecutionOptions } from '../core/transport.js';
+import {
+  ProviderContractError,
+  type ProviderExecutionOptions,
+  type WireRecord,
+} from '../core/transport.js';
 import type { Connection } from '../core/product.js';
+import type { CodexImageRequest } from './codex-runtime.js';
 
 import { PROVIDER_PROTOCOLS } from '../core/product.js';
 import type { Settings, RunSnapshot } from '../core/types.js';
@@ -130,6 +137,48 @@ export async function createApp(options: AppOptions): Promise<App> {
       },
     });
   };
+  /** Illustration turns share the Codex login and the same live-connection authorization. */
+  const generateCodexImage = (
+    connection: Connection,
+    request: CodexImageRequest,
+    execution: {
+      signal: AbortSignal;
+      timeoutMs?: number;
+      onWire: (wire: WireRecord) => void | Promise<void>;
+    }
+  ) => {
+    const authorize = () => {
+      const current = store.product.get<Connection>('connection', connection.id);
+      if (
+        !current.enabled ||
+        current.protocol !== connection.protocol ||
+        current.endpoint !== connection.endpoint ||
+        current.credentialEnv !== connection.credentialEnv
+      )
+        throw new ProviderContractError('CONNECTION_NOT_AUTHORIZED');
+    };
+    authorize();
+    return codex.generateImage(
+      {
+        id: connection.id,
+        protocol: connection.protocol,
+        endpoint: connection.endpoint,
+        ...(connection.credentialEnv ? { credentialEnv: connection.credentialEnv } : {}),
+      },
+      request,
+      {
+        approvedOrigins: options.approvedOrigins ?? [],
+        signal: execution.signal,
+        timeoutMs: execution.timeoutMs,
+        beforeTurn: authorize,
+        onWire: async (wire) => {
+          authorize();
+          await execution.onWire(wire);
+          authorize();
+        },
+      }
+    );
+  };
   const resolveCredential: NonNullable<ProviderExecutionOptions['resolveCredential']> = async (
     reference,
     connection,
@@ -162,6 +211,8 @@ export async function createApp(options: AppOptions): Promise<App> {
   const jobs = new Set<string>();
   const jobControllers = new Map<string, AbortController>();
   const storyControllers = new Map<string, AbortController>();
+  const illustrations = new Set<string>();
+  const illustrationControllers = new Map<string, AbortController>();
   const approvedOrigins = options.approvedOrigins ?? [];
   const stopping = new AbortController();
   const publish = (chatId: string) => {
@@ -389,6 +440,71 @@ export async function createApp(options: AppOptions): Promise<App> {
       );
     }
   };
+  /** Illustration work never shares a queue, slot or transaction with story text jobs. */
+  const pumpIllustrations = () => {
+    if (stopping.signal.aborted) return;
+    for (const id of queuedIllustrations(store)) {
+      if (illustrations.has(id)) continue;
+      illustrations.add(id);
+      const controller = new AbortController();
+      illustrationControllers.set(id, controller);
+      const signal = AbortSignal.any([controller.signal, stopping.signal]);
+      track(
+        (async () => {
+          let chatId = '';
+          let requeued = false;
+          let attempt = 1;
+          try {
+            const queued = illustrationJob(store, id);
+            chatId = queued.chatId;
+            attempt = queued.attempt;
+            const outcome = await runIllustrationJob(store, id, instanceId, {
+              signal,
+              approvedOrigins,
+              resolveCredential,
+              executeCodex,
+              generateCodexImage,
+              authorize: (connection) => store.product.authorize(connection),
+              onAttemptStart: (wire) => store.product.startAttempt(chatId, null, null, wire),
+              onAttemptFinish: (attemptId, result) =>
+                store.product.finishAttempt(attemptId, result),
+              onProgress: () => publish(chatId),
+              cancellationStatus: 'interrupted',
+              allowFixture: options.testMode === true,
+              gate: async () => {
+                await controls.wait('illustration', signal);
+                signal.throwIfAborted();
+                controls.fail('illustration');
+              },
+            });
+            requeued = outcome?.status === 'requeued';
+          } catch {
+            if (!stopping.signal.aborted)
+              store.transaction(() => {
+                const changed = store.db
+                  .prepare(
+                    "UPDATE illustration_jobs SET status='failed',owner=NULL,error='ILLUSTRATION_FAILED',updated_at=? WHERE id=? AND status='running' AND owner=?"
+                  )
+                  .run(new Date().toISOString(), id, instanceId);
+                if (changed.changes && chatId) store.event(chatId, 'illustration.failed', id);
+              });
+          } finally {
+            illustrations.delete(id);
+            illustrationControllers.delete(id);
+            if (chatId && !stopping.signal.aborted) {
+              publish(chatId);
+              if (queuedIllustrations(store).length) {
+                // Automatic retries back off briefly outside test mode; a manual pump is immediate.
+                const delay = requeued && !options.testMode ? Math.min(5000, attempt * 1000) : 0;
+                if (delay) setTimeout(pumpIllustrations, delay).unref();
+                else queueMicrotask(pumpIllustrations);
+              }
+            }
+          }
+        })()
+      );
+    }
+  };
   const execute = (id: string) => {
     const controller = new AbortController();
     runs.set(id, controller);
@@ -560,6 +676,7 @@ export async function createApp(options: AppOptions): Promise<App> {
           if (controls.crashAfterSourceCommit) process.exit(86);
           publish(run.chatId);
           pumpJobs();
+          pumpIllustrations();
           pumpStory();
           titles.afterSource(id);
         } catch (error) {
@@ -818,6 +935,19 @@ export async function createApp(options: AppOptions): Promise<App> {
     abort: (id) => storyControllers.get(id)?.abort(),
   });
   packageImageRoutes(app, store, { publish, pump: pumpJobs });
+  illustrationRoutes(app, store, {
+    publish,
+    pump: pumpIllustrations,
+    abort: (id) => illustrationControllers.get(id)?.abort(new Error('Illustration cancelled')),
+    testMode: options.testMode === true,
+    reconcile: (id) =>
+      reconcileIllustrationJob(store, id, instanceId, {
+        signal: AbortSignal.any([AbortSignal.timeout(20_000), stopping.signal]),
+        resolveCredential: (name) => process.env[name],
+        onProgress: () => publish(illustrationJob(store, id).chatId),
+      }),
+    resolveCredential: (name) => process.env[name],
+  });
   packageFeatureRoutes(app, store);
   app.post<{ Params: { id: string } }>('/api/chats/:id/package-start', async (request) => {
     const result = createPackageStart(store, request.params.id, request.body, (snapshot) =>
@@ -1131,7 +1261,7 @@ export async function createApp(options: AppOptions): Promise<App> {
       fields(body, ['action', 'barrier', 'point']);
       if (body.action === 'hold' || body.action === 'release') {
         if (
-          !['run', 'translation', 'status', 'image', 'state', 'context'].includes(
+          !['run', 'translation', 'status', 'image', 'state', 'context', 'illustration'].includes(
             String(body.barrier)
           )
         )
@@ -1147,6 +1277,7 @@ export async function createApp(options: AppOptions): Promise<App> {
             'image',
             'state',
             'context',
+            'illustration',
           ].includes(String(body.point))
         )
           throw new HttpError(400, 'Invalid failure point');
@@ -1179,6 +1310,7 @@ export async function createApp(options: AppOptions): Promise<App> {
   streams.recover();
   app.addHook('onListen', async () => {
     pumpJobs();
+    pumpIllustrations();
     pumpStory();
   });
   return app;

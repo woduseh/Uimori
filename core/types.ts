@@ -232,7 +232,7 @@ export type ReaderActivity = {
   superseded?: boolean;
   executionUncertain?: boolean;
   id: string;
-  kind: 'main' | 'translation' | 'image' | 'status' | 'state' | 'context';
+  kind: 'main' | 'translation' | 'image' | 'status' | 'state' | 'context' | 'illustration';
   status: string;
   createdAt: string;
   updatedAt: string;
@@ -246,6 +246,8 @@ export type ReaderNavigationItem = { id: string; number: number; label: string }
 
 export type ReaderDetail = Omit<ChatDetail, 'runs' | 'attempts'> & {
   runs: ReaderRun[];
+  /** Scene illustrations for the returned sources; older pages keep their cached entries. */
+  illustrations?: import('./illustration.js').Illustration[];
   reader: {
     navigation: ReaderNavigationItem[];
     activity?: ReaderActivity[];

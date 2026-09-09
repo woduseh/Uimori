@@ -1,6 +1,7 @@
 import { HttpError, fields, record, text } from './request-validation.js';
 import { createHash, randomUUID } from 'node:crypto';
 import { forkImageInput } from './package-images.js';
+import { copyIllustrationsForFork } from './illustrations.js';
 import { splitSource } from '../core/auxiliary.js';
 import type { Resource, RunSnapshot } from '../core/types.js';
 import type { Store, Chat, Source } from './store.js';
@@ -322,6 +323,15 @@ export function forkChat(store: Store, chatId: string, value: unknown): Chat {
           .run(jobId, job.generation, json(result), job.result_created_at);
       }
     }
+    copyIllustrationsForFork(
+      store,
+      id,
+      ancestors.map((original) => ({
+        oldId: original.id,
+        newId: sourceIds.get(original.id)!,
+        hash: original.hash,
+      }))
+    );
     const head = sourceIds.get(fromRevision)!;
     store.db.prepare('UPDATE chats SET head_revision=? WHERE id=?').run(head, id);
     store.db.prepare('UPDATE branches SET head_revision=? WHERE id=?').run(head, branchId);

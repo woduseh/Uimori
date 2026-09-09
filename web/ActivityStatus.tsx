@@ -33,6 +33,7 @@ const names: Record<string, string> = {
   status: '상태 정리 중',
   state: '상태 정리 중',
   context: '문맥 압축 중',
+  illustration: '삽화 만드는 중',
 };
 const doneNames: Record<string, string> = {
   main: '본문',
@@ -41,6 +42,7 @@ const doneNames: Record<string, string> = {
   status: '상태 정리',
   state: '상태 정리',
   context: '문맥 압축',
+  illustration: '삽화',
   request: '요청',
 };
 export function elapsedLabel(start: string, end: number) {

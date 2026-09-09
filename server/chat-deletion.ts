@@ -4,6 +4,7 @@ import type { FastifyInstance } from 'fastify';
 import type { Store } from './store.js';
 import { deleteChatOverrideSourcesInTransaction } from './chat-overrides.js';
 import { deleteChatOptionSourcesInTransaction } from './chat-options.js';
+import { deleteIllustrationsForSources } from './illustrations.js';
 
 type Row = Record<string, any>;
 const chatTables = [
@@ -30,6 +31,9 @@ const chatTables = [
   'package_behavior_journal',
   'package_behavior_heads',
   'package_behavior_opportunities',
+  'illustration_images',
+  'illustration_jobs',
+  'illustration_references',
   'attempts',
   'jobs',
   'sources',
@@ -79,7 +83,7 @@ function assertIdle(store: Store, chatId: string) {
       .get(chatId)
   )
     throw new HttpError(409, '진행 중인 도우미 작업을 취소하거나 완료한 뒤 삭제해 주세요.');
-  for (const table of ['runs', 'jobs', 'story_jobs', 'context_jobs'])
+  for (const table of ['runs', 'jobs', 'story_jobs', 'context_jobs', 'illustration_jobs'])
     if (
       store.db
         .prepare(
@@ -337,6 +341,7 @@ export function deleteBranch(store: Store, chatId: string, branchId: string, val
     removeIds(store, 'attempts', 'job_id', jobIds);
     removeIds(store, 'attempts', 'run_id', runIds);
     removeIds(store, 'jobs', 'id', jobIds);
+    deleteIllustrationsForSources(store, sourceIds);
     for (const table of [
       'scene_commands',
       'package_requests',
