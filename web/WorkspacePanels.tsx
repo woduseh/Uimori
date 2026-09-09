@@ -1,3 +1,4 @@
+import { DraftDiscardActions } from './DraftDiscardActions.js';
 import { Switch } from './BooleanControls.js';
 import { ModelWorkspaceEditor } from './ModelWorkspaceEditor.js';
 import { PromptWorkspaceEditor } from './PromptWorkspaceEditor.js';
@@ -528,7 +529,10 @@ export function AppSettingsPanel({
                     </div>
                   )}
                   {key === 'agents' && (
-                    <CodexAgentSettings active={active === 'agents' && showingDetail} />
+                    <CodexAgentSettings
+                      active={active === 'agents' && showingDetail}
+                      onOpenModels={() => select('connections')}
+                    />
                   )}
                   {key === 'illustrations' && state.library && (
                     <IllustrationSettingsEditor
@@ -597,35 +601,25 @@ export function AppSettingsPanel({
             {discardError}
           </p>
         )}
-        <div className="form-actions">
-          <button
-            type="button"
-            className="secondary"
-            disabled={discarding}
-            onClick={() => setDiscard(false)}
-          >
-            계속 편집
-          </button>
-          <button
-            type="button"
-            disabled={discarding}
-            onClick={async () => {
-              setDiscarding(true);
-              setDiscardError('');
-              try {
-                if (promptDirty) await discardActiveEditor('prompt-workspace:current');
-                setDiscard(false);
-                closeHistory();
-              } catch (error) {
-                setDiscardError((error as Error).message);
-              } finally {
-                setDiscarding(false);
-              }
-            }}
-          >
-            초안 버리고 닫기
-          </button>
-        </div>
+        <DraftDiscardActions
+          open={discard}
+          disabled={discarding}
+          onContinue={() => setDiscard(false)}
+          onDiscard={async () => {
+            setDiscarding(true);
+            setDiscardError('');
+            try {
+              if (promptDirty) await discardActiveEditor('prompt-workspace:current');
+              setDiscard(false);
+              closeHistory();
+            } catch (error) {
+              setDiscardError((error as Error).message);
+            } finally {
+              setDiscarding(false);
+            }
+          }}
+          discardLabel="초안 버리고 닫기"
+        />
       </Dialog>
     </Dialog>
   );

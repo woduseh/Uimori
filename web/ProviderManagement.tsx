@@ -1,3 +1,4 @@
+import { DraftDiscardActions } from './DraftDiscardActions.js';
 import { Switch } from './BooleanControls.js';
 import { useEffect, useRef, useState } from 'react';
 import { ArrowLeft, ArrowRight, Plus, Plug, Power, Save, X } from 'lucide-react';
@@ -517,34 +518,32 @@ export function ConnectionEditor({
           aria-label="편집 중인 초안 확인"
           tabIndex={-1}
           ref={discardPanel}
+          onKeyDown={(event) => {
+            if (event.key !== 'Escape') return;
+            event.preventDefault();
+            event.stopPropagation();
+            const kind = discard.kind;
+            setDiscard(undefined);
+            navigate(kind);
+          }}
         >
           <strong>
             저장하지 않은 {discard.kind === 'connection' ? '프로바이더' : '모델'} 초안이 있어요
           </strong>
           <p>다른 항목을 편집하면 현재 초안이 교체돼요.</p>
-          <div className="provider-actions">
-            <button
-              type="button"
-              onClick={() => {
-                const action = discard.proceed;
-                setDiscard(undefined);
-                action();
-              }}
-            >
-              초안 버리고 계속
-            </button>
-            <button
-              type="button"
-              className="secondary"
-              onClick={() => {
-                const kind = discard.kind;
-                setDiscard(undefined);
-                navigate(kind);
-              }}
-            >
-              계속 편집
-            </button>
-          </div>
+          <DraftDiscardActions
+            onContinue={() => {
+              const kind = discard.kind;
+              setDiscard(undefined);
+              navigate(kind);
+            }}
+            onDiscard={() => {
+              const action = discard.proceed;
+              setDiscard(undefined);
+              action();
+            }}
+            discardLabel="초안 버리고 계속"
+          />
         </section>
       )}
       <div className="provider-workspace-heading" ref={heading} tabIndex={-1}>

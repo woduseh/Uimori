@@ -1,3 +1,6 @@
+import { RefreshCw } from 'lucide-react';
+import { IconButton } from './IconButton.js';
+import './codex-agent-settings.css';
 import { useEffect, useRef, useState } from 'react';
 import type { CodexRuntimeStatus } from '../core/agent-runtime.js';
 import { api } from './api.js';
@@ -13,8 +16,15 @@ const runtimeErrors: Record<string, string> = {
 };
 
 /** Authentication remains in the server's dedicated official Codex runtime. */
-export function CodexAgentSettings({ active = true }: { active?: boolean }) {
+export function CodexAgentSettings({
+  active = true,
+  onOpenModels,
+}: {
+  active?: boolean;
+  onOpenModels?: () => void;
+}) {
   const [status, setStatus] = useState<CodexRuntimeStatus>();
+  const [checking, setChecking] = useState(false);
   const [busy, setBusy] = useState(false),
     [error, setError] = useState(''),
     [refresh, setRefresh] = useState(0);
@@ -28,6 +38,8 @@ export function CodexAgentSettings({ active = true }: { active?: boolean }) {
     const current = ++version.current,
       deadline = Date.now() + 10 * 60 * 1000;
     async function poll() {
+      if (!alive || current !== version.current) return;
+      setChecking(true);
       try {
         const result = await api<CodexRuntimeStatus>('/agent-runtimes/codex');
         if (!alive || current !== version.current) return;
@@ -41,6 +53,8 @@ export function CodexAgentSettings({ active = true }: { active?: boolean }) {
       } catch {
         if (alive && current === version.current)
           setError('Codex 상태를 확인하지 못했어요. 잠시 후 다시 확인해 주세요.');
+      } finally {
+        if (alive && current === version.current) setChecking(false);
       }
     }
     void poll();
@@ -55,6 +69,7 @@ export function CodexAgentSettings({ active = true }: { active?: boolean }) {
     setBusy(true);
     setError('');
     ++version.current;
+    setChecking(false);
     try {
       setStatus(await api<CodexRuntimeStatus>(path, {}, method));
       setRefresh((value) => value + 1);
@@ -83,55 +98,59 @@ export function CodexAgentSettings({ active = true }: { active?: boolean }) {
   })();
   return (
     <section className="settings-section codex-agent-settings" aria-label="Codex 에이전트 연결">
-      <h3>Codex · 개인 ChatGPT 구독</h3>
-      <p>
-        Codex는 Uimori 서버에서 실행해요. Uimori 전용 로그인으로 연결하며 PC와 휴대폰에서 같은 구독
-        한도를 사용해요. API 키 방식으로 자동 전환하지 않아요.
-      </p>
+      <div className="codex-agent-heading">
+        <h3>Codex</h3>
+        <IconButton
+          icon={RefreshCw}
+          label="Codex 상태 다시 확인"
+          disabled={busy || checking}
+          aria-busy={checking}
+          className={checking ? 'codex-agent-refreshing' : ''}
+          onClick={() => setRefresh((value) => value + 1)}
+        />
+      </div>
+      <p className="muted">ChatGPT 구독으로 연결해요.</p>
       {!status ? (
-        <p role="status">Codex 준비 상태를 확인하고 있어요…</p>
+        <p role="status">{error ? '상태 확인 실패' : '상태 확인 중…'}</p>
       ) : (
         <>
-          <p role="status">
+          <p role="status" className="codex-agent-status">
             {!status.available
-              ? '서버에 Codex 실행 설정이 필요해요'
+              ? '서버 설정 필요'
               : status.authenticated && status.authMode === 'chatgpt'
-                ? 'ChatGPT 구독으로 연결됐어요'
+                ? '연결됨'
                 : status.authMode === 'apikey'
-                  ? 'API 키 로그인이 감지됐어요. 구독을 사용하려면 연결을 해제하고 ChatGPT로 로그인해 주세요.'
+                  ? '구독 로그인 필요'
                   : status.login
-                    ? '공식 페이지에서 로그인을 완료해 주세요'
-                    : 'ChatGPT 로그인이 필요해요'}
+                    ? '로그인 대기 중'
+                    : '로그인 필요'}
           </p>
-          {!status.available && (
+          {!status.available ? (
             <p>
-              서버 관리자가 공식 Codex 실행기와 Uimori 전용 실행 환경을 설정해야 해요. 서버 설정
-              문서의 Codex 연결 절차를 확인해 주세요.
+              {(status.error && runtimeErrors[status.error]) ||
+                '서버의 Codex 실행 설정을 확인해 주세요.'}
             </p>
-          )}
-          {status.error && (
+          ) : status.authMode === 'apikey' ? (
+            <p>API 키 연결을 해제하고 ChatGPT로 로그인해 주세요.</p>
+          ) : status.error && status.error !== 'CODEX_LOGIN_REQUIRED' ? (
             <p className="error" role="alert">
-              {runtimeErrors[status.error] ??
-                'Codex 실행 환경을 확인해 주세요. 서버에서 준비 상태를 확인하지 못했어요.'}
+              {runtimeErrors[status.error] ?? 'Codex 실행 환경을 확인해 주세요.'}
             </p>
-          )}
+          ) : null}
           {status.login && (
             <div className="compact-card" role="region" aria-label="Codex 로그인 코드">
               <strong>로그인 코드</strong>
               <code>{status.login.userCode}</code>
               {verificationUrl ? (
                 <a href={verificationUrl} target="_blank" rel="noopener noreferrer">
-                  공식 Codex 로그인 페이지 열기
+                  로그인 페이지 열기
                 </a>
               ) : (
                 <p className="error">
                   공식 로그인 주소를 확인하지 못했어요. 로그인을 취소하고 다시 시도해 주세요.
                 </p>
               )}
-              <small>
-                코드는 위의 공식 페이지에 직접 입력해요. 이 화면이 열려 있는 동안 완료 여부를
-                확인해요.
-              </small>
+              <small>페이지에 코드를 입력해 주세요. 로그인 완료를 자동으로 확인해요.</small>
             </div>
           )}
           {status.planType && <p>구독: {status.planType}</p>}
@@ -148,6 +167,14 @@ export function CodexAgentSettings({ active = true }: { active?: boolean }) {
           )}
           <div className="provider-actions">
             {status.available &&
+              status.authenticated &&
+              status.authMode === 'chatgpt' &&
+              onOpenModels && (
+                <button type="button" onClick={onOpenModels}>
+                  프로바이더와 모델
+                </button>
+              )}
+            {status.available &&
               !status.authenticated &&
               !status.login &&
               status.authMode !== 'apikey' && (
@@ -158,7 +185,7 @@ export function CodexAgentSettings({ active = true }: { active?: boolean }) {
                     void action('/agent-runtimes/codex/login');
                   }}
                 >
-                  ChatGPT로 Codex 로그인
+                  ChatGPT로 로그인
                 </button>
               )}
             {status.login && (
@@ -170,7 +197,7 @@ export function CodexAgentSettings({ active = true }: { active?: boolean }) {
                   void action('/agent-runtimes/codex/login/cancel');
                 }}
               >
-                Codex 로그인 취소
+                로그인 취소
               </button>
             )}
             {(status.authenticated || status.authMode === 'apikey') && (
@@ -182,25 +209,24 @@ export function CodexAgentSettings({ active = true }: { active?: boolean }) {
                   void action('/agent-runtimes/codex/session', 'DELETE');
                 }}
               >
-                Codex 연결 해제
+                연결 해제
               </button>
             )}
           </div>
         </>
       )}
-      <button
-        type="button"
-        className="secondary"
-        disabled={busy}
-        onClick={() => setRefresh((value) => value + 1)}
-      >
-        Codex 상태 다시 확인
-      </button>
-      <p>
-        로그인 후 ‘프로바이더와 모델’에서 Codex 프로바이더와 모델 프리셋을 저장해요. 본문·번역·장면
-        상태·이미지 작업·상태·문맥 정리와 도우미 요청에서 역할별로 선택할 수 있어요. 실제 요청은
-        구독 한도를 사용해요.
-      </p>
+      <details className="codex-agent-help">
+        <summary>연결 도움말</summary>
+        <p>
+          서버 관리자가 공식 Codex 실행기와 전용 로그인 환경을 설정해야 해요. 서버 설정 문서의 Codex
+          연결 절차를 확인해 주세요.
+        </p>
+        <p>로그인 후 ‘프로바이더와 모델’에서 Codex 프로바이더와 모델 프리셋을 저장해요.</p>
+        <p>
+          Codex는 Uimori 서버에서 실행해요. PC와 휴대폰에서 같은 구독 한도를 사용하며, API 키
+          방식으로 자동 전환하지 않아요.
+        </p>
+      </details>
       {error && (
         <p className="error" role="alert">
           {error}
