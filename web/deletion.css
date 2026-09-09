@@ -53,3 +53,16 @@
 .delete-button > svg {
   flex: 0 0 auto;
 }
+
+.delete-dialog .form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  width: 100%;
+  margin-top: 12px;
+}
+.delete-dialog .form-actions > button {
+  flex: 0 0 auto;
+  width: auto;
+  min-height: 44px;
+}

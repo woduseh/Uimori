@@ -1,6 +1,6 @@
 import { visualReview } from './fixtures/visual-review.js';
 import { preservePromptWorkspace } from './fixtures/prompt-workspace.js';
-import { selectChatSettingsSection, openPromptBlocks } from './ui-navigation.js';
+import { selectChatSettingsSection, openPromptBlocks, navigationAction } from './ui-navigation.js';
 import { postFixtureChat } from './fixtures/chat.js';
 import { test, expect } from '@playwright/test';
 import type { PromptProgram } from '../core/prompt-program.js';
@@ -83,9 +83,9 @@ test('PRUI01 template drafts retain same-owner combinations and reject identical
   await page.getByRole('button', { name: '채팅 설정', exact: true }).click();
   await selectChatSettingsSection(page, '프롬프트·창작 프리셋');
   await page.getByRole('button', { name: '전역 프롬프트 설정', exact: true }).click();
-  const editor = page.getByRole('region', { name: '현재 프롬프트 설정' }),
-    composer = page.getByTestId('prompt-composer');
-  const global = composer.getByLabel('이 프롬프트의 옵션 조합', { exact: true });
+  const settings = page.getByRole('region', { name: '현재 프롬프트 설정' });
+  await settings.locator('summary').filter({ hasText: '창작 옵션' }).click();
+  const global = settings.getByLabel('옵션 조합', { exact: true });
   await expect(global.getByRole('option', { name: 'Reusable detailed', exact: true })).toHaveCount(
     1
   );
@@ -93,12 +93,37 @@ test('PRUI01 template drafts retain same-owner combinations and reject identical
     global.getByRole('option', { name: 'Foreign combination', exact: true })
   ).toHaveCount(0);
   await global.selectOption({ label: 'Reusable detailed' });
-  await expect(composer.getByLabel('합성 상세도', { exact: true })).toHaveValue('3');
-  await composer.getByLabel('합성 상세도', { exact: true }).fill('2');
-  await expect(composer.getByText('불러온 조합에서 수정됨', { exact: true })).toBeVisible();
-  await composer.getByLabel('새 조합 이름', { exact: true }).fill('Reusable medium');
-  await composer.getByRole('button', { name: '옵션 조합 저장', exact: true }).click();
+  await expect(settings.getByLabel('합성 상세도', { exact: true })).toHaveValue('3');
+  await expect
+    .poll(
+      async () => (await (await request.get('/api/prompt-workspace')).json()).main.values.detail
+    )
+    .toBe(3);
+  await settings.getByLabel('합성 상세도', { exact: true }).fill('2');
+  await expect
+    .poll(
+      async () => (await (await request.get('/api/prompt-workspace')).json()).main.values.detail
+    )
+    .toBe(2);
+  await expect(global.locator('option:checked')).toHaveText('사용자 설정');
+  await settings.getByLabel('옵션 조합 메뉴', { exact: true }).click();
+  await settings.getByRole('button', { name: '현재 선택을 새 조합으로 저장', exact: true }).click();
+  const dialog = page.getByRole('dialog', { name: '옵션 조합 저장', exact: true });
+  await dialog.getByLabel('조합 이름', { exact: true }).fill('Reusable medium');
+  await dialog.getByRole('button', { name: '저장', exact: true }).click();
   await expect(global).toContainText('Reusable medium');
+  await global.selectOption({ label: 'Reusable detailed' });
+  await expect(settings.getByLabel('합성 상세도', { exact: true })).toHaveValue('3');
+  await expect
+    .poll(
+      async () => (await (await request.get('/api/prompt-workspace')).json()).main.values.detail
+    )
+    .toBe(3);
+  await page.getByRole('button', { name: '설정 닫기', exact: true }).click();
+  await navigationAction(page, '프롬프트');
+  await page.getByRole('button', { name: `${saved.title} 프롬프트 편집`, exact: true }).click();
+  const editor = page.getByTestId('prompt-editor');
+  const composer = editor.getByTestId('prompt-composer');
   const block = composer.locator('.pc-block').first();
   await openPromptBlocks(composer);
   await block.locator('summary').first().click();
@@ -109,30 +134,18 @@ test('PRUI01 template drafts retain same-owner combinations and reject identical
   await block.getByRole('button', { name: '문법 초안 적용', exact: true }).click();
   await expect(source).toHaveValue('Line\n{{ options.missing }}');
   await expect(block.getByRole('alert')).toContainText('PROMPT_UNKNOWN_CONTROL (2:4)');
-  await editor.getByLabel('현재 프롬프트 저장 메뉴', { exact: true }).click();
-  await expect(
-    editor.getByRole('button', { name: '새 프리셋으로 저장', exact: true })
-  ).toBeDisabled();
-  await editor.getByLabel('현재 프롬프트 저장 메뉴', { exact: true }).click();
-  await expect(editor.getByLabel('현재 프롬프트 프리셋', { exact: true })).toBeDisabled();
+  await expect(editor.getByRole('button', { name: '저장', exact: true })).toBeDisabled();
   await source.fill(
     '{% if options.detail >= 2 %}Detailed {{ options.detail }}{% else %}Brief{% endif %}'
   );
   await block.getByRole('button', { name: '문법 초안 적용', exact: true }).click();
-  await expect(editor.getByRole('button', { name: '현재 설정 저장', exact: true })).toBeEnabled();
-  await editor.getByRole('button', { name: '현재 설정 저장', exact: true }).click();
-  await expect(editor.getByRole('button', { name: '현재 설정 저장', exact: true })).toBeDisabled();
-  await expect(global.getByRole('option', { name: 'Reusable detailed', exact: true })).toHaveCount(
-    1
-  );
-  await expect(global.getByRole('option', { name: 'Reusable medium', exact: true })).toHaveCount(1);
-  await expect(
-    global.getByRole('option', { name: 'Foreign combination', exact: true })
-  ).toHaveCount(0);
-  const revised = (await (await request.get('/api/prompt-workspace')).json()).main;
+  await editor.getByRole('button', { name: '저장', exact: true }).click();
+  await expect(editor.getByRole('button', { name: '저장', exact: true })).toBeDisabled();
+  const revised = await (await request.get(`/api/prompt-presets/${saved.id}`)).json();
   expect(revised.program.blocks[0].template[0].kind).toBe('if');
-  expect(revised.presetId).toBe(saved.id);
-  await expect(composer.getByLabel('합성 상세도', { exact: true })).toHaveValue('2');
+  const current = (await (await request.get('/api/prompt-workspace')).json()).main;
+  expect(current.program).toEqual(program);
+  expect(current.values.detail).toBe(3);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(
     true
   );

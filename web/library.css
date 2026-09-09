@@ -18,12 +18,11 @@
   font-size: 20px;
   letter-spacing: -0.04em;
   margin: 0;
-  margin-inline-end: auto;
   min-width: 0;
 }
 .library-heading > h1,
 .library-heading > div {
-  flex: 1;
+  flex: 0 1 auto;
   min-width: 0;
 }
 .library-heading p {
@@ -1123,4 +1122,11 @@
 }
 .library-detail-actions > button > svg {
   flex: 0 0 auto;
+}
+
+.prompt-settings-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 16px;
 }

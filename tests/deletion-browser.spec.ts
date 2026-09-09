@@ -165,22 +165,39 @@ test('DEL02 prompt combinations and presets have deletion and removed prompt doe
     },
   });
   expect(combinationResponse.ok()).toBe(true);
-  const panel = await library(page, '프롬프트');
+  const workspace = await (await request.get('/api/prompt-workspace')).json();
+  expect(
+    (
+      await request.post('/api/prompt-workspace/apply', {
+        data: { expectedRevision: workspace.revision, role: 'main', presetId: prompt.id },
+      })
+    ).ok()
+  ).toBe(true);
+  await page.goto('/');
+  await navigationAction(page, '설정');
+  await selectSettingsSection(page, '현재 프롬프트');
+  const settings = page.getByRole('region', { name: '현재 프롬프트 설정' });
+  await settings.locator('summary').filter({ hasText: '창작 옵션' }).click();
+  await settings.getByLabel('옵션 조합 메뉴', { exact: true }).click();
+  await settings.getByRole('button', { name: '조합 관리', exact: true }).click();
+  const combinations = page.getByRole('dialog', { name: '옵션 조합 관리', exact: true });
+  await combinations.getByRole('button', { name: '삭제 전역 조합 삭제', exact: true }).click();
+  await confirm(page);
+  await expect(
+    combinations.getByRole('button', { name: '삭제 전역 조합 삭제', exact: true })
+  ).toHaveCount(0);
+  await page.keyboard.press('Escape');
+  await page.getByRole('button', { name: '설정 닫기', exact: true }).click();
+  await navigationAction(page, '프롬프트');
+  const panel = page.getByTestId('prompt-library');
   await panel.getByRole('button', { name: `${prompt.title} 프롬프트 편집`, exact: true }).click();
   await page.emulateMedia({ colorScheme: 'dark' });
   for (const width of visualReview ? [960, 390] : [390]) {
     await page.setViewportSize({ width, height: 900 });
-    await panel.locator('.prompt-saved-management').scrollIntoViewIfNeeded();
+    await panel.locator('.prompt-save-actions').scrollIntoViewIfNeeded();
     if (visualReview)
       await page.screenshot({ path: info.outputPath(`prompt-footer-${width}.png`) });
   }
-
-  await panel.getByText('이 프롬프트의 옵션 조합 관리', { exact: true }).click();
-  await panel.getByRole('button', { name: '삭제 전역 조합 삭제', exact: true }).click();
-  await confirm(page);
-  await expect(panel.getByRole('button', { name: '삭제 전역 조합 삭제', exact: true })).toHaveCount(
-    0
-  );
   await openPromptActions(panel);
   await panel.getByRole('button', { name: `${prompt.title} 프롬프트 삭제`, exact: true }).click();
   await confirm(page);

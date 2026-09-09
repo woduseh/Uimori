@@ -74,6 +74,8 @@ export type CurrentPrompt = {
   title: string;
   program: import('./prompt-program.js').PromptProgram;
   values: Record<string, import('./prompt-program.js').PromptValue>;
+  /** Defaults copied when the preset was applied, independent of later library edits. */
+  defaultValues?: Record<string, import('./prompt-program.js').PromptValue>;
 };
 export type ModelWorkspace = {
   titleModel?: ModelRef | null;

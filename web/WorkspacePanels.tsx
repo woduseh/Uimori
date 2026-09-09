@@ -304,6 +304,7 @@ export function AppSettingsPanel({
   enterSend,
   setEnterSend,
   onClose,
+  onEditPrompt,
 }: {
   initialTab?: string;
   state: StoryState;
@@ -312,6 +313,7 @@ export function AppSettingsPanel({
   enterSend: boolean;
   setEnterSend: (value: boolean) => void;
   onClose: () => void;
+  onEditPrompt?: (presetId?: string) => void;
 }) {
   const [signingOut, setSigningOut] = useState(false);
   const [active, setActive] = useState(initialTab);
@@ -509,6 +511,8 @@ export function AppSettingsPanel({
                       library={state.library}
                       reload={state.loadLibrary}
                       onDirtyChange={setPromptDirty}
+                      onEditPrompt={onEditPrompt}
+                      navigationDisabled={dirty}
                       chatId={state.selected || undefined}
                       branchId={state.branch?.id}
                     />

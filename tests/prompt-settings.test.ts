@@ -398,6 +398,49 @@ async function apply(app: App, preset: PromptPreset) {
   });
 }
 
+test('applied prompt defaults stay pinned across library edits and option autosaves', async () => {
+  const app = await application();
+  const program = createDefaultPromptProgram('Pinned options');
+  program.controls = [{ id: 'tone', label: 'Tone', type: 'text', default: 'program default' }];
+  const preset = await request<PromptPreset>(app, '/prompt-presets', {
+    title: 'Pinned defaults',
+    role: 'main',
+    program,
+    values: { tone: 'preset default' },
+  });
+  let current = await apply(app, preset);
+  expect(current.main.defaultValues).toEqual({ tone: 'preset default' });
+  const revised = await request<PromptPreset>(
+    app,
+    `/prompt-presets/${preset.id}`,
+    {
+      expectedRevision: preset.revision,
+      title: preset.title,
+      role: preset.role,
+      program,
+      values: { tone: 'revised default' },
+    },
+    200,
+    'PUT'
+  );
+  expect((await workspace(app)).main.defaultValues).toEqual({ tone: 'preset default' });
+  current = await request(
+    app,
+    '/prompt-workspace',
+    {
+      expectedRevision: current.revision,
+      main: { ...current.main, values: { tone: 'user selection' } },
+    },
+    200,
+    'PUT'
+  );
+  expect(current.main.values).toEqual({ tone: 'user selection' });
+  expect(current.main.defaultValues).toEqual({ tone: 'preset default' });
+  const reapplied = await apply(app, revised);
+  expect(reapplied.main.defaultValues).toEqual({ tone: 'revised default' });
+  expect(reapplied.main.values).toEqual({ tone: 'revised default' });
+});
+
 describe('global working prompts and independent library copies', () => {
   test('rejects retired fixed creative controls and APIs and retired persona scope', async () => {
     const app = await application();

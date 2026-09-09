@@ -3,16 +3,9 @@ import { DeleteButton } from './DeleteButton.js';
 import { ActionMenu } from './ActionMenu.js';
 import { CopyIcon } from './ui-icons.js';
 import { Save } from 'lucide-react';
-import { matchesPromptCombination } from '../core/prompt-combinations.js';
 import { booleanPromptDraft } from './prompt-boolean-draft.js';
 import { useEffect, useRef, useState } from 'react';
-import type {
-  ContentRef,
-  Library,
-  PromptPreset,
-  PromptRole,
-  SavedPromptCombination,
-} from '../core/product.js';
+import type { ContentRef, Library, PromptPreset, PromptRole } from '../core/product.js';
 import { DEFAULT_MAIN_PROMPT, DEFAULT_TRANSLATION_PROMPT } from '../core/prompts.js';
 import {
   validatePromptProgram,
@@ -22,7 +15,6 @@ import {
 import { PromptComposer } from './PromptComposer.js';
 import { AgentCollaborationEditor, agentCollaborationIssue } from './AgentCollaborationEditor.js';
 import { createDefaultPromptProgram } from '../core/prompt-defaults.js';
-import { api } from './api.js';
 import {
   EditorDraftProvider,
   EditorDraftStatus,
@@ -98,7 +90,8 @@ export function PromptEditor({
   const [busy, setBusy] = useState(false);
   const [composerDirty, setComposerDirty] = useState<Record<string, boolean>>({});
   const [pendingTemplate, setPendingTemplate] = useState(false);
-  const [localCombinations, setLocalCombinations] = useState<SavedPromptCombination[]>([]);
+  const [importVersion, setImportVersion] = useState(0);
+  const [collaborationExpanded, setCollaborationExpanded] = useState(false);
   const [error, setError] = useState('');
   const [status, setStatus] = useState('');
   const draftCache = useRef<Record<string, Draft>>({});
@@ -177,18 +170,6 @@ export function PromptEditor({
       }));
     },
   });
-  const ownedCombinations = [
-    ...(library.promptCombinations ?? []),
-    ...localCombinations.filter(
-      (item) => !library.promptCombinations?.some((saved) => saved.id === item.id)
-    ),
-  ].filter(
-    (item) =>
-      draft.base &&
-      item.role === role &&
-      item.owner?.kind === 'preset' &&
-      item.owner.id === draft.base.id
-  );
   const collaborationIssue =
     role === 'main'
       ? agentCollaborationIssue(draft.program.collaboration, draft.program.controls)
@@ -369,32 +350,39 @@ export function PromptEditor({
                 )
               }
               onPendingDraftChange={setPendingTemplate}
-              savedCombinations={ownedCombinations}
-              combinationOwner={draft.base ? { kind: 'preset', id: draft.base.id } : undefined}
-              onSaveCombination={
-                draft.base &&
-                !draft.program.controls.some(
-                  (control) => control.type === 'boolean' && control.default === null
-                ) &&
-                JSON.stringify(draft.program.controls) ===
-                  JSON.stringify(draft.base.program.controls)
-                  ? async (title, values) => {
-                      const accepted = await api<SavedPromptCombination>(
-                        '/prompt-combinations',
-                        {
-                          title,
-                          role,
-                          values,
-                          owner: { kind: 'preset', id: draft.base!.id },
-                          expectedRevision: draft.base!.revision,
-                        },
-                        'POST'
-                      );
-                      setLocalCombinations((current) => [...current, accepted]);
-                      await reload?.();
-                    }
-                  : undefined
-              }
+              title={draft.title}
+              onImport={(file) => {
+                const importedRole = file.role ?? role;
+                if (initialPreset && importedRole !== role)
+                  throw new Error('다른 역할의 프롬프트는 새 프롬프트에서 불러와 주세요.');
+                const previous = drafts[importedRole];
+                const target =
+                  importedRole === role
+                    ? previous
+                    : {
+                        ...draftFor(importedRole),
+                        source: 'new',
+                        title: '',
+                      };
+                if (importedRole !== role)
+                  draftCache.current[`${importedRole}:${previous.source}`] = previous;
+                controlDraftCache.current[`${importedRole}:${target.source}`] = {
+                  values: file.values,
+                  combinations: [],
+                };
+                setDrafts((current) => ({
+                  ...current,
+                  [importedRole]: {
+                    ...target,
+                    title: file.title ?? target.title,
+                    program: file.program,
+                    dirty: true,
+                  },
+                }));
+                setRole(importedRole);
+                setImportVersion((current) => current + 1);
+                setStatus('이름·역할·구성과 기본 옵션을 편집 초안으로 불러왔어요.');
+              }}
               onChange={(program) => edit({ program })}
               chatId={chatId}
               branchId={branchId}
@@ -405,7 +393,9 @@ export function PromptEditor({
             />
             {role === 'main' && (
               <AgentCollaborationEditor
-                key={`collaboration:${role}:${draft.source}`}
+                key={`collaboration:${role}:${importVersion}`}
+                expanded={collaborationExpanded}
+                onExpandedChange={setCollaborationExpanded}
                 value={draft.program.collaboration}
                 controls={draft.program.controls}
                 models={library.models}
@@ -491,40 +481,6 @@ export function PromptEditor({
         <p role="status" className="prompt-status">
           {busy ? '처리 중…' : status}
         </p>
-        <details className="prompt-saved-management">
-          <summary>이 프롬프트의 옵션 조합 관리</summary>
-          <div className="deletion-list">
-            {ownedCombinations.map((item) => (
-              <div className="deletion-row" key={item.id}>
-                <span>
-                  {item.title} · 옵션 조합
-                  {draft.base &&
-                    !matchesPromptCombination(
-                      item,
-                      { kind: 'preset', id: draft.base.id },
-                      role,
-                      draft.program
-                    ) && <small>옵션 정의가 변경되어 불러올 수 없어요.</small>}
-                </span>
-                <DeleteButton
-                  path={`/prompt-combinations/${encodeURIComponent(item.id)}`}
-                  revision={item.revision}
-                  title={item.title}
-                  onError={onError}
-                  onDeleted={async () => {
-                    setLocalCombinations((current) =>
-                      current.filter((saved) => saved.id !== item.id)
-                    );
-                    await reload?.();
-                  }}
-                />
-              </div>
-            ))}
-            {!ownedCombinations.length && (
-              <p className="muted">이 프롬프트에 저장된 옵션 조합이 없어요.</p>
-            )}
-          </div>
-        </details>
         {pendingTemplate && (
           <p className="muted">
             미적용 문법 초안이 있어요. 해당 본문에서 적용하거나 되돌린 뒤 저장·전환해 주세요.

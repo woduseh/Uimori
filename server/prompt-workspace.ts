@@ -30,7 +30,7 @@ const roleValue = (value: unknown): PromptRole => {
 
 export function validateCurrentPrompt(value: unknown, role: PromptRole): CurrentPrompt {
   const b = record(value);
-  fields(b, ['title', 'program', 'values', 'presetId']);
+  fields(b, ['title', 'program', 'values', 'presetId', 'defaultValues']);
   const program = validatePromptProgram(b.program);
   if (role !== 'main' && program.collaboration)
     throw new HttpError(400, 'Collaboration requires the main prompt');
@@ -39,6 +39,9 @@ export function validateCurrentPrompt(value: unknown, role: PromptRole): Current
     title: text(b.title, 'prompt title', 200),
     program,
     values: resolvePromptValues(program, record(b.values)),
+    ...(b.defaultValues !== undefined
+      ? { defaultValues: resolvePromptValues(program, record(b.defaultValues)) }
+      : {}),
   };
 }
 
@@ -265,7 +268,7 @@ export function freezeCurrentPrompts(
   const prompts: NonNullable<ProfileSnapshot['prompts']> = {};
   const promptControls: NonNullable<ProfileSnapshot['promptControls']> = {};
   for (const role of roles) {
-    const { presetId: _presetId, ...current } = workspace[role];
+    const { presetId: _presetId, defaultValues: _defaultValues, ...current } = workspace[role];
     const preset = {
       ...structuredClone(current),
       id: `current-${role}`,
@@ -322,7 +325,12 @@ export function promptWorkspaceRoutes(
         store,
         {
           expectedRevision: b.expectedRevision,
-          [role]: { title: preset.title, program: preset.program, values: preset.values ?? {} },
+          [role]: {
+            title: preset.title,
+            program: preset.program,
+            values: preset.values ?? {},
+            defaultValues: resolvePromptValues(preset.program, preset.values ?? {}),
+          },
         },
         { role, id: preset.id }
       )

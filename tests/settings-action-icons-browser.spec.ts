@@ -82,20 +82,16 @@ for (const width of [390, 1440]) {
     await icon(reload);
     ready = true;
     await reload.click();
-    await expect(settings.locator('.pc-blocks-section')).not.toHaveAttribute('open');
+    const prompts = settings.getByRole('region', { name: '현재 프롬프트 설정' });
+    await expect(prompts.getByLabel('현재 프롬프트 프리셋', { exact: true })).toBeVisible();
+    await expect(prompts.getByTestId('prompt-composer')).toHaveCount(0);
+    await expect(prompts.getByRole('button', { name: '현재 설정 저장', exact: true })).toHaveCount(
+      0
+    );
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(
       true
     );
     await page.screenshot({ path: info.outputPath(`prompt-fold-${width}.png`) });
-    const add = settings.getByRole('button', { name: '블록 추가', exact: true });
-    await icon(add);
-    const blocks = settings.locator('.pc-blocks-section .pc-block');
-    const count = await blocks.count();
-    await add.click();
-    await expect(blocks).toHaveCount(count + 1);
-    await expect(settings.locator('.pc-blocks-section')).toHaveAttribute('open');
-    await expect(blocks.last()).toHaveAttribute('open');
-    await expect(blocks.last().locator('input').first()).toBeFocused();
     await page.screenshot({ path: info.outputPath(`prompt-add-${width}.png`) });
   });
 }

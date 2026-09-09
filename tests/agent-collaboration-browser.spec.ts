@@ -33,6 +33,18 @@ test('AGENTUI03 shared selections remain independent and binary switches fit and
   const enabled = collaboration.getByRole('switch', { name: '협업 사용', exact: true });
   const save = editor.getByRole('button', { name: /^(수정 )?저장$/ });
   await enabled.check();
+  await expect(
+    collaboration.getByRole('button', { name: '에이전트 협업', exact: true })
+  ).toHaveAttribute('aria-expanded', 'false');
+  await expect(
+    collaboration.getByRole('button', { name: '인물 에이전트 추가', exact: true })
+  ).toBeHidden();
+  if (
+    (await collaboration
+      .getByRole('button', { name: '에이전트 협업', exact: true })
+      .getAttribute('aria-expanded')) === 'false'
+  )
+    await collaboration.getByRole('button', { name: '에이전트 협업', exact: true }).click();
   await collaboration.getByRole('button', { name: '인물 에이전트 추가', exact: true }).click();
   await enabled.uncheck();
   for (const width of [390, 1440]) {
@@ -125,6 +137,12 @@ test('AGENTUI01 collaboration stays editable through incomplete drafts, undo and
   const save = editor.getByRole('button', { name: '저장', exact: true });
   await expect(enabled).not.toBeChecked();
   await enabled.check();
+  if (
+    (await collaboration
+      .getByRole('button', { name: '에이전트 협업', exact: true })
+      .getAttribute('aria-expanded')) === 'false'
+  )
+    await collaboration.getByRole('button', { name: '에이전트 협업', exact: true }).click();
   await expect(save).toBeDisabled();
   await openPromptBlocks(editor);
   await editor.locator('#prompt-block-instructions > summary').click();
@@ -172,7 +190,11 @@ test('AGENTUI01 collaboration stays editable through incomplete drafts, undo and
   await openPromptTools(editor);
   await editor.getByRole('button', { name: 'JSON 내보내기', exact: true }).click();
   const download = await downloaded;
-  expect(JSON.parse(await readFile((await download.path())!, 'utf8'))).toEqual(saved.program);
+  expect(JSON.parse(await readFile((await download.path())!, 'utf8'))).toMatchObject({
+    title: saved.title,
+    role: saved.role,
+    program: saved.program,
+  });
   await collaboration.scrollIntoViewIfNeeded();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(
     true
@@ -180,15 +202,16 @@ test('AGENTUI01 collaboration stays editable through incomplete drafts, undo and
   if (visualReview)
     await page.screenshot({ path: info.outputPath('agent-collaboration-mobile.png') });
   await collaboration
-    .locator('.pc-composer-fold > summary')
+    .getByRole('button', { name: '에이전트 협업', exact: true })
     .evaluate((element) => element.scrollIntoView({ block: 'start' }));
   if (visualReview)
     await page.screenshot({ path: info.outputPath('agent-collaboration-mobile-overview.png') });
   const sharedInstructions = collaboration.getByLabel('함께 따를 지침', { exact: true });
-  const fold = collaboration.locator('.pc-composer-fold');
-  await fold.locator(':scope > summary').click();
-  await expect(enabled).toBeHidden();
-  await fold.locator(':scope > summary').click();
+  const fold = collaboration.getByRole('button', { name: '에이전트 협업', exact: true });
+  await fold.click();
+  await expect(enabled).toBeVisible();
+  await expect(sharedInstructions).toBeHidden();
+  await fold.click();
   await expect(enabled).toBeChecked();
   await enabled.uncheck();
   await expect(sharedInstructions).toBeHidden();
@@ -211,6 +234,7 @@ test('AGENTUI01 collaboration stays editable through incomplete drafts, undo and
   await expect(page.getByRole('switch', { name: '협업 사용' })).not.toBeChecked();
   await expect(page.getByLabel('1번째 에이전트 이름', { exact: true })).toBeHidden();
   await page.getByRole('switch', { name: '협업 사용' }).check();
+  await collaboration.getByRole('button', { name: '에이전트 협업', exact: true }).click();
   await expect(page.getByLabel('1번째 에이전트 이름', { exact: true })).toHaveValue('인물 관찰자');
   expect(pageErrors).toEqual([]);
 });
@@ -235,6 +259,7 @@ test('AGENTUI02 saved collaboration options reach the real preview API and trans
   const editor = page.getByTestId('prompt-editor'),
     collaboration = editor.getByRole('region', { name: '에이전트 협업' });
   await collaboration.getByRole('switch', { name: '협업 사용' }).check();
+  await collaboration.getByRole('button', { name: '에이전트 협업', exact: true }).click();
   await collaboration
     .getByRole('button', { name: '설정과 기억 에이전트 추가', exact: true })
     .click();
@@ -303,7 +328,7 @@ test('AGENTUI02 saved collaboration options reach the real preview API and trans
   if (visualReview)
     await page.screenshot({ path: info.outputPath('agent-collaboration-desktop.png') });
   await collaboration
-    .locator('.pc-composer-fold > summary')
+    .getByRole('button', { name: '에이전트 협업', exact: true })
     .evaluate((element) => element.scrollIntoView({ block: 'start' }));
   if (visualReview)
     await page.screenshot({ path: info.outputPath('agent-collaboration-desktop-overview.png') });

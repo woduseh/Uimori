@@ -1276,12 +1276,10 @@ test('UI17 full writing and empty translation prompts import, save and apply wit
   });
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto(`/?chat=${chat.id}`);
-  await page.getByRole('button', { name: '채팅 설정', exact: true }).click();
-  await selectCurrentSettingsSection(page, '프롬프트·창작 프리셋');
-  const dialog = page.getByRole('dialog', { name: '설정', exact: true });
-  const editor = dialog.getByRole('region', { name: '현재 프롬프트 설정' });
+  await nav(page, '프롬프트');
+  await page.getByRole('button', { name: '새 프롬프트', exact: true }).click();
+  const editor = page.getByTestId('prompt-library').getByTestId('prompt-editor');
   await expect(await promptBody(editor)).not.toHaveValue('');
-  await promptBody(editor);
   const literal =
     '  FULL_PROMPT_UI17\n{{user}} {{#if exact}}literal CBS{{/if}}\n<script>globalThis.__promptExecuted=true</script>\n' +
     'Preserve this complete authored prompt and all tool data separately.\n'.repeat(90) +
@@ -1292,38 +1290,49 @@ test('UI17 full writing and empty translation prompts import, save and apply wit
     buffer: Buffer.from(literal),
   });
   await expect(await promptBody(editor)).toHaveValue(literal);
-  await editor.getByLabel('현재 프롬프트 이름').fill('UI17-full-main');
-  await editor.getByLabel('현재 프롬프트 역할').selectOption('translation');
-  await editor.getByLabel('현재 프롬프트 역할').selectOption('main');
+  await editor.getByLabel('프롬프트 이름', { exact: true }).fill('UI17-full-main');
+  await editor.getByLabel('프롬프트 역할', { exact: true }).selectOption('translation');
+  await editor.getByLabel('프롬프트 역할', { exact: true }).selectOption('main');
   await expect(await promptBody(editor)).toHaveValue(literal);
   expect(await editor.evaluate((element) => element.scrollWidth <= element.clientWidth + 1)).toBe(
     true
   );
-  expect(await dialog.evaluate((element) => element.scrollWidth <= element.clientWidth + 1)).toBe(
-    true
-  );
-  await editor.getByRole('button', { name: '현재 설정 저장', exact: true }).click();
-  await expect
-    .poll(async () => (await (await request.get('/api/prompt-workspace')).json()).main.title)
-    .toBe('UI17-full-main');
-  const main = (await (await request.get('/api/prompt-workspace')).json()).main;
-  expect(main.program).toEqual(createDefaultPromptProgram(literal, 'main'));
+  await editor.getByRole('button', { name: '저장', exact: true }).click();
+  await expect(editor.getByText('프롬프트를 저장했어요.', { exact: true })).toBeVisible();
   if (visualReview) await page.screenshot({ path: info.outputPath('full-prompt-mobile.png') });
-  await editor.getByLabel('현재 프롬프트 역할').selectOption('translation');
-  await promptBody(editor);
-  await editor.getByLabel('현재 프롬프트 이름').fill('UI17 empty translation');
+  await editor.getByLabel('프롬프트 역할', { exact: true }).selectOption('translation');
+  await editor.getByLabel('프롬프트 이름', { exact: true }).fill('UI17 empty translation');
   await (await promptBody(editor)).fill('');
-  await expect(await promptBody(editor)).toHaveValue('');
-  await editor.getByRole('button', { name: '현재 설정 저장', exact: true }).click();
+  await editor.getByRole('button', { name: '저장', exact: true }).click();
   await expect
-    .poll(async () => (await (await request.get('/api/prompt-workspace')).json()).translation.title)
-    .toBe('UI17 empty translation');
-  const translation = (await (await request.get('/api/prompt-workspace')).json()).translation;
-  expect(translation.program).toEqual(createDefaultPromptProgram('', 'translation'));
-  await editor.getByLabel('현재 프롬프트 역할').selectOption('main');
+    .poll(async () =>
+      (await (await request.get('/api/library')).json()).promptPresets.some(
+        (item: { title: string }) => item.title === 'UI17 empty translation'
+      )
+    )
+    .toBe(true);
+  await editor.getByLabel('프롬프트 역할', { exact: true }).selectOption('main');
   await expect(await promptBody(editor)).toHaveValue(literal);
   await page.setViewportSize({ width: 1440, height: 1000 });
   if (visualReview) await page.screenshot({ path: info.outputPath('full-prompt-desktop.png') });
+  await page.getByRole('button', { name: '← 프롬프트 목록', exact: true }).click();
+  await page.getByRole('button', { name: '현재 프롬프트 설정', exact: true }).click();
+  const settings = page.getByRole('region', { name: '현재 프롬프트 설정' });
+  const library = await (await request.get('/api/library')).json();
+  for (const [role, title, text] of [
+    ['main', 'UI17-full-main', literal],
+    ['translation', 'UI17 empty translation', ''],
+  ] as const) {
+    const preset = library.promptPresets.find((item: { title: string }) => item.title === title);
+    await settings.getByLabel('현재 프롬프트 역할').selectOption(role);
+    await settings.getByLabel('현재 프롬프트 프리셋').selectOption(preset.id);
+    await expect
+      .poll(async () => (await (await request.get('/api/prompt-workspace')).json())[role].title)
+      .toBe(title);
+    expect((await (await request.get('/api/prompt-workspace')).json())[role].program).toEqual(
+      createDefaultPromptProgram(text, role)
+    );
+  }
   const after = await data(request, chat.id);
   expect(after.runs).toEqual(before.runs);
   expect(after.attempts).toEqual(before.attempts);
@@ -1380,12 +1389,19 @@ test('UI17 prompts use latest settings and concurrent edits preserve unsaved tex
   await selectCurrentSettingsSection(page, '프롬프트·창작 프리셋');
   const dialog = page.getByRole('dialog', { name: '설정', exact: true });
   const editor = dialog.getByRole('region', { name: '현재 프롬프트 설정' });
-  await expect(await promptBody(editor)).toHaveValue(originalText);
+  expect((await (await request.get('/api/prompt-workspace')).json()).main.program).toEqual(
+    createDefaultPromptProgram(originalText, 'main')
+  );
+  await editor.getByRole('button', { name: '최신 버전 적용', exact: true }).click();
+  await expect
+    .poll(async () => (await (await request.get('/api/prompt-workspace')).json()).main.program)
+    .toEqual(createDefaultPromptProgram('Latest library writing prompt.', 'main'));
+  await page.getByRole('button', { name: '설정 닫기', exact: true }).click();
+  await nav(page, '프롬프트');
+  await page.getByRole('button', { name: `${first.title} 프롬프트 편집`, exact: true }).click();
+  const libraryEditor = page.getByTestId('prompt-library').getByTestId('prompt-editor');
   const edited = 'Unsaved custom full prompt.\n' + 'Keep my edited text intact.\n'.repeat(30);
-  await (await promptBody(editor)).fill(edited);
-  await editor.getByLabel('현재 프롬프트 역할').selectOption('translation');
-  await editor.getByLabel('현재 프롬프트 역할').selectOption('main');
-  await expect(await promptBody(editor)).toHaveValue(edited);
+  await (await promptBody(libraryEditor)).fill(edited);
   const current = await (await request.get('/api/prompt-workspace')).json();
   const concurrent = await request.put('/api/prompt-workspace', {
     data: {
@@ -1397,48 +1413,21 @@ test('UI17 prompts use latest settings and concurrent edits preserve unsaved tex
     },
   });
   expect(concurrent.ok()).toBeTruthy();
-  await expect(editor.getByRole('alert')).toContainText('다른 곳에서 현재 프롬프트가 바뀌었어요.');
-  await expect(editor.getByRole('button', { name: '현재 설정 저장', exact: true })).toBeDisabled();
-  await expect(await promptBody(editor)).toHaveValue(edited);
-  expect((await (await request.get('/api/prompt-workspace')).json()).main.program).toEqual(
-    createDefaultPromptProgram('Concurrent current prompt.', 'main')
-  );
-  await editor.getByLabel('현재 프롬프트 이름').fill('UI17 recovered copy');
-  await editor.getByLabel('현재 프롬프트 저장 메뉴', { exact: true }).click();
-  await editor.getByRole('button', { name: '새 프리셋으로 저장', exact: true }).click();
-  await expect(
-    editor.getByRole('status').filter({ hasText: '독립된 프리셋으로 저장했어요.' })
-  ).toBeVisible();
-  expect((await data(request, chat.id)).profile).toEqual(profile);
-  await page.getByRole('button', { name: '설정 닫기', exact: true }).click();
-  await page.getByRole('button', { name: '초안 버리고 닫기', exact: true }).click();
-  await expect
-    .poll(
-      async () =>
-        (await (await request.get('/api/edit-drafts?editorKey=prompt-workspace%3Acurrent')).json())
-          .length
-    )
-    .toBe(0);
-  await nav(page, '프롬프트');
-  await page
-    .getByRole('button', { name: 'UI17 recovered copy 프롬프트 편집', exact: true })
-    .click();
-  const libraryEditor = page.getByTestId('prompt-library').getByTestId('prompt-editor');
-  const library = await (await request.get('/api/library')).json();
-  const copy = library.promptPresets.find(
-    (item: { title: string }) => item.title === 'UI17 recovered copy'
-  );
-  expect(copy.program).toEqual(createDefaultPromptProgram(edited, 'main'));
-  await (await promptBody(libraryEditor)).fill(edited + '\nRevised in library.');
+  await expect(await promptBody(libraryEditor)).toHaveValue(edited);
   await libraryEditor.getByRole('button', { name: '저장', exact: true }).click();
   await expect
     .poll(
       async () =>
         (await (await request.get('/api/library')).json()).promptPresets.find(
-          (item: { id: string }) => item.id === copy.id
+          (item: { id: string }) => item.id === first.id
         ).revision
     )
-    .toBe(2);
+    .toBe(3);
+  const stored = await (await request.get(`/api/prompt-presets/${first.id}`)).json();
+  expect(stored.program).toEqual(createDefaultPromptProgram(edited, 'main'));
+  expect((await (await request.get('/api/prompt-workspace')).json()).main.program).toEqual(
+    createDefaultPromptProgram('Concurrent current prompt.', 'main')
+  );
   const after = await data(request, chat.id);
   expect(after.profile).toEqual(profile);
   expect(after.runs).toHaveLength(0);

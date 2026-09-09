@@ -1,8 +1,8 @@
 import { Switch } from './BooleanControls.js';
-import { booleanPromptDraft } from './prompt-boolean-draft.js';
+import { parsePromptFile, type PromptFile } from '../core/prompt-file.js';
 import { compileTranslationPreview } from '../core/translation-preview.js';
 import { DismissibleError } from './DismissibleError.js';
-import { PromptControlFields, ValueInput } from './PromptControlFields.js';
+import { PromptControlFields } from './PromptControlFields.js';
 import { ActionMenu } from './ActionMenu.js';
 import { IconButton } from './IconButton.js';
 import { DownloadIcon, UploadIcon } from './ui-icons.js';
@@ -15,8 +15,6 @@ import {
 } from './editor-workspace-context.js';
 import {
   compilePromptProgram,
-  resolvePromptValues,
-  validateChatPromptControls,
   validatePromptProgram,
   type ChatPromptControls,
   type PromptBlock,
@@ -34,9 +32,6 @@ import {
   parsePromptTemplate,
   printPromptTemplate,
 } from '../core/prompt-language.js';
-import type { SavedPromptCombination, PromptCombinationOwner } from '../core/product.js';
-import { matchesPromptCombination } from '../core/prompt-combinations.js';
-
 type Props = {
   program: PromptProgram;
   onChange: (program: PromptProgram) => void;
@@ -44,10 +39,8 @@ type Props = {
   branchId?: string;
   role?: 'main' | 'translation';
   controlState?: ChatPromptControls;
-  onSaveControls?: (state: ChatPromptControls) => Promise<void>;
-  savedCombinations?: SavedPromptCombination[];
-  combinationOwner?: PromptCombinationOwner;
-  onSaveCombination?: (title: string, values: Record<string, PromptValue>) => Promise<void>;
+  title?: string;
+  onImport?: (file: PromptFile) => void;
   onDirtyChange?: (dirty: boolean) => void;
   onPendingDraftChange?: (dirty: boolean) => void;
   initialPreviewRequest?: string;
@@ -780,12 +773,6 @@ function ControlEditor({
           </select>
         </label>
       </div>
-      <ValueInput
-        control={control}
-        label={`${control.label} 기본값`}
-        value={control.default}
-        onChange={(value) => onChange({ ...control, default: value })}
-      />
       {control.type === 'select' && (
         <JsonDraft
           fieldKey={`controls.${control.id}.options`}
@@ -848,10 +835,8 @@ export function PromptComposer({
   branchId,
   role = 'main',
   controlState,
-  onSaveControls,
-  savedCombinations = [],
-  combinationOwner,
-  onSaveCombination,
+  title,
+  onImport,
   onDirtyChange,
   onPendingDraftChange,
   initialPreviewRequest,
@@ -889,16 +874,10 @@ export function PromptComposer({
     if ((block.kind === 'message' || block.kind === 'slot') && block.template)
       collectSlots(block.template);
   }
-  const compatibleCombinations = savedCombinations.filter(
-    (item) => combinationOwner && matchesPromptCombination(item, combinationOwner, role, program)
-  );
-  const [selectedSavedCombination, setSelectedSavedCombination] = useState('');
-  const [savingCombination, setSavingCombination] = useState(false);
   const scope = role;
   const [drafts, setDrafts] = useState<Record<string, ChatPromptControls>>({});
-  const [saved, setSaved] = useState<Record<string, string>>({});
   const controls = drafts[scope] ?? initialControlDraft ?? controlState ?? emptyControls();
-  const savedControls = saved[scope] ?? pretty(controlState ?? emptyControls());
+  const savedControls = pretty(controlState ?? emptyControls());
   const controlsDirty = pretty(controls) !== savedControls;
   useEffect(() => {
     onPendingDraftChange?.(pendingTemplate);
@@ -908,10 +887,6 @@ export function PromptComposer({
     controls.values,
     ...controls.combinations.map((combination) => combination.values),
   ].some((values) => Object.keys(values).some((id) => !knownControls.has(id)));
-  const [combinationName, setCombinationName] = useState('');
-  const [importedCombination, setImportedCombination] = useState<
-    ChatPromptControls['combinations'][number] | null
-  >(null);
   const [requests, setRequests] = useState({
     main:
       role === 'main'
@@ -931,28 +906,12 @@ export function PromptComposer({
     blockNames: Record<string, string>;
   } | null>(null);
   const [previewBusy, setPreviewBusy] = useState(false);
-  const [saving, setSaving] = useState(false);
   useEffect(() => {
-    onDirtyChange?.(
-      controlsDirty ||
-        pendingTemplate ||
-        combinationName.length > 0 ||
-        importedCombination !== null ||
-        savingCombination ||
-        saving
-    );
-  }, [
-    controlsDirty,
-    pendingTemplate,
-    combinationName,
-    importedCombination,
-    savingCombination,
-    saving,
-    onDirtyChange,
-  ]);
+    onDirtyChange?.(controlsDirty || pendingTemplate);
+  }, [controlsDirty, pendingTemplate, onDirtyChange]);
   const [error, setError] = useState('');
   const [status, setStatus] = useState('');
-  const [undo, setUndo] = useState<PromptProgram[]>([]);
+  const [undo, setUndo] = useState<{ program: PromptProgram; controls?: ChatPromptControls }[]>([]);
   const root = useRef<HTMLElement>(null);
   const draggingBlock = useRef<string | null>(null);
   const [dropTarget, setDropTarget] = useState<{ id: string; after: boolean } | null>(null);
@@ -967,10 +926,9 @@ export function PromptComposer({
     if (lastCollaboration.current !== program.collaboration) setUndo([]);
     lastCollaboration.current = program.collaboration;
   }, [program.collaboration]);
-  // biome-ignore lint/correctness/useExhaustiveDependencies: A prompt scope switch clears its undo history and imported combination.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: A prompt scope switch clears its undo history.
   useEffect(() => {
     setUndo([]);
-    setImportedCombination(null);
     setError('');
     setStatus('');
   }, [scope]);
@@ -995,7 +953,7 @@ export function PromptComposer({
       ...validatePromptProgram(body),
       ...(collaboration !== undefined ? { collaboration } : {}),
     };
-    setUndo((current) => [...current.slice(-19), structuredClone(program)]);
+    setUndo((current) => [...current.slice(-19), { program: structuredClone(program) }]);
     lastCollaboration.current = collaboration;
     onChange(validated);
     setError('');
@@ -1021,7 +979,7 @@ export function PromptComposer({
   const editControls = (next: ChatPromptControls) => {
     onControlDraftChange?.(next);
     setDrafts((current) => ({ ...current, [scope]: next }));
-    setStatus('선택값과 조합은 아직 저장하지 않았어요.');
+    setStatus('기본 창작 옵션을 바꿨어요. 편집기 아래 저장 버튼으로 함께 저장해요.');
     setError('');
   };
   const safe = (work: () => void) => {
@@ -1070,47 +1028,12 @@ export function PromptComposer({
     const previous = undo.at(-1);
     if (!previous) return;
     setUndo((current) => current.slice(0, -1));
-    lastCollaboration.current = previous.collaboration;
-    onChange(previous);
+    lastCollaboration.current = previous.program.collaboration;
+    onChange(previous.program);
+    if (previous.controls) editControls(previous.controls);
     setStatus('이전 프롬프트 초안으로 되돌렸어요.');
-    const target = previous.blocks.find((block) => block.id === lastBlockAction.current);
+    const target = previous.program.blocks.find((block) => block.id === lastBlockAction.current);
     if (target) focusBlock(target.id);
-  }
-  async function saveControls() {
-    if (!onSaveControls) return;
-    const activeScope = scope;
-    const snapshot = structuredClone(controls);
-    setSaving(true);
-    setError('');
-    try {
-      validateChatPromptControls(snapshot);
-      resolvePromptValues(program, snapshot.values);
-      for (const combination of snapshot.combinations)
-        resolvePromptValues(program, combination.values);
-      await onSaveControls(snapshot);
-      setSaved((current) => ({ ...current, [activeScope]: pretty(snapshot) }));
-      if (latest.current.scope === activeScope)
-        setStatus('이 이야기의 선택값과 조합을 저장했어요.');
-    } catch (caught) {
-      report(errorMessage(caught));
-    } finally {
-      setSaving(false);
-    }
-  }
-  async function saveCombination(title = combinationName, values = controls.values) {
-    if (!onSaveCombination || !title.trim()) return;
-    setSavingCombination(true);
-    setError('');
-    try {
-      const resolved = booleanPromptDraft(program, resolvePromptValues(program, values)).values;
-      await onSaveCombination(title.trim(), resolved);
-      setCombinationName('');
-      setStatus('이 프롬프트의 옵션 조합을 저장했어요.');
-    } catch (caught) {
-      report(errorMessage(caught));
-    } finally {
-      setSavingCombination(false);
-    }
   }
   async function runPreview() {
     const turn = ++sequence.current;
@@ -1190,26 +1113,26 @@ export function PromptComposer({
   }
   async function importFile(file: File) {
     const activeScope = scope;
+    const turn = ++sequence.current;
+    const sourceFingerprint = fingerprint;
     try {
       if (file.size > 1_500_000) throw new Error('JSON 파일은 1.5 MB 이하여야 해요.');
       const parsed = JSON.parse(await file.text()) as unknown;
-      if (latest.current.scope !== activeScope) return;
-      const wrapper =
-        parsed && typeof parsed === 'object' && 'program' in parsed
-          ? (parsed as { program: unknown; suggestedCombination?: unknown })
-          : null;
-      const next = validatePromptProgram(wrapper ? wrapper.program : parsed);
-      let suggestion = null;
-      if (wrapper?.suggestedCombination) {
-        const state = validateChatPromptControls({
-          values: {},
-          combinations: [wrapper.suggestedCombination],
-        });
-        resolvePromptValues(next, state.combinations[0]!.values);
-        suggestion = state.combinations[0]!;
+      if (
+        latest.current.scope !== activeScope ||
+        turn !== sequence.current ||
+        latest.current.fingerprint !== sourceFingerprint
+      )
+        return;
+      const imported = parsePromptFile(parsed);
+      if (onImport) onImport(imported);
+      else onChange(imported.program);
+      if (!imported.role || imported.role === role) {
+        // Imports replace both the structure and option values. Undo must restore them together.
+        setUndo((current) => [...current.slice(-19), structuredClone({ program, controls })]);
+        lastCollaboration.current = imported.program.collaboration;
+        editControls({ values: imported.values, combinations: [] });
       }
-      change(next);
-      setImportedCombination(suggestion);
       setStatus('JSON을 편집 초안으로 불러왔어요.');
     } catch (caught) {
       report(errorMessage(caught));
@@ -1259,7 +1182,14 @@ export function PromptComposer({
                 <button
                   type="button"
                   className="secondary"
-                  onClick={() => saveDownload('uimori-prompt-program.json', program)}
+                  onClick={() =>
+                    safe(() =>
+                      saveDownload(
+                        'uimori-prompt.json',
+                        parsePromptFile({ title, role, program, values: controls.values })
+                      )
+                    )
+                  }
                 >
                   <DownloadIcon size={18} aria-hidden="true" /> JSON 내보내기
                 </button>
@@ -1509,12 +1439,12 @@ export function PromptComposer({
             <details className="pc-section" open={program.controls.length > 0}>
               <summary>
                 <ChevronRight className="pc-disclosure-icon" size={16} aria-hidden="true" />
-                프롬프트 창작 옵션과 조합
+                기본 창작 옵션
               </summary>
               <div className="pc-stack">
                 <p className="muted">
-                  값을 바꾼 뒤 저장 버튼을 눌러 적용해요. 프롬프트의 기본값은 제어 정의에서 바꿀 수
-                  있어요.
+                  이 프롬프트를 불러올 때 사용할 옵션이에요. 편집기 아래 저장 버튼으로 함께
+                  저장해요.
                 </p>
                 <PromptControlFields
                   program={program}
@@ -1527,73 +1457,6 @@ export function PromptComposer({
                     })
                   }
                 />
-                <div className="pc-control pc-combination-card">
-                  <h4>이 프롬프트의 옵션 조합</h4>
-                  <p className="muted">
-                    같은 프롬프트에서 저장했고 옵션 정의가 일치하는 조합만 불러올 수 있어요. 불러온
-                    선택값은 초안에 반영되며 저장해야 적용돼요.
-                  </p>
-                  <label>
-                    옵션 조합 선택
-                    <select
-                      aria-label="이 프롬프트의 옵션 조합"
-                      value={selectedSavedCombination}
-                      onChange={(event) => {
-                        const item = compatibleCombinations.find(
-                          (item) => item.id === event.target.value
-                        );
-                        if (item)
-                          safe(() => {
-                            editControls({
-                              ...controls,
-                              values: resolvePromptValues(program, item.values),
-                              selectedCombinationId: undefined,
-                            });
-                            setSelectedSavedCombination(item.id);
-                          });
-                        else setSelectedSavedCombination('');
-                      }}
-                    >
-                      <option value="">직접 선택</option>
-                      {compatibleCombinations.map((item) => (
-                        <option key={item.id} value={item.id}>
-                          {item.title}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  {selectedSavedCombination && (
-                    <small>
-                      {pretty(
-                        Object.fromEntries(
-                          program.controls.map((control) => [
-                            control.id,
-                            Object.hasOwn(controls.values, control.id)
-                              ? controls.values[control.id]
-                              : control.default,
-                          ])
-                        )
-                      ) ===
-                      pretty(
-                        compatibleCombinations.find((item) => item.id === selectedSavedCombination)
-                          ?.values
-                      )
-                        ? '불러온 조합'
-                        : '불러온 조합에서 수정됨'}
-                    </small>
-                  )}
-                </div>
-                <div className="pc-actions">
-                  <button
-                    type="button"
-                    className="ghost"
-                    onClick={() =>
-                      editControls({ ...controls, values: {}, selectedCombinationId: undefined })
-                    }
-                  >
-                    선택값을 프롬프트 기본값으로
-                  </button>
-                </div>
                 {hasRemovedValues && (
                   <div className="pc-stack">
                     <p className="muted">현재 프롬프트에 없는 제어의 선택값이 남아 있어요.</p>
@@ -1619,60 +1482,6 @@ export function PromptComposer({
                     </button>
                   </div>
                 )}
-                <div className="pc-grid">
-                  <label>
-                    새 조합 이름
-                    <input
-                      value={combinationName}
-                      maxLength={200}
-                      onChange={(event) => setCombinationName(event.target.value)}
-                    />
-                  </label>
-                  <button
-                    type="button"
-                    disabled={!onSaveCombination || !combinationName.trim() || savingCombination}
-                    onClick={() => void saveCombination()}
-                  >
-                    {savingCombination ? '저장 중…' : '옵션 조합 저장'}
-                  </button>
-                </div>
-                {!onSaveCombination && (
-                  <small className="muted">
-                    프롬프트와 옵션 정의를 먼저 저장하면 조합을 저장할 수 있어요.
-                  </small>
-                )}
-                {importedCombination && (
-                  <button
-                    type="button"
-                    className="secondary"
-                    disabled={controls.combinations.length >= 50}
-                    onClick={() =>
-                      safe(() => {
-                        resolvePromptValues(program, importedCombination.values);
-                        editControls({
-                          ...controls,
-                          values: structuredClone(importedCombination.values),
-                        });
-                        setImportedCombination(null);
-                      })
-                    }
-                  >
-                    가져온 권장 옵션 적용
-                  </button>
-                )}
-                <div className="pc-actions">
-                  <button
-                    type="button"
-                    disabled={!onSaveControls || !controlsDirty || saving}
-                    onClick={() => void saveControls()}
-                  >
-                    {saving ? '저장 중…' : '현재 옵션 저장'}
-                  </button>
-                  {controlsDirty && <small>미저장 변경 있음</small>}
-                  {!onSaveControls && (
-                    <small>편집기 아래의 저장 버튼으로 옵션을 함께 저장해요.</small>
-                  )}
-                </div>
               </div>
             </details>
             <details className="pc-section">

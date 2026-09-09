@@ -718,7 +718,13 @@ export function useUnappliedEditorField(path: string, pending: boolean) {
   }, [session, path, pending]);
 }
 
-export function EditorDraftStatus({ value }: { value: ReturnType<typeof useServerEditDraft> }) {
+export function EditorDraftStatus({
+  value,
+  hideSyncError = false,
+}: {
+  value: ReturnType<typeof useServerEditDraft>;
+  hideSyncError?: boolean;
+}) {
   const { state, session } = value;
   const [comparison, setComparison] = useState(false);
   const [actionError, setActionError] = useState('');
@@ -774,7 +780,9 @@ export function EditorDraftStatus({ value }: { value: ReturnType<typeof useServe
           </ActionMenu>
         )}
       </div>
-      {(state.error || actionError) && <p role="alert">{actionError || state.error}</p>}
+      {(actionError || (!hideSyncError && state.error)) && (
+        <p role="alert">{actionError || state.error}</p>
+      )}
       {state.conflict ? (
         <>
           <button type="button" className="secondary" onClick={() => setComparison(!comparison)}>
