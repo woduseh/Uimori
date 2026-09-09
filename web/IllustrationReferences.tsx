@@ -1,8 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Save } from 'lucide-react';
 import type { IllustrationReferenceRole, IllustrationReferences } from '../core/illustration.js';
 import { api } from './api.js';
-import { IconButton } from './IconButton.js';
+import { SaveButton } from './SaveButton.js';
 import './settings-actions.css';
 import './illustrations.css';
 
@@ -122,11 +121,9 @@ export function IllustrationReferencesEditor({
         ))}
       </div>
       <div className="form-actions settings-save-actions">
-        <IconButton
+        <SaveButton
           type="button"
-          icon={Save}
           label="삽화 참조 저장"
-          className="settings-save-button"
           aria-busy={saving}
           disabled={!dirty || saving}
           onClick={() => void save()}

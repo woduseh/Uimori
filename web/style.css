@@ -16,9 +16,12 @@
   --accent-soft: #e0e9db;
   --user: #edf1e8;
   --error: #9d3022;
+  --error-ink: #fff;
   --error-bg: #fcf0ed;
   --shade: #14201459;
   --reading: 18px;
+  /* Lucide chevron-right, the shared disclosure marker. */
+  --chevron: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="black" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>');
   --nav-w: 250px;
   --app-height: 100dvh;
   font-family: system-ui, -apple-system, "Segoe UI", "Malgun Gothic", sans-serif;
@@ -42,6 +45,7 @@
   --accent-soft: #303b30;
   --user: #2a312b;
   --error: #f3b3a9;
+  --error-ink: #3d1a14;
   --error-bg: #372726;
   --shade: #0008;
 }
@@ -108,6 +112,32 @@ select {
 textarea {
   resize: vertical;
 }
+/* One file picker look: the browser's own button becomes a secondary button of this app. */
+input[type="file"] {
+  padding: 6px;
+  cursor: pointer;
+}
+input[type="file"]::file-selector-button {
+  font: inherit;
+  min-height: 32px;
+  margin-right: 10px;
+  padding: 6px 12px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--surface);
+  color: var(--text);
+  cursor: pointer;
+}
+input[type="file"]:hover:not(:disabled)::file-selector-button {
+  background: var(--hover);
+}
+input[type="file"]:disabled {
+  cursor: default;
+}
+input[type="file"]:disabled::file-selector-button {
+  cursor: default;
+  opacity: 0.5;
+}
 a {
   color: var(--accent);
   text-underline-offset: 3px;
@@ -159,14 +189,40 @@ label {
   gap: 6px;
   font-size: 13px;
 }
+/* One disclosure idiom: the app's chevron, rotated when open, instead of the browser triangle.
+   Controls that draw their own marker keep it by opting out just below. */
 summary {
   cursor: pointer;
   min-height: 44px;
   padding: 10px 0;
   overflow-wrap: anywhere;
+  list-style: none;
 }
-summary::marker {
+summary::-webkit-details-marker {
+  display: none;
+}
+summary::before {
+  content: "";
+  display: inline-block;
+  vertical-align: -3px;
+  flex: none;
+  width: 16px;
+  height: 16px;
+  margin-right: 4px;
   color: var(--muted);
+  background: currentColor;
+  mask: var(--chevron) center / 16px 16px no-repeat;
+}
+details[open] > summary::before {
+  transform: rotate(90deg);
+}
+.action-menu > summary::before,
+.library-item-menu > summary::before,
+.turn-activity > summary::before,
+.pc-block > summary::before,
+.pc-composer-fold > summary::before,
+.prompt-composer summary:has(> .pc-disclosure-icon)::before {
+  content: none;
 }
 fieldset {
   min-width: 0;
@@ -400,8 +456,6 @@ input[type="checkbox"] {
   min-width: 0;
   max-width: 220px;
   margin-right: 6px;
-}
-.model-chip {
   min-height: 44px;
   padding: 4px 12px;
   border: 1px solid var(--line);

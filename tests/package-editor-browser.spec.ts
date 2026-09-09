@@ -153,7 +153,7 @@ test('PKUI04 hundreds of lore entries support folders, search, bulk move and per
   await expect(library.locator('.library-savebar [role="status"]')).toContainText(
     '저장됨 · 다음 실행부터 사용해요.'
   );
-  await library.getByRole('button', { name: '← 서재 목록', exact: true }).click();
+  await library.getByRole('button', { name: '서재 목록', exact: true }).click();
   await editLibraryContent(page, `${pkg.title}`);
   await expect(manager.getByLabel('로어 폴더 필터', { exact: true })).toContainText('미분류 · 170');
   await expect(manager.getByLabel('로어 폴더 필터', { exact: true })).not.toContainText('등장인물');
@@ -289,7 +289,7 @@ test('PKUI01 package editing preserves internal lore, instructions, unsaved work
   await fields
     .getByLabel('지침 1 본문', { exact: true })
     .fill('Mention visible actions before interpretation.');
-  await library.getByRole('button', { name: '← 서재 목록', exact: true }).click();
+  await library.getByRole('button', { name: '서재 목록', exact: true }).click();
   const guard = library.getByRole('alertdialog', { name: '미저장 자료 확인', exact: true });
   await expect(guard).toBeVisible();
   await page.setViewportSize({ width: 390, height: 844 });
@@ -310,7 +310,7 @@ test('PKUI01 package editing preserves internal lore, instructions, unsaved work
   await expect(library.getByLabel('자료 이름', { exact: true })).toHaveValue(
     'Synthetic package editor bot'
   );
-  await library.getByRole('button', { name: '← 서재 목록', exact: true }).click();
+  await library.getByRole('button', { name: '서재 목록', exact: true }).click();
   await expect(guard).toBeVisible();
   await guard.getByRole('button', { name: '계속 편집', exact: true }).click();
   await page.setViewportSize({ width: 1440, height: 1000 });
@@ -352,7 +352,7 @@ test('PKUI01 package editing preserves internal lore, instructions, unsaved work
     target: 'main',
     text: 'Mention visible actions before interpretation.',
   });
-  await library.getByRole('button', { name: '← 서재 목록', exact: true }).click();
+  await library.getByRole('button', { name: '서재 목록', exact: true }).click();
   await editLibraryContent(page, 'Synthetic package editor bot');
   await expect(fields.getByLabel('로어 1 본문', { exact: true })).toHaveValue(
     'A blue bell hangs by the synthetic harbor.'

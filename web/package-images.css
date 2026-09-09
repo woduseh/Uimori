@@ -21,21 +21,6 @@
   padding: 5px 8px;
   font-size: 12px;
 }
-.package-images-toolbar input[type="file"]::file-selector-button {
-  height: 34px;
-  margin-right: 10px;
-  padding: 0 12px;
-  border: 1px solid var(--line);
-  border-radius: 6px;
-  background: var(--surface);
-  color: var(--text);
-  font: inherit;
-  cursor: pointer;
-}
-.package-images-toolbar input[type="file"]:disabled::file-selector-button {
-  cursor: default;
-  opacity: 0.5;
-}
 .package-images > p {
   margin: 0;
 }

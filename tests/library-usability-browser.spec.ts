@@ -159,7 +159,7 @@ test('LUSE03 empty persona and module folders explain their roles and offer the 
     await noHorizontalOverflow(page);
     if (visualReview)
       await page.screenshot({ path: info.outputPath(`library-role-${category}-360.png`) });
-    await panel.getByRole('button', { name: '← 서재 목록', exact: true }).click();
+    await panel.getByRole('button', { name: '서재 목록', exact: true }).click();
   }
   expect(contentWrites).toBe(0);
 });

@@ -1,5 +1,11 @@
 # 현재 작업 상태 · Uimori
 
+## 화면 사이 일관성 정리 (2026-09-10)
+
+같은 목적인데 화면마다 달랐던 조작을 하나로 맞췄어요. 서재와 프롬프트가 같은 폴더 breadcrumb·검색·목록 관리·선택 작업을 쓰고, 설정의 저장 버튼은 공통 도상에 보이는 이름을 붙였어요. 사이드바 봇 행은 이름을 먼저 보여주고 보조 조작은 hover에서 나타나요. `<details>`의 브라우저 삼각형과 파일 선택 위젯을 앱 공통 모양으로 바꿨고, 정의되지 않은 `--danger`·`--text-muted` 때문에 테마를 따르지 않던 색 다섯 곳을 고쳤어요. `web/ui-icons.ts` 공통 어휘를 넓혀 29개 컴포넌트의 직접 아이콘 import를 없앴어요.
+
+`quality`와 빌드는 PASS이고 단위·통합은 Node 24에서 **1,716 PASS / opt-in 1 SKIP**이에요. 판정은 전체 회귀로 했어요. `verify:redesign`이 이 트리에서 **214 PASS / 6 FAIL**, `HEAD`(`e417572`) 격리 트리에서 **210 PASS / 10 FAIL**이라 이 트리의 실패는 HEAD 실패의 부분집합이에요. 새로 깨진 검사는 없고 `UI07`·`UI12`·`UI18`·공용 대화상자 4건이 되살아났어요. 부분 묶음은 `verify:library` 26, `verify:providers` 15, `verify:deletion` 19, `verify:request-edit` 6, `verify:illustration` 3, `verify:chat-unification` 14, `verify:turn-activity` 4가 PASS예요. 다만 이 실행은 **macOS·Edge 152**이고 저장소 CI는 Windows·Node 24.14예요. 같은 환경의 A/B 비교라 이번 변경의 영향 판정은 유효하지만, 남은 실패의 절대 개수는 Windows에서 다시 확인해야 해요. 계약·근거·남은 항목은 [일관성 정리 기록](UIUX-CONSISTENCY-2026-09-10.md)에 있어요. 커밋·push·배포는 하지 않았어요.
+
 ## 프롬프트 설정·제작 UX 정리 (2026-09-10)
 
 설정은 프롬프트 선택·현재 옵션 자동 저장·협업 스위치만 제공하고, 이름·구성·기본 옵션·협업 상세는 프롬프트 탭에서 편집해요. 조합은 현재 선택만 바꾸며 저장 조합은 유지해요. JSON 이름/역할 왕복, 적용 당시 기본값 고정, 생성 버튼·아이콘·삭제 확인 배치를 정리했어요.
@@ -69,7 +75,7 @@
 
 ## 장면 삽화 생성 · Codex 이미지 생성과 원격 ComfyUI (2026-09-09)
 
-기준은 origin/main `d2f80d2`예요. 완성된 응답의 장면을 골라 삽화를 만드는 기능을 추가했어요. 기존 이미지 배치(`image` 역할)와 분리된 `illustration_*` 표·큐·러너로 구현했고 스키마 v15는 유지하며 없는 표만 추가해요. 생성기는 Codex 연결의 공식 이미지 생성 턴(`server/codex-runtime.ts`의 `generateImage`, `features.image_generation`만 추가 허용)과 원격 ComfyUI API(`server/comfyui-client.ts`, 프롬프트 모델이 장면을 JSON 프롬프트로 변환)예요. 수동 생성·새 삽화 생성·다시 요청·취소·삭제, 자동 생성, 재시도 가능한 실패의 자동 재요청(0~5회), 장면당 최대 개수(1~8), 채팅별 캐릭터 디자인·그림체 참조 이미지(Codex 경로)를 구현했어요. Reader 장면 아래 삽화 영역, 설정 → 삽화, 채팅 설정 → 이미지의 참조 지정, 작업 현황 표시, 포크·삭제·archive 연동을 포함해요. 이후 확인한 설계 검토서(`Uimori-Illustration-Design-Review.v2.ko.md`)의 불변 조건을 반영해 자동 예약의 생략(skip), ComfyUI 시간 초과 시 새 생성 대신 `prompt_id` 결과 확인(reconcile), 실행 중인 우리 작업일 때만 interrupt, 원문 구간 정책의 main 구간만 전송, 수정 전 원문 삽화 표시, 이미지 16MB 한도를 추가했어요. 계약·결정 기록·사용자 확인 절차는 [장면 삽화](../docs/ILLUSTRATIONS.md)에 있어요.
+기준은 origin/main `d2f80d2`예요. 완성된 응답의 장면을 골라 삽화를 만드는 기능을 추가했어요. 기존 이미지 배치(`image` 역할)와 분리된 `illustration_*` 표·큐·러너로 구현했고 스키마 v15는 유지하며 없는 표만 추가해요. 생성기는 Codex 프로바이더의 공식 이미지 생성 턴(`server/codex-runtime.ts`의 `generateImage`, `features.image_generation`만 추가 허용)과 원격 ComfyUI API(`server/comfyui-client.ts`, 프롬프트 모델이 장면을 JSON 프롬프트로 변환)예요. 수동 생성·새 삽화 생성·다시 요청·취소·삭제, 자동 생성, 재시도 가능한 실패의 자동 재요청(0~5회), 장면당 최대 개수(1~8), 채팅별 캐릭터 디자인·그림체 참조 이미지(Codex 경로)를 구현했어요. Reader 장면 아래 삽화 영역, 설정 → 삽화, 채팅 설정 → 이미지의 참조 지정, 작업 현황 표시, 포크·삭제·archive 연동을 포함해요. 이후 확인한 설계 검토서(`Uimori-Illustration-Design-Review.v2.ko.md`)의 불변 조건을 반영해 자동 예약의 생략(skip), ComfyUI 시간 초과 시 새 생성 대신 `prompt_id` 결과 확인(reconcile), 실행 중인 우리 작업일 때만 interrupt, 원문 구간 정책의 main 구간만 전송, 수정 전 원문 삽화 표시, 이미지 16MB 한도를 추가했어요. 계약·결정 기록·사용자 확인 절차는 [장면 삽화](../docs/ILLUSTRATIONS.md)에 있어요.
 
 로컬 검증(Node 24.14.0·resolved TMPDIR, 이 Mac): `npm run quality` PASS, `test:tooling` PASS, 새 빌드 PASS. 새 합성 검사 `tests/illustration-core.test.ts`, `tests/comfyui-client.test.ts`, `tests/codex-image.test.ts`, `tests/illustration-store.test.ts`, `tests/illustration-runner.test.ts`, `tests/illustration-api.test.ts` **44 PASS**. 전체 Vitest는 세 번 실행해 **1,611 PASS / 1 FAIL**, **1,612 PASS / 0 FAIL**, **1,616 PASS / 1 FAIL**(선택 1 skip)이었고, 실패는 매번 `context-lore-integration`의 LRU 제거 case(`summaryCalls` 2 vs 0) 하나예요. 이 case는 삽화 코드와 무관한 문맥 압축 검사이며 삽화 검사 파일 없이 문맥 검사 4개 파일만 세 번 돌려도 1회 실패·2회 통과해 기존 비결정성으로 판단했어요. 실패를 PASS로 바꾸지 않고 별도 조사 항목으로 남겨요. 새 브라우저 검사 `npm run verify:illustration`(ILUI01 데스크톱 1440: 장면 메뉴 요청·이미지 표시·새로고침 유지·실패 재요청·삭제, ILUI02 모바일 390: 설정 저장·CAS 충돌·초안 유지)은 **2 PASS**이며 증거는 `output/playwright/illustration-ui-2026-09-09T08-53-23-617Z-4769f36e/summary.json`이에요. 합성 ComfyUI HTTP 서버와 확장한 Codex app-server fixture(`imageGeneration` 항목, 저장 파일, 사용량 한도)를 사용했으며 실제 Codex 구독·ComfyUI PC 호출, 이미지 품질, 참조 반영 정도, 휴대폰 실기기는 검증하지 않았어요(사용자 확인 항목). 이번 변경은 미커밋이에요.
 
@@ -97,9 +103,9 @@
 
 ## 모델 등록 개편 · 실행 게이트 제거와 공급자 판정 표시 (2026-09-09)
 
-모델 ID 코드표를 실행 조건으로 쓰던 `requireSupportedModel`과 프리셋의 `capabilityRevision` 각인을 없앴어요. 표에 없는 모델 ID와 값도 저장·실행하며, 저장 검증은 프로토콜 encoder가 보낼 수 있는 옵션·값 어휘만 거절해요. 공급자의 4xx 거절에서 화이트리스트 필드 이름만 추출해 실패 턴 카드·보조 작업 카드·응답 테스트에 거절된 설정 이름으로 표시하고 메시지 원문은 저장하지 않아요. 응답 테스트는 프리셋 옵션을 그대로 보내되 출력 256토큰·캐시 끄기·도구 없음이에요. Anthropic·Vercel 모델 목록의 한도·옵션 값을 `Connection.catalog`에 저장하고 목록에서 고르면 한도를 미리 채워요. Gemini 연결은 선택한 API 키 환경변수가 있으면 Gemini Developer API 목록에서 Gemini 모델과 한도를 받아와요. state·memory 작업의 4xx 거절도 같은 안내로 표시해요. 모델 편집은 **기본 / 고급** 두 탭이며 노출 조절은 **사고 강도** 하나예요. 문서로 확인한 값을 먼저, 나머지 프로토콜 값을 미확인으로 보여주고 어느 요청 필드로 나가는지 표시해요. 에이전트 등록 보조 기능과 관련 저장소·라우트·UI·테스트는 삭제했어요. 계약은 [연결 계약](../docs/PROVIDERS.md)과 [모델 옵션](../docs/MODEL-PARAMETERS.md)에 있고, 근거와 버린 대안은 [모델 등록 결정](../docs/MODEL-REGISTRATION.md)에 있어요.
+모델 ID 코드표를 실행 조건으로 쓰던 `requireSupportedModel`과 프리셋의 `capabilityRevision` 각인을 없앴어요. 표에 없는 모델 ID와 값도 저장·실행하며, 저장 검증은 프로토콜 encoder가 보낼 수 있는 옵션·값 어휘만 거절해요. 공급자의 4xx 거절에서 화이트리스트 필드 이름만 추출해 실패 턴 카드·보조 작업 카드·응답 테스트에 거절된 설정 이름으로 표시하고 메시지 원문은 저장하지 않아요. 응답 테스트는 프리셋 옵션을 그대로 보내되 출력 256토큰·캐시 끄기·도구 없음이에요. Anthropic·Vercel 모델 목록의 한도·옵션 값을 `Connection.catalog`에 저장하고 목록에서 고르면 한도를 미리 채워요. Gemini 프로바이더은 선택한 API 키 환경변수가 있으면 Gemini Developer API 목록에서 Gemini 모델과 한도를 받아와요. state·memory 작업의 4xx 거절도 같은 안내로 표시해요. 모델 편집은 **기본 / 고급** 두 탭이며 노출 조절은 **사고 강도** 하나예요. 문서로 확인한 값을 먼저, 나머지 프로토콜 값을 미확인으로 보여주고 어느 요청 필드로 나가는지 표시해요. 에이전트 등록 보조 기능과 관련 저장소·라우트·UI·테스트는 삭제했어요. 계약은 [프로바이더 계약](../docs/PROVIDERS.md)과 [모델 옵션](../docs/MODEL-PARAMETERS.md)에 있고, 근거와 버린 대안은 [모델 등록 결정](../docs/MODEL-REGISTRATION.md)에 있어요.
 
-검증은 CI와 같은 Node 24.14.0·resolved TMPDIR로 실행했어요. `quality` PASS, 새 빌드 PASS, 단위·통합 **1,409 PASS / 1 opt-in skip**, 도구 검사 PASS, `verify:providers` **15 PASS**(마지막 재실행 `provider-management-2026-09-09T01-28-29-631Z-23f36d36`, 다른 프로토콜 연결로 바꿔도 이전 옵션이 보이고 지울 수 있는지 PMUI12에서 확인), `verify:evaluation` **2 PASS**, `verify:browser-smoke` **3 PASS**, product-browser P04 세 case는 세션용 임시 runner로 **3 PASS**예요. 증거는 `output/playwright/provider-management-2026-09-09T01-04-14-855Z-ebb0a399/summary.json`, `output/playwright/product-p04-scratch-2026-09-09T01-07-35-168Z-45a504da/summary.json`이에요. 실제 공급자 호출·운영 DB·커밋·푸시·배포는 수행하지 않았어요. Google Agent Platform 목록 API 유무의 직접 대조와 실제 키로 확인하는 거절 필드 형태는 남은 항목이에요.
+검증은 CI와 같은 Node 24.14.0·resolved TMPDIR로 실행했어요. `quality` PASS, 새 빌드 PASS, 단위·통합 **1,409 PASS / 1 opt-in skip**, 도구 검사 PASS, `verify:providers` **15 PASS**(마지막 재실행 `provider-management-2026-09-09T01-28-29-631Z-23f36d36`, 다른 프로토콜 프로바이더로 바꿔도 이전 옵션이 보이고 지울 수 있는지 PMUI12에서 확인), `verify:evaluation` **2 PASS**, `verify:browser-smoke` **3 PASS**, product-browser P04 세 case는 세션용 임시 runner로 **3 PASS**예요. 증거는 `output/playwright/provider-management-2026-09-09T01-04-14-855Z-ebb0a399/summary.json`, `output/playwright/product-p04-scratch-2026-09-09T01-07-35-168Z-45a504da/summary.json`이에요. 실제 공급자 호출·운영 DB·커밋·푸시·배포는 수행하지 않았어요. Google Agent Platform 목록 API 유무의 직접 대조와 실제 키로 확인하는 거절 필드 형태는 남은 항목이에요.
 
 ## boolean 스위치와 복수 선택 구분 (2026-09-09)
 
@@ -157,9 +163,9 @@ Vercel `openai/gpt-5.6-sol`에 Service Tier default/flex를 추가했어요. 공
 
 Oracle 실제 job의 `PROMPT_UNKNOWN_SLOT`와 전송 attempt 0개를 확인했어요. 번역 프롬프트 `pheme-7`의 `glossary` 슬롯 누락을 수정하고 오류 단계·블록·슬롯·attempt 연결, 안전한 HTTP 진단과 좁은 판정 JSON 정규화를 보강했어요. `quality:full` **1,429 PASS / 선택 1 skip**, 관련 브라우저 **3 PASS**예요. 이후 사용자 승인으로 실패 당시 모델·프롬프트와 합성 원문을 이용한 실제 Google 번역/판정 **2회 모두 completed, accepted**를 확인했어요. 운영 DB·프롬프트는 보존했으며 운영 배포는 하지 않았어요. [원인·수정·증거·한계](TRANSLATION-DEBUG-2026-09-09.md)를 봐요.
 
-## Gemini·Vercel 모델 및 DeepSeek 연결 추가 (2026-09-09)
+## Gemini·Vercel 모델 및 DeepSeek 프로바이더 추가 (2026-09-09)
 
-Google `gemini-3.5-flash-lite`, Vercel `spacexai/grok-4.6`·`openai/gpt-5.6-sol`, DeepSeek `deepseek-v4-pro`·`deepseek-v4-flash`를 로컬 지원 목록에 추가했어요. DeepSeek는 공식 `https://api.deepseek.com/v1`에서 OpenAI Chat Completions 형식을 사용하고 `DEEPSEEK_API_KEY`를 참조해요. Flash-Lite MINIMAL과 DeepSeek none→thinking disabled 매핑, 도구 후속 reasoning 보존을 검증했어요. [모델 옵션](../docs/MODEL-PARAMETERS.md) · [연결 계약](../docs/PROVIDERS.md).
+Google `gemini-3.5-flash-lite`, Vercel `spacexai/grok-4.6`·`openai/gpt-5.6-sol`, DeepSeek `deepseek-v4-pro`·`deepseek-v4-flash`를 로컬 지원 목록에 추가했어요. DeepSeek는 공식 `https://api.deepseek.com/v1`에서 OpenAI Chat Completions 형식을 사용하고 `DEEPSEEK_API_KEY`를 참조해요. Flash-Lite MINIMAL과 DeepSeek none→thinking disabled 매핑, 도구 후속 reasoning 보존을 검증했어요. [모델 옵션](../docs/MODEL-PARAMETERS.md) · [프로바이더 계약](../docs/PROVIDERS.md).
 
 `quality` PASS, `quality:full`의 도구 31 PASS·새 빌드 PASS·단위/통합 1,398 PASS / 1 FAIL / 1 opt-in skip 후, 신규 Gemini가 빠진 기존 목록 기대값을 수정해 관련 파일 5 PASS를 확인했어요. 제품 소스의 추가 수정은 없어요. 브라우저는 Vercel 참고 명세 문구 기대값을 수정한 뒤 `verify:providers` **17 PASS**, 종료 지문·cleanup PASS예요. 증거는 `output/playwright/provider-management-2026-09-08T18-24-39-041Z-e4907113/summary.json`, 빌드는 `output/build/build-2026-09-08T18-22-25-323Z-c91e6cae/summary.json`에 있어요. 사용자 DB·실제 공급자 호출·커밋·푸시·배포는 수행하지 않았어요.
 
@@ -203,14 +209,14 @@ Google `gemini-3.5-flash-lite`, Vercel `spacexai/grok-4.6`·`openai/gpt-5.6-sol`
 ## 현재 구현
 
 - 채팅 설정 7개 분야와 고급 패키지 9개 분야에 모바일 목록→상세·데스크톱 병치를 적용했어요. 프롬프트 저장과 채팅 적용을 구별하고 관리·구성 도구와 장면 하단 작업은 메뉴로 모았어요. 분야 왕복·닫기·뒤로가기에서 초안·파일·커서·초점과 기존 저장 계약을 유지해요. [상세 화면 구현·검증](UI-DETAIL-IMPLEMENTATION.md)
-- 공통 UI·아이콘을 설정·서재·프롬프트·연결과 모델·데이터 관리에 적용했어요. 모바일 설정은 목록→상세로 이동하고 데스크톱은 나란히 보여줘요. 제목 중복·관리 도구의 기본 노출을 줄이고, 빈 상태·검색 복구·미저장 초안·뒤로가기·메뉴 안의 삭제 보호를 유지해요. 자료 조회/화면 로딩 실패에도 탐색을 제공해요. [구현·검증 결과](UI-COMPACT-IMPLEMENTATION.md) · [공통 원칙](../docs/UI-PRINCIPLES.md)
+- 공통 UI·아이콘을 설정·서재·프롬프트·프로바이더와 모델·데이터 관리에 적용했어요. 모바일 설정은 목록→상세로 이동하고 데스크톱은 나란히 보여줘요. 제목 중복·관리 도구의 기본 노출을 줄이고, 빈 상태·검색 복구·미저장 초안·뒤로가기·메뉴 안의 삭제 보호를 유지해요. 자료 조회/화면 로딩 실패에도 탐색을 제공해요. [구현·검증 결과](UI-COMPACT-IMPLEMENTATION.md) · [공통 원칙](../docs/UI-PRINCIPLES.md)
 - 메인 프롬프트의 **에이전트 협업**에서 지침·공유 옵션·모델·참여 시점과 조회 권한을 직접 설정해요. 기본은 OFF이며 생성 전 자문 또는 메인의 필요 시 호출을 지원해요. 예약된 Run에 설정·모델을 고정하고 전체 호출 한도·취소·원문 귀속을 유지해요. [협업 계약](../docs/AGENT-COLLABORATION.md)
 - 자료·프롬프트·공유 모듈은 같은 ID의 최신 저장 내용을 다음 실행에서 사용해요. 전역 옵션 조합은 현재 정의로 검증하고, 이미 예약한 실행과 과거 원문은 자체 snapshot을 유지해요. [현재 설정 계약](CURRENT-SETTINGS-PLAN.md) · [번역 구간과 재시도](TRANSLATION-CHUNKS.md)
 - **DB schema / 전체 JSON archive v13**예요. 봇·페르소나·모듈은 공통 패키지이며 서재의 분류별 폴더·대표 이미지와 별도의 프롬프트 관리를 제공해요. 분류·폴더 정리는 내용 개정 및 채팅에서 사용하는 역할과 독립적이에요. [서재 계약](../docs/LIBRARY.md)
 - 봇별 채팅·폴더, 드래그 이동·정렬, 대화별 접고 펼치는 작업 현황, 원문 수정·응답 후보·번역·포크를 제공해요. 페르소나 선택에는 페르소나 분류와 ‘페르소나 없음’을 표시해요. [사용 안내](../docs/USAGE.md)
 - 새 채팅은 봇·본문 모델을 먼저 고르고 선택 설정은 접어 보여줘요. 사용 가능한 최근 모델 또는 유일한 모델을 제안하고, 새 채팅의 자동 장면 상태는 기본 OFF예요. 모바일 서재는 전체 폭 목록과 간단한 자료 제작을 우선하며, 채팅 입력창의 추가 설정은 더보기에서 열어요. 원문·번역 직접 수정은 초점과 읽던 위치를 복원해요. [UIUX 테스트 후속 개선](UIUX-IMPROVEMENTS-2026-09-08.md)
 - 프롬프트는 `PromptProgram` AST로 실행하고 블록 구성 편집을 사용해요. 새 프롬프트는 역할별 앱 기본 내용으로 시작하며 전송 미리보기는 접고 펼칠 수 있어요. 템플릿 문법과 TypeScript 제작 API는 선택 가능한 제작 방식이에요. [제작 방식](../docs/PROMPT-AUTHORING.md)
-- 모델·연결은 최신 `provider_settings` 한 벌을 사용하며 `ModelRef`는 `{id}`예요. 과거 Run과 보조 작업은 자체 snapshot을 보존해요. 일반 실행은 역할별 모델 선택이 필수이며 모델 없는 합성 실행은 명시적 테스트 모드에서만 허용해요. [공급자](../docs/PROVIDERS.md) · [모델 파라미터](../docs/MODEL-PARAMETERS.md)
+- 모델·프로바이더는 최신 `provider_settings` 한 벌을 사용하며 `ModelRef`는 `{id}`예요. 과거 Run과 보조 작업은 자체 snapshot을 보존해요. 일반 실행은 역할별 모델 선택이 필수이며 모델 없는 합성 실행은 명시적 테스트 모드에서만 허용해요. [공급자](../docs/PROVIDERS.md) · [모델 파라미터](../docs/MODEL-PARAMETERS.md)
 - 공통 패키지의 이미지·시작문·로어·상태와 행동, 다음 요청 예약, 원문 구간 정책을 사용해요. 자료별 native/hidden 실행기, 독립 `lore/canon/skill/glossary` 자료 종류와 앱 내부 Risu 변환기는 제거했어요. 외부 에이전트가 native JSON을 작성하고 기존 편집기에서 검토 후 저장해요. [패키지](../docs/PACKAGES.md) · [상태와 행동](../docs/PACKAGE-BEHAVIOR.md) · [Risu 이식](../docs/RISU-PORTING.md)
 - full history와 전송 projection, source/hash·히든 viewHash·정사 의존성을 구분해요. 로어 유지와 자동 요약, 원문 수정에 따른 파생물 무효화, CAS·취소·불확실 실행의 자동 재생 금지를 유지해요. [입력 한도](../docs/CONTEXT-LIMITS.md) · [로어 문맥](../docs/LORE-CONTEXT.md) · [삭제 보호](../docs/DELETION.md)
 - 개인 self-host용 HTTPS·토큰·영구 SQLite 구성과 선택형 Tailscale 배포 구성이 있어요. 실제 서버 배포는 별도 작업이며 이 정리의 검증 범위에 포함하지 않아요. [Self-host](../docs/SELF-HOST.md) · [Tailscale](../docs/TAILSCALE-DEPLOY.md)
@@ -225,7 +231,7 @@ UI 설계 v2의 작은 마무리를 적용했어요. 포크 뒤 원본으로 돌
 
 UI 설계 v2의 후속으로 채팅 리더를 마무리했어요. 본문이 없는 실패 요청은 본문 자리의 카드(재시도·요청 편집·모델 설정·상세)로, 진행 중 요청은 자리표시 세 줄로 보여요. 카드가 화면에 보이는 실패는 입력창 위 상태 줄에서 빼고, 빈 채팅은 아바타·문구를 세로 중앙에 두며, 집중 읽기는 장면 헤더·도구 줄을 숨겨요. `quality`·빌드 통과, 관련 브라우저 검사 17건 통과. [적용 기록](../docs/UI-DESIGN-V2.md#적용-기록). 아래는 이 변경 이전 기록이에요.
 
-UI 설계 v2 4단계(설정 정리)를 적용했어요. 채팅 설정은 기본·고급 두 묶음의 여섯 분야이고 읽기 설정은 채팅 ⋯의 대화상자에서 보기·글꼴·크기·집중 읽기만 다뤄요. 화면 테마는 설정 → 일반에서만 바꾸고, 모델 표기는 어디서나 `프리셋 이름 · 연결 이름`이에요. 영향 받는 브라우저 검사 11건(chat-settings CSUI01~03, P01, 공통 대화상자, PMUI03, S01, EVALUI01, SCUI01, UXUI01) 통과. 4단계 완료 커밋(73767f5)의 전체 브라우저 검사는 **164/164 PASS**예요. [적용 기록](../docs/UI-DESIGN-V2.md#적용-기록). 아래는 이 변경 이전 기록이에요.
+UI 설계 v2 4단계(설정 정리)를 적용했어요. 채팅 설정은 기본·고급 두 묶음의 여섯 분야이고 읽기 설정은 채팅 ⋯의 대화상자에서 보기·글꼴·크기·집중 읽기만 다뤄요. 화면 테마는 설정 → 일반에서만 바꾸고, 모델 표기는 어디서나 `프리셋 이름 · 프로바이더 이름`이에요. 영향 받는 브라우저 검사 11건(chat-settings CSUI01~03, P01, 공통 대화상자, PMUI03, S01, EVALUI01, SCUI01, UXUI01) 통과. 4단계 완료 커밋(73767f5)의 전체 브라우저 검사는 **164/164 PASS**예요. [적용 기록](../docs/UI-DESIGN-V2.md#적용-기록). 아래는 이 변경 이전 기록이에요.
 
 UI 설계 v2 3단계를 마쳤어요. 프롬프트 목록도 서재와 같은 도구 한 줄(폴더 드롭다운·검색·목록 관리)을 쓰고 개수 줄을 없앴어요. `quality`·빌드 통과, 프롬프트·서재 검사 13건 통과, 3단계 완료 커밋(2baecf6)의 전체 브라우저 검사 **164/164 PASS**. [적용 기록](../docs/UI-DESIGN-V2.md#적용-기록). 아래는 이 변경 이전 기록이에요.
 
@@ -268,9 +274,9 @@ UIUX 테스트 후속 개선에서 새 채팅·입력창·모바일 서재·직�
 | 단계 | 구현·로컬 검증 범위 | 남은 범위 |
 | --- | --- | --- |
 | M0 | 서버 소유 실행·SQLite·채팅 격리·재접속·실패 탐지, F01–F06 | M0 범위 완료 |
-| M1 | 콘텐츠·연결·전체 프롬프트, 요청 시 최신 번역·제한 재시도·직접 편집, 포크·읽기 위치·백업, P01–P13 | 실제 폰·접속 환경 L02, 공급자별 L01 미확인 경로, Q01/Q02/Q03/Q05 품질 |
+| M1 | 콘텐츠·프로바이더·전체 프롬프트, 요청 시 최신 번역·제한 재시도·직접 편집, 포크·읽기 위치·백업, P01–P13 | 실제 폰·접속 환경 L02, 공급자별 L01 미확인 경로, Q01/Q02/Q03/Q05 품질 |
 | M2 | 상태 계산·대기·무효화/복구, 기억·checkpoint·원문 회수, 장면 예약·표현·에셋, 공통 패키지 실행 | Q04 실제 장기 의미·비용 평가, 개인 자료의 공통 형식 재이식 |
-| M3 | 모델 프리셋별 선택형 평가 도구, 연결·모델 관리와 검토 후 적용하는 등록 보조 | E01–E03 전체 인수, 실제 공급자별 도구 호환, 일반 MCP/외부 action·공개 배포 |
+| M3 | 모델 프리셋별 선택형 평가 도구, 프로바이더·모델 관리와 검토 후 적용하는 등록 보조 | E01–E03 전체 인수, 실제 공급자별 도구 호환, 일반 MCP/외부 action·공개 배포 |
 
 실제 모델 품질·청구 비용·휴대폰/IME·Linux/Docker 동작은 로컬 합성 검증으로 보증하지 않아요. 과거 Vertex 시험 49회와 사용량 추정은 [M1 기록](M1-RESULTS.md)에 남아 있으며 현재 청구액이 아니에요. 중단된 품질 실험이나 유료 실행은 새 승인 없이 재개하지 않아요. M2 의미 품질 평가는 별도 범위예요.
 
@@ -280,7 +286,7 @@ UIUX 테스트 후속 개선에서 새 채팅·입력창·모바일 서재·직�
 
 | 영역 | 기록 |
 | --- | --- |
-| 공통 UI·아이콘 | [상세 화면 구현과 검증](UI-DETAIL-IMPLEMENTATION.md) · [설정·서재·연결·데이터 구현과 검증](UI-COMPACT-IMPLEMENTATION.md) · [공통 원칙](../docs/UI-PRINCIPLES.md) · [화면 설계](../docs/UI-SCREEN-DESIGN.md) |
+| 공통 UI·아이콘 | [상세 화면 구현과 검증](UI-DETAIL-IMPLEMENTATION.md) · [설정·서재·프로바이더·데이터 구현과 검증](UI-COMPACT-IMPLEMENTATION.md) · [공통 원칙](../docs/UI-PRINCIPLES.md) · [화면 설계](../docs/UI-SCREEN-DESIGN.md) |
 | 서재·이미지·탐색 | [서재 결과](LIBRARY-RESULTS.md) · [탐색 결과](NAVIGATION-RESULTS.md) · [장면 탐색](SCENE-NAVIGATION.md) |
 | 공통 실행 구조·품질·삭제 | [구조 정리 결과](CODEBASE-CLEANUP-RESULTS.md) · [품질 도구](QUALITY-RESULTS.md) · [삭제 결과](DELETION-RESULTS.md) |
 | 모델·입력 한도·로어 통합 | [최종 통합](PROVIDER-PARAMETERS-RESULTS.md) · [공통 자료](SHARED-PACKAGE-RESULTS.md) · [로어 유지](LORE-CONTEXT-RESULTS.md) |

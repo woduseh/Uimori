@@ -12,12 +12,12 @@
   gap: 0.5rem;
 }
 .editor-draft-toolbar small {
-  color: var(--text-muted, #767b88);
+  color: var(--muted);
 }
 .editor-draft-review {
   margin-block: 0.65rem;
   padding: 0.8rem;
-  border: 1px solid var(--border, #d7d9de);
+  border: 1px solid var(--border);
   border-radius: 0.65rem;
   min-width: 0;
 }

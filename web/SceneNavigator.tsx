@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type RefObject } from 'react';
-import { ArrowDown, List } from 'lucide-react';
+import { DownIcon, ListIcon } from './ui-icons.js';
 import type { ReaderDetail } from '../core/types.js';
 import { Dialog } from './Dialog.js';
 import './scene-navigator.css';
@@ -193,7 +193,7 @@ export function SceneNavigator({
             title="최신 장면으로"
             onClick={() => select(last.id)}
           >
-            <ArrowDown size={20} aria-hidden="true" />
+            <DownIcon size={20} aria-hidden="true" />
           </button>
         )}
         {dialog}
@@ -209,7 +209,7 @@ export function SceneNavigator({
           title="장면 목록 열기"
           onClick={openList}
         >
-          <List size={18} />
+          <ListIcon size={18} />
           <span>
             {active.number} / {entries.length}
           </span>
@@ -250,7 +250,7 @@ export function SceneNavigator({
           disabled={current === last?.id}
           onClick={() => last && select(last.id)}
         >
-          <ArrowDown size={18} />
+          <DownIcon size={18} />
         </button>
       </nav>
       {dialog}

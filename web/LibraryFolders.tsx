@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { ArrowDown, ArrowUp, Folder } from 'lucide-react';
 import type { Library } from '../core/product.js';
 import type {
   LibraryCategory,
@@ -11,7 +10,7 @@ import { api } from './api.js';
 import { Dialog } from './Dialog.js';
 import { DeleteButton } from './DeleteButton.js';
 import { ActionMenu } from './ActionMenu.js';
-import { EditIcon, FolderAddIcon, MoreIcon } from './ui-icons.js';
+import { DownIcon, EditIcon, FolderAddIcon, FolderIcon, MoreIcon, UpIcon } from './ui-icons.js';
 import './library-folders.css';
 
 export const categoryLabels: Record<LibraryCategory, string> = {
@@ -121,9 +120,9 @@ export function LibraryFolders({
   counts,
   reload,
   onError,
-  presentation = 'toolbar',
+  presentation = 'breadcrumb',
 }: {
-  presentation?: 'toolbar' | 'cards' | 'breadcrumb';
+  presentation?: 'cards' | 'breadcrumb';
   category: LibraryCategory;
   organizer: LibraryOrganizer;
   value: FolderFilter;
@@ -144,11 +143,6 @@ export function LibraryFolders({
     setTitle(folder?.title ?? '');
     setEdit({ folder, revision: organization.revision });
   }
-  const options = [
-    { id: 'all', title: '전체' },
-    { id: 'unclassified', title: '미분류' },
-    ...folders,
-  ];
   function folderActions(folder: LibraryFolder) {
     const index = folders.findIndex((item) => item.id === folder.id);
     return (
@@ -174,7 +168,7 @@ export function LibraryFolders({
             )
           }
         >
-          <ArrowUp size={18} aria-hidden="true" />
+          <UpIcon size={18} aria-hidden="true" />
           위로
         </button>
         <button
@@ -189,7 +183,7 @@ export function LibraryFolders({
             )
           }
         >
-          <ArrowDown size={18} aria-hidden="true" />
+          <DownIcon size={18} aria-hidden="true" />
           아래로
         </button>
         <DeleteButton
@@ -223,7 +217,7 @@ export function LibraryFolders({
               aria-label={`${folder.title} 폴더 열기`}
               onClick={() => onChange(folder.id)}
             >
-              <Folder size={28} aria-hidden="true" />
+              <FolderIcon size={28} aria-hidden="true" />
               <span>
                 <strong title={folder.title}>{folder.title}</strong>
                 <small>{counts[folder.id] ?? 0}개</small>
@@ -236,30 +230,17 @@ export function LibraryFolders({
         ))
       ) : (
         <>
-          {presentation === 'breadcrumb' ? (
-            <nav className="library-breadcrumb" aria-label="서재 위치">
-              <button type="button" className="secondary" onClick={() => onChange('all')}>
-                전체
-              </button>
-              {value !== 'all' && (
-                <>
-                  <span aria-hidden="true">/</span>
-                  <span aria-current="page">{selectedFolder?.title ?? '미분류'}</span>
-                </>
-              )}
-            </nav>
-          ) : (
-            <label className="library-folder-mobile">
-              <span className="sr-only">폴더 선택</span>
-              <select value={value} onChange={(event) => onChange(event.target.value)}>
-                {options.map((item) => (
-                  <option value={item.id} key={item.id}>
-                    {item.title} ({counts[item.id] ?? 0})
-                  </option>
-                ))}
-              </select>
-            </label>
-          )}
+          <nav className="library-breadcrumb" aria-label="현재 폴더">
+            <button type="button" className="secondary" onClick={() => onChange('all')}>
+              전체
+            </button>
+            {value !== 'all' && (
+              <>
+                <span aria-hidden="true">/</span>
+                <span aria-current="page">{selectedFolder?.title ?? '미분류'}</span>
+              </>
+            )}
+          </nav>
           <LibraryItemMenu title="폴더 관리">
             <button
               type="button"

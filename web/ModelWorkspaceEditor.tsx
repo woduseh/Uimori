@@ -3,8 +3,9 @@ import type { Library, ModelRef, ModelWorkspace, TaskRole } from '../core/produc
 import { api } from './api.js';
 import { usePromptWorkspace } from './usePromptWorkspace.js';
 import { useModelSelection } from './model-selection.js';
-import { RefreshCw, Save } from 'lucide-react';
+import { RefreshIcon } from './ui-icons.js';
 import { IconButton } from './IconButton.js';
+import { SaveButton } from './SaveButton.js';
 import './settings-actions.css';
 
 export function ModelWorkspaceEditor({
@@ -44,7 +45,7 @@ export function ModelWorkspaceEditor({
       <p role="status" className="settings-loading-status">
         {error || '현재 모델 설정을 불러오는 중이에요…'}{' '}
         <IconButton
-          icon={RefreshCw}
+          icon={RefreshIcon}
           label="다시 불러오기"
           className="secondary"
           onClick={() => void refresh()}
@@ -211,11 +212,9 @@ export function ModelWorkspaceEditor({
               최신 설정 다시 불러오기
             </button>
           )}
-          <IconButton
+          <SaveButton
             type="button"
-            icon={Save}
             label="현재 모델 설정 저장"
-            className="settings-save-button"
             aria-busy={busy}
             disabled={
               !dirty ||

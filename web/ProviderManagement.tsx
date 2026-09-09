@@ -1,10 +1,21 @@
 import { DraftDiscardActions } from './DraftDiscardActions.js';
 import { Switch } from './BooleanControls.js';
 import { useEffect, useRef, useState } from 'react';
-import { ArrowLeft, ArrowRight, Plus, Plug, Power, Save, X } from 'lucide-react';
 import { ActionMenu } from './ActionMenu.js';
 import { IconButton } from './IconButton.js';
-import { ConnectionIcon, CopyIcon, ModelIcon, RefreshIcon, SearchIcon } from './ui-icons.js';
+import { SaveButton } from './SaveButton.js';
+import {
+  AddIcon,
+  BackIcon,
+  CloseIcon,
+  ConnectionIcon,
+  CopyIcon,
+  ForwardIcon,
+  ModelIcon,
+  PowerIcon,
+  RefreshIcon,
+  SearchIcon,
+} from './ui-icons.js';
 import { VertexCredentialUpload } from './VertexCredentialUpload.js';
 import { ProviderCatalogPicker } from './ProviderCatalogPicker.js';
 import { modelHints } from '../core/model-hints.js';
@@ -615,7 +626,7 @@ export function ConnectionEditor({
                   disabled={busy}
                   onClick={() => (screen === 'connections' ? newConnection() : newModel())}
                 >
-                  <Plus size={18} aria-hidden="true" />
+                  <AddIcon size={18} aria-hidden="true" />
                   <span>{screen === 'connections' ? '새 프로바이더 입력' : '새 모델 입력'}</span>
                 </button>
               </div>
@@ -647,7 +658,7 @@ export function ConnectionEditor({
               <h4>첫 프로바이더를 준비해요</h4>
               <p>프로바이더를 추가한 뒤 사용할 모델을 등록해요.</p>
               <button type="button" disabled={busy} onClick={newConnection}>
-                프로바이더 추가 <ArrowRight size={18} aria-hidden="true" />
+                프로바이더 추가 <ForwardIcon size={18} aria-hidden="true" />
               </button>
             </div>
           )}
@@ -657,7 +668,7 @@ export function ConnectionEditor({
               <h4>사용할 모델을 등록해요</h4>
               <p>준비된 프로바이더를 선택하고 모델과 생성 설정을 저장해요.</p>
               <button type="button" disabled={busy} onClick={() => newModel()}>
-                <Plus size={18} aria-hidden="true" /> 새 모델 입력
+                <AddIcon size={18} aria-hidden="true" /> 새 모델 입력
               </button>
             </div>
           )}
@@ -674,7 +685,7 @@ export function ConnectionEditor({
               navigate(screen === 'model' ? 'models' : 'connections');
             }}
           >
-            <ArrowLeft size={16} />
+            <BackIcon size={16} />
             목록으로
           </button>
           {setup && (
@@ -702,7 +713,7 @@ export function ConnectionEditor({
                 onClick={() => startProvider(item.id)}
               >
                 <span className="provider-template-icon">
-                  <Plug size={20} />
+                  <ConnectionIcon size={20} />
                 </span>
                 <strong>{item.label}</strong>
                 <small>
@@ -714,7 +725,7 @@ export function ConnectionEditor({
                         ? '호환 API 또는 로컬 서버'
                         : '서버 API 키 인증'}
                 </small>
-                <ArrowRight size={16} />
+                <ForwardIcon size={16} />
               </button>
             ))}
           </div>
@@ -771,7 +782,7 @@ export function ConnectionEditor({
                     aria-label={item.title + ' 프로바이더 ' + (item.enabled ? '비활성' : '활성화')}
                     onClick={() => statusConnection(item)}
                   >
-                    <Power size={18} aria-hidden="true" /> {item.enabled ? '비활성' : '활성화'}
+                    <PowerIcon size={18} aria-hidden="true" /> {item.enabled ? '비활성' : '활성화'}
                   </button>
                   <button
                     type="button"
@@ -881,7 +892,7 @@ export function ConnectionEditor({
                     }
                     onClick={() => statusModel(item)}
                   >
-                    <Power size={18} aria-hidden="true" />{' '}
+                    <PowerIcon size={18} aria-hidden="true" />{' '}
                     {item.enabled === false ? '활성화' : '비활성'}
                   </button>
                   {deleteModel(item)}
@@ -1448,17 +1459,14 @@ export function ConnectionEditor({
         <div className="provider-actions full provider-model-save-actions">
           {editingModel && deleteModel(editingModel, true)}
           <IconButton
-            icon={X}
+            icon={CloseIcon}
             label="모델 편집 끝내기"
             disabled={busy}
             onClick={() => navigate('models')}
           />
           {editingModel ? (
-            <IconButton
-              type="submit"
-              icon={Save}
+            <SaveButton
               label="모델 변경 저장"
-              className="settings-save-button"
               disabled={busy || !!confirmation || !chosen}
               aria-busy={busy}
             />

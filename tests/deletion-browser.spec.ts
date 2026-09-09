@@ -98,7 +98,7 @@ test('DEL01 library cancel, stale revision, dependent bot and actual deletion at
   const dialog = page.getByRole('alertdialog', { name: '삭제 확인', exact: true });
   await dialog.getByRole('button', { name: '취소', exact: true }).click();
   expect((await request.get(`/api/revisions/content/${item.id}/1`)).ok()).toBe(true);
-  await panel.getByRole('button', { name: '← 서재 목록', exact: true }).click();
+  await panel.getByRole('button', { name: '서재 목록', exact: true }).click();
   const changed = await request.put(`/api/content/${item.id}`, {
     data: {
       kind: item.kind,
@@ -204,7 +204,7 @@ test('DEL02 prompt combinations and presets have deletion and removed prompt doe
   await expect(
     panel.getByRole('button', { name: `${prompt.title} 프롬프트 삭제`, exact: true })
   ).toHaveCount(0);
-  await panel.getByRole('button', { name: '← 프롬프트 목록', exact: true }).click();
+  await panel.getByRole('button', { name: '프롬프트 목록', exact: true }).click();
   await expect(
     panel.getByRole('button', { name: `${prompt.title} 프롬프트 편집`, exact: true })
   ).toHaveCount(0);

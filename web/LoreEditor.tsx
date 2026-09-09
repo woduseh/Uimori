@@ -1,7 +1,7 @@
 import { SelectionCheckbox } from './BooleanControls.js';
 import { useEffect, useState } from 'react';
 import { useBufferedEditorState, useUnappliedEditorField } from './editor-workspace-context.js';
-import { Folder, Plus, Search } from 'lucide-react';
+import { AddIcon, FolderIcon, SearchIcon } from './ui-icons.js';
 import type { ContentPackage, PackageLore } from '../core/content-package.js';
 import { Dialog } from './Dialog.js';
 import './lore-editor.css';
@@ -125,7 +125,7 @@ export function LoreEditor({
         </div>
         <div className="lore-actions">
           <button type="button" className="secondary" onClick={() => setFolderEdit({ name: '' })}>
-            <Folder size={15} />
+            <FolderIcon size={15} />
             폴더 추가
           </button>
           <button
@@ -134,7 +134,7 @@ export function LoreEditor({
             onClick={add}
             disabled={value.lore.length >= 2000}
           >
-            <Plus size={15} />
+            <AddIcon size={15} />
             로어 추가
           </button>
         </div>
@@ -156,7 +156,7 @@ export function LoreEditor({
       )}
       <div className="lore-filters">
         <label className="lore-search">
-          <Search size={16} />
+          <SearchIcon size={16} />
           <input
             aria-label="로어 검색"
             placeholder="이름, 설명, 본문 검색"
@@ -199,7 +199,7 @@ export function LoreEditor({
       {activeFolder && (
         <div className="lore-folder-bar">
           <span>
-            <Folder size={14} />
+            <FolderIcon size={14} />
             {activeFolder.name}
           </span>
           <button

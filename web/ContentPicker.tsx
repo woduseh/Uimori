@@ -1,5 +1,5 @@
 import { useId, useRef, useState, type KeyboardEvent } from 'react';
-import { Check, ChevronDown, Search } from 'lucide-react';
+import { CheckIcon, DropdownIcon, SearchIcon } from './ui-icons.js';
 import type { PackageRole } from '../core/content-package.js';
 import { libraryCategory, libraryFolderOf } from '../core/library-organization.js';
 import type { Content, Library } from '../core/product.js';
@@ -83,7 +83,7 @@ export function ContentPicker({
   };
   function moveFocus(event: KeyboardEvent<HTMLElement>) {
     if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) return;
-    // Search text editing keeps its Home/End behavior; arrows enter the result list.
+    // SearchIcon text editing keeps its Home/End behavior; arrows enter the result list.
     if (event.target instanceof HTMLInputElement && ['Home', 'End'].includes(event.key)) return;
     const choices = [
       ...(list.current?.querySelectorAll<HTMLButtonElement>(
@@ -126,7 +126,7 @@ export function ContentPicker({
         </small>
       </span>
       {reference(content) === value ? (
-        <Check size={18} aria-hidden="true" />
+        <CheckIcon size={18} aria-hidden="true" />
       ) : (
         <span className="content-picker-action">{roleTitles[role]}로 사용</span>
       )}
@@ -157,7 +157,7 @@ export function ContentPicker({
           {current?.title ??
             (value ? '선택한 자료 확인 필요' : allowNone ? noneLabel : '자료 선택')}
         </span>
-        <ChevronDown size={16} />
+        <DropdownIcon size={16} />
       </button>
       <Dialog
         open={open}
@@ -193,7 +193,7 @@ export function ContentPicker({
             </div>
           )}
           <label className="content-picker-search">
-            <Search size={17} aria-hidden="true" />
+            <SearchIcon size={17} aria-hidden="true" />
             <input
               type="search"
               aria-label={`${label} 검색`}
@@ -246,7 +246,7 @@ export function ContentPicker({
               onClick={() => choose('')}
             >
               <span className="content-picker-copy">{noneLabel}</span>
-              {!value && <Check size={18} aria-hidden="true" />}
+              {!value && <CheckIcon size={18} aria-hidden="true" />}
             </button>
           )}
           {currentOutside && renderChoice(current, true)}

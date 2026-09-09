@@ -1,5 +1,5 @@
 import { ProviderRejectionNotice } from './provider-rejection.js';
-import { Upload } from 'lucide-react';
+import { UploadIcon } from './ui-icons.js';
 import { DeleteButton } from './DeleteButton.js';
 import { useEffect, useRef, useState } from 'react';
 import type { Connection, ModelRef, ModelPreset } from '../core/product.js';
@@ -442,7 +442,7 @@ function StoryPanelEditor({
                 </div>
                 <div className="form-actions">
                   <label className="story-file secondary">
-                    <Upload size={18} aria-hidden="true" />
+                    <UploadIcon size={18} aria-hidden="true" />
                     <span>JSON 불러오기</span>
                     <input
                       type="file"

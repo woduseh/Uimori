@@ -8,7 +8,6 @@ import {
   useServerEditDraft,
 } from './editor-workspace-context.js';
 import type { ContentDraftModel } from '../core/edit-drafts.js';
-import { SlidersHorizontal } from 'lucide-react';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import type { Content, ContentKind, Library } from '../core/product.js';
 import type { LibraryItemKey, LibraryOrganization } from '../core/library-organization.js';
@@ -23,6 +22,7 @@ import { ContentAvatar } from './ContentAvatar.js';
 import { PackagePortraitEditor } from './PackagePortraitEditor.js';
 import {
   AddIcon,
+  BackIcon,
   BotIcon,
   CardsIcon,
   CopyIcon,
@@ -31,6 +31,7 @@ import {
   ModuleIcon,
   MoveIcon,
   NewChatIcon,
+  OptionsIcon,
   PersonaIcon,
   SearchIcon,
   SelectIcon,
@@ -423,7 +424,7 @@ export function LibraryPanel({
         <h1>서재</h1>
         {!editing && !detail && (!library || filtered.length > 0 || !!query) && (
           <button type="button" className="library-create" onClick={openNew} disabled={!library}>
-            <AddIcon size={20} aria-hidden="true" />
+            <AddIcon size={18} aria-hidden="true" />
             <span>새로 만들기</span>
           </button>
         )}
@@ -484,7 +485,8 @@ export function LibraryPanel({
         <section className="library-detail library-preview" aria-label="자료 상세">
           <div className="library-detail-heading">
             <button type="button" className="secondary" onClick={() => navigate(tab, true)}>
-              ← 서재 목록
+              <BackIcon size={18} aria-hidden="true" />
+              서재 목록
             </button>
             <div className="library-detail-title">
               <h2>{detail.title}</h2>
@@ -694,7 +696,7 @@ export function LibraryPanel({
                         <LibraryItemMenu
                           title="목록 관리"
                           className="library-list-options"
-                          icon={SlidersHorizontal}
+                          icon={OptionsIcon}
                         >
                           <div className="library-list-options-body">
                             <label>
@@ -1043,7 +1045,8 @@ function ContentEditor({
             disabled={editorUnavailable}
             onClick={onClose}
           >
-            ← 서재 목록
+            <BackIcon size={18} aria-hidden="true" />
+            서재 목록
           </button>
           <h2>{selected ? selected.title : `새 ${contentLabels[kind]}`}</h2>
           <div className="library-detail-actions">

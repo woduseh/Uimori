@@ -1,4 +1,4 @@
-import { ChevronRight, ExternalLink, RotateCcw } from 'lucide-react';
+import { ExpandIcon, ExternalLinkIcon, ResetIcon } from './ui-icons.js';
 import { useEffect, useRef, useState } from 'react';
 import type { Library, PromptRole, PromptWorkspace } from '../core/product.js';
 import type { WorkspaceDraftModel } from '../core/edit-drafts.js';
@@ -190,7 +190,7 @@ export function PromptWorkspaceEditor({
     return (
       <p role="status">
         {error || '현재 프롬프트를 불러오는 중이에요…'}{' '}
-        <IconButton icon={RotateCcw} label="다시 불러오기" onClick={() => void refresh()} />
+        <IconButton icon={ResetIcon} label="다시 불러오기" onClick={() => void refresh()} />
       </p>
     );
   const current = draft[role];
@@ -274,13 +274,13 @@ export function PromptWorkspaceEditor({
                 disabled={busy || dirty || navigationDisabled}
                 onClick={() => onEditPrompt(preset?.id)}
               >
-                <ExternalLink size={16} aria-hidden="true" /> 프롬프트 편집
+                <ExternalLinkIcon size={16} aria-hidden="true" /> 프롬프트 편집
               </button>
             )}
           </div>
           <details className="pc-composer-fold">
             <summary>
-              <ChevronRight className="pc-disclosure-icon" size={16} aria-hidden="true" />
+              <ExpandIcon className="pc-disclosure-icon" size={16} aria-hidden="true" />
               <strong>창작 옵션</strong>
               <small>
                 {comboValue === 'default'

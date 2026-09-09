@@ -1,4 +1,4 @@
-# 모델 생성 설정과 연결 테스트
+# 모델 생성 설정과 응답 테스트
 
 고급 탭의 공식/직접 입력 단가와 호출 후 추정 비용은 [모델 요금](MODEL-PRICING.md)을 봐요. 가격은 모델 실행 지원 여부를 결정하지 않아요.
 
@@ -6,13 +6,13 @@
 
 모델 ID는 실행 조건이 아니에요. 이렇게 정한 근거는 [모델 등록 결정](MODEL-REGISTRATION.md)에 있어요. 앱의 힌트 표는 검토한 모델의 옵션 목록과 한도를 먼저 보여주는 용도이며, 표에 없는 ID나 값도 그대로 공급자에 보내요. 저장 검증은 프로토콜의 encoder가 보낼 수 있는 옵션과 값 어휘만 확인해요. 모델별 지원 여부는 공급자의 응답이 판정하고, 4xx 거절이 가리킨 옵션은 실패 턴 카드·보조 작업 카드·응답 테스트 결과에 이름으로 표시해요. 공급자 메시지 원문은 저장하거나 보여주지 않아요.
 
-모델·연결 편집은 최신 설정 한 벌을 갱신해요. 사용자가 고르는 버전이나 과거 설정 목록은 없어요. 내부 revision은 동시 편집 충돌을 막는 CAS 토큰이며, 새 생성·번역 예약·상태 재구축·문맥 정리은 모델 ID로 최신 설정을 읽어요. 진행 중인 작업과 과거 Run은 자기 모델·연결 snapshot을 유지해요. 연결의 프로토콜을 바꾸면 모델 설정을 다시 검토·저장하기 전까지 새 실행을 차단해요.
+모델·프로바이더 편집은 최신 설정 한 벌을 갱신해요. 사용자가 고르는 버전이나 과거 설정 목록은 없어요. 내부 revision은 동시 편집 충돌을 막는 CAS 토큰이며, 새 생성·번역 예약·상태 재구축·문맥 정리은 모델 ID로 최신 설정을 읽어요. 진행 중인 작업과 과거 Run은 자기 모델·프로바이더 snapshot을 유지해요. 프로바이더의 프로토콜을 바꾸면 모델 설정을 다시 검토·저장하기 전까지 새 실행을 차단해요.
 
 입력 컨텍스트 한도와 자동 요약은 [컨텍스트 문서](CONTEXT-LIMITS.md)를 확인해요. 기본 입력 한도 272,000은 로컬 추정 기준이며, 출력 토큰 한도와 별개예요.
 
-## 연결과 지원 모델
+## 프로바이더와 지원 모델
 
-연결에는 접속 주소와 서버 인증 참조를 저장하고, 생성 설정은 모델 프리셋에 저장해요. Google 카드 이름은 **Google Agent Platform**, API 프로토콜은 `vertex-gemini-v1`이며 location은 **global 고정**이에요.
+프로바이더에는 접속 주소와 서버 인증 참조를 저장하고, 생성 설정은 모델 프리셋에 저장해요. Google 카드 이름은 **Google Agent Platform**, API 프로토콜은 `vertex-gemini-v1`이며 location은 **global 고정**이에요.
 
 | 경로 | 검토한 모델 ID | 주요 옵션 |
 | --- | --- | --- |
@@ -52,7 +52,7 @@ Fable 5.1은 Adaptive Thinking이 항상 켜져 있어요. 강제 도구 호출�
 - **Claude**: 5분(`5m`) 또는 60분(`1h`). 유지 시간을 생략하면 공급자 기본 5분이에요. 60분은 캐시 쓰기 비용이 더 높아요. 모든 기준점과 자동 캐시에는 같은 시간을 적용해요.
 - **GPT-5.6 이후 Responses**: 현재 확인한 TTL은 30분(`30m`)뿐이에요. 선택한 mode는 `prompt_cache_options.mode`, 기준점은 `prompt_cache_breakpoint`로 전달해요.
 - TTL을 명시하려면 명시/자동 모드를 선택해요. 캐시 OFF 또는 모드 미지정에 TTL만 남은 조합은 수정 전 저장하지 않아요.
-- **Gemini**: 기존 암묵적 캐시는 공급자가 처리해요. 이번 앱에는 `cachedContents` 생성·갱신·삭제 기능이나 프로젝트 전체 암묵적 캐시 제어가 없으므로 OFF·TTL 선택을 제공하지 않아요. Chat/Vercel/호환 연결에도 지원을 추정하지 않아요.
+- **Gemini**: 기존 암묵적 캐시는 공급자가 처리해요. 이번 앱에는 `cachedContents` 생성·갱신·삭제 기능이나 프로젝트 전체 암묵적 캐시 제어가 없으므로 OFF·TTL 선택을 제공하지 않아요. Chat/Vercel/호환 프로바이더에도 지원을 추정하지 않아요.
 
 캐시 포인트는 API 요청상의 경계예요. 최소 길이, 같은 prefix, 공급자 가용성 등의 조건에 따라 실제 재사용 여부가 달라져요. Inspector는 공급자가 보고한 읽기/쓰기 토큰과 Claude의 5분/60분 쓰기 항목을 표시해요. 누락된 usage는 `미확인`이고 설정값에서 hit·절감액을 계산하지 않아요.
 
@@ -70,9 +70,9 @@ Fable 5.1은 Adaptive Thinking이 항상 켜져 있어요. 강제 도구 호출�
 
 ## 저장·실행 경계
 
-현재 schema/archive는 v15이며 연결의 구형 requestTier, Claude 공통 reasoningEffort, 모델의 capabilityRevision 저장 형식을 받지 않아요. 구버전 자동 이관·호환 UI·자동 백업은 없고 사용자 DB를 자동 초기화하지 않아요.
+현재 schema/archive는 v15이며 프로바이더의 구형 requestTier, Claude 공통 reasoningEffort, 모델의 capabilityRevision 저장 형식을 받지 않아요. 구버전 자동 이관·호환 UI·자동 백업은 없고 사용자 DB를 자동 초기화하지 않아요.
 
-모델 revision은 생성 옵션을 보관해요. Run/job snapshot은 이를 고정하며, main/translation/status/image/state/context/helper는 공통 추출기로 같은 필드를 전달해요. 최신 연결 enabled·endpoint·인증·origin 권한은 호출마다 다시 확인해요. 평가 절약 모드는 명시 opt-in일 때만 출력 한도·effort를 줄이고 나머지 binding을 바꾸지 않아요.
+모델 revision은 생성 옵션을 보관해요. Run/job snapshot은 이를 고정하며, main/translation/status/image/state/context/helper는 공통 추출기로 같은 필드를 전달해요. 최신 프로바이더 enabled·endpoint·인증·origin 권한은 호출마다 다시 확인해요. 평가 절약 모드는 명시 opt-in일 때만 출력 한도·effort를 줄이고 나머지 binding을 바꾸지 않아요.
 
 누적 호출 횟수와 추정 금액으로 차단하던 ProviderBudget은 제거됐어요. 요청별 출력·시간·도구 반복 한도, 전송 전 기록, 취소·중복 방지, 원문/hash 귀속, 실제 usage와 `costUsd=null`은 유지해요.
 

@@ -5,8 +5,17 @@ import { DismissibleError } from './DismissibleError.js';
 import { PromptControlFields } from './PromptControlFields.js';
 import { ActionMenu } from './ActionMenu.js';
 import { IconButton } from './IconButton.js';
-import { DownloadIcon, UploadIcon } from './ui-icons.js';
-import { ArrowUp, ArrowDown, Undo2, Trash2, GripVertical, ChevronRight, Plus } from 'lucide-react';
+import {
+  AddIcon,
+  DeleteIcon,
+  DownIcon,
+  DownloadIcon,
+  DragHandleIcon,
+  ExpandIcon,
+  UndoIcon,
+  UpIcon,
+  UploadIcon,
+} from './ui-icons.js';
 import { useEffect, useRef, useState } from 'react';
 import {
   EditorDraftFieldScope,
@@ -446,7 +455,7 @@ function TemplateEditor({
         )}
         <details open={!plain}>
           <summary>
-            <ChevronRight className="pc-disclosure-icon" size={16} aria-hidden="true" />
+            <ExpandIcon className="pc-disclosure-icon" size={16} aria-hidden="true" />
             템플릿 JSON · 고급 편집
           </summary>
           <JsonDraft
@@ -702,7 +711,7 @@ function BlockEditor({
       )}
       <details>
         <summary>
-          <ChevronRight className="pc-disclosure-icon" size={16} aria-hidden="true" />
+          <ExpandIcon className="pc-disclosure-icon" size={16} aria-hidden="true" />
           블록 적용 조건
         </summary>
         <p className="muted">비워두면 항상 적용해요. 예: {'{"control":"control-id"}'}</p>
@@ -812,7 +821,7 @@ function ControlEditor({
       </label>
       <details>
         <summary>
-          <ChevronRight className="pc-disclosure-icon" size={16} aria-hidden="true" />
+          <ExpandIcon className="pc-disclosure-icon" size={16} aria-hidden="true" />
           제어 정의 JSON
         </summary>
         <JsonDraft
@@ -1148,7 +1157,7 @@ export function PromptComposer({
       >
         <details className="pc-composer-fold" open>
           <summary aria-label="프롬프트 구성 접기/펼치기">
-            <ChevronRight className="pc-disclosure-icon" size={16} aria-hidden="true" />
+            <ExpandIcon className="pc-disclosure-icon" size={16} aria-hidden="true" />
             <strong>프롬프트 구성</strong>
             <span className="pc-badge">
               {program.blocks.length}개 블록 · {program.controls.length}개 제어
@@ -1160,7 +1169,7 @@ export function PromptComposer({
             <div className="pc-composer-tools">
               <IconButton
                 label="이전 편집으로"
-                icon={Undo2}
+                icon={UndoIcon}
                 disabled={pendingTemplate || !undo.length}
                 onClick={undoEdit}
               />
@@ -1219,10 +1228,10 @@ export function PromptComposer({
               </datalist>
               <details className="pc-section pc-blocks-section">
                 <summary aria-label="프롬프트 블록 접기/펼치기">
-                  <ChevronRight className="pc-disclosure-icon" size={16} aria-hidden="true" />
+                  <ExpandIcon className="pc-disclosure-icon" size={16} aria-hidden="true" />
                   블록 · {program.blocks.length}개
                   <IconButton
-                    icon={Plus}
+                    icon={AddIcon}
                     label="블록 추가"
                     className="pc-add-block"
                     data-add-block
@@ -1299,7 +1308,7 @@ export function PromptComposer({
                       id={`prompt-block-${block.id}`}
                     >
                       <summary>
-                        <ChevronRight className="pc-disclosure-icon" size={16} aria-hidden="true" />
+                        <ExpandIcon className="pc-disclosure-icon" size={16} aria-hidden="true" />
                         <button
                           type="button"
                           className="pc-drag-handle"
@@ -1314,7 +1323,7 @@ export function PromptComposer({
                           }}
                           onDragEnd={clearDrag}
                         >
-                          <GripVertical size={18} aria-hidden="true" />
+                          <DragHandleIcon size={18} aria-hidden="true" />
                         </button>
                         <span className="pc-order">{index + 1}</span>
                         <span className="pc-block-title">
@@ -1331,14 +1340,14 @@ export function PromptComposer({
                         <div className="pc-block-tools">
                           <IconButton
                             label={`${block.title} 위로`}
-                            icon={ArrowUp}
+                            icon={UpIcon}
                             data-block-move={-1}
                             disabled={index === 0}
                             onClick={() => move(index, -1)}
                           />
                           <IconButton
                             label={`${block.title} 아래로`}
-                            icon={ArrowDown}
+                            icon={DownIcon}
                             data-block-move={1}
                             disabled={index === program.blocks.length - 1}
                             onClick={() => move(index, 1)}
@@ -1350,7 +1359,7 @@ export function PromptComposer({
                               disabled={pendingTemplate}
                               onClick={() => removeBlock(index)}
                             >
-                              <Trash2 size={18} aria-hidden="true" /> 블록 삭제
+                              <DeleteIcon size={18} aria-hidden="true" /> 블록 삭제
                             </button>
                           </ActionMenu>
                         </div>
@@ -1375,14 +1384,14 @@ export function PromptComposer({
               </details>
               <details className="pc-section">
                 <summary>
-                  <ChevronRight className="pc-disclosure-icon" size={16} aria-hidden="true" />
+                  <ExpandIcon className="pc-disclosure-icon" size={16} aria-hidden="true" />
                   제어 정의 · {program.controls.length}개
                 </summary>
                 <div className="pc-stack">
                   {program.controls.map((control, index) => (
                     <details className="pc-control" key={control.id}>
                       <summary>
-                        <ChevronRight className="pc-disclosure-icon" size={16} aria-hidden="true" />
+                        <ExpandIcon className="pc-disclosure-icon" size={16} aria-hidden="true" />
                         {control.label}
                         <small> · {control.type}</small>
                       </summary>
@@ -1438,7 +1447,7 @@ export function PromptComposer({
             </div>
             <details className="pc-section" open={program.controls.length > 0}>
               <summary>
-                <ChevronRight className="pc-disclosure-icon" size={16} aria-hidden="true" />
+                <ExpandIcon className="pc-disclosure-icon" size={16} aria-hidden="true" />
                 기본 창작 옵션
               </summary>
               <div className="pc-stack">
@@ -1486,7 +1495,7 @@ export function PromptComposer({
             </details>
             <details className="pc-section">
               <summary>
-                <ChevronRight className="pc-disclosure-icon" size={16} aria-hidden="true" />
+                <ExpandIcon className="pc-disclosure-icon" size={16} aria-hidden="true" />
                 전체 구성 JSON · 고급 편집
               </summary>
               <JsonDraft
@@ -1503,7 +1512,7 @@ export function PromptComposer({
             </details>
             <details className="pc-section pc-preview" aria-label="프롬프트 미리보기">
               <summary aria-label="전송 미리보기 접기/펼치기">
-                <ChevronRight className="pc-disclosure-icon" size={16} aria-hidden="true" />
+                <ExpandIcon className="pc-disclosure-icon" size={16} aria-hidden="true" />
                 전송 미리보기
               </summary>
               <label>
@@ -1548,7 +1557,7 @@ export function PromptComposer({
                       <li key={message.id}>
                         <details>
                           <summary>
-                            <ChevronRight
+                            <ExpandIcon
                               className="pc-disclosure-icon"
                               size={16}
                               aria-hidden="true"
@@ -1569,7 +1578,7 @@ export function PromptComposer({
                   </ol>
                   <details>
                     <summary>
-                      <ChevronRight className="pc-disclosure-icon" size={16} aria-hidden="true" />
+                      <ExpandIcon className="pc-disclosure-icon" size={16} aria-hidden="true" />
                       블록별 조건과 포함 결과
                     </summary>
                     <div className="pc-table-wrap">
@@ -1601,7 +1610,7 @@ export function PromptComposer({
                   </details>
                   <details>
                     <summary>
-                      <ChevronRight className="pc-disclosure-icon" size={16} aria-hidden="true" />
+                      <ExpandIcon className="pc-disclosure-icon" size={16} aria-hidden="true" />
                       캐시 기준과 지원 제한
                     </summary>
                     <pre>
@@ -1620,7 +1629,7 @@ export function PromptComposer({
                   {preview.value.provider ? (
                     <details>
                       <summary>
-                        <ChevronRight className="pc-disclosure-icon" size={16} aria-hidden="true" />
+                        <ExpandIcon className="pc-disclosure-icon" size={16} aria-hidden="true" />
                         공급자 전송 구성 · {preview.value.provider.protocol} ·{' '}
                         {preview.value.provider.modelId}
                       </summary>

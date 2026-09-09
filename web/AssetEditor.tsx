@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
-import { ImagePlus } from 'lucide-react';
-import { IconButton } from './IconButton.js';
+import { ImageAddIcon } from './ui-icons.js';
+import { SaveButton } from './SaveButton.js';
 import './settings-actions.css';
 import type { Asset } from '../core/product.js';
 import { api } from './api.js';
@@ -218,11 +218,10 @@ export function AssetEditor({
           </label>
           <div className="form-actions full settings-save-actions">
             <span role="status">{message}</span>
-            <IconButton
-              type="submit"
-              icon={ImagePlus}
+            <SaveButton
+              icon={ImageAddIcon}
               label="이미지 등록"
-              className="settings-save-button"
+              text="등록"
               disabled={busy || !file}
               aria-busy={busy}
             />

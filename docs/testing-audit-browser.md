@@ -94,7 +94,7 @@ CURRENTUI01 현재 prompt control 변경 시 조합의 유효값/기본값 보�
 
 ### `tests/deletion-browser.spec.ts`
 
-DEL01 자료 취소/CAS/참조 방어, DEL02 prompt/조합, DEL03 선택 채팅 URL/reader 정리, DEL04 persona/module UI 삭제, DEL05 모델 후 연결, DEL06 현재 branch 삭제를 유지해요. DEL04의 구형 kind API 반복만 기존 library-organization 단위/통합 검사로 통합했어요.
+DEL01 자료 취소/CAS/참조 방어, DEL02 prompt/조합, DEL03 선택 채팅 URL/reader 정리, DEL04 persona/module UI 삭제, DEL05 모델 후 프로바이더, DEL06 현재 branch 삭제를 유지해요. DEL04의 구형 kind API 반복만 기존 library-organization 단위/통합 검사로 통합했어요.
 
 - 유지: `DEL01 library cancel, stale revision, dependent bot and actual deletion at mobile width`
 - 유지: `DEL02 prompt combinations and presets have deletion and removed prompt does not reappear`
@@ -233,7 +233,7 @@ PREQUESTUI01 제안 저장/재조회/1회 소비/취소, PREQUESTUI02 전달 뒤
 
 ### `tests/product-browser.spec.ts`
 
-P01 최신 package/조합의 Run snapshot, P04 수동 모델/연결 권한/역할 라우팅/native provider 옵션, P09/P10/P13 fork 본문/anchor/번역/이미지/draft/후손, P06/P11 품질 메모/실제 다운로드/점유 restore를 유지해요. PMUI 설정 화면과 다른 실행 snapshot/bytes 증거예요.
+P01 최신 package/조합의 Run snapshot, P04 수동 모델/프로바이더 권한/역할 라우팅/native provider 옵션, P09/P10/P13 fork 본문/anchor/번역/이미지/draft/후손, P06/P11 품질 메모/실제 다운로드/점유 restore를 유지해요. PMUI 설정 화면과 다른 실행 snapshot/bytes 증거예요.
 
 - 유지: `P01 packages use latest settings and prompt-owned creative choices replace prior values`
 - 유지: `P04 manual model IDs and distinct main/translation routing preserve connection authority after catalog failure`
@@ -287,14 +287,14 @@ PWS01 새 채팅에도 적용되는 현재 옵션/profile 무변경, PWS02 번�
 
 ### `tests/provider-compact-browser.spec.ts`
 
-PCUI01 빈 연결/모델 진입, PCUI02 목록/menu/search 복구를 유지해요. PCUI03 등록 요청 초안 폐기는 등록 보조 기능 제거(2026-09-09)와 함께 삭제했어요. 6폭을 기본 2폭으로 줄이고 icon/tab 정밀 정렬은 시각 검토로 옮겼어요.
+PCUI01 빈 프로바이더/모델 진입, PCUI02 목록/menu/search 복구를 유지해요. PCUI03 등록 요청 초안 폐기는 등록 보조 기능 제거(2026-09-09)와 함께 삭제했어요. 6폭을 기본 2폭으로 줄이고 icon/tab 정밀 정렬은 시각 검토로 옮겼어요.
 
 - 유지: `PCUI01 empty connections and empty models each expose one relevant starting action`
 - 유지: `PCUI02 compact provider lists align at six widths and retain accessible menus and search recovery`
 
 ### `tests/provider-management-browser.spec.ts`
 
-PMUI01 template/manual/catalog 오류, 02 clone/CAS, 03 최신 연결/비활성, 04 늦은 readiness, 07 cached catalog/draft, 08 Vertex JSON/credential ref, 09 invalid focus/오래된 확인, 11 provider별 파라미터, 12 미지원 선택 교정, 13 늦은 test token, 14 불확실 key, 15 강제 Google tier, 10 합성 Codex login, 16 endpoint 정책/stale 응답을 유지해요. 검토일 고정 문자열만 날짜 형식으로 바꿨어요.
+PMUI01 template/manual/catalog 오류, 02 clone/CAS, 03 최신 프로바이더/비활성, 04 늦은 readiness, 07 cached catalog/draft, 08 Vertex JSON/credential ref, 09 invalid focus/오래된 확인, 11 provider별 파라미터, 12 미지원 선택 교정, 13 늦은 test token, 14 불확실 key, 15 강제 Google tier, 10 합성 Codex login, 16 endpoint 정책/stale 응답을 유지해요. 검토일 고정 문자열만 날짜 형식으로 바꿨어요.
 
 - 유지: `PMUI01 mobile template registration selects the connection, reports catalog failure honestly and saves manual options`
 - 유지: `PMUI02 connection clone requires review and stale edits retain their draft and CAS revision until explicit reload`

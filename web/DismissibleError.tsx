@@ -1,4 +1,4 @@
-import { X } from 'lucide-react';
+import { CloseIcon } from './ui-icons.js';
 import { IconButton } from './IconButton.js';
 import './dismissible-error.css';
 
@@ -26,7 +26,7 @@ export function DismissibleError({
           <p>{message}</p>
         )}
       </div>
-      <IconButton label="오류 메시지 닫기" icon={X} onClick={onDismiss} />
+      <IconButton label="오류 메시지 닫기" icon={CloseIcon} onClick={onDismiss} />
     </div>
   );
 }
