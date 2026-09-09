@@ -14,7 +14,7 @@ import { EditDraftService, editDraftRoutes } from './edit-drafts.js';
 import { ChatOverridesStore, chatOverrideRoutes } from './chat-overrides.js';
 import { chatOptionRoutes } from './chat-options.js';
 import { ResponseStreamStore, responseStreamRoutes } from './response-stream.js';
-import { readerActivities, readerDetail } from './reader.js';
+import { readerActivities, readerDetail, readerRuns } from './reader.js';
 import { chatActivities } from './chat-activity.js';
 import { readerRoutes } from './reader-routes.js';
 import { Controls, type Barrier, type FailurePoint } from './controls.js';
@@ -1025,6 +1025,9 @@ export async function createApp(options: AppOptions): Promise<App> {
   app.get<{ Params: { id: string }; Querystring: Record<string, string | undefined> }>(
     '/api/chats/:id/reader',
     async (request) => readerDetail(store, request.params.id, request.query)
+  );
+  app.get<{ Params: { id: string } }>('/api/chats/:id/reader-runs', async (request) =>
+    readerRuns(store, request.params.id)
   );
   app.get<{ Params: { id: string }; Querystring: Record<string, string | undefined> }>(
     '/api/chats/:id/activities',

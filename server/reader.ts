@@ -141,6 +141,61 @@ export function readerActivities(
   };
 }
 
+/** Display summaries for an explicit task panel, or the reader's selected Run IDs. */
+export function readerRuns(store: Store, id: string, scope?: string[]) {
+  store.chat(id);
+  // JSON projection happens in SQLite: do not parse quadratic history or diagnostic bodies.
+  const runCosts = new Map(
+    (
+      store.db
+        .prepare(`SELECT run_id AS runId,COUNT(*) AS attemptCount,
+    SUM(CASE WHEN json_extract(response,'$.estimatedCost.status')='estimated' AND json_type(response,'$.estimatedCost.usd') IN ('integer','real') THEN 0 ELSE 1 END) AS unknownCount,
+    SUM(COALESCE(json_extract(response,'$.estimatedCost.usd'),json_extract(response,'$.estimatedCost.subtotalUsd'),0)) AS subtotalUsd
+    FROM attempts WHERE chat_id=? AND run_id IS NOT NULL AND role!='title' ${scope ? 'AND run_id IN (SELECT value FROM json_each(?))' : ''} GROUP BY run_id`)
+        .all(id, ...(scope ? [JSON.stringify(scope)] : [])) as {
+        runId: string;
+        attemptCount: number;
+        unknownCount: number;
+        subtotalUsd: number;
+      }[]
+    ).map(({ runId, ...cost }) => [
+      runId,
+      { ...cost, usd: cost.unknownCount ? null : cost.subtotalUsd },
+    ])
+  );
+  const runs = (
+    store.db
+      .prepare(`SELECT id,chat_id AS chatId,parent_revision AS parentRevision,status,request,source_revision AS sourceRevision,error,usage,partial_text AS partialText,
+    json_extract(snapshot,'$.settingsRevision') AS settingsRevision,CASE WHEN json_extract(snapshot,'$.packageStart.mode')='authored' THEN NULL ELSE json_extract(snapshot,'$.profile.models.main.title') END AS modelTitle,json_extract(snapshot,'$.sourceSegments') AS sourceSegments,COALESCE(json_array_length(snapshot,'$.profile.packageAttachments'),0)>0 AS hasPackages,
+    CASE WHEN json_type(snapshot,'$.packageStart') IS NOT NULL THEN json_object('mode',json_extract(snapshot,'$.packageStart.mode'),'title',json_extract(snapshot,'$.packageStart.title')) END AS packageStart,
+    CASE WHEN json_type(snapshot,'$.contextPlan')='object' THEN json_object('status',json_extract(snapshot,'$.contextPlan.status'),'inputTokenLimit',json_extract(snapshot,'$.contextPlan.budget.inputTokenLimit'),'estimatedInputTokens',json_extract(snapshot,'$.contextPlan.estimatedInputTokens'),'compactedSources',json_array_length(snapshot,'$.contextPlan.compacted'),'summaryCalls',json_extract(snapshot,'$.contextPlan.summaryCalls'),'error',json_extract(snapshot,'$.contextPlan.error')) END AS contextSummary,
+    json_object('loreContextReset',json_extract(snapshot,'$.loreContextReset'),'branchId',branch_id,'candidateOf',json_extract(snapshot,'$.candidateOf'),'forkedFrom',json_extract(snapshot,'$.forkedFrom')) AS snapshot
+    FROM runs WHERE chat_id=? ${scope ? 'AND id IN (SELECT value FROM json_each(?))' : ''} ORDER BY created_at,id`)
+      .all(id, ...(scope ? [JSON.stringify(scope)] : [])) as (Record<string, any> & {
+      id: string;
+      request: string;
+      sourceRevision: string | null;
+    })[]
+  ).map((row) => ({
+    ...row,
+    estimatedCost: runCosts.get(row.id),
+    snapshot: {
+      ...JSON.parse(row.snapshot),
+      loreContextReset: !!JSON.parse(row.snapshot).loreContextReset,
+    },
+    contextSummary: row.contextSummary ? JSON.parse(row.contextSummary) : undefined,
+    packageStart: row.packageStart ? JSON.parse(row.packageStart) : undefined,
+    sourceSegments: row.sourceSegments ? JSON.parse(row.sourceSegments) : undefined,
+    usage: row.usage
+      ? JSON.parse(row.usage)
+      : { modelCalls: 0, inputTokens: null, outputTokens: null, costUsd: null },
+    ...(/^HTTP_4\d\d$/u.test(String(row.error ?? ''))
+      ? { rejection: attemptRejection(store, 'run_id', row.id) }
+      : {}),
+  }));
+  return runs;
+}
+
 /** Read projection only. Frozen execution records remain available through detail/run APIs. */
 export function readerDetail(store: Store, id: string, query: Record<string, string | undefined>) {
   const chat = store.chat(id);
@@ -158,9 +213,10 @@ export function readerDetail(store: Store, id: string, query: Record<string, str
     seen.add(head);
     const row = byId.get(head);
     if (!row) break;
-    chain.unshift(head);
+    chain.push(head);
     head = row.parentRevision;
   }
+  chain.reverse();
   const limit = 5;
   let start = query.source ? chain.indexOf(query.source) : 0;
   if (start < 0) throw new HttpError(404, 'Source is not in this branch');
@@ -225,52 +281,38 @@ export function readerDetail(store: Store, id: string, query: Record<string, str
         return rejection ? { ...job, rejection } : job;
       });
   });
-  // JSON projection happens in SQLite: do not parse quadratic history or diagnostic bodies.
-  const runCosts = new Map(
-    (
-      store.db
-        .prepare(`SELECT run_id AS runId,COUNT(*) AS attemptCount,
-    SUM(CASE WHEN json_extract(response,'$.estimatedCost.status')='estimated' AND json_type(response,'$.estimatedCost.usd') IN ('integer','real') THEN 0 ELSE 1 END) AS unknownCount,
-    SUM(COALESCE(json_extract(response,'$.estimatedCost.usd'),json_extract(response,'$.estimatedCost.subtotalUsd'),0)) AS subtotalUsd
-    FROM attempts WHERE chat_id=? AND run_id IS NOT NULL AND role!='title' GROUP BY run_id`)
-        .all(id) as {
-        runId: string;
-        attemptCount: number;
-        unknownCount: number;
-        subtotalUsd: number;
-      }[]
-    ).map(({ runId, ...cost }) => [
-      runId,
-      { ...cost, usd: cost.unknownCount ? null : cost.subtotalUsd },
-    ])
-  );
-  const runs = (
-    store.db
-      .prepare(`SELECT id,chat_id AS chatId,parent_revision AS parentRevision,status,request,source_revision AS sourceRevision,error,usage,partial_text AS partialText,
-    json_extract(snapshot,'$.settingsRevision') AS settingsRevision,CASE WHEN json_extract(snapshot,'$.packageStart.mode')='authored' THEN NULL ELSE json_extract(snapshot,'$.profile.models.main.title') END AS modelTitle,json_extract(snapshot,'$.sourceSegments') AS sourceSegments,COALESCE(json_array_length(snapshot,'$.profile.packageAttachments'),0)>0 AS hasPackages,
-    CASE WHEN json_type(snapshot,'$.packageStart') IS NOT NULL THEN json_object('mode',json_extract(snapshot,'$.packageStart.mode'),'title',json_extract(snapshot,'$.packageStart.title')) END AS packageStart,
-    CASE WHEN json_type(snapshot,'$.contextPlan')='object' THEN json_object('status',json_extract(snapshot,'$.contextPlan.status'),'inputTokenLimit',json_extract(snapshot,'$.contextPlan.budget.inputTokenLimit'),'estimatedInputTokens',json_extract(snapshot,'$.contextPlan.estimatedInputTokens'),'compactedSources',json_array_length(snapshot,'$.contextPlan.compacted'),'summaryCalls',json_extract(snapshot,'$.contextPlan.summaryCalls'),'error',json_extract(snapshot,'$.contextPlan.error')) END AS contextSummary,
-    json_object('loreContextReset',json_extract(snapshot,'$.loreContextReset'),'branchId',branch_id,'candidateOf',json_extract(snapshot,'$.candidateOf'),'forkedFrom',json_extract(snapshot,'$.forkedFrom')) AS snapshot
+  // One metadata scan serves navigation, selection and branch labels. Off-branch requests
+  // and off-page execution diagnostics need not be materialized for the reader.
+  const indexRows = store.db
+    .prepare(`SELECT id,source_revision AS sourceRevision,status,branch_id AS branchId,
+    CASE WHEN id IN (SELECT value FROM json_each(?)) THEN request ELSE NULL END AS request,
+    json_extract(snapshot,'$.packageStart.mode') AS startMode,
+    json_extract(snapshot,'$.candidateOf') AS candidateOf
     FROM runs WHERE chat_id=? ORDER BY created_at,id`)
-      .all(id) as (Record<string, any> & { id: string; request: string })[]
-  ).map((row) => ({
-    ...row,
-    estimatedCost: runCosts.get(row.id),
-    snapshot: {
-      ...JSON.parse(row.snapshot),
-      loreContextReset: !!JSON.parse(row.snapshot).loreContextReset,
-    },
-    contextSummary: row.contextSummary ? JSON.parse(row.contextSummary) : undefined,
-    packageStart: row.packageStart ? JSON.parse(row.packageStart) : undefined,
-    sourceSegments: row.sourceSegments ? JSON.parse(row.sourceSegments) : undefined,
-    usage: row.usage
-      ? JSON.parse(row.usage)
-      : { modelCalls: 0, inputTokens: null, outputTokens: null, costUsd: null },
-    ...(/^HTTP_4\d\d$/u.test(String(row.error ?? ''))
-      ? { rejection: attemptRejection(store, 'run_id', row.id) }
-      : {}),
-  }));
-  const runsById = new Map(runs.map((run) => [run.id, run]));
+    .all(JSON.stringify(chain.map((sourceId) => byId.get(sourceId)!.runId)), id) as {
+    id: string;
+    sourceRevision: string | null;
+    status: string;
+    branchId: string | null;
+    candidateOf: string | null;
+    request: string | null;
+    startMode: string | null;
+  }[];
+  // The complete task panel loads readerRuns independently when opened.
+  const pageIds = new Set(order);
+  const runs = readerRuns(
+    store,
+    id,
+    indexRows
+      .filter(
+        (run) =>
+          run.sourceRevision === null ||
+          pageIds.has(run.sourceRevision) ||
+          ['queued', 'running', 'waiting_for_state'].includes(run.status)
+      )
+      .map((run) => run.id)
+  );
+  const runsById = new Map(indexRows.map((run) => [run.id, run]));
   // Requests label the branch's complete index without loading off-page source bodies.
   // Authored starts have no user request; never substitute generated or hidden content.
   const navigation = chain.map((sourceId, index) => {
@@ -278,9 +320,11 @@ export function readerDetail(store: Store, id: string, query: Record<string, str
     const request = String(run?.request ?? '')
       .replace(/\s+/gu, ' ')
       .trim();
-    const characters = Array.from(request);
+    // 202 UTF-16 units suffice to decide whether there are more than 100 codepoints.
+    // Avoid expanding a long request into an array only to discard all but its label.
+    const characters = Array.from(request.slice(0, 202));
     const label =
-      run?.packageStart?.mode === 'authored'
+      run?.startMode === 'authored'
         ? '시작 장면'
         : characters.length > 100
           ? `${characters.slice(0, 99).join('')}…`
@@ -318,6 +362,12 @@ export function readerDetail(store: Store, id: string, query: Record<string, str
     ...(assetsChanged ? { assets: mergedReaderAssets(store, id, order) } : {}),
     reader: {
       navigation,
+      latestBranchRuns: Object.fromEntries(
+        indexRows.filter((run) => run.branchId !== null).map((run) => [run.branchId!, run.id])
+      ),
+      candidateBranches: indexRows
+        .filter((run) => run.candidateOf !== null && run.branchId !== null)
+        .map((run) => run.branchId!),
       activity: readerActivity(store, id),
       responseActivity: readerActivity(store, id, order),
       headSourceHash: branch.headRevision

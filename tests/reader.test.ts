@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { basename, isAbsolute, join, relative, resolve } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { createApp, type App } from '../server/app.js';
-import { readerActivities, readerDetail } from '../server/reader.js';
+import { readerActivities, readerDetail, readerRuns } from '../server/reader.js';
 import type { Store } from '../server/store.js';
 import type { RunSnapshot } from '../core/types.js';
 
@@ -155,6 +155,9 @@ test('100-source HTTP reader pages retain order while execution snapshot and ful
     expect(response.statusCode, response.body).toBe(200);
     const page: ReturnType<typeof readerDetail> = response.json();
     expect(page.sources).toHaveLength(5);
+    expect(page.runs.map((run) => run.id).sort()).toEqual(
+      page.sources.map((source) => source.runId).sort()
+    );
     expect(page.reader.total).toBe(100);
     expect(page.reader.navigation).toEqual(
       sources.map((item, index) => ({
@@ -178,6 +181,13 @@ test('100-source HTTP reader pages retain order while execution snapshot and ful
   } while (next);
   expect(collected).toEqual(sources.map((s) => s.id));
   expect(store.detail(chat.id)).toEqual(full);
+  const taskResponse = await injectWithFixtureBot(app, {
+    method: 'GET',
+    url: `/api/chats/${chat.id}/reader-runs`,
+  });
+  expect(taskResponse.statusCode).toBe(200);
+  expect(taskResponse.json()).toHaveLength(100);
+  expect(taskResponse.json()).toEqual(JSON.parse(JSON.stringify(readerRuns(store, chat.id))));
   expect(store.run(sources[99].runId).snapshot).toEqual(frozen);
   expect(frozen.history).toHaveLength(99);
   expect(frozen.history).toEqual(
@@ -224,6 +234,72 @@ test('source cursors and supplied known IDs cannot cross branch or chat boundari
       known: other.id,
     }).sources.map((s) => s.id)
   ).toEqual([root.id, child.id]);
+});
+
+test('reader scopes long Run details while retaining unresolved work, candidate order and full task access', async () => {
+  const app = await setup(),
+    store = app.store;
+  const chat = createFixtureChat(store, 'Scoped run summaries');
+  const items = readerSourceBatch(
+    store,
+    chat.id,
+    Array.from({ length: 40 }, (_, i) => `Scene ${i}`)
+  );
+  const request = 'A long synthetic request. '.repeat(100);
+  store.db.prepare('UPDATE runs SET request=? WHERE chat_id=?').run(request, chat.id);
+  const attempt =
+    store.db.prepare(`INSERT INTO attempts(id,chat_id,run_id,role,connection_id,model_id,status,request,response)
+    VALUES(?,?,?,?,'synthetic','synthetic','completed','{}',?)`);
+  for (const [runId, role, cost] of [
+    [items[0].runId, 'main', { status: 'estimated', usd: 0.25 }],
+    [items[0].runId, 'main', { status: 'unavailable', usd: null, subtotalUsd: 0.1 }],
+    [items[0].runId, 'title', { status: 'estimated', usd: 99 }],
+    [items[39].runId, 'main', { status: 'estimated', usd: 7 }],
+  ] as const)
+    attempt.run(randomUUID(), chat.id, runId, role, JSON.stringify({ estimatedCost: cost }));
+  const branch = store.product.createBranch(chat.id, {
+    title: '후보 분기',
+    fromRevision: items[20].id,
+  });
+  const candidate = source(store, chat.id, 'Candidate scene', branch.id);
+  store.db
+    .prepare("UPDATE runs SET snapshot=json_set(snapshot,'$.candidateOf',?) WHERE id=?")
+    .run(items[20].runId, candidate.runId);
+  const pendingId = randomUUID();
+  store.db
+    .prepare(`INSERT INTO runs(id,chat_id,parent_revision,status,request,snapshot,request_key,command,created_at,updated_at,branch_id)
+    SELECT ?,chat_id,parent_revision,'failed','Unresolved request',snapshot,?,'{}','1970-01-01','1970-01-01',branch_id FROM runs WHERE id=?`)
+    .run(pendingId, randomUUID(), items[39].runId);
+  const page = readerDetail(store, chat.id, {});
+  expect(page.runs).toHaveLength(6);
+  expect(page.runs.find((run) => run.id === items[0].runId)?.estimatedCost).toEqual({
+    usd: null,
+    subtotalUsd: 0.35,
+    unknownCount: 1,
+    attemptCount: 2,
+  });
+  expect(page.runs.find((run) => run.id === pendingId)?.request).toBe('Unresolved request');
+  expect(page.runs.some((run) => run.id === items[39].runId)).toBe(false);
+  expect(
+    page.runs.filter((run) => run.sourceRevision).every((run) => run.request === request)
+  ).toBe(true);
+  expect(page.reader.latestBranchRuns[`main:${chat.id}`]).toBe(items[39].runId);
+  expect(page.reader.candidateBranches).toEqual([branch.id]);
+  expect(readerRuns(store, chat.id)).toHaveLength(42);
+  const delta = readerDetail(store, chat.id, {
+    since: String(page.reader.cursor),
+    known: page.reader.order.join(','),
+  });
+  expect(delta.runs).toEqual(page.runs);
+  expect(delta.sources).toEqual([]);
+  const last = readerDetail(store, chat.id, { source: items[39].id });
+  expect(last.runs.find((run) => run.id === items[39].runId)?.request).toBe(request);
+  expect(last.runs.find((run) => run.id === items[39].runId)?.estimatedCost?.usd).toBe(7);
+  expect(last.runs.some((run) => run.id === items[0].runId)).toBe(false);
+  expect(last.reader.candidateBranches).toEqual(page.reader.candidateBranches);
+  expect(Buffer.byteLength(JSON.stringify(page.runs))).toBeLessThan(
+    Buffer.byteLength(JSON.stringify(readerRuns(store, chat.id))) / 3
+  );
 });
 
 test('delta includes current edited source and matching latest translation only, with unchanged assets omitted', async () => {
@@ -276,6 +352,8 @@ test('navigation labels use bounded requests and never authored, generated, or e
   request.run('  Request\n\twith   whitespace  ', items[1].runId);
   request.run('🙂'.repeat(110), items[2].runId);
   request.run(' \n ', items[3].runId);
+  request.run('🙂'.repeat(100), items[4].runId);
+  request.run('a' + '🙂'.repeat(100), items[5].runId);
   store.db
     .prepare(
       "UPDATE runs SET snapshot=json_set(snapshot,'$.packageStart',json(?)),request=? WHERE id=?"
@@ -294,8 +372,8 @@ test('navigation labels use bounded requests and never authored, generated, or e
     'Request with whitespace',
     `${'🙂'.repeat(99)}…`,
     '장면 4',
-    'Synthetic request',
-    'Synthetic request',
+    '🙂'.repeat(100),
+    `a${'🙂'.repeat(98)}…`,
     'Synthetic request',
   ]);
   expect(

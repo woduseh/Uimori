@@ -49,6 +49,74 @@ async function seed(request: APIRequestContext, count: number) {
 const articles = (page: Page) => page.getByTestId('source');
 const article = (page: Page, id: string) =>
   page.locator(`[data-testid="source"][data-source-id="${id}"]`);
+
+test('LOADUI08 task history loads on demand and preserves off-page reading, inspection and forks', async ({
+  page,
+  request,
+}) => {
+  const seeded = await seed(request, 8);
+  const target = seeded.sources[7];
+  let historyRequests = 0;
+  let releaseHistory!: () => void;
+  const firstHistory = new Promise<void>((resolve) => {
+    releaseHistory = resolve;
+  });
+  await page.route(`**/api/chats/${seeded.chat.id}/reader-runs`, async (route) => {
+    historyRequests++;
+    if (historyRequests === 1) {
+      await firstHistory;
+      await route.fulfill({ status: 503, json: { error: 'Synthetic history read failed.' } });
+    } else await route.continue();
+  });
+  const initialResponse = page.waitForResponse(
+    (response) => response.url().includes(`/chats/${seeded.chat.id}/reader?`) && response.ok()
+  );
+  await page.goto(`/?chat=${seeded.chat.id}`);
+  const initial = (await (await initialResponse).json()) as ReaderDetail;
+  expect(initial.runs).toHaveLength(5);
+  expect(initial.runs.some((run) => run.id === target.runId)).toBe(false);
+  await expect(articles(page)).toHaveCount(5);
+  expect(historyRequests).toBe(0);
+  await navigationAction(page, '작업 현황');
+  const panel = page.getByRole('dialog', { name: '작업 현황', exact: true });
+  await expect(panel.getByText('작업 목록을 불러오는 중이에요…', { exact: true })).toBeVisible();
+  releaseHistory();
+  // The shared API client intentionally hides arbitrary server 5xx diagnostics.
+  await expect(panel.getByRole('alert')).toContainText('서버 작업을 완료하지 못했어요. (503)');
+  await panel.getByRole('button', { name: '작업 목록 다시 불러오기', exact: true }).click();
+  await expect(panel.getByTestId('run')).toHaveCount(8);
+  await panel.locator('summary').filter({ hasText: '전체 역할의 호출과 비용' }).click();
+  await expect(
+    panel.getByText('보관된 원문 Run 8개 · 완료 8개 · 거절 0개 · 부분 0개')
+  ).toBeVisible();
+  const task = panel.locator(`[data-testid="run"][data-run-id="${target.runId}"]`);
+  await task.getByRole('button', { name: '원고 읽기', exact: true }).click();
+  await expect(panel).toHaveCount(0);
+  await expect(page).toHaveURL(new RegExp(`source=${target.id}`));
+  await expect(article(page, target.id)).toBeVisible();
+
+  await page.goto(`/?chat=${seeded.chat.id}&source=${seeded.sources[0].id}`);
+  await expect(article(page, seeded.sources[0].id)).toBeVisible();
+  await expect(article(page, target.id)).toHaveCount(0);
+  await navigationAction(page, '작업 현황');
+  await expect(task).toBeAttached();
+  const forkResponse = page.waitForResponse(
+    (response) =>
+      response.url().endsWith(`/api/chats/${seeded.chat.id}/fork`) &&
+      response.request().method() === 'POST'
+  );
+  await task.getByRole('button', { name: '새 이야기로 이어가기', exact: true }).click();
+  const forkedResponse = await forkResponse;
+  expect(forkedResponse.ok()).toBeTruthy();
+  const forked = (await forkedResponse.json()) as Chat;
+  await expect(page).toHaveURL(new RegExp(`chat=${forked.id}`));
+  expect((await detail(request, forked.id)).sources).toHaveLength(8);
+  const after = await detail(request, seeded.chat.id);
+  expect(after.sources).toEqual(seeded.sources);
+  expect(after.runs).toEqual(seeded.runs);
+  expect(after.attempts).toEqual(seeded.attempts);
+});
+
 async function navLibrary(page: Page) {
   await navigationAction(page, '봇');
 }

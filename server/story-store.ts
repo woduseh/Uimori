@@ -777,6 +777,7 @@ export class StoryStore {
       command.branchId !== run.snapshot.branchId ||
       command.request !== run.request ||
       command.status === 'consumed' ||
+      (command.status === 'cancelled' && !command.runId) ||
       (command.runId &&
         ['queued', 'running', 'waiting_for_state'].includes(this.store.run(command.runId).status))
     )

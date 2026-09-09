@@ -14,6 +14,7 @@ await runBrowserVerification({
     'LOADUI05',
     'LOADUI06',
     'LOADUI07',
+    'LOADUI08',
   ],
   requiredScreenshots: [
     'loading-reader-page.png',

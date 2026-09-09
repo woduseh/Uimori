@@ -66,6 +66,7 @@ await runBrowserVerification({
     'BUI03',
     'BUI04',
     'ACTUI05',
+    'LOADUI08',
     'C04E',
     'NSUI01',
     'UXUI01',

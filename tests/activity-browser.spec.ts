@@ -68,6 +68,7 @@ async function harness(
 ) {
   let items = initial,
     cursor = 1000000;
+  let omittedRunIds: string[] = [];
   const writes: string[] = [];
   page.on('request', (request) => {
     if (request.url().includes('/api/') && !['GET', 'HEAD'].includes(request.method()))
@@ -107,6 +108,7 @@ async function harness(
     expect(response.ok()).toBeTruthy();
     const body = (await response.json()) as ReaderDetail;
     body.reader.activity = items;
+    body.runs = body.runs.filter((run) => !omittedRunIds.includes(run.id));
     body.reader.cursor = cursor;
     body.reader.activeJobs = items.filter((item) =>
       ['queued', 'running', 'waiting_for_state'].includes(item.status)
@@ -132,8 +134,9 @@ async function harness(
     project(next: ReaderActivity[]) {
       items = next;
     },
-    async set(next: ReaderActivity[]) {
+    async set(next: ReaderActivity[], omitRuns: string[] = []) {
       items = next;
+      omittedRunIds = omitRuns;
       cursor++;
       const response = page.waitForResponse(
         (response) => response.url().includes(`/chats/${chatId}/reader?`) && response.ok()
@@ -222,7 +225,7 @@ test('ACTUI04 sending timer starts before admission and continues after accepted
   await expect(status).toContainText('완료');
   await page.clock.fastForward(4500);
   await expect(status).toHaveCount(0);
-  await state.set([]);
+  await state.set([], [admittedId]);
   await expect(status).toHaveCount(0);
   expect(state.writes.filter((write) => write.includes('/runs'))).toHaveLength(1);
 });

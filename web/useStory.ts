@@ -540,14 +540,14 @@ export function useStory() {
     setDestination('story');
     restoredView.current = '';
   };
-  const chooseBranch = (id: string) => {
+  const chooseBranch = (id: string, source = '') => {
     navigationEpoch.current++;
     savePosition();
     rememberCursor();
-    setViewUrl(selected, id);
+    setViewUrl(selected, id, source);
     sessionStorage.setItem(`branch:${selected}`, id);
     setViewedBranch(id);
-    setReadSource('');
+    setReadSource(source);
     restoredView.current = '';
   };
   const chooseSource = (id: string) => {
@@ -744,8 +744,8 @@ export function useStory() {
     const epoch = navigationEpoch.current;
     const lock = `${chatId}:${sourceId}`;
     const key = `fork-command:${lock}`;
-    if (!detail?.runs.some((run) => run.sourceRevision === sourceId) || forkLocks.current.has(lock))
-      return;
+    // The reader contains only the current page; the server verifies source ownership and ancestry.
+    if (!detail || detail.chat.id !== chatId || !sourceId || forkLocks.current.has(lock)) return;
     forkLocks.current.add(lock);
     setForking([...forkLocks.current]);
     const idempotencyKey = sessionStorage.getItem(key) || crypto.randomUUID();
@@ -966,10 +966,10 @@ export function useStory() {
   const settledOutsideActivity =
     trackedRequest?.status === 'accepted' &&
     (!detail ||
-      (detail.runs.some(
+      (!detail.runs.some(
         (run) =>
           run.id === trackedRequest.runId &&
-          !['queued', 'running', 'waiting_for_state'].includes(run.status)
+          ['queued', 'running', 'waiting_for_state'].includes(run.status)
       ) &&
         !detail.reader.activity?.some((item) => item.id === trackedRequest.runId)));
   const requestActivity =
