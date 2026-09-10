@@ -1,4 +1,5 @@
 import { navigationAction } from './ui-navigation.js';
+import { openChatSettings } from './ui-navigation.js';
 import { waitForContentDraftSave } from './fixtures/edit-draft-save.js';
 import { visualReview } from './fixtures/visual-review.js';
 import {
@@ -171,7 +172,7 @@ test('LCUI02 policy drafts survive tabs and preview reflects the unsaved policy 
   await page.getByLabel('다음 장면 요청', { exact: true }).fill('합성 다음 장면');
   await page.getByRole('button', { name: '입력창 더보기' }).click();
   await page.getByRole('switch', { name: '다음 생성에서 조회 로어 제외' }).click();
-  await page.getByRole('button', { name: '채팅 설정', exact: true }).click();
+  await openChatSettings(page);
   await selectChatSettingsSection(page, '봇·페르소나·모듈');
   const editor = page.getByTestId('profile-editor'),
     policy = editor.getByRole('region', { name: '로어 문맥 정책', exact: true }),

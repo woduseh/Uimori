@@ -48,6 +48,8 @@ type ReaderProps = {
   retryDisabled?: boolean;
   onEditingChange?: (sourceId: string, editing: boolean) => void;
   request?: string;
+  /** The newest scene of the branch keeps its request actions standing on narrow widths. */
+  latest?: boolean;
   onEditRequest?: (text: string) => Promise<boolean>;
   onCheckRequest?: () => Promise<boolean>;
   onAskHelper?: (sourceId: string, text: string) => void;
@@ -133,6 +135,7 @@ function SourceReaderContent({
   retryDisabled,
   onEditingChange,
   request,
+  latest,
   onEditRequest,
   onCheckRequest,
   onAskHelper,
@@ -436,6 +439,7 @@ function SourceReaderContent({
         <RequestMessage
           runId={source.runId}
           request={request}
+          compactActions={latest ? 'always' : 'tap'}
           onSubmit={onEditRequest}
           onConfirm={onCheckRequest}
           disabled={retryDisabled}

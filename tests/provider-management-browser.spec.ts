@@ -1,4 +1,5 @@
 import { selectCurrentSettingsSection } from './ui-navigation.js';
+import { openChatSettings } from './ui-navigation.js';
 import { preservePromptWorkspace } from './fixtures/prompt-workspace.js';
 import { setCurrentModels } from './ui-navigation.js';
 import { visualReview } from './fixtures/visual-review.js';
@@ -406,7 +407,7 @@ test('PMUI03 model edits use the latest connection without changing role IDs; de
   await page.keyboard.press('Escape');
   await page.goto(`/?chat=${chat.id}`);
   await expect(page.getByRole('button', { name: /^현재 본문 모델/ })).toContainText(changed.title);
-  await page.getByRole('button', { name: '채팅 설정', exact: true }).click();
+  await openChatSettings(page);
   await selectCurrentSettingsSection(page, '모델');
   await expect(page.getByLabel('원문 모델', { exact: true })).toHaveValue(`${original.id}`);
   await expect(

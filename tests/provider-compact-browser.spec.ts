@@ -150,6 +150,10 @@ test('PCUI02 compact provider lists align at six widths and retain accessible me
   await expect(menu).toBeFocused();
   await expect(page.getByRole('dialog', { name: '설정', exact: true })).toBeVisible();
   await menu.click();
+  await expect(copy).toBeVisible();
+  // 390px opens the menu as a bottom sheet; a tap on its scrim dismisses it before the search.
+  await page.mouse.click(195, 60);
+  await expect(copy).not.toBeVisible();
   await search.click();
   await expect(copy).not.toBeVisible();
   await search.fill('찾을 수 없는 합성 검색어');
@@ -181,6 +185,8 @@ test('PCUI02 compact provider lists align at six widths and retain accessible me
   await expect(provider.locator('.action-menu-body > .delete-control > button > svg')).toHaveCount(
     1
   );
+  // Close the (sheet) menu before reaching the tab bar it would otherwise cover on 390px.
+  await page.keyboard.press('Escape');
   await editor.getByRole('button', { name: '모델 프리셋', exact: true }).click();
   await item.getByRole('button', { name: model.title + ' 모델 수정', exact: true }).click();
   const form = editor.getByRole('form', { name: '모델 편집 양식' });

@@ -1,4 +1,5 @@
 import { selectCurrentSettingsSection } from './ui-navigation.js';
+import { openChatSettings } from './ui-navigation.js';
 import { preservePromptWorkspace } from './fixtures/prompt-workspace.js';
 import { setCurrentModels } from './ui-navigation.js';
 import { visualReview } from './fixtures/visual-review.js';
@@ -151,7 +152,7 @@ test('EVALUI01 desktop preset evaluation opt-in persists selected story roles af
   const reconnected = await context.newPage();
   await reconnected.setViewportSize({ width: 1440, height: 1000 });
   await reconnected.goto(storyUrl);
-  await reconnected.getByRole('button', { name: '채팅 설정', exact: true }).click();
+  await openChatSettings(reconnected);
   await selectCurrentSettingsSection(reconnected, '모델');
   await expect(reconnected.getByLabel('원문 모델', { exact: true })).toHaveValue(ref);
   await expect(reconnected.getByLabel('번역 모델', { exact: true })).toHaveValue(ref);

@@ -1,5 +1,6 @@
 import { createDefaultPromptProgram } from '../core/prompt-defaults.js';
 import { selectCurrentSettingsSection } from './ui-navigation.js';
+import { openChatSettings } from './ui-navigation.js';
 import { visualReview } from './fixtures/visual-review.js';
 import { preservePromptWorkspace } from './fixtures/prompt-workspace.js';
 import {
@@ -58,12 +59,12 @@ async function selectStoredChat(page: Page, chat: Chat) {
 }
 async function storySettings(page: Page) {
   await closeDialog(page);
-  if (!(await page.getByRole('button', { name: '채팅 설정', exact: true }).isVisible())) {
+  if (!(await page.locator('.workspace-header .chat-menu').isVisible())) {
     const chatId = new URL(page.url()).searchParams.get('chat')!;
     const detail = await getDetail(page.request, chatId);
     await selectStoredChat(page, detail.chat);
   }
-  await page.getByRole('button', { name: '채팅 설정', exact: true }).click();
+  await openChatSettings(page);
   return page.getByRole('dialog', { name: '채팅 설정', exact: true });
 }
 async function profileInfo(page: Page) {
