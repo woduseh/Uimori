@@ -445,7 +445,8 @@ export class Store {
         ];
     }
     const sourceSegments = freezeSourceSegments(base.profile);
-    const authored = base.packageStart?.mode === 'authored';
+    // Authored openings and transcript imports commit their exact text; nothing is prepared for a model.
+    const authored = base.packageStart?.mode === 'authored' || base.transcriptImport !== undefined;
     let frozen = authored
       ? { ...base, ...(sourceSegments ? { sourceSegments } : {}) }
       : this.story.prepareRunInTransaction({
@@ -770,7 +771,7 @@ export class Store {
     if (branch.default)
       this.db.prepare('UPDATE chats SET head_revision=? WHERE id=?').run(source.id, source.chatId);
     for (const kind of ['status', 'image'] as const) {
-      if (run.snapshot.packageStart?.mode === 'authored') continue;
+      if (run.snapshot.packageStart?.mode === 'authored' || run.snapshot.transcriptImport) continue;
       if (!(kind === 'image' ? run.snapshot.profile?.image : settings[kind])) continue;
       if (kind === 'image' && !imageJobInput(this, run.snapshot).imageCatalog.entries.length)
         continue;
@@ -799,7 +800,7 @@ export class Store {
     }
     if (run.snapshot.packageStart?.mode === 'authored')
       completeAuthoredPackageStartStatesInTransaction(this, run, source);
-    else {
+    else if (!run.snapshot.transcriptImport) {
       this.story.reserveSourceInTransaction(source, run);
       completePackageOutputs(this, run, source);
       // Illustrations never block the source commit; reservation problems become visible jobs.

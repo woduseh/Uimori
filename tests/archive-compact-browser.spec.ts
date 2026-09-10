@@ -243,3 +243,54 @@ test('ACOM04 an accepted import clears its file once even when the following lib
   if (visualReview)
     await page.screenshot({ path: info.outputPath('archive-accepted-refresh-error.png') });
 });
+
+test('ACOM03 a chat transcript file creates a new chat through the data panel without touching the archive import', async ({
+  page,
+}) => {
+  await page.route('**/api/import/status', (route) =>
+    route.fulfill({ json: { canImport: false } })
+  );
+  const imports: unknown[] = [];
+  await page.route('**/api/chats/import-transcript', async (route) => {
+    imports.push(route.request().postDataJSON());
+    await route.fulfill({
+      json: {
+        chat: { id: 'synthetic-imported', title: '복원된 작품' },
+        created: true,
+        skippedAttachments: [{ id: 'missing-module', revision: 2 }],
+      },
+    });
+  });
+  const panel = await openArchive(page);
+  const section = panel.getByRole('region', { name: '채팅 본문 가져오기', exact: true });
+  await expect(section.getByText(/실행 기록은 없어요/)).toBeVisible();
+  const transcript = {
+    format: 'uimori-chat-transcript',
+    version: 1,
+    exportedAt: '2026-09-10T00:00:00.000Z',
+    title: '복원된 작품',
+    attachments: [],
+    packageAttachments: [{ id: 'bot-1', revision: 1, role: 'bot' }],
+    notes: [],
+    entries: [{ request: '시작', text: '첫 장면.', translation: null }],
+  };
+  await section
+    .getByLabel('채팅 본문 JSON 파일', { exact: true })
+    .setInputFiles(jsonFile('story.transcript.json', transcript));
+  const done = section.getByRole('status').filter({ hasText: '채팅을 만들었어요' });
+  await expect(done).toContainText('"복원된 작품" 채팅을 만들었어요.');
+  await expect(done).toContainText('서재에 없는 자료 1개는 장착하지 않았어요.');
+  // The busy notice ends when the server has created the chat, not after the list refresh.
+  await expect(section.getByText('채팅을 만들고 있어요…', { exact: true })).toBeHidden();
+  expect(imports).toHaveLength(1);
+  const body = imports[0] as { transcript: unknown; idempotencyKey: string };
+  expect(body.transcript).toEqual(transcript);
+  expect(body.idempotencyKey).toMatch(/^[0-9a-f-]{36}$/);
+  // The whole-database import stays gated by the empty-DB rule; the transcript path is separate.
+  await expect(panel.getByRole('button', { name: '빈 DB에 가져오기', exact: true })).toBeDisabled();
+  await section
+    .getByLabel('채팅 본문 JSON 파일', { exact: true })
+    .setInputFiles({ name: 'broken.json', mimeType: 'application/json', buffer: Buffer.from('{') });
+  await expect(section.getByRole('alert')).toContainText('JSON 형식이 아니에요');
+  expect(imports).toHaveLength(1);
+});

@@ -25,6 +25,7 @@ import {
   ArrowUp,
   BookOpen,
   ChevronDown,
+  Download,
   GitFork,
   History,
   ListTree,
@@ -41,7 +42,7 @@ import {
 } from 'lucide-react';
 import type { Content } from '../core/product.js';
 import { reconcilePromptValues } from '../core/prompt-program.js';
-import { api } from './api.js';
+import { api, saveDownload } from './api.js';
 import { refValue } from './content-ref.js';
 import { deferredPanel } from './deferredPanel.js';
 import { ContentPicker } from './ContentPicker.js';
@@ -584,6 +585,28 @@ function App() {
                     <SlidersHorizontal size={20} />
                   </button>
                   <ActionMenu label="채팅 메뉴" className="chat-menu">
+                    <button
+                      type="button"
+                      className="secondary"
+                      aria-label="채팅 본문 내보내기"
+                      title="원문·요청·최신 번역·메모만 담은 JSON 파일을 받아요. 실행 기록은 담지 않아요"
+                      disabled={!s.sources.length}
+                      onClick={() => {
+                        const chatId = s.selected;
+                        const title = s.chats.find((chat) => chat.id === chatId)?.title ?? 'chat';
+                        void api<unknown>(`/chats/${chatId}/transcript`).then(
+                          (transcript) =>
+                            saveDownload(
+                              `${title.replace(/[\\/:*?"<>|]/g, '_')}.transcript.json`,
+                              transcript
+                            ),
+                          (error: Error) => s.setError(error.message)
+                        );
+                      }}
+                    >
+                      <Download size={18} aria-hidden="true" />
+                      본문 JSON 내보내기
+                    </button>
                     <button
                       type="button"
                       className="secondary"
