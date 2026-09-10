@@ -42,7 +42,7 @@ const categories = [
   },
   {
     id: 'models',
-    title: '모델',
+    title: '이 채팅의 모델',
     icon: ModelIcon,
     description: '본문과 보조 작업의 모델',
     group: '기본',

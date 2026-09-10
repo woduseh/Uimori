@@ -171,7 +171,7 @@ export function CodexAgentSettings({
               status.authMode === 'chatgpt' &&
               onOpenModels && (
                 <button type="button" onClick={onOpenModels}>
-                  프로바이더와 모델
+                  프로바이더·모델 등록
                 </button>
               )}
             {status.available &&
@@ -221,7 +221,7 @@ export function CodexAgentSettings({
           서버 관리자가 공식 Codex 실행기와 전용 로그인 환경을 설정해야 해요. 서버 설정 문서의 Codex
           연결 절차를 확인해 주세요.
         </p>
-        <p>로그인 후 ‘프로바이더와 모델’에서 Codex 프로바이더와 모델 프리셋을 저장해요.</p>
+        <p>로그인 후 ‘프로바이더·모델 등록’에서 Codex 프로바이더·모델 프리셋을 저장해요.</p>
         <p>
           Codex는 Uimori 서버에서 실행해요. PC와 휴대폰에서 같은 구독 한도를 사용하며, API 키
           방식으로 자동 전환하지 않아요.

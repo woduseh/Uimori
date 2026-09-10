@@ -134,8 +134,7 @@
   opacity: 1;
   pointer-events: auto;
 }
-.bot-navigation .bot-row-actions > .icon-button,
-.bot-navigation .bot-row-actions > .delete-control > .delete-button {
+.bot-navigation .bot-row-actions > .icon-button {
   display: grid;
   place-items: center;
   width: 26px;
@@ -151,12 +150,6 @@
 .bot-navigation .bot-row-actions > button:hover {
   background: var(--hover);
   color: var(--text);
-}
-.bot-navigation .bot-row-actions > .delete-control > .delete-button {
-  color: var(--error);
-}
-.bot-row-actions .delete-control {
-  display: flex;
 }
 .bot-chat-list {
   display: grid;
@@ -484,8 +477,7 @@
 @media (hover: none), (pointer: coarse) {
   .bot-branch-actions > .icon-button,
   .bot-branch-actions > .action-menu > summary,
-  .bot-row-actions > .action-menu > summary,
-  .bot-navigation .bot-row-actions > .delete-control > .delete-button {
+  .bot-row-actions > .action-menu > summary {
     width: 44px;
     min-width: 44px;
     height: 44px;

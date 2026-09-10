@@ -164,7 +164,7 @@ test('CTXUI02 concurrent summary and note changes preserve local drafts and requ
   await expect(notes.getByRole('button', { name: '새 메모 저장', exact: true })).toBeDisabled();
   // A mobile section-back changes visibility only, preserving text and its conflict state.
   await page.getByRole('button', { name: '채팅 설정 목록으로', exact: true }).click();
-  await selectChatSettingsSection(page, '모델');
+  await selectChatSettingsSection(page, '이 채팅의 모델');
   await selectChatSettingsSection(page, '상태와 문맥');
   await expect(notes.getByLabel('메모·정정 내용')).toHaveValue('내 메모 초안');
   await notes

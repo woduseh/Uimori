@@ -197,7 +197,7 @@ export function TasksPanel({
                       });
                     }}
                   >
-                    새 이야기로 이어가기
+                    새 채팅으로 복사
                   </button>
                 )}
               </div>
@@ -257,7 +257,8 @@ export function BranchesPanel({ state, onClose }: { state: StoryState; onClose: 
   return (
     <section className="branches-panel" aria-label="보관된 전개 목록">
       <p className="muted">
-        이전에 저장한 전개를 읽어요. 새로 갈라 쓰려면 원고에서 ‘새 이야기로 이어가기’를 눌러요.
+        이전에 저장한 전개를 읽어요. 새로 갈라 쓰려면 원고에서 ‘이 장면까지 새 채팅으로 복사’를
+        눌러요.
       </p>
       <div className="branch-list">
         {detail.branches?.map((branch) => (
@@ -335,9 +336,9 @@ export function AppSettingsPanel({
   const id = useId();
   const categories = [
     { key: 'general', label: '일반', icon: SettingsIcon },
-    { key: 'models', label: '현재 모델', icon: ModelIcon },
+    { key: 'models', label: '역할별 모델', icon: ModelIcon },
     { key: 'prompts', label: '현재 프롬프트', icon: PromptIcon },
-    { key: 'connections', label: '프로바이더와 모델', icon: ConnectionIcon },
+    { key: 'connections', label: '프로바이더·모델 등록', icon: ConnectionIcon },
     { key: 'agents', label: '에이전트', icon: AgentIcon },
     { key: 'illustrations', label: '삽화', icon: IllustrationIcon },
     { key: 'data', label: '데이터 관리', icon: DataIcon },

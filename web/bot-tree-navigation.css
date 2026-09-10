@@ -1,3 +1,26 @@
+/* First row: brand on the left, 새 채팅 · 전체 채팅 검색 on the right (44px targets). */
+.bot-navigation .brand {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 0 4px 8px 12px;
+}
+.bot-navigation .brand > span {
+  flex: 1;
+  min-width: 0;
+}
+.navigation-quick-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+/* In the drawer the row is the dialog header; the hidden "탐색" title leaves room for the close button. */
+.navigation-dialog > .dialog-header > .navigation-quick-actions {
+  flex: 1;
+}
+.navigation-quick-actions .story-search {
+  margin: 0;
+}
 .bot-tree-section-heading,
 .bot-tree-folder-heading {
   display: flex;

@@ -231,6 +231,7 @@ test('DEL03 deleting selected chat clears reader and URL while preserving anothe
   await page.getByRole('button', { name: '탐색 메뉴', exact: true }).click();
   const nav = page.getByTestId('bot-navigation').filter({ visible: true });
   await nav.locator(`[data-chat-id="${chat.id}"]`).hover();
+  await nav.getByLabel(`${chat.title} 채팅 메뉴`, { exact: true }).click();
   await nav.getByRole('button', { name: `${chat.title} 채팅 삭제`, exact: true }).click();
   await confirm(page);
   await expect(nav.getByRole('button', { name: chat.title, exact: true })).toHaveCount(0);
@@ -300,7 +301,7 @@ test('DEL05 model is deleted before its connection and settings lists stay curre
   await expect(other.getByRole('button', { name: /^현재 본문 모델/ })).toContainText(model.title);
   await page.getByRole('button', { name: '탐색 메뉴', exact: true }).click();
   await page.getByRole('button', { name: '설정', exact: true }).filter({ visible: true }).click();
-  await selectSettingsSection(page, '프로바이더와 모델');
+  await selectSettingsSection(page, '프로바이더·모델 등록');
   const editor = page.getByTestId('connection-editor');
   await openProviderMenu(page, '모델', model.title);
   await editor.getByRole('button', { name: `${model.title} 모델 삭제`, exact: true }).click();

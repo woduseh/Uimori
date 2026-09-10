@@ -62,7 +62,7 @@ async function settings(page: Page) {
   if (!(await button.isVisible()))
     await page.getByRole('button', { name: '탐색 메뉴', exact: true }).click();
   await button.click();
-  await selectSettingsSection(page, '프로바이더와 모델');
+  await selectSettingsSection(page, '프로바이더·모델 등록');
   await expect(page.getByTestId('connection-editor')).toBeVisible();
 }
 function observe(page: Page) {
@@ -197,7 +197,7 @@ test('PMUI01 mobile template registration selects the connection, reports catalo
     source: { kind: 'manual', catalogUpdatedAt: null },
   });
   await expect(page.getByRole('region', { name: '등록한 모델 사용 방법' })).toContainText(
-    '설정 → 현재 모델에서 사용할 역할을 선택하고 저장해요.'
+    '설정 → 역할별 모델에서 사용할 역할을 선택하고 저장해요.'
   );
   expect(observed.errors).toEqual([]);
   expect(observed.generations).toEqual([]);
@@ -1393,7 +1393,7 @@ test('PMUI10 Codex subscription login preserves drafts and saves a connection an
   await expect(panel).toContainText('사용 25%');
   if (visualReview)
     await page.screenshot({ path: info.outputPath('codex-subscription-settings-mobile.png') });
-  await panel.getByRole('button', { name: '프로바이더와 모델', exact: true }).click();
+  await panel.getByRole('button', { name: '프로바이더·모델 등록', exact: true }).click();
   await expect(form.getByLabel('프로바이더 이름', { exact: true })).toHaveValue(
     '보존할 Codex 초안'
   );

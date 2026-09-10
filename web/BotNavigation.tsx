@@ -1,13 +1,14 @@
 import { Dialog } from './Dialog.js';
 import { ActionMenu } from './ActionMenu.js';
 import type { useChatActivities } from './useChatActivities.js';
-import type { DragEvent, ReactNode } from 'react';
+import type { DragEvent, MouseEvent, ReactNode } from 'react';
 import { DeleteButton } from './DeleteButton.js';
 import { IconButton } from './IconButton.js';
 import { useEffect, useRef, useState } from 'react';
 import {
   AddIcon,
   DownIcon,
+  EditIcon,
   ExpandIcon,
   FolderAddIcon,
   FolderIcon,
@@ -43,6 +44,16 @@ export type Props = {
   tasks: number;
 };
 const reference = (value: { id: string; revision: number }) => `${value.id}@${value.revision}`;
+/** A menu item that opens a dialog closes its ⋯ and refocuses it first, so the dialog's focus
+ *  restore lands on the still-visible summary instead of a hidden item. */
+function openFromMenu(event: MouseEvent<HTMLButtonElement>, run: () => void) {
+  const menu = event.currentTarget.closest('details');
+  if (menu) {
+    menu.open = false;
+    menu.querySelector('summary')?.focus();
+  }
+  run();
+}
 
 export function BotBranch(
   props: Props & {
@@ -327,34 +338,29 @@ export function BotBranch(
                 <ActionMenu label={`${chat.title} 채팅 메뉴`} viewport>
                   <button
                     type="button"
-                    onClick={(event) => {
-                      const menu = event.currentTarget.closest('details');
-                      if (menu) {
-                        menu.open = false;
-                        menu.querySelector('summary')?.focus();
-                      }
-                      setMenuId(chat.id);
-                    }}
+                    onClick={(event) => openFromMenu(event, () => setMenuId(chat.id))}
                   >
+                    <EditIcon size={18} aria-hidden="true" />
                     이름 변경
                   </button>
+                  <button
+                    type="button"
+                    onClick={(event) => openFromMenu(event, () => setMovingId(chat.id))}
+                  >
+                    <MoveIcon size={18} aria-hidden="true" />
+                    채팅 이동
+                  </button>
+                  <DeleteButton
+                    path={`/chats/${encodeURIComponent(chat.id)}`}
+                    preparePath={`/chats/${encodeURIComponent(chat.id)}/deletion-impact`}
+                    title={chat.title}
+                    label="채팅 삭제"
+                    disabled={busy}
+                    description="이 채팅의 모든 분기, 원문, 번역, 이미지와 실행 기록을 영구 삭제해요. 실행 중인 작업은 먼저 취소하거나 완료해 주세요."
+                    onError={onError}
+                    onDeleted={onChatsChanged}
+                  />
                 </ActionMenu>
-                <IconButton
-                  label={`${chat.title} 채팅 이동`}
-                  icon={MoveIcon}
-                  onClick={() => setMovingId(chat.id)}
-                />
-                <DeleteButton
-                  path={`/chats/${encodeURIComponent(chat.id)}`}
-                  preparePath={`/chats/${encodeURIComponent(chat.id)}/deletion-impact`}
-                  title={chat.title}
-                  label="채팅 삭제"
-                  iconOnly
-                  disabled={busy}
-                  description="이 채팅의 모든 분기, 원문, 번역, 이미지와 실행 기록을 영구 삭제해요. 실행 중인 작업은 먼저 취소하거나 완료해 주세요."
-                  onError={onError}
-                  onDeleted={onChatsChanged}
-                />
               </div>
             </div>
           );

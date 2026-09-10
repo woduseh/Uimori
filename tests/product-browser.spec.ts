@@ -156,7 +156,7 @@ test('P01 packages use latest settings and prompt-owned creative choices replace
   ).toHaveText([
     '봇·페르소나·모듈',
     '프롬프트·창작 프리셋',
-    '모델',
+    '이 채팅의 모델',
     '상태와 문맥',
     '이미지',
     '자동 후속 작업',
@@ -231,7 +231,7 @@ test('P04 manual model IDs and distinct main/translation routing preserve connec
   const unique = `P04-${Date.now()}`;
   const chat = await createChat(page, `합성 ${unique}`);
   await navigation(page, '설정');
-  await selectSettingsSection(page, '프로바이더와 모델');
+  await selectSettingsSection(page, '프로바이더·모델 등록');
   const library = page.getByTestId('connection-editor');
   await startProviderConnection(page);
   await library.getByText('개발·검사용 프로바이더', { exact: true }).click();
@@ -291,7 +291,7 @@ test('P04 manual model IDs and distinct main/translation routing preserve connec
     translation: null,
   });
   await navigation(page, '설정');
-  await selectSettingsSection(page, '프로바이더와 모델');
+  await selectSettingsSection(page, '프로바이더·모델 등록');
   await library.getByRole('button', { name: '프로바이더 관리', exact: true }).click();
   const enabledResponse = page.waitForResponse(
     (response) =>
@@ -319,7 +319,7 @@ test('P04 manual model IDs and distinct main/translation routing preserve connec
   await selectCurrentSettingsSection(page, '모델');
   await page.getByLabel('원문 모델', { exact: true }).selectOption(`${modelRefs[0].id}`);
   await page.getByLabel('번역 모델', { exact: true }).selectOption(`${modelRefs[1].id}`);
-  await page.getByRole('button', { name: '현재 모델 설정 저장', exact: true }).click();
+  await page.getByRole('button', { name: '역할별 모델 설정 저장', exact: true }).click();
   await expect
     .poll(async () => (await (await request.get('/api/model-workspace')).json()).routes.main)
     .toEqual({ id: modelRefs[0].id });
@@ -409,13 +409,13 @@ test('P09 P10 P13 fork from a completed scene preserves long prose and annotatio
   await openDetails(page, 'profile-editor');
   await selectCurrentSettingsSection(page, '모델');
   await page.getByLabel('이미지 배치 모델', { exact: true }).selectOption(imageModel.id);
-  await page.getByRole('button', { name: '현재 모델 설정 저장', exact: true }).click();
+  await page.getByRole('button', { name: '역할별 모델 설정 저장', exact: true }).click();
   await expect
     .poll(async () => (await (await request.get('/api/model-workspace')).json()).routes.image)
     .toEqual({ id: imageModel.id });
   await expect(
-    page.getByRole('region', { name: '현재 모델 설정', exact: true }).getByRole('status')
-  ).toContainText('현재 모델 설정을 저장했어요.');
+    page.getByRole('region', { name: '역할별 모델 설정', exact: true }).getByRole('status')
+  ).toContainText('역할별 모델 설정을 저장했어요.');
   await openDetails(page, 'profile-editor');
   await selectChatSettingsSection(page, '봇·페르소나·모듈');
   await page.getByLabel('원문 이미지 자동 배치', { exact: true }).check();
@@ -526,7 +526,7 @@ test('P09 P10 P13 fork from a completed scene preserves long prose and annotatio
     await openSourceActions(page.locator(`[data-testid="source"][data-source-id="${source.id}"]`));
     await page
       .locator(`[data-testid="source"][data-source-id="${source.id}"]`)
-      .getByRole('button', { name: '여기서 새 이야기로 이어가기', exact: true })
+      .getByRole('button', { name: '이 장면까지 새 채팅으로 복사', exact: true })
       .click();
     const forkReply = await forkResponse;
     expect(forkReply.ok()).toBeTruthy();
@@ -726,7 +726,7 @@ test('P04 Vertex settings use service-account references and persist distinct ma
   const pageErrors: string[] = [];
   page.on('pageerror', (error) => pageErrors.push(error.message));
   await navigation(page, '설정');
-  await selectSettingsSection(page, '프로바이더와 모델');
+  await selectSettingsSection(page, '프로바이더·모델 등록');
   const editor = page.getByTestId('connection-editor');
   await startProviderConnection(page);
   await editor
@@ -796,7 +796,7 @@ test('P04 Vertex settings use service-account references and persist distinct ma
   await selectCurrentSettingsSection(page, '모델');
   await page.getByLabel('원문 모델', { exact: true }).selectOption(`${models[0].id}`);
   await page.getByLabel('번역 모델', { exact: true }).selectOption(`${models[1].id}`);
-  await page.getByRole('button', { name: '현재 모델 설정 저장', exact: true }).click();
+  await page.getByRole('button', { name: '역할별 모델 설정 저장', exact: true }).click();
   await expect
     .poll(async () => (await (await request.get('/api/model-workspace')).json()).routes.main)
     .toEqual({ id: models[0].id });
@@ -817,7 +817,7 @@ test('P04 named and custom providers save native options from mobile settings wi
 }, testInfo) => {
   const chat = await createChat(page, `공급자 설정 ${Date.now()}`);
   await navigation(page, '설정');
-  await selectSettingsSection(page, '프로바이더와 모델');
+  await selectSettingsSection(page, '프로바이더·모델 등록');
   const cases = [
     {
       protocol: 'openai-responses-v1',
