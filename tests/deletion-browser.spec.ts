@@ -313,8 +313,8 @@ test('DEL05 model is deleted before its connection and settings lists stay curre
   await expect
     .poll(async () => (await (await request.get('/api/model-workspace')).json()).routes.main)
     .toBeNull();
-  await expect(other.getByRole('button', { name: /^현재 본문 모델/ })).toContainText(
-    '본문 모델을 선택해 주세요'
+  await expect(other.getByRole('button', { name: /^현재 본문 모델/ })).toHaveAccessibleName(
+    /본문 모델을 선택해 주세요/
   );
   await expect(
     editor.getByRole('button', { name: `${model.title} 모델 삭제`, exact: true })
@@ -329,7 +329,7 @@ test('DEL05 model is deleted before its connection and settings lists stay curre
     editor.getByRole('button', { name: `${connection.title} 프로바이더 삭제`, exact: true })
   ).toHaveCount(0);
   await page.keyboard.press('Escape');
-  await expect(chip).toContainText('본문 모델을 선택해 주세요');
+  await expect(chip).toHaveAccessibleName(/본문 모델을 선택해 주세요/);
   await other.close();
 });
 

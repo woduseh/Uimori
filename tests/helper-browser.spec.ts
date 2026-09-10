@@ -12,6 +12,7 @@ import type { HelperArtifactView } from '../web/HelperArtifactCard.js';
 import type { HelperTaskView } from '../web/useHelperConversation.js';
 import { postFixtureChat } from './fixtures/chat.js';
 import { navigationAction, openSourceActions } from './ui-navigation.js';
+import { openHelper } from './ui-navigation.js';
 
 test.setTimeout(60000);
 const usage = { modelCalls: 1, inputTokens: 10, outputTokens: 10, costUsd: null };
@@ -334,7 +335,7 @@ async function create(request: APIRequestContext) {
   return response.json() as Promise<Chat>;
 }
 async function open(page: Page) {
-  await page.getByRole('button', { name: '도우미 열기', exact: true }).click();
+  await openHelper(page);
   const panel = page.locator('#helper-panel');
   await expect(panel).toBeVisible();
   await expect(panel.getByText('대화를 불러오는 중…', { exact: true })).toHaveCount(0);

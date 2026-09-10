@@ -319,7 +319,13 @@ function App() {
     : s.promptWorkspace?.helperModel
       ? '선택한 도우미 모델 · 확인 필요'
       : '도우미 모델을 선택해 주세요';
-  // Wide widths keep the model in the header; compact widths show it beside the send action.
+  // The model is a header chip at every width; narrow widths shorten the empty states so the
+  // chip leaves room for the title. The accessible name keeps the full description.
+  const mainShortDescription = mainModel
+    ? mainDescription
+    : s.promptWorkspace?.modelRoutes.main
+      ? '모델 확인 필요'
+      : '모델 선택';
   const mainModelChip = (
     <button
       type="button"
@@ -331,7 +337,7 @@ function App() {
         setPanel('settings');
       }}
     >
-      <span>{mainDescription}</span>
+      <span>{compact ? mainShortDescription : mainDescription}</span>
     </button>
   );
   const composerStatus = [
@@ -466,16 +472,18 @@ function App() {
         icon={Menu}
         onClick={() => setPanel('navigation')}
       />
-      <IconButton
-        label="도우미 열기"
-        icon={MessageCircle}
-        aria-expanded={helperOpen}
-        aria-controls="helper-panel"
-        onClick={() => {
-          setOptionsOpen(false);
-          setHelperOpen((value) => !value);
-        }}
-      />
+      {(!compact || s.destination !== 'story') && (
+        <IconButton
+          label="도우미 열기"
+          icon={MessageCircle}
+          aria-expanded={helperOpen}
+          aria-controls="helper-panel"
+          onClick={() => {
+            setOptionsOpen(false);
+            setHelperOpen((value) => !value);
+          }}
+        />
+      )}
     </>
   );
   function renderReadingSettings(onStartFocus: () => void) {
@@ -564,7 +572,7 @@ function App() {
             <div className="header-actions">
               {s.selected && s.destination === 'story' && (
                 <>
-                  {!compact && mainModelChip}
+                  {mainModelChip}
                   {focus && (
                     <button
                       className="icon-button"
@@ -575,15 +583,47 @@ function App() {
                       <Minimize size={19} />
                     </button>
                   )}
-                  <button
-                    className="icon-button"
-                    aria-label="채팅 설정"
-                    title="채팅 설정"
-                    onClick={() => openChatSettings()}
-                  >
-                    <SlidersHorizontal size={20} />
-                  </button>
+                  {!compact && (
+                    <button
+                      className="icon-button"
+                      aria-label="채팅 설정"
+                      title="채팅 설정"
+                      onClick={() => openChatSettings()}
+                    >
+                      <SlidersHorizontal size={20} />
+                    </button>
+                  )}
                   <ActionMenu label="채팅 메뉴" className="chat-menu">
+                    {compact && (
+                      <>
+                        <button
+                          type="button"
+                          className="secondary"
+                          aria-label="채팅 설정"
+                          onClick={(event) => {
+                            fromChatMenu(event);
+                            openChatSettings();
+                          }}
+                        >
+                          <SlidersHorizontal size={18} aria-hidden="true" />
+                          채팅 설정
+                        </button>
+                        <button
+                          type="button"
+                          className="secondary"
+                          aria-label="도우미 열기"
+                          aria-expanded={helperOpen}
+                          aria-controls="helper-panel"
+                          onClick={() => {
+                            setOptionsOpen(false);
+                            setHelperOpen(true);
+                          }}
+                        >
+                          <MessageCircle size={18} aria-hidden="true" />
+                          도우미
+                        </button>
+                      </>
+                    )}
                     <button
                       type="button"
                       className="secondary"
@@ -782,6 +822,7 @@ function App() {
                           const { source, index } = entry;
                           return (
                             <SourceReader
+                              latest={source.id === s.sources.at(-1)?.id}
                               onModelSettings={() => {
                                 setSettingsTab('models');
                                 setPanel('settings');
@@ -1055,7 +1096,6 @@ function App() {
                     />
                   </p>
                 )}
-                {compact && <div className="composer-model">{mainModelChip}</div>}
                 <ActivityStatus
                   key={s.viewKey}
                   chatId={s.selected}

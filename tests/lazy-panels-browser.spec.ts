@@ -2,6 +2,7 @@ import { visualReview } from './fixtures/visual-review.js';
 import { test, expect, type Page, type TestInfo } from '@playwright/test';
 import { postFixtureChat } from './fixtures/chat.js';
 import { navigationAction, selectChatSettingsSection } from './ui-navigation.js';
+import { openChatSettings } from './ui-navigation.js';
 
 async function scriptEvidence(page: Page, info: TestInfo, name: string) {
   const scripts = await page.evaluate(() =>
@@ -179,7 +180,7 @@ test('LAZY03 failed settings script stays local and preserves unsent text', asyn
   await settings.getByRole('button', { name: '설정 닫기', exact: true }).click();
   await expect(draft).toHaveValue('SYNTHETIC_PRESERVED_AFTER_CHUNK_FAILURE');
   await draft.fill('SYNTHETIC_STILL_EDITABLE');
-  await page.getByRole('button', { name: '채팅 설정', exact: true }).click();
+  await openChatSettings(page);
   const profile = page.getByRole('dialog', { name: '채팅 설정', exact: true });
   await selectChatSettingsSection(page, '봇·페르소나·모듈');
   await expect(profile.getByTestId('profile-editor')).toBeVisible();

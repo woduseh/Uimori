@@ -83,3 +83,34 @@
   top: auto;
   bottom: calc(100% + 4px);
 }
+/* Bottom sheet below 600px (SHEET_MEDIA in ActionMenu.tsx): a scrim behind and rows sized for
+   thumbs. The doubled class outranks per-screen popover overrides such as `.source-actions >
+   .action-menu > .action-menu-body`; the component drops its anchored inline position here. */
+@media (max-width: 600px) {
+  .action-menu[open]::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    z-index: 7;
+    background: var(--shade);
+  }
+  .action-menu[open] > summary {
+    position: relative;
+    z-index: 8;
+  }
+  .action-menu[open] > .action-menu-body.action-menu-body {
+    position: fixed;
+    inset: auto 8px max(8px, env(safe-area-inset-bottom)) 8px;
+    width: auto;
+    max-width: none;
+    max-height: calc(100dvh - 72px);
+    overflow-y: auto;
+    border-radius: 14px;
+    padding: 6px;
+    box-shadow: 0 -6px 24px var(--shade);
+  }
+  .action-menu[open] > .action-menu-body.action-menu-body > button,
+  .action-menu[open] > .action-menu-body.action-menu-body > .delete-control > button {
+    min-height: 48px;
+  }
+}

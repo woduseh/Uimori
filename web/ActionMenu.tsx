@@ -10,6 +10,9 @@ import type { LucideIcon } from 'lucide-react';
 import { MoreIcon } from './ui-icons.js';
 import './ui-controls.css';
 
+/** Below this width menus open as bottom sheets instead of anchored popovers (ui-controls.css). */
+export const SHEET_MEDIA = '(max-width: 600px)';
+
 export function ActionMenu({
   label,
   children,
@@ -29,12 +32,29 @@ export function ActionMenu({
   const [open, setOpen] = useState(false);
   const body = useRef<HTMLDivElement>(null);
   const [position, setPosition] = useState<CSSProperties>();
+  const [sheet, setSheet] = useState(false);
+  // Narrow screens open every menu as a bottom sheet (CSS): a popover anchored to its trigger has
+  // no room above or below once it holds more than a few rows, and gets clipped by the header.
   useLayoutEffect(() => {
-    if (!open || !viewport) return;
+    if (!open) return;
+    const media = matchMedia(SHEET_MEDIA);
+    const update = () => setSheet(media.matches);
+    update();
+    media.addEventListener('change', update);
+    return () => media.removeEventListener('change', update);
+  }, [open]);
+  useLayoutEffect(() => {
+    if (!open || (!viewport && !sheet)) return;
     const place = () => {
       const anchor = ref.current?.querySelector('summary')?.getBoundingClientRect();
       const menu = body.current;
       if (!anchor || !menu) return;
+      // Sheet geometry lives in ui-controls.css (see SHEET_MEDIA there) so the first painted
+      // frame is already the sheet; the details toggle event arrives after that frame.
+      if (sheet) {
+        setPosition(undefined);
+        return;
+      }
       const height = Math.min(menu.scrollHeight + 2, window.innerHeight - 16);
       const below = window.innerHeight - anchor.bottom - 8;
       const above = anchor.top - 8;
@@ -66,28 +86,59 @@ export function ActionMenu({
     const observer = new ResizeObserver(place);
     if (body.current) observer.observe(body.current);
     window.addEventListener('resize', place);
-    document.addEventListener('scroll', scroll, true);
+    // An anchored popover drifts from its trigger when the page scrolls, so it closes; a sheet is
+    // pinned to the viewport behind a scrim and only closes by pointer, Escape or blur.
+    if (!sheet) document.addEventListener('scroll', scroll, true);
     return () => {
       observer.disconnect();
       window.removeEventListener('resize', place);
       document.removeEventListener('scroll', scroll, true);
     };
-  }, [open, viewport, placement]);
+  }, [open, viewport, placement, sheet]);
   useEffect(() => {
-    if (!open) return;
+    // Reads the native open state: the details toggle event is asynchronous, so a tap right
+    // after opening must still dismiss. The sheet's scrim is the details' own ::before, so a tap
+    // on it reports the details itself.
     const dismiss = (event: PointerEvent) => {
       const node = ref.current;
       if (
-        node &&
+        node?.open &&
         event.target instanceof Node &&
-        !node.contains(event.target) &&
+        (event.target === node || !node.contains(event.target)) &&
         !node.querySelector('dialog[open]')
       )
         node.open = false;
     };
     document.addEventListener('pointerdown', dismiss);
     return () => document.removeEventListener('pointerdown', dismiss);
-  }, [open]);
+  }, []);
+  useEffect(() => {
+    // A dialog opened from an item (delete confirmation, picker) finishes the choice when it
+    // closes, whichever way: the menu closes with it and focus returns to the trigger.
+    const node = ref.current;
+    if (!node) return;
+    const closed = (event: Event) => {
+      if (!(event.target instanceof HTMLDialogElement) || !node.open) return;
+      if (event.target.closest('details.action-menu') !== node) return;
+      node.open = false;
+      node.querySelector('summary')?.focus();
+    };
+    node.addEventListener('close', closed, true);
+    return () => node.removeEventListener('close', closed, true);
+  }, []);
+  // A dialog *inside* the menu (confirmation, picker) owns its own controls; the menu itself may
+  // sit inside a dialog such as the navigation drawer, which must not count.
+  const insideNestedDialog = (element: Element) => {
+    const dialog = element.closest('dialog');
+    return !!dialog && !!ref.current?.contains(dialog);
+  };
+  const closeAfterChoice = () => {
+    const node = ref.current;
+    if (!node) return;
+    setTimeout(() => {
+      if (node.open && !node.querySelector('dialog[open]')) node.open = false;
+    }, 0);
+  };
   return (
     <details
       ref={ref}
@@ -116,7 +167,25 @@ export function ActionMenu({
         <Icon size={20} aria-hidden="true" />
         <span className="sr-only">{label}</span>
       </summary>
-      <div ref={body} className="action-menu-body" style={viewport ? position : undefined}>
+      <div
+        ref={body}
+        className="action-menu-body"
+        style={viewport && !sheet ? position : undefined}
+        onClick={(event) => {
+          // Choosing an item closes the menu, unless the item opens something inside it (a
+          // confirmation dialog, a picker). The check runs after the item's own handler committed.
+          const item = (event.target as Element).closest('button');
+          if (
+            !item ||
+            item.disabled ||
+            insideNestedDialog(item) ||
+            item.hasAttribute('aria-haspopup') ||
+            item.hasAttribute('aria-pressed')
+          )
+            return;
+          closeAfterChoice();
+        }}
+      >
         {children}
       </div>
     </details>

@@ -53,3 +53,14 @@
     opacity: 1;
   }
 }
+/* Narrow widths: only the latest request keeps a standing edit row. Earlier requests fold the
+   row away until the bubble is tapped; keyboard focus still reaches and reveals the button. */
+@media (max-width: 600px) {
+  .request-actions-tap:not(.request-actions-revealed):not(:focus-within)
+    > .request-message-actions {
+    height: 0;
+    margin: 0;
+    opacity: 0;
+    overflow: hidden;
+  }
+}

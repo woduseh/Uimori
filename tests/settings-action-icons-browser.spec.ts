@@ -5,6 +5,7 @@ import {
   selectChatSettingsSection,
   selectSettingsSection,
 } from './ui-navigation.js';
+import { openChatSettings } from './ui-navigation.js';
 
 async function icon(button: Locator) {
   await expect(button).toBeVisible();
@@ -38,7 +39,7 @@ for (const width of [390, 1440]) {
     const chat = await response.json();
     await page.setViewportSize({ width, height: 900 });
     await page.goto(`/?chat=${chat.id}`);
-    await page.getByRole('button', { name: '채팅 설정', exact: true }).click();
+    await openChatSettings(page);
     const dialog = page.getByRole('dialog', { name: '채팅 설정', exact: true });
     await selectChatSettingsSection(page, '봇·페르소나·모듈');
     const save = dialog.getByRole('button', { name: '채팅 설정 저장', exact: true });
