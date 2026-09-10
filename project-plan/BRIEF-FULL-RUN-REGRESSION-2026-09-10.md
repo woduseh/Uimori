@@ -2,6 +2,8 @@
 
 > 아래 본문은 당시 macOS 측정 이력이에요. 2026-09-10 Windows 후속 측정은 **228건 중 223 PASS / 5 FAIL, 618,989ms(10.3분)**였어요. 전역 timeout은 없고 cleanup은 PASS예요. 과거 여섯 지연 사례는 모두 통과했지만 같은 기계·같은 소스의 A/B가 아니므로 macOS 회귀의 원인이 해소됐다는 증거로 쓰지 않아요.
 
+2026-09-11 KST 릴리즈 전 전체 재검증은 **228 PASS / 0 FAIL / 0 SKIP**, 547,806ms(9.1분), cleanup PASS예요. 증거는 `output/playwright/redesign-2026-09-10T14-52-06-467Z-4a923c56/summary.json`에 있어요. 아래 최초 Windows 실패 5건과 과거 macOS 원인 미확인 기록은 유지해요.
+
 ## Windows 후속 측정
 
 `main` 병합 `ed418d87` 이후 채팅 고정·독립 조회·프롬프트 가져오기 메뉴 수정이 포함된 빌드로 실행했어요. 증거는 `output/playwright/redesign-2026-09-10T12-01-46-160Z-9ebcd134/`의 summary·reporter·실패 trace에 있어요. 전체 결과는 실패로 보존하고 이후 집중 재검증은 [방향 결정 후속 결과](DECISION-FOLLOWUP-RESULTS-2026-09-10.md)에 따로 기록해요.
