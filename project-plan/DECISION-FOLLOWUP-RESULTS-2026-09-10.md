@@ -23,6 +23,7 @@
 | **최종 `quality:full`** | **1,785 PASS / 선택형 1 SKIP**, 170파일 PASS / 1 SKIP, 도구 검사·서식·타입·빌드 PASS | 예약 체인·장면 번호·도우미 응답·거절 지침을 포함한 최종 소스 |
 | **최종 `verify:smoke`** | **F02·F03·F06, 3 PASS**, cleanup PASS | 독립 포트·DB, 실제 공급자 호출 없음 |
 | **최종 관련 UI** | **13 PASS**, required case/title·cleanup PASS | 390/1440px 고정·메뉴·Dialog·도우미 회귀, 전체 redesign과 별도 |
+| **릴리즈 전 전체 `verify:redesign`** | **228 PASS / 0 FAIL / 0 SKIP**, cleanup PASS | 2026-09-11 KST, 최종 소스, 547,806ms(9.1분). 아래 이전 실패 기록과 별도 실행 |
 | 최초 통합 `quality:full` | 1,730 PASS / 선택형 1 SKIP, 도구 검사·타입·빌드 PASS | 이후 발견한 독립 조회·모바일 메뉴 수정 전 전체 실행 |
 | 필수 `verify:smoke` | F02·F03·F06, 3 PASS | 새 포트·DB, 실제 공급자 호출 없음 |
 | 독립 조회 수정 후 집중 단위 검사 | 4파일 50 PASS | 모델 고정·삽화 저장·문맥 checkpoint·순환 |
@@ -36,6 +37,7 @@
 
 - 최종 스모크: `2026-09-10T14-45-40-464Z-bf74c159`
 - 최종 관련 UI: `recovery-ui-2026-09-10T14-45-55-930Z-22902c95`
+- 릴리즈 전 전체: `redesign-2026-09-10T14-52-06-467Z-4a923c56` — 시작 2026-09-10 23:52 KST, 완료 2026-09-11 00:01 KST
 - 관련 UI의 이전 하네스 실패: `recovery-ui-2026-09-10T12-39-38-002Z-c4b586ca` — 테스트 13건은 통과했지만 제목 전체를 case ID로 요구한 설정 때문에 `Missing UI common dialogs evidence`로 FAIL이었어요. `requiredTitles`로 바로잡고 최종 실행을 따로 남겼어요.
 - 스모크: `2026-09-10T11-50-25-732Z-fcc5fa8c`
 - 고정 최초 실패 / 재검증: `global-models-2026-09-10T11-50-29-646Z-120ffcdf` / `global-models-2026-09-10T12-00-54-172Z-f67f2fcc`

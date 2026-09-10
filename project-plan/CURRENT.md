@@ -32,7 +32,7 @@
 
 ## 마지막 검증 상태
 
-2026-09-10 `main` 병합과 후속 구현의 최종 Windows `quality:full`은 **1,785 PASS / opt-in 1 SKIP**, `verify:smoke`는 **3 PASS**, 관련 UI는 **13 PASS**이며 cleanup을 완료했어요. 앞서 실행한 전체 `verify:redesign`의 **223 PASS / 5 FAIL**, 10.3분 기록은 별도로 유지해요. 이후 집중 통과가 전체 회귀의 새 PASS를 뜻하지 않아요. 과거 macOS 결과와 같은 조건의 A/B가 아니므로 운영체제별 원인이나 성능 우위로 해석하지 않아요. [통합 후속 결과](DECISION-FOLLOWUP-RESULTS-2026-09-10.md) · [전체 회귀 지연 브리프](BRIEF-FULL-RUN-REGRESSION-2026-09-10.md)
+2026-09-10 `main` 병합과 후속 구현의 최종 Windows `quality:full`은 **1,785 PASS / opt-in 1 SKIP**, `verify:smoke`는 **3 PASS**, 관련 UI는 **13 PASS**예요. 2026-09-11 KST 릴리즈 전 전체 `verify:redesign`은 **228 PASS / 0 FAIL / 0 SKIP**, 547,806ms(9.1분)에 종료하고 cleanup을 완료했어요. 앞선 전체 **223 PASS / 5 FAIL**, 10.3분 기록은 별도로 유지해요. 과거 macOS 결과와 같은 조건의 A/B가 아니므로 운영체제별 원인이나 성능 우위로 해석하지 않아요. [통합 후속 결과](DECISION-FOLLOWUP-RESULTS-2026-09-10.md) · [전체 회귀 지연 브리프](BRIEF-FULL-RUN-REGRESSION-2026-09-10.md)
 
 Oracle 운영 서버의 짧은 실사용과 별도로, 독립 DB에서 공개 원문 162,975 토큰·61장을 이용한 Gemini 장기 문맥 평가를 수행했어요. 활성 요약 조회·길이 문제를 보완하고 도우미의 로어·프롬프트 저장과 옵션의 예약 소비를 확인했어요. 의미 오류와 문맥 한도·공급자 EOF 실패가 남아 전체 live 시나리오 PASS는 아니에요. 상세 경계는 [기억 평가](LIVE-MEMORY-RESULTS-2026-09-10.md), 다른 도우미 도구와 경량 역할 비교는 [하네스 효율](HARNESS-EFFICIENCY-2026-09-10.md)에 기록해요.
 
