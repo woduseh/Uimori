@@ -84,6 +84,31 @@ node scripts/verify-worktrees.mjs --a '<준비된 작업트리 A>' --b '<준비�
 
 서재·탐색·삭제·패키지·전체 개편과 입력창 옵션/재시도 검증은 [공통 브라우저 실행기](../scripts/browser-verification.mjs)를 사용해요. 각 진입점은 검사 파일·필수 case·timeout을 선택하고, 실행기는 새 DB/포트, 소스·빌드 지문, reporter, 소유권·취소·cleanup과 증거 보관을 관리해요. 필수 검사 누락·0개·skip·재시도·cleanup 실패는 PASS로 처리하지 않아요. [하네스 회귀](../tests/harness.test.ts)는 이 실패 경계와 수동 cleanup 명령의 소유권 호환을 확인해요. 전용 HTTPS 등 다른 실행 계약의 하네스는 독립적으로 유지해요.
 
+## 실행 환경과 조사 방법
+
+CI는 Windows / Node 24.14.0에서 돌지만 검토와 수정은 macOS·Linux에서도 해요. 두 환경의 차이 때문에 반복해서 시간을 쓰던 것들을 정리해요.
+
+**Node는 `.nvmrc`의 24.14.0을 써요.** `engines`가 `>=24.14 <25`이고 `verify-*`는 그 밖의 버전을 거부해요. Node 26에서 `npm test`를 돌리면 `tests/harness.test.ts`가 BLOCKED, `tests/server.test.ts`의 F03이 실패하는데 둘 다 환경 문제예요. `nvm use`로 맞추거나 `npx -y node@24 scripts/verify-x.mjs`처럼 실행기를 지정해요.
+
+**브라우저는 자동으로 찾아요.** `browserPath()`와 `playwright.config.ts`가 Windows·macOS·Linux의 Chrome·Edge 경로를 탐색해요. 다른 빌드를 쓰려면 `NR_BROWSER_PATH`로 지정해요. 사내 PAC 프록시가 loopback을 가로채면 Playwright가 멈추므로 `--no-proxy-server`를 유지해요.
+
+**빌드 지문에 드는 것과 아닌 것을 구분해요.** `core`·`server`·`web`·`src`와 `package*.json`·`tsconfig*`·`vite.config.*`·`.gitattributes`, 그리고 `scripts/build.mjs`·`build-runner.mjs`·`lib.mjs`가 입력이에요. 이것들을 고치면 검증 전에 `npm run build`가 필요하고, `verify-*` 실행 도중에 고치면 그 실행이 무효가 돼요. `tests/`·`docs/`·`playwright.config.ts`·`verify-*.mjs`는 지문 밖이지만, 실행 도중 `tests/`를 바꾸면 그 증거는 저장소 규칙상 무효예요.
+
+**전역 상태가 의심되면 보존된 실행 DB부터 열어요.** 하네스가 종료 시점 SQLite를 `output/playwright/<runId>/evidence-db/app.sqlite`에 남겨요. 브라우저 spec 56개가 서버와 DB 하나를 공유하므로 앞선 spec이 남긴 전역 프롬프트·모델 설정이 뒤의 실패로 나타나요. 56개 순서를 재생하기 전에 이 DB를 조회해요.
+
+```
+node --input-type=module -e "
+import { DatabaseSync } from 'node:sqlite';
+const db = new DatabaseSync('output/playwright/<runId>/evidence-db/app.sqlite', { readOnly: true });
+const w = JSON.parse(db.prepare('SELECT body FROM prompt_workspace WHERE id=1').get().body);
+console.log(w.main.program.controls.map((c) => c.id));
+"
+```
+
+**변경의 책임은 부모 커밋과 비교해서 판정해요.** `HEAD`에서도 실패한다는 사실은 그 시점 `HEAD`에 포함된 커밋을 면제하지 않아요. `git archive <ref> | tar -x -C <스크래치>`로 대상과 부모를 각각 풀고 `node_modules`를 심볼릭 링크한 뒤 같은 기계·같은 브라우저로 연속 실행해요. 작업트리의 미스테이징 변경이 지문을 흔들지 않아서 커밋 예정 내용만 검증할 때도 같은 방법을 써요.
+
+**증거는 쌓여요.** `output/`은 Git에서 제외하지만 실행마다 trace·screenshot·DB를 남겨 금세 기가바이트가 돼요. 개별 실행은 `npm run cleanup -- --run <run-id>`로 지우고, 오래된 것은 `output/playwright`에서 직접 정리해요.
+
 ## 코드의 경계
 
 - `web/`: 서재·프롬프트 관리, 봇별 탐색·채팅·패키지 편집, 안전한 원고 표시, 탭별 URL/초안/독서 위치, 페이지 읽기·SSE 갱신과 늦은 HTTP 응답 폐기.
