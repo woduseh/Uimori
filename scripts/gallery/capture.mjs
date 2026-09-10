@@ -3,53 +3,8 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import { chromium } from '@playwright/test';
 import { measureScreen, styleInventory, metricSource } from '../../tests/fixtures/ui-metrics.ts';
 import { defaultMetrics, screens as allScreens, themes, viewports } from './screens.mjs';
-
-const menuLabels = { chat: '채팅 메뉴', scene: '장면 작업 메뉴', app: '앱 메뉴' };
-
-function substitute(value, ids) {
-  return String(value).replaceAll(/\$([a-z]+(?:\.[a-z]+)*)/gu, (_, key) => {
-    if (!(key in ids)) throw new Error(`Seed value missing: ${key}`);
-    return ids[key];
-  });
-}
-export function resolveUrl(baseUrl, params, ids) {
-  const url = new URL(baseUrl);
-  for (const [key, value] of Object.entries(params))
-    url.searchParams.set(key, substitute(value, ids));
-  return url.toString();
-}
-function locatorFor(page, spec, ids) {
-  const scope = spec.within ? locatorFor(page, spec.within, ids) : page;
-  const name = spec.name === undefined ? undefined : substitute(spec.name, ids);
-  let locator;
-  if (spec.testid) locator = scope.getByTestId(spec.testid);
-  else if (spec.label) locator = scope.getByLabel(spec.label, { exact: spec.exact ?? true });
-  else if (spec.role) locator = scope.getByRole(spec.role, { name, exact: spec.exact ?? true });
-  else if (spec.text) locator = scope.getByText(spec.text, { exact: spec.exact ?? false });
-  else if (spec.css) locator = scope.locator(spec.css);
-  else throw new Error(`Unknown locator ${JSON.stringify(spec)}`);
-  if (spec.nth === 'last') return locator.last();
-  return locator.nth(typeof spec.nth === 'number' ? spec.nth : 0);
-}
-async function runStep(page, step, ids) {
-  if (step.wait) return page.waitForTimeout(step.wait);
-  if (step.press) return page.keyboard.press(step.press);
-  if (step.click) {
-    const target = locatorFor(page, step.click, ids);
-    await target.scrollIntoViewIfNeeded();
-    return target.click();
-  }
-  if (step.menu) {
-    const label = menuLabels[step.menu];
-    if (!label) throw new Error(`Unknown menu ${step.menu}`);
-    const summary = page.getByLabel(label, { exact: true });
-    const target = step.which === 'last' ? summary.last() : summary.first();
-    await target.scrollIntoViewIfNeeded();
-    if (!(await target.evaluate((node) => node.closest('details')?.open))) await target.click();
-    return page.locator('details[open] .action-menu-body').first().waitFor();
-  }
-  throw new Error(`Unknown step ${JSON.stringify(step)}`);
-}
+import { locatorFor, resolveUrl, runStep } from './steps.mjs';
+import { captureJourneys, journeys as allJourneys } from './journey.mjs';
 
 const html = (value) =>
   String(value).replaceAll(
@@ -57,7 +12,56 @@ const html = (value) =>
     (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]
   );
 
-function contactSheet({ captures, metrics, screens, generatedAt }) {
+function badgeList(scored) {
+  return scored
+    .map((m) => {
+      const state = m.pass === null ? 'note' : m.pass ? 'pass' : 'fail';
+      const value = typeof m.value === 'number' ? m.value : m.value === null ? '–' : m.value;
+      return `<span class="badge ${state}" title="${html(m.target)}">${html(m.metric)} ${html(value)}</span>`;
+    })
+    .join('');
+}
+
+function journeySheet({ journey, runs, metrics }) {
+  const columns = runs.map((run) => run.viewport);
+  const head = columns
+    .map((vp) => {
+      const run = runs.find((r) => r.viewport === vp);
+      return `<th>${html(`${vp} ${viewports[vp].width}px`)}<small>${html(`상호작용 ${run.interactions}회 · ${run.completed ? '완주' : '중단'}`)}</small></th>`;
+    })
+    .join('');
+  const rows = journey.steps
+    .map((step, index) => {
+      const cells = columns
+        .map((vp) => {
+          const run = runs.find((r) => r.viewport === vp);
+          const shot = run?.steps.find((s) => s.step === step.id);
+          if (!shot) return `<td class="missing">${html(`${vp} 없음`)}</td>`;
+          const scored = metrics.filter(
+            (m) => m.journey === journey.id && m.step === step.id && m.viewport === vp
+          );
+          return `<td><a href="${html(shot.file)}"><img loading="lazy" src="${html(shot.file)}" alt="${html(`${journey.title} ${step.title} ${vp}`)}"></a><div class="badges"><span class="badge note">${html(`+${shot.interactions} → 누적 ${shot.cumulativeInteractions}`)}</span>${badgeList(scored)}</div></td>`;
+        })
+        .join('');
+      return `<tr><th scope="row"><div>${html(`${index + 1}. ${step.title}`)}</div><code>${html(step.id)}</code></th>${cells}</tr>`;
+    })
+    .join('\n');
+  return `<h2>${html(`여정 · ${journey.title}`)}</h2>
+<p><code>${html(journey.id)}</code> · ${html((journey.principles ?? []).join(' · '))} · 각 단계는 그 단계에 든 상호작용 수와 누적 수를 함께 적어요.</p>
+<table><thead><tr><th>단계</th>${head}</tr></thead><tbody>
+${rows}
+</tbody></table>`;
+}
+
+function contactSheet({
+  captures,
+  metrics,
+  screens,
+  journeys,
+  journeyRuns,
+  journeyMetrics,
+  generatedAt,
+}) {
   const columns = Object.keys(viewports).flatMap((vp) => themes.map((theme) => ({ vp, theme })));
   const rows = screens
     .map((screen) => {
@@ -69,16 +73,8 @@ function contactSheet({ captures, metrics, screens, generatedAt }) {
           const scored = metrics.filter(
             (m) => m.screen === screen.id && m.viewport === vp && m.theme === theme
           );
-          const badges = scored
-            .map((m) => {
-              const state = m.pass === null ? 'note' : m.pass ? 'pass' : 'fail';
-              const value =
-                typeof m.value === 'number' ? m.value : m.value === null ? '–' : m.value;
-              return `<span class="badge ${state}" title="${html(m.target)}">${html(m.metric)} ${html(value)}</span>`;
-            })
-            .join('');
           if (!shot) return `<td class="missing">${html(`${vp} ${theme}`)} 없음</td>`;
-          return `<td><a href="${html(shot.file)}"><img loading="lazy" src="${html(shot.file)}" alt="${html(`${screen.title} ${vp} ${theme}`)}"></a><div class="badges">${badges}</div></td>`;
+          return `<td><a href="${html(shot.file)}"><img loading="lazy" src="${html(shot.file)}" alt="${html(`${screen.title} ${vp} ${theme}`)}"></a><div class="badges">${badgeList(scored)}</div></td>`;
         })
         .join('');
       return `<tr><th scope="row"><div>${html(screen.title)}</div><code>${html(screen.id)}</code><small>${html((screen.principles ?? []).join(' · '))}</small></th>${cells}</tr>`;
@@ -94,11 +90,20 @@ function contactSheet({ captures, metrics, screens, generatedAt }) {
         `<li><strong>${html(m.metric)}</strong> ${html(m.value)} (${html(m.target)}) ${m.pass ? '충족' : '미충족'}</li>`
     )
     .join('');
+  const journeySections = journeys
+    .map((journey) =>
+      journeySheet({
+        journey,
+        runs: journeyRuns.filter((run) => run.journey === journey.id),
+        metrics: journeyMetrics,
+      })
+    )
+    .join('\n');
   return `<!doctype html><html lang="ko"><head><meta charset="utf-8"><title>Uimori 화면 갤러리</title>
 <style>
 body{font:14px system-ui,sans-serif;margin:16px;background:#f4f4f2;color:#222}
 table{border-collapse:collapse}th,td{vertical-align:top;padding:8px;border-bottom:1px solid #ddd;text-align:left}
-th[scope=row]{width:180px}th code{display:block;color:#666;font-size:12px}th small{color:#888}
+th[scope=row]{width:180px}th code{display:block;color:#666;font-size:12px}th small{display:block;color:#888;font-weight:normal}
 td img{display:block;max-width:260px;height:auto;border:1px solid #ccc;background:#fff}
 .badges{display:flex;flex-wrap:wrap;gap:4px;margin-top:4px;max-width:260px}
 .badge{font-size:11px;padding:1px 6px;border-radius:10px;background:#e5e5e5}
@@ -106,11 +111,13 @@ td img{display:block;max-width:260px;height:auto;border:1px solid #ccc;backgroun
 td.missing{color:#a33}
 </style></head><body>
 <h1>Uimori 화면 갤러리</h1>
-<p>${html(generatedAt)} · 수치 출처: <code>${html(metricSource)}</code> · 원본 수치는 <a href="metrics.json">metrics.json</a>. 배지 색은 기록이며 판정은 사람이 해요.</p>
+<p>${html(generatedAt)} · 수치 출처: <code>${html(metricSource)}</code> · 원본 수치는 <a href="metrics.json">metrics.json</a>, 여정은 <a href="journey.json">journey.json</a>. 배지 색은 기록이며 판정은 사람이 해요.</p>
 <ul>${inventory}</ul>
 <table><thead><tr><th>화면</th>${head}</tr></thead><tbody>
 ${rows}
-</tbody></table></body></html>
+</tbody></table>
+${journeySections}
+</body></html>
 `;
 }
 
@@ -125,7 +132,9 @@ export function summarizeRubric(metrics) {
     unmetBy: scored
       .filter((m) => !m.pass)
       .reduce((acc, m) => {
-        (acc[m.metric] ??= []).push(`${m.screen} ${m.viewport} ${m.theme}`);
+        (acc[m.metric] ??= []).push(
+          `${m.screen ?? `${m.journey}/${m.step}`} ${m.viewport} ${m.theme}`
+        );
         return acc;
       }, {}),
   };
@@ -137,6 +146,7 @@ export async function captureGallery({
   ids,
   directory,
   screens = allScreens,
+  journeys = allJourneys,
   log = () => {},
 }) {
   const shots = path.join(directory, 'screens');
@@ -145,6 +155,7 @@ export async function captureGallery({
   const captures = [];
   const metrics = [];
   const failures = [];
+  let journey = { runs: [], metrics: [], failures: [] };
   try {
     for (const screen of screens)
       for (const vp of screen.viewports ?? Object.keys(viewports))
@@ -190,6 +201,7 @@ export async function captureGallery({
             captures.push({
               screen: screen.id,
               title: screen.title,
+              at: new Date(started).toISOString(),
               viewport: vp,
               width: viewport.width,
               theme,
@@ -226,6 +238,15 @@ export async function captureGallery({
     } finally {
       await context.close();
     }
+    // Journeys create chats on the server, so they run after every screen is captured. A failure
+    // outside a step (a context that will not open) is recorded like a step failure so the screen
+    // evidence above is still written.
+    try {
+      journey = await captureJourneys({ browser, baseUrl, ids, directory, journeys, log });
+    } catch (error) {
+      journey.failures.push(String(error.message).split('\n')[0]);
+    }
+    failures.push(...journey.failures.map((message) => `journey ${message}`));
   } finally {
     await browser.close();
   }
@@ -240,8 +261,30 @@ export async function captureGallery({
     JSON.stringify({ generatedAt, captures, failures }, null, 2) + '\n'
   );
   await writeFile(
-    path.join(directory, 'index.html'),
-    contactSheet({ captures, metrics, screens, generatedAt })
+    path.join(directory, 'journey.json'),
+    JSON.stringify(
+      {
+        source: metricSource,
+        generatedAt,
+        runs: journey.runs,
+        rubric: summarizeRubric(journey.metrics),
+        results: journey.metrics,
+      },
+      null,
+      2
+    ) + '\n'
   );
-  return { captures, metrics, failures, rubric };
+  await writeFile(
+    path.join(directory, 'index.html'),
+    contactSheet({
+      captures,
+      metrics,
+      screens,
+      journeys,
+      journeyRuns: journey.runs,
+      journeyMetrics: journey.metrics,
+      generatedAt,
+    })
+  );
+  return { captures, metrics, failures, rubric, journeys: journey.runs };
 }
