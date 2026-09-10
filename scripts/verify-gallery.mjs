@@ -20,9 +20,11 @@ import {
 import { seedGallery } from './gallery/seed.mjs';
 import { captureGallery } from './gallery/capture.mjs';
 import { screens, themes, viewports } from './gallery/screens.mjs';
+import { expectedJourneyCaptures, journeys } from './gallery/journey.mjs';
 
 // Captures every listed screen and modal at 390/1440px in light and dark on an owned test-mode
-// server, and records the principle metrics beside each capture. PASS means every capture and the
+// server, then walks the listed journeys step by step counting interactions, and records the
+// principle metrics beside each capture. PASS means every capture, every journey step and the
 // cleanup succeeded; an unmet metric is recorded in metrics.json and never fails the run.
 async function main() {
   if (process.argv.length > 2) throw new Error('verify-gallery accepts no arguments');
@@ -40,6 +42,7 @@ async function main() {
     environment: { node: process.version, platform: process.platform },
     scope: 'gallery',
     screens: screens.length,
+    journeysDefined: journeys.length,
     failures,
     cleanup: { status: 'NOT_RUN' },
     limitations: [
@@ -142,11 +145,26 @@ async function main() {
       rubric: gallery.rubric,
       index: path.relative(directory, path.join(directory, 'index.html')),
       metrics: 'metrics.json',
+      journeys: gallery.journeys.map((run) => ({
+        journey: run.journey,
+        viewport: run.viewport,
+        completed: run.completed,
+        steps: run.steps.length,
+        interactions: run.interactions,
+        elapsedMs: run.elapsedMs,
+      })),
+      journeyCaptures: gallery.journeys.reduce((count, run) => count + run.steps.length, 0),
+      expectedJourneyCaptures: expectedJourneyCaptures(),
+      journey: 'journey.json',
     };
     failures.push(...gallery.failures.map((message) => `Capture: ${message}`));
     if (gallery.captures.length !== summary.gallery.expectedCaptures)
       throw new Error(
         `Expected ${summary.gallery.expectedCaptures} captures, received ${gallery.captures.length}`
+      );
+    if (summary.gallery.journeyCaptures !== summary.gallery.expectedJourneyCaptures)
+      throw new Error(
+        `Expected ${summary.gallery.expectedJourneyCaptures} journey captures, received ${summary.gallery.journeyCaptures}`
       );
     assertNotCancelled();
     if (
@@ -220,6 +238,7 @@ async function main() {
         evidence: path.join(directory, 'summary.json'),
         index: path.join(directory, 'index.html'),
         captures: summary.gallery?.captures ?? 0,
+        journeys: summary.gallery?.journeys,
         rubric: summary.gallery?.rubric,
         failures,
       })

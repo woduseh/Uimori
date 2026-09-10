@@ -1,8 +1,8 @@
 # 화면 갤러리 · 디자인 검토를 위한 일괄 캡처
 
-`npm run verify:gallery`는 빌드된 앱을 격리된 테스트 모드 서버에 띄우고, 합성 자료를 한 번 시딩한 뒤, 목록에 있는 모든 화면과 모달을 **390×844(모바일)·1440×900(데스크톱) × light·dark**로 캡처해요. 단정이 없어서 한 기계에서 2분 안에 끝나고, 결과는 한 장의 contact sheet와 수치 파일로 남아요. 디자인 검토를 시작할 때 전체 브라우저 회귀(`verify:redesign`) 대신 이 갤러리를 먼저 열어요.
+`npm run verify:gallery`는 빌드된 앱을 격리된 테스트 모드 서버에 띄우고, 합성 자료를 한 번 시딩한 뒤, 목록에 있는 모든 화면과 모달을 **390×844(모바일)·1440×900(데스크톱) × light·dark**로 캡처해요. 이어서 목록에 있는 **여정**(서재의 봇에서 첫 채팅을 만들고, 두 장면을 받고, 포크하기까지)을 두 폭에서 한 단계씩 걸으며 단계마다 캡처하고 상호작용 횟수를 세요. 단정이 없어서 한 기계에서 2분 안에 끝나고, 결과는 한 장의 contact sheet와 수치 파일로 남아요. 디자인 검토를 시작할 때 전체 브라우저 회귀(`verify:redesign`) 대신 이 갤러리를 먼저 열어요.
 
-갤러리는 **기록**이에요. 캡처가 모두 성공하고 정리가 끝나면 PASS이고, 원칙 수치를 못 맞춘 화면이 있어도 실행은 실패하지 않아요. 판정과 개선 결정은 사람이 하고, 수치를 단정으로 강제하는 일은 해당 화면의 `verify-*` 검사가 맡아요.
+갤러리는 **기록**이에요. 캡처와 여정 단계가 모두 성공하고 정리가 끝나면 PASS이고, 원칙 수치를 못 맞춘 화면이 있어도 실행은 실패하지 않아요. 판정과 개선 결정은 사람이 하고, 수치를 단정으로 강제하는 일은 해당 화면의 `verify-*` 검사가 맡아요.
 
 ## 산출물
 
@@ -10,11 +10,13 @@
 
 | 파일 | 내용 |
 | --- | --- |
-| `index.html` | 화면 × (폭·테마) 표. 각 캡처 아래에 수치 배지가 붙어요. 배지 색은 기록이며 판정이 아니에요. |
+| `index.html` | 화면 × (폭·테마) 표와, 그 아래 여정별 단계 × 폭 표. 각 캡처 아래에 수치 배지가 붙고, 여정 단계에는 그 단계의 상호작용 수와 누적 수가 붙어요. 배지 색은 기록이며 판정이 아니에요. |
 | `screens/<id>-<폭>-<테마>.png` | 뷰포트 캡처. 실패한 화면은 `-failed.png`로 마지막 상태를 남겨요. |
+| `journeys/<여정>-<단계>-<폭>.png` | 여정의 각 단계가 안정된 뒤의 캡처(light만). 실패한 단계는 `-failed.png`를 남기고 그 폭의 여정은 거기서 멈춰요. |
 | `metrics.json` | 화면별 수치. 항목마다 `metric`, `value`, `target`, `pass`(`null`은 기록만), `detail`, `source`가 있어요. |
-| `captures.json` | 캡처 목록과 소요 시간, 실패 이유. |
-| `summary.json` | 실행 상태, 서버·빌드 identity, 시딩 결과와 경고, `gallery.rubric`(충족·미충족·기록만 개수와 미충족 화면 목록). |
+| `journey.json` | `source`, `rubric`, 여정 실행(`runs`: 폭별 단계 목록, 단계마다 `interactions`·`cumulativeInteractions`·`elapsedMs`·`url`, 중단됐으면 `failedStep`)과 단계별 수치(`results`). |
+| `captures.json` | 캡처 목록(시작 시각 `at`, 소요 시간 `elapsedMs`)과 실패 이유. |
+| `summary.json` | 실행 상태, 서버·빌드 identity, 시딩 결과와 경고, `screens`·`journeysDefined`(목록 개수), `gallery.rubric`(충족·미충족·기록만 개수와 미충족 화면 목록), `gallery.journeys`(폭별 완주 여부·단계 수·상호작용 수). |
 
 ## 수치와 출처
 
@@ -39,8 +41,17 @@
 [`scripts/gallery/screens.mjs`](../scripts/gallery/screens.mjs)가 목록이에요. 항목 하나는 `id`, `title`, `principles`(원칙 문서의 P·F 식별자), `url`, 선택 사항으로 `ready`(기다릴 요소), `steps`, `viewports`, `themes`, `metrics`, `settle`, `fullPage`를 가져요.
 
 - `url`의 `$chat.main` 같은 값은 시딩 결과로 바뀌어요. 이름은 [`scripts/gallery/seed.mjs`](../scripts/gallery/seed.mjs)의 반환값이에요.
-- `steps`는 페이지가 준비된 뒤 차례로 실행돼요. `{ click: { label | role+name | testid | text | css } }`, `{ menu: 'chat' | 'scene' | 'app' }`, `{ press }`, `{ wait }`를 지원해요. 접근 가능한 이름에 의존하므로 라벨을 바꾸면 이 목록도 함께 바꿔요.
+- `steps`는 페이지가 준비된 뒤 차례로 실행돼요. 어휘는 [`scripts/gallery/steps.mjs`](../scripts/gallery/steps.mjs)에 있어요: `{ click: { label | role+name | testid | text | css, nth?, within? } }`, `{ fill: { <위치>, text } }`, `{ menu: 'chat' | 'scene' | 'app' | '<aria-label>' }`, `{ visible: <위치> }`, `{ press }`, `{ wait }`. 어떤 단계든 `when: 'compact' | 'wide'`를 붙이면 그 폭(760px 기준)에서만 실행돼요. 도우미 패널처럼 좁은 화면에서는 ⋯ 메뉴 안에, 넓은 화면에서는 헤더에 진입점이 있는 화면이 이 방식을 써요. 접근 가능한 이름에 의존하므로 라벨을 바꾸면 이 목록도 함께 바꿔요.
 - 화면을 추가할 때는 원칙 식별자와 기다릴 요소를 함께 적어요. 기다릴 요소가 없으면 헤더가 보이는 시점에 캡처해요.
+
+## 여정
+
+[`scripts/gallery/journey.mjs`](../scripts/gallery/journey.mjs)가 목록이에요. 여정 하나는 `id`, `title`, `principles`, 시작 `url`·`ready`, 선택 사항으로 `viewports`, 그리고 `steps`를 가져요. 단계 하나는 `id`, `title`, `actions`(위 단계 어휘), 선택 사항으로 `ready`(단계가 끝났다고 볼 요소), `urlParam`(그 쿼리 값이 바뀔 때까지 기다림 · 새 채팅·포크), `settle`(캡처 전 대기, 기본 300ms), `metrics`를 가져요.
+
+- 상호작용은 `click`·`fill`·`menu`·`press` 한 번을 1로 세요. `visible`·`wait`는 세지 않아요. 실행된 순간 세므로 단계가 그 뒤에 실패해도 든 횟수는 남아요. 같은 결과에 폭마다 몇 번이 드는지 비교하는 것이 목적이고, 실제 기기의 스크롤·IME 입력은 포함하지 않아요.
+- `fill`의 `text`는 입력할 값이에요. 위치는 `label`·`testid`·`role`·`css`로 적어요.
+- 여정은 화면 캡처가 모두 끝난 뒤 light 테마로만, 두 폭에서 각각 새 컨텍스트로 실행돼요. 서버에 채팅을 실제로 만들지만, 화면 캡처는 그보다 먼저 끝나므로 영향을 받지 않아요.
+- 현재 여정은 `first-chat` 하나예요: 서재 봇 탭 → `<봇> 새 채팅` → `채팅 만들기` → 첫 요청·첫 장면 → 둘째 요청·둘째 장면 → 채팅 ⋯ `채팅 포크`. 페르소나·시작 프롬프트 선택은 포함하지 않아요.
 
 ## 테스트 모드 딥링크
 
@@ -56,10 +67,11 @@
 
 ## 시딩 자료
 
-봇 두 개(하나는 긴 한글 이름), 페르소나, 모듈, 장면 3개가 쓰인 채팅, 빈 채팅, 요청이 실패한 채팅(테스트 모드 `fail-next` 주입)이에요. 실패 주입이 안 되면 `summary.json`의 `seed.warnings`에 남고 실행은 계속돼요. 모두 합성 문장이며 개인 자료는 쓰지 않아요.
+봇 두 개(하나는 긴 한글 이름), 페르소나, 모듈, 장면 3개가 쓰인 채팅(제목과 첫 장면 id도 `$chat.main.title`·`$source.first`로 쓸 수 있어요), 빈 채팅, 요청이 실패한 채팅(테스트 모드 `fail-next` 주입)이에요. 실패 주입이 안 되면 `summary.json`의 `seed.warnings`에 남고 실행은 계속돼요. 모두 합성 문장이며 개인 자료는 쓰지 않아요.
 
 ## 한계
 
 - 이 캡처는 실제 기기, IME, 실제 모델, 배포 환경의 증거가 아니에요.
 - 수치는 정의된 요소 선택자에 묶여 있어요. 클래스 이름이 바뀌면 `ui-metrics.ts`도 따라 바꿔야 하고, 값이 `null`이나 `false`로 떨어지면 먼저 선택자를 의심해요.
 - Windows CI에서는 아직 실행하지 않았어요. 캡처 시간과 글꼴 렌더링은 기계마다 달라요.
+- 같은 기계에서 다른 브라우저 검사가 동시에 돌면 준비 대기(10초)와 단계 대기(15초)가 넘어 개별 캡처가 실패할 수 있어요. 2026-09-10에 다른 세션의 spec 44건과 겹친 실행은 캡처 2개가 대기 초과로 빠졌고, 혼자 돌린 직전 실행은 모두 성공했어요. 혼자 돌리고, `captures.json`의 `elapsedMs`가 평소(중앙값 약 0.5초)보다 크게 튀면 결과보다 기계 상태를 먼저 의심해요.

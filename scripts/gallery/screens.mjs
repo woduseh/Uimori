@@ -1,11 +1,7 @@
 // One entry per screen or modal the gallery captures. `url` values starting with `$` are
-// replaced from the seed result (see seed.mjs). Steps run after the page is ready.
-//
-//   { click: { label | role+name | testid | text | css, nth?, within? } }
-//   { menu: 'chat' | 'scene' | 'app', which?: 'first' | 'last' }   opens an ActionMenu
-//   { press: 'Escape' }   { wait: 300 }
-//
-// `principles` are identifiers from docs/UI-PRINCIPLES-AI-PRODUCTS.md.
+// replaced from the seed result (see seed.mjs). Steps run after the page is ready; the step
+// vocabulary is documented in steps.mjs. `principles` are identifiers from
+// docs/UI-PRINCIPLES-AI-PRODUCTS.md.
 
 export const viewports = {
   mobile: { width: 390, height: 844, isMobile: true, hasTouch: true },
@@ -15,6 +11,8 @@ export const themes = ['light', 'dark'];
 export const defaultMetrics = ['overflow', 'touch-44', 'min-font'];
 
 const chat = { chat: '$chat.main' };
+const inMenu = { css: 'details[open] .action-menu-body' };
+const inHeader = { css: 'header.workspace-header' };
 
 const chatSettings = (section, title, principles) => ({
   id: `chat-settings-${section}`,
@@ -79,9 +77,53 @@ export const screens = [
     steps: [{ menu: 'chat' }],
     metrics: ['menu-in-viewport', ...defaultMetrics],
   },
+  {
+    id: 'chat-earlier-scene',
+    title: '이전 장면 읽기 (최신 장면으로 버튼)',
+    principles: ['P1', 'P11', 'F7'],
+    url: { ...chat, source: '$source.first' },
+    ready: { role: 'button', name: '최신 장면으로' },
+    metrics: ['header-controls', 'composer-dock', 'body-share', ...defaultMetrics],
+  },
+  {
+    id: 'chat-request-actions',
+    title: '이전 요청 탭 → 요청 편집 표시',
+    principles: ['P3', 'F3'],
+    url: chat,
+    ready: { testid: 'source-text' },
+    steps: [
+      { click: { testid: 'source-request' } },
+      { visible: { role: 'button', name: '요청 편집' } },
+    ],
+    viewports: ['mobile'],
+  },
+  {
+    id: 'chat-helper',
+    title: '도우미 패널',
+    principles: ['P1', 'F2'],
+    url: chat,
+    ready: { testid: 'source-text' },
+    steps: [
+      { menu: 'chat', when: 'compact' },
+      { click: { role: 'button', name: '도우미 열기', within: inMenu }, when: 'compact' },
+      { click: { role: 'button', name: '도우미 열기', within: inHeader }, when: 'wide' },
+      { visible: { css: '#helper-panel' } },
+    ],
+  },
+  {
+    id: 'composer-more',
+    title: '입력창 더보기',
+    principles: ['P2'],
+    url: chat,
+    ready: { testid: 'source-text' },
+    steps: [
+      { click: { label: '입력창 더보기' } },
+      { visible: { role: 'group', name: '이번 요청 옵션' } },
+    ],
+  },
   chatSettings('characters', '봇·페르소나·모듈', ['P4', 'F8']),
   chatSettings('prompts', '프롬프트·창작 프리셋', ['P4', 'F8']),
-  chatSettings('models', '모델', ['P7', 'F5', 'F8']),
+  chatSettings('models', '이 채팅의 모델', ['P7', 'F5', 'F8']),
   chatSettings('story', '상태와 기억', ['F8']),
   chatSettings('images', '이미지', ['F8']),
   chatSettings('runtime', '자동 후속 작업', ['F8']),
@@ -129,6 +171,26 @@ export const screens = [
     viewports: ['mobile'],
   },
   {
+    id: 'navigation-chat-menu',
+    title: '모바일 탐색 드로어 · 채팅 행 ⋯',
+    principles: ['P3', 'P4', 'F4'],
+    url: { ...chat, panel: 'navigation' },
+    ready: { role: 'dialog', name: '탐색' },
+    steps: [{ menu: '$chat.main.title 채팅 메뉴' }],
+    viewports: ['mobile'],
+    metrics: ['menu-in-viewport', ...defaultMetrics],
+  },
+  {
+    id: 'sidebar-chat-menu',
+    title: '사이드바 · 채팅 행 ⋯',
+    principles: ['P3', 'P4', 'F4'],
+    url: chat,
+    ready: { testid: 'source-text' },
+    steps: [{ menu: '$chat.main.title 채팅 메뉴' }],
+    viewports: ['desktop'],
+    metrics: ['menu-in-viewport', ...defaultMetrics],
+  },
+  {
     id: 'sidebar-app-menu',
     title: '사이드바 앱 메뉴',
     principles: ['P4', 'F4'],
@@ -150,10 +212,19 @@ export const screens = [
     ready: { testid: 'library-panel' },
     steps: [{ click: { role: 'button', name: '$bot.long.title 상세 보기' } }],
   },
+  {
+    id: 'library-item-menu',
+    title: '서재 · 자료 행 ⋯',
+    principles: ['P2', 'P3', 'P4'],
+    url: { destination: 'library', tab: 'bot' },
+    ready: { testid: 'library-panel' },
+    steps: [{ menu: '$bot.main.title 메뉴' }],
+    metrics: ['menu-in-viewport', ...defaultMetrics],
+  },
   appSettings('general', '일반', ['P4']),
-  appSettings('models', '현재 모델', ['P7', 'F5']),
+  appSettings('models', '역할별 모델', ['P7', 'F5']),
   appSettings('prompts', '현재 프롬프트', ['P4']),
-  appSettings('connections', '프로바이더와 모델', ['P7', 'F5']),
+  appSettings('connections', '프로바이더·모델 등록', ['P7', 'F5']),
   appSettings('agents', '에이전트', ['P4']),
   appSettings('illustrations', '삽화', ['P4']),
   appSettings('data', '데이터 관리', ['P4']),
