@@ -211,10 +211,22 @@ export function ActivityStatus({
     setNow(time);
   }, [serialized]);
   const running = items.filter((item) => active(item.status));
+  // A retry replaces the execution it retried. Its notice carries the older generation in its
+  // acknowledgement key, so the reconciling effect above only drops it after the next paint.
+  // Filtering here keeps one activity from showing two contradictory rows in between.
+  const retried = (notice: Notice) =>
+    items.some(
+      (item) =>
+        item.runId === notice.item.runId &&
+        item.generation !== undefined &&
+        notice.item.generation !== undefined &&
+        item.generation > notice.item.generation
+    );
   const unresolvedNotices = notices.filter(
     (notice) =>
       (notice.expiresAt === null || notice.expiresAt > now) &&
-      !resolved.some((item) => item.acknowledgementKey === notice.item.acknowledgementKey)
+      !resolved.some((item) => item.acknowledgementKey === notice.item.acknowledgementKey) &&
+      !retried(notice)
   );
   const visibleNotices = unresolvedNotices.filter(
     (notice) =>
