@@ -69,39 +69,60 @@ export function preservePromptWorkspace() {
     original = baseline;
     originalModels = await (await request.get('/api/model-workspace')).json();
   });
-  test.afterEach(async ({ request, page }) => {
-    // Drain synthetic response handlers before restoration emits fresh SSE requests.
-    await page.unrouteAll({ behavior: 'wait' });
+  test.afterEach(async ({ request, page }, testInfo) => {
+    // Prompt and model settings are global to the server, and every browser spec of a run shares
+    // one server. A case that spends its whole budget must not also starve this restore: leaked
+    // controls turn into unrelated failures in later spec files, far from their cause.
+    test.setTimeout(testInfo.timeout + 30_000);
+    // Drain synthetic response handlers before restoration emits fresh SSE requests. A case that
+    // timed out can leave a handler blocked on a gate it never resolves, so plain draining would
+    // hang here and everything below would be skipped. Bound the drain, then drop what is left.
+    await Promise.race([
+      page.unrouteAll({ behavior: 'wait' }),
+      new Promise((resolve) => setTimeout(resolve, 5_000)),
+    ]);
+    await page.unrouteAll({ behavior: 'ignoreErrors' });
     if (!original || !originalModels) return;
-    let current = (await (await request.get('/api/prompt-workspace')).json()) as PromptWorkspace;
-    for (const role of ['main', 'translation'] as const) {
-      if (current[role].presetId === original[role].presetId) continue;
-      const applied = await request.post('/api/prompt-workspace/apply', {
-        data: { expectedRevision: current.revision, role, presetId: original[role].presetId },
+    // Prompts and models restore independently, so one failure must not skip the other.
+    const failures: string[] = [];
+    try {
+      let current = (await (await request.get('/api/prompt-workspace')).json()) as PromptWorkspace;
+      for (const role of ['main', 'translation'] as const) {
+        if (current[role].presetId === original[role].presetId) continue;
+        const applied = await request.post('/api/prompt-workspace/apply', {
+          data: { expectedRevision: current.revision, role, presetId: original[role].presetId },
+        });
+        expect(applied.ok(), await applied.text()).toBe(true);
+        current = (await applied.json()) as PromptWorkspace;
+      }
+      const restored = await request.put('/api/prompt-workspace', {
+        data: {
+          expectedRevision: current.revision,
+          main: original.main,
+          translation: original.translation,
+          translationPolicy: original.translationPolicy,
+        },
       });
-      expect(applied.ok(), await applied.text()).toBe(true);
-      current = (await applied.json()) as PromptWorkspace;
+      expect(restored.ok(), await restored.text()).toBe(true);
+    } catch (error) {
+      failures.push(`prompt workspace: ${(error as Error).message}`);
     }
-    const restored = await request.put('/api/prompt-workspace', {
-      data: {
-        expectedRevision: current.revision,
-        main: original.main,
-        translation: original.translation,
-        translationPolicy: original.translationPolicy,
-      },
-    });
-    expect(restored.ok(), await restored.text()).toBe(true);
-    const modelCurrent = await (await request.get('/api/model-workspace')).json();
-    const modelRestored = await request.put('/api/model-workspace', {
-      data: {
-        expectedRevision: modelCurrent.revision,
-        routes: originalModels.routes,
-        titleModel: originalModels.titleModel ?? null,
-        helperModel: originalModels.helperModel ?? null,
-        contextModel: originalModels.contextModel ?? null,
-        translationPolicy: originalModels.translationPolicy,
-      },
-    });
-    expect(modelRestored.ok(), await modelRestored.text()).toBe(true);
+    try {
+      const modelCurrent = await (await request.get('/api/model-workspace')).json();
+      const modelRestored = await request.put('/api/model-workspace', {
+        data: {
+          expectedRevision: modelCurrent.revision,
+          routes: originalModels.routes,
+          titleModel: originalModels.titleModel ?? null,
+          helperModel: originalModels.helperModel ?? null,
+          contextModel: originalModels.contextModel ?? null,
+          translationPolicy: originalModels.translationPolicy,
+        },
+      });
+      expect(modelRestored.ok(), await modelRestored.text()).toBe(true);
+    } catch (error) {
+      failures.push(`model workspace: ${(error as Error).message}`);
+    }
+    expect(failures, 'global settings were left changed for later specs').toEqual([]);
   });
 }

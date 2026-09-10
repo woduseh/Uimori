@@ -72,6 +72,12 @@ export async function selectChatSettingsSection(page: Page, name: string) {
 export async function selectPackageSection(page: Page, name: string) {
   const fields = page.getByTestId('package-fields');
   await expect(fields).toBeVisible();
+  // The list/detail split follows a media query, so right after a resize the previous layout is
+  // still mounted. Reading the back button then races React and clicks an element about to go.
+  await expect(fields.locator('.package-editor-layout')).toHaveAttribute(
+    'data-compact',
+    String((page.viewportSize()?.width ?? 0) <= 760)
+  );
   const back = fields.getByRole('button', { name: '패키지 분야 목록', exact: true });
   if (await back.isVisible()) await back.click();
   const tab = fields.getByRole('tab', { name, exact: true });
