@@ -115,7 +115,9 @@ export async function seedGallery(baseUrl, { log = () => {} } = {}) {
     throw new Error(`Run ${runId} did not settle within 10s`);
   };
 
-  const main = await quietChat(bot.id, '북쪽 등대의 첫 겨울');
+  const mainTitle = '북쪽 등대의 첫 겨울';
+  const main = await quietChat(bot.id, mainTitle);
+  let firstSource;
   for (let index = 0; index < prose.length; index++) {
     const current = await detailOf(main.id);
     const run = await call('POST', `/api/chats/${main.id}/runs`, {
@@ -128,6 +130,7 @@ export async function seedGallery(baseUrl, { log = () => {} } = {}) {
     if (settled.run.status !== 'completed')
       throw new Error(`Seed run ${index} ended as ${settled.run.status}`);
     const source = settled.detail.sources.at(-1);
+    firstSource ??= source.id;
     await call('PUT', `/api/sources/${source.id}/text`, {
       text: prose[index],
       expectedRevision: source.editRevision ?? 0,
@@ -161,6 +164,8 @@ export async function seedGallery(baseUrl, { log = () => {} } = {}) {
   return {
     ids: {
       'chat.main': main.id,
+      'chat.main.title': mainTitle,
+      'source.first': firstSource,
       'chat.empty': empty.id,
       'chat.failed': failed.id,
       'bot.main': bot.id,
