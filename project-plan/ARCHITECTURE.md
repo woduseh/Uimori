@@ -1,6 +1,6 @@
 # 아키텍처 계약 v0.6.1
 
-> 2026-09-08 현행 연결: 문서 제목의 v0.6.1은 계약 문서 버전이며 현재 DB/archive는 v12다. 구형 DB는 이관하지 않고 거부하며 개발 DB 초기화는 `npm run reset:dev`를 사용한다. 서재 분류·폴더와 자료 종류는 [LIBRARY](../docs/LIBRARY.md), 공통 패키지·Run 상태·기록된 난수는 [PACKAGE-BEHAVIOR](../docs/PACKAGE-BEHAVIOR.md), 개인 HTTPS 접속·세션은 [SELF-HOST](../docs/SELF-HOST.md), Risu 자료의 에이전트 이식은 [RISU-PORTING](../docs/RISU-PORTING.md)을 따른다. 아래 M1/M2 시점의 설명과 장기 설계는 각 단계의 계약이며 전체 구현 완료를 뜻하지 않는다. 실제 완료 범위는 [CURRENT](CURRENT.md)에서 확인한다.
+> 2026-09-08 현행 연결(2026-09-10 버전 정정): 문서 제목의 v0.6.1은 계약 문서 버전이며 현재 DB/archive는 v15다(이 문장 작성 당시 v12, 본문 10절의 "현재 v12 새 DB"도 같은 시점의 표현). 현재 계약의 요약은 [CURRENT](CURRENT.md)를 따른다. 구형 DB는 이관하지 않고 거부하며 개발 DB 초기화는 `npm run reset:dev`를 사용한다. 서재 분류·폴더와 자료 종류는 [LIBRARY](../docs/LIBRARY.md), 공통 패키지·Run 상태·기록된 난수는 [PACKAGE-BEHAVIOR](../docs/PACKAGE-BEHAVIOR.md), 개인 HTTPS 접속·세션은 [SELF-HOST](../docs/SELF-HOST.md), Risu 자료의 에이전트 이식은 [RISU-PORTING](../docs/RISU-PORTING.md)을 따른다. 아래 M1/M2 시점의 설명과 장기 설계는 각 단계의 계약이며 전체 구현 완료를 뜻하지 않는다. 실제 완료 범위는 [CURRENT](CURRENT.md)에서 확인한다.
 
 제안된 이름은 구현을 강제하는 클래스 목록이 아니다. 아래 경계와 동작을 유지하면 더 단순한 표현으로 구현할 수 있다.
 

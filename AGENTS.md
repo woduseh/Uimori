@@ -1,5 +1,7 @@
 # 작업 지도
 
+- 2026-09-10 방향 결정(채팅별 고정 층, Q04 대체 실검증, 검증 게이트 층 분리, 프롬프트 AST 원본, 선언형 확장 확정, 구조 정리 4건, 채팅 본문 추출 형식, 계획 문서 분리)과 실행 순서는 `docs/DECISIONS-2026-09-10.md`를 봐요. 구현은 각 단계별 별도 작업이며 결과는 해당 계약 문서에 기록해요. 채팅 본문 추출·가져오기(`uimori-chat-transcript` v1)는 `docs/CHAT-TRANSCRIPT.md`, `core/chat-transcript.ts`, `server/chat-transcript.ts`를 봐요. 가져온 항목은 사용량 0의 완료 Run이고 snapshot의 `transcriptImport`로 구분하며 모델 준비·상태·이미지 작업을 만들지 않아요.
+
 - 도우미·통합 문맥의 확정 계약은 `project-plan/HELPER-CONTEXT-PLAN.md`, 결과는 `project-plan/HELPER-CONTEXT-RESULTS.md`를 봐요. 별도 도우미는 `server/helper-runtime.ts`, 허가·operation 영수증·작업은 `server/helper-workspace.ts`, 공통 초안은 `server/edit-drafts.ts`, 채팅별 로어 변경과 옵션 위임은 `server/chat-overrides.ts`·`server/chat-options.ts`예요. 도우미 요청의 명시 권한만 쓰며 미저장 JSON·revision 충돌을 보존해요. 가정 장면은 본편과 별도 산출물이고 원문/상태/추첨을 저장하지 않아요. 공개 답변 스트림은 `server/response-stream.ts`에서 durable cursor로 보관하며 내부 도구 JSON·reasoning은 노출하지 않아요. 이미지 이해·실모델 의미 품질·운영 v15 전환은 별도 범위예요.
 
 - 현재 역할 모델은 `docs/GLOBAL-MODELS.md`, `server/prompt-workspace.ts`의 `/api/model-workspace`를 봐요. 본문·번역·거절 판정·표시 상태·이미지·도우미·문맥 정리·제목 모델과 번역 정책은 전역이며 `profile.routes`는 읽기 전용 projection이에요. 새 작업 예약 때 고정하고 기존 채팅 모델을 자동 채택하지 않아요. 번역 job 재시도는 현재 설정의 새 job, 표시 상태·이미지 job 재시도와 후보 실험은 원 snapshot을 유지해요. `npm run verify:global-models`는 390/1440px 합성 UI·예약 경계를 확인하며 실제 공급자를 호출하지 않아요.
@@ -12,9 +14,9 @@
 
 - 커스텀 작문 보조는 `docs/AGENT-COLLABORATION.md`, `core/agent-collaboration.ts`, `server/agent-collaboration.ts`를 봐요. `PromptProgram.collaboration`은 기본 OFF이며 보조의 지침·공유 옵션·모델을 Run에 고정해요. 읽기 권한·전체 호출 한도·전송 전 attempt·취소를 유지하고 메인만 원문을 저장해요. `npm run verify:collaboration`은 설정·미리보기 합성 화면 검사이며 실제 창작 품질의 증거는 아니에요.
 
-- 코드 품질·완료 검사: `docs/QUALITY.md`. 수정 중에는 `npm run quality`(서식·lint·타입·의존성), 완료/통합 전에는 `npm run quality:full`(단위·통합·빌드 추가)을 실행해요. UI 동작 변경은 빌드 후 해당 `verify:*` 또는 전체 `npm run verify:redesign`을 추가해요. 서식 수정은 `npm run format`, lint 자동 수정은 안전한 수정만 하는 `npm run lint:fix`예요. 필요한 검사 통과 후 반복·확대하지 않으며, 검사 통과를 위한 광범위 ignore·규칙 약화 대신 좁은 예외에 이유를 남겨요.
+- 코드 품질·완료 검사: `docs/QUALITY.md`. 수정 중에는 `npm run quality`(서식·lint·타입·의존성)를 실행해요. 매 변경의 완료 조건은 `npm run quality:full`(단위·통합·빌드 추가) + `npm run verify:smoke` + 변경 영역의 `verify:*` 하나예요. 전체 `npm run verify:redesign`은 릴리스 전 1회이며 매 변경의 완료 조건이 아니에요(2026-09-10 결정 3). 서식 수정은 `npm run format`, lint 자동 수정은 안전한 수정만 하는 `npm run lint:fix`예요. 필요한 검사 통과 후 반복·확대하지 않으며, 검사 통과를 위한 광범위 ignore·규칙 약화 대신 좁은 예외에 이유를 남겨요. `core/`·`server/` 값 import 순환은 `tests/module-cycles.test.ts`가 알려진 목록과 비교하므로 새 순환을 만들지 않아요.
 
-- 검사 통폐합 판단은 `docs/TESTING-AUDIT.md`와 연결된 전수표에 있어요. 기본 UI 연결은 `verify:browser-smoke`, 관련 기능은 기존 `verify:*`, 여러 영역 통합은 `verify:redesign`을 사용해요. 추가 화면 폭·정밀 배치·성공 PNG는 `verify:visual`, 반복 성능 측정은 `benchmark:story`로 분리해요. 테스트만 바꾸면 재빌드는 필요 없지만 검증 도중 테스트가 바뀐 증거는 무효예요.
+- 검사 통폐합 판단은 `docs/TESTING-AUDIT.md`와 연결된 전수표에 있어요. 기본 UI 연결은 `verify:browser-smoke`, 관련 기능은 기존 `verify:*`를 사용하고 전체 `verify:redesign`은 릴리스 전에만 돌려요. 추가 화면 폭·정밀 배치·성공 PNG는 `verify:visual`, 반복 성능 측정은 `benchmark:story`로 분리해요. 테스트만 바꾸면 재빌드는 필요 없지만 검증 도중 테스트가 바뀐 증거는 무효예요.
 
 - 공통 합성 브라우저 실행은 `scripts/browser-verification.mjs`예요. 연결된 `verify-*` 진입점은 검사 파일·필수 case·필수 PNG·timeout을 선택해요. 소스/빌드 일치, reporter·fixture 오류 판정, 소유권·취소·cleanup·DB 증거 보존을 공통 실행기에 유지하며 회귀는 `tests/harness.test.ts`에서 확인해요. 초기 UI 전후 캡처 전용 `ui-evidence.mjs`는 제거했으며 당시 화면 증거는 보존해요.
 
