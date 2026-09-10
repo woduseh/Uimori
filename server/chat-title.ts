@@ -1,4 +1,4 @@
-import type { Connection, ModelPreset } from '../core/product.js';
+import { workspaceModelRef, type Connection, type ModelPreset } from '../core/product.js';
 import type { Run } from '../core/types.js';
 import {
   executeProvider,
@@ -36,7 +36,7 @@ export class ChatTitleService {
     );
   }
   enroll(chatId: string) {
-    if (promptWorkspace(this.store).titleModel && !this.has(chatId, 'eligible'))
+    if (workspaceModelRef(promptWorkspace(this.store), 'title') && !this.has(chatId, 'eligible'))
       this.store.event(chatId, 'chat.title.eligible', chatId);
   }
   cancel(chatId: string) {
@@ -77,7 +77,7 @@ export class ChatTitleService {
     let attempt: string | undefined;
     let result: ProviderResult | undefined;
     try {
-      const ref = promptWorkspace(this.store).titleModel;
+      const ref = workspaceModelRef(promptWorkspace(this.store), 'title');
       if (!ref || !run.sourceRevision) throw new ProviderContractError('TITLE_MODEL_UNSET');
       this.store.product.assertAvailable('model', ref.id);
       const model = structuredClone(this.store.product.get<ModelPreset>('model', ref.id));

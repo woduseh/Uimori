@@ -1,6 +1,8 @@
 import { promptOptionOwner } from '../core/chat-options.js';
 import type { FastifyInstance } from 'fastify';
 import type {
+  ChatProfile,
+  ContentRef,
   CurrentPrompt,
   ModelWorkspace,
   PromptPreset,
@@ -10,6 +12,7 @@ import type {
   SavedPromptCombination,
   PromptCombinationOwner,
 } from '../core/product.js';
+import { workspaceModelRef } from '../core/product.js';
 import { createDefaultPromptProgram } from '../core/prompt-defaults.js';
 import { DEFAULT_MAIN_PROMPT, DEFAULT_TRANSLATION_PROMPT } from '../core/prompts.js';
 import {
@@ -132,6 +135,42 @@ export function promptWorkspace(store: Store): PromptWorkspace {
   };
 }
 
+type ChatPromptWorkspace = PromptWorkspace & { pinnedMainPreset?: ContentRef };
+
+/** Resolve live chat selections without changing the global working copy or historical runs. */
+export function chatPromptWorkspace(
+  store: Store,
+  pinned: ChatProfile['pinned']
+): ChatPromptWorkspace {
+  const workspace: ChatPromptWorkspace = promptWorkspace(store);
+  if (pinned?.mainModel) workspace.modelRoutes.main = structuredClone(pinned.mainModel);
+  if (pinned?.mainPromptPresetId) {
+    let preset: PromptPreset;
+    try {
+      store.product.assertAvailable('prompt-preset', pinned.mainPromptPresetId);
+      preset = store.product.get<PromptPreset>('prompt-preset', pinned.mainPromptPresetId);
+      if (preset.role !== 'main')
+        throw new HttpError(400, 'The pinned prompt is not a main prompt');
+    } catch (error) {
+      if (!(error instanceof HttpError)) throw error;
+      throw new HttpError(
+        409,
+        'PINNED_PROMPT_UNAVAILABLE: 이 채팅에 고정한 작문 프롬프트를 사용할 수 없어요. 채팅 설정에서 다시 선택해 주세요.'
+      );
+    }
+    const values = resolvePromptValues(preset.program, preset.values ?? {});
+    workspace.main = {
+      presetId: preset.id,
+      title: preset.title,
+      program: structuredClone(preset.program),
+      values,
+      defaultValues: structuredClone(values),
+    };
+    workspace.pinnedMainPreset = { id: preset.id, revision: preset.revision };
+  }
+  return workspace;
+}
+
 export function emptyModelRoutes(): ModelWorkspace['routes'] {
   return { main: null, translation: null, status: null, image: null };
 }
@@ -157,9 +196,9 @@ export function modelWorkspace(store: Store): ModelWorkspace {
   const current = promptWorkspace(store);
   return {
     revision: current.revision,
-    titleModel: current.titleModel ?? null,
-    helperModel: current.helperModel ?? null,
-    contextModel: current.contextModel ?? null,
+    titleModel: workspaceModelRef(current, 'title'),
+    helperModel: workspaceModelRef(current, 'helper'),
+    contextModel: workspaceModelRef(current, 'context'),
     routes: current.modelRoutes,
     translationPolicy: current.translationPolicy,
   };
@@ -260,7 +299,7 @@ export function updatePromptWorkspace(
 
 /** IDs here identify a working slot and revision, not a retained preset dependency. */
 export function freezeCurrentPrompts(
-  workspace: PromptWorkspace
+  workspace: ChatPromptWorkspace
 ): Pick<
   ProfileSnapshot,
   'prompts' | 'promptPresets' | 'promptControls' | 'promptWorkspaceRevision' | 'promptOptionOwner'
@@ -272,8 +311,14 @@ export function freezeCurrentPrompts(
     const { presetId: _presetId, defaultValues: _defaultValues, ...current } = workspace[role];
     const preset = {
       ...structuredClone(current),
-      id: `current-${role}`,
-      revision: workspace.revision,
+      id:
+        role === 'main'
+          ? (workspace.pinnedMainPreset?.id ?? 'current-main')
+          : 'current-translation',
+      revision:
+        role === 'main'
+          ? (workspace.pinnedMainPreset?.revision ?? workspace.revision)
+          : workspace.revision,
       role,
     };
     promptPresets[role] = preset;

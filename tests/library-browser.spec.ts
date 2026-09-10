@@ -197,6 +197,9 @@ test('LIBUI02 mobile folder deletion refreshes another page and stale moves requ
   await expect(confirm).toContainText('미분류');
   await confirm.getByRole('button', { name: '영구 삭제', exact: true }).click();
   await expect(confirm).toBeHidden();
+  const folderMenu = panel.locator('details.action-menu:has(> summary[aria-label="폴더 관리"])');
+  await expect(folderMenu).not.toHaveAttribute('open');
+  await expect(panel.getByLabel('폴더 관리', { exact: true })).toBeFocused();
   await expect(otherPanel.getByRole('checkbox', { name: `${item.title} 선택` })).toHaveCount(1);
   await expect(
     otherPanel.getByRole('button', { name: `${item.title} 선택`, exact: true })

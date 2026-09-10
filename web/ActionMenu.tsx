@@ -117,14 +117,44 @@ export function ActionMenu({
     // closes, whichever way: the menu closes with it and focus returns to the trigger.
     const node = ref.current;
     if (!node) return;
-    const closed = (event: Event) => {
-      if (!(event.target instanceof HTMLDialogElement) || !node.open) return;
-      if (event.target.closest('details.action-menu') !== node) return;
+    const finish = () => {
+      if (!node.open || !node.isConnected) return;
       node.open = false;
-      node.querySelector('summary')?.focus();
+      node.querySelector<HTMLElement>(':scope > summary')?.focus();
     };
+    const ownedDialogs = () =>
+      new Set(
+        [...node.querySelectorAll<HTMLDialogElement>('dialog[open]')].filter(
+          (dialog) => dialog.closest('details.action-menu') === node
+        )
+      );
+    const activeDialogs = ownedDialogs();
+    const closed = (event: Event) => {
+      if (!(event.target instanceof HTMLDialogElement)) return;
+      if (event.target.closest('details.action-menu') !== node) return;
+      activeDialogs.delete(event.target);
+      finish();
+    };
+    // A successful deletion can unmount its dialog before the asynchronous native close event
+    // bubbles through this menu. Only track dialogs owned by this menu, excluding nested menus.
+    const observer = new MutationObserver(() => {
+      const removed = [...activeDialogs].some((dialog) => !node.contains(dialog));
+      const currentDialogs = ownedDialogs();
+      for (const dialog of currentDialogs) activeDialogs.add(dialog);
+      for (const dialog of activeDialogs) if (!node.contains(dialog)) activeDialogs.delete(dialog);
+      if (removed && currentDialogs.size === 0) finish();
+    });
+    observer.observe(node, {
+      childList: true,
+      subtree: true,
+      attributes: true,
+      attributeFilter: ['open'],
+    });
     node.addEventListener('close', closed, true);
-    return () => node.removeEventListener('close', closed, true);
+    return () => {
+      observer.disconnect();
+      node.removeEventListener('close', closed, true);
+    };
   }, []);
   // A dialog *inside* the menu (confirmation, picker) owns its own controls; the menu itself may
   // sit inside a dialog such as the navigation drawer, which must not count.

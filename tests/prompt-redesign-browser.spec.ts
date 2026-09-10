@@ -140,13 +140,65 @@ test('PRUI01 template drafts retain same-owner combinations and reject identical
     '{% if options.detail >= 2 %}Detailed {{ options.detail }}{% else %}Brief{% endif %}'
   );
   await block.getByRole('button', { name: '문법 초안 적용', exact: true }).click();
-  await editor.getByRole('button', { name: '저장', exact: true }).click();
+  await expect(block.getByRole('alert')).toHaveCount(0);
+  const beforeSave = await (await request.get(`/api/prompt-presets/${saved.id}`)).json();
+  const savePath = /\/api\/edit-drafts\/[^/]+\/save$/u;
+  let releaseSave!: () => void;
+  const saveGate = new Promise<void>((resolve) => {
+    releaseSave = resolve;
+  });
+  let saveStarted = false;
+  await page.route(savePath, async (route) => {
+    saveStarted = true;
+    await saveGate;
+    await route.continue();
+  });
+  const saveResponse = page.waitForResponse(
+    (response) => savePath.test(response.url()) && response.request().method() === 'POST'
+  );
+  try {
+    await editor.getByRole('button', { name: '저장', exact: true }).click();
+    await expect.poll(() => saveStarted).toBe(true);
+    // Busy disables the fieldset before persistence; disabled alone is not a save receipt.
+    await expect(editor.getByRole('button', { name: '저장', exact: true })).toBeDisabled();
+    expect(await (await request.get(`/api/prompt-presets/${saved.id}`)).json()).toEqual(beforeSave);
+  } finally {
+    releaseSave();
+  }
+  const response = await saveResponse;
+  expect(response.ok()).toBe(true);
+  const accepted = (await response.json()).saved;
+  await page.unroute(savePath);
+  await expect(
+    editor.getByRole('status').filter({ hasText: '프롬프트를 저장했어요.' })
+  ).toBeVisible();
   await expect(editor.getByRole('button', { name: '저장', exact: true })).toBeDisabled();
   const revised = await (await request.get(`/api/prompt-presets/${saved.id}`)).json();
-  expect(revised.program.blocks[0].template[0].kind).toBe('if');
+  expect(revised).toEqual(accepted);
+  expect(revised.revision).toBeGreaterThan(beforeSave.revision);
+  expect(revised.program.blocks[0].template).toEqual([
+    {
+      kind: 'if',
+      condition: { op: 'greaterEqual', args: [{ control: 'detail' }, 2] },
+      then: [
+        { kind: 'text', text: 'Detailed ' },
+        { kind: 'value', expression: { control: 'detail' } },
+      ],
+      else: [{ kind: 'text', text: 'Brief' }],
+    },
+  ]);
   const current = (await (await request.get('/api/prompt-workspace')).json()).main;
   expect(current.program).toEqual(program);
   expect(current.values.detail).toBe(3);
+  await page.reload();
+  await navigationAction(page, '프롬프트');
+  await page.getByRole('button', { name: `${saved.title} 프롬프트 편집`, exact: true }).click();
+  await openPromptBlocks(composer);
+  await block.locator('summary').first().click();
+  await block.getByRole('button', { name: '템플릿 문법으로 편집 · 시험', exact: true }).click();
+  await expect(source).toHaveValue(
+    '{% if greaterEqual(options.detail, 2) %}Detailed {{ options.detail }}{% else %}Brief{% endif %}'
+  );
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(
     true
   );

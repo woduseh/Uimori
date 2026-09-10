@@ -7,6 +7,7 @@ import {
   contextWindowStatus,
 } from '../core/context-tools.js';
 import type { ToolAction } from '../core/provider.js';
+import { sourceSceneAnchors, sourceSceneScope } from '../core/source-history.js';
 import type { RunSnapshot, ToolEvent } from '../core/types.js';
 import {
   contextSourceRefs,
@@ -95,14 +96,22 @@ export async function executeContextTool(
     keys = Object.keys(args);
   if (action.name === 'context.read') {
     if (keys.length) return denied('INVALID_ARGUMENTS');
+    const anchors = sourceSceneAnchors(fixed);
+    const numbers = new Map(anchors.map((anchor) => [anchor.revision, anchor.sceneNumber]));
+    const retained = new Set(plan.recentSourceRevisions);
     return {
       event: {
         ...action,
         result: {
           savedSummary: state.workingSummary,
           windowSummary: plan.summary,
-          compacted: plan.compacted.map(({ revision, hash }) => ({ revision, hash })),
-          retained: [...plan.recentSourceRevisions],
+          sceneScope: sourceSceneScope(fixed),
+          compacted: plan.compacted.map(({ revision, hash }) => ({
+            sceneNumber: numbers.get(revision)!,
+            revision,
+            hash,
+          })),
+          retained: anchors.filter((anchor) => retained.has(anchor.revision)),
           checkpoint: state.checkpoint,
         },
         denied: false,
@@ -186,6 +195,7 @@ export async function executeContextTool(
   state.workingSummary = summary;
   state.checkpoint = saved.checkpoint ?? state.checkpoint;
   const switched = saved.snapshot;
+  const retained = new Set(switched.contextPlan?.recentSourceRevisions ?? []);
   return {
     switched,
     event: {
@@ -194,7 +204,8 @@ export async function executeContextTool(
       result: {
         switched: true,
         compactedExchanges: refs.length,
-        retained: [...(switched.contextPlan?.recentSourceRevisions ?? [])],
+        sceneScope: sourceSceneScope(switched),
+        retained: sourceSceneAnchors(switched).filter((anchor) => retained.has(anchor.revision)),
         droppedToolResults: options.pendingResults,
         checkpoint: saved.checkpoint,
         activated: saved.activated,
@@ -203,7 +214,7 @@ export async function executeContextTool(
           plan.budget.inputTokenLimit
         ),
         guidance:
-          'Earlier exchanges and previous tool results are no longer in the transmitted input. story.list, story.search and story.read still reach every original.',
+          'Earlier exchanges and tool results have left the input. Read any known [scene N] anchor directly with story.read({sceneNumber:N}); story.list/search still discover every original in this sceneScope.',
       },
       denied: false,
     },

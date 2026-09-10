@@ -130,9 +130,11 @@ const completed = (text: string, costUsd: number | null = null) =>
   );
 type SummaryPayload = {
   previousSummary: string | null;
+  sceneScope: { chatId: string; headRevision: string | null; headHash: string | null };
   fragments: {
     sourceRevision: string;
     sourceHash: string;
+    sourceSceneNumber: number;
     messageId: string;
     role: string;
     offsetUtf16: number;
@@ -180,6 +182,10 @@ function respondWithMergedSummary(log: ReturnType<typeof observed>) {
     expect(wire.generation.maxOutputTokens).toBe(4096);
     expect(estimateContextTokens(wire)).toBeLessThanOrEqual(8192);
     const source = wire.input.source as SummaryPayload;
+    for (const fragment of source.fragments)
+      expect(fragment.sourceSceneNumber).toBe(
+        Number(fragment.sourceRevision.split('-').at(-1)) + 1
+      );
     payloads.push(source);
     return completed(
       `${source.previousSummary ?? '미라가 약속을 기억하지만 진실은 불확실해요.'}\n추가 요약 ${payloads.length}. 사용자 의사를 보존해요.`
@@ -206,6 +212,107 @@ afterEach(() => {
 });
 
 describe('input context projection and durable summary calls', () => {
+  test.each([
+    { consumerLimit: 8192, outputLimit: 8192, target: 1024, hardCap: 4096 },
+    { consumerLimit: 65536, outputLimit: 8192, target: 2048, hardCap: 4096 },
+    { consumerLimit: 16384, outputLimit: 512, target: 256, hardCap: 512 },
+  ])(
+    'manual compaction gives a $consumerLimit-token consumer a $target-token summary goal below its $hardCap hard output cap',
+    async ({ consumerLimit, outputLimit, target, hardCap }) => {
+      const source = snapshot([
+        '첫 약속.',
+        '아직 풀리지 않은 의문.',
+        '최근 첫 장면.',
+        '최근 다음 장면.',
+      ]);
+      source.profile!.models.main = { ...model(), inputTokenLimit: consumerLimit };
+      source.profile!.contextModel = {
+        ...model('summary-model'),
+        inputTokenLimit: 32768,
+        maxOutputTokens: outputLimit,
+      };
+      source.contextPlan!.budget.inputTokenLimit = consumerLimit;
+      const original = structuredClone(source),
+        log = observed({ reason: 'manual' });
+      // This fixed provider response exercises host policy, not semantic summary quality.
+      vi.mocked(fetch).mockImplementation(async () => completed('SYNTHETIC_COMPLETE_SUMMARY'));
+      const result = await prepareInputContext(source, log.hooks);
+      expect(result.snapshot.contextPlan!.status).toBe('ready');
+      expect(result.snapshot.contextPlan!.recentSourceRevisions).toEqual(['source-2', 'source-3']);
+      expect(log.wires).toHaveLength(1);
+      expect(log.wires[0].body).toMatchObject({
+        generation: { maxOutputTokens: hardCap },
+        input: { controls: { purpose: 'input-context-compaction', targetSummaryTokens: target } },
+      });
+      expect(source).toEqual(original);
+      expect(result.snapshot.history).toEqual(original.history);
+    }
+  );
+
+  test.each([0, -128])(
+    'no summary is requested with %i estimated tokens free below the fixed-input trigger',
+    async (freeTokens) => {
+      const source = snapshot(['원문 하나.', '원문 둘.', '원문 셋.']),
+        original = structuredClone(source),
+        log = observed({
+          measureInput: (projected) => ({
+            snapshot: projected,
+            estimatedInputTokens:
+              8192 * 0.85 -
+              freeTokens +
+              projected.contextPlan!.recentSourceRevisions.length * 500 +
+              (projected.contextPlan!.summary ? 20 : 0),
+          }),
+        });
+      const error = await failure(prepareInputContext(source, log.hooks));
+      expect(error.code).toBe('CONTEXT_FIXED_INPUT_TOO_LARGE');
+      expect(error.usage.modelCalls).toBe(0);
+      expect(log.wires).toHaveLength(0);
+      expect(fetch).not.toHaveBeenCalled();
+      expect(source).toEqual(original);
+    }
+  );
+
+  test.each([
+    { freeTokens: 128, summaryTokens: 20, fits: true },
+    { freeTokens: 511, summaryTokens: 20, fits: true },
+    { freeTokens: 128, summaryTokens: 129, fits: false },
+    { freeTokens: 511, summaryTokens: 512, fits: false },
+  ])(
+    '$freeTokens tokens of summary headroom still require the actual $summaryTokens-token summary to pass final input admission',
+    async ({ freeTokens, summaryTokens, fits }) => {
+      const source = snapshot(['원문 하나.', '원문 둘.', '원문 셋.']),
+        original = structuredClone(source),
+        log = observed({
+          measureInput: (projected) => ({
+            snapshot: projected,
+            estimatedInputTokens:
+              8192 * 0.85 -
+              freeTokens +
+              projected.contextPlan!.recentSourceRevisions.length * 500 +
+              (projected.contextPlan!.summary ? summaryTokens : 0),
+          }),
+        });
+      vi.mocked(fetch).mockImplementation(async () => completed('SYNTHETIC_COMPLETE_SUMMARY'));
+      if (fits) {
+        const result = await prepareInputContext(source, log.hooks);
+        expect(result.snapshot.contextPlan!.status).toBe('ready');
+        expect(result.snapshot.contextPlan!.estimatedInputTokens).toBeLessThanOrEqual(8192 * 0.85);
+      } else {
+        const error = await failure(prepareInputContext(source, log.hooks));
+        expect(error.code).toBe('CONTEXT_FIXED_INPUT_TOO_LARGE');
+        expect(error.plan.estimatedInputTokens).toBeGreaterThan(8192 * 0.85);
+      }
+      expect(log.wires.length).toBeGreaterThan(0);
+      for (const wire of log.wires)
+        expect(wire.body).toMatchObject({
+          generation: { maxOutputTokens: 4096 },
+          input: { controls: { targetSummaryTokens: freeTokens } },
+        });
+      expect(source).toEqual(original);
+    }
+  );
+
   test('under-threshold input needs no provider call and preserves source text, roles, prompt, and current input', async () => {
     const source = snapshot(['미라는 부두에 도착했어요.']),
       original = structuredClone(source),
@@ -316,6 +423,97 @@ describe('input context projection and durable summary calls', () => {
       expect(payloads[i].previousSummary).toContain(
         payloads[i - 1].previousSummary ?? '미라가 약속'
       );
+  });
+
+  test('successive compactions keep the same consumer policy and transmit the whole previous summary, exact source tuples, identifiers and correction notes', async () => {
+    const sourceTexts = Array.from(
+        { length: 10 },
+        (_, index) =>
+          `장면 ${index}: Darcy가 Elizabeth에게 한 발언이에요. 증언자는 Mira예요. CODE_${index}_Q7x-α9.`
+      ),
+      first = snapshot(sourceTexts.slice(0, 6)),
+      correction =
+        'USER_CORRECTION: 발언자는 Darcy, 대상은 Elizabeth예요. Mira의 코드는 Q7x-α9예요.';
+    first.story = {
+      config: defaultStoryConfig(),
+      state: null,
+      waiting: false,
+      lineageHash: 'lineage',
+      canonHash: 'canon-with-correction',
+      notes: [
+        {
+          id: 'correction-note',
+          chatId: first.chatId,
+          atRevision: first.history[0].revision,
+          atHash: first.history[0].contentHash!,
+          text: correction,
+          kind: 'author-note',
+          declaration: { author: 'user', text: correction },
+        },
+      ],
+      models: {},
+    };
+    const expanded = snapshot(sourceTexts);
+    expanded.story = structuredClone(first.story);
+    const originals = [structuredClone(first), structuredClone(expanded)],
+      log = observed({ reason: 'manual' }),
+      mergedSummary = 'FIXTURE_SUMMARY: Darcy → Elizabeth [scene 1]; witness=Mira; code=Q7x-α9.';
+    // A canned response proves transmission and checkpoint invariants only, not fidelity of a model.
+    vi.mocked(fetch).mockImplementation(async () => completed(mergedSummary));
+    const initial = await prepareInputContext(first, log.hooks),
+      previous = structuredClone(initial.snapshot.contextPlan!),
+      next = await prepareInputContext(expanded, log.hooks, previous);
+    expect(log.wires).toHaveLength(2);
+    const payloads = log.wires.map((wire) => {
+      expect(wire.body).toMatchObject({
+        generation: { maxOutputTokens: 4096 },
+        input: {
+          controls: { targetSummaryTokens: 1024 },
+          source: { userNotes: first.story!.notes },
+        },
+      });
+      return (wire.body as { input: { source: SummaryPayload } }).input.source;
+    });
+    expect(payloads[0].previousSummary).toBeNull();
+    expect(payloads[1].previousSummary).toBe(mergedSummary);
+    for (const [index, fixed] of [first, expanded].entries()) {
+      expect(payloads[index].sceneScope).toMatchObject({
+        chatId: fixed.chatId,
+        headRevision: fixed.history.at(-1)!.revision,
+        headHash: fixed.history.at(-1)!.contentHash,
+      });
+      const contract = (log.wires[index].body as { stable: { contract: string } }).stable.contract;
+      expect(contract).toContain('[scene 12]');
+      expect(contract).toContain('Keep exact story identifiers and codes');
+      expect(contract).toContain('Anchors share the existing summary budget');
+    }
+    const fragments = payloads.flatMap((payload) => payload.fragments);
+    for (const ref of next.snapshot.contextPlan!.compacted) {
+      for (const message of expanded.logicalHistory!.filter(
+        (item) => item.sourceRevision === ref.revision
+      )) {
+        const transmitted = fragments.filter((part) => part.messageId === message.id);
+        expect(transmitted.map((part) => part.text).join('')).toBe(message.text);
+        expect(transmitted.every((part) => part.role === message.role)).toBe(true);
+        expect(transmitted.every((part) => part.sourceHash === message.sourceHash)).toBe(true);
+        expect(
+          transmitted.every(
+            (part) =>
+              part.sourceSceneNumber ===
+              expanded.history.findIndex((item) => item.revision === ref.revision) + 1
+          )
+        ).toBe(true);
+      }
+    }
+    expect(
+      payloads[1].fragments.some((part) =>
+        previous.compacted.some((ref) => ref.revision === part.sourceRevision)
+      )
+    ).toBe(false);
+    expect(initial.snapshot.contextPlan).toEqual(previous);
+    expect([first, expanded]).toEqual(originals);
+    expect(next.snapshot.history).toEqual(expanded.history);
+    expect(next.snapshot.logicalHistory).toEqual(expanded.logicalHistory);
   });
 
   test('one large source is split on UTF-16 boundaries and becomes compacted only after all user and assistant fragments succeed', async () => {

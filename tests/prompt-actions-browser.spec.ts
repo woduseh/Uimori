@@ -439,6 +439,7 @@ test('PAUI03 block tools preserve pending template drafts, focus and undo throug
     buffer: Buffer.from(JSON.stringify(imported)),
   });
   await expect(composer).toContainText('합성 가져온 지침');
+  await expect(composer.locator('.pc-program-menu')).not.toHaveAttribute('open');
   await composer.getByRole('button', { name: '이전 편집으로', exact: true }).click();
   await expect(block.locator(':scope > summary')).toContainText('합성 지침');
   expect(observed.calls).toEqual([]);

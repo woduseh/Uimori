@@ -4,8 +4,8 @@
 
 ## 현재 계약
 
-- **DB schema / JSON archive는 v15**예요. 새 DB만 초기화하고 구형 DB·archive는 이관하지 않아요. 기능 추가로 표가 늘 때는 v15 DB에 없는 표만 추가하고 버전은 유지해요. Oracle 운영 서버는 v14 배포 상태이며 v15 전환은 별도 작업이에요. [운영 배포](../docs/ORACLE-RELEASE.md) · [도우미·문맥 결과](HELPER-CONTEXT-RESULTS.md)
-- **작문·번역 프롬프트와 역할 모델은 전역**이에요. `prompt_workspace` 한 벌에 프로그램·선택값·번역 정책·역할 모델을 두고 새 요청이 그때의 작업본을 자기 snapshot에 고정해요. 채팅 프로필은 봇·페르소나·모듈·옵션만 소유해요. 채팅별 고정 층(작문 프리셋·본문 모델)은 결정 1로 예정이고 미구현이에요. [전역 역할 모델](../docs/GLOBAL-MODELS.md) · [현재 프롬프트](../docs/RUNTIME-SIMPLIFICATION.md)
+- **DB schema / JSON archive는 v15**예요. 새 DB만 초기화하고 구형 DB·archive는 이관하지 않아요. 기능 추가로 표가 늘 때는 v15 DB에 없는 표만 추가하고 버전은 유지해요. 2026-09-10 사용자 확인으로 Oracle 운영 서버에도 v15가 배포되어 있어요. [운영 배포](../docs/ORACLE-RELEASE.md) · [도우미·문맥 결과](HELPER-CONTEXT-RESULTS.md)
+- **작문·번역 프롬프트와 역할 모델은 전역이 기본**이며, 채팅은 작문 프리셋 ID와 본문 모델 ID를 고정할 수 있어요. 고정한 ID의 최신 저장본을 새 요청에 사용하고 삭제·비활성 대상을 임의로 대체하지 않아요. 번역과 보조 역할은 전역을 유지해요. `workspaceModelRef`가 역할 선택 규칙을 소유하며 이미 예약한 snapshot은 바꾸지 않아요. [전역 역할 모델](../docs/GLOBAL-MODELS.md) · [현재 프롬프트](../docs/RUNTIME-SIMPLIFICATION.md)
 - 자료·프롬프트·공유 모듈은 **같은 ID의 최신 저장본**을 다음 실행에서 사용해요. 이미 예약한 실행과 과거 원문은 자체 snapshot을 유지하고 현재 작업본으로 다시 해석하지 않아요. [현재 설정 계약](CURRENT-SETTINGS-PLAN.md) · [번역 구간과 재시도](TRANSLATION-CHUNKS.md)
 - 봇·페르소나·모듈은 **공통 패키지**이고 서재의 분류·폴더는 채팅 장착 역할과 독립이에요. 이미지·시작문·로어·상태와 행동·다음 요청 예약·원문 구간 정책을 패키지가 선언하고 런타임 플러그인은 없어요. Risu 자료는 외부 에이전트가 native JSON으로 이식해요. [서재](../docs/LIBRARY.md) · [패키지](../docs/PACKAGES.md) · [상태와 행동](../docs/PACKAGE-BEHAVIOR.md) · [Risu 이식](../docs/RISU-PORTING.md)
 - 프롬프트는 저장된 **`PromptProgram` AST**로 실행하고 블록 편집기로 고쳐요. 템플릿 문법과 TypeScript 제작 API는 선택 가능한 입력 경로예요. 프롬프트별 옵션 조합은 role+values로 저장하고 현재 정의로 검증해요. 채팅 옵션의 소속(`OptionBinding.owner`)은 `core/chat-options.ts`의 한 규칙으로 예약 고정과 현재 상태가 같이 계산해요. [제작 방식](../docs/PROMPT-AUTHORING.md) · [프롬프트 실행](../docs/PROMPT-RUNTIME.md)
@@ -32,28 +32,23 @@
 
 ## 마지막 검증 상태
 
-2026-09-10 화면 일관성 정리 시점이에요. `quality:full`은 Node 24에서 **1,716 PASS / opt-in 1 SKIP**이고, 전체 `verify:redesign`은 이 트리 **214 PASS / 6 FAIL**, 직전 `HEAD`(`e417572`) **210 PASS / 10 FAIL**로 새로 깨진 검사는 없어요. 이 측정은 macOS·Edge 152이고 저장소 CI는 Windows·Node 24.14라 남은 실패의 절대 개수는 Windows에서 1회 다시 재야 해요. 완주 시간이 길어진 원인은 [전체 회귀 지연 브리프](BRIEF-FULL-RUN-REGRESSION-2026-09-10.md)에서 조사 중이에요.
+2026-09-10 `main` 병합과 후속 구현의 최종 Windows `quality:full`은 **1,785 PASS / opt-in 1 SKIP**, `verify:smoke`는 **3 PASS**, 관련 UI는 **13 PASS**이며 cleanup을 완료했어요. 앞서 실행한 전체 `verify:redesign`의 **223 PASS / 5 FAIL**, 10.3분 기록은 별도로 유지해요. 이후 집중 통과가 전체 회귀의 새 PASS를 뜻하지 않아요. 과거 macOS 결과와 같은 조건의 A/B가 아니므로 운영체제별 원인이나 성능 우위로 해석하지 않아요. [통합 후속 결과](DECISION-FOLLOWUP-RESULTS-2026-09-10.md) · [전체 회귀 지연 브리프](BRIEF-FULL-RUN-REGRESSION-2026-09-10.md)
 
-실사용은 Oracle 운영 서버(v14)에서 3일간 짧은 세션 몇 개예요. 본문 생성·번역의 기본 경로는 실제 공급자로 확인했고, 압축·문맥 도구·도우미의 실제 변경·장기 세션은 미확인이에요.
+Oracle 운영 서버의 짧은 실사용과 별도로, 독립 DB에서 공개 원문 162,975 토큰·61장을 이용한 Gemini 장기 문맥 평가를 수행했어요. 활성 요약 조회·길이 문제를 보완하고 도우미의 로어·프롬프트 저장과 옵션의 예약 소비를 확인했어요. 의미 오류와 문맥 한도·공급자 EOF 실패가 남아 전체 live 시나리오 PASS는 아니에요. 상세 경계는 [기억 평가](LIVE-MEMORY-RESULTS-2026-09-10.md), 다른 도우미 도구와 경량 역할 비교는 [하네스 효율](HARNESS-EFFICIENCY-2026-09-10.md)에 기록해요.
 
 ## 남은 범위
 
 | 구분 | 남은 것 | 어디서 다루나 |
 | --- | --- | --- |
-| 방향 결정 구현 | 게이트 문구·문서 분리와 순환 제거·옵션 소속 규칙 통합은 완료(남은 순환은 `package-images` ↔ `source-editing` 하나), 채팅 본문 추출 형식(완료), Lua 봇 2개 정적 이식 검토(봇 파일 대기), 채팅별 고정 층과 `ModelRole` 통일, 장기 세션 실사용, 예약 고정 체인 통합 | [방향 결정 2026-09-10](../docs/DECISIONS-2026-09-10.md) 실행 순서 |
-| 실모델 검증 | 압축·`context.*` 도구·메모·원문 재조회의 장기 세션 품질(구 Q04를 대체), 도우미의 로어 수정 저장·옵션 위임 실제 실행 | 결정 2. 공급자·모델·허용 비용은 실행 직전 사용자가 정해요 |
+| 방향 결정 구현 | 채택한 구현·정적 검토·대체 실모델 평가를 수행했어요. 예약 체인은 7가지 purpose로 통합했으며 남은 값 순환은 `package-images` ↔ `source-editing` 하나예요 | [방향 결정](../docs/DECISIONS-2026-09-10.md) · [예약 고정 계약](../docs/RESERVATION-SNAPSHOTS.md) · [후속 결과](DECISION-FOLLOWUP-RESULTS-2026-09-10.md) |
+| 실모델 품질 | 장편 대체 평가는 88회 전송·61장으로 종료했어요. 약속·귀속 오류, 일반 조회의 문맥 한도 초과, 완료 스트림 EOF를 전체 PASS로 판정하지 않아요. 새 장면 번호 도구의 실모델 효율과 실제 창작 품질은 별도예요 | [실제 기억 평가](LIVE-MEMORY-RESULTS-2026-09-10.md). 로어·프롬프트 저장과 옵션 예약 소비는 원본 영수증으로 확인했어요 |
 | 인수 항목 | M1 Q01/Q02/Q03/Q05 품질, M3 E01–E03 전체 인수와 실제 공급자별 도구 호환, 개인 자료의 공통 형식 재이식 | [MILESTONES](MILESTONES.md) · [ACCEPTANCE](ACCEPTANCE.json). M3의 "검토 후 적용하는 등록 보조"는 2026-09-09 실행 게이트 제거로 삭제됐어요 |
-| 하네스·CI | Windows 전체 회귀 1회 재측정, 전체 회귀 지연 원인, 브라우저 회귀의 별도 CI job 분리, 도우미 작업의 모델 귀속 표시 | [후속 항목 2026-09-10](FOLLOW-UPS-2026-09-10.md) · [지연 브리프](BRIEF-FULL-RUN-REGRESSION-2026-09-10.md) |
-| 운영 | 운영 서버 v14 → v15 전환, 이미지 이해, 실제 휴대폰·IME·Linux/Docker 동작 | [운영 배포](../docs/ORACLE-RELEASE.md) · [도우미·문맥 결과](HELPER-CONTEXT-RESULTS.md) |
+| 하네스·CI | Windows 전체 회귀 재측정·지연 원인 구분·브라우저 CI job 분리·도우미 예약 모델 표시는 완료했어요. 실제 GitHub Actions 실행은 별도예요 | [후속 항목 2026-09-10](FOLLOW-UPS-2026-09-10.md) · [지연 브리프](BRIEF-FULL-RUN-REGRESSION-2026-09-10.md) |
+| 운영 | 이미지 이해, 실제 휴대폰·IME·Linux/Docker 동작. Oracle v15 배포는 사용자 확인으로 완료 | [운영 배포](../docs/ORACLE-RELEASE.md) · [도우미·문맥 결과](HELPER-CONTEXT-RESULTS.md) |
 
-### 다음 작업 인계 (2026-09-10 할당량 소진 시점)
+### 방향 결정 후속 진행 · 2026-09-10
 
-실행 순서 1·2·4단계는 완료해 커밋했어요. 3단계는 사용자의 Lua 봇 파일 2개가 `.local/reference/`에 없어 대기 중이에요. 5단계(결정 1 + `ModelRole` 통일)는 코드 변경 없이 설계만 확정했고 다음 세션이 이어가요.
-
-- 역할: `core/product.ts`에 `MODEL_ROLES`/`ModelRole`(9개)과 `WorkspaceModelRole`(`TaskRole`+helper·context·title·refusal), 단일 해석 함수 `workspaceModelRef(workspace, role)`을 두고 `ProviderRole`·`Attempt.role`을 별칭으로 바꿔요. `helper-runtime`·`chat-title`·`product-store.snapshot`의 필드 직접 읽기를 이 함수로 바꿔요. state·illustration 모델은 각자 설정에 있어 대상이 아니에요.
-- 고정 층: `ChatProfile.pinned?: { mainPromptPresetId?, mainModel? }`. `updateProfile`이 `pinned`를 받아 프리셋(작문 역할)·모델의 현재 존재를 확인해요. `currentProfile`의 `routes.main`은 고정 모델을 반영하고, 새 함수 `chatPromptWorkspace(store, pinned)`가 고정 프리셋의 최신 저장본을 `main`으로 바꾼 작업본을 돌려줘요. `ProductStore.snapshot`과 `ChatOptionsStore.get`이 이 함수를 써서 옵션 소속이 `preset:<id>`로 따라가요. 삭제·비활성은 `modelSnapshot`/`assertAvailable`이 새 실행을 막아요. archive 프로필 필드 목록에 `pinned`를 추가해요.
-- 화면: 채팅 설정 프롬프트·모델 탭에 "이 채팅의 작문 프롬프트/본문 모델" 선택(전역 따르기 기본), 헤더 모델 칩에 "이 채팅 고정" 표시. `profileBody`는 `pinned: next.pinned ?? {}`로 항상 보내 해제를 표현해요.
-- 검사: Store 단위(고정 모델·프리셋이 snapshot에 반영, 최신 저장본 추종, 삭제 시 차단, 잘못된 참조 거절, 옵션 소속)와 `tests/global-models-browser.spec.ts`의 채팅 설정 고정 케이스. 영역 검사는 `verify:global-models`. 문서는 [GLOBAL-MODELS](../docs/GLOBAL-MODELS.md)·[RUNTIME-SIMPLIFICATION](../docs/RUNTIME-SIMPLIFICATION.md) 머리말의 "채팅별 선택 없음"을 고정 층 예외로 고쳐요.
+현재 워크트리에 `main`을 병합한 뒤 채팅별 고정 층과 공통 모델 역할을 구현했어요. 삭제·비활성 고정 대상의 실행 차단, 전역 복귀, 최신 저장본 추종, 옵션 소속 충돌과 과거 snapshot 불변을 검사해요. 지정한 Lua 봇 검토 결과는 [정적 검토 보고](LUA-PORTING-REVIEW-2026-09-10.md)에 있어요. 미지원 동작의 자동 이식이나 런타임 확장은 구현하지 않았어요.
 
 L01(공급자별 경로)·L02(실기기 접속)는 위 3일 실사용으로 기본 경로만 확인한 상태로 정리하고 별도 인수 항목으로 두지 않아요. 중단된 품질 실험이나 유료 실행은 새 승인 없이 재개하지 않아요. 런타임 플러그인·Lua·MCP 클라이언트는 결정 5로 미지원이에요.
 

@@ -227,41 +227,43 @@ export class ContextStore {
       return { ...snapshot, contextPlan: { ...plan, checkpoint: ref(checkpoint) } };
     });
   }
-  detail(chatId: string, branchId?: string) {
-    const { scopeKey, branch } = this.scope(chatId, branchId),
-      head = this.head(scopeKey);
-    const checkpoints = (
-      this.db
-        .prepare(
-          'SELECT id,revision,hash FROM context_checkpoints WHERE scope_key=? ORDER BY rowid DESC LIMIT 100'
-        )
-        .all(scopeKey) as ContextCheckpointRef[]
-    ).map((value) => this.checkpoint(value));
+  /** Active metadata and its validated checkpoint, without loading UI history or job snapshots. */
+  current(chatId: string, branchId?: string) {
+    return this.currentState(chatId, this.scope(chatId, branchId));
+  }
+  private currentState(chatId: string, { scopeKey, branch }: ReturnType<ContextStore['scope']>) {
+    const head = this.head(scopeKey);
     const checkpoint = head.checkpointId ? this.byId(head.checkpointId) : null;
     let usable = false;
     if (checkpoint) {
-      const chat = this.store.chat(chatId),
-        profile = this.store.product.snapshot(chatId, 'inspect', branch.headRevision);
-      let current: RunSnapshot = {
-        chatId,
-        branchId: branch.id,
-        parentRevision: branch.headRevision,
-        settingsRevision: chat.settingsRevision,
-        settings: chat.settings,
-        request: '',
-        history: this.store.history(branch.headRevision),
-        resources: this.store.product.resources(chatId, profile),
-        profile,
-        sourceSegments: freezeSourceSegments(profile),
-      };
-      current = this.store.story.prepareRunInTransaction(current);
-      usable =
-        checkpoint.plan.dependencyKey === contextDependencyKey(current) &&
-        isDeepStrictEqual(
-          checkpoint.plan.compacted,
-          contextSourceRefs(current).slice(0, checkpoint.plan.compacted.length)
-        ) &&
-        checkpoint.plan.compacted.length <= current.history.length;
+      try {
+        const chat = this.store.chat(chatId),
+          profile = this.store.product.snapshot(chatId, 'inspect', branch.headRevision);
+        let current: RunSnapshot = {
+          chatId,
+          branchId: branch.id,
+          parentRevision: branch.headRevision,
+          settingsRevision: chat.settingsRevision,
+          settings: chat.settings,
+          request: '',
+          history: this.store.history(branch.headRevision),
+          resources: this.store.product.resources(chatId, profile),
+          profile,
+          sourceSegments: freezeSourceSegments(profile),
+        };
+        current = this.store.story.prepareRunInTransaction(current);
+        usable =
+          checkpoint.plan.dependencyKey === contextDependencyKey(current) &&
+          isDeepStrictEqual(
+            checkpoint.plan.compacted,
+            contextSourceRefs(current).slice(0, checkpoint.plan.compacted.length)
+          ) &&
+          checkpoint.plan.compacted.length <= current.history.length;
+      } catch (error) {
+        // Keep saved summaries readable while the user repairs a deleted writing pin.
+        if (!(error instanceof HttpError) || !error.message.startsWith('PINNED_PROMPT_UNAVAILABLE'))
+          throw error;
+      }
     }
     return {
       scopeKey,
@@ -269,18 +271,30 @@ export class ContextStore {
       notesRevision: this.store.story.notes.revision(chatId),
       headRevision: branch.headRevision,
       checkpoint,
-      checkpoints,
       usable,
       invalidReason:
         checkpoint && !usable
           ? '원문·메모 또는 작문 설정이 바뀌어 다음 입력에 이 요약을 사용하지 않아요.'
           : null,
+    };
+  }
+  detail(chatId: string, branchId?: string) {
+    const scope = this.scope(chatId, branchId);
+    return {
+      ...this.currentState(chatId, scope),
+      checkpoints: (
+        this.db
+          .prepare(
+            'SELECT id,revision,hash FROM context_checkpoints WHERE scope_key=? ORDER BY rowid DESC LIMIT 100'
+          )
+          .all(scope.scopeKey) as ContextCheckpointRef[]
+      ).map((value) => this.checkpoint(value)),
       jobs: (
         this.db
           .prepare(
             'SELECT id FROM context_jobs WHERE chat_id=? AND branch_id=? ORDER BY rowid DESC LIMIT 50'
           )
-          .all(chatId, branch.id) as Row[]
+          .all(chatId, scope.branch.id) as Row[]
       ).map((row) => this.job(row.id)),
     };
   }

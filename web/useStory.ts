@@ -2,7 +2,8 @@ import { readerConversation } from '../core/reader-conversation.js';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { subscribeAppHistory } from './app-history.js';
 import type { Chat, ReaderDetail, Run, Source } from '../core/types.js';
-import type { Content, Library } from '../core/product.js';
+import type { Content, CurrentPrompt, Library } from '../core/product.js';
+import type { ChatOptionState } from '../core/chat-options.js';
 import { api, ApiError, libraryChangedKey } from './api.js';
 import { usePromptWorkspace } from './usePromptWorkspace.js';
 import { combinationOwner, matchesPromptCombination } from '../core/prompt-combinations.js';
@@ -789,6 +790,21 @@ export function useStory() {
     }
   }
   const quickLock = useRef(false);
+  const pinnedPromptId = detail?.profile?.pinned?.mainPromptPresetId;
+  const pinnedPrompt = library?.promptPresets?.find(
+    (item) => item.id === pinnedPromptId && item.role === 'main'
+  );
+  // Library summaries keep prompt programs. A missing pin must never fall back to the workspace.
+  const currentPrompt: CurrentPrompt | undefined = pinnedPromptId
+    ? pinnedPrompt
+      ? {
+          presetId: pinnedPrompt.id,
+          title: pinnedPrompt.title,
+          program: pinnedPrompt.program,
+          values: pinnedPrompt.values ?? {},
+        }
+      : undefined
+    : promptWorkspace?.main;
   async function quickChange(kind: 'combination' | 'persona' | 'module', value: string) {
     if (
       !detail?.profile ||
@@ -810,19 +826,45 @@ export function useStory() {
         if (
           !preset ||
           !promptWorkspace ||
+          !currentPrompt ||
           !matchesPromptCombination(
             preset,
-            combinationOwner(promptWorkspace.main, 'main'),
+            combinationOwner(currentPrompt, 'main'),
             'main',
-            promptWorkspace.main.program
+            currentPrompt.program
           )
         )
           throw new Error('현재 프롬프트와 옵션 정의가 일치하는 조합을 선택해 주세요.');
-        await api('/prompt-workspace/apply-options', {
-          expectedRevision: promptWorkspace.revision,
-          role: 'main',
-          combinationId: preset.id,
-        });
+        if (pinnedPromptId) {
+          if (!branch) throw new Error('현재 채팅 분기를 확인해 주세요.');
+          const state = await api<ChatOptionState>(
+            `/chats/${chatId}/options?branchId=${encodeURIComponent(branch.id)}`
+          );
+          if (
+            state.binding.owner !== `preset:${pinnedPromptId}` ||
+            !matchesPromptCombination(
+              preset,
+              { kind: 'preset', id: pinnedPromptId },
+              'main',
+              state.program
+            )
+          )
+            throw new Error('채팅의 작문 프롬프트가 바뀌었어요. 옵션 조합을 다시 확인해 주세요.');
+          await api(`/chats/${chatId}/options/fixed`, {
+            branchId: branch.id,
+            expectedRevision: state.revision,
+            operationId: crypto.randomUUID(),
+            binding: state.binding,
+            values: preset.values,
+          });
+          dispatchEvent(new Event('chat-options-changed'));
+        } else {
+          await api('/prompt-workspace/apply-options', {
+            expectedRevision: promptWorkspace.revision,
+            role: 'main',
+            combinationId: preset.id,
+          });
+        }
       } else if (kind === 'module') {
         const epoch = navigationEpoch.current;
         let module = library.contents.find((item) => refValue(item) === value);
@@ -991,6 +1033,8 @@ export function useStory() {
       : undefined);
   return {
     promptWorkspace,
+    currentPrompt,
+    pinnedPromptRevision: pinnedPrompt?.revision,
     requestActivity,
     chats,
     selected,

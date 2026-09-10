@@ -21,9 +21,7 @@ concurrency:
 jobs:
   quality:
     runs-on: windows-latest
-    # Covers install and quality:full on their own, plus the opt-in browser regression,
-    # whose own 30-minute harness bound is the guard for that step.
-    timeout-minutes: 45
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7
         with:
@@ -34,6 +32,21 @@ jobs:
           cache: npm
       - run: npm ci --no-audit --no-fund
       - run: npm run quality:full
-      - name: Synthetic browser regression (optional)
-        if: github.event_name == 'workflow_dispatch' && inputs.browser
-        run: npm run verify:redesign
+
+  browser:
+    if: github.event_name == 'workflow_dispatch' && inputs.browser
+    needs: quality
+    runs-on: windows-latest
+    # Includes installation and a fresh build; the regression itself is bounded at 30 minutes.
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24.14.0'
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - run: npm run build
+      - run: npm run verify:redesign

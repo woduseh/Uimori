@@ -1,5 +1,6 @@
 import { HttpError, fields, number, record, text } from './request-validation.js';
 import { translationPolicy } from '../core/translation-settings.js';
+import { workspaceModelRef } from '../core/product.js';
 import { automaticImageSelection, invalidateTranslationImages } from './package-images.js';
 import { promptWorkspace } from './prompt-workspace.js';
 import { createHash, randomUUID } from 'node:crypto';
@@ -100,8 +101,8 @@ export function requestTranslation(
       }
     }
     const workspace = promptWorkspace(store);
-    const selected = workspace.modelRoutes.translation;
-    const refusal = workspace.translationPolicy.refusalModel;
+    const selected = workspaceModelRef(workspace, 'translation');
+    const refusal = workspaceModelRef(workspace, 'refusal');
     const profile = store.product.snapshot(source.chatId, 'translation');
     const automatic = profile?.imageTranslation !== false;
     const selection = automatic

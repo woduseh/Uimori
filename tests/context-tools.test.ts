@@ -230,7 +230,7 @@ describe('model-driven working summary and window switch inside one main run', (
         toolTurn([{ id: 'c2', name: 'context.write', args: { summary: workingSummary } }], n),
       (_body, n) => toolTurn([{ id: 'c3', name: 'context.new', args: { keepRecent: 2 } }], n),
       (_body, n) =>
-        toolTurn([{ id: 'c4', name: 'story.read', args: { id: 'chapter-0', limit: 40 } }], n),
+        toolTurn([{ id: 'c4', name: 'story.read', args: { sceneNumber: 1, limit: 40 } }], n),
       () => completed(),
     ]);
     const result = await runMain(snapshot(), log.value);
@@ -279,7 +279,15 @@ describe('model-driven working summary and window switch inside one main run', (
     expect(log.events[2].result).toMatchObject({
       switched: true,
       compactedExchanges: 3,
-      retained: ['chapter-3', 'chapter-4'],
+      retained: [
+        { sceneNumber: 4, revision: 'chapter-3', hash: hash(chapters[3]) },
+        { sceneNumber: 5, revision: 'chapter-4', hash: hash(chapters[4]) },
+      ],
+      sceneScope: {
+        chatId: snapshot().chatId,
+        headRevision: 'chapter-4',
+        headHash: hash(chapters[4]),
+      },
       droppedToolResults: 2,
       checkpoint: { id: 'cp-2' },
       contextWindow: { inputTokenLimit: 16384 },
@@ -311,6 +319,10 @@ describe('model-driven working summary and window switch inside one main run', (
     );
     const reread = log.events[3].result as { text: string; source: { revision: string } };
     expect(reread.source.revision).toBe('chapter-0');
+    expect(reread).toMatchObject({
+      sceneNumber: 1,
+      sceneScope: { headRevision: 'chapter-4', headHash: hash(chapters[4]) },
+    });
     expect(chapters[0].startsWith(reread.text)).toBe(true);
     expect(bodies[4].opaqueState).toBe('OPAQUE_4');
     expect(bodies[4].input.results.map((event) => event.name)).toEqual(['story.read']);
@@ -370,7 +382,11 @@ describe('model-driven working summary and window switch inside one main run', (
       savedSummary: null,
       windowSummary: null,
       compacted: [],
-      retained: chapters.map((_, index) => `chapter-${index}`),
+      retained: chapters.map((text, index) => ({
+        sceneNumber: index + 1,
+        revision: `chapter-${index}`,
+        hash: hash(text),
+      })),
       checkpoint: null,
     });
   });
@@ -431,6 +447,34 @@ describe('model-driven working summary and window switch inside one main run', (
       }
     );
     expect(outcome.switched).toBeDefined();
+    const readBack = await executeContextTool(
+      outcome.switched!,
+      { callId: 'read-back', name: 'context.read', args: {} },
+      {
+        state: { workingSummary, checkpoint: null },
+        alone: true,
+        pendingResults: 0,
+        reservedBootstrap: 0,
+      }
+    );
+    expect(readBack.event).toMatchObject({
+      denied: false,
+      result: {
+        savedSummary: workingSummary,
+        windowSummary: workingSummary,
+        sceneScope: {
+          chatId: fixed.chatId,
+          headRevision: 'chapter-4',
+          headHash: hash(chapters[4]),
+        },
+        compacted: chapters.slice(0, 4).map((text, index) => ({
+          sceneNumber: index + 1,
+          revision: `chapter-${index}`,
+          hash: hash(text),
+        })),
+        retained: [{ sceneNumber: 5, revision: 'chapter-4', hash: hash(chapters[4]) }],
+      },
+    });
     const { request } = buildMainProviderRequest(outcome.switched!, {
       segmentBootstrap: [outcome.event],
     });

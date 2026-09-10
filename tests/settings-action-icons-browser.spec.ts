@@ -37,6 +37,9 @@ for (const width of [390, 1440]) {
     });
     expect(response.ok()).toBe(true);
     const chat = await response.json();
+    const workspaceResponse = await request.get('/api/prompt-workspace');
+    expect(workspaceResponse.ok()).toBe(true);
+    const workspace = await workspaceResponse.json();
     await page.setViewportSize({ width, height: 900 });
     await page.goto(`/?chat=${chat.id}`);
     await openChatSettings(page);
@@ -47,11 +50,21 @@ for (const width of [390, 1440]) {
     await named(save, '저장');
     await page.screenshot({ path: info.outputPath(`chat-save-${width}.png`) });
     await selectChatSettingsSection(page, '프롬프트·창작 프리셋');
-    const description = dialog
-      .getByRole('tabpanel')
-      .locator('p')
-      .filter({ hasText: /^작문:/ });
-    await expect(description.locator('br')).toHaveCount(1);
+    const promptPanel = dialog.getByRole('tabpanel');
+    const promptChoice = promptPanel.getByRole('combobox', {
+      name: '이 채팅의 작문 프롬프트',
+      exact: true,
+    });
+    await expect(promptChoice).toHaveValue('');
+    await expect(promptChoice.locator('option:checked')).toHaveText(
+      `전역 따르기 · ${workspace.main.title}`
+    );
+    await expect(
+      promptPanel.getByText('작문 프롬프트 · 전역 따르기', { exact: true })
+    ).toBeVisible();
+    await expect(
+      promptPanel.getByText(`번역 · 전역 따르기: ${workspace.translation.title}`, { exact: true })
+    ).toBeVisible();
     await selectChatSettingsSection(page, '자동 후속 작업');
     const runtimeSave = dialog.getByRole('button', { name: '설정 저장', exact: true });
     await named(runtimeSave, '저장');

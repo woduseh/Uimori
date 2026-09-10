@@ -1,6 +1,6 @@
 import type { ProviderHttpDiagnostic } from './provider-http-error.js';
 import { validateModelOptions } from './model-capabilities.js';
-import type { ProviderProtocol, VertexRequestTier, ModelGeneration } from './product.js';
+import type { ProviderProtocol, VertexRequestTier, ModelGeneration, ModelRole } from './product.js';
 import { executeVertexProvider } from './vertex.js';
 import { executeNativeProvider } from './provider-http.js';
 import type { ProviderPrompt } from './prompt-program.js';
@@ -31,16 +31,7 @@ export {
 
 /** This versioned loopback protocol is a local fixture, not a live API claim. */
 export type Json = null | boolean | number | string | Json[] | { [key: string]: Json };
-export type ProviderRole =
-  | 'main'
-  | 'translation'
-  | 'status'
-  | 'image'
-  | 'state'
-  | 'context'
-  | 'helper'
-  | 'title'
-  | 'illustration';
+export type ProviderRole = ModelRole;
 export type ProviderConnection = {
   id: string;
   protocol: ProviderProtocol;

@@ -449,11 +449,12 @@ input[type="checkbox"] {
   gap: 1px;
   align-items: center;
 }
-/* Current global main model opens application-wide role settings. */
+/* The effective main model opens its global or chat-specific settings. */
 .model-chip {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  gap: 4px;
   min-width: 0;
   max-width: 220px;
   margin-right: 6px;
@@ -471,6 +472,9 @@ input[type="checkbox"] {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+.model-chip > svg {
+  flex-shrink: 0;
 }
 .model-chip:hover:not(:disabled) {
   border-color: var(--accent);

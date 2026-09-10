@@ -62,9 +62,9 @@ Biome `noRestrictedImports`를 디렉토리별로 적용해 다음 import/re-exp
 
 ## CI
 
-`.github/workflows/quality.yml`은 PR과 main push에서 Windows / Node 24.14.0으로 `npm ci` 후 **같은 `npm run quality:full`**을 실행해요. npm 다운로드 캐시를 재사용하고 같은 브랜치의 오래된 실행은 취소해요. 브라우저 전체 회귀는 수동 실행의 `browser` 옵션으로 추가할 수 있어요. 로컬 검증과 GitHub에서 실제 실행된 결과는 구분해요.
+`.github/workflows/quality.yml`은 PR과 main push에서 Windows / Node 24.14.0으로 `npm ci` 후 **같은 `npm run quality:full`**을 실행해요. 공통 `quality` job 한도는 15분이에요. npm 다운로드 캐시를 재사용하고 같은 브랜치의 오래된 실행은 취소해요. 수동 실행의 `browser` 옵션을 켜면 `quality` 성공 뒤 별도 `browser` job이 의존성 설치와 새 빌드를 거쳐 전체 회귀를 실행하며, 이 job만 45분 한도를 써요. 로컬 검증과 GitHub에서 실제 실행된 결과는 구분해요.
 
-`verify:redesign`은 모든 브라우저 spec을 한 번의 Playwright 명령으로 돌리므로 공용 기본값 600초로는 끝나지 않아요. 2026-09-10에 한 기계에서 잰 완주 시간은 9.2분과 11.8분이고, 그 이전 기록의 반복된 timeout FAIL도 같은 원인이에요. 그래서 이 검사만 30분 한도를 직접 지정하고 CI job 한도를 45분으로 두었어요. 두 값은 멈춤을 잡기 위한 상한이지 목표 실행 시간이 아니에요. 검사마다 자기 묶음에 맞는 한도를 지정하는 기존 방식을 따랐어요. `runBrowserVerification`에 한도를 직접 넘기는 검사는 이 검사를 포함해 열여섯 개이고, 나머지 열다섯 개는 모두 120~360초로 기본값보다 좁혀요. 기본값보다 늘리는 것은 이 검사뿐이에요. `verify:self-host`와 `verify:worktrees`도 `timeout`을 쓰지만 공용 실행기를 거치지 않는 개별 명령·조작의 한도예요. Windows CI에서의 실제 완주 시간은 아직 측정하지 않았어요. 2026-09-10 macOS 측정에서 남은 실패가 macOS·Edge 한정인지 가르기 위한 Windows 전체 회귀 1회 재측정과 완주 시간 지연 조사([회귀 브리프](../project-plan/BRIEF-FULL-RUN-REGRESSION-2026-09-10.md))는 릴리스 주기의 작업이에요.
+`verify:redesign`은 모든 브라우저 spec을 한 번의 Playwright 명령으로 돌리므로 공용 기본값 600초로는 끝나지 않아요. 2026-09-10에 한 기계에서 잰 완주 시간은 9.2분과 11.8분이고, 그 이전 기록의 반복된 timeout FAIL도 같은 원인이에요. 그래서 이 검사만 30분 한도를 직접 지정하고 CI의 별도 `browser` job 한도를 45분으로 두었어요. 두 값은 멈춤을 잡기 위한 상한이지 목표 실행 시간이 아니에요. 검사마다 자기 묶음에 맞는 한도를 지정하는 기존 방식을 따랐어요. `runBrowserVerification`에 한도를 직접 넘기는 검사는 이 검사를 포함해 열여섯 개이고, 나머지 열다섯 개는 모두 120~360초로 기본값보다 좁혀요. 기본값보다 늘리는 것은 이 검사뿐이에요. `verify:self-host`와 `verify:worktrees`도 `timeout`을 쓰지만 공용 실행기를 거치지 않는 개별 명령·조작의 한도예요. Windows CI에서의 실제 완주 시간은 아직 측정하지 않았어요. 2026-09-10 로컬 Windows 전체 재측정은 10.3분에 223 PASS / 5 FAIL로 종료됐고 timeout 없이 cleanup을 완료했어요. 남은 실패와 집중 재검증을 구분한 [회귀 브리프](../project-plan/BRIEF-FULL-RUN-REGRESSION-2026-09-10.md)를 참고해요. macOS와 같은 조건의 A/B가 아니므로 운영체제별 인과 비교로 해석하지 않아요.
 
 ## 채택 이유와 후속 범위
 

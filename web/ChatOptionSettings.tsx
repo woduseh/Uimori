@@ -17,6 +17,7 @@ type Props = {
   active: boolean;
   disabled: boolean;
   workspaceRevision?: number;
+  promptRevision?: string;
   onDirtyChange: (dirty: boolean) => void;
   onBusyChange: (busy: boolean) => void;
 };
@@ -56,7 +57,8 @@ export function ChatOptionSettings(props: Props) {
   const [conflict, setConflict] = useState(false);
   const [uncertain, setUncertain] = useState<Operation | null>(null);
   const lock = useRef(false),
-    requestVersion = useRef(0);
+    requestVersion = useRef(0),
+    loadedPromptRevision = useRef(props.promptRevision);
   const fixedDirty = !!base && !sameValues(fixed, base.fixedValues);
   const dirty = fixedDirty || Object.keys(oneoff).length > 0 || fields.length > 0 || !!uncertain;
   const current = useRef({ base, fixed, oneoff, fields, dirty, fixedDirty });
@@ -97,7 +99,9 @@ export function ChatOptionSettings(props: Props) {
         } else if (
           state.revision !== draft.base.revision ||
           state.workspaceRevision !== draft.base.workspaceRevision ||
-          state.headRevision !== draft.base.headRevision
+          state.headRevision !== draft.base.headRevision ||
+          state.binding.owner !== draft.base.binding.owner ||
+          state.binding.definitionHash !== draft.base.binding.definitionHash
         ) {
           setConflict(true);
         }
@@ -126,11 +130,14 @@ export function ChatOptionSettings(props: Props) {
     if (
       props.active &&
       !props.disabled &&
-      props.workspaceRevision !== undefined &&
-      props.workspaceRevision !== current.current.base?.workspaceRevision
-    )
+      ((props.workspaceRevision !== undefined &&
+        props.workspaceRevision !== current.current.base?.workspaceRevision) ||
+        props.promptRevision !== loadedPromptRevision.current)
+    ) {
+      loadedPromptRevision.current = props.promptRevision;
       void refresh();
-  }, [props.active, props.disabled, props.workspaceRevision, refresh]);
+    }
+  }, [props.active, props.disabled, props.workspaceRevision, props.promptRevision, refresh]);
   useEffect(() => {
     props.onDirtyChange(dirty);
     return () => props.onDirtyChange(false);
@@ -232,7 +239,8 @@ export function ChatOptionSettings(props: Props) {
         <section aria-label="이 채팅 고정 옵션">
           <h3>고정 옵션</h3>
           <p className="muted">
-            체크한 옵션은 이 채팅에 적용해요. 나머지는 모든 채팅 설정을 따라요.
+            체크한 옵션은 이 채팅에 적용해요. 나머지는 이 채팅에서 사용하는 작문 프롬프트의 기본
+            옵션을 따라요.
           </p>
           <fieldset className="chat-options-fields" disabled={disabled}>
             <SelectiveValues

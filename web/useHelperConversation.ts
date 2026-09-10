@@ -8,7 +8,7 @@ import type {
 } from '../core/helper.js';
 import { api } from './api.js';
 
-export type HelperTaskView = Omit<HelperTask, 'snapshot'>;
+export type HelperTaskView = Omit<HelperTask, 'snapshot'> & { modelTitle: string };
 type View = {
   conversation: HelperConversation;
   messages: HelperMessage[];

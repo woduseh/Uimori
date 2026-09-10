@@ -6,6 +6,7 @@ import type { Source, Store } from './store.js';
 import { assertModelSelection } from './provider-selection.js';
 import type { PackageImageBlob } from './package-images.js';
 import { packageImages } from '../core/package-images.js';
+import { resolvePackageProfile } from './package-features.js';
 import type { Asset, Connection, ModelPreset, ModelRef } from '../core/product.js';
 import {
   defaultIllustrationSettings,
@@ -190,7 +191,11 @@ export function updateIllustrationSettings(
 // ---------------------------------------------------------------------------
 export function illustrationReferenceCandidates(store: Store, chatId: string): Asset[] {
   store.chat(chatId);
-  const profile = store.product.snapshot(chatId, 'inspect');
+  // Image candidates depend on attached packages, not on an available writing prompt/model.
+  const profile = {
+    chatId,
+    ...resolvePackageProfile(store.product, store.product.profile(chatId)),
+  };
   return [...store.product.assets(chatId), ...packageImages(profile)];
 }
 export function illustrationReferences(store: Store, chatId: string): IllustrationReferences {

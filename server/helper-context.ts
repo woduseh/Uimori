@@ -12,6 +12,39 @@ type Row = Record<string, any>;
 const hash = (value: unknown) => createHash('sha256').update(JSON.stringify(value)).digest('hex');
 const refs = (history: HelperTaskSnapshot['history']) =>
   history.map((message) => ({ revision: message.id, hash: hash([message.role, message.text]) }));
+
+/** Model reads need the active reference once, without the UI's checkpoint and job history. */
+export function readHelperChatContext(store: Store, chatId: string, branchId: string) {
+  const current = store.context.current(chatId, branchId),
+    checkpoint = current.checkpoint;
+  return {
+    scopeKey: current.scopeKey,
+    activeRevision: current.activeRevision,
+    notesRevision: current.notesRevision,
+    headRevision: current.headRevision,
+    checkpoint: checkpoint
+      ? {
+          id: checkpoint.id,
+          revision: checkpoint.revision,
+          hash: checkpoint.hash,
+          origin: checkpoint.origin,
+          plan: {
+            summary: checkpoint.plan.summary,
+            dependencyKey: checkpoint.plan.dependencyKey,
+            compacted: checkpoint.plan.compacted,
+            recentSourceRevisions: checkpoint.plan.recentSourceRevisions,
+          },
+        }
+      : null,
+    usable: current.usable,
+    invalidReason: current.invalidReason,
+    notes: store.story.notes.entries({
+      chatId,
+      history: store.history(current.headRevision),
+    }),
+  };
+}
+
 export function helperHistory(store: Store, conversationId: string): HelperTaskSnapshot['history'] {
   return store.db
     .prepare(

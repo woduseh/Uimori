@@ -71,6 +71,7 @@ async function harness(page: Page, seedCount = 0) {
       id: randomUUID(),
       conversationId: view.conversation.id,
       request: text,
+      modelTitle: '예약 당시 도우미 모델',
       status,
       generation: status === 'queued' ? 0 : 1,
       error: null,
@@ -593,16 +594,24 @@ test('HELPUI05 retry edits in place, preserves composer and hides historical fai
     state = await harness(page);
   await page.goto(`/?chat=${chat.id}`);
   let panel = await open(page);
-  state.addFailed(state.current());
+  const failed = state.addFailed(state.current());
+  failed.modelTitle = '이전 시도의 도우미 모델';
   await page.reload();
   panel = await open(page);
+  const details = panel.locator(
+    `[data-testid="helper-task-activity"][data-task-id="${failed.id}"]`
+  );
+  await details.locator('summary').click();
+  await expect(details.getByText('모델 · 이전 시도의 도우미 모델', { exact: true })).toBeVisible();
   await panel.getByLabel('도우미에게 요청').fill('새 요청 작성 중');
   await panel.getByRole('button', { name: '요청 편집', exact: true }).click();
   await panel.getByLabel('요청 수정 내용').fill('고친 요청');
   await panel.getByRole('button', { name: '수정한 요청 보내기', exact: true }).click();
   await expect(panel.getByLabel('도우미에게 요청')).toHaveValue('새 요청 작성 중');
   await expect(panel.getByRole('group', { name: '실패한 요청' })).toHaveCount(0);
-  state.complete(state.current().tasks[0]);
+  const retried = state.current().tasks[0];
+  retried.modelTitle = '재시도에 선택한 도우미 모델';
+  state.complete(retried);
   await expect(panel.getByText('합성 완료 응답', { exact: true })).toBeVisible();
   await page.reload();
   panel = await open(page);
@@ -612,5 +621,11 @@ test('HELPUI05 retry edits in place, preserves composer and hides historical fai
   await panel.locator('summary[aria-label="도우미 대화 더보기"]').click();
   await panel.getByRole('button', { name: '작업 기록', exact: true }).click();
   await expect(panel.locator('[data-testid="helper-task-record"]')).toHaveCount(2);
+  await expect(
+    panel.locator(`[data-testid="helper-task-record"][data-task-id="${failed.id}"]`)
+  ).toContainText('모델 · 이전 시도의 도우미 모델');
+  await expect(
+    panel.locator(`[data-testid="helper-task-record"][data-task-id="${retried.id}"]`)
+  ).toContainText('모델 · 재시도에 선택한 도우미 모델');
   await expect(panel.locator('.helper-task-history').getByText('SYNTHETIC_FAILURE')).toBeVisible();
 });

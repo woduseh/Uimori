@@ -20,7 +20,7 @@ import {
 } from '../core/prompt-program.js';
 import type { ProviderTool, Json } from '../core/transport.js';
 import { HelperWorkspace } from './helper-workspace.js';
-import { promptWorkspace } from './prompt-workspace.js';
+import { chatPromptWorkspace } from './prompt-workspace.js';
 import { fields, HttpError, number, record, text } from './request-validation.js';
 import type { Store } from './store.js';
 
@@ -149,7 +149,7 @@ export class ChatOptionsStore {
   }
   get(chatId: string, branchId?: string): ChatOptionState {
     const branch = this.store.product.branch(chatId, branchId),
-      workspace = promptWorkspace(this.store),
+      workspace = chatPromptWorkspace(this.store, this.store.product.profile(chatId).pinned),
       binding = optionBinding(workspace.main),
       saved = this.saved(chatId);
     const compatible = !saved.binding || isDeepStrictEqual(saved.binding, binding);
@@ -511,11 +511,21 @@ const schema = (properties: Record<string, Json>, required: string[] = []): Json
   additionalProperties: false,
 });
 const str: Json = { type: 'string' };
+/** Model option decisions need definitions and receipts, not the unrelated prompt body. */
+export function helperOptionState({ program, pending, ...state }: ChatOptionState) {
+  return {
+    ...state,
+    definitions: program.controls,
+    // The current delegation list already carries the scope, definitions and revocation state.
+    // Keep the choice's own frozen binding/definitions so old choices remain inspectable.
+    pending: pending.map(({ delegation: _delegation, ...choice }) => choice),
+  };
+}
 export const helperOptionTools: ProviderTool[] = [
   {
     name: 'options.read',
     description:
-      'Read actual writing option definitions, fixed values, next-request choices and active user delegations in this chat. Recommendation does not save.',
+      'Read writing option definitions, global/fixed values, pending choices, conflicts and user delegations in this chat. Use definitions for allowed values and check delegation binding, fields and revokedAt before choosing. Prompt prose is omitted. Recommendation does not save.',
     inputSchema: schema({}),
   },
   {
@@ -578,7 +588,7 @@ export function invokeHelperOptions(
   const service = new ChatOptionsStore(store);
   if (name === 'options.read') {
     fields(record(value), []);
-    return service.get(scope.chatId, scope.branchId);
+    return helperOptionState(service.get(scope.chatId, scope.branchId));
   }
   if (name !== 'options.choose' && name !== 'options.oneoff')
     throw new HttpError(400, 'Unknown option tool');
@@ -591,36 +601,41 @@ export function invokeHelperOptions(
   )
     throw new HttpError(403, 'Helper option scope changed');
   if (name === 'options.oneoff')
-    return service.stage(
+    return helperOptionState(
+      service.stage(
+        scope.chatId,
+        { ...b, branchId: scope.branchId },
+        {
+          requestId: task.id,
+          assert: () =>
+            new HelperWorkspace(store).authorize(task.id, scope.chatId, 'options.oneoff'),
+        }
+      )
+    );
+  const delegationId = text(b.delegationId, 'delegation ID', 100);
+  return helperOptionState(
+    service.stage(
       scope.chatId,
       { ...b, branchId: scope.branchId },
       {
         requestId: task.id,
-        assert: () => new HelperWorkspace(store).authorize(task.id, scope.chatId, 'options.oneoff'),
-      }
-    );
-  const delegationId = text(b.delegationId, 'delegation ID', 100);
-  return service.stage(
-    scope.chatId,
-    { ...b, branchId: scope.branchId },
-    {
-      requestId: task.id,
-      assert: (intent) => {
-        if (
-          intent.action !== 'choose' ||
-          intent.chatId !== scope.chatId ||
-          intent.branchId !== scope.branchId ||
-          !savedTask.snapshot.grants.some(
-            (grant) =>
-              grant.provenance === 'delegation' &&
-              grant.target === delegationId &&
-              intent.fields.every((id) => grant.actions.includes(`options.choose:${id}`))
+        assert: (intent) => {
+          if (
+            intent.action !== 'choose' ||
+            intent.chatId !== scope.chatId ||
+            intent.branchId !== scope.branchId ||
+            !savedTask.snapshot.grants.some(
+              (grant) =>
+                grant.provenance === 'delegation' &&
+                grant.target === delegationId &&
+                intent.fields.every((id) => grant.actions.includes(`options.choose:${id}`))
+            )
           )
-        )
-          throw new HttpError(403, '이 작업에 사용자 옵션 위임이 없어요.');
+            throw new HttpError(403, '이 작업에 사용자 옵션 위임이 없어요.');
+        },
       },
-    },
-    true
+      true
+    )
   );
 }
 export function chatOptionRoutes(app: FastifyInstance, store: Store): void {

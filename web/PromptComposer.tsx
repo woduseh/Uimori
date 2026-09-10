@@ -364,8 +364,9 @@ function TemplateEditor({
       {mode === 'source' && (
         <div className="pc-json">
           <p className="muted">
-            작성 방식 후보예요. {'{{ options.id }}'} 값, {'{% if options.id %}...{% endif %}'}{' '}
-            조건을 사용해요. 현재 제어 ID: {controlIds.join(', ') || '없음'}.
+            실험 기능이에요. 적용하면 저장할 프롬프트 구성이 바뀌어요. {'{{ options.id }}'} 값,{' '}
+            {'{% if options.id %}...{% endif %}'} 조건을 사용해요. 현재 제어 ID:{' '}
+            {controlIds.join(', ') || '없음'}.
           </p>
           <label>
             {label} 문법
@@ -1143,6 +1144,13 @@ export function PromptComposer({
         editControls({ values: imported.values, combinations: [] });
       }
       setStatus('JSON을 편집 초안으로 불러왔어요.');
+      // File inputs do not pass through ActionMenu's button-choice handler. Finish a successful
+      // import by dismissing its sheet so the imported blocks and undo action are reachable.
+      const menu = root.current?.querySelector<HTMLDetailsElement>('.pc-program-menu');
+      if (menu?.open) {
+        menu.open = false;
+        menu.querySelector('summary')?.focus();
+      }
     } catch (caught) {
       report(errorMessage(caught));
     }

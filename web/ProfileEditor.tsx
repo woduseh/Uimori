@@ -4,6 +4,8 @@ import { useEffect, useState } from 'react';
 import type { ChatProfile, Library } from '../core/product.js';
 import { api } from './api.js';
 import { usePromptWorkspace } from './usePromptWorkspace.js';
+import { isModelSelectable } from './model-selection.js';
+import { modelLabel } from './storyLabels.js';
 import { PackageAttachments } from './PackageAttachments.js';
 import { LoreContextPolicyEditor } from './LoreContextPolicyEditor.js';
 import './library.css';
@@ -105,6 +107,7 @@ export function ProfileEditor({
   }
   const profileBody = (next: ChatProfile) => ({
     expectedRevision: next.revision,
+    pinned: next.pinned ?? {},
     attachments: next.attachments,
     image: next.image,
     imageTranslation: next.imageTranslation !== false,
@@ -112,6 +115,17 @@ export function ProfileEditor({
     ...(next.packageValues ? { packageValues: next.packageValues } : {}),
     ...(next.loreContext ? { loreContext: next.loreContext } : {}),
   });
+  const promptId = value.pinned?.mainPromptPresetId;
+  const promptChoices = library.promptPresets?.filter((item) => item.role === 'main') ?? [];
+  const pinnedPrompt = promptChoices.find((item) => item.id === promptId);
+  const modelId = value.pinned?.mainModel?.id;
+  const selectedModelId = modelId ?? workspace?.modelRoutes.main?.id;
+  const selectedModel = library.models.find((item) => item.id === selectedModelId);
+  const modelAvailable =
+    !!selectedModel && isModelSelectable(selectedModel, library.models, library.connections);
+  const modelChoices = library.models.filter((item) =>
+    isModelSelectable(item, library.models, library.connections)
+  );
   return (
     <section
       className="profile-editor"
@@ -219,12 +233,43 @@ export function ProfileEditor({
               />
             </div>
             <div hidden={tab !== 'prompts'}>
-              <p>모든 채팅의 이후 요청에 현재 전역 프롬프트와 옵션을 사용해요.</p>
-              <p>
-                작문: {workspace?.main.title ?? '불러오는 중…'}
-                <br />
-                번역: {workspace?.translation.title ?? '불러오는 중…'}
-              </p>
+              <label>
+                이 채팅의 작문 프롬프트
+                <select
+                  value={promptId ?? ''}
+                  onChange={(event) =>
+                    change({
+                      ...value,
+                      pinned: {
+                        ...value.pinned,
+                        mainPromptPresetId: event.target.value || undefined,
+                      },
+                    })
+                  }
+                >
+                  <option value="">전역 따르기 · {workspace?.main.title ?? '불러오는 중…'}</option>
+                  {promptId && !pinnedPrompt && (
+                    <option value={promptId}>사용 불가 · {promptId}</option>
+                  )}
+                  {promptChoices.map((item) => (
+                    <option key={item.id} value={item.id}>
+                      {item.title}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <p>{promptId ? '작문 프롬프트 · 이 채팅 고정' : '작문 프롬프트 · 전역 따르기'}</p>
+              {promptId && !pinnedPrompt && (
+                <p className="error" role="alert">
+                  고정한 작문 프리셋을 사용할 수 없어 새 본문 실행이 차단돼요. 다른 프리셋을
+                  고르거나 전역 따르기로 바꿔 저장해 주세요.
+                </p>
+              )}
+              <small>
+                고정한 프리셋의 최신 저장본을 다음 요청부터 사용해요. 과거와 진행 중인 작업은 바뀌지
+                않아요. 창작 옵션은 선택한 프롬프트의 정의를 따라요.
+              </small>
+              <p>번역 · 전역 따르기: {workspace?.translation.title ?? '불러오는 중…'}</p>
               <button
                 type="button"
                 className="secondary"
@@ -234,13 +279,49 @@ export function ProfileEditor({
               </button>
             </div>
             <div hidden={tab !== 'models'}>
+              <label>
+                이 채팅의 본문 모델
+                <select
+                  value={modelId ?? ''}
+                  onChange={(event) =>
+                    change({
+                      ...value,
+                      pinned: {
+                        ...value.pinned,
+                        mainModel: event.target.value ? { id: event.target.value } : undefined,
+                      },
+                    })
+                  }
+                >
+                  <option value="">
+                    전역 따르기 ·{' '}
+                    {library.models.find((item) => item.id === workspace?.modelRoutes.main?.id)
+                      ?.title ?? '미지정 또는 확인 필요'}
+                  </option>
+                  {modelId && !modelChoices.some((item) => item.id === modelId) && (
+                    <option value={modelId}>사용 불가 · {selectedModel?.title ?? modelId}</option>
+                  )}
+                  {modelChoices.map((item) => (
+                    <option key={item.id} value={item.id}>
+                      {modelLabel(item, library)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <p>{modelId ? '본문 모델 · 이 채팅 고정' : '본문 모델 · 전역 따르기'}</p>
+              {!modelAvailable && workspace && (
+                <p className="error" role="alert">
+                  {modelId ? '고정한 본문 모델' : '전역 본문 모델'}을 사용할 수 없어 새 본문 실행이
+                  차단돼요. 사용 가능한 모델을 고르거나 전역 설정을 확인해 주세요.
+                </p>
+              )}
               <p>
-                모든 채팅의 이후 요청에 현재 전역 모델을 사용해요. 진행 중이거나 과거의 작업은
-                바뀌지 않아요.
+                본문 모델의 최신 저장본을 다음 요청부터 사용해요. 진행 중이거나 과거의 작업은 바뀌지
+                않아요. 번역과 보조 작업은 전역 모델을 따라요.
               </p>
-              {(['main', 'translation', 'status', 'image'] as const).map((role, index) => (
+              {(['translation', 'status', 'image'] as const).map((role, index) => (
                 <p key={role}>
-                  {['본문 모델', '번역 모델', '표시 상태 모델', '이미지 배치 모델'][index]}:{' '}
+                  {['번역 모델', '표시 상태 모델', '이미지 배치 모델'][index]}:{' '}
                   {library.models.find((item) => item.id === workspace?.modelRoutes[role]?.id)
                     ?.title ?? '미지정 또는 확인 필요'}
                 </p>
@@ -293,14 +374,14 @@ export function ProfileEditor({
               ? '저장 중…'
               : status || (dirty || lorePending ? '저장하지 않은 변경이 있어요.' : '')}
           </span>
-          {(dirty || lorePending) && <small>인물·자료의 변경 사항을 함께 저장해요.</small>}
+          {(dirty || lorePending) && <small>인물·자료·프롬프트·모델의 변경을 함께 저장해요.</small>}
           <SaveButton
             label="채팅 설정 저장"
             disabled={saving || !dirty || lorePending}
             aria-busy={saving}
           />
         </div>
-        {tab === 'prompts' && !dirty && !lorePending && status && <p role="status">{status}</p>}
+        {tab !== 'characters' && !dirty && !lorePending && status && <p role="status">{status}</p>}
       </form>
     </section>
   );

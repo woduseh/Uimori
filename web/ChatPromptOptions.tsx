@@ -11,6 +11,7 @@ import './chat-prompt-options.css';
 type Props = {
   open: boolean;
   workspace: PromptWorkspace | null;
+  promptRevision?: string;
   library: Library | null;
   disabled: boolean;
   chatId?: string;
@@ -187,6 +188,7 @@ export function ChatPromptOptions(props: Props) {
           visible={selectedScope === 'chat' && context.key === contextKey}
           disabled={props.disabled}
           workspaceRevision={props.workspace?.revision}
+          promptRevision={context.key === contextKey ? props.promptRevision : undefined}
           onDirtyChange={reportDirty}
           onBusyChange={reportBusy}
         />
@@ -201,6 +203,7 @@ function ChatScopeEditor({
   visible,
   disabled,
   workspaceRevision,
+  promptRevision,
   onDirtyChange,
   onBusyChange,
 }: {
@@ -209,6 +212,7 @@ function ChatScopeEditor({
   visible: boolean;
   disabled: boolean;
   workspaceRevision?: number;
+  promptRevision?: string;
   onDirtyChange: (key: string, value: boolean) => void;
   onBusyChange: (key: string, value: boolean) => void;
 }) {
@@ -234,6 +238,7 @@ function ChatScopeEditor({
         active={active}
         disabled={disabled}
         workspaceRevision={workspaceRevision}
+        promptRevision={promptRevision}
         onDirtyChange={dirty}
         onBusyChange={busy}
       />

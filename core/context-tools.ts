@@ -21,13 +21,13 @@ export const CONTEXT_TOOLS: ProviderTool[] = [
   {
     name: 'context.read',
     description:
-      'Show the saved working summary, which exchanges are compacted out of the transmitted window, which recent exchanges remain, and the current contextWindow usage.',
+      'Show saved/window summaries, compacted and retained source anchors (sceneNumber, revision, hash) in their frozen sceneScope, and current contextWindow usage. Read a known scene directly with story.read({sceneNumber}).',
     inputSchema: { type: 'object', properties: {}, additionalProperties: false },
   },
   {
     name: 'context.write',
     description:
-      'Save or replace your working summary for later windows and turns: decisions and their reasons, active constraints, unresolved threads, next steps, and where the originals are (story ids). It is durable before this returns and does not change the current window. Explicit user notes stay separate and take precedence over it.',
+      'Save or replace working memory for later windows and turns: decisions, reasons, active constraints, unresolved threads and next steps. Attach compact [scene 12] anchors to important claims with known sources, without expanding anchors with source UUIDs/hashes or writing per-scene recaps. Keep exact story identifiers, codes, attribution and user corrections. It is durable before returning; the current window is unchanged and explicit user notes take precedence.',
     inputSchema: {
       type: 'object',
       properties: { summary: summarySchema },
@@ -38,7 +38,7 @@ export const CONTEXT_TOOLS: ProviderTool[] = [
   {
     name: 'context.new',
     description:
-      'Open a new context window in this run. Exchanges older than keepRecent (default 2) and every earlier tool result leave the transmitted input; your working summary stands in for them and the host keeps every original for story.list, story.search and story.read. A saved or supplied summary is required when anything is compacted. Call it alone, after saving what you still need.',
+      'Open a new context window in this run. Exchanges older than keepRecent (default 2) and earlier tool results leave the input; your summary replaces them and every original remains retrievable by story.read({sceneNumber}). A saved or supplied summary is required when anything is compacted; preserve known compact scene anchors on important claims. Call alone after saving needed working memory.',
     inputSchema: {
       type: 'object',
       properties: {
