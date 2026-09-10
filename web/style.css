@@ -211,6 +211,7 @@ summary::before {
   margin-right: 4px;
   color: var(--muted);
   background: currentColor;
+  -webkit-mask: var(--chevron) center / 16px 16px no-repeat;
   mask: var(--chevron) center / 16px 16px no-repeat;
 }
 details[open] > summary::before {

@@ -39,6 +39,7 @@ export function PromptLibrary({
   onOpenCurrentPrompts,
   initialPresetId,
   onInitialPresetHandled,
+  listRequest = 0,
 }: {
   library: Library | null;
   reload: () => Promise<void>;
@@ -48,6 +49,8 @@ export function PromptLibrary({
   onOpenCurrentPrompts: () => void;
   initialPresetId?: string | null;
   onInitialPresetHandled?: () => void;
+  /** Bumped when the navigation entry is chosen, so an open editor returns to the list. */
+  listRequest?: number;
 }) {
   const [folder, setFolder] = useState<FolderFilter>('all');
   const [query, setQuery] = useState('');
@@ -73,6 +76,7 @@ export function PromptLibrary({
 
   const [dirty, setDirty] = useState(false);
   const [discard, setDiscard] = useState(false);
+  const externalList = useRef(listRequest);
   const [moving, setMoving] = useState<LibraryItemKey[] | null>(null);
   const [selecting, setSelecting] = useState(false);
   const [selection, setSelection] = useState<string[]>([]);
@@ -145,6 +149,13 @@ export function PromptLibrary({
   function close() {
     changeEditing(null);
   }
+  // biome-ignore lint/correctness/useExhaustiveDependencies: Only an explicit request leaves the editor.
+  useEffect(() => {
+    if (externalList.current === listRequest) return;
+    externalList.current = listRequest;
+    // `changeEditing` keeps the existing unsaved-draft confirmation.
+    if (editing) close();
+  }, [listRequest]);
   async function placeCreated(preset: PromptPreset, created: boolean) {
     if (!created || folder === 'all' || folder === 'unclassified') return;
     const current = await api<LibraryOrganization>('/library/organization');

@@ -51,6 +51,15 @@
   min-width: 0;
   margin: 0;
 }
+/* A group inside a group is a label, not a second card. Only the outer one draws a box. */
+.control-grid .control-grid {
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+}
+.control-grid .control-grid > legend {
+  padding-left: 0;
+}
 .control-grid legend {
   padding: 0 6px;
   font-weight: 600;
