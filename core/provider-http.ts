@@ -24,14 +24,13 @@ import {
   diagnosticAnthropicBody,
   AnthropicProtocolError,
 } from './anthropic-protocol.js';
-import {
-  ProviderContractError,
-  validateConnection,
-  validateRequest,
-  type Json,
-  type ProviderConnection,
-  type ProviderExecutionOptions,
-  type ProviderResult,
+import { ProviderContractError } from './provider-errors.js';
+import { validateConnection, validateRequest } from './provider-request.js';
+import type {
+  Json,
+  ProviderConnection,
+  ProviderExecutionOptions,
+  ProviderResult,
 } from './transport.js';
 
 type Decoder = {

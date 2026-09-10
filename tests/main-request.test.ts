@@ -4,10 +4,10 @@ import Fastify from 'fastify';
 import {
   buildMainProviderRequest,
   encodeMainPreview,
-  attachMainHostContext,
   storySubmissionEnabled,
   STORY_SUBMIT_MAX_CHARS,
 } from '../server/main-request.js';
+import { attachMainHostContext } from '../server/main-host-context.js';
 import { compileSnapshotPrompt } from '../server/prompt-snapshot.js';
 import { promptRoutes } from '../server/prompt-routes.js';
 import { runMain, type MainHooks } from '../server/model-runner.js';

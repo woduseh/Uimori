@@ -1,5 +1,5 @@
 import { GoogleAuth } from 'google-auth-library';
-import { ProviderContractError } from './transport.js';
+import { ProviderContractError } from './provider-errors.js';
 
 const clients = new Map<string, GoogleAuth>();
 

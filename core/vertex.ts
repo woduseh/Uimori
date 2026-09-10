@@ -12,14 +12,13 @@ import {
   VertexDecoder,
   VertexProtocolError,
 } from './vertex-protocol.js';
-import {
-  ProviderContractError,
-  validateConnection,
-  validateRequest,
-  type Json,
-  type ProviderConnection,
-  type ProviderExecutionOptions,
-  type ProviderResult,
+import { ProviderContractError } from './provider-errors.js';
+import { validateConnection, validateRequest } from './provider-request.js';
+import type {
+  Json,
+  ProviderConnection,
+  ProviderExecutionOptions,
+  ProviderResult,
 } from './transport.js';
 
 const sha = (value: string) => createHash('sha256').update(value).digest('hex');

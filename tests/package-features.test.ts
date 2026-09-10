@@ -7,7 +7,7 @@ import { randomUUID } from 'node:crypto';
 import { Store } from '../server/store.js';
 import { resolvePackageModules } from '../server/package-features.js';
 import { behaviorDetail } from '../server/package-behavior-host.js';
-import { packageControlKey } from '../server/product-store.js';
+import { packageControlKey } from '../core/content-package.js';
 import { freezeSourceSegments } from '../core/package-source-segments.js';
 import { compiledPackages } from '../core/package-context.js';
 import type { ContentPackage, PackageAttachment } from '../core/content-package.js';

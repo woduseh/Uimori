@@ -7,12 +7,18 @@ import { Store } from '../server/store.js';
 import {
   ChatOptionsStore,
   chatOptionGrants,
+  optionBinding,
   invokeHelperOptions,
   validateChatOptionArchive,
   type ChatOptionAuthority,
 } from '../server/chat-options.js';
 import { HelperWorkspace } from '../server/helper-workspace.js';
-import { promptWorkspace, updatePromptWorkspace } from '../server/prompt-workspace.js';
+import {
+  defaultPromptWorkspace,
+  freezeCurrentPrompts,
+  promptWorkspace,
+  updatePromptWorkspace,
+} from '../server/prompt-workspace.js';
 import { createFixtureChat } from './fixtures/chat.js';
 import { forkChat } from '../server/chat-fork.js';
 import type { OptionValues } from '../core/chat-options.js';
@@ -391,4 +397,13 @@ test('archive retains delegation start and revoke history, consumed option owner
     .prepare('UPDATE chat_option_pending SET body=? WHERE id=?')
     .run(JSON.stringify(corrupted), corrupted.id);
   expect(() => validateChatOptionArchive(target)).toThrow(/identity|owner/);
+});
+
+test('the frozen profile owner and the live option binding come from one rule', () => {
+  const workspace = defaultPromptWorkspace();
+  expect(freezeCurrentPrompts(workspace).promptOptionOwner).toBe('workspace:main');
+  expect(optionBinding(workspace.main).owner).toBe('workspace:main');
+  const applied = { ...workspace, main: { ...workspace.main, presetId: 'preset-1' } };
+  expect(freezeCurrentPrompts(applied).promptOptionOwner).toBe('preset:preset-1');
+  expect(optionBinding(applied.main).owner).toBe('preset:preset-1');
 });
