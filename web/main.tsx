@@ -57,6 +57,7 @@ import { BotNavigation, type ChatFolder } from './BotTreeNavigation.js';
 import { completePendingStoryProfile } from './pendingStory.js';
 import { useStory } from './useStory.js';
 import { useTestMode } from './useTestMode.js';
+import { usePanelDeepLink } from './usePanelDeepLink.js';
 import { ActivityStatus } from './ActivityStatus.js';
 import { modelLabel } from './storyLabels.js';
 import './style.css';
@@ -216,6 +217,38 @@ function App() {
   const [initialModules, setInitialModules] = useState<Content[]>([]);
   const [moduleToUse, setModuleToUse] = useState<Content | null>(null);
   const [libraryTab, setLibraryTab] = useState<'bot' | 'persona' | 'module' | 'prompts'>('bot');
+  usePanelDeepLink(!s.selected || s.detail?.chat.id === s.selected, (link) => {
+    if (link.destination === 'library') {
+      if (['bot', 'persona', 'module', 'prompts'].includes(link.tab))
+        setLibraryTab(link.tab as typeof libraryTab);
+      s.showLibrary();
+    }
+    const chatSections: ChatSettingsSection[] = [
+      'characters',
+      'prompts',
+      'models',
+      'story',
+      'images',
+      'runtime',
+    ];
+    const appSections = [
+      'general',
+      'models',
+      'prompts',
+      'connections',
+      'agents',
+      'illustrations',
+      'data',
+      'security',
+    ];
+    const panels: Panel[] = ['navigation', 'new', 'branches', 'tasks', 'reading', 'outline'];
+    if (link.panel === 'story')
+      openChatSettings(chatSections.find((section) => section === link.section) ?? undefined);
+    else if (link.panel === 'settings') {
+      if (appSections.includes(link.section)) setSettingsTab(link.section);
+      setPanel('settings');
+    } else if ((panels as string[]).includes(link.panel)) setPanel(link.panel as Panel);
+  });
   const [libraryListRequest, setLibraryListRequest] = useState(0);
   const errorScope = `${s.destination}:${libraryTab}:${s.viewKey}`;
   const previousErrorScope = useRef(errorScope);
