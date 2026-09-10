@@ -140,12 +140,12 @@
 
 `UXUI01`과 `CSUI04`는 처음에 `web/main.tsx`의 컨트롤이라는 이유로 `e417572` 쪽 문제로 적었는데, 그 논증은 틀렸어요. "`HEAD`에서도 실패한다"는 이번 변경만 면제하고, `HEAD`가 곧 `e417572`이므로 그 커밋을 면제하지 않아요. 병행 작업 쪽에서 부모 `08fab43`과 직접 비교해 확인했어요.
 
-| 검사 | `08fab43` 단독 | `e417572` 단독 |
+| 검사 | `08fab43` | `e417572` |
 | --- | --- | --- |
 | `UXUI01` | PASS | PASS |
 | `CSUI04` | TIMEDOUT | PASS |
 
-`CSUI04`는 그 커밋 이전부터 단독 실행에서 깨져 있었고 오히려 그 커밋에서 통과해요. `UXUI01`은 양쪽 모두 단독으로 통과하니 **전체 실행에서만 나타나는 실행 간 상호작용**이에요.
+**이 표는 두 검사만 `--grep`으로 뽑은 같은 선택에서의 결과예요.** `chat-settings-browser.spec.ts`의 앞선 `CSUI01`~`CSUI03`은 돌지 않았어요. 그래서 이 표가 뒷받침하는 것은 "그 커밋이 이 둘을 깨지 않았다"까지이고, "`CSUI04`가 통과한다"는 아니에요. 파일 전체나 전체 묶음에서는 `CSUI04`가 실패해요. `UXUI01`은 양쪽 모두 통과하니 **전체 실행에서만 나타나는 실행 간 상호작용**이고, `CSUI04`도 같은 성격일 가능성이 있어요.
 
 `UXUI01`의 원인은 확정했어요. `창작 옵션` 버튼의 조건인 `hasCreativeOptions`(`web/main.tsx:263`)가 채팅별 상태가 아니라 **전역 프롬프트 작업본**의 `main.program.controls`를 읽어요. `verify:redesign`은 56개 spec이 서버와 DB 하나를 공유하고, `UXUI01`은 220개 케이스 중 219번째로 가장 마지막에 실행돼요.
 
@@ -172,9 +172,69 @@ harness가 보존한 evidence DB로 종료 시점 상태를 직접 읽었어요.
 
 원인을 좁히려고 chevron 규칙만 뺀 빌드와 transition만 뺀 빌드를 각각 3회 돌렸고, 둘 다 통과했어요. 문서 전체의 `<details>`마다 transition을 거는 비용이 창 크기 변경 뒤 첫 commit을 늦춰 기존 경합을 드러낸 것으로 보여요. transition을 빼고 회전만 남겼어요. 사이드바의 기존 chevron도 transition이 없어서 동작이 같아져요.
 
+## 후속 정리 (같은 날)
+
+정리해 둔 후속 목록을 이어서 처리했어요. 남은 실패 여섯 건 중 셋이 없어졌고, **그중 둘은 실제 UX 결함이었어요.**
+
+### 8. 탐색 항목이 그 화면의 목록으로 돌아가지 않았어요
+
+서재 상세나 편집 화면에서 사이드바의 `서재`를 다시 눌러도 목록으로 돌아오지 않았어요. `showLibrary()`가 탭과 목적지만 바꾸고 패널이 들고 있는 `detail`·`editing` 상태는 그대로 뒀거든요. 프롬프트 편집기도 같았어요.
+
+`web/main.tsx`에 `libraryListRequest` 카운터를 두고, `LibraryPanel`과 `PromptLibrary`가 각자 이미 가진 복귀 경로(`navigate()`·`changeEditing()`)를 타게 했어요. 그 경로가 미저장 초안 확인을 이미 담당하므로 보호 규칙은 그대로예요.
+
+이게 `ui-browser.spec.ts`의 `UI03 UI12 new story retry`가 오래 실패하던 이유였어요. 그 검사는 서재 편집기에서 `새 채팅`으로 가는데, 편집기가 열린 채라 `봇` 탭을 30초 동안 기다렸어요. 지금은 `ui-browser`가 **24/24**이고 파일 실행 시간도 1.1분에서 33초로 줄었어요.
+
+### 9. 앱 메뉴가 선택 후에도 열려 있었어요
+
+사이드바 하단 앱 메뉴에서 `서재`·`프롬프트`를 골라도 메뉴가 닫히지 않았어요. 봇 행 메뉴를 비롯한 다른 메뉴는 모두 선택과 함께 닫혀요. `web/BotTreeNavigation.tsx`의 두 항목에 같은 처리를 붙였어요.
+
+닫힌 `ActionMenu`의 본문이 레이아웃 상자를 유지하던 것도 함께 정리했어요. `position: absolute`라 그려지지는 않지만 상자가 남아서 숨김 검사와 hit test에 존재하는 것처럼 보였어요. `.action-menu:not([open]) > .action-menu-body`에 `display: none`을 줬어요.
+
+앞선 절에서 `SIDENAV01`을 "렌더링 엔진 의존"으로 적었는데 **틀린 판단이었어요.** 첫 `toBeHidden`은 통과하고 있었고, 실제 실패 지점은 그 뒤의 "항목을 고르면 메뉴가 닫힌다"였어요. 실패 산출물에 그 지점 이후의 스크린샷이 남아 있는 것으로 알아냈어요.
+
+### 10. 전역 설정 복원이 통째로 건너뛰어졌어요
+
+`tests/fixtures/prompt-workspace.ts`의 `afterEach`가 첫 줄의 `page.unrouteAll({ behavior: 'wait' })`에서 멈춰 있었어요. timeout으로 끝난 검사가 해제하지 않은 route gate를 무한정 기다려서, 그 아래 전역 프롬프트·모델 복원이 한 줄도 실행되지 않았어요. 그래서 `detail`·`coNarration`이 남아 뒤의 `UXUI01`을 깨뜨렸어요.
+
+drain을 5초로 제한하고 남은 handler는 `ignoreErrors`로 떨궈요. 복원 훅에 자체 timeout 예산을 주고, 프롬프트 복원과 모델 복원이 서로의 실패로 건너뛰지 않게 나눴어요. 수정 전에는 그 검사 하나만 돌려도 control이 2개 남았고 지금은 0이에요.
+
+### 11. 실행 환경과 조사 절차
+
+- `.nvmrc`에 `24.14.0`을 넣었어요. `engines`는 범위를 정하지만 고정 파일이 없어서, Node 26으로 들어온 세션이 harness 거부와 `vitest` 실패를 겪고 원인 파악에 시간을 썼어요.
+- `scripts/lib.mjs`의 `browserPath()`와 `playwright.config.ts`가 Windows 경로만 탐색해서 macOS는 무조건 `Local test browser unavailable`이었어요. 두 목록을 같은 내용으로 맞추고 macOS·Linux 경로를 더했어요. 목록을 두 곳에 두는 것은 Playwright 설정이 `node:fs` 외에 아무것도 의존하지 않게 하려는 의도이고, 주석으로 서로를 가리켜요.
+- `docs/DEVELOPMENT.md`에 실행 환경, 빌드 지문에 드는 파일과 아닌 파일, evidence DB 조회, 부모 커밋과의 격리 A/B, `output/` 정리를 정리했어요.
+
+### 12. 화면 소품 둘
+
+`설정 → 현재 모델`의 `번역`이 다른 역할과 달리 테두리 카드였어요. `.control-grid` 안의 `.control-grid`가 테두리와 여백을 한 번 더 그려서 카드 안 카드가 됐거든요. 중첩된 묶음은 라벨만 남기고 바깥 하나만 상자를 그려요. 같은 중첩을 쓰는 삽화 설정도 함께 정리돼요.
+
+`--chevron`에 `-webkit-mask` 폴백을 더했어요. 없으면 지원이 없는 브라우저에서 `<details>` 마커가 통째로 사라져요.
+
+### 남은 두 건은 이번 변경과 무관해요
+
+`PRUI01`은 경합이 아니에요. `문법 초안 적용` 뒤 오류 alert가 사라지고 `저장`이 활성인 것까지 확인한 다음 저장해도 결과가 같아요. 저장된 프리셋의 `blocks[0].template[0].kind`가 `if`가 아니라 `text`예요. 적용한 `{% if %}` 템플릿이 저장 프로그램에 반영되지 않는 동작 문제이고 `core/prompt-*` 조사가 필요해요.
+
+`CSUI04`는 푸시된 `15f6bd5` 기준 트리에서 2회 중 2회 실패해요. `빠른 페르소나` 트리거가 계속 `disabled`이고 요소가 반복 remount돼요. 비활성 조건은 `quickBusy`·`optionsBusy`·`optionsDirty`·`profileDirty`·`!detail`·`!attachmentsReady` 여섯 개예요.
+
+### 13. 재시도한 작업의 이전 세대 알림이 함께 보였어요
+
+병행 작업이 `web/ActivityStatus.tsx`·`web/ActivityNotifications.tsx`의 잠금을 풀고 분석을 넘겨줘서 이어받았어요.
+
+작업을 재시도하면 알림 대화상자에 같은 `data-activity-id`를 가진 행이 둘 생겼어요. 하나는 세대 2의 `번역하는 중`, 다른 하나는 세대 1의 `번역 중단 · 확인 필요`였어요. 사용자에게는 한 작업이 서로 모순된 두 상태로 동시에 보여요.
+
+**렌더와 effect의 시차예요.** reader가 세대 2를 내려주면 `items`는 그 자리에서 세대 2 하나로 합쳐지는데, `notices` 상태를 정리하는 것은 `useEffect`라 페인트 뒤에 돌아요. 그 사이 한 프레임 동안 두 행이 함께 그려지고, Playwright의 단정이 그 프레임을 잡으면 strict mode 위반이에요. 3회 중 2회 실패한 것이 이 경합이에요.
+
+같은 활동 id를 더 높은 세대로 이미 보고 있으면 이전 세대의 알림을 `unresolvedNotices`에서 걸러요. effect를 기다리지 않고 렌더에서 판단해요. `verify:activity`가 **8 PASS**이고 `verify:chat-unification` 14, `verify:turn-activity` 4는 그대로예요.
+
+### 전체 실행이 두 배로 느려졌어요
+
+후속 정리를 마친 트리로 전체 회귀를 다시 재니 **19.8분에 211 PASS / 9 FAIL**이었어요. 기준선 `15f6bd5`는 같은 기계에서 **10.8분에 213 PASS / 7 FAIL**이에요. 위에서 고친 네 건은 실제로 사라졌지만 여섯 건이 새로 깨졌고, 새 실패는 모두 단독 실행에서 통과해요.
+
+처음에는 환경 탓으로 봤는데 기준선을 같은 조건에서 다시 재서 기각했어요. 원인은 특정하지 못했어요. 후보와 측정값, 다음 단계는 [전체 회귀 지연 브리프](BRIEF-FULL-RUN-REGRESSION-2026-09-10.md)에 따로 정리했어요. 되돌리기 쉽도록 검사 helper 수정은 별도 커밋으로 나눴어요.
+
 ## 남은 것
 
-- `tests/ui-navigation.ts`의 `selectPackageSection`에는 경합이 남아 있어요. 창 폭을 바꾼 직후 `compact` 상태가 반영되기 전에 뒤로가기 버튼의 표시 여부를 읽어요. 이번에는 원인을 없애 통과하지만, `.package-editor-layout[data-compact]`가 기대한 값이 될 때까지 기다리게 하면 근본적으로 사라져요. 여러 suite가 공유하는 helper라 이번 범위에서 고치지 않았어요.
+- `tests/ui-navigation.ts`의 `selectPackageSection`에 `.package-editor-layout[data-compact]` 대기를 넣어 경합을 없앴어요. 다만 이 helper를 쓰는 `BUI03`이 전체 실행에서 2.6초에서 210.5초로 늘어난 게 이 변경과 같은 시점이에요. 인과는 확인하지 못했고 브리프의 후보 B예요.
 - `설정 → 현재 모델`에서 `번역`만 테두리로 감싼 묶음이고 나머지 역할은 맨 label이에요. 하위 설정이 있는 역할이라 묶음 자체는 뜻이 있지만, 다른 역할과의 시각 차이는 다시 볼 여지가 있어요.
 - border-radius 26종, font-size 19종에 px와 rem이 섞여 있어요. 이번에는 결함만 고치고 스케일 토큰화는 하지 않았어요.
 - **Windows에서 같은 전체 회귀를 한 번 돌려야 해요.** 이 기록의 실패 6건이 그대로 남는지, 아니면 macOS·Edge에서만 나타난 것인지가 거기서 갈려요. A/B 비교 자체는 같은 환경에서 했으므로 이번 변경의 영향 판정에는 영향이 없어요.
