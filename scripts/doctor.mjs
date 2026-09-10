@@ -199,6 +199,8 @@ export async function doctor(
         context = await chromium.launchPersistentContext(path.join(temp, 'browser-profile'), {
           executablePath,
           headless: true,
+          // Same as playwright.config.ts: a system PAC proxy must not intercept 127.0.0.1.
+          args: ['--no-proxy-server'],
           viewport: { width: 390, height: 844 },
           timeout: 10000,
         });

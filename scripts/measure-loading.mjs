@@ -219,7 +219,11 @@ try {
   summary.server = server.ready;
   ownership.children.push({ pid: server.child.pid, dbPath, url: server.ready.url });
   await json(path.join(directory, 'ownership.json'), ownership);
-  browser = await chromium.launch({ executablePath: browserPath(), headless: true });
+  browser = await chromium.launch({
+    executablePath: browserPath(),
+    headless: true,
+    args: ['--no-proxy-server'],
+  });
   const context = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
   const page = await context.newPage();
   page.setDefaultTimeout(120000);
