@@ -13,7 +13,7 @@ Node **24.14 이상 24.x**와 `npm ci`를 사용해요. 프로젝트의 `strict`
 | 기본 UI 연결 확인 | `npm run verify:browser-smoke` | 채팅 진입·생성 및 전역 프롬프트 설정의 작은 브라우저 묶음. 전체 기능 검사를 대신하지 않아요. |
 | 통합 UI 회귀 | `npm run verify:redesign` | 전체 기능 흐름. 대표 모바일/데스크톱 폭을 사용해요. |
 | 배치·반응형 시각 검토 | `npm run verify:visual` | 전체 기능 + 추가 화면 폭·정밀 배치·성공 PNG. 사람이 화면도 확인해야 해요. |
-| 화면 갤러리 | `npm run verify:gallery` | 주요 화면·모달을 390/1440px × light/dark로 한 번에 캡처하고 원칙 수치를 `metrics.json`에 기록해요. 단정이 없어 몇 분 안에 끝나요. 계약은 [화면 갤러리](UI-GALLERY.md)에 있어요. |
+| 화면 갤러리 | `npm run verify:gallery` | 주요 화면·모달을 390/1440px × light/dark로 한 번에 캡처하고 원칙 수치를 `metrics.json`에 기록한 뒤, 첫 채팅 여정을 두 폭에서 단계별로 캡처하며 상호작용 수를 `journey.json`에 세요. 단정이 없어 몇 분 안에 끝나요. 계약은 [화면 갤러리](UI-GALLERY.md)에 있어요. |
 | 반복 성능 측정 | `npm run benchmark:story` | 긴 본문 동작 검사에 warmup/반복 표본과 측정 산출물을 추가해요. |
 | 서식 수정 | `npm run format` | Biome가 지원하는 프로젝트 소스·설정의 서식만 수정해요. |
 | lint 수정 | `npm run lint:fix` | 도구가 안전하다고 분류한 수정만 적용해요. 해결되지 않은 진단은 실패로 남아요. |
