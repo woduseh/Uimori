@@ -181,7 +181,7 @@ test('LCUI02 policy drafts survive tabs and preview reflects the unsaved policy 
   await expect(policy.getByLabel('고정 자료 문자 한도', { exact: true })).toHaveValue('200000');
   await policy.getByLabel('조회 로어 구간 한도', { exact: true }).fill('257');
   await expect(save).toBeDisabled();
-  await selectChatSettingsSection(page, '모델');
+  await selectChatSettingsSection(page, '이 채팅의 모델');
   await expect(save).toBeDisabled();
   await selectChatSettingsSection(page, '봇·페르소나·모듈');
   await expect(policy.getByLabel('조회 로어 구간 한도', { exact: true })).toHaveValue('257');

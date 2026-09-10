@@ -105,7 +105,7 @@ test('LOADUI08 task history loads on demand and preserves off-page reading, insp
       response.url().endsWith(`/api/chats/${seeded.chat.id}/fork`) &&
       response.request().method() === 'POST'
   );
-  await task.getByRole('button', { name: '새 이야기로 이어가기', exact: true }).click();
+  await task.getByRole('button', { name: '새 채팅으로 복사', exact: true }).click();
   const forkedResponse = await forkResponse;
   expect(forkedResponse.ok()).toBeTruthy();
   const forked = (await forkedResponse.json()) as Chat;
@@ -310,7 +310,7 @@ test('LOADUI02 same-source tabs keep CAS drafts and isolate another chat, manual
   ]);
   for (const tab of [page, second]) {
     await expect(article(tab, source.id)).toBeVisible();
-    await openSourceActions(article(tab, source.id));
+    // The toolbar pencil edits the current view; opening the ⋯ sheet first would cover it at 390px.
     await article(tab, source.id).getByRole('button', { name: '원문 수정', exact: true }).click();
   }
   await second.getByLabel('원문 수정 내용').fill('Stale tab draft must survive.');

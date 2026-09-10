@@ -53,7 +53,7 @@ import { PackageBehaviorPanel } from './PackageBehaviorPanel.js';
 import { SessionGate } from './SessionGate.js';
 import { Dialog } from './Dialog.js';
 import { DeleteButton } from './DeleteButton.js';
-import { BotNavigation, type ChatFolder } from './BotTreeNavigation.js';
+import { BotNavigation, NavigationQuickActions, type ChatFolder } from './BotTreeNavigation.js';
 import { completePendingStoryProfile } from './pendingStory.js';
 import { useStory } from './useStory.js';
 import { useTestMode } from './useTestMode.js';
@@ -469,8 +469,10 @@ function App() {
     setInspectedRun(id);
     setPanel('tasks');
   }
-  const navigation = (
+  // The drawer shows the quick actions in its header row instead of the brand row.
+  const navigation = (quickActions: boolean) => (
     <BotNavigation
+      quickActions={quickActions}
       library={s.library}
       chats={s.chats}
       selected={s.selected}
@@ -572,7 +574,7 @@ function App() {
       className={`app-shell ${focus ? 'focus-reading' : ''} ${sidebarCollapsed ? 'sidebar-collapsed' : ''} ${optionsOpen && s.destination === 'story' && s.selected ? 'options-open' : ''} ${helperOpen ? 'helper-open' : ''}`}
     >
       <aside id="workspace-sidebar" className="sidebar" aria-label="탐색">
-        {!compact && panel !== 'navigation' && navigation}
+        {!compact && panel !== 'navigation' && navigation(true)}
       </aside>
       <main className="story-workspace">
         {s.destination === 'story' && (
@@ -1413,8 +1415,18 @@ function App() {
         title="탐색"
         onClose={() => setPanel('')}
         className="navigation-dialog"
+        headerLeading={
+          panel === 'navigation' ? (
+            <NavigationQuickActions
+              chats={s.chats}
+              library={s.library}
+              onSelect={select}
+              onLibrary={showLibrary}
+            />
+          ) : undefined
+        }
       >
-        {panel === 'navigation' && navigation}
+        {panel === 'navigation' && navigation(false)}
       </Dialog>
       <Dialog open={panel === 'new'} title="새 채팅" onClose={() => setPanel('')}>
         {s.library && (

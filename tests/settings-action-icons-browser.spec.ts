@@ -76,15 +76,15 @@ for (const width of [390, 1440]) {
         });
     });
     await navigationAction(page, '설정');
-    await selectSettingsSection(page, '현재 모델');
+    await selectSettingsSection(page, '역할별 모델');
     const settings = page.getByRole('dialog', { name: '설정', exact: true });
     const reload = settings.getByRole('button', { name: '다시 불러오기', exact: true });
     await icon(reload);
     ready = true;
     await reload.click();
-    const models = settings.getByRole('region', { name: '현재 모델 설정', exact: true });
+    const models = settings.getByRole('region', { name: '역할별 모델 설정', exact: true });
     await expect(models).toBeVisible();
-    const modelSave = models.getByRole('button', { name: '현재 모델 설정 저장', exact: true });
+    const modelSave = models.getByRole('button', { name: '역할별 모델 설정 저장', exact: true });
     await modelSave.scrollIntoViewIfNeeded();
     await named(modelSave, '저장');
     await expect(models).not.toContainText('새 채팅의 첫 응답이 성공하면');

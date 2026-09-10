@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type MouseEvent } from 'react';
-import type { Content } from '../core/product.js';
+import type { Content, Library } from '../core/product.js';
+import type { Chat } from '../core/types.js';
 import {
   libraryCategory,
   libraryFolderOf,
@@ -10,6 +11,7 @@ import { ActionMenu } from './ActionMenu.js';
 import { Dialog } from './Dialog.js';
 import { IconButton } from './IconButton.js';
 import {
+  AddIcon,
   DownIcon,
   ExpandIcon,
   FolderAddIcon,
@@ -17,6 +19,7 @@ import {
   LibraryIcon,
   PromptIcon,
   RunningIcon,
+  SearchIcon,
   SettingsIcon,
   UpIcon,
 } from './ui-icons.js';
@@ -47,7 +50,82 @@ function closeMenu(event: MouseEvent<HTMLButtonElement>, run: () => void) {
   if (menu) menu.open = false;
   run();
 }
-export function BotNavigation(props: Props & { onLibraryChanged: () => Promise<void> }) {
+/** First row of the sidebar and the drawer: start a chat (from the library's bot tab, where bots
+ *  without chats live) or find a chat across every bot. */
+export function NavigationQuickActions({
+  chats,
+  library,
+  onSelect,
+  onLibrary,
+}: {
+  chats: Chat[];
+  library: Library | null;
+  onSelect: (id: string) => void;
+  onLibrary: (tab: 'bot') => void;
+}) {
+  const [searching, setSearching] = useState(false);
+  const [query, setQuery] = useState('');
+  const botTitle = (chat: Chat) =>
+    library?.contents.find((bot) => bot.id === chat.botId)?.title ?? '';
+  const needle = query.trim().toLocaleLowerCase();
+  const matches = chats
+    .filter(
+      (chat) =>
+        !needle ||
+        chat.title.toLocaleLowerCase().includes(needle) ||
+        botTitle(chat).toLocaleLowerCase().includes(needle)
+    )
+    .sort((a, b) => (b.lastActivityAt ?? '').localeCompare(a.lastActivityAt ?? ''));
+  return (
+    <div className="navigation-quick-actions">
+      <IconButton label="새 채팅" icon={AddIcon} onClick={() => onLibrary('bot')} />
+      <IconButton
+        label="전체 채팅 검색"
+        icon={SearchIcon}
+        onClick={() => {
+          setQuery('');
+          setSearching(true);
+        }}
+      />
+      <Dialog
+        open={searching}
+        title="전체 채팅 검색"
+        onClose={() => setSearching(false)}
+        className="bot-organize-dialog"
+      >
+        <label className="story-search">
+          <SearchIcon size={16} />
+          <input
+            aria-label="전체 채팅 검색"
+            placeholder="채팅 또는 봇 이름"
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+          />
+        </label>
+        <nav className="bot-search-results" aria-label="채팅 검색 결과">
+          {matches.map((chat) => (
+            <button
+              key={chat.id}
+              type="button"
+              data-chat-id={chat.id}
+              onClick={() => {
+                setSearching(false);
+                onSelect(chat.id);
+              }}
+            >
+              <strong>{chat.title}</strong>
+              <small>{botTitle(chat)}</small>
+            </button>
+          ))}
+          {!matches.length && <p>검색 결과가 없어요.</p>}
+        </nav>
+      </Dialog>
+    </div>
+  );
+}
+export function BotNavigation(
+  props: Props & { onLibraryChanged: () => Promise<void>; quickActions?: boolean }
+) {
   const {
     library,
     chats,
@@ -59,6 +137,8 @@ export function BotNavigation(props: Props & { onLibraryChanged: () => Promise<v
     tasks,
     onError,
     onLibraryChanged,
+    onSelect,
+    quickActions = true,
   } = props;
   const [view, setView] = useState(readView);
   const activities = useChatActivities();
@@ -239,7 +319,17 @@ export function BotNavigation(props: Props & { onLibraryChanged: () => Promise<v
   }
   return (
     <div className="bot-navigation bot-tree-navigation" data-testid="bot-navigation">
-      <div className="brand">Uimori</div>
+      <div className="brand">
+        <span>Uimori</span>
+        {quickActions && (
+          <NavigationQuickActions
+            chats={chats}
+            library={library}
+            onSelect={onSelect}
+            onLibrary={onLibrary}
+          />
+        )}
+      </div>
       <div className="bot-tree-section-heading">
         <button
           className="bot-folder-toggle"

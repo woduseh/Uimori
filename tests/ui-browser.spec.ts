@@ -196,7 +196,7 @@ test('UI01 UI02 UI04 UI05 UI09 long real sources keep composer accessible, safe 
       )
     ).toBe(true);
     await nav(page, '설정');
-    await selectSettingsSection(page, '프로바이더와 모델');
+    await selectSettingsSection(page, '프로바이더·모델 등록');
     const connectionDialog = page.getByRole('dialog', { name: '설정', exact: true });
     expect(
       await connectionDialog.evaluate((element) => element.scrollWidth <= element.clientWidth + 1)
@@ -647,7 +647,7 @@ test('UI07 UI12 late accepted fork cannot navigate after A B A or replace the cu
   });
   try {
     await openSourceActions(page.getByTestId('source'));
-    await page.getByRole('button', { name: '여기서 새 이야기로 이어가기', exact: true }).click();
+    await page.getByRole('button', { name: '이 장면까지 새 채팅으로 복사', exact: true }).click();
     const fork = await acceptedChat;
     // The list is named after its own bot so several expanded bots stay distinguishable.
     const list = page.getByRole('navigation', { name: chatListName });
@@ -1055,11 +1055,11 @@ test('UI03 starting without a model explains setup and creates a chat without ex
   await expect(page.getByRole('dialog', { name: '설정', exact: true })).toBeVisible();
   await expect(page.getByLabel('원문 모델', { exact: true })).toBeVisible();
   const settings = page.getByRole('dialog', { name: '설정', exact: true });
-  const connectionTab = settings.getByRole('tab', { name: '현재 모델', exact: true });
+  const connectionTab = settings.getByRole('tab', { name: '역할별 모델', exact: true });
   if (await connectionTab.isVisible())
     await expect(connectionTab).toHaveAttribute('aria-selected', 'true');
   else {
-    await expect(settings.getByRole('heading', { name: '현재 모델', exact: true })).toBeVisible();
+    await expect(settings.getByRole('heading', { name: '역할별 모델', exact: true })).toBeVisible();
     await expect(
       settings.getByRole('button', { name: '설정 목록으로', exact: true })
     ).toBeVisible();
@@ -1773,7 +1773,7 @@ test('UI settings categories retain drafts and support keyboard navigation', asy
     await expect(dialog.getByRole('tabpanel')).toHaveCount(1);
     await expect(dialog.getByLabel('앱 화면 테마')).toBeVisible();
     await expect(dialog.getByTestId('connection-editor')).not.toBeVisible();
-    await selectSettingsSection(page, '프로바이더와 모델');
+    await selectSettingsSection(page, '프로바이더·모델 등록');
     await startProviderConnection(page);
     await dialog
       .getByRole('region', { name: '제공자 선택', exact: true })
@@ -1790,7 +1790,7 @@ test('UI settings categories retain drafts and support keyboard navigation', asy
     if (viewport.width === 1440) {
       await tabs.getByRole('tab', { name: '접근 보안', exact: true }).press('Home');
       await expect(tabs.getByRole('tab', { name: '일반', exact: true })).toBeFocused();
-      for (const section of ['현재 모델', '현재 프롬프트', '프로바이더와 모델']) {
+      for (const section of ['역할별 모델', '현재 프롬프트', '프로바이더·모델 등록']) {
         await page.keyboard.press('ArrowDown');
         await expect(tabs.getByRole('tab', { name: section, exact: true })).toBeFocused();
       }
@@ -1798,7 +1798,7 @@ test('UI settings categories retain drafts and support keyboard navigation', asy
       await dialog.getByRole('button', { name: '설정 목록으로', exact: true }).click();
       const connection = dialog
         .locator('.settings-navigation')
-        .getByRole('button', { name: '프로바이더와 모델', exact: true });
+        .getByRole('button', { name: '프로바이더·모델 등록', exact: true });
       await connection.focus();
       await page.keyboard.press('Enter');
       await expect(dialog.locator('.settings-navigation').filter({ visible: true })).toHaveCount(0);

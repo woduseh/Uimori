@@ -35,7 +35,7 @@ test('DLUI02 ?chat=…&panel=story&section=models waits for the chat and opens i
   const dialog = page.getByRole('dialog', { name: '채팅 설정', exact: true });
   await expect(dialog).toBeVisible();
   await expect(
-    dialog.locator('.section-navigation').getByRole('tab', { name: '모델', exact: true })
+    dialog.locator('.section-navigation').getByRole('tab', { name: '이 채팅의 모델', exact: true })
   ).toHaveAttribute('aria-selected', 'true');
   await expect.poll(() => params(page).has('panel')).toBe(false);
   expect(params(page).get('chat')).toBe(chat.id);

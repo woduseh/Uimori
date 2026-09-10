@@ -22,7 +22,7 @@ async function library(request: APIRequestContext): Promise<Library> {
 }
 async function settings(page: Page) {
   await navigation(page, '설정');
-  await selectSettingsSection(page, '프로바이더와 모델');
+  await selectSettingsSection(page, '프로바이더·모델 등록');
   await startProviderConnection(page);
   await page
     .getByRole('region', { name: '제공자 선택', exact: true })
@@ -258,7 +258,7 @@ test('EVALUI02 mobile 390px evaluation controls save only for opted-in presets a
   });
   await page.reload();
   await navigation(page, '설정');
-  await selectSettingsSection(page, '프로바이더와 모델');
+  await selectSettingsSection(page, '프로바이더·모델 등록');
   await expect(page.getByText(title + ' 모델', { exact: true })).toBeVisible();
   expect((await library(request)).models.find((item) => item.id === model.id)).toEqual(model);
   expect(observed.errors).toEqual([]);

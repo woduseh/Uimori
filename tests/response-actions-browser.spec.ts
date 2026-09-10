@@ -99,7 +99,7 @@ test('RACOM01 source footer stays compact and its menu supports touch, keyboard 
     await expect(actions.getByRole('button')).toHaveText([
       '도우미에게 물어보기',
       '현재 설정으로 다시 요청',
-      '여기서 새 이야기로 이어가기',
+      '이 장면까지 새 채팅으로 복사',
       '번역 수정',
       '이미지 자동 배치',
       '삽화 생성',
