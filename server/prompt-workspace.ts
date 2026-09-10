@@ -1,3 +1,4 @@
+import { promptOptionOwner } from '../core/chat-options.js';
 import type { FastifyInstance } from 'fastify';
 import type {
   CurrentPrompt,
@@ -287,9 +288,7 @@ export function freezeCurrentPrompts(
     promptPresets,
     promptControls,
     promptWorkspaceRevision: workspace.revision,
-    promptOptionOwner: workspace.main.presetId
-      ? `preset:${workspace.main.presetId}`
-      : 'workspace:main',
+    promptOptionOwner: promptOptionOwner(workspace.main),
   };
 }
 

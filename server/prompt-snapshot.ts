@@ -1,6 +1,6 @@
 import { loreHistory } from '../core/lore-context.js';
 import { createDefaultPromptProgram } from '../core/prompt-defaults.js';
-import { attachMainHostContext } from './main-request.js';
+import { attachMainHostContext } from './main-host-context.js';
 import { buildMainInput, pinnedSlotSources } from '../core/provider.js';
 import {
   compilePromptProgram,

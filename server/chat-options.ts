@@ -1,12 +1,13 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { isDeepStrictEqual } from 'node:util';
 import type { FastifyInstance } from 'fastify';
-import type {
-  OptionBinding,
-  OptionDelegation,
-  OptionValues,
-  PendingChatOptions,
-  ChatOptionState,
+import {
+  promptOptionOwner,
+  type OptionBinding,
+  type OptionDelegation,
+  type OptionValues,
+  type PendingChatOptions,
+  type ChatOptionState,
 } from '../core/chat-options.js';
 import type { HelperTask, HelperGrant } from '../core/helper.js';
 import type { RunSnapshot } from '../core/types.js';
@@ -49,9 +50,15 @@ export type ChatOptionIntent = {
 export type ChatOptionAuthority = { requestId: string; assert: (intent: ChatOptionIntent) => void };
 export function optionBinding(prompt: Pick<CurrentPrompt, 'presetId' | 'program'>): OptionBinding {
   return {
-    owner: prompt.presetId ? `preset:${prompt.presetId}` : 'workspace:main',
+    owner: promptOptionOwner(prompt),
     definitionHash: hash(prompt.program.controls),
   };
+}
+/** The binding a frozen profile implies; its owner was recorded from the workspace at freeze time. */
+function frozenOptionBinding(profile: ProfileSnapshot): OptionBinding | undefined {
+  const preset = profile.promptPresets?.main;
+  if (!preset || profile.promptOptionOwner === undefined) return undefined;
+  return { owner: profile.promptOptionOwner, definitionHash: hash(preset.program.controls) };
 }
 const readBinding = (value: unknown): OptionBinding => {
   const b = record(value);
@@ -418,9 +425,8 @@ export class ChatOptionsStore {
     if (!preset || !ref) return;
     const state = this.get(profile.chatId, branchId);
     if (
-      hash(preset.program.controls) !== state.binding.definitionHash ||
-      profile.promptWorkspaceRevision !== state.workspaceRevision ||
-      profile.promptOptionOwner !== state.binding.owner
+      !isDeepStrictEqual(frozenOptionBinding(profile), state.binding) ||
+      profile.promptWorkspaceRevision !== state.workspaceRevision
     )
       conflict('옵션 예약 전 현재 프롬프트가 변경됐어요.');
     const globalValues = resolvePromptValues(
@@ -677,8 +683,7 @@ export function validateChatOptionSnapshot(profile: ProfileSnapshot): void {
   if (
     !preset ||
     !ref ||
-    readBinding(resolution.binding).definitionHash !== hash(preset.program.controls) ||
-    resolution.binding.owner !== profile.promptOptionOwner
+    !isDeepStrictEqual(readBinding(resolution.binding), frozenOptionBinding(profile))
   )
     throw new HttpError(400, 'Invalid option snapshot binding');
   number(resolution.revision, 'option revision', 0, Number.MAX_SAFE_INTEGER);

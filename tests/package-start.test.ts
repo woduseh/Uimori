@@ -8,7 +8,7 @@ import { createHash } from 'node:crypto';
 import { Store } from '../server/store.js';
 import { createPackageStart } from '../server/package-start.js';
 import { behaviorDetail } from '../server/package-behavior-host.js';
-import { packageControlKey } from '../server/product-store.js';
+import { packageControlKey } from '../core/content-package.js';
 import { resolvePackageStart, validatePackageStarts } from '../core/package-start.js';
 import { validateContentPackage, type ContentPackage } from '../core/content-package.js';
 import { completePendingStoryProfile, savePendingStoryProfile } from '../web/pendingStory.js';

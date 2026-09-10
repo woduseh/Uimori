@@ -1,7 +1,7 @@
 import { isDeepStrictEqual } from 'node:util';
 import type { HelperTaskSnapshot } from '../core/helper.js';
 import type { RunSnapshot } from '../core/types.js';
-import { validateModelSnapshot } from './product-store.js';
+import { validateModelSnapshot } from './provider-archive.js';
 import { validateRunSnapshot } from './snapshot-archive.js';
 import { validateHelperContexts, helperHistory } from './helper-context.js';
 import { fields, HttpError, number, record, text } from './request-validation.js';

@@ -9,7 +9,7 @@ import {
   type PackageStartRef,
 } from '../core/package-start.js';
 import type { Store } from './store.js';
-import { packageControlKey } from './product-store.js';
+import { packageControlKey } from '../core/content-package.js';
 import { freezePackageStates } from './package-behavior-host.js';
 import type { BehaviorScope } from './package-behavior-store.js';
 

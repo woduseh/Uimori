@@ -1,9 +1,17 @@
-import { HttpError, fields, number, record, text } from './request-validation.js';
 import {
-  resolveModelPricing,
-  validateModelPricing,
-  validatePricingSnapshot,
-} from '../core/model-pricing.js';
+  HttpError,
+  archiveId,
+  archiveList,
+  archiveVersionBody,
+  boolean,
+  choice,
+  fields,
+  number,
+  parse,
+  record,
+  text,
+} from './request-validation.js';
+import { resolveModelPricing, validatePricingSnapshot } from '../core/model-pricing.js';
 import { estimateCost } from '../core/pricing-estimate.js';
 import { translationPolicy } from '../core/translation-settings.js';
 import {
@@ -16,13 +24,7 @@ import {
   validateCombinationOwner,
 } from './prompt-workspace.js';
 import { combinationOwner } from '../core/prompt-combinations.js';
-import {
-  GENERATION_KEYS,
-  generationFromModel,
-  modelCapability,
-  validateGenerationShape,
-  validateModelOptions,
-} from '../core/model-capabilities.js';
+import { generationFromModel } from '../core/model-capabilities.js';
 import { createDefaultPromptProgram } from '../core/prompt-defaults.js';
 import { randomUUID, createHash } from 'node:crypto';
 import {
@@ -37,7 +39,6 @@ import type { Store } from './store.js';
 export { fields, number, record, text } from './request-validation.js';
 import {
   defaultProfile,
-  validateProviderEndpoint,
   PROVIDER_PROTOCOLS,
   VERTEX_GEMINI_DEFAULT_TIMEOUT_MS,
   type Content,
@@ -59,6 +60,16 @@ import type { ProviderResult, WireRecord } from '../core/transport.js';
 import { validateDisplayAnnotation, validatePresentation } from '../core/auxiliary.js';
 import { validateTranslationArtifact } from './source-editing.js';
 import { storyTables } from './story-store.js';
+import {
+  catalogTimestamp,
+  connectionEndpoint,
+  isProviderSetting,
+  modelOptionKeys,
+  modelPricing,
+  validateModelGeneration,
+  validateModelSnapshot,
+  validateProviderSettingVersion,
+} from './provider-archive.js';
 import {
   ILLUSTRATION_TABLES,
   illustrationSettings,
@@ -108,6 +119,7 @@ import {
   validateContentPackage,
   validatePackageAttachment,
   type PackageAttachment,
+  packageControlKey,
 } from '../core/content-package.js';
 import { compilePackageAttachment } from '../core/package-runtime.js';
 import {
@@ -134,15 +146,6 @@ import { validateArchivedLoreContext } from './lore-context-archive.js';
 
 type Row = Record<string, any>;
 const json = JSON.stringify;
-const parse = (s: any) => (s == null ? null : JSON.parse(String(s)));
-const choice = <T extends string>(v: unknown, values: T[], name: string): T => {
-  if (!values.includes(v as T)) throw new HttpError(400, `Invalid ${name}`);
-  return v as T;
-};
-const boolean = (v: unknown): boolean => {
-  if (typeof v !== 'boolean') throw new HttpError(400, 'Invalid boolean');
-  return v;
-};
 const ref = (v: unknown): ContentRef => {
   const b = record(v);
   fields(b, ['id', 'revision']);
@@ -153,80 +156,6 @@ export const modelRef = (v: unknown): ModelRef => {
   fields(b, ['id']);
   return { id: text(b.id, 'model', 100) };
 };
-const isProviderSetting = (kind: string) => kind === 'connection' || kind === 'model';
-
-function connectionEndpoint(value: unknown, protocol: Connection['protocol']) {
-  const endpoint = text(value, 'endpoint', 2000);
-  try {
-    return validateProviderEndpoint(protocol, endpoint);
-  } catch {
-    throw new HttpError(400, 'Invalid provider endpoint');
-  }
-}
-
-const modelOptionKeys = [
-  ...GENERATION_KEYS.filter((key) => !['maxOutputTokens', 'temperature'].includes(key)),
-  'timeoutMs',
-  'evaluationTools',
-  'contextTools',
-  'inputTokenLimit',
-];
-function catalogTimestamp(value: unknown): string | null {
-  if (value === null) return null;
-  if (
-    typeof value !== 'string' ||
-    !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(value) ||
-    !Number.isFinite(Date.parse(value)) ||
-    new Date(value).toISOString() !== value
-  )
-    throw new HttpError(400, 'Invalid catalog timestamp');
-  return value;
-}
-function modelPricing(value: unknown) {
-  try {
-    return validateModelPricing(value);
-  } catch {
-    throw new HttpError(400, 'Invalid model pricing');
-  }
-}
-function validateModelMetadata(value: Row) {
-  if (value.enabled !== undefined) boolean(value.enabled);
-  if (value.pricing !== undefined) modelPricing(value.pricing);
-  if (value.source !== undefined) {
-    const source = record(value.source);
-    fields(source, ['kind', 'catalogUpdatedAt']);
-    choice(source.kind, ['catalog', 'manual'], 'model source');
-    catalogTimestamp(source.catalogUpdatedAt);
-  }
-}
-function validateModelGeneration(value: Row, protocol?: Connection['protocol']) {
-  if (value.inputTokenLimit !== undefined)
-    number(value.inputTokenLimit, 'input context limit', 8192, 1000000);
-  if (value.evaluationTools !== undefined)
-    try {
-      validateEvaluationToolOptions(value.evaluationTools);
-    } catch {
-      throw new HttpError(400, 'Invalid evaluation tool options');
-    }
-  if (value.contextTools !== undefined) boolean(value.contextTools);
-  if (value.timeoutMs !== undefined)
-    number(value.timeoutMs, 'timeout', 1, protocol === 'fixture-sse-v1' ? 600000 : 1800000);
-  const generation = generationFromModel(value as ModelPreset);
-  try {
-    if (protocol) {
-      validateModelOptions(generation, protocol);
-      if (
-        modelCapability(protocol, value.modelId)?.forcedTools === false &&
-        value.evaluationTools?.contextMode === 'preloaded'
-      )
-        throw new Error(
-          '이 모델은 강제 도구 호출을 지원하지 않아요. 평가 문맥을 모델 선택으로 설정해 주세요.'
-        );
-    } else validateGenerationShape(generation);
-  } catch (error) {
-    throw new HttpError(400, error instanceof Error ? error.message : 'Invalid model options');
-  }
-}
 
 export class ProductStore {
   constructor(readonly store: Store) {}
@@ -1387,7 +1316,6 @@ const archiveTables = [
   ...OUTLINE_TABLES,
 ];
 
-export const packageControlKey = (r: PackageAttachment) => `${r.id}@${r.revision}:${r.role}`;
 function currentRef(product: ProductStore, kind: string, reference: ContentRef): ContentRef {
   const current = product.get<ContentRef>(kind, reference.id);
   return { id: current.id, revision: current.revision };
@@ -1504,11 +1432,6 @@ function validateAttachmentRoles(
       throw new HttpError(400, 'Duplicate legacy and package primary role');
 }
 
-const archiveId = (value: unknown) => {
-  const id = text(value, 'archive ID', 200);
-  if (!/^[A-Za-z0-9][A-Za-z0-9._:-]*$/.test(id)) throw new HttpError(400, 'Invalid archive ID');
-  return id;
-};
 function scrubArchiveSecrets(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(scrubArchiveSecrets);
   if (value && typeof value === 'object')
@@ -1522,11 +1445,6 @@ function scrubArchiveSecrets(value: unknown): unknown {
     );
   return value;
 }
-function archiveList(value: unknown, maximum = 300): any[] {
-  if (!Array.isArray(value) || value.length > maximum)
-    throw new HttpError(400, 'Invalid archive list');
-  return value;
-}
 function archiveSettings(value: unknown) {
   const b = record(value);
   fields(b, ['preset', 'mode', 'translation', 'status', 'maxCalls']);
@@ -1537,13 +1455,13 @@ function archiveSettings(value: unknown) {
   number(b.maxCalls, 'call limit', 1, 16);
 }
 function validateArchiveVersion(row: Row, providerSetting = false) {
-  if (isProviderSetting(row.kind) && !providerSetting)
-    throw new HttpError(400, 'Provider settings do not have archived revisions');
-  const body = record(parse(row.body));
-  archiveId(row.id);
-  number(row.revision, 'version');
-  if (body.id !== row.id || body.revision !== row.revision)
-    throw new HttpError(400, 'Version identity mismatch');
+  if (isProviderSetting(row.kind)) {
+    if (!providerSetting)
+      throw new HttpError(400, 'Provider settings do not have archived revisions');
+    validateProviderSettingVersion(row);
+    return;
+  }
+  const body = archiveVersionBody(row);
   if (row.kind === 'package-image') {
     validateImageBlob(body);
     return;
@@ -1598,162 +1516,9 @@ function validateArchiveVersion(row: Row, providerSetting = false) {
       });
       resolvePromptValues(program, record(body.values));
     }
-  } else if (row.kind === 'connection') {
-    fields(body, [
-      'id',
-      'revision',
-      'title',
-      'protocol',
-      'endpoint',
-      'credentialEnv',
-      'catalogCredentialEnv',
-      'enabled',
-      'catalog',
-      'catalogError',
-      'catalogUpdatedAt',
-    ]);
-    const protocol = choice(body.protocol, [...PROVIDER_PROTOCOLS], 'protocol');
-    if (
-      body.catalogCredentialEnv !== undefined &&
-      (protocol !== 'vertex-gemini-v1' ||
-        !validCredentialEnv(text(body.catalogCredentialEnv, 'catalog credential reference', 200)))
-    )
-      throw new HttpError(400, 'Invalid catalog credential reference');
-    if (body.catalogUpdatedAt !== undefined) catalogTimestamp(body.catalogUpdatedAt);
-    connectionEndpoint(body.endpoint, protocol);
-    if (protocol === 'codex-app-server-v1' && body.credentialEnv !== undefined)
-      throw new HttpError(400, 'Invalid Codex authority');
-    boolean(body.enabled);
-    if (
-      body.credentialEnv !== undefined &&
-      !validCredentialEnv(text(body.credentialEnv, 'credential reference', 200))
-    )
-      throw new HttpError(400, 'Invalid credential reference');
-    archiveList(body.catalog, 5000).forEach((raw) => {
-      const model = record(raw);
-      fields(model, [
-        'id',
-        'name',
-        'capabilities',
-        'priceRevision',
-        'limits',
-        'options',
-        'pricing',
-      ]);
-      text(model.id, 'catalog ID', 300);
-      text(model.name, 'catalog name', 400);
-      const capabilities = record(model.capabilities);
-      if (Object.values(capabilities).some((v) => v !== null && typeof v !== 'boolean'))
-        throw new HttpError(400, 'Invalid catalog capabilities');
-      if (model.priceRevision !== null) text(model.priceRevision, 'price revision', 200);
-      if (model.pricing !== undefined) {
-        const pricing = record(model.pricing);
-        fields(pricing, ['rates', 'longContext', 'serviceTiers']);
-        const validateRateSet = (entry: Row) => {
-          fields(entry, ['rates', 'longContext']);
-          modelPricing({ mode: 'manual', rates: entry.rates });
-          if (entry.longContext !== undefined) {
-            const long = record(entry.longContext);
-            fields(long, ['aboveInputTokens', 'rates']);
-            number(long.aboveInputTokens, 'pricing threshold', 1, 100_000_000);
-            modelPricing({ mode: 'manual', rates: long.rates });
-          }
-        };
-        validateRateSet({
-          rates: pricing.rates,
-          ...(pricing.longContext ? { longContext: pricing.longContext } : {}),
-        });
-        if (pricing.serviceTiers !== undefined) {
-          const tiers = record(pricing.serviceTiers);
-          if (
-            Object.keys(tiers).length > 20 ||
-            Object.keys(tiers).some(
-              (tier) =>
-                !/^[a-z][a-z0-9_-]{0,39}$/.test(tier) ||
-                ['constructor', 'prototype', '__proto__'].includes(tier)
-            )
-          )
-            throw new HttpError(400, 'Invalid catalog pricing tiers');
-          for (const value of Object.values(tiers)) validateRateSet(record(value));
-        }
-      }
-      if (model.limits !== undefined) {
-        const limits = record(model.limits);
-        fields(limits, ['maxOutputTokens', 'inputTokenLimit']);
-        for (const value of Object.values(limits))
-          if (!Number.isSafeInteger(value) || Number(value) < 1 || Number(value) > 100_000_000)
-            throw new HttpError(400, 'Invalid catalog limit');
-      }
-      if (model.options !== undefined) {
-        const options = record(model.options);
-        fields(options, ['thinking', 'thinkingModes']);
-        for (const list of Object.values(options)) {
-          if (!Array.isArray(list) || list.length > 20)
-            throw new HttpError(400, 'Invalid catalog options');
-          for (const item of list) text(item, 'catalog option', 40);
-        }
-      }
-    });
-    if (body.catalogError !== null) text(body.catalogError, 'catalog error', 2000);
-  } else if (row.kind === 'model') {
-    fields(body, [
-      'id',
-      'revision',
-      'title',
-      'connectionId',
-      'modelId',
-      'maxOutputTokens',
-      'temperature',
-      ...modelOptionKeys,
-      'enabled',
-      'pricing',
-      'source',
-      'capabilityProtocol',
-    ]);
-    archiveId(body.connectionId);
-    text(body.modelId, 'model ID', 300);
-    validateModelGeneration(
-      body,
-      body.capabilityProtocol === undefined
-        ? undefined
-        : choice(body.capabilityProtocol, [...PROVIDER_PROTOCOLS], 'model protocol')
-    );
-    validateModelMetadata(body);
   } else throw new HttpError(400, 'Invalid archive version kind');
 }
 /** Execution snapshots are self-contained evidence, independent of later setting edits. */
-export function validateModelSnapshot(value: unknown): ModelSnapshot {
-  const snapshot = record(value),
-    { connection: rawConnection, pricingSnapshot, ...model } = snapshot,
-    connection = record(rawConnection);
-  validateArchiveVersion(
-    { kind: 'model', id: model.id, revision: model.revision, body: json(model) },
-    true
-  );
-  validateArchiveVersion(
-    {
-      kind: 'connection',
-      id: connection.id,
-      revision: connection.revision,
-      body: json(connection),
-    },
-    true
-  );
-  if (model.connectionId !== connection.id)
-    throw new HttpError(400, 'Model snapshot connection mismatch');
-  if (model.capabilityProtocol !== undefined && model.capabilityProtocol !== connection.protocol)
-    throw new HttpError(400, 'Model snapshot protocol mismatch');
-  validateModelGeneration(model, connection.protocol);
-  if (pricingSnapshot !== undefined) {
-    validatePricingSnapshot(pricingSnapshot);
-    if (
-      pricingSnapshot.modelId !== model.modelId ||
-      pricingSnapshot.protocol !== connection.protocol
-    )
-      throw new HttpError(400, 'Pricing snapshot model mismatch');
-  }
-  return structuredClone(snapshot) as ModelSnapshot;
-}
 function validateArchiveAsset(row: Row) {
   const body = record(parse(row.body));
   fields(body, [

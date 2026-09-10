@@ -18,7 +18,7 @@ import {
 } from '../core/state.js';
 import { sourceHash, type SourceScope } from '../core/source-history.js';
 import { validateAuthorNote, type AuthorNote } from '../core/notes.js';
-import { validateModelSnapshot } from './product-store.js';
+import { validateModelSnapshot } from './provider-archive.js';
 import type { RunSnapshot } from '../core/types.js';
 
 type Row = Record<string, any>;

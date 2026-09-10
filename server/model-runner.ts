@@ -20,8 +20,8 @@ import {
 import type { ModelInput, RunSnapshot, ToolEvent, Usage } from '../core/types.js';
 import { createEvaluationToolSession } from './evaluation-session.js';
 import { createHash } from 'node:crypto';
+import { attachMainHostContext } from './main-host-context.js';
 import {
-  attachMainHostContext,
   buildMainProviderRequest,
   encodeMainPreview,
   storySubmissionEnabled,

@@ -15,6 +15,8 @@ export type PackageRole = (typeof PACKAGE_ROLES)[number];
 export const PACKAGE_TARGETS = ['main', 'translation', 'state', 'status', 'image'] as const;
 export type PackageTarget = (typeof PACKAGE_TARGETS)[number];
 export type PackageAttachment = { id: string; revision: number; role: PackageRole };
+/** Chat-local package values are keyed by the exact attachment identity; a new revision starts fresh. */
+export const packageControlKey = (r: PackageAttachment) => `${r.id}@${r.revision}:${r.role}`;
 /** Flat authoring folders only; folder membership does not change loading or runtime order. */
 export type PackageLoreFolder = { id: string; name: string };
 export type PackageLore = {

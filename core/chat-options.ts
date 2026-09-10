@@ -3,6 +3,9 @@ import type { HelperScope } from './helper.js';
 
 export type OptionValues = Record<string, PromptValue>;
 export type OptionBinding = { owner: string; definitionHash: string };
+/** One owner rule for the frozen profile and the live binding: the applied preset, else the bare slot. */
+export const promptOptionOwner = (prompt: { presetId?: string }): string =>
+  prompt.presetId ? `preset:${prompt.presetId}` : 'workspace:main';
 export type OptionDelegation = {
   id: string;
   revision: number;

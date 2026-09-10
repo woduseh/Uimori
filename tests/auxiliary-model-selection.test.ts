@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { isAbsolute, join, relative } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { Store } from '../server/store.js';
-import { validateModelSnapshot } from '../server/product-store.js';
+import { validateModelSnapshot } from '../server/provider-archive.js';
 import { modelWorkspace, updateModelWorkspace } from '../server/prompt-workspace.js';
 import { frozenImageSelection } from '../server/package-images.js';
 import { auxiliaryBridge } from '../server/auxiliary-bridge.js';
