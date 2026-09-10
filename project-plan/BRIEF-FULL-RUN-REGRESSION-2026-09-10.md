@@ -53,13 +53,15 @@ node output/playwright/baseline-15f6bd5-2026-09-10T00-40-40Z/compare-durations.m
 
 531초 중 **437초가 새로 실패한 아홉 건 안에서** 나왔고, 통과한 검사 전체에 흩어진 것은 94초예요.
 
+**220건 중 189건은 ±1초 안에 있고 그 189건의 증감 합은 5초예요.** 나머지 31건이 526초를 만들고, 그중 상위 다섯이 421초예요. 움직인 검사들의 증가 중앙값은 9.2초로 `expect`의 10초 한도와 맞아요. 전체가 고르게 느려진 게 아니라 **31곳에서 각각 한도까지 기다렸다가 풀린 모양**이에요.
+
 여기서 "실패가 늘어서 그만큼 느려졌다"로 읽으면 안 돼요. **기준선도 일곱 건이 실패했고 그 일곱 건의 소요 합은 119초예요.** 후속 실행의 아홉 건은 462초예요. 실패 건수가 둘 늘어난 것이 아니라 **실패 한 건이 훨씬 오래 걸리게 된 것**이 차이예요. 실패마다 30초 한도를 태운다는 계산으로는 이 차이가 설명되지 않아요.
 
 가장 큰 `BUI03`은 그 자체로 설명이 필요해요. `tests/package-behavior-browser.spec.ts:223`이 자기 한도를 60초로 선언하는데 기록된 소요는 210.5초예요. 검사 본문 한도만으로는 나올 수 없는 값이라, 어디서 시간이 갔는지(hook, fixture, 산출물 기록) 먼저 가르는 게 빠를 거예요.
 
 ## 확정한 것
 
-- **환경이 아니에요.** 기준선을 같은 조건에서 다시 재서 10.8분을 얻었어요. 처음 세운 "핫스팟·기계 상태" 가설은 이 측정으로 기각됐어요.
+- **환경만으로는 설명되지 않아요.** 기준선을 같은 조건에서 다시 재서 10.8분을 얻었어요. 처음 세운 "핫스팟·기계 상태" 가설로는 2.1배가 안 나와요. 다만 **기준선 자체가 고정점이 아니에요.** 사실상 같은 내용을 09-09 22:07과 22:53에 쟀을 때는 9.2분·9.4분에 214 PASS / 6 FAIL이었는데, 09-10 00:40의 `15f6bd5`는 10.8분에 213 PASS / 7 FAIL이에요. 같은 동작에서 **+15%와 실패 1건**이 움직였어요. 환경 요인은 그 크기까지는 실재해요.
 - **동시 실행이 아니에요.** 후속 실행 창(00:16Z–00:36Z)에 겹치는 다른 harness 실행 산출물이 없어요.
 - **단독 실행에서는 재현되지 않아요.** 예를 들어 `LOADUI01`은 전체 실행에서 1.3초 → 11.4초인데 `verify:loading` 단독으로는 1.3초예요. 새 실패 여섯 건도 모두 단독으로 통과해요.
 - **정상 변동이 아니에요.** 저장소에 남은 전체 실행 기록을 전수로 읽으면 소요가 검사 수를 거의 선형으로 따라가요.
@@ -89,20 +91,56 @@ node output/playwright/baseline-15f6bd5-2026-09-10T00-40-40Z/compare-durations.m
 
 **후보 B — `tests/ui-navigation.ts`의 `selectPackageSection`.** 창 폭을 바꾼 직후의 경합을 없애려고 `.package-editor-layout[data-compact]`가 기대값이 될 때까지 기다리는 단정을 추가했어요. 8개 spec 파일이 이 helper를 써요.
 
-**두 후보 모두 절반만 설명해요.** 느려진 18건 중 11건은 A 또는 B의 사용처인데 나머지 7건(`LIBUI04`, `HELPUI02`, `HELPUI05`, `OUTUI01`, `LOADUI01`, `CSUI02`, `LIBUI01`)은 둘 다 쓰지 않아요. 가장 큰 `BUI03`(+207.9초)은 B의 사용처이고, 두 번째로 큰 `LIBUI04`(+76.1초)는 아니에요.
+**두 후보를 합쳐도 59%까지만 닿아요.** 증가한 검사를 spec 파일 단위로 묶고 각 파일이 A·B를 쓰는지 붙이면 이렇게 나뉘어요.
 
-`LIBUI04`의 실패 문맥에는 `Test timeout of 30000ms exceeded` 뒤에 `apiRequestContext.get: Target page, context or browser has been closed`가 남아 있어요. 뒤엣것은 본문이 이미 timeout된 뒤 `afterEach`가 닫힌 컨텍스트로 요청한 결과라서, 원인이 아니라 결과예요.
+| 구분 | 증가 |
+| --- | --- |
+| A(`fixtures/prompt-workspace`)를 쓰는 파일 | 135초 (21%) |
+| B(`selectPackageSection`)를 쓰는 파일 | 243초 (38%) |
+| **둘 다 안 쓰는 파일** | **265초 (41%)** |
+
+A와 B를 동시에 쓰는 파일은 없어요. 둘 다 안 쓰는 쪽에 `helper-browser` 106.7초, `library-browser` 82.2초, `outline-browser` 40.8초, `loading` 10.3초, `chat-settings` 9.9초가 있어요. **그래서 A와 B를 각각 되돌려 전체 실행을 두 번 돌려도 41%는 남아요.** 되돌리기 실험만으로는 결론이 나지 않아요.
+
+### `BUI03`은 느려진 게 아니라 막혔어요
+
+혼자 증가분의 33%를 만들어요. 보존된 실패 문맥은 이래요.
+
+```
+Error: locator.click: Test timeout of 60000ms exceeded.
+  - waiting for getByRole('region', { name: '자료 상세' })
+      .getByRole('button', { name: '편집' }).first()
+    - locator resolved to <button type="button" class="secondary">…</button>
+  - attempting click action
+    - waiting for element to be visible, enabled and stable
+```
+
+**요소는 찾았어요.** 없어서 못 누른 게 아니라 `visible / enabled / stable` 셋 중 하나가 끝내 참이 안 됐어요. `stable`은 바운딩 박스가 두 프레임 연속 같아야 성립하므로, **한 번 어긋난 위치가 아니라 계속 움직이는 것**을 뜻해요. 검사 helper의 대기 방식으로는 설명하기 어려운 종류예요.
+
+`LIBUI04`의 문맥에는 `Test timeout of 30000ms exceeded` 뒤에 `apiRequestContext.get: Target page, context or browser has been closed`가 남아 있어요. 뒤엣것은 본문이 이미 timeout된 뒤 `afterEach`가 닫힌 컨텍스트로 요청한 결과라서, 원인이 아니라 결과예요.
+
+### 배제한 후보
+
+- **`libraryListRequest` 리렌더 루프가 아니에요.** `LibraryPanel`의 effect가 `externalList` ref로 가드돼서 카운터가 실제로 바뀔 때만 `navigate`를 불러요.
+- **닫힌 ActionMenu 본문의 `display: none`이 형제를 밀어낸 게 아니에요.** 전역 규칙이라 A·B를 안 쓰는 파일까지 닿는다는 점 때문에 41%의 후보로 검토했고, `BUI03`이 막힌 `편집` 버튼 바로 옆 형제가 실제로 ActionMenu예요. 그런데 `.action-menu-body`는 **두 상태 모두 `position: absolute`**예요. 흐름 밖 상자는 원래도 형제의 위치나 부모의 자동 크기에 기여하지 않으니, 상자가 사라져도 `편집` 버튼은 움직이지 않아요. 이 규칙이 바꾸는 것은 레이아웃이 아니라 hit test인데, 덮개가 없어지는 방향이라 클릭을 막을 수도 없어요.
 
 ## 다음 사람이 할 일
 
-0. **`BUI03` 하나만 먼저 봐요.** 증가분 531초 중 208초가 이 한 건이고, 선언된 한도 60초를 세 배 넘겨요. 전체 실행을 다시 돌리기 전에 이 한 건의 시간이 어디로 갔는지 아는 편이 싸요. 실패 산출물이 `output/playwright/redesign-2026-09-10T00-16-49-965Z-f1414b80/browser/package-behavior-*`에 있어요.
-1. **후보를 하나씩 되돌려 전체 실행을 재요.** 개별 실행으로는 아무것도 재현되지 않으니 판정은 전체 실행에서만 나와요. 한 번이 10~20분이에요. `tests/ui-navigation.ts`만 되돌린 실행과 `tests/fixtures/prompt-workspace.ts`만 되돌린 실행, 두 번이면 A·B의 기여를 가릅니다. 되돌릴 커밋은 아래 "관련 커밋"에 있어요.
-2. **둘 다 아니면 제품 쪽을 봐요.** `web/main.tsx`의 `libraryListRequest`와 그것을 받는 `web/LibraryPanel.tsx`·`web/PromptLibrary.tsx`의 effect가 화면 진입마다 목록으로 되돌리는 경로를 새로 태워요. `LIBUI04`·`LIBUI01`이 서재 검사라는 점과 맞물려요.
-3. **판정은 같은 기계의 A/B로만 해요.** 저장소 CI는 Windows·Node 24.14이고 이 측정은 macOS·Edge예요. 절대 실패 개수는 옮겨 쓸 수 없어요.
+1. **보존된 trace를 먼저 열어요.** 되돌리기 실행보다 훨씬 싸고, A·B로 설명되지 않는 41%에 직접 닿아요.
+
+   ```bash
+   npx playwright show-trace output/playwright/redesign-2026-09-10T00-16-49-965Z-f1414b80/browser/package-behavior-browser-B-47721-thout-user-buttons-at-390px/trace.zip
+   ```
+
+   `편집` 클릭 시점의 프레임에서 **박스가 왜 안 멈추는지**를 봐요. `LIBUI04`·`HELPUI02`의 trace도 같은 폴더에 있어요. 셋이 같은 모양이면 공통 원인이고, 다르면 그때 나눠요.
+2. **그 다음에야 되돌리기를 재요.** 개별 실행으로는 아무것도 재현되지 않으니 판정은 전체 실행에서만 나와요. 한 번이 10~20분이고, 위 표대로면 두 번을 다 돌려도 41%는 남아요. 되돌릴 커밋은 아래 "관련 커밋"에 있어요.
+3. **제품 쪽도 열려 있어요.** `web/main.tsx`의 `libraryListRequest`와 그것을 받는 `web/LibraryPanel.tsx`·`web/PromptLibrary.tsx`의 effect가 화면 진입마다 목록으로 되돌리는 경로를 새로 태워요. `LIBUI04`·`LIBUI01`이 서재 검사라는 점과 맞물려요.
+4. **판정은 같은 기계의 A/B로만 해요.** 저장소 CI는 Windows·Node 24.14이고 이 측정은 macOS·Edge예요. 절대 실패 개수는 옮겨 쓸 수 없어요.
 
 ## 받아들이는 기준
 
-전체 실행이 기준선의 **10~11분대**로 돌아오고, 새로 생긴 여섯 건이 사라지고, 이번에 고친 네 건(`CSUI04`, `SIDENAV01`, `UI03 UI12`, `UXUI01`)이 계속 통과하는 상태예요. 두 조건을 동시에 만족해야 해요. 되돌리기만 하면 네 건이 함께 돌아와요.
+새로 생긴 여섯 건이 사라지고, 이번에 고친 네 건(`CSUI04`, `SIDENAV01`, `UI03 UI12`, `UXUI01`)이 계속 통과하는 상태예요. 두 조건을 동시에 만족해야 해요. 되돌리기만 하면 네 건이 함께 돌아와요.
+
+시간은 **절대값으로 못 박지 마세요.** 같은 내용을 다시 잰 것만으로 9.2분과 10.8분이 나왔어요. 판정할 때 기준선을 **같은 세션에서 다시 재고 그 값과 비교**하세요.
 
 ## 관련 커밋
 
