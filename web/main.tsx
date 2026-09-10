@@ -216,6 +216,7 @@ function App() {
   const [initialModules, setInitialModules] = useState<Content[]>([]);
   const [moduleToUse, setModuleToUse] = useState<Content | null>(null);
   const [libraryTab, setLibraryTab] = useState<'bot' | 'persona' | 'module' | 'prompts'>('bot');
+  const [libraryListRequest, setLibraryListRequest] = useState(0);
   const errorScope = `${s.destination}:${libraryTab}:${s.viewKey}`;
   const previousErrorScope = useRef(errorScope);
   useEffect(() => {
@@ -405,6 +406,9 @@ function App() {
   function showLibrary(tab: 'bot' | 'persona' | 'module' | 'prompts' = 'bot') {
     const go = () => {
       setLibraryTab(tab);
+      // Choosing the navigation entry for the section you are in returns to that section's list,
+      // even when the tab does not change. The panel keeps its own unsaved-draft protection.
+      setLibraryListRequest((value) => value + 1);
       s.showLibrary();
       setPanel('');
     };
@@ -674,6 +678,7 @@ function App() {
             {libraryTab === 'prompts' ? (
               s.library ? (
                 <PromptLibrary
+                  listRequest={libraryListRequest}
                   initialPresetId={promptToEdit}
                   onInitialPresetHandled={() => setPromptToEdit(null)}
                   onOpenCurrentPrompts={() => {
@@ -708,6 +713,7 @@ function App() {
                 recentChatByContent={recentChatByContent}
                 onContinueChat={select}
                 initialTab={libraryTab}
+                listRequest={libraryListRequest}
                 onTabChange={setLibraryTab}
                 onDirtyChange={setLibraryDirty}
               />

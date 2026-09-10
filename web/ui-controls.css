@@ -32,6 +32,11 @@
 .action-menu[open] > summary {
   background: var(--hover);
 }
+/* A closed menu keeps a layout box because its body is positioned out of flow. Nothing paints
+   there, but the box makes the menu look present to assistive checks and hit tests. */
+.action-menu:not([open]) > .action-menu-body {
+  display: none;
+}
 .action-menu > .action-menu-body {
   position: absolute;
   z-index: 8;

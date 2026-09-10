@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type MouseEvent } from 'react';
 import type { Content } from '../core/product.js';
 import {
   libraryCategory,
@@ -40,6 +40,12 @@ function readView(): View {
   } catch {
     return { open: {}, sort: 'recent', order: [] };
   }
+}
+/** Choosing an item closes its menu, the way every other menu in the app behaves. */
+function closeMenu(event: MouseEvent<HTMLButtonElement>, run: () => void) {
+  const menu = event.currentTarget.closest('details');
+  if (menu) menu.open = false;
+  run();
 }
 export function BotNavigation(props: Props & { onLibraryChanged: () => Promise<void> }) {
   const {
@@ -387,16 +393,16 @@ export function BotNavigation(props: Props & { onLibraryChanged: () => Promise<v
         )}
         <nav className="sidebar-app-actions" aria-label="앱 탐색">
           <button type="button" className="nav-button" onClick={onSettings}>
-            <SettingsIcon size={19} />
+            <SettingsIcon size={18} />
             설정
           </button>
           <ActionMenu label="앱 메뉴" placement="top" className="sidebar-app-menu">
-            <button onClick={() => onLibrary('bot')}>
-              <LibraryIcon size={17} />
+            <button onClick={(event) => closeMenu(event, () => onLibrary('bot'))}>
+              <LibraryIcon size={18} />
               서재
             </button>
-            <button onClick={() => onLibrary('prompts')}>
-              <PromptIcon size={17} />
+            <button onClick={(event) => closeMenu(event, () => onLibrary('prompts'))}>
+              <PromptIcon size={18} />
               프롬프트
             </button>
           </ActionMenu>

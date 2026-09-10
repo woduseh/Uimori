@@ -110,6 +110,7 @@ export function LibraryPanel({
   onStartStory,
   onUseContent,
   initialTab = 'bot',
+  listRequest = 0,
   onTabChange,
   onDirtyChange,
   recentChatByContent,
@@ -122,6 +123,8 @@ export function LibraryPanel({
   onStartStory?: (bot: Content) => void;
   onUseContent?: (content: Content, role: PrimaryLibraryTab) => void;
   initialTab?: PrimaryLibraryTab;
+  /** Bumped when the navigation entry is chosen, so the same tab still returns to its list. */
+  listRequest?: number;
   onTabChange?: (tab: PrimaryLibraryTab) => void;
   onDirtyChange?: (dirty: boolean) => void;
   recentChatByContent?: Record<string, string>;
@@ -178,6 +181,14 @@ export function LibraryPanel({
       navigate(initialTab);
     }
   }, [initialTab]);
+  const externalList = useRef(listRequest);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: Only an explicit request leaves a detail view.
+  useEffect(() => {
+    if (externalList.current === listRequest) return;
+    externalList.current = listRequest;
+    // `navigate` returns early when the list is already showing and asks to keep an unsaved draft.
+    navigate(initialTab);
+  }, [listRequest]);
   useEffect(() => {
     if (
       folder !== 'all' &&
