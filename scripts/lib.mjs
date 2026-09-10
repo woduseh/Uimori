@@ -136,12 +136,22 @@ export async function assertBuild() {
     throw new Error('Compiled build fingerprint mismatch.');
   return manifest;
 }
+/**
+ * CI runs on Windows, but a review or a fix often happens on macOS or Linux. Without a local
+ * candidate there the harness reports BLOCKED before it starts. `playwright.config.ts` repeats
+ * this list on purpose so the Playwright config keeps depending on nothing but `node:fs`.
+ */
 export function browserPath() {
   if (process.env.NR_BROWSER_PATH) return process.env.NR_BROWSER_PATH;
   return [
     'C:/Program Files/Google/Chrome/Application/chrome.exe',
     'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe',
     'C:/Program Files/Microsoft/Edge/Application/msedge.exe',
+    '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+    '/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge',
+    '/usr/bin/google-chrome',
+    '/usr/bin/chromium',
+    '/usr/bin/microsoft-edge',
   ].find(existsSync);
 }
 export async function killOwned(child) {
