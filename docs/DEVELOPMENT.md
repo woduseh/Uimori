@@ -18,7 +18,7 @@ npm run verify:smoke
 
 2026-09-08 Windows의 현재 제한 환경에서는 새 소스 사본의 오프라인 설치와 품질·하네스 회귀가 통과했지만, Node/Chrome 자식 실행은 `EPERM`으로 차단됐어요. `verify:smoke`가 제품 검사를 시작하지 않고 BLOCKED·nonzero와 cleanup 근거를 남기는 것까지 확인했어요. 권한을 변경하지 않았으며, 이 결과는 브라우저 흐름 통과의 증거가 아니에요.
 
-수정 중에는 `npm run quality`, 완료·통합 전에는 `npm run quality:full`을 실행해요. `quality`는 서식·lint·모듈 경계·타입을 검사하고, `quality:full`은 전체 Vitest와 빌드를 더해요. UI를 바꿨다면 이 빌드에 해당하는 브라우저 검증을 추가해요. 아래는 작업에 따라 선택하는 명령이며 전체 목록을 매번 실행하는 절차가 아니에요.
+수정 중에는 `npm run quality`를 실행해요. 매 변경의 완료 조건은 `npm run quality:full` + `npm run verify:smoke` + 변경 영역의 `verify:*` 하나예요. `quality`는 서식·lint·모듈 경계·타입을 검사하고, `quality:full`은 전체 Vitest와 빌드를 더해요. 전체 `verify:redesign`은 릴리스 전 1회이고 매 변경에는 돌리지 않아요([검사 안내](QUALITY.md)). 아래는 작업에 따라 선택하는 명령이며 전체 목록을 매번 실행하는 절차가 아니에요.
 
 ```powershell
 npm run quality
