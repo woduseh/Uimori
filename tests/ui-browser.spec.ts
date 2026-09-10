@@ -1,4 +1,5 @@
 import { selectCurrentSettingsSection } from './ui-navigation.js';
+import { openChatSettings } from './ui-navigation.js';
 import { setCurrentModels } from './ui-navigation.js';
 import { visualReview } from './fixtures/visual-review.js';
 import { preservePromptWorkspace } from './fixtures/prompt-workspace.js';
@@ -176,7 +177,7 @@ test('UI01 UI02 UI04 UI05 UI09 long real sources keep composer accessible, safe 
     if ([390, 1440].includes(viewport.width))
       if (visualReview)
         await page.screenshot({ path: info.outputPath(`reader-${viewport.width}.png`) });
-    await page.getByRole('button', { name: '채팅 설정', exact: true }).click();
+    await openChatSettings(page);
     const settingsDialog = page.getByRole('dialog', { name: '채팅 설정', exact: true });
     expect(
       await settingsDialog.evaluate((element) => element.scrollWidth <= element.clientWidth + 1)
@@ -195,7 +196,7 @@ test('UI01 UI02 UI04 UI05 UI09 long real sources keep composer accessible, safe 
       )
     ).toBe(true);
     await nav(page, '설정');
-    await selectSettingsSection(page, '프로바이더와 모델');
+    await selectSettingsSection(page, '프로바이더·모델 등록');
     const connectionDialog = page.getByRole('dialog', { name: '설정', exact: true });
     expect(
       await connectionDialog.evaluate((element) => element.scrollWidth <= element.clientWidth + 1)
@@ -334,7 +335,9 @@ test('UI08 UI12 native dialog focus, composition, URL and draft selection stay l
 }) => {
   const chat = await seed(request, `합성 UI keyboard ${Date.now()}`, 'Synthetic quiet harbor.');
   await page.goto(`/?chat=${chat.id}`);
-  const settings = page.getByRole('button', { name: '채팅 설정', exact: true });
+  // 390px: chat settings is the first chat ⋯ item; focus returns to the menu trigger on close.
+  const menu = await openChatMenu(page);
+  const settings = menu.getByRole('button', { name: '채팅 설정', exact: true });
   await settings.focus();
   await settings.press('Enter');
   const dialog = page.getByRole('dialog', { name: '채팅 설정', exact: true });
@@ -342,7 +345,7 @@ test('UI08 UI12 native dialog focus, composition, URL and draft selection stay l
   // Common-dialog coverage owns focus wrapping; this case owns IME and caret persistence.
   await page.keyboard.press('Escape');
   await expect(dialog).not.toBeVisible();
-  await expect(settings).toBeFocused();
+  await expect(page.locator('.chat-menu > summary')).toBeFocused();
   const input = page.getByLabel('다음 장면 요청');
   await input.fill('합성 IME 입력 초안');
   await input.evaluate((element) => {
@@ -644,7 +647,7 @@ test('UI07 UI12 late accepted fork cannot navigate after A B A or replace the cu
   });
   try {
     await openSourceActions(page.getByTestId('source'));
-    await page.getByRole('button', { name: '여기서 새 이야기로 이어가기', exact: true }).click();
+    await page.getByRole('button', { name: '이 장면까지 새 채팅으로 복사', exact: true }).click();
     const fork = await acceptedChat;
     // The list is named after its own bot so several expanded bots stay distinguishable.
     const list = page.getByRole('navigation', { name: chatListName });
@@ -1052,11 +1055,11 @@ test('UI03 starting without a model explains setup and creates a chat without ex
   await expect(page.getByRole('dialog', { name: '설정', exact: true })).toBeVisible();
   await expect(page.getByLabel('원문 모델', { exact: true })).toBeVisible();
   const settings = page.getByRole('dialog', { name: '설정', exact: true });
-  const connectionTab = settings.getByRole('tab', { name: '현재 모델', exact: true });
+  const connectionTab = settings.getByRole('tab', { name: '역할별 모델', exact: true });
   if (await connectionTab.isVisible())
     await expect(connectionTab).toHaveAttribute('aria-selected', 'true');
   else {
-    await expect(settings.getByRole('heading', { name: '현재 모델', exact: true })).toBeVisible();
+    await expect(settings.getByRole('heading', { name: '역할별 모델', exact: true })).toBeVisible();
     await expect(
       settings.getByRole('button', { name: '설정 목록으로', exact: true })
     ).toBeVisible();
@@ -1490,7 +1493,7 @@ test('UI18 translation is requested only by first view click, never by restore, 
     },
   });
   expect(changed.ok()).toBeTruthy();
-  await page.getByRole('button', { name: '채팅 설정', exact: true }).click();
+  await openChatSettings(page);
   await selectChatSettingsSection(page, '자동 후속 작업');
   await expect(
     page.getByText('저장한 설정은 다음 실행부터 적용해요.', { exact: true })
@@ -1619,6 +1622,15 @@ test('UI18 source and translation edits preserve past snapshots and feed only fu
   expect(original.runs[1].snapshot.history[0].text).toBe(source.text);
 });
 
+// Without a translation the pencil in the scene tool row already edits the source; the ⋯ menu
+// only holds the other side, and on 390px an open menu is a sheet that covers the row.
+async function openSourceEditor(tab: Page) {
+  const source = tab.getByTestId('source');
+  await source.locator('.source-actions').waitFor();
+  if (!(await source.locator('.scene-action[aria-label="원문 수정"]').count()))
+    await openSourceActions(source);
+  await tab.getByRole('button', { name: '원문 수정', exact: true }).click();
+}
 test('UI18 two-tab conflicts preserve reloadable drafts and manual translation survives held work and a late response', async ({
   page,
   context,
@@ -1651,10 +1663,7 @@ test('UI18 two-tab conflicts preserve reloadable drafts and manual translation s
   try {
     await page.goto(`/?chat=${chat.id}`);
     await second.goto(`/?chat=${chat.id}`);
-    for (const tab of [page, second]) {
-      await openSourceActions(tab.getByTestId('source'));
-      await tab.getByRole('button', { name: '원문 수정', exact: true }).click();
-    }
+    for (const tab of [page, second]) await openSourceEditor(tab);
     const draft = 'UNSAVED_TAB_ONE\n원문 충돌 뒤에도 남는 초안.';
     await page.getByLabel('원문 수정 내용').fill(draft);
     await page.route(`**/api/sources/${source.id}/text`, async (route) => {
@@ -1679,8 +1688,7 @@ test('UI18 two-tab conflicts preserve reloadable drafts and manual translation s
     await expect(page.getByLabel('원문 수정 내용')).toHaveValue(draft);
     await expect(page.getByText(/다른 요청이 먼저 반영됐어요/)).toBeVisible();
     await page.reload();
-    await openSourceActions(page.getByTestId('source'));
-    await page.getByRole('button', { name: '원문 수정', exact: true }).click();
+    await openSourceEditor(page);
     await expect(page.getByLabel('원문 수정 내용')).toHaveValue(draft);
     await expect(page.getByRole('button', { name: '원문 저장', exact: true })).toBeDisabled();
     expect((await data(request, chat.id)).sources[0].text).toBe(winner);
@@ -1765,7 +1773,7 @@ test('UI settings categories retain drafts and support keyboard navigation', asy
     await expect(dialog.getByRole('tabpanel')).toHaveCount(1);
     await expect(dialog.getByLabel('앱 화면 테마')).toBeVisible();
     await expect(dialog.getByTestId('connection-editor')).not.toBeVisible();
-    await selectSettingsSection(page, '프로바이더와 모델');
+    await selectSettingsSection(page, '프로바이더·모델 등록');
     await startProviderConnection(page);
     await dialog
       .getByRole('region', { name: '제공자 선택', exact: true })
@@ -1782,7 +1790,7 @@ test('UI settings categories retain drafts and support keyboard navigation', asy
     if (viewport.width === 1440) {
       await tabs.getByRole('tab', { name: '접근 보안', exact: true }).press('Home');
       await expect(tabs.getByRole('tab', { name: '일반', exact: true })).toBeFocused();
-      for (const section of ['현재 모델', '현재 프롬프트', '프로바이더와 모델']) {
+      for (const section of ['역할별 모델', '현재 프롬프트', '프로바이더·모델 등록']) {
         await page.keyboard.press('ArrowDown');
         await expect(tabs.getByRole('tab', { name: section, exact: true })).toBeFocused();
       }
@@ -1790,7 +1798,7 @@ test('UI settings categories retain drafts and support keyboard navigation', asy
       await dialog.getByRole('button', { name: '설정 목록으로', exact: true }).click();
       const connection = dialog
         .locator('.settings-navigation')
-        .getByRole('button', { name: '프로바이더와 모델', exact: true });
+        .getByRole('button', { name: '프로바이더·모델 등록', exact: true });
       await connection.focus();
       await page.keyboard.press('Enter');
       await expect(dialog.locator('.settings-navigation').filter({ visible: true })).toHaveCount(0);
@@ -1834,7 +1842,7 @@ test('UI common dialogs center on desktop and fill mobile without changing dismi
     for (const title of ['채팅 설정', '작업 현황']) {
       const opener = page.getByRole('button', { name: title, exact: true });
       if (title === '작업 현황') await nav(page, title);
-      else await opener.click();
+      else await openChatSettings(page);
       const dialog = page.getByRole('dialog', { name: title, exact: true });
       await expect(dialog).toBeVisible();
       const box = (await dialog.boundingBox())!;
@@ -1870,10 +1878,12 @@ test('UI common dialogs center on desktop and fill mobile without changing dismi
         });
       await page.keyboard.press('Escape');
       await expect(dialog).not.toBeVisible();
-      // Tasks open from the chat ⋯ menu, so focus returns to the menu button afterwards.
+      // Tasks (every width) and chat settings (390px) open from the chat ⋯ menu, so focus
+      // returns to the menu button afterwards; the wide header button gets its own focus back.
       if (title === '작업 현황') {
         if (width === 1440) await expect(page.locator('.chat-menu > summary')).toBeFocused();
-      } else await expect(opener).toBeFocused();
+      } else if (width === 1440) await expect(opener).toBeFocused();
+      else await expect(page.locator('.chat-menu > summary')).toBeFocused();
     }
     if (width === 1440) {
       await openChatMenu(page);
@@ -1923,7 +1933,7 @@ test('UI whole-source translation retains completed results across retry and can
   ).toBeTruthy();
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto(`/?chat=${chat.id}`);
-  await page.getByRole('button', { name: '채팅 설정', exact: true }).click();
+  await openChatSettings(page);
   await selectChatSettingsSection(page, '자동 후속 작업');
   await expect(page.getByLabel('번역 구간 기준 글자 수', { exact: true })).toHaveCount(0);
   await expect(page.getByLabel('번역 구간 무제한', { exact: true })).toHaveCount(0);
@@ -2019,7 +2029,7 @@ test('UI chat settings close right after saving does not warn while the refresh 
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto(`/?chat=${chat.id}`);
   const dialog = page.getByRole('dialog', { name: '채팅 설정', exact: true });
-  await page.getByRole('button', { name: '채팅 설정', exact: true }).click();
+  await openChatSettings(page);
   await selectChatSettingsSection(page, '자동 후속 작업');
   const runtime = dialog.locator('section.settings');
   const statusEnabled = !(await data(request, chat.id)).chat.settings.status;

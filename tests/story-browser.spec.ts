@@ -1,5 +1,6 @@
 import { visualReview } from './fixtures/visual-review.js';
 import { selectChatSettingsSection } from './ui-navigation.js';
+import { openChatSettings } from './ui-navigation.js';
 import { postFixtureChat } from './fixtures/chat.js';
 import { test, expect, type Page, type APIRequestContext, type Locator } from '@playwright/test';
 import { DatabaseSync } from 'node:sqlite';
@@ -35,8 +36,7 @@ async function create(page: Page, title: string): Promise<Chat> {
 }
 async function panel(page: Page) {
   const dialog = page.getByRole('dialog', { name: '채팅 설정', exact: true });
-  if (!(await dialog.isVisible()))
-    await page.getByRole('button', { name: '채팅 설정', exact: true }).click();
+  if (!(await dialog.isVisible())) await openChatSettings(page);
   await selectChatSettingsSection(page, '상태와 문맥');
   const section = dialog.getByRole('region', { name: '이야기 상태와 문맥', exact: true });
   await expect(section.getByRole('button', { name: '상태 설정 저장', exact: true })).toBeVisible();

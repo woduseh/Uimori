@@ -1,6 +1,7 @@
 import { visualReview } from './fixtures/visual-review.js';
 import { preservePromptWorkspace } from './fixtures/prompt-workspace.js';
 import { selectChatSettingsSection, openPromptBlocks, navigationAction } from './ui-navigation.js';
+import { openChatSettings } from './ui-navigation.js';
 import { postFixtureChat } from './fixtures/chat.js';
 import { test, expect } from '@playwright/test';
 import type { PromptProgram } from '../core/prompt-program.js';
@@ -80,7 +81,7 @@ test('PRUI01 template drafts retain same-owner combinations and reject identical
   const errors: string[] = [];
   page.on('pageerror', (error) => errors.push(error.message));
   await page.goto(`/?chat=${chat.id}`);
-  await page.getByRole('button', { name: '채팅 설정', exact: true }).click();
+  await openChatSettings(page);
   await selectChatSettingsSection(page, '프롬프트·창작 프리셋');
   await page.getByRole('button', { name: '전역 프롬프트 설정', exact: true }).click();
   const settings = page.getByRole('region', { name: '현재 프롬프트 설정' });

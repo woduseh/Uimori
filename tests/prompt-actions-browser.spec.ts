@@ -1,4 +1,5 @@
 import { selectChatSettingsSection, openPromptBlocks } from './ui-navigation.js';
+import { openChatSettings } from './ui-navigation.js';
 import { visualReview } from './fixtures/visual-review.js';
 import { preservePromptWorkspace } from './fixtures/prompt-workspace.js';
 import { test, expect, type APIRequestContext, type Page } from '@playwright/test';
@@ -304,7 +305,7 @@ test('PAUI02 saving and applying retain distinct scopes with compact actions on 
   const chat = await response.json();
   const before = await detail(request, chat.id);
   await page.goto(`/?chat=${chat.id}`);
-  await page.getByRole('button', { name: '채팅 설정', exact: true }).click();
+  await openChatSettings(page);
   await selectChatSettingsSection(page, '프롬프트·창작 프리셋');
   await page.getByRole('button', { name: '전역 프롬프트 설정', exact: true }).click();
   const editor = page.getByRole('region', { name: '현재 프롬프트 설정' });

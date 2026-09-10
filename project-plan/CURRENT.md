@@ -14,7 +14,7 @@
 - 계층형 구성과 지정 단위 집필, 장면 삽화 생성(Codex 이미지 턴·원격 ComfyUI), 원문·번역 이미지 배치, 메인 프롬프트의 에이전트 협업(기본 OFF), 모델 프리셋별 선택형 평가 도구를 제공해요. [구성](../docs/OUTLINE.md) · [삽화](../docs/ILLUSTRATIONS.md) · [협업](../docs/AGENT-COLLABORATION.md) · [평가 도구](EVALUATION-TOOLS.md)
 - 채팅 하나의 **본문 기록**(원문·요청·최신 번역·메모·장착 참조)은 `uimori-chat-transcript` v1 파일로 내보내고 새 채팅으로 가져와요. 스키마와 독립이라 개발 단계 DB 리셋에서 작품을 살리는 경로예요. [채팅 본문 추출](../docs/CHAT-TRANSCRIPT.md)
 - 메인과 도우미는 **공통 입력창**을 쓰고 실패 요청은 자리에서 편집·재요청하며 공개 답변 스트림은 durable cursor로 재접속해요. 봇별 채팅·폴더·공유 폴더 트리, 포크, 읽기 위치, 삭제 보호, archive·backup 왕복을 유지해요. [대화 통일](CHAT-UNIFICATION.md) · [사용 안내](../docs/USAGE.md) · [삭제 보호](../docs/DELETION.md)
-- UI는 원고가 화면인 리더, 한 줄 입력창, 목록→상세 설정과 공통 아이콘 어휘를 따라요. [UI 원칙](../docs/UI-PRINCIPLES.md) · [UI 설계 v2](../docs/UI-DESIGN-V2.md) · [화면 설계](../docs/UI-SCREEN-DESIGN.md) · [화면 일관성 정리](UIUX-CONSISTENCY-2026-09-10.md)
+- UI는 원고가 화면인 리더, 한 줄 입력창, 목록→상세 설정과 공통 아이콘 어휘를 따라요. [UI 원칙](../docs/UI-PRINCIPLES.md) · [UI 설계 v2](../docs/UI-DESIGN-V2.md) · [화면 설계](../docs/UI-SCREEN-DESIGN.md) · [화면 일관성 정리](UIUX-CONSISTENCY-2026-09-10.md) · [AI 제품 원칙 적용](../docs/UI-PRINCIPLES-AI-PRODUCTS.md) · [화면 갤러리](../docs/UI-GALLERY.md)
 - 개인 self-host용 HTTPS·토큰·영구 SQLite 구성과 Oracle 배포 절차가 있어요. [Self-host](../docs/SELF-HOST.md) · [Oracle 배포](../docs/ORACLE-RELEASE.md) · [Tailscale](../docs/TAILSCALE-DEPLOY.md)
 
 앱은 프로젝트 루트에서 `npm run dev`로 실행하고 사용자 DB를 검증에 쓰지 않아요. 전체 구조와 경계는 [아키텍처](ARCHITECTURE.md), 목적과 비목표는 [PROJECT](PROJECT.md)를 봐요.

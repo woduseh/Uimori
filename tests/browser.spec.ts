@@ -1,5 +1,6 @@
 import { visualReview } from './fixtures/visual-review.js';
 import { selectChatSettingsSection } from './ui-navigation.js';
+import { openChatSettings } from './ui-navigation.js';
 import { postFixtureChat } from './fixtures/chat.js';
 import { test, expect, type Page, type APIRequestContext, type Request } from '@playwright/test';
 import { DatabaseSync } from 'node:sqlite';
@@ -59,8 +60,7 @@ async function expectSourceRaw(page: Page, text: string) {
 }
 async function storySettings(page: Page) {
   const dialog = page.getByRole('dialog', { name: '채팅 설정', exact: true });
-  if (!(await dialog.isVisible()))
-    await page.getByRole('button', { name: '채팅 설정', exact: true }).click();
+  if (!(await dialog.isVisible())) await openChatSettings(page);
   await selectChatSettingsSection(page, '자동 후속 작업');
   const fixture = dialog
     .locator('details')

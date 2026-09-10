@@ -280,5 +280,35 @@ export async function selectCurrentSettingsSection(
   name: '모델' | '프롬프트·창작 프리셋'
 ) {
   await navigationAction(page, '설정');
-  await selectSettingsSection(page, name === '모델' ? '현재 모델' : '현재 프롬프트');
+  await selectSettingsSection(page, name === '모델' ? '역할별 모델' : '현재 프롬프트');
+}
+/** Chat settings: a header button on wide widths, the first chat ⋯ item on compact widths. */
+export async function openChatSettings(page: Page) {
+  // Decided by the viewport like `useCompactLayout` (760px), so a just-resized page does not
+  // race the header re-render; the click itself waits for the chosen control to appear.
+  if (compactLayout(page)) {
+    const menu = await openChatMenu(page);
+    await menu.getByRole('button', { name: '채팅 설정', exact: true }).click();
+    return;
+  }
+  await page
+    .locator('.workspace-header')
+    .getByRole('button', { name: '채팅 설정', exact: true })
+    .click();
+}
+function compactLayout(page: Page) {
+  return (page.viewportSize()?.width ?? 390) <= 760;
+}
+/** The helper: a header button on wide widths, a chat ⋯ item on compact widths. */
+export async function openHelper(page: Page) {
+  const header = page
+    .locator('.workspace-header')
+    .getByRole('button', { name: '도우미 열기', exact: true });
+  // Compact chat screens keep the helper in the chat ⋯ menu; every other screen has the header icon.
+  if (compactLayout(page) && (await page.locator('.workspace-header .chat-menu').count())) {
+    const menu = await openChatMenu(page);
+    await menu.getByRole('button', { name: '도우미 열기', exact: true }).click();
+    return;
+  }
+  await header.click();
 }

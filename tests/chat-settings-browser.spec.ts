@@ -3,11 +3,12 @@ import { expect, test, type APIRequestContext, type Locator, type Page } from '@
 import type { Chat, ChatDetail } from '../core/types.js';
 import { postFixtureChat } from './fixtures/chat.js';
 import { openChatMenu, selectChatSettingsSection } from './ui-navigation.js';
+import { openChatSettings } from './ui-navigation.js';
 
 const sections = [
   '봇·페르소나·모듈',
   '프롬프트·창작 프리셋',
-  '모델',
+  '이 채팅의 모델',
   '상태와 문맥',
   '이미지',
   '자동 후속 작업',
@@ -37,7 +38,7 @@ async function prepare(page: Page, request: APIRequestContext, title: string) {
 }
 
 async function openSettings(page: Page) {
-  await page.getByRole('button', { name: '채팅 설정', exact: true }).click();
+  await openChatSettings(page);
   const dialog = page.getByRole('dialog', { name: '채팅 설정', exact: true });
   await expect(dialog).toBeVisible();
   return dialog;
@@ -133,7 +134,7 @@ test('CSUI01 chat settings list and seven details fit six widths with accessible
         );
       }
       await expectNoOverflow(page, dialog);
-      if (name === '모델') {
+      if (name === '이 채팅의 모델') {
         await expect(dialog.getByLabel('원문 모델', { exact: true })).toHaveCount(0);
         await expect(
           dialog.getByRole('button', { name: '전역 모델 설정', exact: true })
@@ -147,7 +148,7 @@ test('CSUI01 chat settings list and seven details fit six widths with accessible
           dialog.getByRole('button', { name: '전역 프롬프트 설정', exact: true })
         ).toBeVisible();
       }
-      if (name === '모델' && (width === 390 || width === 1440))
+      if (name === '이 채팅의 모델' && (width === 390 || width === 1440))
         if (visualReview)
           await page.screenshot({
             path: info.outputPath(
@@ -178,7 +179,7 @@ test('CSUI02 section changes, browser Back and resizing preserve chat setting dr
   await expect(
     dialog.getByRole('checkbox', { name: '본문에서 페르소나 참조', exact: true })
   ).toHaveCount(0);
-  await selectChatSettingsSection(page, '모델');
+  await selectChatSettingsSection(page, '이 채팅의 모델');
   await expect(dialog.getByRole('button', { name: '전역 모델 설정', exact: true })).toBeVisible();
   await selectChatSettingsSection(page, sections[0]);
   const image = dialog.getByRole('switch', { name: '원문 이미지 자동 배치', exact: true });
@@ -280,7 +281,8 @@ test('CSUI03 keyboard navigation and clean browser Back keep immediate reading p
   await openSettings(page);
   await page.keyboard.press('Escape');
   await expect(dialog).toBeHidden();
-  await expect(page.getByRole('button', { name: '채팅 설정', exact: true })).toBeFocused();
+  // 390px opens chat settings from the chat ⋯ menu, so focus returns to that menu's trigger.
+  await expect(page.locator('.chat-menu > summary')).toBeFocused();
   // Reading settings: the dialog from the chat ⋯ menu keeps view and font; the theme is in 설정 → 일반 only.
   await openChatMenu(page);
   await page.getByRole('button', { name: '읽기 설정', exact: true }).click();

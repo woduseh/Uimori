@@ -48,6 +48,8 @@ type ReaderProps = {
   retryDisabled?: boolean;
   onEditingChange?: (sourceId: string, editing: boolean) => void;
   request?: string;
+  /** The newest scene of the branch keeps its request actions standing on narrow widths. */
+  latest?: boolean;
   onEditRequest?: (text: string) => Promise<boolean>;
   onCheckRequest?: () => Promise<boolean>;
   onAskHelper?: (sourceId: string, text: string) => void;
@@ -133,6 +135,7 @@ function SourceReaderContent({
   retryDisabled,
   onEditingChange,
   request,
+  latest,
   onEditRequest,
   onCheckRequest,
   onAskHelper,
@@ -436,6 +439,7 @@ function SourceReaderContent({
         <RequestMessage
           runId={source.runId}
           request={request}
+          compactActions={latest ? 'always' : 'tap'}
           onSubmit={onEditRequest}
           onConfirm={onCheckRequest}
           disabled={retryDisabled}
@@ -679,7 +683,7 @@ function SourceReaderContent({
             }}
           >
             <GitFork size={18} aria-hidden="true" />
-            {pending === 'fork' ? '이야기 복사 중…' : '여기서 새 이야기로 이어가기'}
+            {pending === 'fork' ? '채팅 복사 중…' : '이 장면까지 새 채팅으로 복사'}
           </button>
           <button
             type="button"

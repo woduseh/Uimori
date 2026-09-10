@@ -11,7 +11,7 @@ async function settings(page: Page) {
   if (!(await button.isVisible()))
     await page.getByRole('button', { name: '탐색 메뉴', exact: true }).click();
   await button.click();
-  await selectSettingsSection(page, '프로바이더와 모델');
+  await selectSettingsSection(page, '프로바이더·모델 등록');
 }
 
 async function library(request: APIRequestContext): Promise<Library> {

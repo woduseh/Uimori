@@ -7,6 +7,7 @@ import type { ModelWorkspace } from '../core/product.js';
 import { postFixtureChat } from './fixtures/chat.js';
 import { preservePromptWorkspace } from './fixtures/prompt-workspace.js';
 import { selectChatSettingsSection } from './ui-navigation.js';
+import { openChatSettings } from './ui-navigation.js';
 
 async function read<T>(request: APIRequestContext, path: string): Promise<T> {
   const response = await request.get(`/api${path}`);
@@ -51,7 +52,7 @@ async function create(page: Page, title: string) {
   const chat = (await response.json()) as Chat;
   await page.goto(`/?chat=${chat.id}`);
   await expect(page.getByRole('heading', { name: title, exact: true })).toBeVisible();
-  await page.getByRole('button', { name: '채팅 설정', exact: true }).click();
+  await openChatSettings(page);
   await selectChatSettingsSection(page, '상태와 문맥');
   const panel = page.getByTestId('context-panel');
   await expect(panel.getByRole('button', { name: '요약 작성', exact: true })).toBeEnabled();
@@ -118,7 +119,7 @@ test('CTXUI01 summary authoring without a Run, edit and restore are durable at b
     await page.screenshot({ path: info.outputPath(`context-summary-${width}.png`) });
   }
   await page.reload();
-  await page.getByRole('button', { name: '채팅 설정', exact: true }).click();
+  await openChatSettings(page);
   await selectChatSettingsSection(page, '상태와 문맥');
   await expect(panel.getByTestId('context-summary-text')).toHaveText(
     '첫 요약: 항구의 종이 울렸다.'
@@ -163,7 +164,7 @@ test('CTXUI02 concurrent summary and note changes preserve local drafts and requ
   await expect(notes.getByRole('button', { name: '새 메모 저장', exact: true })).toBeDisabled();
   // A mobile section-back changes visibility only, preserving text and its conflict state.
   await page.getByRole('button', { name: '채팅 설정 목록으로', exact: true }).click();
-  await selectChatSettingsSection(page, '모델');
+  await selectChatSettingsSection(page, '이 채팅의 모델');
   await selectChatSettingsSection(page, '상태와 문맥');
   await expect(notes.getByLabel('메모·정정 내용')).toHaveValue('내 메모 초안');
   await notes

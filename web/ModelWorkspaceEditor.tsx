@@ -43,7 +43,7 @@ export function ModelWorkspaceEditor({
   if (!draft)
     return (
       <p role="status" className="settings-loading-status">
-        {error || '현재 모델 설정을 불러오는 중이에요…'}{' '}
+        {error || '역할별 모델 설정을 불러오는 중이에요…'}{' '}
         <IconButton
           icon={RefreshIcon}
           label="다시 불러오기"
@@ -98,7 +98,7 @@ export function ModelWorkspaceEditor({
     );
   };
   return (
-    <section aria-label="현재 모델 설정" className="settings-section">
+    <section aria-label="역할별 모델 설정" className="settings-section">
       <p>
         모든 채팅의 이후 요청에 적용해요. 진행 중인 작업과 과거 실행·결과의 설정은 바뀌지 않아요.
       </p>
@@ -214,7 +214,7 @@ export function ModelWorkspaceEditor({
           )}
           <SaveButton
             type="button"
-            label="현재 모델 설정 저장"
+            label="역할별 모델 설정 저장"
             aria-busy={busy}
             disabled={
               !dirty ||
@@ -248,7 +248,7 @@ export function ModelWorkspaceEditor({
                   setDraft(accepted);
                   setDirty(false);
                   await refresh();
-                  setMessage('현재 모델 설정을 저장했어요. 모든 채팅의 이후 요청에 적용해요.');
+                  setMessage('역할별 모델 설정을 저장했어요. 모든 채팅의 이후 요청에 적용해요.');
                 })
                 .catch((caught: Error) => setSaveError(caught.message))
                 .finally(() => {
