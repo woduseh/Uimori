@@ -155,6 +155,7 @@ async function main(args) {
         const context = await chromium.launchPersistentContext(entry.profile, {
           executablePath: browserPath(),
           headless: true,
+          args: ['--no-proxy-server'],
           viewport: { width: 390, height: 844 },
           baseURL: entry.ready.url,
           env: { ...process.env, TEMP: entry.temp, TMP: entry.temp },
