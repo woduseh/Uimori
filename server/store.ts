@@ -1,8 +1,8 @@
 import { DatabaseSync } from 'node:sqlite';
 import { initHelperTaskTiming, initHelperWorkspace } from './helper-workspace.js';
 import { initEditDrafts } from './edit-drafts.js';
-import { initChatOverrides, freezeChatOverrides } from './chat-overrides.js';
-import { initChatOptions, ChatOptionsStore } from './chat-options.js';
+import { initChatOverrides } from './chat-overrides.js';
+import { initChatOptions } from './chat-options.js';
 import { initResponseStreams } from './response-stream.js';
 import { createHash, randomUUID } from 'node:crypto';
 import { basename, dirname, join } from 'node:path';
@@ -20,8 +20,7 @@ import { ProductStore } from './product-store.js';
 import { HttpError, text } from './request-validation.js';
 export { HttpError } from './request-validation.js';
 import { StoryStore } from './story-store.js';
-import { OutlineStore, freezeOutline, initOutline } from './outline-store.js';
-import { freezeSourceSegments } from '../core/package-source-segments.js';
+import { OutlineStore, initOutline } from './outline-store.js';
 import { consumePackageRequestInTransaction } from './package-requests.js';
 import { ChatOrganizationStore } from './chat-organization.js';
 import { LibraryOrganizationStore } from './library-organization.js';
@@ -32,15 +31,10 @@ import {
   completePackageOutputs,
   branchPackageStates,
 } from './package-behavior-host.js';
-import {
-  initRunBehavior,
-  prepareRunBehavior,
-  copyCandidateBehavior,
-} from './package-behavior-run.js';
+import { initRunBehavior, copyCandidateBehavior } from './package-behavior-run.js';
 import { completeAuthoredPackageStartStatesInTransaction } from './package-start.js';
-import { captureLogicalHistory, compileSnapshotPrompt } from './prompt-snapshot.js';
 import { ContextStore } from './context-store.js';
-import { freezeLoreContext } from './lore-context.js';
+import { freezeReservationSnapshot } from './reservation-snapshot.js';
 import { splitSource, validateSourceIdentity } from '../core/auxiliary.js';
 import {
   imageJobInput,
@@ -429,38 +423,13 @@ export class Store {
       executionClock: { iso: time, unix: Math.floor(Date.parse(time) / 1000) },
       branchId: branch.id,
     };
-    if (base.profile) {
-      new ChatOptionsStore(this).freeze(base.profile, branch.id, id);
-      const roots =
-        base.profile.chatOverrides?.roots ?? this.product.profile(chatId).packageAttachments ?? [];
-      const overrides = freezeChatOverrides(this, base.profile, roots, branch.headRevision);
-      if (overrides) base.profile.chatOverrides = overrides;
-      else delete base.profile.chatOverrides;
-      if (base.profile.packageAttachments?.length)
-        base.resources = [
-          ...base.resources.filter((resource) => !resource.id.startsWith('package:')),
-          ...this.product
-            .resources(chatId, base.profile)
-            .filter((resource) => resource.id.startsWith('package:')),
-        ];
-    }
-    const sourceSegments = freezeSourceSegments(base.profile);
     // Authored openings and transcript imports commit their exact text; nothing is prepared for a model.
     const authored = base.packageStart?.mode === 'authored' || base.transcriptImport !== undefined;
-    let frozen = authored
-      ? { ...base, ...(sourceSegments ? { sourceSegments } : {}) }
-      : this.story.prepareRunInTransaction({
-          ...base,
-          ...(sourceSegments ? { sourceSegments } : {}),
-        });
-    if (command.sceneCommandId) frozen = freezeOutline(this, command.sceneCommandId, frozen);
-    frozen = freezePackageStates(
-      this,
-      { ...frozen, logicalHistory: captureLogicalHistory(this, frozen) },
-      true
-    );
-    frozen = freezeLoreContext(this, authored ? frozen : prepareRunBehavior(this, id, frozen));
-    frozen = compileSnapshotPrompt(authored ? frozen : this.context.prepareRun(frozen));
+    const frozen = freezeReservationSnapshot(this, base, {
+      purpose: authored ? 'authored' : 'run',
+      runId: id,
+      sceneCommandId: command.sceneCommandId,
+    });
     const status = frozen.story?.waiting ? 'waiting_for_state' : 'queued';
     this.db
       .prepare(

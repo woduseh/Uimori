@@ -1,7 +1,7 @@
 import { HttpError, fields, number, record, text } from './request-validation.js';
 import { createHash, randomUUID } from 'node:crypto';
-import { compileSnapshotPrompt, captureLogicalHistory } from './prompt-snapshot.js';
-import { freezeLoreContext } from './lore-context.js';
+import { captureLogicalHistory } from './prompt-snapshot.js';
+import { freezeReservationSnapshot } from './reservation-snapshot.js';
 import { isDeepStrictEqual } from 'node:util';
 import type { Store, Source, Run } from './store.js';
 import {
@@ -21,7 +21,12 @@ import {
   type SceneCommand,
 } from '../core/story.js';
 import type { RunSnapshot } from '../core/types.js';
-import type { ModelPreset, Connection, ModelRef } from '../core/product.js';
+import {
+  workspaceModelRef,
+  type ModelPreset,
+  type Connection,
+  type ModelRef,
+} from '../core/product.js';
 import { StoryNotes } from './story-notes.js';
 import { promptWorkspace } from './prompt-workspace.js';
 import { assertModelSelection } from './provider-selection.js';
@@ -208,7 +213,7 @@ export class StoryStore {
     const result: StorySnapshot['models'] = {};
     for (const [kind, ref] of [
       ['state', config.stateModel],
-      ['context', promptWorkspace(this.store).contextModel],
+      ['context', workspaceModelRef(promptWorkspace(this.store), 'context')],
     ] as const)
       if (ref) {
         const model = this.store.product.get<ModelPreset>('model', ref.id);
@@ -636,11 +641,13 @@ export class StoryStore {
         }
         const state = this.stateAt(run.chatId, run.parentRevision, story.config);
         if (!state) continue;
-        const snapshot = compileSnapshotPrompt(
-          freezeLoreContext(this.store, {
+        const snapshot = freezeReservationSnapshot(
+          this.store,
+          {
             ...run.snapshot,
             story: { ...story, state, waiting: false },
-          })
+          },
+          { purpose: 'resume-state' }
         );
         this.db
           .prepare(

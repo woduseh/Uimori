@@ -100,6 +100,37 @@ export type PromptWorkspace = {
   };
 };
 export type TaskRole = 'main' | 'translation' | 'status' | 'image';
+export const MODEL_ROLES = [
+  'main',
+  'translation',
+  'status',
+  'image',
+  'state',
+  'context',
+  'helper',
+  'title',
+  'illustration',
+] as const;
+export type ModelRole = (typeof MODEL_ROLES)[number];
+// Refusal checks execute within a translation job; state and illustration own separate settings.
+export type WorkspaceModelRole = Exclude<ModelRole, 'state' | 'illustration'> | 'refusal';
+export function workspaceModelRef(
+  workspace: PromptWorkspace,
+  role: WorkspaceModelRole
+): ModelRef | null {
+  switch (role) {
+    case 'helper':
+      return workspace.helperModel ?? null;
+    case 'context':
+      return workspace.contextModel ?? null;
+    case 'title':
+      return workspace.titleModel ?? null;
+    case 'refusal':
+      return workspace.translationPolicy.refusalModel;
+    default:
+      return workspace.modelRoutes[role];
+  }
+}
 export type Connection = ContentRef & {
   title: string;
   protocol: ProviderProtocol;
@@ -158,13 +189,15 @@ export type ModelSnapshot = ModelPreset & {
   pricingSnapshot?: import('./pricing-types.js').PricingSnapshot;
 };
 export type ChatProfile = {
+  /** Optional live selections. Future main runs follow the selected IDs' latest saved contents. */
+  pinned?: { mainPromptPresetId?: string; mainModel?: ModelRef };
   /** Read-only notices from adapting saved options to current definitions. Never execution evidence. */
   optionAdjustments?: string[];
   loreContext?: import('./lore-context.js').LoreContextPolicy;
   chatId: string;
   revision: number;
   attachments: ContentRef[];
-  /** Read-only current global selection; persisted only in execution snapshots. */
+  /** Read-only effective selection, including a pinned main model; frozen by each execution. */
   routes: Record<TaskRole, ModelRef | null>;
   image: boolean;
   /** Automatically place images after a model translation completes. Defaults to true. */
@@ -225,7 +258,7 @@ export type Attempt = {
   runId: string | null;
   jobId: string | null;
   storyJobId?: string | null;
-  role: TaskRole | 'state' | 'context' | 'helper' | 'title' | 'illustration';
+  role: ModelRole;
   connectionId: string;
   modelId: string;
   status: string;

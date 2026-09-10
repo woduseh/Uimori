@@ -1,6 +1,11 @@
 import { promptWorkspace } from './prompt-workspace.js';
 import { existsSync } from 'node:fs';
-import type { Connection, ModelRef, ModelPreset } from '../core/product.js';
+import {
+  workspaceModelRef,
+  type Connection,
+  type ModelRef,
+  type ModelPreset,
+} from '../core/product.js';
 import type { ProductStore } from './product-store.js';
 import {
   isVertexAdcReference,
@@ -95,23 +100,51 @@ export function managementImpact(
   const workspace = promptWorkspace(store.store);
   const globalRoles = Object.entries({
     ...workspace.modelRoutes,
-    'translation-refusal': workspace.translationPolicy.refusalModel,
-    title: workspace.titleModel,
-    helper: workspace.helperModel,
-    context: workspace.contextModel,
+    'translation-refusal': workspaceModelRef(workspace, 'refusal'),
+    title: workspaceModelRef(workspace, 'title'),
+    helper: workspaceModelRef(workspace, 'helper'),
+    context: workspaceModelRef(workspace, 'context'),
   })
     .filter(([, ref]) => matches(ref))
     .map(([role]) => role);
   for (const agent of workspace.main.program.collaboration?.agents ?? [])
     if (matches(agent.model)) globalRoles.push(`advisor:${agent.id}`);
-  const profiles: ReferencingProfile[] = globalRoles.length
-    ? (
-        store.db.prepare('SELECT id AS chatId,title FROM chats ORDER BY id').all() as {
-          chatId: string;
-          title: string;
-        }[]
-      ).map((chat) => ({ ...chat, roles: [...globalRoles] }))
-    : [];
+  const chats = store.db
+    .prepare(`SELECT c.id AS chatId,c.title,
+    json_extract(p.body,'$.pinned.mainModel') AS mainModel,
+    json_extract(p.body,'$.pinned.mainPromptPresetId') AS mainPromptPresetId
+    FROM chats c LEFT JOIN profiles p ON p.chat_id=c.id ORDER BY c.id`)
+    .all() as {
+    chatId: string;
+    title: string;
+    mainModel: string | null;
+    mainPromptPresetId: string | null;
+  }[];
+  const advisorRoles = new Map<string, string[]>();
+  const profiles: ReferencingProfile[] = [];
+  for (const chat of chats) {
+    const roles = globalRoles.filter((role) =>
+      role === 'main' ? !chat.mainModel : !role.startsWith('advisor:') || !chat.mainPromptPresetId
+    );
+    if (chat.mainModel && matches(JSON.parse(chat.mainModel) as ModelRef)) roles.push('main');
+    if (chat.mainPromptPresetId) {
+      let selected = advisorRoles.get(chat.mainPromptPresetId);
+      if (!selected) {
+        const row = store.db
+          .prepare(
+            "SELECT json_extract(body,'$.program.collaboration.agents') AS agents FROM versions WHERE kind='prompt-preset' AND id=? ORDER BY revision DESC LIMIT 1"
+          )
+          .get(chat.mainPromptPresetId) as { agents: string | null } | undefined;
+        const agents = JSON.parse(row?.agents ?? '[]') as { id: string; model?: ModelRef | null }[];
+        selected = agents
+          .filter((agent) => matches(agent.model))
+          .map((agent) => `advisor:${agent.id}`);
+        advisorRoles.set(chat.mainPromptPresetId, selected);
+      }
+      roles.push(...selected);
+    }
+    if (roles.length) profiles.push({ chatId: chat.chatId, title: chat.title, roles });
+  }
   const storyProfiles: ReferencingProfile[] = [];
   const storyRows = store.db
     .prepare(

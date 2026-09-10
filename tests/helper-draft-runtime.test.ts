@@ -6,8 +6,10 @@ import { randomUUID } from 'node:crypto';
 import { createApp, type App } from '../server/app.js';
 import { EditDraftService } from '../server/edit-drafts.js';
 import { HelperWorkspace } from '../server/helper-workspace.js';
+import { helperWritingSnapshot } from '../server/helper-runtime.js';
+import { readHelperChatContext } from '../server/helper-context.js';
 import { modelWorkspace, updateModelWorkspace } from '../server/prompt-workspace.js';
-import { fixtureBotInput } from './fixtures/chat.js';
+import { createFixtureChat, fixtureBotInput } from './fixtures/chat.js';
 import type { Content } from '../core/product.js';
 import type {
   ContentDraftModel,
@@ -188,6 +190,201 @@ async function submit(
   return { task: f.workspace.task(task.id), payload };
 }
 
+test('real helper context reads keep one active summary and scoped notes without checkpoint or job history', async () => {
+  const f = await fixture(),
+    selected = modelWorkspace(f.store);
+  updateModelWorkspace(f.store, {
+    expectedRevision: selected.revision,
+    routes: { ...selected.routes, main: selected.helperModel },
+    translationPolicy: selected.translationPolicy,
+  });
+  const chat = createFixtureChat(f.store, 'Synthetic context read'),
+    branch = f.store.product.branch(chat.id);
+  for (let index = 0; index < 4; index++) {
+    const current = f.store.chat(chat.id),
+      request = `Synthetic request ${index}`;
+    const run = f.store.createRun(
+      chat.id,
+      {
+        request,
+        expectedRevision: current.headRevision,
+        expectedSettingsRevision: current.settingsRevision,
+        idempotencyKey: randomUUID(),
+      },
+      (captured) => ({
+        chatId: chat.id,
+        parentRevision: captured.headRevision,
+        settingsRevision: captured.settingsRevision,
+        settings: captured.settings,
+        request,
+        history: f.store.history(captured.headRevision),
+        resources: [],
+      })
+    ).run;
+    f.store.startRun(run.id);
+    f.store.completeRun(
+      run.id,
+      `Synthetic source ${index}`,
+      { modelCalls: 0, inputTokens: 0, outputTokens: 0, costUsd: 0 },
+      run.snapshot.settings
+    );
+  }
+  const notesBase = {
+    branchId: branch.id,
+    expectedHeadRevision: f.store.chat(chat.id).headRevision,
+    author: 'Synthetic user',
+  };
+  const oldNote = f.store.story.notes.write(chat.id, {
+    ...notesBase,
+    expectedRevision: 0,
+    idempotencyKey: 'original-note',
+    text: 'REPLACED_NOTE',
+  });
+  const note = f.store.story.notes.write(chat.id, {
+    ...notesBase,
+    expectedRevision: oldNote.revision,
+    idempotencyKey: 'corrected-note',
+    replacesId: oldNote.note.id,
+    text: 'The user correction takes precedence over derived summaries.',
+  });
+  const activeSummary = 'ACTIVE_SUMMARY: preserve the unresolved promise and its source.';
+  for (let index = 0; index < 8; index++) {
+    const snapshot = helperWritingSnapshot(f.store, chat.id, branch.id, 'context');
+    f.store.context.edit(
+      chat.id,
+      {
+        branchId: branch.id,
+        expectedRevision: index,
+        expectedHeadRevision: snapshot.parentRevision,
+        idempotencyKey: `summary-${index}`,
+        summary: index === 7 ? activeSummary : `ARCHIVED_SUMMARY_${index}: ${'old '.repeat(4000)}`,
+      },
+      snapshot
+    );
+  }
+  const snapshot = helperWritingSnapshot(f.store, chat.id, branch.id, 'context');
+  const job = f.store.context.schedule(
+    chat.id,
+    {
+      branchId: branch.id,
+      expectedRevision: 8,
+      expectedHeadRevision: snapshot.parentRevision,
+      idempotencyKey: 'cancelled-ui-job',
+    },
+    snapshot
+  );
+  f.store.context.cancel(chat.id, job.id);
+  const beforeResponse = await f.app.inject(`/api/chats/${chat.id}/context`),
+    before = beforeResponse.json();
+  expect(beforeResponse.statusCode).toBe(200);
+  expect(before.checkpoints).toHaveLength(8);
+  expect(before.jobs).toHaveLength(1);
+  expect(before.checkpoint.plan.compacted).toHaveLength(2);
+  const conversation = f.workspace.open({ kind: 'chat', chatId: chat.id, branchId: branch.id });
+  let read!: ReturnType<typeof readHelperChatContext>,
+    events: ToolEvent[] = [];
+  const send = mockSend((request, round) => {
+    if (round === 0) return calls(tool('read-context', 'context.read', {}));
+    if (round === 1) {
+      read = result(request, 'read-context');
+      return calls(
+        tool('unauthorized-summary', 'context.edit', {
+          expectedRevision: read.activeRevision,
+          summary: 'UNAUTHORIZED_SUMMARY',
+          operationId: 'unauthorized-summary',
+        }),
+        tool('unauthorized-note', 'notes.write', {
+          body: { text: 'UNAUTHORIZED_NOTE', expectedRevision: read.notesRevision },
+          operationId: 'unauthorized-note',
+        })
+      );
+    }
+    events = request.input.results as unknown as ToolEvent[];
+    return structuredClone(success);
+  });
+  const { task } = await submit({ ...f, conversation }, '현재 요약과 사용자 정정을 읽고 설명해줘');
+  expect(send).toHaveBeenCalledTimes(3);
+  expect(task.snapshot.grants).toEqual([]);
+  expect(read).toEqual({
+    scopeKey: before.scopeKey,
+    activeRevision: 8,
+    notesRevision: note.revision,
+    headRevision: snapshot.parentRevision,
+    checkpoint: {
+      id: before.checkpoint.id,
+      revision: before.checkpoint.revision,
+      hash: before.checkpoint.hash,
+      origin: before.checkpoint.origin,
+      plan: {
+        summary: activeSummary,
+        dependencyKey: before.checkpoint.plan.dependencyKey,
+        compacted: before.checkpoint.plan.compacted,
+        recentSourceRevisions: before.checkpoint.plan.recentSourceRevisions,
+      },
+    },
+    usable: true,
+    invalidReason: null,
+    notes: [note.note],
+  });
+  const serialized = JSON.stringify(read);
+  expect(serialized).not.toContain('ARCHIVED_SUMMARY_');
+  expect(serialized).not.toContain('REPLACED_NOTE');
+  expect(serialized.length).toBeLessThan(beforeResponse.body.length / 10);
+  for (const name of ['context.edit', 'notes.write'])
+    expect(events.find((event) => event.name === name)).toMatchObject({ denied: true });
+  expect((await f.app.inject(`/api/chats/${chat.id}/context`)).json()).toEqual(before);
+  expect(f.store.story.notes.revision(chat.id)).toBe(note.revision);
+});
+
+test('helper context reads preserve missing summaries and stale checkpoint usability with current CAS revisions', async () => {
+  const f = await fixture(),
+    selected = modelWorkspace(f.store);
+  updateModelWorkspace(f.store, {
+    expectedRevision: selected.revision,
+    routes: { ...selected.routes, main: selected.helperModel },
+    translationPolicy: selected.translationPolicy,
+  });
+  const chat = createFixtureChat(f.store, 'Synthetic stale summary'),
+    branch = f.store.product.branch(chat.id);
+  expect(readHelperChatContext(f.store, chat.id, branch.id)).toMatchObject({
+    activeRevision: 0,
+    notesRevision: 0,
+    checkpoint: null,
+    usable: false,
+    invalidReason: null,
+    notes: [],
+  });
+  const snapshot = helperWritingSnapshot(f.store, chat.id, branch.id, 'context');
+  const saved = f.store.context.edit(
+    chat.id,
+    {
+      branchId: branch.id,
+      expectedRevision: 0,
+      expectedHeadRevision: null,
+      idempotencyKey: 'first-summary',
+      summary: 'Saved summary before the user correction.',
+    },
+    snapshot
+  );
+  const note = f.store.story.notes.write(chat.id, {
+    branchId: branch.id,
+    expectedRevision: 0,
+    expectedHeadRevision: null,
+    idempotencyKey: 'new-correction',
+    author: 'Synthetic user',
+    text: 'The earlier summary has an incorrect promise.',
+  });
+  const read = readHelperChatContext(f.store, chat.id, branch.id);
+  expect(read).toMatchObject({
+    activeRevision: 1,
+    notesRevision: 1,
+    checkpoint: { id: saved.checkpoint!.id, plan: { summary: saved.checkpoint!.plan.summary } },
+    usable: false,
+    notes: [note.note],
+  });
+  expect(read.invalidReason).toBeTruthy();
+});
+
 test('real app draft bridge reads the human buffer then honors one explicit patch and save despite a repeated save tool call', async () => {
   const f = await fixture();
   let saveArgs: Record<string, unknown> | undefined, savedResult: DraftSaveResult | undefined;
@@ -342,4 +539,65 @@ test('a human revision after helper read produces a conflict proposal and preser
   expect(f.drafts.proposals(f.draft.id)).toHaveLength(1);
   expect(f.drafts.savedOperations(f.draft.id)).toEqual([]);
   expect(f.store.product.get<Content>('content', f.saved.id)).toEqual(f.saved);
+});
+
+test('helper task projections retain the reserved model title after a rename and selection change without exposing snapshots', async () => {
+  const f = await fixture();
+  const send = mockSend(() => success);
+  const original = await submit(f, '예약 당시 모델을 기록해줘');
+  const model = original.task.snapshot.model;
+  f.store.product.model(
+    {
+      expectedRevision: model.revision,
+      title: '이름을 바꾼 이전 모델',
+      connectionId: model.connectionId,
+      modelId: model.modelId,
+      temperature: model.temperature,
+      maxOutputTokens: model.maxOutputTokens,
+    },
+    model.id
+  );
+  const selectedModel = f.store.product.model({
+    title: '새로 선택한 도우미 모델',
+    connectionId: model.connectionId,
+    modelId: 'fixture-new-helper',
+    temperature: null,
+    maxOutputTokens: 1024,
+  });
+  const selected = modelWorkspace(f.store);
+  updateModelWorkspace(f.store, {
+    expectedRevision: selected.revision,
+    routes: selected.routes,
+    translationPolicy: selected.translationPolicy,
+    helperModel: { id: selectedModel.id },
+  });
+  const latest = await submit(f, '새 선택으로 작업해줘');
+  const snapshots = () =>
+    f.store.db.prepare('SELECT id,snapshot FROM helper_tasks ORDER BY rowid').all();
+  const beforeReads = snapshots();
+  const listed = await f.app.inject(`/api/helper/conversations/${f.conversation.id}/tasks`);
+  expect(listed.statusCode).toBe(200);
+  const tasks = listed.json<(Omit<HelperTask, 'snapshot'> & { modelTitle: string })[]>();
+  expect(tasks.map((task) => [task.id, task.modelTitle])).toEqual([
+    [latest.task.id, selectedModel.title],
+    [original.task.id, model.title],
+  ]);
+  const detail = await f.app.inject(`/api/helper/tasks/${original.task.id}`);
+  const replay = await f.app.inject({
+    method: 'POST',
+    url: `/api/helper/conversations/${f.conversation.id}/messages`,
+    payload: original.payload,
+  });
+  for (const response of [detail, replay]) {
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({ id: original.task.id, modelTitle: model.title });
+  }
+  for (const view of [...tasks, detail.json(), replay.json()]) {
+    expect(view).not.toHaveProperty('snapshot');
+    expect(view).not.toHaveProperty('model');
+    expect(view).not.toHaveProperty('connection');
+  }
+  expect(f.workspace.task(original.task.id).snapshot).toEqual(original.task.snapshot);
+  expect(snapshots()).toEqual(beforeReads);
+  expect(send).toHaveBeenCalledTimes(2);
 });

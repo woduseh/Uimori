@@ -111,6 +111,8 @@ export function createPackageStart(
   };
   const request = start.mode === 'authored' ? `[작성된 도입문] ${start.title}` : start.text;
   return store.transaction(() => {
+    // Store applies the shared run/authored reservation phases after this callback's
+    // optional initial action, inside the same transaction as an authored source commit.
     const result = store.createRunInTransaction(
       chatId,
       {

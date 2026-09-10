@@ -318,6 +318,19 @@ test('helper option tools require the running host task and its direct or persis
   workspace.start(task.id, 'test-owner');
   const current = workspace.task(task.id);
   expect(invokeHelperOptions(f.store, current, 'options.read', {})).toMatchObject({ pending: [] });
+  const modelRead = invokeHelperOptions(f.store, current, 'options.read', {});
+  expect(modelRead).not.toHaveProperty('program');
+  expect(modelRead).toMatchObject({
+    definitions: state.program.controls,
+    revision: state.revision,
+    binding: state.binding,
+    headRevision: state.headRevision,
+    globalValues: state.globalValues,
+    fixedValues: state.fixedValues,
+    delegations: state.delegations,
+    conflicts: state.conflicts,
+  });
+  expect(f.service.get(f.chat.id).program).toEqual(state.program);
   expect(() =>
     invokeHelperOptions(f.store, current, 'options.oneoff', {
       ...toolArgs,
@@ -338,10 +351,20 @@ test('helper option tools require the running host task and its direct or persis
       toolArgs
     )
   ).toThrow(/scope/);
-  expect(invokeHelperOptions(f.store, current, 'options.choose', toolArgs)).toMatchObject({
+  const choiceReceipt = invokeHelperOptions(f.store, current, 'options.choose', toolArgs);
+  expect(choiceReceipt).toMatchObject({
     pending: [expect.objectContaining({ values: { detail: 5 } })],
   });
+  expect(choiceReceipt).not.toHaveProperty('program');
+  expect(choiceReceipt).not.toHaveProperty('pending.0.delegation');
+  expect(choiceReceipt).toMatchObject({
+    pending: [
+      { delegationId: grant.id, binding: state.binding, definitions: state.program.controls },
+    ],
+    delegations: [expect.objectContaining({ id: grant.id, revokedAt: null })],
+  });
   const staged = f.service.get(f.chat.id);
+  expect(staged.pending[0].delegation).toEqual(grant);
   f.service.revoke(
     f.chat.id,
     grant.id,

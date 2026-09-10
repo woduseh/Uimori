@@ -87,7 +87,8 @@ test('NUI01 native prompt metadata import, default options and authoring persist
     ),
   });
   await expect(composer.getByLabel('다른 옵션', { exact: true })).toHaveValue('imported');
-  await composer.getByLabel('프롬프트 구성 도구', { exact: true }).press('Escape');
+  await expect(composer.locator('.pc-program-menu')).not.toHaveAttribute('open');
+  await expect(composer.getByLabel('프롬프트 구성 도구', { exact: true })).toBeFocused();
   await composer.getByRole('button', { name: '이전 편집으로', exact: true }).click();
   await expect(composer.getByLabel('합성 분위기', { exact: true })).toHaveValue('"bright"');
   await expect(composer.getByLabel('다른 옵션', { exact: true })).toHaveCount(0);
@@ -120,7 +121,8 @@ test('NUI01 native prompt metadata import, default options and authoring persist
   for await (const chunk of stream!) chunks.push(Buffer.from(chunk));
   const exported = JSON.parse(Buffer.concat(chunks).toString());
   expect(exported).toMatchObject({ title, role: 'translation', program, values: { tone: 'calm' } });
-  await composer.getByRole('button', { name: 'JSON 내보내기', exact: true }).press('Escape');
+  await expect(composer.locator('.pc-program-menu')).not.toHaveAttribute('open');
+  await expect(composer.getByLabel('프롬프트 구성 도구', { exact: true })).toBeVisible();
   await openPromptBlocks(composer);
   await composer.locator('.pc-block').first().locator('summary').first().click();
   for (const [name, width, height] of [

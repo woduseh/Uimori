@@ -3,6 +3,8 @@ import {
   readStorySource,
   searchStorySources,
   searchTerms,
+  sourceHash,
+  sourceSceneScope,
 } from './source-history.js';
 import { visibleAuthorNotes } from './notes.js';
 import type { RunSnapshot, ToolEvent } from './types.js';
@@ -33,9 +35,15 @@ function boundedRead<T>(start: number, desiredEnd: number, build: (end: number) 
   return build(low);
 }
 
-function boundedSearch(total: number, offset: number, candidates: unknown[]) {
+function boundedSearch(
+  total: number,
+  offset: number,
+  candidates: unknown[],
+  sceneScope?: ReturnType<typeof sourceSceneScope>
+) {
   const results: unknown[] = [];
   const result = () => ({
+    ...(sceneScope ? { sceneScope } : {}),
     results,
     total,
     nextOffset: offset + results.length < total ? offset + results.length : null,
@@ -58,20 +66,22 @@ function boundedSearch(total: number, offset: number, candidates: unknown[]) {
 /** Ordered ancestry index: position, id, size, a short preview and window membership. */
 function listStorySources(snapshot: RunSnapshot, offset: number, limit: number) {
   const compacted = new Set(snapshot.contextPlan?.compacted.map((ref) => ref.revision) ?? []);
-  const items = snapshot.history.map((item, index) => {
+  const items = snapshot.history.slice(offset, offset + limit).map((item, pageIndex) => {
+    const index = offset + pageIndex;
     const view = snapshot.sourceSegments ? sourceRequestView(snapshot, item.revision) : undefined;
     const text = view?.text ?? item.text;
     const preview = text.replace(/\s+/gu, ' ').trim().slice(0, LIST_PREVIEW_CHARS);
     return {
-      index,
+      sceneNumber: index + 1,
       revision: item.revision,
-      hash: view?.sourceHash ?? item.contentHash,
+      index,
+      hash: view?.sourceHash ?? item.contentHash ?? sourceHash(item.text),
       chars: text.length,
       preview,
       compacted: compacted.has(item.revision),
     };
   });
-  return { total: items.length, results: items.slice(offset, offset + limit) };
+  return { total: snapshot.history.length, results: items };
 }
 
 /** Search only inside a kept source span: a query cannot cross an omitted hidden region. */
@@ -126,7 +136,9 @@ export function executeStoryRead(
       ? ['offset', 'limit']
       : search
         ? ['query', 'offset', 'limit']
-        : ['id', 'offset', 'limit'];
+        : action.name === 'story.read'
+          ? ['id', 'sceneNumber', 'offset', 'limit']
+          : ['id', 'offset', 'limit'];
   if (Object.keys(args).some((key) => !allowed.includes(key))) return denied('INVALID_ARGUMENTS');
   const offset = args.offset === undefined ? 0 : Number(args.offset),
     limit = args.limit === undefined ? (search ? 20 : 4096) : Number(args.limit);
@@ -142,11 +154,12 @@ export function executeStoryRead(
     let result: unknown;
     if (action.name === 'story.list') {
       const listed = listStorySources(snapshot, offset, limit);
-      result = boundedSearch(listed.total, offset, listed.results);
+      result = boundedSearch(listed.total, offset, listed.results, sourceSceneScope(scope));
     } else if (search) {
       const query = args.query === undefined && action.name === 'notes.list' ? '' : args.query;
       if (typeof query !== 'string' || query.length > 512) return denied('INVALID_ARGUMENTS');
       if (action.name === 'story.search') {
+        const numbers = new Map(scope.history.map((source, index) => [source.revision, index + 1]));
         const found = snapshot.sourceSegments
           ? searchHiddenSources(snapshot, query, offset, limit)
           : searchStorySources(scope, { query, offset, limit });
@@ -155,8 +168,10 @@ export function executeStoryRead(
           offset,
           found.results.map(({ source: { quote: _quote, ...source }, ...item }) => ({
             ...item,
+            sceneNumber: numbers.get(source.revision)!,
             source,
-          }))
+          })),
+          sourceSceneScope(scope)
         );
       } else {
         const found = visibleAuthorNotes(scope, snapshot.story?.notes ?? []).filter((note) =>
@@ -178,15 +193,33 @@ export function executeStoryRead(
         );
       }
     } else {
-      if (typeof args.id !== 'string' || args.id.length > 200) return denied('INVALID_ARGUMENTS');
       if (action.name === 'story.read') {
-        const page = readStorySource(scope, { revision: args.id, offset, limit }),
+        if (
+          (args.id !== undefined && (typeof args.id !== 'string' || args.id.length > 200)) ||
+          (args.sceneNumber !== undefined &&
+            (!Number.isSafeInteger(args.sceneNumber) || (args.sceneNumber as number) < 1)) ||
+          (args.id === undefined && args.sceneNumber === undefined)
+        )
+          return denied('INVALID_ARGUMENTS');
+        const numbered =
+          args.sceneNumber === undefined
+            ? undefined
+            : scope.history[(args.sceneNumber as number) - 1];
+        if (args.sceneNumber !== undefined && !numbered) return denied('RESOURCE_UNAVAILABLE');
+        if (numbered && args.id !== undefined && args.id !== numbered.revision)
+          return denied('INVALID_ARGUMENTS');
+        const sourceId = numbered?.revision ?? (args.id as string);
+        const sceneNumber = scope.history.findIndex((source) => source.revision === sourceId) + 1;
+        const page = readStorySource(scope, { revision: sourceId, offset, limit }),
           { quote: _quote, ...source } = page.source;
+        const sceneScope = sourceSceneScope(scope);
         result = boundedRead(offset, page.source.end, (end) => {
           const filtered = snapshot.sourceSegments
-            ? sourceReadRange(snapshot, args.id as string, offset, end)
+            ? sourceReadRange(snapshot, sourceId, offset, end)
             : undefined;
           return {
+            sceneNumber,
+            sceneScope,
             text: filtered?.text ?? page.text.slice(0, end - offset),
             source: { ...source, end },
             ...(filtered
@@ -202,6 +235,7 @@ export function executeStoryRead(
           };
         });
       } else {
+        if (typeof args.id !== 'string' || args.id.length > 200) return denied('INVALID_ARGUMENTS');
         const note = visibleAuthorNotes(scope, snapshot.story?.notes ?? []).find(
           (note) => note.id === args.id
         );

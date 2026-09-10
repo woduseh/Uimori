@@ -7,6 +7,8 @@ import { createHash } from 'node:crypto';
 import {
   validateProviderEndpoint,
   PROVIDER_PROTOCOLS,
+  MODEL_ROLES,
+  type ModelRole,
   type ProviderProtocol,
   type ModelGeneration,
 } from './product.js';
@@ -143,20 +145,7 @@ export function validateRequest(value: unknown): ProviderRequest {
       reject(error instanceof Error ? error.message : 'INVALID_PROMPT');
     }
   }
-  if (
-    ![
-      'main',
-      'translation',
-      'status',
-      'image',
-      'state',
-      'context',
-      'helper',
-      'title',
-      'illustration',
-    ].includes(value.role as string)
-  )
-    reject('INVALID_ROLE');
+  if (!MODEL_ROLES.includes(value.role as ModelRole)) reject('INVALID_ROLE');
   string(value.modelId);
   if (value.generation !== undefined) validateGeneration(value.generation);
   if (value.contextBudget !== undefined) validateContextBudget(value.contextBudget);

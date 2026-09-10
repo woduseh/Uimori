@@ -2,12 +2,12 @@ import { randomUUID } from 'node:crypto';
 import { setTimeout as delay } from 'node:timers/promises';
 import type { HelperEditor, HelperTask, HelperSelection } from '../core/helper.js';
 import type { RunSnapshot, ToolEvent } from '../core/types.js';
-import type { ModelSnapshot } from '../core/product.js';
+import { workspaceModelRef, type ModelSnapshot } from '../core/product.js';
 import { contextBudgetForModel, estimateContextTokens } from '../core/context-budget.js';
 import { sourceHash } from '../core/source-history.js';
+import { chatOverrideHash } from '../core/chat-overrides.js';
 import { generationFromModel } from '../core/model-capabilities.js';
 import { executeTool } from '../core/provider.js';
-import { freezeSourceSegments } from '../core/package-source-segments.js';
 import {
   executeProvider,
   type Json,
@@ -17,9 +17,8 @@ import {
   transportConnection,
 } from '../core/transport.js';
 import { promptWorkspace } from './prompt-workspace.js';
-import { captureLogicalHistory, compileSnapshotPrompt } from './prompt-snapshot.js';
-import { freezePackageStates } from './package-behavior-host.js';
-import { freezeLoreContext } from './lore-context.js';
+import { compileSnapshotPrompt } from './prompt-snapshot.js';
+import { freezeReservationSnapshot } from './reservation-snapshot.js';
 import { previousContextPlan, seedContextPlan } from './context-planning.js';
 import { prepareInputContext } from './context-compaction.js';
 import { runMain, type MainHooks } from './model-runner.js';
@@ -46,31 +45,75 @@ const schema = (properties: Record<string, Json>, required: string[] = []): Json
   additionalProperties: false,
 });
 const str: Json = { type: 'string' },
-  integer: Json = { type: 'integer', minimum: 1 };
+  integer: Json = { type: 'integer', minimum: 1 },
+  revision: Json = { type: 'integer', minimum: 0 },
+  itemId: Json = { type: 'string', minLength: 1, maxLength: 100 };
 const TOOLS: ProviderTool[] = [
   ...helperOptionTools,
   {
     name: 'chat.lore',
     description:
-      'Read or edit an attachment-scoped lore override in this chat. Read first for selectors, exact branch/head/profile/package revisions and field hash. Shared originals stay intact. Mutations require a user request for chat-only lore.',
+      'Read or edit an attachment-scoped lore override in this chat. Read first: use attachments[].scope plus lore[].id and field to form selector, and copy lore[].fieldHashes[field] as expectedFieldHash. Both mutations require body selector, expectedRevision, expectedHeadRevision and operationId. Patch additionally requires expectedProfileRevision, expectedPackageRevision, expectedFieldHash and value; omit those four fields for remove. The host supplies the branch. Shared originals stay intact. Mutations require a user request for chat-only lore.',
     inputSchema: schema(
-      { action: { type: 'string', enum: ['read', 'patch', 'remove'] }, body: { type: 'object' } },
+      {
+        action: { type: 'string', enum: ['read', 'patch', 'remove'] },
+        body: schema(
+          {
+            selector: schema(
+              {
+                id: { type: 'string', minLength: 1, maxLength: 64 },
+                role: { type: 'string', enum: ['bot', 'persona', 'module'] },
+                modulePath: {
+                  type: 'array',
+                  maxItems: 20,
+                  items: { type: 'string', minLength: 1, maxLength: 64 },
+                },
+                loreId: { type: 'string', minLength: 1, maxLength: 64 },
+                field: { type: 'string', enum: ['title', 'description', 'text'] },
+              },
+              ['id', 'role', 'modulePath', 'loreId', 'field']
+            ),
+            expectedRevision: revision,
+            expectedHeadRevision: { type: ['string', 'null'], maxLength: 100 },
+            operationId: { type: 'string', minLength: 1, maxLength: 160 },
+            expectedProfileRevision: integer,
+            expectedPackageRevision: integer,
+            expectedFieldHash: { type: 'string', pattern: '^[a-f0-9]{64}$' },
+            value: { type: 'string', maxLength: 1_000_000 },
+          },
+          ['selector', 'expectedRevision', 'expectedHeadRevision', 'operationId']
+        ),
+      },
       ['action']
     ),
   },
   {
     name: 'workspace.read',
     description:
-      'Read current workspace settings, library metadata or an authorized shared draft. Never claims image understanding.',
+      'Read current workspace settings, library metadata or an authorized shared draft. Prefer library.search when finding an item by name or category. Never claims image understanding.',
     inputSchema: schema({
       kind: { type: 'string', enum: ['settings', 'library', 'draft'] },
       draftId: str,
     }),
   },
   {
+    name: 'library.search',
+    description:
+      'Prefer this tool to find library items by name, ID or category (bot/persona/module/main/translation). Searches latest visible metadata only, never body text. All whitespace-separated query terms must match after NFKC normalization and case folding. An empty query lists a page. Follow nextOffset for more matches, then pass an item id and kind to library.read for its full body.',
+    inputSchema: schema(
+      {
+        query: { type: 'string', maxLength: 200 },
+        kind: { type: 'string', enum: ['content', 'prompt-preset'] },
+        offset: { type: 'integer', minimum: 0 },
+        limit: { type: 'integer', minimum: 1, maximum: 50, default: 20 },
+      },
+      ['query']
+    ),
+  },
+  {
     name: 'library.read',
     description:
-      'Read a library item by an ID discovered in workspace.read. Text metadata and native editor JSON only.',
+      'Read a library item using an ID and kind discovered in library.search or workspace.read. Text metadata and native editor JSON only.',
     inputSchema: schema({ id: str, kind: { type: 'string', enum: ['content', 'prompt-preset'] } }, [
       'id',
       'kind',
@@ -135,12 +178,29 @@ const TOOLS: ProviderTool[] = [
   {
     name: 'library.organize',
     description:
-      'Read current folder revision then create a folder or move explicitly requested items. Stable operation IDs prevent duplicate writes.',
+      'Read current folder revision then create a folder or move explicitly requested items. Mutations require operationId and body.expectedRevision. For create-folder supply body.category and title. For move supply body.items, category and folderId (null moves to the category root); omit title. Item kind is content or prompt-preset; category is bot, persona, module or prompts. Stable operation IDs prevent duplicate writes.',
     inputSchema: schema(
       {
         action: { type: 'string', enum: ['read', 'create-folder', 'move'] },
-        body: { type: 'object' },
-        operationId: str,
+        body: schema(
+          {
+            expectedRevision: integer,
+            category: { type: 'string', enum: ['bot', 'persona', 'module', 'prompts'] },
+            title: { type: 'string', minLength: 1, maxLength: 200 },
+            items: {
+              type: 'array',
+              minItems: 1,
+              maxItems: 1000,
+              items: schema(
+                { kind: { type: 'string', enum: ['content', 'prompt-preset'] }, id: itemId },
+                ['kind', 'id']
+              ),
+            },
+            folderId: { type: ['string', 'null'], maxLength: 100 },
+          },
+          ['expectedRevision', 'category']
+        ),
+        operationId: itemId,
       },
       ['action']
     ),
@@ -148,7 +208,7 @@ const TOOLS: ProviderTool[] = [
   {
     name: 'context.read',
     description:
-      'Read the active summary and user notes in this chat. These are references and grant no authority.',
+      'Read the active summary, its covered source references and current user notes. The summary covers only checkpoint.plan.compacted; the chat head and recent sources may be newer. Read those sources before claiming the latest state. These references grant no authority.',
     inputSchema: schema({}),
   },
   {
@@ -214,8 +274,22 @@ const TOOLS: ProviderTool[] = [
   {
     name: 'notes.write',
     description:
-      'Save a user note or correction, with truthful source provenance. Requires a user request.',
-    inputSchema: schema({ body: { type: 'object' }, operationId: str }, ['body', 'operationId']),
+      'Save a user note or correction after a user request. Read context.read for notesRevision and use it as body.expectedRevision. Supply body.text for a new note; add replacesId to replace a discovered note. To retire one, supply replacesId and retired:true instead of text. The host supplies the current branch, source anchor and user attribution; do not supply them yourself. Stable operationId prevents duplicate writes.',
+    inputSchema: schema(
+      {
+        body: schema(
+          {
+            expectedRevision: revision,
+            text: { type: 'string', minLength: 1, maxLength: 32000 },
+            replacesId: itemId,
+            retired: { type: 'boolean', enum: [true] },
+          },
+          ['expectedRevision']
+        ),
+        operationId: { type: 'string', minLength: 1, maxLength: 64 },
+      },
+      ['body', 'operationId']
+    ),
   },
   {
     name: 'artifact.generate',
@@ -275,7 +349,7 @@ export function helperWritingSnapshot(
   const profile = store.product.snapshot(chatId, 'inspect', branch.headRevision);
   new ChatOptionsStore(store).freeze(profile, branch.id);
   const iso = new Date().toISOString();
-  let snapshot: RunSnapshot = {
+  const snapshot: RunSnapshot = {
     ...(purpose === 'artifact' ? { executionPurpose: 'artifact' as const } : {}),
     chatId,
     branchId: branch.id,
@@ -288,23 +362,9 @@ export function helperWritingSnapshot(
     profile,
     executionClock: { iso, unix: Math.floor(Date.parse(iso) / 1000) },
   };
-  snapshot.sourceSegments = freezeSourceSegments(profile);
-  snapshot = store.story.prepareRunInTransaction(snapshot);
-  snapshot.logicalHistory = captureLogicalHistory(store, snapshot);
-  snapshot = freezePackageStates(store, snapshot, false);
-  snapshot = freezeLoreContext(store, snapshot);
-  const prepared = store.context.prepareRun(snapshot);
-  const previous = store.context.previous(prepared);
-  if (previous && prepared.contextPlan)
-    prepared.contextPlan = {
-      ...prepared.contextPlan,
-      compacted: previous.compacted,
-      summary: previous.summary,
-      recentSourceRevisions: prepared.history
-        .slice(previous.compacted.length)
-        .map((source) => source.revision),
-    };
-  return prepared;
+  return freezeReservationSnapshot(store, snapshot, {
+    purpose: purpose === 'artifact' ? 'helper-artifact' : 'helper-context',
+  });
 }
 
 export class HelperRuntime {
@@ -335,8 +395,10 @@ export class HelperRuntime {
     }
     const conversation = this.workspace.conversation(conversationId),
       workspace = promptWorkspace(this.store);
-    if (!workspace.helperModel) throw new HttpError(409, 'MODEL_REQUIRED:helper');
-    const model = this.store.product.modelSnapshot(workspace.helperModel.id);
+    const helperModel = workspaceModelRef(workspace, 'helper');
+    const contextModel = workspaceModelRef(workspace, 'context');
+    if (!helperModel) throw new HttpError(409, 'MODEL_REQUIRED:helper');
+    const model = this.store.product.modelSnapshot(helperModel.id);
     if (model.evaluationTools)
       throw new HttpError(409, '도우미 모델에서는 평가 도구를 해제해 주세요.');
     if (editor) {
@@ -366,13 +428,9 @@ export class HelperRuntime {
       history,
       context: helperContext(this.store, conversationId, history),
       persona: conversation.persona,
-      ...(workspace.contextModel
+      ...(contextModel
         ? {
-            contextModel: this.store.product.modelSnapshot(
-              workspace.contextModel.id,
-              undefined,
-              false
-            ),
+            contextModel: this.store.product.modelSnapshot(contextModel.id, undefined, false),
           }
         : {}),
       ...(scope.kind === 'chat'
@@ -571,7 +629,8 @@ export class HelperRuntime {
         for (const call of result.toolCalls) {
           signal.throwIfAborted();
           let output: unknown,
-            denied = false;
+            denied = false,
+            errorKind: ToolEvent['errorKind'];
           try {
             if (call.name === 'artifact.generate') {
               if (task.snapshot.scope.kind !== 'chat')
@@ -613,10 +672,23 @@ export class HelperRuntime {
                 text: saved.text,
                 usage: saved.usage,
               };
+            } else if (
+              task.snapshot.writing &&
+              MAIN_READ_TOOLS.some((tool) => tool.name === call.name)
+            ) {
+              const read = executeTool(
+                task.snapshot.writing,
+                { callId: call.id, name: call.name, args: record(call.arguments) },
+                signal
+              );
+              output = read.result;
+              denied = read.denied;
+              errorKind = read.errorKind;
             } else
               output = await this.tool(task, call.name, record(call.arguments), hooks('context'));
           } catch (error) {
             denied = true;
+            errorKind = 'recoverable';
             output = {
               error: error instanceof Error ? error.message : 'HELPER_TOOL_FAILED',
               recoverable: true,
@@ -628,13 +700,14 @@ export class HelperRuntime {
             args: call.arguments,
             result: output,
             denied,
-            ...(denied ? { errorKind: 'recoverable' as const } : {}),
+            ...(errorKind ? { errorKind } : {}),
           };
           results.push(event);
           this.workspace.event(task.conversationId, id, 'tool.finished', {
             name: call.name,
             denied,
             result: output,
+            ...(errorKind ? { errorKind } : {}),
           });
         }
       }
@@ -808,7 +881,23 @@ export class HelperRuntime {
     if (name === 'chat.lore') {
       if (scope.kind !== 'chat') throw new HttpError(403, 'CHAT_SCOPE_REQUIRED');
       const service = new ChatOverridesStore(this.store);
-      if (args.action === 'read') return service.get(scope.chatId, scope.branchId);
+      if (args.action === 'read') {
+        const current = service.get(scope.chatId, scope.branchId);
+        return {
+          ...current,
+          attachments: current.attachments.map((attachment) => ({
+            ...attachment,
+            lore: attachment.lore.map((entry) => ({
+              ...entry,
+              fieldHashes: {
+                title: chatOverrideHash(entry.title),
+                description: chatOverrideHash(entry.description),
+                text: chatOverrideHash(entry.text),
+              },
+            })),
+          })),
+        };
+      }
       if (args.action !== 'patch' && args.action !== 'remove')
         throw new HttpError(400, 'INVALID_LORE_ACTION');
       const authority = {
@@ -845,15 +934,9 @@ export class HelperRuntime {
           workspace: promptWorkspace(this.store),
           ...(scope.kind === 'chat' ? { chat: this.store.chat(scope.chatId) } : {}),
         };
-      return {
-        contents: this.store.product
-          .all('content')
-          .map(({ id, revision, title, kind }) => ({ id, revision, title, kind })),
-        prompts: this.store.product
-          .all('prompt-preset')
-          .map(({ id, revision, title, role }) => ({ id, revision, title, role })),
-      };
+      return this.store.product.libraryMetadata();
     }
+    if (name === 'library.search') return this.store.product.searchLibrary(args);
     if (name === 'library.read') {
       if (!['content', 'prompt-preset'].includes(args.kind))
         throw new HttpError(400, 'Invalid library kind');
@@ -979,8 +1062,6 @@ export class HelperRuntime {
         usage: artifact.usage,
       };
     }
-    if (task.snapshot.writing && MAIN_READ_TOOLS.some((tool) => tool.name === name))
-      return executeTool(task.snapshot.writing, { callId: randomUUID(), name, args }).result;
     throw new HttpError(400, 'UNKNOWN_HELPER_TOOL');
   }
   private async artifact(

@@ -18,6 +18,7 @@ import {
   defaultPromptWorkspace,
   emptyModelRoutes,
   promptWorkspace,
+  chatPromptWorkspace,
   freezeCurrentPrompts,
   validateCurrentPrompt,
   validatePromptWorkspace,
@@ -39,6 +40,7 @@ import type { Store } from './store.js';
 export { fields, number, record, text } from './request-validation.js';
 import {
   defaultProfile,
+  workspaceModelRef,
   PROVIDER_PROTOCOLS,
   VERTEX_GEMINI_DEFAULT_TIMEOUT_MS,
   type Content,
@@ -156,6 +158,16 @@ export const modelRef = (v: unknown): ModelRef => {
   fields(b, ['id']);
   return { id: text(b.id, 'model', 100) };
 };
+function validatePinnedProfile(value: unknown): NonNullable<ChatProfile['pinned']> {
+  const pinned = record(value);
+  fields(pinned, ['mainPromptPresetId', 'mainModel']);
+  return {
+    ...(pinned.mainPromptPresetId !== undefined
+      ? { mainPromptPresetId: text(pinned.mainPromptPresetId, 'pinned main prompt', 100) }
+      : {}),
+    ...(pinned.mainModel !== undefined ? { mainModel: modelRef(pinned.mainModel) } : {}),
+  };
+}
 
 export class ProductStore {
   constructor(readonly store: Store) {}
@@ -188,6 +200,79 @@ export class ProductStore {
         )
         .all(kind) as Row[]
     ).map((r) => parse(r.body));
+  }
+  libraryMetadata(): {
+    contents: Pick<Content, 'id' | 'revision' | 'title' | 'kind'>[];
+    prompts: Pick<PromptPreset, 'id' | 'revision' | 'title' | 'role'>[];
+  } {
+    // Keep large package bodies and prompt programs inside SQLite for metadata-only reads.
+    const statement = this.db.prepare(`
+      SELECT json_extract(v.body,'$.id') AS id,
+        json_extract(v.body,'$.revision') AS revision,
+        json_extract(v.body,'$.title') AS title,
+        json_extract(v.body,'$.kind') AS kind,
+        json_extract(v.body,'$.role') AS role
+      FROM versions v WHERE v.kind=?
+        AND v.revision=(SELECT MAX(n.revision) FROM versions n WHERE n.kind=v.kind AND n.id=v.id)
+        AND NOT EXISTS(SELECT 1 FROM library_hidden h WHERE h.kind=v.kind AND h.id=v.id)
+      ORDER BY v.id
+    `);
+    return {
+      contents: (statement.all('content') as Row[]).map(({ id, revision, title, kind }) => ({
+        id,
+        revision,
+        title,
+        kind,
+      })),
+      prompts: (statement.all('prompt-preset') as Row[]).map(({ id, revision, title, role }) => ({
+        id,
+        revision,
+        title,
+        role,
+      })),
+    };
+  }
+  searchLibrary(value: unknown) {
+    const body = record(value);
+    fields(body, ['query', 'kind', 'offset', 'limit']);
+    const fold = (value: string) => value.normalize('NFKC').toLocaleLowerCase('en');
+    const terms = fold(text(body.query, 'library query', 200, true))
+      .trim()
+      .split(/\s+/u)
+      .filter(Boolean);
+    const kind =
+      body.kind === undefined
+        ? undefined
+        : choice(body.kind, ['content', 'prompt-preset'], 'library kind');
+    const offset =
+      body.offset === undefined
+        ? 0
+        : number(body.offset, 'library offset', 0, Number.MAX_SAFE_INTEGER);
+    const limit = body.limit === undefined ? 20 : number(body.limit, 'library limit', 1, 50);
+    const metadata = this.libraryMetadata();
+    const found = [
+      ...metadata.contents.map(({ kind, ...item }) => ({
+        ...item,
+        kind: 'content' as const,
+        category: kind,
+      })),
+      ...metadata.prompts.map(({ role, ...item }) => ({
+        ...item,
+        kind: 'prompt-preset' as const,
+        category: role,
+      })),
+    ].filter((item) => {
+      if (kind !== undefined && item.kind !== kind) return false;
+      const searchable = fold(`${item.title} ${item.id} ${item.category}`);
+      return terms.every((term) => searchable.includes(term));
+    });
+    const items = found.slice(offset, offset + limit);
+    return {
+      items,
+      total: found.length,
+      offset,
+      nextOffset: offset + items.length < found.length ? offset + items.length : null,
+    };
   }
   isHidden(kind: string, id: string): boolean {
     return !!this.db.prepare('SELECT 1 FROM library_hidden WHERE kind=? AND id=?').get(kind, id);
@@ -556,6 +641,7 @@ export class ProductStore {
       'packageAttachments',
       'packageValues',
       'loreContext',
+      'pinned',
     ]);
     if (!Array.isArray(b.attachments) || b.attachments.length > 300)
       throw new HttpError(400, 'Invalid attachments');
@@ -575,6 +661,18 @@ export class ProductStore {
       const prior = this.profile(chatId);
       if (prior.revision !== number(b.expectedRevision, 'profile revision'))
         throw new HttpError(409, 'Profile revision conflict');
+      const pinned = b.pinned === undefined ? prior.pinned : validatePinnedProfile(b.pinned);
+      if (
+        pinned?.mainPromptPresetId &&
+        pinned.mainPromptPresetId !== prior.pinned?.mainPromptPresetId
+      ) {
+        this.assertAvailable('prompt-preset', pinned.mainPromptPresetId);
+        const preset = this.get<PromptPreset>('prompt-preset', pinned.mainPromptPresetId);
+        if (preset.role !== 'main')
+          throw new HttpError(400, '이 채팅에는 작문 프롬프트만 고정할 수 있어요.');
+      }
+      if (pinned?.mainModel?.id !== prior.pinned?.mainModel?.id)
+        assertModelSelection(this, pinned?.mainModel ?? null);
       const packageAttachments =
         b.packageAttachments === undefined
           ? prior.packageAttachments
@@ -606,8 +704,12 @@ export class ProductStore {
           : {}),
         chatId,
         revision: prior.revision + 1,
+        ...(pinned && Object.keys(pinned).length ? { pinned } : {}),
         attachments,
-        routes: prior.routes,
+        routes: {
+          ...promptWorkspace(this.store).modelRoutes,
+          ...(pinned?.mainModel ? { main: structuredClone(pinned.mainModel) } : {}),
+        },
         image,
         imageTranslation:
           b.imageTranslation === undefined
@@ -642,10 +744,15 @@ export class ProductStore {
   ): ProfileSnapshot {
     const { optionAdjustments: _notices, ...p } = this.profile(chatId);
     const contents = p.attachments.map((r) => this.get<Content>('content', r.id, r.revision));
+    // Auxiliary jobs keep their global prompt; an unavailable main pin must not prevent translation.
+    const workspace =
+      requiredRole === 'main' || requiredRole === 'inspect'
+        ? chatPromptWorkspace(this.store, p.pinned)
+        : chatPromptWorkspace(this.store, { mainModel: p.pinned?.mainModel });
     const models: ProfileSnapshot['models'] = {};
     const routes = { ...p.routes };
     for (const role of ['main', 'translation', 'status', 'image'] as const) {
-      const r = p.routes[role];
+      const r = workspaceModelRef(workspace, role);
       if (!r) continue;
       try {
         models[role] = this.modelSnapshot(r.id, role, requiredRole !== 'inspect');
@@ -654,10 +761,10 @@ export class ProductStore {
         routes[role] = null;
       }
     }
-    const workspace = promptWorkspace(this.store);
     const frozen = freezeCurrentPrompts(workspace);
-    const contextModel = workspace.contextModel
-      ? this.modelSnapshot(workspace.contextModel.id, undefined, false)
+    const contextRef = workspaceModelRef(workspace, 'context');
+    const contextModel = contextRef
+      ? this.modelSnapshot(contextRef.id, undefined, false)
       : undefined;
     const collaboration = frozen.promptPresets?.main?.program.collaboration;
     const collaborationModels: Record<string, ModelSnapshot> = {};
@@ -1359,7 +1466,10 @@ function currentProfile(product: ProductStore, saved: ChatProfile): ChatProfile 
   const result = {
     ...current,
     imageTranslation: current.imageTranslation ?? true,
-    routes: structuredClone(promptWorkspace(product.store).modelRoutes),
+    routes: {
+      ...structuredClone(promptWorkspace(product.store).modelRoutes),
+      ...(saved.pinned?.mainModel ? { main: structuredClone(saved.pinned.mainModel) } : {}),
+    },
     attachments: saved.attachments.map((r) => currentRef(product, 'content', r)),
   };
   const notices: string[] = [];
@@ -1568,6 +1678,7 @@ function validateArchiveProfile(
     'packageAttachments',
     'packageValues',
     'loreContext',
+    'pinned',
     ...(frozen
       ? [
           'contents',
@@ -1585,6 +1696,15 @@ function validateArchiveProfile(
         ]
       : []),
   ]);
+  if (p.pinned !== undefined) {
+    const pinned = validatePinnedProfile(p.pinned);
+    // Frozen profiles carry their own execution evidence and never resolve live selections.
+    if (!frozen) {
+      if (pinned.mainPromptPresetId)
+        product.get<PromptPreset>('prompt-preset', pinned.mainPromptPresetId);
+      if (pinned.mainModel) product.get<ModelPreset>('model', pinned.mainModel.id);
+    }
+  }
   if (p.loreContext !== undefined) validateLoreContextPolicy(p.loreContext);
   if (p.chatId !== chatId) throw new HttpError(400, 'Profile chat mismatch');
   number(p.revision, 'profile revision');

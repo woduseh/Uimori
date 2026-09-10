@@ -79,7 +79,7 @@ export const MAIN_READ_TOOLS: ProviderTool[] = [
               {
                 name: 'story.list',
                 description:
-                  'List the original exchanges of this exact ancestry in order: index, id, length, a short preview and whether each is compacted out of the current window. Browse here when the exact wording is unknown, then read ranges.',
+                  'List original exchanges in this frozen ancestry: 1-based sceneNumber (authored start included), revision, hash, size, preview and compacted status. Numbers stay fixed across compaction and pagination, and are local to the returned sceneScope. Use story.read with a known sceneNumber directly.',
                 inputSchema: {
                   type: 'object',
                   properties: { ...pagination(100) },
@@ -93,7 +93,7 @@ export const MAIN_READ_TOOLS: ProviderTool[] = [
           description:
             kind === 'notes'
               ? 'List explicit user notes and corrections valid in this exact story ancestry.'
-              : 'Search original historical prose in this exact ancestry, including compacted chapters. Whitespace-separated terms match case-insensitively and must all occur in the same exchange.',
+              : 'Search original prose in this exact ancestry, including compacted scenes. Results include sceneNumber and sceneScope for direct reading. Whitespace-separated terms match case-insensitively and must all occur in the same exchange.',
           inputSchema: {
             type: 'object',
             properties: { query: { type: 'string', maxLength: 512 }, ...pagination(100) },
@@ -104,14 +104,21 @@ export const MAIN_READ_TOOLS: ProviderTool[] = [
         {
           name: `${kind}.read`,
           description:
-            'Read a discovered ID with exact source provenance, character range and continuation. User notes are explicit instructions, not original story evidence.',
+            kind === 'story'
+              ? 'Read an original by id (revision) or 1-based sceneNumber in this frozen ancestry. If both are supplied they must select the same source. Returns sceneScope, sceneNumber, exact source hash, character range and continuation; the number is not a cross-chat ID.'
+              : 'Read a discovered note ID with exact source provenance, character range and continuation. User notes are explicit instructions, not original story evidence.',
           inputSchema: {
             type: 'object',
             properties: {
               id: { type: 'string', maxLength: 200 },
+              ...(kind === 'story'
+                ? { sceneNumber: { type: 'integer', minimum: 1, maximum: Number.MAX_SAFE_INTEGER } }
+                : {}),
               ...pagination(16000),
             },
-            required: ['id'],
+            ...(kind === 'story'
+              ? { anyOf: [{ required: ['id'] }, { required: ['sceneNumber'] }] }
+              : { required: ['id'] }),
             additionalProperties: false,
           },
         },

@@ -17,7 +17,17 @@
 
 요약은 파생 문맥이며 사실 판정이나 도구 실행 권한을 만들지 않아요. 사용자 요청, 인물의 믿음과 불확실성, 본문에서 실제로 일어난 일을 구분해요. 공통 자료에서 작성한 시작문은 `authored-start` 출처의 assistant 단독 이력으로 보내고 존재하지 않았던 사용자 요청을 만들지 않아요.
 
+요약은 장별 줄거리를 끝없이 누적하지 않고 다음 턴에 필요한 작업 기억으로 다시 써요. 현재 상황·인물 관계와 동기·조건부 약속·미해결 사건·명시적 사용자 정정을 우선 보존하며, 오래된 해결 사건은 현재에 남은 결과로 묶어요. 세부 원문은 삭제하지 않고 `story.*`로 다시 읽어요. 전체 요약의 목표는 소비 모델 입력 한도의 12.5%, 최대 2,048 토큰이고 고정 입력을 제외한 85%까지의 여유와 요약 모델 출력 한도의 절반으로 더 줄여요. 이 값은 모델 지침이며 실제 전송 결과를 다시 측정해요. 고정 입력만으로 이미 85% 이상이면 불가능한 요약을 유료 요청하지 않고 중단해요. 출력의 강제 자르기나 부분 응답 자동 재시도는 하지 않아요.
+
 대화를 제외해도 고정 입력이 85%를 넘으면 유지 중인 조회 로어를 오래 사용하지 않은 순서로 통째 정리해 75%를 목표로 줄여요. 고정 자료는 제거하지 않아요. 남은 조회 구간과 정리 이유를 Run에 저장하고 다음 턴은 그 결과만 상속해요. 원문 대화 요약에 조회 로어 본문을 섞지 않으며, 요약 때문에 원래 위치가 빠진 참고 자료는 요약 뒤·최근 대화 앞에 별도 메시지로 제공해요.
+
+## 요약에서 원문 장면 찾기
+
+`story.list/search/read`는 원문의 `sceneNumber`와 현재 `sceneScope`를 반환해요. 번호는 **예약 시 고정한 전체 원문 ancestry의 1부터 시작하는 위치**예요. 작성된 시작문이 있으면 1번이며 소설 본문에 적힌 회차 번호와는 별개예요. 요약으로 압축하거나 검색 결과를 거르거나 페이지를 넘겨도 번호를 다시 매기지 않아요. 범위에는 채팅 ID, 마지막 원문 revision/hash가 있고 각 결과는 해당 원문의 revision/hash를 유지해요. 포크의 같은 앞부분은 같은 번호를 갖지만 갈라진 뒤 같은 번호가 가리키는 원문은 다를 수 있으므로 다른 채팅의 식별자로 사용하지 않아요.
+
+요약의 중요한 약속·정정·미해결 사실에는 출처를 아는 경우 `[scene 12]`처럼 짧은 위치를 남기도록 지시해요. 자동 요약은 모든 분할 조각에 `sourceSceneNumber`를 보내고, 모델 주도 `context.read/new`도 compacted/retained 원문의 번호·revision/hash와 범위를 알려줘요. 번호를 모르는 오래된 사실에 출처를 지어내거나 원문마다 요약 항목을 만들도록 요구하지 않아요. 위치 표기는 기존 전체 요약 목표 안에 포함하며 의미상 정확성은 모델 출력에 달려 있어요.
+
+번호가 있으면 `story.read {sceneNumber: 12}`로 바로 읽을 수 있고 기존 `id` 조회도 유지해요. 둘을 함께 넘기면 같은 원문이어야 하며 불일치는 `INVALID_ARGUMENTS`, 범위 밖 번호는 `RESOURCE_UNAVAILABLE`로 거절해요. 원문 hash 검증·숨김 구간·UTF-16 offset·24,000바이트 결과 한도는 그대로 적용해요. 위치 표기는 조회를 돕는 정보이고 저장 원문·정정 권한·checkpoint 유효성을 바꾸지 않아요.
 
 ## 수동 정리와 요약 편집
 
@@ -28,6 +38,20 @@
 자동 정리를 기다리는 동안 사용자가 요약이나 메모를 고치면 늦은 결과는 비활성 후보로 남아요. 다음 요청의 활성 요약을 되돌리지 않으며, 그 자동 결과로 실제 실행된 과거 Run은 자신이 사용한 checkpoint를 계속 가리켜요. 원문이 추가되더라도 기존 prefix가 동일해야 활성화할 수 있고, 편집·분기 변경으로 prefix가 달라지면 활성화하지 않아요.
 
 `GET /api/chats/:id/context`, `PUT /context/summary`, `POST /context/compact`와 `/context/jobs/:jobId`의 조회·취소가 이 계약을 사용해요. 각 짧은 경로 앞에는 `/api/chats/:id`가 붙어요. 자동·수동 결과는 `context_checkpoints`, 활성 포인터는 `context_heads`, 수동 실행과 전송 영수증은 `context_jobs/context_job_attempts`에 보존해요.
+
+도우미의 `context.read`는 활성 checkpoint 한 개의 요약·ID/revision/hash·출처 원문과 의존성, 현재 유효한 메모·정정, CAS revision과 요약 사용 가능 여부만 반환해요. 요약 본문은 자르지 않으며 과거 checkpoint 본문·이력과 정리 작업 정보는 모델 입력에 반복해서 넣지 않아요. 화면의 문맥 상세 API는 이전 요약과 작업 이력을 계속 제공해요. 메모가 바뀌어 사용할 수 없는 활성 요약도 조회할 수 있지만 `usable: false`와 이유를 함께 반환하고, 조회로 변경 권한이 생기지 않아요.
+
+서버에서도 `ContextStore.current`가 활성 상태만 읽고 `detail`이 화면용 checkpoint·작업 이력을 추가해요. 두 경로의 revision·메모 revision·원문 head·사용 가능 여부는 같은 함수에서 계산해요. 활성 checkpoint의 hash와 현재 의존성은 조회마다 검사하며 전역 캐시를 두지 않아요. `tests/helper-context-read.test.ts`는 이력이 10개에서 100개로, 작업이 5개에서 50개로 늘어나도 모델 조회가 같은 활성 plan 1개만 읽는지 확인해요.
+
+2026-09-10 Windows/Node 24.14.0의 동일 합성 DB(활성 요약 1개, 각 32,768자인 과거 후보 100개와 취소 작업 50개, 원문 4개)에서 이전 detail 후 projection 경로와 활성 조회 경로를 번갈아 측정했어요. warmup 3회 뒤 9개 표본을 수집했고 표본마다 10회 조회했어요. 중앙 조회 시간은 **25.46ms → 2.19ms**, 디코드한 checkpoint plan·job snapshot JSON은 조회당 **5,499,254 → 754바이트**예요. 시간 측정에는 바이트 계측·결과 직렬화를 넣지 않았으며, 바이트는 전체 DB I/O나 원문·프로필 처리량이 아니에요. 결과 JSON 938바이트와 내용은 두 경로에서 같고, 화면의 이력·작업 계약도 유지돼요. warm-cache 로컬 진단이며 성능 수치 자체를 테스트 통과 기준으로 쓰지 않아요. 원시 표본·환경·소스 hash는 `output/benchmarks/context-read-2026-09-10T12-54-41.362Z/context-read.json`에 있어요.
+
+반복 측정은 PowerShell에서 다음과 같이 실행해요. 결과는 새 `output/benchmarks/context-read-*/context-read.json`에 보존해요.
+
+```powershell
+$env:NR_CONTEXT_READ_BENCHMARK = '1'
+try { npm test -- tests/helper-context-read.test.ts }
+finally { Remove-Item Env:NR_CONTEXT_READ_BENCHMARK }
+```
 
 ## 사용자 메모·정정
 
@@ -41,12 +65,13 @@
 
 | 도구 | 역할 |
 | --- | --- |
-| `context.read` | 저장된 작업 요약, 현재 창에서 빠진 원문(compacted)과 남은 원문(retained), 마지막 checkpoint 참조를 돌려줘요. |
+| `context.read` | 저장된 작업 요약, 현재 창에서 빠진 원문(compacted)과 남은 원문(retained)의 장면 번호·revision/hash, 범위와 마지막 checkpoint 참조를 돌려줘요. |
 | `context.write {summary}` | 작업 요약을 저장·교체해요. 결과가 돌아오기 전에 checkpoint(`origin: 'model'`)로 저장되며 **현재 창은 바꾸지 않고** 다음 창과 다음 턴에 반영돼요. |
 | `context.new {keepRecent?, summary?}` | 새 컨텍스트 창을 열어요. 최근 `keepRecent`개(기본 2, 최대 8) 이전의 원문 교환과 **이전 도구 결과 전부**가 전송 입력에서 빠지고, 저장된(또는 이번에 넘긴) 요약이 그 자리를 대신해요. 정리할 원문이 있으면 요약이 필수예요. 같은 라운드에 다른 도구와 함께 부르면 거절해요. |
-| `story.list {offset?, limit?}` | 정확한 표현을 모를 때 쓰는 목록 탐색이에요. 전개 순서대로 index·id·hash·글자 수·짧은 미리보기와 현재 창 포함 여부를 돌려줘요. 이 도구는 플래그와 무관하게 본문·상태 역할에 항상 제공해요. |
+| `story.list {offset?, limit?}` | 정확한 표현을 모를 때 쓰는 목록 탐색이에요. 전개 순서대로 sceneNumber·index·revision·hash·글자 수·짧은 미리보기와 현재 창 포함 여부, 번호의 범위를 돌려줘요. 이 도구는 플래그와 무관하게 본문·상태 역할에 항상 제공해요. |
+| `story.read {id?, sceneNumber?, offset?, limit?}` | ID나 장면 번호 중 하나로 원문을 직접 읽어요. 둘을 보내면 같은 원문을 가리켜야 해요. 장면 번호·범위·출처 hash와 읽은 구간·이어 읽기 위치를 반환해요. |
 
-`story.search`는 공백으로 나눈 모든 용어가 같은 원문에 등장하면 대소문자 구분 없이 찾도록 바꿨어요(NFKC 정규화). 결과 형식과 원문 구간 정책은 그대로예요.
+`story.search`는 공백으로 나눈 모든 용어가 같은 원문에 등장하면 대소문자 구분 없이 찾도록 바꿨어요(NFKC 정규화). 결과는 장면 번호와 범위를 포함하고 원문 구간 정책을 유지해요.
 
 동작 순서는 다음과 같아요.
 
@@ -86,6 +111,8 @@
 `tiktoken@1.0.22`의 로컬 WASM `o200k_base`를 사용해 최대 4,096 UTF-16 단위의 조각으로 계산하고 같은 요청의 동일 조각은 재사용해요. 합계에 10% 여유를 더해요. 문자열·키·토큰을 외부 계산 서비스로 보내지 않아요. 다른 모델 tokenizer·공급자 내부 포맷·조각 경계 차이가 있으므로 실제 청구 토큰이나 상한 보장은 아니에요. 같은 내용의 body라도 실행마다 새로 만드는 Run·메시지 ID와 해시 때문에 추정값이 조금씩 달라져요. 관측한 예로 직렬화 길이가 15,887 UTF-16 단위로 동일한 body에서 추정값이 6,943–7,011 토큰(약 1%) 범위로 움직였어요. 85%·75% 판정은 이 편차보다 큰 여유가 있을 때만 결정적이므로, 합성 검사도 픽스처를 경계 1% 안쪽에 두지 않아요.
 
 구현은 `core/context-budget.ts`, `core/context-plan.ts`, `core/context-projection.ts`, `core/context-tools.ts`, `core/notes.ts`, `core/story-context.ts`, `server/context-planning.ts`, `server/context-compaction.ts`, `server/context-tools.ts`, `server/context-store.ts`, `server/story-notes.ts`에 있어요. `tests/context-integration.test.ts`와 관련 context/story 검사는 실제 앱 경로와 fresh SQLite, 합성 provider body로 경합·취소·입력 귀속·보관을 확인해요. 모델 주도 경로는 `tests/context-tools.test.ts`(도구 루프·세그먼트 경계·네 native 인코더의 새 요청 형식)와 `tests/context-model-driven-integration.test.ts`(실제 App·SQLite에서 저장·전환·회수·다음 Run 재사용·사용자 편집 우선·archive/fork)로 확인해요. 실제 요약의 의미 품질·공급자 인증·계정별 문맥 상한·물리적 휴대폰 검증은 별도예요.
+
+2026-09-10의 [61장 실제 문맥 평가](../project-plan/LIVE-MEMORY-RESULTS-2026-09-10.md)는 약속 조건 오류·일반 조회 한도·응답 EOF로 중단된 실행이며 전체 PASS가 아니에요. 위 2026-09-09의 미검증 기록과 구분하고, 이번 장면 번호·요약 출처 표기는 그 실제 실행 이후 추가해 로컬 합성 회귀만 검증했어요.
 
 ## 전체 원문 번역
 

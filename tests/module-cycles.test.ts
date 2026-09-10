@@ -25,7 +25,9 @@ function valueImports(file: string): string[] {
     if (match[1] !== undefined && parts.length && parts.every((part) => part.startsWith('type ')))
       continue;
     edges.push(
-      relative(root, resolve(dirname(join(root, file)), specifier)).replace(/\.js$/, '.ts')
+      relative(root, resolve(dirname(join(root, file)), specifier))
+        .replaceAll('\\', '/')
+        .replace(/\.js$/, '.ts')
     );
   }
   return edges;

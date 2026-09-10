@@ -1845,6 +1845,8 @@ test('UI common dialogs center on desktop and fill mobile without changing dismi
       else await openChatSettings(page);
       const dialog = page.getByRole('dialog', { name: title, exact: true });
       await expect(dialog).toBeVisible();
+      // The task list adds its inspector after loading; wait until the tab order is ready.
+      if (title === '작업 현황') await expect(dialog.getByTestId('usage-inspector')).toBeVisible();
       const box = (await dialog.boundingBox())!;
       expect(box.x).toBeGreaterThanOrEqual(0);
       expect(box.y).toBeGreaterThanOrEqual(0);

@@ -3,16 +3,14 @@ import type { FastifyInstance } from 'fastify';
 import { defaultProfile } from '../core/product.js';
 import { compilePromptProgram, validatePromptProgram } from '../core/prompt-program.js';
 import { planNativeMessages } from '../core/provider-messages.js';
-import { captureLogicalHistory, compileSnapshotPrompt, promptContext } from './prompt-snapshot.js';
-import { freezeSourceSegments } from '../core/package-source-segments.js';
+import { compileSnapshotPrompt, promptContext } from './prompt-snapshot.js';
 import type { Store } from './store.js';
 import type { RunSnapshot } from '../core/types.js';
 import { buildMainProviderRequest, encodeMainPreview } from './main-request.js';
-import { freezePackageStates } from './package-behavior-host.js';
+import { freezeReservationSnapshot } from './reservation-snapshot.js';
 import { createHash } from 'node:crypto';
 import { compileTranslationPrompt, translationInput } from '../core/auxiliary.js';
 import { sourceTimeContext } from './product-auxiliary.js';
-import { freezeLoreContext } from './lore-context.js';
 import { validateLoreContextPolicy } from '../core/lore-context.js';
 import { createDefaultPromptProgram } from '../core/prompt-defaults.js';
 import { DEFAULT_MAIN_PROMPT } from '../core/prompts.js';
@@ -77,7 +75,7 @@ export function promptRoutes(app: FastifyInstance, store: Store) {
           },
         };
       }
-      let snapshot: RunSnapshot = {
+      const base: RunSnapshot = {
         chatId: chat.id,
         parentRevision: branch.headRevision,
         settingsRevision: chat.settingsRevision,
@@ -89,19 +87,13 @@ export function promptRoutes(app: FastifyInstance, store: Store) {
         branchId: branch.id,
         ...(b.loreContextReset ? { loreContextReset: true } : {}),
       };
-      if (role === 'main') snapshot.sourceSegments = freezeSourceSegments(profile);
-      snapshot = store.story.prepareRunInTransaction(snapshot);
-      snapshot.logicalHistory = captureLogicalHistory(store, snapshot);
-      const previewTime = new Date().toISOString();
-      snapshot = freezePackageStates(
-        store,
-        {
-          ...snapshot,
-          executionClock: { iso: previewTime, unix: Math.floor(Date.parse(previewTime) / 1000) },
+      const snapshot = freezeReservationSnapshot(store, base, {
+        purpose: role === 'main' ? 'preview-main' : 'preview-translation',
+        executionClock: () => {
+          const iso = new Date().toISOString();
+          return { iso, unix: Math.floor(Date.parse(iso) / 1000) };
         },
-        false
-      );
-      if (role === 'main') snapshot = freezeLoreContext(store, snapshot);
+      });
       const values = b.values !== undefined ? record(b.values) : undefined;
       let previewSource:
         | {

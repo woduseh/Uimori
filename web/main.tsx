@@ -7,6 +7,7 @@ import { DismissibleError } from './DismissibleError.js';
 import { ChatComposer, ComposerInput } from './ChatComposer.js';
 import { ComposerMore, LoreResetChip } from './ComposerMore.js';
 import { IconButton } from './IconButton.js';
+import { PinIcon } from './ui-icons.js';
 import { ActionMenu } from './ActionMenu.js';
 import { useCompactLayout } from './useCompactLayout.js';
 import { subscribeAppHistory } from './app-history.js';
@@ -295,7 +296,9 @@ function App() {
   const [pendingNavigation, setPendingNavigation] = useState<null | (() => void)>(null);
   const [discardingNavigation, setDiscardingNavigation] = useState(false);
   const [navigationDiscardError, setNavigationDiscardError] = useState('');
-  const currentPrompt = s.promptWorkspace?.main;
+  const currentPrompt = s.currentPrompt;
+  const pinned = s.detail?.profile?.pinned;
+  const promptAvailable = !pinned?.mainPromptPresetId || !!currentPrompt;
   const hasCreativeOptions = !!currentPrompt?.program.controls.length;
   const creativePresets =
     s.library?.promptCombinations?.filter(
@@ -322,6 +325,8 @@ function App() {
   }
   const currentProgram = currentPrompt?.program;
   const currentCombination = creativePresets.find((c) => {
+    // Chat-fixed values are edited through the chat options API, separate from preset defaults.
+    if (pinned?.mainPromptPresetId) return false;
     if (!currentPrompt || !currentProgram || c.role !== 'main') return false;
     const currentValues = reconcilePromptValues(currentProgram, currentPrompt.values).values;
     const savedValues = reconcilePromptValues(currentProgram, c.values).values;
@@ -329,16 +334,15 @@ function App() {
       (control) => currentValues[control.id] === savedValues[control.id]
     );
   });
-  const mainModel = s.library?.models.find(
-    (item) => item.id === s.promptWorkspace?.modelRoutes.main?.id
-  );
+  const mainModelRef = pinned?.mainModel ?? s.promptWorkspace?.modelRoutes.main;
+  const mainModel = s.library?.models.find((item) => item.id === mainModelRef?.id);
   const mainAvailable =
     !!mainModel &&
     !!s.library &&
     isModelSelectable(mainModel, s.library.models, s.library.connections);
   const mainDescription = mainModel
     ? `${modelLabel(mainModel, s.library)}${mainAvailable ? '' : ' · 사용 불가'}`
-    : s.promptWorkspace?.modelRoutes.main
+    : mainModelRef
       ? '선택한 본문 모델 · 확인 필요'
       : '본문 모델을 선택해 주세요';
   const helperModel = s.library?.models.find(
@@ -356,22 +360,38 @@ function App() {
   // The model is a header chip at every width; narrow widths shorten the empty states so the
   // chip leaves room for the title. The accessible name keeps the full description.
   const mainShortDescription = mainModel
-    ? mainDescription
-    : s.promptWorkspace?.modelRoutes.main
+    ? `${mainModel.title}${mainAvailable ? '' : ' · 사용 불가'}`
+    : mainModelRef
       ? '모델 확인 필요'
       : '모델 선택';
   const mainModelChip = (
     <button
       type="button"
       className="model-chip secondary"
-      aria-label={`현재 본문 모델 · ${mainDescription}`}
-      title="모든 채팅의 이후 요청에 적용되는 전역 모델 설정"
+      aria-label={`현재 본문 모델 · ${mainDescription}${pinned?.mainModel ? ' · 이 채팅 고정' : ''}${pinned?.mainPromptPresetId ? ` · 작문 프롬프트 ${promptAvailable ? '이 채팅 고정' : '사용 불가'}` : ''}`}
+      title={
+        pinned?.mainModel || pinned?.mainPromptPresetId
+          ? `${mainDescription} · 이 채팅 고정 · ${pinned.mainModel ? '본문 모델' : ''}${pinned.mainModel && pinned.mainPromptPresetId ? ' · ' : ''}${pinned.mainPromptPresetId ? `작문 프롬프트: ${currentPrompt?.title ?? '사용 불가'}` : ''}`
+          : '모든 채팅의 이후 요청에 적용되는 전역 모델 설정'
+      }
       onClick={() => {
-        setSettingsTab('models');
-        setPanel('settings');
+        if (pinned?.mainModel || pinned?.mainPromptPresetId) {
+          setSettingsSection(pinned.mainModel ? 'models' : 'prompts');
+          setPanel('story');
+        } else {
+          setSettingsTab('models');
+          setPanel('settings');
+        }
       }}
     >
-      <span>{compact ? mainShortDescription : mainDescription}</span>
+      {(pinned?.mainModel || pinned?.mainPromptPresetId) && (
+        <PinIcon size={12} aria-hidden="true" />
+      )}
+      <span>
+        {compact ? mainShortDescription : mainDescription}
+        {(pinned?.mainModel || pinned?.mainPromptPresetId) && ' · 고정'}
+        {!promptAvailable && ' · 프롬프트 사용 불가'}
+      </span>
     </button>
   );
   const composerStatus = [
@@ -1165,21 +1185,32 @@ function App() {
                   onDetails={() => inspect('')}
                   seenRunIds={seenRuns}
                 />
-                {!sourceEditing && !testMode && !mainAvailable && !s.pendingRequest && (
-                  <p className="muted" role="status">
-                    사용 가능한 전역 본문 모델을 선택해 주세요.{' '}
-                    <button
-                      type="button"
-                      className="secondary"
-                      onClick={() => {
-                        setSettingsTab('models');
-                        setPanel('settings');
-                      }}
-                    >
-                      전역 모델 설정
-                    </button>
-                  </p>
-                )}
+                {!sourceEditing &&
+                  !s.pendingRequest &&
+                  ((!testMode && !mainAvailable) || !promptAvailable) && (
+                    <p className="muted" role="status">
+                      {!promptAvailable
+                        ? '고정한 작문 프리셋을 사용할 수 없어요. 다시 선택해 주세요.'
+                        : pinned?.mainModel
+                          ? '고정한 본문 모델을 사용할 수 없어요. 다시 선택해 주세요.'
+                          : '사용 가능한 전역 본문 모델을 선택해 주세요.'}{' '}
+                      <button
+                        type="button"
+                        className="secondary"
+                        onClick={() => {
+                          if (pinned?.mainModel || !promptAvailable) {
+                            setSettingsSection(!promptAvailable ? 'prompts' : 'models');
+                            setPanel('story');
+                          } else {
+                            setSettingsTab('models');
+                            setPanel('settings');
+                          }
+                        }}
+                      >
+                        {pinned?.mainModel || !promptAvailable ? '채팅 설정' : '전역 모델 설정'}
+                      </button>
+                    </p>
+                  )}
                 <ChatComposer
                   hidden={sourceEditing}
                   onSubmit={(event) => {
@@ -1329,7 +1360,7 @@ function App() {
                         (!s.draft.trim() && !s.pendingRequest) ||
                         !s.detail ||
                         s.pendingProfile ||
-                        (!testMode && !mainAvailable && !s.pendingRequest)
+                        (((!testMode && !mainAvailable) || !promptAvailable) && !s.pendingRequest)
                       }
                     >
                       <ArrowUp size={21} />
@@ -1362,6 +1393,7 @@ function App() {
         branchId={s.branch?.id}
         open={optionsOpen && s.destination === 'story' && !!s.selected}
         workspace={s.promptWorkspace}
+        promptRevision={`${s.detail?.profile?.revision ?? 0}:${s.pinnedPromptRevision ?? 0}`}
         library={s.library}
         disabled={
           optionsBusy ||

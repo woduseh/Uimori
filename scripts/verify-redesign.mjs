@@ -23,6 +23,7 @@ await runBrowserVerification({
     'RINFO01',
     'SICON01',
     'GMUI01',
+    'GMUI02',
     'PWS01',
     'PWS02',
     'PWS03',

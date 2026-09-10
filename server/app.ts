@@ -8,6 +8,7 @@ import type { ServerResponse } from 'node:http';
 import { Store } from './store.js';
 import { ChatTitleService } from './chat-title.js';
 import { HelperRuntime, helperWritingSnapshot } from './helper-runtime.js';
+import { readHelperChatContext } from './helper-context.js';
 import { helperRoutes } from './helper-routes.js';
 import { contextRoutes } from './context-routes.js';
 import { EditDraftService, editDraftRoutes } from './edit-drafts.js';
@@ -291,15 +292,8 @@ export async function createApp(options: AppOptions): Promise<App> {
       context: async (task, name, args, hooks) => {
         const scope = task.snapshot.scope;
         if (scope.kind !== 'chat') throw new HttpError(403, 'CHAT_SCOPE_REQUIRED');
-        const current = store.context.detail(scope.chatId, scope.branchId);
         if (name === 'context.read')
-          return {
-            ...current,
-            notes: store.story.notes.entries({
-              chatId: scope.chatId,
-              history: store.history(current.headRevision),
-            }),
-          };
+          return readHelperChatContext(store, scope.chatId, scope.branchId);
         const key = `helper:${task.id}:${text(args.operationId, 'operation ID', 64)}`;
         const base = {
           branchId: scope.branchId,

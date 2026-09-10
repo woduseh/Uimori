@@ -7,6 +7,7 @@ import {
 import { updateTestProfile } from './fixtures/model-workspace.js';
 import { createFixtureChat, injectWithFixtureBot } from './fixtures/chat.js';
 import { randomUUID } from 'node:crypto';
+import { sourceHash as hash } from '../core/source-history.js';
 import { mkdtemp, realpath, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { basename, isAbsolute, join, relative, resolve } from 'node:path';
@@ -557,7 +558,7 @@ describe('model-written summary and window switch through the real App and file 
       () => toolTurn([{ id: 'c3', name: 'context.new', args: { keepRecent: 2 } }], 'OPAQUE_3'),
       () =>
         toolTurn(
-          [{ id: 'c4', name: 'story.read', args: { id: compactedId, limit: 30 } }],
+          [{ id: 'c4', name: 'story.read', args: { sceneNumber: 1, limit: 30 } }],
           'OPAQUE_4'
         ),
       () => complete(finalText),
@@ -587,12 +588,25 @@ describe('model-written summary and window switch through the real App and file 
     expect(events[2].result).toMatchObject({
       switched: true,
       compactedExchanges: 3,
-      retained: sources.slice(-2).map((source) => source.id),
+      retained: sources.slice(-2).map((source, index) => ({
+        sceneNumber: sources.length - 1 + index,
+        revision: source.id,
+        hash: hash(source.text),
+      })),
+      sceneScope: {
+        chatId,
+        headRevision: sources.at(-1)!.id,
+        headHash: hash(sources.at(-1)!.text),
+      },
       droppedToolResults: 2,
       activated: true,
     });
     const reread = events[3].result as { text: string; source: { revision: string } };
     expect(reread.source.revision).toBe(compactedId);
+    expect(reread).toMatchObject({
+      sceneNumber: 1,
+      sceneScope: { chatId, headRevision: sources.at(-1)!.id },
+    });
     expect(sources[0].text.startsWith(reread.text)).toBe(true);
     expect(reread.text).toContain('CHAPTER_0_CANARY');
     const fresh = bodies[3];

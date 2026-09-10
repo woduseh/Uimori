@@ -6,8 +6,8 @@ import { fields, HttpError, number, record, text } from './request-validation.js
 export function helperRoutes(app: FastifyInstance, runtime: HelperRuntime) {
   const store = runtime.workspace;
   const publicTask = (task: ReturnType<typeof store.task>) => {
-    const { snapshot: _snapshot, ...view } = task;
-    return view;
+    const { snapshot, ...view } = task;
+    return { ...view, modelTitle: snapshot.model.title };
   };
   const publicArtifact = (artifact: ReturnType<typeof store.artifact>) => {
     const { snapshot: _snapshot, ...view } = artifact;

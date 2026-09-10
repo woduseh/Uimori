@@ -453,6 +453,7 @@ export function HelperPanel(props: Props) {
         storageKey={`helper-task-activity:${task.conversationId}:${task.id}`}
         dataProps={{ 'data-testid': 'helper-task-activity', 'data-task-id': task.id }}
       >
+        <p>모델 · {task.modelTitle}</p>
         <p>
           모델 호출 {task.usage.modelCalls}회 · 입력 {task.usage.inputTokens ?? '미확인'} / 출력{' '}
           {task.usage.outputTokens ?? '미확인'} 토큰
@@ -836,6 +837,7 @@ export function HelperPanel(props: Props) {
                   </small>
                 </div>
               </div>
+              <p>모델 · {task.modelTitle}</p>
               <p className="task-request">{task.request}</p>
               {task.error && <p className="error">{task.error}</p>}
             </li>
