@@ -99,7 +99,7 @@ test('RACOM01 source footer stays compact and its menu supports touch, keyboard 
     await expect(actions.getByRole('button')).toHaveText([
       '도우미에게 물어보기',
       '현재 설정으로 다시 요청',
-      '여기서 새 이야기로 이어가기',
+      '이 장면까지 새 채팅으로 복사',
       '번역 수정',
       '이미지 자동 배치',
       '삽화 생성',
@@ -110,10 +110,21 @@ test('RACOM01 source footer stays compact and its menu supports touch, keyboard 
     ]);
     const openTriggerBox = (await trigger.boundingBox())!;
     const menuBox = (await actions.boundingBox())!;
+    const height = page.viewportSize()!.height;
     expect(menuBox.x).toBeGreaterThanOrEqual(0);
     expect(menuBox.x + menuBox.width).toBeLessThanOrEqual(width);
     expect(menuBox.y).toBeGreaterThanOrEqual(0);
-    expect(menuBox.y + menuBox.height).toBeLessThanOrEqual(openTriggerBox.y + 1);
+    expect(menuBox.y + menuBox.height).toBeLessThanOrEqual(height);
+    // Up to 600px the menu is a bottom sheet (every row inside the viewport, resting on the
+    // bottom edge); wider screens keep the popover that opens above its trigger.
+    if (width <= 600) {
+      expect(menuBox.y + menuBox.height).toBeGreaterThanOrEqual(height - 24);
+      for (const item of await actions.getByRole('button').all()) {
+        const box = (await item.boundingBox())!;
+        expect(box.y).toBeGreaterThanOrEqual(0);
+        expect(box.y + box.height).toBeLessThanOrEqual(height);
+      }
+    } else expect(menuBox.y + menuBox.height).toBeLessThanOrEqual(openTriggerBox.y + 1);
     if (width === 390 || width === 1440)
       if (visualReview)
         await page.screenshot({ path: info.outputPath(`response-menu-${width}.png`) });
@@ -125,6 +136,12 @@ test('RACOM01 source footer stays compact and its menu supports touch, keyboard 
 
     await openSourceActions(scene);
     const composer = page.getByLabel('다음 장면 요청', { exact: true });
+    if (width <= 600) {
+      // The sheet covers the composer; a tap on the scrim above it dismisses the menu first.
+      const sheet = (await actions.boundingBox())!;
+      await page.mouse.click(width / 2, Math.max(8, sheet.y - 30));
+      await expect(menu).toHaveJSProperty('open', false);
+    }
     await composer.click();
     await expect(menu).toHaveJSProperty('open', false);
     await expect(composer).toBeFocused();

@@ -1,6 +1,7 @@
 import { useLayoutEffect, useRef, useState } from 'react';
 import { ArrowUp, Pencil, RefreshCw, X } from 'lucide-react';
 import { IconButton } from './IconButton.js';
+import { SHEET_MEDIA } from './ActionMenu.js';
 import './request-message.css';
 
 export function RequestMessage({
@@ -12,9 +13,12 @@ export function RequestMessage({
   onEditingChange,
   editHint = '수정한 요청으로 새 분기에서 생성해요.',
   maxLength = 4000,
+  compactActions = 'always',
 }: {
   editHint?: string;
   maxLength?: number;
+  /** Narrow widths: keep the edit action standing ('always') or show it when the bubble is tapped ('tap'). */
+  compactActions?: 'always' | 'tap';
   runId: string;
   request: string;
   disabled?: boolean;
@@ -24,6 +28,7 @@ export function RequestMessage({
 }) {
   const key = `request-edit:${runId}`;
   const [editing, setEditing] = useState(false);
+  const [revealed, setRevealed] = useState(false);
   const [draft, setDraft] = useState(request);
   const [busy, setBusy] = useState(false);
   const lock = useRef(false);
@@ -55,7 +60,9 @@ export function RequestMessage({
     requestAnimationFrame(() => trigger.current?.focus({ preventScroll: true }));
   };
   return (
-    <div className="request-message-wrap">
+    <div
+      className={`request-message-wrap${compactActions === 'tap' ? ' request-actions-tap' : ''}${revealed ? ' request-actions-revealed' : ''}`}
+    >
       {editing ? (
         <form
           className="request-message request-message-editor"
@@ -119,7 +126,15 @@ export function RequestMessage({
         </form>
       ) : (
         <>
-          <div className="request-message" data-testid="source-request">
+          <div
+            className="request-message"
+            data-testid="source-request"
+            onClick={() => {
+              // Narrow widths keep earlier requests quiet; tapping the bubble shows its actions.
+              if (compactActions === 'tap' && matchMedia(SHEET_MEDIA).matches)
+                setRevealed((value) => !value);
+            }}
+          >
             {request.length > 280 ? (
               <details>
                 <summary>

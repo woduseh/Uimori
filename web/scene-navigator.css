@@ -164,8 +164,9 @@
    returns to the latest scene while an earlier one is being read. */
 .scene-latest-floating {
   position: absolute;
-  right: 16px;
-  bottom: 14px;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: 12px;
   z-index: 4;
   width: 44px;
   height: 44px;

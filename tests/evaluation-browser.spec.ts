@@ -1,4 +1,5 @@
 import { selectCurrentSettingsSection } from './ui-navigation.js';
+import { openChatSettings } from './ui-navigation.js';
 import { preservePromptWorkspace } from './fixtures/prompt-workspace.js';
 import { setCurrentModels } from './ui-navigation.js';
 import { visualReview } from './fixtures/visual-review.js';
@@ -21,7 +22,7 @@ async function library(request: APIRequestContext): Promise<Library> {
 }
 async function settings(page: Page) {
   await navigation(page, '설정');
-  await selectSettingsSection(page, '프로바이더와 모델');
+  await selectSettingsSection(page, '프로바이더·모델 등록');
   await startProviderConnection(page);
   await page
     .getByRole('region', { name: '제공자 선택', exact: true })
@@ -151,7 +152,7 @@ test('EVALUI01 desktop preset evaluation opt-in persists selected story roles af
   const reconnected = await context.newPage();
   await reconnected.setViewportSize({ width: 1440, height: 1000 });
   await reconnected.goto(storyUrl);
-  await reconnected.getByRole('button', { name: '채팅 설정', exact: true }).click();
+  await openChatSettings(reconnected);
   await selectCurrentSettingsSection(reconnected, '모델');
   await expect(reconnected.getByLabel('원문 모델', { exact: true })).toHaveValue(ref);
   await expect(reconnected.getByLabel('번역 모델', { exact: true })).toHaveValue(ref);
@@ -257,7 +258,7 @@ test('EVALUI02 mobile 390px evaluation controls save only for opted-in presets a
   });
   await page.reload();
   await navigation(page, '설정');
-  await selectSettingsSection(page, '프로바이더와 모델');
+  await selectSettingsSection(page, '프로바이더·모델 등록');
   await expect(page.getByText(title + ' 모델', { exact: true })).toBeVisible();
   expect((await library(request)).models.find((item) => item.id === model.id)).toEqual(model);
   expect(observed.errors).toEqual([]);

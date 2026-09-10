@@ -54,10 +54,11 @@ import { PackageBehaviorPanel } from './PackageBehaviorPanel.js';
 import { SessionGate } from './SessionGate.js';
 import { Dialog } from './Dialog.js';
 import { DeleteButton } from './DeleteButton.js';
-import { BotNavigation, type ChatFolder } from './BotTreeNavigation.js';
+import { BotNavigation, NavigationQuickActions, type ChatFolder } from './BotTreeNavigation.js';
 import { completePendingStoryProfile } from './pendingStory.js';
 import { useStory } from './useStory.js';
 import { useTestMode } from './useTestMode.js';
+import { usePanelDeepLink } from './usePanelDeepLink.js';
 import { ActivityStatus } from './ActivityStatus.js';
 import { modelLabel } from './storyLabels.js';
 import './style.css';
@@ -217,6 +218,38 @@ function App() {
   const [initialModules, setInitialModules] = useState<Content[]>([]);
   const [moduleToUse, setModuleToUse] = useState<Content | null>(null);
   const [libraryTab, setLibraryTab] = useState<'bot' | 'persona' | 'module' | 'prompts'>('bot');
+  usePanelDeepLink(!s.selected || s.detail?.chat.id === s.selected, (link) => {
+    if (link.destination === 'library') {
+      if (['bot', 'persona', 'module', 'prompts'].includes(link.tab))
+        setLibraryTab(link.tab as typeof libraryTab);
+      s.showLibrary();
+    }
+    const chatSections: ChatSettingsSection[] = [
+      'characters',
+      'prompts',
+      'models',
+      'story',
+      'images',
+      'runtime',
+    ];
+    const appSections = [
+      'general',
+      'models',
+      'prompts',
+      'connections',
+      'agents',
+      'illustrations',
+      'data',
+      'security',
+    ];
+    const panels: Panel[] = ['navigation', 'new', 'branches', 'tasks', 'reading', 'outline'];
+    if (link.panel === 'story')
+      openChatSettings(chatSections.find((section) => section === link.section) ?? undefined);
+    else if (link.panel === 'settings') {
+      if (appSections.includes(link.section)) setSettingsTab(link.section);
+      setPanel('settings');
+    } else if ((panels as string[]).includes(link.panel)) setPanel(link.panel as Panel);
+  });
   const [libraryListRequest, setLibraryListRequest] = useState(0);
   const errorScope = `${s.destination}:${libraryTab}:${s.viewKey}`;
   const previousErrorScope = useRef(errorScope);
@@ -320,7 +353,13 @@ function App() {
     : s.promptWorkspace?.helperModel
       ? '선택한 도우미 모델 · 확인 필요'
       : '도우미 모델을 선택해 주세요';
-  // Wide widths keep the model in the header; compact widths show it beside the send action.
+  // The model is a header chip at every width; narrow widths shorten the empty states so the
+  // chip leaves room for the title. The accessible name keeps the full description.
+  const mainShortDescription = mainModel
+    ? mainDescription
+    : s.promptWorkspace?.modelRoutes.main
+      ? '모델 확인 필요'
+      : '모델 선택';
   const mainModelChip = (
     <button
       type="button"
@@ -332,7 +371,7 @@ function App() {
         setPanel('settings');
       }}
     >
-      <span>{mainDescription}</span>
+      <span>{compact ? mainShortDescription : mainDescription}</span>
     </button>
   );
   const composerStatus = [
@@ -431,8 +470,10 @@ function App() {
     setInspectedRun(id);
     setPanel('tasks');
   }
-  const navigation = (
+  // The drawer shows the quick actions in its header row instead of the brand row.
+  const navigation = (quickActions: boolean) => (
     <BotNavigation
+      quickActions={quickActions}
       library={s.library}
       chats={s.chats}
       selected={s.selected}
@@ -467,16 +508,18 @@ function App() {
         icon={Menu}
         onClick={() => setPanel('navigation')}
       />
-      <IconButton
-        label="도우미 열기"
-        icon={MessageCircle}
-        aria-expanded={helperOpen}
-        aria-controls="helper-panel"
-        onClick={() => {
-          setOptionsOpen(false);
-          setHelperOpen((value) => !value);
-        }}
-      />
+      {(!compact || s.destination !== 'story') && (
+        <IconButton
+          label="도우미 열기"
+          icon={MessageCircle}
+          aria-expanded={helperOpen}
+          aria-controls="helper-panel"
+          onClick={() => {
+            setOptionsOpen(false);
+            setHelperOpen((value) => !value);
+          }}
+        />
+      )}
     </>
   );
   function renderReadingSettings(onStartFocus: () => void) {
@@ -532,7 +575,7 @@ function App() {
       className={`app-shell ${focus ? 'focus-reading' : ''} ${sidebarCollapsed ? 'sidebar-collapsed' : ''} ${optionsOpen && s.destination === 'story' && s.selected ? 'options-open' : ''} ${helperOpen ? 'helper-open' : ''}`}
     >
       <aside id="workspace-sidebar" className="sidebar" aria-label="탐색">
-        {!compact && panel !== 'navigation' && navigation}
+        {!compact && panel !== 'navigation' && navigation(true)}
       </aside>
       <main className="story-workspace">
         {s.destination === 'story' && (
@@ -565,7 +608,7 @@ function App() {
             <div className="header-actions">
               {s.selected && s.destination === 'story' && (
                 <>
-                  {!compact && mainModelChip}
+                  {mainModelChip}
                   {focus && (
                     <button
                       className="icon-button"
@@ -576,15 +619,47 @@ function App() {
                       <Minimize size={19} />
                     </button>
                   )}
-                  <button
-                    className="icon-button"
-                    aria-label="채팅 설정"
-                    title="채팅 설정"
-                    onClick={() => openChatSettings()}
-                  >
-                    <SlidersHorizontal size={20} />
-                  </button>
+                  {!compact && (
+                    <button
+                      className="icon-button"
+                      aria-label="채팅 설정"
+                      title="채팅 설정"
+                      onClick={() => openChatSettings()}
+                    >
+                      <SlidersHorizontal size={20} />
+                    </button>
+                  )}
                   <ActionMenu label="채팅 메뉴" className="chat-menu">
+                    {compact && (
+                      <>
+                        <button
+                          type="button"
+                          className="secondary"
+                          aria-label="채팅 설정"
+                          onClick={(event) => {
+                            fromChatMenu(event);
+                            openChatSettings();
+                          }}
+                        >
+                          <SlidersHorizontal size={18} aria-hidden="true" />
+                          채팅 설정
+                        </button>
+                        <button
+                          type="button"
+                          className="secondary"
+                          aria-label="도우미 열기"
+                          aria-expanded={helperOpen}
+                          aria-controls="helper-panel"
+                          onClick={() => {
+                            setOptionsOpen(false);
+                            setHelperOpen(true);
+                          }}
+                        >
+                          <MessageCircle size={18} aria-hidden="true" />
+                          도우미
+                        </button>
+                      </>
+                    )}
                     <button
                       type="button"
                       className="secondary"
@@ -805,6 +880,7 @@ function App() {
                           const { source, index } = entry;
                           return (
                             <SourceReader
+                              latest={source.id === s.sources.at(-1)?.id}
                               onModelSettings={() => {
                                 setSettingsTab('models');
                                 setPanel('settings');
@@ -1078,7 +1154,6 @@ function App() {
                     />
                   </p>
                 )}
-                {compact && <div className="composer-model">{mainModelChip}</div>}
                 <ActivityStatus
                   key={s.viewKey}
                   chatId={s.selected}
@@ -1363,8 +1438,18 @@ function App() {
         title="탐색"
         onClose={() => setPanel('')}
         className="navigation-dialog"
+        headerLeading={
+          panel === 'navigation' ? (
+            <NavigationQuickActions
+              chats={s.chats}
+              library={s.library}
+              onSelect={select}
+              onLibrary={showLibrary}
+            />
+          ) : undefined
+        }
       >
-        {panel === 'navigation' && navigation}
+        {panel === 'navigation' && navigation(false)}
       </Dialog>
       <Dialog open={panel === 'new'} title="새 채팅" onClose={() => setPanel('')}>
         {s.library && (

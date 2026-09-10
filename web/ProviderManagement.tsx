@@ -520,7 +520,7 @@ export function ConnectionEditor({
     <section
       className="connection-editor"
       data-testid="connection-editor"
-      aria-label="프로바이더와 모델"
+      aria-label="프로바이더·모델 등록"
     >
       {discard && (
         <section
@@ -558,7 +558,7 @@ export function ConnectionEditor({
         </section>
       )}
       <div className="provider-workspace-heading" ref={heading} tabIndex={-1}>
-        <div className="provider-workspace-navigation" aria-label="프로바이더와 모델 화면">
+        <div className="provider-workspace-navigation" aria-label="프로바이더·모델 등록 화면">
           <button
             type="button"
             className={screen === 'models' ? 'selected' : 'secondary'}
@@ -1486,7 +1486,7 @@ export function ConnectionEditor({
           <strong>{registeredModel.title} · 다음으로 역할에 배정하세요</strong>
           <p>비활성 프로바이더로 등록했다면 프로바이더를 활성화한 뒤 역할에 배정해 주세요.</p>
           <ol>
-            <li>설정 → 현재 모델에서 사용할 역할을 선택하고 저장해요.</li>
+            <li>설정 → 역할별 모델에서 사용할 역할을 선택하고 저장해요.</li>
             <li>
               모든 채팅의 이후 요청에 적용해요. 상태 계산의 독립 모델은 채팅 설정의 해당 작업
               설정에서 선택해요.

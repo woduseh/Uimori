@@ -1,4 +1,5 @@
 import { navigationAction } from './ui-navigation.js';
+import { openChatSettings } from './ui-navigation.js';
 import { waitForContentDraftSave } from './fixtures/edit-draft-save.js';
 import { visualReview } from './fixtures/visual-review.js';
 import {
@@ -224,7 +225,7 @@ test('PFUI02 required module appears once and keeps chat options after another r
   const chat = await made.json();
   await page.setViewportSize({ width: 1440, height: 1000 });
   await page.goto(`/?chat=${chat.id}`);
-  await page.getByRole('button', { name: '채팅 설정', exact: true }).click();
+  await openChatSettings(page);
   await selectChatSettingsSection(page, '봇·페르소나·모듈');
   const editor = page.getByTestId('profile-editor'),
     panel = editor.getByRole('region', { name: '장착 패키지', exact: true });

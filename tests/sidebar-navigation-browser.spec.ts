@@ -35,7 +35,10 @@ for (const width of [390, 1440]) {
     expect(menuBox).not.toBeNull();
     if (!menuBox) throw new Error('App menu has no visible bounds');
     expect(menuBox.y).toBeGreaterThanOrEqual(0);
-    expect(menuBox.y + menuBox.height).toBeLessThanOrEqual(triggerBox.y);
+    // Up to 600px the menu is a bottom sheet inside the viewport; wider widths open above the trigger.
+    if (width <= 600)
+      expect(menuBox.y + menuBox.height).toBeLessThanOrEqual(page.viewportSize()!.height);
+    else expect(menuBox.y + menuBox.height).toBeLessThanOrEqual(triggerBox.y);
     expect(menuBox.x).toBeGreaterThanOrEqual(0);
     expect(menuBox.x + menuBox.width).toBeLessThanOrEqual(width);
     expect(

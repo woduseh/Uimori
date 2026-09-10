@@ -63,7 +63,7 @@ for (const width of [390, 1440]) {
     await page.setViewportSize({ width, height: 900 });
     await page.goto(`/?chat=${existing.id}`);
     await page.getByRole('button', { name: /^현재 본문 모델 ·/ }).click();
-    const editor = page.getByRole('region', { name: '현재 모델 설정', exact: true });
+    const editor = page.getByRole('region', { name: '역할별 모델 설정', exact: true });
     await expect(editor).toContainText('모든 채팅의 이후 요청에 적용');
     await expect(editor.getByLabel('원문 모델', { exact: true })).toHaveValue('');
     for (const label of [
@@ -79,7 +79,7 @@ for (const width of [390, 1440]) {
     if (await policy.count()) await policy.locator('summary').click();
     await editor.getByLabel('번역 자동 재요청 횟수').fill('2');
     await editor.getByLabel('번역 전체 호출 한도').fill('12');
-    await editor.getByRole('button', { name: '현재 모델 설정 저장', exact: true }).click();
+    await editor.getByRole('button', { name: '역할별 모델 설정 저장', exact: true }).click();
     await expect.poll(async () => (await models(request)).routes.main?.id).toBe(ids[0]);
     const selected = await models(request);
     expect(selected.titleModel).toEqual({ id: ids[0] });
