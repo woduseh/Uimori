@@ -96,6 +96,8 @@ export type RunSnapshot = {
   profile?: import('./product.js').ProfileSnapshot;
   candidateOf?: string;
   forkedFrom?: { chatId: string; runId: string; sourceRevision: string };
+  /** The source was read from a chat transcript file as authored history; no model was called. */
+  transcriptImport?: { index: number };
   story?: import('./story.js').StorySnapshot;
 };
 export type Run = {

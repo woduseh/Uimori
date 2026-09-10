@@ -7,6 +7,7 @@ import type { FastifyInstance } from 'fastify';
 import type { Store } from './store.js';
 import { AccessSessions, AccessSessionRateLimitError } from './access-session.js';
 import { forkChat } from './chat-fork.js';
+import { exportChatTranscript, importChatTranscript } from './chat-transcript.js';
 import { validateVertexEndpoint, type Connection } from '../core/product.js';
 import { parseCatalog, validateConnection } from '../core/transport.js';
 import { promptRoutes } from './prompt-routes.js';
@@ -53,6 +54,16 @@ export function productRoutes(
     const chat = forkChat(store, request.params.id, request.body);
     options.publish(chat.id);
     return chat;
+  });
+  app.get<{ Params: { id: string } }>('/api/chats/:id/transcript', async (request, reply) =>
+    reply
+      .header('Content-Disposition', 'attachment; filename="chat-transcript.json"')
+      .send(exportChatTranscript(store, request.params.id))
+  );
+  app.post('/api/chats/import-transcript', { bodyLimit: 64 * 1024 * 1024 }, async (request) => {
+    const result = importChatTranscript(store, request.body);
+    if (result.created) options.publish(result.chat.id);
+    return result;
   });
   const sessions = new AccessSessions(options);
   const authenticated = (cookie?: string) => sessions.authenticated(cookie);

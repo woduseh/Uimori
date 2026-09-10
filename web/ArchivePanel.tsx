@@ -30,6 +30,9 @@ export function ArchivePanel({
   const [importMessage, setImportMessage] = useState('');
   const [status, setStatus] = useState<ImportStatus>('loading');
   const [statusError, setStatusError] = useState('');
+  const [transcriptBusy, setTranscriptBusy] = useState(false);
+  const [transcriptError, setTranscriptError] = useState('');
+  const [transcriptMessage, setTranscriptMessage] = useState('');
   const fileInput = useRef<HTMLInputElement>(null);
   const readVersion = useRef(0);
   const statusVersion = useRef(0);
@@ -120,6 +123,42 @@ export function ArchivePanel({
     } finally {
       operationLock.current = false;
       setBusy(null);
+    }
+  }
+  async function importTranscript(file: File) {
+    if (operationLock.current) return;
+    operationLock.current = true;
+    setTranscriptBusy(true);
+    setTranscriptError('');
+    setTranscriptMessage('');
+    onError('');
+    try {
+      const transcript = JSON.parse(await file.text()) as unknown;
+      const result = await api<{ chat: { title: string }; skippedAttachments: unknown[] }>(
+        '/chats/import-transcript',
+        { transcript, idempotencyKey: crypto.randomUUID() }
+      );
+      const skipped = result.skippedAttachments.length;
+      // The chat exists now; the list refresh runs in the background so the busy state ends here.
+      setTranscriptBusy(false);
+      setTranscriptMessage(
+        `"${result.chat.title}" 채팅을 만들었어요.` +
+          (skipped ? ` 서재에 없는 자료 ${skipped}개는 장착하지 않았어요.` : '')
+      );
+      void onImported().catch((caught) =>
+        setTranscriptError(
+          `채팅은 만들었어요. 목록을 새로 읽지 못했어요. ${(caught as Error).message}`
+        )
+      );
+    } catch (error) {
+      setTranscriptError(
+        error instanceof SyntaxError
+          ? '파일을 읽지 못했거나 JSON 형식이 아니에요. 채팅 본문 JSON 파일을 선택해 주세요.'
+          : (error as Error).message
+      );
+    } finally {
+      operationLock.current = false;
+      setTranscriptBusy(false);
     }
   }
   const Container = expanded ? 'section' : 'details';
@@ -295,6 +334,37 @@ export function ArchivePanel({
             거절해요.
           </p>
         </details>
+      </section>
+      <section aria-label="채팅 본문 가져오기">
+        <h3>채팅 본문 가져오기</h3>
+        <p className="muted" id={`${id}-transcript-help`}>
+          채팅 메뉴의 본문 JSON 내보내기로 받은 파일을 새 채팅으로 읽어요. 원문·요청·최신
+          번역·메모만 담고 실행 기록은 없어요. 봇은 이 서재에 있어야 해요.
+        </p>
+        <div className="archive-file-field">
+          <label>
+            채팅 본문 JSON 파일
+            <input
+              aria-label="채팅 본문 JSON 파일"
+              aria-describedby={`${id}-transcript-help`}
+              type="file"
+              accept="application/json,.json"
+              disabled={busy !== null || transcriptBusy}
+              onChange={(event) => {
+                const file = event.target.files?.[0];
+                event.target.value = '';
+                if (file) void importTranscript(file);
+              }}
+            />
+          </label>
+        </div>
+        {transcriptBusy && <p role="status">채팅을 만들고 있어요…</p>}
+        {transcriptError && (
+          <p className="error" role="alert">
+            {transcriptError}
+          </p>
+        )}
+        {transcriptMessage && <p role="status">{transcriptMessage}</p>}
       </section>
     </Container>
   );
