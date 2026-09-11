@@ -4,6 +4,7 @@ import { basename, join, relative, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { spawn } from 'node:child_process';
 import { once } from 'node:events';
+import { get } from 'node:http';
 import { setTimeout as delay } from 'node:timers/promises';
 import { inspectData } from './oracle-data.mjs';
 
@@ -38,6 +39,42 @@ export function verifyIdentity(directory, buildId, distHash) {
   )
     throw new Error('Image build identity or artifact hash mismatch');
   return identity;
+}
+
+// Use node:http so the HTTPS-origin Host reaches the loopback server unchanged.
+export function probeSession(url, host, timeoutMs = 500) {
+  return new Promise((resolve) => {
+    const finish = (ready) => {
+      clearTimeout(timer);
+      resolve(ready);
+    };
+    const request = get(url, { headers: { Host: host }, agent: false }, (response) => {
+      let body = '';
+      response.setEncoding('utf8');
+      response.on('data', (chunk) => {
+        body += chunk;
+        if (body.length > 65536) request.destroy(new Error('Probe response too large'));
+      });
+      response.on('error', () => finish(false));
+      response.on('end', () => {
+        try {
+          const session = JSON.parse(body);
+          finish(
+            response.statusCode === 200 &&
+              session.required === true &&
+              session.authenticated === false
+          );
+        } catch {
+          finish(false);
+        }
+      });
+    });
+    const timer = setTimeout(() => {
+      request.destroy();
+      finish(false);
+    }, timeoutMs);
+    request.on('error', () => finish(false));
+  });
 }
 
 export async function bootProbe(app = '/app', data = '/data') {
@@ -75,22 +112,9 @@ export async function bootProbe(app = '/app', data = '/data') {
     for (let i = 0; i < 100; i++) {
       if (child.exitCode !== null)
         throw new Error(`Linux application startup failed: ${diagnostics}`);
-      try {
-        const response = await fetch('http://127.0.0.1:4310/api/session', {
-          headers: { Host: 'oracle-probe.invalid' },
-          signal: AbortSignal.timeout(500),
-        });
-        const session = await response.json();
-        if (
-          response.status === 200 &&
-          session.required === true &&
-          session.authenticated === false
-        ) {
-          ready = true;
-          break;
-        }
-      } catch {
-        /* Wait for the isolated application listener. */
+      if (await probeSession('http://127.0.0.1:4310/api/session', 'oracle-probe.invalid')) {
+        ready = true;
+        break;
       }
       await delay(200);
     }
