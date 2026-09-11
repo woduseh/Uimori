@@ -402,3 +402,11 @@
   bottom: 0;
   border-inline-start: 1px solid var(--line);
 }
+.branch-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.branch-actions > button {
+  flex: 1 1 auto;
+}

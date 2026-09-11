@@ -228,6 +228,10 @@ export function TasksPanel({
 
 export function BranchesPanel({ state, onClose }: { state: StoryState; onClose: () => void }) {
   const [changingDefault, setChangingDefault] = useState(false);
+  const [renaming, setRenaming] = useState<Branch | null>(null);
+  const [name, setName] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [summarizing, setSummarizing] = useState('');
   const detail = state.detail;
   if (!detail) return <p className="muted">먼저 이야기를 열어 주세요.</p>;
   function preview(branchId: string, head: string | null) {
@@ -303,6 +307,7 @@ export function BranchesPanel({ state, onClose }: { state: StoryState; onClose: 
             >
               <strong>{branchLabel(branch, detail)}</strong>
               <small>
+                {branch.default ? '기본 · ' : ''}
                 {node.forkIndex
                   ? `장면 ${node.forkIndex}에서 갈라짐 · 이후 ${node.ownScenes}개`
                   : node.totalScenes
@@ -344,6 +349,35 @@ export function BranchesPanel({ state, onClose }: { state: StoryState; onClose: 
                 기본으로 지정
               </button>
             )}
+            <div className="branch-actions">
+              <button
+                type="button"
+                className="ghost"
+                onClick={() => {
+                  setRenaming(branch);
+                  setName(branch.title);
+                }}
+              >
+                이름 변경
+              </button>
+              <button
+                type="button"
+                className="ghost"
+                disabled={summarizing === branch.id}
+                onClick={async () => {
+                  setSummarizing(branch.id);
+                  try {
+                    await api(`/chats/${detail.chat.id}/branches/${branch.id}/title`, {});
+                  } catch (error) {
+                    state.setError(error instanceof Error ? error.message : String(error));
+                  } finally {
+                    setSummarizing('');
+                  }
+                }}
+              >
+                {summarizing === branch.id ? '요약하는 중…' : '요약으로 이름 짓기'}
+              </button>
+            </div>
             {!branch.default && (
               <DeleteButton
                 path={`/chats/${detail.chat.id}/branches/${branch.id}`}
@@ -361,6 +395,53 @@ export function BranchesPanel({ state, onClose }: { state: StoryState; onClose: 
           </div>
         ))}
       </div>
+      <Dialog
+        open={!!renaming}
+        title="분기 이름 변경"
+        onClose={() => {
+          if (!saving) setRenaming(null);
+        }}
+      >
+        <form
+          onSubmit={(event) => {
+            event.preventDefault();
+            if (!renaming || saving || !name.trim()) return;
+            setSaving(true);
+            void api<Branch>(
+              `/chats/${detail.chat.id}/branches/${renaming.id}`,
+              { title: name.trim(), expectedRevision: renaming.revision },
+              'PATCH'
+            )
+              .then(() => setRenaming(null))
+              .catch((cause) => state.setError(cause.message))
+              .finally(() => setSaving(false));
+          }}
+        >
+          <label>
+            분기 이름
+            <input
+              value={name}
+              maxLength={200}
+              disabled={saving}
+              onChange={(event) => setName(event.target.value)}
+            />
+          </label>
+          <p className="muted">직접 지은 이름은 자동 요약이 덮어쓰지 않아요.</p>
+          <div className="form-actions">
+            <button
+              type="button"
+              className="secondary"
+              disabled={saving}
+              onClick={() => setRenaming(null)}
+            >
+              취소
+            </button>
+            <button className="primary" disabled={saving || !name.trim()}>
+              이름 저장
+            </button>
+          </div>
+        </form>
+      </Dialog>
     </section>
   );
 }
