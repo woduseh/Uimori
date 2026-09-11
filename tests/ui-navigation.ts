@@ -320,14 +320,17 @@ function compactLayout(page: Page) {
 }
 /** The helper: a header button on wide widths, a chat ⋯ item on compact widths. */
 export async function openHelper(page: Page) {
-  const header = page
-    .locator('.workspace-header')
-    .getByRole('button', { name: '도우미 열기', exact: true });
   // Compact chat screens keep the helper in the chat ⋯ menu; every other screen has the header icon.
   if (compactLayout(page) && (await page.locator('.workspace-header .chat-menu').count())) {
     const menu = await openChatMenu(page);
     await menu.getByRole('button', { name: '도우미 열기', exact: true }).click();
     return;
   }
-  await header.click();
+  // The chat keeps the icon in its own header; the library and prompts put it at the
+  // right edge of their page header. `first` skips the transient loading header.
+  await page
+    .locator('.workspace-header, .library-heading')
+    .getByRole('button', { name: '도우미 열기', exact: true })
+    .first()
+    .click();
 }

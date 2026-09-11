@@ -61,5 +61,5 @@
 .delete-dialog .form-actions > button {
   flex: 0 0 auto;
   width: auto;
-  min-height: 44px;
+  min-height: var(--control-h);
 }

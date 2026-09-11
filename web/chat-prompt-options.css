@@ -1,9 +1,8 @@
 .app-shell.options-open {
-  grid-template-columns: var(--nav-w) minmax(0, 1fr) 384px;
+  grid-template-columns: var(--nav-w) minmax(0, 1fr) var(--panel-w);
 }
-.app-shell.sidebar-collapsed.options-open,
 .app-shell.focus-reading.options-open {
-  grid-template-columns: minmax(0, 1fr) 384px;
+  grid-template-columns: minmax(0, 1fr) var(--panel-w);
 }
 .chat-prompt-options {
   min-width: 0;
@@ -22,14 +21,20 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 15px 18px;
+  min-height: var(--header-h);
+  padding: 6px 18px;
   border-bottom: 1px solid var(--line);
   gap: 12px;
   flex-shrink: 0;
 }
 .chat-options-header h2 {
   font-size: 17px;
+  line-height: 24px;
   margin: 0;
+}
+.chat-options-header small {
+  display: block;
+  line-height: 18px;
 }
 .chat-options-scope {
   display: grid;
@@ -40,7 +45,7 @@
   flex-shrink: 0;
 }
 .chat-options-scope button {
-  min-height: 44px;
+  min-height: var(--control-h);
   background: transparent;
   color: var(--muted);
 }
@@ -74,13 +79,13 @@
 .chat-specific-options button,
 .chat-options-footer button,
 .chat-specific-options summary {
-  min-height: 44px;
+  min-height: var(--control-h);
 }
 .chat-specific-options button {
   white-space: normal;
 }
 .chat-specific-options .prompt-option-field .prompt-option-unset {
-  min-height: 44px;
+  min-height: var(--control-h);
 }
 .chat-options-extra {
   border-top: 1px solid var(--line);
@@ -99,7 +104,7 @@
   padding-bottom: 10px;
 }
 .chat-option-selection {
-  min-height: 44px;
+  min-height: var(--control-h);
   font-size: 13px;
 }
 .chat-option-selection > span {
@@ -121,8 +126,70 @@
 .chat-option-value .pc-control-values {
   padding: 0 0 6px;
 }
-.chat-option-value:disabled {
-  opacity: 0.65;
+/* Option rows: the name and the value read as a sentence, and one control switches
+   between following the wider setting and setting a value for this chat. */
+.chat-option-group {
+  border-bottom: 1px solid var(--line);
+}
+.chat-option-group > summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: var(--control-h);
+  cursor: pointer;
+  font-weight: 600;
+}
+.chat-option-group-name {
+  overflow-wrap: anywhere;
+  min-width: 0;
+}
+.chat-option-group-count {
+  margin-left: auto;
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--muted);
+  white-space: nowrap;
+}
+.chat-option-group-body {
+  padding-bottom: 8px;
+}
+.chat-option-inherited {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 12px;
+  padding: 8px 0 2px;
+  min-width: 0;
+}
+.chat-option-name {
+  overflow-wrap: anywhere;
+  min-width: 0;
+}
+.chat-option-current {
+  margin-left: auto;
+  overflow-wrap: anywhere;
+}
+.chat-option-scope {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.chat-option-scope[data-actionable="true"] {
+  min-height: var(--control-h);
+}
+/* A switch that follows the wider setting needs only the origin line under it. */
+.chat-option-scope[data-actionable="false"] {
+  padding-bottom: 6px;
+}
+.chat-option-origin {
+  font-size: 12px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+.chat-option-scope > button {
+  margin-left: auto;
+  flex-shrink: 0;
 }
 .chat-delegation-fields {
   gap: 6px;
@@ -264,23 +331,21 @@
 }
 
 .app-shell.panel-docked.options-open {
-  grid-template-columns: var(--nav-w) minmax(0, 1fr) 384px;
+  grid-template-columns: var(--nav-w) minmax(0, 1fr) var(--panel-w);
 }
-.app-shell.sidebar-collapsed.panel-docked.options-open,
 .app-shell.focus-reading.panel-docked.options-open {
-  grid-template-columns: minmax(0, 1fr) 384px;
+  grid-template-columns: minmax(0, 1fr) var(--panel-w);
 }
 .app-shell.panel-overlay.options-open {
   grid-template-columns: var(--nav-w) minmax(0, 1fr);
 }
-.app-shell.sidebar-collapsed.panel-overlay.options-open,
 .app-shell.focus-reading.panel-overlay.options-open {
   grid-template-columns: minmax(0, 1fr);
 }
 .panel-overlay > .chat-prompt-options {
   position: fixed;
   inset: 0 0 0 auto;
-  width: 384px;
+  width: var(--panel-w);
   height: min(var(--app-height, 100dvh), 100dvh);
   z-index: 32;
   box-shadow: -8px 0 30px var(--shade);
@@ -293,4 +358,13 @@
     width: 100vw;
     border-left: 0;
   }
+}
+
+/* A row that still follows the wider setting stays one line tall, switch or not;
+   the option's own help appears once the row is set for this chat. */
+.chat-option-choice[data-scoped="false"] .chat-option-value .toggle-row small {
+  display: none;
+}
+.chat-option-choice[data-scoped="false"] .chat-option-value .prompt-option-field > small {
+  display: none;
 }

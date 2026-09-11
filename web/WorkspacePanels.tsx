@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import { DraftDiscardActions } from './DraftDiscardActions.js';
 import { Switch } from './BooleanControls.js';
 import { ModelWorkspaceEditor } from './ModelWorkspaceEditor.js';
@@ -337,6 +338,9 @@ export function AppSettingsPanel({
   setTheme,
   enterSend,
   setEnterSend,
+  panelWidth,
+  setPanelWidth,
+  readingSettings,
   onClose,
   onEditPrompt,
 }: {
@@ -346,6 +350,9 @@ export function AppSettingsPanel({
   setTheme: (theme: 'system' | 'dark' | 'light') => void;
   enterSend: boolean;
   setEnterSend: (value: boolean) => void;
+  panelWidth: number;
+  setPanelWidth: (value: number) => void;
+  readingSettings: ReactNode;
   onClose: () => void;
   onEditPrompt?: (presetId?: string) => void;
 }) {
@@ -370,7 +377,7 @@ export function AppSettingsPanel({
     { key: 'general', label: '일반', icon: SettingsIcon },
     { key: 'models', label: '역할별 모델', icon: ModelIcon },
     { key: 'prompts', label: '현재 프롬프트', icon: PromptIcon },
-    { key: 'connections', label: '프로바이더·모델 등록', icon: ConnectionIcon },
+    { key: 'connections', label: '프로바이더·모델', icon: ConnectionIcon },
     { key: 'agents', label: '에이전트', icon: AgentIcon },
     { key: 'illustrations', label: '삽화', icon: IllustrationIcon },
     { key: 'data', label: '데이터 관리', icon: DataIcon },
@@ -503,7 +510,10 @@ export function AppSettingsPanel({
                   {!compact && <h3 className="settings-page-title">{label}</h3>}
                   {key === 'general' && (
                     <section className="settings-section">
-                      <h3>화면과 입력</h3>
+                      <h3>
+                        화면과 입력
+                        <span className="scope-badge">이 기기</span>
+                      </h3>
                       <label>
                         화면 테마
                         <select
@@ -530,6 +540,34 @@ export function AppSettingsPanel({
                           ? 'Enter로 보내고 Shift+Enter로 줄을 바꿔요.'
                           : 'Enter는 줄바꿈, Ctrl/Cmd+Enter는 보내기예요.'}{' '}
                         한글 조합 중에는 보내지 않아요.
+                      </small>
+                      <label>
+                        도우미·창작 옵션 패널 폭
+                        <select
+                          aria-label="도우미·창작 옵션 패널 폭"
+                          value={panelWidth}
+                          onChange={(event) => setPanelWidth(Number(event.target.value))}
+                        >
+                          <option value={360}>좁게</option>
+                          <option value={384}>보통</option>
+                          <option value={480}>넓게</option>
+                        </select>
+                      </label>
+                      <small>
+                        도우미와 창작 옵션이 같은 자리를 나눠 써서 폭도 함께 바뀌어요. 넓게 두면
+                        좁은 화면에서 패널이 원고 위에 겹쳐 열려요.
+                      </small>
+                    </section>
+                  )}
+                  {key === 'general' && (
+                    <section className="settings-section">
+                      <h3>
+                        원고 읽기
+                        <span className="scope-badge">이 기기</span>
+                      </h3>
+                      {readingSettings}
+                      <small>
+                        채팅 메뉴의 읽기 설정과 같은 값이에요. 어느 쪽에서 바꿔도 함께 바뀌어요.
                       </small>
                     </section>
                   )}

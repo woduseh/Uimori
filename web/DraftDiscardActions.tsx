@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react';
+import { CloseIcon, EditIcon } from './ui-icons.js';
 import './draft-discard.css';
 
 export function DraftDiscardActions({
@@ -21,7 +22,16 @@ export function DraftDiscardActions({
     return () => cancelAnimationFrame(frame);
   }, [open]);
   return (
-    <div className="draft-discard-actions">
+    <div className="form-actions draft-discard-actions">
+      <button
+        type="button"
+        className="secondary draft-discard danger"
+        disabled={disabled}
+        onClick={onDiscard}
+      >
+        <CloseIcon size={18} aria-hidden="true" />
+        {discardLabel}
+      </button>
       <button
         type="button"
         className="draft-continue"
@@ -29,15 +39,8 @@ export function DraftDiscardActions({
         disabled={disabled}
         onClick={onContinue}
       >
+        <EditIcon size={18} aria-hidden="true" />
         계속 편집
-      </button>
-      <button
-        type="button"
-        className="secondary draft-discard"
-        disabled={disabled}
-        onClick={onDiscard}
-      >
-        {discardLabel}
       </button>
     </div>
   );

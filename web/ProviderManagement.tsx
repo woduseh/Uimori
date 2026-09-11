@@ -573,7 +573,7 @@ export function ConnectionEditor({
             }}
           >
             <ConnectionIcon size={18} aria-hidden="true" />
-            연결
+            프로바이더
           </button>
           <button
             type="button"
@@ -630,7 +630,7 @@ export function ConnectionEditor({
                   onClick={() => (screen === 'connections' ? newConnection() : newModel())}
                 >
                   <AddIcon size={18} aria-hidden="true" />
-                  <span>{screen === 'connections' ? '연결 추가' : '모델 추가'}</span>
+                  <span>{screen === 'connections' ? '프로바이더 추가' : '모델 추가'}</span>
                 </button>
               </div>
             </div>
@@ -693,7 +693,7 @@ export function ConnectionEditor({
           </button>
           {setup && (
             <ol className="provider-steps" aria-label="빠른 프로바이더 진행">
-              <li aria-current={screen === 'providers' ? 'step' : undefined}>1. 연결 방식</li>
+              <li aria-current={screen === 'providers' ? 'step' : undefined}>1. 프로바이더 종류</li>
               <li aria-current={screen === 'connection' ? 'step' : undefined}>2. 접속 정보</li>
               <li aria-current={screen === 'model' ? 'step' : undefined}>3. 모델</li>
             </ol>
@@ -1047,7 +1047,7 @@ export function ConnectionEditor({
           disabled={busy || !!confirmation}
         >
           <label>
-            연결 방식
+            프로바이더 종류
             <select
               aria-label="프로바이더 프로토콜"
               value={connection.protocol}
@@ -1070,7 +1070,7 @@ export function ConnectionEditor({
             </select>
           </label>
           <label>
-            연결 이름
+            프로바이더 이름
             <input
               aria-label="프로바이더 이름"
               required
@@ -1248,9 +1248,9 @@ export function ConnectionEditor({
           <small className="provider-save-status">
             {editingConnection
               ? JSON.stringify(connection) === connectionBaseline
-                ? '저장한 연결이에요.'
+                ? '저장한 프로바이더예요.'
                 : '아직 저장하지 않은 변경이 있어요.'
-              : '아직 저장하지 않은 연결이에요.'}
+              : '아직 저장하지 않은 프로바이더예요.'}
           </small>
           <button
             type="button"

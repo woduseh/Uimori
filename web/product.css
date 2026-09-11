@@ -68,16 +68,31 @@
 .form-actions {
   display: flex;
   align-items: center;
+  justify-content: flex-end;
   gap: 10px;
   flex-wrap: wrap;
+  margin-top: 16px;
+}
+.form-actions > .danger,
+.form-actions > .destructive,
+.form-actions > .delete-control {
+  margin-right: auto;
+}
+/* Destructive confirmations read as destructive. */
+.danger {
+  color: var(--error);
+  border-color: var(--error);
+  background: var(--error-bg);
 }
 .form-actions [role="status"] {
+  margin-right: auto;
   font-size: 12px;
   color: var(--accent);
 }
 .check {
   flex-direction: row;
   align-items: center;
+  min-height: var(--control-h);
   gap: 10px;
 }
 .check input {
@@ -376,4 +391,16 @@
   line-height: 1.75;
   color: var(--muted);
   margin-top: 3px;
+}
+
+/* Marks a setting that lives in this browser only, next to ones the workspace shares. */
+.scope-badge {
+  margin-left: 8px;
+  padding: 2px 8px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--muted);
+  vertical-align: middle;
 }

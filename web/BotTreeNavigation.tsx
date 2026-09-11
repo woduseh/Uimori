@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Sprout } from 'lucide-react';
+import { PanelLeftClose, PanelLeftOpen, Sprout } from 'lucide-react';
 import type { Content, Library } from '../core/product.js';
 import type { Chat } from '../core/types.js';
 import {
@@ -52,11 +52,14 @@ export function NavigationQuickActions({
   library,
   onSelect,
   onLibrary,
+  compact = false,
 }: {
   chats: Chat[];
   library: Library | null;
   onSelect: (id: string) => void;
   onLibrary: (tab: 'bot') => void;
+  /** The collapsed rail shows the same two actions as icons. */
+  compact?: boolean;
 }) {
   const [searching, setSearching] = useState(false);
   const [query, setQuery] = useState('');
@@ -71,29 +74,39 @@ export function NavigationQuickActions({
         botTitle(chat).toLocaleLowerCase().includes(needle)
     )
     .sort((a, b) => (b.lastActivityAt ?? '').localeCompare(a.lastActivityAt ?? ''));
+  const openSearch = () => {
+    setQuery('');
+    setSearching(true);
+  };
   return (
-    <div className="navigation-quick-actions">
-      <button
-        type="button"
-        className="nav-button"
-        aria-label="새 채팅"
-        onClick={() => onLibrary('bot')}
-      >
-        <AddIcon size={20} aria-hidden="true" />
-        <span>새 채팅</span>
-      </button>
-      <button
-        type="button"
-        className="nav-button"
-        aria-label="전체 채팅 검색"
-        onClick={() => {
-          setQuery('');
-          setSearching(true);
-        }}
-      >
-        <SearchIcon size={20} aria-hidden="true" />
-        <span>채팅 검색</span>
-      </button>
+    <div className={`navigation-quick-actions${compact ? ' compact' : ''}`}>
+      {compact ? (
+        <>
+          <IconButton label="새 채팅" icon={AddIcon} onClick={() => onLibrary('bot')} />
+          <IconButton label="전체 채팅 검색" icon={SearchIcon} onClick={openSearch} />
+        </>
+      ) : (
+        <>
+          <button
+            type="button"
+            className="nav-button"
+            aria-label="새 채팅"
+            onClick={() => onLibrary('bot')}
+          >
+            <AddIcon size={20} aria-hidden="true" />
+            <span>새 채팅</span>
+          </button>
+          <button
+            type="button"
+            className="nav-button"
+            aria-label="전체 채팅 검색"
+            onClick={openSearch}
+          >
+            <SearchIcon size={20} aria-hidden="true" />
+            <span>채팅 검색</span>
+          </button>
+        </>
+      )}
       <Dialog
         open={searching}
         title="전체 채팅 검색"
@@ -135,6 +148,9 @@ export function BotNavigation(
     onLibraryChanged: () => Promise<void>;
     quickActions?: boolean;
     libraryTab?: 'bot' | 'persona' | 'module' | 'prompts';
+    /** Collapsed navigation renders an icon rail instead of the full tree. */
+    collapsed?: boolean;
+    onToggleCollapse?: () => void;
   }
 ) {
   const {
@@ -328,6 +344,50 @@ export function BotNavigation(
       />
     );
   }
+  const onLibraryTab = props.libraryTab;
+  const inLibrary = destination === 'library';
+  if (props.collapsed)
+    return (
+      <div className="bot-navigation bot-tree-navigation sidebar-rail" data-testid="bot-navigation">
+        <div className="sidebar-rail-head">
+          <IconButton
+            className="sidebar-toggle"
+            label="좌측 패널 펼치기"
+            icon={PanelLeftOpen}
+            aria-expanded={false}
+            aria-controls="workspace-sidebar"
+            onClick={props.onToggleCollapse}
+          />
+        </div>
+        <NavigationQuickActions
+          compact
+          chats={chats}
+          library={library}
+          onSelect={onSelect}
+          onLibrary={onLibrary}
+        />
+        <nav className="sidebar-rail-destinations" aria-label="작업 공간">
+          <IconButton
+            label="서재"
+            icon={LibraryIcon}
+            aria-current={inLibrary && onLibraryTab !== 'prompts' ? 'page' : undefined}
+            className={inLibrary && onLibraryTab !== 'prompts' ? 'selected' : ''}
+            onClick={() => onLibrary('bot')}
+          />
+          <IconButton
+            label="프롬프트"
+            icon={PromptIcon}
+            aria-current={inLibrary && onLibraryTab === 'prompts' ? 'page' : undefined}
+            className={inLibrary && onLibraryTab === 'prompts' ? 'selected' : ''}
+            onClick={() => onLibrary('prompts')}
+          />
+        </nav>
+        <div className="sidebar-rail-spacer" />
+        <nav className="sidebar-app-actions" aria-label="앱 탐색">
+          <IconButton label="설정" icon={SettingsIcon} onClick={onSettings} />
+        </nav>
+      </div>
+    );
   return (
     <div className="bot-navigation bot-tree-navigation" data-testid="bot-navigation">
       <div className="brand">
@@ -335,6 +395,16 @@ export function BotNavigation(
           <Sprout size={26} aria-hidden="true" />
           Uimori
         </span>
+        {props.onToggleCollapse && (
+          <IconButton
+            className="sidebar-toggle"
+            label="좌측 패널 접기"
+            icon={PanelLeftClose}
+            aria-expanded
+            aria-controls="workspace-sidebar"
+            onClick={props.onToggleCollapse}
+          />
+        )}
       </div>
       {quickActions && (
         <div className="sidebar-quick-actions">

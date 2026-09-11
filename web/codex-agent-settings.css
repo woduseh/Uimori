@@ -15,7 +15,7 @@
 }
 .codex-agent-help summary {
   cursor: pointer;
-  min-height: 44px;
+  min-height: var(--control-h);
   align-content: center;
 }
 .codex-agent-refreshing svg {

@@ -981,23 +981,30 @@ export function HelperPanel(props: Props) {
           />
         )}
         {error && (
-          <div role="alert">
+          <div className="helper-notice" role="alert">
             <p>{error}</p>
-            {/모델|MODEL_REQUIRED/u.test(error) && (
-              <button type="button" onClick={props.onModelSettings}>
-                모델 설정
+            <div className="form-actions">
+              {/모델|MODEL_REQUIRED/u.test(error) && (
+                <button
+                  type="button"
+                  className="secondary helper-notice-lead"
+                  onClick={props.onModelSettings}
+                >
+                  모델 설정
+                </button>
+              )}
+              <button
+                type="button"
+                className="secondary"
+                onClick={() => {
+                  setError('');
+                  data.setError('');
+                  sessions.clearError();
+                }}
+              >
+                닫기
               </button>
-            )}
-            <button
-              type="button"
-              onClick={() => {
-                setError('');
-                data.setError('');
-                sessions.clearError();
-              }}
-            >
-              닫기
-            </button>
+            </div>
           </div>
         )}
         <ChatComposer

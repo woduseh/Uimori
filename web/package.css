@@ -229,7 +229,7 @@
   display: flex;
   align-items: flex-start;
   gap: 10px;
-  min-height: 44px;
+  min-height: var(--control-h);
 }
 .behavior-method-editor .behavior-method-choice input {
   flex: none;

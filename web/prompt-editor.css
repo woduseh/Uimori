@@ -59,7 +59,7 @@
   min-width: 0;
 }
 .prompt-save-buttons > button {
-  min-height: 44px;
+  min-height: var(--control-h);
   font-size: 14px;
 }
 .prompt-editor textarea {
@@ -87,7 +87,8 @@
   display: block;
 }
 .library-prompt-editor .prompt-editor {
-  max-width: 1280px;
+  max-width: var(--collection-w);
+  margin-inline: auto;
 }
 .prompt-editor [disabled] {
   cursor: default;
@@ -156,8 +157,10 @@
   color: var(--muted);
   cursor: pointer;
 }
-.prompt-saved-management > summary:hover {
-  color: var(--text);
+@media (hover: hover) {
+  .prompt-saved-management > summary:hover {
+    color: var(--text);
+  }
 }
 .prompt-saved-management > .deletion-list {
   padding-bottom: 8px;
@@ -257,6 +260,8 @@
   font-weight: 500;
   padding-inline: 8px;
 }
-.prompt-current-links > button:hover:not(:disabled) {
-  color: var(--text);
+@media (hover: hover) {
+  .prompt-current-links > button:hover:not(:disabled) {
+    color: var(--text);
+  }
 }

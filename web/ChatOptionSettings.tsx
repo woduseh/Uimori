@@ -266,8 +266,8 @@ export function ChatOptionSettings(props: Props) {
         <section aria-label="이 채팅 고정 옵션">
           <h3>고정 옵션</h3>
           <p className="muted">
-            체크한 옵션은 이 채팅에 적용해요. 나머지는 이 채팅에서 사용하는 작문 프롬프트의 기본
-            옵션을 따라요.
+            개별 지정한 옵션만 이 채팅에 적용해요. 나머지는 이 채팅에서 사용하는 작문 프롬프트의
+            기본 옵션을 따라요.
           </p>
           <fieldset className="chat-options-fields" disabled={disabled}>
             <SelectiveValues
@@ -291,7 +291,9 @@ export function ChatOptionSettings(props: Props) {
         </section>
         <details className="chat-options-extra">
           <summary>다음 생성에만 적용</summary>
-          <p className="muted">현재 분기의 다음 생성에 한 번 사용하고 해제해요.</p>
+          <p className="muted">
+            여기서 지정한 옵션만 현재 분기의 다음 생성에 한 번 사용하고 해제해요.
+          </p>
           <fieldset className="chat-options-fields" disabled={disabled}>
             <SelectiveValues
               program={base.program}
@@ -475,6 +477,31 @@ export function ChatOptionSettings(props: Props) {
   );
 }
 
+/* Reading an inherited value must not look like a broken form, so a row that follows
+   the wider setting shows the value as text and offers one explicit switch. */
+const SCOPE_WORDS = {
+  fixed: {
+    set: '개별 지정',
+    unset: '전역 따르기',
+    following: '전역 따름',
+    scoped: '이 채팅 지정',
+  },
+  oneoff: {
+    set: '다음 생성만 지정',
+    unset: '지정 해제',
+    following: '현재 설정 따름',
+    scoped: '다음 생성만 적용',
+  },
+} as const;
+
+function optionText(control: PromptProgram['controls'][number], value: PromptValue | undefined) {
+  if (value === null || value === undefined) return '미설정';
+  if (typeof value === 'boolean') return value ? '켬' : '끔';
+  const choice = control.options?.find((option) => option.value === value);
+  if (choice) return choice.label;
+  return value === '' ? '비어 있음' : String(value);
+}
+
 function SelectiveValues({
   program,
   inherited,
@@ -499,46 +526,74 @@ function SelectiveValues({
   }
   if (program.controls.length === 0)
     return <p className="muted">현재 프롬프트에 조정할 옵션이 없어요.</p>;
+  const words = SCOPE_WORDS[mode];
+  /* Same grouping rule as the prompt editor, so one option means the same thing in
+     both places. Long option sets stay navigable instead of becoming one long list. */
+  const groups = new Map<string, PromptProgram['controls']>();
+  for (const control of controls) {
+    const group = control.group?.trim() || '기본 설정';
+    groups.set(group, [...(groups.get(group) ?? []), control]);
+  }
+  const row = (control: PromptProgram['controls'][number]) => {
+    const selected = Object.hasOwn(values, control.id);
+    const current = Object.hasOwn(effective, control.id) ? effective[control.id]! : control.default;
+    /* A switch already says what it will do, so flipping it is the act of setting a
+       value for this chat. Every other control keeps its value readable as text until
+       the row is explicitly switched into editing. */
+    const live = control.type === 'boolean' || selected;
+    return (
+      <div key={control.id} className="chat-option-choice" data-scoped={String(selected)}>
+        {live ? (
+          <div className="chat-option-value">
+            <PromptControlFields
+              program={{ ...program, controls: [{ ...control, visibleWhen: undefined }] }}
+              values={{ [control.id]: current }}
+              visibilityValues={{ [control.id]: visibilityValues[control.id]! }}
+              onChange={(id, value) => onChange({ ...values, [id]: value })}
+            />
+          </div>
+        ) : (
+          <div className="chat-option-inherited">
+            <span className="chat-option-name">{control.label}</span>
+            <span className="chat-option-current">{optionText(control, current)}</span>
+          </div>
+        )}
+        <div className="chat-option-scope" data-actionable={String(selected || !live)}>
+          <span className="chat-option-origin">{selected ? words.scoped : words.following}</span>
+          {(selected || !live) && (
+            <button
+              type="button"
+              className="secondary"
+              aria-label={`${control.label} ${selected ? words.unset : words.set}`}
+              onClick={() => {
+                if (selected) {
+                  const next = { ...values };
+                  delete next[control.id];
+                  onChange(next);
+                } else onChange({ ...values, [control.id]: current });
+              }}
+            >
+              {selected ? words.unset : words.set}
+            </button>
+          )}
+        </div>
+      </div>
+    );
+  };
   return (
     <div className="chat-selective-values">
-      {controls.map((control) => {
-        const selected = Object.hasOwn(values, control.id);
+      {[...groups].map(([group, items]) => {
+        const scoped = items.filter((control) => Object.hasOwn(values, control.id)).length;
         return (
-          <div key={control.id} className="chat-option-choice">
-            <label className="chat-option-selection">
-              <SelectionCheckbox
-                aria-label={`${control.label} ${mode === 'fixed' ? '이 채팅에 고정' : '다음 생성에만 적용'}`}
-                checked={selected}
-                onChange={(event) => {
-                  if (event.target.checked)
-                    onChange({
-                      ...values,
-                      [control.id]: Object.hasOwn(effective, control.id)
-                        ? effective[control.id]!
-                        : control.default,
-                    });
-                  else {
-                    const next = { ...values };
-                    delete next[control.id];
-                    onChange(next);
-                  }
-                }}
-              />
-              <span>{mode === 'fixed' ? '이 채팅에 고정' : '다음 생성에만 적용'}</span>
-            </label>
-            <fieldset className="chat-option-value" disabled={!selected}>
-              <PromptControlFields
-                program={{ ...program, controls: [{ ...control, visibleWhen: undefined }] }}
-                values={{
-                  [control.id]: Object.hasOwn(effective, control.id)
-                    ? effective[control.id]!
-                    : control.default,
-                }}
-                visibilityValues={{ [control.id]: visibilityValues[control.id]! }}
-                onChange={(id, value) => onChange({ ...values, [id]: value })}
-              />
-            </fieldset>
-          </div>
+          <details key={group} open className="chat-option-group">
+            <summary>
+              <span className="chat-option-group-name">{group}</span>
+              <span className="chat-option-group-count">
+                {scoped > 0 ? `${scoped}개 지정 · 전체 ${items.length}개` : `${items.length}개`}
+              </span>
+            </summary>
+            <div className="chat-option-group-body">{items.map(row)}</div>
+          </details>
         );
       })}
     </div>

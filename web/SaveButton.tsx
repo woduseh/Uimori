@@ -6,15 +6,16 @@ import './settings-actions.css';
 type Props = Omit<ComponentPropsWithRef<'button'>, 'children' | 'aria-label'> & {
   /** Full action name including its target. Speech input and tooltips use it. */
   label: string;
-  /** Visible text. It stays inside `label` so the shown name is part of the spoken one. */
+  /** Optional visible text. Empty by default: the glyph carries the meaning and
+   * `label` supplies the tooltip and the spoken name. */
   text?: string;
   icon?: LucideIcon;
 };
 
-/** Primary confirm action of a settings form: the shared glyph with a visible name. */
+/** Primary confirm action of a settings form: the shared glyph, named by `label`. */
 export function SaveButton({
   label,
-  text = '저장',
+  text = '',
   icon: Icon = SaveIcon,
   className = '',
   type = 'submit',
@@ -29,7 +30,7 @@ export function SaveButton({
       title={label}
     >
       <Icon size={18} aria-hidden="true" />
-      <span>{text}</span>
+      {text && <span>{text}</span>}
     </button>
   );
 }

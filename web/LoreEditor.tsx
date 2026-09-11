@@ -1,7 +1,7 @@
 import { SelectionCheckbox } from './BooleanControls.js';
 import { useEffect, useRef, useState } from 'react';
 import { useBufferedEditorState, useUnappliedEditorField } from './editor-workspace-context.js';
-import { AddIcon, BackIcon, FolderIcon, SearchIcon } from './ui-icons.js';
+import { AddIcon, BackIcon, CloseIcon, FolderIcon, SearchIcon } from './ui-icons.js';
 import type { ContentPackage, PackageLore } from '../core/content-package.js';
 import { Dialog } from './Dialog.js';
 import './lore-editor.css';
@@ -597,6 +597,7 @@ export function LoreEditor({
         <p>‘{value.lore.find((row) => row.id === deleteLore)?.title}’ 로어를 초안에서 삭제해요.</p>
         <div className="lore-actions">
           <button type="button" className="secondary" onClick={() => setDeleteLore(null)}>
+            <CloseIcon size={18} aria-hidden="true" />
             취소
           </button>
           <button

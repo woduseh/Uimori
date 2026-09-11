@@ -1,3 +1,4 @@
+import { IconButton } from './IconButton.js';
 import { DraftDiscardActions } from './DraftDiscardActions.js';
 import { SelectionCheckbox } from './BooleanControls.js';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
@@ -36,6 +37,7 @@ export function PromptLibrary({
   onError,
   onDirtyChange,
   headerLeading,
+  headerTrailing,
   onOpenCurrentPrompts,
   initialPresetId,
   onInitialPresetHandled,
@@ -46,6 +48,7 @@ export function PromptLibrary({
   onError: (message: string) => void;
   onDirtyChange?: (dirty: boolean) => void;
   headerLeading?: ReactNode;
+  headerTrailing?: ReactNode;
   onOpenCurrentPrompts: () => void;
   initialPresetId?: string | null;
   onInitialPresetHandled?: () => void;
@@ -196,6 +199,7 @@ export function PromptLibrary({
       <header className="library-heading">
         {headerLeading}
         <h1>프롬프트</h1>
+        {headerTrailing}
       </header>
       {library && !editing && (
         <button
@@ -247,10 +251,12 @@ export function PromptLibrary({
       ) : editing ? (
         <div className="library-prompt-editor">
           <div className="library-detail-heading">
-            <button type="button" className="secondary" onClick={close}>
-              <BackIcon size={18} aria-hidden="true" />
-              프롬프트 목록
-            </button>
+            <IconButton
+              className="secondary"
+              label="프롬프트 목록"
+              icon={BackIcon}
+              onClick={close}
+            />
             <h2>{editing.preset?.title ?? '새 프롬프트'}</h2>
           </div>
           <PromptEditor

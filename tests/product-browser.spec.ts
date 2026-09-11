@@ -234,7 +234,7 @@ test('P04 manual model IDs and distinct main/translation routing preserve connec
   const unique = `P04-${Date.now()}`;
   const chat = await createChat(page, `합성 ${unique}`);
   await navigation(page, '설정');
-  await selectSettingsSection(page, '프로바이더·모델 등록');
+  await selectSettingsSection(page, '프로바이더·모델');
   const library = page.getByTestId('connection-editor');
   await startProviderConnection(page);
   await library.getByText('개발·검사용 프로바이더', { exact: true }).click();
@@ -294,7 +294,7 @@ test('P04 manual model IDs and distinct main/translation routing preserve connec
     translation: null,
   });
   await navigation(page, '설정');
-  await selectSettingsSection(page, '프로바이더·모델 등록');
+  await selectSettingsSection(page, '프로바이더·모델');
   await library.getByRole('button', { name: '프로바이더 관리', exact: true }).click();
   const enabledResponse = page.waitForResponse(
     (response) =>
@@ -730,7 +730,7 @@ test('P04 Vertex settings use service-account references and persist distinct ma
   const pageErrors: string[] = [];
   page.on('pageerror', (error) => pageErrors.push(error.message));
   await navigation(page, '설정');
-  await selectSettingsSection(page, '프로바이더·모델 등록');
+  await selectSettingsSection(page, '프로바이더·모델');
   const editor = page.getByTestId('connection-editor');
   await startProviderConnection(page);
   await editor
@@ -821,7 +821,7 @@ test('P04 named and custom providers save native options from mobile settings wi
 }, testInfo) => {
   const chat = await createChat(page, `공급자 설정 ${Date.now()}`);
   await navigation(page, '설정');
-  await selectSettingsSection(page, '프로바이더·모델 등록');
+  await selectSettingsSection(page, '프로바이더·모델');
   const cases = [
     {
       protocol: 'openai-responses-v1',

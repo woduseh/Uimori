@@ -250,8 +250,13 @@ test('chat creative options scope fixed values, oneoff reservations and revocabl
   );
   const panel = page.getByRole('tabpanel', { name: '이 채팅 옵션', exact: true });
   const fixed = panel.getByRole('region', { name: '이 채팅 고정 옵션', exact: true });
-  await expect(fixed.getByLabel('서술 상세도', { exact: true })).toBeDisabled();
-  await fixed.getByRole('checkbox', { name: '서술 상세도 이 채팅에 고정', exact: true }).check();
+  const detailRow = fixed.locator('.chat-option-choice').filter({ hasText: '서술 상세도' });
+  await expect(detailRow).toHaveAttribute('data-scoped', 'false');
+  await expect(detailRow.locator('.chat-option-current')).toHaveText('1');
+  await expect(detailRow.locator('.chat-option-origin')).toHaveText('전역 따름');
+  await expect(fixed.getByLabel('서술 상세도', { exact: true })).toHaveCount(0);
+  await fixed.getByRole('button', { name: '서술 상세도 개별 지정', exact: true }).click();
+  await expect(detailRow).toHaveAttribute('data-scoped', 'true');
   await fixed.getByLabel('서술 상세도', { exact: true }).fill('9');
   await expect(fixed.getByLabel('서술 상세도', { exact: true })).toHaveValue('9');
   await fixed.getByLabel('서술 상세도', { exact: true }).fill('3');
@@ -262,13 +267,19 @@ test('chat creative options scope fixed values, oneoff reservations and revocabl
   await panel.getByRole('button', { name: '채팅 고정 옵션 저장', exact: true }).click();
   await expect.poll(async () => (await state()).fixedValues).toEqual({ detail: 3 });
   expect(await (await request.get('/api/prompt-workspace')).json()).toEqual(workspace);
+  await fixed.getByRole('button', { name: '서술 상세도 전역 따르기', exact: true }).click();
+  await expect(detailRow).toHaveAttribute('data-scoped', 'false');
+  await panel.getByRole('button', { name: '채팅 고정 옵션 저장', exact: true }).click();
+  await expect.poll(async () => (await state()).fixedValues).toEqual({});
+  await fixed.getByRole('button', { name: '서술 상세도 개별 지정', exact: true }).click();
+  await fixed.getByLabel('서술 상세도', { exact: true }).fill('3');
+  await panel.getByRole('button', { name: '채팅 고정 옵션 저장', exact: true }).click();
+  await expect.poll(async () => (await state()).fixedValues).toEqual({ detail: 3 });
   const oneoff = panel
     .locator('details')
     .filter({ has: page.locator(':scope > summary', { hasText: /^다음 생성에만 적용$/ }) });
   await oneoff.locator(':scope > summary').click();
-  await oneoff
-    .getByRole('checkbox', { name: '서술 상세도 다음 생성에만 적용', exact: true })
-    .check();
+  await oneoff.getByRole('button', { name: '서술 상세도 다음 생성만 지정', exact: true }).click();
   await oneoff.getByLabel('서술 상세도', { exact: true }).fill('2');
   await oneoff.getByRole('button', { name: '1회 옵션 예약', exact: true }).click();
   await expect
@@ -334,7 +345,7 @@ test('chat creative options retry an uncertain save with the same operation and 
   await page.getByRole('button', { name: '창작 옵션', exact: true }).click();
   const panel = page.getByRole('tabpanel', { name: '이 채팅 옵션', exact: true });
   const fixed = panel.getByRole('region', { name: '이 채팅 고정 옵션', exact: true });
-  await fixed.getByRole('checkbox', { name: '서술 상세도 이 채팅에 고정', exact: true }).check();
+  await fixed.getByRole('button', { name: '서술 상세도 개별 지정', exact: true }).click();
   await fixed.getByLabel('서술 상세도', { exact: true }).fill('3');
   const operations: string[] = [];
   await page.route(`**/api/chats/${chat.id}/options/fixed`, async (route) => {

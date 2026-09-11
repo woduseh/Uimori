@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react';
-import { DeleteIcon } from './ui-icons.js';
+import { CloseIcon, DeleteIcon } from './ui-icons.js';
 import { api } from './api.js';
 import { Dialog } from './Dialog.js';
 import './deletion.css';
@@ -120,6 +120,7 @@ export function DeleteButton({
             disabled={busy}
             onClick={() => setTarget(null)}
           >
+            <CloseIcon size={18} aria-hidden="true" />
             취소
           </button>
           <button

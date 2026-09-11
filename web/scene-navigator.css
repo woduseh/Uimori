@@ -5,8 +5,10 @@
   min-height: 0;
   min-width: 0;
 }
+/* Symmetric so the manuscript centres on the same axis as the composer below it;
+   the left half is the space the absolutely positioned scene rail sits in. */
 .reader-stage.has-scenes > .reader-scrollport {
-  padding-left: 58px;
+  padding-inline: 58px;
 }
 .scene-navigator {
   position: absolute;
@@ -67,10 +69,15 @@
   background: var(--accent);
   height: 3px;
 }
-.scene-mark:hover .scene-tick,
 .scene-mark:focus-visible .scene-tick {
   width: 26px;
   background: var(--accent);
+}
+@media (hover: hover) {
+  .scene-mark:hover .scene-tick {
+    width: 26px;
+    background: var(--accent);
+  }
 }
 .scene-preview {
   display: none;
@@ -98,14 +105,16 @@
 }
 .scene-latest {
   min-height: 36px;
-  width: 44px;
+  width: var(--control-h);
   display: grid;
   place-items: center;
   padding: 6px;
 }
-.scene-navigator button:hover {
-  color: var(--accent);
-  background: var(--surface);
+@media (hover: hover) {
+  .scene-navigator button:hover {
+    color: var(--accent);
+    background: var(--surface);
+  }
 }
 .scene-dialog {
   width: min(560px, calc(100vw - 24px));
@@ -148,10 +157,15 @@
 .scene-list button small {
   flex-shrink: 0;
 }
-.scene-list button:hover,
 .scene-list button[aria-current] {
   background: var(--accent-soft);
   border-color: var(--line);
+}
+@media (hover: hover) {
+  .scene-list button:hover {
+    background: var(--accent-soft);
+    border-color: var(--line);
+  }
 }
 .scene-list-pages {
   display: flex;
@@ -167,9 +181,9 @@
   transform: translateX(-50%);
   bottom: 12px;
   z-index: 4;
-  width: 44px;
-  height: 44px;
-  min-height: 44px;
+  width: var(--control-h);
+  height: var(--control-h);
+  min-height: var(--control-h);
   padding: 0;
   display: grid;
   place-items: center;
@@ -181,7 +195,7 @@
 }
 @media (max-width: 760px) {
   .reader-stage.has-scenes > .reader-scrollport {
-    padding-left: 0;
+    padding-inline: 0;
   }
 }
 @media (prefers-reduced-motion: reduce) {

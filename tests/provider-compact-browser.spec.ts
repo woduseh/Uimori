@@ -50,7 +50,7 @@ async function projectLibrary(
 async function openProviders(page: Page) {
   await page.goto('/');
   await navigationAction(page, '설정');
-  await selectSettingsSection(page, '프로바이더·모델 등록');
+  await selectSettingsSection(page, '프로바이더·모델');
   await expect(page.getByTestId('connection-editor')).toBeVisible();
 }
 

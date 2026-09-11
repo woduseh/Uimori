@@ -92,7 +92,7 @@
   gap: 6px;
   max-height: 50vh;
   overflow-y: auto;
-  min-height: 44px;
+  min-height: var(--control-h);
 }
 .content-picker-choice {
   display: flex;

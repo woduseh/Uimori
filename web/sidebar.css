@@ -1,21 +1,82 @@
-.sidebar-collapsed {
-  grid-template-columns: minmax(0, 1fr);
+/* Collapsed navigation keeps an icon rail of the main destinations, so the app never
+   loses its primary entry points. The rail is only a narrower navigation column, so
+   every existing template keeps working through --nav-w. Below 1024px navigation is
+   already a drawer and --rail-w collapses to zero. */
+.app-shell {
+  transition: grid-template-columns var(--motion-panel) ease;
 }
-.sidebar-collapsed .sidebar {
-  display: none;
+.app-shell.sidebar-collapsed {
+  --nav-w: var(--rail-w);
+}
+.sidebar-collapsed > .sidebar {
+  padding: 15px 6px 12px;
+  align-items: center;
+  overflow: hidden;
+}
+.sidebar-rail {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0;
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+}
+/* Occupies the slot the brand uses when expanded, so every icon below keeps its
+   vertical position whether navigation is open or collapsed. */
+.sidebar-rail > .sidebar-rail-head {
+  height: var(--nav-head-h);
+  /* The brand carries the same gap before the first navigation row. */
+  margin-bottom: 12px;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+}
+.sidebar-rail > .navigation-quick-actions,
+.sidebar-rail > .sidebar-rail-destinations,
+.sidebar-rail > .sidebar-app-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  width: 100%;
+}
+.sidebar-rail > .sidebar-rail-destinations {
+  margin-top: 12px;
+}
+.sidebar-rail > .sidebar-app-actions {
+  padding-top: 8px;
+  border-top: 1px solid var(--line);
+}
+.sidebar-rail-spacer {
+  flex: 1;
+}
+.sidebar-rail > .sidebar-app-actions > .icon-button {
+  width: 100%;
+}
+.sidebar-rail .icon-button[aria-current="page"] {
+  background: var(--accent-soft);
+  color: var(--text);
+}
+/* The collapse control belongs to the panel it closes. */
+.bot-tree-navigation > .brand {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
 }
 .sidebar-toggle {
   flex-shrink: 0;
 }
-.focus-reading .sidebar-toggle {
-  display: none;
-}
-@media (max-width: 760px) {
+/* App navigation changes to a drawer before reading and editing become cramped. */
+@media (max-width: 1023px) {
+  :root {
+    --rail-w: 0px;
+  }
   .sidebar-toggle {
     display: none;
   }
 }
-/* App navigation changes to a drawer before reading and editing become cramped. */
 @media (min-width: 761px) and (max-width: 1023px) {
   .app-shell {
     grid-template-columns: minmax(0, 1fr);

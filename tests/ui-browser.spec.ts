@@ -195,7 +195,7 @@ test('UI01 UI02 UI04 UI05 UI09 long real sources keep composer accessible, safe 
       )
     ).toBe(true);
     await nav(page, '설정');
-    await selectSettingsSection(page, '프로바이더·모델 등록');
+    await selectSettingsSection(page, '프로바이더·모델');
     const connectionDialog = page.getByRole('dialog', { name: '설정', exact: true });
     expect(
       await connectionDialog.evaluate((element) => element.scrollWidth <= element.clientWidth + 1)
@@ -1772,7 +1772,7 @@ test('UI settings categories retain drafts and support keyboard navigation', asy
     await expect(dialog.getByRole('tabpanel')).toHaveCount(1);
     await expect(dialog.getByLabel('앱 화면 테마')).toBeVisible();
     await expect(dialog.getByTestId('connection-editor')).not.toBeVisible();
-    await selectSettingsSection(page, '프로바이더·모델 등록');
+    await selectSettingsSection(page, '프로바이더·모델');
     await startProviderConnection(page);
     await dialog
       .getByRole('region', { name: '제공자 선택', exact: true })
@@ -1789,7 +1789,7 @@ test('UI settings categories retain drafts and support keyboard navigation', asy
     if (viewport.width === 1440) {
       await tabs.getByRole('tab', { name: '접근 보안', exact: true }).press('Home');
       await expect(tabs.getByRole('tab', { name: '일반', exact: true })).toBeFocused();
-      for (const section of ['역할별 모델', '현재 프롬프트', '프로바이더·모델 등록']) {
+      for (const section of ['역할별 모델', '현재 프롬프트', '프로바이더·모델']) {
         await page.keyboard.press('ArrowDown');
         await expect(tabs.getByRole('tab', { name: section, exact: true })).toBeFocused();
       }
@@ -1797,7 +1797,7 @@ test('UI settings categories retain drafts and support keyboard navigation', asy
       await dialog.getByRole('button', { name: '설정 목록으로', exact: true }).click();
       const connection = dialog
         .locator('.settings-navigation')
-        .getByRole('button', { name: '프로바이더·모델 등록', exact: true });
+        .getByRole('button', { name: '프로바이더·모델', exact: true });
       await connection.focus();
       await page.keyboard.press('Enter');
       await expect(dialog.locator('.settings-navigation').filter({ visible: true })).toHaveCount(0);

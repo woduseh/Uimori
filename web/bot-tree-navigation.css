@@ -41,7 +41,7 @@
   flex: 1;
 }
 .navigation-dialog > .dialog-header > .navigation-quick-actions > .nav-button {
-  width: 44px;
+  width: var(--control-h);
   padding: 10px;
 }
 .navigation-dialog > .dialog-header > .navigation-quick-actions > .nav-button > span {
@@ -63,7 +63,7 @@
   min-width: 0;
 }
 .bot-tree-folder-contents {
-  padding-left: 8px;
+  padding-left: 16px;
 }
 .bot-tree-folder {
   margin-bottom: 6px;

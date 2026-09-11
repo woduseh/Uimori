@@ -52,8 +52,10 @@
   padding: 10px 6px;
   margin: 3px 0;
 }
-.bot-choice:hover {
-  background: var(--hover);
+@media (hover: hover) {
+  .bot-choice:hover {
+    background: var(--hover);
+  }
 }
 .bot-choice > span:last-child {
   display: flex;
@@ -94,8 +96,10 @@
   border-radius: 6px;
   gap: 2px;
 }
-.bot-folder-heading:hover {
-  background: var(--hover);
+@media (hover: hover) {
+  .bot-folder-heading:hover {
+    background: var(--hover);
+  }
 }
 .bot-folder-toggle {
   display: flex;
@@ -119,6 +123,10 @@
 .bot-folder-toggle svg {
   flex-shrink: 0;
 }
+.bot-folder-toggle > svg,
+.bot-branch-toggle > svg {
+  transition: transform var(--motion-fast) ease;
+}
 .bot-folder-toggle .expanded {
   transform: rotate(90deg);
 }
@@ -129,12 +137,17 @@
   opacity: 0;
   pointer-events: none;
 }
-.bot-chat-item:hover .bot-row-actions,
 .bot-chat-item:focus-within .bot-row-actions,
-.bot-folder-heading:hover .bot-row-actions,
 .bot-folder-heading:focus-within .bot-row-actions {
   opacity: 1;
   pointer-events: auto;
+}
+@media (hover: hover) {
+  .bot-chat-item:hover .bot-row-actions,
+  .bot-folder-heading:hover .bot-row-actions {
+    opacity: 1;
+    pointer-events: auto;
+  }
 }
 .bot-navigation .bot-row-actions > .icon-button {
   display: grid;
@@ -149,9 +162,11 @@
   color: var(--muted);
   border-radius: 4px;
 }
-.bot-navigation .bot-row-actions > button:hover {
-  background: var(--hover);
-  color: var(--text);
+@media (hover: hover) {
+  .bot-navigation .bot-row-actions > button:hover {
+    background: var(--hover);
+    color: var(--text);
+  }
 }
 .bot-chat-list {
   display: grid;
@@ -176,8 +191,10 @@
   border-radius: 6px;
   gap: 2px;
 }
-.bot-chat-item:hover {
-  background: var(--hover);
+@media (hover: hover) {
+  .bot-chat-item:hover {
+    background: var(--hover);
+  }
 }
 .bot-chat-item.selected {
   background: var(--surface-raised);
@@ -318,9 +335,9 @@
 .bot-chat-menu-actions > .delete-control > .delete-button {
   display: grid;
   place-items: center;
-  width: 44px;
-  min-width: 44px;
-  min-height: 44px;
+  width: var(--control-h);
+  min-width: var(--control-h);
+  min-height: var(--control-h);
   padding: 0;
 }
 .bot-chat-menu > button {
@@ -337,18 +354,18 @@
   }
   .bot-chat-item,
   .bot-chat-item .chat-link {
-    min-height: 44px;
-    height: 44px;
+    min-height: var(--control-h);
+    height: var(--control-h);
   }
   .bot-navigation .bot-row-actions > .icon-button {
-    width: 44px;
-    min-width: 44px;
-    height: 44px;
-    min-height: 44px;
+    width: var(--control-h);
+    min-width: var(--control-h);
+    height: var(--control-h);
+    min-height: var(--control-h);
   }
 
   .bot-folder-toggle {
-    min-height: 44px;
+    min-height: var(--control-h);
   }
 }
 .bot-navigation-empty {
@@ -387,6 +404,24 @@
 .bot-branch {
   min-width: 0;
 }
+/* A revealed subtree fades in. Collapsed rows stay unmounted so their folders are
+   still fetched lazily. The rows must not move: a transform here shifts drag and drop
+   targets while the list is being reordered. */
+.bot-branch-chats,
+.bot-chat-list {
+  animation: bot-tree-reveal var(--motion-panel) ease;
+}
+@keyframes bot-tree-reveal {
+  from {
+    opacity: 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .bot-branch-chats,
+  .bot-chat-list {
+    animation: none;
+  }
+}
 .bot-branch-heading,
 .bot-branch-actions {
   display: flex;
@@ -394,12 +429,13 @@
   min-width: 0;
 }
 .bot-branch-heading {
-  min-height: 44px;
+  min-height: var(--control-h);
   gap: 2px;
 }
 .bot-branch-toggle {
   display: flex;
   align-items: center;
+  border-color: transparent;
   gap: 5px;
   flex: 1;
   min-width: 0;
@@ -432,12 +468,17 @@
   opacity: 0;
   pointer-events: none;
 }
-.bot-branch-heading:hover .bot-branch-actions,
 .bot-branch-heading:focus-within .bot-branch-actions,
 .bot-branch-actions:has(details[open]),
 .bot-branch-actions:has(dialog[open]) {
   opacity: 1;
   pointer-events: auto;
+}
+@media (hover: hover) {
+  .bot-branch-heading:hover .bot-branch-actions {
+    opacity: 1;
+    pointer-events: auto;
+  }
 }
 .bot-branch-actions > .icon-button,
 .bot-branch-actions > .action-menu > summary,
@@ -449,7 +490,7 @@
   padding: 0;
 }
 .bot-branch-chats {
-  padding-left: 8px;
+  padding-left: 16px;
 }
 .bot-row-actions:has(details[open]) {
   opacity: 1;
@@ -461,28 +502,36 @@
   margin-top: 12px;
 }
 .bot-search-results > button {
-  display: flex;
-  justify-content: space-between;
-  gap: 12px;
+  display: grid;
+  justify-items: start;
+  gap: 2px;
   text-align: left;
   background: transparent;
   color: var(--text);
 }
-.bot-search-results strong {
+.bot-search-results strong,
+.bot-search-results small {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
   overflow-wrap: anywhere;
   min-width: 0;
+  max-width: 100%;
+}
+.bot-search-results strong {
+  -webkit-line-clamp: 2;
 }
 .bot-search-results small {
   color: var(--muted);
-  flex-shrink: 0;
+  -webkit-line-clamp: 1;
 }
 @media (hover: none), (pointer: coarse) {
   .bot-branch-actions > .icon-button,
   .bot-branch-actions > .action-menu > summary,
   .bot-row-actions > .action-menu > summary {
-    width: 44px;
-    min-width: 44px;
-    height: 44px;
-    min-height: 44px;
+    width: var(--control-h);
+    min-width: var(--control-h);
+    height: var(--control-h);
+    min-height: var(--control-h);
   }
 }

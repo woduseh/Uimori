@@ -31,7 +31,7 @@
   align-items: center;
   gap: 8px;
   position: relative;
-  min-height: 44px;
+  min-height: var(--control-h);
   padding: 9px 14px;
   border: 1px solid var(--border);
   border-radius: 9px;
