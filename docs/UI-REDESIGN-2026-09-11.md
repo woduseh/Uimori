@@ -178,3 +178,23 @@
 `/api/chat-activities` 응답을 두 채팅·세 종류로 가로채 확인했어요. 하단 요약 `진행 중 6`, 채팅 선택 목록에 `북쪽 등대의 첫 겨울 · 원문 생성 2개`와 `폭풍 전날 밤 · 번역 1개 · 삽화 3개`가 뜨고, 고르면 해당 채팅으로 이동하며 그 채팅의 작업 현황이 열려요. 한 채팅만 진행 중일 때는 목록 없이 바로 이동해요. 레일에서는 44×44 글리프가 `bot-working`으로 돌아요.
 
 내장 브라우저가 화면에 표시되지 않으면 `document.hidden`이 참이라 활동 폴링이 멈추고 CSS 전환도 진행되지 않아요. 확인할 때 `visibilitychange`를 발생시키고 전환을 끈 뒤 측정했어요. 앱 동작이 아니라 검사 환경의 특성이에요.
+
+## 2026-09-11 6차: 손수 만든 alertdialog 세 곳을 공유 모달로
+
+`Dialog`를 쓰지 않고 `role="alertdialog"`만 선언한 곳이 세 군데 있었어요. 보조 기술에는 모달이라고 알리면서 배경이 살아 있고 Escape도 없어서, 선언과 실제가 어긋난 상태였어요.
+
+- `ProviderManagement`의 `provider-impact`는 같은 `DraftDiscardActions`를 쓰는 형제 다섯 곳이 이미 `Dialog`인데 혼자만 `<section>`에 `tabIndex={-1}`, 포커스용 ref, 손으로 짠 Escape 핸들러를 달고 있었어요. 셋 다 `Dialog`가 대신하므로 지웠어요.
+- `PackageBehaviorPanel`의 상태 초깃값 복구는 목록 안에서 항목마다 펼쳐지던 확인이었어요. 하나의 `Dialog`로 모으고 대상 항목 이름을 제목 대신 본문에서 밝혀요.
+- `PackageImagesEditor`의 이미지 참조 제거는 확인과 취소가 둘 다 `secondary`라 어느 쪽이 파괴적인지 구분이 없었어요. 공용 `.form-actions` 규약으로 옮겨 파괴적 동작을 표시했어요.
+
+세 곳 모두 접근성 이름과 버튼 이름을 유지해 기존 검사가 그대로 통과해요. 항목 단위 파괴적 확인을 모달로 두는 것은 `DeleteButton`이 15곳에서 쓰는 기존 규약과 같아요.
+
+CSS도 정리했어요. `.behavior-reset`은 규칙이 아예 없었고, `.package-image-remove`는 `rem`·`margin` 기반이라 앱의 `px`·`gap` 체계와 따로 놀았어요. 후자는 지웠어요. `.provider-impact`는 `비활성 영향 확인` 패널이 아직 쓰므로 남겼어요.
+
+### 검증
+
+`quality:full` PASS, 1,902 PASS / 1 SKIP. `verify:ui` PASS, `verify:providers` 15 PASS, `verify:library` 38 PASS / 1 FAIL(기존 실패 `PNAV01`).
+
+`편집 중인 초안 확인`은 `provider-management-browser.spec.ts`가 `getByRole('alertdialog', …)`로 직접 잡고 있고 통과해요. `이미지 참조 제거`는 `library-images-browser`·`shared-package-browser` 두 곳이 덮어요.
+
+**상태 초깃값 복구는 클릭 경로를 검증하지 못했어요.** 그 버튼은 인스턴스가 `stale`이거나 오류일 때만 나타나는데, 합성 봇으로 패키지 개정과 상태 스키마를 두 번 바꿔도 런타임이 매번 상태를 이행시켜 `ready`로 남아 재현하지 못했어요. 패널이 새 `Dialog`를 품은 채 렌더되고 `verify:ui`가 통과한다는 것까지만 확인했어요.

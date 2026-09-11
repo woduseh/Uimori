@@ -1,4 +1,5 @@
 import { DraftDiscardActions } from './DraftDiscardActions.js';
+import { Dialog } from './Dialog.js';
 import { Switch } from './BooleanControls.js';
 import { useEffect, useRef, useState } from 'react';
 import { ActionMenu } from './ActionMenu.js';
@@ -189,14 +190,7 @@ export function ConnectionEditor({
   const [conflict, setConflict] = useState<'connection' | 'model' | 'status' | null>(null),
     [confirmation, setConfirmation] = useState<Confirmation>();
   const [registeredModel, setRegisteredModel] = useState<ModelPreset>();
-  const operationLock = useRef(false),
-    discardPanel = useRef<HTMLElement>(null);
-  useEffect(() => {
-    if (discard) {
-      discardPanel.current?.scrollIntoView({ block: 'nearest' });
-      discardPanel.current?.focus();
-    }
-  }, [discard]);
+  const operationLock = useRef(false);
   const connectionForm = useRef<HTMLFormElement>(null),
     modelForm = useRef<HTMLFormElement>(null),
     confirmationPanel = useRef<HTMLElement>(null);
@@ -522,41 +516,39 @@ export function ConnectionEditor({
       data-testid="connection-editor"
       aria-label="프로바이더·모델 등록"
     >
-      {discard && (
-        <section
-          className="provider-impact"
-          role="alertdialog"
-          aria-label="편집 중인 초안 확인"
-          tabIndex={-1}
-          ref={discardPanel}
-          onKeyDown={(event) => {
-            if (event.key !== 'Escape') return;
-            event.preventDefault();
-            event.stopPropagation();
-            const kind = discard.kind;
-            setDiscard(undefined);
-            navigate(kind);
-          }}
-        >
-          <strong>
-            저장하지 않은 {discard.kind === 'connection' ? '프로바이더' : '모델'} 초안이 있어요
-          </strong>
-          <p>다른 항목을 편집하면 현재 초안이 교체돼요.</p>
-          <DraftDiscardActions
-            onContinue={() => {
-              const kind = discard.kind;
-              setDiscard(undefined);
-              navigate(kind);
-            }}
-            onDiscard={() => {
-              const action = discard.proceed;
-              setDiscard(undefined);
-              action();
-            }}
-            discardLabel="초안 버리고 계속"
-          />
-        </section>
-      )}
+      <Dialog
+        open={!!discard}
+        role="alertdialog"
+        title="편집 중인 초안 확인"
+        onClose={() => {
+          if (!discard) return;
+          const kind = discard.kind;
+          setDiscard(undefined);
+          navigate(kind);
+        }}
+      >
+        {discard && (
+          <>
+            <strong>
+              저장하지 않은 {discard.kind === 'connection' ? '프로바이더' : '모델'} 초안이 있어요
+            </strong>
+            <p>다른 항목을 편집하면 현재 초안이 교체돼요.</p>
+            <DraftDiscardActions
+              onContinue={() => {
+                const kind = discard.kind;
+                setDiscard(undefined);
+                navigate(kind);
+              }}
+              onDiscard={() => {
+                const action = discard.proceed;
+                setDiscard(undefined);
+                action();
+              }}
+              discardLabel="초안 버리고 계속"
+            />
+          </>
+        )}
+      </Dialog>
       <div className="provider-workspace-heading" ref={heading} tabIndex={-1}>
         <div className="provider-workspace-navigation" aria-label="프로바이더·모델 등록 화면">
           <button

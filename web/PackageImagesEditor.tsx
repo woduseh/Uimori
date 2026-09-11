@@ -1,3 +1,5 @@
+import { Dialog } from './Dialog.js';
+import { CloseIcon, DeleteIcon } from './ui-icons.js';
 import { Switch } from './BooleanControls.js';
 import { useLayoutEffect, useRef, useState } from 'react';
 import type { ContentPackage } from '../core/content-package.js';
@@ -294,36 +296,43 @@ export function PackageImagesEditor({ value, onChange, onDirtyChange }: Props) {
             <button type="button" className="ghost" onClick={() => setRemove(active.id)}>
               이 자료에서 이미지 제거
             </button>
-            {removing && (
-              <div
-                role="alertdialog"
-                aria-label="이미지 참조 제거 확인"
-                className="package-image-remove"
-              >
-                <p>
-                  “{removing.title}”을 이 자료의 최신 내용에서 제거할까요? 저장된 과거 실행 자료와
-                  과거 장면에서 쓰는 이미지는 보존돼요.
-                </p>
-                <button
-                  type="button"
-                  className="secondary"
-                  onClick={() => {
-                    change(
-                      (latest.current.value.images ?? []).filter(
-                        (image) => image.id !== removing.id
-                      )
-                    );
-                    setRemove('');
-                    setSelected('');
-                  }}
-                >
-                  이미지 참조 제거
-                </button>
-                <button type="button" className="secondary" onClick={() => setRemove('')}>
-                  취소
-                </button>
-              </div>
-            )}
+            <Dialog
+              open={!!removing}
+              role="alertdialog"
+              title="이미지 참조 제거 확인"
+              onClose={() => setRemove('')}
+            >
+              {removing && (
+                <>
+                  <p>
+                    “{removing.title}”을 이 자료의 최신 내용에서 제거할까요? 저장된 과거 실행 자료와
+                    과거 장면에서 쓰는 이미지는 보존돼요.
+                  </p>
+                  <div className="form-actions">
+                    <button type="button" className="secondary" onClick={() => setRemove('')}>
+                      <CloseIcon size={18} aria-hidden="true" />
+                      취소
+                    </button>
+                    <button
+                      type="button"
+                      className="danger"
+                      onClick={() => {
+                        change(
+                          (latest.current.value.images ?? []).filter(
+                            (image) => image.id !== removing.id
+                          )
+                        );
+                        setRemove('');
+                        setSelected('');
+                      }}
+                    >
+                      <DeleteIcon size={18} aria-hidden="true" />
+                      이미지 참조 제거
+                    </button>
+                  </div>
+                </>
+              )}
+            </Dialog>
           </div>
         ) : (
           images.length > 0 && (
