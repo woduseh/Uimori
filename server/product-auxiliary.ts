@@ -38,6 +38,7 @@ import {
 } from '../core/translation-context.js';
 import { PromptProgramError } from '../core/prompt-program.js';
 import type { AuxiliaryFailureDiagnostic } from '../core/auxiliary-diagnostic.js';
+import { STORY_READ_TOOLS } from '../core/story-read-tools.js';
 
 type MaybePromise<T> = T | Promise<T>;
 type JobKind = Exclude<TaskRole, 'main'>;
@@ -134,37 +135,37 @@ const safeError = (error: unknown) => {
   return 'AUXILIARY_EXECUTION_FAILED';
 };
 const toolSchemas: ProviderTool[] = [
-  ...(['story', 'notes', 'translation'] as const).flatMap((kind): ProviderTool[] => [
-    {
-      name: kind === 'notes' ? 'notes.list' : `${kind}.search`,
-      description: `Search scoped ${kind} evidence; empty query lists metadata. Translation is wording only, notes contain explicit user corrections.`,
-      inputSchema: {
-        type: 'object',
-        properties: {
-          query: { type: 'string' },
-          offset: { type: 'integer' },
-          limit: { type: 'integer' },
-        },
-        required: ['query'],
-        additionalProperties: false,
+  ...STORY_READ_TOOLS,
+  {
+    name: 'translation.search',
+    description:
+      'Search scoped prior translations for wording and register; an empty query lists metadata. These translations never establish new story facts.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        query: { type: 'string' },
+        offset: { type: 'integer' },
+        limit: { type: 'integer' },
       },
+      required: ['query'],
+      additionalProperties: false,
     },
-    {
-      name: `${kind}.read`,
-      description:
-        'Read discovered evidence with exact source provenance and range. Follow nextOffset for the next range.',
-      inputSchema: {
-        type: 'object',
-        properties: {
-          id: { type: 'string' },
-          offset: { type: 'integer' },
-          limit: { type: 'integer' },
-        },
-        required: ['id'],
-        additionalProperties: false,
+  },
+  {
+    name: 'translation.read',
+    description:
+      'Read discovered evidence with exact source provenance and range. Follow nextOffset for the next range.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        id: { type: 'string' },
+        offset: { type: 'integer' },
+        limit: { type: 'integer' },
       },
+      required: ['id'],
+      additionalProperties: false,
     },
-  ]),
+  },
   {
     name: 'knowledge.search',
     description:
@@ -300,12 +301,22 @@ function providerInput(
         ? 'Return optional display-only annotations for the source blocks.'
         : 'Select appropriate existing assets or return no images.';
   const compilation = compileTranslationPrompt(input, snapshot, task);
+  // Omit a fallback only after its complete value was rendered by a declared slot.
+  // Inactive slots and templates that trim or otherwise omit content keep the full fallback.
+  const delivered = (slot: string, value: string) =>
+    !!value &&
+    !!compilation?.usedSlots?.includes(slot) &&
+    compilation.messages.some((message) =>
+      message.content.some((part) => part.text.includes(value))
+    );
+  const notes = input.role === 'translation' ? snapshot.story?.notes : undefined;
   return {
     role: input.role === 'presentation' ? 'image' : input.role,
     modelId,
     stable: {
       contract:
         (compilation ? '' : input.contract) +
+        (input.referencePolicy ? '\n' + input.referencePolicy : '') +
         (evaluation
           ? '\nThe selected evaluation tool set is scoped to this model preset and this run. eval_submit_artifact returns content as the completed task output; userFacingNotice remains separate metadata.'
           : ''),
@@ -355,17 +366,25 @@ function providerInput(
       source: json({
         sourceRevision: input.sourceRevision,
         sourceHash: input.sourceHash,
-        context: input.context,
-        ...(input.referencePolicy ? { referencePolicy: input.referencePolicy } : {}),
-        ...(input.role === 'translation' ? { text: input.sourceText } : { blocks: input.blocks }),
+        ...(!delivered('context', JSON.stringify(input.context)) ? { context: input.context } : {}),
+        ...(input.role === 'translation'
+          ? !delivered('source', input.sourceText ?? '')
+            ? { text: input.sourceText }
+            : {}
+          : { blocks: input.blocks }),
+        ...(notes?.length && !delivered('notes', JSON.stringify(notes)) ? { notes } : {}),
         ...(input.role !== 'presentation' && input.scenes ? { scenes: input.scenes } : {}),
         outputSchema: input.outputSchema,
       }),
-      catalog: json(
-        input.role === 'presentation'
-          ? { items: input.assets ?? [], ...input.assetPage }
-          : input.catalog
-      ),
+      ...(!delivered('catalog', JSON.stringify(input.catalog))
+        ? {
+            catalog: json(
+              input.role === 'presentation'
+                ? { items: input.assets ?? [], ...input.assetPage }
+                : input.catalog
+            ),
+          }
+        : {}),
       results: json(input.results),
     },
     ...(opaqueState !== undefined ? { opaqueState } : {}),

@@ -1,4 +1,10 @@
-import { modelWorkspace, updateModelWorkspace } from '../server/prompt-workspace.js';
+import {
+  modelWorkspace,
+  updateModelWorkspace,
+  updatePromptWorkspace,
+} from '../server/prompt-workspace.js';
+import { createDefaultPromptProgram } from '../core/prompt-defaults.js';
+import { DEFAULT_MAIN_PROMPT } from '../core/prompts.js';
 import { updateTestProfile } from './fixtures/model-workspace.js';
 import { createFixtureChat } from './fixtures/chat.js';
 import { afterEach, expect, test } from 'vitest';
@@ -108,6 +114,15 @@ test('real authored start and ordinary turns retain host provenance through comp
     opening =
       'AUTHORED_OPENING\n' +
       '비 오는 항구에서 미라는 약속을 기억해요. 진실인지 아직 알 수 없어요.\n'.repeat(450);
+  // Set only the source fixture; restore targets must remain untouched empty databases.
+  updatePromptWorkspace(store, {
+    expectedRevision: modelWorkspace(store).revision,
+    main: {
+      title: 'Synthetic context instructions',
+      program: createDefaultPromptProgram(DEFAULT_MAIN_PROMPT),
+      values: {},
+    },
+  });
   const content = store.product.content({
     kind: 'module',
     title: 'Synthetic authored world',

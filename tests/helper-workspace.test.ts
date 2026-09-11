@@ -204,9 +204,22 @@ test.each([
   ['초안을 수정하면 저장해줘.', []],
   ['Save this draft if it is correct.', []],
   ['이 초안을 저장해 주실 수 있을까요?', ['draft.save']],
-  ['이 초안을 수정해 주실 수 있을까요?', ['draft.patch']],
+  ['이 초안을 수정해 주실 수 있을까요?', ['draft.patch', 'draft.save']],
   ['이 초안을 수정하고 저장해 주실 수 있을까요?', ['draft.patch', 'draft.save']],
-  ['초안 저장 여부를 확인해줘. 제목은 수정해줘.', ['draft.patch']],
+  ['초안 저장 여부를 확인해줘. 제목은 수정해줘.', ['draft.patch', 'draft.save']],
+  ['현재 프롬프트를 수정해줘', ['draft.patch', 'draft.save']],
+  ['Please edit this prompt', ['draft.patch', 'draft.save']],
+  ['초안만 수정해줘', ['draft.patch']],
+  ['Edit this prompt as a draft only', ['draft.patch']],
+  ['Edit this prompt for review only', []],
+  ['Edit this prompt. For review only.', []],
+  ['수정안만 작성해줘', []],
+  ["Edit this prompt. Don't save; it's only for review.", ['draft.patch']],
+  ["Edit this prompt. Don't save because it's for review only.", ['draft.patch']],
+  ['Edit this prompt. Don’t save; it’s only for review.', ['draft.patch']],
+  ['현재 초안을 수정해줘. 저장하지 마시고 검토만 해줘.', ['draft.patch']],
+  ['현재 초안을 수정해줘. 저장 없이 변경 결과를 설명해줘.', ['draft.patch']],
+  ["Edit this prompt. 'Don't save'.", ['draft.patch', 'draft.save']],
 ] as const)('direct draft authority follows the requested action: %s', (request, actions) => {
   const scope = { kind: 'library' as const, workId: 'work' };
   expect(
@@ -229,6 +242,99 @@ test('mixed draft requests preserve explicit patch and save independently of pro
   ]);
   expect(directHelperGrants('r', scope, '새 봇을 만들어줘라는 문장을 번역해줘')).toEqual([]);
   expect(directHelperGrants('r', scope, '초안을 저장해줘. 저장하지 마', editor)).toEqual([]);
+});
+
+test('clear library creation includes saving unless the user asks for a draft only', () => {
+  const scope = { kind: 'library' as const, workId: 'work' };
+  expect(directHelperGrants('r', scope, '새 봇을 만들어줘')).toEqual([
+    expect.objectContaining({
+      target: 'library:work',
+      actions: ['draft.create:bot', 'draft.create.save'],
+    }),
+  ]);
+  expect(directHelperGrants('r', scope, '새 봇의 초안만 만들어줘')).toEqual([
+    expect.objectContaining({ target: 'library:work', actions: ['draft.create:bot'] }),
+  ]);
+  expect(directHelperGrants('r', scope, '새 봇을 만들어줘. 저장하지 마')).toEqual([
+    expect.objectContaining({ target: 'library:work', actions: ['draft.create:bot'] }),
+  ]);
+});
+
+test.each([
+  'Create a draft of a new bot for review',
+  'Create a new bot for review only',
+  'Create a new prompt proposal only',
+  '새 봇을 제안용으로 만들어줘',
+])('review-only creation stays a proposal even with an editor open: %s', (request) => {
+  expect(
+    directHelperGrants('r', { kind: 'library', workId: 'work' }, request, { draftId: 'existing' })
+  ).toEqual([]);
+});
+
+test('library creation cannot save a different open draft and respects a contracted English prohibition', () => {
+  const scope = { kind: 'library' as const, workId: 'work' },
+    editor = { draftId: 'existing' };
+  for (const request of ['새 봇을 만들어줘', 'Create a new bot'])
+    expect(directHelperGrants('r', scope, request, editor)).toEqual([
+      expect.objectContaining({
+        target: 'library:work',
+        actions: ['draft.create:bot', 'draft.create.save'],
+      }),
+    ]);
+  expect(
+    directHelperGrants('r', scope, "Create a new bot. Don't save; it's only a proposal.", editor)
+  ).toEqual([expect.objectContaining({ target: 'library:work', actions: ['draft.create:bot'] })]);
+  expect(
+    directHelperGrants(
+      'r',
+      scope,
+      "Create a new bot. Don't save because it's for review only.",
+      editor
+    )
+  ).toEqual([expect.objectContaining({ target: 'library:work', actions: ['draft.create:bot'] })]);
+  expect(directHelperGrants('r', scope, '현재 초안을 참고해서 새 봇을 만들어줘', editor)).toEqual([
+    expect.objectContaining({
+      target: 'library:work',
+      actions: ['draft.create:bot', 'draft.create.save'],
+    }),
+  ]);
+  for (const request of [
+    '새 봇을 만들고 현재 초안도 수정해줘',
+    'Create a new bot and edit this prompt',
+    '현재 초안을 수정하고 새 봇을 만들어줘',
+    'Edit this prompt and create a new bot',
+  ])
+    expect(directHelperGrants('r', scope, request, editor)).toEqual([
+      expect.objectContaining({
+        target: 'library:work',
+        actions: ['draft.create:bot', 'draft.create.save'],
+      }),
+      expect.objectContaining({ target: 'existing', actions: ['draft.patch', 'draft.save'] }),
+    ]);
+});
+
+test('chat actions and explicit draft edits authorize only their named targets', () => {
+  const scope = { kind: 'chat' as const, chatId: 'chat', branchId: 'branch' },
+    editor = { draftId: 'existing' };
+  for (const [request, actions] of [
+    ['제목을 수정해줘', ['title.write']],
+    ['메모를 추가해줘', ['notes.write']],
+    ['이 채팅의 로어를 수정해줘', ['chat.lore']],
+    ['요약을 수정해줘', ['context.edit']],
+    ['장면의 구성을 수정해줘', ['outline.write']],
+  ] as const)
+    expect(directHelperGrants('r', scope, request, editor)).toEqual([
+      expect.objectContaining({ target: 'chat', actions }),
+    ]);
+  expect(directHelperGrants('r', scope, '현재 초안의 제목을 수정해줘', editor)).toEqual([
+    expect.objectContaining({ target: 'existing', actions: ['draft.patch', 'draft.save'] }),
+  ]);
+  expect(
+    directHelperGrants('r', scope, '제목을 수정하고 현재 초안의 내용도 수정해줘', editor)
+  ).toEqual([
+    expect.objectContaining({ target: 'chat', actions: ['title.write'] }),
+    expect.objectContaining({ target: 'existing', actions: ['draft.patch', 'draft.save'] }),
+  ]);
 });
 test('real transport permits requested outline writing while refusing an unsolicited artifact child', async () => {
   const f = fixture(),

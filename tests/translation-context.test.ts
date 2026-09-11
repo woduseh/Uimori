@@ -17,6 +17,7 @@ import { executeTool } from '../core/provider.js';
 import type { RunSnapshot, ToolEvent } from '../core/types.js';
 import type { Connection, ModelPreset } from '../core/product.js';
 import { loopbackProvider, writeSse } from './fixtures/loopback-provider.js';
+import { translationFixtureSlot } from './fixtures/translation-job.js';
 
 const owned: { store: Store; dir: string }[] = [];
 const servers: (() => Promise<void>)[] = [];
@@ -190,9 +191,8 @@ test('HTTP tool discovery/read reaches older-than-two source, typed authored mem
     const wire = JSON.parse(req.body);
     const results = wire.input.results;
     if (results.length === 0) {
-      expect(wire.input.source.context.previousSources.map((s: any) => s.revision)).not.toContain(
-        first.id
-      );
+      const context = JSON.parse(translationFixtureSlot(wire, 'context'));
+      expect(context.previousSources.map((s: any) => s.revision)).not.toContain(first.id);
       expect(JSON.stringify(wire)).not.toContain('앨런 선장이라고 불러 줘.');
       await writeSse(res, [
         {
@@ -346,7 +346,16 @@ test('translation tools support empty memory with disabled indexing, bounded pag
     { id: refs[0].id, offset: -1 },
     { id: refs[0].id, unexpected: true },
   ])
-    expect(read(call('translation.read', args)).denied).toBe(true);
+    expect(read(call('translation.read', args))).toMatchObject({
+      denied: true,
+      errorKind: 'recoverable',
+      result: { code: 'INVALID_ARGUMENTS' },
+    });
+  expect(read(call('shell', {}))).toMatchObject({
+    denied: true,
+    result: { code: 'TOOL_NOT_ALLOWED' },
+  });
+  expect(read(call('shell', {}))).not.toHaveProperty('errorKind');
 });
 
 test.each(['denied', 'budget', 'empty'] as const)(

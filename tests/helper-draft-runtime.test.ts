@@ -426,9 +426,10 @@ test('the real draft bridge keeps saved writes visible after EOF and refuses a f
 });
 
 test.each([
+  '현재 초안의 제목을 수정해줘',
   '현재 초안의 제목을 수정하고 미완성 JSON을 완성한 뒤 저장해줘',
   '현재 초안의 제목을 수정하고 미완성 JSON을 완성한 뒤 저장해 주실 수 있을까요?',
-])('real draft bridge honors explicit patch and save exactly once: %s', async (text) => {
+])('real draft bridge completes clear edit or save requests exactly once: %s', async (text) => {
   const f = await fixture();
   let saveArgs: Record<string, unknown> | undefined, savedResult: DraftSaveResult | undefined;
   const send = mockSend((request, round) => {

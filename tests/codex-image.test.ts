@@ -75,8 +75,8 @@ afterEach(async () => {
 });
 
 describe('Codex illustration turns through the synthetic app-server', () => {
-  it('enables only image generation, sends references as data URLs and returns decoded PNG bytes', async () => {
-    const { runtime, records } = setup('image');
+  it('adds image generation alongside native utilities and returns only decoded image bytes and the caption', async () => {
+    const { runtime, records } = setup('image-native');
     const wires: WireRecord[] = [];
     const result = await runtime.generateImage(
       connection,
@@ -98,6 +98,8 @@ describe('Codex illustration turns through the synthetic app-server', () => {
     expect(result.usage).toMatchObject({ inputTokens: 100, outputTokens: 30, costUsd: null });
     const threadStart = records().find((entry) => entry.method === 'thread/start');
     expect(threadStart.params.config['features.image_generation']).toBe(true);
+    expect(threadStart.params.config['features.code_mode']).toBe(true);
+    expect(threadStart.params.config.web_search).toBe('cached');
     expect(threadStart.params.config['features.shell_tool']).toBe(false);
     expect(threadStart.params.environments).toEqual([]);
     const turnStart = records().find((entry) => entry.method === 'turn/start');

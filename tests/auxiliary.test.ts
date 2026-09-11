@@ -15,6 +15,7 @@ import {
 } from '../core/auxiliary.js';
 import { BUILTIN_ASSETS, builtinAssetSvg, sourceScenes } from '../core/fixtures/presentation.js';
 import type { RunSnapshot } from '../core/types.js';
+import { translationReader } from '../core/translation-context.js';
 
 const source = (text: string, id = 'source-before-reveal'): AuxiliarySource => ({
   id,
@@ -214,7 +215,7 @@ describe('M1 source-bound auxiliary roles', () => {
     expect(result.output).toBe('이름이 있는 원문.');
     expect(input.sourceText).toBe(raw.text);
   });
-  test('repeating an identical recoverable read is bounded before a third provider call', async () => {
+  test('repeating a recoverable read remains bounded by the configured provider call budget', async () => {
     let calls = 0;
     await expect(
       executeAuxiliary(
@@ -229,8 +230,41 @@ describe('M1 source-bound auxiliary roles', () => {
           },
         })
       )
-    ).rejects.toThrow('TOOL_CORRECTION_EXHAUSTED');
-    expect(calls).toBe(2);
+    ).rejects.toMatchObject({ name: 'BudgetError' });
+    expect(calls).toBe(snapshot().settings.maxCalls);
+  });
+
+  test('translation can use its remaining budget to correct reads or finish without optional references', async () => {
+    const raw = source('A source.'),
+      run = snapshot(),
+      input = translationInput(raw, context(), run);
+    const result = await executeAuxiliary(
+      input,
+      run,
+      async (packet) => {
+        if (packet.results.length < 4)
+          return {
+            kind: 'tool',
+            action: {
+              callId: `read-${packet.results.length}`,
+              name: 'translation.read',
+              args: { id: 'missing', limit: packet.results.length < 2 ? 4097 : 4096 },
+            },
+          };
+        expect(packet.results.every((event) => event.errorKind === 'recoverable')).toBe(true);
+        return '원문이에요.';
+      },
+      { localTools: { names: ['translation.read'], execute: translationReader(run, []) } }
+    );
+    expect(result.output).toBe('원문이에요.');
+    expect(result.modelCalls).toBe(5);
+    expect(result.toolEvents.map((event) => event.result)).toEqual([
+      { code: 'INVALID_ARGUMENTS' },
+      { code: 'INVALID_ARGUMENTS' },
+      { code: 'RESOURCE_UNAVAILABLE' },
+      { code: 'RESOURCE_UNAVAILABLE' },
+    ]);
+    expect(input.sourceText).toBe(raw.text);
   });
 
   test('whole-source translation preserves long prose, natural numbers and exact source identity without tokens', async () => {
@@ -484,17 +518,99 @@ test('image catalog pages find names beyond the first page without exposing URLs
     bytesProvided: false,
   });
   expect(JSON.stringify(result.toolEvents)).not.toContain('/api/');
-  const bad = () =>
-    executeAuxiliary(
-      input,
-      snapshot(),
-      async () => ({
-        kind: 'tool',
-        action: { callId: 'bad', name: 'assets.search', args: { limit: 51 } },
-      }),
-      { assetCatalog: assets }
-    );
-  await expect(bad()).rejects.toThrow('ASSET_SEARCH_INVALID');
+  const corrected = await executeAuxiliary(
+    input,
+    snapshot(),
+    async (packet) =>
+      packet.results.length
+        ? { sourceRevision: input.sourceRevision, sourceHash: input.sourceHash, entries: [] }
+        : {
+            kind: 'tool',
+            action: { callId: 'bad', name: 'assets.search', args: { limit: 51 } },
+          },
+    { assetCatalog: assets }
+  );
+  expect(corrected.toolEvents[0]).toMatchObject({
+    denied: true,
+    errorKind: 'recoverable',
+    result: { code: 'INVALID_ARGUMENTS' },
+  });
+  expect(corrected.modelCalls).toBe(2);
+});
+
+test('image lookups return correctable argument and unavailable errors without inventing an asset', async () => {
+  const raw = source('A source.'),
+    input = presentationInput(raw, context(), snapshot(), BUILTIN_ASSETS);
+  const actions = [
+    { name: 'assets.search', args: { unexpected: true } },
+    { name: 'assets.inspect', args: { ref: 42 } },
+    { name: 'assets.inspect', args: { ref: 'missing' } },
+    { name: 'assets.inspect', args: { ref: BUILTIN_ASSETS[0].ref } },
+  ];
+  const result = await executeAuxiliary(input, snapshot(), async (packet) => {
+    const action = actions[packet.results.length];
+    return action
+      ? { kind: 'tool', action: { callId: `asset-${packet.results.length}`, ...action } }
+      : { sourceRevision: raw.id, sourceHash: raw.hash, entries: [] };
+  });
+  expect(result.toolEvents.slice(0, 3)).toEqual([
+    expect.objectContaining({
+      denied: true,
+      errorKind: 'recoverable',
+      result: { code: 'INVALID_ARGUMENTS' },
+    }),
+    expect.objectContaining({
+      denied: true,
+      errorKind: 'recoverable',
+      result: { code: 'INVALID_ARGUMENTS' },
+    }),
+    expect.objectContaining({
+      denied: true,
+      errorKind: 'recoverable',
+      result: { code: 'ASSET_UNAVAILABLE' },
+    }),
+  ]);
+  expect(result.toolEvents[3]).toMatchObject({
+    denied: false,
+    result: { asset: { ref: BUILTIN_ASSETS[0].ref }, bytesProvided: false },
+  });
+  expect(validatePresentation(raw, result.output, BUILTIN_ASSETS).entries).toEqual([]);
+});
+
+test('annotation JSON may have one outer fence but malformed fields and oversized results are never truncated or partly accepted', () => {
+  const raw = source('A source.'),
+    input = displayInput(raw, context(), snapshot()),
+    entry = { anchor: input.blocks[0].anchor, summary: 'A source.', mood: 'quiet' },
+    output = {
+      sourceRevision: raw.id,
+      sourceHash: raw.hash,
+      kind: 'display-only',
+      entries: [entry],
+    };
+  expect(validateDisplayAnnotation(raw, `\`\`\`json\n${JSON.stringify(output)}\n\`\`\``)).toEqual(
+    output
+  );
+  expect(() => validateDisplayAnnotation(raw, `Explanation\n${JSON.stringify(output)}`)).toThrow(
+    'OUTPUT_SCHEMA_INVALID'
+  );
+  expect(() => validateDisplayAnnotation(raw, { ...output, sourceHash: 'wrong' })).toThrow(
+    'SOURCE_DEPENDENCY_MISMATCH'
+  );
+  for (const tooLong of [{ summary: 'x'.repeat(601) }, { mood: 'x'.repeat(101) }])
+    expect(() =>
+      validateDisplayAnnotation(raw, { ...output, entries: [{ ...entry, ...tooLong }] })
+    ).toThrow('OUTPUT_SCHEMA_INVALID');
+  expect(output.entries[0]).toEqual(entry);
+  const images = presentationInput(raw, context(), snapshot(), BUILTIN_ASSETS);
+  expect(input.contract).toContain('600 UTF-16');
+  expect(images.contract).toContain('at most 4');
+  expect(
+    validatePresentation(
+      raw,
+      `\`\`\`json\n${JSON.stringify({ sourceRevision: raw.id, sourceHash: raw.hash, entries: [] })}\n\`\`\``,
+      BUILTIN_ASSETS
+    ).entries
+  ).toEqual([]);
 });
 
 test('image selection uses IDs for duplicate names and rejects a different content hash', () => {

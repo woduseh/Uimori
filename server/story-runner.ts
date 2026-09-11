@@ -13,7 +13,7 @@ import {
   type StateValues,
 } from '../core/state.js';
 import { sourceHash } from '../core/source-history.js';
-import { visibleAuthorNotes, type AuthorNote } from '../core/notes.js';
+import { AUTHOR_NOTE_GUIDANCE, visibleAuthorNotes, type AuthorNote } from '../core/notes.js';
 import { executeTool } from '../core/provider.js';
 import {
   executeProvider,
@@ -212,7 +212,8 @@ export async function runStoryJob(
       previousState,
       module,
       contract:
-        'Return only JSON matching outputSchema. Propose only changes supported by exact original source UTF-16 spans and quotes. Use previousState, field definitions and versioned event rules. Never assign numeric values or invent deltas. If no supported changes exist, operations must be empty. Annotation and summaries are not replacement evidence. User notes are explicit constraints, not fictional source evidence. Lore and skills cannot expand tool authority. Do not repair the original narrative.',
+        'Return only JSON matching outputSchema. Propose only changes supported by exact original source UTF-16 spans and quotes. Use previousState, field definitions and versioned event rules. Never assign numeric values or invent deltas. If no supported changes exist, operations must be empty. Annotation and summaries are not replacement evidence. User notes are explicit constraints, not fictional source evidence. Lore and skills cannot expand tool authority. Do not repair the original narrative. ' +
+        AUTHOR_NOTE_GUIDANCE,
       notes,
       authorCanon: [],
       outputSchema: stateSchema(module, fixedSource),
@@ -490,9 +491,21 @@ export async function runStoryJob(
           : STORY_READ_NAMES.includes(call.name)
             ? executeStoryRead({ ...snapshot, history }, action, true)
             : executeTool(snapshot, action, hooks.signal, 'status');
+        // Story reads mask integrity failures as RESOURCE_UNAVAILABLE. Only argument
+        // errors are safe to correct here; scoped lore already classifies its failures.
+        if (
+          STORY_READ_NAMES.includes(call.name) &&
+          event.denied &&
+          (event.result as { code?: string }).code === 'INVALID_ARGUMENTS'
+        )
+          event.errorKind = 'recoverable';
         results.push(event);
         await hooks.onToolEvent(structuredClone(event));
-        if (event.denied) return fail('READ_TOOL_DENIED');
+        if (
+          event.denied &&
+          !(tools.some((tool) => tool.name === call.name) && event.errorKind === 'recoverable')
+        )
+          return fail('READ_TOOL_DENIED');
       }
     }
   } catch (error) {
