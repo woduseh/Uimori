@@ -30,7 +30,6 @@ const policy = (): SourceSegmentPolicy => ({
       title: true,
       label: '다른 시점',
       scene: { open: '⟬', close: '⟭', separator: '::' },
-      portrait: { open: '[portrait:', close: ']' },
     },
     {
       id: 'audit',
@@ -52,7 +51,7 @@ const excludePolicy = (): SourceSegmentPolicy => ({
 });
 
 describe('package-authored source segments', () => {
-  test('arbitrary literal delimiters partition exact CRLF and UTF-16 ranges without granting knowledge', () => {
+  test('arbitrary literal delimiters partition exact CRLF and UTF-16 ranges', () => {
     const raw = sample(),
       before = structuredClone(raw),
       parsed = parseSourceSegments(raw, policy());
@@ -73,17 +72,15 @@ describe('package-authored source segments', () => {
     expect(aside.title).toBe('Quiet bell');
     expect(raw.text.slice(aside.titleRange!.start, aside.titleRange!.end)).toBe('Quiet bell');
     expect(aside.scene).toMatchObject({ place: 'Tower', time: 'Morning', subjectLabel: 'Mira' });
-    expect(aside.portrait!.raw).toBe('resource:coat@1');
+    expect(aside).not.toHaveProperty('portrait');
+    expect(aside).not.toHaveProperty('knowledge');
+    // An unrecognised reference line stays ordinary body text instead of being hidden.
+    expect(raw.text.slice(aside.bodyRange.start, aside.bodyRange.end)).toContain(
+      '[portrait: resource:coat@1]'
+    );
     expect(raw.text.slice(aside.bodyRange.start, aside.bodyRange.end)).toContain(
       'Mira imagines a silent bell. 😀'
     );
-    expect(aside.knowledge).toEqual({
-      status: 'unknown',
-      mode: 'unspecified',
-      perspectiveActorIds: null,
-      knownByActorIds: null,
-      evidence: [],
-    });
     expect(raw).toEqual(before);
     expect(parseSourceSegments(raw, policy())).toEqual(parsed);
     expect(parseSourceSegments(source(raw.text + ' changed'), policy()).segments[1].id).not.toBe(
@@ -226,6 +223,7 @@ describe('package-authored source segments', () => {
     expect(() => validateSourceSegmentPolicy(repeated)).toThrow('SEGMENT_DELIMITER_CONFLICT');
     for (const change of [
       { open: '' },
+      { portrait: { open: '[portrait:', close: ']' } },
       { close: 'a\nb' },
       { keepLastMessages: -1 },
       { keepLastMessages: 10001 },

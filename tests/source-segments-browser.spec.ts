@@ -85,7 +85,7 @@ test('SEGMENTUI01 package-defined source reader expands without writes and displ
   await expect(hidden.first()).toContainText('Mira recalls a blue bell.');
   await expect(hidden.first().getByRole('list', { name: '이 장면의 장소와 시점' })).toHaveCount(0);
   await expect(hidden.first().locator('dl')).toContainText('Tower');
-  await expect(reader).toContainText('등장인물에게 정보가 전달되지는');
+  await expect(reader).not.toContainText('등장인물');
   await fits(page);
   if (visualReview)
     await page.screenshot({ path: info.outputPath('source-segments-reader-mobile.png') });

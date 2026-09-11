@@ -14,13 +14,6 @@ export type SegmentDiagnostic = {
   severity: 'warning' | 'error';
   range?: SegmentRange;
 };
-export type SegmentKnowledge = {
-  status: 'unknown';
-  mode: 'unspecified';
-  perspectiveActorIds: null;
-  knownByActorIds: null;
-  evidence: SegmentRange[];
-};
 /** Literal delimiters are package data. No package name, prompt instruction, or content theme is interpreted here. */
 export type SourceSegmentRule = {
   id: string;
@@ -34,7 +27,6 @@ export type SourceSegmentRule = {
   exclude?: boolean;
   keepLastMessages?: number;
   scene?: { open: string; close: string; separator: string };
-  portrait?: { open: string; close: string };
   when?: PromptExpression;
   excludeWhen?: PromptExpression;
   expandedWhen?: PromptExpression;
@@ -50,8 +42,6 @@ export type SourceSegment = {
   titleRange?: SegmentRange;
   markers?: { open: SegmentRange; close: SegmentRange };
   scene?: { range: SegmentRange; place: string; time: string; subjectLabel?: string };
-  portrait?: { range: SegmentRange; raw: string };
-  knowledge: SegmentKnowledge;
 };
 export type SegmentDocument = {
   sourceRevision: string;
@@ -110,7 +100,6 @@ export function validateSourceSegmentPolicy(
       'exclude',
       'keepLastMessages',
       'scene',
-      'portrait',
       'when',
       'excludeWhen',
       'expandedWhen',
@@ -146,16 +135,12 @@ export function validateSourceSegmentPolicy(
         r.keepLastMessages > 10000)
     )
       fail('SEGMENT_RETENTION');
-    for (const key of ['scene', 'portrait'])
-      if (r[key] !== undefined) {
-        const m = object(
-          r[key],
-          key === 'scene' ? ['open', 'close', 'separator'] : ['open', 'close']
-        );
-        literal(m.open);
-        literal(m.close);
-        if (key === 'scene') literal(m.separator);
-      }
+    if (r.scene !== undefined) {
+      const m = object(r.scene, ['open', 'close', 'separator']);
+      literal(m.open);
+      literal(m.close);
+      literal(m.separator);
+    }
     for (const key of ['when', 'excludeWhen', 'expandedWhen'])
       if (r[key] !== undefined)
         validatePromptExpression(
@@ -335,13 +320,6 @@ export function parseSourceSegments(
     kind,
     range: { start, end },
     bodyRange: { start, end },
-    knowledge: {
-      status: 'unknown',
-      mode: 'unspecified',
-      perspectiveActorIds: null,
-      knownByActorIds: null,
-      evidence: [],
-    },
   });
   let cursor = 0;
   for (const { open, close } of pairs) {
@@ -358,15 +336,8 @@ export function parseSourceSegments(
       const value = line.text.trim();
       if (!value) continue;
       const range = { start: open.end + line.start, end: open.end + line.end },
-        scene = open.rule.scene,
-        portrait = open.rule.portrait;
-      if (
-        scene &&
-        !segment.scene &&
-        !segment.portrait &&
-        value.startsWith(scene.open) &&
-        value.endsWith(scene.close)
-      ) {
+        scene = open.rule.scene;
+      if (scene && !segment.scene && value.startsWith(scene.open) && value.endsWith(scene.close)) {
         const fields = value
           .slice(scene.open.length, -scene.close.length)
           .split(scene.separator)
@@ -380,19 +351,6 @@ export function parseSourceSegments(
           place: fields[0],
           time: fields[1],
           ...(fields[2] ? { subjectLabel: fields[2] } : {}),
-        };
-        segment.bodyRange.start = range.end;
-        continue;
-      }
-      if (
-        portrait &&
-        !segment.portrait &&
-        value.startsWith(portrait.open) &&
-        value.endsWith(portrait.close)
-      ) {
-        segment.portrait = {
-          range,
-          raw: value.slice(portrait.open.length, -portrait.close.length).trim(),
         };
         segment.bodyRange.start = range.end;
         continue;

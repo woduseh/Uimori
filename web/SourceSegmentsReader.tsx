@@ -9,41 +9,25 @@ import {
 import { Prose } from './Prose.js';
 import './source-segments.css';
 
-type TranslatedSourceSegment = {
-  body: string;
-  title?: string;
-  scene?: { place: string; time: string; subjectLabel?: string };
-};
-type SegmentTranslationView = {
-  sourceRevision: string;
-  sourceHash: string;
-  segments: Record<string, TranslatedSourceSegment>;
-};
 type SourceSegmentsReaderProps = {
   source: SegmentSource;
   policy: SourceSegmentPolicy;
-  translation?: SegmentTranslationView;
   renderText?: (text: string, segment: SourceSegment) => ReactNode;
-  renderPortrait?: (segment: SourceSegment) => ReactNode;
   onToggle?: (event: { segmentId: string; expanded: boolean }) => void;
 };
 function Segment({
   source,
   segment,
   rule,
-  translation,
   renderText,
-  renderPortrait,
   onToggle,
-}: Omit<SourceSegmentsReaderProps, 'policy' | 'translation'> & {
+}: Omit<SourceSegmentsReaderProps, 'policy'> & {
   segment: SourceSegment;
   rule?: SourceSegmentRule;
-  translation?: TranslatedSourceSegment;
 }) {
   const [expanded, setExpanded] = useState(rule?.expanded ?? false);
   useEffect(() => setExpanded(rule?.expanded ?? false), [rule?.expanded]);
-  const body =
-      translation?.body ?? source.text.slice(segment.bodyRange.start, segment.bodyRange.end),
+  const body = source.text.slice(segment.bodyRange.start, segment.bodyRange.end),
     text = renderText ? renderText(body, segment) : <Prose text={body} />;
   if (segment.kind === 'main')
     return (
@@ -51,8 +35,7 @@ function Segment({
         {text}
       </div>
     );
-  const scene = translation?.scene ?? segment.scene,
-    portrait = segment.portrait ? renderPortrait?.(segment) : null;
+  const scene = segment.scene;
   return (
     <details
       className="source-aside-segment"
@@ -65,9 +48,8 @@ function Segment({
         onToggle?.({ segmentId: segment.id, expanded: next });
       }}
     >
-      <summary>{translation?.title ?? segment.title ?? rule?.label ?? '별도 구간'}</summary>
+      <summary>{segment.title ?? rule?.label ?? '별도 구간'}</summary>
       <div className="source-segment-body">
-        <p className="muted">펼쳐 읽어도 등장인물에게 정보가 전달되지는 않아요.</p>
         {scene && (
           <dl className="source-segment-scene">
             <div>
@@ -86,20 +68,13 @@ function Segment({
             )}
           </dl>
         )}
-        {portrait}
-        {segment.portrait && !portrait && <small>연결된 이미지를 표시할 수 없어요.</small>}
         {text}
       </div>
     </details>
   );
 }
-/** Expansion is reader state. Source identity, translation identity and knowledge never change here. */
-export function SourceSegmentsReader({
-  source,
-  policy,
-  translation,
-  ...props
-}: SourceSegmentsReaderProps) {
+/** Expansion is reader state. The stored source, its identity and the request scope never change here. */
+export function SourceSegmentsReader({ source, policy, ...props }: SourceSegmentsReaderProps) {
   const read = useMemo(() => {
     try {
       return parseSourceSegments(
@@ -110,11 +85,6 @@ export function SourceSegmentsReader({
       return null;
     }
   }, [source.sourceRevision, source.sourceHash, source.text, policy]);
-  const translated =
-    translation?.sourceRevision === source.sourceRevision &&
-    translation.sourceHash === source.sourceHash
-      ? translation
-      : undefined;
   if (!read)
     return (
       <div>
@@ -135,16 +105,12 @@ export function SourceSegmentsReader({
           </ul>
         </details>
       )}
-      {translation && !translated && (
-        <p role="alert">다른 원문 버전의 번역이라 표시하지 않았어요.</p>
-      )}
       {read.segments.map((segment) => (
         <Segment
           key={segment.id}
           source={source}
           segment={segment}
           rule={policy.rules.find((rule) => rule.id === segment.ruleId)}
-          translation={translated?.segments[segment.id]}
           {...props}
         />
       ))}

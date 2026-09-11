@@ -119,7 +119,7 @@ function bundle(sourceText = text): AuxiliaryBundle {
   };
 }
 describe('whole-source authored translation prompts', () => {
-  test('scripted whole-source output preserves exact structural source text and knowledge metadata without protection tokens', async () => {
+  test('scripted whole-source output preserves exact structural source text without protection tokens', async () => {
     const seed = bundle();
     const input = translationInput(
       seed.source,
@@ -128,9 +128,7 @@ describe('whole-source authored translation prompts', () => {
     );
     expect(input.sourceText).toBe(text);
     expect(input.blocks).toEqual([]);
-    expect(
-      input.context.segmentKnowledge!.segments.some((segment) => segment.kind === 'aside')
-    ).toBe(true);
+    expect(JSON.stringify(input.context)).not.toContain('Knowledge');
     expect(JSON.stringify(input)).not.toContain('[[p_');
     const output = await runAuxiliaryJob(
       bridge(seed).store,
@@ -330,8 +328,7 @@ describe('whole-source authored translation prompts', () => {
     expect(bodies[1].prompt).toEqual(bodies[0].prompt);
     expect(bodies[1].opaqueState).toEqual({ cursor: 'synthetic-source-time' });
     expect(bodies[1].input.results[0].callId).toBe('lookup');
-    expect(
-      observed[0].context.segmentKnowledge!.segments.some((segment) => segment.kind === 'aside')
-    ).toBe(true);
+    expect(observed[0].sourceText).toBe(text);
+    expect(JSON.stringify(observed[0].context)).not.toContain('Knowledge');
   });
 });

@@ -206,9 +206,6 @@ export function buildMainInput(
     input.outline = structuredClone(snapshot.outline);
     input.contract += `\n${OUTLINE_CONTRACT}`;
   }
-  if (snapshot.sourceSegments)
-    input.contract +=
-      '\nHidden segment visibility is for the reader. Quoted perspectives and user notes do not establish a character knowledge state; unspecified actor knowledge remains unknown. Never infer actor knowledge from a portrait or from the reader opening a panel.';
   if (input.catalog.length > 100) {
     input.catalogPage = {
       total: input.catalog.length,
