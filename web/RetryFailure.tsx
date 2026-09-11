@@ -1,4 +1,5 @@
 import { ActionMenu } from './ActionMenu.js';
+import { HistoryIcon, IssueIcon } from './ui-icons.js';
 import './retry-failure.css';
 
 export function RetryFailure({
@@ -57,9 +58,11 @@ export function RetryFailure({
         )}
         <ActionMenu label="실패한 요청 더보기">
           <button type="button" onClick={onDetails}>
+            <IssueIcon size={18} aria-hidden="true" />
             오류 상세
           </button>
           <button type="button" onClick={onHistory}>
+            <HistoryIcon size={18} aria-hidden="true" />
             작업 기록
           </button>
         </ActionMenu>

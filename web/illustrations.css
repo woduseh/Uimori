@@ -123,8 +123,11 @@
   max-width: none;
   min-width: 0;
 }
+/* The neighbouring cell stacks a caption over its select, so centring leaves the switch floating
+   between the two. Sit at the end of the row to share the select's baseline. */
 .illustration-settings label.check {
-  align-self: center;
+  align-self: end;
+  min-height: var(--control-h);
   margin: 0;
 }
 .illustration-settings details p + p {

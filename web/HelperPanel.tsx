@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { ArrowUp, Square, X, Settings2 } from 'lucide-react';
+import { ArrowUp, History, Square, X, Settings2 } from 'lucide-react';
+import { SaveIcon } from './ui-icons.js';
 import type {
   HelperConversation,
   HelperEditor,
@@ -715,6 +716,8 @@ export function HelperPanel(props: Props) {
           </button>
           <button
             type="button"
+            aria-label="도우미 설정 저장"
+            title="도우미 설정 저장"
             disabled={
               props.ready === false ||
               branchMismatch ||
@@ -765,7 +768,7 @@ export function HelperPanel(props: Props) {
                 .finally(() => setSavingPersona(false));
             }}
           >
-            도우미 설정 저장
+            <SaveIcon size={18} aria-hidden="true" />
           </button>
         </div>
       )}
@@ -1033,6 +1036,7 @@ export function HelperPanel(props: Props) {
           <div className="quick-controls">
             <ActionMenu label="도우미 대화 더보기" placement="top" viewport>
               <button type="button" onClick={() => setTaskHistory({})}>
+                <History size={18} aria-hidden="true" />
                 작업 기록
               </button>
             </ActionMenu>

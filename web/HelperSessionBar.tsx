@@ -8,7 +8,7 @@ import { api, ApiError } from './api.js';
 import { ActionMenu } from './ActionMenu.js';
 import { Dialog } from './Dialog.js';
 import { IconButton } from './IconButton.js';
-import { CheckIcon, CloseIcon, DeleteIcon } from './ui-icons.js';
+import { CheckIcon, CloseIcon, DeleteIcon, EditIcon } from './ui-icons.js';
 import { forgetHelperSession, type HelperSession } from './useHelperSessions.js';
 import type { HelperTaskView } from './useHelperConversation.js';
 
@@ -135,6 +135,7 @@ export function HelperSessionBar(props: Props) {
               setError('');
             }}
           >
+            <EditIcon size={18} aria-hidden="true" />
             세션 이름 변경
           </button>
           <button
@@ -147,6 +148,7 @@ export function HelperSessionBar(props: Props) {
               setError('');
             }}
           >
+            <DeleteIcon size={18} aria-hidden="true" />
             세션 삭제
           </button>
         </ActionMenu>

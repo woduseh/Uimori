@@ -17,6 +17,7 @@ import {
   UndoIcon,
   UpIcon,
   UploadIcon,
+  CodeIcon,
 } from './ui-icons.js';
 import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
 import {
@@ -1265,6 +1266,7 @@ export function PromptComposer({
               />
               <ActionMenu label="프롬프트 구성 도구" className="pc-program-menu">
                 <button type="button" onClick={() => setSection('json')}>
+                  <CodeIcon size={18} aria-hidden="true" />
                   JSON 편집
                 </button>
                 <label className="pc-file">
