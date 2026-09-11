@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { isolatePromptDrafts } from './fixtures/prompt-workspace.js';
-import { navigationAction } from './ui-navigation.js';
+import { navigationAction, selectPromptSection } from './ui-navigation.js';
 import type { PromptProgram } from '../core/prompt-program.js';
 
 isolatePromptDrafts();
@@ -26,10 +26,9 @@ test('PERR01 preview errors stay local, can be dismissed and clear after recover
   };
   await openEditor();
   const composer = page.getByTestId('prompt-composer');
-  const previewFold = composer.getByLabel('전송 미리보기 접기/펼치기');
   const refresh = composer.getByRole('button', { name: '미리보기 갱신', exact: true });
   const error = composer.getByRole('alert');
-  await previewFold.click();
+  await selectPromptSection(composer, '미리보기');
   await refresh.click();
   await expect(error).toContainText('대화 이력 일부가 프롬프트에 포함되지 않았어요.');
   await expect(page.getByRole('alert')).toHaveCount(1);
@@ -43,10 +42,10 @@ test('PERR01 preview errors stay local, can be dismissed and clear after recover
   await navigationAction(page, '프롬프트');
   await openEditor();
   await expect(error).toHaveCount(0);
-  await previewFold.click();
+  await selectPromptSection(composer, '미리보기');
   await refresh.click();
   await expect(error).toContainText('PROMPT_HISTORY_OMITTED');
-  await composer.getByText('전체 구성 JSON · 고급 편집', { exact: true }).click();
+  await selectPromptSection(composer, 'JSON 편집');
   const corrected: PromptProgram = {
     ...program,
     blocks: [{ id: 'history', title: '대화', kind: 'history', from: 0, to: 'end' }],
@@ -55,6 +54,7 @@ test('PERR01 preview errors stay local, can be dismissed and clear after recover
     .getByLabel('전체 프롬프트 구성 JSON', { exact: true })
     .fill(JSON.stringify(corrected));
   await composer.getByRole('button', { name: 'JSON 적용', exact: true }).click();
+  await selectPromptSection(composer, '미리보기');
   await refresh.click();
   await expect(composer.locator('.pc-preview-result')).toBeVisible();
   await expect(page.getByRole('alert')).toHaveCount(0);

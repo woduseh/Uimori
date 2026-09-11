@@ -4,7 +4,7 @@ import { test, expect, type APIRequestContext } from '@playwright/test';
 import type { Content } from '../core/product.js';
 import { DEFAULT_MAIN_PROMPT, DEFAULT_TRANSLATION_PROMPT } from '../core/prompts.js';
 import { createDefaultPromptProgram } from '../core/prompt-defaults.js';
-import { navigationAction, openPromptBlocks } from './ui-navigation.js';
+import { navigationAction, selectPromptBlock, selectPromptSection } from './ui-navigation.js';
 
 isolatePromptDrafts();
 
@@ -80,9 +80,7 @@ test('PLR03 creation displays and saves role defaults and preview uses block nam
   ] as const) {
     await editor.getByLabel('프롬프트 역할', { exact: true }).selectOption(role);
     const instructions = editor.locator('#prompt-block-instructions');
-    await openPromptBlocks(editor);
-    if (!(await instructions.evaluate((node) => (node as HTMLDetailsElement).open)))
-      await instructions.locator(':scope > summary').click();
+    await selectPromptBlock(editor, '지침');
     await expect(instructions.getByLabel('지침 본문', { exact: true })).toHaveValue(text);
     const title = `PLR 기본 ${role} ${crypto.randomUUID()}`;
     await editor.getByLabel('프롬프트 이름', { exact: true }).fill(title);
@@ -91,7 +89,7 @@ test('PLR03 creation displays and saves role defaults and preview uses block nam
         /\/api\/edit-drafts\/[^/]+\/save$/.test(response.url()) &&
         response.request().method() === 'POST'
     );
-    await editor.getByRole('button', { name: '저장', exact: true }).click();
+    await editor.getByRole('button', { name: '프리셋 저장', exact: true }).click();
     const response = await savedResponse;
     expect(response.ok()).toBe(true);
     const saved = (await response.json()).saved;
@@ -101,10 +99,9 @@ test('PLR03 creation displays and saves role defaults and preview uses block nam
     expect(persisted.ok()).toBe(true);
     expect((await persisted.json()).program).toEqual(createDefaultPromptProgram(text, role));
   }
-  const fold = composer.getByLabel('전송 미리보기 접기/펼치기', { exact: true });
   const input = composer.getByLabel('미리보기 원문', { exact: true });
   await expect(input).not.toBeVisible();
-  await fold.click();
+  await selectPromptSection(composer, '미리보기');
   await input.fill('합성 미리보기 접기 입력 보존');
   await composer.getByRole('button', { name: '미리보기 갱신', exact: true }).click();
   await expect(composer.locator('.pc-preview-result')).toBeVisible();

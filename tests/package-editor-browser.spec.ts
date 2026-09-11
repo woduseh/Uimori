@@ -47,6 +47,7 @@ test('PKUI04 hundreds of lore entries support folders, search, bulk move and per
   });
   await library.getByRole('button', { name: '가져온 패키지로 초안 바꾸기', exact: true }).click();
   await revealLibraryEditor(page);
+  await selectPackageSection(page, '로어');
   const manager = library.locator('.lore-manager');
   await expect(manager.locator('.lore-row')).toHaveCount(50);
   await expect(manager.locator('textarea')).toHaveCount(1);
@@ -109,17 +110,18 @@ test('PKUI04 hundreds of lore entries support folders, search, bulk move and per
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(
     true
   );
+  const loreBack = manager.getByRole('button', { name: '로어 목록', exact: true });
+  if (await loreBack.isVisible()) await loreBack.click();
   await manager.locator('.lore-heading').scrollIntoViewIfNeeded();
   if (visualReview) await page.screenshot({ path: info.outputPath('lore-folders-mobile.png') });
+  await manager.locator('.lore-row').first().getByRole('button').click();
   await manager.locator('textarea').scrollIntoViewIfNeeded();
   if (visualReview) await page.screenshot({ path: info.outputPath('lore-editor-mobile.png') });
   await library.getByRole('button', { name: '자료 등록', exact: true }).click();
   await expect(library.locator('.library-savebar [role="status"]')).toContainText(
     '저장됨 · 다음 실행부터 사용해요.'
   );
-  await expect(
-    library.getByText('고급 패키지 설정', { exact: true }).locator('..')
-  ).toHaveAttribute('open', '');
+  await expect(library.getByTestId('package-fields')).toBeVisible();
   await expect(library.locator('.library-package-tools')).toHaveAttribute('open', '');
   await expect(manager).toBeVisible();
   await expect(manager.locator('.lore-row')).toHaveCount(50);
@@ -143,6 +145,7 @@ test('PKUI04 hundreds of lore entries support folders, search, bulk move and per
   const exported = JSON.parse(Buffer.concat(chunks).toString());
   expect(exported.loreFolders).toEqual(content.package!.loreFolders);
   expect(exported.lore).toEqual(content.package!.lore);
+  if (await loreBack.isVisible()) await loreBack.click();
   await manager.getByLabel('로어 폴더 필터', { exact: true }).selectOption(folderId);
   await manager.getByRole('button', { name: '폴더 관리', exact: true }).click();
   await manager.getByRole('button', { name: '폴더 삭제 · 로어 유지', exact: true }).click();
@@ -155,6 +158,7 @@ test('PKUI04 hundreds of lore entries support folders, search, bulk move and per
   );
   await library.getByRole('button', { name: '서재 목록', exact: true }).click();
   await editLibraryContent(page, `${pkg.title}`);
+  await selectPackageSection(page, '로어');
   await expect(manager.getByLabel('로어 폴더 필터', { exact: true })).toContainText('미분류 · 170');
   await expect(manager.getByLabel('로어 폴더 필터', { exact: true })).not.toContainText('등장인물');
 });
@@ -278,6 +282,7 @@ test('PKUI01 package editing preserves internal lore, instructions, unsaved work
   await library.getByLabel('자료 이름', { exact: true }).fill('Synthetic package editor bot');
   await library.getByLabel('자료 본문', { exact: true }).fill('Synthetic common body.');
   const fields = library.getByRole('region', { name: '패키지 구성', exact: true });
+  await selectPackageSection(page, '로어');
   await fields.getByRole('button', { name: '로어 추가', exact: true }).click();
   await fields.getByLabel('로어 1 이름', { exact: true }).fill('Synthetic harbor');
   await fields
@@ -354,6 +359,7 @@ test('PKUI01 package editing preserves internal lore, instructions, unsaved work
   });
   await library.getByRole('button', { name: '서재 목록', exact: true }).click();
   await editLibraryContent(page, 'Synthetic package editor bot');
+  await selectPackageSection(page, '로어');
   await expect(fields.getByLabel('로어 1 본문', { exact: true })).toHaveValue(
     'A blue bell hangs by the synthetic harbor.'
   );
@@ -364,9 +370,7 @@ test('PKUI01 package editing preserves internal lore, instructions, unsaved work
   await library.getByText('패키지 가져오기·내보내기와 역할 사본', { exact: true }).click();
   await library.getByRole('button', { name: '페르소나로 사본 만들기', exact: true }).click();
   await expect(library.getByLabel('자료 종류', { exact: true })).toHaveValue('persona');
-  await expect(
-    library.getByText('고급 패키지 설정', { exact: true }).locator('..')
-  ).toHaveAttribute('open', '');
+  await expect(library.getByTestId('package-fields')).toBeVisible();
   await expect(library.locator('.library-package-tools')).toHaveAttribute('open', '');
   await expect(fields.getByLabel('지침 1 본문', { exact: true })).toBeVisible();
   await expect(fields.getByLabel('지침 1 본문', { exact: true })).toHaveValue(

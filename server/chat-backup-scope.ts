@@ -35,7 +35,7 @@ export function chatBackupTables(store: Store, chatId: string): BackupTables {
     helper_task_attempts:
       'task_id IN (SELECT t.id FROM helper_tasks t JOIN helper_conversations c ON c.id=t.conversation_id WHERE c.chat_id=?)',
     helper_artifacts: 'conversation_id IN (SELECT id FROM helper_conversations WHERE chat_id=?)',
-    helper_delegations: 'conversation_id IN (SELECT id FROM helper_conversations WHERE chat_id=?)',
+    helper_delegations: 'chat_id=?',
     response_stream_chunks:
       '(task_kind,task_id) IN (SELECT task_kind,task_id FROM response_stream_tasks WHERE chat_id=?)',
     chat_folders: 'id IN (SELECT folder_id FROM chat_organization WHERE chat_id=?)',

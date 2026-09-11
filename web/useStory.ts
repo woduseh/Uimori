@@ -9,10 +9,25 @@ import { usePromptWorkspace } from './usePromptWorkspace.js';
 import { combinationOwner, matchesPromptCombination } from '../core/prompt-combinations.js';
 import { refValue } from './content-ref.js';
 
-function initialView() {
+const lastWorkspaceKey = 'uimori:last-workspace';
+function initialView(restore = false) {
   const params = new URLSearchParams(location.search);
-  const chat = params.get('chat') || '';
-  return { chat, branch: params.get('branch') || '', source: params.get('source') || '' };
+  let chat = params.get('chat') || '';
+  if (restore && !location.search && !location.hash) {
+    try {
+      const saved = JSON.parse(localStorage.getItem(lastWorkspaceKey) || 'null');
+      if (saved?.destination === 'story' && typeof saved.chatId === 'string') chat = saved.chatId;
+    } catch {
+      // Storage is optional; an unavailable or invalid workspace starts in the library.
+    }
+  }
+  return {
+    chat,
+    branch: params.get('branch') || '',
+    source: params.get('source') || '',
+    destination:
+      chat && params.get('workspace') !== 'library' ? ('story' as const) : ('library' as const),
+  };
 }
 function ancestry(sources: Source[], head: string | null) {
   const byId = new Map(sources.map((source) => [source.id, source]));
@@ -93,10 +108,11 @@ function definiteRejection(error: unknown): boolean {
 type Position = { target?: string; source: string; anchor: string; offset: number; top: number };
 export function useStory() {
   const { workspace: promptWorkspace } = usePromptWorkspace();
+  const [initial] = useState(() => initialView(true));
   const [chats, setChats] = useState<Chat[]>([]);
-  const [selected, setSelected] = useState(() => initialView().chat);
-  const [viewedBranch, setViewedBranch] = useState(() => initialView().branch);
-  const [readSource, setReadSource] = useState(() => initialView().source);
+  const [selected, setSelected] = useState(initial.chat);
+  const [viewedBranch, setViewedBranch] = useState(initial.branch);
+  const [readSource, setReadSource] = useState(initial.source);
   const [loadedDetail, setDetail] = useState<ReaderDetail | null>(null);
   const [library, setLibrary] = useState<Library | null>(null);
   const [libraryError, setLibraryError] = useState('');
@@ -110,11 +126,27 @@ export function useStory() {
   const submitLocks = useRef(new Set<string>());
   const [requestActivities, setRequestActivities] = useState<Record<string, RequestActivity>>({});
   const [connected, setConnected] = useState(false);
-  const [destination, setDestination] = useState<'story' | 'library'>(() =>
-    initialView().chat ? 'story' : 'library'
-  );
+  const [destination, setDestination] = useState<'story' | 'library'>(initial.destination);
   const [profileDirty, setProfileDirty] = useState(false);
   const [quickBusy, setQuickBusy] = useState(false);
+  useEffect(() => {
+    if (destination === 'story' && (!selected || !detail)) return;
+    try {
+      localStorage.setItem(
+        lastWorkspaceKey,
+        JSON.stringify({
+          destination,
+          chatId: destination === 'story' ? selected : null,
+        })
+      );
+    } catch {
+      // Restoring the last workspace must not be required to read or edit a chat.
+    }
+  }, [destination, selected, detail]);
+  useEffect(() => {
+    if (initial.chat && !location.search && !location.hash)
+      history.replaceState(null, '', `?${new URLSearchParams({ chat: initial.chat })}`);
+  }, [initial]);
   const reader = useRef<HTMLDivElement>(null);
   const input = useRef<HTMLTextAreaElement>(null);
   const current = useRef(selected);
@@ -128,16 +160,38 @@ export function useStory() {
   const latestIntent = useRef<{ epoch: number; source: string } | null>(null);
   const readerQuery = useRef({ branch: '', source: '', key: '' });
   const readerCache = useRef<{ key: string; detail: ReaderDetail } | null>(null);
+  // Bind an implicit default to the branch actually opened. Later default changes must not
+  // retarget reading, drafts, or an in-flight request in this viewing session.
+  const defaultView = useRef<{ chatId: string; branchId: string } | null>(null);
+  if (!viewedBranch && detail && defaultView.current?.chatId !== selected) {
+    const opened = detail.branches?.find((item) => item.default);
+    if (opened) defaultView.current = { chatId: selected, branchId: opened.id };
+  }
+  const activeBranchId =
+    viewedBranch || (defaultView.current?.chatId === selected ? defaultView.current.branchId : '');
+  // Keep the initial branch's existing storage address; every other branch uses its own ID.
+  // This identity is stable when either branch gains or loses the default flag.
+  const storageBranch = activeBranchId === `main:${selected}` ? '' : activeBranchId;
+  const preserveDefaultView = useRef<(branchId: string) => void>(() => {});
+  preserveDefaultView.current = (branchId) => {
+    if (viewedBranch || current.current !== selected) return;
+    setViewedBranch(branchId);
+    const url = new URL(location.href);
+    url.searchParams.set('branch', branchId);
+    history.replaceState(null, '', url);
+  };
   const savedPosition = JSON.parse(
-    sessionStorage.getItem(`reading:${selected}:${viewedBranch}`) || 'null'
+    sessionStorage.getItem(`reading:${selected}:${storageBranch}`) || 'null'
   ) as Position | null;
   readerQuery.current = {
-    branch: viewedBranch,
+    branch: activeBranchId,
     source:
-      (savedPosition?.target === readSource ? savedPosition?.source : readSource) ||
-      savedPosition?.source ||
-      '',
-    key: `${selected}:${viewedBranch}:${readSource}`,
+      !activeBranchId && !readSource
+        ? ''
+        : (savedPosition?.target === readSource ? savedPosition?.source : readSource) ||
+          savedPosition?.source ||
+          '',
+    key: `${selected}:${activeBranchId}:${readSource}`,
   };
   const refresh = useCallback(async (id: string, incremental = false) => {
     if (current.current !== id) return;
@@ -158,6 +212,9 @@ export function useStory() {
       readerQuery.current.key === query.key &&
       refreshVersion.current === version
     ) {
+      const nextDefault = value.branches?.find((item) => item.default);
+      if (query.branch && nextDefault && nextDefault.id !== query.branch)
+        preserveDefaultView.current(query.branch);
       const changed = new Set(value.sources.map((source) => source.id));
       const available = new Map(
         [...(cached?.sources ?? []), ...value.sources].map((source) => [source.id, source])
@@ -289,6 +346,7 @@ export function useStory() {
           });
         if (message.kind === 'branch.deleted' && readerQuery.current.branch === message.entityId) {
           navigationEpoch.current++;
+          defaultView.current = null;
           readerCache.current = null;
           setViewedBranch('');
           setReadSource('');
@@ -370,7 +428,7 @@ export function useStory() {
     return () => {
       alive = false;
     };
-  }, [selected, viewedBranch, readSource, refresh]);
+  }, [selected, activeBranchId, readSource, refresh]);
   const attachmentKey = [
     ...(detail?.profile?.attachments ?? []),
     ...(detail?.profile?.packageAttachments ?? []),
@@ -396,8 +454,8 @@ export function useStory() {
       alive = false;
     };
   }, [attachmentKey, library, selected]);
-  const viewKey = `${selected}:${viewedBranch}`;
-  const draftKey = `draft:${selected}${viewedBranch ? `:${viewedBranch}` : ''}`;
+  const viewKey = `${selected}:${storageBranch}`;
+  const draftKey = `draft:${selected}${storageBranch ? `:${storageBranch}` : ''}`;
   currentDraftKey.current = draftKey;
   currentView.current = viewKey;
   const savePosition = useCallback(() => {
@@ -459,13 +517,13 @@ export function useStory() {
     else sessionStorage.removeItem(`package-request-draft:${draftKey}`);
   }
   function editLoreContextReset(value: boolean) {
-    if (readCommand(`command:${selected}${viewedBranch ? `:${viewedBranch}` : ''}`)) return;
+    if (readCommand(`command:${selected}${storageBranch ? `:${storageBranch}` : ''}`)) return;
     setLoreResetDraft(value);
     if (value) sessionStorage.setItem(`lore-reset:${draftKey}`, 'true');
     else sessionStorage.removeItem(`lore-reset:${draftKey}`);
   }
   const branch =
-    detail?.branches?.find((item) => item.id === viewedBranch) ??
+    detail?.branches?.find((item) => item.id === activeBranchId) ??
     detail?.branches?.find((item) => item.default);
   const sources = useMemo(
     () =>
@@ -559,7 +617,8 @@ export function useStory() {
     navigationEpoch.current++;
     savePosition();
     rememberCursor();
-    const target = sessionStorage.getItem(`branch:${id}`) || '';
+    const target = '';
+    defaultView.current = null;
     setViewUrl(id, target);
     setSelected(id);
     setViewedBranch(target);
@@ -571,6 +630,7 @@ export function useStory() {
     navigationEpoch.current++;
     savePosition();
     rememberCursor();
+    defaultView.current = null;
     setViewUrl(selected, id, source);
     sessionStorage.setItem(`branch:${selected}`, id);
     setViewedBranch(id);
@@ -616,10 +676,11 @@ export function useStory() {
       savePosition();
       rememberCursor();
       const view = initialView();
+      defaultView.current = null;
       setSelected(view.chat);
       setViewedBranch(view.branch);
       setReadSource(view.source);
-      setDestination('story');
+      setDestination(view.destination);
       restoredView.current = '';
     };
     return subscribeAppHistory(onPop);
@@ -627,6 +688,7 @@ export function useStory() {
   function showLibrary() {
     navigationEpoch.current++;
     savePosition();
+    history.pushState(null, '', '?workspace=library');
     setDestination('library');
     restoredView.current = '';
   }
@@ -651,7 +713,7 @@ export function useStory() {
     profileDirty ||
     !detail ||
     !!sessionStorage.getItem(`pending-profile:${selected}`) ||
-    !!readCommand(`command:${selected}${viewedBranch ? `:${viewedBranch}` : ''}`);
+    !!readCommand(`command:${selected}${storageBranch ? `:${storageBranch}` : ''}`);
   async function generate(retryRunId?: string, editedRequest?: string): Promise<boolean> {
     if (
       !detail ||
@@ -666,7 +728,7 @@ export function useStory() {
     const chat = detail.chat;
     const sentKey = draftKey;
     const sentView = viewKey;
-    const commandKey = `command:${chat.id}${viewedBranch ? `:${viewedBranch}` : ''}`;
+    const commandKey = `command:${chat.id}${storageBranch ? `:${storageBranch}` : ''}`;
     const previous = readCommand(commandKey);
     if (!previous && !retryRun && !draft.trim()) return false;
     // An uncertain request keeps its original snapshot as well as its key.
@@ -683,7 +745,7 @@ export function useStory() {
         : {}),
       expectedRevision: branch ? branch.headRevision : chat.headRevision,
       expectedSettingsRevision: chat.settingsRevision,
-      ...(viewedBranch && branch ? { branchId: branch.id } : {}),
+      ...(branch ? { branchId: branch.id } : {}),
       ...(detail.profile ? { expectedProfileRevision: detail.profile.revision } : {}),
     };
     const preserveDraft = !!retryRun || previous?.record.preserveDraft === true;

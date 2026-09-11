@@ -27,7 +27,7 @@ async function noHorizontalOverflow(page: Page) {
 }
 
 for (const [index, width] of (visualReview ? [390, 360] : [390]).entries()) {
-  test(`LUSE0${index + 1} mobile ${width}px library starts with readable rows and creates a bot into a chat`, async ({
+  test(`LUSE0${index + 1} mobile ${width}px library list view keeps readable rows and creates a bot into a chat`, async ({
     page,
     request,
   }, info) => {
@@ -37,6 +37,9 @@ for (const [index, width] of (visualReview ? [390, 360] : [390]).entries()) {
     await page.goto('/');
     const panel = page.getByTestId('library-panel');
     await panel.getByLabel('서재 검색', { exact: true }).fill(title);
+    await panel.getByLabel('목록 관리', { exact: true }).click();
+    await panel.getByRole('button', { name: '목록', exact: true }).click();
+    await panel.getByLabel('목록 관리', { exact: true }).press('Escape');
     const row = panel.locator('.library-list-item');
     await expect(row).toHaveCount(1);
     await expect(
@@ -66,8 +69,10 @@ for (const [index, width] of (visualReview ? [390, 360] : [390]).entries()) {
     await createLibraryContent(page);
     await expect(panel.getByLabel('자료 이름', { exact: true })).toBeInViewport();
     await expect(panel.getByLabel('자료 본문', { exact: true })).toBeInViewport();
-    await expect(panel.getByRole('region', { name: '대표 이미지 설정', exact: true })).toBeHidden();
-    await expect(panel.getByTestId('package-fields')).toBeHidden();
+    await expect(
+      panel.getByRole('region', { name: '대표 이미지 설정', exact: true })
+    ).toBeVisible();
+    await expect(panel.getByTestId('package-fields')).toBeVisible();
     await noHorizontalOverflow(page);
     if (visualReview)
       await page.screenshot({ path: info.outputPath(`library-create-${width}.png`) });
@@ -82,6 +87,7 @@ for (const [index, width] of (visualReview ? [390, 360] : [390]).entries()) {
     expect(saved.package?.body).toBe(body);
     const start = panel.getByRole('button', { name: '채팅 시작', exact: true });
     await expect(start).toBeEnabled();
+    await start.scrollIntoViewIfNeeded();
     await expect(start).toBeInViewport();
     await expect(
       panel.getByRole('status').filter({ hasText: '저장됨 · 다음 실행부터 사용해요.' })

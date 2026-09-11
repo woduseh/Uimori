@@ -108,6 +108,7 @@ test('LCUI01 lore placement and invalid order drafts stay independent from folde
   await navigationAction(page, '서재');
   const library = page.getByTestId('library-panel');
   await editLibraryContent(page, `${original.title}`);
+  await selectPackageSection(page, '로어');
   const fields = library.getByRole('region', { name: '패키지 구성', exact: true }),
     save = library.getByRole('button', { name: '변경사항 저장', exact: true });
   await fields.getByLabel('사용 방법', { exact: true }).selectOption('pinned');

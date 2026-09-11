@@ -19,33 +19,19 @@ export function helperRoutes(app: FastifyInstance, runtime: HelperRuntime) {
       const { kind, chatId, branchId } = request.query;
       if (kind !== 'library' && kind !== 'chat')
         throw new HttpError(400, 'Helper scope kind required');
-      const rows =
+      return store.list(
         kind === 'library'
-          ? runtime.store.db
-              .prepare(
-                'SELECT id FROM helper_conversations WHERE chat_id IS NULL ORDER BY rowid DESC'
-              )
-              .all()
-          : runtime.store.db
-              .prepare(
-                'SELECT id FROM helper_conversations WHERE chat_id=? AND branch_id=? ORDER BY rowid DESC'
-              )
-              .all(text(chatId, 'chat ID', 100), text(branchId, 'branch ID', 100));
-      return rows.map((row) => {
-        const conversation = store.conversation(String(row.id));
-        const first = runtime.store.db
-          .prepare(
-            "SELECT text FROM helper_messages WHERE conversation_id=? AND role='user' ORDER BY rowid LIMIT 1"
-          )
-          .get(conversation.id);
-        return { ...conversation, title: String(first?.text ?? '새 서재 작업').slice(0, 80) };
-      });
+          ? { kind }
+          : {
+              kind,
+              chatId: text(chatId, 'chat ID', 100),
+              ...(branchId === undefined ? {} : { branchId: text(branchId, 'branch ID', 100) }),
+            }
+      );
     }
   );
-  app.post('/api/helper/conversations', (request) => {
-    const body = record(request.body);
-    fields(body, ['scope']);
-    const input = record(body.scope);
+  const readScope = (value: unknown): HelperScope => {
+    const input = record(value);
     let scope: HelperScope;
     if (input.kind === 'chat') {
       fields(input, ['kind', 'chatId', 'branchId']);
@@ -63,14 +49,30 @@ export function helperRoutes(app: FastifyInstance, runtime: HelperRuntime) {
       if (input.kind !== 'library') throw new HttpError(400, 'Invalid helper scope');
       scope = { kind: 'library', workId: text(input.workId, 'library work ID', 100) };
     }
-    return store.open(scope);
+    return scope;
+  };
+  app.post('/api/helper/conversations', (request) => {
+    const body = record(request.body);
+    fields(body, ['scope']);
+    return store.open(readScope(body.scope));
+  });
+  app.post('/api/helper/conversations/new', (request) => {
+    const body = record(request.body);
+    fields(body, ['scope', 'requestKey', 'title']);
+    return store.create(
+      readScope(body.scope),
+      `request:${text(body.requestKey, 'request key', 100)}`,
+      body.title === undefined ? undefined : text(body.title, 'conversation title', 200)
+    );
   });
   app.get<{ Params: { id: string } }>('/api/helper/conversations/:id', (request) =>
     store.conversation(request.params.id)
   );
   app.patch<{ Params: { id: string } }>('/api/helper/conversations/:id', (request) => {
     const body = record(request.body);
-    fields(body, ['expectedRevision', 'persona', 'limits']);
+    fields(body, ['expectedRevision', 'title', 'persona', 'limits']);
+    if (body.title === undefined && body.persona === undefined && body.limits === undefined)
+      throw new HttpError(400, '변경할 도우미 설정이 필요해요.');
     let limits: HelperLimits | undefined;
     if (body.limits !== undefined) {
       const value = record(body.limits);
@@ -82,12 +84,33 @@ export function helperRoutes(app: FastifyInstance, runtime: HelperRuntime) {
         artifacts: number(value.artifacts, 'artifact jobs', 1, 10),
       };
     }
-    return store.persona(
+    return store.update(
       request.params.id,
       number(body.expectedRevision, 'helper settings revision'),
-      text(body.persona, 'helper persona', 2000, true),
-      limits
+      {
+        ...(body.title === undefined ? {} : { title: text(body.title, 'conversation title', 200) }),
+        ...(body.persona === undefined
+          ? {}
+          : { persona: text(body.persona, 'helper persona', 2000, true) }),
+        ...(limits === undefined ? {} : { limits }),
+      }
     );
+  });
+  app.get<{ Params: { id: string } }>('/api/helper/conversations/:id/deletion', (request) =>
+    runtime.deletionImpact(request.params.id)
+  );
+  app.delete<{ Params: { id: string } }>('/api/helper/conversations/:id', (request) => {
+    const body = record(request.body);
+    fields(body, ['expectedRevision', 'expectedEventSequence']);
+    return runtime.deleteConversation(request.params.id, {
+      expectedRevision: number(body.expectedRevision, 'conversation revision'),
+      expectedEventSequence: number(
+        body.expectedEventSequence,
+        'event sequence',
+        0,
+        Number.MAX_SAFE_INTEGER
+      ),
+    });
   });
   app.get<{ Params: { id: string }; Querystring: { before?: string } }>(
     '/api/helper/conversations/:id/messages',

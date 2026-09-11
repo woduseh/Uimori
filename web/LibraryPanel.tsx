@@ -8,7 +8,7 @@ import {
   useServerEditDraft,
 } from './editor-workspace-context.js';
 import type { ContentDraftModel } from '../core/edit-drafts.js';
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
 import type { Content, ContentKind, Library } from '../core/product.js';
 import type { LibraryItemKey, LibraryOrganization } from '../core/library-organization.js';
 import { libraryCategory, libraryFolderOf } from '../core/library-organization.js';
@@ -87,8 +87,8 @@ const contentGuidance: Record<PrimaryLibraryTab, { description: string; example:
 type ViewMode = 'cards' | 'list';
 function savedViews(): Record<PrimaryLibraryTab, ViewMode> {
   const defaults: Record<PrimaryLibraryTab, ViewMode> = {
-    bot: 'list',
-    persona: 'list',
+    bot: 'cards',
+    persona: 'cards',
     module: 'list',
   };
   try {
@@ -429,16 +429,15 @@ export function LibraryPanel({
   const roleActionLabel = (id: PrimaryLibraryTab, title: string) =>
     id === 'bot' ? '봇으로 새 채팅' : id === 'persona' ? '페르소나로 사용' : `${title}로 추가`;
   return (
-    <section ref={panelRef} className="library-page" data-testid="library-panel" aria-label="서재">
+    <section
+      ref={panelRef}
+      className={`library-page${editing ? ' library-page-editing' : ''}`}
+      data-testid="library-panel"
+      aria-label="서재"
+    >
       <header className="library-heading">
         {headerLeading}
         <h1>서재</h1>
-        {!editing && !detail && (!library || filtered.length > 0 || !!query) && (
-          <button type="button" className="library-create" onClick={openNew} disabled={!library}>
-            <AddIcon size={18} aria-hidden="true" />
-            <span>새로 만들기</span>
-          </button>
-        )}
       </header>
       <Dialog
         open={!!pendingNavigation}
@@ -762,6 +761,17 @@ export function LibraryPanel({
                     )}
                   </>
                 )}
+                {!selecting && (filtered.length > 0 || !!query) && (
+                  <button
+                    type="button"
+                    className="library-create primary"
+                    onClick={openNew}
+                    disabled={!library}
+                  >
+                    <AddIcon size={18} aria-hidden="true" />
+                    <span>{contentLabels[tab]} 만들기</span>
+                  </button>
+                )}
               </div>
               {!!query && !selecting && (
                 <p className="library-result-count muted" role="status">
@@ -934,6 +944,7 @@ function ContentEditor({
   onDirtyChange: (dirty: boolean) => void;
   onCreated?: (content: Content) => Promise<void>;
 }) {
+  const formId = useId();
   const [selected, setSelected] = useState(initial);
   const [value, setValue] = useState<Omit<Content, 'id' | 'revision'>>(
     initial ?? freshContent(kind)
@@ -1044,10 +1055,109 @@ function ContentEditor({
       setBusy(false);
     }
   }
+  const basicEditor = (
+    <div className="library-basic-fields full">
+      {value.package && (
+        <div className="library-basic-portrait">
+          <PackagePortraitEditor
+            value={value.package}
+            onChange={(pkg) => setValue((current) => ({ ...current, package: pkg }))}
+            onDirtyChange={setPortraitBusy}
+            disabled={editorUnavailable}
+          />
+        </div>
+      )}
+      <label className="full">
+        이름
+        <input
+          aria-label="자료 이름"
+          value={value.title}
+          maxLength={160}
+          required
+          onChange={(event) => setValue({ ...value, title: event.target.value })}
+        />
+      </label>
+      <label className="full">
+        짧은 소개 · 선택
+        <input
+          aria-label="자료 설명"
+          value={value.description}
+          maxLength={1000}
+          placeholder="서재 목록에 보여줄 한 줄 소개"
+          onChange={(event) => setValue({ ...value, description: event.target.value })}
+        />
+      </label>
+      <label className="full">
+        {value.kind === 'bot'
+          ? '봇 설정'
+          : value.kind === 'persona'
+            ? '내 인물의 설정'
+            : '더할 설정과 지침'}
+        <textarea
+          aria-label="자료 본문"
+          rows={12}
+          value={value.text}
+          maxLength={100000}
+          required={!value.package}
+          onChange={(event) => setValue({ ...value, text: event.target.value })}
+        />
+      </label>
+      <details className="library-editor-extra full">
+        <summary>분류·읽기 설정</summary>
+        <div className="library-editor-extra-body">
+          <label>
+            서재 분류
+            <select
+              aria-label="자료 종류"
+              value={selected ? libraryCategory(library, selected) : value.kind}
+              disabled={!!selected}
+              onChange={(event) => {
+                const next = event.target.value as ContentKind;
+                setValue({
+                  ...value,
+                  kind: next,
+                  loading: freshContent(next).loading,
+                  ...(!value.package && ['bot', 'persona', 'module'].includes(next)
+                    ? { package: packageFromContent(value) }
+                    : {}),
+                });
+              }}
+            >
+              {Object.entries(contentLabels).map(([key, title]) => (
+                <option key={key} value={key}>
+                  {title}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            이 자료를 읽는 방법
+            <select
+              aria-label="기본 로딩"
+              value={value.loading}
+              onChange={(event) =>
+                setValue({ ...value, loading: event.target.value as Content['loading'] })
+              }
+            >
+              <option value="pinned">항상 포함</option>
+              <option value="discoverable">모델이 필요할 때 읽기</option>
+            </select>
+          </label>
+        </div>
+      </details>
+      <p className="library-editor-guide">
+        {contentGuidance[value.kind].description} {contentGuidance[value.kind].example}
+      </p>
+    </div>
+  );
   if (!hasShownEditor.current) return <EditorDraftStatus value={shared} />;
   return (
     <EditorDraftProvider value={shared}>
-      <section className="library-detail" aria-label="자료 상세" aria-busy={editorUnavailable}>
+      <section
+        className="library-detail library-content-editor"
+        aria-label="자료 상세"
+        aria-busy={editorUnavailable}
+      >
         <EditorDraftStatus value={shared} />
         <div className="library-detail-heading">
           <button
@@ -1061,6 +1171,19 @@ function ContentEditor({
           </button>
           <h2>{selected ? selected.title : `새 ${contentLabels[kind]}`}</h2>
           <div className="library-detail-actions">
+            <small className="library-draft-state">
+              {dirty ? '저장본과 다른 초안' : '저장본과 같아요'}
+            </small>
+            <button
+              type="submit"
+              form={formId}
+              className="primary"
+              disabled={
+                editorUnavailable || !!importedPackage || behaviorDraftDirty || portraitBusy
+              }
+            >
+              {busy ? '저장 중…' : selected ? '변경사항 저장' : '자료 등록'}
+            </button>
             {selected && (
               <LibraryItemMenu title="자료 메뉴">
                 <DeleteButton
@@ -1080,10 +1203,8 @@ function ContentEditor({
             )}
           </div>
         </div>
-        <p className="library-editor-guide">
-          {contentGuidance[value.kind].description} {contentGuidance[value.kind].example}
-        </p>
         <form
+          id={formId}
           className="editor-grid"
           onSubmit={async (event) => {
             event.preventDefault();
@@ -1091,120 +1212,25 @@ function ContentEditor({
           }}
         >
           <fieldset className="editor-fields full" disabled={editorUnavailable}>
-            <label className="full">
-              이름
-              <input
-                aria-label="자료 이름"
-                value={value.title}
-                maxLength={160}
-                required
-                onChange={(event) => setValue({ ...value, title: event.target.value })}
+            {value.package ? (
+              <PackageFields
+                value={value.package}
+                onChange={(pkg) => setValue((current) => ({ ...current, package: pkg }))}
+                onBehaviorDraftChange={setBehaviorDraftDirty}
+                basicEditor={basicEditor}
               />
-            </label>
-            <label className="full">
-              {value.kind === 'bot'
-                ? '성격과 대화 지침'
-                : value.kind === 'persona'
-                  ? '내 인물의 설정'
-                  : '더할 설정과 지침'}
-              <textarea
-                aria-label="자료 본문"
-                rows={5}
-                value={value.text}
-                maxLength={100000}
-                required={!value.package}
-                onChange={(event) => setValue({ ...value, text: event.target.value })}
-              />
-            </label>
-            <label className="full">
-              짧은 소개 · 선택
-              <input
-                aria-label="자료 설명"
-                value={value.description}
-                maxLength={1000}
-                placeholder="서재 목록에 보여줄 한 줄 소개"
-                onChange={(event) => setValue({ ...value, description: event.target.value })}
-              />
-            </label>
-            {value.package && (
-              <details className="library-editor-extra full">
-                <summary>대표 이미지 · 선택</summary>
-                <div className="library-editor-extra-body">
-                  <PackagePortraitEditor
-                    value={value.package}
-                    onChange={(pkg) => setValue((current) => ({ ...current, package: pkg }))}
-                    onDirtyChange={setPortraitBusy}
-                    disabled={editorUnavailable}
-                  />
-                </div>
-              </details>
+            ) : (
+              <>
+                {basicEditor}
+                <button
+                  type="button"
+                  className="secondary full library-package-expand"
+                  onClick={() => setValue({ ...value, package: packageFromContent(value) })}
+                >
+                  공통 패키지로 확장
+                </button>
+              </>
             )}
-            <details className="library-editor-extra full">
-              <summary>분류·읽기 설정</summary>
-              <div className="library-editor-extra-body">
-                <label>
-                  서재 분류
-                  <select
-                    aria-label="자료 종류"
-                    value={selected ? libraryCategory(library, selected) : value.kind}
-                    disabled={!!selected}
-                    onChange={(event) => {
-                      const next = event.target.value as ContentKind;
-                      setValue({
-                        ...value,
-                        kind: next,
-                        loading: freshContent(next).loading,
-                        ...(!value.package && ['bot', 'persona', 'module'].includes(next)
-                          ? { package: packageFromContent(value) }
-                          : {}),
-                      });
-                    }}
-                  >
-                    {Object.entries(contentLabels).map(([key, title]) => (
-                      <option key={key} value={key}>
-                        {title}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label>
-                  이 자료를 읽는 방법
-                  <select
-                    aria-label="기본 로딩"
-                    value={value.loading}
-                    onChange={(event) =>
-                      setValue({ ...value, loading: event.target.value as Content['loading'] })
-                    }
-                  >
-                    <option value="pinned">항상 포함</option>
-                    <option value="discoverable">모델이 필요할 때 읽기</option>
-                  </select>
-                </label>
-              </div>
-            </details>
-            <details className="library-editor-extra full">
-              <summary>고급 패키지 설정</summary>
-              <div className="library-editor-extra-body">
-                <p className="muted">로어, 시작 장면, 역할별 지침과 동작을 더할 수 있어요.</p>
-                {value.package ? (
-                  <PackageFields
-                    value={value.package}
-                    onChange={(pkg) => setValue((current) => ({ ...current, package: pkg }))}
-                    onBehaviorDraftChange={setBehaviorDraftDirty}
-                  />
-                ) : (
-                  ['bot', 'persona', 'module'].includes(value.kind) && (
-                    <button
-                      type="button"
-                      className="secondary"
-                      onClick={() => setValue({ ...value, package: packageFromContent(value) })}
-                    >
-                      공통 패키지로 확장
-                    </button>
-                  )
-                )}
-              </div>
-            </details>
             <details className="library-package-tools full">
               <summary>패키지 가져오기·내보내기와 역할 사본</summary>
               <div className="library-package-tools-body">
@@ -1300,14 +1326,7 @@ function ContentEditor({
                 {selected.kind === 'bot' ? '채팅 시작' : '이 자료를 봇으로 시작'}
               </button>
             )}
-            <button
-              className={selected ? 'secondary' : ''}
-              disabled={
-                editorUnavailable || !!importedPackage || behaviorDraftDirty || portraitBusy
-              }
-            >
-              {busy ? '저장 중…' : selected ? '변경사항 저장' : '자료 등록'}
-            </button>
+
             <span role="status">{saved}</span>
           </div>
           {selected && (

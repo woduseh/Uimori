@@ -1,9 +1,9 @@
 .app-shell.options-open {
-  grid-template-columns: var(--nav-w) minmax(0, 1fr) 360px;
+  grid-template-columns: var(--nav-w) minmax(0, 1fr) 384px;
 }
 .app-shell.sidebar-collapsed.options-open,
 .app-shell.focus-reading.options-open {
-  grid-template-columns: minmax(0, 1fr) 360px;
+  grid-template-columns: minmax(0, 1fr) 384px;
 }
 .chat-prompt-options {
   min-width: 0;
@@ -242,24 +242,6 @@
   background: var(--accent-soft);
   color: var(--text);
 }
-@media (max-width: 1100px) {
-  .app-shell.options-open {
-    grid-template-columns: var(--nav-w) minmax(0, 1fr);
-  }
-  .app-shell.sidebar-collapsed.options-open,
-  .app-shell.focus-reading.options-open {
-    grid-template-columns: minmax(0, 1fr);
-  }
-  .chat-prompt-options {
-    position: fixed;
-    right: 0;
-    top: 0;
-    width: min(420px, 100vw);
-    height: min(var(--app-height, 100dvh), 100dvh);
-    z-index: 30;
-    box-shadow: -8px 0 30px var(--shade);
-  }
-}
 @media (max-width: 760px) {
   .app-shell.options-open {
     grid-template-columns: minmax(0, 1fr);
@@ -278,5 +260,37 @@
   .chat-options-footer {
     padding-left: 16px;
     padding-right: 16px;
+  }
+}
+
+.app-shell.panel-docked.options-open {
+  grid-template-columns: var(--nav-w) minmax(0, 1fr) 384px;
+}
+.app-shell.sidebar-collapsed.panel-docked.options-open,
+.app-shell.focus-reading.panel-docked.options-open {
+  grid-template-columns: minmax(0, 1fr) 384px;
+}
+.app-shell.panel-overlay.options-open {
+  grid-template-columns: var(--nav-w) minmax(0, 1fr);
+}
+.app-shell.sidebar-collapsed.panel-overlay.options-open,
+.app-shell.focus-reading.panel-overlay.options-open {
+  grid-template-columns: minmax(0, 1fr);
+}
+.panel-overlay > .chat-prompt-options {
+  position: fixed;
+  inset: 0 0 0 auto;
+  width: 384px;
+  height: min(var(--app-height, 100dvh), 100dvh);
+  z-index: 32;
+  box-shadow: -8px 0 30px var(--shade);
+}
+@media (max-width: 767px) {
+  .app-shell.panel-overlay.options-open {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .panel-overlay > .chat-prompt-options {
+    width: 100vw;
+    border-left: 0;
   }
 }

@@ -30,18 +30,13 @@ export async function navigationAction(page: Page, name: string, botTitle?: stri
     const start = botTitle
       ? library.getByRole('button', { name: `${botTitle} 새 채팅`, exact: true })
       : library
-          .locator('.library-list-item')
+          .locator('.library-list-item, .library-card')
           .getByRole('button', { name: / 새 채팅$/ })
           .first();
     await start.click();
     return;
   }
   const libraryTab = ['봇', '페르소나', '모듈'].includes(name);
-  if (libraryTab || name === '서재' || name === '프롬프트') {
-    const menu = nav.locator('.sidebar-app-menu');
-    if ((await menu.getAttribute('open')) === null)
-      await menu.getByLabel('앱 메뉴', { exact: true }).click();
-  }
   await nav.getByRole('button', { name: libraryTab ? '서재' : name, exact: true }).click();
   if (libraryTab)
     await page.getByTestId('library-panel').getByRole('tab', { name, exact: true }).click();
@@ -110,10 +105,33 @@ export async function openPromptTools(editor: Locator) {
     await menu.click();
 }
 export async function openPromptBlocks(editor: Locator) {
-  const fold = editor.getByLabel('프롬프트 블록 접기/펼치기', { exact: true });
-  await expect(fold).toBeVisible();
-  if (!(await fold.evaluate((node) => (node.parentElement as HTMLDetailsElement).open)))
-    await fold.click();
+  await selectPromptSection(editor, '블록');
+}
+export async function selectPromptSection(editor: Locator, name: string) {
+  if (name === 'JSON 편집') {
+    await openPromptTools(editor);
+    await editor.getByRole('button', { name, exact: true }).click();
+    return;
+  }
+  const select = editor.getByRole('combobox', { name: '프롬프트 편집 섹션', exact: true });
+  // Role changes remount the composer. Wait for its responsive navigation before choosing
+  // the control, instead of treating a not-yet-mounted select as a desktop layout.
+  const control = select
+    .or(editor.getByRole('tab', { name, exact: true }))
+    .filter({ visible: true })
+    .first();
+  await expect(control).toBeVisible();
+  if (await control.evaluate((node) => node.tagName === 'SELECT'))
+    await control.selectOption({ label: name });
+  else await control.click();
+  await expect(editor.getByRole('tabpanel', { name, exact: true })).toBeVisible();
+}
+export async function selectPromptBlock(editor: Locator, title: string) {
+  await openPromptBlocks(editor);
+  const navigation = editor.getByRole('complementary', { name: '블록 목록', exact: true });
+  const back = editor.getByRole('button', { name: '블록 목록', exact: true });
+  if (await back.isVisible()) await back.click();
+  await navigation.getByRole('button', { name: `${title} 블록 선택`, exact: true }).click();
 }
 export async function startProviderConnection(page: Page) {
   const editor = page.getByTestId('connection-editor');
@@ -158,16 +176,17 @@ export async function createLibraryContent(page: Page) {
 }
 export async function revealLibraryEditor(page: Page) {
   const library = page.getByTestId('library-panel');
+  await expect(library.getByLabel('자료 이름', { exact: true })).toHaveCount(1);
+  if (await library.getByTestId('package-fields').count())
+    await selectPackageSection(page, '기본 정보');
   await expect(library.getByLabel('자료 이름', { exact: true })).toBeVisible();
   const sections = library.locator('summary').filter({
-    hasText: /^(대표 이미지 · 선택|고급 패키지 설정|분류·읽기 설정)$/,
+    hasText: /^분류·읽기 설정$/,
   });
   for (const section of await sections.all()) {
     if (!(await section.evaluate((node) => (node.parentElement as HTMLDetailsElement).open)))
       await section.click();
   }
-  // Plain content has no package fields until the author explicitly expands its structure.
-  if (await library.getByTestId('package-fields').count()) await selectPackageSection(page, '로어');
 }
 export async function selectContent(page: Page, label: string, title: string) {
   await page.getByRole('button', { name: label, exact: true }).click();

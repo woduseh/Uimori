@@ -574,13 +574,65 @@ export class HelperRuntime {
       ],
       limits: structuredClone(conversation.limits),
     });
-    this.start(task.id);
+    this.pump();
     return task;
   }
   cancel(id: string) {
     const task = this.workspace.cancel(id);
     this.controllers.get(id)?.abort();
+    this.pump();
     return task;
+  }
+  deletionImpact(id: string) {
+    const impact = this.workspace.deletionImpact(id);
+    const workerActive = [...this.controllers.keys()].some((taskId) =>
+      this.store.db
+        .prepare('SELECT 1 FROM helper_tasks WHERE id=? AND conversation_id=?')
+        .get(taskId, id)
+    );
+    return { ...impact, workerActive, canDelete: impact.canDelete && !workerActive };
+  }
+  deleteConversation(
+    id: string,
+    expected: ReturnType<HelperWorkspace['deletionImpact']>['request']
+  ) {
+    return this.store.transaction(() => {
+      if (!this.deletionImpact(id).canDelete)
+        throw new HttpError(
+          409,
+          '진행 중인 작업을 중지하고 공급자 요청이 종료된 뒤 삭제해 주세요.'
+        );
+      new ChatOptionsStore(this.store).detachConversation(id);
+      return this.workspace.delete(id, expected);
+    });
+  }
+  private pump() {
+    if (this.options.signal.aborted || this.controllers.size >= 2) return;
+    if (
+      Number(
+        this.store.db.prepare("SELECT COUNT(*) AS n FROM helper_tasks WHERE status='running'").get()
+          ?.n
+      ) >= 2
+    )
+      return;
+    const occupied = new Set(
+      [...this.controllers.keys()].map(
+        (taskId) =>
+          this.store.db.prepare('SELECT conversation_id FROM helper_tasks WHERE id=?').get(taskId)
+            ?.conversation_id
+      )
+    );
+    const queued = this.store.db
+      .prepare(
+        "SELECT t.id,t.conversation_id FROM helper_tasks t WHERE t.status='queued' AND NOT EXISTS (SELECT 1 FROM helper_tasks running WHERE running.conversation_id=t.conversation_id AND running.status='running') ORDER BY t.rowid"
+      )
+      .all();
+    for (const task of queued) {
+      if (this.controllers.size >= 2) break;
+      if (occupied.has(task.conversation_id)) continue;
+      occupied.add(task.conversation_id);
+      this.start(String(task.id));
+    }
   }
   private start(id: string) {
     if (this.controllers.has(id) || this.options.signal.aborted) return;
@@ -601,14 +653,7 @@ export class HelperRuntime {
         })
         .finally(() => {
           this.controllers.delete(id);
-          if (this.options.signal.aborted) return;
-          const task = this.workspace.task(id);
-          const next = this.store.db
-            .prepare(
-              "SELECT id FROM helper_tasks WHERE conversation_id=? AND status='queued' ORDER BY rowid LIMIT 1"
-            )
-            .get(task.conversationId);
-          if (next && next.id !== id) this.start(String(next.id));
+          this.pump();
         })
     );
   }

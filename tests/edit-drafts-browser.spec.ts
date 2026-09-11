@@ -74,6 +74,7 @@ for (const [index, width] of [390, 1440].entries()) {
       await release.promise;
       await route.continue();
     });
+    await selectPackageSection(page, '기본 정보');
     await page.getByLabel('자료 이름', { exact: true }).fill(`${title} local`);
     await arrived.promise;
     const helper = await request.patch(`/api/edit-drafts/${before.id}`, {
@@ -95,7 +96,7 @@ for (const [index, width] of [390, 1440].entries()) {
       .getByRole('button', { name: '확인한 서버 초안에 내 입력 적용', exact: true })
       .click();
     await expect(page.getByRole('button', { name: '두 초안 비교', exact: true })).toBeHidden();
-    await json.fill('');
+    await (await behavior(page)).fill('');
     await expect(page.getByRole('button', { name: '변경사항 저장', exact: true })).toBeEnabled();
     await page.getByRole('button', { name: '변경사항 저장', exact: true }).click();
     await expect
@@ -111,6 +112,7 @@ for (const [index, width] of [390, 1440].entries()) {
       .click();
     await expect(review).toContainText(`${title} local`);
     await review.getByRole('button', { name: '확인한 저장 되돌리기', exact: true }).click();
+    await selectPackageSection(page, '기본 정보');
     await expect(page.getByLabel('자료 이름', { exact: true })).toHaveValue(title);
     await expect
       .poll(async () => (await (await request.get(`/api/content/${content.id}`)).json()).revision)

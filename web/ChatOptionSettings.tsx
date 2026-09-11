@@ -7,6 +7,8 @@ import {
   type PromptValue,
 } from '../core/prompt-program.js';
 import { api, ApiError } from './api.js';
+import type { HelperConversation } from '../core/helper.js';
+import { selectedHelperSession } from './useHelperSessions.js';
 import { SelectionCheckbox } from './BooleanControls.js';
 import { PromptControlFields } from './PromptControlFields.js';
 
@@ -63,6 +65,31 @@ export function ChatOptionSettings(props: Props) {
   const dirty = fixedDirty || Object.keys(oneoff).length > 0 || fields.length > 0 || !!uncertain;
   const current = useRef({ base, fixed, oneoff, fields, dirty, fixedDirty });
   current.current = { base, fixed, oneoff, fields, dirty, fixedDirty };
+  const [helperSessions, setHelperSessions] = useState<HelperConversation[]>([]);
+  const [delegatedSession, setDelegatedSession] = useState(
+    () =>
+      selectedHelperSession({ kind: 'chat', chatId: props.chatId, branchId: props.branchId }) ?? ''
+  );
+  useEffect(() => {
+    if (!props.active) return;
+    let disposed = false;
+    void api<HelperConversation[]>(
+      `/helper/conversations?kind=chat&chatId=${encodeURIComponent(props.chatId)}&branchId=${encodeURIComponent(props.branchId)}`
+    )
+      .then((values) => {
+        if (disposed) return;
+        setHelperSessions(values);
+        setDelegatedSession((current) =>
+          values.some((item) => item.id === current) ? current : ''
+        );
+      })
+      .catch((cause) => {
+        if (!disposed) setError(cause.message);
+      });
+    return () => {
+      disposed = true;
+    };
+  }, [props.active, props.chatId, props.branchId]);
   const path = `/chats/${encodeURIComponent(props.chatId)}/options`;
   const refresh = useCallback(
     async (review = false) => {
@@ -318,7 +345,11 @@ export function ChatOptionSettings(props: Props) {
           </p>
           {activeDelegations.map((item) => (
             <div key={item.id} className="chat-option-record">
-              <strong>지속 위임 중</strong>
+              <strong>
+                지속 위임 중 ·{' '}
+                {helperSessions.find((session) => session.id === item.conversationId)?.title ||
+                  '도우미 세션'}
+              </strong>
               <p>{item.fields.map(fieldLabel).join(', ')}</p>
               <small>{new Date(item.startedAt).toLocaleString()} 시작</small>
               <button
@@ -334,6 +365,20 @@ export function ChatOptionSettings(props: Props) {
           ))}
           <fieldset className="chat-options-fields chat-delegation-fields" disabled={disabled}>
             <legend>조정을 허용할 옵션</legend>
+            <label>
+              위임할 도우미 세션
+              <select
+                value={delegatedSession}
+                onChange={(event) => setDelegatedSession(event.target.value)}
+              >
+                <option value="">기본 도우미 세션</option>
+                {helperSessions.map((session) => (
+                  <option key={session.id} value={session.id}>
+                    {session.title || '새 대화'}
+                  </option>
+                ))}
+              </select>
+            </label>
             {base.program.controls.map((control) => (
               <label key={control.id} className="chat-option-selection">
                 <SelectionCheckbox
@@ -354,6 +399,7 @@ export function ChatOptionSettings(props: Props) {
               disabled={blocked || fields.length === 0}
               onClick={() =>
                 submit('delegation', 'delegations', {
+                  ...(delegatedSession ? { conversationId: delegatedSession } : {}),
                   binding: base.binding,
                   fields: base.program.controls
                     .filter((control) => fields.includes(control.id))

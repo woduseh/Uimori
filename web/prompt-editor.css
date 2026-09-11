@@ -36,6 +36,15 @@
   gap: 14px;
   min-width: 0;
 }
+.prompt-preset-fields {
+  grid-template-columns: minmax(110px, 180px) minmax(0, 1fr);
+}
+.prompt-preset-fields > .prompt-editor-row {
+  display: contents;
+}
+.prompt-preset-fields > :not(label, .prompt-editor-row) {
+  grid-column: 1 / -1;
+}
 .prompt-applied {
   font-size: 12px;
   margin: 0;
@@ -78,12 +87,15 @@
   display: block;
 }
 .library-prompt-editor .prompt-editor {
-  max-width: 960px;
+  max-width: 1280px;
 }
 .prompt-editor [disabled] {
   cursor: default;
 }
 @media (max-width: 600px) {
+  .prompt-preset-fields {
+    grid-template-columns: minmax(80px, 0.35fr) minmax(0, 1fr);
+  }
   .prompt-editor-row {
     grid-template-columns: minmax(0, 1fr);
   }
@@ -97,6 +109,13 @@
 .prompt-save-actions {
   display: grid;
   gap: 12px;
+  order: -1;
+  position: sticky;
+  top: 56px;
+  z-index: 7;
+  background: var(--bg);
+  padding-block: 12px;
+  border-bottom: 1px solid var(--line);
 }
 .prompt-editor .prompt-composer {
   margin-bottom: 0;
@@ -118,6 +137,7 @@
   flex-wrap: nowrap;
   gap: 8px;
   align-items: center;
+  flex-direction: row-reverse;
 }
 .prompt-management-menu {
   margin-inline-start: auto;
@@ -143,6 +163,22 @@
   padding-bottom: 8px;
 }
 @media (max-width: 600px) {
+  .prompt-save-actions {
+    order: 0;
+    top: auto;
+    bottom: 0;
+    padding-bottom: max(12px, env(safe-area-inset-bottom));
+    border-top: 1px solid var(--line);
+    border-bottom: 0;
+  }
+  .prompt-save-scope {
+    order: 1;
+    flex: 1 1 100%;
+    font-size: 12px;
+  }
+  .prompt-save-buttons {
+    flex-wrap: wrap;
+  }
   .prompt-save-buttons > button {
     flex: 1 1 0;
     min-width: 0;

@@ -1,6 +1,6 @@
 import { SelectionCheckbox } from './BooleanControls.js';
 import { LoreEditor } from './LoreEditor.js';
-import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
+import { useEffect, useId, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { useBufferedEditorState, useUnappliedEditorField } from './editor-workspace-context.js';
 import type { Content } from '../core/product.js';
 import type { ContentPackage, PackageRole } from '../core/content-package.js';
@@ -75,7 +75,7 @@ const packageSections = [
   },
   { id: 'behavior', title: '상태와 행동', icon: BehaviorIcon, description: '상태값과 실행할 행동' },
 ] as const;
-type PackageSection = (typeof packageSections)[number]['id'];
+type PackageSection = (typeof packageSections)[number]['id'] | 'basic';
 type SectionPosition = {
   focused: HTMLElement | undefined;
   selection: { start: number; end: number; direction: 'forward' | 'backward' | 'none' } | null;
@@ -95,10 +95,12 @@ export function PackageFields({
   value,
   onChange,
   onBehaviorDraftChange,
+  basicEditor,
 }: {
   value: ContentPackage;
   onChange: (v: ContentPackage) => void;
   onBehaviorDraftChange?: (dirty: boolean) => void;
+  basicEditor?: ReactNode;
 }) {
   const compact = useCompactLayout();
   const idPrefix = useId();
@@ -109,10 +111,21 @@ export function PackageFields({
   const lastRootFocus = useRef<HTMLElement | null>(null);
   const pendingPosition = useRef<'detail' | 'list' | 'desktop' | null>(null);
   const previousCompact = useRef(compact);
-  const [tab, setTab] = useState<PackageSection>('lore');
-  const [detailOpen, setDetailOpen] = useState(!compact);
+  const sections = basicEditor
+    ? [
+        {
+          id: 'basic' as const,
+          title: '기본 정보',
+          icon: PersonaIcon,
+          description: '이름, 소개와 기본 설정',
+        },
+        ...packageSections,
+      ]
+    : packageSections;
+  const [tab, setTab] = useState<PackageSection>(basicEditor ? 'basic' : 'lore');
+  const [detailOpen, setDetailOpen] = useState(!!basicEditor || !compact);
   const showingDetail = !compact || detailOpen;
-  const currentSection = packageSections.find((item) => item.id === tab)!;
+  const currentSection = sections.find((item) => item.id === tab)!;
   const visiblePanel = (id: PackageSection) => ({
     id: `${idPrefix}-${id}-panel`,
     role: compact ? 'region' : 'tabpanel',
@@ -254,9 +267,30 @@ export function PackageFields({
   return (
     <section
       ref={root}
-      className="package-fields full"
+      className={`package-fields full${basicEditor ? ' package-fields-unified' : ''}`}
       aria-label="패키지 구성"
       data-testid="package-fields"
+      onInvalidCapture={(event) => {
+        const target = event.target;
+        if (
+          !(
+            target instanceof HTMLInputElement ||
+            target instanceof HTMLTextAreaElement ||
+            target instanceof HTMLSelectElement
+          ) ||
+          target.checkVisibility()
+        )
+          return;
+        const section = target.closest<HTMLElement>('[data-package-section]')?.dataset
+          .packageSection as PackageSection | undefined;
+        if (!section) return;
+        event.preventDefault();
+        selectSection(section);
+        requestAnimationFrame(() => {
+          target.focus();
+          target.reportValidity();
+        });
+      }}
       onFocusCapture={(event) => {
         const target = event.target;
         if (!(target instanceof HTMLElement)) return;
@@ -280,12 +314,13 @@ export function PackageFields({
       <div className="package-editor-layout" data-compact={compact}>
         <SectionNavigation
           label="패키지 편집 분류"
-          items={packageSections}
+          items={sections}
           value={tab}
           onSelect={selectSection}
           compact={compact}
           idPrefix={idPrefix}
           hidden={compact && detailOpen}
+          orientation={basicEditor ? 'horizontal' : 'vertical'}
         />
         <div className="package-section-content" hidden={!showingDetail}>
           <header className="package-section-heading">
@@ -304,6 +339,7 @@ export function PackageFields({
               {currentSection.title}
             </h3>
           </header>
+          {basicEditor && <div {...visiblePanel('basic')}>{basicEditor}</div>}
           <div {...visiblePanel('images')}>
             <PackageImagesEditor
               key={value.id}

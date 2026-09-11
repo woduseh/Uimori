@@ -5,6 +5,11 @@
   min-width: 0;
   margin: 12px 0 20px;
 }
+/* A block's menu can be a viewport sheet. Its ancestor must clear the sticky save bar,
+   otherwise the bar intercepts sheet actions even though the menu itself has a z-index. */
+.prompt-composer:has(.action-menu[open]) {
+  z-index: 8;
+}
 .prompt-composer p {
   margin-bottom: 0;
   line-height: 1.7;
@@ -386,7 +391,7 @@
 .pc-composer-content {
   display: grid;
   gap: 0;
-  padding: 0 0 12px 28px;
+  padding: 0 0 12px;
   min-width: 0;
 }
 .pc-structure-editor:not([hidden]) {
@@ -398,6 +403,172 @@
   position: absolute;
   top: 5px;
   right: 4px;
+}
+.pc-editor-workspace {
+  container: prompt-editor / inline-size;
+  min-width: 0;
+}
+.pc-section-tabs {
+  display: flex;
+  gap: 20px;
+  padding-right: 96px;
+  border-bottom: 1px solid var(--line);
+  margin-bottom: 20px;
+}
+.pc-section-tabs > button {
+  flex: none;
+  min-height: 48px;
+  padding: 8px 0;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  color: var(--muted);
+  background: transparent;
+}
+.pc-section-tabs > button[aria-selected="true"] {
+  color: var(--text);
+  border-bottom-color: var(--accent);
+  font-weight: 600;
+}
+.pc-section-select {
+  display: none;
+  margin: 0 96px 16px 0;
+}
+.pc-item-workspace {
+  display: grid;
+  grid-template-columns: 224px minmax(0, 1fr);
+  gap: 24px;
+  align-items: start;
+  min-width: 0;
+}
+.pc-item-navigation {
+  position: sticky;
+  top: 128px;
+  display: grid;
+  gap: 12px;
+  min-height: 0;
+  min-width: 0;
+  max-height: calc(var(--app-height, 100dvh) - 160px);
+}
+.pc-item-search {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid var(--input-border);
+  border-radius: 8px;
+  padding-inline: 12px;
+  background: var(--surface-raised);
+}
+.pc-item-search > svg {
+  flex: none;
+  color: var(--muted);
+}
+.prompt-composer .pc-item-search > input {
+  border: 0;
+  padding-inline: 0;
+  background: transparent;
+}
+.pc-blocks-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  color: var(--muted);
+  font-size: 13px;
+}
+.pc-item-links {
+  display: grid;
+  align-content: start;
+  gap: 4px;
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+.pc-item-links > button {
+  position: relative;
+  display: grid;
+  gap: 4px;
+  padding: 12px;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+  overflow-wrap: anywhere;
+}
+.pc-item-links > button[aria-current="true"] {
+  background: var(--accent-soft);
+}
+.pc-item-links > button:hover {
+  background: var(--hover);
+}
+.pc-item-links > button[data-drop-position="before"] {
+  box-shadow: inset 0 3px var(--accent);
+}
+.pc-item-links > button[data-drop-position="after"] {
+  box-shadow: inset 0 -3px var(--accent);
+}
+.pc-item-detail {
+  min-width: 0;
+}
+.pc-item-detail .pc-block,
+.pc-item-detail .pc-control {
+  border: 0;
+  background: transparent;
+  border-radius: 0;
+}
+.pc-item-detail .pc-block-body {
+  padding: 0;
+}
+.pc-block-heading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-block: 0 16px;
+}
+.pc-block-heading .pc-block-title {
+  font-size: 18px;
+  font-weight: 600;
+}
+.pc-item-back {
+  display: none;
+}
+.pc-item-detail .pc-block[hidden],
+.pc-item-detail .pc-control[hidden],
+.pc-item-links > button[hidden] {
+  display: none;
+}
+.pc-editor-workspace > .pc-composer-content > .pc-section {
+  padding: 0;
+  border: 0;
+}
+.pc-defaults {
+  max-width: 800px;
+}
+@container prompt-editor (max-width: 799px) {
+  .pc-section-tabs {
+    display: none;
+  }
+  .pc-section-select {
+    display: grid;
+  }
+  .pc-item-workspace {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 16px;
+  }
+  .pc-item-navigation {
+    position: static;
+    max-height: none;
+  }
+  .pc-item-workspace[data-detail="true"] > .pc-item-navigation,
+  .pc-item-workspace[data-detail="false"] > .pc-item-detail {
+    display: none;
+  }
+  .pc-item-back {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 16px;
+  }
 }
 .prompt-composer summary:has(> .pc-disclosure-icon) {
   display: flex;

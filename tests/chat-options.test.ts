@@ -23,6 +23,9 @@ import { createFixtureChat } from './fixtures/chat.js';
 import { forkChat } from '../server/chat-fork.js';
 import type { OptionValues } from '../core/chat-options.js';
 import type { HelperTask } from '../core/helper.js';
+import { HelperRuntime } from '../server/helper-runtime.js';
+import { ResponseStreamStore } from '../server/response-stream.js';
+import { EditDraftService } from '../server/edit-drafts.js';
 
 const owned: { store: Store; path: string }[] = [];
 afterEach(() => {
@@ -391,6 +394,231 @@ test('helper option tools require the running host task and its direct or persis
       retryOf: task.id,
     })
   ).toThrow('HELPER_EFFECTS_ALREADY_COMMITTED');
+});
+
+test('same-branch option delegations belong only to their selected helper session, even with a copied grant', () => {
+  const f = fixture(),
+    workspace = new HelperWorkspace(f.store);
+  const branchId = f.store.product.branch(f.chat.id).id;
+  const a = workspace.create({ kind: 'chat', chatId: f.chat.id, branchId }, 'a'),
+    b = workspace.create(a.scope, 'b');
+  const state = f.service.get(f.chat.id);
+  const grant = f.service.delegate(
+    f.chat.id,
+    {
+      branchId,
+      conversationId: a.id,
+      expectedRevision: state.revision,
+      binding: state.binding,
+      fields: ['detail'],
+      operationId: 'delegate-a',
+    },
+    authority
+  ).delegations[0];
+  expect(chatOptionGrants(f.store, a.id, 'a')).toHaveLength(1);
+  expect(chatOptionGrants(f.store, b.id, 'b')).toEqual([]);
+  const connection = f.store.product.connection({
+    title: 'Fixture',
+    protocol: 'fixture-sse-v1',
+    endpoint: 'http://127.0.0.1:9',
+    enabled: true,
+  });
+  const model = f.store.product.model({
+    title: 'Fixture',
+    connectionId: connection.id,
+    modelId: 'fixture',
+    temperature: null,
+    maxOutputTokens: 1024,
+  });
+  const task = workspace.enqueue(b.id, 'copied-grant', '설명해줘', {
+    scope: b.scope,
+    model: f.store.product.modelSnapshot(model.id),
+    history: [],
+    persona: '',
+    grants: chatOptionGrants(f.store, a.id, 'copied-grant'),
+    limits: { totalCalls: 3, helperCalls: 3, artifacts: 1 },
+  });
+  workspace.start(task.id, 'test');
+  const running = workspace.task(task.id);
+  expect(invokeHelperOptions(f.store, running, 'options.read', {})).toMatchObject({
+    delegations: [],
+  });
+  const current = f.service.get(f.chat.id);
+  expect(() =>
+    invokeHelperOptions(f.store, running, 'options.choose', {
+      expectedRevision: current.revision,
+      binding: current.binding,
+      values: { detail: 4 },
+      expectedHeadRevision: current.headRevision,
+      delegationId: grant.id,
+      operationId: 'cross-session',
+    })
+  ).toThrow(/위임/);
+  expect(current.pending).toEqual([]);
+  const foreign = createFixtureChat(f.store, 'Other chat');
+  const other = workspace.open({
+    kind: 'chat',
+    chatId: foreign.id,
+    branchId: f.store.product.branch(foreign.id).id,
+  });
+  expect(() =>
+    f.service.delegate(
+      f.chat.id,
+      {
+        branchId,
+        conversationId: other.id,
+        expectedRevision: current.revision,
+        binding: current.binding,
+        fields: ['detail'],
+        operationId: 'foreign-session',
+      },
+      authority
+    )
+  ).toThrow(/이 채팅 분기/);
+});
+
+test('deleting a helper session revokes pending choices while preserving consumed options and detached receipts', () => {
+  const f = fixture(),
+    grant = delegate(f),
+    helper = new HelperWorkspace(f.store);
+  stage(f, { detail: 6 }, grant.id);
+  const written = run(f).run;
+  complete(f, written.id);
+  const frozen = structuredClone(f.store.run(written.id));
+  stage(f, { detail: 8 }, grant.id);
+  const runtime = new HelperRuntime(f.store, {
+    approvedOrigins: [],
+    owner: 'delete-test',
+    signal: new AbortController().signal,
+    track: () => {
+      throw new Error('No execution expected');
+    },
+    streams: new ResponseStreamStore(f.store),
+  });
+  runtime.deleteConversation(
+    grant.conversationId,
+    runtime.deletionImpact(grant.conversationId).request
+  );
+  expect(() => helper.conversation(grant.conversationId)).toThrow(/찾을 수/);
+  expect(f.service.get(f.chat.id)).toMatchObject({ pending: [], delegations: [] });
+  expect(f.store.run(written.id)).toEqual(frozen);
+  const receipt = f.store.db.prepare('SELECT * FROM helper_delegations WHERE id=?').get(grant.id)!;
+  expect(receipt.conversation_id).toBeNull();
+  expect(receipt.revoked_at).toEqual(expect.any(String));
+  expect(JSON.parse(String(receipt.body))).toEqual(grant);
+  expect(
+    f.store.db
+      .prepare('SELECT body FROM chat_option_pending WHERE chat_id=?')
+      .all(f.chat.id)
+      .map((row) => JSON.parse(String(row.body)).status)
+      .sort()
+  ).toEqual(['cancelled', 'consumed']);
+  expect(() => validateChatOptionArchive(f.store)).not.toThrow();
+  const restored = database();
+  expect(() => restored.product.import(f.store.product.export())).not.toThrow();
+  const invalid = structuredClone(f.store.product.export());
+  invalid.tables.helper_delegations[0].revoked_at = null;
+  invalid.tables.helper_delegations[0].revision = 1;
+  expect(() => database().product.import(invalid)).toThrow(/delegation owner/);
+  const replacement = helper.open({
+    kind: 'chat',
+    chatId: f.chat.id,
+    branchId: f.store.product.branch(f.chat.id).id,
+  });
+  expect(chatOptionGrants(f.store, replacement.id, 'new')).toEqual([]);
+});
+
+test('session deletion cancels its direct oneoff reservation while keeping another session delegation and shared editor draft', () => {
+  const f = fixture(),
+    helper = new HelperWorkspace(f.store);
+  const branchId = f.store.product.branch(f.chat.id).id;
+  const a = helper.create({ kind: 'chat', chatId: f.chat.id, branchId }, 'a'),
+    b = helper.create(a.scope, 'b');
+  const connection = f.store.product.connection({
+    title: 'Fixture',
+    protocol: 'fixture-sse-v1',
+    endpoint: 'http://127.0.0.1:9',
+    enabled: true,
+  });
+  const model = f.store.product.model({
+    title: 'Fixture',
+    connectionId: connection.id,
+    modelId: 'fixture',
+    temperature: null,
+    maxOutputTokens: 1024,
+  });
+  const task = helper.enqueue(a.id, 'oneoff', '이번 요청의 옵션을 설정해줘', {
+    scope: a.scope,
+    model: f.store.product.modelSnapshot(model.id),
+    history: [],
+    persona: '',
+    grants: [
+      {
+        id: 'direct',
+        requestId: 'oneoff',
+        target: f.chat.id,
+        actions: ['options.oneoff'],
+        provenance: 'direct-user-request',
+      },
+    ],
+    limits: { totalCalls: 3, helperCalls: 3, artifacts: 1 },
+  });
+  helper.start(task.id, 'owner');
+  const state = f.service.get(f.chat.id);
+  invokeHelperOptions(f.store, helper.task(task.id), 'options.oneoff', {
+    expectedRevision: state.revision,
+    expectedHeadRevision: state.headRevision,
+    binding: state.binding,
+    values: { detail: 6 },
+    operationId: 'direct-choice',
+  });
+  const drafts = new EditDraftService(f.store);
+  const draft = drafts.create(
+    {
+      kind: 'prompt-workspace',
+      targetId: 'current',
+      editorKey: 'prompt-workspace:current',
+      model: {},
+      operationId: 'shared-draft',
+    },
+    { requestId: task.id, assert: () => {} }
+  );
+  helper.finish(task.id, 'owner', 1, 'completed', '옵션 예약 완료', null);
+  const next = f.service.get(f.chat.id);
+  const delegation = f.service.delegate(
+    f.chat.id,
+    {
+      branchId,
+      conversationId: b.id,
+      expectedRevision: next.revision,
+      binding: next.binding,
+      fields: ['detail'],
+      operationId: 'delegate-b',
+    },
+    authority
+  ).delegations[0];
+  stage(f, { detail: 3 }, delegation.id);
+  const runtime = new HelperRuntime(f.store, {
+    approvedOrigins: [],
+    owner: 'owner',
+    signal: new AbortController().signal,
+    track: () => {
+      throw new Error('No execution expected');
+    },
+    streams: new ResponseStreamStore(f.store),
+  });
+  runtime.deleteConversation(a.id, runtime.deletionImpact(a.id).request);
+  const after = f.service.get(f.chat.id);
+  expect(after.pending).toHaveLength(1);
+  expect(after.pending[0]).toMatchObject({
+    kind: 'delegated',
+    delegationId: delegation.id,
+    values: { detail: 3 },
+  });
+  expect(chatOptionGrants(f.store, b.id, 'next')).toHaveLength(1);
+  expect(drafts.get(draft.id)).toEqual(draft);
+  expect(() => validateChatOptionArchive(f.store)).not.toThrow();
+  expect(() => database().product.import(f.store.product.export())).not.toThrow();
 });
 test('archive retains delegation start and revoke history, consumed option ownership and copied Run evidence without copying permission', () => {
   const f = fixture(),

@@ -375,11 +375,17 @@ export class Store {
   ): { run: Run; created: boolean } {
     if (command.loreContextReset !== undefined && typeof command.loreContextReset !== 'boolean')
       throw new HttpError(400, 'Invalid lore context reset');
+    const prior = this.db
+      .prepare('SELECT id,command FROM runs WHERE chat_id=? AND request_key=?')
+      .get(chatId, command.idempotencyKey) as Row | undefined;
+    // A replay keeps the branch originally resolved for an omitted branch ID.
+    const resolvedBranchId =
+      command.branchId ?? (prior ? parse(prior.command).branchId : this.product.branch(chatId).id);
     const canonical = json({
       request: command.request,
       expectedRevision: command.expectedRevision,
       expectedSettingsRevision: command.expectedSettingsRevision,
-      branchId: command.branchId ?? `main:${chatId}`,
+      branchId: resolvedBranchId,
       expectedProfileRevision: command.expectedProfileRevision,
       ...(command.sceneCommandId ? { sceneCommandId: command.sceneCommandId } : {}),
       ...(command.packageRequestId ? { packageRequestId: command.packageRequestId } : {}),
@@ -388,16 +394,13 @@ export class Store {
       ...(command.retryOf ? { retryOf: command.retryOf } : {}),
       ...(command.requestEdited ? { requestEdited: true } : {}),
     });
-    const prior = this.db
-      .prepare('SELECT id,command FROM runs WHERE chat_id=? AND request_key=?')
-      .get(chatId, command.idempotencyKey) as Row | undefined;
     if (prior) {
       if (prior.command !== canonical)
         throw new HttpError(409, 'Idempotency key reused with different command');
       return { run: this.run(prior.id), created: false };
     }
     const chat = this.chat(chatId);
-    const branch = this.product.branch(chatId, command.branchId);
+    const branch = this.product.branch(chatId, resolvedBranchId);
     if (branch.headRevision !== command.expectedRevision)
       throw new HttpError(409, 'Source revision conflict');
     if (chat.settingsRevision !== command.expectedSettingsRevision)

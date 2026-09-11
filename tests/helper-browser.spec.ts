@@ -129,15 +129,36 @@ async function harness(page: Page, seedCount = 0) {
     if (path === '/api/helper/conversations' && request.method() === 'GET')
       return route.fulfill({
         json: [...views.values()]
-          .filter((view) => view.conversation.scope.kind === url.searchParams.get('kind'))
-          .map((view) => view.conversation)
+          .filter((view) => {
+            const scope = view.conversation.scope;
+            return (
+              scope.kind === url.searchParams.get('kind') &&
+              (scope.kind === 'library' ||
+                (scope.chatId === url.searchParams.get('chatId') &&
+                  (!url.searchParams.has('branchId') ||
+                    scope.branchId === url.searchParams.get('branchId'))))
+            );
+          })
+          .map((view) => ({
+            ...view.conversation,
+            activity: {
+              running: view.tasks.filter((task) => task.status === 'running').length,
+              queued: view.tasks.filter((task) => task.status === 'queued').length,
+            },
+            latestEventSeq: view.events.at(-1)?.seq ?? 0,
+          }))
           .reverse(),
       });
-    if (path === '/api/helper/conversations' && request.method() === 'POST') {
+    if (
+      ['/api/helper/conversations', '/api/helper/conversations/new'].includes(path) &&
+      request.method() === 'POST'
+    ) {
       const scope = body.scope as HelperScope;
-      let view = [...views.values()].find(
-        (value) => JSON.stringify(value.conversation.scope) === JSON.stringify(scope)
-      );
+      let view = path.endsWith('/new')
+        ? undefined
+        : [...views.values()].find(
+            (value) => JSON.stringify(value.conversation.scope) === JSON.stringify(scope)
+          );
       if (!view) {
         const conversation: Conversation = {
           id: randomUUID(),
@@ -146,6 +167,7 @@ async function harness(page: Page, seedCount = 0) {
           persona: '',
           limits: { totalCalls: 24, helperCalls: 12, artifacts: 1 },
           createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
           title: `합성 작업 ${views.size + 1}`,
         };
         view = { conversation, messages: [], tasks: [], events: [] };
@@ -166,12 +188,15 @@ async function harness(page: Page, seedCount = 0) {
     const conversationMatch =
       /^\/api\/helper\/conversations\/([^/]+)(?:\/(messages|tasks|events))?$/u.exec(path);
     if (conversationMatch) {
-      const view = views.get(conversationMatch[1])!;
+      const view = views.get(conversationMatch[1]);
+      if (!view)
+        return route.fulfill({ status: 404, json: { error: 'Helper conversation not found' } });
       const kind = conversationMatch[2];
       if (!kind && request.method() === 'PATCH') {
         view.conversation = {
           ...view.conversation,
-          persona: body.persona,
+          title: body.title ?? view.conversation.title,
+          persona: body.persona ?? view.conversation.persona,
           limits: body.limits ?? view.conversation.limits,
           revision: view.conversation.revision + 1,
         };
@@ -339,6 +364,7 @@ async function open(page: Page) {
   await openHelper(page);
   const panel = page.locator('#helper-panel');
   await expect(panel).toBeVisible();
+  await expect(panel.getByLabel('도우미에게 요청')).toBeEnabled();
   await expect(panel.getByText('대화를 불러오는 중…', { exact: true })).toHaveCount(0);
   return panel;
 }
@@ -503,12 +529,12 @@ test('HELPUI03 library work selection, older pages and direct artifact edit pres
   expect(state.artifacts.get(artifact.id)!.at(-1)!.revision).toBe(3);
   expect(view.messages.at(-1)!.artifacts).toEqual([{ id: artifact.id, revision: 1 }]);
   await expect(panel.getByLabel('도우미에게 요청')).toHaveValue('별도로 유지할 요청 초안');
-  await panel.getByRole('button', { name: '새 서재 작업' }).click();
+  await panel.getByRole('button', { name: '새 도우미 세션' }).click();
   await expect(
     panel.getByText('작품에 대해 묻거나, 설정을 다듬거나, 가정 장면을 부탁해 보세요.')
   ).toBeVisible();
   await panel.getByLabel('도우미에게 요청').fill('새 작업의 초안');
-  await panel.getByLabel('서재 작업 선택').selectOption(view.conversation.id);
+  await panel.getByLabel('도우미 세션 선택').selectOption(view.conversation.id);
   await expect(panel.getByLabel('도우미에게 요청')).toHaveValue('별도로 유지할 요청 초안');
   await panel.locator('summary[aria-label="도우미 대화 더보기"]').click();
   await panel.getByRole('button', { name: '작업 기록', exact: true }).click();
@@ -556,6 +582,17 @@ test('HELPUI04 selected source is frozen in the request and a terminal missing s
     source = saved.sources[0];
   await page.goto(`/?chat=${chat.id}`);
   const article = page.locator(`[data-testid="source"][data-source-id="${source.id}"]`);
+  // A session deleted in another window must not break the source-to-helper entry point.
+  await page.evaluate(
+    ({ chatId, branchId }) => {
+      const scope = { kind: 'chat', chatId, branchId };
+      localStorage.setItem(
+        `uimori:helper-session-scope:${JSON.stringify(scope)}`,
+        'deleted-helper-session'
+      );
+    },
+    { chatId: chat.id, branchId: saved.branches!.find((branch) => branch.default)!.id }
+  );
   await openSourceActions(article);
   await article.getByRole('button', { name: '도우미에게 물어보기' }).click();
   const panel = page.locator('#helper-panel');
@@ -659,4 +696,46 @@ test('HELPUI06 saved effects survive response failure and cannot be replayed fro
   await details.locator('summary').click();
   await expect(details.getByText('저장한 작업 · 다음 요청 옵션')).toBeVisible();
   await expect(details.getByText('UNEXPECTED_EOF', { exact: true })).toBeVisible();
+});
+
+test('HELPUI07 switching sessions isolates late responses and retains the background task', async ({
+  page,
+  request,
+}) => {
+  const chat = await create(request),
+    state = await harness(page);
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto(`/?chat=${chat.id}`);
+  const panel = await open(page),
+    input = panel.getByLabel('도우미에게 요청');
+  const picker = panel.getByLabel('도우미 세션 선택');
+  const firstId = await picker.inputValue();
+  await input.fill('첫 세션의 실행');
+  await panel.getByRole('button', { name: '도우미 요청 보내기', exact: true }).click();
+  await expect(input).toHaveValue('');
+  const firstTask = state.views.get(firstId)!.tasks[0];
+  await input.fill('첫 세션의 다음 초안');
+  const release = state.holdNextStream(firstTask.id);
+  try {
+    await expect.poll(() => state.heldStreams.has(firstTask.id)).toBe(true);
+    await panel.getByRole('button', { name: '새 도우미 세션', exact: true }).click();
+    await expect(picker).not.toHaveValue(firstId);
+    await expect(input).toBeEnabled();
+    await expect(input).toHaveValue('');
+    await input.fill('다른 세션에서 쓰는 초안');
+    expect(firstTask.status).toBe('running');
+    state.complete(firstTask);
+    release();
+    await expect
+      .poll(() => picker.locator(`option[value="${firstId}"]`).textContent())
+      .toContain('●');
+    await expect(input).toHaveValue('다른 세션에서 쓰는 초안');
+    await expect(panel.getByText('합성 완료 응답', { exact: true })).toHaveCount(0);
+    await picker.selectOption(firstId);
+    await expect(input).toHaveValue('첫 세션의 다음 초안');
+    await expect(panel.getByText('합성 완료 응답', { exact: true })).toBeVisible();
+    expect(state.posts).toHaveLength(1);
+  } finally {
+    release();
+  }
 });

@@ -14,7 +14,7 @@ import {
   selectChatSettingsSection,
   openSourceActions,
   openChatMenu,
-  openPromptBlocks,
+  selectPromptBlock,
 } from './ui-navigation.js';
 import { postFixtureChat } from './fixtures/chat.js';
 import { test, expect, type Page, type APIRequestContext, type Locator } from '@playwright/test';
@@ -24,10 +24,9 @@ import type { Content } from '../core/product.js';
 import { createDefaultPromptProgram } from '../core/prompt-defaults.js';
 
 async function promptBody(editor: Locator) {
-  await openPromptBlocks(editor);
+  await selectPromptBlock(editor, '지침');
   const block = editor.locator('#prompt-block-instructions');
   const body = block.getByLabel('지침 본문', { exact: true });
-  if (!(await body.isVisible())) await block.locator('summary').first().click();
   return body;
 }
 
@@ -1302,13 +1301,13 @@ test('UI17 full writing and empty translation prompts import, save and apply wit
   expect(await editor.evaluate((element) => element.scrollWidth <= element.clientWidth + 1)).toBe(
     true
   );
-  await editor.getByRole('button', { name: '저장', exact: true }).click();
+  await editor.getByRole('button', { name: '프리셋 저장', exact: true }).click();
   await expect(editor.getByText('프롬프트를 저장했어요.', { exact: true })).toBeVisible();
   if (visualReview) await page.screenshot({ path: info.outputPath('full-prompt-mobile.png') });
   await editor.getByLabel('프롬프트 역할', { exact: true }).selectOption('translation');
   await editor.getByLabel('프롬프트 이름', { exact: true }).fill('UI17 empty translation');
   await (await promptBody(editor)).fill('');
-  await editor.getByRole('button', { name: '저장', exact: true }).click();
+  await editor.getByRole('button', { name: '프리셋 저장', exact: true }).click();
   await expect
     .poll(async () =>
       (await (await request.get('/api/library')).json()).promptPresets.some(
@@ -1419,7 +1418,7 @@ test('UI17 prompts use latest settings and concurrent edits preserve unsaved tex
   });
   expect(concurrent.ok()).toBeTruthy();
   await expect(await promptBody(libraryEditor)).toHaveValue(edited);
-  await libraryEditor.getByRole('button', { name: '저장', exact: true }).click();
+  await libraryEditor.getByRole('button', { name: '프리셋 저장', exact: true }).click();
   await expect
     .poll(
       async () =>

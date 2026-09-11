@@ -2,6 +2,8 @@ import { createHash, randomUUID } from 'node:crypto';
 import type {
   HelperArtifact,
   HelperConversation,
+  HelperConversationDeletion,
+  HelperConversationSummary,
   HelperEvent,
   HelperGrant,
   HelperMessage,
@@ -41,7 +43,8 @@ export function initHelperTaskTiming(store: Store) {
 }
 export function initHelperWorkspace(store: Store) {
   store.db.exec(`
-    CREATE TABLE helper_conversations(id TEXT PRIMARY KEY,scope_key TEXT NOT NULL UNIQUE,chat_id TEXT REFERENCES chats(id) ON DELETE CASCADE,branch_id TEXT REFERENCES branches(id) ON DELETE CASCADE,scope TEXT NOT NULL,revision INTEGER NOT NULL,persona TEXT NOT NULL,created_at TEXT NOT NULL,limits TEXT NOT NULL DEFAULT '{"totalCalls":24,"helperCalls":12,"artifacts":1}');
+    CREATE TABLE helper_conversations(id TEXT PRIMARY KEY,scope_key TEXT NOT NULL,creation_key TEXT NOT NULL,creation_hash TEXT NOT NULL,chat_id TEXT REFERENCES chats(id) ON DELETE CASCADE,branch_id TEXT REFERENCES branches(id) ON DELETE CASCADE,scope TEXT NOT NULL,title TEXT NOT NULL,auto_title INTEGER NOT NULL,revision INTEGER NOT NULL,persona TEXT NOT NULL,created_at TEXT NOT NULL,updated_at TEXT NOT NULL,limits TEXT NOT NULL DEFAULT '{"totalCalls":24,"helperCalls":12,"artifacts":1}',UNIQUE(scope_key,creation_key));
+    CREATE INDEX helper_conversations_scope ON helper_conversations(chat_id,branch_id,updated_at);
     CREATE TABLE helper_tasks(id TEXT PRIMARY KEY,conversation_id TEXT NOT NULL REFERENCES helper_conversations(id) ON DELETE CASCADE,request_key TEXT NOT NULL,request TEXT NOT NULL,status TEXT NOT NULL,generation INTEGER NOT NULL DEFAULT 0,owner TEXT,snapshot TEXT NOT NULL,error TEXT,usage TEXT NOT NULL,created_at TEXT NOT NULL,started_at TEXT,updated_at TEXT NOT NULL,UNIQUE(conversation_id,request_key));
     CREATE UNIQUE INDEX helper_one_active_task ON helper_tasks(conversation_id) WHERE status='running';
     CREATE TABLE helper_messages(id TEXT PRIMARY KEY,conversation_id TEXT NOT NULL REFERENCES helper_conversations(id) ON DELETE CASCADE,task_id TEXT NOT NULL REFERENCES helper_tasks(id) ON DELETE CASCADE,role TEXT NOT NULL,text TEXT NOT NULL,artifacts TEXT NOT NULL,created_at TEXT NOT NULL,UNIQUE(task_id,role));
@@ -52,7 +55,7 @@ export function initHelperWorkspace(store: Store) {
     CREATE TABLE helper_artifact_jobs(id TEXT PRIMARY KEY,task_id TEXT NOT NULL REFERENCES helper_tasks(id) ON DELETE CASCADE,operation_id TEXT NOT NULL UNIQUE,snapshot TEXT NOT NULL,status TEXT NOT NULL,artifact_id TEXT,artifact_revision INTEGER,error TEXT,created_at TEXT NOT NULL);
     CREATE TABLE helper_task_attempts(task_id TEXT NOT NULL REFERENCES helper_tasks(id) ON DELETE CASCADE,attempt_id TEXT PRIMARY KEY REFERENCES attempts(id) ON DELETE CASCADE,purpose TEXT NOT NULL,segment INTEGER NOT NULL,artifact_job_id TEXT REFERENCES helper_artifact_jobs(id) ON DELETE CASCADE);
     CREATE TABLE helper_artifacts(id TEXT NOT NULL,revision INTEGER NOT NULL,conversation_id TEXT NOT NULL REFERENCES helper_conversations(id) ON DELETE CASCADE,task_id TEXT NOT NULL REFERENCES helper_tasks(id) ON DELETE CASCADE,request TEXT NOT NULL,text TEXT NOT NULL,snapshot TEXT NOT NULL,usage TEXT NOT NULL,created_at TEXT NOT NULL,origin TEXT NOT NULL,PRIMARY KEY(id,revision));
-    CREATE TABLE helper_delegations(id TEXT PRIMARY KEY,conversation_id TEXT NOT NULL REFERENCES helper_conversations(id) ON DELETE CASCADE,revision INTEGER NOT NULL,body TEXT NOT NULL,revoked_at TEXT,created_at TEXT NOT NULL);
+    CREATE TABLE helper_delegations(id TEXT PRIMARY KEY,conversation_id TEXT REFERENCES helper_conversations(id) ON DELETE SET NULL,chat_id TEXT NOT NULL REFERENCES chats(id) ON DELETE CASCADE,branch_id TEXT NOT NULL REFERENCES branches(id) ON DELETE CASCADE,revision INTEGER NOT NULL,body TEXT NOT NULL,revoked_at TEXT,created_at TEXT NOT NULL);
   `);
 }
 
@@ -305,43 +308,175 @@ export class HelperWorkspace {
     return {
       id: row.id,
       scope: JSON.parse(row.scope),
+      title: row.title,
       revision: row.revision,
       persona: row.persona,
       limits: JSON.parse(row.limits),
       createdAt: row.created_at,
+      updatedAt: row.updated_at,
     };
   }
   open(scope: HelperScope): HelperConversation {
-    if (scope.kind === 'chat') this.store.product.branch(scope.chatId, scope.branchId);
-    const key = json(scope);
-    const old = this.store.db
-      .prepare('SELECT id FROM helper_conversations WHERE scope_key=?')
-      .get(key) as Row | undefined;
-    if (old) return this.conversation(old.id);
-    const id = randomUUID();
-    this.store.db
-      .prepare(
-        'INSERT INTO helper_conversations(id,scope_key,chat_id,branch_id,scope,revision,persona,created_at) VALUES(?,?,?,?,?,1,?,?)'
-      )
-      .run(
-        id,
-        key,
-        scope.kind === 'chat' ? scope.chatId : null,
-        scope.kind === 'chat' ? scope.branchId : null,
-        json(scope),
-        '',
-        now()
-      );
-    return this.conversation(id);
+    return this.create(scope, 'default');
+  }
+  create(scope: HelperScope, creationKey: string, title?: string): HelperConversation {
+    return this.store.transaction(() => {
+      if (scope.kind === 'chat') this.store.product.branch(scope.chatId, scope.branchId);
+      const key = json(scope),
+        creationHash = createHash('sha256')
+          .update(json({ title: title ?? null }))
+          .digest('hex');
+      const old = this.store.db
+        .prepare(
+          'SELECT id,creation_hash FROM helper_conversations WHERE scope_key=? AND creation_key=?'
+        )
+        .get(key, creationKey) as Row | undefined;
+      if (old) {
+        if (old.creation_hash !== creationHash)
+          throw new HttpError(409, '대화 생성 요청 키가 다른 요청에 사용됐어요.');
+        return this.conversation(old.id);
+      }
+      const id = randomUUID(),
+        time = now();
+      this.store.db
+        .prepare(
+          'INSERT INTO helper_conversations(id,scope_key,creation_key,creation_hash,chat_id,branch_id,scope,title,auto_title,revision,persona,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,1,?,?,?)'
+        )
+        .run(
+          id,
+          key,
+          creationKey,
+          creationHash,
+          scope.kind === 'chat' ? scope.chatId : null,
+          scope.kind === 'chat' ? scope.branchId : null,
+          key,
+          title ?? '새 도우미 대화',
+          Number(title === undefined),
+          '',
+          time,
+          time
+        );
+      return this.conversation(id);
+    });
+  }
+  list(
+    scope: { kind: 'chat'; chatId: string; branchId?: string } | { kind: 'library' }
+  ): HelperConversationSummary[] {
+    if (scope.kind === 'chat') {
+      this.store.chat(scope.chatId);
+      if (scope.branchId) this.store.product.branch(scope.chatId, scope.branchId);
+    }
+    const rows =
+      scope.kind === 'library'
+        ? this.store.db
+            .prepare(
+              'SELECT id FROM helper_conversations WHERE chat_id IS NULL ORDER BY updated_at DESC,rowid DESC'
+            )
+            .all()
+        : this.store.db
+            .prepare(
+              `SELECT id FROM helper_conversations WHERE chat_id=? ${scope.branchId ? 'AND branch_id=?' : ''} ORDER BY updated_at DESC,rowid DESC`
+            )
+            .all(...(scope.branchId ? [scope.chatId, scope.branchId] : [scope.chatId]));
+    return rows.map((row) => {
+      const activity = this.store.db
+        .prepare(
+          "SELECT COALESCE(SUM(status='running'),0) AS running,COALESCE(SUM(status='queued'),0) AS queued FROM helper_tasks WHERE conversation_id=?"
+        )
+        .get(row.id)!;
+      return {
+        ...this.conversation(String(row.id)),
+        activity: { running: Number(activity.running), queued: Number(activity.queued) },
+        latestEventSeq: Number(
+          this.store.db
+            .prepare(
+              'SELECT COALESCE(MAX(seq),0) AS seq FROM helper_events WHERE conversation_id=?'
+            )
+            .get(row.id)?.seq
+        ),
+      };
+    });
   }
   persona(id: string, revision: number, persona: string, limits = this.conversation(id).limits) {
+    return this.update(id, revision, { persona, limits });
+  }
+  update(
+    id: string,
+    revision: number,
+    changes: Partial<Pick<HelperConversation, 'title' | 'persona' | 'limits'>>
+  ) {
+    const previous = this.conversation(id);
     const changed = this.store.db
       .prepare(
-        'UPDATE helper_conversations SET persona=?,limits=?,revision=revision+1 WHERE id=? AND revision=?'
+        'UPDATE helper_conversations SET title=?,auto_title=CASE WHEN ? THEN 0 ELSE auto_title END,persona=?,limits=?,updated_at=?,revision=revision+1 WHERE id=? AND revision=?'
       )
-      .run(persona, json(limits), id, revision);
+      .run(
+        changes.title ?? previous.title,
+        Number(changes.title !== undefined),
+        changes.persona ?? previous.persona,
+        json(changes.limits ?? previous.limits),
+        now(),
+        id,
+        revision
+      );
     if (!changed.changes) throw new HttpError(409, '도우미 설정이 다른 곳에서 변경됐어요.');
+    this.event(id, null, 'conversation.updated');
     return this.conversation(id);
+  }
+  deletionImpact(id: string): HelperConversationDeletion {
+    const conversation = this.conversation(id);
+    const count = (sql: string) => Number(this.store.db.prepare(sql).get(id)?.n ?? 0);
+    const activeTasks = count(
+      "SELECT COUNT(*) AS n FROM helper_tasks WHERE conversation_id=? AND status IN ('queued','running')"
+    );
+    const unsettledAttempts = count(
+      "SELECT COUNT(*) AS n FROM attempts a JOIN helper_task_attempts x ON x.attempt_id=a.id JOIN helper_tasks t ON t.id=x.task_id WHERE t.conversation_id=? AND a.status='running'"
+    );
+    return {
+      request: {
+        expectedRevision: conversation.revision,
+        expectedEventSequence: count(
+          'SELECT COALESCE(MAX(seq),0) AS n FROM helper_events WHERE conversation_id=?'
+        ),
+      },
+      activeTasks,
+      unsettledAttempts,
+      workerActive: false,
+      canDelete: activeTasks === 0 && unsettledAttempts === 0,
+      description:
+        '이 도우미 대화의 메시지·작업·가정 장면·개인 요약을 영구 삭제하고 이 대화에서 아직 적용하지 않은 옵션 예약과 위임을 해제해요. 이미 저장한 본편·공통 자료·편집 초안과 적용된 옵션의 영수증은 유지돼요. 진행 중인 작업은 먼저 중지하고 종료를 기다려 주세요.',
+    };
+  }
+  delete(id: string, expected: HelperConversationDeletion['request']) {
+    return this.store.transaction(() => {
+      const impact = this.deletionImpact(id);
+      if (
+        impact.request.expectedRevision !== expected.expectedRevision ||
+        impact.request.expectedEventSequence !== expected.expectedEventSequence
+      )
+        throw new HttpError(
+          409,
+          '도우미 대화가 변경됐어요. 최신 내용을 확인한 뒤 다시 삭제해 주세요.'
+        );
+      if (!impact.canDelete)
+        throw new HttpError(
+          409,
+          '진행 중인 작업을 중지하고 공급자 요청이 종료된 뒤 삭제해 주세요.'
+        );
+      const tasks = this.store.db
+        .prepare('SELECT id FROM helper_tasks WHERE conversation_id=?')
+        .all(id);
+      for (const scopeKey of [`helper:${id}`, ...tasks.map((task) => `artifact:${task.id}`)])
+        for (const table of ['context_heads', 'context_checkpoints'])
+          this.store.db.prepare(`DELETE FROM ${table} WHERE scope_key=?`).run(scopeKey);
+      this.store.db
+        .prepare(
+          'DELETE FROM attempts WHERE id IN (SELECT x.attempt_id FROM helper_task_attempts x JOIN helper_tasks t ON t.id=x.task_id WHERE t.conversation_id=?)'
+        )
+        .run(id);
+      this.store.db.prepare('DELETE FROM helper_conversations WHERE id=?').run(id);
+      return { deleted: true as const };
+    });
   }
   messages(id: string, before?: string): HelperMessage[] {
     this.conversation(id);
@@ -370,6 +505,9 @@ export class HelperWorkspace {
       }));
   }
   event(conversationId: string, taskId: string | null, kind: string, data: unknown = null) {
+    this.store.db
+      .prepare('UPDATE helper_conversations SET updated_at=? WHERE id=?')
+      .run(now(), conversationId);
     this.store.db
       .prepare('INSERT INTO helper_events(conversation_id,task_id,kind,data) VALUES(?,?,?,?)')
       .run(conversationId, taskId, kind, json(data));
@@ -492,6 +630,17 @@ export class HelperWorkspace {
       }
       const id = randomUUID(),
         time = now();
+      const titled = this.store.db
+        .prepare(
+          'UPDATE helper_conversations SET title=?,auto_title=0,revision=revision+1,updated_at=? WHERE id=? AND auto_title=1 AND revision=1 AND NOT EXISTS (SELECT 1 FROM helper_tasks WHERE conversation_id=?)'
+        )
+        .run(
+          Array.from(request.trim().replace(/\s+/gu, ' ')).slice(0, 80).join(''),
+          time,
+          conversationId,
+          conversationId
+        );
+      if (titled.changes) this.event(conversationId, null, 'conversation.updated');
       this.store.db
         .prepare(
           'INSERT INTO helper_tasks(id,conversation_id,request_key,request,status,snapshot,usage,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?)'
@@ -519,6 +668,13 @@ export class HelperWorkspace {
     });
   }
   start(id: string, owner: string) {
+    if (
+      Number(
+        this.store.db.prepare("SELECT COUNT(*) AS n FROM helper_tasks WHERE status='running'").get()
+          ?.n
+      ) >= 2
+    )
+      return false;
     const task = this.task(id);
     if (
       this.store.db

@@ -12,6 +12,9 @@ import { createFixtureChat } from './fixtures/chat.js';
 import * as transport from '../core/transport.js';
 import type { HelperTaskSnapshot } from '../core/helper.js';
 import { runStoryJob } from '../server/story-runner.js';
+import Fastify from 'fastify';
+import { helperRoutes } from '../server/helper-routes.js';
+import { helperContext, helperHistory, publishHelperContext } from '../server/helper-context.js';
 
 const owned: { store: Store; path: string }[] = [];
 afterEach(() => {
@@ -927,4 +930,283 @@ test('helper retries retain attempts but project the latest response at the orig
   expect(visible[0].requestOrder).toBe(messages[0].requestOrder);
   expect(reloaded.tasks(f.conversation.id)).toHaveLength(3);
   expect(reloaded.task(first.id).status).toBe('failed');
+});
+
+test('only unnamed new sessions adopt the first request title and preserve explicit or renamed titles', () => {
+  const f = fixture(),
+    question = `  첫 질문\n${'🌟'.repeat(90)}`;
+  const task = f.workspace.enqueue(f.conversation.id, 'first', question, snapshot(f));
+  const expected = Array.from(question.trim().replace(/\s+/gu, ' ')).slice(0, 80).join('');
+  expect(f.workspace.conversation(f.conversation.id)).toMatchObject({
+    title: expected,
+    revision: 2,
+  });
+  expect(f.workspace.open(f.conversation.scope).title).toBe(expected);
+  expect(f.workspace.existing(f.conversation.id, 'first', question)?.id).toBe(task.id);
+  f.workspace.enqueue(f.conversation.id, 'second', '두 번째 요청', snapshot(f));
+  expect(f.workspace.conversation(f.conversation.id).title).toBe(expected);
+  const explicit = f.workspace.create(f.conversation.scope, 'explicit', '새 도우미 대화');
+  f.workspace.enqueue(explicit.id, 'first', '이 요청은 이름이 되면 안 돼요', snapshot(f));
+  expect(f.workspace.conversation(explicit.id).title).toBe('새 도우미 대화');
+  const manual = f.workspace.create(f.conversation.scope, 'manual');
+  f.workspace.update(manual.id, manual.revision, { title: '내가 정한 이름' });
+  f.workspace.enqueue(manual.id, 'first', '이 요청도 이름이 되면 안 돼요', snapshot(f));
+  expect(f.workspace.conversation(manual.id).title).toBe('내가 정한 이름');
+});
+
+test('same-branch sessions keep independent histories, direct grants and summaries through archive restore', async () => {
+  const f = fixture(),
+    chat = createFixtureChat(f.store, 'Sessions');
+  const scope = {
+    kind: 'chat' as const,
+    chatId: chat.id,
+    branchId: f.store.product.branch(chat.id).id,
+  };
+  const a = f.workspace.create(scope, 'session-a', '설정 검토'),
+    b = f.workspace.create(scope, 'session-b', '장면 구상');
+  expect(a.id).not.toBe(b.id);
+  expect(f.workspace.create(scope, 'session-a', a.title).id).toBe(a.id);
+  expect(() => f.workspace.create(scope, 'session-a', '다른 생성')).toThrow(/요청 키/);
+  const renamed = f.workspace.update(a.id, a.revision, { title: '설정 집중 검토' });
+  expect(f.workspace.create(scope, 'session-a', a.title).title).toBe(renamed.title);
+  expect(() => f.workspace.update(a.id, a.revision, { title: '늦은 이름' })).toThrow(/변경/);
+  expect(f.workspace.open(scope).id).toBe(f.workspace.open(scope).id);
+  const send = mockSend();
+  const first = f.runtime.enqueue(a.id, 'same-key', '이 채팅의 제목을 바꿔줘');
+  await Promise.all(f.work);
+  const second = f.runtime.enqueue(b.id, 'same-key', '설정을 설명해줘');
+  await Promise.all(f.work);
+  expect(f.workspace.task(first.id).snapshot.grants.length).toBeGreaterThan(0);
+  expect(f.workspace.task(second.id).snapshot.grants).toEqual([]);
+  expect(f.workspace.task(second.id).snapshot.history).toEqual([]);
+  expect(helperHistory(f.store, b.id).map((message) => message.text)).not.toContain(first.request);
+  const history = helperHistory(f.store, a.id);
+  const compact = f.workspace.enqueue(a.id, 'summary', '검토 요약', {
+    ...snapshot(f),
+    scope,
+    history,
+  });
+  f.workspace.start(compact.id, 'summary-owner');
+  const context = publishHelperContext(
+    f.store,
+    f.workspace.task(compact.id),
+    1,
+    'A 세션에서만 알아야 하는 설정',
+    { modelCalls: 0, inputTokens: 0, outputTokens: 0, costUsd: 0 },
+    100,
+    { activeRevision: 0, checkpoint: null }
+  );
+  f.workspace.finish(compact.id, 'summary-owner', 1, 'completed', 'A 요약 완료', null);
+  expect(helperContext(f.store, b.id, helperHistory(f.store, b.id)).checkpoint).toBeNull();
+  expect(helperContext(f.store, a.id, helperHistory(f.store, a.id)).checkpoint?.id).toBe(
+    context.checkpoint.id
+  );
+  const restored = emptyStore();
+  restored.product.import(f.store.product.export());
+  const restoredHelper = new HelperWorkspace(restored);
+  expect(restoredHelper.conversation(a.id).title).toBe(renamed.title);
+  expect(restoredHelper.conversation(b.id).title).toBe(b.title);
+  expect(restoredHelper.messages(a.id)).toEqual(f.workspace.messages(a.id));
+  expect(restoredHelper.messages(b.id)).toEqual(f.workspace.messages(b.id));
+  expect(helperContext(restored, b.id, helperHistory(restored, b.id)).checkpoint).toBeNull();
+  expect(send).toHaveBeenCalledTimes(2);
+});
+
+test('all helper sessions share two execution slots while each session preserves FIFO and isolated history', async () => {
+  const f = fixture();
+  const a = f.conversation,
+    b = f.workspace.create(a.scope, 'b'),
+    c = f.workspace.create(a.scope, 'c');
+  const releases = new Map<string, () => void>();
+  const calls: string[] = [];
+  let live = 0,
+    peak = 0;
+  mockSend(async (request) => {
+    const name = String(request.input.task);
+    calls.push(name);
+    live++;
+    peak = Math.max(peak, live);
+    await new Promise<void>((resolve) => releases.set(name, resolve));
+    live--;
+    return { ...success, text: `${name} 답변` };
+  });
+  const a1 = f.runtime.enqueue(a.id, 'a1', 'A1');
+  const a2 = f.runtime.enqueue(a.id, 'a2', 'A2');
+  const b1 = f.runtime.enqueue(b.id, 'b1', 'B1');
+  const c1 = f.runtime.enqueue(c.id, 'c1', 'C1');
+  await vi.waitFor(() => expect(calls).toEqual(['A1', 'B1']));
+  expect(f.workspace.task(a2.id).status).toBe('queued');
+  expect(f.workspace.task(c1.id).status).toBe('queued');
+  expect(f.workspace.list({ kind: 'library' }).find((item) => item.id === a.id)?.activity).toEqual({
+    running: 1,
+    queued: 1,
+  });
+  releases.get('B1')!();
+  await vi.waitFor(() => expect(calls).toEqual(['A1', 'B1', 'C1']));
+  expect(f.workspace.task(a2.id).status).toBe('queued');
+  releases.get('A1')!();
+  await vi.waitFor(() => expect(calls).toEqual(['A1', 'B1', 'C1', 'A2']));
+  releases.get('C1')!();
+  releases.get('A2')!();
+  await vi.waitFor(() => expect(f.workspace.task(a2.id).status).toBe('completed'));
+  await Promise.all(f.work);
+  expect(peak).toBe(2);
+  expect(f.workspace.task(a2.id).snapshot.history.map((message) => message.text)).toEqual([
+    'A1',
+    'A1 답변',
+  ]);
+  expect(f.workspace.task(c1.id).snapshot.history).toEqual([]);
+  expect([a1, a2, b1, c1].map((task) => f.workspace.task(task.id).status)).toEqual([
+    'completed',
+    'completed',
+    'completed',
+    'completed',
+  ]);
+});
+
+test('cancelled workers retain their slot and block deletion until provider accounting and cleanup finish', async () => {
+  const f = fixture();
+  const other = f.workspace.create(f.conversation.scope, 'other');
+  const waiting = f.workspace.create(f.conversation.scope, 'waiting');
+  const releases = new Map<string, () => void>();
+  mockSend(async (request) => {
+    await new Promise<void>((resolve) => releases.set(String(request.input.task), resolve));
+    return success;
+  });
+  const a = f.runtime.enqueue(f.conversation.id, 'a', 'A'),
+    b = f.runtime.enqueue(other.id, 'b', 'B'),
+    c = f.runtime.enqueue(waiting.id, 'c', 'C');
+  await vi.waitFor(() => expect(releases.size).toBe(2));
+  f.runtime.cancel(a.id);
+  const pending = f.runtime.deletionImpact(f.conversation.id);
+  expect(pending).toMatchObject({ canDelete: false, unsettledAttempts: 1, workerActive: true });
+  expect(() => f.runtime.deleteConversation(f.conversation.id, pending.request)).toThrow(/종료/);
+  expect(f.workspace.task(c.id).status).toBe('queued');
+  releases.get('A')!();
+  await vi.waitFor(() => expect(releases.has('C')).toBe(true));
+  expect(f.runtime.deletionImpact(f.conversation.id)).toMatchObject({
+    canDelete: true,
+    workerActive: false,
+    unsettledAttempts: 0,
+  });
+  expect(f.workspace.task(a.id).usage.modelCalls).toBe(1);
+  expect(
+    f.workspace.messages(f.conversation.id).filter((message) => message.role === 'assistant')
+  ).toEqual([]);
+  const stale = f.runtime.deletionImpact(f.conversation.id).request;
+  f.workspace.update(f.conversation.id, stale.expectedRevision, { title: '삭제 전에 변경' });
+  expect(() => f.runtime.deleteConversation(f.conversation.id, stale)).toThrow(/변경/);
+  const impact = f.runtime.deletionImpact(f.conversation.id);
+  expect(f.runtime.deleteConversation(f.conversation.id, impact.request)).toEqual({
+    deleted: true,
+  });
+  expect(() => f.workspace.conversation(f.conversation.id)).toThrow(/찾을 수/);
+  expect(
+    f.store.db
+      .prepare('SELECT COUNT(*) AS n FROM helper_tasks WHERE conversation_id=?')
+      .get(f.conversation.id)
+  ).toEqual({ n: 0 });
+  expect(
+    f.store.db
+      .prepare('SELECT COUNT(*) AS n FROM response_stream_tasks WHERE helper_task_id=?')
+      .get(a.id)
+  ).toEqual({ n: 0 });
+  expect(f.workspace.task(b.id).status).toBe('running');
+  releases.get('B')!();
+  releases.get('C')!();
+  await vi.waitFor(() => expect(f.workspace.task(c.id).status).toBe('completed'));
+  await Promise.all(f.work);
+  const restored = emptyStore();
+  expect(() => restored.product.import(f.store.product.export())).not.toThrow();
+});
+
+test('helper HTTP routes create separate sessions, list all chat branches and require reviewed deletion state', async () => {
+  const f = fixture(),
+    chat = createFixtureChat(f.store, 'API sessions');
+  const branch = f.store.product.branch(chat.id);
+  const scope = { kind: 'chat', chatId: chat.id, branchId: branch.id };
+  const app = Fastify();
+  helperRoutes(app, f.runtime);
+  try {
+    const create = {
+      method: 'POST' as const,
+      url: '/api/helper/conversations/new',
+      payload: { scope, requestKey: 'same', title: 'A 세션' },
+    };
+    const a = (await app.inject(create)).json();
+    expect((await app.inject(create)).json()).toEqual(a);
+    const b = (
+      await app.inject({
+        ...create,
+        payload: { ...create.payload, requestKey: 'second', title: 'B 세션' },
+      })
+    ).json();
+    expect(a.id).not.toBe(b.id);
+    const otherBranch = f.store.product.createBranch(chat.id, {
+      title: '다른 분기',
+      fromRevision: null,
+    });
+    const c = (
+      await app.inject({
+        ...create,
+        payload: {
+          ...create.payload,
+          scope: { ...scope, branchId: otherBranch.id },
+          requestKey: 'other-branch',
+          title: 'C 세션',
+        },
+      })
+    ).json();
+    const listed = await app.inject(`/api/helper/conversations?kind=chat&chatId=${chat.id}`);
+    expect(listed.statusCode).toBe(200);
+    expect(
+      listed
+        .json()
+        .map((item: { id: string }) => item.id)
+        .sort()
+    ).toEqual([a.id, b.id, c.id].sort());
+    expect(
+      (
+        await app.inject(
+          `/api/helper/conversations?kind=chat&chatId=${chat.id}&branchId=${branch.id}`
+        )
+      )
+        .json()
+        .map((item: { id: string }) => item.id)
+        .sort()
+    ).toEqual([a.id, b.id].sort());
+    expect(listed.json()[0]).toMatchObject({
+      activity: { running: 0, queued: 0 },
+      latestEventSeq: 0,
+    });
+    const renamed = await app.inject({
+      method: 'PATCH',
+      url: `/api/helper/conversations/${a.id}`,
+      payload: { expectedRevision: a.revision, title: '이름 바꿈' },
+    });
+    expect(renamed.statusCode).toBe(200);
+    expect(renamed.json().title).toBe('이름 바꿈');
+    const impact = (await app.inject(`/api/helper/conversations/${a.id}/deletion`)).json();
+    expect(impact.canDelete).toBe(true);
+    f.workspace.event(a.id, null, 'new-event');
+    const stale = await app.inject({
+      method: 'DELETE',
+      url: `/api/helper/conversations/${a.id}`,
+      payload: impact.request,
+    });
+    expect(stale.statusCode).toBe(409);
+    const current = (await app.inject(`/api/helper/conversations/${a.id}/deletion`)).json();
+    expect(
+      (
+        await app.inject({
+          method: 'DELETE',
+          url: `/api/helper/conversations/${a.id}`,
+          payload: current.request,
+        })
+      ).json()
+    ).toEqual({ deleted: true });
+    expect((await app.inject(`/api/helper/conversations/${b.id}`)).statusCode).toBe(200);
+  } finally {
+    await app.close();
+  }
 });

@@ -21,6 +21,7 @@ export function SectionNavigation<K extends string>({
   compact,
   idPrefix,
   hidden,
+  orientation = 'vertical',
 }: {
   label: string;
   items: readonly SectionNavigationItem<K>[];
@@ -29,17 +30,20 @@ export function SectionNavigation<K extends string>({
   compact: boolean;
   idPrefix: string;
   hidden?: boolean;
+  orientation?: 'vertical' | 'horizontal';
 }) {
   return (
     <div
       className="section-navigation"
       role={compact ? 'navigation' : 'tablist'}
       aria-label={label}
-      aria-orientation={compact ? undefined : 'vertical'}
+      aria-orientation={compact ? undefined : orientation}
       data-compact={compact}
       hidden={hidden}
       onKeyDown={(event) => {
-        if (compact || !['ArrowUp', 'ArrowDown', 'Home', 'End'].includes(event.key)) return;
+        const previousKey = orientation === 'horizontal' ? 'ArrowLeft' : 'ArrowUp';
+        const nextKey = orientation === 'horizontal' ? 'ArrowRight' : 'ArrowDown';
+        if (compact || ![previousKey, nextKey, 'Home', 'End'].includes(event.key)) return;
         event.preventDefault();
         const current = items.findIndex((item) => item.id === value);
         const next =
@@ -47,7 +51,7 @@ export function SectionNavigation<K extends string>({
             ? 0
             : event.key === 'End'
               ? items.length - 1
-              : (current + (event.key === 'ArrowDown' ? 1 : -1) + items.length) % items.length;
+              : (current + (event.key === nextKey ? 1 : -1) + items.length) % items.length;
         if (!items[next]) return;
         onSelect(items[next].id);
         event.currentTarget.querySelectorAll<HTMLButtonElement>('button')[next]?.focus();

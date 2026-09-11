@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useRef, useState, type MouseEvent } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Sprout } from 'lucide-react';
 import type { Content, Library } from '../core/product.js';
 import type { Chat } from '../core/types.js';
 import {
@@ -44,12 +45,6 @@ function readView(): View {
     return { open: {}, sort: 'recent', order: [] };
   }
 }
-/** Choosing an item closes its menu, the way every other menu in the app behaves. */
-function closeMenu(event: MouseEvent<HTMLButtonElement>, run: () => void) {
-  const menu = event.currentTarget.closest('details');
-  if (menu) menu.open = false;
-  run();
-}
 /** First row of the sidebar and the drawer: start a chat (from the library's bot tab, where bots
  *  without chats live) or find a chat across every bot. */
 export function NavigationQuickActions({
@@ -78,15 +73,27 @@ export function NavigationQuickActions({
     .sort((a, b) => (b.lastActivityAt ?? '').localeCompare(a.lastActivityAt ?? ''));
   return (
     <div className="navigation-quick-actions">
-      <IconButton label="새 채팅" icon={AddIcon} onClick={() => onLibrary('bot')} />
-      <IconButton
-        label="전체 채팅 검색"
-        icon={SearchIcon}
+      <button
+        type="button"
+        className="nav-button"
+        aria-label="새 채팅"
+        onClick={() => onLibrary('bot')}
+      >
+        <AddIcon size={20} aria-hidden="true" />
+        <span>새 채팅</span>
+      </button>
+      <button
+        type="button"
+        className="nav-button"
+        aria-label="전체 채팅 검색"
         onClick={() => {
           setQuery('');
           setSearching(true);
         }}
-      />
+      >
+        <SearchIcon size={20} aria-hidden="true" />
+        <span>채팅 검색</span>
+      </button>
       <Dialog
         open={searching}
         title="전체 채팅 검색"
@@ -124,7 +131,11 @@ export function NavigationQuickActions({
   );
 }
 export function BotNavigation(
-  props: Props & { onLibraryChanged: () => Promise<void>; quickActions?: boolean }
+  props: Props & {
+    onLibraryChanged: () => Promise<void>;
+    quickActions?: boolean;
+    libraryTab?: 'bot' | 'persona' | 'module' | 'prompts';
+  }
 ) {
   const {
     library,
@@ -320,16 +331,45 @@ export function BotNavigation(
   return (
     <div className="bot-navigation bot-tree-navigation" data-testid="bot-navigation">
       <div className="brand">
-        <span>Uimori</span>
-        {quickActions && (
+        <span className="brand-name">
+          <Sprout size={26} aria-hidden="true" />
+          Uimori
+        </span>
+      </div>
+      {quickActions && (
+        <div className="sidebar-quick-actions">
           <NavigationQuickActions
             chats={chats}
             library={library}
             onSelect={onSelect}
             onLibrary={onLibrary}
           />
-        )}
-      </div>
+        </div>
+      )}
+      <nav className="sidebar-destinations" aria-label="작업 공간">
+        <button
+          type="button"
+          className={`nav-button${props.destination === 'library' && props.libraryTab !== 'prompts' ? ' selected' : ''}`}
+          aria-current={
+            props.destination === 'library' && props.libraryTab !== 'prompts' ? 'page' : undefined
+          }
+          onClick={() => onLibrary('bot')}
+        >
+          <LibraryIcon size={20} aria-hidden="true" />
+          서재
+        </button>
+        <button
+          type="button"
+          className={`nav-button${props.destination === 'library' && props.libraryTab === 'prompts' ? ' selected' : ''}`}
+          aria-current={
+            props.destination === 'library' && props.libraryTab === 'prompts' ? 'page' : undefined
+          }
+          onClick={() => onLibrary('prompts')}
+        >
+          <PromptIcon size={20} aria-hidden="true" />
+          프롬프트
+        </button>
+      </nav>
       <div className="bot-tree-section-heading">
         <button
           className="bot-folder-toggle"
@@ -486,16 +526,6 @@ export function BotNavigation(
             <SettingsIcon size={18} />
             설정
           </button>
-          <ActionMenu label="앱 메뉴" placement="top" className="sidebar-app-menu">
-            <button onClick={(event) => closeMenu(event, () => onLibrary('bot'))}>
-              <LibraryIcon size={18} />
-              서재
-            </button>
-            <button onClick={(event) => closeMenu(event, () => onLibrary('prompts'))}>
-              <PromptIcon size={18} />
-              프롬프트
-            </button>
-          </ActionMenu>
         </nav>
       </div>
     </div>

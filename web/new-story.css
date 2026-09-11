@@ -18,11 +18,44 @@
   min-width: 0;
 }
 .new-story-main-model {
-  gap: 8px;
+  gap: 12px;
+  padding-block: 16px;
+  border-block: 1px solid var(--line);
 }
 .new-story-main-model > p {
   margin: 0;
   font-size: 13px;
+}
+.new-story-settings-summary {
+  display: grid;
+  gap: 12px;
+  margin: 0;
+  font-size: 13px;
+}
+.new-story-settings-summary > div {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 12px;
+  align-items: baseline;
+}
+.new-story-settings-summary dt {
+  color: var(--muted);
+}
+.new-story-settings-summary dd {
+  min-width: 0;
+  margin: 0;
+  text-align: right;
+  overflow-wrap: anywhere;
+}
+.new-story-settings-summary dd > span {
+  white-space: nowrap;
+}
+.new-story-main-model > button {
+  justify-self: end;
+  font-size: 13px;
+  border-color: transparent;
+  background: transparent;
+  color: var(--accent);
 }
 .new-story-options-content > label {
   min-width: 0;

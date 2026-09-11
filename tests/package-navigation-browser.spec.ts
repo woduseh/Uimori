@@ -4,6 +4,7 @@ import { expect, test, type APIRequestContext, type Locator, type Page } from '@
 import type { Content } from '../core/product.js';
 
 const sectionNames = [
+  '기본 정보',
   '로어',
   '이미지',
   '시작',
@@ -64,7 +65,6 @@ async function openEditor(page: Page, title: string) {
   await menu.click();
   await menu.locator('..').getByRole('button', { name: '편집', exact: true }).click();
   await expect(library.getByLabel('자료 이름', { exact: true })).toHaveValue(title);
-  await library.getByText('고급 패키지 설정', { exact: true }).click();
   const fields = library.getByTestId('package-fields');
   await expect(fields).toBeVisible();
   return { library, fields };
@@ -105,11 +105,13 @@ test('PNAV01 mobile section navigation preserves lore search, caret and unapplie
       writes.push(`${entry.method()} ${new URL(entry.url()).pathname}`);
   });
   const { library, fields } = await openEditor(page, item.title);
+  await expect(library.getByLabel('자료 이름', { exact: true })).toBeVisible();
+  await fields.getByRole('button', { name: '패키지 분야 목록', exact: true }).click();
   const navigation = fields.getByRole('navigation', { name: '패키지 편집 분류', exact: true });
   await expect(navigation.getByRole('button')).toHaveText(
     sectionNames.map((name) => new RegExp(name))
   );
-  await expect(fields.locator('[data-package-section]')).toHaveCount(9);
+  await expect(fields.locator('[data-package-section]')).toHaveCount(10);
   await expect(fields.locator('.package-section-content')).toBeHidden();
   for (const button of await navigation.getByRole('button').all()) {
     const box = await button.boundingBox();
@@ -122,6 +124,7 @@ test('PNAV01 mobile section navigation preserves lore search, caret and unapplie
   await expect(navigation).toBeHidden();
   const search = fields.getByLabel('로어 검색', { exact: true });
   await search.fill('별빛');
+  await fields.locator('.lore-row').filter({ hasText: '별빛 항구' }).getByRole('button').click();
   const body = fields.getByLabel('로어 2 본문', { exact: true });
   const editedLore = '별빛 아래에서 이어 쓰는 합성 항구';
   await body.fill(editedLore);
@@ -170,8 +173,8 @@ test('PNAV02 desktop keyboard navigation and mobile resizing retain fields, expa
   await page.setViewportSize({ width: 1440, height: 1000 });
   const { fields } = await openEditor(page, item.title);
   let navigation = fields.getByRole('tablist', { name: '패키지 편집 분류', exact: true });
-  await expect(navigation).toHaveAttribute('aria-orientation', 'vertical');
-  await expect(navigation.getByRole('tab')).toHaveCount(9);
+  await expect(navigation).toHaveAttribute('aria-orientation', 'horizontal');
+  await expect(navigation.getByRole('tab')).toHaveCount(10);
   await expect(navigation.locator('[tabindex="0"]')).toHaveCount(1);
   await navigation.getByRole('tab', { name: '역할별 지침', exact: true }).click();
   const role = fields.getByRole('textbox', { name: '봇으로 사용할 때', exact: true });
@@ -195,13 +198,13 @@ test('PNAV02 desktop keyboard navigation and mobile resizing retain fields, expa
   await page.setViewportSize({ width: 1440, height: 1000 });
   navigation = fields.getByRole('tablist', { name: '패키지 편집 분류', exact: true });
   await navigation.getByRole('tab', { name: '표현', exact: true }).press('Home');
-  await expect(navigation.getByRole('tab', { name: '로어', exact: true })).toBeFocused();
-  await navigation.getByRole('tab', { name: '로어', exact: true }).press('ArrowDown');
-  await expect(navigation.getByRole('tab', { name: '이미지', exact: true })).toHaveAttribute(
+  await expect(navigation.getByRole('tab', { name: '기본 정보', exact: true })).toBeFocused();
+  await navigation.getByRole('tab', { name: '기본 정보', exact: true }).press('ArrowRight');
+  await expect(navigation.getByRole('tab', { name: '로어', exact: true })).toHaveAttribute(
     'aria-selected',
     'true'
   );
-  await navigation.getByRole('tab', { name: '이미지', exact: true }).press('End');
+  await navigation.getByRole('tab', { name: '로어', exact: true }).press('End');
   await expect(navigation.getByRole('tab', { name: '상태와 행동', exact: true })).toBeFocused();
   await page.setViewportSize({ width: 390, height: 844 });
   await expect(fields.locator('.package-section-heading h3')).toHaveText('상태와 행동');
@@ -214,7 +217,7 @@ test('PNAV02 desktop keyboard navigation and mobile resizing retain fields, expa
     await page.screenshot({ path: info.outputPath('package-navigation-resize-focus.png') });
 });
 
-test('PNAV03 package navigation uses one mobile column and desktop side-by-side panels without overflow', async ({
+test('PNAV03 package navigation uses one mobile column and desktop horizontal tabs and 224px lore navigation without overflow', async ({
   page,
   request,
 }, info) => {
@@ -232,10 +235,18 @@ test('PNAV03 package navigation uses one mobile column and desktop side-by-side 
       await navigation.getByRole('tab', { name: '역할별 지침', exact: true }).click();
       const navBox = await navigation.boundingBox();
       const detailBox = await fields.locator('.package-section-content').boundingBox();
-      expect(navBox!.x + navBox!.width).toBeLessThan(detailBox!.x);
+      expect(navBox!.y + navBox!.height).toBeLessThanOrEqual(detailBox!.y);
+      await navigation.getByRole('tab', { name: '로어', exact: true }).click();
+      const loreList = await fields.locator('.lore-list-pane').boundingBox();
+      expect(loreList).not.toBeNull();
+      expect(Math.abs(loreList!.width - 224)).toBeLessThanOrEqual(1);
     }
     await expectNoOverflow(page, fields);
-    await fields.locator('.package-section-heading').scrollIntoViewIfNeeded();
+    if (width <= 760) await fields.locator('.package-section-heading').scrollIntoViewIfNeeded();
+    else
+      await fields
+        .getByRole('tablist', { name: '패키지 편집 분류', exact: true })
+        .scrollIntoViewIfNeeded();
     if (visualReview)
       await page.screenshot({ path: info.outputPath(`package-navigation-${width}.png`) });
   }

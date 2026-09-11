@@ -908,10 +908,43 @@ export class ProductStore {
       default: !!r.is_default,
     }));
   }
-  branch(chatId: string, id = `main:${chatId}`): Branch {
-    const b = this.branches(chatId).find((x) => x.id === id);
+  branch(chatId: string, id?: string): Branch {
+    const b = this.branches(chatId).find((x) => (id === undefined ? x.default : x.id === id));
     if (!b) throw new HttpError(404, 'Branch not found');
     return b;
+  }
+  setDefaultBranch(chatId: string, branchId: string, value: unknown): Branch {
+    const body = record(value);
+    fields(body, ['expectedRevision', 'expectedDefaultBranchId', 'expectedDefaultBranchRevision']);
+    const expected = number(body.expectedRevision, 'branch revision');
+    const expectedDefaultId = text(body.expectedDefaultBranchId, 'default branch ID', 100);
+    const expectedDefaultRevision = number(
+      body.expectedDefaultBranchRevision,
+      'default branch revision'
+    );
+    return this.store.transaction(() => {
+      this.store.chat(chatId);
+      const current = this.branch(chatId);
+      const target = this.branch(chatId, branchId);
+      if (
+        target.revision !== expected ||
+        current.id !== expectedDefaultId ||
+        current.revision !== expectedDefaultRevision
+      )
+        throw new HttpError(409, '분기가 변경됐어요. 목록을 새로 확인하고 다시 선택해 주세요.');
+      if (target.default) return target;
+      this.db
+        .prepare('UPDATE branches SET is_default=0,revision=revision+1 WHERE id=?')
+        .run(current.id);
+      this.db
+        .prepare('UPDATE branches SET is_default=1,revision=revision+1 WHERE id=?')
+        .run(target.id);
+      this.db
+        .prepare('UPDATE chats SET head_revision=? WHERE id=?')
+        .run(target.headRevision, chatId);
+      this.store.event(chatId, 'branch.default.changed', target.id);
+      return this.branch(chatId, target.id);
+    });
   }
   createBranch(chatId: string, value: unknown) {
     const b = record(value);

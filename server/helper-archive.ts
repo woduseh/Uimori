@@ -80,6 +80,15 @@ export function validateHelperArchive(
   for (const row of conversations.values()) {
     const scope = record(JSON.parse(row.scope));
     if (row.scope_key !== JSON.stringify(scope)) reject('conversation identity');
+    text(row.creation_key, 'conversation creation key', 108);
+    if (!/^[a-f0-9]{64}$/u.test(row.creation_hash)) reject('conversation creation hash');
+    text(row.title, 'conversation title', 200);
+    if (row.auto_title !== 0 && row.auto_title !== 1) reject('conversation automatic title');
+    if (
+      !Number.isFinite(Date.parse(row.created_at)) ||
+      !Number.isFinite(Date.parse(row.updated_at))
+    )
+      reject('conversation timestamp');
     number(row.revision, 'helper revision');
     text(row.persona, 'persona', 2000, true);
     const limits = record(JSON.parse(row.limits));
