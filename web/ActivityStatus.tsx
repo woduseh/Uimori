@@ -52,7 +52,7 @@ export function elapsedLabel(start: string, end: number) {
   return seconds < 60 ? `${seconds}초` : `${Math.floor(seconds / 60)}분 ${seconds % 60}초`;
 }
 function message(item: Item) {
-  const prefix = item.otherBranch ? '다른 전개 · ' : '';
+  const prefix = item.otherBranch ? '다른 분기 · ' : '';
   const name = doneNames[item.kind] ?? '작업';
   const status =
     item.status === 'sending'

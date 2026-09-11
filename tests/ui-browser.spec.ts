@@ -521,7 +521,7 @@ test('UI07 UI12 lost fork response reuses one new story and Back Forward preserv
   await page.goto(`/?chat=${chat.id}`);
   await expect(page.getByTestId('source')).toHaveCount(2);
   await openChatMenu(page);
-  await expect(page.getByRole('button', { name: '보관된 전개', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: '보관된 분기', exact: true })).toHaveCount(0);
   await page.keyboard.press('Escape');
   await expect(page.getByRole('button', { name: '다른 응답', exact: true })).toHaveCount(0);
   await page.getByLabel('다음 장면 요청').fill('원본 이야기의 합성 초안');
@@ -1224,11 +1224,11 @@ test('UI07 UI09 legacy branches use one mobile selection and preserve reading wi
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto(`/?chat=${chat.id}`);
   await openChatMenu(page);
-  await page.getByRole('button', { name: '보관된 전개', exact: true }).click();
-  const dialog = page.getByRole('dialog', { name: '보관된 전개', exact: true });
+  await page.getByRole('button', { name: '보관된 분기', exact: true }).click();
+  const dialog = page.getByRole('dialog', { name: '보관된 분기', exact: true });
   await expect
     .poll(() => dialog.locator('.branch-choice strong').allTextContents())
-    .toEqual(expect.arrayContaining(['기본 전개', '다른 응답 1', '다른 응답 2']));
+    .toEqual(expect.arrayContaining(['기본 분기', '다른 응답 1', '다른 응답 2']));
   await expect(dialog.locator('.branch-preview')).toHaveCount(3);
   await expect(dialog.locator('select, input')).toHaveCount(0);
   expect(

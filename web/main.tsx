@@ -117,7 +117,7 @@ const AppSettingsPanel = deferredPanel(
     </Dialog>
   )
 );
-const BranchesPanel = deferredPanel('보관된 전개', async () => ({
+const BranchesPanel = deferredPanel('보관된 분기', async () => ({
   default: (await import('./WorkspacePanels.js')).BranchesPanel,
 }));
 const TasksPanel = deferredPanel('작업 현황', async () => ({
@@ -783,7 +783,7 @@ function App() {
                       type="button"
                       className="secondary"
                       aria-label="채팅 포크"
-                      title="현재 전개의 마지막 장면까지 복사해서 새 채팅으로 이어가요"
+                      title="현재 분기의 마지막 장면까지 복사해서 새 채팅으로 이어가요"
                       disabled={
                         !s.sources.length ||
                         s.forking.some((key) => key.startsWith(`${s.selected}:`))
@@ -847,7 +847,7 @@ function App() {
                         }}
                       >
                         <History size={18} aria-hidden="true" />
-                        보관된 전개
+                        보관된 분기
                       </button>
                     )}
                     {s.detail && (
@@ -1505,6 +1505,7 @@ function App() {
         ready={s.destination !== 'story' || !s.selected || !!s.branch}
         modal={panelModal}
         branches={s.detail?.branches ?? []}
+        detail={s.detail ?? undefined}
         onBranchNavigate={s.chooseBranch}
         enterSend={enterSend}
         modelDescription={helperDescription}
@@ -1663,7 +1664,7 @@ function App() {
           />
         )}
       </Dialog>
-      <Dialog open={panel === 'branches'} title="보관된 전개" onClose={() => setPanel('')}>
+      <Dialog open={panel === 'branches'} title="보관된 분기" onClose={() => setPanel('')}>
         <BranchesPanel state={s} onClose={() => setPanel('')} />
       </Dialog>
       <Dialog
