@@ -11,7 +11,8 @@ Node **24.14 이상 24.x**와 `npm ci`를 사용해요. 프로젝트의 `strict`
 | 작업 완료(매 변경) | `npm run quality:full` + `npm run verify:smoke` + 변경 영역의 `verify:*` 하나 | 품질 검사 → 하네스 회귀 → 새 빌드 → 전체 Vitest, 최소 앱 검증, 해당 영역의 합성 브라우저. 영역 대응은 [TESTING-AUDIT.md](TESTING-AUDIT.md)를 따라요. |
 | UI 동작 변경 | 빌드 후 관련 `verify:*` | 새 DB/port를 사용하는 기존 합성 브라우저 검증. 전체 회귀로 대신하지 않아요. |
 | 기본 UI 연결 확인 | `npm run verify:browser-smoke` | 채팅 진입·생성 및 전역 프롬프트 설정의 작은 브라우저 묶음. 전체 기능 검사를 대신하지 않아요. |
-| 릴리스 전 1회 | `npm run verify:redesign` | 전체 기능 흐름. 대표 모바일/데스크톱 폭을 사용해요. 매 변경의 완료 조건이 아니며 실패는 "다음 릴리스 전에 볼 것"으로 분류해요. |
+| 릴리스 후보 | `npm run release:check -- --area <verify:*>` | `quality:full`, `verify:smoke`, 선택 영역 검사를 묶고 내용 지문 영수증을 남겨요. 기본 영역은 `verify:browser-smoke`예요. |
+| 넓은 변경·안정화 릴리스 | 위 명령에 `--full` | 전체 `verify:redesign`을 추가해 대표 모바일/데스크톱 기능 흐름을 확인해요. 공통 UI나 공통 실행·저장 경계를 넓게 바꾼 경우에 사용해요. |
 | 배치·반응형 시각 검토 | `npm run verify:visual` | 전체 기능 + 추가 화면 폭·정밀 배치·성공 PNG. 사람이 화면도 확인해야 해요. |
 | 화면 갤러리 | `npm run verify:gallery` | 주요 화면·모달을 390/1440px × light/dark로 한 번에 캡처하고 원칙 수치를 `metrics.json`에 기록한 뒤, 첫 채팅 여정을 두 폭에서 단계별로 캡처하며 상호작용 수를 `journey.json`에 세요. 단정이 없어 몇 분 안에 끝나요. 계약은 [화면 갤러리](UI-GALLERY.md)에 있어요. |
 | 반복 성능 측정 | `npm run benchmark:story` | 긴 본문 동작 검사에 warmup/반복 표본과 측정 산출물을 추가해요. |
@@ -23,7 +24,13 @@ Node **24.14 이상 24.x**와 `npm ci`를 사용해요. 프로젝트의 `strict`
 
 `quality:full`은 새 빌드를 만든 뒤 Vitest를 실행해요. 서버 프로세스 재시작 테스트가 `dist/server/index.js`를 실행하므로 이 순서가 필요해요. 개별 `npm test`를 실행할 때도 서버 코드를 변경했거나 `dist`가 없으면 먼저 `npm run build`를 실행해요.
 
-수정 중에는 `npm test -- tests/관련.test.ts`와 해당 영역의 `verify:*`를 선택해요. 매 변경의 완료 조건은 `quality:full`, `verify:smoke`, 변경 영역의 `verify:*` 하나까지예요. 전체 브라우저 회귀 `verify:redesign`은 릴리스 전 1회로 내리고, 여러 영역을 함께 바꿨어도 매 변경마다 돌리지 않아요(2026-09-10 결정 3, [DECISIONS-2026-09-10.md](DECISIONS-2026-09-10.md)). 검사별 유지·통합·선택 실행 이유는 [TESTING-AUDIT.md](TESTING-AUDIT.md)에 있어요.
+수정 중에는 `npm test -- tests/관련.test.ts`와 해당 영역의 `verify:*`를 선택해요. 매 변경의 완료 조건은 `quality:full`, `verify:smoke`, 변경 영역의 `verify:*` 하나까지예요. 전체 브라우저 회귀 `verify:redesign`은 매 변경이나 작은 배포의 고정 조건이 아니에요. 공통 UI, 공통 실행·저장 경계처럼 여러 기능에 걸친 변경과 안정화 릴리스에서 실행해요. 이는 2026-09-10 결정 3의 "매 변경이 아니라 릴리스 전 1회" 원칙을 더 좁게 정의한 2026-09-11 사용자 결정이에요. 검사별 유지·통합·선택 실행 이유는 [TESTING-AUDIT.md](TESTING-AUDIT.md)에 있어요.
+
+릴리스 후보는 `npm run release:check -- --area <verify:*>`로 같은 묶음을 실행해요. 성공 영수증은 HEAD 문자열이 아니라 source·실행 환경·검사 계약 지문이 모두 같을 때 검사별로 재사용해요. build만 없거나 stale이면 build만 복구하고 source와 artifact 일치를 다시 확인해요. source나 실행 환경·검사 계약이 달라지면 stale로 판정해 다시 실행해요. 같은 source에 실패 기록이 있으면 영역을 줄여 우회하지 않아요. 검증 뒤 commit만 만들어 내용이 같다면 clean HEAD와 `origin/main` 일치 확인 후 영수증을 재사용할 수 있어요. Oracle 실행 계약은 [Oracle 릴리스](ORACLE-RELEASE.md)를 봐요.
+
+배포할 변경의 완료 검사도 가능하면 `release:check`로 실행해 영수증을 남겨요. 세 명령을 따로 실행해 터미널 출력만 남긴 과거 결과는 자동 수집하지 않으므로, 영수증 없이 배포 명령을 실행하면 필요한 검사를 새로 수행해요.
+
+릴리스·self-host 도구 변경의 관련 영역은 `verify:selfhost`예요. 상위 브라우저 연결도 바뀌면 `verify:browser-smoke`도 실행해요. 이 도구 변경만으로 `verify:redesign`을 요구하지 않으며, 제품 UI나 공통 실행·저장 경계까지 넓게 바뀐 경우에만 `--full`을 선택해요.
 
 빌드 지문은 앱 소스와 실제 빌드 설정·실행기·의존성 파일을 포함해요. 테스트/검증 스크립트만 바꾸면 기존 앱 빌드를 재사용할 수 있어요. 브라우저와 milestone 결과에는 이와 별개로 테스트·검증 설정까지 포함한 전체 지문을 기록하고 실행 전후 동일성을 확인해요. 테스트를 실행 중에 고친 결과는 PASS로 남기지 않아요.
 
@@ -64,7 +71,7 @@ Biome `noRestrictedImports`를 디렉토리별로 적용해 다음 import/re-exp
 
 `.github/workflows/quality.yml`은 PR과 main push에서 Windows / Node 24.14.0으로 `npm ci` 후 **같은 `npm run quality:full`**을 실행해요. 공통 `quality` job 한도는 15분이에요. npm 다운로드 캐시를 재사용하고 같은 브랜치의 오래된 실행은 취소해요. 수동 실행의 `browser` 옵션을 켜면 `quality` 성공 뒤 별도 `browser` job이 의존성 설치와 새 빌드를 거쳐 전체 회귀를 실행하며, 이 job만 45분 한도를 써요. 로컬 검증과 GitHub에서 실제 실행된 결과는 구분해요.
 
-`verify:redesign`은 모든 브라우저 spec을 한 번의 Playwright 명령으로 돌리므로 공용 기본값 600초로는 끝나지 않아요. 2026-09-10에 한 기계에서 잰 완주 시간은 9.2분과 11.8분이고, 그 이전 기록의 반복된 timeout FAIL도 같은 원인이에요. 그래서 이 검사만 30분 한도를 직접 지정하고 CI의 별도 `browser` job 한도를 45분으로 두었어요. 두 값은 멈춤을 잡기 위한 상한이지 목표 실행 시간이 아니에요. 검사마다 자기 묶음에 맞는 한도를 지정하는 기존 방식을 따랐어요. `runBrowserVerification`에 한도를 직접 넘기는 검사는 이 검사를 포함해 열여섯 개이고, 나머지 열다섯 개는 모두 120~360초로 기본값보다 좁혀요. 기본값보다 늘리는 것은 이 검사뿐이에요. `verify:self-host`와 `verify:worktrees`도 `timeout`을 쓰지만 공용 실행기를 거치지 않는 개별 명령·조작의 한도예요. Windows CI에서의 실제 완주 시간은 아직 측정하지 않았어요. 2026-09-10 로컬 Windows 전체 재측정은 10.3분에 223 PASS / 5 FAIL로 종료됐고 timeout 없이 cleanup을 완료했어요. 남은 실패와 집중 재검증을 구분한 [회귀 브리프](../project-plan/BRIEF-FULL-RUN-REGRESSION-2026-09-10.md)를 참고해요. macOS와 같은 조건의 A/B가 아니므로 운영체제별 인과 비교로 해석하지 않아요.
+`verify:redesign`은 모든 브라우저 spec을 한 번의 Playwright 명령으로 돌리므로 공용 기본값 600초로는 끝나지 않아요. 2026-09-10에 한 기계에서 잰 완주 시간은 9.2분과 11.8분이고, 그 이전 기록의 반복된 timeout FAIL도 같은 원인이에요. 그래서 이 검사만 30분 한도를 직접 지정하고 CI의 별도 `browser` job 한도를 45분으로 두었어요. 두 값은 멈춤을 잡기 위한 상한이지 목표 실행 시간이 아니에요. 검사마다 자기 묶음에 맞는 한도를 지정하는 기존 방식을 따랐어요. `runBrowserVerification`에 한도를 직접 넘기는 검사는 이 검사를 포함해 열여섯 개이고, 나머지 열다섯 개는 모두 120~360초로 기본값보다 좁혀요. 기본값보다 늘리는 것은 이 검사뿐이에요. `verify:selfhost`와 `verify:worktrees`도 `timeout`을 쓰지만 공용 실행기를 거치지 않는 개별 명령·조작의 한도예요. Windows CI에서의 실제 완주 시간은 아직 측정하지 않았어요. 2026-09-10 로컬 Windows 전체 재측정은 10.3분에 223 PASS / 5 FAIL로 종료됐고 timeout 없이 cleanup을 완료했어요. 남은 실패와 집중 재검증을 구분한 [회귀 브리프](../project-plan/BRIEF-FULL-RUN-REGRESSION-2026-09-10.md)를 참고해요. macOS와 같은 조건의 A/B가 아니므로 운영체제별 인과 비교로 해석하지 않아요.
 
 ## 채택 이유와 후속 범위
 
