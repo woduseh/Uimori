@@ -12,7 +12,7 @@
 - 모델·프로바이더는 최신 `provider_settings` 한 벌을 쓰고 `ModelRef`는 `{id}`예요. 모델 ID 코드표로 실행을 막지 않고 공급자의 거절을 그대로 표시해요. 요금 설정과 호출 후 추정 비용을 제공해요. [공급자](../docs/PROVIDERS.md) · [모델 등록](../docs/MODEL-REGISTRATION.md) · [모델 파라미터](../docs/MODEL-PARAMETERS.md) · [요금](../docs/MODEL-PRICING.md)
 - **도우미와 통합 문맥**: 별도 도우미 대화, 공통 서버 초안과 명시 요청의 수정·저장, 사용자 메모·정정, 공통 요약의 자동·수동 압축, 채팅별 로어 변경과 옵션 위임, 선택형 `context.*` 도구를 제공해요. 매 턴 기억 추출은 제거했어요. [확정 계획](HELPER-CONTEXT-PLAN.md) · [구현 결과](HELPER-CONTEXT-RESULTS.md) · [입력 한도](../docs/CONTEXT-LIMITS.md) · [로어 문맥](../docs/LORE-CONTEXT.md)
 - 계층형 구성과 지정 단위 집필, 장면 삽화 생성(Codex 이미지 턴·원격 ComfyUI), 원문·번역 이미지 배치, 메인 프롬프트의 에이전트 협업(기본 OFF), 모델 프리셋별 선택형 평가 도구를 제공해요. [구성](../docs/OUTLINE.md) · [삽화](../docs/ILLUSTRATIONS.md) · [협업](../docs/AGENT-COLLABORATION.md) · [평가 도구](EVALUATION-TOOLS.md)
-- 채팅 하나의 **본문 기록**(원문·요청·최신 번역·메모·장착 참조)은 `uimori-chat-transcript` v1 파일로 내보내고 새 채팅으로 가져와요. 스키마와 독립이라 개발 단계 DB 리셋에서 작품을 살리는 경로예요. [채팅 본문 추출](../docs/CHAT-TRANSCRIPT.md)
+- 채팅 하나의 **전체 백업**은 DB 스키마와 독립인 `uimori-chat-backup` v1이에요. 모든 분기와 작업 이력·참조 자료를 보관하며 같은 파일을 반복해서 새 채팅으로 복원해요. 현재 전역 설정을 덮어쓰지 않고 원래 환경을 함께 보존하며, 미완료 외부 작업을 자동 재전송하지 않아요. 한 응답의 복사는 클립보드 평문이고, 외부 본문 교환용 `uimori-chat-transcript` v1은 별도예요. [채팅 백업](../docs/CHAT-BACKUP.md) · [본문 교환](../docs/CHAT-TRANSCRIPT.md) · [안정화 결정](../docs/STABILIZATION-2026-09-11.md)
 - 메인과 도우미는 **공통 입력창**을 쓰고 실패 요청은 자리에서 편집·재요청하며 공개 답변 스트림은 durable cursor로 재접속해요. 봇별 채팅·폴더·공유 폴더 트리, 포크, 읽기 위치, 삭제 보호, archive·backup 왕복을 유지해요. [대화 통일](CHAT-UNIFICATION.md) · [사용 안내](../docs/USAGE.md) · [삭제 보호](../docs/DELETION.md)
 - UI는 원고가 화면인 리더, 한 줄 입력창, 목록→상세 설정과 공통 아이콘 어휘를 따라요. [UI 원칙](../docs/UI-PRINCIPLES.md) · [UI 설계 v2](../docs/UI-DESIGN-V2.md) · [화면 설계](../docs/UI-SCREEN-DESIGN.md) · [화면 일관성 정리](UIUX-CONSISTENCY-2026-09-10.md) · [AI 제품 원칙 적용](../docs/UI-PRINCIPLES-AI-PRODUCTS.md) · [화면 갤러리](../docs/UI-GALLERY.md)
 - 개인 self-host용 HTTPS·토큰·영구 SQLite 구성과 Oracle 배포 절차가 있어요. [Self-host](../docs/SELF-HOST.md) · [Oracle 배포](../docs/ORACLE-RELEASE.md) · [Tailscale](../docs/TAILSCALE-DEPLOY.md)
@@ -32,6 +32,8 @@
 
 ## 마지막 검증 상태
 
+2026-09-11 안정화의 최종 Windows `quality:full`은 **1,859 PASS / opt-in 1 SKIP**, `verify:smoke` **3 PASS**, 채팅 백업 화면 **7 PASS**, 공통 대화 화면 **16 PASS**예요. Reader 코드가 동일한 직전 빌드의 로딩 화면 **10 PASS**도 보존해요. 초기 전체 검사 1,850 PASS / 1 FAIL은 초안의 국문 CAS 메시지 분류 누락을 고친 뒤 재검증한 기록과 구분해요. 신규 승인 예산의 Gemini 평가는 총 100회 전송으로 종료했어요. 실행 중 문맥 정리의 두 전송 경계를 고쳤고 32k 후속에서는 원문 재조회·정정, 옵션 저장·소비, 두 모델의 독립 3+3 사례까지 완료했어요. 장기 요약 손실과 16k 호출 소진, Lite의 조건 분류 모순·Flash의 인용 표현 문제는 남겨 전체 의미 품질 PASS로 해석하지 않아요. [안정화 결과](STABILIZATION-RESULTS-2026-09-11.md)
+
 2026-09-10 `main` 병합과 후속 구현의 최종 Windows `quality:full`은 **1,785 PASS / opt-in 1 SKIP**, `verify:smoke`는 **3 PASS**, 관련 UI는 **13 PASS**예요. 2026-09-11 KST 릴리즈 전 전체 `verify:redesign`은 **228 PASS / 0 FAIL / 0 SKIP**, 547,806ms(9.1분)에 종료하고 cleanup을 완료했어요. 앞선 전체 **223 PASS / 5 FAIL**, 10.3분 기록은 별도로 유지해요. 과거 macOS 결과와 같은 조건의 A/B가 아니므로 운영체제별 원인이나 성능 우위로 해석하지 않아요. [통합 후속 결과](DECISION-FOLLOWUP-RESULTS-2026-09-10.md) · [전체 회귀 지연 브리프](BRIEF-FULL-RUN-REGRESSION-2026-09-10.md)
 
 Oracle 운영 서버의 짧은 실사용과 별도로, 독립 DB에서 공개 원문 162,975 토큰·61장을 이용한 Gemini 장기 문맥 평가를 수행했어요. 활성 요약 조회·길이 문제를 보완하고 도우미의 로어·프롬프트 저장과 옵션의 예약 소비를 확인했어요. 의미 오류와 문맥 한도·공급자 EOF 실패가 남아 전체 live 시나리오 PASS는 아니에요. 상세 경계는 [기억 평가](LIVE-MEMORY-RESULTS-2026-09-10.md), 다른 도우미 도구와 경량 역할 비교는 [하네스 효율](HARNESS-EFFICIENCY-2026-09-10.md)에 기록해요.
@@ -41,7 +43,7 @@ Oracle 운영 서버의 짧은 실사용과 별도로, 독립 DB에서 공개 �
 | 구분 | 남은 것 | 어디서 다루나 |
 | --- | --- | --- |
 | 방향 결정 구현 | 채택한 구현·정적 검토·대체 실모델 평가를 수행했어요. 예약 체인은 7가지 purpose로 통합했으며 남은 값 순환은 `package-images` ↔ `source-editing` 하나예요 | [방향 결정](../docs/DECISIONS-2026-09-10.md) · [예약 고정 계약](../docs/RESERVATION-SNAPSHOTS.md) · [후속 결과](DECISION-FOLLOWUP-RESULTS-2026-09-10.md) |
-| 실모델 품질 | 장편 대체 평가는 88회 전송·61장으로 종료했어요. 약속·귀속 오류, 일반 조회의 문맥 한도 초과, 완료 스트림 EOF를 전체 PASS로 판정하지 않아요. 새 장면 번호 도구의 실모델 효율과 실제 창작 품질은 별도예요 | [실제 기억 평가](LIVE-MEMORY-RESULTS-2026-09-10.md). 로어·프롬프트 저장과 옵션 예약 소비는 원본 영수증으로 확인했어요 |
+| 실모델 품질 | 앞선 88회 평가 이후 신규 100회 안정화 평가도 종료했어요. 32k 재조회는 원문·정정·출처를 복구했지만 장기 요약의 귀속·조건 손실, 16k 반복 읽기와 호출 소진, 일부 조건 분류·인용 표현 문제는 남아요. 실제 창작 품질 인수는 별도예요 | [안정화 결과](STABILIZATION-RESULTS-2026-09-11.md). 과거 기록은 [실제 기억 평가](LIVE-MEMORY-RESULTS-2026-09-10.md)에 보존해요 |
 | 인수 항목 | M1 Q01/Q02/Q03/Q05 품질, M3 E01–E03 전체 인수와 실제 공급자별 도구 호환, 개인 자료의 공통 형식 재이식 | [MILESTONES](MILESTONES.md) · [ACCEPTANCE](ACCEPTANCE.json). M3의 "검토 후 적용하는 등록 보조"는 2026-09-09 실행 게이트 제거로 삭제됐어요 |
 | 하네스·CI | Windows 전체 회귀 재측정·지연 원인 구분·브라우저 CI job 분리·도우미 예약 모델 표시는 완료했어요. 실제 GitHub Actions 실행은 별도예요 | [후속 항목 2026-09-10](FOLLOW-UPS-2026-09-10.md) · [지연 브리프](BRIEF-FULL-RUN-REGRESSION-2026-09-10.md) |
 | 운영 | 이미지 이해, 실제 휴대폰·IME·Linux/Docker 동작. Oracle v15 배포는 사용자 확인으로 완료 | [운영 배포](../docs/ORACLE-RELEASE.md) · [도우미·문맥 결과](HELPER-CONTEXT-RESULTS.md) |

@@ -390,6 +390,8 @@ export class HelperRuntime {
       const previous = this.workspace.task(retryOf);
       if (previous.conversationId !== conversationId)
         throw new HttpError(403, '다른 대화의 요청은 재시도할 수 없어요.');
+      if (previous.completedEffects?.count)
+        throw new HttpError(409, 'HELPER_EFFECTS_ALREADY_COMMITTED');
       editor ??= previous.snapshot.editor;
       selection ??= previous.snapshot.selection;
     }
@@ -859,8 +861,12 @@ export class HelperRuntime {
       }
       if (lo < 1) throw new Error('HELPER_FIXED_CONTEXT_TOO_LARGE');
       const result = await this.execute(task, target, requestFor(remaining.slice(0, lo)), hooks);
-      if (result.status !== 'completed' || !result.text.trim())
-        throw new Error('HELPER_COMPACTION_FAILED');
+      if (result.status !== 'completed' || result.error || result.refusal || !result.text.trim())
+        throw new Error(
+          result.error?.code === 'UNEXPECTED_EOF'
+            ? 'HELPER_COMPACTION_EOF'
+            : 'HELPER_COMPACTION_FAILED'
+        );
       usage.modelCalls++;
       for (const key of ['inputTokens', 'outputTokens', 'costUsd'] as const)
         usage[key] =

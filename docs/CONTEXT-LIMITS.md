@@ -8,6 +8,8 @@
 
 모델 편집의 **입력 컨텍스트 한도**는 요청 준비에 쓰는 토큰 추정 한도예요. 기본값은 **272,000**, 직접 지정 범위는 **8,192–1,000,000**이에요. 출력 토큰 한도는 별개예요. 확인된 native 모델은 전체 문맥에서 선택한 출력 예약량을 뺀 값도 실효 입력 한도에 적용해요. Codex 실행기·Vercel 경로·미등록 모델에 API 모델의 전체 문맥 크기를 추정 적용하지 않아요.
 
+**채팅 설정 → 자동 후속 작업 → 작업당 모델 호출 한도**는 정수 1~32회이며 새 채팅의 기본값은 8회예요. `PATCH /api/chats/:id/settings`와 archive도 같은 범위를 허용해요. 본문 요청의 조회 후속 호출·문맥 요약은 이 한도를 함께 사용하고, 설정 변경은 이후 예약에 반영돼요. 번역은 별도 정책의 2~64회, 도우미는 전체 2~100회 안에서 판단 호출을 1~전체 한도로 정하므로 도우미의 전체·판단 한도 32/32도 허용돼요. 호출 횟수는 입력 토큰 한도·출력 한도와 다른 제한이에요.
+
 1. 예약할 때 전체 원문과 실제 user/assistant 쌍, 모델·프로바이더·자료·메모·원문 구간 정책, 활성 checkpoint의 정확한 ID/revision/hash를 고정해요.
 2. 최종 요청 body의 system·메시지·도구·카탈로그·출력 스키마를 모두 세어요. 캐시 읽기 토큰도 입력 문맥에 포함해요.
 3. 입력이 실효 한도의 85%를 넘으면 이전 대화를 요약해 보통 75% 아래로 줄여요. 최근 두 원문을 우선 유지하되 필요하면 더 오래된 순서부터 추가 요약해요. 현재 사용자 입력과 고정 지침을 삭제하지 않아요.
@@ -20,6 +22,22 @@
 요약은 장별 줄거리를 끝없이 누적하지 않고 다음 턴에 필요한 작업 기억으로 다시 써요. 현재 상황·인물 관계와 동기·조건부 약속·미해결 사건·명시적 사용자 정정을 우선 보존하며, 오래된 해결 사건은 현재에 남은 결과로 묶어요. 세부 원문은 삭제하지 않고 `story.*`로 다시 읽어요. 전체 요약의 목표는 소비 모델 입력 한도의 12.5%, 최대 2,048 토큰이고 고정 입력을 제외한 85%까지의 여유와 요약 모델 출력 한도의 절반으로 더 줄여요. 이 값은 모델 지침이며 실제 전송 결과를 다시 측정해요. 고정 입력만으로 이미 85% 이상이면 불가능한 요약을 유료 요청하지 않고 중단해요. 출력의 강제 자르기나 부분 응답 자동 재시도는 하지 않아요.
 
 대화를 제외해도 고정 입력이 85%를 넘으면 유지 중인 조회 로어를 오래 사용하지 않은 순서로 통째 정리해 75%를 목표로 줄여요. 고정 자료는 제거하지 않아요. 남은 조회 구간과 정리 이유를 Run에 저장하고 다음 턴은 그 결과만 상속해요. 원문 대화 요약에 조회 로어 본문을 섞지 않으며, 요약 때문에 원래 위치가 빠진 참고 자료는 요약 뒤·최근 대화 앞에 별도 메시지로 제공해요.
+
+## 본문 실행 중 조회 결과 정리
+
+사전 정리가 끝난 뒤에도 같은 요청 안에서 `story.read` 등을 반복하면 조회 결과가 입력을 채울 수 있어요. `server/model-runner.ts`는 다음 모델 호출 직전에 반환된 결과를 포함한 실제 전송 body를 다시 추정해요. 입력이 85%를 넘고 정리할 성공한 읽기 결과가 있으면 `server/context-tool-compaction.ts`가 예약 당시 문맥 정리 모델로 그 결과를 요약해요. 이 경로는 평가 도구 실행을 제외한 본문 실행기에 적용하며, 본문 모델의 선택형 `contextTools`를 켜지 않아도 동작해요.
+
+정리 대상은 **이미 완료된 성공한 읽기 도구 교환**이에요. `story.*`, `notes.*`, `knowledge.*`, `skills.*`, `context.read`의 등록된 조회 결과만 대상으로 삼아요. 거절된 호출, `context.write` 같은 저장 작업, 패키지 상태 변경 영수증과 작문 보조 응답은 원래 호출·결과를 그대로 남겨요. 요청·고정 지침·원문 ancestry를 이 경로에서 지우거나 다시 쓰지 않아요.
+
+큰 조회 결과는 문맥 모델의 입력 한도에 맞게 모든 조각을 차례로 처리하고 이전 요약과 병합해요. 출처·장면 번호·식별자, 누가 누구에게 한 말인지, 약속별 당사자와 조건, 불확실성·명시적 정정을 유지하도록 지시해요. 한 인물의 행동 시점과 다른 인물의 약속 조건을 합치지 않도록 구분하며, 원래 읽기 도구 이름과 인자는 모델 요약과 별도로 보존해 다시 조회할 수 있게 해요. 이는 요약 지침이며 의미 정확성을 보장하는 검증은 아니에요.
+
+완료된 조회 교환은 현재 실행의 전송 입력에서 `host-compacted-reads` 요약과 회수 참조로 바꿔요. 후보가 원래 요청보다 작고 실제 입력 한도 이내이면 채택하고 공급자 opaque 연속을 해제해 새 요청을 구성해요. 이때 완료된 읽기 요약과 원래 수정 영수증은 `input.source.completedToolHistory`의 일반 참고 데이터로 전달하며, 새 요청의 미처리 도구 결과나 서명 없는 native 함수 호출로 만들지 않아요. 반복 정리에서도 이전 조회 인자와 완료 영수증을 유지해요.
+
+85%는 정리를 시도하는 기준이며 별도의 전송 상한이 아니에요. 요약이 도움이 되지 않아도 원래 요청이 실제 입력 한도 이내이면 원래 결과와 공급자 연속을 유지해요. 같은 읽기 결과를 다시 요약해 비용을 쓰지 않고 새로 성공한 읽기 결과가 추가될 때만 다시 판단해요. 원래 요청이 한도를 넘었는데 요약도 충분히 줄이지 못하면 `CONTEXT_TOOL_COMPACTION_NO_PROGRESS`로 끝나요. 요약 호출 자체의 EOF·권한 오류·취소를 무시하고 진행하지 않으며, 어느 경로든 최종 전송의 실제 입력 한도 검사를 유지해요.
+
+이 요약은 **현재 실행용 파생 참고 문맥**이에요. 정사나 다음 턴의 활성 checkpoint로 저장하지 않으며 Run의 예약 snapshot, 원본 `tool_events`, 원문, 이미 확정한 변경 영수증은 유지해요. 정리 전후 추정 토큰 수와 후보 채택 여부 `applied`는 `context.compact` 이벤트에 남아요. 사용하지 않은 요약 호출도 attempt와 사용량에서 빼지 않아요. 원문 대화는 다음 집필 요청을 준비하는 기존 사전 정리 경로에서 다뤄요.
+
+문맥 모델이 없거나 비활성이면 `MODEL_REQUIRED:context`로 멈춰요. 요약 호출은 전체 `maxCalls`에 포함하고 다음 본문 호출 한 번을 남겨야 해요. 전송 전 attempt, 취소, 매 호출 연결 권한 검사를 유지하며 요약 실패를 자동으로 재전송하지 않아요. 강제 글자 자르기나 저장 작업 재실행으로 공간을 만들지 않아요.
 
 ## 요약에서 원문 장면 찾기
 
@@ -76,9 +94,9 @@ finally { Remove-Item Env:NR_CONTEXT_READ_BENCHMARK }
 동작 순서는 다음과 같아요.
 
 1. Run 예약과 사전 자동 정리는 기존과 같아요. 활성 checkpoint가 모델이 쓴 것이면 그 요약과 compacted 범위를 그대로 재사용하므로 문맥 정리 모델을 호출하지 않아요.
-2. 매 호출 직전 하네스가 실제 전송 body를 추정해요. 읽기 도구(`story.*`, `notes.*`, `knowledge.*`, `skills.*`, `context.read/write`) 결과에 `contextWindow: { inputTokenLimit, estimatedInputTokens, usedRatio, level, notice? }`를 붙여요. `level`은 70% 이상이면 `notice`, 80% 이상이면 `urgent`예요. 호스트 문맥(host context)에는 한도·compacted/retained 개수·요약 길이 같은 고정값만 넣고 추정치는 넣지 않아요. 추정치를 프롬프트에 넣으면 측정 대상이 바뀌어 archive 검증과 어긋나기 때문이에요.
+2. 매 호출 직전 하네스가 실제 전송 body를 추정해요. 등록된 조회·메모 도구(`story.*`, `notes.*`, `knowledge.*`, `skills.*`, `context.read/write`)가 성공하면 **방금 반환한 결과 본문까지 포함한 다음 요청의 예상 입력량**으로 `contextWindow: { inputTokenLimit, estimatedInputTokens, usedRatio, level, notice? }`를 붙여요. 도구를 여러 개 요청한 응답은 실제 결과를 각각 즉시 기록하고, 묶음 전체가 완료된 뒤 전송용 결과에 알림을 붙여요. 이전 공급자 연속에 포함된 결과와 원본 영수증을 바꾸지 않으며, 알림 자체의 크기도 여유를 포함해 추정해요. 큰 결과를 반환하기 전의 낮은 추정치를 그대로 안내하지 않아요. `level`은 70% 이상이면 `notice`, 80% 이상이면 `urgent`예요. 이 알림은 공급자가 보고한 실제 토큰이 아닌 로컬 추정이에요. 호스트 문맥(host context)에는 한도·compacted/retained 개수·요약 길이 같은 고정값만 넣고 추정치는 넣지 않아요. 추정치를 프롬프트에 넣으면 측정 대상이 바뀌어 archive 검증과 어긋나기 때문이에요.
 3. `context.new`가 성공하면 같은 Run 안에서 **세그먼트 경계**를 만들어요. 새 요약·compacted 범위로 프롬프트를 다시 컴파일하고, 공급자 opaque 연속과 이전 도구 결과를 버린 새 요청을 보내요. 완료된 `context.new` 호출·결과 한 쌍만 bootstrap으로 넘겨 모델이 전환 사실과 회수 방법을 알 수 있게 해요. 전환 후 입력이 한도를 넘으면 전환하지 않고 `CONTEXT_FIXED_INPUT_TOO_LARGE`로 거절해요.
-4. 모델이 제때 요청하지 않아 다음 턴 입력이 85%를 넘으면 기존 호스트 자동 정리가 그대로 동작해요. 문맥 정리 모델이 없으면 기존처럼 그 작업만 멈춰요.
+4. 모델이 제때 전환을 요청하지 않아 같은 실행의 조회 결과가 85%를 넘으면 위의 **본문 실행 중 조회 결과 정리**가 동작해요. 다음 집필 요청에서 원문 대화가 한도에 닿으면 기존 사전 자동 정리를 사용해요. 문맥 정리 모델이 없으면 정리가 필요한 작업만 멈춰요.
 
 저장·CAS 규칙은 기존 checkpoint와 같아요. 모델 checkpoint도 `context_checkpoints`에 `origin: 'model'`로 저장하고, 예약 시점의 활성 revision·메모 revision·원문 prefix가 그대로일 때만 활성화해요. 사용자가 실행 도중 요약이나 메모를 고치면 모델의 늦은 저장은 비활성 후보로 남고 결과에도 `activated: false`로 표시해요. 같은 Run이 이미 자신의 checkpoint를 활성화했다면 뒤따르는 저장은 그 위에 이어서 활성화해요(`ContextStore.rebase`). **Run snapshot은 예약 시점의 입력이며 실행 중 바꾸지 않아요.** 모델의 저장·전환은 `tool_events`와 checkpoint에 남고, 다음 Run이 활성 checkpoint를 통해 이어받아요. 화면의 요약 출처 표시는 `모델 작성`이고 편집·되돌리기·수동 압축은 모델 요약에도 그대로 적용돼요.
 
@@ -106,13 +124,26 @@ finally { Remove-Item Env:NR_CONTEXT_READ_BENCHMARK }
 
 도우미 대화도 같은 checkpoint 형식을 사용하지만 본편과 별도 scope에 저장해요. 긴 도우미 작업의 세그먼트 경계와 권한·변경 영수증은 [도우미 계획과 인수 계약](../project-plan/HELPER-CONTEXT-PLAN.md)에 있어요.
 
+### 응답 EOF의 발생 단계
+
+EOF는 공급자 스트림이 정상 완료 신호 없이 끝났다는 뜻이에요. 입력 문맥 초과나 출력 토큰 부족과 같은 원인으로 단정하지 않아요. 원래 attempt에는 공급자의 `UNEXPECTED_EOF`를 남기고 상위 작업은 다음 코드로 실패 단계를 구분해요.
+
+| 실패한 호출 | 작업 오류 코드 |
+| --- | --- |
+| 일반 본문·도우미 답변 등 공급자 호출 | `UNEXPECTED_EOF` |
+| 본문 실행 전·수동 원문 대화 요약 | `CONTEXT_COMPACTION_EOF` |
+| 본문 실행 중 완료된 조회 결과 요약 | `CONTEXT_TOOL_COMPACTION_EOF` |
+| 도우미 대화·작업 문맥 요약 | `HELPER_COMPACTION_EOF` |
+
+부분 요약을 성공한 checkpoint로 저장하거나 원문을 요약 완료로 표시하지 않아요. 이전 활성 요약·원문·완료된 변경 영수증은 유지하며 불확실한 호출은 자동 재생하지 않아요. 특히 도우미의 변경이 저장된 뒤 최종 답변만 끊긴 경우는 [사용 안내의 도우미](USAGE.md#도우미와-독립-가정-장면)처럼 저장된 변경과 미완료 응답을 따로 표시해요.
+
 ## 추정과 검증 범위
 
 `tiktoken@1.0.22`의 로컬 WASM `o200k_base`를 사용해 최대 4,096 UTF-16 단위의 조각으로 계산하고 같은 요청의 동일 조각은 재사용해요. 합계에 10% 여유를 더해요. 문자열·키·토큰을 외부 계산 서비스로 보내지 않아요. 다른 모델 tokenizer·공급자 내부 포맷·조각 경계 차이가 있으므로 실제 청구 토큰이나 상한 보장은 아니에요. 같은 내용의 body라도 실행마다 새로 만드는 Run·메시지 ID와 해시 때문에 추정값이 조금씩 달라져요. 관측한 예로 직렬화 길이가 15,887 UTF-16 단위로 동일한 body에서 추정값이 6,943–7,011 토큰(약 1%) 범위로 움직였어요. 85%·75% 판정은 이 편차보다 큰 여유가 있을 때만 결정적이므로, 합성 검사도 픽스처를 경계 1% 안쪽에 두지 않아요.
 
-구현은 `core/context-budget.ts`, `core/context-plan.ts`, `core/context-projection.ts`, `core/context-tools.ts`, `core/notes.ts`, `core/story-context.ts`, `server/context-planning.ts`, `server/context-compaction.ts`, `server/context-tools.ts`, `server/context-store.ts`, `server/story-notes.ts`에 있어요. `tests/context-integration.test.ts`와 관련 context/story 검사는 실제 앱 경로와 fresh SQLite, 합성 provider body로 경합·취소·입력 귀속·보관을 확인해요. 모델 주도 경로는 `tests/context-tools.test.ts`(도구 루프·세그먼트 경계·네 native 인코더의 새 요청 형식)와 `tests/context-model-driven-integration.test.ts`(실제 App·SQLite에서 저장·전환·회수·다음 Run 재사용·사용자 편집 우선·archive/fork)로 확인해요. 실제 요약의 의미 품질·공급자 인증·계정별 문맥 상한·물리적 휴대폰 검증은 별도예요.
+구현은 `core/context-budget.ts`, `core/context-plan.ts`, `core/context-projection.ts`, `core/context-tools.ts`, `core/notes.ts`, `core/story-context.ts`, `server/context-planning.ts`, `server/context-compaction.ts`, `server/context-tool-compaction.ts`, `server/model-runner.ts`, `server/context-tools.ts`, `server/context-store.ts`, `server/story-notes.ts`에 있어요. `tests/context-integration.test.ts`와 관련 context/story 검사는 실제 앱 경로와 fresh SQLite, 합성 provider body로 경합·취소·입력 귀속·보관을 확인해요. 모델 주도 경로는 `tests/context-tools.test.ts`(도구 루프·세그먼트 경계·네 native 인코더의 새 요청 형식)와 `tests/context-model-driven-integration.test.ts`(실제 App·SQLite에서 저장·전환·회수·다음 Run 재사용·사용자 편집 우선·archive/fork)로 확인해요. 실행 중 조회 결과 정리와 결과 반환 후 알림은 `tests/context-tools.test.ts`, 단계별 EOF는 `tests/context-compaction.test.ts`와 `tests/helper-draft-runtime.test.ts`에도 회귀가 있어요. 실제 요약의 의미 품질·공급자 인증·계정별 문맥 상한·물리적 휴대폰 검증은 별도예요.
 
-2026-09-10의 [61장 실제 문맥 평가](../project-plan/LIVE-MEMORY-RESULTS-2026-09-10.md)는 약속 조건 오류·일반 조회 한도·응답 EOF로 중단된 실행이며 전체 PASS가 아니에요. 위 2026-09-09의 미검증 기록과 구분하고, 이번 장면 번호·요약 출처 표기는 그 실제 실행 이후 추가해 로컬 합성 회귀만 검증했어요.
+2026-09-10의 [61장 실제 문맥 평가](../project-plan/LIVE-MEMORY-RESULTS-2026-09-10.md)는 약속 조건 오류·일반 조회 한도·응답 EOF로 중단된 실행이며 전체 PASS가 아니에요. 위 2026-09-09의 미검증 기록과 구분해요. 그 뒤 추가한 장면 번호 조회, 실행 중 조회 결과 정리와 단계별 EOF 구분은 2026-09-11 안정화의 로컬 검사와 새 승인 실모델 평가로 확인했어요. R3는 16k 입력에서 문맥 정리 보류·채택 후 실제 전송을 확인했지만 호출 수 16회를 소진해 답변에 실패했어요. R4는 32k·32회 조건에서 5회 호출로 원문 재조회와 명시 요청의 정정 답변을 완료했어요. 장기 요약의 귀속·조건 손실은 남아 전체 의미 품질 PASS가 아니에요. 각 소스 지문·실패·검증 결과는 [안정화 결과](../project-plan/STABILIZATION-RESULTS-2026-09-11.md)에 구분해요.
 
 ## 전체 원문 번역
 

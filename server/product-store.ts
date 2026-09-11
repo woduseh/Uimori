@@ -36,6 +36,7 @@ import {
 import { validateEvaluationToolOptions } from '../core/evaluation-tool-config.js';
 import { existsSync, readFileSync, unlinkSync } from 'node:fs';
 import { isDeepStrictEqual } from 'node:util';
+import { isSourceOnlyTranscript } from '../core/authored-history.js';
 import type { Store } from './store.js';
 export { fields, number, record, text } from './request-validation.js';
 import {
@@ -1562,7 +1563,7 @@ function archiveSettings(value: unknown) {
   choice(b.mode, ['direct', 'research'], 'mode');
   boolean(b.translation);
   boolean(b.status);
-  number(b.maxCalls, 'call limit', 1, 16);
+  number(b.maxCalls, 'call limit', 1, 32);
 }
 function validateArchiveVersion(row: Row, providerSetting = false) {
   if (isProviderSetting(row.kind)) {
@@ -1953,7 +1954,10 @@ function validateArchiveGraph(product: ProductStore) {
     }
     archiveSettings(snapshot.settings);
     number(snapshot.settingsRevision, 'snapshot settings revision');
-    if (!product.store.validateHistory(snapshot.history, run.parent_revision))
+    if (
+      !isSourceOnlyTranscript(snapshot as RunSnapshot) &&
+      !product.store.validateHistory(snapshot.history, run.parent_revision)
+    )
       throw new HttpError(400, 'Snapshot history differs from source ancestry');
     const resources = archiveList(snapshot.resources, 10000);
     const ids = new Set<string>();

@@ -6,7 +6,11 @@ import { randomUUID } from 'node:crypto';
 import { Store, HttpError } from '../server/store.js';
 import { createFixtureChat } from './fixtures/chat.js';
 import { exportChatTranscript, importChatTranscript } from '../server/chat-transcript.js';
-import { CHAT_TRANSCRIPT_FORMAT, validateChatTranscript } from '../core/chat-transcript.js';
+import {
+  CHAT_TRANSCRIPT_FORMAT,
+  CHAT_TRANSCRIPT_LIMITS,
+  validateChatTranscript,
+} from '../core/chat-transcript.js';
 import { editTranslation, successfulTranslation } from '../server/source-editing.js';
 import { forkChat } from '../server/chat-fork.js';
 import { createApp } from '../server/app.js';
@@ -109,6 +113,70 @@ const requests = (store: Store, chatId: string) =>
     .map((item) => store.run(store.source(item.revision).runId).request);
 
 describe('chat transcript export and import', () => {
+  test('the largest editable source and full chat title round trip without truncation', async () => {
+    const store = await database();
+    const { chat, first } = authoredChat(store);
+    const text = '가'.repeat(CHAT_TRANSCRIPT_LIMITS.text);
+    store.editSource(first.id, { text, expectedRevision: 0 });
+    store.db.prepare('UPDATE chats SET title=? WHERE id=?').run('제'.repeat(200), chat.id);
+    const exported = exportChatTranscript(store, chat.id);
+    expect(validateChatTranscript(exported)).toEqual(exported);
+    const imported = importChatTranscript(store, { transcript: exported, idempotencyKey: 'large' });
+    expect(imported.chat.title).toBe(exported.title);
+    expect(exportChatTranscript(store, imported.chat.id).entries).toEqual(exported.entries);
+    const fresh = await database();
+    expect(fresh.product.import(store.product.export()).restored).toBe(true);
+    expect(exportChatTranscript(fresh, imported.chat.id).entries).toEqual(exported.entries);
+  });
+
+  test('authored import storage grows with sources and preserves ancestry after edits and archive restore', async () => {
+    const store = await database();
+    const { chat } = authoredChat(store);
+    const base = exportChatTranscript(store, chat.id);
+    const measurements: number[] = [];
+    for (const count of [100, 200]) {
+      const transcript = {
+        ...base,
+        notes: [],
+        entries: Array.from({ length: count }, (_, index) => ({
+          request: `Synthetic ${index}`,
+          text: `${index} ${'long authored prose '.repeat(50)}`,
+          translation: null,
+        })),
+      };
+      const imported = importChatTranscript(store, {
+        transcript,
+        idempotencyKey: `linear-${count}`,
+      });
+      const stored = store.db
+        .prepare('SELECT SUM(length(snapshot)) AS n FROM runs WHERE chat_id=?')
+        .get(imported.chat.id) as { n: number };
+      measurements.push(stored.n);
+      const history = store.history(imported.chat.headRevision);
+      expect(history.map((item) => item.text)).toEqual(
+        transcript.entries.map((entry) => entry.text)
+      );
+      const first = store.source(history[0].revision);
+      store.editSource(first.id, { text: 'Changed after import', expectedRevision: 0 });
+      expect(store.sourceOriginal(first.id).text).toBe(transcript.entries[0].text);
+      expect(store.source(first.id).text).toBe('Changed after import');
+      expect(
+        store.db.prepare('SELECT COUNT(*) AS n FROM attempts WHERE chat_id=?').get(imported.chat.id)
+      ).toEqual({ n: 0 });
+      const fork = forkChat(store, imported.chat.id, {
+        fromRevision: history[1].revision,
+        idempotencyKey: `linear-fork-${count}`,
+      });
+      expect(store.history(fork.headRevision).map((item) => item.text)).toEqual([
+        'Changed after import',
+        transcript.entries[1].text,
+      ]);
+    }
+    expect(measurements[1]).toBeLessThan(measurements[0] * 2.2);
+    const fresh = await database();
+    expect(fresh.product.import(store.product.export()).restored).toBe(true);
+  });
+
   test('a transcript carries authored history only and imports as a new chat with the same reading', async () => {
     const store = await database();
     const { chat, glossary, first } = authoredChat(store);
@@ -139,7 +207,9 @@ describe('chat transcript export and import', () => {
       const run = store.run(store.source(item.revision).runId);
       expect(run.status).toBe('completed');
       expect(run.usage.modelCalls).toBe(0);
-      expect(run.snapshot.transcriptImport).toEqual({ index });
+      expect(run.snapshot.transcriptImport).toEqual({ index, storage: 'source-only-v1' });
+      expect(run.snapshot.history).toEqual([]);
+      expect(run.snapshot.promptCompilation).toBeUndefined();
     }
     expect(store.validateHistory(history, store.chat(id).headRevision)).toBe(true);
     const copiedFirst = store.source(history[0].revision);

@@ -39,6 +39,7 @@ import {
 } from '../core/package-behavior-tools.js';
 import { BehaviorError } from '../core/package-behavior.js';
 import { createAgentCollaboration } from './agent-collaboration.js';
+import { compactableRead, compactToolReads } from './context-tool-compaction.js';
 
 export type MainResult = {
   status: 'completed' | 'refused' | 'partial' | 'error' | 'cancelled';
@@ -105,13 +106,16 @@ export async function runMain(snapshot: RunSnapshot, hooks: MainHooks): Promise<
     checkpoint: fixed.contextPlan?.checkpoint ?? null,
   };
   let segmentBootstrap: ToolEvent[] = [];
-  let windowStatus: ContextWindowStatus | undefined;
+  let completedToolHistory: ToolEvent[] = [];
+  let lastUnhelpfulRead: string | undefined;
+  const resultWindows = new Map<string, ContextWindowStatus>();
   const results: ToolEvent[] = [];
   const correction = createToolCorrectionPolicy();
   const evaluation = createEvaluationToolSession(target, hooks.timeoutMs);
   const maxCalls = fixed.settings.maxCalls;
   const mainCallLimit = evaluation ? Math.min(maxCalls, evaluation.maxCalls) : maxCalls;
   let mainCalls = 0;
+  const completedCallIds = new Set<string>();
   const usage: Usage = structuredClone(
     hooks.initialUsage ?? { modelCalls: 0, inputTokens: 0, outputTokens: 0, costUsd: 0 }
   );
@@ -147,29 +151,97 @@ export async function runMain(snapshot: RunSnapshot, hooks: MainHooks): Promise<
       authorized.protocol !== target.connection.protocol
     )
       return fail('CONNECTION_NOT_AUTHORIZED');
-    const built = buildMainProviderRequest(fixed, {
-      results,
-      ...(evaluation
-        ? {
-            evaluation: {
-              definitions: evaluation.definitions,
-              bootstrap: evaluation.bootstrap,
-              ...(evaluation.toolChoice(results.length)
-                ? { toolChoice: evaluation.toolChoice(results.length) }
-                : {}),
+    const build = (freshHistory?: ToolEvent[]) => {
+      const fresh = freshHistory !== undefined;
+      const history = freshHistory ?? completedToolHistory;
+      return buildMainProviderRequest(fixed, {
+        results: (fresh ? [] : results).map((event) => {
+          const contextWindow = resultWindows.get(event.callId);
+          return contextWindow
+            ? { ...event, result: { ...(event.result as Record<string, unknown>), contextWindow } }
+            : event;
+        }),
+        ...(evaluation
+          ? {
+              evaluation: {
+                definitions: evaluation.definitions,
+                bootstrap: evaluation.bootstrap,
+                ...(evaluation.toolChoice(results.length)
+                  ? { toolChoice: evaluation.toolChoice(results.length) }
+                  : {}),
+              },
+            }
+          : {}),
+        ...(!fresh && opaqueState !== undefined ? { opaqueState } : {}),
+        ...(collaboration ? { agentBootstrap: collaboration.bootstrap } : {}),
+        ...(!fresh && segmentBootstrap.length ? { segmentBootstrap } : {}),
+        ...(history.length ? { completedToolHistory: history } : {}),
+      });
+    };
+    let built = build();
+    const latestRead = results.findLast(compactableRead)?.callId;
+    if (!evaluation && fixed.contextPlan && latestRead) {
+      const before = estimateContextTokens(encodeMainPreview(built.request, target).body);
+      const inputLimit = fixed.contextPlan.budget.inputTokenLimit;
+      if (latestRead === lastUnhelpfulRead && before > inputLimit)
+        return fail('CONTEXT_TOOL_COMPACTION_NO_PROGRESS');
+      if (before > inputLimit * 0.85 && latestRead !== lastUnhelpfulRead) {
+        try {
+          const compacted = await compactToolReads(
+            fixed,
+            [...completedToolHistory, ...segmentBootstrap, ...results],
+            hooks,
+            usage
+          );
+          // Completed work becomes ordinary host reference data, not unsigned native tool calls.
+          const candidate = build(compacted);
+          const after = estimateContextTokens(encodeMainPreview(candidate.request, target).body);
+          // 85% is a soft trigger, not a second admission limit. Keep a valid original
+          // continuation when summarization fails to reduce it; never admit an oversized body.
+          const applied = after < before && after <= inputLimit;
+          await hooks.onToolEvent({
+            callId: `host-compaction-${usage.modelCalls}`,
+            name: 'context.compact',
+            args: {},
+            denied: false,
+            result: {
+              reason: 'tool-results',
+              applied,
+              beforeTokens: before,
+              afterTokens: after,
+              compactedReads: results.filter(compactableRead).length,
             },
+          });
+          if (applied) {
+            // Discard opaque continuation only after adopting the replacement history.
+            opaqueState = undefined;
+            results.length = 0;
+            resultWindows.clear();
+            completedToolHistory = compacted;
+            segmentBootstrap = [];
+            lastUnhelpfulRead = undefined;
+            built = candidate;
+          } else {
+            // The same reads must not repeatedly spend summary calls after unrelated writes.
+            lastUnhelpfulRead = latestRead;
+            if (before > inputLimit) return fail('CONTEXT_TOOL_COMPACTION_NO_PROGRESS');
           }
-        : {}),
-      ...(opaqueState !== undefined ? { opaqueState } : {}),
-      ...(collaboration ? { agentBootstrap: collaboration.bootstrap } : {}),
-      ...(segmentBootstrap.length ? { segmentBootstrap } : {}),
-    });
+          // Compaction can take several provider calls; refresh main authorization afterwards.
+          authorized = await hooks.authorize(structuredClone(target.connection));
+          if (
+            !authorized.enabled ||
+            authorized.id !== target.connectionId ||
+            authorized.endpoint !== target.connection.endpoint ||
+            authorized.protocol !== target.connection.protocol ||
+            authorized.credentialEnv !== target.connection.credentialEnv
+          )
+            return fail('CONNECTION_NOT_AUTHORIZED');
+        } catch (error) {
+          return fail(error instanceof Error ? error.message : 'CONTEXT_TOOL_COMPACTION_FAILED');
+        }
+      }
+    }
     const { input, request } = built;
-    if (contextTools)
-      windowStatus = contextWindowStatus(
-        estimateContextTokens(encodeMainPreview(request, target).body),
-        fixed.contextPlan!.budget.inputTokenLimit
-      );
     if (evaluation && request.generation) {
       const configured = request.generation;
       request.generation = evaluation.generation(configured, results.length);
@@ -222,8 +294,9 @@ export async function runMain(snapshot: RunSnapshot, hooks: MainHooks): Promise<
       )
     );
     for (const call of result.toolCalls) {
-      if (callIds.has(call.id)) return fail('DUPLICATE_TOOL_ID');
+      if (callIds.has(call.id) || completedCallIds.has(call.id)) return fail('DUPLICATE_TOOL_ID');
       callIds.add(call.id);
+      completedCallIds.add(call.id);
     }
     const terminals = result.toolCalls.filter((call) => call.name === 'story.submit');
     if (terminals.length) {
@@ -312,6 +385,7 @@ export async function runMain(snapshot: RunSnapshot, hooks: MainHooks): Promise<
     }
     opaqueState = result.opaqueState;
     let boundary: { snapshot: RunSnapshot; event: ToolEvent } | undefined;
+    const batchStart = results.length;
     for (const call of result.toolCalls) {
       if (hooks.signal.aborted) return fail('CANCELLED');
       // Transport only decodes. Exact frozen bindings separate state actions from read permissions.
@@ -347,16 +421,8 @@ export async function runMain(snapshot: RunSnapshot, hooks: MainHooks): Promise<
         event = evaluation?.allNames.includes(call.name as (typeof evaluation.allNames)[number])
           ? evaluation.execute(call)
           : executeTool(fixed, action, hooks.signal);
-      if (
-        windowStatus &&
-        !event.denied &&
-        CONTEXT_WINDOW_RESULT_TOOLS.has(event.name) &&
-        event.result &&
-        typeof event.result === 'object' &&
-        !Array.isArray(event.result)
-      )
-        event = { ...event, result: { ...event.result, contextWindow: windowStatus } };
       results.push(event);
+      // Persist each real result immediately, before the next action or any request preview.
       await hooks.onToolEvent(structuredClone(event));
       const outcome = correction(event, call.arguments);
       if (outcome === 'exhausted') return fail('TOOL_CORRECTION_EXHAUSTED');
@@ -365,13 +431,44 @@ export async function runMain(snapshot: RunSnapshot, hooks: MainHooks): Promise<
           binding || call.name.startsWith('behavior_') ? 'ACTION_TOOL_DENIED' : 'READ_TOOL_DENIED'
         );
     }
+    if (contextTools && !boundary) {
+      const batch = results
+        .slice(batchStart)
+        .filter(
+          (event) =>
+            !event.denied &&
+            CONTEXT_WINDOW_RESULT_TOOLS.has(event.name) &&
+            event.result &&
+            typeof event.result === 'object' &&
+            !Array.isArray(event.result)
+        );
+      if (batch.length) {
+        // Native continuation validation needs every pending result. Only the completed batch
+        // receives new wire annotations; durable receipts and prior continuation results stay fixed.
+        const measure = () =>
+          estimateContextTokens(encodeMainPreview(build().request, target).body);
+        const reserve = 128 * batch.length;
+        const annotate = (tokens: number) => {
+          const status = contextWindowStatus(tokens, fixed.contextPlan!.budget.inputTokenLimit);
+          for (const event of batch) resultWindows.set(event.callId, status);
+        };
+        const projected = measure() + reserve;
+        annotate(projected);
+        // Include the actual annotations with a bounded second measurement, not a fixed-point loop.
+        const annotated = measure();
+        if (annotated > projected) annotate(annotated + reserve);
+      }
+    }
     if (boundary) {
       // A new window is a fresh provider request: no opaque continuation, no prior results.
       // The completed context.new exchange is the only carried-over tool history.
       fixed = boundary.snapshot;
       results.length = 0;
+      resultWindows.clear();
       opaqueState = undefined;
       segmentBootstrap = [structuredClone(boundary.event)];
+      completedToolHistory = [];
+      lastUnhelpfulRead = undefined;
     }
   }
 }

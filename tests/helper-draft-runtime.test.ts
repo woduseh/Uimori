@@ -164,7 +164,8 @@ function result<T>(request: transport.ProviderRequest, callId: string): T {
 async function submit(
   f: Awaited<ReturnType<typeof fixture>>,
   text: string,
-  requestKey = randomUUID()
+  requestKey = randomUUID(),
+  status: HelperTask['status'] = 'completed'
 ) {
   const payload = {
     requestKey,
@@ -183,7 +184,7 @@ async function submit(
   });
   expect(response.statusCode).toBe(200);
   const task = response.json<HelperTask>();
-  await vi.waitFor(() => expect(f.workspace.task(task.id).status).toBe('completed'), {
+  await vi.waitFor(() => expect(f.workspace.task(task.id).status).toBe(status), {
     timeout: 3000,
     interval: 10,
   });
@@ -385,7 +386,49 @@ test('helper context reads preserve missing summaries and stale checkpoint usabi
   expect(read.invalidReason).toBeTruthy();
 });
 
-test('real app draft bridge reads the human buffer then honors one explicit patch and save despite a repeated save tool call', async () => {
+test('the real draft bridge keeps saved writes visible after EOF and refuses a fresh whole-request retry', async () => {
+  const f = await fixture();
+  const send = mockSend((request, round) => {
+    if (round === 0)
+      return calls(
+        tool('patch', 'draft.patch', {
+          expectedRevision: f.draft.revision,
+          model: { ...f.draft.model, title: '설명 실패 전에 저장한 제목' },
+          rawFields: {},
+          unappliedFields: [],
+          operationId: 'patch-before-eof',
+        })
+      );
+    if (round === 1)
+      return calls(
+        tool('save', 'draft.save', {
+          expectedRevision: result<DraftPatchResult>(request, 'patch').draft.revision,
+          operationId: 'save-before-eof',
+        })
+      );
+    expect(result<DraftSaveResult>(request, 'save').status).toBe('saved');
+    return { ...success, status: 'error', text: '', error: { code: 'UNEXPECTED_EOF' } };
+  });
+  const { task } = await submit(f, '현재 초안을 수정하고 저장해줘', randomUUID(), 'failed');
+  expect(task.completedEffects).toEqual({ count: 2, labels: ['자료 저장', '초안 수정'] });
+  expect(f.store.product.get<Content>('content', f.saved.id).title).toBe(
+    '설명 실패 전에 저장한 제목'
+  );
+  const retry = await f.app.inject({
+    method: 'POST',
+    url: `/api/helper/conversations/${f.conversation.id}/messages`,
+    payload: { requestKey: randomUUID(), text: task.request, retryOf: task.id },
+  });
+  expect(retry.statusCode).toBe(409);
+  expect(retry.json()).toMatchObject({ error: 'HELPER_EFFECTS_ALREADY_COMMITTED' });
+  expect(f.drafts.savedOperations(f.draft.id)).toHaveLength(1);
+  expect(send).toHaveBeenCalledTimes(3);
+});
+
+test.each([
+  '현재 초안의 제목을 수정하고 미완성 JSON을 완성한 뒤 저장해줘',
+  '현재 초안의 제목을 수정하고 미완성 JSON을 완성한 뒤 저장해 주실 수 있을까요?',
+])('real draft bridge honors explicit patch and save exactly once: %s', async (text) => {
   const f = await fixture();
   let saveArgs: Record<string, unknown> | undefined, savedResult: DraftSaveResult | undefined;
   const send = mockSend((request, round) => {
@@ -426,7 +469,7 @@ test('real app draft bridge reads the human buffer then honors one explicit patc
     expect(result<DraftSaveResult>(request, 'repeat-save-new-call-id')).toEqual(savedResult);
     return success;
   });
-  const completed = await submit(f, '현재 초안의 제목을 수정하고 미완성 JSON을 완성한 뒤 저장해줘');
+  const completed = await submit(f, text);
   expect(completed.task.snapshot.grants).toEqual([
     expect.objectContaining({
       target: f.draft.id,
@@ -452,7 +495,12 @@ test('real app draft bridge reads the human buffer then honors one explicit patc
   expect(f.store.db.prepare('SELECT COUNT(*) AS n FROM runs').get()).toEqual({ n: 0 });
 });
 
-test('a recommendation request cannot gain patch or save authority through model tool arguments in the real bridge', async () => {
+test.each([
+  '이 자료를 어떻게 수정하면 좋을까? 제안만 해줘',
+  '현재 프롬프트를 저장해도 괜찮은지 확인해줘.',
+  '프롬프트를 수정해도 되는지 확인해줘.',
+  '문제가 없으면 초안을 저장해줘.',
+])('a review or conditional request cannot gain authority in the real bridge: %s', async (text) => {
   const f = await fixture();
   mockSend((request, round) => {
     if (round === 0) return calls(tool('read', 'workspace.read', { kind: 'draft' }));
@@ -481,7 +529,7 @@ test('a recommendation request cannot gain patch or save authority through model
       });
     return success;
   });
-  const { task } = await submit(f, '이 자료를 어떻게 수정하면 좋을까? 제안만 해줘');
+  const { task } = await submit(f, text);
   expect(task.snapshot.grants).toEqual([]);
   expect(f.drafts.get(f.draft.id)).toEqual(f.draft);
   expect(f.drafts.savedOperations(f.draft.id)).toEqual([]);
@@ -489,57 +537,66 @@ test('a recommendation request cannot gain patch or save authority through model
   expect(f.store.product.get<Content>('content', f.saved.id)).toEqual(f.saved);
 });
 
-test('a human revision after helper read produces a conflict proposal and preserves the newest title and incomplete JSON', async () => {
-  const f = await fixture();
-  let newest: EditDraft | undefined;
-  mockSend(async (request, round) => {
-    if (round === 0) return calls(tool('read', 'workspace.read', { kind: 'draft' }));
-    if (round === 1) {
-      const observed = result<EditDraft>(request, 'read');
-      const response = await f.app.inject({
-        method: 'PATCH',
-        url: `/api/edit-drafts/${f.draft.id}`,
-        payload: {
-          expectedRevision: observed.revision,
-          operationId: randomUUID(),
-          model: { ...observed.model, title: '사람이 나중에 고친 제목' },
-          rawFields: { 'package.instructions': '[\n  {"id":' },
-          unappliedFields: ['package.instructions'],
-        },
-      });
-      expect(response.statusCode).toBe(200);
-      newest = response.json<DraftPatchResult>().draft;
-      return calls(
-        tool('stale-patch', 'draft.patch', {
-          expectedRevision: observed.revision,
-          model: { ...observed.model, title: '읽은 시점의 도우미 제안' },
-          rawFields: observed.rawFields,
-          unappliedFields: observed.unappliedFields,
-          operationId: 'stale-proposal',
-        })
-      );
-    }
-    const patched = result<DraftPatchResult>(request, 'stale-patch');
-    expect(patched.status).toBe('conflict');
-    expect(patched.draft).toEqual(newest);
-    if (patched.status === 'conflict')
-      expect(patched.proposal).toMatchObject({
-        expectedRevision: f.draft.revision,
-        actualRevision: newest!.revision,
-        model: { title: '읽은 시점의 도우미 제안' },
-        rawFields: f.draft.rawFields,
-      });
-    return { ...success, text: '사람이 변경한 최신 초안을 유지하고 제안을 남겼어요.' };
-  });
-  const { task } = await submit(f, '현재 초안의 제목을 수정하고 저장해줘');
-  expect(task.snapshot.grants).toEqual([
-    expect.objectContaining({ target: f.draft.id, actions: ['draft.patch', 'draft.save'] }),
-  ]);
-  expect(f.drafts.get(f.draft.id)).toEqual(newest);
-  expect(f.drafts.proposals(f.draft.id)).toHaveLength(1);
-  expect(f.drafts.savedOperations(f.draft.id)).toEqual([]);
-  expect(f.store.product.get<Content>('content', f.saved.id)).toEqual(f.saved);
-});
+test.each(['completed', 'failed'] as const)(
+  'human revision conflicts preserve the draft and are not counted as applied writes: %s',
+  async (status) => {
+    const f = await fixture();
+    let newest: EditDraft | undefined;
+    mockSend(async (request, round) => {
+      if (round === 0) return calls(tool('read', 'workspace.read', { kind: 'draft' }));
+      if (round === 1) {
+        const observed = result<EditDraft>(request, 'read');
+        const response = await f.app.inject({
+          method: 'PATCH',
+          url: `/api/edit-drafts/${f.draft.id}`,
+          payload: {
+            expectedRevision: observed.revision,
+            operationId: randomUUID(),
+            model: { ...observed.model, title: '사람이 나중에 고친 제목' },
+            rawFields: { 'package.instructions': '[\n  {"id":' },
+            unappliedFields: ['package.instructions'],
+          },
+        });
+        expect(response.statusCode).toBe(200);
+        newest = response.json<DraftPatchResult>().draft;
+        return calls(
+          tool('stale-patch', 'draft.patch', {
+            expectedRevision: observed.revision,
+            model: { ...observed.model, title: '읽은 시점의 도우미 제안' },
+            rawFields: observed.rawFields,
+            unappliedFields: observed.unappliedFields,
+            operationId: 'stale-proposal',
+          })
+        );
+      }
+      const patched = result<DraftPatchResult>(request, 'stale-patch');
+      expect(patched.status).toBe('conflict');
+      expect(patched.draft).toEqual(newest);
+      if (patched.status === 'conflict')
+        expect(patched.proposal).toMatchObject({
+          expectedRevision: f.draft.revision,
+          actualRevision: newest!.revision,
+          model: { title: '읽은 시점의 도우미 제안' },
+          rawFields: f.draft.rawFields,
+        });
+      return {
+        ...success,
+        status: status === 'failed' ? 'error' : 'completed',
+        text: '사람이 변경한 최신 초안을 유지하고 제안을 남겼어요.',
+        error: status === 'failed' ? { code: 'UNEXPECTED_EOF' } : null,
+      };
+    });
+    const { task } = await submit(f, '현재 초안의 제목을 수정하고 저장해줘', randomUUID(), status);
+    expect(task.snapshot.grants).toEqual([
+      expect.objectContaining({ target: f.draft.id, actions: ['draft.patch', 'draft.save'] }),
+    ]);
+    expect(f.drafts.get(f.draft.id)).toEqual(newest);
+    expect(f.drafts.proposals(f.draft.id)).toHaveLength(1);
+    expect(f.drafts.savedOperations(f.draft.id)).toEqual([]);
+    expect(f.store.product.get<Content>('content', f.saved.id)).toEqual(f.saved);
+    expect(task).not.toHaveProperty('completedEffects');
+  }
+);
 
 test('helper task projections retain the reserved model title after a rename and selection change without exposing snapshots', async () => {
   const f = await fixture();

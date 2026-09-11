@@ -1,9 +1,10 @@
-import { illustrationErrorMessage } from './illustration-labels.js';
+import { apiErrorDiagnostic } from './api-errors.js';
 
 export class ApiError extends Error {
   constructor(
     message: string,
-    readonly status: number
+    readonly status: number,
+    readonly code: string | null = null
   ) {
     super(message);
     this.name = 'ApiError';
@@ -37,76 +38,8 @@ export async function api<T>(
     )
       window.dispatchEvent(new Event(sessionRequiredEvent));
     const payload = (await response.json().catch(() => null)) as { error?: unknown } | null;
-    if (
-      typeof payload?.error === 'string' &&
-      /^(?:ILLUSTRATION_|COMFYUI_|CODEX_IMAGE_)[A-Z0-9_]+$/.test(payload.error)
-    )
-      throw new ApiError(illustrationErrorMessage(payload.error), response.status);
-    if (
-      typeof payload?.error === 'string' &&
-      /^MODEL_UNAVAILABLE:(main|translation|translation-refusal|status|image|context|helper|illustration):/.test(
-        payload.error
-      )
-    )
-      throw new ApiError(
-        '선택한 모델 또는 프로바이더를 사용할 수 없어요. 전역 모델 설정에서 역할별 모델을 확인하고 모델 프리셋·프로바이더 관리에서 활성 상태, 인증과 지원 모델 설정을 확인해 주세요.',
-        response.status
-      );
-    const settingErrors = new Set([
-      'Model disabled',
-      'Connection disabled or authority changed',
-      'Connection protocol changed; review and save the model settings',
-      'Setting not found',
-      'CONNECTION_NOT_AUTHORIZED',
-      'CREDENTIAL_UNAVAILABLE',
-      'ENDPOINT_NOT_APPROVED',
-    ]);
-    if (typeof payload?.error === 'string' && settingErrors.has(payload.error))
-      throw new ApiError(
-        '선택한 모델 또는 프로바이더를 사용할 수 없어요. 전역 모델 설정에서 역할별 모델을 확인하고 모델 프리셋·프로바이더 관리에서 활성 상태, 인증과 지원 모델 설정을 확인해 주세요.',
-        response.status
-      );
-    if (response.status === 409) {
-      if (payload?.error === 'MODEL_REQUIRED:translation-refusal')
-        throw new ApiError(
-          '전역 모델 설정에서 번역 거절 판정 모델을 선택해 주세요.',
-          response.status
-        );
-      const requiredRole =
-        typeof payload?.error === 'string' &&
-        /^MODEL_REQUIRED:(main|translation|status|image|state|context|helper|illustration)$/.test(
-          payload.error
-        )
-          ? payload.error.split(':')[1]
-          : null;
-      if (requiredRole) {
-        const roleNames: Record<string, string> = {
-          main: '본문',
-          translation: '번역',
-          status: '표시 상태',
-          image: '이미지 배치',
-          state: '상태',
-          context: '문맥 압축',
-          helper: '도우미',
-          illustration: '삽화',
-        };
-        throw new ApiError(
-          `${requiredRole === 'state' ? '상태와 문맥 설정' : '전역 모델 설정'}에서 ${roleNames[requiredRole]} 모델을 선택해 주세요.`,
-          response.status
-        );
-      }
-      if (method === 'DELETE') {
-        if (typeof payload?.error === 'string' && payload.error.length <= 4000)
-          throw new ApiError(payload.error, response.status);
-      }
-      throw new ApiError(
-        '다른 요청이 먼저 반영됐어요. 최신 내용을 확인한 뒤 다시 시도해 주세요.',
-        response.status
-      );
-    }
-    const message =
-      response.status >= 500 ? '서버 작업을 완료하지 못했어요.' : '요청을 처리할 수 없어요.';
-    throw new ApiError(`${message} (${response.status})`, response.status);
+    const diagnostic = apiErrorDiagnostic(payload?.error, response.status, method);
+    throw new ApiError(diagnostic.message, response.status, diagnostic.code);
   }
   const result = (await response.json()) as T;
   const providerSettingsChanged =

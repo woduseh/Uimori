@@ -1563,6 +1563,9 @@ input[type="checkbox"] {
   gap: 8px;
   min-width: 0;
 }
+.chat-backup-import p {
+  overflow-wrap: anywhere;
+}
 .archive-file-field > label {
   flex: 1;
   min-width: 0;

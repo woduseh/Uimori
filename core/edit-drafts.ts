@@ -21,6 +21,8 @@ export type EditDraft = {
   status: 'active' | 'discarded';
   createdAt: string;
   updatedAt: string;
+  /** A restored global prompt draft remains detached until an explicit rebase. */
+  backupOrigin?: { chatId: string };
 };
 export type DraftProposal = {
   id: string;

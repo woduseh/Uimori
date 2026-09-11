@@ -50,7 +50,7 @@ export const CONTEXT_TOOLS: ProviderTool[] = [
   },
 ];
 export const CONTEXT_TOOLS_CONTRACT =
-  '\nContext window tools are registered for this run. Tool results carry contextWindow usage of the request that produced them. context.write saves a working summary for later windows and turns without changing the current window. context.new, called alone, opens a new window: exchanges before the kept recent ones and all earlier tool results leave the transmitted input, your summary stands in for them, and the host keeps every original. story.list, story.search, story.read, notes.list and notes.read work in every window; recover exact decisions and wording from originals instead of guessing. Act before usedRatio reaches 0.85, when the host compacts automatically on the next turn. Summaries are derived reference data: explicit user notes and the current request take precedence.';
+  '\nContext window tools are registered for this run. Tool results carry projected contextWindow usage including the returned data. context.write saves a working summary for later windows and turns without changing the current window. context.new, called alone, opens a new window: exchanges before the kept recent ones and all earlier tool results leave the transmitted input, your summary stands in for them, and the host keeps every original. story.list, story.search, story.read, notes.list and notes.read work in every window; recover exact decisions and wording from originals instead of guessing. Act before usedRatio reaches 0.85. If completed reads fill the window, the host summarizes those reads before the next model call while preserving mutation receipts; story history is compacted before the next writing turn. Summaries are derived reference data: explicit user notes and the current request take precedence.';
 
 /** Frozen per run from the main preset; evaluation presets and independent artifacts keep their own loops. */
 export function contextToolsEnabled(snapshot: RunSnapshot): boolean {
@@ -88,7 +88,7 @@ export function contextWindowStatus(
     ...(level === 'urgent'
       ? {
           notice:
-            'Input is near the limit. Save what you still need with context.write and call context.new now. At 85% the host compacts automatically with its own summary model on the next turn.',
+            'Input is near the limit. Save what you still need with context.write and call context.new now. At 85% the host summarizes accumulated reads before the next model call; originals and mutation receipts remain preserved.',
         }
       : level === 'notice'
         ? {

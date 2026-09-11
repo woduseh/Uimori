@@ -694,7 +694,7 @@ describe('input context projection and durable summary calls', () => {
     [
       'partial',
       () => sse({ type: 'text_delta', delta: 'Unfinished summary' }),
-      'CONTEXT_COMPACTION_PARTIAL',
+      'CONTEXT_COMPACTION_EOF',
     ],
     ['empty', () => sse({ type: 'done', reason: 'stop' }), 'CONTEXT_COMPACTION_EMPTY'],
     [
@@ -748,7 +748,7 @@ describe('input context projection and durable summary calls', () => {
       .mockResolvedValueOnce(completed('PARTIAL_SOURCE_SUMMARY'))
       .mockResolvedValueOnce(sse({ type: 'text_delta', delta: 'Unfinished' }));
     const error = await failure(prepareInputContext(source, log.hooks));
-    expect(error.code).toBe('CONTEXT_COMPACTION_PARTIAL');
+    expect(error.code).toBe('CONTEXT_COMPACTION_EOF');
     expect(error.plan).toMatchObject({ compacted: [], summary: null, summaryCalls: 2 });
     expect(error.usage).toEqual({
       modelCalls: 2,

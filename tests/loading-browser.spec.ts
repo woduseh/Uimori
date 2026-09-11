@@ -161,10 +161,15 @@ test('LOADUI06 scene navigator jumps across bounded pages and remains usable in 
   await expect(currentMark.locator('.scene-preview')).toBeVisible();
   if (visualReview) await page.screenshot({ path: info.outputPath('scene-navigator-desktop.png') });
 
-  await navigator.getByRole('button', { name: '최신 장면으로', exact: true }).click();
+  await navigator.getByRole('button', { name: '본문 맨 아래로', exact: true }).click();
   await expect(article(page, ids[11])).toBeVisible();
   await expect(articles(page)).toHaveCount(2);
   await expect(navigator).toContainText('12 / 12');
+  const reader = page.locator('[data-reader-scrollport]');
+  const distance = () =>
+    reader.evaluate((node) => node.scrollHeight - node.clientHeight - node.scrollTop);
+  await expect.poll(distance).toBeLessThanOrEqual(2);
+  await expect(navigator.getByRole('button', { name: '본문 맨 아래로' })).toBeDisabled();
   await page.goBack();
   await expect(article(page, ids[7])).toBeVisible();
   await expect(navigator).toContainText('8 / 12');
@@ -205,16 +210,122 @@ test('LOADUI06 scene navigator jumps across bounded pages and remains usable in 
   await expect(article(page, ids[2])).toBeVisible();
   await expect(page).toHaveURL(new RegExp(`source=${ids[2]}`));
   await expect(articles(page)).toHaveCount(5);
-  const latest = page.getByRole('button', { name: '최신 장면으로', exact: true });
+  const latest = page.getByRole('button', { name: '본문 맨 아래로', exact: true });
   await expect(latest).toBeVisible();
   await latest.click();
   await expect(article(page, ids[11])).toBeVisible();
+  await expect.poll(distance).toBeLessThanOrEqual(2);
+  await expect(latest).toHaveCount(0);
+  // The latest scene is longer than the viewport: its top still needs a return button.
+  await article(page, ids[11]).evaluate((node) => {
+    const viewport = node.closest<HTMLElement>('[data-reader-scrollport]')!;
+    viewport.scrollTop += node.getBoundingClientRect().top - viewport.getBoundingClientRect().top;
+  });
+  await expect(latest).toBeVisible();
+  const buttonBounds = (await latest.boundingBox())!;
+  expect(buttonBounds.width).toBeGreaterThanOrEqual(44);
+  expect(buttonBounds.height).toBeGreaterThanOrEqual(44);
+  if (visualReview) await page.screenshot({ path: info.outputPath('latest-scene-top-mobile.png') });
+  await latest.focus();
+  await page.keyboard.press('Enter');
+  await expect.poll(distance).toBeLessThanOrEqual(2);
   await expect(latest).toHaveCount(0);
   const after = await detail(request, seeded.chat.id);
   expect(after.sources).toEqual(seeded.sources);
   expect(after.runs).toEqual(seeded.runs);
   expect(after.attempts).toEqual(seeded.attempts);
   expect(writes).toHaveLength(0);
+});
+
+test('LOADUI09 newer chat list wins over a late empty response without clearing the selected chat', async ({
+  page,
+  request,
+}) => {
+  const seeded = await seed(request, 1);
+  let listRequests = 0;
+  let release!: () => void;
+  const held = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  await page.route('**/api/chats', async (route) => {
+    if (route.request().method() !== 'GET' || ++listRequests !== 1) return route.continue();
+    await held;
+    await route.fulfill({ json: [] });
+  });
+  // A synthetic deletion notification requests a second list while the first is held.
+  // The real current list still owns this chat, so it must remain selected.
+  await page.route(`**/api/chats/${seeded.chat.id}/events`, (route) =>
+    route.fulfill({ contentType: 'text/event-stream', body: 'data: {"kind":"chat.deleted"}\n\n' })
+  );
+  try {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto(`/?chat=${seeded.chat.id}`);
+    const chat = page.locator(`.bot-chat-item[data-chat-id="${seeded.chat.id}"]`);
+    await expect(chat).toBeVisible();
+    await expect(article(page, seeded.sources[0].id)).toBeVisible();
+    expect(listRequests).toBe(2);
+    const finished = page.waitForResponse(
+      (response) => new URL(response.url()).pathname === '/api/chats' && response.ok()
+    );
+    release();
+    await finished;
+    // A browser frame barrier observes React's commit after the stale response is delivered.
+    await page.evaluate(
+      () => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))
+    );
+    await expect(chat).toBeVisible();
+    await expect(page).toHaveURL(new RegExp(`chat=${seeded.chat.id}`));
+    await expect(article(page, seeded.sources[0].id)).toBeVisible();
+  } finally {
+    release();
+    await page.unrouteAll({ behavior: 'wait' });
+  }
+});
+
+test('LOADUI10 reader refresh preserves the upper reading position when latest text grows', async ({
+  page,
+  request,
+}) => {
+  const seeded = await seed(request, 1);
+  const source = seeded.sources[0];
+  for (const width of [390, 1440]) {
+    await page.setViewportSize({ width, height: 900 });
+    await page.goto(`/?chat=${seeded.chat.id}`);
+    const text = article(page, source.id).getByTestId('source-text');
+    await expect(text).toBeVisible();
+    const reader = page.locator('[data-reader-scrollport]');
+    await reader.evaluate((node) => {
+      node.scrollTop = 160;
+    });
+    const before = await reader.evaluate((node) => ({
+      top: node.scrollTop,
+      height: node.scrollHeight,
+    }));
+    const current = (await detail(request, seeded.chat.id)).sources[0];
+    const changed = await request.put(`/api/sources/${source.id}/text`, {
+      data: {
+        text: `${current.text}\n\n${'Synthetic appended text below the current reading position.\n\n'.repeat(20)}APPENDED_${width}`,
+        expectedRevision: current.editRevision ?? 0,
+      },
+    });
+    expect(changed.ok()).toBeTruthy();
+    await expect(text).toContainText(`APPENDED_${width}`);
+    await expect
+      .poll(() => reader.evaluate((node) => node.scrollHeight))
+      .toBeGreaterThan(before.height);
+    expect(Math.abs((await reader.evaluate((node) => node.scrollTop)) - before.top)).toBeLessThan(
+      3
+    );
+    const latest = page.getByRole('button', { name: '본문 맨 아래로', exact: true });
+    await expect(latest).toBeEnabled();
+    await latest.click();
+    await expect
+      .poll(() => reader.evaluate((node) => node.scrollHeight - node.clientHeight - node.scrollTop))
+      .toBeLessThanOrEqual(2);
+  }
+  const after = await detail(request, seeded.chat.id);
+  expect(after.runs).toEqual(seeded.runs);
+  expect(after.attempts).toEqual(seeded.attempts);
 });
 
 test('LOADUI01 bounded pages, previous/next, deep links and reload preserve reader position', async ({

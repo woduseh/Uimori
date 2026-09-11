@@ -351,3 +351,9 @@ GPL 코드나 개인 패키지의 본문·스크립트를 복사하지 않고 �
 - 공식 추가 근거: [Fable 5.1](https://platform.claude.com/docs/en/models/fable-5-1/whats-new-fable-5-1)의 항상 adaptive·forced-tool 미지원·prefix binding, [Claude cache](https://platform.claude.com/docs/en/build-with-claude/prompt-caching)의 5m/1h·자동 슬롯, [OpenAI cache](https://developers.openai.com/api/docs/guides/prompt-caching)의 explicit/implicit·30m·usage, [Flex](https://developers.openai.com/api/docs/guides/flex-processing)의 Responses/Chat 전달을 2026-09-07 확인했어요.
 
 - 2026-09-08 context token estimate: dqbd/tiktoken README + npm tiktoken 1.0.22 (MIT) → Node WASM get_encoding(o200k_base) → offline segmented estimate with 10% margin in core/context-budget.ts → context-budget and app compaction regression. Pure JS whole-string BPE was not retained: a repeated 8,192-character token took 4.52s; bounded WASM segments keep that fixture responsive. No claim of exact Claude/Gemini/Codex billing tokens.
+
+## 실행 중 문맥 정리와 Vertex 연속 경계 (2026-09-11)
+
+- 같은 날 다시 확인한 Google [Thought signatures](https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/thinking/thought-signatures)의 전체 parts·순서·서명 보존 원리를 유지해요. `server/model-runner.ts`는 이미 완료한 조회를 새 요청에서 일반 참고 문맥으로 전달하고, 원래 native 연속을 유지할 때는 해당 결과와 opaque를 함께 보존해요. 서명 없는 과거 결과를 새 function response로 재구성하거나 임의 서명을 넣는 방식은 채택하지 않았어요.
+- 같은 응답의 병렬 도구 결과는 모두 완료한 뒤 전송 크기를 계산해요. 원본 영수증과 전송용 `contextWindow`를 분리해 결과의 대응·불변성을 유지해요. `tests/context-tools.test.ts`의 실제 Vertex 인코더로 단일·병렬·읽기/쓰기 혼합 경계를 검증했어요.
+- 85%는 정리를 시도하는 기준이며 실제 상한이 아니에요. 더 작은 후보가 실제 한도 안이면 채택하고, 도움이 없는 요약이면 한도 안인 원래 요청을 유지해요. 이 선택은 Uimori의 독립 설계이며 공식 문서가 특정 비율을 권장한다고 해석하지 않아요. R3의 실제 후속 응답 7경계와 R4의 원문 재조회 완료, 남은 의미 품질 한계는 [안정화 결과](STABILIZATION-RESULTS-2026-09-11.md)에 구분했어요.

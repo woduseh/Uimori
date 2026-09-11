@@ -321,6 +321,7 @@ export class EditDraftService {
     };
   }
   private saveModel(draft: EditDraft): Content | PromptPreset | PromptWorkspace {
+    this.assertRebased(draft);
     if (draft.kind === 'prompt-workspace')
       return updatePromptWorkspace(
         this.store,
@@ -337,6 +338,9 @@ export class EditDraftService {
         ? this.store.product.content(input, draft.targetId ?? undefined, true)
         : this.store.product.promptPreset(input, draft.targetId ?? undefined, true)
     ) as Content | PromptPreset;
+  }
+  private assertRebased(draft: EditDraft): void {
+    if (draft.backupOrigin) throw new HttpError(409, 'DRAFT_BACKUP_REBASE_REQUIRED');
   }
   validate(id: string): DraftValidation {
     const draft = this.active(id);
@@ -430,6 +434,7 @@ export class EditDraftService {
       () => this.intent('save', id, expected),
       () => {
         const before = this.active(id, expected);
+        this.assertRebased(before);
         if (before.unappliedFields.length)
           throw new HttpError(400, '미적용 초안을 검증하고 적용한 뒤 저장해 주세요.');
         const saved = this.saveModel(before),
@@ -477,6 +482,7 @@ export class EditDraftService {
       () => this.intent('undo', id, expected),
       () => {
         const before = this.active(id, expected);
+        this.assertRebased(before);
         const row = this.store.db
           .prepare(
             "SELECT result,before_body FROM edit_draft_operations WHERE operation_id=? AND draft_id=? AND action IN ('save','undo')"
@@ -559,6 +565,9 @@ export class EditDraftService {
       () => this.intent('patch', id, expected),
       () => {
         const before = this.active(id, expected);
+        // `pristine` is the automatic refresh path. A restored workspace draft needs
+        // an explicit choice before binding it to this installation's global prompts.
+        if (before.backupOrigin && input.mode === 'pristine') this.assertRebased(before);
         if (
           input.mode === 'pristine' &&
           (!isDeepStrictEqual(before.model, before.baseModel) ||
@@ -579,8 +588,9 @@ export class EditDraftService {
         if (target.revision !== targetRevision)
           throw new HttpError(409, '저장본이 다시 변경됐어요.');
         const baseModel = draftModel(before.kind, target);
+        const { backupOrigin: _backupOrigin, ...rebased } = before;
         const draft: EditDraft = {
-          ...before,
+          ...rebased,
           baseModel,
           baseHash: hash(baseModel),
           baseRevision: target.revision,
@@ -652,6 +662,7 @@ export function validateEditDraftArchive(store: Store): void {
       'status',
       'createdAt',
       'updatedAt',
+      'backupOrigin',
     ]);
     const kind = kindValue(body.kind);
     text(body.id, 'draft ID', 160);
@@ -665,13 +676,29 @@ export function validateEditDraftArchive(store: Store): void {
     if (body.baseHash !== hash(body.baseModel)) invalid('base hash');
     timestamp(body.createdAt);
     timestamp(body.updatedAt);
+    if (body.backupOrigin !== undefined) {
+      const origin = record(body.backupOrigin);
+      fields(origin, ['chatId']);
+      const owner = text(origin.chatId, 'backup draft chat ID', 100);
+      if (
+        kind !== 'prompt-workspace' ||
+        body.targetId !== 'current' ||
+        !String(body.editorKey).startsWith(`backup:${owner}:`) ||
+        !/^[a-f0-9]{32}$/.test(String(body.editorKey).slice(`backup:${owner}:`.length))
+      )
+        invalid('backup workspace ownership');
+      store.chat(owner);
+    }
     if (body.targetId === null) {
       if (kind === 'prompt-workspace' || body.baseRevision !== null) invalid('new target');
     } else {
       const targetId = text(body.targetId, 'target ID', 160),
         revision = number(body.baseRevision, 'base revision');
       if (kind === 'prompt-workspace') {
-        if (targetId !== 'current' || revision > promptWorkspace(store).revision)
+        if (
+          targetId !== 'current' ||
+          (!body.backupOrigin && revision > promptWorkspace(store).revision)
+        )
           invalid('workspace target');
       } else {
         const saved = store.product.get<Content | PromptPreset>(kind, targetId, revision);

@@ -8,6 +8,7 @@ import {
 import type { PackageAttachment } from '../core/content-package.js';
 import type { Content, ContentRef } from '../core/product.js';
 import type { RunSnapshot } from '../core/types.js';
+import { CHAT_TITLE_MAX_CHARS } from '../core/content-limits.js';
 import { HttpError, fields, record, text } from './request-validation.js';
 import { successfulTranslation } from './source-editing.js';
 import type { Chat, Store } from './store.js';
@@ -81,7 +82,7 @@ export function importChatTranscript(store: Store, value: unknown): ChatTranscri
     throw new HttpError(400, error instanceof Error ? error.message : 'CHAT_TRANSCRIPT_INVALID');
   }
   const title =
-    body.title === undefined ? transcript.title.slice(0, 120) : text(body.title, 'title', 120);
+    body.title === undefined ? transcript.title : text(body.title, 'title', CHAT_TITLE_MAX_CHARS);
   return store.transaction(() => {
     const prior = store.db
       .prepare('SELECT chat_id FROM events WHERE kind=? AND entity_id=?')
@@ -150,10 +151,10 @@ export function importChatTranscript(store: Store, value: unknown): ChatTranscri
           settingsRevision: state.settingsRevision,
           settings: state.settings,
           request: entry.request,
-          history: store.history(state.headRevision),
+          history: [],
           resources: store.product.resources(id, frozen),
           profile: frozen,
-          transcriptImport: { index },
+          transcriptImport: { index, storage: 'source-only-v1' },
         })
       );
       // No queue worker can observe an imported run before its exact source commits.

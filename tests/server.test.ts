@@ -8,6 +8,7 @@ import { spawn, type ChildProcess } from 'node:child_process';
 import { backup, DatabaseSync } from 'node:sqlite';
 import { createApp, type App } from '../server/app.js';
 import type { Chat, ChatDetail, Run } from '../core/types.js';
+import type { HelperConversation } from '../core/helper.js';
 
 const owned: { app?: App; directory: string; child?: ChildProcess }[] = [];
 afterEach(async () => {
@@ -109,6 +110,91 @@ const completed = (url: string, id: string) =>
   );
 
 describe('file SQLite HTTP runtime', () => {
+  it('allows 32 task calls through settings and archive while rejecting 33 without changing saved work', async () => {
+    const { app, url, chat } = await setup();
+    expect(chat.settings.maxCalls).toBe(8);
+    const configured = await api<Chat>(
+      url,
+      `/api/chats/${chat.id}/settings`,
+      { ...chat.settings, maxCalls: 32, expectedSettingsRevision: chat.settingsRevision },
+      'PATCH'
+    );
+    expect(configured.settings.maxCalls).toBe(32);
+    await api(
+      url,
+      `/api/chats/${chat.id}/settings`,
+      {
+        ...configured.settings,
+        maxCalls: 33,
+        expectedSettingsRevision: configured.settingsRevision,
+      },
+      'PATCH',
+      400
+    );
+    expect(app.store.chat(chat.id)).toEqual(configured);
+    const run = await api<Run>(url, `/api/chats/${chat.id}/runs`, command(configured));
+    expect((await completed(url, run.id)).snapshot.settings.maxCalls).toBe(32);
+
+    const opened = await api<HelperConversation>(url, '/api/helper/conversations', {
+      scope: { kind: 'chat', chatId: chat.id },
+    });
+    const helper = await api<HelperConversation>(
+      url,
+      `/api/helper/conversations/${opened.id}`,
+      {
+        expectedRevision: opened.revision,
+        persona: opened.persona,
+        limits: { totalCalls: 32, helperCalls: 32, artifacts: 1 },
+      },
+      'PATCH'
+    );
+    expect(helper.limits).toEqual({ totalCalls: 32, helperCalls: 32, artifacts: 1 });
+    await api(
+      url,
+      `/api/helper/conversations/${opened.id}`,
+      {
+        expectedRevision: helper.revision,
+        persona: helper.persona,
+        limits: { totalCalls: 32, helperCalls: 33, artifacts: 1 },
+      },
+      'PATCH',
+      400
+    );
+    expect(await api(url, `/api/helper/conversations/${opened.id}`)).toEqual(helper);
+
+    const archive = app.store.product.export();
+    const invalid = structuredClone(archive);
+    const archivedChat = invalid.tables.chats.find((row) => row.id === chat.id)!;
+    archivedChat.settings = JSON.stringify({ ...JSON.parse(archivedChat.settings), maxCalls: 33 });
+    const directory = await mkdtemp(join(tmpdir(), '서사 M0 call-limit restore '));
+    const restored = await createApp({
+      dbPath: join(directory, 'story.sqlite'),
+      buildId: 'call-limit-archive-boundary',
+      testMode: true,
+    });
+    owned.push({ app: restored, directory });
+    const rejected = await restored.inject({
+      method: 'POST',
+      url: '/api/import',
+      payload: { archive: invalid },
+    });
+    expect(rejected.statusCode).toBe(400);
+    expect(restored.store.chats()).toEqual([]);
+    const imported = await restored.inject({
+      method: 'POST',
+      url: '/api/import',
+      payload: { archive },
+    });
+    expect(imported.statusCode, imported.body).toBe(200);
+    expect(restored.store.chat(chat.id).settings.maxCalls).toBe(32);
+    expect(restored.store.run(run.id).snapshot.settings.maxCalls).toBe(32);
+    expect(
+      (
+        await restored.inject({ method: 'GET', url: `/api/helper/conversations/${opened.id}` })
+      ).json<HelperConversation>().limits
+    ).toEqual(helper.limits);
+  });
+
   it('F02 fixes snapshots, rejects stale revisions, and deduplicates a logical command', async () => {
     const { app, url, chat } = await setup();
     const other = await api<Chat>(url, '/api/chats', { title: '별도의 도시', preset: 'vivid' });

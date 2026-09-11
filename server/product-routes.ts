@@ -8,6 +8,8 @@ import type { Store } from './store.js';
 import { AccessSessions, AccessSessionRateLimitError } from './access-session.js';
 import { forkChat } from './chat-fork.js';
 import { exportChatTranscript, importChatTranscript } from './chat-transcript.js';
+import { exportChatBackup, importChatBackup } from './chat-backup.js';
+import { CHAT_BACKUP_MAX_BYTES } from '../core/chat-backup.js';
 import { validateVertexEndpoint, type Connection } from '../core/product.js';
 import { parseCatalog, validateConnection } from '../core/transport.js';
 import { promptRoutes } from './prompt-routes.js';
@@ -65,6 +67,20 @@ export function productRoutes(
     if (result.created) options.publish(result.chat.id);
     return result;
   });
+  app.get<{ Params: { id: string } }>('/api/chats/:id/backup', async (request, reply) =>
+    reply
+      .header('Content-Disposition', 'attachment; filename="chat-backup.json"')
+      .send(exportChatBackup(store, request.params.id))
+  );
+  app.post(
+    '/api/chats/import-backup',
+    { bodyLimit: CHAT_BACKUP_MAX_BYTES + 1024 },
+    async (request) => {
+      const result = importChatBackup(store, request.body);
+      if (result.created) options.publish(result.chat.id);
+      return result;
+    }
+  );
   const sessions = new AccessSessions(options);
   const authenticated = (cookie?: string) => sessions.authenticated(cookie);
   app.addHook('onRequest', async (request) => {

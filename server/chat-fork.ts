@@ -16,6 +16,7 @@ import { copyChatOptionsInTransaction } from './chat-options.js';
 import { copyPackageFork } from './package-behavior-host.js';
 import { historicalRunLoreReads } from './lore-context-archive.js';
 import type { RetainedLore } from '../core/lore-context.js';
+import { isSourceOnlyTranscript } from '../core/authored-history.js';
 
 type Row = Record<string, any>;
 const json = JSON.stringify;
@@ -92,7 +93,8 @@ export function forkChat(store: Store, chatId: string, value: unknown): Chat {
         run.sourceRevision !== source.id ||
         run.chatId !== chatId ||
         run.parentRevision !== source.parentRevision ||
-        !store.validateHistory(run.snapshot.history, source.parentRevision)
+        (!isSourceOnlyTranscript(run.snapshot) &&
+          !store.validateHistory(run.snapshot.history, source.parentRevision))
       )
         throw new HttpError(400, 'Invalid completed fork source');
     }
@@ -386,7 +388,8 @@ export function forkChat(store: Store, chatId: string, value: unknown): Chat {
           };
       }
       if (snapshot.contextPlan) snapshot.contextPlan.dependencyKey = contextDependencyKey(snapshot);
-      snapshot = compileSnapshotPrompt({ ...snapshot, promptCompilation: undefined });
+      if (!isSourceOnlyTranscript(snapshot))
+        snapshot = compileSnapshotPrompt({ ...snapshot, promptCompilation: undefined });
       if (snapshot.contextPlan?.status === 'ready')
         snapshot.contextPlan.estimatedInputTokens =
           measureMainContext(snapshot).estimatedInputTokens;

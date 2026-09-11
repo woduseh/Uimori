@@ -429,6 +429,10 @@ export function HelperPanel(props: Props) {
   }
   async function retry(task: HelperTaskView, text = task.request) {
     if (!conversation || outbox || busy || locks.current.has(scopeKey)) return false;
+    if (task.completedEffects?.count) {
+      setError('이미 저장된 변경이 있어요. 결과를 확인한 뒤 남은 작업을 새로 요청해 주세요.');
+      return false;
+    }
     const request: Outbox = {
       requestKey: crypto.randomUUID(),
       text,
@@ -459,6 +463,7 @@ export function HelperPanel(props: Props) {
           {task.usage.outputTokens ?? '미확인'} 토큰
         </p>
         {task.error && <p className="error">{task.error}</p>}
+        {task.completedEffects && <p>저장한 작업 · {task.completedEffects.labels.join(' · ')}</p>}
         {active(task) && (
           <div className="form-actions">
             <button type="button" className="secondary" onClick={() => void cancel(task)}>
@@ -480,15 +485,23 @@ export function HelperPanel(props: Props) {
         </div>
       )}
       {!active(task) && task.status !== 'completed' && (
-        <RetryFailure
-          status={task.status}
-          error={task.error}
-          disabled={busy || Boolean(outbox)}
-          onRetry={() => void retry(task)}
-          onSettings={props.onModelSettings}
-          onDetails={() => setTaskHistory({ taskId: task.id })}
-          onHistory={() => setTaskHistory({})}
-        />
+        <>
+          {task.completedEffects && (
+            <p role="status" data-testid="helper-completed-effects">
+              변경 {task.completedEffects.count}건은 저장됐지만 응답은 완료되지 않았어요. 저장된
+              결과를 확인한 뒤 남은 작업을 새로 요청해 주세요.
+            </p>
+          )}
+          <RetryFailure
+            status={task.status}
+            error={task.error}
+            disabled={busy || Boolean(outbox)}
+            onRetry={task.completedEffects ? undefined : () => void retry(task)}
+            onSettings={props.onModelSettings}
+            onDetails={() => setTaskHistory({ taskId: task.id })}
+            onHistory={() => setTaskHistory({})}
+          />
+        </>
       )}
     </div>
   );
@@ -779,6 +792,7 @@ export function HelperPanel(props: Props) {
                   onSubmit={
                     taskMap.get(message.taskId) &&
                     !active(taskMap.get(message.taskId)!) &&
+                    !taskMap.get(message.taskId)!.completedEffects &&
                     taskMap.get(message.taskId)!.status !== 'completed'
                       ? (text) => retry(taskMap.get(message.taskId)!, text)
                       : undefined
@@ -840,6 +854,12 @@ export function HelperPanel(props: Props) {
               <p>모델 · {task.modelTitle}</p>
               <p className="task-request">{task.request}</p>
               {task.error && <p className="error">{task.error}</p>}
+              {task.completedEffects && (
+                <p>
+                  저장한 변경 {task.completedEffects.count}건 ·{' '}
+                  {task.completedEffects.labels.join(' · ')}
+                </p>
+              )}
             </li>
           ))}
         </ul>

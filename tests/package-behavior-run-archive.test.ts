@@ -9,10 +9,15 @@ import type { ContentPackage } from '../core/content-package.js';
 import type { RunSnapshot } from '../core/types.js';
 import { listBehaviorTools } from '../core/package-behavior-tools.js';
 import { Store, type Run } from '../server/store.js';
-import { executeRunBehaviorTool, runBehaviorProgress } from '../server/package-behavior-run.js';
+import {
+  executeRunBehaviorTool,
+  exportOpportunityEntropy,
+  runBehaviorProgress,
+} from '../server/package-behavior-run.js';
 import { behaviorDetail } from '../server/package-behavior-host.js';
 import { forkChat } from '../server/chat-fork.js';
 import { buildMainProviderRequest } from '../server/main-request.js';
+import { exportChatBackup, importChatBackup } from '../server/chat-backup.js';
 
 const owned: { path: string; store: Store }[] = [];
 afterEach(() => {
@@ -437,5 +442,178 @@ describe('v11 recorded automatic/model behavior archive', () => {
       expect(() => target.product.import(archive), `attack ${index}`).toThrow();
       expect(target.product.export().tables).toEqual(empty);
     }
+  });
+
+  test('RBA05 entropy export is read-only and preserves the root proof through repeated forks', () => {
+    const f = fixture(),
+      run = start(f.store, f.chat.id);
+    model(f.store, run);
+    const source = complete(f.store, run),
+      opportunityId = run.snapshot.behaviorExecution!.opportunityId,
+      before = f.store.product.export(),
+      proof = exportOpportunityEntropy(f.store, opportunityId);
+    expect(proof).toEqual({
+      opportunityId,
+      seed: before.tables.package_behavior_entropy[0].seed,
+    });
+    expect(f.store.product.export().tables).toEqual(before.tables);
+    let previousChat = f.chat.id,
+      previousSource = source.id;
+    const forkIds: string[] = [];
+    for (let index = 0; index < 2; index += 1) {
+      const fork = forkChat(f.store, previousChat, {
+          fromRevision: previousSource,
+          idempotencyKey: randomUUID(),
+        }),
+        copied = f.store.run(f.store.source(fork.headRevision!).runId),
+        id = copied.snapshot.behaviorExecution!.opportunityId;
+      expect(id).not.toBe(opportunityId);
+      expect(exportOpportunityEntropy(f.store, id)).toEqual(proof);
+      expect(runBehaviorProgress(f.store, copied.id)?.entries).toEqual(
+        runBehaviorProgress(f.store, run.id)?.entries
+      );
+      forkIds.push(id);
+      previousChat = fork.id;
+      previousSource = fork.headRevision!;
+    }
+    const archive = f.store.product.export();
+    for (const id of forkIds) {
+      const row = archive.tables.package_behavior_opportunities.find((row) => row.id === id)!;
+      expect(JSON.parse(row.body).originEntropy).toEqual(proof);
+      const value = JSON.parse(row.body);
+      delete value.originEntropy;
+      f.store.db
+        .prepare('UPDATE package_behavior_opportunities SET body=? WHERE id=?')
+        .run(JSON.stringify(value), id);
+    }
+    // Existing proofless forks can still be exported by tracing their original run chain.
+    const legacy = f.store.product.export();
+    expect(exportOpportunityEntropy(f.store, forkIds[1])).toEqual(proof);
+    expect(f.store.product.export().tables).toEqual(legacy.tables);
+    expect(database().product.import(legacy)).toEqual({ restored: true, chats: 3 });
+  });
+
+  test('RBA06 portable entropy restores under a different master with detached fork provenance and no redraw', () => {
+    const f = fixture(),
+      run = start(f.store, f.chat.id);
+    model(f.store, run);
+    const source = complete(f.store, run),
+      fork = forkChat(f.store, f.chat.id, {
+        fromRevision: source.id,
+        idempotencyKey: randomUUID(),
+      }),
+      copied = f.store.run(f.store.source(fork.headRevision!).runId),
+      archive = f.store.product.export();
+    for (const row of archive.tables.package_behavior_opportunities) {
+      const value = JSON.parse(row.body);
+      value.originEntropy = exportOpportunityEntropy(f.store, row.id);
+      row.body = JSON.stringify(value);
+    }
+    const copiedRow = archive.tables.runs.find((row) => row.id === copied.id)!,
+      copiedSnapshot = JSON.parse(copiedRow.snapshot);
+    copiedSnapshot.forkedFrom = {
+      chatId: randomUUID(),
+      runId: randomUUID(),
+      sourceRevision: randomUUID(),
+    };
+    copiedRow.snapshot = JSON.stringify(copiedSnapshot);
+    archive.tables.package_behavior_entropy[0].seed = 'e'.repeat(64);
+    const target = database();
+    expect(target.product.import(archive)).toEqual({ restored: true, chats: 2 });
+    expect(target.product.export().tables.package_behavior_opportunities).toEqual(
+      archive.tables.package_behavior_opportunities
+    );
+    expect(runBehaviorProgress(target, copied.id)?.entries).toEqual(
+      runBehaviorProgress(f.store, run.id)?.entries
+    );
+    const next = forkChat(target, fork.id, {
+        fromRevision: fork.headRevision!,
+        idempotencyKey: randomUUID(),
+      }),
+      nextRun = target.run(target.source(next.headRevision!).runId);
+    expect(
+      exportOpportunityEntropy(target, nextRun.snapshot.behaviorExecution!.opportunityId)
+    ).toEqual(exportOpportunityEntropy(f.store, run.snapshot.behaviorExecution!.opportunityId));
+    expect(database().product.import(target.product.export())).toEqual({
+      restored: true,
+      chats: 3,
+    });
+  });
+
+  test('RBA07 malformed entropy proofs and changed receipts reject atomically', () => {
+    const f = fixture(),
+      run = start(f.store, f.chat.id);
+    model(f.store, run);
+    complete(f.store, run);
+    const base = f.store.product.export(),
+      original = JSON.parse(base.tables.package_behavior_opportunities[0].body),
+      proof = exportOpportunityEntropy(f.store, run.snapshot.behaviorExecution!.opportunityId);
+    const attacks = [
+      null,
+      {},
+      { ...proof, seed: '0'.repeat(64) },
+      { ...proof, opportunityId: '0'.repeat(64) },
+      { ...proof, seed: 'invalid' },
+      { ...proof, extra: true },
+    ];
+    for (const originEntropy of attacks) {
+      const archive = structuredClone(base),
+        row = archive.tables.package_behavior_opportunities[0];
+      row.body = JSON.stringify({ ...original, originEntropy });
+      const target = database(),
+        empty = target.product.export().tables;
+      expect(() => target.product.import(archive)).toThrow();
+      expect(target.product.export().tables).toEqual(empty);
+      f.store.db
+        .prepare('UPDATE package_behavior_opportunities SET body=? WHERE id=?')
+        .run(row.body, row.id);
+      expect(() => exportOpportunityEntropy(f.store, row.id)).toThrow(
+        'BEHAVIOR_OPPORTUNITY_ENTROPY_INVALID'
+      );
+    }
+    const archive = structuredClone(base),
+      value = { ...original, originEntropy: proof };
+    value.entries[1].draws.die = 99;
+    archive.tables.package_behavior_opportunities[0].body = JSON.stringify(value);
+    expect(() => database().product.import(archive)).toThrow();
+  });
+
+  test('RBA08 full and detached-fork backups repeat with new ownership and unchanged behavior receipts', () => {
+    const f = fixture(),
+      run = start(f.store, f.chat.id);
+    model(f.store, run);
+    const source = complete(f.store, run),
+      fork = forkChat(f.store, f.chat.id, {
+        fromRevision: source.id,
+        idempotencyKey: randomUUID(),
+      }),
+      proof = exportOpportunityEntropy(f.store, run.snapshot.behaviorExecution!.opportunityId),
+      recorded = runBehaviorProgress(f.store, run.id)!,
+      originalBackup = exportChatBackup(f.store, f.chat.id),
+      forkBackup = exportChatBackup(f.store, fork.id),
+      target = database(),
+      entropy = target.product.export().tables.package_behavior_entropy;
+    const opportunities = new Set<string>();
+    for (const backup of [originalBackup, originalBackup, forkBackup]) {
+      const copied = importChatBackup(target, { backup, idempotencyKey: randomUUID() }).chat,
+        copiedRun = target.run(target.source(copied.headRevision!).runId),
+        progress = runBehaviorProgress(target, copiedRun.id)!;
+      opportunities.add(progress.opportunityId);
+      expect(copied.id).not.toBe(f.chat.id);
+      expect(copiedRun.id).not.toBe(run.id);
+      expect(progress.entries).toEqual(recorded.entries);
+      expect(progress.states).toEqual(recorded.states);
+      expect(exportOpportunityEntropy(target, progress.opportunityId)).toEqual(proof);
+      expect(behaviorDetail(target, copied.id).instances[0]).toMatchObject({
+        state: { count: 11 },
+      });
+      expect(target.source(copied.headRevision!).text).toBe(source.text);
+    }
+    expect(opportunities.size).toBe(3);
+    expect(target.product.export().tables.package_behavior_entropy).toEqual(entropy);
+    expect(database().product.import(target.product.export())).toEqual({
+      restored: true,
+      chats: 3,
+    });
   });
 });

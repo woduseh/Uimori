@@ -1,5 +1,7 @@
 # 작업 지도
 
+- 2026-09-11 안정화 범위는 `docs/STABILIZATION-2026-09-11.md`예요. 채팅 전체 백업은 DB 스키마와 독립인 `uimori-chat-backup` v1이며 `docs/CHAT-BACKUP.md`, `server/chat-backup*.ts`를 봐요. 모든 분기·관련 이력을 새 ID로 반복 복원하며 원문·상태·추첨 결과를 보존하고 미완료 외부 작업을 재전송하지 않아요. 목적지 전역 설정은 유지하고 원본 환경은 별도 영수증에 보관해요. `npm run verify:chat-backup`이 관련 합성 화면 검사예요. 본문 교환용 transcript는 전체 백업과 구분하며 `source-only-v1` imported Run은 원문 ancestry를 snapshot에 중복하지 않아요.
+
 - 2026-09-10 방향 결정(채팅별 고정 층, Q04 대체 실검증, 검증 게이트 층 분리, 프롬프트 AST 원본, 선언형 확장 확정, 구조 정리 4건, 채팅 본문 추출 형식, 계획 문서 분리)과 실행 순서는 `docs/DECISIONS-2026-09-10.md`를 봐요. 구현은 각 단계별 별도 작업이며 결과는 해당 계약 문서에 기록해요. 채팅 본문 추출·가져오기(`uimori-chat-transcript` v1)는 `docs/CHAT-TRANSCRIPT.md`, `core/chat-transcript.ts`, `server/chat-transcript.ts`를 봐요. 가져온 항목은 사용량 0의 완료 Run이고 snapshot의 `transcriptImport`로 구분하며 모델 준비·상태·이미지 작업을 만들지 않아요.
 
 - 도우미·통합 문맥의 확정 계약은 `project-plan/HELPER-CONTEXT-PLAN.md`, 결과는 `project-plan/HELPER-CONTEXT-RESULTS.md`를 봐요. 별도 도우미는 `server/helper-runtime.ts`, 허가·operation 영수증·작업은 `server/helper-workspace.ts`, 공통 초안은 `server/edit-drafts.ts`, 채팅별 로어 변경과 옵션 위임은 `server/chat-overrides.ts`·`server/chat-options.ts`예요. 도우미 요청의 명시 권한만 쓰며 미저장 JSON·revision 충돌을 보존해요. 가정 장면은 본편과 별도 산출물이고 원문/상태/추첨을 저장하지 않아요. 공개 답변 스트림은 `server/response-stream.ts`에서 durable cursor로 보관하며 내부 도구 JSON·reasoning은 노출하지 않아요. 이미지 이해·실모델 의미 품질은 별도 검증 범위예요. Oracle v15 배포는 2026-09-10 사용자 확인으로 완료됐어요.

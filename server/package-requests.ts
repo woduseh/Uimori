@@ -235,6 +235,7 @@ export function validatePackageRequests(store: Store) {
       'sourceRevision',
       'sourceHash',
       'stateRevision',
+      ...(Object.hasOwn(value ?? {}, 'origin') ? ['origin'] : []),
     ];
     if (
       !value ||
@@ -293,6 +294,57 @@ export function validatePackageRequests(store: Store) {
     if (deps.length && deps.at(-1)!.hash !== value.sourceHash) invalid();
     for (const dep of deps)
       if (store.sourceAtHash(dep.id, dep.hash).chatId !== value.chatId) invalid();
+    let runtimeOwner = {
+      chatId: value.chatId,
+      branchId: value.branchId,
+      sourceRevision: value.sourceRevision,
+      dependencies: deps,
+    };
+    if (Object.hasOwn(value, 'origin')) {
+      const origin = value.origin;
+      const exactObject = (item: unknown, keys: string[]) =>
+        !!item &&
+        typeof item === 'object' &&
+        !Array.isArray(item) &&
+        Object.keys(item).length === keys.length &&
+        keys.every((key) => Object.hasOwn(item, key));
+      const identity = (item: unknown) =>
+        typeof item === 'string' && item.length > 0 && item.length <= 200;
+      if (
+        !exactObject(origin, [
+          'chatId',
+          'branchId',
+          'sourceRevision',
+          'dependencies',
+          'identities',
+        ]) ||
+        !identity(origin!.chatId) ||
+        !identity(origin!.branchId) ||
+        !Array.isArray(origin!.dependencies) ||
+        origin!.dependencies.length !== deps.length ||
+        origin!.sourceRevision !== (origin!.dependencies.at(-1)?.id ?? null) ||
+        origin!.dependencies.some(
+          (source, index) =>
+            !exactObject(source, ['id', 'hash']) ||
+            !identity(source.id) ||
+            source.hash !== deps[index].hash
+        ) ||
+        !Array.isArray(origin!.identities)
+      )
+        invalid();
+      const expectedIdentities = [
+        { from: origin!.chatId, to: value.chatId },
+        { from: origin!.branchId, to: value.branchId },
+        ...origin!.dependencies.map((source, index) => ({ from: source.id, to: deps[index].id })),
+      ];
+      if (
+        new Set(expectedIdentities.map((entry) => entry.from)).size !== expectedIdentities.length ||
+        new Set(expectedIdentities.map((entry) => entry.to)).size !== expectedIdentities.length ||
+        !isDeepStrictEqual(origin!.identities, expectedIdentities)
+      )
+        invalid();
+      runtimeOwner = origin!;
+    }
     const journal = store.db
       .prepare(
         'SELECT payload,result FROM package_behavior_journal WHERE chat_id=? AND branch_id=? AND instance_id=? AND idempotency_key=?'
@@ -315,10 +367,10 @@ export function validatePackageRequests(store: Store) {
       receipt.stateRevision !== value.stateRevision ||
       receipt.sourceHash !== value.sourceHash ||
       payload.hostRuntime?.profile?.revision !== value.profileRevision ||
-      payload.hostRuntime?.chat?.id !== value.chatId ||
-      payload.hostRuntime?.chat?.branchId !== value.branchId ||
-      payload.hostRuntime?.chat?.parentRevision !== value.sourceRevision ||
-      payload.hostRuntime?.sourceDependenciesHash !== behaviorPayloadHash(deps)
+      payload.hostRuntime?.chat?.id !== runtimeOwner.chatId ||
+      payload.hostRuntime?.chat?.branchId !== runtimeOwner.branchId ||
+      payload.hostRuntime?.chat?.parentRevision !== runtimeOwner.sourceRevision ||
+      payload.hostRuntime?.sourceDependenciesHash !== behaviorPayloadHash(runtimeOwner.dependencies)
     )
       invalid();
     if (
