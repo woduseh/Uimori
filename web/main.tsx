@@ -35,8 +35,6 @@ import {
   Menu,
   MessageCircle,
   Minimize,
-  PanelLeftClose,
-  PanelLeftOpen,
   SlidersHorizontal,
   Square,
   Type,
@@ -139,6 +137,14 @@ type Panel =
   | 'settings'
   | 'reading'
   | 'outline';
+/* Device layout preferences. The reader column and the right work slot are the two
+   widths a person notices, so both are choices rather than fixed numbers. */
+const READING_WIDTHS = [760, 880, 1040];
+const PANEL_WIDTHS = [360, 384, 480];
+const SIDEBAR_WIDTH = 248;
+const RAIL_WIDTH = 56;
+/* Below this the centre column stops being comfortable to read or edit in. */
+const MIN_CENTER_WIDTH = 768;
 const runActive = (status: string) => ['queued', 'running', 'waiting_for_state'].includes(status);
 const runFailed = (status: string) =>
   ['failed', 'cancelled', 'interrupted', 'refused', 'partial'].includes(status);
@@ -274,6 +280,14 @@ function App() {
   });
   const [viewportWidth, setViewportWidth] = useState(() => window.innerWidth);
   const [panelSidebarExpanded, setPanelSidebarExpanded] = useState(false);
+  const [readingWidth, setReadingWidth] = useState(() => {
+    const value = Number(localStorage.getItem('uimori:reading-width'));
+    return READING_WIDTHS.includes(value) ? value : 880;
+  });
+  const [panelWidth, setPanelWidth] = useState(() => {
+    const value = Number(localStorage.getItem('uimori:panel-width'));
+    return PANEL_WIDTHS.includes(value) ? value : 384;
+  });
   useEffect(() => {
     const resize = () => setViewportWidth(window.innerWidth);
     window.addEventListener('resize', resize);
@@ -281,10 +295,18 @@ function App() {
   }, []);
   const workspacePanelOpen =
     helperOpen || (optionsOpen && s.destination === 'story' && !!s.selected);
+  /* Dock only while the centre column keeps its minimum readable width. Collapsing
+     navigation frees the sidebar down to the icon rail, not to nothing. */
+  const dockBesideSidebar = SIDEBAR_WIDTH + panelWidth + MIN_CENTER_WIDTH;
+  const dockBesideRail = RAIL_WIDTH + panelWidth + MIN_CENTER_WIDTH;
   const autoCollapseSidebar =
-    workspacePanelOpen && viewportWidth >= 1152 && viewportWidth < 1400 && !panelSidebarExpanded;
+    workspacePanelOpen &&
+    viewportWidth >= dockBesideRail &&
+    viewportWidth < dockBesideSidebar &&
+    !panelSidebarExpanded;
   const sidebarHidden = sidebarCollapsed || autoCollapseSidebar;
-  const panelModal = viewportWidth < 1152 || (!sidebarHidden && viewportWidth < 1400);
+  const panelModal =
+    viewportWidth < dockBesideRail || (!sidebarHidden && viewportWidth < dockBesideSidebar);
   useEffect(() => {
     if (!workspacePanelOpen) setPanelSidebarExpanded(false);
   }, [workspacePanelOpen]);
@@ -444,6 +466,14 @@ function App() {
     localStorage.setItem('uimori:reading-language', readingLanguage);
   }, [readingLanguage]);
   useEffect(() => {
+    document.documentElement.style.setProperty('--reading-width', `${readingWidth}px`);
+    localStorage.setItem('uimori:reading-width', String(readingWidth));
+  }, [readingWidth]);
+  useEffect(() => {
+    document.documentElement.style.setProperty('--panel-w', `${panelWidth}px`);
+    localStorage.setItem('uimori:panel-width', String(panelWidth));
+  }, [panelWidth]);
+  useEffect(() => {
     const viewport = visualViewport;
     const update = () =>
       document.documentElement.style.setProperty(
@@ -509,9 +539,18 @@ function App() {
     setPanel('tasks');
   }
   // The drawer shows the quick actions in its header row instead of the brand row.
-  const navigation = (quickActions: boolean) => (
+  const toggleSidebar = () => {
+    if (autoCollapseSidebar && !sidebarCollapsed) setPanelSidebarExpanded(true);
+    else {
+      setSidebarCollapsed(!sidebarCollapsed);
+      setPanelSidebarExpanded(false);
+    }
+  };
+  const navigation = (quickActions: boolean, collapsed = false) => (
     <BotNavigation
       quickActions={quickActions}
+      collapsed={collapsed}
+      onToggleCollapse={toggleSidebar}
       library={s.library}
       chats={s.chats}
       selected={s.selected}
@@ -534,40 +573,27 @@ function App() {
   const navigationControls = (
     <>
       <IconButton
-        className="sidebar-toggle"
-        label={sidebarHidden ? '좌측 패널 펼치기' : '좌측 패널 접기'}
-        icon={sidebarHidden ? PanelLeftOpen : PanelLeftClose}
-        aria-expanded={!sidebarHidden}
-        aria-controls="workspace-sidebar"
-        onClick={() => {
-          if (autoCollapseSidebar && !sidebarCollapsed) setPanelSidebarExpanded(true);
-          else {
-            setSidebarCollapsed(!sidebarCollapsed);
-            setPanelSidebarExpanded(false);
-          }
-        }}
-      />
-      <IconButton
         className="mobile-menu"
         label="탐색 메뉴"
         icon={Menu}
         onClick={() => setPanel('navigation')}
       />
-      {s.destination !== 'story' && (
-        <IconButton
-          label="도우미 열기"
-          icon={MessageCircle}
-          aria-expanded={helperOpen}
-          aria-controls="helper-panel"
-          onClick={() => {
-            setOptionsOpen(false);
-            setHelperOpen((value) => !value);
-          }}
-        />
-      )}
     </>
   );
-  function renderReadingSettings(onStartFocus: () => void) {
+  const destinationHelperControl = s.destination !== 'story' && (
+    <IconButton
+      className="destination-helper"
+      label="도우미 열기"
+      icon={MessageCircle}
+      aria-expanded={helperOpen}
+      aria-controls="helper-panel"
+      onClick={() => {
+        setOptionsOpen(false);
+        setHelperOpen((value) => !value);
+      }}
+    />
+  );
+  function renderReadingSettings(onStartFocus?: () => void) {
     return (
       <div className="settings-stack">
         <label>
@@ -609,9 +635,24 @@ function App() {
           />
           <span>{fontSize}px</span>
         </label>
-        <button className="secondary" onClick={onStartFocus}>
-          집중 읽기 시작
-        </button>
+        <label>
+          본문 폭
+          <select
+            aria-label="본문 폭"
+            value={readingWidth}
+            onChange={(event) => setReadingWidth(Number(event.target.value))}
+          >
+            <option value={760}>좁게</option>
+            <option value={880}>기본</option>
+            <option value={1040}>넓게</option>
+          </select>
+        </label>
+        <small>한 줄이 짧을수록 눈이 다음 줄을 찾기 쉬워요. 이 기기에만 적용해요.</small>
+        {onStartFocus && (
+          <button className="secondary" onClick={onStartFocus}>
+            집중 읽기 시작
+          </button>
+        )}
       </div>
     );
   }
@@ -620,7 +661,7 @@ function App() {
       className={`app-shell ${focus ? 'focus-reading' : ''} ${sidebarHidden ? 'sidebar-collapsed' : ''} ${optionsOpen && s.destination === 'story' && s.selected ? 'options-open' : ''} ${helperOpen ? 'helper-open' : ''} ${workspacePanelOpen ? (panelModal ? 'panel-overlay' : 'panel-docked') : ''}`}
     >
       <aside id="workspace-sidebar" className="sidebar" aria-label="탐색">
-        {!compact && panel !== 'navigation' && navigation(true)}
+        {!compact && panel !== 'navigation' && navigation(true, sidebarHidden)}
       </aside>
       <main className="story-workspace">
         {s.destination === 'story' && (
@@ -840,6 +881,7 @@ function App() {
                     setPanel('settings');
                   }}
                   headerLeading={navigationControls}
+                  headerTrailing={destinationHelperControl}
                   library={s.library}
                   reload={s.loadLibrary}
                   onError={s.setError}
@@ -859,6 +901,7 @@ function App() {
             ) : (
               <LibraryPanel
                 headerLeading={navigationControls}
+                headerTrailing={destinationHelperControl}
                 library={s.library}
                 reload={s.loadLibrary}
                 onError={s.setError}
@@ -1666,6 +1709,9 @@ function App() {
           setTheme={setTheme}
           enterSend={enterSend}
           setEnterSend={setEnterSend}
+          panelWidth={panelWidth}
+          setPanelWidth={setPanelWidth}
+          readingSettings={renderReadingSettings()}
         />
       )}
     </div>

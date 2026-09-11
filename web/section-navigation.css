@@ -12,7 +12,7 @@
   align-items: center;
   gap: 12px;
   min-width: 0;
-  min-height: 44px;
+  min-height: var(--control-h);
   width: 100%;
   padding: 10px 12px;
   border: 0;
@@ -59,6 +59,8 @@
 .section-navigation > button[aria-current="page"] > svg {
   color: var(--accent);
 }
-.section-navigation > button:hover {
-  background: var(--hover);
+@media (hover: hover) {
+  .section-navigation > button:hover {
+    background: var(--hover);
+  }
 }

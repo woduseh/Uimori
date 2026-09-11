@@ -114,7 +114,7 @@ export function IllustrationSettingsEditor({
                 {canSelect(item)
                   ? library.connections.find((connection) => connection.id === item.connectionId)
                       ?.title
-                  : '모델 또는 연결 비활성'}
+                  : '모델 또는 프로바이더 비활성'}
               </option>
             ))}
         </select>
@@ -286,9 +286,11 @@ export function IllustrationSettingsEditor({
               draft.codex.model,
               codexModels,
               (ref) => change({ ...draft, codex: { ...draft.codex, model: ref } }),
-              codexModels.length ? '모델 미지정' : 'Codex 연결의 모델 프리셋이 없어요'
+              codexModels.length ? '모델 미지정' : 'Codex 프로바이더의 모델 프리셋이 없어요'
             )}
-            <small className="full">에이전트에서 로그인한 Codex 연결의 모델을 선택해요.</small>
+            <small className="full">
+              에이전트에서 로그인한 Codex 프로바이더의 모델을 선택해요.
+            </small>
             <label className="check">
               <Switch
                 aria-label="채팅의 참조 이미지 사용"

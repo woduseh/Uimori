@@ -1,8 +1,8 @@
 .ui-icon-button {
-  width: 44px;
-  min-width: 44px;
-  min-height: 44px;
-  height: 44px;
+  width: var(--control-h);
+  min-width: var(--control-h);
+  min-height: var(--control-h);
+  height: var(--control-h);
   padding: 0;
 }
 .ui-icon-button svg,
@@ -17,9 +17,9 @@
 .action-menu > summary {
   display: grid;
   place-items: center;
-  width: 44px;
-  min-width: 44px;
-  min-height: 44px;
+  width: var(--control-h);
+  min-width: var(--control-h);
+  min-height: var(--control-h);
   padding: 0;
   list-style: none;
   border-radius: 9px;
@@ -28,9 +28,13 @@
 .action-menu > summary::-webkit-details-marker {
   display: none;
 }
-.action-menu > summary:hover,
 .action-menu[open] > summary {
   background: var(--hover);
+}
+@media (hover: hover) {
+  .action-menu > summary:hover {
+    background: var(--hover);
+  }
 }
 /* A closed menu keeps a layout box because its body is positioned out of flow. Nothing paints
    there, but the box makes the menu look present to assistive checks and hit tests. */
@@ -60,7 +64,7 @@
   justify-content: flex-start;
   gap: 8px;
   width: 100%;
-  min-height: 44px;
+  min-height: var(--control-h);
   padding: 10px 12px;
   border: 0;
   border-radius: 7px;
@@ -69,9 +73,11 @@
   font-size: 14px;
   text-align: left;
 }
-.action-menu-body > button:hover:not(:disabled),
-.action-menu-body > .delete-control > button:hover:not(:disabled) {
-  background: var(--hover);
+@media (hover: hover) {
+  .action-menu-body > button:hover:not(:disabled),
+  .action-menu-body > .delete-control > button:hover:not(:disabled) {
+    background: var(--hover);
+  }
 }
 .action-menu-body > .delete-control > button {
   color: var(--error);

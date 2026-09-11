@@ -10,14 +10,16 @@
 .activity-status button {
   background: transparent;
   color: inherit;
-  min-height: 44px;
+  min-height: var(--control-h);
   padding: 8px;
   border-radius: 9px;
   font-size: inherit;
 }
-.activity-status button:hover {
-  background: var(--hover);
-  filter: none;
+@media (hover: hover) {
+  .activity-status button:hover {
+    background: var(--hover);
+    filter: none;
+  }
 }
 .activity-toggle {
   display: flex;
@@ -44,7 +46,7 @@
 .activity-details {
   flex-shrink: 0;
   margin-left: auto;
-  min-width: 44px;
+  min-width: var(--control-h);
   justify-content: center;
 }
 .activity-issue {

@@ -44,6 +44,7 @@ export {
   ArrowUp as UpIcon,
   ArrowDown as DownIcon,
   ArrowRight as ForwardIcon,
+  GitCompare as ReviewIcon,
   Undo2 as UndoIcon,
   RotateCcw as ResetIcon,
   GripVertical as DragHandleIcon,

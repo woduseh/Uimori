@@ -6,6 +6,7 @@ import { api, ApiError } from './api.js';
 import { ActionMenu } from './ActionMenu.js';
 import { Dialog } from './Dialog.js';
 import { IconButton } from './IconButton.js';
+import { CheckIcon, CloseIcon, DeleteIcon } from './ui-icons.js';
 import { forgetHelperSession, type HelperSession } from './useHelperSessions.js';
 import type { HelperTaskView } from './useHelperConversation.js';
 
@@ -203,9 +204,11 @@ export function HelperSessionBar(props: Props) {
               disabled={working}
               onClick={() => setRename(null)}
             >
+              <CloseIcon size={18} aria-hidden="true" />
               취소
             </button>
             <button className="primary" disabled={working || !title.trim()}>
+              <CheckIcon size={18} aria-hidden="true" />
               이름 저장
             </button>
           </div>
@@ -236,6 +239,7 @@ export function HelperSessionBar(props: Props) {
             disabled={working}
             onClick={() => setDeleting(null)}
           >
+            <CloseIcon size={18} aria-hidden="true" />
             계속 사용
           </button>
           {impact && !impact.canDelete && (
@@ -277,6 +281,7 @@ export function HelperSessionBar(props: Props) {
                 .finally(() => setWorking(false));
             }}
           >
+            <DeleteIcon size={18} aria-hidden="true" />
             세션 영구 삭제
           </button>
         </div>

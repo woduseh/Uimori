@@ -91,7 +91,6 @@ export function ComposerMore({
             <Switch
               ref={choice}
               checked={selected}
-              aria-describedby={`${id}-description`}
               onChange={(event) => {
                 onChange(event.target.checked);
                 setOpen(false);
@@ -100,9 +99,6 @@ export function ComposerMore({
             />
             <span>다음 생성에서 조회 로어 제외</span>
           </label>
-          <p id={`${id}-description`}>
-            이전에 읽은 로어를 다음 생성에 전달하지 않아요. 고정 자료는 유지해요.
-          </p>
         </div>
       )}
     </div>

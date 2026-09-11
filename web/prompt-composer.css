@@ -51,16 +51,18 @@
   gap: 8px;
   background: transparent;
   border: 0;
-  min-height: 44px;
+  min-height: var(--control-h);
   font-size: 14px;
 }
-.pc-program-menu .pc-file:hover {
-  background: var(--hover);
+@media (hover: hover) {
+  .pc-program-menu .pc-file:hover {
+    background: var(--hover);
+  }
 }
 .pc-actions button,
 .pc-actions .pc-file {
   font-size: 12px;
-  min-height: 44px;
+  min-height: var(--control-h);
 }
 .pc-file {
   position: relative;
@@ -148,8 +150,8 @@
   align-items: center;
   justify-content: center;
   flex: 0 0 44px;
-  width: 44px;
-  height: 44px;
+  width: var(--control-h);
+  height: var(--control-h);
   padding: 0;
   border: 0;
   background: transparent;
@@ -436,7 +438,7 @@
 }
 .pc-item-workspace {
   display: grid;
-  grid-template-columns: 224px minmax(0, 1fr);
+  grid-template-columns: var(--editor-list-w) minmax(0, 1fr);
   gap: 24px;
   align-items: start;
   min-width: 0;
@@ -498,8 +500,10 @@
 .pc-item-links > button[aria-current="true"] {
   background: var(--accent-soft);
 }
-.pc-item-links > button:hover {
-  background: var(--hover);
+@media (hover: hover) {
+  .pc-item-links > button:hover {
+    background: var(--hover);
+  }
 }
 .pc-item-links > button[data-drop-position="before"] {
   box-shadow: inset 0 3px var(--accent);
@@ -542,7 +546,7 @@
   border: 0;
 }
 .pc-defaults {
-  max-width: 800px;
+  max-width: var(--form-w);
 }
 @container prompt-editor (max-width: 799px) {
   .pc-section-tabs {

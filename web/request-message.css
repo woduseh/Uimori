@@ -19,9 +19,13 @@
   justify-content: flex-end;
   opacity: 0;
 }
-.request-message-wrap:hover .request-message-actions,
 .request-message-wrap:focus-within .request-message-actions {
   opacity: 1;
+}
+@media (hover: hover) {
+  .request-message-wrap:hover .request-message-actions {
+    opacity: 1;
+  }
 }
 .request-message-editor textarea {
   width: 100%;

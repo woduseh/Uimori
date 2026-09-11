@@ -57,7 +57,7 @@
   display: flex;
   flex-direction: row;
   align-items: center;
-  min-height: 44px;
+  min-height: var(--control-h);
   min-width: 0;
   gap: 8px;
   font-size: 13px;
@@ -65,7 +65,7 @@
 }
 .agent-collaboration input:not([type="checkbox"]),
 .agent-collaboration select {
-  min-height: 44px;
+  min-height: var(--control-h);
   min-width: 0;
   width: 100%;
 }
@@ -125,7 +125,7 @@
   border-radius: 8px;
 }
 .ac-agent > summary {
-  min-height: 44px;
+  min-height: var(--control-h);
   padding: 12px;
   cursor: pointer;
   box-sizing: border-box;
@@ -144,7 +144,7 @@
   justify-content: flex-end;
 }
 .ac-agent-actions button {
-  min-height: 44px;
+  min-height: var(--control-h);
   font-size: 12px;
 }
 @media (max-width: 600px) {

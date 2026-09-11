@@ -247,12 +247,14 @@
   background: transparent;
   color: var(--muted);
 }
-.lore-manager button.ghost:hover:not(:disabled) {
-  background: var(--hover);
-  color: var(--text);
+@media (hover: hover) {
+  .lore-manager button.ghost:hover:not(:disabled) {
+    background: var(--hover);
+    color: var(--text);
+  }
 }
 .lore-workspace {
-  grid-template-columns: 224px minmax(0, 1fr);
+  grid-template-columns: var(--editor-list-w) minmax(0, 1fr);
   border: 0;
   border-radius: 0;
   overflow: visible;
@@ -272,8 +274,8 @@
   line-height: 1.6;
 }
 .lore-actions > button {
-  flex: 1;
-  min-height: 44px;
+  flex: 0 0 auto;
+  min-height: var(--control-h);
 }
 .lore-filters {
   grid-template-columns: minmax(0, 1fr);
@@ -340,7 +342,7 @@
   .lore-manager .lore-list-back {
     display: inline-flex;
     justify-self: start;
-    min-height: 44px;
+    min-height: var(--control-h);
   }
   .lore-rows {
     max-height: none;

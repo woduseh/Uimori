@@ -4,7 +4,7 @@
   align-items: center;
   justify-content: space-between;
   gap: 20px;
-  min-height: 44px;
+  min-height: var(--control-h);
   padding-block: 8px;
   cursor: pointer;
 }

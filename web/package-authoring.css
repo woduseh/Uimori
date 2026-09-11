@@ -94,7 +94,7 @@
 }
 .package-editor-layout {
   display: grid;
-  grid-template-columns: 176px minmax(0, 1fr);
+  grid-template-columns: var(--editor-list-w) minmax(0, 1fr);
   align-items: start;
   gap: 20px;
   min-width: 0;

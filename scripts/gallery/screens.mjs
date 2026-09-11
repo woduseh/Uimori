@@ -224,7 +224,7 @@ export const screens = [
   appSettings('general', '일반', ['P4']),
   appSettings('models', '역할별 모델', ['P7', 'F5']),
   appSettings('prompts', '현재 프롬프트', ['P4']),
-  appSettings('connections', '프로바이더·모델 등록', ['P7', 'F5']),
+  appSettings('connections', '프로바이더·모델', ['P7', 'F5']),
   appSettings('agents', '에이전트', ['P4']),
   appSettings('illustrations', '삽화', ['P4']),
   appSettings('data', '데이터 관리', ['P4']),

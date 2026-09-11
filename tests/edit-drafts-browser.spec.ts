@@ -102,8 +102,7 @@ for (const [index, width] of [390, 1440].entries()) {
     await expect
       .poll(async () => (await (await request.get(`/api/content/${content.id}`)).json()).title)
       .toBe(`${title} local`);
-    await page.getByLabel('편집 초안 메뉴', { exact: true }).click();
-    await page.getByRole('button', { name: '변경 내용·공유 영향·저장 이력', exact: true }).click();
+    await page.getByRole('button', { name: '변경 검토', exact: true }).click();
     const review = page.getByRole('region', { name: '편집 변경 검토', exact: true });
     await review.locator('summary').filter({ hasText: '최근 저장 이력' }).click();
     await review

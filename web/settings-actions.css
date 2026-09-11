@@ -24,8 +24,8 @@
 .provider-model-save-actions > .ui-icon-button,
 .provider-model-save-actions > .delete-control > .icon-only {
   flex: none;
-  width: 44px;
-  height: 44px;
+  width: var(--control-h);
+  height: var(--control-h);
   padding: 0;
 }
 .provider-model-save-actions > .settings-save-button {

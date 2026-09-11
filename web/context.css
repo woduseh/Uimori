@@ -52,7 +52,7 @@
   border-inline-start: 2px solid var(--border);
 }
 .context-panel summary {
-  min-height: 44px;
+  min-height: var(--control-h);
   box-sizing: border-box;
   align-content: center;
 }

@@ -10,7 +10,16 @@ import { api } from './api.js';
 import { Dialog } from './Dialog.js';
 import { DeleteButton } from './DeleteButton.js';
 import { ActionMenu } from './ActionMenu.js';
-import { DownIcon, EditIcon, FolderAddIcon, FolderIcon, MoreIcon, UpIcon } from './ui-icons.js';
+import {
+  CheckIcon,
+  CloseIcon,
+  DownIcon,
+  EditIcon,
+  FolderAddIcon,
+  FolderIcon,
+  MoreIcon,
+  UpIcon,
+} from './ui-icons.js';
 import './library-folders.css';
 
 export const categoryLabels: Record<LibraryCategory, string> = {
@@ -121,8 +130,11 @@ export function LibraryFolders({
   reload,
   onError,
   presentation = 'breadcrumb',
+  view = 'cards',
 }: {
   presentation?: 'cards' | 'breadcrumb';
+  /** Card folders follow the list/card choice made for the items below them. */
+  view?: 'cards' | 'list';
   category: LibraryCategory;
   organizer: LibraryOrganizer;
   value: FolderFilter;
@@ -206,6 +218,7 @@ export function LibraryFolders({
   return (
     <aside
       className={presentation === 'cards' ? 'library-folder-grid' : 'library-folders'}
+      data-view={presentation === 'cards' ? view : undefined}
       aria-label={`${categoryLabels[category]} 폴더`}
     >
       {presentation === 'cards' ? (
@@ -319,9 +332,11 @@ export function LibraryFolders({
               disabled={busy}
               onClick={() => setEdit(null)}
             >
+              <CloseIcon size={18} aria-hidden="true" />
               취소
             </button>
             <button disabled={busy || !title.trim() || edit?.revision !== organization?.revision}>
+              <CheckIcon size={18} aria-hidden="true" />
               {edit?.folder ? '이름 저장' : '폴더 만들기'}
             </button>
           </div>

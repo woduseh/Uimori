@@ -62,7 +62,7 @@ async function settings(page: Page) {
   if (!(await button.isVisible()))
     await page.getByRole('button', { name: '탐색 메뉴', exact: true }).click();
   await button.click();
-  await selectSettingsSection(page, '프로바이더·모델 등록');
+  await selectSettingsSection(page, '프로바이더·모델');
   await expect(page.getByTestId('connection-editor')).toBeVisible();
 }
 function observe(page: Page) {
@@ -328,10 +328,10 @@ test('PMUI03 model edits use the latest connection without changing role IDs; de
       expect(box!.width).toBeCloseTo(44, 0);
       expect(box!.height).toBeCloseTo(44, 0);
     }
-    // Saving is the confirming action, so it keeps the glyph and says the word.
+    // Saving is the confirming action: a stable glyph whose spoken name names the target.
     await expect(saveAction).toBeVisible();
     await expect(saveAction.locator('svg')).toHaveCount(1);
-    await expect(saveAction).toHaveText('저장');
+    await expect(saveAction).toHaveAttribute('aria-label', '모델 변경 저장');
     const saveBounds = (await saveAction.boundingBox())!;
     expect(saveBounds.width).toBeGreaterThanOrEqual(44);
     expect(saveBounds.height).toBeCloseTo(44, 0);
@@ -516,7 +516,7 @@ test('PMUI07 quick setup selects a cached catalog model and keeps drafts across 
       modelForm = page.getByRole('form', { name: '모델 편집 양식' });
     await startProviderConnection(page);
     await expect(page.getByRole('list', { name: '빠른 프로바이더 진행' })).toContainText(
-      '1. 연결 방식'
+      '1. 프로바이더 종류'
     );
     await page.getByText('개발·검사용 프로바이더', { exact: true }).click();
     await page.getByRole('button', { name: '로컬 fixture로 설정', exact: true }).click();
@@ -1393,7 +1393,7 @@ test('PMUI10 Codex subscription login preserves drafts and saves a connection an
   await expect(panel).toContainText('사용 25%');
   if (visualReview)
     await page.screenshot({ path: info.outputPath('codex-subscription-settings-mobile.png') });
-  await panel.getByRole('button', { name: '프로바이더·모델 등록', exact: true }).click();
+  await panel.getByRole('button', { name: '프로바이더·모델', exact: true }).click();
   await expect(form.getByLabel('프로바이더 이름', { exact: true })).toHaveValue(
     '보존할 Codex 초안'
   );

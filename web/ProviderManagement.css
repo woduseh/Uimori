@@ -12,7 +12,7 @@
 }
 .connection-editor .compact-card > button {
   font-size: 12px;
-  min-height: 44px;
+  min-height: var(--control-h);
 }
 .connection-editor .editor-grid {
   margin-top: 26px;
@@ -95,7 +95,7 @@
   flex-wrap: wrap;
 }
 .provider-actions button {
-  min-height: 44px;
+  min-height: var(--control-h);
 }
 .provider-actions small {
   flex: 1 1 200px;
@@ -136,7 +136,7 @@
   font-size: 12px;
 }
 .provider-auth-settings > summary {
-  min-height: 44px;
+  min-height: var(--control-h);
   padding: 12px 0;
   cursor: pointer;
 }
@@ -385,9 +385,11 @@
   grid-row: 1 / 3;
   color: var(--accent);
 }
-.provider-template:hover {
-  border-color: var(--accent);
-  background: var(--accent-soft);
+@media (hover: hover) {
+  .provider-template:hover {
+    border-color: var(--accent);
+    background: var(--accent-soft);
+  }
 }
 .provider-test-template {
   margin: 24px 0;
@@ -554,7 +556,7 @@
   }
   .provider-toolbar > .provider-actions > button {
     flex: none;
-    width: 44px;
+    width: var(--control-h);
     padding: 0;
   }
   .provider-toolbar > .provider-actions > button > span {
@@ -638,7 +640,7 @@
 }
 .provider-stop-sequences > summary {
   padding-block: 14px;
-  min-height: 44px;
+  min-height: var(--control-h);
   cursor: pointer;
   font-size: 14px;
 }
@@ -662,5 +664,5 @@
 }
 .provider-stop-add {
   width: auto;
-  min-height: 44px;
+  min-height: var(--control-h);
 }

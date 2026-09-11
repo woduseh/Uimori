@@ -1,9 +1,8 @@
 .app-shell.helper-open {
-  grid-template-columns: var(--nav-w) minmax(0, 1fr) 384px;
+  grid-template-columns: var(--nav-w) minmax(0, 1fr) var(--panel-w);
 }
-.app-shell.sidebar-collapsed.helper-open,
 .app-shell.focus-reading.helper-open {
-  grid-template-columns: minmax(0, 1fr) 384px;
+  grid-template-columns: minmax(0, 1fr) var(--panel-w);
 }
 .helper-panel {
   min-width: 0;
@@ -22,6 +21,7 @@
   display: flex;
   align-items: center;
   gap: 8px;
+  min-height: var(--header-h);
   padding: 6px 16px;
   border-bottom: 1px solid var(--line);
 }
@@ -31,7 +31,12 @@
 }
 .helper-header h2 {
   font-size: 17px;
+  line-height: 24px;
   margin: 0;
+}
+.helper-header small {
+  display: block;
+  line-height: 18px;
 }
 .helper-header small {
   color: var(--muted);
@@ -195,7 +200,7 @@
   min-width: 0;
 }
 .helper-limits summary {
-  min-height: 44px;
+  min-height: var(--control-h);
   align-content: center;
 }
 .helper-task-history .task-request {
@@ -281,23 +286,21 @@
 }
 
 .app-shell.panel-docked.helper-open {
-  grid-template-columns: var(--nav-w) minmax(0, 1fr) 384px;
+  grid-template-columns: var(--nav-w) minmax(0, 1fr) var(--panel-w);
 }
-.app-shell.sidebar-collapsed.panel-docked.helper-open,
 .app-shell.focus-reading.panel-docked.helper-open {
-  grid-template-columns: minmax(0, 1fr) 384px;
+  grid-template-columns: minmax(0, 1fr) var(--panel-w);
 }
 .app-shell.panel-overlay.helper-open {
   grid-template-columns: var(--nav-w) minmax(0, 1fr);
 }
-.app-shell.sidebar-collapsed.panel-overlay.helper-open,
 .app-shell.focus-reading.panel-overlay.helper-open {
   grid-template-columns: minmax(0, 1fr);
 }
 .panel-overlay > .helper-panel {
   position: fixed;
   inset: 0 0 0 auto;
-  width: 384px;
+  width: var(--panel-w);
   height: min(var(--app-height, 100dvh), 100dvh);
   z-index: 32;
   box-shadow: -8px 0 30px var(--shade);
@@ -327,4 +330,16 @@
 }
 .helper-work-selector .icon-button {
   flex-shrink: 0;
+}
+
+/* The notice keeps its message on one line and splits its two actions to the edges. */
+.helper-notice {
+  display: grid;
+  gap: 8px;
+}
+.helper-notice > .form-actions {
+  margin-top: 0;
+}
+.helper-notice .helper-notice-lead {
+  margin-right: auto;
 }

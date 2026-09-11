@@ -36,7 +36,7 @@
 .quick-controls .composer-extra-settings select,
 .quick-controls .composer-extra-settings button {
   font-size: 13px;
-  min-height: 44px;
+  min-height: var(--control-h);
 }
 .composer[hidden] {
   display: none;

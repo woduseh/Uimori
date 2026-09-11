@@ -22,7 +22,7 @@ import type {
   EditDraftModel,
 } from '../core/edit-drafts.js';
 import { api, ApiError, libraryChangedKey } from './api.js';
-import { ActionMenu } from './ActionMenu.js';
+import { ReviewIcon } from './ui-icons.js';
 import './editor-drafts.css';
 
 type Buffer = {
@@ -769,15 +769,15 @@ export function EditorDraftStatus({
                 : '초안을 동기화했어요. 자료 저장은 별도예요.'}
         </small>
         {state.ready && (
-          <ActionMenu label="편집 초안 메뉴">
-            <button
-              type="button"
-              disabled={working || state.conflict}
-              onClick={() => work(inspect)}
-            >
-              변경 내용·공유 영향·저장 이력
-            </button>
-          </ActionMenu>
+          <button
+            type="button"
+            className="secondary editor-draft-review-open"
+            disabled={working || state.conflict}
+            onClick={() => work(inspect)}
+          >
+            <ReviewIcon size={18} aria-hidden="true" />
+            변경 검토
+          </button>
         )}
       </div>
       {(actionError || (!hideSyncError && state.error)) && (

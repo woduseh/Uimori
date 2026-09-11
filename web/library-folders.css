@@ -26,9 +26,9 @@
   list-style: none;
   display: grid;
   place-items: center;
-  width: 44px;
-  min-width: 44px;
-  min-height: 44px;
+  width: var(--control-h);
+  min-width: var(--control-h);
+  min-height: var(--control-h);
   cursor: pointer;
   border-radius: 8px;
   font-size: 20px;
@@ -36,9 +36,13 @@
 .library-item-menu > summary::-webkit-details-marker {
   display: none;
 }
-.library-item-menu > summary:hover,
 .library-item-menu[open] > summary {
   background: var(--accent-soft);
+}
+@media (hover: hover) {
+  .library-item-menu > summary:hover {
+    background: var(--accent-soft);
+  }
 }
 .library-item-menu > div {
   position: absolute;
@@ -64,7 +68,7 @@
   padding: 9px 12px;
   border: 0;
   font-size: 13px;
-  min-height: 44px;
+  min-height: var(--control-h);
 }
 .library-folder-form {
   display: grid;

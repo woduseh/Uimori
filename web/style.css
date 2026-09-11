@@ -21,6 +21,27 @@
   --error-bg: #fcf0ed;
   --shade: #14201459;
   --reading: 18px;
+  /* Manuscript column width; the reading settings pick 760 / 880 / 1040. */
+  --reading-width: 880px;
+  /* Right work slot shared by the helper and the creative options panel. */
+  --panel-w: 384px;
+  /* Collapsed navigation keeps an icon rail instead of disappearing. */
+  --rail-w: 56px;
+  /* Every app-level header shares one height so their bottom borders line up. */
+  --header-h: 58px;
+  /* The brand block, and the rail slot that replaces it when collapsed. */
+  --nav-head-h: 60px;
+  --collection-w: 1280px;
+  --detail-w: 1120px;
+  --form-w: 800px;
+  --editor-list-w: 224px;
+  --settings-w: 960px;
+  --dialog-w: 480px;
+  /* Touch target floor, applied on every pointer type. */
+  --control-h: 44px;
+  /* Motion: colour and opacity are quick, a panel or column change is slower. */
+  --motion-fast: 120ms;
+  --motion-panel: 180ms;
   /* Lucide chevron-right, the shared disclosure marker. */
   --chevron: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="black" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>');
   --nav-w: 248px;
@@ -84,7 +105,7 @@ summary {
   touch-action: manipulation;
 }
 button {
-  min-height: 44px;
+  min-height: var(--control-h);
   border: 1px solid var(--line);
   border-radius: 8px;
   padding: 9px 14px;
@@ -117,7 +138,7 @@ select {
   border: 1px solid var(--input-border);
   border-radius: 8px;
   padding: 10px 12px;
-  min-height: 44px;
+  min-height: var(--control-h);
 }
 textarea {
   resize: vertical;
@@ -138,8 +159,10 @@ input[type="file"]::file-selector-button {
   color: var(--text);
   cursor: pointer;
 }
-input[type="file"]:hover:not(:disabled)::file-selector-button {
-  background: var(--hover);
+@media (hover: hover) {
+  input[type="file"]:hover:not(:disabled)::file-selector-button {
+    background: var(--hover);
+  }
 }
 input[type="file"]:disabled {
   cursor: default;
@@ -203,7 +226,7 @@ label {
    Controls that draw their own marker keep it by opting out just below. */
 summary {
   cursor: pointer;
-  min-height: 44px;
+  min-height: var(--control-h);
   padding: 10px 0;
   overflow-wrap: anywhere;
   list-style: none;
@@ -238,6 +261,13 @@ details[open] > summary::before {
 fieldset {
   min-width: 0;
 }
+/* An icon beside a label belongs on the label's centre line. Without this the button
+   stays an inline box and the SVG drops onto the baseline. */
+button:has(> svg) {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
 button svg {
   flex-shrink: 0;
   stroke-width: 1.7;
@@ -262,18 +292,20 @@ input[type="checkbox"] {
   border-color: var(--line);
   color: var(--text);
 }
-.secondary:hover:not(:disabled),
-.icon-button:hover:not(:disabled) {
-  background: var(--hover);
-  filter: none;
+@media (hover: hover) {
+  .secondary:hover:not(:disabled),
+  .icon-button:hover:not(:disabled) {
+    background: var(--hover);
+    filter: none;
+  }
 }
 .icon-button {
   display: inline-flex;
   justify-content: center;
   align-items: center;
-  min-width: 44px;
-  width: 44px;
-  height: 44px;
+  min-width: var(--control-h);
+  width: var(--control-h);
+  height: var(--control-h);
   padding: 0;
   border-color: transparent;
   background: transparent;
@@ -346,10 +378,15 @@ input[type="checkbox"] {
   background: transparent;
   border-color: transparent;
 }
-.nav-button:hover:not(:disabled),
 .nav-button.selected {
   background: var(--hover);
   filter: none;
+}
+@media (hover: hover) {
+  .nav-button:hover:not(:disabled) {
+    background: var(--hover);
+    filter: none;
+  }
 }
 .chat-link {
   display: flex;
@@ -376,10 +413,15 @@ input[type="checkbox"] {
   font-size: 11px;
   white-space: nowrap;
 }
-.chat-link:hover:not(:disabled),
 .chat-link.selected {
   background: var(--surface);
   filter: none;
+}
+@media (hover: hover) {
+  .chat-link:hover:not(:disabled) {
+    background: var(--surface);
+    filter: none;
+  }
 }
 .chat-link.selected strong {
   color: var(--accent);
@@ -403,7 +445,7 @@ input[type="checkbox"] {
   flex-direction: column;
 }
 .workspace-header {
-  min-height: 56px;
+  min-height: var(--header-h);
   display: flex;
   align-items: center;
   border-bottom: 1px solid var(--line);
@@ -426,9 +468,13 @@ input[type="checkbox"] {
   box-shadow: none;
   min-height: 0;
 }
-.header-title-hit:hover,
 .header-title-hit:focus-visible {
   background: var(--hover);
+}
+@media (hover: hover) {
+  .header-title-hit:hover {
+    background: var(--hover);
+  }
 }
 .header-title-caret {
   display: inline-block;
@@ -470,7 +516,7 @@ input[type="checkbox"] {
   min-width: 0;
   max-width: 220px;
   margin-right: 6px;
-  min-height: 44px;
+  min-height: var(--control-h);
   padding: 4px 12px;
   border: 1px solid var(--line);
   border-radius: 18px;
@@ -488,8 +534,10 @@ input[type="checkbox"] {
 .model-chip > svg {
   flex-shrink: 0;
 }
-.model-chip:hover:not(:disabled) {
-  border-color: var(--accent);
+@media (hover: hover) {
+  .model-chip:hover:not(:disabled) {
+    border-color: var(--accent);
+  }
 }
 .chat-menu > .action-menu-body {
   min-width: 240px;
@@ -508,7 +556,7 @@ input[type="checkbox"] {
   overflow-anchor: auto;
 }
 .reader {
-  width: min(100%, 800px);
+  width: min(100%, calc(var(--reading-width) + 40px));
   margin: 0 auto;
   padding: 26px 20px 48px;
   min-height: 100%;
@@ -596,14 +644,14 @@ input[type="checkbox"] {
   flex-wrap: wrap;
   align-items: center;
   gap: 8px;
-  min-height: 44px;
+  min-height: var(--control-h);
   min-width: 0;
 }
 .scene-header-tools {
   position: absolute;
   top: 0;
   right: 0;
-  height: 44px;
+  height: var(--control-h);
   display: flex;
   align-items: center;
 }
@@ -781,9 +829,11 @@ input[type="checkbox"] {
 .source-actions > .action-menu > summary {
   color: var(--faint);
 }
-.source-actions .scene-action:hover:not(:disabled),
-.source-actions > .action-menu > summary:hover {
-  color: var(--text);
+@media (hover: hover) {
+  .source-actions .scene-action:hover:not(:disabled),
+  .source-actions > .action-menu > summary:hover {
+    color: var(--text);
+  }
 }
 .source-actions > .action-menu {
   position: static;
@@ -811,7 +861,7 @@ input[type="checkbox"] {
 .source-actions .story-source-state details > summary {
   display: inline-flex;
   align-items: center;
-  min-height: 44px;
+  min-height: var(--control-h);
   padding: 0 8px;
   width: fit-content;
   cursor: pointer;
@@ -830,11 +880,15 @@ input[type="checkbox"] {
   opacity: 0;
   transition: opacity 0.15s;
 }
-.focus-reading .source:hover .source-actions,
 .focus-reading .source:focus-within .source-actions,
-.focus-reading .source:hover .scene-header,
 .focus-reading .source:focus-within .scene-header {
   opacity: 1;
+}
+@media (hover: hover) {
+  .focus-reading .source:hover .source-actions,
+  .focus-reading .source:hover .scene-header {
+    opacity: 1;
+  }
 }
 .inline-asset {
   max-width: 400px;
@@ -860,7 +914,7 @@ input[type="checkbox"] {
   flex-shrink: 0;
   background: var(--bg);
   width: 100%;
-  max-width: 828px;
+  max-width: calc(var(--reading-width) + 48px);
   margin: 0 auto;
 }
 /* Composer: one row while the draft fits, then the text takes the full width and the
@@ -896,7 +950,7 @@ input[type="checkbox"] {
   padding: 11px 8px;
   border: 0;
   resize: none;
-  min-height: 44px;
+  min-height: var(--control-h);
   max-height: 180px;
   border-radius: 0;
   background: transparent;
@@ -947,8 +1001,8 @@ input[type="checkbox"] {
 }
 .send-button {
   width: 40px;
-  min-width: 44px;
-  height: 44px;
+  min-width: var(--control-h);
+  height: var(--control-h);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1040,6 +1094,10 @@ input[type="checkbox"] {
   }
 }
 @media (prefers-reduced-motion: reduce) {
+  :root {
+    --motion-fast: 0ms;
+    --motion-panel: 0ms;
+  }
   .turn-skeleton > span {
     animation: none;
   }
@@ -1105,9 +1163,15 @@ input[type="checkbox"] {
   gap: 6px;
   padding: 4vh 0;
 }
+/* The empty chat is where the bot's portrait carries the screen, so it reads as a
+   picture rather than a list thumbnail. */
+/* The vh cap keeps the portrait from pushing the prompt below the fold on a short
+   window; on a normal one the fixed size wins. */
 .first-scene-avatar {
-  --content-avatar-size: 48px;
-  margin-bottom: 10px;
+  --content-avatar-size: min(240px, 30vh);
+  /* The shared 10px corner is tuned for list thumbnails and reads tight at this size. */
+  border-radius: 28px;
+  margin-bottom: 22px;
 }
 .first-scene h2 {
   font-size: 22px;
@@ -1128,9 +1192,7 @@ input[type="checkbox"] {
 .focus-reading .composer-dock {
   display: none;
 }
-.focus-reading .reader {
-  max-width: 840px;
-}
+/* Focus reading hides the surroundings; it does not change the column width. */
 .error {
   color: var(--error);
   background: var(--error-bg);
@@ -1147,7 +1209,7 @@ input[type="checkbox"] {
 .app-dialog {
   position: fixed;
   inset: 0;
-  width: min(480px, calc(100vw - 48px));
+  width: min(var(--dialog-w), calc(100vw - 48px));
   height: fit-content;
   max-height: min(760px, calc(var(--app-height, 100dvh) - 48px));
   max-width: 100%;
@@ -1161,7 +1223,7 @@ input[type="checkbox"] {
   overflow: hidden;
 }
 .app-dialog.wide {
-  width: min(960px, calc(100vw - 48px));
+  width: min(var(--settings-w), calc(100vw - 48px));
 }
 .app-dialog[open] {
   display: flex;
@@ -1262,7 +1324,7 @@ input[type="checkbox"] {
     font-size: 10px;
   }
   .model-chip {
-    min-height: 44px;
+    min-height: var(--control-h);
     max-width: 132px;
     margin-right: 2px;
     font-size: 12px;
@@ -1272,8 +1334,8 @@ input[type="checkbox"] {
     gap: 0;
   }
   .header-actions .icon-button {
-    width: 44px;
-    min-width: 44px;
+    width: var(--control-h);
+    min-width: var(--control-h);
   }
   .reader {
     padding: 24px 20px 36px;
@@ -1305,7 +1367,7 @@ input[type="checkbox"] {
   .composer textarea {
     padding: 10px 6px;
     font-size: 15px;
-    min-height: 44px;
+    min-height: var(--control-h);
   }
   .composer.grown textarea {
     padding: 11px 12px 6px;
@@ -1348,6 +1410,11 @@ input[type="checkbox"] {
   }
   .first-scene {
     padding: 10vh 0;
+  }
+  .first-scene-avatar {
+    --content-avatar-size: min(176px, 24vh, 56vw);
+    border-radius: 22px;
+    margin-bottom: 16px;
   }
   .focus-reading .mobile-menu {
     display: none;
@@ -1447,7 +1514,7 @@ input[type="checkbox"] {
   min-width: 0;
 }
 .settings-navigation {
-  flex: 0 0 200px;
+  flex: 0 0 var(--editor-list-w);
   padding: 20px 12px;
   background: var(--nav);
   border-right: 1px solid var(--line);
@@ -1458,7 +1525,7 @@ input[type="checkbox"] {
   align-items: center;
   gap: 12px;
   width: 100%;
-  min-height: 44px;
+  min-height: var(--control-h);
   margin: 0 0 4px;
   padding: 10px 14px;
   border: 1px solid transparent;
@@ -1468,9 +1535,11 @@ input[type="checkbox"] {
   text-align: left;
   font-weight: 500;
 }
-.settings-navigation > button:hover {
-  background: var(--panel);
-  color: var(--text);
+@media (hover: hover) {
+  .settings-navigation > button:hover {
+    background: var(--panel);
+    color: var(--text);
+  }
 }
 .settings-navigation [aria-selected="true"] {
   background: var(--accent-soft);
@@ -1570,7 +1639,7 @@ input[type="checkbox"] {
   align-items: center;
   justify-content: flex-start;
   gap: 8px;
-  min-height: 44px;
+  min-height: var(--control-h);
   text-align: left;
 }
 .archive-backup-option p {
@@ -1607,7 +1676,7 @@ input[type="checkbox"] {
   flex: 1;
   min-width: 0;
   width: 100%;
-  min-height: 44px;
+  min-height: var(--control-h);
 }
 .archive-file-field > button {
   flex-shrink: 0;

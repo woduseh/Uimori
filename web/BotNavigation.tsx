@@ -12,6 +12,8 @@ import {
   ExpandIcon,
   FolderAddIcon,
   FolderIcon,
+  CheckIcon,
+  CloseIcon,
   LibraryIcon,
   MoreIcon,
   MoveIcon,
@@ -791,9 +793,6 @@ function ChatTitleEditor({
         />
       </label>
       <div className="form-actions">
-        <button disabled={disabled || saving || !dirty || !draft.trim()}>
-          {saving ? '저장 중…' : '제목 저장'}
-        </button>
         <button
           type="button"
           className="secondary"
@@ -806,7 +805,12 @@ function ChatTitleEditor({
             onClose();
           }}
         >
+          <CloseIcon size={18} aria-hidden="true" />
           취소
+        </button>
+        <button disabled={disabled || saving || !dirty || !draft.trim()}>
+          <CheckIcon size={18} aria-hidden="true" />
+          {saving ? '저장 중…' : '제목 저장'}
         </button>
       </div>
       {dirty && (chat.titleRevision ?? 0) !== baseTitleRevision && (

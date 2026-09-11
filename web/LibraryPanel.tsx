@@ -1,3 +1,4 @@
+import { IconButton } from './IconButton.js';
 import { DraftDiscardActions } from './DraftDiscardActions.js';
 import { SelectionCheckbox } from './BooleanControls.js';
 import { PackageTransfer } from './PackageTransfer.js';
@@ -116,6 +117,7 @@ export function LibraryPanel({
   recentChatByContent,
   onContinueChat,
   headerLeading,
+  headerTrailing,
 }: {
   library: Library | null;
   reload: () => Promise<void>;
@@ -130,6 +132,7 @@ export function LibraryPanel({
   recentChatByContent?: Record<string, string>;
   onContinueChat?: (chatId: string) => void;
   headerLeading?: ReactNode;
+  headerTrailing?: ReactNode;
 }) {
   const [tab, setTab] = useState(initialTab);
   const [dirty, setDirty] = useState(false);
@@ -428,6 +431,8 @@ export function LibraryPanel({
     : [];
   const roleActionLabel = (id: PrimaryLibraryTab, title: string) =>
     id === 'bot' ? '봇으로 새 채팅' : id === 'persona' ? '페르소나로 사용' : `${title}로 추가`;
+  const roleActionIcon = (id: PrimaryLibraryTab) =>
+    id === 'bot' ? NewChatIcon : id === 'persona' ? PersonaIcon : ModuleIcon;
   return (
     <section
       ref={panelRef}
@@ -438,6 +443,7 @@ export function LibraryPanel({
       <header className="library-heading">
         {headerLeading}
         <h1>서재</h1>
+        {headerTrailing}
       </header>
       <Dialog
         open={!!pendingNavigation}
@@ -494,10 +500,12 @@ export function LibraryPanel({
       ) : detail ? (
         <section className="library-detail library-preview" aria-label="자료 상세">
           <div className="library-detail-heading">
-            <button type="button" className="secondary" onClick={() => navigate(tab, true)}>
-              <BackIcon size={18} aria-hidden="true" />
-              서재 목록
-            </button>
+            <IconButton
+              className="secondary"
+              label="서재 목록"
+              icon={BackIcon}
+              onClick={() => navigate(tab, true)}
+            />
             <div className="library-detail-title">
               <h2>{detail.title}</h2>
               <small>
@@ -531,6 +539,10 @@ export function LibraryPanel({
                       }
                       onClick={() => void openContent(detail, id)}
                     >
+                      {(() => {
+                        const Icon = roleActionIcon(id);
+                        return <Icon size={18} aria-hidden="true" />;
+                      })()}
                       {roleActionLabel(id, title)}
                     </button>
                   ))}
@@ -764,12 +776,13 @@ export function LibraryPanel({
                 {!selecting && (filtered.length > 0 || !!query) && (
                   <button
                     type="button"
-                    className="library-create primary"
+                    className="library-create primary ui-icon-button"
+                    aria-label={`${contentLabels[tab]} 만들기`}
+                    title={`${contentLabels[tab]} 만들기`}
                     onClick={openNew}
                     disabled={!library}
                   >
                     <AddIcon size={18} aria-hidden="true" />
-                    <span>{contentLabels[tab]} 만들기</span>
                   </button>
                 )}
               </div>
@@ -783,6 +796,7 @@ export function LibraryPanel({
                   <h2>폴더</h2>
                   <LibraryFolders
                     presentation="cards"
+                    view={views[tab]}
                     category={tab}
                     organizer={organizer}
                     value={folder}
@@ -1162,12 +1176,13 @@ function ContentEditor({
         <div className="library-detail-heading">
           <button
             type="button"
-            className="secondary"
+            className="secondary ui-icon-button"
+            aria-label="서재 목록"
+            title="서재 목록"
             disabled={editorUnavailable}
             onClick={onClose}
           >
             <BackIcon size={18} aria-hidden="true" />
-            서재 목록
           </button>
           <h2>{selected ? selected.title : `새 ${contentLabels[kind]}`}</h2>
           <div className="library-detail-actions">
