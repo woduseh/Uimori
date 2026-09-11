@@ -198,3 +198,25 @@ CSS도 정리했어요. `.behavior-reset`은 규칙이 아예 없었고, `.packa
 `편집 중인 초안 확인`은 `provider-management-browser.spec.ts`가 `getByRole('alertdialog', …)`로 직접 잡고 있고 통과해요. `이미지 참조 제거`는 `library-images-browser`·`shared-package-browser` 두 곳이 덮어요.
 
 **상태 초깃값 복구는 클릭 경로를 검증하지 못했어요.** 그 버튼은 인스턴스가 `stale`이거나 오류일 때만 나타나는데, 합성 봇으로 패키지 개정과 상태 스키마를 두 번 바꿔도 런타임이 매번 상태를 이행시켜 `ready`로 남아 재현하지 못했어요. 패널이 새 `Dialog`를 품은 채 렌더되고 `verify:ui`가 통과한다는 것까지만 확인했어요.
+
+## 2026-09-11 7차: 중앙정렬에서 빠져 있던 자료 편집 화면
+
+66행의 중앙정렬 결정은 서재 목록·자료 상세·프롬프트 목록에는 닿았지만 **자료 편집 화면에는 닿지 않았어요.** `.library-content-editor`가 `max-width: none`으로 상위 `.library-detail`의 `--detail-w`를 직접 취소하고 있었기 때문이에요. 2560px에서 미리보기는 1120px 중앙 열인데 같은 자료의 편집 화면은 2264px 전폭이라, 편집을 누르는 순간 열이 두 배로 벌어졌어요. 그 선언은 첫 개편(`eb133d4`)이 남긴 것이고 후속 검토가 놓쳤어요.
+
+- `max-width: none`을 지워 `.library-detail`의 1120px를 되찾았어요. 미리보기와 같은 값이라 미리보기↔편집 전환에서 열이 움직이지 않아요.
+- 고정 머리줄의 `margin: 0 -24px` 블리드는 열이 전폭일 때 페이지 좌우 여백을 덮으려던 것이었어요. 중앙 열에서는 24px씩 삐져나오기만 하므로 없앴어요. 모바일(`max-width: 760px`)은 자기 `-16px` 블리드를 그대로 써요.
+- `.prompt-library-actions`도 같은 이유로 전폭이었어요. 바로 아래 목록이 1280px 중앙 열인데 동작 줄만 왼쪽 끝에서 시작했어요. 목록과 같은 `--collection-w` 중앙 열로 맞췄어요.
+
+뒤로가기 버튼은 앱에서 유일하게 공유 `IconButton`을 쓰지 않고 `className="secondary ui-icon-button"`을 손으로 적은 곳이었어요. `icon-button` 클래스가 빠져 `.secondary`의 테두리가 살아남아, 다른 아이콘 버튼과 달리 혼자만 네모 상자를 두르고 있었어요. `IconButton`으로 바꿔 미리보기 화면의 같은 버튼과 완전히 같아졌어요. 아이콘 크기도 18에서 기본값 20으로 맞췄어요.
+
+### 검증
+
+`quality:full` PASS, 1,959 PASS / 1 SKIP. `verify:library` 40 PASS / 1 FAIL(기존 실패 `PNAV01`), `verify:packages` 10 PASS, `verify:ui` PASS, `scripts/verify-prompts.mjs` 15 PASS.
+
+회귀 검사 `LIBUI07`을 넣었어요. 2560×1440에서 목록·미리보기·편집·프롬프트 열의 좌우 여백이 같은지 보고, **편집 열이 미리보기 열과 완전히 일치하는지**를 `toEqual`로 고정해요. 고치기 전 트리에 같은 검사를 넣어 돌리면 `expect(editor).toEqual(preview)`에서 실패해요.
+
+중앙정렬 결정에는 그때까지 브라우저 검사가 하나도 없었어요. 2560px을 쓰는 스펙 자체가 없었고, 그래서 이 회귀가 눈으로 발견될 때까지 남아 있었어요. `LIBUI07`이 그 빈자리를 메워요.
+
+### 남은 것
+
+`scripts/verify-prompts.mjs`는 `package.json`에 항목이 없어 `npm run verify:prompts`로 돌지 않아요. 직접 `node scripts/verify-prompts.mjs`로만 실행돼요.

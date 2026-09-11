@@ -25,6 +25,7 @@ await runBrowserVerification({
     'LIBUI04',
     'LIBUI05',
     'LIBUI06',
+    'LIBUI07',
     'LCOM01',
     'LCOM02',
     'LCOM03',
