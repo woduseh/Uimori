@@ -11,6 +11,7 @@ import {
   type PromptHistoryMessage,
 } from '../core/prompt-program.js';
 import { estimateContextTokens } from '../core/context-budget.js';
+import { CONTEXT_SUMMARY_SEMANTICS } from '../core/context-summary-policy.js';
 import { createSourceSegmentFixture } from './fixtures/source-segments.js';
 import { sourceLogicalHistoryForRequest } from '../core/source-context.js';
 import {
@@ -128,6 +129,7 @@ const completed = (text: string, costUsd: number | null = null) =>
     { type: 'opaque_state', state: 'OPAQUE_SUMMARY_CANARY' },
     { type: 'done', reason: 'stop' }
   );
+
 type SummaryPayload = {
   previousSummary: string | null;
   sceneScope: { chatId: string; headRevision: string | null; headHash: string | null };
@@ -212,6 +214,63 @@ afterEach(() => {
 });
 
 describe('input context projection and durable summary calls', () => {
+  test.each([
+    {
+      consumerLimit: 65536,
+      summaryLimit: 8192,
+      output: 8192,
+      thinking: 7168,
+      goal: 2048,
+      budget: 2048,
+    },
+    {
+      consumerLimit: 8192,
+      summaryLimit: 65536,
+      output: 8192,
+      thinking: 7168,
+      goal: 1024,
+      budget: 3072,
+    },
+    {
+      consumerLimit: 16384,
+      summaryLimit: 8192,
+      output: 1500,
+      thinking: 1200,
+      goal: 476,
+      budget: 1024,
+    },
+  ])(
+    'a $consumerLimit-token consumer and $summaryLimit-token summarizer send one consistent goal and thinking policy',
+    async ({ consumerLimit, summaryLimit, output, thinking, goal, budget }) => {
+      const source = snapshot([
+        'OLD_ACTOR → RECIPIENT: PROMISE',
+        'CURRENT_UNRESOLVED_REQUEST',
+        'RECENT_1',
+        'RECENT_2',
+      ]);
+      source.profile!.models.main = { ...model(), inputTokenLimit: consumerLimit };
+      source.profile!.contextModel = {
+        ...model('summary-model'),
+        inputTokenLimit: summaryLimit,
+        maxOutputTokens: output,
+        thinkingBudgetTokens: thinking,
+      };
+      source.contextPlan!.budget.inputTokenLimit = consumerLimit;
+      const original = structuredClone(source),
+        log = observed({ reason: 'manual' });
+      vi.mocked(fetch).mockImplementation(async () => completed('SYNTHETIC_MERGED_SUMMARY'));
+      await prepareInputContext(source, log.hooks);
+      expect(log.wires).toHaveLength(1);
+      expect(log.wires[0].body).toMatchObject({
+        generation: { maxOutputTokens: Math.min(output, 4096), thinkingBudgetTokens: budget },
+        stable: { contract: expect.stringContaining(CONTEXT_SUMMARY_SEMANTICS) },
+        input: { controls: { targetSummaryTokens: goal } },
+      });
+      expect(goal + budget).toBeLessThanOrEqual(Math.min(output, 4096));
+      expect(source).toEqual(original);
+    }
+  );
+
   test.each([
     { consumerLimit: 8192, outputLimit: 8192, target: 1024, hardCap: 4096 },
     { consumerLimit: 65536, outputLimit: 8192, target: 2048, hardCap: 4096 },
@@ -483,6 +542,7 @@ describe('input context projection and durable summary calls', () => {
         headHash: fixed.history.at(-1)!.contentHash,
       });
       const contract = (log.wires[index].body as { stable: { contract: string } }).stable.contract;
+      expect(contract).toContain(CONTEXT_SUMMARY_SEMANTICS);
       expect(contract).toContain('[scene 12]');
       expect(contract).toContain('Keep exact story identifiers and codes');
       expect(contract).toContain('Anchors share the existing summary budget');

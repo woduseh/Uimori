@@ -1,6 +1,11 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 import { createHash } from 'node:crypto';
 import { estimateContextTokens } from '../core/context-budget.js';
+import {
+  CONTEXT_CONTINUATION_GUIDANCE,
+  CONTEXT_RETRIEVAL_GUIDANCE,
+  CONTEXT_SUMMARY_SEMANTICS,
+} from '../core/context-summary-policy.js';
 import { defaultProfile, type ModelSnapshot, VERTEX_GEMINI_MODEL_ID } from '../core/product.js';
 import type { RunSnapshot, ToolEvent } from '../core/types.js';
 import type { Json } from '../core/transport.js';
@@ -19,8 +24,11 @@ import {
   withContextProjection,
 } from '../server/context-planning.js';
 import { executeContextTool, type ContextPersistence } from '../server/context-tools.js';
-import { buildMainProviderRequest } from '../server/main-request.js';
+import { buildMainProviderRequest, encodeMainPreview } from '../server/main-request.js';
 import { runMain, type MainHooks } from '../server/model-runner.js';
+import { compactToolReads } from '../server/context-tool-compaction.js';
+import { executeTool } from '../core/provider.js';
+import { createSourceSegmentFixture } from './fixtures/source-segments.js';
 
 const hash = (text: string) => createHash('sha256').update(text).digest('hex');
 const origin = 'http://127.0.0.1:44998';
@@ -228,6 +236,13 @@ type Body = {
 };
 const promptText = (body: Body) =>
   body.prompt!.messages.flatMap((message) => message.content.map((part) => part.text)).join('\n');
+const projectedTokens = (fixed: RunSnapshot) => (events: ToolEvent[]) =>
+  estimateContextTokens(
+    encodeMainPreview(
+      buildMainProviderRequest(fixed, { completedToolHistory: events }).request,
+      fixed.profile!.models.main!
+    ).body
+  );
 function persistence(activated = true) {
   const calls: { compacted: number; summary: string | null; own: unknown }[] = [];
   let revision = 0;
@@ -288,6 +303,268 @@ afterEach(() => {
 });
 
 describe('model-driven working summary and window switch inside one main run', () => {
+  test.each([
+    {
+      consumerLimit: 65536,
+      summaryLimit: 8192,
+      output: 8192,
+      thinking: 7168,
+      goal: 2048,
+      budget: 2048,
+    },
+    {
+      consumerLimit: 8192,
+      summaryLimit: 32768,
+      output: 1500,
+      thinking: 1200,
+      goal: 476,
+      budget: 1024,
+    },
+  ])(
+    'read compaction sends the $goal-token consumer goal with an independently sized $summaryLimit-token summarizer',
+    async ({ consumerLimit, summaryLimit, output, thinking, goal, budget }) => {
+      const fixed = snapshot();
+      fixed.contextPlan!.budget.inputTokenLimit = consumerLimit;
+      fixed.profile!.models.main!.inputTokenLimit = consumerLimit;
+      fixed.profile!.contextModel = {
+        ...model(false),
+        id: 'summary-model',
+        inputTokenLimit: summaryLimit,
+        maxOutputTokens: output,
+        thinkingBudgetTokens: thinking,
+      };
+      delete fixed.promptCompilation;
+      const original = structuredClone(fixed),
+        log = hooks(),
+        event = executeTool(fixed, {
+          callId: 'actual-read',
+          name: 'story.read',
+          args: { sceneNumber: 1, offset: 2, limit: 30 },
+        });
+      const bodies = script([
+        (body) => {
+          expect(body).toMatchObject({
+            generation: { maxOutputTokens: Math.min(output, 4096), thinkingBudgetTokens: budget },
+            stable: { contract: expect.stringContaining(CONTEXT_SUMMARY_SEMANTICS) },
+            input: { controls: { targetSummaryTokens: goal }, task: fixed.request },
+          });
+          expect(JSON.parse(body.input.source.part as string)).toEqual([event]);
+          expect(body.stable.contract).toContain(CONTEXT_RETRIEVAL_GUIDANCE);
+          return completed();
+        },
+      ]);
+      const events = await compactToolReads(
+        fixed,
+        [event],
+        log.value,
+        { modelCalls: 0, inputTokens: 0, outputTokens: 0, costUsd: 0 },
+        projectedTokens(fixed)
+      );
+      expect(bodies).toHaveLength(1);
+      expect(events[0].result).toMatchObject({
+        references: [
+          {
+            name: 'story.read',
+            args: event.args,
+            returned: {
+              sceneNumber: 1,
+              source: {
+                revision: fixed.history[0].revision,
+                hash: fixed.history[0].contentHash,
+                start: 2,
+                end: 32,
+              },
+              truncated: true,
+              nextOffset: 32,
+            },
+          },
+        ],
+      });
+      expect(goal + budget).toBeLessThanOrEqual(Math.min(output, 4096));
+      expect(fixed).toEqual(original);
+    }
+  );
+
+  test('read summaries retain returned revisions, filtered ranges and search excerpts without inventing full-source verification', async () => {
+    const fixed = snapshot();
+    fixed.profile!.contextModel = { ...model(false), inputTokenLimit: 32768 };
+    fixed.sourceSegments = createSourceSegmentFixture({ excludeAnnotations: true });
+    const source = fixed.history[0];
+    source.text = 'VISIBLE_START <EvaluationReport>SECRET_NOTE</EvaluationReport> VISIBLE_END';
+    source.contentHash = hash(source.text);
+    for (const message of fixed.logicalHistory!.filter(
+      (item) => item.sourceRevision === source.revision
+    )) {
+      message.sourceHash = source.contentHash;
+      if (message.role === 'assistant') message.text = source.text;
+    }
+    fixed.resources = [
+      {
+        id: 'same-resource',
+        chatId: fixed.chatId,
+        kind: 'lore',
+        revision: 1,
+        title: 'Versioned source',
+        description: 'A synthetic local source',
+        text: 'OLD_RESOURCE_BODY',
+      },
+    ];
+    delete fixed.promptCompilation;
+    const revised = structuredClone(fixed);
+    revised.resources[0] = { ...revised.resources[0], revision: 2, text: 'NEW_RESOURCE_BODY' };
+    const originals = [structuredClone(fixed), structuredClone(revised)];
+    const read = executeTool(fixed, {
+      callId: 'filtered-read',
+      name: 'story.read',
+      args: { sceneNumber: 1, offset: 0, limit: 100 },
+    });
+    const search = executeTool(fixed, {
+      callId: 'partial-search',
+      name: 'story.search',
+      args: { query: 'VISIBLE', offset: 0, limit: 20 },
+    });
+    const action = { name: 'knowledge.read', args: { id: 'same-resource', offset: 2, limit: 4 } };
+    const firstVersion = executeTool(fixed, { ...action, callId: 'version-one' });
+    const secondVersion = executeTool(revised, { ...action, callId: 'version-two' });
+    const events = [read, search, firstVersion];
+    expect(events.every((event) => !event.denied)).toBe(true);
+    expect(secondVersion.denied).toBe(false);
+    expect((read.result as { text: string }).text).not.toContain('SECRET_NOTE');
+    const log = hooks();
+    const bodies = script([() => completed(), () => completed()]);
+    const usage = { modelCalls: 0, inputTokens: 0, outputTokens: 0, costUsd: 0 };
+    const first = await compactToolReads(fixed, events, log.value, usage, projectedTokens(fixed));
+    const second = await compactToolReads(
+      revised,
+      [...first, secondVersion],
+      log.value,
+      usage,
+      projectedTokens(revised)
+    );
+    const result = second[0].result as {
+      references: { name: string; args: Json; returned?: Record<string, Json> }[];
+      guidance: string;
+    };
+    expect(result.references).toHaveLength(4);
+    const metadata = result.references.find((item) => item.name === 'story.read')!.returned!;
+    const originalRead = read.result as Record<string, Json>;
+    expect(metadata).toMatchObject({
+      source: originalRead.source,
+      sceneScope: originalRead.sceneScope,
+      keptRanges: originalRead.keptRanges,
+      excludedRanges: originalRead.excludedRanges,
+      rangeSemantics: originalRead.rangeSemantics,
+    });
+    expect(metadata).not.toHaveProperty('text');
+    const searchMetadata = result.references.find((item) => item.name === 'story.search')!
+      .returned!;
+    const searchResults = (search.result as { results: Record<string, Json>[] }).results;
+    expect(searchResults.length).toBeGreaterThan(0);
+    expect(searchMetadata.results).toEqual(
+      searchResults.map((item) => ({
+        sceneNumber: item.sceneNumber,
+        source: item.source,
+        truncated: item.truncated,
+        nextOffset: item.nextOffset,
+      }))
+    );
+    const versions = result.references.filter((item) => item.name === 'knowledge.read');
+    expect(versions.map((item) => item.args)).toEqual([firstVersion.args, secondVersion.args]);
+    expect(versions.map((item) => item.returned!.source)).toEqual([
+      (firstVersion.result as { source: Json }).source,
+      (secondVersion.result as { source: Json }).source,
+    ]);
+    expect(
+      versions.every(
+        (item) =>
+          JSON.stringify(item.returned!.range) ===
+          JSON.stringify({ start: 2, end: 6, unit: 'utf16-code-unit' })
+      )
+    ).toBe(true);
+    expect(result.guidance).toContain(CONTEXT_RETRIEVAL_GUIDANCE);
+    expect(JSON.stringify(result)).not.toContain('SECRET_NOTE');
+    expect(JSON.stringify(result)).not.toContain('OLD_RESOURCE_BODY');
+    expect(JSON.stringify(result)).not.toContain('NEW_RESOURCE_BODY');
+    expect(bodies[1].input.source.part).toContain('host-compacted-reads');
+    expect([fixed, revised]).toEqual(originals);
+  });
+
+  test('summary headroom includes retained source metadata and exact receipts in the actual fresh body', async () => {
+    const fixed = fixedHeavySnapshot(),
+      log = hooks(persistence().persist),
+      limit = measureMainContext(fixed).estimatedInputTokens + 2800;
+    fixed.profile!.models.main!.inputTokenLimit = limit;
+    fixed.contextPlan!.budget.inputTokenLimit = limit;
+    delete fixed.promptCompilation;
+    const original = structuredClone(fixed);
+    const bodies = script([
+      (_body, n) =>
+        toolTurn(
+          [
+            { id: 'exact-write-receipt', name: 'context.write', args: { summary: workingSummary } },
+            ...Array.from({ length: 6 }, (_, index) => ({
+              id: `metadata-read-${index}`,
+              name: 'story.read',
+              args: { sceneNumber: 1, offset: index * 200, limit: 1200 },
+            })),
+          ],
+          n
+        ),
+      () => completed(),
+      () => completed(),
+    ]);
+    const result = await runMain(fixed, log.value);
+    expect(result, JSON.stringify(result)).toMatchObject({
+      status: 'completed',
+      usage: { modelCalls: 3 },
+    });
+    expect(bodies.map((body) => body.role)).toEqual(['main', 'context', 'main']);
+    const history = bodies[2].input.source.completedToolHistory as { events: ToolEvent[] };
+    const receipt = log.events.find((event) => event.callId === 'exact-write-receipt')!;
+    expect(receipt.denied).toBe(false);
+    expect(history.events[0]).toEqual(receipt);
+    expect(history.events).toHaveLength(2);
+    const compacted = history.events[1].result as {
+      summary: string;
+      references: { name: string; args: Json; returned: Record<string, Json> }[];
+    };
+    expect(compacted.summary).toBe(finalText);
+    expect(compacted.references).toHaveLength(6);
+    for (const [index, reference] of compacted.references.entries())
+      expect(reference).toMatchObject({
+        name: 'story.read',
+        args: { sceneNumber: 1, offset: index * 200, limit: 1200 },
+        returned: {
+          source: {
+            revision: fixed.history[0].revision,
+            hash: fixed.history[0].contentHash,
+            start: index * 200,
+            end: index * 200 + 1200,
+          },
+        },
+      });
+    const emptyBody = structuredClone(bodies[2]);
+    const emptyHistory = emptyBody.input.source.completedToolHistory as { events: ToolEvent[] };
+    (emptyHistory.events[1].result as { summary: string }).summary = '';
+    const fixedTokens = estimateContextTokens(emptyBody);
+    const goal = (bodies[1].input as unknown as { controls: { targetSummaryTokens: number } })
+      .controls.targetSummaryTokens;
+    // Metadata consumes real room that the previous non-read-only estimate omitted.
+    expect(fixedTokens).toBeGreaterThan(projectedTokens(fixed)([receipt]));
+    expect(limit - fixedTokens).toBeGreaterThan(0);
+    expect(goal).toBeLessThanOrEqual(limit - fixedTokens);
+    expect(goal).toBeLessThan(
+      Math.min(2048, Math.floor(limit / 8), limit - projectedTokens(fixed)([receipt]))
+    );
+    expect(estimateContextTokens(bodies[2])).toBeLessThanOrEqual(limit);
+    expect(log.events.find((event) => event.name === 'context.compact')!.result).toMatchObject({
+      applied: true,
+    });
+    expect(bodies[2]).not.toHaveProperty('opaqueState');
+    expect(bodies[2].prompt!.messages.at(-1)!.content[0].text).toContain('read-results-compacted');
+    expect(fixed).toEqual(original);
+  });
+
   test('a useful read summary proceeds above the soft trigger with less than ten percent total reduction', async () => {
     const fixed = fixedHeavySnapshot(),
       original = structuredClone(fixed),
@@ -735,8 +1012,10 @@ describe('model-driven working summary and window switch inside one main run', (
   test('repeated compaction retains more than eight exact receipts and prior read arguments as one reference envelope', async () => {
     const fixed = oversizedSnapshot(),
       saved = persistence(),
-      log = hooks(saved.persist),
-      original = structuredClone(fixed);
+      log = hooks(saved.persist);
+    // This case isolates repeated receipt/continuation preservation from summary chunking.
+    fixed.profile!.contextModel!.inputTokenLimit = 65536;
+    const original = structuredClone(fixed);
     const largeReads = (prefix: string, offset: number) =>
       Array.from({ length: 4 }, (_, i) => ({
         id: `${prefix}-${i}`,
@@ -786,6 +1065,18 @@ describe('model-driven working summary and window switch inside one main run', (
             ({ name, args }) => ({ name, args })
           ),
         });
+        const references = (
+          history.events.at(-1)!.result as {
+            references: { returned: { source: Json; sceneScope: Json } }[];
+          }
+        ).references;
+        const reads = log.events.filter((event) => event.name === 'story.read');
+        expect(references.map((reference) => reference.returned.source)).toEqual(
+          reads.map((event) => (event.result as { source: Json }).source)
+        );
+        expect(references.map((reference) => reference.returned.sceneScope)).toEqual(
+          reads.map((event) => (event.result as { sceneScope: Json }).sceneScope)
+        );
         for (const [protocol, modelId] of [
           ['vertex-gemini-v1', VERTEX_GEMINI_MODEL_ID],
           ['openai-responses-v1', 'gpt-5.6'],
@@ -818,6 +1109,14 @@ describe('model-driven working summary and window switch inside one main run', (
       },
     ]);
     const result = await runMain(fixed, log.value);
+    expect(bodies.map((body) => body.role)).toEqual([
+      'main',
+      'main',
+      'context',
+      'main',
+      'context',
+      'main',
+    ]);
     expect(result).toMatchObject({
       status: 'error',
       error: 'DUPLICATE_TOOL_ID',
@@ -850,6 +1149,8 @@ describe('model-driven working summary and window switch inside one main run', (
       expect.arrayContaining([...CONTEXT_TOOL_NAMES, 'story.list', 'story.search', 'story.read'])
     );
     expect(first.stable.contract).toContain('Context window tools are registered');
+    expect(first.stable.contract).toContain(CONTEXT_SUMMARY_SEMANTICS);
+    expect(first.stable.contract).toContain(CONTEXT_RETRIEVAL_GUIDANCE);
     expect(first.input.source.contextWindow).toMatchObject({
       inputTokenLimit: 16384,
       compactedExchanges: 0,
@@ -1087,9 +1388,23 @@ describe('model-driven working summary and window switch inside one main run', (
         retained: [{ sceneNumber: 5, revision: 'chapter-4', hash: hash(chapters[4]) }],
       },
     });
+    const preservedSnapshot = structuredClone(outcome.switched!);
+    const initial = buildMainProviderRequest(outcome.switched!).request;
+    expect(initial.input.source).not.toHaveProperty('requestContinuation');
     const { request } = buildMainProviderRequest(outcome.switched!, {
       segmentBootstrap: [outcome.event],
     });
+    expect(request.prompt!.messages.slice(0, -1)).toEqual(initial.prompt!.messages);
+    expect(request.prompt!.messages.at(-1)).toMatchObject({
+      id: 'native.request-continuation',
+      role: 'user',
+      content: [{ type: 'text', text: expect.stringContaining(CONTEXT_CONTINUATION_GUIDANCE) }],
+    });
+    const notice = request.prompt!.messages.at(-1)!.content[0].text;
+    expect(notice).toContain('same-request-in-progress');
+    expect(notice).toContain('context-window-opened');
+    expect(notice).toContain('"callId":"switch","name":"context.new","denied":false');
+    expect(request.input.source).not.toHaveProperty('requestContinuation');
     expect(request.bootstrap).toHaveLength(1);
     expect(request.input.results).toEqual([]);
     expect(request).not.toHaveProperty('opaqueState');
@@ -1116,5 +1431,15 @@ describe('model-driven working summary and window switch inside one main run', (
       any
     >;
     expect(JSON.stringify(vertex.contents)).toContain(workingSummary);
+    for (const messages of [responses.input, chat.messages, anthropic.messages, vertex.contents]) {
+      const encoded = JSON.stringify(messages);
+      // A completed step must remain after the original request in every fresh native window.
+      // Otherwise the original sequence can look like a newly issued request again.
+      expect(encoded.lastIndexOf('Host continuation for this in-flight request')).toBeGreaterThan(
+        encoded.lastIndexOf('CURRENT_REQUEST_CANARY')
+      );
+      expect(encoded.lastIndexOf('CURRENT_REQUEST_CANARY')).toBeGreaterThan(-1);
+    }
+    expect(outcome.switched).toEqual(preservedSnapshot);
   });
 });
