@@ -11,6 +11,7 @@ import {
 import { DEFAULT_LORE_CONTEXT, type LorePlacement } from './lore-context.js';
 import { listBehaviorTools } from './package-behavior-tools.js';
 import { OUTLINE_CONTRACT, type OutlineSnapshot } from './outline.js';
+import { AUTHOR_NOTE_GUIDANCE } from './notes.js';
 
 // These are host permissions, never instructions read from a content package.
 const ALLOWED_TOOLS = Object.freeze([
@@ -187,7 +188,10 @@ export function buildMainInput(
       .filter((item) => item.kind !== 'skill')
       .map((item) => item.text);
   }
-  if (snapshot.story?.notes.length) input.notes = structuredClone(snapshot.story.notes);
+  if (snapshot.story?.notes.length) {
+    input.notes = structuredClone(snapshot.story.notes);
+    input.contract += '\n' + AUTHOR_NOTE_GUIDANCE;
+  }
   input.history = sourceHistoryForRequest(snapshot);
   input.tools.push(...STORY_READ_NAMES);
   if (snapshot.contextPlan) {

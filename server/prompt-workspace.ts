@@ -13,8 +13,7 @@ import type {
   PromptCombinationOwner,
 } from '../core/product.js';
 import { workspaceModelRef } from '../core/product.js';
-import { createDefaultPromptProgram } from '../core/prompt-defaults.js';
-import { DEFAULT_MAIN_PROMPT, DEFAULT_TRANSLATION_PROMPT } from '../core/prompts.js';
+import { builtinCurrentPrompt } from './builtin-prompts.js';
 import {
   resolvePromptValues,
   validatePromptProgram,
@@ -105,16 +104,8 @@ export function defaultPromptWorkspace(): PromptWorkspace {
     helperModel: null,
     contextModel: null,
     modelRoutes: emptyModelRoutes(),
-    main: {
-      title: '현재 작문 프롬프트',
-      program: createDefaultPromptProgram(DEFAULT_MAIN_PROMPT),
-      values: {},
-    },
-    translation: {
-      title: '현재 번역 프롬프트',
-      program: createDefaultPromptProgram(DEFAULT_TRANSLATION_PROMPT, 'translation'),
-      values: {},
-    },
+    main: builtinCurrentPrompt('main'),
+    translation: builtinCurrentPrompt('translation'),
     translationPolicy: { refusalModel: null, maxRetries: 1, maxCalls: 16 },
   };
 }

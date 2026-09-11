@@ -325,9 +325,19 @@ describe('M2 story runner actual localhost request evidence (synthetic, no live 
     expect(budget.attempts).toHaveLength(1);
   });
 
-  test('S03 refused provider is terminal and cross-chat read cannot expand scope', async () => {
+  test('S03 refused provider is terminal while unavailable scoped lore permits a safe continuation', async () => {
     let denied = false;
-    const server = await fixture(async (_request, response) => {
+    const server = await fixture(async (request, response) => {
+      const body = JSON.parse(request.body);
+      if (body.input.results.length) {
+        expect(body.input.results[0]).toMatchObject({
+          denied: true,
+          errorKind: 'recoverable',
+          result: { code: 'RESOURCE_UNAVAILABLE' },
+        });
+        await writeSse(response, finish(stateResult(work.source)));
+        return;
+      }
       await writeSse(
         response,
         denied
@@ -352,9 +362,53 @@ describe('M2 story runner actual localhost request evidence (synthetic, no live 
     expect((await runStoryJob(work, log.hooks)).status).toBe('failed');
     expect(server.requests).toHaveLength(1);
     denied = true;
-    expect((await runStoryJob(work, log.hooks)).error).toBe('READ_TOOL_DENIED');
-    expect(server.requests).toHaveLength(2);
+    expect(await runStoryJob(work, log.hooks)).toMatchObject({ status: 'completed', error: null });
+    expect(server.requests).toHaveLength(3);
     expect(JSON.stringify(log.inputs)).not.toContain('HIDDEN_CANARY');
+  });
+
+  test('state reads can correct repeated arguments within the shared call budget and still preserve exact evidence', async () => {
+    const server = await fixture(async (request, response) => {
+      const body = JSON.parse(request.body),
+        results = body.input.results;
+      if (results.length < 4) {
+        await writeSse(response, [
+          {
+            type: 'tool_delta',
+            index: 0,
+            id: `read-${results.length}`,
+            name: 'story.read',
+            argumentsDelta: JSON.stringify({ id: 'source-1', limit: 16001 }),
+          },
+          { type: 'done', reason: 'tool_calls' },
+        ]);
+        return;
+      }
+      expect(results).toHaveLength(4);
+      for (const result of results)
+        expect(result).toMatchObject({
+          denied: true,
+          errorKind: 'recoverable',
+          result: { code: 'INVALID_ARGUMENTS' },
+        });
+      await writeSse(response, finish(stateResult(work.source)));
+    });
+    const work = bundle('state', server.endpoint);
+    work.snapshot.settings.maxCalls = 5;
+    const log = observed(server.origin);
+    expect(await runStoryJob(work, log.hooks)).toMatchObject({
+      status: 'completed',
+      result: stateResult(work.source),
+    });
+    expect(log.attempts).toHaveLength(5);
+    work.snapshot.settings.maxCalls = 4;
+    const exhausted = observed(server.origin);
+    expect(await runStoryJob(work, exhausted.hooks)).toMatchObject({
+      status: 'failed',
+      result: null,
+      error: 'MODEL_CALL_BUDGET_EXHAUSTED',
+    });
+    expect(exhausted.attempts).toHaveLength(4);
   });
 
   test('S03 repeated tool IDs across turns are rejected and uncertain partial output is never replayed', async () => {

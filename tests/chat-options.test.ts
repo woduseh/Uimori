@@ -26,6 +26,8 @@ import type { HelperTask } from '../core/helper.js';
 import { HelperRuntime } from '../server/helper-runtime.js';
 import { ResponseStreamStore } from '../server/response-stream.js';
 import { EditDraftService } from '../server/edit-drafts.js';
+import { createDefaultPromptProgram } from '../core/prompt-defaults.js';
+import { DEFAULT_MAIN_PROMPT } from '../core/prompts.js';
 
 const owned: { store: Store; path: string }[] = [];
 afterEach(() => {
@@ -53,7 +55,7 @@ function fixture() {
       ...prior.main,
       values: { tone: 'calm', detail: 1 },
       program: {
-        ...prior.main.program,
+        ...createDefaultPromptProgram(DEFAULT_MAIN_PROMPT),
         controls: [
           {
             id: 'tone',

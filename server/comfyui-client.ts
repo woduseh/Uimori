@@ -131,14 +131,27 @@ async function send(
     });
   }
 }
-async function readBytes(response: Response, maximum: number): Promise<Buffer> {
+async function readBytes(
+  response: Response,
+  maximum: number,
+  signal: AbortSignal
+): Promise<Buffer> {
+  signal.throwIfAborted();
   const reader = response.body?.getReader();
   if (!reader) return Buffer.alloc(0);
+  // A response body can outlive fetch's abort propagation. Close the pending
+  // read ourselves, without waiting for the remote source to acknowledge it.
+  const abortReader = () => {
+    void reader.cancel(signal.reason).catch(() => undefined);
+  };
+  signal.addEventListener('abort', abortReader, { once: true });
   const parts: Uint8Array[] = [];
   let length = 0;
   try {
     for (;;) {
+      signal.throwIfAborted();
       const next = await reader.read();
+      signal.throwIfAborted();
       if (next.done) break;
       length += next.value.byteLength;
       if (length > maximum) throw new IllustrationError('COMFYUI_RESPONSE_INVALID');
@@ -146,12 +159,13 @@ async function readBytes(response: Response, maximum: number): Promise<Buffer> {
     }
     return Buffer.concat(parts, length);
   } finally {
-    await reader.cancel().catch(() => {});
+    signal.removeEventListener('abort', abortReader);
+    void reader.cancel().catch(() => undefined);
     reader.releaseLock();
   }
 }
-async function readJson(response: Response): Promise<unknown> {
-  const text = (await readBytes(response, 8_000_000)).toString('utf8');
+async function readJson(response: Response, signal: AbortSignal): Promise<unknown> {
+  const text = (await readBytes(response, 8_000_000, signal)).toString('utf8');
   try {
     return JSON.parse(text);
   } catch {
@@ -236,7 +250,7 @@ export async function comfyUISystemStats(
       response.status >= 500,
       { comfyui: { httpStatus: response.status } }
     );
-  const body = await readJson(response);
+  const body = await readJson(response, options.signal);
   if (!object(body) || !object(body.system))
     throw new IllustrationError('COMFYUI_RESPONSE_INVALID', false, {
       comfyui: { httpStatus: response.status },
@@ -273,11 +287,11 @@ export async function cancelComfyUIPrompt(
       { body: {} }
     );
     if (stop.ok) {
-      const body = await readJson(stop);
+      const body = await readJson(stop, options.signal);
       result.targeted = object(body) && body.cancelled === true;
       return result;
     }
-    await stop.body?.cancel();
+    void stop.body?.cancel().catch(() => undefined);
     if (![404, 405].includes(stop.status)) return result;
   } catch {
     // Uncertain support/response is not permission to interrupt a shared queue.
@@ -286,7 +300,7 @@ export async function cancelComfyUIPrompt(
   try {
     const removed = await send(connection, options, 'queue', { body: { delete: [promptId] } });
     result.removed = removed.ok;
-    await removed.body?.cancel();
+    void removed.body?.cancel().catch(() => undefined);
   } catch {
     /* Same. */
   }
@@ -304,14 +318,14 @@ export async function fetchComfyUIResult(
 ): Promise<ComfyUIResult> {
   const response = await send(connection, options, `history/${encodeURIComponent(promptId)}`);
   if (!response.ok) {
-    await response.body?.cancel();
+    void response.body?.cancel().catch(() => undefined);
     if (response.status >= 500)
       throw new IllustrationError('COMFYUI_HTTP_5XX', true, {
         comfyui: { promptId, httpStatus: response.status },
       });
     return { state: 'pending' };
   }
-  const body = await readJson(response);
+  const body = await readJson(response, options.signal);
   if (!object(body) || !object(body[promptId])) return { state: 'pending' };
   const history = body[promptId] as Record<string, unknown>;
   const status = history.status;
@@ -345,7 +359,7 @@ export async function fetchComfyUIResult(
       });
     let bytes: Buffer;
     try {
-      bytes = await readBytes(view, ILLUSTRATION_MAX_IMAGE_BYTES);
+      bytes = await readBytes(view, ILLUSTRATION_MAX_IMAGE_BYTES, options.signal);
     } catch (error) {
       if (error instanceof IllustrationError)
         throw new IllustrationError('COMFYUI_IMAGE_INVALID', false, { comfyui: { promptId } });
@@ -383,7 +397,7 @@ export async function generateWithComfyUI(
       },
     });
     if (!submitted.ok) {
-      const body = await readJson(submitted).catch(() => undefined);
+      const body = await readJson(submitted, execution.signal).catch(() => undefined);
       const diagnostic: ComfyDiagnostic = {
         httpStatus: submitted.status,
         submission: submitted.status >= 500 ? 'uncertain' : 'rejected',
@@ -401,7 +415,7 @@ export async function generateWithComfyUI(
         { comfyui: diagnostic }
       );
     }
-    const accepted = await readJson(submitted);
+    const accepted = await readJson(submitted, execution.signal);
     if (
       !object(accepted) ||
       typeof accepted.prompt_id !== 'string' ||

@@ -352,8 +352,29 @@ GPL 코드나 개인 패키지의 본문·스크립트를 복사하지 않고 �
 
 - 2026-09-08 context token estimate: dqbd/tiktoken README + npm tiktoken 1.0.22 (MIT) → Node WASM get_encoding(o200k_base) → offline segmented estimate with 10% margin in core/context-budget.ts → context-budget and app compaction regression. Pure JS whole-string BPE was not retained: a repeated 8,192-character token took 4.52s; bounded WASM segments keep that fixture responsive. No claim of exact Claude/Gemini/Codex billing tokens.
 
+## 하네스 지시와 자율성 (2026-09-11)
+
+- OpenAI [GPT-6 Astra prompting best practices](https://developers.openai.com/api/docs/guides/latest-model#prompting-best-practices), 2026-09-11 조회 → 작업 완료·지시 우선순위·비례 검증·구체적인 위임 → 하네스가 선택 프롬프트의 문체를 덮지 않고 복구 가능한 도구 오류, 명확한 변경 요청, 필요한 후속 상담을 허용 → 실제 도구 반환·예약·영수증·입력 조립의 합성 회귀로 검증해요. 사용자 실사용 평가는 별도예요.
+- 사용자 제공 Uimori 페메/번역 JSON과 RisuToki `risu/prompts/phēmē`, `risu/plugins/risuagent preset`의 agents-pipeline-페메 계열을 읽기 전용으로 참고했어요 → 캐릭터의 동기·관계·국소적 인과, 조건부 작가 권한과 선택 가능한 보조 의견 → `server/agent-collaboration.ts`, `core/agent-collaboration.ts`에 일반적인 협업 계약으로 적용했어요. 원본 문체나 사용자 발화 권한을 하네스 기본값으로 고정하는 방식은 다양한 프롬프트와 충돌하므로 채택하지 않았어요.
+- Codex 로컬 체크아웃 `459a79eb85400af759e9220c7bafb4429ae07516` → 격리 code mode, 등록 도구 인덱스, Windows 환경 도구 읽기 경계 → `core/codex-protocol.ts`, `server/codex-runtime.ts`의 검색·계산 허용과 최종 이벤트 처리 → stdio fixture로 검증해요. 정확한 파일·심볼과 남은 실증 범위는 [CODEX](../docs/CODEX.md)에 있어요. 읽기 전용 셸만으로 서버 인증 파일을 격리할 수 있다는 가정은 채택하지 않았어요.
+- 개편 위치와 유지한 검증 계약: [HARNESS-PROMPTS](../docs/HARNESS-PROMPTS.md).
+
 ## 실행 중 문맥 정리와 Vertex 연속 경계 (2026-09-11)
 
 - 같은 날 다시 확인한 Google [Thought signatures](https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/thinking/thought-signatures)의 전체 parts·순서·서명 보존 원리를 유지해요. `server/model-runner.ts`는 이미 완료한 조회를 새 요청에서 일반 참고 문맥으로 전달하고, 원래 native 연속을 유지할 때는 해당 결과와 opaque를 함께 보존해요. 서명 없는 과거 결과를 새 function response로 재구성하거나 임의 서명을 넣는 방식은 채택하지 않았어요.
 - 같은 응답의 병렬 도구 결과는 모두 완료한 뒤 전송 크기를 계산해요. 원본 영수증과 전송용 `contextWindow`를 분리해 결과의 대응·불변성을 유지해요. `tests/context-tools.test.ts`의 실제 Vertex 인코더로 단일·병렬·읽기/쓰기 혼합 경계를 검증했어요.
 - 85%는 정리를 시도하는 기준이며 실제 상한이 아니에요. 더 작은 후보가 실제 한도 안이면 채택하고, 도움이 없는 요약이면 한도 안인 원래 요청을 유지해요. 이 선택은 Uimori의 독립 설계이며 공식 문서가 특정 비율을 권장한다고 해석하지 않아요. R3의 실제 후속 응답 7경계와 R4의 원문 재조회 완료, 남은 의미 품질 한계는 [안정화 결과](STABILIZATION-RESULTS-2026-09-11.md)에 구분했어요.
+
+## 선택한 협업 문맥과 Risu 참고 구조 (2026-09-11)
+
+사용자가 제공한 `RisuAI.Agent.v4.1.2.js`를 정적으로 읽었어요. 파일 SHA-256은 `a6bdd94bbe4d114700450ea4d480c564452d0a9270df259eda7b2d7d9d642b5c`이며, 기존 `risu-agents.pipeline-preset` JSON의 row 실행기와 다른 정보 추출·채팅 로어 저장·페르소나 감독 플러그인이에요. 파일을 실행하거나 코드를 복사하지 않았어요.
+
+| 원본 위치·심볼 | 배운 원리 | Uimori 적용과 검증 |
+| --- | --- | --- |
+| `buildScopedExtractorMessages` 및 호출별 읽을 로어 이름·대화 범위(8460, 8628행) | 소비할 자료를 명시적으로 선택해요. | `server/agent-context.ts`에서 같은 Run의 완료 상담·메인 조회 영수증만 ID로 선택해요. `tests/agent-collaboration-context.test.ts`가 선택·미선택 자료, 실패 결과, 범위 오류를 검사해요. |
+| 이전 턴 자료와 감독 대상 턴 구분(1743–1747, 1838–1865행) | 제안의 출처·시점과 실제 원문을 구분해요. | `server/agent-collaboration.ts`가 원 영수증과 문맥 해시·미확정 초안을 전달해요. `tests/agent-context-backup.test.ts`가 새 ID 반복 복원에서도 실제 전송 기록의 내용·해시 보존을 확인해요. |
+| 추출 호출 완료 후 `writeOutputsForCall`(16847–16917행) | 직렬 실행과 앞 단계 결과 전달은 별도 계약이에요. | 순서만으로 의존성을 추정하지 않고 메인이 `contextRefs`를 선택해 후속 상담해요. `server/model-runner.ts`의 완료 영수증 보관은 전송 문맥의 요약·초기화와 독립이에요. |
+
+원본의 조언 자동 로어 저장·주기적 장기 기억 추출·수치화한 성격 우선순위·`strict_directive`와 보조 실패 시 메인 중단은 채택하지 않았어요. 기존 Uimori의 선택 가능한 의견, 메인의 최종 창작·저장, 호출 예산·취소·불확실 실행 계약을 유지해요.
+
+Risu Agents! 페메/뮈토스 JSON 8종은 역할과 실행 설정을 비교했어요. 페메의 인물·대사·출연 선별, 장면·세계 연속성, 전개 줄기를 기본 3역할로 구성하고 장외 관점은 시뮬용 사본에 추가했어요. 원본의 고정 체크리스트·작은 전개·자동 기억·polish를 그대로 옮기지 않고 현재 페메의 요청 단위·서술권·실제 행위 능력·시점에 맞췄어요. 개인 프롬프트 사본과 원본 해시는 ignored `output/pheme-collaborators-uimori-2026-09-11/`에 있으며 제품에는 자료 이름별 분기를 추가하지 않았어요. 실제 창작 품질과 원본 Risu 실행의 동등성은 검증 범위가 아니에요.

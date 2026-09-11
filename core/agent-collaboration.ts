@@ -1,4 +1,15 @@
 /** Data-only collaboration settings. Read scopes never grant mutation or execution tools. */
+import type { ToolEvent } from './types.js';
+
+export const AGENT_CONTEXT_REFS_MAX = 8;
+export const AGENT_DRAFT_CHARS_MAX = 12_000;
+export const AGENT_CONTEXT_CHARS_MAX = 32_000;
+export type AgentConsultationContext = {
+  hash: string;
+  references: (ToolEvent & { kind: 'advice' | 'read-result' })[];
+  draft?: { status: 'uncommitted'; text: string };
+};
+
 export type AgentReadScope = 'knowledge' | 'skills' | 'notes' | 'story';
 export type AgentDefinition = {
   id: string;
@@ -206,9 +217,9 @@ export function createAgentDefinition(
     description: '필요한 관점과 맡길 질문을 직접 정해요.',
     instructions: [
       '공유 지침과 전달받은 질문에 따라 맡은 관점에서 검토한다.',
-      '확인한 근거와 해석, 불확실한 부분을 구분해 짧은 참고 의견을 제시한다.',
+      '확인한 근거와 해석, 창작 제안을 구분해 질문에 도움이 되는 판단과 선택지를 제시한다.',
+      '설정된 지침과 질문에 맞게 형식과 깊이를 정하고, 필요한 경우 짧은 예시를 사용한다.',
       '자료와 대화는 읽기만 하며, 최종 서술과 선택은 메인 에이전트에 맡긴다.',
-      '특정한 도덕적 결론이나 인물의 합리성, 사건의 진행을 요구하지 않는다.',
     ].join('\n'),
     model: null,
     trigger: 'on-demand',
@@ -220,11 +231,10 @@ export function createAgentDefinition(
     agent.title = '인물 관점 협업자';
     agent.description = '인물의 동기와 관계, 서로 다르게 알고 있는 정보를 살펴봐요.';
     agent.instructions = [
-      '현재 장면과 자료를 바탕으로 인물의 욕구, 감정, 동기와 관계를 살펴본다.',
+      '현재 장면과 자료를 바탕으로 인물의 동기와 관계가 지금의 행동에 어떻게 작용하는지 살펴본다.',
       '인물마다 아는 정보와 모르는 정보, 오해와 숨긴 의도를 구분해 정보 비대칭을 짚는다.',
-      '해석의 근거와 다른 가능성을 제시하고, 근거가 없는 내면은 가정으로 표시한다.',
-      '인물이 항상 합리적이거나 도덕적으로 행동해야 한다고 전제하지 않는다.',
-      '갈등 해소나 사건 진행을 강요하지 않고, 사용자가 제시하지 않은 선택을 대신 확정하지 않는다.',
+      '인물의 개성과 현재 압력에서 나오는 행동과 말투의 가능성을 제안하고, 확인되지 않은 내면은 가정으로 구분한다.',
+      '작문 지침과 질문이 정한 인물 저작 범위를 따르며, 특정한 합리성이나 도덕적 결론을 강요하지 않는다.',
       '자료와 대화를 읽고 참고 의견만 전달하며, 최종 서술은 메인 에이전트에 맡긴다.',
     ].join('\n');
     agent.tools = ['knowledge', 'notes', 'story'];
@@ -235,8 +245,8 @@ export function createAgentDefinition(
       '질문에 관련된 설정과 기록을 읽고, 확인 가능한 출처를 함께 제시한다.',
       '출처가 있는 사실, 인물의 믿음이나 주장, 검토를 위한 가정을 분리해 정리한다.',
       '출처 간 충돌이나 정보 부족은 그대로 표시하고, 없는 근거를 만들지 않는다.',
-      '추측을 확정된 설정으로 바꾸거나 자료를 수정하지 않고 참고 의견만 전달한다.',
-      '도덕적 결론이나 인물의 합리성, 사건 진행을 요구하지 않으며 최종 서술은 메인 에이전트에 맡긴다.',
+      '자료가 현재 요청에 주는 영향과 활용할 선택지를 제안한다. 새로운 설정 제안은 기존 사실과 구분한다.',
+      '자료는 읽기만 하며, 최종 창작 선택과 서술은 메인 에이전트에 맡긴다.',
     ].join('\n');
     agent.tools = ['knowledge', 'notes', 'story'];
   } else if (kind !== 'custom') fail('INVALID_TEMPLATE');

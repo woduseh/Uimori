@@ -62,7 +62,11 @@ test('NUI01 native prompt metadata import, default options and authoring persist
   page.on('pageerror', (error) => errors.push(error.message));
   await page.goto('/');
   await navigationAction(page, '프롬프트');
-  await page.getByRole('button', { name: '새 프롬프트', exact: true }).click();
+  await page
+    .getByRole('region', { name: '프롬프트 관리', exact: true })
+    .locator('.library-toolbar')
+    .getByRole('button', { name: '새 프롬프트', exact: true })
+    .click();
   const editor = page.getByTestId('prompt-editor');
   const composer = editor.getByTestId('prompt-composer');
   await openPromptTools(composer);

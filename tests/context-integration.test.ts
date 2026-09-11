@@ -1,4 +1,10 @@
-import { modelWorkspace, updateModelWorkspace } from '../server/prompt-workspace.js';
+import {
+  modelWorkspace,
+  updateModelWorkspace,
+  updatePromptWorkspace,
+} from '../server/prompt-workspace.js';
+import { createDefaultPromptProgram } from '../core/prompt-defaults.js';
+import { DEFAULT_MAIN_PROMPT } from '../core/prompts.js';
 import { updateTestProfile } from './fixtures/model-workspace.js';
 import { createFixtureChat, injectWithFixtureBot } from './fixtures/chat.js';
 import { randomUUID } from 'node:crypto';
@@ -83,6 +89,15 @@ async function setup(options: { evaluated?: boolean; count?: number; short?: boo
     approvedOrigins: [origin],
   }));
   await app.ready();
+  // Keep these compression boundaries on the same short synthetic instructions.
+  updatePromptWorkspace(app.store, {
+    expectedRevision: modelWorkspace(app.store).revision,
+    main: {
+      title: 'Synthetic context instructions',
+      program: createDefaultPromptProgram(DEFAULT_MAIN_PROMPT),
+      values: {},
+    },
+  });
   let chat = createFixtureChat(app.store, '합성 긴 한국어 대화');
   chat = app.store.settings(chat.id, chat.settingsRevision, {
     ...chat.settings,

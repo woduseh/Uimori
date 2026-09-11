@@ -32,24 +32,34 @@ Linux Docker의 실제 이미지 빌드·기동과 실계정 로그인·구독 �
 ## 실행 계약과 한계
 
 - App Server `initialize`, `account/*`, `model/list`, `thread/start`, `turn/start`를 사용해요. 각 판단 요청은 새 ephemeral thread와 별도 프로세스로 실행하며 opaque continuation은 저장하지 않아요.
-- 전용 Codex home과 빈 임시 작업 폴더를 사용해요. 기존 사용자 home/config와 서버의 provider API 키 환경변수를 넘기지 않아요. `environments: []`, `selectedCapabilityRoots: []`, read-only/never 정책과 기능 비활성화로 Codex의 파일·터미널·웹·MCP·앱·스킬 접근을 차단해요. 예상하지 않은 도구 실행은 실패로 처리해요.
-- Codex는 JSON으로 최종 응답 또는 허용된 Uimori 도구 요청을 반환해요. 실제 도구 권한·자료 조회·검증·저장은 기존 Uimori 하네스가 담당해요. 각 역할의 기존 원문/hash/revision·취소·작업 귀속 계약을 유지해요.
-- 삽화 턴은 같은 프로세스 격리 안에서 `features.image_generation=true`만 더해 `imageGeneration` 항목을 받아요. 결과 base64 또는 전용 home의 `savedPath` 파일만 읽고 다른 도구 항목은 계속 거절해요. 텍스트 턴과 별도 동시 실행 슬롯(1개)을 써요.
+- 전용 Codex home과 빈 임시 작업 폴더를 사용해요. 기존 사용자 home/config와 서버의 provider API 키 환경변수를 넘기지 않아요. `environments: []`, `selectedCapabilityRoots: []`, read-only/never 정책은 유지해요. 내장 도구 전체 금지는 제거하고 `web_search=cached`와 `features.code_mode=true`로 검색과 격리된 JavaScript 계산을 사용할 수 있게 해요. 실제 도구 제공 여부는 설치된 CLI·모델에 따라 달라요.
+- Codex는 JSON으로 최종 응답 또는 허용된 Uimori 도구 요청을 반환해요. Uimori 자료 조회·검증·저장은 기존 하네스가 담당하고, 내장 도구 이름을 이 JSON에 넣어 실행시키지는 않아요. 각 역할의 기존 원문/hash/revision·취소·작업 귀속 계약을 유지해요. 내장 검색·계산의 중간 결과, 계획, 진행 메시지는 본문으로 저장하지 않으며 `final_answer`만 채택해요. phase가 없는 구형 응답은 후속 작업이 없을 때 마지막 메시지를 최종 후보로 사용해요.
+- 삽화 턴은 같은 검색·계산 도구에 `features.image_generation=true`를 더해 `imageGeneration` 항목을 받아요. 결과 base64 또는 전용 home의 `savedPath` 파일만 읽어요. 텍스트 턴에는 이미지 결과의 예약·귀속·저장 계약이 없으므로 이미지 생성은 계속 삽화 전용이에요. 삽화는 별도 동시 실행 슬롯(1개)을 써요.
 - PromptProgram의 논리적 역할·순서·빈 메시지를 JSON으로 전달해요. Codex 자체 지침이 추가되므로 native API message role과 동일한 처리는 보장하지 않아요. assistant prefill과 필수 cache는 실행 전에 거절해요.
 - `reasoningEffort`와 timeout을 전달해요. `maxOutputTokens`는 출력 목표이며 공급자의 강제 토큰 한도가 아니에요. temperature는 허용하지 않아요. 구조화 출력은 항상 외부 JSON envelope로 검증하며 내부 역할별 결과 검증도 유지해요.
 - 전송 전에 RPC attempt를 기록해요. 동시 실행은 2개, 대기는 최대 32개이며 취소할 수 있어요. Uimori는 재시작·전송 실패·불확실한 실행을 자동 재생하지 않아요. 다만 공식 CLI 내부의 통신 재시도 정책은 Uimori가 제어하지 못해요. 0.153은 내장 OpenAI provider의 retry 설정 덮어쓰기를 거절하므로 내부 재시도 0회나 upstream exactly-once는 보장하지 않아요. 기존 하네스의 명시적 재요청 및 정상 종료된 결과에 대한 제한된 재시도는 별도 판단 요청으로 기록돼요.
 - 한 attempt는 Codex 판단 작업 하나이며 Codex 내부 모델 호출 수와 같지 않아요. 응답에 토큰 사용량이 있으면 기록하지만 실제 비용과 내부 호출 수는 `null`이에요. Vertex의 USD 예산을 Codex 구독 예산으로 해석하지 않아요. 화면 사용률은 공식 계정 한도의 최근 조회값이에요.
 
+### 내장 도구의 남은 경계
+
+터미널·파일 읽기/쓰기·Node REPL·로컬 이미지 보기·브라우저/컴퓨터 제어·앱/MCP·외부 스킬·지속 메모·내장 하위 에이전트·추가 권한 요청은 제공하지 않아요. 이들은 호스트 파일·인증·외부 변경 권한, Uimori의 저장·협업·문맥 관리와 연결되므로 검색·계산과 같은 범위가 아니에요. `code_mode`는 Node REPL과 다른 V8 JavaScript 실행기예요. 등록된 도구만 호출하고 Node·파일·네트워크 API 및 모듈 import를 제공하지 않는 계약을 사용해요. Uimori 도구는 native registry에 등록하지 않고 JSON envelope로만 처리하므로 code mode에서 직접 저장 권한을 얻지 못해요. 지원하지 않는 승인/동적 도구 요청과 호스트 환경 도구 이벤트는 기존대로 실패 처리해요.
+
+read-only sandbox만 남기고 셸을 열면 쓰기는 막아도 서버 파일과 전용 인증 파일의 읽기까지 격리하지는 못해요. 확인한 Codex Windows 제한 토큰 테스트는 루트 읽기 권한이 없는 파일시스템 정책을 지원하지 않는다고 명시하므로, 단순한 설정 삭제로 셸까지 허용하지 않았어요. 환경 도구를 추가하려면 별도 실행 환경과 읽기 범위를 먼저 정해야 해요. 검색은 Codex의 cached 모드이며 셸의 네트워크는 계속 차단해요.
+
+2026-09-11 정적 근거는 로컬 `codex` 체크아웃 `459a79eb85400af759e9220c7bafb4429ae07516`의 `code-mode-runtime/src/runtime/{globals,module_loader,callbacks}.rs`(허용 전역·import 거부·등록 도구 인덱스), `core/src/tools/code_mode/execute_handler.rs`(현재 도구만 전달), `core/src/tools/spec_plan_tests.rs::disabling_shell_tools_disables_command_tools_for_all_environments`, `app-server/tests/suite/v2/thread_start.rs::create_config_toml_with_profile_workspace_root`예요. 경로는 모두 `codex-rs/` 아래예요. 이 원리를 Uimori의 `core/codex-protocol.ts`, `server/codex-runtime.ts`에 적용하고 합성 stdio 이벤트·실행 설정 검사를 추가했어요. 실제 설치 CLI에서의 도구 실행과 플랫폼 sandbox 검증은 사용자가 진행하며, 이 소스 조사와 합성 검사는 그 실증을 대신하지 않아요.
+
+같은 소스의 `core/src/stream_events_utils.rs::{handle_output_item_done,handle_non_tool_response_item}`와 `app-server-protocol/src/protocol/v2/item.rs::ThreadItem`을 따라가면 code mode의 `exec`/`wait` 호출은 내부 도구 실행이며 별도 `codeMode` 공개 item을 만들지 않아요. 원시 이벤트를 요청한 경우 호출·출력은 `rawResponseItem/completed`에 해당하며 Uimori의 최종 응답 처리에 들어가지 않아요. 중첩한 검색은 `webSearch`, 삽화 생성은 `imageGeneration`처럼 해당 도구의 항목으로 나타나요. `core/src/tools/spec_plan.rs::register_code_mode_executors`는 환경 목록과 무관하게 실행기를 등록하고, `code-mode-runtime/src/service_contract_tests.rs::yields_and_resumes`는 빈 등록 도구 목록으로 계산을 실행하는 합성 사례예요. 단, `code-mode/src/remote_session.rs::ProcessOwnedCodeModeSessionProvider`는 설치 패키지의 `codex-code-mode-host` 실행 파일을 요구해요. 파일이 없으면 `core/src/tools/mod.rs::effective_tool_mode`에 따라 직접 도구로 돌아가거나 해당 모델의 code-mode-only 요청이 실패할 수 있으므로, 설정 허용을 모든 설치에서의 실제 계산 가능으로 해석하지 않아요.
+
 ## 로컬 검증
 
 ```powershell
-npx vitest run tests/codex-process.test.ts tests/codex-runtime.test.ts tests/codex-protocol.test.ts tests/codex-integration.test.ts
+npx vitest run tests/codex-process.test.ts tests/codex-runtime.test.ts tests/codex-protocol.test.ts tests/codex-image.test.ts tests/codex-integration.test.ts
 # 설치된 CLI 연결만 확인: 새 빈 인증 폴더, 로그인/모델 호출 없음
 $env:NR_CODEX_PREFLIGHT='1'
 npx vitest run tests/codex-installed.test.ts
 Remove-Item Env:NR_CODEX_PREFLIGHT
 ```
 
-설치 사전 검사 결과는 `output/codex-preflight/summary.json`에 남아요. 합성 stdio 검사는 인증 취소·오류 가림·정상 이벤트·시간 초과·종료 경합·도구 차단·대기 취소·attempt 선기록을 확인해요. 앱 통합 검사는 6개 역할과 등록 제안, export/import, 비활성 프로바이더 및 인증/Origin 경계를 확인해요. `npm run verify:providers`에는 390px의 Codex 설정·모의 로그인·취소·연결 해제 검사가 포함돼요. 이 검사들은 실제 구독 모델 응답 품질·소모량을 입증하지 않아요.
+설치 사전 검사 결과는 `output/codex-preflight/summary.json`에 남아요. 합성 stdio 검사는 인증 취소·오류 가림·정상 이벤트·시간 초과·종료 경합·내장 도구 진행과 최종 응답 분리·환경/승인 경계·대기 취소·attempt 선기록을 확인해요. 앱 통합 검사는 6개 역할과 등록 제안, export/import, 비활성 프로바이더 및 인증/Origin 경계를 확인해요. `npm run verify:providers`에는 390px의 Codex 설정·모의 로그인·취소·연결 해제 검사가 포함돼요. 이 검사들은 실제 구독 모델 응답 품질·소모량을 입증하지 않아요.
 
 공식 계약: [App Server](https://learn.chatgpt.com/docs/app-server), [인증](https://learn.chatgpt.com/docs/auth), [설정 schema](https://learn.chatgpt.com/config-schema.json). 버전별 실제 생성 타입과 채택 근거는 [SOURCES](../project-plan/SOURCES.md)에 기록해요.

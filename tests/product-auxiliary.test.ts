@@ -1,7 +1,14 @@
 import { createDefaultPromptProgram } from '../core/prompt-defaults.js';
+import { AUTHOR_NOTE_GUIDANCE } from '../core/notes.js';
 import { afterEach, describe, expect, test } from 'vitest';
 import { runAuxiliaryJob, sourceTimeContext } from '../server/product-auxiliary.js';
-import { bundle, bridge, hooks, selectProvider } from './fixtures/translation-job.js';
+import {
+  bundle,
+  bridge,
+  hooks,
+  selectProvider,
+  translationFixtureSlot,
+} from './fixtures/translation-job.js';
 import { loopbackProvider, writeSse } from './fixtures/loopback-provider.js';
 
 const cleanups: (() => Promise<void>)[] = [];
@@ -14,7 +21,7 @@ async function fixture(handler: Parameters<typeof loopbackProvider>[0]) {
   return server;
 }
 function translationBody(wire: string) {
-  return `합성 번역 ${JSON.parse(wire).input.source.text}`;
+  return `합성 번역 ${translationFixtureSlot(JSON.parse(wire), 'source')}`;
 }
 
 describe('M1 durable auxiliary orchestration with actual fixture HTTP', () => {
@@ -80,7 +87,8 @@ describe('M1 durable auxiliary orchestration with actual fixture HTTP', () => {
     const second = JSON.parse(server.requests[1].body);
     expect(first.role).toBe('translation');
     expect(first.modelId).toBe('explicit-fixture-model');
-    expect(first.input.source.context).toMatchObject({
+    const context = JSON.parse(translationFixtureSlot(first, 'context'));
+    expect(context).toMatchObject({
       revision: 'chat-a@4',
       bot: { id: 'bot', revision: 2, text: 'Mira has not learned the keeper identity.' },
       references: [
@@ -88,7 +96,7 @@ describe('M1 durable auxiliary orchestration with actual fixture HTTP', () => {
         { id: 'canon', revision: 4 },
       ],
     });
-    expect(first.input.source.context.modelPresetRevision).toBe('model-translation@5');
+    expect(context.modelPresetRevision).toBe('model-translation@5');
     expect(JSON.stringify(first)).not.toContain('SOURCE_TIME_GLOSSARY');
     expect(second.opaqueState).toEqual({ continuation: 'opaque-for-translation' });
     expect(second.input.results.map((item: { callId: string }) => item.callId)).toEqual([
@@ -205,7 +213,9 @@ test('custom translation prompt survives tool continuation and refusal retry wit
   expect(server.requests).toHaveLength(3);
   for (const captured of server.requests) {
     const wire = JSON.parse(captured.body);
-    expect(wire.stable.contract).toBe('');
+    expect(wire.stable.contract).toContain(AUTHOR_NOTE_GUIDANCE);
+    expect(wire.stable.contract).toContain('translation.search/read retrieves prior wording');
+    expect(wire.input.source).not.toHaveProperty('referencePolicy');
     expect(wire.prompt.messages[0].content[0].text).toBe(custom);
     expect(wire.input.task).not.toContain('Korean');
     expect(wire.input.controls).toMatchObject({

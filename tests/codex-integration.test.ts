@@ -7,6 +7,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import { createApp, type App } from '../server/app.js';
 import type { CodexRuntimeService } from '../server/codex-runtime.js';
 import type { ProviderRequest, ProviderResult } from '../core/transport.js';
+import { translationFixtureSlot } from './fixtures/translation-job.js';
 
 const owned: { directory: string; app?: App }[] = [];
 afterEach(async () => {
@@ -204,7 +205,7 @@ test('app routes every agent role through Codex and persists RPC attempts, propo
         output =
           request.input.controls.purpose === 'translation-refusal'
             ? { verdict: 'accepted' }
-            : source.text;
+            : translationFixtureSlot(request, 'source');
       else
         output = {
           sourceRevision: source.sourceRevision,

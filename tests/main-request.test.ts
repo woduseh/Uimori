@@ -663,7 +663,7 @@ describe('Recoverable read failures in the real main runner', () => {
     }
   );
 
-  test('repeated invalid read with fresh call IDs exhausts correction before call budget', async () => {
+  test('repeated invalid reads remain correctable until the configured call budget', async () => {
     let calls = 0;
     const server = await loopbackProvider(async (request, response) => {
       const body = JSON.parse(request.body);
@@ -677,8 +677,8 @@ describe('Recoverable read failures in the real main runner', () => {
     work.settings.maxCalls = 8;
     expect(await runMain(work, hooks(server.origin).value)).toMatchObject({
       status: 'error',
-      error: 'TOOL_CORRECTION_EXHAUSTED',
+      error: 'MODEL_CALL_BUDGET_EXHAUSTED',
     });
-    expect(calls).toBe(2);
+    expect(calls).toBe(8);
   });
 });

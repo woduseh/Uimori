@@ -152,6 +152,8 @@ test('before advisors run in order with scoped reads, selected models and explic
         expect(body.model).toBe(state.mainModel.modelId);
         expect(body.max_output_tokens).toBe(4096);
         expect(JSON.stringify(body)).toContain(MAIN_ONLY);
+        expect(body.instructions).toContain(SHARED);
+        expect(packet(body).source.collaboration).not.toHaveProperty('sharedInstructions');
         const bootstrap = outputs(body);
         expect(bootstrap.map((result) => result.agentId)).toEqual(['advisor', 'second']);
         expect(bootstrap.map((result) => result.status)).toEqual(['completed', 'completed']);
@@ -254,7 +256,7 @@ test('on-demand main -> advisor read loop -> main persists attempts before HTTP 
         call(
           body,
           'agents.consult',
-          { agentId: 'advisor', question: 'Return the same consultation again.' },
+          { agentId: 'advisor', question: '  Where does the source place the observatory?  ' },
           'consult-2'
         ),
       ]);
@@ -300,6 +302,79 @@ test('on-demand main -> advisor read loop -> main persists attempts before HTTP 
   expect(JSON.stringify(detail)).not.toContain(opaque);
   expect((await state.start()).id).toBe(run.id);
   expect(state.provider.requests).toHaveLength(5);
+});
+
+test('different follow-up questions receive prior advice and share the per-advisor budget', async () => {
+  const first = 'Which part of the setting matters here?';
+  const second = 'Given that constraint, suggest another character response.';
+  const state = await fixture(
+    async (body, target, number, wire) => {
+      if (number === 1) {
+        await send(target, [
+          call(body, 'agents.consult', { agentId: 'advisor', question: first }, 'first'),
+        ]);
+      } else if (number === 2) {
+        expect(wire.agentId).toBe('advisor');
+        expect(packet(body).source).not.toHaveProperty('previousConsultations');
+        await send(target, [message('The observatory can be seen from the harbor.')]);
+      } else if (number === 3) {
+        await send(target, [
+          call(body, 'agents.consult', { agentId: 'advisor', question: second }, 'follow-up'),
+          call(body, 'agents.consult', { agentId: 'advisor', question: first }, 'repeat-first'),
+          call(
+            body,
+            'agents.consult',
+            { agentId: 'advisor', question: 'Consider one further alternative.' },
+            'over-budget'
+          ),
+        ]);
+      } else if (number === 4) {
+        expect(wire.agentId).toBe('advisor');
+        expect(packet(body).task).toBe(second);
+        expect(packet(body).source.previousConsultations).toEqual([
+          {
+            question: first,
+            status: 'completed',
+            text: 'The observatory can be seen from the harbor.',
+            truncated: false,
+          },
+        ]);
+        await send(target, [message('The keeper could avoid looking toward it.')]);
+      } else {
+        expect(number).toBe(5);
+        expect(wire.agentId).toBeUndefined();
+        const results = outputs(body);
+        expect(results).toHaveLength(4);
+        expect(results[1]).toMatchObject({
+          question: second,
+          status: 'completed',
+          text: 'The keeper could avoid looking toward it.',
+          usage: { modelCalls: 1 },
+        });
+        expect(results[2]).toMatchObject({ cached: true, text: results[0].text });
+        expect(results[3]).toMatchObject({
+          status: 'unavailable',
+          error: 'ADVISOR_CALL_BUDGET_EXHAUSTED',
+          usage: { modelCalls: 0 },
+        });
+        await send(target, [message('The keeper turned away.')]);
+      }
+    },
+    { collaboration: collaboration({ agents: [agent('advisor', { maxCalls: 2 })] }) }
+  );
+  const run = await settled(state, (await state.start()).id);
+  expect(run.status).toBe('completed');
+  expect(state.observed.map((wire) => wire.agentId ?? 'main')).toEqual([
+    'main',
+    'advisor',
+    'main',
+    'advisor',
+    'main',
+  ]);
+  expect(run.usage.modelCalls).toBe(5);
+  expect((await state.detail()).sources.map((source) => source.text)).toEqual([
+    'The keeper turned away.',
+  ]);
 });
 
 test('host, collaboration and per-advisor budgets bound real requests while reserving the last main call', async () => {
@@ -398,7 +473,7 @@ test('advisor recursive consult, state writes, final submission and ungranted re
       async (body, target, _number, wire) => {
         if (wire.agentId) {
           advisorRequests++;
-          expect(advisorRequests).toBeLessThanOrEqual(forbidden === 'foreign-resource' ? 2 : 1);
+          expect(advisorRequests).toBeLessThanOrEqual(forbidden === 'foreign-resource' ? 3 : 1);
           expect(JSON.stringify(body)).not.toContain(state.foreign.text);
           expect(body.tools).toHaveLength(2);
           if (forbidden === 'foreign-resource')
@@ -430,14 +505,14 @@ test('advisor recursive consult, state writes, final submission and ungranted re
     );
     const run = await settled(state, (await state.start()).id);
     expect(run.status, forbidden).toBe('completed');
-    expect(advisorRequests).toBe(forbidden === 'foreign-resource' ? 2 : 1);
-    expect(state.provider.requests).toHaveLength(forbidden === 'foreign-resource' ? 3 : 2);
+    expect(advisorRequests).toBe(forbidden === 'foreign-resource' ? 3 : 1);
+    expect(state.provider.requests).toHaveLength(forbidden === 'foreign-resource' ? 4 : 2);
     expect(consults(run)[0].result.status).toBe('unavailable');
     const reads = run.toolEvents.filter((event) => event.name === 'agents.read');
     if (forbidden === 'foreign-resource') {
-      expect(reads).toHaveLength(2);
+      expect(reads).toHaveLength(3);
       expect(reads[0]).toMatchObject({ denied: true, result: { code: 'RESOURCE_UNAVAILABLE' } });
-      expect(consults(run)[0].result.error).toBe('ADVISOR_TOOL_CORRECTION_EXHAUSTED');
+      expect(consults(run)[0].result.error).toBe('ADVISOR_CALL_BUDGET_EXHAUSTED');
     } else expect(reads).toEqual([]);
     expect(
       run.toolEvents.some((event) => /^(state\.|behavior_|story\.submit)/u.test(event.name))
