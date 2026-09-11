@@ -523,9 +523,11 @@ test('LIBUI07 a wide desktop centres the library and prompt columns inside the d
   expect(heading).toEqual(editor);
   await navigationAction(page, '프롬프트');
   await expect(page.getByTestId('prompt-library')).toBeVisible();
-  const actions = await column('.prompt-library-actions');
+  // The prompt entry points ride the list's own toolbar, so one centred column holds both.
+  const toolbar = await column('.prompt-library .library-toolbar');
   const prompts = await column('.prompt-library .library-workspace');
-  expect(actions.leading).toBe(prompts.leading);
+  expect(toolbar).toEqual(prompts);
+  expect(await page.locator('.library-toolbar > .prompt-library-actions').count()).toBe(1);
   expect(
     await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)
   ).toBeLessThanOrEqual(1);
