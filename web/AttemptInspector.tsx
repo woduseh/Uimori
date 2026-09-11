@@ -155,7 +155,7 @@ export function AttemptInspector({
   runs: Pick<Run, 'status'>[];
 }) {
   return (
-    <div data-testid="usage-inspector">
+    <div className="usage-inspector" data-testid="usage-inspector">
       <LazyDiagnostics<AttemptSummary[]>
         path={`/chats/${chatId}/attempts`}
         revision={revision}

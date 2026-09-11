@@ -156,3 +156,10 @@
   width: 100%;
   font-size: 12px;
 }
+
+/* The only spinner that was left turning under reduced motion. */
+@media (prefers-reduced-motion: reduce) {
+  .illustration-progress svg {
+    animation: none;
+  }
+}

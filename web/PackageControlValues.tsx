@@ -69,6 +69,7 @@ export function PackageControlInput({
               type={control.type === 'number' ? 'number' : 'text'}
               min={control.min}
               max={control.max}
+              step={control.type === 'number' ? 'any' : undefined}
               value={value === null ? '' : String(value)}
               onChange={(event) => {
                 const text = event.target.value;

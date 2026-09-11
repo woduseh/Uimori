@@ -193,6 +193,9 @@ export function LoreEditor({
                   setQuery(event.target.value);
                   resetList();
                 }}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') event.preventDefault();
+                }}
               />
             </label>
             <select

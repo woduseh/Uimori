@@ -217,6 +217,9 @@ export function PackagePortraitEditor({
               setQuery(event.target.value);
               setVisibleCount(50);
             }}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter') event.preventDefault();
+            }}
             placeholder="이름 또는 설명"
           />
         </label>

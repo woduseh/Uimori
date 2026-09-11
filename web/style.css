@@ -890,6 +890,14 @@ input[type="checkbox"] {
     opacity: 1;
   }
 }
+/* Touch has no hover to reveal them with, and an invisible control must not stay
+   tappable. */
+@media (hover: none), (pointer: coarse) {
+  .focus-reading .source-actions,
+  .focus-reading .scene-header {
+    opacity: 1;
+  }
+}
 .inline-asset {
   max-width: 400px;
   margin: 26px auto;
@@ -1281,6 +1289,16 @@ input[type="checkbox"] {
   margin: 8vh auto;
   max-width: 540px;
   padding: 24px;
+}
+.login > .wordmark {
+  display: inline-block;
+  margin-bottom: 18px;
+  font-size: 23px;
+  font-weight: 650;
+  letter-spacing: -0.8px;
+  line-height: 32px;
+  color: var(--text);
+  text-decoration: none;
 }
 .login .editor-grid {
   grid-template-columns: 1fr;

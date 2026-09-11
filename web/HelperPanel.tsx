@@ -660,13 +660,13 @@ export function HelperPanel(props: Props) {
                   type="number"
                   min={min}
                   max={max}
-                  value={persona.limits[field]}
+                  value={Number.isFinite(persona.limits[field]) ? persona.limits[field] : ''}
                   onChange={(event) =>
                     setPersonas((old) => ({
                       ...old,
                       [scopeKey]: {
                         ...persona,
-                        limits: { ...persona.limits, [field]: Number(event.target.value) },
+                        limits: { ...persona.limits, [field]: event.target.valueAsNumber },
                       },
                     }))
                   }

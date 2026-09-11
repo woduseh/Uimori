@@ -25,7 +25,7 @@ export function DraftDiscardActions({
     <div className="form-actions draft-discard-actions">
       <button
         type="button"
-        className="secondary draft-discard danger"
+        className="secondary draft-discard"
         disabled={disabled}
         onClick={onDiscard}
       >
