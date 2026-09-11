@@ -241,7 +241,8 @@
   }
 }
 @media (prefers-reduced-motion: reduce) {
-  .bot-chat-status svg {
+  .bot-chat-status svg,
+  .nav-progress svg {
     animation: none;
   }
 }

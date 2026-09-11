@@ -161,7 +161,6 @@ export function BotNavigation(
     onLibrary,
     onSettings,
     onTasks,
-    tasks,
     onError,
     onLibraryChanged,
     onSelect,
@@ -169,6 +168,44 @@ export function BotNavigation(
   } = props;
   const [view, setView] = useState(readView);
   const activities = useChatActivities();
+  const [runningPicker, setRunningPicker] = useState(false);
+  const running = Object.entries(activities).filter(([, item]) => item.count > 0);
+  const runningTotal = running.reduce((total, [, item]) => total + item.count, 0);
+  const chatTitle = (id: string) => chats.find((chat) => chat.id === id)?.title ?? '이름 없는 채팅';
+  const openRunning = () => {
+    const only = running.length === 1 ? running[0] : undefined;
+    if (only) {
+      if (only[0] !== selected) onSelect(only[0]);
+      onTasks();
+    } else setRunningPicker(true);
+  };
+  const runningDialog = (
+    <Dialog
+      open={runningPicker}
+      title="진행 중인 작업"
+      onClose={() => setRunningPicker(false)}
+      className="bot-organize-dialog"
+    >
+      <p className="muted">작업 현황은 채팅별로 열려요. 확인할 채팅을 골라 주세요.</p>
+      <nav className="bot-search-results" aria-label="진행 중인 채팅">
+        {running.map(([id, item]) => (
+          <button
+            key={id}
+            type="button"
+            onClick={() => {
+              setRunningPicker(false);
+              if (id !== selected) onSelect(id);
+              onTasks();
+            }}
+          >
+            <strong>{chatTitle(id)}</strong>
+            <small>{item.label}</small>
+          </button>
+        ))}
+        {!running.length && <p>진행 중인 작업이 끝났어요.</p>}
+      </nav>
+    </Dialog>
+  );
   const [editing, setEditing] = useState<LibraryFolder | 'new' | null>(null);
   const [title, setTitle] = useState('');
   const [busy, setBusy] = useState(false);
@@ -384,8 +421,17 @@ export function BotNavigation(
         </nav>
         <div className="sidebar-rail-spacer" />
         <nav className="sidebar-app-actions" aria-label="앱 탐색">
+          {runningTotal > 0 && (
+            <IconButton
+              className="nav-progress"
+              label={`작업 현황 · 전체 채팅에서 진행 중 ${runningTotal}개`}
+              icon={RunningIcon}
+              onClick={openRunning}
+            />
+          )}
           <IconButton label="설정" icon={SettingsIcon} onClick={onSettings} />
         </nav>
+        {runningDialog}
       </div>
     );
   return (
@@ -584,11 +630,16 @@ export function BotNavigation(
           <button disabled={busy || !title.trim()}>저장</button>
         </form>
       </Dialog>
+      {runningDialog}
       <div className="nav-bottom">
-        {tasks > 0 && (
-          <button className="nav-button nav-progress" aria-label="작업 현황" onClick={onTasks}>
+        {runningTotal > 0 && (
+          <button
+            className="nav-button nav-progress"
+            aria-label={`작업 현황 · 전체 채팅에서 진행 중 ${runningTotal}개`}
+            onClick={openRunning}
+          >
             <RunningIcon size={17} />
-            진행 중 {tasks}
+            진행 중 {runningTotal}
           </button>
         )}
         <nav className="sidebar-app-actions" aria-label="앱 탐색">
