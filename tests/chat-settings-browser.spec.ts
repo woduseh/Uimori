@@ -192,7 +192,7 @@ test('CSUI02 section changes, browser Back and resizing preserve chat setting dr
   await image.setChecked(!originalImage);
   await translationImage.uncheck();
   await selectChatSettingsSection(page, '자동 후속 작업');
-  const status = dialog.getByRole('switch', { name: '장면 상태 자동 실행', exact: true });
+  const status = dialog.getByRole('switch', { name: '장면 해설 자동 생성', exact: true });
   const originalStatus = await status.isChecked();
   await status.setChecked(!originalStatus);
   await page.evaluate(() => history.back());
@@ -266,11 +266,11 @@ test('CSUI03 keyboard navigation and clean browser Back keep immediate reading p
   await expect(nav.locator('[tabindex="0"]')).toHaveCount(1);
   // Reading settings are no longer a chat settings section; the last section keeps its panel.
   await expect(dialog.getByLabel('새 원고의 기본 보기', { exact: true })).toHaveCount(0);
-  await expect(dialog.getByLabel('장면 상태 자동 실행', { exact: true })).toBeVisible();
+  await expect(dialog.getByLabel('장면 해설 자동 생성', { exact: true })).toBeVisible();
   await last.focus();
   await page.setViewportSize({ width: 390, height: 844 });
   await expect(dialog.getByRole('tabpanel')).toBeFocused();
-  await expect(dialog.getByLabel('장면 상태 자동 실행', { exact: true })).toBeVisible();
+  await expect(dialog.getByLabel('장면 해설 자동 생성', { exact: true })).toBeVisible();
   await page.evaluate(() => history.back());
   await expect(
     dialog.getByRole('navigation', { name: '채팅 설정 분류', exact: true })

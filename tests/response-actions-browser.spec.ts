@@ -214,7 +214,7 @@ test('TSKUI01 task overview screenshots wait for real run, job and attempt data 
     await expect(usage.getByRole('rowheader')).toHaveText([
       '원문',
       '번역',
-      '표시 상태',
+      '장면 해설',
       '이미지 배치',
       '서사 상태',
       '문맥 압축',

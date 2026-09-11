@@ -94,7 +94,7 @@ export function RunTaskDetails({
               key={job.id}
               path={`/jobs/${job.id}`}
               revision={revision}
-              title={`${{ translation: '번역', image: '이미지', status: '장면 상태' }[job.kind]} · ${labels[job.status]} · 작업 관리`}
+              title={`${{ translation: '번역', image: '이미지', status: '장면 해설' }[job.kind]} · ${labels[job.status]} · 작업 관리`}
             >
               {(full) => <JobCard job={full} refresh={refresh} onError={onError} hideText />}
             </LazyDiagnostics>

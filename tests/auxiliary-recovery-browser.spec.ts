@@ -68,18 +68,18 @@ test('auxiliary failures show separate safe causes and recreate status with curr
   const translation = panel.getByTestId('job-translation');
   await expect(status).toContainText('MODEL_REQUIRED:status');
   await expect(translation).toContainText('인증');
-  await expect(translation).not.toContainText('표시 상태 모델');
+  await expect(translation).not.toContainText('장면 해설 모델');
   await expect(translation).toContainText('AUXILIARY_PROVIDER_HTTP_401');
   await status.getByRole('button', { name: '이 작업만 재시도', exact: true }).click();
   await expect(
-    page.getByText('장면 상태: 전역 모델 설정에서 표시 상태 모델을 선택해 주세요.', { exact: true })
+    page.getByText('장면 해설: 전역 모델 설정에서 장면 해설 모델을 선택해 주세요.', { exact: true })
   ).toBeVisible();
-  await status.getByRole('button', { name: '현재 설정으로 장면 상태 새로 실행' }).click();
+  await status.getByRole('button', { name: '현재 설정으로 장면 해설 새로 실행' }).click();
   await expect
     .poll(() => recoveryBody)
     .toEqual({ expectedSourceHash: source.hash, expectedJobId: 'synthetic-status' });
   await expect(
-    page.getByText('장면 상태: 전역 모델 설정에서 표시 상태 모델을 선택해 주세요.', { exact: true })
+    page.getByText('장면 해설: 전역 모델 설정에서 장면 해설 모델을 선택해 주세요.', { exact: true })
   ).toHaveCount(0);
   expect(
     await translation.evaluate((element) => element.scrollWidth <= element.clientWidth + 1)

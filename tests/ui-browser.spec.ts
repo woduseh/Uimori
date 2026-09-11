@@ -2037,7 +2037,7 @@ test('UI chat settings close right after saving does not warn while the refresh 
   await selectChatSettingsSection(page, '자동 후속 작업');
   const runtime = dialog.locator('section.settings');
   const statusEnabled = !(await data(request, chat.id)).chat.settings.status;
-  await runtime.getByLabel('장면 상태 자동 실행', { exact: true }).setChecked(statusEnabled);
+  await runtime.getByLabel('장면 해설 자동 생성', { exact: true }).setChecked(statusEnabled);
   // Hold the post-save reader refresh so the close arrives while it is still in flight.
   let release!: () => void;
   const held = new Promise<void>((resolve) => {

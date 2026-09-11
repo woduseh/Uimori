@@ -112,7 +112,7 @@ const jobTitle = (job: Job) =>
   job.kind === 'translation'
     ? '한국어 번역'
     : job.kind === 'status'
-      ? '장면 상태'
+      ? '장면 해설'
       : `${job.imageTarget?.mode === 'translation' ? '번역' : '원문'} 이미지 배치`;
 
 export function SourceReader(props: ReaderProps) {
@@ -604,8 +604,8 @@ function SourceReaderContent({
       )}
       <PackageStateCards data={presentation?.data} />
       {sceneStatus && (
-        <aside className="scene-status" aria-label="현재 장면의 표시 상태">
-          <small>장면 상태</small>
+        <aside className="scene-status" aria-label="현재 장면의 해설">
+          <small>장면 해설</small>
           <span>{sceneStatus}</span>
         </aside>
       )}
@@ -1155,11 +1155,11 @@ function JobActions({
             disabled={pending}
             onClick={() => void perform('status')}
           >
-            현재 설정으로 장면 상태 새로 실행
+            현재 설정으로 장면 해설 새로 실행
           </button>
           {!compact && (
             <small>
-              전역 모델 설정에서 표시 상태 모델을 저장한 뒤 새로 실행해요. 기존 작업 재시도는 당시
+              전역 모델 설정에서 장면 해설 모델을 저장한 뒤 새로 실행해요. 기존 작업 재시도는 당시
               설정을 사용해요.
             </small>
           )}

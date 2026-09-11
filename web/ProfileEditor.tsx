@@ -332,7 +332,7 @@ export function ProfileEditor({
                 <dl>
                   {(['translation', 'status', 'image'] as const).map((role, index) => (
                     <div key={role}>
-                      <dt>{['번역', '표시 상태', '이미지 배치'][index]}</dt>
+                      <dt>{['번역', '장면 해설', '이미지 배치'][index]}</dt>
                       <dd>
                         {library.models.find((item) => item.id === workspace?.modelRoutes[role]?.id)
                           ?.title ?? '미지정 또는 확인 필요'}

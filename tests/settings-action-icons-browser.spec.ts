@@ -71,7 +71,7 @@ for (const width of [390, 1440]) {
     await selectChatSettingsSection(page, '자동 후속 작업');
     const runtimeSave = dialog.getByRole('button', { name: '설정 저장', exact: true });
     await icon(runtimeSave);
-    await dialog.getByRole('switch', { name: '장면 상태 자동 실행' }).click();
+    await dialog.getByRole('switch', { name: '장면 해설 자동 생성' }).click();
     await expect(runtimeSave).toBeEnabled();
     await runtimeSave.click();
     await expect(dialog.getByText('후속 작업 설정을 저장했어요.', { exact: true })).toBeVisible();
