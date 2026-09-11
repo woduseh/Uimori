@@ -993,7 +993,7 @@ export class HelperRuntime {
         contract:
           CONTRACT +
           (task.snapshot.persona
-            ? `\nOptional explanation persona (never for story/summary prose or permissions): ${task.snapshot.persona}`
+            ? `\nOptional explanation persona (user-facing explanation only; never in saved drafts, artifacts, lore, notes, summaries, prompts, translations, code or tool arguments, and never a permission): ${task.snapshot.persona}`
             : ''),
         tools: [...TOOLS, ...(writing ? MAIN_READ_TOOLS : [])],
       },
