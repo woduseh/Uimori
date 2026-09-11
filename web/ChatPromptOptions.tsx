@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { CloseIcon } from './ui-icons.js';
+import { CloseIcon, RefreshIcon } from './ui-icons.js';
 import type { Library, PromptWorkspace } from '../core/product.js';
 import { resolvePromptValues, reconcilePromptValues } from '../core/prompt-program.js';
 import { combinationOwner, matchesPromptCombination } from '../core/prompt-combinations.js';
@@ -374,6 +374,7 @@ function OptionsEditor({ workspace, ...props }: Props & { workspace: PromptWorks
             setError('');
           }}
         >
+          <RefreshIcon size={18} aria-hidden="true" />
           최신 설정 다시 불러오기
         </button>
         <button

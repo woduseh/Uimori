@@ -1,3 +1,4 @@
+import { RefreshIcon } from './ui-icons.js';
 import { Switch } from './BooleanControls.js';
 import { SaveButton } from './SaveButton.js';
 import './settings-actions.css';
@@ -150,6 +151,7 @@ export function SettingsEditor({
                   onError('');
                 }}
               >
+                <RefreshIcon size={18} aria-hidden="true" />
                 저장된 설정 다시 불러오기
               </button>
             )}

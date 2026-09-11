@@ -8,7 +8,7 @@ import { api, ApiError } from './api.js';
 import { ActionMenu } from './ActionMenu.js';
 import { Dialog } from './Dialog.js';
 import { IconButton } from './IconButton.js';
-import { CheckIcon, CloseIcon, DeleteIcon, EditIcon } from './ui-icons.js';
+import { CheckIcon, CloseIcon, DeleteIcon, EditIcon, StopIcon } from './ui-icons.js';
 import { forgetHelperSession, type HelperSession } from './useHelperSessions.js';
 import type { HelperTaskView } from './useHelperConversation.js';
 
@@ -254,6 +254,7 @@ export function HelperSessionBar(props: Props) {
               disabled={working || impact.activeTasks === 0}
               onClick={() => void stop()}
             >
+              <StopIcon size={18} aria-hidden="true" />
               진행·대기 작업 중지
             </button>
           )}

@@ -1,3 +1,4 @@
+import { AddIcon, BackIcon, CloseIcon, EditIcon, PowerIcon } from './ui-icons.js';
 import { useEffect, useRef, useState } from 'react';
 import type { AuthorNote } from '../core/notes.js';
 import { ApiError } from './api.js';
@@ -160,6 +161,7 @@ export function AuthorNotesEditor({
                   disabled={busy || disabled || editing !== null}
                   onClick={() => begin(note)}
                 >
+                  <EditIcon size={18} aria-hidden="true" />
                   수정
                 </button>
                 <button
@@ -173,6 +175,7 @@ export function AuthorNotesEditor({
                     setMessage('');
                   }}
                 >
+                  <PowerIcon size={18} aria-hidden="true" />
                   사용 중단
                 </button>
               </div>
@@ -184,6 +187,7 @@ export function AuthorNotesEditor({
       )}
       {!editing && (
         <button type="button" className="secondary" disabled={disabled} onClick={() => begin()}>
+          <AddIcon size={18} aria-hidden="true" />
           메모 추가
         </button>
       )}
@@ -270,6 +274,7 @@ export function AuthorNotesEditor({
                 setError('');
               }}
             >
+              <CloseIcon size={18} aria-hidden="true" />
               편집 취소
             </button>
           </div>
@@ -297,6 +302,7 @@ export function AuthorNotesEditor({
                 setError('');
               }}
             >
+              <BackIcon size={18} aria-hidden="true" />
               돌아가기
             </button>
           </div>

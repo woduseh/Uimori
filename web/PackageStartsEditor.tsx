@@ -1,3 +1,4 @@
+import { CloseIcon } from './ui-icons.js';
 import { useEffect, useState } from 'react';
 import { useBufferedEditorState, useUnappliedEditorField } from './editor-workspace-context.js';
 import type { ContentPackage } from '../core/content-package.js';
@@ -239,6 +240,7 @@ export function PackageStartsEditor({
                           setError('');
                         }}
                       >
+                        <CloseIcon size={18} aria-hidden="true" />
                         입력식 초안 취소
                       </button>
                     </div>

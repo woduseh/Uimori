@@ -3,7 +3,7 @@ import type { Library, ModelRef, ModelWorkspace, TaskRole } from '../core/produc
 import { api } from './api.js';
 import { usePromptWorkspace } from './usePromptWorkspace.js';
 import { useModelSelection } from './model-selection.js';
-import { RefreshIcon } from './ui-icons.js';
+import { RefreshIcon, SettingsIcon } from './ui-icons.js';
 import { IconButton } from './IconButton.js';
 import { SaveButton } from './SaveButton.js';
 import './settings-actions.css';
@@ -219,6 +219,7 @@ export function ModelWorkspaceEditor({
                 void refresh();
               }}
             >
+              <RefreshIcon size={18} aria-hidden="true" />
               최신 설정 다시 불러오기
             </button>
           )}
@@ -278,7 +279,8 @@ export function ModelWorkspaceEditor({
       {saveError && <p role="alert">{saveError} 초안은 유지했어요.</p>}
       <p role="status">{message || error}</p>
       <button type="button" className="secondary" onClick={onManage}>
-        모델 프리셋·프로바이더 관리
+        <SettingsIcon size={18} aria-hidden="true" />
+        모델 프리셋·프로바이더 관리{' '}
       </button>
     </section>
   );

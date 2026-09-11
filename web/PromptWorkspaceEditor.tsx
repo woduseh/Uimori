@@ -1,4 +1,4 @@
-import { ExpandIcon, ExternalLinkIcon, ResetIcon, SaveIcon } from './ui-icons.js';
+import { ExpandIcon, ExternalLinkIcon, ResetIcon, SaveIcon, CloseIcon } from './ui-icons.js';
 import { useEffect, useRef, useState } from 'react';
 import type { Library, PromptRole, PromptWorkspace } from '../core/product.js';
 import type { WorkspaceDraftModel } from '../core/edit-drafts.js';
@@ -467,6 +467,7 @@ export function PromptWorkspaceEditor({
               disabled={savingCombo}
               onClick={() => setComboOpen(false)}
             >
+              <CloseIcon size={18} aria-hidden="true" />
               취소
             </button>
             <button
