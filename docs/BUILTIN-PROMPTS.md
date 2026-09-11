@@ -46,3 +46,7 @@
 - 두 앱 검사의 소스/빌드 지문은 `a53c7418b2f5d3d8656f71c7712f444987ab4945f34224a40cc98dc8d125bc58`로 같아요. 각각 `output/playwright/<실행 ID>/summary.json`에 reporter·DB·cleanup 증거가 있어요.
 
 첫 전체 실행은 **1,940 PASS / 19 FAIL / 1 opt-in skip**이었어요(`output/builtin-prompts-quality-full-final-20260911.log`). 기존 짧은 프롬프트를 가정한 전용 옵션 fixture와 번역 원문 추출·Vertex 첫 요청 판별을 수정했어요. 문맥 예산 전용 검사는 자신이 측정하는 짧은 프롬프트를 명시하고 기존 예산 단정은 유지해요. 실패 기록은 그대로 보존하며 위 최종 전체 결과와 구분해요. 제품 검증·입력 예산·provider continuation 단정을 완화하지 않았어요.
+
+같은 날 `1908be0`을 커밋한 뒤 원격 `main`의 `a2307a5f96b1cf0568028df572f964586ee1c4bd`를 병합했어요. 원격의 Oracle 릴리스·self-host 도구 변경과 파일 충돌은 없었어요. 병합된 내용에서 `npm run release:check -- --area verify:packages`를 실행해 **quality:full 1,959 PASS / 1 opt-in skip, 도구 회귀 65 PASS, smoke 3 PASS, packages 10 PASS**를 다시 확인했어요. 영수증은 `output/release/checks/59d07a1f7f6a5e901e21927f35e6234dc45cd14cc9378d56b4e9273e7e75d586/summary.json`이에요. 병합 후 앱 소스/빌드 지문은 `2905c28908f849b9263ae65d650b29adcd8faf72a65db9bed13568a76fa8078f`예요.
+
+병합 후 브라우저 실행 ID는 smoke `2026-09-11T11-00-59-228Z-e5ed028b`, packages `package-ui-2026-09-11T11-02-20-666Z-dbbaa969`예요. 추가 `npm run verify:selfhost`는 `self-host-2026-09-11T10-58-39-817Z-009ef80b`에서 **2 PASS**, 합성 공급자 요청 2회·오류 0회·cleanup PASS를 확인했어요. 이는 새 DB의 기본 Phēmē와 로컬 HTTPS 경로의 연결 증거이며 실제 Oracle/Docker 배포나 실제 공급자 호출의 증거는 아니에요.
