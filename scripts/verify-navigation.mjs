@@ -22,6 +22,7 @@ await runBrowserVerification({
     'ORG07',
     'DEL03',
     'BRANCH01',
+    'BRANCH02',
     'WORKSPACE01',
   ],
 });

@@ -24,7 +24,8 @@ import {
   BackIcon,
   IllustrationIcon,
 } from './ui-icons.js';
-import type { Job, ReaderRun } from '../core/types.js';
+import type { BranchTreeNode, Job, ReaderRun } from '../core/types.js';
+import type { Branch } from '../core/product.js';
 import { branchLabel } from './storyLabels.js';
 import type { StoryState } from './useStory.js';
 import { api, labels } from './api.js';
@@ -227,6 +228,10 @@ export function TasksPanel({
 
 export function BranchesPanel({ state, onClose }: { state: StoryState; onClose: () => void }) {
   const [changingDefault, setChangingDefault] = useState(false);
+  const [renaming, setRenaming] = useState<Branch | null>(null);
+  const [name, setName] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [summarizing, setSummarizing] = useState('');
   const detail = state.detail;
   if (!detail) return <p className="muted">먼저 이야기를 열어 주세요.</p>;
   function preview(branchId: string, head: string | null) {
@@ -256,15 +261,40 @@ export function BranchesPanel({ state, onClose }: { state: StoryState; onClose: 
       .trim()
       .slice(0, 120);
   }
+  const order = detail.reader.branchTree ?? [];
+  const placed = order
+    .map((node) => ({ node, branch: detail.branches?.find((item) => item.id === node.id) }))
+    .filter((row): row is { node: BranchTreeNode; branch: Branch } => !!row.branch);
+  const listed = placed.length
+    ? placed
+    : (detail.branches ?? []).map((branch) => ({
+        branch,
+        node: {
+          id: branch.id,
+          depth: 0,
+          forkSourceId: null,
+          forkIndex: null,
+          ownScenes: 0,
+          totalScenes: 0,
+        },
+      }));
+  const forked = listed.some(({ node }) => node.depth > 0);
   return (
-    <section className="branches-panel" aria-label="보관된 전개 목록">
+    <section className="branches-panel" aria-label="보관된 분기 목록">
       <p className="muted">
-        기본 전개는 채팅을 열 때 먼저 보여요. 다른 전개를 기본으로 지정해도 원문과 실행 기록은
+        기본 분기는 채팅을 열 때 먼저 보여요. 다른 분기를 기본으로 지정해도 원문과 실행 기록은
         그대로 유지돼요.
+        {forked && ' 들여쓴 분기는 바로 위 분기에서 갈라져 나온 이야기예요.'}
       </p>
-      <div className="branch-list">
-        {detail.branches?.map((branch) => (
-          <div className="branch-entry" key={branch.id}>
+      <div className="branch-list" data-forked={forked}>
+        {listed.map(({ branch, node }) => (
+          // Indentation only repeats what the fork sentence already says, so it carries no role.
+          <div
+            className="branch-entry"
+            key={branch.id}
+            data-depth={Math.min(node.depth, 4)}
+            style={{ marginInlineStart: `${Math.min(node.depth, 4) * 18}px` }}
+          >
             <button
               type="button"
               className={`secondary branch-choice ${state.branch?.id === branch.id ? 'selected' : ''}`}
@@ -276,7 +306,16 @@ export function BranchesPanel({ state, onClose }: { state: StoryState; onClose: 
               aria-pressed={state.branch?.id === branch.id}
             >
               <strong>{branchLabel(branch, detail)}</strong>
-              <small>{state.branch?.id === branch.id ? '읽는 중' : '이 전개 읽기'}</small>
+              <small>
+                {branch.default ? '기본 · ' : ''}
+                {node.forkIndex
+                  ? `장면 ${node.forkIndex}에서 갈라짐 · 이후 ${node.ownScenes}개`
+                  : node.totalScenes
+                    ? `장면 ${node.totalScenes}개`
+                    : '아직 장면이 없어요'}
+                {' · '}
+                {state.branch?.id === branch.id ? '읽는 중' : '이 분기 읽기'}
+              </small>
               <span className="branch-preview">{preview(branch.id, branch.headRevision)}</span>
             </button>
             {!branch.default && (
@@ -284,7 +323,7 @@ export function BranchesPanel({ state, onClose }: { state: StoryState; onClose: 
                 type="button"
                 className="secondary"
                 disabled={changingDefault}
-                aria-label={`${branchLabel(branch, detail)} 기본 전개로 지정`}
+                aria-label={`${branchLabel(branch, detail)} 기본 분기로 지정`}
                 onClick={async () => {
                   const current = detail.branches?.find((item) => item.default);
                   if (!current) return;
@@ -310,6 +349,35 @@ export function BranchesPanel({ state, onClose }: { state: StoryState; onClose: 
                 기본으로 지정
               </button>
             )}
+            <div className="branch-actions">
+              <button
+                type="button"
+                className="ghost"
+                onClick={() => {
+                  setRenaming(branch);
+                  setName(branch.title);
+                }}
+              >
+                이름 변경
+              </button>
+              <button
+                type="button"
+                className="ghost"
+                disabled={summarizing === branch.id}
+                onClick={async () => {
+                  setSummarizing(branch.id);
+                  try {
+                    await api(`/chats/${detail.chat.id}/branches/${branch.id}/title`, {});
+                  } catch (error) {
+                    state.setError(error instanceof Error ? error.message : String(error));
+                  } finally {
+                    setSummarizing('');
+                  }
+                }}
+              >
+                {summarizing === branch.id ? '요약하는 중…' : '요약으로 이름 짓기'}
+              </button>
+            </div>
             {!branch.default && (
               <DeleteButton
                 path={`/chats/${detail.chat.id}/branches/${branch.id}`}
@@ -327,6 +395,53 @@ export function BranchesPanel({ state, onClose }: { state: StoryState; onClose: 
           </div>
         ))}
       </div>
+      <Dialog
+        open={!!renaming}
+        title="분기 이름 변경"
+        onClose={() => {
+          if (!saving) setRenaming(null);
+        }}
+      >
+        <form
+          onSubmit={(event) => {
+            event.preventDefault();
+            if (!renaming || saving || !name.trim()) return;
+            setSaving(true);
+            void api<Branch>(
+              `/chats/${detail.chat.id}/branches/${renaming.id}`,
+              { title: name.trim(), expectedRevision: renaming.revision },
+              'PATCH'
+            )
+              .then(() => setRenaming(null))
+              .catch((cause) => state.setError(cause.message))
+              .finally(() => setSaving(false));
+          }}
+        >
+          <label>
+            분기 이름
+            <input
+              value={name}
+              maxLength={200}
+              disabled={saving}
+              onChange={(event) => setName(event.target.value)}
+            />
+          </label>
+          <p className="muted">직접 지은 이름은 자동 요약이 덮어쓰지 않아요.</p>
+          <div className="form-actions">
+            <button
+              type="button"
+              className="secondary"
+              disabled={saving}
+              onClick={() => setRenaming(null)}
+            >
+              취소
+            </button>
+            <button className="primary" disabled={saving || !name.trim()}>
+              이름 저장
+            </button>
+          </div>
+        </form>
+      </Dialog>
     </section>
   );
 }

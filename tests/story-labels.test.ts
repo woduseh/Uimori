@@ -20,7 +20,12 @@ describe('candidate branch labels', () => {
     expect(branchLabel(branch, detail)).toBe('다른 응답 2');
     detail.runs = [];
     expect(branchLabel(branch, detail)).toBe('다른 응답 2');
-    expect(branchLabel({ ...branch, default: true }, detail)).toBe('기본 전개');
+    expect(branchLabel({ ...branch, title: '기본 분기', default: true }, detail)).toBe('기본 분기');
+    expect(branchLabel({ ...branch, title: '기본 분기' }, detail)).toBe('이전 기본 분기');
+    // A summarised or hand-written name survives the default flag.
+    expect(branchLabel({ ...branch, title: '등불이 흔들린 밤', default: true }, detail)).toBe(
+      '등불이 흔들린 밤'
+    );
     expect(branchLabel({ ...branch, title: '사용자 전개' }, detail)).toBe('사용자 전개');
     expect(branchLabel({ ...branch, id: 'removed-candidate' }, detail)).toBe('보관된 다른 응답');
   });

@@ -32,6 +32,7 @@ import {
 import { useHelperSessions } from './useHelperSessions.js';
 import { HelperSessionBar } from './HelperSessionBar.js';
 import type { Branch } from '../core/product.js';
+import type { ReaderDetail } from '../core/types.js';
 import './helper.css';
 
 type Props = {
@@ -40,6 +41,7 @@ type Props = {
   modal?: boolean;
   ready?: boolean;
   branches?: Branch[];
+  detail?: ReaderDetail;
   onBranchNavigate?: (branchId: string) => void;
   scope: HelperScope;
   selection?: HelperSelection & { key: string; scope?: HelperScope; conversationId?: string };
@@ -249,7 +251,7 @@ export function HelperPanel(props: Props) {
       }
       if (disposed || appliedSelections.current.has(selected.key)) return;
       if (JSON.stringify(owner.scope) !== JSON.stringify(target))
-        throw new Error('선택한 원문과 도우미 세션의 전개가 달라요.');
+        throw new Error('선택한 원문과 도우미 세션의 분기가 달라요.');
       const key = owner.id;
       appliedSelections.current.add(selected.key);
       const value: HelperSelection = {
@@ -592,6 +594,7 @@ export function HelperPanel(props: Props) {
         conversation={conversation}
         currentId={sessions.currentId}
         branches={props.branches ?? []}
+        detail={props.detail}
         creating={sessions.creating || props.ready === false}
         busy={props.ready === false || busy || Boolean(outbox)}
         onSelect={sessions.select}
@@ -607,15 +610,15 @@ export function HelperPanel(props: Props) {
       {branchMismatch && scope.kind === 'chat' && (
         <div className="helper-branch-notice" role="status">
           <p>
-            <strong>{targetBranch?.title || '다른 전개'}</strong>의 도우미 기록이에요. 새 요청과
-            변경은 해당 전개로 이동한 뒤 진행해요.
+            <strong>{targetBranch?.title || '다른 분기'}</strong>의 도우미 기록이에요. 새 요청과
+            변경은 해당 분기로 이동한 뒤 진행해요.
           </p>
           <button
             type="button"
             className="secondary"
             onClick={() => props.onBranchNavigate?.(scope.branchId)}
           >
-            해당 전개로 이동
+            해당 분기로 이동
           </button>
         </div>
       )}

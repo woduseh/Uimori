@@ -3,7 +3,8 @@ import { latestTranslation, validateTranslationArtifact } from './source-editing
 import type { Store } from './store.js';
 import { mergedReaderAssets } from './package-images.js';
 import { illustrationsForSources } from './illustrations.js';
-import type { ReaderActivity } from '../core/types.js';
+import type { BranchTreeNode, ReaderActivity } from '../core/types.js';
+import type { Branch } from '../core/product.js';
 import { providerRejection } from '../core/provider-rejection.js';
 
 /** The failing attempt's stored provider diagnostic, read only for 4xx failures being displayed. */
@@ -198,6 +199,71 @@ export function readerRuns(store: Store, id: string, scope?: string[]) {
       : {}),
   }));
   return runs;
+}
+
+/**
+ * `branches` records no parent, so the shape comes from the source chains: branches whose chains
+ * share a prefix diverged at its last source. Walking that trie orders and indents them.
+ */
+export function branchTree(
+  branches: Branch[],
+  parents: Map<string, string | null>
+): BranchTreeNode[] {
+  const chains = new Map<string, string[]>();
+  for (const branch of branches) {
+    const chain: string[] = [];
+    const seen = new Set<string>();
+    let head = branch.headRevision;
+    while (head && !seen.has(head)) {
+      seen.add(head);
+      if (!parents.has(head)) break;
+      chain.push(head);
+      head = parents.get(head) ?? null;
+    }
+    chains.set(branch.id, chain.reverse());
+  }
+  const nodes: BranchTreeNode[] = [];
+  const emit = (branch: Branch, depth: number, fork: number) => {
+    const chain = chains.get(branch.id)!;
+    nodes.push({
+      id: branch.id,
+      depth,
+      forkSourceId: fork > 0 ? chain[fork - 1] : null,
+      forkIndex: fork > 0 ? fork : null,
+      ownScenes: chain.length - fork,
+      totalScenes: chain.length,
+    });
+  };
+  /**
+   * `members` share the first `start` sources and left their siblings after `fork` of them.
+   * Only a position where the members actually part ways indents them and moves the fork.
+   */
+  const walk = (members: Branch[], start: number, depth: number, fork: number) => {
+    const ending = members.filter((branch) => chains.get(branch.id)!.length === start);
+    const groups = new Map<string, Branch[]>();
+    for (const branch of members.filter((item) => chains.get(item.id)!.length > start)) {
+      const next = chains.get(branch.id)![start];
+      groups.set(next, [...(groups.get(next) ?? []), branch]);
+    }
+    const parting = ending.length + groups.size > 1;
+    // A branch ending here parted from the row above it earlier; `start` is only where its own
+    // continuations leave it, and those rows carry that themselves.
+    for (const branch of ending) emit(branch, depth, fork);
+    for (const group of groups.values()) {
+      if (!parting) walk(group, start + 1, depth, fork);
+      else if (group.length === 1) emit(group[0], depth + 1, start);
+      else walk(group, start + 1, depth + 1, start);
+    }
+  };
+  // A branch with no scene sits outside the source tree, so it cannot part anything.
+  for (const branch of branches) if (!chains.get(branch.id)!.length) emit(branch, 0, 0);
+  walk(
+    branches.filter((branch) => chains.get(branch.id)!.length > 0),
+    0,
+    0,
+    0
+  );
+  return nodes;
 }
 
 /** Read projection only. Frozen execution records remain available through detail/run APIs. */
@@ -404,6 +470,10 @@ export function readerDetail(store: Store, id: string, query: Record<string, str
     reader: {
       navigation,
       pendingRunIds,
+      branchTree: branchTree(
+        store.product.branches(id),
+        new Map(rows.map((row) => [row.id, row.parentRevision]))
+      ),
       latestBranchRuns: Object.fromEntries(
         indexRows.filter((run) => run.branchId !== null).map((run) => [run.branchId!, run.id])
       ),

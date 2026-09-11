@@ -422,6 +422,14 @@ export function productRoutes(
     options.publish(branch.chatId);
     return branch;
   });
+  app.patch<{ Params: { id: string; branchId: string } }>(
+    '/api/chats/:id/branches/:branchId',
+    async (request) => {
+      const branch = product.renameBranch(request.params.id, request.params.branchId, request.body);
+      options.publish(branch.chatId);
+      return branch;
+    }
+  );
   app.put<{ Params: { id: string; branchId: string } }>(
     '/api/chats/:id/branches/:branchId/default',
     async (request) => {

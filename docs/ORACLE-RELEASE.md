@@ -1,6 +1,6 @@
 # Oracle 릴리스
 
-이 문서는 기존 Oracle Uimori 서비스에 검증한 `origin/main`을 반복 배포하는 현재 절차예요. 실행기 도입 전 운영 기준은 commit `6a2cc79`, schema v15, `/opt/uimori/app`, loopback `127.0.0.1:4310`, 공개 주소 `https://pocketrisu.taila7874d.ts.net:8443/`예요. 주소의 hostname은 유지하지만 PocketRisu 서비스와 라우팅은 제거된 상태이므로 배포 전후 검사에서 PocketRisu를 요구하지 않아요.
+이 문서는 기존 Oracle Uimori 서비스에 검증한 `origin/main`을 반복 배포하는 현재 절차예요. 2026-09-11 운영 앱 기준은 commit `96d3cf610888bbbac051975abae695056d0fe9f4`, schema v15, `/opt/uimori/app`, loopback `127.0.0.1:4310`이에요. 공개 주소는 [https://uimori.taila7874d.ts.net/](https://uimori.taila7874d.ts.net/)이며 Tailscale Funnel의 기본 HTTPS 포트 443을 사용해요. PocketRisu 서비스와 이전 8443 라우팅은 제거된 상태이므로 배포 전후 검사에서 PocketRisu를 요구하지 않아요.
 
 과거 v14/v15 일회성 스크립트와 `output/oracle-release-*` 기록은 당시 배포 증거일 뿐 현재 실행 절차가 아니에요. 특히 과거 볼륨명, 선택적 행 삭제, 70개 표 전체 hash, PocketRisu 보존 검사를 새 배포에 복사하지 않아요.
 
@@ -26,7 +26,7 @@ SSH 키, `known_hosts`, 운영 접속 설정은 Git에 넣지 않고 `.local/ora
 
 `releaseRoot`는 실행기가 사용하는 전용 staging 경로 `/opt/uimori/releases`로 고정돼요. 다른 경로로 바꾸는 설정이 아니며 `appDirectory`와 겹칠 수 없어요.
 
-`accessEnvFile`에는 기존 `NR_PUBLIC_ORIGIN`과 `NR_ACCESS_TOKEN`이 있어야 해요. 토큰과 키 내용은 명령 인자, 로그, 저장소에 남기지 않아요. 배포는 이 공개 주소와 접근 토큰을 바꾸지 않아요.
+`accessEnvFile`에는 기존 `NR_PUBLIC_ORIGIN`과 `NR_ACCESS_TOKEN`이 있어야 해요. 현재 Oracle의 origin은 `NR_PUBLIC_ORIGIN=https://uimori.taila7874d.ts.net`이며 `:8443`이나 후행 `/`를 붙이지 않아요. 서버 `.env.self-host`와 로컬 `accessEnvFile`이 같은 origin을 사용해야 해요. 토큰과 키 내용은 명령 인자, 로그, 저장소에 남기지 않아요. 배포는 이 공개 주소와 접근 토큰을 바꾸지 않아요. 이름·포트 변경은 [Tailscale 접속 주소 변경](TAILSCALE-DEPLOY.md#접속-이름이나-포트-변경)을 별도로 따라요.
 
 로컬 Docker는 필요하지 않아요. 기본 경로는 서버에서 이미 받은 정확한 SHA를 한 번 빌드하고 immutable image ID로 이후 검사와 전환을 이어 가요. 이미 관리 중인 registry image가 있다면 `--image registry.example/uimori@sha256:...`처럼 전체 image reference를 줄 수 있어요. 이 입력 기능만 있으며 현재 절차는 Docker를 설치하거나 새 image repository·registry를 만들지 않아요.
 
@@ -73,6 +73,14 @@ npm run release:oracle -- --config .local/oracle-release.json --area verify:brow
 
 `output/release/oracle/<run>/summary.json`에는 로컬 검증 재사용, 파일 전송, 서버 작업, 공개 HTTPS smoke의 시간이 구분돼요. 서버 receipt의 `stages`에는 이미지 준비, 격리 검사, 백업, 전환과 health 시간이 있어요. 최초 의존성 다운로드나 캐시 유무에 따라 준비 시간이 달라지므로 고정 시간을 보장하지 않아요. 로컬 image build와 registry 업로드는 선택지이며 현재 기본 절차에는 없어요.
 
-## 현재 증거의 한계
+## 운영 검증 기록
 
-이 문서와 실행기 도입 자체는 운영 재배포 성공 증거가 아니에요. 현재 `6a2cc79` 운영 기준에 새 production HTTPS/API smoke를 읽기 위주로 실행한 결과는 `output/release/smoke-baseline.json`의 **6 PASS, 5.52초**예요. 이전 브라우저 기반 전체 운영 검사의 약 65초와 범위가 다르므로 직접적인 속도 비교나 브라우저 UI 증거로 해석하지 않아요. 새 smoke는 인증, build, 읽기 API와 정적 asset 전달을 확인했고 DB 무결성, 컨테이너 identity, 실제 공급자, GUI·실기기 품질은 확인하지 않았어요. 이후 배포 상태와 결과는 각 실행의 receipt와 HTTPS smoke를 따로 확인해야 해요.
+2026-09-11 `96d3cf6`을 기존 DB를 유지하는 업데이트 모드로 배포한 뒤, 사용자 선택에 따라 접속 이름을 `pocketrisu`에서 `uimori`로, HTTPS 포트를 8443에서 443으로 변경했어요.
+
+- 배포 전 검증: `quality:full` **1,959 PASS / 1 opt-in SKIP**, `verify:smoke` **3 PASS**, `verify:packages` **10 PASS**, 전체 `verify:redesign` **249 PASS / 0 FAIL / 0 SKIP / 0 FLAKY**, cleanup PASS예요. 검증 중 오래된 fixture·UI 기대와 비동기 대기 문제를 고친 테스트 6파일을 포함해 최종 전체 검사를 통과했어요. 이전 실패 기록은 `output/release/oracle-20260911-results.md`에 따로 보존했어요.
+- 원격 배포: 후보 이미지, 새 DB 부팅, 기존 DB 호환성, 정지 상태 백업, 전환과 health가 모두 PASS예요. schema v15의 무결성 `ok`, 같은 데이터 volume, 자격 증명·보호 환경·당시 라우팅 보존을 확인했어요. 배포 영수증은 `output/release/oracle/2026-09-11T13-36-37-951Z-8ddaed3b-96d3cf6/summary.json`이에요.
+- 주소 변경: 같은 Tailscale 장치와 IP, 앱 이미지·데이터 volume·접속 토큰을 유지하고 hostname, Funnel 라우팅, 서버와 로컬의 `NR_PUBLIC_ORIGIN`만 변경했어요. 이전 설정과 정지 상태 데이터는 서버 `/opt/uimori/releases/uimori-address-20260911/private/`에 보관했어요. 비밀 설정과 데이터 백업은 Git에 넣지 않아요.
+- 새 주소의 공개 HTTPS/API: 인증서 검증과 **6 PASS / 0 FAIL**을 2026-09-11 22:47 KST에 확인했어요. 영수증은 `output/release/uimori-address-20260911/https-smoke-final.json`이에요. 첫 구주소 검사와 전환 직후 새 주소의 연결 실패 기록은 같은 폴더에 FAIL로 유지하며, 구체적인 초기 DNS/TLS 실패 원인은 확정하지 않았어요.
+- 향후 배포 설정: `release:oracle --plan`이 새 origin과 clean checkout을 확인했고 서버에는 접속하지 않았어요. 주소 변경 상세 기록은 `output/release/uimori-address-20260911/RESULTS.md`예요. `output/`의 실행 영수증은 로컬 운영 자료이며 저장소에 포함하지 않아요.
+
+실행기 도입 당시 `6a2cc79` 기준의 `output/release/smoke-baseline.json`은 과거 **6 PASS, 5.52초** 증거예요. 이전 브라우저 기반 운영 검사와 HTTPS/API smoke는 범위가 다르므로 직접적인 속도 비교나 브라우저 UI 증거로 해석하지 않아요. HTTPS/API smoke는 실제 공급자, 창작 의미 품질, GUI·실기기·IME를 확인하지 않으며 DB 무결성과 컨테이너 identity는 원격 실행기의 별도 검사예요. 이후 배포 상태와 결과는 각 실행의 영수증을 확인해야 해요.

@@ -97,7 +97,7 @@ test('HSESSION02 another branch session is readable and requires navigation befo
   const panel = page.locator('#helper-panel');
   await expect(panel.getByLabel('도우미에게 요청')).toBeEnabled();
   await panel.getByLabel('도우미 세션 선택').selectOption(foreign.id);
-  await expect(panel.getByRole('button', { name: '해당 전개로 이동', exact: true })).toBeVisible();
+  await expect(panel.getByRole('button', { name: '해당 분기로 이동', exact: true })).toBeVisible();
   await panel.getByLabel('도우미에게 요청').fill('전개를 이동한 뒤 보낼 초안');
   await expect(
     panel.getByRole('button', { name: '도우미 요청 보내기', exact: true })
@@ -106,9 +106,9 @@ test('HSESSION02 another branch session is readable and requires navigation befo
   await panel.getByLabel('도우미 말투', { exact: true }).fill('이 전개에서 사용할 말투 초안');
   await expect(panel.getByRole('button', { name: '도우미 설정 저장', exact: true })).toBeDisabled();
   await page.screenshot({ path: info.outputPath('helper-other-branch.png') });
-  await panel.getByRole('button', { name: '해당 전개로 이동', exact: true }).click();
+  await panel.getByRole('button', { name: '해당 분기로 이동', exact: true }).click();
   await expect(page).toHaveURL(new RegExp(`branch=${branch.id}`));
-  await expect(panel.getByRole('button', { name: '해당 전개로 이동', exact: true })).toBeHidden();
+  await expect(panel.getByRole('button', { name: '해당 분기로 이동', exact: true })).toBeHidden();
   await expect(panel.getByLabel('도우미 세션 선택')).toHaveValue(foreign.id);
   await expect(panel.getByLabel('도우미에게 요청')).toHaveValue('전개를 이동한 뒤 보낼 초안');
   await expect(
