@@ -6,7 +6,6 @@ import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { Store } from '../server/store.js';
 import { forkChat } from '../server/chat-fork.js';
-import { parseSourceSegments } from '../core/source-segments.js';
 import { createSourceSegmentFixture } from './fixtures/source-segments.js';
 import { fixtureBotInput, createFixtureChat } from './fixtures/chat.js';
 import { translationInput } from '../core/auxiliary.js';
@@ -162,18 +161,10 @@ describe('Source segment memory, translation and fork provenance (synthetic only
       initial: translationInput(copiedSource, sourceTimeContext(snapshot, 'translation'), snapshot),
     };
     expect(copied.result).toMatchObject({ sourceRevision: copiedSource.id, sourceHash: s.hash });
-    expect(input.initial.context.segmentKnowledge!.sourceRevision).toBe(copiedSource.id);
-    expect(input.initial.context.segmentKnowledge!.sourceHash).toBe(s.hash);
-    expect(input.initial.context.segmentKnowledge!.segments.map((x: any) => x.range)).toEqual(
-      parseSourceSegments(
-        {
-          sourceRevision: copiedSource.id,
-          sourceHash: s.hash,
-          text: s.text,
-        },
-        createSourceSegmentFixture()
-      ).segments.map((x) => x.range)
-    );
+    expect(input.initial.sourceRevision).toBe(copiedSource.id);
+    expect(input.initial.sourceHash).toBe(s.hash);
+    expect(input.initial.sourceText).toBe(s.text);
+    expect(JSON.stringify(input.initial.context)).not.toContain('actorKnowledge');
     const restored = database();
     expect(restored.product.import(f.store.product.export())).toEqual({ restored: true, chats: 2 });
   });

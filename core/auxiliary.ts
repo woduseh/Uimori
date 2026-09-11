@@ -4,12 +4,7 @@ import { createHash } from 'node:crypto';
 import { executeTool, type ToolAction } from './provider.js';
 import { createToolCorrectionPolicy } from './tool-outcome.js';
 import type { Resource, RunSnapshot, ToolEvent } from './types.js';
-import {
-  parseSourceSegments,
-  type SegmentKnowledge,
-  type SegmentRange,
-  type SourceSegmentPolicy,
-} from './source-segments.js';
+import type { SourceSegmentPolicy } from './source-segments.js';
 import { STORY_READ_NAMES } from './story-context.js';
 import { TRANSLATION_READ_NAMES } from './translation-context.js';
 import { AUTHOR_NOTE_GUIDANCE } from './notes.js';
@@ -35,19 +30,6 @@ export type SourceTimeContext = {
   previousSources: { revision: string; text: string }[];
   instructionRevision: string;
   modelPresetRevision: string;
-  segmentKnowledge?: {
-    sourceRevision: string;
-    sourceHash: string;
-    provenance: 'source-markers';
-    segments: {
-      id: string;
-      kind: 'main' | 'aside' | 'annotation';
-      range: SegmentRange;
-      readerExposure: 'present-in-source';
-      actorKnowledge: SegmentKnowledge;
-      worldTruth: 'unknown';
-    }[];
-  };
 };
 export type SourceBlock = {
   anchor: string;
@@ -206,10 +188,6 @@ export function translationInput(
 ): AuxiliaryInput {
   validateSourceIdentity(source);
   if (snapshot.chatId !== source.chatId) throw new Error('SOURCE_SCOPE_MISMATCH');
-  const document = parseSourceSegments(
-    { sourceRevision: source.id, sourceHash: source.hash, text: source.text },
-    context.sourceSegments
-  );
   const base = baseInput(source.id, source.hash, context, snapshot);
   const compiled = compiledPackages(snapshot, 'translation');
   const packages = packageContextFromCompiled(compiled);
@@ -231,24 +209,11 @@ export function translationInput(
     context: {
       ...base.context,
       ...(packages ? { packages } : {}),
-      segmentKnowledge: {
-        sourceRevision: source.id,
-        sourceHash: source.hash,
-        provenance: 'source-markers',
-        segments: document.segments.map((segment) => ({
-          id: segment.id,
-          kind: segment.kind,
-          range: { ...segment.range },
-          readerExposure: 'present-in-source',
-          actorKnowledge: structuredClone(segment.knowledge),
-          worldTruth: 'unknown',
-        })),
-      },
     },
     contract: '',
     referencePolicy:
       AUTHOR_NOTE_GUIDANCE +
-      ' Optional story.list/search/read retrieves frozen prior originals; notes.list/read retrieves typed source-time evidence; translation.search/read retrieves prior wording, never new facts. Search names, forms of address and speaker register when useful, then read only needed ranges. Current source and source-time references take precedence over prior translations, beliefs and summaries. Hidden viewpoints remain distinct: reference knowledge does not become a character’s knowledge. A search with no matches needs no retry; translation remains possible without tools. Total tool result budget is 96000 UTF-8 bytes per job.',
+      ' Optional story.list/search/read retrieves frozen prior originals; notes.list/read retrieves typed source-time evidence; translation.search/read retrieves prior wording, never new facts. Search names, forms of address and speaker register when useful, then read only needed ranges. Current source and source-time references take precedence over prior translations, beliefs and summaries. A search with no matches needs no retry; translation remains possible without tools. Total tool result budget is 96000 UTF-8 bytes per job.',
     ...(snapshot.profile?.promptPresets?.translation ? { customPrompt: true } : {}),
     outputSchema: {},
   };
