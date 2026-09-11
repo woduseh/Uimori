@@ -391,3 +391,14 @@
   color: var(--muted);
   vertical-align: middle;
 }
+.branch-list > .branch-entry {
+  position: relative;
+}
+.branch-list > .branch-entry:not([data-depth="0"])::before {
+  content: "";
+  position: absolute;
+  inset-inline-start: -10px;
+  top: 0;
+  bottom: 0;
+  border-inline-start: 1px solid var(--line);
+}
