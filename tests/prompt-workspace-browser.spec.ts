@@ -65,8 +65,7 @@ test('PWS02 translation policy and prompt options save in the independent worksp
   await navigationAction(page, '설정');
   await selectSettingsSection(page, '역할별 모델');
   const models = page.getByRole('region', { name: '역할별 모델 설정' });
-  const details = models.locator('details').filter({ hasText: '거절 감지' });
-  await details.locator('summary').click();
+  await models.getByText('번역 오류 감지와 재시도', { exact: false }).click();
   await models.getByLabel('번역 자동 재요청 횟수').fill('2');
   await models.getByLabel('번역 전체 호출 한도').fill('12');
   await models.getByRole('button', { name: '역할별 모델 설정 저장', exact: true }).click();

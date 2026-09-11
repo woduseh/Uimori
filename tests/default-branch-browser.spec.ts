@@ -36,7 +36,9 @@ test('WORKSPACE01 restores only a valid last workspace while explicit URLs and b
   await expect(page.getByTestId('library-panel')).toBeVisible();
   await page.goBack();
   await expect(page.getByRole('textbox', { name: '다음 장면 요청' })).toBeVisible();
-  await page.evaluate(() =>
+  // Seed each new document before the app starts. A live reader can legitimately save its
+  // current workspace again while its final refresh completes, replacing an injected value.
+  await page.addInitScript(() =>
     localStorage.setItem(
       'uimori:last-workspace',
       JSON.stringify({ destination: 'story', chatId: 'deleted-chat' })
@@ -44,12 +46,6 @@ test('WORKSPACE01 restores only a valid last workspace while explicit URLs and b
   );
   await page.goto(`/?chat=${chat.id}`);
   await expect(page.getByRole('textbox', { name: '다음 장면 요청' })).toBeVisible();
-  await page.evaluate(() =>
-    localStorage.setItem(
-      'uimori:last-workspace',
-      JSON.stringify({ destination: 'story', chatId: 'deleted-chat' })
-    )
-  );
   await page.goto('/');
   await expect(page.getByTestId('library-panel')).toBeVisible();
   await expect

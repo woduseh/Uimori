@@ -1,4 +1,5 @@
 import { HttpError, fields, number, record, text } from './request-validation.js';
+import { BehaviorError } from '../core/package-behavior.js';
 import { promptWorkspaceRoutes } from './prompt-workspace.js';
 import Fastify, { type FastifyInstance } from 'fastify';
 import fastifyStatic from '@fastify/static';
@@ -843,6 +844,8 @@ export async function createApp(options: AppOptions): Promise<App> {
     if (denied) throw new HttpError(403, denied);
   });
   app.setErrorHandler((error, _request, reply) => {
+    const behaviorCode =
+      error instanceof BehaviorError && /^BEHAVIOR_[A-Z0-9_]{1,100}$/.test(error.message);
     const statusCode =
       error && typeof error === 'object' && 'statusCode' in error ? error.statusCode : undefined;
     const code =
@@ -853,7 +856,7 @@ export async function createApp(options: AppOptions): Promise<App> {
           : 500;
     void reply.code(code).send({
       error:
-        error instanceof HttpError
+        error instanceof HttpError || behaviorCode
           ? error.message
           : code === 400
             ? 'Invalid request'

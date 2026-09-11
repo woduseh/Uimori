@@ -289,7 +289,10 @@ test('chat creative options scope fixed values, oneoff reservations and revocabl
   await expect
     .poll(async () => (await state()).delegations.map((item) => item.fields))
     .toEqual([['inner']]);
-  await expect(delegation.getByText('지속 위임 중', { exact: true })).toBeVisible();
+  await expect(delegation.getByText(/^지속 위임 중 · /)).toBeVisible();
+  await expect(
+    delegation.locator('.chat-option-record').filter({ hasText: '지속 위임 중' })
+  ).toContainText('내면 서술 강조');
   await delegation.getByRole('button', { name: '지속 위임 해제', exact: true }).click();
   await expect.poll(async () => (await state()).delegations[0]?.revokedAt).not.toBeNull();
   await delegation.getByText('해제한 위임 1개', { exact: true }).click();

@@ -68,6 +68,7 @@ for (const [index, width] of (visualReview ? [390, 360] : [390]).entries()) {
     await expect(panel.getByLabel('서재 검색', { exact: true })).toHaveValue(title);
     await createLibraryContent(page);
     await expect(panel.getByLabel('자료 이름', { exact: true })).toBeInViewport();
+    await panel.getByLabel('자료 본문', { exact: true }).scrollIntoViewIfNeeded();
     await expect(panel.getByLabel('자료 본문', { exact: true })).toBeInViewport();
     await expect(
       panel.getByRole('region', { name: '대표 이미지 설정', exact: true })
