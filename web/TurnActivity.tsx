@@ -14,7 +14,7 @@ const attention = (status: string) =>
 const names: Record<string, string> = {
   translation: '번역',
   image: '이미지',
-  status: '장면 상태',
+  status: '장면 해설',
   state: '상태 정리',
   context: '문맥 압축',
   illustration: '삽화',

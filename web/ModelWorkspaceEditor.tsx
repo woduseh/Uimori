@@ -128,13 +128,13 @@ export function ModelWorkspaceEditor({
         </div>
         <details className="full model-secondary-settings">
           <summary>
-            기타 자동 작업 모델 <small>표시 상태 · 이미지 배치 · 채팅 제목</small>
+            기타 자동 작업 모델 <small>장면 해설 · 이미지 배치 · 채팅 제목</small>
           </summary>
           <div className="control-grid">
             {(['status', 'image'] as TaskRole[]).map((role, index) => (
               <div key={role}>
                 {selector(
-                  ['표시 상태 모델', '이미지 배치 모델'][index],
+                  ['장면 해설 모델', '이미지 배치 모델'][index],
                   draft.routes[role],
                   (ref) => change({ ...draft, routes: { ...draft.routes, [role]: ref } })
                 )}

@@ -8,7 +8,7 @@ import './model-pricing.css';
 const roleLabels: Record<Attempt['role'], string> = {
   main: '원문',
   translation: '번역',
-  status: '표시 상태',
+  status: '장면 해설',
   image: '이미지 배치',
   state: '서사 상태',
   context: '문맥 압축',

@@ -90,7 +90,7 @@ const roles: Record<string, string> = {
   main: '본문',
   translation: '번역',
   'translation-refusal': '번역 거절 판정',
-  status: '표시 상태',
+  status: '장면 해설',
   image: '이미지 배치',
   state: '상태',
   context: '문맥 압축',

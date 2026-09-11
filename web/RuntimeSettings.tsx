@@ -78,15 +78,16 @@ export function SettingsEditor({
           <small className="full">번역은 원문 전체를 현재 번역 프롬프트와 설정으로 요청해요.</small>
           <label className="check">
             <Switch
-              aria-label="장면 상태 자동 실행"
+              aria-label="장면 해설 자동 생성"
               checked={value.status}
               onChange={(event) => update('status', event.target.checked)}
             />
-            장면 상태 자동 실행
+            장면 해설 자동 생성
           </label>
           <small className="full">
-            모델 경로는 역할별 모델 설정을 따라요. 장면 상태를 끄면 새 원고에서 상태 작업을 호출하지
-            않아요.
+            새 원고가 완성되면 장면의 요약과 분위기를 짧게 붙여요. 읽을 때만 쓰는 설명이라 이야기
+            상태나 다음 요청의 근거는 바뀌지 않아요. 꺼도 상태 정의를 사용하는 채팅의 상태 추적은
+            계속돼요. 모델 경로는 역할별 모델 설정을 따라요.
           </small>
           <label className="full">
             작업당 모델 호출 한도

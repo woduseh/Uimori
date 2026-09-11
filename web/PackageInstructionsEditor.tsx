@@ -64,7 +64,7 @@ const targetLabels: Record<PackageInstruction['target'], string> = {
   main: '본문 창작',
   translation: '번역',
   state: '상태 계산',
-  status: '표시 상태',
+  status: '장면 해설',
   image: '이미지 배치',
 };
 const roleLabels: Record<PackageRole, string> = { bot: '봇', persona: '페르소나', module: '모듈' };

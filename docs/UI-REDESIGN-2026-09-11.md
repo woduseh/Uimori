@@ -300,3 +300,29 @@ CSS도 정리했어요. `.behavior-reset`은 규칙이 아예 없었고, `.packa
 `quality:full` PASS, 1,966 PASS / 1 SKIP. `verify:ui` PASS, `scripts/verify-prompts.mjs` 15 PASS, `verify:library` 40 PASS / 1 FAIL(기존 실패 `PNAV01`).
 
 `LIBUI07`의 프롬프트 단언을 바꿨어요. 진입점이 목록 도구 줄 안으로 들어갔으므로 도구 줄과 목록이 같은 중앙 열을 쓰는지, 그리고 그 묶음이 도구 줄의 자식인지를 봐요.
+
+## 2026-09-12 11차: 표시 전용 해설이 '상태'라고 불리던 문제
+
+`장면 상태 자동 실행` 토글은 이름이 가리키는 일을 하지 않아요. 코드로 확인한 사실이에요.
+
+- `server/store.ts:745`가 `settings.status`가 참일 때만 `status` 보조 작업을 예약해요.
+- 그 작업의 계약은 `core/auxiliary.ts:233`에 있어요 — "display-only scene summaries and mood annotations … **never become authoritative state, canon, or next-turn evidence**". `instructionRevision`도 문자 그대로 `display-only-1`이에요.
+- 반면 실제 이야기 상태는 `server/story-store.ts:332`의 `reserveSourceInTransaction`이 `story.config.module`의 존재만 보고 `state` 작업을 예약해요. **`settings.status`를 읽지 않아요.**
+
+그래서 화면의 "장면 상태를 끄면 새 원고에서 상태 작업을 호출하지 않아요"는 표시용 작업에만 참이고 상태 추적에는 거짓이었어요. 토글을 꺼서 상태 추적도 멈췄다고 믿게 만드는 문구였어요.
+
+같은 대상에 이름이 둘이기도 했어요. 토글은 `장면 상태`, 모델 역할은 `표시 상태`. 그리고 `장면 상태`는 이야기 상태를 가리키는 자리(`ChatSettingsPanel`의 상태와 문맥, `StoryPanel`)에도 쓰이고 있었어요.
+
+이 기능에서 **상태라는 말을 걷어내고 `장면 해설`로 모았어요.** 토글·모델 역할·작업 표시·오류 안내·지침 대상 목록까지 한 이름을 써요. 이야기 상태를 가리키던 자리는 그대로 뒀어요. 안내 문구는 무엇을 만드는지, 무엇을 바꾸지 않는지, 꺼도 상태 추적은 계속된다는 것을 밝혀요.
+
+### 하지 않은 것
+
+저장이 필요한 스위치를 체크박스로 바꾸는 일은 넣지 않았어요. 앱의 `Switch` 13곳을 성격별로 분류하면 저장이 필요한 폼이 10곳(`RuntimeSettings`, `ProfileEditor`, `IllustrationSettingsEditor`, `LoreContextPolicyEditor`, `PromptWorkspaceEditor`, `PackageImagesEditor`, `PackageControlsEditor`, `PackageInstructionsEditor`, `AgentCollaborationEditor`), 즉시 적용이 3곳(`ComposerMore`, `PackageBehaviorPanel`, `PackageControlValues`)이에요. 한 곳만 바꾸면 오히려 덜 일관돼지고, 열 곳을 바꾸면 `role="switch"`를 기대하는 검사까지 함께 옮겨야 해요. 규약 변경으로 따로 다룰 일이에요.
+
+메뉴 재배치(`자동 후속 작업` 해체, 문맥과 상태 분리)와 상태 추적 일시중지도 넣지 않았어요. 후자는 값 보존·실행 중 작업·재개 시 누락 처리까지 서버 설계가 필요해요.
+
+### 검증
+
+`quality:full` PASS, 1,967 PASS / 1 SKIP. `verify:ui` PASS, `verify:global-models` 4 PASS, `verify:providers` 20 PASS.
+
+`CSUI04`는 실패하는데 이름 변경 이전 트리(`82640da`)에서도 같게 실패해요. `tests/chat-settings-browser.spec.ts`가 어떤 verify 스크립트의 파일 목록에도 없어 `verify:redesign`에서만 도는 탓에 드러나지 않던 기존 실패예요.

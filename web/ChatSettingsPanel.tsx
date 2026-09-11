@@ -65,7 +65,7 @@ const categories = [
     id: 'runtime',
     title: '자동 후속 작업',
     icon: BehaviorIcon,
-    description: '장면 상태 자동 실행',
+    description: '장면 해설과 호출 한도',
     group: '고급',
   },
 ] as const;
