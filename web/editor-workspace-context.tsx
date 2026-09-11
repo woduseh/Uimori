@@ -22,7 +22,7 @@ import type {
   EditDraftModel,
 } from '../core/edit-drafts.js';
 import { api, ApiError, libraryChangedKey } from './api.js';
-import { ReviewIcon } from './ui-icons.js';
+import { ReviewIcon, CloseIcon } from './ui-icons.js';
 import './editor-drafts.css';
 
 type Buffer = {
@@ -824,6 +824,7 @@ export function EditorDraftStatus({
           <div className="editor-draft-toolbar">
             <strong>편집 변경 검토</strong>
             <button type="button" className="ghost" onClick={() => setReview(null)}>
+              <CloseIcon size={18} aria-hidden="true" />
               닫기
             </button>
           </div>
@@ -922,6 +923,7 @@ export function EditorDraftStatus({
                 확인한 저장 되돌리기
               </button>
               <button type="button" className="secondary" onClick={() => setUndo(null)}>
+                <CloseIcon size={18} aria-hidden="true" />
                 취소
               </button>
             </div>

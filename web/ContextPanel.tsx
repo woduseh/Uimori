@@ -1,3 +1,4 @@
+import { CheckIcon, CloseIcon } from './ui-icons.js';
 import { useEffect, useRef, useState } from 'react';
 import type {
   ContextDetail,
@@ -353,7 +354,8 @@ export function ContextPanel({
                   className="secondary"
                   disabled={busy || conflict || !current || !draft.text.trim()}
                 >
-                  요약 저장
+                  <CheckIcon size={18} aria-hidden="true" />
+                  요약 저장{' '}
                 </button>
                 <button
                   type="button"
@@ -364,6 +366,7 @@ export function ContextPanel({
                     setError('');
                   }}
                 >
+                  <CloseIcon size={18} aria-hidden="true" />
                   편집 취소
                 </button>
               </div>

@@ -23,6 +23,9 @@ import {
   SecurityIcon,
   BackIcon,
   IllustrationIcon,
+  CheckIcon,
+  CloseIcon,
+  LibraryIcon,
 } from './ui-icons.js';
 import type { BranchTreeNode, Job, ReaderRun } from '../core/types.js';
 import type { Branch } from '../core/product.js';
@@ -185,6 +188,7 @@ export function TasksPanel({
                       onClose();
                     }}
                   >
+                    <LibraryIcon size={18} aria-hidden="true" />
                     원고 읽기
                   </button>
                 )}
@@ -434,10 +438,12 @@ export function BranchesPanel({ state, onClose }: { state: StoryState; onClose: 
               disabled={saving}
               onClick={() => setRenaming(null)}
             >
+              <CloseIcon size={18} aria-hidden="true" />
               취소
             </button>
             <button className="primary" disabled={saving || !name.trim()}>
-              이름 저장
+              <CheckIcon size={18} aria-hidden="true" />
+              이름 저장{' '}
             </button>
           </div>
         </form>

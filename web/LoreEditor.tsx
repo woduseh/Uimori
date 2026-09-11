@@ -562,6 +562,7 @@ export function LoreEditor({
             {folderEdit?.id ? '이름 저장' : '폴더 만들기'}
           </button>
           <button type="button" className="secondary" onClick={() => setFolderEdit(null)}>
+            <CloseIcon size={18} aria-hidden="true" />
             취소
           </button>
         </div>

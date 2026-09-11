@@ -3,7 +3,7 @@ import { api, ApiError } from './api.js';
 import { IconButton } from './IconButton.js';
 import { DismissibleError } from './DismissibleError.js';
 import './outline.css';
-import { AddIcon, DeleteIcon, EditIcon, PinIcon } from './ui-icons.js';
+import { AddIcon, DeleteIcon, EditIcon, PinIcon, CloseIcon } from './ui-icons.js';
 import {
   OUTLINE_INTENT_MAX,
   OUTLINE_LEVEL_LABELS,
@@ -173,6 +173,7 @@ function OutlineAddForm({
             onDone();
           }}
         >
+          <CloseIcon size={18} aria-hidden="true" />
           취소
         </button>
         <button type="submit" disabled={!!busy}>
@@ -321,6 +322,7 @@ function OutlineEntry({
                 actions.setEditing(null);
               }}
             >
+              <CloseIcon size={18} aria-hidden="true" />
               취소
             </button>
             <button type="submit" disabled={!!actions.busy}>

@@ -1,3 +1,4 @@
+import { CheckIcon, CloseIcon } from './ui-icons.js';
 import { useEffect, useRef, useState } from 'react';
 import { Copy } from 'lucide-react';
 import type { HelperArtifact } from '../core/helper.js';
@@ -167,7 +168,8 @@ export function HelperArtifactCard({
               </label>
               <div className="form-actions">
                 <button disabled={readOnly || busy || conflict || !draft.text.trim()}>
-                  장면 편집 저장
+                  <CheckIcon size={18} aria-hidden="true" />
+                  장면 편집 저장{' '}
                 </button>
                 <button
                   type="button"
@@ -178,6 +180,7 @@ export function HelperArtifactCard({
                     setError('');
                   }}
                 >
+                  <CloseIcon size={18} aria-hidden="true" />
                   장면 편집 취소
                 </button>
               </div>

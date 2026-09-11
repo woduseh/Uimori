@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { ArrowUp, History, Square, X, Settings2 } from 'lucide-react';
-import { SaveIcon } from './ui-icons.js';
+import { SaveIcon, SettingsIcon, CloseIcon } from './ui-icons.js';
 import type {
   HelperConversation,
   HelperEditor,
@@ -999,7 +999,8 @@ export function HelperPanel(props: Props) {
                   className="secondary helper-notice-lead"
                   onClick={props.onModelSettings}
                 >
-                  모델 설정
+                  <SettingsIcon size={18} aria-hidden="true" />
+                  모델 설정{' '}
                 </button>
               )}
               <button
@@ -1011,6 +1012,7 @@ export function HelperPanel(props: Props) {
                   sessions.clearError();
                 }}
               >
+                <CloseIcon size={18} aria-hidden="true" />
                 닫기
               </button>
             </div>

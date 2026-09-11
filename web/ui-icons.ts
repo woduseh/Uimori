@@ -38,6 +38,7 @@ export {
   Palette as IllustrationIcon,
   Braces as CodeIcon,
   History as HistoryIcon,
+  Square as StopIcon,
   Save as SaveIcon,
   Trash2 as DeleteIcon,
   Check as CheckIcon,

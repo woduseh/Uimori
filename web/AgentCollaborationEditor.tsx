@@ -1,6 +1,6 @@
 import { Switch, SelectionCheckbox } from './BooleanControls.js';
 import { useId, useState } from 'react';
-import { ExpandIcon } from './ui-icons.js';
+import { ExpandIcon, CloseIcon } from './ui-icons.js';
 import {
   createAgentCollaboration,
   createAgentDefinition,
@@ -417,6 +417,7 @@ export function AgentCollaborationEditor({
         <p className="muted">프롬프트를 저장하면 반영돼요.</p>
         <div className="form-actions">
           <button type="button" className="secondary" onClick={() => setRemoving(null)}>
+            <CloseIcon size={18} aria-hidden="true" />
             취소
           </button>
           <button

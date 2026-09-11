@@ -19,6 +19,7 @@ import {
   FolderIcon,
   MoreIcon,
   UpIcon,
+  MoveIcon,
 } from './ui-icons.js';
 import './library-folders.css';
 
@@ -452,14 +453,16 @@ export function LibraryMoveDialog({
         )}
         <div className="form-actions">
           <button type="button" className="secondary" disabled={busy} onClick={onClose}>
-            취소
+            <CloseIcon size={18} aria-hidden="true" />
+            취소{' '}
           </button>
           <button
             disabled={
               busy || stale || revision === undefined || revision !== organization?.revision
             }
           >
-            이동
+            <MoveIcon size={18} aria-hidden="true" />
+            이동{' '}
           </button>
         </div>
       </form>

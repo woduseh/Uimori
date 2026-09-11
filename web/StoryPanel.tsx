@@ -1,5 +1,5 @@
 import { ProviderRejectionNotice } from './provider-rejection.js';
-import { UploadIcon } from './ui-icons.js';
+import { UploadIcon, CheckIcon, PowerIcon } from './ui-icons.js';
 import { DeleteButton } from './DeleteButton.js';
 import { useEffect, useRef, useState } from 'react';
 import type { Connection, ModelRef, ModelPreset } from '../core/product.js';
@@ -460,6 +460,7 @@ function StoryPanelEditor({
                       className="secondary"
                       onClick={() => change({ ...draft, module: null })}
                     >
+                      <PowerIcon size={18} aria-hidden="true" />
                       상태 사용 안 함
                     </button>
                   )}
@@ -511,7 +512,8 @@ function StoryPanelEditor({
             </section>
             <div className="form-actions story-config-actions">
               <button className="secondary" disabled={!dirty.current}>
-                상태 설정 저장
+                <CheckIcon size={18} aria-hidden="true" />
+                상태 설정 저장{' '}
               </button>
               {dirty.current && detail && draft.revision !== detail.config.revision && (
                 <div>
