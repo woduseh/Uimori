@@ -1,4 +1,5 @@
 import { createDefaultPromptProgram } from '../core/prompt-defaults.js';
+import { AUTHOR_NOTE_GUIDANCE } from '../core/notes.js';
 import { createHash } from 'node:crypto';
 import { afterEach, describe, expect, test } from 'vitest';
 import {
@@ -275,11 +276,13 @@ describe('whole-source authored translation prompts', () => {
           { type: 'done', reason: 'tool_calls' },
         ]);
       else {
-        const packet = body.input.source;
+        const sourceMessage = body.prompt.messages.find(
+          (message: { id: string }) => message.id === 'source'
+        );
         await writeSse(response, [
           {
             type: 'text_delta',
-            delta: packet.text,
+            delta: sourceMessage.content[0].text,
           },
           { type: 'done', reason: 'stop' },
         ]);
@@ -321,7 +324,8 @@ describe('whole-source authored translation prompts', () => {
     });
     expect(local.requests).toHaveLength(2);
     const bodies = local.requests.map((request) => JSON.parse(request.body));
-    expect(bodies[0].stable.contract).toBe('');
+    expect(bodies[0].stable.contract).toContain(AUTHOR_NOTE_GUIDANCE);
+    expect(bodies[0].input.source).not.toHaveProperty('referencePolicy');
     expect(bodies[0].prompt.values).toEqual({ style: 'precise' });
     expect(bodies[1].prompt).toEqual(bodies[0].prompt);
     expect(bodies[1].opaqueState).toEqual({ cursor: 'synthetic-source-time' });

@@ -49,7 +49,7 @@ test('missing and private resources retain identical safe failure, unapproved to
   const denied = executeTool(run, { callId: 'a', name: 'shell', args: {} });
   expect(createToolCorrectionPolicy()(denied, {})).toBe('denied');
 });
-test('total corrections are bounded and key ordering does not evade repetition detection', () => {
+test('recoverable feedback stays available to the owning loop budget; unclassified failures stay terminal', () => {
   const event: ToolEvent = {
     callId: 'a',
     name: 'knowledge.search',
@@ -59,10 +59,9 @@ test('total corrections are bounded and key ordering does not evade repetition d
     errorKind: 'recoverable',
   };
   const policy = createToolCorrectionPolicy();
-  for (const limit of [101, 102, 103]) expect(policy(event, { limit })).toBe('continue');
-  expect(policy(event, { limit: 104 })).toBe('exhausted');
+  for (const limit of [101, 102, 103, 104]) expect(policy(event, { limit })).toBe('continue');
   const repeated = createToolCorrectionPolicy();
   expect(repeated(event, { limit: 101, query: 'a' })).toBe('continue');
-  expect(repeated(event, { query: 'a', limit: 101 })).toBe('exhausted');
+  expect(repeated(event, { query: 'a', limit: 101 })).toBe('continue');
   expect(createToolCorrectionPolicy()({ ...event, errorKind: undefined }, {})).toBe('denied');
 });

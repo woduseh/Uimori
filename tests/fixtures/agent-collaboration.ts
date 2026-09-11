@@ -120,6 +120,8 @@ export async function fixture(
     selectedAgents?: string[];
     maxCalls?: number;
     timeoutMs?: number;
+    loreText?: string;
+    contextTools?: boolean;
   } = {}
 ) {
   vi.stubEnv(credentialEnv, bearer);
@@ -179,7 +181,7 @@ export async function fixture(
     kind: 'module',
     title: 'Copper observatory',
     description: 'Synthetic scoped reference',
-    text: 'The copper observatory stands north of the harbor.',
+    text: options.loreText ?? 'The copper observatory stands north of the harbor.',
     loading: 'discoverable',
     relatedIds: [],
   });
@@ -212,6 +214,7 @@ export async function fixture(
     maxOutputTokens: 4096,
     temperature: null,
     timeoutMs: options.timeoutMs ?? 4000,
+    ...(options.contextTools ? { contextTools: true } : {}),
   });
   const advisorModel = await api<ModelPreset>(app, '/api/model-presets', {
     title: 'Synthetic advisor',

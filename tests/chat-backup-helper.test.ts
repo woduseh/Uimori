@@ -19,6 +19,8 @@ import type { PendingChatOptions } from '../core/chat-options.js';
 import type { WorkspaceDraftModel } from '../core/edit-drafts.js';
 import { HelperRuntime } from '../server/helper-runtime.js';
 import { ResponseStreamStore } from '../server/response-stream.js';
+import { createDefaultPromptProgram } from '../core/prompt-defaults.js';
+import { DEFAULT_MAIN_PROMPT } from '../core/prompts.js';
 
 const owned: { store: Store; path: string }[] = [];
 afterEach(() => {
@@ -52,7 +54,7 @@ test('multiple same-branch sessions and detached revoked option receipts survive
       ...prior.main,
       values: { detail: 1 },
       program: {
-        ...prior.main.program,
+        ...createDefaultPromptProgram(DEFAULT_MAIN_PROMPT),
         controls: [{ id: 'detail', label: 'Detail', type: 'number', default: 1, min: 0, max: 10 }],
       },
     },
@@ -270,7 +272,7 @@ test('helper backup remaps durable draft and option ownership while preserving a
       ...current.main,
       values: { custom: chat.id },
       program: {
-        ...current.main.program,
+        ...createDefaultPromptProgram(DEFAULT_MAIN_PROMPT),
         controls: [{ id: 'custom', label: 'Custom', type: 'text', default: chat.id }],
       },
     },

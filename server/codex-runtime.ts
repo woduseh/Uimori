@@ -27,6 +27,7 @@ import {
 import {
   buildCodexDescriptor,
   buildCodexTurn,
+  CODEX_BUILTIN_TOOLS,
   CODEX_ENDPOINT,
   decodeCodexOutput,
 } from '../core/codex-protocol.js';
@@ -285,15 +286,16 @@ export function codexEnvironment(
   };
 }
 
-// CLI 0.153+ supports environments:[] on thread/start. It disables the environment
-// tools instead of relying on a prompt to deny filesystem or terminal access.
+// Native search and isolated JavaScript can assist a decision. Environment tools
+// remain unavailable: read-only alone would also expose host files and auth.json.
+// CLI 0.153+ supports environments:[] to enforce that boundary independently of prompts.
 export const CODEX_RUNTIME_CONFIG = {
   forced_login_method: 'chatgpt',
   cli_auth_credentials_store: 'file',
   approval_policy: 'never',
   approvals_reviewer: 'user',
   sandbox_mode: 'read-only',
-  web_search: 'disabled',
+  web_search: CODEX_BUILTIN_TOOLS.webSearch,
   project_doc_max_bytes: 0,
   check_for_update_on_startup: false,
   'analytics.enabled': false,
@@ -301,7 +303,7 @@ export const CODEX_RUNTIME_CONFIG = {
   'features.apps': false,
   'features.shell_tool': false,
   'features.unified_exec': false,
-  'features.code_mode': false,
+  'features.code_mode': CODEX_BUILTIN_TOOLS.codeMode,
   'features.code_mode_only': false,
   'features.js_repl': false,
   'features.view_image': false,
@@ -320,13 +322,22 @@ export const CODEX_RUNTIME_CONFIG = {
   'features.unbounded_connection_retries': false,
   'features.image_generation': false,
 } as const;
-/** Illustration turns enable only the official image generation tool on top of the text policy. */
+/** Illustration turns add image generation while retaining the same native utility tools. */
 export const CODEX_ILLUSTRATION_CONFIG = {
   ...CODEX_RUNTIME_CONFIG,
   'features.image_generation': true,
 } as const;
 const ILLUSTRATION_LINE_BYTES = 64 * 1024 * 1024;
-const TEXT_ITEMS = ['userMessage', 'agentMessage', 'reasoning'] as const;
+const TEXT_ITEMS = [
+  'userMessage',
+  'agentMessage',
+  'reasoning',
+  'webSearch',
+  'functionCallOutput',
+  'plan',
+  'sleep',
+  'contextCompaction',
+] as const;
 
 /** Owns one Uimori-specific login and isolated, disposable agent turns. */
 export class CodexRuntime implements CodexRuntimeService {
@@ -726,6 +737,7 @@ export class CodexRuntime implements CodexRuntimeService {
           attachments,
           outputSchema: request.outputSchema,
           imageGeneration: true,
+          builtinTools: CODEX_BUILTIN_TOOLS,
           environmentAccess: false,
           ephemeral: true,
         },
@@ -866,7 +878,8 @@ export class CodexRuntime implements CodexRuntimeService {
       offExit = () => {};
     let usage = emptyUsage(),
       output = '',
-      outputItem: string | undefined;
+      outputItem: string | undefined,
+      legacyOutput = '';
     let rejectTurn: (reason: unknown) => void = () => {};
     const aborted = () =>
       rejectTurn(new ProviderContractError(options.signal.aborted ? 'CANCELLED' : 'TIMEOUT'));
@@ -991,6 +1004,16 @@ export class CodexRuntime implements CodexRuntimeService {
             rejectTurn(new ProviderContractError('CODEX_TOOL_NOT_ALLOWED'));
             return;
           }
+          // Native work and commentary are intermediate. A phase-less message is
+          // only a legacy final candidate until a later activity supersedes it.
+          if (!['userMessage', 'reasoning', 'agentMessage'].includes(String(item.type)))
+            legacyOutput = '';
+          if (
+            method === 'item/completed' &&
+            item.type === 'agentMessage' &&
+            item.phase === 'commentary'
+          )
+            legacyOutput = '';
           if (
             method === 'item/completed' &&
             item.type === 'agentMessage' &&
@@ -1000,13 +1023,15 @@ export class CodexRuntime implements CodexRuntimeService {
               !boundedString(item.id) ||
               typeof item.text !== 'string' ||
               item.text.length > 2_000_000 ||
-              (outputItem && outputItem !== item.id)
+              (item.phase === 'final_answer' && outputItem && outputItem !== item.id)
             ) {
               rejectTurn(new ProviderContractError('CODEX_INVALID_OUTPUT'));
               return;
             }
-            outputItem = item.id;
-            output = item.text;
+            if (item.phase === 'final_answer') {
+              outputItem = item.id;
+              output = item.text;
+            } else legacyOutput = item.text;
           }
           try {
             plan.onItem?.(item, method);
@@ -1057,7 +1082,7 @@ export class CodexRuntime implements CodexRuntimeService {
       turnId = (turn as { turn: { id: string } }).turn.id;
       await completed;
       if (signal.aborted || revision !== this.revision) return fail(abortCode(), usage);
-      return { ok: true, output, usage };
+      return { ok: true, output: outputItem ? output : legacyOutput, usage };
     } catch (caught) {
       return fail(
         options.signal.aborted ? 'CANCELLED' : timeout.aborted ? 'TIMEOUT' : safeError(caught),

@@ -14,9 +14,16 @@ import { sourceTimeContext } from './product-auxiliary.js';
 import { validateLoreContextPolicy } from '../core/lore-context.js';
 import { createDefaultPromptProgram } from '../core/prompt-defaults.js';
 import { DEFAULT_MAIN_PROMPT } from '../core/prompts.js';
+import { builtinPromptTemplate, builtinPromptTemplates } from './builtin-prompts.js';
 
 /** A read-only preview, including unsaved draft blocks. No provider call or Run is created. */
 export function promptRoutes(app: FastifyInstance, store: Store) {
+  app.get('/api/prompt-templates', async () => builtinPromptTemplates());
+  app.get<{ Params: { id: string } }>('/api/prompt-templates/:id', async (request) => {
+    const template = builtinPromptTemplate(request.params.id);
+    if (!template) throw new HttpError(404, 'Unknown prompt template');
+    return template;
+  });
   app.post<{ Params: { id: string } }>(
     '/api/chats/:id/prompt-preview',
     { bodyLimit: 2_000_000 },

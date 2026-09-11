@@ -30,6 +30,9 @@ export function translationReader(
       args: {},
       result: { code },
       denied: true,
+      ...(['INVALID_ARGUMENTS', 'RESOURCE_UNAVAILABLE'].includes(code)
+        ? { errorKind: 'recoverable' as const }
+        : {}),
     });
     const { args } = action;
     const search = action.name === 'translation.search';

@@ -159,6 +159,7 @@ export function executeStoryRead(
       const query = args.query === undefined && action.name === 'notes.list' ? '' : args.query;
       if (typeof query !== 'string' || query.length > 512) return denied('INVALID_ARGUMENTS');
       if (action.name === 'story.search') {
+        if (!query.trim()) return denied('INVALID_ARGUMENTS');
         const numbers = new Map(scope.history.map((source, index) => [source.revision, index + 1]));
         const found = snapshot.sourceSegments
           ? searchHiddenSources(snapshot, query, offset, limit)

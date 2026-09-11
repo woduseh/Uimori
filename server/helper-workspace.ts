@@ -71,7 +71,11 @@ export function directHelperGrants(
     .replace(/```[\s\S]*?```/gu, '')
     .replace(/^\s*>.*$/gmu, '')
     .replace(/\([^)]*\bOOC\s*:[^)]*\)/giu, '')
-    .replace(/"[^"\n]*"|'[^'\n]*'|“[^”]*”|‘[^’]*’|`[^`]*`|「[^」]*」|『[^』]*』/gu, '')
+    .replace(/(?<=[\p{L}\p{N}])’(?=[\p{L}\p{N}])/gu, "'")
+    .replace(
+      /"[^"\n]*"|(?<![\p{L}\p{N}_])'(?:[^'\n]|(?<=[\p{L}\p{N}])'(?=[\p{L}\p{N}]))*'(?![\p{L}\p{N}_])|“[^”]*”|‘[^’]*’|`[^`]*`|「[^」]*」|『[^』]*』/gu,
+      ''
+    )
     // Keep the prohibited clause intact, so it can veto that action elsewhere in the request.
     .replace(/지\s*말고\s*/gu, '지 말고. ')
     .split(/[.!?。;,\n]+|\s+(?:그리고|하지만|그러나|but)\s+/iu)
@@ -86,6 +90,36 @@ export function directHelperGrants(
       /(해|바꿔|고쳐|남겨|만들어|써|보여|그려)\s*(?:주실\s*수\s*있(?:을까요|나요)|주실래요|주시겠어요|줄\s*수\s*있(?:을까(?:요)?|나요|어(?:요)?))$/u,
       '$1줘'
     );
+    // A no-save instruction still constrains earlier edits when this clause ends in
+    // a review or explanation request. Record that boundary before skipping prose.
+    if (
+      /(?:저장|적용)(?:은|는)?\s*하지(?:는)?\s*(?:마|말)|\b(?:do\s+not|don't|never)\s+(?:(?:automatically|actually|ever)\s+)?(?:save|apply)\b/iu.test(
+        instruction
+      )
+    )
+      blocked.add('draft.save').add('draft.create.save');
+    const withoutSaving = /(?:저장|적용)\s*없이|without (?:saving|applying)/iu.test(instruction);
+    if (withoutSaving) {
+      blocked.add('draft.save').add('draft.create.save');
+      instruction = instruction
+        .replace(/(?:저장|적용)\s*없이|without (?:saving|applying)/giu, '')
+        .trim();
+    }
+    // Proposed changes for review belong in the answer, not in a shared draft or library.
+    if (
+      /(?:수정안|개선안|변경안|제안)(?:으로)?\s*만|(?:검토|제안)용|\bfor\s+(?:review|proposal)\b|\b(?:review|proposals?|suggestions?)\s+only\b|\bonly\s+(?:a\s+)?(?:proposal|suggestions?)\b/iu.test(
+        instruction
+      )
+    ) {
+      // A separate scope reminder also constrains an earlier action in this request.
+      if (
+        /^(?:(?:it's|it is|this is)\s+)?(?:for\s+review|(?:review|proposal)\s+only)\b|^(?:검토|제안)용(?:이|으|만|$)/iu.test(
+          instruction
+        )
+      )
+        return [];
+      continue;
+    }
     // Discussing a command does not execute it, even when the quoted words have no delimiters.
     if (
       /(?:설명|번역|해석|추천|제안|분석|검토|평가|비교|확인|판단|점검)\s*(?:만\s*)?(?:좀\s*)?(?:해\s*(?:줘|주세요|줄래)|하(?:자|세요))$/u.test(
@@ -102,13 +136,13 @@ export function directHelperGrants(
       /(?:괜찮|가능하|필요하|문제없|문제가\s*없|좋|원하|확인되|승인되)(?:으)?면|(?:저장|적용|수정|편집|변경|삭제|추가)(?:해도|하면|한다면|할\s*경우)|\b(?:if|unless|provided\s+that)\b/iu.test(
         instruction
       );
-    const withoutSaving = /(?:저장|적용)\s*없이|without (?:saving|applying)/iu.test(instruction);
-    if (withoutSaving) {
-      blocked.add('draft.save').add('draft.create.save');
-      instruction = instruction
-        .replace(/(?:저장|적용)\s*없이|without (?:saving|applying)/giu, '')
-        .trim();
-    }
+    // A selected draft is an editing surface, not itself a request to stop at a draft.
+    // Only explicit draft-only / no-save wording withholds the save for a clear edit.
+    const draftOnly =
+      /(?:초안|시안)(?:으로)?\s*만|\b(?:draft|proposal)\s+only\b|\bonly\s+(?:a\s+)?draft\b/iu.test(
+        instruction
+      );
+    if (draftOnly) blocked.add('draft.save').add('draft.create.save');
     if (/지\s*(?:는\s*)?(?:마|말)|do not|don't|never/iu.test(instruction)) {
       const forbidden: [RegExp, string[]][] = [
         [/(?:저장|적용|save|apply)/iu, ['draft.save', 'draft.create.save']],
@@ -170,51 +204,67 @@ function instructionGrants(
       instruction
     );
   if (!imperative) return [];
+  const draftEdit =
+    /(?:수정|편집|추가|삭제|작성)(?:해|하(?:고|자|세요|여))|(?:바꿔|고쳐|만들어)|(?:^|\band\s+)(?:please\s+)?(?:edit|change|update|write|remove|add)\b/iu;
+  const draftSave =
+    /(?:저장|적용)(?:해|하(?:고|자|세요|여))|(?:^|\band\s+)(?:please\s+)?(?:save|apply)\b/iu;
+  // Scope-specific requests must not also authorize whichever editor happens to be open.
+  // Conjoined actions may name both targets explicitly; keep those actions separate.
+  const parts = instruction.split(/(?<=[고며])\s+|\s+and\s+/iu);
+  const editorParts = new Set(
+    editor
+      ? parts.filter(
+          (part) =>
+            /(?:현재|지금|선택한|열린|열려\s*있는|이)\s*(?:초안|편집기|자료|프롬프트)|\b(?:current|selected|open|this)\s+(?:draft|editor|prompt)\b/iu.test(
+              part
+            ) &&
+            !/(?:참고|참조|기반|바탕)|\b(?:reference|using|based|from)\b/iu.test(part) &&
+            (draftEdit.test(part) || draftSave.test(part))
+        )
+      : []
+  );
+  const scopeInstruction = parts.filter((part) => !editorParts.has(part)).join(' and ');
   const actions: string[] = [];
   if (
-    /(?:가정|장면|만약|다면|라면|what.if|scene)/iu.test(instruction) &&
+    /(?:가정|장면|만약|다면|라면|what.if|scene)/iu.test(scopeInstruction) &&
     /(?:써\s?줘|작성해|만들어|보여\s?줘|그려\s?줘|수정해|다듬어|write|generate|revise)/iu.test(
-      instruction
+      scopeInstruction
     )
   )
     actions.push('artifact.generate');
-  const saveRequested =
-    /(?:저장|적용)(?:해|하(?:고|자|세요|여))|(?:^|\band\s+)(?:please\s+)?(?:save|apply)\b/iu.test(
-      instruction
-    );
   if (
     /(?:이번|다음).*(?:요청|번|한\s?번).*(?:옵션|선택|값).*(?:적용|설정|지정)|(?:옵션).*(?:이번만|한\s?번만).*(?:적용|설정|지정)/iu.test(
-      instruction
+      scopeInstruction
     )
   )
     actions.push('options.oneoff');
   if (
     /(?:이\s?채팅|채팅\s?전용|이\s?대화|여기).*(?:로어|설정).*(?:수정|바꿔|고쳐|삭제|되돌)|(?:chat.only lore)/iu.test(
-      instruction
+      scopeInstruction
     )
   )
     actions.push('chat.lore');
   if (
     /(?:요약|문맥).*(?:압축|정리)(?:해\s*(?:줘|주세요|줄래)|하(?:고|자|세요))|^(?:please\s+)?compact\b/iu.test(
-      instruction
+      scopeInstruction
     )
   )
     actions.push('context.compact');
   if (
     /(?:요약).*(?:(?:수정|저장)(?:해\s*(?:줘|주세요|줄래)|하(?:고|자|세요))|바꿔\s*줘)|^(?:please\s+)?edit (?:the )?summary/iu.test(
-      instruction
+      scopeInstruction
     )
   )
     actions.push('context.edit');
   if (
     /(?:메모|정정).*(?:(?:추가|저장|수정|삭제)(?:해\s*(?:줘|주세요|줄래)|하(?:고|자|세요))|남겨\s*줘)|^(?:please\s+)?(?:save|add|remove) (?:a )?note/iu.test(
-      instruction
+      scopeInstruction
     )
   )
     actions.push('notes.write');
   if (
     /(?:구성|개요|줄거리|플롯).*(?:(?:구성|작성|수정|변경|정리|추가|삭제)(?:해\s*(?:줘|주세요|줄래)|하(?:고|자|세요))|(?:만들어|짜|바꿔|고쳐)\s*(?:줘|주세요|줄래))|구성해\s*(?:줘|주세요|줄래)|^(?:please\s+)?(?:outline|plan)\b/iu.test(
-      instruction
+      scopeInstruction
     )
   )
     actions.push('outline.write');
@@ -225,13 +275,13 @@ function instructionGrants(
   }
   if (
     /(?:제목).*(?:(?:변경|수정|설정)(?:해\s*(?:줘|주세요|줄래)|하(?:고|자|세요))|바꿔\s*줘)|^(?:please\s+)?(?:rename|set (?:the )?title)/iu.test(
-      instruction
+      scopeInstruction
     )
   )
     actions.push('title.write');
   if (
     /(?:포크|분기).*(?:만들어\s*줘|생성해\s*줘|해\s*줘)|^(?:please\s+)?(?:fork|create .*branch)/iu.test(
-      instruction
+      scopeInstruction
     )
   )
     actions.push('chat.fork');
@@ -249,25 +299,27 @@ function instructionGrants(
       : [];
   if (scope.kind === 'library') {
     const libraryActions: string[] = [];
-    const creating = /(?:만들어|생성해|작성해|구성해|복제해)|\b(?:create|make|duplicate)\b/iu.test(
-      instruction
-    );
-    if (creating && /(?:새|신규|new|create).*(?:봇|bot)/iu.test(instruction))
+    const creating =
+      /(?:만들[어고]|생성해|작성해|구성해|복제해)|\b(?:create|make|duplicate)\b/iu.test(
+        scopeInstruction
+      );
+    if (creating && /(?:새|신규|new|create).*(?:봇|bot)/iu.test(scopeInstruction))
       libraryActions.push('draft.create:bot');
-    if (creating && /(?:새|신규|new|create).*(?:페르소나|persona)/iu.test(instruction))
+    if (creating && /(?:새|신규|new|create).*(?:페르소나|persona)/iu.test(scopeInstruction))
       libraryActions.push('draft.create:persona');
-    if (creating && /(?:새|신규|new|create).*(?:모듈|module)/iu.test(instruction))
+    if (creating && /(?:새|신규|new|create).*(?:모듈|module)/iu.test(scopeInstruction))
       libraryActions.push('draft.create:module');
-    if (creating && /(?:새|신규|new|create).*(?:프롬프트|prompt)/iu.test(instruction))
+    if (creating && /(?:새|신규|new|create).*(?:프롬프트|prompt)/iu.test(scopeInstruction))
       libraryActions.push('draft.create:prompt-preset');
     if (
       /(?:폴더|서재).*(?:(?:정리|이동|생성)(?:해\s*(?:줘|주세요|줄래)|하(?:고|자|세요))|만들어\s*줘)|^(?:please\s+)?(?:organize|create .*folder|move)/iu.test(
-        instruction
+        scopeInstruction
       )
     )
       libraryActions.push('library.organize');
     if (libraryActions.length) {
-      if (saveRequested) libraryActions.push('draft.create.save');
+      if (libraryActions.some((action) => action.startsWith('draft.create:')))
+        libraryActions.push('draft.create.save');
       result.push({
         id: randomUUID(),
         requestId,
@@ -277,15 +329,12 @@ function instructionGrants(
       });
     }
   }
-  if (editor) {
-    // Edits affect the selected draft only. A save is a distinct, explicit action.
-    const draftActions =
-      /(?:수정|편집|추가|삭제|작성)(?:해|하(?:고|자|세요|여))|(?:바꿔|고쳐|만들어)|(?:^|\band\s+)(?:please\s+)?(?:edit|change|update|write|remove|add)\b/iu.test(
-        instruction
-      )
-        ? ['draft.patch']
-        : [];
-    if (saveRequested) draftActions.push('draft.save');
+  const editorInstruction = result.length ? [...editorParts].join(' and ') : instruction;
+  if (editor && editorInstruction) {
+    // A clear edit request includes completing the selected draft's save. Review and
+    // draft-only wording is filtered above; revisions and operation receipts still apply.
+    const draftActions = draftEdit.test(editorInstruction) ? ['draft.patch'] : [];
+    if (draftSave.test(editorInstruction) || draftActions.length) draftActions.push('draft.save');
     if (draftActions.length)
       result.push({
         id: randomUUID(),

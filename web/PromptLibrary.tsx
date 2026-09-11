@@ -20,6 +20,7 @@ import { api } from './api.js';
 import { Dialog } from './Dialog.js';
 import { DeleteButton } from './DeleteButton.js';
 import { PromptEditor } from './PromptEditor.js';
+import { PromptTemplatesDialog, type PromptTemplate } from './PromptTemplatesDialog.js';
 import { discardActiveEditor } from './editor-workspace-context.js';
 import {
   LibraryFolders,
@@ -83,6 +84,9 @@ export function PromptLibrary({
   const organizer = useLibraryOrganization(library, reload, onError);
   const mutation = useRef(false);
   const [busy, setBusy] = useState(false);
+  const [templatesOpen, setTemplatesOpen] = useState(false);
+  const createdPresetFocus = useRef<string | null>(null);
+  const editorHeading = useRef<HTMLHeadingElement>(null);
   const organized = library
     ? { ...library, organization: organizer.organization ?? library.organization }
     : null;
@@ -90,6 +94,12 @@ export function PromptLibrary({
     onDirtyChange?.(dirty);
   }, [dirty, onDirtyChange]);
   useEffect(() => () => onDirtyChange?.(false), [onDirtyChange]);
+  useEffect(() => {
+    if (!editing?.preset || createdPresetFocus.current !== editing.preset.id) return;
+    createdPresetFocus.current = null;
+    const frame = requestAnimationFrame(() => editorHeading.current?.focus());
+    return () => cancelAnimationFrame(frame);
+  }, [editing]);
   useEffect(() => {
     if (
       folder !== 'all' &&
@@ -187,6 +197,37 @@ export function PromptLibrary({
       setBusy(false);
     }
   }
+  async function addTemplate(id: string): Promise<PromptPreset | null> {
+    if (mutation.current) return null;
+    mutation.current = true;
+    setBusy(true);
+    try {
+      const template = await api<PromptTemplate>(`/prompt-templates/${encodeURIComponent(id)}`);
+      const created = await api<PromptPreset>('/prompt-presets', {
+        title: template.title,
+        role: template.role,
+        program: template.program,
+        values: template.values,
+      });
+      // Creation is complete. A later placement/reload failure must not offer another POST.
+      try {
+        await placeCreated(created, true);
+      } catch (error) {
+        onError(`프롬프트는 추가됐어요. 폴더에 배치하지 못했어요. ${(error as Error).message}`);
+      }
+      try {
+        await reload();
+      } catch (error) {
+        onError(
+          `프롬프트는 추가됐어요. 목록을 다시 불러오지 못했어요. ${(error as Error).message}`
+        );
+      }
+      return created;
+    } finally {
+      mutation.current = false;
+      setBusy(false);
+    }
+  }
   return (
     <section
       className={`library-page prompt-library${editing ? ' library-page-editing' : ''}`}
@@ -198,15 +239,38 @@ export function PromptLibrary({
         <h1>프롬프트</h1>
       </header>
       {library && !editing && (
-        <button
-          type="button"
-          className="secondary prompt-settings-link"
-          onClick={onOpenCurrentPrompts}
-        >
-          <SettingsIcon size={18} aria-hidden="true" />
-          현재 프롬프트 설정
-        </button>
+        <div className="prompt-library-actions">
+          <button
+            type="button"
+            className="secondary prompt-settings-link"
+            onClick={onOpenCurrentPrompts}
+          >
+            <SettingsIcon size={18} aria-hidden="true" />
+            현재 프롬프트 설정
+          </button>
+          <button
+            type="button"
+            className="secondary prompt-templates-open"
+            disabled={busy || organizer.busy}
+            onClick={() => setTemplatesOpen(true)}
+          >
+            <PromptIcon size={18} aria-hidden="true" />
+            기본 프롬프트
+          </button>
+        </div>
       )}
+      <PromptTemplatesDialog
+        open={templatesOpen}
+        busy={busy}
+        onClose={() => setTemplatesOpen(false)}
+        onAdd={addTemplate}
+        onAdded={(preset) => {
+          setTemplatesOpen(false);
+          createdPresetFocus.current = preset.id;
+          changeEditing({ preset, role: preset.role });
+        }}
+        onError={onError}
+      />
       <Dialog
         open={discard}
         title="미저장 프롬프트 확인"
@@ -251,7 +315,9 @@ export function PromptLibrary({
               <BackIcon size={18} aria-hidden="true" />
               프롬프트 목록
             </button>
-            <h2>{editing.preset?.title ?? '새 프롬프트'}</h2>
+            <h2 ref={editorHeading} tabIndex={-1}>
+              {editing.preset?.title ?? '새 프롬프트'}
+            </h2>
           </div>
           <PromptEditor
             key={

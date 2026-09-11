@@ -23,6 +23,7 @@ import { createHash } from 'node:crypto';
 import { attachMainHostContext } from './main-host-context.js';
 import {
   buildMainProviderRequest,
+  MAIN_READ_TOOLS,
   encodeMainPreview,
   storySubmissionEnabled,
   STORY_SUBMIT_MAX_CHARS,
@@ -128,6 +129,12 @@ export async function runMain(snapshot: RunSnapshot, hooks: MainHooks): Promise<
   if (!Number.isSafeInteger(maxCalls) || maxCalls < 1) return fail('MODEL_CALL_BUDGET_EXHAUSTED');
   const collaboration = createAgentCollaboration(fixed, hooks, usage);
   await collaboration?.prepare();
+  // Explicit cross-advisor references outlive provider compaction and context.new. Keep the
+  // original completed receipts separate from the mutable projection sent to the main model.
+  const advisorContext = new Map(
+    (collaboration?.bootstrap ?? []).map((event) => [event.callId, structuredClone(event)])
+  );
+  const contextReadNames = new Set(MAIN_READ_TOOLS.map((tool) => tool.name));
   while (true) {
     if (hooks.signal.aborted) return fail('CANCELLED');
     if (
@@ -391,7 +398,7 @@ export async function runMain(snapshot: RunSnapshot, hooks: MainHooks): Promise<
       const action = { callId: call.id, name: call.name, args: call.arguments };
       let event: ToolEvent;
       if (call.name === 'agents.consult' && collaboration) {
-        event = await collaboration.consult(call.id, call.arguments);
+        event = await collaboration.consult(call.id, call.arguments, [...advisorContext.values()]);
       } else if (contextTools && (CONTEXT_TOOL_NAMES as readonly string[]).includes(call.name)) {
         const outcome = await executeContextTool(fixed, action, {
           state: contextState,
@@ -420,10 +427,11 @@ export async function runMain(snapshot: RunSnapshot, hooks: MainHooks): Promise<
           ? evaluation.execute(call)
           : executeTool(fixed, action, hooks.signal);
       results.push(event);
+      if (collaboration && (event.name === 'agents.consult' || contextReadNames.has(event.name)))
+        advisorContext.set(event.callId, structuredClone(event));
       // Persist each real result immediately, before the next action or any request preview.
       await hooks.onToolEvent(structuredClone(event));
       const outcome = correction(event, call.arguments);
-      if (outcome === 'exhausted') return fail('TOOL_CORRECTION_EXHAUSTED');
       if (outcome === 'denied')
         return fail(
           binding || call.name.startsWith('behavior_') ? 'ACTION_TOOL_DENIED' : 'READ_TOOL_DENIED'

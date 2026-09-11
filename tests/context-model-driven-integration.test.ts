@@ -269,6 +269,7 @@ describe('model-written summary and window switch through the real App and file 
         expectedRevision: workspace.revision,
         main: {
           ...workspace.main,
+          values: {},
           program: {
             version: 1,
             controls: [],

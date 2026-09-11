@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, test } from 'vitest';
+import { afterEach, describe, expect, test, vi } from 'vitest';
 import {
   cancelComfyUIPrompt,
   comfyUISystemStats,
@@ -37,6 +37,71 @@ async function failure(promise: Promise<unknown>): Promise<IllustrationError> {
 }
 
 describe('remote ComfyUI client against a synthetic HTTP server', () => {
+  test('the deadline cancels a body independently of fetch and never waits for its cancellation acknowledgement', async () => {
+    const requests: string[] = [];
+    let acknowledgeCancellation: () => void;
+    const cancellation = new Promise<void>((resolve) => {
+      acknowledgeCancellation = resolve;
+    });
+    const cancel = vi.fn(() => cancellation);
+    let controller: ReadableStreamDefaultController<Uint8Array>;
+    const body = new ReadableStream<Uint8Array>({
+      start(value) {
+        controller = value;
+        value.enqueue(FIXTURE_PNG.subarray(0, 8));
+      },
+      cancel,
+    });
+    // Deliberately ignore fetch's signal: the consumer must interrupt this body.
+    const fetch = vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+      const path = new URL(String(input)).pathname;
+      requests.push(path);
+      if (path === '/prompt') return Response.json({ prompt_id: 'body-deadline' });
+      if (path === '/history/body-deadline')
+        return Response.json({
+          'body-deadline': {
+            outputs: { '9': { images: [{ filename: 'scene.png', type: 'output' }] } },
+          },
+        });
+      if (path === '/view') return new Response(body, { headers: { 'content-type': 'image/png' } });
+      return Response.json({ cancelled: true });
+    });
+    const pending = failure(
+      generateWithComfyUI({ baseUrl: 'http://comfy.invalid', authorizationEnv: '' }, workflow(), {
+        signal: AbortSignal.timeout(600),
+        timeoutMs: 60,
+        pollIntervalMs: 10,
+      })
+    );
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    try {
+      // Bound a regression without leaving a mocked fetch or stalled stream behind.
+      const error = await Promise.race([
+        pending,
+        new Promise<null>((resolve) => {
+          timer = setTimeout(() => resolve(null), 1000);
+        }),
+      ]);
+      expect(error).toMatchObject({
+        code: 'COMFYUI_TIMEOUT',
+        retryable: false,
+        diagnostic: { comfyui: { promptId: 'body-deadline', submission: 'accepted' } },
+      });
+      expect(cancel).toHaveBeenCalledTimes(1);
+      expect(requests).toEqual(['/prompt', '/history/body-deadline', '/view']);
+    } finally {
+      clearTimeout(timer);
+      acknowledgeCancellation!();
+      try {
+        controller!.close();
+      } catch {
+        /* The deadline normally closes the stream first. */
+      }
+      await pending.catch(() => undefined);
+      fetch.mockRestore();
+    }
+  });
+
   test.each(['prompt', 'history', 'view'] as const)(
     'the total deadline includes stalled %s response bodies',
     async (path) => {
