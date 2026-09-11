@@ -235,3 +235,33 @@ test('HTTP default branch route enforces revision checks and refreshes the reade
     await app.close();
   }
 });
+
+test('renaming a branch needs the current revision and stops an automatic summary from returning', async () => {
+  const store = await database();
+  const chat = createFixtureChat(store, 'Branch naming');
+  const original = store.product.branch(chat.id);
+  const target = store.product.createBranch(chat.id, {
+    title: '후보 분기',
+    fromRevision: null,
+  });
+  const renamed = store.product.renameBranch(chat.id, target.id, {
+    title: '등불이 두 번 흔들린 밤',
+    expectedRevision: target.revision,
+  });
+  expect(renamed.title).toBe('등불이 두 번 흔들린 밤');
+  expect(renamed.revision).toBe(target.revision + 1);
+  expect(() =>
+    store.product.renameBranch(chat.id, target.id, {
+      title: '뒤늦은 이름',
+      expectedRevision: target.revision,
+    })
+  ).toThrow('분기 이름');
+  expect(store.product.branch(chat.id, target.id).title).toBe('등불이 두 번 흔들린 밤');
+  // The manual mark is what a later summary checks before it may overwrite a chosen name.
+  expect(
+    store.db
+      .prepare("SELECT 1 FROM events WHERE entity_id=? AND kind='branch.title.manual'")
+      .get(target.id)
+  ).toBeTruthy();
+  expect(store.product.branch(chat.id, original.id).title).toBe('기본 분기');
+});

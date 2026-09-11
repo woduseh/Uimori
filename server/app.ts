@@ -8,6 +8,7 @@ import { randomUUID } from 'node:crypto';
 import type { ServerResponse } from 'node:http';
 import { Store } from './store.js';
 import { ChatTitleService } from './chat-title.js';
+import { BranchTitleService } from './branch-title.js';
 import { HelperRuntime, helperWritingSnapshot } from './helper-runtime.js';
 import { readHelperChatContext } from './helper-context.js';
 import { helperRoutes } from './helper-routes.js';
@@ -375,6 +376,15 @@ export async function createApp(options: AppOptions): Promise<App> {
     track,
     publish,
   });
+  const branchTitles = new BranchTitleService(store, {
+    approvedOrigins,
+    resolveCredential,
+    executeCodex,
+    vertexRequestTier: options.vertexRequestTier,
+    signal: stopping.signal,
+    track,
+    publish,
+  });
   const pumpJobs = () => {
     if (stopping.signal.aborted) return;
     for (const id of store.queuedJobs()) {
@@ -688,6 +698,7 @@ export async function createApp(options: AppOptions): Promise<App> {
           pumpIllustrations();
           pumpStory();
           titles.afterSource(id);
+          branchTitles.afterSource(id);
         } catch (error) {
           if (!stopping.signal.aborted) {
             if (error instanceof ContextCompactionError) {
@@ -1016,6 +1027,14 @@ export async function createApp(options: AppOptions): Promise<App> {
     publish(chat.id);
     return chat;
   });
+  app.post<{ Params: { id: string; branchId: string } }>(
+    '/api/chats/:id/branches/:branchId/title',
+    async (request) => {
+      const branch = store.product.branch(request.params.id, request.params.branchId);
+      branchTitles.start(branch.chatId, branch.id, true);
+      return branch;
+    }
+  );
   app.get<{ Params: { id: string } }>('/api/chats/:id', async (request) =>
     store.detail(request.params.id)
   );

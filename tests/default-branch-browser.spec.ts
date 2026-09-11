@@ -175,9 +175,10 @@ test('BRANCH02 making another branch the default moves the helper session with t
   await expect(sessions).not.toHaveValue(before);
   await expect(panel.getByRole('button', { name: '해당 분기로 이동', exact: true })).toBeHidden();
   await expect(panel.getByLabel('도우미에게 요청')).toBeEnabled();
-  // One branch is the default and the other used to be, so the two sessions stay distinguishable.
+  // The new default carries its own name and the old one reads as the former default, so the two
+  // sessions stay distinguishable even though both branches were once called the default.
   await expect(sessions.locator('option:not([disabled])')).toHaveText([
-    /· 기본 분기$/,
+    /· 대체 줄기$/,
     /· 이전 기본 분기$/,
   ]);
 });
