@@ -14,6 +14,8 @@ import type { HelperTaskSnapshot } from '../core/helper.js';
 import { runStoryJob } from '../server/story-runner.js';
 import Fastify from 'fastify';
 import { helperRoutes } from '../server/helper-routes.js';
+import { HELPER_PERSONA_MAX_CHARS } from '../core/content-limits.js';
+import { UI_HELPER_PERSONA } from '../web/helper-persona.js';
 import { helperContext, helperHistory, publishHelperContext } from '../server/helper-context.js';
 
 const owned: { store: Store; path: string }[] = [];
@@ -1226,6 +1228,49 @@ test('cancelled workers retain their slot and block deletion until provider acco
   expect(() => restored.product.import(f.store.product.export())).not.toThrow();
 });
 
+test('the helper persona is bounded, saved per conversation and reaches only the helper contract', async () => {
+  const f = fixture();
+  const calls: transport.ProviderRequest[] = [];
+  mockSend((request) => {
+    calls.push(structuredClone(request));
+    return success;
+  });
+  const app = Fastify();
+  helperRoutes(app, f.runtime);
+  const patch = (payload: Record<string, unknown>) =>
+    app.inject({
+      method: 'PATCH',
+      url: `/api/helper/conversations/${f.conversation.id}`,
+      payload,
+    });
+  try {
+    const before = f.workspace.conversation(f.conversation.id);
+    const over = await patch({
+      expectedRevision: before.revision,
+      persona: '우'.repeat(HELPER_PERSONA_MAX_CHARS + 1),
+    });
+    expect(over.statusCode).toBe(400);
+    expect(f.workspace.conversation(f.conversation.id)).toEqual(before);
+    const saved = await patch({
+      expectedRevision: before.revision,
+      persona: UI_HELPER_PERSONA,
+    });
+    expect(saved.statusCode, saved.body).toBe(200);
+    expect(saved.json().persona).toBe(UI_HELPER_PERSONA);
+  } finally {
+    await app.close();
+  }
+  const other = f.workspace.open({ kind: 'library', workId: 'other' });
+  expect(other.persona).toBe('');
+  f.runtime.enqueue(f.conversation.id, 'with-persona', '이 설정을 설명해줘');
+  f.runtime.enqueue(other.id, 'without-persona', '이 설정을 설명해줘');
+  await Promise.all(f.work);
+  expect(calls).toHaveLength(2);
+  expect(calls.every((call) => call.role === 'helper')).toBe(true);
+  expect(calls[0].stable.contract).toContain(UI_HELPER_PERSONA);
+  expect(calls[0].stable.contract).toContain('never in saved drafts');
+  expect(calls[1].stable.contract).not.toContain('Optional explanation persona');
+});
 test('helper HTTP routes create separate sessions, list all chat branches and require reviewed deletion state', async () => {
   const f = fixture(),
     chat = createFixtureChat(f.store, 'API sessions');

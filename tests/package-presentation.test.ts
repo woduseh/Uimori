@@ -10,7 +10,7 @@ import { randomUUID } from 'node:crypto';
 import { Store } from '../server/store.js';
 import { packagePresentationRoutes } from '../server/package-presentation-routes.js';
 import type { ContentPackage } from '../core/content-package.js';
-import { editTranslation } from '../server/source-editing.js';
+import { editSource, editTranslation } from '../server/source-editing.js';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { PackageStateCards } from '../web/PackagePresentation.js';
@@ -129,7 +129,7 @@ test('legacy source with no package returns unchanged text and no cards', async 
   expect(response.json().original.changed).toBe(false);
   expect(response.json().stateViews).toEqual([]);
 });
-test('hidden-story sources preserve their stored body and report disabled transforms', async () => {
+test('a segment policy whose boundaries are absent from this source keeps display transforms', async () => {
   const { app, store } = fixture(),
     a = source(store);
   const snapshot = structuredClone(a.run.snapshot);
@@ -140,8 +140,42 @@ test('hidden-story sources preserve their stored body and report disabled transf
     url: `/api/chats/${a.chat.id}/sources/${a.source.id}/presentation`,
   });
   expect(response.statusCode, response.body).toBe(200);
-  expect(response.json().original.text).toBe('Original');
-  expect(response.json().issues).toHaveLength(1);
+  expect(response.json().original.text).toBe('DISPLAY');
+  expect(response.json().issues).toEqual([]);
+});
+test('a source with real segment boundaries keeps its stored body but still projects the translation', async () => {
+  const { app, store } = fixture(),
+    a = source(store);
+  const snapshot = structuredClone(a.run.snapshot);
+  snapshot.sourceSegments = createSourceSegmentFixture();
+  snapshot.profile!.packages![0].transforms.push({
+    id: 'tr',
+    target: 'translation',
+    pattern: '번역',
+    flags: 'g',
+    replacement: '표시',
+  });
+  store.db.prepare('UPDATE runs SET snapshot=? WHERE id=?').run(JSON.stringify(snapshot), a.run.id);
+  const segmented = editSource(store, a.source.id, {
+    text: 'Original\n@hsTitle: Aside\nHidden body.\n@hs\nOriginal ending.',
+    expectedRevision: a.source.editRevision ?? 0,
+  });
+  editTranslation(store, segmented.id, {
+    text: '첫 번역',
+    expectedRevision: 0,
+    expectedSourceHash: segmented.hash,
+  });
+  const response = await injectWithFixtureBot(app, {
+    method: 'GET',
+    url: `/api/chats/${a.chat.id}/sources/${a.source.id}/presentation`,
+  });
+  expect(response.statusCode, response.body).toBe(200);
+  const body = response.json();
+  expect(body.original.text).toBe(segmented.text);
+  expect(body.original.changed).toBe(false);
+  expect(body.issues).toHaveLength(1);
+  expect(body.translation.text).toBe('첫 표시');
+  expect(store.source(a.source.id).text).toBe(segmented.text);
 });
 test('manual translation projection uses the latest verified revision and never changes its saved text', async () => {
   const { app, store } = fixture(),

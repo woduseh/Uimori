@@ -5,6 +5,7 @@ import { validateModelSnapshot } from './provider-archive.js';
 import { validateRunSnapshot } from './snapshot-archive.js';
 import { validateHelperContexts, helperHistory } from './helper-context.js';
 import { fields, HttpError, number, record, text } from './request-validation.js';
+import { HELPER_PERSONA_MAX_CHARS } from '../core/content-limits.js';
 import type { Store } from './store.js';
 
 type Row = Record<string, any>;
@@ -90,7 +91,7 @@ export function validateHelperArchive(
     )
       reject('conversation timestamp');
     number(row.revision, 'helper revision');
-    text(row.persona, 'persona', 2000, true);
+    text(row.persona, 'persona', HELPER_PERSONA_MAX_CHARS, true);
     const limits = record(JSON.parse(row.limits));
     fields(limits, ['totalCalls', 'helperCalls', 'artifacts']);
     number(limits.totalCalls, 'total call limit', 2, 100);

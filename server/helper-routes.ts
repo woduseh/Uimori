@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import type { HelperScope, HelperEditor, HelperLimits } from '../core/helper.js';
 import type { HelperRuntime } from './helper-runtime.js';
 import { fields, HttpError, number, record, text } from './request-validation.js';
+import { HELPER_PERSONA_MAX_CHARS } from '../core/content-limits.js';
 
 export function helperRoutes(app: FastifyInstance, runtime: HelperRuntime) {
   const store = runtime.workspace;
@@ -91,7 +92,7 @@ export function helperRoutes(app: FastifyInstance, runtime: HelperRuntime) {
         ...(body.title === undefined ? {} : { title: text(body.title, 'conversation title', 200) }),
         ...(body.persona === undefined
           ? {}
-          : { persona: text(body.persona, 'helper persona', 2000, true) }),
+          : { persona: text(body.persona, 'helper persona', HELPER_PERSONA_MAX_CHARS, true) }),
         ...(limits === undefined ? {} : { limits }),
       }
     );
