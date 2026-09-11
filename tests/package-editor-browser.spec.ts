@@ -408,3 +408,31 @@ test('PKUI01 package editing preserves internal lore, instructions, unsaved work
   if (visualReview) await page.screenshot({ path: info.outputPath('package-editor-mobile.png') });
   expect(errors).toEqual([]);
 });
+
+test('PKUI05 instruction reordering keeps focus on the moved instruction', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.goto('/');
+  await navigationAction(page, '서재');
+  const library = page.getByTestId('library-panel');
+  await createLibraryContent(page);
+  await revealLibraryEditor(page);
+  const fields = library.getByRole('region', { name: '패키지 구성', exact: true });
+  await selectPackageSection(page, '지침');
+  for (const [index, text] of ['첫째 지침', '둘째 지침', '셋째 지침'].entries()) {
+    await fields.getByRole('button', { name: '지침 추가', exact: true }).click();
+    await fields.getByLabel(`지침 ${index + 1} 본문`, { exact: true }).fill(text);
+  }
+  const upButton = (position: number) =>
+    fields
+      .getByRole('group', { name: `지침 ${position}`, exact: true })
+      .getByRole('button', { name: '지침 위로', exact: true });
+  await upButton(3).click();
+  await expect(fields.getByLabel('지침 2 본문', { exact: true })).toHaveValue('셋째 지침');
+  // Keyboard reordering only works when focus follows the instruction rather than the position,
+  // so the second press has to keep moving the same instruction.
+  await expect(upButton(2)).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(fields.getByLabel('지침 1 본문', { exact: true })).toHaveValue('셋째 지침');
+  await expect(fields.getByLabel('지침 2 본문', { exact: true })).toHaveValue('첫째 지침');
+  await expect(fields.getByLabel('지침 3 본문', { exact: true })).toHaveValue('둘째 지침');
+});

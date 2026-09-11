@@ -155,6 +155,9 @@ export function PackageControlsEditor({
     }
   }, [baseline, setDrafts]);
   const dirty = JSON.stringify(drafts) !== baseline;
+  const rowIds = useRef<string[]>([]);
+  if (rowIds.current.length !== drafts.length)
+    rowIds.current = drafts.map((_, index) => rowIds.current[index] ?? crypto.randomUUID());
   useUnappliedEditorField('package.controls', dirty);
   useEffect(() => {
     onDirtyChange?.(dirty);
@@ -211,7 +214,7 @@ export function PackageControlsEditor({
       {drafts.map((draft, index) => {
         const control = draft.control;
         return (
-          <fieldset className="package-entry" key={index}>
+          <fieldset className="package-entry" key={rowIds.current[index]}>
             <legend>옵션 {index + 1}</legend>
             <div className="package-authoring-row">
               <label>
@@ -421,6 +424,8 @@ export function PackageControlsEditor({
                 onClick={() => {
                   const next = [...drafts];
                   [next[index - 1], next[index]] = [next[index], next[index - 1]];
+                  const ids = rowIds.current;
+                  [ids[index - 1], ids[index]] = [ids[index], ids[index - 1]];
                   change(next);
                 }}
               >
@@ -433,6 +438,8 @@ export function PackageControlsEditor({
                 onClick={() => {
                   const next = [...drafts];
                   [next[index + 1], next[index]] = [next[index], next[index + 1]];
+                  const ids = rowIds.current;
+                  [ids[index + 1], ids[index]] = [ids[index], ids[index + 1]];
                   change(next);
                 }}
               >
@@ -441,7 +448,10 @@ export function PackageControlsEditor({
               <button
                 type="button"
                 className="ghost"
-                onClick={() => change(drafts.filter((_, i) => i !== index))}
+                onClick={() => {
+                  rowIds.current = rowIds.current.filter((_, i) => i !== index);
+                  change(drafts.filter((_, i) => i !== index));
+                }}
               >
                 옵션 삭제
               </button>
@@ -490,6 +500,7 @@ export function PackageControlsEditor({
           className="ghost"
           disabled={!dirty}
           onClick={() => {
+            rowIds.current = [];
             change(packageControlDrafts(value.controls));
             setNotice('마지막 적용값으로 되돌렸어요.');
           }}
