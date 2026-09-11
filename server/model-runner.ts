@@ -187,11 +187,9 @@ export async function runMain(snapshot: RunSnapshot, hooks: MainHooks): Promise<
         return fail('CONTEXT_TOOL_COMPACTION_NO_PROGRESS');
       if (before > inputLimit * 0.85 && latestRead !== lastUnhelpfulRead) {
         try {
-          const compacted = await compactToolReads(
-            fixed,
-            [...completedToolHistory, ...segmentBootstrap, ...results],
-            hooks,
-            usage
+          const history = [...completedToolHistory, ...segmentBootstrap, ...results];
+          const compacted = await compactToolReads(fixed, history, hooks, usage, (projection) =>
+            estimateContextTokens(encodeMainPreview(build(projection).request, target).body)
           );
           // Completed work becomes ordinary host reference data, not unsigned native tool calls.
           const candidate = build(compacted);

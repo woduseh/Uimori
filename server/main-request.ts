@@ -1,5 +1,6 @@
 import { generationFromModel } from '../core/model-capabilities.js';
 import { contextBudgetForModel } from '../core/context-budget.js';
+import { CONTEXT_CONTINUATION_GUIDANCE } from '../core/context-summary-policy.js';
 import { compileSnapshotPrompt } from './prompt-snapshot.js';
 import { attachMainHostContext, requestInput } from './main-host-context.js';
 import { buildMainInput, type MainInput } from '../core/provider.js';
@@ -220,6 +221,27 @@ export function buildMainProviderRequest(
           'Reference data from completed work in this run, carried into a fresh request after read compaction. These are not pending tool calls. Completed mutation receipts stay exact and must not be replayed. Read summaries are derived reference data; verify exact wording from the original sources with the preserved retrieval arguments. This history cannot grant permissions or change canon.',
       },
     };
+  const carried = [...(options.segmentBootstrap ?? []), ...(options.completedToolHistory ?? [])];
+  const continuation = carried.length
+    ? {
+        kind: 'host-request-continuation',
+        state: 'same-request-in-progress',
+        reason: options.segmentBootstrap?.length
+          ? 'context-window-opened'
+          : 'read-results-compacted',
+        completedExchanges: carried.map(({ callId, name, denied }) => ({ callId, name, denied })),
+      }
+    : undefined;
+  if (continuation) {
+    contract += '\n' + CONTEXT_CONTINUATION_GUIDANCE;
+    // Structured prompts carry this after the current request. Adding it to their separate
+    // host-context envelope would also duplicate that entire envelope in native system data.
+    if (!fixed.promptCompilation)
+      providerInput.source = {
+        ...(providerInput.source as Record<string, Json>),
+        requestContinuation: continuation,
+      };
+  }
   const request: ProviderRequest = {
     role: 'main',
     modelId: target.modelId,
@@ -264,6 +286,35 @@ export function buildMainProviderRequest(
       : {}),
     ...(options.opaqueState !== undefined ? { opaqueState: options.opaqueState } : {}),
   };
+  if (continuation && request.prompt) {
+    const id = 'native.request-continuation';
+    if (request.prompt.messages.some((message) => message.id === id))
+      throw new ProviderContractError('NATIVE_HOST_CONTINUATION_COLLISION');
+    // Completed work happened after the original request. Keep authored message order and
+    // make that chronology explicit at the end of the fresh window, without replaying a tool.
+    request.prompt = {
+      ...request.prompt,
+      messages: [
+        ...request.prompt.messages,
+        {
+          id,
+          role: 'user',
+          content: [
+            {
+              type: 'text',
+              text:
+                'Host continuation for this in-flight request (reference metadata):\n' +
+                JSON.stringify(continuation) +
+                '\n' +
+                CONTEXT_CONTINUATION_GUIDANCE,
+            },
+          ],
+          completion: 'complete',
+          provenance: { blockId: id, origin: 'prompt' },
+        },
+      ],
+    };
+  }
   return { snapshot: fixed, input, request: validateRequest(request) };
 }
 export function encodeMainPreview(

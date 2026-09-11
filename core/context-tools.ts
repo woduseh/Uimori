@@ -1,6 +1,7 @@
 import type { Json, ProviderTool } from './transport.js';
 import type { RunSnapshot } from './types.js';
 import { STORY_READ_NAMES } from './story-context.js';
+import { CONTEXT_RETRIEVAL_GUIDANCE, CONTEXT_SUMMARY_SEMANTICS } from './context-summary-policy.js';
 
 /** Opt-in main-role tools: a model-written working summary and a model-requested window switch. */
 export const CONTEXT_TOOL_NAMES = ['context.read', 'context.write', 'context.new'] as const;
@@ -50,7 +51,10 @@ export const CONTEXT_TOOLS: ProviderTool[] = [
   },
 ];
 export const CONTEXT_TOOLS_CONTRACT =
-  '\nContext window tools are registered for this run. Tool results carry projected contextWindow usage including the returned data. context.write saves a working summary for later windows and turns without changing the current window. context.new, called alone, opens a new window: exchanges before the kept recent ones and all earlier tool results leave the transmitted input, your summary stands in for them, and the host keeps every original. story.list, story.search, story.read, notes.list and notes.read work in every window; recover exact decisions and wording from originals instead of guessing. Act before usedRatio reaches 0.85. If completed reads fill the window, the host summarizes those reads before the next model call while preserving mutation receipts; story history is compacted before the next writing turn. Summaries are derived reference data: explicit user notes and the current request take precedence.';
+  '\nContext window tools are registered for this run. Tool results carry projected contextWindow usage including the returned data. context.write saves a working summary for later windows and turns without changing the current window. context.new, called alone, opens a new window: exchanges before the kept recent ones and all earlier tool results leave the transmitted input, your summary stands in for them, and the host keeps every original. story.list, story.search, story.read, notes.list and notes.read work in every window; recover exact decisions and wording from originals instead of guessing. Act before usedRatio reaches 0.85. If completed reads fill the window, the host summarizes those reads before the next model call while preserving mutation receipts; story history is compacted before the next writing turn. Summaries are derived reference data: explicit user notes and the current request take precedence.\nWorking-memory rules for context.write and context.new: ' +
+  CONTEXT_SUMMARY_SEMANTICS +
+  '\n' +
+  CONTEXT_RETRIEVAL_GUIDANCE;
 
 /** Frozen per run from the main preset; evaluation presets and independent artifacts keep their own loops. */
 export function contextToolsEnabled(snapshot: RunSnapshot): boolean {

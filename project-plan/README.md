@@ -7,7 +7,7 @@
 | 파일 | 내용 |
 | --- | --- |
 | [CURRENT.md](CURRENT.md) | 현재 계약, 완료 조건, 마지막 검증 상태, 남은 범위 |
-| [하네스 후속 개선 계획](HARNESS-OPTIMIZATION-PLAN.md) | 안정화 커밋 이후 도우미 압축·요약 보존·반복 조회·설정 정리 제안과 소규모 실모델 비교 선택. 구현 전 |
+| [하네스 후속 개선 계획](HARNESS-OPTIMIZATION-PLAN.md) · [결과](HARNESS-OPTIMIZATION-RESULTS.md) | 도우미 압축·요약 보존·조회 후 완료·설정 공통화. 로컬 1,888 PASS, 최종본 네 합성 실사례 완료, 누적 예약 $82.996185 / $150 |
 | [history/](history/CURRENT-2026-09.md) | CURRENT에서 옮긴 시간순 작업 기록(2026-09-06 ~ 2026-09-10) |
 | [도우미·통합 문맥 관리 확정 계획 v3](HELPER-CONTEXT-PLAN.md) · [구현 결과](HELPER-CONTEXT-RESULTS.md) | fresh v15, 기억 추출 대체, 공통 초안·작품 맥락·허가, 텍스트·공개 응답 스트리밍과 이미지 이해 후속 인계 |
 | [공통 UI·아이콘 원칙](../docs/UI-PRINCIPLES.md) | 데스크톱·모바일의 공통 의미·아이콘, 화면 폭에 따른 배치, 후속 적용·확인 기준 |
