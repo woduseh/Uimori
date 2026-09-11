@@ -37,10 +37,6 @@
   display: inline-flex;
   color: var(--faint);
 }
-.turn-status-running svg {
-  animation: turn-spin 1s linear infinite;
-}
-.turn-status-issue,
 .turn-activity-issue .turn-activity-text {
   color: var(--error);
 }
@@ -75,16 +71,6 @@
 .turn-activity-body button {
   max-width: 100%;
   white-space: normal;
-}
-@keyframes turn-spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-@media (prefers-reduced-motion: reduce) {
-  .turn-status-running svg {
-    animation: none;
-  }
 }
 @media (max-width: 600px) {
   .turn-activity-body {

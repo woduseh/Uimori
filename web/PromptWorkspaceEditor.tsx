@@ -34,8 +34,6 @@ export function PromptWorkspaceEditor({
   onDirtyChange?: (dirty: boolean) => void;
   onEditPrompt?: (presetId?: string) => void;
   navigationDisabled?: boolean;
-  chatId?: string;
-  branchId?: string;
 }) {
   const { workspace, error, refresh } = usePromptWorkspace();
   const [draft, setDraft] = useState<PromptWorkspace | null>(null);

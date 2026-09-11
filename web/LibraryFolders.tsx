@@ -22,7 +22,7 @@ import {
 } from './ui-icons.js';
 import './library-folders.css';
 
-export const categoryLabels: Record<LibraryCategory, string> = {
+const categoryLabels: Record<LibraryCategory, string> = {
   bot: '봇',
   persona: '페르소나',
   module: '모듈',
@@ -101,7 +101,7 @@ export function useLibraryOrganization(
   }
   return { organization, busy, mutate };
 }
-export type LibraryOrganizer = ReturnType<typeof useLibraryOrganization>;
+type LibraryOrganizer = ReturnType<typeof useLibraryOrganization>;
 
 export function LibraryItemMenu({
   title,

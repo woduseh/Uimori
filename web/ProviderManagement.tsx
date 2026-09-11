@@ -191,8 +191,7 @@ export function ConnectionEditor({
     [confirmation, setConfirmation] = useState<Confirmation>();
   const [registeredModel, setRegisteredModel] = useState<ModelPreset>();
   const operationLock = useRef(false);
-  const connectionForm = useRef<HTMLFormElement>(null),
-    modelForm = useRef<HTMLFormElement>(null),
+  const modelForm = useRef<HTMLFormElement>(null),
     confirmationPanel = useRef<HTMLElement>(null);
   useEffect(() => {
     if (confirmation) confirmationPanel.current?.scrollIntoView({ block: 'nearest' });
@@ -972,7 +971,6 @@ export function ConnectionEditor({
       )}
       <form
         hidden={screen !== 'connection'}
-        ref={connectionForm}
         className="editor-grid provider-management-form"
         aria-label="프로바이더 편집 양식"
         onSubmit={(event) => {

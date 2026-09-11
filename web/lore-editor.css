@@ -216,18 +216,9 @@
   .lore-search {
     grid-column: 1 / -1;
   }
-  .lore-workspace {
-    grid-template-columns: minmax(0, 1fr);
-  }
   .lore-list-pane {
     border-right: 0;
     border-bottom: 1px solid var(--line);
-  }
-  .lore-rows {
-    max-height: 220px;
-  }
-  .lore-detail {
-    padding: 12px;
   }
   .lore-detail-options {
     grid-template-columns: minmax(0, 1fr);

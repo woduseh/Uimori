@@ -11,7 +11,7 @@ import {
 } from '../core/content-package.js';
 import { printPromptTemplate, parsePromptTemplate } from '../core/prompt-language.js';
 
-export type PackageInstructionDraft = {
+type PackageInstructionDraft = {
   instruction: PackageInstruction;
   mode: 'text' | 'template';
   condition: string;

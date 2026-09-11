@@ -3,16 +3,6 @@
   padding-top: 20px;
   min-width: 0;
 }
-.package-tabs {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin-bottom: 18px;
-}
-.package-tabs button[aria-pressed="true"] {
-  background: var(--accent-soft);
-  border-color: var(--accent);
-}
 .package-stack {
   display: grid;
   gap: 16px;
@@ -92,9 +82,6 @@
 @media (max-width: 760px) {
   .package-state-row {
     grid-template-columns: 1fr;
-  }
-  .package-tabs button {
-    padding: 8px 11px;
   }
   .package-entry {
     padding: 12px;

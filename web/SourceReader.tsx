@@ -32,7 +32,7 @@ import { RequestMessage } from './RequestMessage.js';
 
 type ReaderMode = 'original' | 'translation';
 /** Scene header pieces the activity panel places inside its summary row. */
-export type SceneHeaderSlots = { leading: ReactNode; badges: ReactNode };
+type SceneHeaderSlots = { leading: ReactNode; badges: ReactNode };
 type ReaderProps = {
   source: Source;
   index: number;

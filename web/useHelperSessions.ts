@@ -8,7 +8,7 @@ export type HelperSession = HelperConversation & {
   activity?: { running: number; queued: number };
   latestEventSeq?: number;
 };
-export const helperGroupKey = (scope: HelperScope) =>
+const helperGroupKey = (scope: HelperScope) =>
   scope.kind === 'chat' ? `chat:${scope.chatId}` : 'library';
 function read(key: string) {
   try {

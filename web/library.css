@@ -111,22 +111,6 @@
   background: transparent;
   border-bottom-color: var(--accent);
 }
-.library-search {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  margin: 22px 0 20px;
-}
-.library-search label {
-  width: min(100%, 360px);
-}
-.library-search input {
-  width: 100%;
-}
-.library-search > span {
-  font-size: 12px;
-  white-space: nowrap;
-}
 .library-cards {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(min(100%, 220px), 1fr));
@@ -307,11 +291,6 @@
   font-size: 12px;
   color: var(--muted);
 }
-.profile-diagnostics {
-  margin-top: 16px;
-  font-size: 11px;
-  color: var(--muted);
-}
 @media (max-width: 600px) {
   .library-heading {
     gap: 12px;
@@ -332,10 +311,6 @@
   }
   .library-tabs > button {
     padding: 8px 11px;
-  }
-  .library-search {
-    gap: 10px;
-    margin: 18px 0;
   }
   .library-cards {
     grid-template-columns: repeat(auto-fill, minmax(min(100%, 210px), 1fr));
@@ -751,7 +726,6 @@
 .library-list-item .library-item-avatar {
   --content-avatar-size: 48px;
 }
-.library-list-item .library-edit-content,
 .library-list-item .library-start-chat {
   flex-shrink: 0;
   font-size: 12px;
@@ -807,7 +781,6 @@
   background: var(--surface-raised);
   z-index: 1;
 }
-.library-portrait-card > .library-edit-content,
 .library-portrait-card > .library-start-chat {
   width: 100%;
   margin: 0;
@@ -838,15 +811,6 @@
 .library-detail-title small {
   color: var(--muted);
   font-size: 12px;
-}
-.library-preview-heading h2 {
-  font-size: 22px;
-  margin: 0 0 6px;
-  overflow-wrap: anywhere;
-}
-.library-preview-heading p {
-  margin: 0;
-  color: var(--muted);
 }
 .library-preview-counts {
   font-size: 13px;
@@ -895,24 +859,6 @@
   border-top: 1px solid var(--border);
   padding-top: 24px;
   margin-top: 24px;
-}
-.library-preview-facts {
-  display: flex;
-  gap: 22px;
-  padding-top: 20px;
-  border-top: 1px solid var(--border);
-  margin-top: 24px;
-  font-size: 13px;
-}
-.library-preview-facts div {
-  display: flex;
-  gap: 8px;
-}
-.library-preview-facts dt {
-  color: var(--muted);
-}
-.library-preview-facts dd {
-  margin: 0;
 }
 .library-prompt-icon {
   display: grid;
@@ -965,10 +911,6 @@
   }
   .library-use-actions > button {
     flex: 1 1 130px;
-  }
-  .library-preview-facts {
-    flex-wrap: wrap;
-    gap: 12px;
   }
 }
 @media (hover: none), (pointer: coarse) {

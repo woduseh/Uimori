@@ -46,7 +46,7 @@ import {
 } from './LibraryFolders.js';
 import './library.css';
 
-export const contentLabels: Record<ContentKind, string> = {
+const contentLabels: Record<ContentKind, string> = {
   bot: '봇',
   persona: '페르소나',
   module: '모듈',
@@ -65,7 +65,7 @@ type EditorProps = {
   reload: () => Promise<void>;
   onError: (error: string) => void;
 };
-export type PrimaryLibraryTab = 'bot' | 'persona' | 'module';
+type PrimaryLibraryTab = 'bot' | 'persona' | 'module';
 const libraryTabs: { id: PrimaryLibraryTab; title: string; icon: typeof BotIcon }[] = [
   { id: 'bot', title: '봇', icon: BotIcon },
   { id: 'persona', title: '페르소나', icon: PersonaIcon },

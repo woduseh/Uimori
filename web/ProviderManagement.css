@@ -168,14 +168,6 @@
   border-top: 1px solid var(--line);
   padding-top: 20px;
 }
-.provider-capabilities {
-  font-size: 12px;
-  line-height: 1.7;
-  overflow-wrap: anywhere;
-}
-.provider-capabilities p {
-  margin: 6px 0;
-}
 .provider-empty {
   padding: 24px 8px;
   color: var(--muted);

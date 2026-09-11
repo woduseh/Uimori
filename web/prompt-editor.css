@@ -45,11 +45,6 @@
 .prompt-preset-fields > :not(label, .prompt-editor-row) {
   grid-column: 1 / -1;
 }
-.prompt-applied {
-  font-size: 12px;
-  margin: 0;
-  overflow-wrap: anywhere;
-}
 .prompt-save-actions,
 .prompt-save-buttons {
   display: flex;
@@ -147,24 +142,6 @@
   top: auto;
   bottom: calc(100% + 4px);
 }
-.prompt-saved-management {
-  margin-top: 16px;
-  border-top: 1px solid var(--line);
-}
-.prompt-saved-management > summary {
-  padding: 14px 0;
-  font-size: 13px;
-  color: var(--muted);
-  cursor: pointer;
-}
-@media (hover: hover) {
-  .prompt-saved-management > summary:hover {
-    color: var(--text);
-  }
-}
-.prompt-saved-management > .deletion-list {
-  padding-bottom: 8px;
-}
 @media (max-width: 600px) {
   .prompt-save-actions {
     order: 0;
@@ -189,39 +166,6 @@
     white-space: normal;
   }
 }
-
-.prompt-workspace-actions {
-  margin-top: 16px;
-}
-
-.prompt-save-control {
-  position: relative;
-  display: inline-flex;
-}
-.prompt-save-tooltip {
-  display: none;
-  position: absolute;
-  bottom: calc(100% + 8px);
-  left: 0;
-  padding: 6px 10px;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  background: var(--panel);
-  color: var(--text);
-  font-size: 12px;
-  white-space: nowrap;
-  z-index: 9;
-  pointer-events: none;
-}
-.prompt-save-control:hover > .prompt-save-tooltip,
-.prompt-save-control:focus-within > .prompt-save-tooltip {
-  display: block;
-}
-.prompt-workspace-actions .action-menu-body {
-  left: 0;
-  right: auto;
-}
-
 .prompt-current-links {
   display: flex;
   flex-wrap: wrap;

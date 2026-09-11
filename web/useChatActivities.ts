@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import type { ChatActivityCount } from '../core/chat-activity.js';
 import { api } from './api.js';
 
-export type ChatActivitySummary = { count: number; label: string };
+type ChatActivitySummary = { count: number; label: string };
 const kindLabels: Record<ChatActivityCount['kind'], string> = {
   main: '원문 생성',
   translation: '번역',

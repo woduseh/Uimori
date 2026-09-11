@@ -22,14 +22,6 @@
 .pc-template > .muted {
   font-size: 12px;
 }
-.pc-badge {
-  white-space: nowrap;
-  font-size: 11px;
-  background: var(--surface);
-  border-radius: 6px;
-  padding: 4px 8px;
-  color: var(--muted);
-}
 .pc-actions {
   display: flex;
   flex-wrap: wrap;
@@ -602,11 +594,6 @@ details[open] > summary > .pc-disclosure-icon {
 .pc-blocks-section > summary > .pc-add-block {
   margin-left: auto;
 }
-@media (max-width: 600px) {
-  .pc-composer-fold > summary > .pc-badge {
-    display: none;
-  }
-}
 .pc-structure-editor[hidden],
 .pc-section[hidden] {
   display: none;
@@ -628,29 +615,6 @@ details[open] > summary > .pc-disclosure-icon {
 }
 .prompt-editor .prompt-composer .pc-file input[type="file"] {
   width: 100%;
-}
-.pc-combination-card {
-  display: grid;
-  gap: 12px;
-  padding: 16px;
-}
-.pc-combination-card > h4,
-.pc-combination-card > p {
-  margin: 0;
-}
-.pc-combination-card > h4 {
-  font-size: 14px;
-  line-height: 1.5;
-}
-.pc-combination-card > .muted,
-.pc-combination-card > small {
-  font-size: 12px;
-  line-height: 1.7;
-}
-.pc-combination-card > label {
-  display: grid;
-  gap: 8px;
-  min-width: 0;
 }
 .pc-control-values:empty {
   display: none;

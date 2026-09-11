@@ -9,17 +9,17 @@ import {
 import { Prose } from './Prose.js';
 import './source-segments.css';
 
-export type TranslatedSourceSegment = {
+type TranslatedSourceSegment = {
   body: string;
   title?: string;
   scene?: { place: string; time: string; subjectLabel?: string };
 };
-export type SegmentTranslationView = {
+type SegmentTranslationView = {
   sourceRevision: string;
   sourceHash: string;
   segments: Record<string, TranslatedSourceSegment>;
 };
-export type SourceSegmentsReaderProps = {
+type SourceSegmentsReaderProps = {
   source: SegmentSource;
   policy: SourceSegmentPolicy;
   translation?: SegmentTranslationView;

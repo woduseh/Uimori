@@ -1,6 +1,6 @@
 import type { Asset } from '../core/product.js';
 
-export type ImagePlacement = {
+type ImagePlacement = {
   assetRef: string;
   assetRevision: number;
   assetHash: string;

@@ -6,7 +6,7 @@ import {
 } from '../core/prompt-program.js';
 
 /** The option index keeps distinct values such as 1 and "1" separate. */
-export function PackageControlInput({
+function PackageControlInput({
   control,
   value,
   onChange,
