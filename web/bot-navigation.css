@@ -348,8 +348,7 @@
   gap: 8px;
 }
 @media (hover: none), (pointer: coarse) {
-  .bot-row-actions,
-  .bot-branch-actions {
+  .bot-row-actions {
     opacity: 1;
     pointer-events: auto;
   }
@@ -527,6 +526,11 @@
   -webkit-line-clamp: 1;
 }
 @media (hover: none), (pointer: coarse) {
+  /* Declared after the unconditional rule above so the bot row menu is reachable. */
+  .bot-branch-actions {
+    opacity: 1;
+    pointer-events: auto;
+  }
   .bot-branch-actions > .icon-button,
   .bot-branch-actions > .action-menu > summary,
   .bot-row-actions > .action-menu > summary {

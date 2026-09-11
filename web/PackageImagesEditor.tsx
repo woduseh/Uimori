@@ -160,6 +160,9 @@ export function PackageImagesEditor({ value, onChange, onDirtyChange }: Props) {
               setQuery(event.target.value);
               setPage(0);
             }}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter') event.preventDefault();
+            }}
           />
         </label>
       </div>

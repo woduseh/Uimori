@@ -50,6 +50,9 @@ export function ProviderCatalogPicker({
                 setQuery(event.target.value);
                 setLimit(24);
               }}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') event.preventDefault();
+              }}
             />
           </label>
           <div className="provider-catalog-grid">
