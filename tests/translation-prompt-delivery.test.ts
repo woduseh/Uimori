@@ -157,7 +157,9 @@ test.each<ProviderProtocol>([
     // The one note object retains both its text and matching declaration.text for provenance.
     expect(occurrences(wire.body, 'AUTHOR_NOTE_ONCE')).toBe(2);
     expect(JSON.stringify(wire.body)).not.toContain('EXCLUDED_OTHER_CHAT');
-    expect(JSON.stringify(wire.body)).toContain('segmentKnowledge');
+    // The context slot still carries the frozen source-time context, without segment knowledge.
+    expect(JSON.stringify(wire.body)).toContain('instructionRevision');
+    expect(JSON.stringify(wire.body)).not.toContain('actorKnowledge');
   }
 );
 

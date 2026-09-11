@@ -1,7 +1,6 @@
 import { defaultProfile } from './product.js';
 import type { PromptProgram, PromptValue } from './prompt-program.js';
 import { compileTranslationPrompt } from './translation-prompt.js';
-import { parseSourceSegments } from './source-segments.js';
 import type { AuxiliaryInput } from './auxiliary.js';
 import type { RunSnapshot } from './types.js';
 
@@ -42,7 +41,6 @@ export async function compileTranslationPreview(
       promptControls: { [`${preset.id}@${preset.revision}`]: { values, combinations: [] } },
     },
   };
-  const document = parseSourceSegments({ sourceRevision, sourceHash, text: sourceText });
   const input: AuxiliaryInput = {
     role: 'translation',
     contract: '',
@@ -63,19 +61,6 @@ export async function compileTranslationPreview(
       previousSources: [],
       instructionRevision,
       modelPresetRevision: 'synthetic',
-      segmentKnowledge: {
-        sourceRevision,
-        sourceHash,
-        provenance: 'source-markers',
-        segments: document.segments.map((segment) => ({
-          id: segment.id,
-          kind: segment.kind,
-          range: { ...segment.range },
-          readerExposure: 'present-in-source',
-          actorKnowledge: structuredClone(segment.knowledge),
-          worldTruth: 'unknown',
-        })),
-      },
     },
   };
   return compileTranslationPrompt(input, snapshot, task)!;

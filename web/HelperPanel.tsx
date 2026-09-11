@@ -6,6 +6,8 @@ import type {
   HelperScope,
   HelperSelection,
 } from '../core/helper.js';
+import { HELPER_PERSONA_MAX_CHARS } from '../core/content-limits.js';
+import { UI_HELPER_PERSONA } from './helper-persona.js';
 import { api, ApiError } from './api.js';
 import { RetryFailure } from './RetryFailure.js';
 import { RequestMessage } from './RequestMessage.js';
@@ -637,7 +639,7 @@ export function HelperPanel(props: Props) {
             도우미 말투
             <textarea
               value={persona.text}
-              maxLength={2000}
+              maxLength={HELPER_PERSONA_MAX_CHARS}
               onChange={(event) =>
                 setPersonas((old) => ({
                   ...old,
@@ -647,6 +649,10 @@ export function HelperPanel(props: Props) {
               placeholder="비워 두면 담백한 도우미로 응답해요."
             />
           </label>
+          <p className="muted">
+            이 도우미 대화에만 적용해요. 저장 후 새로 접수한 요청부터 반영되며, 작품과 저장 자료의
+            문체는 바꾸지 않아요.
+          </p>
           <details className="helper-limits">
             <summary>작업 한도</summary>
             <p>새 요청부터 적용해요.</p>
@@ -701,14 +707,11 @@ export function HelperPanel(props: Props) {
             onClick={() =>
               setPersonas((old) => ({
                 ...old,
-                [scopeKey]: {
-                  ...persona,
-                  text: '이름은 우이. 따뜻하고 가벼운 해요체로 짧게 설명해요. 작업 결과와 오류는 정확하게 말해요.',
-                },
+                [scopeKey]: { ...persona, text: UI_HELPER_PERSONA },
               }))
             }
           >
-            우이 말투
+            우이 프리셋 불러오기
           </button>
           <button
             type="button"

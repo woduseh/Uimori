@@ -23,7 +23,6 @@ export function createSourceSegmentFixture(
         expanded: options.expanded ?? false,
         exclude: options.excludeAsides ?? false,
         scene: { open: '⟦', close: '⟧', separator: '@' },
-        portrait: { open: '[hsPortrait:', close: ']' },
       },
       {
         id: 'annotation',
@@ -33,6 +32,29 @@ export function createSourceSegmentFixture(
         match: 'inline',
         label: '평가 기록',
         exclude: options.excludeAnnotations ?? true,
+        ...(options.keepLastMessages === undefined
+          ? {}
+          : { keepLastMessages: options.keepLastMessages }),
+      },
+    ],
+  };
+}
+
+/** A neutral annotation package: no actor, scene header or title line is involved. */
+export function createNeutralAnnotationFixture(
+  options: { exclude?: boolean; keepLastMessages?: number } = {}
+): SourceSegmentPolicy {
+  return {
+    version: 1,
+    rules: [
+      {
+        id: 'note',
+        kind: 'annotation',
+        open: '[note]',
+        close: '[/note]',
+        match: 'inline',
+        label: '편집 메모',
+        exclude: options.exclude ?? false,
         ...(options.keepLastMessages === undefined
           ? {}
           : { keepLastMessages: options.keepLastMessages }),
