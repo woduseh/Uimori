@@ -1,4 +1,5 @@
 import { Switch } from './BooleanControls.js';
+import { SettingsIcon } from './ui-icons.js';
 import { SaveButton } from './SaveButton.js';
 import { useEffect, useState } from 'react';
 import type { ChatProfile, Library } from '../core/product.js';
@@ -258,7 +259,6 @@ export function ProfileEditor({
                   ))}
                 </select>
               </label>
-              <p>{promptId ? '작문 프롬프트 · 이 채팅 고정' : '작문 프롬프트 · 전역 따르기'}</p>
               {promptId && !pinnedPrompt && (
                 <p className="error" role="alert">
                   고정한 작문 프리셋을 사용할 수 없어 새 본문 실행이 차단돼요. 다른 프리셋을
@@ -269,14 +269,23 @@ export function ProfileEditor({
                 고정한 프리셋의 최신 저장본을 다음 요청부터 사용해요. 과거와 진행 중인 작업은 바뀌지
                 않아요. 창작 옵션은 선택한 프롬프트의 정의를 따라요.
               </small>
-              <p>번역 · 전역 따르기: {workspace?.translation.title ?? '불러오는 중…'}</p>
-              <button
-                type="button"
-                className="secondary"
-                onClick={() => onGlobalSettings('prompts')}
-              >
-                전역 프롬프트 설정
-              </button>
+              <div className="settings-inherited">
+                <h4>이 채팅이 따르는 전역 설정</h4>
+                <dl>
+                  <div>
+                    <dt>번역</dt>
+                    <dd>{workspace?.translation.title ?? '불러오는 중…'}</dd>
+                  </div>
+                </dl>
+                <button
+                  type="button"
+                  className="secondary"
+                  onClick={() => onGlobalSettings('prompts')}
+                >
+                  <SettingsIcon size={18} aria-hidden="true" />
+                  전역 프롬프트 설정
+                </button>
+              </div>
             </div>
             <div hidden={tab !== 'models'}>
               <label>
@@ -308,31 +317,38 @@ export function ProfileEditor({
                   ))}
                 </select>
               </label>
-              <p>{modelId ? '본문 모델 · 이 채팅 고정' : '본문 모델 · 전역 따르기'}</p>
               {!modelAvailable && workspace && (
                 <p className="error" role="alert">
                   {modelId ? '고정한 본문 모델' : '전역 본문 모델'}을 사용할 수 없어 새 본문 실행이
                   차단돼요. 사용 가능한 모델을 고르거나 전역 설정을 확인해 주세요.
                 </p>
               )}
-              <p>
+              <small>
                 본문 모델의 최신 저장본을 다음 요청부터 사용해요. 진행 중이거나 과거의 작업은 바뀌지
-                않아요. 번역과 보조 작업은 전역 모델을 따라요.
-              </p>
-              {(['translation', 'status', 'image'] as const).map((role, index) => (
-                <p key={role}>
-                  {['번역 모델', '표시 상태 모델', '이미지 배치 모델'][index]}:{' '}
-                  {library.models.find((item) => item.id === workspace?.modelRoutes[role]?.id)
-                    ?.title ?? '미지정 또는 확인 필요'}
-                </p>
-              ))}
-              <button
-                type="button"
-                className="secondary"
-                onClick={() => onGlobalSettings('models')}
-              >
-                전역 모델 설정
-              </button>
+                않아요.
+              </small>
+              <div className="settings-inherited">
+                <h4>이 채팅이 따르는 전역 설정</h4>
+                <dl>
+                  {(['translation', 'status', 'image'] as const).map((role, index) => (
+                    <div key={role}>
+                      <dt>{['번역', '표시 상태', '이미지 배치'][index]}</dt>
+                      <dd>
+                        {library.models.find((item) => item.id === workspace?.modelRoutes[role]?.id)
+                          ?.title ?? '미지정 또는 확인 필요'}
+                      </dd>
+                    </div>
+                  ))}
+                </dl>
+                <button
+                  type="button"
+                  className="secondary"
+                  onClick={() => onGlobalSettings('models')}
+                >
+                  <SettingsIcon size={18} aria-hidden="true" />
+                  전역 모델 설정
+                </button>
+              </div>
             </div>
           </fieldset>
         </div>
