@@ -5,7 +5,15 @@ import {
   IMAGE_POSITION_UNAVAILABLE,
 } from './image-placement.js';
 import { StorySourceState } from './StoryPanel.js';
-import { Fragment, useCallback, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
+import {
+  Fragment,
+  useCallback,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from 'react';
 import type { Asset } from '../core/product.js';
 import type { Illustration } from '../core/illustration.js';
 import type { ImageTarget, Job, ReaderRun, Source } from '../core/types.js';
@@ -24,7 +32,7 @@ import { CopyIcon, EditIcon, IllustrationIcon, ImagesIcon, RefreshIcon } from '.
 import { GitFork, Info, MessageCircleQuestion, ReceiptText, Save, X } from 'lucide-react';
 import { Dialog } from './Dialog.js';
 import { SourceSegmentsReader } from './SourceSegmentsReader.js';
-import type { SourceSegmentPolicy } from '../core/source-segments.js';
+import { hasSourceSegmentBoundaries, type SourceSegmentPolicy } from '../core/source-segments.js';
 
 import { PackageStateCards, usePackagePresentation } from './PackagePresentation.js';
 import './source-edit.css';
@@ -179,7 +187,18 @@ function SourceReaderContent({
     hasPackages === true,
     `${presentationRefreshKey ?? ''}:${jobs.map((job) => `${job.id}:${job.status}`).join(',')}`
   );
-  const projected = !sourceSegments ? presentation?.data : undefined;
+  // Only a source that really carries declared boundaries is read through the segment reader; the
+  // server drops source transforms for exactly those, and translation display keeps its own.
+  const segmented = useMemo(
+    () =>
+      !!sourceSegments &&
+      hasSourceSegmentBoundaries(
+        { sourceRevision: source.id, sourceHash: source.hash, text: source.text },
+        sourceSegments
+      ),
+    [sourceSegments, source.id, source.hash, source.text]
+  );
+  const projected = presentation?.data;
   const [mode, setMode] = useState<ReaderMode>(() =>
     initialMode(source.id, !!displayTranslation?.result)
   );
@@ -476,14 +495,14 @@ function SourceReaderContent({
       {validTranslation && translation?.status !== 'completed' && mode === 'translation' && (
         <p role="status">이전 완료 번역을 표시하고 있어요. 새 번역이 성공하면 교체돼요.</p>
       )}
-      {sourceSegments && mode === 'original' ? (
+      {segmented && sourceSegments && mode === 'original' ? (
         <SourceSegmentBody
           source={source}
           config={sourceSegments}
           blocks={blocks}
           inline={inline}
         />
-      ) : mode === 'original' && projected?.original.changed ? (
+      ) : mode === 'original' && !segmented && projected?.original.changed ? (
         <div className="prose" data-testid="source-text">
           <div
             className="source-block"

@@ -370,6 +370,21 @@ export function parseSourceSegments(
     diagnostics,
   };
 }
+/**
+ * True when this stored source really carries declared boundaries, so the segment reader owns its
+ * display. A policy that matches nothing in this source leaves ordinary display paths untouched.
+ */
+export function hasSourceSegmentBoundaries(
+  source: SegmentSource,
+  policy?: SourceSegmentPolicy
+): boolean {
+  try {
+    const document = parseSourceSegments(source, policy);
+    return document.segments.some((s) => s.kind !== 'main') || document.diagnostics.length > 0;
+  } catch {
+    return true;
+  }
+}
 export type SegmentRequestView = {
   ok: boolean;
   text: string;
