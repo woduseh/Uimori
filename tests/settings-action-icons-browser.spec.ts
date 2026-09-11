@@ -11,6 +11,10 @@ async function icon(button: Locator) {
   await expect(button).toBeVisible();
   await expect(button.locator('svg')).toHaveCount(1);
   expect((await button.innerText()).trim()).toBe('');
+  const label = await button.getAttribute('aria-label');
+  expect(label).toBeTruthy();
+  await expect(button).toHaveAccessibleName(label!);
+  await expect(button).toHaveAttribute('title', label!);
   const box = await button.boundingBox();
   expect(box!.width).toBeGreaterThanOrEqual(44);
   expect(box!.height).toBeGreaterThanOrEqual(44);
@@ -47,7 +51,7 @@ for (const width of [390, 1440]) {
     await selectChatSettingsSection(page, '봇·페르소나·모듈');
     const save = dialog.getByRole('button', { name: '채팅 설정 저장', exact: true });
     await save.scrollIntoViewIfNeeded();
-    await named(save, '저장');
+    await icon(save);
     await page.screenshot({ path: info.outputPath(`chat-save-${width}.png`) });
     await selectChatSettingsSection(page, '프롬프트·창작 프리셋');
     const promptPanel = dialog.getByRole('tabpanel');
@@ -67,7 +71,7 @@ for (const width of [390, 1440]) {
     ).toBeVisible();
     await selectChatSettingsSection(page, '자동 후속 작업');
     const runtimeSave = dialog.getByRole('button', { name: '설정 저장', exact: true });
-    await named(runtimeSave, '저장');
+    await icon(runtimeSave);
     await dialog.getByRole('switch', { name: '장면 상태 자동 실행' }).click();
     await expect(runtimeSave).toBeEnabled();
     await runtimeSave.click();
@@ -99,7 +103,7 @@ for (const width of [390, 1440]) {
     await expect(models).toBeVisible();
     const modelSave = models.getByRole('button', { name: '역할별 모델 설정 저장', exact: true });
     await modelSave.scrollIntoViewIfNeeded();
-    await named(modelSave, '저장');
+    await icon(modelSave);
     await expect(models).not.toContainText('새 채팅의 첫 응답이 성공하면');
     await expect(models).not.toContainText('명확한 거절일 때만 추가 번역');
     await page.screenshot({ path: info.outputPath(`model-save-${width}.png`) });

@@ -528,7 +528,10 @@ test('LOADUI04 offline edits reappear on reconnect and connected SSE sends only 
     if (request.method() === 'POST' && /\/runs(?:\?|$)/.test(request.url()))
       generated.push(request.url());
   });
-  await page.goto(`/?chat=${seeded.chat.id}`);
+  // Pin the view so implicit default-branch discovery cannot overlap the reconnect probe.
+  const branch = seeded.branches?.find((item) => item.default);
+  expect(branch).toBeDefined();
+  await page.goto(`/?chat=${seeded.chat.id}&branch=${encodeURIComponent(branch!.id)}`);
   await expect(articles(page)).toHaveCount(2);
   await expect(page.getByText('연결을 다시 확인하는 중이에요.', { exact: true })).toHaveCount(0);
   await context.setOffline(true);
@@ -542,7 +545,17 @@ test('LOADUI04 offline edits reappear on reconnect and connected SSE sends only 
       'Source changed while browser was offline.'
     );
   } finally {
+    // onopen only means the transport is connected; wait for its full reader catch-up too.
+    const catchUpRequest = page.waitForRequest((request) => {
+      const url = new URL(request.url());
+      return (
+        url.pathname === `/api/chats/${seeded.chat.id}/reader` && !url.searchParams.has('since')
+      );
+    });
     await context.setOffline(false);
+    const catchUpResponse = await (await catchUpRequest).response();
+    expect(catchUpResponse?.ok()).toBe(true);
+    await catchUpResponse!.finished();
   }
   await expect(article(page, first.id).getByTestId('source-text')).toContainText(
     'Source changed while browser was offline.'

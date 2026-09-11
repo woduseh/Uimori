@@ -1400,7 +1400,10 @@ test('UI17 prompts use latest settings and concurrent edits preserve unsaved tex
   await expect
     .poll(async () => (await (await request.get('/api/prompt-workspace')).json()).main.program)
     .toEqual(createDefaultPromptProgram('Latest library writing prompt.', 'main'));
+  // The API can finish before the editor's refresh clears its busy/dirty projection.
+  await expect(editor.getByRole('button', { name: '최신 버전 적용', exact: true })).toBeEnabled();
   await page.getByRole('button', { name: '설정 닫기', exact: true }).click();
+  await expect(dialog).toBeHidden();
   await nav(page, '프롬프트');
   await page.getByRole('button', { name: `${first.title} 프롬프트 편집`, exact: true }).click();
   const libraryEditor = page.getByTestId('prompt-library').getByTestId('prompt-editor');
@@ -1625,10 +1628,10 @@ test('UI18 source and translation edits preserve past snapshots and feed only fu
 // only holds the other side, and on 390px an open menu is a sheet that covers the row.
 async function openSourceEditor(tab: Page) {
   const source = tab.getByTestId('source');
-  await source.locator('.source-actions').waitFor();
-  if (!(await source.locator('.scene-action[aria-label="원문 수정"]').count()))
-    await openSourceActions(source);
-  await tab.getByRole('button', { name: '원문 수정', exact: true }).click();
+  const edit = source.locator('.scene-action[aria-label="원문 수정"]');
+  // A reader refresh can remount the toolbar; its transient absence does not mean menu mode.
+  await expect(edit).toBeVisible();
+  await edit.click();
 }
 test('UI18 two-tab conflicts preserve reloadable drafts and manual translation survives held work and a late response', async ({
   page,

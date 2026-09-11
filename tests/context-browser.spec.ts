@@ -3,7 +3,9 @@ import { test, expect, type APIRequestContext, type Page } from '@playwright/tes
 import type { ContextDetail as Detail, ContextJob } from '../core/context-plan.js';
 import type { Chat, ChatDetail } from '../core/types.js';
 import type { StoryDetail } from '../core/story.js';
-import type { ModelWorkspace } from '../core/product.js';
+import type { ModelWorkspace, PromptWorkspace } from '../core/product.js';
+import { createDefaultPromptProgram } from '../core/prompt-defaults.js';
+import { DEFAULT_MAIN_PROMPT } from '../core/prompts.js';
 import { postFixtureChat } from './fixtures/chat.js';
 import { preservePromptWorkspace } from './fixtures/prompt-workspace.js';
 import { selectChatSettingsSection } from './ui-navigation.js';
@@ -16,6 +18,19 @@ async function read<T>(request: APIRequestContext, path: string): Promise<T> {
 }
 async function create(page: Page, title: string) {
   // Summary edits measure the selected main input budget; these tests never send a provider call.
+  // Keep the summary workflow independent of the size of the bundled writing prompt.
+  const prompts = await read<PromptWorkspace>(page.request, '/prompt-workspace');
+  const configured = await page.request.put('/api/prompt-workspace', {
+    data: {
+      expectedRevision: prompts.revision,
+      main: {
+        title: 'Synthetic context instructions',
+        program: createDefaultPromptProgram(DEFAULT_MAIN_PROMPT),
+        values: {},
+      },
+    },
+  });
+  expect(configured.ok(), await configured.text()).toBe(true);
   const connectionResponse = await page.request.post('/api/connections', {
     data: {
       title: `${title} 합성 연결`,

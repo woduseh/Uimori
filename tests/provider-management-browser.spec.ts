@@ -840,96 +840,96 @@ test('PMUI09 invalid hidden model fields receive focus and old deactivation conf
   expect(modelWrites).toBe(0);
 });
 
-test('PMUI11 documented provider options lead each select, round-trip without generation, and include GPT Flex and Fable', async ({
-  page,
-  request,
-}, info) => {
-  await page.setViewportSize({ width: 390, height: 844 });
-  const observed = observe(page),
-    prefix = 'PMUI11 ' + Date.now();
-  const tabFor = (label: string) =>
-    ['사고 강도', '서비스 등급'].includes(label) ? '기본' : '고급';
-  const cases = [
-    {
-      protocol: 'vercel-chat-v1',
-      endpoint: 'https://ai-gateway.vercel.sh/v1',
-      modelId: 'openai/gpt-5.6-sol',
-      choices: { '사고 강도': 'high', '서비스 등급': 'flex' },
-      saved: { reasoningEffort: 'high', serviceTier: 'flex' },
-      absent: ['thinkingLevel'],
-      hidden: ['Thinking Level', 'Output Effort', 'Verbosity'],
+const providerOptionCases = [
+  {
+    protocol: 'vercel-chat-v1',
+    endpoint: 'https://ai-gateway.vercel.sh/v1',
+    modelId: 'openai/gpt-5.6-sol',
+    choices: { '사고 강도': 'high', '서비스 등급': 'flex' },
+    saved: { reasoningEffort: 'high', serviceTier: 'flex' },
+    absent: ['thinkingLevel'],
+    hidden: ['Thinking Level', 'Output Effort', 'Verbosity'],
+  },
+  {
+    protocol: 'vertex-gemini-v1',
+    endpoint:
+      'https://aiplatform.googleapis.com/v1/projects/synthetic-parameters/locations/global/publishers/google/models',
+    modelId: 'gemini-3.1-pro-preview',
+    choices: { '서비스 등급': 'flex' },
+    saved: { serviceTier: 'flex' },
+    absent: ['thinkingLevel'],
+    hidden: ['Verbosity', '사고 모드'],
+  },
+  {
+    protocol: 'vertex-gemini-v1',
+    endpoint:
+      'https://aiplatform.googleapis.com/v1/projects/synthetic-parameters/locations/global/publishers/google/models',
+    modelId: 'gemini-3.8-flash',
+    choices: { '사고 강도': 'HIGH', '서비스 등급': 'flex' },
+    saved: { thinkingLevel: 'HIGH', serviceTier: 'flex' },
+    absent: ['outputEffort'],
+    hidden: ['Verbosity', '사고 모드'],
+  },
+  {
+    protocol: 'openai-responses-v1',
+    endpoint: 'https://api.openai.com/v1',
+    modelId: 'gpt-5.6-sol',
+    choices: {
+      '사고 강도': 'none',
+      Verbosity: 'high',
+      '서비스 등급': 'flex',
+      '캐시 방식': 'automatic',
+      '캐시 유지 시간': '30m',
     },
-    {
-      protocol: 'vertex-gemini-v1',
-      endpoint:
-        'https://aiplatform.googleapis.com/v1/projects/synthetic-parameters/locations/global/publishers/google/models',
-      modelId: 'gemini-3.1-pro-preview',
-      choices: { '서비스 등급': 'flex' },
-      saved: { serviceTier: 'flex' },
-      absent: ['thinkingLevel'],
-      hidden: ['Verbosity', '사고 모드'],
+    saved: {
+      reasoningEffort: 'none',
+      verbosity: 'high',
+      serviceTier: 'flex',
+      cacheMode: 'automatic',
+      cacheTtl: '30m',
     },
-    {
-      protocol: 'vertex-gemini-v1',
-      endpoint:
-        'https://aiplatform.googleapis.com/v1/projects/synthetic-parameters/locations/global/publishers/google/models',
-      modelId: 'gemini-3.8-flash',
-      choices: { '사고 강도': 'HIGH', '서비스 등급': 'flex' },
-      saved: { thinkingLevel: 'HIGH', serviceTier: 'flex' },
-      absent: ['outputEffort'],
-      hidden: ['Verbosity', '사고 모드'],
+    absent: ['outputEffort'],
+    hidden: ['사고 모드'],
+  },
+  {
+    protocol: 'anthropic-messages-v1',
+    endpoint: 'https://api.anthropic.com/v1',
+    modelId: 'claude-opus-5',
+    choices: {
+      '사고 강도': 'high',
+      '사고 모드': 'disabled',
+      '캐시 방식': 'explicit',
+      '캐시 유지 시간': '5m',
     },
-    {
-      protocol: 'openai-responses-v1',
-      endpoint: 'https://api.openai.com/v1',
-      modelId: 'gpt-5.6-sol',
-      choices: {
-        '사고 강도': 'none',
-        Verbosity: 'high',
-        '서비스 등급': 'flex',
-        '캐시 방식': 'automatic',
-        '캐시 유지 시간': '30m',
-      },
-      saved: {
-        reasoningEffort: 'none',
-        verbosity: 'high',
-        serviceTier: 'flex',
-        cacheMode: 'automatic',
-        cacheTtl: '30m',
-      },
-      absent: ['outputEffort'],
-      hidden: ['사고 모드'],
+    saved: {
+      outputEffort: 'high',
+      thinkingMode: 'disabled',
+      cacheMode: 'explicit',
+      cacheTtl: '5m',
     },
-    {
-      protocol: 'anthropic-messages-v1',
-      endpoint: 'https://api.anthropic.com/v1',
-      modelId: 'claude-opus-5',
-      choices: {
-        '사고 강도': 'high',
-        '사고 모드': 'disabled',
-        '캐시 방식': 'explicit',
-        '캐시 유지 시간': '5m',
-      },
-      saved: {
-        outputEffort: 'high',
-        thinkingMode: 'disabled',
-        cacheMode: 'explicit',
-        cacheTtl: '5m',
-      },
-      absent: ['reasoningEffort'],
-      hidden: ['Verbosity'],
-    },
-    {
-      protocol: 'anthropic-messages-v1',
-      endpoint: 'https://api.anthropic.com/v1',
-      modelId: 'claude-fable-5-1',
-      choices: { '사고 강도': 'max', '캐시 방식': 'automatic', '캐시 유지 시간': '1h' },
-      saved: { outputEffort: 'max', cacheMode: 'automatic', cacheTtl: '1h' },
-      absent: ['reasoningEffort', 'thinkingMode'],
-      hidden: ['Verbosity'],
-    },
-  ];
-  for (const [index, item] of cases.entries()) {
+    absent: ['reasoningEffort'],
+    hidden: ['Verbosity'],
+  },
+  {
+    protocol: 'anthropic-messages-v1',
+    endpoint: 'https://api.anthropic.com/v1',
+    modelId: 'claude-fable-5-1',
+    choices: { '사고 강도': 'max', '캐시 방식': 'automatic', '캐시 유지 시간': '1h' },
+    saved: { outputEffort: 'max', cacheMode: 'automatic', cacheTtl: '1h' },
+    absent: ['reasoningEffort', 'thinkingMode'],
+    hidden: ['Verbosity'],
+  },
+];
+for (const [index, item] of providerOptionCases.entries()) {
+  test(`PMUI11 ${item.protocol}/${item.modelId} documented provider options lead each select and round-trip without generation`, async ({
+    page,
+    request,
+  }, info) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    const observed = observe(page),
+      prefix = 'PMUI11 ' + Date.now();
+    const tabFor = (label: string) =>
+      ['사고 강도', '서비스 등급'].includes(label) ? '기본' : '고급';
     const title = prefix + ' ' + item.modelId,
       connection = await api<Connection>(request, '/connections', {
         title,
@@ -998,11 +998,11 @@ test('PMUI11 documented provider options lead each select, round-trip without ge
       await form.getByRole('button', { name: tabFor(label), exact: true }).click();
       await expect(form.getByLabel(label, { exact: true })).toHaveValue(value!);
     }
-  }
-  expect(observed.errors).toEqual([]);
-  expect(observed.generations).toEqual([]);
-  expect(observed.legacyReads).toEqual([]);
-});
+    expect(observed.errors).toEqual([]);
+    expect(observed.generations).toEqual([]);
+    expect(observed.legacyReads).toEqual([]);
+  });
+}
 
 test('PMUI12 changing the model or connection keeps choices visible as unverified or unsendable, and only unsendable values block saving', async ({
   page,
