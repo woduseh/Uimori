@@ -348,8 +348,8 @@ test('DEL06 deleting the displayed branch returns to the default branch', async 
   const branch = await response.json();
   await page.goto(`/?chat=${chat.id}&branch=${branch.id}`);
   await openChatMenu(page);
-  await page.getByRole('button', { name: '보관된 전개', exact: true }).click();
-  const panel = page.getByRole('region', { name: '보관된 전개 목록', exact: true });
+  await page.getByRole('button', { name: '보관된 분기', exact: true }).click();
+  const panel = page.getByRole('region', { name: '보관된 분기 목록', exact: true });
   await panel.getByRole('button', { name: /분기 삭제$/ }).click();
   await confirm(page);
   await expect(panel.getByRole('button', { name: /분기 삭제$/ })).toHaveCount(0);

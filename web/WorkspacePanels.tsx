@@ -257,9 +257,9 @@ export function BranchesPanel({ state, onClose }: { state: StoryState; onClose: 
       .slice(0, 120);
   }
   return (
-    <section className="branches-panel" aria-label="보관된 전개 목록">
+    <section className="branches-panel" aria-label="보관된 분기 목록">
       <p className="muted">
-        기본 전개는 채팅을 열 때 먼저 보여요. 다른 전개를 기본으로 지정해도 원문과 실행 기록은
+        기본 분기는 채팅을 열 때 먼저 보여요. 다른 분기를 기본으로 지정해도 원문과 실행 기록은
         그대로 유지돼요.
       </p>
       <div className="branch-list">
@@ -276,7 +276,7 @@ export function BranchesPanel({ state, onClose }: { state: StoryState; onClose: 
               aria-pressed={state.branch?.id === branch.id}
             >
               <strong>{branchLabel(branch, detail)}</strong>
-              <small>{state.branch?.id === branch.id ? '읽는 중' : '이 전개 읽기'}</small>
+              <small>{state.branch?.id === branch.id ? '읽는 중' : '이 분기 읽기'}</small>
               <span className="branch-preview">{preview(branch.id, branch.headRevision)}</span>
             </button>
             {!branch.default && (
@@ -284,7 +284,7 @@ export function BranchesPanel({ state, onClose }: { state: StoryState; onClose: 
                 type="button"
                 className="secondary"
                 disabled={changingDefault}
-                aria-label={`${branchLabel(branch, detail)} 기본 전개로 지정`}
+                aria-label={`${branchLabel(branch, detail)} 기본 분기로 지정`}
                 onClick={async () => {
                   const current = detail.branches?.find((item) => item.default);
                   if (!current) return;

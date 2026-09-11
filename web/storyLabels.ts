@@ -8,8 +8,8 @@ export function modelLabel(model: ModelPreset, library: Library | null) {
 }
 
 export function branchLabel(branch: Branch, detail: ReaderDetail) {
-  if (branch.default) return '기본 전개';
-  if (branch.title === '기본 분기') return '이전 기본 전개';
+  if (branch.default) return '기본 분기';
+  if (branch.title === '기본 분기') return '이전 기본 분기';
   if (branch.title !== '후보 분기') return branch.title;
   // Run order is creation order; adding a candidate never renumbers earlier ones.
   const candidates =
