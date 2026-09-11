@@ -457,7 +457,6 @@
   display: none;
 }
 .library-content-editor {
-  max-width: none;
   width: 100%;
 }
 .library-content-editor > .library-detail-heading {
@@ -465,8 +464,8 @@
   position: sticky;
   top: 56px;
   z-index: 7;
-  margin: 0 -24px;
-  padding: 8px 24px;
+  margin: 0;
+  padding: 8px 0;
   background: var(--bg);
   border-bottom: 1px solid var(--line);
 }

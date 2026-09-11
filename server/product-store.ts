@@ -913,6 +913,28 @@ export class ProductStore {
     if (!b) throw new HttpError(404, 'Branch not found');
     return b;
   }
+  renameBranch(chatId: string, branchId: string, value: unknown): Branch {
+    const body = record(value);
+    fields(body, ['title', 'expectedRevision']);
+    const title = text(body.title, 'branch title', 200);
+    const expected = number(body.expectedRevision, 'branch revision');
+    return this.store.transaction(() => {
+      this.store.chat(chatId);
+      const branch = this.branch(chatId, branchId);
+      if (branch.revision !== expected)
+        throw new HttpError(
+          409,
+          '분기 이름이 다른 곳에서 변경됐어요. 최신 이름을 확인한 뒤 다시 저장해 주세요.'
+        );
+      this.db
+        .prepare('UPDATE branches SET title=?,revision=revision+1 WHERE id=?')
+        .run(title, branchId);
+      // Saving the same text still records intent so an automatic summary never overwrites it.
+      this.store.event(chatId, 'branch.title.manual', branchId);
+      this.store.event(chatId, 'branch.renamed', branchId);
+      return this.branch(chatId, branchId);
+    });
+  }
   setDefaultBranch(chatId: string, branchId: string, value: unknown): Branch {
     const body = record(value);
     fields(body, ['expectedRevision', 'expectedDefaultBranchId', 'expectedDefaultBranchRevision']);

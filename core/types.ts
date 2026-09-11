@@ -253,6 +253,19 @@ export type ReaderActivity = {
 };
 export type ReaderNavigationItem = { id: string; number: number; label: string };
 
+/** Branches placed by where their source chains diverge; `branches` itself stores no parent. */
+export type BranchTreeNode = {
+  id: string;
+  /** Indentation level: how many fork points this branch sits below. */
+  depth: number;
+  /** Last source shared with the sibling it diverged from, null while a branch has no scene. */
+  forkSourceId: string | null;
+  /** 1-based position of the fork source within this branch. */
+  forkIndex: number | null;
+  /** Scenes this branch does not share with the sibling it diverged from. */
+  ownScenes: number;
+  totalScenes: number;
+};
 export type ReaderDetail = Omit<ChatDetail, 'runs' | 'attempts'> & {
   /** Current page, all active Runs and source-less responses; full task history is fetched separately. */
   runs: ReaderRun[];
@@ -265,6 +278,8 @@ export type ReaderDetail = Omit<ChatDetail, 'runs' | 'attempts'> & {
     /** Candidate creation order is independent of the visible Run page. */
     candidateBranches?: string[];
     latestBranchRuns?: Record<string, string>;
+    /** Display order is the walk itself; the list is already sorted. */
+    branchTree?: BranchTreeNode[];
     activity?: ReaderActivity[];
     responseActivity?: ReaderActivity[];
     headSourceHash?: string | null;

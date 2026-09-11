@@ -480,3 +480,53 @@ for (const width of [390, 1440]) {
     ).toBeNull();
   });
 }
+
+test('LIBUI07 a wide desktop centres the library and prompt columns inside the destination', async ({
+  page,
+  request,
+}) => {
+  const title = `LIBUI07 ${Date.now()}`;
+  await createContent(request, title);
+  await page.setViewportSize({ width: 2560, height: 1440 });
+  await page.goto('/');
+  const column = async (selector: string) =>
+    page
+      .locator(selector)
+      .first()
+      .evaluate((element) => {
+        const box = element.getBoundingClientRect(),
+          host = document.querySelector('.library-page')!.getBoundingClientRect();
+        return {
+          width: Math.round(box.width),
+          leading: Math.round(box.left - host.left),
+          trailing: Math.round(host.right - box.right),
+        };
+      });
+  const panel = page.getByTestId('library-panel');
+  await expect(
+    panel.getByRole('button', { name: `${title} 상세 보기`, exact: true })
+  ).toBeVisible();
+  const list = await column('.library-workspace');
+  expect(list.leading).toBe(list.trailing);
+  await panel.getByRole('button', { name: `${title} 상세 보기`, exact: true }).click();
+  const preview = await column('.library-preview');
+  expect(preview.leading).toBe(preview.trailing);
+  // The editor holds the same item as the preview, so switching between them must not move the column.
+  await page
+    .getByRole('region', { name: '자료 상세', exact: true })
+    .getByRole('button', { name: '편집', exact: true })
+    .first()
+    .click();
+  const editor = await column('.library-content-editor');
+  expect(editor).toEqual(preview);
+  const heading = await column('.library-content-editor > .library-detail-heading');
+  expect(heading).toEqual(editor);
+  await navigationAction(page, '프롬프트');
+  await expect(page.getByTestId('prompt-library')).toBeVisible();
+  const actions = await column('.prompt-library-actions');
+  const prompts = await column('.prompt-library .library-workspace');
+  expect(actions.leading).toBe(prompts.leading);
+  expect(
+    await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)
+  ).toBeLessThanOrEqual(1);
+});

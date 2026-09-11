@@ -4,6 +4,8 @@
   align-items: center;
   gap: 8px;
   margin-bottom: 16px;
+  max-width: var(--collection-w);
+  margin-inline: auto;
 }
 .prompt-library-actions > button {
   display: inline-flex;

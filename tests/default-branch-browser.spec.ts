@@ -1,7 +1,8 @@
 import { test, expect, type APIRequestContext } from '@playwright/test';
 import type { ChatDetail, Run } from '../core/types.js';
 import { postFixtureChat } from './fixtures/chat.js';
-import { navigationAction, openChatMenu } from './ui-navigation.js';
+import { randomUUID } from 'node:crypto';
+import { navigationAction, openChatMenu, openHelper } from './ui-navigation.js';
 
 async function detail(request: APIRequestContext, id: string): Promise<ChatDetail> {
   const response = await request.get(`/api/chats/${id}`);
@@ -114,8 +115,8 @@ for (const width of [390, 1440])
     try {
       await other.goto(`/?chat=${chat.id}`);
       await openChatMenu(other);
-      await other.getByRole('button', { name: '보관된 전개', exact: true }).click();
-      await other.getByRole('button', { name: '대체 전개 기본 전개로 지정', exact: true }).click();
+      await other.getByRole('button', { name: '보관된 분기', exact: true }).click();
+      await other.getByRole('button', { name: '대체 전개 기본 분기로 지정', exact: true }).click();
       await expect(other).toHaveURL(new RegExp(`branch=${target.id}`));
       await other.keyboard.press('Escape');
       await expect(
@@ -142,3 +143,42 @@ for (const width of [390, 1440])
       await other.close();
     }
   });
+
+test('BRANCH02 making another branch the default moves the helper session with the reader', async ({
+  page,
+  request,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  const chat = await (
+    await postFixtureChat(request, { data: { title: `Helper default ${randomUUID()}` } })
+  ).json();
+  await write(request, chat.id, 'Original branch synthetic scene.');
+  const branchResponse = await request.post(`/api/chats/${chat.id}/branches`, {
+    data: { title: '대체 줄기', fromRevision: null },
+  });
+  expect(branchResponse.ok()).toBe(true);
+  const target = await branchResponse.json();
+  await write(request, chat.id, 'Alternative branch synthetic scene.', target.id);
+  await page.goto(`/?chat=${chat.id}`);
+  await openHelper(page);
+  const panel = page.locator('#helper-panel');
+  const sessions = panel.getByLabel('도우미 세션 선택');
+  await expect(sessions).toHaveValue(/.+/);
+  const before = await sessions.inputValue();
+  await openChatMenu(page);
+  await page.getByRole('button', { name: '보관된 분기', exact: true }).click();
+  await page.getByRole('button', { name: '대체 줄기 기본 분기로 지정', exact: true }).click();
+  await expect(page).toHaveURL(new RegExp(`branch=${target.id}`));
+  await page.keyboard.press('Escape');
+  // The reader followed the new default, so the helper must follow it rather than hold the old
+  // branch behind a navigation notice.
+  await expect(sessions).not.toHaveValue(before);
+  await expect(panel.getByRole('button', { name: '해당 분기로 이동', exact: true })).toBeHidden();
+  await expect(panel.getByLabel('도우미에게 요청')).toBeEnabled();
+  // The new default carries its own name and the old one reads as the former default, so the two
+  // sessions stay distinguishable even though both branches were once called the default.
+  await expect(sessions.locator('option:not([disabled])')).toHaveText([
+    /· 대체 줄기$/,
+    /· 이전 기본 분기$/,
+  ]);
+});

@@ -50,6 +50,11 @@ export function useHelperSessions(open: boolean, scope: HelperScope) {
   const selectionVersions = useRef(new Map<string, number>());
   const selectedRef = useRef(selected);
   selectedRef.current = selected;
+  // The scope each selection was made under. A selection survives until the reader moves to
+  // another branch; after that the panel resolves the session belonging to the branch on screen.
+  const selectionScopes = useRef(new Map<string, string>());
+  const viewedScope = useRef(scopeKey);
+  viewedScope.current = scopeKey;
   const alive = useRef(true);
   const createLock = useRef(false);
   const sessions = lists[group] ?? [];
@@ -63,6 +68,7 @@ export function useHelperSessions(open: boolean, scope: HelperScope) {
   const select = useCallback((conversation: HelperConversation) => {
     const key = helperGroupKey(conversation.scope);
     selectionVersions.current.set(key, (selectionVersions.current.get(key) ?? 0) + 1);
+    selectionScopes.current.set(key, viewedScope.current);
     remember(`uimori:helper-session:${key}`, conversation.id);
     remember(`uimori:helper-session-scope:${JSON.stringify(conversation.scope)}`, conversation.id);
     selectedRef.current = { ...selectedRef.current, [key]: conversation.id };
@@ -86,7 +92,11 @@ export function useHelperSessions(open: boolean, scope: HelperScope) {
     const values = await api<HelperSession[]>(`/helper/conversations?${query}`);
     if (!alive.current || versions.current.get(group) !== version) return;
     setLists((old) => ({ ...old, [group]: values }));
-    const saved = selectedRef.current[group] ?? read(`uimori:helper-session:${group}`);
+    const moved =
+      selectionScopes.current.has(group) && selectionScopes.current.get(group) !== scopeKey;
+    const saved = moved
+      ? read(`uimori:helper-session-scope:${scopeKey}`)
+      : (selectedRef.current[group] ?? read(`uimori:helper-session:${group}`));
     const chosen =
       values.find((item) => item.id === saved) ??
       values.find((item) => JSON.stringify(item.scope) === scopeKey);

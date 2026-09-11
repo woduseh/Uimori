@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react';
 import { Plus } from 'lucide-react';
 import type { HelperConversation, HelperConversationDeletion } from '../core/helper.js';
 import type { Branch } from '../core/product.js';
+import type { ReaderDetail } from '../core/types.js';
+import { branchLabel } from './storyLabels.js';
 import { api, ApiError } from './api.js';
 import { ActionMenu } from './ActionMenu.js';
 import { Dialog } from './Dialog.js';
@@ -16,6 +18,7 @@ type Props = {
   conversation: HelperConversation | null;
   currentId: string | null;
   branches: Branch[];
+  detail?: ReaderDetail;
   creating: boolean;
   busy: boolean;
   onSelect: (session: HelperConversation) => void;
@@ -105,7 +108,7 @@ export function HelperSessionBar(props: Props) {
                 <option key={session.id} value={session.id}>
                   {props.unread.includes(session.id) ? '● ' : ''}
                   {session.title || '새 대화'}
-                  {branch ? ` · ${branch.default ? '본편' : branch.title}` : ''}
+                  {branch && props.detail ? ` · ${branchLabel(branch, props.detail)}` : ''}
                   {session.activity?.running
                     ? ' · 진행 중'
                     : session.activity?.queued
