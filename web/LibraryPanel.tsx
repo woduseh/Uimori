@@ -1174,16 +1174,13 @@ function ContentEditor({
       >
         <EditorDraftStatus value={shared} />
         <div className="library-detail-heading">
-          <button
-            type="button"
-            className="secondary ui-icon-button"
-            aria-label="서재 목록"
-            title="서재 목록"
+          <IconButton
+            className="secondary"
+            label="서재 목록"
+            icon={BackIcon}
             disabled={editorUnavailable}
             onClick={onClose}
-          >
-            <BackIcon size={18} aria-hidden="true" />
-          </button>
+          />
           <h2>{selected ? selected.title : `새 ${contentLabels[kind]}`}</h2>
           <div className="library-detail-actions">
             <small className="library-draft-state">
