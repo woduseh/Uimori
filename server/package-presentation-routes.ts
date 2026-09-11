@@ -3,6 +3,7 @@ import type { FastifyInstance } from 'fastify';
 import type { Store } from './store.js';
 import { successfulTranslation, validateTranslationArtifact } from './source-editing.js';
 import { buildPackagePresentation } from './package-presentation.js';
+import { hasSourceSegmentBoundaries } from '../core/source-segments.js';
 
 export function packagePresentationRoutes(app: FastifyInstance, store: Store) {
   app.get<{ Params: { id: string; sourceId: string } }>(
@@ -24,11 +25,20 @@ export function packagePresentationRoutes(app: FastifyInstance, store: Store) {
         };
       }
       const issues: string[] = [];
-      if (snapshot.sourceSegments && snapshot.profile?.packages?.some((p) => p.transforms.length)) {
-        // Never allow replacement of the markers that the reader uses for visibility controls.
-        for (const pkg of snapshot.profile.packages) pkg.transforms = [];
+      if (
+        snapshot.sourceSegments &&
+        snapshot.profile?.packages?.some((p) => p.transforms.some((t) => t.target === 'source')) &&
+        hasSourceSegmentBoundaries(
+          { sourceRevision: source.id, sourceHash: source.hash, text: source.text },
+          snapshot.sourceSegments
+        )
+      ) {
+        // This source carries segment boundaries; a source transform could replace the markers the
+        // reader uses for visibility. Translation transforms never touch them and stay applied.
+        for (const pkg of snapshot.profile.packages)
+          pkg.transforms = pkg.transforms.filter((t) => t.target !== 'source');
         issues.push(
-          '원문 구간 경계를 보존하기 위해 이 장면의 패키지 정규식 표시는 적용하지 않았어요.'
+          '이 장면의 원문에 구간 경계가 있어 원문 대상 패키지 정규식 표시는 적용하지 않았어요. 번역 대상 표시는 그대로 적용해요.'
         );
       }
       const detail = store.story.sourceDetail(source.id);
