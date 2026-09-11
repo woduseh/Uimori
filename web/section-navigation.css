@@ -36,8 +36,10 @@
 .section-navigation-title {
   font-weight: 550;
 }
+/* The list gap is 4px, so a group label needs a clear break above and almost none below;
+   otherwise it floats between two items instead of heading the ones under it. */
 .section-navigation-group {
-  padding: 10px 12px 2px;
+  padding: 20px 12px 3px;
   font-size: 11px;
   letter-spacing: 0.04em;
   color: var(--faint);

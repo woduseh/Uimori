@@ -79,7 +79,9 @@
     background: var(--hover);
   }
 }
-.action-menu-body > .delete-control > button {
+/* `.danger` alone loses to the menu item rule, so destructive items name themselves here too. */
+.action-menu-body > .delete-control > button,
+.action-menu-body > button.danger {
   color: var(--error);
 }
 .action-menu-body svg {

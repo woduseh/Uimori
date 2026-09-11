@@ -73,6 +73,7 @@
   flex-wrap: wrap;
   margin-top: 16px;
 }
+/* Destructive actions sit apart from the confirm pair, on the leading edge, on every screen. */
 .form-actions > .danger,
 .form-actions > .delete-control {
   margin-right: auto;

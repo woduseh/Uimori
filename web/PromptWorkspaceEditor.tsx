@@ -1,4 +1,4 @@
-import { ExpandIcon, ExternalLinkIcon, ResetIcon } from './ui-icons.js';
+import { ExpandIcon, ExternalLinkIcon, ResetIcon, SaveIcon } from './ui-icons.js';
 import { useEffect, useRef, useState } from 'react';
 import type { Library, PromptRole, PromptWorkspace } from '../core/product.js';
 import type { WorkspaceDraftModel } from '../core/edit-drafts.js';
@@ -335,6 +335,7 @@ export function PromptWorkspaceEditor({
                         setComboOpen(true);
                       }}
                     >
+                      <SaveIcon size={18} aria-hidden="true" />
                       현재 선택을 새 조합으로 저장
                     </button>
                     <button type="button" onClick={() => setManageCombinations(true)}>

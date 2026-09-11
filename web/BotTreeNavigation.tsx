@@ -23,6 +23,7 @@ import {
   SearchIcon,
   SettingsIcon,
   UpIcon,
+  EditIcon,
 } from './ui-icons.js';
 import { api } from './api.js';
 import { useChatActivities } from './useChatActivities.js';
@@ -556,6 +557,7 @@ export function BotNavigation(
                           setTitle(entry.title);
                         }}
                       >
+                        <EditIcon size={18} aria-hidden="true" />
                         폴더 이름 변경
                       </button>
                       <button

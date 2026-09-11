@@ -36,6 +36,8 @@ export {
   Eye as DisplayIcon,
   Workflow as BehaviorIcon,
   Palette as IllustrationIcon,
+  Braces as CodeIcon,
+  History as HistoryIcon,
   Save as SaveIcon,
   Trash2 as DeleteIcon,
   Check as CheckIcon,
