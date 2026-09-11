@@ -6,6 +6,7 @@ import { mkdir, readdir, copyFile, readFile, writeFile } from 'node:fs/promises'
 import { request as httpRequest } from 'node:http';
 import { createServer as createHttpsServer, request as httpsRequest } from 'node:https';
 import { chromium } from '@playwright/test';
+import { loopbackProvider, writeSse } from '../tests/fixtures/loopback-provider.ts';
 import {
   root,
   createOwnership,
@@ -42,14 +43,15 @@ const summary = {
     'Self-signed, publicly committed test certificate; Chromium explicitly ignores certificate verification errors. Public TLS issuance and DNS are not tested.',
     'Runs on the current host OS with Node and a Node HTTPS proxy. This is not Linux, Docker or production proxy execution evidence.',
     '390px Chromium viewport/touch emulation is not physical mobile Safari/Chrome, OS keyboard, background suspension or network handoff evidence.',
-    'Fresh isolated SQLite, synthetic token, bot and mock generation only. No personal data, live provider, billing or external deployment.',
-    'Browser re-entry verifies stored results and independent sessions; mock generation is immediate and does not establish a long-running live-provider disconnect result.',
+    'Fresh isolated SQLite, synthetic token, bot and owned loopback provider only. No personal data, live provider, billing or external deployment.',
+    'Browser re-entry verifies stored results and independent sessions; the synthetic provider is immediate and does not establish a long-running live-provider disconnect result.',
   ],
 };
 const ownership = createOwnership(directory, summary.startedAt);
 await json(path.join(directory, 'ownership.json'), ownership);
 let environmentBlocked = false,
-  proxy;
+  proxy,
+  providerFixture;
 const cancel = (signal) => {
   failures.push(`${signal}: self-host smoke cancelled`);
   for (const child of children)
@@ -57,6 +59,39 @@ const cancel = (signal) => {
 };
 process.once('SIGINT', cancel);
 process.once('SIGTERM', cancel);
+
+async function startMainProviderFixture() {
+  let mainCalls = 0;
+  const errors = [];
+  const fixture = await loopbackProvider(async (request, response) => {
+    try {
+      if (request.url !== '/turn') throw new Error('Unexpected self-host fixture path');
+      const body = JSON.parse(request.body);
+      if (
+        body.protocol !== 'fixture-sse-v1' ||
+        body.role !== 'main' ||
+        body.modelId !== 'synthetic-self-host-main'
+      )
+        throw new Error('Unexpected self-host fixture request');
+      mainCalls++;
+      await writeSse(response, [
+        { type: 'text_delta', delta: `Synthetic HTTPS source ${mainCalls}.` },
+        { type: 'usage', inputTokens: 30, outputTokens: 6, costUsd: null },
+        { type: 'done', reason: 'stop' },
+      ]);
+    } catch (error) {
+      errors.push(error instanceof Error ? error.message : String(error));
+      response.writeHead(500);
+      response.end();
+    }
+  });
+  return {
+    origin: fixture.origin,
+    url: fixture.endpoint,
+    stats: () => ({ mainCalls, requests: fixture.requests.length, errors: [...errors] }),
+    close: fixture.close,
+  };
+}
 
 // Keep production Host/Origin exactly as received; forwarding metadata carries
 // no authority. Streams are piped and headers flushed without body buffering.
@@ -237,6 +272,7 @@ try {
   summary.identity = identity;
   const temp = path.join(runtime, 'temp');
   await mkdir(temp, { recursive: true });
+  providerFixture = await startMainProviderFixture();
   proxy = await startProxy();
   const env = {
     NR_DB: path.join(runtime, 'self-host.sqlite'),
@@ -247,7 +283,8 @@ try {
     NR_TEST_MODE: '',
     NR_PUBLIC_ORIGIN: proxy.origin,
     NR_ACCESS_TOKEN: randomBytes(32).toString('hex'),
-    NR_PROVIDER_ORIGINS: '',
+    NR_PROVIDER_ORIGINS: providerFixture.origin,
+    NR_PROVIDER_FIXTURE_URL: providerFixture.url,
     NR_ARTIFACT_DIR: directory,
     NR_BROWSER_OUTPUT: path.join(directory, 'browser'),
     NR_SECRET_CANARY: canary,
@@ -313,6 +350,13 @@ try {
   for (const id of ['SHUI01', 'SHUI02'])
     if (!summary.report.tests.some((test) => test.status === 'passed' && test.title.includes(id)))
       throw new Error(`Missing ${id} evidence`);
+  summary.providerFixture = providerFixture.stats();
+  if (
+    summary.providerFixture.mainCalls !== 2 ||
+    summary.providerFixture.requests !== 2 ||
+    summary.providerFixture.errors.length
+  )
+    throw new Error('Self-host main provider fixture did not receive exactly two valid calls');
   if (!proxy.stats().eventStreams || !proxy.stats().eventBytes)
     throw new Error('No actual HTTPS event stream bytes observed');
   if (
@@ -336,6 +380,13 @@ try {
   for (const child of children)
     try {
       await killOwned(child);
+    } catch (error) {
+      cleanupErrors.push(error.message);
+    }
+  if (providerFixture)
+    try {
+      summary.providerFixture = providerFixture.stats();
+      await providerFixture.close();
     } catch (error) {
       cleanupErrors.push(error.message);
     }

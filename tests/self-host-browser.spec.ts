@@ -1,7 +1,7 @@
 import { visualReview } from './fixtures/visual-review.js';
 import { expect, test, type Page } from '@playwright/test';
 import type { Chat, ChatDetail } from '../core/types.js';
-import type { Content } from '../core/product.js';
+import type { Content, ModelWorkspace } from '../core/product.js';
 
 // This suite needs the authenticated HTTPS fixture and must contribute neither
 // skipped tests nor false evidence to ordinary loopback browser regressions.
@@ -85,6 +85,46 @@ if (process.env.NR_SELF_HOST_BROWSER === '1')
       await expect(page.getByText('연결을 다시 확인하는 중이에요.', { exact: true })).toHaveCount(
         0
       );
+    }
+    async function selectSyntheticMainModel(page: Page) {
+      const endpoint = process.env.NR_PROVIDER_FIXTURE_URL;
+      if (!endpoint) throw new Error('Owned self-host provider fixture is required');
+      const connectionResponse = await page.request.post('/api/connections', {
+        headers: mutationHeaders,
+        data: {
+          title: '합성 HTTPS 본문 연결',
+          protocol: 'fixture-sse-v1',
+          endpoint,
+          enabled: true,
+        },
+      });
+      expect(connectionResponse.ok(), await connectionResponse.text()).toBe(true);
+      const connection = (await connectionResponse.json()) as { id: string };
+      const modelResponse = await page.request.post('/api/model-presets', {
+        headers: mutationHeaders,
+        data: {
+          title: '합성 HTTPS 본문 모델',
+          connectionId: connection.id,
+          modelId: 'synthetic-self-host-main',
+          maxOutputTokens: 512,
+          temperature: null,
+        },
+      });
+      expect(modelResponse.ok(), await modelResponse.text()).toBe(true);
+      const model = (await modelResponse.json()) as { id: string };
+      const workspace = (await (
+        await page.request.get('/api/model-workspace')
+      ).json()) as ModelWorkspace;
+      const selected = await page.request.put('/api/model-workspace', {
+        headers: mutationHeaders,
+        data: {
+          expectedRevision: workspace.revision,
+          routes: { ...workspace.routes, main: { id: model.id } },
+          translationPolicy: workspace.translationPolicy,
+        },
+      });
+      expect(selected.ok(), await selected.text()).toBe(true);
+      expect(((await selected.json()) as ModelWorkspace).routes.main).toEqual({ id: model.id });
     }
 
     test('SHUI01 actual HTTPS enforces authentication, exact origin and secure browser sessions', async ({
@@ -181,6 +221,7 @@ if (process.env.NR_SELF_HOST_BROWSER === '1')
       phone.on('pageerror', (error) => errors.push(error.message));
       try {
         await login(pc);
+        await selectSyntheticMainModel(pc);
         const title = '합성 HTTPS 개인 작업실';
         const response = await pc.request.post('/api/content', {
           headers: mutationHeaders,
