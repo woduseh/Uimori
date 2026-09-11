@@ -11,6 +11,8 @@ import {
 import type { RuntimeValue } from '../core/prompt-program.js';
 import type { PackageRequest } from '../core/package-request.js';
 import { api, ApiError } from './api.js';
+import { Dialog } from './Dialog.js';
+import { CloseIcon, ResetIcon } from './ui-icons.js';
 import './package.css';
 
 type Instance = {
@@ -391,6 +393,7 @@ function BehaviorPanel({ chatId, branchId, refreshKey, onChange, onRunRequest }:
       if (mounted.current) setBusy(false);
     }
   }
+  const resetInstance = snapshot?.instances.find((instance) => instance.instanceId === resetTarget);
   if (!loading && !error && snapshot?.instances.length === 0) return null;
   return (
     <section
@@ -521,28 +524,6 @@ function BehaviorPanel({ chatId, branchId, refreshKey, onChange, onRunRequest }:
               초깃값으로 복구
             </button>
           )}
-          {resetTarget === instance.instanceId && (
-            <div className="behavior-reset" role="alertdialog" aria-label="상태 초깃값 복구 확인">
-              <p>현재 상태를 이 패키지의 초깃값으로 바꿔요. 이전 상태 이력과 원문은 보존돼요.</p>
-              <div className="package-role-actions">
-                <button
-                  type="button"
-                  disabled={busy || loading}
-                  onClick={() => void run(instance, '', null, true)}
-                >
-                  초깃값 복구 확인
-                </button>
-                <button
-                  type="button"
-                  className="secondary"
-                  disabled={busy}
-                  onClick={() => setResetTarget(null)}
-                >
-                  취소
-                </button>
-              </div>
-            </div>
-          )}
           <div className="behavior-actions">
             {instance.behavior.actions.map((action) =>
               behaviorActionTriggers(action).includes('user') ? (
@@ -563,6 +544,47 @@ function BehaviorPanel({ chatId, branchId, refreshKey, onChange, onRunRequest }:
           </div>
         </article>
       ))}
+      <Dialog
+        open={!!resetInstance}
+        role="alertdialog"
+        title="상태 초깃값 복구 확인"
+        onClose={() => setResetTarget(null)}
+      >
+        {resetInstance && (
+          <>
+            <p>
+              “{resetInstance.title}”의 현재 상태를 이 패키지의 초깃값으로 바꿔요. 이전 상태 이력과
+              원문은 보존돼요.
+            </p>
+            {/* A failed reset leaves this open, and the panel's own error sits behind it. */}
+            {error && (
+              <p className="error" role="alert">
+                {error}
+              </p>
+            )}
+            <div className="form-actions">
+              <button
+                type="button"
+                className="secondary"
+                disabled={busy}
+                onClick={() => setResetTarget(null)}
+              >
+                <CloseIcon size={18} aria-hidden="true" />
+                취소
+              </button>
+              <button
+                type="button"
+                className="danger"
+                disabled={busy || loading}
+                onClick={() => void run(resetInstance, '', null, true)}
+              >
+                <ResetIcon size={18} aria-hidden="true" />
+                초깃값 복구 확인
+              </button>
+            </div>
+          </>
+        )}
+      </Dialog>
     </section>
   );
 }
