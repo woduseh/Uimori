@@ -378,6 +378,19 @@ test('helper option tools require the running host task and its direct or persis
       operationId: randomUUID(),
     })
   ).toThrow(/위임/);
+  // An explanation EOF does not undo the staged choice, even though this tool bypasses
+  // helper_operations. A new whole-request retry must not stage it again.
+  expect(f.store.db.prepare('SELECT COUNT(*) AS n FROM helper_operations').get()).toEqual({ n: 0 });
+  workspace.finish(task.id, 'test-owner', current.generation, 'failed', '', 'UNEXPECTED_EOF');
+  expect(workspace.task(task.id)).toMatchObject({
+    completedEffects: { count: 1, labels: ['채팅 옵션'] },
+  });
+  expect(() =>
+    workspace.enqueue(conversation.id, 'retry-option', task.request, {
+      ...task.snapshot,
+      retryOf: task.id,
+    })
+  ).toThrow('HELPER_EFFECTS_ALREADY_COMMITTED');
 });
 test('archive retains delegation start and revoke history, consumed option ownership and copied Run evidence without copying permission', () => {
   const f = fixture(),

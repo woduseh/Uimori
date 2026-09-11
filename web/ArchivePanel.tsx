@@ -2,6 +2,7 @@ import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { api, saveDownload } from './api.js';
 import { IconButton } from './IconButton.js';
 import { CloseIcon, DownloadIcon, RefreshIcon, UploadIcon } from './ui-icons.js';
+import { ChatBackupImport } from './ChatBackupImport.js';
 
 type ImportStatus = 'loading' | 'allowed' | 'occupied' | 'failed';
 type ArchiveOperation = 'json' | 'sqlite' | 'import';
@@ -33,6 +34,7 @@ export function ArchivePanel({
   const [transcriptBusy, setTranscriptBusy] = useState(false);
   const [transcriptError, setTranscriptError] = useState('');
   const [transcriptMessage, setTranscriptMessage] = useState('');
+  const [chatBackupDirty, setChatBackupDirty] = useState(false);
   const fileInput = useRef<HTMLInputElement>(null);
   const readVersion = useRef(0);
   const statusVersion = useRef(0);
@@ -60,8 +62,8 @@ export function ArchivePanel({
     if (active) void refreshStatus();
   }, [active, refreshStatus]);
   useEffect(() => {
-    onDirtyChange?.(fileSelected || reading || busy !== null);
-  }, [onDirtyChange, fileSelected, reading, busy]);
+    onDirtyChange?.(fileSelected || reading || busy !== null || chatBackupDirty);
+  }, [onDirtyChange, fileSelected, reading, busy, chatBackupDirty]);
   useEffect(
     () => () => {
       readVersion.current++;
@@ -169,6 +171,11 @@ export function ArchivePanel({
       aria-label="백업과 가져오기"
     >
       {!expanded && <summary>내보내기와 복원</summary>}
+      <ChatBackupImport
+        onImported={onImported}
+        onDirtyChange={setChatBackupDirty}
+        disabled={busy !== null || transcriptBusy}
+      />
       <section aria-label="백업 받기">
         <h3>백업 받기</h3>
         <div className="archive-backup-options">
@@ -338,8 +345,9 @@ export function ArchivePanel({
       <section aria-label="채팅 본문 가져오기">
         <h3>채팅 본문 가져오기</h3>
         <p className="muted" id={`${id}-transcript-help`}>
-          채팅 메뉴의 본문 JSON 내보내기로 받은 파일을 새 채팅으로 읽어요. 원문·요청·최신
-          번역·메모만 담고 실행 기록은 없어요. 봇은 이 서재에 있어야 해요.
+          외부에서 만든 uimori-chat-transcript 형식의 본문 JSON을 새 채팅으로 읽어요. 원문·요청·최신
+          번역·메모만 담은 한 분기의 자료이며, 완전 백업은 위의 채팅 백업 가져오기를 사용해요. 봇은
+          이 서재에 있어야 해요.
         </p>
         <div className="archive-file-field">
           <label>

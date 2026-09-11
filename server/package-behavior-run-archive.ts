@@ -12,7 +12,11 @@ import { inspectRuntimeValue } from '../core/prompt-values.js';
 import { executionContext, type PackageExecutionState } from '../core/execution-context.js';
 import type { RunSnapshot } from '../core/types.js';
 import { behaviorPayloadHash, recordDraws } from './package-behavior-store.js';
-import type { RunBehaviorEntry, RunBehaviorProgress } from './package-behavior-run.js';
+import type {
+  OpportunityEntropy,
+  RunBehaviorEntry,
+  RunBehaviorProgress,
+} from './package-behavior-run.js';
 import type { Store } from './store.js';
 
 export const packageBehaviorRunTables = [
@@ -30,10 +34,10 @@ type CheckState = (
 function reject(message: string): never {
   throw new HttpError(400, `Invalid run behavior archive: ${message}`);
 }
-function object(value: unknown, fields: string[]): Row {
+function object(value: unknown, fields: string[], optional: string[] = []): Row {
   const record = behaviorRecord(value);
   if (
-    Object.keys(record).some((key) => !fields.includes(key)) ||
+    Object.keys(record).some((key) => !fields.includes(key) && !optional.includes(key)) ||
     fields.some((key) => !Object.hasOwn(record, key))
   )
     reject('fields');
@@ -64,15 +68,30 @@ export function validateRunBehaviorArchive(store: Store, checkState: CheckState)
   const entropy = rows('package_behavior_entropy');
   if (entropy.length !== 1 || entropy[0].id !== 1) reject('entropy');
   digest(entropy[0].seed);
-  const opportunities = new Map<string, { row: Row; seed: string; entries: RunBehaviorEntry[] }>();
+  const opportunities = new Map<
+    string,
+    { row: Row; seed: string; entries: RunBehaviorEntry[]; originEntropy?: OpportunityEntropy }
+  >();
   for (const row of rows('package_behavior_opportunities')) {
     digest(row.id);
     text(row.chat_id);
     text(row.branch_id);
     store.chat(row.chat_id);
     store.product.branch(row.chat_id, row.branch_id);
-    const value = object(body(row), ['seed', 'entries']);
+    const value = object(body(row), ['seed', 'entries'], ['originEntropy']);
     digest(value.seed);
+    let originEntropy: OpportunityEntropy | undefined;
+    if (Object.hasOwn(value, 'originEntropy')) {
+      const proof = object(value.originEntropy, ['opportunityId', 'seed']);
+      digest(proof.opportunityId);
+      digest(proof.seed);
+      same(
+        value.seed,
+        createHash('sha256').update(`${proof.seed}:${proof.opportunityId}`).digest('hex'),
+        'origin opportunity entropy'
+      );
+      originEntropy = proof as OpportunityEntropy;
+    }
     list(value.entries);
     const seen = new Set<string>();
     for (const raw of value.entries) {
@@ -148,7 +167,7 @@ export function validateRunBehaviorArchive(store: Store, checkState: CheckState)
       same(evaluated.state, after.state, 'calculated state');
       same(evaluated.result, entry.result, 'calculated result');
     }
-    opportunities.set(row.id, { row, seed: value.seed, entries: value.entries });
+    opportunities.set(row.id, { row, seed: value.seed, entries: value.entries, originEntropy });
   }
   const progresses = new Map<string, RunBehaviorProgress>();
   for (const row of rows('package_behavior_runs')) {
@@ -281,6 +300,8 @@ export function validateRunBehaviorArchive(store: Store, checkState: CheckState)
   for (const [id, opportunity] of opportunities) {
     const owners = ownersByOpportunity.get(id) ?? [];
     if (!owners.length) reject('orphan opportunity');
+    // Portable imports keep the original entropy proof while owning new chat/run identities.
+    if (opportunity.originEntropy) continue;
     if (owners.some((snapshot) => !snapshot.forkedFrom))
       same(
         opportunity.seed,

@@ -97,7 +97,7 @@ export type RunSnapshot = {
   candidateOf?: string;
   forkedFrom?: { chatId: string; runId: string; sourceRevision: string };
   /** The source was read from a chat transcript file as authored history; no model was called. */
-  transcriptImport?: { index: number };
+  transcriptImport?: { index: number; storage?: 'source-only-v1' };
   story?: import('./story.js').StorySnapshot;
 };
 export type Run = {

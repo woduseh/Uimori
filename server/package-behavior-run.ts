@@ -41,7 +41,12 @@ export type RunBehaviorProgress = {
   entries: RunBehaviorEntry[];
   states: PackageExecutionState[];
 };
-type Opportunity = { seed: string; entries: RunBehaviorEntry[] };
+export type OpportunityEntropy = { opportunityId: string; seed: string };
+type Opportunity = {
+  seed: string;
+  entries: RunBehaviorEntry[];
+  originEntropy?: OpportunityEntropy;
+};
 type Row = Record<string, any>;
 export const MAX_RUN_BEHAVIOR_ACTIONS = 100;
 const MAX_JOURNAL_CHARS = 4_000_000;
@@ -105,6 +110,74 @@ function opportunity(store: Store, id: string): Opportunity {
     .get(id) as Row | undefined;
   if (!row) fail('BEHAVIOR_OPPORTUNITY_MISSING');
   return JSON.parse(row!.body);
+}
+/** Portable evidence binds the recorded opportunity seed to its original entropy input. */
+export function exportOpportunityEntropy(store: Store, opportunityId: string): OpportunityEntropy {
+  const active = new Set<string>(),
+    found = new Map<string, OpportunityEntropy>();
+  const derived = (proof: OpportunityEntropy) =>
+    createHash('sha256').update(`${proof.seed}:${proof.opportunityId}`).digest('hex');
+  const read = (id: string): OpportunityEntropy => {
+    const cached = found.get(id);
+    if (cached) return cached;
+    if (active.has(id)) fail('BEHAVIOR_OPPORTUNITY_ENTROPY_INVALID');
+    active.add(id);
+    const saved = opportunity(store, id);
+    let proof: OpportunityEntropy;
+    if (Object.hasOwn(saved, 'originEntropy')) {
+      const origin = saved.originEntropy;
+      if (
+        !origin ||
+        typeof origin !== 'object' ||
+        Array.isArray(origin) ||
+        Object.keys(origin).length !== 2 ||
+        !Object.hasOwn(origin, 'opportunityId') ||
+        !Object.hasOwn(origin, 'seed') ||
+        typeof origin.opportunityId !== 'string' ||
+        typeof origin.seed !== 'string' ||
+        !/^[a-f0-9]{64}$/u.test(origin.opportunityId) ||
+        !/^[a-f0-9]{64}$/u.test(origin.seed) ||
+        derived(origin) !== saved.seed
+      )
+        fail('BEHAVIOR_OPPORTUNITY_ENTROPY_INVALID');
+      proof = { opportunityId: origin!.opportunityId, seed: origin!.seed };
+    } else {
+      const master = store.db
+        .prepare('SELECT seed FROM package_behavior_entropy WHERE id=1')
+        .get() as Row | undefined;
+      const local = { opportunityId: id, seed: master?.seed };
+      if (typeof local.seed === 'string' && derived(local) === saved.seed) proof = local;
+      else {
+        const owners = store.db
+          .prepare(
+            "SELECT snapshot FROM runs WHERE json_extract(snapshot,'$.behaviorExecution.opportunityId')=?"
+          )
+          .all(id) as Row[];
+        if (!owners.length) fail('BEHAVIOR_OPPORTUNITY_ENTROPY_INVALID');
+        let root: OpportunityEntropy | undefined;
+        for (const row of owners) {
+          const snapshot = JSON.parse(row.snapshot) as RunSnapshot;
+          if (!snapshot.forkedFrom) fail('BEHAVIOR_OPPORTUNITY_ENTROPY_INVALID');
+          const source = store.db
+            .prepare('SELECT snapshot FROM runs WHERE id=?')
+            .get(snapshot.forkedFrom!.runId) as Row | undefined;
+          const sourceId = source
+            ? (JSON.parse(source.snapshot) as RunSnapshot).behaviorExecution?.opportunityId
+            : undefined;
+          if (!sourceId) fail('BEHAVIOR_OPPORTUNITY_ENTROPY_INVALID');
+          const candidate = read(sourceId!);
+          if (derived(candidate) !== saved.seed || (root && !isDeepStrictEqual(root, candidate)))
+            fail('BEHAVIOR_OPPORTUNITY_ENTROPY_INVALID');
+          root = candidate;
+        }
+        proof = root!;
+      }
+    }
+    active.delete(id);
+    found.set(id, proof);
+    return proof;
+  };
+  return structuredClone(read(opportunityId));
 }
 function setOpportunity(store: Store, id: string, value: Opportunity) {
   store.db
@@ -431,9 +504,15 @@ export function copyForkRunBehaviors(
     const oldId = progress.opportunityId,
       newId = copied.get(oldId) ?? hash({ chatId, branchId, oldId });
     if (!copied.has(oldId)) {
-      store.db
-        .prepare('INSERT INTO package_behavior_opportunities VALUES(?,?,?,?)')
-        .run(newId, chatId, branchId, encode(opportunity(store, oldId)));
+      store.db.prepare('INSERT INTO package_behavior_opportunities VALUES(?,?,?,?)').run(
+        newId,
+        chatId,
+        branchId,
+        encode({
+          ...opportunity(store, oldId),
+          originEntropy: exportOpportunityEntropy(store, oldId),
+        })
+      );
       copied.set(oldId, newId);
     }
     snapshot.behaviorExecution.opportunityId = newId;

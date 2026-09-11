@@ -683,24 +683,23 @@ function App() {
                     <button
                       type="button"
                       className="secondary"
-                      aria-label="채팅 본문 내보내기"
-                      title="원문·요청·최신 번역·메모만 담은 JSON 파일을 받아요. 실행 기록은 담지 않아요"
-                      disabled={!s.sources.length}
+                      aria-label="채팅 백업 내보내기"
+                      title="모든 분기·원문·자료·이미지·실행 기록을 새 채팅으로 복원할 수 있는 백업을 받아요"
                       onClick={() => {
                         const chatId = s.selected;
                         const title = s.chats.find((chat) => chat.id === chatId)?.title ?? 'chat';
-                        void api<unknown>(`/chats/${chatId}/transcript`).then(
-                          (transcript) =>
+                        void api<unknown>(`/chats/${chatId}/backup`).then(
+                          (backup) =>
                             saveDownload(
-                              `${title.replace(/[\\/:*?"<>|]/g, '_')}.transcript.json`,
-                              transcript
+                              `${title.replace(/[\\/:*?"<>|]/g, '_')}.uimori-chat.json`,
+                              backup
                             ),
                           (error: Error) => s.setError(error.message)
                         );
                       }}
                     >
                       <Download size={18} aria-hidden="true" />
-                      본문 JSON 내보내기
+                      채팅 백업 내보내기
                     </button>
                     <button
                       type="button"
@@ -1109,6 +1108,7 @@ function App() {
                   reader={s.reader}
                   target={s.readSource}
                   onSelect={s.chooseSource}
+                  onLatest={s.chooseLatest}
                   compact={compact}
                   listOpen={sceneList}
                   onListOpenChange={setSceneList}

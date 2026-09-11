@@ -629,3 +629,34 @@ test('HELPUI05 retry edits in place, preserves composer and hides historical fai
   ).toContainText('모델 · 재시도에 선택한 도우미 모델');
   await expect(panel.locator('.helper-task-history').getByText('SYNTHETIC_FAILURE')).toBeVisible();
 });
+
+test('HELPUI06 saved effects survive response failure and cannot be replayed from retry controls', async ({
+  page,
+  request,
+}) => {
+  const chat = await create(request),
+    state = await harness(page);
+  await page.goto(`/?chat=${chat.id}`);
+  await open(page);
+  const failed = state.addFailed(state.current());
+  failed.error = 'UNEXPECTED_EOF';
+  failed.completedEffects = { count: 1, labels: ['다음 요청 옵션'] };
+  await page.reload();
+  const panel = await open(page);
+  await expect(panel.getByTestId('helper-completed-effects')).toContainText(
+    '변경 1건은 저장됐지만 응답은 완료되지 않았어요.'
+  );
+  await expect(panel.getByRole('button', { name: '다시 시도', exact: true })).toHaveCount(0);
+  await expect(panel.getByRole('button', { name: '요청 편집', exact: true })).toHaveCount(0);
+  await panel.getByLabel('도우미에게 요청').fill('저장한 옵션의 현재 값을 확인해 줘');
+  await expect(panel.getByLabel('도우미에게 요청')).toHaveValue(
+    '저장한 옵션의 현재 값을 확인해 줘'
+  );
+  expect(state.posts).toHaveLength(0);
+  const details = panel.locator(
+    `[data-testid="helper-task-activity"][data-task-id="${failed.id}"]`
+  );
+  await details.locator('summary').click();
+  await expect(details.getByText('저장한 작업 · 다음 요청 옵션')).toBeVisible();
+  await expect(details.getByText('UNEXPECTED_EOF', { exact: true })).toBeVisible();
+});

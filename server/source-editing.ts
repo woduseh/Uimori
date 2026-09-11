@@ -5,6 +5,7 @@ import { automaticImageSelection, invalidateTranslationImages } from './package-
 import { promptWorkspace } from './prompt-workspace.js';
 import { createHash, randomUUID } from 'node:crypto';
 import type { Store, Source, Job } from './store.js';
+import { SOURCE_TEXT_MAX_CHARS, TRANSLATION_TEXT_MAX_CHARS } from '../core/content-limits.js';
 
 export function latestTranslation(store: Store, id: string): Job | null {
   const row = store.db
@@ -34,7 +35,7 @@ export function validateTranslationArtifact(_store: Store, job: Job, source: Sou
     throw new HttpError(400, 'Translation dependency mismatch');
   if (result.manual !== undefined && (result.manual !== true || result.mock))
     throw new HttpError(400, 'Invalid authored marker');
-  text(result.text, 'translation', 2e6);
+  text(result.text, 'translation', TRANSLATION_TEXT_MAX_CHARS);
 }
 /** Invalidate ownership without deleting the previous response or its execution evidence. */
 function stopTranslations(store: Store, sourceId: string) {
@@ -47,7 +48,7 @@ function stopTranslations(store: Store, sourceId: string) {
 export function editSource(store: Store, id: string, value: unknown): Source {
   const b = record(value);
   fields(b, ['text', 'expectedRevision']);
-  const content = text(b.text, 'source', 2e6);
+  const content = text(b.text, 'source', SOURCE_TEXT_MAX_CHARS);
   const expected = number(b.expectedRevision, 'source revision', 0);
   return store.transaction(() => {
     const source = store.source(id);

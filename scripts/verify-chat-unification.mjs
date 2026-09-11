@@ -19,6 +19,7 @@ await runBrowserVerification({
     'HELPUI03',
     'HELPUI04',
     'HELPUI05',
+    'HELPUI06',
     'REDIT01',
     'RINFO01',
     'LOADUI05',
@@ -26,6 +27,7 @@ await runBrowserVerification({
   requiredTitles: [
     'shared composer preserves Korean composition and Shift+Enter without sending',
     'shared composer grows at narrow widths and resets after clearing',
+    'shared composer shrinks nonempty drafts in main and helper without width oscillation',
     'failed request edit, draft protection and uncertain retry reuse one admission',
     'independent failed requests retain their positions when a later request succeeds',
   ],

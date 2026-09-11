@@ -37,17 +37,22 @@ export function ComposerInput({ inputRef, enterSend, onSend, value, ...props }: 
     const node = ref.current;
     if (!node) return;
     const resize = () => {
+      // Measure the one-row layout before choosing a shape. The grown layout is wider;
+      // measuring only that width would alternate shapes for a borderline draft.
+      const form = node.closest('form.composer');
+      const wasGrown = form?.classList.contains('grown');
+      if (wasGrown) form?.classList.remove('grown');
       node.style.height = 'auto';
+      const style = getComputedStyle(node);
+      const single =
+        Number.parseFloat(style.lineHeight) +
+        Number.parseFloat(style.paddingTop) +
+        Number.parseFloat(style.paddingBottom);
+      const grown = !!value && (String(value).includes('\n') || node.scrollHeight > single + 1);
+      // Restore React's current class synchronously, before paint or observer delivery.
+      if (wasGrown) form?.classList.add('grown');
+      setGrown(grown);
       node.style.height = `${Math.min(node.scrollHeight, 180)}px`;
-      if (!value) setGrown(false);
-      else {
-        const style = getComputedStyle(node);
-        const single =
-          Number.parseFloat(style.lineHeight) +
-          Number.parseFloat(style.paddingTop) +
-          Number.parseFloat(style.paddingBottom);
-        if (String(value ?? '').includes('\n') || node.scrollHeight > single + 1) setGrown(true);
-      }
     };
     resize();
     // Observe width only: resizing our own height must not schedule another resize.

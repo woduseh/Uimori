@@ -20,6 +20,7 @@ import { buildMainInput } from '../core/provider.js';
 import type { Content } from '../core/product.js';
 import type { RunSnapshot } from '../core/types.js';
 import { createActionPackage } from './fixtures/action-package.js';
+import { exportChatBackup, importChatBackup } from '../server/chat-backup.js';
 
 const owned: { store: Store; directory: string }[] = [];
 afterEach(() => {
@@ -435,4 +436,120 @@ test('PREQUEST11 completed consumption survives fork while branch and chat delet
   expect(rows(disposable, 'package_requests')).toEqual([]);
   expect(rows(disposable, 'package_behavior_journal')).toEqual([]);
   validatePackageRequests(disposable.store);
+});
+
+test('PREQUEST12 repeated portable copies preserve runtime-derived text and state while binding new ownership', () => {
+  const f = fixture((pkg) => {
+    const propose = pkg.behavior!.actions.find((entry) => entry.id === 'propose')!;
+    propose.effects = [{ path: ['plan'], value: { context: ['chat', 'id'] } }];
+    propose.result = { context: ['chat', 'id'] };
+  });
+  complete(f, run(f).run, 'First exact source.');
+  complete(f, run(f).run, 'Second exact source.');
+  const pending = action(f).pendingRequest!,
+    originalJournal = rows(f, 'package_behavior_journal')[0] as Record<string, any>,
+    originalPayload = JSON.parse(originalJournal.payload),
+    backup = exportChatBackup(f.store, f.chatId),
+    target = database();
+  expect(pending.request).toBe(f.chatId);
+  const first = importChatBackup(target, { backup, idempotencyKey: randomUUID() }).chat,
+    second = importChatBackup(target, { backup, idempotencyKey: randomUUID() }).chat,
+    repeated = importChatBackup(target, {
+      backup: exportChatBackup(target, first.id),
+      idempotencyKey: randomUUID(),
+    }).chat;
+  expect(new Set([first.id, second.id, repeated.id, f.chatId]).size).toBe(4);
+  for (const chat of [first, second, repeated]) {
+    const copy = pendingPackageRequest(target, chat.id)!,
+      journal = target.db
+        .prepare('SELECT * FROM package_behavior_journal WHERE chat_id=?')
+        .get(chat.id) as Record<string, any>,
+      payload = JSON.parse(journal.payload);
+    expect(copy.request).toBe(f.chatId);
+    expect(copy.origin).toMatchObject({
+      chatId: f.chatId,
+      branchId: f.branchId,
+      sourceRevision: pending.sourceRevision,
+    });
+    expect(copy.origin!.identities.slice(0, 2)).toEqual([
+      { from: f.chatId, to: chat.id },
+      { from: f.branchId, to: `main:${chat.id}` },
+    ]);
+    expect(copy.origin!.identities).toHaveLength(4);
+    expect(payload.hostRuntime).toEqual(originalPayload.hostRuntime);
+    expect(payload.input).toEqual(originalPayload.input);
+    expect(JSON.parse(journal.result).draws).toEqual(JSON.parse(originalJournal.result).draws);
+    expect(behaviorDetail(target, chat.id).instances[0].state).toMatchObject({ plan: f.chatId });
+    expect(target.history(chat.headRevision).map((source) => source.text)).toEqual([
+      'First exact source.',
+      'Second exact source.',
+    ]);
+  }
+  const copy = pendingPackageRequest(target, repeated.id)!,
+    restored = { ...f, store: target, chatId: repeated.id, branchId: `main:${repeated.id}` };
+  complete(restored, run(restored, copy.request, copy.id).run);
+  expect(pendingPackageRequest(target, repeated.id)).toBeNull();
+  expect(database().product.import(target.product.export())).toEqual({ restored: true, chats: 3 });
+});
+
+test('PREQUEST13 portable runtime origins reject forged identity, lineage and ownership proofs atomically', () => {
+  const f = fixture();
+  complete(f, run(f).run, 'First exact source.');
+  complete(f, run(f).run, 'Second exact source.');
+  action(f);
+  const target = database(),
+    imported = importChatBackup(target, {
+      backup: exportChatBackup(f.store, f.chatId),
+      idempotencyKey: randomUUID(),
+    }).chat,
+    backup = exportChatBackup(target, imported.id);
+  const attacks: ((value: any) => void)[] = [
+    (value) => {
+      value.origin.chatId = randomUUID();
+    },
+    (value) => {
+      value.origin.branchId = randomUUID();
+    },
+    (value) => {
+      value.origin.sourceRevision = randomUUID();
+    },
+    (value) => {
+      value.origin.dependencies[0].hash = '0'.repeat(64);
+    },
+    (value) => {
+      value.origin.dependencies.reverse();
+    },
+    (value) => {
+      value.origin.identities[0].to = randomUUID();
+    },
+    (value) => {
+      value.origin.identities[2].from = randomUUID();
+    },
+    (value) => {
+      value.origin.identities.pop();
+    },
+    (value) => {
+      value.origin.identities.reverse();
+    },
+    (value) => {
+      value.origin.extra = true;
+    },
+    (value) => {
+      delete value.origin;
+    },
+  ];
+  for (const [index, attack] of attacks.entries()) {
+    const altered = structuredClone(backup);
+    attack(altered.records.packageRequests[0].body);
+    const before = target.product.export().tables;
+    expect(
+      () =>
+        importChatBackup(target, {
+          backup: altered,
+          idempotencyKey: randomUUID(),
+        }),
+      `origin attack ${index}`
+    ).toThrow();
+    expect(target.product.export().tables).toEqual(before);
+  }
 });

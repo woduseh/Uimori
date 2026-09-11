@@ -9,6 +9,7 @@ export function SceneNavigator({
   reader,
   target,
   onSelect,
+  onLatest,
   compact = false,
   listOpen = false,
   onListOpenChange,
@@ -17,7 +18,8 @@ export function SceneNavigator({
   reader: RefObject<HTMLDivElement | null>;
   target: string;
   onSelect: (id: string) => void;
-  /** Compact widths have no rail: the header title opens the list and a floating button jumps to the latest scene. */
+  onLatest: () => void;
+  /** Compact widths have no rail: the header title opens the list and a button jumps to the text end. */
   compact?: boolean;
   /** Controlled list state on compact widths (the header owns the opener). */
   listOpen?: boolean;
@@ -25,6 +27,7 @@ export function SceneNavigator({
 }) {
   const entries = detail.reader.navigation;
   const [current, setCurrent] = useState(target || detail.reader.order[0] || '');
+  const [awayFromBottom, setAwayFromBottom] = useState(false);
   const [ownOpen, setOwnOpen] = useState(false);
   const open = compact ? listOpen : ownOpen;
   const setOpen = (next: boolean) => {
@@ -43,6 +46,7 @@ export function SceneNavigator({
     let frame = 0;
     const update = () => {
       frame = 0;
+      setAwayFromBottom(node.scrollHeight - node.clientHeight - node.scrollTop > 48);
       const top = node.getBoundingClientRect().top + 32;
       const sources = [...node.querySelectorAll<HTMLElement>('[data-testid="source"]')];
       const visible =
@@ -54,7 +58,7 @@ export function SceneNavigator({
     };
     const resize = new ResizeObserver(schedule);
     resize.observe(node);
-    for (const source of node.querySelectorAll('[data-testid="source"]')) resize.observe(source);
+    if (node.firstElementChild) resize.observe(node.firstElementChild);
     node.addEventListener('scroll', schedule, { passive: true });
     schedule();
     return () => {
@@ -100,6 +104,7 @@ export function SceneNavigator({
   }, [compact, listOpen]);
   const active = entries[index];
   const last = entries.at(-1);
+  const canGoLatest = awayFromBottom || last?.id !== detail.reader.order.at(-1);
   const count = Math.min(capacity, entries.length);
   const marks = new Set<number>();
   for (let i = 0; i < count; i++)
@@ -185,13 +190,13 @@ export function SceneNavigator({
   if (compact)
     return (
       <>
-        {last && current !== last.id && (
+        {last && canGoLatest && (
           <button
             type="button"
             className="scene-latest-floating"
-            aria-label="최신 장면으로"
-            title="최신 장면으로"
-            onClick={() => select(last.id)}
+            aria-label="본문 맨 아래로"
+            title="본문 맨 아래로"
+            onClick={onLatest}
           >
             <DownIcon size={20} aria-hidden="true" />
           </button>
@@ -245,10 +250,10 @@ export function SceneNavigator({
         <button
           type="button"
           className="scene-latest"
-          aria-label="최신 장면으로"
-          title="최신 장면으로"
-          disabled={current === last?.id}
-          onClick={() => last && select(last.id)}
+          aria-label="본문 맨 아래로"
+          title="본문 맨 아래로"
+          disabled={!canGoLatest}
+          onClick={onLatest}
         >
           <DownIcon size={18} />
         </button>

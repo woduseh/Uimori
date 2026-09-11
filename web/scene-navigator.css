@@ -160,8 +160,7 @@
   gap: 8px;
   font-size: 12px;
 }
-/* Compact widths have no rail or bar: the header title opens the list and this button
-   returns to the latest scene while an earlier one is being read. */
+/* Compact widths use the existing floating control to return to the text end. */
 .scene-latest-floating {
   position: absolute;
   left: 50%;

@@ -1,4 +1,5 @@
 import type { RunSnapshot } from '../core/types.js';
+import { isSourceOnlyTranscript, validateSourceOnlyTranscript } from '../core/authored-history.js';
 import { freezeSourceSegments } from '../core/package-source-segments.js';
 import type { Store } from './store.js';
 import { ChatOptionsStore } from './chat-options.js';
@@ -41,6 +42,12 @@ export function freezeReservationSnapshot(
     authored !== (base.packageStart?.mode === 'authored' || base.transcriptImport !== undefined)
   )
     throw new Error('RESERVATION_AUTHORSHIP_MISMATCH');
+
+  if (authored && isSourceOnlyTranscript(base)) {
+    validateSourceOnlyTranscript(base);
+    const sourceSegments = freezeSourceSegments(base.profile);
+    return { ...base, ...(sourceSegments ? { sourceSegments } : {}) };
+  }
 
   if (reserved && base.profile) {
     new ChatOptionsStore(store).freeze(base.profile, base.branchId!, options.runId);

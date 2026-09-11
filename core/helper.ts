@@ -58,6 +58,8 @@ export type HelperTask = {
   startedAt: string | null;
   updatedAt: string;
   snapshot: HelperTaskSnapshot;
+  /** Successful durable writes remain visible even if the explanation fails afterward. */
+  completedEffects?: { count: number; labels: string[] };
 };
 export type HelperMessage = {
   requestOrder?: number;

@@ -263,7 +263,7 @@ test('ACOM03 a chat transcript file creates a new chat through the data panel wi
   });
   const panel = await openArchive(page);
   const section = panel.getByRole('region', { name: '채팅 본문 가져오기', exact: true });
-  await expect(section.getByText(/실행 기록은 없어요/)).toBeVisible();
+  await expect(section.getByText(/완전 백업은 위의 채팅 백업 가져오기를 사용해요/)).toBeVisible();
   const transcript = {
     format: 'uimori-chat-transcript',
     version: 1,

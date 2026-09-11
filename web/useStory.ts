@@ -125,6 +125,7 @@ export function useStory() {
   // A completed server operation may navigate only while its original viewing intent is current.
   // Increment on every navigation, including A -> B -> A and changes within the same story.
   const navigationEpoch = useRef(0);
+  const latestIntent = useRef<{ epoch: number; source: string } | null>(null);
   const readerQuery = useRef({ branch: '', source: '', key: '' });
   const readerCache = useRef<{ key: string; detail: ReaderDetail } | null>(null);
   const savedPosition = JSON.parse(
@@ -186,10 +187,13 @@ export function useStory() {
     }
   }, []);
   current.current = selected;
+  const chatsRequest = useRef(0);
   const loadChats = useCallback(async () => {
+    const request = ++chatsRequest.current;
     const selectedAtRequest = current.current,
       epoch = navigationEpoch.current;
     const chats = await api<Chat[]>('/chats');
+    if (chatsRequest.current !== request) return;
     setChats(chats);
     if (
       selectedAtRequest &&
@@ -504,10 +508,12 @@ export function useStory() {
     const saved = JSON.parse(
       sessionStorage.getItem(`reading:${viewKey}`) || 'null'
     ) as Position | null;
+    const epoch = navigationEpoch.current;
     const frame = requestAnimationFrame(() => {
       if (
         current.current !== selected ||
         currentView.current !== viewKey ||
+        navigationEpoch.current !== epoch ||
         reader.current !== node
       )
         return;
@@ -515,7 +521,14 @@ export function useStory() {
         readSource && saved?.target !== readSource
           ? document.getElementById(`source-${readSource}`)
           : null;
-      if (sourceTarget && node.contains(sourceTarget))
+      const latest = latestIntent.current;
+      if (
+        latest?.epoch === navigationEpoch.current &&
+        detail.reader.order.includes(latest.source)
+      ) {
+        node.scrollTop = node.scrollHeight;
+        latestIntent.current = null;
+      } else if (sourceTarget && node.contains(sourceTarget))
         node.scrollTop +=
           sourceTarget.getBoundingClientRect().top - node.getBoundingClientRect().top;
       else {
@@ -564,23 +577,38 @@ export function useStory() {
     setReadSource(source);
     restoredView.current = '';
   };
-  const chooseSource = (id: string) => {
+  const chooseSource = (id: string, toEnd = false) => {
     navigationEpoch.current++;
+    latestIntent.current = toEnd ? { epoch: navigationEpoch.current, source: id } : null;
     savePosition();
     restoredView.current = '';
     setReadSource(id);
     setViewUrl(selected, viewedBranch, id);
     if (id === readSource) {
       const key = currentView.current;
+      const epoch = navigationEpoch.current;
       requestAnimationFrame(() => {
         const node = reader.current,
           target = document.getElementById(`source-${id}`);
-        if (currentView.current === key && node && target && node.contains(target)) {
-          node.scrollTop += target.getBoundingClientRect().top - node.getBoundingClientRect().top;
+        if (
+          currentView.current === key &&
+          navigationEpoch.current === epoch &&
+          node &&
+          target &&
+          node.contains(target)
+        ) {
+          if (toEnd) node.scrollTop = node.scrollHeight;
+          else
+            node.scrollTop += target.getBoundingClientRect().top - node.getBoundingClientRect().top;
+          latestIntent.current = null;
           restoredView.current = key;
         }
       });
     }
+  };
+  const chooseLatest = () => {
+    const last = detail?.reader.navigation.at(-1);
+    if (last) chooseSource(last.id, true);
   };
   useEffect(() => {
     const onPop = () => {
@@ -1085,6 +1113,7 @@ export function useStory() {
     select,
     chooseBranch,
     chooseSource,
+    chooseLatest,
     showLibrary,
     generate,
     canReuseRun,

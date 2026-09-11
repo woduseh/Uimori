@@ -77,14 +77,28 @@ export function directHelperGrants(
   const blocked = new Set<string>();
   const grants: HelperGrant[] = [];
   for (let instruction of clauses) {
+    // Polite questions can still be direct requests. Normalize the request ending only;
+    // permission questions such as "저장해도 되는지 확인해 주세요" stay review requests.
+    instruction = instruction.replace(
+      /(해|바꿔|고쳐|남겨|만들어|써|보여|그려)\s*(?:주실\s*수\s*있(?:을까요|나요)|주실래요|주시겠어요|줄\s*수\s*있(?:을까(?:요)?|나요|어(?:요)?))$/u,
+      '$1줘'
+    );
     // Discussing a command does not execute it, even when the quoted words have no delimiters.
     if (
-      /(?:설명|번역|해석|추천|제안|분석|검토|평가|비교)\s*(?:좀\s*)?(?:해\s*(?:줘|주세요|줄래)|하(?:자|세요))$/u.test(
+      /(?:설명|번역|해석|추천|제안|분석|검토|평가|비교|확인|판단|점검)\s*(?:만\s*)?(?:좀\s*)?(?:해\s*(?:줘|주세요|줄래)|하(?:자|세요))$/u.test(
         instruction
       ) ||
-      /(?:방법|작성법|사용법|의미|뜻).*(?:보여|알려)\s*(?:줘|주세요|줄래)$/u.test(instruction)
+      /(?:방법|작성법|사용법|의미|뜻|여부|되는지|괜찮은지|가능한지).*(?:보여|알려)\s*(?:줘|주세요|줄래)$/u.test(
+        instruction
+      )
     )
       continue;
+    // An unevaluated condition is not permission to mutate. Fictional conditions remain
+    // usable as artifact prompts, but cannot grant a real draft/chat/library write.
+    const conditional =
+      /(?:괜찮|가능하|필요하|문제없|문제가\s*없|좋|원하|확인되|승인되)(?:으)?면|(?:저장|적용|수정|편집|변경|삭제|추가)(?:해도|하면|한다면|할\s*경우)|\b(?:if|unless|provided\s+that)\b/iu.test(
+        instruction
+      );
     const withoutSaving = /(?:저장|적용)\s*없이|without (?:saving|applying)/iu.test(instruction);
     if (withoutSaving) {
       blocked.add('draft.save').add('draft.create.save');
@@ -123,7 +137,11 @@ export function directHelperGrants(
       for (const action of actions) blocked.add(action);
       continue;
     }
-    grants.push(...instructionGrants(requestId, scope, instruction, editor));
+    for (const grant of instructionGrants(requestId, scope, instruction, editor)) {
+      if (conditional)
+        grant.actions = grant.actions.filter((action) => action === 'artifact.generate');
+      if (grant.actions.length) grants.push(grant);
+    }
   }
   const byTarget = new Map<string, HelperGrant>();
   for (const grant of grants) {
@@ -382,6 +400,9 @@ export class HelperWorkspace {
       | Row
       | undefined;
     if (!row) throw new HttpError(404, '도우미 작업을 찾을 수 없어요.');
+    const completedEffects = ['failed', 'cancelled', 'interrupted'].includes(row.status)
+      ? this.completedEffects(id)
+      : undefined;
     return {
       id: row.id,
       conversationId: row.conversation_id,
@@ -394,6 +415,40 @@ export class HelperWorkspace {
       startedAt: row.started_at ?? null,
       updatedAt: row.updated_at,
       snapshot: JSON.parse(row.snapshot),
+      ...(completedEffects?.count ? { completedEffects } : {}),
+    };
+  }
+  /** Read receipts, never streamed tool output: the worker may stop before tool.finished. */
+  private completedEffects(id: string) {
+    const prefix = `helper:${id}:`;
+    const rows = this.store.db
+      .prepare(`
+      SELECT '도우미 변경' AS label, COUNT(*) AS n FROM helper_operations h
+        WHERE h.task_id=? AND NOT EXISTS (SELECT 1 FROM edit_draft_operations d WHERE d.operation_id=h.id)
+      UNION ALL SELECT CASE action WHEN 'save' THEN '자료 저장' WHEN 'create' THEN '초안 생성' ELSE '초안 수정' END AS label, COUNT(*) AS n
+        FROM edit_draft_operations WHERE request_id=? AND
+          (action='create' OR json_extract(result,'$.status') IN ('applied','saved')) GROUP BY label
+      UNION ALL SELECT '채팅 옵션', COUNT(*) FROM chat_option_operations WHERE request_id=?
+      UNION ALL SELECT '채팅 로어', COUNT(*) FROM chat_override_operations WHERE request_id=?
+      UNION ALL SELECT '메모·정정', COUNT(*) FROM author_note_commands WHERE substr(request_key,1,?)=?
+      UNION ALL SELECT '문맥 요약', COUNT(*) FROM context_commands WHERE substr(request_key,1,?)=?
+      UNION ALL SELECT '문맥 압축', COUNT(*) FROM context_jobs WHERE substr(request_key,1,?)=? AND status='completed' AND checkpoint IS NOT NULL AND noop=0
+    `)
+      .all(
+        id,
+        id,
+        id,
+        id,
+        prefix.length,
+        prefix,
+        prefix.length,
+        prefix,
+        prefix.length,
+        prefix
+      ) as Row[];
+    return {
+      count: rows.reduce((sum, row) => sum + Number(row.n), 0),
+      labels: rows.filter((row) => Number(row.n) > 0).map((row) => String(row.label)),
     };
   }
   tasks(id: string, before?: string) {
@@ -424,6 +479,8 @@ export class HelperWorkspace {
           throw new HttpError(403, '다른 대화의 요청은 재시도할 수 없어요.');
         if (!['failed', 'cancelled', 'interrupted'].includes(previous.status))
           throw new HttpError(409, '종료된 실패 요청만 재시도할 수 있어요.');
+        if (previous.completedEffects?.count)
+          throw new HttpError(409, 'HELPER_EFFECTS_ALREADY_COMMITTED');
         snapshot.requestGroupId = previous.snapshot.requestGroupId ?? previous.id;
         const latest = this.store.db
           .prepare(

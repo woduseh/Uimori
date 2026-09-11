@@ -9,6 +9,7 @@ import type { Store } from './store.js';
 import { mapForkChatOverrideSnapshot } from './chat-overrides.js';
 import { mapForkChatOptionSnapshot } from './chat-options.js';
 import { sealOutlineSnapshot } from '../core/outline.js';
+import { isSourceOnlyTranscript, validateSourceOnlyTranscript } from '../core/authored-history.js';
 
 const reject = (message: string): never => {
   throw new HttpError(400, `Invalid snapshot archive: ${message}`);
@@ -16,6 +17,22 @@ const reject = (message: string): never => {
 
 /** Check frozen history and compiled requests for every archived Run. */
 export function validateRunSnapshot(store: Store, snapshot: RunSnapshot, runId?: string): void {
+  if (isSourceOnlyTranscript(snapshot)) {
+    validateSourceOnlyTranscript(snapshot);
+    if (!isDeepStrictEqual(snapshot.sourceSegments, freezeSourceSegments(snapshot.profile)))
+      reject('source segment policy mismatch');
+    if (runId) {
+      const run = store.run(runId);
+      if (
+        run.status !== 'completed' ||
+        run.usage.modelCalls !== 0 ||
+        run.inputs.length ||
+        run.toolEvents.length
+      )
+        reject('imported source has model execution');
+    }
+    return;
+  }
   const compilationSnapshot = candidateCompilationSnapshot(store, snapshot, runId);
   if (!isDeepStrictEqual(snapshot.sourceSegments, freezeSourceSegments(snapshot.profile)))
     reject('source segment policy mismatch');

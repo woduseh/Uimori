@@ -1,5 +1,10 @@
 import type { ContentRef } from './product.js';
 import { PACKAGE_ROLES, type PackageAttachment } from './content-package.js';
+import {
+  CHAT_TITLE_MAX_CHARS,
+  SOURCE_TEXT_MAX_CHARS,
+  TRANSLATION_TEXT_MAX_CHARS,
+} from './content-limits.js';
 
 /**
  * One chat's authored history as a small file: source texts in order, the request that produced
@@ -12,13 +17,13 @@ export const CHAT_TRANSCRIPT_VERSION = 1;
 export const CHAT_TRANSCRIPT_LIMITS = {
   entries: 5000,
   request: 20_000,
-  text: 1_000_000,
-  translation: 2_000_000,
+  text: SOURCE_TEXT_MAX_CHARS,
+  translation: TRANSLATION_TEXT_MAX_CHARS,
   notes: 500,
   noteText: 32_000,
   author: 200,
   attachments: 300,
-  title: 200,
+  title: CHAT_TITLE_MAX_CHARS,
 } as const;
 
 export type ChatTranscriptEntry = {

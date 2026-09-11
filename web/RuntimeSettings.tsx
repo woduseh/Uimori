@@ -87,6 +87,23 @@ export function SettingsEditor({
             모델 경로는 역할별 모델 설정을 따라요. 장면 상태를 끄면 새 원고에서 상태 작업을 호출하지
             않아요.
           </small>
+          <label className="full">
+            작업당 모델 호출 한도
+            <input
+              type="number"
+              aria-label="작업당 모델 호출 한도"
+              min={1}
+              max={32}
+              step={1}
+              required
+              value={Number.isFinite(value.maxCalls) ? value.maxCalls : ''}
+              onChange={(event) => update('maxCalls', event.target.valueAsNumber)}
+            />
+          </label>
+          <small className="full">
+            1~32회. 본문의 조회 후속 호출과 문맥 요약을 함께 세어요. 번역·도우미는 각 기능의 별도
+            호출 한도를 사용해요.
+          </small>
           {testMode && (
             <details className="full fixture-settings">
               <summary>개발자용 모의 실행 제어</summary>

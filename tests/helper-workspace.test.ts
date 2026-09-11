@@ -166,6 +166,12 @@ test('direct grants exclude quoted instructions, fiction OOC and recommendations
   ]);
 });
 test.each([
+  ['현재 프롬프트를 저장해도 괜찮은지 확인해줘.', []],
+  ['프롬프트를 수정해도 되는지 확인해줘.', []],
+  ['이 채팅의 로어를 바꿔도 되는지 확인해줘.', []],
+  ['이 채팅의 로어를 수정해도 되는지 알려줘.', []],
+  ['이 채팅의 로어를 수정해줘라는 지시를 점검해줘.', []],
+  ['문제가 없으면 이 채팅의 로어를 수정해줘.', []],
   ['장면의 구성만 만들어줘', ['outline.write']],
   ['장면의 구성을 수정해줘', ['outline.write']],
   ['구성을 만들어줘라는 문장을 설명해줘', []],
@@ -185,6 +191,24 @@ test.each([
   expect(directHelperGrants('r', scope, request).flatMap((grant) => grant.actions)).toEqual(
     actions
   );
+});
+test.each([
+  ['현재 프롬프트를 저장해도 괜찮은지 확인해줘.', []],
+  ['프롬프트를 수정해도 되는지 확인해줘.', []],
+  ['저장해도 되는지 확인해 주실 수 있을까요?', []],
+  ['초안을 저장해도 되는지 알려줘.', []],
+  ['문제가 없으면 초안을 저장해줘.', []],
+  ['초안을 수정하면 저장해줘.', []],
+  ['Save this draft if it is correct.', []],
+  ['이 초안을 저장해 주실 수 있을까요?', ['draft.save']],
+  ['이 초안을 수정해 주실 수 있을까요?', ['draft.patch']],
+  ['이 초안을 수정하고 저장해 주실 수 있을까요?', ['draft.patch', 'draft.save']],
+  ['초안 저장 여부를 확인해줘. 제목은 수정해줘.', ['draft.patch']],
+] as const)('direct draft authority follows the requested action: %s', (request, actions) => {
+  const scope = { kind: 'library' as const, workId: 'work' };
+  expect(
+    directHelperGrants('r', scope, request, { draftId: 'draft' }).flatMap((grant) => grant.actions)
+  ).toEqual(actions);
 });
 test('mixed draft requests preserve explicit patch and save independently of prohibitions and explanations', () => {
   const scope = { kind: 'library' as const, workId: 'work' },
@@ -297,6 +321,85 @@ test('operation receipt and nested service mutation commit or roll back together
   expect(() => f.workspace.operation(task.id, 'stable-op', { title: 'different' }, apply)).toThrow(
     'OPERATION_ID_CONFLICT'
   );
+});
+
+test('a saved change survives an explanation EOF and prevents whole-request retry after reopening the database', async () => {
+  const f = fixture(),
+    chat = createFixtureChat(f.store, '원 제목');
+  const conversation = f.workspace.open({
+    kind: 'chat',
+    chatId: chat.id,
+    branchId: `main:${chat.id}`,
+  });
+  const send = mockSend((_request, _options, index) =>
+    index === 0
+      ? {
+          ...structuredClone(success),
+          status: 'tool_calls',
+          text: '',
+          toolCalls: [
+            {
+              id: 'rename',
+              name: 'chat.rename',
+              arguments: {
+                title: '저장 완료',
+                expectedRevision: chat.titleRevision ?? 0,
+                operationId: 'rename',
+              },
+            },
+          ],
+        }
+      : {
+          ...structuredClone(success),
+          status: 'error',
+          text: '',
+          error: { code: 'UNEXPECTED_EOF' },
+        }
+  );
+  const task = f.runtime.enqueue(conversation.id, 'rename-eof', '제목을 바꿔줘');
+  await Promise.all(f.work);
+  expect(f.store.chat(chat.id).title).toBe('저장 완료');
+  expect(f.workspace.task(task.id)).toMatchObject({
+    status: 'failed',
+    error: 'UNEXPECTED_EOF',
+    completedEffects: { count: 1, labels: ['도우미 변경'] },
+  });
+  expect(send).toHaveBeenCalledTimes(2);
+  const owner = owned.find((item) => item.store === f.store)!;
+  f.store.close();
+  owner.store = new Store(join(owner.path, 'story.sqlite'));
+  const reopened = new HelperWorkspace(owner.store);
+  const previous = reopened.task(task.id);
+  expect(previous.completedEffects).toEqual({ count: 1, labels: ['도우미 변경'] });
+  expect(() =>
+    reopened.enqueue(conversation.id, 'retry-eof', previous.request, {
+      ...previous.snapshot,
+      retryOf: previous.id,
+    })
+  ).toThrow('HELPER_EFFECTS_ALREADY_COMMITTED');
+  expect(reopened.tasks(conversation.id)).toHaveLength(1);
+});
+
+test('a rolled-back operation does not block retry or claim a completed change', () => {
+  const f = fixture(),
+    chat = createFixtureChat(f.store, '원 제목');
+  const task = f.workspace.enqueue(f.conversation.id, 'rollback', 'rename', snapshot(f));
+  f.workspace.start(task.id, 'owner');
+  expect(() =>
+    f.workspace.operation(task.id, 'rolled-back', {}, () => {
+      f.store.renameChat(chat.id, '되돌릴 제목', chat.titleRevision ?? 0);
+      throw new Error('rolled back');
+    })
+  ).toThrow('rolled back');
+  f.workspace.finish(task.id, 'owner', 1, 'failed', '', 'UNEXPECTED_EOF');
+  expect(f.workspace.task(task.id)).not.toHaveProperty('completedEffects');
+  expect(f.store.chat(chat.id).title).toBe('원 제목');
+  expect(
+    f.workspace.enqueue(f.conversation.id, 'retry', 'rename', {
+      ...snapshot(f),
+      retryOf: task.id,
+    }).snapshot.retryOf
+  ).toBe(task.id);
 });
 
 test('an explanation request cannot authorize a model-requested artifact child', async () => {

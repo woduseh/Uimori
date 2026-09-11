@@ -87,7 +87,7 @@ function settings(body: RecordBody): Settings {
     mode: body.mode as Settings['mode'],
     translation: body.translation,
     status: body.status,
-    maxCalls: number(body.maxCalls, 'maxCalls', 1, 16),
+    maxCalls: number(body.maxCalls, 'maxCalls', 1, 32),
   };
 }
 

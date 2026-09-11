@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 import { createHash } from 'node:crypto';
+import { estimateContextTokens } from '../core/context-budget.js';
 import { defaultProfile, type ModelSnapshot, VERTEX_GEMINI_MODEL_ID } from '../core/product.js';
 import type { RunSnapshot, ToolEvent } from '../core/types.js';
 import type { Json } from '../core/transport.js';
@@ -125,6 +126,72 @@ function snapshot(contextTools = true): RunSnapshot {
     contextPlan: { ...ready.contextPlan!, estimatedInputTokens: measured.estimatedInputTokens },
   };
 }
+function oversizedSnapshot(): RunSnapshot {
+  const fixed = snapshot();
+  fixed.profile!.models.main!.inputTokenLimit = 8192;
+  fixed.profile!.contextModel = {
+    ...model(false),
+    id: 'summary-model',
+    modelId: 'fixture-summary',
+    inputTokenLimit: 32768,
+  };
+  for (const source of fixed.history) {
+    source.text = `${source.text}\n${'미라는 조건 하나와 별개의 약속을 구분한다. '.repeat(500)}`;
+    source.contentHash = hash(source.text);
+    for (const message of fixed.logicalHistory!.filter(
+      (item) => item.sourceRevision === source.revision
+    )) {
+      message.sourceHash = source.contentHash;
+      if (message.role === 'assistant') message.text = source.text;
+    }
+  }
+  return withContextProjection(
+    seedContextPlan(fixed),
+    fixed.history.map((source) => ({ revision: source.revision, hash: source.contentHash! })),
+    workingSummary
+  );
+}
+/** Leave a measured 14% margin around fixed instructions, independent of tokenizer fixture drift. */
+function fixedHeavySnapshot(vertex = false): RunSnapshot {
+  const fixed = oversizedSnapshot(),
+    target = fixed.profile!.models.main!,
+    block = fixed.profile!.promptPresets!.main!.program.blocks[0];
+  if (block.kind !== 'message') throw new Error('Expected a fixed instruction block');
+  block.template = [
+    {
+      kind: 'text',
+      text:
+        'FIXED_INSTRUCTIONS_CANARY\n' + 'Keep every separate promise and condition. '.repeat(1800),
+    },
+  ];
+  target.inputTokenLimit = 65536;
+  fixed.profile!.contextModel!.inputTokenLimit = 65536;
+  if (vertex) {
+    target.modelId = VERTEX_GEMINI_MODEL_ID;
+    target.connection = {
+      ...target.connection,
+      protocol: 'vertex-gemini-v1',
+      endpoint:
+        'https://aiplatform.googleapis.com/v1/projects/synthetic-project/locations/global/publishers/google/models',
+      credentialEnv: 'NARRATIVE_PROVIDER_VERTEX_TEST',
+    };
+  }
+  const project = () =>
+    withContextProjection(
+      seedContextPlan(fixed),
+      fixed.history.map((source) => ({ revision: source.revision, hash: source.contentHash! })),
+      workingSummary
+    );
+  target.inputTokenLimit = Math.ceil(measureMainContext(project()).estimatedInputTokens / 0.86);
+  const measured = measureMainContext(project());
+  return {
+    ...measured.snapshot,
+    contextPlan: {
+      ...measured.snapshot.contextPlan!,
+      estimatedInputTokens: measured.estimatedInputTokens,
+    },
+  };
+}
 const sse = (...events: unknown[]) =>
   new Response(events.map((event) => `data: ${JSON.stringify(event)}\n\n`).join(''), {
     headers: { 'content-type': 'text/event-stream' },
@@ -221,6 +288,547 @@ afterEach(() => {
 });
 
 describe('model-driven working summary and window switch inside one main run', () => {
+  test('a useful read summary proceeds above the soft trigger with less than ten percent total reduction', async () => {
+    const fixed = fixedHeavySnapshot(),
+      original = structuredClone(fixed),
+      log = hooks(),
+      limit = fixed.contextPlan!.budget.inputTokenLimit;
+    const bodies = script([
+      (_body, n) =>
+        toolTurn(
+          [{ id: 'small-useful-read', name: 'story.read', args: { sceneNumber: 1, limit: 1200 } }],
+          n
+        ),
+      () => completed(),
+      () => completed(),
+    ]);
+    const result = await runMain(fixed, log.value);
+    expect(result).toMatchObject({
+      status: 'completed',
+      text: finalText,
+      usage: { modelCalls: 3 },
+    });
+    expect(bodies.map((body) => body.role)).toEqual(['main', 'context', 'main']);
+    const compacted = log.events.find((event) => event.name === 'context.compact')!.result as {
+      applied: boolean;
+      beforeTokens: number;
+      afterTokens: number;
+    };
+    expect(compacted.applied).toBe(true);
+    expect(compacted.beforeTokens).toBeGreaterThan(limit * 0.85);
+    expect(compacted.afterTokens).toBeGreaterThan(limit * 0.85);
+    expect(compacted.afterTokens).toBeGreaterThanOrEqual(compacted.beforeTokens * 0.9);
+    expect(compacted.afterTokens).toBeLessThan(compacted.beforeTokens);
+    expect(compacted.afterTokens).toBeLessThanOrEqual(limit);
+    expect(bodies[2]).not.toHaveProperty('opaqueState');
+    expect(bodies[2].input.results).toEqual([]);
+    expect(bodies[2].input.source.completedToolHistory).toMatchObject({
+      events: [
+        {
+          callId: 'small-useful-read',
+          result: { kind: 'host-compacted-reads', summary: finalText },
+        },
+      ],
+    });
+    expect(fixed).toEqual(original);
+  });
+
+  test('an unhelpful summary keeps Vertex signed history; only a new successful read permits another summary', async () => {
+    const fixed = fixedHeavySnapshot(true),
+      target = fixed.profile!.models.main!,
+      original = structuredClone(fixed),
+      saved = persistence(),
+      log = hooks(saved.persist),
+      limit = fixed.contextPlan!.budget.inputTokenLimit;
+    log.value.resolveCredential = () => 'SYNTHETIC_VERTEX_TOKEN';
+    const vertexBodies: any[] = [],
+      summaryBodies: Body[] = [],
+      roles: string[] = [];
+    const expandedSummary =
+      'Expanded reading keeps each separate participant and condition. '.repeat(400);
+    const reply = (parts: unknown[]) =>
+      sse({
+        candidates: [{ index: 0, content: { role: 'model', parts }, finishReason: 'STOP' }],
+        usageMetadata: { promptTokenCount: 11, candidatesTokenCount: 7, totalTokenCount: 18 },
+      });
+    vi.mocked(fetch).mockImplementation(async (url, options) => {
+      const body = JSON.parse(String(options?.body));
+      if (String(url).startsWith(origin)) {
+        roles.push('context');
+        summaryBodies.push(body);
+        return sse(
+          { type: 'text_delta', delta: expandedSummary },
+          { type: 'usage', inputTokens: 11, outputTokens: 7, costUsd: null },
+          { type: 'done', reason: 'stop' }
+        );
+      }
+      roles.push('main');
+      vertexBodies.push(body);
+      if (vertexBodies.length === 1)
+        return reply([
+          {
+            functionCall: {
+              id: 'first-read',
+              name: 'story.read',
+              args: { sceneNumber: 1, limit: 40 },
+            },
+            thoughtSignature: 'ORIGINAL_READ_SIGNATURE',
+          },
+        ]);
+      if (vertexBodies.length === 2)
+        return reply([
+          {
+            functionCall: {
+              id: 'write-between-reads',
+              name: 'context.write',
+              args: { summary: workingSummary },
+            },
+            thoughtSignature: 'WRITE_SIGNATURE',
+          },
+        ]);
+      if (vertexBodies.length === 3)
+        return reply([
+          {
+            functionCall: {
+              id: 'second-read',
+              name: 'story.read',
+              args: { sceneNumber: 2, limit: 40 },
+            },
+            thoughtSignature: 'SECOND_READ_SIGNATURE',
+          },
+        ]);
+      return reply([{ text: finalText }]);
+    });
+    const result = await runMain(fixed, log.value);
+    expect(result).toMatchObject({
+      status: 'completed',
+      text: finalText,
+      usage: { modelCalls: 6 },
+    });
+    expect(roles).toEqual(['main', 'context', 'main', 'main', 'context', 'main']);
+    expect(vertexBodies).toHaveLength(4);
+    expect(summaryBodies).toHaveLength(2);
+    expect(saved.calls).toHaveLength(1);
+    expect(log.events.filter((event) => event.name === 'context.write')).toHaveLength(1);
+    expect(summaryBodies[0].input.source.part).toContain('first-read');
+    expect(summaryBodies[1].input.source.part).toContain('second-read');
+    for (const body of summaryBodies)
+      expect(body.input.source.part).not.toContain('write-between-reads');
+    const compactions = log.events
+      .filter((event) => event.name === 'context.compact')
+      .map(
+        (event) => event.result as { applied: boolean; beforeTokens: number; afterTokens: number }
+      );
+    expect(compactions).toHaveLength(2);
+    for (const event of compactions) {
+      expect(event.applied).toBe(false);
+      expect(event.beforeTokens).toBeGreaterThan(limit * 0.85);
+      expect(event.beforeTokens).toBeLessThanOrEqual(limit);
+      expect(event.afterTokens).toBeGreaterThanOrEqual(event.beforeTokens);
+    }
+    const responses = (body: any) =>
+      body.contents
+        .flatMap((content: any) => content.parts)
+        .flatMap((part: any) => (part.functionResponse ? [part.functionResponse] : []));
+    const firstResponse = responses(vertexBodies[1]).find((part: any) => part.id === 'first-read');
+    expect(firstResponse).toMatchObject({
+      name: 'story.read',
+      response: { text: expect.any(String), contextWindow: { inputTokenLimit: limit } },
+    });
+    for (const body of vertexBodies.slice(1)) {
+      expect(JSON.stringify(body)).toContain('ORIGINAL_READ_SIGNATURE');
+      expect(JSON.stringify(body)).not.toContain('host-completed-tool-history');
+      expect(JSON.stringify(body)).not.toContain('skip_thought_signature_validator');
+      expect(responses(body).find((part: any) => part.id === 'first-read')).toEqual(firstResponse);
+      expect(estimateContextTokens(body)).toBeLessThanOrEqual(limit);
+    }
+    expect(JSON.stringify(vertexBodies[2])).toContain('WRITE_SIGNATURE');
+    expect(JSON.stringify(vertexBodies[3])).toContain('SECOND_READ_SIGNATURE');
+    expect(
+      responses(vertexBodies[3]).filter((part: any) => part.name === 'context.write')
+    ).toHaveLength(1);
+    expect(target.connection.protocol).toBe('vertex-gemini-v1');
+    expect(fixed).toEqual(original);
+  });
+
+  test('when original reads and their summary both exceed the hard limit no further main request is sent', async () => {
+    const fixed = fixedHeavySnapshot(),
+      log = hooks(),
+      original = structuredClone(fixed),
+      limit = fixed.contextPlan!.budget.inputTokenLimit;
+    const bodies = script([
+      (_body, n) =>
+        toolTurn(
+          Array.from({ length: 4 }, (_, index) => ({
+            id: `over-limit-read-${index}`,
+            name: 'story.read',
+            args: { sceneNumber: index + 1, limit: 16000 },
+          })),
+          n
+        ),
+      () =>
+        sse(
+          {
+            type: 'text_delta',
+            delta: 'Expanded reading keeps each separate participant and condition. '.repeat(400),
+          },
+          { type: 'usage', inputTokens: 11, outputTokens: 7, costUsd: null },
+          { type: 'done', reason: 'stop' }
+        ),
+    ]);
+    const result = await runMain(fixed, log.value);
+    expect(result).toMatchObject({
+      status: 'error',
+      error: 'CONTEXT_TOOL_COMPACTION_NO_PROGRESS',
+      usage: { modelCalls: 2 },
+    });
+    expect(bodies.map((body) => body.role)).toEqual(['main', 'context']);
+    expect(log.events.filter((event) => event.name === 'story.read')).toHaveLength(4);
+    const compacted = log.events.find((event) => event.name === 'context.compact')!.result as {
+      applied: boolean;
+      beforeTokens: number;
+      afterTokens: number;
+    };
+    expect(compacted.applied).toBe(false);
+    expect(compacted.beforeTokens).toBeGreaterThan(limit);
+    expect(compacted.afterTokens).toBeGreaterThan(limit);
+    expect(fixed).toEqual(original);
+  });
+
+  test.each(['completed', 'eof', 'call-limit', 'authorization-revoked'] as const)(
+    'accumulated reads are admitted before the next send; compaction %s preserves saved effects and originals',
+    async (outcome) => {
+      const fixed = oversizedSnapshot();
+      fixed.settings.maxCalls = outcome === 'call-limit' ? 3 : 8;
+      const original = structuredClone(fixed);
+      const saved = persistence(),
+        log = hooks(saved.persist);
+      let revoked = false;
+      log.value.authorize = (connection) => ({ ...connection, enabled: !revoked });
+      const bodies = script([
+        (_body, n) =>
+          toolTurn(
+            [{ id: 'saved-once', name: 'context.write', args: { summary: workingSummary } }],
+            n
+          ),
+        (_body, n) =>
+          toolTurn(
+            Array.from({ length: 4 }, (_, i) => ({
+              id: `large-read-${i}`,
+              name: 'story.read',
+              args: { sceneNumber: i + 1, limit: 16000 },
+            })),
+            n
+          ),
+        (body) => {
+          expect(body.role).toBe('context');
+          expect(body.input.source.part).toContain('large-read-0');
+          expect(body.input.source.part).not.toContain('saved-once');
+          revoked = outcome === 'authorization-revoked';
+          return outcome === 'eof' ? sse({ type: 'text_delta', delta: 'Incomplete' }) : completed();
+        },
+        (body) => {
+          expect(body.role).toBe('main');
+          expect(body).not.toHaveProperty('opaqueState');
+          expect(body.input.results).toEqual([]);
+          expect(body).not.toHaveProperty('bootstrap');
+          const history = body.input.source.completedToolHistory as { events: ToolEvent[] };
+          expect(history.events).toHaveLength(2);
+          expect(history.events[0]).toMatchObject({
+            callId: 'saved-once',
+            name: 'context.write',
+            result: { saved: true, checkpoint: { id: 'cp-1' } },
+          });
+          expect(history.events[1]).toMatchObject({
+            name: 'story.read',
+            result: {
+              kind: 'host-compacted-reads',
+              summary: finalText,
+              references: Array.from({ length: 4 }, (_, i) => ({
+                name: 'story.read',
+                args: { sceneNumber: i + 1, limit: 16000 },
+              })),
+            },
+          });
+          return completed();
+        },
+      ]);
+      const result = await runMain(fixed, log.value);
+      expect(fixed).toEqual(original);
+      expect(saved.calls).toHaveLength(1);
+      expect(log.events.filter((event) => event.name === 'story.read')).toHaveLength(4);
+      expect(
+        log.events.find((event) => event.callId === 'large-read-3')!.result
+      ).not.toHaveProperty('contextWindow');
+      if (outcome === 'completed') {
+        expect(result).toMatchObject({ status: 'completed', usage: { modelCalls: 4 } });
+        expect(log.events.at(-1)).toMatchObject({ name: 'context.compact' });
+        expect(
+          (log.events.at(-1)!.result as { beforeTokens: number }).beforeTokens
+        ).toBeGreaterThan(8192);
+        expect(bodies).toHaveLength(4);
+      } else {
+        expect(result).toMatchObject({
+          status: 'error',
+          error:
+            outcome === 'eof'
+              ? 'CONTEXT_TOOL_COMPACTION_EOF'
+              : outcome === 'authorization-revoked'
+                ? 'CONNECTION_NOT_AUTHORIZED'
+                : 'CONTEXT_TOOL_COMPACTION_CALL_LIMIT',
+        });
+        expect(bodies).toHaveLength(outcome === 'call-limit' ? 2 : 3);
+        expect(log.events.some((event) => event.name === 'context.compact')).toBe(
+          outcome === 'authorization-revoked'
+        );
+      }
+    }
+  );
+
+  test.each(['single', 'batch', 'mixed'] as const)(
+    'Vertex signed %s continuation becomes a fresh text reference after compaction, then resumes native reads',
+    async (mode) => {
+      const fixed = oversizedSnapshot(),
+        target = fixed.profile!.models.main!,
+        saved = persistence(),
+        log = hooks(saved.persist);
+      target.modelId = VERTEX_GEMINI_MODEL_ID;
+      target.connection = {
+        ...target.connection,
+        protocol: 'vertex-gemini-v1',
+        endpoint:
+          'https://aiplatform.googleapis.com/v1/projects/synthetic-project/locations/global/publishers/google/models',
+        credentialEnv: 'NARRATIVE_PROVIDER_VERTEX_TEST',
+      };
+      const original = structuredClone(fixed);
+      log.value.resolveCredential = () => 'SYNTHETIC_VERTEX_TOKEN';
+      log.value.persistContext = (prepared, own) => {
+        if (mode === 'mixed' && saved.calls.length > 0)
+          expect(log.events.at(-1)!.callId).toBe(
+            saved.calls.length === 1 ? 'vertex-large-read' : 'fresh-read'
+          );
+        return saved.persist(prepared, own);
+      };
+      const vertexBodies: any[] = [],
+        summaryBodies: Body[] = [];
+      const reply = (parts: unknown[]) =>
+        sse({
+          candidates: [{ index: 0, content: { role: 'model', parts }, finishReason: 'STOP' }],
+          usageMetadata: { promptTokenCount: 11, candidatesTokenCount: 7, totalTokenCount: 18 },
+        });
+      const readParts = (prefix: string, limit: number, signature: string) => [
+        {
+          functionCall: {
+            id: `${prefix}-read`,
+            name: 'story.read',
+            args: { sceneNumber: 1, limit },
+          },
+          thoughtSignature: signature,
+        },
+        ...(mode === 'mixed'
+          ? [
+              {
+                functionCall: {
+                  id: `${prefix}-write`,
+                  name: 'context.write',
+                  args: { summary: workingSummary },
+                },
+              },
+            ]
+          : []),
+        ...(mode !== 'single'
+          ? [
+              {
+                functionCall: {
+                  id: `${prefix}-read-2`,
+                  name: 'story.read',
+                  args: { sceneNumber: 2, limit },
+                },
+              },
+            ]
+          : []),
+      ];
+      vi.mocked(fetch).mockImplementation(async (url, options) => {
+        const body = JSON.parse(String(options?.body));
+        if (String(url).startsWith(origin)) {
+          summaryBodies.push(body);
+          expect(body.role).toBe('context');
+          expect(body.input.source.part).toContain('vertex-large-read');
+          expect(body.input.source.part).not.toContain('vertex-write');
+          return completed();
+        }
+        expect(String(url)).toBe(
+          `${target.connection.endpoint}/${target.modelId}:streamGenerateContent?alt=sse`
+        );
+        vertexBodies.push(body);
+        if (vertexBodies.length === 1)
+          return reply([
+            {
+              functionCall: {
+                id: 'vertex-write',
+                name: 'context.write',
+                args: { summary: workingSummary },
+              },
+              thoughtSignature: 'OLD_SIGNED_WRITE',
+            },
+          ]);
+        if (vertexBodies.length === 2) {
+          expect(JSON.stringify(body.contents)).toContain('OLD_SIGNED_WRITE');
+          return reply(readParts('vertex-large', 16000, 'OLD_SIGNED_READ'));
+        }
+        const text = JSON.stringify(body);
+        expect(text).toContain('host-completed-tool-history');
+        expect(text).toContain('vertex-write');
+        expect(text).toContain('host-compacted-reads');
+        expect(text).not.toContain('OLD_SIGNED_WRITE');
+        expect(text).not.toContain('OLD_SIGNED_READ');
+        expect(text).not.toContain('skip_thought_signature_validator');
+        if (vertexBodies.length === 3) {
+          expect(
+            body.contents.every((message: any) =>
+              message.parts.every((part: any) => !part.functionCall && !part.functionResponse)
+            )
+          ).toBe(true);
+          return reply(readParts('fresh', 40, 'NEW_SIGNED_READ'));
+        }
+        expect(vertexBodies).toHaveLength(4);
+        expect(text).toContain('NEW_SIGNED_READ');
+        expect(body.contents.at(-1).parts[0].functionResponse).toMatchObject({
+          id: 'fresh-read',
+          name: 'story.read',
+        });
+        expect(body.contents.at(-1).parts).toHaveLength(
+          mode === 'single' ? 1 : mode === 'batch' ? 2 : 3
+        );
+        const windows = body.contents
+          .at(-1)
+          .parts.map((part: any) => part.functionResponse.response.contextWindow);
+        expect(
+          windows.every((window: any) => window.estimatedInputTokens >= estimateContextTokens(body))
+        ).toBe(true);
+        expect(
+          windows.every((window: any) => JSON.stringify(window) === JSON.stringify(windows[0]))
+        ).toBe(true);
+        return reply([{ text: finalText }]);
+      });
+      const result = await runMain(fixed, log.value);
+      expect(result).toMatchObject({
+        status: 'completed',
+        text: finalText,
+        usage: { modelCalls: 5 },
+      });
+      expect(summaryBodies).toHaveLength(1);
+      expect(vertexBodies).toHaveLength(4);
+      expect(saved.calls).toHaveLength(mode === 'mixed' ? 3 : 1);
+      expect(log.events.filter((event) => event.name === 'story.read')).toHaveLength(
+        mode === 'single' ? 2 : 4
+      );
+      expect(
+        log.events
+          .filter((event) => event.name === 'context.write')
+          .every((event) => !Object.hasOwn(event.result as object, 'contextWindow'))
+      ).toBe(true);
+      expect(fixed).toEqual(original);
+    }
+  );
+
+  test('repeated compaction retains more than eight exact receipts and prior read arguments as one reference envelope', async () => {
+    const fixed = oversizedSnapshot(),
+      saved = persistence(),
+      log = hooks(saved.persist),
+      original = structuredClone(fixed);
+    const largeReads = (prefix: string, offset: number) =>
+      Array.from({ length: 4 }, (_, i) => ({
+        id: `${prefix}-${i}`,
+        name: 'story.read',
+        args: { sceneNumber: i + 1, offset, limit: 16000 },
+      }));
+    const receipts = () => log.events.filter((event) => event.name === 'context.write');
+    const bodies = script([
+      (_body, n) =>
+        toolTurn(
+          Array.from({ length: 9 }, (_, i) => ({
+            id: `write-${i}`,
+            name: 'context.write',
+            args: { summary: `Saved ${i}` },
+          })),
+          n
+        ),
+      (_body, n) => toolTurn(largeReads('first-read', 0), n),
+      () => completed(),
+      (body, n) => {
+        expect(body.input.results).toEqual([]);
+        expect(body).not.toHaveProperty('bootstrap');
+        expect(body).not.toHaveProperty('opaqueState');
+        const history = body.input.source.completedToolHistory as { events: ToolEvent[] };
+        expect(history.events.filter((event) => event.name === 'context.write')).toEqual(
+          receipts()
+        );
+        return toolTurn(largeReads('second-read', 1), n);
+      },
+      (body) => {
+        expect(body.input.source.part).toContain('host-compacted-reads');
+        expect(body.input.source.part).toContain('second-read-0');
+        expect(body.input.source.part).not.toContain('write-0');
+        return completed();
+      },
+      (body) => {
+        expect(body.input.results).toEqual([]);
+        expect(body).not.toHaveProperty('bootstrap');
+        expect(body).not.toHaveProperty('opaqueState');
+        const history = body.input.source.completedToolHistory as { events: ToolEvent[] };
+        expect(history.events).toHaveLength(10);
+        expect(history.events.filter((event) => event.name === 'context.write')).toEqual(
+          receipts()
+        );
+        expect(history.events.at(-1)!.result).toMatchObject({
+          references: [...largeReads('ignored', 0), ...largeReads('ignored', 1)].map(
+            ({ name, args }) => ({ name, args })
+          ),
+        });
+        for (const [protocol, modelId] of [
+          ['vertex-gemini-v1', VERTEX_GEMINI_MODEL_ID],
+          ['openai-responses-v1', 'gpt-5.6'],
+          ['openai-chat-v1', 'gpt-5.6'],
+          ['anthropic-messages-v1', 'claude-sonnet-4-6'],
+        ] as const) {
+          const target = structuredClone(fixed);
+          target.profile!.models.main!.connection.protocol = protocol;
+          target.profile!.models.main!.modelId = modelId;
+          const request = buildMainProviderRequest(target, {
+            completedToolHistory: history.events,
+          }).request;
+          const encoded =
+            protocol === 'vertex-gemini-v1'
+              ? encodeVertex(request).body
+              : protocol === 'openai-responses-v1'
+                ? encodeResponses(request).body
+                : protocol === 'anthropic-messages-v1'
+                  ? encodeAnthropic(request).body
+                  : encodeChat(request).body;
+          const text = JSON.stringify(encoded);
+          expect(text).toContain('host-completed-tool-history');
+          expect(text).toContain('write-8');
+          expect(text).toContain('host-compacted-reads');
+          expect(request.input.results).toEqual([]);
+          expect(request).not.toHaveProperty('bootstrap');
+        }
+        // A completed call ID cannot replay a mutation after either reset.
+        return toolTurn([{ id: 'write-0', name: 'context.write', args: { summary: 'Replay' } }], 6);
+      },
+    ]);
+    const result = await runMain(fixed, log.value);
+    expect(result).toMatchObject({
+      status: 'error',
+      error: 'DUPLICATE_TOOL_ID',
+      usage: { modelCalls: 6 },
+    });
+    expect(bodies).toHaveLength(6);
+    expect(saved.calls).toHaveLength(9);
+    expect(log.events.filter((event) => event.name === 'context.compact')).toHaveLength(2);
+    expect(fixed).toEqual(original);
+  });
+
   test('list, write, switch alone, then read a compacted original through the new window', async () => {
     const saved = persistence();
     const log = hooks(saved.persist);
@@ -257,7 +865,8 @@ describe('model-driven working summary and window switch inside one main run', (
       'context.new',
       'story.read',
     ]);
-    const listed = log.events[0].result as {
+    expect(log.events[0].result).not.toHaveProperty('contextWindow');
+    const listed = bodies[1].input.results[0].result as {
       results: { revision: string; compacted: boolean }[];
       contextWindow: { estimatedInputTokens: number; inputTokenLimit: number; level: string };
     };
@@ -273,6 +882,9 @@ describe('model-driven working summary and window switch inside one main run', (
       summaryChars: workingSummary.length,
       checkpoint: { id: 'cp-1' },
       activated: true,
+    });
+    expect(log.events[1].result).not.toHaveProperty('contextWindow');
+    expect(bodies[2].input.results[1].result).toMatchObject({
       contextWindow: { inputTokenLimit: 16384 },
     });
     expect(saved.calls[0]).toEqual({ compacted: 0, summary: workingSummary, own: null });
