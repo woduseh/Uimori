@@ -35,7 +35,8 @@ test('UXUI01 compact composer and mobile settings details preserve the draft', a
     }
     await expect(page.getByRole('button', { name: '빠른 페르소나', exact: true })).toHaveCount(0);
     await page.getByRole('button', { name: '입력창 더보기', exact: true }).click();
-    await expect(page.getByRole('button', { name: '창작 옵션', exact: true })).toHaveCount(0);
+    // The bundled writing prompt has controls, exposed only after opening the menu.
+    await expect(page.getByRole('button', { name: '창작 옵션', exact: true })).toBeVisible();
     await expect(page.getByRole('button', { name: '빠른 페르소나', exact: true })).toBeVisible();
     await page.keyboard.press('Escape');
     await expect(input).toHaveValue('아직 보내지 않은 합성 요청');
