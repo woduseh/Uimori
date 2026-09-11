@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { useTestMode } from './useTestMode.js';
 
-export type PanelDeepLink = { panel: string; section: string; destination: string; tab: string };
+type PanelDeepLink = { panel: string; section: string; destination: string; tab: string };
 
 const keys = ['panel', 'section', 'destination', 'tab'] as const;
 // Read once at load: useStory rewrites the address to chat/branch/source before any effect runs.

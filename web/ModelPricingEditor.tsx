@@ -13,7 +13,7 @@ import './model-pricing.css';
 
 const primaryRates = ['input', 'cacheRead', 'cacheWrite', 'output'] as const;
 
-export function PricingSummary({
+function PricingSummary({
   snapshot,
   context = 'current',
 }: {

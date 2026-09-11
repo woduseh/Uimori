@@ -1,7 +1,7 @@
 import type { ProviderRejection, RejectedOption } from '../core/provider-rejection.js';
 
 /** User-facing names for the option groups a provider can reject. */
-export const rejectedOptionLabels: Record<RejectedOption, string> = {
+const rejectedOptionLabels: Record<RejectedOption, string> = {
   thinking: '사고 강도',
   temperature: 'Temperature',
   topP: 'Top-p',

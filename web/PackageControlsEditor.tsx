@@ -6,7 +6,7 @@ import type { PromptControl, PromptValue } from '../core/prompt-program.js';
 import { PackageControlValues } from './PackageControlValues.js';
 
 type ScalarDraft = { type: 'string' | 'number' | 'boolean' | 'null'; text: string };
-export type PackageControlDraft = {
+type PackageControlDraft = {
   control: PromptControl;
   defaultValue: ScalarDraft;
   min: string;

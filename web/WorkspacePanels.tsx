@@ -585,8 +585,6 @@ export function AppSettingsPanel({
                       onDirtyChange={setPromptDirty}
                       onEditPrompt={onEditPrompt}
                       navigationDisabled={dirty}
-                      chatId={state.selected || undefined}
-                      branchId={state.branch?.id}
                     />
                   )}
                   {key === 'connections' && (

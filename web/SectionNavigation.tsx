@@ -2,7 +2,7 @@ import { Fragment } from 'react';
 import type { LucideIcon } from 'lucide-react';
 import './section-navigation.css';
 
-export type SectionNavigationItem<K extends string> = {
+type SectionNavigationItem<K extends string> = {
   id: K;
   title: string;
   icon?: LucideIcon;

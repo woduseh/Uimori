@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { AuthorNote } from '../core/notes.js';
 import { ApiError } from './api.js';
 
-export type AuthorNoteCommand = {
+type AuthorNoteCommand = {
   branchId: string;
   expectedHeadRevision: string | null;
   expectedRevision: number;

@@ -1,4 +1,4 @@
-export type AuxiliaryErrorDiagnostic = {
+type AuxiliaryErrorDiagnostic = {
   code: string | null;
   message: string;
   action: string;

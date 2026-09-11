@@ -13,13 +13,13 @@ import {
 } from '../core/evaluation-tool-config.js';
 
 export type RateDraft = Record<keyof Required<TokenRates>, string>;
-export type PricingDraft = {
+type PricingDraft = {
   mode: 'official' | 'manual';
   rates: RateDraft;
   flexEnabled: boolean;
   flexRates: RateDraft;
 };
-export const emptyRateDraft = (): RateDraft => ({
+const emptyRateDraft = (): RateDraft => ({
   input: '',
   cacheRead: '',
   cacheWrite: '',

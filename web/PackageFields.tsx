@@ -34,7 +34,7 @@ import {
   type PackageBehavior,
 } from '../core/package-behavior.js';
 
-export function blankPackage(): ContentPackage {
+function blankPackage(): ContentPackage {
   return {
     version: 1,
     id: 'draft',

@@ -24,13 +24,6 @@
   border-left: 3px solid var(--border);
   padding-left: 12px;
 }
-.outline-entry.level-episode,
-.outline-entry.level-beat {
-  border-left-color: var(--accent);
-}
-.outline-entry.progress-written {
-  border-left-style: double;
-}
 .outline-row {
   display: flex;
   align-items: flex-start;
@@ -58,14 +51,6 @@
   border-radius: 999px;
   padding: 1px 8px;
   white-space: nowrap;
-}
-.outline-progress.state-written {
-  border-color: var(--accent);
-  color: var(--accent);
-}
-.outline-progress.state-writing,
-.outline-progress.state-scheduled {
-  font-weight: 600;
 }
 .outline-pin-badge {
   border-style: dashed;

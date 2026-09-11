@@ -7,7 +7,7 @@ import {
   type PromptValue,
 } from '../core/prompt-program.js';
 
-export function ValueInput({
+function ValueInput({
   control,
   value,
   onChange,
