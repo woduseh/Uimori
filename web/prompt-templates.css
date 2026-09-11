@@ -1,11 +1,13 @@
+/** Page-level entry points sit with the create action, not in a band of their own. */
 .prompt-library-actions {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 8px;
-  margin-bottom: 16px;
-  max-width: var(--collection-w);
-  margin-inline: auto;
+  margin-inline-start: auto;
+}
+.prompt-library-actions + .library-create {
+  margin-inline-start: 0;
 }
 .prompt-library-actions > button {
   display: inline-flex;
@@ -69,10 +71,19 @@
   color: var(--error);
   overflow-wrap: anywhere;
 }
+/* Compact widths keep the list's own search and create first; these are occasional entry points. */
+@media (max-width: 600px) {
+  .library-page .library-toolbar > .prompt-library-actions {
+    order: 3;
+    flex-basis: 100%;
+    margin-inline-start: 0;
+  }
+}
 @media (max-width: 520px) {
   .prompt-library-actions {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
+    flex-basis: 100%;
   }
   .prompt-library-actions > button {
     gap: 6px;

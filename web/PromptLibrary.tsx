@@ -242,27 +242,6 @@ export function PromptLibrary({
         <h1>프롬프트</h1>
         {headerTrailing}
       </header>
-      {library && !editing && (
-        <div className="prompt-library-actions">
-          <button
-            type="button"
-            className="secondary prompt-settings-link"
-            onClick={onOpenCurrentPrompts}
-          >
-            <SettingsIcon size={18} aria-hidden="true" />
-            현재 프롬프트 설정
-          </button>
-          <button
-            type="button"
-            className="secondary prompt-templates-open"
-            disabled={busy || organizer.busy}
-            onClick={() => setTemplatesOpen(true)}
-          >
-            <PromptIcon size={18} aria-hidden="true" />
-            기본 프롬프트
-          </button>
-        </div>
-      )}
       <PromptTemplatesDialog
         open={templatesOpen}
         busy={busy}
@@ -451,6 +430,27 @@ export function PromptLibrary({
                     </LibraryItemMenu>
                   </>
                 )
+              )}
+              {!selecting && library && (
+                <div className="prompt-library-actions">
+                  <button
+                    type="button"
+                    className="secondary prompt-settings-link"
+                    onClick={onOpenCurrentPrompts}
+                  >
+                    <SettingsIcon size={18} aria-hidden="true" />
+                    현재 프롬프트 설정
+                  </button>
+                  <button
+                    type="button"
+                    className="secondary prompt-templates-open"
+                    disabled={busy || organizer.busy}
+                    onClick={() => setTemplatesOpen(true)}
+                  >
+                    <PromptIcon size={18} aria-hidden="true" />
+                    기본 프롬프트
+                  </button>
+                </div>
               )}
               {!selecting && (
                 <button
