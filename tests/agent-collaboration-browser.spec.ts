@@ -5,7 +5,12 @@ import { test, expect } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
 import { createDefaultPromptProgram } from '../core/prompt-defaults.js';
 import type { PromptPreset } from '../core/product.js';
-import { navigationAction, openPromptTools, openPromptBlocks } from './ui-navigation.js';
+import {
+  navigationAction,
+  openPromptTools,
+  selectPromptBlock,
+  selectPromptSection,
+} from './ui-navigation.js';
 import { postFixtureChat } from './fixtures/chat.js';
 
 test('AGENTUI03 shared selections remain independent and binary switches fit and persist at 390 and 1440px', async ({
@@ -31,24 +36,25 @@ test('AGENTUI03 shared selections remain independent and binary switches fit and
   const editor = page.getByTestId('prompt-editor');
   const collaboration = editor.getByRole('region', { name: '에이전트 협업' });
   const enabled = collaboration.getByRole('switch', { name: '협업 사용', exact: true });
-  const save = editor.getByRole('button', { name: /^(수정 )?저장$/ });
+  const save = editor.getByRole('button', { name: '프리셋 저장', exact: true });
+  await selectPromptSection(editor, '에이전트 협업');
   await enabled.check();
+  await expect(
+    collaboration.getByRole('button', { name: '에이전트 협업', exact: true })
+  ).toHaveAttribute('aria-expanded', 'true');
+  await collaboration.getByRole('button', { name: '에이전트 협업', exact: true }).click();
   await expect(
     collaboration.getByRole('button', { name: '에이전트 협업', exact: true })
   ).toHaveAttribute('aria-expanded', 'false');
   await expect(
     collaboration.getByRole('button', { name: '인물 에이전트 추가', exact: true })
   ).toBeHidden();
-  if (
-    (await collaboration
-      .getByRole('button', { name: '에이전트 협업', exact: true })
-      .getAttribute('aria-expanded')) === 'false'
-  )
-    await collaboration.getByRole('button', { name: '에이전트 협업', exact: true }).click();
+  await collaboration.getByRole('button', { name: '에이전트 협업', exact: true }).click();
   await collaboration.getByRole('button', { name: '인물 에이전트 추가', exact: true }).click();
   await enabled.uncheck();
   for (const width of [390, 1440]) {
     await page.setViewportSize({ width, height: 1000 });
+    await selectPromptSection(editor, '에이전트 협업');
     await enabled.focus();
     await page.keyboard.press('Space');
     await expect(enabled).toBeChecked();
@@ -64,6 +70,14 @@ test('AGENTUI03 shared selections remain independent and binary switches fit and
     await page.keyboard.press('Space');
     await expect(first).toBeChecked();
     await expect(second).toBeChecked();
+    const enabledBox = await enabled.boundingBox();
+    expect(enabledBox).not.toBeNull();
+    expect(enabledBox!.width).toBe(44);
+    expect(enabledBox!.height).toBe(26);
+    expect(
+      await collaboration.evaluate((element) => element.scrollWidth <= element.clientWidth + 1)
+    ).toBe(true);
+    await selectPromptSection(editor, '기본 옵션');
     const value = editor.getByRole('switch', { name: longLabel, exact: true });
     await expect(value).not.toBeChecked();
     const field = value.locator(
@@ -76,13 +90,9 @@ test('AGENTUI03 shared selections remain independent and binary switches fit and
     expect(textBox).not.toBeNull();
     expect(valueBox).not.toBeNull();
     expect(textBox!.x + textBox!.width).toBeLessThanOrEqual(valueBox!.x);
-    for (const control of [enabled, value]) {
-      const box = await control.boundingBox();
-      expect(box).not.toBeNull();
-      expect(box!.width).toBe(44);
-      expect(box!.height).toBe(26);
-    }
-    for (const region of [field, collaboration, editor])
+    expect(valueBox!.width).toBe(44);
+    expect(valueBox!.height).toBe(26);
+    for (const region of [field, editor])
       expect(
         await region.evaluate((element) => element.scrollWidth <= element.clientWidth + 1)
       ).toBe(true);
@@ -97,6 +107,7 @@ test('AGENTUI03 shared selections remain independent and binary switches fit and
             .collaboration
       )
       .toMatchObject({ enabled: true, sharedControls: ['inner', 'dialogue'] });
+    await selectPromptSection(editor, '에이전트 협업');
     await enabled.scrollIntoViewIfNeeded();
     if (visualReview)
       await page.screenshot({ path: info.outputPath(`boolean-controls-${width}.png`) });
@@ -115,6 +126,7 @@ test('AGENTUI03 shared selections remain independent and binary switches fit and
   await page.reload();
   await navigationAction(page, '프롬프트');
   await page.getByRole('button', { name: `${preset.title} 프롬프트 편집`, exact: true }).click();
+  await selectPromptSection(editor, '에이전트 협업');
   await expect(enabled).not.toBeChecked();
 });
 
@@ -124,6 +136,7 @@ test('AGENTUI01 collaboration stays editable through incomplete drafts, undo and
 }, info) => {
   const pageErrors: string[] = [];
   page.on('pageerror', (error) => pageErrors.push(error.message));
+  await page.setViewportSize({ width: 390, height: 1000 });
   await page.goto('/');
   await navigationAction(page, '프롬프트');
   const library = page.getByTestId('prompt-library');
@@ -134,7 +147,8 @@ test('AGENTUI01 collaboration stays editable through incomplete drafts, undo and
     .getByLabel('프롬프트 이름', { exact: true })
     .fill(`협업 합성 UI ${crypto.randomUUID()}`);
   const enabled = collaboration.getByRole('switch', { name: '협업 사용' });
-  const save = editor.getByRole('button', { name: '저장', exact: true });
+  const save = editor.getByRole('button', { name: '프리셋 저장', exact: true });
+  await selectPromptSection(editor, '에이전트 협업');
   await expect(enabled).not.toBeChecked();
   await enabled.check();
   if (
@@ -144,11 +158,11 @@ test('AGENTUI01 collaboration stays editable through incomplete drafts, undo and
   )
     await collaboration.getByRole('button', { name: '에이전트 협업', exact: true }).click();
   await expect(save).toBeDisabled();
-  await openPromptBlocks(editor);
-  await editor.locator('#prompt-block-instructions > summary').click();
+  await selectPromptBlock(editor, '지침');
   const body = editor.getByLabel('지침 본문', { exact: true });
   await body.fill('합성 본문: 인물의 선택을 따라 장면을 쓴다.');
   await expect(body).toHaveValue('합성 본문: 인물의 선택을 따라 장면을 쓴다.');
+  await selectPromptSection(editor, '에이전트 협업');
   await collaboration.getByRole('button', { name: '인물 에이전트 추가', exact: true }).click();
   await expect(editor.getByRole('button', { name: '이전 편집으로', exact: true })).toBeDisabled();
   await collaboration.getByLabel('1번째 에이전트 이름', { exact: true }).fill('인물 관찰자');
@@ -158,9 +172,11 @@ test('AGENTUI01 collaboration stays editable through incomplete drafts, undo and
   await collaboration
     .getByLabel('함께 따를 지침', { exact: true })
     .fill('각 인물이 실제로 알고 있는 정보만 고려한다.');
+  await selectPromptBlock(editor, '지침');
   await body.fill('합성 본문 수정');
   await editor.getByRole('button', { name: '이전 편집으로', exact: true }).click();
   await expect(body).toHaveValue('합성 본문: 인물의 선택을 따라 장면을 쓴다.');
+  await selectPromptSection(editor, '에이전트 협업');
   await expect(collaboration.getByLabel('1번째 에이전트 이름', { exact: true })).toHaveValue(
     '인물 관찰자'
   );
@@ -195,6 +211,7 @@ test('AGENTUI01 collaboration stays editable through incomplete drafts, undo and
     role: saved.role,
     program: saved.program,
   });
+  await selectPromptSection(editor, '에이전트 협업');
   await collaboration.scrollIntoViewIfNeeded();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(
     true
@@ -226,15 +243,15 @@ test('AGENTUI01 collaboration stays editable through incomplete drafts, undo and
     (item) =>
       /\/api\/edit-drafts\/[^/]+\/save$/.test(item.url()) && item.request().method() === 'POST'
   );
-  await editor.getByRole('button', { name: '저장', exact: true }).click();
+  await save.click();
   expect((await (await updatedResponse).json()).saved.program.collaboration.enabled).toBe(false);
   await page.reload();
   await navigationAction(page, '프롬프트');
   await page.getByRole('button', { name: `${saved.title} 프롬프트 편집`, exact: true }).click();
+  await selectPromptSection(editor, '에이전트 협업');
   await expect(page.getByRole('switch', { name: '협업 사용' })).not.toBeChecked();
   await expect(page.getByLabel('1번째 에이전트 이름', { exact: true })).toBeHidden();
   await page.getByRole('switch', { name: '협업 사용' }).check();
-  await collaboration.getByRole('button', { name: '에이전트 협업', exact: true }).click();
   await expect(page.getByLabel('1번째 에이전트 이름', { exact: true })).toHaveValue('인물 관찰자');
   expect(pageErrors).toEqual([]);
 });
@@ -258,8 +275,8 @@ test('AGENTUI02 saved collaboration options reach the real preview API and trans
   await page.getByRole('button', { name: `${preset.title} 프롬프트 편집`, exact: true }).click();
   const editor = page.getByTestId('prompt-editor'),
     collaboration = editor.getByRole('region', { name: '에이전트 협업' });
+  await selectPromptSection(editor, '에이전트 협업');
   await collaboration.getByRole('switch', { name: '협업 사용' }).check();
-  await collaboration.getByRole('button', { name: '에이전트 협업', exact: true }).click();
   await collaboration
     .getByRole('button', { name: '설정과 기억 에이전트 추가', exact: true })
     .click();
@@ -269,7 +286,7 @@ test('AGENTUI02 saved collaboration options reach the real preview API and trans
     (item) =>
       /\/api\/edit-drafts\/[^/]+\/save$/.test(item.url()) && item.request().method() === 'POST'
   );
-  await editor.getByRole('button', { name: '저장', exact: true }).click();
+  await editor.getByRole('button', { name: '프리셋 저장', exact: true }).click();
   const saved = (await (await updated).json()).saved as PromptPreset;
   expect(saved.program.collaboration).toMatchObject({
     maxCalls: 4,
@@ -321,6 +338,7 @@ test('AGENTUI02 saved collaboration options reach the real preview API and trans
   const detail = await (await request.get(`/api/chats/${chat.id}`)).json();
   expect(detail.runs).toHaveLength(0);
   expect(detail.attempts).toHaveLength(0);
+  await selectPromptSection(editor, '에이전트 협업');
   await collaboration.scrollIntoViewIfNeeded();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(
     true

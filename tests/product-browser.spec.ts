@@ -179,6 +179,9 @@ test('P01 packages use latest settings and prompt-owned creative choices replace
   await expect(library.locator('.library-savebar [role="status"]')).toContainText(
     '저장됨 · 다음 실행부터 사용해요.'
   );
+  // The library has its own URL, so return through the chat navigation before its settings.
+  await selectStoredChat(page, chat);
+  await expect(page.getByRole('textbox', { name: '다음 장면 요청', exact: true })).toBeVisible();
   await openDetails(page, 'profile-editor');
   await expect(
     profile
