@@ -47,3 +47,38 @@
     font-size: 16px;
   }
 }
+
+/* The chat's own override is editable; what it inherits is not. Separating them stops the two
+   from reading as one pile of lines. */
+.settings-inherited {
+  margin-top: 24px;
+  padding-top: 18px;
+  border-top: 1px solid var(--line);
+}
+.settings-inherited > h4 {
+  margin: 0 0 10px;
+  font-size: 12px;
+  font-weight: 550;
+  letter-spacing: 0.04em;
+  color: var(--faint);
+}
+.settings-inherited > dl {
+  display: grid;
+  gap: 6px;
+  margin: 0 0 16px;
+}
+.settings-inherited > dl > div {
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
+  font-size: 13px;
+}
+.settings-inherited > dl dt {
+  flex: 0 0 88px;
+  color: var(--muted);
+}
+.settings-inherited > dl dd {
+  margin: 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}

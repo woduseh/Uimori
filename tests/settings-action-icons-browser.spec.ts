@@ -63,12 +63,11 @@ for (const width of [390, 1440]) {
     await expect(promptChoice.locator('option:checked')).toHaveText(
       `전역 따르기 · ${workspace.main.title}`
     );
-    await expect(
-      promptPanel.getByText('작문 프롬프트 · 전역 따르기', { exact: true })
-    ).toBeVisible();
-    await expect(
-      promptPanel.getByText(`번역 · 전역 따르기: ${workspace.translation.title}`, { exact: true })
-    ).toBeVisible();
+    // The select above already states whether the chat follows the global prompt, so the page
+    // repeats only what it inherits and cannot change here.
+    const inherited = promptPanel.locator('.settings-inherited');
+    await expect(inherited.getByRole('term')).toHaveText(['번역']);
+    await expect(inherited.getByRole('definition')).toHaveText([workspace.translation.title]);
     await selectChatSettingsSection(page, '자동 후속 작업');
     const runtimeSave = dialog.getByRole('button', { name: '설정 저장', exact: true });
     await icon(runtimeSave);

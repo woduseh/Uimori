@@ -331,7 +331,8 @@ for (const width of [390, 1440]) {
         mainPromptPresetId: preset.id,
         mainModel: { id: pinnedModel.id },
       });
-    await expect(settings.getByText('본문 모델 · 이 채팅 고정', { exact: true })).toBeVisible();
+    // Pinning shows in the select itself rather than in a line repeating it underneath.
+    await expect(modelSelect.locator('option:checked')).toContainText(pinnedModel.title);
     await settings.getByRole('button', { name: '채팅 설정 닫기', exact: true }).click();
     await expect(settings).toBeHidden();
     const chip = page.getByRole('button', { name: /^현재 본문 모델 ·/ });
