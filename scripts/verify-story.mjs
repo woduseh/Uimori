@@ -53,7 +53,7 @@ export async function verifyStory(selection) {
       nativePort: {
         status: 'SEPARATE_EVIDENCE',
         reason:
-          'Phēmē, Hinano and Hidden Story were supplied; the user authorized a nonsexual Hinano adaptation. Actual local import and native UI evidence are tracked separately in project-plan/NATIVE-PORTING.md and CURRENT.md. This synthetic M2 runner does not certify that evidence.',
+          'The example-specific runtimes were merged into the common package, prompt and source-segment contracts; project-plan/NATIVE-PORTING.md and CURRENT.md are historical evidence of that porting round, not a map of current code. This synthetic M2 runner certifies neither.',
       },
     },
     limitations: [
