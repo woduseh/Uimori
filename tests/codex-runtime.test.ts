@@ -151,7 +151,7 @@ describe('official Codex runtime boundary using a synthetic stdio executable', (
     expect(onWire).not.toHaveBeenCalled();
     expect(api.records().some((row) => row.method === 'turn/start')).toBe(false);
   });
-  it('persists a truthful RPC attempt before any turn, denies environment access and decodes final output', async () => {
+  it('records native utility availability before any turn while preserving the host environment boundary', async () => {
     const { runtime, records } = setup();
     let wire: WireRecord | undefined;
     const result = await runtime.execute(connection, request(), {
@@ -174,7 +174,11 @@ describe('official Codex runtime boundary using a synthetic stdio executable', (
       method: 'RPC',
       url: 'codex://local',
       headers: {},
-      body: { method: 'turn/start', environmentAccess: false },
+      body: {
+        method: 'turn/start',
+        environmentAccess: false,
+        builtinTools: { codeMode: true, webSearch: 'cached' },
+      },
     });
     const start = records().find((row) => row.method === 'thread/start').params;
     expect(start).toMatchObject({
@@ -183,7 +187,18 @@ describe('official Codex runtime boundary using a synthetic stdio executable', (
       ephemeral: true,
       approvalPolicy: 'never',
       sandbox: 'read-only',
-      config: { 'features.shell_tool': false, 'features.apps': false },
+      config: {
+        web_search: 'cached',
+        'features.code_mode': true,
+        'features.shell_tool': false,
+        'features.js_repl': false,
+        'features.apps': false,
+        'features.request_permissions': false,
+      },
+    });
+    expect(records().find((row) => row.method === 'turn/start').params).toMatchObject({
+      approvalPolicy: 'never',
+      sandboxPolicy: { type: 'readOnly', networkAccess: false },
     });
     expect(Object.keys(start.config).some((key) => key.startsWith('model_providers.openai.'))).toBe(
       false
@@ -231,6 +246,9 @@ describe('official Codex runtime boundary using a synthetic stdio executable', (
   );
   it.each([
     ['builtin', 'CODEX_TOOL_NOT_ALLOWED'],
+    ['approval-during-turn', 'CODEX_TOOL_NOT_ALLOWED'],
+    ['native-without-final', 'CODEX_INVALID_OUTPUT'],
+    ['duplicate-final', 'CODEX_INVALID_OUTPUT'],
     ['turn-exit', 'CODEX_EXECUTION_INTERRUPTED'],
     ['turn-error', 'CODEX_TURN_FAILED'],
     ['wrong-model', 'CODEX_INVALID_THREAD'],
@@ -245,6 +263,23 @@ describe('official Codex runtime boundary using a synthetic stdio executable', (
     expect(JSON.stringify(result)).not.toContain('SECRET_AUTH_TOKEN');
     expect(records().filter((row) => row.method === 'turn/start').length).toBeLessThanOrEqual(1);
   });
+  it.each(['native-tools', 'phase-less-preamble', 'phase-less-final'])(
+    'accepts %s while keeping intermediate messages and native tool output out of the result',
+    async (mode) => {
+      const { runtime, records } = setup(mode);
+      const result = await runtime.execute(connection, request(), {
+        signal: new AbortController().signal,
+        approvedOrigins: [],
+      });
+      expect(result).toMatchObject({
+        status: 'completed',
+        text: 'A synthetic scene.',
+        toolCalls: [],
+      });
+      expect(JSON.stringify(result)).not.toContain('INTERNAL_');
+      expect(records().filter((row) => row.method === 'turn/start')).toHaveLength(1);
+    }
+  );
   it('accepts completion before the turn-start acknowledgement without losing or duplicating the result', async () => {
     const { runtime } = setup('early-completion');
     expect(

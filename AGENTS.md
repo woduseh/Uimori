@@ -16,9 +16,9 @@
 
 - 커스텀 작문 보조는 `docs/AGENT-COLLABORATION.md`, `core/agent-collaboration.ts`, `server/agent-collaboration.ts`를 봐요. `PromptProgram.collaboration`은 기본 OFF이며 보조의 지침·공유 옵션·모델을 Run에 고정해요. 읽기 권한·전체 호출 한도·전송 전 attempt·취소를 유지하고 메인만 원문을 저장해요. `npm run verify:collaboration`은 설정·미리보기 합성 화면 검사이며 실제 창작 품질의 증거는 아니에요.
 
-- 코드 품질·완료 검사: `docs/QUALITY.md`. 수정 중에는 `npm run quality`(서식·lint·타입·의존성)를 실행해요. 매 변경의 완료 조건은 `npm run quality:full`(단위·통합·빌드 추가) + `npm run verify:smoke` + 변경 영역의 `verify:*` 하나예요. 전체 `npm run verify:redesign`은 릴리스 전 1회이며 매 변경의 완료 조건이 아니에요(2026-09-10 결정 3). 서식 수정은 `npm run format`, lint 자동 수정은 안전한 수정만 하는 `npm run lint:fix`예요. 필요한 검사 통과 후 반복·확대하지 않으며, 검사 통과를 위한 광범위 ignore·규칙 약화 대신 좁은 예외에 이유를 남겨요. `core/`·`server/` 값 import 순환은 `tests/module-cycles.test.ts`가 알려진 목록과 비교하므로 새 순환을 만들지 않아요.
+- 코드 품질·완료 검사: `docs/QUALITY.md`. 수정 중에는 `npm run quality`(서식·lint·타입·의존성)를 실행해요. 매 변경의 완료 조건은 `npm run quality:full`(단위·통합·빌드 추가) + `npm run verify:smoke` + 변경 영역의 `verify:*` 하나예요. 릴리스 후보는 `npm run release:check -- --area <verify:*>`로 같은 묶음과 내용 지문 영수증을 만들어요. 전체 `verify:redesign`은 공통 UI·공통 실행/저장 경계를 넓게 바꾼 릴리스나 안정화 릴리스에 `--full`로 추가하며, 매 변경이나 작은 배포의 조건이 아니에요(2026-09-11 결정). 서식 수정은 `npm run format`, lint 자동 수정은 안전한 수정만 하는 `npm run lint:fix`예요. 필요한 검사 통과 후 반복·확대하지 않으며, 검사 통과를 위한 광범위 ignore·규칙 약화 대신 좁은 예외에 이유를 남겨요. `core/`·`server/` 값 import 순환은 `tests/module-cycles.test.ts`가 알려진 목록과 비교하므로 새 순환을 만들지 않아요.
 
-- 검사 통폐합 판단은 `docs/TESTING-AUDIT.md`와 연결된 전수표에 있어요. 기본 UI 연결은 `verify:browser-smoke`, 관련 기능은 기존 `verify:*`를 사용하고 전체 `verify:redesign`은 릴리스 전에만 돌려요. 추가 화면 폭·정밀 배치·성공 PNG는 `verify:visual`, 반복 성능 측정은 `benchmark:story`로 분리해요. 테스트만 바꾸면 재빌드는 필요 없지만 검증 도중 테스트가 바뀐 증거는 무효예요.
+- 검사 통폐합 판단은 `docs/TESTING-AUDIT.md`와 연결된 전수표에 있어요. 기본 UI 연결은 `verify:browser-smoke`, 관련 기능은 기존 `verify:*`를 사용해요. 전체 `verify:redesign`은 넓은 변경·안정화 릴리스에만 추가해요. 추가 화면 폭·정밀 배치·성공 PNG는 `verify:visual`, 반복 성능 측정은 `benchmark:story`로 분리해요. 테스트만 바꾸면 재빌드는 필요 없지만 검증 도중 테스트가 바뀐 증거는 무효예요.
 
 - 공통 합성 브라우저 실행은 `scripts/browser-verification.mjs`예요. 연결된 `verify-*` 진입점은 검사 파일·필수 case·필수 PNG·timeout을 선택해요. 소스/빌드 일치, reporter·fixture 오류 판정, 소유권·취소·cleanup·DB 증거 보존을 공통 실행기에 유지하며 회귀는 `tests/harness.test.ts`에서 확인해요. 초기 UI 전후 캡처 전용 `ui-evidence.mjs`는 제거했으며 당시 화면 증거는 보존해요.
 

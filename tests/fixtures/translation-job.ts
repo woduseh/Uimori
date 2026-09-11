@@ -7,7 +7,43 @@ import type {
   AuxiliaryStoreBridge,
   AuxiliaryJobHooks,
 } from '../../server/product-auxiliary.js';
-import type { ProviderResult, WireRecord } from '../../core/transport.js';
+import type { ProviderRequest, ProviderResult, WireRecord } from '../../core/transport.js';
+/** Decode only observed starter slots or the complete Hermēneía source/context block. */
+export function translationFixtureRenderedSlot(
+  texts: readonly string[],
+  slot: 'source' | 'context'
+): string {
+  const values: string[] = [];
+  const prefix = `${slot}:\n`;
+  for (const text of texts) {
+    if (text.startsWith(prefix)) {
+      values.push(text.slice(prefix.length));
+      continue;
+    }
+    // Context and notes slots are single-line JSON. Match the closing envelope so
+    // literal source delimiters and source whitespace remain part of the source.
+    const authored = text.match(
+      /(?:^|\n)<Sample_Text>\n([\s\S]*)\n<\/Sample_Text>\n\n<Additional_Information>\n\ncontext:\n([^\n]*)\nnotes:\n[^\n]*\n<\/Additional_Information>$/
+    );
+    if (authored) values.push(authored[slot === 'source' ? 1 : 2]);
+  }
+  if (values.length !== 1)
+    throw new Error(`Expected one translation fixture slot: ${slot}; found ${values.length}`);
+  return values[0];
+}
+
+/** Read observed wire data; never invent text missing from either request layout. */
+export function translationFixtureSlot(request: ProviderRequest, slot: 'source' | 'context') {
+  const fallback = request.input.source as Record<string, unknown>;
+  if (slot === 'source' && typeof fallback.text === 'string') return fallback.text;
+  if (slot === 'context' && fallback.context) return JSON.stringify(fallback.context);
+  return translationFixtureRenderedSlot(
+    request.prompt?.messages
+      .filter((item) => item.provenance.blockId === slot || item.provenance.blockId === 'pheme-7')
+      .map((item) => item.content.map((part) => part.text).join('')) ?? [],
+    slot
+  );
+}
 export function bundle(text = 'Mira waited quietly beside the pier.'): AuxiliaryBundle {
   const source = {
     id: 'source-old',

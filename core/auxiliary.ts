@@ -12,6 +12,7 @@ import {
 } from './source-segments.js';
 import { STORY_READ_NAMES } from './story-context.js';
 import { TRANSLATION_READ_NAMES } from './translation-context.js';
+import { AUTHOR_NOTE_GUIDANCE } from './notes.js';
 import {
   compiledPackages,
   packageContext,
@@ -106,7 +107,10 @@ const object = (value: unknown): Record<string, unknown> => {
 };
 const parsed = (value: unknown) => {
   try {
-    return object(typeof value === 'string' ? JSON.parse(value) : value);
+    if (typeof value !== 'string') return object(value);
+    const text = value.trim();
+    const fence = /^```(?:json)?[\t ]*\r?\n([\s\S]*?)\r?\n```$/iu.exec(text);
+    return object(JSON.parse(fence ? fence[1] : text));
   } catch {
     throw new Error('OUTPUT_SCHEMA_INVALID');
   }
@@ -243,7 +247,8 @@ export function translationInput(
     },
     contract: '',
     referencePolicy:
-      'Optional story.search/read retrieves frozen prior originals; notes.list/read retrieves typed source-time evidence; translation.search/read retrieves prior wording, never new facts. Search names, forms of address and speaker register when useful, then read only needed ranges. Current source and source-time references take precedence over prior translations, beliefs and summaries. Hidden viewpoints remain distinct: reference knowledge does not become a character’s knowledge. Empty search needs no retry; translation remains possible without tools. Total tool result budget is 96000 UTF-8 bytes per job.',
+      AUTHOR_NOTE_GUIDANCE +
+      ' Optional story.list/search/read retrieves frozen prior originals; notes.list/read retrieves typed source-time evidence; translation.search/read retrieves prior wording, never new facts. Search names, forms of address and speaker register when useful, then read only needed ranges. Current source and source-time references take precedence over prior translations, beliefs and summaries. Hidden viewpoints remain distinct: reference knowledge does not become a character’s knowledge. A search with no matches needs no retry; translation remains possible without tools. Total tool result budget is 96000 UTF-8 bytes per job.',
     ...(snapshot.profile?.promptPresets?.translation ? { customPrompt: true } : {}),
     outputSchema: {},
   };
@@ -260,7 +265,7 @@ export function displayInput(
     role: 'status',
     blocks: splitSource(source),
     contract:
-      'Create optional display-only scene summaries and mood annotations grounded in the specified source blocks. Do not invent inner motives or new events. These interpretations never become authoritative state, canon, or next-turn evidence. Return structured data; do not rewrite the source or add HTML.',
+      'Create optional display-only scene summaries and mood annotations grounded in the specified source blocks. Do not invent inner motives or new events. These interpretations never become authoritative state, canon, or next-turn evidence. Return structured data; do not rewrite the source or add HTML. Use at most one entry per source anchor. Each summary is at most 600 UTF-16 code units and each mood label at most 100.',
     outputSchema: {
       sourceRevision: 'exact input value',
       sourceHash: 'exact input value',
@@ -322,7 +327,7 @@ export function presentationInput(
     scenes: structuredClone(scenes),
     tools: ['assets.search', 'assets.inspect'],
     contract:
-      'Select optional existing images for the corresponding source block. Choose from the authored names and optional descriptions using the source meaning. Do not require literal actor, clothing or location strings in a block. Assets metadata is an authored description, not a claim that you viewed image bytes. The initial catalog is a bounded page. Use assets.search with offset/limit and follow nextOffset when useful; assets.inspect reads an exact ref. Never invent a name-to-ID mapping. No suitable image means an empty entries list, which is successful. Return source-bound annotations only; never HTML or rewritten narrative. The host validates source, anchor, asset revision/hash and allowed use. Image interpretation never changes story canon or state.',
+      'Select optional existing images for the corresponding source block. Choose from the authored names and optional descriptions using the source meaning. Do not require literal actor, clothing or location strings in a block. Assets metadata is an authored description, not a claim that you viewed image bytes. The initial catalog is a bounded page. Use assets.search with offset/limit and follow nextOffset when useful; assets.inspect reads an exact ref. Never invent a name-to-ID mapping. No suitable image means an empty entries list, which is successful. Return at most 4 source-bound annotations; never HTML or rewritten narrative. The host validates source, anchor, asset revision/hash and allowed use. Image interpretation never changes story canon or state.',
     outputSchema: {
       sourceRevision: 'exact input value',
       sourceHash: 'exact input value',
@@ -480,36 +485,53 @@ export async function executeAuxiliary(
           throw new Error('TOOL_CALL_INVALID');
       } else if (action.name === 'assets.search' || action.name === 'assets.inspect') {
         const assets = assetCatalog;
+        const denied = (code: string): ToolEvent => ({
+          callId: action.callId,
+          name: action.name,
+          args: {},
+          result: { code },
+          denied: true,
+          errorKind: 'recoverable',
+        });
         if (action.name === 'assets.search') {
-          if (Object.keys(action.args).some((key) => !['query', 'offset', 'limit'].includes(key)))
-            throw new Error('TOOL_CALL_INVALID');
           const query = action.args.query ?? '',
             offset = action.args.offset ?? 0,
             limit = action.args.limit ?? 20;
-          const page = imageCatalogPage(assets, query as string, offset as number, limit as number);
-          event = { ...action, args: { query, offset, limit }, result: page, denied: false };
+          if (Object.keys(action.args).some((key) => !['query', 'offset', 'limit'].includes(key)))
+            event = denied('INVALID_ARGUMENTS');
+          else {
+            try {
+              const page = imageCatalogPage(
+                assets,
+                query as string,
+                offset as number,
+                limit as number
+              );
+              event = { ...action, args: { query, offset, limit }, result: page, denied: false };
+            } catch (error) {
+              if (!(error instanceof Error) || error.message !== 'ASSET_SEARCH_INVALID')
+                throw error;
+              event = denied('INVALID_ARGUMENTS');
+            }
+          }
         } else {
           if (
             Object.keys(action.args).some((key) => key !== 'ref') ||
             typeof action.args.ref !== 'string' ||
             action.args.ref.length > 200
           )
-            throw new Error('TOOL_CALL_INVALID');
-          const found = assets.find((asset) => asset.ref === action.args.ref);
-          event = found
-            ? {
-                ...action,
-                args: { ref: found.ref },
-                result: { asset: imageMetadata(found), bytesProvided: false },
-                denied: false,
-              }
-            : {
-                callId: action.callId,
-                name: action.name,
-                args: {},
-                result: { code: 'ASSET_UNAVAILABLE' },
-                denied: true,
-              };
+            event = denied('INVALID_ARGUMENTS');
+          else {
+            const found = assets.find((asset) => asset.ref === action.args.ref);
+            event = found
+              ? {
+                  ...action,
+                  args: { ref: found.ref },
+                  result: { asset: imageMetadata(found), bytesProvided: false },
+                  denied: false,
+                }
+              : denied('ASSET_UNAVAILABLE');
+          }
         }
       } else
         event = executeTool(
@@ -522,7 +544,6 @@ export async function executeAuxiliary(
       await hooks.onToolEvent?.(structuredClone(event));
       check();
       const decision = correction(event, action.args);
-      if (decision === 'exhausted') throw new Error('TOOL_CORRECTION_EXHAUSTED');
       if (decision === 'denied') throw new Error('Auxiliary read tool denied');
     }
   }

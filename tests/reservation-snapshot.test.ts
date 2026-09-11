@@ -18,6 +18,8 @@ import { helperWritingSnapshot } from '../server/helper-runtime.js';
 import { promptWorkspace, updatePromptWorkspace } from '../server/prompt-workspace.js';
 import { Store } from '../server/store.js';
 import { createFixtureChat } from './fixtures/chat.js';
+import { createDefaultPromptProgram } from '../core/prompt-defaults.js';
+import { DEFAULT_MAIN_PROMPT } from '../core/prompts.js';
 
 const owned: { store: Store; directory: string }[] = [];
 afterEach(() => {
@@ -272,7 +274,7 @@ test('helper callers apply fixed options before resources and preserve pending o
       ...prior.main,
       values: { tone: 'calm' },
       program: {
-        ...prior.main.program,
+        ...createDefaultPromptProgram(DEFAULT_MAIN_PROMPT),
         controls: [
           {
             id: 'tone',

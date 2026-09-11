@@ -96,6 +96,9 @@ const payloads = new Set([
   'code',
   'rawUsage',
   'opaqueState',
+  // Exact advisor transmission receipt: these are origin-execution IDs, not live references
+  // into the restored chat. Preserve its body and digest together, like the recorded wire request.
+  'consultationContext',
 ]);
 
 /** Primary keys are allocated once; public/library identities are deliberately preserved. */

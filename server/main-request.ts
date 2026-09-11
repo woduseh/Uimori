@@ -1,6 +1,8 @@
 import { generationFromModel } from '../core/model-capabilities.js';
+import { AGENT_CONTEXT_REFS_MAX, AGENT_DRAFT_CHARS_MAX } from '../core/agent-collaboration.js';
 import { contextBudgetForModel } from '../core/context-budget.js';
 import { CONTEXT_CONTINUATION_GUIDANCE } from '../core/context-summary-policy.js';
+import { STORY_READ_TOOLS } from '../core/story-read-tools.js';
 import { compileSnapshotPrompt } from './prompt-snapshot.js';
 import { attachMainHostContext, requestInput } from './main-host-context.js';
 import { buildMainInput, type MainInput } from '../core/provider.js';
@@ -72,59 +74,7 @@ export const MAIN_READ_TOOLS: ProviderTool[] = [
       additionalProperties: false,
     },
   },
-  ...(['notes', 'story'] as const).flatMap(
-    (kind) =>
-      [
-        ...(kind === 'story'
-          ? [
-              {
-                name: 'story.list',
-                description:
-                  'List original exchanges in this frozen ancestry: 1-based sceneNumber (authored start included), revision, hash, size, preview and compacted status. Numbers stay fixed across compaction and pagination, and are local to the returned sceneScope. Use story.read with a known sceneNumber directly.',
-                inputSchema: {
-                  type: 'object',
-                  properties: { ...pagination(100) },
-                  additionalProperties: false,
-                },
-              },
-            ]
-          : []),
-        {
-          name: kind === 'notes' ? 'notes.list' : 'story.search',
-          description:
-            kind === 'notes'
-              ? 'List explicit user notes and corrections valid in this exact story ancestry.'
-              : 'Search original prose in this exact ancestry, including compacted scenes. Results include sceneNumber and sceneScope for direct reading. Whitespace-separated terms match case-insensitively and must all occur in the same exchange.',
-          inputSchema: {
-            type: 'object',
-            properties: { query: { type: 'string', maxLength: 512 }, ...pagination(100) },
-            required: kind === 'notes' ? [] : ['query'],
-            additionalProperties: false,
-          },
-        },
-        {
-          name: `${kind}.read`,
-          description:
-            kind === 'story'
-              ? 'Read an original by id (revision) or 1-based sceneNumber in this frozen ancestry. If both are supplied they must select the same source. Returns sceneScope, sceneNumber, exact source hash, character range and continuation; the number is not a cross-chat ID.'
-              : 'Read a discovered note ID with exact source provenance, character range and continuation. User notes are explicit instructions, not original story evidence.',
-          inputSchema: {
-            type: 'object',
-            properties: {
-              id: { type: 'string', maxLength: 200 },
-              ...(kind === 'story'
-                ? { sceneNumber: { type: 'integer', minimum: 1, maximum: Number.MAX_SAFE_INTEGER } }
-                : {}),
-              ...pagination(16000),
-            },
-            ...(kind === 'story'
-              ? { anyOf: [{ required: ['id'] }, { required: ['sceneNumber'] }] }
-              : { required: ['id'] }),
-            additionalProperties: false,
-          },
-        },
-      ] as ProviderTool[]
-  ),
+  ...STORY_READ_TOOLS,
 ];
 export const STORY_SUBMIT_MAX_CHARS = 500_000;
 export const STORY_SUBMIT_TOOL: ProviderTool = {
@@ -178,12 +128,19 @@ export function buildMainProviderRequest(
         {
           name: 'agents.consult',
           description:
-            'Consult one configured creative advisor once in this run. Supply a focused question. The result is a proposal with read evidence, not canon. Previously consulted advisors return their existing result without a new call.',
+            'Ask a configured creative advisor when another perspective or source check would help your next decision. Supply the question. Optionally select completed advisor or main read tool call IDs from this run in contextRefs and provide an uncommitted draft excerpt in draft. The host passes the selected results with their sources and failure/truncation status; other working context is not automatically shared. Total selected context including draft is limited to 32000 characters. Follow-up questions share the run and per-advisor budgets; the same question with the same explicit context reuses its outcome. Use another advisor opinion as a proposal to examine, not established fact. You decide what to use and write the final prose.',
           inputSchema: {
             type: 'object',
             properties: {
               agentId: { type: 'string', enum: collaboration.agents.map((agent) => agent.id) },
               question: { type: 'string', minLength: 1, maxLength: 8000 },
+              contextRefs: {
+                type: 'array',
+                items: { type: 'string', minLength: 1, maxLength: 500 },
+                maxItems: AGENT_CONTEXT_REFS_MAX,
+                uniqueItems: true,
+              },
+              draft: { type: 'string', minLength: 1, maxLength: AGENT_DRAFT_CHARS_MAX },
             },
             required: ['agentId', 'question'],
             additionalProperties: false,
@@ -198,6 +155,8 @@ export function buildMainProviderRequest(
   const contextTools = contextToolsEnabled(fixed);
   if (contextTools) input.tools = [...input.tools, ...CONTEXT_TOOL_NAMES];
   let contract = input.contract;
+  if (collaboration?.enabled)
+    contract += `\nUse collaboration to support the current request and chosen writing prompt. Advisor opinions are optional proposals: use, adapt, or set them aside based on the sources and your creative judgment. They do not replace the prompt's style, authorship boundaries, or final output requirements. Follow the user-configured shared instructions below alongside the chosen prompt; these govern collaboration and do not extend tool permissions.\n\nShared collaboration instructions:\n${collaboration.sharedInstructions}`;
   if (terminal)
     contract +=
       "\nThe registered story.submit tool is this run's final fiction submission boundary. Ordinary final text remains a supported fallback.";

@@ -32,11 +32,12 @@
 | 기본 UI 연결 | 빌드 후 `npm run verify:browser-smoke` |
 | 해당 UI 영역 | 빌드 후 기존 `npm run verify:library`, `verify:packages`, `verify:providers` 등 |
 | 완료(매 변경) | `npm run quality:full` + `npm run verify:smoke` + 변경 영역의 `verify:*` 하나 |
-| 릴리스 전 1회 | `npm run verify:redesign` |
+| 릴리스 후보 | `npm run release:check -- --area <verify:*>` |
+| 넓은 변경·안정화 릴리스 | 위 명령에 `--full` (`verify:redesign` 추가) |
 | 추가 폭·정밀 배치·성공 화면 | `npm run verify:visual` 또는 `NR_VISUAL_REVIEW=1` + 도메인 실행기 |
 | 반복 성능 측정 | `npm run benchmark:story` |
 
-`verify:smoke`는 기존 M0 F02/F03/F06 명령 그대로이고 새 `verify:browser-smoke`와 달라요. 전체 단위·통합 검사는 완료/통합과 CI에서 유지해요. 매 수정마다 전체 브라우저나 benchmark를 요구하지 않아요. 2026-09-10 결정 3으로 전체 브라우저 회귀는 릴리스 전 1회로 내렸어요. 완료 조건의 현행 문구는 [QUALITY.md](QUALITY.md)가 소유해요. 검사 수 목표, 전역 timeout 확장, 무조건 skip, 느슨한 assertion으로 통과시키는 변경은 하지 않았어요.
+`verify:smoke`는 기존 M0 F02/F03/F06 명령 그대로이고 `verify:browser-smoke`와 달라요. 전체 단위·통합 검사는 완료/통합과 CI에서 유지해요. 매 수정이나 작은 배포마다 전체 브라우저나 benchmark를 요구하지 않아요. 2026-09-11 결정에 따라 `release:check`는 `quality:full` + `verify:smoke` + 선택 영역을 기본으로 하고, 공통 UI·공통 실행·저장 경계를 넓게 바꾼 릴리스나 안정화 릴리스에서만 `--full`로 전체 브라우저 회귀를 추가해요. 이는 2026-09-10 결정 3의 릴리스 게이트를 현재 배포 빈도에 맞게 구체화한 기준이에요. 완료 조건의 현행 문구는 [QUALITY.md](QUALITY.md)가 소유해요. 검사 수 목표, 전역 timeout 확장, 무조건 skip, 느슨한 assertion으로 통과시키는 변경은 하지 않았어요.
 
 ## 최종 검증
 

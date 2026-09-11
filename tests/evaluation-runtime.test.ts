@@ -17,6 +17,7 @@ import type {
 import type { Json } from '../core/transport.js';
 import { defaultEvaluationToolOptions } from '../core/evaluation-tool-config.js';
 import { loopbackProvider, sse, writeSse } from './fixtures/loopback-provider.js';
+import { translationFixtureRenderedSlot } from './fixtures/translation-job.js';
 
 const credentialEnv = 'Evaluation_Runtime_Key';
 const bearer = 'synthetic-evaluation-fixture-key';
@@ -271,7 +272,12 @@ async function settled(state: Awaited<ReturnType<typeof fixture>>, id: string): 
 }
 const artifact = (body: Body, text: string, id = 'artifact'): Json =>
   call(body, 'eval_submit_artifact', { content: text, userFacingNotice: marker }, id);
-const translated = (body: Body): string => '합성 번역: ' + packet(body).source.text;
+const translated = (body: Body): string => {
+  const texts = body.input
+    .flatMap((message) => message.content ?? [])
+    .flatMap((part) => (typeof part.text === 'string' ? [part.text] : []));
+  return '합성 번역: ' + translationFixtureRenderedSlot(texts, 'source');
+};
 
 test('preset evaluation mixes permitted reads and local tools; buffered Responses translation keeps source/hash and per-request attempts', async () => {
   const sourceText = 'The keeper watched the copper observatory.';

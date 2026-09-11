@@ -16,6 +16,7 @@ import type {
 import type { SourceTimeContext } from '../core/auxiliary.js';
 import type { Json } from '../core/transport.js';
 import { loopbackProvider, sse, writeSse } from './fixtures/loopback-provider.js';
+import { translationFixtureRenderedSlot } from './fixtures/translation-job.js';
 
 const origin = 'https://aiplatform.googleapis.com';
 const endpoint = `${origin}/v1/projects/synthetic-project/locations/global/publishers/google/models`;
@@ -154,11 +155,18 @@ function decoded(bodyText: string) {
   ];
   for (const marker of markers) {
     const text = parts.map((part) => part.text ?? '').find((value) => value.includes(marker));
-    if (text)
-      return {
-        body,
-        packet: JSON.parse(text.slice(text.indexOf(marker) + marker.length)) as Packet,
-      };
+    if (text) {
+      const packet = JSON.parse(text.slice(text.indexOf(marker) + marker.length)) as Packet;
+      if (packet.source.sourceRevision) {
+        // Translation data now lives in the authored slots; metadata retains source identity.
+        const texts = parts.flatMap((part) => (typeof part.text === 'string' ? [part.text] : []));
+        expect(packet.source).not.toHaveProperty('text');
+        expect(packet.source).not.toHaveProperty('context');
+        packet.source.text = translationFixtureRenderedSlot(texts, 'source');
+        packet.source.context = JSON.parse(translationFixtureRenderedSlot(texts, 'context'));
+      }
+      return { body, packet };
+    }
   }
   throw new Error(
     'Native requests must include source-bound host context or classifier request data'
@@ -339,7 +347,7 @@ test('L01 P05 P07 P08 P09 preserves source-time Main/Aux snapshots, whole-source
         maxOutputTokens: 8192,
         thinkingConfig: { thinkingLevel: 'MEDIUM' },
       });
-      if (body.contents.length === 1) {
+      if (!last.parts.some((part) => part.functionResponse)) {
         if (mainRequests === 1) {
           firstReceived();
           await gate;
@@ -357,7 +365,11 @@ test('L01 P05 P07 P08 P09 preserves source-time Main/Aux snapshots, whole-source
           name: 'knowledge.read',
           response: { text: 'ORIGINAL_LORE: The observatory lies north.' },
         });
-        expect(body.contents[1].parts[1].thoughtSignature).toBe('PRIVATE_VERTEX_APP_SIGNATURE');
+        expect(
+          body.contents
+            .findLast((message) => message.parts.some((part) => part.functionCall))
+            ?.parts.some((part) => part.thoughtSignature === 'PRIVATE_VERTEX_APP_SIGNATURE')
+        ).toBe(true);
         await writeSse(response, complete(sourceTexts[completedMain++]));
       }
     } else {
@@ -371,7 +383,7 @@ test('L01 P05 P07 P08 P09 preserves source-time Main/Aux snapshots, whole-source
       expect(
         packet.source.context!.references.find((item) => item.text.includes('ORIGINAL_GLOSSARY'))
       ).toBeDefined();
-      if (body.contents.length === 1)
+      if (!last.parts.some((part) => part.functionResponse))
         await writeSse(
           response,
           read(
@@ -381,7 +393,11 @@ test('L01 P05 P07 P08 P09 preserves source-time Main/Aux snapshots, whole-source
         );
       else {
         expect(last.parts[0].functionResponse?.response.text).toContain('ORIGINAL_GLOSSARY');
-        expect(body.contents[1].parts[1].thoughtSignature).toBe('PRIVATE_VERTEX_APP_SIGNATURE');
+        expect(
+          body.contents
+            .findLast((message) => message.parts.some((part) => part.functionCall))
+            ?.parts.some((part) => part.thoughtSignature === 'PRIVATE_VERTEX_APP_SIGNATURE')
+        ).toBe(true);
         await writeSse(response, complete(`합성 번역 ${packet.source.text}`));
       }
     }

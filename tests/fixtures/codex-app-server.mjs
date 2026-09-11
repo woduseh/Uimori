@@ -196,8 +196,64 @@ input.on('line', (line) => {
       });
       return;
     }
+    if (mode === 'approval-during-turn') {
+      send({
+        id: 'turn-approval',
+        method: 'item/commandExecution/requestApproval',
+        params: { threadId, turnId, command: 'never execute' },
+      });
+      return;
+    }
     setTimeout(() => {
       const text = process.env.UIMORI_CODEX_FIXTURE_OUTPUT ?? '{"ok":true}';
+      const completedItem = (item) =>
+        send({ method: 'item/completed', params: { threadId, turnId, item } });
+      if (
+        [
+          'native-tools',
+          'phase-less-preamble',
+          'native-without-final',
+          'duplicate-final',
+          'image-native',
+        ].includes(mode)
+      )
+        completedItem({
+          type: 'agentMessage',
+          id: 'intermediate-message',
+          text:
+            mode === 'native-without-final' || mode === 'duplicate-final'
+              ? text
+              : 'INTERNAL_INTERMEDIATE_TEXT',
+          phase: mode === 'duplicate-final' ? 'final_answer' : null,
+        });
+      if (['native-tools', 'native-without-final', 'image-native'].includes(mode)) {
+        for (const item of [
+          {
+            type: 'webSearch',
+            id: 'native-search',
+            query: 'synthetic public fact',
+            action: { type: 'search' },
+          },
+          {
+            type: 'functionCallOutput',
+            id: 'native-output',
+            name: 'synthetic-calculation',
+            namespace: null,
+            output: 'INTERNAL_TOOL_OUTPUT',
+          },
+          { type: 'contextCompaction', id: 'native-compaction' },
+          { type: 'plan', id: 'native-plan', text: 'INTERNAL_PLAN' },
+        ]) {
+          send({ method: 'item/started', params: { threadId, turnId, item } });
+          completedItem(item);
+        }
+        completedItem({
+          type: 'agentMessage',
+          id: 'native-progress',
+          text: 'INTERNAL_COMMENTARY',
+          phase: 'commentary',
+        });
+      }
       send({
         method: 'thread/tokenUsage/updated',
         params: { threadId, turnId, tokenUsage: { total: { inputTokens: 100, outputTokens: 30 } } },
@@ -283,18 +339,18 @@ input.on('line', (line) => {
             },
           });
       }
-      send({
-        method: 'item/agentMessage/delta',
-        params: { threadId, turnId, itemId: 'fixture-item-' + turnId, delta: text },
-      });
-      send({
-        method: 'item/completed',
-        params: {
-          threadId,
-          turnId,
-          item: { type: 'agentMessage', id: 'fixture-item-' + turnId, text, phase: 'final_answer' },
-        },
-      });
+      if (mode !== 'native-without-final') {
+        send({
+          method: 'item/agentMessage/delta',
+          params: { threadId, turnId, itemId: 'fixture-item-' + turnId, delta: text },
+        });
+        completedItem({
+          type: 'agentMessage',
+          id: 'fixture-item-' + turnId,
+          text,
+          phase: mode === 'phase-less-final' ? null : 'final_answer',
+        });
+      }
       send({
         method: 'turn/completed',
         params: {

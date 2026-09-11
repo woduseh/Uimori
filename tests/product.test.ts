@@ -16,6 +16,7 @@ import { compileSnapshotPrompt } from '../server/prompt-snapshot.js';
 import type { ProviderResult } from '../core/transport.js';
 import { loopbackProvider, writeSse } from './fixtures/loopback-provider.js';
 import { createApp } from '../server/app.js';
+import { translationFixtureSlot } from './fixtures/translation-job.js';
 
 const owned: { directory: string; store?: Store; close?: () => Promise<void> }[] = [];
 afterEach(async () => {
@@ -787,7 +788,10 @@ describe('M1 real HTTP application boundaries', () => {
       }
       expect(body.role).toBe('translation');
       expect(body.modelId).toBe(expectedTranslationModel);
-      const source = body.input.source;
+      const source = {
+        text: translationFixtureSlot(body, 'source'),
+        context: JSON.parse(translationFixtureSlot(body, 'context')),
+      };
       expect(source.context.references).toMatchObject([
         { id: glossaryId, revision: 1, text: 'SOURCE_TIME_GLOSSARY_OLD' },
       ]);

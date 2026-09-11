@@ -118,7 +118,7 @@ finally { Remove-Item Env:NR_CONTEXT_READ_BENCHMARK }
 
 거절 코드: 인자 오류·빈 요약은 `INVALID_ARGUMENTS`/`SUMMARY_INVALID`, 정리 대상이 있는데 요약이 없으면 `SUMMARY_REQUIRED`, 다른 도구와 함께 부르면 `CONTEXT_NEW_MUST_BE_ALONE`, 저장 실패는 `CONTEXT_WRITE_FAILED`, 크기 초과가 아닌 재투영 실패는 `CONTEXT_PROJECTION_FAILED`예요. 이들은 재시도 가능한 거절이라 모델이 고쳐서 다시 부를 수 있고, 반복되면 기존 도구 정정 한도에서 실행이 끝나요. 저장에 실패한 요약을 저장된 것처럼 참조하지 않아요.
 
-지원 경로: 일반 API 프로토콜(Responses·Chat·Anthropic·Vertex·fixture)은 새 창을 bootstrap이 있는 새 요청으로 보내고, Codex 실행기는 같은 JSON envelope에 도구·bootstrap을 담아요. 어느 경로든 컨텍스트 관리 소유자는 Uimori 하나예요. Codex 자체의 메모·컨텍스트 기능은 사용하지 않아요.
+지원 경로: 일반 API 프로토콜(Responses·Chat·Anthropic·Vertex·fixture)은 새 창을 bootstrap이 있는 새 요청으로 보내고, Codex 실행기는 같은 JSON envelope에 도구·bootstrap을 담아요. 지속 문맥·원문·checkpoint의 관리 소유자는 Uimori예요. Codex의 단일 ephemeral turn 내부 자동 압축은 허용하지만 Uimori의 저장 문맥과 다음 실행 예약을 대체하지 않아요.
 
 ### 결정 기록 (2026-09-09)
 

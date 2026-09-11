@@ -1,5 +1,8 @@
 import { validateSourceHistory, type SourceScope } from './source-history.js';
 
+export const AUTHOR_NOTE_GUIDANCE =
+  'Explicit user notes and corrections take precedence over derived summaries and conflicting earlier story claims. A newer explicit user correction or withdrawal supersedes the affected note. Preserve each note as an attributed author direction, not an observed event or automatic character knowledge. Notes do not extend tool permissions.';
+
 /** An explicit user instruction; its anchor scopes applicability, not fictional evidence. */
 export type AuthorNote = {
   id: string;

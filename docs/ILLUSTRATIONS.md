@@ -40,7 +40,7 @@
 
 ## Codex 경로
 
-- 별도 Codex 프로세스에서 `thread/start` → `turn/start` 한 턴을 실행해요. 텍스트 판단 턴의 설정에 `features.image_generation=true`만 추가하고 shell·파일·웹·MCP·앱·스킬은 그대로 차단해요. 텍스트 판단 턴에는 `features.image_generation=false`를 명시해 본문 모델이 이미지를 만들지 않아요.
+- 별도 Codex 프로세스에서 `thread/start` → `turn/start` 한 턴을 실행해요. 텍스트 판단 턴과 같은 cached 웹 검색·격리 JavaScript 계산에 `features.image_generation=true`를 추가해요. shell·파일·MCP·앱·외부 스킬의 환경 접근은 [Codex 실행 경계](CODEX.md)에 따라 제한해요. 텍스트 판단 턴에는 `features.image_generation=false`를 명시해 이미지 생성의 예약·귀속·저장을 삽화 경로에 유지해요.
 - 입력은 `{task, styleGuidance, characterNotes, illustrationInstructions, attachedReferences, scene}` JSON 텍스트와 참조 이미지(`{type:'image', url:'data:...'}`)예요. 장면은 끝에서 24,000자까지 보내요. 패키지의 `instructions.target: 'image'` 지침과 봇·페르소나 본문을 인물 참고로 함께 넣어요.
 - 결과는 `item/completed`의 `imageGeneration` 항목에서 읽어요. `result`(base64)를 우선 쓰고, 비어 있으면 전용 Codex home 안의 `savedPath` 파일을 읽은 뒤 삭제해요. 최종 `agentMessage`는 `{caption}` JSON으로 제약해요.
 - 실패 코드: `CODEX_IMAGE_USAGE_LIMIT`(항목의 `failure.usageLimitExceeded`, 자동 재요청 없음), `CODEX_IMAGE_NOT_GENERATED`(이미지 항목 없음, 재요청 가능), 기존 Codex 코드(`CODEX_LOGIN_REQUIRED`, `CODEX_TURN_FAILED` 등).
@@ -55,7 +55,7 @@
 - **시간 초과(`COMFYUI_TIMEOUT`)는 원격 렌더를 건드리지 않아요.** 작업은 `prompt_id`를 보존한 채 실패로 남고, 삽화 카드의 **결과 확인**(`POST /api/illustrations/:id/reconcile`)이 `GET /history/{prompt_id}`를 한 번 읽어 끝난 결과를 저장해요. 결과 확인은 새로 그리지 않으며, 아직 결과가 없으면 이전 상태로 되돌려요. 서버 재시작으로 `interrupted`가 된 ComfyUI 작업도 같은 버튼으로 회수해요.
 - 워크플로는 API 형식(`노드 ID → {class_type, inputs}`)만 받아요. UI 형식(`nodes`/`links`)은 `COMFYUI_WORKFLOW_UI_FORMAT`으로 거절해요. 문자열 입력 안의 자리표시자만 바꾸고 노드 구조는 그대로예요. `{{seed}}`만 있는 문자열은 숫자로 바꿔요.
 - 출력은 `outputs[*].images` 중 `type: 'output'`을 우선해 최대 4장까지 저장해요. 프롬프트 모델이 쓴 캡션을 삽화 캡션으로 써요.
-- 실패 코드와 진단: `COMFYUI_PROMPT_REJECTED`는 노드 오류를, `COMFYUI_EXECUTION_FAILED`는 실행 오류를 **생성 상세**에 표시해요. 접수 여부는 전송 전부터 기록하며 `COMFYUI_SUBMISSION_UNCERTAIN`은 새 렌더를 자동 제출하지 않아요. 접수 후 조회 실패는 `COMFYUI_RESULT_UNAVAILABLE`과 prompt ID를 보존해 **결과 확인**을 제공해요. 요청 전체 deadline은 응답 헤더뿐 아니라 JSON·이미지 body 읽기에도 적용해요.
+- 실패 코드와 진단: `COMFYUI_PROMPT_REJECTED`는 노드 오류를, `COMFYUI_EXECUTION_FAILED`는 실행 오류를 **생성 상세**에 표시해요. 접수 여부는 전송 전부터 기록하며 `COMFYUI_SUBMISSION_UNCERTAIN`은 새 렌더를 자동 제출하지 않아요. 접수 후 조회 실패는 `COMFYUI_RESULT_UNAVAILABLE`과 prompt ID를 보존해 **결과 확인**을 제공해요. 요청 전체 deadline은 응답 헤더뿐 아니라 JSON·이미지 body 읽기에도 적용해요. reader는 취소 신호를 직접 구독하며 본문·정리 응답이 멈춰도 종료가 지연되지 않아요.
 - 참조 이미지 업로드(`POST /upload/image`)는 이번 구현에 없어요. 작업 입력에는 참조 목록이 그대로 고정되므로 나중에 ComfyUI 어댑터만 확장하면 돼요.
 
 ## API

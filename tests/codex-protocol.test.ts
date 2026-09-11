@@ -94,7 +94,7 @@ test('preserves ordered logical roles and explicit empty instructions while reje
   expect(() => buildCodexTurn(r)).toThrow('CODEX_PROMPT_CACHE_UNSUPPORTED');
 });
 
-test('decodes only advertised tool requests and rejects mixed, builtin, duplicate, and malformed output', () => {
+test('decodes only advertised Uimori tool requests and rejects mixed, foreign, duplicate, and malformed output', () => {
   const r = request(),
     call = { id: 'a', name: 'resource.read', argumentsJson: '{"id":"resource"}' };
   expect(decodeCodexOutput(encode('tools', '', [call]), r)).toMatchObject({
@@ -117,4 +117,20 @@ test('decodes only advertised tool requests and rejects mixed, builtin, duplicat
     refusal: 'Cannot',
   });
   expect(decodeCodexOutput(encode('final', ''), request()).error?.code).toBe('EMPTY_COMPLETION');
+});
+
+test('permits native assistance while reserving Uimori application actions for the JSON envelope', () => {
+  const built = buildCodexTurn(request());
+  expect(built.developerInstructions).toContain('Use available Codex builtin tools when they help');
+  expect(built.developerInstructions).toContain(
+    'Use these Uimori tools for application data and saved changes'
+  );
+  expect(built.developerInstructions).not.toContain('Never invoke builtin tools');
+  expect(JSON.parse(built.inputText).allowedTools).toEqual(request().stable.tools);
+  expect(
+    decodeCodexOutput(
+      encode('tools', '', [{ id: 'x', name: 'exec', argumentsJson: '{}' }]),
+      request()
+    ).error?.code
+  ).toBe('CODEX_INVALID_TOOL_CALL');
 });

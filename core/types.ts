@@ -33,6 +33,7 @@ export type Resource = {
 };
 export type ModelInput = {
   agentId?: string;
+  consultationContext?: import('./agent-collaboration.js').AgentConsultationContext;
   role: 'main';
   contract: string;
   task: string;
