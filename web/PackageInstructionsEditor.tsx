@@ -93,6 +93,9 @@ export function PackageInstructionsEditor({
     }
   }, [baseline, setDrafts]);
   const dirty = JSON.stringify(drafts) !== baseline;
+  const rowIds = useRef<string[]>([]);
+  if (rowIds.current.length !== drafts.length)
+    rowIds.current = drafts.map((_, index) => rowIds.current[index] ?? crypto.randomUUID());
   useUnappliedEditorField('package.instructions', dirty);
   useEffect(() => {
     onDirtyChange?.(dirty);
@@ -153,7 +156,7 @@ export function PackageInstructionsEditor({
       {drafts.map((draft, index) => {
         const instruction = draft.instruction;
         return (
-          <fieldset className="package-entry" key={index}>
+          <fieldset className="package-entry" key={rowIds.current[index]}>
             <legend>지침 {index + 1}</legend>
             <label>
               담당 작업
@@ -326,6 +329,8 @@ export function PackageInstructionsEditor({
                 onClick={() => {
                   const next = [...drafts];
                   [next[index - 1], next[index]] = [next[index], next[index - 1]];
+                  const ids = rowIds.current;
+                  [ids[index - 1], ids[index]] = [ids[index], ids[index - 1]];
                   change(next);
                 }}
               >
@@ -338,6 +343,8 @@ export function PackageInstructionsEditor({
                 onClick={() => {
                   const next = [...drafts];
                   [next[index + 1], next[index]] = [next[index], next[index + 1]];
+                  const ids = rowIds.current;
+                  [ids[index + 1], ids[index]] = [ids[index], ids[index + 1]];
                   change(next);
                 }}
               >
@@ -346,7 +353,10 @@ export function PackageInstructionsEditor({
               <button
                 type="button"
                 className="ghost"
-                onClick={() => change(drafts.filter((_, i) => i !== index))}
+                onClick={() => {
+                  rowIds.current = rowIds.current.filter((_, i) => i !== index);
+                  change(drafts.filter((_, i) => i !== index));
+                }}
               >
                 지침 삭제
               </button>
@@ -377,6 +387,7 @@ export function PackageInstructionsEditor({
           className="ghost"
           disabled={!dirty}
           onClick={() => {
+            rowIds.current = [];
             change(packageInstructionDrafts(value.instructions));
             setNotice('마지막 적용값으로 되돌렸어요.');
           }}

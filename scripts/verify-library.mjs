@@ -38,6 +38,7 @@ await runBrowserVerification({
     'PKUI01',
     'PKUI03',
     'PKUI04',
+    'PKUI05',
     'PNAV01',
     'PNAV02',
     'PNAV03',
