@@ -348,34 +348,79 @@ export class ChatOptionsStore {
     );
   }
   delegate(chatId: string, value: unknown, authority: ChatOptionAuthority): ChatOptionState {
-    return this.write(chatId, value, 'delegate', authority, ['binding', 'fields'], (b, state) => {
-      this.assertBinding(b.binding, state);
-      if (!Array.isArray(b.fields) || !b.fields.length)
-        throw new HttpError(400, '위임할 옵션을 선택해 주세요.');
-      const selected = [...new Set(b.fields.map((v) => text(v, 'option field', 100)))];
-      if (selected.some((id) => !state.program.controls.some((control) => control.id === id)))
-        throw new HttpError(400, '실제 프롬프트 옵션만 위임할 수 있어요.');
-      const conversation = new HelperWorkspace(this.store).open({
-        kind: 'chat',
-        chatId,
-        branchId: state.branchId,
-      });
-      const item: OptionDelegation = {
-        id: randomUUID(),
-        revision: 1,
-        conversationId: conversation.id,
-        scope: { kind: 'chat', chatId, branchId: state.branchId },
-        binding: state.binding,
-        definitions: state.program.controls,
-        fields: selected,
-        startedAt: now(),
-        revokedAt: null,
-      };
-      this.store.db
-        .prepare('INSERT INTO helper_delegations VALUES(?,?,1,?,NULL,?)')
-        .run(item.id, conversation.id, json(item), item.startedAt);
-      this.bump(chatId);
-    });
+    return this.write(
+      chatId,
+      value,
+      'delegate',
+      authority,
+      ['binding', 'fields', 'conversationId'],
+      (b, state) => {
+        this.assertBinding(b.binding, state);
+        if (!Array.isArray(b.fields) || !b.fields.length)
+          throw new HttpError(400, '위임할 옵션을 선택해 주세요.');
+        const selected = [...new Set(b.fields.map((v) => text(v, 'option field', 100)))];
+        if (selected.some((id) => !state.program.controls.some((control) => control.id === id)))
+          throw new HttpError(400, '실제 프롬프트 옵션만 위임할 수 있어요.');
+        const workspace = new HelperWorkspace(this.store);
+        const conversation =
+          b.conversationId === undefined
+            ? workspace.open({ kind: 'chat', chatId, branchId: state.branchId })
+            : workspace.conversation(text(b.conversationId, 'helper conversation ID', 100));
+        if (
+          conversation.scope.kind !== 'chat' ||
+          conversation.scope.chatId !== chatId ||
+          conversation.scope.branchId !== state.branchId
+        )
+          throw new HttpError(403, '이 채팅 분기의 도우미 대화에만 위임할 수 있어요.');
+        const item: OptionDelegation = {
+          id: randomUUID(),
+          revision: 1,
+          conversationId: conversation.id,
+          scope: { kind: 'chat', chatId, branchId: state.branchId },
+          binding: state.binding,
+          definitions: state.program.controls,
+          fields: selected,
+          startedAt: now(),
+          revokedAt: null,
+        };
+        this.store.db
+          .prepare('INSERT INTO helper_delegations VALUES(?,?,?,?,1,?,NULL,?)')
+          .run(item.id, conversation.id, chatId, state.branchId, json(item), item.startedAt);
+        workspace.event(conversation.id, null, 'delegation.created', { id: item.id });
+        this.bump(chatId);
+      }
+    );
+  }
+  /** Deletion removes authority while retaining the exact proof used by past story runs. */
+  detachConversation(conversationId: string): void {
+    const conversation = new HelperWorkspace(this.store).conversation(conversationId);
+    if (conversation.scope.kind !== 'chat') return;
+    const { chatId, branchId } = conversation.scope;
+    const delegations = this.delegations(chatId, branchId).filter(
+      (item) => item.conversationId === conversationId
+    );
+    const oneoffIds = new Set<string>();
+    for (const row of this.store.db
+      .prepare(
+        "SELECT o.result FROM chat_option_operations o JOIN helper_tasks t ON t.id=o.request_id WHERE t.conversation_id=? AND json_extract(o.intent,'$.action')='oneoff'"
+      )
+      .all(conversationId))
+      for (const pending of (JSON.parse(String(row.result)) as ChatOptionState).pending)
+        if (pending.kind === 'oneoff') oneoffIds.add(pending.id);
+    if (!delegations.length && !oneoffIds.size) return;
+    const ids = new Set(delegations.map((item) => item.id));
+    this.store.db
+      .prepare(
+        'UPDATE helper_delegations SET revoked_at=?,revision=revision+1 WHERE conversation_id=? AND revoked_at IS NULL'
+      )
+      .run(now(), conversationId);
+    for (const pending of this.pending(chatId, branchId))
+      if (
+        pending.status === 'pending' &&
+        (oneoffIds.has(pending.id) || (pending.delegationId && ids.has(pending.delegationId)))
+      )
+        this.updatePending({ ...pending, status: 'cancelled' });
+    this.bump(chatId);
   }
   revoke(
     chatId: string,
@@ -399,6 +444,12 @@ export class ChatOptionsStore {
             'UPDATE helper_delegations SET revoked_at=?,revision=revision+1 WHERE id=? AND revoked_at IS NULL'
           )
           .run(now(), delegationId);
+        new HelperWorkspace(this.store).event(
+          delegation!.conversationId,
+          null,
+          'delegation.revoked',
+          { id: delegationId }
+        );
         for (const item of state.pending.filter((item) => item.delegationId === delegationId))
           this.updatePending({ ...item, status: 'cancelled' });
         this.bump(chatId);
@@ -495,7 +546,12 @@ export function chatOptionGrants(
   const service = new ChatOptionsStore(store),
     state = service.get(conversation.scope.chatId, conversation.scope.branchId);
   return state.delegations
-    .filter((item) => !item.revokedAt && isDeepStrictEqual(item.binding, state.binding))
+    .filter(
+      (item) =>
+        item.conversationId === conversationId &&
+        !item.revokedAt &&
+        isDeepStrictEqual(item.binding, state.binding)
+    )
     .map((item) => ({
       id: randomUUID(),
       requestId,
@@ -512,13 +568,29 @@ const schema = (properties: Record<string, Json>, required: string[] = []): Json
 });
 const str: Json = { type: 'string' };
 /** Model option decisions need definitions and receipts, not the unrelated prompt body. */
-export function helperOptionState({ program, pending, ...state }: ChatOptionState) {
+export function helperOptionState(
+  { program, pending, ...state }: ChatOptionState,
+  conversationId?: string
+) {
+  const delegations =
+    conversationId === undefined
+      ? state.delegations
+      : state.delegations.filter((item) => item.conversationId === conversationId);
+  const visible = new Set(delegations.map((item) => item.id));
   return {
     ...state,
+    delegations,
     definitions: program.controls,
     // The current delegation list already carries the scope, definitions and revocation state.
     // Keep the choice's own frozen binding/definitions so old choices remain inspectable.
-    pending: pending.map(({ delegation: _delegation, ...choice }) => choice),
+    pending: pending
+      .filter(
+        (item) =>
+          conversationId === undefined ||
+          item.kind !== 'delegated' ||
+          visible.has(item.delegationId ?? '')
+      )
+      .map(({ delegation: _delegation, ...choice }) => choice),
   };
 }
 export const helperOptionTools: ProviderTool[] = [
@@ -588,7 +660,7 @@ export function invokeHelperOptions(
   const service = new ChatOptionsStore(store);
   if (name === 'options.read') {
     fields(record(value), []);
-    return helperOptionState(service.get(scope.chatId, scope.branchId));
+    return helperOptionState(service.get(scope.chatId, scope.branchId), task.conversationId);
   }
   if (name !== 'options.choose' && name !== 'options.oneoff')
     throw new HttpError(400, 'Unknown option tool');
@@ -610,7 +682,8 @@ export function invokeHelperOptions(
           assert: () =>
             new HelperWorkspace(store).authorize(task.id, scope.chatId, 'options.oneoff'),
         }
-      )
+      ),
+      task.conversationId
     );
   const delegationId = text(b.delegationId, 'delegation ID', 100);
   return helperOptionState(
@@ -624,6 +697,14 @@ export function invokeHelperOptions(
             intent.action !== 'choose' ||
             intent.chatId !== scope.chatId ||
             intent.branchId !== scope.branchId ||
+            !service
+              .delegations(scope.chatId, scope.branchId)
+              .some(
+                (item) =>
+                  item.id === delegationId &&
+                  item.conversationId === task.conversationId &&
+                  !item.revokedAt
+              ) ||
             !savedTask.snapshot.grants.some(
               (grant) =>
                 grant.provenance === 'delegation' &&
@@ -635,7 +716,8 @@ export function invokeHelperOptions(
         },
       },
       true
-    )
+    ),
+    task.conversationId
   );
 }
 export function chatOptionRoutes(app: FastifyInstance, store: Store): void {
@@ -792,16 +874,26 @@ export function validateChatOptionArchive(store: Store): void {
       revision: Number(row.revision),
       revokedAt: row.revoked_at,
     });
-    const conversation = new HelperWorkspace(store).conversation(String(row.conversation_id));
+    const conversation =
+      row.conversation_id === null
+        ? null
+        : new HelperWorkspace(store).conversation(String(row.conversation_id));
     if (
       item.id !== row.id ||
       original.revokedAt !== null ||
       original.revision !== 1 ||
-      item.conversationId !== conversation.id ||
+      (conversation
+        ? item.conversationId !== conversation.id ||
+          !isDeepStrictEqual(item.scope, conversation.scope)
+        : !item.revokedAt) ||
+      item.scope.chatId !== row.chat_id ||
+      item.scope.branchId !== row.branch_id ||
       row.created_at !== item.startedAt ||
-      !isDeepStrictEqual(item.scope, conversation.scope)
+      (!conversation &&
+        store.db.prepare('SELECT 1 FROM helper_conversations WHERE id=?').get(item.conversationId))
     )
       throw new HttpError(400, 'Invalid archived delegation owner');
+    store.product.branch(item.scope.chatId, item.scope.branchId);
     delegations.set(item.id, item);
   }
   for (const row of store.db.prepare('SELECT * FROM chat_prompt_options').all() as Row[]) {

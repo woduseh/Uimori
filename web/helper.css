@@ -1,9 +1,9 @@
 .app-shell.helper-open {
-  grid-template-columns: var(--nav-w) minmax(0, 1fr) 390px;
+  grid-template-columns: var(--nav-w) minmax(0, 1fr) 384px;
 }
 .app-shell.sidebar-collapsed.helper-open,
 .app-shell.focus-reading.helper-open {
-  grid-template-columns: minmax(0, 1fr) 390px;
+  grid-template-columns: minmax(0, 1fr) 384px;
 }
 .helper-panel {
   min-width: 0;
@@ -22,7 +22,7 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 12px 16px;
+  padding: 6px 16px;
   border-bottom: 1px solid var(--line);
 }
 .helper-header > div {
@@ -75,8 +75,10 @@
 }
 .helper-artifact {
   margin-top: 16px;
-  border-top: 1px solid var(--line);
-  padding-top: 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 16px;
+  background: var(--panel);
 }
 .helper-artifact header,
 .helper-artifact footer {
@@ -246,23 +248,6 @@
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
-@media (max-width: 1100px) {
-  .app-shell.helper-open {
-    grid-template-columns: var(--nav-w) minmax(0, 1fr);
-  }
-  .app-shell.sidebar-collapsed.helper-open,
-  .app-shell.focus-reading.helper-open {
-    grid-template-columns: minmax(0, 1fr);
-  }
-  .helper-panel {
-    position: fixed;
-    inset: 0 0 0 auto;
-    width: min(440px, 100vw);
-    height: min(var(--app-height, 100dvh), 100dvh);
-    z-index: 32;
-    box-shadow: -8px 0 30px var(--shade);
-  }
-}
 @media (max-width: 760px) {
   .app-shell.helper-open {
     grid-template-columns: minmax(0, 1fr);
@@ -285,13 +270,61 @@
   white-space: nowrap;
   text-overflow: ellipsis;
 }
-/* The panel is always narrow, so the model gets its own row under the panel title. */
+/* Global model management lives with session settings, keeping the conversation compact. */
 .helper-model {
   display: flex;
-  padding: 8px 16px;
-  border-bottom: 1px solid var(--line);
+  padding: 0 0 12px;
 }
 .helper-model .model-chip {
   max-width: 100%;
   margin-right: 0;
+}
+
+.app-shell.panel-docked.helper-open {
+  grid-template-columns: var(--nav-w) minmax(0, 1fr) 384px;
+}
+.app-shell.sidebar-collapsed.panel-docked.helper-open,
+.app-shell.focus-reading.panel-docked.helper-open {
+  grid-template-columns: minmax(0, 1fr) 384px;
+}
+.app-shell.panel-overlay.helper-open {
+  grid-template-columns: var(--nav-w) minmax(0, 1fr);
+}
+.app-shell.sidebar-collapsed.panel-overlay.helper-open,
+.app-shell.focus-reading.panel-overlay.helper-open {
+  grid-template-columns: minmax(0, 1fr);
+}
+.panel-overlay > .helper-panel {
+  position: fixed;
+  inset: 0 0 0 auto;
+  width: 384px;
+  height: min(var(--app-height, 100dvh), 100dvh);
+  z-index: 32;
+  box-shadow: -8px 0 30px var(--shade);
+}
+@media (max-width: 767px) {
+  .app-shell.panel-overlay.helper-open {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .panel-overlay > .helper-panel {
+    width: 100vw;
+    border-left: 0;
+  }
+}
+
+.helper-branch-notice {
+  padding: 10px 16px;
+  font-size: 13px;
+  line-height: 1.6;
+  background: var(--accent-soft);
+  border-bottom: 1px solid var(--line);
+}
+.helper-branch-notice p {
+  margin: 0 0 8px;
+}
+.helper-work-selector {
+  align-items: flex-end;
+}
+.helper-work-selector .icon-button {
+  flex-shrink: 0;
 }

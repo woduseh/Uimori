@@ -46,6 +46,9 @@ test('LCOM01 compact library keeps row actions aligned across mobile and desktop
   await page.goto('/');
   const panel = page.getByTestId('library-panel');
   await panel.getByRole('searchbox', { name: '서재 검색', exact: true }).fill(stamp);
+  await panel.getByLabel('목록 관리', { exact: true }).click();
+  await panel.getByRole('button', { name: '목록', exact: true }).click();
+  await panel.getByLabel('목록 관리', { exact: true }).press('Escape');
   for (const width of reviewWidths([360, 390, 430, 768, 1024, 1440])) {
     await page.setViewportSize({ width, height: 900 });
     const row = panel.locator('.library-list-item');
@@ -176,6 +179,16 @@ test('LCOM03 selection replaces list tools and retains search and saved view acr
   const search = panel.getByRole('searchbox', { name: '서재 검색', exact: true });
   await search.fill(title);
   const options = panel.getByLabel('목록 관리', { exact: true });
+  await options.click();
+  await expect(panel.getByRole('button', { name: '카드', exact: true })).toHaveAttribute(
+    'aria-pressed',
+    'true'
+  );
+  await panel.getByRole('button', { name: '목록', exact: true }).click();
+  await options.press('Escape');
+  await page.reload();
+  await search.fill(title);
+  await expect(panel.locator('.library-list-item')).toHaveCount(1);
   await options.click();
   await panel.getByRole('button', { name: '선택', exact: true }).click();
   await expect(search).toHaveCount(0);

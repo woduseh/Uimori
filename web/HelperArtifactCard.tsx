@@ -25,9 +25,11 @@ export function HelperArtifactCard({
   id,
   revision,
   onRevise,
+  readOnly = false,
 }: {
   id: string;
   revision: number;
+  readOnly?: boolean;
   onRevise: (artifact: HelperArtifactView) => void;
 }) {
   const storageKey = `uimori:helper-artifact-draft:${id}:${revision}`;
@@ -69,7 +71,7 @@ export function HelperArtifactCard({
     return value;
   }
   async function save() {
-    if (!draft || locked.current || conflict) return;
+    if (readOnly || !draft || locked.current || conflict) return;
     locked.current = true;
     setBusy(true);
     setError('');
@@ -164,7 +166,9 @@ export function HelperArtifactCard({
                 />
               </label>
               <div className="form-actions">
-                <button disabled={busy || conflict || !draft.text.trim()}>장면 편집 저장</button>
+                <button disabled={readOnly || busy || conflict || !draft.text.trim()}>
+                  장면 편집 저장
+                </button>
                 <button
                   type="button"
                   className="secondary"
@@ -192,6 +196,7 @@ export function HelperArtifactCard({
               <button
                 type="button"
                 className="secondary"
+                disabled={readOnly}
                 onClick={() => {
                   setDraft({ revision: artifact.revision, text: artifact.text });
                   setError('');
@@ -200,7 +205,12 @@ export function HelperArtifactCard({
               >
                 직접 편집
               </button>
-              <button type="button" className="secondary" onClick={() => onRevise(artifact)}>
+              <button
+                type="button"
+                className="secondary"
+                disabled={readOnly}
+                onClick={() => onRevise(artifact)}
+              >
                 이 장면 수정 요청
               </button>
               <button

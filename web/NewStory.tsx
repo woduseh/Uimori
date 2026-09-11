@@ -365,7 +365,6 @@ export function NewStory({
     ) : null
   );
   const additionalSummary = [
-    activePersona ? '페르소나 선택됨' : '',
     modules.length ? `모듈 ${modules.length}개` : '',
     title.trim() ? '이름 지정됨' : '',
   ]
@@ -406,15 +405,38 @@ export function NewStory({
           />
         </>
       )}
-      <div className="new-story-main-model">
-        <p>모든 채팅에 현재 전역 모델과 프롬프트를 사용해요.</p>
-        <p>본문 모델: {mainModel?.title ?? '미지정'}</p>
+      <ContentPicker
+        library={{ ...library, contents }}
+        role="persona"
+        label="시작 페르소나"
+        value={persona}
+        selectedContent={activePersona}
+        onChange={setPersona}
+        allowNone
+        noneLabel="페르소나 없음"
+        disabled={locked}
+      />
+      <div className="new-story-main-model" aria-label="새 채팅에 사용할 전역 설정">
+        <dl className="new-story-settings-summary">
+          <div>
+            <dt>본문 모델</dt>
+            <dd>
+              {mainModel?.title ?? '미지정'} <span>· 전역 따름</span>
+            </dd>
+          </div>
+          <div>
+            <dt>작문 프롬프트</dt>
+            <dd>
+              {workspace?.main.title ?? '확인 중…'} <span>· 전역 따름</span>
+            </dd>
+          </div>
+        </dl>
         {!mainAvailable && (
           <p role="status">
             본문 생성 전에 사용 가능한 전역 본문 모델을 선택해 주세요. 채팅만 먼저 만들 수도 있어요.
           </p>
         )}
-        <button type="button" className="secondary" disabled={locked} onClick={onModelSettings}>
+        <button type="button" className="ghost" disabled={locked} onClick={onModelSettings}>
           전역 모델 설정
         </button>
       </div>
@@ -480,20 +502,9 @@ export function NewStory({
       <details className="new-story-options">
         <summary>
           <span>추가 설정</span>
-          <small>{additionalSummary || '페르소나, 모듈, 채팅 이름'}</small>
+          <small>{additionalSummary || '모듈 · 채팅 이름'}</small>
         </summary>
         <div className="new-story-options-content">
-          <ContentPicker
-            library={{ ...library, contents }}
-            role="persona"
-            label="시작 페르소나"
-            value={persona}
-            selectedContent={activePersona}
-            onChange={setPersona}
-            allowNone
-            noneLabel="페르소나 없음"
-            disabled={locked}
-          />
           <fieldset>
             <legend>함께 사용할 모듈</legend>
             {modules.map((key) => {
@@ -549,6 +560,7 @@ export function NewStory({
         </p>
       )}
       <button
+        className="primary"
         disabled={
           busy ||
           uncertain.current ||

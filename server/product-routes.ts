@@ -422,6 +422,18 @@ export function productRoutes(
     options.publish(branch.chatId);
     return branch;
   });
+  app.put<{ Params: { id: string; branchId: string } }>(
+    '/api/chats/:id/branches/:branchId/default',
+    async (request) => {
+      const branch = product.setDefaultBranch(
+        request.params.id,
+        request.params.branchId,
+        request.body
+      );
+      options.publish(branch.chatId);
+      return branch;
+    }
+  );
   app.post<{ Params: { id: string } }>('/api/chats/:id/assets', async (request) => {
     const asset = product.createAsset(request.params.id, request.body);
     store.event(asset.chatId, 'asset.created', asset.id);

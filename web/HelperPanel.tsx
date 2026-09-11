@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { ArrowUp, Square, X, Settings2, Plus } from 'lucide-react';
+import { ArrowUp, Square, X, Settings2 } from 'lucide-react';
 import type {
   HelperConversation,
   HelperEditor,
@@ -27,13 +27,20 @@ import {
   refreshActiveEditor,
   type ActiveEditorContext,
 } from './editor-workspace-context.js';
+import { useHelperSessions } from './useHelperSessions.js';
+import { HelperSessionBar } from './HelperSessionBar.js';
+import type { Branch } from '../core/product.js';
 import './helper.css';
 
 type Props = {
   enterSend: boolean;
   open: boolean;
+  modal?: boolean;
+  ready?: boolean;
+  branches?: Branch[];
+  onBranchNavigate?: (branchId: string) => void;
   scope: HelperScope;
-  selection?: HelperSelection & { key: string; scope?: HelperScope };
+  selection?: HelperSelection & { key: string; scope?: HelperScope; conversationId?: string };
   onClose: () => void;
   onModelSettings: () => void;
   /** Current global helper model, worded like the reader's main-model chip. */
@@ -122,18 +129,22 @@ const quotedSelection = (selection: HelperSelection) =>
     .join('\n')}\n\n`;
 
 export function HelperPanel(props: Props) {
-  const [libraryWork, setLibraryWork] = useState<string | null>(() =>
-    local('uimori:helper-library-work')
-  );
-  const scope: HelperScope =
-    props.scope.kind === 'library' && libraryWork
-      ? { kind: 'library', workId: libraryWork }
-      : props.scope;
-  const scopeKey = JSON.stringify(scope);
+  const sessions = useHelperSessions(props.open && props.ready !== false, props.scope);
+  const scopeKey = sessions.currentId ?? '';
   const currentScope = useRef(scopeKey);
   currentScope.current = scopeKey;
-  const data = useHelperConversation(props.open, scope);
+  const data = useHelperConversation(props.open && props.ready !== false, sessions.currentId);
   const conversation = data.current?.conversation ?? null;
+  const scope = conversation?.scope ?? props.scope;
+  const branchMismatch =
+    scope.kind === 'chat' &&
+    (props.scope.kind !== 'chat' ||
+      scope.chatId !== props.scope.chatId ||
+      scope.branchId !== props.scope.branchId);
+  const targetBranch =
+    scope.kind === 'chat'
+      ? props.branches?.find((branch) => branch.id === scope.branchId)
+      : undefined;
   const messages = (data.current?.messages ?? [])
     .filter((message) => !message.latestTaskId || message.latestTaskId === message.taskId)
     .sort((a, b) =>
@@ -150,7 +161,6 @@ export function HelperPanel(props: Props) {
       .filter((message) => message.role === 'assistant')
       .map((message) => message.taskId)
   );
-  const [works, setWorks] = useState<(HelperConversation & { title?: string })[]>([]);
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [outboxes, setOutboxes] = useState<Record<string, Outbox | null>>({});
   const [selections, setSelections] = useState<Record<string, HelperSelection | null>>({});
@@ -165,7 +175,7 @@ export function HelperPanel(props: Props) {
     Record<string, { text: string; revision: number; limits: HelperConversation['limits'] }>
   >({});
   const [savingPersona, setSavingPersona] = useState(false);
-  const [compact, setCompact] = useState(() => matchMedia('(max-width:1100px)').matches);
+  const compact = props.modal ?? false;
   const closeButton = useRef<HTMLButtonElement>(null),
     input = useRef<HTMLTextAreaElement>(null);
   const scroll = useRef<HTMLDivElement>(null),
@@ -184,7 +194,7 @@ export function HelperPanel(props: Props) {
   const selection =
     selections[scopeKey] === undefined ? storedSelection(scopeKey) : selections[scopeKey];
   const busy = busyScopes[scopeKey] ?? false;
-  const error = errors[scopeKey] || data.error;
+  const error = errors[scopeKey] || data.error || sessions.error;
   const persona =
     personas[scopeKey] ??
     (conversation
@@ -200,6 +210,7 @@ export function HelperPanel(props: Props) {
   const setError = (message: string) => setErrors((old) => ({ ...old, [scopeKey]: message }));
   const editDraft = useCallback(
     (text: string) => {
+      if (!scopeKey) return;
       saveLocal(`uimori:helper-input:${scopeKey}`, text);
       setDrafts((old) => ({ ...old, [scopeKey]: text }));
     },
@@ -214,28 +225,54 @@ export function HelperPanel(props: Props) {
       throw new Error('요청을 보관하지 못했어요. 브라우저 저장 공간을 확인한 뒤 다시 보내 주세요.');
     setOutboxes((old) => ({ ...old, [key]: value }));
   };
+  const selectSession = sessions.select;
   useEffect(() => {
     const selected = props.selection;
     if (!selected || appliedSelections.current.has(selected.key)) return;
-    const target = selected.scope ?? props.scope;
-    if (target.kind !== 'chat') return;
-    const key = JSON.stringify(target);
-    appliedSelections.current.add(selected.key);
-    const value: HelperSelection = {
-      sourceId: selected.sourceId,
-      sourceHash: selected.sourceHash,
-      text: selected.text.slice(0, 20000),
+    const target = selected.scope;
+    if (target?.kind !== 'chat') return;
+    let disposed = false;
+    // Resolve once from the clicked source and frozen session ID, independently of later navigation.
+    const prepare = async () => {
+      let owner: HelperConversation;
+      try {
+        owner = selected.conversationId
+          ? await api<HelperConversation>(
+              `/helper/conversations/${encodeURIComponent(selected.conversationId)}`
+            )
+          : await api<HelperConversation>('/helper/conversations', { scope: target });
+      } catch (cause) {
+        if (!(cause instanceof ApiError) || cause.status !== 404) throw cause;
+        owner = await api<HelperConversation>('/helper/conversations', { scope: target });
+      }
+      if (disposed || appliedSelections.current.has(selected.key)) return;
+      if (JSON.stringify(owner.scope) !== JSON.stringify(target))
+        throw new Error('선택한 원문과 도우미 세션의 전개가 달라요.');
+      const key = owner.id;
+      appliedSelections.current.add(selected.key);
+      const value: HelperSelection = {
+        sourceId: selected.sourceId,
+        sourceHash: selected.sourceHash,
+        text: selected.text.slice(0, 20000),
+      };
+      setSelections((old) => ({ ...old, [key]: value }));
+      saveLocal(`uimori:helper-selection:${key}`, JSON.stringify(value));
+      setDrafts((old) => {
+        const text = [old[key] ?? local(`uimori:helper-input:${key}`), quotedSelection(value)]
+          .filter(Boolean)
+          .join('\n\n');
+        saveLocal(`uimori:helper-input:${key}`, text);
+        return { ...old, [key]: text };
+      });
+      selectSession(owner);
     };
-    setSelections((old) => ({ ...old, [key]: value }));
-    saveLocal(`uimori:helper-selection:${key}`, JSON.stringify(value));
-    setDrafts((old) => {
-      const text = [old[key] ?? local(`uimori:helper-input:${key}`), quotedSelection(value)]
-        .filter(Boolean)
-        .join('\n\n');
-      saveLocal(`uimori:helper-input:${key}`, text);
-      return { ...old, [key]: text };
+    void prepare().catch((cause) => {
+      if (!disposed) setErrors((old) => ({ ...old, [currentScope.current]: cause.message }));
     });
-  }, [props.selection, props.scope]);
+    return () => {
+      disposed = true;
+    };
+  }, [props.selection, selectSession]);
   useEffect(() => {
     const update = () => setEditor(getActiveEditorContext());
     update();
@@ -249,32 +286,10 @@ export function HelperPanel(props: Props) {
     const timer = setInterval(() => setNow(Date.now()), 250);
     return () => clearInterval(timer);
   }, [ticking]);
-  // biome-ignore lint/correctness/useExhaustiveDependencies: A newly opened server conversation must appear in the saved-work selector.
-  useEffect(() => {
-    if (!props.open || scope.kind !== 'library') return;
-    let disposed = false;
-    void api<(HelperConversation & { title?: string })[]>('/helper/conversations?kind=library')
-      .then((value) => {
-        if (!disposed) setWorks(value);
-      })
-      .catch(() => {
-        /* Current work remains usable. */
-      });
-    return () => {
-      disposed = true;
-    };
-  }, [props.open, scope.kind, conversation?.id]);
-  useEffect(() => {
-    const media = matchMedia('(max-width:1100px)'),
-      update = () => setCompact(media.matches);
-    media.addEventListener('change', update);
-    return () => media.removeEventListener('change', update);
-  }, []);
   useEffect(() => {
     if (!props.open) return;
     const prior = document.activeElement as HTMLElement | null;
     closeButton.current?.focus();
-    const media = matchMedia('(max-width:1100px)');
     const background = [
       ...document.querySelectorAll<HTMLElement>(
         '.app-shell > .sidebar,.app-shell > .story-workspace'
@@ -283,11 +298,10 @@ export function HelperPanel(props: Props) {
     const original = background.map((node) => node.inert);
     const update = () => {
       background.forEach((node, index) => {
-        node.inert = media.matches || original[index];
+        node.inert = compact || original[index];
       });
     };
     update();
-    media.addEventListener('change', update);
     const token = crypto.randomUUID(),
       base = history.state,
       url = location.href;
@@ -308,14 +322,13 @@ export function HelperPanel(props: Props) {
     };
     return () => {
       remove();
-      media.removeEventListener('change', update);
       background.forEach((node, index) => {
         node.inert = original[index];
       });
       if (owns()) history.replaceState(base, '', url);
       if (prior?.isConnected && prior.checkVisibility()) prior.focus();
     };
-  }, [props.open]);
+  }, [props.open, compact]);
   useLayoutEffect(() => {
     const node = scroll.current;
     if (!props.open || !node || !data.current) return;
@@ -339,7 +352,13 @@ export function HelperPanel(props: Props) {
     return () => observer.disconnect();
   }, [props.open]);
   async function send(saved?: Outbox): Promise<boolean> {
-    if (locks.current.has(scopeKey) || (!saved && (!conversation || !draft.trim()))) return false;
+    if (
+      props.ready === false ||
+      branchMismatch ||
+      locks.current.has(scopeKey) ||
+      (!saved && (!conversation || !draft.trim()))
+    )
+      return false;
     if (!saved && outbox) return false;
     const text = saved?.text ?? draft,
       owner = scopeKey;
@@ -428,7 +447,15 @@ export function HelperPanel(props: Props) {
     }
   }
   async function retry(task: HelperTaskView, text = task.request) {
-    if (!conversation || outbox || busy || locks.current.has(scopeKey)) return false;
+    if (
+      props.ready === false ||
+      branchMismatch ||
+      !conversation ||
+      outbox ||
+      busy ||
+      locks.current.has(scopeKey)
+    )
+      return false;
     if (task.completedEffects?.count) {
       setError('이미 저장된 변경이 있어요. 결과를 확인한 뒤 남은 작업을 새로 요청해 주세요.');
       return false;
@@ -495,7 +522,7 @@ export function HelperPanel(props: Props) {
           <RetryFailure
             status={task.status}
             error={task.error}
-            disabled={busy || Boolean(outbox)}
+            disabled={branchMismatch || busy || Boolean(outbox)}
             onRetry={task.completedEffects ? undefined : () => void retry(task)}
             onSettings={props.onModelSettings}
             onDetails={() => setTaskHistory({ taskId: task.id })}
@@ -514,6 +541,7 @@ export function HelperPanel(props: Props) {
       aria-modal={compact && props.open ? true : undefined}
       aria-label="도우미 패널"
       onKeyDown={(event) => {
+        if (event.target instanceof Element && event.target.closest('dialog[open]')) return;
         if (event.key === 'Escape') {
           event.preventDefault();
           closePanel.current();
@@ -556,54 +584,52 @@ export function HelperPanel(props: Props) {
           <X size={20} />
         </button>
       </header>
-      <div className="helper-model">
-        <button
-          type="button"
-          className="model-chip secondary"
-          aria-label={`현재 도우미 모델 · ${props.modelDescription}`}
-          title="모든 채팅의 도우미 요청에 적용되는 전역 모델 설정"
-          onClick={props.onModelSettings}
-        >
-          <span>{props.modelDescription}</span>
-        </button>
-      </div>
-      {scope.kind === 'library' && (
-        <div className="helper-work-selector">
-          <label>
-            서재 작업 선택
-            <select
-              value={conversation?.id ?? ''}
-              onChange={(event) => {
-                const selected = works.find((work) => work.id === event.target.value);
-                if (selected?.scope.kind === 'library') {
-                  setLibraryWork(selected.scope.workId);
-                  saveLocal('uimori:helper-library-work', selected.scope.workId);
-                }
-              }}
-            >
-              <option value="" disabled>
-                작업을 불러오는 중…
-              </option>
-              {works.map((work) => (
-                <option key={work.id} value={work.id}>
-                  {work.title || `서재 작업 · ${new Date(work.createdAt).toLocaleString()}`}
-                </option>
-              ))}
-            </select>
-          </label>
-          <IconButton
-            label="새 서재 작업"
-            icon={Plus}
-            onClick={() => {
-              const next = crypto.randomUUID();
-              setLibraryWork(next);
-              saveLocal('uimori:helper-library-work', next);
-            }}
-          />
+      <HelperSessionBar
+        sessions={sessions.sessions}
+        unread={sessions.unread}
+        conversation={conversation}
+        currentId={sessions.currentId}
+        branches={props.branches ?? []}
+        creating={sessions.creating || props.ready === false}
+        busy={props.ready === false || busy || Boolean(outbox)}
+        onSelect={sessions.select}
+        onCreate={() => void sessions.create()}
+        onUpdate={(value) => {
+          data.updateConversation(value);
+          void sessions.reload().catch((cause) => setError(cause.message));
+        }}
+        onDelete={() => {
+          void sessions.reload().catch((cause) => setError(cause.message));
+        }}
+      />
+      {branchMismatch && scope.kind === 'chat' && (
+        <div className="helper-branch-notice" role="status">
+          <p>
+            <strong>{targetBranch?.title || '다른 전개'}</strong>의 도우미 기록이에요. 새 요청과
+            변경은 해당 전개로 이동한 뒤 진행해요.
+          </p>
+          <button
+            type="button"
+            className="secondary"
+            onClick={() => props.onBranchNavigate?.(scope.branchId)}
+          >
+            해당 전개로 이동
+          </button>
         </div>
       )}
       {settings && conversation && (
         <div className="helper-settings">
+          <div className="helper-model">
+            <button
+              type="button"
+              className="model-chip secondary"
+              aria-label={`현재 도우미 모델 · ${props.modelDescription}`}
+              title="모든 채팅의 도우미 요청에 적용되는 전역 모델 설정"
+              onClick={props.onModelSettings}
+            >
+              <span>{props.modelDescription}</span>
+            </button>
+          </div>
           <label>
             도우미 말투
             <textarea
@@ -684,6 +710,8 @@ export function HelperPanel(props: Props) {
           <button
             type="button"
             disabled={
+              props.ready === false ||
+              branchMismatch ||
               savingPersona ||
               persona.revision !== conversation.revision ||
               persona.limits.totalCalls < 2 ||
@@ -694,6 +722,7 @@ export function HelperPanel(props: Props) {
               persona.limits.artifacts > 10
             }
             onClick={() => {
+              if (props.ready === false || branchMismatch) return;
               setSavingPersona(true);
               void api<HelperConversation>(
                 `/helper/conversations/${conversation.id}`,
@@ -788,7 +817,7 @@ export function HelperPanel(props: Props) {
                   request={message.text}
                   maxLength={100000}
                   editHint="수정한 요청으로 같은 자리에서 다시 시도해요."
-                  disabled={busy || Boolean(outbox)}
+                  disabled={branchMismatch || busy || Boolean(outbox)}
                   onSubmit={
                     taskMap.get(message.taskId) &&
                     !active(taskMap.get(message.taskId)!) &&
@@ -805,6 +834,7 @@ export function HelperPanel(props: Props) {
                 <HelperArtifactCard
                   key={`${artifact.id}:${artifact.revision}`}
                   {...artifact}
+                  readOnly={branchMismatch}
                   onRevise={(value) => {
                     editDraft(
                       `가정 장면 ${value.id} 개정 ${value.revision}을 다음과 같이 수정해줘: `
@@ -908,7 +938,12 @@ export function HelperPanel(props: Props) {
             <button
               type="button"
               className="secondary"
-              disabled={!conversation || conversation.id !== outbox.targetConversationId}
+              disabled={
+                props.ready === false ||
+                branchMismatch ||
+                !conversation ||
+                conversation.id !== outbox.targetConversationId
+              }
               onClick={() => void send(outbox)}
             >
               접수 확인·다시 시도
@@ -958,6 +993,7 @@ export function HelperPanel(props: Props) {
               onClick={() => {
                 setError('');
                 data.setError('');
+                sessions.clearError();
               }}
             >
               닫기
@@ -975,6 +1011,7 @@ export function HelperPanel(props: Props) {
             enterSend={props.enterSend}
             aria-label="도우미에게 요청"
             value={draft}
+            disabled={props.ready === false || !conversation}
             placeholder="도우미에게 요청하기"
             maxLength={100000}
             onChange={(event) => editDraft(event.target.value)}
@@ -1008,7 +1045,15 @@ export function HelperPanel(props: Props) {
               className="send-button"
               type="submit"
               aria-label="도우미 요청 보내기"
-              disabled={busy || data.loading || !conversation || !draft.trim() || Boolean(outbox)}
+              disabled={
+                props.ready === false ||
+                branchMismatch ||
+                busy ||
+                data.loading ||
+                !conversation ||
+                !draft.trim() ||
+                Boolean(outbox)
+              }
             >
               <ArrowUp size={20} />
             </button>

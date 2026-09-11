@@ -408,6 +408,7 @@ test('P09 P10 P13 fork from a completed scene preserves long prose and annotatio
   await page.reload();
   await openDetails(page, 'profile-editor');
   await selectCurrentSettingsSection(page, '모델');
+  await page.locator('summary').filter({ hasText: '기타 자동 작업 모델' }).click();
   await page.getByLabel('이미지 배치 모델', { exact: true }).selectOption(imageModel.id);
   await page.getByRole('button', { name: '역할별 모델 설정 저장', exact: true }).click();
   await expect

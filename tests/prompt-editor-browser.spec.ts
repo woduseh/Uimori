@@ -1,5 +1,10 @@
 import { visualReview } from './fixtures/visual-review.js';
-import { navigationAction, openPromptTools, openPromptBlocks } from './ui-navigation.js';
+import {
+  navigationAction,
+  openPromptTools,
+  selectPromptBlock,
+  selectPromptSection,
+} from './ui-navigation.js';
 import { test, expect } from '@playwright/test';
 import type { PromptProgram } from '../core/prompt-program.js';
 
@@ -71,6 +76,7 @@ test('NUI01 native prompt metadata import, default options and authoring persist
   await expect(editor.getByLabel('프롬프트 이름', { exact: true })).toHaveValue(title);
   await expect(editor.getByLabel('프롬프트 역할', { exact: true })).toHaveValue('translation');
   await expect(composer.locator('.pc-block')).toHaveCount(4);
+  await selectPromptSection(composer, '기본 옵션');
   await expect(composer.getByLabel('합성 분위기', { exact: true })).toHaveValue('"bright"');
   await expect(editor.getByRole('button', { name: '현재 옵션 저장', exact: true })).toHaveCount(0);
   await expect(editor.getByRole('button', { name: '옵션 조합 저장', exact: true })).toHaveCount(0);
@@ -86,16 +92,16 @@ test('NUI01 native prompt metadata import, default options and authoring persist
       })
     ),
   });
-  await expect(composer.getByLabel('다른 옵션', { exact: true })).toHaveValue('imported');
   await expect(composer.locator('.pc-program-menu')).not.toHaveAttribute('open');
   await expect(composer.getByLabel('프롬프트 구성 도구', { exact: true })).toBeFocused();
+  await selectPromptSection(composer, '기본 옵션');
+  await expect(composer.getByLabel('다른 옵션', { exact: true })).toHaveValue('imported');
   await composer.getByRole('button', { name: '이전 편집으로', exact: true }).click();
+  await selectPromptSection(composer, '기본 옵션');
   await expect(composer.getByLabel('합성 분위기', { exact: true })).toHaveValue('"bright"');
   await expect(composer.getByLabel('다른 옵션', { exact: true })).toHaveCount(0);
-  const jsonSection = composer
-    .locator('.pc-section')
-    .filter({ has: page.locator('summary', { hasText: '전체 구성 JSON · 고급 편집' }) });
-  await jsonSection.locator('summary').first().click();
+  await selectPromptSection(composer, 'JSON 편집');
+  const jsonSection = composer.getByRole('region', { name: '전체 구성 JSON 편집', exact: true });
   const raw = composer.getByLabel('전체 프롬프트 구성 JSON', { exact: true });
   await raw.fill('{ malformed native JSON');
   await jsonSection.getByRole('button', { name: 'JSON 적용', exact: true }).click();
@@ -103,8 +109,9 @@ test('NUI01 native prompt metadata import, default options and authoring persist
   await expect(composer.locator('.pc-block')).toHaveCount(4);
   await jsonSection.getByRole('button', { name: '적용된 값으로 되돌리기', exact: true }).click();
   await expect(raw).toHaveValue(JSON.stringify(program, null, 2));
+  await selectPromptSection(composer, '기본 옵션');
   await composer.getByLabel('합성 분위기', { exact: true }).selectOption('"calm"');
-  await editor.getByRole('button', { name: '저장', exact: true }).click();
+  await editor.getByRole('button', { name: '프리셋 저장', exact: true }).click();
   await expect
     .poll(async () => {
       const library = await (await request.get('/api/library')).json();
@@ -123,8 +130,7 @@ test('NUI01 native prompt metadata import, default options and authoring persist
   expect(exported).toMatchObject({ title, role: 'translation', program, values: { tone: 'calm' } });
   await expect(composer.locator('.pc-program-menu')).not.toHaveAttribute('open');
   await expect(composer.getByLabel('프롬프트 구성 도구', { exact: true })).toBeVisible();
-  await openPromptBlocks(composer);
-  await composer.locator('.pc-block').first().locator('summary').first().click();
+  await selectPromptBlock(composer, '합성 지침');
   for (const [name, width, height] of [
     ['desktop', 1440, 1000],
     ['mobile', 390, 844],
@@ -139,6 +145,7 @@ test('NUI01 native prompt metadata import, default options and authoring persist
   await page.reload();
   await navigationAction(page, '프롬프트');
   await page.getByRole('button', { name: `${title} 프롬프트 편집`, exact: true }).click();
+  await selectPromptSection(composer, '기본 옵션');
   await expect(
     page.getByTestId('prompt-composer').getByLabel('합성 분위기', { exact: true })
   ).toHaveValue('"calm"');

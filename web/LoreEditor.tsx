@@ -1,7 +1,7 @@
 import { SelectionCheckbox } from './BooleanControls.js';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useBufferedEditorState, useUnappliedEditorField } from './editor-workspace-context.js';
-import { AddIcon, FolderIcon, SearchIcon } from './ui-icons.js';
+import { AddIcon, BackIcon, FolderIcon, SearchIcon } from './ui-icons.js';
 import type { ContentPackage, PackageLore } from '../core/content-package.js';
 import { Dialog } from './Dialog.js';
 import './lore-editor.css';
@@ -22,6 +22,20 @@ export function LoreEditor({
   const [query, setQuery] = useState('');
   const [loading, setLoading] = useState('*');
   const [selected, setSelected] = useState(value.lore[0]?.id ?? '');
+  const [detailOpen, setDetailOpen] = useState(false);
+  const root = useRef<HTMLDivElement>(null);
+  const detailHeading = useRef<HTMLHeadingElement>(null);
+  function selectLore(id: string) {
+    setSelected(id);
+    setDetailOpen(true);
+    requestAnimationFrame(() => {
+      detailHeading.current?.focus({ preventScroll: true });
+      if (matchMedia('(max-width: 760px)').matches)
+        root.current
+          ?.querySelector<HTMLElement>('.lore-detail')
+          ?.scrollIntoView({ block: 'start' });
+    });
+  }
   const [checked, setChecked] = useState<string[]>([]);
   const [page, setPage] = useState(0);
   const [folderEdit, setFolderEdit] = useBufferedEditorState<{ id?: string; name: string } | null>(
@@ -103,7 +117,7 @@ export function LoreEditor({
     });
     setQuery('');
     setLoading('*');
-    setSelected(id);
+    selectLore(id);
     setChecked([]);
     setPage(
       Math.floor(
@@ -113,106 +127,119 @@ export function LoreEditor({
     );
   };
   return (
-    <div className="lore-manager">
-      <header className="lore-heading">
-        <div>
-          <strong>
-            로어 <span className="muted">{value.lore.length}</span>
-          </strong>
-          <p className="muted">
-            폴더는 편집용 분류예요. 포함 방식과 프롬프트 배치는 각 로어에서 정해요.
-          </p>
-        </div>
-        <div className="lore-actions">
-          <button type="button" className="secondary" onClick={() => setFolderEdit({ name: '' })}>
-            <FolderIcon size={15} />
-            폴더 추가
-          </button>
-          <button
-            type="button"
-            className="secondary"
-            onClick={add}
-            disabled={value.lore.length >= 2000}
-          >
-            <AddIcon size={15} />
-            로어 추가
-          </button>
-        </div>
-      </header>
-      {pendingOrders.length > 0 && (
-        <p className="error" role="status">
-          순서 입력을 확인할 로어가 {pendingOrders.length}개 있어요.{' '}
-          {pendingOrders.map((row) => (
-            <button
-              type="button"
-              className="ghost"
-              key={row.id}
-              onClick={() => setSelected(row.id)}
-            >
-              {row.title || '이름 없는 로어'}
-            </button>
-          ))}
-        </p>
-      )}
-      <div className="lore-filters">
-        <label className="lore-search">
-          <SearchIcon size={16} />
-          <input
-            aria-label="로어 검색"
-            placeholder="이름, 설명, 본문 검색"
-            value={query}
-            onChange={(event) => {
-              setQuery(event.target.value);
-              resetList();
-            }}
-          />
-        </label>
-        <select
-          aria-label="로어 폴더 필터"
-          value={folder}
-          onChange={(event) => {
-            setFolder(event.target.value);
-            resetList();
-          }}
-        >
-          <option value="*">모든 폴더 · {value.lore.length}</option>
-          <option value="">미분류 · {value.lore.filter((row) => !row.folderId).length}</option>
-          {folders.map((entry) => (
-            <option key={entry.id} value={entry.id}>
-              {entry.name} · {value.lore.filter((row) => row.folderId === entry.id).length}
-            </option>
-          ))}
-        </select>
-        <select
-          aria-label="로어 사용 방법 필터"
-          value={loading}
-          onChange={(event) => {
-            setLoading(event.target.value);
-            resetList();
-          }}
-        >
-          <option value="*">모든 사용 방법</option>
-          <option value="pinned">항상 포함</option>
-          <option value="discoverable">필요할 때 읽기</option>
-        </select>
-      </div>
-      {activeFolder && (
-        <div className="lore-folder-bar">
-          <span>
-            <FolderIcon size={14} />
-            {activeFolder.name}
-          </span>
-          <button
-            type="button"
-            className="ghost"
-            onClick={() => setFolderEdit({ id: activeFolder.id, name: activeFolder.name })}
-          >
-            폴더 관리
-          </button>
-        </div>
-      )}
+    <div
+      className="lore-manager"
+      data-detail={detailOpen && !!item}
+      ref={root}
+      onFocusCapture={(event) => {
+        if (event.target instanceof HTMLElement && event.target.closest('.lore-detail'))
+          setDetailOpen(true);
+      }}
+    >
       <div className="lore-workspace">
         <section className="lore-list-pane" aria-label="로어 목록">
+          <header className="lore-heading">
+            <div>
+              <strong>
+                로어 <span className="muted">{value.lore.length}</span>
+              </strong>
+              <p className="muted">
+                폴더는 편집용 분류예요. 포함 방식과 프롬프트 배치는 각 로어에서 정해요.
+              </p>
+            </div>
+            <div className="lore-actions">
+              <button
+                type="button"
+                className="secondary"
+                onClick={() => setFolderEdit({ name: '' })}
+              >
+                <FolderIcon size={15} />
+                폴더 추가
+              </button>
+              <button
+                type="button"
+                className="secondary"
+                onClick={add}
+                disabled={value.lore.length >= 2000}
+              >
+                <AddIcon size={15} />
+                로어 추가
+              </button>
+            </div>
+          </header>
+          {pendingOrders.length > 0 && (
+            <p className="error" role="status">
+              순서 입력을 확인할 로어가 {pendingOrders.length}개 있어요.{' '}
+              {pendingOrders.map((row) => (
+                <button
+                  type="button"
+                  className="ghost"
+                  key={row.id}
+                  onClick={() => selectLore(row.id)}
+                >
+                  {row.title || '이름 없는 로어'}
+                </button>
+              ))}
+            </p>
+          )}
+          <div className="lore-filters">
+            <label className="lore-search">
+              <SearchIcon size={16} />
+              <input
+                aria-label="로어 검색"
+                placeholder="이름, 설명, 본문 검색"
+                value={query}
+                onChange={(event) => {
+                  setQuery(event.target.value);
+                  resetList();
+                }}
+              />
+            </label>
+            <select
+              aria-label="로어 폴더 필터"
+              value={folder}
+              onChange={(event) => {
+                setFolder(event.target.value);
+                resetList();
+              }}
+            >
+              <option value="*">모든 폴더 · {value.lore.length}</option>
+              <option value="">미분류 · {value.lore.filter((row) => !row.folderId).length}</option>
+              {folders.map((entry) => (
+                <option key={entry.id} value={entry.id}>
+                  {entry.name} · {value.lore.filter((row) => row.folderId === entry.id).length}
+                </option>
+              ))}
+            </select>
+            <select
+              aria-label="로어 사용 방법 필터"
+              value={loading}
+              onChange={(event) => {
+                setLoading(event.target.value);
+                resetList();
+              }}
+            >
+              <option value="*">모든 사용 방법</option>
+              <option value="pinned">항상 포함</option>
+              <option value="discoverable">필요할 때 읽기</option>
+            </select>
+          </div>
+          {activeFolder && (
+            <div className="lore-folder-bar">
+              <span>
+                <FolderIcon size={14} />
+                {activeFolder.name}
+              </span>
+              <button
+                type="button"
+                className="ghost"
+                onClick={() => setFolderEdit({ id: activeFolder.id, name: activeFolder.name })}
+              >
+                폴더 관리
+              </button>
+            </div>
+          )}
+
           <div className="lore-list-summary">
             <label>
               <SelectionCheckbox
@@ -270,7 +297,8 @@ export function LoreEditor({
                 <button
                   type="button"
                   aria-pressed={item?.id === row.id}
-                  onClick={() => setSelected(row.id)}
+                  data-lore-id={row.id}
+                  onClick={() => selectLore(row.id)}
                 >
                   <span className="lore-row-title">{row.title || '이름 없는 로어'}</span>
                   <span className="lore-row-meta">
@@ -319,10 +347,30 @@ export function LoreEditor({
           )}
         </section>
         <section className="lore-detail" aria-label="선택한 로어 편집">
+          <button
+            type="button"
+            className="secondary lore-list-back"
+            onClick={() => {
+              setDetailOpen(false);
+              requestAnimationFrame(() => {
+                const choice = root.current?.querySelector<HTMLButtonElement>(
+                  `[data-lore-id="${CSS.escape(item?.id ?? '')}"]`
+                );
+                (
+                  choice ??
+                  root.current?.querySelector<HTMLInputElement>('[aria-label="로어 검색"]')
+                )?.focus({ preventScroll: true });
+              });
+            }}
+          >
+            <BackIcon size={18} aria-hidden="true" /> 로어 목록
+          </button>
           {item ? (
             <>
               <div className="lore-detail-heading">
-                <strong>로어 편집</strong>
+                <h4 ref={detailHeading} tabIndex={-1}>
+                  {item.title || '이름 없는 로어'}
+                </h4>
                 <button type="button" className="ghost" onClick={() => setDeleteLore(item.id)}>
                   로어 삭제
                 </button>

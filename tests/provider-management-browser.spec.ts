@@ -516,7 +516,7 @@ test('PMUI07 quick setup selects a cached catalog model and keeps drafts across 
       modelForm = page.getByRole('form', { name: '모델 편집 양식' });
     await startProviderConnection(page);
     await expect(page.getByRole('list', { name: '빠른 프로바이더 진행' })).toContainText(
-      '1 제공자'
+      '1. 연결 방식'
     );
     await page.getByText('개발·검사용 프로바이더', { exact: true }).click();
     await page.getByRole('button', { name: '로컬 fixture로 설정', exact: true }).click();

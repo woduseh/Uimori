@@ -189,25 +189,13 @@ export function PromptLibrary({
   }
   return (
     <section
-      className="library-page prompt-library"
+      className={`library-page prompt-library${editing ? ' library-page-editing' : ''}`}
       aria-label="프롬프트 관리"
       data-testid="prompt-library"
     >
       <header className="library-heading">
         {headerLeading}
         <h1>프롬프트</h1>
-        {!editing && (!library || filtered.length > 0 || !!query) && (
-          <button
-            type="button"
-            className="library-create"
-            disabled={!library}
-            onClick={() =>
-              changeEditing({ preset: null, role: role === 'translation' ? role : 'main' })
-            }
-          >
-            <AddIcon size={18} aria-hidden="true" /> 새 프롬프트
-          </button>
-        )}
       </header>
       {library && !editing && (
         <button
@@ -391,6 +379,18 @@ export function PromptLibrary({
                     </LibraryItemMenu>
                   </>
                 )
+              )}
+              {!selecting && (
+                <button
+                  type="button"
+                  className={`library-create${categoryEmpty ? ' secondary' : ' primary'}`}
+                  disabled={!library}
+                  onClick={() =>
+                    changeEditing({ preset: null, role: role === 'translation' ? role : 'main' })
+                  }
+                >
+                  <AddIcon size={18} aria-hidden="true" /> 새 프롬프트
+                </button>
               )}
             </div>
             {!!query && !selecting && (

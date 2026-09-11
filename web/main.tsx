@@ -13,6 +13,7 @@ import { useCompactLayout } from './useCompactLayout.js';
 import { subscribeAppHistory } from './app-history.js';
 import { ChatPromptOptions } from './ChatPromptOptions.js';
 import { HelperPanel } from './HelperPanel.js';
+import { selectedHelperSession } from './useHelperSessions.js';
 import type { HelperScope } from '../core/helper.js';
 import { StreamingResponse } from './StreamingResponse.js';
 import { discardActiveEditor } from './editor-workspace-context.js';
@@ -190,6 +191,7 @@ function App() {
     sourceId: string;
     sourceHash: string;
     text: string;
+    conversationId?: string;
     scope: HelperScope;
   }>();
   const [editingSources, setEditingSources] = useState<string[]>([]);
@@ -270,6 +272,22 @@ function App() {
       return false;
     }
   });
+  const [viewportWidth, setViewportWidth] = useState(() => window.innerWidth);
+  const [panelSidebarExpanded, setPanelSidebarExpanded] = useState(false);
+  useEffect(() => {
+    const resize = () => setViewportWidth(window.innerWidth);
+    window.addEventListener('resize', resize);
+    return () => window.removeEventListener('resize', resize);
+  }, []);
+  const workspacePanelOpen =
+    helperOpen || (optionsOpen && s.destination === 'story' && !!s.selected);
+  const autoCollapseSidebar =
+    workspacePanelOpen && viewportWidth >= 1152 && viewportWidth < 1400 && !panelSidebarExpanded;
+  const sidebarHidden = sidebarCollapsed || autoCollapseSidebar;
+  const panelModal = viewportWidth < 1152 || (!sidebarHidden && viewportWidth < 1400);
+  useEffect(() => {
+    if (!workspacePanelOpen) setPanelSidebarExpanded(false);
+  }, [workspacePanelOpen]);
   useEffect(() => {
     try {
       localStorage.setItem('uimori:sidebar-collapsed', String(sidebarCollapsed));
@@ -498,6 +516,7 @@ function App() {
       chats={s.chats}
       selected={s.selected}
       destination={s.destination}
+      libraryTab={libraryTab}
       onSelect={select}
       onNew={newStory}
       onLibrary={showLibrary}
@@ -516,11 +535,17 @@ function App() {
     <>
       <IconButton
         className="sidebar-toggle"
-        label={sidebarCollapsed ? '좌측 패널 펼치기' : '좌측 패널 접기'}
-        icon={sidebarCollapsed ? PanelLeftOpen : PanelLeftClose}
-        aria-expanded={!sidebarCollapsed}
+        label={sidebarHidden ? '좌측 패널 펼치기' : '좌측 패널 접기'}
+        icon={sidebarHidden ? PanelLeftOpen : PanelLeftClose}
+        aria-expanded={!sidebarHidden}
         aria-controls="workspace-sidebar"
-        onClick={() => setSidebarCollapsed((value) => !value)}
+        onClick={() => {
+          if (autoCollapseSidebar && !sidebarCollapsed) setPanelSidebarExpanded(true);
+          else {
+            setSidebarCollapsed(!sidebarCollapsed);
+            setPanelSidebarExpanded(false);
+          }
+        }}
       />
       <IconButton
         className="mobile-menu"
@@ -528,7 +553,7 @@ function App() {
         icon={Menu}
         onClick={() => setPanel('navigation')}
       />
-      {(!compact || s.destination !== 'story') && (
+      {s.destination !== 'story' && (
         <IconButton
           label="도우미 열기"
           icon={MessageCircle}
@@ -592,7 +617,7 @@ function App() {
   }
   return (
     <div
-      className={`app-shell ${focus ? 'focus-reading' : ''} ${sidebarCollapsed ? 'sidebar-collapsed' : ''} ${optionsOpen && s.destination === 'story' && s.selected ? 'options-open' : ''} ${helperOpen ? 'helper-open' : ''}`}
+      className={`app-shell ${focus ? 'focus-reading' : ''} ${sidebarHidden ? 'sidebar-collapsed' : ''} ${optionsOpen && s.destination === 'story' && s.selected ? 'options-open' : ''} ${helperOpen ? 'helper-open' : ''} ${workspacePanelOpen ? (panelModal ? 'panel-overlay' : 'panel-docked') : ''}`}
     >
       <aside id="workspace-sidebar" className="sidebar" aria-label="탐색">
         {!compact && panel !== 'navigation' && navigation(true)}
@@ -629,6 +654,18 @@ function App() {
               {s.selected && s.destination === 'story' && (
                 <>
                   {mainModelChip}
+                  {!compact && (
+                    <IconButton
+                      label="도우미 열기"
+                      icon={MessageCircle}
+                      aria-expanded={helperOpen}
+                      aria-controls="helper-panel"
+                      onClick={() => {
+                        setOptionsOpen(false);
+                        setHelperOpen((value) => !value);
+                      }}
+                    />
+                  )}
                   {focus && (
                     <button
                       className="icon-button"
@@ -964,6 +1001,12 @@ function App() {
                                     sourceId,
                                     sourceHash: source.hash,
                                     text,
+                                    conversationId:
+                                      selectedHelperSession({
+                                        kind: 'chat',
+                                        chatId: s.selected,
+                                        branchId: s.branch.id,
+                                      }) ?? undefined,
                                     scope: {
                                       kind: 'chat',
                                       chatId: s.selected,
@@ -1389,6 +1432,7 @@ function App() {
         )}
       </main>
       <ChatPromptOptions
+        modal={panelModal}
         chatId={s.selected || undefined}
         branchId={s.branch?.id}
         open={optionsOpen && s.destination === 'story' && !!s.selected}
@@ -1415,6 +1459,10 @@ function App() {
         onBusyChange={setOptionsBusy}
       />
       <HelperPanel
+        ready={s.destination !== 'story' || !s.selected || !!s.branch}
+        modal={panelModal}
+        branches={s.detail?.branches ?? []}
+        onBranchNavigate={s.chooseBranch}
         enterSend={enterSend}
         modelDescription={helperDescription}
         open={helperOpen}

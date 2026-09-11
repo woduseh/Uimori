@@ -142,7 +142,7 @@ export const BACKUP_COLLECTIONS = [
   collection(
     'helperConversations',
     'helper_conversations',
-    'id scope_key chat_id branch_id @scope revision persona created_at @limits'
+    'id scope_key creation_key creation_hash chat_id branch_id @scope title auto_title revision persona created_at updated_at @limits'
   ),
   collection(
     'helperTasks',
@@ -175,7 +175,7 @@ export const BACKUP_COLLECTIONS = [
   collection(
     'helperDelegations',
     'helper_delegations',
-    'id conversation_id revision @body revoked_at created_at'
+    'id conversation_id chat_id branch_id revision @body revoked_at created_at'
   ),
   collection(
     'responseStreams',

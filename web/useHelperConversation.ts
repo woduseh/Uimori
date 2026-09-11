@@ -1,11 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type {
-  HelperConversation,
-  HelperEvent,
-  HelperMessage,
-  HelperScope,
-  HelperTask,
-} from '../core/helper.js';
+import type { HelperConversation, HelperEvent, HelperMessage, HelperTask } from '../core/helper.js';
 import { api } from './api.js';
 
 export type HelperTaskView = Omit<HelperTask, 'snapshot'> & { modelTitle: string };
@@ -19,8 +13,8 @@ type View = {
 const id = encodeURIComponent;
 
 /** Retains visited pages across panel hides and reads only new events while idle. */
-export function useHelperConversation(open: boolean, scope: HelperScope) {
-  const scopeKey = JSON.stringify(scope);
+export function useHelperConversation(open: boolean, conversationId: string | null) {
+  const scopeKey = conversationId ?? '';
   const selectedScope = useRef(scopeKey);
   selectedScope.current = scopeKey;
   const cache = useRef(new Map<string, View>());
@@ -45,12 +39,13 @@ export function useHelperConversation(open: boolean, scope: HelperScope) {
   }, []);
   const refresh = useCallback(
     async (conversation: HelperConversation) => {
-      const key = JSON.stringify(conversation.scope);
+      const key = conversation.id;
       const version = (versions.current.get(key) ?? 0) + 1;
       versions.current.set(key, version);
-      const [messages, tasks] = await Promise.all([
+      const [messages, tasks, latestConversation] = await Promise.all([
         api<HelperMessage[]>(`/helper/conversations/${id(conversation.id)}/messages`),
         api<HelperTaskView[]>(`/helper/conversations/${id(conversation.id)}/tasks`),
+        api<HelperConversation>(`/helper/conversations/${id(conversation.id)}`),
       ]);
       if (!alive.current || versions.current.get(key) !== version) return;
       const previous = cache.current.get(key);
@@ -61,9 +56,10 @@ export function useHelperConversation(open: boolean, scope: HelperScope) {
       const taskIds = new Set(tasks.map((task) => task.id));
       write(key, {
         conversation:
-          previous?.conversation.revision && previous.conversation.revision > conversation.revision
+          previous?.conversation.revision &&
+          previous.conversation.revision > latestConversation.revision
             ? previous.conversation
-            : conversation,
+            : latestConversation,
         messages: [
           ...(previous?.messages ?? []).filter(
             (message) =>
@@ -82,11 +78,13 @@ export function useHelperConversation(open: boolean, scope: HelperScope) {
     [write]
   );
   useEffect(() => {
-    if (!open) return;
+    if (!open || !conversationId) return;
     let disposed = false,
       polling = false;
     let timer: ReturnType<typeof setTimeout> | undefined;
     let conversation: HelperConversation | undefined;
+    let initialized = false,
+      needsRefresh = true;
     const report = (cause: unknown) => {
       if (!disposed && selectedScope.current === scopeKey)
         setError(cause instanceof Error ? cause.message : '도우미 대화를 불러오지 못했어요.');
@@ -120,14 +118,27 @@ export function useHelperConversation(open: boolean, scope: HelperScope) {
       return changed;
     };
     const poll = async () => {
-      if (disposed || polling || !conversation) return;
+      if (disposed || polling) return;
       polling = true;
       try {
-        if (!document.hidden && (await events())) await refresh(conversation);
+        if (!document.hidden) {
+          conversation ??= await api<HelperConversation>(
+            `/helper/conversations/${id(conversationId)}`
+          );
+          if (disposed) return;
+          needsRefresh = (await events(!initialized)) || needsRefresh;
+          if (needsRefresh) {
+            await refresh(conversation);
+            needsRefresh = false;
+          }
+          initialized = true;
+          if (!disposed && selectedScope.current === scopeKey) setError('');
+        }
       } catch (cause) {
         report(cause);
       } finally {
         polling = false;
+        if (!disposed) setLoading(false);
         if (!disposed) timer = setTimeout(() => void poll(), document.hidden ? 10000 : 1200);
       }
     };
@@ -139,26 +150,14 @@ export function useHelperConversation(open: boolean, scope: HelperScope) {
     };
     setLoading(!cache.current.has(scopeKey));
     setError('');
-    void api<HelperConversation>('/helper/conversations', { scope: JSON.parse(scopeKey) })
-      .then(async (value) => {
-        if (disposed) return;
-        conversation = value;
-        await events(true);
-        if (disposed) return;
-        await refresh(value);
-        if (!disposed) timer = setTimeout(() => void poll(), 1200);
-      })
-      .catch(report)
-      .finally(() => {
-        if (!disposed) setLoading(false);
-      });
+    void poll();
     addEventListener('visibilitychange', visible);
     return () => {
       disposed = true;
       clearTimeout(timer);
       removeEventListener('visibilitychange', visible);
     };
-  }, [open, scopeKey, refresh]);
+  }, [open, scopeKey, conversationId, refresh]);
   const earlier = async (kind: 'messages' | 'tasks') => {
     const view = cache.current.get(scopeKey);
     if (!view || earlierLock.current) return;
@@ -204,7 +203,7 @@ export function useHelperConversation(open: boolean, scope: HelperScope) {
     refresh,
     earlier,
     updateConversation: (conversation: HelperConversation) => {
-      const key = JSON.stringify(conversation.scope),
+      const key = conversation.id,
         previous = cache.current.get(key);
       if (previous) write(key, { ...previous, conversation });
     },

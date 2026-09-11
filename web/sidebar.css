@@ -15,3 +15,16 @@
     display: none;
   }
 }
+/* App navigation changes to a drawer before reading and editing become cramped. */
+@media (min-width: 761px) and (max-width: 1023px) {
+  .app-shell {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .app-shell .sidebar,
+  .sidebar-toggle {
+    display: none;
+  }
+  .app-shell .mobile-menu {
+    display: inline-flex;
+  }
+}

@@ -323,17 +323,21 @@
   margin: 20px 0;
 }
 .provider-steps {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  flex-basis: 100%;
+  gap: 4px;
   list-style: none;
-  padding: 0;
-  margin: 0 0 0 auto;
+  padding: 4px;
+  margin: 0;
   color: var(--muted);
+  background: var(--surface-raised);
+  border-radius: 9px;
   font-size: 12px;
 }
 .provider-steps li {
-  padding: 6px 8px;
+  padding: 10px 6px;
+  text-align: center;
   border-radius: 6px;
 }
 .provider-steps [aria-current] {
@@ -397,6 +401,9 @@
   margin-top: 0;
   padding-top: 0;
   border: 0;
+}
+.connection-editor .provider-connection-fields {
+  grid-template-columns: minmax(0, 1fr);
 }
 .provider-model-tabs {
   display: flex;
@@ -470,6 +477,14 @@
   border-top: 1px solid var(--line);
   z-index: 1;
 }
+.provider-save-actions {
+  justify-content: flex-end;
+}
+.provider-save-status {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.6;
+}
 @media (max-width: 600px) {
   .provider-template-grid {
     grid-template-columns: minmax(0, 1fr);
@@ -494,6 +509,10 @@
   .provider-management-form > .provider-actions {
     position: static;
     padding-block: 10px;
+  }
+  .provider-save-actions > .provider-save-status {
+    flex-basis: 100%;
+    order: -1;
   }
 }
 .provider-saved-item {

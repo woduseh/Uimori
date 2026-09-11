@@ -8,10 +8,24 @@ export type HelperScope =
 export type HelperConversation = {
   id: string;
   scope: HelperScope;
+  title: string;
   revision: number;
   persona: string;
   limits: HelperLimits;
   createdAt: string;
+  updatedAt: string;
+};
+export type HelperConversationDeletion = {
+  request: { expectedRevision: number; expectedEventSequence: number };
+  activeTasks: number;
+  unsettledAttempts: number;
+  workerActive: boolean;
+  canDelete: boolean;
+  description: string;
+};
+export type HelperConversationSummary = HelperConversation & {
+  activity: { running: number; queued: number };
+  latestEventSeq: number;
 };
 export type HelperStatus =
   | 'queued'

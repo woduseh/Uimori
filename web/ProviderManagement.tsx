@@ -561,23 +561,11 @@ export function ConnectionEditor({
         <div className="provider-workspace-navigation" aria-label="프로바이더·모델 등록 화면">
           <button
             type="button"
-            className={screen === 'models' ? 'selected' : 'secondary'}
-            aria-label="모델 프리셋"
-            aria-pressed={screen === 'models'}
-            disabled={busy}
-            onClick={() => {
-              setSetup(false);
-              navigate('models');
-            }}
-          >
-            <ModelIcon size={18} aria-hidden="true" />
-            모델
-          </button>
-          <button
-            type="button"
-            className={screen === 'connections' ? 'selected' : 'secondary'}
+            className={
+              ['connections', 'connection', 'providers'].includes(screen) ? 'selected' : 'secondary'
+            }
             aria-label="프로바이더 관리"
-            aria-pressed={screen === 'connections'}
+            aria-pressed={['connections', 'connection', 'providers'].includes(screen)}
             disabled={busy}
             onClick={() => {
               setSetup(false);
@@ -585,7 +573,21 @@ export function ConnectionEditor({
             }}
           >
             <ConnectionIcon size={18} aria-hidden="true" />
-            프로바이더
+            연결
+          </button>
+          <button
+            type="button"
+            className={screen === 'models' || screen === 'model' ? 'selected' : 'secondary'}
+            aria-label="모델 프리셋"
+            aria-pressed={screen === 'models' || screen === 'model'}
+            disabled={busy}
+            onClick={() => {
+              setSetup(false);
+              navigate('models');
+            }}
+          >
+            <ModelIcon size={18} aria-hidden="true" />
+            모델 프리셋
           </button>
           <IconButton
             label="목록 새로고침"
@@ -622,12 +624,13 @@ export function ConnectionEditor({
               <div className="provider-actions">
                 <button
                   type="button"
+                  className="primary"
                   aria-label={screen === 'connections' ? '새 프로바이더 입력' : '새 모델 입력'}
                   disabled={busy}
                   onClick={() => (screen === 'connections' ? newConnection() : newModel())}
                 >
                   <AddIcon size={18} aria-hidden="true" />
-                  <span>{screen === 'connections' ? '새 프로바이더 입력' : '새 모델 입력'}</span>
+                  <span>{screen === 'connections' ? '연결 추가' : '모델 추가'}</span>
                 </button>
               </div>
             </div>
@@ -690,9 +693,9 @@ export function ConnectionEditor({
           </button>
           {setup && (
             <ol className="provider-steps" aria-label="빠른 프로바이더 진행">
-              <li aria-current={screen === 'providers' ? 'step' : undefined}>1 제공자</li>
-              <li aria-current={screen === 'connection' ? 'step' : undefined}>2 프로바이더</li>
-              <li aria-current={screen === 'model' ? 'step' : undefined}>3 모델</li>
+              <li aria-current={screen === 'providers' ? 'step' : undefined}>1. 연결 방식</li>
+              <li aria-current={screen === 'connection' ? 'step' : undefined}>2. 접속 정보</li>
+              <li aria-current={screen === 'model' ? 'step' : undefined}>3. 모델</li>
             </ol>
           )}
         </div>
@@ -1039,19 +1042,12 @@ export function ConnectionEditor({
             다른 곳에서 프로바이더가 변경됐어요. 초안은 유지했어요. 최신 설정을 불러와 주세요.
           </p>
         )}
-        <fieldset className="editor-fields full" disabled={busy || !!confirmation}>
+        <fieldset
+          className="editor-fields full provider-connection-fields"
+          disabled={busy || !!confirmation}
+        >
           <label>
-            프로바이더 이름
-            <input
-              aria-label="프로바이더 이름"
-              required
-              maxLength={160}
-              value={connection.title}
-              onChange={(event) => setConnection({ ...connection, title: event.target.value })}
-            />
-          </label>
-          <label>
-            프로바이더 프로토콜
+            연결 방식
             <select
               aria-label="프로바이더 프로토콜"
               value={connection.protocol}
@@ -1072,6 +1068,16 @@ export function ConnectionEditor({
                 </option>
               ))}
             </select>
+          </label>
+          <label>
+            연결 이름
+            <input
+              aria-label="프로바이더 이름"
+              required
+              maxLength={160}
+              value={connection.title}
+              onChange={(event) => setConnection({ ...connection, title: event.target.value })}
+            />
           </label>
           {vertex && (
             <VertexCredentialUpload
@@ -1237,10 +1243,15 @@ export function ConnectionEditor({
             <p>프로바이더 템플릿은 로컬 구현의 설명이에요. 모델별 기능과 가격은 미확인이에요.</p>
           </details>
         </fieldset>
-        <div className="provider-actions full">
-          <button disabled={busy || !!confirmation}>
-            {editingConnection ? '프로바이더 변경 저장' : '프로바이더 등록'}
-          </button>
+        <div className="provider-actions full provider-save-actions">
+          {editingConnection && deleteConnection(editingConnection)}
+          <small className="provider-save-status">
+            {editingConnection
+              ? JSON.stringify(connection) === connectionBaseline
+                ? '저장한 연결이에요.'
+                : '아직 저장하지 않은 변경이 있어요.'
+              : '아직 저장하지 않은 연결이에요.'}
+          </small>
           <button
             type="button"
             className="secondary"
@@ -1249,7 +1260,9 @@ export function ConnectionEditor({
           >
             프로바이더 편집 끝내기
           </button>
-          {editingConnection && deleteConnection(editingConnection)}
+          <button className="primary" disabled={busy || !!confirmation}>
+            {editingConnection ? '프로바이더 변경 저장' : '프로바이더 등록'}
+          </button>
         </div>
       </form>
       <form
@@ -1456,8 +1469,15 @@ export function ConnectionEditor({
             forcedVertexTier={forcedVertexTier}
           />
         </fieldset>
-        <div className="provider-actions full provider-model-save-actions">
+        <div className="provider-actions full provider-save-actions provider-model-save-actions">
           {editingModel && deleteModel(editingModel, true)}
+          <small className="provider-save-status">
+            {editingModel
+              ? JSON.stringify(model) === modelBaseline
+                ? '저장한 모델 프리셋이에요.'
+                : '아직 저장하지 않은 변경이 있어요.'
+              : '아직 저장하지 않은 모델 프리셋이에요.'}
+          </small>
           <IconButton
             icon={CloseIcon}
             label="모델 편집 끝내기"
@@ -1471,7 +1491,9 @@ export function ConnectionEditor({
               aria-busy={busy}
             />
           ) : (
-            <button disabled={busy || !!confirmation || !chosen}>모델 프리셋 등록</button>
+            <button className="primary" disabled={busy || !!confirmation || !chosen}>
+              모델 프리셋 등록
+            </button>
           )}
         </div>
       </form>

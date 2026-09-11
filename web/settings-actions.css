@@ -37,3 +37,15 @@
   height: 20px;
   stroke-width: 1.7;
 }
+.model-secondary-settings {
+  border-top: 1px solid var(--line);
+  padding-top: 4px;
+}
+.model-secondary-settings > summary small {
+  display: block;
+  margin-left: 22px;
+  font-weight: 400;
+}
+.model-secondary-settings > .control-grid {
+  padding: 8px 0 12px;
+}

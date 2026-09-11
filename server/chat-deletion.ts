@@ -198,7 +198,10 @@ export function deleteBranch(store: Store, chatId: string, branchId: string, val
     if (branch.revision !== expected)
       throw new HttpError(409, '분기가 변경됐어요. 최신 내용을 확인한 뒤 다시 삭제해 주세요.');
     if (branch.default)
-      throw new HttpError(409, '기본 분기는 개별 삭제할 수 없어요. 채팅 삭제를 이용해 주세요.');
+      throw new HttpError(
+        409,
+        '기본 분기는 삭제할 수 없어요. 다른 분기를 기본으로 지정하거나 채팅 삭제를 이용해 주세요.'
+      );
     assertIdle(store, chatId);
     const runIds = (
       store.db

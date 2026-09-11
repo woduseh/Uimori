@@ -384,6 +384,7 @@ export function readerDetail(store: Store, id: string, query: Record<string, str
     !events ||
     events.some(
       (event) =>
+        event.kind === 'branch.default.changed' ||
         event.kind.startsWith('asset.') ||
         event.kind.startsWith('job.') ||
         event.kind.startsWith('source.')

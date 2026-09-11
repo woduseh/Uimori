@@ -180,6 +180,7 @@ test('LIMG01 representative image upload, unset and existing inline selection pr
     expect(old.package).toEqual(previous.package);
   }
   await page.setViewportSize({ width: 390, height: 844 });
+  await selectPackageSection(page, '기본 정보');
   await portrait.scrollIntoViewIfNeeded();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(
     true

@@ -90,7 +90,7 @@ export function PromptEditor({
   const [composerDirty, setComposerDirty] = useState<Record<string, boolean>>({});
   const [pendingTemplate, setPendingTemplate] = useState(false);
   const [importVersion, setImportVersion] = useState(0);
-  const [collaborationExpanded, setCollaborationExpanded] = useState(false);
+  const [collaborationExpanded, setCollaborationExpanded] = useState(true);
   const [error, setError] = useState('');
   const [status, setStatus] = useState('');
   const draftCache = useRef<Record<string, Draft>>({});
@@ -258,11 +258,16 @@ export function PromptEditor({
         aria-label="전체 프롬프트 편집"
       >
         <EditorDraftStatus value={shared} />
-        <p className="muted">
-          본문·메시지 구성과 옵션을 독립된 프리셋으로 저장해요. 현재 프롬프트에서 불러와 사용할 수
-          있어요.
-        </p>
-        <fieldset className="prompt-editor-fields" disabled={busy}>
+        {initialPreset === undefined && (
+          <p className="muted">
+            본문·메시지 구성과 옵션을 독립된 프리셋으로 저장해요. 현재 프롬프트에서 불러와 사용할 수
+            있어요.
+          </p>
+        )}
+        <fieldset
+          className={`prompt-editor-fields${initialPreset !== undefined ? ' prompt-preset-fields' : ''}`}
+          disabled={busy}
+        >
           <div className="prompt-editor-row">
             <label>
               역할
@@ -389,18 +394,22 @@ export function PromptEditor({
               controlState={
                 draft.base ? { values: draft.base.values ?? {}, combinations: [] } : undefined
               }
+              collaborationEditor={
+                role === 'main' && (
+                  <AgentCollaborationEditor
+                    key={`collaboration:${role}:${importVersion}`}
+                    expanded={collaborationExpanded}
+                    onExpandedChange={setCollaborationExpanded}
+                    value={draft.program.collaboration}
+                    controls={draft.program.controls}
+                    models={library.models}
+                    onChange={(collaboration) =>
+                      edit({ program: { ...draft.program, collaboration } })
+                    }
+                  />
+                )
+              }
             />
-            {role === 'main' && (
-              <AgentCollaborationEditor
-                key={`collaboration:${role}:${importVersion}`}
-                expanded={collaborationExpanded}
-                onExpandedChange={setCollaborationExpanded}
-                value={draft.program.collaboration}
-                controls={draft.program.controls}
-                models={library.models}
-                onChange={(collaboration) => edit({ program: { ...draft.program, collaboration } })}
-              />
-            )}
           </fieldset>
           <div className="prompt-save-actions">
             <div className="prompt-save-buttons">
@@ -415,11 +424,11 @@ export function PromptEditor({
                 }
                 onClick={() => void save(!!draft.base)}
               >
-                <SaveIcon size={18} aria-hidden="true" /> 저장
+                <SaveIcon size={18} aria-hidden="true" /> 프리셋 저장
               </button>
               <small className="prompt-save-scope">
                 {draft.base
-                  ? '프리셋에 저장해요. 현재 프롬프트는 바뀌지 않아요.'
+                  ? '전역 사용 설정 유지 · 고정 채팅은 다음 요청부터 반영'
                   : '새 프리셋으로 저장해요. 현재 프롬프트에 불러와 사용할 수 있어요.'}
               </small>
               {draft.base && (

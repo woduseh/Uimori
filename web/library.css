@@ -1,8 +1,8 @@
 .library-page {
-  max-width: 1180px;
+  max-width: none;
   width: 100%;
-  margin: 0 auto;
-  padding: 16px 24px 48px;
+  margin: 0;
+  padding: 0 24px 48px;
   min-width: 0;
   color: var(--text);
 }
@@ -12,10 +12,16 @@
   justify-content: flex-start;
   gap: 12px;
   min-height: 56px;
-  margin-bottom: 12px;
+  margin: 0 -24px 16px;
+  padding: 6px 24px;
+  border-bottom: 1px solid var(--line);
+  background: var(--bg);
+  position: sticky;
+  top: 0;
+  z-index: 8;
 }
 .library-heading h1 {
-  font-size: 20px;
+  font-size: 24px;
   letter-spacing: -0.04em;
   margin: 0;
   min-width: 0;
@@ -50,6 +56,9 @@
 }
 .library-create {
   font-size: 14px;
+  flex: none;
+  margin-inline-start: auto;
+  white-space: nowrap;
 }
 .library-tabs,
 .profile-tabs {
@@ -173,8 +182,8 @@
   margin: 12px 0 22px;
 }
 .library-detail {
-  max-width: 840px;
-  margin: 0 auto;
+  max-width: 1120px;
+  margin: 0;
   min-width: 0;
 }
 .library-detail-heading {
@@ -467,6 +476,66 @@
 .library-savebar > span:empty {
   display: none;
 }
+.library-content-editor {
+  max-width: none;
+  width: 100%;
+}
+.library-content-editor > .library-detail-heading {
+  min-height: 56px;
+  position: sticky;
+  top: 56px;
+  z-index: 7;
+  margin: 0 -24px;
+  padding: 8px 24px;
+  background: var(--bg);
+  border-bottom: 1px solid var(--line);
+}
+.library-content-editor > .library-detail-heading h2 {
+  font-size: 20px;
+}
+.library-content-editor .library-draft-state {
+  color: var(--muted);
+  font-size: 12px;
+}
+.library-content-editor .library-detail-actions {
+  flex-wrap: wrap;
+}
+.library-content-editor > .editor-grid {
+  padding-top: 8px;
+}
+.library-basic-fields {
+  display: grid;
+  gap: 24px;
+  max-width: 800px;
+  min-width: 0;
+}
+.library-content-editor .library-basic-fields label {
+  font-size: 14px;
+}
+.library-basic-fields > label > textarea {
+  min-height: 270px;
+}
+.library-package-expand {
+  justify-self: start;
+  align-self: start;
+}
+.library-content-editor .library-package-tools {
+  margin-top: 20px;
+}
+@media (max-width: 760px) {
+  .library-content-editor > .library-detail-heading {
+    position: static;
+    margin-inline: -16px;
+    padding-inline: 16px;
+  }
+  .library-content-editor .library-detail-actions {
+    order: initial;
+    flex-basis: auto;
+  }
+  .library-content-editor .library-draft-state {
+    display: none;
+  }
+}
 @media (max-width: 600px) {
   .library-package-transfer {
     grid-template-columns: minmax(0, 1fr);
@@ -679,8 +748,8 @@
   justify-content: center;
 }
 .library-portrait-cards {
-  grid-template-columns: repeat(auto-fill, minmax(min(100%, 190px), 1fr));
-  gap: 14px;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 224px), 288px));
+  gap: 16px;
 }
 .library-portrait-card {
   padding: 12px;
@@ -695,7 +764,7 @@
 .library-portrait-card .library-item-avatar {
   width: 100%;
   height: auto;
-  aspect-ratio: 1.15;
+  aspect-ratio: 1.45;
   font-size: 48px;
   border-radius: 8px;
 }
@@ -732,7 +801,7 @@
   gap: 24px;
 }
 .library-preview-avatar {
-  --content-avatar-size: 72px;
+  --content-avatar-size: 200px;
   border-radius: 14px;
   font-size: 28px;
 }
@@ -899,7 +968,8 @@
   color: var(--muted);
 }
 .library-page .library-workspace {
-  margin-top: 12px;
+  margin-top: 20px;
+  max-width: 1280px;
 }
 .library-list-options {
   position: relative;
@@ -965,7 +1035,11 @@
 }
 @media (max-width: 760px) {
   .library-page {
-    padding: 12px 16px 32px;
+    padding: 0 16px 32px;
+  }
+  .library-page .library-heading {
+    margin-inline: -16px;
+    padding-inline: 16px;
   }
   .library-page .library-workspace {
     gap: 8px;
@@ -975,11 +1049,18 @@
     flex-wrap: wrap;
   }
   .library-page .library-toolbar > .library-folders {
-    flex: 1 1 100%;
+    flex: 1 1 auto;
+  }
+  .library-page .library-toolbar > .library-create {
+    order: 0;
   }
   .library-page .library-toolbar .library-search-field {
-    flex: 1 1 0;
+    flex: 1 1 calc(100% - 64px);
     min-width: 0;
+    order: 1;
+  }
+  .library-page .library-toolbar .library-list-options {
+    order: 2;
   }
   .library-page .library-list-item {
     flex-wrap: nowrap;
@@ -1053,12 +1134,6 @@
 .library-page .library-empty .library-role-guide + p {
   margin-top: 4px;
 }
-@media (min-width: 761px) {
-  .library-page .library-workspace-content {
-    max-width: 860px;
-  }
-}
-
 .library-detail-actions > button {
   display: inline-flex;
   align-items: center;

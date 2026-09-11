@@ -106,19 +106,58 @@ export function ModelWorkspaceEditor({
         {selector('원문 모델', draft.routes.main, (ref) =>
           change({ ...draft, routes: { ...draft.routes, main: ref } })
         )}
-        <fieldset className="control-grid">
-          <legend>번역</legend>
-          {selector('번역 모델', draft.routes.translation, (ref) =>
-            change({ ...draft, routes: { ...draft.routes, translation: ref } })
+        {selector('번역 모델', draft.routes.translation, (ref) =>
+          change({ ...draft, routes: { ...draft.routes, translation: ref } })
+        )}
+        <div>
+          {selector('도우미 모델', draft.helperModel ?? null, (ref) =>
+            change({ ...draft, helperModel: ref })
           )}
-          {selector('번역 거절 판정 모델', draft.translationPolicy.refusalModel, (ref) =>
-            change({
-              ...draft,
-              translationPolicy: { ...draft.translationPolicy, refusalModel: ref },
-            })
+          <small>
+            작품 질문과 자료 작업에 사용해요. 미지정하면 도우미의 모델 실행을 시작하지 않아요.
+          </small>
+        </div>
+        <div>
+          {selector('문맥 요약 모델', draft.contextModel ?? null, (ref) =>
+            change({ ...draft, contextModel: ref })
           )}
-          <details>
-            <summary>거절 감지와 재시도 상세 설정</summary>
+          <small>
+            자동·수동 요약에 사용해요. 미지정하면 압축이 필요한 작업만 멈추며 다른 모델로 대체하지
+            않아요.
+          </small>
+        </div>
+        <details className="full model-secondary-settings">
+          <summary>
+            기타 자동 작업 모델 <small>표시 상태 · 이미지 배치 · 채팅 제목</small>
+          </summary>
+          <div className="control-grid">
+            {(['status', 'image'] as TaskRole[]).map((role, index) => (
+              <div key={role}>
+                {selector(
+                  ['표시 상태 모델', '이미지 배치 모델'][index],
+                  draft.routes[role],
+                  (ref) => change({ ...draft, routes: { ...draft.routes, [role]: ref } })
+                )}
+              </div>
+            ))}
+            <div>
+              {selector('채팅 제목 모델', draft.titleModel ?? null, (ref) =>
+                change({ ...draft, titleModel: ref })
+              )}
+            </div>
+          </div>
+        </details>
+        <details className="full model-secondary-settings">
+          <summary>
+            번역 오류 감지와 재시도 <small>세부 설정</small>
+          </summary>
+          <div className="control-grid">
+            {selector('번역 거절 판정 모델', draft.translationPolicy.refusalModel, (ref) =>
+              change({
+                ...draft,
+                translationPolicy: { ...draft.translationPolicy, refusalModel: ref },
+              })
+            )}
             <label>
               자동 재요청 횟수
               <input
@@ -167,37 +206,8 @@ export function ModelWorkspaceEditor({
                 }
               />
             </label>
-          </details>
-        </fieldset>
-        {(['status', 'image'] as TaskRole[]).map((role, index) => (
-          <div key={role}>
-            {selector(['표시 상태 모델', '이미지 배치 모델'][index], draft.routes[role], (ref) =>
-              change({ ...draft, routes: { ...draft.routes, [role]: ref } })
-            )}
           </div>
-        ))}
-        <div>
-          {selector('도우미 모델', draft.helperModel ?? null, (ref) =>
-            change({ ...draft, helperModel: ref })
-          )}
-          <small>
-            작품 질문과 자료 작업에 사용해요. 미지정하면 도우미의 모델 실행을 시작하지 않아요.
-          </small>
-        </div>
-        <div>
-          {selector('문맥 요약 모델', draft.contextModel ?? null, (ref) =>
-            change({ ...draft, contextModel: ref })
-          )}
-          <small>
-            자동·수동 요약에 사용해요. 미지정하면 압축이 필요한 작업만 멈추며 다른 모델로 대체하지
-            않아요.
-          </small>
-        </div>
-        <div>
-          {selector('채팅 제목 모델', draft.titleModel ?? null, (ref) =>
-            change({ ...draft, titleModel: ref })
-          )}
-        </div>
+        </details>
         <div className="form-actions settings-save-actions full">
           {(dirty || conflict) && (
             <button

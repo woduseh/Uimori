@@ -17,6 +17,8 @@ import { createFixtureChat, fixtureBotInput } from './fixtures/chat.js';
 import type { Content } from '../core/product.js';
 import type { PendingChatOptions } from '../core/chat-options.js';
 import type { WorkspaceDraftModel } from '../core/edit-drafts.js';
+import { HelperRuntime } from '../server/helper-runtime.js';
+import { ResponseStreamStore } from '../server/response-stream.js';
 
 const owned: { store: Store; path: string }[] = [];
 afterEach(() => {
@@ -39,6 +41,168 @@ function database() {
   return store;
 }
 const hash = (value: unknown) => createHash('sha256').update(JSON.stringify(value)).digest('hex');
+
+test('multiple same-branch sessions and detached revoked option receipts survive repeated chat backup restoration', () => {
+  const source = database(),
+    chat = createFixtureChat(source, '복수 세션 백업');
+  const prior = promptWorkspace(source);
+  updatePromptWorkspace(source, {
+    expectedRevision: prior.revision,
+    main: {
+      ...prior.main,
+      values: { detail: 1 },
+      program: {
+        ...prior.main.program,
+        controls: [{ id: 'detail', label: 'Detail', type: 'number', default: 1, min: 0, max: 10 }],
+      },
+    },
+  });
+  const connection = source.product.connection({
+    title: 'Fixture',
+    protocol: 'fixture-sse-v1',
+    endpoint: 'http://127.0.0.1:9',
+    enabled: true,
+  });
+  const model = source.product.model({
+    title: 'Fixture',
+    connectionId: connection.id,
+    modelId: 'fixture',
+    temperature: null,
+    maxOutputTokens: 1024,
+  });
+  const helper = new HelperWorkspace(source),
+    branchId = source.product.branch(chat.id).id;
+  const scope = { kind: 'chat' as const, chatId: chat.id, branchId };
+  for (const title of ['세계관 검토', '다음 장면']) {
+    const session = helper.create(scope, title, title);
+    const task = helper.enqueue(session.id, 'same-key', `${title} 전용 질문`, {
+      scope,
+      model: source.product.modelSnapshot(model.id),
+      history: [],
+      persona: title,
+      grants: [],
+      limits: { totalCalls: 3, helperCalls: 3, artifacts: 1 },
+    });
+    helper.start(task.id, 'fixture');
+    helper.finish(task.id, 'fixture', 1, 'completed', `${title} 전용 답변`, null);
+  }
+  const deleted = helper.create(scope, 'deleted', '삭제할 세션');
+  const options = new ChatOptionsStore(source),
+    state = options.get(chat.id);
+  const delegated = options.delegate(
+    chat.id,
+    {
+      branchId,
+      conversationId: deleted.id,
+      expectedRevision: state.revision,
+      binding: state.binding,
+      fields: ['detail'],
+      operationId: 'delegate',
+    },
+    { requestId: 'user', assert: () => {} }
+  );
+  options.stage(
+    chat.id,
+    {
+      branchId,
+      expectedRevision: delegated.revision,
+      binding: state.binding,
+      values: { detail: 4 },
+      expectedHeadRevision: state.headRevision,
+      delegationId: delegated.delegations[0].id,
+      operationId: 'choose',
+    },
+    { requestId: 'user', assert: () => {} },
+    true
+  );
+  const command = {
+    request: '옵션을 적용한 본편',
+    expectedRevision: state.headRevision,
+    expectedSettingsRevision: chat.settingsRevision,
+    branchId,
+    idempotencyKey: 'consume-options',
+  };
+  const written = source.createRun(chat.id, command, (current) => {
+    const profile = source.product.snapshot(chat.id);
+    return {
+      chatId: chat.id,
+      parentRevision: command.expectedRevision,
+      settings: current.settings,
+      settingsRevision: current.settingsRevision,
+      request: command.request,
+      history: source.history(command.expectedRevision),
+      resources: source.product.resources(chat.id, profile),
+      profile,
+    };
+  }).run;
+  source.startRun(written.id);
+  source.completeRun(
+    written.id,
+    '보존할 본편 원문',
+    { modelCalls: 0, inputTokens: null, outputTokens: null, costUsd: null },
+    { ...written.snapshot.settings, status: false }
+  );
+  const nextOptions = options.get(chat.id);
+  options.stage(
+    chat.id,
+    {
+      branchId,
+      expectedRevision: nextOptions.revision,
+      binding: nextOptions.binding,
+      values: { detail: 8 },
+      expectedHeadRevision: nextOptions.headRevision,
+      delegationId: delegated.delegations[0].id,
+      operationId: 'unconsumed-choice',
+    },
+    { requestId: 'user', assert: () => {} },
+    true
+  );
+  const runtime = new HelperRuntime(source, {
+    approvedOrigins: [],
+    owner: 'fixture',
+    signal: new AbortController().signal,
+    track: () => {
+      throw new Error('No provider execution expected');
+    },
+    streams: new ResponseStreamStore(source),
+  });
+  runtime.deleteConversation(deleted.id, runtime.deletionImpact(deleted.id).request);
+  const backup = exportChatBackup(source, chat.id),
+    destination = database();
+  expect(backup.records.helperConversations).toHaveLength(2);
+  expect(backup.records.helperDelegations).toHaveLength(1);
+  expect(backup.records.helperDelegations[0].conversationId).toBeNull();
+  const first = importChatBackup(destination, { backup, idempotencyKey: 'one' });
+  const second = importChatBackup(destination, { backup, idempotencyKey: 'two' });
+  for (const imported of [first, second]) {
+    const copies = new HelperWorkspace(destination).list({
+      kind: 'chat',
+      chatId: imported.chat.id,
+    });
+    expect(copies.map((item) => item.title).sort()).toEqual(['다음 장면', '세계관 검토']);
+    for (const copy of copies) {
+      expect(
+        new HelperWorkspace(destination).messages(copy.id).map((message) => message.text)
+      ).toEqual([`${copy.title} 전용 질문`, `${copy.title} 전용 답변`]);
+      expect(copy.scope).toMatchObject({ chatId: imported.chat.id });
+    }
+    expect(new ChatOptionsStore(destination).get(imported.chat.id)).toMatchObject({
+      pending: [],
+      delegations: [],
+    });
+    const importedSource = destination.source(imported.chat.headRevision!);
+    expect(importedSource.text).toBe('보존할 본편 원문');
+    expect(destination.run(importedSource.runId).snapshot.profile?.chatOptions?.values).toEqual({
+      detail: 4,
+    });
+    const roundtrip = exportChatBackup(destination, imported.chat.id);
+    expect(roundtrip.records.helperDelegations).toHaveLength(1);
+    expect(roundtrip.records.helperDelegations[0].conversationId).toBeNull();
+    expect(() =>
+      importChatBackup(database(), { backup: roundtrip, idempotencyKey: 'again' })
+    ).not.toThrow();
+  }
+});
 
 test('helper backup remaps durable draft and option ownership while preserving all authored payloads', () => {
   const store = database(),

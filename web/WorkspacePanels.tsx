@@ -225,6 +225,7 @@ export function TasksPanel({
 }
 
 export function BranchesPanel({ state, onClose }: { state: StoryState; onClose: () => void }) {
+  const [changingDefault, setChangingDefault] = useState(false);
   const detail = state.detail;
   if (!detail) return <p className="muted">먼저 이야기를 열어 주세요.</p>;
   function preview(branchId: string, head: string | null) {
@@ -257,8 +258,8 @@ export function BranchesPanel({ state, onClose }: { state: StoryState; onClose: 
   return (
     <section className="branches-panel" aria-label="보관된 전개 목록">
       <p className="muted">
-        이전에 저장한 전개를 읽어요. 새로 갈라 쓰려면 원고에서 ‘이 장면까지 새 채팅으로 복사’를
-        눌러요.
+        기본 전개는 채팅을 열 때 먼저 보여요. 다른 전개를 기본으로 지정해도 원문과 실행 기록은
+        그대로 유지돼요.
       </p>
       <div className="branch-list">
         {detail.branches?.map((branch) => (
@@ -277,6 +278,37 @@ export function BranchesPanel({ state, onClose }: { state: StoryState; onClose: 
               <small>{state.branch?.id === branch.id ? '읽는 중' : '이 전개 읽기'}</small>
               <span className="branch-preview">{preview(branch.id, branch.headRevision)}</span>
             </button>
+            {!branch.default && (
+              <button
+                type="button"
+                className="secondary"
+                disabled={changingDefault}
+                aria-label={`${branchLabel(branch, detail)} 기본 전개로 지정`}
+                onClick={async () => {
+                  const current = detail.branches?.find((item) => item.default);
+                  if (!current) return;
+                  setChangingDefault(true);
+                  try {
+                    await api(
+                      `/chats/${detail.chat.id}/branches/${branch.id}/default`,
+                      {
+                        expectedRevision: branch.revision,
+                        expectedDefaultBranchId: current.id,
+                        expectedDefaultBranchRevision: current.revision,
+                      },
+                      'PUT'
+                    );
+                    state.chooseBranch(branch.id);
+                  } catch (error) {
+                    state.setError(error instanceof Error ? error.message : String(error));
+                  } finally {
+                    setChangingDefault(false);
+                  }
+                }}
+              >
+                기본으로 지정
+              </button>
+            )}
             {!branch.default && (
               <DeleteButton
                 path={`/chats/${detail.chat.id}/branches/${branch.id}`}

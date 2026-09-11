@@ -76,9 +76,7 @@ test('NSUI01 global model reaches an empty chat on mobile and optional choices s
   await expect(options).not.toHaveAttribute('open');
   await expect(dialog.getByLabel('시작 번역 모델', { exact: true })).not.toBeVisible();
   await expect(dialog.getByLabel('새 채팅 이름', { exact: true })).not.toBeVisible();
-  await expect(
-    dialog.getByRole('button', { name: '시작 페르소나', exact: true })
-  ).not.toBeVisible();
+  await expect(dialog.getByRole('button', { name: '시작 페르소나', exact: true })).toBeVisible();
   const create = dialog.getByRole('button', { name: '채팅 만들기', exact: true });
   await expect(create).toBeEnabled();
   const bounds = await create.boundingBox();

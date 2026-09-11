@@ -7,16 +7,18 @@ import { ActionMenu } from './ActionMenu.js';
 import { IconButton } from './IconButton.js';
 import {
   AddIcon,
+  BackIcon,
   DeleteIcon,
   DownIcon,
   DownloadIcon,
   DragHandleIcon,
   ExpandIcon,
+  SearchIcon,
   UndoIcon,
   UpIcon,
   UploadIcon,
 } from './ui-icons.js';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
 import {
   EditorDraftFieldScope,
   useBufferedEditorState,
@@ -56,7 +58,9 @@ type Props = {
   onPreviewRequestChange?: (value: string) => void;
   initialControlDraft?: ChatPromptControls;
   onControlDraftChange?: (state: ChatPromptControls) => void;
+  collaborationEditor?: ReactNode;
 };
+type EditorSection = 'blocks' | 'controls' | 'defaults' | 'collaboration' | 'preview' | 'json';
 type Preview = {
   compilation: PromptCompilation;
   provider: {
@@ -853,7 +857,34 @@ export function PromptComposer({
   onPreviewRequestChange,
   initialControlDraft,
   onControlDraftChange,
+  collaborationEditor,
 }: Props) {
+  const sectionId = useId();
+  const [section, setSection] = useState<EditorSection>('blocks');
+  const [blockQuery, setBlockQuery] = useState('');
+  const [controlQuery, setControlQuery] = useState('');
+  const [selectedBlock, setSelectedBlock] = useState(program.blocks[0]?.id ?? '');
+  const [selectedControl, setSelectedControl] = useState(program.controls[0]?.id ?? '');
+  const [itemDetail, setItemDetail] = useState(false);
+  const activeBlock = program.blocks.some((block) => block.id === selectedBlock)
+    ? selectedBlock
+    : program.blocks[0]?.id;
+  const activeControl = program.controls.some((control) => control.id === selectedControl)
+    ? selectedControl
+    : program.controls[0]?.id;
+  const sections: { id: EditorSection; title: string }[] = [
+    { id: 'blocks', title: '블록' },
+    { id: 'controls', title: '옵션 정의' },
+    { id: 'defaults', title: '기본 옵션' },
+    ...(collaborationEditor ? [{ id: 'collaboration' as const, title: '에이전트 협업' }] : []),
+    { id: 'preview', title: '미리보기' },
+  ];
+  const sectionProps = (id: EditorSection) => ({
+    id: `${sectionId}-${id}-panel`,
+    role: 'tabpanel',
+    'aria-labelledby': `${sectionId}-${id}-tab`,
+    hidden: section !== id,
+  });
   const [pendingTemplates, setPendingTemplates] = useState<Record<string, boolean>>({});
   const pendingTemplate = Object.values(pendingTemplates).some(Boolean);
   const slotNames = new Set<string>([
@@ -1000,6 +1031,9 @@ export function PromptComposer({
     }
   };
   function focusBlock(id: string, direction?: number) {
+    setSelectedBlock(id);
+    setItemDetail(true);
+    setSection('blocks');
     requestAnimationFrame(() => {
       const block = root.current?.querySelector<HTMLElement>(`#prompt-block-${CSS.escape(id)}`);
       const button =
@@ -1007,7 +1041,9 @@ export function PromptComposer({
           ? null
           : block?.querySelector<HTMLButtonElement>(`[data-block-move="${direction}"]`);
       const target =
-        button && !button.disabled ? button : block?.querySelector<HTMLElement>(':scope > summary');
+        button && !button.disabled
+          ? button
+          : block?.querySelector<HTMLElement>('.pc-block-heading');
       target?.focus({ preventScroll: true });
       target?.scrollIntoView({ block: 'nearest' });
     });
@@ -1163,16 +1199,62 @@ export function PromptComposer({
         aria-label="프롬프트 구성"
         data-testid="prompt-composer"
       >
-        <details className="pc-composer-fold" open>
-          <summary aria-label="프롬프트 구성 접기/펼치기">
-            <ExpandIcon className="pc-disclosure-icon" size={16} aria-hidden="true" />
-            <strong>프롬프트 구성</strong>
-            <span className="pc-badge">
-              {program.blocks.length}개 블록 · {program.controls.length}개 제어
-            </span>
-            {pendingTemplate && <small>미적용 문법</small>}
-            {controlsDirty && <small>미저장 옵션</small>}
-          </summary>
+        <div className="pc-editor-workspace">
+          <div
+            className="pc-section-tabs"
+            role="tablist"
+            aria-label="프롬프트 편집 섹션"
+            onKeyDown={(event) => {
+              if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
+              event.preventDefault();
+              const current = sections.findIndex((item) => item.id === section);
+              const next =
+                event.key === 'Home'
+                  ? 0
+                  : event.key === 'End'
+                    ? sections.length - 1
+                    : (current + (event.key === 'ArrowRight' ? 1 : -1) + sections.length) %
+                      sections.length;
+              setSection(sections[next].id);
+              event.currentTarget.querySelectorAll<HTMLButtonElement>('button')[next]?.focus();
+            }}
+          >
+            {sections.map((item) => (
+              <button
+                type="button"
+                role="tab"
+                key={item.id}
+                id={`${sectionId}-${item.id}-tab`}
+                aria-controls={`${sectionId}-${item.id}-panel`}
+                aria-selected={section === item.id}
+                tabIndex={section === item.id ? 0 : -1}
+                onClick={() => {
+                  setSection(item.id);
+                  setItemDetail(false);
+                }}
+              >
+                {item.title}
+              </button>
+            ))}
+          </div>
+          <label className="pc-section-select">
+            <span className="sr-only">프롬프트 편집 섹션</span>
+            <select
+              aria-label="프롬프트 편집 섹션"
+              value={section}
+              onChange={(event) => {
+                setSection(event.target.value as EditorSection);
+                setItemDetail(false);
+              }}
+            >
+              {sections.map((item) => (
+                <option key={item.id} value={item.id}>
+                  {item.title}
+                </option>
+              ))}
+              {section === 'json' && <option value="json">JSON 편집</option>}
+            </select>
+          </label>
           <div className="pc-composer-content">
             <div className="pc-composer-tools">
               <IconButton
@@ -1182,6 +1264,9 @@ export function PromptComposer({
                 onClick={undoEdit}
               />
               <ActionMenu label="프롬프트 구성 도구" className="pc-program-menu">
+                <button type="button" onClick={() => setSection('json')}>
+                  JSON 편집
+                </button>
                 <label className="pc-file">
                   <UploadIcon size={18} aria-hidden="true" /> JSON 불러오기
                   <input
@@ -1234,234 +1319,388 @@ export function PromptComposer({
                   </option>
                 ))}
               </datalist>
-              <details className="pc-section pc-blocks-section">
-                <summary aria-label="프롬프트 블록 접기/펼치기">
-                  <ExpandIcon className="pc-disclosure-icon" size={16} aria-hidden="true" />
-                  블록 · {program.blocks.length}개
-                  <IconButton
-                    icon={AddIcon}
-                    label="블록 추가"
-                    className="pc-add-block"
-                    data-add-block
-                    disabled={program.blocks.length >= 300}
-                    onClick={(event) => {
-                      event.preventDefault();
-                      event.stopPropagation();
-                      const section = event.currentTarget.closest('details');
-                      if (section) section.open = true;
-                      const block = freshBlock('message');
-                      edit({ ...program, blocks: [...program.blocks, block] });
-                      requestAnimationFrame(() => {
-                        const added = root.current?.querySelector<HTMLDetailsElement>(
-                          `#prompt-block-${CSS.escape(block.id)}`
-                        );
-                        if (!added) return;
-                        added.open = true;
-                        const input = added.querySelector<HTMLInputElement>('input');
-                        input?.focus({ preventScroll: true });
-                        input?.scrollIntoView({ block: 'nearest' });
-                      });
-                    }}
-                  />
-                </summary>
-                <div className="pc-block-list">
-                  {program.blocks.map((block, index) => (
-                    <details
-                      className={`pc-block${block.enabled === false ? ' pc-disabled' : ''}`}
-                      data-drop-position={
-                        dropTarget?.id === block.id
-                          ? dropTarget.after
-                            ? 'after'
-                            : 'before'
-                          : undefined
-                      }
-                      onDragOver={(event) => {
-                        if (!draggingBlock.current) return;
-                        event.preventDefault();
-                        event.dataTransfer.dropEffect = 'move';
-                        const bounds = event.currentTarget.getBoundingClientRect();
-                        setDropTarget({
-                          id: block.id,
-                          after: event.clientY >= bounds.top + bounds.height / 2,
-                        });
-                      }}
-                      onDragLeave={(event) => {
-                        if (!event.currentTarget.contains(event.relatedTarget as Node | null))
-                          setDropTarget(null);
-                      }}
-                      onDrop={(event) => {
-                        const sourceId = draggingBlock.current;
-                        if (!sourceId) return;
-                        event.preventDefault();
-                        event.stopPropagation();
-                        const bounds = event.currentTarget.getBoundingClientRect();
-                        const after = event.clientY >= bounds.top + bounds.height / 2;
-                        clearDrag();
-                        if (sourceId === block.id) return;
-                        const source = program.blocks.find((item) => item.id === sourceId);
-                        if (!source) return;
-                        const blocks = program.blocks.filter((item) => item.id !== sourceId);
-                        const target = blocks.findIndex((item) => item.id === block.id);
-                        if (target < 0) return;
-                        blocks.splice(target + (after ? 1 : 0), 0, source);
-                        if (
-                          blocks.every((item, position) => item.id === program.blocks[position].id)
-                        )
-                          return;
-                        lastBlockAction.current = sourceId;
-                        edit({ ...program, blocks });
-                        focusBlock(sourceId);
-                      }}
-                      key={block.id}
-                      id={`prompt-block-${block.id}`}
-                    >
-                      <summary>
-                        <ExpandIcon className="pc-disclosure-icon" size={16} aria-hidden="true" />
+              <section className="pc-section pc-blocks-section" {...sectionProps('blocks')}>
+                <div className="pc-item-workspace" data-detail={itemDetail}>
+                  <aside className="pc-item-navigation" aria-label="블록 목록">
+                    <label className="pc-item-search">
+                      <SearchIcon size={18} aria-hidden="true" />
+                      <input
+                        type="search"
+                        aria-label="블록 찾기"
+                        placeholder="블록 찾기"
+                        value={blockQuery}
+                        onChange={(event) => setBlockQuery(event.target.value)}
+                      />
+                    </label>
+                    <div className="pc-blocks-heading">
+                      <span>블록 · {program.blocks.length}개</span>
+                      <IconButton
+                        icon={AddIcon}
+                        label="블록 추가"
+                        className="pc-add-block"
+                        data-add-block
+                        disabled={program.blocks.length >= 300}
+                        onClick={(event) => {
+                          event.preventDefault();
+                          event.stopPropagation();
+                          const section = event.currentTarget.closest('details');
+                          if (section) section.open = true;
+                          const block = freshBlock('message');
+                          edit({ ...program, blocks: [...program.blocks, block] });
+                          setSelectedBlock(block.id);
+                          setItemDetail(true);
+                          setBlockQuery('');
+                          requestAnimationFrame(() => {
+                            const added = root.current?.querySelector<HTMLElement>(
+                              `#prompt-block-${CSS.escape(block.id)}`
+                            );
+                            if (!added) return;
+                            const input = added.querySelector<HTMLInputElement>('input');
+                            input?.focus({ preventScroll: true });
+                            input?.scrollIntoView({ block: 'nearest' });
+                          });
+                        }}
+                      />
+                    </div>
+                    <div className="pc-item-links">
+                      {program.blocks.map((block, index) => (
                         <button
                           type="button"
-                          className="pc-drag-handle"
+                          key={block.id}
+                          aria-label={`${block.title || block.id} 블록 선택`}
+                          hidden={
+                            !!blockQuery &&
+                            !`${block.title} ${block.id}`
+                              .toLocaleLowerCase()
+                              .includes(blockQuery.toLocaleLowerCase())
+                          }
+                          aria-current={activeBlock === block.id ? 'true' : undefined}
+                          onClick={() => {
+                            setSelectedBlock(block.id);
+                            setItemDetail(true);
+                          }}
                           draggable
-                          aria-label={`${block.title || block.id} 블록 드래그`}
-                          title="드래그하여 순서 변경 · 키보드는 블록 안의 위/아래 이동 사용"
-                          onClick={(event) => event.preventDefault()}
                           onDragStart={(event) => {
                             draggingBlock.current = block.id;
                             event.dataTransfer.effectAllowed = 'move';
                             event.dataTransfer.setData('text/plain', block.id);
                           }}
                           onDragEnd={clearDrag}
+                          onDragOver={(event) => {
+                            event.preventDefault();
+                            event.dataTransfer.dropEffect = 'move';
+                            setDropTarget({
+                              id: block.id,
+                              after:
+                                event.clientY >
+                                event.currentTarget.getBoundingClientRect().top +
+                                  event.currentTarget.offsetHeight / 2,
+                            });
+                          }}
+                          data-drop-position={
+                            dropTarget?.id === block.id
+                              ? dropTarget.after
+                                ? 'after'
+                                : 'before'
+                              : undefined
+                          }
+                          onDrop={(event) => {
+                            event.preventDefault();
+                            const sourceId = draggingBlock.current;
+                            const after = dropTarget?.after ?? false;
+                            clearDrag();
+                            if (!sourceId || sourceId === block.id) return;
+                            const source = program.blocks.find((item) => item.id === sourceId);
+                            if (!source) return;
+                            const blocks = program.blocks.filter((item) => item.id !== sourceId);
+                            const target = blocks.findIndex((item) => item.id === block.id);
+                            blocks.splice(target + (after ? 1 : 0), 0, source);
+                            lastBlockAction.current = sourceId;
+                            edit({ ...program, blocks });
+                            focusBlock(sourceId);
+                          }}
                         >
-                          <DragHandleIcon size={18} aria-hidden="true" />
-                        </button>
-                        <span className="pc-order">{index + 1}</span>
-                        <span className="pc-block-title">
-                          {block.title || block.id}
+                          <strong>
+                            {index + 1}. {block.title || block.id}
+                          </strong>
                           <small>
+                            {'role' in block ? `${block.role} · ` : ''}
                             {kindLabels[block.kind]}
-                            {'role' in block ? ` · ${block.role}` : ''}
-                            {block.when !== undefined ? ' · 조건 있음' : ''}
                             {block.enabled === false ? ' · 사용 안 함' : ''}
                           </small>
-                        </span>
-                      </summary>
-                      <div className="pc-block-body">
-                        <div className="pc-block-tools">
-                          <IconButton
-                            label={`${block.title} 위로`}
-                            icon={UpIcon}
-                            data-block-move={-1}
-                            disabled={index === 0}
-                            onClick={() => move(index, -1)}
-                          />
-                          <IconButton
-                            label={`${block.title} 아래로`}
-                            icon={DownIcon}
-                            data-block-move={1}
-                            disabled={index === program.blocks.length - 1}
-                            onClick={() => move(index, 1)}
-                          />
-                          <ActionMenu label={`${block.title || block.id} 블록 메뉴`}>
+                        </button>
+                      ))}
+                      {!!blockQuery &&
+                        !program.blocks.some((block) =>
+                          `${block.title} ${block.id}`
+                            .toLocaleLowerCase()
+                            .includes(blockQuery.toLocaleLowerCase())
+                        ) && <p className="muted">일치하는 블록이 없어요.</p>}
+                    </div>
+                  </aside>
+                  <div className="pc-item-detail">
+                    <button
+                      type="button"
+                      className="secondary pc-item-back"
+                      onClick={() => setItemDetail(false)}
+                    >
+                      <BackIcon size={18} aria-hidden="true" />
+                      블록 목록
+                    </button>
+                    {!program.blocks.length && (
+                      <p className="muted">블록을 추가해 프롬프트를 구성해요.</p>
+                    )}
+                    <div className="pc-block-list">
+                      {program.blocks.map((block, index) => (
+                        <section
+                          className={`pc-block${block.enabled === false ? ' pc-disabled' : ''}`}
+                          hidden={activeBlock !== block.id}
+                          data-drop-position={
+                            dropTarget?.id === block.id
+                              ? dropTarget.after
+                                ? 'after'
+                                : 'before'
+                              : undefined
+                          }
+                          onDragOver={(event) => {
+                            if (!draggingBlock.current) return;
+                            event.preventDefault();
+                            event.dataTransfer.dropEffect = 'move';
+                            const bounds = event.currentTarget.getBoundingClientRect();
+                            setDropTarget({
+                              id: block.id,
+                              after: event.clientY >= bounds.top + bounds.height / 2,
+                            });
+                          }}
+                          onDragLeave={(event) => {
+                            if (!event.currentTarget.contains(event.relatedTarget as Node | null))
+                              setDropTarget(null);
+                          }}
+                          onDrop={(event) => {
+                            const sourceId = draggingBlock.current;
+                            if (!sourceId) return;
+                            event.preventDefault();
+                            event.stopPropagation();
+                            const bounds = event.currentTarget.getBoundingClientRect();
+                            const after = event.clientY >= bounds.top + bounds.height / 2;
+                            clearDrag();
+                            if (sourceId === block.id) return;
+                            const source = program.blocks.find((item) => item.id === sourceId);
+                            if (!source) return;
+                            const blocks = program.blocks.filter((item) => item.id !== sourceId);
+                            const target = blocks.findIndex((item) => item.id === block.id);
+                            if (target < 0) return;
+                            blocks.splice(target + (after ? 1 : 0), 0, source);
+                            if (
+                              blocks.every(
+                                (item, position) => item.id === program.blocks[position].id
+                              )
+                            )
+                              return;
+                            lastBlockAction.current = sourceId;
+                            edit({ ...program, blocks });
+                            focusBlock(sourceId);
+                          }}
+                          key={block.id}
+                          id={`prompt-block-${block.id}`}
+                        >
+                          <div className="pc-block-heading" tabIndex={-1}>
                             <button
                               type="button"
-                              className="secondary"
-                              disabled={pendingTemplate}
-                              onClick={() => removeBlock(index)}
+                              className="pc-drag-handle"
+                              draggable
+                              aria-label={`${block.title || block.id} 블록 드래그`}
+                              title="드래그하여 순서 변경 · 키보드는 블록 안의 위/아래 이동 사용"
+                              onClick={(event) => event.preventDefault()}
+                              onDragStart={(event) => {
+                                draggingBlock.current = block.id;
+                                event.dataTransfer.effectAllowed = 'move';
+                                event.dataTransfer.setData('text/plain', block.id);
+                              }}
+                              onDragEnd={clearDrag}
                             >
-                              <DeleteIcon size={18} aria-hidden="true" /> 블록 삭제
+                              <DragHandleIcon size={18} aria-hidden="true" />
                             </button>
-                          </ActionMenu>
-                        </div>
-                        <BlockEditor
-                          block={block}
-                          onChange={(next) => {
-                            if (pendingTemplate && next.kind !== block.kind)
-                              throw new Error('문법 초안을 먼저 적용하거나 되돌려 주세요.');
-                            editBlock(index, next);
-                          }}
-                          onError={report}
-                          controlIds={program.controls.map((control) => control.id)}
-                          slots={[...slotNames]}
-                          onPendingChange={(dirty) =>
-                            setPendingTemplates((current) => ({ ...current, [block.id]: dirty }))
-                          }
-                        />
-                      </div>
-                    </details>
-                  ))}
+                            <span className="pc-order">{index + 1}</span>
+                            <span className="pc-block-title">
+                              {block.title || block.id}
+                              <small>
+                                {kindLabels[block.kind]}
+                                {'role' in block ? ` · ${block.role}` : ''}
+                                {block.when !== undefined ? ' · 조건 있음' : ''}
+                                {block.enabled === false ? ' · 사용 안 함' : ''}
+                              </small>
+                            </span>
+                          </div>
+                          <div className="pc-block-body">
+                            <div className="pc-block-tools">
+                              <IconButton
+                                label={`${block.title} 위로`}
+                                icon={UpIcon}
+                                data-block-move={-1}
+                                disabled={index === 0}
+                                onClick={() => move(index, -1)}
+                              />
+                              <IconButton
+                                label={`${block.title} 아래로`}
+                                icon={DownIcon}
+                                data-block-move={1}
+                                disabled={index === program.blocks.length - 1}
+                                onClick={() => move(index, 1)}
+                              />
+                              <ActionMenu label={`${block.title || block.id} 블록 메뉴`}>
+                                <button
+                                  type="button"
+                                  className="secondary"
+                                  disabled={pendingTemplate}
+                                  onClick={() => removeBlock(index)}
+                                >
+                                  <DeleteIcon size={18} aria-hidden="true" /> 블록 삭제
+                                </button>
+                              </ActionMenu>
+                            </div>
+                            <BlockEditor
+                              block={block}
+                              onChange={(next) => {
+                                if (pendingTemplate && next.kind !== block.kind)
+                                  throw new Error('문법 초안을 먼저 적용하거나 되돌려 주세요.');
+                                editBlock(index, next);
+                              }}
+                              onError={report}
+                              controlIds={program.controls.map((control) => control.id)}
+                              slots={[...slotNames]}
+                              onPendingChange={(dirty) =>
+                                setPendingTemplates((current) => ({
+                                  ...current,
+                                  [block.id]: dirty,
+                                }))
+                              }
+                            />
+                          </div>
+                        </section>
+                      ))}
+                    </div>
+                  </div>
                 </div>
-              </details>
-              <details className="pc-section">
-                <summary>
-                  <ExpandIcon className="pc-disclosure-icon" size={16} aria-hidden="true" />
-                  제어 정의 · {program.controls.length}개
-                </summary>
-                <div className="pc-stack">
-                  {program.controls.map((control, index) => (
-                    <details className="pc-control" key={control.id}>
-                      <summary>
-                        <ExpandIcon className="pc-disclosure-icon" size={16} aria-hidden="true" />
-                        {control.label}
-                        <small> · {control.type}</small>
-                      </summary>
-                      <ControlEditor
-                        control={control}
-                        onError={report}
-                        onChange={(next) =>
-                          change({
-                            ...program,
-                            controls: program.controls.map((item, i) =>
-                              i === index ? next : item
-                            ),
-                          })
-                        }
+              </section>
+              <section className="pc-section" {...sectionProps('controls')}>
+                <div className="pc-item-workspace" data-detail={itemDetail}>
+                  <aside className="pc-item-navigation" aria-label="옵션 정의 목록">
+                    <label className="pc-item-search">
+                      <SearchIcon size={18} aria-hidden="true" />
+                      <input
+                        type="search"
+                        aria-label="옵션 정의 찾기"
+                        placeholder="옵션 정의 찾기"
+                        value={controlQuery}
+                        onChange={(event) => setControlQuery(event.target.value)}
                       />
-                      <button
-                        type="button"
-                        className="ghost"
-                        onClick={() =>
-                          edit({
-                            ...program,
-                            controls: program.controls.filter((_, i) => i !== index),
-                          })
-                        }
-                      >
-                        제어 삭제
-                      </button>
-                    </details>
-                  ))}
-                  <button
-                    type="button"
-                    className="secondary"
-                    disabled={program.controls.length >= 150}
-                    onClick={() =>
-                      edit({
-                        ...program,
-                        controls: [
-                          ...program.controls,
-                          {
+                    </label>
+                    <div className="pc-blocks-heading">
+                      <span>옵션 정의 · {program.controls.length}개</span>
+                      <IconButton
+                        label="제어 추가"
+                        icon={AddIcon}
+                        disabled={program.controls.length >= 150}
+                        onClick={() => {
+                          const control: PromptControl = {
                             id: newId('control'),
                             label: '새 제어',
                             type: 'boolean',
                             default: false,
-                          },
-                        ],
-                      })
-                    }
-                  >
-                    제어 추가
-                  </button>
+                          };
+                          edit({ ...program, controls: [...program.controls, control] });
+                          setSelectedControl(control.id);
+                          setItemDetail(true);
+                          setControlQuery('');
+                        }}
+                      />
+                    </div>
+                    <div className="pc-item-links">
+                      {program.controls.map((control) => (
+                        <button
+                          type="button"
+                          key={control.id}
+                          hidden={
+                            !!controlQuery &&
+                            !`${control.label} ${control.id}`
+                              .toLocaleLowerCase()
+                              .includes(controlQuery.toLocaleLowerCase())
+                          }
+                          aria-current={activeControl === control.id ? 'true' : undefined}
+                          onClick={() => {
+                            setSelectedControl(control.id);
+                            setItemDetail(true);
+                          }}
+                        >
+                          <strong>{control.label}</strong>
+                          <small>{control.type}</small>
+                        </button>
+                      ))}
+                      {!!controlQuery &&
+                        !program.controls.some((control) =>
+                          `${control.label} ${control.id}`
+                            .toLocaleLowerCase()
+                            .includes(controlQuery.toLocaleLowerCase())
+                        ) && <p className="muted">일치하는 옵션이 없어요.</p>}
+                    </div>
+                  </aside>
+                  <div className="pc-item-detail">
+                    <button
+                      type="button"
+                      className="secondary pc-item-back"
+                      onClick={() => setItemDetail(false)}
+                    >
+                      <BackIcon size={18} aria-hidden="true" />
+                      옵션 정의 목록
+                    </button>
+                    {!program.controls.length && (
+                      <p className="muted">
+                        옵션 정의를 추가하면 기본 옵션에서 값을 설정할 수 있어요.
+                      </p>
+                    )}
+                    {program.controls.map((control, index) => (
+                      <section
+                        className="pc-control"
+                        key={control.id}
+                        hidden={activeControl !== control.id}
+                      >
+                        <h3>{control.label}</h3>
+                        <ControlEditor
+                          control={control}
+                          onError={report}
+                          onChange={(next) =>
+                            change({
+                              ...program,
+                              controls: program.controls.map((item, i) =>
+                                i === index ? next : item
+                              ),
+                            })
+                          }
+                        />
+                        <button
+                          type="button"
+                          className="ghost"
+                          onClick={() =>
+                            edit({
+                              ...program,
+                              controls: program.controls.filter((_, i) => i !== index),
+                            })
+                          }
+                        >
+                          제어 삭제
+                        </button>
+                      </section>
+                    ))}
+                  </div>
                 </div>
-              </details>
+              </section>
             </div>
-            <details className="pc-section" open={program.controls.length > 0}>
-              <summary>
-                <ExpandIcon className="pc-disclosure-icon" size={16} aria-hidden="true" />
-                기본 창작 옵션
-              </summary>
+            <section className="pc-section pc-defaults" {...sectionProps('defaults')}>
+              <h3>기본 창작 옵션</h3>
               <div className="pc-stack">
                 <p className="muted">
-                  이 프롬프트를 불러올 때 사용할 옵션이에요. 편집기 아래 저장 버튼으로 함께
-                  저장해요.
+                  이 프롬프트의 기본값이에요. 프리셋을 저장할 때 함께 저장해요.
                 </p>
                 <PromptControlFields
                   program={program}
@@ -1500,12 +1739,22 @@ export function PromptComposer({
                   </div>
                 )}
               </div>
-            </details>
-            <details className="pc-section">
-              <summary>
-                <ExpandIcon className="pc-disclosure-icon" size={16} aria-hidden="true" />
-                전체 구성 JSON · 고급 편집
-              </summary>
+            </section>
+            {collaborationEditor && (
+              <section className="pc-section" {...sectionProps('collaboration')}>
+                {collaborationEditor}
+              </section>
+            )}
+            <section
+              className="pc-section"
+              hidden={section !== 'json'}
+              aria-label="전체 구성 JSON 편집"
+            >
+              <button type="button" className="secondary" onClick={() => setSection('blocks')}>
+                <BackIcon size={18} aria-hidden="true" />
+                블록 편집으로
+              </button>
+              <h3>전체 구성 JSON</h3>
               <JsonDraft
                 fieldKey={`program.${role}`}
                 label="전체 프롬프트 구성 JSON"
@@ -1517,12 +1766,9 @@ export function PromptComposer({
                 }}
                 onError={report}
               />
-            </details>
-            <details className="pc-section pc-preview" aria-label="프롬프트 미리보기">
-              <summary aria-label="전송 미리보기 접기/펼치기">
-                <ExpandIcon className="pc-disclosure-icon" size={16} aria-hidden="true" />
-                전송 미리보기
-              </summary>
+            </section>
+            <section className="pc-section pc-preview" {...sectionProps('preview')}>
+              <h3>전송 미리보기</h3>
               <label>
                 {role === 'translation' ? '미리보기 원문' : '현재 요청'}
                 <textarea
@@ -1653,9 +1899,9 @@ export function PromptComposer({
                   )}
                 </div>
               )}
-            </details>
+            </section>
           </div>
-        </details>
+        </div>
         <DismissibleError message={error} onDismiss={() => setError('')} />
         <p className="pc-status" role="status">
           {status}

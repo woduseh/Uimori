@@ -1,6 +1,6 @@
 import { visualReview } from './fixtures/visual-review.js';
 import { preservePromptWorkspace } from './fixtures/prompt-workspace.js';
-import { selectChatSettingsSection, openPromptBlocks, navigationAction } from './ui-navigation.js';
+import { selectChatSettingsSection, selectPromptBlock, navigationAction } from './ui-navigation.js';
 import { openChatSettings } from './ui-navigation.js';
 import { postFixtureChat } from './fixtures/chat.js';
 import { test, expect } from '@playwright/test';
@@ -126,8 +126,7 @@ test('PRUI01 template drafts retain same-owner combinations and reject identical
   const editor = page.getByTestId('prompt-editor');
   const composer = editor.getByTestId('prompt-composer');
   const block = composer.locator('.pc-block').first();
-  await openPromptBlocks(composer);
-  await block.locator('summary').first().click();
+  await selectPromptBlock(composer, '합성 지침');
   await block.getByRole('button', { name: '템플릿 문법으로 편집 · 시험', exact: true }).click();
   const source = block.getByLabel('합성 지침 본문 문법', { exact: true });
   await expect(source).toHaveValue('Synthetic {{ options.detail }}');
@@ -135,7 +134,7 @@ test('PRUI01 template drafts retain same-owner combinations and reject identical
   await block.getByRole('button', { name: '문법 초안 적용', exact: true }).click();
   await expect(source).toHaveValue('Line\n{{ options.missing }}');
   await expect(block.getByRole('alert')).toContainText('PROMPT_UNKNOWN_CONTROL (2:4)');
-  await expect(editor.getByRole('button', { name: '저장', exact: true })).toBeDisabled();
+  await expect(editor.getByRole('button', { name: '프리셋 저장', exact: true })).toBeDisabled();
   await source.fill(
     '{% if options.detail >= 2 %}Detailed {{ options.detail }}{% else %}Brief{% endif %}'
   );
@@ -157,10 +156,10 @@ test('PRUI01 template drafts retain same-owner combinations and reject identical
     (response) => savePath.test(response.url()) && response.request().method() === 'POST'
   );
   try {
-    await editor.getByRole('button', { name: '저장', exact: true }).click();
+    await editor.getByRole('button', { name: '프리셋 저장', exact: true }).click();
     await expect.poll(() => saveStarted).toBe(true);
     // Busy disables the fieldset before persistence; disabled alone is not a save receipt.
-    await expect(editor.getByRole('button', { name: '저장', exact: true })).toBeDisabled();
+    await expect(editor.getByRole('button', { name: '프리셋 저장', exact: true })).toBeDisabled();
     expect(await (await request.get(`/api/prompt-presets/${saved.id}`)).json()).toEqual(beforeSave);
   } finally {
     releaseSave();
@@ -172,7 +171,7 @@ test('PRUI01 template drafts retain same-owner combinations and reject identical
   await expect(
     editor.getByRole('status').filter({ hasText: '프롬프트를 저장했어요.' })
   ).toBeVisible();
-  await expect(editor.getByRole('button', { name: '저장', exact: true })).toBeDisabled();
+  await expect(editor.getByRole('button', { name: '프리셋 저장', exact: true })).toBeDisabled();
   const revised = await (await request.get(`/api/prompt-presets/${saved.id}`)).json();
   expect(revised).toEqual(accepted);
   expect(revised.revision).toBeGreaterThan(beforeSave.revision);
@@ -193,8 +192,7 @@ test('PRUI01 template drafts retain same-owner combinations and reject identical
   await page.reload();
   await navigationAction(page, '프롬프트');
   await page.getByRole('button', { name: `${saved.title} 프롬프트 편집`, exact: true }).click();
-  await openPromptBlocks(composer);
-  await block.locator('summary').first().click();
+  await selectPromptBlock(composer, '합성 지침');
   await block.getByRole('button', { name: '템플릿 문법으로 편집 · 시험', exact: true }).click();
   await expect(source).toHaveValue(
     '{% if greaterEqual(options.detail, 2) %}Detailed {{ options.detail }}{% else %}Brief{% endif %}'

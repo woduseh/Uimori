@@ -10,6 +10,7 @@ import { ChatOptionSettings } from './ChatOptionSettings.js';
 import './chat-prompt-options.css';
 type Props = {
   open: boolean;
+  modal?: boolean;
   workspace: PromptWorkspace | null;
   promptRevision?: string;
   library: Library | null;
@@ -59,35 +60,34 @@ export function ChatPromptOptions(props: Props) {
   }, [props.open]);
   useEffect(() => {
     if (!props.open) return;
-    const media = matchMedia('(max-width:1100px)');
     const background = [
       ...document.querySelectorAll<HTMLElement>(
         '.app-shell > .sidebar, .app-shell > .story-workspace'
       ),
     ];
     const update = () => {
-      for (const node of background) node.inert = media.matches;
+      for (const node of background) node.inert = props.modal ?? false;
     };
     update();
-    media.addEventListener('change', update);
     return () => {
-      media.removeEventListener('change', update);
       for (const node of background) node.inert = false;
     };
-  }, [props.open]);
+  }, [props.open, props.modal]);
   return (
     <aside
       id="chat-prompt-options"
       className="chat-prompt-options"
       hidden={!props.open}
-      role="region"
+      role={props.modal ? 'dialog' : 'region'}
+      aria-modal={props.modal && props.open ? true : undefined}
       aria-label="창작 옵션 패널"
       onKeyDown={(event) => {
+        if (event.target instanceof Element && event.target.closest('dialog[open]')) return;
         if (event.key === 'Escape') {
           event.preventDefault();
           props.onClose();
         }
-        if (event.key === 'Tab' && matchMedia('(max-width:1100px)').matches) {
+        if (event.key === 'Tab' && props.modal) {
           const nodes = [
             ...event.currentTarget.querySelectorAll<HTMLElement>(
               'button,input,textarea,select,summary'
