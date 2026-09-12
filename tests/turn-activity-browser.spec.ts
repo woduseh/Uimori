@@ -170,6 +170,30 @@ test('TURNUI01 independent response panels, lazy inspector and reload persistenc
   expect((await detail(request, seeded.chat.id)).runs).toEqual(seeded.runs);
 });
 
+test('TURNUI05 package failures remain visible beside completed prose without loading diagnostic bodies', async ({
+  page,
+  request,
+}) => {
+  const seeded = await seed(request, 2);
+  const affected = seeded.sources[0]!;
+  const other = seeded.sources.find((item) => item.id !== affected.id)!;
+  const state = await harness(page, seeded.chat.id, (body) => {
+    body.runs = body.runs.map((run) => ({ ...run, hasPackageIssues: run.id === affected.runId }));
+  });
+  const panel = page.locator(`[data-testid="turn-activity"][data-run-id="${affected.runId}"]`);
+  const unrelated = page.locator(`[data-testid="turn-activity"][data-run-id="${other.runId}"]`);
+  await expect(panel.locator(':scope > summary')).toContainText('본문 완료');
+  await expect(panel.locator(':scope > summary')).toContainText('자료 처리 일부 미적용');
+  await expect(panel).toHaveClass(/turn-activity-issue/);
+  await expect(unrelated.locator(':scope > summary')).not.toContainText('일부 미적용');
+  await expect(panel).not.toHaveAttribute('open');
+  await panel.locator(':scope > summary').click();
+  await expect(panel.getByText(/일부 자료의 자동 처리나 지침을 적용하지 못했어요/)).toBeVisible();
+  expect(state.runReads).toEqual([]);
+  expect(state.writes).toEqual([]);
+  expect((await detail(request, seeded.chat.id)).runs).toEqual(seeded.runs);
+});
+
 test('TURNUI02 folded auxiliary progress updates preserve explicit expansion and ownership', async ({
   page,
   request,

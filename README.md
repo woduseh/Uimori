@@ -2,6 +2,8 @@
 
 긴 원고를 읽고 다음 장면을 이어 쓰는 개인용 창작 웹앱이에요. 봇별 채팅·폴더, 봇·페르소나·모듈 패키지, 프롬프트와 창작 프리셋, 원문·번역 편집, 포크, 상태·장기기억과 백업을 제공해요.
 
+현재는 `0.0.1` 개발 버전이며 [v0.1.0 베타 준비](project-plan/BETA-PLAN.md)를 진행하고 있어요. [확정한 제품 원칙](docs/DECISIONS-2026-09-12-BETA.md)과 [표본별 지원·검증 상태](project-plan/BETA-SAMPLES.md)를 구분해 안내해요. 계획에 있는 호환·확장·업데이트 기능이 모두 구현된 상태는 아니에요.
+
 개인 ChatGPT 구독으로 에이전트를 실행하려면 [Codex 연결 안내](docs/CODEX.md)를 따라 서버 실행기를 준비하고 **설정 → 에이전트**에서 로그인해요.
 
 M0와 M1·M2 로컬 기능을 바탕으로 봇 중심 화면과 패키지·프롬프트 편집을 확장했어요. 실제 휴대폰 사용, 모델의 창작·번역·장기기억 품질과 특정 사용자 자료의 완전한 이식은 별도 확인이 필요해요. [현재 상태와 남은 작업](project-plan/CURRENT.md)
@@ -34,6 +36,8 @@ npm run dev
 | [사용 안내](docs/USAGE.md) | 봇별 채팅·폴더, 패키지, 프롬프트·창작 프리셋, 번역·포크, 백업 |
 | [서재와 프롬프트](docs/LIBRARY.md) · [항목 삭제](docs/DELETION.md) | 자료 분류·폴더·대표 이미지, 삭제 위치와 참조 보호 |
 | [Native JSON 가져오기](docs/RISU-IMPORT.md) | 자료·프롬프트 편집기에서 검증·검토 후 저장 |
+| [자료 파일 이동](docs/NATIVE-TRANSFER.md) | 저장된 자료·연결 모듈·이미지·프롬프트 옵션을 함께 옮기고 새 사본으로 가져오기 |
+| [문제 보고용 진단](docs/DIAGNOSTICS.md) | 원문·키를 제외한 보고서 미리보기와 다운로드 |
 | [에이전트의 Risu 자료 이식](docs/RISU-PORTING.md) | RisuToki MCP·스킬로 조사하고 native JSON·손실 보고·검증 결과 작성 |
 | [패키지](docs/PACKAGES.md) · [상태와 행동](docs/PACKAGE-BEHAVIOR.md) | 역할별 자료·옵션, 상태 전이·자동/사용자/모델 행동·기록된 추첨 |
 | [장면 삽화](docs/ILLUSTRATIONS.md) | Codex 이미지 생성·원격 ComfyUI로 응답별 삽화 생성, 자동 생성·재요청·개수 한도 |
@@ -46,7 +50,7 @@ npm run dev
 
 ## 데이터와 접속
 
-- 기본 DB는 `.local/narrative.sqlite`예요. 현재 DB·JSON archive는 **v13**이며 정식 배포 전에는 구버전 호환·자동 이관을 지원하지 않아요. 개발 DB를 초기화하려면 서버 종료 후 `npm run reset:dev`를 실행해요.
+- 기본 DB는 `.local/narrative.sqlite`예요. DB 스키마와 자료 교환 형식의 현재 버전·지원 범위는 [현재 계약](project-plan/CURRENT.md)을 확인해요. 공개 베타의 데이터 보존·업데이트는 [베타 계획](project-plan/BETA-PLAN.md)에 따라 준비하고 있어요. 테스트용 개발 DB를 초기화하려면 서버 종료 후 `npm run reset:dev`를 실행해요.
 - **설정 → 데이터 관리 → 내보내기와 복원**에서 JSON 또는 SQLite 백업을 저장해요. JSON은 새 빈 DB로 복원해요. [백업·격리 DB 사용법](docs/USAGE.md)
 - 기본은 `127.0.0.1` 로컬 모드이며 `NR_ACCESS_TOKEN` 인증을 선택할 수 있어요. 개인 서버 모드는 `NR_PUBLIC_ORIGIN`에 HTTPS 주소 하나를 지정하고 32자 이상 접속 토큰을 필수로 사용해요. `NR_HOST`로 수신 주소를 정하며 외부 수신은 개인 서버 모드에서만 허용해요. [접속 조건](docs/SELF-HOST.md#프록시와-접속-조건)
 - 인증 정보는 서버 환경변수·서버가 읽는 파일로 설정해요. 사용자 데이터·인증 파일·실행 산출물은 Git에서 제외해요.

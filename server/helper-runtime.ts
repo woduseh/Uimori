@@ -1436,7 +1436,14 @@ export class HelperRuntime {
             snapshot.story.config
           );
           if (state) {
-            snapshot.story = { ...snapshot.story, state, waiting: false };
+            snapshot.story = {
+              ...snapshot.story,
+              state,
+              waiting: false,
+              ...(snapshot.story.preparation
+                ? { preparation: { version: 1, status: 'ready', fallback: null, missing: [] } }
+                : {}),
+            };
             break;
           }
           const jobs = this.store.db

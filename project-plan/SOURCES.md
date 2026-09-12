@@ -1,5 +1,11 @@
 # 근거와 확인 범위 v0.6.1
 
+## 2026-09-12 베타의 확장 경계
+
+사용자가 지정한 RisuAI `cad8595aa39620df4246f56918f0962c2aa0263a`의 `src/ts/plugins/apiV3/v3.svelte.ts`·`src/ts/process/scriptings.ts`와 RisuToki `45048b1139361cd0fded462683dd30fd7df7ce98`의 구조화 읽기 → 강력한 코드·UI·작업 도구와 호스트의 권한/저장 책임을 구분하는 원리 → [베타 결정](../docs/DECISIONS-2026-09-12-BETA.md)과 [확장 설계 초안](../docs/EXTENSIONS.md) → 고정한 [표본/기능 기준](BETA-SAMPLES.md)의 대표 동작·오류/취소·권한·복원 검증으로 연결해요. 원본 코드나 개인 자료를 복사하지 않았고 정적 조사와 구현·실행 인수를 구분해요.
+
+2026-09-12 조회한 [Node 24 VM](https://nodejs.org/docs/latest-v24.x/api/vm.html)·[Permission Model](https://nodejs.org/docs/latest-v24.x/api/permissions.html)은 악의적인 코드의 보안 격리를 보장하지 않아요. 이를 유일한 외부 코드 격리로 쓰는 방식은 비채택이에요. [QuickJS WebAssembly bindings](https://github.com/justjake/quickjs-emscripten)의 명시적 host 연결·런타임 제한은 검토 후보이며 아직 운영 격리 채택/검증 결과가 아니에요. 실제 런타임 선택은 의존성과 버전을 고정한 대표·오류 사례의 증거로 기록해요.
+
 ## 2026-09-09 통합 감사의 ComfyUI 취소 경계
 
 공식 [Comfy-Org/ComfyUI server.py](https://github.com/Comfy-Org/ComfyUI/blob/master/server.py)의 2026-09-09 조회 snapshot(master, 별도 commit 고정 없음) → `/api/jobs/{job_id}/cancel`·`interrupt_if_running` → 대상 ID 확인과 취소를 서버에서 원자적으로 수행하는 원리 → `server/comfyui-client.ts`의 대상별 취소와 404/405일 때 해당 ID 대기 삭제만 하는 fallback → `tests/comfyui-client.test.ts`의 합성 HTTP·대상 전환·shutdown·timeout 회귀로 확인했어요. 원본 코드를 복사하지 않았고 설치된 사용자 서버의 버전 지원은 미검증이에요. queue 조회 뒤 전역 interrupt를 보내는 기존 방식은 조회와 실행 사이 경쟁 상태 때문에 제거했어요. 통합 결과와 실서비스 인수 조건은 [통합 감사](INTEGRATED-AUDIT-2026-09-09.md)에 있어요.

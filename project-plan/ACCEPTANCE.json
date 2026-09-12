@@ -548,7 +548,7 @@
         "M2 story runner actual localhost request evidence (synthetic, no live provider quality claim) S01 R03 mock is explicit: numeric events need literal markers and memory is extractive with safe UTF16 evidence",
         "M2 S01–S06 actual file SQLite integration S01 state 10→7 is applied once and is present in the next real main input",
         "M2 S01–S06 actual file SQLite integration S02 a delayed authoritative state parks generation while original remains readable; cancelled wait never resumes",
-        "M2 S01–S06 actual file SQLite integration S02 failed state keeps waiting until explicit retry succeeds, then freezes the resumed dependency",
+        "M2 S01–S06 actual file SQLite integration S02 failed state releases the same Run with attributed fallback; a later retry never rewrites it",
         "M2 S01–S06 actual file SQLite integration S03 late source-edit result is stale and prior source state remains an immutable historical artifact",
         "M2 S01–S06 actual file SQLite integration S03 restart retains queued work, interrupts uncertain running work, and does not replay it automatically",
         "M2 S01–S06 actual file SQLite integration S05 out-of-order memory completion preserves holes and main tools recover actual compacted historical text",
@@ -563,9 +563,9 @@
     {
       "id": "S02",
       "milestone": "M2",
-      "title": "늦은 상태와 다음 턴 barrier",
+        "title": "상태 준비·실패·건너뛰기와 늦은 결과",
       "lane": "software",
-      "expected": "authoritative state에 의존하는 후속 run은 적합한 revision을 기다린다. display-only는 읽기/다음 턴을 막지 않는다. 늦은 결과는 원래 유효 source에 저장하며 새 head를 덮지 않는다.",
+      "expected": "정상적으로 진행 가능한 상태 준비는 기다리고, 부가 상태 실패 또는 사용자의 건너뛰기는 같은 Run을 본문용 fallback으로 진행한다. 누락 범위와 정확한 reducer 부모를 구분하고 늦은 결과는 원래 source에 귀속되며 이미 진행한 snapshot을 바꾸지 않는다.",
       "required_evidence": [
         "controlled-race",
         "job-dependencies",
@@ -577,19 +577,21 @@
         "U11",
         "U15"
       ],
-      "status": "passed-m2-local-fixture",
+        "status": "passed-m2-local-fixture",
       "implemented_test_ids": [
         "S02 S03 actual Store continuity and activation dependencies continuity permits the next source but defers its state claim until the preceding state is ready; duplicate claims and completions cannot double-apply",
         "S02 S03 actual Store continuity and activation dependencies continuity dependency hydration survives export/import and selected-ancestry fork while original Run snapshots remain unchanged",
-        "S02 S03 actual Store continuity and activation dependencies explicit rebuild of an edited first activation source rebases initial state before that source and releases a waiting Run",
+        "S02 S03 actual Store continuity and activation dependencies explicit rebuild of an edited first activation source preserves a Run already admitted without stale state",
         "S02 S03 actual Store continuity and activation dependencies activation at the second source rebuilds from its parent baseline and rejects rebuilding pre-activation history",
         "S02 S03 actual Store continuity and activation dependencies explicit state reset pins a new module revision to the selected branch and cancels old-rule waiting without rewriting history",
         "M2 S01–S06 actual file SQLite integration S02 a delayed authoritative state parks generation while original remains readable; cancelled wait never resumes",
-        "M2 S01–S06 actual file SQLite integration S02 failed state keeps waiting until explicit retry succeeds, then freezes the resumed dependency",
-        "M2 HTTP state controls and authored memory S02 held state preserves readable source; cancellation and failure require retry before the HTTP waiting Run resumes",
-        "story-browser.spec.ts S01 S02 state settings use synthetic rules, preserve readable original while waiting, then compile persisted state"
+        "M2 S01–S06 actual file SQLite integration S02 failed state releases the same Run with attributed fallback; a later retry never rewrites it",
+        "M2 HTTP state controls and authored memory S02 cancelling state releases the HTTP Run; failed and successful state retries never repeat its prose",
+        "story-browser.spec.ts S01 S02 state settings use synthetic rules, preserve readable original while waiting, then compile persisted state",
+        "story-browser.spec.ts S02 BPREPUI01 the existing task details skip pending state without cancelling its job or repeating prose",
+        "story.test.ts BPREP01–BPREP06 scoped skip, coverage, restart, concurrency, independent resume and storage errors"
       ],
-      "notes": "2026-09-07 final local reporter PASS; see M2-RESULTS.md and output/m2-final/2026-09-07/summary.json. Q04/native port remain BLOCKED."
+        "notes": "2026-09-07 결과는 이전 계약의 기록이에요. 2026-09-12 최종 DB17 베타 기반: output/playwright/m2-2026-09-12T12-40-45-193Z-707cc0e9/summary.json의 S02 단위/화면/DB 검사 PASS. Q04 실제 의미 품질과 원본 표본 인수는 별도이며 이 결과가 증명하지 않아요."
     },
     {
       "id": "S03",
@@ -630,7 +632,7 @@
         "M2 story runner actual localhost request evidence (synthetic, no live provider quality claim) S03 stale source and pre-aborted jobs cannot reach provider or leak abort reason",
         "S02 S03 actual Store continuity and activation dependencies continuity permits the next source but defers its state claim until the preceding state is ready; duplicate claims and completions cannot double-apply",
         "S02 S03 actual Store continuity and activation dependencies continuity dependency hydration survives export/import and selected-ancestry fork while original Run snapshots remain unchanged",
-        "S02 S03 actual Store continuity and activation dependencies explicit rebuild of an edited first activation source rebases initial state before that source and releases a waiting Run",
+        "S02 S03 actual Store continuity and activation dependencies explicit rebuild of an edited first activation source preserves a Run already admitted without stale state",
         "S02 S03 actual Store continuity and activation dependencies activation at the second source rebuilds from its parent baseline and rejects rebuilding pre-activation history",
         "S02 S03 actual Store continuity and activation dependencies explicit state reset pins a new module revision to the selected branch and cancels old-rule waiting without rewriting history",
         "M2 S01–S06 actual file SQLite integration S03 late source-edit result is stale and prior source state remains an immutable historical artifact",
@@ -746,7 +748,7 @@
         "S06 advances zero-length Unicode matches without looping or splitting characters",
         "M2 S01–S06 actual file SQLite integration S01 state 10→7 is applied once and is present in the next real main input",
         "M2 S01–S06 actual file SQLite integration S02 a delayed authoritative state parks generation while original remains readable; cancelled wait never resumes",
-        "M2 S01–S06 actual file SQLite integration S02 failed state keeps waiting until explicit retry succeeds, then freezes the resumed dependency",
+        "M2 S01–S06 actual file SQLite integration S02 failed state releases the same Run with attributed fallback; a later retry never rewrites it",
         "M2 S01–S06 actual file SQLite integration S03 late source-edit result is stale and prior source state remains an immutable historical artifact",
         "M2 S01–S06 actual file SQLite integration S03 restart retains queued work, interrupts uncertain running work, and does not replay it automatically",
         "M2 S01–S06 actual file SQLite integration S05 out-of-order memory completion preserves holes and main tools recover actual compacted historical text",

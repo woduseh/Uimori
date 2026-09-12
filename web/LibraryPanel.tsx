@@ -2,6 +2,7 @@ import { IconButton } from './IconButton.js';
 import { DraftDiscardActions } from './DraftDiscardActions.js';
 import { SelectionCheckbox } from './BooleanControls.js';
 import { PackageTransfer } from './PackageTransfer.js';
+import { NativeTransfer } from './NativeTransfer.js';
 import {
   EditorDraftProvider,
   EditorDraftStatus,
@@ -443,6 +444,7 @@ export function LibraryPanel({
       <header className="library-heading">
         {headerLeading}
         <h1>서재</h1>
+        {library && !editing && !detail && <NativeTransfer library={library} reload={reload} />}
         {headerTrailing}
       </header>
       <Dialog

@@ -8,7 +8,7 @@ import {
 } from './content-package.js';
 import { compilePackageAttachment, type CompiledPackageAttachment } from './package-runtime.js';
 import type { Resource, RunSnapshot } from './types.js';
-import { executionContext } from './execution-context.js';
+import { executionContext, packageInstanceId } from './execution-context.js';
 import { projectChatPackageCompilation } from './chat-overrides.js';
 
 export type ResolvedPackage = CompiledPackageAttachment & {
@@ -30,6 +30,9 @@ export function compiledPackages(snapshot: RunSnapshot, target: PackageTarget): 
       chatId: snapshot.chatId,
       target,
       runtime: executionContext(snapshot, target, attachment),
+      behaviorUnavailable: snapshot.packageBehaviorUnavailable?.find(
+        (item) => item.instanceId === packageInstanceId(attachment)
+      )?.code,
       values:
         profile?.packageValues?.[`${attachment.id}@${attachment.revision}:${attachment.role}`],
     });

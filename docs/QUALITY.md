@@ -22,6 +22,8 @@ Node **24.14 이상 24.x**와 `npm ci`를 사용해요. 프로젝트의 `strict`
 
 `quality`는 Biome의 서식·lint를 한 번에 실행해 중복 스캔을 줄여요. 기본 검사에는 서버 실행, 브라우저, 모델 호출, 네트워크 조회, 의존성 설치가 없어요. 매 저장·커밋마다 전체 테스트를 강제하는 Git hook은 설치하지 않아요. 작업에 필요한 검사가 통과하면 변경이나 새 실패 근거 없이 반복하지 않아요.
 
+베타 자료 이동의 화면 검사는 `npm run verify:native-transfer`, 공유용 진단은 `npm run verify:diagnostics`예요. 각각 실제 합성 파일의 내보내기/검토/복원·불확실 재시도와 개인정보 제외/다운로드/취소를 확인해요. Risu 원본 실행, 실제 모델, Linux 자동 업데이트의 증거는 아니에요.
+
 `quality:full`은 새 빌드를 만든 뒤 Vitest를 실행해요. 서버 프로세스 재시작 테스트가 `dist/server/index.js`를 실행하므로 이 순서가 필요해요. 개별 `npm test`를 실행할 때도 서버 코드를 변경했거나 `dist`가 없으면 먼저 `npm run build`를 실행해요.
 
 수정 중에는 `npm test -- tests/관련.test.ts`와 해당 영역의 `verify:*`를 선택해요. 매 변경의 완료 조건은 `quality:full`, `verify:smoke`, 변경 영역의 `verify:*` 하나까지예요. 전체 브라우저 회귀 `verify:redesign`은 매 변경이나 작은 배포의 고정 조건이 아니에요. 공통 UI, 공통 실행·저장 경계처럼 여러 기능에 걸친 변경과 안정화 릴리스에서 실행해요. 이는 2026-09-10 결정 3의 "매 변경이 아니라 릴리스 전 1회" 원칙을 더 좁게 정의한 2026-09-11 사용자 결정이에요. 검사별 유지·통합·선택 실행 이유는 [TESTING-AUDIT.md](TESTING-AUDIT.md)에 있어요.

@@ -10,6 +10,11 @@ import { Controls } from '../server/controls.js';
 import { createApp, type App } from '../server/app.js';
 import { runStoryJob } from '../server/story-runner.js';
 import { buildMainInput } from '../core/provider.js';
+import { forkChat } from '../server/chat-fork.js';
+import { exportChatBackup, importChatBackup } from '../server/chat-backup.js';
+import * as reservation from '../server/reservation-snapshot.js';
+import { PromptProgramError } from '../core/prompt-program.js';
+import { PromptEvaluationError } from '../core/prompt-values.js';
 import type { RunSnapshot, Run } from '../core/types.js';
 import type { StateModule } from '../core/state.js';
 
@@ -207,7 +212,7 @@ describe('M2 S01–S06 actual file SQLite integration', () => {
     expect(queued(store, id).status).toBe('queued');
   });
 
-  test('S02 failed state keeps waiting until explicit retry succeeds, then freezes the resumed dependency', async () => {
+  test('S02 failed state releases the same Run with attributed fallback; a later retry never rewrites it', async () => {
     const { store } = await database();
     const id = chat(store);
     const original = source(store, id);
@@ -220,15 +225,244 @@ describe('M2 S01–S06 actual file SQLite integration', () => {
       error: 'Synthetic extraction failure',
       mock: true,
     });
-    expect(store.story.resumeWaiting()).toEqual([]);
-    expect(store.run(waiting.id).status).toBe('waiting_for_state');
+    expect(store.story.resumeWaiting()).toEqual([waiting.id]);
+    const frozen = structuredClone(store.run(waiting.id).snapshot);
+    expect(frozen.story).toMatchObject({
+      state: null,
+      waiting: false,
+      preparation: {
+        status: 'failed',
+        reason: 'STATE_FAILED',
+        fallback: { values: { coins: 10 } },
+        missing: [{ revision: original.id, hash: original.hash }],
+      },
+    });
+    expect(buildMainInput(frozen)).toMatchObject({
+      state: { values: { coins: 10 } },
+      statePreparation: { status: 'failed' },
+    });
     store.story.retry(job.id);
     await extract(store, job.id);
-    expect(store.story.resumeWaiting()).toEqual([waiting.id]);
+    expect(store.story.resumeWaiting()).toEqual([]);
     const resumed = store.run(waiting.id);
     expect(resumed.status).toBe('queued');
-    expect(resumed.snapshot.story?.state?.values).toEqual({ coins: 7 });
+    expect(resumed.snapshot).toEqual(frozen);
     expect(resumed.snapshot.story?.waiting).toBe(false);
+  });
+
+  test('BPREP01 skipping is scoped, idempotent, and preserves the original reservation and late-result attribution', async () => {
+    const { store } = await database();
+    const id = chat(store);
+    const original = source(store, id);
+    const waiting = queued(store, id, 'Keep this exact request.');
+    const before = structuredClone(waiting.snapshot);
+    const payload = {
+      chatId: id,
+      branchId: before.branchId,
+      expectedRevision: original.id,
+      idempotencyKey: 'skip-once',
+    };
+    expect(() =>
+      store.story.skipStateWait(waiting.id, { ...payload, chatId: chat(store) })
+    ).toThrow('outside selected chat');
+    expect(() =>
+      store.story.skipStateWait(waiting.id, { ...payload, branchId: 'another-branch' })
+    ).toThrow('outside selected chat');
+    expect(() =>
+      store.story.skipStateWait(waiting.id, { ...payload, expectedRevision: null })
+    ).toThrow('Source revision conflict');
+    expect(store.story.skipStateWait(waiting.id, payload).resumed).toBe(true);
+    expect(store.story.skipStateWait(waiting.id, payload).resumed).toBe(false);
+    const frozen = structuredClone(store.run(waiting.id).snapshot);
+    for (const key of [
+      'request',
+      'history',
+      'profile',
+      'settings',
+      'executionClock',
+      'packageStates',
+      'behaviorExecution',
+    ] as const)
+      expect(frozen[key]).toEqual(before[key]);
+    expect(frozen.story).toMatchObject({
+      state: null,
+      waiting: false,
+      preparation: { status: 'skipped', skipKey: 'skip-once' },
+    });
+    const job = jobFor(store, id, original.id, 'state');
+    expect(job.status).toBe('queued');
+    await extract(store, job.id);
+    expect(store.story.resumeWaiting()).toEqual([]);
+    expect(store.run(waiting.id).snapshot).toEqual(frozen);
+    expect(store.source(original.id).text).toBe(original.text);
+    expect(store.story.stateAt(id, original.id)?.values).toEqual({ coins: 7 });
+    expect(store.startRun(waiting.id)).toBe(true);
+    const next = store.completeRun(
+      waiting.id,
+      'Continued exact prose.',
+      waiting.usage,
+      waiting.snapshot.settings
+    );
+    const archived = exportChatBackup(store, id);
+    const restored = importChatBackup(store, {
+      backup: archived,
+      idempotencyKey: 'restore-skipped',
+    });
+    const restoredRun = store
+      .detail(restored.chat.id)
+      .runs.find((run) => run.request === waiting.request)!;
+    expect(restoredRun.snapshot.story?.preparation).toMatchObject({
+      status: 'skipped',
+      fallback: { values: { coins: 10 } },
+    });
+    expect(restoredRun.snapshot.story?.preparation?.missing[0].revision).not.toBe(original.id);
+    const fork = forkChat(store, id, {
+      fromRevision: next.id,
+      title: 'Skipped-state fork',
+      idempotencyKey: 'fork-skipped',
+    });
+    const forkRun = store.detail(fork.id).runs.find((run) => run.request === waiting.request)!;
+    expect(forkRun.snapshot.story?.preparation?.missing[0].revision).not.toBe(original.id);
+    expect(forkRun.snapshot.story?.preparation?.fallback?.values).toEqual({ coins: 10 });
+    const tampered = store.product.export();
+    const archivedRun = tampered.tables.runs.find((row) => row.id === waiting.id)!;
+    const altered = JSON.parse(String(archivedRun.snapshot));
+    altered.story.preparation.missing[0].hash = '0'.repeat(64);
+    archivedRun.snapshot = JSON.stringify(altered);
+    const { store: target } = await database();
+    expect(() => target.product.import(tampered)).toThrow();
+    expect(target.chats()).toEqual([]);
+  });
+
+  test.each(['skip-first', 'resume-first'] as const)(
+    'BPREP05 state completion racing %s admits one unchanged Run',
+    async (order) => {
+      const { store } = await database();
+      const id = chat(store);
+      const first = source(store, id);
+      const waiting = queued(store, id);
+      await extract(store, jobFor(store, id, first.id, 'state').id);
+      const payload = {
+        chatId: id,
+        branchId: waiting.snapshot.branchId,
+        expectedRevision: first.id,
+        idempotencyKey: 'completion-race',
+      };
+      if (order === 'skip-first') {
+        expect(store.story.skipStateWait(waiting.id, payload).resumed).toBe(true);
+        expect(store.story.resumeWaiting()).toEqual([]);
+        expect(store.story.skipStateWait(waiting.id, payload).resumed).toBe(false);
+      } else {
+        expect(store.story.resumeWaiting()).toEqual([waiting.id]);
+        expect(() => store.story.skipStateWait(waiting.id, payload)).toThrow('더 이상');
+      }
+      expect(store.run(waiting.id).snapshot.story).toMatchObject({
+        state: { values: { coins: 7 } },
+        preparation: { status: 'ready' },
+      });
+      expect(store.startRun(waiting.id)).toBe(true);
+      expect(store.startRun(waiting.id)).toBe(false);
+      expect(store.detail(id).runs).toHaveLength(2);
+      expect(store.run(waiting.id).request).toBe(waiting.request);
+    }
+  );
+
+  test('BPREP02 failed ancestors do not leave descendants waiting or become reducer input', async () => {
+    const { store } = await database();
+    const id = chat(store);
+    const first = source(store, id);
+    const parent = jobFor(store, id, first.id, 'state');
+    const claim = store.story.claim(parent.id, 'failure')!;
+    store.story.finish(parent.id, claim.generation, 'failure', {
+      status: 'failed',
+      result: null,
+      error: 'Synthetic failure',
+      mock: true,
+    });
+    const second = source(store, id, 'Another purchase. [[event:buy-ticket]]');
+    const child = jobFor(store, id, second.id, 'state');
+    expect(store.story.bundle(child.id).snapshot.story?.state).toBeNull();
+    expect(store.story.claim(child.id, 'must-not-skip-parent')).toBeNull();
+    const next = queued(store, id);
+    expect(next.status).toBe('queued');
+    expect(next.snapshot.story?.preparation?.missing).toHaveLength(2);
+    expect(next.snapshot.story?.preparation?.status).toBe('failed');
+    const frozen = structuredClone(next.snapshot);
+    store.story.retry(parent.id);
+    await extract(store, parent.id);
+    await extract(store, child.id);
+    expect(store.story.stateAt(id, second.id)?.values).toEqual({ coins: 4 });
+    expect(store.run(next.id).snapshot).toEqual(frozen);
+  });
+
+  test('BPREP03 source changes and cancellation reject skipping; restart does not start unsent waiting Runs', async () => {
+    const { store } = await database();
+    const id = chat(store);
+    const first = source(store, id);
+    const waiting = queued(store, id);
+    const payload = {
+      chatId: id,
+      branchId: waiting.snapshot.branchId,
+      expectedRevision: first.id,
+      idempotencyKey: 'skip-edited',
+    };
+    store.editSource(first.id, { text: 'Edited source.', expectedRevision: 0 });
+    expect(() => store.story.skipStateWait(waiting.id, payload)).toThrow('원문 또는 작가 설정');
+    expect(store.run(waiting.id).status).toBe('waiting_for_state');
+    store.finishRun(waiting.id, 'cancelled', 'User cancelled');
+    expect(() => store.story.skipStateWait(waiting.id, payload)).toThrow('더 이상');
+    const otherId = chat(store);
+    source(store, otherId);
+    const parked = queued(store, otherId);
+    expect(parked.status).toBe('waiting_for_state');
+    store.recover();
+    store.story.recover();
+    expect(store.run(parked.id).status).toBe('interrupted');
+    expect(store.story.resumeWaiting()).toEqual([]);
+    expect(store.detail(otherId).sources).toHaveLength(1);
+    expect(globalThis.fetch).not.toHaveBeenCalled();
+  });
+
+  test.each([
+    new PromptProgramError('PROMPT_UNKNOWN_SLOT'),
+    new PromptEvaluationError('PROMPT_STEP_LIMIT'),
+  ])('BPREP06 waiting prompt $name does not prevent another chat from resuming', async (error) => {
+    const { store } = await database();
+    const blockedId = chat(store);
+    const healthyId = chat(store);
+    const first = source(store, blockedId);
+    const second = source(store, healthyId);
+    const broken = queued(store, blockedId);
+    const healthy = queued(store, healthyId);
+    await extract(store, jobFor(store, blockedId, first.id, 'state').id);
+    await extract(store, jobFor(store, healthyId, second.id, 'state').id);
+    const freeze = reservation.freezeReservationSnapshot;
+    const spy = vi
+      .spyOn(reservation, 'freezeReservationSnapshot')
+      .mockImplementation((owner, input, options) => {
+        if (input.chatId === blockedId && options.purpose === 'resume-state') throw error;
+        return freeze(owner, input, options);
+      });
+    expect(store.story.resumeWaiting()).toEqual([healthy.id]);
+    expect(store.run(broken.id)).toMatchObject({ status: 'failed', error: error.message });
+    expect(store.run(healthy.id).status).toBe('queued');
+    spy.mockRestore();
+  });
+
+  test.each([
+    Object.assign(new Error('Synthetic database failure'), { code: 'SQLITE_FULL' }),
+    new Error('Unclassified preparation failure'),
+  ])('BPREP06 storage or unclassified errors still propagate: $message', async (error) => {
+    const { store } = await database();
+    const storageId = chat(store);
+    const original = source(store, storageId);
+    const waiting = queued(store, storageId);
+    await extract(store, jobFor(store, storageId, original.id, 'state').id);
+    vi.spyOn(reservation, 'freezeReservationSnapshot').mockImplementation(() => {
+      throw error;
+    });
+    expect(() => store.story.resumeWaiting()).toThrow(error);
+    expect(store.run(waiting.id).status).toBe('waiting_for_state');
   });
 
   test('S03 late source-edit result is stale and prior source state remains an immutable historical artifact', async () => {
@@ -402,7 +636,7 @@ describe('M2 S01–S06 actual file SQLite integration', () => {
 });
 
 describe('M2 HTTP state controls and authored memory', () => {
-  test('S02 held state preserves readable source; cancellation and failure require retry before the HTTP waiting Run resumes', async () => {
+  test('S02 cancelling state releases the HTTP Run; failed and successful state retries never repeat its prose', async () => {
     const app = await application();
     const created = await api(app, 'POST', '/api/chats', { title: 'Synthetic held state' });
     await api(app, 'PUT', `/api/chats/${created.id}/story/config`, {
@@ -441,7 +675,15 @@ describe('M2 HTTP state controls and authored memory', () => {
     expect((await api(app, 'POST', `/api/story-jobs/${stateJob.id}/cancel`, {})).status).toBe(
       'cancelled'
     );
-    expect(app.store.run(waiting.id).status).toBe('waiting_for_state');
+    const continued = await eventually(
+      () => app.store.run(waiting.id),
+      (value) => value.status === 'completed'
+    );
+    const frozen = structuredClone(continued.snapshot);
+    expect(frozen.story).toMatchObject({
+      state: null,
+      preparation: { status: 'failed', reason: 'STATE_CANCELLED' },
+    });
     await api(app, 'POST', '/api/test/control', { action: 'fail-next', point: 'state' });
     await api(app, 'POST', '/api/test/control', { action: 'release', barrier: 'state' });
     await api(app, 'POST', `/api/story-jobs/${stateJob.id}/retry`, {});
@@ -449,16 +691,74 @@ describe('M2 HTTP state controls and authored memory', () => {
       () => app.store.story.job(stateJob.id),
       (value) => value.status === 'failed'
     );
-    expect(app.store.run(waiting.id).status).toBe('waiting_for_state');
+    expect(app.store.run(waiting.id).snapshot).toEqual(frozen);
     await api(app, 'POST', `/api/story-jobs/${stateJob.id}/retry`, {});
     const resumed = await eventually(
       () => app.store.run(waiting.id),
       (value) => value.status === 'completed'
     );
-    expect(resumed.snapshot.story?.state?.values).toEqual({ coins: 7 });
-    expect((await api(app, 'GET', `/api/sources/${original.id}/story`)).state.values).toEqual({
-      coins: 7,
+    expect(resumed.snapshot).toEqual(frozen);
+    await eventually(
+      () => app.store.story.stateAt(created.id, original.id),
+      (state) => state?.values.coins === 7
+    );
+    expect(
+      app.store.detail(created.id).runs.filter((run) => run.request === waiting.request)
+    ).toHaveLength(1);
+  });
+
+  test('BPREP04 HTTP skip validates scope and sends the waiting main only once while its state task continues', async () => {
+    const app = await application();
+    const created = await api(app, 'POST', '/api/chats', { title: 'Synthetic skip state' });
+    await api(app, 'PUT', `/api/chats/${created.id}/story/config`, {
+      expectedRevision: 0,
+      module,
+      stateModel: null,
     });
+    await api(app, 'POST', '/api/test/control', { action: 'hold', barrier: 'state' });
+    const send = (request: string) => {
+      const current = app.store.chat(created.id);
+      return api(app, 'POST', `/api/chats/${created.id}/runs`, {
+        request,
+        expectedRevision: current.headRevision,
+        expectedSettingsRevision: current.settingsRevision,
+        idempotencyKey: randomUUID(),
+      });
+    };
+    const first = await send('First purchase. [[event:buy-ticket]]');
+    await eventually(
+      () => app.store.run(first.id),
+      (run) => run.status === 'completed'
+    );
+    const waiting = await send('Write despite pending state.');
+    expect(waiting.status).toBe('waiting_for_state');
+    const payload = {
+      chatId: created.id,
+      branchId: waiting.snapshot.branchId,
+      expectedRevision: waiting.parentRevision,
+      idempotencyKey: 'http-skip',
+    };
+    const path = `/api/runs/${waiting.id}/skip-state-wait`;
+    await api(app, 'POST', path, { ...payload, chatId: 'wrong-chat' }, 404);
+    await api(app, 'POST', path, { ...payload, expectedRevision: null }, 409);
+    await api(app, 'POST', path, payload);
+    await api(app, 'POST', path, payload);
+    const finished = await eventually(
+      () => app.store.run(waiting.id),
+      (run) => run.status === 'completed'
+    );
+    expect(finished.snapshot.story?.preparation?.status).toBe('skipped');
+    expect(app.store.detail(created.id).sources).toHaveLength(2);
+    expect(app.store.story.detail(created.id).jobs.some((job) => job.status === 'running')).toBe(
+      true
+    );
+    const frozen = structuredClone(finished.snapshot);
+    await api(app, 'POST', '/api/test/control', { action: 'release', barrier: 'state' });
+    await eventually(
+      () => app.store.story.detail(created.id).jobs,
+      (jobs) => jobs.every((job) => job.status === 'completed')
+    );
+    expect(app.store.run(waiting.id).snapshot).toEqual(frozen);
   });
 
   test('explicit notes need no transcripts, use CAS and preserve their replaced records without provider calls', async () => {

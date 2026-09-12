@@ -27,7 +27,7 @@
 
 ## 저장과 표시 계약
 
-- 표는 `illustration_settings`, `illustration_references`, `illustration_jobs`, `illustration_images`예요. 스키마 버전은 **v15 그대로**이고, 기존 v15 DB를 열 때 없으면 `CREATE TABLE IF NOT EXISTS`로 추가해요. 다른 표와 사용자 데이터는 건드리지 않아요.
+- 표는 `illustration_settings`, `illustration_references`, `illustration_jobs`, `illustration_images`예요. 알려진 v15 DB에서 빠진 표는 [v16 migration](DATA-MIGRATIONS.md)이 기존 행·설정을 보존하며 원자적으로 보충해요. 정상 v16 재개방에서 installer를 반복하지 않아요.
 - 작업은 `source_revision`과 예약 당시 `source_hash`에 귀속돼요. 원문을 나중에 고쳐도 완료된 삽화는 요청 당시 장면의 것으로 그 응답 아래 남고 **수정 전 원문의 삽화**로 표시해요. 새 본문에 자동으로 다시 붙이지 않아요. 실행 시에는 예약 hash의 원문을 다시 읽어요(`sourceAtHash`).
 - 원문 구간 정책(`sourceSegments`)이 있는 원고는 `main` 구간의 본문만 생성기에 보내요. 별도 구간(aside/annotation)의 내용은 삽화 입력에서 제외해 공개 카드로 새지 않게 해요.
 - 상태는 `queued → running → completed | failed | cancelled | interrupted`예요. 취소는 `generation`을 올려 늦게 도착한 결과를 버리고, 서버 재시작은 `running`을 `interrupted`로 바꾸며 자동 재생하지 않아요(`queued`는 다시 실행해요).

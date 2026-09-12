@@ -15,6 +15,7 @@ import {
   defaultStoryConfig,
   type StoryConfig,
   type StorySnapshot,
+  type StoryPreparation,
   type StoryState,
   type StoryJob,
   type StoryDetail,
@@ -30,6 +31,10 @@ import {
 import { StoryNotes } from './story-notes.js';
 import { promptWorkspace } from './prompt-workspace.js';
 import { assertModelSelection } from './provider-selection.js';
+import { PromptProgramError } from '../core/prompt-program.js';
+import { PromptEvaluationError } from '../core/prompt-values.js';
+import { ContentPackageError } from '../core/content-package.js';
+import { ProviderContractError } from '../core/provider-errors.js';
 
 type Row = Record<string, any>;
 const parse = (value: any): any => (value == null ? null : JSON.parse(String(value)));
@@ -209,18 +214,40 @@ export class StoryStore {
       return result;
     });
   }
-  private models(config: StoryConfig): StorySnapshot['models'] {
+  private models(config: StoryConfig, optionalState = false): StorySnapshot['models'] {
     const result: StorySnapshot['models'] = {};
     for (const [kind, ref] of [
       ['state', config.stateModel],
       ['context', workspaceModelRef(promptWorkspace(this.store), 'context')],
     ] as const)
       if (ref) {
-        const model = this.store.product.get<ModelPreset>('model', ref.id);
-        result[kind] = {
-          ...model,
-          connection: this.store.product.get<Connection>('connection', model.connectionId),
-        };
+        try {
+          const model = this.store.product.get<ModelPreset>('model', ref.id);
+          const connection = this.store.product.get<Connection>('connection', model.connectionId);
+          if (
+            optionalState &&
+            kind === 'state' &&
+            (model.enabled === false ||
+              !connection.enabled ||
+              this.store.product.isHidden('model', ref.id) ||
+              this.store.product.isHidden('connection', model.connectionId))
+          )
+            continue;
+          result[kind] = {
+            ...model,
+            connection,
+          };
+        } catch (error) {
+          if (
+            !(
+              optionalState &&
+              kind === 'state' &&
+              error instanceof HttpError &&
+              error.statusCode === 404
+            )
+          )
+            throw error;
+        }
       }
     return result;
   }
@@ -259,20 +286,100 @@ export class StoryStore {
     );
     return valid ? parse(valid.body) : null;
   }
+  /** A queued child with a failed ancestor is not progressing preparation. No jobs are replayed. */
+  private stateProgress(
+    chatId: string,
+    head: string | null,
+    config: StoryConfig,
+    fallback: StoryState | null
+  ): Pick<StoryPreparation, 'status' | 'reason'> {
+    const seen = new Set<string>();
+    while (head) {
+      if (seen.has(head)) throw new HttpError(409, 'State source ancestry cycle');
+      seen.add(head);
+      if (fallback?.sourceRevision === head) return { status: 'pending' };
+      const source = this.store.source(head);
+      const row = this.db
+        .prepare(`SELECT id FROM story_jobs
+        WHERE chat_id=? AND source_revision=? AND source_hash=?
+          AND json_extract(snapshot,'$.story.config.module.revision')=?
+        ORDER BY created_at DESC,rowid DESC LIMIT 1`)
+        .get(chatId, head, source.hash, config.module!.revision) as Row | undefined;
+      if (!row) return { status: 'failed', reason: 'STATE_UNAVAILABLE' };
+      const job = this.job(row.id);
+      if (!this.valid(job)) return { status: 'failed', reason: 'STATE_STALE' };
+      if (!['queued', 'running'].includes(job.status))
+        return { status: 'failed', reason: `STATE_${job.status.toUpperCase()}` };
+      const parent = this.bundle(job.id).snapshot.story?.state;
+      if (parent) return { status: 'pending' };
+      head = source.parentRevision;
+    }
+    return this.stateAt(chatId, null, config)
+      ? { status: 'pending' }
+      : { status: 'failed', reason: 'STATE_UNAVAILABLE' };
+  }
+  private preparation(
+    snapshot: RunSnapshot,
+    config: StoryConfig,
+    state: StoryState | null
+  ): StoryPreparation {
+    if (state) return { version: 1, status: 'ready', fallback: null, missing: [] };
+    const references = snapshot.history.map((entry) => ({
+      revision: entry.revision,
+      hash: createHash('sha256').update(entry.text).digest('hex'),
+    }));
+    // Validate only actual successful state candidates, not every source in a long failed interval.
+    const candidates = this.db
+      .prepare(`SELECT s.body,s.job_id FROM story_states s
+      JOIN story_jobs j ON j.id=s.job_id
+      JOIN json_each(?) h ON json_extract(h.value,'$.revision')=s.source_revision
+        AND json_extract(h.value,'$.hash')=s.source_hash
+      WHERE s.chat_id=? AND s.module_revision=? AND j.status='completed'
+      ORDER BY CAST(h.key AS INTEGER) DESC,j.created_at DESC,j.rowid DESC`)
+      .all(json(references), snapshot.chatId, config.module!.revision) as Row[];
+    const found = candidates.find((row) => this.valid(this.job(row.job_id), false));
+    const initialAvailable =
+      config.activatedAt === null ||
+      references.some(
+        (entry) =>
+          entry.revision === config.activatedAt?.revision && entry.hash === config.activatedAt.hash
+      );
+    const fallback: StoryState | null = found
+      ? parse(found.body)
+      : initialAvailable
+        ? this.initial(snapshot.chatId, config)
+        : null;
+    const covered = fallback?.sourceRevision
+      ? snapshot.history.findIndex((entry) => entry.revision === fallback.sourceRevision)
+      : -1;
+    return {
+      version: 1,
+      ...this.stateProgress(snapshot.chatId, snapshot.parentRevision, config, fallback),
+      fallback,
+      missing: references.slice(covered + 1),
+    };
+  }
   prepare(snapshot: RunSnapshot): StorySnapshot | undefined {
     const config = this.configForBranch(snapshot.chatId, snapshot.branchId);
     const scope = { chatId: snapshot.chatId, history: snapshot.history };
     const notes = this.notes.entries(scope);
     if (!config.module && !notes.length) return undefined;
     const state = this.stateAt(snapshot.chatId, snapshot.parentRevision, config);
+    const models = this.models(config, true);
+    const preparation = config.module ? this.preparation(snapshot, config, state) : undefined;
+    if (preparation && config.stateModel && !models.state) {
+      preparation.status = 'failed';
+      preparation.reason = 'STATE_MODEL_UNAVAILABLE';
+    }
     return {
       config,
       state,
-      waiting: config.module?.mode === 'authoritative' && state === null,
+      waiting: config.module?.mode === 'authoritative' && preparation?.status === 'pending',
       lineageHash: lineageHash(snapshot.history),
       canonHash: this.notes.canonHash(scope),
       notes,
-      models: this.models(config),
+      models,
+      ...(preparation ? { preparation } : {}),
     };
   }
   prepareRunInTransaction(snapshot: RunSnapshot): RunSnapshot {
@@ -477,7 +584,24 @@ export class StoryStore {
         // Continuity can generate prose immediately; its reducer still depends on the preceding state.
         const state = this.stateAt(job.chatId, source.parentRevision, snapshot.story!.config);
         if (!state) return null;
-        const resolved = { ...snapshot, story: { ...snapshot.story!, state, waiting: false } };
+        const resolved = {
+          ...snapshot,
+          story: {
+            ...snapshot.story!,
+            state,
+            waiting: false,
+            ...(snapshot.story!.preparation
+              ? {
+                  preparation: {
+                    version: 1 as const,
+                    status: 'ready' as const,
+                    fallback: null,
+                    missing: [],
+                  },
+                }
+              : {}),
+          },
+        };
         const key = storyDependencyKey('state', source, resolved);
         const prior = this.db
           .prepare('SELECT id FROM story_jobs WHERE dependency_key=? AND id<>?')
@@ -615,6 +739,67 @@ export class StoryStore {
       }
     });
   }
+  private assertWaitingSource(run: Run): void {
+    const story = run.snapshot.story;
+    const branch = this.store.product.branch(run.chatId, run.snapshot.branchId);
+    if (
+      !story ||
+      branch.headRevision !== run.parentRevision ||
+      lineageHash(this.store.history(run.parentRevision)) !== story.lineageHash ||
+      this.notes.canonHash({ chatId: run.chatId, history: run.snapshot.history }) !==
+        story.canonHash
+    )
+      throw new HttpError(409, '대기 중 원문 또는 작가 설정이 변경됐어요. 새 요청이 필요해요.');
+  }
+  /** Resolve only the deferred state input. Models, options, history and behavior draws stay fixed. */
+  private finishPreparation(run: Run, skipKey?: string): boolean {
+    const story = run.snapshot.story!;
+    const state = this.stateAt(run.chatId, run.parentRevision, story.config);
+    const preparation = this.preparation(run.snapshot, story.config, state);
+    if (skipKey) {
+      preparation.skipKey = skipKey;
+      if (!state) {
+        preparation.status = 'skipped';
+        preparation.reason = 'USER_SKIPPED_STATE';
+      }
+    }
+    if (preparation.status === 'pending') return false;
+    const snapshot = freezeReservationSnapshot(
+      this.store,
+      { ...run.snapshot, story: { ...story, state, preparation, waiting: false } },
+      { purpose: 'resume-state' }
+    );
+    const changed = this.db
+      .prepare(
+        "UPDATE runs SET status='queued',snapshot=?,updated_at=? WHERE id=? AND status='waiting_for_state'"
+      )
+      .run(json(snapshot), now(), run.id);
+    if (!changed.changes) return false;
+    this.store.event(run.chatId, 'run.queued', run.id);
+    return true;
+  }
+  skipStateWait(runId: string, value: unknown): { run: Run; resumed: boolean } {
+    const body = record(value);
+    fields(body, ['chatId', 'branchId', 'expectedRevision', 'idempotencyKey']);
+    const chatId = text(body.chatId, 'chat ID', 100);
+    const branchId = text(body.branchId, 'branch ID', 100);
+    const expected =
+      body.expectedRevision === null ? null : text(body.expectedRevision, 'source', 100);
+    const key = text(body.idempotencyKey, 'request key', 120);
+    return this.store.transaction(() => {
+      const run = this.store.run(runId);
+      if (run.chatId !== chatId || run.snapshot.branchId !== branchId)
+        throw new HttpError(404, 'Run outside selected chat or branch');
+      if (run.parentRevision !== expected) throw new HttpError(409, 'Source revision conflict');
+      const prior = run.snapshot.story?.preparation?.skipKey;
+      if (prior === key) return { run, resumed: false };
+      if (prior || run.status !== 'waiting_for_state')
+        throw new HttpError(409, '이 요청은 더 이상 상태 준비를 기다리지 않아요.');
+      this.assertWaitingSource(run);
+      const resumed = this.finishPreparation(run, key);
+      return { run: this.store.run(runId), resumed };
+    });
+  }
   resumeWaiting(): string[] {
     return this.store.transaction(() => {
       const ready: string[] = [];
@@ -622,40 +807,26 @@ export class StoryStore {
         .prepare("SELECT id FROM runs WHERE status='waiting_for_state' ORDER BY created_at,id")
         .all() as Row[]) {
         const run = this.store.run(row.id);
-        const story = run.snapshot.story!;
-        const branch = this.store.product.branch(run.chatId, run.snapshot.branchId);
-        if (
-          branch.headRevision !== run.parentRevision ||
-          lineageHash(this.store.history(run.parentRevision)) !== story.lineageHash ||
-          this.notes.canonHash({ chatId: run.chatId, history: run.snapshot.history }) !==
-            story.canonHash
-        ) {
+        try {
+          this.assertWaitingSource(run);
+          if (this.finishPreparation(run)) ready.push(run.id);
+        } catch (error) {
+          const requestFailure =
+            (error instanceof HttpError && error.statusCode >= 400 && error.statusCode < 500) ||
+            error instanceof PromptProgramError ||
+            error instanceof PromptEvaluationError ||
+            error instanceof ContentPackageError ||
+            error instanceof ProviderContractError;
+          if (!requestFailure) throw error;
           this.db
             .prepare(
-              "UPDATE runs SET status='failed',error='대기 중 원문 또는 작가 설정이 변경됐어요. 새 요청이 필요해요.',updated_at=? WHERE id=?"
+              "UPDATE runs SET status='failed',error=?,updated_at=? WHERE id=? AND status='waiting_for_state'"
             )
-            .run(now(), run.id);
+            .run(error.message, now(), run.id);
           this.finishCommandInTransaction(run.id, 'failed');
           this.store.event(run.chatId, 'run.failed', run.id);
           continue;
         }
-        const state = this.stateAt(run.chatId, run.parentRevision, story.config);
-        if (!state) continue;
-        const snapshot = freezeReservationSnapshot(
-          this.store,
-          {
-            ...run.snapshot,
-            story: { ...story, state, waiting: false },
-          },
-          { purpose: 'resume-state' }
-        );
-        this.db
-          .prepare(
-            "UPDATE runs SET status='queued',snapshot=?,updated_at=? WHERE id=? AND status='waiting_for_state'"
-          )
-          .run(json(snapshot), now(), run.id);
-        this.store.event(run.chatId, 'run.queued', run.id);
-        ready.push(run.id);
       }
       return ready;
     });

@@ -21,6 +21,7 @@ import { api } from './api.js';
 import { Dialog } from './Dialog.js';
 import { DeleteButton } from './DeleteButton.js';
 import { PromptEditor } from './PromptEditor.js';
+import { NativeTransfer } from './NativeTransfer.js';
 import { PromptTemplatesDialog, type PromptTemplate } from './PromptTemplatesDialog.js';
 import { discardActiveEditor } from './editor-workspace-context.js';
 import {
@@ -240,6 +241,7 @@ export function PromptLibrary({
       <header className="library-heading">
         {headerLeading}
         <h1>프롬프트</h1>
+        {library && !editing && <NativeTransfer library={library} reload={reload} />}
         {headerTrailing}
       </header>
       <PromptTemplatesDialog

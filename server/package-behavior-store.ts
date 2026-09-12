@@ -1,15 +1,18 @@
 import type { DatabaseSync } from 'node:sqlite';
 import { createHash, randomBytes } from 'node:crypto';
-import { evaluatePromptExpressions, type RuntimeValue } from '../core/prompt-program.js';
+import type { RuntimeValue } from '../core/prompt-program.js';
 import { inspectRuntimeValue } from '../core/prompt-values.js';
 import {
   BehaviorError,
+  BehaviorEvaluationError,
   applyBehaviorEffects,
   behaviorActionAllowed,
   behaviorActionTriggers,
   evaluateBehaviorAction,
+  behaviorOutputConditions,
   parseBehaviorOutput,
   validatePackageBehavior,
+  validateBehaviorValue,
   type PackageBehavior,
   type BehaviorDraw,
 } from '../core/package-behavior.js';
@@ -143,7 +146,8 @@ export class PackageBehaviorStore {
     )
       conflict('BEHAVIOR_MIGRATION_REQUIRED');
     checkScope(stored, b);
-    return { ...scope, stateRevision: Number(row.state_revision), state: JSON.parse(row.state) };
+    const state = validateBehaviorValue(b.stateSchema, JSON.parse(row.state));
+    return { ...scope, stateRevision: Number(row.state_revision), state };
   }
   ensure(scope: BehaviorScope, b: PackageBehavior) {
     return this.tx(() => this.ensureInTransaction(scope, b));
@@ -251,18 +255,6 @@ export class PackageBehaviorStore {
     if (cached) return cached;
     const state = prior ?? this.read(scope, b);
     this.expect(state, command.expectedStateRevision, command.expectedSourceHash);
-    if (prior)
-      this.db
-        .prepare(
-          'UPDATE package_behavior_states SET scope=?,definition_hash=? WHERE chat_id=? AND branch_id=? AND instance_id=?'
-        )
-        .run(
-          JSON.stringify(scope),
-          hash(b),
-          scope.chatId,
-          scope.branchId,
-          scope.attachmentInstanceId
-        );
     return this.commit(
       scope,
       b,
@@ -340,14 +332,23 @@ export class PackageBehaviorStore {
         conflict('BEHAVIOR_DRAW_MISMATCH');
     } else if (entry.drawSeed !== null || Object.keys(entry.draws).length)
       conflict('BEHAVIOR_DRAW_MISMATCH');
-    const evaluated = evaluateBehaviorAction(
-      b,
-      action,
-      state.state,
-      entry.input,
-      entry.draws,
-      entry.hostRuntime
-    );
+    // Replaying an already accepted journal entry must reproduce its result. Invalid recorded
+    // input or failed deterministic replay is an integrity error, not a new add-on request.
+    validateBehaviorValue(action.inputSchema, entry.input);
+    let evaluated: ReturnType<typeof evaluateBehaviorAction>;
+    try {
+      evaluated = evaluateBehaviorAction(
+        b,
+        action,
+        state.state,
+        entry.input,
+        entry.draws,
+        entry.hostRuntime
+      );
+    } catch (error) {
+      if (error instanceof BehaviorEvaluationError) conflict('BEHAVIOR_REPLAY_INVALID');
+      throw error;
+    }
     if (
       hash(evaluated.state) !== hash(entry.after.state) ||
       hash(evaluated.result) !== hash(entry.result)
@@ -443,13 +444,8 @@ export class PackageBehaviorStore {
         )
           bad('BEHAVIOR_OVERLAPPING_PARSERS');
     let next = state.state;
-    const allowed = evaluatePromptExpressions(
-      selected.map((parser) => parser.when ?? true),
-      {},
-      { runtime: { ...hostRuntime, state: state.state, input: {}, draws: {} } }
-    );
+    const allowed = behaviorOutputConditions(b, selected, state.state, hostRuntime);
     for (const [index, parser] of selected.entries()) {
-      if (typeof allowed[index] !== 'boolean') bad('BEHAVIOR_CONDITION_NOT_BOOLEAN');
       if (!allowed[index]) continue;
       next = parseBehaviorOutput(b, parser, next, command.text);
     }
@@ -517,7 +513,9 @@ export class PackageBehaviorStore {
     drawSeed: string | null,
     actionResult?: RuntimeValue
   ): BehaviorJournalResult {
-    this.ensureInTransaction(scope, b);
+    // A confirmed reset replaces the old definition and value together. Never validate the old
+    // value against the new schema or temporarily advertise it as the new definition's state.
+    if (provenance !== 'explicit-reset' || !this.row(scope)) this.ensureInTransaction(scope, b);
     const result: BehaviorJournalResult = {
       ...scope,
       stateRevision: before.stateRevision + 1,
@@ -533,11 +531,13 @@ export class PackageBehaviorStore {
     };
     const changed = this.db
       .prepare(
-        'UPDATE package_behavior_states SET state_revision=?,state=? WHERE chat_id=? AND branch_id=? AND instance_id=? AND state_revision=?'
+        'UPDATE package_behavior_states SET state_revision=?,state=?,scope=?,definition_hash=? WHERE chat_id=? AND branch_id=? AND instance_id=? AND state_revision=?'
       )
       .run(
         result.stateRevision,
         JSON.stringify(next),
+        JSON.stringify(scope),
+        hash(b),
         scope.chatId,
         scope.branchId,
         scope.attachmentInstanceId,

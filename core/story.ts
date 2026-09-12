@@ -51,7 +51,21 @@ export type StorySnapshot = {
   notes: AuthorNote[];
   models: Partial<Record<'state' | 'context', ModelSnapshot>>;
   sceneCommandId?: string;
+  /** Main-input fallback only. State reducers still require the exact parent in `state`. */
+  preparation?: StoryPreparation;
 };
+export type StoryPreparation = {
+  version: 1;
+  status: 'ready' | 'pending' | 'failed' | 'skipped';
+  fallback: StoryState | null;
+  missing: { revision: string; hash: string }[];
+  reason?: string;
+  skipKey?: string;
+};
+/** Never supplies a fallback to a state reducer or mutates a saved state. */
+export function storyInputState(story: StorySnapshot | undefined): StoryState | null {
+  return story?.state ?? (!story?.waiting ? (story?.preparation?.fallback ?? null) : null);
+}
 export type StoryJob = {
   id: string;
   chatId: string;

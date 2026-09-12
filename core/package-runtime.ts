@@ -1,6 +1,7 @@
 import {
   compilePromptProgram,
   resolvePromptValues,
+  PromptProgramError,
   type PromptControl,
   type PromptValue,
   type RuntimeValue,
@@ -16,8 +17,10 @@ import {
   type PackageTransform,
 } from './content-package.js';
 import type { Resource } from './types.js';
+import { PromptBudget, PromptEvaluationError } from './prompt-values.js';
 
 export type CompiledPackageAttachment = {
+  unavailableInstructions?: { id: string; code: string }[];
   resources: Resource[];
   pinned: Resource[];
   instructions: { id: string; text: string; position?: string }[];
@@ -37,6 +40,9 @@ export function compilePackageAttachment(
     runtime?: Record<string, RuntimeValue>;
     slots?: Record<string, string>;
     resourcesOnly?: boolean;
+    behaviorUnavailable?: string;
+    /** Host-only shared budget for all optional instruction evaluations. */
+    budget?: PromptBudget;
   }
 ): CompiledPackageAttachment {
   const pkg = validateContentPackage(value),
@@ -105,51 +111,79 @@ export function compilePackageAttachment(
       stateView: pkg.stateView,
       transforms: structuredClone(pkg.transforms),
     };
+  const unavailableInstructions: { id: string; code: string }[] = [];
   const selected = pkg.instructions.filter(
-    (n) =>
-      n.target === context.target &&
-      (!n.attachmentRoles || n.attachmentRoles.includes(attachment.role))
+    (instruction) =>
+      instruction.target === context.target &&
+      (!instruction.attachmentRoles || instruction.attachmentRoles.includes(attachment.role))
   );
-  const compilation = compilePromptProgram(
-    {
-      version: 1,
-      controls: pkg.controls,
-      blocks: [
-        ...selected.map((n) => ({
-          id: n.id,
-          title: n.id,
-          kind: 'message' as const,
-          role: 'system' as const,
-          template: n.template ?? [{ kind: 'text' as const, text: n.text }],
-          ...(n.when === undefined ? {} : { when: n.when }),
-        })),
-        { id: '__package_current__', title: 'Runtime placeholder', kind: 'current' },
-      ],
-    },
-    {
-      values: context.values,
-      runtime: context.runtime,
-      slots: context.slots ?? {},
-      history: [{ id: '__package_input__', role: 'user', text: '', current: true }],
+  const values = resolvePromptValues(
+    { version: 1, controls: pkg.controls, blocks: [] },
+    context.values
+  );
+  const budget = context.budget ?? new PromptBudget();
+  const instructions: CompiledPackageAttachment['instructions'] = [];
+  let outputChars = 0;
+  for (const instruction of selected) {
+    try {
+      const compilation = compilePromptProgram(
+        {
+          version: 1,
+          controls: pkg.controls,
+          blocks: [
+            {
+              id: instruction.id,
+              title: instruction.id,
+              kind: 'message',
+              role: 'system',
+              template: instruction.template ?? [{ kind: 'text', text: instruction.text }],
+              ...(instruction.when === undefined ? {} : { when: instruction.when }),
+            },
+            { id: '__package_current__', title: 'Runtime placeholder', kind: 'current' },
+          ],
+        },
+        {
+          values,
+          runtime: context.runtime,
+          slots: context.slots ?? {},
+          history: [{ id: '__package_input__', role: 'user', text: '', current: true }],
+          budget,
+        }
+      );
+      for (const message of compilation.messages.filter(
+        (message) => message.provenance.origin === 'prompt'
+      )) {
+        const text = message.content.map((part) => part.text).join('');
+        budget.textLength(outputChars + text.length, true);
+        outputChars += text.length;
+        instructions.push({
+          id: `${prefix}:instruction:${message.id}`,
+          text,
+          ...(instruction.position ? { position: instruction.position } : {}),
+        });
+      }
+    } catch (error) {
+      // Package instructions are optional add-on expressions. Main PromptProgram compilation
+      // uses the same evaluator without this boundary; DB/identity/schema errors stay outside.
+      if (!(error instanceof PromptProgramError) && !(error instanceof PromptEvaluationError))
+        throw error;
+      unavailableInstructions.push({ id: instruction.id, code: error.code });
     }
-  );
-  const instructions = compilation.messages
-    .filter((m) => m.provenance.origin === 'prompt')
-    .map((m) => ({
-      id: `${prefix}:instruction:${m.id}`,
-      text: m.content.map((c) => c.text).join(''),
-      ...(selected.find((n) => n.id === m.provenance.blockId)?.position
-        ? { position: selected.find((n) => n.id === m.provenance.blockId)!.position }
-        : {}),
-    }));
+  }
   const binding = pkg.roleBindings?.[attachment.role];
   if (binding !== undefined) instructions.unshift({ id: `${prefix}:binding`, text: binding });
+  if (context.behaviorUnavailable || unavailableInstructions.length)
+    instructions.push({
+      id: `${prefix}:instruction-diagnostics`,
+      text: `Optional package instruction diagnostics: ${JSON.stringify(unavailableInstructions)}. These instructions were not applied; preserve the other package content and continue the original writing request.${context.behaviorUnavailable ? ` Package behavior is unavailable (${context.behaviorUnavailable}); its state and action outcomes are not current facts. Do not invent successful actions or replacement state.` : ''}`,
+    });
   return {
+    ...(unavailableInstructions.length ? { unavailableInstructions } : {}),
     resources,
     pinned: resources.filter((r) => r.loading === 'pinned'),
     instructions,
     controls: structuredClone(pkg.controls),
-    values: compilation.values,
+    values,
     ...(pkg.stateView ? { stateView: structuredClone(pkg.stateView) } : {}),
     transforms: structuredClone(pkg.transforms),
   };

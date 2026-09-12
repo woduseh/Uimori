@@ -3,6 +3,7 @@ import { sourceLogicalHistoryForRequest } from './source-context.js';
 import type { PackageAttachment, PackageTarget } from './content-package.js';
 import { resolvePromptValues, type RuntimeValue } from './prompt-program.js';
 import type { RunSnapshot } from './types.js';
+import { storyInputState } from './story.js';
 
 export type PackageExecutionState = {
   instanceId: string;
@@ -51,13 +52,17 @@ export function executionContext(
   const packages = refs.map((ref) => {
     const pkg = profile?.packages?.find((p) => p.id === ref.id && p.revision === ref.revision);
     const frozen = snapshot.packageStates?.find((s) => s.instanceId === packageInstanceId(ref));
+    const unavailable = snapshot.packageBehaviorUnavailable?.find(
+      (s) => s.instanceId === packageInstanceId(ref)
+    );
     return {
       id: ref.id,
       revision: ref.revision,
       role: ref.role,
       instanceId: packageInstanceId(ref),
       title: pkg?.title ?? '',
-      state: frozen?.state ?? pkg?.behavior?.initialState ?? {},
+      state: unavailable ? null : (frozen?.state ?? pkg?.behavior?.initialState ?? {}),
+      ...(unavailable ? { stateStatus: 'unavailable', stateError: unavailable.code } : {}),
       stateRevision: frozen?.stateRevision ?? 0,
       draws: frozen?.draws ?? {},
       options: pkg
@@ -125,7 +130,13 @@ export function executionContext(
       lastUser: [...recent].reverse().find((m) => m.role === 'user')?.text ?? null,
       lastAssistant: [...recent].reverse().find((m) => m.role === 'assistant')?.text ?? null,
     },
-    state: selected?.state ?? snapshot.story?.state?.values ?? {},
+    state:
+      selected?.stateStatus === 'unavailable'
+        ? null
+        : (selected?.state ?? storyInputState(snapshot.story)?.values ?? {}),
+    ...(selected?.stateStatus === 'unavailable'
+      ? { stateStatus: 'unavailable', stateError: selected.stateError! }
+      : {}),
     draws: selected?.draws ?? {},
     options: selected?.options ?? {},
     package: selected ?? null,

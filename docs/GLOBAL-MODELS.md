@@ -16,7 +16,7 @@
 
 `GET /api/model-workspace`는 `{revision, routes, translationPolicy, titleModel, helperModel, contextModel}`을 반환하고, `PUT`은 `expectedRevision`으로 동시 편집을 보호해요. 세 선택 기능 모델은 `{id}` 참조 또는 `null`이며 PUT에서 생략하면 기존 값을 유지해요. 현재 프롬프트와 같은 `prompt_workspace` JSON 행에 저장하므로 모델·프롬프트의 동시 저장 충돌도 CAS로 처리해요. 프리셋을 적용하면 현재 작업본으로 복사하며, 프리셋 후속 수정·삭제가 현재 작업본이나 과거 실행을 바꾸지 않아요.
 
-현재는 fresh v15 DB와 v15 archive만 지원해요. 새 DB의 역할 모델은 미지정으로 시작하고 채팅 body의 모델 값을 전역 기본값으로 채택하지 않아요. API의 채팅 `profile.routes`는 고정 본문 모델을 포함한 현재 적용 설정의 읽기 전용 projection이에요. 채팅별 선택은 `profile.pinned.mainPromptPresetId`와 `profile.pinned.mainModel`에 ID로 저장해요. 프로필 수정에서 `pinned` 생략은 유지, `{}`는 전체 고정 해제이며 `expectedRevision`으로 충돌을 보호해요. 보관된 Run의 `snapshot.profile.routes/models`는 과거 실행의 고정 정보예요. 구버전 DB/archive를 자동 이관하지 않아요.
+DB·archive의 버전과 지원 이관은 [migration](DATA-MIGRATIONS.md)을 봐요. 새 DB의 역할 모델은 미지정으로 시작하고 채팅 body의 모델 값을 전역 기본값으로 채택하지 않아요. API의 채팅 `profile.routes`는 고정 본문 모델을 포함한 현재 적용 설정의 읽기 전용 projection이에요. 채팅별 선택은 `profile.pinned.mainPromptPresetId`와 `profile.pinned.mainModel`에 ID로 저장해요. 프로필 수정에서 `pinned` 생략은 유지, `{}`는 전체 고정 해제이며 `expectedRevision`으로 충돌을 보호해요. 보관된 Run의 `snapshot.profile.routes/models`는 과거 실행의 고정 정보예요. 지원하지 않는 과거 DB/archive를 임의로 변환하지 않아요.
 
 전역 프리셋 적용은 복사이고, 채팅 고정은 같은 ID의 최신 저장본을 따라가요. 고정한 작문 프리셋이 삭제되거나 본문 모델·프로바이더가 비활성·삭제되면 새 본문 실행을 차단해요. 다른 모델이나 전역 프롬프트로 조용히 바꾸지 않으며, 채팅 설정을 열어 현재 ID를 확인하고 다시 선택하거나 해제할 수 있어요. 프롬프트의 소속·옵션 정의가 바뀌면 기존 채팅 옵션의 충돌 검사로 대기 옵션을 처리해요. 미저장 설정·옵션 초안과 과거 Run은 유지해요.
 

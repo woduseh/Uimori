@@ -136,7 +136,7 @@ finally { Remove-Item Env:NR_CONTEXT_READ_BENCHMARK }
 - 전송 전에 attempt를 기록해요. 거절·빈 응답·잘림·오류·취소는 자동 재시도하지 않으며 재시작 후 불확실 실행도 재생하지 않아요. 취소 후 늦은 결과는 checkpoint를 활성화하거나 terminal 상태를 바꾸지 않아요. 받은 usage와 미확인 `null`을 보존해요.
 - 고정 입력이 너무 크거나 호출 예산이 모자라면 이전 정상 checkpoint를 유지하고 중단해요. 상태 작업도 같은 요약 엔진을 사용하며 판정할 현재 원문을 온전히 한 번 보내요. 번역은 현재 원문 전체와 원문시점 자료를 보내고, 모든 역할의 실제 body에 입력 한도 검사를 적용해요.
 - 선택 지점 포크는 그 시점에 포함되는 원문·메모·요약만 새 ID/hash로 연결해요. 선택 지점 이후 요약, 타 분기와 미래의 메모는 복사하지 않아요. 수동으로 만든 Run 없는 checkpoint도 같은 검증을 받아요.
-- 현재 DB/archive는 **v15**예요. v15 export/import·backup/restore는 불변 checkpoint·활성 참조·메모·작업·전송 소유권을 검증하고 진행 중 작업을 자동 재전송하지 않아요. v14 이하 DB/archive를 이관하거나 제거한 기억 형식을 자동 변환하지 않아요.
+- DB와 교환 형식의 버전은 [migration](DATA-MIGRATIONS.md)을 봐요. 현재 export/import·backup/restore는 불변 checkpoint·활성 참조·메모·작업·전송 소유권을 검증하고 진행 중 작업을 자동 재전송하지 않아요. v14 이하 DB/archive를 이관하거나 제거한 기억 형식을 자동 변환하지 않아요.
 
 도우미 대화도 같은 checkpoint 형식을 사용하지만 본편과 별도 scope에 저장해요. 긴 도우미 작업의 세그먼트 경계와 권한·변경 영수증은 [도우미 계획과 인수 계약](../project-plan/HELPER-CONTEXT-PLAN.md)에 있어요.
 

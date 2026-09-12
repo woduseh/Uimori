@@ -175,13 +175,95 @@ export function validateStoryArchive(store: Store): StorySnapshotArchiveValidato
       const story = shape(
         snapshot.story,
         ['config', 'state', 'waiting', 'lineageHash', 'canonHash', 'notes', 'models'],
-        ['sceneCommandId']
+        ['sceneCommandId', 'preparation']
       ) as StorySnapshot;
       const config = configValue(store, story.config, chatId, false);
       rememberConfig(chatId, config);
       if (typeof story.waiting !== 'boolean' || story.lineageHash !== lineageHash(snapshot.history))
         reject('snapshot lineage mismatch');
-      if (story.waiting !== (config.module?.mode === 'authoritative' && story.state === null))
+      if (story.preparation) {
+        const preparation = shape(
+          story.preparation,
+          ['version', 'status', 'fallback', 'missing'],
+          ['reason', 'skipKey']
+        );
+        if (
+          !config.module ||
+          preparation.version !== 1 ||
+          !['ready', 'pending', 'failed', 'skipped'].includes(preparation.status)
+        )
+          reject('invalid state preparation');
+        if (!Array.isArray(preparation.missing)) reject('invalid state preparation coverage');
+        if (
+          preparation.reason !== undefined &&
+          ![
+            'STATE_UNAVAILABLE',
+            'STATE_STALE',
+            'STATE_FAILED',
+            'STATE_CANCELLED',
+            'STATE_INTERRUPTED',
+            'STATE_COMPLETED',
+            'STATE_MODEL_UNAVAILABLE',
+            'USER_SKIPPED_STATE',
+          ].includes(preparation.reason)
+        )
+          reject('invalid state preparation reason');
+        if (
+          preparation.skipKey !== undefined &&
+          (typeof preparation.skipKey !== 'string' ||
+            !preparation.skipKey.trim() ||
+            preparation.skipKey.length > 120)
+        )
+          reject('invalid state skip receipt');
+        if (preparation.skipKey !== undefined && !['ready', 'skipped'].includes(preparation.status))
+          reject('state skip receipt outside completion');
+        if (['ready', 'pending'].includes(preparation.status) && preparation.reason !== undefined)
+          reject('unexpected state preparation reason');
+        if (
+          preparation.status === 'failed' &&
+          (!preparation.reason || preparation.reason === 'USER_SKIPPED_STATE')
+        )
+          reject('state preparation failure reason missing');
+        if (
+          preparation.status === 'skipped' &&
+          (!preparation.skipKey || preparation.reason !== 'USER_SKIPPED_STATE')
+        )
+          reject('state skip receipt missing');
+        if (
+          preparation.status === 'ready' &&
+          (!story.state || preparation.fallback !== null || preparation.missing.length)
+        )
+          reject('ready state preparation mismatch');
+        if (
+          story.state !== null &&
+          preparation.status !== 'ready' &&
+          preparation.reason !== 'STATE_MODEL_UNAVAILABLE'
+        )
+          reject('state preparation parent mismatch');
+        if (
+          story.waiting !==
+          (!stateSource &&
+            config.module?.mode === 'authoritative' &&
+            preparation.status === 'pending')
+        )
+          reject('state preparation barrier mismatch');
+        const covered = preparation.fallback?.sourceRevision
+          ? snapshot.history.findIndex(
+              (entry) => entry.revision === preparation.fallback!.sourceRevision
+            )
+          : -1;
+        same(
+          preparation.missing,
+          preparation.status === 'ready' || story.state
+            ? []
+            : snapshot.history
+                .slice(covered + 1)
+                .map((entry) => ({ revision: entry.revision, hash: sourceHash(entry.text) })),
+          'state preparation coverage mismatch'
+        );
+      } else if (
+        story.waiting !== (config.module?.mode === 'authoritative' && story.state === null)
+      )
         reject('state barrier mismatch');
       const modelMap = shape(story.models, [], ['state', 'context']);
       for (const [kind, ref] of [['state', config.stateModel]] as const) {
@@ -189,12 +271,15 @@ export function validateStoryArchive(store: Store): StorySnapshotArchiveValidato
           if (modelMap[kind] !== undefined) reject('unselected model snapshot');
           continue;
         }
+        if (modelMap[kind] === undefined && story.preparation?.reason === 'STATE_MODEL_UNAVAILABLE')
+          continue;
         const selected = validateModelSnapshot(modelMap[kind]);
         if (selected.id !== ref.id) reject('model snapshot selection mismatch');
       }
       if (modelMap.context !== undefined) validateModelSnapshot(modelMap.context);
-      if (story.state !== null) {
-        const state = shape(story.state, [
+      for (const rawState of [story.state, story.preparation?.fallback ?? null]) {
+        if (rawState === null) continue;
+        const state = shape(rawState, [
           'id',
           'sourceRevision',
           'sourceHash',
@@ -613,6 +698,15 @@ export function copyStoryFork(
       lineageHash: lineageHash(mappedHistory),
       canonHash: canonHash(mappedNotes),
     };
+    if (story.preparation)
+      result.preparation = {
+        ...story.preparation,
+        fallback: mapState(story.preparation.fallback),
+        missing: story.preparation.missing.map((entry) => ({
+          ...entry,
+          revision: sourceId(entry.revision)!,
+        })),
+      };
     if (story.sceneCommandId !== undefined) {
       const mapped = commands.get(story.sceneCommandId);
       if (mapped) result.sceneCommandId = mapped;

@@ -1375,6 +1375,8 @@ export function compilePromptProgram(
     history: PromptHistoryMessage[];
     runtime?: Record<string, RuntimeValue>;
     limits?: PromptEvaluationLimits;
+    /** Host-only evaluation budget; never included in the compiled program or snapshot. */
+    budget?: PromptBudget;
   }
 ): PromptCompilation {
   validatePromptProgram(program);
@@ -1393,6 +1395,7 @@ export function compilePromptProgram(
   const evaluator = new PromptEvaluator(values, {
     runtime: context.runtime,
     limits: context.limits,
+    budget: context.budget,
   });
   const submission = program.execution?.storySubmission;
   const execution =

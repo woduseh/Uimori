@@ -34,6 +34,7 @@ import type { StoryState } from './useStory.js';
 import { api, labels } from './api.js';
 import { ConnectionEditor } from './ProviderManagement.js';
 import { ArchivePanel } from './ArchivePanel.js';
+import { DiagnosticReport } from './DiagnosticReport.js';
 import { AttemptInspector } from './AttemptInspector.js';
 import { RunTaskDetails } from './RunTaskDetails.js';
 
@@ -735,16 +736,28 @@ export function AppSettingsPanel({
                     />
                   )}
                   {key === 'data' && (
-                    <ArchivePanel
-                      expanded
-                      active={active === 'data' && showingDetail}
-                      onImported={async () => {
-                        await Promise.all([state.loadChats(), state.loadLibrary()]);
-                        if (state.selected) await state.refresh(state.selected);
-                      }}
-                      onError={state.setError}
-                      onDirtyChange={setArchiveDirty}
-                    />
+                    <>
+                      <ArchivePanel
+                        expanded
+                        active={active === 'data' && showingDetail}
+                        onImported={async () => {
+                          await Promise.all([state.loadChats(), state.loadLibrary()]);
+                          if (state.selected) await state.refresh(state.selected);
+                        }}
+                        onError={state.setError}
+                        onDirtyChange={setArchiveDirty}
+                      />
+                      <section aria-label="문제 보고용 진단" className="settings-section">
+                        <h3>문제 보고용 진단</h3>
+                        <DiagnosticReport scope={{ scope: 'system' }} label="시스템 진단 만들기" />
+                        {state.selected && (
+                          <DiagnosticReport
+                            scope={{ scope: 'chat', chatId: state.selected }}
+                            label="선택 채팅 진단 만들기"
+                          />
+                        )}
+                      </section>
+                    </>
                   )}
                   {key === 'security' && (
                     <section className="settings-section">

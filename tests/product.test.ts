@@ -7,6 +7,7 @@ import { tmpdir } from 'node:os';
 import { createHash, randomUUID } from 'node:crypto';
 import { DatabaseSync } from 'node:sqlite';
 import { Store } from '../server/store.js';
+import { DATABASE_SCHEMA_VERSION } from '../server/schema-migrations.js';
 import { ProductStore } from '../server/product-store.js';
 import { buildMainInput } from '../core/provider.js';
 import type { ChatProfile, Connection, Content, ModelPreset } from '../core/product.js';
@@ -610,7 +611,7 @@ describe('M1 product data with actual file SQLite', () => {
     expect(product.asset(asset.id).asset.hash).toBe(asset.hash);
   });
 
-  test.each([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 16])(
+  test.each([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, DATABASE_SCHEMA_VERSION + 1])(
     'P11 rejects unsupported schema %i without automatic migration or backup',
     async (version) => {
       const item = await directory();
@@ -620,7 +621,9 @@ describe('M1 product data with actual file SQLite', () => {
       old.exec(`PRAGMA user_version=${version};`);
       old.close();
       expect(() => new Store(path)).toThrow(`Unsupported database schema version ${version}`);
-      expect(() => new Store(path)).toThrow('npm run reset:dev');
+      expect(() => new Store(path)).toThrow(
+        version > DATABASE_SCHEMA_VERSION ? 'downgrades are not applied' : 'npm run reset:dev'
+      );
       expect((await readdir(item.directory)).filter((name) => name.includes('.pre-'))).toEqual([]);
       const backup = new DatabaseSync(path, { readOnly: true });
       try {
@@ -653,7 +656,9 @@ describe('M1 product data with actual file SQLite', () => {
     await writeFile(path, bytes);
     const reopened = new DatabaseSync(path, { readOnly: true });
     try {
-      expect(reopened.prepare('PRAGMA user_version').get()).toEqual({ user_version: 15 });
+      expect(reopened.prepare('PRAGMA user_version').get()).toEqual({
+        user_version: DATABASE_SCHEMA_VERSION,
+      });
       expect(
         reopened.prepare('SELECT id,text,hash FROM sources WHERE id=?').get(source.id)
       ).toEqual({ id: source.id, text: source.text, hash: source.hash });

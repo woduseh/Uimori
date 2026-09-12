@@ -47,6 +47,7 @@ export async function api<T>(
   if (
     body !== undefined &&
     (providerSettingsChanged ||
+      path === '/native-transfers/apply' ||
       /^(?:\/library\/(?:folders|organization)|\/content(?:\/|$)|\/prompt-presets?(?:\/|$)|\/(?:prompt-workspace|model-workspace)(?:\/|$)|\/prompt-combinations?(?:\/|$))/.test(
         path
       ))
@@ -80,9 +81,9 @@ export const labels: Record<string, string> = {
   partial: '부분 결과',
 };
 
-export function saveDownload(name: string, data: unknown) {
+export function saveDownload(name: string, data: unknown, compact = false) {
   const url = URL.createObjectURL(
-    new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
+    new Blob([JSON.stringify(data, null, compact ? undefined : 2)], { type: 'application/json' })
   );
   const anchor = document.createElement('a');
   anchor.href = url;

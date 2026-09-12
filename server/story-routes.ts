@@ -48,7 +48,16 @@ export function storyRoutes(
     const job = store.story.cancel(request.params.id);
     hooks.abort(job.id);
     hooks.publish(job.chatId);
+    hooks.pump();
     return job;
+  });
+  app.post<{ Params: { id: string } }>('/api/runs/:id/skip-state-wait', async (request) => {
+    const result = store.story.skipStateWait(request.params.id, request.body);
+    if (result.resumed) {
+      hooks.publish(result.run.chatId);
+      hooks.execute(result.run.id);
+    }
+    return result.run;
   });
   app.post<{ Params: { id: string } }>('/api/sources/:id/story/rebuild', async (request) => {
     const body = record(request.body);
@@ -107,6 +116,7 @@ export function storyRoutes(
     if (result.created) {
       hooks.publish(scene.chatId);
       if (result.run.status === 'queued') hooks.execute(result.run.id);
+      else if (result.run.status === 'waiting_for_state') hooks.pump();
     }
     return result.run;
   });

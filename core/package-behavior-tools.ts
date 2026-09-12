@@ -1,5 +1,9 @@
 import { historicalPersonaExcluded } from './persona-scope.js';
-import { ContentPackageError, validateContentPackage } from './content-package.js';
+import {
+  ContentPackageError,
+  validateContentPackage,
+  type PackageAttachment,
+} from './content-package.js';
 import { BehaviorError, type BehaviorSchema } from './package-behavior.js';
 import { packageInstanceId } from './execution-context.js';
 import type { Json, ProviderTool } from './transport.js';
@@ -7,6 +11,66 @@ import type { RunSnapshot } from './types.js';
 
 export type BehaviorToolBinding = { tool: ProviderTool; instanceId: string; actionId: string };
 export const MAX_MODEL_BEHAVIOR_ACTIONS = 20;
+
+/** Admission projection only. Package definitions and durable state/journals remain untouched. */
+export function withoutPackageBehavior(
+  snapshot: RunSnapshot,
+  refs: readonly PackageAttachment[],
+  stage: NonNullable<RunSnapshot['packageBehaviorUnavailable']>[number]['stage'],
+  code: string,
+  retainedStates = snapshot.packageStates
+): RunSnapshot {
+  const unavailable = [...(snapshot.packageBehaviorUnavailable ?? [])];
+  for (const ref of refs) {
+    const instanceId = packageInstanceId(ref);
+    if (!unavailable.some((item) => item.instanceId === instanceId))
+      unavailable.push({
+        instanceId,
+        packageId: ref.id,
+        packageRevision: ref.revision,
+        role: ref.role,
+        stage,
+        code,
+        ...(retainedStates?.find((state) => state.instanceId === instanceId)
+          ? {
+              retainedState: structuredClone(
+                retainedStates.find((state) => state.instanceId === instanceId)!
+              ),
+            }
+          : {}),
+      });
+  }
+  return {
+    ...snapshot,
+    promptCompilation: undefined,
+    packageStates: snapshot.packageStates?.filter(
+      (state) => !unavailable.some((item) => item.instanceId === state.instanceId)
+    ),
+    packageBehaviorUnavailable: unavailable,
+  };
+}
+
+/** Unusable action-tool contracts disable the affected add-on instances for this admission. */
+export function admitBehaviorTools(snapshot: RunSnapshot): RunSnapshot {
+  try {
+    assertBehaviorToolCapability(snapshot);
+    return snapshot;
+  } catch (error) {
+    if (
+      !(error instanceof BehaviorError) ||
+      !['BEHAVIOR_MODEL_ACTION_LIMIT', 'BEHAVIOR_MODEL_TOOLS_UNSUPPORTED'].includes(error.message)
+    )
+      throw error;
+    const refs = (snapshot.profile?.packageAttachments ?? []).filter(
+      (ref) =>
+        !historicalPersonaExcluded(snapshot.profile, ref.role) &&
+        snapshot.profile?.packages
+          ?.find((pkg) => pkg.id === ref.id && pkg.revision === ref.revision)
+          ?.behavior?.actions.some((action) => action.triggers?.includes('model'))
+    );
+    return withoutPackageBehavior(snapshot, refs, 'tools', error.message);
+  }
+}
 
 /** Deterministic identity only, not an authorization token. Browser and server use the same name. */
 function toolName(instanceId: string, actionId: string): string {
@@ -81,6 +145,12 @@ export function listBehaviorTools(snapshot: RunSnapshot): BehaviorToolBinding[] 
     );
     if (!pkg) throw new ContentPackageError('PACKAGE_SNAPSHOT_REVISION_MISSING', ref.id);
     validateContentPackage(pkg);
+    if (
+      snapshot.packageBehaviorUnavailable?.some(
+        (item) => item.instanceId === packageInstanceId(ref)
+      )
+    )
+      continue;
     if (historicalPersonaExcluded(profile, ref.role)) continue;
     for (const action of pkg.behavior?.actions ?? []) {
       if (!action.triggers?.includes('model')) continue;

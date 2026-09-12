@@ -47,6 +47,8 @@
     "verify:browser-smoke": "node scripts/verify-browser-smoke.mjs",
     "verify:chat-unification": "node scripts/verify-chat-unification.mjs",
     "verify:chat-backup": "node scripts/verify-chat-backup.mjs",
+    "verify:diagnostics": "node scripts/verify-diagnostics.mjs",
+    "verify:native-transfer": "node scripts/verify-native-transfer.mjs",
     "verify:visual": "node scripts/verify-visual.mjs",
     "verify:gallery": "node scripts/verify-gallery.mjs",
     "verify:selfhost": "node scripts/verify-self-host.mjs"

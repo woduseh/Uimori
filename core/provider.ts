@@ -12,6 +12,7 @@ import { DEFAULT_LORE_CONTEXT, type LorePlacement } from './lore-context.js';
 import { listBehaviorTools } from './package-behavior-tools.js';
 import { OUTLINE_CONTRACT, type OutlineSnapshot } from './outline.js';
 import { AUTHOR_NOTE_GUIDANCE } from './notes.js';
+import { storyInputState } from './story.js';
 
 // These are host permissions, never instructions read from a content package.
 const ALLOWED_TOOLS = Object.freeze([
@@ -82,6 +83,13 @@ export type MainInput = ModelInput & {
     moduleRevision: number;
     constraints: import('./state.js').StateModule;
   };
+  statePreparation?: {
+    status: 'pending' | 'failed' | 'skipped';
+    lastSourceRevision: string | null;
+    missing: { revision: string; hash: string }[];
+    reason?: string;
+    guidance: string;
+  };
   notes?: import('./notes.js').AuthorNote[];
   outline?: OutlineSnapshot;
   catalogPage?: { total: number; listed: number; remaining: string };
@@ -140,13 +148,25 @@ export function buildMainInput(
     }));
     input.facts = pinned.map((item) => item.text);
   }
-  if (snapshot.story?.state?.canonical && snapshot.story.config.module) {
-    const state = snapshot.story.state;
+  const storyState = storyInputState(snapshot.story);
+  if (storyState?.canonical && snapshot.story?.config.module) {
+    const state = storyState;
     input.state = {
       values: structuredClone(state.values),
       sourceRevision: state.sourceRevision,
       moduleRevision: state.moduleRevision,
       constraints: structuredClone(snapshot.story.config.module),
+    };
+  }
+  const preparation = snapshot.story?.preparation;
+  if (preparation && preparation.status !== 'ready' && !snapshot.story?.waiting) {
+    input.statePreparation = {
+      status: preparation.status,
+      lastSourceRevision: storyState?.sourceRevision ?? null,
+      missing: structuredClone(preparation.missing),
+      ...(preparation.reason ? { reason: preparation.reason } : {}),
+      guidance:
+        'Continue the original writing request. The optional state update is unavailable or was skipped. State values, if present, are only the last confirmed state and do not cover the listed sources. Do not invent successful actions, rolls, rewards or state changes to fill that gap.',
     };
   }
 

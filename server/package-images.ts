@@ -69,9 +69,16 @@ export function putImageBlob(product: ProductStore, value: unknown): PackageImag
     mime: image.mime,
     base64: input.base64,
   };
+  return putValidatedImageBlob(product, blob);
+}
+/** Caller has decoded and hash-validated this blob; import callers own the outer transaction. */
+export function putValidatedImageBlob(
+  product: ProductStore,
+  blob: PackageImageBlob
+): PackageImageBlob {
   const existing = product.db
     .prepare("SELECT body FROM versions WHERE kind='package-image' AND id=? AND revision=1")
-    .get(image.hash) as { body: string } | undefined;
+    .get(blob.hash) as { body: string } | undefined;
   if (existing) {
     if (!isDeepStrictEqual(validateImageBlob(JSON.parse(existing.body)), blob))
       throw new HttpError(409, 'Image blob collision');
@@ -79,7 +86,7 @@ export function putImageBlob(product: ProductStore, value: unknown): PackageImag
   }
   product.db
     .prepare("INSERT INTO versions VALUES('package-image',?,1,?)")
-    .run(image.hash, JSON.stringify(blob));
+    .run(blob.hash, JSON.stringify(blob));
   return blob;
 }
 export function assertPackageImages(product: ProductStore, pkg: ContentPackage) {

@@ -46,6 +46,6 @@
 
 파일을 독립 임시 DB에서 검증하고 정규화한 뒤, 새 소유 ID와 파생 hash를 만든 사본도 다시 검증해요. 두 검증이 끝난 뒤에만 목적지 transaction에서 새 채팅과 관련 기록을 함께 붙여요. 이 단계에서 공유 자료 충돌이나 연결 무결성 오류가 나도 새 채팅·자료 일부만 남기지 않아요. 내보내기 검증 실패를 작은 본문 파일로 대신 성공 처리하지 않아요.
 
-파일 버전은 SQLite schema 버전과 독립이에요. 현재 구현은 v1 공개 형식과 v15 저장 구조 사이의 명시적 adapter를 사용해요. DB 구조가 바뀌면 adapter 또는 지원 형식의 reader를 함께 갱신해야 하며, 정식 배포 전 모든 개발 버전 파일의 영구 호환을 약속하지 않아요. 지원하지 않는 버전은 명시적으로 거절해요.
+파일 버전은 SQLite schema 버전과 독립이에요. 현재 구현은 v1 공개 형식과 DB schema v17의 작품 저장 구조 사이의 명시적 adapter를 사용해요. DB 내부 migration 이력은 이 작품 파일에 넣지 않아요. DB 구조가 바뀌면 adapter 또는 지원 형식의 reader를 함께 갱신해야 하며, 모든 과거 개발 버전 파일의 영구 호환을 약속하지 않아요. 지원하지 않는 버전은 명시적으로 거절해요. 지원 경로는 [DB migration](DATA-MIGRATIONS.md)을 봐요.
 
 구현은 `core/chat-backup.ts`, `server/chat-backup.ts`와 `server/chat-backup-*.ts`에 있어요. `tests/chat-backup.test.ts`, `tests/chat-backup-context.test.ts`, `tests/chat-backup-helper.test.ts`는 반복 복원·사본 재백업·소유권/hash·원값 보존·충돌 rollback·분리 초안을 확인해요. 통합 검증 결과는 [안정화 기록](STABILIZATION-2026-09-11.md)과 [CURRENT](../project-plan/CURRENT.md)에 기록해요. 파일 계약 검증은 실제 공급자 호출이나 실제 모델 의미 품질의 증거가 아니에요.

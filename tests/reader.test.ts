@@ -46,6 +46,68 @@ test('new chats leave automatic status off until explicitly enabled', async () =
       .get(result.id)
   ).toEqual({ count: 0 });
 });
+
+test.each(['state', 'instruction', 'tool'] as const)(
+  'package %s failure appears as scoped reader metadata without private diagnostic payloads',
+  async (kind) => {
+    const app = await setup();
+    const chat = createFixtureChat(app.store, 'Synthetic package warning');
+    const affected = source(app.store, chat.id);
+    const unaffected = source(app.store, chat.id);
+    const other = createFixtureChat(app.store, 'Unrelated package warning');
+    const foreign = source(app.store, other.id);
+    const marker = 'SYNTHETIC_PRIVATE_DIAGNOSTIC_VALUE';
+    const run = app.store.run(affected.runId);
+    // Seed projection inputs only; full execution/backup validation has separate behavior tests.
+    if (kind === 'state') {
+      const snapshot = {
+        ...run.snapshot,
+        packageBehaviorUnavailable: [{ retainedState: { state: marker } }],
+      };
+      app.store.db
+        .prepare('UPDATE runs SET snapshot=? WHERE id=?')
+        .run(JSON.stringify(snapshot), run.id);
+    } else if (kind === 'instruction') {
+      const snapshot = {
+        ...run.snapshot,
+        promptCompilation: {
+          ...run.snapshot.promptCompilation,
+          warnings: [`PACKAGE_INSTRUCTION_UNAVAILABLE:${marker}`],
+        },
+      };
+      app.store.db
+        .prepare('UPDATE runs SET snapshot=? WHERE id=?')
+        .run(JSON.stringify(snapshot), run.id);
+    } else {
+      app.store.db.prepare('INSERT INTO tool_events(run_id,event) VALUES(?,?)').run(
+        run.id,
+        JSON.stringify({
+          name: 'behavior_synthetic',
+          denied: true,
+          errorKind: 'recoverable',
+          args: {},
+          result: { detail: marker },
+        })
+      );
+    }
+    app.store.db.prepare('INSERT INTO tool_events(run_id,event) VALUES(?,?)').run(
+      foreign.runId,
+      JSON.stringify({
+        name: 'behavior_other_chat',
+        denied: true,
+        errorKind: 'recoverable',
+        args: {},
+        result: { detail: marker },
+      })
+    );
+    const summaries = readerRuns(app.store, chat.id, [affected.runId, unaffected.runId]);
+    expect(summaries.find((item) => item.id === affected.runId)?.hasPackageIssues).toBe(true);
+    expect(summaries.find((item) => item.id === unaffected.runId)?.hasPackageIssues).toBe(false);
+    expect(summaries).toHaveLength(2);
+    expect(JSON.stringify(summaries)).not.toContain(marker);
+    expect(app.store.source(affected.id).text).toBe('Synthetic paragraph.');
+  }
+);
 function source(store: Store, chatId: string, text = 'Synthetic paragraph.', branchId?: string) {
   const chat = store.chat(chatId),
     branch = store.product.branch(chatId, branchId);

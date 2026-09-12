@@ -164,15 +164,29 @@ export function compileSnapshotPrompt(
       if ((block.kind === 'slot' || block.kind === 'message') && block.template)
         walk(block.template);
     }
-    for (const instruction of positioned)
-      if (!declared.has(instruction.position!))
-        throw new Error(`PACKAGE_INSERTION_SLOT_MISSING (${instruction.position})`);
+    for (const pkg of packages) {
+      pkg.instructions = pkg.instructions.filter((instruction) => {
+        if (!instruction.position || declared.has(instruction.position)) return true;
+        (pkg.unavailableInstructions ??= []).push({
+          id: instruction.id.slice(
+            `package:${pkg.attachment.id}:${pkg.attachment.role}:instruction:`.length
+          ),
+          code: 'PACKAGE_INSERTION_SLOT_MISSING',
+        });
+        return false;
+      });
+    }
   }
   const context = contextFromPackages(snapshot, packages);
   const promptCompilation = compilePromptProgram(selected, {
     ...context,
     ...(values ? { values } : {}),
   });
+  for (const pkg of packages)
+    for (const item of pkg.unavailableInstructions ?? [])
+      promptCompilation.warnings.push(
+        `PACKAGE_INSTRUCTION_UNAVAILABLE:${JSON.stringify({ instanceId: `${pkg.attachment.id}:${pkg.attachment.role}`, instructionId: item.id, code: item.code })}`
+      );
 
   return attachMainHostContext({ ...snapshot, promptCompilation });
 }

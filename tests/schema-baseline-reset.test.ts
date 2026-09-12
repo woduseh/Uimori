@@ -66,11 +66,11 @@ function reset(
   return { ...result, body: line ? JSON.parse(line) : undefined };
 }
 
-test('BASE01 a fresh database creates the complete schema 15 and a current database reopens directly', () => {
+test('BASE01 a fresh database creates schema 17 and a current database reopens directly', () => {
   const f = fixture(),
     store = new Store(f.path);
   f.owner.store = store;
-  expect(store.db.prepare('PRAGMA user_version').get()).toEqual({ user_version: 15 });
+  expect(store.db.prepare('PRAGMA user_version').get()).toEqual({ user_version: 17 });
   expect(
     store.db.prepare("SELECT name FROM sqlite_schema WHERE type='table' AND name='resources'").get()
   ).toBeUndefined();
@@ -109,7 +109,7 @@ test('BASE03 fresh initialization rolls back as one transaction and releases its
     mock = vi.spyOn(ProductStore.prototype, 'initFresh').mockImplementationOnce(() => {
       throw new Error('synthetic initialization failure');
     });
-  expect(() => new Store(f.path)).toThrow('synthetic initialization failure');
+  expect(() => new Store(f.path)).toThrow('DATABASE_MIGRATION_FAILED');
   mock.mockRestore();
   const db = new DatabaseSync(f.path, { readOnly: true });
   try {
@@ -123,10 +123,10 @@ test('BASE03 fresh initialization rolls back as one transaction and releases its
     db.close();
   }
   f.owner.store = new Store(f.path);
-  expect(f.owner.store.db.prepare('PRAGMA user_version').get()).toEqual({ user_version: 15 });
+  expect(f.owner.store.db.prepare('PRAGMA user_version').get()).toEqual({ user_version: 17 });
 });
 
-test('BASE04 only schema 15 archives restore, and a rejected version leaves both databases untouched', () => {
+test('BASE04 archive format 15 remains independent from database schema 17', () => {
   const source = fixture(),
     target = fixture();
   source.owner.store = new Store(source.path);

@@ -3,6 +3,19 @@ import { illustrationErrorMessage } from './illustration-labels.js';
 type ApiErrorDiagnostic = { code: string | null; message: string };
 
 const messages: Record<string, string> = {
+  NATIVE_TRANSFER_FORMAT:
+    '지원하지 않는 자료 파일 형식이나 버전이에요. Uimori의 자료 파일 내보내기로 만든 파일을 선택해 주세요.',
+  NATIVE_TRANSFER_TOO_LARGE:
+    '자료 파일이 64 MB 한도를 넘었어요. 내보낼 자료를 나누어 선택해 주세요.',
+  NATIVE_TRANSFER_MODEL_BINDINGS_REQUIRED: '프롬프트의 보조 모델을 모두 연결한 뒤 가져와 주세요.',
+  NATIVE_TRANSFER_DRAFT_CHANGED:
+    '확인한 파일 내용이 달라졌어요. 파일을 다시 선택해 내용을 확인해 주세요.',
+  NATIVE_TRANSFER_IMPORT_CONFLICT:
+    '같은 가져오기 요청에 다른 파일이나 모델 연결이 지정됐어요. 기존 요청의 결과를 먼저 확인해 주세요.',
+  NATIVE_TRANSFER_MODULE_BINDINGS:
+    '연결된 모듈 정보가 맞지 않아요. 필요한 모듈을 포함해 자료 파일을 다시 내보내 주세요.',
+  NATIVE_TRANSFER_SOURCE_CHANGED:
+    '자료의 개정이 달라졌어요. 최신 자료를 확인한 뒤 다시 내보내 주세요.',
   PINNED_PROMPT_UNAVAILABLE:
     '이 채팅에 고정한 작문 프롬프트를 사용할 수 없어요. 채팅 설정에서 사용 가능한 프롬프트를 다시 선택하거나 고정을 해제해 주세요.',
   HELPER_EFFECTS_ALREADY_COMMITTED:

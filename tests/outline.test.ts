@@ -728,7 +728,7 @@ describe('hierarchical composition', () => {
     expect(run.snapshot.outline?.path.at(-1)?.revision).toBe(current.revision);
   });
 
-  test('same-version databases and archives without the additive outline tables preserve the story', async () => {
+  test('legacy v15 databases and archives without outline tables preserve the story', async () => {
     const store = await database();
     const chat = createFixtureChat(store, '이전 v15 보존 검사');
     const command = store.story.createCommand(chat.id, {
@@ -749,16 +749,18 @@ describe('hierarchical composition', () => {
     initOutline(restored.db);
     initOutline(restored.db);
     expect(restored.chat(chat.id)).toEqual(store.chat(chat.id));
-    expect(restored.db.prepare('PRAGMA user_version').get()).toMatchObject({ user_version: 15 });
+    expect(restored.db.prepare('PRAGMA user_version').get()).toMatchObject({ user_version: 17 });
     expect(restored.db.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
-    restored.db.exec('DROP TABLE IF EXISTS outline_batches; DROP TABLE outline_nodes');
+    restored.db.exec(
+      'DROP TABLE IF EXISTS outline_batches; DROP TABLE outline_nodes; DROP TABLE native_transfer_receipts; DROP TABLE schema_migrations; PRAGMA user_version=15;'
+    );
     restored.close();
     const reopened = new Store(restored.path);
     owned.find((item) => item.store === restored)!.store = reopened;
     expect(reopened.source(source.id)).toEqual(store.source(source.id));
     expect(reopened.chat(chat.id)).toEqual(store.chat(chat.id));
     expect(reopened.outline.detail(chat.id).nodes).toEqual([]);
-    expect(reopened.db.prepare('PRAGMA user_version').get()).toMatchObject({ user_version: 15 });
+    expect(reopened.db.prepare('PRAGMA user_version').get()).toMatchObject({ user_version: 17 });
   });
 
   test('receipts survive restore after deletion and reject forged references to another chat', async () => {

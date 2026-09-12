@@ -96,6 +96,59 @@ test.afterEach(async ({ request }) => {
   for (const barrier of ['run', 'state']) await control(request, 'release', { barrier });
 });
 
+test('S02 BPREPUI01 the existing task details skip pending state without cancelling its job or repeating prose', async ({
+  page,
+  request,
+}) => {
+  await page.setViewportSize({ width: MOBILE_WIDTH, height: 900 });
+  const chat = await create(page, '상태 준비 건너뛰기 합성');
+  const saved = await request.put(`/api/chats/${chat.id}/story/config`, {
+    data: {
+      expectedRevision: 0,
+      module: {
+        id: 'skip-wallet',
+        revision: 1,
+        name: 'Skip wallet',
+        mode: 'authoritative',
+        fields: { coins: { type: 'number', initial: 10, min: 0, max: 100 } },
+        rules: { purchase: { field: 'coins', delta: -3 } },
+      },
+      stateModel: null,
+    },
+  });
+  expect(saved.ok()).toBeTruthy();
+  await control(request, 'hold', { barrier: 'state' });
+  const first = await send(page, 'SYNTHETIC_FIRST [[event:purchase]]');
+  const source = await complete(request, chat.id, first.id);
+  const next = await send(page, 'SYNTHETIC_SKIP Continue this exact request.');
+  expect(next.status).toBe('waiting_for_state');
+  const activity = page.getByTestId('pending-run').getByTestId('turn-activity');
+  await expect(activity.locator(':scope > summary')).toContainText('상태 정리 대기');
+  await open(page.getByTestId('pending-run'), /상태 정리 대기/);
+  await activity.getByRole('button', { name: '상태 준비 건너뛰기', exact: true }).click();
+  const continued = await complete(request, chat.id, next.id);
+  const frozen = (await detail(request, chat.id)).runs.find((run) => run.id === next.id)!.snapshot;
+  expect(frozen.story?.preparation).toMatchObject({
+    status: 'skipped',
+    fallback: { values: { coins: 10 } },
+  });
+  const article = await original(page, continued);
+  await open(article, /본문 완료|장면 해설|상태 정리/);
+  await expect(article.getByText(/상태 준비를 건너뛰고/)).toBeVisible();
+  expect((await story(request, chat.id)).jobs.some((job) => job.status === 'running')).toBe(true);
+  expect((await detail(request, chat.id)).sources).toHaveLength(2);
+  storedSource(source);
+  await control(request, 'release', { barrier: 'state' });
+  await expect
+    .poll(async () =>
+      (await story(request, chat.id)).jobs.every((job) => job.status === 'completed')
+    )
+    .toBe(true);
+  expect((await detail(request, chat.id)).runs.find((run) => run.id === next.id)!.snapshot).toEqual(
+    frozen
+  );
+});
+
 test('S01 S02 state settings use synthetic rules, preserve readable original while waiting, then compile persisted state', async ({
   page,
   request,

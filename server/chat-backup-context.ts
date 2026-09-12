@@ -78,6 +78,13 @@ export function remapBackupContext(ctx: BackupRemap): void {
       const previous = story.canonHash;
       story.config = config(story.config);
       story.state = state(story.state);
+      if (story.preparation) {
+        story.preparation.fallback = state(story.preparation.fallback);
+        story.preparation.missing = story.preparation.missing.map((entry) => ({
+          ...entry,
+          revision: id(entry.revision),
+        }));
+      }
       story.notes = story.notes.map(note);
       story.lineageHash = lineageHash(snapshot.history);
       story.canonHash = hash([...story.notes].sort((a, b) => a.id.localeCompare(b.id)));

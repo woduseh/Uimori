@@ -2,6 +2,8 @@
 
 [시작하기](../README.md) · [프로바이더](PROVIDERS.md)
 
+> 현재 개발 버전의 실행 안내예요. Linux/Docker를 첫 공식 베타 환경으로 지원하고 한 번의 Update와 지원 업그레이드 데이터 보존을 마련하는 작업은 [베타 계획](../project-plan/BETA-PLAN.md)에서 추적해요. 아래 수동 절차와 현재 제한을 그 기능의 구현 완료로 해석하지 않아요.
+
 한 사람이 PC와 휴대폰에서 같은 작업실을 사용하는 구성이에요. Linux 서버의 Docker Compose가 **Nginx HTTPS → Uimori 한 프로세스 → 영구 SQLite**를 실행해요. 접속 토큰을 아는 기기는 같은 자료·채팅에 접근해요. 사용자별 계정·권한 분리는 없어요.
 
 호스트에 Tailscale이 있다면 [Tailscale 배포 안내](TAILSCALE-DEPLOY.md)의 별도 Compose로 Serve 또는 Funnel을 사용할 수도 있어요. Funnel은 휴대폰의 Tailscale 연결 없이 접속할 수 있는 공개 HTTPS 경로예요.
@@ -86,11 +88,11 @@ docker compose --env-file .env.self-host exec proxy nginx -t
 docker compose --env-file .env.self-host restart proxy
 ```
 
-데이터를 유지하려면 `down`에 `-v`를 붙이지 마세요. Compose 프로젝트 이름은 기본 `uimori`로 고정돼요. 데이터 전환과 복구에서는 이미지 태그와 호환되는 `UIMORI_DATA_VOLUME`을 함께 지정해요. 구버전 데이터를 사용하지 않기로 결정했다면 새 볼륨에서 현재 schema의 빈 DB를 초기화해요. 자동 이관은 제공하지 않아요.
+데이터를 유지하려면 `down`에 `-v`를 붙이지 마세요. Compose 프로젝트 이름은 기본 `uimori`로 고정돼요. 데이터 전환과 복구에서는 이미지 태그와 호환되는 `UIMORI_DATA_VOLUME`을 함께 지정해요. 현재 앱은 지원하는 v15/v16 DB를 v17로 올리는 [migration](DATA-MIGRATIONS.md)을 제공해요. v17 DB를 구버전 앱으로 직접 낮춰 열지 않으며, 업데이트 전 백업과 실행 이미지 정보를 함께 보관해요. 일반 사용자를 위한 자동 Update·복구 흐름은 아직 베타 준비 중이에요.
 
 프로그램과 Docker 서비스가 정상적으로 재시작되면 `restart: unless-stopped`가 앱·프록시를 다시 시작해요. 서버 중지로 끊긴 모델 작업은 자동 재호출하지 않아요. 브라우저만 닫았다면 서버의 생성 작업은 계속 진행되고, 다시 로그인해 저장된 진행 상태와 결과를 볼 수 있어요.
 
-필요할 때 앱의 **내보내기와 복원 → SQLite 백업 다운로드**로 일관된 백업을 직접 받아 별도로 보관할 수 있어요. 구형 DB 자동 이관·자동 백업은 제공하지 않아요. 정식 배포 전 schema 변경은 새 DB를 요구할 수 있으니 업데이트 내용을 확인하세요. 실행 중 DB 파일 하나만 복사하면 WAL의 변경분을 놓칠 수 있어요.
+앱의 **내보내기와 복원 → SQLite 백업 다운로드**로 일관된 백업을 받아 별도로 보관할 수 있어요. 현재 지원 migration과 모든 과거 개발 버전의 이관은 구분하며, 백업·컨테이너 전환을 포함한 자동 업데이트는 [베타 계획](../project-plan/BETA-PLAN.md)에서 준비해요. 실행 중 DB 파일 하나만 복사하면 WAL의 변경분을 놓칠 수 있어요.
 
 ## 프록시와 접속 조건
 
