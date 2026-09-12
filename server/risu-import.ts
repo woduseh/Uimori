@@ -13,6 +13,7 @@ import {
   type RisuImportResult,
 } from '../core/risu-import.js';
 import { readCharacterCard } from './character-card-file.js';
+import { importRisuDisplayRegex } from './risu-regex.js';
 import { applyNativeTransfer, prepareNativeTransfer } from './native-transfer.js';
 import { decodeImage } from './package-images.js';
 import { fields, HttpError, record, text } from './request-validation.js';
@@ -248,11 +249,16 @@ function analyze(value: unknown) {
   }
   if (lore.some((item) => !item.enabled))
     finding('disabled-lore', 'info', '비활성 로어는 적용하지 않고 원본 파일에 보존해요.');
+  const risu = object(object(card.extensions).risuai);
+  const regex = importRisuDisplayRegex(risu.customScripts);
+  pkg.transforms = regex.transforms;
+  findings.push(...regex.findings);
   // Traverse data only to identify executable/configured extension surfaces, never to execute them.
   const pending: unknown[] = [card.extensions];
   while (pending.length) {
     const current = object(pending.pop());
     for (const [key, value] of Object.entries(current)) {
+      if (current === risu && key === 'customScripts') continue;
       if (!present(value)) continue;
       if (/regex|customscript|triggerscript|lua|backgroundhtml|customcss|backgroundcss/iu.test(key))
         finding(
@@ -319,7 +325,7 @@ function analyze(value: unknown) {
     ],
   };
   prepareNativeTransfer({ file });
-  const digest = createHash('sha256').update(`risu-import-v1:${hash}:${source.name}`).digest('hex');
+  const digest = createHash('sha256').update(`risu-import-v2:${hash}:${source.name}`).digest('hex');
   const preview: RisuImportPreview = {
     digest,
     title,
