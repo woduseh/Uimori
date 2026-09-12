@@ -102,6 +102,15 @@ test('PFUI01 option drafts survive tabs and validated authoring preserves templa
   const errors: string[] = [];
   page.on('pageerror', (error) => errors.push(error.message));
   const original = await seed(request, 'bot', `합성 옵션 제작 ${Date.now()}`, {
+    starts: [
+      {
+        id: 'opening',
+        title: '시작 인사',
+        mode: 'authored',
+        text: '{{char}} greets {{user}}.',
+        template: [{ kind: 'value', expression: { context: ['bot', 'name'] } }],
+      },
+    ],
     controls: [{ id: 'gate', label: '고급 설정', type: 'boolean', default: false }],
     instructions: [
       {
@@ -151,7 +160,9 @@ test('PFUI01 option drafts survive tabs and validated authoring preserves templa
   await fields.getByRole('button', { name: '옵션 검증 후 적용', exact: true }).click();
   await expect(save).toBeEnabled();
   await fields.getByText('채팅 옵션 미리보기', { exact: true }).click();
-  const preview = fields.locator('.package-control-values');
+  const preview = fields
+    .getByLabel('패키지 옵션 편집', { exact: true })
+    .locator('.package-control-values');
   await expect(preview.getByRole('group', { name: '마법', exact: true })).toBeVisible();
   await expect(preview.getByLabel('힘', { exact: true })).toHaveCount(0);
   await preview.getByLabel('고급 설정', { exact: true }).check();
@@ -197,6 +208,14 @@ test('PFUI01 option drafts survive tabs and validated authoring preserves templa
   const plain = await saveEditor(page, library, original.id);
   expect(plain.package!.instructions[0].template).toBeUndefined();
   expect(plain.package!.instructions[0].text).toBe('수정한 보관용 본문');
+  expect(plain.package!.starts![0].template).toEqual(original.package!.starts![0].template);
+  await selectPackageSection(page, '시작');
+  await fields.locator('.package-start-editor > summary').click();
+  await expect(fields.getByRole('status')).toContainText('템플릿이 해제되고');
+  await fields.getByLabel('시작 본문', { exact: true }).fill('직접 작성한 도입문');
+  const plainStart = await saveEditor(page, library, original.id);
+  expect(plainStart.package!.starts![0].template).toBeUndefined();
+  expect(plainStart.package!.starts![0].text).toBe('직접 작성한 도입문');
   expect(
     (await (await request.get(`/api/revisions/content/${original.id}/1`)).json()).package
   ).toEqual(original.package);

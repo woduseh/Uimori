@@ -121,14 +121,21 @@ export function PackageStartsEditor({
             <select
               aria-label="시작 방식"
               value={active.mode}
-              onChange={(event) =>
-                update({ ...active, mode: event.target.value as PackageStart['mode'] })
-              }
+              onChange={(event) => {
+                const { template: _template, ...plain } = active;
+                update({ ...plain, mode: event.target.value as PackageStart['mode'] });
+              }}
             >
               <option value="authored">작성된 도입문</option>
               <option value="generate">모델로 첫 장면 생성</option>
             </select>
           </label>
+          {active.template && (
+            <p className="muted full" role="status">
+              이 도입문은 선택한 봇·페르소나 이름과 옵션을 템플릿으로 적용해요. 본문을 직접
+              수정하거나 시작 방식을 바꾸면 템플릿이 해제되고 입력한 글을 그대로 사용해요.
+            </p>
+          )}
           <label className="full">
             선택 설명
             <input
@@ -145,7 +152,10 @@ export function PackageStartsEditor({
               value={active.text}
               rows={8}
               maxLength={active.mode === 'generate' ? 4000 : 100000}
-              onChange={(event) => update({ ...active, text: event.target.value })}
+              onChange={(event) => {
+                const { template: _template, ...plain } = active;
+                update({ ...plain, text: event.target.value });
+              }}
             />
           </label>
           {!!value.controls.length && (

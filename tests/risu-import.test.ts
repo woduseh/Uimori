@@ -9,6 +9,8 @@ import { applyRisuImport, prepareRisuImport, risuImportRoutes } from '../server/
 import { nativeTransferOriginal } from '../server/native-transfer.js';
 import type { Content } from '../core/product.js';
 import { applyPackageTransforms } from '../server/package-transforms.js';
+import { resolvePackageStart } from '../core/package-start.js';
+import { createPackageStart } from '../server/package-start.js';
 
 const owned: { directory: string; store: Store }[] = [];
 afterEach(() => {
@@ -92,6 +94,45 @@ test('card display regex is imported through the shared package renderer', async
     (await applyPackageTransforms('<state>HP 3</state>', content.package!.transforms, 'source'))
       .text
   ).toBe('**상태**\nHP 3');
+  expect(nativeTransferOriginal(store, saved.receipt.id).sourceFiles![0].base64).toBe(
+    source.base64
+  );
+});
+
+test('imported opening identity tokens become native templates while source bytes stay intact', () => {
+  const store = database(),
+    value = card();
+  value.data.first_mes = '{{char}} welcomes {{user}}.';
+  const source = sourceOf(value),
+    preview = prepareRisuImport({ source });
+  const saved = applyRisuImport(store, {
+    source,
+    digest: preview.digest,
+    memoryIds: [],
+    allowPartial: false,
+    idempotencyKey: 'opening-template',
+  });
+  const content = store.product.get<Content>('content', saved.receipt.items[0].id);
+  expect(content.package!.starts![0].text).toBe(value.data.first_mes);
+  expect(
+    resolvePackageStart(
+      content.package!,
+      'start-0',
+      {},
+      { bot: { name: 'Pilot' }, user: { name: '{{user}}' } }
+    ).text
+  ).toBe('Pilot welcomes {{user}}.');
+  const opened = createPackageStart(store, saved.chat!.id, {
+    packageId: content.id,
+    packageRevision: content.revision,
+    startId: 'start-0',
+    expectedSettingsRevision: saved.chat!.settingsRevision,
+    expectedProfileRevision: store.product.profile(saved.chat!.id).revision,
+    idempotencyKey: 'open',
+  });
+  expect(store.sourceOriginal(opened.run.sourceRevision!).text).toBe(
+    'Synthetic Pilot welcomes User.'
+  );
   expect(nativeTransferOriginal(store, saved.receipt.id).sourceFiles![0].base64).toBe(
     source.base64
   );

@@ -13,6 +13,7 @@ import { isModelSelectable } from './model-selection.js';
 import type { ChatFolder } from './BotNavigation.js';
 import { PackageControlValues } from './PackageControlValues.js';
 import { resolvePackageStart, type PackageStartSnapshot } from '../core/package-start.js';
+import { packageIdentityFromContents } from '../core/package-identity.js';
 import {
   reconcilePromptValues,
   resolvePromptValues,
@@ -210,7 +211,12 @@ export function NewStory({
     );
     const opening =
       start && selectedBot.package
-        ? resolvePackageStart(selectedBot.package, start, values[`${refValue(selectedBot)}:bot`])
+        ? resolvePackageStart(
+            selectedBot.package,
+            start,
+            values[`${refValue(selectedBot)}:bot`],
+            packageIdentityFromContents(selectedBot, selectedPersona)
+          )
         : null;
     if (start && !opening) throw new Error('선택한 시작을 다시 확인해 주세요.');
     if (opening?.mode === 'generate' && !mainAvailable && !testMode)
@@ -333,7 +339,8 @@ export function NewStory({
       opening = resolvePackageStart(
         activeBot.package,
         start,
-        packageValues[`${refValue(activeBot)}:bot`]
+        packageValues[`${refValue(activeBot)}:bot`],
+        packageIdentityFromContents(activeBot, activePersona)
       );
     } catch (caught) {
       openingError = (caught as Error).message;
@@ -455,7 +462,12 @@ export function NewStory({
                 setStart(id);
                 const pkg = activeBot.package!;
                 const values = id
-                  ? resolvePackageStart(pkg, id).values
+                  ? resolvePackageStart(
+                      pkg,
+                      id,
+                      {},
+                      packageIdentityFromContents(activeBot, activePersona)
+                    ).values
                   : resolvePromptValues({ version: 1, controls: pkg.controls, blocks: [] });
                 setPackageValues((previous) => ({
                   ...previous,

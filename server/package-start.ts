@@ -6,8 +6,10 @@ import { packageInstanceId, executionContext } from '../core/execution-context.j
 import {
   resolvePackageStart,
   validatePackageStartRef,
+  validatePackageStarts,
   type PackageStartRef,
 } from '../core/package-start.js';
+import { packageIdentityFromProfile } from '../core/package-identity.js';
 import type { Store } from './store.js';
 import { packageControlKey } from '../core/content-package.js';
 import { freezePackageStates } from './package-behavior-host.js';
@@ -72,7 +74,12 @@ export function validateArchivedPackageStart(store: Store, run: Run, snapshot: R
   const content = store.product.get<Content>('content', ref.packageId, ref.packageRevision);
   if (!content.package) throw new HttpError(400, 'PACKAGE_START_REQUIRES_PACKAGE');
   const values = profile.packageValues?.[packageControlKey(attachment)] ?? {};
-  const expected = resolvePackageStart(content.package, ref.startId, values);
+  const expected = resolvePackageStart(
+    content.package,
+    ref.startId,
+    values,
+    packageIdentityFromProfile(profile)
+  );
   if (!isDeepStrictEqual(marker, expected) || !isDeepStrictEqual(values, expected.values))
     throw new HttpError(400, 'PACKAGE_START_ARCHIVE_SELECTION_MISMATCH');
   if (command.packageStart !== undefined && !isDeepStrictEqual(command.packageStart, ref))
@@ -103,7 +110,10 @@ export function createPackageStart(
   const command = validatePackageStartCommand(value);
   const content = store.product.get<Content>('content', command.packageId, command.packageRevision);
   if (!content.package) throw new HttpError(400, 'PACKAGE_START_REQUIRES_PACKAGE');
-  const start = resolvePackageStart(content.package, command.startId);
+  const start = validatePackageStarts(content.package.starts ?? [], content.package).find(
+    (item) => item.id === command.startId
+  );
+  if (!start) throw new HttpError(400, 'PACKAGE_START_NOT_FOUND');
   const ref: PackageStartRef = {
     packageId: command.packageId,
     packageRevision: command.packageRevision,
@@ -139,7 +149,8 @@ export function createPackageStart(
         const selected = resolvePackageStart(
           content.package!,
           command.startId,
-          profile.packageValues?.[packageControlKey(attachment)]
+          profile.packageValues?.[packageControlKey(attachment)],
+          packageIdentityFromProfile(profile)
         );
         // The profile stores the same complete selection shown in the opening preview.
         const storedValues = profile.packageValues?.[packageControlKey(attachment)];

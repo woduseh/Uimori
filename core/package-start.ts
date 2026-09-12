@@ -5,21 +5,26 @@ import {
 } from './package-behavior.js';
 import {
   evaluatePromptExpression,
+  renderPromptTemplate,
   resolvePromptValues,
   validatePromptExpression,
+  validatePromptTemplate,
   type PromptControl,
   type PromptExpression,
+  type PromptTemplate,
   type PromptValue,
   type RuntimeValue,
 } from './prompt-program.js';
+import type { PackageIdentityContext } from './package-identity.js';
 
-/** One explicitly selected opening; the text remains the author's exact text. */
+/** One explicitly selected opening; optional authored templates preserve their source text. */
 export type PackageStart = {
   id: string;
   title: string;
   description?: string;
   mode: 'authored' | 'generate';
   text: string;
+  template?: PromptTemplate;
   values?: Record<string, PromptValue>;
   initialAction?: { actionId: string; input: PromptExpression };
 };
@@ -34,6 +39,8 @@ export type PackageStartSnapshot = PackageStartRef & {
 type StartPackage = {
   id: string;
   revision: number;
+  title?: string;
+  identity?: { name: string };
   controls: PromptControl[];
   behavior?: PackageBehavior;
   starts?: PackageStart[];
@@ -87,6 +94,35 @@ function controlsOnly(expression: PromptExpression): void {
   }
 }
 
+function identityTemplate(value: unknown, controls: PromptControl[]): void {
+  const pending: unknown[] = [
+    validatePromptTemplate(
+      value,
+      controls.map((item) => item.id)
+    ),
+  ];
+  while (pending.length) {
+    const node = pending.pop();
+    if (!node || typeof node !== 'object') continue;
+    if (!Array.isArray(node)) {
+      if (Object.hasOwn(node, 'literal')) continue;
+      const record = node as Record<string, unknown>;
+      if (record.kind === 'slot') fail('PACKAGE_START_TEMPLATE_SLOT');
+      if (Object.hasOwn(record, 'context')) {
+        const path = record.context;
+        if (
+          !Array.isArray(path) ||
+          path.length !== 2 ||
+          !['bot', 'user'].includes(path[0]) ||
+          path[1] !== 'name'
+        )
+          fail('PACKAGE_START_TEMPLATE_CONTEXT');
+      }
+    }
+    pending.push(...Object.values(node));
+  }
+}
+
 export function validatePackageStartRef(value: unknown): PackageStartRef {
   const ref = record(value, ['packageId', 'packageRevision', 'startId']);
   identifier(ref.packageId);
@@ -109,6 +145,7 @@ export function validatePackageStarts(
       'description',
       'mode',
       'text',
+      'template',
       'values',
       'initialAction',
     ]);
@@ -119,6 +156,10 @@ export function validatePackageStarts(
     text(start.text, start.mode === 'generate' ? 4000 : 100_000);
     if (start.description !== undefined) text(start.description, 2000, true);
     if (start.mode !== 'authored' && start.mode !== 'generate') fail('PACKAGE_START_INVALID_MODE');
+    if (start.template !== undefined) {
+      if (start.mode !== 'authored') fail('PACKAGE_START_TEMPLATE_AUTHORED_ONLY');
+      identityTemplate(start.template, context.controls);
+    }
     const values = resolvePromptValues(
       { version: 1, controls: context.controls, blocks: [] },
       start.values === undefined ? {} : (record(start.values) as Record<string, PromptValue>)
@@ -145,7 +186,11 @@ export function validatePackageStarts(
 export function resolvePackageStart(
   pkg: StartPackage,
   startId: string,
-  overrides: Record<string, PromptValue> = {}
+  overrides: Record<string, PromptValue> = {},
+  identity: PackageIdentityContext = {
+    bot: { name: pkg.identity?.name ?? pkg.title ?? 'Character' },
+    user: { name: 'User' },
+  }
 ): PackageStartSnapshot {
   const start = validatePackageStarts(pkg.starts ?? [], pkg).find((item) => item.id === startId);
   if (!start) fail('PACKAGE_START_NOT_FOUND');
@@ -164,13 +209,25 @@ export function resolvePackageStart(
       ),
     };
   }
+  const rendered = start.template
+    ? renderPromptTemplate(
+        start.template,
+        values,
+        {},
+        {
+          runtime: identity,
+          limits: { maxOutputChars: 100_000 },
+        }
+      )
+    : start.text;
+  text(rendered, start.mode === 'generate' ? 4000 : 100_000);
   return {
     packageId: pkg.id,
     packageRevision: pkg.revision,
     startId,
     mode: start.mode,
     title: start.title,
-    text: start.text,
+    text: rendered,
     values,
     ...(initialAction ? { initialAction } : {}),
   };
