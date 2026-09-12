@@ -375,6 +375,97 @@ function zip(files: [string, Buffer][]) {
   return Buffer.concat([...locals, directory, end]);
 }
 
+test('module project ZIP reads ordered asset files within one project folder without RPack', () => {
+  const store = database();
+  const png = Buffer.from(
+    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aX1sAAAAASUVORK5CYII=',
+    'base64'
+  );
+  const document = {
+    type: 'risuModule',
+    module: {
+      name: 'Module project',
+      description: 'Synthetic extracted project',
+      lorebook: [{ comment: 'Picture', content: '{{image::green}}', alwaysActive: true }],
+      assets: [['green', '', 'png']],
+      regex: [],
+      trigger: [],
+    },
+  };
+  const moduleJson = Buffer.from(JSON.stringify(document));
+  const marker = Buffer.from(
+    JSON.stringify({
+      version: 1,
+      sourceFileType: 'risum',
+      risumAssetFiles: ['.risutoki/risum-assets/custom.bin'],
+    })
+  );
+  const bytes = zip([
+    ['Project/module.json', moduleJson],
+    ['Project/.risutoki/workspace.json', marker],
+    ['Project/.risutoki/risum-assets/custom.bin', png],
+  ]);
+  const source = { name: 'module-project.zip', base64: bytes.toString('base64') };
+  const preview = prepareRisuImport({ source });
+  expect(preview).toMatchObject({
+    kind: 'module',
+    format: 'risu-module-project-zip',
+    summary: { lore: 1, starts: 0, images: 1 },
+  });
+  expect(preview.findings.some((item) => item.level === 'unsupported')).toBe(false);
+  const result = applyRisuImport(store, {
+    source,
+    digest: preview.digest,
+    memoryIds: [],
+    allowPartial: false,
+    idempotencyKey: 'module-project',
+  });
+  const content = store.product.get<Content>('content', result.receipt.items[0].id);
+  expect(content.package!.lore[0].text).toMatch(/^!\[green\]\(\/api\/package-image-blobs\//u);
+  expect(content.package!.images).toHaveLength(1);
+  expect(result.chat).toBeNull();
+  expect(nativeTransferOriginal(store, result.receipt.id).sourceFiles![0]).toMatchObject({
+    mediaType: 'application/zip',
+    base64: source.base64,
+  });
+  const missing = {
+    name: source.name,
+    base64: zip([
+      ['module.json', moduleJson],
+      ['.risutoki/workspace.json', marker],
+    ]).toString('base64'),
+  };
+  expect(prepareRisuImport({ source: missing }).findings).toContainEqual(
+    expect.objectContaining({ code: 'asset-unavailable', level: 'unsupported' })
+  );
+});
+
+test('module project refuses paths outside its folder and multiple module definitions', () => {
+  const document = Buffer.from(
+    JSON.stringify({
+      type: 'risuModule',
+      module: { name: 'Project', description: '', assets: [['image', '', 'png']] },
+    })
+  );
+  const bytes = zip([
+    ['module.json', document],
+    [
+      '.risutoki/workspace.json',
+      Buffer.from(JSON.stringify({ risumAssetFiles: ['../outside.png'] })),
+    ],
+  ]);
+  expect(() =>
+    prepareRisuImport({ source: { name: 'project.zip', base64: bytes.toString('base64') } })
+  ).toThrow('RISU_IMPORT_INVALID_FILE');
+  const ambiguous = zip([
+    ['one/module.json', document],
+    ['two/module.json', document],
+  ]);
+  expect(() =>
+    prepareRisuImport({ source: { name: 'projects.zip', base64: ambiguous.toString('base64') } })
+  ).toThrow('RISU_IMPORT_INVALID_FILE');
+});
+
 test('charx imports embedded images and requires consent for unsupported modules; corrupt files never register', () => {
   const store = database();
   const png = Buffer.from(

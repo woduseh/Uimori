@@ -13,7 +13,7 @@ export type RisuImportPreview = {
   digest: string;
   title: string;
   description: string;
-  format: 'charx' | 'character-card-json' | 'risu-module-json';
+  format: 'charx' | 'character-card-json' | 'risu-module-json' | 'risu-module-project-zip';
   summary: { lore: number; starts: number; images: number };
   lore: {
     id: string;

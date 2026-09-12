@@ -108,12 +108,26 @@ export function readCharacterCard(value: unknown) {
   if (bytes.toString('base64') !== base64 || bytes.length < 2) return invalid();
   const source: RisuImportSource = { name, base64 };
   const hash = createHash('sha256').update(bytes).digest('hex');
-  const format =
-    /\.charx$/iu.test(name) || bytes.readUInt16LE(0) === 0x4b50
+  const zipped = /\.(?:charx|zip)$/iu.test(name) || bytes.readUInt16LE(0) === 0x4b50;
+  let members = zipped ? cardZip(bytes) : new Map<string, () => Buffer>();
+  const projectFiles = [...members.keys()].filter((path) => /(?:^|\/)module\.json$/u.test(path));
+  if (members.has('card.json') && projectFiles.length) return invalid();
+  const moduleProject = zipped && !members.has('card.json') && projectFiles.length > 0;
+  if (moduleProject && projectFiles.length !== 1) return invalid();
+  if (moduleProject) {
+    const prefix = projectFiles[0].slice(0, -'module.json'.length);
+    members = new Map(
+      [...members]
+        .filter(([path]) => path.startsWith(prefix))
+        .map(([path, read]) => [path.slice(prefix.length), read])
+    );
+  }
+  const format = moduleProject
+    ? ('risu-module-project-zip' as const)
+    : zipped
       ? ('charx' as const)
       : ('character-card-json' as const);
-  const members = format === 'charx' ? cardZip(bytes) : new Map<string, () => Buffer>();
-  const cardBytes = format === 'charx' ? members.get('card.json')?.() : bytes;
+  const cardBytes = zipped ? members.get(moduleProject ? 'module.json' : 'card.json')?.() : bytes;
   if (!cardBytes || cardBytes.length > 8 * 1024 * 1024) return invalid();
   let document: unknown;
   try {
@@ -122,16 +136,57 @@ export function readCharacterCard(value: unknown) {
     return invalid();
   }
   const outer = record(document);
-  if (format === 'character-card-json' && outer.type === 'risuModule') {
+  if ((format === 'character-card-json' || moduleProject) && outer.type === 'risuModule') {
+    let assetFiles: string[] = [];
+    if (moduleProject) {
+      const markerBytes = members.get('.risutoki/workspace.json')?.();
+      if (markerBytes) {
+        if (markerBytes.length > 256 * 1024) return invalid();
+        let marker: ReturnType<typeof record>;
+        try {
+          marker = record(JSON.parse(markerBytes.toString('utf8').replace(/^\uFEFF/u, '')));
+        } catch {
+          return invalid();
+        }
+        if (marker.sourceFileType !== undefined && marker.sourceFileType !== 'risum')
+          return invalid();
+        if (marker.risumAssetFiles !== undefined) {
+          if (!Array.isArray(marker.risumAssetFiles) || marker.risumAssetFiles.length > 2000)
+            return invalid();
+          assetFiles = marker.risumAssetFiles;
+        }
+      }
+      if (!assetFiles.length)
+        assetFiles = [...members.keys()]
+          .filter((path) => /^\.risutoki\/risum-assets\/[^/]+\.bin$/u.test(path))
+          .sort();
+      if (
+        assetFiles.some(
+          (path) =>
+            typeof path !== 'string' ||
+            !path ||
+            path.startsWith('/') ||
+            path.includes('\\') ||
+            path.includes('\0') ||
+            path.split('/').some((part) => part === '..' || part === '.')
+        )
+      )
+        return invalid();
+    }
     return {
       source,
       hash,
-      format: 'risu-module-json' as const,
+      format: moduleProject ? ('risu-module-project-zip' as const) : ('risu-module-json' as const),
       kind: 'module' as const,
-      card: moduleJsonDocument(outer, members),
+      card: moduleJsonDocument(
+        outer,
+        members,
+        assetFiles.map((path) => members.get(path))
+      ),
       members,
     };
   }
+  if (moduleProject) return invalid();
   if (outer.type !== undefined || outer.lorebook !== undefined || outer.regex !== undefined)
     return invalid();
   if (outer.spec !== undefined && !['chara_card_v2', 'chara_card_v3'].includes(String(outer.spec)))

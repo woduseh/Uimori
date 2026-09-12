@@ -80,8 +80,8 @@ export function RisuImport({
     setError('');
     setNotice('');
     try {
-      if (!/\.(charx|json)$/i.test(file.name))
-        throw new Error('.charx, 캐릭터 카드 JSON 또는 모듈 JSON 파일을 선택해 주세요.');
+      if (!/\.(charx|json|zip)$/i.test(file.name))
+        throw new Error('.charx, 카드·모듈 JSON 또는 모듈 프로젝트 ZIP을 선택해 주세요.');
       if (file.size === 0) throw new Error('빈 파일은 가져올 수 없어요.');
       if (file.size > RISU_IMPORT_MAX_BYTES) throw new Error('파일은 24 MiB 이하여야 해요.');
       const nextSource = await readSource(file);
@@ -196,11 +196,11 @@ export function RisuImport({
             파일의 코드나 외부 URL을 자동으로 실행하지 않아요.
           </p>
           <label className="risu-import-file">
-            .charx · 카드 JSON · 모듈 JSON · 최대 24 MiB
+            .charx · 카드·모듈 JSON · 모듈 프로젝트 ZIP · 최대 24 MiB
             <input
               type="file"
               aria-label="Risu 파일 선택"
-              accept=".charx,.json,application/json"
+              accept=".charx,.json,.zip,application/json,application/zip"
               disabled={busy || uncertain}
               onChange={(event) => {
                 const file = event.target.files?.[0];

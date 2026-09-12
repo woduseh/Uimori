@@ -112,3 +112,5 @@ authored 시작문에 기존 `PromptTemplate`를 연결하고 미리보기·확�
 ### RPack을 포함하지 않는 모듈 JSON 경로
 
 기존 RisuToki 프로젝트 추출의 `module.json`을 독립적으로 해석해 로어·이름 템플릿·정적 표시 정규식·JSON 내 이미지와 사용자용 설명을 모듈로 가져와요. 같은 파일 검토/영수증 경로를 쓰되 봇·채팅·기억은 만들지 않고, namespace·트리거·Lua·외부 에셋 등 미지원 부분은 먼저 표시해요. RPack 바이너리 직접 해석은 남아 있어요. quality·빌드, 가져오기/자료 이동 집중 33개, 기존 `verify:native-transfer`의 4개 화면 흐름이 PASS예요. 화면 결과는 `native-transfer-2026-09-12T23-43-34-544Z-e564dc5f`에 있고 실제 원본 `.risum`의 전체 인수 결과는 아니에요.
+
+후속 단위로 모듈 프로젝트 ZIP의 `module.json`·`.risutoki/workspace.json`·분리된 이미지 파일을 연결했어요. 상위 폴더 하나를 포함하는 ZIP도 읽고 파일 목록의 순서를 보존해요. 누락 에셋은 미지원으로 알리고 외부 경로/여러 정의는 거절하며 선택한 ZIP을 원본 영수증에 보관해요. 기존 제한된 ZIP reader와 이미지 저장을 재사용했고 RPack/제3자 ZIP 구현은 추가하지 않았어요. 관련 가져오기 8개와 quality가 PASS예요. 이 경로의 안내는 [RISU-IMPORT](../docs/RISU-IMPORT.md)에 있어요.

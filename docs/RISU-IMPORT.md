@@ -2,7 +2,7 @@
 
 > 현재 구현의 사용 안내예요. [베타 결정](DECISIONS-2026-09-12-BETA.md)에 따라 Risu 가져오기·표현 변환·선택적 호환 실행을 준비하며 구현/검증 상태는 [베타 계획](../project-plan/BETA-PLAN.md)에 기록해요.
 
-앱은 `.charx`·Character Card JSON과 구조화된 Risu 모듈 JSON의 기본 자료를 가져오며, Uimori의 `ContentPackage`·`PromptProgram` JSON도 읽어요. `.risup`·`.risum` 바이너리와 동적 스크립트의 직접 이식은 아직 별도 작업이에요. RPack의 기존 코드·치환표는 포함하지 않아요.
+앱은 `.charx`·Character Card JSON과 구조화된 Risu 모듈 JSON/프로젝트 ZIP의 기본 자료를 가져오며, Uimori의 `ContentPackage`·`PromptProgram` JSON도 읽어요. `.risup`·`.risum` 바이너리와 동적 스크립트의 직접 이식은 아직 별도 작업이에요. RPack의 기존 코드·치환표는 포함하지 않아요.
 
 ## Risu 캐릭터 카드
 
@@ -23,9 +23,11 @@
 
 RisuToki의 **파일 → 파일을 프로젝트 폴더로 추출…**에서 `.risum`을 새 폴더로 내보내면 `{ "type": "risuModule", "module": {...} }` 형식의 `module.json`이 생성돼요. 서재 봇/모듈 탭의 **Risu 자료 가져오기**에서 이 파일을 선택하고 **모듈 가져오기**를 눌러요. 모듈로 등록하며 봇·채팅·진행 기억을 자동 생성하지 않아요. 등록 후 기존 채팅의 봇·페르소나·모듈 설정에서 장착할 수 있어요.
 
-이름·설명, 활성 로어의 내용·이름 템플릿·정렬 순서, 지원하는 정적 표시 정규식을 가져와요. 모듈 설명은 사용자용 metadata로 유지하고 작문 본문에 복사하지 않아요. JSON에 직접 들어 있는 PNG/JPEG/WebP data URL 이미지는 기존 이미지 저장 경로를 사용해요. 별도 파일에 들어 있는 에셋은 JSON만으로 가져올 수 없으며 미지원으로 안내해요. 트리거·Lua·CSS·토글·namespace/MCP 등 아직 대응하지 않는 설정도 검토 대상이에요.
+이름·설명, 활성 로어의 내용·이름 템플릿·정렬 순서, 지원하는 정적 표시 정규식을 가져와요. 모듈 설명은 사용자용 metadata로 유지하고 작문 본문에 복사하지 않아요. JSON에 직접 들어 있는 PNG/JPEG/WebP data URL 이미지는 기존 이미지 저장 경로를 사용해요. 트리거·Lua·CSS·토글·namespace/MCP 등 아직 대응하지 않는 설정도 검토 대상이에요.
 
-이 경로에서는 별도 설치된 RisuToki가 바이너리 해석을 맡고 Uimori는 일반 JSON만 읽어요. RisuToki 추출의 정규화·숨김 필드 제거가 적용되므로 JSON을 원본 `.risum` 전체와 동일하다고 간주하지 않아요. Uimori는 선택한 JSON 바이트를 원본 영수증에 보존해요.
+추출 폴더의 이미지도 옮기려면 **`module.json`과 `.risutoki` 폴더를 함께 ZIP으로 압축**하고 그 ZIP을 선택해요. 하나의 상위 폴더로 감싸져 있어도 읽어요. `.risutoki/workspace.json`의 `risumAssetFiles` 순서로 원래 모듈 에셋과 연결하며, 목록이 없는 경우 `.risutoki/risum-assets/*.bin`의 파일명 순서를 사용해요. 실제 이미지 바이트로 형식을 확인하며 누락된 파일은 미지원으로 표시해요. ZIP 안에서만 읽고 외부 경로나 로컬 파일 시스템으로 추출하지 않아요. 여러 모듈 정의나 카드·모듈 정의가 함께 있는 모호한 프로젝트 ZIP은 거절해요.
+
+이 경로에서는 별도 설치된 RisuToki가 바이너리 해석을 맡고 Uimori는 일반 JSON과 ZIP만 읽어요. RisuToki 추출의 정규화·숨김 필드 제거가 적용되므로 그 결과를 원본 `.risum` 전체와 동일하다고 간주하지 않아요. Uimori는 선택한 JSON/ZIP 바이트를 원본 영수증에 보존해요.
 
 ### native 패키지 JSON
 

@@ -347,14 +347,17 @@ function analyze(value: unknown) {
       {
         entryKey: kind,
         name: source.name,
-        mediaType: input.format === 'charx' ? 'application/zip' : 'application/json',
+        mediaType:
+          input.format === 'charx' || input.format === 'risu-module-project-zip'
+            ? 'application/zip'
+            : 'application/json',
         hash,
         base64: source.base64,
       },
     ],
   };
   prepareNativeTransfer({ file });
-  const digest = createHash('sha256').update(`risu-import-v5:${hash}:${source.name}`).digest('hex');
+  const digest = createHash('sha256').update(`risu-import-v6:${hash}:${source.name}`).digest('hex');
   const preview: RisuImportPreview = {
     kind,
     digest,
