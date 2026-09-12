@@ -226,9 +226,12 @@ export class Store {
   createChat(
     title: string,
     preset: Settings['preset'] = 'calm',
-    organization: { botId?: string; folderId?: string | null } = {}
+    organization: { botId?: string; folderId?: string | null } = {},
+    internalId?: string
   ): Chat {
-    const id = randomUUID();
+    const id = internalId === undefined ? randomUUID() : text(internalId, 'internal chat ID', 100);
+    if (!/^[A-Za-z0-9][A-Za-z0-9._:-]*$/u.test(id))
+      throw new HttpError(400, 'Invalid internal chat ID');
     const settings: Settings = {
       preset,
       mode: 'direct',

@@ -3,6 +3,7 @@ import { DraftDiscardActions } from './DraftDiscardActions.js';
 import { SelectionCheckbox } from './BooleanControls.js';
 import { PackageTransfer } from './PackageTransfer.js';
 import { NativeTransfer } from './NativeTransfer.js';
+import { RisuImport } from './RisuImport.js';
 import {
   EditorDraftProvider,
   EditorDraftStatus,
@@ -445,6 +446,11 @@ export function LibraryPanel({
         {headerLeading}
         <h1>서재</h1>
         {library && !editing && !detail && <NativeTransfer library={library} reload={reload} />}
+        <RisuImport
+          showTrigger={!!library && tab === 'bot' && !editing && !detail}
+          reload={reload}
+          onContinueChat={onContinueChat}
+        />
         {headerTrailing}
       </header>
       <Dialog

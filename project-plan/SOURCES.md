@@ -1,5 +1,9 @@
 # 근거와 확인 범위 v0.6.1
 
+## 2026-09-13 기본 캐릭터 카드 가져오기
+
+아래 확장 경계에 고정한 RisuAI 스냅샷의 `src/ts/characterCards.ts`(ZIP `card.json`, 내장 모듈 우선 적용)와 RisuToki 스냅샷의 `src/charx-io.ts`(CCv2/v3 필드 매핑), 구조화 MCP의 Vela 공개 자료 → 파일 해석과 앱 고유 저장·실행을 분리 → `server/character-card-file.ts`·`server/risu-import.ts`의 독립적인 단방향 변환과 기존 native transfer → 합성 JSON/ZIP 저장 검사, 기존 화면 검사, 실제 표본의 비저장 준비 결과로 확인했어요. 원본 코드는 복사하지 않았어요. RPack 구현·치환표는 포함하지 않았으며 내장 `module.risum`은 미지원으로 명시해요. 카드 로어를 실제 모듈 우선 적용 결과와 동일하다고 가정하지 않아요.
+
 ## 2026-09-12 베타의 확장 경계
 
 사용자가 지정한 RisuAI `cad8595aa39620df4246f56918f0962c2aa0263a`의 `src/ts/plugins/apiV3/v3.svelte.ts`·`src/ts/process/scriptings.ts`와 RisuToki `45048b1139361cd0fded462683dd30fd7df7ce98`의 구조화 읽기 → 강력한 코드·UI·작업 도구와 호스트의 권한/저장 책임을 구분하는 원리 → [베타 결정](../docs/DECISIONS-2026-09-12-BETA.md)과 [확장 설계 초안](../docs/EXTENSIONS.md) → 고정한 [표본/기능 기준](BETA-SAMPLES.md)의 대표 동작·오류/취소·권한·복원 검증으로 연결해요. 원본 코드나 개인 자료를 복사하지 않았고 정적 조사와 구현·실행 인수를 구분해요.

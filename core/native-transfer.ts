@@ -42,6 +42,14 @@ export type NativeTransferImage = {
   mime: PackageImage['mime'];
   base64: string;
 };
+/** Opaque source bytes owned by one entry; never part of its model context. */
+export type NativeTransferSourceFile = {
+  entryKey: string;
+  name: string;
+  mediaType: string;
+  hash: string;
+  base64: string;
+};
 export type NativeTransferFile = {
   format: typeof NATIVE_TRANSFER_FORMAT;
   version: typeof NATIVE_TRANSFER_VERSION;
@@ -49,6 +57,7 @@ export type NativeTransferFile = {
   contents: NativeTransferContent[];
   prompts: NativeTransferPrompt[];
   images: NativeTransferImage[];
+  sourceFiles?: NativeTransferSourceFile[];
 };
 export type NativeTransferExportRequest = { items: { kind: NativeTransferKind; id: string }[] };
 export type NativeTransferSummary = {
@@ -57,6 +66,8 @@ export type NativeTransferSummary = {
   combinations: number;
   images: number;
   imageBytes: number;
+  sourceFiles?: number;
+  sourceFileBytes?: number;
 };
 export type NativeTransferEntry = NativeTransferRef & {
   title: string;

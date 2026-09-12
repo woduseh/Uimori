@@ -122,6 +122,22 @@ describe('shared story read schemas and execution', () => {
     });
   });
 
+  test('imported memory reads retain external origin without becoming user directions', async () => {
+    const { call, snapshot, note } = fixture();
+    const origin = {
+      fileHash: 'a'.repeat(64),
+      entryId: 'external-history',
+      title: 'External history',
+    };
+    snapshot.story!.notes = [{ ...note, kind: 'imported-memory', origin }];
+    const listed = await call('notes.list', {});
+    const read = await call('notes.read', { id: note.id });
+    expect(listed.event.result.results).toMatchObject([{ kind: 'imported-memory', origin }]);
+    expect(read.event.result).toMatchObject({ kind: 'imported-memory', origin, text: note.text });
+    delete (snapshot.story!.notes[0] as any).origin;
+    expect((await call('notes.read', { id: note.id })).event.denied).toBe(true);
+  });
+
   test('advertised schemas reject blank story searches and invalid lookup shapes', async () => {
     const { call } = fixture();
     for (const args of [{}, { query: '' }, { query: ' \n ' }])

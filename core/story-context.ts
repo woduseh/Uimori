@@ -185,6 +185,7 @@ export function executeStoryRead(
             id: note.id,
             chatId: note.chatId,
             kind: note.kind,
+            ...(note.origin ? { origin: structuredClone(note.origin) } : {}),
             atRevision: note.atRevision,
             atHash: note.atHash,
             author: note.declaration.author,
@@ -244,6 +245,7 @@ export function executeStoryRead(
         result = boundedRead(offset, Math.min(note.text.length, offset + limit), (end) => ({
           id: note.id,
           kind: note.kind,
+          ...(note.origin ? { origin: structuredClone(note.origin) } : {}),
           atRevision: note.atRevision,
           atHash: note.atHash,
           author: note.declaration.author,

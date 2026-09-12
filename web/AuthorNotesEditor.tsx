@@ -1,6 +1,6 @@
 import { AddIcon, BackIcon, CloseIcon, EditIcon, PowerIcon } from './ui-icons.js';
 import { useEffect, useRef, useState } from 'react';
-import type { AuthorNote } from '../core/notes.js';
+import type { AuthorNote, ImportedMemoryOrigin } from '../core/notes.js';
 import { ApiError } from './api.js';
 
 type AuthorNoteCommand = {
@@ -12,6 +12,8 @@ type AuthorNoteCommand = {
   text: string;
   replacesId?: string;
   retired?: true;
+  kind?: AuthorNote['kind'];
+  origin?: ImportedMemoryOrigin;
 };
 type NoteDraft = {
   originalId: string | null;
@@ -19,6 +21,8 @@ type NoteDraft = {
   headRevision: string | null;
   text: string;
   author: string;
+  kind: AuthorNote['kind'];
+  origin?: ImportedMemoryOrigin;
 };
 
 /** User-authored instructions remain separate from derived summaries and fictional events. */
@@ -74,6 +78,8 @@ export function AuthorNotesEditor({
     headRevision,
     text: note?.text ?? '',
     author: note?.declaration.author ?? '사용자',
+    kind: note?.kind ?? 'author-note',
+    ...(note?.origin ? { origin: note.origin } : {}),
   });
   function begin(note?: AuthorNote) {
     setDraft(fromNote(note));
@@ -99,6 +105,7 @@ export function AuthorNotesEditor({
       expectedHeadRevision: value.headRevision,
       text: retired ? '' : value.text,
       author: value.author,
+      ...(value.kind === 'imported-memory' ? { kind: value.kind, origin: value.origin } : {}),
       ...(value.originalId ? { replacesId: value.originalId } : {}),
       ...(retired ? { retired: true as const } : {}),
     };
@@ -134,9 +141,15 @@ export function AuthorNotesEditor({
   }
   return (
     <details className="context-notes" data-testid="context-notes">
-      <summary>사용자 메모·정정 {notes.length}개</summary>
+      <summary>
+        사용자 메모·정정
+        {notes.some((note) => note.kind === 'imported-memory') ? '·가져온 기억' : ''} {notes.length}
+        개
+      </summary>
       <p className="muted">
         이후 요청에서 지킬 설정이나 정정을 직접 남겨요. 원문과 요약은 별도로 보존해요.
+        {notes.some((note) => note.kind === 'imported-memory') &&
+          ' 가져온 기억은 외부 자료의 기록으로 구분해요.'}
       </p>
       {error && (
         <p className="error" role="alert">
@@ -150,6 +163,7 @@ export function AuthorNotesEditor({
             <li key={note.id}>
               <p>{note.text}</p>
               <small>
+                {note.kind === 'imported-memory' && <>가져온 기억: {note.origin.title} · </>}
                 작성자: {note.declaration.author} ·{' '}
                 {note.atRevision ? '원문에 연결된 메모' : '첫 장면 전 메모'}
               </small>
