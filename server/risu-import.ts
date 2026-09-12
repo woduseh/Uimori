@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
 import type { ContentPackage } from '../core/content-package.js';
+import type { PromptTemplate } from '../core/prompt-program.js';
 import {
   NATIVE_TRANSFER_FORMAT,
   NATIVE_TRANSFER_VERSION,
@@ -34,6 +35,23 @@ const present = (value: unknown): boolean =>
     : typeof value === 'object'
       ? Object.keys(value).length > 0
       : true);
+
+/** Translate the two identity tokens into native data nodes, never generated program source. */
+function startIdentityTemplate(value: string): PromptTemplate | undefined {
+  const nodes: PromptTemplate = [];
+  let offset = 0;
+  for (const match of value.matchAll(/\{\{(char|user)\}\}/giu)) {
+    if (match.index > offset) nodes.push({ kind: 'text', text: value.slice(offset, match.index) });
+    nodes.push({
+      kind: 'value',
+      expression: { context: [match[1].toLowerCase() === 'char' ? 'bot' : 'user', 'name'] },
+    });
+    offset = match.index + match[0].length;
+  }
+  if (!nodes.length) return;
+  if (offset < value.length) nodes.push({ kind: 'text', text: value.slice(offset) });
+  return nodes;
+}
 
 /** A one-way format adapter. No Risu runtime or source-specific behavior enters the package. */
 function analyze(value: unknown) {
@@ -130,10 +148,10 @@ function analyze(value: unknown) {
     assetUrls.set(`{{image::${name}}}`, `![${name.replace(/[\[\]]/gu, '')}](${url})`);
     assetUrls.set(`{{img::${name}}}`, `![${name.replace(/[\[\]]/gu, '')}](${url})`);
   }
-  const convertText = (value: unknown): string => {
+  const convertText = (value: unknown, dynamicNames = false): string => {
     let result = string(value);
     for (const [from, to] of assetUrls) result = result.replaceAll(from, to);
-    if (/\{\{char\}\}/iu.test(result)) {
+    if (!dynamicNames && /\{\{char\}\}/iu.test(result)) {
       result = result.replace(/\{\{char\}\}/giu, () => title);
       finding(
         'character-name',
@@ -141,14 +159,14 @@ function analyze(value: unknown) {
         '{{char}}는 카드의 인물 이름으로 바꿔요. 원본은 별도로 보존해요.'
       );
     }
-    if (/\{\{user\}\}/iu.test(result))
+    if (!dynamicNames && /\{\{user\}\}/iu.test(result))
       finding(
         'user-name',
         'warning',
-        '{{user}} 표기는 유지해요. 모델에는 현재 사용자의 배역을 가리킨다고 안내하지만, 시작문 화면의 이름 치환은 아직 지원하지 않아요.'
+        '설명·로어·지시의 {{user}} 표기는 유지하고 모델에는 현재 사용자의 배역을 가리킨다고 안내해요.'
       );
     if (
-      /\{\{(?!user\}\})/iu.test(result) ||
+      (dynamicNames ? /\{\{(?!(?:char|user)\}\})/iu : /\{\{(?!user\}\})/iu).test(result) ||
       /\{#(?:if|each)|<script\b|risu-trigger|@@[A-Za-z]/iu.test(result)
     )
       finding(
@@ -184,18 +202,26 @@ function analyze(value: unknown) {
     card.first_mes,
     ...(Array.isArray(card.alternate_greetings) ? card.alternate_greetings : []),
   ];
-  pkg.starts = greetings.flatMap((greeting, index) =>
-    string(greeting).trim()
-      ? [
-          {
-            id: `start-${index}`,
-            title: index === 0 ? '기본 시작문' : `시작문 ${index + 1}`,
-            mode: 'authored' as const,
-            text: convertText(greeting),
-          },
-        ]
-      : []
-  );
+  pkg.starts = greetings.flatMap((greeting, index) => {
+    if (!string(greeting).trim()) return [];
+    const sourceText = convertText(greeting, true);
+    const template = startIdentityTemplate(sourceText);
+    if (template)
+      finding(
+        'start-names',
+        'info',
+        '시작문의 {{char}}·{{user}}는 시작을 확정할 때 선택한 봇·페르소나 이름으로 표시해요.'
+      );
+    return [
+      {
+        id: `start-${index}`,
+        title: index === 0 ? '기본 시작문' : `시작문 ${index + 1}`,
+        mode: 'authored' as const,
+        text: sourceText,
+        ...(template ? { template } : {}),
+      },
+    ];
+  });
   const book = object(card.character_book);
   const entries = book.entries === undefined ? [] : book.entries;
   if (!Array.isArray(entries) || entries.length > 2000)
@@ -325,7 +351,7 @@ function analyze(value: unknown) {
     ],
   };
   prepareNativeTransfer({ file });
-  const digest = createHash('sha256').update(`risu-import-v2:${hash}:${source.name}`).digest('hex');
+  const digest = createHash('sha256').update(`risu-import-v3:${hash}:${source.name}`).digest('hex');
   const preview: RisuImportPreview = {
     digest,
     title,

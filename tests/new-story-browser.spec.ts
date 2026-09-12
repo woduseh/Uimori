@@ -21,10 +21,49 @@ test('NSUI01 global model reaches an empty chat on mobile and optional choices s
       text: 'A synthetic harbor guide.',
       loading: 'pinned',
       relatedIds: [],
+      package: {
+        version: 1,
+        id: 'quick-start-template',
+        revision: 1,
+        title,
+        description: '',
+        body: 'A synthetic harbor guide.',
+        identity: { name: 'Harbor', description: '' },
+        lore: [],
+        instructions: [],
+        controls: [],
+        transforms: [],
+        starts: [
+          {
+            id: 'greeting',
+            title: '인사',
+            mode: 'authored',
+            text: '{{char}} greets {{user}}.',
+            template: [
+              { kind: 'value', expression: { context: ['bot', 'name'] } },
+              { kind: 'text', text: ' greets ' },
+              { kind: 'value', expression: { context: ['user', 'name'] } },
+              { kind: 'text', text: '.' },
+            ],
+          },
+        ],
+      },
     },
   });
   expect(savedBot.ok()).toBe(true);
   const bot = (await savedBot.json()) as Content;
+  const personaTitle = `Mira ${info.workerIndex}`;
+  const persona = await request.post('/api/content', {
+    data: {
+      kind: 'persona',
+      title: personaTitle,
+      description: '',
+      text: 'Synthetic traveler.',
+      loading: 'pinned',
+      relatedIds: [],
+    },
+  });
+  expect(persona.ok()).toBe(true);
   const savedConnection = await request.post('/api/connections', {
     data: {
       title: `${title} connection`,
@@ -117,6 +156,27 @@ test('NSUI01 global model reaches an empty chat on mobile and optional choices s
   await expect(dialog.getByLabel('새 채팅 이름', { exact: true })).toHaveValue(customTitle);
   await expect(dialog.getByLabel('시작 번역 모델', { exact: true })).toHaveCount(0);
   expect(executionRequests).toEqual([]);
+  await dialog.getByLabel('사용할 시작', { exact: true }).selectOption('greeting');
+  await expect(dialog.getByLabel('시작 미리보기', { exact: true })).toHaveText(
+    'Harbor greets User.'
+  );
+  await dialog.getByRole('button', { name: '시작 페르소나', exact: true }).click();
+  const picker = page.getByRole('dialog', { name: '시작 페르소나', exact: true });
+  await picker.getByRole('searchbox').fill(personaTitle);
+  await picker
+    .getByRole('button')
+    .filter({ has: page.getByText(personaTitle, { exact: true }) })
+    .click();
+  await expect(dialog.getByLabel('시작 미리보기', { exact: true })).toHaveText(
+    `Harbor greets ${personaTitle}.`
+  );
+  const confirmed = page.waitForResponse(
+    (response) => /\/package-start$/.test(response.url()) && response.request().method() === 'POST'
+  );
+  await dialog.getByRole('button', { name: '도입문 확정하고 채팅 만들기', exact: true }).click();
+  const opening = await (await confirmed).json();
+  expect(opening.run.snapshot.packageStart.text).toBe(`Harbor greets ${personaTitle}.`);
+  expect(opening.run.usage.modelCalls).toBe(0);
 });
 
 preservePromptWorkspace();

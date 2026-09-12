@@ -10,6 +10,10 @@ import { createPackageStart } from '../server/package-start.js';
 import { behaviorDetail } from '../server/package-behavior-host.js';
 import { packageControlKey } from '../core/content-package.js';
 import { resolvePackageStart, validatePackageStarts } from '../core/package-start.js';
+import {
+  packageIdentityFromContents,
+  packageIdentityFromProfile,
+} from '../core/package-identity.js';
 import { validateContentPackage, type ContentPackage } from '../core/content-package.js';
 import { completePendingStoryProfile, savePendingStoryProfile } from '../web/pendingStory.js';
 import type { Content } from '../core/product.js';
@@ -122,9 +126,8 @@ function packageData(): ContentPackage {
     ],
   };
 }
-function fixture() {
-  const store = database(),
-    pkg = packageData();
+function fixture(pkg = packageData()) {
+  const store = database();
   const content = store.product.content({
     kind: 'module',
     title: pkg.title,
@@ -159,6 +162,114 @@ function fixture() {
     },
   };
 }
+
+test('authored templates render selected names and controls once while rejecting other runtime access', () => {
+  const pkg = packageData();
+  pkg.identity = { name: 'Aster', description: '' };
+  pkg.starts![0].template = [
+    { kind: 'text', text: '\r\n' },
+    { kind: 'value', expression: { context: ['bot', 'name'] } },
+    { kind: 'text', text: ' meets ' },
+    { kind: 'value', expression: { context: ['user', 'name'] } },
+    { kind: 'text', text: ' (' },
+    { kind: 'value', expression: { control: 'job' } },
+    { kind: 'text', text: ').\n' },
+  ];
+  const before = structuredClone(pkg);
+  const identity = packageIdentityFromContents(
+    { title: pkg.title, package: pkg },
+    { title: '{{char}}' }
+  );
+  expect(resolvePackageStart(pkg, 'arrival', {}, identity).text).toBe(
+    '\r\nAster meets {{char}} (researcher).\n'
+  );
+  expect(resolvePackageStart(pkg, 'arrival', { job: 'guard' }).text).toBe(
+    '\r\nAster meets User (guard).\n'
+  );
+  expect(pkg).toEqual(before);
+  for (const path of [['state'], ['bot', 'description'], ['user'], ['time', 'iso']]) {
+    expect(() =>
+      validatePackageStarts(
+        [{ ...pkg.starts![0], template: [{ kind: 'value', expression: { context: path } }] }],
+        pkg
+      )
+    ).toThrow('PACKAGE_START_TEMPLATE_CONTEXT');
+  }
+  expect(() =>
+    validatePackageStarts([{ ...pkg.starts![0], template: [{ kind: 'slot', name: 'input' }] }], pkg)
+  ).toThrow('PACKAGE_START_TEMPLATE_SLOT');
+  expect(() => validatePackageStarts([{ ...pkg.starts![0], mode: 'generate' }], pkg)).toThrow(
+    'PACKAGE_START_TEMPLATE_AUTHORED_ONLY'
+  );
+});
+
+test('templated openings freeze persona names across replay, later edits, archive and fork', () => {
+  const pkg = packageData();
+  pkg.identity = { name: 'Aster', description: '' };
+  pkg.starts![0].template = [
+    { kind: 'value', expression: { context: ['bot', 'name'] } },
+    { kind: 'text', text: ' greets ' },
+    { kind: 'value', expression: { context: ['user', 'name'] } },
+    { kind: 'text', text: '.' },
+  ];
+  const f = fixture(pkg);
+  const persona = f.store.product.content({
+    kind: 'persona',
+    title: 'Mira',
+    description: '',
+    text: 'Synthetic persona description.',
+    loading: 'pinned',
+    relatedIds: [],
+  }) as Content;
+  const { chatId: _chatId, revision, ...profileBody } = f.profile;
+  const saved = updateTestProfile(f.store.product, f.chat.id, {
+    ...profileBody,
+    expectedRevision: revision,
+    attachments: [...profileBody.attachments, { id: persona.id, revision: persona.revision }],
+  });
+  const command = { ...f.command, expectedProfileRevision: saved.revision };
+  const preview = resolvePackageStart(
+    f.content.package!,
+    'arrival',
+    {},
+    packageIdentityFromContents(f.content, persona)
+  );
+  const result = createPackageStart(f.store, f.chat.id, command);
+  expect(result.run.snapshot.packageStart).toEqual(preview);
+  expect(f.store.source(result.run.sourceRevision!).text).toBe('Aster greets Mira.');
+  expect(result.run.snapshot.profile!.packages![0].starts).toEqual(f.content.package!.starts);
+  expect(packageIdentityFromProfile(result.run.snapshot.profile!)).toEqual({
+    bot: { name: 'Aster' },
+    user: { name: 'Mira' },
+  });
+  f.store.product.content(
+    {
+      kind: persona.kind,
+      title: 'Changed later',
+      description: persona.description,
+      text: persona.text,
+      loading: persona.loading,
+      relatedIds: [],
+      expectedRevision: persona.revision,
+    },
+    persona.id
+  );
+  expect(createPackageStart(f.store, f.chat.id, command)).toMatchObject({
+    created: false,
+    run: { id: result.run.id },
+  });
+  const fork = forkChat(f.store, f.chat.id, {
+    fromRevision: result.run.sourceRevision!,
+    idempotencyKey: 'templated-start-fork',
+  });
+  const forkSource = f.store.detail(fork.id).sources[0];
+  expect(forkSource.text).toBe(preview.text);
+  const restored = database();
+  restored.product.import(f.store.product.export());
+  expect(restored.run(result.run.id).snapshot.packageStart).toEqual(preview);
+  expect(restored.source(forkSource.id).text).toBe(preview.text);
+  expect(restored.run(forkSource.runId).snapshot.packageStart?.text).toBe(preview.text);
+});
 
 test('starts validate typed choices and existing explicit actions; preview preserves exact author text and does not draw', () => {
   const pkg = packageData();
