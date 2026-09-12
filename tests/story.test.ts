@@ -803,4 +803,53 @@ describe('M2 HTTP state controls and authored memory', () => {
       409
     );
   });
+
+  test('imported memories preserve exact text and origin with note CAS, archive and internal chat identity', async () => {
+    const { store } = await database();
+    const owner = createFixtureChat(store, 'Synthetic note owner');
+    const id = randomUUID();
+    const created = store.createChat('Imported notes', 'calm', { botId: owner.botId }, id);
+    expect(created.id).toBe(id);
+    const origin = { fileHash: 'a'.repeat(64), entryId: 'history-1', title: 'External history' };
+    const command = {
+      kind: 'imported-memory',
+      origin,
+      text: '  A prior account.\r\nNo source transcript.  ',
+      author: 'External author',
+      expectedRevision: 0,
+      expectedHeadRevision: null,
+      idempotencyKey: 'imported-memory-one',
+    };
+    const saved = store.story.notes.write(id, command);
+    expect(saved.note).toMatchObject({
+      kind: 'imported-memory',
+      origin,
+      text: command.text,
+      atRevision: null,
+      atHash: null,
+    });
+    expect(store.story.notes.write(id, command)).toEqual(saved);
+    expect(() => store.story.notes.write(id, { ...command, text: 'changed' })).toThrow(
+      'key reused'
+    );
+    expect(() => store.story.notes.write(id, { ...command, idempotencyKey: 'stale' })).toThrow(
+      '메모가 변경'
+    );
+    expect(() =>
+      store.story.notes.write(id, {
+        ...command,
+        expectedRevision: 1,
+        origin: undefined,
+        idempotencyKey: 'invalid-origin',
+      })
+    ).toThrow('Invalid note');
+    expect(store.story.notes.revision(id)).toBe(1);
+    expect(store.detail(id).sources).toEqual([]);
+    expect(store.detail(id).attempts).toEqual([]);
+    expect(() => store.createChat('Duplicate', 'calm', { botId: owner.botId }, id)).toThrow();
+    expect(store.chat(id).title).toBe('Imported notes');
+    const { store: restored } = await database();
+    restored.product.import(store.product.export());
+    expect(restored.story.notes.entries({ chatId: id, history: [] })).toEqual([saved.note]);
+  });
 });

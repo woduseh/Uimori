@@ -1,5 +1,7 @@
 # 작업 지도
 
+- 기본 Risu 카드 가져오기는 `docs/RISU-IMPORT.md`, `server/risu-import.ts`·`server/character-card-file.ts`, `web/RisuImport.tsx`예요. `.charx`·카드 JSON을 단방향 변환하고 새 봇·채팅을 함께 저장해요. 로어 보존이 기본이며 기억 분리는 선택한 경우에만 기존 notes 저장소의 출처 있는 `imported-memory`로 보관해요. 내장 모듈·스크립트는 미지원 안내 후 부분 가져오기이며 전체 호환 완료가 아니에요. 원본 바이트는 native transfer `sourceFiles`에만 보존해요. 사용자의 2026-09-13 지시에 따라 새 검증·진단 기반을 확장하지 말고 실제 기능 구현과 해당 흐름의 필요한 확인을 우선해요.
+
 - v0.1.0 베타 방향은 `docs/DECISIONS-2026-09-12-BETA.md`, 승인된 실행 순서·진행 상태는 `project-plan/BETA-PLAN.md`, 표본의 기능/근거는 `project-plan/BETA-SAMPLES.md`·`.json`이 소유해요. 선언형 전용·Risu 직접 가져오기 영구 미지원·공개 이후 DB 비이관·부가 실패의 채팅 차단은 새 방향으로 대체돼요. 현재 미구현은 지원으로 표시하지 않으며, 기술 세부·사용 사례의 수치를 사용자 확정 원칙으로 만들지 않아요. 사용자 판단은 실제 경험·의미·지원 범위의 선택이 생기면 구체안을 준비해 요청해요.
 
 - 현재 DB는 v17, 전체 JSON archive는 v15, 채팅 백업은 v1이에요. `docs/DATA-MIGRATIONS.md`와 `server/schema-migrations.ts`가 v15→v16→v17의 원자적 이관과 내부 ledger를 소유해요. 과거 migration을 변경하거나 schema 번호를 유지한 채 임의의 installer를 재개방마다 추가하지 않아요. 아래 기능의 v15 도입 기록은 당시 근거이며 현재 DB 시작 경계는 migration runner예요.

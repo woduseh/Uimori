@@ -56,6 +56,7 @@ type OriginalIndex = {
     origin?: NativeTransferOrigin;
   }[];
   images: string[];
+  sourceFiles?: NativeTransferFile['sourceFiles'];
   modelBindings: NativeTransferModelBinding[];
 };
 
@@ -97,11 +98,12 @@ function originalIndex(
       ...(entry.origin ? { origin: entry.origin } : {}),
     })),
     images: file.images.map((image) => image.hash),
+    ...(file.sourceFiles !== undefined ? { sourceFiles: structuredClone(file.sourceFiles) } : {}),
     modelBindings,
   };
 }
 
-/** Rebuild source definitions from immutable first revisions plus only the remapped metadata. */
+/** Rebuild definitions from immutable first revisions; opaque attachments stay in the receipt. */
 function reconstructOriginal(store: Store, index: OriginalIndex): NativeTransferFile {
   if (
     index.version !== 1 ||
@@ -160,6 +162,7 @@ function reconstructOriginal(store: Store, index: OriginalIndex): NativeTransfer
     images: index.images.map((hash) =>
       store.product.get<PackageImageBlob>('package-image', hash, 1)
     ),
+    ...(index.sourceFiles !== undefined ? { sourceFiles: structuredClone(index.sourceFiles) } : {}),
   };
 }
 function checkedFile(value: unknown) {
@@ -167,6 +170,14 @@ function checkedFile(value: unknown) {
     throw new HttpError(413, 'NATIVE_TRANSFER_TOO_LARGE');
   const checked = validateNativeTransfer(value);
   for (const image of checked.file.images) validateImageBlob(image);
+  for (const source of checked.file.sourceFiles ?? []) {
+    const bytes = Buffer.from(source.base64, 'base64');
+    if (
+      bytes.toString('base64') !== source.base64 ||
+      createHash('sha256').update(bytes).digest('hex') !== source.hash
+    )
+      throw new HttpError(400, 'NATIVE_TRANSFER_SOURCE_FILE_HASH');
+  }
   const summary = {
     contents: checked.file.contents.length,
     prompts: checked.file.prompts.length,
@@ -176,6 +187,15 @@ function checkedFile(value: unknown) {
       (bytes, image) => bytes + Buffer.byteLength(image.base64, 'base64'),
       0
     ),
+    ...(checked.file.sourceFiles !== undefined
+      ? {
+          sourceFiles: checked.file.sourceFiles.length,
+          sourceFileBytes: checked.file.sourceFiles.reduce(
+            (bytes, item) => bytes + Buffer.byteLength(item.base64, 'base64'),
+            0
+          ),
+        }
+      : {}),
   };
   return { ...checked, digest: digest(checked.file), summary };
 }
@@ -198,10 +218,13 @@ function sourceContent(value: Content): NativeTransferContent['source'] {
   const { coverImage: _cover, hasPackage: _hasPackage, ...source } = value;
   return structuredClone(source);
 }
-function importedOrigins(store: Store): Map<string, NativeTransferOrigin> {
-  const found = new Map<string, NativeTransferOrigin>();
+type ImportedOrigin = { origin: NativeTransferOrigin; receiptId: string };
+function importedOrigins(store: Store): Map<string, ImportedOrigin> {
+  const found = new Map<string, ImportedOrigin>();
   for (const row of store.db
-    .prepare('SELECT body,original FROM native_transfer_receipts ORDER BY rowid')
+    .prepare(
+      "SELECT id,body,json_remove(original,'$.sourceFiles') AS original FROM native_transfer_receipts ORDER BY rowid"
+    )
     .all()) {
     const receipt = JSON.parse(String(row.body)) as NativeTransferReceipt;
     const original = JSON.parse(String(row.original)) as OriginalIndex;
@@ -210,11 +233,14 @@ function importedOrigins(store: Store): Map<string, NativeTransferOrigin> {
         (entry) => entry.key === item.key
       )!.source;
       found.set(`${item.kind}:${item.id}`, {
-        format: NATIVE_TRANSFER_FORMAT,
-        digest: receipt.digest,
-        entryKey: item.key,
-        sourceId: source.id,
-        sourceRevision: source.revision,
+        receiptId: String(row.id),
+        origin: {
+          format: NATIVE_TRANSFER_FORMAT,
+          digest: receipt.digest,
+          entryKey: item.key,
+          sourceId: source.id,
+          sourceRevision: source.revision,
+        },
       });
     }
   }
@@ -261,6 +287,27 @@ export function exportNativeTransfer(store: Store, value: unknown): NativeTransf
       bytes += additional;
       items.push(item);
     };
+    const attachSourceFiles = (provenance: ImportedOrigin, entryKey: string) => {
+      const rows = store.db
+        .prepare(
+          "SELECT f.key,length(CAST(f.value AS BLOB)) AS bytes FROM native_transfer_receipts r,json_each(r.original,'$.sourceFiles') f WHERE r.id=? AND json_extract(f.value,'$.entryKey')=?"
+        )
+        .all(provenance.receiptId, provenance.origin.entryKey);
+      for (const row of rows) {
+        checkBytes(Number(row.bytes) + entryKey.length + 20);
+        const original = store.db
+          .prepare(
+            "SELECT f.value FROM native_transfer_receipts r,json_each(r.original,'$.sourceFiles') f WHERE r.id=? AND f.key=?"
+          )
+          .get(provenance.receiptId, row.key)!;
+        if (!file.sourceFiles) {
+          checkBytes(17);
+          bytes += 17;
+          file.sourceFiles = [];
+        }
+        append(file.sourceFiles, { ...JSON.parse(String(original.value)), entryKey });
+      }
+    };
     // Read byte length in SQLite before materializing another body. Each accepted entry is
     // charged once, so a large selection cannot accumulate unbounded JSON before final validation.
     const readBounded = <T>(kind: string, id: string, revision?: number): T => {
@@ -283,13 +330,15 @@ export function exportNativeTransfer(store: Store, value: unknown): NativeTransf
       }
       const key = `content-${file.contents.length + 1}`;
       contentKeys.set(source.id, key);
-      const origin = origins.get(`content:${source.id}`);
+      const provenance = origins.get(`content:${source.id}`);
+      const origin = provenance?.origin;
       append(file.contents, {
         key,
         source: sourceContent(source),
         modules: [],
         ...(origin ? { origin } : {}),
       });
+      if (provenance) attachSourceFiles(provenance, key);
       return key;
     };
     const captureContent = (id: string, revision?: number): NativeTransferContent => {
@@ -309,7 +358,8 @@ export function exportNativeTransfer(store: Store, value: unknown): NativeTransf
       if (selected.kind === 'prompt-preset') {
         const source = readBounded<PromptPreset>('prompt-preset', selected.id);
         const key = `prompt-${file.prompts.length + 1}`;
-        const origin = origins.get(`prompt-preset:${source.id}`);
+        const provenance = origins.get(`prompt-preset:${source.id}`);
+        const origin = provenance?.origin;
         const entry: NativeTransferFile['prompts'][number] = {
           key,
           source: structuredClone(source),
@@ -317,6 +367,7 @@ export function exportNativeTransfer(store: Store, value: unknown): NativeTransf
           ...(origin ? { origin } : {}),
         };
         append(file.prompts, entry);
+        if (provenance) attachSourceFiles(provenance, key);
         for (const row of store.db
           .prepare(
             "SELECT id,revision FROM versions v WHERE kind='prompt-combination' AND revision=(SELECT MAX(revision) FROM versions n WHERE n.kind=v.kind AND n.id=v.id) AND json_extract(body,'$.owner.kind')='preset' AND json_extract(body,'$.owner.id')=? AND NOT EXISTS(SELECT 1 FROM library_hidden h WHERE h.kind=v.kind AND h.id=v.id) ORDER BY id"

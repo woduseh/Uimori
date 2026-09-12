@@ -78,6 +78,8 @@ export class StoryNotes {
       'replacesId',
       'retired',
       'expectedHeadRevision',
+      'kind',
+      'origin',
     ]);
     const expectedRevision = number(body.expectedRevision, 'notes revision', 0);
     const key = text(body.idempotencyKey, 'request key', 120);
@@ -108,19 +110,25 @@ export class StoryNotes {
       if (replacesId && !this.entries(scope).some((note) => note.id === replacesId))
         throw new HttpError(409, 'Note no longer available in this branch');
       const anchor = scope.history.at(-1);
-      const note = validateAuthorNote(
-        {
-          id: randomUUID(),
-          chatId,
-          atRevision: anchor?.revision ?? null,
-          atHash: anchor ? sourceHash(anchor.text) : null,
-          kind: 'author-note',
-          text: content,
-          declaration: { author, text: content },
-          ...(body.retired ? { retired: true } : {}),
-        },
-        scope
-      );
+      let note: AuthorNote;
+      try {
+        note = validateAuthorNote(
+          {
+            id: randomUUID(),
+            chatId,
+            atRevision: anchor?.revision ?? null,
+            atHash: anchor ? sourceHash(anchor.text) : null,
+            kind: body.kind === undefined ? 'author-note' : body.kind,
+            ...(body.origin !== undefined ? { origin: body.origin } : {}),
+            text: content,
+            declaration: { author, text: content },
+            ...(body.retired ? { retired: true } : {}),
+          },
+          scope
+        );
+      } catch {
+        throw new HttpError(400, 'Invalid note kind or origin');
+      }
       if (replacesId)
         this.db
           .prepare('UPDATE author_notes SET retired_at=? WHERE id=? AND chat_id=?')

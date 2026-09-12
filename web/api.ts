@@ -48,6 +48,7 @@ export async function api<T>(
     body !== undefined &&
     (providerSettingsChanged ||
       path === '/native-transfers/apply' ||
+      path === '/risu-imports/apply' ||
       /^(?:\/library\/(?:folders|organization)|\/content(?:\/|$)|\/prompt-presets?(?:\/|$)|\/(?:prompt-workspace|model-workspace)(?:\/|$)|\/prompt-combinations?(?:\/|$))/.test(
         path
       ))

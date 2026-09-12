@@ -2,6 +2,7 @@ import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 import Fastify, { type FastifyInstance } from 'fastify';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
+import { createHash } from 'node:crypto';
 import { basename, isAbsolute, join, relative, resolve } from 'node:path';
 import { Store } from '../server/store.js';
 import {
@@ -192,6 +193,89 @@ function request(file: NativeTransferFile, key = 'synthetic-import') {
 function snapshot(store: Store) {
   return store.product.export().tables;
 }
+
+test('NATIVE14 opaque source files retain their bytes and entry ownership through re-export and archive', () => {
+  const f = sourceFixture(),
+    target = database().store;
+  const entry = f.file.contents.find((item) => item.source.id === f.persona.id)!;
+  const bytes = Buffer.from([0, 255, 13, 10, 83, 89, 78, 84, 72]);
+  const attached = {
+    entryKey: entry.key,
+    name: 'synthetic-original.bin',
+    mediaType: 'application/octet-stream',
+    hash: createHash('sha256').update(bytes).digest('hex'),
+    base64: bytes.toString('base64'),
+  };
+  f.file.sourceFiles = [attached];
+  const prepared = prepareNativeTransfer({ file: f.file });
+  expect(prepared.summary).toMatchObject({ sourceFiles: 1, sourceFileBytes: bytes.length });
+  const receipt = applyNativeTransfer(target, request(f.file));
+  const imported = receipt.items.find((item) => item.key === entry.key)!;
+  expect(nativeTransferOriginal(target, receipt.id)).toEqual(f.file);
+  expect(JSON.stringify(target.product.all('content'))).not.toContain(attached.base64);
+  const exported = exportNativeTransfer(target, { items: [{ kind: 'content', id: imported.id }] });
+  expect(exported.sourceFiles).toEqual([{ ...attached, entryKey: exported.roots[0].key }]);
+  const restored = database().store;
+  restored.product.import(target.product.export());
+  expect(nativeTransferOriginal(restored, receipt.id)).toEqual(f.file);
+  expect(exportNativeTransfer(restored, { items: [{ kind: 'content', id: imported.id }] })).toEqual(
+    exported
+  );
+  expect(applyNativeTransfer(restored, request(f.file))).toMatchObject({
+    id: receipt.id,
+    created: false,
+  });
+});
+
+test('NATIVE15 invalid source bytes, attachment keys and forged archive files are rejected before writes', () => {
+  const f = sourceFixture(),
+    target = database().store;
+  const bytes = Buffer.from('SYNTHETIC ORIGINAL');
+  const attached = {
+    entryKey: f.file.contents[0].key,
+    name: 'source.txt',
+    mediaType: 'text/plain',
+    hash: createHash('sha256').update(bytes).digest('hex'),
+    base64: bytes.toString('base64'),
+  };
+  f.file.sourceFiles = [attached];
+  const before = snapshot(target);
+  for (const change of [
+    { hash: '0'.repeat(64) },
+    { base64: attached.base64 + '\n' },
+    { entryKey: 'not-in-file' },
+    { name: '../source.txt' },
+  ]) {
+    const file = { ...f.file, sourceFiles: [{ ...attached, ...change }] };
+    expect(() => prepareNativeTransfer({ file })).toThrow();
+  }
+  expect(snapshot(target)).toEqual(before);
+  const receipt = applyNativeTransfer(target, request(f.file));
+  const archive = target.product.export();
+  const row = archive.tables.native_transfer_receipts[0] as any;
+  const original = JSON.parse(row.original);
+  original.sourceFiles[0].base64 = Buffer.from('altered').toString('base64');
+  row.original = JSON.stringify(original);
+  const restored = database().store,
+    empty = snapshot(restored);
+  expect(() => restored.product.import(archive)).toThrow('NATIVE_TRANSFER_SOURCE_FILE_HASH');
+  expect(snapshot(restored)).toEqual(empty);
+  expect(nativeTransferOriginal(target, receipt.id)).toEqual(f.file);
+});
+
+test('NATIVE16 source bytes share the existing whole-file size limit', () => {
+  const { file } = sourceFixture();
+  file.sourceFiles = [
+    {
+      entryKey: file.contents[0].key,
+      name: 'large.bin',
+      mediaType: 'application/octet-stream',
+      hash: '0'.repeat(64),
+      base64: 'A'.repeat(NATIVE_TRANSFER_MAX_BYTES),
+    },
+  ];
+  expect(() => prepareNativeTransfer({ file })).toThrow('NATIVE_TRANSFER_TOO_LARGE');
+});
 
 test('NATIVE01 captures nested shared modules at their effective revision and preserves authored source refs', () => {
   const f = sourceFixture();

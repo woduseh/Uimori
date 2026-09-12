@@ -3,6 +3,7 @@ import { readFile } from 'node:fs/promises';
 import { createDefaultPromptProgram } from '../core/prompt-defaults.js';
 import type { Content, Library, PromptPreset } from '../core/product.js';
 import type { NativeTransferFile, NativeTransferReceipt } from '../core/native-transfer.js';
+import type { RisuImportApply, RisuImportResult } from '../core/risu-import.js';
 import { DEFAULT_WIDTHS } from './fixtures/browser-viewports.js';
 import { navigationAction } from './ui-navigation.js';
 
@@ -255,4 +256,70 @@ test('NATIVEUI02 explicit model binding and uncertain apply preserve the reviewe
     after.promptPresets!.find((item) => item.id === result.items[0].id)?.program.collaboration
       ?.agents[0].model
   ).toBeNull();
+});
+
+test('NATIVEUI03 Risu card JSON keeps ordinary lore by default and opens the new chat', async ({
+  page,
+  request,
+}) => {
+  const title = `NATIVEUI03 ${Date.now()}`;
+  const card = {
+    spec: 'chara_card_v3',
+    spec_version: '3.0',
+    data: {
+      name: title,
+      description: 'A synthetic pilot explores an imaginary planet.',
+      first_mes: 'The pilot waits beside the ship.',
+      character_book: {
+        entries: [
+          { name: 'World', content: 'The sky is green.', constant: true, enabled: true },
+          { name: 'Culture', content: 'Pilots greet with a wave.', constant: true, enabled: true },
+        ],
+      },
+    },
+  };
+  await page.goto('/');
+  await navigationAction(page, '봇');
+  await page.getByRole('button', { name: 'Risu 봇 가져오기', exact: true }).click();
+  const dialog = page.getByRole('dialog', { name: 'Risu 봇 가져오기', exact: true });
+  await expect(dialog).toBeVisible();
+  await dialog.getByLabel('Risu 파일 선택', { exact: true }).setInputFiles({
+    name: 'synthetic-risu-card.json',
+    mimeType: 'application/json',
+    buffer: Buffer.from(JSON.stringify(card)),
+  });
+  await expect(dialog.getByRole('heading', { name: title, exact: true })).toBeVisible();
+  await expect(
+    dialog.getByText('로어 2개 · 시작문 1개 · 이미지 0개', { exact: true })
+  ).toBeVisible();
+  const memory = dialog.locator('details.risu-import-memory');
+  await expect(memory).toHaveJSProperty('open', false);
+  await expect(memory.locator('summary').first()).toHaveText(
+    '로어북에서 과거 진행 기억 분리하기 (선택)'
+  );
+  for (const name of ['World', 'Culture'])
+    await expect(
+      memory.getByLabel(`${name} 과거 진행 기억으로 옮기기`, { exact: true })
+    ).not.toBeChecked();
+  const submit = dialog.getByRole('button', { name: '가져오고 새 채팅 열기', exact: true });
+  await expect(submit).toBeEnabled();
+  const applied = page.waitForResponse(
+    (response) =>
+      response.url().endsWith('/api/risu-imports/apply') && response.request().method() === 'POST'
+  );
+  await submit.click();
+  const response = await applied;
+  expect(response.ok(), await response.text()).toBe(true);
+  const payload = response.request().postDataJSON() as RisuImportApply;
+  expect(payload.memoryIds).toEqual([]);
+  expect(payload.allowPartial).toBe(false);
+  const imported = (await response.json()) as RisuImportResult;
+  expect(imported.chat).not.toBeNull();
+  await expect(dialog).toBeHidden();
+  await expect.poll(() => new URL(page.url()).searchParams.get('chat')).toBe(imported.chat!.id);
+  await expect(page.getByLabel('다음 장면 요청', { exact: true })).toBeVisible();
+  const saved = (await (
+    await request.get(`/api/content/${imported.receipt.items[0].id}`)
+  ).json()) as Content;
+  expect(saved.package?.lore).toHaveLength(2);
 });

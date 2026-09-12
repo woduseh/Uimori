@@ -1,0 +1,100 @@
+.risu-import-body,
+.risu-import-file,
+.risu-import-summary,
+.risu-import-lore,
+.risu-import-lore-content,
+.risu-import-result {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+.risu-import-body p,
+.risu-import-body h3 {
+  margin: 0;
+}
+.risu-import-body h3 {
+  font-size: 16px;
+}
+.risu-import-body p,
+.risu-import-body label,
+.risu-import-body summary,
+.risu-import-body li {
+  overflow-wrap: anywhere;
+}
+.risu-import-file input {
+  width: 100%;
+  min-width: 0;
+}
+.risu-import-summary {
+  gap: 6px;
+}
+.risu-import-findings ul {
+  margin: 8px 0 0;
+  padding-left: 22px;
+}
+.risu-import-findings li + li {
+  margin-top: 6px;
+}
+.risu-import-lore {
+  margin: 0;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+}
+.risu-import-memory > summary {
+  cursor: pointer;
+  min-height: 44px;
+  padding-block: 10px;
+}
+.risu-import-memory > summary small {
+  color: var(--muted);
+}
+.risu-import-lore legend {
+  padding-inline: 4px;
+  font-weight: 600;
+}
+.risu-import-selection-count {
+  font-size: 13px;
+}
+.risu-import-lore-entry + .risu-import-lore-entry {
+  border-top: 1px solid var(--line);
+  padding-top: 10px;
+}
+.risu-import-lore-entry summary {
+  cursor: pointer;
+  min-height: 40px;
+}
+.risu-import-lore-entry summary small {
+  display: block;
+  margin-top: 4px;
+  color: var(--muted);
+}
+.risu-import-lore-content {
+  gap: 8px;
+  margin-top: 8px;
+}
+.risu-import-lore-text {
+  white-space: pre-wrap;
+  max-height: 260px;
+  overflow-y: auto;
+  font-size: 14px;
+  line-height: 1.6;
+}
+.risu-import-choice {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  min-height: 44px;
+  padding-block: 8px;
+  cursor: pointer;
+}
+.risu-import-choice input {
+  flex: 0 0 auto;
+  margin-top: 2px;
+}
+.risu-import-partial {
+  border-top: 1px solid var(--line);
+}
+.risu-import-summary > p {
+  white-space: pre-wrap;
+}
