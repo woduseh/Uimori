@@ -11,6 +11,7 @@ import type { Content } from '../core/product.js';
 import { applyPackageTransforms } from '../server/package-transforms.js';
 import { resolvePackageStart } from '../core/package-start.js';
 import { createPackageStart } from '../server/package-start.js';
+import { compilePackageAttachment } from '../core/package-runtime.js';
 
 const owned: { directory: string; store: Store }[] = [];
 afterEach(() => {
@@ -57,6 +58,121 @@ const card = () => ({
 const sourceOf = (value: unknown) => ({
   name: 'synthetic-card.json',
   base64: Buffer.from(JSON.stringify(value)).toString('base64'),
+});
+
+test('module JSON registers a reusable module without a bot, chat or memory', async () => {
+  const store = database();
+  const module = {
+    type: 'risuModule',
+    module: {
+      id: 'original-module',
+      name: 'Synthetic module',
+      description: 'Display-only author notes.',
+      lorebook: [
+        {
+          id: 'setting',
+          key: '',
+          comment: 'World',
+          content: '{{user}} visits a green moon.',
+          mode: 'normal',
+          alwaysActive: true,
+          insertorder: 200,
+        },
+        { id: 'folder', comment: 'Folder', mode: 'folder', content: '' },
+      ],
+      regex: [{ type: 'editdisplay', in: '<status>(.*?)</status>', out: '**$1**' }],
+      trigger: [],
+      lowLevelAccess: false,
+      assets: [
+        [
+          'green',
+          'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aX1sAAAAASUVORK5CYII=',
+          'source-hash',
+        ],
+      ],
+    },
+  };
+  const source = { ...sourceOf(module), name: 'module.json' },
+    preview = prepareRisuImport({ source });
+  expect(preview.kind).toBe('module');
+  expect(preview.format).toBe('risu-module-json');
+  expect(preview.summary).toEqual({ lore: 1, starts: 0, images: 1 });
+  expect(preview.findings.some((item) => item.level === 'unsupported')).toBe(false);
+  const body = {
+    source,
+    digest: preview.digest,
+    memoryIds: [],
+    allowPartial: false,
+    idempotencyKey: 'module-json',
+  };
+  const result = applyRisuImport(store, body);
+  expect(result.chat).toBeNull();
+  expect(result.receipt.items[0].category).toBe('module');
+  expect(store.db.prepare('SELECT count(*) AS n FROM chats').get()!.n).toBe(0);
+  const content = store.product.get<Content>('content', result.receipt.items[0].id),
+    pkg = content.package!;
+  expect(content.kind).toBe('module');
+  expect(pkg.identity).toBeUndefined();
+  expect(pkg.body).toBe('');
+  expect(pkg.portraitImageId).toBeUndefined();
+  expect(pkg.lore[0].loreContext?.order).toBe(200);
+  const compiled = compilePackageAttachment(
+    pkg,
+    { id: pkg.id, revision: pkg.revision, role: 'module' },
+    {
+      chatId: 'synthetic',
+      target: 'main',
+      identity: { bot: { name: 'Pilot' }, user: { name: 'Mira' } },
+    }
+  );
+  expect(compiled.resources.find((item) => item.id.endsWith(':lore:lore-0'))?.text).toBe(
+    'Mira visits a green moon.'
+  );
+  expect(
+    (await applyPackageTransforms('<status>ready</status>', pkg.transforms, 'source')).text
+  ).toBe('**ready**');
+  expect(nativeTransferOriginal(store, result.receipt.id).sourceFiles![0].base64).toBe(
+    source.base64
+  );
+  expect(applyRisuImport(store, body).receipt).toMatchObject({
+    id: result.receipt.id,
+    created: false,
+  });
+});
+
+test('module scripts remain explicit unsupported findings and module import cannot create memory', () => {
+  const store = database();
+  const source = sourceOf({
+    type: 'risuModule',
+    module: {
+      name: 'Scripted module',
+      description: '',
+      lorebook: [{ comment: 'Text', content: 'Lore', alwaysActive: true }],
+      trigger: [
+        { type: 'output', effect: [{ type: 'triggerlua', code: 'return "not executed"' }] },
+      ],
+      lowLevelAccess: true,
+    },
+  });
+  const preview = prepareRisuImport({ source });
+  expect(preview.findings.some((item) => item.level === 'unsupported')).toBe(true);
+  const body = {
+    source,
+    digest: preview.digest,
+    memoryIds: [],
+    allowPartial: false,
+    idempotencyKey: 'scripted-module',
+  };
+  expect(() => applyRisuImport(store, body)).toThrow('RISU_IMPORT_PARTIAL_REQUIRED');
+  expect(() =>
+    applyRisuImport(store, { ...body, allowPartial: true, memoryIds: ['lore-0'] })
+  ).toThrow('RISU_IMPORT_MEMORY_SELECTION');
+  expect(store.db.prepare('SELECT count(*) AS n FROM chats').get()!.n).toBe(0);
+  expect(() =>
+    prepareRisuImport({
+      source: sourceOf({ name: 'Unwrapped module', description: '', lorebook: [] }),
+    })
+  ).toThrow('RISU_IMPORT_INVALID_FILE');
 });
 
 test('card display regex is imported through the shared package renderer', async () => {

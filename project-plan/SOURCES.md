@@ -2,6 +2,8 @@
 
 ## 2026-09-13 기본 캐릭터 카드 가져오기
 
+RisuToki의 `main.ts:1220`과 `src/lib/folder-workspace.ts:681`에 있는 기존 **파일을 프로젝트 폴더로 추출** 경로 → 바이너리 해석은 외부 프로그램에 두고 공개 `{type:'risuModule',module}` JSON만 교환 → 독립 작성한 `server/risu-module-json.ts`와 기존 native transfer → 합성 모듈의 로어·이미지·표시 정규식·무채팅 등록과 미지원 코드 보존을 확인해요. RPack 구현·치환표를 복사하지 않았어요. 프로젝트의 별도 asset 파일과 추출 과정에서 제거된 필드를 JSON만으로 보존한다고 주장하지 않아요.
+
 같은 RisuAI 스냅샷 `src/ts/process/scripts.ts:133–335`의 flags·문자열 치환·실행 순서와 `storage/database.svelte.ts`의 `customscript` 형식 → 표시 변환과 저장/상태 효과를 구분 → `server/risu-regex.ts`의 정적 `editdisplay` 변환 → 가져온 규칙을 기존 `applyPackageTransforms`로 실행하는 합성 사례로 확인했어요. `$0`·`{{data}}`를 전체 매치 별칭으로 바꾸는 해석과 HTML/특수 명령의 단순 텍스트 치환은 채택하지 않았어요.
 
 아래 확장 경계에 고정한 RisuAI 스냅샷의 `src/ts/characterCards.ts`(ZIP `card.json`, 내장 모듈 우선 적용)와 RisuToki 스냅샷의 `src/charx-io.ts`(CCv2/v3 필드 매핑), 구조화 MCP의 Vela 공개 자료 → 파일 해석과 앱 고유 저장·실행을 분리 → `server/character-card-file.ts`·`server/risu-import.ts`의 독립적인 단방향 변환과 기존 native transfer → 합성 JSON/ZIP 저장 검사, 기존 화면 검사, 실제 표본의 비저장 준비 결과로 확인했어요. 원본 코드는 복사하지 않았어요. RPack 구현·치환표는 포함하지 않았으며 내장 `module.risum`은 미지원으로 명시해요. 카드 로어를 실제 모듈 우선 적용 결과와 동일하다고 가정하지 않아요.

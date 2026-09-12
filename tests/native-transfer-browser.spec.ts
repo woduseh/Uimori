@@ -280,8 +280,8 @@ test('NATIVEUI03 Risu card JSON keeps ordinary lore by default and opens the new
   };
   await page.goto('/');
   await navigationAction(page, '봇');
-  await page.getByRole('button', { name: 'Risu 봇 가져오기', exact: true }).click();
-  const dialog = page.getByRole('dialog', { name: 'Risu 봇 가져오기', exact: true });
+  await page.getByRole('button', { name: 'Risu 자료 가져오기', exact: true }).click();
+  const dialog = page.getByRole('dialog', { name: 'Risu 자료 가져오기', exact: true });
   await expect(dialog).toBeVisible();
   await dialog.getByLabel('Risu 파일 선택', { exact: true }).setInputFiles({
     name: 'synthetic-risu-card.json',
@@ -322,4 +322,69 @@ test('NATIVEUI03 Risu card JSON keeps ordinary lore by default and opens the new
     await request.get(`/api/content/${imported.receipt.items[0].id}`)
   ).json()) as Content;
   expect(saved.package?.lore).toHaveLength(2);
+});
+
+test('NATIVEUI04 Risu module JSON registers a library module without creating a chat or memory', async ({
+  page,
+  request,
+}) => {
+  const title = `NATIVEUI04 ${Date.now()}`;
+  const beforeChats = await (await request.get('/api/chats')).json();
+  const source = {
+    type: 'risuModule',
+    module: {
+      id: 'synthetic-module',
+      name: title,
+      description: 'Synthetic module description for its reader.',
+      lorebook: [
+        {
+          key: '',
+          comment: 'Harbor setting',
+          content: 'The harbor has blue lights.',
+          mode: 'normal',
+          alwaysActive: true,
+          insertorder: 100,
+        },
+      ],
+      regex: [],
+      trigger: [],
+    },
+  };
+  await page.goto('/');
+  await navigationAction(page, '모듈');
+  await page.getByRole('button', { name: 'Risu 자료 가져오기', exact: true }).click();
+  const dialog = page.getByRole('dialog', { name: 'Risu 자료 가져오기', exact: true });
+  await dialog.getByLabel('Risu 파일 선택', { exact: true }).setInputFiles({
+    name: 'synthetic-risu-module.json',
+    mimeType: 'application/json',
+    buffer: Buffer.from(JSON.stringify(source)),
+  });
+  await expect(dialog.getByRole('heading', { name: title, exact: true })).toBeVisible();
+  await expect(dialog.locator('.risu-import-memory')).toHaveCount(0);
+  await expect(
+    dialog.getByText('.risum 파일 직접 가져오기는 아직 지원하지 않아요.', { exact: true })
+  ).toBeVisible();
+  const applied = page.waitForResponse(
+    (response) =>
+      response.url().endsWith('/api/risu-imports/apply') && response.request().method() === 'POST'
+  );
+  await dialog.getByRole('button', { name: '모듈 가져오기', exact: true }).click();
+  const response = await applied;
+  expect(response.ok(), await response.text()).toBe(true);
+  const imported = (await response.json()) as RisuImportResult;
+  expect((response.request().postDataJSON() as RisuImportApply).memoryIds).toEqual([]);
+  expect(imported.chat).toBeNull();
+  const root = imported.receipt.items.find((item) => item.root)!;
+  expect(root.category).toBe('module');
+  await expect(dialog).toBeVisible();
+  await expect(
+    dialog.getByRole('status').filter({ hasText: '모듈을 서재에 등록했어요.' })
+  ).toBeVisible();
+  await expect(dialog.getByText(/연결된 채팅이 삭제/)).toHaveCount(0);
+  await expect(dialog.getByRole('button', { name: '새 채팅 열기', exact: true })).toHaveCount(0);
+  const saved = (await (await request.get(`/api/content/${root.id}`)).json()) as Content;
+  expect(saved.kind).toBe('module');
+  expect(saved.package!.lore).toHaveLength(1);
+  expect(saved.package!.lore[0].text).toBe('The harbor has blue lights.');
+  expect(await (await request.get('/api/chats')).json()).toHaveLength(beforeChats.length);
 });

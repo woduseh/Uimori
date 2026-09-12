@@ -56,7 +56,7 @@ function identityTemplate(value: string): PromptTemplate | undefined {
 /** A one-way format adapter. No Risu runtime or source-specific behavior enters the package. */
 function analyze(value: unknown) {
   const input = readCharacterCard(value);
-  const { card, hash, source, members } = input;
+  const { card, hash, source, members, kind } = input;
   const findings: RisuImportFinding[] = [];
   const finding = (code: string, level: RisuImportFinding['level'], message: string) => {
     if (!findings.some((item) => item.code === code)) findings.push({ code, level, message });
@@ -67,9 +67,12 @@ function analyze(value: unknown) {
     id: `card-${hash.slice(0, 32)}`,
     revision: 1,
     title,
-    description: `Risu 캐릭터 카드에서 가져온 자료 · ${source.name}`.slice(0, 4000),
+    description:
+      kind === 'module'
+        ? string(card.creator_notes).slice(0, 4000)
+        : `Risu 캐릭터 카드에서 가져온 자료 · ${source.name}`.slice(0, 4000),
     body: '',
-    identity: { name: title, description: '' },
+    ...(kind === 'bot' ? { identity: { name: title, description: '' } } : {}),
     lore: [],
     instructions: [],
     controls: [],
@@ -141,7 +144,8 @@ function analyze(value: unknown) {
       mime: image.mime,
       allowedUse: 'both',
     });
-    if (!pkg.portraitImageId || name === 'main') pkg.portraitImageId = id;
+    if ((kind === 'bot' || asset.type === 'icon') && (!pkg.portraitImageId || name === 'main'))
+      pkg.portraitImageId = id;
     const url = `/api/package-image-blobs/${image.hash}`;
     assetUrls.set(uri, url);
     assetUrls.set(`{{raw::${name}}}`, url);
@@ -272,6 +276,10 @@ function analyze(value: unknown) {
       text: loreText,
       ...(template ? { template } : {}),
       loading,
+      ...(Number.isSafeInteger(entry.insertion_order) &&
+      Math.abs(entry.insertion_order) <= 1_000_000
+        ? { loreContext: { placement: 'background' as const, order: entry.insertion_order } }
+        : {}),
     });
   }
   if (lore.some((item) => !item.enabled))
@@ -315,14 +323,14 @@ function analyze(value: unknown) {
   const file: NativeTransferFile = {
     format: NATIVE_TRANSFER_FORMAT,
     version: NATIVE_TRANSFER_VERSION,
-    roots: [{ kind: 'content', key: 'bot' }],
+    roots: [{ kind: 'content', key: kind }],
     contents: [
       {
-        key: 'bot',
+        key: kind,
         source: {
           id: pkg.id,
           revision: 1,
-          kind: 'bot',
+          kind,
           title,
           description: pkg.description,
           text: pkg.body,
@@ -337,7 +345,7 @@ function analyze(value: unknown) {
     images,
     sourceFiles: [
       {
-        entryKey: 'bot',
+        entryKey: kind,
         name: source.name,
         mediaType: input.format === 'charx' ? 'application/zip' : 'application/json',
         hash,
@@ -346,8 +354,9 @@ function analyze(value: unknown) {
     ],
   };
   prepareNativeTransfer({ file });
-  const digest = createHash('sha256').update(`risu-import-v4:${hash}:${source.name}`).digest('hex');
+  const digest = createHash('sha256').update(`risu-import-v5:${hash}:${source.name}`).digest('hex');
   const preview: RisuImportPreview = {
+    kind,
     digest,
     title,
     description: string(card.creator_notes),
@@ -376,6 +385,7 @@ export function applyRisuImport(store: Store, value: unknown): RisuImportResult 
     throw new HttpError(400, 'RISU_IMPORT_PARTIAL_REQUIRED');
   if (
     !Array.isArray(body.memoryIds) ||
+    (preview.kind === 'module' && body.memoryIds.length > 0) ||
     new Set(body.memoryIds).size !== body.memoryIds.length ||
     body.memoryIds.some(
       (id: unknown) =>
@@ -399,6 +409,7 @@ export function applyRisuImport(store: Store, value: unknown): RisuImportResult 
       modelBindings: [],
       idempotencyKey: `risu:${requestKey}`,
     });
+    if (preview.kind === 'module') return { receipt, chat: null };
     if (!receipt.created) {
       const exists = store.db.prepare('SELECT id FROM chats WHERE id=?').get(receipt.id);
       return { receipt, chat: exists ? store.chat(receipt.id) : null };

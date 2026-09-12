@@ -37,6 +37,9 @@ function memorySelectionIssue(entry: RisuImportPreview['lore'][number]): string 
   return '';
 }
 
+const importedModule = (result: RisuImportResult) =>
+  result.receipt.items.some((item) => item.root && item.category === 'module');
+
 /** Closing the dialog retains the reviewed file and any uncertain apply request. */
 export function RisuImport({
   showTrigger = true,
@@ -78,7 +81,7 @@ export function RisuImport({
     setNotice('');
     try {
       if (!/\.(charx|json)$/i.test(file.name))
-        throw new Error('.charx 또는 캐릭터 카드 .json 파일을 선택해 주세요.');
+        throw new Error('.charx, 캐릭터 카드 JSON 또는 모듈 JSON 파일을 선택해 주세요.');
       if (file.size === 0) throw new Error('빈 파일은 가져올 수 없어요.');
       if (file.size > RISU_IMPORT_MAX_BYTES) throw new Error('파일은 24 MiB 이하여야 해요.');
       const nextSource = await readSource(file);
@@ -103,6 +106,7 @@ export function RisuImport({
   async function refreshAndOpen(imported: RisuImportResult) {
     try {
       await reload();
+      if (importedModule(imported)) return;
       if (imported.chat && onContinueChat) {
         setOpen(false);
         onContinueChat(imported.chat.id);
@@ -110,7 +114,11 @@ export function RisuImport({
         setNotice('봇과 새 채팅을 만들었어요. 채팅 목록에서 이어갈 수 있어요.');
       }
     } catch {
-      setNotice('가져오기는 완료했어요. 목록을 새로고침한 뒤 채팅을 열어 주세요.');
+      setNotice(
+        importedModule(imported)
+          ? '모듈 등록은 완료했어요. 서재를 새로고침한 뒤 기존 채팅에 장착해 주세요.'
+          : '가져오기는 완료했어요. 목록을 새로고침한 뒤 채팅을 열어 주세요.'
+      );
     }
   }
 
@@ -119,9 +127,10 @@ export function RisuImport({
     const payload = submission.current ?? {
       source,
       digest: preview.digest,
-      memoryIds: preview.lore
-        .filter((entry) => memoryIds.includes(entry.id))
-        .map((entry) => entry.id),
+      memoryIds:
+        preview.kind === 'module'
+          ? []
+          : preview.lore.filter((entry) => memoryIds.includes(entry.id)).map((entry) => entry.id),
       allowPartial,
       idempotencyKey: (requestKey.current ??= crypto.randomUUID()),
     };
@@ -168,7 +177,7 @@ export function RisuImport({
     <>
       {showTrigger && (
         <IconButton
-          label="Risu 봇 가져오기"
+          label="Risu 자료 가져오기"
           className="secondary"
           icon={UploadIcon}
           onClick={() => setOpen(true)}
@@ -176,18 +185,18 @@ export function RisuImport({
       )}
       <Dialog
         open={open}
-        title="Risu 봇 가져오기"
+        title="Risu 자료 가져오기"
         onClose={() => setOpen(false)}
         className="risu-import-dialog"
         wide
       >
         <section className="risu-import-body" aria-label="Risu 파일 검토" aria-busy={busy}>
           <p className="muted">
-            원본 파일은 그대로 두고 봇과 새 채팅을 만들어요. 파일의 코드나 외부 URL을 자동으로
-            실행하지 않아요.
+            원본 파일은 그대로 보존해요. 봇 카드는 새 봇과 채팅을 만들고, 모듈은 서재에 등록해요.
+            파일의 코드나 외부 URL을 자동으로 실행하지 않아요.
           </p>
           <label className="risu-import-file">
-            캐릭터 카드 파일 · 최대 24 MiB
+            .charx · 카드 JSON · 모듈 JSON · 최대 24 MiB
             <input
               type="file"
               aria-label="Risu 파일 선택"
@@ -200,11 +209,14 @@ export function RisuImport({
               }}
             />
           </label>
+          <p className="muted">.risum 파일 직접 가져오기는 아직 지원하지 않아요.</p>
           {preview && (
             <>
               <div className="risu-import-summary">
                 <h3>{preview.title}</h3>
-                <small className="muted">{source?.name}</small>
+                <small className="muted">
+                  {preview.kind === 'module' ? '모듈' : '봇'} · {source?.name}
+                </small>
                 {preview.description && <p>{preview.description}</p>}
                 <p>
                   로어 {preview.summary.lore}개 · 시작문 {preview.summary.starts}개 · 이미지{' '}
@@ -234,9 +246,21 @@ export function RisuImport({
                 <p className="muted">현재 파일에서 보고된 미지원 항목은 없어요.</p>
               )}
               <p className="muted">
-                로어북의 사용 중인 항목은 별도로 선택하지 않아도 봇의 설정으로 가져와요.
+                로어북의 사용 중인 항목은 별도로 선택하지 않아도{' '}
+                {preview.kind === 'module' ? '모듈' : '봇'}의 설정으로 가져와요.
               </p>
-              {preview.lore.length > 0 && (
+              {preview.kind === 'module' && preview.lore.length > 0 && (
+                <details className="risu-import-preview" key={preview.digest}>
+                  <summary>모듈 로어 미리보기 ({preview.lore.length}개)</summary>
+                  {preview.lore.map((entry) => (
+                    <details key={entry.id} className="risu-import-lore-entry">
+                      <summary>{entry.title || '제목 없는 로어'}</summary>
+                      <p className="risu-import-lore-text">{entry.text || '(내용 없음)'}</p>
+                    </details>
+                  ))}
+                </details>
+              )}
+              {preview.kind === 'bot' && preview.lore.length > 0 && (
                 <details className="risu-import-memory" key={preview.digest}>
                   <summary>
                     로어북에서 과거 진행 기억 분리하기 (선택)
@@ -312,15 +336,18 @@ export function RisuImport({
               {uncertain && (
                 <p role="status">
                   서버의 완료 여부를 확인하지 못했어요. 파일과 선택을 유지한 같은 요청으로 다시
-                  확인하면 봇과 채팅이 중복 생성되지 않아요. 이 창을 닫아도 요청은 유지돼요.
+                  확인하면 {preview.kind === 'module' ? '모듈이' : '봇과 채팅이'} 중복 생성되지
+                  않아요. 이 창을 닫아도 요청은 유지돼요.
                 </p>
               )}
               {result ? (
                 <div className="risu-import-result">
                   <p role="status">
-                    {result.chat
-                      ? '봇과 새 채팅을 가져왔어요.'
-                      : '자료 가져오기는 완료됐어요. 연결된 채팅이 삭제되어 열 수 없어요.'}
+                    {importedModule(result)
+                      ? '모듈을 서재에 등록했어요. 기존 채팅의 봇·페르소나·모듈 설정에서 장착해 주세요.'
+                      : result.chat
+                        ? '봇과 새 채팅을 가져왔어요.'
+                        : '자료 가져오기는 완료됐어요. 연결된 채팅이 삭제되어 열 수 없어요.'}
                   </p>
                   {result.chat && onContinueChat && (
                     <button type="button" disabled={busy} onClick={() => void openSavedChat()}>
@@ -330,7 +357,11 @@ export function RisuImport({
                 </div>
               ) : (
                 <button type="button" disabled={busy || !ready} onClick={() => void apply()}>
-                  {uncertain ? '같은 요청으로 다시 확인' : '가져오고 새 채팅 열기'}
+                  {uncertain
+                    ? '같은 요청으로 다시 확인'
+                    : preview.kind === 'module'
+                      ? '모듈 가져오기'
+                      : '가져오고 새 채팅 열기'}
                 </button>
               )}
             </>

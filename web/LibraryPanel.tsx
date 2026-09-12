@@ -447,7 +447,7 @@ export function LibraryPanel({
         <h1>서재</h1>
         {library && !editing && !detail && <NativeTransfer library={library} reload={reload} />}
         <RisuImport
-          showTrigger={!!library && tab === 'bot' && !editing && !detail}
+          showTrigger={!!library && (tab === 'bot' || tab === 'module') && !editing && !detail}
           reload={reload}
           onContinueChat={onContinueChat}
         />
