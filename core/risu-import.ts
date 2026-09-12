@@ -9,10 +9,11 @@ export type RisuImportFinding = {
   message: string;
 };
 export type RisuImportPreview = {
+  kind: 'bot' | 'module';
   digest: string;
   title: string;
   description: string;
-  format: 'charx' | 'character-card-json';
+  format: 'charx' | 'character-card-json' | 'risu-module-json';
   summary: { lore: number; starts: number; images: number };
   lore: {
     id: string;

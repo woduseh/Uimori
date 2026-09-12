@@ -3,7 +3,8 @@ import { illustrationErrorMessage } from './illustration-labels.js';
 type ApiErrorDiagnostic = { code: string | null; message: string };
 
 const messages: Record<string, string> = {
-  RISU_IMPORT_INVALID_FILE: '지원하는 캐릭터 카드 JSON 또는 올바른 .charx 파일인지 확인해 주세요.',
+  RISU_IMPORT_INVALID_FILE:
+    '지원하는 캐릭터 카드·Risu 모듈 JSON 또는 올바른 .charx 파일인지 확인해 주세요.',
   RISU_IMPORT_TOO_LARGE: '캐릭터 카드 파일은 24 MiB 이하여야 해요.',
   RISU_IMPORT_DRAFT_CHANGED: '확인한 파일이 달라졌어요. 파일을 다시 선택해 주세요.',
   RISU_IMPORT_PARTIAL_REQUIRED:

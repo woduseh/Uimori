@@ -2,6 +2,7 @@ import { crc32, inflateRawSync } from 'node:zlib';
 import { createHash } from 'node:crypto';
 import { RISU_IMPORT_MAX_BYTES, type RisuImportSource } from '../core/risu-import.js';
 import { fields, HttpError, record, text } from './request-validation.js';
+import { moduleJsonDocument } from './risu-module-json.js';
 
 const invalid = (): never => {
   throw new HttpError(400, 'RISU_IMPORT_INVALID_FILE');
@@ -121,10 +122,22 @@ export function readCharacterCard(value: unknown) {
     return invalid();
   }
   const outer = record(document);
+  if (format === 'character-card-json' && outer.type === 'risuModule') {
+    return {
+      source,
+      hash,
+      format: 'risu-module-json' as const,
+      kind: 'module' as const,
+      card: moduleJsonDocument(outer, members),
+      members,
+    };
+  }
+  if (outer.type !== undefined || outer.lorebook !== undefined || outer.regex !== undefined)
+    return invalid();
   if (outer.spec !== undefined && !['chara_card_v2', 'chara_card_v3'].includes(String(outer.spec)))
     return invalid();
   const card = outer.data === undefined ? outer : record(outer.data);
   if (typeof card.name !== 'string' || !card.name.trim() || typeof card.description !== 'string')
     return invalid();
-  return { source, hash, format, card, members };
+  return { source, hash, format, kind: 'bot' as const, card, members };
 }

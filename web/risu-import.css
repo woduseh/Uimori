@@ -41,12 +41,14 @@
   border: 1px solid var(--line);
   border-radius: 12px;
 }
-.risu-import-memory > summary {
+.risu-import-memory > summary,
+.risu-import-preview > summary {
   cursor: pointer;
   min-height: 44px;
   padding-block: 10px;
 }
-.risu-import-memory > summary small {
+.risu-import-memory > summary small,
+.risu-import-preview > summary small {
   color: var(--muted);
 }
 .risu-import-lore legend {
