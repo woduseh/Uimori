@@ -1,6 +1,6 @@
 # v0.1.0 표본 기준과 기능 대응표
 
-작성일: 2026-09-12. **단계 A의 기준 목록이며 구현 완료·native 호환 PASS가 아니에요.** 기계가 읽는 원본은 [BETA-SAMPLES.json](BETA-SAMPLES.json)이에요. [베타 결정](../docs/DECISIONS-2026-09-12-BETA.md)을 따르며, 책임 영역은 후속 설계의 후보예요.
+작성일: 2026-09-12. **단계 A 기준과 Merry 후속 정적 조사를 담은 목록이며 구현 완료·native 호환 PASS가 아니에요.** 기계가 읽는 원본은 [BETA-SAMPLES.json](BETA-SAMPLES.json)이에요. [베타 결정](../docs/DECISIONS-2026-09-12-BETA.md)을 따르며, 책임 영역은 후속 설계의 후보예요.
 
 ## 공개 조건과 읽는 방법
 
@@ -8,7 +8,7 @@
 - Uimori 자체 데이터와 확장 API를 기준으로 가져오기·표현 변환·선택형 호환 실행을 조합해요. 기술 구현·픽셀·원본 코드 무수정의 동일성은 일괄 요구하지 않아요. 특정 자료명 전용 본체 기능을 만들지 않아요.
 - 원본 보존과 코드 실행 허가는 별개예요. 제작자 코드·확장 소유 화면을 지원할 공통 경계를 준비하되 주 앱 DOM 전체 접근은 범위에서 제외해요.
 - 정상 준비·개입·건너뛰기를 구분하고 부가 기능 실패가 채팅을 막지 않게 해요. 사용자의 명시적 변경이 자동 변경보다 우선해요.
-- 이 표는 **현재 발견한 212개 추적 항목**이에요. `coverage-gap`도 포함하며 완전한 세부 동작 전수표는 아직 아니에요. 같은 고정 표본에서 미조회 기능이 발견되면 기존 공개 조건의 누락을 보완해요.
+- 이 표는 **현재 발견한 246개 추적 항목**이에요. `coverage-gap`도 포함하며 완전한 세부 동작 전수표는 아직 아니에요. 같은 고정 표본에서 미조회 기능이 발견되면 기존 공개 조건의 누락을 보완해요.
 - `현재 지원 기반`은 관련 Uimori 구현의 존재, `부분`은 일부 기반만 존재, `미구현`은 완성 경로 없음, `미확인`은 근거 부족이에요. **모든 항목의 표본 native 인수와 사용자 인수는 `not-run`**이에요.
 - JSON의 `currentSupport`, `originalEvidence`, `requiredVerification`, `nativeAcceptance`를 별개로 유지해요. 정적 분석·hash·일반 회귀를 표본 인수로 바꾸지 않아요.
 
@@ -16,7 +16,7 @@
 
 Uimori 조사 기준은 `ed596791a2873d6bc45ed1556b94150aea08eff3`(`0.0.1`), 작업 브랜치는 `codex/beta-foundations`예요. 참고한 RisuAI는 `cad8595aa39620df4246f56918f0962c2aa0263a`, RisuToki는 `45048b1139361cd0fded462683dd30fd7df7ce98`예요.
 
-이번 단계에서는 원본 파일을 **byte hash/크기로만 확인**했어요. 컨테이너 해제·원문 재추출·코드 실행은 하지 않았어요. 아래 현재 hash는 이전 구조화 읽기 결과와의 byte 단위 일치 검증이 아니며, 실제 이식/인수에 착수할 때 해당 hash와 세부 읽기 영수증을 연결해야 해요. 개인 절대경로·원문·코드·비밀은 공개 목록에 넣지 않아요. 파일명 철자도 원본대로 기록해요.
+초기 기준에서는 원본 파일을 **byte hash/크기로만 확인**했어요. 이후 Merry만 readonly MCP로 32개 미독 Lua section을 추가 조회하고 읽기 전후 파일 hash와 40개 section hash를 대조했어요. 컨테이너 직접 해제·원본 코드 실행은 하지 않았어요. 다른 표본의 현재 hash와 이전 구조화 읽기의 연결은 여전히 별도 확인이 필요해요. Merry도 전체 필드·의미·실행 검증과 구분하며 아래 조사 범위를 따라요. 개인 절대경로·원문·코드·비밀은 공개 목록에 넣지 않아요. 파일명 철자도 원본대로 기록해요.
 
 | Sample ID | 원본 파일명 | 자료 역할 / 컨테이너 | 버전·근거 | bytes | SHA-256 |
 | --- | --- | --- | --- | ---: | --- |
@@ -377,11 +377,16 @@ Provider Manager는 8줄 압축 파일이므로 `8행 · offset N`을 사용해�
 
 ### Merry Sisters! · `merry`
 
-이번 정적 조회 요약: lore 91개, regex 64개, Lua 40 section/전체 필드 363,897 UTF-16 중 핵심 8 section 완독. 이전 2026-09-10 정적 보고는 참고 근거로 구분해요.
+앞선 핵심 Lua 8 section 조사에 더해 미독 32 section(245,223 UTF-16)을 readonly MCP로 잘림 없이 조회하고 함수·API·주요 기능을 제한적으로 정적 검토했어요. 현재 40 section hash는 이전 목록과 모두 같으며 원본 파일 SHA256도 읽기 전후 기준과 같아요. lore 91개·regex 64개와 전체 필드 363,897 UTF-16은 앞선 조회 근거로 구분해요.
 
-- 미완: 이번 8 section 조회와 이전 보고의 더 넓은 읽기 범위를 합쳐 이번 전체 검증으로 표시하지 않아요.
-- 미완: 나머지 Lua 의미, 대형 패널, 전체 에셋 목록/byte/renderer와 실제 보조 모델/상태 흐름은 미완이에요.
-- 미완: 오늘 전체 파일 hash 확인은 이전 구조화 추출물과의 byte 단위 일치 검증이 아니에요.
+후속 조회는 RisuToki **standalone readonly / allowWrites=false / artifact 3.9.0 build `3402ea0434e8`**를 사용했어요. 저장소 HEAD `45048b1139361cd0fded462683dd30fd7df7ce98`와 실행 artifact build를 같은 것으로 취급하지 않아요. 새 조회 section은 **0–21, 24, 25, 27, 30, 31, 33–35, 38–39**, 앞선 조회는 **22, 23, 26, 28, 29, 32, 36, 37**이에요. 32개 원본 응답과 40개 section hash 목록을 대조했으며, 공개 JSON에는 section ID·hash·길이·조회 구분만 기록해요.
+
+- 미완: 32 section 응답의 완전한 수신은 긴 프롬프트·반복 수치·조건 조합의 의미 완독이나 실행 검증이 아니에요. 앞선 8 section은 이번에 의미 재검토하지 않았어요.
+- 미완: 40 section 본문 합계 358,763 UTF-16과 앞선 전체 필드 363,897 UTF-16 사이의 5,134 차이는 이번 조사에서 독립적으로 설명하지 않았어요. 전체 필드 전수 검증으로 표시하지 않아요.
+- 미완: 대형 패널·CSS·64 regex의 전체 동작, 91 lore의 전체 의미와 전체 에셋 목록/byte/renderer, 실제 보조 모델·상태 흐름은 미완이에요.
+- 미완: 새 32 section의 문자열 검색에서 동적 코드 로딩은 발견하지 못했지만 전체 자료·의존 코드에 대한 부재 증명은 아니에요. 동적 함수 등록과 앞선 section의 helper 호출은 확인했어요.
+
+아래 `S번호:행`은 구조화 응답에서 해당 Lua section 안의 1-based 행이에요. 새 세부 항목은 기존 상위 ID를 유지한 누락 보완이며 `parentFeatureId`로 연결해요. 기존 항목과 세부 항목의 수를 기능 완료율로 해석하지 않아요.
 
 **MS · 복합 상태와 사후 실행**
 
@@ -399,12 +404,84 @@ Provider Manager는 8줄 압축 파일이므로 `8행 · offset N`을 사용해�
 | `MS.REGEX` | 입력·저장 전 출력·요청·번역·표시의 규칙별 가공 | 부분 | representation, runtime | WIRE, RUNTIME, SAMPLE | 이전 정적 보고:51 |
 | `MS.IMAGES` | 등록 이미지 해석·검증·문단 배치 | 부분 | images, representation | IMAGES, WIRE, SAMPLE | 이전 정적 보고:51 |
 | `MS.UI` | 전투/퀘스트/선택·게이지·버튼·툴팁 등 전용 화면 | 미구현 | ui, state, images | UI, STATE, IMAGES, SAMPLE | 이전 정적 보고:51 |
-| `MS.COVERAGE` | 40 Lua section·91 lore·64 regex·대형 패널·전체 에셋의 잔여 조사 **(조사 공백)** | 미확인 | import, runtime, ui, images | IMPORT, RUNTIME, UI, IMAGES, SAMPLE | 이전 정적 보고:51 |
+| `MS.COVERAGE` | Lua 전체 의미·필드 길이 차이·91 lore·64 regex·대형 패널·전체 에셋의 잔여 조사 **(조사 공백)** | 미확인 | import, runtime, ui, images | IMPORT, RUNTIME, UI, IMAGES, SAMPLE | 이전 정적 보고:51 + 후속 구조화 조회 |
+| `MS.RESTORE.STORE` | SEED 조회 키와 별도 상태 저장소의 대응 보존 | 부분 | state, data, source | STATE, LIFECYCLE, SOURCE, SAMPLE | S24:79–196 |
+| `MS.RESTORE.GC` | 저장 40회 주기의 미참조 상태 키 정리 | 미구현 | state, data | STATE, LIFECYCLE, SAMPLE | S24:93–122, S24:182–187 |
+| `MS.RESTORE.HISTORY` | 최신 메시지부터 역순으로 유효 SEED를 찾아 복원 | 부분 | state, data, source | STATE, LIFECYCLE, SOURCE, SAMPLE | S24:199–238 |
+| `MS.RESTORE.DELTA` | 메시지 위치별 임시 변경과 복원 후 재적용 순서 | 부분 | state, source | STATE, SOURCE, LIFECYCLE, SAMPLE | S3:90–104, S24:240–248 |
+| `MS.RESTORE.RNG` | 저장 키 난수와 판정 난수의 서로 다른 용도 | 부분 | state, runtime | STATE, RUNTIME, LIFECYCLE, SAMPLE | S24:125–148, S7:57–68, S10:29–36 |
+| `MS.DRAWS.HISTORY_EDIT` | 과거 사용자 메시지의 판정 결과 수정 | 미구현 | source, state, runtime | SOURCE, STATE, RUNTIME, SAMPLE | S6:14–63, S7:10–80, S8:19–69, S9:10–37, S10:10–92 |
+| `MS.DRAWS.TOKENS` | 자원별 보너스·유리한 재굴림·판정 결과 전환 | 부분 | state, runtime, ui | STATE, RUNTIME, UI, SAMPLE | S6:1–69, S7:1–85, S8:1–75, S9:1–41, S10:1–96, S11:1–240 |
+| `MS.DRAWS.CONSUMPTION` | 행동 메시지 표식과 후속 자원 소비의 연결 | 부분 | state, source, representation | STATE, SOURCE, WIRE, SAMPLE | S4:1–44, S11:69–70, S11:146–147, S27:1–28 |
+| `MS.DRAWS.COMPANION` | 동료/사용자 판정의 보너스·확률·임계값 조합 | 부분 | state, runtime | STATE, RUNTIME, SAMPLE | S12:1–413 |
+| `MS.DRAWS.COOLDOWN` | 실패 후 특성 쿨다운과 다음 응답 지침 | 부분 | state, representation | STATE, WIRE, LIFECYCLE, SAMPLE | S12:431–460 |
+| `MS.CHOICE.CUSTOM_QUEST` | 직접 퀘스트 입력과 기존 보드 카드 교체 | 미구현 | ui, source, runtime | UI, SOURCE, RUNTIME, SAMPLE | S11:243–283 |
+| `MS.CHOICE.QUEST_ACCEPT` | 퀘스트 선택을 다음 사용자 요청으로 연결 | 부분 | state, representation, ui | STATE, WIRE, UI, SAMPLE | S11:340–347, S31:8–26 |
+| `MS.CHOICE.QUEST_DELETE` | 기존 퀘스트 보드 제거와 표시 중단 요청 | 미구현 | source, ui, representation | SOURCE, UI, WIRE, SAMPLE | S11:286–299, S31:29–30 |
+| `MS.CHOICE.REROLL_INPUT` | 사용자 추가 지시를 포함한 선택지 재생성 | 미구현 | jobs, source, ui | JOBS, SOURCE, UI, SAMPLE | S5:2–71, S11:302–332 |
+| `MS.CHOICE.FORCED_CHECK` | 사용자가 강제로 요청하는 스킬 판정 | 미구현 | jobs, runtime, ui | JOBS, RUNTIME, UI, SAMPLE | S11:335–337, S38:63–81 |
+| `MS.STATE.PROGRESSION` | 스킬 투자 제한과 연속 레벨업·포인트 지급 | 부분 | state, runtime, ui | STATE, RUNTIME, UI, SAMPLE | S14:34–119, S19:2–116, S20:1–54 |
+| `MS.STATE.PERKS` | 특성 비용·선결조건·상호배제·효과 합산 | 부분 | state, runtime, ui | STATE, RUNTIME, UI, SAMPLE | S16:1, S19:120–229, S21:1 |
+| `MS.STATE.TERRITORY` | 영지 작업 상태와 단계별 퀘스트 활성 조건 | 부분 | state, memory | STATE, MEMORY, WIRE, SAMPLE | S15:1, S17:52–59, S24:316–341, S24:386–390 |
+| `MS.STATE.REST_TRAINING` | 휴식·훈련 태그의 자원 회복과 경험치 처리 | 부분 | state, representation | STATE, WIRE, SAMPLE | S4:47–123, S27:1–28 |
+| `MS.STATE.TAG_PIPELINE` | 인벤토리·관계 태그와 퀘스트 보상의 단계적 반영 | 부분 | state, representation, runtime | STATE, WIRE, RUNTIME, SAMPLE | S17:62–182, S18:1–174 |
+| `MS.STATE.MANUAL_OVERRIDES` | 사용자의 관계·능력치·경험치·포인트 직접 변경 | 부분 | state, ui | STATE, UI, LIFECYCLE, SAMPLE | S34:10–102, S35:8–59 |
+| `MS.STATE.DEBUG` | 최대치 설정과 스킬/동료 판정 테스트 기능 | 부분 | state, runtime, ui | STATE, RUNTIME, UI, SAMPLE | S38:1–82 |
+| `MS.INSTRUCTIONS.AUX_MODES` | 상태 생성 역할·보조 호출 1/2회·기능 묶음 설정 | 부분 | jobs, representation, ui | JOBS, WIRE, UI, SAMPLE | S12:627–711, S33:1–31 |
+| `MS.INSTRUCTIONS.GAME_OPTIONS` | 추가 콘텐츠·기능·관계/상태/EXP 배율·난이도 설정 | 부분 | state, representation, ui | STATE, WIRE, UI, SAMPLE | S12:477–626, S12:640–664, S12:813–945, S13:1 |
+| `MS.INSTRUCTIONS.LANGUAGE` | 본문 언어와 UI 언어 설정의 구분 | 부분 | representation, ui | WIRE, UI, SAMPLE | S12:759–786 |
+| `MS.INSTRUCTIONS.INSERTION` | 시스템 지침 삽입 위치와 판정 계획 설정 | 부분 | representation | WIRE, SAMPLE | S12:715–757 |
+| `MS.INSTRUCTIONS.THEME` | 테마/BGM 선택 지침과 활성 설정 | 미확인 | representation, ui | WIRE, UI, SAMPLE | S0:81–93, S12:601–612, S24:399 |
+| `MS.UI.DYNAMIC_ACTIONS` | 표에서 동적으로 생성하는 사용자 행동 등록 | 미구현 | runtime, ui | RUNTIME, UI, SAMPLE | S34:69–102, S35:1–6 |
+| `MS.UI.PANEL_STATE` | 패널 열림 상태와 상호 닫힘·설정 패널 표시 | 부분 | ui, state | UI, STATE, LIFECYCLE, SAMPLE | S33:34–36, S39:1–37 |
+| `MS.UI.REFRESH` | 상태 변경 후 원문을 유지하는 표시 새로고침 | 부분 | ui, source | UI, SOURCE, SAMPLE | S39:40–47, S6:61–63 |
+| `MS.IMAGES.VALIDATION` | 인물/복장/표현·배경/시간 조합의 태그 검증 | 부분 | images, representation | IMAGES, WIRE, SAMPLE | S25:89–160, S0:94–156 |
+| `MS.PERIODIC.CONTEXT` | NPC 장기 기억·직전 상태와 최근 이력의 별도 문맥 | 부분 | memory, representation | MEMORY, WIRE, SAMPLE | S1:118–222, S1:295–352 |
+| `MS.UI.NOTIFICATIONS` | 알림 큐와 임시 진행 메시지의 완료·실패 정리 | 부분 | ui, jobs, source | UI, JOBS, SOURCE, SAMPLE | S3:1–9, S5:50–71, S19:62–76 |
+| `MS.STATE.DIAGNOSTICS` | 상태 변경·복원·보조 프롬프트 진단의 범위 | 부분 | diagnostics, state | DIAGNOSTICS, STATE, SAMPLE | S3:105, S24:30–76, S1:222–227 |
+
+세부 검증 메모:
+
+- `MS.RESTORE.STORE`: SEED를 난수 재현 seed로 오인하지 않고 참조 키와 상태 값의 연결을 대조해요.
+- `MS.RESTORE.GC`: 메시지 삭제·분기·복원 전후 살아 있는 참조가 정리되지 않는지 확인해요.
+- `MS.RESTORE.HISTORY`: 없는 키·잘못된 참조·더 이전의 유효 상태·저장 정보 없음의 결과를 구분해요.
+- `MS.RESTORE.DELTA`: 복원 상태와 사용자의 임시 변경이 겹칠 때 적용 순서와 귀속을 대조해요.
+- `MS.RESTORE.RNG`: 저장 키 충돌 처리와 판정 결과 보존을 각각 검증해요. 저장 키 보존만으로 판정 재현을 주장하지 않아요.
+- `MS.DRAWS.HISTORY_EDIT`: 대상 메시지 선택·이미 적용한 수정·원문 변경·분기에서 수정 귀속과 중복을 확인해요.
+- `MS.DRAWS.TOKENS`: 각 자원의 상한·보유량·입력 수량·사용 조건·취소와 서로 다른 결과 전환을 개별 대조해요.
+- `MS.DRAWS.CONSUMPTION`: 표식 언어·수정·재전송·취소에 따른 소비 시점과 횟수를 확인해요.
+- `MS.DRAWS.COMPANION`: 동료와 사용자 스킬 경로, 특성 보너스·확률·대성공/대실패·근소 결과를 조건별로 대조해요. 반복 계수 전수 검증은 미완이에요.
+- `MS.DRAWS.COOLDOWN`: 메시지 수 감소·분기·연속 실패에서 재발동 조건과 다음 요청 지침을 확인해요.
+- `MS.CHOICE.CUSTOM_QUEST`: 제목·설명·난이도·종류·의뢰인 입력, 취소, 비어 있는 값, 보드/대상 소실을 확인해요.
+- `MS.CHOICE.QUEST_ACCEPT`: 선택한 카드와 요청의 대응 및 퀘스트를 즉시 완료하지 않는 원본 지침을 대조해요.
+- `MS.CHOICE.QUEST_DELETE`: 보드 제거 대상과 이후 표시 중단 지침을 원문/공유/분기에서 구분해요.
+- `MS.CHOICE.REROLL_INPUT`: 기존 선택지만 교체하는지, 추가 지시·취소·실패·임시 진행 표시를 보존하는지 확인해요.
+- `MS.CHOICE.FORCED_CHECK`: 공유 helper 호출의 전체 동작과 판정 입력/결과를 대조해요. helper 본문은 앞선 조사 범위예요.
+- `MS.STATE.PROGRESSION`: 스킬 상한·레벨 조건·연속 레벨업·성공/실패 EXP·배율을 개별 대조해요.
+- `MS.STATE.PERKS`: 특성별 조건·그룹 충돌·중복 취득·포인트 차감·보너스를 확인해요. 전체 특성 계수의 의미 검증은 미완이에요.
+- `MS.STATE.TERRITORY`: 작업별 초기값과 단계 의존·능력치 조건·표시용 상태를 대조해요.
+- `MS.STATE.REST_TRAINING`: 태그 감지·기능 OFF·특성/배율·이미 회복된 값·알림 시점을 확인해요.
+- `MS.STATE.TAG_PIPELINE`: 표시 전용 추출값·대기 변경·현재 상태·등록/완료 순서를 구분해요.
+- `MS.STATE.MANUAL_OVERRIDES`: 음수 입력·범위·취소·파생값 갱신과 임시 변경의 복원 귀속을 확인해요.
+- `MS.STATE.DEBUG`: 최대치 일괄 설정과 선택한 스킬/동료·DC의 기존 판정 경로 호출을 따로 검증해요.
+- `MS.INSTRUCTIONS.AUX_MODES`: 메인/보조/OFF와 호출 횟수·묶음 설정의 실제 적용 범위를 확인해요.
+- `MS.INSTRUCTIONS.GAME_OPTIONS`: 설정별 값과 조합이 활성 기능·지침·계산에 미치는 영향을 추적해요.
+- `MS.INSTRUCTIONS.LANGUAGE`: 원본의 언어 선택별 실제 값·지침·알림 언어를 확인해요. 표시명만으로 동작을 추정하지 않아요.
+- `MS.INSTRUCTIONS.INSERTION`: 기존 지침 덮기/마지막 삽입 선택과 판정 계획 ON/OFF의 최종 요청을 대조해요.
+- `MS.INSTRUCTIONS.THEME`: 선택 지침과 스위치는 확인했지만 실제 오디오 자산·재생/정지 경로는 미검토라 현재 대응을 확정하지 않아요.
+- `MS.UI.DYNAMIC_ACTIONS`: 등록된 행동 이름·입력·권한·중복/소실을 확인해요. 동적 함수 등록을 외부 코드 로딩과 구분해요.
+- `MS.UI.PANEL_STATE`: 패널 간 전환과 상태 유지·복원을 실제 화면에서 확인해요.
+- `MS.UI.REFRESH`: 원본이 같은 텍스트 재설정을 새로고침에 사용하는 점을 구분하고, 대상 구현의 원문·hash 보존과 화면 갱신을 확인해요.
+- `MS.IMAGES.VALIDATION`: 허용 조합·누락/잘못된 태그 제거·문단 계획을 대조해요. 전체 에셋 byte 및 renderer 검증은 미완이에요.
+- `MS.PERIODIC.CONTEXT`: 설정·페르소나·명성·장기 기억과 직전 상태의 우선순위, 최근 30메시지에서 제외하는 형식을 확인해요.
+- `MS.UI.NOTIFICATIONS`: 본문에 붙는 알림과 진행 표시를 구분하고 중복·실패·취소 시 실제 원문 보존을 확인해요.
+- `MS.STATE.DIAGNOSTICS`: 원본 로그가 포함하는 프롬프트/상태와 공유 진단의 제외 범위를 구분해요. 원본 로그의 무조건 공개를 목표로 삼지 않아요.
 
 대응 시 지킬 점:
 
 - `MS.POSTJOBS`: 기존 authoritative 실패 차단을 그대로 목표로 삼지 않아요. 정상 준비·개입·건너뛰기와 부가 기능 실패의 비차단을 검증해요.
 - `MS.EVENTS`: 현재 behavior effects의 동시 읽기와 원본 순차 계산을 대조하며 결과가 다른 대입으로 축약하지 않아요.
+- 새 조사에서 SEED는 별도 상태 저장소의 조회 키임을 확인했어요. 주석 참조·저장소·임시 변경의 연결 보존을 검증하며, 구체 저장 방식과 권한 계약은 이 표에서 새로 결정하지 않아요.
 
 ### LogPlus · `logplus`
 
@@ -600,6 +677,7 @@ Provider Manager는 8줄 압축 파일이므로 `8행 · offset N`을 사용해�
 | `U-IMAGES` | [docs/ILLUSTRATIONS.md](../docs/ILLUSTRATIONS.md), [docs/PACKAGES.md:77](../docs/PACKAGES.md#L77), [core/package-images.ts:3](../core/package-images.ts#L3) | 이미지 catalog·source anchor·삽화 작업 기반. 외부 자산 전체/표본 renderer 인수가 아님. |
 | `U-CACHE` | [docs/MODEL-PARAMETERS.md:55](../docs/MODEL-PARAMETERS.md#L55), [core/provider-cache.ts:19](../core/provider-cache.ts#L19) | 요청 캐시 경계/TTL. Gemini cachedContents lifecycle과 Advisor는 없음. |
 | `U-PRICING` | [docs/MODEL-PRICING.md:28](../docs/MODEL-PRICING.md#L28) | 실제/추정/미확인 비용을 분리한 호출별 기록. |
+| `MERRY-LUA-20260912` | ignored 로컬 구조화 조회 영수증·검토 기록; JSON의 section ID/hash 목록 | 32개 응답 수신·40개 hash 대조와 제한적 정적 검토. 원본 응답은 공개하지 않으며 native/전체 의미 검증은 아님. |
 
 ## 조합과 공개 완료 판단
 
@@ -625,4 +703,4 @@ Provider Manager는 8줄 압축 파일이므로 `8행 · offset N`을 사용해�
 - JSON을 기능 상태의 기준으로 갱신하고 이 문서의 대응표·설명도 함께 맞춰요. 기존 ID는 재사용·재번호화하지 않고 세부 기능은 새 ID로 추가해요.
 - `unknown`은 실패도 지원도 아니에요. 근거 없이 더 낙관적인 상태로 바꾸지 않아요. 비어 있는 실제 검증 영수증을 정적 근거로 채우지 않아요.
 - 새 소스 hash나 새 버전은 기존 기준을 덮지 말고 사용자 공개 범위와 별도로 평가해요. 파일명이 같아도 hash가 달라지면 같은 표본 검증으로 계산하지 않아요.
-- 원본 함수/토글/regex의 세부 locator와 실제 case를 보완하는 작업이 남아 있어요. 이 초안의 기능군·212개 ID가 임의 제작자 코드의 모든 동작을 자동 판별했다고 주장하지 않아요.
+- 원본 함수/토글/regex의 세부 locator와 실제 case를 보완하는 작업이 남아 있어요. 이 초안의 기능군·246개 ID가 임의 제작자 코드의 모든 동작을 자동 판별했다고 주장하지 않아요.

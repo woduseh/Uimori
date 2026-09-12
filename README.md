@@ -27,7 +27,7 @@ npm run dev
 
 ## 개인 Linux 서버에서 사용
 
-[Self-host 안내](docs/SELF-HOST.md)에 Docker Compose와 Nginx HTTPS 구성을 준비했어요. 도메인·인증서·접속 토큰을 설정하면 PC와 휴대폰에서 같은 작업실에 접속하는 방식이에요. 앱 포트는 내부 네트워크에 두고 SQLite는 영구 volume에 저장해요. 실제 Linux 이미지 빌드·기동과 실제 기기 접속은 아직 검증하지 않았으며, 로컬 HTTPS 검증의 결과와 한계는 [현재 상태](project-plan/CURRENT.md)에 기록해요.
+[Self-host 안내](docs/SELF-HOST.md)에 Docker Compose와 Nginx HTTPS 구성을 준비했어요. 도메인·인증서·접속 토큰을 설정하면 PC와 휴대폰에서 같은 작업실에 접속하는 방식이에요. 앱 포트는 내부 네트워크에 두고 SQLite는 영구 volume에 저장해요. 개인 Oracle 운영 이력은 있지만, 새 사용자의 일반 설치·업데이트·복구와 실제 기기 접속의 베타 인수는 아직 완료하지 않았어요. 현재 근거는 [현재 상태](project-plan/CURRENT.md), 별도 Linux 격리 실험은 [베타 진행 기록](project-plan/BETA-PLAN.md)에서 확인해요.
 
 ## 사용·설정 안내
 
