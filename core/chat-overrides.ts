@@ -9,8 +9,13 @@ import {
   type PackageLore,
   type PackageRole,
 } from './content-package.js';
-import { compilePackageAttachment, type CompiledPackageAttachment } from './package-runtime.js';
+import {
+  compilePackageAttachment,
+  packageTextTemplateDiagnostics,
+  type CompiledPackageAttachment,
+} from './package-runtime.js';
 import type { ProfileSnapshot } from './product.js';
+import { packageIdentityFromProfile, type PackageIdentityContext } from './package-identity.js';
 
 export const CHAT_LORE_FIELDS = ['title', 'description', 'text'] as const;
 export type ChatLoreField = (typeof CHAT_LORE_FIELDS)[number];
@@ -180,6 +185,7 @@ export function buildChatOverrideSnapshot(
           pkg.lore.push(lore);
         }
         lore[entry.selector.field] = entry.value;
+        if (entry.selector.field === 'text') delete lore.template;
       }
       // A deleted entry can reference a folder or neighbor removed by the original author. The old text is
       // preserved, while unavailable presentation links are dropped from this execution projection only.
@@ -215,7 +221,8 @@ export function projectChatPackageCompilation(
   attachment: PackageAttachment,
   pkg: ContentPackage,
   compiled: CompiledPackageAttachment,
-  includeRoot: (role: PackageRole) => boolean = () => true
+  includeRoot: (role: PackageRole) => boolean = () => true,
+  identity: PackageIdentityContext = packageIdentityFromProfile(profile)
 ): { package: ContentPackage; compiled: CompiledPackageAttachment } {
   const projections =
     profile.chatOverrides?.projections.filter(
@@ -230,19 +237,30 @@ export function projectChatPackageCompilation(
   );
   const selected = distinct ? projections : [projections[0]];
   const prefix = `package:${pkg.id}:${attachment.role}`;
+  const unavailableTextTemplates = (compiled.unavailableTextTemplates ?? []).filter(
+    (item) => item.id === 'body'
+  );
   const resources = [
     ...compiled.resources.filter((resource) => resource.sourceKind !== 'lore'),
     ...selected.flatMap((projection) => {
       const scopePrefix = distinct
         ? `${prefix}:scope:${chatOverrideHash(chatAttachmentKey(projection.scope)).slice(0, 24)}`
         : prefix;
-      return compilePackageAttachment(projection.package, attachment, {
+      const projected = compilePackageAttachment(projection.package, attachment, {
         chatId: profile.chatId,
         target: 'main',
         values: compiled.values,
         resourcesOnly: true,
-      })
-        .resources.filter((resource) => resource.sourceKind === 'lore')
+        identity,
+      });
+      for (const failure of projected.unavailableTextTemplates ?? [])
+        if (failure.id !== 'body')
+          unavailableTextTemplates.push({
+            ...failure,
+            id: failure.id.replace(/^lore:/u, `${scopePrefix}:lore:`),
+          });
+      return projected.resources
+        .filter((resource) => resource.sourceKind === 'lore')
         .map((resource) => ({
           ...resource,
           id: resource.id.replace(prefix, scopePrefix),
@@ -265,6 +283,15 @@ export function projectChatPackageCompilation(
     package: distinct ? pkg : selected[0].package,
     compiled: {
       ...compiled,
+      unavailableTextTemplates: unavailableTextTemplates.length
+        ? unavailableTextTemplates
+        : undefined,
+      instructions: [
+        ...compiled.instructions.filter(
+          (item) => item.id !== `${prefix}:text-template-diagnostics`
+        ),
+        ...packageTextTemplateDiagnostics(prefix, unavailableTextTemplates),
+      ],
       resources,
       pinned: resources.filter((resource) => resource.loading === 'pinned'),
     },

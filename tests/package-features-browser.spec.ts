@@ -102,6 +102,17 @@ test('PFUI01 option drafts survive tabs and validated authoring preserves templa
   const errors: string[] = [];
   page.on('pageerror', (error) => errors.push(error.message));
   const original = await seed(request, 'bot', `합성 옵션 제작 ${Date.now()}`, {
+    bodyTemplate: [{ kind: 'value', expression: { context: ['bot', 'name'] } }],
+    lore: [
+      {
+        id: 'name',
+        title: '이름',
+        description: '',
+        text: '원래 {{user}}',
+        loading: 'discoverable',
+        template: [{ kind: 'value', expression: { context: ['user', 'name'] } }],
+      },
+    ],
     starts: [
       {
         id: 'opening',
@@ -216,6 +227,19 @@ test('PFUI01 option drafts survive tabs and validated authoring preserves templa
   const plainStart = await saveEditor(page, library, original.id);
   expect(plainStart.package!.starts![0].template).toBeUndefined();
   expect(plainStart.package!.starts![0].text).toBe('직접 작성한 도입문');
+  expect(plainStart.package!.bodyTemplate).toEqual(original.package!.bodyTemplate);
+  expect(plainStart.package!.lore[0].template).toEqual(original.package!.lore[0].template);
+  await selectPackageSection(page, '기본 정보');
+  await expect(fields.getByText(/이 본문은 선택한/)).toBeVisible();
+  await library.getByLabel('자료 본문', { exact: true }).fill('직접 수정한 자료 본문');
+  await selectPackageSection(page, '로어');
+  await expect(fields.getByText(/이 로어는 선택한/)).toBeVisible();
+  await fields.getByLabel('로어 1 본문', { exact: true }).fill('직접 수정한 로어 {{user}}');
+  const plainTexts = await saveEditor(page, library, original.id);
+  expect(plainTexts.package!.bodyTemplate).toBeUndefined();
+  expect(plainTexts.package!.body).toBe('직접 수정한 자료 본문');
+  expect(plainTexts.package!.lore[0].template).toBeUndefined();
+  expect(plainTexts.package!.lore[0].text).toBe('직접 수정한 로어 {{user}}');
   expect(
     (await (await request.get(`/api/revisions/content/${original.id}/1`)).json()).package
   ).toEqual(original.package);

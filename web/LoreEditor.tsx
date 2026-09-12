@@ -74,7 +74,14 @@ export function LoreEditor({
   const changeItem = (patch: Partial<PackageLore>) => {
     if (!item) return;
     setSelected(item.id);
-    onChange({ lore: value.lore.map((row) => (row.id === item.id ? { ...row, ...patch } : row)) });
+    onChange({
+      lore: value.lore.map((row) => {
+        if (row.id !== item.id) return row;
+        const next = { ...row, ...patch };
+        if (Object.hasOwn(patch, 'text')) delete next.template;
+        return next;
+      }),
+    });
   };
   const changeOrder = (text: string) => {
     if (!item) return;
@@ -436,6 +443,12 @@ export function LoreEditor({
                   onChange={(event) => changeItem({ text: event.target.value })}
                 />
               </label>
+              {item.template && (
+                <p className="muted" role="status">
+                  이 로어는 선택한 봇·페르소나 이름과 옵션을 템플릿으로 적용해요. 본문을 직접
+                  수정하면 템플릿이 해제되고 입력한 글을 그대로 사용해요.
+                </p>
+              )}
               {(item.loading === 'pinned' || Object.hasOwn(orderDrafts, item.id)) && (
                 <fieldset className="lore-placement-fields">
                   <legend>고정 포함 때의 배치</legend>

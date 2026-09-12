@@ -187,6 +187,11 @@ export function compileSnapshotPrompt(
       promptCompilation.warnings.push(
         `PACKAGE_INSTRUCTION_UNAVAILABLE:${JSON.stringify({ instanceId: `${pkg.attachment.id}:${pkg.attachment.role}`, instructionId: item.id, code: item.code })}`
       );
+  for (const pkg of packages)
+    for (const item of pkg.unavailableTextTemplates ?? [])
+      promptCompilation.warnings.push(
+        `PACKAGE_TEXT_TEMPLATE_FALLBACK:${JSON.stringify({ instanceId: `${pkg.attachment.id}:${pkg.attachment.role}`, resourceId: item.id, code: item.code })}`
+      );
 
   return attachMainHostContext({ ...snapshot, promptCompilation });
 }

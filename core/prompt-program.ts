@@ -230,14 +230,17 @@ function primitive(value: unknown): asserts value is PromptValue {
     fail('PROMPT_INVALID_VALUE');
 }
 /** Check serialized bounds before JSON.stringify/structuredClone can allocate an oversized AST. */
-function inspectAst(value: unknown, limit = 1_000_000): void {
+function inspectAst(value: unknown, limit = 1_000_000, budget?: PromptBudget): void {
   const pending: { value: unknown; leave?: boolean }[] = [{ value }],
     active = new Set<object>();
   let size = 0,
     nodes = 0;
   const started = performance.now();
+  const deterministic = budget?.timing === 'deterministic' ? budget : undefined;
   while (pending.length) {
-    if (++nodes % 128 === 0 && performance.now() - started > 1000) fail('PROMPT_TIME_LIMIT');
+    deterministic?.step();
+    if (++nodes % 128 === 0 && !deterministic && performance.now() - started > 1000)
+      fail('PROMPT_TIME_LIMIT');
     if (nodes > 500_000) fail('PROMPT_PROGRAM_LIMIT');
     const item = pending.pop()!,
       v = item.value;
@@ -249,7 +252,7 @@ function inspectAst(value: unknown, limit = 1_000_000): void {
     if (v === null) size += 4;
     else if (typeof v === 'string') {
       if (v.length > limit) fail('PROMPT_PROGRAM_LIMIT');
-      size += jsonStringSize(v);
+      size += jsonStringSize(v, deterministic);
     } else if (typeof v === 'number') {
       if (!Number.isFinite(v)) fail('PROMPT_INVALID_VALUE');
       size += String(v).length;
@@ -276,7 +279,7 @@ function inspectAst(value: unknown, limit = 1_000_000): void {
         if (entries++) size++;
         if (!array) {
           if (key.length > limit) fail('PROMPT_PROGRAM_LIMIT');
-          size += jsonStringSize(key) + 1;
+          size += jsonStringSize(key, deterministic) + 1;
         }
         pending.push({ value: d.value });
       }
@@ -485,10 +488,11 @@ function template(
 export function validatePromptTemplate(
   value: unknown,
   controlIds: Iterable<string> = [],
-  localNames: Iterable<string> = []
+  localNames: Iterable<string> = [],
+  budget = new PromptBudget()
 ): PromptTemplate {
-  inspectAst(value);
-  template(value, new Set(controlIds), 0, new Set(localNames));
+  inspectAst(value, 1_000_000, budget);
+  template(value, new Set(controlIds), 0, new Set(localNames), budget);
   return structuredClone(value) as PromptTemplate;
 }
 export function validatePromptProgram(value: unknown): PromptProgram {
@@ -1362,8 +1366,15 @@ export function renderPromptTemplate(
   slots: Record<string, string> = {},
   options: PromptEvaluationOptions = {}
 ): string {
-  inspectAst(nodes);
-  template(nodes, new Set(Object.keys(values)), 0, new Set(Object.keys(options.locals ?? {})));
+  const validation = new PromptBudget({}, options.budget?.timing);
+  inspectAst(nodes, 1_000_000, validation);
+  template(
+    nodes,
+    new Set(Object.keys(values)),
+    0,
+    new Set(Object.keys(options.locals ?? {})),
+    validation
+  );
   return new PromptEvaluator(values, options).render(nodes, slots);
 }
 /** History includes the current user turn. Slices are half-open with clamped negative offsets. */

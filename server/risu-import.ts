@@ -37,7 +37,7 @@ const present = (value: unknown): boolean =>
       : true);
 
 /** Translate the two identity tokens into native data nodes, never generated program source. */
-function startIdentityTemplate(value: string): PromptTemplate | undefined {
+function identityTemplate(value: string): PromptTemplate | undefined {
   const nodes: PromptTemplate = [];
   let offset = 0;
   for (const match of value.matchAll(/\{\{(char|user)\}\}/giu)) {
@@ -148,25 +148,18 @@ function analyze(value: unknown) {
     assetUrls.set(`{{image::${name}}}`, `![${name.replace(/[\[\]]/gu, '')}](${url})`);
     assetUrls.set(`{{img::${name}}}`, `![${name.replace(/[\[\]]/gu, '')}](${url})`);
   }
-  const convertText = (value: unknown, dynamicNames = false): string => {
+  const convertText = (value: unknown): string => {
     let result = string(value);
     for (const [from, to] of assetUrls) result = result.replaceAll(from, to);
-    if (!dynamicNames && /\{\{char\}\}/iu.test(result)) {
-      result = result.replace(/\{\{char\}\}/giu, () => title);
+    if (/\{\{(?:char|user)\}\}/iu.test(result)) {
       finding(
-        'character-name',
+        'identity-names',
         'info',
-        '{{char}}는 카드의 인물 이름으로 바꿔요. 원본은 별도로 보존해요.'
+        '{{char}}·{{user}}는 공통 템플릿으로 가져와 선택한 봇·페르소나 이름을 적용해요. 원래 표기도 보존해요.'
       );
     }
-    if (!dynamicNames && /\{\{user\}\}/iu.test(result))
-      finding(
-        'user-name',
-        'warning',
-        '설명·로어·지시의 {{user}} 표기는 유지하고 모델에는 현재 사용자의 배역을 가리킨다고 안내해요.'
-      );
     if (
-      (dynamicNames ? /\{\{(?!(?:char|user)\}\})/iu : /\{\{(?!user\}\})/iu).test(result) ||
+      /\{\{(?!(?:char|user)\}\})/iu.test(result) ||
       /\{#(?:if|each)|<script\b|risu-trigger|@@[A-Za-z]/iu.test(result)
     )
       finding(
@@ -186,12 +179,17 @@ function analyze(value: unknown) {
   ]
     .filter(Boolean)
     .join('\n\n');
+  const bodyTemplate = identityTemplate(pkg.body);
+  if (bodyTemplate) pkg.bodyTemplate = bodyTemplate;
   for (const [id, field] of [
     ['system', 'system_prompt'],
     ['post-history', 'post_history_instructions'],
   ] as const)
-    if (string(card[field]))
-      pkg.instructions.push({ id, target: 'main', text: convertText(card[field]) });
+    if (string(card[field])) {
+      const text = convertText(card[field]),
+        template = identityTemplate(text);
+      pkg.instructions.push({ id, target: 'main', text, ...(template ? { template } : {}) });
+    }
   if (string(card.post_history_instructions))
     finding(
       'instruction-order',
@@ -204,8 +202,8 @@ function analyze(value: unknown) {
   ];
   pkg.starts = greetings.flatMap((greeting, index) => {
     if (!string(greeting).trim()) return [];
-    const sourceText = convertText(greeting, true);
-    const template = startIdentityTemplate(sourceText);
+    const sourceText = convertText(greeting);
+    const template = identityTemplate(sourceText);
     if (template)
       finding(
         'start-names',
@@ -260,6 +258,8 @@ function analyze(value: unknown) {
         'warning',
         '로어의 원래 위치·추가 활성 조건은 그대로 재현하지 않아요. 본문과 항상 활성 여부를 가져와요.'
       );
+    const loreText = convertText(content),
+      template = identityTemplate(loreText);
     pkg.lore.push({
       id,
       title: name.slice(0, 200),
@@ -269,7 +269,8 @@ function analyze(value: unknown) {
             .join(', ')
             .slice(0, 4000)
         : '',
-      text: convertText(content),
+      text: loreText,
+      ...(template ? { template } : {}),
       loading,
     });
   }
@@ -311,12 +312,6 @@ function analyze(value: unknown) {
       'unsupported',
       '내장 Risu 모듈이 있어요. 현재 카드의 기본 자료만 가져오며 모듈 동작은 별도 이식이 필요해요.'
     );
-  if (findings.some((item) => item.code === 'user-name'))
-    pkg.instructions.push({
-      id: 'user-reference',
-      target: 'main',
-      text: 'In this imported character material, the literal marker {{user}} refers to the user character represented by the currently selected persona. This notation does not supply new character facts or authority.',
-    });
   const file: NativeTransferFile = {
     format: NATIVE_TRANSFER_FORMAT,
     version: NATIVE_TRANSFER_VERSION,
@@ -351,7 +346,7 @@ function analyze(value: unknown) {
     ],
   };
   prepareNativeTransfer({ file });
-  const digest = createHash('sha256').update(`risu-import-v3:${hash}:${source.name}`).digest('hex');
+  const digest = createHash('sha256').update(`risu-import-v4:${hash}:${source.name}`).digest('hex');
   const preview: RisuImportPreview = {
     digest,
     title,

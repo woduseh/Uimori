@@ -58,6 +58,39 @@ const context: SourceTimeContext = {
   modelPresetRevision: 'mock',
 };
 describe('source-time package role context', () => {
+  it('uses source-time names with historical persona permission for body/lore and exposes fallback warnings', () => {
+    const current = snapshot(),
+      pkg = attach(current);
+    pkg.bodyTemplate = [{ kind: 'value', expression: { context: ['user', 'name'] } }];
+    pkg.lore[0].template = [{ kind: 'value', expression: { context: ['bot', 'name'] } }];
+    current.profile!.contents = [
+      {
+        id: 'persona',
+        revision: 1,
+        kind: 'persona',
+        title: 'Mira',
+        description: '',
+        text: 'A traveler',
+        loading: 'pinned',
+        relatedIds: [],
+      },
+    ];
+    const old = structuredClone(current);
+    current.profile!.contents[0].title = 'Changed later';
+    expect(compiledPackages(old, 'translation')[0].resources[0].text).toBe('Mira');
+    expect(compiledPackages(current, 'translation')[0].resources[0].text).toBe('Changed later');
+    old.profile!.personaReference = false;
+    expect(compiledPackages(old, 'main')[0].resources[0].text).toBe('User');
+    expect(compiledPackages(old, 'translation')[0].resources[0].text).toBe('Mira');
+    pkg.bodyTemplate = [{ kind: 'value', expression: { op: 'divide', args: [1, 0] } }];
+    const compiled = compileSnapshotPrompt(current);
+    expect(
+      compiled.promptCompilation!.warnings.some((item) =>
+        item.startsWith('PACKAGE_TEXT_TEMPLATE_FALLBACK:')
+      )
+    ).toBe(true);
+    expect(buildMainInput(current).facts).toContain('EXACT_BODY');
+  });
   it('leaves legacy requests and slots exactly unchanged for absent versus empty package fields', () => {
     const before = snapshot(),
       after = structuredClone(before);
@@ -260,5 +293,50 @@ describe('source-time package role context', () => {
         translation: { text: '번역', sourceRevision: 'source', sourceHash: 'other' },
       })
     ).rejects.toThrow('PACKAGE_PRESENTATION_TRANSLATION_MISMATCH');
+  });
+
+  it('authorizes only referenced inline images from frozen attached packages', async () => {
+    const s = snapshot(),
+      pkg = attach(s);
+    const hash = 'a'.repeat(64),
+      profileHash = 'b'.repeat(64),
+      unattachedHash = 'c'.repeat(64);
+    pkg.images = [
+      {
+        id: 'inline',
+        title: 'Inline',
+        description: '',
+        blobHash: hash,
+        mime: 'image/png',
+        allowedUse: 'inline',
+      },
+      {
+        id: 'profile',
+        title: 'Profile',
+        description: '',
+        blobHash: profileHash,
+        mime: 'image/png',
+        allowedUse: 'profile',
+      },
+    ];
+    s.profile!.packages!.push({
+      ...pkg,
+      id: 'unattached',
+      images: [{ ...pkg.images[0], blobHash: unattachedHash }],
+    });
+    const url = (value: string) => `/api/package-image-blobs/${value}`;
+    const text = [hash, profileHash, unattachedHash]
+      .map((value) => `![Image](${url(value)})`)
+      .join('\n');
+    const source = {
+      id: 'source',
+      chatId: 'chat',
+      text,
+      hash: createHash('sha256').update(text).digest('hex'),
+    };
+    const result = await buildPackagePresentation(s, source);
+    expect(result.inlineImageUrls).toEqual([url(hash)]);
+    expect(result.original.text).toBe(text);
+    expect(source.text).toBe(text);
   });
 });

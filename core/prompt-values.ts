@@ -39,7 +39,11 @@ export class PromptBudget {
   readonly limits: Required<PromptEvaluationLimits>;
   private steps = 0;
   private readonly started = performance.now();
-  constructor(input: PromptEvaluationLimits = {}) {
+  constructor(
+    input: PromptEvaluationLimits = {},
+    /** Host-only choice for reproducible stored text; data ASTs cannot select this mode. */
+    readonly timing: 'elapsed' | 'deterministic' = 'elapsed'
+  ) {
     this.limits = { ...caps };
     for (const key of Object.keys(input) as (keyof PromptEvaluationLimits)[]) {
       if (
@@ -55,7 +59,7 @@ export class PromptBudget {
   step(amount = 1): void {
     this.steps += amount;
     if (this.steps > this.limits.maxSteps) evaluationFail('PROMPT_STEP_LIMIT');
-    if (performance.now() - this.started > this.limits.maxMilliseconds)
+    if (this.timing === 'elapsed' && performance.now() - this.started > this.limits.maxMilliseconds)
       evaluationFail('PROMPT_TIME_LIMIT');
   }
   textLength(length: number, output = false): void {

@@ -1,4 +1,7 @@
 import type { Content, ProfileSnapshot } from './product.js';
+import { historicalPersonaExcluded } from './persona-scope.js';
+import { validatePromptTemplate, type PromptTemplate } from './prompt-program.js';
+import { PromptBudget } from './prompt-values.js';
 
 export type PackageIdentityContext = { bot: { name: string }; user: { name: string } };
 type IdentityContent = Pick<Content, 'title' | 'package'>;
@@ -14,9 +17,12 @@ export function packageIdentityFromContents(
 }
 
 /** Frozen profile lookup keeps historical openings independent of later library revisions. */
-export function packageIdentityFromProfile(profile: ProfileSnapshot): PackageIdentityContext {
+export function packageIdentityFromProfile(
+  profile: ProfileSnapshot,
+  target = 'main'
+): PackageIdentityContext {
   const content = (role: 'bot' | 'persona'): IdentityContent | undefined => {
-    if (role === 'persona' && profile.personaReference === false) return undefined;
+    if (historicalPersonaExcluded(profile, role, target)) return undefined;
     const ref = profile.packageAttachments?.find((item) => item.role === role);
     const pkg =
       ref && profile.packages?.find((item) => item.id === ref.id && item.revision === ref.revision);
@@ -25,4 +31,35 @@ export function packageIdentityFromProfile(profile: ProfileSnapshot): PackageIde
       : profile.contents.find((item) => item.kind === role);
   };
   return packageIdentityFromContents(content('bot'), content('persona'));
+}
+
+/** Shared authored text scope: selected identity names and declared controls, without slots or ambient runtime. */
+export function validatePackageIdentityTemplate(
+  value: unknown,
+  controls: Iterable<string>,
+  invalid: (reason: 'SLOT' | 'CONTEXT') => never
+): PromptTemplate {
+  const result = validatePromptTemplate(value, controls, [], new PromptBudget({}, 'deterministic'));
+  const pending: unknown[] = [result];
+  while (pending.length) {
+    const node = pending.pop();
+    if (!node || typeof node !== 'object') continue;
+    if (!Array.isArray(node)) {
+      if (Object.hasOwn(node, 'literal')) continue;
+      const record = node as Record<string, unknown>;
+      if (record.kind === 'slot') invalid('SLOT');
+      if (Object.hasOwn(record, 'context')) {
+        const path = record.context;
+        if (
+          !Array.isArray(path) ||
+          path.length !== 2 ||
+          !['bot', 'user'].includes(path[0]) ||
+          path[1] !== 'name'
+        )
+          invalid('CONTEXT');
+      }
+    }
+    pending.push(...Object.values(node));
+  }
+  return result;
 }

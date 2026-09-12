@@ -78,4 +78,27 @@ describe('content package data contract', () => {
     expect(validatePackageTransform(rule).pattern).toBe(rule.pattern);
     expect(() => validatePackageTransform({ ...rule, flags: 'gg' })).toThrow('PACKAGE_REGEX_FLAGS');
   });
+  it('preserves body/lore identity templates and rejects slots or broader runtime reads', () => {
+    const value = modulePackage();
+    value.bodyTemplate = [{ kind: 'value', expression: { context: ['bot', 'name'] } }];
+    value.lore = [
+      {
+        id: 'person',
+        title: 'Person',
+        description: '',
+        text: '{{user}}',
+        loading: 'discoverable',
+        template: [{ kind: 'value', expression: { context: ['user', 'name'] } }],
+      },
+    ];
+    expect(validateContentPackage(value)).toEqual(value);
+    expect(() => validateContentPackage({ ...value, body: undefined })).toThrow(
+      'PACKAGE_TEXT_TEMPLATE_BODY_REQUIRED'
+    );
+    expect(() =>
+      validateContentPackage({ ...value, bodyTemplate: [{ kind: 'slot', name: 'input' }] })
+    ).toThrow('PACKAGE_TEXT_TEMPLATE_SLOT');
+    value.lore[0].template = [{ kind: 'value', expression: { context: ['state', 'count'] } }];
+    expect(() => validateContentPackage(value)).toThrow('PACKAGE_TEXT_TEMPLATE_CONTEXT');
+  });
 });
