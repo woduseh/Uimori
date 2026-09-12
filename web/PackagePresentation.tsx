@@ -5,6 +5,8 @@ export type PackagePresentation = {
   sourceRevision: string;
   sourceHash: string;
   format: 'plain-text';
+  /** Registered inline images from this source's frozen packages only. */
+  inlineImageUrls?: string[];
   original: { text: string; changed: boolean; applied: string[] };
   translation?: { text: string; changed: boolean; applied: string[] };
   translationId: string | null;

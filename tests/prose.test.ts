@@ -10,6 +10,21 @@ import type { Job, Source } from '../core/types.js';
 const render = (text: string) => renderToStaticMarkup(createElement(Prose, { text }));
 
 describe('safe prose rendering', () => {
+  test('renders only explicitly registered local images and keeps code and external images literal', () => {
+    const local = `/api/package-image-blobs/${'a'.repeat(64)}`;
+    const other = `/api/package-image-blobs/${'b'.repeat(64)}`;
+    const external = 'https://example.com/tracking.png';
+    const text = `![등록 이미지](${local})\n![](${local})\n![다른 이미지](${other})\n![외부](${external})\n\n\`![코드](${local})\`\n\n\`\`\`\n![블록 코드](${local})\n\`\`\``;
+    const html = renderToStaticMarkup(
+      createElement(Prose, { text, allowedImageUrls: [local, external] })
+    );
+    expect(html.match(/<img /gu)).toHaveLength(2);
+    expect(html).toContain(`src="${local}"`);
+    expect(html).not.toContain(`src="${other}"`);
+    expect(html).not.toContain(`src="${external}"`);
+    expect(html).toContain(`![다른 이미지](${other})`);
+    expect(html).toContain(`<code>![코드](${local})</code>`);
+  });
   test('renders headings, emphasis, quotes, lists and line breaks with semantic elements', () => {
     const html = render(
       '# 실제 원고 제목\n\n**강조**와 *기울임*\n다음 줄\n\n> 인용한 문장\n> 이어지는 문장\n\n- 하나\n- 둘\n\n3. 셋\n4. 넷'

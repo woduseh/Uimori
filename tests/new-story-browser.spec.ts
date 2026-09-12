@@ -13,6 +13,16 @@ test('NSUI01 global model reaches an empty chat on mobile and optional choices s
 }, info) => {
   await page.setViewportSize({ width: MOBILE_WIDTH, height: 844 });
   const title = `Quick start ${crypto.randomUUID()}`;
+  const imageResponse = await request.post('/api/package-image-blobs', {
+    data: {
+      mime: 'image/png',
+      base64:
+        'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aX1sAAAAASUVORK5CYII=',
+    },
+  });
+  expect(imageResponse.ok()).toBe(true);
+  const image = await imageResponse.json();
+  const imageText = `\n\n![등록된 시작 이미지](${image.url})`;
   const savedBot = await request.post('/api/content', {
     data: {
       kind: 'bot',
@@ -33,17 +43,27 @@ test('NSUI01 global model reaches an empty chat on mobile and optional choices s
         instructions: [],
         controls: [],
         transforms: [],
+        images: [
+          {
+            id: 'opening-image',
+            title: '등록된 시작 이미지',
+            description: '',
+            blobHash: image.hash,
+            mime: image.mime,
+            allowedUse: 'inline',
+          },
+        ],
         starts: [
           {
             id: 'greeting',
             title: '인사',
             mode: 'authored',
-            text: '{{char}} greets {{user}}.',
+            text: `{{char}} greets {{user}}.${imageText}`,
             template: [
               { kind: 'value', expression: { context: ['bot', 'name'] } },
               { kind: 'text', text: ' greets ' },
               { kind: 'value', expression: { context: ['user', 'name'] } },
-              { kind: 'text', text: '.' },
+              { kind: 'text', text: `.${imageText}` },
             ],
           },
         ],
@@ -160,6 +180,11 @@ test('NSUI01 global model reaches an empty chat on mobile and optional choices s
   await expect(dialog.getByLabel('시작 미리보기', { exact: true })).toHaveText(
     'Harbor greets User.'
   );
+  const previewImage = dialog.getByRole('img', { name: '등록된 시작 이미지', exact: true });
+  await expect(previewImage).toBeVisible();
+  await expect
+    .poll(() => previewImage.evaluate((element) => (element as HTMLImageElement).naturalWidth))
+    .toBeGreaterThan(0);
   await dialog.getByRole('button', { name: '시작 페르소나', exact: true }).click();
   const picker = page.getByRole('dialog', { name: '시작 페르소나', exact: true });
   await picker.getByRole('searchbox').fill(personaTitle);
@@ -175,8 +200,16 @@ test('NSUI01 global model reaches an empty chat on mobile and optional choices s
   );
   await dialog.getByRole('button', { name: '도입문 확정하고 채팅 만들기', exact: true }).click();
   const opening = await (await confirmed).json();
-  expect(opening.run.snapshot.packageStart.text).toBe(`Harbor greets ${personaTitle}.`);
+  expect(opening.run.snapshot.packageStart.text).toBe(`Harbor greets ${personaTitle}.${imageText}`);
   expect(opening.run.usage.modelCalls).toBe(0);
+  await expect(dialog).toBeHidden();
+  const readerImage = page
+    .getByTestId('source-text')
+    .getByRole('img', { name: '등록된 시작 이미지', exact: true });
+  await expect(readerImage).toBeVisible();
+  await expect
+    .poll(() => readerImage.evaluate((element) => (element as HTMLImageElement).naturalWidth))
+    .toBeGreaterThan(0);
 });
 
 preservePromptWorkspace();
