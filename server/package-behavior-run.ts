@@ -1,13 +1,14 @@
 import { historicalPersonaExcluded } from '../core/persona-scope.js';
-import { HttpError } from './request-validation.js';
 import { createHash, randomBytes } from 'node:crypto';
 import { isDeepStrictEqual } from 'node:util';
 import {
   BehaviorError,
+  BehaviorEvaluationError,
   behaviorActionAllowed,
   behaviorActionTriggers,
   evaluateBehaviorAction,
   validatePackageBehavior,
+  validateBehaviorValue,
   type BehaviorAction,
 } from '../core/package-behavior.js';
 import {
@@ -15,7 +16,12 @@ import {
   packageInstanceId,
   type PackageExecutionState,
 } from '../core/execution-context.js';
-import { assertBehaviorToolCapability, listBehaviorTools } from '../core/package-behavior-tools.js';
+import {
+  admitBehaviorTools,
+  assertBehaviorToolCapability,
+  listBehaviorTools,
+  withoutPackageBehavior,
+} from '../core/package-behavior-tools.js';
 import type { PackageAttachment } from '../core/content-package.js';
 import type { RuntimeValue } from '../core/prompt-program.js';
 import type { ToolAction } from '../core/provider.js';
@@ -77,6 +83,12 @@ function encode(value: unknown) {
 function definitions(snapshot: RunSnapshot) {
   return (snapshot.profile?.packageAttachments ?? [])
     .filter((ref) => !historicalPersonaExcluded(snapshot.profile, ref.role))
+    .filter(
+      (ref) =>
+        !snapshot.packageBehaviorUnavailable?.some(
+          (item) => item.instanceId === packageInstanceId(ref)
+        )
+    )
     .flatMap((ref) => {
       const pkg = snapshot.profile?.packages?.find(
         (p) => p.id === ref.id && p.revision === ref.revision
@@ -228,6 +240,7 @@ function resolveAction(
   const behavior = snapshot.profile!.packages!.find(
     (p) => p.id === ref.id && p.revision === ref.revision
   )!.behavior!;
+  validateBehaviorValue(behavior.stateSchema, before!.state);
   if (!behaviorActionAllowed(action, before!.state, input, hostRuntime))
     fail('BEHAVIOR_ACTION_DISABLED');
   const drawSeed = action.draws?.length
@@ -268,6 +281,48 @@ function resolveAction(
 
 /** Admission only. Preview paths never call this function. No current state is mutated. */
 export function prepareRunBehavior(
+  store: Store,
+  runId: string,
+  snapshot: RunSnapshot
+): RunSnapshot {
+  const admitted = admitBehaviorTools(snapshot);
+  store.db.exec('SAVEPOINT behavior_preparation');
+  try {
+    const prepared = prepareRunBehaviorInTransaction(store, runId, admitted);
+    store.db.exec('RELEASE behavior_preparation');
+    return prepared;
+  } catch (error) {
+    store.db.exec('ROLLBACK TO behavior_preparation; RELEASE behavior_preparation');
+    if (!isRecoverableBehaviorExecutionError(error)) throw error;
+    // Automatic actions form a dependency cohort. Do not publish a partial prefix or fake state.
+    return withoutPackageBehavior(
+      admitted,
+      definitions(admitted).map((d) => d.ref),
+      'preparation',
+      error.message
+    );
+  }
+}
+
+/** Only add-on evaluation/eligibility errors are recoverable. Ownership and corrupt journals stay fatal. */
+export function isRecoverableBehaviorExecutionError(error: unknown): error is Error {
+  return (
+    error instanceof BehaviorEvaluationError ||
+    (error instanceof BehaviorError &&
+      [
+        'BEHAVIOR_RUN_ACTION_LIMIT',
+        'BEHAVIOR_RUN_JOURNAL_LIMIT',
+        'BEHAVIOR_ACTION_DISABLED',
+        'BEHAVIOR_OPPORTUNITY_INPUT_CHANGED',
+        'BEHAVIOR_OPPORTUNITY_STATE_CHANGED',
+        'BEHAVIOR_OPPORTUNITY_DEPENDENCY_CHANGED',
+        'BEHAVIOR_STATE_STALE',
+        'BEHAVIOR_MIGRATION_REQUIRED',
+      ].includes(error.message))
+  );
+}
+
+function prepareRunBehaviorInTransaction(
   store: Store,
   runId: string,
   snapshot: RunSnapshot
@@ -438,11 +493,22 @@ export function executeRunBehaviorTool(
       };
     });
   } catch (error) {
-    const code =
-      error instanceof BehaviorError || error instanceof HttpError
-        ? error.message
-        : 'BEHAVIOR_ACTION_FAILED';
-    return { callId: call.callId, name: call.name, args: {}, denied: true, result: { code } };
+    const permissionDenied =
+      error instanceof BehaviorError && error.message === 'BEHAVIOR_TOOL_NOT_ALLOWED';
+    if (!permissionDenied && !isRecoverableBehaviorExecutionError(error)) throw error;
+    const code = (error as Error).message;
+    return {
+      callId: call.callId,
+      name: permissionDenied ? 'unapproved' : call.name,
+      args: {},
+      denied: true,
+      result: {
+        code,
+        unavailable: true,
+        continueWithoutAction: true,
+      },
+      errorKind: 'recoverable',
+    };
   }
 }
 

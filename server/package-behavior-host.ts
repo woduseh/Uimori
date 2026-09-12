@@ -5,7 +5,12 @@ import {
   type PackageExecutionState,
 } from '../core/execution-context.js';
 import type { RuntimeValue } from '../core/prompt-program.js';
-import { validatePackageBehavior } from '../core/package-behavior.js';
+import {
+  BehaviorError,
+  validatePackageBehavior,
+  validateBehaviorValue,
+} from '../core/package-behavior.js';
+import { withoutPackageBehavior } from '../core/package-behavior-tools.js';
 import type { ContentPackage, PackageAttachment } from '../core/content-package.js';
 import type { RunSnapshot } from '../core/types.js';
 import {
@@ -20,6 +25,7 @@ import {
   commitRunBehaviorInstance,
   completedRunBehaviorView,
   copyForkRunBehaviors,
+  isRecoverableBehaviorExecutionError,
 } from './package-behavior-run.js';
 import {
   initPackageRequests,
@@ -128,6 +134,32 @@ function frozenState(store: Store, d: Definition, state: BehaviorState): Package
     draws: lastDraw?.draws ?? (head ? JSON.parse(head.draws) : {}),
   };
 }
+function retainedState(store: Store, d: Definition): PackageExecutionState[] {
+  const stored = store.behavior.storedState(d.scope);
+  if (!stored) return [];
+  const prior = store.product.get<{ package: ContentPackage }>(
+    'content',
+    stored.packageId,
+    stored.packageRevision
+  ).package;
+  validateBehaviorValue(validatePackageBehavior(prior.behavior).stateSchema, stored.state);
+  return [
+    frozenState(
+      store,
+      {
+        ...d,
+        ref: { ...d.ref, revision: stored.packageRevision },
+        scope: {
+          ...d.scope,
+          packageRevision: stored.packageRevision,
+          behaviorRevision: stored.behaviorRevision,
+          schemaVersion: stored.schemaVersion,
+        },
+      },
+      stored
+    ),
+  ];
+}
 /** GET and previews are projections. They never initialize rows, roll dice, or repair state. */
 export function behaviorDetail(store: Store, chatId: string, requestedBranch?: string) {
   store.chat(chatId);
@@ -197,16 +229,48 @@ export function freezePackageStates(
   initialize: boolean
 ): RunSnapshot {
   const branchId = snapshot.branchId ?? `main:${snapshot.chatId}`;
-  const states = definitions(store, snapshot.chatId, branchId, snapshot).map((d) => {
+  let projected = snapshot;
+  const states = definitions(store, snapshot.chatId, branchId, snapshot).flatMap((d) => {
+    if (
+      snapshot.packageBehaviorUnavailable?.some(
+        (item) => item.instanceId === d.scope.attachmentInstanceId
+      )
+    )
+      return [];
     const availability = status(store, d.scope);
-    if (availability.status !== 'ready' && d.pkg.behavior!.mode !== 'annotation')
-      throw new HttpError(409, availability.error!);
-    const state = initialize
-      ? store.behavior.ensureInTransaction(d.scope, d.pkg.behavior!)
-      : store.behavior.read(d.scope, d.pkg.behavior!);
-    return frozenState(store, d, state);
+    if (availability.status !== 'ready') {
+      projected = withoutPackageBehavior(
+        projected,
+        [d.ref],
+        'state',
+        availability.error!,
+        retainedState(store, d)
+      );
+      return [];
+    }
+    try {
+      const state = initialize
+        ? store.behavior.ensureInTransaction(d.scope, d.pkg.behavior!)
+        : store.behavior.read(d.scope, d.pkg.behavior!);
+      validateBehaviorValue(d.pkg.behavior!.stateSchema, state.state);
+      return [frozenState(store, d, state)];
+    } catch (error) {
+      // A definition update is recoverable; malformed rows/SQL/ownership errors are not.
+      if (!(error instanceof BehaviorError) || error.message !== 'BEHAVIOR_MIGRATION_REQUIRED')
+        throw error;
+      projected = withoutPackageBehavior(
+        projected,
+        [d.ref],
+        'state',
+        error.message,
+        retainedState(store, d)
+      );
+      return [];
+    }
   });
-  return states.length ? { ...snapshot, packageStates: states } : snapshot;
+  return states.length || projected.packageBehaviorUnavailable?.length
+    ? { ...projected, packageStates: states }
+    : snapshot;
 }
 export function performBehaviorAction(
   store: Store,
@@ -291,7 +355,7 @@ export function completePackageOutputs(store: Store, run: Run, source: Source) {
     }))
     .filter((item): item is { d: Definition; before: PackageExecutionState } => !!item.before);
   if (!defs.length) return;
-  const projected = completedRunBehaviorView(store, run);
+  let projected = run.snapshot;
   const parse = (d: Definition, before: PackageExecutionState) => {
     const expected =
       projected.packageStates?.find((s) => s.instanceId === d.scope.attachmentInstanceId)
@@ -313,6 +377,7 @@ export function completePackageOutputs(store: Store, run: Run, source: Source) {
   let groupFailure: string | null = null;
   store.db.exec('SAVEPOINT package_outputs');
   try {
+    projected = completedRunBehaviorView(store, run);
     if (
       run.snapshot.history.some(
         (item) =>
@@ -327,6 +392,11 @@ export function completePackageOutputs(store: Store, run: Run, source: Source) {
     store.db.exec('RELEASE package_outputs');
   } catch (error) {
     store.db.exec('ROLLBACK TO package_outputs; RELEASE package_outputs');
+    if (
+      !isRecoverableBehaviorExecutionError(error) &&
+      !(error instanceof HttpError && error.message === 'BEHAVIOR_SOURCE_DEPENDENCY_CHANGED')
+    )
+      throw error;
     groupFailure = error instanceof Error ? error.message : String(error);
   }
   for (const { d, before } of defs) {
@@ -338,6 +408,7 @@ export function completePackageOutputs(store: Store, run: Run, source: Source) {
         store.db.exec('RELEASE package_annotation');
       } catch (error) {
         store.db.exec('ROLLBACK TO package_annotation; RELEASE package_annotation');
+        if (!isRecoverableBehaviorExecutionError(error)) throw error;
         failure = error instanceof Error ? error.message : String(error);
       }
     }
@@ -411,6 +482,13 @@ export function branchPackageStates(
     }
     const basis =
       candidate ?? (sourceId ? store.run(store.source(sourceId).runId).snapshot : undefined);
+    const unavailable = basis?.packageBehaviorUnavailable?.find(
+      (item) => item.instanceId === d.scope.attachmentInstanceId
+    );
+    if (unavailable) {
+      saved = unavailable.retainedState;
+      failure = unavailable.code;
+    }
     if (
       saved &&
       basis?.history.some(

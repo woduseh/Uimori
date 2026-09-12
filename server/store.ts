@@ -1,5 +1,6 @@
 import { DatabaseSync } from 'node:sqlite';
-import { initHelperTaskTiming, initHelperWorkspace } from './helper-workspace.js';
+import { initHelperWorkspace } from './helper-workspace.js';
+import { databaseSchemaVersion, initializeDatabaseSchema } from './schema-migrations.js';
 import { initEditDrafts } from './edit-drafts.js';
 import { initChatOverrides } from './chat-overrides.js';
 import { initChatOptions } from './chat-options.js';
@@ -20,7 +21,7 @@ import { ProductStore } from './product-store.js';
 import { HttpError, text } from './request-validation.js';
 export { HttpError } from './request-validation.js';
 import { StoryStore } from './story-store.js';
-import { OutlineStore, initOutline } from './outline-store.js';
+import { OutlineStore } from './outline-store.js';
 import { consumePackageRequestInTransaction } from './package-requests.js';
 import { ChatOrganizationStore } from './chat-organization.js';
 import { LibraryOrganizationStore } from './library-organization.js';
@@ -43,11 +44,7 @@ import {
   scheduleTranslationImages,
   latestImageJob,
 } from './package-images.js';
-import {
-  initIllustrations,
-  recoverIllustrations,
-  scheduleAutomaticIllustration,
-} from './illustrations.js';
+import { recoverIllustrations, scheduleAutomaticIllustration } from './illustrations.js';
 import type {
   Settings,
   Chat as BaseChat,
@@ -105,22 +102,7 @@ export class Store {
       throw error;
     }
     try {
-      const version = Number((this.db.prepare('PRAGMA user_version').get() as Row).user_version);
-      if (![0, 15].includes(version))
-        throw new Error(
-          `Unsupported database schema version ${version}; Uimori requires schema 15. For disposable default development data, stop the server and run npm run reset:dev.`
-        );
-      if (
-        version === 0 &&
-        this.db
-          .prepare(
-            "SELECT 1 FROM sqlite_schema WHERE type='table' AND name NOT LIKE 'sqlite_%' LIMIT 1"
-          )
-          .get()
-      )
-        throw new Error(
-          'Unversioned database is not empty. For disposable default development data, stop the server and run npm run reset:dev.'
-        );
+      databaseSchemaVersion(this.db);
       this.db.exec('PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON; PRAGMA busy_timeout=3000;');
       this.product = new ProductStore(this);
       this.story = new StoryStore(this);
@@ -133,9 +115,8 @@ export class Store {
         return branch.headRevision ? this.source(branch.headRevision).hash : null;
       });
       // Keep the retired runs.issue storage column as an unused diagnostic field.
-      if (version === 0)
-        this.transaction(() => {
-          this.db.exec(`
+      initializeDatabaseSchema(this.db, () => {
+        this.db.exec(`
       CREATE TABLE IF NOT EXISTS chats (id TEXT PRIMARY KEY, title TEXT NOT NULL, head_revision TEXT, settings_revision INTEGER NOT NULL, settings TEXT NOT NULL, created_at TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS runs (id TEXT PRIMARY KEY, chat_id TEXT NOT NULL REFERENCES chats(id), parent_revision TEXT, status TEXT NOT NULL, request TEXT NOT NULL, snapshot TEXT NOT NULL, request_key TEXT NOT NULL, command TEXT NOT NULL, source_revision TEXT, error TEXT, usage TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, branch_id TEXT REFERENCES branches(id), partial_text TEXT, issue TEXT, UNIQUE(chat_id,request_key));
       CREATE UNIQUE INDEX IF NOT EXISTS one_active_run_per_branch ON runs(branch_id) WHERE status IN ('queued','running','waiting_for_state');
@@ -150,29 +131,20 @@ export class Store {
       CREATE TABLE provider_connection_tests (id TEXT PRIMARY KEY, idempotency_key TEXT NOT NULL UNIQUE, model_id TEXT NOT NULL, model_revision INTEGER NOT NULL, status TEXT NOT NULL, sent_at TEXT, body TEXT NOT NULL);
       CREATE UNIQUE INDEX one_active_connection_test_per_model ON provider_connection_tests(model_id) WHERE status='running';
       `);
-          this.product.initFresh();
-          this.story.initFresh();
-          this.context.initFresh();
-          this.organization.init();
-          this.libraryOrganization.init();
-          this.behavior.init();
-          initBehaviorHost(this);
-          initRunBehavior(this);
-          initHelperWorkspace(this);
-          initEditDrafts(this);
-          initChatOverrides(this);
-          initChatOptions(this);
-          initResponseStreams(this.db);
-          initIllustrations(this.db);
-          initOutline(this.db);
-          this.db.exec('PRAGMA user_version=15');
-        });
-      // Additive illustration and outline tables; a schema 15 database keeps its version and data.
-      else {
-        initIllustrations(this.db);
-        initOutline(this.db);
-      }
-      initHelperTaskTiming(this);
+        this.product.initFresh();
+        this.story.initFresh();
+        this.context.initFresh();
+        this.organization.init();
+        this.libraryOrganization.init();
+        this.behavior.init();
+        initBehaviorHost(this);
+        initRunBehavior(this);
+        initHelperWorkspace(this);
+        initEditDrafts(this);
+        initChatOverrides(this);
+        initChatOptions(this);
+        initResponseStreams(this.db);
+      });
     } catch (error) {
       this.db.close();
       this.ownership.close();
@@ -563,6 +535,14 @@ export class Store {
         return { run: this.run(prior.id), created: false };
       }
       validate?.(original.snapshot);
+      if (
+        original.snapshot.history.some(
+          (item) =>
+            this.source(item.revision).hash !==
+            (item.contentHash ?? this.sourceOriginal(item.revision).hash)
+        )
+      )
+        throw new HttpError(409, 'Candidate source history changed; retry with current settings');
       const branch = this.product.createBranch(original.chatId, {
         title,
         fromRevision: original.parentRevision,
@@ -1111,7 +1091,7 @@ export class Store {
   recover() {
     this.transaction(() => {
       for (const row of this.db
-        .prepare("SELECT id FROM runs WHERE status IN ('queued','running')")
+        .prepare("SELECT id FROM runs WHERE status IN ('queued','running','waiting_for_state')")
         .all() as Row[]) {
         const run = this.run(row.id);
         this.db

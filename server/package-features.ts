@@ -1,7 +1,6 @@
 import { HttpError, fields, record } from './request-validation.js';
 import type { FastifyInstance } from 'fastify';
 import {
-  validateContentPackage,
   validatePackageAttachment,
   type ContentPackage,
   type PackageAttachment,
@@ -10,6 +9,7 @@ import type { ChatProfile, Content, ProfileSnapshot } from '../core/product.js';
 import type { ProductStore } from './product-store.js';
 import type { Store } from './store.js';
 import { assertPackageImages } from './package-images.js';
+import { resolvePackageGraph } from '../core/package-graph.js';
 
 /** Live links follow IDs; a frozen closure resolves dependencies from its captured refs. */
 export function resolvePackageModules(
@@ -17,38 +17,18 @@ export function resolvePackageModules(
   roots: PackageAttachment[],
   options: { latest?: boolean; frozen?: PackageAttachment[] } = {}
 ): { attachments: PackageAttachment[]; packages: ContentPackage[] } {
-  const attachments: PackageAttachment[] = [],
-    packages: ContentPackage[] = [],
-    seen = new Map<string, number>(),
-    active = new Set<string>();
-  const visit = (raw: PackageAttachment, depth: number) => {
-    const validated = validatePackageAttachment(raw);
-    const captured = options.frozen?.find((r) => r.id === raw.id && r.role === raw.role);
-    if (options.frozen && !captured) throw new HttpError(400, 'Frozen module dependency missing');
-    const ref = options.latest
-        ? { ...validated, revision: product.get<Content>('content', raw.id).revision }
-        : (captured ?? validated),
-      key = `${ref.id}:${ref.role}`,
-      identity = `${ref.id}@${ref.revision}`;
-    if (active.has(identity)) throw new HttpError(400, 'Package module dependency cycle');
-    if (seen.has(key)) {
-      if (seen.get(key) !== ref.revision)
-        throw new HttpError(400, 'Package module revision conflict');
-      return;
-    }
-    if (depth > 20 || attachments.length >= 100)
-      throw new HttpError(400, 'Package module dependency limit');
-    const content = product.get<Content>('content', ref.id, ref.revision);
-    if (!content.package) throw new HttpError(400, 'Required module is not a package');
-    const pkg = validateContentPackage(content.package);
-    seen.set(key, ref.revision);
-    active.add(identity);
-    attachments.push(ref);
-    packages.push(pkg);
-    for (const module of pkg.modules ?? []) visit({ ...module, role: 'module' }, depth + 1);
-    active.delete(identity);
-  };
-  for (const root of roots) visit(root, 0);
+  const { attachments, packages } = resolvePackageGraph(
+    {
+      latestRevision: (id) => product.get<Content>('content', id).revision,
+      read: (ref) => {
+        const pkg = product.get<Content>('content', ref.id, ref.revision).package;
+        if (!pkg) throw new HttpError(400, 'Required module is not a package');
+        return pkg;
+      },
+    },
+    roots,
+    options
+  );
   return { attachments, packages };
 }
 export function assertPackageReferences(product: ProductStore, pkg: ContentPackage) {

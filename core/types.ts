@@ -65,6 +65,17 @@ export type Usage = {
   costUsd: number | null;
 };
 export type RunSnapshot = {
+  /** Frozen add-on admission failures; retained records are never substituted as current state. */
+  packageBehaviorUnavailable?: {
+    instanceId: string;
+    packageId: string;
+    packageRevision: number;
+    role: 'bot' | 'persona' | 'module';
+    stage: 'state' | 'preparation' | 'tools';
+    code: string;
+    /** Recovery evidence under its own historical definition; never active model input. */
+    retainedState?: import('./execution-context.js').PackageExecutionState;
+  }[];
   /** Independent writing artifact: read-only tools and no host source/state commit. */
   executionPurpose?: 'artifact';
   /** Frozen author-side composition for the unit this run writes; planning, never story fact. */
@@ -210,6 +221,15 @@ export type ChatDetail = {
 
 /** Reader summaries never stand in for frozen execution inputs. */
 export type ReaderRun = Omit<Run, 'snapshot' | 'inputs' | 'toolEvents'> & {
+  /** Metadata only; excluded package state and instruction bodies stay in explicit diagnostics. */
+  hasPackageIssues?: boolean;
+  statePreparation?: {
+    status: import('./story.js').StoryPreparation['status'];
+    reason?: string;
+    missingSources: number;
+    lastSourceRevision: string | null;
+    hasState: boolean;
+  };
   /** Stable admission order of the first request in this retry chain. */
   requestOrder?: number;
   retryOf?: string | null;

@@ -146,6 +146,7 @@ import {
 import { validateArchivedPackageStart } from './package-start.js';
 import { validateLoreContextPolicy } from '../core/lore-context.js';
 import { validateArchivedLoreContext } from './lore-context-archive.js';
+import { validateNativeTransferArchive } from './native-transfer.js';
 
 type Row = Record<string, any>;
 const json = JSON.stringify;
@@ -308,7 +309,18 @@ export class ProductStore {
     return this.store.transaction(() => this.saveInTransaction(kind, value, id, expected));
   }
   /** Caller owns the transaction. */
-  saveInTransaction(kind: string, value: Row, id?: string, expected?: number) {
+  saveInTransaction(kind: string, value: Row, id?: string, expected?: number, createId?: string) {
+    // Server-owned import identities are never update IDs or accepted from ordinary edit bodies.
+    if (
+      createId &&
+      (id ||
+        this.db
+          .prepare(
+            'SELECT 1 FROM versions WHERE id=? UNION SELECT 1 FROM provider_settings WHERE id=? UNION SELECT 1 FROM library_hidden WHERE id=?'
+          )
+          .get(createId, createId, createId))
+    )
+      throw new HttpError(409, 'New library identity already exists');
     if (id) this.assertAvailable(kind, id);
     const prior = id ? this.get<Row & ContentRef>(kind, id) : null;
     if (prior && prior.revision !== expected) throw new HttpError(409, 'Revision conflict');
@@ -330,7 +342,7 @@ export class ProductStore {
     }
     const result: Row & ContentRef = {
       ...value,
-      id: id ?? randomUUID(),
+      id: id ?? createId ?? randomUUID(),
       revision: (prior?.revision ?? 0) + 1,
     };
     if (kind === 'content' && result.package)
@@ -362,7 +374,7 @@ export class ProductStore {
       for (const chat of this.store.chats()) this.store.event(chat.id, 'profile.updated', chat.id);
     return result;
   }
-  content(value: unknown, id?: string, inTransaction = false) {
+  content(value: unknown, id?: string, inTransaction = false, createId?: string) {
     const b = record(value);
     fields(b, [
       'kind',
@@ -396,7 +408,8 @@ export class ProductStore {
         ...(b.package !== undefined ? { package: validateContentPackage(b.package) } : {}),
       },
       id,
-      id ? number(b.expectedRevision, 'revision') : undefined
+      id ? number(b.expectedRevision, 'revision') : undefined,
+      createId
     );
   }
   promptCombination(value: unknown) {
@@ -444,7 +457,7 @@ export class ProductStore {
       });
     });
   }
-  promptPreset(value: unknown, id?: string, inTransaction = false) {
+  promptPreset(value: unknown, id?: string, inTransaction = false, createId?: string) {
     const b = record(value);
     fields(b, ['title', 'role', 'text', 'program', 'values', 'expectedRevision']);
     const role = choice(b.role, ['main', 'translation'], 'prompt role');
@@ -481,7 +494,8 @@ export class ProductStore {
         ),
       },
       id,
-      id ? number(b.expectedRevision, 'revision') : undefined
+      id ? number(b.expectedRevision, 'revision') : undefined,
+      createId
     );
   }
   prepareConnection(value: unknown, id?: string) {
@@ -1240,7 +1254,8 @@ export class ProductStore {
       throw new HttpError(400, 'Unsupported archive');
     const tables = record(a.tables);
     // Illustration and outline tables were added to schema 15 later; older archives restore normally.
-    for (const table of [...ILLUSTRATION_TABLES, ...OUTLINE_TABLES]) tables[table] ??= [];
+    for (const table of [...ILLUSTRATION_TABLES, ...OUTLINE_TABLES, 'native_transfer_receipts'])
+      tables[table] ??= [];
     fields(tables, archiveTables);
     if (archiveTables.some((t) => !Array.isArray(tables[t]) || tables[t].length > 100000))
       throw new HttpError(400, 'Missing or oversized archive table');
@@ -1434,6 +1449,7 @@ export class ProductStore {
         validateChatOptionArchive(this.store);
         validatePackageRequests(this.store);
         validatePackageBehaviorArchive(this.store);
+        validateNativeTransferArchive(this.store);
         validateOutlineArchive(this.store);
         this.store.organization.validateArchive();
         this.store.libraryOrganization.validateArchive();
@@ -1477,6 +1493,7 @@ const archiveTables = [
   ...packageBehaviorTables,
   ...ILLUSTRATION_TABLES,
   ...OUTLINE_TABLES,
+  'native_transfer_receipts',
 ];
 
 function currentRef(product: ProductStore, kind: string, reference: ContentRef): ContentRef {

@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react';
+import { useRef, useState, type ReactNode } from 'react';
 import type { Job, ReaderRun, Run } from '../core/types.js';
 import { api, labels } from './api.js';
 import { ContextSummaryStatus } from './ContextSummaryStatus.js';
@@ -6,6 +6,7 @@ import { LazyDiagnostics } from './LazyDiagnostics.js';
 import { LoreContextDiagnostics } from './LoreContextDiagnostics.js';
 import { ProviderRejectionNotice } from './provider-rejection.js';
 import { JobCard } from './SourceReader.js';
+import { DiagnosticReport } from './DiagnosticReport.js';
 
 export function RunTaskDetails({
   run,
@@ -27,6 +28,8 @@ export function RunTaskDetails({
   initiallyInspect?: boolean;
 }) {
   const [cancelling, setCancelling] = useState(false);
+  const [skipping, setSkipping] = useState(false);
+  const skipKey = useRef<string | null>(null);
   const canCancel = ['queued', 'running', 'waiting_for_state'].includes(run.status);
   return (
     <div className="run-task-details">
@@ -39,6 +42,26 @@ export function RunTaskDetails({
         </small>
       </div>
       <ContextSummaryStatus summary={run.contextSummary} />
+      {run.hasPackageIssues && (
+        <p role="status" className="muted">
+          일부 자료의 자동 처리나 지침을 적용하지 못했어요. 원본 자료와 기록을 보존하고 채팅을
+          계속해요. 자세한 내용은 진단에서 확인할 수 있어요.
+        </p>
+      )}
+      {run.statePreparation && ['failed', 'skipped'].includes(run.statePreparation.status) && (
+        <p role="status" className="muted">
+          {run.statePreparation.status === 'skipped'
+            ? '상태 준비를 건너뛰고'
+            : '상태를 갱신하지 못해'}{' '}
+          채팅을 계속해요.{' '}
+          {run.statePreparation.hasState
+            ? '마지막 확인 상태를 참고해요.'
+            : '사용할 수 있는 확인 상태가 없어요.'}
+          {run.statePreparation.missingSources > 0 && (
+            <> 원문 {run.statePreparation.missingSources}개의 상태 변화는 반영되지 않았어요.</>
+          )}
+        </p>
+      )}
       {run.error &&
         !(run.contextSummary?.status === 'failed' && run.contextSummary.error === run.error) && (
           <p className="error">{run.error}</p>
@@ -55,10 +78,38 @@ export function RunTaskDetails({
       )}
       {canCancel && (
         <div className="form-actions">
+          {run.status === 'waiting_for_state' && run.snapshot.branchId && (
+            <button
+              type="button"
+              className="secondary"
+              disabled={skipping || cancelling}
+              onClick={async () => {
+                if (skipping || cancelling) return;
+                setSkipping(true);
+                skipKey.current ??= crypto.randomUUID();
+                onError('');
+                try {
+                  await api(`/runs/${run.id}/skip-state-wait`, {
+                    chatId: run.chatId,
+                    branchId: run.snapshot.branchId,
+                    expectedRevision: run.parentRevision,
+                    idempotencyKey: skipKey.current,
+                  });
+                  await refresh();
+                } catch (error) {
+                  onError((error as Error).message);
+                } finally {
+                  setSkipping(false);
+                }
+              }}
+            >
+              상태 준비 건너뛰기
+            </button>
+          )}
           <button
             type="button"
             className="secondary"
-            disabled={cancelling}
+            disabled={cancelling || skipping}
             onClick={async () => {
               if (cancelling) return;
               setCancelling(true);
@@ -100,6 +151,7 @@ export function RunTaskDetails({
             </LazyDiagnostics>
           )
         )}
+      <DiagnosticReport scope={{ scope: 'chat', chatId: run.chatId, runId: run.id }} />
       <LazyDiagnostics<Run>
         path={`/runs/${run.id}`}
         revision={revision}

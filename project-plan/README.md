@@ -1,11 +1,12 @@
 # Uimori 계획과 인수 기준
 
-이 디렉터리는 제품 범위·설계·검증 계약을 관리해요. v0.6.1 착수 명세(2026-09-06)를 바탕으로 후속 사용자 결정과 구현 결과를 반영했어요. **현재 계약과 남은 범위는 [CURRENT.md](CURRENT.md)**, 방향 결정은 [DECISIONS-2026-09-10](../docs/DECISIONS-2026-09-10.md), 앱 실행은 [루트 README](../README.md)를 먼저 확인해요.
+이 디렉터리는 제품 범위·설계·검증 계약을 관리해요. 초기 명세의 v0.6.1 표기는 앱 릴리스 버전과 별개예요. **현재 계약과 남은 범위는 [CURRENT.md](CURRENT.md)**, 최신 방향은 [베타 결정](../docs/DECISIONS-2026-09-12-BETA.md) · [실행 계획](BETA-PLAN.md), 앱 실행은 [루트 README](../README.md)를 먼저 확인해요. 이전 [2026-09-10 결정](../docs/DECISIONS-2026-09-10.md)은 후속 변경과 구분해 보존해요.
 
 ## 문서 지도
 
 | 파일 | 내용 |
 | --- | --- |
+| [베타 실행 계획](BETA-PLAN.md) · [확정 원칙](../docs/DECISIONS-2026-09-12-BETA.md) · [표본 기준](BETA-SAMPLES.md) | v0.1.0 준비의 승인된 순서, 독립적인 확장·데이터 보존·공개 조건과 구현/검증 상태 |
 | [CURRENT.md](CURRENT.md) | 현재 계약, 완료 조건, 마지막 검증 상태, 남은 범위 |
 | [하네스 후속 개선 계획](HARNESS-OPTIMIZATION-PLAN.md) · [결과](HARNESS-OPTIMIZATION-RESULTS.md) | 도우미 압축·요약 보존·조회 후 완료·설정 공통화. 로컬 1,888 PASS, 최종본 네 합성 실사례 완료, 누적 예약 $82.996185 / $150 |
 | [history/](history/CURRENT-2026-09.md) | CURRENT에서 옮긴 시간순 작업 기록(2026-09-06 ~ 2026-09-10) |

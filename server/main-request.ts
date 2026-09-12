@@ -21,7 +21,7 @@ import { encodeChat } from '../core/openai-chat-protocol.js';
 import { encodeAnthropic } from '../core/anthropic-protocol.js';
 import { encodeVertex } from '../core/vertex-protocol.js';
 import { buildCodexDescriptor } from '../core/codex-protocol.js';
-import { assertBehaviorToolCapability, listBehaviorTools } from '../core/package-behavior-tools.js';
+import { admitBehaviorTools, listBehaviorTools } from '../core/package-behavior-tools.js';
 import {
   CONTEXT_TOOL_NAMES,
   CONTEXT_TOOLS,
@@ -99,6 +99,8 @@ export function storySubmissionEnabled(snapshot: RunSnapshot): boolean {
 export function buildMainProviderRequest(
   snapshot: RunSnapshot,
   options: {
+    /** Per-request suppression after an add-on error; never changes the frozen Run. */
+    disabledBehaviorTools?: readonly string[];
     results?: readonly ToolEvent[];
     opaqueState?: Json;
     evaluation?: {
@@ -113,8 +115,10 @@ export function buildMainProviderRequest(
     completedToolHistory?: readonly ToolEvent[];
   } = {}
 ): { snapshot: RunSnapshot; input: MainInput; request: ProviderRequest } {
-  const behaviorTools = listBehaviorTools(snapshot);
-  assertBehaviorToolCapability(snapshot, behaviorTools);
+  snapshot = admitBehaviorTools(snapshot);
+  const behaviorTools = listBehaviorTools(snapshot).filter(
+    (binding) => !options.disabledBehaviorTools?.includes(binding.tool.name)
+  );
   const fixed = attachMainHostContext(
       snapshot.promptCompilation ? snapshot : compileSnapshotPrompt(snapshot)
     ),
@@ -122,6 +126,8 @@ export function buildMainProviderRequest(
   if (!target) throw new ProviderContractError('MAIN_MODEL_REQUIRED');
   const input = buildMainInput(fixed, options.results ?? []),
     terminal = storySubmissionEnabled(fixed);
+  if (options.disabledBehaviorTools?.length)
+    input.tools = input.tools.filter((name) => !options.disabledBehaviorTools!.includes(name));
   const collaboration = fixed.profile?.promptPresets?.main?.program.collaboration;
   const agentTools: ProviderTool[] = collaboration?.enabled
     ? [

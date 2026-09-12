@@ -186,13 +186,20 @@ function complete(f: Fixture, r: Run, text = 'Original prose.\n<state>{"count":7
     r.snapshot.settings
   );
 }
-function expectRunBlocked(f: Fixture) {
-  try {
-    run(f);
-    throw Error('Expected authoritative successor to reject');
-  } catch (error) {
-    expect(error).toMatchObject({ statusCode: 409 });
-  }
+function expectBehaviorUnavailable(f: Fixture) {
+  const admitted = run(f);
+  expect(admitted.snapshot.packageBehaviorUnavailable).toEqual([
+    expect.objectContaining({ instanceId: f.instanceId, stage: 'state' }),
+  ]);
+  expect(admitted.snapshot.packageStates).toEqual([]);
+  expect(
+    executionContext(admitted.snapshot, 'main', {
+      id: f.content.id,
+      revision: f.content.revision,
+      role: 'bot',
+    }).state
+  ).toBeNull();
+  f.store.finishRun(admitted.id, 'cancelled', 'Synthetic admission check');
 }
 async function action(f: Fixture, value: number, branchId = f.scope.branchId) {
   const detail = behaviorDetail(f.store, f.chat.id, branchId),
@@ -320,7 +327,7 @@ test('compatible latest content preserves state and dice; incompatible behavior 
     error: 'BEHAVIOR_MIGRATION_REQUIRED',
     state: { count: 7 },
   });
-  expectRunBlocked(f);
+  expectBehaviorUnavailable(f);
   const beforeReset = tables(f);
   expect(behaviorDetail(f.store, f.chat.id)).toEqual(stale);
   expect(tables(f)).toEqual(beforeReset);
@@ -411,7 +418,7 @@ test('BINT02 user action freezes state and recorded draw into Run and composed p
   });
 });
 
-test('BINT03 malformed output and lost state CAS preserve source and fence the next authoritative run', async () => {
+test('BINT03 malformed output and lost state CAS preserve source and admit the next run without unavailable behavior', async () => {
   for (const scenario of ['malformed', 'cas'] as const) {
     const f = fixture();
     expect((await action(f, 3)).statusCode).toBe(200);
@@ -440,7 +447,7 @@ test('BINT03 malformed output and lost state CAS preserve source and fence the n
       .prepare('SELECT body FROM package_behavior_outputs WHERE source_id=?')
       .get(source.id) as { body: string };
     expect(JSON.parse(output.body)).toMatchObject({ status: 'failed', sourceHash: source.hash });
-    expectRunBlocked(f);
+    expectBehaviorUnavailable(f);
     const actionBlocked = await action(f, 8);
     expect(actionBlocked.statusCode).toBe(409);
     expect(f.store.source(source.id).hash).toBe(source.hash);
@@ -458,7 +465,7 @@ test('BINT04 source edits stale derived state; reset requires current hash and r
     status: 'stale',
     state: { count: 7 },
   });
-  expectRunBlocked(f);
+  expectBehaviorUnavailable(f);
   const payload = {
     expectedStateRevision: old.instances[0].stateRevision,
     expectedSourceHash: source.hash,
@@ -512,7 +519,7 @@ test('BINT09 replaying an earlier reset cannot acknowledge a later source edit o
   expect(replay.json().instances[0].status).toBe('stale');
   expect(tables(f)).toEqual(before);
   expect(f.store.events(f.chat.id, 0)).toHaveLength(eventCount);
-  expectRunBlocked(f);
+  expectBehaviorUnavailable(f);
 });
 
 test('BINT05 source branching restores post-source state and candidates restore original pre-source state', async () => {
@@ -562,12 +569,10 @@ test('BINT06 branching after an ancestor edit cannot mark old derived state fres
       fromRevision: source.id,
     });
     expect(behaviorDetail(f.store, f.chat.id, branch.id).instances[0].status).toBe('stale');
-    try {
-      run(f, branch.id);
-      throw Error('Expected stale branch to reject');
-    } catch (error) {
-      expect(error).toMatchObject({ statusCode: 409 });
-    }
+    const admitted = run(f, branch.id);
+    expect(admitted.snapshot.packageStates).toEqual([]);
+    expect(admitted.snapshot.packageBehaviorUnavailable).toHaveLength(1);
+    f.store.finishRun(admitted.id, 'cancelled', 'Synthetic admission check');
   }
   const branchCount = f.store.product.branches(f.chat.id).length;
   try {
@@ -582,7 +587,7 @@ test('BINT06 branching after an ancestor edit cannot mark old derived state fres
   expect(f.store.sourceOriginal(second.id).text).toBe(second.text);
 });
 
-test('BINT07 an ancestor edit during a run preserves completed prose but fails package output and blocks its successor', () => {
+test('BINT07 an ancestor edit during a run preserves completed prose but fails package output and isolates it from its successor', () => {
   const f = fixture(),
     first = complete(f, run(f)),
     pending = run(f),
@@ -615,7 +620,7 @@ test('BINT07 an ancestor edit during a run preserves completed prose but fails p
     error: 'BEHAVIOR_SOURCE_DEPENDENCY_CHANGED',
     after: { state: { count: 7 } },
   });
-  expectRunBlocked(f);
+  expectBehaviorUnavailable(f);
   expect(f.store.sourceOriginal(first.id).text).toBe(first.text);
 });
 

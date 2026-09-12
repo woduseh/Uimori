@@ -144,6 +144,18 @@ export function readerActivities(
 
 /** Display summaries for an explicit task panel, or the reader's selected Run IDs. */
 export function readerRuns(store: Store, id: string, scope?: string[]) {
+  // Read once for the selected chat/page, rather than fetching full tool histories per response.
+  const behaviorFailures = new Set(
+    (
+      store.db
+        .prepare(`SELECT DISTINCT t.run_id AS id FROM tool_events t JOIN runs r ON r.id=t.run_id
+          WHERE r.chat_id=? ${scope ? 'AND r.id IN (SELECT value FROM json_each(?))' : ''}
+            AND json_extract(t.event,'$.denied')=1
+            AND json_extract(t.event,'$.errorKind')='recoverable'
+            AND json_extract(t.event,'$.name') GLOB 'behavior_*'`)
+        .all(id, ...(scope ? [JSON.stringify(scope)] : [])) as { id: string }[]
+    ).map((row) => row.id)
+  );
   store.chat(id);
   // JSON projection happens in SQLite: do not parse quadratic history or diagnostic bodies.
   const runCosts = new Map(
@@ -171,6 +183,8 @@ export function readerRuns(store: Store, id: string, scope?: string[]) {
     CASE WHEN source_revision IS NULL THEN (SELECT newer.id FROM runs newer WHERE newer.chat_id=runs.chat_id AND json_extract(newer.command,'$.retryOf')=runs.id ORDER BY newer.created_at DESC,newer.id DESC LIMIT 1) END AS supersededBy,
     json_extract(snapshot,'$.settingsRevision') AS settingsRevision,CASE WHEN json_extract(snapshot,'$.packageStart.mode')='authored' THEN NULL ELSE json_extract(snapshot,'$.profile.models.main.title') END AS modelTitle,json_extract(snapshot,'$.sourceSegments') AS sourceSegments,COALESCE(json_array_length(snapshot,'$.profile.packageAttachments'),0)>0 AS hasPackages,
     CASE WHEN json_type(snapshot,'$.packageStart') IS NOT NULL THEN json_object('mode',json_extract(snapshot,'$.packageStart.mode'),'title',json_extract(snapshot,'$.packageStart.title')) END AS packageStart,
+    CASE WHEN json_type(snapshot,'$.story.preparation')='object' THEN json_object('status',json_extract(snapshot,'$.story.preparation.status'),'reason',json_extract(snapshot,'$.story.preparation.reason'),'missingSources',json_array_length(snapshot,'$.story.preparation.missing'),'lastSourceRevision',json_extract(snapshot,'$.story.preparation.fallback.sourceRevision'),'hasState',json_type(snapshot,'$.story.state')='object' OR json_type(snapshot,'$.story.preparation.fallback')='object') END AS statePreparation,
+    (COALESCE(json_array_length(snapshot,'$.packageBehaviorUnavailable'),0)>0 OR EXISTS(SELECT 1 FROM json_each(snapshot,'$.promptCompilation.warnings') WHERE value GLOB 'PACKAGE_INSTRUCTION_UNAVAILABLE:*')) AS hasPackageIssues,
     CASE WHEN json_type(snapshot,'$.contextPlan')='object' THEN json_object('status',json_extract(snapshot,'$.contextPlan.status'),'inputTokenLimit',json_extract(snapshot,'$.contextPlan.budget.inputTokenLimit'),'estimatedInputTokens',json_extract(snapshot,'$.contextPlan.estimatedInputTokens'),'compactedSources',json_array_length(snapshot,'$.contextPlan.compacted'),'summaryCalls',json_extract(snapshot,'$.contextPlan.summaryCalls'),'error',json_extract(snapshot,'$.contextPlan.error')) END AS contextSummary,
     json_object('loreContextReset',json_extract(snapshot,'$.loreContextReset'),'branchId',branch_id,'candidateOf',json_extract(snapshot,'$.candidateOf'),'forkedFrom',json_extract(snapshot,'$.forkedFrom')) AS snapshot
     FROM runs WHERE chat_id=? ${scope ? 'AND id IN (SELECT value FROM json_each(?))' : ''} ORDER BY created_at,id`)
@@ -183,12 +197,19 @@ export function readerRuns(store: Store, id: string, scope?: string[]) {
     })[]
   ).map((row) => ({
     ...row,
+    hasPackageIssues: !!row.hasPackageIssues || behaviorFailures.has(row.id),
     estimatedCost: runCosts.get(row.id),
     snapshot: {
       ...JSON.parse(row.snapshot),
       loreContextReset: !!JSON.parse(row.snapshot).loreContextReset,
     },
     contextSummary: row.contextSummary ? JSON.parse(row.contextSummary) : undefined,
+    statePreparation: row.statePreparation
+      ? {
+          ...JSON.parse(row.statePreparation),
+          hasState: !!JSON.parse(row.statePreparation).hasState,
+        }
+      : undefined,
     packageStart: row.packageStart ? JSON.parse(row.packageStart) : undefined,
     sourceSegments: row.sourceSegments ? JSON.parse(row.sourceSegments) : undefined,
     usage: row.usage

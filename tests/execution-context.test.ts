@@ -182,7 +182,11 @@ describe('frozen execution context and module insertion', () => {
     ];
     s.profile!.packages = [p];
     s.profile!.packageAttachments = [{ id: p.id, revision: 1, role: 'module' }];
-    expect(() => compileSnapshotPrompt(s)).toThrow('PACKAGE_INSERTION_SLOT_MISSING');
+    const skipped = compileSnapshotPrompt(s).promptCompilation!;
+    expect(skipped.warnings).toContain(
+      `PACKAGE_INSTRUCTION_UNAVAILABLE:${JSON.stringify({ instanceId: 'module:module', instructionId: 'roster', code: 'PACKAGE_INSERTION_SLOT_MISSING' })}`
+    );
+    expect(JSON.stringify(skipped.messages)).not.toContain('A;B;');
     s.profile!.promptPresets = {
       main: {
         id: 'p',
@@ -220,5 +224,78 @@ describe('frozen execution context and module insertion', () => {
     expect(contents.filter((t) => t.includes('A;B;'))).toHaveLength(1);
     expect(contents.indexOf('BEFORE')).toBeLessThan(contents.indexOf('A;B;'));
     expect(contents.indexOf('A;B;')).toBeLessThan(contents.indexOf('AFTER'));
+  });
+  it('omits only absent-slot instructions while preserving other positions, host instructions and provenance', () => {
+    const s = snapshot(),
+      first = pkg('first'),
+      second = pkg('second');
+    first.instructions = [
+      { id: 'plain-one', target: 'main', text: 'PLAIN_ONE' },
+      { id: 'alpha-one', target: 'main', position: 'alpha', text: 'ALPHA_ONE' },
+      { id: 'beta-one', target: 'main', position: 'beta', text: 'BETA_ONE' },
+    ];
+    second.instructions = [
+      { id: 'alpha-two', target: 'main', position: 'alpha', text: 'ALPHA_TWO' },
+      { id: 'plain-two', target: 'main', text: 'PLAIN_TWO' },
+      { id: 'beta-two', target: 'main', position: 'beta', text: 'BETA_TWO' },
+    ];
+    s.profile!.packages = [first, second];
+    s.profile!.packageAttachments = [first, second].map((p) => ({
+      id: p.id,
+      revision: 1,
+      role: 'module',
+    }));
+    const program = {
+      version: 1 as const,
+      controls: [],
+      blocks: [
+        {
+          id: 'alpha',
+          title: 'Alpha',
+          kind: 'slot' as const,
+          role: 'system' as const,
+          slot: 'alpha',
+        },
+        { id: 'beta', title: 'Beta', kind: 'slot' as const, role: 'system' as const, slot: 'beta' },
+        { id: 'current', title: 'Current', kind: 'current' as const },
+      ],
+    };
+    const expected = compileSnapshotPrompt(s, program).promptCompilation!;
+    first.instructions.splice(1, 0, {
+      id: 'missing-one',
+      target: 'main',
+      position: 'absent',
+      text: 'OMITTED_ONE',
+    });
+    second.instructions.splice(2, 0, {
+      id: 'missing-two',
+      target: 'main',
+      position: 'absent',
+      text: 'OMITTED_TWO',
+    });
+    const before = structuredClone(s);
+    const actual = compileSnapshotPrompt(s, program).promptCompilation!;
+    expect(s).toEqual(before);
+    expect(actual.messages).toEqual(expected.messages);
+    expect(actual.trace).toEqual(expected.trace);
+    expect(
+      actual.warnings.filter((warning) => warning.startsWith('PACKAGE_INSTRUCTION_UNAVAILABLE:'))
+    ).toEqual(
+      ['first', 'second'].map(
+        (id, index) =>
+          `PACKAGE_INSTRUCTION_UNAVAILABLE:${JSON.stringify({ instanceId: `${id}:module`, instructionId: index === 0 ? 'missing-one' : 'missing-two', code: 'PACKAGE_INSERTION_SLOT_MISSING' })}`
+      )
+    );
+    const messages = actual.messages.map((message) =>
+      message.content.map((part) => part.text).join('')
+    );
+    expect(messages).toContain('ALPHA_ONE\n\nALPHA_TWO');
+    expect(messages).toContain('BETA_ONE\n\nBETA_TWO');
+    expect(messages.indexOf('ALPHA_ONE\n\nALPHA_TWO')).toBeLessThan(
+      messages.indexOf('BETA_ONE\n\nBETA_TWO')
+    );
+    const text = JSON.stringify(actual.messages);
+    expect(text).not.toContain('OMITTED_');
+    expect(text.indexOf('PLAIN_ONE')).toBeLessThan(text.indexOf('PLAIN_TWO'));
   });
 });

@@ -37,6 +37,9 @@ import { providerConnectionTestRoutes } from './provider-connection-test.js';
 import { storyRoutes } from './story-routes.js';
 import { outlineRoutes } from './outline-routes.js';
 import { packageImageRoutes } from './package-images.js';
+import { nativeTransferRoutes } from './native-transfer.js';
+import { NativeTransferError } from '../core/native-transfer-validation.js';
+import { diagnosticReportRoutes } from './diagnostic-report.js';
 import { packageFeatureRoutes } from './package-features.js';
 import { reconcileIllustrationJob, runIllustrationJob } from './illustration-runner.js';
 import { illustrationJob, illustrationRoutes, queuedIllustrations } from './illustrations.js';
@@ -857,6 +860,8 @@ export async function createApp(options: AppOptions): Promise<App> {
   app.setErrorHandler((error, _request, reply) => {
     const behaviorCode =
       error instanceof BehaviorError && /^BEHAVIOR_[A-Z0-9_]{1,100}$/.test(error.message);
+    const transferCode =
+      error instanceof NativeTransferError && /^NATIVE_TRANSFER_[A-Z0-9_]{1,100}$/.test(error.code);
     const statusCode =
       error && typeof error === 'object' && 'statusCode' in error ? error.statusCode : undefined;
     const code =
@@ -867,7 +872,7 @@ export async function createApp(options: AppOptions): Promise<App> {
           : 500;
     void reply.code(code).send({
       error:
-        error instanceof HttpError || behaviorCode
+        error instanceof HttpError || behaviorCode || transferCode
           ? error.message
           : code === 400
             ? 'Invalid request'
@@ -972,6 +977,8 @@ export async function createApp(options: AppOptions): Promise<App> {
     resolveCredential: (name) => process.env[name],
   });
   packageFeatureRoutes(app, store);
+  nativeTransferRoutes(app, store);
+  diagnosticReportRoutes(app, store, { buildId: options.buildId, testMode: options.testMode });
   app.post<{ Params: { id: string } }>('/api/chats/:id/package-start', async (request) => {
     const result = createPackageStart(store, request.params.id, request.body, (snapshot) =>
       requireModel(snapshot.profile?.models.main, 'main')

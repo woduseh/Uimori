@@ -4,6 +4,8 @@
 
 공유 타입과 조회 helper는 [library-organization.ts](../core/library-organization.ts), 저장·검증·API는 [server/library-organization.ts](../server/library-organization.ts)에 있어요. 패키지 내부 기능은 [PACKAGES.md](PACKAGES.md)를 봐요.
 
+저장된 자료를 다른 설치로 옮길 때는 서재·프롬프트 목록 상단의 **자료 파일 가져오기·내보내기**를 사용해요. 연결 모듈·이미지·프롬프트 옵션 조합을 함께 담고 확인 후 새 사본으로 저장해요. 단일 편집 초안의 기존 패키지 JSON 도구와 구분하며 자세한 보존 범위는 [자료 묶음 이동](NATIVE-TRANSFER.md)을 봐요.
+
 ## 화면에서 찾고 선택하기
 
 왼쪽 탐색의 **서재**에서 봇·페르소나·모듈 탭을 고르고, **프롬프트**에서 작문·번역 프롬프트를 관리해요. 각 분류의 폴더와 검색으로 목록을 좁히고 여러 항목을 선택해 한 번에 이동할 수 있어요. 폴더 삭제는 항목을 미분류로 옮기며 자료 내용은 유지해요.

@@ -134,6 +134,7 @@ function TurnActivityContent({
   const important = entries.filter((item) => item.status !== 'completed');
   const summary = [
     mainLabel,
+    ...(run.hasPackageIssues ? ['자료 처리 일부 미적용'] : []),
     ...important.map(
       (item) =>
         `${'label' in item ? item.label : names[item.kind]} ${labels[item.status] ?? item.status}`
@@ -146,7 +147,10 @@ function TurnActivityContent({
     );
   const elapsed = connected && running && timing ? elapsedLabel(timing.startedAt, now) : '';
   const uncertain = !connected && running;
-  const hasIssue = attention(run.status) || entries.some((item) => attention(item.status));
+  const hasIssue =
+    !!run.hasPackageIssues ||
+    attention(run.status) ||
+    entries.some((item) => attention(item.status));
   const tone = uncertain ? 'uncertain' : hasIssue ? 'issue' : running ? 'running' : 'done';
   // A finished response shows only the check; its text stays for assistive technology.
   const quiet = tone === 'done' && !!source;

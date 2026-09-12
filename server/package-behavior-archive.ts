@@ -16,7 +16,10 @@ import { evaluatePromptExpression } from '../core/prompt-program.js';
 import { inspectRuntimeValue } from '../core/prompt-values.js';
 import type { PackageExecutionState } from '../core/execution-context.js';
 import type { RunSnapshot } from '../core/types.js';
-import { assertBehaviorToolCapability } from '../core/package-behavior-tools.js';
+import {
+  assertBehaviorToolCapability,
+  MAX_MODEL_BEHAVIOR_ACTIONS,
+} from '../core/package-behavior-tools.js';
 import { behaviorPayloadHash, recordDraws, type BehaviorScope } from './package-behavior-store.js';
 import type { Store } from './store.js';
 import {
@@ -169,6 +172,97 @@ function executionState(
   return s as PackageExecutionState;
 }
 export function validatePackageBehaviorRunSnapshot(store: Store, snapshot: RunSnapshot): void {
+  const unavailable = new Set<string>();
+  if (snapshot.packageBehaviorUnavailable !== undefined) {
+    if (
+      !Array.isArray(snapshot.packageBehaviorUnavailable) ||
+      snapshot.packageBehaviorUnavailable.length > 100
+    )
+      reject('unavailable behaviors');
+    for (const raw of snapshot.packageBehaviorUnavailable) {
+      const item = object(raw, [
+        'instanceId',
+        'packageId',
+        'packageRevision',
+        'role',
+        'stage',
+        'code',
+        'retainedState',
+      ]);
+      text(item.instanceId);
+      text(item.packageId);
+      revision(item.packageRevision, 1);
+      text(item.code, 200);
+      if (
+        !['state', 'preparation', 'tools'].includes(item.stage) ||
+        !/^(BEHAVIOR|PROMPT)_[A-Z0-9_]+$/u.test(item.code)
+      )
+        reject('unavailable reason');
+      const ref = snapshot.profile?.packageAttachments?.find(
+        (ref) =>
+          ref.id === item.packageId &&
+          ref.revision === item.packageRevision &&
+          ref.role === item.role
+      );
+      const pkg = snapshot.profile?.packages?.find(
+        (pkg) => pkg.id === item.packageId && pkg.revision === item.packageRevision
+      );
+      if (!ref || !pkg?.behavior || item.instanceId !== `${ref.id}:${ref.role}`)
+        reject('unavailable attachment');
+      if (item.stage === 'tools') {
+        if (
+          historicalPersonaExcluded(snapshot.profile, ref.role) ||
+          !pkg.behavior.actions.some((action) => action.triggers?.includes('model'))
+        )
+          reject('unavailable tool permission');
+        if (item.code === 'BEHAVIOR_MODEL_TOOLS_UNSUPPORTED') {
+          const model = snapshot.profile?.models.main;
+          if (
+            !model ||
+            model.connection.catalog.find((entry) => entry.id === model.modelId)?.capabilities
+              .tools !== false
+          )
+            reject('unavailable tool capability');
+        } else if (item.code === 'BEHAVIOR_MODEL_ACTION_LIMIT') {
+          const count = (snapshot.profile?.packageAttachments ?? [])
+            .filter(
+              (ref) =>
+                !historicalPersonaExcluded(snapshot.profile, ref.role) &&
+                !snapshot.packageBehaviorUnavailable?.some(
+                  (failure) =>
+                    failure.instanceId === `${ref.id}:${ref.role}` && failure.stage !== 'tools'
+                )
+            )
+            .reduce(
+              (total, ref) =>
+                total +
+                (snapshot.profile?.packages
+                  ?.find((pkg) => pkg.id === ref.id && pkg.revision === ref.revision)
+                  ?.behavior?.actions.filter((action) => action.triggers?.includes('model'))
+                  .length ?? 0),
+              0
+            );
+          if (count <= MAX_MODEL_BEHAVIOR_ACTIONS) reject('unavailable tool count');
+        } else reject('unavailable tool reason');
+      }
+      if (item.retainedState !== undefined) {
+        const retained = executionState(
+          store,
+          item.retainedState,
+          snapshot.chatId,
+          snapshot.branchId ?? `main:${snapshot.chatId}`
+        );
+        if (
+          retained.instanceId !== item.instanceId ||
+          retained.packageId !== item.packageId ||
+          retained.role !== item.role
+        )
+          reject('unavailable retained state');
+      }
+      if (unavailable.has(item.instanceId)) reject('duplicate unavailable instance');
+      unavailable.add(item.instanceId);
+    }
+  }
   assertBehaviorToolCapability(snapshot);
   if (snapshot.executionClock !== undefined) {
     const c = object(snapshot.executionClock, ['iso', 'unix']);
@@ -183,6 +277,7 @@ export function validatePackageBehaviorRunSnapshot(store: Store, snapshot: RunSn
       reject('execution clock');
   }
   const expected = (snapshot.profile?.packageAttachments ?? [])
+    .filter((ref) => !unavailable.has(`${ref.id}:${ref.role}`))
     .filter((r) =>
       snapshot.profile?.packages?.some(
         (p) => p.id === r.id && p.revision === r.revision && p.behavior
@@ -191,6 +286,7 @@ export function validatePackageBehaviorRunSnapshot(store: Store, snapshot: RunSn
     .map((r) => `${r.id}:${r.role}`);
   const expectsExecution = (snapshot.profile?.packageAttachments ?? []).some(
     (ref) =>
+      !unavailable.has(`${ref.id}:${ref.role}`) &&
       !historicalPersonaExcluded(snapshot.profile, ref.role) &&
       snapshot.profile?.packages
         ?.find((pkg) => pkg.id === ref.id && pkg.revision === ref.revision)

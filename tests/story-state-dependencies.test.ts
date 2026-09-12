@@ -453,7 +453,7 @@ describe('S02 S03 actual Store continuity and activation dependencies', () => {
     expect(globalThis.fetch).not.toHaveBeenCalled();
   });
 
-  test('explicit rebuild of an edited first activation source rebases initial state before that source and releases a waiting Run', async () => {
+  test('explicit rebuild of an edited first activation source preserves a Run already admitted without stale state', async () => {
     const store = await database();
     const id = chat(store);
     const first = source(store, id, 'Pre-module activation source.');
@@ -465,7 +465,8 @@ describe('S02 S03 actual Store continuity and activation dependencies', () => {
       expectedRevision: 0,
     });
     const waiting = request(store, id);
-    expect(waiting.status).toBe('waiting_for_state');
+    expect(waiting.status).toBe('queued');
+    const admitted = structuredClone(waiting.snapshot);
     const rebuilt = store.story.rebuildSource(first.id, 'state');
     expect(store.story.bundle(rebuilt.id).snapshot.story?.state).toMatchObject({
       id: `initial:${id}:${config.module!.revision}:rebuild:${store.source(first.id).hash}`,
@@ -475,11 +476,12 @@ describe('S02 S03 actual Store continuity and activation dependencies', () => {
     });
     await finish(store, rebuilt.id);
     expect(store.story.stateAt(id, first.id)?.values).toEqual({ coins: 7 });
-    expect(store.story.resumeWaiting()).toEqual([waiting.id]);
+    expect(store.story.resumeWaiting()).toEqual([]);
     expect(store.run(waiting.id)).toMatchObject({
       status: 'queued',
-      snapshot: { story: { waiting: false, state: { values: { coins: 7 } } } },
+      snapshot: { story: { waiting: false, state: null, preparation: { status: 'failed' } } },
     });
+    expect(store.run(waiting.id).snapshot).toEqual(admitted);
     expect(store.run(first.runId).snapshot).toEqual(originalRun);
     expect(store.story.config(id).activatedAt).toEqual(config.activatedAt);
     const restored = await database();
@@ -525,7 +527,8 @@ describe('S02 S03 actual Store continuity and activation dependencies', () => {
     });
     expect(() => store.story.rebuildSource(first.id, 'state')).toThrow();
     const waiting = request(store, id);
-    expect(waiting.status).toBe('waiting_for_state');
+    expect(waiting.status).toBe('queued');
+    const admitted = structuredClone(waiting.snapshot);
     const rebuilt = store.story.rebuildSource(second.id, 'state');
     expect(store.story.bundle(rebuilt.id).snapshot.story?.state).toMatchObject({
       id: `initial:${id}:${config.module!.revision}:rebuild:${store.source(second.id).hash}`,
@@ -535,7 +538,8 @@ describe('S02 S03 actual Store continuity and activation dependencies', () => {
     });
     await finish(store, rebuilt.id);
     expect(store.story.stateAt(id, second.id)?.values).toEqual({ coins: 7 });
-    expect(store.story.resumeWaiting()).toEqual([waiting.id]);
+    expect(store.story.resumeWaiting()).toEqual([]);
+    expect(store.run(waiting.id).snapshot).toEqual(admitted);
     for (const original of originals)
       expect(store.run(original.id).snapshot).toEqual(original.snapshot);
     expect(globalThis.fetch).not.toHaveBeenCalled();

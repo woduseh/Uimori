@@ -34,13 +34,14 @@ import {
   type ContextToolState,
 } from './context-tools.js';
 import {
-  assertBehaviorToolCapability,
+  admitBehaviorTools,
   listBehaviorTools,
   type BehaviorToolBinding,
 } from '../core/package-behavior-tools.js';
-import { BehaviorError } from '../core/package-behavior.js';
 import { createAgentCollaboration } from './agent-collaboration.js';
 import { compactableRead, compactToolReads } from './context-tool-compaction.js';
+import { BehaviorError } from '../core/package-behavior.js';
+import { PromptEvaluationError } from '../core/prompt-values.js';
 
 export type MainResult = {
   status: 'completed' | 'refused' | 'partial' | 'error' | 'cancelled';
@@ -79,21 +80,31 @@ function addUsage(total: Usage, result: ProviderResult) {
   }
 }
 
+/** Denials describe an unexecuted operation, never echo the rejected input or host diagnostics. */
+function compactBehaviorDenial(event: ToolEvent, action: ToolAction): ToolEvent {
+  const raw = (event.result as { code?: unknown } | null)?.code;
+  const code =
+    typeof raw === 'string' && /^(BEHAVIOR|PROMPT)_[A-Z0-9_]{1,100}$/u.test(raw)
+      ? raw
+      : 'BEHAVIOR_ACTION_DENIED';
+  const recoverable = event.errorKind === 'recoverable' || code === 'BEHAVIOR_TOOL_NOT_ALLOWED';
+  return {
+    callId: action.callId,
+    name: action.name,
+    args: {},
+    denied: true,
+    ...(recoverable ? { errorKind: 'recoverable' as const } : {}),
+    result: { code, ...(recoverable ? { unavailable: true, continueWithoutAction: true } : {}) },
+  };
+}
+
 /** One server-owned main run. A transport error/partial/refusal is terminal, never an implicit retry. */
 export async function runMain(snapshot: RunSnapshot, hooks: MainHooks): Promise<MainResult> {
-  let behaviorTools: BehaviorToolBinding[];
-  try {
-    behaviorTools = listBehaviorTools(snapshot);
-    assertBehaviorToolCapability(snapshot, behaviorTools);
-  } catch (error) {
-    if (!(error instanceof BehaviorError)) throw error;
-    return {
-      status: 'error',
-      text: '',
-      error: error.message,
-      usage: { modelCalls: 0, inputTokens: 0, outputTokens: 0, costUsd: 0 },
-    };
-  }
+  snapshot = admitBehaviorTools(snapshot);
+  const behaviorTools = listBehaviorTools(snapshot);
+  const disabledBehaviorTools = new Set<string>(
+    hooks.onBehaviorTool ? [] : behaviorTools.map((binding) => binding.tool.name)
+  );
   // Reassigned only at a model-requested window boundary; every segment is one frozen projection.
   let fixed = attachMainHostContext(structuredClone(snapshot));
   const target = fixed.profile?.models.main;
@@ -162,6 +173,12 @@ export async function runMain(snapshot: RunSnapshot, hooks: MainHooks): Promise<
       const fresh = freshHistory !== undefined;
       const history = freshHistory ?? completedToolHistory;
       return buildMainProviderRequest(fixed, {
+        disabledBehaviorTools: [
+          ...disabledBehaviorTools,
+          ...(usage.modelCalls + 1 >= maxCalls || mainCalls + 1 >= mainCallLimit
+            ? behaviorTools.map((binding) => binding.tool.name)
+            : []),
+        ],
         results: (fresh ? [] : results).map((event) => {
           const contextWindow = resultWindows.get(event.callId);
           return contextWindow
@@ -279,11 +296,18 @@ export async function runMain(snapshot: RunSnapshot, hooks: MainHooks): Promise<
           await hooks.onResponseProgress?.({ ...progress, attemptId, segment: 0 });
       },
     });
-    if (attemptId !== undefined)
-      await hooks.onAttemptFinish(
-        attemptId,
-        evaluation ? evaluation.diagnosticResult(result) : structuredClone(result)
-      );
+    if (attemptId !== undefined) {
+      // The attempt is saved before tool authorization. Preserve actual arguments only in a
+      // successful ToolEvent; a rejected operation must not leak them through this earlier copy.
+      const diagnostic = evaluation ? evaluation.diagnosticResult(result) : structuredClone(result);
+      diagnostic.toolCalls = diagnostic.toolCalls.map((call) => {
+        const registered = behaviorTools.some((binding) => binding.tool.name === call.name);
+        return registered || call.name.startsWith('behavior_')
+          ? { ...call, name: registered ? call.name : 'unapproved', arguments: {} }
+          : call;
+      });
+      await hooks.onAttemptFinish(attemptId, diagnostic);
+    }
     addUsage(usage, result);
     if (result.status !== 'tool_calls')
       return {
@@ -410,18 +434,53 @@ export async function runMain(snapshot: RunSnapshot, hooks: MainHooks): Promise<
         event = outcome.event;
         if (outcome.switched) boundary = { snapshot: outcome.switched, event };
       } else if (binding) {
-        event = hooks.onBehaviorTool
-          ? await hooks.onBehaviorTool(
-              { instanceId: binding.instanceId, actionId: binding.actionId },
-              action
-            )
-          : {
-              callId: call.id,
-              name: call.name,
-              args: {},
-              result: { code: 'BEHAVIOR_EXECUTOR_UNAVAILABLE' },
-              denied: true,
-            };
+        try {
+          event = !hooks.onBehaviorTool
+            ? {
+                callId: call.id,
+                name: call.name,
+                args: {},
+                denied: true,
+                errorKind: 'recoverable',
+                result: { code: 'BEHAVIOR_EXECUTOR_UNAVAILABLE' },
+              }
+            : disabledBehaviorTools.has(call.name)
+              ? {
+                  callId: call.id,
+                  name: call.name,
+                  args: {},
+                  denied: true,
+                  errorKind: 'recoverable',
+                  result: {
+                    code: 'BEHAVIOR_DISABLED_FOR_RUN',
+                    unavailable: true,
+                    continueWithoutAction: true,
+                  },
+                }
+              : await hooks.onBehaviorTool(
+                  { instanceId: binding.instanceId, actionId: binding.actionId },
+                  action
+                );
+        } catch (error) {
+          // Fatal host/ownership/cancellation errors still terminate this run. Returning the
+          // accumulated usage lets the caller settle a cancelled run without losing accounting.
+          if (error instanceof BehaviorError || error instanceof PromptEvaluationError)
+            return fail(error.message);
+          throw error;
+        }
+        if (event.denied) event = compactBehaviorDenial(event, action);
+        if (event.denied && event.errorKind === 'recoverable') disabledBehaviorTools.add(call.name);
+      } else if (call.name.startsWith('behavior_')) {
+        event = compactBehaviorDenial(
+          {
+            ...action,
+            args: {},
+            denied: true,
+            errorKind: 'recoverable',
+            result: { code: 'BEHAVIOR_TOOL_NOT_ALLOWED' },
+          },
+          { ...action, name: 'unapproved', args: {} }
+        );
       } else
         event = evaluation?.allNames.includes(call.name as (typeof evaluation.allNames)[number])
           ? evaluation.execute(call)

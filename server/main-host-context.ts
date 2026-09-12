@@ -47,6 +47,7 @@ export function requestInput(snapshot: RunSnapshot, input: MainInput): ProviderR
           }
         : {}),
       ...(input.state && !stateSlot ? { state: input.state } : {}),
+      ...(input.statePreparation ? { statePreparation: input.statePreparation } : {}),
       ...(input.notes && !used.has('notes') ? { notes: input.notes } : {}),
       ...(input.outline && !used.has('outline') ? { outline: input.outline } : {}),
       ...(input.catalogPage ? { catalogPage: input.catalogPage } : {}),

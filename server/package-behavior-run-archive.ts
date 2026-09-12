@@ -228,6 +228,7 @@ export function validateRunBehaviorArchive(store: Store, checkState: CheckState)
         action = pkg?.behavior?.actions.find((action) => action.id === entry.actionId);
       if (
         !ref ||
+        snapshot.packageBehaviorUnavailable?.some((item) => item.instanceId === entry.instanceId) ||
         historicalPersonaExcluded(snapshot.profile, ref.role) ||
         !action ||
         !behaviorActionTriggers(action).includes(entry.trigger)

@@ -2,10 +2,11 @@ import {
   evaluatePromptExpression,
   evaluatePromptExpressions,
   validatePromptExpression,
+  PromptProgramError,
   type PromptExpression,
   type RuntimeValue,
 } from './prompt-program.js';
-import { inspectRuntimeValue, PromptBudget } from './prompt-values.js';
+import { inspectRuntimeValue, PromptBudget, PromptEvaluationError } from './prompt-values.js';
 
 export type BehaviorSchema = (
   | { type: 'number'; min: number; max: number; integer?: boolean }
@@ -66,6 +67,20 @@ export class BehaviorError extends Error {
     message: string
   ) {
     super(message);
+  }
+}
+/** Only pure add-on input/expression/output evaluation produces this recoverable error. */
+export class BehaviorEvaluationError extends BehaviorError {}
+function evaluate<T>(fn: () => T): T {
+  try {
+    return fn();
+  } catch (error) {
+    if (error instanceof BehaviorEvaluationError) throw error;
+    if (error instanceof BehaviorError)
+      throw new BehaviorEvaluationError(error.statusCode, error.message);
+    if (error instanceof PromptEvaluationError || error instanceof PromptProgramError)
+      throw new BehaviorEvaluationError(400, error.code);
+    throw error;
   }
 }
 export const BEHAVIOR_RESULT_MAX_CHARS = 8_000;
@@ -391,15 +406,18 @@ export function behaviorActionAllowed(
   input: RuntimeValue,
   hostRuntime: Record<string, RuntimeValue> = {}
 ): boolean {
-  validateBehaviorValue(action.inputSchema, input);
-  if (action.when === undefined) return true;
-  const result = evaluatePromptExpression(
-    action.when,
-    {},
-    { runtime: { ...hostRuntime, state, input, draws: {}, nextState: null } }
-  );
-  if (typeof result !== 'boolean') bad('BEHAVIOR_CONDITION_NOT_BOOLEAN');
-  return result;
+  inspectRuntimeValue({ hostRuntime, state });
+  return evaluate(() => {
+    validateBehaviorValue(action.inputSchema, input);
+    if (action.when === undefined) return true;
+    const result = evaluatePromptExpression(
+      action.when,
+      {},
+      { runtime: { ...hostRuntime, state, input, draws: {}, nextState: null } }
+    );
+    if (typeof result !== 'boolean') bad('BEHAVIOR_CONDITION_NOT_BOOLEAN');
+    return result;
+  });
 }
 export function applyBehaviorEffects(
   behavior: PackageBehavior,
@@ -409,16 +427,20 @@ export function applyBehaviorEffects(
   effects: BehaviorEffect[],
   hostRuntime: Record<string, RuntimeValue> = {}
 ): RuntimeValue {
-  const next = structuredClone(state);
-  const values = evaluatePromptExpressions(
-    effects.map((effect) => effect.value),
-    {},
-    { runtime: { ...hostRuntime, state, input, draws } }
-  );
-  effects.forEach((effect, index) => {
-    setPath(next, effect.path, values[index]);
+  validateBehaviorValue(behavior.stateSchema, state);
+  inspectRuntimeValue({ hostRuntime, state, draws });
+  return evaluate(() => {
+    const next = structuredClone(state);
+    const values = evaluatePromptExpressions(
+      effects.map((effect) => effect.value),
+      {},
+      { runtime: { ...hostRuntime, state, input, draws } }
+    );
+    effects.forEach((effect, index) => {
+      setPath(next, effect.path, values[index]);
+    });
+    return validateBehaviorValue(behavior.stateSchema, next);
   });
-  return validateBehaviorValue(behavior.stateSchema, next);
 }
 /** Deterministic calculation only. The host owns authorization, opportunity IDs, draws and persistence. */
 export function evaluateBehaviorAction(
@@ -432,37 +454,44 @@ export function evaluateBehaviorAction(
   const budget = new PromptBudget();
   behaviorRecord(hostRuntime);
   behaviorRecord(draws);
-  inspectRuntimeValue({ hostRuntime, state, input, draws }, budget);
-  const before = validateBehaviorValue(behavior.stateSchema, state),
-    actionInput = validateBehaviorValue(action.inputSchema, input);
-  const runtime = { ...hostRuntime, state: before, input: actionInput, draws, nextState: null };
-  if (action.when !== undefined) {
-    const allowed = evaluatePromptExpression(
-      action.when,
+  inspectRuntimeValue({ hostRuntime, state, draws }, budget);
+  const before = validateBehaviorValue(behavior.stateSchema, state);
+  return evaluate(() => {
+    inspectRuntimeValue(input, budget);
+    const actionInput = validateBehaviorValue(action.inputSchema, input);
+    const runtime = { ...hostRuntime, state: before, input: actionInput, draws, nextState: null };
+    if (action.when !== undefined) {
+      const allowed = evaluatePromptExpression(
+        action.when,
+        {},
+        { runtime: { ...runtime, draws: {} }, budget }
+      );
+      if (typeof allowed !== 'boolean') bad('BEHAVIOR_CONDITION_NOT_BOOLEAN');
+      if (!allowed) throw new BehaviorError(409, 'BEHAVIOR_ACTION_DISABLED');
+    }
+    const next = structuredClone(before);
+    const values = evaluatePromptExpressions(
+      action.effects.map((effect) => effect.value),
       {},
-      { runtime: { ...runtime, draws: {} }, budget }
+      { runtime, budget }
     );
-    if (typeof allowed !== 'boolean') bad('BEHAVIOR_CONDITION_NOT_BOOLEAN');
-    if (!allowed) throw new BehaviorError(409, 'BEHAVIOR_ACTION_DISABLED');
-  }
-  const next = structuredClone(before);
-  const values = evaluatePromptExpressions(
-    action.effects.map((effect) => effect.value),
-    {},
-    { runtime, budget }
-  );
-  action.effects.forEach((effect, index) => {
-    setPath(next, effect.path, values[index]);
+    action.effects.forEach((effect, index) => {
+      setPath(next, effect.path, values[index]);
+    });
+    const nextState = validateBehaviorValue(behavior.stateSchema, next);
+    const result =
+      action.result === undefined
+        ? { applied: true, draws: structuredClone(draws) }
+        : evaluatePromptExpression(
+            action.result,
+            {},
+            { runtime: { ...runtime, nextState }, budget }
+          );
+    inspectRuntimeValue(result, budget);
+    if (JSON.stringify(result).length > BEHAVIOR_RESULT_MAX_CHARS) bad('BEHAVIOR_RESULT_SIZE');
+    budget.step();
+    return { state: nextState, result };
   });
-  const nextState = validateBehaviorValue(behavior.stateSchema, next);
-  const result =
-    action.result === undefined
-      ? { applied: true, draws: structuredClone(draws) }
-      : evaluatePromptExpression(action.result, {}, { runtime: { ...runtime, nextState }, budget });
-  inspectRuntimeValue(result, budget);
-  if (JSON.stringify(result).length > BEHAVIOR_RESULT_MAX_CHARS) bad('BEHAVIOR_RESULT_SIZE');
-  budget.step();
-  return { state: nextState, result };
 }
 function setPath(root: RuntimeValue, path: string[], value: RuntimeValue) {
   let at = behaviorRecord(root);
@@ -475,60 +504,84 @@ export function parseBehaviorOutput(
   state: RuntimeValue,
   text: string
 ): RuntimeValue {
-  if (typeof text !== 'string' || text.length > 500_000) bad('BEHAVIOR_OUTPUT_SIZE');
-  let body = text;
-  if (
-    parser.required === false &&
-    parser.start &&
-    parser.end &&
-    !text.includes(parser.start) &&
-    !text.includes(parser.end)
-  )
-    return structuredClone(state);
-  if (parser.start && parser.end) {
-    const start = text.indexOf(parser.start);
-    if (start < 0 || text.indexOf(parser.start, start + parser.start.length) >= 0)
-      bad('BEHAVIOR_OUTPUT_MARKER');
-    const end = text.indexOf(parser.end, start + parser.start.length);
-    if (end < 0 || text.indexOf(parser.end, end + parser.end.length) >= 0)
-      bad('BEHAVIOR_OUTPUT_MARKER');
-    body = text.slice(start + parser.start.length, end);
-  }
-  let data: unknown;
-  if (parser.format === 'json') {
-    try {
-      data = JSON.parse(body);
-    } catch {
-      bad('BEHAVIOR_OUTPUT_JSON');
+  validateBehaviorValue(behavior.stateSchema, state);
+  return evaluate(() => {
+    if (typeof text !== 'string' || text.length > 500_000) bad('BEHAVIOR_OUTPUT_SIZE');
+    let body = text;
+    if (
+      parser.required === false &&
+      parser.start &&
+      parser.end &&
+      !text.includes(parser.start) &&
+      !text.includes(parser.end)
+    )
+      return structuredClone(state);
+    if (parser.start && parser.end) {
+      const start = text.indexOf(parser.start);
+      if (start < 0 || text.indexOf(parser.start, start + parser.start.length) >= 0)
+        bad('BEHAVIOR_OUTPUT_MARKER');
+      const end = text.indexOf(parser.end, start + parser.start.length);
+      if (end < 0 || text.indexOf(parser.end, end + parser.end.length) >= 0)
+        bad('BEHAVIOR_OUTPUT_MARKER');
+      body = text.slice(start + parser.start.length, end);
     }
-    inspectData(data);
-  } else data = body.split(parser.delimiter!).map((v) => v.trim());
-  const next = structuredClone(state);
-  for (const field of parser.fields) {
-    let value: any = data;
-    for (const key of field.from) {
-      if (value === null || typeof value !== 'object' || !Object.hasOwn(value, key))
-        bad('BEHAVIOR_OUTPUT_FIELD');
-      value = value[key];
-    }
-    if (field.valueType === 'number') {
-      if (typeof value !== 'number' && (typeof value !== 'string' || !value.trim()))
-        bad('BEHAVIOR_OUTPUT_NUMBER');
-      value = Number(value);
-    } else if (field.valueType === 'boolean') {
-      if (value === 'true') value = true;
-      else if (value === 'false') value = false;
-      else if (typeof value !== 'boolean') bad('BEHAVIOR_OUTPUT_BOOLEAN');
-    } else if (field.valueType === 'json' && typeof value === 'string') {
+    let data: unknown;
+    if (parser.format === 'json') {
       try {
-        value = JSON.parse(value);
+        data = JSON.parse(body);
       } catch {
         bad('BEHAVIOR_OUTPUT_JSON');
       }
-      inspectData(value);
+      inspectData(data);
+    } else data = body.split(parser.delimiter!).map((v) => v.trim());
+    const next = structuredClone(state);
+    for (const field of parser.fields) {
+      let value: any = data;
+      for (const key of field.from) {
+        if (value === null || typeof value !== 'object' || !Object.hasOwn(value, key))
+          bad('BEHAVIOR_OUTPUT_FIELD');
+        value = value[key];
+      }
+      if (field.valueType === 'number') {
+        if (typeof value !== 'number' && (typeof value !== 'string' || !value.trim()))
+          bad('BEHAVIOR_OUTPUT_NUMBER');
+        value = Number(value);
+      } else if (field.valueType === 'boolean') {
+        if (value === 'true') value = true;
+        else if (value === 'false') value = false;
+        else if (typeof value !== 'boolean') bad('BEHAVIOR_OUTPUT_BOOLEAN');
+      } else if (field.valueType === 'json' && typeof value === 'string') {
+        try {
+          value = JSON.parse(value);
+        } catch {
+          bad('BEHAVIOR_OUTPUT_JSON');
+        }
+        inspectData(value);
+      }
+      validateBehaviorValue(atSchema(behavior.stateSchema, field.path), value);
+      setPath(next, field.path, value);
     }
-    validateBehaviorValue(atSchema(behavior.stateSchema, field.path), value);
-    setPath(next, field.path, value);
-  }
-  return validateBehaviorValue(behavior.stateSchema, next);
+    return validateBehaviorValue(behavior.stateSchema, next);
+  });
+}
+
+/** Selected parser conditions share one budget; stored state validation is not an add-on failure. */
+export function behaviorOutputConditions(
+  behavior: PackageBehavior,
+  parsers: readonly BehaviorOutputParser[],
+  state: RuntimeValue,
+  hostRuntime: Record<string, RuntimeValue>
+): boolean[] {
+  validateBehaviorValue(behavior.stateSchema, state);
+  inspectRuntimeValue(hostRuntime);
+  return evaluate(() =>
+    evaluatePromptExpressions(
+      parsers.map((parser) => parser.when ?? true),
+      {},
+      { runtime: { ...hostRuntime, state, input: {}, draws: {} } }
+    ).map((allowed) => {
+      if (typeof allowed !== 'boolean') bad('BEHAVIOR_CONDITION_NOT_BOOLEAN');
+      return allowed as boolean;
+    })
+  );
 }

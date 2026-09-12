@@ -5,7 +5,8 @@ import type { PackageBehavior } from '../core/package-behavior.js';
 import { behaviorInputJsonSchema, listBehaviorTools } from '../core/package-behavior-tools.js';
 import { buildMainInput, executeTool } from '../core/provider.js';
 import type { ModelInput, RunSnapshot, ToolEvent } from '../core/types.js';
-import type { Json, WireRecord } from '../core/transport.js';
+import type { Json, WireRecord, ProviderResult } from '../core/transport.js';
+import { BehaviorError } from '../core/package-behavior.js';
 import { buildMainProviderRequest, encodeMainPreview } from '../server/main-request.js';
 import { runMain, type MainHooks } from '../server/model-runner.js';
 import { loopbackProvider, writeSse } from './fixtures/loopback-provider.js';
@@ -102,6 +103,7 @@ function snapshot(
 function hooks(origin: string, extra: Partial<MainHooks> = {}) {
   const inputs: ModelInput[] = [],
     events: ToolEvent[] = [],
+    responses: ProviderResult[] = [],
     attempts: WireRecord[] = [];
   const value: MainHooks = {
     signal: new AbortController().signal,
@@ -117,10 +119,12 @@ function hooks(origin: string, extra: Partial<MainHooks> = {}) {
       attempts.push(wire);
       return String(attempts.length);
     },
-    onAttemptFinish: () => {},
+    onAttemptFinish: (_id, result) => {
+      responses.push(result);
+    },
     ...extra,
   };
-  return { value, inputs, events, attempts };
+  return { value, inputs, events, attempts, responses };
 }
 
 describe('Author-selected behavior tool surface', () => {
@@ -214,45 +218,43 @@ describe('Author-selected behavior tool surface', () => {
       });
   });
 
-  test('BT03 enforces the shared tool limit and rejects known unsupported models before attempts', async () => {
+  test('BT03 records unusable behavior tools and preserves the writing request', () => {
     const work = snapshot(),
       template = work.profile!.packages![0].behavior!.actions[1];
-    work.profile!.packages![0].behavior!.actions = Array.from({ length: 20 }, (_, index) => ({
+    work.profile!.packages![0].behavior!.actions = Array.from({ length: 21 }, (_, index) => ({
       ...template,
       id: `action_${index}`,
     }));
-    expect(listBehaviorTools(work)).toHaveLength(20);
-    work.profile!.packages![0].behavior!.actions.push({ ...template, id: 'one_too_many' });
-    expect(() => buildMainProviderRequest(work)).toThrow('BEHAVIOR_MODEL_ACTION_LIMIT');
-    const observed = hooks('http://127.0.0.1:19999');
-    expect(await runMain(work, observed.value)).toMatchObject({
-      status: 'error',
-      error: 'BEHAVIOR_MODEL_ACTION_LIMIT',
-      usage: { modelCalls: 0 },
-    });
-    {
-      const unsupported = snapshot(),
-        target = unsupported.profile!.models.main!;
-      target.connection.catalog = [
-        {
-          id: target.modelId,
-          name: target.modelId,
-          capabilities: { tools: false },
-          priceRevision: null,
-        },
-      ];
-      expect(() => buildMainProviderRequest(unsupported)).toThrow(
-        'BEHAVIOR_MODEL_TOOLS_UNSUPPORTED'
-      );
-      expect(await runMain(unsupported, observed.value)).toMatchObject({
-        status: 'error',
-        error: 'BEHAVIOR_MODEL_TOOLS_UNSUPPORTED',
-        usage: { modelCalls: 0 },
-      });
-    }
-    expect(observed.attempts).toEqual([]);
-    expect(observed.events).toEqual([]);
-    expect(observed.inputs).toEqual([]);
+    const limited = buildMainProviderRequest(work);
+    expect(
+      limited.request.stable.tools.some((tool) => tool.name.startsWith('behavior_')) ?? false
+    ).toBe(false);
+    expect(limited.snapshot.packageBehaviorUnavailable).toEqual([
+      expect.objectContaining({
+        instanceId: 'rules:bot',
+        stage: 'tools',
+        code: 'BEHAVIOR_MODEL_ACTION_LIMIT',
+      }),
+    ]);
+    const unsupported = snapshot(),
+      target = unsupported.profile!.models.main!;
+    target.connection.catalog = [
+      {
+        id: target.modelId,
+        name: target.modelId,
+        capabilities: { tools: false },
+        priceRevision: null,
+      },
+    ];
+    const built = buildMainProviderRequest(unsupported);
+    expect(
+      built.request.stable.tools.some((tool) => tool.name.startsWith('behavior_')) ?? false
+    ).toBe(false);
+    expect(built.snapshot.packageBehaviorUnavailable).toEqual([
+      expect.objectContaining({ stage: 'tools', code: 'BEHAVIOR_MODEL_TOOLS_UNSUPPORTED' }),
+    ]);
+    expect(built.snapshot.request).toBe(unsupported.request);
+    expect(work.packageBehaviorUnavailable).toBeUndefined();
   });
 
   test.each([
@@ -282,6 +284,85 @@ describe('Author-selected behavior tool surface', () => {
 });
 
 describe('Main behavior tool execution through local provider transports', () => {
+  test.each([1, 2])(
+    'BETA-BEH05 %i same-batch calls preserve compact failure receipts and prose within the existing budget',
+    async (batchCalls) => {
+      let actionName = '',
+        executions = 0;
+      const server = await loopbackProvider(async (captured, response) => {
+        if (server.requests.length === 1) {
+          await writeSse(response, [
+            ...Array.from({ length: batchCalls }, (_, index) => ({
+              type: 'tool_delta',
+              index,
+              id: index === 0 ? 'failed-action' : 'disabled-action',
+              name: actionName,
+              argumentsDelta: '{"secret":"PRIVATE_ARGUMENT"}',
+            })),
+            { type: 'done', reason: 'tool_calls' },
+          ]);
+        } else {
+          const body = JSON.parse(captured.body);
+          expect(body.stable.tools.map((tool: { name: string }) => tool.name)).not.toContain(
+            actionName
+          );
+          expect(body.input.results[0]).toMatchObject({
+            args: {},
+            denied: true,
+            errorKind: 'recoverable',
+            result: { unavailable: true },
+          });
+          expect(body.input.results).toHaveLength(batchCalls);
+          if (batchCalls === 2)
+            expect(body.input.results[1]).toMatchObject({
+              callId: 'disabled-action',
+              name: actionName,
+              args: {},
+              denied: true,
+              errorKind: 'recoverable',
+              result: { code: 'BEHAVIOR_DISABLED_FOR_RUN' },
+            });
+          expect(captured.body).not.toContain('PRIVATE_ARGUMENT');
+          await writeSse(response, [
+            { type: 'text_delta', delta: 'The story continues without the failed action.' },
+            { type: 'done', reason: 'stop' },
+          ]);
+        }
+      });
+      cleanups.push(server.close);
+      const work = snapshot(server.endpoint);
+      work.settings.maxCalls = 2;
+      actionName = listBehaviorTools(work)[0].tool.name;
+      const before = structuredClone(work);
+      const observed = hooks(server.origin, {
+        onBehaviorTool: (_binding, action) => {
+          executions++;
+          return {
+            ...action,
+            args: {},
+            denied: true,
+            errorKind: 'recoverable',
+            result: {
+              code: 'BEHAVIOR_ACTION_DISABLED',
+              unavailable: true,
+              continueWithoutAction: true,
+            },
+          };
+        },
+      });
+      expect(await runMain(work, observed.value)).toMatchObject({
+        status: 'completed',
+        text: 'The story continues without the failed action.',
+        usage: { modelCalls: 2 },
+      });
+      expect(executions).toBe(1);
+      expect(work).toEqual(before);
+      expect(observed.events).toHaveLength(batchCalls);
+      expect(JSON.stringify(observed.events)).not.toContain('PRIVATE_ARGUMENT');
+      expect(JSON.stringify(observed.inputs)).not.toContain('PRIVATE_ARGUMENT');
+      expect(JSON.stringify(observed.attempts)).not.toContain('PRIVATE_ARGUMENT');
+    }
+  );
   test('BT05 executes exact frozen bindings, resumes with compact results and keeps prompt inputs stable', async () => {
     let actionName = '',
       executions = 0;
@@ -344,12 +425,31 @@ describe('Main behavior tool execution through local provider transports', () =>
   });
 
   test.each(['unregistered', 'missing-executor', 'host-denial'] as const)(
-    'BT06 %s cannot fall through to read permissions or another provider call',
+    'BT06 %s denies only the operation and continues with a sanitized receipt',
     async (scenario) => {
       let actionName = '',
         executions = 0;
-      const server = await loopbackProvider(async (_captured, response) =>
-        writeSse(response, [
+      const server = await loopbackProvider(async (captured, response) => {
+        if (server.requests.length > 1) {
+          expect(captured.body).not.toContain('PRIVATE_ARGUMENT');
+          expect(captured.body).not.toContain('PRIVATE_DIAGNOSTIC');
+          const body = JSON.parse(captured.body);
+          expect(body.stable.tools.some((tool: { name: string }) => tool.name === actionName)).toBe(
+            false
+          );
+          expect(body.input.results[0]).toMatchObject({
+            args: {},
+            denied: true,
+            errorKind: 'recoverable',
+            result: { unavailable: true, continueWithoutAction: true },
+          });
+          await writeSse(response, [
+            { type: 'text_delta', delta: 'Prose without the denied action.' },
+            { type: 'done', reason: 'stop' },
+          ]);
+          return;
+        }
+        await writeSse(response, [
           {
             type: 'tool_delta',
             index: 0,
@@ -358,8 +458,8 @@ describe('Main behavior tool execution through local provider transports', () =>
             argumentsDelta: '{"secret":"PRIVATE_ARGUMENT"}',
           },
           { type: 'done', reason: 'tool_calls' },
-        ])
-      );
+        ]);
+      });
       cleanups.push(server.close);
       const work = snapshot(server.endpoint);
       actionName =
@@ -376,22 +476,138 @@ describe('Main behavior tool execution through local provider transports', () =>
                 return {
                   callId: action.callId,
                   name: action.name,
-                  args: {},
+                  args: action.args,
                   denied: true,
-                  result: { code: 'BEHAVIOR_INVALID_ARGUMENTS' },
+                  result: { code: 'BEHAVIOR_TOOL_NOT_ALLOWED', detail: 'PRIVATE_DIAGNOSTIC' },
                 };
               },
             }
       );
       expect(await runMain(work, observed.value)).toMatchObject({
-        status: 'error',
-        error: 'ACTION_TOOL_DENIED',
-        usage: { modelCalls: 1 },
+        status: 'completed',
+        text: 'Prose without the denied action.',
+        usage: { modelCalls: 2 },
       });
       expect(executions).toBe(scenario === 'host-denial' ? 1 : 0);
-      expect(server.requests).toHaveLength(1);
+      expect(server.requests).toHaveLength(2);
       expect(observed.events).toHaveLength(1);
       expect(JSON.stringify(observed.events)).not.toContain('PRIVATE_ARGUMENT');
+      expect(JSON.stringify(observed.events)).not.toContain('PRIVATE_DIAGNOSTIC');
+      expect(JSON.stringify(observed.responses)).not.toContain('PRIVATE_');
+      if (scenario === 'unregistered') expect(observed.events[0].name).toBe('unapproved');
+    }
+  );
+
+  test.each(['maxCalls', 'mainCallLimit'] as const)(
+    'BETA-BEH12 %s reserves the final request for prose without extending either budget',
+    async (limit) => {
+      const server = await loopbackProvider(async (captured, response) => {
+        const body = JSON.parse(captured.body);
+        expect(
+          body.stable.tools.some((tool: { name: string }) => tool.name.startsWith('behavior_'))
+        ).toBe(false);
+        await writeSse(response, [
+          { type: 'text_delta', delta: 'Final budget prose.' },
+          { type: 'done', reason: 'stop' },
+        ]);
+      });
+      cleanups.push(server.close);
+      const work = snapshot(server.endpoint);
+      work.settings.maxCalls = limit === 'maxCalls' ? 1 : 4;
+      if (limit === 'mainCallLimit')
+        work.profile!.models.main!.evaluationTools = {
+          contextMode: 'model-selected',
+          approvalReasoningMode: 'configured',
+          maximumToolRounds: 0,
+          terminalLateCorrections: false,
+          outputRecovery: true,
+        };
+      const executor = vi.fn();
+      const observed = hooks(server.origin, { onBehaviorTool: executor });
+      expect(await runMain(work, observed.value)).toMatchObject({
+        status: 'completed',
+        text: 'Final budget prose.',
+        usage: { modelCalls: 1 },
+      });
+      expect(executor).not.toHaveBeenCalled();
+      expect(server.requests).toHaveLength(1);
+    }
+  );
+
+  test('BETA-BEH16 an unclassified host denial remains terminal and never exposes diagnostic payloads', async () => {
+    let actionName = '';
+    const server = await loopbackProvider(async (_captured, response) =>
+      writeSse(response, [
+        {
+          type: 'tool_delta',
+          index: 0,
+          id: 'host-error',
+          name: actionName,
+          argumentsDelta: '{"secret":"PRIVATE_ARGUMENT"}',
+        },
+        { type: 'done', reason: 'tool_calls' },
+      ])
+    );
+    cleanups.push(server.close);
+    const work = snapshot(server.endpoint);
+    actionName = listBehaviorTools(work)[0].tool.name;
+    const observed = hooks(server.origin, {
+      onBehaviorTool: (_binding, action) => ({
+        ...action,
+        denied: true,
+        result: { code: 'BEHAVIOR_SCOPE', detail: 'PRIVATE_DIAGNOSTIC' },
+      }),
+    });
+    expect(await runMain(work, observed.value)).toMatchObject({
+      status: 'error',
+      error: 'ACTION_TOOL_DENIED',
+      usage: { modelCalls: 1 },
+    });
+    expect(server.requests).toHaveLength(1);
+    expect(observed.events[0]).toMatchObject({ args: {}, result: { code: 'BEHAVIOR_SCOPE' } });
+    expect(observed.events[0].errorKind).toBeUndefined();
+    expect(JSON.stringify(observed.events)).not.toContain('PRIVATE_');
+  });
+
+  test.each([
+    'BEHAVIOR_SOURCE_STALE',
+    'BEHAVIOR_RUN_CANCELLED',
+    'BEHAVIOR_RUN_JOURNAL_MISSING',
+  ] as const)(
+    'BETA-BEH17 %s terminates without another request and keeps usage accounting',
+    async (code) => {
+      let actionName = '';
+      const server = await loopbackProvider(async (_captured, response) =>
+        writeSse(response, [
+          {
+            type: 'tool_delta',
+            index: 0,
+            id: 'fatal',
+            name: actionName,
+            argumentsDelta: '{"secret":"PRIVATE_ARGUMENT"}',
+          },
+          { type: 'done', reason: 'tool_calls' },
+        ])
+      );
+      cleanups.push(server.close);
+      const work = snapshot(server.endpoint);
+      actionName = listBehaviorTools(work)[0].tool.name;
+      const controller = new AbortController();
+      const observed = hooks(server.origin, {
+        signal: controller.signal,
+        onBehaviorTool: () => {
+          if (code === 'BEHAVIOR_RUN_CANCELLED') controller.abort();
+          throw new BehaviorError(409, code);
+        },
+      });
+      expect(await runMain(work, observed.value)).toMatchObject({
+        status: code === 'BEHAVIOR_RUN_CANCELLED' ? 'cancelled' : 'error',
+        error: code,
+        usage: { modelCalls: 1 },
+      });
+      expect(server.requests).toHaveLength(1);
+      expect(observed.events).toEqual([]);
+      expect(JSON.stringify(observed.responses)).not.toContain('PRIVATE_');
     }
   );
 

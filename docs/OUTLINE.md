@@ -20,7 +20,7 @@
 
 ## 소유와 저장
 
-구성은 **채팅의 한 분기**에 속해요. 항목은 `outline_nodes`, 배치 요청 영수증은 `outline_batches`에 저장해요. 둘 다 스키마 v15에 추가되는 표라서 기존 DB는 버전을 유지한 채 열 때 없는 표만 얻어요(`initOutline`, 삽화 표와 같은 방식).
+구성은 **채팅의 한 분기**에 속해요. 항목은 `outline_nodes`, 배치 요청 영수증은 `outline_batches`에 저장해요. 알려진 v15 DB에서 빠진 구성 표는 [v16 migration](DATA-MIGRATIONS.md)이 다른 추가 항목과 함께 원자적으로 보충해요. 정상 v16 재개방에서 installer를 반복하지 않아요.
 
 - 항목별 `revision`으로 수정 충돌을 막아요. 저장할 때 `expectedRevision`을 보내요.
 - 서재에 저장해 여러 채팅에서 재사용하는 공유 구성은 이번 범위가 아니에요(5절 결정).
