@@ -1,3 +1,4 @@
+import { MOBILE_WIDTH, DESKTOP_WIDTH, DEFAULT_WIDTHS } from './fixtures/browser-viewports.js';
 import { selectCurrentSettingsSection } from './ui-navigation.js';
 import { openChatSettings } from './ui-navigation.js';
 import { setCurrentModels } from './ui-navigation.js';
@@ -140,14 +141,14 @@ test('UI01 UI02 UI04 UI05 UI09 long real sources keep composer accessible, safe 
   for (const viewport of visualReview
     ? [
         { width: 360, height: 800 },
-        { width: 390, height: 844 },
+        { width: MOBILE_WIDTH, height: 844 },
         { width: 768, height: 1024 },
         { width: 1024, height: 768 },
-        { width: 1440, height: 1000 },
+        { width: DESKTOP_WIDTH, height: 1000 },
       ]
     : [
-        { width: 390, height: 844 },
-        { width: 1440, height: 1000 },
+        { width: MOBILE_WIDTH, height: 844 },
+        { width: DESKTOP_WIDTH, height: 1000 },
       ]) {
     await page.setViewportSize(viewport);
     await page.goto(`/?chat=${chat.id}`);
@@ -173,7 +174,7 @@ test('UI01 UI02 UI04 UI05 UI09 long real sources keep composer accessible, safe 
         )
       ).toBe(true);
     }
-    if ([390, 1440].includes(viewport.width))
+    if (DEFAULT_WIDTHS.includes(viewport.width))
       if (visualReview)
         await page.screenshot({ path: info.outputPath(`reader-${viewport.width}.png`) });
     await openChatSettings(page);
@@ -334,7 +335,7 @@ test('UI08 UI12 native dialog focus, composition, URL and draft selection stay l
 }) => {
   const chat = await seed(request, `합성 UI keyboard ${Date.now()}`, 'Synthetic quiet harbor.');
   await page.goto(`/?chat=${chat.id}`);
-  // 390px: chat settings is the first chat ⋯ item; focus returns to the menu trigger on close.
+  // 412px: chat settings is the first chat ⋯ item; focus returns to the menu trigger on close.
   const menu = await openChatMenu(page);
   const settings = menu.getByRole('button', { name: '채팅 설정', exact: true });
   await settings.focus();
@@ -597,7 +598,7 @@ test('UI07 UI12 late accepted fork cannot navigate after A B A or replace the cu
   page,
   request,
 }) => {
-  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.setViewportSize({ width: DESKTOP_WIDTH, height: 1000 });
   const chat = await seed(request, `UI late fork A ${Date.now()}`, 'Synthetic fork boundary.');
   const other = await seed(
     request,
@@ -683,7 +684,7 @@ test('UI12 late failed SSE refresh from another story never publishes its error 
   page,
   request,
 }) => {
-  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.setViewportSize({ width: DESKTOP_WIDTH, height: 1000 });
   const chatA = await seed(request, `UI stale refresh A ${Date.now()}`, 'Synthetic old story.');
   const chatB = await seed(request, `UI stale refresh B ${Date.now()}`, '', 0, chatA.botId);
   await page.goto(`/?chat=${chatA.id}`);
@@ -753,7 +754,7 @@ test('UI03 UI12 new story retry retains selections, uses current content and loc
   page,
   request,
 }) => {
-  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.setViewportSize({ width: DESKTOP_WIDTH, height: 1000 });
   const title = `UI frozen start ${Date.now()}`;
   const response = await request.post('/api/content', {
     data: {
@@ -888,7 +889,7 @@ test('UI03 UI12 failed starting profile read survives reload and recovers frozen
   page,
   request,
 }) => {
-  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.setViewportSize({ width: DESKTOP_WIDTH, height: 1000 });
   const title = `UI pending profile ${Date.now()}`;
   const botResponse = await request.post('/api/content', {
     data: {
@@ -1085,7 +1086,7 @@ test('UI03 UI12 global model choices survive chat creation and disabled connecti
   page,
   request,
 }, info) => {
-  await page.setViewportSize({ width: 390, height: 844 });
+  await page.setViewportSize({ width: MOBILE_WIDTH, height: 844 });
   const title = `UI global models ${Date.now()}`;
   const { connection, models } = await startingModels(request, title);
   const workspace = await setCurrentModels(request, { main: models[0], translation: models[1] });
@@ -1161,7 +1162,7 @@ test('UI02 UI04 UI12 sending a long request collapses the empty composer and pre
   page,
   request,
 }, info) => {
-  await page.setViewportSize({ width: 390, height: 844 });
+  await page.setViewportSize({ width: MOBILE_WIDTH, height: 844 });
   const chat = await seed(request, `UI composer height ${Date.now()}`, '', 0);
   await page.goto(`/?chat=${chat.id}`);
   const input = page.getByLabel('다음 장면 요청');
@@ -1221,7 +1222,7 @@ test('UI07 UI09 legacy branches use one mobile selection and preserve reading wi
       (await data(request, chat.id)).jobs.every((job) => job.status === 'completed')
     )
     .toBe(true);
-  await page.setViewportSize({ width: 390, height: 844 });
+  await page.setViewportSize({ width: MOBILE_WIDTH, height: 844 });
   await page.goto(`/?chat=${chat.id}`);
   await openChatMenu(page);
   await page.getByRole('button', { name: '보관된 분기', exact: true }).click();
@@ -1278,7 +1279,7 @@ test('UI17 full writing and empty translation prompts import, save and apply wit
   page.on('request', (event) => {
     if (['POST', 'PUT'].includes(event.method())) writes.push(event.url());
   });
-  await page.setViewportSize({ width: 390, height: 844 });
+  await page.setViewportSize({ width: MOBILE_WIDTH, height: 844 });
   await page.goto(`/?chat=${chat.id}`);
   await nav(page, '프롬프트');
   await page.getByRole('button', { name: '새 프롬프트', exact: true }).click();
@@ -1317,7 +1318,7 @@ test('UI17 full writing and empty translation prompts import, save and apply wit
     .toBe(true);
   await editor.getByLabel('프롬프트 역할', { exact: true }).selectOption('main');
   await expect(await promptBody(editor)).toHaveValue(literal);
-  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.setViewportSize({ width: DESKTOP_WIDTH, height: 1000 });
   if (visualReview) await page.screenshot({ path: info.outputPath('full-prompt-desktop.png') });
   await page.getByRole('button', { name: '프롬프트 목록', exact: true }).click();
   await page.getByRole('button', { name: '현재 프롬프트 설정', exact: true }).click();
@@ -1463,7 +1464,7 @@ test('UI18 translation is requested only by first view click, never by restore, 
     if (item.method() === 'POST' && /\/sources\/[^/]+\/translation$/.test(item.url()))
       posts.push(item.url());
   });
-  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.setViewportSize({ width: DESKTOP_WIDTH, height: 1000 });
   await page.goto(`/?chat=${chat.id}`);
   await expect(page.getByTestId('source-text')).toBeVisible();
   await page.reload();
@@ -1550,7 +1551,7 @@ test('UI18 source and translation edits preserve past snapshots and feed only fu
   const oldJob = original.jobs.find(
     (job) => job.kind === 'translation' && job.sourceRevision === source.id
   )!;
-  await page.setViewportSize({ width: 390, height: 844 });
+  await page.setViewportSize({ width: MOBILE_WIDTH, height: 844 });
   await page.goto(`/?chat=${chat.id}`);
   const scene = page.locator(`[data-testid="source"][data-source-id="${source.id}"]`);
   await openSourceActions(scene);
@@ -1625,7 +1626,7 @@ test('UI18 source and translation edits preserve past snapshots and feed only fu
 });
 
 // Without a translation the pencil in the scene tool row already edits the source; the ⋯ menu
-// only holds the other side, and on 390px an open menu is a sheet that covers the row.
+// only holds the other side, and on 412px an open menu is a sheet that covers the row.
 async function openSourceEditor(tab: Page) {
   const source = tab.getByTestId('source');
   const edit = source.locator('.scene-action[aria-label="원문 수정"]');
@@ -1758,15 +1759,15 @@ test('UI settings categories retain drafts and support keyboard navigation', asy
   page,
 }, info) => {
   for (const viewport of [
-    { width: 390, height: 844 },
-    { width: 1440, height: 1000 },
+    { width: MOBILE_WIDTH, height: 844 },
+    { width: DESKTOP_WIDTH, height: 1000 },
   ]) {
     await page.setViewportSize(viewport);
     await page.goto('/');
     await nav(page, '설정');
     const dialog = page.getByRole('dialog', { name: '설정', exact: true });
     const tabs = dialog.getByRole('tablist', { name: '설정 항목' });
-    if (viewport.width === 390) {
+    if (viewport.width === MOBILE_WIDTH) {
       await expect(dialog.locator('.settings-navigation').filter({ visible: true })).toBeVisible();
       await expect(dialog.getByRole('tabpanel')).toHaveCount(0);
       await expect(dialog.getByLabel('앱 화면 테마')).toBeHidden();
@@ -1789,7 +1790,7 @@ test('UI settings categories retain drafts and support keyboard navigation', asy
     await expect(dialog.getByLabel('프로바이더 이름', { exact: true })).not.toBeVisible();
     await selectSettingsSection(page, '접근 보안');
     await expect(dialog.getByRole('button', { name: '접속 해제', exact: true })).toBeVisible();
-    if (viewport.width === 1440) {
+    if (viewport.width === DESKTOP_WIDTH) {
       await tabs.getByRole('tab', { name: '접근 보안', exact: true }).press('Home');
       await expect(tabs.getByRole('tab', { name: '일반', exact: true })).toBeFocused();
       for (const section of ['역할별 모델', '현재 프롬프트', '프로바이더·모델']) {
@@ -1837,8 +1838,8 @@ test('UI common dialogs center on desktop and fill mobile without changing dismi
   request,
 }, info) => {
   const chat = await seed(request, `합성 common dialog ${Date.now()}`, '', 0);
-  for (const width of [1440, 390]) {
-    const height = width === 390 ? 844 : 1000;
+  for (const width of [DESKTOP_WIDTH, MOBILE_WIDTH]) {
+    const height = width === MOBILE_WIDTH ? 844 : 1000;
     await page.setViewportSize({ width, height });
     await page.goto(`/?chat=${chat.id}`);
     for (const title of ['채팅 설정', '작업 현황']) {
@@ -1854,7 +1855,7 @@ test('UI common dialogs center on desktop and fill mobile without changing dismi
       expect(box.y).toBeGreaterThanOrEqual(0);
       expect(box.x + box.width).toBeLessThanOrEqual(width);
       expect(box.y + box.height).toBeLessThanOrEqual(height);
-      if (visualReview && width === 390) {
+      if (visualReview && width === MOBILE_WIDTH) {
         expect(box.x).toBe(0);
         expect(box.y).toBe(0);
         expect(box.width).toBe(width);
@@ -1882,20 +1883,21 @@ test('UI common dialogs center on desktop and fill mobile without changing dismi
         });
       await page.keyboard.press('Escape');
       await expect(dialog).not.toBeVisible();
-      // Tasks (every width) and chat settings (390px) open from the chat ⋯ menu, so focus
+      // Tasks (every width) and chat settings (412px) open from the chat ⋯ menu, so focus
       // returns to the menu button afterwards; the wide header button gets its own focus back.
       if (title === '작업 현황') {
-        if (width === 1440) await expect(page.locator('.chat-menu > summary')).toBeFocused();
-      } else if (width === 1440) await expect(opener).toBeFocused();
+        if (width === DESKTOP_WIDTH)
+          await expect(page.locator('.chat-menu > summary')).toBeFocused();
+      } else if (width === DESKTOP_WIDTH) await expect(opener).toBeFocused();
       else await expect(page.locator('.chat-menu > summary')).toBeFocused();
     }
-    if (width === 1440) {
+    if (width === DESKTOP_WIDTH) {
       await openChatMenu(page);
       const opener = page.getByRole('button', { name: '읽기 설정', exact: true });
       await opener.click();
       const dialog = page.getByRole('dialog', { name: '읽기 설정', exact: true });
       const box = (await dialog.boundingBox())!;
-      if (visualReview) expect(box.width).toBe(560);
+      if (visualReview) expect(box.width).toBe(480);
       if (visualReview) expect(box.height).toBeLessThan(880);
       if (visualReview)
         expect(Math.abs(box.y + box.height / 2 - height / 2)).toBeLessThanOrEqual(1);
@@ -1935,14 +1937,16 @@ test('UI whole-source translation retains completed results across retry and can
       })
     ).ok()
   ).toBeTruthy();
-  await page.setViewportSize({ width: 390, height: 844 });
+  await page.setViewportSize({ width: MOBILE_WIDTH, height: 844 });
   await page.goto(`/?chat=${chat.id}`);
   await openChatSettings(page);
   await selectChatSettingsSection(page, '자동 후속 작업');
   await expect(page.getByLabel('번역 구간 기준 글자 수', { exact: true })).toHaveCount(0);
   await expect(page.getByLabel('번역 구간 무제한', { exact: true })).toHaveCount(0);
   if (visualReview)
-    await page.screenshot({ path: info.outputPath('translation-whole-source-settings-390.png') });
+    await page.screenshot({
+      path: info.outputPath(`translation-whole-source-settings-${MOBILE_WIDTH}.png`),
+    });
   await close(page);
   const scene = page.locator(`[data-testid="source"][data-source-id="${source.id}"]`);
   await scene.getByRole('button', { name: '번역 보기', exact: true }).click();
@@ -1980,7 +1984,9 @@ test('UI whole-source translation retains completed results across retry and can
   await expect.poll(async () => (await latest()).status).toBe('cancelled');
   await expect(scene.getByTestId('translation-text')).toHaveText(firstText);
   if (visualReview)
-    await page.screenshot({ path: info.outputPath('translation-previous-cancelled-390.png') });
+    await page.screenshot({
+      path: info.outputPath(`translation-previous-cancelled-${MOBILE_WIDTH}.png`),
+    });
   for (const terminal of ['cancelled', 'failed'] as const) {
     if (terminal === 'failed') {
       expect(
@@ -2020,7 +2026,7 @@ test('UI whole-source translation retains completed results across retry and can
     );
     if (visualReview)
       await page.screenshot({
-        path: info.outputPath(`translation-whole-source-${terminal}-retry-390.png`),
+        path: info.outputPath(`translation-whole-source-${terminal}-retry-${MOBILE_WIDTH}.png`),
       });
   }
 });
@@ -2030,7 +2036,7 @@ test('UI chat settings close right after saving does not warn while the refresh 
   request,
 }) => {
   const chat = await seed(request, `저장 직후 닫기 ${Date.now()}`, 'Synthetic close after save.');
-  await page.setViewportSize({ width: 390, height: 844 });
+  await page.setViewportSize({ width: MOBILE_WIDTH, height: 844 });
   await page.goto(`/?chat=${chat.id}`);
   const dialog = page.getByRole('dialog', { name: '채팅 설정', exact: true });
   await openChatSettings(page);

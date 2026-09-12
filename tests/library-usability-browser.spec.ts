@@ -1,3 +1,4 @@
+import { MOBILE_WIDTH } from './fixtures/browser-viewports.js';
 import { visualReview } from './fixtures/visual-review.js';
 import { isEditDraftSaveRequest, waitForContentDraftSave } from './fixtures/edit-draft-save.js';
 import { createLibraryContent } from './ui-navigation.js';
@@ -26,7 +27,7 @@ async function noHorizontalOverflow(page: Page) {
   ).toBeLessThanOrEqual(1);
 }
 
-for (const [index, width] of (visualReview ? [390, 360] : [390]).entries()) {
+for (const [index, width] of (visualReview ? [MOBILE_WIDTH, 360] : [MOBILE_WIDTH]).entries()) {
   test(`LUSE0${index + 1} mobile ${width}px library list view keeps readable rows and creates a bot into a chat`, async ({
     page,
     request,
@@ -134,7 +135,7 @@ test('LUSE03 empty persona and module folders explain their roles and offer the 
       (folder) => !organization.folders.some((item) => item.id === folder.id)
     )!.title;
   }
-  await page.setViewportSize({ width: 390, height: 800 });
+  await page.setViewportSize({ width: MOBILE_WIDTH, height: 800 });
   let contentWrites = 0;
   page.on('request', (item) => {
     if (

@@ -1,3 +1,4 @@
+import { MOBILE_WIDTH, DESKTOP_WIDTH, DEFAULT_WIDTHS } from './fixtures/browser-viewports.js';
 import { setCurrentModels } from './ui-navigation.js';
 import { visualReview } from './fixtures/visual-review.js';
 import { preservePromptWorkspace } from './fixtures/prompt-workspace.js';
@@ -13,7 +14,7 @@ import {
 } from './ui-navigation.js';
 import { postFixtureChat } from './fixtures/chat.js';
 
-test('AGENTUI03 shared selections remain independent and binary switches fit and persist at 390 and 1440px', async ({
+test(`AGENTUI03 shared selections remain independent and binary switches fit and persist at ${MOBILE_WIDTH} and ${DESKTOP_WIDTH}px`, async ({
   page,
   request,
 }, info) => {
@@ -52,7 +53,7 @@ test('AGENTUI03 shared selections remain independent and binary switches fit and
   await collaboration.getByRole('button', { name: '에이전트 협업', exact: true }).click();
   await collaboration.getByRole('button', { name: '인물 에이전트 추가', exact: true }).click();
   await enabled.uncheck();
-  for (const width of [390, 1440]) {
+  for (const width of DEFAULT_WIDTHS) {
     await page.setViewportSize({ width, height: 1000 });
     await selectPromptSection(editor, '에이전트 협업');
     await enabled.focus();
@@ -130,13 +131,13 @@ test('AGENTUI03 shared selections remain independent and binary switches fit and
   await expect(enabled).not.toBeChecked();
 });
 
-test('AGENTUI01 collaboration stays editable through incomplete drafts, undo and JSON round trips at 390px', async ({
+test(`AGENTUI01 collaboration stays editable through incomplete drafts, undo and JSON round trips at ${MOBILE_WIDTH}px`, async ({
   page,
   request,
 }, info) => {
   const pageErrors: string[] = [];
   page.on('pageerror', (error) => pageErrors.push(error.message));
-  await page.setViewportSize({ width: 390, height: 1000 });
+  await page.setViewportSize({ width: MOBILE_WIDTH, height: 1000 });
   await page.goto('/');
   await navigationAction(page, '프롬프트');
   const library = page.getByTestId('prompt-library');
@@ -260,7 +261,7 @@ test('AGENTUI02 saved collaboration options reach the real preview API and trans
   page,
   request,
 }, info) => {
-  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.setViewportSize({ width: DESKTOP_WIDTH, height: 1000 });
   const program = createDefaultPromptProgram('Synthetic main instructions.');
   program.controls = [
     { id: 'perspective', label: '합성 시점', type: 'text', default: '가까운 시점' },

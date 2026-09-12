@@ -692,7 +692,7 @@ input[type="checkbox"] {
 }
 .prose {
   font-size: var(--reading);
-  line-height: 1.9;
+  line-height: var(--reading-line-height, 1.9);
   white-space: normal;
   word-break: keep-all;
   overflow-wrap: anywhere;
@@ -702,7 +702,7 @@ input[type="checkbox"] {
   font-family: Georgia, "Batang", "Noto Serif CJK KR", serif;
 }
 .prose p {
-  margin: 0 0 1.35em;
+  margin: 0 0 var(--reading-paragraph-gap, 1.35em);
 }
 .prose h1 {
   font-size: 1.35em;
@@ -1363,10 +1363,10 @@ input[type="checkbox"] {
   }
   .prose {
     font-size: var(--reading);
-    line-height: 1.9;
+    line-height: var(--reading-line-height, 1.9);
   }
   .prose p {
-    margin-bottom: 1.45em;
+    margin-bottom: var(--reading-paragraph-gap, 1.45em);
   }
   .composer-dock {
     padding: 8px 11px max(7px, env(safe-area-inset-bottom));

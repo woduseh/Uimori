@@ -1,3 +1,4 @@
+import { MOBILE_WIDTH, DESKTOP_WIDTH, DEFAULT_WIDTHS } from './fixtures/browser-viewports.js';
 import {
   selectChatSettingsSection,
   openPromptBlocks,
@@ -61,11 +62,11 @@ test('PAUI05 prompt sections and responsive list detail preserve drafts without 
   await selectPromptBlock(composer, '합성 지침');
   await expect(body).toHaveValue(draft);
   await expect(save).toBeEnabled();
-  for (const width of [390, 1440]) {
+  for (const width of DEFAULT_WIDTHS) {
     await page.setViewportSize({ width, height: 1000 });
     await selectPromptBlock(composer, '합성 지침');
     const navigation = composer.getByRole('complementary', { name: '블록 목록', exact: true });
-    if (width === 390) {
+    if (width === MOBILE_WIDTH) {
       await expect(
         composer.getByRole('combobox', { name: '프롬프트 편집 섹션', exact: true })
       ).toBeVisible();
@@ -114,7 +115,7 @@ test('PAUI04 desktop block drag preserves content, supports undo and persists bo
 }, info) => {
   const preset = await seed(request),
     observed = observe(page);
-  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.setViewportSize({ width: DESKTOP_WIDTH, height: 1000 });
   await page.goto('/');
   await navigationAction(page, '프롬프트');
   await page.getByRole('button', { name: `${preset.title} 프롬프트 편집`, exact: true }).click();
@@ -217,7 +218,7 @@ test('PAUI01 editing updates the same prompt while copy and deletion stay in the
 }) => {
   const preset = await seed(request),
     observed = observe(page);
-  await page.setViewportSize({ width: 390, height: 844 });
+  await page.setViewportSize({ width: MOBILE_WIDTH, height: 844 });
   await page.goto('/');
   await navigationAction(page, '프롬프트');
   await page.getByRole('button', { name: `${preset.title} 프롬프트 편집`, exact: true }).click();
@@ -311,7 +312,7 @@ test('PAUI02 saving and applying retain distinct scopes with compact actions on 
     .toBe(2);
   expect(await (await request.get(`/api/prompt-presets/${preset.id}`)).json()).toEqual(snapshot);
   expect((await detail(request, chat.id)).profile).toEqual(before.profile);
-  for (const width of [390, 1440]) {
+  for (const width of DEFAULT_WIDTHS) {
     await page.setViewportSize({ width, height: 900 });
     await editor.scrollIntoViewIfNeeded();
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(
@@ -319,7 +320,9 @@ test('PAUI02 saving and applying retain distinct scopes with compact actions on 
     );
     if (visualReview)
       await page.screenshot({
-        path: info.outputPath(`prompt-actions-${width === 390 ? 'mobile' : 'desktop'}.png`),
+        path: info.outputPath(
+          `prompt-actions-${width === MOBILE_WIDTH ? 'mobile' : 'desktop'}.png`
+        ),
       });
   }
   if (visualReview) {
@@ -354,7 +357,7 @@ test('PAUI03 block tools preserve pending template drafts, focus and undo throug
   test.setTimeout(60000);
   const preset = await seed(request),
     observed = observe(page);
-  await page.setViewportSize({ width: 390, height: 844 });
+  await page.setViewportSize({ width: MOBILE_WIDTH, height: 844 });
   await page.goto('/');
   await navigationAction(page, '프롬프트');
   await page.getByRole('button', { name: `${preset.title} 프롬프트 편집`, exact: true }).click();

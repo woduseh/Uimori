@@ -1,3 +1,4 @@
+import { MOBILE_WIDTH, DESKTOP_WIDTH } from './fixtures/browser-viewports.js';
 import { visualReview } from './fixtures/visual-review.js';
 import { test, expect, type APIRequestContext, type Page } from '@playwright/test';
 import type { Chat, ChatDetail, Job, ReaderActivity, ReaderDetail, Run } from '../core/types.js';
@@ -137,7 +138,7 @@ test('TURNUI01 independent response panels, lazy inspector and reload persistenc
   request,
 }, info) => {
   const seeded = await seed(request, 2);
-  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.setViewportSize({ width: DESKTOP_WIDTH, height: 900 });
   const state = await harness(page, seeded.chat.id);
   const panels = page.getByTestId('source').getByTestId('turn-activity');
   await expect(panels).toHaveCount(2);
@@ -293,14 +294,14 @@ test('TURNUI04 expanded pending run preserves disclosure when its source arrives
   expect((await detail(request, seeded.chat.id)).runs).toEqual(seeded.runs);
 });
 
-test('TURNUI03 failed response without source keeps inline diagnostics readable at 390px', async ({
+test(`TURNUI03 failed response without source keeps inline diagnostics readable at ${MOBILE_WIDTH}px`, async ({
   page,
   request,
 }, info) => {
   const seeded = await seed(request);
   const run = seeded.runs[0]!;
   const failure = `SYNTHETIC_CONTEXT_FAILURE:${'long-diagnostic-'.repeat(18)}`;
-  await page.setViewportSize({ width: 390, height: 844 });
+  await page.setViewportSize({ width: MOBILE_WIDTH, height: 844 });
   const state = await harness(page, seeded.chat.id, (body) => {
     body.sources = [];
     body.jobs = [];

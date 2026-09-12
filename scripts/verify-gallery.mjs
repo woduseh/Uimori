@@ -22,7 +22,7 @@ import { captureGallery } from './gallery/capture.mjs';
 import { screens, themes, viewports } from './gallery/screens.mjs';
 import { expectedJourneyCaptures, journeys } from './gallery/journey.mjs';
 
-// Captures every listed screen and modal at 390/1440px in light and dark on an owned test-mode
+// Captures every listed screen and modal at 412/2560px in light and dark on an owned test-mode
 // server, then walks the listed journeys step by step counting interactions, and records the
 // principle metrics beside each capture. PASS means every capture, every journey step and the
 // cleanup succeeded; an unmet metric is recorded in metrics.json and never fails the run.

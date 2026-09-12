@@ -1,3 +1,5 @@
+import browserWidths from '../fixtures/browser-viewports.json' with { type: 'json' };
+const { mobile: MOBILE_WIDTH } = browserWidths;
 import { spawn } from 'node:child_process';
 import http from 'node:http';
 import os from 'node:os';
@@ -201,7 +203,7 @@ export async function doctor(
           headless: true,
           // Same as playwright.config.ts: a system PAC proxy must not intercept 127.0.0.1.
           args: ['--no-proxy-server'],
-          viewport: { width: 390, height: 844 },
+          viewport: { width: MOBILE_WIDTH, height: 844 },
           timeout: 10000,
         });
         const page = await context.newPage();
@@ -212,7 +214,7 @@ export async function doctor(
           name: 'chromium',
           version: context.browser().version(),
           executablePath: executablePath || 'Playwright managed browser',
-          viewport: '390x844 emulator',
+          viewport: `${MOBILE_WIDTH}x844 emulator`,
         };
         await page.screenshot({ path: path.join(directory, 'doctor-browser.png') });
         await context.close();

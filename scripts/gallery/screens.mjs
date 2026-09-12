@@ -1,11 +1,13 @@
+import browserWidths from '../../fixtures/browser-viewports.json' with { type: 'json' };
+const { mobile: MOBILE_WIDTH, desktop: DESKTOP_WIDTH } = browserWidths;
 // One entry per screen or modal the gallery captures. `url` values starting with `$` are
 // replaced from the seed result (see seed.mjs). Steps run after the page is ready; the step
 // vocabulary is documented in steps.mjs. `principles` are identifiers from
 // docs/UI-PRINCIPLES-AI-PRODUCTS.md.
 
 export const viewports = {
-  mobile: { width: 390, height: 844, isMobile: true, hasTouch: true },
-  desktop: { width: 1440, height: 900, isMobile: false, hasTouch: false },
+  mobile: { width: MOBILE_WIDTH, height: 844, isMobile: true, hasTouch: true },
+  desktop: { width: DESKTOP_WIDTH, height: 900, isMobile: false, hasTouch: false },
 };
 export const themes = ['light', 'dark'];
 export const defaultMetrics = ['overflow', 'touch-44', 'min-font'];

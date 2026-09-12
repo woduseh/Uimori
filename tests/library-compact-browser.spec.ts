@@ -1,3 +1,4 @@
+import { MOBILE_WIDTH, DESKTOP_WIDTH, DEFAULT_WIDTHS } from './fixtures/browser-viewports.js';
 import { reviewWidths, visualReview } from './fixtures/visual-review.js';
 import { expect, test, type APIRequestContext, type Locator, type Page } from '@playwright/test';
 import type { Content, Library } from '../core/product.js';
@@ -76,7 +77,7 @@ test('LCOM01 compact library keeps row actions aligned across mobile and desktop
     if (visualReview)
       await page.screenshot({ path: info.outputPath(`library-compact-${width}.png`) });
   }
-  await page.setViewportSize({ width: 390, height: 900 });
+  await page.setViewportSize({ width: MOBILE_WIDTH, height: 900 });
   await panel.getByRole('searchbox').fill('');
   if (visualReview) {
     const folders = panel.locator('.library-folder-section');
@@ -138,7 +139,7 @@ test('LCOM02 empty categories hide unused tools while empty folders and searches
   ).toBeVisible();
   await expect(panel.getByRole('searchbox', { name: '서재 검색', exact: true })).toBeVisible();
   await expect(panel.getByLabel('목록 관리', { exact: true })).toBeVisible();
-  for (const width of [390, 1440]) {
+  for (const width of DEFAULT_WIDTHS) {
     await page.setViewportSize({ width, height: 900 });
     const back = await panel.getByRole('button', { name: '전체 보기', exact: true }).boundingBox();
     const create = await panel
@@ -195,7 +196,7 @@ test('LCOM03 selection replaces list tools and retains search and saved view acr
   await expect(options).toHaveCount(0);
   await expect(panel.getByRole('button', { name: '완료', exact: true })).toBeFocused();
   await panel.getByRole('checkbox', { name: `${item.title} 선택`, exact: true }).check();
-  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.setViewportSize({ width: DESKTOP_WIDTH, height: 900 });
   await expect(
     panel.getByRole('checkbox', { name: `${item.title} 선택`, exact: true })
   ).toBeChecked();
@@ -215,7 +216,7 @@ test('LCOM03 selection replaces list tools and retains search and saved view acr
   await page.reload();
   await search.fill(title);
   await expect(panel.locator('.library-portrait-card')).toHaveCount(1);
-  await page.setViewportSize({ width: 390, height: 800 });
+  await page.setViewportSize({ width: MOBILE_WIDTH, height: 800 });
   await expect(panel.locator('.library-portrait-card')).toHaveCount(1);
   await expectNoOverflow(page);
 });

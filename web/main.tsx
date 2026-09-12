@@ -1,4 +1,7 @@
 import { DraftDiscardActions } from './DraftDiscardActions.js';
+import { ReadabilitySettings } from './ReadabilitySettings.js';
+import { ReadingPreferencesContext } from './ReadingPreferencesContext.js';
+import { useReadingPreferences } from './useReadingPreferences.js';
 import { RequestMessage } from './RequestMessage.js';
 import { RetryFailure } from './RetryFailure.js';
 import { isModelSelectable } from './model-selection.js';
@@ -323,7 +326,7 @@ function App() {
   });
   const [font, setFont] = useState(() => localStorage.getItem('uimori:font') || 'sans');
   const [fontSize, setFontSize] = useState(() =>
-    Math.max(16, Math.min(22, Number(localStorage.getItem('uimori:font-size') || 18)))
+    Math.max(9, Math.min(28, Number(localStorage.getItem('uimori:font-size') || 18)))
   );
   const [enterSend, setEnterSend] = useState(
     () => localStorage.getItem('uimori:enter-send') === 'true'
@@ -331,6 +334,7 @@ function App() {
   const [readingLanguage, setReadingLanguage] = useState(
     () => localStorage.getItem('uimori:reading-language') || 'translation'
   );
+  const reading = useReadingPreferences(font, fontSize, readingWidth);
 
   const [libraryDirty, setLibraryDirty] = useState(false);
   const [pendingNavigation, setPendingNavigation] = useState<null | (() => void)>(null);
@@ -454,21 +458,11 @@ function App() {
     return () => media.removeEventListener('change', apply);
   }, [theme]);
   useEffect(() => {
-    document.documentElement.dataset.readingFont = font;
-    document.documentElement.style.setProperty('--reading', `${fontSize}px`);
-    localStorage.setItem('uimori:font', font);
-    localStorage.setItem('uimori:font-size', String(fontSize));
-  }, [font, fontSize]);
-  useEffect(() => {
     localStorage.setItem('uimori:enter-send', String(enterSend));
   }, [enterSend]);
   useEffect(() => {
     localStorage.setItem('uimori:reading-language', readingLanguage);
   }, [readingLanguage]);
-  useEffect(() => {
-    document.documentElement.style.setProperty('--reading-width', `${readingWidth}px`);
-    localStorage.setItem('uimori:reading-width', String(readingWidth));
-  }, [readingWidth]);
   useEffect(() => {
     document.documentElement.style.setProperty('--panel-w', `${panelWidth}px`);
     localStorage.setItem('uimori:panel-width', String(panelWidth));
@@ -596,6 +590,7 @@ function App() {
   function renderReadingSettings(onStartFocus?: () => void) {
     return (
       <div className="settings-stack">
+        <ReadabilitySettings value={reading.settings} onChange={reading.update} />
         <label>
           새 원고의 기본 보기
           <select
@@ -616,7 +611,7 @@ function App() {
           <select
             aria-label="본문 글꼴"
             value={font}
-            onChange={(event) => setFont(event.target.value)}
+            onChange={(event) => reading.changeLayout(() => setFont(event.target.value))}
           >
             <option value="sans">기본 고딕</option>
             <option value="serif">명조</option>
@@ -627,11 +622,13 @@ function App() {
           <input
             aria-label="본문 크기"
             type="range"
-            min={16}
-            max={22}
+            min={9}
+            max={28}
             step={1}
             value={fontSize}
-            onChange={(event) => setFontSize(Number(event.target.value))}
+            onChange={(event) =>
+              reading.changeLayout(() => setFontSize(Number(event.target.value)))
+            }
           />
           <span>{fontSize}px</span>
         </label>
@@ -640,7 +637,9 @@ function App() {
           <select
             aria-label="본문 폭"
             value={readingWidth}
-            onChange={(event) => setReadingWidth(Number(event.target.value))}
+            onChange={(event) =>
+              reading.changeLayout(() => setReadingWidth(Number(event.target.value)))
+            }
           >
             <option value={760}>좁게</option>
             <option value={880}>기본</option>
@@ -656,7 +655,7 @@ function App() {
       </div>
     );
   }
-  return (
+  const workspace = (
     <div
       className={`app-shell ${focus ? 'focus-reading' : ''} ${sidebarHidden ? 'sidebar-collapsed' : ''} ${optionsOpen && s.destination === 'story' && s.selected ? 'options-open' : ''} ${helperOpen ? 'helper-open' : ''} ${workspacePanelOpen ? (panelModal ? 'panel-overlay' : 'panel-docked') : ''}`}
     >
@@ -1716,6 +1715,9 @@ function App() {
         />
       )}
     </div>
+  );
+  return (
+    <ReadingPreferencesContext value={reading.settings}>{workspace}</ReadingPreferencesContext>
   );
 }
 createRoot(document.getElementById('root')!).render(

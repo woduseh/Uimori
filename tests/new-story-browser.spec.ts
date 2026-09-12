@@ -1,3 +1,4 @@
+import { MOBILE_WIDTH } from './fixtures/browser-viewports.js';
 import { setCurrentModels } from './ui-navigation.js';
 import { preservePromptWorkspace } from './fixtures/prompt-workspace.js';
 import { visualReview } from './fixtures/visual-review.js';
@@ -10,7 +11,7 @@ test('NSUI01 global model reaches an empty chat on mobile and optional choices s
   page,
   request,
 }, info) => {
-  await page.setViewportSize({ width: 390, height: 844 });
+  await page.setViewportSize({ width: MOBILE_WIDTH, height: 844 });
   const title = `Quick start ${crypto.randomUUID()}`;
   const savedBot = await request.post('/api/content', {
     data: {

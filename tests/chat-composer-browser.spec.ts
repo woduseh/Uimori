@@ -1,3 +1,4 @@
+import { MOBILE_WIDTH, DESKTOP_WIDTH, DEFAULT_WIDTHS } from './fixtures/browser-viewports.js';
 import { expect, test } from '@playwright/test';
 import { postFixtureChat } from './fixtures/chat.js';
 import { openHelper } from './ui-navigation.js';
@@ -42,7 +43,7 @@ test('shared composer grows at narrow widths and resets after clearing', async (
   page.on('pageerror', (error) => {
     if (/ResizeObserver/u.test(error.message)) observerErrors.push(error.message);
   });
-  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.setViewportSize({ width: DESKTOP_WIDTH, height: 900 });
   await page.goto(`/?chat=${chat.id}`);
   const input = page.getByRole('textbox', { name: '다음 장면 요청' });
   const form = page.locator('form.composer').filter({ has: input });
@@ -51,7 +52,7 @@ test('shared composer grows at narrow widths and resets after clearing', async (
   await expect(form).not.toHaveClass(/grown/u);
   await input.fill('장면의 인물과 배경을 이어서 묘사해 주세요. '.repeat(25));
   await expect(form).toHaveClass(/grown/u);
-  await page.setViewportSize({ width: 390, height: 844 });
+  await page.setViewportSize({ width: MOBILE_WIDTH, height: 844 });
   await expect
     .poll(async () => input.evaluate((node) => node.getBoundingClientRect().height))
     .toBeLessThanOrEqual(180);
@@ -82,7 +83,7 @@ test('shared composer shrinks nonempty drafts in main and helper without width o
   page.on('pageerror', (error) => {
     if (/ResizeObserver/u.test(error.message)) observerErrors.push(error.message);
   });
-  for (const width of [390, 1440]) {
+  for (const width of DEFAULT_WIDTHS) {
     await page.setViewportSize({ width, height: 900 });
     await page.goto(`/?chat=${chat.id}`);
     for (const target of ['main', 'helper']) {

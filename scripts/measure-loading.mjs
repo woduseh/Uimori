@@ -1,3 +1,5 @@
+import browserWidths from '../fixtures/browser-viewports.json' with { type: 'json' };
+const { desktop: DESKTOP_WIDTH } = browserWidths;
 import path from 'node:path';
 import { mkdir, stat } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
@@ -224,7 +226,7 @@ try {
     headless: true,
     args: ['--no-proxy-server'],
   });
-  const context = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
+  const context = await browser.newContext({ viewport: { width: DESKTOP_WIDTH, height: 1000 } });
   const page = await context.newPage();
   page.setDefaultTimeout(120000);
   const cdp = await context.newCDPSession(page);

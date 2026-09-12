@@ -1,3 +1,4 @@
+import { MOBILE_WIDTH } from './fixtures/browser-viewports.js';
 import { reviewWidths, visualReview } from './fixtures/visual-review.js';
 import { expect, test, type Page } from '@playwright/test';
 import { navigationAction, selectSettingsSection } from './ui-navigation.js';
@@ -108,7 +109,7 @@ test('ACOM02 stale file reads cannot replace a later selection or restore a clea
       reads[name].release();
       await reads[name].done;
     }, name);
-  await page.setViewportSize({ width: 390, height: 844 });
+  await page.setViewportSize({ width: MOBILE_WIDTH, height: 844 });
   const panel = await openArchive(page);
   const file = panel.getByLabel('가져올 JSON 파일', { exact: true });
   const submit = panel.getByRole('button', { name: '빈 DB에 가져오기', exact: true });
@@ -162,7 +163,7 @@ test('ACOM03 status failure and occupied data block import, while a failed write
     imports.push(route.request().postDataJSON());
     return route.fulfill({ status: 503, json: { error: 'SYNTHETIC_IMPORT_FAILURE' } });
   });
-  await page.setViewportSize({ width: 390, height: 844 });
+  await page.setViewportSize({ width: MOBILE_WIDTH, height: 844 });
   const panel = await openArchive(page);
   const file = panel.getByLabel('가져올 JSON 파일', { exact: true });
   const submit = panel.getByRole('button', { name: '빈 DB에 가져오기', exact: true });

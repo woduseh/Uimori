@@ -1,3 +1,4 @@
+import { MOBILE_WIDTH, DESKTOP_WIDTH } from './fixtures/browser-viewports.js';
 import { navigationAction } from './ui-navigation.js';
 import { preservePromptWorkspace } from './fixtures/prompt-workspace.js';
 import { visualReview } from './fixtures/visual-review.js';
@@ -19,7 +20,7 @@ const png = Buffer.from(
   'base64'
 );
 async function libraryFor(page: Page, role: '페르소나' | '모듈') {
-  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.setViewportSize({ width: DESKTOP_WIDTH, height: 1000 });
   await page.goto('/');
   await navigationAction(page, '서재');
   const library = page.getByTestId('library-panel');
@@ -252,7 +253,7 @@ test('shared persona draft uploads an image and starts as a bot with an exact au
     originalImage.result!.annotations!.length
   );
 
-  await page.setViewportSize({ width: 390, height: 844 });
+  await page.setViewportSize({ width: MOBILE_WIDTH, height: 844 });
   await expect(page.getByTestId('authored-start')).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(
     true
@@ -335,17 +336,17 @@ test('shared package image editing pages large lists and preserves old revisions
   await images.getByRole('listitem').first().getByRole('button').click();
   if (visualReview)
     await images.screenshot({ path: info.outputPath('shared-image-editor-desktop.png') });
-  await page.setViewportSize({ width: 390, height: 844 });
+  await page.setViewportSize({ width: MOBILE_WIDTH, height: 844 });
   await images.scrollIntoViewIfNeeded();
   const bounds = await images.boundingBox();
   expect(bounds!.x).toBeGreaterThanOrEqual(0);
-  expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(390);
+  expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(MOBILE_WIDTH);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(
     true
   );
   if (visualReview)
     await page.screenshot({ path: info.outputPath('shared-image-editor-mobile.png') });
-  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.setViewportSize({ width: DESKTOP_WIDTH, height: 1000 });
   await library.getByText('패키지 가져오기·내보내기와 역할 사본', { exact: true }).click();
   const downloadWait = page.waitForEvent('download');
   await library.getByRole('button', { name: '패키지 JSON 내보내기', exact: true }).click();

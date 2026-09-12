@@ -2,7 +2,7 @@
 
 2026-09-08~09, `codex/simplify-runtime`. 런타임 간소화에 맞춰 전체 검사 본문을 점검하고 중복을 통합했어요. 이 문서의 개수는 전체 제품 보증이나 실제 창작 품질을 뜻하지 않아요.
 
-전수표는 점검 시점의 기록이에요. 이후 계약이 바뀌면 case 제목과 개수는 달라져요. 예로 2026-09-11 원문 구간 정리에서 `tests/source-segments*.test.ts`·`tests/package-presentation.test.ts`의 지식 메타데이터·초상·구간별 번역 case를 현재 계약에 맞게 바꿨어요(`docs/SOURCE-SEGMENTS.md`). 현재 목록은 저장소의 실제 파일을 확인해요.
+전수표는 점검 시점의 기록이에요. 이후 계약이 바뀌면 case 제목과 개수는 달라져요. 예로 2026-09-11 원문 구간 정리에서 `tests/source-segments*.test.ts`·`tests/package-presentation.test.ts`의 지식 메타데이터·초상·구간별 번역 case를 현재 계약에 맞게 바꿨어요(`docs/SOURCE-SEGMENTS.md`). 현재 목록은 저장소의 실제 파일을 확인해요. 기본 화면 검증 폭은 2026-09-12부터 모바일 412·데스크톱 2560 CSS px이며 공통 값은 `fixtures/browser-viewports.json`에 있어요. 브라우저 전수표의 현재 검사 설명은 이 기준을 따르고, 아래 과거 실행 결과와 별도 결과 문서의 수치는 당시 기록으로 보존해요.
 
 ## 범위와 판단 기준
 

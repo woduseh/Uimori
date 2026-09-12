@@ -89,7 +89,7 @@ npx vitest run tests/illustration-core.test.ts tests/comfyui-client.test.ts test
 | `illustration-store` | v15 DB 표 추가, 설정 CAS·검증, 예약 한도·동시 1개, 자동 예약과 설정 오류 표시, 재요청·취소·복구, 참조 고정, 포크·삭제·archive |
 | `illustration-runner` | 모의 생성기의 자동 재요청·한도·취소, Codex 턴 입력·attempt·캡션, 프롬프트 모델+ComfyUI 전체 경로와 실패 분류, 자동 예약의 생략(skip)과 직접 요청의 생략 금지, 시간 초과 후 결과 확인(reconcile) |
 | `illustration-api` | 테스트 모드 App에서 수동·자동 생성, 한도, 자동 재요청, 다시 요청, 취소, 주입 실패, 참조·설정 API, Reader·이벤트 반영 |
-| `npm run verify:illustration` | 빌드 후 합성 브라우저(1440·390px): 장면 메뉴의 삽화 생성, 완료 이미지 표시와 새로고침 유지, 실패 카드의 다시 요청, 삭제 확인, 설정 저장과 CAS 충돌 시 초안 유지 |
+| `npm run verify:illustration` | 빌드 후 합성 브라우저(2560·412px): 장면 메뉴의 삽화 생성, 완료 이미지 표시와 새로고침 유지, 실패 카드의 다시 요청, 삭제 확인, 설정 저장과 CAS 충돌 시 초안 유지 |
 
 사용자가 직접 확인해야 하는 항목(실제 서비스 호출):
 

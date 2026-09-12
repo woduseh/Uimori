@@ -1,3 +1,4 @@
+import { MOBILE_WIDTH } from './fixtures/browser-viewports.js';
 import { visualReview } from './fixtures/visual-review.js';
 import { selectChatSettingsSection } from './ui-navigation.js';
 import { openChatSettings } from './ui-navigation.js';
@@ -104,7 +105,7 @@ test('F02 F03 F05 two contexts and two tabs keep commands, snapshots, source job
 }, testInfo) => {
   const errors: string[] = [];
   page.on('pageerror', (e) => errors.push(e.message));
-  const other = await browser.newContext({ viewport: { width: 390, height: 844 } });
+  const other = await browser.newContext({ viewport: { width: MOBILE_WIDTH, height: 844 } });
   const bPage = await other.newPage();
   bPage.on('pageerror', (e) => errors.push(e.message));
   const base = process.env.NR_BASE_URL!;

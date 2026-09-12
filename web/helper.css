@@ -63,7 +63,7 @@
 .streaming-text {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
-  line-height: 1.7;
+  line-height: var(--reading-line-height, 1.7);
 }
 .helper-prose {
   margin-top: 6px;

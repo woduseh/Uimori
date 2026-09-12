@@ -1,3 +1,4 @@
+import { MOBILE_WIDTH, DESKTOP_WIDTH } from './fixtures/browser-viewports.js';
 import { navigationAction } from './ui-navigation.js';
 import { openChatSettings } from './ui-navigation.js';
 import { waitForContentDraftSave } from './fixtures/edit-draft-save.js';
@@ -53,7 +54,7 @@ async function seed(
   return response.json() as Promise<Content>;
 }
 async function openEditor(page: Page, content: Content) {
-  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.setViewportSize({ width: DESKTOP_WIDTH, height: 1000 });
   await page.goto('/');
   await navigationAction(page, '서재');
   const library = page.getByTestId('library-panel');
@@ -71,8 +72,8 @@ async function saveEditor(page: Page, library: Locator, id: string): Promise<Con
 }
 async function evidence(page: Page, target: Locator, info: TestInfo, name: string) {
   for (const [suffix, width, height] of [
-    ['desktop', 1440, 1000],
-    ['mobile', 390, 844],
+    ['desktop', DESKTOP_WIDTH, 1000],
+    ['mobile', MOBILE_WIDTH, 844],
   ] as const) {
     await page.setViewportSize({ width, height });
     await target.scrollIntoViewIfNeeded();
@@ -160,7 +161,7 @@ test('PFUI01 option drafts survive tabs and validated authoring preserves templa
   await preview.getByLabel('고급 설정', { exact: true }).check();
   await expect(preview.getByLabel('힘', { exact: true })).toHaveValue('7');
   await evidence(page, preview, info, 'package-options');
-  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.setViewportSize({ width: DESKTOP_WIDTH, height: 1000 });
   await selectPackageSection(page, '지침');
   await fields.getByLabel('지침 1 본문', { exact: true }).fill('수정한 보관용 본문');
   await expect(save).toBeDisabled();
@@ -223,7 +224,7 @@ test('PFUI02 required module appears once and keeps chat options after another r
   });
   expect(made.ok(), await made.text()).toBe(true);
   const chat = await made.json();
-  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.setViewportSize({ width: DESKTOP_WIDTH, height: 1000 });
   await page.goto(`/?chat=${chat.id}`);
   await openChatSettings(page);
   await selectChatSettingsSection(page, '봇·페르소나·모듈');

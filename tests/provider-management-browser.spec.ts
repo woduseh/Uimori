@@ -1,3 +1,4 @@
+import { MOBILE_WIDTH, DESKTOP_WIDTH, DEFAULT_WIDTHS } from './fixtures/browser-viewports.js';
 import { selectCurrentSettingsSection } from './ui-navigation.js';
 import { openChatSettings } from './ui-navigation.js';
 import { preservePromptWorkspace } from './fixtures/prompt-workspace.js';
@@ -86,7 +87,7 @@ test('PMUI01 mobile template registration selects the connection, reports catalo
   page,
   request,
 }, info) => {
-  await page.setViewportSize({ width: 390, height: 844 });
+  await page.setViewportSize({ width: MOBILE_WIDTH, height: 844 });
   const title = 'PMUI01 ' + Date.now(),
     observed = observe(page);
   await settings(page);
@@ -173,7 +174,7 @@ test('PMUI01 mobile template registration selects the connection, reports catalo
     const box = await control.boundingBox();
     expect(box).not.toBeNull();
     expect(box!.x).toBeGreaterThanOrEqual(0);
-    expect(box!.x + box!.width).toBeLessThanOrEqual(390);
+    expect(box!.x + box!.width).toBeLessThanOrEqual(MOBILE_WIDTH);
   }
   await modelForm.getByLabel('Standard 입력 요금').scrollIntoViewIfNeeded();
   if (visualReview)
@@ -208,7 +209,7 @@ test('PMUI02 connection clone requires review and stale edits retain their draft
   page,
   request,
 }, info) => {
-  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.setViewportSize({ width: DESKTOP_WIDTH, height: 1000 });
   const title = 'PMUI02 ' + Date.now(),
     observed = observe(page);
   const original = await api<Connection>(request, '/connections', connectionInput(title));
@@ -281,7 +282,7 @@ test('PMUI03 model edits use the latest connection without changing role IDs; de
   page,
   request,
 }, info) => {
-  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.setViewportSize({ width: DESKTOP_WIDTH, height: 1000 });
   const title = 'PMUI03 ' + Date.now(),
     observed = observe(page);
   const connection = await api<Connection>(request, '/connections', connectionInput(title));
@@ -316,8 +317,8 @@ test('PMUI03 model edits use the latest connection without changing role IDs; de
     name: original.title + ' 모델 삭제',
     exact: true,
   });
-  for (const width of [390, 1440]) {
-    await page.setViewportSize({ width, height: width === 390 ? 844 : 1000 });
+  for (const width of DEFAULT_WIDTHS) {
+    await page.setViewportSize({ width, height: width === MOBILE_WIDTH ? 844 : 1000 });
     await actions.scrollIntoViewIfNeeded();
     for (const action of [closeAction, deleteAction]) {
       await expect(action).toBeVisible();
@@ -508,8 +509,8 @@ test('PMUI07 quick setup selects a cached catalog model and keeps drafts across 
     }));
     await route.fulfill({ response, json: body });
   });
-  for (const width of [390, 1440]) {
-    await page.setViewportSize({ width, height: width === 390 ? 844 : 1000 });
+  for (const width of DEFAULT_WIDTHS) {
+    await page.setViewportSize({ width, height: width === MOBILE_WIDTH ? 844 : 1000 });
     await settings(page);
     const title = `PMUI07 ${width} ${Date.now()}`,
       form = page.getByRole('form', { name: '프로바이더 편집 양식' }),
@@ -611,7 +612,7 @@ test('PMUI08 Vertex JSON upload validates locally and saves only the returned cr
   page,
   request,
 }, info) => {
-  await page.setViewportSize({ width: 390, height: 844 });
+  await page.setViewportSize({ width: MOBILE_WIDTH, height: 844 });
   await settings(page);
   const title = 'PMUI08 ' + Date.now(),
     observed = observe(page);
@@ -925,7 +926,7 @@ for (const [index, item] of providerOptionCases.entries()) {
     page,
     request,
   }, info) => {
-    await page.setViewportSize({ width: 390, height: 844 });
+    await page.setViewportSize({ width: MOBILE_WIDTH, height: 844 });
     const observed = observe(page),
       prefix = 'PMUI11 ' + Date.now();
     const tabFor = (label: string) =>
@@ -1008,7 +1009,7 @@ test('PMUI12 changing the model or connection keeps choices visible as unverifie
   page,
   request,
 }, info) => {
-  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.setViewportSize({ width: DESKTOP_WIDTH, height: 1000 });
   const title = 'PMUI12 ' + Date.now(),
     observed = observe(page),
     connection = await api<Connection>(request, '/connections', {
@@ -1095,7 +1096,7 @@ test('PMUI13 response tests are explicit and late results stay with the original
   page,
   request,
 }, info) => {
-  await page.setViewportSize({ width: 390, height: 844 });
+  await page.setViewportSize({ width: MOBILE_WIDTH, height: 844 });
   const title = 'PMUI13 ' + Date.now(),
     observed = observe(page),
     connection = await api<Connection>(request, '/connections', connectionInput(title));
@@ -1340,7 +1341,7 @@ test('PMUI10 Codex subscription login preserves drafts and saves a connection an
       },
     });
   });
-  await page.setViewportSize({ width: 390, height: 844 });
+  await page.setViewportSize({ width: MOBILE_WIDTH, height: 844 });
   const observed = observe(page);
   await settings(page);
   await startProviderConnection(page);
@@ -1450,7 +1451,7 @@ test('PMUI16 endpoint guidance checks server policy before saving and ignores a 
   page,
   request,
 }, info) => {
-  await page.setViewportSize({ width: 390, height: 844 });
+  await page.setViewportSize({ width: MOBILE_WIDTH, height: 844 });
   await settings(page);
   await startProviderConnection(page);
   await page
@@ -1466,7 +1467,7 @@ test('PMUI16 endpoint guidance checks server policy before saving and ignores a 
   await expect(status).toContainText('서버에서 한 번 허용');
   await expect(status).toContainText('https://custom.example');
   await expect(status).toContainText('매번 입력하지 않아도');
-  for (const width of [390, 1440]) {
+  for (const width of DEFAULT_WIDTHS) {
     await page.setViewportSize({ width, height: 1000 });
     await status.scrollIntoViewIfNeeded();
     const box = await status.boundingBox();
@@ -1508,7 +1509,7 @@ test('PMUI17 new Google, Vercel and DeepSeek models are selectable locally and s
   page,
   request,
 }, info) => {
-  await page.setViewportSize({ width: 390, height: 844 });
+  await page.setViewportSize({ width: MOBILE_WIDTH, height: 844 });
   const prefix = 'PMUI17 ' + Date.now(),
     observed = observe(page),
     outboundActions: string[] = [];

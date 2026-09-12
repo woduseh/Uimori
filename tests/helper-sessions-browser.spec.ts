@@ -1,3 +1,4 @@
+import { MOBILE_WIDTH, DESKTOP_WIDTH } from './fixtures/browser-viewports.js';
 import { randomUUID } from 'node:crypto';
 import { expect, test } from '@playwright/test';
 import type { Chat } from '../core/types.js';
@@ -13,7 +14,7 @@ test('HSESSION01 sessions retain their own drafts after switching and reload, re
   const chat = (await (
     await postFixtureChat(request, { data: { title: `세션 분리 ${randomUUID()}` } })
   ).json()) as Chat;
-  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.setViewportSize({ width: DESKTOP_WIDTH, height: 900 });
   await page.goto(`/?chat=${chat.id}`);
   await openHelper(page);
   const panel = page.locator('#helper-panel');
@@ -43,12 +44,12 @@ test('HSESSION01 sessions retain their own drafts after switching and reload, re
   await openHelper(page);
   await expect(picker).toHaveValue(second);
   await expect(input).toHaveValue('두 번째 세션 초안');
-  for (const width of [1440, 1280, 390]) {
+  for (const width of [DESKTOP_WIDTH, 1280, MOBILE_WIDTH]) {
     await page.setViewportSize({ width, height: 900 });
     await expect(panel).toBeVisible();
     await expect
       .poll(async () => (await panel.boundingBox())?.width)
-      .toBe(width === 390 ? 390 : 384);
+      .toBe(width === MOBILE_WIDTH ? MOBILE_WIDTH : 384);
     await expect
       .poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1))
       .toBe(true);
@@ -91,7 +92,7 @@ test('HSESSION02 another branch session is readable and requires navigation befo
       },
     })
   ).json()) as HelperConversation;
-  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.setViewportSize({ width: DESKTOP_WIDTH, height: 900 });
   await page.goto(`/?chat=${chat.id}`);
   await openHelper(page);
   const panel = page.locator('#helper-panel');
@@ -124,7 +125,7 @@ test('HSESSION03 a delayed session creation does not replace a later user select
   const chat = (await (
     await postFixtureChat(request, { data: { title: `늦은 세션 응답 ${randomUUID()}` } })
   ).json()) as Chat;
-  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.setViewportSize({ width: DESKTOP_WIDTH, height: 900 });
   await page.goto(`/?chat=${chat.id}`);
   await openHelper(page);
   const panel = page.locator('#helper-panel'),

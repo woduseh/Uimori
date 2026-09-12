@@ -1,3 +1,4 @@
+import { MOBILE_WIDTH, DESKTOP_WIDTH } from './fixtures/browser-viewports.js';
 import { reviewWidths, visualReview } from './fixtures/visual-review.js';
 import { test, expect } from '@playwright/test';
 import { fixtureBotInput } from './fixtures/chat.js';
@@ -11,7 +12,7 @@ test('SCUI03 multi-entry browser back keeps the address and chat consistent with
   page,
   request,
 }) => {
-  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.setViewportSize({ width: DESKTOP_WIDTH, height: 900 });
   const created = await request.post('/api/content', {
     data: fixtureBotInput('설정 이력 검사 합성 봇'),
   });
@@ -65,7 +66,7 @@ test('SCUI01 settings list and details adapt at six widths with distinct icons a
 }, info) => {
   const errors: string[] = [];
   page.on('pageerror', (error) => errors.push(error.message));
-  await page.setViewportSize({ width: 390, height: 844 });
+  await page.setViewportSize({ width: MOBILE_WIDTH, height: 844 });
   await page.goto('/');
   await navigationAction(page, '설정');
   const dialog = page.getByRole('dialog', { name: '설정', exact: true });
@@ -79,7 +80,8 @@ test('SCUI01 settings list and details adapt at six widths with distinct icons a
       .evaluateAll((nodes) => nodes.map((node) => node.innerHTML));
     expect(new Set(icons).size).toBe(icons.length);
   }
-  if (visualReview) await page.screenshot({ path: info.outputPath('settings-list-390.png') });
+  if (visualReview)
+    await page.screenshot({ path: info.outputPath(`settings-list-${MOBILE_WIDTH}.png`) });
   await selectSettingsSection(page, '일반');
   for (const width of reviewWidths([360, 390, 430, 768, 1024, 1440])) {
     await page.setViewportSize({ width, height: 900 });
@@ -102,7 +104,7 @@ test('SCUI01 settings list and details adapt at six widths with distinct icons a
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
       true
     );
-    if (width === 390 || width === 1440)
+    if (width === MOBILE_WIDTH || width === DESKTOP_WIDTH)
       if (visualReview)
         await page.screenshot({ path: info.outputPath(`settings-general-${width}.png`) });
   }
@@ -138,7 +140,7 @@ test('SCUI02 settings back, resize and close preserve provider and chat drafts u
   });
   expect(response.ok()).toBe(true);
   const chat = await response.json();
-  await page.setViewportSize({ width: 390, height: 844 });
+  await page.setViewportSize({ width: MOBILE_WIDTH, height: 844 });
   await page.goto(`/?chat=${chat.id}`);
   const composer = page.getByLabel('다음 장면 요청', { exact: true });
   await composer.fill('계속 보존할 사용자 요청');
@@ -161,16 +163,17 @@ test('SCUI02 settings back, resize and close preserve provider and chat drafts u
   await selectSettingsSection(page, '프로바이더·모델');
   await expect(name).toHaveValue('아직 저장하지 않은 합성 연결');
   await name.focus();
-  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.setViewportSize({ width: DESKTOP_WIDTH, height: 900 });
   await expect(name).toBeFocused();
   await selectSettingsSection(page, '일반');
   await selectSettingsSection(page, '프로바이더·모델');
   await expect(name).toHaveValue('아직 저장하지 않은 합성 연결');
-  await page.setViewportSize({ width: 390, height: 844 });
+  await page.setViewportSize({ width: MOBILE_WIDTH, height: 844 });
   await expect(name).toBeVisible();
   await dialog.getByRole('button', { name: '설정 닫기', exact: true }).click();
   await expect(confirm).toBeVisible();
-  if (visualReview) await page.screenshot({ path: info.outputPath('settings-unsaved-390.png') });
+  if (visualReview)
+    await page.screenshot({ path: info.outputPath(`settings-unsaved-${MOBILE_WIDTH}.png`) });
   await page.keyboard.press('Escape');
   await expect(confirm).toBeHidden();
   await expect(name).toHaveValue('아직 저장하지 않은 합성 연결');

@@ -1,3 +1,4 @@
+import { DESKTOP_WIDTH } from './fixtures/browser-viewports.js';
 import { expect, test, type APIRequestContext } from '@playwright/test';
 import { fixtureBotInput } from './fixtures/chat.js';
 import { measureScreen } from './fixtures/ui-metrics.js';
@@ -30,7 +31,7 @@ test('DLUI02 ?chat=…&panel=story&section=models waits for the chat and opens i
   request,
 }) => {
   const chat = await seedChat(request, `DLUI02 ${Date.now()}`);
-  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.setViewportSize({ width: DESKTOP_WIDTH, height: 900 });
   await page.goto(`/?chat=${chat.id}&panel=story&section=models`);
   const dialog = page.getByRole('dialog', { name: '채팅 설정', exact: true });
   await expect(dialog).toBeVisible();

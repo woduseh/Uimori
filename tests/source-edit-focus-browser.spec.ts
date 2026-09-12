@@ -1,3 +1,4 @@
+import { MOBILE_WIDTH, DESKTOP_WIDTH } from './fixtures/browser-viewports.js';
 import { visualReview } from './fixtures/visual-review.js';
 import { openSourceActions } from './ui-navigation.js';
 import { test, expect, type APIRequestContext, type Locator } from '@playwright/test';
@@ -83,8 +84,8 @@ const readerOffset = (control: Locator) =>
   );
 
 for (const [label, viewport] of [
-  ['mobile', { width: 390, height: 844 }],
-  ['desktop', { width: 1440, height: 900 }],
+  ['mobile', { width: MOBILE_WIDTH, height: 844 }],
+  ['desktop', { width: DESKTOP_WIDTH, height: 900 }],
 ] as const) {
   test(`C04E ${label} long source editing focuses the visible editor and restores reading after Escape, cancel and save`, async ({
     page,
@@ -179,7 +180,7 @@ test('C04E failed source save keeps the draft available and a later save restore
 }) => {
   const before = await seed(request, 'failed save');
   const source = before.sources[0];
-  await page.setViewportSize({ width: 390, height: 844 });
+  await page.setViewportSize({ width: MOBILE_WIDTH, height: 844 });
   await page.goto(`/?chat=${before.chat.id}`);
   const scene = page.locator(`[data-source-id="${source.id}"][data-testid="source"]`);
   const trigger = scene.getByRole('button', { name: '원문 수정', exact: true });

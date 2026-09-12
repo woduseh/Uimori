@@ -1,3 +1,4 @@
+import { DEFAULT_WIDTHS } from './fixtures/browser-viewports.js';
 import { randomUUID } from 'node:crypto';
 import { test, expect, type APIRequestContext, type Page } from '@playwright/test';
 import type { ContextDetail as Detail, ContextJob } from '../core/context-plan.js';
@@ -127,7 +128,7 @@ test('CTXUI01 summary authoring without a Run, edit and restore are durable at b
   expect(saved.checkpoints).toHaveLength(3);
   expect((await read<ChatDetail>(request, `/chats/${chat.id}`)).runs).toEqual([]);
   expect(await read<unknown[]>(request, `/chats/${chat.id}/attempts`)).toEqual([]);
-  for (const width of [390, 1440]) {
+  for (const width of DEFAULT_WIDTHS) {
     await page.setViewportSize({ width, height: 844 });
     await panel.scrollIntoViewIfNeeded();
     await assertBounds(page);

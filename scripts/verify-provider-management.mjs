@@ -1,3 +1,5 @@
+import browserWidths from '../fixtures/browser-viewports.json' with { type: 'json' };
+const { mobile: MOBILE_WIDTH, desktop: DESKTOP_WIDTH } = browserWidths;
 import { runBrowserVerification } from './browser-verification.mjs';
 
 await runBrowserVerification({
@@ -23,8 +25,8 @@ await runBrowserVerification({
     'provider-management-mobile-pricing.png',
     'provider-management-desktop-conflict.png',
     'provider-management-current-model.png',
-    'endpoint-guidance-390.png',
-    'endpoint-guidance-1440.png',
+    `endpoint-guidance-${MOBILE_WIDTH}.png`,
+    `endpoint-guidance-${DESKTOP_WIDTH}.png`,
     'provider-management-current-readiness.png',
     'codex-subscription-settings-mobile.png',
     'provider-parameters-0-mobile.png',

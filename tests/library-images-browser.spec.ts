@@ -1,3 +1,4 @@
+import { MOBILE_WIDTH, DESKTOP_WIDTH } from './fixtures/browser-viewports.js';
 import { navigationAction } from './ui-navigation.js';
 import { waitForContentDraftSave } from './fixtures/edit-draft-save.js';
 import { visualReview } from './fixtures/visual-review.js';
@@ -57,7 +58,7 @@ async function seed(
   return response.json();
 }
 async function openLibrary(page: Page, kind: Content['kind']) {
-  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.setViewportSize({ width: DESKTOP_WIDTH, height: 1000 });
   await page.goto('/');
   await navigationAction(page, '서재');
   const library = page.getByTestId('library-panel');
@@ -179,7 +180,7 @@ test('LIMG01 representative image upload, unset and existing inline selection pr
     ).json();
     expect(old.package).toEqual(previous.package);
   }
-  await page.setViewportSize({ width: 390, height: 844 });
+  await page.setViewportSize({ width: MOBILE_WIDTH, height: 844 });
   await selectPackageSection(page, '기본 정보');
   await portrait.scrollIntoViewIfNeeded();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(
@@ -270,7 +271,7 @@ test('LIMG02 persona folder picker supports keyboard selection and nested Escape
   await expect(picker.getByText(module.title, { exact: true })).toHaveCount(0);
   await picker.getByRole('searchbox').fill(persona.title);
   await expect(choice.locator('img')).toHaveAttribute('src', `/api/package-image-blobs/${hash}`);
-  await page.setViewportSize({ width: 390, height: 844 });
+  await page.setViewportSize({ width: MOBILE_WIDTH, height: 844 });
   expect(await picker.evaluate((element) => element.scrollWidth <= element.clientWidth + 1)).toBe(
     true
   );
@@ -425,7 +426,7 @@ test('LIMG05 quick persona selection shows one current selection after its image
     },
   });
   expect(changed.ok(), await changed.text()).toBe(true);
-  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.setViewportSize({ width: DESKTOP_WIDTH, height: 1000 });
   await page.goto(`/?chat=${chat.id}`);
   await page.getByRole('button', { name: '입력창 더보기', exact: true }).click();
   const trigger = page.getByRole('button', { name: '빠른 페르소나', exact: true });

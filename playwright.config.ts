@@ -1,3 +1,4 @@
+import { MOBILE_WIDTH } from './tests/fixtures/browser-viewports.js';
 import { defineConfig } from '@playwright/test';
 import { existsSync } from 'node:fs';
 // Kept in step with `browserPath()` in scripts/lib.mjs; see the note there.
@@ -27,7 +28,7 @@ export default defineConfig({
     headless: true,
     // Every verified server is a loopback address; a system PAC proxy must not intercept it.
     launchOptions: { executablePath, args: ['--no-proxy-server'] },
-    viewport: { width: 390, height: 844 },
+    viewport: { width: MOBILE_WIDTH, height: 844 },
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
   },

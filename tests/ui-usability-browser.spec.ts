@@ -1,3 +1,4 @@
+import { MOBILE_WIDTH } from './fixtures/browser-viewports.js';
 import { visualReview } from './fixtures/visual-review.js';
 import { selectSettingsSection, navigationAction } from './ui-navigation.js';
 import { test, expect } from '@playwright/test';
@@ -23,7 +24,7 @@ test('UXUI01 compact composer and mobile settings details preserve the draft', a
   await page.goto(`/?chat=${chat.id}`);
   const input = page.getByLabel('다음 장면 요청', { exact: true });
   await input.fill('아직 보내지 않은 합성 요청');
-  for (const width of visualReview ? [390, 360] : [390]) {
+  for (const width of visualReview ? [MOBILE_WIDTH, 360] : [MOBILE_WIDTH]) {
     await page.setViewportSize({ width, height: 844 });
     await expect(input).toBeInViewport();
     await expect(page.getByRole('button', { name: /^현재 본문 모델/ })).toBeInViewport();

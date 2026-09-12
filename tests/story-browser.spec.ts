@@ -1,3 +1,4 @@
+import { MOBILE_WIDTH, DESKTOP_WIDTH } from './fixtures/browser-viewports.js';
 import { visualReview } from './fixtures/visual-review.js';
 import { selectChatSettingsSection } from './ui-navigation.js';
 import { openChatSettings } from './ui-navigation.js';
@@ -167,7 +168,7 @@ test('S01 S02 state settings use synthetic rules, preserve readable original whi
     } finally {
       db.close();
     }
-    await page.setViewportSize({ width: 1440, height: 1000 });
+    await page.setViewportSize({ width: DESKTOP_WIDTH, height: 1000 });
     await panel(page);
     if (visualReview)
       await page.screenshot({
@@ -266,7 +267,7 @@ test('S06 scene commands distinguish successful original, failed original and ca
     )
     .toBe('cancelled');
   await expect(cancelled).toContainText('취소됨');
-  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.setViewportSize({ width: DESKTOP_WIDTH, height: 1000 });
   if (visualReview)
     await page.screenshot({
       path: testInfo.outputPath('S05-desktop-command-outcomes.png'),
@@ -399,7 +400,7 @@ test('STUI01 state settings align on mobile and desktop while imported definitio
   const chat = await create(page, '상태 설정 배치 합성');
   const section = await panel(page);
   const fields = section.getByRole('group', { name: '다음 원고에 적용할 설정', exact: true });
-  for (const width of [1440, 390]) {
+  for (const width of [DESKTOP_WIDTH, MOBILE_WIDTH]) {
     await page.setViewportSize({ width, height: 1000 });
     await fields.scrollIntoViewIfNeeded();
     await expect(fields.getByText('상태 정의', { exact: true })).toBeVisible();

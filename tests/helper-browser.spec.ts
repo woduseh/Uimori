@@ -1,3 +1,4 @@
+import { MOBILE_WIDTH, DESKTOP_WIDTH, DEFAULT_WIDTHS } from './fixtures/browser-viewports.js';
 import { randomUUID } from 'node:crypto';
 import { expect, test, type APIRequestContext, type Page } from '@playwright/test';
 import type { Chat, ChatDetail, Run } from '../core/types.js';
@@ -369,7 +370,7 @@ async function open(page: Page) {
   return panel;
 }
 
-test('HELPUI01 helper panel preserves separate input, reading position and Back behavior at 390/1440', async ({
+test(`HELPUI01 helper panel preserves separate input, reading position and Back behavior at ${MOBILE_WIDTH}/${DESKTOP_WIDTH}`, async ({
   page,
   request,
 }, info) => {
@@ -395,7 +396,7 @@ test('HELPUI01 helper panel preserves separate input, reading position and Back 
   await page.goBack();
   await expect(panel).toBeHidden();
   expect(page.url()).toBe(url);
-  for (const width of [390, 1440]) {
+  for (const width of DEFAULT_WIDTHS) {
     await page.setViewportSize({ width, height: 844 });
     await open(page);
     await expect(input).toHaveValue('도우미 입력 초안');
@@ -704,7 +705,7 @@ test('HELPUI07 switching sessions isolates late responses and retains the backgr
 }) => {
   const chat = await create(request),
     state = await harness(page);
-  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.setViewportSize({ width: DESKTOP_WIDTH, height: 900 });
   await page.goto(`/?chat=${chat.id}`);
   const panel = await open(page),
     input = panel.getByLabel('도우미에게 요청');

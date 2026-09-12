@@ -139,7 +139,7 @@ export async function assertBuild() {
 /**
  * CI runs on Windows, but a review or a fix often happens on macOS or Linux. Without a local
  * candidate there the harness reports BLOCKED before it starts. `playwright.config.ts` repeats
- * this list on purpose so the Playwright config keeps depending on nothing but `node:fs`.
+ * this list on purpose so the Playwright config resolves its browser without server tooling.
  */
 export function browserPath() {
   if (process.env.NR_BROWSER_PATH) return process.env.NR_BROWSER_PATH;

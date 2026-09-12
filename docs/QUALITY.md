@@ -14,7 +14,7 @@ Node **24.14 이상 24.x**와 `npm ci`를 사용해요. 프로젝트의 `strict`
 | 릴리스 후보 | `npm run release:check -- --area <verify:*>` | `quality:full`, `verify:smoke`, 선택 영역 검사를 묶고 내용 지문 영수증을 남겨요. 기본 영역은 `verify:browser-smoke`예요. |
 | 넓은 변경·안정화 릴리스 | 위 명령에 `--full` | 전체 `verify:redesign`을 추가해 대표 모바일/데스크톱 기능 흐름을 확인해요. 공통 UI나 공통 실행·저장 경계를 넓게 바꾼 경우에 사용해요. |
 | 배치·반응형 시각 검토 | `npm run verify:visual` | 전체 기능 + 추가 화면 폭·정밀 배치·성공 PNG. 사람이 화면도 확인해야 해요. |
-| 화면 갤러리 | `npm run verify:gallery` | 주요 화면·모달을 390/1440px × light/dark로 한 번에 캡처하고 원칙 수치를 `metrics.json`에 기록한 뒤, 첫 채팅 여정을 두 폭에서 단계별로 캡처하며 상호작용 수를 `journey.json`에 세요. 단정이 없어 몇 분 안에 끝나요. 계약은 [화면 갤러리](UI-GALLERY.md)에 있어요. |
+| 화면 갤러리 | `npm run verify:gallery` | 주요 화면·모달을 412/2560px × light/dark로 한 번에 캡처하고 원칙 수치를 `metrics.json`에 기록한 뒤, 첫 채팅 여정을 두 폭에서 단계별로 캡처하며 상호작용 수를 `journey.json`에 세요. 단정이 없어 몇 분 안에 끝나요. 계약은 [화면 갤러리](UI-GALLERY.md)에 있어요. |
 | 반복 성능 측정 | `npm run benchmark:story` | 긴 본문 동작 검사에 warmup/반복 표본과 측정 산출물을 추가해요. |
 | 서식 수정 | `npm run format` | Biome가 지원하는 프로젝트 소스·설정의 서식만 수정해요. |
 | lint 수정 | `npm run lint:fix` | 도구가 안전하다고 분류한 수정만 적용해요. 해결되지 않은 진단은 실패로 남아요. |
@@ -33,6 +33,8 @@ Node **24.14 이상 24.x**와 `npm ci`를 사용해요. 프로젝트의 `strict`
 릴리스·self-host 도구 변경의 관련 영역은 `verify:selfhost`예요. 상위 브라우저 연결도 바뀌면 `verify:browser-smoke`도 실행해요. 이 도구 변경만으로 `verify:redesign`을 요구하지 않으며, 제품 UI나 공통 실행·저장 경계까지 넓게 바뀐 경우에만 `--full`을 선택해요.
 
 빌드 지문은 앱 소스와 실제 빌드 설정·실행기·의존성 파일을 포함해요. 테스트/검증 스크립트만 바꾸면 기존 앱 빌드를 재사용할 수 있어요. 브라우저와 milestone 결과에는 이와 별개로 테스트·검증 설정까지 포함한 전체 지문을 기록하고 실행 전후 동일성을 확인해요. 테스트를 실행 중에 고친 결과는 PASS로 남기지 않아요.
+
+2026-09-12부터 기본 화면 검증 폭은 **모바일 412·데스크톱 2560 CSS px**예요. 사용자의 Galaxy S25 Ultra 브라우저와 4K 모니터 150% 배율의 작업 화면에 맞춘 기준이며, 실제 기기 검사 결과를 뜻하지 않아요. `fixtures/browser-viewports.json` 한 벌을 Playwright 설정·테스트·갤러리·진단·별도 브라우저 실행기가 공유하고, 테스트의 상수 export는 `tests/fixtures/browser-viewports.ts`예요. 높이는 각 시나리오의 기존 값을 유지해요. 시각 검토에서는 기존 추가 폭과 두 기본 폭을 함께 검사하며, 과거 실행의 수치·PNG 이름·증거는 변경하지 않아요.
 
 기본 브라우저 검사는 기능·키보드·취소·초안·오류·터치 영역을 유지해요. 성공 화면 캡처·추가 폭 전수 반복·정밀 정렬은 `NR_VISUAL_REVIEW=1`에서 실행하며 실패 screenshot/trace는 항상 보존해요. 특정 도메인의 시각 검사만 필요하면 PowerShell에서 `$env:NR_VISUAL_REVIEW='1'`을 설정해 기존 `verify:*`를 실행한 뒤 환경변수를 제거해요. 기본 성능 단위검사는 큰 본문과 이력 격리 기능을 한 번씩 검사하며, 반복 측정·성능 파일은 `NR_BENCHMARK=1`에서만 만들어요.
 

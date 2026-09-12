@@ -1,3 +1,4 @@
+import { MOBILE_WIDTH, DESKTOP_WIDTH } from './fixtures/browser-viewports.js';
 import { visualReview } from './fixtures/visual-review.js';
 import { preservePromptWorkspace } from './fixtures/prompt-workspace.js';
 import { postFixtureChat } from './fixtures/chat.js';
@@ -102,7 +103,7 @@ test('chat creative options preserve drafts, apply explicitly and fit desktop/mo
   });
   expect(otherResponse.ok()).toBe(true);
   const other = await otherResponse.json();
-  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.setViewportSize({ width: DESKTOP_WIDTH, height: 1000 });
   await page.goto(`/?chat=${chat.id}`);
   const open = page.getByRole('button', { name: '창작 옵션', exact: true });
   await page.getByRole('button', { name: '입력창 더보기', exact: true }).click();
@@ -169,7 +170,7 @@ test('chat creative options preserve drafts, apply explicitly and fit desktop/mo
   await page.getByRole('tab', { name: '모든 채팅', exact: true }).click();
   await expect(custom).toHaveValue('프랑스어');
   await expect(inner).toBeChecked();
-  await page.setViewportSize({ width: 390, height: 844 });
+  await page.setViewportSize({ width: MOBILE_WIDTH, height: 844 });
   await expect(panel).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(
     true
@@ -240,7 +241,7 @@ test('chat creative options scope fixed values, oneoff reservations and revocabl
   const { chat, workspace } = await fixture(request);
   const state = async () =>
     (await (await request.get(`/api/chats/${chat.id}/options`)).json()) as ChatOptionState;
-  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.setViewportSize({ width: DESKTOP_WIDTH, height: 1000 });
   await page.goto(`/?chat=${chat.id}`);
   await page.getByRole('button', { name: '입력창 더보기', exact: true }).click();
   await page.getByRole('button', { name: '창작 옵션', exact: true }).click();
@@ -308,8 +309,8 @@ test('chat creative options scope fixed values, oneoff reservations and revocabl
   await expect.poll(async () => (await state()).delegations[0]?.revokedAt).not.toBeNull();
   await delegation.getByText('해제한 위임 1개', { exact: true }).click();
   await expect(delegation.locator('.chat-options-revocations .chat-option-record')).toHaveCount(1);
-  for (const width of [1440, 390]) {
-    await page.setViewportSize({ width, height: width === 390 ? 844 : 1000 });
+  for (const width of [DESKTOP_WIDTH, MOBILE_WIDTH]) {
+    await page.setViewportSize({ width, height: width === MOBILE_WIDTH ? 844 : 1000 });
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(
       true
     );
