@@ -1,3 +1,4 @@
+import { MOBILE_WIDTH, DESKTOP_WIDTH } from './fixtures/browser-viewports.js';
 import { navigationAction } from './ui-navigation.js';
 import { waitForContentDraftSave } from './fixtures/edit-draft-save.js';
 import { visualReview } from './fixtures/visual-review.js';
@@ -56,7 +57,7 @@ test('SEGMENTUI01 package-defined source reader expands without writes and displ
   request,
 }, info) => {
   const c = await chat(request, 'Synthetic source segment reader UI');
-  await page.setViewportSize({ width: 390, height: 844 });
+  await page.setViewportSize({ width: MOBILE_WIDTH, height: 844 });
   await generate(request, c.id);
   const source = (await detail(request, c.id)).sources[0];
   const text =
@@ -89,7 +90,7 @@ test('SEGMENTUI01 package-defined source reader expands without writes and displ
   await fits(page);
   if (visualReview)
     await page.screenshot({ path: info.outputPath('source-segments-reader-mobile.png') });
-  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.setViewportSize({ width: DESKTOP_WIDTH, height: 1000 });
   await fits(page);
   if (visualReview)
     await page.screenshot({ path: info.outputPath('source-segments-reader-desktop.png') });
@@ -135,8 +136,8 @@ test('SEGMENTUI01 package-defined source reader expands without writes and displ
   await expect(translatedBody.locator('.source-segments-reader')).toHaveCount(0);
   await expect(translatedBody).toContainText('Mira recalls a blue bell.');
   for (const [name, width, height] of [
-    ['desktop', 1440, 1000],
-    ['mobile', 390, 844],
+    ['desktop', DESKTOP_WIDTH, 1000],
+    ['mobile', MOBILE_WIDTH, 844],
   ] as const) {
     await page.setViewportSize({ width, height });
     await translatedBody.evaluate((el) => el.scrollIntoView({ block: 'start' }));
@@ -239,7 +240,7 @@ test('SEGMENTUI02 current modules preserve unapplied segment drafts and existing
   expect(revisionResponse.ok(), await revisionResponse.text()).toBe(true);
   const revised = (await revisionResponse.json()) as Content;
 
-  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.setViewportSize({ width: DESKTOP_WIDTH, height: 1000 });
   await page.goto('/');
   await navigationAction(page, '서재');
   const library = page.getByTestId('library-panel');
@@ -278,7 +279,7 @@ test('SEGMENTUI02 current modules preserve unapplied segment drafts and existing
   for (const previous of beforeRuns)
     expect(afterRuns.find((run) => run.id === previous.id)).toEqual(previous);
 
-  await page.setViewportSize({ width: 390, height: 844 });
+  await page.setViewportSize({ width: MOBILE_WIDTH, height: 844 });
   await name.scrollIntoViewIfNeeded();
   await fits(page);
   if (visualReview)

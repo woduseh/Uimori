@@ -1,3 +1,4 @@
+import { MOBILE_WIDTH, DESKTOP_WIDTH } from './fixtures/browser-viewports.js';
 import { visualReview } from './fixtures/visual-review.js';
 import { postFixtureChat } from './fixtures/chat.js';
 import { test, expect, type APIRequestContext, type Page } from '@playwright/test';
@@ -155,7 +156,7 @@ test('ACTUI01 elapsed time, collapse, next task and completion expiry', async ({
   request,
 }, info) => {
   const seeded = await seed(request);
-  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.setViewportSize({ width: DESKTOP_WIDTH, height: 900 });
   const state = await harness(page, seeded.chat.id, [activity('first')]);
   const status = page.getByTestId('activity-status');
   await expect(status).toContainText('장면을 쓰는 중');
@@ -247,7 +248,7 @@ test('ACTUI02 auxiliary concurrency, mobile bounds and connection uncertainty', 
   const bounds = await status.boundingBox();
   expect(bounds).not.toBeNull();
   expect(bounds!.x).toBeGreaterThanOrEqual(0);
-  expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(390);
+  expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(MOBILE_WIDTH);
   expect(await status.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   if (visualReview) await page.screenshot({ path: info.outputPath('activity-mobile.png') });
@@ -399,7 +400,7 @@ test('ACTUI07 translation success clears only its source hash and failed detail 
   request,
 }, info) => {
   const seeded = await seed(request);
-  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.setViewportSize({ width: DESKTOP_WIDTH, height: 900 });
   const failed: ReaderActivity = {
     ...activity('resolved-translation', 'translation', 'failed'),
     sourceRevision: 'source-a',

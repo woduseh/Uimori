@@ -1,3 +1,4 @@
+import { DESKTOP_WIDTH, DEFAULT_WIDTHS } from './fixtures/browser-viewports.js';
 import { test, expect, type APIRequestContext } from '@playwright/test';
 import type { Chat, ChatDetail, Run } from '../core/types.js';
 import { postFixtureChat } from './fixtures/chat.js';
@@ -26,7 +27,7 @@ async function seed(request: APIRequestContext, width: number, text = '원래 �
     .toBe('completed');
   return { chat, run, before: await detail(request, chat.id) };
 }
-for (const width of [390, 1440]) {
+for (const width of DEFAULT_WIDTHS) {
   test(`RINFO01 ${width} expanded requests avoid duplicate previews and source metadata opens from the menu`, async ({
     page,
     request,
@@ -82,7 +83,7 @@ for (const width of [390, 1440]) {
     await source.getByTestId('source-request').hover();
     await expect(edit).toBeVisible();
     await expect(edit.locator('svg')).toHaveCount(1);
-    if (width === 1440) {
+    if (width === DESKTOP_WIDTH) {
       await page.mouse.move(0, 0);
       await expect(source.locator('.request-message-actions')).toHaveCSS('opacity', '0');
       await edit.focus();

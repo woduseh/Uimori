@@ -1,3 +1,4 @@
+import { MOBILE_WIDTH, DESKTOP_WIDTH, DEFAULT_WIDTHS } from './fixtures/browser-viewports.js';
 import { reviewWidths, visualReview } from './fixtures/visual-review.js';
 import { expect, test, type APIRequestContext, type Locator, type Page } from '@playwright/test';
 import type { Chat, ChatDetail, Run } from '../core/types.js';
@@ -125,7 +126,7 @@ test('RACOM01 source footer stays compact and its menu supports touch, keyboard 
         expect(box.y + box.height).toBeLessThanOrEqual(height);
       }
     } else expect(menuBox.y + menuBox.height).toBeLessThanOrEqual(openTriggerBox.y + 1);
-    if (width === 390 || width === 1440)
+    if (width === MOBILE_WIDTH || width === DESKTOP_WIDTH)
       if (visualReview)
         await page.screenshot({ path: info.outputPath(`response-menu-${width}.png`) });
     await page.keyboard.press('Tab');
@@ -167,8 +168,8 @@ test('TSKUI01 task overview screenshots wait for real run, job and attempt data 
   ]);
   const pageErrors: string[] = [];
   page.on('pageerror', (error) => pageErrors.push(error.message));
-  for (const width of [390, 1440]) {
-    await page.setViewportSize({ width, height: width === 390 ? 844 : 1000 });
+  for (const width of DEFAULT_WIDTHS) {
+    await page.setViewportSize({ width, height: width === MOBILE_WIDTH ? 844 : 1000 });
     await page.goto(`/?chat=${before.chat.id}`);
     await expect(page.getByTestId('source')).toHaveCount(before.sources.length);
     const jobsLoaded = page.waitForResponse((response) =>

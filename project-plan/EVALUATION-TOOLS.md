@@ -40,6 +40,6 @@ npx vitest run tests/evaluation-settings.test.ts tests/evaluation-tools.test.ts 
 npm run verify:evaluation
 ```
 
-브라우저 검증은 새 DB·포트와 1440px/390px viewport에서 기본 OFF, opt-in 저장·재조회·해제, 역할 배정, 미지원 도구 저장 차단을 확인해요. 실제 provider 요청이나 유료 생성을 실행하지 않아요.
+브라우저 검증은 새 DB·포트와 2560px/412px viewport에서 기본 OFF, opt-in 저장·재조회·해제, 역할 배정, 미지원 도구 저장 차단을 확인해요. 실제 provider 요청이나 유료 생성을 실행하지 않아요.
 
 원본 모델-facing 표현 복원 후 병행 구조 개편과 분리한 고정 소스/build `58aab3dcf356babcf931b622e78c28271a70b4edda98809a259f089c4151946f`에서 `npm run check`, `npm run build`, 전체 Vitest **1,219 PASS·1 opt-in skip**을 확인했어요. [평가 도구 브라우저 결과](../output/playwright/evaluation-ui-2026-09-07T17-26-15-469Z-baf591db/summary.json)는 2/2 PASS이고 source/build identity, 합성 secret canary scan, 서버·프로필 cleanup을 통과했어요. 현재 공유 작업트리의 최종 합본 빌드는 진행 중인 별도 구조 개편이 끝난 뒤 다시 확인해야 해요.

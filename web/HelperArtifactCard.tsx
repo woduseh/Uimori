@@ -4,6 +4,7 @@ import { Copy } from 'lucide-react';
 import type { HelperArtifact } from '../core/helper.js';
 import { api, ApiError } from './api.js';
 import { IconButton } from './IconButton.js';
+import { PlainProse } from './Prose.js';
 
 export type HelperArtifactView = Omit<HelperArtifact, 'snapshot'>;
 type Draft = { revision: number; text: string; requestKey?: string };
@@ -130,7 +131,9 @@ export function HelperArtifactCard({
       {message && <p role="status">{message}</p>}
       {artifact ? (
         <>
-          <div className="helper-prose">{artifact.text}</div>
+          <div className="helper-prose">
+            <PlainProse text={artifact.text} />
+          </div>
           {draft ? (
             <form
               className="helper-artifact-editor"

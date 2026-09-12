@@ -1,3 +1,5 @@
+import browserWidths from '../fixtures/browser-viewports.json' with { type: 'json' };
+const { mobile: MOBILE_WIDTH, desktop: DESKTOP_WIDTH } = browserWidths;
 import { runBrowserVerification } from './browser-verification.mjs';
 
 await runBrowserVerification({
@@ -11,7 +13,7 @@ await runBrowserVerification({
     'tests/activity-browser.spec.ts',
     'tests/default-branch-browser.spec.ts',
   ],
-  requiredScreenshots: ['bot-tree-390.png', 'bot-tree-1440.png'],
+  requiredScreenshots: [`bot-tree-${MOBILE_WIDTH}.png`, `bot-tree-${DESKTOP_WIDTH}.png`],
   requiredCases: [
     'ORG01',
     'ORG02',

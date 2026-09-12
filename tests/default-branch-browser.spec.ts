@@ -1,3 +1,4 @@
+import { DESKTOP_WIDTH, DEFAULT_WIDTHS } from './fixtures/browser-viewports.js';
 import { test, expect, type APIRequestContext } from '@playwright/test';
 import type { ChatDetail, Run } from '../core/types.js';
 import { postFixtureChat } from './fixtures/chat.js';
@@ -80,7 +81,7 @@ async function write(request: APIRequestContext, chatId: string, text: string, b
   return (await detail(request, chatId)).runs.find((item) => item.id === run.id)!.sourceRevision!;
 }
 
-for (const width of [390, 1440])
+for (const width of DEFAULT_WIDTHS)
   test(`BRANCH01 ${width}px remote default changes preserve the open source and draft, and fresh entry uses the new default`, async ({
     page,
     request,
@@ -148,7 +149,7 @@ test('BRANCH02 making another branch the default moves the helper session with t
   page,
   request,
 }) => {
-  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.setViewportSize({ width: DESKTOP_WIDTH, height: 900 });
   const chat = await (
     await postFixtureChat(request, { data: { title: `Helper default ${randomUUID()}` } })
   ).json();

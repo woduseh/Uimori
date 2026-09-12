@@ -1,3 +1,4 @@
+import { MOBILE_WIDTH, DESKTOP_WIDTH, DEFAULT_WIDTHS } from './fixtures/browser-viewports.js';
 import { test, expect, type APIRequestContext } from '@playwright/test';
 import type { Chat, ChatDetail, Run } from '../core/types.js';
 import type { Illustration, IllustrationSettings } from '../core/illustration.js';
@@ -71,7 +72,7 @@ test('ILUI01 scene menu requests an illustration, shows the stored image, retrie
     maxPerSource: 3,
     maxAutoRetries: 0,
   });
-  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.setViewportSize({ width: DESKTOP_WIDTH, height: 900 });
   await page.goto(`/?chat=${chat.id}`);
   const scene = page.getByTestId('source').first();
   await expect(scene).toBeVisible();
@@ -135,7 +136,7 @@ test('ILUI02 mobile settings save illustration limits with CAS and expose the ge
 }, info) => {
   await seed(request);
   const before = await settings(request, { generator: 'none', maxPerSource: 2 });
-  await page.setViewportSize({ width: 390, height: 844 });
+  await page.setViewportSize({ width: MOBILE_WIDTH, height: 844 });
   await page.goto('/');
   await navigationAction(page, '설정');
   await selectSettingsSection(page, '삽화');
@@ -197,7 +198,7 @@ test('ILUI03 illustration editors use full width and seconds preserve stored mil
   await selectSettingsSection(page, '삽화');
   const section = page.getByRole('region', { name: '삽화 설정', exact: true });
   await section.getByLabel('삽화 생성기', { exact: true }).selectOption('comfyui');
-  for (const width of [1440, 390]) {
+  for (const width of [DESKTOP_WIDTH, MOBILE_WIDTH]) {
     await page.setViewportSize({ width, height: 1000 });
     for (const label of [
       '삽화 그림 지침',
@@ -245,7 +246,7 @@ test('ILUI03 illustration editors use full width and seconds preserve stored mil
   await section.getByLabel('삽화 그림 지침').fill('preserve draft');
   await section.getByRole('button', { name: '저장된 설정 다시 불러오기' }).click();
   const guard = page.getByRole('alertdialog', { name: '삽화 설정 다시 불러오기' });
-  for (const width of [390, 1440]) {
+  for (const width of DEFAULT_WIDTHS) {
     await page.setViewportSize({ width, height: 900 });
     await page.emulateMedia({ colorScheme: 'dark' });
     await expect(guard.getByRole('button', { name: '계속 편집' })).toBeFocused();

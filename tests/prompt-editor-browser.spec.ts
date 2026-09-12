@@ -1,3 +1,4 @@
+import { MOBILE_WIDTH, DESKTOP_WIDTH } from './fixtures/browser-viewports.js';
 import { visualReview } from './fixtures/visual-review.js';
 import {
   navigationAction,
@@ -136,8 +137,8 @@ test('NUI01 native prompt metadata import, default options and authoring persist
   await expect(composer.getByLabel('프롬프트 구성 도구', { exact: true })).toBeVisible();
   await selectPromptBlock(composer, '합성 지침');
   for (const [name, width, height] of [
-    ['desktop', 1440, 1000],
-    ['mobile', 390, 844],
+    ['desktop', DESKTOP_WIDTH, 1000],
+    ['mobile', MOBILE_WIDTH, 844],
   ] as const) {
     await page.setViewportSize({ width, height });
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(

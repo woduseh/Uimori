@@ -1,3 +1,4 @@
+import { MOBILE_WIDTH, DESKTOP_WIDTH } from './fixtures/browser-viewports.js';
 import { visualReview } from './fixtures/visual-review.js';
 import { waitForContentDraftSave } from './fixtures/edit-draft-save.js';
 import {
@@ -86,7 +87,7 @@ async function seed(request: APIRequestContext, definition: PackageBehavior = be
   return made.json() as Promise<{ id: string }>;
 }
 
-test('BUI01 typed actions preserve drafts after CAS conflicts, block duplicate writes and render text safely at 390px', async ({
+test(`BUI01 typed actions preserve drafts after CAS conflicts, block duplicate writes and render text safely at ${MOBILE_WIDTH}px`, async ({
   page,
   request,
 }, info) => {
@@ -177,7 +178,7 @@ test('BUI01 typed actions preserve drafts after CAS conflicts, block duplicate w
 test('BUI02 behavior editor validates without discarding an invalid draft or other package edits', async ({
   page,
 }) => {
-  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.setViewportSize({ width: DESKTOP_WIDTH, height: 1000 });
   await page.goto('/');
   await navigationAction(page, '서재');
   const library = page.getByTestId('library-panel');
@@ -216,7 +217,7 @@ test('BUI02 behavior editor validates without discarding an invalid draft or oth
   await expect(library.getByLabel('자료 본문', { exact: true })).toHaveValue('기존 본문 초안');
 });
 
-test('BUI03 invocation methods persist, validate automatic input drafts and show model-only actions without user buttons at 390px', async ({
+test(`BUI03 invocation methods persist, validate automatic input drafts and show model-only actions without user buttons at ${MOBILE_WIDTH}px`, async ({
   page,
   request,
 }, info) => {
@@ -224,7 +225,7 @@ test('BUI03 invocation methods persist, validate automatic input drafts and show
   const title = `합성 호출 방법 ${Date.now()}`,
     errors: string[] = [];
   page.on('pageerror', (error) => errors.push(error.message));
-  await page.setViewportSize({ width: 390, height: 844 });
+  await page.setViewportSize({ width: MOBILE_WIDTH, height: 844 });
   await page.goto('/');
   await navigationAction(page, '서재');
   const library = page.getByTestId('library-panel');
@@ -344,7 +345,7 @@ test('BUI04 a pure dice action displays its stored result safely and reload does
   page.on('request', (r) => {
     if (r.method() === 'POST' && r.url().includes('/package-behaviors/')) writes++;
   });
-  await page.setViewportSize({ width: 390, height: 844 });
+  await page.setViewportSize({ width: MOBILE_WIDTH, height: 844 });
   await page.goto(`/?chat=${chat.id}`);
   const panel = page.getByRole('region', { name: '패키지 상태와 행동', exact: true }),
     result = panel.getByRole('region', { name: '최근 행동 결과', exact: true });

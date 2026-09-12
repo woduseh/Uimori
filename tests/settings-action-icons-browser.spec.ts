@@ -1,3 +1,4 @@
+import { DEFAULT_WIDTHS } from './fixtures/browser-viewports.js';
 import { test, expect, type Locator } from '@playwright/test';
 import { postFixtureChat } from './fixtures/chat.js';
 import {
@@ -31,7 +32,7 @@ async function named(button: Locator, text: string) {
   expect(box!.width).toBeGreaterThanOrEqual(44);
   expect(box!.height).toBeGreaterThanOrEqual(44);
 }
-for (const width of [390, 1440]) {
+for (const width of DEFAULT_WIDTHS) {
   test(`SICON01 ${width} settings actions stay beside their forms with compact accessible controls`, async ({
     page,
     request,

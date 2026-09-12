@@ -1,3 +1,4 @@
+import { DESKTOP_WIDTH } from './browser-viewports.js';
 import type { Page } from '@playwright/test';
 
 /** Every numeric target below is the one written in this section; change them there first. */
@@ -204,7 +205,7 @@ export async function measureScreen(
   names: readonly MetricName[],
   options: { compact?: boolean } = {}
 ): Promise<MetricResult[]> {
-  const compact = options.compact ?? isCompactWidth(page.viewportSize()?.width ?? 1440);
+  const compact = options.compact ?? isCompactWidth(page.viewportSize()?.width ?? DESKTOP_WIDTH);
   return page.evaluate(measureInPage, { names, compact });
 }
 

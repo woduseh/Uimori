@@ -1,3 +1,5 @@
+import browserWidths from '../fixtures/browser-viewports.json' with { type: 'json' };
+const { mobile: MOBILE_WIDTH } = browserWidths;
 import path from 'node:path';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
@@ -156,7 +158,7 @@ async function main(args) {
           executablePath: browserPath(),
           headless: true,
           args: ['--no-proxy-server'],
-          viewport: { width: 390, height: 844 },
+          viewport: { width: MOBILE_WIDTH, height: 844 },
           baseURL: entry.ready.url,
           env: { ...process.env, TEMP: entry.temp, TMP: entry.temp },
         });

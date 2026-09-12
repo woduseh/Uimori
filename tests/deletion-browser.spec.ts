@@ -1,3 +1,4 @@
+import { MOBILE_WIDTH, DESKTOP_WIDTH } from './fixtures/browser-viewports.js';
 import { preservePromptWorkspace } from './fixtures/prompt-workspace.js';
 import { setCurrentModels } from './ui-navigation.js';
 import { visualReview } from './fixtures/visual-review.js';
@@ -46,7 +47,7 @@ test('DEL01 library cancel, stale revision, dependent bot and actual deletion at
   browser,
 }, info) => {
   const item = await content(request);
-  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.setViewportSize({ width: DESKTOP_WIDTH, height: 900 });
   const panel = await library(page, '봇');
   await panel.getByLabel('목록 관리', { exact: true }).click();
   await panel.getByRole('button', { name: '카드', exact: true }).click();
@@ -64,7 +65,7 @@ test('DEL01 library cancel, stale revision, dependent bot and actual deletion at
     await page.screenshot({ path: info.outputPath('library-card-delete-desktop.png') });
   const touchContext = await browser.newContext({
     baseURL: info.project.use.baseURL,
-    viewport: { width: 390, height: 844 },
+    viewport: { width: MOBILE_WIDTH, height: 844 },
     hasTouch: true,
     isMobile: true,
     colorScheme: 'dark',
@@ -88,7 +89,7 @@ test('DEL01 library cancel, stale revision, dependent bot and actual deletion at
   await editLibraryContent(page, item.title);
   await expect(panel.getByRole('region', { name: '자료 상세', exact: true })).toBeVisible();
   await page.emulateMedia({ colorScheme: 'dark' });
-  for (const width of visualReview ? [960, 390] : [390]) {
+  for (const width of visualReview ? [960, MOBILE_WIDTH] : [MOBILE_WIDTH]) {
     await page.setViewportSize({ width, height: 900 });
     if (visualReview)
       await page.screenshot({ path: info.outputPath(`content-header-${width}.png`) });
@@ -192,7 +193,7 @@ test('DEL02 prompt combinations and presets have deletion and removed prompt doe
   const panel = page.getByTestId('prompt-library');
   await panel.getByRole('button', { name: `${prompt.title} 프롬프트 편집`, exact: true }).click();
   await page.emulateMedia({ colorScheme: 'dark' });
-  for (const width of visualReview ? [960, 390] : [390]) {
+  for (const width of visualReview ? [960, MOBILE_WIDTH] : [MOBILE_WIDTH]) {
     await page.setViewportSize({ width, height: 900 });
     await panel.locator('.prompt-save-actions').scrollIntoViewIfNeeded();
     if (visualReview)

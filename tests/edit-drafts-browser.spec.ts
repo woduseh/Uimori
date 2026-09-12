@@ -1,3 +1,4 @@
+import { DEFAULT_WIDTHS } from './fixtures/browser-viewports.js';
 import { test, expect, type Page } from '@playwright/test';
 import { randomUUID } from 'node:crypto';
 import type { Content } from '../core/product.js';
@@ -20,7 +21,7 @@ async function behavior(page: Page) {
   return page.getByLabel('동작 정의 JSON', { exact: true });
 }
 
-for (const [index, width] of [390, 1440].entries()) {
+for (const [index, width] of DEFAULT_WIDTHS.entries()) {
   test(`ED0${index + 1} shared editor preserves incomplete JSON, helper races and reviewed undo at ${width}px`, async ({
     page,
     browser,

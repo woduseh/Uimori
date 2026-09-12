@@ -24,7 +24,19 @@ import {
 
 // This verifies an already-built immutable checkout. Run npm run build first.
 // M0/M1-local and human visual/performance review remain separate gates.
-const requiredBrowserIds = ['UI01', 'UI02', 'UI03', 'UI04', 'UI05', 'UI08', 'UI09', 'UI10', 'UI12'];
+const requiredBrowserIds = [
+  'UI01',
+  'UI02',
+  'UI03',
+  'UI04',
+  'UI05',
+  'UI08',
+  'UI09',
+  'UI10',
+  'UI12',
+  'READUI01',
+  'READUI02',
+];
 const requiredProseTitles = [
   'renders headings, emphasis, quotes, lists and line breaks with semantic elements',
   'escapes raw HTML, blocks executable links and never requests Markdown images',
@@ -150,6 +162,7 @@ async function main() {
       proseTitles: requiredProseTitles,
       requiredBrowserIds,
       browserFile: 'tests/ui-browser.spec.ts',
+      readingBrowserFile: 'tests/reading-browser.spec.ts',
       skippedAllowed: 0,
       failuresAllowed: 0,
     };
@@ -204,6 +217,7 @@ async function main() {
         'node_modules/@playwright/test/cli.js',
         'test',
         'tests/ui-browser.spec.ts',
+        'tests/reading-browser.spec.ts',
         '--reporter=json',
       ],
       env

@@ -1,7 +1,8 @@
+import { MOBILE_WIDTH, DEFAULT_WIDTHS } from './fixtures/browser-viewports.js';
 import { expect, test } from '@playwright/test';
 import { visibleNavigation } from './ui-navigation.js';
 
-for (const width of [390, 1440]) {
+for (const width of DEFAULT_WIDTHS) {
   test(`SIDENAV01 settings and direct workspace navigation stay accessible at ${width}px`, async ({
     page,
   }, info) => {
@@ -39,7 +40,7 @@ for (const width of [390, 1440]) {
       await page.evaluate(() => document.documentElement.scrollWidth - innerWidth)
     ).toBeLessThanOrEqual(1);
     await page.screenshot({ path: info.outputPath(`sidebar-menu-${width}.png`) });
-    if (width === 390) {
+    if (width === MOBILE_WIDTH) {
       await page.keyboard.press('Escape');
       await expect(page.getByRole('dialog', { name: '탐색', exact: true })).toBeHidden();
       await expect(page.getByRole('button', { name: '탐색 메뉴', exact: true })).toBeFocused();
@@ -56,7 +57,7 @@ for (const width of [390, 1440]) {
       await current.getByRole('button', { name: destination, exact: true }).focus();
       await page.keyboard.press('Enter');
       await expect(page.getByRole('heading', { name: destination, exact: true })).toBeVisible();
-      if (width === 390)
+      if (width === MOBILE_WIDTH)
         await expect(page.getByRole('dialog', { name: '탐색', exact: true })).toBeHidden();
       const returned = await visibleNavigation(page);
       await expect(

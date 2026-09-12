@@ -1,3 +1,4 @@
+import { MOBILE_WIDTH, DESKTOP_WIDTH, DEFAULT_WIDTHS } from './fixtures/browser-viewports.js';
 import { visualReview } from './fixtures/visual-review.js';
 import { expect, test, type APIRequestContext, type Locator } from '@playwright/test';
 import type { Content } from '../core/product.js';
@@ -120,7 +121,7 @@ async function navigationFixture(request: APIRequestContext) {
 
 const rows = (nav: Locator) => nav.locator('.bot-chat-item');
 
-for (const width of [390, 1440]) {
+for (const width of DEFAULT_WIDTHS) {
   test(`ORG05 ${width}px chat menu icons and manual titles preserve drafts and persist`, async ({
     page,
     request,
@@ -129,7 +130,8 @@ for (const width of [390, 1440]) {
     const { chats } = await navigationFixture(request);
     const chat = chats[0];
     await page.goto(`/?chat=${chat.id}`);
-    if (width === 390) await page.getByRole('button', { name: '탐색 메뉴', exact: true }).click();
+    if (width === MOBILE_WIDTH)
+      await page.getByRole('button', { name: '탐색 메뉴', exact: true }).click();
     const nav = page.getByTestId('bot-navigation').filter({ visible: true });
     const row = nav.locator(`.bot-chat-item[data-chat-id="${chat.id}"]`);
     await row.hover();
@@ -177,7 +179,8 @@ for (const width of [390, 1440]) {
     );
     await page.screenshot({ path: info.outputPath(`chat-menu-${width}.png`) });
     await page.reload();
-    if (width === 390) await page.getByRole('button', { name: '탐색 메뉴', exact: true }).click();
+    if (width === MOBILE_WIDTH)
+      await page.getByRole('button', { name: '탐색 메뉴', exact: true }).click();
     await expect(nav.getByRole('button', { name: renamed, exact: true })).toBeVisible();
   });
 }
@@ -186,7 +189,7 @@ test('ORG02 desktop compact rows support drag ordering, folder drops, collapse a
   page,
   request,
 }, info) => {
-  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.setViewportSize({ width: DESKTOP_WIDTH, height: 1000 });
   const { owner, chats, folder } = await navigationFixture(request);
   await page.goto(`/?chat=${chats[0].id}`);
   const nav = page.getByTestId('bot-navigation').filter({ visible: true });
@@ -274,7 +277,7 @@ test('ORG03 touch menu offers folder movement and ordering and keeps deletion co
   const { chats, folder } = await navigationFixture(request);
   const context = await browser.newContext({
     baseURL: test.info().project.use.baseURL,
-    viewport: { width: 390, height: 844 },
+    viewport: { width: MOBILE_WIDTH, height: 844 },
     hasTouch: true,
     isMobile: true,
   });
@@ -324,7 +327,7 @@ test('ORG04 unselected chat and collapsed folder display compact pending activit
   page,
   request,
 }, info) => {
-  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.setViewportSize({ width: DESKTOP_WIDTH, height: 1000 });
   const { chats, folder } = await navigationFixture(request);
   const background = chats[1];
   const moved = await request.patch(`/api/chats/${background.id}/organization`, {
@@ -356,7 +359,7 @@ test('ORG04 unselected chat and collapsed folder display compact pending activit
   await expect(nav.locator('.bot-chat-status')).toHaveCount(0);
 });
 
-for (const width of [390, 1440]) {
+for (const width of DEFAULT_WIDTHS) {
   test(`ORG06 ${width}px shared bot folders, scoped search and manual sorting persist`, async ({
     page,
     request,
@@ -501,7 +504,7 @@ for (const width of [390, 1440]) {
   });
 }
 
-for (const width of [390, 1440]) {
+for (const width of DEFAULT_WIDTHS) {
   test(`ORG07 ${width}px lower sidebar bot menus stay within the viewport`, async ({
     page,
     request,
@@ -562,7 +565,7 @@ for (const width of [390, 1440]) {
   });
 }
 
-for (const width of [390, 1440]) {
+for (const width of DEFAULT_WIDTHS) {
   test(`ORG08 ${width}px first row starts a chat from the library and searches chats across bots`, async ({
     page,
     request,

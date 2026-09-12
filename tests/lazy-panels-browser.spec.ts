@@ -1,3 +1,4 @@
+import { MOBILE_WIDTH, DEFAULT_WIDTHS } from './fixtures/browser-viewports.js';
 import { visualReview } from './fixtures/visual-review.js';
 import { test, expect, type Page, type TestInfo } from '@playwright/test';
 import { postFixtureChat } from './fixtures/chat.js';
@@ -42,7 +43,7 @@ test('LAZY04 failed library keeps desktop and mobile navigation available', asyn
   await page.route('**/assets/LibraryPanel-*.js', (route) => route.abort('failed'));
   const errors: string[] = [];
   page.on('pageerror', (error) => errors.push(error.message));
-  for (const width of [390, 1440]) {
+  for (const width of DEFAULT_WIDTHS) {
     await page.setViewportSize({ width, height: 900 });
     await page.goto('/');
     await expect(page.getByRole('alert')).toContainText('불러오지 못했어요');
@@ -68,7 +69,7 @@ test('LAZY05 unavailable library data keeps prompt navigation usable', async ({ 
   );
   const errors: string[] = [];
   page.on('pageerror', (error) => errors.push(error.message));
-  for (const width of [390, 1440]) {
+  for (const width of DEFAULT_WIDTHS) {
     await page.setViewportSize({ width, height: 900 });
     const failed = page.waitForResponse(/\/api\/library(?:\?.*)?$/);
     await page.goto('/');
@@ -78,7 +79,7 @@ test('LAZY05 unavailable library data keeps prompt navigation usable', async ({ 
     await expect(page.getByRole('main').getByRole('status')).toContainText(
       '프롬프트 목록을 불러오지 못했어요.'
     );
-    if (width === 390)
+    if (width === MOBILE_WIDTH)
       await expect(page.getByRole('button', { name: '탐색 메뉴', exact: true })).toBeVisible();
     if (visualReview)
       await page.screenshot({ path: info.outputPath(`prompt-data-failure-${width}.png`) });

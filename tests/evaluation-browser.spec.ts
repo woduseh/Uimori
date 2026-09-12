@@ -1,3 +1,4 @@
+import { MOBILE_WIDTH, DESKTOP_WIDTH } from './fixtures/browser-viewports.js';
 import { selectCurrentSettingsSection } from './ui-navigation.js';
 import { openChatSettings } from './ui-navigation.js';
 import { preservePromptWorkspace } from './fixtures/prompt-workspace.js';
@@ -88,7 +89,7 @@ test('EVALUI01 desktop preset evaluation opt-in persists selected story roles af
   context,
   request,
 }, info) => {
-  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.setViewportSize({ width: DESKTOP_WIDTH, height: 1000 });
   const observed = observe(page);
   const title = '합성 평가 desktop ' + Date.now();
   const bot = await request.post('/api/content', {
@@ -150,7 +151,7 @@ test('EVALUI01 desktop preset evaluation opt-in persists selected story roles af
   await page.reload();
   await expect(page.getByRole('button', { name: /^현재 본문 모델/ })).toContainText(model.title);
   const reconnected = await context.newPage();
-  await reconnected.setViewportSize({ width: 1440, height: 1000 });
+  await reconnected.setViewportSize({ width: DESKTOP_WIDTH, height: 1000 });
   await reconnected.goto(storyUrl);
   await openChatSettings(reconnected);
   await selectCurrentSettingsSection(reconnected, '모델');
@@ -171,11 +172,11 @@ test('EVALUI01 desktop preset evaluation opt-in persists selected story roles af
   await reconnected.close();
 });
 
-test('EVALUI02 mobile 390px evaluation controls save only for opted-in presets and can be disabled', async ({
+test(`EVALUI02 mobile ${MOBILE_WIDTH}px evaluation controls save only for opted-in presets and can be disabled`, async ({
   page,
   request,
 }, info) => {
-  await page.setViewportSize({ width: 390, height: 844 });
+  await page.setViewportSize({ width: MOBILE_WIDTH, height: 844 });
   const observed = observe(page);
   const title = '합성 평가 mobile ' + Date.now();
   await page.goto('/');
@@ -210,7 +211,7 @@ test('EVALUI02 mobile 390px evaluation controls save only for opted-in presets a
     const box = await control.boundingBox();
     expect(box, label).not.toBeNull();
     expect(box!.x, label).toBeGreaterThanOrEqual(0);
-    expect(box!.x + box!.width, label).toBeLessThanOrEqual(390);
+    expect(box!.x + box!.width, label).toBeLessThanOrEqual(MOBILE_WIDTH);
     if (visualReview) expect(box!.width, label).toBeGreaterThan(120);
   }
   const horizontal = await page
@@ -241,7 +242,7 @@ test('EVALUI02 mobile 390px evaluation controls save only for opted-in presets a
         label + ' displayed choice fits before the native arrow'
       ).toBeLessThanOrEqual(measured.available);
     }
-    // Capture the whole section laid out at 390px, including controls below the scroll fold.
+    // Capture the whole section laid out at 412px, including controls below the scroll fold.
     await page
       .getByRole('group', { name: '평가 도구', exact: true })
       .screenshot({ path: info.outputPath('evaluation-mobile-options.png') });

@@ -1,3 +1,4 @@
+import { MOBILE_WIDTH, DESKTOP_WIDTH } from './fixtures/browser-viewports.js';
 import { visualReview } from './fixtures/visual-review.js';
 import { expect, test, type Page } from '@playwright/test';
 import type { Chat, ChatDetail } from '../core/types.js';
@@ -198,19 +199,19 @@ if (process.env.NR_SELF_HOST_BROWSER === '1')
       ).toBeVisible();
     });
 
-    test('SHUI02 desktop and 390px mobile share persisted chats and live HTTPS SSE across re-entry', async ({
+    test(`SHUI02 desktop and ${MOBILE_WIDTH}px mobile share persisted chats and live HTTPS SSE across re-entry`, async ({
       browser,
     }, info) => {
       test.setTimeout(60_000);
       const desktop = await browser.newContext({
         baseURL: origin,
         ignoreHTTPSErrors: true,
-        viewport: { width: 1440, height: 1000 },
+        viewport: { width: DESKTOP_WIDTH, height: 1000 },
       });
       const mobile = await browser.newContext({
         baseURL: origin,
         ignoreHTTPSErrors: true,
-        viewport: { width: 390, height: 844 },
+        viewport: { width: MOBILE_WIDTH, height: 844 },
         isMobile: true,
         hasTouch: true,
       });
@@ -278,7 +279,9 @@ if (process.env.NR_SELF_HOST_BROWSER === '1')
           true
         );
         if (visualReview)
-          await phone.screenshot({ path: info.outputPath('https-mobile-shared-source-390.png') });
+          await phone.screenshot({
+            path: info.outputPath(`https-mobile-shared-source-${MOBILE_WIDTH}.png`),
+          });
         if (visualReview)
           await pc.screenshot({ path: info.outputPath('https-desktop-shared-source.png') });
 
@@ -330,7 +333,7 @@ if (process.env.NR_SELF_HOST_BROWSER === '1')
               liveMobileSseUpdate: true,
               tabReentry: true,
               sessionReauthentication: true,
-              viewport: { width: 390, height: 844 },
+              viewport: { width: MOBILE_WIDTH, height: 844 },
               browserErrors: errors,
             },
             null,

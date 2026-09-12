@@ -1,0 +1,112 @@
+.reading-quote {
+  --reading-thought: #62516d;
+}
+[data-theme="dark"] .reading-quote {
+  --reading-thought: #d6c4e0;
+}
+.reading-settings {
+  display: grid;
+  gap: 16px;
+  min-width: 0;
+  padding-bottom: 20px;
+  border-bottom: 1px solid var(--line);
+}
+.reading-preview {
+  min-width: 0;
+  padding: 14px 16px;
+  border-radius: 12px;
+  background: var(--surface-raised);
+}
+.reading-preview > small {
+  display: block;
+  margin-bottom: 8px;
+  color: var(--muted);
+}
+.reading-preview .prose > p:last-of-type {
+  margin-bottom: 0;
+}
+.reading-spacing,
+.reading-quote-rules {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  min-width: 0;
+}
+.reading-settings label {
+  min-width: 0;
+}
+.reading-toggles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 24px;
+}
+.reading-toggles label.check {
+  margin: 0;
+  min-height: var(--control-h);
+}
+.reading-quote-settings summary {
+  min-height: var(--control-h);
+  padding-block: 10px;
+  cursor: pointer;
+}
+.reading-quote-settings p,
+.reading-settings-footer small {
+  color: var(--muted);
+}
+.reading-settings-footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+.reading-settings-footer small {
+  flex: 1 1 200px;
+}
+.reading-quote[data-emphasis="subtle"][data-quote-role="dialogue"] {
+  color: var(--accent);
+  font-weight: 500;
+}
+.reading-quote[data-emphasis="subtle"][data-quote-role="thought"] {
+  color: var(--reading-thought);
+  font-weight: 500;
+}
+.reading-quote[data-emphasis="subtle"][data-quote-role="quote"] {
+  font-weight: 500;
+}
+.reading-quote[data-emphasis="strong"][data-quote-role="dialogue"] {
+  color: var(--accent);
+  font-weight: 700;
+}
+.reading-quote[data-emphasis="strong"][data-quote-role="thought"] {
+  color: var(--reading-thought);
+  font-weight: 600;
+}
+.reading-quote[data-emphasis="strong"][data-quote-role="quote"] {
+  font-weight: 600;
+}
+.reading-quote-break {
+  display: inline;
+}
+.reading-quote-break-before::before,
+.reading-quote-break-after::after {
+  content: "";
+  display: block;
+}
+.reading-quote-break-before::before {
+  margin-block-start: 0.25em;
+}
+.reading-quote-break-after::after {
+  margin-block-end: 0.25em;
+}
+[data-reading-paragraph-spacing="custom"] .helper-prose,
+[data-reading-paragraph-spacing="custom"] .streaming-text {
+  white-space: normal;
+}
+[data-reading-paragraph-spacing="custom"] .reading-plain-paragraph {
+  display: block;
+  white-space: pre-wrap;
+  margin-block-end: var(--reading-paragraph-gap);
+}
+[data-reading-paragraph-spacing="custom"] .reading-plain-paragraph:last-child {
+  margin-block-end: 0;
+}

@@ -1,3 +1,4 @@
+import { MOBILE_WIDTH, DESKTOP_WIDTH, DEFAULT_WIDTHS } from './fixtures/browser-viewports.js';
 import { reviewWidths, visualReview } from './fixtures/visual-review.js';
 import { expect, test, type Page } from '@playwright/test';
 import type { Connection, Library, ModelPreset } from '../core/product.js';
@@ -57,7 +58,7 @@ async function openProviders(page: Page) {
 test('PCUI01 empty connections and empty models each expose one relevant starting action', async ({
   page,
 }, info) => {
-  await page.setViewportSize({ width: 390, height: 844 });
+  await page.setViewportSize({ width: MOBILE_WIDTH, height: 844 });
   const value: { connections: Connection[]; models: ModelPreset[] } = {
     connections: [],
     models: [],
@@ -130,13 +131,15 @@ test('PCUI02 compact provider lists align at six widths and retain accessible me
     expect(geometry.refreshWidth).toBeGreaterThanOrEqual(44);
     expect(geometry.refreshHeight).toBeGreaterThanOrEqual(44);
     expect(geometry.overflow).toBeLessThanOrEqual(1);
-    if (width === 390 || width === 1440)
+    if (width === MOBILE_WIDTH || width === DESKTOP_WIDTH)
       if (visualReview)
         await page.screenshot({
-          path: info.outputPath(`provider-compact-${width === 390 ? 'mobile' : 'desktop'}.png`),
+          path: info.outputPath(
+            `provider-compact-${width === MOBILE_WIDTH ? 'mobile' : 'desktop'}.png`
+          ),
         });
   }
-  await page.setViewportSize({ width: 390, height: 844 });
+  await page.setViewportSize({ width: MOBILE_WIDTH, height: 844 });
   const menu = item.getByLabel(model.title + ' 모델 메뉴', { exact: true });
   const copy = item.getByRole('button', { name: model.title + ' 모델 복제', exact: true });
   await expect(copy).not.toBeVisible();
@@ -151,7 +154,7 @@ test('PCUI02 compact provider lists align at six widths and retain accessible me
   await expect(page.getByRole('dialog', { name: '설정', exact: true })).toBeVisible();
   await menu.click();
   await expect(copy).toBeVisible();
-  // 390px opens the menu as a bottom sheet; a tap on its scrim dismisses it before the search.
+  // 412px opens the menu as a bottom sheet; a tap on its scrim dismisses it before the search.
   await page.mouse.click(195, 60);
   await expect(copy).not.toBeVisible();
   await search.click();
@@ -185,7 +188,7 @@ test('PCUI02 compact provider lists align at six widths and retain accessible me
   await expect(provider.locator('.action-menu-body > .delete-control > button > svg')).toHaveCount(
     1
   );
-  // Close the (sheet) menu before reaching the tab bar it would otherwise cover on 390px.
+  // Close the (sheet) menu before reaching the tab bar it would otherwise cover on 412px.
   await page.keyboard.press('Escape');
   await editor.getByRole('button', { name: '모델 프리셋', exact: true }).click();
   await item.getByRole('button', { name: model.title + ' 모델 수정', exact: true }).click();
@@ -206,7 +209,7 @@ test('PCUI02 compact provider lists align at six widths and retain accessible me
   await expect(stops).toHaveJSProperty('open', true);
   await expect(form.getByLabel('생성 중단 문자열 1', { exact: true })).toHaveValue('END');
   if (visualReview) {
-    for (const width of [390, 1440]) {
+    for (const width of DEFAULT_WIDTHS) {
       await page.setViewportSize({ width, height: 900 });
       const button = await add.boundingBox(),
         section = await stops.boundingBox();

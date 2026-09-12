@@ -1,3 +1,4 @@
+import { MOBILE_WIDTH, DESKTOP_WIDTH, DEFAULT_WIDTHS } from './fixtures/browser-viewports.js';
 import { expect, test } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
 import { postFixtureChat } from './fixtures/chat.js';
@@ -5,7 +6,7 @@ import { navigationAction, openChatMenu, selectSettingsSection } from './ui-navi
 import type { ChatBackup } from '../core/chat-backup.js';
 import type { ChatDetail, Run } from '../core/types.js';
 
-test('CBACK01 downloads every branch and restores the same file twice as new chats at 390 and 1440px', async ({
+test(`CBACK01 downloads every branch and restores the same file twice as new chats at ${MOBILE_WIDTH} and ${DESKTOP_WIDTH}px`, async ({
   page,
   request,
 }, info) => {
@@ -64,7 +65,7 @@ test('CBACK01 downloads every branch and restores the same file twice as new cha
   expect(backup.format).toBe('uimori-chat-backup');
   expect(backup.records.branches).toHaveLength(2);
   const restored: string[] = [];
-  for (const width of [390, 1440]) {
+  for (const width of DEFAULT_WIDTHS) {
     await page.setViewportSize({ width, height: 900 });
     await navigationAction(page, '설정');
     await selectSettingsSection(page, '데이터 관리');

@@ -1,3 +1,4 @@
+import { DEFAULT_WIDTHS } from './fixtures/browser-viewports.js';
 import { test, expect, type APIRequestContext, type Page } from '@playwright/test';
 import type { Attempt, Connection, Library } from '../core/product.js';
 import type { Chat, ChatDetail, ReaderDetail, Run } from '../core/types.js';
@@ -20,7 +21,7 @@ async function library(request: APIRequestContext): Promise<Library> {
   return response.json();
 }
 
-for (const width of [390, 1440]) {
+for (const width of DEFAULT_WIDTHS) {
   test(`PRICEUI${width} official Flex and manual zero/unknown rates survive save and restore`, async ({
     page,
     request,
@@ -238,7 +239,7 @@ test('PRICECOST01 source and attempt cost disclosures separate actual, estimated
   );
   const errors: string[] = [];
   page.on('pageerror', (error) => errors.push(error.message));
-  for (const width of [390, 1440]) {
+  for (const width of DEFAULT_WIDTHS) {
     await page.setViewportSize({ width, height: 1000 });
     await page.goto(`/?chat=${chat.id}`);
     const source = page.getByTestId('source').first();

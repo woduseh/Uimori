@@ -1,3 +1,4 @@
+import { MOBILE_WIDTH } from './fixtures/browser-viewports.js';
 import { visualReview } from './fixtures/visual-review.js';
 import { test, expect, type APIRequestContext } from '@playwright/test';
 import { createActionPackage } from './fixtures/action-package.js';
@@ -28,7 +29,7 @@ async function detail(request: APIRequestContext, id: string) {
   return (await (await request.get(`/api/chats/${id}`)).json()) as ChatDetail;
 }
 
-test('PREQUESTUI01 generic controls reserve a proposal, survive reload, consume once and cancel at 390px', async ({
+test(`PREQUESTUI01 generic controls reserve a proposal, survive reload, consume once and cancel at ${MOBILE_WIDTH}px`, async ({
   page,
   request,
 }, info) => {
@@ -37,7 +38,7 @@ test('PREQUESTUI01 generic controls reserve a proposal, survive reload, consume 
     before = await detail(request, chat.id),
     errors: string[] = [];
   page.on('pageerror', (error) => errors.push(error.message));
-  await page.setViewportSize({ width: 390, height: 844 });
+  await page.setViewportSize({ width: MOBILE_WIDTH, height: 844 });
   await page.goto(`/?chat=${chat.id}`);
   const panel = page.getByRole('region', { name: '패키지 상태와 행동', exact: true });
   await expect(panel).toBeVisible();

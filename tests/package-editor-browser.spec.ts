@@ -1,3 +1,4 @@
+import { MOBILE_WIDTH, DESKTOP_WIDTH } from './fixtures/browser-viewports.js';
 import { visualReview } from './fixtures/visual-review.js';
 import {
   editLibraryContent,
@@ -34,7 +35,7 @@ test('PKUI04 hundreds of lore entries support folders, search, bulk move and per
     controls: [],
     transforms: [],
   };
-  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.setViewportSize({ width: DESKTOP_WIDTH, height: 1000 });
   await page.goto('/');
   await navigationAction(page, '서재');
   const library = page.getByTestId('library-panel');
@@ -102,11 +103,11 @@ test('PKUI04 hundreds of lore entries support folders, search, bulk move and per
   await expect(manager.locator('.lore-row')).toHaveCount(25);
   await manager.getByLabel('로어 사용 방법 필터', { exact: true }).selectOption('*');
   if (visualReview) await manager.screenshot({ path: info.outputPath('lore-folders-desktop.png') });
-  await page.setViewportSize({ width: 390, height: 844 });
+  await page.setViewportSize({ width: MOBILE_WIDTH, height: 844 });
   await expect(manager.locator('textarea')).toHaveCount(1);
   const bounds = await manager.boundingBox();
   expect(bounds!.x).toBeGreaterThanOrEqual(0);
-  expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(390);
+  expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(MOBILE_WIDTH);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(
     true
   );
@@ -167,7 +168,7 @@ test('PKUI03 native JSON import remains a reviewed persona draft and preserves l
   page,
   request,
 }, info) => {
-  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.setViewportSize({ width: DESKTOP_WIDTH, height: 1000 });
   await page.goto('/');
   await navigationAction(page, '서재');
   await expect(page.getByRole('button', { name: '자료 가져오기', exact: true })).toHaveCount(0);
@@ -190,7 +191,7 @@ test('PKUI03 native JSON import remains a reviewed persona draft and preserves l
   }
   if (visualReview)
     await transfers.screenshot({ path: info.outputPath('library-package-tools-desktop.png') });
-  await page.setViewportSize({ width: 390, height: 844 });
+  await page.setViewportSize({ width: MOBILE_WIDTH, height: 844 });
   const mobileCards = await cards.evaluateAll((items) =>
     items.map((item) => ({
       top: item.getBoundingClientRect().top,
@@ -199,10 +200,10 @@ test('PKUI03 native JSON import remains a reviewed persona draft and preserves l
     }))
   );
   if (visualReview) expect(mobileCards[1].top).toBeGreaterThan(mobileCards[0].bottom);
-  expect(mobileCards.every((item) => item.right <= 390)).toBe(true);
+  expect(mobileCards.every((item) => item.right <= MOBILE_WIDTH)).toBe(true);
   if (visualReview)
     await transfers.screenshot({ path: info.outputPath('library-package-tools-mobile.png') });
-  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.setViewportSize({ width: DESKTOP_WIDTH, height: 1000 });
   const input = library.getByLabel('패키지 JSON 가져오기', { exact: true });
   await input.setInputFiles({
     name: 'invalid.json',
@@ -261,7 +262,7 @@ test('PKUI01 package editing preserves internal lore, instructions, unsaved work
   request,
 }, info) => {
   test.setTimeout(60000);
-  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.setViewportSize({ width: DESKTOP_WIDTH, height: 1000 });
   const errors: string[] = [];
   page.on('pageerror', (error) => errors.push(error.message));
   await page.goto('/');
@@ -297,7 +298,7 @@ test('PKUI01 package editing preserves internal lore, instructions, unsaved work
   await library.getByRole('button', { name: '서재 목록', exact: true }).click();
   const guard = library.getByRole('alertdialog', { name: '미저장 자료 확인', exact: true });
   await expect(guard).toBeVisible();
-  await page.setViewportSize({ width: 390, height: 844 });
+  await page.setViewportSize({ width: MOBILE_WIDTH, height: 844 });
   expect(
     await guard.evaluate(
       (element) => element instanceof HTMLDialogElement && element.matches(':modal')
@@ -305,7 +306,7 @@ test('PKUI01 package editing preserves internal lore, instructions, unsaved work
   ).toBe(true);
   const bounds = await guard.boundingBox();
   expect(bounds!.x).toBeGreaterThanOrEqual(0);
-  expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(390);
+  expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(MOBILE_WIDTH);
   if (visualReview) expect(bounds!.height).toBeLessThan(400);
   await expect(guard.getByRole('button', { name: '계속 편집', exact: true })).toBeFocused();
   if (visualReview)
@@ -318,7 +319,7 @@ test('PKUI01 package editing preserves internal lore, instructions, unsaved work
   await library.getByRole('button', { name: '서재 목록', exact: true }).click();
   await expect(guard).toBeVisible();
   await guard.getByRole('button', { name: '계속 편집', exact: true }).click();
-  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.setViewportSize({ width: DESKTOP_WIDTH, height: 1000 });
   await expect(fields.getByLabel('지침 1 본문', { exact: true })).toHaveValue(
     'Mention visible actions before interpretation.'
   );
@@ -401,7 +402,7 @@ test('PKUI01 package editing preserves internal lore, instructions, unsaved work
     `/api/revisions/content/${original.id}/${original.revision}`
   );
   expect(await unchangedResponse.json()).toEqual(original);
-  await page.setViewportSize({ width: 390, height: 844 });
+  await page.setViewportSize({ width: MOBILE_WIDTH, height: 844 });
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(
     true
   );
@@ -410,7 +411,7 @@ test('PKUI01 package editing preserves internal lore, instructions, unsaved work
 });
 
 test('PKUI05 instruction reordering keeps focus on the moved instruction', async ({ page }) => {
-  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.setViewportSize({ width: DESKTOP_WIDTH, height: 1000 });
   await page.goto('/');
   await navigationAction(page, '서재');
   const library = page.getByTestId('library-panel');

@@ -1,3 +1,4 @@
+import { DEFAULT_WIDTHS } from './fixtures/browser-viewports.js';
 import { test, expect, type APIRequestContext } from '@playwright/test';
 import type {
   ModelPreset,
@@ -24,7 +25,7 @@ async function detail(request: APIRequestContext, id: string): Promise<ChatDetai
   return (await request.get(`/api/chats/${id}`)).json();
 }
 
-for (const width of [390, 1440]) {
+for (const width of DEFAULT_WIDTHS) {
   test(`GMUI01 ${width} global choices apply to existing and new bot chats and freeze at reservation`, async ({
     page,
     request,
@@ -215,7 +216,7 @@ for (const width of [390, 1440]) {
   });
 }
 
-for (const width of [390, 1440]) {
+for (const width of DEFAULT_WIDTHS) {
   test(`GMUI02 ${width} chat pins preserve drafts, follow saved presets and return to global settings`, async ({
     page,
     request,

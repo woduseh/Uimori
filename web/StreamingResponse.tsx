@@ -5,6 +5,7 @@ import type {
   ResponseTaskKind,
 } from '../core/response-stream.js';
 import { api, ApiError } from './api.js';
+import { PlainProse } from './Prose.js';
 
 const active = (status?: string) =>
   status === undefined || ['queued', 'running', 'waiting_for_state'].includes(status);
@@ -156,7 +157,7 @@ export function StreamingResponse({
       </small>
       {[...parts].map(([key, value]) => (
         <div className="streaming-text" key={key}>
-          {value}
+          <PlainProse text={value} />
         </div>
       ))}
     </div>

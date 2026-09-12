@@ -1,3 +1,4 @@
+import { MOBILE_WIDTH, DESKTOP_WIDTH } from './fixtures/browser-viewports.js';
 import { visualReview } from './fixtures/visual-review.js';
 import { isolatePromptDrafts } from './fixtures/prompt-workspace.js';
 import { navigationAction, selectPromptBlock, selectPromptSection } from './ui-navigation.js';
@@ -90,8 +91,8 @@ test('PUNI01 structured editor preserves one AST; section navigation keeps draft
   await expect(body).not.toBeVisible();
   await expect(save).toBeEnabled();
   for (const [name, width, height] of [
-    ['desktop', 1440, 1000],
-    ['mobile', 390, 844],
+    ['desktop', DESKTOP_WIDTH, 1000],
+    ['mobile', MOBILE_WIDTH, 844],
   ] as const) {
     await page.setViewportSize({ width, height });
     await expect(

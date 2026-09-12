@@ -1,3 +1,5 @@
+import browserWidths from '../fixtures/browser-viewports.json' with { type: 'json' };
+const { mobile: MOBILE_WIDTH } = browserWidths;
 import path from 'node:path';
 import { spawn } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
@@ -42,7 +44,7 @@ const summary = {
   limitations: [
     'Self-signed, publicly committed test certificate; Chromium explicitly ignores certificate verification errors. Public TLS issuance and DNS are not tested.',
     'Runs on the current host OS with Node and a Node HTTPS proxy. This is not Linux, Docker or production proxy execution evidence.',
-    '390px Chromium viewport/touch emulation is not physical mobile Safari/Chrome, OS keyboard, background suspension or network handoff evidence.',
+    `${MOBILE_WIDTH}px Chromium viewport/touch emulation is not physical mobile Safari/Chrome, OS keyboard, background suspension or network handoff evidence.`,
     'Fresh isolated SQLite, synthetic token, bot and owned loopback provider only. No personal data, live provider, billing or external deployment.',
     'Browser re-entry verifies stored results and independent sessions; the synthetic provider is immediate and does not establish a long-running live-provider disconnect result.',
   ],

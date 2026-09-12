@@ -1,3 +1,4 @@
+import { MOBILE_WIDTH } from './fixtures/browser-viewports.js';
 import { expect, type APIRequestContext, type Locator, type Page } from '@playwright/test';
 import type { PromptPreset, SavedPromptCombination } from '../core/product.js';
 import type { PromptProgram } from '../core/prompt-program.js';
@@ -316,7 +317,7 @@ export async function openChatSettings(page: Page) {
     .click();
 }
 function compactLayout(page: Page) {
-  return (page.viewportSize()?.width ?? 390) <= 760;
+  return (page.viewportSize()?.width ?? MOBILE_WIDTH) <= 760;
 }
 /** The helper: a header button on wide widths, a chat ⋯ item on compact widths. */
 export async function openHelper(page: Page) {

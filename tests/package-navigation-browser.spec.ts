@@ -1,3 +1,4 @@
+import { MOBILE_WIDTH, DESKTOP_WIDTH } from './fixtures/browser-viewports.js';
 import { reviewWidths, visualReview } from './fixtures/visual-review.js';
 import { isEditDraftBufferRequest, waitForEditDraftSave } from './fixtures/edit-draft-save.js';
 import { expect, test, type APIRequestContext, type Locator, type Page } from '@playwright/test';
@@ -94,7 +95,7 @@ test('PNAV01 mobile section navigation preserves lore search, caret and unapplie
 }, info) => {
   test.setTimeout(60000);
   const item = await seed(request, `PNAV01 ${Date.now()}`);
-  await page.setViewportSize({ width: 390, height: 844 });
+  await page.setViewportSize({ width: MOBILE_WIDTH, height: 844 });
   const writes: string[] = [];
   page.on('request', (entry) => {
     if (
@@ -170,7 +171,7 @@ test('PNAV02 desktop keyboard navigation and mobile resizing retain fields, expa
   request,
 }, info) => {
   const item = await seed(request, `PNAV02 ${Date.now()}`);
-  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.setViewportSize({ width: DESKTOP_WIDTH, height: 1000 });
   const { fields } = await openEditor(page, item.title);
   let navigation = fields.getByRole('tablist', { name: '패키지 편집 분류', exact: true });
   await expect(navigation).toHaveAttribute('aria-orientation', 'horizontal');
@@ -180,7 +181,7 @@ test('PNAV02 desktop keyboard navigation and mobile resizing retain fields, expa
   const role = fields.getByRole('textbox', { name: '봇으로 사용할 때', exact: true });
   await role.fill('창작할 때 참고하는 합성 역할 지침');
   await role.evaluate((node: HTMLTextAreaElement) => node.setSelectionRange(3, 5));
-  await page.setViewportSize({ width: 390, height: 844 });
+  await page.setViewportSize({ width: MOBILE_WIDTH, height: 844 });
   await expect(role).toBeVisible();
   await expect(role).toBeFocused();
   expect(
@@ -195,7 +196,7 @@ test('PNAV02 desktop keyboard navigation and mobile resizing retain fields, expa
   await expect(stateTitle).toBeVisible();
   await expect(stateTitle).toHaveValue('합성 상태');
   await fields.getByRole('button', { name: '패키지 분야 목록', exact: true }).click();
-  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.setViewportSize({ width: DESKTOP_WIDTH, height: 1000 });
   navigation = fields.getByRole('tablist', { name: '패키지 편집 분류', exact: true });
   await navigation.getByRole('tab', { name: '표현', exact: true }).press('Home');
   await expect(navigation.getByRole('tab', { name: '기본 정보', exact: true })).toBeFocused();
@@ -206,7 +207,7 @@ test('PNAV02 desktop keyboard navigation and mobile resizing retain fields, expa
   );
   await navigation.getByRole('tab', { name: '로어', exact: true }).press('End');
   await expect(navigation.getByRole('tab', { name: '상태와 행동', exact: true })).toBeFocused();
-  await page.setViewportSize({ width: 390, height: 844 });
+  await page.setViewportSize({ width: MOBILE_WIDTH, height: 844 });
   await expect(fields.locator('.package-section-heading h3')).toHaveText('상태와 행동');
   await expect(fields.locator('.package-section-heading h3')).toBeFocused();
   expect(await page.evaluate(() => (document.activeElement as HTMLElement).checkVisibility())).toBe(

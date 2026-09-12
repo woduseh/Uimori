@@ -1,3 +1,5 @@
+import browserWidths from '../fixtures/browser-viewports.json' with { type: 'json' };
+const { mobile: MOBILE_WIDTH, desktop: DESKTOP_WIDTH } = browserWidths;
 import { runBrowserVerification } from './browser-verification.mjs';
 
 await runBrowserVerification({
@@ -8,9 +10,9 @@ await runBrowserVerification({
   requiredCases: ['OUTUI01', 'OUTUI02', 'OUTUI03', 'OUTUI04'],
   expectedCount: 8,
   requiredScreenshots: [
-    'outline-panel-390.png',
-    'outline-panel-1440.png',
-    'outline-written-390.png',
-    'outline-written-1440.png',
+    `outline-panel-${MOBILE_WIDTH}.png`,
+    `outline-panel-${DESKTOP_WIDTH}.png`,
+    `outline-written-${MOBILE_WIDTH}.png`,
+    `outline-written-${DESKTOP_WIDTH}.png`,
   ],
 });

@@ -1,3 +1,4 @@
+import { MOBILE_WIDTH } from './fixtures/browser-viewports.js';
 import { visualReview } from './fixtures/visual-review.js';
 import { preservePromptWorkspace } from './fixtures/prompt-workspace.js';
 import { test, expect, type APIRequestContext } from '@playwright/test';
@@ -109,7 +110,7 @@ test('CURRENTUI01 changed control definitions exclude old combinations and rejec
   ).toBe(true);
   const errors: string[] = [];
   page.on('pageerror', (error) => errors.push(error.message));
-  await page.setViewportSize({ width: 390, height: 844 });
+  await page.setViewportSize({ width: MOBILE_WIDTH, height: 844 });
   await page.goto(`/?chat=${chat.id}`);
   await page.getByRole('button', { name: '입력창 더보기', exact: true }).click();
   await page.getByRole('button', { name: '창작 옵션', exact: true }).click();

@@ -1,3 +1,4 @@
+import { DESKTOP_WIDTH, DEFAULT_WIDTHS } from './fixtures/browser-viewports.js';
 import { visualReview } from './fixtures/visual-review.js';
 import { test, expect, type APIRequestContext, type Page, type Locator } from '@playwright/test';
 import type { Content, Library } from '../core/product.js';
@@ -102,7 +103,7 @@ test('LIBUI01 library folders move and classify without changing revisions or ow
   const chat = await (
     await request.post('/api/chats', { data: { title: `${prefix} saved chat`, botId: a.id } })
   ).json();
-  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.setViewportSize({ width: DESKTOP_WIDTH, height: 1000 });
   await page.goto('/');
   const panel = page.getByTestId('library-panel');
   await expect(panel.getByRole('tab')).toHaveText(['봇', '페르소나', '모듈']);
@@ -396,7 +397,7 @@ test('LIBUI05 accepted folder creation closes even when the summary refresh fail
   ).toHaveLength(1);
 });
 
-for (const width of [390, 1440]) {
+for (const width of DEFAULT_WIDTHS) {
   test(`LIBUI06 folder overview and scoped selection at ${width}px`, async ({
     page,
     request,

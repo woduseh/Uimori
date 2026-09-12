@@ -1,3 +1,5 @@
+import browserWidths from '../../fixtures/browser-viewports.json' with { type: 'json' };
+const { desktop: DESKTOP_WIDTH } = browserWidths;
 import path from 'node:path';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { chromium } from '@playwright/test';
@@ -218,7 +220,7 @@ export async function captureGallery({
             await context.close();
           }
         }
-    const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+    const context = await browser.newContext({ viewport: { width: DESKTOP_WIDTH, height: 900 } });
     try {
       const page = await context.newPage();
       await page.goto(baseUrl, { waitUntil: 'load' });
@@ -227,7 +229,7 @@ export async function captureGallery({
         metrics.push({
           screen: '*',
           viewport: 'desktop',
-          width: 1440,
+          width: DESKTOP_WIDTH,
           theme: 'light',
           principles: ['P5', 'F8'],
           ...result,

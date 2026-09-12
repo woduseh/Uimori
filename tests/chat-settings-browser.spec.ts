@@ -1,3 +1,4 @@
+import { MOBILE_WIDTH, DESKTOP_WIDTH } from './fixtures/browser-viewports.js';
 import { reviewWidths, visualReview } from './fixtures/visual-review.js';
 import { expect, test, type APIRequestContext, type Locator, type Page } from '@playwright/test';
 import type { Chat, ChatDetail } from '../core/types.js';
@@ -114,9 +115,9 @@ test('CSUI01 chat settings list and seven details fit six widths with accessible
       expect(navBox!.x + navBox!.width).toBeLessThanOrEqual(panelBox!.x);
     }
     await expectNoOverflow(page, dialog);
-    if (width === 390)
+    if (width === MOBILE_WIDTH)
       if (visualReview)
-        await page.screenshot({ path: info.outputPath('chat-settings-list-390.png') });
+        await page.screenshot({ path: info.outputPath(`chat-settings-list-${MOBILE_WIDTH}.png`) });
     for (const name of sections) {
       await selectChatSettingsSection(page, name);
       await expect(dialog.getByRole('tabpanel')).toHaveCount(1);
@@ -148,11 +149,13 @@ test('CSUI01 chat settings list and seven details fit six widths with accessible
           dialog.getByRole('button', { name: '전역 프롬프트 설정', exact: true })
         ).toBeVisible();
       }
-      if (name === '이 채팅의 모델' && (width === 390 || width === 1440))
+      if (name === '이 채팅의 모델' && (width === MOBILE_WIDTH || width === DESKTOP_WIDTH))
         if (visualReview)
           await page.screenshot({
             path: info.outputPath(
-              width === 390 ? 'chat-settings-detail-390.png' : 'chat-settings-desktop-1440.png'
+              width === MOBILE_WIDTH
+                ? `chat-settings-detail-${MOBILE_WIDTH}.png`
+                : `chat-settings-desktop-${DESKTOP_WIDTH}.png`
             ),
           });
     }
@@ -168,7 +171,7 @@ test('CSUI02 section changes, browser Back and resizing preserve chat setting dr
   request,
 }, info) => {
   test.setTimeout(60000);
-  await page.setViewportSize({ width: 390, height: 844 });
+  await page.setViewportSize({ width: MOBILE_WIDTH, height: 844 });
   const { chat, before, writes, errors } = await prepare(page, request, `CSUI02 ${Date.now()}`);
   const composer = page.getByLabel('다음 장면 요청', { exact: true });
   await composer.fill('채팅 설정을 닫아도 유지할 미전송 요청');
@@ -210,7 +213,7 @@ test('CSUI02 section changes, browser Back and resizing preserve chat setting dr
   await selectChatSettingsSection(page, '자동 후속 작업');
   await expect(status).toBeChecked({ checked: !originalStatus });
   await status.focus();
-  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.setViewportSize({ width: DESKTOP_WIDTH, height: 900 });
   await expect(status).toBeFocused();
   await selectChatSettingsSection(page, sections[0]);
   await expect(image).toBeChecked({ checked: !originalImage });
@@ -218,13 +221,14 @@ test('CSUI02 section changes, browser Back and resizing preserve chat setting dr
   await selectChatSettingsSection(page, '자동 후속 작업');
   await expect(status).toBeChecked({ checked: !originalStatus });
   await status.focus();
-  await page.setViewportSize({ width: 390, height: 844 });
+  await page.setViewportSize({ width: MOBILE_WIDTH, height: 844 });
   await expect(status).toBeVisible();
   await expect(status).toBeFocused();
   await expectNoOverflow(page, dialog);
   await dialog.getByRole('button', { name: '채팅 설정 닫기', exact: true }).click();
   await expect(confirm).toBeVisible();
-  if (visualReview) await page.screenshot({ path: info.outputPath('chat-settings-dirty-390.png') });
+  if (visualReview)
+    await page.screenshot({ path: info.outputPath(`chat-settings-dirty-${MOBILE_WIDTH}.png`) });
   await page.keyboard.press('Escape');
   await expect(confirm).toBeHidden();
   await expect(status).toBeChecked({ checked: !originalStatus });
@@ -250,7 +254,7 @@ test('CSUI03 keyboard navigation and clean browser Back keep immediate reading p
   page,
   request,
 }) => {
-  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.setViewportSize({ width: DESKTOP_WIDTH, height: 900 });
   const { before, writes, errors } = await prepare(page, request, `CSUI03 ${Date.now()}`);
   const dialog = await openSettings(page);
   const nav = dialog.getByRole('tablist', { name: '채팅 설정 분류', exact: true });
@@ -268,7 +272,7 @@ test('CSUI03 keyboard navigation and clean browser Back keep immediate reading p
   await expect(dialog.getByLabel('새 원고의 기본 보기', { exact: true })).toHaveCount(0);
   await expect(dialog.getByLabel('장면 해설 자동 생성', { exact: true })).toBeVisible();
   await last.focus();
-  await page.setViewportSize({ width: 390, height: 844 });
+  await page.setViewportSize({ width: MOBILE_WIDTH, height: 844 });
   await expect(dialog.getByRole('tabpanel')).toBeFocused();
   await expect(dialog.getByLabel('장면 해설 자동 생성', { exact: true })).toBeVisible();
   await page.evaluate(() => history.back());
@@ -281,7 +285,7 @@ test('CSUI03 keyboard navigation and clean browser Back keep immediate reading p
   await openSettings(page);
   await page.keyboard.press('Escape');
   await expect(dialog).toBeHidden();
-  // 390px opens chat settings from the chat ⋯ menu, so focus returns to that menu's trigger.
+  // 412px opens chat settings from the chat ⋯ menu, so focus returns to that menu's trigger.
   await expect(page.locator('.chat-menu > summary')).toBeFocused();
   // Reading settings: the dialog from the chat ⋯ menu keeps view and font; the theme is in 설정 → 일반 only.
   await openChatMenu(page);
@@ -312,7 +316,7 @@ test('CSUI04 quick persona and chat settings share persisted attachments and non
   page,
   request,
 }) => {
-  await page.setViewportSize({ width: 390, height: 844 });
+  await page.setViewportSize({ width: MOBILE_WIDTH, height: 844 });
   const title = `CSUI04 persona ${Date.now()}`;
   const seeded = await request.post('/api/content', {
     data: {

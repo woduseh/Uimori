@@ -1,3 +1,4 @@
+import { MOBILE_WIDTH, DESKTOP_WIDTH, DEFAULT_WIDTHS } from './fixtures/browser-viewports.js';
 import { visualReview } from './fixtures/visual-review.js';
 import { editLibraryContent, openChatMenu, openSourceActions } from './ui-navigation.js';
 import { postFixtureChat } from './fixtures/chat.js';
@@ -139,7 +140,7 @@ test('LOADUI06 scene navigator jumps across bounded pages and remains usable in 
     if (request.url().includes('/api/') && !['GET', 'HEAD'].includes(request.method()))
       writes.push(`${request.method()} ${request.url()}`);
   });
-  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.setViewportSize({ width: DESKTOP_WIDTH, height: 900 });
   await page.goto(`/?chat=${seeded.chat.id}`);
   const navigator = page.getByRole('navigation', { name: '장면 탐색', exact: true });
   const list = page.getByRole('dialog', { name: '장면 목록', exact: true });
@@ -187,7 +188,7 @@ test('LOADUI06 scene navigator jumps across bounded pages and remains usable in 
   ).toBeFocused();
   await page.getByRole('button', { name: '집중 읽기 종료', exact: true }).click();
 
-  await page.setViewportSize({ width: 390, height: 844 });
+  await page.setViewportSize({ width: MOBILE_WIDTH, height: 844 });
   // Compact widths replace the bar with the header title opener and a floating latest button.
   await expect(navigator).toHaveCount(0);
   const opener = page.getByRole('button', { name: '장면 목록 열기', exact: true });
@@ -199,7 +200,7 @@ test('LOADUI06 scene navigator jumps across bounded pages and remains usable in 
     const bounds = await control.boundingBox();
     expect(bounds).not.toBeNull();
     expect(bounds!.x).toBeGreaterThanOrEqual(0);
-    expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(390);
+    expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(MOBILE_WIDTH);
     expect(await control.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(
       true
     );
@@ -258,7 +259,7 @@ test('LOADUI09 newer chat list wins over a late empty response without clearing 
     route.fulfill({ contentType: 'text/event-stream', body: 'data: {"kind":"chat.deleted"}\n\n' })
   );
   try {
-    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.setViewportSize({ width: DESKTOP_WIDTH, height: 900 });
     await page.goto(`/?chat=${seeded.chat.id}`);
     const chat = page.locator(`.bot-chat-item[data-chat-id="${seeded.chat.id}"]`);
     await expect(chat).toBeVisible();
@@ -288,7 +289,7 @@ test('LOADUI10 reader refresh preserves the upper reading position when latest t
 }) => {
   const seeded = await seed(request, 1);
   const source = seeded.sources[0];
-  for (const width of [390, 1440]) {
+  for (const width of DEFAULT_WIDTHS) {
     await page.setViewportSize({ width, height: 900 });
     await page.goto(`/?chat=${seeded.chat.id}`);
     const text = article(page, source.id).getByTestId('source-text');
@@ -421,7 +422,7 @@ test('LOADUI02 same-source tabs keep CAS drafts and isolate another chat, manual
   ]);
   for (const tab of [page, second]) {
     await expect(article(tab, source.id)).toBeVisible();
-    // The toolbar pencil edits the current view; opening the ⋯ sheet first would cover it at 390px.
+    // The toolbar pencil edits the current view; opening the ⋯ sheet first would cover it at 412px.
     await article(tab, source.id).getByRole('button', { name: '원문 수정', exact: true }).click();
   }
   await second.getByLabel('원문 수정 내용').fill('Stale tab draft must survive.');
@@ -656,7 +657,7 @@ test('LOADUI05 context summary status fits mobile reader and run details without
     const runs = (await response.json()) as ReaderRun[];
     await route.fulfill({ response, json: projectRuns(runs) });
   });
-  await page.setViewportSize({ width: 390, height: 844 });
+  await page.setViewportSize({ width: MOBILE_WIDTH, height: 844 });
   await page.goto(`/?chat=${seeded.chat.id}`);
   await openActivity(page.getByTestId('pending-run'));
   const pending = page.getByTestId('pending-run').getByTestId('context-summary');
@@ -675,7 +676,7 @@ test('LOADUI05 context summary status fits mobile reader and run details without
   expect(heading).not.toBeNull();
   expect(bounds!.y).toBeGreaterThanOrEqual(heading!.y + heading!.height);
   expect(bounds!.x).toBeGreaterThanOrEqual(0);
-  expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(390);
+  expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(MOBILE_WIDTH);
   expect(await ready.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
   if (visualReview) await page.screenshot({ path: info.outputPath('context-summary-mobile.png') });
   await expect(activity.locator('.run-task-details').getByTestId('context-summary')).toHaveText(
@@ -735,7 +736,7 @@ test('LOADUI07 synthetic navigation metadata covers long-list paging, search and
     ];
     await route.fulfill({ response, json: body });
   });
-  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.setViewportSize({ width: DESKTOP_WIDTH, height: 900 });
   await page.goto(`/?chat=${seeded.chat.id}`);
   const navigator = page.getByRole('navigation', { name: '장면 탐색', exact: true });
   const list = page.getByRole('dialog', { name: '장면 목록', exact: true });

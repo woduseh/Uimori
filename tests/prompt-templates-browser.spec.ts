@@ -1,3 +1,4 @@
+import { MOBILE_WIDTH, DESKTOP_WIDTH } from './fixtures/browser-viewports.js';
 import { expect, test } from '@playwright/test';
 import type { EditDraft, DraftPatchResult } from '../core/edit-drafts.js';
 import type { LibraryOrganization } from '../core/library-organization.js';
@@ -12,7 +13,7 @@ const titles = [
   'Phēmē · OOC 검토',
 ];
 
-test('BPTUI01 builtin templates create editable presets at 390/1440px and preserve existing work', async ({
+test(`BPTUI01 builtin templates create editable presets at ${MOBILE_WIDTH}/${DESKTOP_WIDTH}px and preserve existing work`, async ({
   page,
   request,
 }, info) => {
@@ -78,8 +79,8 @@ test('BPTUI01 builtin templates create editable presets at 390/1440px and preser
   const panel = page.getByTestId('prompt-library');
   await panel.getByRole('button', { name: `${folder.title} 폴더 열기`, exact: true }).click();
   for (const [width, id, title, role] of [
-    [390, 'pheme-collaboration', 'Phēmē · 협업', 'main'],
-    [1440, 'hermeneia', 'Hermēneía', 'translation'],
+    [MOBILE_WIDTH, 'pheme-collaboration', 'Phēmē · 협업', 'main'],
+    [DESKTOP_WIDTH, 'hermeneia', 'Hermēneía', 'translation'],
   ] as const) {
     await page.setViewportSize({ width, height: 1000 });
     await panel.getByRole('button', { name: '기본 프롬프트', exact: true }).click();

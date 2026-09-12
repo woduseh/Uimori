@@ -1,3 +1,4 @@
+import { MOBILE_WIDTH, DESKTOP_WIDTH } from './fixtures/browser-viewports.js';
 import { navigationAction } from './ui-navigation.js';
 import { openChatSettings } from './ui-navigation.js';
 import { waitForContentDraftSave } from './fixtures/edit-draft-save.js';
@@ -60,8 +61,8 @@ async function detail(request: APIRequestContext, id: string): Promise<ChatDetai
 }
 async function evidence(page: Page, target: Locator, info: TestInfo, name: string) {
   for (const [suffix, width, height] of [
-    ['desktop', 1440, 1000],
-    ['mobile', 390, 844],
+    ['desktop', DESKTOP_WIDTH, 1000],
+    ['mobile', MOBILE_WIDTH, 844],
   ] as const) {
     await page.setViewportSize({ width, height });
     await target.scrollIntoViewIfNeeded();
@@ -103,7 +104,7 @@ test('LCUI01 lore placement and invalid order drafts stay independent from folde
       },
     ],
   });
-  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.setViewportSize({ width: DESKTOP_WIDTH, height: 1000 });
   await page.goto('/');
   await navigationAction(page, '서재');
   const library = page.getByTestId('library-panel');
@@ -168,7 +169,7 @@ test('LCUI02 policy drafts survive tabs and preview reflects the unsaved policy 
       ],
     }),
     chat = await createChat(request, bot);
-  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.setViewportSize({ width: DESKTOP_WIDTH, height: 1000 });
   await page.goto(`/?chat=${chat.id}`);
   await page.getByLabel('다음 장면 요청', { exact: true }).fill('합성 다음 장면');
   await page.getByRole('button', { name: '입력창 더보기' }).click();
@@ -243,7 +244,7 @@ test('LCUI03 a lost response freezes the one-shot reset through retry and expose
   const bot = await seed(request, `합성 로어 재확인 ${Date.now()}`),
     chat = await createChat(request, bot),
     commands: Record<string, unknown>[] = [];
-  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.setViewportSize({ width: DESKTOP_WIDTH, height: 1000 });
   await page.goto(`/?chat=${chat.id}`);
   await page.route(`**/api/chats/${chat.id}/runs`, async (route) => {
     commands.push(route.request().postDataJSON());

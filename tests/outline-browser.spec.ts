@@ -1,3 +1,4 @@
+import { DEFAULT_WIDTHS } from './fixtures/browser-viewports.js';
 import { test, expect, type APIRequestContext, type Page } from '@playwright/test';
 import type { Chat, ChatDetail } from '../core/types.js';
 import type { OutlineDetail } from '../core/outline.js';
@@ -90,7 +91,7 @@ function barrier() {
   return { promise, resolve };
 }
 
-for (const width of [390, 1440]) {
+for (const width of DEFAULT_WIDTHS) {
   test(`OUTUI03 ${width} confirms a committed save after response loss without duplicate nodes or losing a later draft`, async ({
     page,
     request,

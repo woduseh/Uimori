@@ -4,8 +4,8 @@
 
 ## 실행 경계
 
-- 기본 기능은 대표 mobile 390px/desktop 1440px를 사용해요. 단일 환경에서 의미 있는 기능은 중복 복제하지 않아요. draft/CAS/중복 명령/읽기 위치/focus/접근 행동/넘침은 기본이에요.
-- `tests/fixtures/visual-review.ts`의 `NR_VISUAL_REVIEW=1`에서 추가 폭 sweep, 정확한 정렬/크기/아이콘 형태, 성공 PNG를 실행해요. 실패 trace/reporter는 공통 실행기 소관이에요. 일부 기존 PNG 이름의 360은 유지했지만 기본 기능 폭은 390px예요.
+- 기본 기능은 대표 mobile 412px/desktop 2560px를 사용해요. 단일 환경에서 의미 있는 기능은 중복 복제하지 않아요. draft/CAS/중복 명령/읽기 위치/focus/접근 행동/넘침은 기본이에요.
+- `tests/fixtures/visual-review.ts`의 `NR_VISUAL_REVIEW=1`에서 추가 폭 sweep, 정확한 정렬/크기/아이콘 형태, 성공 PNG를 실행해요. 실패 trace/reporter는 공통 실행기 소관이에요. 일부 기존 PNG 이름의 360은 유지했지만 기본 기능 폭은 412px예요.
 - 일부 제목의 six widths/compact/screenshots 표현은 runner case 식별을 보존하기 위해 남겼어요. 실제 범위는 코드 조건을 기준으로 해요. P01의 prompt-owned 제목과 달리 assertion은 현재 workspace/Run snapshot을 확인해요.
 - self-host는 별도 조건이에요. 합성 검사는 live provider 품질/OAuth/요금/실기기/운영 배포 증거가 아니에요.
 
@@ -26,7 +26,7 @@
 
 ### `tests/model-pricing-browser.spec.ts`
 
-PRICEUI390·PRICEUI1440은 공식 요금·Flex 표시, 직접 입력의 무료 0/미확인 빈칸 구분, 저장·재조회·공식 복원과 잘못된 입력을 확인해요. PRICECOST01은 합성 비용 응답으로 공급자 보고 비용과 추정 금액의 분리, 캐시 항목·부분합·미확인 및 본문 안내를 390/1440px에서 확인해요. `npm run verify:pricing`으로 실행하며 실제 계산·저장·전송은 pricing 단위·통합 검사 소관이에요. 실제 청구액의 증거는 아니에요.
+PRICEUI412·PRICEUI2560은 공식 요금·Flex 표시, 직접 입력의 무료 0/미확인 빈칸 구분, 저장·재조회·공식 복원과 잘못된 입력을 확인해요. PRICECOST01은 합성 비용 응답으로 공급자 보고 비용과 추정 금액의 분리, 캐시 항목·부분합·미확인 및 본문 안내를 412/2560px에서 확인해요. `npm run verify:pricing`으로 실행하며 실제 계산·저장·전송은 pricing 단위·통합 검사 소관이에요. 실제 청구액의 증거는 아니에요.
 
 ### `tests/activity-browser.spec.ts`
 
@@ -44,9 +44,9 @@ ACTUI06은 30개 밖 누적 알림·일괄 확인·새 오류와 회차·새로�
 
 AGENTUI01 불완전 초안/undo/JSON 왕복, AGENTUI02 실제 로컬 preview API의 저장 옵션 전달과 번역 역할 분리를 유지해요.
 
-- 유지: `AGENTUI01 collaboration stays editable through incomplete drafts, undo and JSON round trips at 390px`
+- 유지: `AGENTUI01 collaboration stays editable through incomplete drafts, undo and JSON round trips at 412px`
 - 유지: `AGENTUI02 saved collaboration options reach the real preview API and translation stays separate on desktop`
-- 추가: `AGENTUI03`은 390/1440px에서 공통 스위치와 복수 선택의 모양·긴 라벨·가로 넘침, Space 조작과 독립 선택, 저장/재조회 및 boolean 미지정 버튼 제거를 검사해요.
+- 추가: `AGENTUI03`은 412/2560px에서 공통 스위치와 복수 선택의 모양·긴 라벨·가로 넘침, Space 조작과 독립 선택, 저장/재조회 및 boolean 미지정 버튼 제거를 검사해요.
 
 ### `tests/archive-compact-browser.spec.ts`
 
@@ -80,7 +80,7 @@ F02/F03/F05 다중 context/tab, 중복 명령/설정 CAS, source job 귀속/재�
 
 ### `tests/chat-settings-browser.spec.ts`
 
-CSUI01 7개 섹션 접근/무쓰기, CSUI02 Back/리사이즈/명시 폐기, CSUI03 키보드/즉시 저장 읽기 설정을 유지해요. 6폭 반복은 기본 390/1440으로 줄였어요.
+CSUI01 7개 섹션 접근/무쓰기, CSUI02 Back/리사이즈/명시 폐기, CSUI03 키보드/즉시 저장 읽기 설정을 유지해요. 6폭 반복은 기본 412/2560으로 줄였어요.
 
 - 유지: `CSUI01 chat settings list and seven details fit six widths with accessible navigation and no writes`
 - 유지: `CSUI02 section changes, browser Back and resizing preserve chat setting drafts until explicit discard`
@@ -108,7 +108,7 @@ DEL01 자료 취소/CAS/참조 방어, DEL02 prompt/조합, DEL03 선택 채팅 
 EVALUI01 desktop 저장/재연결/역할 선택, EVALUI02 mobile opt-in/해제를 유지해요. canvas 문자 측정과 고정 최소 폭만 시각 검토이며 containment는 기본이에요.
 
 - 유지: `EVALUI01 desktop preset evaluation opt-in persists selected story roles after reconnect without model calls`
-- 유지: `EVALUI02 mobile 390px evaluation controls save only for opted-in presets and can be disabled`
+- 유지: `EVALUI02 mobile 412px evaluation controls save only for opted-in presets and can be disabled`
 
 ### `tests/lazy-panels-browser.spec.ts`
 
@@ -150,7 +150,7 @@ LIMG01 업로드/해제/기존 이미지/불변 revision, LIMG02 picker 키보�
 
 ### `tests/library-usability-browser.spec.ts`
 
-LUSE01 bot 목록 정보/생성/채팅 진입은 기본 390px, LUSE02 추가 360px 배치는 시각 검토로 옮겼어요. LUSE03 빈 persona/module 폴더의 맞는 생성 초안/무저장을 390px에서 유지해요.
+LUSE01 bot 목록 정보/생성/채팅 진입은 기본 412px, LUSE02 추가 360px 배치는 시각 검토로 옮겼어요. LUSE03 빈 persona/module 폴더의 맞는 생성 초안/무저장을 412px에서 유지해요.
 
 - 유지: `LUSE0${index + 1} mobile ${width}px library starts with readable rows and creates a bot into a chat`
 - 유지: `LUSE03 empty persona and module folders explain their roles and offer the matching creation action`
@@ -195,9 +195,9 @@ ORG01 소속별 폴더 해제, ORG02 desktop drag/drop/순서 저장, ORG03 터�
 
 BUI01 typed action CAS/중복/안전 text, BUI02 JSON 오류 초안, BUI03 자동 입력/model-only action, BUI04 저장 dice 결과/재조회 무추첨을 유지해요.
 
-- 유지: `BUI01 typed actions preserve drafts after CAS conflicts, block duplicate writes and render text safely at 390px`
+- 유지: `BUI01 typed actions preserve drafts after CAS conflicts, block duplicate writes and render text safely at 412px`
 - 유지: `BUI02 behavior editor validates without discarding an invalid draft or other package edits`
-- 유지: `BUI03 invocation methods persist, validate automatic input drafts and show model-only actions without user buttons at 390px`
+- 유지: `BUI03 invocation methods persist, validate automatic input drafts and show model-only actions without user buttons at 412px`
 - 유지: `BUI04 a pure dice action displays its stored result safely and reload does not reroll it`
 
 ### `tests/package-editor-browser.spec.ts`
@@ -228,7 +228,7 @@ PNAV01 section 이동의 검색/caret/초안, PNAV02 keyboard/resize/focus/접�
 
 PREQUESTUI01 제안 저장/재조회/1회 소비/취소, PREQUESTUI02 전달 뒤 수정 receipt 해제/다른 제안 소비 방지를 유지해요.
 
-- 유지: `PREQUESTUI01 generic controls reserve a proposal, survive reload, consume once and cancel at 390px`
+- 유지: `PREQUESTUI01 generic controls reserve a proposal, survive reload, consume once and cancel at 412px`
 - 유지: `PREQUESTUI02 editing a staged proposal clears its receipt and cannot consume a different stored request`
 
 ### `tests/product-browser.spec.ts`
@@ -246,7 +246,7 @@ P01 최신 package/조합의 Run snapshot, P04 수동 모델/프로바이더 권
 
 PAUI01 동일 preset 수정/복사/삭제, PAUI02 저장/적용 scope, PAUI03 block 이동/삭제/undo의 template draft/focus를 유지해요.
 
-PAUI04는 양방향 블록 드래그·실행 취소·저장/재조회, PAUI05는 390/1440px 계층 정렬·펼침 아이콘·상위 도구 배치와 접힘 뒤 초안 보존을 확인해요.
+PAUI04는 양방향 블록 드래그·실행 취소·저장/재조회, PAUI05는 412/2560px 계층 정렬·펼침 아이콘·상위 도구 배치와 접힘 뒤 초안 보존을 확인해요.
 
 - 유지: `PAUI01 editing updates the same prompt while copy and deletion stay in the named management menu`
 - 유지: `PAUI02 saving and applying retain distinct scopes with compact actions on desktop and mobile`
@@ -317,7 +317,7 @@ PMUI01 template/manual/catalog 오류, 02 clone/CAS, 03 최신 프로바이더/�
 
 ### `tests/response-actions-browser.spec.ts`
 
-RACOM01 touch/keyboard/닫기/넘침은 기본 390/1440, 추가 폭은 시각 검토예요. TSKUI01 실제 run/job/attempt 표시 검사는 기본이며 PNG만 opt-in이에요.
+RACOM01 touch/keyboard/닫기/넘침은 기본 412/2560, 추가 폭은 시각 검토예요. TSKUI01 실제 run/job/attempt 표시 검사는 기본이며 PNG만 opt-in이에요.
 
 - 유지: `RACOM01 source footer stays compact and its menu supports touch, keyboard and dismissal at six widths`
 - 유지: `TSKUI01 task overview screenshots wait for real run, job and attempt data on mobile and desktop`
@@ -333,7 +333,7 @@ RACOM01 touch/keyboard/닫기/넘침은 기본 390/1440, 추가 폭은 시각 �
 기존 NR_SELF_HOST_BROWSER=1의 HTTPS 세션/접근 해제 격리를 유지해요. 일반 redesign과 별도 환경 전제이며 실제 배포/휴대폰 증거가 아니에요. PNG만 visual opt-in이에요.
 
 - 유지: `SHUI01 actual HTTPS enforces authentication, exact origin and secure browser sessions`
-- 유지: `SHUI02 desktop and 390px mobile share persisted chats and live HTTPS SSE across re-entry`
+- 유지: `SHUI02 desktop and 412px mobile share persisted chats and live HTTPS SSE across re-entry`
 
 ### `tests/settings-compact-browser.spec.ts`
 
@@ -380,7 +380,7 @@ TURNUI01 독립 펼침/lazy inspector/reload, TURNUI02 접힌 보조 진행/소�
 - 유지: `TURNUI01 independent response panels, lazy inspector and reload persistence`
 - 유지: `TURNUI02 folded auxiliary progress updates preserve explicit expansion and ownership`
 - 유지: `TURNUI04 expanded pending run preserves disclosure when its source arrives`
-- 유지: `TURNUI03 failed response without source keeps inline diagnostics readable at 390px`
+- 유지: `TURNUI03 failed response without source keeps inline diagnostics readable at 412px`
 
 ### `tests/ui-browser.spec.ts`
 
@@ -412,7 +412,7 @@ TURNUI01 독립 펼침/lazy inspector/reload, TURNUI02 접힌 보조 진행/소�
 
 ### `tests/ui-usability-browser.spec.ts`
 
-UXUI01 composer/설정 상세 이동의 draft는 390px 기본이에요. 추가 360px/정사각 avatar/고정 composer 높이는 시각 검토예요.
+UXUI01 composer/설정 상세 이동의 draft는 412px 기본이에요. 추가 360px/정사각 avatar/고정 composer 높이는 시각 검토예요.
 
 - 유지: `UXUI01 compact composer, square avatar and mobile settings details preserve the draft`
 
