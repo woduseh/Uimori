@@ -4,6 +4,7 @@ import { compiledPackages } from '../core/package-context.js';
 import { renderPackageStateView } from '../core/package-runtime.js';
 import type { RunSnapshot } from '../core/types.js';
 import { applyPackageTransforms } from './package-transforms.js';
+import { packageImages } from '../core/package-images.js';
 
 export type PackagePresentationSource = {
   id: string;
@@ -38,6 +39,16 @@ export async function buildPackagePresentation(
   const translation = source.translation
     ? await applyPackageTransforms(source.translation.text, rules, 'translation')
     : undefined;
+  const shownText = `${original.text}\n${translation?.text ?? ''}`;
+  const inlineImageUrls = snapshot.profile
+    ? [
+        ...new Set(
+          packageImages(snapshot.profile)
+            .filter((asset) => asset.allowedUse !== 'profile' && shownText.includes(asset.url))
+            .map((asset) => asset.url)
+        ),
+      ]
+    : [];
   const views = packages
     .filter((p) => p.stateView)
     .map((p) => ({
@@ -50,6 +61,7 @@ export async function buildPackagePresentation(
     sourceRevision: source.id,
     sourceHash: source.hash,
     format: 'plain-text' as const,
+    ...(inlineImageUrls.length ? { inlineImageUrls } : {}),
     original,
     ...(translation ? { translation } : {}),
     stateViews: views,

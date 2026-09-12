@@ -23,6 +23,7 @@ import './package-authoring.css';
 import { useTestMode } from './useTestMode.js';
 import { ContentAvatar } from './ContentAvatar.js';
 import { ContentPicker } from './ContentPicker.js';
+import { Prose } from './Prose.js';
 import type { PackageRole } from '../core/content-package.js';
 import './new-story.css';
 
@@ -493,7 +494,12 @@ export function NewStory({
                 aria-label="시작 미리보기"
                 style={{ whiteSpace: 'pre-wrap', maxHeight: 260, overflow: 'auto' }}
               >
-                {opening.text}
+                <Prose
+                  text={opening.text}
+                  allowedImageUrls={(activeBot.package.images ?? [])
+                    .filter((image) => image.allowedUse !== 'profile')
+                    .map((image) => `/api/package-image-blobs/${image.blobHash}`)}
+                />
               </div>
               <p className="muted">
                 {opening.mode === 'authored'

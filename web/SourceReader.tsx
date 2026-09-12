@@ -501,6 +501,7 @@ function SourceReaderContent({
           config={sourceSegments}
           blocks={blocks}
           inline={inline}
+          allowedImageUrls={projected?.inlineImageUrls}
         />
       ) : mode === 'original' && !segmented && projected?.original.changed ? (
         <div className="prose" data-testid="source-text">
@@ -508,7 +509,7 @@ function SourceReaderContent({
             className="source-block"
             data-block-anchor={blocks.map((block) => block.anchor).join(' ')}
           >
-            <Prose text={projected.original.text} />
+            <Prose text={projected.original.text} allowedImageUrls={projected.inlineImageUrls} />
           </div>
           {annotations.length > 0 && (
             <p className="muted" role="status">
@@ -519,7 +520,7 @@ function SourceReaderContent({
       ) : mode === 'translation' && validTranslation && projected?.translation?.changed ? (
         <div className="prose translated" data-testid="translation-text">
           <div className="source-block">
-            <Prose text={projected.translation.text} />
+            <Prose text={projected.translation.text} allowedImageUrls={projected.inlineImageUrls} />
           </div>
           {annotations.length > 0 && (
             <p className="muted" role="status">
@@ -538,6 +539,7 @@ function SourceReaderContent({
                 id={`block-${source.id}-${block.anchor}`}
               >
                 <Prose
+                  allowedImageUrls={projected?.inlineImageUrls}
                   text={source.text.slice(
                     block.start,
                     blocks[position + 1]?.start ?? source.text.length
@@ -557,6 +559,7 @@ function SourceReaderContent({
                 <Fragment key={block.anchor}>
                   <div className="source-block" data-block-anchor={block.anchor}>
                     <Prose
+                      allowedImageUrls={projected?.inlineImageUrls}
                       text={
                         block.text +
                         translationText.slice(
@@ -572,7 +575,7 @@ function SourceReaderContent({
             </>
           ) : (
             <div className="source-block">
-              <Prose text={translationText} />
+              <Prose text={translationText} allowedImageUrls={projected?.inlineImageUrls} />
             </div>
           )}
         </div>
@@ -869,11 +872,13 @@ export function SourceSegmentBody({
   config,
   blocks,
   inline,
+  allowedImageUrls,
 }: {
   source: Source;
   config: SourceSegmentPolicy;
   blocks: { anchor: string; start: number; end: number }[];
   inline: (anchor: string) => ReactNode[];
+  allowedImageUrls?: readonly string[];
 }) {
   const original = { sourceRevision: source.id, sourceHash: source.hash, text: source.text };
   const emitted = new Set<string>();
@@ -894,7 +899,7 @@ export function SourceSegmentBody({
           });
           return (
             <div className="source-block" data-block-anchor={anchors.join(' ')}>
-              <Prose text={text} />
+              <Prose text={text} allowedImageUrls={allowedImageUrls} />
               {images.flatMap(inline)}
             </div>
           );

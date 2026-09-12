@@ -1,0 +1,8 @@
+.prose-embedded-image {
+  display: block;
+  max-inline-size: 100%;
+  max-block-size: 80vh;
+  block-size: auto;
+  object-fit: contain;
+  margin-block: 0.6rem;
+}

@@ -4,17 +4,19 @@ import {
   isValidElement,
   memo,
   useContext,
+  useMemo,
   type ReactElement,
   type ReactNode,
 } from 'react';
 import { ReadingPreferencesContext } from './ReadingPreferencesContext.js';
 import type { ReadabilitySettings } from './reading-preferences.js';
 import { hasReadingQuotes, scanReadingQuotes, type ReadingQuote } from './reading-quotes.js';
+import './prose-images.css';
 
 /**
  * Deliberate Markdown subset for reading saved prose. This produces React nodes,
  * never HTML. Source strings, hashes and translation anchors are not rewritten.
- * Raw HTML and Markdown images remain literal text. Only attribute-free
+ * Raw HTML and unapproved Markdown images remain literal text. Only attribute-free
  * <ruby>base<rt>reading</rt></ruby> (optional rb/rp) becomes native ruby.
  */
 export function safeProseLink(value: string): string | undefined {
@@ -29,7 +31,12 @@ export function safeProseLink(value: string): string | undefined {
   }
 }
 
-function inline(text: string, depth = 0, protectQuotes = false): ReactNode[] {
+function inline(
+  text: string,
+  depth = 0,
+  protectQuotes = false,
+  imageUrls?: ReadonlySet<string>
+): ReactNode[] {
   if (depth > 8) return protectQuotes ? [<Fragment key="literal-depth">{text}</Fragment>] : [text];
   const nodes: ReactNode[] = [];
   let plain = '';
@@ -90,14 +97,26 @@ function inline(text: string, depth = 0, protectQuotes = false): ReactNode[] {
       offset += protectedToken[0].length;
       continue;
     }
-    const link = rest.match(/^(!?)\[([^\]\n]{1,1000})\]\(([^)\s]{1,2000})\)/u);
+    const link = rest.match(/^(!?)\[([^\]\n]{0,1000})\]\(([^)\s]{1,2000})\)/u);
     if (link) {
       const href = !link[1] ? safeProseLink(link[3]) : undefined;
-      if (href) {
+      if (link[1] && imageUrls?.has(link[3])) {
+        flush();
+        nodes.push(
+          <img
+            key={offset}
+            className="prose-embedded-image"
+            src={link[3]}
+            alt={link[2]}
+            loading="lazy"
+            decoding="async"
+          />
+        );
+      } else if (href) {
         flush();
         nodes.push(
           <a key={offset} href={href} rel="noreferrer noopener">
-            {inline(link[2], depth + 1)}
+            {inline(link[2], depth + 1, false, imageUrls)}
           </a>
         );
       } else if (protectQuotes) {
@@ -135,7 +154,8 @@ function inline(text: string, depth = 0, protectQuotes = false): ReactNode[] {
         const content = inline(
           text.slice(offset + delimiter.length, end),
           depth + 1,
-          protectQuotes
+          protectQuotes,
+          imageUrls
         );
         flush();
         nodes.push(
@@ -266,8 +286,12 @@ function applyReading(nodes: ReactNode[], settings: ReadabilitySettings): ReactN
   return renderRange(0, indexed.text.length, quotes);
 }
 
-function readableInline(text: string, settings: ReadabilitySettings): ReactNode[] {
-  return applyReading(inline(text, 0, hasReadingQuotes(settings)), settings);
+function readableInline(
+  text: string,
+  settings: ReadabilitySettings,
+  imageUrls?: ReadonlySet<string>
+): ReactNode[] {
+  return applyReading(inline(text, 0, hasReadingQuotes(settings), imageUrls), settings);
 }
 
 const fencePattern = /^ {0,3}(`{3,}|~{3,})([\s\S]*)$/u;
@@ -286,7 +310,12 @@ function beginsBlock(line: string): boolean {
   );
 }
 
-function renderBlocks(text: string, settings: ReadabilitySettings, depth = 0): ReactNode[] {
+function renderBlocks(
+  text: string,
+  settings: ReadabilitySettings,
+  depth = 0,
+  imageUrls?: ReadonlySet<string>
+): ReactNode[] {
   const lines = text.replace(/\r\n?/gu, '\n').split('\n');
   const output: ReactNode[] = [];
   let index = 0;
@@ -325,7 +354,7 @@ function renderBlocks(text: string, settings: ReadabilitySettings, depth = 0): R
     }
     const heading = lines[index].match(headingPattern);
     if (heading) {
-      const content = readableInline(heading[2].replace(/\s+#+\s*$/u, ''), settings);
+      const content = readableInline(heading[2].replace(/\s+#+\s*$/u, ''), settings, imageUrls);
       const Tag = `h${heading[1].length}` as 'h1' | 'h2' | 'h3' | 'h4' | 'h5' | 'h6';
       push(<Tag>{content}</Tag>, start);
       index++;
@@ -340,7 +369,10 @@ function renderBlocks(text: string, settings: ReadabilitySettings, depth = 0): R
       const quoted: string[] = [];
       while (index < lines.length && quotePattern.test(lines[index]))
         quoted.push(lines[index++].match(quotePattern)![1]);
-      push(<blockquote>{renderBlocks(quoted.join('\n'), settings, depth + 1)}</blockquote>, start);
+      push(
+        <blockquote>{renderBlocks(quoted.join('\n'), settings, depth + 1, imageUrls)}</blockquote>,
+        start
+      );
       continue;
     }
     const firstItem = lines[index].match(listPattern);
@@ -358,7 +390,7 @@ function renderBlocks(text: string, settings: ReadabilitySettings, depth = 0): R
           !listPattern.test(lines[index])
         )
           content.push(lines[index++].trimStart());
-        items.push(<li key={at}>{readableInline(content.join('\n'), settings)}</li>);
+        items.push(<li key={at}>{readableInline(content.join('\n'), settings, imageUrls)}</li>);
       }
       push(
         ordered ? <ol start={Number.parseInt(firstItem[1], 10)}>{items}</ol> : <ul>{items}</ul>,
@@ -368,7 +400,7 @@ function renderBlocks(text: string, settings: ReadabilitySettings, depth = 0): R
     }
     const paragraph = [lines[index++]];
     while (index < lines.length && !beginsBlock(lines[index])) paragraph.push(lines[index++]);
-    push(<p>{readableInline(paragraph.join('\n'), settings)}</p>, start);
+    push(<p>{readableInline(paragraph.join('\n'), settings, imageUrls)}</p>, start);
   }
   return output;
 }
@@ -377,12 +409,23 @@ function renderBlocks(text: string, settings: ReadabilitySettings, depth = 0): R
 export const Prose = memo(function Prose({
   text,
   reading,
+  allowedImageUrls,
 }: {
   text: string;
   reading?: ReadabilitySettings;
+  allowedImageUrls?: readonly string[];
 }) {
   const preferences = useContext(ReadingPreferencesContext);
-  return <>{renderBlocks(text, reading ?? preferences)}</>;
+  const images = useMemo(
+    () =>
+      new Set(
+        (allowedImageUrls ?? []).filter((url) =>
+          /^\/api\/package-image-blobs\/[a-f0-9]{64}$/u.test(url)
+        )
+      ),
+    [allowedImageUrls]
+  );
+  return <>{renderBlocks(text, reading ?? preferences, 0, images)}</>;
 });
 
 /** Literal helper/stream content keeps its whitespace and never acquires Markdown semantics. */
