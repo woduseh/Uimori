@@ -9,6 +9,7 @@ import { validatePackageImages, type PackageImage } from './package-images.js';
 import { validatePackageStarts, type PackageStart } from './package-start.js';
 import { validateSourceSegmentPolicy, type SourceSegmentPolicy } from './source-segments.js';
 import { validatePackageModules, type PackageModuleRef } from './package-features.js';
+import { validatePackageIdentityTemplate } from './package-identity.js';
 
 export const PACKAGE_ROLES = ['bot', 'persona', 'module'] as const;
 export type PackageRole = (typeof PACKAGE_ROLES)[number];
@@ -24,6 +25,7 @@ export type PackageLore = {
   title: string;
   description: string;
   text: string;
+  template?: PromptTemplate;
   loading: 'pinned' | 'discoverable';
   relatedIds?: string[];
   folderId?: string;
@@ -57,6 +59,7 @@ export type ContentPackage = {
   title: string;
   description: string;
   body?: string;
+  bodyTemplate?: PromptTemplate;
   identity?: { name: string; description: string };
   roleBindings?: Partial<Record<PackageRole, string>>;
   images?: PackageImage[];
@@ -142,6 +145,7 @@ export function validateContentPackage(value: unknown): ContentPackage {
     'title',
     'description',
     'body',
+    'bodyTemplate',
     'identity',
     'roleBindings',
     'images',
@@ -193,6 +197,7 @@ export function validateContentPackage(value: unknown): ContentPackage {
       'title',
       'description',
       'text',
+      'template',
       'loading',
       'relatedIds',
       'folderId',
@@ -277,6 +282,18 @@ export function validateContentPackage(value: unknown): ContentPackage {
       ...(n.when === undefined ? {} : { when: n.when }),
     })),
   });
+  const controlIds = (p.controls as PromptControl[]).map((control) => control.id);
+  if (p.bodyTemplate !== undefined) {
+    if (p.body === undefined) fail('PACKAGE_TEXT_TEMPLATE_BODY_REQUIRED');
+    validatePackageIdentityTemplate(p.bodyTemplate, controlIds, (reason) =>
+      fail(`PACKAGE_TEXT_TEMPLATE_${reason}`, 'body')
+    );
+  }
+  for (const lore of p.lore as PackageLore[])
+    if (lore.template !== undefined)
+      validatePackageIdentityTemplate(lore.template, controlIds, (reason) =>
+        fail(`PACKAGE_TEXT_TEMPLATE_${reason}`, lore.id)
+      );
   if (p.stateView !== undefined) {
     const v = object(p.stateView, ['title', 'fields']);
     string(v.title, 200);

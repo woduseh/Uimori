@@ -1,4 +1,4 @@
-import { afterEach, expect, test } from 'vitest';
+import { afterEach, expect, test, vi } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { basename, isAbsolute, join, relative, resolve } from 'node:path';
@@ -17,6 +17,9 @@ import { compiledPackages } from '../core/package-context.js';
 import { roleResources } from '../core/provider.js';
 import { fixtureBotInput } from './fixtures/chat.js';
 import { forkChat } from '../server/chat-fork.js';
+import { PromptBudget } from '../core/prompt-values.js';
+import { resolvePackageStart } from '../core/package-start.js';
+import type { PromptTemplate } from '../core/prompt-program.js';
 
 const owned: { store: Store; dir: string }[] = [];
 afterEach(() => {
@@ -202,6 +205,115 @@ test('the same package in bot and persona roles receives an override only on the
       .text
   ).toBe('Bot-only local lore');
   expect(store.run(value.id).snapshot).toEqual(original);
+});
+
+test('name templates freeze resources across persona edits and archive while a direct lore override clears only its AST', () => {
+  const store = database();
+  const bot = save(store, 'Templated bot', {
+    identity: { name: 'Aster', description: '' },
+    bodyTemplate: [{ kind: 'value', expression: { context: ['bot', 'name'] } }],
+    lore: [
+      {
+        id: 'fact',
+        title: 'Person',
+        description: '',
+        text: 'Original {{user}}',
+        loading: 'pinned',
+        template: [{ kind: 'value', expression: { context: ['user', 'name'] } }],
+      },
+    ],
+  });
+  const persona = save(store, 'Selected persona', { identity: { name: 'Mira', description: '' } });
+  const chat = store.createChat('Names', 'calm', { botId: bot.id });
+  profile(store, chat.id, [ref(bot, 'bot'), ref(persona, 'persona')]);
+  const original = run(store, chat.id);
+  const loreId = `package:${bot.id}:bot:lore:fact`;
+  expect(original.snapshot.resources.find((item) => item.id === loreId)?.text).toBe('Mira');
+  expect(original.snapshot.resources).toEqual(
+    store.product.resources(chat.id, original.snapshot.profile!)
+  );
+  const source = complete(store, original);
+  save(
+    store,
+    'Selected persona changed',
+    { ...persona.package!, identity: { name: 'Nova', description: '' } },
+    persona
+  );
+  expect(roleResources(original.snapshot).find((item) => item.id === loreId)?.text).toBe('Mira');
+  expect(
+    store.product
+      .resources(chat.id, store.product.snapshot(chat.id))
+      .find((item) => item.id === loreId)?.text
+  ).toBe('Nova');
+  patch(store, chat.id, selector(bot), 'Manual {{user}} remains literal');
+  const edited = run(store, chat.id);
+  expect(roleResources(edited.snapshot).find((item) => item.id === loreId)?.text).toBe(
+    'Manual {{user}} remains literal'
+  );
+  expect(
+    edited.snapshot.profile!.chatOverrides!.projections[0].package.lore[0].template
+  ).toBeUndefined();
+  expect(
+    edited.snapshot.profile!.packages!.find((item) => item.id === bot.id)!.lore[0].template
+  ).toEqual(bot.package!.lore[0].template);
+  complete(store, edited);
+  const fork = forkChat(store, chat.id, {
+    fromRevision: source.id,
+    idempotencyKey: 'name-template-fork',
+  });
+  const forked = store.detail(fork.id).runs[0];
+  expect(roleResources(forked.snapshot).find((item) => item.id === loreId)?.text).toBe('Mira');
+  const restored = database();
+  restored.product.import(store.product.export());
+  expect(restored.run(original.id).snapshot.resources).toEqual(original.snapshot.resources);
+  expect(
+    roleResources(restored.run(edited.id).snapshot).find((item) => item.id === loreId)?.text
+  ).toBe('Manual {{user}} remains literal');
+});
+
+test('stored name templates remain identical across clock delays and archive reevaluation while work limits stay active', () => {
+  const store = database();
+  const template: PromptTemplate = Array.from({ length: 100 }, () => ({
+    kind: 'value',
+    expression: { context: ['bot', 'name'] },
+  }));
+  const bot = save(store, 'Clock independent bot', {
+    bodyTemplate: template,
+    starts: [
+      { id: 'opening', title: 'Opening', mode: 'authored', text: 'Preserved opening', template },
+    ],
+    lore: [
+      {
+        id: 'fact',
+        title: 'Fallback',
+        description: '',
+        text: 'Preserved fallback',
+        loading: 'pinned',
+        template: [{ kind: 'value', expression: { op: 'divide', args: [1, 0] } }],
+      },
+    ],
+  });
+  const chat = store.createChat('Reproducible resources', 'calm', { botId: bot.id });
+  const original = run(store, chat.id);
+  complete(store, original);
+  const expected = original.snapshot.resources;
+  const opening = resolvePackageStart(bot.package!, 'opening');
+  let tick = 0;
+  const clock = vi.spyOn(performance, 'now').mockImplementation(() => (tick += 2000));
+  try {
+    expect(store.product.resources(chat.id, original.snapshot.profile!)).toEqual(expected);
+    expect(compiledPackages(original.snapshot, 'main')[0].resources).toEqual(expected);
+    expect(resolvePackageStart(bot.package!, 'opening')).toEqual(opening);
+    expect(() => new PromptBudget().step()).toThrow('PROMPT_TIME_LIMIT');
+    const bounded = new PromptBudget({ maxSteps: 1 }, 'deterministic');
+    bounded.step();
+    expect(() => bounded.step()).toThrow('PROMPT_STEP_LIMIT');
+  } finally {
+    clock.mockRestore();
+  }
+  const restored = database();
+  restored.product.import(store.product.export());
+  expect(restored.run(original.id).snapshot.resources).toEqual(expected);
 });
 
 test('a shared nested module keeps its other path unchanged and executes canonical behavior and instructions once', () => {

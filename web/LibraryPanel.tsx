@@ -1121,9 +1121,19 @@ function ContentEditor({
           value={value.text}
           maxLength={100000}
           required={!value.package}
-          onChange={(event) => setValue({ ...value, text: event.target.value })}
+          onChange={(event) => {
+            const pkg = value.package && { ...value.package };
+            if (pkg) delete pkg.bodyTemplate;
+            setValue({ ...value, ...(pkg ? { package: pkg } : {}), text: event.target.value });
+          }}
         />
       </label>
+      {value.package?.bodyTemplate && (
+        <p className="muted full" role="status">
+          이 본문은 선택한 봇·페르소나 이름과 옵션을 템플릿으로 적용해요. 본문을 직접 수정하면
+          템플릿이 해제되고 입력한 글을 그대로 사용해요.
+        </p>
+      )}
       <details className="library-editor-extra full">
         <summary>분류·읽기 설정</summary>
         <div className="library-editor-extra-body">

@@ -173,7 +173,17 @@ test('card routes import a usable bot and chat; memory separation is opt-in, exa
     const bot = store.product.get<Content>('content', result.receipt.items[0].id);
     expect(bot.package!.lore).toHaveLength(2);
     expect(bot.package!.starts).toHaveLength(2);
-    expect(bot.package!.body).toBe('Synthetic Pilot explores an imaginary planet.');
+    expect(bot.package!.body).toBe('{{char}} explores an imaginary planet.');
+    const resources = store.product.resources(
+      result.chat.id,
+      store.product.snapshot(result.chat.id)!
+    );
+    expect(resources.find((item) => item.id.endsWith(':body'))?.text).toBe(
+      'Synthetic Pilot explores an imaginary planet.'
+    );
+    expect(resources.find((item) => item.id.endsWith(':lore:lore-1'))?.text).toBe(
+      '\nEarlier travel with User.\n'
+    );
     expect(store.story.notes.revision(result.chat.id)).toBe(0);
     expect(JSON.stringify(bot)).not.toContain(source.base64);
     const selectedBody = { ...body, idempotencyKey: 'with-memory', memoryIds: ['lore-1'] };

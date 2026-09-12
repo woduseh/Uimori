@@ -92,6 +92,8 @@ system('npcs', letValue('total', expr.sum(expr.context<number[]>('scores')), tot
 
 ## 실행 한도
 
+패키지의 이름·옵션 본문/로어와 작성된 도입문처럼 저장 후 같은 내용으로 재구성해야 하는 텍스트만 호스트 전용 결정적 예산을 사용해요. 이 경우 단계·AST/값 크기·반복·출력 한도로 작업량을 제한하고 경과 시간으로 내용이나 fallback을 바꾸지 않아요. 자료 AST나 `limits` 입력으로 이 모드를 선택할 수 없으며 일반 프롬프트·지침은 아래 시간 제한을 유지해요.
+
 한 요청 컴파일의 모든 블록과 반복은 하나의 평가 budget을 공유해요. 기본 상한은 100,000 steps, 1,000 ms, 출력 1,500,000 UTF-16 코드 단위예요. 구조화 값은 JSON 크기 1,000,000 코드 단위, 30,000 nodes, 배열/객체당 2,000 entries, 깊이 32까지예요. caller의 `limits`는 상한을 낮출 수 있지만 높일 수는 없어요. `evaluatePromptExpressions(expressions, values, options)`는 여러 식에 evaluator와 step/time budget 하나를 적용하고, 전체 반환값의 합계 크기/nodes도 제한해요. 개별 `evaluatePromptExpression` 호출은 각각 budget을 가지므로 한 action의 여러 효과는 batch API로 평가해요.
 
 목록 편집은 원본을 바꾸지 않는 `append(array, value)`, `concatArrays(...arrays)`, `setAt(array, index, value)`로 처리해요. `setAt`은 0 이상이고 현재 길이보다 작은 정수 index만 허용하며, 끝에 추가할 때는 `append`를 써요. `merge(record, record)`는 오른쪽 필드가 우선하는 얕은 병합이에요. 배열/record 타입과 결과 크기를 검사하고 잘못된 index를 자동 보정하지 않아요. 이 네 함수는 같은 이름의 `expr` TypeScript helper와 선택 문법 함수로도 제공해요. 문자열 `concat`의 기존 의미에는 영향을 주지 않아요.

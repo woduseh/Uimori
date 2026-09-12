@@ -36,6 +36,7 @@ DB schema와 전체 archive의 현재 버전은 [현재 계약](../project-plan/
 
 - `version`은 형식 버전, `revision`은 저장한 콘텐츠 개정 번호예요. `id`는 개정 간 유지해요. 패키지와 attachment의 ID·revision이 다르면 실행하지 않아요.
 - `body`, 선택적 `identity: {name, description}`, 선택적 `roleBindings`는 원문 그대로 보관해요. 역할별 binding은 작성자가 직접 넣는 지침이에요.
+- 선택적 `bodyTemplate`와 로어의 `template`은 기존 `PromptTemplate` AST로 선택한 봇·페르소나 이름과 자료 옵션을 읽어요. 허용된 context는 `bot.name`·`user.name`이며 외부 slot·상태·시간은 읽지 않아요. 저장 문자열과 AST는 보존하고 새 예약·조회·원문 시점의 보조 처리에는 같은 고정 문맥을 사용해요. 직접 본문 편집이나 채팅 로어 text override는 해당 AST를 해제하여 사용자 글을 적용해요. 템플릿 처리 실패는 원문으로 되돌리고 `PACKAGE_TEXT_TEMPLATE_FALLBACK`으로 알려요.
 - 로어는 패키지 내부 배열이에요. `pinned`는 고정 공급, `discoverable`은 모델이 검색·조회할 자료예요. 내부 `relatedIds`는 같은 패키지의 실제 로어 ID만 참조해요. Risu 트리거 키를 자동 실행하지 않아요.
 - `loreContext`로 고정 로어의 배경/장면 배치·그룹·순서를 정해요. 실제 읽은 자동 로어의 다음 턴 유지와 정리 정책은 [로어 문맥](LORE-CONTEXT.md)에 있어요.
 - `instructions.target`은 `main`, `translation`, `state`, `status`, `image` 중 하나예요. `attachmentRoles`로 적용할 부착 역할을 선택할 수 있어요. 생략하면 모든 부착 역할에 적용돼요.
@@ -90,7 +91,7 @@ Reader의 **이미지 자동 배치 / 이미지 다시 배치**는 현재 보고
 
 `starts`는 최대 20개의 `{id, title, description?, mode, text, template?, values?, initialAction?}` 선택지예요. `authored`는 100,000자까지의 작성된 도입문을 저장하며 선택적인 `template`은 기존 `PromptTemplate` AST를 사용해요. 템플릿은 선택한 옵션과 `bot.name`·`user.name`만 읽고 원래 `text`·AST는 패키지에 보존해요. 이름 안의 문법은 다시 평가하지 않아요. 템플릿이 없으면 원래 글을 그대로 저장해요. `generate`는 템플릿을 받지 않고 4,000자까지의 요청을 기존 메인 실행기에 전달해요. 새 채팅 화면에서 미리보기·이번 채팅 옵션을 확인하고 확정하며, 단순 미리보기는 Run·상태·모델 호출을 만들지 않아요.
 
-미리보기와 확정은 동일한 이름 해석을 사용하고 확정한 텍스트는 Run에 고정해요. 이후 서재의 이름이 바뀌어도 과거 도입문·포크·archive는 저장된 profile을 사용해요. 도입문 본문을 직접 수정하거나 생성 방식으로 바꿀 때는 안내에 따라 기존 template를 제거하고 입력한 글을 사용해요. 본문·로어 전체의 동적 템플릿 지원은 이 기능과 별개예요.
+미리보기와 확정은 동일한 이름 해석을 사용하고 확정한 텍스트는 Run에 고정해요. 이후 서재의 이름이 바뀌어도 과거 도입문·포크·archive는 저장된 profile을 사용해요. 도입문 본문을 직접 수정하거나 생성 방식으로 바꿀 때는 안내에 따라 기존 template를 제거하고 입력한 글을 사용해요. 저장·재구성되는 이름·옵션 텍스트는 처리 시간에 따라 결과가 바뀌지 않도록 호스트가 결정적 예산을 사용하며 단계·출력·값·배열 한도는 유지해요.
 
 작성된 도입문은 모델 attempt, 상태 보조 예약이나 자동 이미지 작업을 만들지 않아요. Reader에는 작성된 도입문으로 표시하고, 다음 모델 대화에서는 실제 도입문만 assistant 이력에 들어가요. 초기 행동은 기존 타입 검증·상태 실행 계약으로 한 번 실행하며 채팅 옵션·원문 귀속을 유지해요. 확정 요청의 idempotency key는 응답 유실 시 같은 결과를 돌려주고, 다른 시작을 다시 확정하는 요청은 거부해요. 실행 옵션과 초기 상태는 채팅에 속하며 페르소나나 패키지 원본을 수정하지 않아요.
 

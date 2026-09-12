@@ -10,6 +10,7 @@ import { compilePackageAttachment, type CompiledPackageAttachment } from './pack
 import type { Resource, RunSnapshot } from './types.js';
 import { executionContext, packageInstanceId } from './execution-context.js';
 import { projectChatPackageCompilation } from './chat-overrides.js';
+import { packageIdentityFromProfile } from './package-identity.js';
 
 export type ResolvedPackage = CompiledPackageAttachment & {
   attachment: PackageAttachment;
@@ -30,6 +31,7 @@ export function compiledPackages(snapshot: RunSnapshot, target: PackageTarget): 
       chatId: snapshot.chatId,
       target,
       runtime: executionContext(snapshot, target, attachment),
+      identity: packageIdentityFromProfile(profile!, target),
       behaviorUnavailable: snapshot.packageBehaviorUnavailable?.find(
         (item) => item.instanceId === packageInstanceId(attachment)
       )?.code,
@@ -41,7 +43,8 @@ export function compiledPackages(snapshot: RunSnapshot, target: PackageTarget): 
       attachment,
       pkg,
       compiled,
-      (role) => !historicalPersonaExcluded(profile, role, target)
+      (role) => !historicalPersonaExcluded(profile, role, target),
+      packageIdentityFromProfile(profile!, target)
     );
     // Historical exclusions still validate the frozen package above.
     return [

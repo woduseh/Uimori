@@ -105,6 +105,7 @@ import {
   validateChatOverrideSnapshot,
 } from './chat-overrides.js';
 import { projectChatPackageCompilation } from '../core/chat-overrides.js';
+import { packageIdentityFromProfile } from '../core/package-identity.js';
 import {
   chatOptionTables,
   validateChatOptionArchive,
@@ -891,6 +892,7 @@ export class ProductStore {
           chatId,
           target: 'main',
           resourcesOnly: true,
+          identity: packageIdentityFromProfile(p),
           values: p.packageValues?.[packageControlKey(ref)],
         });
         return projectChatPackageCompilation(p, ref, pkg, compiled).compiled.resources;

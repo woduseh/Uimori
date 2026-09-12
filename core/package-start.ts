@@ -8,14 +8,17 @@ import {
   renderPromptTemplate,
   resolvePromptValues,
   validatePromptExpression,
-  validatePromptTemplate,
   type PromptControl,
   type PromptExpression,
   type PromptTemplate,
   type PromptValue,
   type RuntimeValue,
 } from './prompt-program.js';
-import type { PackageIdentityContext } from './package-identity.js';
+import {
+  validatePackageIdentityTemplate,
+  type PackageIdentityContext,
+} from './package-identity.js';
+import { PromptBudget } from './prompt-values.js';
 
 /** One explicitly selected opening; optional authored templates preserve their source text. */
 export type PackageStart = {
@@ -95,32 +98,11 @@ function controlsOnly(expression: PromptExpression): void {
 }
 
 function identityTemplate(value: unknown, controls: PromptControl[]): void {
-  const pending: unknown[] = [
-    validatePromptTemplate(
-      value,
-      controls.map((item) => item.id)
-    ),
-  ];
-  while (pending.length) {
-    const node = pending.pop();
-    if (!node || typeof node !== 'object') continue;
-    if (!Array.isArray(node)) {
-      if (Object.hasOwn(node, 'literal')) continue;
-      const record = node as Record<string, unknown>;
-      if (record.kind === 'slot') fail('PACKAGE_START_TEMPLATE_SLOT');
-      if (Object.hasOwn(record, 'context')) {
-        const path = record.context;
-        if (
-          !Array.isArray(path) ||
-          path.length !== 2 ||
-          !['bot', 'user'].includes(path[0]) ||
-          path[1] !== 'name'
-        )
-          fail('PACKAGE_START_TEMPLATE_CONTEXT');
-      }
-    }
-    pending.push(...Object.values(node));
-  }
+  validatePackageIdentityTemplate(
+    value,
+    controls.map((item) => item.id),
+    (reason) => fail(`PACKAGE_START_TEMPLATE_${reason}`)
+  );
 }
 
 export function validatePackageStartRef(value: unknown): PackageStartRef {
@@ -216,7 +198,7 @@ export function resolvePackageStart(
         {},
         {
           runtime: identity,
-          limits: { maxOutputChars: 100_000 },
+          budget: new PromptBudget({ maxOutputChars: 100_000 }, 'deterministic'),
         }
       )
     : start.text;

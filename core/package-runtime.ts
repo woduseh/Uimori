@@ -1,9 +1,11 @@
 import {
   compilePromptProgram,
+  renderPromptTemplate,
   resolvePromptValues,
   PromptProgramError,
   type PromptControl,
   type PromptValue,
+  type PromptTemplate,
   type RuntimeValue,
 } from './prompt-program.js';
 import {
@@ -18,9 +20,11 @@ import {
 } from './content-package.js';
 import type { Resource } from './types.js';
 import { PromptBudget, PromptEvaluationError } from './prompt-values.js';
+import { packageIdentityFromContents, type PackageIdentityContext } from './package-identity.js';
 
 export type CompiledPackageAttachment = {
   unavailableInstructions?: { id: string; code: string }[];
+  unavailableTextTemplates?: { id: string; code: string }[];
   resources: Resource[];
   pinned: Resource[];
   instructions: { id: string; text: string; position?: string }[];
@@ -38,6 +42,7 @@ export function compilePackageAttachment(
     target: PackageTarget;
     values?: Record<string, PromptValue>;
     runtime?: Record<string, RuntimeValue>;
+    identity?: PackageIdentityContext;
     slots?: Record<string, string>;
     resourcesOnly?: boolean;
     behaviorUnavailable?: string;
@@ -52,6 +57,33 @@ export function compilePackageAttachment(
   if (!context.chatId || typeof context.chatId !== 'string')
     throw new ContentPackageError('PACKAGE_CHAT_REQUIRED');
   const prefix = `package:${pkg.id}:${attachment.role}`;
+  const values = resolvePromptValues(
+    { version: 1, controls: pkg.controls, blocks: [] },
+    context.values
+  );
+  const identity =
+    context.identity ??
+    packageIdentityFromContents(
+      attachment.role === 'bot' ? { title: pkg.title, package: pkg } : null,
+      attachment.role === 'persona' ? { title: pkg.title, package: pkg } : null
+    );
+  const unavailableTextTemplates: NonNullable<
+    CompiledPackageAttachment['unavailableTextTemplates']
+  > = [];
+  // Resources are reconstructed during model input and archive validation. Elapsed CPU time
+  // must not change their text; deterministic step/value/output limits still bound evaluation.
+  const textBudget = new PromptBudget({ maxOutputChars: 1_000_000 }, 'deterministic');
+  const renderedText = (id: string, original: string, template?: PromptTemplate) => {
+    if (!template) return original;
+    try {
+      return renderPromptTemplate(template, values, {}, { runtime: identity, budget: textBudget });
+    } catch (error) {
+      if (!(error instanceof PromptProgramError) && !(error instanceof PromptEvaluationError))
+        throw error;
+      unavailableTextTemplates.push({ id, code: error.code });
+      return original;
+    }
+  };
   const resource = (
     key: string,
     title: string,
@@ -79,13 +111,27 @@ export function compilePackageAttachment(
     [...group].sort((a, b) => (a.loreContext?.order ?? 0) - (b.loreContext?.order ?? 0))
   );
   const resources = ordered.map((lore) => ({
-    ...resource(`lore:${lore.id}`, lore.title, lore.description, lore.text, lore.loading, 'lore'),
+    ...resource(
+      `lore:${lore.id}`,
+      lore.title,
+      lore.description,
+      renderedText(`lore:${lore.id}`, lore.text, lore.template),
+      lore.loading,
+      'lore'
+    ),
     ...(lore.loreContext ? { loreContext: structuredClone(lore.loreContext) } : {}),
     ...(lore.relatedIds ? { relatedIds: lore.relatedIds.map((id) => `${prefix}:lore:${id}`) } : {}),
   }));
   if (pkg.body !== undefined)
     resources.unshift(
-      resource('body', pkg.title, pkg.description, pkg.body, 'pinned', attachment.role)
+      resource(
+        'body',
+        pkg.title,
+        pkg.description,
+        renderedText('body', pkg.body, pkg.bodyTemplate),
+        'pinned',
+        attachment.role
+      )
     );
   if (pkg.identity)
     resources.unshift(
@@ -100,14 +146,12 @@ export function compilePackageAttachment(
     );
   if (context.resourcesOnly)
     return {
+      ...(unavailableTextTemplates.length ? { unavailableTextTemplates } : {}),
       resources,
       pinned: resources.filter((r) => r.loading === 'pinned'),
       instructions: [],
       controls: structuredClone(pkg.controls),
-      values: resolvePromptValues(
-        { version: 1, controls: pkg.controls, blocks: [] },
-        context.values
-      ),
+      values,
       stateView: pkg.stateView,
       transforms: structuredClone(pkg.transforms),
     };
@@ -116,10 +160,6 @@ export function compilePackageAttachment(
     (instruction) =>
       instruction.target === context.target &&
       (!instruction.attachmentRoles || instruction.attachmentRoles.includes(attachment.role))
-  );
-  const values = resolvePromptValues(
-    { version: 1, controls: pkg.controls, blocks: [] },
-    context.values
   );
   const budget = context.budget ?? new PromptBudget();
   const instructions: CompiledPackageAttachment['instructions'] = [];
@@ -177,8 +217,10 @@ export function compilePackageAttachment(
       id: `${prefix}:instruction-diagnostics`,
       text: `Optional package instruction diagnostics: ${JSON.stringify(unavailableInstructions)}. These instructions were not applied; preserve the other package content and continue the original writing request.${context.behaviorUnavailable ? ` Package behavior is unavailable (${context.behaviorUnavailable}); its state and action outcomes are not current facts. Do not invent successful actions or replacement state.` : ''}`,
     });
+  instructions.push(...packageTextTemplateDiagnostics(prefix, unavailableTextTemplates));
   return {
     ...(unavailableInstructions.length ? { unavailableInstructions } : {}),
+    ...(unavailableTextTemplates.length ? { unavailableTextTemplates } : {}),
     resources,
     pinned: resources.filter((r) => r.loading === 'pinned'),
     instructions,
@@ -187,6 +229,20 @@ export function compilePackageAttachment(
     ...(pkg.stateView ? { stateView: structuredClone(pkg.stateView) } : {}),
     transforms: structuredClone(pkg.transforms),
   };
+}
+
+export function packageTextTemplateDiagnostics(
+  prefix: string,
+  failures: NonNullable<CompiledPackageAttachment['unavailableTextTemplates']>
+): CompiledPackageAttachment['instructions'] {
+  return failures.length
+    ? [
+        {
+          id: `${prefix}:text-template-diagnostics`,
+          text: `Optional package text template diagnostics: ${JSON.stringify(failures)}. These body/lore templates could not be applied, so their preserved source text is supplied instead. Continue the original writing request without inventing substitution results.`,
+        },
+      ]
+    : [];
 }
 
 export type PackageStateField = { key: string; label: string; text: string; missing: boolean };

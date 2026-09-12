@@ -36,6 +36,47 @@ const rule = (pattern: string, replacement: string, flags = 'g'): PackageTransfo
   flags,
 });
 describe('package role projection', () => {
+  it('renders body/lore names and controls consistently in resourcesOnly and keeps substituted text literal', () => {
+    const value = pkg();
+    value.bodyTemplate = [{ kind: 'value', expression: { context: ['bot', 'name'] } }];
+    value.lore[0].template = [
+      { kind: 'value', expression: { context: ['user', 'name'] } },
+      { kind: 'text', text: ':' },
+      { kind: 'value', expression: { control: 'on' } },
+    ];
+    const original = structuredClone(value);
+    const ref = { id: value.id, revision: value.revision, role: 'module' as const };
+    const context = {
+      chatId: 'chat',
+      target: 'main' as const,
+      values: { on: false },
+      identity: { bot: { name: 'Aster' }, user: { name: '{{char}}' } },
+    };
+    const compiled = compilePackageAttachment(value, ref, context);
+    expect(compiled.resources.map((item) => item.text)).toEqual(['Aster', '{{char}}:0']);
+    expect(
+      compilePackageAttachment(value, ref, { ...context, resourcesOnly: true }).resources
+    ).toEqual(compiled.resources);
+    expect(value).toEqual(original);
+  });
+  it('falls back to the preserved body/lore text on template errors and reports the failed fields', () => {
+    const value = pkg();
+    value.bodyTemplate = [{ kind: 'value', expression: { op: 'divide', args: [1, 0] } }];
+    value.lore[0].template = value.bodyTemplate;
+    const result = compilePackageAttachment(
+      value,
+      { id: value.id, revision: value.revision, role: 'bot' },
+      { chatId: 'chat', target: 'main' }
+    );
+    expect(result.resources.map((item) => item.text)).toEqual(['Original body', 'Original lore']);
+    expect(result.unavailableTextTemplates?.map((item) => item.id).sort()).toEqual([
+      'body',
+      'lore:home',
+    ]);
+    expect(
+      result.instructions.find((item) => item.id.endsWith(':text-template-diagnostics'))?.text
+    ).toContain('preserved source text');
+  });
   it('isolates role namespaces, keeps discoverable bodies out of pinned, and selects role instructions', () => {
     const value = pkg(),
       before = structuredClone(value);
