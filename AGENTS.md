@@ -2,6 +2,8 @@
 
 - 2026-09-13 사용자 선택: GitHub public과 별개로 프로젝트 라이선스 정책은 미정이에요. RPack의 기존 AGPL 조건 코드·치환표를 제품에 포함하지 않고 독립 구현이나 대체 수단을 우선해요. 프로젝트 LICENSE를 임의로 지정하지 않아요. 정확한 선택은 `docs/DECISIONS-2026-09-12-BETA.md`에 있어요.
 
+- RPack을 포함하지 않는 모듈 가져오기는 RisuToki의 기존 프로젝트 추출로 만든 `module.json` 또는 `.risutoki` 에셋을 포함한 프로젝트 ZIP을 사용해요. `server/risu-module-json.ts`가 공개 JSON을 해석하고 모듈로만 등록해요. 바이너리 `.risum` 직접 지원이나 원본 전체 기능 수용 완료와 구분해요.
+
 - 자료 이름·옵션 텍스트는 `bodyTemplate`·`lore.template`·authored `starts.template`과 기존 `PromptTemplate` AST를 사용해요. `core/package-identity.ts`의 고정 이름 문맥과 호스트 전용 결정적 예산으로 예약·모델 참고·복원을 일치시키고 직접 text 편집은 템플릿을 해제해요. Reader·시작문 이미지 표시는 원문 시점 패키지의 허용된 로컬 blob 참조만 사용해요. `docs/PACKAGES.md`·`docs/RISU-IMPORT.md`가 현재 범위예요.
 
 - 기본 Risu 카드 가져오기는 `docs/RISU-IMPORT.md`, `server/risu-import.ts`·`server/character-card-file.ts`, `web/RisuImport.tsx`예요. `.charx`·카드 JSON을 단방향 변환하고 새 봇·채팅을 함께 저장해요. 로어 보존이 기본이며 기억 분리는 선택한 경우에만 기존 notes 저장소의 출처 있는 `imported-memory`로 보관해요. 내장 모듈·스크립트는 미지원 안내 후 부분 가져오기이며 전체 호환 완료가 아니에요. 원본 바이트는 native transfer `sourceFiles`에만 보존해요. 사용자의 2026-09-13 지시에 따라 새 검증·진단 기반을 확장하지 말고 실제 기능 구현과 해당 흐름의 필요한 확인을 우선해요.

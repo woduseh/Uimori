@@ -3,7 +3,8 @@ import { HttpError, record, text } from './request-validation.js';
 /** Interpret the documented JSON envelope, independently of its binary container codec. */
 export function moduleJsonDocument(
   value: unknown,
-  members = new Map<string, () => Buffer>()
+  members = new Map<string, () => Buffer>(),
+  projectAssets: ((() => Buffer) | undefined)[] = []
 ): Record<string, unknown> {
   const envelope = record(value);
   if (envelope.type !== 'risuModule') throw new HttpError(400, 'RISU_IMPORT_INVALID_FILE');
@@ -64,14 +65,14 @@ export function moduleJsonDocument(
     };
   });
   const assets: { name: string; uri: string; type: string }[] = [];
-  const addAsset = (name: unknown, value: unknown, type: string) => {
+  const addAsset = (name: unknown, value: unknown, type: string, projectAsset?: () => Buffer) => {
     const title = typeof name === 'string' && name ? name : `이미지 ${assets.length + 1}`;
     const raw = typeof value === 'string' ? value : '';
     const data = raw.match(/^data:image\/(?:png|jpeg|webp);base64,([A-Za-z0-9+/]+={0,2})$/u);
-    const uri = data ? `embeded://module-assets/${assets.length}` : raw;
-    if (data) {
-      const bytes = Buffer.from(data[1], 'base64');
-      if (bytes.toString('base64') !== data[1])
+    const uri = data || projectAsset ? `embeded://module-assets/${assets.length}` : raw;
+    if (data || projectAsset) {
+      const bytes = projectAsset ? projectAsset() : Buffer.from(data![1], 'base64');
+      if (!projectAsset && bytes.toString('base64') !== data![1])
         throw new HttpError(400, 'RISU_IMPORT_INVALID_FILE');
       members.set(uri.slice('embeded://'.length), () => bytes);
     }
@@ -80,10 +81,10 @@ export function moduleJsonDocument(
   if (module.assets !== undefined) {
     if (!Array.isArray(module.assets) || module.assets.length > 2000)
       throw new HttpError(400, 'RISU_IMPORT_INVALID_FILE');
-    for (const asset of module.assets) {
+    for (const [index, asset] of module.assets.entries()) {
       if (!Array.isArray(asset) || asset.length < 2)
         throw new HttpError(400, 'RISU_IMPORT_INVALID_FILE');
-      addAsset(asset[0], asset[1], 'other');
+      addAsset(asset[0], asset[1], 'other', projectAssets[index]);
     }
   }
   if (module.icon) addAsset('main', module.icon, 'icon');
