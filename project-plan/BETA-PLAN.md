@@ -86,3 +86,7 @@
 - 화면 검사는 `native-transfer-2026-09-12T15-48-53-033Z-9b4367cb`에서 PASS/cleanup PASS예요. 실제 Vela 분석은 ignored `output/risu-import/vela/product-preview.json`, 빌드는 `output/risu-import/build.log`예요.
 
 다음 구현은 이 흐름에서 드러난 미지원 자료 표현을 공통 기능으로 확장하는 일이에요. 추가 실험실·진단 기반 구축을 선행 조건으로 되돌리지 않아요. 상세 사용법과 현재 지원 범위는 [Risu 가져오기](../docs/RISU-IMPORT.md)를 봐요.
+
+### 표시 정규식 가져오기
+
+카드의 정적 `editdisplay` 규칙을 `server/risu-regex.ts`에서 기존 native transform으로 연결했어요. 기본 flags·문자열 캡처·개행·명시 순서를 반영하고 CBS/HTML/특수 동작은 미지원으로 보존해요. 표시만 바꾸며 저장 원문과 모델 입력은 유지해요. 관련 가져오기·기존 표시 worker의 3파일 12개 검사가 PASS예요. 특정 TVoN 규칙이나 전체 표본의 기능 동등성을 확인한 결과는 아니에요.

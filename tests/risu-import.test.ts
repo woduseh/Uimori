@@ -8,6 +8,7 @@ import { Store } from '../server/store.js';
 import { applyRisuImport, prepareRisuImport, risuImportRoutes } from '../server/risu-import.js';
 import { nativeTransferOriginal } from '../server/native-transfer.js';
 import type { Content } from '../core/product.js';
+import { applyPackageTransforms } from '../server/package-transforms.js';
 
 const owned: { directory: string; store: Store }[] = [];
 afterEach(() => {
@@ -54,6 +55,46 @@ const card = () => ({
 const sourceOf = (value: unknown) => ({
   name: 'synthetic-card.json',
   base64: Buffer.from(JSON.stringify(value)).toString('base64'),
+});
+
+test('card display regex is imported through the shared package renderer', async () => {
+  const store = database();
+  const value = card();
+  Object.assign(value.data, {
+    extensions: {
+      risuai: {
+        customScripts: [
+          {
+            type: 'editdisplay',
+            in: '<state>([\\s\\S]*?)</state>',
+            out: '**상태**$n$1',
+            ableFlag: true,
+            flag: 'g',
+          },
+        ],
+      },
+    },
+  });
+  const source = sourceOf(value),
+    preview = prepareRisuImport({ source });
+  expect(preview.findings.some((item) => item.level === 'unsupported')).toBe(false);
+  expect(preview.findings).toContainEqual(expect.objectContaining({ code: 'display-regex' }));
+  const saved = applyRisuImport(store, {
+    source,
+    digest: preview.digest,
+    memoryIds: [],
+    allowPartial: false,
+    idempotencyKey: 'display-regex',
+  });
+  const content = store.product.get<Content>('content', saved.receipt.items[0].id);
+  expect(content.package!.transforms).toHaveLength(1);
+  expect(
+    (await applyPackageTransforms('<state>HP 3</state>', content.package!.transforms, 'source'))
+      .text
+  ).toBe('**상태**\nHP 3');
+  expect(nativeTransferOriginal(store, saved.receipt.id).sourceFiles![0].base64).toBe(
+    source.base64
+  );
 });
 
 test('card routes import a usable bot and chat; memory separation is opt-in, exact and idempotent', async () => {
