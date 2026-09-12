@@ -29,7 +29,7 @@
     }
   },
   "evidenceRules": [
-    "원본 파일명·버전/그 근거·현재 byte hash와 이전 의미 조사를 분리해요. 파일 hash만 확인하고 컨테이너를 해제하거나 코드를 실행하지 않았어요.",
+    "초기 기준의 원본 byte hash·크기와 이전 의미 조사를 분리해요. Merry 후속 구조화 읽기는 discovery.structuredRead에 별도 기록했으며 컨테이너 직접 해제·원본 코드 실행은 하지 않았어요.",
     "원본 파일의 private 절대경로·본문·코드·비밀은 이 목록에 포함하지 않아요.",
     "prior-structured-read와 summary-only 위치는 개별 필드/section의 새 검증 영수증이 아니에요. 다음 조사에서 locator와 기대값을 보강해요.",
     "source-header 버전도 이번 단계에서 header를 다시 읽었다는 뜻은 아니에요. 이 대화의 앞선 정적 조사에서 확인한 값이에요.",
@@ -311,6 +311,14 @@
         "docs/MODEL-PRICING.md:28"
       ],
       "scope": "실제/추정/미확인 비용을 분리한 호출별 기록."
+    },
+    "MERRY-LUA-20260912": {
+      "kind": "structured-read",
+      "references": [
+        "output/beta-planning/2026-09-12/merry-readonly/read-receipts.json",
+        "output/beta-planning/2026-09-12/merry-readonly/review-notes.md"
+      ],
+      "scope": "고정 Merry 원본의 미독 Lua 32 section을 readonly MCP로 잘림 없이 조회하고 주요 함수·API·기능을 제한적으로 정적 검토했어요. 원본 응답은 ignored 로컬 증거이며 공개 문서에 복제하지 않아요. 전체 의미 완독·실행·native 인수 증거가 아니에요."
     }
   },
   "verificationProfiles": {
@@ -5348,20 +5356,377 @@
           "value": "af9e932fe110abf32cdeca255d91d24028e8b5c13e23b23438db61993d88e6ca",
           "bytes": 140785373,
           "checkedOn": "2026-09-12",
-          "method": "raw-file-hash-only",
-          "semanticReadBinding": "not-revalidated"
+          "method": "raw-file-hash-before-and-after-structured-read",
+          "semanticReadBinding": "raw-hash-matches-baseline; current-section-list-matches-all-40-prior-section-hashes; not-full-field-or-runtime-proof"
         }
       },
       "discovery": {
-        "method": "prior-structured-read-summary",
+        "method": "prior-structured-read-summary-plus-bounded-lua-followup",
         "complete": false,
-        "scope": "이번 정적 조회 요약: lore 91개, regex 64개, Lua 40 section/전체 필드 363,897 UTF-16 중 핵심 8 section 완독. 이전 2026-09-10 정적 보고는 참고 근거로 구분해요.",
+        "scope": "앞선 핵심 Lua 8 section 조사에 더해 미독 32 section(245,223 UTF-16)을 readonly MCP로 잘림 없이 조회하고 함수·API·주요 기능을 제한적으로 정적 검토했어요. 현재 40 section hash는 이전 목록과 모두 같으며 원본 파일 SHA256도 읽기 전후 기준과 같아요. lore 91개·regex 64개와 전체 필드 363,897 UTF-16은 앞선 조회 근거로 구분해요.",
         "unresolved": [
-          "이번 8 section 조회와 이전 보고의 더 넓은 읽기 범위를 합쳐 이번 전체 검증으로 표시하지 않아요.",
-          "나머지 Lua 의미, 대형 패널, 전체 에셋 목록/byte/renderer와 실제 보조 모델/상태 흐름은 미완이에요.",
-          "오늘 전체 파일 hash 확인은 이전 구조화 추출물과의 byte 단위 일치 검증이 아니에요."
+          "32 section 응답의 완전한 수신은 긴 프롬프트·반복 수치·조건 조합의 의미 완독이나 실행 검증이 아니에요. 앞선 8 section은 이번에 의미 재검토하지 않았어요.",
+          "40 section 본문 합계 358,763 UTF-16과 앞선 전체 필드 363,897 UTF-16 사이의 5,134 차이는 이번 조사에서 독립적으로 설명하지 않았어요. 전체 필드 전수 검증으로 표시하지 않아요.",
+          "대형 패널·CSS·64 regex의 전체 동작, 91 lore의 전체 의미와 전체 에셋 목록/byte/renderer, 실제 보조 모델·상태 흐름은 미완이에요.",
+          "새 32 section의 문자열 검색에서 동적 코드 로딩은 발견하지 못했지만 전체 자료·의존 코드에 대한 부재 증명은 아니에요. 동적 함수 등록과 앞선 section의 helper 호출은 확인했어요."
         ],
-        "rawEvidencePublished": false
+        "rawEvidencePublished": false,
+        "structuredRead": {
+          "recordedOn": "2026-09-12",
+          "evidenceRefs": [
+            "MERRY-LUA-20260912"
+          ],
+          "sampleSha256": "af9e932fe110abf32cdeca255d91d24028e8b5c13e23b23438db61993d88e6ca",
+          "rawHashCheckedBeforeAndAfter": true,
+          "runtime": {
+            "mode": "standalone",
+            "toolProfile": "readonly",
+            "allowWrites": false,
+            "version": "3.9.0",
+            "buildCommit": "3402ea0434e8",
+            "repositoryCommit": "45048b1139361cd0fded462683dd30fd7df7ce98",
+            "buildAndRepositoryIdentityAreDistinct": true
+          },
+          "currentReadSections": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12,
+            13,
+            14,
+            15,
+            16,
+            17,
+            18,
+            19,
+            20,
+            21,
+            24,
+            25,
+            27,
+            30,
+            31,
+            33,
+            34,
+            35,
+            38,
+            39
+          ],
+          "priorReadSections": [
+            22,
+            23,
+            26,
+            28,
+            29,
+            32,
+            36,
+            37
+          ],
+          "untruncatedCurrentSections": 32,
+          "currentRetrievedUtf16": 245223,
+          "listedSectionPayloadUtf16": 358763,
+          "priorReportedFullFieldUtf16": 363897,
+          "uncharacterizedDifferenceUtf16": 5134,
+          "currentListComparedWithPriorList": {
+            "sections": 40,
+            "hashMismatches": 0
+          },
+          "semanticReview": "bounded-static; retrieval-complete-is-not-semantic-complete",
+          "originalCodeExecuted": false,
+          "externalModelCalls": false,
+          "nativePassClaimed": false,
+          "sectionEvidence": [
+            {
+              "sectionId": 0,
+              "sha256": "7ef9fa9fc9379c13d7a5af8c466503fb9ff9bf182097df27a53c3afae972956b",
+              "payloadUtf16": 12475,
+              "readPass": "current-untruncated-read",
+              "semanticReview": "bounded-static"
+            },
+            {
+              "sectionId": 1,
+              "sha256": "b5329b5c4f6bd92a7bba5a922801583d7b96bdb3f5a219a992d6f1a5bb8e4e02",
+              "payloadUtf16": 23021,
+              "readPass": "current-untruncated-read",
+              "semanticReview": "bounded-static"
+            },
+            {
+              "sectionId": 2,
+              "sha256": "cae7384db795c2c120f86045e6b1587fe04b89c4afacc2682ab2916fffa201ad",
+              "payloadUtf16": 8864,
+              "readPass": "current-untruncated-read",
+              "semanticReview": "bounded-static"
+            },
+            {
+              "sectionId": 3,
+              "sha256": "d7d5b54787d96379c73caab9935cd54f2aa4631174bdcf89343949c720e4a77c",
+              "payloadUtf16": 3073,
+              "readPass": "current-untruncated-read",
+              "semanticReview": "bounded-static"
+            },
+            {
+              "sectionId": 4,
+              "sha256": "ded8fb458e75ea4ee2393fc5410ac685edb7dd6ea5434c11a058c17c6221e9a9",
+              "payloadUtf16": 8059,
+              "readPass": "current-untruncated-read",
+              "semanticReview": "bounded-static"
+            },
+            {
+              "sectionId": 5,
+              "sha256": "16d2e7488bcd3f5a47d1ba746b9bc2e4c93b55623cdc81b88d0441fa1ab07a0d",
+              "payloadUtf16": 2803,
+              "readPass": "current-untruncated-read",
+              "semanticReview": "bounded-static"
+            },
+            {
+              "sectionId": 6,
+              "sha256": "5e1d8b7954817c1efb948ae95fd75a6714a7e52703927a8fe556f48cd339355c",
+              "payloadUtf16": 3333,
+              "readPass": "current-untruncated-read",
+              "semanticReview": "bounded-static"
+            },
+            {
+              "sectionId": 7,
+              "sha256": "9d049041ba5f42c56a9598a1b0d3e6a8f5c1eacad747009ab05ef3dd2f9d0a3b",
+              "payloadUtf16": 4087,
+              "readPass": "current-untruncated-read",
+              "semanticReview": "bounded-static"
+            },
+            {
+              "sectionId": 8,
+              "sha256": "6e5bdc5980bf0324f3d55cffdcf7d2c54bcdd712d87e9362aec43aec915be013",
+              "payloadUtf16": 3699,
+              "readPass": "current-untruncated-read",
+              "semanticReview": "bounded-static"
+            },
+            {
+              "sectionId": 9,
+              "sha256": "46335c24621f3f201eee978c7873580ec70d2f72ab19202354fcdf585cb0b3de",
+              "payloadUtf16": 1730,
+              "readPass": "current-untruncated-read",
+              "semanticReview": "bounded-static"
+            },
+            {
+              "sectionId": 10,
+              "sha256": "f84a3963b1955047feddda401e3664f23c06943cf6fdc90623948451c79f6e9f",
+              "payloadUtf16": 3760,
+              "readPass": "current-untruncated-read",
+              "semanticReview": "bounded-static"
+            },
+            {
+              "sectionId": 11,
+              "sha256": "da33997235b25899ca91489c5494680591982f89188dea640d013da47b562756",
+              "payloadUtf16": 17213,
+              "readPass": "current-untruncated-read",
+              "semanticReview": "bounded-static"
+            },
+            {
+              "sectionId": 12,
+              "sha256": "77e9474b58490021dd0fdeea0fbf936fc8f574b1b44733888f138ce462d61aee",
+              "payloadUtf16": 44010,
+              "readPass": "current-untruncated-read",
+              "semanticReview": "bounded-static"
+            },
+            {
+              "sectionId": 13,
+              "sha256": "82f3c399bfea5d21b14b917d3c38ea5b294a4f60f6feac780b0f709a2601378c",
+              "payloadUtf16": 1254,
+              "readPass": "current-untruncated-read",
+              "semanticReview": "bounded-static"
+            },
+            {
+              "sectionId": 14,
+              "sha256": "6eafe86e584e64585da182d7873d9522e1a2c8db1f6f30401257824b5116da15",
+              "payloadUtf16": 4770,
+              "readPass": "current-untruncated-read",
+              "semanticReview": "bounded-static"
+            },
+            {
+              "sectionId": 15,
+              "sha256": "759136d499930f57405b92a1a05945d165a58fffb484d61eb025f599647f5649",
+              "payloadUtf16": 478,
+              "readPass": "current-untruncated-read",
+              "semanticReview": "bounded-static"
+            },
+            {
+              "sectionId": 16,
+              "sha256": "767b56dc7155a41ce93f828c99a282cae56e355fa89a5771e26f6a89d90e5d47",
+              "payloadUtf16": 15774,
+              "readPass": "current-untruncated-read",
+              "semanticReview": "bounded-static"
+            },
+            {
+              "sectionId": 17,
+              "sha256": "6da10830860c9093908857baf4fe3f72582418067b9326d3b79073cefad7f64c",
+              "payloadUtf16": 7074,
+              "readPass": "current-untruncated-read",
+              "semanticReview": "bounded-static"
+            },
+            {
+              "sectionId": 18,
+              "sha256": "167a26565010395d1f8a28ff7c5f51cd1c60fba8a80c56fd48cfa4d7dd49bd1f",
+              "payloadUtf16": 7341,
+              "readPass": "current-untruncated-read",
+              "semanticReview": "bounded-static"
+            },
+            {
+              "sectionId": 19,
+              "sha256": "31441a5df67ca52758de40e1f21e88996e1b3a304969edcf4b790ee151466a44",
+              "payloadUtf16": 10107,
+              "readPass": "current-untruncated-read",
+              "semanticReview": "bounded-static"
+            },
+            {
+              "sectionId": 20,
+              "sha256": "10e6c724e3a0708f208acb6afed1fe9217f29fa9aed60e10cba9ceee8e2c2e6e",
+              "payloadUtf16": 2396,
+              "readPass": "current-untruncated-read",
+              "semanticReview": "bounded-static"
+            },
+            {
+              "sectionId": 21,
+              "sha256": "38c35c62d2b365e3768ed95aa0bd33fff794ec5f33e87f4d5a99d8e380ca6e50",
+              "payloadUtf16": 7687,
+              "readPass": "current-untruncated-read",
+              "semanticReview": "bounded-static"
+            },
+            {
+              "sectionId": 22,
+              "sha256": "cc1be202375c21ddc71f6c1670ac4982477c40040dc2be7144c5bc6b6cdc7f7b",
+              "payloadUtf16": 50367,
+              "readPass": "prior-structured-read",
+              "semanticReview": "prior-summary-only-in-this-pass"
+            },
+            {
+              "sectionId": 23,
+              "sha256": "70bccf4aa1d6f88451d37fb3ef8d4c4dd490a90d0754ee69f39bc2672c8a1d76",
+              "payloadUtf16": 3691,
+              "readPass": "prior-structured-read",
+              "semanticReview": "prior-summary-only-in-this-pass"
+            },
+            {
+              "sectionId": 24,
+              "sha256": "31f8a36608fa63bed3d5f1e72ed10d91a91e5a0440ce8a0731939ff2879fdd41",
+              "payloadUtf16": 16020,
+              "readPass": "current-untruncated-read",
+              "semanticReview": "bounded-static"
+            },
+            {
+              "sectionId": 25,
+              "sha256": "b909ce4977f719881645aae30aedf52776f40949b33a400e925d6b21fe9cf2c8",
+              "payloadUtf16": 6652,
+              "readPass": "current-untruncated-read",
+              "semanticReview": "bounded-static"
+            },
+            {
+              "sectionId": 26,
+              "sha256": "87d2069e53f87ed5a51a4d993ec6fbee106ed653faa0090cfa7a99260715496c",
+              "payloadUtf16": 7483,
+              "readPass": "prior-structured-read",
+              "semanticReview": "prior-summary-only-in-this-pass"
+            },
+            {
+              "sectionId": 27,
+              "sha256": "016184a50d39c322589d11cc9a9c0aed5316bd82e5c170245d04b7b3f735dc00",
+              "payloadUtf16": 1182,
+              "readPass": "current-untruncated-read",
+              "semanticReview": "bounded-static"
+            },
+            {
+              "sectionId": 28,
+              "sha256": "2ae5c074c551ac369851f2f601d4ff5546a1c183a4768e58f01dc18ea67b49bd",
+              "payloadUtf16": 11570,
+              "readPass": "prior-structured-read",
+              "semanticReview": "prior-summary-only-in-this-pass"
+            },
+            {
+              "sectionId": 29,
+              "sha256": "2e1dc85d95ac6bf816f366d60d047df65f060125b03ce95d8d26b50fcb418c66",
+              "payloadUtf16": 4223,
+              "readPass": "prior-structured-read",
+              "semanticReview": "prior-summary-only-in-this-pass"
+            },
+            {
+              "sectionId": 30,
+              "sha256": "cfb100147422abc163c4536ba2670ef0e6700cfd2a783fe1ec9bca45e1d7b24e",
+              "payloadUtf16": 13101,
+              "readPass": "current-untruncated-read",
+              "semanticReview": "bounded-static"
+            },
+            {
+              "sectionId": 31,
+              "sha256": "389fb5e3d173301680e9e912337935a29659a6dde58320d107bc77bfd93088fb",
+              "payloadUtf16": 1947,
+              "readPass": "current-untruncated-read",
+              "semanticReview": "bounded-static"
+            },
+            {
+              "sectionId": 32,
+              "sha256": "2e8740aa9175b2b2ab4383322c7224f43315599e1b44a017e4b6471cc4463241",
+              "payloadUtf16": 4719,
+              "readPass": "prior-structured-read",
+              "semanticReview": "prior-summary-only-in-this-pass"
+            },
+            {
+              "sectionId": 33,
+              "sha256": "1bef50199dc21f6a186ad04535e6cd4e2abfb2126cda2244fb7af9ace33df594",
+              "payloadUtf16": 1483,
+              "readPass": "current-untruncated-read",
+              "semanticReview": "bounded-static"
+            },
+            {
+              "sectionId": 34,
+              "sha256": "9dc3551f53e7c97f96e01ca5e8f2d4f3b5454cf321eb7855e49aaafd559642d2",
+              "payloadUtf16": 4384,
+              "readPass": "current-untruncated-read",
+              "semanticReview": "bounded-static"
+            },
+            {
+              "sectionId": 35,
+              "sha256": "734894dc07ce5fa1c6c56854c6a146dcf0dc9dd121956f55a2c190cc15abd793",
+              "payloadUtf16": 2678,
+              "readPass": "current-untruncated-read",
+              "semanticReview": "bounded-static"
+            },
+            {
+              "sectionId": 36,
+              "sha256": "18ce15e907361924113b433d8bddfc4c43a09eb2346af43e3baa7ef8f1bc9c05",
+              "payloadUtf16": 8537,
+              "readPass": "prior-structured-read",
+              "semanticReview": "prior-summary-only-in-this-pass"
+            },
+            {
+              "sectionId": 37,
+              "sha256": "f0ebc25e6d19616f7be5e261f71317810485240ef175e951a39662c90d5f61a6",
+              "payloadUtf16": 22950,
+              "readPass": "prior-structured-read",
+              "semanticReview": "prior-summary-only-in-this-pass"
+            },
+            {
+              "sectionId": 38,
+              "sha256": "95ae76d73f9369f16c6c64d1c8268f4d4a20a31c569d5fab00f625c3daeb839b",
+              "payloadUtf16": 3198,
+              "readPass": "current-untruncated-read",
+              "semanticReview": "bounded-static"
+            },
+            {
+              "sectionId": 39,
+              "sha256": "37ea34a77b90bd6e9befa92a452a45c586fdcd93bfb7012d27835f6175a364f9",
+              "payloadUtf16": 1570,
+              "readPass": "current-untruncated-read",
+              "semanticReview": "bounded-static"
+            }
+          ]
+        }
       },
       "dependencies": [],
       "scopeExclusions": [],
@@ -5787,7 +6152,7 @@
             },
             {
               "id": "MS.COVERAGE",
-              "title": "40 Lua section·91 lore·64 regex·대형 패널·전체 에셋의 잔여 조사",
+              "title": "Lua 전체 의미·필드 길이 차이·91 lore·64 regex·대형 패널·전체 에셋의 잔여 조사",
               "itemType": "coverage-gap",
               "requiredForBeta": true,
               "currentSupport": {
@@ -5811,8 +6176,1836 @@
               "originalEvidence": {
                 "kind": "prior-static-report",
                 "reference": "project-plan/LUA-PORTING-REVIEW-2026-09-10.md:51",
-                "precision": "historical-report; latest read coverage separately recorded"
+                "precision": "historical-report plus current bounded structured-read evidence; remaining gaps stay open",
+                "followupEvidenceRefs": [
+                  "MERRY-LUA-20260912"
+                ]
               },
+              "nativeAcceptance": {
+                "status": "not-run",
+                "evidence": []
+              }
+            },
+            {
+              "id": "MS.RESTORE.STORE",
+              "parentFeatureId": "MS.RESTORE",
+              "title": "SEED 조회 키와 별도 상태 저장소의 대응 보존",
+              "itemType": "observed-function",
+              "requiredForBeta": true,
+              "currentSupport": {
+                "status": "partial",
+                "evidenceRefs": [
+                  "U-BEHAVIOR",
+                  "U-BACKUP",
+                  "U-SOURCE"
+                ],
+                "basis": "관련 Uimori 기반은 있지만 이 원본 세부 기능의 연결·시점·경험과 native 검증은 미완이에요."
+              },
+              "responsibilityCandidates": [
+                "state",
+                "data",
+                "source"
+              ],
+              "requiredVerification": [
+                "STATE",
+                "LIFECYCLE",
+                "SOURCE",
+                "SAMPLE"
+              ],
+              "originalEvidence": {
+                "kind": "bounded-structured-read",
+                "evidenceRefs": [
+                  "MERRY-LUA-20260912"
+                ],
+                "sampleId": "merry",
+                "reference": "Lua section IDs refer to samples.merry.discovery.structuredRead.sectionEvidence",
+                "locators": [
+                  {
+                    "sectionId": 24,
+                    "lineStart": 79,
+                    "lineEnd": 196
+                  }
+                ],
+                "precision": "section-local 1-based lines in structured response; focused static review, not full semantics or runtime"
+              },
+              "verificationNotes": "SEED를 난수 재현 seed로 오인하지 않고 참조 키와 상태 값의 연결을 대조해요.",
+              "nativeAcceptance": {
+                "status": "not-run",
+                "evidence": []
+              }
+            },
+            {
+              "id": "MS.RESTORE.GC",
+              "parentFeatureId": "MS.RESTORE",
+              "title": "저장 40회 주기의 미참조 상태 키 정리",
+              "itemType": "observed-function",
+              "requiredForBeta": true,
+              "currentSupport": {
+                "status": "missing",
+                "evidenceRefs": [
+                  "U-BEHAVIOR",
+                  "U-BACKUP"
+                ],
+                "basis": "조사 기준의 Uimori에 이 기능을 완성한 공통 확장 경로나 연결이 없어요."
+              },
+              "responsibilityCandidates": [
+                "state",
+                "data"
+              ],
+              "requiredVerification": [
+                "STATE",
+                "LIFECYCLE",
+                "SAMPLE"
+              ],
+              "originalEvidence": {
+                "kind": "bounded-structured-read",
+                "evidenceRefs": [
+                  "MERRY-LUA-20260912"
+                ],
+                "sampleId": "merry",
+                "reference": "Lua section IDs refer to samples.merry.discovery.structuredRead.sectionEvidence",
+                "locators": [
+                  {
+                    "sectionId": 24,
+                    "lineStart": 93,
+                    "lineEnd": 122
+                  },
+                  {
+                    "sectionId": 24,
+                    "lineStart": 182,
+                    "lineEnd": 187
+                  }
+                ],
+                "precision": "section-local 1-based lines in structured response; focused static review, not full semantics or runtime"
+              },
+              "verificationNotes": "메시지 삭제·분기·복원 전후 살아 있는 참조가 정리되지 않는지 확인해요.",
+              "nativeAcceptance": {
+                "status": "not-run",
+                "evidence": []
+              }
+            },
+            {
+              "id": "MS.RESTORE.HISTORY",
+              "parentFeatureId": "MS.RESTORE",
+              "title": "최신 메시지부터 역순으로 유효 SEED를 찾아 복원",
+              "itemType": "observed-function",
+              "requiredForBeta": true,
+              "currentSupport": {
+                "status": "partial",
+                "evidenceRefs": [
+                  "U-BEHAVIOR",
+                  "U-BACKUP",
+                  "U-SOURCE"
+                ],
+                "basis": "관련 Uimori 기반은 있지만 이 원본 세부 기능의 연결·시점·경험과 native 검증은 미완이에요."
+              },
+              "responsibilityCandidates": [
+                "state",
+                "data",
+                "source"
+              ],
+              "requiredVerification": [
+                "STATE",
+                "LIFECYCLE",
+                "SOURCE",
+                "SAMPLE"
+              ],
+              "originalEvidence": {
+                "kind": "bounded-structured-read",
+                "evidenceRefs": [
+                  "MERRY-LUA-20260912"
+                ],
+                "sampleId": "merry",
+                "reference": "Lua section IDs refer to samples.merry.discovery.structuredRead.sectionEvidence",
+                "locators": [
+                  {
+                    "sectionId": 24,
+                    "lineStart": 199,
+                    "lineEnd": 238
+                  }
+                ],
+                "precision": "section-local 1-based lines in structured response; focused static review, not full semantics or runtime"
+              },
+              "verificationNotes": "없는 키·잘못된 참조·더 이전의 유효 상태·저장 정보 없음의 결과를 구분해요.",
+              "nativeAcceptance": {
+                "status": "not-run",
+                "evidence": []
+              }
+            },
+            {
+              "id": "MS.RESTORE.DELTA",
+              "parentFeatureId": "MS.RESTORE",
+              "title": "메시지 위치별 임시 변경과 복원 후 재적용 순서",
+              "itemType": "observed-function",
+              "requiredForBeta": true,
+              "currentSupport": {
+                "status": "partial",
+                "evidenceRefs": [
+                  "U-BEHAVIOR",
+                  "U-SOURCE"
+                ],
+                "basis": "관련 Uimori 기반은 있지만 이 원본 세부 기능의 연결·시점·경험과 native 검증은 미완이에요."
+              },
+              "responsibilityCandidates": [
+                "state",
+                "source"
+              ],
+              "requiredVerification": [
+                "STATE",
+                "SOURCE",
+                "LIFECYCLE",
+                "SAMPLE"
+              ],
+              "originalEvidence": {
+                "kind": "bounded-structured-read",
+                "evidenceRefs": [
+                  "MERRY-LUA-20260912"
+                ],
+                "sampleId": "merry",
+                "reference": "Lua section IDs refer to samples.merry.discovery.structuredRead.sectionEvidence",
+                "locators": [
+                  {
+                    "sectionId": 3,
+                    "lineStart": 90,
+                    "lineEnd": 104
+                  },
+                  {
+                    "sectionId": 24,
+                    "lineStart": 240,
+                    "lineEnd": 248
+                  }
+                ],
+                "precision": "section-local 1-based lines in structured response; focused static review, not full semantics or runtime"
+              },
+              "verificationNotes": "복원 상태와 사용자의 임시 변경이 겹칠 때 적용 순서와 귀속을 대조해요.",
+              "nativeAcceptance": {
+                "status": "not-run",
+                "evidence": []
+              }
+            },
+            {
+              "id": "MS.RESTORE.RNG",
+              "parentFeatureId": "MS.RESTORE",
+              "title": "저장 키 난수와 판정 난수의 서로 다른 용도",
+              "itemType": "observed-function",
+              "requiredForBeta": true,
+              "currentSupport": {
+                "status": "partial",
+                "evidenceRefs": [
+                  "U-BEHAVIOR",
+                  "U-RUNTIME"
+                ],
+                "basis": "관련 Uimori 기반은 있지만 이 원본 세부 기능의 연결·시점·경험과 native 검증은 미완이에요."
+              },
+              "responsibilityCandidates": [
+                "state",
+                "runtime"
+              ],
+              "requiredVerification": [
+                "STATE",
+                "RUNTIME",
+                "LIFECYCLE",
+                "SAMPLE"
+              ],
+              "originalEvidence": {
+                "kind": "bounded-structured-read",
+                "evidenceRefs": [
+                  "MERRY-LUA-20260912"
+                ],
+                "sampleId": "merry",
+                "reference": "Lua section IDs refer to samples.merry.discovery.structuredRead.sectionEvidence",
+                "locators": [
+                  {
+                    "sectionId": 24,
+                    "lineStart": 125,
+                    "lineEnd": 148
+                  },
+                  {
+                    "sectionId": 7,
+                    "lineStart": 57,
+                    "lineEnd": 68
+                  },
+                  {
+                    "sectionId": 10,
+                    "lineStart": 29,
+                    "lineEnd": 36
+                  }
+                ],
+                "precision": "section-local 1-based lines in structured response; focused static review, not full semantics or runtime"
+              },
+              "verificationNotes": "저장 키 충돌 처리와 판정 결과 보존을 각각 검증해요. 저장 키 보존만으로 판정 재현을 주장하지 않아요.",
+              "nativeAcceptance": {
+                "status": "not-run",
+                "evidence": []
+              }
+            },
+            {
+              "id": "MS.DRAWS.HISTORY_EDIT",
+              "parentFeatureId": "MS.DRAWS",
+              "title": "과거 사용자 메시지의 판정 결과 수정",
+              "itemType": "observed-function",
+              "requiredForBeta": true,
+              "currentSupport": {
+                "status": "missing",
+                "evidenceRefs": [
+                  "U-SOURCE",
+                  "U-BEHAVIOR",
+                  "U-RUNTIME"
+                ],
+                "basis": "조사 기준의 Uimori에 이 기능을 완성한 공통 확장 경로나 연결이 없어요."
+              },
+              "responsibilityCandidates": [
+                "source",
+                "state",
+                "runtime"
+              ],
+              "requiredVerification": [
+                "SOURCE",
+                "STATE",
+                "RUNTIME",
+                "SAMPLE"
+              ],
+              "originalEvidence": {
+                "kind": "bounded-structured-read",
+                "evidenceRefs": [
+                  "MERRY-LUA-20260912"
+                ],
+                "sampleId": "merry",
+                "reference": "Lua section IDs refer to samples.merry.discovery.structuredRead.sectionEvidence",
+                "locators": [
+                  {
+                    "sectionId": 6,
+                    "lineStart": 14,
+                    "lineEnd": 63
+                  },
+                  {
+                    "sectionId": 7,
+                    "lineStart": 10,
+                    "lineEnd": 80
+                  },
+                  {
+                    "sectionId": 8,
+                    "lineStart": 19,
+                    "lineEnd": 69
+                  },
+                  {
+                    "sectionId": 9,
+                    "lineStart": 10,
+                    "lineEnd": 37
+                  },
+                  {
+                    "sectionId": 10,
+                    "lineStart": 10,
+                    "lineEnd": 92
+                  }
+                ],
+                "precision": "section-local 1-based lines in structured response; focused static review, not full semantics or runtime"
+              },
+              "verificationNotes": "대상 메시지 선택·이미 적용한 수정·원문 변경·분기에서 수정 귀속과 중복을 확인해요.",
+              "nativeAcceptance": {
+                "status": "not-run",
+                "evidence": []
+              }
+            },
+            {
+              "id": "MS.DRAWS.TOKENS",
+              "parentFeatureId": "MS.DRAWS",
+              "title": "자원별 보너스·유리한 재굴림·판정 결과 전환",
+              "itemType": "observed-function",
+              "requiredForBeta": true,
+              "currentSupport": {
+                "status": "partial",
+                "evidenceRefs": [
+                  "U-BEHAVIOR",
+                  "U-RUNTIME",
+                  "U-READING"
+                ],
+                "basis": "관련 Uimori 기반은 있지만 이 원본 세부 기능의 연결·시점·경험과 native 검증은 미완이에요."
+              },
+              "responsibilityCandidates": [
+                "state",
+                "runtime",
+                "ui"
+              ],
+              "requiredVerification": [
+                "STATE",
+                "RUNTIME",
+                "UI",
+                "SAMPLE"
+              ],
+              "originalEvidence": {
+                "kind": "bounded-structured-read",
+                "evidenceRefs": [
+                  "MERRY-LUA-20260912"
+                ],
+                "sampleId": "merry",
+                "reference": "Lua section IDs refer to samples.merry.discovery.structuredRead.sectionEvidence",
+                "locators": [
+                  {
+                    "sectionId": 6,
+                    "lineStart": 1,
+                    "lineEnd": 69
+                  },
+                  {
+                    "sectionId": 7,
+                    "lineStart": 1,
+                    "lineEnd": 85
+                  },
+                  {
+                    "sectionId": 8,
+                    "lineStart": 1,
+                    "lineEnd": 75
+                  },
+                  {
+                    "sectionId": 9,
+                    "lineStart": 1,
+                    "lineEnd": 41
+                  },
+                  {
+                    "sectionId": 10,
+                    "lineStart": 1,
+                    "lineEnd": 96
+                  },
+                  {
+                    "sectionId": 11,
+                    "lineStart": 1,
+                    "lineEnd": 240
+                  }
+                ],
+                "precision": "section-local 1-based lines in structured response; focused static review, not full semantics or runtime"
+              },
+              "verificationNotes": "각 자원의 상한·보유량·입력 수량·사용 조건·취소와 서로 다른 결과 전환을 개별 대조해요.",
+              "nativeAcceptance": {
+                "status": "not-run",
+                "evidence": []
+              }
+            },
+            {
+              "id": "MS.DRAWS.CONSUMPTION",
+              "parentFeatureId": "MS.DRAWS",
+              "title": "행동 메시지 표식과 후속 자원 소비의 연결",
+              "itemType": "observed-function",
+              "requiredForBeta": true,
+              "currentSupport": {
+                "status": "partial",
+                "evidenceRefs": [
+                  "U-BEHAVIOR",
+                  "U-SOURCE",
+                  "U-PROMPT",
+                  "U-SEGMENT"
+                ],
+                "basis": "관련 Uimori 기반은 있지만 이 원본 세부 기능의 연결·시점·경험과 native 검증은 미완이에요."
+              },
+              "responsibilityCandidates": [
+                "state",
+                "source",
+                "representation"
+              ],
+              "requiredVerification": [
+                "STATE",
+                "SOURCE",
+                "WIRE",
+                "SAMPLE"
+              ],
+              "originalEvidence": {
+                "kind": "bounded-structured-read",
+                "evidenceRefs": [
+                  "MERRY-LUA-20260912"
+                ],
+                "sampleId": "merry",
+                "reference": "Lua section IDs refer to samples.merry.discovery.structuredRead.sectionEvidence",
+                "locators": [
+                  {
+                    "sectionId": 4,
+                    "lineStart": 1,
+                    "lineEnd": 44
+                  },
+                  {
+                    "sectionId": 11,
+                    "lineStart": 69,
+                    "lineEnd": 70
+                  },
+                  {
+                    "sectionId": 11,
+                    "lineStart": 146,
+                    "lineEnd": 147
+                  },
+                  {
+                    "sectionId": 27,
+                    "lineStart": 1,
+                    "lineEnd": 28
+                  }
+                ],
+                "precision": "section-local 1-based lines in structured response; focused static review, not full semantics or runtime"
+              },
+              "verificationNotes": "표식 언어·수정·재전송·취소에 따른 소비 시점과 횟수를 확인해요.",
+              "nativeAcceptance": {
+                "status": "not-run",
+                "evidence": []
+              }
+            },
+            {
+              "id": "MS.DRAWS.COMPANION",
+              "parentFeatureId": "MS.DRAWS",
+              "title": "동료/사용자 판정의 보너스·확률·임계값 조합",
+              "itemType": "observed-function",
+              "requiredForBeta": true,
+              "currentSupport": {
+                "status": "partial",
+                "evidenceRefs": [
+                  "U-BEHAVIOR",
+                  "U-RUNTIME"
+                ],
+                "basis": "관련 Uimori 기반은 있지만 이 원본 세부 기능의 연결·시점·경험과 native 검증은 미완이에요."
+              },
+              "responsibilityCandidates": [
+                "state",
+                "runtime"
+              ],
+              "requiredVerification": [
+                "STATE",
+                "RUNTIME",
+                "SAMPLE"
+              ],
+              "originalEvidence": {
+                "kind": "bounded-structured-read",
+                "evidenceRefs": [
+                  "MERRY-LUA-20260912"
+                ],
+                "sampleId": "merry",
+                "reference": "Lua section IDs refer to samples.merry.discovery.structuredRead.sectionEvidence",
+                "locators": [
+                  {
+                    "sectionId": 12,
+                    "lineStart": 1,
+                    "lineEnd": 413
+                  }
+                ],
+                "precision": "section-local 1-based lines in structured response; focused static review, not full semantics or runtime"
+              },
+              "verificationNotes": "동료와 사용자 스킬 경로, 특성 보너스·확률·대성공/대실패·근소 결과를 조건별로 대조해요. 반복 계수 전수 검증은 미완이에요.",
+              "nativeAcceptance": {
+                "status": "not-run",
+                "evidence": []
+              }
+            },
+            {
+              "id": "MS.DRAWS.COOLDOWN",
+              "parentFeatureId": "MS.DRAWS",
+              "title": "실패 후 특성 쿨다운과 다음 응답 지침",
+              "itemType": "observed-function",
+              "requiredForBeta": true,
+              "currentSupport": {
+                "status": "partial",
+                "evidenceRefs": [
+                  "U-BEHAVIOR",
+                  "U-PROMPT",
+                  "U-SEGMENT"
+                ],
+                "basis": "관련 Uimori 기반은 있지만 이 원본 세부 기능의 연결·시점·경험과 native 검증은 미완이에요."
+              },
+              "responsibilityCandidates": [
+                "state",
+                "representation"
+              ],
+              "requiredVerification": [
+                "STATE",
+                "WIRE",
+                "LIFECYCLE",
+                "SAMPLE"
+              ],
+              "originalEvidence": {
+                "kind": "bounded-structured-read",
+                "evidenceRefs": [
+                  "MERRY-LUA-20260912"
+                ],
+                "sampleId": "merry",
+                "reference": "Lua section IDs refer to samples.merry.discovery.structuredRead.sectionEvidence",
+                "locators": [
+                  {
+                    "sectionId": 12,
+                    "lineStart": 431,
+                    "lineEnd": 460
+                  }
+                ],
+                "precision": "section-local 1-based lines in structured response; focused static review, not full semantics or runtime"
+              },
+              "verificationNotes": "메시지 수 감소·분기·연속 실패에서 재발동 조건과 다음 요청 지침을 확인해요.",
+              "nativeAcceptance": {
+                "status": "not-run",
+                "evidence": []
+              }
+            },
+            {
+              "id": "MS.CHOICE.CUSTOM_QUEST",
+              "parentFeatureId": "MS.CHOICE",
+              "title": "직접 퀘스트 입력과 기존 보드 카드 교체",
+              "itemType": "observed-function",
+              "requiredForBeta": true,
+              "currentSupport": {
+                "status": "missing",
+                "evidenceRefs": [
+                  "U-RUNTIME",
+                  "U-READING",
+                  "U-SOURCE"
+                ],
+                "basis": "조사 기준의 Uimori에 이 기능을 완성한 공통 확장 경로나 연결이 없어요."
+              },
+              "responsibilityCandidates": [
+                "ui",
+                "source",
+                "runtime"
+              ],
+              "requiredVerification": [
+                "UI",
+                "SOURCE",
+                "RUNTIME",
+                "SAMPLE"
+              ],
+              "originalEvidence": {
+                "kind": "bounded-structured-read",
+                "evidenceRefs": [
+                  "MERRY-LUA-20260912"
+                ],
+                "sampleId": "merry",
+                "reference": "Lua section IDs refer to samples.merry.discovery.structuredRead.sectionEvidence",
+                "locators": [
+                  {
+                    "sectionId": 11,
+                    "lineStart": 243,
+                    "lineEnd": 283
+                  }
+                ],
+                "precision": "section-local 1-based lines in structured response; focused static review, not full semantics or runtime"
+              },
+              "verificationNotes": "제목·설명·난이도·종류·의뢰인 입력, 취소, 비어 있는 값, 보드/대상 소실을 확인해요.",
+              "nativeAcceptance": {
+                "status": "not-run",
+                "evidence": []
+              }
+            },
+            {
+              "id": "MS.CHOICE.QUEST_ACCEPT",
+              "parentFeatureId": "MS.CHOICE",
+              "title": "퀘스트 선택을 다음 사용자 요청으로 연결",
+              "itemType": "observed-function",
+              "requiredForBeta": true,
+              "currentSupport": {
+                "status": "partial",
+                "evidenceRefs": [
+                  "U-BEHAVIOR",
+                  "U-PROMPT",
+                  "U-SEGMENT",
+                  "U-RUNTIME",
+                  "U-READING"
+                ],
+                "basis": "관련 Uimori 기반은 있지만 이 원본 세부 기능의 연결·시점·경험과 native 검증은 미완이에요."
+              },
+              "responsibilityCandidates": [
+                "state",
+                "representation",
+                "ui"
+              ],
+              "requiredVerification": [
+                "STATE",
+                "WIRE",
+                "UI",
+                "SAMPLE"
+              ],
+              "originalEvidence": {
+                "kind": "bounded-structured-read",
+                "evidenceRefs": [
+                  "MERRY-LUA-20260912"
+                ],
+                "sampleId": "merry",
+                "reference": "Lua section IDs refer to samples.merry.discovery.structuredRead.sectionEvidence",
+                "locators": [
+                  {
+                    "sectionId": 11,
+                    "lineStart": 340,
+                    "lineEnd": 347
+                  },
+                  {
+                    "sectionId": 31,
+                    "lineStart": 8,
+                    "lineEnd": 26
+                  }
+                ],
+                "precision": "section-local 1-based lines in structured response; focused static review, not full semantics or runtime"
+              },
+              "verificationNotes": "선택한 카드와 요청의 대응 및 퀘스트를 즉시 완료하지 않는 원본 지침을 대조해요.",
+              "nativeAcceptance": {
+                "status": "not-run",
+                "evidence": []
+              }
+            },
+            {
+              "id": "MS.CHOICE.QUEST_DELETE",
+              "parentFeatureId": "MS.CHOICE",
+              "title": "기존 퀘스트 보드 제거와 표시 중단 요청",
+              "itemType": "observed-function",
+              "requiredForBeta": true,
+              "currentSupport": {
+                "status": "missing",
+                "evidenceRefs": [
+                  "U-SOURCE",
+                  "U-RUNTIME",
+                  "U-READING",
+                  "U-PROMPT",
+                  "U-SEGMENT"
+                ],
+                "basis": "조사 기준의 Uimori에 이 기능을 완성한 공통 확장 경로나 연결이 없어요."
+              },
+              "responsibilityCandidates": [
+                "source",
+                "ui",
+                "representation"
+              ],
+              "requiredVerification": [
+                "SOURCE",
+                "UI",
+                "WIRE",
+                "SAMPLE"
+              ],
+              "originalEvidence": {
+                "kind": "bounded-structured-read",
+                "evidenceRefs": [
+                  "MERRY-LUA-20260912"
+                ],
+                "sampleId": "merry",
+                "reference": "Lua section IDs refer to samples.merry.discovery.structuredRead.sectionEvidence",
+                "locators": [
+                  {
+                    "sectionId": 11,
+                    "lineStart": 286,
+                    "lineEnd": 299
+                  },
+                  {
+                    "sectionId": 31,
+                    "lineStart": 29,
+                    "lineEnd": 30
+                  }
+                ],
+                "precision": "section-local 1-based lines in structured response; focused static review, not full semantics or runtime"
+              },
+              "verificationNotes": "보드 제거 대상과 이후 표시 중단 지침을 원문/공유/분기에서 구분해요.",
+              "nativeAcceptance": {
+                "status": "not-run",
+                "evidence": []
+              }
+            },
+            {
+              "id": "MS.CHOICE.REROLL_INPUT",
+              "parentFeatureId": "MS.CHOICE",
+              "title": "사용자 추가 지시를 포함한 선택지 재생성",
+              "itemType": "observed-function",
+              "requiredForBeta": true,
+              "currentSupport": {
+                "status": "missing",
+                "evidenceRefs": [
+                  "U-JOBS",
+                  "U-SOURCE",
+                  "U-RUNTIME",
+                  "U-READING"
+                ],
+                "basis": "조사 기준의 Uimori에 이 기능을 완성한 공통 확장 경로나 연결이 없어요."
+              },
+              "responsibilityCandidates": [
+                "jobs",
+                "source",
+                "ui"
+              ],
+              "requiredVerification": [
+                "JOBS",
+                "SOURCE",
+                "UI",
+                "SAMPLE"
+              ],
+              "originalEvidence": {
+                "kind": "bounded-structured-read",
+                "evidenceRefs": [
+                  "MERRY-LUA-20260912"
+                ],
+                "sampleId": "merry",
+                "reference": "Lua section IDs refer to samples.merry.discovery.structuredRead.sectionEvidence",
+                "locators": [
+                  {
+                    "sectionId": 5,
+                    "lineStart": 2,
+                    "lineEnd": 71
+                  },
+                  {
+                    "sectionId": 11,
+                    "lineStart": 302,
+                    "lineEnd": 332
+                  }
+                ],
+                "precision": "section-local 1-based lines in structured response; focused static review, not full semantics or runtime"
+              },
+              "verificationNotes": "기존 선택지만 교체하는지, 추가 지시·취소·실패·임시 진행 표시를 보존하는지 확인해요.",
+              "nativeAcceptance": {
+                "status": "not-run",
+                "evidence": []
+              }
+            },
+            {
+              "id": "MS.CHOICE.FORCED_CHECK",
+              "parentFeatureId": "MS.CHOICE",
+              "title": "사용자가 강제로 요청하는 스킬 판정",
+              "itemType": "observed-function",
+              "requiredForBeta": true,
+              "currentSupport": {
+                "status": "missing",
+                "evidenceRefs": [
+                  "U-JOBS",
+                  "U-RUNTIME",
+                  "U-READING"
+                ],
+                "basis": "조사 기준의 Uimori에 이 기능을 완성한 공통 확장 경로나 연결이 없어요."
+              },
+              "responsibilityCandidates": [
+                "jobs",
+                "runtime",
+                "ui"
+              ],
+              "requiredVerification": [
+                "JOBS",
+                "RUNTIME",
+                "UI",
+                "SAMPLE"
+              ],
+              "originalEvidence": {
+                "kind": "bounded-structured-read",
+                "evidenceRefs": [
+                  "MERRY-LUA-20260912"
+                ],
+                "sampleId": "merry",
+                "reference": "Lua section IDs refer to samples.merry.discovery.structuredRead.sectionEvidence",
+                "locators": [
+                  {
+                    "sectionId": 11,
+                    "lineStart": 335,
+                    "lineEnd": 337
+                  },
+                  {
+                    "sectionId": 38,
+                    "lineStart": 63,
+                    "lineEnd": 81
+                  }
+                ],
+                "precision": "section-local 1-based lines in structured response; focused static review, not full semantics or runtime"
+              },
+              "verificationNotes": "공유 helper 호출의 전체 동작과 판정 입력/결과를 대조해요. helper 본문은 앞선 조사 범위예요.",
+              "nativeAcceptance": {
+                "status": "not-run",
+                "evidence": []
+              }
+            },
+            {
+              "id": "MS.STATE.PROGRESSION",
+              "parentFeatureId": "MS.STATE",
+              "title": "스킬 투자 제한과 연속 레벨업·포인트 지급",
+              "itemType": "observed-function",
+              "requiredForBeta": true,
+              "currentSupport": {
+                "status": "partial",
+                "evidenceRefs": [
+                  "U-BEHAVIOR",
+                  "U-RUNTIME",
+                  "U-READING"
+                ],
+                "basis": "관련 Uimori 기반은 있지만 이 원본 세부 기능의 연결·시점·경험과 native 검증은 미완이에요."
+              },
+              "responsibilityCandidates": [
+                "state",
+                "runtime",
+                "ui"
+              ],
+              "requiredVerification": [
+                "STATE",
+                "RUNTIME",
+                "UI",
+                "SAMPLE"
+              ],
+              "originalEvidence": {
+                "kind": "bounded-structured-read",
+                "evidenceRefs": [
+                  "MERRY-LUA-20260912"
+                ],
+                "sampleId": "merry",
+                "reference": "Lua section IDs refer to samples.merry.discovery.structuredRead.sectionEvidence",
+                "locators": [
+                  {
+                    "sectionId": 14,
+                    "lineStart": 34,
+                    "lineEnd": 119
+                  },
+                  {
+                    "sectionId": 19,
+                    "lineStart": 2,
+                    "lineEnd": 116
+                  },
+                  {
+                    "sectionId": 20,
+                    "lineStart": 1,
+                    "lineEnd": 54
+                  }
+                ],
+                "precision": "section-local 1-based lines in structured response; focused static review, not full semantics or runtime"
+              },
+              "verificationNotes": "스킬 상한·레벨 조건·연속 레벨업·성공/실패 EXP·배율을 개별 대조해요.",
+              "nativeAcceptance": {
+                "status": "not-run",
+                "evidence": []
+              }
+            },
+            {
+              "id": "MS.STATE.PERKS",
+              "parentFeatureId": "MS.STATE",
+              "title": "특성 비용·선결조건·상호배제·효과 합산",
+              "itemType": "observed-function",
+              "requiredForBeta": true,
+              "currentSupport": {
+                "status": "partial",
+                "evidenceRefs": [
+                  "U-BEHAVIOR",
+                  "U-RUNTIME",
+                  "U-READING"
+                ],
+                "basis": "관련 Uimori 기반은 있지만 이 원본 세부 기능의 연결·시점·경험과 native 검증은 미완이에요."
+              },
+              "responsibilityCandidates": [
+                "state",
+                "runtime",
+                "ui"
+              ],
+              "requiredVerification": [
+                "STATE",
+                "RUNTIME",
+                "UI",
+                "SAMPLE"
+              ],
+              "originalEvidence": {
+                "kind": "bounded-structured-read",
+                "evidenceRefs": [
+                  "MERRY-LUA-20260912"
+                ],
+                "sampleId": "merry",
+                "reference": "Lua section IDs refer to samples.merry.discovery.structuredRead.sectionEvidence",
+                "locators": [
+                  {
+                    "sectionId": 16,
+                    "lineStart": 1
+                  },
+                  {
+                    "sectionId": 19,
+                    "lineStart": 120,
+                    "lineEnd": 229
+                  },
+                  {
+                    "sectionId": 21,
+                    "lineStart": 1
+                  }
+                ],
+                "precision": "section-local 1-based lines in structured response; focused static review, not full semantics or runtime"
+              },
+              "verificationNotes": "특성별 조건·그룹 충돌·중복 취득·포인트 차감·보너스를 확인해요. 전체 특성 계수의 의미 검증은 미완이에요.",
+              "nativeAcceptance": {
+                "status": "not-run",
+                "evidence": []
+              }
+            },
+            {
+              "id": "MS.STATE.TERRITORY",
+              "parentFeatureId": "MS.STATE",
+              "title": "영지 작업 상태와 단계별 퀘스트 활성 조건",
+              "itemType": "observed-function",
+              "requiredForBeta": true,
+              "currentSupport": {
+                "status": "partial",
+                "evidenceRefs": [
+                  "U-BEHAVIOR",
+                  "U-MEMORY"
+                ],
+                "basis": "관련 Uimori 기반은 있지만 이 원본 세부 기능의 연결·시점·경험과 native 검증은 미완이에요."
+              },
+              "responsibilityCandidates": [
+                "state",
+                "memory"
+              ],
+              "requiredVerification": [
+                "STATE",
+                "MEMORY",
+                "WIRE",
+                "SAMPLE"
+              ],
+              "originalEvidence": {
+                "kind": "bounded-structured-read",
+                "evidenceRefs": [
+                  "MERRY-LUA-20260912"
+                ],
+                "sampleId": "merry",
+                "reference": "Lua section IDs refer to samples.merry.discovery.structuredRead.sectionEvidence",
+                "locators": [
+                  {
+                    "sectionId": 15,
+                    "lineStart": 1
+                  },
+                  {
+                    "sectionId": 17,
+                    "lineStart": 52,
+                    "lineEnd": 59
+                  },
+                  {
+                    "sectionId": 24,
+                    "lineStart": 316,
+                    "lineEnd": 341
+                  },
+                  {
+                    "sectionId": 24,
+                    "lineStart": 386,
+                    "lineEnd": 390
+                  }
+                ],
+                "precision": "section-local 1-based lines in structured response; focused static review, not full semantics or runtime"
+              },
+              "verificationNotes": "작업별 초기값과 단계 의존·능력치 조건·표시용 상태를 대조해요.",
+              "nativeAcceptance": {
+                "status": "not-run",
+                "evidence": []
+              }
+            },
+            {
+              "id": "MS.STATE.REST_TRAINING",
+              "parentFeatureId": "MS.STATE",
+              "title": "휴식·훈련 태그의 자원 회복과 경험치 처리",
+              "itemType": "observed-function",
+              "requiredForBeta": true,
+              "currentSupport": {
+                "status": "partial",
+                "evidenceRefs": [
+                  "U-BEHAVIOR",
+                  "U-PROMPT",
+                  "U-SEGMENT"
+                ],
+                "basis": "관련 Uimori 기반은 있지만 이 원본 세부 기능의 연결·시점·경험과 native 검증은 미완이에요."
+              },
+              "responsibilityCandidates": [
+                "state",
+                "representation"
+              ],
+              "requiredVerification": [
+                "STATE",
+                "WIRE",
+                "SAMPLE"
+              ],
+              "originalEvidence": {
+                "kind": "bounded-structured-read",
+                "evidenceRefs": [
+                  "MERRY-LUA-20260912"
+                ],
+                "sampleId": "merry",
+                "reference": "Lua section IDs refer to samples.merry.discovery.structuredRead.sectionEvidence",
+                "locators": [
+                  {
+                    "sectionId": 4,
+                    "lineStart": 47,
+                    "lineEnd": 123
+                  },
+                  {
+                    "sectionId": 27,
+                    "lineStart": 1,
+                    "lineEnd": 28
+                  }
+                ],
+                "precision": "section-local 1-based lines in structured response; focused static review, not full semantics or runtime"
+              },
+              "verificationNotes": "태그 감지·기능 OFF·특성/배율·이미 회복된 값·알림 시점을 확인해요.",
+              "nativeAcceptance": {
+                "status": "not-run",
+                "evidence": []
+              }
+            },
+            {
+              "id": "MS.STATE.TAG_PIPELINE",
+              "parentFeatureId": "MS.STATE",
+              "title": "인벤토리·관계 태그와 퀘스트 보상의 단계적 반영",
+              "itemType": "observed-function",
+              "requiredForBeta": true,
+              "currentSupport": {
+                "status": "partial",
+                "evidenceRefs": [
+                  "U-BEHAVIOR",
+                  "U-PROMPT",
+                  "U-SEGMENT",
+                  "U-RUNTIME"
+                ],
+                "basis": "관련 Uimori 기반은 있지만 이 원본 세부 기능의 연결·시점·경험과 native 검증은 미완이에요."
+              },
+              "responsibilityCandidates": [
+                "state",
+                "representation",
+                "runtime"
+              ],
+              "requiredVerification": [
+                "STATE",
+                "WIRE",
+                "RUNTIME",
+                "SAMPLE"
+              ],
+              "originalEvidence": {
+                "kind": "bounded-structured-read",
+                "evidenceRefs": [
+                  "MERRY-LUA-20260912"
+                ],
+                "sampleId": "merry",
+                "reference": "Lua section IDs refer to samples.merry.discovery.structuredRead.sectionEvidence",
+                "locators": [
+                  {
+                    "sectionId": 17,
+                    "lineStart": 62,
+                    "lineEnd": 182
+                  },
+                  {
+                    "sectionId": 18,
+                    "lineStart": 1,
+                    "lineEnd": 174
+                  }
+                ],
+                "precision": "section-local 1-based lines in structured response; focused static review, not full semantics or runtime"
+              },
+              "verificationNotes": "표시 전용 추출값·대기 변경·현재 상태·등록/완료 순서를 구분해요.",
+              "nativeAcceptance": {
+                "status": "not-run",
+                "evidence": []
+              }
+            },
+            {
+              "id": "MS.STATE.MANUAL_OVERRIDES",
+              "parentFeatureId": "MS.STATE",
+              "title": "사용자의 관계·능력치·경험치·포인트 직접 변경",
+              "itemType": "observed-function",
+              "requiredForBeta": true,
+              "currentSupport": {
+                "status": "partial",
+                "evidenceRefs": [
+                  "U-BEHAVIOR",
+                  "U-RUNTIME",
+                  "U-READING"
+                ],
+                "basis": "관련 Uimori 기반은 있지만 이 원본 세부 기능의 연결·시점·경험과 native 검증은 미완이에요."
+              },
+              "responsibilityCandidates": [
+                "state",
+                "ui"
+              ],
+              "requiredVerification": [
+                "STATE",
+                "UI",
+                "LIFECYCLE",
+                "SAMPLE"
+              ],
+              "originalEvidence": {
+                "kind": "bounded-structured-read",
+                "evidenceRefs": [
+                  "MERRY-LUA-20260912"
+                ],
+                "sampleId": "merry",
+                "reference": "Lua section IDs refer to samples.merry.discovery.structuredRead.sectionEvidence",
+                "locators": [
+                  {
+                    "sectionId": 34,
+                    "lineStart": 10,
+                    "lineEnd": 102
+                  },
+                  {
+                    "sectionId": 35,
+                    "lineStart": 8,
+                    "lineEnd": 59
+                  }
+                ],
+                "precision": "section-local 1-based lines in structured response; focused static review, not full semantics or runtime"
+              },
+              "verificationNotes": "음수 입력·범위·취소·파생값 갱신과 임시 변경의 복원 귀속을 확인해요.",
+              "nativeAcceptance": {
+                "status": "not-run",
+                "evidence": []
+              }
+            },
+            {
+              "id": "MS.STATE.DEBUG",
+              "parentFeatureId": "MS.STATE",
+              "title": "최대치 설정과 스킬/동료 판정 테스트 기능",
+              "itemType": "observed-function",
+              "requiredForBeta": true,
+              "currentSupport": {
+                "status": "partial",
+                "evidenceRefs": [
+                  "U-BEHAVIOR",
+                  "U-RUNTIME",
+                  "U-READING"
+                ],
+                "basis": "관련 Uimori 기반은 있지만 이 원본 세부 기능의 연결·시점·경험과 native 검증은 미완이에요."
+              },
+              "responsibilityCandidates": [
+                "state",
+                "runtime",
+                "ui"
+              ],
+              "requiredVerification": [
+                "STATE",
+                "RUNTIME",
+                "UI",
+                "SAMPLE"
+              ],
+              "originalEvidence": {
+                "kind": "bounded-structured-read",
+                "evidenceRefs": [
+                  "MERRY-LUA-20260912"
+                ],
+                "sampleId": "merry",
+                "reference": "Lua section IDs refer to samples.merry.discovery.structuredRead.sectionEvidence",
+                "locators": [
+                  {
+                    "sectionId": 38,
+                    "lineStart": 1,
+                    "lineEnd": 82
+                  }
+                ],
+                "precision": "section-local 1-based lines in structured response; focused static review, not full semantics or runtime"
+              },
+              "verificationNotes": "최대치 일괄 설정과 선택한 스킬/동료·DC의 기존 판정 경로 호출을 따로 검증해요.",
+              "nativeAcceptance": {
+                "status": "not-run",
+                "evidence": []
+              }
+            },
+            {
+              "id": "MS.INSTRUCTIONS.AUX_MODES",
+              "parentFeatureId": "MS.INSTRUCTIONS",
+              "title": "상태 생성 역할·보조 호출 1/2회·기능 묶음 설정",
+              "itemType": "observed-function",
+              "requiredForBeta": true,
+              "currentSupport": {
+                "status": "partial",
+                "evidenceRefs": [
+                  "U-JOBS",
+                  "U-PROMPT",
+                  "U-SEGMENT",
+                  "U-RUNTIME",
+                  "U-READING"
+                ],
+                "basis": "관련 Uimori 기반은 있지만 이 원본 세부 기능의 연결·시점·경험과 native 검증은 미완이에요."
+              },
+              "responsibilityCandidates": [
+                "jobs",
+                "representation",
+                "ui"
+              ],
+              "requiredVerification": [
+                "JOBS",
+                "WIRE",
+                "UI",
+                "SAMPLE"
+              ],
+              "originalEvidence": {
+                "kind": "bounded-structured-read",
+                "evidenceRefs": [
+                  "MERRY-LUA-20260912"
+                ],
+                "sampleId": "merry",
+                "reference": "Lua section IDs refer to samples.merry.discovery.structuredRead.sectionEvidence",
+                "locators": [
+                  {
+                    "sectionId": 12,
+                    "lineStart": 627,
+                    "lineEnd": 711
+                  },
+                  {
+                    "sectionId": 33,
+                    "lineStart": 1,
+                    "lineEnd": 31
+                  }
+                ],
+                "precision": "section-local 1-based lines in structured response; focused static review, not full semantics or runtime"
+              },
+              "verificationNotes": "메인/보조/OFF와 호출 횟수·묶음 설정의 실제 적용 범위를 확인해요.",
+              "nativeAcceptance": {
+                "status": "not-run",
+                "evidence": []
+              }
+            },
+            {
+              "id": "MS.INSTRUCTIONS.GAME_OPTIONS",
+              "parentFeatureId": "MS.INSTRUCTIONS",
+              "title": "추가 콘텐츠·기능·관계/상태/EXP 배율·난이도 설정",
+              "itemType": "observed-function",
+              "requiredForBeta": true,
+              "currentSupport": {
+                "status": "partial",
+                "evidenceRefs": [
+                  "U-BEHAVIOR",
+                  "U-PROMPT",
+                  "U-SEGMENT",
+                  "U-RUNTIME",
+                  "U-READING"
+                ],
+                "basis": "관련 Uimori 기반은 있지만 이 원본 세부 기능의 연결·시점·경험과 native 검증은 미완이에요."
+              },
+              "responsibilityCandidates": [
+                "state",
+                "representation",
+                "ui"
+              ],
+              "requiredVerification": [
+                "STATE",
+                "WIRE",
+                "UI",
+                "SAMPLE"
+              ],
+              "originalEvidence": {
+                "kind": "bounded-structured-read",
+                "evidenceRefs": [
+                  "MERRY-LUA-20260912"
+                ],
+                "sampleId": "merry",
+                "reference": "Lua section IDs refer to samples.merry.discovery.structuredRead.sectionEvidence",
+                "locators": [
+                  {
+                    "sectionId": 12,
+                    "lineStart": 477,
+                    "lineEnd": 626
+                  },
+                  {
+                    "sectionId": 12,
+                    "lineStart": 640,
+                    "lineEnd": 664
+                  },
+                  {
+                    "sectionId": 12,
+                    "lineStart": 813,
+                    "lineEnd": 945
+                  },
+                  {
+                    "sectionId": 13,
+                    "lineStart": 1
+                  }
+                ],
+                "precision": "section-local 1-based lines in structured response; focused static review, not full semantics or runtime"
+              },
+              "verificationNotes": "설정별 값과 조합이 활성 기능·지침·계산에 미치는 영향을 추적해요.",
+              "nativeAcceptance": {
+                "status": "not-run",
+                "evidence": []
+              }
+            },
+            {
+              "id": "MS.INSTRUCTIONS.LANGUAGE",
+              "parentFeatureId": "MS.INSTRUCTIONS",
+              "title": "본문 언어와 UI 언어 설정의 구분",
+              "itemType": "observed-function",
+              "requiredForBeta": true,
+              "currentSupport": {
+                "status": "partial",
+                "evidenceRefs": [
+                  "U-PROMPT",
+                  "U-SEGMENT",
+                  "U-RUNTIME",
+                  "U-READING"
+                ],
+                "basis": "관련 Uimori 기반은 있지만 이 원본 세부 기능의 연결·시점·경험과 native 검증은 미완이에요."
+              },
+              "responsibilityCandidates": [
+                "representation",
+                "ui"
+              ],
+              "requiredVerification": [
+                "WIRE",
+                "UI",
+                "SAMPLE"
+              ],
+              "originalEvidence": {
+                "kind": "bounded-structured-read",
+                "evidenceRefs": [
+                  "MERRY-LUA-20260912"
+                ],
+                "sampleId": "merry",
+                "reference": "Lua section IDs refer to samples.merry.discovery.structuredRead.sectionEvidence",
+                "locators": [
+                  {
+                    "sectionId": 12,
+                    "lineStart": 759,
+                    "lineEnd": 786
+                  }
+                ],
+                "precision": "section-local 1-based lines in structured response; focused static review, not full semantics or runtime"
+              },
+              "verificationNotes": "원본의 언어 선택별 실제 값·지침·알림 언어를 확인해요. 표시명만으로 동작을 추정하지 않아요.",
+              "nativeAcceptance": {
+                "status": "not-run",
+                "evidence": []
+              }
+            },
+            {
+              "id": "MS.INSTRUCTIONS.INSERTION",
+              "parentFeatureId": "MS.INSTRUCTIONS",
+              "title": "시스템 지침 삽입 위치와 판정 계획 설정",
+              "itemType": "observed-function",
+              "requiredForBeta": true,
+              "currentSupport": {
+                "status": "partial",
+                "evidenceRefs": [
+                  "U-PROMPT",
+                  "U-SEGMENT"
+                ],
+                "basis": "관련 Uimori 기반은 있지만 이 원본 세부 기능의 연결·시점·경험과 native 검증은 미완이에요."
+              },
+              "responsibilityCandidates": [
+                "representation"
+              ],
+              "requiredVerification": [
+                "WIRE",
+                "SAMPLE"
+              ],
+              "originalEvidence": {
+                "kind": "bounded-structured-read",
+                "evidenceRefs": [
+                  "MERRY-LUA-20260912"
+                ],
+                "sampleId": "merry",
+                "reference": "Lua section IDs refer to samples.merry.discovery.structuredRead.sectionEvidence",
+                "locators": [
+                  {
+                    "sectionId": 12,
+                    "lineStart": 715,
+                    "lineEnd": 757
+                  }
+                ],
+                "precision": "section-local 1-based lines in structured response; focused static review, not full semantics or runtime"
+              },
+              "verificationNotes": "기존 지침 덮기/마지막 삽입 선택과 판정 계획 ON/OFF의 최종 요청을 대조해요.",
+              "nativeAcceptance": {
+                "status": "not-run",
+                "evidence": []
+              }
+            },
+            {
+              "id": "MS.INSTRUCTIONS.THEME",
+              "parentFeatureId": "MS.INSTRUCTIONS",
+              "title": "테마/BGM 선택 지침과 활성 설정",
+              "itemType": "observed-function",
+              "requiredForBeta": true,
+              "currentSupport": {
+                "status": "unknown",
+                "evidenceRefs": [],
+                "basis": "원본의 일부 구조는 확인했지만 남은 표면 조사 없이는 상세 동작과 Uimori 대응을 확정할 수 없어요."
+              },
+              "responsibilityCandidates": [
+                "representation",
+                "ui"
+              ],
+              "requiredVerification": [
+                "WIRE",
+                "UI",
+                "SAMPLE"
+              ],
+              "originalEvidence": {
+                "kind": "bounded-structured-read",
+                "evidenceRefs": [
+                  "MERRY-LUA-20260912"
+                ],
+                "sampleId": "merry",
+                "reference": "Lua section IDs refer to samples.merry.discovery.structuredRead.sectionEvidence",
+                "locators": [
+                  {
+                    "sectionId": 0,
+                    "lineStart": 81,
+                    "lineEnd": 93
+                  },
+                  {
+                    "sectionId": 12,
+                    "lineStart": 601,
+                    "lineEnd": 612
+                  },
+                  {
+                    "sectionId": 24,
+                    "lineStart": 399,
+                    "lineEnd": 399
+                  }
+                ],
+                "precision": "section-local 1-based lines in structured response; focused static review, not full semantics or runtime"
+              },
+              "verificationNotes": "선택 지침과 스위치는 확인했지만 실제 오디오 자산·재생/정지 경로는 미검토라 현재 대응을 확정하지 않아요.",
+              "nativeAcceptance": {
+                "status": "not-run",
+                "evidence": []
+              }
+            },
+            {
+              "id": "MS.UI.DYNAMIC_ACTIONS",
+              "parentFeatureId": "MS.UI",
+              "title": "표에서 동적으로 생성하는 사용자 행동 등록",
+              "itemType": "observed-function",
+              "requiredForBeta": true,
+              "currentSupport": {
+                "status": "missing",
+                "evidenceRefs": [
+                  "U-RUNTIME",
+                  "U-READING"
+                ],
+                "basis": "조사 기준의 Uimori에 이 기능을 완성한 공통 확장 경로나 연결이 없어요."
+              },
+              "responsibilityCandidates": [
+                "runtime",
+                "ui"
+              ],
+              "requiredVerification": [
+                "RUNTIME",
+                "UI",
+                "SAMPLE"
+              ],
+              "originalEvidence": {
+                "kind": "bounded-structured-read",
+                "evidenceRefs": [
+                  "MERRY-LUA-20260912"
+                ],
+                "sampleId": "merry",
+                "reference": "Lua section IDs refer to samples.merry.discovery.structuredRead.sectionEvidence",
+                "locators": [
+                  {
+                    "sectionId": 34,
+                    "lineStart": 69,
+                    "lineEnd": 102
+                  },
+                  {
+                    "sectionId": 35,
+                    "lineStart": 1,
+                    "lineEnd": 6
+                  }
+                ],
+                "precision": "section-local 1-based lines in structured response; focused static review, not full semantics or runtime"
+              },
+              "verificationNotes": "등록된 행동 이름·입력·권한·중복/소실을 확인해요. 동적 함수 등록을 외부 코드 로딩과 구분해요.",
+              "nativeAcceptance": {
+                "status": "not-run",
+                "evidence": []
+              }
+            },
+            {
+              "id": "MS.UI.PANEL_STATE",
+              "parentFeatureId": "MS.UI",
+              "title": "패널 열림 상태와 상호 닫힘·설정 패널 표시",
+              "itemType": "observed-function",
+              "requiredForBeta": true,
+              "currentSupport": {
+                "status": "partial",
+                "evidenceRefs": [
+                  "U-RUNTIME",
+                  "U-READING",
+                  "U-BEHAVIOR"
+                ],
+                "basis": "관련 Uimori 기반은 있지만 이 원본 세부 기능의 연결·시점·경험과 native 검증은 미완이에요."
+              },
+              "responsibilityCandidates": [
+                "ui",
+                "state"
+              ],
+              "requiredVerification": [
+                "UI",
+                "STATE",
+                "LIFECYCLE",
+                "SAMPLE"
+              ],
+              "originalEvidence": {
+                "kind": "bounded-structured-read",
+                "evidenceRefs": [
+                  "MERRY-LUA-20260912"
+                ],
+                "sampleId": "merry",
+                "reference": "Lua section IDs refer to samples.merry.discovery.structuredRead.sectionEvidence",
+                "locators": [
+                  {
+                    "sectionId": 33,
+                    "lineStart": 34,
+                    "lineEnd": 36
+                  },
+                  {
+                    "sectionId": 39,
+                    "lineStart": 1,
+                    "lineEnd": 37
+                  }
+                ],
+                "precision": "section-local 1-based lines in structured response; focused static review, not full semantics or runtime"
+              },
+              "verificationNotes": "패널 간 전환과 상태 유지·복원을 실제 화면에서 확인해요.",
+              "nativeAcceptance": {
+                "status": "not-run",
+                "evidence": []
+              }
+            },
+            {
+              "id": "MS.UI.REFRESH",
+              "parentFeatureId": "MS.UI",
+              "title": "상태 변경 후 원문을 유지하는 표시 새로고침",
+              "itemType": "observed-function",
+              "requiredForBeta": true,
+              "currentSupport": {
+                "status": "partial",
+                "evidenceRefs": [
+                  "U-RUNTIME",
+                  "U-READING",
+                  "U-SOURCE"
+                ],
+                "basis": "관련 Uimori 기반은 있지만 이 원본 세부 기능의 연결·시점·경험과 native 검증은 미완이에요."
+              },
+              "responsibilityCandidates": [
+                "ui",
+                "source"
+              ],
+              "requiredVerification": [
+                "UI",
+                "SOURCE",
+                "SAMPLE"
+              ],
+              "originalEvidence": {
+                "kind": "bounded-structured-read",
+                "evidenceRefs": [
+                  "MERRY-LUA-20260912"
+                ],
+                "sampleId": "merry",
+                "reference": "Lua section IDs refer to samples.merry.discovery.structuredRead.sectionEvidence",
+                "locators": [
+                  {
+                    "sectionId": 39,
+                    "lineStart": 40,
+                    "lineEnd": 47
+                  },
+                  {
+                    "sectionId": 6,
+                    "lineStart": 61,
+                    "lineEnd": 63
+                  }
+                ],
+                "precision": "section-local 1-based lines in structured response; focused static review, not full semantics or runtime"
+              },
+              "verificationNotes": "원본이 같은 텍스트 재설정을 새로고침에 사용하는 점을 구분하고, 대상 구현의 원문·hash 보존과 화면 갱신을 확인해요.",
+              "nativeAcceptance": {
+                "status": "not-run",
+                "evidence": []
+              }
+            },
+            {
+              "id": "MS.IMAGES.VALIDATION",
+              "parentFeatureId": "MS.IMAGES",
+              "title": "인물/복장/표현·배경/시간 조합의 태그 검증",
+              "itemType": "observed-function",
+              "requiredForBeta": true,
+              "currentSupport": {
+                "status": "partial",
+                "evidenceRefs": [
+                  "U-IMAGES",
+                  "U-PROMPT",
+                  "U-SEGMENT"
+                ],
+                "basis": "관련 Uimori 기반은 있지만 이 원본 세부 기능의 연결·시점·경험과 native 검증은 미완이에요."
+              },
+              "responsibilityCandidates": [
+                "images",
+                "representation"
+              ],
+              "requiredVerification": [
+                "IMAGES",
+                "WIRE",
+                "SAMPLE"
+              ],
+              "originalEvidence": {
+                "kind": "bounded-structured-read",
+                "evidenceRefs": [
+                  "MERRY-LUA-20260912"
+                ],
+                "sampleId": "merry",
+                "reference": "Lua section IDs refer to samples.merry.discovery.structuredRead.sectionEvidence",
+                "locators": [
+                  {
+                    "sectionId": 25,
+                    "lineStart": 89,
+                    "lineEnd": 160
+                  },
+                  {
+                    "sectionId": 0,
+                    "lineStart": 94,
+                    "lineEnd": 156
+                  }
+                ],
+                "precision": "section-local 1-based lines in structured response; focused static review, not full semantics or runtime"
+              },
+              "verificationNotes": "허용 조합·누락/잘못된 태그 제거·문단 계획을 대조해요. 전체 에셋 byte 및 renderer 검증은 미완이에요.",
+              "nativeAcceptance": {
+                "status": "not-run",
+                "evidence": []
+              }
+            },
+            {
+              "id": "MS.PERIODIC.CONTEXT",
+              "parentFeatureId": "MS.PERIODIC",
+              "title": "NPC 장기 기억·직전 상태와 최근 이력의 별도 문맥",
+              "itemType": "observed-function",
+              "requiredForBeta": true,
+              "currentSupport": {
+                "status": "partial",
+                "evidenceRefs": [
+                  "U-MEMORY",
+                  "U-PROMPT",
+                  "U-SEGMENT"
+                ],
+                "basis": "관련 Uimori 기반은 있지만 이 원본 세부 기능의 연결·시점·경험과 native 검증은 미완이에요."
+              },
+              "responsibilityCandidates": [
+                "memory",
+                "representation"
+              ],
+              "requiredVerification": [
+                "MEMORY",
+                "WIRE",
+                "SAMPLE"
+              ],
+              "originalEvidence": {
+                "kind": "bounded-structured-read",
+                "evidenceRefs": [
+                  "MERRY-LUA-20260912"
+                ],
+                "sampleId": "merry",
+                "reference": "Lua section IDs refer to samples.merry.discovery.structuredRead.sectionEvidence",
+                "locators": [
+                  {
+                    "sectionId": 1,
+                    "lineStart": 118,
+                    "lineEnd": 222
+                  },
+                  {
+                    "sectionId": 1,
+                    "lineStart": 295,
+                    "lineEnd": 352
+                  }
+                ],
+                "precision": "section-local 1-based lines in structured response; focused static review, not full semantics or runtime"
+              },
+              "verificationNotes": "설정·페르소나·명성·장기 기억과 직전 상태의 우선순위, 최근 30메시지에서 제외하는 형식을 확인해요.",
+              "nativeAcceptance": {
+                "status": "not-run",
+                "evidence": []
+              }
+            },
+            {
+              "id": "MS.UI.NOTIFICATIONS",
+              "parentFeatureId": "MS.UI",
+              "title": "알림 큐와 임시 진행 메시지의 완료·실패 정리",
+              "itemType": "observed-function",
+              "requiredForBeta": true,
+              "currentSupport": {
+                "status": "partial",
+                "evidenceRefs": [
+                  "U-RUNTIME",
+                  "U-READING",
+                  "U-JOBS",
+                  "U-SOURCE"
+                ],
+                "basis": "관련 Uimori 기반은 있지만 이 원본 세부 기능의 연결·시점·경험과 native 검증은 미완이에요."
+              },
+              "responsibilityCandidates": [
+                "ui",
+                "jobs",
+                "source"
+              ],
+              "requiredVerification": [
+                "UI",
+                "JOBS",
+                "SOURCE",
+                "SAMPLE"
+              ],
+              "originalEvidence": {
+                "kind": "bounded-structured-read",
+                "evidenceRefs": [
+                  "MERRY-LUA-20260912"
+                ],
+                "sampleId": "merry",
+                "reference": "Lua section IDs refer to samples.merry.discovery.structuredRead.sectionEvidence",
+                "locators": [
+                  {
+                    "sectionId": 3,
+                    "lineStart": 1,
+                    "lineEnd": 9
+                  },
+                  {
+                    "sectionId": 5,
+                    "lineStart": 50,
+                    "lineEnd": 71
+                  },
+                  {
+                    "sectionId": 19,
+                    "lineStart": 62,
+                    "lineEnd": 76
+                  }
+                ],
+                "precision": "section-local 1-based lines in structured response; focused static review, not full semantics or runtime"
+              },
+              "verificationNotes": "본문에 붙는 알림과 진행 표시를 구분하고 중복·실패·취소 시 실제 원문 보존을 확인해요.",
+              "nativeAcceptance": {
+                "status": "not-run",
+                "evidence": []
+              }
+            },
+            {
+              "id": "MS.STATE.DIAGNOSTICS",
+              "parentFeatureId": "MS.STATE",
+              "title": "상태 변경·복원·보조 프롬프트 진단의 범위",
+              "itemType": "observed-function",
+              "requiredForBeta": true,
+              "currentSupport": {
+                "status": "partial",
+                "evidenceRefs": [
+                  "U-JOBS",
+                  "U-PRICING",
+                  "U-BEHAVIOR"
+                ],
+                "basis": "관련 Uimori 기반은 있지만 이 원본 세부 기능의 연결·시점·경험과 native 검증은 미완이에요."
+              },
+              "responsibilityCandidates": [
+                "diagnostics",
+                "state"
+              ],
+              "requiredVerification": [
+                "DIAGNOSTICS",
+                "STATE",
+                "SAMPLE"
+              ],
+              "originalEvidence": {
+                "kind": "bounded-structured-read",
+                "evidenceRefs": [
+                  "MERRY-LUA-20260912"
+                ],
+                "sampleId": "merry",
+                "reference": "Lua section IDs refer to samples.merry.discovery.structuredRead.sectionEvidence",
+                "locators": [
+                  {
+                    "sectionId": 3,
+                    "lineStart": 105,
+                    "lineEnd": 105
+                  },
+                  {
+                    "sectionId": 24,
+                    "lineStart": 30,
+                    "lineEnd": 76
+                  },
+                  {
+                    "sectionId": 1,
+                    "lineStart": 222,
+                    "lineEnd": 227
+                  }
+                ],
+                "precision": "section-local 1-based lines in structured response; focused static review, not full semantics or runtime"
+              },
+              "verificationNotes": "원본 로그가 포함하는 프롬프트/상태와 공유 진단의 제외 범위를 구분해요. 원본 로그의 무조건 공개를 목표로 삼지 않아요.",
               "nativeAcceptance": {
                 "status": "not-run",
                 "evidence": []

@@ -1,6 +1,6 @@
-# 아키텍처 계약 v0.6.1
+# 아키텍처 · 기반과 설계 이력
 
-> 2026-09-08 현행 연결(2026-09-10 버전 정정): 문서 제목의 v0.6.1은 계약 문서 버전이며 현재 DB/archive는 v15다(이 문장 작성 당시 v12, 본문 10절의 "현재 v12 새 DB"도 같은 시점의 표현). 현재 계약의 요약은 [CURRENT](CURRENT.md)를 따른다. 구형 DB는 이관하지 않고 거부하며 개발 DB 초기화는 `npm run reset:dev`를 사용한다. 서재 분류·폴더와 자료 종류는 [LIBRARY](../docs/LIBRARY.md), 공통 패키지·Run 상태·기록된 난수는 [PACKAGE-BEHAVIOR](../docs/PACKAGE-BEHAVIOR.md), 개인 HTTPS 접속·세션은 [SELF-HOST](../docs/SELF-HOST.md), Risu 자료의 에이전트 이식은 [RISU-PORTING](../docs/RISU-PORTING.md)을 따른다. 아래 M1/M2 시점의 설명과 장기 설계는 각 단계의 계약이며 전체 구현 완료를 뜻하지 않는다. 실제 완료 범위는 [CURRENT](CURRENT.md)에서 확인한다.
+> 2026-09-12: 이 문서는 기존 아키텍처 계약 v0.6.1의 기반과 M1/M2 당시 설계·장기 제안을 보존해요. 본문의 버전·자료 종류·전역 설정·매 턴 기억 추출·상태 실패 시 차단 설명을 현재 구현 지시로 사용하지 않아요. 현재 계약과 코드 위치는 [CURRENT](CURRENT.md)를 따라요. 지원 DB 이관은 [DATA-MIGRATIONS](../docs/DATA-MIGRATIONS.md), 정상 대기와 실패·건너뛰기는 [STATE-PREPARATION](../docs/STATE-PREPARATION.md), 현재 문맥·요약은 [CONTEXT-LIMITS](../docs/CONTEXT-LIMITS.md)가 소유해요. 베타의 확장·보존 원칙은 [방향 결정](../docs/DECISIONS-2026-09-12-BETA.md), 미구현 경계는 [실행 계획](BETA-PLAN.md)을 봐요. 아래 설명 전체의 구현 완료를 의미하지 않아요.
 
 제안된 이름은 구현을 강제하는 클래스 목록이 아니다. 아래 경계와 동작을 유지하면 더 단순한 표현으로 구현할 수 있다.
 
