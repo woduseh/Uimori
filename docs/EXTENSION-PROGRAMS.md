@@ -9,9 +9,9 @@
 추가 모델 호출을 사용하는 순서는 간단해요.
 
 1. 설정 → 역할별 모델에서 전역 **확장 호출 모델**을 선택해요. 기본값은 없음이에요.
-2. 자료의 행동에서 제작자가 `model`, `before-turn`, `after-turn` 호출 방법과 `model.generate` capability를 요청해요. 자동 실행에는 `automaticInput`도 지정해요.
+2. 자료의 행동에서 제작자가 `user`, `model`, `before-turn`, `after-turn` 호출 방법과 `model.generate` capability를 요청해요. 자동 실행에는 `automaticInput`도 지정해요.
 3. 채팅에서 장착한 자료의 **추가 모델 호출 허용**을 켜요. 이 허용은 그 자료의 현재 revision에만 적용돼요.
-4. 생성 전·응답 후 자동 처리 또는 본문(main) 모델이 요청한 행동에서 코드가 `model.generate`를 사용할 수 있어요.
+4. 사용자 버튼·생성 전·응답 후 자동 처리 또는 본문(main) 모델이 요청한 행동에서 코드가 `model.generate`를 사용할 수 있어요.
 
 사용자 버튼의 코드는 자기 상태 계산·자료 읽기와 허용된 추가 모델 호출을 지원해요. 모델 capability를 선언한 버튼은 같은 actions API에서 영구 작업으로 접수해요.
 
@@ -167,6 +167,10 @@ Run에 속한 추가 호출은 Run 전체 `maxCalls`를 공유해요. 생성 전
 DB v18의 작업·attempt 연결 표와 archive15/chat-backup1의 선택적 collection에 기록을 보존해요. 과거 백업의 collection 누락은 빈 목록으로 처리하며 복원에서 코드나 모델을 재호출하지 않아요. 복원한 채팅의 live grant 제거 원칙은 그대로예요.
 
 ## 실행 엔진의 경계
+
+모델 Host 연결을 지원하는 네 호출 경로는 `server/package-extension-execution.ts`의 `executePackageExtensionProgram`으로 Host 연결·모델 결과 사용 추적·정산 대기를 공유해요. 성공한 모델 결과를 받은 코드는 계산 완료 뒤에도 모델 접근 가능 여부를 다시 확인해요. 모델 사용 불가를 처리한 로컬 대체 결과에는 성공한 모델 결과의 권한을 요구하지 않아요. 사용자 작업은 재확인 전에 완성 계산을 보관하므로 채택이 거절되어도 미반영 결과를 남겨요. 각 호출자는 진행 상태·건너뛰기·취소·CAS·저장 시점을 계속 소유해요. 짧은 사용자 계산과 순수 상태 변환도 같은 하위 `executeExtensionProgram` 엔진을 사용해요.
+
+새 계산의 영수증 생성은 `server/extension-program-receipt.ts`의 `createExtensionProgramReceipt`를 사용해 프로그램 hash·엔진·출력 한도·상태 schema를 함께 검사해요. 보관 기록의 검증은 같은 계산 검증을 공유하면서 원래 채택 상태와 결과의 일치까지 확인해요. 공통 모델 도구 지침은 행동의 권한·기록·중복 실행 규칙만 정하며 결과를 서사에 어떻게 사용할지는 현재 요청과 자료·프롬프트가 정해요.
 
 현재 구현은 `quickjs-emscripten-core`와 `@jitl/quickjs-wasmfile-release-sync` **0.32.0**의 새 QuickJS WASM 인스턴스를 작업별 Worker에서 실행해요. 게스트 코드를 Node의 `eval`·`vm`이나 웹 패널에서 실행하지 않아요. JSON 입력과 크기를 제한한 JSON 결과만 교환해요.
 

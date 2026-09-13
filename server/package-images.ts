@@ -533,8 +533,7 @@ export function packageImageRoutes(
     )
       throw new HttpError(400, 'Package bundle images mismatch');
     return store.transaction(() => {
-      for (const blob of blobs)
-        putImageBlob(store.product, { mime: blob.mime, base64: blob.base64 });
+      for (const blob of blobs) putValidatedImageBlob(store.product, blob);
       assertPackageImages(store.product, pkg);
       return { package: pkg };
     });

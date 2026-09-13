@@ -1,11 +1,17 @@
 import { isDeepStrictEqual } from 'node:util';
 import {
   EXTENSION_PROGRAM_API,
+  ExtensionProgramError,
   validateExtensionProgramResult,
   type ExtensionProgramReceipt,
   type ExtensionProgramResult,
+  type ResolvedExtensionProgram,
 } from '../core/extension-program.js';
-import { validateBehaviorValue, type BehaviorSchema } from '../core/package-behavior.js';
+import {
+  BehaviorError,
+  validateBehaviorValue,
+  type BehaviorSchema,
+} from '../core/package-behavior.js';
 import type { RuntimeValue } from '../core/prompt-program.js';
 
 export class ExtensionProgramReceiptError extends Error {
@@ -69,6 +75,31 @@ export function validateExtensionComputationReceipt(
     state: output!.state,
     result: output!.result,
   };
+}
+
+/** Bind a fresh computation to its authored action before a caller adopts the resulting state. */
+export function createExtensionProgramReceipt(
+  computed: ResolvedExtensionProgram,
+  binding: { programHash: string; stateSchema: BehaviorSchema }
+): ExtensionProgramReceipt {
+  let receipt: ExtensionProgramReceipt;
+  try {
+    receipt = validateExtensionComputationReceipt(
+      { api: EXTENSION_PROGRAM_API, ...computed },
+      binding.programHash
+    );
+  } catch (error) {
+    if (!(error instanceof ExtensionProgramReceiptError)) throw error;
+    // Live action errors keep their existing conflict/invalid-input meanings. Archive readers
+    // retain the more specific receipt errors, and never execute this adoption preparation.
+    if (error.code === 'BEHAVIOR_PROGRAM_RECEIPT_HASH')
+      throw new BehaviorError(409, 'BEHAVIOR_PROGRAM_HASH_MISMATCH');
+    if (error.code === 'BEHAVIOR_PROGRAM_RECEIPT_ENGINE')
+      throw new BehaviorError(400, 'BEHAVIOR_PROGRAM_ENGINE');
+    throw new ExtensionProgramError(error.code);
+  }
+  validateBehaviorValue(binding.stateSchema, receipt.state);
+  return receipt;
 }
 
 /** Validate adopted state against its frozen schema and recorded outcome without executing code. */

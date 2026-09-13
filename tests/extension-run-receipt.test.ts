@@ -2,7 +2,10 @@ import { DatabaseSync } from 'node:sqlite';
 import { describe, expect, test } from 'vitest';
 import { EXTENSION_PROGRAM_API } from '../core/extension-program.js';
 import { validatePackageBehavior, type PackageBehavior } from '../core/package-behavior.js';
-import { validateExtensionProgramReceipt } from '../server/extension-program-receipt.js';
+import {
+  createExtensionProgramReceipt,
+  validateExtensionProgramReceipt,
+} from '../server/extension-program-receipt.js';
 import {
   behaviorPayloadHash,
   PackageBehaviorStore,
@@ -86,6 +89,34 @@ function entry(behavior = definition()): RunBehaviorEntry {
 }
 
 describe('model-triggered extension program receipts', () => {
+  test('fresh computations use the same bounded receipt contract before any state is adopted', () => {
+    const behavior = definition();
+    const { api: _api, ...computed } = receipt(behavior);
+    const binding = {
+      programHash: behaviorPayloadHash(behavior.actions[0].program),
+      stateSchema: behavior.stateSchema,
+    };
+    const created = createExtensionProgramReceipt(computed, binding);
+    expect(created).toEqual(receipt(behavior));
+    expect(
+      validateExtensionProgramReceipt(created, {
+        ...binding,
+        state: computed.state,
+        result: computed.result,
+      })
+    ).toEqual(created);
+    for (const invalid of [
+      { ...computed, programHash: '0'.repeat(64) },
+      { ...computed, engine: '' },
+      { ...computed, state: { count: 11 } },
+      { ...computed, result: 'x'.repeat(8_001) },
+    ]) {
+      expect(() => createExtensionProgramReceipt(invalid, binding)).toThrow();
+    }
+    (created.state as { count: number }).count = 5;
+    expect(computed.state).toEqual({ count: 1 });
+  });
+
   test('validates the exact bounded receipt against the frozen action and entry', () => {
     const behavior = definition();
     expect(

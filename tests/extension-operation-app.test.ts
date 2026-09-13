@@ -1,4 +1,4 @@
-import { afterEach, expect, test } from 'vitest';
+import { afterEach, expect, test, vi } from 'vitest';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { basename, isAbsolute, join, relative, resolve } from 'node:path';
@@ -16,6 +16,7 @@ import { behaviorDetail } from '../server/package-behavior-host.js';
 import { extensionOperation } from '../server/extension-operations.js';
 import { updateModelWorkspace, modelWorkspace } from '../server/prompt-workspace.js';
 import { exportChatBackup, importChatBackup } from '../server/chat-backup.js';
+import * as extensionRuntime from '../server/extension-runtime.js';
 
 const MAIN_MODEL_ID = 'fixture-extension-main';
 const EXTENSION_MODEL_ID = 'fixture-extension-host';
@@ -30,6 +31,7 @@ const owned: {
 }[] = [];
 
 afterEach(async () => {
+  vi.restoreAllMocks();
   for (const item of owned.splice(0).reverse()) {
     await item.app?.close();
     item.store?.close();
@@ -187,6 +189,7 @@ async function fixture(options: FixtureOptions = {}) {
     extensionStarted,
     releaseExtension,
     directory,
+    extensionModel,
   };
 }
 
@@ -313,6 +316,35 @@ test('user button completes through the local provider and existing state journa
       .get(copied.chat.id)
   ).toMatchObject({ status: 'completed' });
   expect(f.provider.requests).toHaveLength(1);
+});
+
+test('model disabled after real guest completion leaves an unadopted result and settled usage', async () => {
+  const f = await fixture();
+  const execute = extensionRuntime.executeExtensionProgram;
+  vi.spyOn(extensionRuntime, 'executeExtensionProgram').mockImplementationOnce(async (...args) => {
+    const result = await execute(...args);
+    f.app.store.product.save(
+      'model',
+      { ...f.extensionModel, enabled: false },
+      f.extensionModel.id,
+      f.extensionModel.revision
+    );
+    return result;
+  });
+  const admitted = await action(f);
+  expect(admitted.statusCode, admitted.body).toBe(200);
+  const id = admitted.json().operation.operationId as string;
+  const result = await operationTerminal(f, id);
+  expect(result).toMatchObject({
+    status: 'failed',
+    error: 'BEHAVIOR_HOST_MODEL_UNAVAILABLE',
+    result: { state: { count: 1 }, result: { text: EXTENSION_TEXT } },
+    usage: { modelCalls: 1, inputTokens: 6, outputTokens: 4 },
+  });
+  expect(state(f)).toMatchObject({ stateRevision: 0, state: { count: 0 } });
+  expect(count(f.app.store, 'package_behavior_journal')).toBe(0);
+  expect(f.provider.requests).toHaveLength(1);
+  expect(f.app.store.product.attempts(f.chat.id)[0].status).toBe('completed');
 });
 
 test('held user operation responds promptly, cancels with accounting and never adopts late state', async () => {

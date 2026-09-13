@@ -39,6 +39,10 @@ const messages: Record<string, string> = {
   CHAT_TRANSCRIPT_UNSUPPORTED_VERSION:
     '이 버전의 본문 파일은 가져올 수 없어요. 파일을 내보낸 앱과 현재 앱의 버전을 확인해 주세요.',
   CHAT_TRANSCRIPT_BOT_REQUIRED: '본문을 가져올 봇을 선택해 주세요.',
+  CHAT_TRANSCRIPT_IMPORT_CONFLICT:
+    '같은 가져오기 요청의 본문이나 제목이 달라졌어요. 기존에 가져온 채팅을 먼저 확인해 주세요.',
+  CHAT_TRANSCRIPT_IMPORT_UNVERIFIABLE:
+    '과거 가져오기 기록으로는 같은 요청인지 확인할 수 없어요. 기존 채팅을 먼저 확인하고, 새 사본이 필요하면 파일을 다시 선택해 주세요.',
   CHAT_TRANSCRIPT_INVALID_REQUEST:
     '본문 파일의 요청 문장이 허용 길이를 넘었거나 형식이 잘못됐어요.',
   CHAT_TRANSCRIPT_INVALID_TEXT: '본문 파일에 비어 있거나 허용 길이를 넘은 응답이 있어요.',

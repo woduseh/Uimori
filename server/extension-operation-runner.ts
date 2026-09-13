@@ -11,8 +11,7 @@ import {
   createExtensionModelService,
   type ExtensionModelHooks,
 } from './extension-model.js';
-import { createPackageExtensionHost } from './extension-materials.js';
-import { executeExtensionProgram } from './extension-runtime.js';
+import { executePackageExtensionProgram } from './package-extension-execution.js';
 import {
   cancelExtensionOperation,
   claimExtensionOperation,
@@ -132,27 +131,25 @@ export function createExtensionOperationRunner(store: Store, options: Options) {
             phase: 'user-action',
             userAction: binding,
           });
-          const materials = createPackageExtensionHost(
-            program,
-            snapshot.profile,
-            ref,
-            assertCurrent
-          );
-          const executed = await executeExtensionProgram(
+          await executePackageExtensionProgram(
             program,
             { state: snapshot.state, input: command.input },
             signal,
             {
-              awaitHostSettlement: true,
+              profile: snapshot.profile,
+              attachment: ref,
+              assertCurrent,
               waitForSlot: true,
-              hostWaitMs: models.hostWaitMs,
-              host: (method, args, callSignal) =>
-                method === 'model.generate'
-                  ? models.generate(binding, args, callSignal)
-                  : materials(method, args, callSignal),
+              modelServices: {
+                hostWaitMs: models.hostWaitMs,
+                modelGenerate: (args, callSignal) => models.generate(binding, args, callSignal),
+                assertModelAccess: authorizeModel,
+              },
+              onExecuted: (executed) => {
+                result = { ...executed, programHash: behaviorPayloadHash(program) };
+              },
             }
           );
-          result = { ...executed, programHash: behaviorPayloadHash(program) };
           assertCurrent();
           store.transaction(() => {
             assertCurrent();

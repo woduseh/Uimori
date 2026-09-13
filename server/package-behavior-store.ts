@@ -19,11 +19,11 @@ import type { RunBehaviorEntry } from './package-behavior-run.js';
 import type { AfterResponseEntry } from '../core/after-response.js';
 import {
   ExtensionProgramReceiptError,
+  createExtensionProgramReceipt,
   validateExtensionProgramReceipt,
 } from './extension-program-receipt.js';
 import {
   EXTENSION_PROGRAM_API,
-  validateExtensionProgramResult,
   type ExtensionProgramReceipt,
   type ResolvedExtensionProgram,
 } from '../core/extension-program.js';
@@ -391,26 +391,10 @@ export class PackageBehaviorStore {
     let program: ExtensionProgramReceipt | undefined;
     if (action!.program !== undefined) {
       if (resolvedProgram === undefined) conflict('BEHAVIOR_PROGRAM_REQUIRES_EXECUTION');
-      if (
-        typeof resolvedProgram!.engine !== 'string' ||
-        !resolvedProgram!.engine.length ||
-        resolvedProgram!.engine.length > 200
-      )
-        bad('BEHAVIOR_PROGRAM_ENGINE');
-      if (resolvedProgram!.programHash !== hash(action!.program))
-        conflict('BEHAVIOR_PROGRAM_HASH_MISMATCH');
-      const output = validateExtensionProgramResult({
-        state: resolvedProgram!.state,
-        result: resolvedProgram!.result,
+      program = createExtensionProgramReceipt(resolvedProgram!, {
+        programHash: hash(action!.program),
+        stateSchema: b.stateSchema,
       });
-      validateBehaviorValue(b.stateSchema, output.state);
-      program = {
-        api: EXTENSION_PROGRAM_API,
-        programHash: resolvedProgram!.programHash,
-        engine: resolvedProgram!.engine,
-        state: output.state,
-        result: output.result,
-      };
     } else if (resolvedProgram !== undefined) bad('BEHAVIOR_PROGRAM_RESULT_UNEXPECTED');
     const payload = {
         scope,

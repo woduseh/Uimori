@@ -28,6 +28,62 @@
       "commit": "45048b1139361cd0fded462683dd30fd7df7ce98"
     }
   },
+  "currentImplementation": {
+    "recordedOn": "2026-09-13",
+    "sourceCommit": "a9190f4",
+    "scope": "공통 구현 보충이며 고정 표본 실행·기능 인수 근거가 아니에요. baselines와 기능별 currentSupport는 초기 조사 기준을 보존해요.",
+    "versions": {
+      "database": 18,
+      "archive": 15,
+      "chatBackup": 1
+    },
+    "support": [
+      {
+        "area": "card-import",
+        "status": "partial",
+        "basis": "카드 .charx/JSON의 기본 자료·이름 템플릿·정적 표시 정규식 경로가 있어요. 24 MiB 입력 한도와 미지원 기능 검토를 유지하며 원본 스크립트 전체를 이식하지 않아요.",
+        "evidence": [
+          "docs/RISU-IMPORT.md",
+          "server/risu-import.ts",
+          "server/character-card-file.ts"
+        ]
+      },
+      {
+        "area": "module-import",
+        "status": "partial",
+        "basis": "RisuToki가 추출한 module.json 또는 .risutoki 에셋을 포함한 프로젝트 ZIP을 모듈로 등록해요. 고정 원본 .risum·모듈 .charx의 직접 지원은 아니에요.",
+        "evidence": [
+          "docs/RISU-IMPORT.md",
+          "server/risu-module-json.ts"
+        ]
+      },
+      {
+        "area": "extension-runtime",
+        "status": "partial",
+        "basis": "user/model/before-turn/after-turn JavaScript·자기 자료 읽기·허가된 model.generate·응답 후 완성 본문 읽기·사용자 독립 모델 작업·명시적 상태 변환이 있어요. 일반 HTTP·Lua·공유 자료 권한·확장 설치 관리와 원본 스크립트 자동 이식은 미구현이에요.",
+        "evidence": [
+          "docs/EXTENSION-PROGRAMS.md",
+          "docs/PACKAGE-BEHAVIOR.md",
+          "server/extension-operation-runner.ts"
+        ]
+      },
+      {
+        "area": "preservation",
+        "status": "partial",
+        "basis": "DB 이관·native 자료 이동·작업/상태의 archive 및 채팅 백업 보존 기반이 있어요. 고정 표본 전체의 보존 인수는 아니에요.",
+        "evidence": [
+          "docs/DATA-MIGRATIONS.md",
+          "docs/NATIVE-TRANSFER.md",
+          "docs/CHAT-BACKUP.md"
+        ]
+      }
+    ],
+    "sampleLimitations": {
+      "merry": "고정 원본 140785373 bytes는 카드 입력 한도 24 MiB를 초과하므로 currentRisuImport missing을 유지해요.",
+      "originalModules": "히든 스토리·라이트보드 원본의 직접 경로는 missing이며 추출한 JSON/ZIP의 기본 경로와 구분해요."
+    },
+    "acceptance": "모든 표본과 기능의 nativeAcceptance/userAcceptance는 not-run을 유지해요."
+  },
   "evidenceRules": [
     "초기 기준의 원본 byte hash·크기와 이전 의미 조사를 분리해요. Merry 후속 구조화 읽기는 discovery.structuredRead에 별도 기록했으며 컨테이너 직접 해제·원본 코드 실행은 하지 않았어요.",
     "원본 파일의 private 절대경로·본문·코드·비밀은 이 목록에 포함하지 않아요.",
@@ -4546,9 +4602,18 @@
       },
       "dependencies": [],
       "scopeExclusions": [],
-      "currentRisuImport": {
+      "baselineRisuImport": {
         "status": "missing",
         "basis": "현재 원본 직접 가져오기·선택형 호환 실행 경로는 구현 전이에요. native 기반 존재와 구분해요."
+      },
+      "currentRisuImport": {
+        "status": "partial",
+        "basis": "카드 .charx/JSON의 기본 자료 가져오기 경로가 구현되어 있어요. 이 고정 파일의 실제 가져오기·모든 에셋·스크립트·기능 인수는 미검증이며 전체 호환을 뜻하지 않아요.",
+        "evidenceRefs": [
+          "docs/RISU-IMPORT.md",
+          "server/risu-import.ts",
+          "server/character-card-file.ts"
+        ]
       },
       "nativeAcceptance": {
         "status": "not-run",
@@ -4763,9 +4828,18 @@
       },
       "dependencies": [],
       "scopeExclusions": [],
-      "currentRisuImport": {
+      "baselineRisuImport": {
         "status": "missing",
         "basis": "현재 원본 직접 가져오기·선택형 호환 실행 경로는 구현 전이에요. native 기반 존재와 구분해요."
+      },
+      "currentRisuImport": {
+        "status": "partial",
+        "basis": "카드 .charx/JSON의 기본 자료 가져오기 경로가 구현되어 있어요. 이 고정 파일의 실제 가져오기·모든 에셋·스크립트·기능 인수는 미검증이며 전체 호환을 뜻하지 않아요.",
+        "evidenceRefs": [
+          "docs/RISU-IMPORT.md",
+          "server/risu-import.ts",
+          "server/character-card-file.ts"
+        ]
       },
       "nativeAcceptance": {
         "status": "not-run",
@@ -4980,9 +5054,19 @@
       },
       "dependencies": [],
       "scopeExclusions": [],
-      "currentRisuImport": {
+      "baselineRisuImport": {
         "status": "missing",
         "basis": "현재 원본 직접 가져오기·선택형 호환 실행 경로는 구현 전이에요. native 기반 존재와 구분해요."
+      },
+      "currentRisuImport": {
+        "status": "partial",
+        "basis": "카드 .charx/JSON의 기본 자료 가져오기 경로가 구현되어 있어요. 과거 비저장 분석에서 이 파일의 로어 6개·시작문 3개·이미지 3개를 읽은 기록이 있어요. 현재 소스에서의 전체 가져오기·스크립트·기능 인수는 미검증이며 전체 호환을 뜻하지 않아요.",
+        "evidenceRefs": [
+          "docs/RISU-IMPORT.md",
+          "server/risu-import.ts",
+          "server/character-card-file.ts",
+          "project-plan/BETA-PLAN.md#2026-09-13-첫-직접-가져오기-흐름"
+        ]
       },
       "nativeAcceptance": {
         "status": "not-run",
