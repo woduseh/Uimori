@@ -153,6 +153,7 @@ export function validatePackageStarts(
       const action = context.behavior?.actions.find((item) => item.id === initial.actionId);
       if (!action || !behaviorActionTriggers(action).includes('user'))
         fail('PACKAGE_START_INITIAL_ACTION');
+      if (action.program) fail('PACKAGE_START_PROGRAM_ACTION_UNSUPPORTED');
       const input = validatePromptExpression(
         initial.input,
         context.controls.map((control) => control.id)

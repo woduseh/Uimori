@@ -1,0 +1,51 @@
+# 상태 계산 코드
+
+현재 [베타 계획](../project-plan/BETA-PLAN.md)의 2~3단계 구현이에요. 봇·페르소나·모듈의 사용자 행동에 JavaScript 계산을 연결할 수 있어요. 자료별 알고리즘은 코드에 두고 상태 schema·소유권·충돌·저장은 Uimori가 담당해요. Risu/Lua 직접 실행, 자동 hook, 모델·네트워크 호출, 확장 설치 관리 전체를 지원한다는 뜻은 아니에요.
+
+## 제작과 사용
+
+서재의 자료 편집 → **상태와 행동**에서 비어 있는 자료에는 **코드 계산 예제 넣기**를 사용할 수 있어요. 기존 자료는 제작자용 동작 JSON의 action에 `program`을 추가하고 검증·적용한 뒤 저장해요. 기본 행동 폼과 [커스텀 패널](PACKAGE-PANELS.md)의 버튼은 같은 서버 경로를 사용해요. GET·미리보기·자료 저장만으로 코드를 실행하지 않아요.
+
+```json
+{
+  "id": "count_unique",
+  "label": "중복 없는 항목 세기",
+  "inputSchema": {
+    "type": "record",
+    "properties": {"text": {"type": "string", "maxLength": 2000}}
+  },
+  "effects": [],
+  "program": {
+    "api": "uimori-state-action-v1",
+    "source": "const items = [...new Set(api.input.text.split('\\n').map(s => s.trim()).filter(Boolean))]; return {state: {count: Math.min(100, items.length)}, result: {items}};"
+  }
+}
+```
+
+이 예제의 부모 `behavior`는 `count`가 0~100 정수인 record schema와 `{count:0}` 초깃값을 선언해요. `source`는 `api` 하나를 인자로 받는 함수 본문이에요. `api.state`는 이 장착 인스턴스의 현재 상태 사본, `api.input`은 schema 검사를 마친 버튼 입력이에요. 반환값은 정확히 `{state,result}`예요. `state`는 전체 다음 상태이며 기존 state schema를 만족해야 해요. `result`는 호출 결과 표시용 JSON이에요.
+
+코드 action은 사용자 호출만 허용해요. `effects:[]`를 두고 `draws`·선언형 `result`·자동 입력과 함께 쓰지 않아요. 시작문의 `initialAction`은 transaction 안의 선언형 행동 전용이므로 코드 action 연결을 저장 단계에서 거절해요. `nextRequest`는 기존 호스트 표현으로 결과 상태를 읽어 다음 요청을 예약할 수 있으며 모델을 자동 호출하지 않아요. 현재 코드 API에는 시각·기록된 난수 도구가 없으며 `Date`·`Math.random`을 제공하지 않아요.
+
+## 권한과 실행
+
+버튼 실행은 이 자료의 상태/입력 읽기와 반환한 상태의 반영을 요청하는 동작이에요. 코드는 채팅 전체·다른 자료·키·환경변수·DB 객체·앱 DOM을 받지 않아요. ID나 권한을 결과에 추가해도 권한이 늘어나지 않아요. 이 최초 API에는 파일·통신·모델 호출·동적 모듈 import를 연결하지 않았어요.
+
+호스트는 현재 장착 자료와 행동·패널 허용 목록, 입력·상태 개정·원문 의존성을 확인한 뒤 transaction 밖에서 계산해요. 계산이 끝나면 자료/프로필·분기/원문·상태와 진행 중 Run을 다시 확인하고, 같은 경계에서 결과 검사와 journal 저장을 수행해요. 계산 중 다른 작업이 바뀌면 늦은 결과는 반영하지 않아요. 같은 명령 키의 동시 실행은 합치고, 이미 저장된 명령은 원래 영수증을 반환해요. 같은 키의 다른 명령은 충돌이에요.
+
+무한 계산·메모리/출력 초과·잘못된 결과·취소는 해당 행동을 실패시켜요. 기존 상태·원문은 유지하며 새 채팅 요청을 막는 실패 상태를 만들지 않아요. 실제 DB 저장 실패를 성공으로 숨기지는 않아요. HTTP 연결 종료는 진행 중 계산을 취소하고, 종료 후 결과를 저장하지 않아요.
+
+## 실행 엔진의 경계
+
+현재 구현은 `quickjs-emscripten-core`와 `@jitl/quickjs-wasmfile-release-sync` **0.32.0**의 새 QuickJS WASM 인스턴스를 작업별 Worker에서 실행해요. 게스트 코드를 Node의 `eval`·`vm`이나 웹 패널에서 실행하지 않아요. JSON 입력과 크기를 제한한 JSON 결과만 교환해요.
+
+엔진 내부 allocator 한도와 별개로 **16 MiB 고정 WASM 선형 메모리**를 제공해요. 과거 후보 실험에서 실패했던 `setMemoryLimit`만을 격리 근거로 사용하지 않아요. 엔진 계산 중단, 부모의 실행 종료, 동시 실행 수와 입력/출력 상한도 적용해요. Worker의 V8 heap 제한은 WASM 메모리와 별도예요. 이 구성은 OS의 전체 RSS 제한이나 모든 엔진 취약점에 대한 보증이 아니에요. Linux/Docker 실제 실행·전체 컨테이너 자원 제한은 5~6단계 검증에 남아 있어요.
+
+소스는 최대 65,536 UTF-16 문자, 결과 `result`는 JSON 8,000자예요. 전체 상태/결과 계약은 JSON 131,072자 이내이며 실행기의 입력/출력 프레임은 **128 KiB UTF-8** 이하라 비ASCII 문자열에는 더 작은 한도가 적용돼요. 제한은 자료가 변경할 수 없어요. 정확한 실행 한도와 오류 코드는 [서버 실행기](../server/extension-runtime.ts)가 소유해요.
+
+두 추가 의존성은 MIT이고 기존 프로젝트의 라이선스 미정 정책을 변경하지 않아요. 외부 Risu 원본 코드를 제품에 포함하지 않았어요. 메모리 전달 API는 [QuickJS variant API](https://github.com/justjake/quickjs-emscripten), Worker 제한의 범위는 [Node Worker 문서](https://nodejs.org/docs/latest-v24.x/api/worker_threads.html)를 참고해요.
+
+## 보존과 후속 확장
+
+프로그램은 패키지 개정에 속하므로 기존 자료 이동·snapshot·백업에 함께 들어가요. 저장한 행동 영수증에는 API·코드 지문·엔진 식별자·상태/결과를 보존해요. 포크·복원은 schema와 영수증·저장 결과의 일치를 확인하며 코드를 다시 실행하지 않아요. 이것은 승인된 결과의 보존이며 복원 때 계산의 의미를 재평가했다는 증거가 아니에요. 공유용 진단에는 이 코드나 입력/출력을 자동 포함하지 않아요.
+
+엔진 실행, `uimori-state-action-v1` 입력 계약, 상태 저장 호스트는 별도 모듈이에요. 다음 hook·권한은 실제 필요한 공통 작업 계약에 따라 추가하고, 자료별 함수명을 서버 분기로 옮기지 않아요. 비동기 준비·모델/통신 broker·실행 권한 관리·Lua 어댑터는 후속 작업이에요.

@@ -54,6 +54,21 @@ const messages: Record<string, string> = {
   CONTEXT_FIXED_INPUT_TOO_LARGE:
     '고정된 입력만으로 모델의 문맥 한도를 넘었어요. 프롬프트·첨부 자료를 줄이거나 입력 한도가 더 큰 모델을 선택해 주세요.',
   BEHAVIOR_STATE_STALE: '다른 요청이 먼저 반영됐어요. 최신 내용을 확인한 뒤 다시 시도해 주세요.',
+  BEHAVIOR_PROGRAM_CONTEXT_CHANGED:
+    '계산 중 자료나 채팅 상태가 바뀌어 결과를 반영하지 않았어요. 최신 상태에서 다시 실행해 주세요.',
+  BEHAVIOR_RUN_ACTIVE: '이 채팅에서 요청이 진행 중이에요. 완료 후 행동을 다시 실행해 주세요.',
+  EXTENSION_CANCELLED: '코드 계산을 취소했어요. 상태는 바꾸지 않았어요.',
+  BEHAVIOR_PROGRAM_ABORTED: '코드 계산을 취소했어요. 상태는 바꾸지 않았어요.',
+  BEHAVIOR_PROGRAM_BUSY: '다른 코드 계산이 진행 중이에요. 잠시 후 다시 실행해 주세요.',
+  BEHAVIOR_PROGRAM_FAILED:
+    '자료의 코드 계산에 실패했어요. 상태는 유지되며 채팅은 계속할 수 있어요.',
+  BEHAVIOR_PROGRAM_RUNTIME_FAILED:
+    '코드 실행을 완료하지 못했어요. 상태는 유지되며 채팅은 계속할 수 있어요.',
+  BEHAVIOR_PROGRAM_TIMEOUT: '자료의 코드 계산이 제한 시간을 넘었어요. 상태는 바꾸지 않았어요.',
+  BEHAVIOR_PROGRAM_INPUT_SIZE:
+    '코드에 전달할 상태와 입력이 실행 한도를 넘었어요. 상태는 바꾸지 않았어요.',
+  BEHAVIOR_PROGRAM_OUTPUT_SIZE: '코드 계산 결과가 실행 한도를 넘었어요. 상태는 바꾸지 않았어요.',
+  BEHAVIOR_PROGRAM_RESULT_VALUE: '코드가 반환한 결과의 형식이 맞지 않아요. 상태는 바꾸지 않았어요.',
 };
 for (const suffix of [
   'INVALID',

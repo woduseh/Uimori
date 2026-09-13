@@ -9,6 +9,8 @@ import {
   BehaviorError,
   validatePackageBehavior,
   validateBehaviorValue,
+  behaviorActionAllowed,
+  behaviorActionTriggers,
 } from '../core/package-behavior.js';
 import { withoutPackageBehavior } from '../core/package-behavior-tools.js';
 import {
@@ -23,7 +25,10 @@ import {
   behaviorPayloadHash,
   type BehaviorScope,
   type BehaviorState,
+  type BehaviorActionCommand,
 } from './package-behavior-store.js';
+import type { ResolvedExtensionProgram } from '../core/extension-program.js';
+import { executeExtensionProgram } from './extension-runtime.js';
 import type { Store, Run, Source } from './store.js';
 import { captureLogicalHistory } from './prompt-snapshot.js';
 import { freezeSourceSegments } from '../core/package-source-segments.js';
@@ -304,6 +309,97 @@ export function freezePackageStates(
     ? { ...projected, packageStates: states }
     : snapshot;
 }
+type ActionPanel = { id: string; packageRevision: number };
+function actionContext(
+  store: Store,
+  chatId: string,
+  branchId: string | undefined,
+  instanceId: string,
+  command: any,
+  reset: boolean,
+  panel?: ActionPanel
+) {
+  const branch = store.product.branch(chatId, branchId);
+  const d = definitions(store, chatId, branch.id).find(
+    (item) => item.scope.attachmentInstanceId === instanceId
+  );
+  if (!d) throw new HttpError(404, 'PACKAGE_BEHAVIOR_NOT_ATTACHED');
+  if (panel) {
+    if (d.pkg.revision !== panel.packageRevision)
+      throw new HttpError(409, 'PACKAGE_PANEL_REVISION_CHANGED');
+    const definition = d.pkg.panels?.find((item) => item.id === panel.id);
+    if (reset || !definition?.actions?.includes(command.actionId))
+      throw new HttpError(403, 'PACKAGE_PANEL_ACTION_NOT_ALLOWED');
+  }
+  if (
+    store.db
+      .prepare(
+        "SELECT 1 FROM runs WHERE branch_id=? AND status IN ('queued','running','waiting_for_state')"
+      )
+      .get(branch.id)
+  )
+    throw new HttpError(409, 'BEHAVIOR_RUN_ACTIVE');
+  const availability = status(store, d.scope);
+  if (!reset && availability.status !== 'ready') throw new HttpError(409, availability.error!);
+  return { branch, d };
+}
+function actionRuntime(store: Store, chatId: string, branchId: string, ref: PackageAttachment) {
+  const chat = store.chat(chatId);
+  const branch = store.product.branch(chatId, branchId);
+  const profile = store.product.snapshot(chatId);
+  const iso = new Date().toISOString();
+  let view: RunSnapshot = {
+    chatId,
+    parentRevision: branch.headRevision,
+    branchId,
+    settingsRevision: chat.settingsRevision,
+    settings: chat.settings,
+    request: '',
+    history: store.history(branch.headRevision),
+    resources: store.product.resources(chatId, profile),
+    profile,
+    executionClock: { iso, unix: Math.floor(Date.parse(iso) / 1000) },
+  };
+  view.sourceSegments = freezeSourceSegments(profile);
+  view.logicalHistory = captureLogicalHistory(store, view);
+  view = freezePackageStates(store, view, false);
+  return {
+    ...executionContext(view, 'main', ref),
+    profile: { revision: profile?.revision ?? 0 },
+    sourceDependenciesHash: packageRequestDependenciesHash(store, branch.headRevision),
+  };
+}
+function priorActionPayload(store: Store, scope: BehaviorScope, key: string) {
+  const row = store.db
+    .prepare(
+      'SELECT payload FROM package_behavior_journal WHERE chat_id=? AND branch_id=? AND instance_id=? AND idempotency_key=?'
+    )
+    .get(scope.chatId, scope.branchId, scope.attachmentInstanceId, key) as
+    | { payload: string }
+    | undefined;
+  return row ? JSON.parse(row.payload) : undefined;
+}
+/** Only host-owned preparation may supply these values; the HTTP body never accepts them. */
+type PreparedAction = {
+  guard: string;
+  runtime: Record<string, RuntimeValue>;
+  result: ResolvedExtensionProgram;
+};
+function actionGuard(store: Store, d: Definition) {
+  const branch = store.product.branch(d.scope.chatId, d.scope.branchId);
+  const runtime = actionRuntime(store, d.scope.chatId, d.scope.branchId, d.ref);
+  return behaviorPayloadHash({
+    scope: d.scope,
+    state: store.behavior.read(d.scope, d.pkg.behavior!),
+    profileRevision: store.product.profile(d.scope.chatId).revision,
+    settingsRevision: store.chat(d.scope.chatId).settingsRevision,
+    // Conditions/nextRequest may read other scoped values. Only the captured wall clock
+    // is intentionally stable for this action instead of becoming a spurious conflict.
+    context: { ...runtime, time: null },
+    head: branch.headRevision,
+    dependencies: packageRequestDependenciesHash(store, branch.headRevision),
+  });
+}
 export function performBehaviorAction(
   store: Store,
   chatId: string,
@@ -311,75 +407,30 @@ export function performBehaviorAction(
   instanceId: string,
   command: any,
   reset = false,
-  panel?: { id: string; packageRevision: number }
+  panel?: ActionPanel,
+  prepared?: PreparedAction
 ) {
   return store.transaction(() => {
-    const branch = store.product.branch(chatId, branchId),
-      d = definitions(store, chatId, branch.id).find(
-        (d) => d.scope.attachmentInstanceId === instanceId
-      );
-    if (!d) throw new HttpError(404, 'PACKAGE_BEHAVIOR_NOT_ATTACHED');
-    if (panel) {
-      if (d.pkg.revision !== panel.packageRevision)
-        throw new HttpError(409, 'PACKAGE_PANEL_REVISION_CHANGED');
-      const definition = d.pkg.panels?.find((item) => item.id === panel.id);
-      if (reset || !definition?.actions?.includes(command.actionId))
-        throw new HttpError(403, 'PACKAGE_PANEL_ACTION_NOT_ALLOWED');
-    }
-    if (
-      store.db
-        .prepare(
-          "SELECT 1 FROM runs WHERE branch_id=? AND status IN ('queued','running','waiting_for_state')"
-        )
-        .get(branch.id)
-    )
-      throw new HttpError(409, 'BEHAVIOR_RUN_ACTIVE');
-    const availability = status(store, d.scope);
-    if (!reset && availability.status !== 'ready') throw new HttpError(409, availability.error!);
+    const { branch, d } = actionContext(store, chatId, branchId, instanceId, command, reset, panel);
     const beforeRevision =
       (reset ? store.behavior.storedState(d.scope) : undefined)?.stateRevision ??
       store.behavior.read(d.scope, d.pkg.behavior!).stateRevision;
     if (reset) store.behavior.resetInTransaction(d.scope, d.pkg.behavior!, command);
     else {
-      const chat = store.chat(chatId),
-        profile = store.product.snapshot(chatId),
-        iso = new Date().toISOString();
-      let view: RunSnapshot = {
-        chatId,
-        parentRevision: branch.headRevision,
-        branchId: branch.id,
-        settingsRevision: chat.settingsRevision,
-        settings: chat.settings,
-        request: '',
-        history: store.history(branch.headRevision),
-        resources: store.product.resources(chatId, profile),
-        profile,
-        executionClock: { iso, unix: Math.floor(Date.parse(iso) / 1000) },
-      };
-      view.sourceSegments = freezeSourceSegments(profile);
-      view.logicalHistory = captureLogicalHistory(store, view);
-      view = freezePackageStates(store, view, false);
-      const priorAction = store.db
-        .prepare(
-          'SELECT payload FROM package_behavior_journal WHERE chat_id=? AND branch_id=? AND instance_id=? AND idempotency_key=?'
-        )
-        .get(chatId, branch.id, instanceId, command.idempotencyKey) as
-        | { payload: string }
-        | undefined;
+      const priorAction = priorActionPayload(store, d.scope, command.idempotencyKey);
+      if (prepared && !priorAction && actionGuard(store, d) !== prepared.guard)
+        throw new HttpError(409, 'BEHAVIOR_PROGRAM_CONTEXT_CHANGED');
       // A retransmitted UI command must compare with its original clock/context, not a new timestamp.
       // The behavior store still verifies the entire command and scope before returning the receipt.
       const runtime = priorAction
-        ? (JSON.parse(priorAction.payload).hostRuntime ?? {})
-        : {
-            ...executionContext(view, 'main', d.ref),
-            profile: { revision: profile?.revision ?? 0 },
-            sourceDependenciesHash: packageRequestDependenciesHash(store, branch.headRevision),
-          };
+        ? (priorAction.hostRuntime ?? {})
+        : (prepared?.runtime ?? actionRuntime(store, chatId, branch.id, d.ref));
       const receipt = store.behavior.executeInTransaction(
         d.scope,
         d.pkg.behavior!,
         command,
-        runtime
+        runtime,
+        priorAction?.program ?? prepared?.result
       );
       const action = d.pkg.behavior!.actions.find((action) => action.id === command.actionId)!;
       if (receipt.stateRevision > beforeRevision && action.nextRequest !== undefined)
@@ -392,6 +443,85 @@ export function performBehaviorAction(
     }
     return behaviorDetail(store, chatId, branch.id);
   });
+}
+const activePrograms = new WeakMap<
+  Store,
+  Map<string, { commandHash: string; promise: Promise<ReturnType<typeof behaviorDetail>> }>
+>();
+/** Calculate outside SQLite transactions; only the host can adopt the returned state. */
+export async function performBehaviorActionWithProgram(
+  store: Store,
+  chatId: string,
+  branchId: string | undefined,
+  instanceId: string,
+  command: BehaviorActionCommand,
+  panel?: ActionPanel,
+  signal?: AbortSignal
+) {
+  const preparation = store.transaction(() => {
+    const { branch, d } = actionContext(store, chatId, branchId, instanceId, command, false, panel);
+    const action = d.pkg.behavior!.actions.find((item) => item.id === command.actionId);
+    if (!action) throw new HttpError(400, 'BEHAVIOR_ACTION_UNKNOWN');
+    // A committed receipt is returned through the normal full-command idempotency check.
+    if (!action.program || priorActionPayload(store, d.scope, command.idempotencyKey)) return null;
+    if (!behaviorActionTriggers(action).includes('user'))
+      throw new HttpError(403, 'BEHAVIOR_USER_ACTION_NOT_ALLOWED');
+    const state = store.behavior.read(d.scope, d.pkg.behavior!);
+    const sourceHash = branch.headRevision ? store.source(branch.headRevision).hash : null;
+    if (state.stateRevision !== command.expectedStateRevision)
+      throw new HttpError(409, 'BEHAVIOR_STATE_STALE');
+    if (sourceHash !== command.expectedSourceHash)
+      throw new HttpError(409, 'BEHAVIOR_SOURCE_STALE');
+    const runtime = actionRuntime(store, chatId, branch.id, d.ref);
+    if (!behaviorActionAllowed(action, state.state, command.input, runtime))
+      throw new HttpError(409, 'BEHAVIOR_ACTION_DISABLED');
+    return {
+      branchId: branch.id,
+      program: action.program,
+      input: { state: state.state, input: command.input },
+      runtime,
+      guard: actionGuard(store, d),
+    };
+  });
+  if (!preparation)
+    return performBehaviorAction(store, chatId, branchId, instanceId, command, false, panel);
+  let active = activePrograms.get(store);
+  if (!active) {
+    active = new Map();
+    activePrograms.set(store, active);
+  }
+  const key = JSON.stringify([chatId, preparation.branchId, instanceId, command.idempotencyKey]);
+  const commandHash = behaviorPayloadHash({ command, panel: panel ?? null });
+  const pending = active.get(key);
+  if (pending) {
+    if (pending.commandHash !== commandHash)
+      throw new HttpError(409, 'BEHAVIOR_IDEMPOTENCY_CONFLICT');
+    return pending.promise;
+  }
+  const promise = (async () => {
+    const result = await executeExtensionProgram(preparation.program, preparation.input, signal);
+    if (signal?.aborted) throw new HttpError(409, 'EXTENSION_CANCELLED');
+    return performBehaviorAction(
+      store,
+      chatId,
+      preparation.branchId,
+      instanceId,
+      command,
+      false,
+      panel,
+      {
+        guard: preparation.guard,
+        runtime: preparation.runtime,
+        result: { ...result, programHash: behaviorPayloadHash(preparation.program) },
+      }
+    );
+  })();
+  active.set(key, { commandHash, promise });
+  try {
+    return await promise;
+  } finally {
+    if (active.get(key)?.promise === promise) active.delete(key);
+  }
 }
 /** Actions and authoritative outputs share one transaction boundary across packages.
  * Annotation parsing is a separate overlay; its failure preserves already validated action facts. */

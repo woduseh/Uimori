@@ -1,5 +1,7 @@
 # 작업 지도
 
+- 사용자 행동의 JavaScript 상태 계산은 `docs/EXTENSION-PROGRAMS.md`, `core/extension-program.ts`, `server/extension-runtime.ts`·`extension-worker.ts`예요. 패키지 `behavior.actions[].program`은 `uimori-state-action-v1`의 `{state,input}`만 받으며 반환 상태를 기존 schema·CAS·journal 경계에서 저장해요. fresh Worker + 고정 16 MiB WASM, 시간/입출력/동시 수 제한을 유지해요. 저장/GET/preview/복원에서는 코드를 실행하지 않으며 늦은 결과는 현재 작업을 덮어쓰지 않아요. 자동 hook·Lua·모델/통신 broker·설치 권한 관리까지 완료한 것은 아니에요.
+
 - 사용자 재확인(2026-09-13): `project-plan/BETA-PLAN.md`의 **1 기준 → 2 공통 경계 → 3 보존·확장 기반 → 4 전체 표본 → 5 배포 경험 → 6 베타 인수**를 작업·완료 판단의 기준으로 유지해요. 현재는 2~3단계를 우선해요. 표본은 공통 구조의 요구를 찾는 근거이며 개별 자료 완전 재현을 선행하지 않아요. 기존 기능/공통 Host API/확장 코드 중 책임을 먼저 판단하고, 자료별 규칙·선택 트리는 본체에 넣지 않아요. 선언형 옵션을 계속 늘려 코드 실행 기반을 대신하지 않아요.
 
 - 현재 채팅의 커스텀 패널은 `docs/PACKAGE-PANELS.md`, `core/package-panels.ts`, `web/PackagePanelFrame.tsx`·`web/package-panel-frame.ts`예요. 자기 상태·옵션의 템플릿을 격리 HTML/CSS로 표시하고 기존 user behavior 행동에만 연결해요. 임의 JS/Lua 실행·과거 Reader 패널·Risu 자동 이식 완료로 확대해 해석하지 않아요. 시작 선택은 기존 controls/visibleWhen을 보여 주고 시작별 사용자 선택을 유지해요.

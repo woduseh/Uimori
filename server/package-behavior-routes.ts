@@ -1,7 +1,12 @@
 import { fields, number, record, text } from './request-validation.js';
 import type { FastifyInstance } from 'fastify';
 import type { Store } from './store.js';
-import { behaviorDetail, performBehaviorAction } from './package-behavior-host.js';
+import {
+  behaviorDetail,
+  performBehaviorAction,
+  performBehaviorActionWithProgram,
+} from './package-behavior-host.js';
+import type { BehaviorActionCommand } from './package-behavior-store.js';
 import { cancelPackageRequest } from './package-requests.js';
 
 export function packageBehaviorRoutes(app: FastifyInstance, store: Store) {
@@ -25,7 +30,7 @@ export function packageBehaviorRoutes(app: FastifyInstance, store: Store) {
   for (const reset of [false, true])
     app.post<{ Params: { id: string; instanceId: string } }>(
       `/api/chats/:id/package-behaviors/:instanceId/${reset ? 'reset' : 'actions'}`,
-      async (request) => {
+      async (request, reply) => {
         const b = record(request.body);
         fields(b, [
           'branchId',
@@ -41,20 +46,44 @@ export function packageBehaviorRoutes(app: FastifyInstance, store: Store) {
           idempotencyKey: text(b.idempotencyKey, 'idempotency key', 200),
           ...(!reset ? { actionId: text(b.actionId, 'action ID', 100), input: b.input } : {}),
         };
-        return performBehaviorAction(
-          store,
-          request.params.id,
-          b.branchId === undefined ? undefined : text(b.branchId, 'branch ID', 200),
-          request.params.instanceId,
-          command,
-          reset,
+        const branchId = b.branchId === undefined ? undefined : text(b.branchId, 'branch ID', 200);
+        const panel =
           b.panelId === undefined && b.expectedPackageRevision === undefined
             ? undefined
             : {
                 id: text(b.panelId, 'panel ID', 64),
                 packageRevision: number(b.expectedPackageRevision, 'package revision', 1),
-              }
-        );
+              };
+        if (reset)
+          return performBehaviorAction(
+            store,
+            request.params.id,
+            branchId,
+            request.params.instanceId,
+            command,
+            true
+          );
+        const abort = new AbortController();
+        const cancel = () => {
+          if (!reply.raw.writableEnded) abort.abort();
+        };
+        request.raw.once('aborted', cancel);
+        reply.raw.once('close', cancel);
+        try {
+          if (request.raw.aborted) abort.abort();
+          return await performBehaviorActionWithProgram(
+            store,
+            request.params.id,
+            branchId,
+            request.params.instanceId,
+            command as BehaviorActionCommand,
+            panel,
+            abort.signal
+          );
+        } finally {
+          request.raw.removeListener('aborted', cancel);
+          reply.raw.removeListener('close', cancel);
+        }
       }
     );
 }

@@ -7,6 +7,11 @@ import {
   type RuntimeValue,
 } from './prompt-program.js';
 import { inspectRuntimeValue, PromptBudget, PromptEvaluationError } from './prompt-values.js';
+import {
+  ExtensionProgramError,
+  validateExtensionProgram,
+  type ExtensionProgram,
+} from './extension-program.js';
 
 export type BehaviorSchema = (
   | { type: 'number'; min: number; max: number; integer?: boolean }
@@ -33,6 +38,8 @@ export interface BehaviorAction {
   when?: PromptExpression;
   draws?: BehaviorDraw[];
   effects: BehaviorEffect[];
+  /** Explicit user action executed only by a host-owned isolated guest runtime. */
+  program?: ExtensionProgram;
   /** A bounded projection for callers; nextState is available only here. */
   result?: PromptExpression;
   /** Explicit user action proposal. The host reserves the resulting text for one future Run. */
@@ -302,6 +309,7 @@ export function validatePackageBehavior(value: unknown): PackageBehavior {
       'when',
       'draws',
       'effects',
+      'program',
       'result',
       'nextRequest',
     ]);
@@ -319,6 +327,24 @@ export function validatePackageBehavior(value: unknown): PackageBehavior {
     )
       bad('BEHAVIOR_ACTION_TRIGGERS');
     const triggers = behaviorActionTriggers(a);
+    if (a.program !== undefined) {
+      try {
+        validateExtensionProgram(a.program);
+      } catch (error) {
+        if (error instanceof ExtensionProgramError) bad(error.code);
+        throw error;
+      }
+      if (triggers.some((trigger) => trigger !== 'user'))
+        bad('BEHAVIOR_PROGRAM_REQUIRES_USER_ACTION');
+      if (
+        !Array.isArray(a.effects) ||
+        a.effects.length !== 0 ||
+        Object.hasOwn(a, 'result') ||
+        Object.hasOwn(a, 'draws') ||
+        Object.hasOwn(a, 'automaticInput')
+      )
+        bad('BEHAVIOR_PROGRAM_MIXED_ACTION');
+    }
     if (a.nextRequest !== undefined) {
       validatePromptExpression(a.nextRequest);
       if (triggers.length !== 1 || triggers[0] !== 'user')
@@ -484,6 +510,7 @@ export function evaluateBehaviorAction(
   draws: Record<string, RuntimeValue>,
   hostRuntime: Record<string, RuntimeValue> = {}
 ): { state: RuntimeValue; result: RuntimeValue } {
+  if (action.program !== undefined) throw new BehaviorError(409, 'BEHAVIOR_PROGRAM_REQUIRES_HOST');
   const budget = new PromptBudget();
   behaviorRecord(hostRuntime);
   behaviorRecord(draws);

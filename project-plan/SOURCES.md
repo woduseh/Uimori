@@ -1,5 +1,11 @@
 # 근거와 확인 범위 v0.6.1
 
+## 2026-09-13 데이터 전용 코드 계산
+
+MIT 배포 패키지 `quickjs-emscripten-core`·`@jitl/quickjs-wasmfile-release-sync` 0.32.0의 `newVariant({wasmMemory})` / `newQuickJSWASMModuleFromVariant`와 배포 WASM의 imported memory → 엔진 내부 allocator 설정과 별도로 호스트가 실제 선형 메모리의 상한을 소유 → `server/extension-worker.ts`의 256페이지 고정 Memory와 동일 인스턴스 검사, `server/extension-runtime.ts`의 작업별 Worker·JSON/시간/동시 수 제한 → 실제 상태 계산, host 전역 부재, 루프/메모리 소진 후 다음 호출, 취소/출력 제한과 기존 상태 저장/복원 경로로 확인해요. 이전 heap-limit 실패를 성공으로 바꾸지 않았고 OS 전체 RSS·Linux 환경 검증을 이 결과로 대신하지 않아요. [upstream](https://github.com/justjake/quickjs-emscripten) · [Node Worker 제한](https://nodejs.org/docs/latest-v24.x/api/worker_threads.html).
+
+게스트 소스의 Node `eval`/`vm` 실행, 호스트 함수/객체 직접 공유, 복원 중 코드 재실행은 채택하지 않았어요. 실행 엔진과 입력 API·상태 저장을 분리하며 원본 자료별 코드는 제품에 넣지 않았어요.
+
 ## 2026-09-13 확장 소유 화면
 
 [DOMPurify](https://github.com/cure53/DOMPurify) npm `3.4.15`의 allowlist 정화 설정과 `LICENSE`(`MPL-2.0 OR Apache-2.0`, 이 의존성은 Apache-2.0 조건으로 사용), [iframe sandbox](https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/iframe)와 [srcdoc](https://developer.mozilla.org/en-US/docs/Web/API/HTMLIFrameElement/srcdoc) → HTML 정화·별도 origin·통신/탐색 제한을 함께 적용하는 원리 → `web/package-panel-frame.ts`·`web/PackagePanelFrame.tsx`의 제한된 HTML/CSS와 고정 메시지 브리지 → 실제 브라우저의 상위 DOM/저장소 접근 거절, 외부 요청 차단, 상태 행동·실패·초안 유지 사례로 확인해요. DOMPurify는 수정하지 않은 고정 의존성이며 npm 원본 라이선스는 production node_modules에 보존돼요. 프로젝트 자체 라이선스 정책을 지정하는 결정은 아니에요.

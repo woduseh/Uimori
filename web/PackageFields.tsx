@@ -805,19 +805,50 @@ function BehaviorEditor({
         <p className="muted">아직 상태와 행동을 정의하지 않았어요.</p>
       )}
       {!value && !draft && (
-        <button
-          type="button"
-          className="secondary"
-          onClick={() => {
-            const example = structuredClone(neutralBehavior);
-            setDraft(JSON.stringify(example, null, 2));
-            setNotice(
-              '횟수 0에서 시작해 버튼으로 입력한 횟수를 기록하는 예제예요. 검증 후 적용해 주세요.'
-            );
-          }}
-        >
-          중립 시작 예제 넣기
-        </button>
+        <div className="form-actions">
+          <button
+            type="button"
+            className="secondary"
+            onClick={() => {
+              const example = structuredClone(neutralBehavior);
+              setDraft(JSON.stringify(example, null, 2));
+              setNotice(
+                '횟수 0에서 시작해 버튼으로 입력한 횟수를 기록하는 예제예요. 검증 후 적용해 주세요.'
+              );
+            }}
+          >
+            중립 시작 예제 넣기
+          </button>
+          <button
+            type="button"
+            className="secondary"
+            onClick={() => {
+              const example = structuredClone(neutralBehavior);
+              example.actions = [
+                {
+                  id: 'count_unique',
+                  label: '중복 없는 항목 세기',
+                  inputSchema: {
+                    type: 'record',
+                    properties: { text: { type: 'string', maxLength: 2000 } },
+                  },
+                  effects: [],
+                  program: {
+                    api: 'uimori-state-action-v1',
+                    source:
+                      'const items = [...new Set(api.input.text.split("\\n").map(s => s.trim()).filter(Boolean))];\nreturn {state: {count: Math.min(100, items.length)}, result: {items}};',
+                  },
+                },
+              ];
+              setDraft(JSON.stringify(example, null, 2));
+              setNotice(
+                '버튼 입력을 JavaScript로 계산해 이 자료의 상태에 반영하는 예제예요. 코드를 확인하고 적용해 주세요.'
+              );
+            }}
+          >
+            코드 계산 예제 넣기
+          </button>
+        </div>
       )}
       {editable && editable.actions.length > 0 && (
         <section className="package-stack" aria-label="행동 호출 방법">
@@ -836,6 +867,7 @@ function BehaviorEditor({
                 {actionMethods.map((method) => (
                   <label className="check behavior-method-choice" key={method.id}>
                     <SelectionCheckbox
+                      disabled={!!action.program && method.id !== 'user'}
                       checked={triggers.includes(method.id)}
                       onChange={(e) => toggleMethod(index, action, method.id, e.target.checked)}
                     />
@@ -845,6 +877,11 @@ function BehaviorEditor({
                     </span>
                   </label>
                 ))}
+                {action.program && (
+                  <small>
+                    코드 계산은 사용자 버튼으로 실행하며 이 자료의 상태와 입력만 사용해요.
+                  </small>
+                )}
                 {triggers.includes('before-turn') && (
                   <label>
                     자동 실행 입력 · JSON
@@ -877,8 +914,9 @@ function BehaviorEditor({
       <details>
         <summary>제작자용 동작 JSON 편집</summary>
         <p className="muted">
-          Lua나 HTML을 실행하지 않아요. 지원되는 상태 형식과 식만 사용할 수 있어요. 다른 형식을 바꿔
-          넣으면 원래 동작이 손실될 수 있으므로 원본을 보관해 주세요.
+          선언형 계산 또는 행동의 program에 JavaScript 계산을 넣을 수 있어요. 코드에는 이 자료의
+          상태와 버튼 입력만 전달하며 반환한 상태는 저장 전에 검사해요. Lua와 Risu 스크립트의 직접
+          실행은 지원하지 않아요.
         </p>
         <label>
           동작 정의 JSON

@@ -2,8 +2,23 @@ import { test, expect, type APIRequestContext } from '@playwright/test';
 import { MOBILE_WIDTH, DESKTOP_WIDTH } from './fixtures/browser-viewports.js';
 import { createPanelPackage } from './fixtures/panel-package.js';
 
-async function seed(request: APIRequestContext, hostile = false) {
+async function seed(request: APIRequestContext, hostile = false, program = false) {
   const pkg = createPanelPackage();
+  if (program) {
+    const note = pkg.behavior!.actions.find((action) => action.id === 'note')!;
+    note.effects = [];
+    note.program = {
+      api: 'uimori-state-action-v1',
+      source:
+        'const words = [...new Set(api.input.note.trim().split(/\\s+/).filter(Boolean))].sort(); return {state: {...api.state, note: words.join(" ")}, result: {count: words.length}};',
+    };
+    const again = pkg.behavior!.actions.find((action) => action.id === 'again')!;
+    again.effects = [];
+    again.program = {
+      api: 'uimori-state-action-v1',
+      source: 'throw Error("guest private content");',
+    };
+  }
   if (hostile) {
     pkg.panels![0].template.unshift({
       kind: 'text',
@@ -31,6 +46,38 @@ async function seed(request: APIRequestContext, hostile = false) {
   expect(created.ok(), await created.text()).toBe(true);
   return (await created.json()) as { id: string };
 }
+test('EXTPANELUI01 code action updates its panel and a failed action preserves chat input', async ({
+  page,
+  request,
+}) => {
+  const chat = await seed(request, false, true);
+  await page.setViewportSize({ width: MOBILE_WIDTH, height: 900 });
+  await page.goto(`/?chat=${chat.id}`);
+  const custom = page.getByRole('region', { name: '탐험 준비', exact: true });
+  const iframe = page.frameLocator('iframe[title="탐험 준비 패키지 패널"]');
+  await expect(custom).toHaveAttribute('aria-busy', 'false');
+  await iframe.getByRole('textbox', { name: '준비 메모', exact: true }).fill('pear apple pear');
+  await iframe.getByRole('button', { name: '메모 반영', exact: true }).click();
+  await expect(iframe.getByRole('textbox', { name: '준비 메모', exact: true })).toHaveValue(
+    'apple pear'
+  );
+  await page.reload();
+  await expect(iframe.getByRole('textbox', { name: '준비 메모', exact: true })).toHaveValue(
+    'apple pear'
+  );
+  await iframe.getByRole('button', { name: '경로 선택', exact: true }).click();
+  await expect(iframe.locator('#route')).toHaveText('harbor');
+  await iframe.getByRole('button', { name: '다시 선택', exact: true }).click();
+  await expect(custom.getByRole('alert')).toBeVisible();
+  await expect(iframe.locator('#route')).toHaveText('harbor');
+  await expect(page.getByLabel('다음 장면 요청', { exact: true })).toBeEnabled();
+  await expect(page.getByText('guest private content', { exact: false })).toHaveCount(0);
+  const detail = await (await request.get(`/api/chats/${chat.id}/package-behaviors`)).json();
+  expect(detail.instances[0].stateRevision).toBe(2);
+  const current = await (await request.get(`/api/chats/${chat.id}`)).json();
+  expect(current.runs).toHaveLength(0);
+  expect(current.attempts).toHaveLength(0);
+});
 for (const width of [MOBILE_WIDTH, DESKTOP_WIDTH])
   test(`PANELUI01 current-state selection, form draft and fallback at ${width}px`, async ({
     page,
