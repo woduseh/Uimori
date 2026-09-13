@@ -4,9 +4,10 @@ import { afterEach, describe, expect, test } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { basename, isAbsolute, join, relative, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import type { ContentPackage } from '../core/content-package.js';
 import type { RunSnapshot } from '../core/types.js';
+import { EXTENSION_PROGRAM_API } from '../core/extension-program.js';
 import { listBehaviorTools } from '../core/package-behavior-tools.js';
 import { Store, type Run } from '../server/store.js';
 import {
@@ -18,6 +19,8 @@ import { behaviorDetail } from '../server/package-behavior-host.js';
 import { forkChat } from '../server/chat-fork.js';
 import { buildMainProviderRequest } from '../server/main-request.js';
 import { exportChatBackup, importChatBackup } from '../server/chat-backup.js';
+import { prepareAfterResponse } from '../server/package-after-response.js';
+import { behaviorPayloadHash } from '../server/package-behavior-store.js';
 
 const owned: { path: string; store: Store }[] = [];
 afterEach(() => {
@@ -39,7 +42,7 @@ function database() {
   owned.push({ path, store });
   return store;
 }
-function fixture(mode: 'annotation' | 'authoritative' = 'authoritative') {
+function fixture(mode: 'annotation' | 'authoritative' = 'authoritative', afterResponse = false) {
   const store = database(),
     chat = createFixtureChat(store, 'Synthetic run archive', 'calm');
   const pkg: ContentPackage = {
@@ -89,6 +92,21 @@ function fixture(mode: 'annotation' | 'authoritative' = 'authoritative') {
           ],
           result: { context: ['nextState', 'count'] },
         },
+        ...(afterResponse
+          ? [
+              {
+                id: 'after',
+                triggers: ['after-turn'] as 'after-turn'[],
+                inputSchema: { type: 'record' as const, properties: {} },
+                automaticInput: {},
+                effects: [],
+                program: {
+                  api: EXTENSION_PROGRAM_API,
+                  source: 'return {state:{count:api.state.count+1},result:{accepted:true}};',
+                },
+              },
+            ]
+          : []),
       ],
       outputParsers: [
         {
@@ -614,6 +632,126 @@ describe('v11 recorded automatic/model behavior archive', () => {
     expect(database().product.import(target.product.export())).toEqual({
       restored: true,
       chats: 3,
+    });
+  });
+
+  test('RBA09 after-response receipts, committed journals and backup ownership roundtrip exactly', async () => {
+    const f = fixture('authoritative', true),
+      run = start(f.store, f.chat.id);
+    await model(f.store, run);
+    const text = 'Exact synthetic prose. <state>{"count":11}</state>';
+    await prepareAfterResponse(f.store, run.id, text);
+    const source = complete(f.store, run),
+      recorded = runBehaviorProgress(f.store, run.id)!.afterResponse!;
+    expect(recorded).toMatchObject({
+      status: 'completed',
+      sourceHash: source.hash,
+      packages: [
+        {
+          status: 'ready',
+          before: { stateRevision: 3, state: { count: 11 } },
+          after: { stateRevision: 4, state: { count: 12 } },
+          entries: [{ trigger: 'after-turn', drawSeed: null, draws: {} }],
+        },
+      ],
+    });
+    const archive = f.store.product.export(),
+      afterJournal = archive.tables.package_behavior_journal.find(
+        (row) => JSON.parse(row.result).provenance === 'after-turn'
+      );
+    expect(afterJournal?.idempotency_key).toBe(
+      `after:${run.id}:${behaviorPayloadHash(JSON.stringify([f.instanceId, 'after']))}`
+    );
+    expect(database().product.import(archive)).toEqual({ restored: true, chats: 1 });
+    const fork = forkChat(f.store, f.chat.id, {
+        fromRevision: source.id,
+        idempotencyKey: randomUUID(),
+      }),
+      forkRun = f.store.run(f.store.source(fork.headRevision!).runId);
+    expect(runBehaviorProgress(f.store, forkRun.id)!.afterResponse).toEqual(recorded);
+    expect(database().product.import(f.store.product.export())).toEqual({
+      restored: true,
+      chats: 2,
+    });
+
+    const target = database(),
+      copied = importChatBackup(target, {
+        backup: exportChatBackup(f.store, f.chat.id),
+        idempotencyKey: randomUUID(),
+      }).chat,
+      copiedRun = target.run(target.source(copied.headRevision!).runId),
+      copiedReceipt = runBehaviorProgress(target, copiedRun.id)!.afterResponse!;
+    expect(copiedReceipt.packages).toEqual(recorded.packages);
+    expect(
+      target.product
+        .export()
+        .tables.package_behavior_journal.some(
+          (row) =>
+            JSON.parse(row.result).provenance === 'after-turn' &&
+            row.idempotency_key.startsWith(`after:${copiedRun.id}:`)
+        )
+    ).toBe(true);
+  });
+
+  test('RBA10 forged after-response source, host facts and program receipts reject atomically', async () => {
+    const f = fixture('authoritative', true),
+      run = start(f.store, f.chat.id);
+    await model(f.store, run);
+    await prepareAfterResponse(
+      f.store,
+      run.id,
+      'Exact synthetic prose. <state>{"count":11}</state>'
+    );
+    complete(f.store, run);
+    const base = f.store.product.export();
+    const attacks: ((archive: any) => void)[] = [
+      (archive) => {
+        const value = JSON.parse(archive.tables.package_behavior_runs[0].body);
+        value.afterResponse.sourceHash = '0'.repeat(64);
+        archive.tables.package_behavior_runs[0].body = JSON.stringify(value);
+      },
+      (archive) => {
+        const value = JSON.parse(archive.tables.package_behavior_runs[0].body);
+        value.afterResponse.packages[0].entries[0].hostRuntime.state.count = 10;
+        archive.tables.package_behavior_runs[0].body = JSON.stringify(value);
+      },
+      (archive) => {
+        const value = JSON.parse(archive.tables.package_behavior_runs[0].body);
+        value.afterResponse.packages[0].entries[0].program.programHash = '0'.repeat(64);
+        archive.tables.package_behavior_runs[0].body = JSON.stringify(value);
+      },
+    ];
+    for (const mutate of attacks) {
+      const archive = structuredClone(base),
+        target = database(),
+        empty = target.product.export().tables;
+      mutate(archive);
+      expect(() => target.product.import(archive)).toThrow();
+      expect(target.product.export().tables).toEqual(empty);
+    }
+  });
+
+  test('RBA11 interrupted running receipt restores without publishing response-bound state', () => {
+    const f = fixture('authoritative', true),
+      run = start(f.store, f.chat.id),
+      progress = runBehaviorProgress(f.store, run.id)!;
+    progress.afterResponse = {
+      version: 1,
+      sourceHash: createHash('sha256').update('uncommitted response').digest('hex'),
+      status: 'running',
+      completed: 0,
+      total: 1,
+      packages: [],
+    };
+    f.store.db
+      .prepare('UPDATE package_behavior_runs SET body=? WHERE run_id=?')
+      .run(JSON.stringify(progress), run.id);
+    const target = database();
+    expect(target.product.import(f.store.product.export())).toEqual({ restored: true, chats: 1 });
+    expect(runBehaviorProgress(target, run.id)!.afterResponse).toEqual(progress.afterResponse);
+    expect(behaviorDetail(target, f.chat.id).instances[0]).toMatchObject({
+      stateRevision: 0,
+      state: { count: 0 },
     });
   });
 });

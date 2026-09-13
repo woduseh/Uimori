@@ -26,7 +26,7 @@ export type BehaviorDraw = { id: string } & (
   | { type: 'integer'; min: number; max: number }
   | { type: 'choice' | 'shuffle'; values: RuntimeValue[] }
 );
-export type BehaviorActionTrigger = 'user' | 'before-turn' | 'model';
+export type BehaviorActionTrigger = 'user' | 'before-turn' | 'after-turn' | 'model';
 export interface BehaviorAction {
   id: string;
   label?: string;
@@ -321,12 +321,16 @@ export function validatePackageBehavior(value: unknown): PackageBehavior {
     if (
       a.triggers !== undefined &&
       (!Array.isArray(a.triggers) ||
-        a.triggers.length > 3 ||
-        a.triggers.some((v: unknown) => !['user', 'before-turn', 'model'].includes(v as string)) ||
+        a.triggers.length > 4 ||
+        a.triggers.some(
+          (v: unknown) => !['user', 'before-turn', 'after-turn', 'model'].includes(v as string)
+        ) ||
         new Set(a.triggers).size !== a.triggers.length)
     )
       bad('BEHAVIOR_ACTION_TRIGGERS');
     const triggers = behaviorActionTriggers(a);
+    if (triggers.includes('after-turn') && a.program === undefined)
+      bad('BEHAVIOR_AFTER_TURN_PROGRAM_REQUIRED');
     if (a.program !== undefined) {
       try {
         validateExtensionProgram(a.program);
@@ -349,9 +353,9 @@ export function validatePackageBehavior(value: unknown): PackageBehavior {
     }
     if (triggers.includes('model') && a.inputSchema.type !== 'record')
       bad('BEHAVIOR_MODEL_INPUT_ROOT');
-    if (Object.hasOwn(a, 'automaticInput') && !triggers.includes('before-turn'))
-      bad('BEHAVIOR_AUTOMATIC_INPUT_TRIGGER');
-    if (triggers.includes('before-turn'))
+    const automatic = triggers.includes('before-turn') || triggers.includes('after-turn');
+    if (Object.hasOwn(a, 'automaticInput') && !automatic) bad('BEHAVIOR_AUTOMATIC_INPUT_TRIGGER');
+    if (automatic)
       validateBehaviorValue(
         a.inputSchema,
         Object.hasOwn(a, 'automaticInput') ? a.automaticInput : {}

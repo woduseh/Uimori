@@ -3,6 +3,7 @@ import { HttpError } from './request-validation.js';
 import { createHash } from 'node:crypto';
 import { isDeepStrictEqual } from 'node:util';
 import {
+  BehaviorError,
   behaviorActionAllowed,
   behaviorActionTriggers,
   behaviorRecord,
@@ -10,6 +11,12 @@ import {
   validateBehaviorValue,
   validatePackageBehavior,
 } from '../core/package-behavior.js';
+import type {
+  AfterResponseEntry,
+  AfterResponsePackage,
+  AfterResponseProgress,
+} from '../core/after-response.js';
+import { projectBehaviorOutputs } from '../core/behavior-output.js';
 import { inspectRuntimeValue } from '../core/prompt-values.js';
 import { executionContext, type PackageExecutionState } from '../core/execution-context.js';
 import type { RunSnapshot } from '../core/types.js';
@@ -20,7 +27,8 @@ import type {
   RunBehaviorEntry,
   RunBehaviorProgress,
 } from './package-behavior-run.js';
-import type { Store } from './store.js';
+import { preparedBehaviorSnapshot } from './package-behavior-run.js';
+import type { Run, Store } from './store.js';
 
 export const packageBehaviorRunTables = [
   'package_behavior_entropy',
@@ -69,6 +77,15 @@ function body(row: Row): Row {
 const key = (entry: Pick<RunBehaviorEntry, 'instanceId' | 'actionId'>) =>
   JSON.stringify([entry.instanceId, entry.actionId]);
 
+function afterFailureCode(value: unknown): asserts value is string {
+  if (
+    typeof value !== 'string' ||
+    value.length > 200 ||
+    !/^BEHAVIOR_(?:AFTER_RESPONSE|HOST|PROGRAM)_[A-Z0-9_]+$/u.test(value)
+  )
+    reject('after-response failure code');
+}
+
 function preparation(value: unknown, total: number): AutomaticPreparation {
   const receipt = object(value, ['status', 'completed', 'total'], ['code', 'skipKey']);
   if (!['pending', 'running', 'ready', 'failed', 'skipped'].includes(receipt.status))
@@ -110,6 +127,258 @@ function preparation(value: unknown, total: number): AutomaticPreparation {
       break;
   }
   return receipt as AutomaticPreparation;
+}
+
+function validateAfterResponseProgress(
+  store: Store,
+  run: Run,
+  snapshot: RunSnapshot,
+  progress: RunBehaviorProgress,
+  value: unknown,
+  checkState: CheckState
+): AfterResponseProgress {
+  const receipt = object(value, [
+    'version',
+    'sourceHash',
+    'status',
+    'completed',
+    'total',
+    'packages',
+  ]);
+  if (receipt.version !== 1) reject('after-response version');
+  digest(receipt.sourceHash);
+  if (!['running', 'completed'].includes(receipt.status)) reject('after-response status');
+  list(receipt.packages);
+
+  const branchId = snapshot.branchId ?? `main:${run.chatId}`;
+  const effectiveSnapshot = preparedBehaviorSnapshot(store, run.id, snapshot);
+  const definitions = (effectiveSnapshot.profile?.packageAttachments ?? []).flatMap((ref) => {
+    const instanceId = `${ref.id}:${ref.role}`;
+    if (
+      historicalPersonaExcluded(effectiveSnapshot.profile, ref.role) ||
+      effectiveSnapshot.packageBehaviorUnavailable?.some((item) => item.instanceId === instanceId)
+    )
+      return [];
+    const pkg = effectiveSnapshot.profile?.packages?.find(
+      (candidate) => candidate.id === ref.id && candidate.revision === ref.revision
+    );
+    if (!pkg?.behavior) return [];
+    const behavior = validatePackageBehavior(pkg.behavior);
+    const state = progress.states.find((candidate) => candidate.instanceId === instanceId);
+    return state ? [{ ref, instanceId, behavior, state }] : [];
+  });
+  const hooks = definitions
+    .map((definition) => ({
+      ...definition,
+      actions: definition.behavior.actions.filter((action) =>
+        behaviorActionTriggers(action).includes('after-turn')
+      ),
+    }))
+    .filter((definition) => definition.actions.length);
+  count(receipt.total, 1, 100);
+  if (receipt.total !== hooks.length) reject('after-response total');
+  count(receipt.completed, 0, receipt.total);
+  if (receipt.packages.length !== receipt.completed) reject('after-response completed count');
+  if (receipt.status === 'completed') {
+    if (receipt.completed !== receipt.total) reject('after-response completion');
+  } else {
+    if (receipt.completed >= receipt.total || run.status === 'completed')
+      reject('after-response running');
+  }
+
+  const source = run.sourceRevision ? store.sourceOriginal(run.sourceRevision) : undefined;
+  if (source) same(receipt.sourceHash, source.hash, 'after-response source');
+  if (run.status === 'completed' && (!source || receipt.status !== 'completed'))
+    reject('completed after-response');
+
+  const projectedSnapshot: RunSnapshot = {
+    ...effectiveSnapshot,
+    packageStates: structuredClone(progress.states),
+  };
+  const parserStates = structuredClone(progress.states);
+  const parserFailures = new Set<string>();
+  const parserProjections = new Set<string>();
+  let authoritativeParserFailure = false;
+  if (source) {
+    for (const definition of definitions) {
+      if (!definition.behavior.outputParsers.length) {
+        parserProjections.add(definition.instanceId);
+        continue;
+      }
+      const journal = store.db
+        .prepare(
+          'SELECT payload FROM package_behavior_journal WHERE chat_id=? AND branch_id=? AND instance_id=? AND idempotency_key=?'
+        )
+        .get(run.chatId, branchId, definition.instanceId, `source:${source.id}:${source.hash}`) as
+        | Row
+        | undefined;
+      const output = store.db
+        .prepare('SELECT body FROM package_behavior_outputs WHERE source_id=? AND instance_id=?')
+        .get(source.id, definition.instanceId) as Row | undefined;
+      const outputReceipt = output ? JSON.parse(output.body) : undefined;
+      if (!journal) {
+        if (outputReceipt?.status === 'failed') {
+          parserFailures.add(definition.instanceId);
+          if (definition.behavior.mode !== 'annotation') authoritativeParserFailure = true;
+        }
+        continue;
+      }
+      try {
+        const payload = behaviorRecord(JSON.parse(journal.payload));
+        const hostRuntime = behaviorRecord(payload.hostRuntime);
+        inspectRuntimeValue(hostRuntime);
+        const state = projectBehaviorOutputs(
+          definition.behavior,
+          definition.behavior.outputParsers.map((parser) => parser.id),
+          definition.state.state,
+          source.text,
+          hostRuntime
+        );
+        const index = parserStates.findIndex(
+          (candidate) => candidate.instanceId === definition.instanceId
+        );
+        parserStates[index] = {
+          ...structuredClone(definition.state),
+          state,
+          stateRevision: definition.state.stateRevision + 1,
+        };
+        parserProjections.add(definition.instanceId);
+      } catch (error) {
+        if (!(error instanceof BehaviorError)) throw error;
+        parserFailures.add(definition.instanceId);
+        if (definition.behavior.mode !== 'annotation') authoritativeParserFailure = true;
+      }
+    }
+  }
+  // A copied fork intentionally has no cloned journal. Its receipt is an immutable origin fact;
+  // use the recorded parser boundary for internal state-chain checks without reinterpreting it
+  // under the new chat/source identities.
+  if (snapshot.forkedFrom)
+    for (const [packageIndex, rawPackage] of receipt.packages.entries()) {
+      const definition = hooks[packageIndex];
+      if (!definition || parserProjections.has(definition.instanceId)) continue;
+      const pkg = behaviorRecord(rawPackage);
+      const before = checkState(pkg.before, run.chatId, branchId, snapshot.profile);
+      const index = parserStates.findIndex((state) => state.instanceId === definition.instanceId);
+      parserStates[index] = before;
+    }
+
+  for (const [packageIndex, rawPackage] of receipt.packages.entries()) {
+    const definition = hooks[packageIndex];
+    if (!definition) reject('after-response package count');
+    const pkg = object(
+      rawPackage,
+      ['instanceId', 'status', 'before', 'after', 'entries'],
+      ['code']
+    ) as AfterResponsePackage;
+    if (pkg.instanceId !== definition.instanceId) reject('after-response package order');
+    if (!['ready', 'failed'].includes(pkg.status)) reject('after-response package status');
+    list(pkg.entries, definition.actions.length);
+    const before = checkState(pkg.before, run.chatId, branchId, snapshot.profile);
+    const after = checkState(pkg.after, run.chatId, branchId, snapshot.profile);
+    if (before.instanceId !== definition.instanceId || after.instanceId !== definition.instanceId)
+      reject('after-response package instance');
+    if (source && parserProjections.has(definition.instanceId))
+      same(
+        before,
+        parserStates.find((state) => state.instanceId === definition.instanceId),
+        'after-response parser projection'
+      );
+    const parserBlocked =
+      source && (authoritativeParserFailure || parserFailures.has(definition.instanceId));
+    if (pkg.status === 'failed') {
+      afterFailureCode(pkg.code);
+      if (pkg.entries.length) reject('failed after-response entries');
+      same(after, before, 'failed after-response state');
+      if (
+        parserBlocked &&
+        ![
+          'BEHAVIOR_AFTER_RESPONSE_PARSER_FAILED',
+          'BEHAVIOR_AFTER_RESPONSE_BASE_UNAVAILABLE',
+        ].includes(pkg.code)
+      )
+        reject('after-response parser failure receipt');
+      continue;
+    }
+    if (Object.hasOwn(pkg, 'code') || parserBlocked) reject('ready after-response package');
+
+    let current = before;
+    let previousActionIndex = -1;
+    for (const rawEntry of pkg.entries) {
+      const entry = object(rawEntry, [
+        'instanceId',
+        'actionId',
+        'trigger',
+        'input',
+        'before',
+        'after',
+        'result',
+        'draws',
+        'drawSeed',
+        'hostRuntime',
+        'program',
+      ]) as AfterResponseEntry;
+      const actionIndex = definition.actions.findIndex(
+        (candidate, index) => index > previousActionIndex && candidate.id === entry.actionId
+      );
+      if (actionIndex < 0) reject('after-response action order');
+      previousActionIndex = actionIndex;
+      const action = definition.actions[actionIndex];
+      if (action.program === undefined || action.draws?.length)
+        reject('after-response action definition');
+      const expectedRuntime = executionContext(
+        {
+          ...projectedSnapshot,
+          packageStates: parserStates.map((state) =>
+            state.instanceId === definition.instanceId ? current : state
+          ),
+        },
+        'main',
+        definition.ref
+      );
+      const input = action.automaticInput ?? {};
+      if (entry.instanceId !== definition.instanceId || entry.trigger !== 'after-turn')
+        reject('after-response action order');
+      same(entry.input, input, 'after-response automatic input');
+      same(entry.before, current, 'after-response state chain');
+      const entryAfter = checkState(entry.after, run.chatId, branchId, snapshot.profile);
+      same(
+        entryAfter,
+        {
+          ...current,
+          state: entryAfter.state,
+          stateRevision: current.stateRevision + 1,
+        },
+        'after-response entry state'
+      );
+      same(entry.draws, {}, 'after-response draws');
+      if (entry.drawSeed !== null) reject('after-response draw seed');
+      behaviorRecord(entry.hostRuntime);
+      inspectRuntimeValue(entry.hostRuntime);
+      same(entry.hostRuntime.state, current.state, 'after-response host state');
+      same(entry.hostRuntime.draws, current.draws, 'after-response host draws');
+      if (!snapshot.forkedFrom && source)
+        same(entry.hostRuntime.packages, expectedRuntime.packages, 'after-response packages');
+      same(entry.hostRuntime.package, expectedRuntime.package, 'after-response package');
+      same(entry.hostRuntime.options, expectedRuntime.options, 'after-response options');
+      try {
+        validateBehaviorValue(action.inputSchema, entry.input);
+        if (!behaviorActionAllowed(action, current.state, entry.input, entry.hostRuntime))
+          reject('after-response action condition');
+        validateExtensionProgramReceipt(entry.program, {
+          programHash: behaviorPayloadHash(action.program),
+          stateSchema: definition.behavior.stateSchema,
+          state: entryAfter.state,
+          result: entry.result,
+        });
+      } catch {
+        reject('after-response program receipt');
+      }
+      current = entryAfter;
+    }
+    same(after, current, 'after-response final state');
+  }
+  return receipt as AfterResponseProgress;
 }
 
 /** Receipt validation replays deterministic calculations over recorded host facts, including copied fork facts. */
@@ -256,7 +525,7 @@ export function validateRunBehaviorArchive(store: Store, checkState: CheckState)
     const value = object(
       body(row),
       ['version', 'opportunityId', 'entries', 'states'],
-      ['preparation']
+      ['preparation', 'afterResponse']
     );
     if (value.version !== 1 || execution.version !== 1) reject('version');
     digest(value.opportunityId);
@@ -384,6 +653,16 @@ export function validateRunBehaviorArchive(store: Store, checkState: CheckState)
       }
     }
     same(states, value.states, 'progress states');
+    const afterResponseReceipt = Object.hasOwn(value, 'afterResponse')
+      ? validateAfterResponseProgress(
+          store,
+          run,
+          snapshot,
+          value as RunBehaviorProgress,
+          value.afterResponse,
+          checkState
+        )
+      : undefined;
     if (deferred) {
       same(snapshot.packageStates, base, 'deferred snapshot states');
       same(execution.automaticResults, [], 'deferred snapshot results');
@@ -438,6 +717,23 @@ export function validateRunBehaviorArchive(store: Store, checkState: CheckState)
             )
         )
           reject('missing committed action');
+      }
+      for (const pkg of afterResponseReceipt?.packages ?? []) {
+        if (pkg.status !== 'ready') continue;
+        for (const entry of pkg.entries)
+          if (
+            !store.db
+              .prepare(
+                'SELECT 1 FROM package_behavior_journal WHERE chat_id=? AND branch_id=? AND instance_id=? AND idempotency_key=?'
+              )
+              .get(
+                run.chatId,
+                snapshot.branchId ?? `main:${run.chatId}`,
+                entry.instanceId,
+                `after:${run.id}:${behaviorPayloadHash(key(entry))}`
+              )
+          )
+            reject('missing committed after-response action');
       }
     }
     progresses.set(row.run_id, value as RunBehaviorProgress);

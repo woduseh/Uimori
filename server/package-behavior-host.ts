@@ -38,7 +38,10 @@ import {
   completedRunBehaviorView,
   copyForkRunBehaviors,
   isRecoverableBehaviorExecutionError,
+  runBehaviorProgress,
+  saveProgress,
 } from './package-behavior-run.js';
+import { commitAfterResponseInstance } from './package-after-response.js';
 import {
   initPackageRequests,
   packageRequestDependenciesHash,
@@ -241,7 +244,9 @@ export function behaviorDetail(store: Store, chatId: string, requestedBranch?: s
               ? 'user'
               : receipt.provenance === 'before-turn'
                 ? 'before-turn'
-                : 'model') as 'user' | 'before-turn' | 'model',
+                : receipt.provenance === 'after-turn'
+                  ? 'after-turn'
+                  : 'model') as 'user' | 'before-turn' | 'model' | 'after-turn',
           }
         : undefined;
       return {
@@ -610,6 +615,19 @@ export function completePackageOutputs(store: Store, run: Run, source: Source) {
   }
   for (const { d, before } of defs) {
     let failure = groupFailure;
+    const rejectAfterResponse = (code: string) => {
+      const progress = runBehaviorProgress(store, run.id);
+      const prepared = progress?.afterResponse?.packages.find(
+        (item) => item.instanceId === d.scope.attachmentInstanceId
+      );
+      if (progress && prepared?.status === 'ready') {
+        prepared.status = 'failed';
+        prepared.code = code;
+        prepared.entries = [];
+        prepared.after = structuredClone(prepared.before);
+        saveProgress(store, run.id, progress);
+      }
+    };
     if (!groupFailure && d.pkg.behavior!.mode === 'annotation') {
       store.db.exec('SAVEPOINT package_annotation');
       try {
@@ -621,6 +639,21 @@ export function completePackageOutputs(store: Store, run: Run, source: Source) {
         failure = error instanceof Error ? error.message : String(error);
       }
     }
+    if (!failure) {
+      // Response hooks are an optional overlay: retain successful actions/parsers on guest failure.
+      store.db.exec('SAVEPOINT package_after_response');
+      try {
+        commitAfterResponseInstance(store, run, d.scope.attachmentInstanceId, source.hash);
+        store.db.exec('RELEASE package_after_response');
+      } catch (error) {
+        store.db.exec('ROLLBACK TO package_after_response; RELEASE package_after_response');
+        if (!isRecoverableBehaviorExecutionError(error)) throw error;
+        rejectAfterResponse(
+          error instanceof Error ? error.message : 'BEHAVIOR_AFTER_RESPONSE_FAILED'
+        );
+        store.event(run.chatId, 'package.after-response.failed', source.id);
+      }
+    } else rejectAfterResponse('BEHAVIOR_AFTER_RESPONSE_BASE_UNAVAILABLE');
     const after = groupFailure
       ? structuredClone(before)
       : frozenState(store, d, store.behavior.read(d.scope, d.pkg.behavior!));

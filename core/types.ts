@@ -230,6 +230,13 @@ export type ReaderRun = Omit<Run, 'snapshot' | 'inputs' | 'toolEvents'> & {
     total: number;
     code?: string;
   };
+  /** Response hook progress only; no text, state or guest error messages. */
+  packageAfterResponse?: {
+    status: 'running' | 'completed';
+    completed: number;
+    total: number;
+    failed: number;
+  };
   statePreparation?: {
     status: import('./story.js').StoryPreparation['status'];
     reason?: string;

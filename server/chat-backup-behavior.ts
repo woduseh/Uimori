@@ -12,10 +12,11 @@ export function remapBackupBehavior(ctx: BackupRemap): void {
   const dependencies = (value: { id: string; hash: string }[]) =>
     value.map((source) => ({ ...source, id: id(source.id) }));
   const journalKey = (key: string, provenance: string) => {
-    const match = /^(run|source):([^:]+):([a-f0-9]{64})$/u.exec(key);
+    const match = /^(run|after|source):([^:]+):([a-f0-9]{64})$/u.exec(key);
     if (
       !match ||
       (match[1] === 'run' && !['before-turn', 'model-tool'].includes(provenance)) ||
+      (match[1] === 'after' && provenance !== 'after-turn') ||
       (match[1] === 'source' && provenance !== 'local-output-parser')
     )
       return key;
