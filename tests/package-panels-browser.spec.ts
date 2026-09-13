@@ -1,0 +1,175 @@
+import { test, expect, type APIRequestContext } from '@playwright/test';
+import { MOBILE_WIDTH, DESKTOP_WIDTH } from './fixtures/browser-viewports.js';
+import { createPanelPackage } from './fixtures/panel-package.js';
+
+async function seed(request: APIRequestContext, hostile = false) {
+  const pkg = createPanelPackage();
+  if (hostile) {
+    pkg.panels![0].template.unshift({
+      kind: 'text',
+      text: '<script>parent.document.body.dataset.panelEscape="yes"</script><img src="https://panel-probe.invalid/image"><iframe src="https://panel-probe.invalid/frame"></iframe><a href="https://panel-probe.invalid/link">외부 이동</a><p onclick="parent.document.body.dataset.panelEscape=\'yes\'">표시 내용</p>',
+    });
+    pkg.panels![0].css +=
+      ' @import url("https://panel-probe.invalid/style"); body{background-image:url("https://panel-probe.invalid/bg")}';
+  }
+  const saved = await request.post('/api/content', {
+    data: {
+      kind: 'bot',
+      title: pkg.title,
+      description: '',
+      text: pkg.body,
+      loading: 'pinned',
+      relatedIds: [],
+      package: pkg,
+    },
+  });
+  expect(saved.ok(), await saved.text()).toBe(true);
+  const content = await saved.json();
+  const created = await request.post('/api/chats', {
+    data: { title: 'Synthetic panel UI', botId: content.id },
+  });
+  expect(created.ok(), await created.text()).toBe(true);
+  return (await created.json()) as { id: string };
+}
+for (const width of [MOBILE_WIDTH, DESKTOP_WIDTH])
+  test(`PANELUI01 current-state selection, form draft and fallback at ${width}px`, async ({
+    page,
+    request,
+  }, info) => {
+    const chat = await seed(request);
+    const endpoint = `/api/chats/${chat.id}/package-behaviors`;
+    const detail = async () => await (await request.get(endpoint)).json();
+    await page.setViewportSize({ width, height: 900 });
+    await page.goto(`/?chat=${chat.id}`);
+    const owner = page.getByRole('region', { name: '패키지 상태와 행동', exact: true });
+    const custom = page.getByRole('region', { name: '탐험 준비', exact: true });
+    const iframe = page.frameLocator('iframe[title="탐험 준비 패키지 패널"]');
+    await expect(custom).toHaveAttribute('aria-busy', 'false');
+    const note = 'Keep this draft <literal> & safe.';
+    await iframe.getByRole('textbox', { name: '준비 메모', exact: true }).fill(note);
+    await iframe.getByRole('combobox', { name: '출발 경로', exact: true }).selectOption('harbor');
+    const prior = await detail();
+    let releaseRead!: () => void;
+    const readGate = new Promise<void>((resolve) => {
+      releaseRead = resolve;
+    });
+    await page.route(
+      `**${endpoint}`,
+      async (route) => {
+        await readGate;
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify(prior),
+        });
+      },
+      { times: 1 }
+    );
+    await owner.getByRole('button', { name: '새로고침', exact: true }).click();
+    await expect(owner).toHaveAttribute('aria-busy', 'true');
+    await iframe.getByRole('button', { name: '경로 선택', exact: true }).click();
+    await expect(iframe.locator('#route')).toHaveText('harbor');
+    releaseRead();
+    await expect.poll(async () => (await detail()).instances[0].state.route).toBe('harbor');
+    await expect(iframe.getByRole('textbox', { name: '준비 메모', exact: true })).toHaveValue(note);
+    await owner.getByRole('button', { name: '새로고침', exact: true }).click();
+    await expect(owner).toHaveAttribute('aria-busy', 'false');
+    await expect(iframe.getByRole('textbox', { name: '준비 메모', exact: true })).toHaveValue(note);
+    const failurePattern = `**/api/chats/${chat.id}/package-behaviors/*/actions`;
+    await page.route(failurePattern, (route) =>
+      route.fulfill({
+        status: 500,
+        contentType: 'application/json',
+        body: JSON.stringify({ message: 'Synthetic panel action failure' }),
+      })
+    );
+    await iframe.getByRole('button', { name: '메모 반영', exact: true }).click();
+    await expect(custom.getByRole('alert')).toContainText('반영하지 못했어요');
+    await expect(page.getByLabel('다음 장면 요청', { exact: true })).toBeEnabled();
+    await expect(iframe.getByRole('textbox', { name: '준비 메모', exact: true })).toHaveValue(note);
+    await page.unroute(failurePattern);
+    await iframe.getByRole('button', { name: '메모 반영', exact: true }).click();
+    await expect.poll(async () => (await detail()).instances[0].state.note).toBe(note);
+    await expect(iframe.getByRole('textbox', { name: '준비 메모', exact: true })).toHaveValue(note);
+    await page.reload();
+    await expect(iframe.locator('#route')).toHaveText('harbor');
+    await expect(iframe.getByRole('textbox', { name: '준비 메모', exact: true })).toHaveValue(note);
+    await owner.getByText('기본 상태와 행동', { exact: true }).click();
+    await expect(owner.getByRole('button', { name: '경로 다시 선택', exact: true })).toBeVisible();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(
+      true
+    );
+    const chatDetail = await (await request.get(`/api/chats/${chat.id}`)).json();
+    expect(chatDetail.runs).toHaveLength(0);
+    expect(chatDetail.sources).toHaveLength(0);
+    expect(chatDetail.attempts).toHaveLength(0);
+    if (width === MOBILE_WIDTH)
+      await custom.screenshot({ path: info.outputPath('package-panel-mobile.png') });
+  });
+
+test('PANELUI02 markup cannot access app DOM, navigate, fetch remote resources or forge host actions', async ({
+  page,
+  request,
+}) => {
+  const chat = await seed(request, true);
+  const externalRequests: string[] = [];
+  page.on('request', (item) => {
+    if (item.url().startsWith('https://panel-probe.invalid/')) externalRequests.push(item.url());
+  });
+  await page.route('https://panel-probe.invalid/**', (route) => route.abort());
+  await page.goto(`/?chat=${chat.id}`);
+  const custom = page.getByRole('region', { name: '탐험 준비', exact: true });
+  await expect(custom).toHaveAttribute('aria-busy', 'false');
+  const frame = (await (await custom.locator('iframe').elementHandle())!.contentFrame())!;
+  expect(frame).toBeTruthy();
+  expect(await frame.locator('img,iframe,a,script:not([nonce])').count()).toBe(0);
+  const authority = await frame.evaluate(() => {
+    let parentReadable = false,
+      storageReadable = false;
+    try {
+      parentReadable = !!parent.document.body;
+    } catch {
+      /* Expected opaque origin. */
+    }
+    try {
+      storageReadable = !!localStorage;
+    } catch {
+      /* Expected opaque origin. */
+    }
+    return { parentReadable, storageReadable };
+  });
+  expect(authority).toEqual({ parentReadable: false, storageReadable: false });
+  expect(await page.evaluate(() => document.body.dataset.panelEscape)).toBeUndefined();
+  const before = await (await request.get(`/api/chats/${chat.id}/package-behaviors`)).json();
+  // Test-only attempted message from the wrong origin/window; author code is never enabled.
+  await page.evaluate(() =>
+    window.postMessage(
+      {
+        channel: 'uimori-package-panel-v1',
+        token: 'wrong',
+        kind: 'action',
+        actionId: 'choose',
+        input: { route: 'ridge' },
+      },
+      '*'
+    )
+  );
+  await frame.evaluate(() =>
+    parent.postMessage(
+      {
+        channel: 'uimori-package-panel-v1',
+        token: 'wrong',
+        kind: 'action',
+        actionId: 'choose',
+        input: { route: 'ridge' },
+      },
+      '*'
+    )
+  );
+  await frame.getByText('표시 내용', { exact: true }).click();
+  const after = await (await request.get(`/api/chats/${chat.id}/package-behaviors`)).json();
+  expect(after.instances[0].stateRevision).toBe(before.instances[0].stateRevision);
+  expect(after.instances[0].state).toEqual(before.instances[0].state);
+  expect(externalRequests).toEqual([]);
+  await expect(page.getByLabel('다음 장면 요청', { exact: true })).toBeEnabled();
+});

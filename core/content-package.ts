@@ -10,6 +10,7 @@ import { validatePackageStarts, type PackageStart } from './package-start.js';
 import { validateSourceSegmentPolicy, type SourceSegmentPolicy } from './source-segments.js';
 import { validatePackageModules, type PackageModuleRef } from './package-features.js';
 import { validatePackageIdentityTemplate } from './package-identity.js';
+import { validatePackagePanels, type PackagePanel } from './package-panels.js';
 
 export const PACKAGE_ROLES = ['bot', 'persona', 'module'] as const;
 export type PackageRole = (typeof PACKAGE_ROLES)[number];
@@ -72,6 +73,7 @@ export type ContentPackage = {
   instructions: PackageInstruction[];
   controls: PromptControl[];
   stateView?: PackageStateView;
+  panels?: PackagePanel[];
   behavior?: PackageBehavior;
   transforms: PackageTransform[];
 };
@@ -158,6 +160,7 @@ export function validateContentPackage(value: unknown): ContentPackage {
     'instructions',
     'controls',
     'stateView',
+    'panels',
     'behavior',
     'transforms',
   ]);
@@ -312,6 +315,11 @@ export function validateContentPackage(value: unknown): ContentPackage {
   }
   if (p.behavior !== undefined) validatePackageBehavior(p.behavior);
   try {
+    if (p.panels !== undefined)
+      validatePackagePanels(p.panels, {
+        controls: p.controls as PromptControl[],
+        behavior: p.behavior as PackageBehavior | undefined,
+      });
     if (p.images !== undefined) validatePackageImages(p.images);
     if (p.portraitImageId !== undefined) {
       id(p.portraitImageId);

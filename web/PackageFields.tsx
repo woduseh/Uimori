@@ -11,6 +11,7 @@ import { PackageInstructionsEditor } from './PackageInstructionsEditor.js';
 import { PackageImagesEditor } from './PackageImagesEditor.js';
 import { PackageStartsEditor } from './PackageStartsEditor.js';
 import { PackageFeaturesEditor } from './PackageFeaturesEditor.js';
+import { PackagePanelsEditor } from './PackagePanelsEditor.js';
 import { IconButton } from './IconButton.js';
 import { SectionNavigation } from './SectionNavigation.js';
 import { useCompactLayout } from './useCompactLayout.js';
@@ -243,6 +244,7 @@ export function PackageFields({
     [startsDirty, setStartsDirty] = useState(false),
     [featuresDirty, setFeaturesDirty] = useState(false),
     [loreDirty, setLoreDirty] = useState(false);
+  const [panelsDirty, setPanelsDirty] = useState(false);
   useEffect(() => {
     onBehaviorDraftChange?.(
       behaviorDirty ||
@@ -251,7 +253,8 @@ export function PackageFields({
         imagesDirty ||
         startsDirty ||
         featuresDirty ||
-        loreDirty
+        loreDirty ||
+        panelsDirty
     );
   }, [
     behaviorDirty,
@@ -261,6 +264,7 @@ export function PackageFields({
     startsDirty,
     featuresDirty,
     loreDirty,
+    panelsDirty,
     onBehaviorDraftChange,
   ]);
   const update = (part: Partial<ContentPackage>) => onChange({ ...value, ...part });
@@ -417,6 +421,12 @@ export function PackageFields({
             </div>
           </div>
           <div {...visiblePanel('display')}>
+            <PackagePanelsEditor
+              key={value.id}
+              value={value}
+              onChange={onChange}
+              onDirtyChange={setPanelsDirty}
+            />
             <div className="package-stack">
               <h4>표시 문구 바꾸기</h4>
               <p className="muted">

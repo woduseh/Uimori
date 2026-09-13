@@ -750,6 +750,8 @@ export type PromptEvaluationOptions = {
   locals?: Record<string, RuntimeValue>;
   limits?: PromptEvaluationLimits;
   budget?: PromptBudget;
+  /** Host-only HTML presentation mode. Text nodes remain authored markup; evaluated values are escaped. */
+  escapeTemplateValues?: boolean;
 };
 const numberValue = (v: RuntimeValue): number =>
   typeof v === 'number' && Number.isFinite(v) ? v : evaluationFail('PROMPT_NUMBER_REQUIRED');
@@ -780,10 +782,12 @@ class PromptEvaluator {
   readonly runtime: Record<string, RuntimeValue>;
   readonly locals: Record<string, RuntimeValue>;
   private outputChars = 0;
+  private readonly escapeTemplateValues: boolean;
   constructor(
     readonly values: Record<string, PromptValue>,
     options: PromptEvaluationOptions = {}
   ) {
+    this.escapeTemplateValues = options.escapeTemplateValues === true;
     if (options.budget && options.limits) evaluationFail('PROMPT_INVALID_BUDGET');
     this.budget = options.budget ?? new PromptBudget(options.limits);
     if (!isObject(options.runtime ?? {}) || !isObject(options.locals ?? {}) || !isObject(values))
@@ -1250,8 +1254,18 @@ class PromptEvaluator {
     for (const node of nodes) {
       this.budget.step();
       if (node.kind === 'text') append(node.text);
-      else if (node.kind === 'value') append(this.display(this.evaluate(node.expression, locals)));
-      else if (node.kind === 'slot') {
+      else if (node.kind === 'value') {
+        const value = this.display(this.evaluate(node.expression, locals));
+        append(
+          this.escapeTemplateValues
+            ? value.replace(
+                /[&<>"']/gu,
+                (char) =>
+                  ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]!
+              )
+            : value
+        );
+      } else if (node.kind === 'slot') {
         if (!Object.hasOwn(slots, node.name))
           throw new PromptProgramError('PROMPT_UNKNOWN_SLOT', undefined, node.name);
         if (slots[node.name].length) this.usedSlots.add(node.name);
