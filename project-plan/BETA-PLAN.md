@@ -34,11 +34,13 @@
 
 | 권장 순서 | 남은 사용자 결과 | 먼저 사용할 구현 경로 | 완료를 판단할 근거 |
 | --- | --- | --- | --- |
-| 1. 입력·요청 훅 | `onInput`, `listenEdit(editInput/editRequest)`가 실제 제출·모델 전송 시점에 실행되고 상태·전송문에 반영돼요. | `server/risu-lua-adapter.ts`; `package-behavior-run.ts`의 `prepareAutomaticRunBehavior`·`preparedBehaviorSnapshot`; `app.ts`; `model-runner.ts`; 기존 `prompt-transforms.ts` | 파일 가져오기부터 실제 전송 사본까지 연결해요. 원래 요청·snapshot을 보존하고 적용한 변경을 사용자에게 알리며 실패·건너뛰기·취소가 채팅을 막지 않아요. |
+| 1. 입력·요청 훅 | `onInput` 연결 다음으로 `listenEdit(editInput/editRequest)`가 실제 제출·모델 전송 시점에 실행되고 상태·전송문에 반영돼요. | `server/risu-lua-adapter.ts`; `package-behavior-run.ts`의 `prepareAutomaticRunBehavior`·`preparedBehaviorSnapshot`; `app.ts`; `model-runner.ts`; 기존 `prompt-transforms.ts` | 파일 가져오기부터 실제 전송 사본까지 연결해요. 원래 요청·snapshot을 보존하고 적용한 변경을 사용자에게 알리며 실패·건너뛰기·취소가 채팅을 막지 않아요. |
 | 2. 출력·표시 훅과 동적 화면 | `editOutput/editDisplay`와 상태 변화가 응답 표시·상태창·선택기에 반영돼요. 버튼은 같은 사용자 행동 API를 사용해요. | `app.ts`의 `stageRunOutput`·`prepareAfterResponse`; `package-after-response.ts`, `package-presentation.ts`, `package-requests.ts`; [패널 계약](../docs/PACKAGE-PANELS.md) | 원래 응답과 표시용 결과의 관계를 보존하고 명시 실행에서만 계산해요. 새로고침·분기·복원은 저장 결과를 읽으며 코드·모델을 재실행하지 않아요. HTML은 기존 격리 패널 경계를 사용해요. |
 | 3. 필요한 나머지 Risu 효과 연결 | 위 흐름을 막는 혼합 트리거·지원하지 않는 CBS 쓰기/조건·자료/UI·구조화된 모델 요청 등을 공통 API에 대응해요. | `risu-import.ts`, `risu-lua-adapter.ts`, `risu-cbs.ts`; `package-extension-execution.ts`와 기존 Host 모듈 | 미지원 안내와 실제 고정 Risu 동작을 근거로 필요한 기능부터 연결해요. 선언 순서·효과·실패 의미를 보존하고 특정 봇의 규칙을 본체에 추가하지 않아요. 전체 Risu API 구현을 이 묶음의 선행 조건으로 삼지 않아요. |
 
 첫 구현은 **입력·요청 훅 한 흐름**으로 시작해요. Risu의 `onInput`과 `onStart`를 같은 이벤트로 합치지 말고, 최종 전송 요청을 반복 생성하는 예산 계산·미리보기 안에서 제작자 코드를 실행하지 않아요. 기존 정규식 변환 영수증은 정규식 계약에 묶여 있으므로 Lua 계산 증거는 공통 `ExtensionProgramReceipt`로 보존하고 전송·표시 투영과 연결해요. 기존 일반 본문 문자열을 임의 HTML로 해석하지 않아요. 긴 문장·패널에 현재 결과/Host 한도가 부족한지는 실제 연결할 입력으로 판단해요.
+
+2026-09-14 사용자가 이번 작업을 작은 구현 단계로 한정해 **`onInput` 콜백 연결만 완료**했어요. 공통 자동 준비에서 입력 단계를 `onStart`와 구분하고 입력 전 대화·선언 순서·조건을 유지해요. 기존 상태/변수 영수증과 본문 성공 시 채택을 사용하며 원래 요청·snapshot을 바꾸지 않아요. `editInput`·`editRequest`·출력/표시 훅·화면 확장은 다음 단계예요. 최종 `quality`가 통과했어요. 어댑터/계약 81개와 기존 준비·대화·복원 62개를 확인했고, 입력 전 대화 영수증의 저장 경계 누락을 고친 뒤 Lua 통합 6개를 재확인했어요. 실제 앱 제출 검사에서는 준비 변수가 예약 profile을 덮어쓰던 문제를 확인해 `persistedContextSnapshot`이 원래 profile을 보존하도록 수정했어요. 이후 앱 제출·합성 전송·상태 저장과 Lua 통합 9개, 문맥·확장 모델 준비 21개가 통과했어요. 단계별 실패/재검사 로그는 ignored `output/input-hooks-work/`에 보존해요. 전체 검사·빌드·smoke·브라우저·실모델·전체 표본 인수는 실행하지 않았어요.
 
 대화 권한은 이미 결정됐어요. 정확한 자료 개정에 별도 허용한 **현재 선택 분기의 사용자 가시 대화 전체**가 범위이며 모델 문맥 절삭과 별도예요. [대화 Host](../docs/EXTENSION-PROGRAMS.md#host-api로-현재-분기-대화-읽기)의 고정 참조·최신 권한·영수증·복원 경계를 사용해요. 새 요청으로 가시 대화가 달라지면 자동 동작 묶음을 재계산하지만 source/state에 따른 추첨 entropy는 유지해요. 진행 대기와 여러 채팅의 동시 사용도 기존 기능이에요.
 
@@ -70,7 +72,7 @@
 
 **현재 상태의 기준은 이 절과 아래 단계 표예요(2026-09-14).** 날짜별 구현·검증 기록의 ‘현재’·‘남아 있음’은 해당 작업 당시의 상태이며, 이후 구현과 상충하면 이 절을 따라요. 과거 검사 수·run ID·hash는 당시 근거로 보존하며 현재 소스의 새 검증 결과로 재사용하지 않아요.
 
-현재 DB는 **19**, 전체 archive는 **15**, 채팅 백업은 **1**이에요. `user`·`model`·`before-turn`·`after-turn`의 JavaScript·Lua 격리 계산과 공통 변수·자기 자료·현재 분기 대화·모델 Host API를 제공해요. 카드/모듈 가져오기의 독립 Lua는 `onStart`·`onOutput`·`onButtonClick`, 지원하는 조건과 대화 조회 함수를 기존 행동 경로에 연결했어요. 기본 변수·지원 CBS 읽기·사용자 공유 변수·예약 고정·분기/백업 보존은 기존 공통 경로를 사용해요. **현재 남은 구현은 `onInput`과 요청/입력/출력/표시 편집 이벤트, 혼합 트리거, 나머지 자료/UI API와 동적 화면 연결**이에요. 일반 HTTP·공유 자료 권한·확장 설치 관리도 아직 미완이며 필요한 기능만 현재 흐름에 보완해요. Plugin v3 주요 스펙, 대용량 자료·Linux/Docker Update·배포는 별도 후속 범위이고 전체 표본 실사용은 사용자가 평가해요. 현재 연결을 요청 전체·전체 표본·베타 완료로 표시하지 않아요.
+현재 DB는 **19**, 전체 archive는 **15**, 채팅 백업은 **1**이에요. `user`·`model`·`before-turn`·`after-turn`의 JavaScript·Lua 격리 계산과 공통 변수·자기 자료·현재 분기 대화·모델 Host API를 제공해요. 카드/모듈 가져오기의 독립 Lua는 `onInput`·`onStart`·`onOutput`·`onButtonClick`, 지원하는 조건과 대화 조회 함수를 기존 행동 경로에 연결했어요. 기본 변수·지원 CBS 읽기·사용자 공유 변수·예약 고정·분기/백업 보존은 기존 공통 경로를 사용해요. **현재 남은 구현은 요청/입력/출력/표시 편집 이벤트, 혼합 트리거, 나머지 자료/UI API와 동적 화면 연결**이에요. 일반 HTTP·공유 자료 권한·확장 설치 관리도 아직 미완이며 필요한 기능만 현재 흐름에 보완해요. Plugin v3 주요 스펙, 대용량 자료·Linux/Docker Update·배포는 별도 후속 범위이고 전체 표본 실사용은 사용자가 평가해요. 현재 연결을 요청 전체·전체 표본·베타 완료로 표시하지 않아요.
 
 | 단계 | 해야 할 일 | 얻어야 할 결과 | 현재 상태 |
 | --- | --- | --- | --- |

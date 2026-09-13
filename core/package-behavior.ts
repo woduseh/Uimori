@@ -27,6 +27,7 @@ export type BehaviorDraw = { id: string } & (
   | { type: 'choice' | 'shuffle'; values: RuntimeValue[] }
 );
 export type BehaviorActionTrigger = 'user' | 'before-turn' | 'after-turn' | 'model';
+export type BehaviorActionHook = 'input';
 export interface BehaviorAction {
   id: string;
   label?: string;
@@ -34,6 +35,8 @@ export interface BehaviorAction {
   inputSchema: BehaviorSchema;
   /** Omitted actions remain explicit user actions. An empty list disables every entry point. */
   triggers?: BehaviorActionTrigger[];
+  /** Host-owned input phase within before-turn; omitted means ordinary start. */
+  hook?: BehaviorActionHook;
   automaticInput?: RuntimeValue;
   when?: PromptExpression;
   draws?: BehaviorDraw[];
@@ -317,6 +320,7 @@ export function validatePackageBehavior(value: unknown): PackageBehavior {
       'description',
       'inputSchema',
       'triggers',
+      'hook',
       'automaticInput',
       'when',
       'draws',
@@ -341,6 +345,11 @@ export function validatePackageBehavior(value: unknown): PackageBehavior {
     )
       bad('BEHAVIOR_ACTION_TRIGGERS');
     const triggers = behaviorActionTriggers(a);
+    if (a.hook !== undefined) {
+      if (a.hook !== 'input') bad('BEHAVIOR_ACTION_HOOK');
+      if (triggers.length !== 1 || triggers[0] !== 'before-turn') bad('BEHAVIOR_HOOK_TRIGGER');
+      if (a.program === undefined) bad('BEHAVIOR_HOOK_PROGRAM_REQUIRED');
+    }
     if (triggers.includes('after-turn') && a.program === undefined)
       bad('BEHAVIOR_AFTER_TURN_PROGRAM_REQUIRED');
     if (a.program !== undefined) {

@@ -16,6 +16,7 @@ import type { Run } from '../core/types.js';
 import { behaviorDetail } from '../server/package-behavior-host.js';
 import { runBehaviorProgress } from '../server/package-behavior-run.js';
 import { validateRunSnapshot } from '../server/snapshot-archive.js';
+import { readChatVariables } from '../server/chat-variables.js';
 
 const prose = 'The fixture model completed the scene after package preparation.';
 const owned: {
@@ -88,7 +89,7 @@ function packageDefinition(programSource: string): ContentPackage {
   };
 }
 
-async function fixture(programSource: string) {
+async function fixture(programSource: string, configure?: (pkg: ContentPackage) => void) {
   const directory = await mkdtemp(join(tmpdir(), 'uimori-extension-preparation-app-'));
   const provider = await loopbackProvider(async (_request, response) =>
     writeSse(response, [
@@ -106,6 +107,7 @@ async function fixture(programSource: string) {
   await app.ready();
 
   const pkg = packageDefinition(programSource);
+  configure?.(pkg);
   const content = app.store.product.content({
     kind: 'bot',
     title: pkg.title,
@@ -203,6 +205,44 @@ async function terminal(app: App, runId: string) {
     .not.toMatch(/queued|running|waiting_for_state/);
   return result;
 }
+
+test('input callbacks reach the actual send path while preserving reserved variables', async () => {
+  const f = await fixture(
+    `await api.host.call('variables.set', {key:'inputPhase',value:'prepared'});
+    return {state:{count:7},result:null};`,
+    (pkg) => {
+      pkg.behavior!.actions[0].hook = 'input';
+      pkg.behavior!.actions[0].program!.capabilities = ['variables.write'];
+    }
+  );
+  const profile = f.app.store.product.profile(f.chat.id);
+  const ref = profile.packageAttachments!.find((item) => item.id === f.content.id)!;
+  f.app.store.product.updateProfile(f.chat.id, {
+    expectedRevision: profile.revision,
+    attachments: profile.attachments,
+    packageAttachments: profile.packageAttachments,
+    image: profile.image,
+    extensionGrants: {
+      [`${ref.id}:${ref.role}`]: {
+        packageRevision: ref.revision,
+        capabilities: ['variables.write'],
+      },
+    },
+  });
+  const admitted = await start(f.app, f.chat.id);
+  const result = await terminal(f.app, admitted.id);
+  expect(result.status, result.error ?? '').toBe('completed');
+  expect(f.provider.requests).toHaveLength(1);
+  expect(f.provider.requests[0].body).toContain('STATE_COUNT=7');
+  expect(result.snapshot.profile?.variableState).toEqual(admitted.snapshot.profile?.variableState);
+  expect(result.snapshot.request).toBe(admitted.request);
+  expect(readChatVariables(f.app.store, f.chat.id, result.snapshot.branchId!).values).toEqual({
+    inputPhase: 'prepared',
+  });
+  expect((await emptyStore()).product.import(f.app.store.product.export())).toMatchObject({
+    restored: true,
+  });
+});
 
 test('actual app prepares deferred state before prompt budgeting and commits it with the source', async () => {
   const f = await fixture(

@@ -433,6 +433,7 @@ export function adaptRisuLuaTriggers(
   if (!/^[A-Za-z0-9_][A-Za-z0-9_.-]{0,49}$/u.test(prefix)) throw new Error('RISU_LUA_ID_PREFIX');
   if (!Array.isArray(triggers)) return { actions, findings, sources };
   const mapping: Partial<Record<RisuLuaEvent, BehaviorActionTrigger>> = {
+    input: 'before-turn',
     start: 'before-turn',
     output: 'after-turn',
     onButtonClick: 'user',
@@ -513,6 +514,7 @@ export function adaptRisuLuaTriggers(
               ? { type: 'string', maxLength: 8000 }
               : { type: 'record', properties: {} },
             triggers: [nativeTrigger],
+            ...(event === 'input' ? { hook: 'input' as const } : {}),
             ...(button ? {} : { automaticInput: {} }),
             ...(!button && conditionPlan?.when ? { when: conditionPlan.when } : {}),
             effects: [],

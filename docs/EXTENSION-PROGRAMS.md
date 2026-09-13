@@ -124,11 +124,11 @@ return {state: api.state, result: {preview: material?.text ?? ''}};
 
 Run과 영구 사용자 작업에는 본문 대신 run/source hash 참조를 고정해요. Host는 그 참조가 가리키는 정확한 본문만 해석하고, 실제로 대화를 읽은 계산에는 `program.conversation: {viewHash}`를 Host 전용 영수증으로 남겨요. 실행 시작 때의 grant와 채택 직전 최신 grant·자료 개정·분기/원문 소유권을 모두 확인하므로 허용 철회나 문맥 변경 뒤 늦은 상태·변수 결과는 반영하지 않아요. fork·전체 archive·채팅 백업은 참조와 영수증을 ID에 맞게 보존·검증하며 복원에서 대화 읽기나 코드를 실행하지 않아요. 채팅 백업으로 만든 새 채팅의 live grant는 다른 확장 grant와 같이 제거해 다시 허용하게 해요.
 
-대화 읽기를 허용받은 자동 행동이 있으면 판정 기회는 고정한 대화의 역할/본문 hash와 현재 요청 hash도 포함해요. 요청이나 사용자에게 보이는 실패 기록이 달라지면 선언 순서와 의존성을 유지하기 위해 같은 자동 행동 묶음을 다시 계산하며, 그 묶음의 대화를 읽지 않는 행동도 함께 실행될 수 있어요. 기존 추첨의 원래 entropy는 보존하므로 같은 상태의 draw seed는 바뀌지 않아요. 대화 읽기 선언·grant가 없으면 기존 source/state 기반 캐시를 유지해요.
+대화 읽기를 허용받은 자동 행동이 있으면 판정 기회는 고정한 대화의 역할/본문 hash와 현재 요청 hash도 포함해요. 요청이나 사용자에게 보이는 실패 기록이 달라지면 선언 순서와 의존성을 유지하기 위해 같은 자동 행동 묶음을 다시 계산하며, 그 묶음의 대화를 읽지 않는 행동도 함께 실행될 수 있어요. 기존 추첨의 원래 entropy는 보존하므로 같은 상태의 draw seed는 바뀌지 않아요. 입력 단계(`hook: 'input'`)가 있으면 대화 읽기 grant와 무관하게 요청 hash도 구분해요. 입력 단계와 대화 읽기 선언·grant가 모두 없으면 기존 source/state 기반 캐시를 유지해요.
 
 ## 생성 전 자동 준비
 
-기존 `before-turn` 행동 중 코드가 하나라도 있으면 해당 Run의 **모든 자동 행동**을 예약 후에 처리해요. 자료 장착과 행동의 선언 순서를 유지하므로 선언형 계산과 코드가 앞선 임시 상태를 이어받아요. 코드가 없는 기존 자동 행동의 예약 방식은 유지해요.
+기존 `before-turn` 행동 중 코드가 하나라도 있으면 해당 Run의 **모든 자동 행동**을 예약 후에 처리해요. 입력 단계(`hook: 'input'`)를 일반 시작 단계보다 먼저 실행하고 각 단계 안에서는 자료 장착과 행동의 선언 순서를 유지해요. 입력 단계의 대화 읽기는 이번 요청을 제외하고 시작 단계부터 포함하며, 선언형 계산과 코드는 앞선 임시 상태를 이어받아요. 코드가 없는 기존 자동 행동의 예약 방식은 유지해요.
 
 예약에는 자료/코드·입력·기본 상태와 `deferredAutomatic:true`를 고정해요. `package_behavior_runs`의 별도 preparation 기록이 `pending → running → ready/failed/skipped` 진행과 결과를 소유해요. 별도 DB 표나 자료별 실행기는 추가하지 않아요. 계산은 transaction 밖에서 수행하고 준비 결과 전체가 ready일 때만 이번 모델 입력에 투영해요. 현재 상태의 게시 시점은 모델 행동과 같이 성공 원문 저장 때예요.
 
@@ -230,4 +230,4 @@ JavaScript는 `quickjs-emscripten-core`와 `@jitl/quickjs-wasmfile-release-sync`
 
 프로그램은 패키지 개정에 속하므로 기존 자료 이동·snapshot·백업에 함께 들어가요. 저장한 행동 영수증에는 API·코드 지문·엔진 식별자·상태/결과와 사용한 대화의 `viewHash`를 보존해요. 모델 호출의 영수증은 opportunity·Run progress·최종 journal 사이에도 결합해요. 일반 채팅 백업으로 새 채팅을 복원할 때는 다른 사람의 백업이 목적지에서 모델 호출이나 대화 읽기 권한을 자동으로 주지 않도록 live profile의 `extensionGrants`를 제거하고, 사용자가 그 채팅에서 다시 허용하게 해요. source/grant 이력과 대화 참조는 과거 Run snapshot·영구 작업·attempt 귀속 영수증에 보존해 복원 검증에 사용해요. 같은 workspace 안의 fork는 기존 허가를 보존하고, 자료 native transfer는 grant를 처음부터 만들지 않아요. 전체 DB archive는 전역 연결을 disabled·비밀 제거하는 기존 복구 경계를 따르며 이 계약에서 별도 grant 삭제를 추가하지 않아요. 커밋·포크·복원은 고정한 source/revision·입력 schema·호스트 조건과 영수증·저장 결과의 일치를 확인하며 코드를 다시 실행하지 않아요. 이것은 승인된 결과의 보존이며 복원 때 계산의 의미를 재평가했다는 증거가 아니에요. 공유용 진단에는 이 코드나 입력/출력을 자동 포함하지 않아요.
 
-엔진 실행, `uimori-state-action-v1` 입력 계약, 상태 저장 호스트는 별도 모듈이에요. 자동 준비와 모델 행동은 `server/package-behavior-run.ts`에서 행동 해석·영수증·효과 채택과 공통 Host를 공유해요. 응답 후 코드는 `server/package-after-response.ts`가 별도 응답 귀속 영수증으로 같은 Worker·상태 저장 경계를 사용해요. 일반 HTTP, 설치·의존성 권한 관리와 Lua의 입력·요청/출력·표시 이벤트 등 미연결 API는 후속 작업이에요. 자료별 함수명을 서버 분기로 옮기지 않아요.
+엔진 실행, `uimori-state-action-v1` 입력 계약, 상태 저장 호스트는 별도 모듈이에요. 자동 준비와 모델 행동은 `server/package-behavior-run.ts`에서 행동 해석·영수증·효과 채택과 공통 Host를 공유해요. 응답 후 코드는 `server/package-after-response.ts`가 별도 응답 귀속 영수증으로 같은 Worker·상태 저장 경계를 사용해요. 일반 HTTP, 설치·의존성 권한 관리와 Lua의 입력·요청 편집과 출력·표시 편집 등 미연결 API는 후속 작업이에요. 자료별 함수명을 서버 분기로 옮기지 않아요.

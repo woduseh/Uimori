@@ -126,11 +126,12 @@ export function assertRunConversationReceipt(
   ref: PackageAttachment,
   program: ExtensionProgram,
   receipt: { viewHash: string },
-  response?: string
+  response?: string,
+  includeRequest = true
 ): void {
   assertExtensionConversationReadAccess(store, snapshot.profile, ref, program);
   const view = resolveExtensionConversation(store, snapshot, snapshot.extensionConversation, {
-    request: snapshot.request,
+    ...(includeRequest ? { request: snapshot.request } : {}),
     ...(response !== undefined ? { response } : {}),
   });
   validateExtensionConversationPermission(

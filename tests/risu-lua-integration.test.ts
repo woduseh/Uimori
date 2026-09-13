@@ -118,7 +118,7 @@ function imported(lua: string, description?: string) {
 
 type Fixture = ReturnType<typeof imported>;
 
-function grantVariableWrites(fixture: Fixture) {
+function grantVariableWrites(fixture: Fixture, conversation = false) {
   const profile = fixture.store.product.profile(fixture.chat.id);
   fixture.store.product.updateProfile(fixture.chat.id, {
     expectedRevision: profile.revision,
@@ -129,7 +129,7 @@ function grantVariableWrites(fixture: Fixture) {
       ...(profile.extensionGrants ?? {}),
       [fixture.instanceId]: {
         packageRevision: fixture.content.revision,
-        capabilities: ['variables.write'],
+        capabilities: ['variables.write', ...(conversation ? ['conversation.read'] : [])],
       },
     },
   });
@@ -145,6 +145,120 @@ function buttonCommand(fixture: Fixture, input: string, idempotencyKey: string =
     idempotencyKey,
   };
 }
+
+function generation(fixture: Fixture, request = 'New input.') {
+  const { store, chat, branchId } = fixture;
+  const profile = store.product.snapshot(chat.id);
+  const snapshot: RunSnapshot = {
+    chatId: chat.id,
+    branchId,
+    parentRevision: store.product.branch(chat.id).headRevision,
+    settingsRevision: chat.settingsRevision,
+    settings: chat.settings,
+    request,
+    history: [],
+    logicalHistory: [],
+    profile,
+    resources: store.product.resources(chat.id, profile),
+  };
+  const run = store.createRun(
+    chat.id,
+    {
+      request,
+      expectedRevision: snapshot.parentRevision,
+      expectedSettingsRevision: snapshot.settingsRevision,
+      branchId,
+      idempotencyKey: randomUUID(),
+    },
+    () => snapshot
+  ).run;
+  expect(store.startRun(run.id)).toBe(true);
+  return run;
+}
+
+test('onInput runs once before onStart with the pre-submission conversation and survives backup without execution', async () => {
+  const fixture = imported(
+    `function onInput(id)
+  setChatVar(id, "phase", "input")
+  setChatVar(id, "beforeInput", getUserLastMessage(id))
+end
+function onStart(id)
+  setChatVar(id, "phase", getChatVar(id, "phase") .. ":start")
+  setChatVar(id, "afterInput", getUserLastMessage(id))
+end`,
+    'PHASE={{getvar::phase}} CURRENT={{getvar::afterInput}}'
+  );
+  grantVariableWrites(fixture, true);
+  const run = generation(fixture);
+  const reserved = structuredClone(fixture.store.run(run.id).snapshot);
+  const execute = vi.spyOn(extensionRuntime, 'executeExtensionProgram');
+  await prepareAutomaticRunBehavior(fixture.store, run.id);
+  await prepareAutomaticRunBehavior(fixture.store, run.id);
+  const progress = runBehaviorProgress(fixture.store, run.id)!;
+  expect(progress.preparation?.status).toBe('ready');
+  expect(progress.entries.map((entry) => entry.actionId)).toEqual([
+    'risu-lua-0-input',
+    'risu-lua-0-start',
+  ]);
+  expect(execute).toHaveBeenCalledTimes(2);
+  expect(progress.entries[0].program?.conversation?.viewHash).not.toBe(
+    progress.entries[1].program?.conversation?.viewHash
+  );
+  expect(fixture.store.run(run.id).snapshot).toEqual(reserved);
+  expect(readChatVariables(fixture.store, fixture.chat.id, fixture.branchId).values).toEqual({});
+  const prepared = compileSnapshotPrompt(preparedBehaviorSnapshot(fixture.store, run.id));
+  expect(JSON.stringify(prepared.promptCompilation!.messages)).toContain(
+    'PHASE=input:start CURRENT=New input.'
+  );
+  fixture.store.completeRun(
+    run.id,
+    'Unchanged response.',
+    { modelCalls: 0, inputTokens: null, outputTokens: null, costUsd: null },
+    run.snapshot.settings
+  );
+  expect(fixture.store.run(run.id).request).toBe('New input.');
+  expect(readChatVariables(fixture.store, fixture.chat.id, fixture.branchId).values).toEqual({
+    phase: 'input:start',
+    beforeInput: '',
+    afterInput: 'New input.',
+  });
+  const archive = fixture.store.product.export();
+  expect(database().store.product.import(archive)).toMatchObject({ restored: true });
+  const copy = importChatBackup(fixture.store, {
+    backup: exportChatBackup(fixture.store, fixture.chat.id),
+    idempotencyKey: 'on-input-copy',
+  });
+  expect(
+    readChatVariables(fixture.store, copy.chat.id, fixture.store.product.branch(copy.chat.id).id)
+      .values
+  ).toEqual({ phase: 'input:start', beforeInput: '', afterInput: 'New input.' });
+  expect(execute).toHaveBeenCalledTimes(2);
+});
+
+test('an onInput failure keeps the input and discards the optional preparation cohort', async () => {
+  const fixture = imported(`function onInput(id)
+  setChatVar(id, "phase", "must-not-commit")
+  error("synthetic callback failure")
+end
+function onStart(id) setChatVar(id, "phase", "must-not-run") end`);
+  grantVariableWrites(fixture);
+  const run = generation(fixture, 'Preserve this request.');
+  await prepareAutomaticRunBehavior(fixture.store, run.id);
+  const progress = runBehaviorProgress(fixture.store, run.id)!;
+  expect(progress.preparation?.status).toBe('failed');
+  expect(progress.entries).toEqual([]);
+  expect(preparedBehaviorSnapshot(fixture.store, run.id).request).toBe('Preserve this request.');
+  fixture.store.completeRun(
+    run.id,
+    'Main response survives.',
+    { modelCalls: 0, inputTokens: null, outputTokens: null, costUsd: null },
+    run.snapshot.settings
+  );
+  expect(readChatVariables(fixture.store, fixture.chat.id, fixture.branchId).values).toEqual({});
+  expect(database().store.product.import(fixture.store.product.export())).toMatchObject({
+    restored: true,
+  });
+});
 
 async function postButton(fixture: Fixture, payload: ReturnType<typeof buttonCommand>) {
   return injectWithFixtureBot(fixture.app, {
@@ -175,6 +289,7 @@ test('Risu import and passive restores preserve native Lua actions and source by
       action.program?.language,
     ])
   ).toEqual([
+    ['risu-lua-0-input', ['before-turn'], 'lua'],
     ['risu-lua-0-output', ['after-turn'], 'lua'],
     ['risu-lua-0-start', ['before-turn'], 'lua'],
     ['risu-lua-0-onButtonClick', ['user'], 'lua'],
@@ -195,6 +310,7 @@ test('Risu import and passive restores preserve native Lua actions and source by
     .snapshot(fixture.chat.id)!
     .packages!.find((pkg) => pkg.id === fixture.content.id)!;
   expect(restoredPackage.behavior!.actions.map((action) => action.program?.language)).toEqual([
+    'lua',
     'lua',
     'lua',
     'lua',
@@ -341,7 +457,7 @@ end`,
   expect(JSON.stringify(prepared.promptCompilation!.messages)).toContain('PHASE=start');
   await prepareAfterResponse(fixture.store, run.id, 'Synthetic response.');
   const progress = runBehaviorProgress(fixture.store, run.id)!;
-  expect(progress.entries.map((entry) => entry.trigger)).toEqual(['before-turn']);
+  expect(progress.entries.map((entry) => entry.trigger)).toEqual(['before-turn', 'before-turn']);
   expect(progress.afterResponse!.packages[0].entries.map((entry) => entry.trigger)).toEqual([
     'after-turn',
   ]);
