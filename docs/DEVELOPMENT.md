@@ -4,6 +4,10 @@
 
 [시작하기](../README.md) · [코드 품질](QUALITY.md) · [검증 계약](../project-plan/VERIFICATION.md)
 
+## 작업 시작과 탐색
+
+요청한 사용자 결과와 바꿀 계약을 짧게 정하고 [코드 지도](../project-plan/CODE-MAP.md)에서 관련 진입점·문서·검사만 찾아요. 작고 명확한 수정에 별도 계획서·전체 저장소 분석·새 검증 도구를 만들지 않아요. 큰 출력은 파일 목록·심볼 검색으로 좁힌 뒤 구간을 읽고, 서로 독립인 조회/작업만 묶거나 위임해요. 실패 조사도 다음 구현 선택을 바꾸는 근거가 확보되면 끝내고 수정으로 넘어가요. 근본 해결에 필요한 기존 공통 API 보완은 합의된 사용 흐름에 포함해요.
+
 ## 변경과 검증
 
 최소 앱 검증 진입점은 `npm run verify:smoke`예요. 기존 M0 실행기의 F02·F03·F06을 선택해 환경 진단 → 타입·빌드 → 새 서버의 ready/DB identity → 생성·중복/충돌·재접속의 단위/브라우저 검사 → 실패 감지 selftest → 종료·정리를 연결해요. 전체 M0·UI 회귀를 대신하지 않아요. 종료 코드를 확인하고 출력된 `summary.json`의 scope·scenarios·cleanup을 함께 읽어요.
@@ -92,9 +96,9 @@ CI는 Windows / Node 24.14.0에서 돌지만 검토와 수정은 macOS·Linux에
 
 **브라우저는 자동으로 찾아요.** `browserPath()`와 `playwright.config.ts`가 Windows·macOS·Linux의 Chrome·Edge 경로를 탐색해요. 다른 빌드를 쓰려면 `NR_BROWSER_PATH`로 지정해요. 사내 PAC 프록시가 loopback을 가로채면 Playwright가 멈추므로 `--no-proxy-server`를 유지해요.
 
-**빌드 지문에 드는 것과 아닌 것을 구분해요.** `core`·`server`·`web`·`src`와 `package*.json`·`tsconfig*`·`vite.config.*`·`.gitattributes`, 그리고 `scripts/build.mjs`·`build-runner.mjs`·`lib.mjs`가 입력이에요. 이것들을 고치면 검증 전에 `npm run build`가 필요하고, `verify-*` 실행 도중에 고치면 그 실행이 무효가 돼요. `tests/`·`docs/`·`playwright.config.ts`·`verify-*.mjs`는 지문 밖이지만, 실행 도중 `tests/`를 바꾸면 그 증거는 저장소 규칙상 무효예요.
+**빌드 지문에 드는 것과 아닌 것을 구분해요.** `core`·`server`·`web`·`src`와 `package*.json`·`tsconfig*`·`vite.config.*`·`.gitattributes`, 그리고 `scripts/build.mjs`·`build-runner.mjs`·`lib.mjs`가 입력이에요. 이것들을 고친 뒤 `dist`를 사용하는 검사에는 새 빌드가 필요하고, `verify-*` 실행 도중에 고치면 그 실행이 무효가 돼요. `tests/`·`docs/`·`playwright.config.ts`·`verify-*.mjs`는 지문 밖이지만, 실행 도중 `tests/`를 바꾸면 그 증거는 저장소 규칙상 무효예요.
 
-**전역 상태가 의심되면 보존된 실행 DB부터 열어요.** 하네스가 종료 시점 SQLite를 `output/playwright/<runId>/evidence-db/app.sqlite`에 남겨요. 브라우저 spec 56개가 서버와 DB 하나를 공유하므로 앞선 spec이 남긴 전역 프롬프트·모델 설정이 뒤의 실패로 나타나요. 56개 순서를 재생하기 전에 이 DB를 조회해요.
+**전역 상태가 의심되면 보존된 실행 DB부터 열어요.** 하네스가 종료 시점 SQLite를 `output/playwright/<runId>/evidence-db/app.sqlite`에 남겨요. 같은 브라우저 실행의 spec들이 서버와 DB를 공유하면 앞선 spec이 남긴 전역 프롬프트·모델 설정이 뒤의 실패로 나타날 수 있어요. 전체 순서를 재생하기 전에 보존된 실행 DB에서 관련 설정을 좁혀 조회해요.
 
 ```
 node --input-type=module -e "
@@ -105,21 +109,21 @@ console.log(w.main.program.controls.map((c) => c.id));
 "
 ```
 
-**변경의 책임은 부모 커밋과 비교해서 판정해요.** `HEAD`에서도 실패한다는 사실은 그 시점 `HEAD`에 포함된 커밋을 면제하지 않아요. `git archive <ref> | tar -x -C <스크래치>`로 대상과 부모를 각각 풀고 `node_modules`를 심볼릭 링크한 뒤 같은 기계·같은 브라우저로 연속 실행해요. 작업트리의 미스테이징 변경이 지문을 흔들지 않아서 커밋 예정 내용만 검증할 때도 같은 방법을 써요.
+**회귀의 귀속이 불명확하면 부모와 비교해요.** 먼저 실패한 검사·변경 diff·관련 실행 경로에서 원인을 좁혀요. 이 근거로 해결할 수 있으면 별도 checkout 비교를 반복하지 않아요. 귀속 판정이 수정 방향이나 완료 판단을 바꿀 때만 대상과 부모를 분리된 작업트리/스크래치에서 같은 환경·집중 검사로 비교해요. 각 경로의 의존성과 빌드는 필요에 따라 준비하며 원래 미저장 변경은 보존해요. `HEAD`에서도 실패한다는 사실만으로 그 HEAD의 변경을 면제하지 않아요.
 
-**증거는 쌓여요.** `output/`은 Git에서 제외하지만 실행마다 trace·screenshot·DB를 남겨 금세 기가바이트가 돼요. 개별 실행은 `npm run cleanup -- --run <run-id>`로 지우고, 오래된 것은 `output/playwright`에서 직접 정리해요.
+**실행 정리와 증거 보존을 구분해요.** `npm run cleanup -- --run <run-id>`는 소유한 실행 자원을 정리하는 기존 계약을 따라요. 이를 오래된 증거 전체 삭제 명령으로 해석하지 않아요. 실패 원인·진행 중 작업·인수에 필요한 trace/DB/보고서는 보존하고 큰 산출물 정리는 요청 범위와 실제 경로를 확인해 별도로 수행해요.
 
 ## 코드의 경계
 
 - `web/`: 서재·프롬프트 관리, 봇별 탐색·채팅·패키지 편집, 안전한 원고 표시, 탭별 URL/초안/독서 위치, 페이지 읽기·SSE 갱신과 늦은 HTTP 응답 폐기.
 - `core/`: 공통 ContentPackage와 역할별 문맥, PromptProgram 데이터 AST·선택형 문법·TypeScript 제작 API, native JSON 검증, 공급자 adapter와 상태·문맥 요약·메모·원문 조회, 번역·표현 검증. 개발용 지침과 앱 자료는 별개예요.
-- `server/`: DB schema v17 / archive v15, SQLite WAL, revision/idempotency, 봇 소속·채팅 폴더·서재 분류와 폴더, 분기, Run/job/chunk/attempt 수명, 판정 기회·임시 행동 상태, 인증·SSE·현재 형식 백업. DB 트랜잭션은 모델이나 브라우저를 기다리지 않아요.
+- `server/`: DB schema v18 / archive v15, SQLite WAL, revision/idempotency, 봇 소속·채팅 폴더·서재 분류와 폴더, 분기, Run/job/chunk/attempt 수명, 판정 기회·임시 행동 상태, 인증·SSE·현재 형식 백업. DB 트랜잭션은 모델이나 브라우저를 기다리지 않아요.
 - `tests/`: 실제 파일 DB/HTTP/프로세스 재시작과 Playwright 브라우저 검사. `scripts/`는 기존 reporter와 작은 수명주기 코드를 연결해요.
 
 원문·Run 완료·적격 보조 예약은 한 트랜잭션에 저장하고 worker는 커밋 뒤에 실행해요. job 결과·완료도 한 트랜잭션이며 source/hash와 worker generation/owner를 검사해요. 재시작은 완료 원문을 다시 생성하지 않아요. 실행 중이던 메인 요청은 `interrupted`로 남고, 로컬 결정적 모의 job만 재개해요. 표시 상태는 다음 원고의 사실로 주입하지 않아요.
 
 조직 테이블은 `chats`와 별도로 보관해요. 채팅 소속 봇은 고정하고 폴더 이동은 CAS로 보호하며 포크는 원래 소속·폴더를 상속해요. 프롬프트의 전역 옵션 조합은 정확한 prompt revision에 연결하고, 생성 당시 Run 입력을 변경하지 않아요. 패키지 행동은 공통 순수 함수로 계산하며 자동·모델 호출의 효과를 원문 완료 때 게시해요. 패키지 상태창·표시 정규식도 저장 원문과 분리해요.
 
-native JSON 가져오기 한도와 검토·저장 절차는 [JSON 가져오기](RISU-IMPORT.md), 에이전트의 원본 조사·native 작성·등록·검증은 [Risu 이식 가이드](RISU-PORTING.md), 프롬프트 작성 방식의 현재 후보와 실행 경계는 [제작 방식 비교](PROMPT-AUTHORING.md)에 있어요. Uimori 앱에는 Risu 원본 업로드·변환 API가 없어요. 외부 에이전트가 작성한 native 결과만 기존 편집기에서 검증·저장해요.
+Risu 파일과 native JSON의 현재 지원 범위·검토·저장 절차는 [가져오기](RISU-IMPORT.md)가 소유해요. 기존 단방향 가져오기 API를 먼저 재사용하고 지원 밖의 자료별 수동 작성은 [Risu 이식](RISU-PORTING.md)을 참고해요. 프롬프트 제작 방식은 [제작 안내](PROMPT-AUTHORING.md)를 봐요. 파일 파싱이나 등록 성공을 원본 전체 실행 지원으로 표시하지 않아요.
 
-현재 코드/검증 증거와 남은 범위는 [CURRENT](../project-plan/CURRENT.md), [M1 결과](../project-plan/M1-RESULTS.md), 제품 계약은 [계획 시작점](../project-plan/README.md)에 있어요. 서버의 누적 호출 수·금액 제한과 단가 추정은 없으며 작업별 호출·시간·출력 한도와 전송 전 attempt 기록은 유지해요. 실제 모델 호출·배포는 명시적으로 승인된 범위에서 진행해요.
+현재 코드/검증 증거와 남은 범위는 [CURRENT](../project-plan/CURRENT.md), [M1 결과](../project-plan/M1-RESULTS.md), 제품 계약은 [계획 시작점](../project-plan/README.md)에 있어요. 작업별 호출·시간·출력 한도와 전송 전 attempt 기록을 유지해요. 추정 비용과 실제 공급자 사용량의 계약은 [모델 요금](MODEL-PRICING.md)이 소유해요. 실제 모델 호출·배포는 현재 요청과 기존 승인 범위를 확인하고, 같은 범위의 후속 작업에 승인을 반복 요구하지 않아요.
