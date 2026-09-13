@@ -8,7 +8,7 @@ import { createFixtureChat } from './fixtures/chat.js';
 import type { ContentPackage } from '../core/content-package.js';
 import type { Content } from '../core/product.js';
 import type { RunSnapshot } from '../core/types.js';
-import { EXTENSION_PROGRAM_API } from '../core/extension-program.js';
+import { EXTENSION_PROGRAM_API, ExtensionProgramError } from '../core/extension-program.js';
 import { behaviorDetail } from '../server/package-behavior-host.js';
 import {
   prepareAutomaticRunBehavior,
@@ -116,9 +116,10 @@ function definition(programSource?: string): ContentPackage {
   };
 }
 
-function fixture(programSource?: string) {
+function fixture(programSource?: string, configure?: (pkg: ContentPackage) => void) {
   const store = database();
   const pkg = definition(programSource);
+  configure?.(pkg);
   const content = store.product.content({
     kind: 'bot',
     title: pkg.title,
@@ -139,6 +140,18 @@ function fixture(programSource?: string) {
     instanceId: `${content.id}:bot`,
     branchId: `main:${chat.id}`,
   };
+}
+
+function modelFixture(
+  source = `
+    const generated = await api.host.call('model.generate', {prompt: 'Choose the next count.'});
+    return {state: {count: generated.value}, result: generated};
+  `
+) {
+  return fixture(source, (pkg) => {
+    const action = pkg.behavior!.actions.find((item) => item.id === 'program-middle')!;
+    action.program!.capabilities = ['model.generate'];
+  });
 }
 
 type Fixture = ReturnType<typeof fixture>;
@@ -259,6 +272,174 @@ test('the whole static and code cohort stages in declaration order and commits w
   finish(f, run);
   expect(current(f)).toMatchObject({ stateRevision: 3, state: { count: 7 } });
   expect(f.store.run(run.id)).toMatchObject({ request, snapshot: reserved });
+});
+
+test('automatic model programs use a before-turn binding and recheck access before adoption', async () => {
+  const f = modelFixture();
+  const run = start(f);
+  const order: string[] = [];
+  const modelGenerate = vi.fn(async () => {
+    order.push('generated');
+    return { value: 3 };
+  });
+  const assertModelAccess = vi.fn(() => {
+    order.push('authorized');
+    expect(runBehaviorProgress(f.store, run.id)).toMatchObject({
+      entries: [],
+      preparation: { status: 'running', completed: 1 },
+    });
+  });
+  const modelServices = vi.fn(() => ({
+    modelGenerate,
+    assertModelAccess,
+    hostWaitMs: 12_345,
+  }));
+  const execute = vi.spyOn(extensionRuntime, 'executeExtensionProgram');
+
+  await prepareAutomaticRunBehavior(f.store, run.id, undefined, undefined, modelServices);
+
+  expect(modelServices).toHaveBeenCalledWith({
+    instanceId: f.instanceId,
+    actionId: 'program-middle',
+    trigger: 'before-turn',
+  });
+  expect(modelGenerate).toHaveBeenCalledWith(
+    { prompt: 'Choose the next count.' },
+    expect.any(AbortSignal)
+  );
+  expect(assertModelAccess).toHaveBeenCalledTimes(1);
+  expect(order).toEqual(['generated', 'authorized']);
+  expect(execute.mock.calls[0]?.[3]).toMatchObject({
+    hostWaitMs: 12_345,
+    awaitHostSettlement: true,
+  });
+  expect(runBehaviorProgress(f.store, run.id)).toMatchObject({
+    preparation: { status: 'ready', completed: 3, total: 3 },
+    entries: [
+      { actionId: 'static-before' },
+      { actionId: 'program-middle', result: { value: 3 } },
+      { actionId: 'static-after' },
+    ],
+    states: [{ stateRevision: 3, state: { count: 7 } }],
+  });
+});
+
+test('skipping automatic model code waits for host settlement and rejects late adoption', async () => {
+  const f = modelFixture();
+  const run = start(f);
+  let release!: (
+    value: Awaited<ReturnType<typeof extensionRuntime.executeExtensionProgram>>
+  ) => void;
+  vi.spyOn(extensionRuntime, 'executeExtensionProgram').mockImplementation(
+    () => new Promise((resolve) => (release = resolve))
+  );
+  const pending = prepareAutomaticRunBehavior(f.store, run.id, undefined, undefined, () => ({
+    modelGenerate: async () => ({ value: 3 }),
+    assertModelAccess: () => undefined,
+    hostWaitMs: 12_345,
+  }));
+  let settled = false;
+  void pending.then(() => {
+    settled = true;
+  });
+
+  expect(skipAutomaticRunBehavior(f.store, run.id, skipBody(f, run))).toMatchObject({
+    skipped: true,
+    preparation: { status: 'skipped', completed: 1, total: 3 },
+  });
+  await Promise.resolve();
+  expect(settled).toBe(false);
+
+  release({ state: { count: 3 }, result: { value: 3 }, engine: 'test-gate-v1' });
+  await pending;
+  expect(settled).toBe(true);
+  expect(runBehaviorProgress(f.store, run.id)).toMatchObject({
+    entries: [],
+    states: [{ stateRevision: 0, state: { count: 0 } }],
+    preparation: { status: 'skipped', completed: 1, total: 3 },
+  });
+});
+
+test('cancelling automatic model code waits for settlement before failing the preparation', async () => {
+  const f = modelFixture();
+  const run = start(f);
+  const controller = new AbortController();
+  let release!: (
+    value: Awaited<ReturnType<typeof extensionRuntime.executeExtensionProgram>>
+  ) => void;
+  vi.spyOn(extensionRuntime, 'executeExtensionProgram').mockImplementation(
+    () => new Promise((resolve) => (release = resolve))
+  );
+  const pending = prepareAutomaticRunBehavior(
+    f.store,
+    run.id,
+    controller.signal,
+    undefined,
+    () => ({
+      modelGenerate: async () => ({ value: 3 }),
+      assertModelAccess: () => undefined,
+      hostWaitMs: 12_345,
+    })
+  );
+  let settled = false;
+  const observed = pending.then(
+    () => undefined,
+    (error: unknown) => error
+  );
+  void observed.then(() => {
+    settled = true;
+  });
+
+  controller.abort();
+  await Promise.resolve();
+  expect(settled).toBe(false);
+
+  release({ state: { count: 3 }, result: { value: 3 }, engine: 'test-gate-v1' });
+  await expect(observed).resolves.toMatchObject({ message: 'BEHAVIOR_RUN_CANCELLED' });
+  expect(runBehaviorProgress(f.store, run.id)).toMatchObject({
+    entries: [],
+    states: [{ stateRevision: 0, state: { count: 0 } }],
+    preparation: { status: 'failed', code: 'BEHAVIOR_RUN_CANCELLED' },
+  });
+});
+
+test('revoked model access after generation prevents automatic cohort adoption', async () => {
+  const f = modelFixture();
+  const run = start(f);
+
+  await prepareAutomaticRunBehavior(f.store, run.id, undefined, undefined, () => ({
+    modelGenerate: async () => ({ value: 3 }),
+    assertModelAccess: () => {
+      throw new ExtensionProgramError('BEHAVIOR_HOST_MODEL_DENIED');
+    },
+    hostWaitMs: 12_345,
+  }));
+
+  expect(runBehaviorProgress(f.store, run.id)).toMatchObject({
+    entries: [],
+    states: [{ stateRevision: 0, state: { count: 0 } }],
+    preparation: { status: 'failed', code: 'BEHAVIOR_HOST_MODEL_DENIED' },
+  });
+});
+
+test('a fatal model settlement failure is not hidden by a concurrent skip', async () => {
+  const f = modelFixture();
+  const run = start(f);
+  const fatal = new Error('DATABASE_ATTEMPT_FINISH_FAILED');
+  let rejectExecution!: (error: Error) => void;
+  vi.spyOn(extensionRuntime, 'executeExtensionProgram').mockImplementation(
+    () => new Promise((_resolve, reject) => (rejectExecution = reject))
+  );
+  const pending = prepareAutomaticRunBehavior(f.store, run.id, undefined, undefined, () => ({
+    modelGenerate: async () => ({ value: 3 }),
+    assertModelAccess: () => undefined,
+    hostWaitMs: 12_345,
+  }));
+  skipAutomaticRunBehavior(f.store, run.id, skipBody(f, run));
+
+  rejectExecution(fatal);
+  await expect(pending).rejects.toBe(fatal);
+  expect(runBehaviorProgress(f.store, run.id)?.preparation?.status).toBe('skipped');
 });
 
 test('a denied skip changes nothing, while an accepted skip closes late adoption idempotently', async () => {

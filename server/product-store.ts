@@ -2157,12 +2157,11 @@ function validateArchiveGraph(product: ProductStore) {
     }
     if (snapshot.executionPurpose !== undefined)
       throw new HttpError(400, 'Artifact snapshot cannot own a main Run');
-    validateRunSnapshot(product.store, snapshot as RunSnapshot, run.id);
+    const executionSnapshot = validateRunSnapshot(product.store, snapshot as RunSnapshot, run.id);
     const context = (snapshot as RunSnapshot).contextPlan;
     if (context?.status === 'ready') {
       if (
-        measureMainContext(snapshot as RunSnapshot).estimatedInputTokens !==
-        context.estimatedInputTokens
+        measureMainContext(executionSnapshot).estimatedInputTokens !== context.estimatedInputTokens
       )
         throw new HttpError(400, 'Context estimate mismatch');
       if (!snapshot.forkedFrom) {
