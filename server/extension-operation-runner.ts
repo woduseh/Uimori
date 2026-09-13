@@ -4,6 +4,7 @@ import type {
 } from '../core/extension-operation.js';
 import { validateExtensionUserModelAttribution } from '../core/extension-model.js';
 import { packageInstanceId } from '../core/execution-context.js';
+import { assertExtensionVariableWriteAccess } from './extension-variables.js';
 import { ExtensionProgramError, type ResolvedExtensionProgram } from '../core/extension-program.js';
 import type { Usage } from '../core/types.js';
 import {
@@ -139,6 +140,8 @@ export function createExtensionOperationRunner(store: Store, options: Options) {
               profile: snapshot.profile,
               attachment: ref,
               assertCurrent,
+              assertVariableWriteAccess: () =>
+                assertExtensionVariableWriteAccess(store, snapshot.profile, ref, program),
               waitForSlot: true,
               modelServices: {
                 hostWaitMs: models.hostWaitMs,

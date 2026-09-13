@@ -9,7 +9,7 @@
 | 분기 공유 변수·직접 편집·시점 보관 | [공유 변수](../docs/PROMPT-RUNTIME.md#분기-공유-변수), [패널](../docs/PACKAGE-PANELS.md) | `core/chat-variables.ts`, `template-variables.ts`; `server/chat-variables.ts`, `chat-variables-archive.ts`, `chat-variable-context.ts`, `chat-variable-routes.ts`; `web/ChatVariables.tsx` |
 | 공유 패키지·로어·시작·이미지 | [패키지](../docs/PACKAGES.md), [로어 문맥](../docs/LORE-CONTEXT.md) | `core/content-package.ts`, `package-context.ts`, `package-start.ts`; `server/product-store.ts`, `package-start.ts`, `package-images.ts` |
 | 확장 상태·행동·상태 변환 | [행동](../docs/PACKAGE-BEHAVIOR.md), [확장 코드](../docs/EXTENSION-PROGRAMS.md) | `core/package-behavior.ts`; `server/package-behavior-host.ts`, `package-behavior-store.ts`, `package-behavior-run.ts`, `package-behavior-archive.ts` |
-| 격리 실행·Host 호출·영수증 | [확장 코드](../docs/EXTENSION-PROGRAMS.md) | `server/package-extension-execution.ts`, `extension-runtime.ts`, `extension-worker.ts`, `extension-program-receipt.ts`, `extension-materials.ts`, `extension-model.ts` |
+| 격리 실행·Host 호출·영수증 | [확장 코드](../docs/EXTENSION-PROGRAMS.md) | `server/package-extension-execution.ts`, `extension-runtime.ts`, `extension-worker.ts`, `extension-program-receipt.ts`, `extension-materials.ts`, `extension-model.ts`, `extension-variables.ts` |
 | 생성 전/후·사용자 모델 작업 | [확장 코드](../docs/EXTENSION-PROGRAMS.md), [예약](../docs/RESERVATION-SNAPSHOTS.md) | `server/package-behavior-run.ts`, `package-after-response.ts`, `extension-operation-runner.ts`, `extension-operations.ts`; `core/after-response.ts` |
 | 확장 화면·정규식·본문 구간 | [패널](../docs/PACKAGE-PANELS.md), [변환](../docs/PROMPT-TRANSFORMS.md), [구간](../docs/SOURCE-SEGMENTS.md) | `web/PackagePanelFrame.tsx`; `core/package-panels.ts`, `source-context.ts`; `server/text-transforms.ts`, `prompt-transforms.ts`, `package-presentation.ts`, `package-requests.ts` |
 | 본문 예약·모델 전송·복원 | [예약](../docs/RESERVATION-SNAPSHOTS.md), [실행 구성](../docs/RUNTIME-SIMPLIFICATION.md) | `server/reservation-snapshot.ts`, `prompt-snapshot.ts`, `main-request.ts`, `model-runner.ts`, `snapshot-archive.ts`, `store.ts` |
@@ -29,6 +29,7 @@
 - 공통 실행은 `executePackageExtensionProgram`, 계산 영수증 생성은 `createExtensionProgramReceipt`를 사용해요. `onExecuted`는 채택 전 계산 보존이고 진행·취소·CAS·저장은 호출자가 소유해요.
 - 사용자 버튼의 모델 호출은 기존 actions API와 영구 extension operation을 사용해요. 생성 전은 deferred preparation, 응답 후는 고정된 완성 본문과 별도 afterResponse 영수증을 사용하며 가짜 본문 Run이나 중복 Host 실행기를 만들지 않아요.
 - 모델 호출은 공통 `createExtensionModelService`·`authorizeExtensionModelAccess`의 자료 개정·grant·모델/연결 확인을 거쳐요. 자기 자료 조회는 `extension-materials.ts`와 고정 profile을 사용해요. 기존 지원은 해당 계약에서 확인하고 새 capability는 권한·취소·보존까지 실제 흐름에 연결해요.
+- 공유 변수 Host는 `createExtensionVariableSession`에서 임시 변경과 읽기 의존성을 보관하고 `adoptExtensionVariableMutation`으로 기존 행동/source transaction에 채택해요. 생성 전/모델의 `commitRunBehaviorVariables`는 인스턴스별 묶음이 아닌 전체 실행 순서를 유지하고, 응답 후는 패키지별 성공·rollback 경계를 따라요.
 - `previewBehaviorUpgrade/applyBehaviorUpgrade`는 명시적으로 계산한 후보의 CAS 채택이에요. 일반 조회·저장·복원에서 변환을 실행하지 않아요. 계산 실패나 미반영 결과와 유효한 현재 상태를 구분해요.
 - Risu 기본 변수는 저장된 공유 state의 초기 복사본이 아니에요. 읽기 기본값과 저장된 공유 쓰기/Lua 실행의 지원 여부는 해당 계약에서 확인하고 패키지 인스턴스의 state로 조용히 대체하지 않아요. CharX 내부 모듈은 같은 카드의 canonical 자료이며 별도 장착 모듈로 중복 등록하지 않아요.
 

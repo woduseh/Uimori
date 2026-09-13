@@ -4,6 +4,11 @@ import { validateExtensionUserModelAttribution } from '../core/extension-model.j
 import type { ExtensionOperationSnapshot } from '../core/extension-operation.js';
 import { EXTENSION_PROGRAM_API } from '../core/extension-program.js';
 import {
+  validateExtensionVariablePermission,
+  projectExtensionVariableMutation,
+  variableStateFromProfile,
+} from './extension-variables.js';
+import {
   behaviorActionTriggers,
   validateBehaviorValue,
   validatePackageBehavior,
@@ -154,6 +159,13 @@ export function validateExtensionOperationArchive(
     inspectRuntimeValue(record(snapshot.runtime));
     const action = definition.actions.find((item) => item.id === command.actionId);
     if (!action?.program || !behaviorActionTriggers(action).includes('user')) fail('action');
+    const validateVariables = (
+      variables: import('../core/chat-variables.js').ChatVariableMutation | undefined
+    ) => {
+      if (!variables) return;
+      validateExtensionVariablePermission(variables, snapshot.profile, ref!, action!.program!);
+      projectExtensionVariableMutation(variableStateFromProfile(snapshot.profile), variables);
+    };
     validateBehaviorValue(action!.inputSchema, command.input);
     if (command.panel !== undefined) {
       const panel = record(command.panel);
@@ -236,6 +248,7 @@ export function validateExtensionOperationArchive(
           result: result.result,
         }
       );
+      validateVariables(receipt.variables);
       if (!journal) fail('completed journal missing');
       const payload = JSON.parse(journal!.payload),
         adopted = JSON.parse(journal!.result);
@@ -258,10 +271,11 @@ export function validateExtensionOperationArchive(
         fail('uncompleted operation adopted');
       if (row.result !== null) {
         const result = record(JSON.parse(row.result));
-        validateExtensionComputationReceipt(
+        const receipt = validateExtensionComputationReceipt(
           { api: EXTENSION_PROGRAM_API, ...result },
           behaviorPayloadHash(action!.program)
         );
+        validateVariables(receipt.variables);
       }
     }
   }

@@ -41,6 +41,16 @@ import type { RunSnapshot, ToolEvent } from '../core/types.js';
 import { behaviorPayloadHash, recordDraws } from './package-behavior-store.js';
 import type { Run, Store } from './store.js';
 import { fields, record, text, HttpError } from './request-validation.js';
+import type { ChatVariableState } from '../core/chat-variables.js';
+import {
+  adoptExtensionVariableMutation,
+  assertExtensionVariableWriteAccess,
+  profileWithExtensionVariables,
+  projectExtensionVariableMutation,
+  variableStateFromProfile,
+} from './extension-variables.js';
+import { readChatVariables } from './chat-variables.js';
+import type { Source } from './store.js';
 
 export type RunBehaviorEntry = {
   instanceId: string;
@@ -60,6 +70,7 @@ export type RunBehaviorProgress = {
   opportunityId: string;
   entries: RunBehaviorEntry[];
   states: PackageExecutionState[];
+  variableState?: ChatVariableState;
   /** Response-bound receipts never enter the reusable before/model opportunity. */
   afterResponse?: AfterResponseProgress;
   preparation?: {
@@ -226,10 +237,24 @@ function setOpportunity(store: Store, id: string, value: Opportunity) {
     .prepare('UPDATE package_behavior_opportunities SET body=? WHERE id=?')
     .run(encode(value), id);
 }
+function progressSnapshot(snapshot: RunSnapshot, progress: RunBehaviorProgress): RunSnapshot {
+  return {
+    ...snapshot,
+    packageStates: progress.states,
+    ...(progress.variableState
+      ? { profile: profileWithExtensionVariables(snapshot.profile, progress.variableState) }
+      : {}),
+  };
+}
 function applyEntry(progress: RunBehaviorProgress, entry: RunBehaviorEntry) {
   const index = progress.states.findIndex((s) => s.instanceId === entry.instanceId);
   if (index < 0 || !isDeepStrictEqual(progress.states[index], entry.before))
     fail('BEHAVIOR_OPPORTUNITY_STATE_CHANGED');
+  if (entry.program?.variables)
+    progress.variableState = projectExtensionVariableMutation(
+      progress.variableState ?? { revision: 0, values: {} },
+      entry.program.variables
+    );
   progress.states[index] = structuredClone(entry.after);
   progress.entries.push(structuredClone(entry));
 }
@@ -247,22 +272,25 @@ function actionResolution(
   const prior = progress.entries.find((e) => entryKey(e) === key);
   if (prior) {
     if (!isDeepStrictEqual(prior.input, input)) fail('BEHAVIOR_OPPORTUNITY_INPUT_CHANGED');
+    if (prior.program?.variables && Object.keys(prior.program.variables.changes).length)
+      assertExtensionVariableWriteAccess(store, snapshot.profile, ref, action.program!);
     return { entry: prior };
   }
   if (progress.entries.length >= MAX_RUN_BEHAVIOR_ACTIONS) fail('BEHAVIOR_RUN_ACTION_LIMIT');
   const before = progress.states.find((s) => s.instanceId === instanceId);
   if (!before) fail('BEHAVIOR_STATE_MISSING');
-  const hostRuntime = executionContext(
-    { ...snapshot, packageStates: progress.states },
-    'main',
-    ref
-  );
+  const hostRuntime = executionContext(progressSnapshot(snapshot, progress), 'main', ref);
   const saved = opportunity(store, progress.opportunityId),
     cached = saved.entries.find((e) => entryKey(e) === key);
   if (cached) {
     if (!isDeepStrictEqual(cached.input, input)) fail('BEHAVIOR_OPPORTUNITY_INPUT_CHANGED');
     if (!isDeepStrictEqual(cached.hostRuntime.packages, hostRuntime.packages))
       fail('BEHAVIOR_OPPORTUNITY_DEPENDENCY_CHANGED');
+    for (const field of ['variables', 'variableStateRevision', 'variableDefaultsError'])
+      if (!isDeepStrictEqual(cached.hostRuntime[field], hostRuntime[field]))
+        fail('BEHAVIOR_OPPORTUNITY_DEPENDENCY_CHANGED');
+    if (cached.program?.variables && Object.keys(cached.program.variables.changes).length)
+      assertExtensionVariableWriteAccess(store, snapshot.profile, ref, action.program!);
     const replay = { ...structuredClone(cached), trigger };
     applyEntry(progress, replay);
     return { entry: replay };
@@ -377,6 +405,8 @@ export function prepareRunBehavior(
 export function isRecoverableBehaviorExecutionError(error: unknown): error is Error {
   return (
     error instanceof BehaviorEvaluationError ||
+    (error instanceof ExtensionProgramError &&
+      ['BEHAVIOR_HOST_VARIABLES_DENIED', 'BEHAVIOR_HOST_VARIABLES_LIMIT'].includes(error.code)) ||
     (error instanceof BehaviorError &&
       [
         'BEHAVIOR_RUN_ACTION_LIMIT',
@@ -386,6 +416,7 @@ export function isRecoverableBehaviorExecutionError(error: unknown): error is Er
         'BEHAVIOR_OPPORTUNITY_STATE_CHANGED',
         'BEHAVIOR_OPPORTUNITY_DEPENDENCY_CHANGED',
         'BEHAVIOR_STATE_STALE',
+        'BEHAVIOR_VARIABLE_STATE_STALE',
         'BEHAVIOR_MIGRATION_REQUIRED',
       ].includes(error.message))
   );
@@ -415,6 +446,7 @@ function prepareRunBehaviorInTransaction(
     baseStates,
     attachments: snapshot.profile?.packageAttachments,
     values: snapshot.profile?.packageValues,
+    ...(snapshot.profile?.variableState ? { variableState: snapshot.profile.variableState } : {}),
   });
   if (
     !store.db.prepare('SELECT 1 FROM package_behavior_opportunities WHERE id=?').get(opportunityId)
@@ -437,6 +469,9 @@ function prepareRunBehaviorInTransaction(
     opportunityId,
     entries: [],
     states: structuredClone(baseStates),
+    ...(snapshot.profile?.variableState
+      ? { variableState: variableStateFromProfile(snapshot.profile) }
+      : {}),
   };
   const automaticResults: { instanceId: string; actionId: string; result: RuntimeValue }[] = [];
   if (automatic.some((d) => d.action.program)) {
@@ -461,7 +496,7 @@ function prepareRunBehaviorInTransaction(
         d.action,
         before.state,
         input,
-        executionContext({ ...snapshot, packageStates: progress.states }, 'main', d.ref)
+        executionContext(progressSnapshot(snapshot, progress), 'main', d.ref)
       )
     )
       continue;
@@ -491,10 +526,14 @@ export function copyCandidateBehavior(
   if (!previous) fail('BEHAVIOR_RUN_JOURNAL_MISSING');
   const automaticEntries = previous!.entries.filter((e) => e.trigger === 'before-turn');
   const states = structuredClone(snapshot.behaviorExecution.baseStates);
-  for (const entry of automaticEntries)
+  let variableState = variableStateFromProfile(snapshot.profile);
+  for (const entry of automaticEntries) {
     states[states.findIndex((s) => s.instanceId === entry.instanceId)] = structuredClone(
       entry.after
     );
+    if (entry.program?.variables)
+      variableState = projectExtensionVariableMutation(variableState, entry.program.variables);
+  }
   const preparation = previous!.preparation;
   // afterResponse belongs to the original text; a candidate runs its own response hooks.
   saveProgress(store, newRunId, {
@@ -502,6 +541,10 @@ export function copyCandidateBehavior(
     opportunityId: previous!.opportunityId,
     entries: automaticEntries,
     states,
+    ...(snapshot.profile?.variableState ||
+    automaticEntries.some((entry) => entry.program?.variables)
+      ? { variableState }
+      : {}),
     ...(preparation
       ? {
           preparation: ['pending', 'running'].includes(preparation.status)
@@ -515,6 +558,14 @@ export function validateOwner(store: Store, run: Run) {
   if (run.status !== 'running') fail('BEHAVIOR_RUN_NOT_RUNNING');
   const branch = store.product.branch(run.chatId, run.snapshot.branchId);
   if (branch.headRevision !== run.parentRevision) fail('BEHAVIOR_SOURCE_STALE');
+  const reserved = store.run(run.id).snapshot;
+  if (
+    !isDeepStrictEqual(
+      readChatVariables(store, run.chatId, branch.id),
+      variableStateFromProfile(reserved.profile)
+    )
+  )
+    fail('BEHAVIOR_VARIABLE_STATE_STALE');
   if (
     run.snapshot.history.some(
       (s) =>
@@ -567,6 +618,10 @@ export function preparedBehaviorSnapshot(
   }
   const entries = progress!.entries.filter((e) => e.trigger === 'before-turn');
   const states = structuredClone(base.behaviorExecution.baseStates);
+  let variableState = variableStateFromProfile(base.profile);
+  for (const entry of entries)
+    if (entry.program?.variables)
+      variableState = projectExtensionVariableMutation(variableState, entry.program.variables);
   for (const entry of entries)
     states[states.findIndex((s) => s.instanceId === entry.instanceId)] = structuredClone(
       entry.after
@@ -578,12 +633,14 @@ export function preparedBehaviorSnapshot(
   }));
   if (
     isDeepStrictEqual(states, base.packageStates) &&
-    isDeepStrictEqual(automaticResults, base.behaviorExecution.automaticResults)
+    isDeepStrictEqual(automaticResults, base.behaviorExecution.automaticResults) &&
+    isDeepStrictEqual(variableState, variableStateFromProfile(base.profile))
   )
     return base;
   return {
     ...base,
     packageStates: states,
+    profile: profileWithExtensionVariables(base.profile, variableState),
     behaviorExecution: { ...base.behaviorExecution, automaticResults },
     promptCompilation: undefined,
   };
@@ -667,7 +724,7 @@ export async function prepareAutomaticRunBehavior(
               d.action,
               before.state,
               input,
-              executionContext({ ...reserved, packageStates: local.states }, 'main', d.ref)
+              executionContext(progressSnapshot(reserved, local), 'main', d.ref)
             )
           )
             return { skipped: true as const };
@@ -706,9 +763,11 @@ export async function prepareAutomaticRunBehavior(
             controller.signal,
             {
               waitForSlot: true,
-              profile: reserved.profile,
+              profile: progressSnapshot(reserved, local).profile,
               attachment: d.ref,
               assertCurrent,
+              assertVariableWriteAccess: () =>
+                assertExtensionVariableWriteAccess(store, reserved.profile, d.ref, step.program!),
               modelServices: services,
             }
           );
@@ -722,6 +781,8 @@ export async function prepareAutomaticRunBehavior(
             if (current.preparation.status !== 'running') return false;
             if (controller.signal.aborted) fail('BEHAVIOR_RUN_CANCELLED');
             validateOwner(store, store.run(runId));
+            if (output.variables && Object.keys(output.variables.changes).length)
+              assertExtensionVariableWriteAccess(store, reserved.profile, d.ref, step.program!);
             resolveAction(store, reserved, local, d.ref, d.action, input, 'before-turn', {
               ...output,
               programHash: hash(step.program),
@@ -907,7 +968,7 @@ export async function executeRunBehaviorTool(
         program: action.program,
         input: { state: resolution.before.state, input: call.args as RuntimeValue },
         progressHash: hash(progress),
-        profile: run.snapshot.profile,
+        profile: progressSnapshot(run.snapshot, progress).profile,
         attachment: definition.ref,
       };
     });
@@ -934,6 +995,13 @@ export async function executeRunBehaviorTool(
               profile: prepared.profile,
               attachment: prepared.attachment!,
               modelServices: services,
+              assertVariableWriteAccess: () =>
+                assertExtensionVariableWriteAccess(
+                  store,
+                  prepared.profile,
+                  prepared.attachment!,
+                  prepared.program!
+                ),
               assertCurrent: () => {
                 const current = behaviorToolContext(store, runId, binding, call, signal);
                 if (hash(current.progress) !== prepared.progressHash)
@@ -945,6 +1013,13 @@ export async function executeRunBehaviorTool(
             const context = behaviorToolContext(store, runId, binding, call, signal);
             if (hash(context.progress) !== prepared.progressHash)
               fail('BEHAVIOR_OPPORTUNITY_DEPENDENCY_CHANGED');
+            if (output.variables && Object.keys(output.variables.changes).length)
+              assertExtensionVariableWriteAccess(
+                store,
+                prepared.profile,
+                prepared.attachment!,
+                prepared.program!
+              );
             const entry = resolveAction(
               store,
               context.run.snapshot,
@@ -1001,6 +1076,54 @@ export async function executeRunBehaviorTool(
   }
 }
 
+/** The source transaction adopts the complete global action chain before per-package commits. */
+export function commitRunBehaviorVariables(store: Store, run: Run, source: Source): void {
+  if (!run.snapshot.behaviorExecution) return;
+  if (!store.db.isTransaction) throw new Error('CHAT_VARIABLE_TRANSACTION_REQUIRED');
+  const progress = runBehaviorProgress(store, run.id);
+  if (!progress) fail('BEHAVIOR_RUN_JOURNAL_MISSING');
+  const branch = store.product.branch(run.chatId, run.snapshot.branchId);
+  const currentRun = store.run(run.id);
+  if (
+    source.runId !== run.id ||
+    source.chatId !== run.chatId ||
+    currentRun.status !== 'completed' ||
+    currentRun.sourceRevision !== source.id ||
+    branch.headRevision !== source.id
+  )
+    fail('BEHAVIOR_SOURCE_STALE');
+  const entries = progress!.entries.filter((entry) => entry.program?.variables);
+  if (!entries.length) return;
+  let state = variableStateFromProfile(run.snapshot.profile);
+  if (!isDeepStrictEqual(readChatVariables(store, run.chatId, branch.id), state))
+    fail('BEHAVIOR_VARIABLE_STATE_STALE');
+  for (const entry of entries) {
+    const definition = definitions(run.snapshot).find(
+      (item) => item.instanceId === entry.instanceId
+    );
+    const action = definition?.behavior.actions.find((item) => item.id === entry.actionId);
+    if (!definition || !action?.program) fail('BEHAVIOR_TOOL_NOT_ALLOWED');
+    if (Object.keys(entry.program!.variables!.changes).length)
+      assertExtensionVariableWriteAccess(
+        store,
+        run.snapshot.profile,
+        definition!.ref,
+        action!.program!
+      );
+    state = projectExtensionVariableMutation(state, entry.program!.variables!);
+  }
+  if (!isDeepStrictEqual(state, progress!.variableState)) fail('BEHAVIOR_VARIABLE_STATE_STALE');
+  for (const entry of entries)
+    adoptExtensionVariableMutation(
+      store,
+      run.chatId,
+      branch.id,
+      source.hash,
+      `run:${run.id}:${hash(entryKey(entry))}`,
+      entry.program!.variables!
+    );
+}
+
 /** Called inside source completion's per-package savepoint, before output parsing. */
 export function commitRunBehaviorInstance(
   store: Store,
@@ -1043,6 +1166,9 @@ export function completedRunBehaviorView(store: Store, run: Run): RunSnapshot {
   return progress
     ? {
         ...base,
+        ...(progress.variableState
+          ? { profile: profileWithExtensionVariables(base.profile, progress.variableState) }
+          : {}),
         packageStates: structuredClone(progress.states).filter(
           (state) =>
             !base.packageBehaviorUnavailable?.some((item) => item.instanceId === state.instanceId)

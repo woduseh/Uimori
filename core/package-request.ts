@@ -1,3 +1,5 @@
+import type { TemplateVariableContext } from './template-variables.js';
+
 /** A user-selected package action reserves a source-bound proposal, never an automatic model call. */
 export type PackageRequestOrigin = {
   chatId: string;
@@ -20,6 +22,8 @@ export type PackageRequest = {
   sourceRevision: string | null;
   sourceHash: string | null;
   stateRevision: number;
+  /** The action's adopted variable projection; historical requests keep their original runtime. */
+  variableContext?: TemplateVariableContext;
   /** Imported reservations keep the original expression runtime and prove its current ownership. */
   origin?: PackageRequestOrigin;
 };

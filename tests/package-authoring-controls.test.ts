@@ -1,6 +1,6 @@
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { validateContentPackage, type ContentPackage } from '../core/content-package.js';
 import {
   compilePromptProgram,
@@ -19,9 +19,13 @@ import { PackageControlValues } from '../web/PackageControlValues.js';
 import {
   retainAttachedExtensionGrants,
   retainResolvedPackageValues,
+  updateExtensionGrantCapability,
 } from '../web/PackageAttachments.js';
 import { resolveSourceSegmentPolicy } from '../core/source-segments.js';
 import { createSourceSegmentFixture } from './fixtures/source-segments.js';
+import { PackageFields } from '../web/PackageFields.js';
+
+afterEach(() => vi.unstubAllGlobals());
 
 function fixture(): ContentPackage {
   return {
@@ -72,6 +76,92 @@ describe('package authoring controls and UI visibility', () => {
       'kept:module': { packageRevision: 1, capabilities: ['model.generate'] },
     });
     expect(retainAttachedExtensionGrants(grants, [])).toBeUndefined();
+  });
+
+  it('updates current extension grant capabilities independently without adopting stale grants', () => {
+    const modelOnly = {
+      'owner:module': {
+        packageRevision: 2,
+        capabilities: ['model.generate' as const],
+      },
+    };
+    const both = updateExtensionGrantCapability(
+      modelOnly,
+      'owner:module',
+      2,
+      'variables.write',
+      true
+    );
+    expect(both).toEqual({
+      'owner:module': {
+        packageRevision: 2,
+        capabilities: ['model.generate', 'variables.write'],
+      },
+    });
+    const variablesOnly = updateExtensionGrantCapability(
+      both,
+      'owner:module',
+      2,
+      'model.generate',
+      false
+    );
+    expect(variablesOnly).toEqual({
+      'owner:module': { packageRevision: 2, capabilities: ['variables.write'] },
+    });
+    expect(
+      updateExtensionGrantCapability(variablesOnly, 'owner:module', 2, 'variables.write', false)
+    ).toBeUndefined();
+
+    const stale = {
+      'owner:module': {
+        packageRevision: 1,
+        capabilities: ['model.generate' as const],
+      },
+    };
+    expect(updateExtensionGrantCapability(stale, 'owner:module', 2, 'variables.write', false)).toBe(
+      stale
+    );
+    expect(
+      updateExtensionGrantCapability(stale, 'owner:module', 2, 'variables.write', true)
+    ).toEqual({
+      'owner:module': { packageRevision: 2, capabilities: ['variables.write'] },
+    });
+  });
+
+  it('shows shared variable read and write requests independently in the code behavior editor', () => {
+    vi.stubGlobal('matchMedia', () => ({
+      matches: false,
+      addEventListener() {},
+      removeEventListener() {},
+    }));
+    const value: ContentPackage = {
+      ...fixture(),
+      behavior: {
+        revision: 1,
+        schemaVersion: 1,
+        stateSchema: { type: 'record', properties: {} },
+        initialState: {},
+        actions: [
+          {
+            id: 'variables',
+            inputSchema: { type: 'record', properties: {} },
+            effects: [],
+            program: {
+              api: 'uimori-state-action-v1',
+              capabilities: ['variables.read'],
+              source: 'return {state: api.state, result: null};',
+            },
+          },
+        ],
+        outputParsers: [],
+      },
+    };
+    const html = renderToStaticMarkup(
+      createElement(PackageFields, { value, onChange: () => undefined })
+    );
+    expect(html).toContain('공유 변수 읽기');
+    expect(html).toContain('공유 변수 변경 요청');
+    expect(html).toContain('채팅에서 이 자료의 현재 버전에 변경 권한을 별도로 허용해야 해요');
   });
 
   it('accepts forward references and group metadata through the existing package validator', () => {

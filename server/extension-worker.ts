@@ -21,20 +21,12 @@ const MAX_HOST_CALLS = 32;
 const MAX_HOST_PENDING = 8;
 const MAX_HOST_RESULT_BYTES = 512 * 1024;
 const HOST_ERROR_CODES = [
-  'BEHAVIOR_HOST_CALL_FAILED',
-  'BEHAVIOR_HOST_DENIED',
-  'BEHAVIOR_HOST_ARGUMENTS',
-  'BEHAVIOR_HOST_MATERIAL_UNAVAILABLE',
-  'BEHAVIOR_HOST_ABORTED',
+  ...(workerData as WorkerInput).hostErrorCodes,
   'BEHAVIOR_HOST_CALL_LIMIT',
   'BEHAVIOR_HOST_PENDING_LIMIT',
-  'BEHAVIOR_HOST_RESULT_LIMIT',
-  'BEHAVIOR_HOST_MODEL_DENIED',
-  'BEHAVIOR_HOST_MODEL_UNAVAILABLE',
-  'BEHAVIOR_HOST_MODEL_BUDGET_EXHAUSTED',
 ];
 
-type WorkerInput = { source: string; inputJSON: string };
+type WorkerInput = { source: string; inputJSON: string; hostErrorCodes: string[] };
 type WorkerResult =
   | { type: 'result'; ok: true; json: string }
   | { type: 'result'; ok: false; code: string };

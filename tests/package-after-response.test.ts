@@ -7,9 +7,17 @@ import { Store, type Run } from '../server/store.js';
 import type { Content } from '../core/product.js';
 import type { ContentPackage } from '../core/content-package.js';
 import type { RunSnapshot } from '../core/types.js';
-import { EXTENSION_PROGRAM_API, ExtensionProgramError } from '../core/extension-program.js';
+import {
+  EXTENSION_PROGRAM_API,
+  ExtensionProgramError,
+  type ExtensionProgram,
+} from '../core/extension-program.js';
 import { prepareAfterResponse, skipAfterResponse } from '../server/package-after-response.js';
-import { runBehaviorProgress } from '../server/package-behavior-run.js';
+import {
+  runBehaviorProgress,
+  prepareAutomaticRunBehavior,
+} from '../server/package-behavior-run.js';
+import { readChatVariables } from '../server/chat-variables.js';
 import * as behaviorRuntime from '../server/package-behavior-run.js';
 import { BehaviorError } from '../core/package-behavior.js';
 import { behaviorDetail } from '../server/package-behavior-host.js';
@@ -70,10 +78,14 @@ function definition(): ContentPackage {
     },
   };
 }
-function fixture(configure?: (pkg: ContentPackage) => void) {
+function database() {
   const dir = mkdtempSync(join(tmpdir(), 'uimori-after-response-'));
   const store = new Store(join(dir, 'test.sqlite'));
   owned.push({ store, dir });
+  return store;
+}
+function fixture(configure?: (pkg: ContentPackage) => void) {
+  const store = database();
   const pkg = definition();
   configure?.(pkg);
   const content = store.product.content({
@@ -89,8 +101,9 @@ function fixture(configure?: (pkg: ContentPackage) => void) {
   return { store, chat, instanceId: `${content.id}:bot` };
 }
 type Fixture = ReturnType<typeof fixture>;
-function addModule(f: Fixture) {
+function addModule(f: Fixture, configure?: (pkg: ContentPackage) => void) {
   const pkg = definition();
+  configure?.(pkg);
   const content = f.store.product.content({
     kind: 'module',
     title: pkg.title,
@@ -151,6 +164,139 @@ function finish(f: Fixture, run: Run, text: string) {
 }
 const current = (f: Fixture) => behaviorDetail(f.store, f.chat.id).instances;
 const receipt = (f: Fixture, run: Run) => runBehaviorProgress(f.store, run.id)!.afterResponse!;
+
+const variablesProgram = (source: string): ExtensionProgram => ({
+  api: EXTENSION_PROGRAM_API,
+  capabilities: ['variables.read', 'variables.write'],
+  source,
+});
+function grantVariables(f: Fixture, exclude?: string) {
+  const profile = f.store.product.profile(f.chat.id);
+  updateTestProfile(f.store.product, f.chat.id, {
+    expectedRevision: profile.revision,
+    attachments: profile.attachments,
+    routes: profile.routes,
+    image: profile.image,
+    packageAttachments: profile.packageAttachments,
+    extensionGrants: Object.fromEntries(
+      profile
+        .packageAttachments!.filter((ref) => `${ref.id}:${ref.role}` !== exclude)
+        .map((ref) => [
+          `${ref.id}:${ref.role}`,
+          { packageRevision: ref.revision, capabilities: ['variables.write'] },
+        ])
+    ),
+  });
+}
+
+test('after-turn variables inherit preparation and successful package writes, then archive without replay', async () => {
+  const f = fixture((pkg) => {
+    const after = pkg.behavior!.actions[0];
+    after.program = variablesProgram(
+      "const p = await api.host.call('variables.read', {key:'phase'}); await api.host.call('variables.set', {key:'phase',value:p.value + ':bot'}); return {state:{count:api.state.count+1},result:p.value};"
+    );
+    pkg.behavior!.actions.unshift({
+      ...structuredClone(after),
+      id: 'before',
+      triggers: ['before-turn'],
+      automaticInput: {},
+      program: variablesProgram(
+        "await api.host.call('variables.set', {key:'phase',value:'prefix'}); return {state:{count:api.state.count+1},result:'prefix'};"
+      ),
+    });
+  });
+  addModule(f, (pkg) => {
+    pkg.behavior!.actions[0].program = variablesProgram(
+      "const p = await api.host.call('variables.read', {key:'phase'}); await api.host.call('variables.set', {key:'phase',value:p.value + ':module'}); return {state:{count:api.state.count+1},result:p.value};"
+    );
+  });
+  grantVariables(f);
+  const run = start(f),
+    frozen = structuredClone(run.snapshot);
+  await prepareAutomaticRunBehavior(f.store, run.id);
+  await prepareAfterResponse(f.store, run.id, 'source survives');
+  expect(receipt(f, run).packages.map((p) => p.entries[0].result)).toEqual([
+    'prefix',
+    'prefix:bot',
+  ]);
+  expect(readChatVariables(f.store, f.chat.id, `main:${f.chat.id}`)).toEqual({
+    revision: 0,
+    values: {},
+  });
+  finish(f, run, 'source survives');
+  expect(readChatVariables(f.store, f.chat.id, `main:${f.chat.id}`)).toEqual({
+    revision: 3,
+    values: { phase: 'prefix:bot:module' },
+  });
+  expect(f.store.run(run.id).snapshot).toEqual(frozen);
+  const archived = f.store.product.export();
+  const restored = database();
+  const execute = vi.spyOn(runtime, 'executeExtensionProgram');
+  const tampered = structuredClone(archived);
+  const row = tampered.tables.package_behavior_runs.find((item) => item.run_id === run.id)!;
+  const broken = JSON.parse(row.body);
+  broken.afterResponse.packages[1].entries[0].program.variables.beforeRevision++;
+  row.body = JSON.stringify(broken);
+  expect(() => restored.product.import(tampered)).toThrow();
+  expect(restored.chats()).toHaveLength(0);
+  restored.product.import(archived);
+  expect(execute).not.toHaveBeenCalled();
+  expect(readChatVariables(restored, f.chat.id, `main:${f.chat.id}`)).toEqual({
+    revision: 3,
+    values: { phase: 'prefix:bot:module' },
+  });
+});
+
+test('failed after-turn package discards staged variables before the following package reads', async () => {
+  const f = fixture((pkg) => {
+    pkg.variableDefaults = { values: { phase: 'default' } };
+    pkg.behavior!.actions[0].program = variablesProgram(
+      "await api.host.call('variables.set',{key:'phase',value:'discard me'}); throw Error('failed package');"
+    );
+  });
+  addModule(f, (pkg) => {
+    pkg.behavior!.actions[0].program = variablesProgram(
+      "const p=await api.host.call('variables.read',{key:'phase'}); await api.host.call('variables.set',{key:'phase',value:p.value+':module'}); return {state:{count:1},result:p.value};"
+    );
+  });
+  grantVariables(f);
+  const run = start(f);
+  await prepareAfterResponse(f.store, run.id, 'kept text');
+  expect(receipt(f, run).packages.map((p) => p.status)).toEqual(['failed', 'ready']);
+  expect(receipt(f, run).packages[1].entries[0].result).toBe('default');
+  finish(f, run, 'kept text');
+  expect(readChatVariables(f.store, f.chat.id, `main:${f.chat.id}`)).toEqual({
+    revision: 1,
+    values: { phase: 'default:module' },
+  });
+  expect(current(f).map((p) => p.state)).toEqual([{ count: 0 }, { count: 1 }]);
+});
+
+test('revoked after-turn write rejects dependent later adoption while preserving the source', async () => {
+  const f = fixture((pkg) => {
+    pkg.behavior!.actions[0].program = variablesProgram(
+      "await api.host.call('variables.set',{key:'phase',value:'bot'}); return {state:{count:1},result:'bot'};"
+    );
+  });
+  addModule(f, (pkg) => {
+    pkg.behavior!.actions[0].program = variablesProgram(
+      "const p=await api.host.call('variables.read',{key:'phase'}); await api.host.call('variables.set',{key:'phase',value:p.value+':module'}); return {state:{count:1},result:p.value};"
+    );
+  });
+  grantVariables(f);
+  const run = start(f);
+  await prepareAfterResponse(f.store, run.id, 'valid original');
+  expect(receipt(f, run).packages.every((p) => p.status === 'ready')).toBe(true);
+  grantVariables(f, f.instanceId);
+  const source = finish(f, run, 'valid original');
+  expect(f.store.source(source.id).text).toBe('valid original');
+  expect(receipt(f, run).packages.every((p) => p.status === 'failed')).toBe(true);
+  expect(readChatVariables(f.store, f.chat.id, `main:${f.chat.id}`)).toEqual({
+    revision: 0,
+    values: {},
+  });
+  expect(current(f).map((p) => p.state)).toEqual([{ count: 0 }, { count: 0 }]);
+});
 
 test('after-only program reads its fixed response and publishes only with the source', async () => {
   const f = fixture(),
@@ -411,6 +557,32 @@ test('synchronous progress skip closes adoption before the first guest and retri
   expect(current(f)[0].state).toEqual({ count: 0 });
   expect(skipAfterResponse(f.store, run.id, skipBody(f, run)).skipped).toBe(true);
   expect(skipAfterResponse(f.store, run.id, skipBody(f, run, 'different')).skipped).toBe(false);
+});
+
+test('skipping after a computed package keeps variable receipts without adopting their writes', async () => {
+  const configure = (pkg: ContentPackage) => {
+    pkg.behavior!.actions[0].program = variablesProgram(
+      "await api.host.call('variables.set',{key:'phase',value:'staged'}); return {state:{count:1},result:'staged'};"
+    );
+  };
+  const f = fixture(configure);
+  addModule(f, configure);
+  grantVariables(f);
+  const run = start(f);
+  await prepareAfterResponse(f.store, run.id, 'skip keeps source', undefined, () => {
+    if (receipt(f, run).completed === 1)
+      expect(skipAfterResponse(f.store, run.id, skipBody(f, run)).skipped).toBe(true);
+  });
+  expect(receipt(f, run)).toMatchObject({ status: 'skipped', completed: 1 });
+  expect(receipt(f, run).packages[0].entries[0].program.variables?.changes).toEqual({
+    phase: 'staged',
+  });
+  finish(f, run, 'skip keeps source');
+  expect(readChatVariables(f.store, f.chat.id, `main:${f.chat.id}`)).toEqual({
+    revision: 0,
+    values: {},
+  });
+  expect(current(f).map((p) => p.state)).toEqual([{ count: 0 }, { count: 0 }]);
 });
 
 test('after model results reauthorize before adoption and use a bounded host wait', async () => {

@@ -16,6 +16,10 @@ import {
   executeRunBehaviorTool,
   runBehaviorProgress,
   isRecoverableBehaviorExecutionError,
+  prepareAutomaticRunBehavior,
+  preparedBehaviorSnapshot,
+  completedRunBehaviorView,
+  skipAutomaticRunBehavior,
 } from '../server/package-behavior-run.js';
 import { listBehaviorTools } from '../core/package-behavior-tools.js';
 import { buildMainInput } from '../core/provider.js';
@@ -38,6 +42,9 @@ import { compilePackageAttachment } from '../core/package-runtime.js';
 import { compilePromptProgram } from '../core/prompt-program.js';
 import { PromptBudget, PromptEvaluationError } from '../core/prompt-values.js';
 import { compileSnapshotPrompt } from '../server/prompt-snapshot.js';
+import { EXTENSION_PROGRAM_API } from '../core/extension-program.js';
+import { readChatVariables, writeChatVariables } from '../server/chat-variables.js';
+import { executionContext } from '../core/execution-context.js';
 
 const owned: { store: Store; dir: string }[] = [];
 afterEach(() => {
@@ -170,6 +177,273 @@ function fixture(change?: (b: PackageBehavior) => void) {
   };
 }
 type Fixture = ReturnType<typeof fixture>;
+function variableAction(id: string, trigger: 'before-turn' | 'model', next?: string) {
+  return {
+    id,
+    triggers: [trigger],
+    inputSchema: { type: 'record' as const, properties: {} },
+    effects: [],
+    program: {
+      api: EXTENSION_PROGRAM_API,
+      capabilities: ['variables.read', ...(next === undefined ? [] : ['variables.write'])] as (
+        | 'variables.read'
+        | 'variables.write'
+      )[],
+      source: `const before = await api.host.call('variables.read',{key:'score'});
+        ${next === undefined ? '' : `await api.host.call('variables.set',{key:'score',value:${JSON.stringify(next)}});`}
+        return {state:api.state,result:before.value};`,
+    },
+  };
+}
+function variableFixture() {
+  const f = fixture((b) => {
+    b.actions = [
+      variableAction('day', 'before-turn', 'a'),
+      variableAction('check', 'model', 'c'),
+      variableAction('last', 'model', 'e'),
+      variableAction('inspect', 'model'),
+    ];
+  });
+  const module = dependentModule(f, 'before-turn');
+  const pkg = structuredClone(module.package!);
+  pkg.behavior!.actions = [
+    variableAction('copy', 'before-turn', 'b'),
+    variableAction('module-model', 'model', 'd'),
+  ];
+  const updated = f.store.product.content(
+    {
+      kind: 'module',
+      title: module.title,
+      description: '',
+      text: '',
+      loading: 'pinned',
+      relatedIds: [],
+      package: pkg,
+      expectedRevision: module.revision,
+    },
+    module.id
+  ) as Content;
+  const prior = f.store.product.profile(f.chat.id);
+  const attachments = prior.packageAttachments!.map((ref) =>
+    ref.id === updated.id ? { ...ref, revision: updated.revision } : ref
+  );
+  f.store.product.updateProfile(f.chat.id, {
+    expectedRevision: prior.revision,
+    attachments: prior.attachments,
+    image: prior.image,
+    packageAttachments: attachments,
+    extensionGrants: Object.fromEntries(
+      attachments.map((ref) => [
+        `${ref.id}:${ref.role}`,
+        { packageRevision: ref.revision, capabilities: ['variables.write'] },
+      ])
+    ),
+  });
+  writeChatVariables(f.store, f.chat.id, f.branchId, {
+    expectedRevision: 0,
+    expectedSourceHash: null,
+    idempotencyKey: 'variable-base',
+    values: { score: 'base' },
+  });
+  return f;
+}
+
+test('run variables follow before/model cross-instance order in memory and commit once with the source', async () => {
+  const f = variableFixture(),
+    run = start(f),
+    reserved = structuredClone(run.snapshot);
+  await prepareAutomaticRunBehavior(f.store, run.id);
+  expect(readChatVariables(f.store, f.chat.id, f.branchId)).toEqual({
+    revision: 1,
+    values: { score: 'base' },
+  });
+  expect(executionContext(preparedBehaviorSnapshot(f.store, run.id)).variables).toEqual({
+    score: 'b',
+  });
+  expect((await namedCall(f, run, 'check')).result).toBe('b');
+  expect((await namedCall(f, run, 'module-model')).result).toBe('c');
+  expect((await namedCall(f, run, 'last')).result).toBe('d');
+  expect((await namedCall(f, run, 'inspect')).result).toBe('e');
+  expect((await namedCall(f, run, 'inspect')).result).toBe('e');
+  const progress = runBehaviorProgress(f.store, run.id)!;
+  expect(progress.variableState).toEqual({ revision: 6, values: { score: 'e' } });
+  expect(progress.entries.map((entry) => entry.program!.variables!.beforeRevision)).toEqual([
+    1, 2, 3, 4, 5, 6,
+  ]);
+  expect(
+    executionContext(completedRunBehaviorView(f.store, f.store.run(run.id))).variables
+  ).toEqual({ score: 'e' });
+  expect(f.store.run(run.id).snapshot).toEqual(reserved);
+  expect(readChatVariables(f.store, f.chat.id, f.branchId).revision).toBe(1);
+  const source = finish(f, run);
+  expect(readChatVariables(f.store, f.chat.id, f.branchId)).toEqual(progress.variableState);
+  expect(f.store.db.prepare('SELECT count(*) AS n FROM chat_variable_journal').get()!.n).toBe(6);
+  expect(
+    JSON.parse(
+      String(
+        f.store.db
+          .prepare('SELECT body FROM chat_variable_outputs WHERE source_id=?')
+          .get(source.id)!.body
+      )
+    )
+  ).toEqual(progress.variableState);
+  const restored = database();
+  restored.product.import(f.store.product.export());
+  expect(readChatVariables(restored, f.chat.id, f.branchId)).toEqual(progress.variableState);
+  expect(restored.run(run.id).snapshot).toEqual(reserved);
+});
+
+test('cancelled staged variables do not commit and a new request reuses the same validated opportunity', async () => {
+  const f = variableFixture(),
+    first = start(f);
+  await prepareAutomaticRunBehavior(f.store, first.id);
+  await namedCall(f, first, 'check');
+  f.store.finishRun(first.id, 'cancelled', 'Synthetic cancellation');
+  await expect(namedCall(f, first, 'last')).rejects.toThrow('BEHAVIOR_RUN_NOT_RUNNING');
+  expect(readChatVariables(f.store, f.chat.id, f.branchId)).toEqual({
+    revision: 1,
+    values: { score: 'base' },
+  });
+  const second = start(f);
+  await prepareAutomaticRunBehavior(f.store, second.id);
+  expect(second.snapshot.behaviorExecution!.opportunityId).toBe(
+    first.snapshot.behaviorExecution!.opportunityId
+  );
+  expect((await namedCall(f, second, 'check')).result).toBe('b');
+  expect(runBehaviorProgress(f.store, second.id)!.variableState).toEqual({
+    revision: 4,
+    values: { score: 'c' },
+  });
+  finish(f, second);
+  expect(readChatVariables(f.store, f.chat.id, f.branchId)).toEqual({
+    revision: 4,
+    values: { score: 'c' },
+  });
+});
+
+test('revoked variable grants reject cached action adoption and preserve the entire staged prefix', async () => {
+  const f = variableFixture(),
+    run = start(f);
+  await prepareAutomaticRunBehavior(f.store, run.id);
+  await namedCall(f, run, 'check');
+  const prior = f.store.product.profile(f.chat.id);
+  f.store.product.updateProfile(f.chat.id, {
+    expectedRevision: prior.revision,
+    attachments: prior.attachments,
+    image: prior.image,
+    packageAttachments: prior.packageAttachments,
+    extensionGrants: {},
+  });
+  expect(await namedCall(f, run, 'check')).toMatchObject({
+    denied: true,
+    result: { code: 'BEHAVIOR_HOST_VARIABLES_DENIED' },
+  });
+  finish(f, run);
+  expect(readChatVariables(f.store, f.chat.id, f.branchId)).toEqual({
+    revision: 1,
+    values: { score: 'base' },
+  });
+  expect(f.store.db.prepare('SELECT count(*) AS n FROM chat_variable_journal').get()!.n).toBe(1);
+});
+
+test('skipping after one successful automatic variable write discards the unpublished prefix', async () => {
+  const f = variableFixture(),
+    run = start(f);
+  await prepareAutomaticRunBehavior(f.store, run.id, undefined, () => {
+    if (runBehaviorProgress(f.store, run.id)?.preparation?.completed === 1)
+      skipAutomaticRunBehavior(f.store, run.id, {
+        chatId: f.chat.id,
+        branchId: f.branchId,
+        expectedRevision: null,
+        idempotencyKey: 'skip-variable-prefix',
+      });
+  });
+  expect(runBehaviorProgress(f.store, run.id)).toMatchObject({
+    entries: [],
+    preparation: { status: 'skipped', completed: 1 },
+  });
+  expect(executionContext(preparedBehaviorSnapshot(f.store, run.id)).variables).toEqual({
+    score: 'base',
+  });
+  finish(f, run);
+  expect(readChatVariables(f.store, f.chat.id, f.branchId)).toEqual({
+    revision: 1,
+    values: { score: 'base' },
+  });
+  const restored = database();
+  restored.product.import(f.store.product.export());
+  expect(readChatVariables(restored, f.chat.id, f.branchId)).toEqual({
+    revision: 1,
+    values: { score: 'base' },
+  });
+});
+
+test('candidate variable receipts reject a reordered model dependency and preserve the original branch', async () => {
+  const f = variableFixture(),
+    run = start(f);
+  await prepareAutomaticRunBehavior(f.store, run.id);
+  await namedCall(f, run, 'check');
+  await namedCall(f, run, 'module-model');
+  finish(f, run);
+  const candidate = f.store.candidate(run.id, randomUUID(), 'Variable alternative').run;
+  start(f, candidate);
+  expect(await namedCall(f, candidate, 'module-model')).toMatchObject({
+    denied: true,
+    result: { code: 'BEHAVIOR_OPPORTUNITY_DEPENDENCY_CHANGED' },
+  });
+  expect((await namedCall(f, candidate, 'check')).result).toBe('b');
+  expect((await namedCall(f, candidate, 'module-model')).result).toBe('c');
+  finish(f, candidate);
+  expect(readChatVariables(f.store, f.chat.id, candidate.snapshot.branchId!)).toEqual({
+    revision: 5,
+    values: { score: 'd' },
+  });
+  expect(readChatVariables(f.store, f.chat.id, f.branchId)).toEqual({
+    revision: 5,
+    values: { score: 'd' },
+  });
+  const restored = database();
+  restored.product.import(f.store.product.export());
+  expect(restored.run(candidate.id).snapshot).toEqual(f.store.run(candidate.id).snapshot);
+});
+
+test('archive rejects forged variable read dependencies and reordered global mutation chains atomically', async () => {
+  const f = variableFixture(),
+    run = start(f);
+  await prepareAutomaticRunBehavior(f.store, run.id);
+  await namedCall(f, run, 'check');
+  const archive = f.store.product.export();
+  for (const mutate of [
+    (body: any) => {
+      if (body.variableState) body.variableState.revision++;
+    },
+    (body: any) => {
+      body.entries[1].program.variables.beforeHash = '0'.repeat(64);
+    },
+    (body: any) => {
+      body.entries[1].hostRuntime.variables.score = 'forged';
+    },
+    (body: any) => {
+      body.entries.reverse();
+    },
+  ]) {
+    const changed = structuredClone(archive);
+    const row = changed.tables.package_behavior_runs.find((row: any) => row.run_id === run.id)!;
+    const body = JSON.parse(row.body);
+    mutate(body);
+    row.body = JSON.stringify(body);
+    const opportunity = changed.tables.package_behavior_opportunities.find(
+      (row: any) => row.id === body.opportunityId
+    )!;
+    const opportunityBody = JSON.parse(opportunity.body);
+    mutate(opportunityBody);
+    opportunity.body = JSON.stringify(opportunityBody);
+    const restored = database(),
+      before = restored.product.export();
+    expect(() => restored.product.import(changed)).toThrow();
+    expect(restored.product.export().tables).toEqual(before.tables);
+  }
+});
 function snapshot(f: Fixture, branchId = f.branchId): RunSnapshot {
   const chat = f.store.chat(f.chat.id),
     branch = f.store.product.branch(chat.id, branchId),

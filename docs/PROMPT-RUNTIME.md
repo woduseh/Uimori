@@ -44,7 +44,9 @@ Host가 `context.variables`를 제공하면 `{op:'get',args:[{context:['variable
 
 일반 분기와 채팅 포크는 선택한 source의 checkpoint를 복원하므로 이후 직접 편집한 값이 섞이지 않아요. candidate는 원래 Run의 예약 snapshot을 복원해요. checkpoint나 snapshot이 없는 과거 자료는 빈 override로 시작하며 현재값으로 보충하지 않아요. 전체 archive와 채팅 백업은 현재 상태·쓰기 영수증·source checkpoint를 보존하고 값 문자열 안의 ID는 바꾸지 않아요. 형식과 이관은 [DB migration](DATA-MIGRATIONS.md)을 봐요.
 
-이 계약은 사용자의 직접 편집과 공통 읽기·보관 흐름까지예요. 가져온 trigger·Lua·제작자 Host 호출을 통한 공유 변수 쓰기는 아직 연결하지 않았어요. 읽기나 편집기 지원을 그 코드의 실행 완료로 해석하지 않아요.
+제작자 JavaScript 행동도 [공유 변수 Host API](EXTENSION-PROGRAMS.md#host-api로-분기-공유-변수-읽기와-쓰기)를 사용할 수 있어요. `variables.read/write` 선언과 쓰기의 자료 개정별 사용자 grant를 확인하고 계산 중에는 임시 변경만 적용해요. 사용자 행동은 상태·공유 변수·후속 요청을 함께 채택하며, 생성 전/모델 행동은 전역 실행 순서대로 source에 채택해요. 응답 후에는 성공한 패키지의 값만 뒤 패키지가 이어받고 실패한 임시 변경은 폐기해요.
+
+이후 행동·생성 전 지침·자료 읽기는 파생 profile의 공유 상태를 읽지만 원래 Run snapshot과 이미 주 모델에 전송한 프롬프트는 다시 작성하지 않아요. Host의 변수 영수증은 읽기 의존성과 변경분을 기록하며 과거 무변수 영수증은 그대로 보존해요. Risu trigger·Lua의 직접 실행 어댑터는 아직 구현하지 않았으며 공통 Host 연결을 특정 표본의 전체 실행 완료로 해석하지 않아요.
 
 ## 데이터 AST
 

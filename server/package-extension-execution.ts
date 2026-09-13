@@ -4,6 +4,8 @@ import type { ProfileSnapshot } from '../core/product.js';
 import type { RuntimeValue } from '../core/prompt-values.js';
 import { createPackageExtensionHost } from './extension-materials.js';
 import { executeExtensionProgram, type ExtensionHostHandler } from './extension-runtime.js';
+import { createExtensionVariableSession } from './extension-variables.js';
+import type { ChatVariableMutation } from '../core/chat-variables.js';
 
 export type PackageExtensionModelServices = {
   modelGenerate: (args: RuntimeValue, signal: AbortSignal) => Promise<RuntimeValue>;
@@ -11,11 +13,14 @@ export type PackageExtensionModelServices = {
   hostWaitMs: number;
 };
 
-type ExecutionResult = Awaited<ReturnType<typeof executeExtensionProgram>>;
+type ExecutionResult = Awaited<ReturnType<typeof executeExtensionProgram>> & {
+  variables?: ChatVariableMutation;
+};
 type Options = {
   profile: ProfileSnapshot | undefined;
   attachment: PackageAttachment;
   assertCurrent: () => void;
+  assertVariableWriteAccess?: () => void;
   modelServices?: PackageExtensionModelServices;
   responseHost?: ExtensionHostHandler;
   waitForSlot?: boolean;
@@ -33,19 +38,33 @@ export async function executePackageExtensionProgram(
 ): Promise<ExecutionResult> {
   const usesModel = program.capabilities?.includes('model.generate') === true;
   const services = usesModel ? options.modelServices : undefined;
-  const materials = createPackageExtensionHost(
+  const variables = program.capabilities?.some((capability) => capability.startsWith('variables.'))
+    ? createExtensionVariableSession(
+        program,
+        options.profile,
+        options.attachment,
+        options.assertCurrent,
+        options.assertVariableWriteAccess
+      )
+    : undefined;
+  let materialGeneration = variables?.generation ?? 0;
+  let materials = createPackageExtensionHost(
     program,
     options.profile,
     options.attachment,
     options.assertCurrent
   );
   let modelResultRead = false;
-  const result = await executeExtensionProgram(program, input, signal, {
+  const computed = await executeExtensionProgram(program, input, signal, {
     waitForSlot: options.waitForSlot,
     hostWaitMs: options.hostWaitMs ?? services?.hostWaitMs,
     // A model-capable guest must wait for paid Host work to settle even when it is cancelled.
     awaitHostSettlement: usesModel,
     host: async (method, args, hostSignal) => {
+      if (method.startsWith('variables.')) {
+        if (!variables) throw new ExtensionProgramError('BEHAVIOR_HOST_VARIABLES_DENIED');
+        return variables.host(method, args, hostSignal);
+      }
       if (method === 'model.generate') {
         if (!services) throw new ExtensionProgramError('BEHAVIOR_HOST_MODEL_DENIED');
         options.assertCurrent();
@@ -53,12 +72,24 @@ export async function executePackageExtensionProgram(
         modelResultRead = true;
         return value;
       }
+      if (variables && materialGeneration !== variables.generation) {
+        materials = createPackageExtensionHost(
+          program,
+          variables.profile(),
+          options.attachment,
+          options.assertCurrent
+        );
+        materialGeneration = variables.generation;
+      }
       return method.startsWith('response.') && options.responseHost
         ? options.responseHost(method, args, hostSignal)
         : materials(method, args, hostSignal);
     },
   });
+  const mutation = variables?.receipt();
+  const result: ExecutionResult = { ...computed, ...(mutation ? { variables: mutation } : {}) };
   options.onExecuted?.(result);
+  variables?.assertWriteAccess();
   // A caught denied/unavailable call may still produce a valid local fallback state.
   if (modelResultRead) await services!.assertModelAccess();
   return result;

@@ -13,6 +13,7 @@ import {
   type BehaviorSchema,
 } from '../core/package-behavior.js';
 import type { RuntimeValue } from '../core/prompt-program.js';
+import { validateChatVariableMutation } from '../core/chat-variables.js';
 
 export class ExtensionProgramReceiptError extends Error {
   constructor(readonly code: string) {
@@ -36,11 +37,12 @@ function exactReceipt(value: unknown): Record<string, unknown> {
     fail('BEHAVIOR_PROGRAM_RECEIPT');
   const record = value as Record<string, unknown>;
   const fields = ['api', 'programHash', 'engine', 'state', 'result'];
+  const allowed = [...fields, 'variables'];
   const names = Object.getOwnPropertyNames(record);
-  if (names.length !== fields.length || fields.some((field) => !Object.hasOwn(record, field)))
+  if (fields.some((field) => !Object.hasOwn(record, field)))
     fail('BEHAVIOR_PROGRAM_RECEIPT_FIELDS');
   for (const name of names) {
-    if (!fields.includes(name)) fail('BEHAVIOR_PROGRAM_RECEIPT_FIELDS');
+    if (!allowed.includes(name)) fail('BEHAVIOR_PROGRAM_RECEIPT_FIELDS');
     const descriptor = Object.getOwnPropertyDescriptor(record, name)!;
     if (!Object.hasOwn(descriptor, 'value') || !descriptor.enumerable)
       fail('BEHAVIOR_PROGRAM_RECEIPT');
@@ -74,6 +76,9 @@ export function validateExtensionComputationReceipt(
     engine,
     state: output!.state,
     result: output!.result,
+    ...(Object.hasOwn(receipt, 'variables')
+      ? { variables: validateChatVariableMutation(receipt.variables) }
+      : {}),
   };
 }
 

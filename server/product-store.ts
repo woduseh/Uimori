@@ -18,6 +18,10 @@ import {
 } from './request-validation.js';
 import { resolveModelPricing, validatePricingSnapshot } from '../core/model-pricing.js';
 import { validateExtensionModelAttribution } from '../core/extension-model.js';
+import {
+  EXTENSION_GRANT_CAPABILITIES,
+  type ExtensionGrantCapability,
+} from '../core/extension-program.js';
 import { estimateCost } from '../core/pricing-estimate.js';
 import { translationPolicy } from '../core/translation-settings.js';
 import {
@@ -734,9 +738,11 @@ export class ProductStore {
               if (!unchanged) {
                 if (
                   grant.packageRevision !== attached.attachment.revision ||
-                  !packageRequestsModelGeneration(attached.pkg)
+                  grant.capabilities.some(
+                    (capability) => !packageRequestsExtensionGrant(attached.pkg, capability)
+                  )
                 )
-                  throw new HttpError(400, 'Invalid extension model grant');
+                  throw new HttpError(400, 'Invalid extension grant');
               }
               return [[instanceId, grant]];
             })
@@ -1652,7 +1658,7 @@ function packageRefs(product: ProductStore, value: unknown): PackageAttachment[]
 }
 function validateExtensionGrants(value: unknown): NonNullable<ChatProfile['extensionGrants']> {
   const grants = record(value);
-  if (Object.keys(grants).length > 100) throw new HttpError(400, 'Invalid extension model grants');
+  if (Object.keys(grants).length > 100) throw new HttpError(400, 'Invalid extension grants');
   return Object.fromEntries(
     Object.entries(grants).map(([instanceId, value]) => {
       text(instanceId, 'package instance ID', 200);
@@ -1660,10 +1666,14 @@ function validateExtensionGrants(value: unknown): NonNullable<ChatProfile['exten
       fields(grant, ['packageRevision', 'capabilities']);
       if (
         !Array.isArray(grant.capabilities) ||
-        grant.capabilities.length !== 1 ||
-        grant.capabilities[0] !== 'model.generate'
+        grant.capabilities.length === 0 ||
+        grant.capabilities.length > EXTENSION_GRANT_CAPABILITIES.length ||
+        new Set(grant.capabilities).size !== grant.capabilities.length
       )
-        throw new HttpError(400, 'Invalid extension model capabilities');
+        throw new HttpError(400, 'Invalid extension capabilities');
+      const capabilities = grant.capabilities.map((capability) =>
+        choice(capability, [...EXTENSION_GRANT_CAPABILITIES], 'extension capability')
+      );
       return [
         instanceId,
         {
@@ -1673,17 +1683,19 @@ function validateExtensionGrants(value: unknown): NonNullable<ChatProfile['exten
             1,
             Number.MAX_SAFE_INTEGER
           ),
-          capabilities: ['model.generate'] as ['model.generate'],
+          capabilities,
         },
       ];
     })
   );
 }
-function packageRequestsModelGeneration(pkg: ContentPackage | undefined) {
+function packageRequestsExtensionGrant(
+  pkg: ContentPackage | undefined,
+  capability: ExtensionGrantCapability
+) {
   return (
-    pkg?.behavior?.actions.some((action) =>
-      action.program?.capabilities?.includes('model.generate')
-    ) ?? false
+    pkg?.behavior?.actions.some((action) => action.program?.capabilities?.includes(capability)) ??
+    false
   );
 }
 function packageControlValues(
@@ -1985,7 +1997,9 @@ function validateArchiveProfile(
       if (!attached) throw new HttpError(400, 'Extension grant package is not attached');
       if (
         grant.packageRevision === attached.attachment.revision &&
-        !packageRequestsModelGeneration(attached.pkg)
+        grant.capabilities.some(
+          (capability) => !packageRequestsExtensionGrant(attached.pkg, capability)
+        )
       )
         throw new HttpError(400, 'Extension grant capability is not requested');
     }

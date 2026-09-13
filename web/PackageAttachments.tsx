@@ -7,6 +7,7 @@ import { ContentAvatar } from './ContentAvatar.js';
 import { ContentPicker } from './ContentPicker.js';
 import { reconcilePromptValues } from '../core/prompt-program.js';
 import { packageInstanceId } from '../core/execution-context.js';
+import type { ExtensionGrantCapability } from '../core/extension-program.js';
 import { Switch } from './BooleanControls.js';
 import './package-authoring.css';
 const keyOf = (ref: PackageAttachment) => `${ref.id}@${ref.revision}:${ref.role}`;
@@ -61,10 +62,29 @@ export function retainAttachedExtensionGrants(
   return Object.keys(retained).length ? retained : undefined;
 }
 
-const requestsModelGeneration = (pkg: ContentPackage) =>
-  pkg.behavior?.actions.some((action) =>
-    action.program?.capabilities?.includes('model.generate')
-  ) ?? false;
+export function updateExtensionGrantCapability(
+  grants: ChatProfile['extensionGrants'],
+  instanceId: string,
+  packageRevision: number,
+  capability: ExtensionGrantCapability,
+  checked: boolean
+): ChatProfile['extensionGrants'] {
+  const existing = grants?.[instanceId];
+  if (existing?.packageRevision !== packageRevision && !checked) return grants;
+  const capabilities =
+    existing?.packageRevision === packageRevision
+      ? existing.capabilities.filter((item) => item !== capability)
+      : [];
+  if (checked) capabilities.push(capability);
+  const updated = { ...grants };
+  if (capabilities.length) updated[instanceId] = { packageRevision, capabilities };
+  else delete updated[instanceId];
+  return Object.keys(updated).length ? updated : undefined;
+}
+
+const requestsCapability = (pkg: ContentPackage, capability: ExtensionGrantCapability) =>
+  pkg.behavior?.actions.some((action) => action.program?.capabilities?.includes(capability)) ??
+  false;
 
 export function PackageAttachments({
   profile,
@@ -232,6 +252,8 @@ export function PackageAttachments({
           automatic = required.has(scope),
           title = pkg?.title ?? '연결한 패키지',
           fixedBot = ref.role === 'bot',
+          requestsModelGeneration = pkg && requestsCapability(pkg, 'model.generate'),
+          requestsVariableWrite = pkg && requestsCapability(pkg, 'variables.write'),
           Attachment = fixedBot ? 'fieldset' : 'article';
         return (
           <Attachment
@@ -296,40 +318,69 @@ export function PackageAttachments({
                 수정하면 제외할 수 있어요.
               </p>
             )}
-            {pkg && requestsModelGeneration(pkg) && (
+            {pkg && (requestsModelGeneration || requestsVariableWrite) && (
               <div>
-                <label className="check">
-                  <Switch
-                    aria-label={`${title} 추가 모델 호출 허용`}
-                    checked={
-                      extensionGrant?.packageRevision === ref.revision &&
-                      extensionGrant.capabilities.includes('model.generate')
-                    }
-                    disabled={busy}
-                    onChange={(event) => {
-                      const current = latest.current;
-                      if (current.viewKey !== viewKey) return;
-                      const extensionGrants = { ...current.profile.extensionGrants };
-                      if (event.target.checked)
-                        extensionGrants[instanceId] = {
-                          packageRevision: ref.revision,
-                          capabilities: ['model.generate'],
-                        };
-                      else delete extensionGrants[instanceId];
-                      current.onChange({
-                        ...current.profile,
-                        extensionGrants: Object.keys(extensionGrants).length
-                          ? extensionGrants
-                          : undefined,
-                      });
-                    }}
-                  />
-                  추가 모델 호출 허용
-                </label>
-                {!extensionModelConfigured && (
-                  <small>
-                    전역 설정에서 확장 호출 모델을 선택해야 패키지가 추가 생성을 요청할 수 있어요.
-                  </small>
+                {requestsModelGeneration && (
+                  <>
+                    <label className="check">
+                      <Switch
+                        aria-label={`${title} 추가 모델 호출 허용`}
+                        checked={
+                          extensionGrant?.packageRevision === ref.revision &&
+                          extensionGrant.capabilities.includes('model.generate')
+                        }
+                        disabled={busy}
+                        onChange={(event) => {
+                          const current = latest.current;
+                          if (current.viewKey !== viewKey) return;
+                          current.onChange({
+                            ...current.profile,
+                            extensionGrants: updateExtensionGrantCapability(
+                              current.profile.extensionGrants,
+                              instanceId,
+                              ref.revision,
+                              'model.generate',
+                              event.target.checked
+                            ),
+                          });
+                        }}
+                      />
+                      추가 모델 호출 허용
+                    </label>
+                    {!extensionModelConfigured && (
+                      <small>
+                        전역 설정에서 확장 호출 모델을 선택해야 패키지가 추가 생성을 요청할 수
+                        있어요.
+                      </small>
+                    )}
+                  </>
+                )}
+                {requestsVariableWrite && (
+                  <label className="check">
+                    <Switch
+                      aria-label={`${title} 공유 변수 변경 허용`}
+                      checked={
+                        extensionGrant?.packageRevision === ref.revision &&
+                        extensionGrant.capabilities.includes('variables.write')
+                      }
+                      disabled={busy}
+                      onChange={(event) => {
+                        const current = latest.current;
+                        if (current.viewKey !== viewKey) return;
+                        current.onChange({
+                          ...current.profile,
+                          extensionGrants: updateExtensionGrantCapability(
+                            current.profile.extensionGrants,
+                            instanceId,
+                            ref.revision,
+                            'variables.write',
+                            event.target.checked
+                          ),
+                        });
+                      }}
+                    />
+                    공유 변수 변경 허용
+                  </label>
                 )}
                 {extensionGrant && extensionGrant.packageRevision !== ref.revision && (
                   <small role="status">

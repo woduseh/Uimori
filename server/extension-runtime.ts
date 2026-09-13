@@ -60,6 +60,8 @@ const safeHostCodes = new Set([
   'BEHAVIOR_HOST_MODEL_DENIED',
   'BEHAVIOR_HOST_MODEL_UNAVAILABLE',
   'BEHAVIOR_HOST_MODEL_BUDGET_EXHAUSTED',
+  'BEHAVIOR_HOST_VARIABLES_DENIED',
+  'BEHAVIOR_HOST_VARIABLES_LIMIT',
 ]);
 const workerResultCodes = new Set([
   'BEHAVIOR_PROGRAM_INPUT_SIZE',
@@ -213,7 +215,11 @@ export async function executeExtensionProgram(
       : new URL('./extension-worker.ts', import.meta.url);
     const worker = new Worker(source, {
       execArgv: source.pathname.endsWith('.ts') ? ['--experimental-strip-types'] : undefined,
-      workerData: { source: program.source, inputJSON: encodedInput },
+      workerData: {
+        source: program.source,
+        inputJSON: encodedInput,
+        hostErrorCodes: [...safeHostCodes],
+      },
       resourceLimits: {
         codeRangeSizeMb: 16,
         maxOldGenerationSizeMb: 32,

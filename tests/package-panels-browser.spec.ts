@@ -380,6 +380,109 @@ test('EXTPANELUI01 code action updates its panel and a failed action preserves c
   expect(current.runs).toHaveLength(0);
   expect(current.attempts).toHaveLength(0);
 });
+
+test('VARWRITEUI01 user code changes shared variables only with the exact chat grant', async ({
+  page,
+  request,
+}) => {
+  test.setTimeout(60000);
+  const pkg = createPanelPackage();
+  pkg.variableDefaults = { values: { phase: '0' } };
+  const note = pkg.behavior!.actions.find((action) => action.id === 'note')!;
+  note.effects = [];
+  note.program = {
+    api: 'uimori-state-action-v1',
+    capabilities: ['variables.read', 'variables.write'],
+    source:
+      'const current = await api.host.call("variables.read", {key:"phase"}); const next = String(Number(current.value ?? "0") + 1); await api.host.call("variables.set", {key:"phase", value:next}); return {state:{...api.state,note:next},result:{value:next}};',
+  };
+  const added = await request.post('/api/content', {
+    data: {
+      kind: 'bot',
+      title: 'Synthetic variable writer',
+      description: '',
+      text: pkg.body,
+      loading: 'pinned',
+      relatedIds: [],
+      package: pkg,
+    },
+  });
+  expect(added.ok(), await added.text()).toBe(true);
+  const content = await added.json();
+  const created = await request.post('/api/chats', {
+    data: { title: 'Synthetic variable writer', botId: content.id },
+  });
+  expect(created.ok(), await created.text()).toBe(true);
+  const chat = await created.json();
+  const behaviorEndpoint = `/api/chats/${chat.id}/package-behaviors`;
+  const variablesEndpoint = `/api/chats/${chat.id}/variables`;
+  const behavior = async () => await (await request.get(behaviorEndpoint)).json();
+  const variables = async () => await (await request.get(variablesEndpoint)).json();
+
+  await page.setViewportSize({ width: MOBILE_WIDTH, height: 900 });
+  await page.goto(`/?chat=${chat.id}`);
+  const custom = page.getByRole('region', { name: '탐험 준비', exact: true });
+  const iframe = page.frameLocator('iframe[title="탐험 준비 패키지 패널"]');
+  await expect(custom).toHaveAttribute('aria-busy', 'false');
+  await iframe.getByRole('textbox', { name: '준비 메모', exact: true }).fill('run without grant');
+  await iframe.getByRole('button', { name: '메모 반영', exact: true }).click();
+  await expect(custom.getByRole('alert')).toBeVisible();
+  expect(await variables()).toMatchObject({ revision: 0, values: {}, resolved: { phase: '0' } });
+  expect((await behavior()).instances[0]).toMatchObject({ stateRevision: 0, state: { note: '' } });
+
+  await openChatSettings(page);
+  await selectChatSettingsSection(page, '봇·페르소나·모듈');
+  const settings = page.getByRole('dialog', { name: '채팅 설정', exact: true });
+  const attachment = settings
+    .locator('.package-attachment')
+    .filter({ has: page.getByRole('heading', { name: content.title, exact: true }) });
+  const grant = attachment.getByRole('switch', {
+    name: `${content.title} 공유 변수 변경 허용`,
+    exact: true,
+  });
+  await expect(grant).not.toBeChecked();
+  await grant.check();
+  let profileSave = page.waitForResponse(
+    (response) =>
+      response.url().endsWith(`/api/chats/${chat.id}/profile`) &&
+      response.request().method() === 'PUT'
+  );
+  await settings.getByRole('button', { name: '채팅 설정 저장', exact: true }).click();
+  expect((await profileSave).ok()).toBe(true);
+  await settings.getByRole('button', { name: '채팅 설정 닫기', exact: true }).click();
+
+  await iframe.getByRole('textbox', { name: '준비 메모', exact: true }).fill('run with grant');
+  await iframe.getByRole('button', { name: '메모 반영', exact: true }).click();
+  await expect(iframe.getByRole('textbox', { name: '준비 메모', exact: true })).toHaveValue('1');
+  await expect.poll(async () => (await variables()).values).toEqual({ phase: '1' });
+  expect((await behavior()).instances[0]).toMatchObject({ stateRevision: 1, state: { note: '1' } });
+  const variablePanel = page.locator('.chat-variables');
+  await variablePanel.getByText('공유 변수', { exact: true }).click();
+  await expect(variablePanel.getByLabel('공유 변수 재정의 · JSON', { exact: true })).toHaveValue(
+    JSON.stringify({ phase: '1' }, null, 2)
+  );
+
+  await openChatSettings(page);
+  await selectChatSettingsSection(page, '봇·페르소나·모듈');
+  await expect(grant).toBeChecked();
+  await grant.uncheck();
+  profileSave = page.waitForResponse(
+    (response) =>
+      response.url().endsWith(`/api/chats/${chat.id}/profile`) &&
+      response.request().method() === 'PUT'
+  );
+  await settings.getByRole('button', { name: '채팅 설정 저장', exact: true }).click();
+  expect((await profileSave).ok()).toBe(true);
+  await settings.getByRole('button', { name: '채팅 설정 닫기', exact: true }).click();
+
+  await iframe.getByRole('textbox', { name: '준비 메모', exact: true }).fill('run after revoke');
+  await iframe.getByRole('button', { name: '메모 반영', exact: true }).click();
+  await expect(custom.getByRole('alert')).toBeVisible();
+  expect(await variables()).toMatchObject({ revision: 1, values: { phase: '1' } });
+  expect((await behavior()).instances[0]).toMatchObject({ stateRevision: 1, state: { note: '1' } });
+  const savedChat = await (await request.get(`/api/chats/${chat.id}`)).json();
+  expect(savedChat.profile.extensionGrants).toBeUndefined();
+});
 for (const width of [MOBILE_WIDTH, DESKTOP_WIDTH])
   test(`PANELUI01 current-state selection, form draft and fallback at ${width}px`, async ({
     page,

@@ -144,7 +144,14 @@ describe('explicit behavior definition upgrades', () => {
       const destination = database();
       expect(destination.product.import(archive)).toMatchObject({ restored: true });
       expect(destination.behavior.storedState(scope)).toEqual(store.behavior.storedState(scope));
-      for (const tamper of ['previousScope', 'state', 'mode', 'extra', 'programHash']) {
+      for (const tamper of [
+        'previousScope',
+        'state',
+        'mode',
+        'extra',
+        'programHash',
+        'variables',
+      ]) {
         const forged = structuredClone(archive);
         const row = forged.tables.package_behavior_journal.find(
           (r) => JSON.parse(String(r.result)).provenance === 'explicit-upgrade'
@@ -157,6 +164,15 @@ describe('explicit behavior definition upgrades', () => {
         if (tamper === 'extra') payload.actionId = 'unrelated';
         if (tamper === 'programHash')
           payload.program = { ...(payload.program ?? {}), programHash: '0'.repeat(64) };
+        if (tamper === 'variables')
+          payload.program = {
+            ...(payload.program ?? {}),
+            variables: {
+              beforeRevision: 0,
+              beforeHash: behaviorPayloadHash({ revision: 0, values: {} }),
+              changes: {},
+            },
+          };
         row.payload = JSON.stringify(payload);
         row.payload_hash = behaviorPayloadHash(payload);
         row.result = JSON.stringify(result);

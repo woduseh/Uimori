@@ -1,5 +1,16 @@
 import { randomUUID } from 'node:crypto';
 import { chatVariableProfile } from './chat-variable-context.js';
+import {
+  adoptExtensionVariableMutation,
+  assertExtensionVariableWriteAccess,
+  runtimeWithExtensionVariables,
+  profileWithExtensionVariables,
+} from './extension-variables.js';
+import {
+  resolveTemplateVariableContext,
+  type TemplateVariableContext,
+} from '../core/template-variables.js';
+import { executePackageExtensionProgram } from './package-extension-execution.js';
 import { HttpError } from './request-validation.js';
 import {
   executionContext,
@@ -32,7 +43,6 @@ import {
 } from './package-behavior-store.js';
 import type { ResolvedExtensionProgram } from '../core/extension-program.js';
 import { executeExtensionProgram } from './extension-runtime.js';
-import { createPackageExtensionHost } from './extension-materials.js';
 import { extensionOperationViews } from './extension-operations.js';
 import type { Store, Run, Source } from './store.js';
 import { captureLogicalHistory } from './prompt-snapshot.js';
@@ -42,6 +52,7 @@ import {
   completedRunBehaviorView,
   copyForkRunBehaviors,
   isRecoverableBehaviorExecutionError,
+  commitRunBehaviorVariables,
   runBehaviorProgress,
   saveProgress,
 } from './package-behavior-run.js';
@@ -659,8 +670,36 @@ export function performBehaviorAction(
         priorAction?.program ?? prepared?.result
       );
       const action = d.pkg.behavior!.actions.find((action) => action.id === command.actionId)!;
+      let afterRuntime = runtime;
+      let variableContext: TemplateVariableContext | undefined;
+      const mutation = prepared?.result.variables;
+      if (!priorAction && mutation) {
+        const profile = chatVariableProfile(store, chatId, branch.id);
+        if (Object.keys(mutation.changes).length)
+          assertExtensionVariableWriteAccess(store, profile, d.ref, action.program!);
+        const state = adoptExtensionVariableMutation(
+          store,
+          chatId,
+          branch.id,
+          command.expectedSourceHash,
+          `extension-user:${behaviorPayloadHash({ instanceId, key: command.idempotencyKey })}`,
+          mutation
+        );
+        afterRuntime = runtimeWithExtensionVariables(runtime, profile, state);
+        if (Object.keys(mutation.changes).length)
+          variableContext = resolveTemplateVariableContext(
+            profileWithExtensionVariables(profile, state)
+          );
+      }
       if (receipt.stateRevision > beforeRevision && action.nextRequest !== undefined)
-        reservePackageRequestInTransaction(store, action, receipt, command.input, runtime);
+        reservePackageRequestInTransaction(
+          store,
+          action,
+          receipt,
+          command.input,
+          afterRuntime,
+          variableContext
+        );
     }
     const afterState = store.behavior.read(d.scope, d.pkg.behavior!);
     if (afterState.stateRevision !== beforeRevision) {
@@ -714,11 +753,6 @@ export function prepareUserBehaviorProgram(
       input: { state: state.state, input: command.input },
       runtime,
       guard,
-      host: createPackageExtensionHost(action.program, profile, d.ref, () => {
-        const current = actionContext(store, chatId, branch.id, instanceId, command, false, panel);
-        if (actionGuard(store, current.d) !== guard)
-          throw new HttpError(409, 'BEHAVIOR_PROGRAM_CONTEXT_CHANGED');
-      }),
     };
   });
 }
@@ -771,9 +805,30 @@ export async function performBehaviorActionWithProgram(
     return pending.promise;
   }
   const promise = (async () => {
-    const result = await executeExtensionProgram(preparation.program, preparation.input, signal, {
-      host: preparation.host,
-    });
+    const ref = preparation.profile.packageAttachments!.find(
+      (ref) => packageInstanceId(ref) === instanceId
+    )!;
+    const result = await executePackageExtensionProgram(
+      preparation.program,
+      preparation.input,
+      signal,
+      {
+        profile: preparation.profile,
+        attachment: ref,
+        assertCurrent: () =>
+          assertUserBehaviorProgramCurrent(
+            store,
+            chatId,
+            preparation.branchId,
+            instanceId,
+            command,
+            preparation.guard,
+            panel
+          ),
+        assertVariableWriteAccess: () =>
+          assertExtensionVariableWriteAccess(store, preparation.profile, ref, preparation.program),
+      }
+    );
     if (signal?.aborted) throw new HttpError(409, 'EXTENSION_CANCELLED');
     return performBehaviorAction(
       store,
@@ -847,6 +902,7 @@ export function completePackageOutputs(store: Store, run: Run, source: Source) {
       )
     )
       throw new HttpError(409, 'BEHAVIOR_SOURCE_DEPENDENCY_CHANGED');
+    commitRunBehaviorVariables(store, run, source);
     for (const { d } of defs)
       commitRunBehaviorInstance(store, run, d.scope.attachmentInstanceId, source.hash);
     for (const { d, before } of defs) if (d.pkg.behavior!.mode !== 'annotation') parse(d, before);
