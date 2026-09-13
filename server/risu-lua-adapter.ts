@@ -3,7 +3,11 @@ import {
   EXTENSION_PROGRAM_MAX_SOURCE_CHARS,
   type ExtensionProgram,
 } from '../core/extension-program.js';
-import type { BehaviorAction, BehaviorActionTrigger } from '../core/package-behavior.js';
+import {
+  BEHAVIOR_EDIT_INPUT_SCHEMA,
+  type BehaviorAction,
+  type BehaviorActionTrigger,
+} from '../core/package-behavior.js';
 import {
   validatePromptExpression,
   type PromptExpression,
@@ -290,7 +294,8 @@ export function buildRisuLuaProgram(source: string, event: RisuLuaEvent): Extens
   const dispatcher = event.startsWith('edit')
     ? `local value = __input.value
 for _, callback in ipairs(__callbacks["${event}"]) do value = callback(__id, value, __input.meta) end
-return {state=__state, result=value == nil and __null or value}`
+if value == nil then value = __input.value end
+return {state=__state, result=value}`
     : `local callback = ${callback}
 if callback ~= nil then
   if type(callback) ~= "function" then error("RISU_LUA_CALLBACK_INVALID") end
@@ -434,6 +439,7 @@ export function adaptRisuLuaTriggers(
   if (!Array.isArray(triggers)) return { actions, findings, sources };
   const mapping: Partial<Record<RisuLuaEvent, BehaviorActionTrigger>> = {
     input: 'before-turn',
+    editInput: 'before-turn',
     start: 'before-turn',
     output: 'after-turn',
     onButtonClick: 'user',
@@ -487,7 +493,7 @@ export function adaptRisuLuaTriggers(
         );
       }
       for (const event of RISU_LUA_EVENTS) {
-        if (event.startsWith('edit')) {
+        if (event.startsWith('edit') && event !== 'editInput') {
           report(
             'RISU_LUA_PHASE_UNSUPPORTED',
             `${event} 변환은 원문이나 표시 결과를 안전하게 반영할 공통 실행 단계가 필요해 아직 연결하지 않았어요.`,
@@ -504,7 +510,15 @@ export function adaptRisuLuaTriggers(
           );
           continue;
         }
-        if (event !== 'onButtonClick' && !conditionPlan) continue;
+        // Risu runs listenEdit callbacks from the edit path itself, which ignores trigger conditions.
+        const edit = event === 'editInput';
+        if (edit)
+          report(
+            'RISU_LUA_EDIT_INPUT_PROJECTION',
+            'editInput은 저장한 요청 원문을 바꾸지 않고 이번 전송 사본에만 적용해요. 원문과 전송문은 Reader에서 비교할 수 있어요. Risu와 같이 트리거 조건은 이 콜백에 적용하지 않고, 대화 읽기에는 이번 입력을 덧붙이지 않아요.',
+            event
+          );
+        if (!edit && event !== 'onButtonClick' && !conditionPlan) continue;
         try {
           const button = event === 'onButtonClick';
           actions.push({
@@ -512,11 +526,14 @@ export function adaptRisuLuaTriggers(
             label: `Lua ${event}`,
             inputSchema: button
               ? { type: 'string', maxLength: 8000 }
-              : { type: 'record', properties: {} },
+              : edit
+                ? structuredClone(BEHAVIOR_EDIT_INPUT_SCHEMA)
+                : { type: 'record', properties: {} },
             triggers: [nativeTrigger],
             ...(event === 'input' ? { hook: 'input' as const } : {}),
-            ...(button ? {} : { automaticInput: {} }),
-            ...(!button && conditionPlan?.when ? { when: conditionPlan.when } : {}),
+            ...(edit ? { hook: 'edit-input' as const } : {}),
+            ...(button || edit ? {} : { automaticInput: {} }),
+            ...(!button && !edit && conditionPlan?.when ? { when: conditionPlan.when } : {}),
             effects: [],
             program: buildRisuLuaProgram(effect.code, event),
           });

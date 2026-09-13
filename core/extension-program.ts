@@ -4,6 +4,8 @@ import { inspectRuntimeValue, PromptBudget } from './prompt-values.js';
 export const EXTENSION_PROGRAM_API = 'uimori-state-action-v1' as const;
 export const EXTENSION_PROGRAM_MAX_SOURCE_CHARS = 512 * 1024;
 export const EXTENSION_PROGRAM_MAX_RESULT_CHARS = 8_000;
+/** Edit hooks return one bounded text back to the host instead of a small projection. */
+export const EXTENSION_PROGRAM_MAX_EDIT_RESULT_CHARS = 128 * 1024;
 /** JSON character cap; the guest runtime separately enforces a stricter 128 KiB UTF-8 cap. */
 export const EXTENSION_PROGRAM_MAX_VALUE_CHARS = 128 * 1024;
 export const EXTENSION_CAPABILITIES = [
@@ -122,7 +124,10 @@ export function validateExtensionProgram(value: unknown): ExtensionProgram {
 }
 
 /** Validates guest output as bounded plain JSON. State-schema validation remains host-owned. */
-export function validateExtensionProgramResult(value: unknown): ExtensionProgramResult {
+export function validateExtensionProgramResult(
+  value: unknown,
+  maxResultChars = EXTENSION_PROGRAM_MAX_RESULT_CHARS
+): ExtensionProgramResult {
   const output = exactRecord(value, ['state', 'result']);
   const budget = new PromptBudget(
     {
@@ -139,7 +144,7 @@ export function validateExtensionProgramResult(value: unknown): ExtensionProgram
       output.result,
       new PromptBudget(
         {
-          maxValueChars: EXTENSION_PROGRAM_MAX_RESULT_CHARS,
+          maxValueChars: maxResultChars,
           maxValueNodes: 30_000,
           maxCollectionLength: 2_000,
           maxSteps: 100_000,
@@ -150,7 +155,6 @@ export function validateExtensionProgramResult(value: unknown): ExtensionProgram
   } catch {
     fail('BEHAVIOR_PROGRAM_RESULT_VALUE');
   }
-  if (JSON.stringify(output.result).length > EXTENSION_PROGRAM_MAX_RESULT_CHARS)
-    fail('BEHAVIOR_RESULT_SIZE');
+  if (JSON.stringify(output.result).length > maxResultChars) fail('BEHAVIOR_RESULT_SIZE');
   return structuredClone(output) as unknown as ExtensionProgramResult;
 }

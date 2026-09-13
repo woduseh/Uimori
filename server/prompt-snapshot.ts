@@ -17,6 +17,7 @@ import { compiledPackages, type ResolvedPackage } from '../core/package-context.
 import { executionContext } from '../core/execution-context.js';
 import { projectedLogicalHistory } from '../core/context-projection.js';
 import { projectPromptInputTransforms } from './prompt-transforms.js';
+import { projectExtensionRequestEdit } from './extension-request-edit.js';
 
 /** Pair each exact source version with its actual user request; never infer roles from prose. */
 export function captureLogicalHistory(store: Store, snapshot: RunSnapshot): PromptHistoryMessage[] {
@@ -130,7 +131,12 @@ function contextFromPackages(
     snapshot,
     [
       ...sourceLogicalHistoryForRequest(snapshot, logical),
-      { id: 'current-input', role: 'user' as const, text: snapshot.request, current: true },
+      {
+        id: 'current-input',
+        role: 'user' as const,
+        text: projectExtensionRequestEdit(snapshot).text,
+        current: true,
+      },
     ],
     program,
     values

@@ -6,6 +6,9 @@ import {
   BehaviorEvaluationError,
   behaviorActionAllowed,
   behaviorActionTriggers,
+  behaviorEditResultText,
+  behaviorHookBeforeRequest,
+  behaviorHookOrder,
   evaluateBehaviorAction,
   validatePackageBehavior,
   validateBehaviorValue,
@@ -25,10 +28,12 @@ import {
 import type { PackageAttachment } from '../core/content-package.js';
 import type { RuntimeValue } from '../core/prompt-program.js';
 import {
+  EXTENSION_PROGRAM_MAX_EDIT_RESULT_CHARS,
   ExtensionProgramError,
   type ExtensionProgramReceipt,
   type ResolvedExtensionProgram,
 } from '../core/extension-program.js';
+import { buildExtensionRequestEdit, extensionEditHookInput } from './extension-request-edit.js';
 import type { ExtensionModelBinding } from '../core/extension-model.js';
 import { createExtensionProgramReceipt } from './extension-program-receipt.js';
 import type { AfterResponseProgress } from '../core/after-response.js';
@@ -148,8 +153,16 @@ function automaticActions(snapshot: RunSnapshot) {
         .filter((action) => behaviorActionTriggers(action).includes('before-turn'))
         .map((action) => ({ ...d, action }))
     )
-    .sort((a, b) => Number(b.action.hook === 'input') - Number(a.action.hook === 'input'));
+    .sort((a, b) => behaviorHookOrder(a.action) - behaviorHookOrder(b.action));
 }
+/** Host-owned edit phases receive the running text; other automatic actions keep their declaration. */
+function automaticInput(action: BehaviorAction, editedRequest: string): RuntimeValue {
+  return action.hook === 'edit-input'
+    ? extensionEditHookInput(editedRequest)
+    : (action.automaticInput ?? {});
+}
+const editResultLimit = (action: BehaviorAction) =>
+  action.hook === 'edit-input' ? { maxResultChars: EXTENSION_PROGRAM_MAX_EDIT_RESULT_CHARS } : {};
 export function runBehaviorProgress(store: Store, runId: string): RunBehaviorProgress | undefined {
   const row = store.db
     .prepare('SELECT body FROM package_behavior_runs WHERE run_id=?')
@@ -288,7 +301,7 @@ function actionResolution(
         action.program!,
         prior.program.conversation,
         undefined,
-        action.hook !== 'input'
+        !behaviorHookBeforeRequest(action)
       );
     return { entry: prior };
   }
@@ -315,7 +328,7 @@ function actionResolution(
         action.program!,
         cached.program.conversation,
         undefined,
-        action.hook !== 'input'
+        !behaviorHookBeforeRequest(action)
       );
     const replay = { ...structuredClone(cached), trigger };
     applyEntry(progress, replay);
@@ -351,6 +364,7 @@ function finishActionResolution(
       program = createExtensionProgramReceipt(resolvedProgram!, {
         programHash: hash(action.program),
         stateSchema: behavior.stateSchema,
+        ...editResultLimit(action),
       });
     } catch (error) {
       if (
@@ -491,7 +505,7 @@ function prepareRunBehaviorInTransaction(
   });
   // An explicit input submission owns its callback even without a conversation-read grant.
   // Keep entropy tied to source/state so changing the request cannot reroll existing draws.
-  const hasInputHooks = automatic.some((d) => d.action.hook === 'input');
+  const hasInputHooks = automatic.some((d) => behaviorHookBeforeRequest(d.action));
   const opportunityId =
     hasInputHooks || (readsConversation && snapshot.extensionConversation)
       ? hash({
@@ -689,24 +703,43 @@ export function preparedBehaviorSnapshot(
     states[states.findIndex((s) => s.instanceId === entry.instanceId)] = structuredClone(
       entry.after
     );
-  const automaticResults = entries.map(({ instanceId, actionId, result }) => ({
-    instanceId,
-    actionId,
-    result,
-  }));
+  const hooks = new Map(
+    definitions(base).flatMap((d) =>
+      d.behavior.actions.map(
+        (action) =>
+          [entryKey({ instanceId: d.instanceId, actionId: action.id }), action.hook] as const
+      )
+    )
+  );
+  const edited = entries.filter((entry) => hooks.get(entryKey(entry)) === 'edit-input');
+  // The reserved request stays the stored original; only its transmitted copy carries the edit.
+  const extensionRequestEdit = buildExtensionRequestEdit(
+    base.request,
+    edited.map((entry) => ({
+      id: entryKey(entry),
+      text: behaviorEditResultText(entry.result),
+    }))
+  );
+  const automaticResults = entries
+    .filter((entry) => !edited.includes(entry))
+    .map(({ instanceId, actionId, result }) => ({ instanceId, actionId, result }));
   if (
     isDeepStrictEqual(states, base.packageStates) &&
     isDeepStrictEqual(automaticResults, base.behaviorExecution.automaticResults) &&
-    isDeepStrictEqual(variableState, variableStateFromProfile(base.profile))
+    isDeepStrictEqual(variableState, variableStateFromProfile(base.profile)) &&
+    isDeepStrictEqual(extensionRequestEdit, base.extensionRequestEdit)
   )
     return base;
-  return {
+  const projected: RunSnapshot = {
     ...base,
     packageStates: states,
     profile: profileWithExtensionVariables(base.profile, variableState),
     behaviorExecution: { ...base.behaviorExecution, automaticResults },
     promptCompilation: undefined,
   };
+  if (extensionRequestEdit) projected.extensionRequestEdit = extensionRequestEdit;
+  else delete projected.extensionRequestEdit;
+  return projected;
 }
 const automaticWork = new WeakMap<
   Store,
@@ -774,8 +807,13 @@ export async function prepareAutomaticRunBehavior(
     onProgress?.();
     try {
       const actions = automaticActions(reserved);
+      // Risu chains every edit callback over the running text in declaration order.
+      let editedRequest = reserved.request;
       for (const d of actions) {
-        const input = d.action.automaticInput ?? {};
+        const chain = (entry: RunBehaviorEntry) => {
+          if (d.action.hook === 'edit-input') editedRequest = behaviorEditResultText(entry.result);
+        };
+        const input = automaticInput(d.action, editedRequest);
         const step = store.transaction(() => {
           const current = preparationProgress(store, runId);
           if (current.preparation.status !== 'running') return null;
@@ -801,12 +839,20 @@ export async function prepareAutomaticRunBehavior(
             'before-turn'
           );
           if (resolution.entry || !d.action.program) {
-            finishActionResolution(store, local, d.action, input, 'before-turn', resolution);
-            return { skipped: true as const };
+            const entry = finishActionResolution(
+              store,
+              local,
+              d.action,
+              input,
+              'before-turn',
+              resolution
+            );
+            return { skipped: true as const, entry };
           }
           return { program: d.action.program, state: resolution.before.state };
         });
         if (!step) return;
+        if ('entry' in step) chain(step.entry!);
         if ('program' in step) {
           const usesModel = step.program!.capabilities?.includes('model.generate') === true;
           const binding = {
@@ -826,6 +872,7 @@ export async function prepareAutomaticRunBehavior(
             controller.signal,
             {
               waitForSlot: true,
+              ...editResultLimit(d.action),
               profile: progressSnapshot(reserved, local).profile,
               attachment: d.ref,
               conversation: packageConversationExecution(
@@ -834,7 +881,7 @@ export async function prepareAutomaticRunBehavior(
                 reserved.profile,
                 d.ref,
                 step.program!,
-                d.action.hook === 'input' ? {} : { request: reserved.request }
+                behaviorHookBeforeRequest(d.action) ? {} : { request: reserved.request }
               ),
               assertCurrent,
               assertVariableWriteAccess: () =>
@@ -854,10 +901,12 @@ export async function prepareAutomaticRunBehavior(
             validateOwner(store, store.run(runId));
             if (output.variables && Object.keys(output.variables.changes).length)
               assertExtensionVariableWriteAccess(store, reserved.profile, d.ref, step.program!);
-            resolveAction(store, reserved, local, d.ref, d.action, input, 'before-turn', {
-              ...output,
-              programHash: hash(step.program),
-            });
+            chain(
+              resolveAction(store, reserved, local, d.ref, d.action, input, 'before-turn', {
+                ...output,
+                programHash: hash(step.program),
+              })
+            );
             return true;
           });
           if (!adopted) return;
@@ -1186,7 +1235,7 @@ export function commitRunBehaviorVariables(store: Store, run: Run, source: Sourc
       action!.program!,
       entry.program.conversation,
       undefined,
-      action!.hook !== 'input'
+      !behaviorHookBeforeRequest(action!)
     );
   }
   const entries = progress!.entries.filter((entry) => entry.program?.variables);

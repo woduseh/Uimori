@@ -21,6 +21,7 @@ import {
   templateReadsVariables,
 } from '../core/template-variables.js';
 import { applyTextTransformBatch } from './text-transforms.js';
+import { projectExtensionRequestEdit } from './extension-request-edit.js';
 
 const hash = (value: string) => createHash('sha256').update(value).digest('hex');
 const digest = (value: unknown) => hash(JSON.stringify(value));
@@ -86,7 +87,12 @@ function rawMessages(snapshot: RunSnapshot): PromptHistoryMessage[] {
         sourceRevision: entry.revision,
         ...(entry.contentHash ? { sourceHash: entry.contentHash } : {}),
       }))),
-    { id: 'current-input', role: 'user', text: snapshot.request, current: true },
+    {
+      id: 'current-input',
+      role: 'user',
+      text: projectExtensionRequestEdit(snapshot).text,
+      current: true,
+    },
   ];
 }
 function inputMessages(snapshot: RunSnapshot) {
@@ -315,18 +321,20 @@ export function projectPromptInputTransforms(
         : [],
   };
 }
+/** The transmitted copy of the current request: host-owned input edits, then the input stage. */
 export function currentPromptInputTransform(
   snapshot: RunSnapshot
 ): TextTransformResult | undefined {
+  const edit = projectExtensionRequestEdit(snapshot);
   const receipt = snapshot.promptInputTransforms;
-  if (!receipt) return undefined;
+  if (!receipt) return edit.changed ? edit : undefined;
   validateReceiptShape(receipt);
   const entry = receipt.entries.at(-1);
-  if (!entry || entry.inputHash !== hash(snapshot.request) || entry.role !== 'user') reject();
+  if (!entry || entry.inputHash !== hash(edit.text) || entry.role !== 'user') reject();
   return {
-    text: entry.text ?? snapshot.request,
-    changed: entry.text !== undefined,
-    applied: entry.applied,
+    text: entry.text ?? edit.text,
+    changed: edit.changed || entry.text !== undefined,
+    applied: [...edit.applied, ...entry.applied],
   };
 }
 export async function applyPromptDisplayTransforms(

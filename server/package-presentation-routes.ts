@@ -4,6 +4,7 @@ import type { Store } from './store.js';
 import { successfulTranslation, validateTranslationArtifact } from './source-editing.js';
 import { buildPackagePresentation } from './package-presentation.js';
 import { hasSourceSegmentBoundaries } from '../core/source-segments.js';
+import { preparedBehaviorSnapshot } from './package-behavior-run.js';
 
 export function packagePresentationRoutes(app: FastifyInstance, store: Store) {
   app.get<{ Params: { id: string; sourceId: string } }>(
@@ -12,7 +13,11 @@ export function packagePresentationRoutes(app: FastifyInstance, store: Store) {
       store.chat(request.params.id);
       const source = store.source(request.params.sourceId);
       if (source.chatId !== request.params.id) throw new HttpError(404, 'Source not found');
-      const snapshot = structuredClone(store.run(source.runId).snapshot);
+      // Read the same execution projection the model input used, so the reader compares the
+      // stored request with the text actually sent instead of the reserved copy.
+      const snapshot = structuredClone(
+        preparedBehaviorSnapshot(store, source.runId, store.run(source.runId).snapshot)
+      );
       if (snapshot.chatId !== source.chatId) throw new HttpError(409, 'Source run mismatch');
       const job = successfulTranslation(store, source);
       let translation: { text: string; sourceRevision: string; sourceHash: string } | undefined;

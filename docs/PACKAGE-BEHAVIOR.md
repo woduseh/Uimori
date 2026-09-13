@@ -49,7 +49,7 @@
 
 상태 schema는 number(min/max/integer), string(maxLength), boolean, enum(values), list(items/maxItems), record(properties)를 지원해요. 루트는 record예요. 누락된 필드와 알 수 없는 필드는 모두 오류예요. 상태 JSON은 250,000자 이내이며 개별 자료·실행기의 상한도 적용돼요.
 
-액션은 `id`, 선택적 `label/description`, `inputSchema`, 선택적 `triggers/automaticInput/when/draws/result`, `effects`로 구성해요. 각 effect의 `path`는 상태 schema에 선언된 경로, `value`는 계산식이에요. **한 행동의 효과는 모두 그 행동 직전의 같은 상태**를 읽어요. 완성된 다음 상태 전체를 검증하고 `result`를 계산해요. `result`에서는 `nextState`도 읽을 수 있어요. 서로 다른 행동은 순서대로 실행하며 앞선 행동의 결과를 읽을 수 있어요. 겹치는 쓰기 경로는 거부해요. 목록은 `append/filter/map/setAt` 등으로 새 값을 만들고 전체 필드에 저장해요.
+액션은 `id`, 선택적 `label/description`, `inputSchema`, 선택적 `triggers/hook/automaticInput/when/draws/result`, `effects`로 구성해요. `hook`은 `before-turn` 안의 Host 소유 단계이며 [확장 코드](EXTENSION-PROGRAMS.md#생성-전-자동-준비)가 실행 시점과 입력을 소유해요. 각 effect의 `path`는 상태 schema에 선언된 경로, `value`는 계산식이에요. **한 행동의 효과는 모두 그 행동 직전의 같은 상태**를 읽어요. 완성된 다음 상태 전체를 검증하고 `result`를 계산해요. `result`에서는 `nextState`도 읽을 수 있어요. 서로 다른 행동은 순서대로 실행하며 앞선 행동의 결과를 읽을 수 있어요. 겹치는 쓰기 경로는 거부해요. 목록은 `append/filter/map/setAt` 등으로 새 값을 만들고 전체 필드에 저장해요.
 
 `draws`는 정수 범위 추첨, 값 목록 선택, 목록 섞기를 지원해요. seed와 실제 결과를 journal에 함께 기록해요. 액션 조건과 효과는 DB·네트워크·시각·난수를 직접 읽지 못해요. 호스트가 고정한 문맥과 추첨 결과만 사용해요. 한 행동에서 식 여러 개가 실행 한도를 공유해요.
 
@@ -77,7 +77,7 @@
 | `before-turn` | Run을 만들 때 장착 순서·행동 선언 순서대로 실행. `automaticInput` 또는 `{}` 사용 | 턴 경과, 고정 확률 조우, 날씨·일정 일괄 결정 |
 | `model` | 메인 모델이 해당 행동의 Tool을 요청. schema로 검증한 입력만 사용 | 문맥에 따른 설득·탐색·전투 판정 |
 
-세 경로는 `evaluateBehaviorAction()`을 사용해요. 함수 본문은 모델에 보내지 않아요. 조건·효과·결과가 하나의 실행 예산을 공유하고, 결과 JSON은 8,000자 이내예요. `result`를 생략하면 `{ "applied": true, "draws": ... }`를 반환해요. `effects: []`인 순수 계산도 사용할 수 있고, 사용자 호출의 결과는 **최근 행동 결과**에 표시돼요.
+세 경로는 `evaluateBehaviorAction()`을 사용해요. 함수 본문은 모델에 보내지 않아요. 조건·효과·결과가 하나의 실행 예산을 공유하고, 결과 JSON은 8,000자 이내예요. 전송 사본을 바꾸는 입력 편집 단계만 한 편집 텍스트를 위해 더 큰 결과 한도를 사용하고 그 결과를 모델 문맥에 넣지 않아요. `result`를 생략하면 `{ "applied": true, "draws": ... }`를 반환해요. `effects: []`인 순수 계산도 사용할 수 있고, 사용자 호출의 결과는 **최근 행동 결과**에 표시돼요.
 
 메인에 참조 가능한 장착 인스턴스에서 `model`로 허용한 행동만 각각 하나의 Tool이 돼요. 보조 모델에는 노출하지 않아요. 비활성 페르소나는 자동·모델 실행에서 제외해요. 모델 입력의 루트 schema는 `record`예요. 주사위·계산·효과를 한 행동으로 묶으면 모델이 각 연산을 따로 요청할 필요가 없어요. 모델에 전달하는 값은 제작자가 선언한 짧은 결과로 정할 수 있어요.
 

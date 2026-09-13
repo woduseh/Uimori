@@ -5,7 +5,12 @@ import { createExtensionVariableSession } from '../server/extension-variables.js
 import { fixtureBotInput } from './fixtures/chat.js';
 import { executeExtensionProgram, type ExtensionHostHandler } from '../server/extension-runtime.js';
 import { adaptRisuLuaTriggers, buildRisuLuaProgram } from '../server/risu-lua-adapter.js';
-import { behaviorActionAllowed, validatePackageBehavior } from '../core/package-behavior.js';
+import {
+  BEHAVIOR_EDIT_INPUT_SCHEMA,
+  behaviorActionAllowed,
+  validatePackageBehavior,
+} from '../core/package-behavior.js';
+import { extensionEditHookInput } from '../server/extension-request-edit.js';
 import type { RuntimeValue } from '../core/prompt-values.js';
 
 const trigger = (code: string, conditions: unknown[] = []) => ({
@@ -23,13 +28,14 @@ describe('pure Risu Lua adaptation', () => {
       ['risu-lua-0-output', ['after-turn'], undefined],
       ['risu-lua-0-start', ['before-turn'], undefined],
       ['risu-lua-0-onButtonClick', ['user'], undefined],
+      ['risu-lua-0-editInput', ['before-turn'], 'edit-input'],
     ]);
     expect(converted.sources).toEqual([{ triggerIndex: 0, effectIndex: 0, source }]);
     expect(
       converted.findings
         .filter((finding) => finding.code === 'RISU_LUA_PHASE_UNSUPPORTED')
         .map((finding) => finding.event)
-    ).toEqual(['editRequest', 'editDisplay', 'editInput', 'editOutput']);
+    ).toEqual(['editRequest', 'editDisplay', 'editOutput']);
     for (const action of converted.actions)
       expect(validateExtensionProgram(action.program).language).toBe('lua');
   });
@@ -40,7 +46,11 @@ describe('pure Risu Lua adaptation', () => {
     const before = structuredClone(input);
     const converted = adaptRisuLuaTriggers(input);
     expect(input).toEqual(before);
-    expect(converted.actions.map((action) => action.triggers)).toEqual([['user']]);
+    // Risu runs edit callbacks from the edit path, which never evaluates trigger conditions.
+    expect(converted.actions.map((action) => [action.id, action.hook])).toEqual([
+      ['risu-lua-0-onButtonClick', undefined],
+      ['risu-lua-0-editInput', 'edit-input'],
+    ]);
     expect(
       converted.findings.some((finding) => finding.code === 'RISU_LUA_CONDITIONS_UNSUPPORTED')
     ).toBe(true);
@@ -87,6 +97,53 @@ describe('pure Risu Lua adaptation', () => {
     const input = converted.actions.find((action) => action.hook === 'input')!;
     expect(input.automaticInput).toEqual({});
     expect(behaviorActionAllowed(input, {}, {}, {})).toBe(false);
+  });
+
+  it('accepts the host-owned edit input without a declared value or condition', () => {
+    const converted = adaptRisuLuaTriggers([
+      trigger('listenEdit("editInput", function(id, value) return value end)', [
+        { type: 'value', var: 'ready', operator: '=', value: 'ready' },
+      ]),
+    ]);
+    const edit = converted.actions.find((action) => action.hook === 'edit-input')!;
+    expect(edit.inputSchema).toEqual(BEHAVIOR_EDIT_INPUT_SCHEMA);
+    expect(edit.automaticInput).toBeUndefined();
+    expect(edit.when).toBeUndefined();
+    expect(() =>
+      validatePackageBehavior({
+        revision: 1,
+        schemaVersion: 1,
+        stateSchema: { type: 'record', properties: {} },
+        initialState: {},
+        actions: converted.actions,
+        outputParsers: [],
+      })
+    ).not.toThrow();
+    expect(behaviorActionAllowed(edit, {}, extensionEditHookInput('요청'), {})).toBe(true);
+    expect(() => behaviorActionAllowed(edit, {}, {}, {})).toThrow('BEHAVIOR_RECORD_FIELDS');
+    expect(
+      converted.findings.some((finding) => finding.code === 'RISU_LUA_EDIT_INPUT_PROJECTION')
+    ).toBe(true);
+  });
+
+  it('runs edit callbacks over the submitted text and keeps the original for a nil result', async () => {
+    const program = buildRisuLuaProgram(
+      `listenEdit("editInput", function(id, value, meta) return value .. "[" .. meta.index .. "]" end)`,
+      'editInput'
+    );
+    const edited = await executeExtensionProgram(program, {
+      state: {},
+      input: extensionEditHookInput('안녕'),
+    });
+    expect(edited.result).toBe('안녕[-1]');
+    const untouched = await executeExtensionProgram(
+      buildRisuLuaProgram(
+        'listenEdit("editInput", function(id, value) return nil end)',
+        'editInput'
+      ),
+      { state: {}, input: extensionEditHookInput('안녕') }
+    );
+    expect(untouched.result).toBe('안녕');
   });
 });
 
@@ -206,9 +263,11 @@ describe('Risu Lua automatic conditions', () => {
       const converted = adaptRisuLuaTriggers([
         trigger(source, [{ type: 'value', var: '1', operator: '=', value: '1' }, unsupported]),
       ]);
-      expect(converted.actions).toHaveLength(1);
-      expect(converted.actions[0].triggers).toEqual(['user']);
-      expect(converted.actions[0].when).toBeUndefined();
+      expect(converted.actions.map((action) => [action.id, action.hook])).toEqual([
+        ['risu-lua-0-onButtonClick', undefined],
+        ['risu-lua-0-editInput', 'edit-input'],
+      ]);
+      expect(converted.actions.every((action) => action.when === undefined)).toBe(true);
       expect(
         converted.findings.some((finding) => finding.code === 'RISU_LUA_CONDITIONS_UNSUPPORTED')
       ).toBe(true);
@@ -225,7 +284,10 @@ describe('Risu Lua automatic conditions', () => {
     const input = [trigger(source, conditions)],
       before = structuredClone(input);
     const converted = adaptRisuLuaTriggers(input);
-    expect(converted.actions.map((item) => item.triggers)).toEqual([['user']]);
+    expect(converted.actions.map((item) => [item.id, item.hook])).toEqual([
+      ['risu-lua-0-onButtonClick', undefined],
+      ['risu-lua-0-editInput', 'edit-input'],
+    ]);
     expect(input).toEqual(before);
     expect(
       converted.findings.some((finding) => finding.code === 'RISU_LUA_CONDITIONS_UNSUPPORTED')
