@@ -152,9 +152,9 @@ function start(store: Store, chatId: string): Run {
   expect(store.startRun(run.id)).toBe(true);
   return store.run(run.id);
 }
-function model(store: Store, run: Run) {
+async function model(store: Store, run: Run) {
   const binding = listBehaviorTools(run.snapshot)[0],
-    event = executeRunBehaviorTool(store, run.id, binding, {
+    event = await executeRunBehaviorTool(store, run.id, binding, {
       callId: randomUUID(),
       name: binding.tool.name,
       args: { purpose: 'persuasion' },
@@ -172,10 +172,10 @@ function complete(store: Store, run: Run) {
 }
 
 describe('v11 recorded automatic/model behavior archive', () => {
-  test('RBA01 automatic result projection is compact and committed journals roundtrip exactly', () => {
+  test('RBA01 automatic result projection is compact and committed journals roundtrip exactly', async () => {
     const f = fixture(),
       run = start(f.store, f.chat.id);
-    model(f.store, run);
+    await model(f.store, run);
     const source = complete(f.store, run),
       archive = f.store.product.export();
     expect(run.snapshot.behaviorExecution?.baseStates[0].state).toEqual({ count: 0 });
@@ -232,10 +232,10 @@ describe('v11 recorded automatic/model behavior archive', () => {
     );
   });
 
-  test('RBA02 cancelled staged outcomes restore without committing state and replay the same opportunity', () => {
+  test('RBA02 cancelled staged outcomes restore without committing state and replay the same opportunity', async () => {
     const f = fixture(),
       run = start(f.store, f.chat.id),
-      event = model(f.store, run),
+      event = await model(f.store, run),
       before = runBehaviorProgress(f.store, run.id)!;
     f.store.finishRun(run.id, 'cancelled', 'Synthetic cancellation');
     expect(behaviorDetail(f.store, f.chat.id).instances[0]).toMatchObject({
@@ -246,7 +246,7 @@ describe('v11 recorded automatic/model behavior archive', () => {
     target.product.import(f.store.product.export());
     expect(target.product.export().tables.package_behavior_journal).toEqual([]);
     const retry = start(target, f.chat.id),
-      replay = model(target, retry),
+      replay = await model(target, retry),
       after = runBehaviorProgress(target, retry.id)!;
     expect(replay.result).toEqual(event.result);
     expect(after.opportunityId).toBe(before.opportunityId);
@@ -254,14 +254,14 @@ describe('v11 recorded automatic/model behavior archive', () => {
     expect(target.product.export().tables.package_behavior_opportunities).toHaveLength(1);
   });
 
-  test('RBA03 candidate and fork preserve recorded outcomes with their respective opportunity ownership', () => {
+  test('RBA03 candidate and fork preserve recorded outcomes with their respective opportunity ownership', async () => {
     const f = fixture(),
       run = start(f.store, f.chat.id);
-    model(f.store, run);
+    await model(f.store, run);
     const source = complete(f.store, run);
     const candidate = f.store.candidate(run.id, randomUUID(), 'Synthetic candidate').run;
     expect(f.store.startRun(candidate.id)).toBe(true);
-    model(f.store, candidate);
+    await model(f.store, candidate);
     complete(f.store, candidate);
     expect(runBehaviorProgress(f.store, candidate.id)?.opportunityId).toBe(
       run.snapshot.behaviorExecution?.opportunityId
@@ -284,10 +284,10 @@ describe('v11 recorded automatic/model behavior archive', () => {
 
   test.each(['annotation', 'authoritative'] as const)(
     'RBA03b failed %s output restores only the states actually committed by the host',
-    (mode) => {
+    async (mode) => {
       const f = fixture(mode),
         run = start(f.store, f.chat.id);
-      model(f.store, run);
+      await model(f.store, run);
       const progress = runBehaviorProgress(f.store, run.id)!,
         source = f.store.completeRun(
           run.id,
@@ -313,10 +313,10 @@ describe('v11 recorded automatic/model behavior archive', () => {
     }
   );
 
-  test('RBA04 forged staged calculations and missing current tables reject atomically, restoring local entropy', () => {
+  test('RBA04 forged staged calculations and missing current tables reject atomically, restoring local entropy', async () => {
     const f = fixture(),
       run = start(f.store, f.chat.id);
-    model(f.store, run);
+    await model(f.store, run);
     complete(f.store, run);
     const base = f.store.product.export();
     const change = (row: any, update: (value: any) => void) => {
@@ -444,10 +444,10 @@ describe('v11 recorded automatic/model behavior archive', () => {
     }
   });
 
-  test('RBA05 entropy export is read-only and preserves the root proof through repeated forks', () => {
+  test('RBA05 entropy export is read-only and preserves the root proof through repeated forks', async () => {
     const f = fixture(),
       run = start(f.store, f.chat.id);
-    model(f.store, run);
+    await model(f.store, run);
     const source = complete(f.store, run),
       opportunityId = run.snapshot.behaviorExecution!.opportunityId,
       before = f.store.product.export(),
@@ -493,10 +493,10 @@ describe('v11 recorded automatic/model behavior archive', () => {
     expect(database().product.import(legacy)).toEqual({ restored: true, chats: 3 });
   });
 
-  test('RBA06 portable entropy restores under a different master with detached fork provenance and no redraw', () => {
+  test('RBA06 portable entropy restores under a different master with detached fork provenance and no redraw', async () => {
     const f = fixture(),
       run = start(f.store, f.chat.id);
-    model(f.store, run);
+    await model(f.store, run);
     const source = complete(f.store, run),
       fork = forkChat(f.store, f.chat.id, {
         fromRevision: source.id,
@@ -540,10 +540,10 @@ describe('v11 recorded automatic/model behavior archive', () => {
     });
   });
 
-  test('RBA07 malformed entropy proofs and changed receipts reject atomically', () => {
+  test('RBA07 malformed entropy proofs and changed receipts reject atomically', async () => {
     const f = fixture(),
       run = start(f.store, f.chat.id);
-    model(f.store, run);
+    await model(f.store, run);
     complete(f.store, run);
     const base = f.store.product.export(),
       original = JSON.parse(base.tables.package_behavior_opportunities[0].body),
@@ -578,10 +578,10 @@ describe('v11 recorded automatic/model behavior archive', () => {
     expect(() => database().product.import(archive)).toThrow();
   });
 
-  test('RBA08 full and detached-fork backups repeat with new ownership and unchanged behavior receipts', () => {
+  test('RBA08 full and detached-fork backups repeat with new ownership and unchanged behavior receipts', async () => {
     const f = fixture(),
       run = start(f.store, f.chat.id);
-    model(f.store, run);
+    await model(f.store, run);
     const source = complete(f.store, run),
       fork = forkChat(f.store, f.chat.id, {
         fromRevision: source.id,

@@ -500,7 +500,8 @@ function BehaviorPanel({ chatId, branchId, refreshKey, onChange, onRunRequest }:
           <h3>{instance.title}</h3>
           {instance.behavior.actions.some((action) => action.program) && (
             <p className="muted">
-              코드 행동은 이 자료의 상태와 버튼 입력으로 계산해 상태에 반영해요.
+              코드 행동은 이 자료의 상태와 행동 입력으로 계산해요. 모델 요청의 상태 변경은 원문
+              생성이 끝나면 반영해요.
             </p>
           )}
           <small>

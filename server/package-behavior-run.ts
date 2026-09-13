@@ -24,6 +24,14 @@ import {
 } from '../core/package-behavior-tools.js';
 import type { PackageAttachment } from '../core/content-package.js';
 import type { RuntimeValue } from '../core/prompt-program.js';
+import {
+  EXTENSION_PROGRAM_API,
+  ExtensionProgramError,
+  validateExtensionProgramResult,
+  type ExtensionProgramReceipt,
+  type ResolvedExtensionProgram,
+} from '../core/extension-program.js';
+import { executeExtensionProgram } from './extension-runtime.js';
 import type { ToolAction } from '../core/provider.js';
 import type { RunSnapshot, ToolEvent } from '../core/types.js';
 import { behaviorPayloadHash, recordDraws } from './package-behavior-store.js';
@@ -40,6 +48,7 @@ export type RunBehaviorEntry = {
   draws: Record<string, RuntimeValue>;
   drawSeed: string | null;
   hostRuntime: Record<string, RuntimeValue>;
+  program?: ExtensionProgramReceipt;
 };
 export type RunBehaviorProgress = {
   version: 1;
@@ -203,7 +212,7 @@ function applyEntry(progress: RunBehaviorProgress, entry: RunBehaviorEntry) {
   progress.states[index] = structuredClone(entry.after);
   progress.entries.push(structuredClone(entry));
 }
-function resolveAction(
+function actionResolution(
   store: Store,
   snapshot: RunSnapshot,
   progress: RunBehaviorProgress,
@@ -211,13 +220,13 @@ function resolveAction(
   action: BehaviorAction,
   input: RuntimeValue,
   trigger: RunBehaviorEntry['trigger']
-): RunBehaviorEntry {
+) {
   const instanceId = packageInstanceId(ref),
     key = entryKey({ instanceId, actionId: action.id });
   const prior = progress.entries.find((e) => entryKey(e) === key);
   if (prior) {
     if (!isDeepStrictEqual(prior.input, input)) fail('BEHAVIOR_OPPORTUNITY_INPUT_CHANGED');
-    return prior;
+    return { entry: prior };
   }
   if (progress.entries.length >= MAX_RUN_BEHAVIOR_ACTIONS) fail('BEHAVIOR_RUN_ACTION_LIMIT');
   const before = progress.states.find((s) => s.instanceId === instanceId);
@@ -235,7 +244,7 @@ function resolveAction(
       fail('BEHAVIOR_OPPORTUNITY_DEPENDENCY_CHANGED');
     const replay = { ...structuredClone(cached), trigger };
     applyEntry(progress, replay);
-    return replay;
+    return { entry: replay };
   }
   const behavior = snapshot.profile!.packages!.find(
     (p) => p.id === ref.id && p.revision === ref.revision
@@ -247,36 +256,75 @@ function resolveAction(
     ? createHash('sha256').update(`${saved.seed}:${key}`).digest('hex')
     : null;
   const draws = drawSeed ? recordDraws(action.draws!, drawSeed) : {};
-  const evaluated = evaluateBehaviorAction(
-    behavior,
-    action,
-    before!.state,
-    input,
-    draws,
-    hostRuntime
-  );
+  return { instanceId, key, before: before!, hostRuntime, saved, behavior, drawSeed, draws };
+}
+function finishActionResolution(
+  store: Store,
+  progress: RunBehaviorProgress,
+  action: BehaviorAction,
+  input: RuntimeValue,
+  trigger: RunBehaviorEntry['trigger'],
+  resolution: ReturnType<typeof actionResolution>,
+  resolvedProgram?: ResolvedExtensionProgram
+): RunBehaviorEntry {
+  if (resolution.entry) return resolution.entry;
+  const { instanceId, before, hostRuntime, saved, behavior, drawSeed, draws } = resolution;
+  let program: ExtensionProgramReceipt | undefined;
+  if (action.program) {
+    if (!resolvedProgram) fail('BEHAVIOR_PROGRAM_REQUIRES_HOST');
+    if (resolvedProgram!.programHash !== hash(action.program))
+      fail('BEHAVIOR_PROGRAM_HASH_MISMATCH');
+    const output = validateExtensionProgramResult({
+      state: resolvedProgram!.state,
+      result: resolvedProgram!.result,
+    });
+    try {
+      validateBehaviorValue(behavior.stateSchema, output.state);
+    } catch (error) {
+      if (error instanceof BehaviorError)
+        throw new BehaviorEvaluationError(error.statusCode, error.message);
+      throw error;
+    }
+    program = { api: EXTENSION_PROGRAM_API, ...resolvedProgram!, ...output };
+  } else if (resolvedProgram) fail('BEHAVIOR_PROGRAM_RESULT_UNEXPECTED');
+  const evaluated =
+    program ?? evaluateBehaviorAction(behavior, action, before.state, input, draws, hostRuntime);
   const after: PackageExecutionState = {
-    ...structuredClone(before!),
-    stateRevision: before!.stateRevision + 1,
+    ...structuredClone(before),
+    stateRevision: before.stateRevision + 1,
     state: evaluated.state,
-    draws: Object.keys(draws).length ? draws : before!.draws,
+    draws: Object.keys(draws).length ? draws : before.draws,
   };
   const entry: RunBehaviorEntry = {
     instanceId,
     actionId: action.id,
     trigger,
     input: structuredClone(input),
-    before: structuredClone(before!),
+    before: structuredClone(before),
     after,
     result: evaluated.result,
     draws,
     drawSeed,
     hostRuntime,
+    ...(program ? { program } : {}),
   };
   saved.entries.push(entry);
   setOpportunity(store, progress.opportunityId, saved);
   applyEntry(progress, entry);
   return entry;
+}
+function resolveAction(
+  store: Store,
+  snapshot: RunSnapshot,
+  progress: RunBehaviorProgress,
+  ref: PackageAttachment,
+  action: BehaviorAction,
+  input: RuntimeValue,
+  trigger: RunBehaviorEntry['trigger'],
+  program?: ResolvedExtensionProgram
+): RunBehaviorEntry {
+  const resolution = actionResolution(store, snapshot, progress, ref, action, input, trigger);
+  return finishActionResolution(store, progress, action, input, trigger, resolution, program);
 }
 
 /** Admission only. Preview paths never call this function. No current state is mutated. */
@@ -447,56 +495,143 @@ function validateOwner(store: Store, run: Run) {
       fail('BEHAVIOR_STATE_STALE');
   }
 }
-export function executeRunBehaviorTool(
+type ToolBinding = { instanceId: string; actionId: string };
+function behaviorToolContext(
   store: Store,
   runId: string,
-  binding: { instanceId: string; actionId: string },
+  binding: ToolBinding,
   call: ToolAction,
   signal?: AbortSignal
-): ToolEvent {
+) {
+  if (signal?.aborted) fail('BEHAVIOR_RUN_CANCELLED');
+  const run = store.run(runId);
+  validateOwner(store, run);
+  const permitted = listBehaviorTools(run.snapshot).find(
+    (item) =>
+      item.tool.name === call.name &&
+      item.instanceId === binding.instanceId &&
+      item.actionId === binding.actionId
+  );
+  if (!permitted) fail('BEHAVIOR_TOOL_NOT_ALLOWED');
+  const definition = definitions(run.snapshot).find((d) => d.instanceId === binding.instanceId);
+  const action = definition?.behavior.actions.find(
+    (a) => a.id === binding.actionId && behaviorActionTriggers(a).includes('model')
+  );
+  if (!definition || !action) fail('BEHAVIOR_TOOL_NOT_ALLOWED');
+  const progress = runBehaviorProgress(store, runId);
+  if (!progress) fail('BEHAVIOR_RUN_JOURNAL_MISSING');
+  return { run, definition: definition!, action: action!, progress: progress! };
+}
+const activeProgramTools = new WeakMap<
+  Store,
+  Map<string, { inputHash: string; work: Promise<RunBehaviorEntry> }>
+>();
+
+/** Both declarative and code actions use one async host entry point. No guest work holds a DB transaction. */
+export async function executeRunBehaviorTool(
+  store: Store,
+  runId: string,
+  binding: ToolBinding,
+  call: ToolAction,
+  signal?: AbortSignal
+): Promise<ToolEvent> {
   try {
-    return store.transaction(() => {
-      if (signal?.aborted) fail('BEHAVIOR_RUN_CANCELLED');
-      const run = store.run(runId);
-      validateOwner(store, run);
-      const permitted = listBehaviorTools(run.snapshot).find(
-        (b) =>
-          b.tool.name === call.name &&
-          b.instanceId === binding.instanceId &&
-          b.actionId === binding.actionId
+    const prepared = store.transaction(() => {
+      const { run, definition, action, progress } = behaviorToolContext(
+        store,
+        runId,
+        binding,
+        call,
+        signal
       );
-      if (!permitted) fail('BEHAVIOR_TOOL_NOT_ALLOWED');
-      const definition = definitions(run.snapshot).find((d) => d.instanceId === binding.instanceId);
-      const action = definition?.behavior.actions.find(
-        (a) => a.id === binding.actionId && behaviorActionTriggers(a).includes('model')
-      );
-      if (!definition || !action) fail('BEHAVIOR_TOOL_NOT_ALLOWED');
-      const progress = runBehaviorProgress(store, runId);
-      if (!progress) fail('BEHAVIOR_RUN_JOURNAL_MISSING');
-      const entry = resolveAction(
+      const resolution = actionResolution(
         store,
         run.snapshot,
-        progress!,
-        definition!.ref,
-        action!,
+        progress,
+        definition.ref,
+        action,
         call.args as RuntimeValue,
         'model'
       );
-      if (signal?.aborted) fail('BEHAVIOR_RUN_CANCELLED');
-      saveProgress(store, runId, progress!);
+      if (resolution.entry || !action.program) {
+        const entry = finishActionResolution(
+          store,
+          progress,
+          action,
+          call.args as RuntimeValue,
+          'model',
+          resolution
+        );
+        saveProgress(store, runId, progress);
+        return { entry };
+      }
       return {
-        callId: call.callId,
-        name: call.name,
-        args: structuredClone(call.args),
-        denied: false,
-        result: structuredClone(entry.result),
+        program: action.program,
+        input: { state: resolution.before.state, input: call.args as RuntimeValue },
+        progressHash: hash(progress),
       };
     });
+    let entry: RunBehaviorEntry;
+    if (prepared.entry) entry = prepared.entry;
+    else {
+      let active = activeProgramTools.get(store);
+      if (!active) {
+        active = new Map();
+        activeProgramTools.set(store, active);
+      }
+      const key = JSON.stringify([runId, binding.instanceId, binding.actionId]);
+      const inputHash = hash(prepared.input);
+      const pending = active.get(key);
+      if (pending && pending.inputHash !== inputHash) fail('BEHAVIOR_OPPORTUNITY_INPUT_CHANGED');
+      const work =
+        pending?.work ??
+        (async () => {
+          const output = await executeExtensionProgram(prepared.program!, prepared.input!, signal);
+          return store.transaction(() => {
+            const context = behaviorToolContext(store, runId, binding, call, signal);
+            if (hash(context.progress) !== prepared.progressHash)
+              fail('BEHAVIOR_OPPORTUNITY_DEPENDENCY_CHANGED');
+            const entry = resolveAction(
+              store,
+              context.run.snapshot,
+              context.progress,
+              context.definition.ref,
+              context.action,
+              call.args as RuntimeValue,
+              'model',
+              { ...output, programHash: hash(prepared.program) }
+            );
+            saveProgress(store, runId, context.progress);
+            return entry;
+          });
+        })();
+      if (!pending) active.set(key, { inputHash, work });
+      try {
+        entry = await work;
+      } finally {
+        if (active.get(key)?.work === work) active.delete(key);
+      }
+    }
+    if (signal?.aborted) fail('BEHAVIOR_RUN_CANCELLED');
+    return {
+      callId: call.callId,
+      name: call.name,
+      args: structuredClone(call.args),
+      denied: false,
+      result: structuredClone(entry.result),
+    };
   } catch (error) {
+    // Cancellation/ownership remains a terminal host decision. Guest messages never become tool output.
+    if (signal?.aborted) fail('BEHAVIOR_RUN_CANCELLED');
     const permissionDenied =
       error instanceof BehaviorError && error.message === 'BEHAVIOR_TOOL_NOT_ALLOWED';
-    if (!permissionDenied && !isRecoverableBehaviorExecutionError(error)) throw error;
-    const code = (error as Error).message;
+    if (
+      !permissionDenied &&
+      !(error instanceof ExtensionProgramError) &&
+      !isRecoverableBehaviorExecutionError(error)
+    )
+      throw error;
+    const code = error instanceof ExtensionProgramError ? error.code : (error as Error).message;
     return {
       callId: call.callId,
       name: permissionDenied ? 'unapproved' : call.name,

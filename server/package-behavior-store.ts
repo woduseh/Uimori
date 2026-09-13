@@ -18,6 +18,10 @@ import {
 } from '../core/package-behavior.js';
 import type { RunBehaviorEntry } from './package-behavior-run.js';
 import {
+  ExtensionProgramReceiptError,
+  validateExtensionProgramReceipt,
+} from './extension-program-receipt.js';
+import {
   EXTENSION_PROGRAM_API,
   validateExtensionProgramResult,
   type ExtensionProgramReceipt,
@@ -364,28 +368,50 @@ export class PackageBehaviorStore {
         conflict('BEHAVIOR_DRAW_MISMATCH');
     } else if (entry.drawSeed !== null || Object.keys(entry.draws).length)
       conflict('BEHAVIOR_DRAW_MISMATCH');
-    // Replaying an already accepted journal entry must reproduce its result. Invalid recorded
-    // input or failed deterministic replay is an integrity error, not a new add-on request.
+    // Replaying an already accepted journal entry must reproduce its result. Program actions use
+    // the host execution receipt and are never evaluated in the commit transaction.
     validateBehaviorValue(action.inputSchema, entry.input);
-    let evaluated: ReturnType<typeof evaluateBehaviorAction>;
-    try {
-      evaluated = evaluateBehaviorAction(
-        b,
-        action,
-        state.state,
-        entry.input,
-        entry.draws,
-        entry.hostRuntime
-      );
-    } catch (error) {
-      if (error instanceof BehaviorEvaluationError) conflict('BEHAVIOR_REPLAY_INVALID');
-      throw error;
+    if (!behaviorActionAllowed(action, state.state, entry.input, entry.hostRuntime))
+      conflict('BEHAVIOR_ACTION_DISABLED');
+    const entryProgram = entry.program;
+    let evaluated: { state: RuntimeValue; result: RuntimeValue };
+    let program: ExtensionProgramReceipt | undefined;
+    if (action.program !== undefined) {
+      if (entry.trigger !== 'model') conflict('BEHAVIOR_PROGRAM_TRIGGER_NOT_ALLOWED');
+      if (entryProgram === undefined) conflict('BEHAVIOR_PROGRAM_RECEIPT_REQUIRED');
+      try {
+        program = validateExtensionProgramReceipt(entryProgram, {
+          programHash: hash(action.program),
+          stateSchema: b.stateSchema,
+          state: entry.after.state,
+          result: entry.result,
+        });
+      } catch (error) {
+        if (error instanceof ExtensionProgramReceiptError) conflict(error.code);
+        throw error;
+      }
+      evaluated = { state: program.state, result: program.result };
+    } else {
+      if (entryProgram !== undefined) conflict('BEHAVIOR_PROGRAM_RECEIPT_UNEXPECTED');
+      try {
+        evaluated = evaluateBehaviorAction(
+          b,
+          action,
+          state.state,
+          entry.input,
+          entry.draws,
+          entry.hostRuntime
+        );
+      } catch (error) {
+        if (error instanceof BehaviorEvaluationError) conflict('BEHAVIOR_REPLAY_INVALID');
+        throw error;
+      }
+      if (
+        hash(evaluated.state) !== hash(entry.after.state) ||
+        hash(evaluated.result) !== hash(entry.result)
+      )
+        conflict('BEHAVIOR_RESULT_MISMATCH');
     }
-    if (
-      hash(evaluated.state) !== hash(entry.after.state) ||
-      hash(evaluated.result) !== hash(entry.result)
-    )
-      conflict('BEHAVIOR_RESULT_MISMATCH');
     const provenance = entry.trigger === 'before-turn' ? 'before-turn' : 'model-tool';
     const payload = {
       scope,
@@ -396,6 +422,7 @@ export class PackageBehaviorStore {
       expectedSourceHash: sourceHash,
       idempotencyKey,
       hostRuntime: entry.hostRuntime,
+      ...(program ? { program } : {}),
     };
     return this.commit(
       scope,

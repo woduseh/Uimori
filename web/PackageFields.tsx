@@ -867,7 +867,7 @@ function BehaviorEditor({
                 {actionMethods.map((method) => (
                   <label className="check behavior-method-choice" key={method.id}>
                     <SelectionCheckbox
-                      disabled={!!action.program && method.id !== 'user'}
+                      disabled={!!action.program && method.id === 'before-turn'}
                       checked={triggers.includes(method.id)}
                       onChange={(e) => toggleMethod(index, action, method.id, e.target.checked)}
                     />
@@ -879,7 +879,8 @@ function BehaviorEditor({
                 ))}
                 {action.program && (
                   <small>
-                    코드 계산은 사용자 버튼으로 실행하며 이 자료의 상태와 입력만 사용해요.
+                    코드 계산은 사용자 버튼이나 모델 요청으로 실행하며 이 자료의 상태와 입력만
+                    사용해요. 모델 요청의 상태 변경은 원문 생성이 끝나면 반영해요.
                   </small>
                 )}
                 {triggers.includes('before-turn') && (
@@ -915,7 +916,7 @@ function BehaviorEditor({
         <summary>제작자용 동작 JSON 편집</summary>
         <p className="muted">
           선언형 계산 또는 행동의 program에 JavaScript 계산을 넣을 수 있어요. 코드에는 이 자료의
-          상태와 버튼 입력만 전달하며 반환한 상태는 저장 전에 검사해요. Lua와 Risu 스크립트의 직접
+          상태와 행동 입력만 전달하며 반환한 상태는 저장 전에 검사해요. Lua와 Risu 스크립트의 직접
           실행은 지원하지 않아요.
         </p>
         <label>
