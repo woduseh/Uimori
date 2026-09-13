@@ -72,6 +72,7 @@ function ActionMethods({ action }: { action: BehaviorAction }) {
       ) : (
         <span>실행 안 함</span>
       )}
+      {action.program && <span>코드 계산</span>}
     </div>
   );
 }
@@ -369,8 +370,9 @@ function BehaviorPanel({ chatId, branchId, refreshKey, onChange, onRunRequest }:
         setNotice(
           reset
             ? '현재 원문에 맞춰 초깃값으로 복구했어요.'
-            : instance.behavior.actions.find((action) => action.id === actionId)?.effects.length ===
-                0
+            : !instance.behavior.actions.find((action) => action.id === actionId)?.program &&
+                instance.behavior.actions.find((action) => action.id === actionId)?.effects
+                  .length === 0
               ? '행동 결과를 계산했어요.'
               : '상태에 반영했어요.'
         );
@@ -496,6 +498,11 @@ function BehaviorPanel({ chatId, branchId, refreshKey, onChange, onRunRequest }:
           aria-label={instance.title}
         >
           <h3>{instance.title}</h3>
+          {instance.behavior.actions.some((action) => action.program) && (
+            <p className="muted">
+              코드 행동은 이 자료의 상태와 버튼 입력으로 계산해 상태에 반영해요.
+            </p>
+          )}
           <small>
             {({ bot: '봇', persona: '페르소나', module: '모듈' } as Record<string, string>)[
               instance.role

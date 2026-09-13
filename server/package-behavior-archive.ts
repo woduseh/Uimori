@@ -12,6 +12,10 @@ import {
   validatePackageBehavior,
   type PackageBehavior,
 } from '../core/package-behavior.js';
+import {
+  EXTENSION_PROGRAM_API,
+  validateExtensionProgramResult,
+} from '../core/extension-program.js';
 import { evaluatePromptExpression } from '../core/prompt-program.js';
 import { inspectRuntimeValue } from '../core/prompt-values.js';
 import type { PackageExecutionState } from '../core/execution-context.js';
@@ -409,6 +413,7 @@ export function validatePackageBehaviorArchive(store: Store): void {
       'sourceHash',
       'hostRuntime',
       'previousScope',
+      'program',
     ]);
     const scope = scopeOf(payload.scope),
       b = definition(store, scope);
@@ -470,16 +475,43 @@ export function validatePackageBehaviorArchive(store: Store): void {
         digest(r.drawSeed);
         same(recordDraws(action.draws, r.drawSeed), r.draws, 'recorded draws');
       } else if (r.drawSeed !== null || Object.keys(r.draws).length) reject('unexpected draws');
-      const evaluated = evaluateBehaviorAction(
-        b,
-        action,
-        r.beforeState,
-        payload.input,
-        r.draws,
-        hostRuntime
-      );
-      same(evaluated.state, r.state, 'action state');
-      same(evaluated.result, r.actionResult, 'action result');
+      if (action.program !== undefined) {
+        if (r.provenance !== 'ui-action') reject('program action provenance');
+        if (r.drawSeed !== null || Object.keys(r.draws).length) reject('program action draws');
+        // Restore verifies the accepted host receipt and committed values. It intentionally does
+        // not execute untrusted guest source, so the archive is not semantic re-evaluation proof.
+        const receipt = object(payload.program, [
+          'api',
+          'programHash',
+          'engine',
+          'state',
+          'result',
+        ]);
+        if (receipt.api !== EXTENSION_PROGRAM_API) reject('program receipt API');
+        digest(receipt.programHash);
+        if (receipt.programHash !== behaviorPayloadHash(action.program))
+          reject('program receipt hash');
+        text(receipt.engine);
+        const evaluated = validateExtensionProgramResult({
+          state: receipt.state,
+          result: receipt.result,
+        });
+        validateBehaviorValue(b.stateSchema, evaluated.state);
+        same(evaluated.state, r.state, 'program action state');
+        same(evaluated.result, r.actionResult, 'program action result');
+      } else {
+        if (Object.hasOwn(payload, 'program')) reject('unexpected program receipt');
+        const evaluated = evaluateBehaviorAction(
+          b,
+          action,
+          r.beforeState,
+          payload.input,
+          r.draws,
+          hostRuntime
+        );
+        same(evaluated.state, r.state, 'action state');
+        same(evaluated.result, r.actionResult, 'action result');
+      }
       if (r.provenance !== 'ui-action') {
         const runId = r.idempotencyKey.split(':')[1],
           run = store.run(runId),

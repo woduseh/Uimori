@@ -1,15 +1,17 @@
 # 현재 계약 · Uimori
 
-> 2026-09-12: v0.1.0 준비의 제품 방향은 [베타 결정](../docs/DECISIONS-2026-09-12-BETA.md), 실행과 검증 상태는 [베타 계획](BETA-PLAN.md)을 따라요. 확장 코드 실행·Risu 직접 가져오기는 준비 중이며, 현재 지원과 향후 계약을 구분해요.
+> 2026-09-13: v0.1.0 준비의 제품 방향은 [베타 결정](../docs/DECISIONS-2026-09-12-BETA.md), 실행과 검증 상태는 [베타 계획](BETA-PLAN.md)을 따라요. 기본 Risu 가져오기와 사용자 행동의 코드 계산이 구현됐으며, 전체 호환 실행·확장 SDK와는 구분해요.
 
 지금 유효한 계약, 완료 조건, 남은 범위만 담아요. 시간순 작업 기록은 [작업 기록 2026-09](history/CURRENT-2026-09.md), 이전 방향은 [결정 2026-09-10](../docs/DECISIONS-2026-09-10.md)에 보존해요. 현재 베타 방향·실행은 위의 최신 결정과 계획을 따르고 각 기능의 상세 계약은 아래 링크의 문서가 소유해요. 이 문서는 계약이나 남은 범위가 바뀔 때만 고쳐요.
 
 ## 현재 계약
 
+- 패키지 사용자 행동은 [상태 계산 코드](../docs/EXTENSION-PROGRAMS.md)로 알고리즘을 표현할 수 있어요. JavaScript는 해당 상태/입력만 전달받고 별도 Worker의 고정 메모리 WASM에서 실행돼요. 기본 버튼·커스텀 패널 모두 같은 저장 경계를 사용하며 결과는 schema·개정 검사 후 journal에 남아요. 복원은 코드를 재실행하지 않아요. 자동 hook·모델/통신·Lua·확장 설치 관리는 후속 범위예요.
+
 - **DB schema는 v17, JSON archive는 v15**예요. 새 DB와 지원하는 v15/v16에서 migration을 순서대로 적용하고 내부 ledger를 기록해요. v17은 native 자료 이동의 출처·중복 방지 영수증을 추가해요. 원문·상태·이미지·snapshot은 보존하고 모든 과거 개발 DB·archive 이관을 의미하지 않아요. 이 작업은 운영 앱을 배포하지 않았으며 Oracle v15는 과거 배포 기록이에요. [DB migration](../docs/DATA-MIGRATIONS.md) · [운영 배포](../docs/ORACLE-RELEASE.md)
 - **작문·번역 프롬프트와 역할 모델은 전역이 기본**이며, 채팅은 작문 프리셋 ID와 본문 모델 ID를 고정할 수 있어요. 고정한 ID의 최신 저장본을 새 요청에 사용하고 삭제·비활성 대상을 임의로 대체하지 않아요. 번역과 보조 역할은 전역을 유지해요. `workspaceModelRef`가 역할 선택 규칙을 소유하며 이미 예약한 snapshot은 바꾸지 않아요. [전역 역할 모델](../docs/GLOBAL-MODELS.md) · [현재 프롬프트](../docs/RUNTIME-SIMPLIFICATION.md)
 - 자료·프롬프트·공유 모듈은 **같은 ID의 최신 저장본**을 다음 실행에서 사용해요. 이미 예약한 실행과 과거 원문은 자체 snapshot을 유지하고 현재 작업본으로 다시 해석하지 않아요. [현재 설정 계약](CURRENT-SETTINGS-PLAN.md) · [번역 구간과 재시도](TRANSLATION-CHUNKS.md)
-- 봇·페르소나·모듈은 **공통 패키지**이고 서재의 분류·폴더는 채팅 장착 역할과 독립이에요. 이미지·시작문·로어·상태와 행동·다음 요청 예약·원문 구간 정책을 패키지가 선언하고 런타임 플러그인은 없어요. `.charx`·Character Card JSON의 기본 자료는 앱에서 검토 후 새 봇·채팅으로 가져와요. 내장 모듈·스크립트 등 미지원 부분은 먼저 표시하고 별도 이식해요. 로어 보존이 기본이며 진행 기억 분리는 사용자가 선택한 경우만 적용해요. [서재](../docs/LIBRARY.md) · [패키지](../docs/PACKAGES.md) · [Risu 가져오기](../docs/RISU-IMPORT.md)
+- 봇·페르소나·모듈은 **공통 패키지**이고 서재의 분류·폴더는 채팅 장착 역할과 독립이에요. 이미지·시작문·로어·상태와 행동·다음 요청 예약·원문 구간 정책을 패키지가 선언해요. `.charx`·Character Card JSON의 기본 자료는 앱에서 검토 후 새 봇·채팅으로 가져와요. 내장 모듈·스크립트 등 미지원 부분은 먼저 표시하고 별도 이식해요. 로어 보존이 기본이며 진행 기억 분리는 사용자가 선택한 경우만 적용해요. [서재](../docs/LIBRARY.md) · [패키지](../docs/PACKAGES.md) · [Risu 가져오기](../docs/RISU-IMPORT.md)
 - 프롬프트는 저장된 **`PromptProgram` AST**로 실행하고 블록 편집기로 고쳐요. 템플릿 문법과 TypeScript 제작 API는 선택 가능한 입력 경로예요. 프롬프트별 옵션 조합은 role+values로 저장하고 현재 정의로 검증해요. 채팅 옵션의 소속(`OptionBinding.owner`)은 `core/chat-options.ts`의 한 규칙으로 예약 고정과 현재 상태가 같이 계산해요. [제작 방식](../docs/PROMPT-AUTHORING.md) · [프롬프트 실행](../docs/PROMPT-RUNTIME.md)
 - 모델·프로바이더는 최신 `provider_settings` 한 벌을 쓰고 `ModelRef`는 `{id}`예요. 모델 ID 코드표로 실행을 막지 않고 공급자의 거절을 그대로 표시해요. 요금 설정과 호출 후 추정 비용을 제공해요. [공급자](../docs/PROVIDERS.md) · [모델 등록](../docs/MODEL-REGISTRATION.md) · [모델 파라미터](../docs/MODEL-PARAMETERS.md) · [요금](../docs/MODEL-PRICING.md)
 - **도우미와 통합 문맥**: 별도 도우미 대화, 공통 서버 초안과 명시 요청의 수정·저장, 사용자 메모·정정, 공통 요약의 자동·수동 압축, 채팅별 로어 변경과 옵션 위임, 선택형 `context.*` 도구를 제공해요. 네 요약 경로는 의미 보존 지침을 공유하고, 본문·도우미 압축은 실제 요청 크기로 작은 유효 후보의 채택과 원 요청 유지를 판단해요. 창 전환 뒤에도 같은 요청의 완료 기록·정확한 변경 영수증·실제 읽기 범위를 전달하며 필요한 재조회는 허용해요. 매 턴 기억 추출은 제거했어요. [확정 계획](HELPER-CONTEXT-PLAN.md) · [구현 결과](HELPER-CONTEXT-RESULTS.md) · [후속 개선](HARNESS-OPTIMIZATION-RESULTS.md) · [입력 한도](../docs/CONTEXT-LIMITS.md) · [로어 문맥](../docs/LORE-CONTEXT.md)

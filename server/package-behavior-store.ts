@@ -17,6 +17,12 @@ import {
   type BehaviorDraw,
 } from '../core/package-behavior.js';
 import type { RunBehaviorEntry } from './package-behavior-run.js';
+import {
+  EXTENSION_PROGRAM_API,
+  validateExtensionProgramResult,
+  type ExtensionProgramReceipt,
+  type ResolvedExtensionProgram,
+} from '../core/extension-program.js';
 
 export interface BehaviorScope {
   chatId: string;
@@ -196,7 +202,7 @@ export class PackageBehaviorStore {
       ...state,
       allowed,
       requiresDraw: !!action!.draws?.length,
-      ...(allowed && !action!.draws?.length
+      ...(allowed && !action!.draws?.length && action!.program === undefined
         ? {
             projectedState: applyBehaviorEffects(
               b,
@@ -272,32 +278,58 @@ export class PackageBehaviorStore {
     scope: BehaviorScope,
     definition: PackageBehavior,
     command: BehaviorActionCommand,
-    hostRuntime: Record<string, RuntimeValue> = {}
+    hostRuntime: Record<string, RuntimeValue> = {},
+    resolvedProgram?: ResolvedExtensionProgram
   ): BehaviorJournalResult {
     inspectRuntimeValue(hostRuntime);
     const b = validatePackageBehavior(definition);
     this.read(scope, b);
-    const payload = { scope, provenance: 'ui-action', ...command, hostRuntime },
-      cached = this.cached(scope, command.idempotencyKey, payload);
-    if (cached) return cached;
     const state = this.read(scope, b);
-    this.expect(state, command.expectedStateRevision, command.expectedSourceHash);
     const action = b.actions.find((a) => a.id === command.actionId);
     if (!action) bad('BEHAVIOR_ACTION_UNKNOWN');
+    let program: ExtensionProgramReceipt | undefined;
+    if (action!.program !== undefined) {
+      if (resolvedProgram === undefined) conflict('BEHAVIOR_PROGRAM_REQUIRES_EXECUTION');
+      if (
+        typeof resolvedProgram!.engine !== 'string' ||
+        !resolvedProgram!.engine.length ||
+        resolvedProgram!.engine.length > 200
+      )
+        bad('BEHAVIOR_PROGRAM_ENGINE');
+      if (resolvedProgram!.programHash !== hash(action!.program))
+        conflict('BEHAVIOR_PROGRAM_HASH_MISMATCH');
+      const output = validateExtensionProgramResult({
+        state: resolvedProgram!.state,
+        result: resolvedProgram!.result,
+      });
+      validateBehaviorValue(b.stateSchema, output.state);
+      program = {
+        api: EXTENSION_PROGRAM_API,
+        programHash: resolvedProgram!.programHash,
+        engine: resolvedProgram!.engine,
+        state: output.state,
+        result: output.result,
+      };
+    } else if (resolvedProgram !== undefined) bad('BEHAVIOR_PROGRAM_RESULT_UNEXPECTED');
+    const payload = {
+        scope,
+        provenance: 'ui-action',
+        ...command,
+        hostRuntime,
+        ...(program ? { program } : {}),
+      },
+      cached = this.cached(scope, command.idempotencyKey, payload);
+    if (cached) return cached;
+    this.expect(state, command.expectedStateRevision, command.expectedSourceHash);
     if (!behaviorActionTriggers(action!).includes('user'))
       conflict('BEHAVIOR_USER_ACTION_NOT_ALLOWED');
     if (!behaviorActionAllowed(action!, state.state, command.input, hostRuntime))
       conflict('BEHAVIOR_ACTION_DISABLED');
     const drawSeed = action!.draws?.length ? randomBytes(32).toString('hex') : null;
     const draws = drawSeed ? recordDraws(action!.draws!, drawSeed) : {};
-    const evaluated = evaluateBehaviorAction(
-      b,
-      action!,
-      state.state,
-      command.input,
-      draws,
-      hostRuntime
-    );
+    const evaluated = program
+      ? { state: program.state, result: program.result }
+      : evaluateBehaviorAction(b, action!, state.state, command.input, draws, hostRuntime);
     return this.commit(
       scope,
       b,
