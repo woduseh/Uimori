@@ -3,6 +3,7 @@ import type { RunSnapshot } from '../core/types.js';
 import type { ContextJob } from './context-store.js';
 import { HttpError, record } from './request-validation.js';
 import type { Store } from './store.js';
+import { preparePromptInputTransforms } from './prompt-transforms.js';
 
 export type ContextRouteHooks = {
   signal: AbortSignal;
@@ -25,7 +26,9 @@ export function contextRoutes(app: FastifyInstance, store: Store, hooks: Context
   );
   app.put<{ Params: { id: string } }>('/api/chats/:id/context/summary', async (request) => {
     const body = record(request.body),
-      snapshot = hooks.snapshot(request.params.id, body.branchId);
+      snapshot = await preparePromptInputTransforms(
+        hooks.snapshot(request.params.id, body.branchId)
+      );
     const value = store.context.edit(request.params.id, body, snapshot);
     return { ...value, jobs: value.jobs.map(publicJob) };
   });

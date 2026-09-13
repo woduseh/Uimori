@@ -4,6 +4,8 @@
 
 작문 프롬프트의 선택적 `collaboration` 설정은 host가 제공하는 읽기 전용 에이전트를 구성해요. AST 평가 중 모델을 호출하지 않으며, [에이전트 협업](AGENT-COLLABORATION.md)의 별도 실행기가 Run의 호출 한도·snapshot·취소 계약으로 실행해요.
 
+프롬프트의 선택적 `transforms`는 [텍스트 변환](PROMPT-TRANSFORMS.md)을 사용해요. AST 컴파일러가 정규식을 실행하지 않고, Host가 별도 준비한 결과를 적용해요.
+
 ## 공개 API
 
 프롬프트 편집·옵션 조합의 새 저장은 `validateEditablePromptProgram`과 `resolveEditablePromptValues`로 boolean 기본값/명시 값을 `true | false`로 제한해요. UI는 기존 boolean `null`을 꺼짐으로 보여주고 사용자가 저장할 때 `false`로 확정해요. 텍스트·숫자·선택 옵션의 `null`은 유지해요. 과거 Run·보관 파일을 읽고 평가하는 기존 검증/해석기는 변경하지 않으며 운영 DB를 자동 이관하지 않아요.

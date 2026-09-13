@@ -3,6 +3,7 @@ import { parsePromptFile, type PromptFile } from '../core/prompt-file.js';
 import { compileTranslationPreview } from '../core/translation-preview.js';
 import { DismissibleError } from './DismissibleError.js';
 import { PromptControlFields } from './PromptControlFields.js';
+import { PromptTransformFields } from './PromptTransformFields.js';
 import { ActionMenu } from './ActionMenu.js';
 import { IconButton } from './IconButton.js';
 import {
@@ -61,7 +62,14 @@ type Props = {
   onControlDraftChange?: (state: ChatPromptControls) => void;
   collaborationEditor?: ReactNode;
 };
-type EditorSection = 'blocks' | 'controls' | 'defaults' | 'collaboration' | 'preview' | 'json';
+type EditorSection =
+  | 'blocks'
+  | 'controls'
+  | 'defaults'
+  | 'transforms'
+  | 'collaboration'
+  | 'preview'
+  | 'json';
 type Preview = {
   compilation: PromptCompilation;
   provider: {
@@ -877,6 +885,7 @@ export function PromptComposer({
     { id: 'blocks', title: '블록' },
     { id: 'controls', title: '옵션 정의' },
     { id: 'defaults', title: '기본 옵션' },
+    { id: 'transforms', title: '텍스트 변환' },
     ...(collaborationEditor ? [{ id: 'collaboration' as const, title: '에이전트 협업' }] : []),
     { id: 'preview', title: '미리보기' },
   ];
@@ -988,12 +997,13 @@ export function PromptComposer({
     setError(message);
   };
   const change = (next: PromptProgram) => {
-    // Incomplete advisor fields remain an unsaved draft while the body stays editable.
+    // Incomplete advisor and regex fields remain drafts while other fields stay editable.
     // Save, preview, and JSON import still validate the complete program.
-    const { collaboration, ...body } = next;
+    const { collaboration, transforms, ...body } = next;
     const validated = {
       ...validatePromptProgram(body),
       ...(collaboration !== undefined ? { collaboration } : {}),
+      ...(transforms !== undefined ? { transforms } : {}),
     };
     setUndo((current) => [...current.slice(-19), { program: structuredClone(program) }]);
     lastCollaboration.current = collaboration;
@@ -1741,6 +1751,13 @@ export function PromptComposer({
                   </div>
                 )}
               </div>
+            </section>
+            <section className="pc-section" {...sectionProps('transforms')}>
+              <PromptTransformFields
+                value={program.transforms}
+                onChange={(transforms) => edit({ ...program, transforms })}
+                onAdvanced={() => setSection('json')}
+              />
             </section>
             {collaborationEditor && (
               <section className="pc-section" {...sectionProps('collaboration')}>

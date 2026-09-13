@@ -458,6 +458,8 @@ function SourceReaderContent({
         <RequestMessage
           runId={source.runId}
           request={request}
+          displayText={presentation?.data?.request?.text}
+          inputTransform={presentation?.data?.inputTransform}
           compactActions={latest ? 'always' : 'tap'}
           onSubmit={onEditRequest}
           onConfirm={onCheckRequest}

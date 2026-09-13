@@ -11,6 +11,7 @@ import { mapForkChatOptionSnapshot } from './chat-options.js';
 import { sealOutlineSnapshot } from '../core/outline.js';
 import { isSourceOnlyTranscript, validateSourceOnlyTranscript } from '../core/authored-history.js';
 import { preparedBehaviorSnapshot } from './package-behavior-run.js';
+import { hasPromptInputTransforms, validatePromptInputTransforms } from './prompt-transforms.js';
 
 const reject = (message: string): never => {
   throw new HttpError(400, `Invalid snapshot archive: ${message}`);
@@ -54,6 +55,18 @@ export function validateRunSnapshot(
     return snapshot;
   }
   const executionSnapshot = behaviorExecutionProjection(store, snapshot, runId);
+  try {
+    validatePromptInputTransforms(executionSnapshot);
+  } catch {
+    reject('prompt input transform receipt mismatch');
+  }
+  if (
+    hasPromptInputTransforms(executionSnapshot) &&
+    !executionSnapshot.promptInputTransforms &&
+    runId &&
+    store.run(runId).inputs.length
+  )
+    reject('prompt input transform receipt missing');
   const candidateSnapshot = candidateCompilationSnapshot(store, snapshot, runId);
   // Deferred behavior stays immutable in the archived Run snapshot. Once an input was recorded,
   // its execution receipt owns the state/results projected into that compiled model input. A
@@ -107,6 +120,11 @@ export function validateRunSnapshot(
   } else if (
     !snapshot.story?.waiting &&
     snapshot.behaviorExecution?.deferredAutomatic !== true &&
+    !(
+      hasPromptInputTransforms(snapshot) &&
+      !snapshot.promptInputTransforms &&
+      (!runId || !store.run(runId).inputs.length)
+    ) &&
     !['pending', 'failed'].includes(snapshot.contextPlan?.status ?? '')
   )
     reject('compiled prompt missing');

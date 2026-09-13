@@ -92,6 +92,7 @@ export type RunSnapshot = {
   sourceSegments?: import('./source-segments.js').SourceSegmentPolicy;
   logicalHistory?: import('./prompt-program.js').PromptHistoryMessage[];
   promptCompilation?: import('./prompt-program.js').PromptCompilation;
+  promptInputTransforms?: import('./prompt-input-transforms.js').PromptInputTransformReceipt;
   chatId: string;
   parentRevision: string | null;
   settingsRevision: number;

@@ -29,6 +29,7 @@ import {
 } from './context-planning.js';
 import { encodeMainPreview } from './main-request.js';
 import type { MainHooks } from './model-runner.js';
+import { preparePromptInputTransforms } from './prompt-transforms.js';
 
 export type ContextCompactionHooks = MainHooks & {
   onProgress: (plan: ContextPlan) => void | Promise<void>;
@@ -160,7 +161,7 @@ export async function prepareInputContext(
   previous?: ContextPlan
 ): Promise<{ snapshot: RunSnapshot; usage: Usage }> {
   if (!snapshot.contextPlan) throw new Error('CONTEXT_PLAN_REQUIRED');
-  const fixed = structuredClone(snapshot),
+  const fixed = await preparePromptInputTransforms(structuredClone(snapshot)),
     usage = emptyUsage();
   const measureInput = hooks.measureInput ?? measureMainContext;
   const plan: ContextPlan = {

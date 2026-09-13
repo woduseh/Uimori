@@ -7,6 +7,8 @@ import './request-message.css';
 export function RequestMessage({
   runId,
   request,
+  displayText,
+  inputTransform,
   disabled,
   onSubmit,
   onConfirm,
@@ -21,12 +23,15 @@ export function RequestMessage({
   compactActions?: 'always' | 'tap';
   runId: string;
   request: string;
+  displayText?: string;
+  inputTransform?: { text: string; changed: boolean };
   disabled?: boolean;
   onSubmit?: (text: string) => Promise<boolean>;
   onConfirm?: () => Promise<boolean>;
   onEditingChange?: (editing: boolean) => void;
 }) {
   const key = `request-edit:${runId}`;
+  const shownRequest = displayText ?? request;
   const [editing, setEditing] = useState(false);
   const [revealed, setRevealed] = useState(false);
   const [draft, setDraft] = useState(request);
@@ -135,20 +140,41 @@ export function RequestMessage({
                 setRevealed((value) => !value);
             }}
           >
-            {request.length > 280 ? (
+            {shownRequest.length > 280 ? (
               <details>
                 <summary>
                   <span className="request-preview">
-                    {request.slice(0, 240)}… <span>전체 보기</span>
+                    {shownRequest.slice(0, 240)}… <span>전체 보기</span>
                   </span>
                   <span className="request-collapse">접기</span>
                 </summary>
-                <p>{request}</p>
+                <p>{shownRequest}</p>
               </details>
             ) : (
-              <p>{request}</p>
+              <p>{shownRequest}</p>
             )}
           </div>
+          {(inputTransform?.changed || shownRequest !== request) && (
+            <details className="request-transform-details">
+              <summary>
+                {inputTransform?.changed
+                  ? '전송 시 변환됨 · 원문과 전송문 보기'
+                  : '표시 변환됨 · 원래 요청 보기'}
+              </summary>
+              <dl>
+                <div>
+                  <dt>원래 요청 · 편집 기준</dt>
+                  <dd>{request}</dd>
+                </div>
+                {inputTransform?.changed && (
+                  <div>
+                    <dt>전송문</dt>
+                    <dd>{inputTransform.text}</dd>
+                  </div>
+                )}
+              </dl>
+            </details>
+          )}
           {onSubmit && (
             <div className="request-message-actions">
               <IconButton

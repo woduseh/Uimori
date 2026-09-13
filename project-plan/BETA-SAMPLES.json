@@ -80,11 +80,14 @@
       {
         "area": "preset-import",
         "status": "partial",
-        "basis": "2026-09-13 후속 구현: .risup/.risupreset 바이너리·JSON·프로젝트 ZIP을 직접 읽어 프롬프트와 토글을 기존 저장/편집/적용 경로에 연결해요. 정규식 실행과 전체 표본 인수는 미완이며 최초 구현 baseline commit과 구분해요.",
+        "basis": ".risup/.risupreset/JSON/프로젝트 ZIP의 프롬프트·토글·지원 editprocess/editdisplay를 native 저장·편집·전송·표시에 연결했어요. 실제 Phēmē 두 파일의 각 5개 정규식을 로컬 Worker에서 실행했고 전체 CBS 실행·memory 위치/래퍼·실모델 품질 인수는 별도예요. 모델·파라미터·도구는 대상에서 제외해요.",
         "evidence": [
           "docs/RISU-IMPORT.md",
           "server/risu-preset-import.ts",
-          "project-plan/BETA-PLAN.md"
+          "project-plan/BETA-PLAN.md",
+          "docs/PROMPT-TRANSFORMS.md",
+          "server/prompt-transforms.ts",
+          "tests/prompt-transform-flow.test.ts"
         ]
       }
     ],
@@ -442,7 +445,7 @@
       ],
       "currentRisuImport": {
         "status": "partial",
-        "basis": "직접 바이너리 해석·프롬프트/토글 부분 가져오기·원본 보존·archive 복원을 확인했어요. 정규식은 미연결이고 memory 위치/래퍼 차이는 Uimori 문맥 관리 안내로 설명해요. 모델·파라미터·도구는 지원 판정 범위에서 제외해요. 전체 표본 인수는 not-run이에요.",
+        "basis": "직접 바이너리 해석·프롬프트/토글 부분 가져오기·원본 보존·archive 복원을 확인했어요. 후속 구현으로 각 5개 정규식의 로컬 실행과 공통 입력/표시 연결을 확인했고 memory 위치/래퍼 차이는 Uimori 문맥 관리 안내로 설명해요. 모델·파라미터·도구는 지원 판정 범위에서 제외해요. 전체 표본 인수는 not-run이에요.",
         "evidenceRefs": [
           "docs/RISU-IMPORT.md",
           "server/risu-preset-file.ts",
@@ -700,7 +703,7 @@
       ],
       "currentRisuImport": {
         "status": "partial",
-        "basis": "직접 바이너리 해석·프롬프트/토글 부분 가져오기·원본 보존·archive 복원을 확인했어요. 정규식은 미연결이고 memory 위치/래퍼 차이는 Uimori 문맥 관리 안내로 설명해요. 모델·파라미터·도구는 지원 판정 범위에서 제외해요. 전체 표본 인수는 not-run이에요.",
+        "basis": "직접 바이너리 해석·프롬프트/토글 부분 가져오기·원본 보존·archive 복원을 확인했어요. 후속 구현으로 각 5개 정규식의 로컬 실행과 공통 입력/표시 연결을 확인했고 memory 위치/래퍼 차이는 Uimori 문맥 관리 안내로 설명해요. 모델·파라미터·도구는 지원 판정 범위에서 제외해요. 전체 표본 인수는 not-run이에요.",
         "evidenceRefs": [
           "docs/RISU-IMPORT.md",
           "server/risu-preset-file.ts",

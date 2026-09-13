@@ -15,6 +15,7 @@ import { validateLoreContextPolicy } from '../core/lore-context.js';
 import { createDefaultPromptProgram } from '../core/prompt-defaults.js';
 import { DEFAULT_MAIN_PROMPT } from '../core/prompts.js';
 import { builtinPromptTemplate, builtinPromptTemplates } from './builtin-prompts.js';
+import { preparePromptInputTransforms } from './prompt-transforms.js';
 
 /** A read-only preview, including unsaved draft blocks. No provider call or Run is created. */
 export function promptRoutes(app: FastifyInstance, store: Store) {
@@ -94,7 +95,7 @@ export function promptRoutes(app: FastifyInstance, store: Store) {
         branchId: branch.id,
         ...(b.loreContextReset ? { loreContextReset: true } : {}),
       };
-      const snapshot = freezeReservationSnapshot(store, base, {
+      let snapshot = freezeReservationSnapshot(store, base, {
         purpose: role === 'main' ? 'preview-main' : 'preview-translation',
         executionClock: () => {
           const iso = new Date().toISOString();
@@ -161,10 +162,12 @@ export function promptRoutes(app: FastifyInstance, store: Store) {
           sourceHash: source.hash,
         };
       } else {
-        const context = promptContext(snapshot);
+        snapshot = await preparePromptInputTransforms(snapshot, program, values);
+        const context = promptContext(snapshot, program, values);
         compilation = !snapshot.story?.waiting
           ? compileSnapshotPrompt(snapshot, program, values).promptCompilation!
           : compilePromptProgram(program, { ...context, ...(values ? { values } : {}) });
+        if (snapshot.story?.waiting) compilation.warnings.push(...context.transformWarnings);
       }
       const target = profile.models[role as 'main' | 'translation'];
       let provider = null;

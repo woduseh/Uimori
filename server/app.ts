@@ -42,6 +42,7 @@ import { authorizeExtensionModelAccess, createExtensionModelService } from './ex
 import { createExtensionOperationRunner } from './extension-operation-runner.js';
 import { prepareAfterResponse } from './package-after-response.js';
 import { freezeLoreContext } from './lore-context.js';
+import { hasPromptInputTransforms, preparePromptInputTransforms } from './prompt-transforms.js';
 import { runAuxiliaryJob } from './product-auxiliary.js';
 import { auxiliaryBridge } from './auxiliary-bridge.js';
 import { productRoutes } from './product-routes.js';
@@ -693,7 +694,11 @@ export async function createApp(options: AppOptions): Promise<App> {
           const reservedCompilationSnapshot = candidateCompilationSnapshot(store, run.snapshot, id);
           let executionSnapshot = preparedBehaviorSnapshot(store, id, run.snapshot),
             compilationSnapshot = preparedBehaviorSnapshot(store, id, reservedCompilationSnapshot);
-          if (run.snapshot.behaviorExecution?.deferredAutomatic && !executionSnapshot.contextPlan) {
+          if (
+            (run.snapshot.behaviorExecution?.deferredAutomatic ||
+              hasPromptInputTransforms(executionSnapshot)) &&
+            !executionSnapshot.contextPlan
+          ) {
             assertCurrent();
             executionSnapshot = freezeLoreContext(store, executionSnapshot);
             compilationSnapshot =
@@ -708,6 +713,28 @@ export async function createApp(options: AppOptions): Promise<App> {
                 : store.context.prepareRun(compilationSnapshot);
             executionSnapshot.contextBase = contextBase;
             compilationSnapshot.contextBase = contextBase;
+          }
+          if (hasPromptInputTransforms(compilationSnapshot)) {
+            compilationSnapshot = await preparePromptInputTransforms(compilationSnapshot);
+            assertCurrent();
+            executionSnapshot = {
+              ...executionSnapshot,
+              promptInputTransforms: compilationSnapshot.promptInputTransforms,
+            };
+            // Keep failure receipts as well, so a cancelled run or candidate never retries
+            // an uncertain transform outcome while reconstructing the same model input.
+            store.transaction(() => {
+              assertCurrent();
+              store.db
+                .prepare('UPDATE runs SET snapshot=?,updated_at=? WHERE id=?')
+                .run(
+                  JSON.stringify(
+                    persistedContextSnapshot(store.run(id).snapshot, executionSnapshot)
+                  ),
+                  new Date().toISOString(),
+                  id
+                );
+            });
           }
           if (executionSnapshot.contextPlan) {
             assertCurrent();

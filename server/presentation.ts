@@ -1,5 +1,5 @@
-import { existsSync } from 'node:fs';
-import { Worker } from 'node:worker_threads';
+import { TextTransformError } from '../core/text-transform.js';
+import { applyTextTransforms } from './text-transforms.js';
 
 export type RegexRule = { pattern: string; flags: string; replacement: string };
 export const PRESENTATION_LIMITS = Object.freeze({
@@ -51,55 +51,24 @@ export async function presentText(source: string, rules: unknown): Promise<Prese
   if (active >= PRESENTATION_LIMITS.concurrent) return fail('PRESENTATION_BUSY');
   active++;
   try {
-    const compiled = new URL('./regex-worker.js', import.meta.url);
-    const worker = new Worker(
-      existsSync(compiled) ? compiled : new URL('./regex-worker.ts', import.meta.url),
-      {
-        workerData: { source, rules: safe, maxOutput: PRESENTATION_LIMITS.output },
-        resourceLimits: { maxOldGenerationSizeMb: 32, maxYoungGenerationSizeMb: 8, stackSizeMb: 2 },
-      }
+    const result = await applyTextTransforms(
+      source,
+      safe.map((rule, index) => ({
+        ...rule,
+        id: `presentation-${index}`,
+        // The legacy presentation API treats every dollar token literally.
+        replacement: rule.replacement.replaceAll('$', '$$$$'),
+      })),
+      { timeoutMs: PRESENTATION_LIMITS.timeoutMs, maxOutputChars: PRESENTATION_LIMITS.output }
     );
-    return await new Promise<PresentationResult>((resolve) => {
-      let settled = false;
-      const finish = (result: PresentationResult) => {
-        if (settled) return;
-        settled = true;
-        clearTimeout(timer);
-        // Keep listeners until termination completes so no late error is unhandled.
-        void worker
-          .terminate()
-          .catch(() => undefined)
-          .finally(() => {
-            worker.removeAllListeners();
-            resolve(result);
-          });
-      };
-      const timer = setTimeout(() => finish(fail('REGEX_TIMEOUT')), PRESENTATION_LIMITS.timeoutMs);
-      worker.once('message', (value: unknown) => {
-        if (
-          value &&
-          typeof value === 'object' &&
-          'text' in value &&
-          typeof value.text === 'string' &&
-          value.text.length <= PRESENTATION_LIMITS.output
-        )
-          finish({ ok: true, text: value.text });
-        else
-          finish(
-            fail(
-              value &&
-                typeof value === 'object' &&
-                'error' in value &&
-                value.error === 'OUTPUT_LIMIT'
-                ? 'OUTPUT_LIMIT'
-                : 'INVALID_PATTERN'
-            )
-          );
-      });
-      worker.once('error', () => finish(fail('REGEX_WORKER_ERROR')));
-      worker.once('exit', () => finish(fail('REGEX_WORKER_EXIT')));
-    });
-  } catch {
+    return { ok: true, text: result.text };
+  } catch (error) {
+    if (error instanceof TextTransformError) {
+      if (error.code === 'TEXT_TRANSFORM_TIMEOUT') return fail('REGEX_TIMEOUT');
+      if (error.code === 'TEXT_TRANSFORM_OUTPUT_LIMIT') return fail('OUTPUT_LIMIT');
+      if (error.code === 'TEXT_REGEX_INVALID') return fail('INVALID_PATTERN');
+      if (error.code === 'TEXT_TRANSFORM_WORKER_EXIT') return fail('REGEX_WORKER_EXIT');
+    }
     return fail('REGEX_WORKER_ERROR');
   } finally {
     active--;

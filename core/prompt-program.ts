@@ -1,5 +1,6 @@
 /** A data-only prompt language. Content cannot create tools, wire objects or executable code. */
 import { validateAgentCollaboration } from './agent-collaboration.js';
+import { validateTextTransformRule, type TextTransformRule } from './text-transform.js';
 import {
   PromptBudget,
   evaluationFail,
@@ -88,6 +89,7 @@ export type PromptTemplate = (
       then: PromptTemplate;
       else?: PromptTemplate;
       trimLines?: boolean;
+      trimIndent?: boolean;
     }
   | {
       kind: 'each';
@@ -135,10 +137,18 @@ export type PromptBlock = {
 );
 /** Opt in to a host-defined final submission tool; prompt data cannot define new tool implementations. */
 export type PromptExecution = { storySubmission?: { when?: PromptExpression } };
+export type PromptTextTransform = TextTransformRule & {
+  title: string;
+  enabled?: boolean;
+  stage: 'input' | 'display';
+  role?: 'all' | 'user' | 'assistant';
+  replacementTemplate?: PromptTemplate;
+};
 export type PromptProgram = {
   version: 1;
   controls: PromptControl[];
   blocks: PromptBlock[];
+  transforms?: PromptTextTransform[];
   execution?: PromptExecution;
   collaboration?: import('./agent-collaboration.js').AgentCollaboration;
   provenance?: { sourceHash: string; variant: string; conversionVersion: string; notes: string[] };
@@ -456,8 +466,10 @@ function template(
       object(raw, ['kind', 'name']);
       id(raw.name);
     } else if (raw.kind === 'if') {
-      object(raw, ['kind', 'condition', 'then', 'else', 'trimLines']);
+      object(raw, ['kind', 'condition', 'then', 'else', 'trimLines', 'trimIndent']);
       if (raw.trimLines !== undefined && typeof raw.trimLines !== 'boolean')
+        fail('PROMPT_INVALID_TEMPLATE');
+      if (raw.trimIndent !== undefined && typeof raw.trimIndent !== 'boolean')
         fail('PROMPT_INVALID_TEMPLATE');
       expression(raw.condition, controls, 0, locals, budget);
       template(raw.then, controls, depth + 1, locals, budget);
@@ -501,6 +513,7 @@ export function validatePromptProgram(value: unknown): PromptProgram {
     'version',
     'controls',
     'blocks',
+    'transforms',
     'execution',
     'collaboration',
     'provenance',
@@ -560,6 +573,40 @@ export function validatePromptProgram(value: unknown): PromptProgram {
   }
   for (const c of raw.controls as PromptControl[])
     if (c.visibleWhen !== undefined) expression(c.visibleWhen, controls);
+  if (raw.transforms !== undefined) {
+    if (!Array.isArray(raw.transforms) || raw.transforms.length > 32)
+      fail('PROMPT_TRANSFORM_LIMIT');
+    const transformIds = new Set<string>();
+    for (const item of raw.transforms) {
+      const rule = object(item, [
+        'id',
+        'title',
+        'enabled',
+        'stage',
+        'role',
+        'pattern',
+        'flags',
+        'replacement',
+        'replacementTemplate',
+      ]);
+      try {
+        validateTextTransformRule(rule as TextTransformRule);
+      } catch {
+        fail('PROMPT_INVALID_TRANSFORM');
+      }
+      id(rule.id);
+      str(rule.title);
+      if (transformIds.has(rule.id)) fail('PROMPT_DUPLICATE_TRANSFORM', rule.id);
+      transformIds.add(rule.id);
+      if (
+        !['input', 'display'].includes(String(rule.stage)) ||
+        (rule.role !== undefined && !['all', 'user', 'assistant'].includes(String(rule.role))) ||
+        (rule.enabled !== undefined && typeof rule.enabled !== 'boolean')
+      )
+        fail('PROMPT_INVALID_TRANSFORM', rule.id);
+      if (rule.replacementTemplate !== undefined) template(rule.replacementTemplate, controls);
+    }
+  }
   if (raw.execution !== undefined) {
     const execution = object(raw.execution, ['storySubmission']);
     if (execution.storySubmission !== undefined) {
@@ -752,6 +799,8 @@ export type PromptEvaluationOptions = {
   budget?: PromptBudget;
   /** Host-only HTML presentation mode. Text nodes remain authored markup; evaluated values are escaped. */
   escapeTemplateValues?: boolean;
+  /** Host-only regex replacement mode: evaluated values are literal, authored text keeps captures. */
+  escapeReplacementValues?: boolean;
 };
 const numberValue = (v: RuntimeValue): number =>
   typeof v === 'number' && Number.isFinite(v) ? v : evaluationFail('PROMPT_NUMBER_REQUIRED');
@@ -783,11 +832,13 @@ class PromptEvaluator {
   readonly locals: Record<string, RuntimeValue>;
   private outputChars = 0;
   private readonly escapeTemplateValues: boolean;
+  private readonly escapeReplacementValues: boolean;
   constructor(
     readonly values: Record<string, PromptValue>,
     options: PromptEvaluationOptions = {}
   ) {
     this.escapeTemplateValues = options.escapeTemplateValues === true;
+    this.escapeReplacementValues = options.escapeReplacementValues === true;
     if (options.budget && options.limits) evaluationFail('PROMPT_INVALID_BUDGET');
     this.budget = options.budget ?? new PromptBudget(options.limits);
     if (!isObject(options.runtime ?? {}) || !isObject(options.locals ?? {}) || !isObject(values))
@@ -1255,7 +1306,8 @@ class PromptEvaluator {
       this.budget.step();
       if (node.kind === 'text') append(node.text);
       else if (node.kind === 'value') {
-        const value = this.display(this.evaluate(node.expression, locals));
+        const displayed = this.display(this.evaluate(node.expression, locals));
+        const value = this.escapeReplacementValues ? displayed.replaceAll('$', '$$$$') : displayed;
         append(
           this.escapeTemplateValues
             ? value.replace(
@@ -1269,7 +1321,9 @@ class PromptEvaluator {
         if (!Object.hasOwn(slots, node.name))
           throw new PromptProgramError('PROMPT_UNKNOWN_SLOT', undefined, node.name);
         if (slots[node.name].length) this.usedSlots.add(node.name);
-        append(slots[node.name]);
+        append(
+          this.escapeReplacementValues ? slots[node.name].replaceAll('$', '$$$$') : slots[node.name]
+        );
       } else if (node.kind === 'if') {
         let value = this.render(
           truth(this.evaluate(node.condition, locals)) ? node.then : (node.else ?? []),
@@ -1277,6 +1331,12 @@ class PromptEvaluator {
           locals,
           depth + 1
         );
+        if (node.trimIndent)
+          value = value
+            .split('\n')
+            .map((line) => line.trimStart())
+            .join('\n')
+            .trim();
         if (node.trimLines) {
           const lines = value.split('\n');
           let from = 0,
