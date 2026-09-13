@@ -1,20 +1,10 @@
 import { HttpError, record, text } from './request-validation.js';
 
-/** Interpret the documented JSON envelope, independently of its binary container codec. */
-export function moduleJsonDocument(
-  value: unknown,
-  members = new Map<string, () => Buffer>(),
-  projectAssets: ((() => Buffer) | undefined)[] = []
-): Record<string, unknown> {
-  const envelope = record(value);
-  if (envelope.type !== 'risuModule') throw new HttpError(400, 'RISU_IMPORT_INVALID_FILE');
-  const module = record(envelope.module);
-  const name = text(module.name, 'module name', 200);
-  const description = text(module.description ?? '', 'module description', 100_000, true);
-  const lorebook = module.lorebook ?? [];
+/** One lore mapping for extracted projects and the canonical lore in CharX containers. */
+export function moduleLoreEntries(lorebook: unknown) {
   if (!Array.isArray(lorebook) || lorebook.length > 2000)
     throw new HttpError(400, 'RISU_IMPORT_INVALID_FILE');
-  const entries = lorebook.map((raw) => {
+  return lorebook.map((raw) => {
     const entry = record(raw);
     const known = [
       'id',
@@ -64,6 +54,20 @@ export function moduleJsonDocument(
         : {}),
     };
   });
+}
+
+/** Interpret the documented JSON envelope, independently of its binary container codec. */
+export function moduleJsonDocument(
+  value: unknown,
+  members = new Map<string, () => Buffer>(),
+  projectAssets: ((() => Buffer) | undefined)[] = []
+): Record<string, unknown> {
+  const envelope = record(value);
+  if (envelope.type !== 'risuModule') throw new HttpError(400, 'RISU_IMPORT_INVALID_FILE');
+  const module = record(envelope.module);
+  const name = text(module.name, 'module name', 200);
+  const description = text(module.description ?? '', 'module description', 100_000, true);
+  const entries = moduleLoreEntries(module.lorebook ?? []);
   const assets: { name: string; uri: string; type: string }[] = [];
   const addAsset = (name: unknown, value: unknown, type: string, projectAsset?: () => Buffer) => {
     const title = typeof name === 'string' && name ? name : `이미지 ${assets.length + 1}`;

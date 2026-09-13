@@ -12,6 +12,7 @@ await runBrowserVerification({
     'tests/package-features-browser.spec.ts',
     'tests/package-panels-browser.spec.ts',
     'tests/risu-preset-import-browser.spec.ts',
+    'tests/risu-import-browser.spec.ts',
   ],
   requiredCases: [
     'NUI01',
@@ -32,5 +33,7 @@ await runBrowserVerification({
     'RISUPRESETUI01',
     'RISUPRESETUI02',
     'RISUPRESETUI03',
+    'RISUKINDUI01',
+    'RISUKINDUI02',
   ],
 });

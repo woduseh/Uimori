@@ -11,6 +11,8 @@ const messages: Record<string, string> = {
   RISU_IMPORT_INVALID_FILE:
     '지원하는 캐릭터 카드·Risu 모듈 JSON 또는 올바른 .charx 파일인지 확인해 주세요.',
   RISU_IMPORT_TOO_LARGE: '캐릭터 카드 파일은 24 MiB 이하여야 해요.',
+  RISU_IMPORT_KIND:
+    '가져올 자료 종류를 확인해 주세요. 모듈 JSON·프로젝트 ZIP은 모듈로만 가져올 수 있어요.',
   RISU_IMPORT_DRAFT_CHANGED: '확인한 파일이 달라졌어요. 파일을 다시 선택해 주세요.',
   RISU_IMPORT_PARTIAL_REQUIRED:
     '자동 이식할 수 없는 부분을 확인하고 부분 가져오기에 동의해 주세요.',

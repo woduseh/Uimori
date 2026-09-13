@@ -1,8 +1,13 @@
 import { crc32, inflateRawSync } from 'node:zlib';
 import { createHash } from 'node:crypto';
-import { RISU_IMPORT_MAX_BYTES, type RisuImportSource } from '../core/risu-import.js';
+import {
+  RISU_IMPORT_MAX_BYTES,
+  type RisuImportSource,
+  type RisuImportKind,
+} from '../core/risu-import.js';
 import { fields, HttpError, record, text } from './request-validation.js';
-import { moduleJsonDocument } from './risu-module-json.js';
+import { moduleJsonDocument, moduleLoreEntries } from './risu-module-json.js';
+import { readEmbeddedRisuModule } from './risu-module-file.js';
 
 const invalid = (): never => {
   throw new HttpError(400, 'RISU_IMPORT_INVALID_FILE');
@@ -98,7 +103,9 @@ export function cardZip(bytes: Buffer): Map<string, () => Buffer> {
   return members;
 }
 
-export function readCharacterCard(value: unknown) {
+export function readCharacterCard(value: unknown, kind?: RisuImportKind) {
+  if (kind !== undefined && kind !== 'bot' && kind !== 'module')
+    throw new HttpError(400, 'RISU_IMPORT_KIND');
   const input = record(value);
   fields(input, ['name', 'base64']);
   const name = text(input.name, 'file name', 255);
@@ -137,6 +144,7 @@ export function readCharacterCard(value: unknown) {
   }
   const outer = record(document);
   if ((format === 'character-card-json' || moduleProject) && outer.type === 'risuModule') {
+    if (kind === 'bot') throw new HttpError(400, 'RISU_IMPORT_KIND');
     let assetFiles: string[] = [];
     if (moduleProject) {
       const markerBytes = members.get('.risutoki/workspace.json')?.();
@@ -191,8 +199,34 @@ export function readCharacterCard(value: unknown) {
     return invalid();
   if (outer.spec !== undefined && !['chara_card_v2', 'chara_card_v3'].includes(String(outer.spec)))
     return invalid();
-  const card = outer.data === undefined ? outer : record(outer.data);
+  let card = outer.data === undefined ? outer : record(outer.data);
   if (typeof card.name !== 'string' || !card.name.trim() || typeof card.description !== 'string')
     return invalid();
-  return { source, hash, format, kind: 'bot' as const, card, members };
+  const embeddedBytes = members.get('module.risum')?.();
+  let embeddedModule: { assetCount: number } | undefined;
+  if (embeddedBytes) {
+    const { module, assets } = readEmbeddedRisuModule(embeddedBytes);
+    const extensions = card.extensions == null ? {} : record(card.extensions);
+    const risu = extensions.risuai == null ? {} : record(extensions.risuai);
+    // This is the card's serialized script/lore section, not another attached package.
+    // Empty arrays deliberately replace inline data; only absent/null lore falls back.
+    card = {
+      ...card,
+      extensions: {
+        ...extensions,
+        risuai: {
+          ...risu,
+          customScripts: module.regex ?? [],
+          triggerscript: module.trigger ?? [],
+        },
+      },
+    };
+    if (module.lorebook != null)
+      card.character_book = {
+        ...(card.character_book == null ? {} : record(card.character_book)),
+        entries: moduleLoreEntries(module.lorebook),
+      };
+    embeddedModule = { assetCount: assets.length };
+  }
+  return { source, hash, format, kind: kind ?? 'bot', card, members, embeddedModule };
 }

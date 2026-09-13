@@ -3,6 +3,7 @@ import { useRef, useState } from 'react';
 import { RISU_IMPORT_MAX_BYTES } from '../core/risu-import.js';
 import type {
   RisuImportApply,
+  RisuImportKind,
   RisuImportPreview,
   RisuImportResult,
   RisuImportSource,
@@ -27,10 +28,12 @@ const importedModule = (result: RisuImportResult) =>
 /** Closing the dialog retains the reviewed file and any uncertain apply request. */
 export function RisuImport({
   showTrigger = true,
+  defaultKind = '',
   reload,
   onContinueChat,
 }: {
   showTrigger?: boolean;
+  defaultKind?: RisuImportKind | '';
   reload: () => Promise<void>;
   onContinueChat?: (chatId: string) => void;
 }) {
@@ -38,6 +41,7 @@ export function RisuImport({
   const [busy, setBusy] = useState(false);
   const active = useRef(false);
   const [source, setSource] = useState<RisuImportSource | null>(null);
+  const [kind, setKind] = useState<RisuImportKind | ''>('');
   const [preview, setPreview] = useState<RisuImportPreview | null>(null);
   const [memoryIds, setMemoryIds] = useState<string[]>([]);
   const [allowPartial, setAllowPartial] = useState(false);
@@ -71,6 +75,7 @@ export function RisuImport({
       const nextSource = await readSource(file);
       const nextPreview = await api<RisuImportPreview>('/risu-imports/prepare', {
         source: nextSource,
+        ...(kind ? { kind } : {}),
       });
       setSource(nextSource);
       setPreview(nextPreview);
@@ -81,6 +86,35 @@ export function RisuImport({
       requestKey.current = null;
     } catch (cause) {
       setError(`${(cause as Error).message}${preview ? ' 앞서 확인한 파일은 유지했어요.' : ''}`);
+    } finally {
+      active.current = false;
+      setBusy(false);
+    }
+  }
+
+  async function changeKind(nextKind: RisuImportKind | '') {
+    if (active.current || uncertain || result) return;
+    if (!source) {
+      setKind(nextKind);
+      selectionChanged();
+      return;
+    }
+    active.current = true;
+    setBusy(true);
+    setError('');
+    setNotice('');
+    try {
+      const nextPreview = await api<RisuImportPreview>('/risu-imports/prepare', {
+        source,
+        ...(nextKind ? { kind: nextKind } : {}),
+      });
+      setKind(nextKind);
+      setPreview(nextPreview);
+      setMemoryIds([]);
+      setAllowPartial(false);
+      selectionChanged();
+    } catch (cause) {
+      setError(`${(cause as Error).message} 앞서 확인한 파일과 자료 종류는 유지했어요.`);
     } finally {
       active.current = false;
       setBusy(false);
@@ -110,6 +144,7 @@ export function RisuImport({
     if (active.current || !source || !preview || !ready || result) return;
     const payload = submission.current ?? {
       source,
+      ...(kind ? { kind } : {}),
       digest: preview.digest,
       memoryIds:
         preview.kind === 'module'
@@ -164,7 +199,10 @@ export function RisuImport({
           label="Risu 자료 가져오기"
           className="secondary"
           icon={UploadIcon}
-          onClick={() => setOpen(true)}
+          onClick={() => {
+            if (!source && !active.current) setKind(defaultKind);
+            setOpen(true);
+          }}
         />
       )}
       <Dialog
@@ -180,6 +218,22 @@ export function RisuImport({
             파일의 코드나 외부 URL을 자동으로 실행하지 않아요.
           </p>
           <label className="risu-import-file">
+            가져올 자료 종류
+            <select
+              value={kind}
+              disabled={locked}
+              onChange={(event) => void changeKind(event.target.value as RisuImportKind | '')}
+            >
+              <option value="">자동</option>
+              <option value="bot">봇</option>
+              <option value="module">모듈</option>
+            </select>
+          </label>
+          <p className="muted">
+            자동은 카드 파일을 봇으로, 모듈 JSON·프로젝트 ZIP을 모듈로 가져와요. CharX를 모듈로
+            쓰려면 모듈을 선택해 주세요. 모듈은 새 채팅을 만들지 않아요.
+          </p>
+          <label className="risu-import-file">
             .charx · 카드·모듈 JSON · 모듈 프로젝트 ZIP · 최대 24 MiB
             <input
               type="file"
@@ -193,7 +247,7 @@ export function RisuImport({
               }}
             />
           </label>
-          <p className="muted">.risum 파일 직접 가져오기는 아직 지원하지 않아요.</p>
+          <p className="muted">.risum 파일 직접 가져오기는 지원하지 않아요.</p>
           {preview && (
             <>
               <div className="risu-import-summary">

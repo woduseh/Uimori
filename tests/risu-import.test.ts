@@ -14,6 +14,10 @@ import { createPackageStart } from '../server/package-start.js';
 import { compilePackageAttachment } from '../core/package-runtime.js';
 import { modelWorkspace, updatePromptWorkspace } from '../server/prompt-workspace.js';
 import { compileSnapshotPrompt } from '../server/prompt-snapshot.js';
+import { decodeRPack } from '../server/rpack.js';
+import { fixtureBotInput } from './fixtures/chat.js';
+import { buildPackagePresentation } from '../server/package-presentation.js';
+import { createHash } from 'node:crypto';
 
 const owned: { directory: string; store: Store }[] = [];
 afterEach(() => {
@@ -462,6 +466,172 @@ function zip(files: [string, Buffer][]) {
   return Buffer.concat([...locals, directory, end]);
 }
 
+function embeddedModule(module: Record<string, unknown>) {
+  const inverse = Buffer.alloc(256);
+  for (const [encoded, plain] of decodeRPack(
+    Buffer.from(Array.from({ length: 256 }, (_, i) => i))
+  ).entries())
+    inverse[plain] = encoded;
+  const bytes = Buffer.from(JSON.stringify({ type: 'risuModule', module }));
+  const header = Buffer.from([111, 0, 0, 0, 0, 0]);
+  header.writeUInt32LE(bytes.length, 2);
+  return Buffer.concat([
+    header,
+    Buffer.from(bytes.map((value) => inverse[value])),
+    Buffer.from([0]),
+  ]);
+}
+
+test('one CharX imports as a module, attaches to a bot, and uses canonical lore and display without duplication', async () => {
+  const store = database(),
+    value = card();
+  Object.assign(value.data, {
+    creator_notes: 'Module information',
+    extensions: {
+      risuai: {
+        customScripts: [{ type: 'editdisplay', in: 'SOURCE', out: 'WRONG INLINE' }],
+        triggerscript: [{ unexpected: 'inline trigger' }],
+      },
+    },
+  });
+  const source = {
+    name: 'neutral.charx',
+    base64: zip([
+      ['card.json', Buffer.from(JSON.stringify(value))],
+      [
+        'module.risum',
+        embeddedModule({
+          name: 'Not the card title',
+          description: 'Not the card creator notes',
+          lorebook: [
+            {
+              comment: 'Canonical lore',
+              content: 'UNIQUE_EMBEDDED_LORE {{char}}',
+              alwaysActive: true,
+              insertorder: 41,
+            },
+          ],
+          regex: [{ type: 'editdisplay', in: 'SOURCE', out: 'DISPLAY', ableFlag: true, flag: 'g' }],
+          trigger: [],
+        }),
+      ],
+    ]).toString('base64'),
+  };
+  const preview = prepareRisuImport({ source, kind: 'module' }),
+    asBot = prepareRisuImport({ source, kind: 'bot' });
+  expect(preview).toMatchObject({
+    kind: 'module',
+    title: value.data.name,
+    description: 'Module information',
+    summary: { lore: 1, starts: 2, images: 0 },
+  });
+  expect(preview.findings.some((item) => item.level === 'unsupported')).toBe(false);
+  expect(preview.digest).not.toBe(asBot.digest);
+  const body = {
+    source,
+    kind: 'module' as const,
+    digest: preview.digest,
+    memoryIds: [],
+    allowPartial: false,
+    idempotencyKey: 'canonical-module',
+  };
+  expect(() => applyRisuImport(store, { ...body, kind: 'bot' })).toThrow(
+    'RISU_IMPORT_DRAFT_CHANGED'
+  );
+  const saved = applyRisuImport(store, body);
+  expect(saved.chat).toBeNull();
+  expect(store.db.prepare('SELECT count(*) AS n FROM chats').get()!.n).toBe(0);
+  const content = store.product.get<Content>('content', saved.receipt.items[0].id);
+  expect(content.package!.lore.map((lore) => lore.text)).toEqual(['UNIQUE_EMBEDDED_LORE {{char}}']);
+  expect(content.package!.lore[0].loreContext?.order).toBe(41);
+  expect(content.package!.identity).toBeUndefined();
+  const input = fixtureBotInput('Host Bot');
+  input.package.modules = [{ id: content.id, revision: content.revision }];
+  const bot = store.product.content(input) as Content;
+  const chat = store.createChat('Using imported module', undefined, { botId: bot.id });
+  const profile = store.product.snapshot(chat.id)!;
+  const snapshot = compileSnapshotPrompt({
+    chatId: chat.id,
+    parentRevision: null,
+    settingsRevision: chat.settingsRevision,
+    settings: chat.settings,
+    request: 'Continue.',
+    history: [],
+    logicalHistory: [],
+    profile,
+    resources: store.product.resources(chat.id, profile),
+  });
+  const messages = JSON.stringify(snapshot.promptCompilation!.messages);
+  expect(messages.match(/UNIQUE_EMBEDDED_LORE/gu)).toHaveLength(1);
+  expect(messages).not.toContain('The sky is green.');
+  const display = await buildPackagePresentation(snapshot, {
+    id: 'source',
+    chatId: chat.id,
+    text: 'SOURCE',
+    hash: createHash('sha256').update('SOURCE').digest('hex'),
+  });
+  expect(display.original.text).toBe('DISPLAY');
+  const original = nativeTransferOriginal(store, saved.receipt.id);
+  expect(original.sourceFiles).toHaveLength(1);
+  expect(original.sourceFiles![0].base64).toBe(source.base64);
+  expect(applyRisuImport(store, body).receipt).toMatchObject({
+    id: saved.receipt.id,
+    created: false,
+  });
+  const restored = database();
+  restored.product.import(store.product.export());
+  expect(nativeTransferOriginal(restored, saved.receipt.id).sourceFiles![0].base64).toBe(
+    source.base64
+  );
+});
+
+test.each([undefined, null, []])(
+  'embedded lore fallback distinguishes missing/null from an empty list: %j',
+  (lorebook) => {
+    const value = card();
+    Object.assign(value.data, {
+      extensions: {
+        risuai: {
+          customScripts: [{ type: 'editdisplay', in: 'x', out: 'inline' }],
+          triggerscript: [{ type: 'unsupported' }],
+        },
+      },
+    });
+    const source = {
+      name: 'card.charx',
+      base64: zip([
+        ['card.json', Buffer.from(JSON.stringify(value))],
+        ['module.risum', embeddedModule({ lorebook })],
+      ]).toString('base64'),
+    };
+    const preview = prepareRisuImport({ source });
+    expect(preview.summary.lore).toBe(lorebook === null || lorebook === undefined ? 2 : 0);
+    expect(
+      preview.findings.some(
+        (finding) => finding.code === 'display-regex' || finding.level === 'unsupported'
+      )
+    ).toBe(false);
+  }
+);
+
+test('module envelopes retain their explicit kind and malformed embedded sections never become inline fallbacks', () => {
+  const module = sourceOf({ type: 'risuModule', module: { name: 'Module' } });
+  expect(() => prepareRisuImport({ source: module, kind: 'bot' })).toThrow('RISU_IMPORT_KIND');
+  expect(() => prepareRisuImport({ source: sourceOf(card()), kind: 'unknown' })).toThrow(
+    'RISU_IMPORT_KIND'
+  );
+  const store = database(),
+    source = {
+      name: 'bad.charx',
+      base64: zip([
+        ['card.json', Buffer.from(JSON.stringify(card()))],
+        ['module.risum', Buffer.from([111, 0, 0, 0, 0, 0, 0])],
+      ]).toString('base64'),
+    };
+  expect(() => prepareRisuImport({ source })).toThrow('RISU_IMPORT_INVALID_FILE');
+  expect(store.db.prepare('SELECT count(*) AS n FROM chats').get()!.n).toBe(0);
+});
+
 test('module project ZIP reads ordered asset files within one project folder without RPack', () => {
   const store = database();
   const png = Buffer.from(
@@ -553,7 +723,7 @@ test('module project refuses paths outside its folder and multiple module defini
   ).toThrow('RISU_IMPORT_INVALID_FILE');
 });
 
-test('charx imports embedded images and requires consent for unsupported modules; corrupt files never register', () => {
+test('charx keeps card-owned images while reading its embedded module; corrupt files never register', () => {
   const store = database();
   const png = Buffer.from(
     'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aX1sAAAAASUVORK5CYII=',
@@ -567,13 +737,13 @@ test('charx imports embedded images and requires consent for unsupported modules
   const bytes = zip([
     ['card.json', Buffer.from(JSON.stringify(value))],
     ['assets/main.png', png],
-    ['module.risum', Buffer.from([111, 0, 0, 0, 0, 0, 0])],
+    ['module.risum', embeddedModule({ trigger: [{ type: 'unsupported-script' }] })],
   ]);
   const source = { name: 'synthetic.charx', base64: bytes.toString('base64') };
   const preview = prepareRisuImport({ source });
   expect(preview.summary.images).toBe(1);
   expect(preview.findings).toContainEqual(
-    expect.objectContaining({ code: 'embedded-module', level: 'unsupported' })
+    expect.objectContaining({ code: 'embedded-module', level: 'info' })
   );
   const body = {
     source,
