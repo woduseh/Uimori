@@ -2,7 +2,7 @@ import type { RuntimeValue } from './prompt-values.js';
 import { inspectRuntimeValue, PromptBudget } from './prompt-values.js';
 
 export const EXTENSION_PROGRAM_API = 'uimori-state-action-v1' as const;
-export const EXTENSION_PROGRAM_MAX_SOURCE_CHARS = 64 * 1024;
+export const EXTENSION_PROGRAM_MAX_SOURCE_CHARS = 512 * 1024;
 export const EXTENSION_PROGRAM_MAX_RESULT_CHARS = 8_000;
 /** JSON character cap; the guest runtime separately enforces a stricter 128 KiB UTF-8 cap. */
 export const EXTENSION_PROGRAM_MAX_VALUE_CHARS = 128 * 1024;
@@ -18,6 +18,8 @@ export type ExtensionGrantCapability = (typeof EXTENSION_GRANT_CAPABILITIES)[num
 
 export interface ExtensionProgram {
   api: typeof EXTENSION_PROGRAM_API;
+  /** Omitted in existing packages; JavaScript remains the default without rewriting old hashes. */
+  language?: 'javascript' | 'lua';
   /** Requested native capabilities. The host independently binds their scope per invocation. */
   capabilities?: (typeof EXTENSION_CAPABILITIES)[number][];
   /** Function body evaluated by a host-owned isolated guest runtime. */
@@ -80,8 +82,14 @@ function exactRecord(
 }
 
 export function validateExtensionProgram(value: unknown): ExtensionProgram {
-  const program = exactRecord(value, ['api', 'source'], ['capabilities']);
+  const program = exactRecord(value, ['api', 'source'], ['capabilities', 'language']);
   if (program.api !== EXTENSION_PROGRAM_API) fail('BEHAVIOR_PROGRAM_API');
+  if (
+    Object.hasOwn(program, 'language') &&
+    program.language !== 'javascript' &&
+    program.language !== 'lua'
+  )
+    fail('BEHAVIOR_PROGRAM_LANGUAGE');
   if (
     typeof program.source !== 'string' ||
     !program.source.length ||

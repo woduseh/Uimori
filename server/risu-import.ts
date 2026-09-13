@@ -19,6 +19,7 @@ import { readCharacterCard } from './character-card-file.js';
 import { importRisuDisplayRegex } from './risu-regex.js';
 import { RisuCbs } from './risu-cbs.js';
 import { importRisuVariableDefaults } from './risu-variable-defaults.js';
+import { adaptRisuLuaTriggers } from './risu-lua-adapter.js';
 import { applyNativeTransfer, prepareNativeTransfer } from './native-transfer.js';
 import { decodeImage } from './package-images.js';
 import { fields, HttpError, record, text } from './request-validation.js';
@@ -75,7 +76,7 @@ function analyze(value: unknown, requestedKind?: RisuImportKind) {
       finding(
         'variable-defaults',
         'warning',
-        '기본 변수를 공통 템플릿의 읽기 기본값으로 가져와요. 이 자료를 봇으로 선택하면 프리셋보다 우선하며, 모듈·페르소나로 장착할 때는 이 기본값을 적용하지 않아요. 저장된 채팅 변수·Lua·트리거의 변경은 아직 실행하지 않아요.'
+        '기본 변수를 공통 템플릿의 읽기 기본값으로 가져와요. 이 자료를 봇으로 선택하면 프리셋보다 우선하며, 모듈·페르소나로 장착할 때는 이 기본값을 적용하지 않아요. 행동의 공유 변수 쓰기는 해당 채팅에서 허용해야 하며 코드 지원 범위는 별도로 안내해요.'
       );
     }
   } catch {
@@ -96,7 +97,7 @@ function analyze(value: unknown, requestedKind?: RisuImportKind) {
         finding(
           'template-cbs',
           'warning',
-          '지원하는 CBS 읽기·계산·조건을 공통 템플릿으로 가져와요. 기본 변수와 선택한 이름을 읽으며, 변수 쓰기·Lua·트리거는 실행하지 않아요. 원래 문법과 기본값은 자료에 보존해요.'
+          '지원하는 CBS 읽기·계산·조건을 공통 템플릿으로 가져와요. 채팅의 공유 변수·자료 기본값·선택한 이름을 읽으며 템플릿 평가 자체는 변수를 쓰거나 코드를 실행하지 않아요. 원래 문법과 기본값은 자료에 보존해요.'
         );
       return template;
     } catch {
@@ -326,12 +327,55 @@ function analyze(value: unknown, requestedKind?: RisuImportKind) {
   const regex = importRisuDisplayRegex(risu.customScripts);
   pkg.transforms = regex.transforms;
   findings.push(...regex.findings);
+  const lua = adaptRisuLuaTriggers(risu.triggerscript);
+  if (lua.actions.length && lua.actions.length <= 100) {
+    pkg.behavior = {
+      revision: 1,
+      schemaVersion: 1,
+      stateSchema: { type: 'record', properties: {} },
+      initialState: {},
+      actions: lua.actions,
+      outputParsers: [],
+    };
+    finding(
+      'lua-actions',
+      'warning',
+      'Lua의 생성 전·응답 후·버튼 콜백을 격리된 행동으로 가져와요. 가져오기 중에는 코드를 실행하지 않아요. 공유 변수 변경과 추가 모델 호출은 채팅에서 각각 허용해야 하며 아직 연결되지 않은 이벤트·API는 아래 안내를 확인해 주세요.'
+    );
+  } else if (lua.actions.length > 100) {
+    finding(
+      'lua-actions-limit',
+      'unsupported',
+      'Lua 행동이 자료의 한도를 넘어 자동 연결하지 않아요. 원본 코드는 파일에 보존해요.'
+    );
+  }
+  for (const issue of lua.findings)
+    finding(
+      `${issue.code}:${issue.triggerIndex}:${issue.effectIndex ?? 0}:${issue.event ?? ''}`,
+      issue.code === 'RISU_LUA_FRESH_INVOCATION' ? 'warning' : 'unsupported',
+      `트리거 ${issue.triggerIndex + 1}${issue.event ? ` · ${issue.event}` : ''}: ${issue.message}`
+    );
+  const unhandledTriggers = Array.isArray(risu.triggerscript)
+    ? risu.triggerscript.some((raw) => {
+        const effects = object(raw).effect;
+        return (
+          !Array.isArray(effects) || effects.some((effect) => object(effect).type !== 'triggerlua')
+        );
+      })
+    : present(risu.triggerscript);
+  if (unhandledTriggers)
+    finding(
+      'trigger-effects-unsupported',
+      'unsupported',
+      'Lua 외의 트리거 효과나 해석하지 못한 트리거가 있어요. 실행 순서를 임의로 바꾸지 않고 원본 파일에 보존해요.'
+    );
   // Traverse data only to identify executable/configured extension surfaces, never to execute them.
   const pending: unknown[] = [card.extensions];
   while (pending.length) {
     const current = object(pending.pop());
     for (const [key, value] of Object.entries(current)) {
-      if (current === risu && (key === 'customScripts' || key === 'defaultVariables')) continue;
+      if (current === risu && ['customScripts', 'defaultVariables', 'triggerscript'].includes(key))
+        continue;
       if (!present(value)) continue;
       if (/regex|customscript|triggerscript|lua|backgroundhtml|customcss|backgroundcss/iu.test(key))
         finding(

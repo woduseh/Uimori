@@ -91,13 +91,16 @@ test('real guest stages reads, empty overrides and removals, and self materials 
     const fallback = await api.host.call('variables.read', {key:'mood'});
     await api.host.call('variables.set', {key:'custom', value:'7'});
     const keys = await api.host.call('variables.list', {});
-    return {state: api.state, result:{first:first.value,blank:blank.value,fallback:fallback.value,material:material.text,keys:keys.items}};
+    const missing = await api.host.call('variables.read', {key:'missing'});
+    return {state: api.state, result:{first:first.value,blank:blank.value,fallback:fallback.value,overrides:[first.overridden,blank.overridden,fallback.overridden,missing.overridden],missing:missing.value,material:material.text,keys:keys.items}};
   `);
   const result = await executePackageExtensionProgram(program, input, undefined, f.options);
   expect(result.result).toMatchObject({
     first: 'calm',
     blank: '',
     fallback: 'calm',
+    overrides: [false, true, false, false],
+    missing: null,
     material: 'bright',
     keys: [
       { key: 'custom', overridden: true },

@@ -297,11 +297,12 @@ export function createExtensionVariableSession(
         };
       }
       if (!Object.hasOwn(resolved, key))
-        return { value: null, offset: 0, nextOffset: null, totalChars: 0 };
+        return { value: null, offset: 0, nextOffset: null, totalChars: 0, overridden: false };
       const text = resolved[key];
       const chunk = text.slice(offset, offset + limit);
       return {
         value: chunk,
+        overridden: Object.hasOwn(state.values, key),
         offset,
         nextOffset: offset + chunk.length < text.length ? offset + chunk.length : null,
         totalChars: text.length,
