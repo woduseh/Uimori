@@ -410,6 +410,7 @@ export class Store {
       purpose: authored ? 'authored' : 'run',
       runId: id,
       sceneCommandId: command.sceneCommandId,
+      supersedesRunId: command.retryOf,
     });
     const status = frozen.story?.waiting ? 'waiting_for_state' : 'queued';
     this.db

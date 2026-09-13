@@ -1033,6 +1033,34 @@ function BehaviorEditor({
                     </label>
                     <label className="check behavior-method-choice">
                       <SelectionCheckbox
+                        checked={
+                          action.program.capabilities?.includes('conversation.read') ?? false
+                        }
+                        onChange={(e) =>
+                          updateAction(index, {
+                            program: {
+                              ...action.program!,
+                              capabilities: [
+                                ...(action.program!.capabilities ?? []).filter(
+                                  (item) => item !== 'conversation.read'
+                                ),
+                                ...(e.target.checked ? ['conversation.read' as const] : []),
+                              ],
+                            },
+                          })
+                        }
+                      />
+                      <span>
+                        대화 읽기 요청
+                        <small>
+                          현재 채팅 분기에서 사용자가 볼 수 있는 전체 대화를 코드에서 조회할 수
+                          있어요. 사용할 채팅에서 이 자료의 정확한 현재 버전에 읽기 권한을 별도로
+                          허용해야 해요. 다른 채팅·분기·삭제 기록·키는 포함하지 않아요.
+                        </small>
+                      </span>
+                    </label>
+                    <label className="check behavior-method-choice">
+                      <SelectionCheckbox
                         checked={action.program.capabilities?.includes('variables.write') ?? false}
                         onChange={(e) =>
                           updateAction(index, {

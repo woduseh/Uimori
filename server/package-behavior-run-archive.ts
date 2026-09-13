@@ -37,6 +37,34 @@ import {
   validateExtensionVariablePermission,
 } from './extension-variables.js';
 import { resolveTemplateVariableContext } from '../core/template-variables.js';
+import type { PackageAttachment } from '../core/content-package.js';
+import type { ExtensionProgram } from '../core/extension-program.js';
+import {
+  resolveExtensionConversation,
+  extensionConversationViewHash,
+} from './extension-conversation.js';
+import { validateExtensionConversationPermission } from './extension-conversation-access.js';
+
+function validateConversationReceipt(
+  store: Store,
+  snapshot: RunSnapshot,
+  ref: PackageAttachment,
+  program: ExtensionProgram,
+  receipt: { viewHash: string },
+  response?: string
+): void {
+  const view = resolveExtensionConversation(store, snapshot, snapshot.extensionConversation, {
+    request: snapshot.request,
+    ...(response !== undefined ? { response } : {}),
+  });
+  validateExtensionConversationPermission(
+    receipt,
+    snapshot.profile,
+    ref,
+    program,
+    extensionConversationViewHash(view)
+  );
+}
 
 export const packageBehaviorRunTables = [
   'package_behavior_entropy',
@@ -386,6 +414,26 @@ function validateAfterResponseProgress(
           state: entryAfter.state,
           result: entry.result,
         });
+        if (entry.program.conversation) {
+          const staged = source
+            ? undefined
+            : store.db.prepare('SELECT partial_text FROM runs WHERE id=?').get(run.id)
+                ?.partial_text;
+          const response = source?.text ?? (typeof staged === 'string' ? staged : undefined);
+          if (
+            response === undefined ||
+            createHash('sha256').update(response).digest('hex') !== receipt.sourceHash
+          )
+            reject('after-response conversation source');
+          validateConversationReceipt(
+            store,
+            snapshot,
+            definition.ref,
+            action.program,
+            entry.program.conversation,
+            response
+          );
+        }
         if (entry.program.variables) {
           validateExtensionVariablePermission(
             entry.program.variables,
@@ -538,6 +586,20 @@ export function validateRunBehaviorArchive(store: Store, checkState: CheckState)
             state: after.state,
             result: entry.result,
           });
+          if (entry.program.conversation) {
+            if (!ownerSnapshot) reject('conversation opportunity owner');
+            const ref = ownerSnapshot.profile?.packageAttachments?.find(
+              (ref) => `${ref.id}:${ref.role}` === entry.instanceId
+            );
+            if (!ref) reject('conversation opportunity attachment');
+            validateConversationReceipt(
+              store,
+              ownerSnapshot,
+              ref,
+              action.program,
+              entry.program.conversation
+            );
+          }
           if (entry.program.variables) {
             if (!ownerSnapshot) reject('variable opportunity owner');
             const ref = ownerSnapshot.profile?.packageAttachments?.find(
@@ -706,6 +768,16 @@ export function validateRunBehaviorArchive(store: Store, checkState: CheckState)
       same(entry.hostRuntime.options, runtime.options, 'selected options');
       for (const field of ['variables', 'variableStateRevision', 'variableDefaultsError'])
         same(entry.hostRuntime[field], runtime[field], 'variable dependency projection');
+      if (entry.program?.conversation) {
+        if (!action.program) reject('conversation program missing');
+        validateConversationReceipt(
+          store,
+          snapshot,
+          ref,
+          action.program,
+          entry.program.conversation
+        );
+      }
       if (entry.program?.variables) {
         try {
           if (!action.program) reject('variable program missing');

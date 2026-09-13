@@ -11,9 +11,15 @@ import { freezeLoreContext } from './lore-context.js';
 import { captureLogicalHistory, compileSnapshotPrompt } from './prompt-snapshot.js';
 import { hasPromptInputTransforms } from './prompt-transforms.js';
 import { chatVariableProfile } from './chat-variable-context.js';
+import { captureRunConversation } from './package-conversation.js';
 
 export type ReservationPurpose =
-  | { purpose: 'run' | 'authored'; runId: string; sceneCommandId?: string }
+  | {
+      purpose: 'run' | 'authored';
+      runId: string;
+      sceneCommandId?: string;
+      supersedesRunId?: string;
+    }
   | { purpose: 'helper-artifact' | 'helper-context' }
   | {
       purpose: 'preview-main' | 'preview-translation';
@@ -90,6 +96,8 @@ export function freezeReservationSnapshot(
   if (options.purpose === 'preview-main' || options.purpose === 'preview-translation')
     frozen = { ...frozen, executionClock: options.executionClock() };
   frozen = freezePackageStates(store, frozen, reserved);
+  if (options.purpose === 'run')
+    frozen = captureRunConversation(store, frozen, options.runId, options.supersedesRunId);
   if (options.purpose === 'run') frozen = prepareRunBehavior(store, options.runId, frozen);
   if (
     options.purpose === 'run' &&

@@ -37,7 +37,7 @@ function exactReceipt(value: unknown): Record<string, unknown> {
     fail('BEHAVIOR_PROGRAM_RECEIPT');
   const record = value as Record<string, unknown>;
   const fields = ['api', 'programHash', 'engine', 'state', 'result'];
-  const allowed = [...fields, 'variables'];
+  const allowed = [...fields, 'variables', 'conversation'];
   const names = Object.getOwnPropertyNames(record);
   if (fields.some((field) => !Object.hasOwn(record, field)))
     fail('BEHAVIOR_PROGRAM_RECEIPT_FIELDS');
@@ -64,6 +64,27 @@ export function validateExtensionComputationReceipt(
   const engine = receipt.engine;
   if (typeof engine !== 'string') fail('BEHAVIOR_PROGRAM_RECEIPT_ENGINE');
   if (!engine.length || engine.length > 200) fail('BEHAVIOR_PROGRAM_RECEIPT_ENGINE');
+  const conversation = receipt.conversation;
+  if (Object.hasOwn(receipt, 'conversation')) {
+    if (
+      !conversation ||
+      typeof conversation !== 'object' ||
+      Array.isArray(conversation) ||
+      ![Object.prototype, null].includes(Object.getPrototypeOf(conversation)) ||
+      Object.getOwnPropertySymbols(conversation).length ||
+      Object.getOwnPropertyNames(conversation).length !== 1 ||
+      !Object.hasOwn(conversation, 'viewHash')
+    )
+      fail('BEHAVIOR_PROGRAM_RECEIPT_CONVERSATION');
+    const descriptor = Object.getOwnPropertyDescriptor(conversation, 'viewHash')!;
+    if (
+      !Object.hasOwn(descriptor, 'value') ||
+      !descriptor.enumerable ||
+      typeof descriptor.value !== 'string' ||
+      !/^[a-f0-9]{64}$/u.test(descriptor.value)
+    )
+      fail('BEHAVIOR_PROGRAM_RECEIPT_CONVERSATION');
+  }
   let output: ExtensionProgramResult;
   try {
     output = validateExtensionProgramResult({ state: receipt.state, result: receipt.result });
@@ -78,6 +99,9 @@ export function validateExtensionComputationReceipt(
     result: output!.result,
     ...(Object.hasOwn(receipt, 'variables')
       ? { variables: validateChatVariableMutation(receipt.variables) }
+      : {}),
+    ...(Object.hasOwn(receipt, 'conversation')
+      ? { conversation: { ...(conversation as { viewHash: string }) } }
       : {}),
   };
 }

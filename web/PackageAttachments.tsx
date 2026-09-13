@@ -253,7 +253,10 @@ export function PackageAttachments({
           title = pkg?.title ?? '연결한 패키지',
           fixedBot = ref.role === 'bot',
           requestsModelGeneration = pkg && requestsCapability(pkg, 'model.generate'),
+          requestsConversationRead = pkg && requestsCapability(pkg, 'conversation.read'),
           requestsVariableWrite = pkg && requestsCapability(pkg, 'variables.write'),
+          requestsExtensionGrant =
+            requestsModelGeneration || requestsConversationRead || requestsVariableWrite,
           Attachment = fixedBot ? 'fieldset' : 'article';
         return (
           <Attachment
@@ -318,7 +321,7 @@ export function PackageAttachments({
                 수정하면 제외할 수 있어요.
               </p>
             )}
-            {pkg && (requestsModelGeneration || requestsVariableWrite) && (
+            {pkg && requestsExtensionGrant && (
               <div>
                 {requestsModelGeneration && (
                   <>
@@ -353,6 +356,39 @@ export function PackageAttachments({
                         있어요.
                       </small>
                     )}
+                  </>
+                )}
+                {requestsConversationRead && (
+                  <>
+                    <label className="check">
+                      <Switch
+                        aria-label={`${title} 대화 읽기 허용`}
+                        checked={
+                          extensionGrant?.packageRevision === ref.revision &&
+                          extensionGrant.capabilities.includes('conversation.read')
+                        }
+                        disabled={busy}
+                        onChange={(event) => {
+                          const current = latest.current;
+                          if (current.viewKey !== viewKey) return;
+                          current.onChange({
+                            ...current.profile,
+                            extensionGrants: updateExtensionGrantCapability(
+                              current.profile.extensionGrants,
+                              instanceId,
+                              ref.revision,
+                              'conversation.read',
+                              event.target.checked
+                            ),
+                          });
+                        }}
+                      />
+                      대화 읽기 허용
+                    </label>
+                    <small>
+                      현재 채팅 분기에서 사용자가 볼 수 있는 전체 대화만 제공해요. 다른
+                      채팅·분기·삭제 기록·연결 설정의 API 키는 포함하지 않아요.
+                    </small>
                   </>
                 )}
                 {requestsVariableWrite && (

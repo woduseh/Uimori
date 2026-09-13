@@ -2,7 +2,7 @@
 
 > 현재 구현의 사용 안내예요. [베타 결정](DECISIONS-2026-09-12-BETA.md)에 따라 Risu 가져오기·표현 변환·선택적 호환 실행을 준비하며 구현/검증 상태는 [베타 계획](../project-plan/BETA-PLAN.md)에 기록해요.
 
-앱은 `.charx`·Character Card JSON과 구조화된 Risu 모듈 JSON/프로젝트 ZIP의 기본 자료를 가져오며, Uimori의 `ContentPackage`·`PromptProgram` JSON도 읽어요. 프리셋 `.risup`·`.risupreset` 바이너리와 JSON/프로젝트 ZIP은 아래 프리셋 범위에서 읽어요. 독립 `.risum` 파일은 지원 대상에서 제외해요. CharX 내부 모듈의 자료를 읽으며 동적 스크립트 실행 연결은 별도 후속 작업이에요. `.risup` 해독에는 RPack 치환표를 사용하며 [라이선스와 원본 고지](../THIRD_PARTY_NOTICES.md)를 보존해요.
+앱은 `.charx`·Character Card JSON과 구조화된 Risu 모듈 JSON/프로젝트 ZIP의 기본 자료를 가져오며, Uimori의 `ContentPackage`·`PromptProgram` JSON도 읽어요. 프리셋 `.risup`·`.risupreset` 바이너리와 JSON/프로젝트 ZIP은 아래 프리셋 범위에서 읽어요. 독립 `.risum` 파일은 지원 대상에서 제외해요. CharX 내부 모듈의 자료와 아래 범위의 Lua 콜백을 읽고, 아직 연결하지 않은 동적 스크립트·표시 기능은 원본과 안내로 보존해요. `.risup` 해독에는 RPack 치환표를 사용하며 [라이선스와 원본 고지](../THIRD_PARTY_NOTICES.md)를 보존해요.
 
 ## Risu 캐릭터 카드
 
@@ -45,11 +45,15 @@
 
 ### Lua 콜백 가져오기
 
-독립 `triggerlua` 효과의 원본 코드를 Lua 프로그램으로 보존해 `onStart`는 생성 전, `onOutput`은 완성 응답 후, `onButtonClick`은 문자열 입력을 받는 사용자 행동으로 연결해요. `trigger.type`만으로 콜백을 추정하지 않으며 실제 호출 때 등록된 함수를 찾아요. 가져오기·일반 미리보기·복원에서는 실행하지 않아요. 공유 변수 쓰기와 모델 호출은 정확한 자료 개정에 대해 채팅별로 각각 허용해야 해요.
+독립 `triggerlua` 효과의 원본 코드를 Lua 프로그램으로 보존해 `onStart`는 생성 전, `onOutput`은 완성 응답 후, `onButtonClick`은 문자열 입력을 받는 사용자 행동으로 연결해요. `trigger.type`만으로 콜백을 추정하지 않으며 실제 호출 때 등록된 함수를 찾아요. 가져오기·일반 미리보기·복원에서는 실행하지 않아요. 공유 변수 쓰기·대화 읽기·모델 호출은 정확한 자료 개정에 대해 채팅별로 각각 허용해야 해요.
 
 `getChatVar/setChatVar/setChatVarChanged`, `getState/setState/setStateChanged`, JSON 모듈·`async`와 `simpleLLM`은 공통 Host API를 사용해요. 없는 변수의 문자열 `"null"`, 빈 값, 저장된 override와 기본값의 차이, Risu JSON의 nil/빈 테이블 의미를 어댑터에서 처리해요. 호출별 Lua 전역은 새로 초기화되므로 영속 상태는 공유 변수/`getState`에 저장해야 해요.
 
-`onInput`·`listenEdit`의 원본 실행 시점, 조건이 붙은 자동 콜백, 다른 효과와 혼합된 트리거, 나머지 대화·자료·UI·모델 API는 아직 연결하지 않아요. 해당 부분을 가져오기 안내에 남기고 미지원 API는 성공한 것처럼 처리하지 않아요. Lua 외 트리거·커스텀 표시와 CBS 쓰기 역시 후속 범위예요. 이 첫 연결은 동적인 상태창·선택기 전체의 완료를 뜻하지 않아요.
+`getChat/getChatMain/getChatData/getChatRole/getChatLength`, `getRecentChats/getRecentChatsMain`, `getFullChat/getFullChatMain`, `getUserLastMessage/getCharacterLastMessage`는 [현재 분기 대화 Host](EXTENSION-PROGRAMS.md#host-api로-현재-분기-대화-읽기)를 사용해요. 모델 문맥 절삭과 무관하게 현재 분기에서 사용자가 볼 수 있는 저장 대화를 읽고, 생성 전·모델 행동은 현재 요청, 응답 후 행동은 현재 요청과 완성 응답을 덧붙여요. 다른 채팅·분기·삭제·대체된 기록과 앱 설정·연결 설정의 API 키는 제공하지 않아요. 사용자가 대화 본문에 직접 쓴 문자열은 원문으로 취급해요. 원본에 없는 시각은 `0`이고 저장되지 않은 첫 인사 대체값은 만들지 않아요. 전체 조회가 실행 한도를 넘으면 일부 결과를 성공으로 반환하지 않아요.
+
+Risu의 `var`·`value` 트리거 조건과 지원하는 비교/CBS 값은 공통 `when` 식으로 변환해 `onStart`·`onOutput` 자동 행동에 적용해요. 변수값 자체에 실행할 CBS가 남아 있거나 조건 종류·연산·CBS 블록을 안전하게 변환할 수 없으면 조건을 버리지 않고 해당 자동 콜백 실행을 보류해요. 다른 효과와 섞인 `triggerlua`도 원래 순서를 바꾸지 않고 소스만 보존해요.
+
+`onInput`과 `listenEdit`의 `editRequest`·`editInput`·`editOutput`·`editDisplay` 원본 실행 시점, 대화 변경·자료/UI API와 동적 화면은 아직 연결하지 않아요. 해당 부분을 가져오기 안내에 남기고 미지원 API는 성공한 것처럼 처리하지 않아요. Lua 외 트리거·커스텀 표시와 CBS 쓰기 역시 후속 범위예요. 이 연결은 동적인 상태창·선택기나 전체 표본 기능의 완료를 뜻하지 않아요.
 
 ## 봇·페르소나·모듈
 

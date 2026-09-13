@@ -35,6 +35,7 @@ const identityFields = new Set([
   'headRevision',
   'revision',
   'runId',
+  'admissionRunId',
   'jobId',
   'taskId',
   'conversationId',

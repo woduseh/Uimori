@@ -22,6 +22,14 @@ import {
 } from '../core/package-behavior-tools.js';
 import { behaviorPayloadHash, recordDraws, type BehaviorScope } from './package-behavior-store.js';
 import { validateExtensionProgramReceipt } from './extension-program-receipt.js';
+import { EXTENSION_PROGRAM_API } from '../core/extension-program.js';
+import type { ExtensionOperationSnapshot } from '../core/extension-operation.js';
+import { conversationScopeFromRefs } from './package-conversation.js';
+import {
+  resolveExtensionConversation,
+  extensionConversationViewHash,
+} from './extension-conversation.js';
+import { validateExtensionConversationPermission } from './extension-conversation-access.js';
 import type { Store } from './store.js';
 import {
   packageBehaviorRunTables,
@@ -523,6 +531,50 @@ export function validatePackageBehaviorArchive(store: Store): void {
             state: r.state,
             result: r.actionResult,
           });
+          if (r.provenance === 'ui-action' && receipt.conversation) {
+            const operation = db
+              .prepare(
+                'SELECT snapshot,result,status FROM package_extension_operations WHERE chat_id=? AND branch_id=? AND attachment_instance_id=? AND request_key=?'
+              )
+              .get(scope.chatId, scope.branchId, scope.attachmentInstanceId, r.idempotencyKey) as
+              | Row
+              | undefined;
+            if (!operation || operation.status !== 'completed' || operation.result === null)
+              reject('user conversation operation owner');
+            const frozen = JSON.parse(operation.snapshot) as ExtensionOperationSnapshot;
+            same(frozen.scope, scope, 'user conversation scope');
+            same(
+              { api: EXTENSION_PROGRAM_API, ...JSON.parse(operation.result) },
+              receipt,
+              'user conversation operation receipt'
+            );
+            const ref = frozen.profile.packageAttachments?.find(
+              (ref) => `${ref.id}:${ref.role}` === scope.attachmentInstanceId
+            );
+            if (!ref || ref.id !== scope.packageId || ref.revision !== scope.packageRevision)
+              reject('user conversation attachment');
+            const conversationScope = conversationScopeFromRefs(
+              store,
+              frozen.extensionConversation,
+              {
+                chatId: scope.chatId,
+                branchId: scope.branchId,
+                parentRevision: frozen.sourceRevision,
+              }
+            );
+            const view = resolveExtensionConversation(
+              store,
+              conversationScope,
+              frozen.extensionConversation
+            );
+            validateExtensionConversationPermission(
+              receipt.conversation,
+              frozen.profile,
+              ref,
+              action.program,
+              extensionConversationViewHash(view)
+            );
+          }
           if (r.provenance === 'ui-action' && receipt.variables) {
             const capability = Object.keys(receipt.variables.changes).length
               ? 'variables.write'
@@ -662,7 +714,7 @@ export function validatePackageBehaviorArchive(store: Store): void {
             state: r.state,
             result: r.actionResult,
           });
-          if (receipt.variables) reject('migration variable receipt');
+          if (receipt.variables || receipt.conversation) reject('migration host receipt');
         } catch {
           reject('upgrade program receipt');
         }

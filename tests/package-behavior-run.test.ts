@@ -321,6 +321,74 @@ test('cancelled staged variables do not commit and a new request reuses the same
   });
 });
 
+test('changed visible conversation recomputes the cohort without rerolling source-bound dice', async () => {
+  const f = fixture((b) => {
+    b.actions[0].effects = [];
+    delete b.actions[0].result;
+    b.actions[0].program = {
+      api: EXTENSION_PROGRAM_API,
+      capabilities: ['conversation.read'],
+      source: `const page = await api.host.call('conversation.page', {});
+        return {state: {...api.state, days: api.state.days + 1}, result: page.items.map(item => item.text)};`,
+    };
+  });
+  const profile = f.store.product.profile(f.chat.id);
+  f.store.product.updateProfile(f.chat.id, {
+    expectedRevision: profile.revision,
+    attachments: profile.attachments,
+    image: profile.image,
+    packageAttachments: profile.packageAttachments,
+    extensionGrants: {
+      [f.instanceId]: { packageRevision: f.content.revision, capabilities: ['conversation.read'] },
+    },
+  });
+  const startRequest = (request: string) => {
+    const s = { ...snapshot(f), request };
+    return start(
+      f,
+      f.store.createRun(
+        f.chat.id,
+        {
+          request,
+          expectedRevision: s.parentRevision,
+          expectedSettingsRevision: s.settingsRevision,
+          branchId: f.branchId,
+          idempotencyKey: randomUUID(),
+        },
+        () => s
+      ).run
+    );
+  };
+  const first = startRequest('First request');
+  await prepareAutomaticRunBehavior(f.store, first.id);
+  const firstDice = await call(f, first);
+  f.store.finishRun(first.id, 'cancelled', 'Synthetic cancellation');
+  const second = startRequest('Changed request');
+  await prepareAutomaticRunBehavior(f.store, second.id);
+  const secondDice = await call(f, second);
+  const firstProgress = runBehaviorProgress(f.store, first.id)!;
+  const secondProgress = runBehaviorProgress(f.store, second.id)!;
+  expect(secondProgress.opportunityId).not.toBe(firstProgress.opportunityId);
+  expect(firstProgress.entries[0].result).toEqual(['First request']);
+  expect(secondProgress.entries[0].result).toEqual(['First request', 'Changed request']);
+  expect(secondProgress.entries[1].drawSeed).toBe(firstProgress.entries[1].drawSeed);
+  expect(secondDice.result).toEqual(firstDice.result);
+  const source = finish(f, second);
+  const fork = forkChat(f.store, f.chat.id, {
+    fromRevision: source.id,
+    idempotencyKey: randomUUID(),
+  });
+  const restored = database();
+  expect(restored.product.import(f.store.product.export())).toMatchObject({ restored: true });
+  const copied = restored.run(restored.source(fork.headRevision!).runId);
+  expect(runBehaviorProgress(restored, copied.id)!.entries[0].result).toEqual(
+    secondProgress.entries[0].result
+  );
+  expect(runBehaviorProgress(restored, copied.id)!.entries[1].drawSeed).toBe(
+    firstProgress.entries[1].drawSeed
+  );
+});
+
 test('revoked variable grants reject cached action adoption and preserve the entire staged prefix', async () => {
   const f = variableFixture(),
     run = start(f);

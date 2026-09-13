@@ -6,6 +6,11 @@ import { createPackageExtensionHost } from './extension-materials.js';
 import { executeExtensionProgram, type ExtensionHostHandler } from './extension-runtime.js';
 import { createExtensionVariableSession } from './extension-variables.js';
 import type { ChatVariableMutation } from '../core/chat-variables.js';
+import {
+  createConversationExtensionHost,
+  extensionConversationViewHash,
+  type FrozenExtensionConversation,
+} from './extension-conversation.js';
 
 export type PackageExtensionModelServices = {
   modelGenerate: (args: RuntimeValue, signal: AbortSignal) => Promise<RuntimeValue>;
@@ -15,6 +20,7 @@ export type PackageExtensionModelServices = {
 
 type ExecutionResult = Awaited<ReturnType<typeof executeExtensionProgram>> & {
   variables?: ChatVariableMutation;
+  conversation?: { viewHash: string };
 };
 type Options = {
   profile: ProfileSnapshot | undefined;
@@ -23,6 +29,7 @@ type Options = {
   assertVariableWriteAccess?: () => void;
   modelServices?: PackageExtensionModelServices;
   responseHost?: ExtensionHostHandler;
+  conversation?: { read: () => FrozenExtensionConversation; assertReadAccess: () => void };
   waitForSlot?: boolean;
   hostWaitMs?: number;
   /** Preserve completed computation only; authorization and state adoption have not finished. */
@@ -55,12 +62,37 @@ export async function executePackageExtensionProgram(
     options.assertCurrent
   );
   let modelResultRead = false;
+  let conversationRead = false;
+  let conversation: { host: ExtensionHostHandler; viewHash: string } | undefined;
   const computed = await executeExtensionProgram(program, input, signal, {
     waitForSlot: options.waitForSlot,
     hostWaitMs: options.hostWaitMs ?? services?.hostWaitMs,
     // A model-capable guest must wait for paid Host work to settle even when it is cancelled.
     awaitHostSettlement: usesModel,
     host: async (method, args, hostSignal) => {
+      if (conversationRead) options.conversation!.assertReadAccess();
+      if (method.startsWith('conversation.')) {
+        if (!program.capabilities?.includes('conversation.read'))
+          throw new ExtensionProgramError('BEHAVIOR_HOST_CONVERSATION_DENIED');
+        if (!options.conversation)
+          throw new ExtensionProgramError('BEHAVIOR_HOST_CONVERSATION_UNAVAILABLE');
+        if (!conversation) {
+          options.conversation.assertReadAccess();
+          const view = options.conversation.read();
+          conversation = {
+            host: createConversationExtensionHost(
+              program,
+              view,
+              options.conversation.assertReadAccess,
+              options.assertCurrent
+            ),
+            viewHash: extensionConversationViewHash(view),
+          };
+        }
+        const result = await conversation.host(method, args, hostSignal);
+        conversationRead = true;
+        return result;
+      }
       if (method.startsWith('variables.')) {
         if (!variables) throw new ExtensionProgramError('BEHAVIOR_HOST_VARIABLES_DENIED');
         return variables.host(method, args, hostSignal);
@@ -87,8 +119,13 @@ export async function executePackageExtensionProgram(
     },
   });
   const mutation = variables?.receipt();
-  const result: ExecutionResult = { ...computed, ...(mutation ? { variables: mutation } : {}) };
+  const result: ExecutionResult = {
+    ...computed,
+    ...(mutation ? { variables: mutation } : {}),
+    ...(conversationRead ? { conversation: { viewHash: conversation!.viewHash } } : {}),
+  };
   options.onExecuted?.(result);
+  if (conversationRead) options.conversation!.assertReadAccess();
   variables?.assertWriteAccess();
   // A caught denied/unavailable call may still produce a valid local fallback state.
   if (modelResultRead) await services!.assertModelAccess();

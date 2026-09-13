@@ -21,6 +21,11 @@ import { buildMainProviderRequest } from '../server/main-request.js';
 import { exportChatBackup, importChatBackup } from '../server/chat-backup.js';
 import { prepareAfterResponse, skipAfterResponse } from '../server/package-after-response.js';
 import { behaviorPayloadHash } from '../server/package-behavior-store.js';
+import {
+  captureExtensionConversation,
+  extensionConversationViewHash,
+  resolveExtensionConversation,
+} from '../server/extension-conversation.js';
 
 const owned: { path: string; store: Store }[] = [];
 afterEach(() => {
@@ -42,7 +47,11 @@ function database() {
   owned.push({ path, store });
   return store;
 }
-function fixture(mode: 'annotation' | 'authoritative' = 'authoritative', afterResponse = false) {
+function fixture(
+  mode: 'annotation' | 'authoritative' = 'authoritative',
+  afterResponse = false,
+  conversation = false
+) {
   const store = database(),
     chat = createFixtureChat(store, 'Synthetic run archive', 'calm');
   const pkg: ContentPackage = {
@@ -102,6 +111,7 @@ function fixture(mode: 'annotation' | 'authoritative' = 'authoritative', afterRe
                 effects: [],
                 program: {
                   api: EXTENSION_PROGRAM_API,
+                  ...(conversation ? { capabilities: ['conversation.read' as const] } : {}),
                   source: 'return {state:{count:api.state.count+1},result:{accepted:true}};',
                 },
               },
@@ -190,6 +200,55 @@ function complete(store: Store, run: Run) {
 }
 
 describe('v11 recorded automatic/model behavior archive', () => {
+  test('after-response conversation markers require the captured grant, context and exact staged response', async () => {
+    const f = fixture('authoritative', true, true);
+    const run = start(f.store, f.chat.id);
+    run.snapshot.extensionConversation = captureExtensionConversation(f.store, run.snapshot, {
+      admissionRunId: run.id,
+    });
+    run.snapshot.profile!.extensionGrants = {
+      [f.instanceId]: { packageRevision: 1, capabilities: ['conversation.read'] },
+    };
+    f.store.db
+      .prepare('UPDATE runs SET snapshot=? WHERE id=?')
+      .run(JSON.stringify(run.snapshot), run.id);
+    await model(f.store, run);
+    const response = 'Exact synthetic prose. <state>{"count":11}</state>';
+    await prepareAfterResponse(f.store, run.id, response);
+    f.store.stageRunOutput(run.id, response);
+    f.store.finishRun(run.id, 'interrupted', 'Synthetic crash before source adoption');
+    const archive = f.store.product.export();
+    const progressRow = archive.tables.package_behavior_runs.find((row) => row.run_id === run.id)!;
+    const progress = JSON.parse(progressRow.body);
+    const marker = {
+      viewHash: extensionConversationViewHash(
+        resolveExtensionConversation(f.store, run.snapshot, run.snapshot.extensionConversation, {
+          request: run.request,
+          response,
+        })
+      ),
+    };
+    // Synthetic historical receipt: restore checks binding and never re-executes authored code.
+    progress.afterResponse.packages[0].entries[0].program.conversation = marker;
+    progressRow.body = JSON.stringify(progress);
+    expect(() => database().product.import(archive)).not.toThrow();
+    for (const attack of ['grant', 'context', 'hash', 'staged'] as const) {
+      const forged = structuredClone(archive);
+      const row = forged.tables.runs.find((row) => row.id === run.id)!;
+      const snapshot = JSON.parse(row.snapshot);
+      if (attack === 'grant') delete snapshot.profile.extensionGrants;
+      if (attack === 'context') delete snapshot.extensionConversation;
+      if (attack === 'staged') row.partial_text = 'Changed staged output';
+      row.snapshot = JSON.stringify(snapshot);
+      if (attack === 'hash') {
+        const record = forged.tables.package_behavior_runs.find((row) => row.run_id === run.id)!;
+        const body = JSON.parse(record.body);
+        body.afterResponse.packages[0].entries[0].program.conversation.viewHash = '0'.repeat(64);
+        record.body = JSON.stringify(body);
+      }
+      expect(() => database().product.import(forged), attack).toThrow();
+    }
+  });
   test('RBA01 automatic result projection is compact and committed journals roundtrip exactly', async () => {
     const f = fixture(),
       run = start(f.store, f.chat.id);

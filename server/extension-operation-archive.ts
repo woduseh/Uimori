@@ -21,6 +21,11 @@ import {
 import { behaviorPayloadHash } from './package-behavior-store.js';
 import { fields, HttpError, number, record, text } from './request-validation.js';
 import type { Store } from './store.js';
+import { validateExtensionConversationPermission } from './extension-conversation-access.js';
+import {
+  extensionConversationViewHash,
+  resolveExtensionConversation,
+} from './extension-conversation.js';
 
 export { EXTENSION_OPERATION_TABLES } from './extension-operations.js';
 type Row = Record<string, any>;
@@ -107,6 +112,7 @@ export function validateExtensionOperationArchive(
       'settings',
       'sourceRevision',
       'sourceHash',
+      'extensionConversation',
     ]);
     if (snapshot.version !== 1) fail('snapshot version');
     const scope = record(snapshot.scope);
@@ -140,6 +146,44 @@ export function validateExtensionOperationArchive(
       same(source.chatId, row.chat_id, 'source owner');
     }
     const frozen = snapshot as ExtensionOperationSnapshot;
+    const conversation = frozen.extensionConversation;
+    const conversationView =
+      conversation === undefined
+        ? undefined
+        : (() => {
+            if (conversation.admissionRunId !== null) fail('conversation admission owner');
+            for (const ref of conversation.messages) {
+              const run = store.db.prepare('SELECT created_at FROM runs WHERE id=?').get(ref.runId);
+              if (!run || Date.parse(String(run.created_at)) > Date.parse(row.created_at))
+                fail('conversation admission time');
+            }
+            const refs = new Map(
+              conversation.messages
+                .filter((ref) => ref.kind === 'source')
+                .map((ref) => [ref.sourceRevision, ref])
+            );
+            if (
+              frozen.sourceRevision !== null &&
+              refs.get(frozen.sourceRevision)?.hash !== frozen.sourceHash
+            )
+              fail('conversation source hash binding');
+            const history = store.history(frozen.sourceRevision).map((item) => {
+              const ref = refs.get(item.revision);
+              if (!ref) return fail('conversation source reference');
+              const source = store.sourceAtHash(item.revision, ref.hash);
+              return { ...item, text: source.text, contentHash: source.hash };
+            });
+            return resolveExtensionConversation(
+              store,
+              {
+                chatId: row.chat_id,
+                branchId: row.branch_id,
+                parentRevision: frozen.sourceRevision,
+                history,
+              },
+              conversation
+            );
+          })();
     const ref = frozen.profile.packageAttachments?.find(
       (item) => packageInstanceId(item) === scope.attachmentInstanceId
     );
@@ -165,6 +209,17 @@ export function validateExtensionOperationArchive(
       if (!variables) return;
       validateExtensionVariablePermission(variables, snapshot.profile, ref!, action!.program!);
       projectExtensionVariableMutation(variableStateFromProfile(snapshot.profile), variables);
+    };
+    const validateConversation = (receipt: { viewHash: string } | undefined) => {
+      if (!receipt) return;
+      if (!conversationView) fail('conversation context missing');
+      validateExtensionConversationPermission(
+        receipt,
+        frozen.profile,
+        ref!,
+        action!.program!,
+        extensionConversationViewHash(conversationView!)
+      );
     };
     validateBehaviorValue(action!.inputSchema, command.input);
     if (command.panel !== undefined) {
@@ -249,6 +304,7 @@ export function validateExtensionOperationArchive(
         }
       );
       validateVariables(receipt.variables);
+      validateConversation(receipt.conversation);
       if (!journal) fail('completed journal missing');
       const payload = JSON.parse(journal!.payload),
         adopted = JSON.parse(journal!.result);
@@ -276,6 +332,7 @@ export function validateExtensionOperationArchive(
           behaviorPayloadHash(action!.program)
         );
         validateVariables(receipt.variables);
+        validateConversation(receipt.conversation);
       }
     }
   }

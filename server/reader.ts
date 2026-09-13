@@ -6,6 +6,7 @@ import { illustrationsForSources } from './illustrations.js';
 import type { BranchTreeNode, ReaderActivity } from '../core/types.js';
 import type { Branch } from '../core/product.js';
 import { providerRejection } from '../core/provider-rejection.js';
+import { readerRequestOrder } from '../core/reader-conversation.js';
 
 /** The failing attempt's stored provider diagnostic, read only for 4xx failures being displayed. */
 export function attemptRejection(
@@ -412,7 +413,8 @@ export function readerDetail(store: Store, id: string, query: Record<string, str
     .prepare(`SELECT id,rowid AS admissionOrder,json_extract(command,'$.retryOf') AS retryOf,source_revision AS sourceRevision,status,branch_id AS branchId,
     CASE WHEN id IN (SELECT value FROM json_each(?)) THEN request ELSE NULL END AS request,
     json_extract(snapshot,'$.packageStart.mode') AS startMode,
-    json_extract(snapshot,'$.candidateOf') AS candidateOf
+    json_extract(snapshot,'$.candidateOf') AS candidateOf,
+    json_extract(snapshot,'$.forkedFrom.requestOrder') AS forkRequestOrder
     FROM runs WHERE chat_id=? ORDER BY created_at,id`)
     .all(JSON.stringify(chain.map((sourceId) => byId.get(sourceId)!.runId)), id) as {
     id: string;
@@ -422,21 +424,12 @@ export function readerDetail(store: Store, id: string, query: Record<string, str
     admissionOrder: number;
     retryOf: string | null;
     candidateOf: string | null;
+    forkRequestOrder: number | null;
     request: string | null;
     startMode: string | null;
   }[];
   const requestRows = new Map(indexRows.map((run) => [run.id, run]));
-  const requestOrder = (id: string): number => {
-    let row = requestRows.get(id);
-    const seen = new Set<string>();
-    while (row?.retryOf && !seen.has(row.id)) {
-      seen.add(row.id);
-      const parent = requestRows.get(row.retryOf);
-      if (!parent) break;
-      row = parent;
-    }
-    return row?.admissionOrder ?? Number.MAX_SAFE_INTEGER;
-  };
+  const requestOrder = (id: string) => readerRequestOrder(requestRows, id);
   // The complete task panel loads readerRuns independently when opened.
   const pageIds = new Set(order);
   const runs = readerRuns(
