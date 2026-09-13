@@ -21,6 +21,7 @@ export function chatBackupTables(store: Store, chatId: string): BackupTables {
     model_inputs: 'run_id IN (SELECT id FROM runs WHERE chat_id=?)',
     tool_events: 'run_id IN (SELECT id FROM runs WHERE chat_id=?)',
     package_behavior_outputs: 'source_id IN (SELECT id FROM sources WHERE chat_id=?)',
+    chat_variable_outputs: 'source_id IN (SELECT id FROM sources WHERE chat_id=?)',
     package_behavior_runs: 'run_id IN (SELECT id FROM runs WHERE chat_id=?)',
     package_extension_operation_attempts:
       'operation_id IN (SELECT id FROM package_extension_operations WHERE chat_id=?)',

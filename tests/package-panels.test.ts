@@ -12,7 +12,8 @@ import { renderPackagePanels } from '../core/package-panels.js';
 import { renderPromptTemplate } from '../core/prompt-program.js';
 import { behaviorDetail } from '../server/package-behavior-host.js';
 import { compiledPackages } from '../core/package-context.js';
-import type { Content } from '../core/product.js';
+import { defaultProfile, type Content, type ProfileSnapshot } from '../core/product.js';
+import { packageIdentityFromProfile } from '../core/package-identity.js';
 
 const owned: { store: Store; app: FastifyInstance; dir: string }[] = [];
 afterEach(async () => {
@@ -85,6 +86,52 @@ test('panel values and nested loop values are escaped without changing ordinary 
   expect(renderPromptTemplate([{ kind: 'value', expression: text }])).toBe(text);
 });
 
+test('panels read frozen shared variables with escaping, empty overrides and authored fallbacks', () => {
+  const pkg = createPanelPackage();
+  pkg.variableDefaults = {
+    values: { '한 글': 'authored fallback', blank: 'blank fallback', dropped: 'restored default' },
+  };
+  pkg.panels = [
+    {
+      id: 'shared',
+      title: 'Shared variables',
+      template: [
+        { kind: 'value', expression: { context: ['variables', '한 글'] } },
+        { kind: 'text', text: '|' },
+        { kind: 'value', expression: { context: ['variables', 'blank'] } },
+        { kind: 'text', text: '|' },
+        { kind: 'value', expression: { context: ['variables', 'dropped'] } },
+      ],
+    },
+  ];
+  expect(() => validateContentPackage(pkg)).not.toThrow();
+  const profile: ProfileSnapshot = {
+    ...defaultProfile('synthetic'),
+    contents: [],
+    models: {},
+    packages: [pkg],
+    packageAttachments: [{ id: pkg.id, revision: pkg.revision, role: 'bot' }],
+    variableState: {
+      revision: 3,
+      values: { '한 글': '<script>😀 & {{literal}}</script>', blank: '' },
+    },
+  };
+  const before = structuredClone(profile);
+  const frozenIdentity = packageIdentityFromProfile(profile);
+  const state = pkg.behavior!.initialState;
+  const rendered = renderPackagePanels(pkg, { state, identity: frozenIdentity });
+  expect(rendered[0].issue).toBeUndefined();
+  expect(rendered[0].html).toBe(
+    '&lt;script&gt;😀 &amp; {{literal}}&lt;/script&gt;||restored default'
+  );
+  expect(profile).toEqual(before);
+  profile.variableState = { revision: 4, values: {} };
+  expect(renderPackagePanels(pkg, { state, identity: frozenIdentity })).toEqual(rendered);
+  expect(
+    renderPackagePanels(pkg, { state, identity: packageIdentityFromProfile(profile) })[0].html
+  ).toBe('authored fallback|blank fallback|restored default');
+});
+
 test('a failing optional panel is reported while another view and standard actions remain available', () => {
   const pkg = createPanelPackage();
   pkg.panels!.unshift({
@@ -95,6 +142,23 @@ test('a failing optional panel is reported while another view and standard actio
   const panels = renderPackagePanels(pkg, { state: pkg.behavior!.initialState, identity });
   expect(panels[0]).toMatchObject({ issue: 'PACKAGE_PANEL_RENDER_FAILED', html: '', actions: [] });
   expect(panels[1].html).toContain('보급 기록');
+  expect(pkg.behavior!.actions).toHaveLength(3);
+});
+
+test('variable overflow disables only panels that read variables and preserves ordinary state panels', () => {
+  const pkg = createPanelPackage();
+  pkg.panels!.unshift({
+    id: 'shared',
+    title: 'Shared',
+    template: [{ kind: 'value', expression: { context: ['variables', 'score'] } }],
+  });
+  const panels = renderPackagePanels(pkg, {
+    state: pkg.behavior!.initialState,
+    identity: { ...identity, variableDefaultsError: 'TEMPLATE_VARIABLE_DEFAULTS_LIMIT' },
+  });
+  expect(panels[0]).toMatchObject({ issue: 'PACKAGE_PANEL_RENDER_FAILED', html: '', actions: [] });
+  expect(panels[1].issue).toBeUndefined();
+  expect(panels[1].html).toContain('경로 선택');
   expect(pkg.behavior!.actions).toHaveLength(3);
 });
 

@@ -219,6 +219,13 @@ export const BACKUP_COLLECTIONS = [
     'chat_id branch_id instance_id @dependencies status error @draws'
   ),
   collection('behaviorOutputs', 'package_behavior_outputs', 'source_id instance_id @body'),
+  collection('variableStates', 'chat_variable_states', 'chat_id branch_id revision @values_json'),
+  collection(
+    'variableJournal',
+    'chat_variable_journal',
+    'chat_id branch_id request_key payload_hash @payload @result created_at'
+  ),
+  collection('variableOutputs', 'chat_variable_outputs', 'source_id @body'),
   collection('behaviorEntropy', 'package_behavior_entropy', 'id seed'),
   collection(
     'behaviorOpportunities',
@@ -308,7 +315,13 @@ export function decodeChatBackup(value: unknown): { backup: ChatBackup; tables: 
   for (const { name, table, fields: columns } of BACKUP_COLLECTIONS) {
     const values =
       records[name] === undefined &&
-      ['extensionOperations', 'extensionOperationAttempts'].includes(name)
+      [
+        'extensionOperations',
+        'extensionOperationAttempts',
+        'variableStates',
+        'variableJournal',
+        'variableOutputs',
+      ].includes(name)
         ? []
         : records[name];
     if (!Array.isArray(values) || values.length > 100_000)

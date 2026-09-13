@@ -10,6 +10,7 @@ import { prepareRunBehavior } from './package-behavior-run.js';
 import { freezeLoreContext } from './lore-context.js';
 import { captureLogicalHistory, compileSnapshotPrompt } from './prompt-snapshot.js';
 import { hasPromptInputTransforms } from './prompt-transforms.js';
+import { chatVariableProfile } from './chat-variable-context.js';
 
 export type ReservationPurpose =
   | { purpose: 'run' | 'authored'; runId: string; sceneCommandId?: string }
@@ -61,7 +62,11 @@ export function freezeReservationSnapshot(
     const overrides = freezeChatOverrides(store, base.profile, roots, base.parentRevision);
     if (overrides) base.profile.chatOverrides = overrides;
     else delete base.profile.chatOverrides;
-    if (base.profile.packageAttachments?.length)
+  }
+  if (base.profile && !translationPreview) {
+    const branchId = base.branchId ?? store.product.branch(base.chatId).id;
+    base = { ...base, profile: chatVariableProfile(store, base.chatId, branchId, base.profile) };
+    if ((reserved || base.profile?.variableState) && base.profile?.packageAttachments?.length)
       base.resources = [
         ...base.resources.filter((resource) => !resource.id.startsWith('package:')),
         ...store.product

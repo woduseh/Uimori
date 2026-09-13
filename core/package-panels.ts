@@ -9,6 +9,8 @@ import {
 } from './prompt-program.js';
 import { behaviorActionTriggers, type PackageBehavior } from './package-behavior.js';
 import { PromptBudget } from './prompt-values.js';
+import type { PackageIdentityContext } from './package-identity.js';
+import { templateReadsVariables } from './template-variables.js';
 
 /** Authored markup is presentation data, not a permission to execute JavaScript or access the app DOM. */
 export type PackagePanel = {
@@ -76,7 +78,7 @@ export function validatePackagePanels(
         if (record.kind === 'slot') fail('PACKAGE_PANEL_SLOT');
         if (Object.hasOwn(record, 'context')) {
           const path = record.context as string[];
-          if (!path.length || !['state', 'options', 'bot', 'user'].includes(path[0]))
+          if (!path.length || !['state', 'options', 'bot', 'user', 'variables'].includes(path[0]))
             fail('PACKAGE_PANEL_CONTEXT');
           if (['bot', 'user'].includes(path[0]) && (path.length !== 2 || path[1] !== 'name'))
             fail('PACKAGE_PANEL_CONTEXT');
@@ -107,11 +109,13 @@ export function renderPackagePanels(
   context: {
     state: RuntimeValue;
     values?: Record<string, PromptValue>;
-    identity: { bot: { name: string }; user: { name: string } };
+    identity: PackageIdentityContext;
   }
 ): RenderedPackagePanel[] {
   return (definition.panels ?? []).map((panel) => {
     try {
+      if (context.identity.variableDefaultsError && templateReadsVariables(panel.template))
+        fail(context.identity.variableDefaultsError);
       const values = resolvePromptValues(
         { version: 1, controls: definition.controls, blocks: [] },
         context.values

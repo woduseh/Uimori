@@ -25,6 +25,7 @@ await runBrowserVerification({
     'PFUI01',
     'PFUI02',
     'PFUI03',
+    'CHATVARUI01',
     'PANELUI01',
     'PANELUI02',
     'EXTPANELUI01',

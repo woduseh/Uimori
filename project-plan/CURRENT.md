@@ -20,7 +20,8 @@
 
 - 패키지 사용자·모델 행동은 [상태 계산 코드](../docs/EXTENSION-PROGRAMS.md)로 알고리즘을 표현할 수 있어요. JavaScript는 해당 상태/입력 사본과 제한된 Host API를 받고 별도 Worker의 고정 메모리 WASM에서 실행돼요. 기본 버튼·커스텀 패널의 결과는 schema·개정 검사 후 journal에 남고, 모델 호출은 공통 async 진입점에서 임시 상태를 계산한 뒤 원문 성공 때 게시해요. 복원은 코드를 재실행하지 않아요. 일반 통신 호출·Lua·확장 설치 관리는 후속 범위예요.
 
-- **DB schema는 v18, JSON archive는 v15**예요. 새 DB와 지원하는 v15/v16/v17에서 migration을 순서대로 적용하고 내부 ledger를 기록해요. v17은 native 자료 이동의 출처·중복 방지 영수증을, v18은 사용자 확장 작업과 기존 attempt 연결을 추가해요. 원문·상태·이미지·snapshot은 보존하고 모든 과거 개발 DB·archive 이관을 의미하지 않아요. 이 작업은 운영 앱을 배포하지 않았으며 Oracle v15는 과거 배포 기록이에요. [DB migration](../docs/DATA-MIGRATIONS.md) · [운영 배포](../docs/ORACLE-RELEASE.md)
+- **DB schema는 v19, JSON archive는 v15**예요. 새 DB와 지원하는 v15~v18에서 migration을 순서대로 적용하고 내부 ledger를 기록해요. v19는 분기 공유 변수·쓰기 영수증·원문 시점 checkpoint를 추가해요. 원문·상태·이미지·snapshot은 보존하고 모든 과거 개발 DB·archive 이관을 의미하지 않아요. 운영 앱의 버전과는 별개예요. [DB migration](../docs/DATA-MIGRATIONS.md) · [운영 배포](../docs/ORACLE-RELEASE.md)
+- **분기 공유 변수**는 사용자 명시 편집과 같은 기본값 resolver로 지침·템플릿·패널에 반영하고 Run 예약·분기·포크·candidate·백업에서 보존해요. 가져온 trigger·Lua와 Host의 공유 쓰기 연결은 남아 있어요. [공유 변수 계약](../docs/PROMPT-RUNTIME.md#분기-공유-변수)
 - **작문·번역 프롬프트와 역할 모델은 전역이 기본**이며, 채팅은 작문 프리셋 ID와 본문 모델 ID를 고정할 수 있어요. 고정한 ID의 최신 저장본을 새 요청에 사용하고 삭제·비활성 대상을 임의로 대체하지 않아요. 번역과 보조 역할은 전역을 유지해요. `workspaceModelRef`가 역할 선택 규칙을 소유하며 이미 예약한 snapshot은 바꾸지 않아요. [전역 역할 모델](../docs/GLOBAL-MODELS.md) · [현재 프롬프트](../docs/RUNTIME-SIMPLIFICATION.md)
 - 자료·프롬프트·공유 모듈은 **같은 ID의 최신 저장본**을 다음 실행에서 사용해요. 이미 예약한 실행과 과거 원문은 자체 snapshot을 유지하고 현재 작업본으로 다시 해석하지 않아요. [현재 설정 계약](CURRENT-SETTINGS-PLAN.md) · [번역 구간과 재시도](TRANSLATION-CHUNKS.md)
 - 봇·페르소나·모듈은 **공통 패키지**이고 서재의 분류·폴더는 채팅 장착 역할과 독립이에요. 이미지·시작문·로어·상태와 행동·다음 요청 예약·원문 구간 정책을 패키지가 선언해요. `.charx`·Character Card JSON의 기본 자료는 앱에서 검토 후 새 봇·채팅으로 가져와요. 내장 모듈·스크립트 등 미지원 부분은 먼저 표시하고 별도 이식해요. 로어 보존이 기본이며 진행 기억 분리는 사용자가 선택한 경우만 적용해요. [서재](../docs/LIBRARY.md) · [패키지](../docs/PACKAGES.md) · [Risu 가져오기](../docs/RISU-IMPORT.md)

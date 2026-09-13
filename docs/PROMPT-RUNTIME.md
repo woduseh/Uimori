@@ -28,13 +28,23 @@ compilePromptProgram(program, { values, slots, history, runtime, limits }): Prom
 
 ## 템플릿 기본 변수
 
-`PromptProgram.variableDefaults?: Record<string,string>`와 `ContentPackage.variableDefaults?: {values: Record<string,string>, attachmentRoles?: PackageRole[]}`는 쓰기 권한이 없는 읽기 기본값이에요. `core/template-variables.ts`의 `resolveTemplateVariableContext`가 고정 profile에서 허용 역할의 attachment 선언을 순서대로 읽고, 먼저 나온 키를 유지한 뒤 main 프롬프트 기본값으로 없는 키를 보충해요. `resolveTemplateVariables`는 같은 결과의 값만 돌려주는 facade예요. 본문·로어·시작문·지침·실행 문맥·모델의 자료 읽기·프리셋 정규식은 이 계산을 공유해요.
+`PromptProgram.variableDefaults?: Record<string,string>`와 `ContentPackage.variableDefaults?: {values: Record<string,string>, attachmentRoles?: PackageRole[]}`는 쓰기 권한이 없는 읽기 기본값이에요. `core/template-variables.ts`의 `resolveTemplateVariableContext`는 고정 profile의 공유 변수 override를 먼저 읽고, 허용 역할의 attachment 선언 순서와 main 프롬프트 기본값으로 없는 키를 보충해요. `resolveTemplateVariables`는 같은 결과의 값만 돌려주는 facade예요. 본문·로어·시작문·지침·패널·실행 문맥·모델의 자료 읽기·프리셋 정규식은 이 계산을 공유해요.
 
-Host가 `context.variables`를 제공하면 `{op:'get',args:[{context:['variables']},'key']}`로 읽어요. 없는 값은 native null이며 빈 문자열은 그대로 유지해요. JSON 데이터는 재해석하지 않아요. 선언 자체는 자료/프롬프트 개정과 Run profile에 보존하고 별도의 상태 표를 만들지 않아요. 이후 자료를 수정해도 과거 예약·시작문·복원의 해석은 바뀌지 않아요. 선언이 없는 과거 profile에는 빈 변수 필드를 추가하지 않아요.
+Host가 `context.variables`를 제공하면 `{op:'get',args:[{context:['variables']},'key']}`로 읽어요. 없는 값은 native null이며 빈 문자열은 그대로 유지해요. JSON 데이터는 재해석하지 않아요. 기본값 선언은 자료/프롬프트 개정과 Run profile에 보존하고 저장 상태의 초기값으로 복사하지 않아요. 이후 자료를 수정해도 과거 예약·시작문·복원의 해석은 바뀌지 않아요. 선언과 공유 변수 snapshot이 없는 과거 profile에는 빈 변수 필드를 추가하지 않아요.
 
 선언은 최대 2,000개 키·값당 200,000자·JSON 합계 1,000,000자이며 기존 unsafe key/JSON 검사를 공유해요. 여러 자료의 합산이 한도를 넘으면 일부 키만 채택하지 않고 변수층 전체를 미적용해요. 본문·로어와 변수 참조 시작문은 보존 원문, 지침은 기존 사용 불가 경고, main 프롬프트는 `TEMPLATE_VARIABLE_DEFAULTS_LIMIT` 경고와 없는 변수 조회로 계속해요. 시작문 경고는 미리보기에서 표시하고 snapshot에도 보존해요. 기존 상태를 초기화하거나 본문 채팅을 금지하지 않아요.
 
-평가기에서 `variables`와 해당 오류 metadata는 나머지 runtime과 독립된 기존 크기 한도로 검사해요. 이미 허용된 대화 문맥이 새 선언 때문에 한도를 넘는 일을 피하며 총 namespace 크기는 유한해요. 일반 AST 연산 결과·출력·단계 한도는 그대로 유지해요. 선언 없는 기존 runtime은 이전 전체 객체 검사를 유지해요. Risu 어댑터의 `getvar`·기본값 우선순위 및 아직 없는 공유 상태 쓰기는 [Risu 가져오기](RISU-IMPORT.md#기본-변수와-읽기-cbs)를 봐요.
+평가기에서 `variables`와 해당 오류 metadata는 나머지 runtime과 독립된 기존 크기 한도로 검사해요. 이미 허용된 대화 문맥이 새 선언 때문에 한도를 넘는 일을 피하며 총 namespace 크기는 유한해요. 일반 AST 연산 결과·출력·단계 한도는 그대로 유지해요. 선언 없는 기존 runtime은 이전 전체 객체 검사를 유지해요. Risu 어댑터의 `getvar`·기본값 해석과 아직 연결하지 않은 가져온 코드의 쓰기는 [Risu 가져오기](RISU-IMPORT.md#기본-변수와-읽기-cbs)를 봐요.
+
+## 분기 공유 변수
+
+사용자는 채팅의 공유 변수 편집기에서 문자열 override를 명시적으로 저장해요. 봇·모듈·main 프리셋은 같은 분기 override를 읽으며 패키지 인스턴스별 `PackageBehavior.state`와는 별개예요. 키를 제거하면 읽기 기본값이 다시 적용되고, 빈 문자열을 저장하면 그 값이 기본값보다 우선해요. 저장은 변수 revision과 현재 원문 hash를 확인하고 동일 요청 키의 재전송을 한 번만 채택해요. 예약·실행 중인 본문 Run이나 사용자 확장 작업이 있는 분기에서는 직접 편집을 채택하지 않아요.
+
+`core/chat-variables.ts`가 기본값과 override의 공통 검증·크기 한도를 소유해요. 저장 형식은 `{revision, values: Record<string,string>}`이며 revision 0은 빈 초기 상태예요. 새 Run은 `ProfileSnapshot.variableState`에 override를 고정하고 같은 resolver가 템플릿·지침·패널·실행 문맥을 해석해요. 과거 source 조회·복원은 현재 분기 값을 덧붙이지 않아요. 재접속은 저장된 현재 분기 값을 읽고, source 완료 transaction은 그때 채택된 상태를 checkpoint로 보존해요.
+
+일반 분기와 채팅 포크는 선택한 source의 checkpoint를 복원하므로 이후 직접 편집한 값이 섞이지 않아요. candidate는 원래 Run의 예약 snapshot을 복원해요. checkpoint나 snapshot이 없는 과거 자료는 빈 override로 시작하며 현재값으로 보충하지 않아요. 전체 archive와 채팅 백업은 현재 상태·쓰기 영수증·source checkpoint를 보존하고 값 문자열 안의 ID는 바꾸지 않아요. 형식과 이관은 [DB migration](DATA-MIGRATIONS.md)을 봐요.
+
+이 계약은 사용자의 직접 편집과 공통 읽기·보관 흐름까지예요. 가져온 trigger·Lua·제작자 Host 호출을 통한 공유 변수 쓰기는 아직 연결하지 않았어요. 읽기나 편집기 지원을 그 코드의 실행 완료로 해석하지 않아요.
 
 ## 데이터 AST
 

@@ -12,6 +12,7 @@ import {
   type PackageStartSnapshot,
 } from '../core/package-start.js';
 import { packageIdentityFromProfile } from '../core/package-identity.js';
+import { chatVariableProfile } from './chat-variable-context.js';
 import type { Store } from './store.js';
 import { packageControlKey, type PackageAttachment } from '../core/content-package.js';
 import { freezePackageStates } from './package-behavior-host.js';
@@ -143,7 +144,7 @@ export function createPackageStart(
       );
     } else {
       const chat = store.chat(chatId);
-      const profile = store.product.snapshot(chatId);
+      const profile = chatVariableProfile(store, chatId, store.product.branch(chatId).id);
       const attachment = profile?.packageAttachments?.find(
         (item) =>
           item.role === 'bot' &&

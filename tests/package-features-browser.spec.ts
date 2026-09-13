@@ -399,3 +399,189 @@ test('PFUI03 generic source segment drafts validate before save and keep authore
       .package
   ).toEqual(linked.package);
 });
+
+test('CHATVARUI01 shared variable overrides save explicitly, restore defaults and retain conflicting drafts', async ({
+  page,
+  request,
+}, info) => {
+  test.setTimeout(60000);
+  const stamp = Date.now(),
+    errors: string[] = [];
+  page.on('pageerror', (error) => errors.push(error.message));
+  const bot = await seed(request, 'bot', `합성 공유 변수 ${stamp}`, {
+    variableDefaults: { values: { mood: 'calm', location: 'library' } },
+  });
+  const made = await request.post('/api/chats', {
+    data: { title: `공유 변수 합성 ${stamp}`, botId: bot.id },
+  });
+  expect(made.ok(), await made.text()).toBe(true);
+  const chat = (await made.json()) as { id: string };
+
+  await page.setViewportSize({ width: DESKTOP_WIDTH, height: 1000 });
+  await page.goto(`/?chat=${chat.id}`);
+  const panel = page.getByRole('region', { name: '채팅 상태와 행동', exact: true });
+  await expect(panel).toBeVisible();
+  const variables = panel.locator('.chat-variables');
+  await variables.getByText('공유 변수', { exact: true }).click();
+  const editor = variables.getByLabel('공유 변수 재정의 · JSON', { exact: true });
+  await expect(editor).toHaveValue('{}');
+  await variables.getByText('현재 적용값 2개', { exact: true }).click();
+  await expect(variables.locator('.chat-variable-readbacks pre').first()).toContainText(
+    '"mood": "calm"'
+  );
+  await variables.getByText('자료 기본값 2개', { exact: true }).click();
+  await expect(variables.locator('.chat-variable-readbacks pre').last()).toContainText(
+    '"location": "library"'
+  );
+
+  await editor.fill(JSON.stringify({ mood: 'bright', empty: '' }, null, 2));
+  const firstSave = page.waitForResponse(
+    (response) =>
+      response.url().endsWith(`/api/chats/${chat.id}/variables`) &&
+      response.request().method() === 'PUT'
+  );
+  await variables.getByRole('button', { name: '공유 변수 저장', exact: true }).click();
+  expect((await firstSave).ok()).toBe(true);
+  await expect(
+    variables.getByText('공유 변수를 저장했어요. 다음 생성부터 적용해요.', { exact: true })
+  ).toBeVisible();
+  let server = (await (await request.get(`/api/chats/${chat.id}/variables`)).json()) as {
+    revision: number;
+    values: Record<string, string>;
+    sourceHash: string | null;
+  };
+  expect(server.values).toEqual({ mood: 'bright', empty: '' });
+
+  await editor.fill(JSON.stringify({ empty: '' }, null, 2));
+  await variables.getByRole('button', { name: '공유 변수 저장', exact: true }).click();
+  await expect(
+    variables.getByText('공유 변수를 저장했어요. 다음 생성부터 적용해요.', { exact: true })
+  ).toBeVisible();
+  await expect(variables.locator('.chat-variable-readbacks pre').first()).toContainText(
+    '"mood": "calm"'
+  );
+  server = (await (await request.get(`/api/chats/${chat.id}/variables`)).json()) as typeof server;
+  expect(server.values).toEqual({ empty: '' });
+
+  await page.reload();
+  const reopenedPanel = page.getByRole('region', { name: '채팅 상태와 행동', exact: true });
+  const reopened = reopenedPanel.locator('.chat-variables');
+  await reopened.getByText('공유 변수', { exact: true }).click();
+  const reopenedEditor = reopened.getByLabel('공유 변수 재정의 · JSON', { exact: true });
+  await expect(reopenedEditor).toHaveValue(JSON.stringify({ empty: '' }, null, 2));
+  const localDraft = JSON.stringify({ mood: 'draft', empty: '' }, null, 2);
+  await reopenedEditor.fill(localDraft);
+  await page.reload();
+  const restoredVariables = page.locator('.chat-variables');
+  await restoredVariables.getByText('공유 변수', { exact: true }).click();
+  const restoredEditor = restoredVariables.getByLabel('공유 변수 재정의 · JSON', {
+    exact: true,
+  });
+  await expect(restoredEditor).toHaveValue(localDraft);
+
+  server = (await (await request.get(`/api/chats/${chat.id}/variables`)).json()) as typeof server;
+  const competing = await request.put(`/api/chats/${chat.id}/variables`, {
+    data: {
+      expectedRevision: server.revision,
+      expectedSourceHash: server.sourceHash,
+      idempotencyKey: `competing-${stamp}`,
+      values: { mood: 'remote' },
+    },
+  });
+  expect(competing.ok(), await competing.text()).toBe(true);
+  const rejected = page.waitForResponse(
+    (response) =>
+      response.url().endsWith(`/api/chats/${chat.id}/variables`) &&
+      response.request().method() === 'PUT'
+  );
+  await restoredVariables.getByRole('button', { name: '공유 변수 저장', exact: true }).click();
+  expect((await rejected).status()).toBe(409);
+  await expect(
+    restoredVariables.getByText(
+      '서버의 변수 개정이나 현재 원문이 바뀌었어요. 입력한 초안은 그대로 보존했어요.',
+      { exact: true }
+    )
+  ).toBeVisible();
+  await expect(restoredEditor).toHaveValue(localDraft);
+  await expect(
+    restoredVariables.getByRole('button', { name: '공유 변수 저장', exact: true })
+  ).toBeDisabled();
+  await restoredVariables
+    .getByRole('button', { name: '최신 상태 기준으로 초안 유지', exact: true })
+    .click();
+  await restoredVariables.getByRole('button', { name: '공유 변수 저장', exact: true }).click();
+  await expect(
+    restoredVariables.getByText('공유 변수를 저장했어요. 다음 생성부터 적용해요.', {
+      exact: true,
+    })
+  ).toBeVisible();
+  server = (await (await request.get(`/api/chats/${chat.id}/variables`)).json()) as typeof server;
+  expect(server.values).toEqual({ mood: 'draft', empty: '' });
+
+  const beforeUncertain = server;
+  let interruptedBody: unknown;
+  let adoptedRevision = -1;
+  let interruptNextPut = true;
+  let releaseInterrupt!: () => void;
+  const interrupted = new Promise<void>((resolve) => {
+    releaseInterrupt = resolve;
+  });
+  await page.route(`**/api/chats/${chat.id}/variables`, async (route) => {
+    if (route.request().method() !== 'PUT' || !interruptNextPut) {
+      await route.continue();
+      return;
+    }
+    interruptNextPut = false;
+    interruptedBody = route.request().postDataJSON();
+    const response = await route.fetch();
+    expect(response.ok()).toBe(true);
+    adoptedRevision = ((await response.json()) as { revision: number }).revision;
+    await route.abort('failed');
+    releaseInterrupt();
+  });
+  const uncertainDraft = JSON.stringify({ mood: 'uncertain', empty: '' }, null, 2);
+  await restoredEditor.fill(uncertainDraft);
+  await restoredVariables.getByRole('button', { name: '공유 변수 저장', exact: true }).click();
+  await interrupted;
+  await expect(
+    restoredVariables.getByText(
+      '이전 저장의 응답을 확인하지 못했어요. 값을 바꾸지 않고 다시 누르면 같은 저장 요청의 결과를 확인해요.',
+      { exact: true }
+    )
+  ).toBeVisible();
+  expect(adoptedRevision).toBe(beforeUncertain.revision + 1);
+  server = (await (await request.get(`/api/chats/${chat.id}/variables`)).json()) as typeof server;
+  expect(server).toMatchObject({
+    revision: adoptedRevision,
+    values: { mood: 'uncertain', empty: '' },
+  });
+
+  await page.reload();
+  const retryVariables = page.locator('.chat-variables');
+  await retryVariables.getByText('공유 변수', { exact: true }).click();
+  const retryEditor = retryVariables.getByLabel('공유 변수 재정의 · JSON', { exact: true });
+  await expect(retryEditor).toHaveValue(uncertainDraft);
+  await expect(retryEditor).toBeDisabled();
+  await expect(
+    retryVariables.getByRole('button', { name: '서버 값으로 되돌리기', exact: true })
+  ).toBeDisabled();
+  const retried = page.waitForRequest(
+    (incoming) =>
+      incoming.url().endsWith(`/api/chats/${chat.id}/variables`) && incoming.method() === 'PUT'
+  );
+  await retryVariables.getByRole('button', { name: '저장 결과 확인', exact: true }).click();
+  const retriedBody = (await retried).postDataJSON();
+  expect(retriedBody).toEqual(interruptedBody);
+  await expect(
+    retryVariables.getByText('공유 변수를 저장했어요. 다음 생성부터 적용해요.', {
+      exact: true,
+    })
+  ).toBeVisible();
+  server = (await (await request.get(`/api/chats/${chat.id}/variables`)).json()) as typeof server;
+  expect(server).toMatchObject({
+    revision: adoptedRevision,
+    values: { mood: 'uncertain', empty: '' },
+  });
+  await evidence(page, restoredVariables, info, 'chat-variables');
+  expect(errors).toEqual([]);
+});

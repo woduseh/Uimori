@@ -14,6 +14,7 @@ import { copyOutlineFork } from './outline-store.js';
 import { copyChatOverridesInTransaction } from './chat-overrides.js';
 import { copyChatOptionsInTransaction } from './chat-options.js';
 import { copyPackageFork } from './package-behavior-host.js';
+import { copyChatVariableFork } from './chat-variables-archive.js';
 import { historicalRunLoreReads } from './lore-context-archive.js';
 import type { RetainedLore } from '../core/lore-context.js';
 import { isSourceOnlyTranscript } from '../core/authored-history.js';
@@ -350,6 +351,7 @@ export function forkChat(store: Store, chatId: string, value: unknown): Chat {
       storyFork.commands
     );
     copyPackageFork(store, id, branchId, sourceIds, head);
+    copyChatVariableFork(store, id, branchId, sourceIds, head);
     const canonHashes = new Map<string, string>();
     for (const original of originalRuns.values()) {
       const canon = original.snapshot.loreContext?.canonHash;

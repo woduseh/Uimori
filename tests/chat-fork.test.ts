@@ -17,6 +17,7 @@ import { promptWorkspace, updatePromptWorkspace } from '../server/prompt-workspa
 import { successfulTranslation, validateTranslationArtifact } from '../server/source-editing.js';
 import type { Content, PromptPreset, ChatProfile } from '../core/product.js';
 import type { RunSnapshot } from '../core/types.js';
+import { readChatVariables, writeChatVariables } from '../server/chat-variables.js';
 
 const owned: { directory: string; app?: App; store?: Store }[] = [];
 beforeEach(() => {
@@ -70,8 +71,11 @@ const profileBody = (prior: ChatProfile, changes: Record<string, unknown> = {}) 
 });
 function source(store: Store, chatId: string, value: string, branchId?: string) {
   const chat = store.chat(chatId);
-  const profile = store.product.snapshot(chatId);
   const branch = store.product.branch(chatId, branchId);
+  const profile = {
+    ...store.product.snapshot(chatId),
+    variableState: readChatVariables(store, chatId, branch.id),
+  };
   const request = 'Synthetic source, no model request';
   const run = store.createRun(
     chatId,
@@ -285,6 +289,39 @@ async function rich(app: App) {
 }
 
 describe('independent stored-story fork without generation', () => {
+  test('forks shared variables from selected source time without leaking later direct edits', async () => {
+    const store = await database();
+    const chat = createFixtureChat(store, '공유 변수 분기');
+    const branchId = `main:${chat.id}`;
+    const before = writeChatVariables(store, chat.id, branchId, {
+      expectedRevision: 0,
+      expectedSourceHash: null,
+      idempotencyKey: 'before',
+      values: { phase: 'before', literal: chat.id },
+    });
+    const selected = source(store, chat.id, 'Source at selected state');
+    const latest = writeChatVariables(store, chat.id, branchId, {
+      expectedRevision: before.revision,
+      expectedSourceHash: selected.hash,
+      idempotencyKey: 'after',
+      values: { phase: 'after', literal: selected.id },
+    });
+    const copied = forkChat(store, chat.id, {
+      fromRevision: selected.id,
+      idempotencyKey: 'state-fork',
+    });
+    expect(readChatVariables(store, copied.id, `main:${copied.id}`)).toEqual(before);
+    expect(readChatVariables(store, chat.id, branchId)).toEqual(latest);
+    const branch = store.product.createBranch(chat.id, {
+      title: '선택 시점',
+      fromRevision: selected.id,
+    });
+    expect(readChatVariables(store, chat.id, branch.id)).toEqual(before);
+    const empty = store.product.createBranch(chat.id, { title: '처음부터', fromRevision: null });
+    expect(readChatVariables(store, chat.id, empty.id)).toEqual({ revision: 0, values: {} });
+    expect(store.source(selected.id).text).toBe('Source at selected state');
+    expect(store.source(copied.headRevision!).text).toBe('Source at selected state');
+  });
   test('forked runs keep source-time package resource revisions after the current owning package changes', async () => {
     const store = await database();
     const input = fixtureBotInput('Synthetic versioned owner', 'OWNER_V1');

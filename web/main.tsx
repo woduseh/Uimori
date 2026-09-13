@@ -1168,20 +1168,18 @@ function App() {
                         onSelect={s.chooseSource}
                         end
                       />
-                      {!!s.detail.profile?.packageAttachments?.length && (
-                        <PackageBehaviorPanel
-                          chatId={s.selected}
-                          branchId={s.branch?.id}
-                          refreshKey={s.detail.reader.cursor}
-                          onRunRequest={(text, id) => {
-                            s.editDraft(text, id);
-                            s.input.current?.focus();
-                          }}
-                          onChange={() => {
-                            void s.refresh(s.selected);
-                          }}
-                        />
-                      )}
+                      <PackageBehaviorPanel
+                        chatId={s.selected}
+                        branchId={s.branch?.id}
+                        refreshKey={s.detail.reader.cursor}
+                        onRunRequest={(text, id) => {
+                          s.editDraft(text, id);
+                          s.input.current?.focus();
+                        }}
+                        onChange={() => {
+                          void s.refresh(s.selected);
+                        }}
+                      />
                     </>
                   )}
                 </section>

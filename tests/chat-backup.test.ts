@@ -8,6 +8,7 @@ import { createFixtureChat } from './fixtures/chat.js';
 import { exportChatBackup, importChatBackup } from '../server/chat-backup.js';
 import { editTranslation, successfulTranslation } from '../server/source-editing.js';
 import type { RunSnapshot } from '../core/types.js';
+import { readChatVariables, writeChatVariables } from '../server/chat-variables.js';
 
 const owned: { directory: string; store: Store }[] = [];
 afterEach(async () => {
@@ -33,7 +34,10 @@ async function database() {
 function turn(store: Store, chatId: string, request: string, text: string, branchId?: string) {
   const chat = store.chat(chatId),
     branch = store.product.branch(chatId, branchId),
-    profile = store.product.snapshot(chatId);
+    profile = {
+      ...store.product.snapshot(chatId),
+      variableState: readChatVariables(store, chatId, branch.id),
+    };
   const { run } = store.createRun(
     chatId,
     {
@@ -87,6 +91,104 @@ function fixture(store: Store) {
   });
   return { chat, first, last, alternative };
 }
+
+test('shared variable backups keep current overrides, historical checkpoints and literal IDs across repeated restore', async () => {
+  const store = await database();
+  const chat = createFixtureChat(store, '공유 변수 백업');
+  const branchId = `main:${chat.id}`;
+  const historical = writeChatVariables(store, chat.id, branchId, {
+    expectedRevision: 0,
+    expectedSourceHash: null,
+    idempotencyKey: 'initial-variables',
+    values: { phase: 'before', literal: chat.id, branchId },
+  });
+  const first = turn(store, chat.id, 'first', 'Immutable original');
+  const latest = writeChatVariables(store, chat.id, branchId, {
+    expectedRevision: historical.revision,
+    expectedSourceHash: first.hash,
+    idempotencyKey: 'later-variables',
+    values: { phase: 'after', literal: first.id },
+  });
+  const backup = exportChatBackup(store, chat.id);
+  const original = JSON.stringify(backup);
+  for (const idempotencyKey of ['variables-copy-1', 'variables-copy-2']) {
+    const copy = importChatBackup(store, { backup, idempotencyKey });
+    expect(readChatVariables(store, copy.chat.id, `main:${copy.chat.id}`)).toEqual(latest);
+    const fork = store.product.createBranch(copy.chat.id, {
+      title: '이전 변수',
+      fromRevision: copy.chat.headRevision,
+    });
+    expect(readChatVariables(store, copy.chat.id, fork.id)).toEqual(historical);
+    expect(store.source(copy.chat.headRevision!).text).toBe('Immutable original');
+    expect(
+      store.run(store.source(copy.chat.headRevision!).runId).snapshot.profile?.variableState
+    ).toEqual(historical);
+    const replay = writeChatVariables(store, copy.chat.id, `main:${copy.chat.id}`, {
+      expectedRevision: historical.revision,
+      expectedSourceHash: first.hash,
+      idempotencyKey: 'later-variables',
+      values: latest.values,
+    });
+    expect(replay).toEqual(latest);
+  }
+  expect(JSON.stringify(backup)).toBe(original);
+  const archive = await database();
+  archive.product.import(store.product.export());
+  expect(readChatVariables(archive, chat.id, branchId)).toEqual(latest);
+});
+
+test('shared variable archive rejects broken ownership, receipts and values atomically; old collections remain optional', async () => {
+  const store = await database();
+  const chat = createFixtureChat(store, '변수 무결성');
+  const other = createFixtureChat(store, '다른 채팅');
+  writeChatVariables(store, chat.id, `main:${chat.id}`, {
+    expectedRevision: 0,
+    expectedSourceHash: null,
+    idempotencyKey: 'write',
+    values: { phase: 'ready' },
+  });
+  turn(store, chat.id, 'request', 'Preserved source');
+  const archive = store.product.export();
+  const target = await database();
+  for (const corrupt of [
+    (tables: typeof archive.tables) => {
+      tables.chat_variable_states[0].branch_id = `main:${other.id}`;
+    },
+    (tables: typeof archive.tables) => {
+      tables.chat_variable_journal[0].result = JSON.stringify({
+        revision: 2,
+        values: { phase: 'ready' },
+      });
+    },
+    (tables: typeof archive.tables) => {
+      tables.chat_variable_outputs[0].source_id = 'missing-source';
+    },
+    (tables: typeof archive.tables) => {
+      tables.chat_variable_outputs[0].body = JSON.stringify({ revision: 1, values: { phase: 1 } });
+    },
+  ]) {
+    const broken = structuredClone(archive);
+    corrupt(broken.tables);
+    expect(() => target.product.import(broken)).toThrow();
+    expect(target.chats()).toHaveLength(0);
+  }
+  const oldArchive = structuredClone(archive);
+  for (const name of ['chat_variable_states', 'chat_variable_journal', 'chat_variable_outputs'])
+    delete oldArchive.tables[name];
+  target.product.import(oldArchive);
+  expect(readChatVariables(target, chat.id, `main:${chat.id}`)).toEqual({
+    revision: 0,
+    values: {},
+  });
+  const oldBackup = exportChatBackup(store, chat.id);
+  for (const name of ['variableStates', 'variableJournal', 'variableOutputs'])
+    delete oldBackup.records[name];
+  const copy = importChatBackup(store, { backup: oldBackup, idempotencyKey: 'legacy-variables' });
+  expect(readChatVariables(store, copy.chat.id, `main:${copy.chat.id}`)).toEqual({
+    revision: 0,
+    values: {},
+  });
+});
 
 test('a portable backup keeps every branch, exact text/edits/translation/notes and repeatedly restores new chats', async () => {
   const store = await database();

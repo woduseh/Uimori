@@ -40,7 +40,7 @@ test(`PREQUESTUI01 generic controls reserve a proposal, survive reload, consume 
   page.on('pageerror', (error) => errors.push(error.message));
   await page.setViewportSize({ width: MOBILE_WIDTH, height: 844 });
   await page.goto(`/?chat=${chat.id}`);
-  const panel = page.getByRole('region', { name: '패키지 상태와 행동', exact: true });
+  const panel = page.getByRole('region', { name: '채팅 상태와 행동', exact: true });
   await expect(panel).toBeVisible();
   await panel.getByLabel('새 활력', { exact: true }).fill('150');
   await panel.getByRole('button', { name: '활력 설정', exact: true }).click();
@@ -107,7 +107,7 @@ test('PREQUESTUI02 editing a staged proposal clears its receipt and cannot consu
   const chat = await seed(request),
     endpoint = `/api/chats/${chat.id}/package-behaviors`;
   await page.goto(`/?chat=${chat.id}`);
-  const panel = page.getByRole('region', { name: '패키지 상태와 행동', exact: true });
+  const panel = page.getByRole('region', { name: '채팅 상태와 행동', exact: true });
   await panel.getByLabel('장면 제안', { exact: true }).fill('The original action proposal.');
   await panel.getByRole('button', { name: '다음 탐험 예약', exact: true }).click();
   const pending = panel.getByRole('complementary', { name: '예약된 다음 요청', exact: true });

@@ -16,6 +16,7 @@ import { contextRoutes } from './context-routes.js';
 import { EditDraftService, editDraftRoutes } from './edit-drafts.js';
 import { ChatOverridesStore, chatOverrideRoutes } from './chat-overrides.js';
 import { chatOptionRoutes } from './chat-options.js';
+import { chatVariableRoutes } from './chat-variable-routes.js';
 import { ResponseStreamStore, responseStreamRoutes } from './response-stream.js';
 import { readerActivities, readerDetail, readerRuns } from './reader.js';
 import { chatActivities } from './chat-activity.js';
@@ -1087,6 +1088,7 @@ export async function createApp(options: AppOptions): Promise<App> {
   readerRoutes(app, store);
   helperRoutes(app, helper);
   chatOptionRoutes(app, store);
+  chatVariableRoutes(app, store, publish);
   contextRoutes(app, store, {
     signal: stopping.signal,
     track,

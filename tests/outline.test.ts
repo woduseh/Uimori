@@ -11,6 +11,7 @@ import { directHelperGrants } from '../server/helper-workspace.js';
 import { buildMainProviderRequest } from '../server/main-request.js';
 import { OUTLINE_LEVEL_LABELS } from '../core/outline.js';
 import { initOutline } from '../server/outline-store.js';
+import { DATABASE_SCHEMA_VERSION } from '../server/schema-migrations.js';
 import type { RunSnapshot } from '../core/types.js';
 import type { Connection, ModelPreset } from '../core/product.js';
 
@@ -749,10 +750,12 @@ describe('hierarchical composition', () => {
     initOutline(restored.db);
     initOutline(restored.db);
     expect(restored.chat(chat.id)).toEqual(store.chat(chat.id));
-    expect(restored.db.prepare('PRAGMA user_version').get()).toMatchObject({ user_version: 18 });
+    expect(restored.db.prepare('PRAGMA user_version').get()).toMatchObject({
+      user_version: DATABASE_SCHEMA_VERSION,
+    });
     expect(restored.db.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
     restored.db.exec(
-      'DROP TABLE IF EXISTS outline_batches; DROP TABLE outline_nodes; DROP TABLE package_extension_operation_attempts; DROP TABLE package_extension_operations; DROP TABLE native_transfer_receipts; DROP TABLE schema_migrations; PRAGMA user_version=15;'
+      'DROP TABLE IF EXISTS outline_batches; DROP TABLE outline_nodes; DROP TABLE chat_variable_outputs; DROP TABLE chat_variable_journal; DROP TABLE chat_variable_states; DROP TABLE package_extension_operation_attempts; DROP TABLE package_extension_operations; DROP TABLE native_transfer_receipts; DROP TABLE schema_migrations; PRAGMA user_version=15;'
     );
     restored.close();
     const reopened = new Store(restored.path);
@@ -760,7 +763,9 @@ describe('hierarchical composition', () => {
     expect(reopened.source(source.id)).toEqual(store.source(source.id));
     expect(reopened.chat(chat.id)).toEqual(store.chat(chat.id));
     expect(reopened.outline.detail(chat.id).nodes).toEqual([]);
-    expect(reopened.db.prepare('PRAGMA user_version').get()).toMatchObject({ user_version: 18 });
+    expect(reopened.db.prepare('PRAGMA user_version').get()).toMatchObject({
+      user_version: DATABASE_SCHEMA_VERSION,
+    });
   });
 
   test('receipts survive restore after deletion and reject forged references to another chat', async () => {

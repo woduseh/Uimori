@@ -86,6 +86,9 @@ function withoutLedger(db: DatabaseSync) {
     native_transfer_receipts: _transfers,
     package_extension_operations: _extensionOperations,
     package_extension_operation_attempts: _extensionAttempts,
+    chat_variable_states: _variables,
+    chat_variable_journal: _variableJournal,
+    chat_variable_outputs: _variableOutputs,
     ...data
   } = snapshot(db);
   return data;
@@ -106,6 +109,7 @@ test('MIG01 fresh initialization and reopening agree with the frozen v15 shape p
     { version: 16, name: 'schema-16-beta-baseline', applied_at: expect.any(String) },
     { version: 17, name: 'schema-17-native-transfer-receipts', applied_at: expect.any(String) },
     { version: 18, name: 'schema-18-package-extension-operations', applied_at: expect.any(String) },
+    { version: 19, name: 'schema-19-chat-variables', applied_at: expect.any(String) },
   ]);
   const before = snapshot(store.db),
     beforeSchema = schema(store.db);
@@ -136,6 +140,9 @@ test('MIG02 an actual frozen v15 preserves every stored row, source, image, stat
           'native_transfer_receipts',
           'package_extension_operations',
           'package_extension_operation_attempts',
+          'chat_variable_states',
+          'chat_variable_journal',
+          'chat_variable_outputs',
         ].includes(String(entry.tbl_name))
     )
   ).toEqual(beforeSchema);
@@ -257,7 +264,7 @@ test.each(['after DDL', 'after ledger'] as const)(
     expect(snapshot(unchanged)).toEqual(before);
     expect(unchanged.prepare('PRAGMA user_version').get()).toEqual({ user_version: 15 });
     unchanged.close();
-    expect(ledger(f.open().db)).toHaveLength(3);
+    expect(ledger(f.open().db)).toHaveLength(4);
   }
 );
 
@@ -277,7 +284,7 @@ test('MIG07 final foreign-key validation rolls back all additions', () => {
   expect(schema(after)).toEqual(beforeSchema);
 });
 
-test.each([0, 14, 19])(
+test.each([0, 14, 20])(
   'MIG08 unsupported version %s leaves the original SQLite bytes and data intact',
   (version) => {
     const f = fixture(),
@@ -299,7 +306,7 @@ test.each([
   'DELETE FROM schema_migrations',
   "UPDATE schema_migrations SET name='unknown'",
   "UPDATE schema_migrations SET applied_at='not-a-time'",
-  "INSERT INTO schema_migrations VALUES(19,'unknown','2026-09-12T00:00:00.000Z')",
+  "INSERT INTO schema_migrations VALUES(20,'unknown','2026-09-12T00:00:00.000Z')",
   'ALTER TABLE schema_migrations ADD COLUMN unexpected TEXT',
   'PRAGMA user_version=15',
 ])('MIG09 inconsistent ledger is rejected without repair: %s', (sql) => {
@@ -368,7 +375,7 @@ test('MIG12 frozen schema16 adds transfer and extension storage; failed schema17
     return exec.call(this, sql);
   });
   expect(() => f.open()).toThrow(
-    'DATABASE_MIGRATION_FAILED:16->18:schema-17-native-transfer-receipts'
+    'DATABASE_MIGRATION_FAILED:16->19:schema-17-native-transfer-receipts'
   );
   injected.mockRestore();
   const unchanged = f.raw();
@@ -380,14 +387,14 @@ test('MIG12 frozen schema16 adds transfer and extension storage; failed schema17
   for (const [table, rows] of Object.entries(before))
     if (table !== 'schema_migrations') expect(snapshot(store.db)[table]).toEqual(rows);
   expect(store.db.prepare('SELECT * FROM native_transfer_receipts').all()).toEqual([]);
-  expect(ledger(store.db)).toHaveLength(3);
+  expect(ledger(store.db)).toHaveLength(4);
 });
 
 test('MIG14 schema17 upgrades atomically and preserves every previous table and ledger row', () => {
   const f = fixture(),
     old = f.open();
   old.db.exec(
-    'DROP TABLE package_extension_operation_attempts; DROP TABLE package_extension_operations; DELETE FROM schema_migrations WHERE version=18; PRAGMA user_version=17'
+    'DROP TABLE chat_variable_outputs; DROP TABLE chat_variable_journal; DROP TABLE chat_variable_states; DROP TABLE package_extension_operation_attempts; DROP TABLE package_extension_operations; DELETE FROM schema_migrations WHERE version>=18; PRAGMA user_version=17'
   );
   const before = snapshot(old.db),
     beforeSchema = schema(old.db);
@@ -401,7 +408,7 @@ test('MIG14 schema17 upgrades atomically and preserves every previous table and 
     return exec.call(this, sql);
   });
   expect(() => f.open()).toThrow(
-    'DATABASE_MIGRATION_FAILED:17->18:schema-18-package-extension-operations'
+    'DATABASE_MIGRATION_FAILED:17->19:schema-18-package-extension-operations'
   );
   injected.mockRestore();
   const unchanged = f.raw();
@@ -430,6 +437,52 @@ test('MIG15 schema18 rejects a weakened extension active-owner index without rep
   expect(() => f.open()).toThrow('DATABASE_SCHEMA_MISMATCH:package_extension_one_active');
   expect(schema(f.raw())).toEqual(before);
 });
+
+test('MIG16 schema18 adds only empty shared-variable tables and rolls back a failed schema19 migration', () => {
+  const f = fixture(),
+    old = f.open();
+  old.db.exec(
+    'DROP TABLE chat_variable_outputs; DROP TABLE chat_variable_journal; DROP TABLE chat_variable_states; DELETE FROM schema_migrations WHERE version=19; PRAGMA user_version=18'
+  );
+  const before = snapshot(old.db),
+    beforeSchema = schema(old.db);
+  old.close();
+  const exec = DatabaseSync.prototype.exec;
+  const injected = vi.spyOn(DatabaseSync.prototype, 'exec').mockImplementation(function (
+    this: DatabaseSync,
+    sql: string
+  ) {
+    if (sql === 'PRAGMA user_version=19') throw new Error('Synthetic schema19 failure');
+    return exec.call(this, sql);
+  });
+  expect(() => f.open()).toThrow('DATABASE_MIGRATION_FAILED:18->19:schema-19-chat-variables');
+  injected.mockRestore();
+  const unchanged = f.raw();
+  expect(snapshot(unchanged)).toEqual(before);
+  expect(schema(unchanged)).toEqual(beforeSchema);
+  expect(unchanged.prepare('PRAGMA user_version').get()!.user_version).toBe(18);
+  unchanged.close();
+  const current = f.open();
+  for (const [table, rows] of Object.entries(before))
+    if (table !== 'schema_migrations') expect(snapshot(current.db)[table]).toEqual(rows);
+  expect(ledger(current.db).slice(0, 3)).toEqual(before.schema_migrations);
+  for (const table of ['chat_variable_states', 'chat_variable_journal', 'chat_variable_outputs'])
+    expect(current.db.prepare(`SELECT * FROM ${table}`).all()).toEqual([]);
+  expect(globalThis.fetch).not.toHaveBeenCalled();
+});
+
+test.each(['chat_variable_states', 'chat_variable_journal', 'chat_variable_outputs'])(
+  'MIG17 current schema rejects a missing shared-variable table without repair: %s',
+  (table) => {
+    const f = fixture(),
+      store = f.open();
+    store.db.exec(`DROP TABLE ${table}`);
+    const before = schema(store.db);
+    store.close();
+    expect(() => f.open()).toThrow(`DATABASE_SCHEMA_MISMATCH:${table}`);
+    expect(schema(f.raw())).toEqual(before);
+  }
+);
 
 test.each(['missing', 'partial'] as const)(
   'MIG13 schema17 rejects a receipt table without complete idempotency uniqueness: %s',

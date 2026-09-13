@@ -1,7 +1,7 @@
 import type { DatabaseSync } from 'node:sqlite';
 import { SCHEMA_15_COLUMNS } from './schema-v15-contract.js';
 
-export const DATABASE_SCHEMA_VERSION = 18;
+export const DATABASE_SCHEMA_VERSION = 19;
 const BASELINE_VERSION = 15;
 const LEDGER = 'schema_migrations';
 const ADDITIVE_TABLES = new Set([
@@ -148,6 +148,12 @@ const EXTENSION_OPERATION_SCHEMA = [
   'CREATE TABLE package_extension_operation_attempts(operation_id TEXT NOT NULL REFERENCES package_extension_operations(id) ON DELETE CASCADE,attempt_id TEXT PRIMARY KEY REFERENCES attempts(id) ON DELETE CASCADE,call_index INTEGER NOT NULL,UNIQUE(operation_id,call_index))',
 ] as const;
 
+const CHAT_VARIABLE_SCHEMA = [
+  'CREATE TABLE chat_variable_states(chat_id TEXT NOT NULL,branch_id TEXT NOT NULL,revision INTEGER NOT NULL,values_json TEXT NOT NULL,PRIMARY KEY(chat_id,branch_id))',
+  'CREATE TABLE chat_variable_journal(chat_id TEXT NOT NULL,branch_id TEXT NOT NULL,request_key TEXT NOT NULL,payload_hash TEXT NOT NULL,payload TEXT NOT NULL,result TEXT NOT NULL,created_at TEXT NOT NULL,PRIMARY KEY(chat_id,branch_id,request_key))',
+  'CREATE TABLE chat_variable_outputs(source_id TEXT PRIMARY KEY,body TEXT NOT NULL)',
+] as const;
+
 const migrations: readonly Migration[] = [
   {
     version: 16,
@@ -200,6 +206,22 @@ const migrations: readonly Migration[] = [
         const actual = db.prepare('SELECT type,sql FROM sqlite_schema WHERE name=?').get(match[2]);
         if (actual?.type !== match[1].toLowerCase() || actual.sql !== sql)
           throw new SchemaMigrationError(`DATABASE_SCHEMA_MISMATCH:${match[2]}`, 18);
+      }
+    },
+  },
+  {
+    version: 19,
+    name: 'schema-19-chat-variables',
+    apply: (db) => {
+      for (const sql of CHAT_VARIABLE_SCHEMA) db.exec(sql);
+    },
+    validate: (db) => {
+      migrations.find((migration) => migration.version === 18)!.validate(db);
+      for (const sql of CHAT_VARIABLE_SCHEMA) {
+        const name = /^CREATE TABLE ([a-z_]+)/u.exec(sql)![1];
+        const actual = db.prepare('SELECT type,sql FROM sqlite_schema WHERE name=?').get(name);
+        if (actual?.type !== 'table' || actual.sql !== sql)
+          throw new SchemaMigrationError(`DATABASE_SCHEMA_MISMATCH:${name}`, 19);
       }
     },
   },
