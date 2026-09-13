@@ -54,6 +54,10 @@ const messages: Record<string, string> = {
   CONTEXT_FIXED_INPUT_TOO_LARGE:
     '고정된 입력만으로 모델의 문맥 한도를 넘었어요. 프롬프트·첨부 자료를 줄이거나 입력 한도가 더 큰 모델을 선택해 주세요.',
   BEHAVIOR_STATE_STALE: '다른 요청이 먼저 반영됐어요. 최신 내용을 확인한 뒤 다시 시도해 주세요.',
+  BEHAVIOR_UPGRADE_PREVIEW_EXPIRED: '변경 내용 확인이 만료됐어요. 다시 계산한 뒤 적용해 주세요.',
+  BEHAVIOR_UPGRADE_NOT_REQUIRED: '이미 최신 상태 정의를 사용하고 있어요. 상태를 새로 읽어 주세요.',
+  BEHAVIOR_UPGRADE_PROGRAM_UNAVAILABLE: '이 자료에는 사용할 수 있는 상태 변환 코드가 없어요.',
+  BEHAVIOR_PACKAGE_STALE: '자료가 다시 변경됐어요. 창을 닫고 최신 자료에서 다시 확인해 주세요.',
   BEHAVIOR_PROGRAM_CONTEXT_CHANGED:
     '계산 중 자료나 채팅 상태가 바뀌어 결과를 반영하지 않았어요. 최신 상태에서 다시 실행해 주세요.',
   BEHAVIOR_RUN_ACTIVE: '이 채팅에서 요청이 진행 중이에요. 완료 후 행동을 다시 실행해 주세요.',

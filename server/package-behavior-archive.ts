@@ -435,6 +435,9 @@ export function validatePackageBehaviorArchive(store: Store): void {
       'hostRuntime',
       'previousScope',
       'program',
+      'mode',
+      'expectedPackageRevision',
+      'previewId',
     ]);
     const scope = scopeOf(payload.scope),
       b = definition(store, scope);
@@ -462,8 +465,16 @@ export function validatePackageBehaviorArchive(store: Store): void {
     revision(r.stateRevision, 1);
     if (r.stateRevision !== r.beforeStateRevision + 1 || r.stateRevision > owner.row.state_revision)
       reject('journal state revision');
-    if (Object.hasOwn(payload, 'previousScope') && r.provenance !== 'explicit-reset')
+    if (
+      Object.hasOwn(payload, 'previousScope') &&
+      !['explicit-reset', 'explicit-upgrade'].includes(r.provenance)
+    )
       reject('unexpected previous scope');
+    if (
+      r.provenance !== 'explicit-upgrade' &&
+      ['mode', 'expectedPackageRevision', 'previewId'].some((key) => Object.hasOwn(payload, key))
+    )
+      reject('unexpected upgrade fields');
     const previousScope =
       payload.previousScope === undefined ? scope : scopeOf(payload.previousScope);
     same(instanceScope(previousScope), instanceScope(scope), 'reset previous instance');
@@ -603,6 +614,48 @@ export function validatePackageBehaviorArchive(store: Store): void {
         );
         same(r.sourceHash, store.sourceOriginal(run.sourceRevision).hash, 'run journal source');
       }
+    } else if (r.provenance === 'explicit-upgrade') {
+      const allowed = [
+        'scope',
+        'provenance',
+        'mode',
+        'expectedPackageRevision',
+        'expectedStateRevision',
+        'expectedSourceHash',
+        'idempotencyKey',
+        'previewId',
+        'previousScope',
+        'program',
+      ];
+      if (Object.keys(payload).some((key) => !allowed.includes(key))) reject('upgrade fields');
+      text(payload.previewId, 200);
+      if (
+        !Object.hasOwn(payload, 'previousScope') ||
+        payload.expectedPackageRevision !== scope.packageRevision ||
+        payload.expectedStateRevision !== r.beforeStateRevision ||
+        payload.expectedSourceHash !== r.sourceHash ||
+        r.drawSeed !== null ||
+        Object.keys(r.draws).length ||
+        behaviorPayloadHash(definition(store, previousScope)) === behaviorPayloadHash(b)
+      )
+        reject('upgrade contract');
+      if (payload.mode === 'preserve') {
+        if (Object.hasOwn(payload, 'program') || Object.hasOwn(r, 'actionResult'))
+          reject('unexpected upgrade program');
+        same(r.state, r.beforeState, 'preserved upgrade state');
+      } else if (payload.mode === 'program') {
+        if (!b.migration || !Object.hasOwn(r, 'actionResult')) reject('upgrade program');
+        try {
+          validateExtensionProgramReceipt(payload.program, {
+            programHash: behaviorPayloadHash(b.migration),
+            stateSchema: b.stateSchema,
+            state: r.state,
+            result: r.actionResult,
+          });
+        } catch {
+          reject('upgrade program receipt');
+        }
+      } else reject('upgrade mode');
     } else if (r.provenance === 'explicit-reset') {
       if (Object.hasOwn(r, 'actionResult')) reject('unexpected action result');
       if (

@@ -73,6 +73,8 @@ export interface PackageBehavior {
   initialState: RuntimeValue;
   actions: BehaviorAction[];
   outputParsers: BehaviorOutputParser[];
+  /** Pure state conversion, executed only by an explicit upgrade preview. */
+  migration?: ExtensionProgram;
 }
 export class BehaviorError extends Error {
   constructor(
@@ -280,6 +282,7 @@ export function validatePackageBehavior(value: unknown): PackageBehavior {
     'initialState',
     'actions',
     'outputParsers',
+    'migration',
   ]);
   inspectRuntimeValue(b);
   if (b.mode !== undefined && !['annotation', 'authoritative'].includes(b.mode))
@@ -289,6 +292,15 @@ export function validatePackageBehavior(value: unknown): PackageBehavior {
   validateBehaviorSchema(b.stateSchema);
   if (b.stateSchema.type !== 'record') bad('BEHAVIOR_STATE_ROOT');
   validateBehaviorValue(b.stateSchema, b.initialState);
+  if (b.migration !== undefined) {
+    try {
+      const migration = validateExtensionProgram(b.migration);
+      if (migration.capabilities?.length) bad('BEHAVIOR_MIGRATION_CAPABILITIES');
+    } catch (error) {
+      if (error instanceof ExtensionProgramError) bad(error.code);
+      throw error;
+    }
+  }
   if (
     !Array.isArray(b.actions) ||
     b.actions.length > 100 ||

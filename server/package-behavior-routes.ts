@@ -1,10 +1,12 @@
-import { fields, number, record, text } from './request-validation.js';
+import { fields, number, record, text, HttpError } from './request-validation.js';
 import type { FastifyInstance } from 'fastify';
 import type { Store } from './store.js';
 import {
   behaviorDetail,
   performBehaviorAction,
   performBehaviorActionWithProgram,
+  previewBehaviorUpgrade,
+  applyBehaviorUpgrade,
 } from './package-behavior-host.js';
 import type { BehaviorActionCommand } from './package-behavior-store.js';
 import { cancelPackageRequest } from './package-requests.js';
@@ -56,6 +58,66 @@ export function packageBehaviorRoutes(
     '/api/chats/:id/package-behaviors',
     async (request) => behaviorDetail(store, request.params.id, request.query.branchId)
   );
+  for (const preview of [true, false])
+    app.post<{ Params: { id: string; instanceId: string } }>(
+      `/api/chats/:id/package-behaviors/:instanceId/${preview ? 'upgrade-preview' : 'upgrade'}`,
+      async (request, reply) => {
+        const b = record(request.body);
+        fields(b, [
+          'branchId',
+          'expectedPackageRevision',
+          'expectedStateRevision',
+          'expectedSourceHash',
+          'mode',
+          ...(preview ? [] : ['previewId', 'idempotencyKey']),
+        ]);
+        if (b.mode !== 'preserve' && b.mode !== 'program')
+          throw new HttpError(400, 'BEHAVIOR_UPGRADE_MODE');
+        const command = {
+          expectedPackageRevision: number(b.expectedPackageRevision, 'package revision', 1),
+          expectedStateRevision: number(b.expectedStateRevision, 'state revision', 0),
+          expectedSourceHash:
+            b.expectedSourceHash === null ? null : text(b.expectedSourceHash, 'source hash', 200),
+          mode: b.mode,
+        };
+        const branchId = b.branchId === undefined ? undefined : text(b.branchId, 'branch ID', 200);
+        if (!preview) {
+          const result = applyBehaviorUpgrade(
+            store,
+            request.params.id,
+            branchId,
+            request.params.instanceId,
+            {
+              ...command,
+              previewId: text(b.previewId, 'preview ID', 200),
+              idempotencyKey: text(b.idempotencyKey, 'idempotency key', 200),
+            }
+          );
+          publish?.(request.params.id);
+          return result;
+        }
+        const abort = new AbortController();
+        const cancel = () => {
+          if (!reply.raw.writableEnded) abort.abort();
+        };
+        request.raw.once('aborted', cancel);
+        reply.raw.once('close', cancel);
+        try {
+          if (request.raw.aborted) abort.abort();
+          return await previewBehaviorUpgrade(
+            store,
+            request.params.id,
+            branchId,
+            request.params.instanceId,
+            command,
+            abort.signal
+          );
+        } finally {
+          request.raw.removeListener('aborted', cancel);
+          reply.raw.removeListener('close', cancel);
+        }
+      }
+    );
   for (const reset of [false, true])
     app.post<{ Params: { id: string; instanceId: string } }>(
       `/api/chats/:id/package-behaviors/:instanceId/${reset ? 'reset' : 'actions'}`,
