@@ -312,8 +312,11 @@ export async function applyPromptDisplayTransforms(
   text: string,
   role: 'user' | 'assistant'
 ): Promise<TextTransformResult> {
+  const authoredStart = snapshot.packageStart?.mode === 'authored';
+  if (authoredStart && role === 'user') return { text, changed: false, applied: [] };
   const config = configuration(snapshot),
-    lastIndex = rawMessages(snapshot).length,
+    // An authored opening has no preceding user request in the actual conversation.
+    lastIndex = rawMessages(snapshot).length - (authoredStart ? 1 : 0),
     index = lastIndex - (role === 'user' ? 1 : 0);
   const message: PromptHistoryMessage = {
     id: 'display',

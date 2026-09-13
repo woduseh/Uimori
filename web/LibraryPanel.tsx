@@ -448,6 +448,7 @@ export function LibraryPanel({
         {library && !editing && !detail && <NativeTransfer library={library} reload={reload} />}
         <RisuImport
           showTrigger={!!library && (tab === 'bot' || tab === 'module') && !editing && !detail}
+          defaultKind={tab === 'module' ? 'module' : ''}
           reload={reload}
           onContinueChat={onContinueChat}
         />

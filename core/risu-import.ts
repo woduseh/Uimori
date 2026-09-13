@@ -3,13 +3,14 @@ import type { Chat } from './types.js';
 
 export const RISU_IMPORT_MAX_BYTES = 24 * 1024 * 1024;
 export type RisuImportSource = { name: string; base64: string };
+export type RisuImportKind = 'bot' | 'module';
 export type RisuImportFinding = {
   code: string;
   level: 'info' | 'warning' | 'unsupported';
   message: string;
 };
 export type RisuImportPreview = {
-  kind: 'bot' | 'module';
+  kind: RisuImportKind;
   digest: string;
   title: string;
   description: string;
@@ -27,6 +28,7 @@ export type RisuImportPreview = {
 };
 export type RisuImportApply = {
   source: RisuImportSource;
+  kind?: RisuImportKind;
   digest: string;
   memoryIds: string[];
   allowPartial: boolean;

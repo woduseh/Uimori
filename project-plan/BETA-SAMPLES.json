@@ -42,7 +42,7 @@
   "currentImplementation": {
     "recordedOn": "2026-09-13",
     "sourceCommit": "a9190f4",
-    "scope": "공통 구현 보충이며 고정 표본 실행·기능 인수 근거가 아니에요. baselines와 기능별 currentSupport는 초기 조사 기준을 보존해요.",
+    "scope": "공통 구현과 후속 파일 가져오기 보충이에요. sourceCommit은 초기 구현 기록이며 이후 결과는 BETA-PLAN의 작업별 근거를 따라요. baselines와 기능별 currentSupport는 초기 조사 기준을 보존해요.",
     "versions": {
       "database": 18,
       "archive": 15,
@@ -52,7 +52,7 @@
       {
         "area": "card-import",
         "status": "partial",
-        "basis": "카드 .charx/JSON의 기본 자료·이름 템플릿·정적 표시 정규식 경로가 있어요. 24 MiB 입력 한도와 미지원 기능 검토를 유지하며 원본 스크립트 전체를 이식하지 않아요.",
+        "basis": "카드 .charx/JSON 기본 자료와 CharX 내부 module.risum의 canonical lore/regex/trigger를 읽고 지원 표시 변환을 연결해요. 파일 24 MiB 등 현재 한도를 유지하며 원본 스크립트 전체 실행은 미완이에요.",
         "evidence": [
           "docs/RISU-IMPORT.md",
           "server/risu-import.ts",
@@ -62,7 +62,7 @@
       {
         "area": "module-import",
         "status": "partial",
-        "basis": "RisuToki가 추출한 module.json 또는 .risutoki 에셋을 포함한 프로젝트 ZIP을 모듈로 등록해요. 고정 원본 .risum·모듈 .charx의 직접 지원은 아니에요.",
+        "basis": "모듈 JSON/프로젝트 ZIP과 사용자가 모듈로 선택한 CharX를 기존 native 모듈로 등록·장착해요. 독립 .risum 입력은 지원 대상에서 제외하며 동적 스크립트의 전체 실행은 미완이에요.",
         "evidence": [
           "docs/RISU-IMPORT.md",
           "server/risu-module-json.ts"
@@ -104,7 +104,7 @@
     ],
     "sampleLimitations": {
       "merry": "고정 원본 140785373 bytes는 카드 입력 한도 24 MiB를 초과하므로 currentRisuImport missing을 유지해요.",
-      "originalModules": "히든 스토리·라이트보드 원본의 직접 경로는 missing이며 추출한 JSON/ZIP의 기본 경로와 구분해요."
+      "originalModules": "라이트보드 3종 원본 CharX는 부분 등록·원본 보존을 확인했어요. 독립 .risum의 히든 스토리는 직접 파일 지원 대상에서 제외하며 기능은 다른 지원 형식으로 연결해요."
     },
     "acceptance": "모든 표본과 기능의 nativeAcceptance/userAcceptance는 not-run을 유지해요."
   },
@@ -4654,11 +4654,13 @@
       },
       "currentRisuImport": {
         "status": "partial",
-        "basis": "카드 .charx/JSON의 기본 자료 가져오기 경로가 구현되어 있어요. 이 고정 파일의 실제 가져오기·모든 에셋·스크립트·기능 인수는 미검증이며 전체 호환을 뜻하지 않아요.",
+        "basis": "고정 원본 CharX 내부 자료를 읽고 봇/모듈로 부분 등록하며 원본 바이트를 보존한 로컬 근거가 있어요. 지원 정적 표시 규칙은 공통 실행기를 사용하고 Lua/트리거·동적 CBS·전체 기능/창작 품질 인수는 미완이에요.",
         "evidenceRefs": [
           "docs/RISU-IMPORT.md",
+          "server/risu-module-file.ts",
+          "server/character-card-file.ts",
           "server/risu-import.ts",
-          "server/character-card-file.ts"
+          "project-plan/BETA-PLAN.md"
         ]
       },
       "nativeAcceptance": {
@@ -4880,11 +4882,13 @@
       },
       "currentRisuImport": {
         "status": "partial",
-        "basis": "카드 .charx/JSON의 기본 자료 가져오기 경로가 구현되어 있어요. 이 고정 파일의 실제 가져오기·모든 에셋·스크립트·기능 인수는 미검증이며 전체 호환을 뜻하지 않아요.",
+        "basis": "고정 원본 CharX 내부 자료를 읽고 봇/모듈로 부분 등록하며 원본 바이트를 보존한 로컬 근거가 있어요. 지원 정적 표시 규칙은 공통 실행기를 사용하고 Lua/트리거·동적 CBS·전체 기능/창작 품질 인수는 미완이에요.",
         "evidenceRefs": [
           "docs/RISU-IMPORT.md",
+          "server/risu-module-file.ts",
+          "server/character-card-file.ts",
           "server/risu-import.ts",
-          "server/character-card-file.ts"
+          "project-plan/BETA-PLAN.md"
         ]
       },
       "nativeAcceptance": {
@@ -5106,12 +5110,13 @@
       },
       "currentRisuImport": {
         "status": "partial",
-        "basis": "카드 .charx/JSON의 기본 자료 가져오기 경로가 구현되어 있어요. 과거 비저장 분석에서 이 파일의 로어 6개·시작문 3개·이미지 3개를 읽은 기록이 있어요. 현재 소스에서의 전체 가져오기·스크립트·기능 인수는 미검증이며 전체 호환을 뜻하지 않아요.",
+        "basis": "고정 원본 CharX 내부 자료를 읽고 봇/모듈로 부분 등록하며 원본 바이트를 보존한 로컬 근거가 있어요. 지원 정적 표시 규칙은 공통 실행기를 사용하고 Lua/트리거·동적 CBS·전체 기능/창작 품질 인수는 미완이에요.",
         "evidenceRefs": [
           "docs/RISU-IMPORT.md",
-          "server/risu-import.ts",
+          "server/risu-module-file.ts",
           "server/character-card-file.ts",
-          "project-plan/BETA-PLAN.md#2026-09-13-첫-직접-가져오기-흐름"
+          "server/risu-import.ts",
+          "project-plan/BETA-PLAN.md"
         ]
       },
       "nativeAcceptance": {
@@ -5287,7 +5292,7 @@
       "scopeExclusions": [],
       "currentRisuImport": {
         "status": "missing",
-        "basis": "현재 원본 직접 가져오기·선택형 호환 실행 경로는 구현 전이에요. native 기반 존재와 구분해요."
+        "basis": "독립 .risum 파일 직접 가져오기는 사용자 선택으로 지원 대상에서 제외했어요. 기존 프로젝트 추출이나 CharX로 자료를 옮기며 필요한 모듈 기능 보존은 별도 목표로 유지해요."
       },
       "nativeAcceptance": {
         "status": "not-run",
@@ -9354,8 +9359,15 @@
       "dependencies": [],
       "scopeExclusions": [],
       "currentRisuImport": {
-        "status": "missing",
-        "basis": "현재 원본 직접 가져오기·선택형 호환 실행 경로는 구현 전이에요. native 기반 존재와 구분해요."
+        "status": "partial",
+        "basis": "고정 원본 CharX 내부 자료를 읽고 봇/모듈로 부분 등록하며 원본 바이트를 보존한 로컬 근거가 있어요. 지원 정적 표시 규칙은 공통 실행기를 사용하고 Lua/트리거·동적 CBS·전체 기능/창작 품질 인수는 미완이에요.",
+        "evidenceRefs": [
+          "docs/RISU-IMPORT.md",
+          "server/risu-module-file.ts",
+          "server/character-card-file.ts",
+          "server/risu-import.ts",
+          "project-plan/BETA-PLAN.md"
+        ]
       },
       "nativeAcceptance": {
         "status": "not-run",
@@ -9939,7 +9951,11 @@
             }
           ]
         }
-      ]
+      ],
+      "baselineRisuImport": {
+        "status": "missing",
+        "basis": "현재 원본 직접 가져오기·선택형 호환 실행 경로는 구현 전이에요. native 기반 존재와 구분해요."
+      }
     },
     {
       "id": "lightboard-mini",
@@ -9980,8 +9996,15 @@
       ],
       "scopeExclusions": [],
       "currentRisuImport": {
-        "status": "missing",
-        "basis": "현재 원본 직접 가져오기·선택형 호환 실행 경로는 구현 전이에요. native 기반 존재와 구분해요."
+        "status": "partial",
+        "basis": "고정 원본 CharX 내부 자료를 읽고 봇/모듈로 부분 등록하며 원본 바이트를 보존한 로컬 근거가 있어요. 지원 정적 표시 규칙은 공통 실행기를 사용하고 Lua/트리거·동적 CBS·전체 기능/창작 품질 인수는 미완이에요.",
+        "evidenceRefs": [
+          "docs/RISU-IMPORT.md",
+          "server/risu-module-file.ts",
+          "server/character-card-file.ts",
+          "server/risu-import.ts",
+          "project-plan/BETA-PLAN.md"
+        ]
       },
       "nativeAcceptance": {
         "status": "not-run",
@@ -10231,7 +10254,11 @@
             }
           ]
         }
-      ]
+      ],
+      "baselineRisuImport": {
+        "status": "missing",
+        "basis": "현재 원본 직접 가져오기·선택형 호환 실행 경로는 구현 전이에요. native 기반 존재와 구분해요."
+      }
     },
     {
       "id": "lightboard-news",
@@ -10272,8 +10299,15 @@
       ],
       "scopeExclusions": [],
       "currentRisuImport": {
-        "status": "missing",
-        "basis": "현재 원본 직접 가져오기·선택형 호환 실행 경로는 구현 전이에요. native 기반 존재와 구분해요."
+        "status": "partial",
+        "basis": "고정 원본 CharX 내부 자료를 읽고 봇/모듈로 부분 등록하며 원본 바이트를 보존한 로컬 근거가 있어요. 지원 정적 표시 규칙은 공통 실행기를 사용하고 Lua/트리거·동적 CBS·전체 기능/창작 품질 인수는 미완이에요.",
+        "evidenceRefs": [
+          "docs/RISU-IMPORT.md",
+          "server/risu-module-file.ts",
+          "server/character-card-file.ts",
+          "server/risu-import.ts",
+          "project-plan/BETA-PLAN.md"
+        ]
       },
       "nativeAcceptance": {
         "status": "not-run",
@@ -10457,7 +10491,11 @@
             }
           ]
         }
-      ]
+      ],
+      "baselineRisuImport": {
+        "status": "missing",
+        "basis": "현재 원본 직접 가져오기·선택형 호환 실행 경로는 구현 전이에요. native 기반 존재와 구분해요."
+      }
     }
   ],
   "combinationChecks": [

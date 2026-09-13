@@ -12,6 +12,7 @@ import {
   type RisuImportFinding,
   type RisuImportPreview,
   type RisuImportResult,
+  type RisuImportKind,
 } from '../core/risu-import.js';
 import { readCharacterCard } from './character-card-file.js';
 import { importRisuDisplayRegex } from './risu-regex.js';
@@ -54,8 +55,8 @@ function identityTemplate(value: string): PromptTemplate | undefined {
 }
 
 /** A one-way format adapter. No Risu runtime or source-specific behavior enters the package. */
-function analyze(value: unknown) {
-  const input = readCharacterCard(value);
+function analyze(value: unknown, requestedKind?: RisuImportKind) {
+  const input = readCharacterCard(value, requestedKind);
   const { card, hash, source, members, kind } = input;
   const findings: RisuImportFinding[] = [];
   const finding = (code: string, level: RisuImportFinding['level'], message: string) => {
@@ -317,7 +318,7 @@ function analyze(value: unknown) {
         );
       else if (/^(risuai|risu|extensions)$/iu.test(key)) pending.push(value);
       else if (
-        !/^(?:talkativeness|fav|favorite|depth_prompt|sd_prompt|additionalAssets|emotionImages|viewScreen|utilityBot|license|source|tags|creator|creation_date|modification_date)$/iu.test(
+        !/^(?:talkativeness|fav|favorite|moduleNoneImage|depth_prompt|sd_prompt|additionalAssets|emotionImages|viewScreen|utilityBot|license|source|tags|creator|creation_date|modification_date)$/iu.test(
           key
         )
       )
@@ -328,12 +329,19 @@ function analyze(value: unknown) {
         );
     }
   }
-  if (members.has('module.risum'))
+  if ('embeddedModule' in input && input.embeddedModule) {
     finding(
       'embedded-module',
-      'unsupported',
-      '내장 Risu 모듈이 있어요. 현재 카드의 기본 자료만 가져오며 모듈 동작은 별도 이식이 필요해요.'
+      'info',
+      'CharX 내부 모듈의 로어·정규식·트리거를 이 자료의 내용으로 읽어요. 카드에 중복된 로어를 다시 추가하지 않으며 실행 지원 여부는 각각 안내해요.'
     );
+    if (input.embeddedModule.assetCount)
+      finding(
+        'embedded-module-assets',
+        'unsupported',
+        '카드 첨부와 별개인 내부 모듈 에셋은 원본에 보존하며 자동 연결하지 않아요.'
+      );
+  }
   const file: NativeTransferFile = {
     format: NATIVE_TRANSFER_FORMAT,
     version: NATIVE_TRANSFER_VERSION,
@@ -370,8 +378,10 @@ function analyze(value: unknown) {
       },
     ],
   };
-  prepareNativeTransfer({ file });
-  const digest = createHash('sha256').update(`risu-import-v6:${hash}:${source.name}`).digest('hex');
+  const transfer = prepareNativeTransfer({ file });
+  const digest = createHash('sha256')
+    .update(JSON.stringify({ version: 7, transfer: transfer.digest, kind, findings, lore }))
+    .digest('hex');
   const preview: RisuImportPreview = {
     kind,
     digest,
@@ -387,15 +397,15 @@ function analyze(value: unknown) {
 
 export function prepareRisuImport(value: unknown): RisuImportPreview {
   const body = record(value);
-  fields(body, ['source']);
-  return analyze(body.source).preview;
+  fields(body, ['source', 'kind']);
+  return analyze(body.source, body.kind as RisuImportKind | undefined).preview;
 }
 
 export function applyRisuImport(store: Store, value: unknown): RisuImportResult {
   const body = record(value);
-  fields(body, ['source', 'digest', 'memoryIds', 'allowPartial', 'idempotencyKey']);
+  fields(body, ['source', 'kind', 'digest', 'memoryIds', 'allowPartial', 'idempotencyKey']);
   const requestKey = text(body.idempotencyKey, 'request key', 100);
-  const { file, preview, hash } = analyze(body.source);
+  const { file, preview, hash } = analyze(body.source, body.kind as RisuImportKind | undefined);
   if (body.digest !== preview.digest) throw new HttpError(409, 'RISU_IMPORT_DRAFT_CHANGED');
   if (typeof body.allowPartial !== 'boolean') throw new HttpError(400, 'RISU_IMPORT_INVALID_FILE');
   if (preview.findings.some((item) => item.level === 'unsupported') && !body.allowPartial)

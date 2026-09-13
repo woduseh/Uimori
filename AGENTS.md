@@ -1,5 +1,7 @@
 # 작업 지도
 
+- CharX 내부 모듈은 `server/risu-module-file.ts`의 `readEmbeddedRisuModule`로 해독하고 `character-card-file.ts`에서 같은 카드의 lore/regex/trigger로 정규화해요. regex/trigger는 내부 값 또는 빈 배열, lore는 누락/null일 때만 카드 fallback이며 두 목록을 합치거나 별도 패키지로 추가하지 않아요. 카드 소유 metadata·이미지는 유지해요. 모듈 JSON과 `moduleLoreEntries`를 공유하며 실제 트리거/Lua 실행은 미연결이에요. `kind` 선택은 검토·저장 digest에 포함하고 모듈 JSON/프로젝트는 모듈로만 등록해요. 파일명만으로 CharX 역할을 확정하지 않아요.
+
 - 2026-09-13 CharX 후속 사용자 선택: 메인 프롬프트 덮어쓰기·성격·시나리오는 제외 안내와 원본 보존만 해요. 글로벌 노트는 기존 공통 `PackageInstruction(target:main)`으로 봇의 추가 작문 지침에 연결하며 `{{original}}`는 중복 삽입하지 않아요. 기존 저장 자료·과거 Run을 일괄 수정하지 않아요. 독립 `.risum` 가져오기는 목표에서 제외하고 CharX 내장 모듈 해독과 구분해요. 결정은 `docs/DECISIONS-2026-09-12-BETA.md`, 현재 구현은 `docs/RISU-IMPORT.md`를 봐요.
 
 - Risu 프리셋은 `docs/RISU-IMPORT.md`, `server/risu-preset-file.ts`·`risu-preset-program.ts`·`risu-preset-import.ts`, `web/RisuPresetImport.tsx`를 봐요. `.risup`·구형 `.risupreset`/JSON/프로젝트 ZIP을 읽어 기존 native transfer로 프롬프트·토글과 원본 바이트를 등록해요. RPack 포함과 AGPL-3.0-only는 사용자의 후속 승인으로 적용했어요. 프리셋 `editprocess`·`editdisplay`는 공통 `PromptProgram.transforms`로 가져와요. `docs/PROMPT-TRANSFORMS.md`, `server/prompt-transforms.ts`·`text-transforms.ts`를 봐요. 전송 변환은 원문과 별도 계산 영수증을 문맥 측정·전송·후보·복원에서 공유하며 실패도 원문 fallback으로 보존해요. memory 슬롯의 위치·래퍼는 직접 적용하지 않고 Uimori 요약·메모 문맥과의 차이를 안내해요. 모델·파라미터·도구는 별도 관리하며 미지원 손실로 계산하지 않아요. 프리셋 파일→검토→저장·옵션/변환 편집→미리보기·본문 전송·Reader 표시 흐름을 연결했으며 전체 표본·실모델 품질 인수와 구분해요.

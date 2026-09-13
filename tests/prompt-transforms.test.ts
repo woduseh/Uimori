@@ -129,4 +129,21 @@ test('preset-only request and response display preserves source and effective in
   ];
   expect((await applyPromptDisplayTransforms(raw, 'same', 'user')).text).toBe('0');
   expect((await applyPromptDisplayTransforms(raw, 'same', 'assistant')).text).toBe('1');
+  raw.logicalHistory = [];
+  raw.packageStart = {
+    packageId: 'p',
+    packageRevision: 1,
+    startId: 'opening',
+    mode: 'authored',
+    title: 'Opening',
+    text: 'same',
+    values: {},
+  };
+  program.transforms!.at(-1)!.replacementTemplate = [
+    { kind: 'value', expression: { context: ['message', 'index'] } },
+    { kind: 'text', text: ':' },
+    { kind: 'value', expression: { context: ['message', 'lastIndex'] } },
+  ];
+  expect((await applyPromptDisplayTransforms(raw, 'same', 'assistant')).text).toBe('0:0');
+  expect((await applyPromptDisplayTransforms(raw, 'same', 'user')).text).toBe('same');
 });
