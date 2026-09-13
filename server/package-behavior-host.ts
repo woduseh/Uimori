@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { chatVariableProfile } from './chat-variable-context.js';
 import { HttpError } from './request-validation.js';
 import {
   executionContext,
@@ -185,7 +186,7 @@ function retainedState(store: Store, d: Definition): PackageExecutionState[] {
 export function behaviorDetail(store: Store, chatId: string, requestedBranch?: string) {
   store.chat(chatId);
   const branch = store.product.branch(chatId, requestedBranch);
-  const profile = store.product.snapshot(chatId);
+  const profile = chatVariableProfile(store, chatId, branch.id);
   const identity = profile
     ? packageIdentityFromProfile(profile, 'status')
     : { bot: { name: 'Character' }, user: { name: 'User' } };
@@ -571,7 +572,7 @@ function actionContext(
 function actionRuntime(store: Store, chatId: string, branchId: string, ref: PackageAttachment) {
   const chat = store.chat(chatId);
   const branch = store.product.branch(chatId, branchId);
-  const profile = store.product.snapshot(chatId);
+  const profile = chatVariableProfile(store, chatId, branch.id);
   const iso = new Date().toISOString();
   let view: RunSnapshot = {
     chatId,
@@ -700,10 +701,11 @@ export function prepareUserBehaviorProgram(
     if (!behaviorActionAllowed(action, state.state, command.input, runtime))
       throw new HttpError(409, 'BEHAVIOR_ACTION_DISABLED');
     const guard = actionGuard(store, d);
+    const profile = chatVariableProfile(store, chatId, branch.id);
     return {
       scope: d.scope,
       stateRevision: state.stateRevision,
-      profile: store.product.snapshot(chatId)!,
+      profile,
       settings: store.chat(chatId).settings,
       sourceRevision: branch.headRevision,
       sourceHash,
@@ -712,24 +714,11 @@ export function prepareUserBehaviorProgram(
       input: { state: state.state, input: command.input },
       runtime,
       guard,
-      host: createPackageExtensionHost(
-        action.program,
-        store.product.snapshot(chatId),
-        d.ref,
-        () => {
-          const current = actionContext(
-            store,
-            chatId,
-            branch.id,
-            instanceId,
-            command,
-            false,
-            panel
-          );
-          if (actionGuard(store, current.d) !== guard)
-            throw new HttpError(409, 'BEHAVIOR_PROGRAM_CONTEXT_CHANGED');
-        }
-      ),
+      host: createPackageExtensionHost(action.program, profile, d.ref, () => {
+        const current = actionContext(store, chatId, branch.id, instanceId, command, false, panel);
+        if (actionGuard(store, current.d) !== guard)
+          throw new HttpError(409, 'BEHAVIOR_PROGRAM_CONTEXT_CHANGED');
+      }),
     };
   });
 }

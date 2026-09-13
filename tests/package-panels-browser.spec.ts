@@ -56,7 +56,7 @@ test('PROGTOOLUI01 creators enable model and response code hooks without a user 
   expect(created.ok(), await created.text()).toBe(true);
   const chat = await created.json();
   await page.goto(`/?chat=${chat.id}`);
-  const panel = page.getByRole('region', { name: '패키지 상태와 행동', exact: true });
+  const panel = page.getByRole('region', { name: '채팅 상태와 행동', exact: true });
   await expect(panel.getByText('모델 요청', { exact: true })).toBeVisible();
   await expect(panel.getByText('응답 후 자동', { exact: true })).toBeVisible();
   await expect(panel.getByText('코드 계산', { exact: true })).toBeVisible();
@@ -390,7 +390,7 @@ for (const width of [MOBILE_WIDTH, DESKTOP_WIDTH])
     const detail = async () => await (await request.get(endpoint)).json();
     await page.setViewportSize({ width, height: 900 });
     await page.goto(`/?chat=${chat.id}`);
-    const owner = page.getByRole('region', { name: '패키지 상태와 행동', exact: true });
+    const owner = page.getByRole('region', { name: '채팅 상태와 행동', exact: true });
     const custom = page.getByRole('region', { name: '탐험 준비', exact: true });
     const iframe = page.frameLocator('iframe[title="탐험 준비 패키지 패널"]');
     await expect(custom).toHaveAttribute('aria-busy', 'false');

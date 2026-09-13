@@ -13,6 +13,7 @@ import {
   deleteSceneCommand,
 } from '../server/chat-deletion.js';
 import { createApp } from '../server/app.js';
+import { readChatVariables, writeChatVariables } from '../server/chat-variables.js';
 
 const owned: { directory: string; store?: Store }[] = [];
 afterEach(async () => {
@@ -38,7 +39,10 @@ async function fixture() {
 function run(store: Store, chatId: string, branchId = `main:${chatId}`, finish = true) {
   const branch = store.product.branch(chatId, branchId),
     chat = store.chat(chatId),
-    profile = store.product.snapshot(chatId);
+    profile = {
+      ...store.product.snapshot(chatId),
+      variableState: readChatVariables(store, chatId, branch.id),
+    };
   const { run } = store.createRun(
     chatId,
     {
@@ -81,6 +85,12 @@ test('chat deletion removes owned graph atomically and preserves independent for
     relatedIds: [],
   });
   const chat = createFixtureChat(store, 'Original', 'calm', { botId: bot.id });
+  writeChatVariables(store, chat.id, `main:${chat.id}`, {
+    expectedRevision: 0,
+    expectedSourceHash: null,
+    idempotencyKey: 'delete-variables',
+    values: { phase: 'saved' },
+  });
   const first = run(store, chat.id).source!;
   run(store, chat.id);
   const fork = forkChat(store, chat.id, { fromRevision: first.id, idempotencyKey: 'fork' });
@@ -103,11 +113,16 @@ test('chat deletion removes owned graph atomically and preserves independent for
     'branches',
     'chat_organization',
     'profiles',
+    'chat_variable_states',
+    'chat_variable_journal',
   ])
     expect(
       store.db.prepare(`SELECT COUNT(*) AS n FROM ${table} WHERE chat_id=?`).get(chat.id)
     ).toMatchObject({ n: 0 });
   expect(store.db.prepare('SELECT COUNT(*) AS n FROM source_edits').get()).toMatchObject({ n: 0 });
+  expect(
+    store.db.prepare('SELECT 1 FROM chat_variable_outputs WHERE source_id=?').get(first.id)
+  ).toBeUndefined();
   const restored = await fixture();
   restored.product.import(store.product.export());
   expect(restored.history(fork.headRevision)).toEqual(before);
@@ -160,6 +175,12 @@ test('exclusive branch history is deleted while shared ancestor and default snap
     title: 'Alternative',
     fromRevision: ancestor.id,
   });
+  writeChatVariables(store, chat.id, branch.id, {
+    expectedRevision: 0,
+    expectedSourceHash: ancestor.hash,
+    idempotencyKey: 'branch-variables',
+    values: { phase: 'alternate' },
+  });
   const alternative = run(store, chat.id, branch.id).source!;
   const defaultBefore = store.run(ancestor.runId);
   const current = store.product.branch(chat.id, branch.id);
@@ -175,6 +196,14 @@ test('exclusive branch history is deleted while shared ancestor and default snap
   expect(() => store.source(alternative.id)).toThrow();
   expect(store.run(ancestor.runId)).toEqual(defaultBefore);
   expect(store.product.branches(chat.id)).toHaveLength(1);
+  for (const table of ['chat_variable_states', 'chat_variable_journal'])
+    expect(
+      store.db.prepare(`SELECT 1 FROM ${table} WHERE branch_id=?`).get(branch.id)
+    ).toBeUndefined();
+  expect(
+    store.db.prepare('SELECT 1 FROM chat_variable_outputs WHERE source_id=?').get(alternative.id)
+  ).toBeUndefined();
+  expect(readChatVariables(store, chat.id, `main:${chat.id}`)).toEqual({ revision: 0, values: {} });
   expect(store.db.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
   const restored = await fixture();
   restored.product.import(store.product.export());

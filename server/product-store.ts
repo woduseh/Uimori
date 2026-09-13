@@ -101,6 +101,12 @@ import { validateRunSnapshot } from './snapshot-archive.js';
 import { validatePackageRequests } from './package-requests.js';
 import { freezeSourceSegments } from '../core/package-source-segments.js';
 import { assertModelSelection } from './provider-selection.js';
+import { validateChatVariableState } from '../core/chat-variables.js';
+import { chatVariableTables } from './chat-variables.js';
+import {
+  restoreChatVariablesAtSource,
+  validateChatVariablesArchive,
+} from './chat-variables-archive.js';
 import { measureMainContext } from './context-planning.js';
 import { CONTEXT_TABLES } from './context-store.js';
 import { editDraftTables, validateEditDraftArchive } from './edit-drafts.js';
@@ -1046,6 +1052,7 @@ export class ProductStore {
       const id = randomUUID();
       this.db.prepare('INSERT INTO branches VALUES(?,?,?,?,1,0)').run(id, chatId, title, head);
       branchPackageStates(this.store, chatId, id, head);
+      restoreChatVariablesAtSource(this.store, chatId, id, head);
       this.store.event(chatId, 'branch.created', id);
       this.db.exec('RELEASE create_branch');
       return this.branch(chatId, id);
@@ -1310,6 +1317,7 @@ export class ProductStore {
       ...OUTLINE_TABLES,
       ...EXTENSION_OPERATION_TABLES,
       'native_transfer_receipts',
+      ...chatVariableTables,
     ])
       tables[table] ??= [];
     fields(tables, archiveTables);
@@ -1511,6 +1519,7 @@ export class ProductStore {
         validateChatOptionArchive(this.store);
         validatePackageRequests(this.store);
         validatePackageBehaviorArchive(this.store);
+        validateChatVariablesArchive(this.store);
         validateNativeTransferArchive(this.store);
         validateOutlineArchive(this.store);
         this.store.organization.validateArchive();
@@ -1553,6 +1562,7 @@ const archiveTables = [
   ...organizationTables,
   ...libraryOrganizationTables,
   ...packageBehaviorTables,
+  ...chatVariableTables,
   ...EXTENSION_OPERATION_TABLES,
   ...ILLUSTRATION_TABLES,
   ...OUTLINE_TABLES,
@@ -1867,6 +1877,7 @@ function validateArchiveProfile(
           'chatOverrides',
           'chatOptions',
           'promptOptionOwner',
+          'variableState',
         ]
       : []),
   ]);
@@ -2007,6 +2018,7 @@ function validateArchiveProfile(
     throw new HttpError(400, 'Frozen profile revision mismatch');
   if (frozen) validateChatOverrideSnapshot(product.store, p as ProfileSnapshot);
   if (frozen) validateChatOptionSnapshot(p as ProfileSnapshot);
+  if (frozen && p.variableState !== undefined) validateChatVariableState(p.variableState);
   return p as ProfileSnapshot | ChatProfile;
 }
 function validateArchiveGraph(product: ProductStore) {

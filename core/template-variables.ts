@@ -1,50 +1,30 @@
 import type { ProfileSnapshot } from './product.js';
 import { historicalPersonaExcluded } from './persona-scope.js';
+import { PromptEvaluationError } from './prompt-values.js';
 import {
-  evaluationFail,
-  inspectRuntimeValue,
-  PromptBudget,
-  PromptEvaluationError,
-} from './prompt-values.js';
+  CHAT_VARIABLE_LIMITS,
+  validateChatVariableValues,
+  validateChatVariableState,
+} from './chat-variables.js';
 
 /** Minimal frozen declaration view, also usable before a new chat exists. */
 export type TemplateVariableProfile = Pick<
   ProfileSnapshot,
-  'packageAttachments' | 'packages' | 'personaReference'
+  'packageAttachments' | 'packages' | 'personaReference' | 'variableState'
 > & {
   promptPresets?: { main?: { program: { variableDefaults?: Record<string, string> } } };
 };
 
 /** Declaration limits fit the existing prompt AST and runtime value budgets. */
-export const TEMPLATE_VARIABLE_LIMITS = {
-  maxEntries: 2000,
-  maxValueChars: 200_000,
-  maxTotalChars: 1_000_000,
-} as const;
+export const TEMPLATE_VARIABLE_LIMITS = CHAT_VARIABLE_LIMITS;
 
 /** Keys are authored data: preserve Unicode, whitespace and empty names exactly. */
-export function validateTemplateVariableDefaults(value: unknown): Record<string, string> {
-  inspectRuntimeValue(
-    value,
-    new PromptBudget(
-      {
-        maxCollectionLength: TEMPLATE_VARIABLE_LIMITS.maxEntries,
-        maxValueChars: TEMPLATE_VARIABLE_LIMITS.maxTotalChars,
-      },
-      'deterministic'
-    )
-  );
-  if (!value || typeof value !== 'object' || Array.isArray(value))
-    evaluationFail('TEMPLATE_VARIABLE_DEFAULTS_INVALID');
-  for (const text of Object.values(value))
-    if (typeof text !== 'string' || text.length > TEMPLATE_VARIABLE_LIMITS.maxValueChars)
-      evaluationFail('TEMPLATE_VARIABLE_DEFAULTS_INVALID');
-  return structuredClone(value) as Record<string, string>;
-}
+export const validateTemplateVariableDefaults = validateChatVariableValues;
 
 /** Read frozen declarations only. Attachment order wins; the main preset is the fallback. */
 export type TemplateVariableContext = {
   variables?: Record<string, string>;
+  variableStateRevision?: number;
   variableDefaultsError?: 'TEMPLATE_VARIABLE_DEFAULTS_LIMIT';
 };
 
@@ -52,6 +32,11 @@ export function resolveTemplateVariableContext(
   profile: TemplateVariableProfile | undefined,
   target = 'main'
 ): TemplateVariableContext {
+  const state =
+    profile?.variableState === undefined
+      ? undefined
+      : validateChatVariableState(profile.variableState);
+  const revision = state ? { variableStateRevision: state.revision } : {};
   let result: Record<string, string> | undefined;
   let overflow = false;
   const append = (defaults: Record<string, string> | undefined) => {
@@ -68,6 +53,7 @@ export function resolveTemplateVariableContext(
       result = undefined;
     }
   };
+  if (state) append(state.values);
   for (const ref of profile?.packageAttachments ?? []) {
     if (historicalPersonaExcluded(profile, ref.role, target)) continue;
     const declaration = profile?.packages?.find(
@@ -79,10 +65,10 @@ export function resolveTemplateVariableContext(
   append(profile?.promptPresets?.main?.program.variableDefaults);
   // Do not add an empty runtime field to historical profiles without declarations.
   return overflow
-    ? { variableDefaultsError: 'TEMPLATE_VARIABLE_DEFAULTS_LIMIT' }
+    ? { ...revision, variableDefaultsError: 'TEMPLATE_VARIABLE_DEFAULTS_LIMIT' }
     : result === undefined
       ? {}
-      : { variables: result };
+      : { ...revision, variables: result };
 }
 
 /** Values-only facade for consumers that do not render a template or report diagnostics. */

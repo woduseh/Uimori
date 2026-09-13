@@ -100,7 +100,7 @@ test(`BUI01 typed actions preserve drafts after CAS conflicts, block duplicate w
     if (r.method() === 'POST' && r.url().includes('/package-behaviors/')) writes++;
   });
   await page.goto(`/?chat=${chat.id}`);
-  const panel = page.getByRole('region', { name: '패키지 상태와 행동', exact: true });
+  const panel = page.getByRole('region', { name: '채팅 상태와 행동', exact: true });
   await expect(panel).toBeVisible();
   await expect(panel.getByText('<img src=x onerror=alert(1)>', { exact: true })).toBeVisible();
   await expect(panel.locator('img')).toHaveCount(0);
@@ -292,7 +292,7 @@ test(`BUI03 invocation methods persist, validate automatic input drafts and show
   expect(made.ok(), await made.text()).toBe(true);
   const chat = await made.json();
   await page.goto(`/?chat=${chat.id}`);
-  const panel = page.getByRole('region', { name: '패키지 상태와 행동', exact: true });
+  const panel = page.getByRole('region', { name: '채팅 상태와 행동', exact: true });
   await expect(panel.getByText('횟수 기록', { exact: true })).toBeVisible();
   await expect(panel.getByText('모델 요청', { exact: true })).toBeVisible();
   await expect(panel.getByRole('button', { name: '횟수 기록', exact: true })).toHaveCount(0);
@@ -347,7 +347,7 @@ test('BUI04 a pure dice action displays its stored result safely and reload does
   });
   await page.setViewportSize({ width: MOBILE_WIDTH, height: 844 });
   await page.goto(`/?chat=${chat.id}`);
-  const panel = page.getByRole('region', { name: '패키지 상태와 행동', exact: true }),
+  const panel = page.getByRole('region', { name: '채팅 상태와 행동', exact: true }),
     result = panel.getByRole('region', { name: '최근 행동 결과', exact: true });
   await expect(panel).toBeVisible();
   await expect(result).toHaveCount(0);

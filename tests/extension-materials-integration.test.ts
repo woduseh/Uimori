@@ -27,6 +27,7 @@ import { listBehaviorTools } from '../core/package-behavior-tools.js';
 import * as extensionRuntime from '../server/extension-runtime.js';
 import type { BehaviorActionCommand } from '../server/package-behavior-store.js';
 import type { RuntimeValue } from '../core/prompt-values.js';
+import { readChatVariables, writeChatVariables } from '../server/chat-variables.js';
 
 const owned: { store: Store; dir: string }[] = [];
 
@@ -187,9 +188,8 @@ function packageDefinition(): ContentPackage {
   };
 }
 
-function fixture() {
+function fixture(pkg = packageDefinition()) {
   const store = database(),
-    pkg = packageDefinition(),
     content = store.product.content({
       kind: 'bot',
       title: pkg.title,
@@ -314,6 +314,76 @@ test('user Guest reads only its projected body, identity and lore through bounde
     lastAction: { result },
   });
   expect(execute).not.toHaveBeenCalled();
+});
+
+test('user material reads share frozen branch variable overrides and reject late ABA adoption', async () => {
+  const pkg = packageDefinition();
+  pkg.variableDefaults = { values: { phase: 'authored default' } };
+  pkg.bodyTemplate = [
+    { kind: 'value', expression: { op: 'get', args: [{ context: ['variables'] }, 'phase'] } },
+  ];
+  const f = fixture(pkg);
+  const initial = writeChatVariables(f.store, f.chat.id, f.branchId, {
+    expectedRevision: 0,
+    expectedSourceHash: null,
+    idempotencyKey: 'materials-shared-initial',
+    values: { phase: 'shared override' },
+  });
+  const first = await performBehaviorActionWithProgram(
+    f.store,
+    f.chat.id,
+    f.branchId,
+    f.instanceId,
+    command(f, 'user-read')
+  );
+  const result = materialResult(first.instances[0].lastAction!.result);
+  expect(result).toMatchObject({
+    text: 'shared override',
+    listedHash: result.contentHash,
+    totalChars: 'shared override'.length,
+    defaultsAgree: true,
+  });
+  expect(first.instances[0]).toMatchObject({ stateRevision: 1, state: { count: 1 } });
+
+  const execute = extensionRuntime.executeExtensionProgram;
+  let guestText: string | undefined;
+  vi.spyOn(extensionRuntime, 'executeExtensionProgram').mockImplementationOnce(async (...args) => {
+    const computed = await execute(...args);
+    guestText = materialResult(computed.result).text;
+    const intervening = writeChatVariables(f.store, f.chat.id, f.branchId, {
+      expectedRevision: initial.revision,
+      expectedSourceHash: null,
+      idempotencyKey: 'materials-shared-b',
+      values: { phase: 'intervening value' },
+    });
+    writeChatVariables(f.store, f.chat.id, f.branchId, {
+      expectedRevision: intervening.revision,
+      expectedSourceHash: null,
+      idempotencyKey: 'materials-shared-a-again',
+      values: initial.values,
+    });
+    return computed;
+  });
+  await expect(
+    performBehaviorActionWithProgram(
+      f.store,
+      f.chat.id,
+      f.branchId,
+      f.instanceId,
+      command(f, 'user-read')
+    )
+  ).rejects.toThrow('BEHAVIOR_PROGRAM_CONTEXT_CHANGED');
+  expect(guestText).toBe('shared override');
+  expect(readChatVariables(f.store, f.chat.id, f.branchId)).toEqual({
+    revision: initial.revision + 2,
+    values: initial.values,
+  });
+  expect(behaviorDetail(f.store, f.chat.id).instances[0]).toMatchObject({
+    stateRevision: 1,
+    state: { count: 1 },
+    lastAction: { result },
+  });
+  expect(f.store.product.get<Content>('content', f.content.id).package!.body).toBe('BODY_FALLBACK');
 });
 
 test('automatic preparation reads its frozen package revision after a newer library edit', async () => {

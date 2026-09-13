@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import type { ContentPackage } from '../core/content-package.js';
+import { resolveTemplateVariableContext } from '../core/template-variables.js';
 import {
   renderPackagePanels,
   validatePackagePanels,
@@ -51,7 +52,20 @@ export function PackagePanelsEditor({
   }, [dirty, onDirtyChange]);
   const preview = renderPackagePanels(value, {
     state: value.behavior?.initialState ?? null,
-    identity: { bot: { name: value.identity?.name ?? value.title }, user: { name: 'User' } },
+    identity: {
+      bot: { name: value.identity?.name ?? value.title },
+      user: { name: 'User' },
+      ...resolveTemplateVariableContext({
+        packages: [value],
+        packageAttachments: [
+          {
+            id: value.id,
+            revision: value.revision,
+            role: value.variableDefaults?.attachmentRoles?.[0] ?? 'bot',
+          },
+        ],
+      }),
+    },
   });
   return (
     <details className="package-stack package-panels-editor">

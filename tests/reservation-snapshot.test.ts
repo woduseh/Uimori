@@ -13,6 +13,7 @@ import * as behavior from '../server/package-behavior-run.js';
 import * as lore from '../server/lore-context.js';
 import * as prompt from '../server/prompt-snapshot.js';
 import * as reservation from '../server/reservation-snapshot.js';
+import * as variables from '../server/chat-variable-context.js';
 import { ChatOptionsStore } from '../server/chat-options.js';
 import { helperWritingSnapshot } from '../server/helper-runtime.js';
 import { promptWorkspace, updatePromptWorkspace } from '../server/prompt-workspace.js';
@@ -99,6 +100,14 @@ function phases() {
     expect(runId).toBe('run');
     calls.push('consume-options');
   });
+  vi.spyOn(variables, 'chatVariableProfile').mockImplementation(
+    (_store, chatId, branchId, profile) => {
+      expect(chatId).toBe('chat');
+      expect(branchId).toBe('branch');
+      calls.push('variables');
+      return profile!;
+    }
+  );
   vi.spyOn(overrides, 'freezeChatOverrides').mockImplementation(
     (_store, _profile, _roots, head) => {
       expect(head).toBe(base.parentRevision);
@@ -149,6 +158,7 @@ test.each<{
     expected: [
       'consume-options',
       'overrides',
+      'variables',
       'resources',
       'segments',
       'story',
@@ -166,6 +176,7 @@ test.each<{
     expected: [
       'consume-options',
       'overrides',
+      'variables',
       'resources',
       'segments',
       'outline',
@@ -178,6 +189,7 @@ test.each<{
   {
     options: { purpose: 'helper-artifact' },
     expected: [
+      'variables',
       'segments',
       'story',
       'logical-history',
@@ -190,6 +202,7 @@ test.each<{
   {
     options: { purpose: 'helper-context' },
     expected: [
+      'variables',
       'segments',
       'story',
       'logical-history',
@@ -201,7 +214,7 @@ test.each<{
   },
   {
     options: { purpose: 'preview-main', executionClock: () => clock },
-    expected: ['segments', 'story', 'logical-history', 'clock', 'read-states', 'lore'],
+    expected: ['variables', 'segments', 'story', 'logical-history', 'clock', 'read-states', 'lore'],
   },
   {
     options: { purpose: 'preview-translation', executionClock: () => clock },

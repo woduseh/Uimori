@@ -113,6 +113,49 @@
 .package-behavior-panel h3 {
   margin: 0 0 6px;
 }
+.chat-variables {
+  border-top: 1px solid var(--line);
+  margin-top: 14px;
+  padding-top: 6px;
+}
+.chat-variables > summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.chat-variables > summary small {
+  margin-left: auto;
+  font-weight: normal;
+}
+.chat-variable-editor {
+  display: grid;
+  gap: 10px;
+}
+.chat-variable-editor textarea,
+.chat-variable-readbacks pre {
+  box-sizing: border-box;
+  font-family: monospace;
+  width: 100%;
+}
+.chat-variable-editor .form-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.chat-variable-readbacks {
+  margin-top: 10px;
+}
+.chat-variable-readbacks pre {
+  max-height: 14rem;
+  margin: 4px 0 12px;
+  padding: 10px;
+  overflow: auto;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-raised);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
 .behavior-instance {
   border-top: 1px solid var(--line);
   padding-top: 16px;
@@ -204,6 +247,9 @@
   }
   .behavior-action button {
     width: 100%;
+  }
+  .chat-variable-editor .form-actions > * {
+    flex: 1 1 100%;
   }
 }
 .behavior-method-editor {

@@ -18,10 +18,12 @@ import type { PromptProgram } from '../core/prompt-program.js';
 import type { RunSnapshot, ToolEvent } from '../core/types.js';
 import type { Json, ProviderResult, WireRecord } from '../core/transport.js';
 import type { Store } from '../server/store.js';
+import * as chatVariables from '../server/chat-variables.js';
 import { loopbackProvider, writeSse } from './fixtures/loopback-provider.js';
 
 const closes: (() => Promise<void>)[] = [];
 afterEach(async () => {
+  vi.restoreAllMocks();
   vi.unstubAllGlobals();
   for (const close of closes.splice(0).reverse()) await close();
 });
@@ -263,6 +265,9 @@ describe('Exact native main preview and terminal submission (synthetic loopback 
         },
       },
     } as unknown as Store;
+    const variables = vi
+      .spyOn(chatVariables, 'readChatVariables')
+      .mockReturnValue({ revision: 0, values: {} });
     promptRoutes(app, fake);
     const response = await injectWithFixtureBot(app, {
       method: 'POST',
@@ -275,6 +280,7 @@ describe('Exact native main preview and terminal submission (synthetic loopback 
       },
     });
     expect(response.statusCode).toBe(200);
+    expect(variables).toHaveBeenCalledWith(fake, work.chatId, 'branch-1');
     expect(response.json().provider.body).toEqual(expected.body);
     expect(server.requests).toHaveLength(0);
     const log = hooks(server.origin),

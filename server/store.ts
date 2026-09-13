@@ -36,6 +36,8 @@ import { initRunBehavior, copyCandidateBehavior } from './package-behavior-run.j
 import { completeAuthoredPackageStartStatesInTransaction } from './package-start.js';
 import { ContextStore } from './context-store.js';
 import { freezeReservationSnapshot } from './reservation-snapshot.js';
+import { checkpointChatVariablesInTransaction } from './chat-variables.js';
+import { restoreCandidateChatVariables } from './chat-variables-archive.js';
 import { splitSource, validateSourceIdentity } from '../core/auxiliary.js';
 import {
   imageJobInput,
@@ -561,6 +563,12 @@ export class Store {
         snapshot.contextPlan.usage = { modelCalls: 0, inputTokens: 0, outputTokens: 0, costUsd: 0 };
       }
       branchPackageStates(this, original.chatId, branch.id, original.parentRevision, snapshot);
+      restoreCandidateChatVariables(
+        this,
+        original.chatId,
+        branch.id,
+        snapshot.profile?.variableState
+      );
       freezePackageStates(this, snapshot, false);
       const id = randomUUID();
       const time = now();
@@ -794,6 +802,7 @@ export class Store {
       // Illustrations never block the source commit; reservation problems become visible jobs.
       if (!run.snapshot.candidateOf) scheduleAutomaticIllustration(this, source);
     }
+    checkpointChatVariablesInTransaction(this, source.id, source.chatId, branch.id);
     this.event(source.chatId, 'source.ready', source.id);
     this.event(source.chatId, 'run.completed', id);
     return source;

@@ -22,6 +22,7 @@ import { compileSnapshotPrompt } from '../server/prompt-snapshot.js';
 import { createPackageExtensionHost } from '../server/extension-materials.js';
 import type { RunSnapshot } from '../core/types.js';
 import { inspectRuntimeValue } from '../core/prompt-values.js';
+import { validateChatVariableState } from '../core/chat-variables.js';
 
 function pkg(id: string): ContentPackage {
   return {
@@ -146,10 +147,188 @@ test('legacy contexts omit variables and native missing lookup remains null', ()
     profile: p,
   };
   expect(executionContext(snapshot)).not.toHaveProperty('variables');
+  expect(executionContext(snapshot)).not.toHaveProperty('variableStateRevision');
   expect(packageIdentityFromProfile(p)).not.toHaveProperty('variables');
+  expect(packageIdentityFromProfile(p)).not.toHaveProperty('variableStateRevision');
+  expect(resolveTemplateVariableContext(p)).toEqual({});
+  expect(snapshot.profile).not.toHaveProperty('variableState');
   expect(
     evaluatePromptExpression(lookup('missing'), {}, { runtime: executionContext(snapshot) })
   ).toBeNull();
+});
+
+test('frozen branch overrides beat attachment and preset defaults while empty and dropped keys stay distinct', () => {
+  const p = profile();
+  const first = {
+    ...pkg('first'),
+    variableDefaults: {
+      values: { shared: 'first', blank: 'first blank', dropped: 'restored package' },
+    },
+  };
+  const second = { ...pkg('second'), variableDefaults: { values: { shared: 'second' } } };
+  p.packages = [first, second];
+  p.packageAttachments = [
+    { id: first.id, revision: 1, role: 'bot' },
+    { id: second.id, revision: 1, role: 'module' },
+  ];
+  p.promptPresets = {
+    main: {
+      id: 'preset',
+      revision: 1,
+      title: '',
+      role: 'main',
+      program: {
+        version: 1,
+        controls: [],
+        blocks: [],
+        variableDefaults: { shared: 'preset', presetOnly: 'preset fallback' },
+      },
+    },
+  };
+  p.variableState = {
+    revision: 3,
+    values: {
+      shared: 'override',
+      blank: '',
+      dropped: 'temporary',
+      presetOnly: 'temporary',
+      ' 한 글 😀 ': '  {{literal}}\n',
+      '': 'empty key',
+    },
+  };
+  const frozen = structuredClone(p);
+  const context = resolveTemplateVariableContext(frozen);
+  expect(context).toEqual({
+    variableStateRevision: 3,
+    variables: {
+      shared: 'override',
+      blank: '',
+      dropped: 'temporary',
+      presetOnly: 'temporary',
+      ' 한 글 😀 ': '  {{literal}}\n',
+      '': 'empty key',
+    },
+  });
+  p.variableState = { revision: 4, values: { shared: 'next', blank: '' } };
+  expect(resolveTemplateVariables(p)).toEqual({
+    shared: 'next',
+    blank: '',
+    dropped: 'restored package',
+    presetOnly: 'preset fallback',
+  });
+  expect(resolveTemplateVariableContext(frozen)).toEqual(context);
+  context.variables!.shared = 'mutated projection';
+  expect(frozen.variableState!.values.shared).toBe('override');
+  expect(resolveTemplateVariables(frozen)!.shared).toBe('override');
+});
+
+test('variable projections remain read-only and retain revisions across ABA values', () => {
+  const p = profile();
+  p.variableState = { revision: 1, values: { score: '1' } };
+  const first = structuredClone(p);
+  const a = resolveTemplateVariableContext(first);
+  p.variableState = { revision: 2, values: { score: '2' } };
+  expect(resolveTemplateVariableContext(p)).toEqual({
+    variableStateRevision: 2,
+    variables: { score: '2' },
+  });
+  p.variableState = { revision: 3, values: { score: '1' } };
+  expect(resolveTemplateVariableContext(p)).toEqual({
+    variableStateRevision: 3,
+    variables: a.variables,
+  });
+  expect(resolveTemplateVariableContext(first)).toEqual(a);
+  expect(first.variableState).toEqual({ revision: 1, values: { score: '1' } });
+  const before = structuredClone(p);
+  packageIdentityFromProfile(p);
+  resolveTemplateVariables(p);
+  expect(p).toEqual(before);
+});
+
+test.each(['entries', 'characters'] as const)(
+  'override and default %s limits apply to the resolved union',
+  (kind) => {
+    const p = profile();
+    const values = (prefix: string) =>
+      kind === 'entries'
+        ? Object.fromEntries(
+            Array.from({ length: 1100 }, (_, index) => [`${prefix}${index}`, 'value'])
+          )
+        : Object.fromEntries(
+            Array.from({ length: 3 }, (_, index) => [`${prefix}${index}`, 'x'.repeat(180000)])
+          );
+    const defaults = values('default');
+    const overrides = values('override');
+    const data = { ...pkg('bot'), variableDefaults: { values: defaults } };
+    p.packages = [data];
+    p.packageAttachments = [{ id: data.id, revision: 1, role: 'bot' }];
+    p.variableState = { revision: 9, values: overrides };
+    expect(() => validateTemplateVariableDefaults(defaults)).not.toThrow();
+    expect(() => validateChatVariableState(p.variableState)).not.toThrow();
+    const before = structuredClone(p);
+    expect(resolveTemplateVariableContext(p)).toEqual({
+      variableStateRevision: 9,
+      variableDefaultsError: 'TEMPLATE_VARIABLE_DEFAULTS_LIMIT',
+    });
+    expect(resolveTemplateVariables(p)).toBeUndefined();
+    expect(p).toEqual(before);
+    // Replacing the same keys does not double-count authored defaults.
+    p.variableState = {
+      revision: 10,
+      values: Object.fromEntries(Object.keys(defaults).map((key) => [key, 'override'])),
+    };
+    expect(resolveTemplateVariableContext(p)).toEqual({
+      variableStateRevision: 10,
+      variables: p.variableState.values,
+    });
+  }
+);
+
+test('shared state validation rejects unsafe prototypes, accessors and impossible revisions without reading getters', () => {
+  let reads = 0;
+  const invalid = [
+    {
+      get revision() {
+        reads++;
+        return 1;
+      },
+      values: {},
+    },
+    {
+      revision: 1,
+      get values() {
+        reads++;
+        return {};
+      },
+    },
+    {
+      revision: 1,
+      values: {
+        get score() {
+          reads++;
+          return '1';
+        },
+      },
+    },
+    Object.assign(Object.create({ inherited: true }), { revision: 1, values: {} }),
+    { revision: 1, values: Object.assign(Object.create({ inherited: 'bad' }), { score: '1' }) },
+    { revision: 0, values: { score: '' } },
+    { revision: -1, values: {} },
+    { revision: 0.5, values: {} },
+    { revision: Number.MAX_SAFE_INTEGER + 1, values: {} },
+    { revision: 1, values: {}, extra: '' },
+    { revision: 1, values: {}, [Symbol('hidden')]: 'bad' },
+  ];
+  for (const state of invalid) expect(() => validateChatVariableState(state)).toThrow();
+  expect(reads).toBe(0);
+  expect(validateChatVariableState({ revision: 0, values: {} })).toEqual({
+    revision: 0,
+    values: {},
+  });
+  const accepted = { revision: 1, values: { score: '1' } };
+  const cloned = validateChatVariableState(accepted);
+  cloned.values.score = '2';
+  expect(accepted.values.score).toBe('1');
 });
 
 test('variable declarations and the prior runtime retain independent size caps', () => {
@@ -286,85 +465,96 @@ test('aggregate overflow disables the whole variable layer with warnings and pre
   expect(p).toEqual(before);
 });
 
-test('frozen variables agree in body, lore, starts, instructions, main prompts and model materials', async () => {
-  const p = profile();
-  const template: PromptTemplate = [{ kind: 'value', expression: lookup('한 글') }];
-  const data: ContentPackage = {
-    ...pkg('bot'),
-    body: 'preserved source',
-    bodyTemplate: template,
-    variableDefaults: { values: { '한 글': 'frozen {{literal}}' }, attachmentRoles: ['bot'] },
-    lore: [
-      {
-        id: 'lore',
+test.each([false, true])(
+  'frozen variables agree in body, lore, starts, instructions, main prompts and model materials (overrides: %s)',
+  async (overrides) => {
+    const p = profile();
+    if (overrides) p.variableState = { revision: 7, values: { '한 글': 'frozen {{literal}}' } };
+    const authoredDefault = overrides ? 'authored fallback' : 'frozen {{literal}}';
+    const template: PromptTemplate = [{ kind: 'value', expression: lookup('한 글') }];
+    const data: ContentPackage = {
+      ...pkg('bot'),
+      body: 'preserved source',
+      bodyTemplate: template,
+      variableDefaults: { values: { '한 글': authoredDefault }, attachmentRoles: ['bot'] },
+      lore: [
+        {
+          id: 'lore',
+          title: '',
+          description: '',
+          text: 'preserved lore',
+          template,
+          loading: 'pinned',
+        },
+      ],
+      starts: [
+        { id: 'start', title: 'start', text: 'preserved start', template, mode: 'authored' },
+      ],
+      instructions: [
+        { id: 'instruction', target: 'main', text: 'preserved instruction', template },
+      ],
+    };
+    p.packages = [data];
+    const ref = { id: data.id, revision: data.revision, role: 'bot' as const };
+    p.packageAttachments = [ref];
+    p.promptPresets = {
+      main: {
+        id: 'preset',
+        revision: 1,
         title: '',
-        description: '',
-        text: 'preserved lore',
-        template,
-        loading: 'pinned',
+        role: 'main',
+        program: {
+          version: 1,
+          controls: [],
+          variableDefaults: { '한 글': 'preset fallback' },
+          blocks: [
+            { id: 'vars', title: '', kind: 'message', role: 'system', template },
+            { id: 'current', title: '', kind: 'current' },
+          ],
+        },
       },
-    ],
-    starts: [{ id: 'start', title: 'start', text: 'preserved start', template, mode: 'authored' }],
-    instructions: [{ id: 'instruction', target: 'main', text: 'preserved instruction', template }],
-  };
-  p.packages = [data];
-  const ref = { id: data.id, revision: data.revision, role: 'bot' as const };
-  p.packageAttachments = [ref];
-  p.promptPresets = {
-    main: {
-      id: 'preset',
-      revision: 1,
-      title: '',
-      role: 'main',
-      program: {
-        version: 1,
-        controls: [],
-        variableDefaults: { '한 글': 'preset fallback' },
-        blocks: [
-          { id: 'vars', title: '', kind: 'message', role: 'system', template },
-          { id: 'current', title: '', kind: 'current' },
-        ],
-      },
-    },
-  };
-  const snapshot: RunSnapshot = {
-    chatId: 'chat',
-    parentRevision: null,
-    settingsRevision: 1,
-    settings: { preset: 'calm', mode: 'direct', translation: false, status: false, maxCalls: 4 },
-    request: 'Continue',
-    history: [],
-    resources: [],
-    profile: p,
-  };
-  const original = structuredClone(snapshot);
-  const identity = packageIdentityFromProfile(p);
-  const resources = compilePackageAttachment(data, ref, {
-    chatId: 'chat',
-    target: 'main',
-    identity,
-    resourcesOnly: true,
-  }).resources;
-  expect(resources.map((r) => r.text)).toEqual(['frozen {{literal}}', 'frozen {{literal}}']);
-  expect(compiledPackages(snapshot, 'main')[0].resources).toEqual(resources);
-  expect(compiledPackages(snapshot, 'main')[0].instructions[0].text).toBe('frozen {{literal}}');
-  expect(resolvePackageStart(data, 'start', {}, identity).text).toBe('frozen {{literal}}');
-  expect(JSON.stringify(compileSnapshotPrompt(snapshot).promptCompilation?.messages)).toContain(
-    'frozen {{literal}}'
-  );
-  const broker = createPackageExtensionHost(
-    { api: 'uimori-state-action-v1', source: '', capabilities: ['materials.read.self'] },
-    p,
-    ref,
-    () => {}
-  );
-  data.variableDefaults!.values['한 글'] = 'later edit';
-  const read = await broker(
-    'materials.read',
-    { id: resources[0].id },
-    new AbortController().signal
-  );
-  expect(read).toMatchObject({ text: 'frozen {{literal}}' });
-  data.variableDefaults!.values['한 글'] = 'frozen {{literal}}';
-  expect(snapshot).toEqual(original);
-});
+    };
+    const snapshot: RunSnapshot = {
+      chatId: 'chat',
+      parentRevision: null,
+      settingsRevision: 1,
+      settings: { preset: 'calm', mode: 'direct', translation: false, status: false, maxCalls: 4 },
+      request: 'Continue',
+      history: [],
+      resources: [],
+      profile: p,
+    };
+    const original = structuredClone(snapshot);
+    const identity = packageIdentityFromProfile(p);
+    const resources = compilePackageAttachment(data, ref, {
+      chatId: 'chat',
+      target: 'main',
+      identity,
+      resourcesOnly: true,
+    }).resources;
+    expect(resources.map((r) => r.text)).toEqual(['frozen {{literal}}', 'frozen {{literal}}']);
+    expect(compiledPackages(snapshot, 'main')[0].resources).toEqual(resources);
+    expect(compiledPackages(snapshot, 'main')[0].instructions[0].text).toBe('frozen {{literal}}');
+    expect(resolvePackageStart(data, 'start', {}, identity).text).toBe('frozen {{literal}}');
+    expect(JSON.stringify(compileSnapshotPrompt(snapshot).promptCompilation?.messages)).toContain(
+      'frozen {{literal}}'
+    );
+    const broker = createPackageExtensionHost(
+      { api: 'uimori-state-action-v1', source: '', capabilities: ['materials.read.self'] },
+      p,
+      ref,
+      () => {}
+    );
+    data.variableDefaults!.values['한 글'] = 'later edit';
+    if (overrides) p.variableState = { revision: 8, values: { '한 글': 'later override' } };
+    const read = await broker(
+      'materials.read',
+      { id: resources[0].id },
+      new AbortController().signal
+    );
+    expect(read).toMatchObject({ text: 'frozen {{literal}}' });
+    data.variableDefaults!.values['한 글'] = authoredDefault;
+    if (overrides) p.variableState = structuredClone(original.profile!.variableState);
+    expect(snapshot).toEqual(original);
+  }
+);

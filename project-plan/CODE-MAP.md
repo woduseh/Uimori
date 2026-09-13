@@ -6,6 +6,7 @@
 | --- | --- | --- |
 | Risu 파일·단방향 변환 | [가져오기](../docs/RISU-IMPORT.md), 지원 밖의 수동 이식만 [이식 안내](../docs/RISU-PORTING.md) | `server/character-card-file.ts`, `risu-import.ts`, `risu-preset-file.ts`, `risu-preset-import.ts`, `risu-module-file.ts`, `risu-module-json.ts` |
 | 이름·기본 변수·CBS·프롬프트 AST | [프롬프트 실행](../docs/PROMPT-RUNTIME.md), [패키지](../docs/PACKAGES.md) | `core/prompt-program.ts`, `template-variables.ts`, `package-identity.ts`, `package-runtime.ts`; `server/risu-cbs.ts` |
+| 분기 공유 변수·직접 편집·시점 보관 | [공유 변수](../docs/PROMPT-RUNTIME.md#분기-공유-변수), [패널](../docs/PACKAGE-PANELS.md) | `core/chat-variables.ts`, `template-variables.ts`; `server/chat-variables.ts`, `chat-variables-archive.ts`, `chat-variable-context.ts`, `chat-variable-routes.ts`; `web/ChatVariables.tsx` |
 | 공유 패키지·로어·시작·이미지 | [패키지](../docs/PACKAGES.md), [로어 문맥](../docs/LORE-CONTEXT.md) | `core/content-package.ts`, `package-context.ts`, `package-start.ts`; `server/product-store.ts`, `package-start.ts`, `package-images.ts` |
 | 확장 상태·행동·상태 변환 | [행동](../docs/PACKAGE-BEHAVIOR.md), [확장 코드](../docs/EXTENSION-PROGRAMS.md) | `core/package-behavior.ts`; `server/package-behavior-host.ts`, `package-behavior-store.ts`, `package-behavior-run.ts`, `package-behavior-archive.ts` |
 | 격리 실행·Host 호출·영수증 | [확장 코드](../docs/EXTENSION-PROGRAMS.md) | `server/package-extension-execution.ts`, `extension-runtime.ts`, `extension-worker.ts`, `extension-program-receipt.ts`, `extension-materials.ts`, `extension-model.ts` |

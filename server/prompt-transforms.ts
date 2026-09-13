@@ -63,6 +63,7 @@ function configuration(
           packageAttachments: profile?.packageAttachments,
           packages: profile?.packages,
           personaReference: profile?.personaReference,
+          variableState: profile?.variableState,
           ...(selected ? { promptPresets: { main: { program: selected } } } : {}),
         }
       : undefined

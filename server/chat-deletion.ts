@@ -32,6 +32,8 @@ const chatTables = [
   'package_extension_operations',
   'package_behavior_states',
   'package_behavior_journal',
+  'chat_variable_states',
+  'chat_variable_journal',
   'package_behavior_heads',
   'package_behavior_opportunities',
   'illustration_images',
@@ -121,7 +123,7 @@ function removeIds(store: Store, table: string, column: string, ids: string[]) {
 function removeRunArtifacts(store: Store, runIds: string[], sourceIds: string[], jobIds: string[]) {
   for (const table of ['model_inputs', 'tool_events', 'package_behavior_runs'])
     removeIds(store, table, 'run_id', runIds);
-  for (const table of ['source_edits', 'package_behavior_outputs'])
+  for (const table of ['source_edits', 'package_behavior_outputs', 'chat_variable_outputs'])
     removeIds(store, table, 'source_id', sourceIds);
   for (const table of ['job_results']) removeIds(store, table, 'job_id', jobIds);
 }
@@ -390,6 +392,8 @@ export function deleteBranch(store: Store, chatId: string, branchId: string, val
       'package_requests',
       'package_behavior_states',
       'package_behavior_journal',
+      'chat_variable_states',
+      'chat_variable_journal',
       'package_behavior_heads',
       'package_behavior_opportunities',
     ])

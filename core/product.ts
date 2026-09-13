@@ -215,6 +215,8 @@ export type ChatProfile = {
   extensionGrants?: Record<string, { packageRevision: number; capabilities: 'model.generate'[] }>;
 };
 export type ProfileSnapshot = ChatProfile & {
+  /** Branch overrides frozen at reservation; absent in historical snapshots. */
+  variableState?: import('./chat-variables.js').ChatVariableState;
   chatOptions?: import('./chat-options.js').ChatOptionResolution;
   /** Text-only per-link projection; the original packages below remain revision-exact. */
   chatOverrides?: import('./chat-overrides.js').ChatOverrideSnapshot;

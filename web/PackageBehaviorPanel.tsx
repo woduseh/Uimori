@@ -19,6 +19,7 @@ import type { RenderedPackagePanel } from '../core/package-panels.js';
 import { PackageStateUpgrade, type UpgradeTarget } from './PackageStateUpgrade.js';
 import type { ExtensionOperationView } from '../core/extension-operation.js';
 import { ExtensionOperations } from './ExtensionOperations.js';
+import { ChatVariables } from './ChatVariables.js';
 
 type Instance = {
   instanceId: string;
@@ -423,16 +424,14 @@ function BehaviorPanel({ chatId, branchId, refreshKey, onChange, onRunRequest }:
     }
   }
   const resetInstance = snapshot?.instances.find((instance) => instance.instanceId === resetTarget);
-  if (!loading && !error && snapshot?.instances.length === 0 && !snapshot.standalonePanels?.length)
-    return null;
   return (
     <section
       className="package-behavior-panel"
-      aria-label="패키지 상태와 행동"
+      aria-label="채팅 상태와 행동"
       aria-busy={loading || busy}
     >
       <header>
-        <h2>패키지 상태와 행동</h2>
+        <h2>채팅 상태와 행동</h2>
         <button
           type="button"
           className="ghost"
@@ -445,7 +444,13 @@ function BehaviorPanel({ chatId, branchId, refreshKey, onChange, onRunRequest }:
           새로고침
         </button>
       </header>
-      <p className="muted">현재 채팅의 상태와 사용할 수 있는 행동이에요.</p>
+      <p className="muted">현재 분기의 공유 변수와 패키지 상태, 사용할 수 있는 행동이에요.</p>
+      <ChatVariables
+        chatId={chatId}
+        branchId={branchId}
+        refreshKey={refreshKey}
+        onChange={onChange}
+      />
       {snapshot?.instances.some((instance) =>
         instance.behavior.actions.some((action) =>
           behaviorActionTriggers(action).some((trigger) => trigger !== 'user')
