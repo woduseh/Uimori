@@ -100,6 +100,18 @@
           "server/prompt-transforms.ts",
           "tests/prompt-transform-flow.test.ts"
         ]
+      },
+      {
+        "area": "template-variable-read",
+        "status": "partial",
+        "basis": "기본 변수 선언과 지원 CBS 읽기/조건을 공통 AST로 가져와 본문·로어·시작문·프리셋·정규식에서 고정 profile 값을 공유해요. 저장된 공유 변수 쓰기와 Lua/트리거 전체 실행은 미완이에요.",
+        "evidence": [
+          "core/template-variables.ts",
+          "server/risu-cbs.ts",
+          "docs/RISU-IMPORT.md",
+          "tests/risu-import.test.ts",
+          "project-plan/BETA-PLAN.md"
+        ]
       }
     ],
     "sampleLimitations": {

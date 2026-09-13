@@ -16,6 +16,10 @@ import {
   type TextTransformResult,
   type TextTransformRule,
 } from '../core/text-transform.js';
+import {
+  resolveTemplateVariableContext,
+  templateReadsVariables,
+} from '../core/template-variables.js';
 import { applyTextTransformBatch } from './text-transforms.js';
 
 const hash = (value: string) => createHash('sha256').update(value).digest('hex');
@@ -52,11 +56,23 @@ function configuration(
   const runtime = executionContext(snapshot);
   const bot = { name: String((runtime.bot as { name?: string }).name ?? 'Character') };
   const user = { name: String((runtime.user as { name?: string }).name ?? 'User') };
+  const profile = snapshot.profile;
+  const variableContext = resolveTemplateVariableContext(
+    profile || selected
+      ? {
+          packageAttachments: profile?.packageAttachments,
+          packages: profile?.packages,
+          personaReference: profile?.personaReference,
+          ...(selected ? { promptPresets: { main: { program: selected } } } : {}),
+        }
+      : undefined
+  );
   return {
     rules: selected?.transforms?.filter((rule) => rule.enabled !== false) ?? [],
     values,
     bot,
     user,
+    ...variableContext,
   };
 }
 function rawMessages(snapshot: RunSnapshot): PromptHistoryMessage[] {
@@ -95,33 +111,38 @@ function rulesForMessage(
       (rule) =>
         rule.stage === stage && (!rule.role || rule.role === 'all' || rule.role === message.role)
     )
-    .map((rule) => ({
-      id: rule.id,
-      pattern: rule.pattern,
-      flags: rule.flags,
-      replacement: rule.replacementTemplate
-        ? renderPromptTemplate(
-            rule.replacementTemplate,
-            config.values,
-            { char: config.bot.name, slot: '' },
-            {
-              runtime: {
-                bot: config.bot,
-                user: config.user,
-                message: {
-                  text: message.text,
-                  role: message.role,
-                  index,
-                  lastIndex,
-                  current: message.current === true,
+    .map((rule) => {
+      if (config.variableDefaultsError && templateReadsVariables(rule.replacementTemplate))
+        throw new TextTransformError('PROMPT_VARIABLE_DEFAULTS_LIMIT', rule.id);
+      return {
+        id: rule.id,
+        pattern: rule.pattern,
+        flags: rule.flags,
+        replacement: rule.replacementTemplate
+          ? renderPromptTemplate(
+              rule.replacementTemplate,
+              config.values,
+              { char: config.bot.name, slot: '' },
+              {
+                runtime: {
+                  bot: config.bot,
+                  user: config.user,
+                  ...(config.variables === undefined ? {} : { variables: config.variables }),
+                  message: {
+                    text: message.text,
+                    role: message.role,
+                    index,
+                    lastIndex,
+                    current: message.current === true,
+                  },
                 },
-              },
-              limits: { maxOutputChars: 16_384 },
-              escapeReplacementValues: true,
-            }
-          )
-        : rule.replacement,
-    }));
+                limits: { maxOutputChars: 16_384 },
+                escapeReplacementValues: true,
+              }
+            )
+          : rule.replacement,
+      };
+    });
 }
 function reject(): never {
   throw new TextTransformError('PROMPT_INPUT_TRANSFORMS_INVALID');

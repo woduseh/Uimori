@@ -283,6 +283,93 @@ test('templated openings freeze persona names across replay, later edits, archiv
   expect(restored.run(forkSource.runId).snapshot.packageStart?.text).toBe(preview.text);
 });
 
+test('declared variables freeze authored starts and rendered resources across library edits and archive restore', () => {
+  const pkg = packageData();
+  pkg.variableDefaults = { values: { greeting: 'A frozen greeting' }, attachmentRoles: ['bot'] };
+  pkg.bodyTemplate = pkg.starts![0].template = [
+    { kind: 'value', expression: { op: 'get', args: [{ context: ['variables'] }, 'greeting'] } },
+  ];
+  const f = fixture(pkg);
+  const profile = f.store.product.snapshot(f.chat.id);
+  const preview = resolvePackageStart(
+    f.content.package!,
+    'arrival',
+    {},
+    packageIdentityFromProfile(profile)
+  );
+  const resources = f.store.product.resources(f.chat.id, profile);
+  expect(preview.text).toBe('A frozen greeting');
+  expect(resources.find((item) => item.id.endsWith(':body'))?.text).toBe(preview.text);
+  const result = createPackageStart(f.store, f.chat.id, f.command);
+  expect(result.run.snapshot.packageStart).toEqual(preview);
+  const { id: _id, revision, ...saved } = f.content;
+  f.store.product.content(
+    {
+      ...saved,
+      expectedRevision: revision,
+      package: {
+        ...saved.package!,
+        variableDefaults: { values: { greeting: 'Changed later' }, attachmentRoles: ['bot'] },
+      },
+    },
+    f.content.id
+  );
+  const restored = database();
+  restored.product.import(f.store.product.export());
+  const restoredRun = restored.run(result.run.id);
+  expect(restoredRun.snapshot.packageStart).toEqual(preview);
+  expect(restored.source(restoredRun.sourceRevision!).text).toBe(preview.text);
+  expect(restored.product.resources(f.chat.id, restoredRun.snapshot.profile!)).toEqual(resources);
+});
+
+test('overflowing combined defaults preserve an authored opening and its warning through archive restore', () => {
+  const pkg = packageData();
+  pkg.variableDefaults = {
+    values: Object.fromEntries(Array.from({ length: 1100 }, (_, i) => [`key${i}`, 'value'])),
+  };
+  pkg.starts![0].template = [
+    { kind: 'value', expression: { op: 'get', args: [{ context: ['variables'] }, 'key0'] } },
+  ];
+  const f = fixture(pkg);
+  const module = f.store.product.content({
+    kind: 'module',
+    title: 'Other defaults',
+    description: '',
+    text: '',
+    loading: 'pinned',
+    relatedIds: [],
+    package: {
+      ...packageData(),
+      variableDefaults: {
+        values: Object.fromEntries(Array.from({ length: 1100 }, (_, i) => [`other${i}`, 'value'])),
+      },
+    },
+  }) as Content;
+  const { chatId: _chatId, revision, ...body } = f.profile;
+  const saved = updateTestProfile(f.store.product, f.chat.id, {
+    ...body,
+    expectedRevision: revision,
+    packageAttachments: [
+      ...body.packageAttachments!,
+      { id: module.id, revision: module.revision, role: 'module' },
+    ],
+  });
+  const result = createPackageStart(f.store, f.chat.id, {
+    ...f.command,
+    expectedProfileRevision: saved.revision,
+  });
+  expect(result.run.snapshot.packageStart).toMatchObject({
+    text: pkg.starts![0].text,
+    templateWarning: 'TEMPLATE_VARIABLE_DEFAULTS_LIMIT',
+  });
+  const restored = database();
+  restored.product.import(f.store.product.export());
+  expect(restored.run(result.run.id).snapshot.packageStart).toEqual(
+    result.run.snapshot.packageStart
+  );
+  expect(restored.source(result.run.sourceRevision!).text).toBe(pkg.starts![0].text);
+});
+
 test('starts validate typed choices and existing explicit actions; preview preserves exact author text and does not draw', () => {
   const pkg = packageData();
   expect(validateContentPackage(pkg).starts).toEqual(pkg.starts);

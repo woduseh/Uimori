@@ -32,7 +32,7 @@ function analyze(value: unknown) {
       provenance: {
         sourceHash: input.hash,
         variant: input.format,
-        conversionVersion: '2',
+        conversionVersion: '3',
         notes: [...new Set(findings.map((finding) => finding.code))],
       },
     },

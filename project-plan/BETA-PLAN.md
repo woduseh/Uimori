@@ -38,7 +38,7 @@
 
 **현재 상태의 기준은 이 절과 아래 단계 표예요(2026-09-13).** 날짜별 구현·검증 기록의 ‘현재’·‘남아 있음’은 해당 작업 당시의 상태이며, 이후 구현과 상충하면 이 절을 따라요. 과거 검사 수·run ID·hash는 당시 근거로 보존하며 현재 소스의 새 검증 결과로 재사용하지 않아요.
 
-현재 DB는 **18**, 전체 archive는 **15**, 채팅 백업은 **1**이에요. `user`·`model`·`before-turn`·`after-turn` JavaScript와 자기 자료 읽기·`model.generate` Host API, 응답 후 완성 본문 읽기, 사용자 독립 모델 작업과 명시적 상태 변환을 구현했어요. 카드 `.charx`/JSON과 추출한 모듈 JSON/프로젝트 ZIP은 기본 자료를 가져와요. 일반 HTTP·Lua·공유 자료 권한·확장 설치 관리, 원본 스크립트 자동 이식과 전체 표본 인수는 미완이에요. Linux/Docker는 사용자가 선택한 설치 방향이며 일반 Update 실행기·버튼과 배포 인수는 남아 있어요. 2~3단계와 4단계를 위의 사용 흐름 단위로 연결하고 [표본 기준의 현재 구현 보충](BETA-SAMPLES.md#현재-구현-보충--2026-09-13)을 전체 표본 완료와 구분해요.
+현재 DB는 **18**, 전체 archive는 **15**, 채팅 백업은 **1**이에요. `user`·`model`·`before-turn`·`after-turn` JavaScript와 자기 자료 읽기·`model.generate` Host API, 응답 후 완성 본문 읽기, 사용자 독립 모델 작업과 명시적 상태 변환을 구현했어요. 카드 `.charx`/JSON과 추출한 모듈 JSON/프로젝트 ZIP은 기본 자료를 가져와요. 기본 변수와 지원 CBS 읽기/조건은 공통 템플릿으로 연결했고 저장된 공유 변수 쓰기와 Lua/트리거는 아직 미완이에요. 일반 HTTP·Lua·공유 자료 권한·확장 설치 관리, 원본 스크립트 자동 이식과 전체 표본 인수는 미완이에요. Linux/Docker는 사용자가 선택한 설치 방향이며 일반 Update 실행기·버튼과 배포 인수는 남아 있어요. 2~3단계와 4단계를 위의 사용 흐름 단위로 연결하고 [표본 기준의 현재 구현 보충](BETA-SAMPLES.md#현재-구현-보충--2026-09-13)을 전체 표본 완료와 구분해요.
 
 | 단계 | 해야 할 일 | 얻어야 할 결과 | 현재 상태 |
 | --- | --- | --- | --- |
@@ -54,6 +54,16 @@
 ## 날짜별 구현·검증 기록
 
 아래 기록은 작업 당시 상태와 증거를 보존해요. 현재 지원 여부는 위의 작업과 완료 기준을 먼저 확인해요.
+
+### 기본 변수와 공통 CBS 읽기 · 2026-09-13
+
+카드·프리셋·프리셋 정규식이 `server/risu-cbs.ts`를 공유하며 `getvar`, 변수 조건과 `#if`/`#if_pure`를 기존 AST로 변환해요. 고정 Risu의 기본 변수는 저장 state의 초기 복사본이 아니라 읽기 fallback이라는 근거에 따라 `ContentPackage`·`PromptProgram`에 일반 문자열 기본값 선언을 추가했어요. `core/template-variables.ts`가 장착 역할·순서와 main 프롬프트 fallback을 해석해 본문·로어·시작문·지침·모델 자료 조회·프리셋 변환·편집 미리보기에 같은 값을 제공해요. Risu 카드 기본값은 bot 역할로만 참여하므로 모듈이 같은 변수를 읽되 카드의 bot 기본값을 덮어쓰지 않아요.
+
+원본 문자열·원본 파일과 선언/AST를 함께 보존하며 DB 18·archive 15·chat-backup 1은 유지해요. 기존 자료나 과거 Run을 자동 수정하지 않아요. 선언이 없는 과거 runtime/정규식 설정 hash는 그대로이며 새 선언의 합산 한도 초과는 변수층 전체 미적용·기존 경고/원문 fallback으로 처리해요. 순수 계산 중 공유 상태 쓰기나 새 모델 호출은 없어요. `setvar`/`addvar`/`setdefaultvar`·Lua/트리거의 실제 공유 상태/실행 순서는 후속 묶음으로 남아요.
+
+합성 가져오기에서 봇 기본값이 프리셋보다 우선하고 모듈이 같은 값을 읽는지, 시작문 저장 뒤 자료 개정/복원에서도 원래 값을 유지하는지 확인했어요. 실제 여섯 CharX의 부분 등록에서도 히나노 기본값 6개·변수 참조 템플릿 4개, TVoN 27개·8개가 연결됐어요. 나머지 Lua·트리거·미지원 문법은 부분 가져오기 표시를 유지해요. 근거는 ignored `output/risu-preset/template-variable-samples.json`이며 원본 내용은 기록하지 않았어요. 이는 상태창·복잡한 시스템의 전체 기능이나 실모델 창작 품질 PASS가 아니에요.
+
+최종 `quality:full`은 **2,343 PASS / 1 SKIP**(226개 파일 통과·기존 1개 제외), `verify:packages` **24 PASS**, smoke F02/F03/F06 PASS예요. 화면 `package-ui-2026-09-13T11-09-00-540Z-0f342b67`과 smoke `2026-09-13T11-09-01-445Z-c18a6f7a`는 cleanup PASS이며 live PID가 없어요. 로그는 ignored `output/risu-preset/template-variables-final-quality-full.log`, `template-variables-final-verify-packages.log`, `template-variables-final-verify-smoke.log`예요. 최초 검사 뒤 standalone 프롬프트 편집기 미리보기의 기본값 누락을 발견해 공통 resolver 연결과 기존 화면 회귀를 보완한 다음 최종 소스로 재확인했어요. 유료 모델·운영 DB·push·배포는 사용하지 않았어요.
 
 ### CharX 내부 모듈과 봇·모듈 등록 · 2026-09-13
 

@@ -11,6 +11,19 @@ import {
 import { buildPackagePresentation } from '../server/package-presentation.js';
 import { createHash } from 'node:crypto';
 
+const variablePackage = () => ({
+  version: 1 as const,
+  id: 'bot',
+  revision: 1,
+  title: 'Bot',
+  description: '',
+  lore: [],
+  instructions: [],
+  controls: [],
+  transforms: [],
+  variableDefaults: { values: { shared: 'package', packageOnly: 'package value' } },
+});
+
 test('template values remain literal while authored replacement captures retain their meaning', async () => {
   const raw = snapshot(),
     program = raw.profile!.promptPresets!.main!.program;
@@ -76,6 +89,96 @@ test('frozen indices distinguish identical messages in context subsets and survi
   const altered = structuredClone(prepared);
   altered.promptInputTransforms!.entries[0]!.text = 'tampered';
   expect(() => validatePromptInputTransforms(altered)).toThrow('PROMPT_INPUT_TRANSFORMS_INVALID');
+});
+test('historical transform configuration stays byte-identical without variable declarations', async () => {
+  const prepared = await preparePromptInputTransforms(snapshot());
+  expect(prepared.promptInputTransforms?.configurationHash).toBe(
+    '2fe72680fa52cc1274ea8ef63c0d56ab98647ac11ce7c06c7204c97b573f8afd'
+  );
+});
+test('transform receipts freeze shared variables and supplied programs use their own defaults', async () => {
+  const raw = snapshot();
+  raw.profile!.packageAttachments = [{ id: 'bot', revision: 1, role: 'bot' }];
+  raw.profile!.packages = [variablePackage()];
+  const program = raw.profile!.promptPresets!.main!.program;
+  program.variableDefaults = { shared: 'preset', presetOnly: 'profile preset' };
+  program.transforms![0]!.replacementTemplate = [
+    {
+      kind: 'value',
+      expression: { op: 'get', args: [{ context: ['variables'] }, 'presetOnly'] },
+    },
+    { kind: 'text', text: ':' },
+    {
+      kind: 'value',
+      expression: { op: 'get', args: [{ context: ['variables'] }, 'shared'] },
+    },
+  ];
+  const prepared = await preparePromptInputTransforms(raw);
+  const repeated = await preparePromptInputTransforms(structuredClone(raw));
+  expect(prepared.promptInputTransforms?.configurationHash).toBe(
+    repeated.promptInputTransforms?.configurationHash
+  );
+  expect(prepared.promptInputTransforms?.entries.at(-1)?.text).toBe('profile preset:package');
+
+  const alternative = structuredClone(program);
+  alternative.variableDefaults = { shared: 'alternative', presetOnly: 'alternative preset' };
+  const alternativeRaw = snapshot();
+  alternativeRaw.profile!.packageAttachments = [{ id: 'bot', revision: 1, role: 'bot' }];
+  alternativeRaw.profile!.packages = [variablePackage()];
+  const alternativePrepared = await preparePromptInputTransforms(alternativeRaw, alternative);
+  expect(alternativePrepared.promptInputTransforms?.entries.at(-1)?.text).toBe(
+    'alternative preset:package'
+  );
+  expect(alternativePrepared.promptInputTransforms?.configurationHash).not.toBe(
+    prepared.promptInputTransforms?.configurationHash
+  );
+  expect(() =>
+    projectPromptInputTransforms(
+      alternativePrepared,
+      [{ id: 'current-input', role: 'user', text: 'same', current: true }],
+      alternative
+    )
+  ).not.toThrow();
+});
+test('combined variable overflow preserves input when a replacement reads variables', async () => {
+  const raw = snapshot();
+  raw.profile!.packageAttachments = [{ id: 'bot', revision: 1, role: 'bot' }];
+  raw.profile!.packages = [
+    {
+      ...variablePackage(),
+      variableDefaults: {
+        values: Object.fromEntries(
+          ['package', 'package-b', 'package-c'].map((key) => [key, 'p'.repeat(180_000)])
+        ),
+      },
+    },
+  ];
+  const program = raw.profile!.promptPresets!.main!.program;
+  program.variableDefaults = Object.fromEntries(
+    ['preset', 'preset-b', 'preset-c'].map((key) => [key, 'q'.repeat(180_000)])
+  );
+  program.transforms![0]!.replacementTemplate = [
+    {
+      kind: 'value',
+      expression: { op: 'get', args: [{ context: ['variables'] }, 'package'] },
+    },
+  ];
+  const prepared = await preparePromptInputTransforms(raw);
+  expect(prepared.promptInputTransforms?.error).toBe('PROMPT_VARIABLE_DEFAULTS_LIMIT');
+  expect(prepared.promptInputTransforms?.entries.at(-1)?.text).toBeUndefined();
+  expect(
+    projectPromptInputTransforms(prepared, [
+      { id: 'current-input', role: 'user', text: 'same', current: true },
+    ]).history[0]?.text
+  ).toBe('same');
+
+  program.transforms![0]!.replacementTemplate = [{ kind: 'text', text: 'safe' }];
+  const variableIndependent = await preparePromptInputTransforms({
+    ...raw,
+    promptInputTransforms: undefined,
+  });
+  expect(variableIndependent.promptInputTransforms?.error).toBeUndefined();
+  expect(variableIndependent.promptInputTransforms?.entries.at(-1)?.text).toBe('safe');
 });
 test('timed out regex is a preserved nonblocking fallback and a fresh valid input still works', async () => {
   const raw = snapshot();

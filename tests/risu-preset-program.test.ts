@@ -105,7 +105,7 @@ describe('Risu preset program conversion', () => {
 
   it.each([
     '{{setvar::counter::1}}',
-    '{{getvar::counter}}',
+    '{{setdefaultvar::counter::1}}',
     '{{unknown::x}}',
     '{{#when::1}}unclosed',
   ])('disables unsupported CBS and never sends it as active prompt text: %s', (text) => {

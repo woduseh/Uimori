@@ -1,5 +1,6 @@
 import { Switch } from './BooleanControls.js';
 import { parsePromptFile, type PromptFile } from '../core/prompt-file.js';
+import { resolveTemplateVariableContext } from '../core/template-variables.js';
 import { compileTranslationPreview } from '../core/translation-preview.js';
 import { DismissibleError } from './DismissibleError.js';
 import { PromptControlFields } from './PromptControlFields.js';
@@ -1138,6 +1139,7 @@ export function PromptComposer({
           compilation: compilePromptProgram(program, {
             values: controls.values,
             slots,
+            runtime: resolveTemplateVariableContext({ promptPresets: { main: { program } } }),
             history: [
               { id: 'preview-user-1', role: 'user', text: '합성 이전 입력' },
               { id: 'preview-assistant-1', role: 'assistant', text: '합성 이전 응답' },

@@ -4,7 +4,7 @@ import {
   type PromptTextTransform,
 } from '../core/prompt-program.js';
 import type { RisuPresetFinding } from '../core/risu-preset.js';
-import { PresetCbs } from './risu-preset-program.js';
+import { RisuCbs } from './risu-cbs.js';
 
 /** Convert the pinned Risu text stages without executing patterns, CBS, or external work. */
 export function importRisuPresetRegex(
@@ -31,7 +31,9 @@ export function importRisuPresetRegex(
         },
       ],
     };
-  const cbs = new PresetCbs(new Map(controls.map((control) => [control.id, control])), true);
+  const cbs = new RisuCbs(new Map(controls.map((control) => [control.id, control])), {
+    messageContext: true,
+  });
   for (const [index, raw] of value.entries()) {
     if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
       unsupported(index, '규칙 형식을 읽을 수 없어요.');

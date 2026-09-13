@@ -2,18 +2,30 @@ import type { Content, ProfileSnapshot } from './product.js';
 import { historicalPersonaExcluded } from './persona-scope.js';
 import { validatePromptTemplate, type PromptTemplate } from './prompt-program.js';
 import { PromptBudget } from './prompt-values.js';
+import {
+  resolveTemplateVariableContext,
+  type TemplateVariableContext,
+} from './template-variables.js';
 
-export type PackageIdentityContext = { bot: { name: string }; user: { name: string } };
+export type PackageIdentityContext = {
+  bot: { name: string };
+  user: { name: string };
+} & TemplateVariableContext;
 type IdentityContent = Pick<Content, 'title' | 'package'>;
 
 /** Identity substitutions read the selected data only; names never become template source. */
 export function packageIdentityFromContents(
   bot?: IdentityContent | null,
-  persona?: IdentityContent | null
+  persona?: IdentityContent | null,
+  variables?: Record<string, string>
 ): PackageIdentityContext {
   const name = (content: IdentityContent | null | undefined, fallback: string) =>
     content?.package?.identity?.name ?? content?.package?.title ?? content?.title ?? fallback;
-  return { bot: { name: name(bot, 'Character') }, user: { name: name(persona, 'User') } };
+  return {
+    bot: { name: name(bot, 'Character') },
+    user: { name: name(persona, 'User') },
+    ...(variables === undefined ? {} : { variables }),
+  };
 }
 
 /** Frozen profile lookup keeps historical openings independent of later library revisions. */
@@ -30,10 +42,13 @@ export function packageIdentityFromProfile(
       ? { title: pkg.title, package: pkg }
       : profile.contents.find((item) => item.kind === role);
   };
-  return packageIdentityFromContents(content('bot'), content('persona'));
+  return {
+    ...packageIdentityFromContents(content('bot'), content('persona')),
+    ...resolveTemplateVariableContext(profile, target),
+  };
 }
 
-/** Shared authored text scope: selected identity names and declared controls, without slots or ambient runtime. */
+/** Authored text reads selected names, declared variables and controls, without slots or ambient runtime. */
 export function validatePackageIdentityTemplate(
   value: unknown,
   controls: Iterable<string>,
@@ -52,9 +67,10 @@ export function validatePackageIdentityTemplate(
         const path = record.context;
         if (
           !Array.isArray(path) ||
-          path.length !== 2 ||
-          !['bot', 'user'].includes(path[0]) ||
-          path[1] !== 'name'
+          !(
+            (path.length === 2 && ['bot', 'user'].includes(path[0]) && path[1] === 'name') ||
+            (path.length === 1 && path[0] === 'variables')
+          )
         )
           invalid('CONTEXT');
       }

@@ -18,6 +18,7 @@ import { decodeRPack } from '../server/rpack.js';
 import { fixtureBotInput } from './fixtures/chat.js';
 import { buildPackagePresentation } from '../server/package-presentation.js';
 import { createHash } from 'node:crypto';
+import { importRisuPresetProgram } from '../server/risu-preset-program.js';
 
 const owned: { directory: string; store: Store }[] = [];
 afterEach(() => {
@@ -64,6 +65,143 @@ const card = () => ({
 const sourceOf = (value: unknown) => ({
   name: 'synthetic-card.json',
   base64: Buffer.from(JSON.stringify(value)).toString('base64'),
+});
+
+test('imported bot and preset defaults share one read context with module lore and frozen openings', () => {
+  const store = database();
+  const preset = importRisuPresetProgram({
+    name: 'Variable preset',
+    templateDefaultVariables: 'shared=PRESET\nfallback=FALLBACK',
+    promptTemplate: [
+      { type: 'plain', role: 'system', text: 'PRESET:{{getvar::shared}}/{{getvar::fallback}}' },
+      { type: 'chat', rangeStart: 0, rangeEnd: 'end' },
+    ],
+  });
+  updatePromptWorkspace(store, {
+    expectedRevision: modelWorkspace(store).revision,
+    main: {
+      title: preset.title,
+      program: preset.program,
+      values: {},
+    },
+  });
+  const original = card();
+  const source = sourceOf({
+    ...original,
+    data: {
+      ...original.data,
+      description: 'BODY:{{getvar::shared}}',
+      first_mes: 'OPEN:{{getvar::shared}}/{{getvar::fallback}}',
+      post_history_instructions: '{{#when::var::flag}}GUIDANCE:{{getvar::shared}}{{/when}}',
+      extensions: { risuai: { defaultVariables: 'shared=BOT\nshared=IGNORED\nflag=true' } },
+    },
+  });
+  const before = store.product.export();
+  const preview = prepareRisuImport({ source });
+  expect(store.product.export().tables).toEqual(before.tables);
+  expect(preview.findings.filter((item) => item.level === 'unsupported')).toEqual([]);
+  const saved = applyRisuImport(store, {
+    source,
+    digest: preview.digest,
+    memoryIds: [],
+    allowPartial: false,
+    idempotencyKey: 'variables',
+  });
+  const bot = store.product.get<Content>('content', saved.receipt.items[0].id);
+  expect(bot.package!.variableDefaults).toEqual({
+    values: { shared: 'BOT', flag: 'true' },
+    attachmentRoles: ['bot'],
+  });
+  expect(bot.package!.behavior).toBeUndefined();
+  const moduleSource = sourceOf({
+    ...original,
+    data: {
+      ...original.data,
+      name: 'Variable reader module',
+      description: '',
+      first_mes: '',
+      alternate_greetings: [],
+      extensions: { risuai: { defaultVariables: 'shared=MODULE_IGNORED' } },
+      character_book: {
+        entries: [
+          {
+            name: 'Reader',
+            content: 'MODULE:{{getvar::shared}}/{{getvar::fallback}}',
+            constant: true,
+          },
+        ],
+      },
+    },
+  });
+  const modulePreview = prepareRisuImport({ source: moduleSource, kind: 'module' });
+  const importedModule = applyRisuImport(store, {
+    source: moduleSource,
+    kind: 'module',
+    digest: modulePreview.digest,
+    memoryIds: [],
+    allowPartial: false,
+    idempotencyKey: 'reader-module',
+  });
+  const module = store.product.get<Content>('content', importedModule.receipt.items[0].id);
+  const chat = saved.chat!,
+    profile = store.product.profile(chat.id);
+  store.product.updateProfile(chat.id, {
+    expectedRevision: profile.revision,
+    attachments: [],
+    image: false,
+    packageAttachments: [
+      ...profile.packageAttachments!,
+      { id: module.id, revision: module.revision, role: 'module' },
+    ],
+  });
+  const frozen = store.product.snapshot(chat.id)!;
+  const snapshot = compileSnapshotPrompt({
+    chatId: chat.id,
+    parentRevision: null,
+    settingsRevision: chat.settingsRevision,
+    settings: chat.settings,
+    request: 'Continue.',
+    history: [],
+    logicalHistory: [],
+    profile: frozen,
+    resources: store.product.resources(chat.id, frozen),
+  });
+  const input = JSON.stringify(snapshot.promptCompilation!.messages);
+  for (const expected of ['BODY:BOT', 'PRESET:BOT/FALLBACK', 'MODULE:BOT/FALLBACK', 'GUIDANCE:BOT'])
+    expect(input).toContain(expected);
+  expect(input).not.toContain('MODULE_IGNORED');
+  const opened = createPackageStart(store, chat.id, {
+    packageId: bot.id,
+    packageRevision: bot.revision,
+    startId: 'start-0',
+    expectedSettingsRevision: chat.settingsRevision,
+    expectedProfileRevision: frozen.revision,
+    idempotencyKey: 'variables-opening',
+  });
+  expect(store.sourceOriginal(opened.run.sourceRevision!).text).toBe('OPEN:BOT/FALLBACK');
+  store.product.content(
+    {
+      kind: bot.kind,
+      title: bot.title,
+      description: bot.description,
+      text: bot.text,
+      loading: bot.loading,
+      relatedIds: [],
+      expectedRevision: bot.revision,
+      package: {
+        ...bot.package!,
+        variableDefaults: { values: { shared: 'CHANGED', flag: 'true' }, attachmentRoles: ['bot'] },
+      },
+    },
+    bot.id
+  );
+  expect(JSON.stringify(compileSnapshotPrompt(snapshot).promptCompilation!.messages)).toBe(input);
+  expect(nativeTransferOriginal(store, saved.receipt.id).sourceFiles![0].base64).toBe(
+    source.base64
+  );
+  const restored = database();
+  expect(() => restored.product.import(store.product.export())).not.toThrow();
+  expect(restored.sourceOriginal(opened.run.sourceRevision!).text).toBe('OPEN:BOT/FALLBACK');
 });
 
 test.each(['{{original}}\nGive {{char}} room to act.', '{{original}}'])(

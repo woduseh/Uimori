@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
 import type { ContentPackage } from '../core/content-package.js';
 import type { PromptTemplate } from '../core/prompt-program.js';
+import { validatePackageIdentityTemplate } from '../core/package-identity.js';
 import {
   NATIVE_TRANSFER_FORMAT,
   NATIVE_TRANSFER_VERSION,
@@ -16,6 +17,8 @@ import {
 } from '../core/risu-import.js';
 import { readCharacterCard } from './character-card-file.js';
 import { importRisuDisplayRegex } from './risu-regex.js';
+import { RisuCbs } from './risu-cbs.js';
+import { importRisuVariableDefaults } from './risu-variable-defaults.js';
 import { applyNativeTransfer, prepareNativeTransfer } from './native-transfer.js';
 import { decodeImage } from './package-images.js';
 import { fields, HttpError, record, text } from './request-validation.js';
@@ -36,23 +39,6 @@ const present = (value: unknown): boolean =>
     : typeof value === 'object'
       ? Object.keys(value).length > 0
       : true);
-
-/** Translate the two identity tokens into native data nodes, never generated program source. */
-function identityTemplate(value: string): PromptTemplate | undefined {
-  const nodes: PromptTemplate = [];
-  let offset = 0;
-  for (const match of value.matchAll(/\{\{(char|user)\}\}/giu)) {
-    if (match.index > offset) nodes.push({ kind: 'text', text: value.slice(offset, match.index) });
-    nodes.push({
-      kind: 'value',
-      expression: { context: [match[1].toLowerCase() === 'char' ? 'bot' : 'user', 'name'] },
-    });
-    offset = match.index + match[0].length;
-  }
-  if (!nodes.length) return;
-  if (offset < value.length) nodes.push({ kind: 'text', text: value.slice(offset) });
-  return nodes;
-}
 
 /** A one-way format adapter. No Risu runtime or source-specific behavior enters the package. */
 function analyze(value: unknown, requestedKind?: RisuImportKind) {
@@ -80,6 +66,47 @@ function analyze(value: unknown, requestedKind?: RisuImportKind) {
     transforms: [],
     starts: [],
     images: [],
+  };
+  const risu = object(object(card.extensions).risuai);
+  try {
+    const values = importRisuVariableDefaults(risu.defaultVariables);
+    if (values !== undefined) {
+      pkg.variableDefaults = { values, attachmentRoles: ['bot'] };
+      finding(
+        'variable-defaults',
+        'warning',
+        '기본 변수를 공통 템플릿의 읽기 기본값으로 가져와요. 이 자료를 봇으로 선택하면 프리셋보다 우선하며, 모듈·페르소나로 장착할 때는 이 기본값을 적용하지 않아요. 저장된 채팅 변수·Lua·트리거의 변경은 아직 실행하지 않아요.'
+      );
+    }
+  } catch {
+    finding(
+      'variable-defaults-invalid',
+      'unsupported',
+      '기본 변수의 형식·이름·크기가 지원 범위를 벗어나 자동 적용하지 않아요. 원본 파일에 보존해요.'
+    );
+  }
+  const cbs = new RisuCbs(new Map(), { names: 'context' });
+  const importedTemplate = (value: string): PromptTemplate | undefined => {
+    if (!value.includes('{{')) return;
+    try {
+      const template = validatePackageIdentityTemplate(cbs.template(value), [], () => {
+        throw new Error('Unsupported imported context');
+      });
+      if (/\{\{(?!(?:char|user)\}\})/iu.test(value))
+        finding(
+          'template-cbs',
+          'warning',
+          '지원하는 CBS 읽기·계산·조건을 공통 템플릿으로 가져와요. 기본 변수와 선택한 이름을 읽으며, 변수 쓰기·Lua·트리거는 실행하지 않아요. 원래 문법과 기본값은 자료에 보존해요.'
+        );
+      return template;
+    } catch {
+      finding(
+        'dynamic-text',
+        'unsupported',
+        '지원하지 않는 CBS 또는 한도를 넘는 템플릿이 있어요. 해당 항목은 이름 치환만 적용하고 나머지 문법을 텍스트로 보존하며 별도 이식이 필요해요.'
+      );
+      return cbs.namesOnly(value);
+    }
   };
   const images: NativeTransferFile['images'] = [];
   const assetUrls = new Map<string, string>();
@@ -163,14 +190,11 @@ function analyze(value: unknown, requestedKind?: RisuImportKind) {
         '{{char}}·{{user}}는 공통 템플릿으로 가져와 선택한 봇·페르소나 이름을 적용해요. 원래 표기도 보존해요.'
       );
     }
-    if (
-      /\{\{(?!(?:char|user)\}\})/iu.test(result) ||
-      /\{#(?:if|each)|<script\b|risu-trigger|@@[A-Za-z]/iu.test(result)
-    )
+    if (/\{#(?:if|each)|<script\b|risu-trigger|@@[A-Za-z]/iu.test(result))
       finding(
-        'dynamic-text',
+        'dynamic-markup',
         'unsupported',
-        'CBS 계산·조건문·로어 명령·HTML 동작은 자동 이식하지 않아요. 해당 문법은 텍스트로 남으며 별도 이식이 필요해요.'
+        '로어 명령·HTML 동작은 자동 이식하지 않아요. 해당 문법은 텍스트로 남으며 별도 이식이 필요해요.'
       );
     return result;
   };
@@ -182,7 +206,7 @@ function analyze(value: unknown, requestedKind?: RisuImportKind) {
   ]
     .filter(Boolean)
     .join('\n\n');
-  const bodyTemplate = identityTemplate(pkg.body);
+  const bodyTemplate = importedTemplate(pkg.body);
   if (bodyTemplate) pkg.bodyTemplate = bodyTemplate;
   if (string(card.personality) || string(card.scenario))
     finding(
@@ -201,7 +225,7 @@ function analyze(value: unknown, requestedKind?: RisuImportKind) {
     // replaced Risu note has no separate insertion target and must not duplicate that prompt.
     const text = convertText(string(card.post_history_instructions).replaceAll('{{original}}', ''));
     if (text.trim()) {
-      const template = identityTemplate(text);
+      const template = importedTemplate(text);
       pkg.instructions.push({
         id: 'writing-guidance',
         target: 'main',
@@ -222,8 +246,8 @@ function analyze(value: unknown, requestedKind?: RisuImportKind) {
   pkg.starts = greetings.flatMap((greeting, index) => {
     if (!string(greeting).trim()) return [];
     const sourceText = convertText(greeting);
-    const template = identityTemplate(sourceText);
-    if (template)
+    const template = importedTemplate(sourceText);
+    if (template && /\{\{(?:char|user)\}\}/iu.test(sourceText))
       finding(
         'start-names',
         'info',
@@ -278,7 +302,7 @@ function analyze(value: unknown, requestedKind?: RisuImportKind) {
         '로어의 원래 위치·추가 활성 조건은 그대로 재현하지 않아요. 본문과 항상 활성 여부를 가져와요.'
       );
     const loreText = convertText(content),
-      template = identityTemplate(loreText);
+      template = importedTemplate(loreText);
     pkg.lore.push({
       id,
       title: name.slice(0, 200),
@@ -299,7 +323,6 @@ function analyze(value: unknown, requestedKind?: RisuImportKind) {
   }
   if (lore.some((item) => !item.enabled))
     finding('disabled-lore', 'info', '비활성 로어는 적용하지 않고 원본 파일에 보존해요.');
-  const risu = object(object(card.extensions).risuai);
   const regex = importRisuDisplayRegex(risu.customScripts);
   pkg.transforms = regex.transforms;
   findings.push(...regex.findings);
@@ -308,7 +331,7 @@ function analyze(value: unknown, requestedKind?: RisuImportKind) {
   while (pending.length) {
     const current = object(pending.pop());
     for (const [key, value] of Object.entries(current)) {
-      if (current === risu && key === 'customScripts') continue;
+      if (current === risu && (key === 'customScripts' || key === 'defaultVariables')) continue;
       if (!present(value)) continue;
       if (/regex|customscript|triggerscript|lua|backgroundhtml|customcss|backgroundcss/iu.test(key))
         finding(
@@ -380,7 +403,7 @@ function analyze(value: unknown, requestedKind?: RisuImportKind) {
   };
   const transfer = prepareNativeTransfer({ file });
   const digest = createHash('sha256')
-    .update(JSON.stringify({ version: 7, transfer: transfer.digest, kind, findings, lore }))
+    .update(JSON.stringify({ version: 8, transfer: transfer.digest, kind, findings, lore }))
     .digest('hex');
   const preview: RisuImportPreview = {
     kind,
