@@ -64,6 +64,30 @@ function database() {
 }
 
 describe('bounded extension state program contract', () => {
+  it('accepts a pure state migration but grants it no material, response, or model access', () => {
+    const behavior = definition();
+    behavior.migration = {
+      api: EXTENSION_PROGRAM_API,
+      source: 'return {state: api.state, result: null};',
+    };
+    expect(validatePackageBehavior(behavior)).toEqual(behavior);
+    for (const capability of [
+      'materials.read.self',
+      'model.generate',
+      'response.read.current',
+    ] as const) {
+      expect(() =>
+        validatePackageBehavior({
+          ...behavior,
+          migration: { ...behavior.migration, capabilities: [capability] },
+        })
+      ).toThrow('BEHAVIOR_MIGRATION_CAPABILITIES');
+    }
+    expect(() =>
+      validatePackageBehavior({ ...behavior, migration: { ...behavior.migration, api: 'unknown' } })
+    ).toThrow('BEHAVIOR_PROGRAM_API');
+  });
+
   it('accepts only the versioned, bounded function-body contract and exact JSON result shape', () => {
     expect(validateExtensionProgram(definition().actions[0].program)).toEqual(
       definition().actions[0].program

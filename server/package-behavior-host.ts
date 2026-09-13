@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { HttpError } from './request-validation.js';
 import {
   executionContext,
@@ -26,6 +27,7 @@ import {
   type BehaviorScope,
   type BehaviorState,
   type BehaviorActionCommand,
+  type BehaviorUpgradeCommand,
 } from './package-behavior-store.js';
 import type { ResolvedExtensionProgram } from '../core/extension-program.js';
 import { executeExtensionProgram } from './extension-runtime.js';
@@ -131,7 +133,10 @@ function frozenState(store: Store, d: Definition, state: BehaviorState): Package
   const journal = store.behavior.journal(d.scope);
   const lastDraw = [...journal]
     .reverse()
-    .find((r) => r.provenance === 'explicit-reset' || Object.keys(r.draws).length);
+    .find(
+      (r) =>
+        ['explicit-reset', 'explicit-upgrade'].includes(r.provenance) || Object.keys(r.draws).length
+    );
   const head = store.db
     .prepare(
       'SELECT draws FROM package_behavior_heads WHERE chat_id=? AND branch_id=? AND instance_id=?'
@@ -231,7 +236,7 @@ export function behaviorDetail(store: Store, chatId: string, requestedBranch?: s
       }
       const last = store.db
         .prepare(
-          "SELECT payload,result FROM package_behavior_journal WHERE chat_id=? AND branch_id=? AND instance_id=? AND json_type(result,'$.actionResult') IS NOT NULL ORDER BY rowid DESC LIMIT 1"
+          "SELECT payload,result FROM package_behavior_journal WHERE chat_id=? AND branch_id=? AND instance_id=? AND json_type(result,'$.actionResult') IS NOT NULL AND json_extract(result,'$.provenance') <> 'explicit-upgrade' ORDER BY rowid DESC LIMIT 1"
         )
         .get(chatId, branch.id, d.scope.attachmentInstanceId) as Row | undefined;
       const receipt = last ? JSON.parse(last.result) : undefined;
@@ -260,6 +265,11 @@ export function behaviorDetail(store: Store, chatId: string, requestedBranch?: s
         state: state.state,
         status: pending ? ('pending' as const) : availability.status,
         error: availability.error,
+        ...(!pending &&
+        availability.error === 'BEHAVIOR_MIGRATION_REQUIRED' &&
+        status(store, d.scope).status === 'ready'
+          ? { upgrade: upgradeOptions(d, state) }
+          : {}),
         ...(d.pkg.panels?.length ? { panels: renderPanels(d.pkg, d.ref, state.state) } : {}),
         ...(lastAction ? { lastAction } : {}),
       };
@@ -314,6 +324,213 @@ export function freezePackageStates(
   return states.length || projected.packageBehaviorUnavailable?.length
     ? { ...projected, packageStates: states }
     : snapshot;
+}
+export type BehaviorUpgradePreviewCommand = Omit<
+  BehaviorUpgradeCommand,
+  'previewId' | 'idempotencyKey'
+>;
+function upgradeOptions(d: Definition, state: BehaviorState) {
+  let canPreserve = false;
+  try {
+    validateBehaviorValue(d.pkg.behavior!.stateSchema, state.state);
+    canPreserve = true;
+  } catch {
+    /* The author may provide a transformation for the new schema. */
+  }
+  return { canPreserve, canTransform: !!d.pkg.behavior!.migration };
+}
+function upgradeDefinition(
+  store: Store,
+  chatId: string,
+  branchId: string | undefined,
+  instanceId: string
+) {
+  store.chat(chatId);
+  const branch = store.product.branch(chatId, branchId);
+  const d = definitions(store, chatId, branch.id).find(
+    (item) => item.scope.attachmentInstanceId === instanceId
+  );
+  if (!d) throw new HttpError(404, 'PACKAGE_BEHAVIOR_NOT_ATTACHED');
+  return { branch, d };
+}
+function upgradeContext(
+  store: Store,
+  chatId: string,
+  branchId: string | undefined,
+  instanceId: string,
+  command: BehaviorUpgradePreviewCommand
+) {
+  const { branch, d } = actionContext(store, chatId, branchId, instanceId, command, false);
+  if (command.expectedPackageRevision !== d.scope.packageRevision)
+    throw new HttpError(409, 'BEHAVIOR_PACKAGE_STALE');
+  let migrationRequired = false;
+  try {
+    store.behavior.read(d.scope, d.pkg.behavior!);
+  } catch (error) {
+    if (!(error instanceof BehaviorError) || error.message !== 'BEHAVIOR_MIGRATION_REQUIRED')
+      throw error;
+    migrationRequired = true;
+  }
+  if (!migrationRequired) throw new HttpError(409, 'BEHAVIOR_UPGRADE_NOT_REQUIRED');
+  const state = store.behavior.storedState(d.scope)!;
+  const prior = store.product.get<{ package: ContentPackage }>(
+    'content',
+    state.packageId,
+    state.packageRevision
+  ).package;
+  validateBehaviorValue(validatePackageBehavior(prior.behavior).stateSchema, state.state);
+  if (state.stateRevision !== command.expectedStateRevision)
+    throw new HttpError(409, 'BEHAVIOR_STATE_STALE');
+  if (
+    (branch.headRevision ? store.source(branch.headRevision).hash : null) !==
+    command.expectedSourceHash
+  )
+    throw new HttpError(409, 'BEHAVIOR_SOURCE_STALE');
+  if (command.mode !== 'preserve' && command.mode !== 'program')
+    throw new HttpError(400, 'BEHAVIOR_UPGRADE_MODE');
+  const guard = behaviorPayloadHash({
+    scope: d.scope,
+    state,
+    prior,
+    target: d.pkg,
+    profile: store.product.snapshot(chatId),
+    settingsRevision: store.chat(chatId).settingsRevision,
+    head: branch.headRevision,
+    dependencies: dependencies(store, chatId, branch.id),
+    requestDependencies: packageRequestDependenciesHash(store, branch.headRevision),
+  });
+  return { branch, d, state, guard };
+}
+type UpgradePreview = {
+  guard: string;
+  commandHash: string;
+  expires: number;
+  result?: ResolvedExtensionProgram;
+};
+const upgradePreviews = new WeakMap<Store, Map<string, UpgradePreview>>();
+function upgradeCommandHash(
+  chatId: string,
+  branchId: string,
+  instanceId: string,
+  command: BehaviorUpgradePreviewCommand
+) {
+  return behaviorPayloadHash({
+    chatId,
+    branchId,
+    instanceId,
+    command: {
+      mode: command.mode,
+      expectedPackageRevision: command.expectedPackageRevision,
+      expectedStateRevision: command.expectedStateRevision,
+      expectedSourceHash: command.expectedSourceHash,
+    },
+  });
+}
+/** Explicit POST only: guest code calculates a candidate without changing persistent state. */
+export async function previewBehaviorUpgrade(
+  store: Store,
+  chatId: string,
+  branchId: string | undefined,
+  instanceId: string,
+  command: BehaviorUpgradePreviewCommand,
+  signal?: AbortSignal
+) {
+  const captured = store.transaction(() =>
+    upgradeContext(store, chatId, branchId, instanceId, command)
+  );
+  const behavior = captured.d.pkg.behavior!;
+  let result: ResolvedExtensionProgram | undefined;
+  if (command.mode === 'program') {
+    if (!behavior.migration || behavior.migration.capabilities?.length)
+      throw new HttpError(400, 'BEHAVIOR_UPGRADE_PROGRAM_UNAVAILABLE');
+    const executed = await executeExtensionProgram(
+      behavior.migration,
+      {
+        state: captured.state.state,
+        input: {
+          from: {
+            behaviorRevision: captured.state.behaviorRevision,
+            schemaVersion: captured.state.schemaVersion,
+          },
+          to: { behaviorRevision: behavior.revision, schemaVersion: behavior.schemaVersion },
+        },
+      },
+      signal
+    );
+    result = { ...executed, programHash: behaviorPayloadHash(behavior.migration) };
+  }
+  if (signal?.aborted) throw new HttpError(409, 'EXTENSION_CANCELLED');
+  const after = result ? result.state : captured.state.state;
+  validateBehaviorValue(behavior.stateSchema, after);
+  return store.transaction(() => {
+    const current = upgradeContext(store, chatId, captured.branch.id, instanceId, command);
+    if (current.guard !== captured.guard)
+      throw new HttpError(409, 'BEHAVIOR_PROGRAM_CONTEXT_CHANGED');
+    if (signal?.aborted) throw new HttpError(409, 'EXTENSION_CANCELLED');
+    let cache = upgradePreviews.get(store);
+    if (!cache) {
+      cache = new Map();
+      upgradePreviews.set(store, cache);
+    }
+    const now = Date.now();
+    for (const [id, entry] of cache) if (entry.expires <= now) cache.delete(id);
+    while (cache.size >= 64) cache.delete(cache.keys().next().value!);
+    const previewId = randomUUID();
+    cache.set(previewId, {
+      guard: captured.guard,
+      result,
+      expires: now + 600_000,
+      commandHash: upgradeCommandHash(chatId, captured.branch.id, instanceId, command),
+    });
+    return {
+      previewId,
+      mode: command.mode,
+      from: {
+        packageRevision: captured.state.packageRevision,
+        behaviorRevision: captured.state.behaviorRevision,
+        schemaVersion: captured.state.schemaVersion,
+        stateRevision: captured.state.stateRevision,
+      },
+      to: {
+        packageRevision: captured.d.scope.packageRevision,
+        behaviorRevision: behavior.revision,
+        schemaVersion: behavior.schemaVersion,
+        stateRevision: captured.state.stateRevision + 1,
+      },
+      before: captured.state.state,
+      after,
+      drawsCleared: true,
+    };
+  });
+}
+/** Apply only a host-owned candidate; durable receipts survive preview expiry and restart. */
+export function applyBehaviorUpgrade(
+  store: Store,
+  chatId: string,
+  branchId: string | undefined,
+  instanceId: string,
+  command: BehaviorUpgradeCommand
+) {
+  return store.transaction(() => {
+    const { branch, d } = upgradeDefinition(store, chatId, branchId, instanceId);
+    if (priorActionPayload(store, d.scope, command.idempotencyKey)) {
+      store.behavior.upgradeInTransaction(d.scope, d.pkg.behavior!, command);
+      return behaviorDetail(store, chatId, branch.id);
+    }
+    const current = upgradeContext(store, chatId, branch.id, instanceId, command);
+    const preview = upgradePreviews.get(store)?.get(command.previewId);
+    if (!preview || preview.expires <= Date.now())
+      throw new HttpError(409, 'BEHAVIOR_UPGRADE_PREVIEW_EXPIRED');
+    if (
+      preview.commandHash !== upgradeCommandHash(chatId, branch.id, instanceId, command) ||
+      preview.guard !== current.guard
+    )
+      throw new HttpError(409, 'BEHAVIOR_PROGRAM_CONTEXT_CHANGED');
+    store.behavior.upgradeInTransaction(d.scope, d.pkg.behavior!, command, preview.result);
+    setHead(store, d.scope, 'ready', null, {});
+    store.event(chatId, 'package.state.upgrade', instanceId);
+    return behaviorDetail(store, chatId, branch.id);
+  });
 }
 type ActionPanel = { id: string; packageRevision: number };
 function actionContext(

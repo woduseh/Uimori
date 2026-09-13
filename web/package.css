@@ -274,3 +274,9 @@
   display: block;
   margin-bottom: 8px;
 }
+.behavior-upgrade-json {
+  max-height: 18rem;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}

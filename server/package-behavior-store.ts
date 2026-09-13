@@ -48,6 +48,14 @@ export interface BehaviorActionCommand {
   expectedSourceHash: string | null;
   idempotencyKey: string;
 }
+export interface BehaviorUpgradeCommand {
+  mode: 'preserve' | 'program';
+  expectedPackageRevision: number;
+  expectedStateRevision: number;
+  expectedSourceHash: string | null;
+  idempotencyKey: string;
+  previewId: string;
+}
 export interface BehaviorOutputCommand {
   parserId: string;
   text: string;
@@ -71,7 +79,8 @@ export interface BehaviorJournalResult extends BehaviorState {
     | 'after-turn'
     | 'model-tool'
     | 'local-output-parser'
-    | 'explicit-reset';
+    | 'explicit-reset'
+    | 'explicit-upgrade';
   idempotencyKey: string;
   sourceHash: string | null;
   draws: Record<string, RuntimeValue>;
@@ -282,6 +291,88 @@ export class PackageBehaviorStore {
       command.expectedSourceHash,
       {},
       null
+    );
+  }
+  /** Adopt a host-prepared definition transition without executing code or rewriting history. */
+  upgradeInTransaction(
+    scope: BehaviorScope,
+    definition: PackageBehavior,
+    command: BehaviorUpgradeCommand,
+    resolvedProgram?: ResolvedExtensionProgram
+  ): BehaviorJournalResult {
+    const b = validatePackageBehavior(definition);
+    checkScope(scope, b);
+    const allowed = [
+      'mode',
+      'expectedPackageRevision',
+      'expectedStateRevision',
+      'expectedSourceHash',
+      'idempotencyKey',
+      'previewId',
+    ];
+    if (Object.keys(command).some((key) => !allowed.includes(key))) bad('BEHAVIOR_UPGRADE_COMMAND');
+    if (!['preserve', 'program'].includes(command.mode)) bad('BEHAVIOR_UPGRADE_MODE');
+    if (
+      !Number.isSafeInteger(command.expectedPackageRevision) ||
+      command.expectedPackageRevision < 1 ||
+      command.expectedPackageRevision !== scope.packageRevision
+    )
+      conflict('BEHAVIOR_UPGRADE_PACKAGE_CHANGED');
+    if (
+      typeof command.previewId !== 'string' ||
+      !command.previewId.length ||
+      command.previewId.length > 200
+    )
+      bad('BEHAVIOR_UPGRADE_PREVIEW');
+    const prior = this.storedState(scope);
+    if (!prior) return conflict('BEHAVIOR_UPGRADE_STATE_REQUIRED');
+    const payload = {
+      scope,
+      provenance: 'explicit-upgrade',
+      ...command,
+      previousScope: Object.fromEntries(
+        Object.keys(scope).map((key) => [key, prior[key as keyof BehaviorScope]])
+      ),
+    };
+    const cached = this.cached(scope, command.idempotencyKey, payload);
+    if (cached) return cached;
+    this.expect(prior, command.expectedStateRevision, command.expectedSourceHash);
+    if (this.row(scope)!.definition_hash === hash(b)) conflict('BEHAVIOR_UPGRADE_NOT_REQUIRED');
+    let program: ExtensionProgramReceipt | undefined;
+    let next = prior.state;
+    if (command.mode === 'preserve') {
+      if (resolvedProgram !== undefined) bad('BEHAVIOR_PROGRAM_RESULT_UNEXPECTED');
+      validateBehaviorValue(b.stateSchema, next);
+    } else {
+      if (!b.migration || !resolvedProgram) return conflict('BEHAVIOR_PROGRAM_REQUIRES_EXECUTION');
+      try {
+        program = validateExtensionProgramReceipt(
+          { api: EXTENSION_PROGRAM_API, ...resolvedProgram },
+          {
+            programHash: hash(b.migration),
+            stateSchema: b.stateSchema,
+            state: resolvedProgram.state,
+            result: resolvedProgram.result,
+          }
+        );
+      } catch (error) {
+        if (error instanceof ExtensionProgramReceiptError) conflict(error.code);
+        throw error;
+      }
+      next = program.state;
+    }
+    return this.commit(
+      scope,
+      b,
+      prior,
+      next,
+      command.idempotencyKey,
+      { ...payload, ...(program ? { program } : {}) },
+      'explicit-upgrade',
+      command.expectedSourceHash,
+      {},
+      null,
+      program?.result
     );
   }
   executeInTransaction(
@@ -546,11 +637,13 @@ export class PackageBehaviorStore {
     const captured = JSON.parse(row.payload),
       candidate = { ...(payload as Record<string, unknown>) };
     if (Object.hasOwn(captured, 'hostRuntime')) candidate.hostRuntime = captured.hostRuntime;
-    if (captured.provenance === 'explicit-reset') {
+    if (['explicit-reset', 'explicit-upgrade'].includes(captured.provenance)) {
       delete candidate.previousScope;
       if (Object.hasOwn(captured, 'previousScope'))
         candidate.previousScope = captured.previousScope;
     }
+    if (captured.provenance === 'explicit-upgrade' && Object.hasOwn(captured, 'program'))
+      candidate.program = captured.program;
     if (row.payload_hash !== hash(candidate)) conflict('BEHAVIOR_IDEMPOTENCY_CONFLICT');
     return JSON.parse(row.result);
   }
@@ -569,7 +662,8 @@ export class PackageBehaviorStore {
   ): BehaviorJournalResult {
     // A confirmed reset replaces the old definition and value together. Never validate the old
     // value against the new schema or temporarily advertise it as the new definition's state.
-    if (provenance !== 'explicit-reset' || !this.row(scope)) this.ensureInTransaction(scope, b);
+    if (!['explicit-reset', 'explicit-upgrade'].includes(provenance) || !this.row(scope))
+      this.ensureInTransaction(scope, b);
     const result: BehaviorJournalResult = {
       ...scope,
       stateRevision: before.stateRevision + 1,

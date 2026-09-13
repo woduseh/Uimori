@@ -16,6 +16,7 @@ import { CloseIcon, ResetIcon } from './ui-icons.js';
 import './package.css';
 import { PackagePanelFrame } from './PackagePanelFrame.js';
 import type { RenderedPackagePanel } from '../core/package-panels.js';
+import { PackageStateUpgrade, type UpgradeTarget } from './PackageStateUpgrade.js';
 
 type Instance = {
   instanceId: string;
@@ -29,6 +30,7 @@ type Instance = {
   status: 'ready' | 'pending' | 'stale';
   error?: string;
   panels?: RenderedPackagePanel[];
+  upgrade?: { canPreserve: boolean; canTransform: boolean };
   lastAction?: {
     actionId: string;
     result: RuntimeValue;
@@ -301,6 +303,7 @@ function BehaviorPanel({ chatId, branchId, refreshKey, onChange, onRunRequest }:
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [resetTarget, setResetTarget] = useState<string | null>(null);
+  const [upgradeTarget, setUpgradeTarget] = useState<UpgradeTarget | null>(null);
   const epoch = useRef(0),
     mounted = useRef(true),
     actionLock = useRef(false);
@@ -515,13 +518,15 @@ function BehaviorPanel({ chatId, branchId, refreshKey, onChange, onRunRequest }:
             <p role="status">
               {instance.status === 'pending'
                 ? '이전 작업을 기다리고 있어요. 완료되면 새로고침해 주세요.'
-                : '원문이 변경됐어요. 현재 원문에 맞는 상태가 준비되면 행동할 수 있어요.'}
+                : instance.error === 'BEHAVIOR_MIGRATION_REQUIRED'
+                  ? '자료 정의가 바뀌어 이전 상태를 보존하고 있어요.'
+                  : '원문이 변경됐어요. 현재 원문에 맞는 상태가 준비되면 행동할 수 있어요.'}
             </p>
           )}
           {instance.error && (
             <p role="alert" className="error">
               {instance.error === 'BEHAVIOR_MIGRATION_REQUIRED'
-                ? '최신 자료의 상태 정의가 바뀌었어요. 기존 상태를 확인한 뒤 초깃값으로 복구해 주세요.'
+                ? '기존 상태를 확인하고 업데이트하거나 초깃값으로 복구할 수 있어요.'
                 : instance.error}
             </p>
           )}
@@ -568,6 +573,26 @@ function BehaviorPanel({ chatId, branchId, refreshKey, onChange, onRunRequest }:
                 초깃값으로 복구
               </button>
             )}
+            {instance.upgrade &&
+              (instance.upgrade.canPreserve || instance.upgrade.canTransform) && (
+                <button
+                  type="button"
+                  className="secondary"
+                  disabled={busy || loading}
+                  onClick={() =>
+                    setUpgradeTarget({
+                      instanceId: instance.instanceId,
+                      title: instance.title,
+                      packageRevision: instance.packageRevision,
+                      stateRevision: instance.stateRevision,
+                      sourceHash: snapshot.sourceHash,
+                      ...instance.upgrade!,
+                    })
+                  }
+                >
+                  상태 유지·변환 업데이트
+                </button>
+              )}
             <div className="behavior-actions">
               {instance.behavior.actions.map((action) =>
                 behaviorActionTriggers(action).includes('user') ? (
@@ -589,6 +614,20 @@ function BehaviorPanel({ chatId, branchId, refreshKey, onChange, onRunRequest }:
           </details>
         </article>
       ))}
+      {upgradeTarget && (
+        <PackageStateUpgrade
+          chatId={chatId}
+          branchId={branchId}
+          target={upgradeTarget}
+          onClose={() => setUpgradeTarget(null)}
+          onApplied={() => {
+            setUpgradeTarget(null);
+            setNotice('확인한 상태를 새 자료 정의에 적용했어요.');
+            void refresh();
+            onChange?.();
+          }}
+        />
+      )}
       <Dialog
         open={!!resetInstance}
         role="alertdialog"

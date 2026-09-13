@@ -4,7 +4,7 @@
 
 ## 제작과 사용
 
-서재의 자료 편집 → **상태와 행동**에서 비어 있는 자료에는 **코드 계산 예제 넣기**를 사용할 수 있어요. 기존 자료는 제작자용 동작 JSON의 action에 `program`을 추가하고 검증·적용한 뒤 저장해요. 기본 행동 폼과 [커스텀 패널](PACKAGE-PANELS.md)의 버튼은 같은 서버 경로를 사용해요. GET·미리보기·자료 저장만으로 코드를 실행하지 않아요.
+서재의 자료 편집 → **상태와 행동**에서 비어 있는 자료에는 **코드 계산 예제 넣기**를 사용할 수 있어요. 기존 자료는 제작자용 동작 JSON의 action에 `program`을 추가하고 검증·적용한 뒤 저장해요. 기본 행동 폼과 [커스텀 패널](PACKAGE-PANELS.md)의 버튼은 같은 서버 경로를 사용해요. GET·일반 미리보기·자료 저장만으로 코드를 실행하지 않아요. 아래 상태 업데이트의 명시적 변환 미리보기는 별도 실행 경로예요.
 
 추가 모델 호출을 사용하는 순서는 간단해요.
 
@@ -34,6 +34,23 @@
 이 예제의 부모 `behavior`는 `count`가 0~100 정수인 record schema와 `{count:0}` 초깃값을 선언해요. `source`는 `api` 하나를 인자로 받는 함수 본문이에요. `api.state`는 이 장착 인스턴스의 상태 사본, `api.input`은 schema 검사를 마친 행동 입력이에요. 반환값은 정확히 `{state,result}`예요. `state`는 전체 다음 상태이며 기존 state schema를 만족해야 해요. `result`는 호출자에게 돌려줄 JSON이에요. 모델이 다음 판단에 필요한 내용을 직접 `result`에 담아요.
 
 `triggers`를 생략하면 사용자 버튼이고 `['model']`이면 모델 호출, `['before-turn']`이면 생성 전 자동 준비예요. 여러 호출 방법을 함께 허용할 수도 있어요. 편집기의 행동 호출 방법에서 선택하고 자동 준비에는 schema에 맞는 `automaticInput` JSON을 지정해요. 모델 호출의 입력 schema는 record여야 해요. `effects:[]`를 두고 `draws`·선언형 `result`와 함께 쓰지 않아요. 시작문의 `initialAction`은 transaction 안에서 끝나는 선언형 행동 전용이라 코드 연결을 계속 거절해요. `nextRequest`는 사용자 전용 행동에서만 다음 요청을 예약하며 모델을 자동 호출하지 않아요. 현재 코드 API에는 시각·기록된 난수 도구가 없으며 `Date`·`Math.random`을 제공하지 않아요.
+
+## 자료 상태 변환 코드
+
+`PackageBehavior.migration?: ExtensionProgram`은 이전 상태를 새 정의로 옮기는 순수 계산이에요. action 안이 아니라 `behavior`에 선언하며 `capabilities`는 생략하거나 빈 배열이어야 해요. 자료 읽기·모델 호출 등 Host API 권한은 허용하지 않아요. `api.state`는 이전 상태 사본, `api.input`은 `{from:{behaviorRevision,schemaVersion},to:{behaviorRevision,schemaVersion}}`이에요. 반환값은 `{state,result}`이며 전체 `state`를 새 `stateSchema`로 검증해요. 기존 Worker의 실행·출력 한도를 적용해요.
+
+예를 들어 이전 `{count:3}`을 새 `{total:3}`으로 바꾸는 제작자 선언은 다음과 같아요. 새 schema는 `total`을 허용해야 하며 지원하지 않는 이전 개정은 코드에서 거절해요.
+
+```json
+{
+  "migration": {
+    "api": "uimori-state-action-v1",
+    "source": "if (api.input.from.schemaVersion !== 1 || api.input.to.schemaVersion !== 2) throw new Error('Unsupported schema'); return {state: {total: api.state.count}, result: {renamed: 'count -> total'}};"
+  }
+}
+```
+
+사용자가 **변경 내용 확인**을 누른 preview POST에서만 계산하고 영구 상태는 쓰지 않아요. 적용은 서버가 보관한 동일 후보를 CAS로 채택하며 재실행하지 않아요. GET·일반 미리보기·가져오기·저장·모델 예약·포크·복원에서는 변환을 실행하지 않아요. 후보 만료와 이력 보존은 [자료 상태 업데이트](PACKAGE-BEHAVIOR.md#자료-상태-업데이트)를 따라요.
 
 ## Host API로 자기 자료 읽기
 
