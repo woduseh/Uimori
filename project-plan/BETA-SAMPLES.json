@@ -13,7 +13,18 @@
     "implementationOrPixelIdentityRequired": false,
     "originalUnmodifiedCodeRequired": false,
     "independentUimoriDataAndExtensionApi": true,
-    "nativePassClaimed": false
+    "nativePassClaimed": false,
+    "explicitUserExclusions": {
+      "standaloneContainers": [
+        "risum"
+      ],
+      "characterFields": [
+        "system_prompt",
+        "personality",
+        "scenario"
+      ],
+      "postHistoryInstructions": "adapt-as-additional-writing-guidance"
+    }
   },
   "baselines": {
     "uimori": {

@@ -175,8 +175,6 @@ function analyze(value: unknown) {
   };
   pkg.body = [
     convertText(card.description),
-    string(card.personality) ? `Character personality:\n${convertText(card.personality)}` : '',
-    string(card.scenario) ? `Scenario:\n${convertText(card.scenario)}` : '',
     string(card.mes_example)
       ? `Authored dialogue examples (not actual chat history):\n${convertText(card.mes_example)}`
       : '',
@@ -185,21 +183,37 @@ function analyze(value: unknown) {
     .join('\n\n');
   const bodyTemplate = identityTemplate(pkg.body);
   if (bodyTemplate) pkg.bodyTemplate = bodyTemplate;
-  for (const [id, field] of [
-    ['system', 'system_prompt'],
-    ['post-history', 'post_history_instructions'],
-  ] as const)
-    if (string(card[field])) {
-      const text = convertText(card[field]),
-        template = identityTemplate(text);
-      pkg.instructions.push({ id, target: 'main', text, ...(template ? { template } : {}) });
-    }
-  if (string(card.post_history_instructions))
+  if (string(card.personality) || string(card.scenario))
     finding(
-      'instruction-order',
-      'warning',
-      '후반 지시는 작문 지시로 보존해요. Risu의 정확한 메시지 삽입 위치는 재현하지 않아요.'
+      'legacy-character-fields',
+      'info',
+      '성격·시나리오 필드는 가져오기 대상에서 제외하며 원본 파일에 보존해요. 봇 설명이나 모델 입력에 합치지 않아요.'
     );
+  if (string(card.system_prompt))
+    finding(
+      'main-prompt-override',
+      'info',
+      '낡은 메인 프롬프트 덮어쓰기 기능은 지원하지 않아요. 이 항목은 원본 파일에만 보존하며 선택한 작문 프롬프트를 유지해요.'
+    );
+  if (string(card.post_history_instructions)) {
+    // The selected Uimori prompt already supplies its own instructions. A reference to the
+    // replaced Risu note has no separate insertion target and must not duplicate that prompt.
+    const text = convertText(string(card.post_history_instructions).replaceAll('{{original}}', ''));
+    if (text.trim()) {
+      const template = identityTemplate(text);
+      pkg.instructions.push({
+        id: 'writing-guidance',
+        target: 'main',
+        text,
+        ...(template ? { template } : {}),
+      });
+    }
+    finding(
+      'global-note-as-guidance',
+      'info',
+      '글로벌 노트는 봇의 추가 작문 지침으로 가져와요. 기존 프롬프트나 전역 설정을 덮어쓰지 않으며, {{original}} 참조는 중복 삽입하지 않아요. 원래 내용과 삽입 위치는 원본 파일에 보존해요.'
+    );
+  }
   const greetings = [
     card.first_mes,
     ...(Array.isArray(card.alternate_greetings) ? card.alternate_greetings : []),
