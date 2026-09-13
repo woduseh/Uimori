@@ -1,0 +1,65 @@
+.package-panel-frame {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+  margin-top: 14px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  overflow: hidden;
+  background: var(--panel);
+}
+
+.package-panel-frame > header {
+  display: flex;
+  min-height: 44px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 14px 0;
+}
+
+.package-panel-frame h4,
+.package-panel-frame p {
+  margin: 0;
+}
+
+.package-panel-frame > p {
+  padding: 0 14px;
+}
+
+.package-panel-frame > p:last-child {
+  padding-bottom: 14px;
+}
+
+.package-panel-frame-content {
+  display: block;
+  width: 100%;
+  min-height: 80px;
+  max-height: 900px;
+  border: 0;
+  background: transparent;
+}
+
+.package-panel-frame-issue,
+.package-panel-fallback {
+  color: var(--danger);
+}
+
+.package-panel-fallback {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  margin-top: 14px;
+  padding: 14px;
+  border: 1px solid color-mix(in srgb, var(--danger) 38%, var(--line));
+  border-radius: 12px;
+  background: var(--panel);
+}
+
+@media (max-width: 760px) {
+  .package-panel-frame > header {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 4px;
+  }
+}

@@ -10,6 +10,7 @@ await runBrowserVerification({
     'tests/source-segments-browser.spec.ts',
     'tests/package-request-browser.spec.ts',
     'tests/package-features-browser.spec.ts',
+    'tests/package-panels-browser.spec.ts',
   ],
   requiredCases: [
     'NUI01',
@@ -22,5 +23,7 @@ await runBrowserVerification({
     'PFUI01',
     'PFUI02',
     'PFUI03',
+    'PANELUI01',
+    'PANELUI02',
   ],
 });

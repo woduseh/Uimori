@@ -53,7 +53,7 @@ DB schema와 전체 archive의 현재 버전은 [현재 계약](../project-plan/
 
 한 호출에서 원문 1,000,000 UTF-16 단위, 규칙 32개, 각 pattern 4,096자·replacement 16,384자, 변환 결과 2,000,000자까지 허용해요. 기본 제한 시간은 worker 시작을 포함해 1초이며 호출자가 10ms–10초 안에서 지정할 수 있어요. 잘못된 정규식은 `PACKAGE_REGEX_INVALID`, 시간 초과는 `PACKAGE_TRANSFORM_TIMEOUT`, 결과 초과는 `PACKAGE_TRANSFORM_OUTPUT_LIMIT`로 실패해요. 오류를 빈 성공 결과로 바꾸지 않아요. 패턴 문법 오류는 worker 실행 시 확인해요.
 
-선택적 `behavior`는 타입 있는 상태·행동·기록된 추첨·출력 파서를 제공해요. 작성·실행·복구 방법과 범위는 [패키지 동작](PACKAGE-BEHAVIOR.md)에 있어요. Lua·임의 JavaScript 실행, Risu 호환 스크립트, HTML/CSS 삽입은 제공하지 않아요.
+선택적 `behavior`는 타입 있는 상태·행동·기록된 추첨·출력 파서를 제공해요. 작성·실행·복구 방법과 범위는 [패키지 동작](PACKAGE-BEHAVIOR.md)에 있어요. `panels`는 [커스텀 패널](PACKAGE-PANELS.md)의 제한된 HTML/CSS 화면과 사용자 행동 연결을 제공해요. Lua·임의 JavaScript 실행, Risu 호환 스크립트, 주 앱 DOM의 직접 조작은 제공하지 않아요.
 
 [package-presentation.ts](../server/package-presentation.ts)의 `buildPackagePresentation`은 원문 Run의 패키지 정의로 표시용 원문과 번역을 만들어요. 선택적 상태 인자는 해당 원문의 ID/hash와 일치해야 해요. 상태가 없으면 누락 표시를 반환하며 생성 전 상태를 현재 원고 상태로 사용하지 않아요. `format: "plain-text"` 결과를 HTML 실행에 사용하지 않아요.
 

@@ -1,5 +1,11 @@
 # 근거와 확인 범위 v0.6.1
 
+## 2026-09-13 확장 소유 화면
+
+[DOMPurify](https://github.com/cure53/DOMPurify) npm `3.4.15`의 allowlist 정화 설정과 `LICENSE`(`MPL-2.0 OR Apache-2.0`, 이 의존성은 Apache-2.0 조건으로 사용), [iframe sandbox](https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/iframe)와 [srcdoc](https://developer.mozilla.org/en-US/docs/Web/API/HTMLIFrameElement/srcdoc) → HTML 정화·별도 origin·통신/탐색 제한을 함께 적용하는 원리 → `web/package-panel-frame.ts`·`web/PackagePanelFrame.tsx`의 제한된 HTML/CSS와 고정 메시지 브리지 → 실제 브라우저의 상위 DOM/저장소 접근 거절, 외부 요청 차단, 상태 행동·실패·초안 유지 사례로 확인해요. DOMPurify는 수정하지 않은 고정 의존성이며 npm 원본 라이선스는 production node_modules에 보존돼요. 프로젝트 자체 라이선스 정책을 지정하는 결정은 아니에요.
+
+비채택: 정화한 문자열을 주 앱 DOM에 삽입하기, `allow-same-origin` 부여, 제작자 script/event-handler 실행, HTML 문자열에서 채팅/인스턴스 권한을 추론하기. 패널은 현재 상태·옵션의 표시와 기존 user 행동 연결만 맡으며, 별도 JS/Lua 실행기를 대체하거나 완료한 것으로 취급하지 않아요.
+
 ## 2026-09-13 기본 캐릭터 카드 가져오기
 
 RisuToki의 `main.ts:1220`과 `src/lib/folder-workspace.ts:681`에 있는 기존 **파일을 프로젝트 폴더로 추출** 경로 → 바이너리 해석은 외부 프로그램에 두고 공개 `{type:'risuModule',module}` JSON만 교환 → 독립 작성한 `server/risu-module-json.ts`와 기존 native transfer → 합성 모듈의 로어·이미지·표시 정규식·무채팅 등록과 미지원 코드 보존을 확인해요. RPack 구현·치환표를 복사하지 않았어요. 프로젝트의 별도 asset 파일과 추출 과정에서 제거된 필드를 JSON만으로 보존한다고 주장하지 않아요.

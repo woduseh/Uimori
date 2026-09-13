@@ -11,7 +11,13 @@ import {
   validateBehaviorValue,
 } from '../core/package-behavior.js';
 import { withoutPackageBehavior } from '../core/package-behavior-tools.js';
-import type { ContentPackage, PackageAttachment } from '../core/content-package.js';
+import {
+  packageControlKey,
+  type ContentPackage,
+  type PackageAttachment,
+} from '../core/content-package.js';
+import { renderPackagePanels } from '../core/package-panels.js';
+import { packageIdentityFromProfile } from '../core/package-identity.js';
 import type { RunSnapshot } from '../core/types.js';
 import {
   behaviorPayloadHash,
@@ -164,12 +170,37 @@ function retainedState(store: Store, d: Definition): PackageExecutionState[] {
 export function behaviorDetail(store: Store, chatId: string, requestedBranch?: string) {
   store.chat(chatId);
   const branch = store.product.branch(chatId, requestedBranch);
+  const profile = store.product.snapshot(chatId);
+  const identity = profile
+    ? packageIdentityFromProfile(profile, 'status')
+    : { bot: { name: 'Character' }, user: { name: 'User' } };
+  const renderPanels = (pkg: ContentPackage, ref: PackageAttachment, state: RuntimeValue) =>
+    renderPackagePanels(pkg, {
+      state,
+      identity,
+      values: profile?.packageValues?.[packageControlKey(ref)],
+    });
+  const standalonePanels = (profile?.packageAttachments ?? []).flatMap((ref) => {
+    const pkg = profile?.packages?.find(
+      (item) => item.id === ref.id && item.revision === ref.revision
+    );
+    return pkg?.panels?.length && !pkg.behavior
+      ? [
+          {
+            instanceId: packageInstanceId(ref),
+            title: pkg.title,
+            panels: renderPanels(pkg, ref, null),
+          },
+        ]
+      : [];
+  });
   const pending = !!store.db
     .prepare(
       "SELECT 1 FROM runs WHERE branch_id=? AND status IN ('queued','running','waiting_for_state')"
     )
     .get(branch.id);
   return {
+    ...(standalonePanels.length ? { standalonePanels } : {}),
     sourceHash: branch.headRevision ? store.source(branch.headRevision).hash : null,
     pendingRequest: pendingPackageRequest(store, chatId, branch.id),
     instances: definitions(store, chatId, branch.id).map((d) => {
@@ -218,6 +249,7 @@ export function behaviorDetail(store: Store, chatId: string, requestedBranch?: s
         state: state.state,
         status: pending ? ('pending' as const) : availability.status,
         error: availability.error,
+        ...(d.pkg.panels?.length ? { panels: renderPanels(d.pkg, d.ref, state.state) } : {}),
         ...(lastAction ? { lastAction } : {}),
       };
     }),
@@ -278,7 +310,8 @@ export function performBehaviorAction(
   branchId: string | undefined,
   instanceId: string,
   command: any,
-  reset = false
+  reset = false,
+  panel?: { id: string; packageRevision: number }
 ) {
   return store.transaction(() => {
     const branch = store.product.branch(chatId, branchId),
@@ -286,6 +319,13 @@ export function performBehaviorAction(
         (d) => d.scope.attachmentInstanceId === instanceId
       );
     if (!d) throw new HttpError(404, 'PACKAGE_BEHAVIOR_NOT_ATTACHED');
+    if (panel) {
+      if (d.pkg.revision !== panel.packageRevision)
+        throw new HttpError(409, 'PACKAGE_PANEL_REVISION_CHANGED');
+      const definition = d.pkg.panels?.find((item) => item.id === panel.id);
+      if (reset || !definition?.actions?.includes(command.actionId))
+        throw new HttpError(403, 'PACKAGE_PANEL_ACTION_NOT_ALLOWED');
+    }
     if (
       store.db
         .prepare(
@@ -319,11 +359,22 @@ export function performBehaviorAction(
       view.sourceSegments = freezeSourceSegments(profile);
       view.logicalHistory = captureLogicalHistory(store, view);
       view = freezePackageStates(store, view, false);
-      const runtime = {
-        ...executionContext(view, 'main', d.ref),
-        profile: { revision: profile?.revision ?? 0 },
-        sourceDependenciesHash: packageRequestDependenciesHash(store, branch.headRevision),
-      };
+      const priorAction = store.db
+        .prepare(
+          'SELECT payload FROM package_behavior_journal WHERE chat_id=? AND branch_id=? AND instance_id=? AND idempotency_key=?'
+        )
+        .get(chatId, branch.id, instanceId, command.idempotencyKey) as
+        | { payload: string }
+        | undefined;
+      // A retransmitted UI command must compare with its original clock/context, not a new timestamp.
+      // The behavior store still verifies the entire command and scope before returning the receipt.
+      const runtime = priorAction
+        ? (JSON.parse(priorAction.payload).hostRuntime ?? {})
+        : {
+            ...executionContext(view, 'main', d.ref),
+            profile: { revision: profile?.revision ?? 0 },
+            sourceDependenciesHash: packageRequestDependenciesHash(store, branch.headRevision),
+          };
       const receipt = store.behavior.executeInTransaction(
         d.scope,
         d.pkg.behavior!,

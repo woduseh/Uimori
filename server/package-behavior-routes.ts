@@ -32,7 +32,7 @@ export function packageBehaviorRoutes(app: FastifyInstance, store: Store) {
           'expectedStateRevision',
           'expectedSourceHash',
           'idempotencyKey',
-          ...(reset ? [] : ['actionId', 'input']),
+          ...(reset ? [] : ['actionId', 'input', 'panelId', 'expectedPackageRevision']),
         ]);
         const command = {
           expectedStateRevision: number(b.expectedStateRevision, 'state revision', 0),
@@ -47,7 +47,13 @@ export function packageBehaviorRoutes(app: FastifyInstance, store: Store) {
           b.branchId === undefined ? undefined : text(b.branchId, 'branch ID', 200),
           request.params.instanceId,
           command,
-          reset
+          reset,
+          b.panelId === undefined && b.expectedPackageRevision === undefined
+            ? undefined
+            : {
+                id: text(b.panelId, 'panel ID', 64),
+                packageRevision: number(b.expectedPackageRevision, 'package revision', 1),
+              }
         );
       }
     );

@@ -14,6 +14,8 @@ import { api, ApiError } from './api.js';
 import { Dialog } from './Dialog.js';
 import { CloseIcon, ResetIcon } from './ui-icons.js';
 import './package.css';
+import { PackagePanelFrame } from './PackagePanelFrame.js';
+import type { RenderedPackagePanel } from '../core/package-panels.js';
 
 type Instance = {
   instanceId: string;
@@ -26,6 +28,7 @@ type Instance = {
   state: unknown;
   status: 'ready' | 'pending' | 'stale';
   error?: string;
+  panels?: RenderedPackagePanel[];
   lastAction?: {
     actionId: string;
     result: RuntimeValue;
@@ -37,6 +40,7 @@ type Snapshot = {
   sourceHash: string | null;
   pendingRequest?: PackageRequest | null;
   instances: Instance[];
+  standalonePanels?: { instanceId: string; title: string; panels: RenderedPackagePanel[] }[];
 };
 type Props = {
   chatId: string;
@@ -323,16 +327,27 @@ function BehaviorPanel({ chatId, branchId, refreshKey, onChange, onRunRequest }:
   useEffect(() => {
     void refresh();
   }, [refresh, refreshKey]);
-  async function run(instance: Instance, actionId: string, input: unknown, reset = false) {
+  async function run(
+    instance: Instance,
+    actionId: string,
+    input: unknown,
+    reset = false,
+    panelId?: string
+  ) {
     if (
       actionLock.current ||
-      loading ||
+      (loading && !panelId) ||
       !snapshot ||
       (reset ? instance.status === 'pending' : instance.status !== 'ready')
-    )
+    ) {
+      if (panelId) throw new Error('상태를 새로 읽은 뒤 행동을 실행해 주세요.');
       return;
+    }
     actionLock.current = true;
     setBusy(true);
+    // The visible panel already owns a state/source revision. Background reads must not drop
+    // its click while the iframe receives an asynchronous disabled update; the server enforces CAS.
+    if (panelId) setLoading(false);
     setError('');
     setNotice('');
     const request = ++epoch.current;
@@ -342,6 +357,7 @@ function BehaviorPanel({ chatId, branchId, refreshKey, onChange, onRunRequest }:
         {
           branchId,
           ...(reset ? {} : { actionId, input }),
+          ...(panelId ? { panelId, expectedPackageRevision: instance.packageRevision } : {}),
           expectedStateRevision: instance.stateRevision,
           expectedSourceHash: snapshot.sourceHash,
           idempotencyKey: crypto.randomUUID(),
@@ -365,6 +381,7 @@ function BehaviorPanel({ chatId, branchId, refreshKey, onChange, onRunRequest }:
         setError((e as Error).message);
         if (e instanceof ApiError && e.status === 409) await refresh();
       }
+      if (panelId) throw e;
     } finally {
       actionLock.current = false;
       if (mounted.current) setBusy(false);
@@ -394,7 +411,8 @@ function BehaviorPanel({ chatId, branchId, refreshKey, onChange, onRunRequest }:
     }
   }
   const resetInstance = snapshot?.instances.find((instance) => instance.instanceId === resetTarget);
-  if (!loading && !error && snapshot?.instances.length === 0) return null;
+  if (!loading && !error && snapshot?.instances.length === 0 && !snapshot.standalonePanels?.length)
+    return null;
   return (
     <section
       className="package-behavior-panel"
@@ -464,6 +482,13 @@ function BehaviorPanel({ chatId, branchId, refreshKey, onChange, onRunRequest }:
           </div>
         </aside>
       )}
+      {snapshot?.standalonePanels?.map((instance) => (
+        <article key={instance.instanceId} aria-label={instance.title}>
+          {instance.panels.map((panel) => (
+            <PackagePanelFrame key={panel.id} panel={panel} disabled onAction={async () => {}} />
+          ))}
+        </article>
+      ))}
       {snapshot?.instances.map((instance) => (
         <article
           className="behavior-instance"
@@ -491,57 +516,68 @@ function BehaviorPanel({ chatId, branchId, refreshKey, onChange, onRunRequest }:
                 : instance.error}
             </p>
           )}
-          <StateValue value={instance.state} schema={instance.behavior.stateSchema} />
-          {instance.lastAction && (
-            <section
-              className="behavior-action-result"
-              aria-label="최근 행동 결과"
-              aria-live="polite"
-            >
-              <h4>
-                {named(
-                  instance.behavior.actions.find(
-                    (action) => action.id === instance.lastAction!.actionId
-                  ) ?? {},
-                  instance.lastAction.actionId
-                )}{' '}
-                결과
-              </h4>
-              <small>
-                {methodLabels[instance.lastAction.trigger]} · 상태{' '}
-                {instance.lastAction.stateRevision}에서 기록
-              </small>
-              <StateValue value={instance.lastAction.result} />
-            </section>
-          )}
-          {(instance.status === 'stale' || instance.error) && instance.status !== 'pending' && (
-            <button
-              type="button"
-              className="secondary"
-              disabled={busy || loading}
-              onClick={() => setResetTarget(instance.instanceId)}
-            >
-              초깃값으로 복구
-            </button>
-          )}
-          <div className="behavior-actions">
-            {instance.behavior.actions.map((action) =>
-              behaviorActionTriggers(action).includes('user') ? (
-                <ActionForm
-                  key={`${instance.instanceId}:${instance.behavior.revision}:${action.id}`}
-                  action={action}
-                  disabled={busy || loading || instance.status !== 'ready'}
-                  run={(id, input) => run(instance, id, input)}
-                />
-              ) : (
-                <div className="behavior-action-summary" key={action.id}>
-                  <strong>{named(action, action.id)}</strong>
-                  <ActionMethods action={action} />
-                  {action.description && <p className="muted">{action.description}</p>}
-                </div>
-              )
+          {instance.panels?.map((panel) => (
+            <PackagePanelFrame
+              key={`${instance.packageRevision}:${panel.id}`}
+              panel={panel}
+              disabled={busy || instance.status !== 'ready'}
+              onAction={(actionId, input) => run(instance, actionId, input, false, panel.id)}
+            />
+          ))}
+          <details open={!instance.panels?.length} className="behavior-standard-controls">
+            <summary hidden={!instance.panels?.length}>기본 상태와 행동</summary>
+            <StateValue value={instance.state} schema={instance.behavior.stateSchema} />
+            {instance.lastAction && (
+              <section
+                className="behavior-action-result"
+                aria-label="최근 행동 결과"
+                aria-live="polite"
+              >
+                <h4>
+                  {named(
+                    instance.behavior.actions.find(
+                      (action) => action.id === instance.lastAction!.actionId
+                    ) ?? {},
+                    instance.lastAction.actionId
+                  )}{' '}
+                  결과
+                </h4>
+                <small>
+                  {methodLabels[instance.lastAction.trigger]} · 상태{' '}
+                  {instance.lastAction.stateRevision}에서 기록
+                </small>
+                <StateValue value={instance.lastAction.result} />
+              </section>
             )}
-          </div>
+            {(instance.status === 'stale' || instance.error) && instance.status !== 'pending' && (
+              <button
+                type="button"
+                className="secondary"
+                disabled={busy || loading}
+                onClick={() => setResetTarget(instance.instanceId)}
+              >
+                초깃값으로 복구
+              </button>
+            )}
+            <div className="behavior-actions">
+              {instance.behavior.actions.map((action) =>
+                behaviorActionTriggers(action).includes('user') ? (
+                  <ActionForm
+                    key={`${instance.instanceId}:${instance.behavior.revision}:${action.id}`}
+                    action={action}
+                    disabled={busy || loading || instance.status !== 'ready'}
+                    run={(id, input) => run(instance, id, input)}
+                  />
+                ) : (
+                  <div className="behavior-action-summary" key={action.id}>
+                    <strong>{named(action, action.id)}</strong>
+                    <ActionMethods action={action} />
+                    {action.description && <p className="muted">{action.description}</p>}
+                  </div>
+                )
+              )}
+            </div>
+          </details>
         </article>
       ))}
       <Dialog

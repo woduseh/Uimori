@@ -1,5 +1,7 @@
 # 작업 지도
 
+- 현재 채팅의 커스텀 패널은 `docs/PACKAGE-PANELS.md`, `core/package-panels.ts`, `web/PackagePanelFrame.tsx`·`web/package-panel-frame.ts`예요. 자기 상태·옵션의 템플릿을 격리 HTML/CSS로 표시하고 기존 user behavior 행동에만 연결해요. 임의 JS/Lua 실행·과거 Reader 패널·Risu 자동 이식 완료로 확대해 해석하지 않아요. 시작 선택은 기존 controls/visibleWhen을 보여 주고 시작별 사용자 선택을 유지해요.
+
 - 2026-09-13 사용자 선택: GitHub public과 별개로 프로젝트 라이선스 정책은 미정이에요. RPack의 기존 AGPL 조건 코드·치환표를 제품에 포함하지 않고 독립 구현이나 대체 수단을 우선해요. 프로젝트 LICENSE를 임의로 지정하지 않아요. 정확한 선택은 `docs/DECISIONS-2026-09-12-BETA.md`에 있어요.
 
 - RPack을 포함하지 않는 모듈 가져오기는 RisuToki의 기존 프로젝트 추출로 만든 `module.json` 또는 `.risutoki` 에셋을 포함한 프로젝트 ZIP을 사용해요. `server/risu-module-json.ts`가 공개 JSON을 해석하고 모듈로만 등록해요. 바이너리 `.risum` 직접 지원이나 원본 전체 기능 수용 완료와 구분해요.
