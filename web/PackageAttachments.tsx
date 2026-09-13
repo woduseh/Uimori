@@ -6,6 +6,8 @@ import { PackageControlValues } from './PackageControlValues.js';
 import { ContentAvatar } from './ContentAvatar.js';
 import { ContentPicker } from './ContentPicker.js';
 import { reconcilePromptValues } from '../core/prompt-program.js';
+import { packageInstanceId } from '../core/execution-context.js';
+import { Switch } from './BooleanControls.js';
 import './package-authoring.css';
 const keyOf = (ref: PackageAttachment) => `${ref.id}@${ref.revision}:${ref.role}`;
 const refValue = (ref: { id: string; revision: number }) => `${ref.id}@${ref.revision}`;
@@ -47,12 +49,30 @@ export function retainResolvedPackageValues(
   );
 }
 
+export function retainAttachedExtensionGrants(
+  grants: ChatProfile['extensionGrants'],
+  attachments: PackageAttachment[]
+): ChatProfile['extensionGrants'] {
+  if (!grants) return undefined;
+  const attached = new Set(attachments.map(packageInstanceId));
+  const retained = Object.fromEntries(
+    Object.entries(grants).filter(([instanceId]) => attached.has(instanceId))
+  );
+  return Object.keys(retained).length ? retained : undefined;
+}
+
+const requestsModelGeneration = (pkg: ContentPackage) =>
+  pkg.behavior?.actions.some((action) =>
+    action.program?.capabilities?.includes('model.generate')
+  ) ?? false;
+
 export function PackageAttachments({
   profile,
   library,
   onChange,
   onError,
   ownerBotId,
+  extensionModelConfigured,
   onPendingChange,
 }: {
   profile: ChatProfile;
@@ -60,6 +80,7 @@ export function PackageAttachments({
   onChange: (profile: ChatProfile) => void;
   onError: (message: string) => void;
   ownerBotId?: string;
+  extensionModelConfigured: boolean;
   onPendingChange?: (pending: boolean) => void;
 }) {
   const attachments = profile.packageAttachments ?? [],
@@ -144,6 +165,7 @@ export function PackageAttachments({
         attachments: legacy,
         packageAttachments: next,
         packageValues: retainResolvedPackageValues(current.packageValues, value),
+        extensionGrants: retainAttachedExtensionGrants(current.extensionGrants, value.attachments),
       });
       setSelected('');
     } catch (caught) {
@@ -205,6 +227,8 @@ export function PackageAttachments({
       {shown.map((ref, index) => {
         const pkg = current?.packages[index],
           scope = keyOf(ref),
+          instanceId = packageInstanceId(ref),
+          extensionGrant = profile.extensionGrants?.[instanceId],
           automatic = required.has(scope),
           title = pkg?.title ?? '연결한 패키지',
           fixedBot = ref.role === 'bot',
@@ -271,6 +295,48 @@ export function PackageAttachments({
                 장착한 자료가 요구하는 모듈이에요. 연결한 자료를 해제하거나 해당 자료의 모듈 참조를
                 수정하면 제외할 수 있어요.
               </p>
+            )}
+            {pkg && requestsModelGeneration(pkg) && (
+              <div>
+                <label className="check">
+                  <Switch
+                    aria-label={`${title} 추가 모델 호출 허용`}
+                    checked={
+                      extensionGrant?.packageRevision === ref.revision &&
+                      extensionGrant.capabilities.includes('model.generate')
+                    }
+                    disabled={busy}
+                    onChange={(event) => {
+                      const current = latest.current;
+                      if (current.viewKey !== viewKey) return;
+                      const extensionGrants = { ...current.profile.extensionGrants };
+                      if (event.target.checked)
+                        extensionGrants[instanceId] = {
+                          packageRevision: ref.revision,
+                          capabilities: ['model.generate'],
+                        };
+                      else delete extensionGrants[instanceId];
+                      current.onChange({
+                        ...current.profile,
+                        extensionGrants: Object.keys(extensionGrants).length
+                          ? extensionGrants
+                          : undefined,
+                      });
+                    }}
+                  />
+                  추가 모델 호출 허용
+                </label>
+                {!extensionModelConfigured && (
+                  <small>
+                    전역 설정에서 확장 호출 모델을 선택해야 패키지가 추가 생성을 요청할 수 있어요.
+                  </small>
+                )}
+                {extensionGrant && extensionGrant.packageRevision !== ref.revision && (
+                  <small role="status">
+                    패키지가 변경되어 이전 허용은 적용되지 않아요. 현재 버전을 다시 허용해 주세요.
+                  </small>
+                )}
+              </div>
             )}
             {pkg && (
               <details>

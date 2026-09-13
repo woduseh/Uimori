@@ -115,6 +115,7 @@ export type WireRecord = {
   pricingStartedAt?: string;
   /** Host-only attribution. Never supplied by model output or serialized to the provider. */
   agentId?: string;
+  extensionAction?: import('./extension-model.js').ExtensionModelAttribution;
   connectionId: string;
   protocol: ProviderConnection['protocol'];
   role: ProviderRole;
@@ -194,8 +195,9 @@ export type ProviderExecutionOptions = {
     connection?: ProviderConnection,
     signal?: AbortSignal
   ) => string | undefined | Promise<string | undefined>;
-  /** Synchronous host authorization after Codex thread setup and immediately before turn/start; never records another attempt. */
-  beforeTurn?: () => void;
+  /** Awaited after Codex thread setup and before turn/start; never records another attempt.
+   * Synchronous callbacks may return an ignored value. */
+  beforeTurn?: () => unknown;
   onWire?: (record: WireRecord) => void | Promise<void>;
   /** Decoder-selected public answer deltas; excludes tools, reasoning and final-only envelopes. */
   onProgress?: (progress: ProviderProgress) => void | Promise<void>;

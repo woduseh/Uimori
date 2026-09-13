@@ -16,7 +16,10 @@ import {
   packageInstructionDrafts,
 } from '../web/PackageInstructionsEditor.js';
 import { PackageControlValues } from '../web/PackageControlValues.js';
-import { retainResolvedPackageValues } from '../web/PackageAttachments.js';
+import {
+  retainAttachedExtensionGrants,
+  retainResolvedPackageValues,
+} from '../web/PackageAttachments.js';
 import { resolveSourceSegmentPolicy } from '../core/source-segments.js';
 import { createSourceSegmentFixture } from './fixtures/source-segments.js';
 
@@ -58,6 +61,19 @@ const controls: PromptControl[] = [
 ];
 
 describe('package authoring controls and UI visibility', () => {
+  it('retains extension grants by package instance while keeping their exact old revision', () => {
+    const grants = {
+      'kept:module': { packageRevision: 1, capabilities: ['model.generate' as const] },
+      'removed:persona': { packageRevision: 3, capabilities: ['model.generate' as const] },
+    };
+    expect(
+      retainAttachedExtensionGrants(grants, [{ id: 'kept', revision: 2, role: 'module' }])
+    ).toEqual({
+      'kept:module': { packageRevision: 1, capabilities: ['model.generate'] },
+    });
+    expect(retainAttachedExtensionGrants(grants, [])).toBeUndefined();
+  });
+
   it('accepts forward references and group metadata through the existing package validator', () => {
     const value = { ...fixture(), controls };
     expect(validateContentPackage(value).controls).toEqual(controls);

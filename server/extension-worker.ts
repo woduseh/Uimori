@@ -29,6 +29,9 @@ const HOST_ERROR_CODES = [
   'BEHAVIOR_HOST_CALL_LIMIT',
   'BEHAVIOR_HOST_PENDING_LIMIT',
   'BEHAVIOR_HOST_RESULT_LIMIT',
+  'BEHAVIOR_HOST_MODEL_DENIED',
+  'BEHAVIOR_HOST_MODEL_UNAVAILABLE',
+  'BEHAVIOR_HOST_MODEL_BUDGET_EXHAUSTED',
 ];
 
 type WorkerInput = { source: string; inputJSON: string };
@@ -36,12 +39,18 @@ type WorkerResult =
   | { type: 'result'; ok: true; json: string }
   | { type: 'result'; ok: false; code: string };
 type WorkerHostCall = { type: 'host-call'; id: number; method: string; argsJson: string };
+type WorkerPhase = {
+  type: 'phase';
+  phase: 'active' | 'host-wait';
+  sequence: number;
+  hostIds: number[];
+};
 type HostReply =
   | { type: 'host-result'; id: number; ok: true; json: string }
   | { type: 'host-result'; id: number; ok: false; code: string };
 
 let replied = false;
-function reply(value: WorkerResult | WorkerHostCall) {
+function reply(value: WorkerResult | WorkerHostCall | WorkerPhase) {
   if (value.type === 'result') {
     if (replied) return;
     replied = true;
@@ -273,6 +282,18 @@ async function run() {
   let wake: (() => void) | undefined;
   let hostResultBytes = 0;
   const hostPending = new Map<number, QuickJSDeferredPromise>();
+  let phase: 'active' | 'host-wait' = 'active';
+  let phaseSequence = 0;
+  const enterPhase = (next: 'active' | 'host-wait') => {
+    if (phase === next) return;
+    phase = next;
+    reply({
+      type: 'phase',
+      phase,
+      sequence: ++phaseSequence,
+      hostIds: phase === 'host-wait' ? [...hostPending.keys()] : [],
+    });
+  };
   const notify = () => {
     const current = wake;
     wake = undefined;
@@ -306,6 +327,7 @@ async function run() {
         protocolFailure();
         return;
       }
+      enterPhase('active');
       const resultJson = context.newString(response.json);
       deferred.resolve(resultJson);
       resultJson.dispose();
@@ -330,6 +352,7 @@ async function run() {
         protocolFailure();
         return;
       }
+      enterPhase('active');
       const error = context.newError(response.code);
       deferred.reject(error);
       error.dispose();
@@ -475,6 +498,8 @@ async function run() {
         fatalCode = cpuTimedOut ? 'BEHAVIOR_PROGRAM_TIMEOUT' : 'BEHAVIOR_PROGRAM_FAILED';
         break;
       }
+      if (hostPending.size && !runtime.hasPendingJob()) enterPhase('host-wait');
+      else enterPhase('active');
       await new Promise<void>((resolve) => {
         wake = resolve;
         if (!hostPending.size) setImmediate(notify);

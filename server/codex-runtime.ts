@@ -96,7 +96,7 @@ export type CodexRuntimeOptions = {
   /** Host-side test injection only; never accepted in an API request or archive. */
   launch?: { command: string; args: string[]; env?: NodeJS.ProcessEnv };
 };
-export type CodexExecutionOptions = ProviderExecutionOptions & { beforeTurn?: () => void };
+export type CodexExecutionOptions = ProviderExecutionOptions;
 /** One illustration turn: the official image generation tool renders, Uimori stores the bytes. */
 export type CodexImageRequest = {
   modelId: string;
@@ -1058,7 +1058,7 @@ export class CodexRuntime implements CodexRuntimeService {
       });
       signal.addEventListener('abort', aborted, { once: true });
       if (signal.aborted) aborted();
-      options.beforeTurn?.();
+      await options.beforeTurn?.();
       const turn = await process.request<unknown>(
         'turn/start',
         {

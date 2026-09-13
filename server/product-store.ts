@@ -12,6 +12,7 @@ import {
   text,
 } from './request-validation.js';
 import { resolveModelPricing, validatePricingSnapshot } from '../core/model-pricing.js';
+import { validateExtensionModelAttribution } from '../core/extension-model.js';
 import { estimateCost } from '../core/pricing-estimate.js';
 import { translationPolicy } from '../core/translation-settings.js';
 import {
@@ -122,9 +123,11 @@ import { libraryOrganizationTables } from './library-organization.js';
 import {
   validateContentPackage,
   validatePackageAttachment,
+  type ContentPackage,
   type PackageAttachment,
   packageControlKey,
 } from '../core/content-package.js';
+import { packageInstanceId } from '../core/execution-context.js';
 import { compilePackageAttachment } from '../core/package-runtime.js';
 import {
   packageBehaviorTables,
@@ -656,6 +659,7 @@ export class ProductStore {
       'imageTranslation',
       'packageAttachments',
       'packageValues',
+      'extensionGrants',
       'loreContext',
       'pinned',
     ]);
@@ -700,6 +704,33 @@ export class ProductStore {
       const resolvedPackages = resolvePackageModules(this, packageAttachments ?? [], {
         latest: true,
       });
+      const requestedExtensionGrants =
+        b.extensionGrants === undefined
+          ? prior.extensionGrants
+          : validateExtensionGrants(b.extensionGrants);
+      const attachedInstances = new Map(
+        resolvedPackages.attachments.map((attachment, index) => [
+          packageInstanceId(attachment),
+          { attachment, pkg: resolvedPackages.packages[index] },
+        ])
+      );
+      const extensionGrants = requestedExtensionGrants
+        ? Object.fromEntries(
+            Object.entries(requestedExtensionGrants).flatMap(([instanceId, grant]) => {
+              const attached = attachedInstances.get(instanceId);
+              if (!attached) return [];
+              const unchanged = isDeepStrictEqual(prior.extensionGrants?.[instanceId], grant);
+              if (!unchanged) {
+                if (
+                  grant.packageRevision !== attached.attachment.revision ||
+                  !packageRequestsModelGeneration(attached.pkg)
+                )
+                  throw new HttpError(400, 'Invalid extension model grant');
+              }
+              return [[instanceId, grant]];
+            })
+          )
+        : undefined;
       const allowedPackageKeys = new Set(resolvedPackages.attachments.map(packageControlKey));
       const inheritedPackageValues =
         prior.packageValues === undefined
@@ -733,6 +764,7 @@ export class ProductStore {
             : boolean(b.imageTranslation),
         ...(packageAttachments !== undefined ? { packageAttachments } : {}),
         ...(packageValues !== undefined ? { packageValues } : {}),
+        ...(extensionGrants && Object.keys(extensionGrants).length ? { extensionGrants } : {}),
       };
       freezeSourceSegments({
         ...result,
@@ -782,6 +814,17 @@ export class ProductStore {
     const contextModel = contextRef
       ? this.modelSnapshot(contextRef.id, undefined, false)
       : undefined;
+    const extensionRef = workspaceModelRef(workspace, 'extension');
+    let extensionModel: ModelSnapshot | undefined;
+    if (extensionRef) {
+      try {
+        extensionModel = this.modelSnapshot(extensionRef.id, undefined, false);
+      } catch (error) {
+        // An unavailable add-on model must not prevent reservation of the user's prose.
+        if (!(error instanceof HttpError) || ![403, 404, 409].includes(error.statusCode))
+          throw error;
+      }
+    }
     const collaboration = frozen.promptPresets?.main?.program.collaboration;
     const collaborationModels: Record<string, ModelSnapshot> = {};
     if (collaboration?.enabled && (requiredRole === 'main' || requiredRole === 'inspect'))
@@ -800,6 +843,7 @@ export class ProductStore {
       ...resolvePackageProfile(this, p),
       ...frozen,
       ...(contextModel ? { contextModel } : {}),
+      ...(extensionModel ? { extensionModel } : {}),
       ...(collaboration?.enabled && (requiredRole === 'main' || requiredRole === 'inspect')
         ? { collaborationModels }
         : {}),
@@ -1370,6 +1414,11 @@ export class ProductStore {
                     delete connection.credentialEnv;
                     connection.enabled = false;
                   }
+              if (snapshot.profile?.extensionModel) {
+                const connection = record(snapshot.profile.extensionModel.connection);
+                delete connection.credentialEnv;
+                connection.enabled = false;
+              }
               row.snapshot = json(snapshot);
             }
             if (table === 'runs' && ['queued', 'running'].includes(row.status)) {
@@ -1579,6 +1628,42 @@ function packageRefs(product: ProductStore, value: unknown): PackageAttachment[]
       throw new HttpError(400, 'Content is not a package');
   return refs;
 }
+function validateExtensionGrants(value: unknown): NonNullable<ChatProfile['extensionGrants']> {
+  const grants = record(value);
+  if (Object.keys(grants).length > 100) throw new HttpError(400, 'Invalid extension model grants');
+  return Object.fromEntries(
+    Object.entries(grants).map(([instanceId, value]) => {
+      text(instanceId, 'package instance ID', 200);
+      const grant = record(value);
+      fields(grant, ['packageRevision', 'capabilities']);
+      if (
+        !Array.isArray(grant.capabilities) ||
+        grant.capabilities.length !== 1 ||
+        grant.capabilities[0] !== 'model.generate'
+      )
+        throw new HttpError(400, 'Invalid extension model capabilities');
+      return [
+        instanceId,
+        {
+          packageRevision: number(
+            grant.packageRevision,
+            'extension grant package revision',
+            1,
+            Number.MAX_SAFE_INTEGER
+          ),
+          capabilities: ['model.generate'] as ['model.generate'],
+        },
+      ];
+    })
+  );
+}
+function packageRequestsModelGeneration(pkg: ContentPackage | undefined) {
+  return (
+    pkg?.behavior?.actions.some((action) =>
+      action.program?.capabilities?.includes('model.generate')
+    ) ?? false
+  );
+}
 function packageControlValues(
   product: ProductStore,
   attachments: PackageAttachment[],
@@ -1752,6 +1837,7 @@ function validateArchiveProfile(
     'imageTranslation',
     'packageAttachments',
     'packageValues',
+    'extensionGrants',
     'loreContext',
     'pinned',
     ...(frozen
@@ -1765,6 +1851,7 @@ function validateArchiveProfile(
           'packages',
           'collaborationModels',
           'contextModel',
+          'extensionModel',
           'chatOverrides',
           'chatOptions',
           'promptOptionOwner',
@@ -1839,6 +1926,7 @@ function validateArchiveProfile(
   }
   if (frozen) {
     if (p.contextModel !== undefined) validateModelSnapshot(p.contextModel);
+    if (p.extensionModel !== undefined) validateModelSnapshot(p.extensionModel);
     const collaboration = promptPresets?.main?.program.collaboration;
     if (collaboration?.enabled) {
       const agentModels = record(p.collaborationModels);
@@ -1861,6 +1949,24 @@ function validateArchiveProfile(
     packageAttachments ?? [],
     frozen ? { frozen: packageAttachments ?? [] } : { latest: true }
   );
+  if (p.extensionGrants !== undefined) {
+    const grants = validateExtensionGrants(p.extensionGrants);
+    const attachedInstances = new Map(
+      resolvedPackages.attachments.map((attachment, index) => [
+        packageInstanceId(attachment),
+        { attachment, pkg: resolvedPackages.packages[index] },
+      ])
+    );
+    for (const [instanceId, grant] of Object.entries(grants)) {
+      const attached = attachedInstances.get(instanceId);
+      if (!attached) throw new HttpError(400, 'Extension grant package is not attached');
+      if (
+        grant.packageRevision === attached.attachment.revision &&
+        !packageRequestsModelGeneration(attached.pkg)
+      )
+        throw new HttpError(400, 'Extension grant capability is not requested');
+    }
+  }
   if (p.packageValues !== undefined) {
     if (frozen) packageControlValues(product, resolvedPackages.attachments, p.packageValues);
     else {
@@ -2188,6 +2294,7 @@ function validateArchiveGraph(product: ProductStore) {
   }
   const illustrationOwners = validateIllustrationArchive(product.store);
   for (const attempt of rows('attempts')) {
+    const request = record(parse(attempt.request));
     sameChat(attempt.run_id, attempt.chat_id, runs);
     sameChat(attempt.job_id, attempt.chat_id, jobs);
     const helperOwner = product.db
@@ -2253,11 +2360,28 @@ function validateArchiveGraph(product: ProductStore) {
       (attempt.run_id !== null
         ? attempt.role !== 'main' &&
           attempt.role !== 'title' &&
+          !(attempt.role === 'state' && request.extensionAction !== undefined) &&
           !(attempt.role === 'context' && parse(runs.get(attempt.run_id)!.snapshot).contextPlan)
         : jobs.get(attempt.job_id)?.kind !== attempt.role)
     )
       throw new HttpError(400, 'Attempt role mismatch');
-    const request = record(parse(attempt.request));
+    if (request.extensionAction !== undefined) {
+      if (
+        attempt.run_id === null ||
+        attempt.role !== 'state' ||
+        request.agentId !== undefined ||
+        attempt.status === 'mock'
+      )
+        throw new HttpError(400, 'Extension attempt attribution mismatch');
+      const snapshot = parse(runs.get(attempt.run_id)!.snapshot) as RunSnapshot;
+      try {
+        const { target } = validateExtensionModelAttribution(snapshot, request.extensionAction);
+        if (request.modelId !== target.modelId || request.connectionId !== target.connectionId)
+          throw new HttpError(400, 'Extension attempt model mismatch');
+      } catch {
+        throw new HttpError(400, 'Extension attempt attribution mismatch');
+      }
+    }
     if (request.pricingSnapshot !== undefined) {
       const pricing = validatePricingSnapshot(request.pricingSnapshot);
       if (pricing.protocol !== request.protocol || pricing.modelId !== attempt.model_id)

@@ -21,7 +21,12 @@ import { readerActivities, readerDetail, readerRuns } from './reader.js';
 import { chatActivities } from './chat-activity.js';
 import { readerRoutes } from './reader-routes.js';
 import { Controls, type Barrier, type FailurePoint } from './controls.js';
-import { runMain, type MainHooks } from './model-runner.js';
+import { runMain, ModelRunError, type MainHooks } from './model-runner.js';
+import {
+  extensionModelTarget,
+  validateExtensionModelAttribution,
+} from '../core/extension-model.js';
+import { ExtensionProgramError } from '../core/extension-program.js';
 import { prepareInputContext, ContextCompactionError } from './context-compaction.js';
 import {
   previousContextPlan,
@@ -140,9 +145,9 @@ export async function createApp(options: AppOptions): Promise<App> {
     authorize();
     return codex.execute(connection, request, {
       ...execution,
-      beforeTurn: () => {
+      beforeTurn: async () => {
         authorize();
-        execution.beforeTurn?.();
+        await execution.beforeTurn?.();
       },
       onWire: async (wire) => {
         authorize();
@@ -567,8 +572,34 @@ export async function createApp(options: AppOptions): Promise<App> {
                 store.product.mockAttempt(run.chatId, id, null, 'main', input);
             },
             onToolEvent: (event) => store.tool(id, event),
-            onBehaviorTool: (binding, action) =>
-              executeRunBehaviorTool(store, id, binding, action, controller.signal),
+            onBehaviorTool: (binding, action, host) =>
+              executeRunBehaviorTool(store, id, binding, action, controller.signal, host),
+            authorizeExtensionModel: (binding) => {
+              assertCurrent();
+              const live = store.product.profile(run.chatId);
+              const { target } = extensionModelTarget(
+                {
+                  ...run.snapshot,
+                  profile: {
+                    ...run.snapshot.profile!,
+                    packageAttachments: live.packageAttachments,
+                    extensionGrants: live.extensionGrants,
+                  },
+                },
+                binding
+              );
+              try {
+                store.product.assertAvailable('model', target.id);
+                store.product.assertAvailable('connection', target.connectionId);
+                const currentModel = store.product.get<{ enabled?: boolean }>('model', target.id);
+                if (currentModel.enabled === false)
+                  throw new ExtensionProgramError('BEHAVIOR_HOST_MODEL_UNAVAILABLE');
+              } catch (error) {
+                if (error instanceof HttpError && error.statusCode === 404)
+                  throw new ExtensionProgramError('BEHAVIOR_HOST_MODEL_UNAVAILABLE');
+                throw error;
+              }
+            },
             persistContext: (prepared, own) =>
               store.transaction(() => {
                 if (controller.signal.aborted || store.run(id).status !== 'running')
@@ -591,12 +622,25 @@ export async function createApp(options: AppOptions): Promise<App> {
             onAttemptStart: (wire) => {
               if (controller.signal.aborted || store.run(id).status !== 'running')
                 throw new Error('Run cancelled');
-              const target =
-                wire.agentId !== undefined
-                  ? run.snapshot.profile?.collaborationModels?.[wire.agentId]
-                  : wire.role === 'context'
-                    ? run.snapshot.profile?.contextModel
-                    : run.snapshot.profile?.models.main;
+              let target =
+                wire.extensionAction !== undefined
+                  ? run.snapshot.profile?.extensionModel
+                  : wire.agentId !== undefined
+                    ? run.snapshot.profile?.collaborationModels?.[wire.agentId]
+                    : wire.role === 'context'
+                      ? run.snapshot.profile?.contextModel
+                      : run.snapshot.profile?.models.main;
+              if (wire.extensionAction !== undefined) {
+                assertCurrent();
+                if (wire.agentId !== undefined || wire.role !== 'state')
+                  throw new Error('Invalid extension attempt');
+                target = validateExtensionModelAttribution(
+                  run.snapshot,
+                  wire.extensionAction
+                ).target;
+                if (target.modelId !== wire.modelId || target.connectionId !== wire.connectionId)
+                  throw new Error('Invalid extension attempt');
+              }
               if (
                 wire.agentId !== undefined &&
                 (!target ||
@@ -752,6 +796,18 @@ export async function createApp(options: AppOptions): Promise<App> {
                 id,
                 controller.signal.aborted ? 'cancelled' : 'failed',
                 error.message,
+                '',
+                error.usage
+              );
+              if (controller.signal.aborted) store.settleCancelledUsage(id, error.usage);
+              publish(run.chatId);
+              return;
+            }
+            if (error instanceof ModelRunError) {
+              store.finishRun(
+                id,
+                controller.signal.aborted ? 'cancelled' : 'failed',
+                controller.signal.aborted ? 'Run cancelled' : error.message,
                 '',
                 error.usage
               );

@@ -10,7 +10,7 @@ export const EXTENSION_PROGRAM_MAX_VALUE_CHARS = 128 * 1024;
 export interface ExtensionProgram {
   api: typeof EXTENSION_PROGRAM_API;
   /** Requested native capabilities. The host independently binds their scope per invocation. */
-  capabilities?: 'materials.read.self'[];
+  capabilities?: ('materials.read.self' | 'model.generate')[];
   /** Function body evaluated by a host-owned isolated guest runtime. */
   source: string;
 }
@@ -86,8 +86,11 @@ export function validateExtensionProgram(value: unknown): ExtensionProgram {
     }
     if (
       !Array.isArray(program.capabilities) ||
-      program.capabilities.length > 1 ||
-      program.capabilities.some((capability) => capability !== 'materials.read.self')
+      program.capabilities.length > 2 ||
+      new Set(program.capabilities).size !== program.capabilities.length ||
+      program.capabilities.some(
+        (capability) => !['materials.read.self', 'model.generate'].includes(capability)
+      )
     )
       fail('BEHAVIOR_PROGRAM_CAPABILITIES');
   }

@@ -15,6 +15,7 @@ export const EXTENSION_RUNTIME_LIMITS = Object.freeze({
   inputBytes: 128 * 1024,
   outputBytes: 128 * 1024,
   timeoutMs: 1_000,
+  hostWaitMs: 1_800_000,
   hostMethodChars: 80,
   hostCalls: 32,
   hostPending: 8,
@@ -31,12 +32,20 @@ export type ExtensionHostHandler = (
 export type ExtensionRuntimeOptions = {
   waitForSlot?: boolean;
   host?: ExtensionHostHandler;
+  hostWaitMs?: number;
+  awaitHostSettlement?: boolean;
 };
 
 type WorkerResult =
   | { type: 'result'; ok: true; json: string }
   | { type: 'result'; ok: false; code: string };
 type WorkerHostCall = { type: 'host-call'; id: number; method: string; argsJson: string };
+type WorkerPhase = {
+  type: 'phase';
+  phase: 'active' | 'host-wait';
+  sequence: number;
+  hostIds: number[];
+};
 type HostReply =
   | { type: 'host-result'; id: number; ok: true; json: string }
   | { type: 'host-result'; id: number; ok: false; code: string };
@@ -48,6 +57,9 @@ const safeHostCodes = new Set([
   'BEHAVIOR_HOST_MATERIAL_UNAVAILABLE',
   'BEHAVIOR_HOST_ABORTED',
   'BEHAVIOR_HOST_RESULT_LIMIT',
+  'BEHAVIOR_HOST_MODEL_DENIED',
+  'BEHAVIOR_HOST_MODEL_UNAVAILABLE',
+  'BEHAVIOR_HOST_MODEL_BUDGET_EXHAUSTED',
 ]);
 const workerResultCodes = new Set([
   'BEHAVIOR_PROGRAM_INPUT_SIZE',
@@ -163,6 +175,13 @@ function publicHostCode(error: unknown) {
     : 'BEHAVIOR_HOST_CALL_FAILED';
 }
 
+function expectedHostCancellation(error: unknown, signal: AbortSignal) {
+  return (
+    signal.aborted &&
+    (error === signal.reason || (error instanceof Error && error.name === 'AbortError'))
+  );
+}
+
 /**
  * Runs one extension in a fresh Worker and fixed-memory QuickJS module. Host reads cross an
  * explicit JSON RPC boundary; neither the Worker nor a guest object enters the host broker.
@@ -175,6 +194,15 @@ export async function executeExtensionProgram(
 ): Promise<ExtensionProgramResult & { engine: string }> {
   const program = validateExtensionProgram(value);
   const encodedInput = inputJSON(input);
+  const hostWaitMs = options.hostWaitMs ?? 0;
+  const awaitHostSettlement = options.awaitHostSettlement ?? false;
+  if (
+    !Number.isSafeInteger(hostWaitMs) ||
+    hostWaitMs < 0 ||
+    hostWaitMs > EXTENSION_RUNTIME_LIMITS.hostWaitMs ||
+    typeof awaitHostSettlement !== 'boolean'
+  )
+    throw fail('BEHAVIOR_PROGRAM_RUNTIME_FAILED');
   if (signal?.aborted) throw fail('BEHAVIOR_PROGRAM_ABORTED');
   await acquireSlot(signal, options.waitForSlot);
   try {
@@ -197,7 +225,15 @@ export async function executeExtensionProgram(
       let settled = false;
       let hostCalls = 0;
       let hostResultBytes = 0;
+      let activeRemainingMs = EXTENSION_RUNTIME_LIMITS.timeoutMs;
+      let hostWaitRemainingMs = hostWaitMs;
+      let watchdogPhase: 'active' | 'host-wait' = 'active';
+      let watchdogStarted = performance.now();
+      let phaseSequence = 0;
+      let settlementFatalError: Error | undefined;
+      let timer: ReturnType<typeof setTimeout> | undefined;
       const hostPending = new Set<number>();
+      const hostWork = new Set<Promise<void>>();
       const hostController = new AbortController();
       const post = (message: HostReply) => {
         if (!settled) worker.postMessage(message);
@@ -205,28 +241,72 @@ export async function executeExtensionProgram(
       const finish = (outcome: { error: unknown } | { result: ExtensionProgramResult }) => {
         if (settled) return;
         settled = true;
-        clearTimeout(timer);
+        if (timer) clearTimeout(timer);
         signal?.removeEventListener('abort', abort);
         hostController.abort();
-        void worker
-          .terminate()
-          .catch(() => undefined)
-          .finally(() => {
-            worker.removeAllListeners();
-            if ('error' in outcome) reject(outcome.error);
-            else resolve({ ...outcome.result, engine: EXTENSION_RUNTIME_ENGINE });
-          });
+        const termination = worker.terminate();
+        const hostSettlement = awaitHostSettlement
+          ? Promise.allSettled([...hostWork])
+          : Promise.resolve();
+        void Promise.allSettled([termination, hostSettlement]).then(() => {
+          worker.removeAllListeners();
+          if (settlementFatalError) reject(settlementFatalError);
+          else if ('error' in outcome) reject(outcome.error);
+          else resolve({ ...outcome.result, engine: EXTENSION_RUNTIME_ENGINE });
+        });
       };
       const finishError = (error: unknown) => finish({ error });
       const finishResult = (result: ExtensionProgramResult) => finish({ result });
       const abort = () => finishError(fail('BEHAVIOR_PROGRAM_ABORTED'));
-      const timer = setTimeout(
-        () => finishError(fail('BEHAVIOR_PROGRAM_TIMEOUT')),
-        EXTENSION_RUNTIME_LIMITS.timeoutMs
-      );
+      const armWatchdog = () => {
+        if (timer) clearTimeout(timer);
+        watchdogStarted = performance.now();
+        const remaining = watchdogPhase === 'active' ? activeRemainingMs : hostWaitRemainingMs;
+        timer = setTimeout(
+          () => finishError(fail('BEHAVIOR_PROGRAM_TIMEOUT')),
+          Math.max(0, remaining)
+        );
+      };
+      const enterPhase = (next: 'active' | 'host-wait') => {
+        if (watchdogPhase === next) return;
+        const elapsed = performance.now() - watchdogStarted;
+        if (watchdogPhase === 'active') activeRemainingMs -= elapsed;
+        else hostWaitRemainingMs -= elapsed;
+        watchdogPhase = next;
+        armWatchdog();
+      };
+      armWatchdog();
       signal?.addEventListener('abort', abort, { once: true });
-      worker.on('message', (message: WorkerResult | WorkerHostCall) => {
+      worker.on('message', (message: WorkerResult | WorkerHostCall | WorkerPhase) => {
         if (settled) return;
+        if (
+          exactRecord(message, ['type', 'phase', 'sequence', 'hostIds']) &&
+          message.type === 'phase'
+        ) {
+          if (
+            (message.phase !== 'active' && message.phase !== 'host-wait') ||
+            !Number.isSafeInteger(message.sequence) ||
+            message.sequence <= phaseSequence ||
+            !Array.isArray(message.hostIds) ||
+            message.hostIds.some(
+              (id) => !Number.isSafeInteger(id) || id < 1 || id > EXTENSION_RUNTIME_LIMITS.hostCalls
+            ) ||
+            new Set(message.hostIds).size !== message.hostIds.length ||
+            (message.phase === 'active' && message.hostIds.length !== 0) ||
+            (message.phase === 'host-wait' && message.hostIds.length === 0)
+          ) {
+            finishError(fail('BEHAVIOR_PROGRAM_RUNTIME_FAILED'));
+            return;
+          }
+          phaseSequence = message.sequence;
+          // No extra wait budget preserves the original one-second wall limit for all work,
+          // including short asynchronous read brokers; it is not a zero-duration host timeout.
+          if (hostWaitMs === 0) return;
+          if (message.phase === 'host-wait' && !message.hostIds.some((id) => hostPending.has(id)))
+            return;
+          enterPhase(message.phase);
+          return;
+        }
         if (
           exactRecord(message, ['type', 'id', 'method', 'argsJson']) &&
           message.type === 'host-call'
@@ -258,7 +338,7 @@ export async function executeExtensionProgram(
           }
           hostCalls++;
           hostPending.add(id);
-          void (async () => {
+          const work = Promise.resolve().then(async () => {
             try {
               if (!options.host) throw fail('BEHAVIOR_HOST_CALL_FAILED');
               const result = await options.host(
@@ -278,14 +358,18 @@ export async function executeExtensionProgram(
             } catch (error) {
               if (error instanceof ExtensionProgramError && safeHostCodes.has(error.code))
                 post({ type: 'host-result', id, ok: false, code: publicHostCode(error) });
-              else
-                finishError(
-                  error instanceof Error ? error : new Error('BEHAVIOR_HOST_RUNTIME_FAILED')
-                );
+              else if (!expectedHostCancellation(error, hostController.signal)) {
+                const fatal =
+                  error instanceof Error ? error : new Error('BEHAVIOR_HOST_RUNTIME_FAILED');
+                if (settled && awaitHostSettlement) settlementFatalError ??= fatal;
+                else finishError(fatal);
+              }
             } finally {
               hostPending.delete(id);
             }
-          })();
+          });
+          hostWork.add(work);
+          void work.then(() => hostWork.delete(work));
           return;
         }
         if (

@@ -875,6 +875,38 @@ function BehaviorEditor({
           >
             자료 읽기 예제 넣기
           </button>
+          <button
+            type="button"
+            className="secondary"
+            onClick={() => {
+              const example = structuredClone(neutralBehavior);
+              example.actions = [
+                {
+                  id: 'ask_extension_model',
+                  label: '모델에게 추가 의견 요청',
+                  description: '필요한 질문을 별도 모델에 보내고 결과를 참고해요.',
+                  triggers: ['model'],
+                  inputSchema: {
+                    type: 'record',
+                    properties: { prompt: { type: 'string', maxLength: 4000 } },
+                  },
+                  effects: [],
+                  program: {
+                    api: 'uimori-state-action-v1',
+                    capabilities: ['model.generate'],
+                    source:
+                      'const answer = await api.host.call("model.generate", {prompt: api.input.prompt});\nif (answer.status !== "completed") throw new Error("Additional generation unavailable");\nreturn {state: {count: Math.min(100, api.state.count + 1)}, result: answer};',
+                  },
+                },
+              ];
+              setDraft(JSON.stringify(example, null, 2));
+              setNotice(
+                '전역 확장 모델을 선택하고, 사용할 채팅에서 이 자료의 추가 모델 호출을 허용해 주세요.'
+              );
+            }}
+          >
+            모델 요청 예제 넣기
+          </button>
         </div>
       )}
       {editable && editable.actions.length > 0 && (
@@ -918,7 +950,12 @@ function BehaviorEditor({
                           updateAction(index, {
                             program: {
                               ...action.program!,
-                              capabilities: e.target.checked ? ['materials.read.self'] : [],
+                              capabilities: [
+                                ...(action.program!.capabilities ?? []).filter(
+                                  (item) => item !== 'materials.read.self'
+                                ),
+                                ...(e.target.checked ? ['materials.read.self' as const] : []),
+                              ],
                             },
                           })
                         }
@@ -928,6 +965,31 @@ function BehaviorEditor({
                         <small>
                           이 자료의 본문·로어를 코드에서 조회할 수 있어요. 다른 자료나 채팅 기록은
                           포함하지 않아요.
+                        </small>
+                      </span>
+                    </label>
+                    <label className="check behavior-method-choice">
+                      <SelectionCheckbox
+                        checked={action.program.capabilities?.includes('model.generate') ?? false}
+                        onChange={(e) =>
+                          updateAction(index, {
+                            program: {
+                              ...action.program!,
+                              capabilities: [
+                                ...(action.program!.capabilities ?? []).filter(
+                                  (item) => item !== 'model.generate'
+                                ),
+                                ...(e.target.checked ? ['model.generate' as const] : []),
+                              ],
+                            },
+                          })
+                        }
+                      />
+                      <span>
+                        추가 모델 호출 요청
+                        <small>
+                          모델이 요청한 행동에서 사용할 수 있어요. 실제 호출에는 전역 확장 모델
+                          선택과 채팅별 허용이 필요하며 본문과 같은 호출 한도를 사용해요.
                         </small>
                       </span>
                     </label>

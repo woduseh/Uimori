@@ -238,6 +238,115 @@ describe('fixed-memory QuickJS extension runtime', () => {
     });
   });
 
+  it('allows host waits beyond the active wall budget when explicitly budgeted', async () => {
+    const started = performance.now();
+    const result = await executeExtensionProgram(
+      program(`
+        const value = await api.host.call('model.generate', {});
+        return { state: api.state, result: value };
+      `),
+      { state: { preserved: true }, input: {} },
+      undefined,
+      {
+        hostWaitMs: 1_500,
+        host: async () => {
+          await new Promise((resolve) => setTimeout(resolve, 1_100));
+          return { text: 'ready' };
+        },
+      }
+    );
+
+    expect(performance.now() - started).toBeGreaterThanOrEqual(1_000);
+    expect(result).toMatchObject({
+      state: { preserved: true },
+      result: { text: 'ready' },
+    });
+  });
+
+  it('bounds cumulative host wait and aborts the in-flight broker', async () => {
+    let calls = 0;
+    let aborted = false;
+    const resultCode = code(
+      executeExtensionProgram(
+        program(`
+          await api.host.call('model.generate', { index: 1 });
+          await api.host.call('model.generate', { index: 2 });
+          return { state: api.state, result: null };
+        `),
+        { state: {}, input: {} },
+        undefined,
+        {
+          hostWaitMs: 450,
+          host: async (_method, _args, signal) => {
+            calls++;
+            if (calls === 1) {
+              await new Promise((resolve) => setTimeout(resolve, 300));
+              return null;
+            }
+            return await new Promise((resolve) => {
+              signal.addEventListener(
+                'abort',
+                () => {
+                  aborted = true;
+                  resolve(null);
+                },
+                { once: true }
+              );
+            });
+          },
+        }
+      )
+    );
+
+    await expect(resultCode).resolves.toBe('BEHAVIOR_PROGRAM_TIMEOUT');
+    expect(calls).toBe(2);
+    expect(aborted).toBe(true);
+  });
+
+  it('does not spend host wait budget on unresolved guest promises or busy guest code', async () => {
+    const unresolvedStarted = performance.now();
+    expect(
+      await code(
+        executeExtensionProgram(
+          program(`await new Promise(() => {});`),
+          { state: {}, input: {} },
+          undefined,
+          { hostWaitMs: 5_000 }
+        )
+      )
+    ).toBe('BEHAVIOR_PROGRAM_TIMEOUT');
+    expect(performance.now() - unresolvedStarted).toBeLessThan(2_500);
+
+    let hostAborted = false;
+    expect(
+      await code(
+        executeExtensionProgram(
+          program(`
+            void api.host.call('model.generate', {});
+            while (true) {}
+          `),
+          { state: {}, input: {} },
+          undefined,
+          {
+            hostWaitMs: 5_000,
+            host: async (_method, _args, signal) =>
+              await new Promise((resolve) =>
+                signal.addEventListener(
+                  'abort',
+                  () => {
+                    hostAborted = true;
+                    resolve(null);
+                  },
+                  { once: true }
+                )
+              ),
+          }
+        )
+      )
+    ).toBe('BEHAVIOR_PROGRAM_TIMEOUT');
+    expect(hostAborted).toBe(true);
+  });
+
   it('exposes only allowlisted host denial codes and cannot let guest code hide host faults', async () => {
     const denied = await executeExtensionProgram(
       program(`
@@ -278,7 +387,7 @@ describe('fixed-memory QuickJS extension runtime', () => {
       `),
       { state: {}, input: {} },
       undefined,
-      { host: async () => Promise.reject(privateFailure) }
+      { awaitHostSettlement: true, host: async () => Promise.reject(privateFailure) }
     );
     await expect(work).rejects.toBe(privateFailure);
   });
@@ -296,6 +405,7 @@ describe('fixed-memory QuickJS extension runtime', () => {
       { state: {}, input: {} },
       controller.signal,
       {
+        hostWaitMs: 1_000,
         host: async (_method, _args, signal) => {
           entered();
           return await new Promise((resolve, reject) => {
@@ -314,9 +424,97 @@ describe('fixed-memory QuickJS extension runtime', () => {
     );
     const resultCode = code(work);
     await started;
+    await new Promise((resolve) => setTimeout(resolve, 50));
     controller.abort();
     await expect(resultCode).resolves.toBe('BEHAVIOR_PROGRAM_ABORTED');
     expect(hostAborted).toBe(true);
+  });
+
+  it('can await aborted host cleanup without allowing the guest to resume', async () => {
+    const controller = new AbortController();
+    let entered!: () => void;
+    const started = new Promise<void>((resolve) => (entered = resolve));
+    let observedAbort!: () => void;
+    const aborted = new Promise<void>((resolve) => (observedAbort = resolve));
+    let releaseCleanup!: () => void;
+    const cleanup = new Promise<void>((resolve) => (releaseCleanup = resolve));
+    let cleanupFinished = false;
+    const calls: string[] = [];
+    const resultCode = code(
+      executeExtensionProgram(
+        program(`
+          const value = await api.host.call('model.generate', {});
+          await api.host.call('model.late', value);
+          return { state: api.state, result: value };
+        `),
+        { state: {}, input: {} },
+        controller.signal,
+        {
+          hostWaitMs: 5_000,
+          awaitHostSettlement: true,
+          host: async (method, _args, signal) => {
+            calls.push(method);
+            if (method !== 'model.generate') return null;
+            const cancelled = new Promise<void>((resolve) =>
+              signal.addEventListener('abort', () => resolve(), { once: true })
+            );
+            entered();
+            await cancelled;
+            observedAbort();
+            await cleanup;
+            cleanupFinished = true;
+            return { late: true };
+          },
+        }
+      )
+    );
+    let outerSettled = false;
+    void resultCode.then(() => {
+      outerSettled = true;
+    });
+
+    await started;
+    controller.abort();
+    await aborted;
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(outerSettled).toBe(false);
+    expect(cleanupFinished).toBe(false);
+
+    releaseCleanup();
+    await expect(resultCode).resolves.toBe('BEHAVIOR_PROGRAM_ABORTED');
+    expect(cleanupFinished).toBe(true);
+    expect(calls).toEqual(['model.generate']);
+  });
+
+  it('rejects a fire-and-forget result when aborted host settlement fails fatally', async () => {
+    const databaseFailure = new Error('DATABASE_ATTEMPT_FINISH_FAILED');
+    let cleanupReached = false;
+    let calls = 0;
+    const work = executeExtensionProgram(
+      program(`
+        void api.host.call('model.generate', {});
+        return { state: { adopted: true }, result: 'must-not-adopt' };
+      `),
+      { state: {}, input: {} },
+      undefined,
+      {
+        hostWaitMs: 5_000,
+        awaitHostSettlement: true,
+        host: async (_method, _args, signal) => {
+          calls++;
+          if (!signal.aborted)
+            await new Promise<void>((resolve) =>
+              signal.addEventListener('abort', () => resolve(), { once: true })
+            );
+          cleanupReached = true;
+          throw databaseFailure;
+        },
+      }
+    );
+
+    await expect(work).rejects.toBe(databaseFailure);
+    expect(cleanupReached).toBe(true);
+    expect(calls).toBe(1);
   });
 
   it('bounds host method, argument, result and cumulative result sizes', async () => {

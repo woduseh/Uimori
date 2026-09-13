@@ -70,6 +70,7 @@ export function validatePromptWorkspace(value: unknown): PromptWorkspace {
     'titleModel',
     'helperModel',
     'contextModel',
+    'extensionModel',
   ]);
   const policy = record(b.translationPolicy);
   fields(policy, ['refusalModel', 'maxRetries', 'maxCalls']);
@@ -84,6 +85,7 @@ export function validatePromptWorkspace(value: unknown): PromptWorkspace {
     titleModel: validateTitleModel(b.titleModel ?? null),
     helperModel: validateTitleModel(b.helperModel ?? null),
     contextModel: validateTitleModel(b.contextModel ?? null),
+    extensionModel: validateTitleModel(b.extensionModel ?? null),
     modelRoutes: validateModelRoutes(
       Object.hasOwn(b, 'modelRoutes') ? b.modelRoutes : emptyModelRoutes()
     ),
@@ -103,6 +105,7 @@ export function defaultPromptWorkspace(): PromptWorkspace {
     titleModel: null,
     helperModel: null,
     contextModel: null,
+    extensionModel: null,
     modelRoutes: emptyModelRoutes(),
     main: builtinCurrentPrompt('main'),
     translation: builtinCurrentPrompt('translation'),
@@ -120,6 +123,7 @@ export function promptWorkspace(store: Store): PromptWorkspace {
     titleModel: validateTitleModel(saved.titleModel ?? null),
     helperModel: validateTitleModel(saved.helperModel ?? null),
     contextModel: validateTitleModel(saved.contextModel ?? null),
+    extensionModel: validateTitleModel(saved.extensionModel ?? null),
     modelRoutes: Object.hasOwn(saved, 'modelRoutes')
       ? validateModelRoutes(saved.modelRoutes)
       : emptyModelRoutes(),
@@ -190,6 +194,7 @@ export function modelWorkspace(store: Store): ModelWorkspace {
     titleModel: workspaceModelRef(current, 'title'),
     helperModel: workspaceModelRef(current, 'helper'),
     contextModel: workspaceModelRef(current, 'context'),
+    extensionModel: workspaceModelRef(current, 'extension'),
     routes: current.modelRoutes,
     translationPolicy: current.translationPolicy,
   };
@@ -203,6 +208,7 @@ export function updateModelWorkspace(store: Store, value: unknown): ModelWorkspa
     'titleModel',
     'helperModel',
     'contextModel',
+    'extensionModel',
   ]);
   return store.transaction(() => {
     const prior = promptWorkspace(store);
@@ -219,6 +225,9 @@ export function updateModelWorkspace(store: Store, value: unknown): ModelWorkspa
       contextModel: Object.hasOwn(input, 'contextModel')
         ? validateTitleModel(input.contextModel)
         : (prior.contextModel ?? null),
+      extensionModel: Object.hasOwn(input, 'extensionModel')
+        ? validateTitleModel(input.extensionModel)
+        : (prior.extensionModel ?? null),
       modelRoutes: validateModelRoutes(input.routes),
       translationPolicy: input.translationPolicy,
       revision: prior.revision + 1,
@@ -228,6 +237,7 @@ export function updateModelWorkspace(store: Store, value: unknown): ModelWorkspa
     assertModelSelection(store.product, next.titleModel ?? null, prior.titleModel ?? null);
     assertModelSelection(store.product, next.helperModel ?? null, prior.helperModel ?? null);
     assertModelSelection(store.product, next.contextModel ?? null, prior.contextModel ?? null);
+    assertModelSelection(store.product, next.extensionModel ?? null, prior.extensionModel ?? null);
     assertModelSelection(
       store.product,
       next.translationPolicy.refusalModel,
