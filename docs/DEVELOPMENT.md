@@ -10,7 +10,7 @@
 
 ## 변경과 검증
 
-최소 앱 검증 진입점은 `npm run verify:smoke`예요. 기존 M0 실행기의 F02·F03·F06을 선택해 환경 진단 → 타입·빌드 → 새 서버의 ready/DB identity → 생성·중복/충돌·재접속의 단위/브라우저 검사 → 실패 감지 selftest → 종료·정리를 연결해요. 전체 M0·UI 회귀를 대신하지 않아요. 종료 코드를 확인하고 출력된 `summary.json`의 scope·scenarios·cleanup을 함께 읽어요. 아래 설치·doctor 명령은 첫 환경 준비나 관련 환경 문제를 해결할 때 선택해요. 매 작업 시작마다 재설치·환경 진단을 반복하는 절차가 아니에요.
+[QUALITY의 검사 시점](QUALITY.md#실행-시점)에 따라 최소 앱 확인이 필요할 때 `npm run verify:smoke`를 사용해요. 기존 M0 실행기의 F02·F03·F06을 선택해 환경 진단 → 타입·빌드 → 새 서버의 ready/DB identity → 생성·중복/충돌·재접속의 단위/브라우저 검사 → 실패 감지 selftest → 종료·정리를 연결해요. 전체 M0·UI 회귀를 대신하지 않아요. 종료 코드를 확인하고 출력된 `summary.json`의 scope·scenarios·cleanup을 함께 읽어요. 아래 설치·doctor 명령은 첫 환경 준비나 관련 환경 문제를 해결할 때 선택해요. 매 작업 시작마다 재설치·환경 진단을 반복하는 절차가 아니에요.
 
 ```powershell
 npm ci --offline --no-audit --no-fund
