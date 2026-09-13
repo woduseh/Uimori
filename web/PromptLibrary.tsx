@@ -22,6 +22,7 @@ import { Dialog } from './Dialog.js';
 import { DeleteButton } from './DeleteButton.js';
 import { PromptEditor } from './PromptEditor.js';
 import { NativeTransfer } from './NativeTransfer.js';
+import { RisuPresetImport } from './RisuPresetImport.js';
 import { PromptTemplatesDialog, type PromptTemplate } from './PromptTemplatesDialog.js';
 import { discardActiveEditor } from './editor-workspace-context.js';
 import {
@@ -242,6 +243,14 @@ export function PromptLibrary({
         {headerLeading}
         <h1>프롬프트</h1>
         {library && !editing && <NativeTransfer library={library} reload={reload} />}
+        <RisuPresetImport
+          showTrigger={!!library && !editing}
+          reload={reload}
+          onImported={(preset) => {
+            createdPresetFocus.current = preset.id;
+            changeEditing({ preset, role: preset.role });
+          }}
+        />
         {headerTrailing}
       </header>
       <PromptTemplatesDialog

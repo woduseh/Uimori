@@ -1,5 +1,7 @@
 # 작업 지도
 
+- Risu 프리셋은 `docs/RISU-IMPORT.md`, `server/risu-preset-file.ts`·`risu-preset-program.ts`·`risu-preset-import.ts`, `web/RisuPresetImport.tsx`를 봐요. `.risup`·구형 `.risupreset`/JSON/프로젝트 ZIP을 읽어 기존 native transfer로 프롬프트·토글과 원본 바이트를 등록해요. RPack 포함과 AGPL-3.0-only는 사용자의 후속 승인으로 적용했어요. 프리셋 정규식 실행은 아직 미연결이며, memory 슬롯의 위치·래퍼는 직접 적용하지 않고 Uimori 요약·메모 문맥과의 차이를 안내해요. 모델·파라미터·도구는 별도 관리하며 미지원 손실로 계산하지 않아요. 다음 작업은 같은 프리셋 흐름의 전송 전·표시 정규식 연결이에요.
+
 - 확장 행동의 공통 Host 연결은 `server/package-extension-execution.ts`의 `executePackageExtensionProgram`을 사용해요. 성공한 모델 결과를 받은 뒤 guest 계산이 끝나면 모델 접근을 다시 확인하며, 실패 호출을 처리한 로컬 대체 상태는 허용해요. `onExecuted`는 채택 전 계산 보존 전용이고 단계별 진행·취소·CAS·저장은 호출자가 소유해요. 새 상태 영수증은 `server/extension-program-receipt.ts`의 `createExtensionProgramReceipt`로 생성하며 보관 검증과 계산 한도를 공유해요.
 
 - 사용자 버튼의 모델 capability는 기존 actions endpoint에서 `server/extension-operation-runner.ts`의 영구 작업으로 접수해요. `core/extension-operation.ts`, `server/extension-operations.ts`, `web/ExtensionOperations.tsx`를 봐요. 동일한 `createExtensionModelService`·`authorizeExtensionModelAccess`·`model.generate`와 product attempt를 쓰고 가짜 본문 Run을 만들지 않아요. 실제 호출에만 정확한 자료 grant·전역 모델이 필요하며 코드가 모델 불가 결과를 처리하고 상태만 반환할 수 있어요. 상태는 기존 `performBehaviorAction`·ui-action journal과 작업 완료를 원자적으로 채택해요. 현재 문맥 충돌 시 계산 결과는 미반영으로 보존하고 본문을 막지 않아요. 화면 이동으로 취소하지 않고 명시 취소는 Host 정산·늦은 채택 차단을 유지해요. queued/running은 재시작·복원에서 interrupted로 보존하고 자동 재생하지 않아요. 같은 키는 원래 terminal 작업, 새 명시 행동은 새 키예요. 목록에는 metadata만, 명시 includeResult=1에는 결과만 제공해요. DB v18의 두 표와 archive15/chat-backup1 선택적 collection으로 보존하며 live 복원 grant는 제거해요.
@@ -20,7 +22,7 @@
 
 - 현재 채팅의 커스텀 패널은 `docs/PACKAGE-PANELS.md`, `core/package-panels.ts`, `web/PackagePanelFrame.tsx`·`web/package-panel-frame.ts`예요. 자기 상태·옵션의 템플릿을 격리 HTML/CSS로 표시하고 기존 user behavior 행동에만 연결해요. 임의 JS/Lua 실행·과거 Reader 패널·Risu 자동 이식 완료로 확대해 해석하지 않아요. 시작 선택은 기존 controls/visibleWhen을 보여 주고 시작별 사용자 선택을 유지해요.
 
-- 2026-09-13 사용자 선택: GitHub public과 별개로 프로젝트 라이선스 정책은 미정이에요. RPack의 기존 AGPL 조건 코드·치환표를 제품에 포함하지 않고 독립 구현이나 대체 수단을 우선해요. 프로젝트 LICENSE를 임의로 지정하지 않아요. 정확한 선택은 `docs/DECISIONS-2026-09-12-BETA.md`에 있어요.
+- 2026-09-13 후속 사용자 승인으로 RPack 제외 선택을 대체했어요. RPack 치환표를 포함하고 Uimori 소스에 AGPL-3.0-only를 적용해요. `LICENSE`·`THIRD_PARTY_NOTICES.md`에 원본 조건과 고지를 보존해요. 사용자 자료·생성 결과는 별도 권리이며 Risu 런타임 의존이나 미래 버전 자동 추종을 도입하지 않아요. 배포한 빌드와 일치하는 대응 소스를 원격 이용자에게 제공해야 하며 로컬 커밋은 push·배포 권한이 아니에요. 정확한 선택과 이전 이력은 `docs/DECISIONS-2026-09-12-BETA.md`에 있어요.
 
 - RPack을 포함하지 않는 모듈 가져오기는 RisuToki의 기존 프로젝트 추출로 만든 `module.json` 또는 `.risutoki` 에셋을 포함한 프로젝트 ZIP을 사용해요. `server/risu-module-json.ts`가 공개 JSON을 해석하고 모듈로만 등록해요. 바이너리 `.risum` 직접 지원이나 원본 전체 기능 수용 완료와 구분해요.
 

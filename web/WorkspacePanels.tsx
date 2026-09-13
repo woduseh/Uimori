@@ -794,6 +794,17 @@ export function AppSettingsPanel({
           {state.error}
         </p>
       )}
+      <p className="muted">
+        Uimori ·{' '}
+        <a href="https://www.gnu.org/licenses/agpl-3.0.html" target="_blank" rel="noreferrer">
+          AGPL-3.0
+        </a>
+        {' · '}
+        <a href="https://github.com/woduseh/Uimori" target="_blank" rel="noreferrer">
+          소스 저장소
+        </a>
+        {' · '}보증 없이 제공돼요.
+      </p>
       <Dialog
         open={discard}
         title="미저장 설정 확인"
