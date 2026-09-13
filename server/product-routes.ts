@@ -21,6 +21,7 @@ import { packagePresentationRoutes } from './package-presentation-routes.js';
 import { packageBehaviorRoutes } from './package-behavior-routes.js';
 import type { VertexCredentialStore } from './vertex-credentials.js';
 import type { CodexRuntimeService } from './codex-runtime.js';
+import type { ExtensionOperationController } from './extension-operation-runner.js';
 import {
   PROVIDER_PROTOCOLS,
   validateProviderEndpoint,
@@ -41,6 +42,7 @@ export function productRoutes(
     publish: (chatId: string) => void;
     onAuthChanged?: () => void;
     onChatDeleted?: (chatId: string) => void;
+    extensionOperations?: ExtensionOperationController;
   }
 ) {
   const product = store.product;
@@ -51,7 +53,7 @@ export function productRoutes(
   chatOrganizationRoutes(app, store, options.publish);
   libraryOrganizationRoutes(app, store);
   packagePresentationRoutes(app, store);
-  packageBehaviorRoutes(app, store, options.publish);
+  packageBehaviorRoutes(app, store, options.publish, options.extensionOperations);
   app.post<{ Params: { id: string } }>('/api/chats/:id/fork', async (request) => {
     const chat = forkChat(store, request.params.id, request.body);
     options.publish(chat.id);

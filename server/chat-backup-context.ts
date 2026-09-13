@@ -105,7 +105,8 @@ export function remapBackupContext(ctx: BackupRemap): void {
   // Each table keeps its own immutable snapshot, including failed and historical jobs.
   for (const list of Object.values(tables))
     for (const row of list) {
-      if (typeof row.snapshot !== 'string') continue;
+      if (typeof row.snapshot !== 'string' || tables.package_extension_operations.includes(row))
+        continue;
       const value = ctx.structured(parse(row.snapshot));
       prepareSnapshot(value);
       snapshots.push({ row, value });

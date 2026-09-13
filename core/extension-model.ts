@@ -8,19 +8,50 @@ export type ExtensionModelBinding = {
   instanceId: string;
   actionId: string;
   /** Omitted preserves the original model-triggered tool contract. */
-  trigger?: 'model' | 'before-turn' | 'after-turn';
+  trigger?: 'model' | 'before-turn' | 'after-turn' | 'user';
 };
 export type ExtensionModelAttribution = Pick<ExtensionModelBinding, 'instanceId' | 'actionId'> & {
   packageId: string;
   packageRevision: number;
   /** Automatic execution needs a marker; legacy model receipts stay unchanged. */
-  trigger?: 'before-turn' | 'after-turn';
+  trigger?: 'before-turn' | 'after-turn' | 'user';
 };
 
+export type ExtensionModelSnapshot = Pick<
+  RunSnapshot,
+  'profile' | 'packageBehaviorUnavailable' | 'behaviorExecution'
+>;
+export type ExtensionUserModelBinding = Pick<ExtensionModelBinding, 'instanceId' | 'actionId'>;
+
 /** Author capability requests do not grant access to a user's model connection. */
-export function extensionModelTarget(snapshot: RunSnapshot, binding: ExtensionModelBinding) {
+export function extensionModelTarget(
+  snapshot: ExtensionModelSnapshot,
+  binding: ExtensionModelBinding
+) {
   const trigger = binding.trigger ?? 'model';
-  const profile = snapshot.profile;
+  if (
+    !['model', 'before-turn', 'after-turn'].includes(trigger) ||
+    snapshot.packageBehaviorUnavailable?.some((item) => item.instanceId === binding.instanceId) ||
+    (trigger === 'before-turn' && snapshot.behaviorExecution?.deferredAutomatic !== true) ||
+    (trigger === 'after-turn' && snapshot.behaviorExecution === undefined)
+  )
+    throw new ExtensionProgramError('BEHAVIOR_HOST_MODEL_DENIED');
+  return resolveModelTarget(snapshot.profile, binding, trigger);
+}
+
+/** User operations bind one explicit action independently of Run execution. */
+export function extensionUserModelTarget(
+  profile: RunSnapshot['profile'],
+  binding: ExtensionUserModelBinding
+) {
+  return resolveModelTarget(profile, binding, 'user');
+}
+
+function resolveModelTarget(
+  profile: RunSnapshot['profile'],
+  binding: ExtensionUserModelBinding,
+  trigger: NonNullable<ExtensionModelBinding['trigger']>
+) {
   const ref = profile?.packageAttachments?.find(
     (item) => packageInstanceId(item) === binding.instanceId
   );
@@ -33,11 +64,7 @@ export function extensionModelTarget(snapshot: RunSnapshot, binding: ExtensionMo
     !pkg ||
     !action ||
     historicalPersonaExcluded(profile, ref.role) ||
-    snapshot.packageBehaviorUnavailable?.some((item) => item.instanceId === binding.instanceId) ||
-    !['model', 'before-turn', 'after-turn'].includes(trigger) ||
     !behaviorActionTriggers(action).includes(trigger) ||
-    (trigger === 'before-turn' && snapshot.behaviorExecution?.deferredAutomatic !== true) ||
-    (trigger === 'after-turn' && snapshot.behaviorExecution === undefined) ||
     !action.program?.capabilities?.includes('model.generate') ||
     grant?.packageRevision !== ref.revision ||
     !grant.capabilities.includes('model.generate')
@@ -53,13 +80,32 @@ export function extensionModelTarget(snapshot: RunSnapshot, binding: ExtensionMo
       actionId: binding.actionId,
       packageId: ref.id,
       packageRevision: ref.revision,
-      ...(trigger === 'before-turn' || trigger === 'after-turn' ? { trigger } : {}),
+      ...(trigger !== 'model' ? { trigger } : {}),
     } satisfies ExtensionModelAttribution,
   };
 }
 
 /** Shared by live attempt admission and archive validation; never executes extension code. */
-export function validateExtensionModelAttribution(snapshot: RunSnapshot, value: unknown) {
+export function validateExtensionModelAttribution(
+  snapshot: ExtensionModelSnapshot,
+  value: unknown
+) {
+  const attribution = attributionShape(value, ['before-turn', 'after-turn']);
+  return matchAttribution(attribution, extensionModelTarget(snapshot, attribution));
+}
+
+export function validateExtensionUserModelAttribution(
+  profile: RunSnapshot['profile'],
+  binding: ExtensionUserModelBinding,
+  value: unknown
+) {
+  const attribution = attributionShape(value, ['user']);
+  if (attribution.trigger !== 'user')
+    throw new ExtensionProgramError('BEHAVIOR_HOST_MODEL_ATTRIBUTION');
+  return matchAttribution(attribution, extensionUserModelTarget(profile, binding));
+}
+
+function attributionShape(value: unknown, triggers: readonly string[]): ExtensionModelAttribution {
   const requiredKeys = ['instanceId', 'actionId', 'packageId', 'packageRevision'] as const;
   const allowedKeys = [...requiredKeys, 'trigger'] as const;
   if (
@@ -81,7 +127,7 @@ export function validateExtensionModelAttribution(snapshot: RunSnapshot, value: 
         return (
           !descriptor?.enumerable ||
           !Object.hasOwn(descriptor, 'value') ||
-          !['before-turn', 'after-turn'].includes(descriptor.value as string)
+          !triggers.includes(descriptor.value as string)
         );
       })())
   )
@@ -94,7 +140,20 @@ export function validateExtensionModelAttribution(snapshot: RunSnapshot, value: 
     !Number.isSafeInteger(attribution.packageRevision)
   )
     throw new ExtensionProgramError('BEHAVIOR_HOST_MODEL_ATTRIBUTION');
-  const resolved = extensionModelTarget(snapshot, attribution);
+  return attribution;
+}
+
+function matchAttribution(
+  attribution: ExtensionModelAttribution,
+  resolved: ReturnType<typeof resolveModelTarget>
+) {
+  const allowedKeys = [
+    'instanceId',
+    'actionId',
+    'packageId',
+    'packageRevision',
+    'trigger',
+  ] as const;
   if (
     allowedKeys.some(
       (key) => attribution[key as keyof ExtensionModelAttribution] !== resolved.attribution[key]

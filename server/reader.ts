@@ -50,9 +50,12 @@ function readerActivity(
     UNION ALL
     SELECT j.id,'illustration',j.status,j.created_at,j.updated_at,r.branch_id,j.source_revision,j.generation,j.source_hash,0,(j.status='interrupted') FROM illustration_jobs j JOIN sources s ON s.id=j.source_revision JOIN runs r ON r.id=s.run_id
       WHERE j.chat_id=?
+    UNION ALL
+    SELECT id,'extension',status,created_at,updated_at,branch_id,NULL,generation,NULL,0,(status='interrupted') FROM package_extension_operations WHERE chat_id=?
   ), recent AS (SELECT * FROM activity WHERE status NOT IN ('queued','running','waiting_for_state') ORDER BY updatedAt DESC,id DESC LIMIT 30)
   ${selection}`)
     .all(
+      chatId,
       chatId,
       chatId,
       chatId,
@@ -82,9 +85,11 @@ function readerActivity(
         ? 'run'
         : row.kind === 'state'
           ? 'story.job'
-          : row.kind === 'illustration'
-            ? 'illustration'
-            : 'job';
+          : row.kind === 'extension'
+            ? 'extension-operation'
+            : row.kind === 'illustration'
+              ? 'illustration'
+              : 'job';
     const time = (status: string) => eventTimes.get(`${row.id}:${prefix}.${status}`);
     // A retry can reuse a job ID; queue time identifies that new user-visible execution.
     const startedAt = row.kind === 'main' ? row.createdAt : (time('queued') ?? row.createdAt);

@@ -1,7 +1,7 @@
 import type { DatabaseSync } from 'node:sqlite';
 import { SCHEMA_15_COLUMNS } from './schema-v15-contract.js';
 
-export const DATABASE_SCHEMA_VERSION = 17;
+export const DATABASE_SCHEMA_VERSION = 18;
 const BASELINE_VERSION = 15;
 const LEDGER = 'schema_migrations';
 const ADDITIVE_TABLES = new Set([
@@ -141,6 +141,13 @@ function migrate15To16(db: DatabaseSync) {
     db.exec('ALTER TABLE helper_tasks ADD COLUMN started_at TEXT');
 }
 
+const EXTENSION_OPERATION_SCHEMA = [
+  'CREATE TABLE package_extension_operations(id TEXT PRIMARY KEY,chat_id TEXT NOT NULL REFERENCES chats(id),branch_id TEXT NOT NULL REFERENCES branches(id),attachment_instance_id TEXT NOT NULL,request_key TEXT NOT NULL,request_hash TEXT NOT NULL,command TEXT NOT NULL,snapshot TEXT NOT NULL,status TEXT NOT NULL,generation INTEGER NOT NULL DEFAULT 0,owner TEXT,result TEXT,usage TEXT,error TEXT,created_at TEXT NOT NULL,started_at TEXT,updated_at TEXT NOT NULL,UNIQUE(chat_id,branch_id,attachment_instance_id,request_key))',
+  "CREATE UNIQUE INDEX package_extension_one_active ON package_extension_operations(chat_id,branch_id,attachment_instance_id) WHERE status IN ('queued','running')",
+  'CREATE INDEX package_extension_recent ON package_extension_operations(chat_id,branch_id,attachment_instance_id,created_at)',
+  'CREATE TABLE package_extension_operation_attempts(operation_id TEXT NOT NULL REFERENCES package_extension_operations(id) ON DELETE CASCADE,attempt_id TEXT PRIMARY KEY REFERENCES attempts(id) ON DELETE CASCADE,call_index INTEGER NOT NULL,UNIQUE(operation_id,call_index))',
+] as const;
+
 const migrations: readonly Migration[] = [
   {
     version: 16,
@@ -178,6 +185,22 @@ const migrations: readonly Migration[] = [
         !uniqueRequestKey
       )
         throw new SchemaMigrationError('DATABASE_SCHEMA_MISMATCH:native_transfer_receipts', 17);
+    },
+  },
+  {
+    version: 18,
+    name: 'schema-18-package-extension-operations',
+    apply: (db) => {
+      for (const sql of EXTENSION_OPERATION_SCHEMA) db.exec(sql);
+    },
+    validate: (db) => {
+      migrations.find((migration) => migration.version === 17)!.validate(db);
+      for (const sql of EXTENSION_OPERATION_SCHEMA) {
+        const match = /^CREATE (?:UNIQUE )?(TABLE|INDEX) ([a-z_]+)/u.exec(sql)!;
+        const actual = db.prepare('SELECT type,sql FROM sqlite_schema WHERE name=?').get(match[2]);
+        if (actual?.type !== match[1].toLowerCase() || actual.sql !== sql)
+          throw new SchemaMigrationError(`DATABASE_SCHEMA_MISMATCH:${match[2]}`, 18);
+      }
     },
   },
 ];

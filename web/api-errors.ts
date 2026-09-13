@@ -62,6 +62,11 @@ const messages: Record<string, string> = {
     '계산 중 자료나 채팅 상태가 바뀌어 결과를 반영하지 않았어요. 최신 상태에서 다시 실행해 주세요.',
   BEHAVIOR_RUN_ACTIVE: '이 채팅에서 요청이 진행 중이에요. 완료 후 행동을 다시 실행해 주세요.',
   EXTENSION_CANCELLED: '코드 계산을 취소했어요. 상태는 바꾸지 않았어요.',
+  EXTENSION_OPERATION_ACTIVE:
+    '이 자료의 코드 작업이 이미 진행 중이에요. 결과를 기다리거나 해당 작업을 취소해 주세요.',
+  EXTENSION_OPERATION_NOT_FOUND: '자료 코드 작업을 찾지 못했어요. 채팅의 상태를 새로 읽어 주세요.',
+  EXTENSION_OPERATION_FAILED: '자료 코드 작업을 완료하지 못했어요. 기존 상태와 채팅은 유지돼요.',
+  EXTENSION_INTERRUPTED: '서버가 중단돼 자료 코드 작업을 멈췄어요. 자동으로 다시 실행하지 않아요.',
   BEHAVIOR_PROGRAM_ABORTED: '코드 계산을 취소했어요. 상태는 바꾸지 않았어요.',
   BEHAVIOR_PROGRAM_BUSY: '다른 코드 계산이 진행 중이에요. 잠시 후 다시 실행해 주세요.',
   BEHAVIOR_PROGRAM_FAILED:

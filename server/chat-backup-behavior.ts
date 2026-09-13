@@ -22,6 +22,14 @@ export function remapBackupBehavior(ctx: BackupRemap): void {
       return key;
     return `${match[1]}:${id(match[2])}:${match[3]}`;
   };
+  for (const row of tables.package_extension_operations) {
+    const snapshot = JSON.parse(row.snapshot);
+    snapshot.scope = ownership(snapshot.scope);
+    snapshot.profile = ctx.structured(snapshot.profile);
+    snapshot.sourceRevision = id(snapshot.sourceRevision);
+    // Runtime, authored command inputs, guard and result are original execution evidence.
+    row.snapshot = JSON.stringify(snapshot);
+  }
   for (const row of tables.package_behavior_states)
     row.scope = JSON.stringify(ownership(JSON.parse(row.scope)));
   for (const row of tables.package_behavior_journal) {

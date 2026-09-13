@@ -32,6 +32,7 @@ import {
 import type { ResolvedExtensionProgram } from '../core/extension-program.js';
 import { executeExtensionProgram } from './extension-runtime.js';
 import { createPackageExtensionHost } from './extension-materials.js';
+import { extensionOperationViews } from './extension-operations.js';
 import type { Store, Run, Source } from './store.js';
 import { captureLogicalHistory } from './prompt-snapshot.js';
 import { freezeSourceSegments } from '../core/package-source-segments.js';
@@ -217,6 +218,7 @@ export function behaviorDetail(store: Store, chatId: string, requestedBranch?: s
     ...(standalonePanels.length ? { standalonePanels } : {}),
     sourceHash: branch.headRevision ? store.source(branch.headRevision).hash : null,
     pendingRequest: pendingPackageRequest(store, chatId, branch.id),
+    operations: extensionOperationViews(store, chatId, branch.id),
     instances: definitions(store, chatId, branch.id).map((d) => {
       let state: BehaviorState;
       let availability: { status: 'ready' | 'stale'; error: string | null };
@@ -671,17 +673,16 @@ const activePrograms = new WeakMap<
   Store,
   Map<string, { commandHash: string; promise: Promise<ReturnType<typeof behaviorDetail>> }>
 >();
-/** Calculate outside SQLite transactions; only the host can adopt the returned state. */
-export async function performBehaviorActionWithProgram(
+/** Shared admission for short local actions and durable user model operations. */
+export function prepareUserBehaviorProgram(
   store: Store,
   chatId: string,
   branchId: string | undefined,
   instanceId: string,
   command: BehaviorActionCommand,
-  panel?: ActionPanel,
-  signal?: AbortSignal
+  panel?: ActionPanel
 ) {
-  const preparation = store.transaction(() => {
+  return store.transaction(() => {
     const { branch, d } = actionContext(store, chatId, branchId, instanceId, command, false, panel);
     const action = d.pkg.behavior!.actions.find((item) => item.id === command.actionId);
     if (!action) throw new HttpError(400, 'BEHAVIOR_ACTION_UNKNOWN');
@@ -700,6 +701,12 @@ export async function performBehaviorActionWithProgram(
       throw new HttpError(409, 'BEHAVIOR_ACTION_DISABLED');
     const guard = actionGuard(store, d);
     return {
+      scope: d.scope,
+      stateRevision: state.stateRevision,
+      profile: store.product.snapshot(chatId)!,
+      settings: store.chat(chatId).settings,
+      sourceRevision: branch.headRevision,
+      sourceHash,
       branchId: branch.id,
       program: action.program,
       input: { state: state.state, input: command.input },
@@ -725,6 +732,40 @@ export async function performBehaviorActionWithProgram(
       ),
     };
   });
+}
+
+/** A durable invocation checks the same context boundary as an immediate user action. */
+export function assertUserBehaviorProgramCurrent(
+  store: Store,
+  chatId: string,
+  branchId: string,
+  instanceId: string,
+  command: BehaviorActionCommand,
+  guard: string,
+  panel?: ActionPanel
+) {
+  const { d } = actionContext(store, chatId, branchId, instanceId, command, false, panel);
+  if (actionGuard(store, d) !== guard) throw new HttpError(409, 'BEHAVIOR_PROGRAM_CONTEXT_CHANGED');
+}
+
+/** Calculate outside SQLite transactions; only the host can adopt the returned state. */
+export async function performBehaviorActionWithProgram(
+  store: Store,
+  chatId: string,
+  branchId: string | undefined,
+  instanceId: string,
+  command: BehaviorActionCommand,
+  panel?: ActionPanel,
+  signal?: AbortSignal
+) {
+  const preparation = prepareUserBehaviorProgram(
+    store,
+    chatId,
+    branchId,
+    instanceId,
+    command,
+    panel
+  );
   if (!preparation)
     return performBehaviorAction(store, chatId, branchId, instanceId, command, false, panel);
   let active = activePrograms.get(store);

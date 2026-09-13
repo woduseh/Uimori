@@ -2,6 +2,8 @@ import { afterEach, expect, test, vi } from 'vitest';
 import type { ContentPackage } from '../core/content-package.js';
 import {
   extensionModelTarget,
+  extensionUserModelTarget,
+  validateExtensionUserModelAttribution,
   validateExtensionModelAttribution,
 } from '../core/extension-model.js';
 import { ExtensionProgramError } from '../core/extension-program.js';
@@ -52,7 +54,7 @@ function snapshot(
   target: ModelSnapshot,
   maxCalls = 6,
   options: {
-    trigger?: 'model' | 'before-turn' | 'after-turn';
+    trigger?: 'model' | 'before-turn' | 'after-turn' | 'user';
     deferredAutomatic?: boolean;
     behaviorExecution?: boolean;
   } = {}
@@ -503,4 +505,91 @@ test('returns fixed guest errors for refusal and provider failure without exposi
   expect(log.finished).toHaveLength(2);
   expect(usage.modelCalls).toBe(2);
   expect(usage.costUsd).toBeNull();
+});
+
+test('user attribution binds the frozen action and grant while Run attribution rejects user', () => {
+  const saved = snapshot(model('http://127.0.0.1:1'), 1, { trigger: 'user' });
+  const resolved = extensionUserModelTarget(saved.profile, binding);
+  expect(resolved.attribution).toEqual({
+    ...binding,
+    packageId: 'extension-model',
+    packageRevision: 1,
+    trigger: 'user',
+  });
+  expect(
+    validateExtensionUserModelAttribution(saved.profile, binding, resolved.attribution)
+  ).toEqual(resolved);
+  for (const changed of [
+    { ...resolved.attribution, trigger: undefined },
+    { ...resolved.attribution, trigger: 'before-turn' },
+    { ...resolved.attribution, actionId: 'other' },
+    { ...resolved.attribution, instanceId: 'other' },
+    { ...resolved.attribution, packageId: 'other' },
+    { ...resolved.attribution, packageRevision: 2 },
+    { ...resolved.attribution, modelId: 'guest-selected' },
+  ]) {
+    expect(() => validateExtensionUserModelAttribution(saved.profile, binding, changed)).toThrow(
+      'BEHAVIOR_HOST_MODEL_ATTRIBUTION'
+    );
+  }
+  expect(() => extensionModelTarget(saved, { ...binding, trigger: 'user' })).toThrow(
+    'BEHAVIOR_HOST_MODEL_DENIED'
+  );
+  expect(() => validateExtensionModelAttribution(saved, resolved.attribution)).toThrow(
+    'BEHAVIOR_HOST_MODEL_ATTRIBUTION'
+  );
+  const profile = structuredClone(saved.profile!);
+  profile.extensionGrants![binding.instanceId]!.packageRevision++;
+  expect(() => extensionUserModelTarget(profile, binding)).toThrow('BEHAVIOR_HOST_MODEL_DENIED');
+  expect(() =>
+    extensionUserModelTarget(snapshot(model('http://127.0.0.1:1')).profile, binding)
+  ).toThrow('BEHAVIOR_HOST_MODEL_DENIED');
+});
+
+test('user service spends its single call on the bound action and settles its durable attempt', async () => {
+  const provider = await loopbackProvider(async (_request, response) => {
+    await writeSse(response, [
+      { type: 'text_delta', delta: 'user action result' },
+      { type: 'usage', inputTokens: 3, outputTokens: 4, costUsd: null },
+      { type: 'done', reason: 'stop' },
+    ]);
+  });
+  servers.push(provider);
+  const target = model(provider.endpoint);
+  const saved = snapshot(target, 1, { trigger: 'user' });
+  const log = observed();
+  const usage: Usage = { modelCalls: 0, inputTokens: 0, outputTokens: 0, costUsd: 0 };
+  const service = createExtensionModelService(saved, hooks(target, log), usage, {
+    phase: 'user-action',
+    userAction: binding,
+  });
+  const signal = new AbortController().signal;
+  for (const rejected of [
+    binding,
+    { ...binding, trigger: 'model' as const },
+    { ...binding, trigger: 'user' as const, actionId: 'other' },
+    { ...binding, trigger: 'user' as const, instanceId: 'other' },
+  ]) {
+    await expect(service.generate(rejected, { prompt: 'test' }, signal)).rejects.toThrow(
+      'BEHAVIOR_HOST_MODEL_DENIED'
+    );
+  }
+  await expect(
+    service.generate({ ...binding, trigger: 'user' }, { prompt: 'test', modelId: 'other' }, signal)
+  ).rejects.toThrow('BEHAVIOR_HOST_ARGUMENTS');
+  expect(log.attempts).toHaveLength(0);
+  const result = await service.generate(
+    { ...binding, trigger: 'user' },
+    { prompt: 'test' },
+    signal
+  );
+  expect(result).toMatchObject({ status: 'completed', text: 'user action result' });
+  expect(log.attempts[0]!.extensionAction).toEqual(
+    extensionUserModelTarget(saved.profile, binding).attribution
+  );
+  expect(log.finished).toHaveLength(1);
+  expect(usage).toEqual({ modelCalls: 1, inputTokens: 3, outputTokens: 4, costUsd: null });
+  await expect(
+    service.generate({ ...binding, trigger: 'user' }, { prompt: 'again' }, signal)
+  ).rejects.toThrow('BEHAVIOR_HOST_MODEL_BUDGET_EXHAUSTED');
 });

@@ -20,6 +20,8 @@ export type BackupCollection = { name: string; table: string; fields: Field[] };
 // Required JSON columns (for example a create operation's beforeBody) store the literal "null".
 const nullableJson = new Set([
   'runs.usage',
+  'package_extension_operations.result',
+  'package_extension_operations.usage',
   'jobs.input',
   'attempts.response',
   'attempts.raw_usage',
@@ -223,6 +225,16 @@ export const BACKUP_COLLECTIONS = [
     'package_behavior_opportunities',
     'id chat_id branch_id @body'
   ),
+  collection(
+    'extensionOperations',
+    'package_extension_operations',
+    'id chat_id branch_id attachment_instance_id request_key request_hash @command @snapshot status generation owner @result @usage error created_at started_at updated_at'
+  ),
+  collection(
+    'extensionOperationAttempts',
+    'package_extension_operation_attempts',
+    'operation_id attempt_id call_index'
+  ),
   collection('behaviorRuns', 'package_behavior_runs', 'run_id @body'),
   collection('illustrationEnvironment', 'illustration_settings', 'id @body'),
   collection('illustrationReferences', 'illustration_references', 'chat_id revision @body'),
@@ -294,7 +306,11 @@ export function decodeChatBackup(value: unknown): { backup: ChatBackup; tables: 
   );
   const tables: BackupTables = {};
   for (const { name, table, fields: columns } of BACKUP_COLLECTIONS) {
-    const values = records[name];
+    const values =
+      records[name] === undefined &&
+      ['extensionOperations', 'extensionOperationAttempts'].includes(name)
+        ? []
+        : records[name];
     if (!Array.isArray(values) || values.length > 100_000)
       throw new HttpError(400, 'CHAT_BACKUP_INVALID_COLLECTION');
     tables[table] = values.map((raw) => {

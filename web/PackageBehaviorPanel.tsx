@@ -17,6 +17,8 @@ import './package.css';
 import { PackagePanelFrame } from './PackagePanelFrame.js';
 import type { RenderedPackagePanel } from '../core/package-panels.js';
 import { PackageStateUpgrade, type UpgradeTarget } from './PackageStateUpgrade.js';
+import type { ExtensionOperationView } from '../core/extension-operation.js';
+import { ExtensionOperations } from './ExtensionOperations.js';
 
 type Instance = {
   instanceId: string;
@@ -42,6 +44,8 @@ type Snapshot = {
   sourceHash: string | null;
   pendingRequest?: PackageRequest | null;
   instances: Instance[];
+  operations?: ExtensionOperationView[];
+  operation?: { operationId: string | null; reused: boolean };
   standalonePanels?: { instanceId: string; title: string; panels: RenderedPackagePanel[] }[];
 };
 type Props = {
@@ -372,13 +376,15 @@ function BehaviorPanel({ chatId, branchId, refreshKey, onChange, onRunRequest }:
         if (request === epoch.current) setSnapshot(result);
         setResetTarget(null);
         setNotice(
-          reset
-            ? '현재 원문에 맞춰 초깃값으로 복구했어요.'
-            : !instance.behavior.actions.find((action) => action.id === actionId)?.program &&
-                instance.behavior.actions.find((action) => action.id === actionId)?.effects
-                  .length === 0
-              ? '행동 결과를 계산했어요.'
-              : '상태에 반영했어요.'
+          result.operation?.operationId
+            ? '자료 코드 작업을 접수했어요. 다른 채팅을 이용해도 작업은 계속돼요.'
+            : reset
+              ? '현재 원문에 맞춰 초깃값으로 복구했어요.'
+              : !instance.behavior.actions.find((action) => action.id === actionId)?.program &&
+                  instance.behavior.actions.find((action) => action.id === actionId)?.effects
+                    .length === 0
+                ? '행동 결과를 계산했어요.'
+                : '상태에 반영했어요.'
         );
         onChange?.();
       }
@@ -457,6 +463,16 @@ function BehaviorPanel({ chatId, branchId, refreshKey, onChange, onRunRequest }:
         <p className="error" role="alert">
           {error}
         </p>
+      )}
+      {snapshot?.operations && (
+        <ExtensionOperations
+          chatId={chatId}
+          operations={snapshot.operations}
+          titles={Object.fromEntries(
+            snapshot.instances.map((instance) => [instance.instanceId, instance.title])
+          )}
+          refresh={refresh}
+        />
       )}
       {snapshot?.pendingRequest && (
         <aside className="behavior-action-result" aria-label="예약된 다음 요청">
