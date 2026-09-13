@@ -30,7 +30,8 @@ export type AfterResponsePackage = {
 export type AfterResponseProgress = {
   version: 1;
   sourceHash: string;
-  status: 'running' | 'completed';
+  status: 'running' | 'completed' | 'skipped';
+  skipKey?: string;
   completed: number;
   total: number;
   packages: AfterResponsePackage[];

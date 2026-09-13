@@ -584,11 +584,7 @@ export async function createApp(options: AppOptions): Promise<App> {
               executeRunBehaviorTool(store, id, binding, action, controller.signal, host),
             authorizeExtensionModel: (binding) => {
               assertCurrent();
-              if (
-                binding.trigger === 'before-turn' &&
-                runBehaviorProgress(store, id)?.preparation?.status !== 'running'
-              )
-                throw new ExtensionProgramError('BEHAVIOR_HOST_MODEL_DENIED');
+              assertExtensionPhase(binding.trigger);
               const live = store.product.profile(run.chatId);
               const { target } = extensionModelTarget(
                 {
@@ -645,6 +641,7 @@ export async function createApp(options: AppOptions): Promise<App> {
                       : run.snapshot.profile?.models.main;
               if (wire.extensionAction !== undefined) {
                 assertCurrent();
+                assertExtensionPhase(wire.extensionAction.trigger);
                 if (wire.agentId !== undefined || wire.role !== 'state')
                   throw new Error('Invalid extension attempt');
                 target = validateExtensionModelAttribution(
@@ -686,6 +683,14 @@ export async function createApp(options: AppOptions): Promise<App> {
                 }) !== run.snapshot.story.canonHash)
             )
               throw new Error('CONTEXT_DEPENDENCIES_CHANGED');
+          };
+          const assertExtensionPhase = (trigger?: 'model' | 'before-turn' | 'after-turn') => {
+            const progress = runBehaviorProgress(store, id);
+            if (
+              (trigger === 'before-turn' && progress?.preparation?.status !== 'running') ||
+              (trigger === 'after-turn' && progress?.afterResponse?.status !== 'running')
+            )
+              throw new ExtensionProgramError('BEHAVIOR_HOST_MODEL_DENIED');
           };
           const preparationModels = createExtensionModelService(run.snapshot, hooks, priorUsage);
           try {
@@ -810,15 +815,31 @@ export async function createApp(options: AppOptions): Promise<App> {
           // Response hooks compute outside the source transaction; only verified state receipts
           // are adopted with the unchanged main text. Keep provider accounting on fatal host errors.
           priorUsage = structuredClone(result.usage);
-          await prepareAfterResponse(store, id, result.text, controller.signal, () =>
-            publish(run.chatId)
-          );
+          const responseModels = createExtensionModelService(run.snapshot, hooks, priorUsage, {
+            phase: 'after-response',
+          });
+          try {
+            await prepareAfterResponse(
+              store,
+              id,
+              result.text,
+              controller.signal,
+              () => publish(run.chatId),
+              (binding) => ({
+                modelGenerate: (args, signal) => responseModels.generate(binding, args, signal),
+                assertModelAccess: () => hooks.authorizeExtensionModel?.(binding),
+                hostWaitMs: responseModels.hostWaitMs,
+              })
+            );
+          } catch (error) {
+            throw new ModelRunError(error, structuredClone(priorUsage));
+          }
           if (controller.signal.aborted) {
-            store.settleCancelledUsage(id, result.usage);
+            store.settleCancelledUsage(id, priorUsage);
             publish(run.chatId);
             return;
           }
-          store.completeRun(id, result.text, result.usage, run.snapshot.settings, controls);
+          store.completeRun(id, result.text, priorUsage, run.snapshot.settings, controls);
           if (controls.crashAfterSourceCommit) process.exit(86);
           publish(run.chatId);
           pumpJobs();

@@ -206,6 +206,83 @@ test('PROGPREPUI01 a user can skip pending automatic code preparation and contin
     await request.post('/api/test/control', { data: { action: 'release', barrier: 'run' } });
   }
 });
+test('PROGPOSTUI01 response processing skip sends the owned command and shows settlement status', async ({
+  page,
+  request,
+}) => {
+  const chat = await seed(request);
+  const current = (await (await request.get(`/api/chats/${chat.id}`)).json()).chat;
+  await request.post('/api/test/control', { data: { action: 'hold', barrier: 'run' } });
+  let runId: string | undefined;
+  try {
+    const admitted = await request.post(`/api/chats/${chat.id}/runs`, {
+      data: {
+        request: 'Synthetic response processing UI.',
+        expectedRevision: null,
+        expectedSettingsRevision: current.settingsRevision,
+        idempotencyKey: crypto.randomUUID(),
+      },
+    });
+    expect(admitted.ok(), await admitted.text()).toBe(true);
+    const run = await admitted.json();
+    runId = run.id;
+    // UI wiring uses a bounded phase projection; the actual provider/settlement path is covered
+    // by after-response-model-app.test.ts with the real API and a controlled HTTP peer.
+    let skipped = false;
+    let command: Record<string, unknown> | undefined;
+    await page.route(`**/api/chats/${chat.id}/reader?*`, async (route) => {
+      const response = await route.fetch();
+      const body = await response.json();
+      body.runs = body.runs.map((item: { id: string }) =>
+        item.id === run.id
+          ? {
+              ...item,
+              packageAfterResponse: {
+                status: skipped ? 'skipped' : 'running',
+                completed: 0,
+                total: 1,
+                failed: 0,
+              },
+            }
+          : item
+      );
+      await route.fulfill({ response, json: body });
+    });
+    await page.route(`**/api/runs/${run.id}/skip-package-after-response`, async (route) => {
+      command = route.request().postDataJSON();
+      skipped = true;
+      await route.fulfill({
+        json: { skipped: true, afterResponse: { status: 'skipped', completed: 0, total: 1 } },
+      });
+    });
+    await page.setViewportSize({ width: MOBILE_WIDTH, height: 900 });
+    await page.goto(`/?chat=${chat.id}`);
+    await page
+      .getByTestId('pending-run')
+      .getByTestId('turn-activity')
+      .locator(':scope > summary')
+      .click();
+    await page.getByRole('button', { name: '응답 후 처리 건너뛰기', exact: true }).click();
+    expect(command).toEqual({
+      chatId: chat.id,
+      branchId: run.snapshot.branchId,
+      expectedRevision: run.parentRevision,
+      idempotencyKey: expect.any(String),
+    });
+    await expect(
+      page.getByText('응답 후 처리를 건너뛰어 해당 상태 결과를 적용하지 않았어요.', {
+        exact: false,
+      })
+    ).toBeVisible();
+    await expect(
+      page.getByRole('button', { name: '응답 후 처리 건너뛰기', exact: true })
+    ).toHaveCount(0);
+  } finally {
+    if (runId) await request.post(`/api/runs/${runId}/cancel`);
+    await request.post('/api/test/control', { data: { action: 'release', barrier: 'run' } });
+  }
+});
+
 test('EXTPANELUI01 code action updates its panel and a failed action preserves chat input', async ({
   page,
   request,

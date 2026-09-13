@@ -31,6 +31,7 @@ export function RunTaskDetails({
   const [skipping, setSkipping] = useState(false);
   const stateSkipKey = useRef<string | null>(null);
   const packageSkipKey = useRef<string | null>(null);
+  const afterResponseSkipKey = useRef<string | null>(null);
   const canCancel = ['queued', 'running', 'waiting_for_state'].includes(run.status);
   const packagePreparing =
     !!run.packagePreparation && ['pending', 'running'].includes(run.packagePreparation.status);
@@ -89,6 +90,12 @@ export function RunTaskDetails({
           원문은 그대로 보존해요.
         </p>
       )}
+      {run.packageAfterResponse?.status === 'skipped' && (
+        <p role="status" className="muted">
+          응답 후 처리를 건너뛰어 해당 상태 결과를 적용하지 않았어요.
+          {canCancel && ' 진행 중인 호출을 정리한 뒤 원문을 저장해요.'}
+        </p>
+      )}
       {run.statePreparation && ['failed', 'skipped'].includes(run.statePreparation.status) && (
         <p role="status" className="muted">
           {run.statePreparation.status === 'skipped'
@@ -119,6 +126,34 @@ export function RunTaskDetails({
       )}
       {canCancel && (
         <div className="form-actions">
+          {run.packageAfterResponse?.status === 'running' && run.snapshot.branchId && (
+            <button
+              type="button"
+              className="secondary"
+              disabled={skipping || cancelling}
+              onClick={async () => {
+                if (skipping || cancelling) return;
+                setSkipping(true);
+                afterResponseSkipKey.current ??= crypto.randomUUID();
+                onError('');
+                try {
+                  await api(`/runs/${run.id}/skip-package-after-response`, {
+                    chatId: run.chatId,
+                    branchId: run.snapshot.branchId,
+                    expectedRevision: run.parentRevision,
+                    idempotencyKey: afterResponseSkipKey.current,
+                  });
+                  await refresh();
+                } catch (error) {
+                  onError((error as Error).message);
+                } finally {
+                  setSkipping(false);
+                }
+              }}
+            >
+              응답 후 처리 건너뛰기
+            </button>
+          )}
           {packagePreparing && run.snapshot.branchId && (
             <button
               type="button"

@@ -137,17 +137,19 @@ function validateAfterResponseProgress(
   value: unknown,
   checkState: CheckState
 ): AfterResponseProgress {
-  const receipt = object(value, [
-    'version',
-    'sourceHash',
-    'status',
-    'completed',
-    'total',
-    'packages',
-  ]);
+  const receipt = object(
+    value,
+    ['version', 'sourceHash', 'status', 'completed', 'total', 'packages'],
+    ['skipKey']
+  );
   if (receipt.version !== 1) reject('after-response version');
   digest(receipt.sourceHash);
-  if (!['running', 'completed'].includes(receipt.status)) reject('after-response status');
+  if (!['running', 'completed', 'skipped'].includes(receipt.status))
+    reject('after-response status');
+  if (receipt.status === 'skipped') {
+    text(receipt.skipKey);
+    if (receipt.skipKey.length > 200) reject('after-response skip key');
+  } else if (Object.hasOwn(receipt, 'skipKey')) reject('after-response skip key');
   list(receipt.packages);
 
   const branchId = snapshot.branchId ?? `main:${run.chatId}`;
@@ -181,14 +183,15 @@ function validateAfterResponseProgress(
   if (receipt.packages.length !== receipt.completed) reject('after-response completed count');
   if (receipt.status === 'completed') {
     if (receipt.completed !== receipt.total) reject('after-response completion');
-  } else {
-    if (receipt.completed >= receipt.total || run.status === 'completed')
-      reject('after-response running');
+  } else if (receipt.status === 'running') {
+    // The last package is persisted before the separate completion marker; a crash in between
+    // leaves every package computed but still uncommitted. Preserve that interrupted receipt.
+    if (run.status === 'completed') reject('after-response running');
   }
 
   const source = run.sourceRevision ? store.sourceOriginal(run.sourceRevision) : undefined;
   if (source) same(receipt.sourceHash, source.hash, 'after-response source');
-  if (run.status === 'completed' && (!source || receipt.status !== 'completed'))
+  if (run.status === 'completed' && (!source || receipt.status === 'running'))
     reject('completed after-response');
 
   const projectedSnapshot: RunSnapshot = {
@@ -718,7 +721,9 @@ export function validateRunBehaviorArchive(store: Store, checkState: CheckState)
         )
           reject('missing committed action');
       }
-      for (const pkg of afterResponseReceipt?.packages ?? []) {
+      for (const pkg of afterResponseReceipt?.status === 'skipped'
+        ? []
+        : (afterResponseReceipt?.packages ?? [])) {
         if (pkg.status !== 'ready') continue;
         for (const entry of pkg.entries)
           if (

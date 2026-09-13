@@ -19,7 +19,7 @@ import { behaviorDetail } from '../server/package-behavior-host.js';
 import { forkChat } from '../server/chat-fork.js';
 import { buildMainProviderRequest } from '../server/main-request.js';
 import { exportChatBackup, importChatBackup } from '../server/chat-backup.js';
-import { prepareAfterResponse } from '../server/package-after-response.js';
+import { prepareAfterResponse, skipAfterResponse } from '../server/package-after-response.js';
 import { behaviorPayloadHash } from '../server/package-behavior-store.js';
 
 const owned: { path: string; store: Store }[] = [];
@@ -731,27 +731,82 @@ describe('v11 recorded automatic/model behavior archive', () => {
     }
   });
 
-  test('RBA11 interrupted running receipt restores without publishing response-bound state', () => {
-    const f = fixture('authoritative', true),
-      run = start(f.store, f.chat.id),
-      progress = runBehaviorProgress(f.store, run.id)!;
-    progress.afterResponse = {
-      version: 1,
-      sourceHash: createHash('sha256').update('uncommitted response').digest('hex'),
-      status: 'running',
-      completed: 0,
-      total: 1,
-      packages: [],
-    };
-    f.store.db
-      .prepare('UPDATE package_behavior_runs SET body=? WHERE run_id=?')
-      .run(JSON.stringify(progress), run.id);
-    const target = database();
-    expect(target.product.import(f.store.product.export())).toEqual({ restored: true, chats: 1 });
-    expect(runBehaviorProgress(target, run.id)!.afterResponse).toEqual(progress.afterResponse);
-    expect(behaviorDetail(target, f.chat.id).instances[0]).toMatchObject({
-      stateRevision: 0,
-      state: { count: 0 },
-    });
-  });
+  test.each([0, 1])(
+    'RBA11 interrupted running receipt restores without publishing response-bound state (%s completed)',
+    async (completed) => {
+      const f = fixture('authoritative', true),
+        run = start(f.store, f.chat.id);
+      if (completed) {
+        await model(f.store, run);
+        await prepareAfterResponse(
+          f.store,
+          run.id,
+          'Exact synthetic prose. <state>{"count":11}</state>'
+        );
+      }
+      const progress = runBehaviorProgress(f.store, run.id)!;
+      progress.afterResponse = completed
+        ? { ...progress.afterResponse!, status: 'running' }
+        : {
+            version: 1,
+            sourceHash: createHash('sha256').update('uncommitted response').digest('hex'),
+            status: 'running',
+            completed: 0,
+            total: 1,
+            packages: [],
+          };
+      f.store.db
+        .prepare('UPDATE package_behavior_runs SET body=? WHERE run_id=?')
+        .run(JSON.stringify(progress), run.id);
+      const target = database();
+      expect(target.product.import(f.store.product.export())).toEqual({ restored: true, chats: 1 });
+      expect(runBehaviorProgress(target, run.id)!.afterResponse).toEqual(progress.afterResponse);
+      expect(behaviorDetail(target, f.chat.id).instances[0]).toMatchObject({
+        stateRevision: 0,
+        state: { count: 0 },
+      });
+    }
+  );
+  test.each([0, 1])(
+    'RBA12 skipped after-response history restores without adoption (%s completed)',
+    async (completed) => {
+      const f = fixture('authoritative', true),
+        run = start(f.store, f.chat.id);
+      await model(f.store, run);
+      await prepareAfterResponse(
+        f.store,
+        run.id,
+        'Exact synthetic prose. <state>{"count":11}</state>',
+        undefined,
+        () => {
+          const progress = runBehaviorProgress(f.store, run.id)!.afterResponse!;
+          if (progress.status === 'running' && progress.completed === completed)
+            skipAfterResponse(f.store, run.id, {
+              chatId: f.chat.id,
+              branchId: run.snapshot.branchId,
+              expectedRevision: run.parentRevision,
+              idempotencyKey: 'skip-after',
+            });
+        }
+      );
+      complete(f.store, run);
+      const recorded = runBehaviorProgress(f.store, run.id)!.afterResponse!;
+      expect(recorded).toMatchObject({ status: 'skipped', completed, skipKey: 'skip-after' });
+      expect(behaviorDetail(f.store, f.chat.id).instances[0].state).toEqual({ count: 11 });
+      const archive = f.store.product.export();
+      expect(
+        archive.tables.package_behavior_journal.some(
+          (row) => JSON.parse(row.result).provenance === 'after-turn'
+        )
+      ).toBe(false);
+      const target = database();
+      expect(target.product.import(archive)).toEqual({ restored: true, chats: 1 });
+      expect(runBehaviorProgress(target, run.id)!.afterResponse).toEqual(recorded);
+      const bad = structuredClone(archive),
+        value = JSON.parse(bad.tables.package_behavior_runs[0].body);
+      delete value.afterResponse.skipKey;
+      bad.tables.package_behavior_runs[0].body = JSON.stringify(value);
+      expect(() => database().product.import(bad)).toThrow();
+    }
+  );
 });

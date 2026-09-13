@@ -9,12 +9,28 @@ import {
 import type { BehaviorActionCommand } from './package-behavior-store.js';
 import { cancelPackageRequest } from './package-requests.js';
 import { skipAutomaticRunBehavior } from './package-behavior-run.js';
+import { skipAfterResponse } from './package-after-response.js';
 
 export function packageBehaviorRoutes(
   app: FastifyInstance,
   store: Store,
   publish?: (chatId: string) => void
 ) {
+  app.post<{ Params: { id: string } }>(
+    '/api/runs/:id/skip-package-after-response',
+    async (request) => {
+      const result = skipAfterResponse(store, request.params.id, request.body);
+      publish?.(store.run(request.params.id).chatId);
+      return {
+        skipped: result.skipped,
+        afterResponse: {
+          status: result.afterResponse.status,
+          completed: result.afterResponse.completed,
+          total: result.afterResponse.total,
+        },
+      };
+    }
+  );
   app.post<{ Params: { id: string } }>(
     '/api/runs/:id/skip-package-preparation',
     async (request) => {
