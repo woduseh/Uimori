@@ -31,6 +31,7 @@ import {
   type ExtensionProgramReceipt,
   type ResolvedExtensionProgram,
 } from '../core/extension-program.js';
+import type { ExtensionModelBinding } from '../core/extension-model.js';
 import { executeExtensionProgram } from './extension-runtime.js';
 import { createPackageExtensionHost } from './extension-materials.js';
 import type { ToolAction } from '../core/provider.js';
@@ -613,7 +614,12 @@ export async function prepareAutomaticRunBehavior(
   store: Store,
   runId: string,
   signal?: AbortSignal,
-  onProgress?: () => void
+  onProgress?: () => void,
+  modelServices?: (binding: ExtensionModelBinding) => {
+    modelGenerate: (args: RuntimeValue, signal: AbortSignal) => Promise<RuntimeValue>;
+    assertModelAccess: () => void | Promise<void>;
+    hostWaitMs: number;
+  }
 ): Promise<void> {
   const reserved = store.run(runId).snapshot;
   if (!reserved.behaviorExecution?.deferredAutomatic) return;
@@ -678,22 +684,53 @@ export async function prepareAutomaticRunBehavior(
         });
         if (!step) return;
         if ('program' in step) {
-          const output = await cancellablePreparation(
-            executeExtensionProgram(
-              step.program!,
-              { state: step.state!, input },
-              controller.signal,
-              {
-                waitForSlot: true,
-                host: createPackageExtensionHost(step.program!, reserved.profile, d.ref, () => {
-                  validateOwner(store, store.run(runId));
-                  if (preparationProgress(store, runId).preparation.status !== 'running')
-                    fail('BEHAVIOR_RUN_CANCELLED');
-                }),
-              }
-            ),
-            controller.signal
+          const usesModel = step.program!.capabilities?.includes('model.generate') === true;
+          const binding = {
+            instanceId: d.instanceId,
+            actionId: d.action.id,
+            trigger: 'before-turn',
+          } satisfies ExtensionModelBinding;
+          const services = usesModel ? modelServices?.(binding) : undefined;
+          const assertCurrent = () => {
+            validateOwner(store, store.run(runId));
+            if (preparationProgress(store, runId).preparation.status !== 'running')
+              fail('BEHAVIOR_RUN_CANCELLED');
+          };
+          const packageHost = createPackageExtensionHost(
+            step.program!,
+            reserved.profile,
+            d.ref,
+            assertCurrent
           );
+          let modelResultRead = false;
+          const execution = executeExtensionProgram(
+            step.program!,
+            { state: step.state!, input },
+            controller.signal,
+            {
+              waitForSlot: true,
+              hostWaitMs: usesModel ? services?.hostWaitMs : undefined,
+              awaitHostSettlement: usesModel,
+              host: async (method, args, hostSignal) => {
+                if (method !== 'model.generate') return packageHost(method, args, hostSignal);
+                if (!usesModel || !services)
+                  throw new ExtensionProgramError('BEHAVIOR_HOST_MODEL_DENIED');
+                assertCurrent();
+                const result = await services.modelGenerate(args, hostSignal);
+                modelResultRead = true;
+                return result;
+              },
+            }
+          );
+          // Paid host work owns durable attempt and usage settlement. Do not let a skip/cancel
+          // return while that work may still be finalizing; pure guest code retains prompt skip.
+          const output = usesModel
+            ? await execution
+            : await cancellablePreparation(execution, controller.signal);
+          if (modelResultRead) {
+            await services!.assertModelAccess();
+            assertCurrent();
+          }
           const adopted = store.transaction(() => {
             const current = preparationProgress(store, runId);
             if (current.preparation.status !== 'running') return false;
@@ -734,23 +771,36 @@ export async function prepareAutomaticRunBehavior(
       onProgress?.();
     } catch (error) {
       const skipped = preparationProgress(store, runId).preparation.status === 'skipped';
-      if (skipped && !signal?.aborted) return;
       const recoverable =
         error instanceof ExtensionProgramError || isRecoverableBehaviorExecutionError(error);
-      if (!recoverable && !signal?.aborted) throw error;
+      const expectedCancellation =
+        controller.signal.aborted &&
+        (error === controller.signal.reason ||
+          (error instanceof Error && error.name === 'AbortError') ||
+          (error instanceof ExtensionProgramError && error.code === 'BEHAVIOR_PROGRAM_ABORTED') ||
+          (error instanceof BehaviorError && error.message === 'BEHAVIOR_RUN_CANCELLED'));
+      // A user skip closes this optional cohort. Fatal owner/DB/settlement failures still escape.
+      if (skipped) {
+        if (recoverable || expectedCancellation) return;
+        throw error;
+      }
+      if (!recoverable && !expectedCancellation) throw error;
       store.transaction(() => {
         const current = preparationProgress(store, runId);
         if (current.preparation.status !== 'running') return;
         current.preparation = {
           ...current.preparation,
           status: 'failed',
-          code: signal?.aborted ? 'BEHAVIOR_RUN_CANCELLED' : (error as Error).message,
+          code:
+            signal?.aborted || expectedCancellation
+              ? 'BEHAVIOR_RUN_CANCELLED'
+              : (error as Error).message,
         };
         saveProgress(store, runId, current);
         notifyPreparation(store, runId);
       });
       onProgress?.();
-      if (signal?.aborted) fail('BEHAVIOR_RUN_CANCELLED');
+      if (signal?.aborted || expectedCancellation) fail('BEHAVIOR_RUN_CANCELLED');
     }
   })();
   active.set(runId, { controller, work });

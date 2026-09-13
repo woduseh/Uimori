@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { basename, isAbsolute, join, relative, resolve } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { createApp, type App } from '../server/app.js';
+import { Store } from '../server/store.js';
 import { createFixtureChat } from './fixtures/chat.js';
 import { updateTestProfile } from './fixtures/model-workspace.js';
 import { loopbackProvider, writeSse } from './fixtures/loopback-provider.js';
@@ -14,14 +15,21 @@ import type { Connection, Content, ModelPreset, PromptPreset } from '../core/pro
 import type { Run } from '../core/types.js';
 import { behaviorDetail } from '../server/package-behavior-host.js';
 import { runBehaviorProgress } from '../server/package-behavior-run.js';
+import { validateRunSnapshot } from '../server/snapshot-archive.js';
 
 const prose = 'The fixture model completed the scene after package preparation.';
-const owned: { directory: string; app: App; closeProvider: () => Promise<void> }[] = [];
+const owned: {
+  directory: string;
+  app?: App;
+  store?: Store;
+  closeProvider?: () => Promise<void>;
+}[] = [];
 
 afterEach(async () => {
   for (const item of owned.splice(0).reverse()) {
-    await item.app.close();
-    await item.closeProvider();
+    await item.app?.close();
+    item.store?.close();
+    await item.closeProvider?.();
     const target = resolve(item.directory),
       within = relative(resolve(tmpdir()), target);
     if (
@@ -158,6 +166,13 @@ async function fixture(programSource: string) {
   return { app, provider, chat, content };
 }
 
+async function emptyStore() {
+  const directory = await mkdtemp(join(tmpdir(), 'uimori-extension-preparation-app-'));
+  const store = new Store(join(directory, 'restored.sqlite'));
+  owned.push({ directory, store });
+  return store;
+}
+
 async function start(app: App, chatId: string) {
   const chat = app.store.chat(chatId);
   const response = await app.inject({
@@ -225,6 +240,15 @@ test('actual app prepares deferred state before prompt budgeting and commits it 
     },
     promptCompilation: expect.any(Object),
   });
+  expect(() => validateRunSnapshot(f.app.store, completed.snapshot, completed.id)).not.toThrow();
+  const restored = await emptyStore();
+  expect(restored.product.import(f.app.store.product.export())).toEqual({
+    restored: true,
+    chats: 1,
+  });
+  expect(runBehaviorProgress(restored, completed.id)).toEqual(
+    runBehaviorProgress(f.app.store, completed.id)
+  );
 
   const candidateResponse = await f.app.inject({
     method: 'POST',

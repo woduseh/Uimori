@@ -9,11 +9,11 @@
 추가 모델 호출을 사용하는 순서는 간단해요.
 
 1. 설정 → 역할별 모델에서 전역 **확장 호출 모델**을 선택해요. 기본값은 없음이에요.
-2. 자료의 행동에서 제작자가 `model` 호출 방법과 `model.generate` capability를 요청해요.
+2. 자료의 행동에서 제작자가 `model` 또는 `before-turn` 호출 방법과 `model.generate` capability를 요청해요. 자동 준비에는 `automaticInput`도 지정해요.
 3. 채팅에서 장착한 자료의 **추가 모델 호출 허용**을 켜요. 이 허용은 그 자료의 현재 revision에만 적용돼요.
-4. 본문(main) 모델이 해당 행동을 호출하면 코드가 `model.generate`를 사용할 수 있어요.
+4. 생성 전 자동 준비 또는 본문(main) 모델이 요청한 행동에서 코드가 `model.generate`를 사용할 수 있어요.
 
-첫 지원은 모델이 호출한 행동의 추가 생성이에요. 기존 순수 코드 사용자 버튼과 생성 전 자동 준비는 그대로 동작하며, 사용자 버튼이나 `before-turn`에서 추가 모델을 호출하는 기능은 후속 범위예요.
+사용자 버튼의 코드는 자기 상태 계산과 자료 읽기를 지원하며, 버튼에서 추가 모델을 호출하는 기능은 후속 범위예요.
 
 ```json
 {
@@ -75,17 +75,21 @@ return {state: api.state, result: {preview: material?.text ?? ''}};
 
 진행 수는 조건이 false라 실행하지 않은 선언도 처리한 항목으로 세요. 취소·서버 중단 뒤 준비를 자동 재실행하지 않으며, 진행 중이던 기록과 Run의 종료 상태를 함께 표시해요. 포크·백업은 준비 상태와 채택된 영수증을 보존하고 코드를 재실행하지 않아요. 복원은 채택된 입력/호스트 조건·선언 순서·상태 연결을 검사하며, 복사된 분기의 새 ID로 과거에 생략한 조건을 재판정하지 않아요.
 
+저장된 프롬프트의 복원 검사는 예약 기본 상태에 준비 영수증의 적용 결과를 투영해 당시 입력과 대조해요. 이때도 예약 snapshot은 바꾸지 않고 자동 준비 코드를 다시 실행하지 않아요.
+
 ## 모델 호출과 상태 저장
 
 ### 모델 호출 Host API와 명시 권한
 
-`program.capabilities: ['model.generate']`는 자료 제작자가 요청하는 capability일 뿐이에요. 행동이 `model` trigger여야 하고, 전역 역할 모델 설정의 `extensionModel`이 선택되어 있어야 하며, 채팅 profile에 `extensionGrants[packageInstanceId] = {packageRevision, capabilities: ['model.generate']}`가 있어야 호출할 수 있어요. 전역 `extensionModel`의 기본값은 `null`이고, 이 모델은 확장 행동의 추가 생성에만 사용해요. 예약할 때 모델·연결·자료 source/revision·허용을 Run에 고정하고 실행 중 전역 설정을 다시 읽지 않지만, 매 호출과 결과 채택에서 최신 grant·connection·소유권을 다시 확인해요.
+`program.capabilities: ['model.generate']`는 자료 제작자가 요청하는 capability일 뿐이에요. 행동이 해당 호출 방법(`model` 또는 `before-turn`)을 허용하고, 전역 역할 모델 설정의 `extensionModel`이 선택되어 있어야 하며, 채팅 profile에 `extensionGrants[packageInstanceId] = {packageRevision, capabilities: ['model.generate']}`가 있어야 호출할 수 있어요. `before-turn`은 예약된 `deferredAutomatic` 실행의 준비 중에만 허용해요. 전역 `extensionModel`의 기본값은 `null`이고, 이 모델은 확장 행동의 추가 생성에만 사용해요. 예약할 때 모델·연결·자료 source/revision·허용을 Run에 고정하고 실행 중 전역 설정을 다시 읽지 않지만, 매 호출과 결과 채택에서 최신 grant·connection·소유권을 다시 확인해요.
 
-허용은 정확히 장착한 자료 revision에 묶여요. 자료가 새 revision이 되면 예전 grant를 자동 승계하지 않으며, 사용자가 허용을 철회하면 새 호출을 막고 이미 끝난 늦은 결과도 채택하지 않아요. 자료 native transfer는 확장 grant를 옮기지 않아요. 기존 순수 코드 버튼과 `before-turn` 자동 준비는 추가 모델 호출 없이 유지해요.
+허용은 정확히 장착한 자료 revision에 묶여요. 자료가 새 revision이 되면 예전 grant를 자동 승계하지 않으며, 사용자가 허용을 철회하면 새 호출을 막고 이미 끝난 늦은 결과도 채택하지 않아요. 자료 native transfer는 확장 grant를 옮기지 않아요. 순수 코드 행동에는 모델 선택이나 추가 호출 허용이 필요하지 않아요.
 
 코드는 `await api.host.call('model.generate', {prompt})`만 요청할 수 있어요. `prompt`는 비어 있지 않은 문자열이고 최대 16,000자예요. 모델 ID·키·endpoint·옵션은 게스트가 지정할 수 없고, 예약된 확장 호출 모델의 generation·context budget·pricing snapshot을 호스트가 사용해요. 출력 토큰 한도도 선택한 모델 설정을 따르며 코드에서 늘릴 수 없어요. 반환값은 `status`, `text`, `truncated`, `error` 필드이며 `text`는 최대 6,000자예요.
 
 추가 호출은 Run 전체 `maxCalls`를 공유하고 마지막 본문(main) 호출 한 번을 남겨요. 동시에 여러 호출해도 pending 예약을 함께 세어 한도를 지켜요. 확장 호출을 자동 재시도하거나 임의 도구를 제공하지 않아요. 전송 전에 `role: 'state'`와 `extensionAction` 자료 귀속을 포함한 attempt를 기록하고, 사용량과 가격 snapshot은 기존 모델 실행 경로로 보존해요. 확장 결과는 행동 결과·opportunity/progress·영수증으로 보존하며 원문은 기존 main 호출만 저장해요. 복원에서는 모델이나 코드를 재실행하지 않아요.
+
+자동 준비의 attempt는 `extensionAction.trigger: 'before-turn'`으로 구분하고 기존 모델 행동의 영수증 형식은 유지해요. 준비에서 사용한 호출·토큰·비용은 뒤의 문맥 정리·본문과 합산해요. 문맥 정리는 이미 사용한 준비 호출을 제외한 남은 한도를 사용하며 자기 `summaryCalls`에는 요약 호출만 기록해요. 준비를 건너뛰면 결과 채택은 즉시 닫고 이미 전송한 호출의 취소·사용량 정산 후 같은 본문 요청을 계속해요. 후보가 완료된 준비 결과를 재사용할 때는 모델을 재호출하거나 원래 준비 사용량을 다시 더하지 않아요.
 
 모델·프로바이더·권한 거절은 알려진 부가 행동 실패로 전달해 본문을 이어갈 수 있어요. DB 오류와 원문 소유권 오류는 부가 실패로 숨기지 않고 치명적인 호스트 오류로 처리해요. 모델 호출을 기다리는 실행이 취소되면 caller는 `awaitHostSettlement` 경계에서 전송 전 attempt 정산이 끝날 때까지 기다린 뒤 돌아오며, 철회되거나 늦은 결과가 상태를 바꾸지 않아요.
 
@@ -97,7 +101,7 @@ return {state: api.state, result: {preview: material?.text ?? ''}};
 
 ## 권한과 실행
 
-버튼 실행은 이 자료의 상태/입력 읽기와 반환한 상태의 반영을 요청하는 동작이에요. 선택한 권한으로 자기 자료를 읽을 수 있지만 채팅 전체·다른 자료·키·환경변수·DB 객체·앱 DOM을 받지 않아요. ID나 권한을 결과에 추가해도 권한이 늘어나지 않아요. 사용자 버튼과 `before-turn`에서의 추가 모델 호출, 파일·일반 HTTP·동적 모듈 import는 연결하지 않았어요. `model.generate`는 모델이 호출한 행동에서만 사용할 수 있어요.
+버튼 실행은 이 자료의 상태/입력 읽기와 반환한 상태의 반영을 요청하는 동작이에요. 선택한 권한으로 자기 자료를 읽을 수 있지만 채팅 전체·다른 자료·키·환경변수·DB 객체·앱 DOM을 받지 않아요. ID나 권한을 결과에 추가해도 권한이 늘어나지 않아요. 사용자 버튼에서의 추가 모델 호출, 파일·일반 HTTP·동적 모듈 import는 연결하지 않았어요. `model.generate`는 생성 전 자동 준비와 모델이 호출한 행동에서 사용할 수 있어요.
 
 사용자 버튼에서는 호스트가 현재 장착 자료와 행동·패널 허용 목록, 입력·상태 개정·원문 의존성을 확인한 뒤 transaction 밖에서 계산해요. 계산이 끝나면 자료/프로필·분기/원문·상태와 진행 중 Run을 다시 확인하고, 같은 경계에서 결과 검사와 journal 저장을 수행해요. 계산 중 다른 작업이 바뀌면 늦은 결과는 반영하지 않아요. 같은 명령 키의 동시 실행은 합치고, 이미 저장된 명령은 원래 영수증을 반환해요. 같은 키의 다른 명령은 충돌이에요.
 
@@ -117,4 +121,4 @@ return {state: api.state, result: {preview: material?.text ?? ''}};
 
 프로그램은 패키지 개정에 속하므로 기존 자료 이동·snapshot·백업에 함께 들어가요. 저장한 행동 영수증에는 API·코드 지문·엔진 식별자·상태/결과를 보존해요. 모델 호출의 영수증은 opportunity·Run progress·최종 journal 사이에도 결합해요. 일반 채팅 백업으로 새 채팅을 복원할 때는 다른 사람의 백업이 목적지에서 선택한 `extensionModel`에 자동 과금 권한을 주지 않도록 live profile의 `extensionGrants`를 제거하고, 사용자가 그 채팅에서 다시 허용하게 해요. source/grant 이력은 과거 Run snapshot과 attempt 귀속 영수증에 보존해 복원 검증에 사용해요. 같은 workspace 안의 fork는 기존 허가를 보존하고, 자료 native transfer는 grant를 처음부터 만들지 않아요. 전체 DB archive는 전역 연결을 disabled·비밀 제거하는 기존 복구 경계를 따르며 이 계약에서 별도 grant 삭제를 추가하지 않아요. 커밋·포크·복원은 고정한 source/revision·입력 schema·호스트 조건과 영수증·저장 결과의 일치를 확인하며 코드를 다시 실행하지 않아요. 이것은 승인된 결과의 보존이며 복원 때 계산의 의미를 재평가했다는 증거가 아니에요. 공유용 진단에는 이 코드나 입력/출력을 자동 포함하지 않아요.
 
-엔진 실행, `uimori-state-action-v1` 입력 계약, 상태 저장 호스트는 별도 모듈이에요. 자동 준비와 모델 행동은 `server/package-behavior-run.ts`에서 행동 해석·영수증·효과 채택을 공유해요. 현재 `model.generate` broker는 모델이 호출한 행동에만 연결되어 있어요. 사용자 버튼·`before-turn`에서의 추가 모델 호출, 일반 HTTP, 응답 후 코드 처리, 실행 설치·의존성 권한 관리와 Lua 어댑터는 후속 작업이에요. 자료별 함수명을 서버 분기로 옮기지 않아요.
+엔진 실행, `uimori-state-action-v1` 입력 계약, 상태 저장 호스트는 별도 모듈이에요. 자동 준비와 모델 행동은 `server/package-behavior-run.ts`에서 행동 해석·영수증·효과 채택과 `model.generate` broker를 공유해요. 사용자 버튼에서의 추가 모델 호출, 일반 HTTP, 응답 후 코드 처리, 실행 설치·의존성 권한 관리와 Lua 어댑터는 후속 작업이에요. 자료별 함수명을 서버 분기로 옮기지 않아요.

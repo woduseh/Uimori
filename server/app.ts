@@ -39,7 +39,9 @@ import {
   executeRunBehaviorTool,
   prepareAutomaticRunBehavior,
   preparedBehaviorSnapshot,
+  runBehaviorProgress,
 } from './package-behavior-run.js';
+import { createExtensionModelService } from './extension-model.js';
 import { freezeLoreContext } from './lore-context.js';
 import { runAuxiliaryJob } from './product-auxiliary.js';
 import { auxiliaryBridge } from './auxiliary-bridge.js';
@@ -74,7 +76,7 @@ import type { Connection } from '../core/product.js';
 import type { CodexImageRequest } from './codex-runtime.js';
 
 import { PROVIDER_PROTOCOLS } from '../core/product.js';
-import type { Settings, RunSnapshot } from '../core/types.js';
+import type { Settings, RunSnapshot, Usage } from '../core/types.js';
 
 export type AppOptions = {
   dbPath: string;
@@ -91,6 +93,12 @@ export type AppOptions = {
 };
 export type App = FastifyInstance & { store: Store; controls: Controls };
 type RecordBody = Record<string, unknown>;
+function mergeUsage(left: Usage, right: Usage): Usage {
+  const total: Usage = { ...left, modelCalls: left.modelCalls + right.modelCalls };
+  for (const key of ['inputTokens', 'outputTokens', 'costUsd'] as const)
+    total[key] = left[key] === null || right[key] === null ? null : left[key] + right[key];
+  return total;
+}
 function settings(body: RecordBody): Settings {
   if (
     !['calm', 'vivid'].includes(String(body.preset)) ||
@@ -548,6 +556,8 @@ export async function createApp(options: AppOptions): Promise<App> {
       (async () => {
         const run = store.run(id);
         let response: ReturnType<ResponseStreamStore['createWriter']> | undefined;
+        // This Run's own calls only. Reusing a candidate's prepared state does not recharge it.
+        let priorUsage: Usage = { modelCalls: 0, inputTokens: 0, outputTokens: 0, costUsd: 0 };
         try {
           if (!store.startRun(id)) return;
           response = streams.createWriter({
@@ -560,9 +570,6 @@ export async function createApp(options: AppOptions): Promise<App> {
           requireModel(run.snapshot.profile?.models.main, 'main');
           publish(run.chatId);
           await controls.wait('run', controller.signal);
-          await prepareAutomaticRunBehavior(store, id, controller.signal, () =>
-            publish(run.chatId)
-          );
           const hooks: MainHooks = {
             signal: controller.signal,
             onResponseProgress: response.progress,
@@ -576,6 +583,11 @@ export async function createApp(options: AppOptions): Promise<App> {
               executeRunBehaviorTool(store, id, binding, action, controller.signal, host),
             authorizeExtensionModel: (binding) => {
               assertCurrent();
+              if (
+                binding.trigger === 'before-turn' &&
+                runBehaviorProgress(store, id)?.preparation?.status !== 'running'
+              )
+                throw new ExtensionProgramError('BEHAVIOR_HOST_MODEL_DENIED');
               const live = store.product.profile(run.chatId);
               const { target } = extensionModelTarget(
                 {
@@ -674,6 +686,24 @@ export async function createApp(options: AppOptions): Promise<App> {
             )
               throw new Error('CONTEXT_DEPENDENCIES_CHANGED');
           };
+          const preparationModels = createExtensionModelService(run.snapshot, hooks, priorUsage);
+          try {
+            await prepareAutomaticRunBehavior(
+              store,
+              id,
+              controller.signal,
+              () => publish(run.chatId),
+              (binding) => ({
+                modelGenerate: (args, signal) => preparationModels.generate(binding, args, signal),
+                assertModelAccess: () => hooks.authorizeExtensionModel?.(binding),
+                hostWaitMs: preparationModels.hostWaitMs,
+              })
+            );
+          } catch (error) {
+            // Model-capable preparation settles its host attempts before reaching this boundary.
+            throw new ModelRunError(error, structuredClone(priorUsage));
+          }
+          hooks.initialUsage = structuredClone(priorUsage);
           const reservedCompilationSnapshot = candidateCompilationSnapshot(store, run.snapshot, id);
           let executionSnapshot = preparedBehaviorSnapshot(store, id, run.snapshot),
             compilationSnapshot = preparedBehaviorSnapshot(store, id, reservedCompilationSnapshot);
@@ -704,6 +734,7 @@ export async function createApp(options: AppOptions): Promise<App> {
                 compilationSnapshot,
                 {
                   ...hooks,
+                  reserveCalls: 1 + priorUsage.modelCalls,
                   authorize: (connection) => {
                     assertCurrent();
                     return store.product.authorize(connection);
@@ -733,6 +764,8 @@ export async function createApp(options: AppOptions): Promise<App> {
                 },
                 previousContextPlan(store, executionSnapshot)
               );
+              priorUsage = mergeUsage(priorUsage, prepared.usage);
+              hooks.initialUsage = structuredClone(priorUsage);
               prepared.snapshot.branchId = executionSnapshot.branchId;
               store.transaction(() => {
                 assertCurrent();
@@ -752,7 +785,6 @@ export async function createApp(options: AppOptions): Promise<App> {
                 store.event(run.chatId, 'run.context.updated', id);
               });
               executionSnapshot = prepared.snapshot;
-              hooks.initialUsage = prepared.usage;
             }
           }
           const result = await runMain(executionSnapshot, hooks);
@@ -785,6 +817,7 @@ export async function createApp(options: AppOptions): Promise<App> {
         } catch (error) {
           if (!stopping.signal.aborted) {
             if (error instanceof ContextCompactionError) {
+              const usage = mergeUsage(priorUsage, error.usage);
               store.transaction(() => {
                 const current = store.run(id);
                 if (current.status === 'running')
@@ -797,9 +830,9 @@ export async function createApp(options: AppOptions): Promise<App> {
                 controller.signal.aborted ? 'cancelled' : 'failed',
                 error.message,
                 '',
-                error.usage
+                usage
               );
-              if (controller.signal.aborted) store.settleCancelledUsage(id, error.usage);
+              if (controller.signal.aborted) store.settleCancelledUsage(id, usage);
               publish(run.chatId);
               return;
             }
@@ -825,7 +858,15 @@ export async function createApp(options: AppOptions): Promise<App> {
                 : controller.signal.aborted
                   ? 'Run cancelled'
                   : 'Scripted generation failed';
-            store.finishRun(id, controller.signal.aborted ? 'cancelled' : 'failed', safeError);
+            store.finishRun(
+              id,
+              controller.signal.aborted ? 'cancelled' : 'failed',
+              safeError,
+              '',
+              priorUsage.modelCalls ? priorUsage : undefined
+            );
+            if (controller.signal.aborted && priorUsage.modelCalls)
+              store.settleCancelledUsage(id, priorUsage);
             publish(run.chatId);
           }
         } finally {

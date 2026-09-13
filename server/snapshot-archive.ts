@@ -10,13 +10,33 @@ import { mapForkChatOverrideSnapshot } from './chat-overrides.js';
 import { mapForkChatOptionSnapshot } from './chat-options.js';
 import { sealOutlineSnapshot } from '../core/outline.js';
 import { isSourceOnlyTranscript, validateSourceOnlyTranscript } from '../core/authored-history.js';
+import { preparedBehaviorSnapshot } from './package-behavior-run.js';
 
 const reject = (message: string): never => {
   throw new HttpError(400, `Invalid snapshot archive: ${message}`);
 };
 
+function behaviorExecutionProjection(
+  store: Store,
+  snapshot: RunSnapshot,
+  runId?: string
+): RunSnapshot {
+  if (!runId) return snapshot;
+  try {
+    return preparedBehaviorSnapshot(store, runId, snapshot);
+  } catch (error) {
+    return reject(
+      `behavior preparation projection (${error instanceof Error ? error.message : 'invalid'})`
+    );
+  }
+}
+
 /** Check frozen history and compiled requests for every archived Run. */
-export function validateRunSnapshot(store: Store, snapshot: RunSnapshot, runId?: string): void {
+export function validateRunSnapshot(
+  store: Store,
+  snapshot: RunSnapshot,
+  runId?: string
+): RunSnapshot {
   if (isSourceOnlyTranscript(snapshot)) {
     validateSourceOnlyTranscript(snapshot);
     if (!isDeepStrictEqual(snapshot.sourceSegments, freezeSourceSegments(snapshot.profile)))
@@ -31,9 +51,27 @@ export function validateRunSnapshot(store: Store, snapshot: RunSnapshot, runId?:
       )
         reject('imported source has model execution');
     }
-    return;
+    return snapshot;
   }
-  const compilationSnapshot = candidateCompilationSnapshot(store, snapshot, runId);
+  const executionSnapshot = behaviorExecutionProjection(store, snapshot, runId);
+  const candidateSnapshot = candidateCompilationSnapshot(store, snapshot, runId);
+  // Deferred behavior stays immutable in the archived Run snapshot. Once an input was recorded,
+  // its execution receipt owns the state/results projected into that compiled model input. A
+  // terminal Run without a recorded main input may retain either deterministic compilation.
+  const preparedCompilationSnapshot =
+    candidateSnapshot === snapshot
+      ? executionSnapshot
+      : behaviorExecutionProjection(store, candidateSnapshot, runId);
+  const compilationCandidates =
+    runId &&
+    snapshot.behaviorExecution?.deferredAutomatic === true &&
+    !store.run(runId).inputs.length
+      ? [
+          { compilation: preparedCompilationSnapshot, execution: executionSnapshot },
+          { compilation: candidateSnapshot, execution: snapshot },
+        ]
+      : [{ compilation: preparedCompilationSnapshot, execution: executionSnapshot }];
+  let validatedExecutionSnapshot = executionSnapshot;
   if (!isDeepStrictEqual(snapshot.sourceSegments, freezeSourceSegments(snapshot.profile)))
     reject('source segment policy mismatch');
   for (const item of snapshot.history) {
@@ -57,17 +95,22 @@ export function validateRunSnapshot(store: Store, snapshot: RunSnapshot, runId?:
       cachePlan: p.cachePlan,
       values: p.values,
     });
-    const expected = compileSnapshotPrompt({
-      ...compilationSnapshot,
-      promptCompilation: undefined,
+    const matched = compilationCandidates.find(({ compilation }) => {
+      const expected = compileSnapshotPrompt({
+        ...compilation,
+        promptCompilation: undefined,
+      });
+      return isDeepStrictEqual(expected.promptCompilation, p);
     });
-    if (!isDeepStrictEqual(expected.promptCompilation, p)) reject('compiled prompt mismatch');
+    if (!matched) return reject('compiled prompt mismatch');
+    validatedExecutionSnapshot = matched.execution;
   } else if (
     !snapshot.story?.waiting &&
     snapshot.behaviorExecution?.deferredAutomatic !== true &&
     !['pending', 'failed'].includes(snapshot.contextPlan?.status ?? '')
   )
     reject('compiled prompt missing');
+  return validatedExecutionSnapshot;
 }
 
 /** Remap identities only; source text, role order and provenance hashes stay fixed. */

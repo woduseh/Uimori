@@ -1,5 +1,9 @@
 import { afterEach, expect, test, vi } from 'vitest';
 import type { ContentPackage } from '../core/content-package.js';
+import {
+  extensionModelTarget,
+  validateExtensionModelAttribution,
+} from '../core/extension-model.js';
 import { ExtensionProgramError } from '../core/extension-program.js';
 import type { Connection, ModelSnapshot } from '../core/product.js';
 import type { RuntimeValue } from '../core/prompt-values.js';
@@ -44,7 +48,11 @@ function model(endpoint: string, timeoutMs?: number): ModelSnapshot {
   };
 }
 
-function snapshot(target: ModelSnapshot, maxCalls = 6): RunSnapshot {
+function snapshot(
+  target: ModelSnapshot,
+  maxCalls = 6,
+  options: { trigger?: 'model' | 'before-turn'; deferredAutomatic?: boolean } = {}
+): RunSnapshot {
   const pkg: ContentPackage = {
     version: 1,
     id: 'extension-model',
@@ -64,7 +72,7 @@ function snapshot(target: ModelSnapshot, maxCalls = 6): RunSnapshot {
       actions: [
         {
           id: binding.actionId,
-          triggers: ['model'],
+          triggers: [options.trigger ?? 'model'],
           inputSchema: { type: 'record', properties: {} },
           effects: [],
           program: {
@@ -79,6 +87,9 @@ function snapshot(target: ModelSnapshot, maxCalls = 6): RunSnapshot {
   };
   return {
     settings: { maxCalls },
+    ...(options.deferredAutomatic
+      ? { behaviorExecution: { deferredAutomatic: true, automaticResults: [] } }
+      : {}),
     profile: {
       packageAttachments: [{ id: pkg.id, revision: pkg.revision, role: 'module' }],
       packages: [pkg],
@@ -162,6 +173,7 @@ test('uses only the frozen model request and preserves bounded output, attempts 
       packageRevision: 1,
     },
   });
+  expect(log.attempts[0].extensionAction).not.toHaveProperty('trigger');
   expect(log.finished).toHaveLength(1);
   expect(log.finished[0].result.opaqueState).toBeNull();
   expect(log.authorizeExtensionModel).toHaveBeenCalledTimes(4);
@@ -177,6 +189,79 @@ test('uses only the frozen model request and preserves bounded output, attempts 
   expect(body).not.toHaveProperty('source');
   expect(body).not.toHaveProperty('endpoint');
   expect(body).not.toHaveProperty('credentialEnv');
+});
+
+test('admits deferred before-turn generation and marks only its durable attempt attribution', async () => {
+  const provider = await loopbackProvider(async (_request, response) => {
+    await writeSse(response, [
+      { type: 'text_delta', delta: 'prepared result' },
+      { type: 'usage', inputTokens: 4, outputTokens: 2, costUsd: 0 },
+      { type: 'done', reason: 'stop' },
+    ]);
+  });
+  servers.push(provider);
+  const target = model(provider.endpoint);
+  const log = observed();
+  const usage: Usage = { modelCalls: 0, inputTokens: 0, outputTokens: 0, costUsd: 0 };
+  const beforeTurnBinding = { ...binding, trigger: 'before-turn' as const };
+  const frozen = snapshot(target, 4, {
+    trigger: 'before-turn',
+    deferredAutomatic: true,
+  });
+
+  await expect(
+    createExtensionModelService(frozen, hooks(target, log), usage).generate(
+      beforeTurnBinding,
+      { prompt: 'prepare automatic state' },
+      new AbortController().signal
+    )
+  ).resolves.toMatchObject({ status: 'completed', text: 'prepared result' });
+
+  expect(log.authorizeExtensionModel).toHaveBeenCalledWith(beforeTurnBinding);
+  expect(log.attempts).toHaveLength(1);
+  expect(log.attempts[0].extensionAction).toEqual({
+    instanceId: binding.instanceId,
+    actionId: binding.actionId,
+    packageId: 'extension-model',
+    packageRevision: 1,
+    trigger: 'before-turn',
+  });
+  expect(usage).toEqual({ modelCalls: 1, inputTokens: 4, outputTokens: 2, costUsd: 0 });
+});
+
+test('keeps legacy attribution valid and rejects forged or undeferred trigger markers', () => {
+  const target = model('http://127.0.0.1:1');
+  const legacy = snapshot(target);
+  const legacyAttribution = extensionModelTarget(legacy, binding).attribution;
+  expect(legacyAttribution).toEqual({
+    instanceId: binding.instanceId,
+    actionId: binding.actionId,
+    packageId: 'extension-model',
+    packageRevision: 1,
+  });
+  expect(validateExtensionModelAttribution(legacy, legacyAttribution).attribution).toEqual(
+    legacyAttribution
+  );
+
+  const automatic = snapshot(target, 6, {
+    trigger: 'before-turn',
+    deferredAutomatic: true,
+  });
+  const beforeTurnBinding = { ...binding, trigger: 'before-turn' as const };
+  const automaticAttribution = extensionModelTarget(automatic, beforeTurnBinding).attribution;
+  expect(validateExtensionModelAttribution(automatic, automaticAttribution).attribution).toEqual(
+    automaticAttribution
+  );
+  expect(() =>
+    extensionModelTarget(snapshot(target, 6, { trigger: 'before-turn' }), beforeTurnBinding)
+  ).toThrow('BEHAVIOR_HOST_MODEL_DENIED');
+  for (const trigger of ['model', 'user', 'future-trigger'])
+    expect(() =>
+      validateExtensionModelAttribution(automatic, {
+        ...automaticAttribution,
+        trigger,
+      })
+    ).toThrow('BEHAVIOR_HOST_MODEL_ATTRIBUTION');
 });
 
 test('reserves concurrent calls before awaiting and keeps one call for final prose', async () => {

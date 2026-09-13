@@ -1,5 +1,5 @@
 import { contextBudgetForModel } from '../core/context-budget.js';
-import { extensionModelTarget } from '../core/extension-model.js';
+import { extensionModelTarget, type ExtensionModelBinding } from '../core/extension-model.js';
 import { ExtensionProgramError } from '../core/extension-program.js';
 import { generationFromModel } from '../core/model-capabilities.js';
 import type { Connection } from '../core/product.js';
@@ -18,8 +18,6 @@ const DEFAULT_CALL_TIMEOUT_MS = 120_000;
 const MAX_HOST_WAIT_MS = 1_800_000;
 const MAX_PROMPT_CHARS = 16_000;
 const MAX_TEXT_CHARS = 6_000;
-
-type Binding = { instanceId: string; actionId: string };
 
 function fail(code: string): never {
   throw new ExtensionProgramError(code);
@@ -98,7 +96,11 @@ export function createExtensionModelService(
   hooks: MainHooks,
   totalUsage: Usage
 ): {
-  generate(binding: Binding, args: RuntimeValue, signal: AbortSignal): Promise<RuntimeValue>;
+  generate(
+    binding: ExtensionModelBinding,
+    args: RuntimeValue,
+    signal: AbortSignal
+  ): Promise<RuntimeValue>;
   hostWaitMs: number;
 } {
   let pendingReservations = 0;
@@ -108,7 +110,7 @@ export function createExtensionModelService(
   const hostWaitMs = Math.min(MAX_HOST_WAIT_MS, perCallTimeout * remainingAtCreation);
 
   const generate = async (
-    binding: Binding,
+    binding: ExtensionModelBinding,
     value: RuntimeValue,
     runtimeSignal: AbortSignal
   ): Promise<RuntimeValue> => {
