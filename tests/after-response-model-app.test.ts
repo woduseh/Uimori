@@ -28,11 +28,15 @@ const owned: {
   app?: App;
   store?: Store;
   closeProvider?: () => Promise<void>;
+  releaseExtension?: () => void;
 }[] = [];
 
 afterEach(async () => {
   vi.restoreAllMocks();
   for (const item of owned.splice(0).reverse()) {
+    // A held fixture provider deliberately waits past Fastify's abort signal. Let its
+    // handler settle before close so an assertion failure never leaves test cleanup blocked.
+    item.releaseExtension?.();
     await item.app?.close();
     item.store?.close();
     await item.closeProvider?.();
@@ -130,7 +134,7 @@ async function fixture(options: FixtureOptions = {}) {
     buildId: 'after-response-model-app-test',
     approvedOrigins: [provider.origin],
   });
-  owned.push({ directory, app, closeProvider: provider.close });
+  owned.push({ directory, app, closeProvider: provider.close, releaseExtension });
   await app.ready();
 
   const pkg = definition();
@@ -194,7 +198,17 @@ async function fixture(options: FixtureOptions = {}) {
       },
     },
   });
-  return { app, chat, content, provider, instanceId, extensionStarted, releaseExtension };
+  return {
+    app,
+    chat,
+    content,
+    provider,
+    instanceId,
+    extensionStarted,
+    releaseExtension,
+    directory,
+    dbPath: join(directory, 'story.sqlite'),
+  };
 }
 
 async function emptyStore() {
@@ -244,6 +258,7 @@ test('createApp runs main before the response hook model, keeps source raw, and 
   const completed = await terminal(f.app, (await start(f.app, f.chat.id)).id);
 
   expect(completed.status).toBe('completed');
+  expect(completed.partialText).toBe('');
   expect(f.provider.requests.map((request) => JSON.parse(request.body).modelId)).toEqual([
     MAIN_MODEL_ID,
     EXTENSION_MODEL_ID,
@@ -319,7 +334,11 @@ test('maxCalls=1 leaves the completed main source and native parser state when a
   const f = await fixture({ maxCalls: 1 });
   const completed = await terminal(f.app, (await start(f.app, f.chat.id)).id);
 
-  expect(completed).toMatchObject({ status: 'completed', usage: { modelCalls: 1 } });
+  expect(completed).toMatchObject({
+    status: 'completed',
+    partialText: '',
+    usage: { modelCalls: 1 },
+  });
   expect(f.provider.requests.map((request) => JSON.parse(request.body).modelId)).toEqual([
     MAIN_MODEL_ID,
   ]);
@@ -334,10 +353,29 @@ test('maxCalls=1 leaves the completed main source and native parser state when a
   expect(f.app.store.product.attempts(f.chat.id).map((attempt) => attempt.role)).toEqual(['main']);
 });
 
-test('skipping an in-flight after-turn model settles its cancelled attempt then commits main text without late state', async () => {
+test('skipping an in-flight after-turn model holds the completed buffer, then commits it without late state', async () => {
   const f = await fixture({ holdExtension: true });
   const admitted = await start(f.app, f.chat.id);
   await f.extensionStarted;
+
+  expect(f.app.store.run(admitted.id)).toMatchObject({
+    status: 'running',
+    sourceRevision: null,
+    partialText: PROSE,
+  });
+  const pendingReader = await f.app.inject({
+    method: 'GET',
+    url: `/api/chats/${f.chat.id}/reader`,
+  });
+  expect(pendingReader.statusCode, pendingReader.body).toBe(200);
+  expect(
+    (pendingReader.json() as { runs: Run[] }).runs.find((run) => run.id === admitted.id)
+  ).toMatchObject({
+    id: admitted.id,
+    status: 'running',
+    sourceRevision: null,
+    partialText: '',
+  });
 
   const skipping = f.app.inject({
     method: 'POST',
@@ -360,7 +398,11 @@ test('skipping an in-flight after-turn model settles its cancelled attempt then 
   expect(skipped.statusCode, skipped.body).toBe(200);
   const completed = await terminal(f.app, admitted.id);
 
-  expect(completed).toMatchObject({ status: 'completed', usage: { modelCalls: 2 } });
+  expect(completed).toMatchObject({
+    status: 'completed',
+    partialText: '',
+    usage: { modelCalls: 2 },
+  });
   expect(f.app.store.source(completed.sourceRevision!).text).toBe(PROSE);
   expect(state(f.app, f.chat.id)).toMatchObject({ stateRevision: 1, state: { count: 2 } });
   expect(f.app.store.product.attempts(f.chat.id)).toMatchObject([
@@ -369,7 +411,7 @@ test('skipping an in-flight after-turn model settles its cancelled attempt then 
   ]);
 });
 
-test('cancelling an in-flight after-turn model settles its usage but publishes neither source nor state', async () => {
+test('cancelling an in-flight after-turn model retains its completed buffer for task details but publishes neither source nor state', async () => {
   const f = await fixture({ holdExtension: true });
   const admitted = await start(f.app, f.chat.id);
   await f.extensionStarted;
@@ -397,9 +439,97 @@ test('cancelling an in-flight after-turn model settles its usage but publishes n
   expect(f.app.store.run(admitted.id)).toMatchObject({
     status: 'cancelled',
     sourceRevision: null,
+    partialText: PROSE,
     usage: { modelCalls: 2 },
   });
   expect(state(f.app, f.chat.id)).toMatchObject({ stateRevision: 0, state: { count: 0 } });
+  const terminalReader = await f.app.inject({
+    method: 'GET',
+    url: `/api/chats/${f.chat.id}/reader-runs`,
+  });
+  expect(terminalReader.statusCode, terminalReader.body).toBe(200);
+  expect((terminalReader.json() as Run[]).find((run) => run.id === admitted.id)).toMatchObject({
+    id: admitted.id,
+    status: 'cancelled',
+    sourceRevision: null,
+    partialText: PROSE,
+    usage: { modelCalls: 2 },
+  });
+
+  const restored = await emptyStore();
+  expect(restored.product.import(f.app.store.product.export())).toEqual({
+    restored: true,
+    chats: 1,
+  });
+  expect(restored.run(admitted.id)).toMatchObject({
+    status: 'cancelled',
+    sourceRevision: null,
+    partialText: PROSE,
+    usage: { modelCalls: 2 },
+  });
+});
+
+test('server stopping during an after-turn model preserves the staged main buffer as interrupted work without replay', async () => {
+  const f = await fixture({ holdExtension: true });
+  const admitted = await start(f.app, f.chat.id);
+  await f.extensionStarted;
+  expect(f.app.store.run(admitted.id)).toMatchObject({
+    status: 'running',
+    sourceRevision: null,
+    partialText: PROSE,
+  });
+
+  const closing = f.app.close();
+  f.releaseExtension();
+  await closing;
+
+  const reopened = await createApp({
+    dbPath: f.dbPath,
+    buildId: 'after-response-model-app-reopened-test',
+    approvedOrigins: [f.provider.origin],
+  });
+  const owner = owned.find((item) => item.app === f.app)!;
+  owner.app = reopened;
+  await reopened.ready();
+
+  expect(
+    reopened.store.db.prepare('SELECT usage FROM runs WHERE id=?').get(admitted.id)
+  ).toMatchObject({ usage: null });
+  expect(reopened.store.run(admitted.id)).toMatchObject({
+    status: 'interrupted',
+    sourceRevision: null,
+    partialText: PROSE,
+    usage: { modelCalls: 2, inputTokens: null, outputTokens: null, costUsd: null },
+  });
+  expect(reopened.store.detail(f.chat.id).sources).toEqual([]);
+  expect(state(reopened, f.chat.id)).toMatchObject({ stateRevision: 0, state: { count: 0 } });
+  expect(f.provider.requests.map((request) => JSON.parse(request.body).modelId)).toEqual([
+    MAIN_MODEL_ID,
+    EXTENSION_MODEL_ID,
+  ]);
+  const reopenedReader = await reopened.inject({
+    method: 'GET',
+    url: `/api/chats/${f.chat.id}/reader-runs`,
+  });
+  expect(reopenedReader.statusCode, reopenedReader.body).toBe(200);
+  expect((reopenedReader.json() as Run[]).find((run) => run.id === admitted.id)).toMatchObject({
+    status: 'interrupted',
+    sourceRevision: null,
+    partialText: PROSE,
+    usage: { modelCalls: 2, inputTokens: null, outputTokens: null, costUsd: null },
+  });
+
+  const restored = await emptyStore();
+  expect(restored.product.import(reopened.store.product.export())).toEqual({
+    restored: true,
+    chats: 1,
+  });
+  expect(restored.run(admitted.id)).toMatchObject({
+    status: 'interrupted',
+    sourceRevision: null,
+    partialText: PROSE,
+    usage: { modelCalls: 2, inputTokens: null, outputTokens: null, costUsd: null },
+  });
 });
 
 test('revoking the exact package grant while after-turn generation is in flight prevents late state adoption', async () => {

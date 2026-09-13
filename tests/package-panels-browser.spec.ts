@@ -283,6 +283,71 @@ test('PROGPOSTUI01 response processing skip sends the owned command and shows se
   }
 });
 
+test('PROGCOPYUI01 a cancelled response can be read and copied without publishing it', async ({
+  page,
+  request,
+}) => {
+  const chat = await seed(request);
+  const current = (await (await request.get(`/api/chats/${chat.id}`)).json()).chat;
+  const preserved = 'Synthetic received prose.\n\nKeep the exact line breaks and <literal> text.';
+  const copied: string[] = [];
+  await page.exposeFunction('recordPendingClipboard', (text: string) => copied.push(text));
+  await page.addInitScript(() => {
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      value: {
+        writeText: (text: string) =>
+          (
+            window as unknown as {
+              recordPendingClipboard: (value: string) => Promise<void>;
+            }
+          ).recordPendingClipboard(text),
+      },
+    });
+  });
+  await request.post('/api/test/control', { data: { action: 'hold', barrier: 'run' } });
+  let runId: string | undefined;
+  try {
+    const admitted = await request.post(`/api/chats/${chat.id}/runs`, {
+      data: {
+        request: 'Synthetic received output UI.',
+        expectedRevision: null,
+        expectedSettingsRevision: current.settingsRevision,
+        idempotencyKey: crypto.randomUUID(),
+      },
+    });
+    expect(admitted.ok(), await admitted.text()).toBe(true);
+    const run = await admitted.json();
+    runId = run.id;
+    const cancelled = await request.post(`/api/runs/${run.id}/cancel`);
+    expect(cancelled.ok(), await cancelled.text()).toBe(true);
+    // Only UI copying is projected here. Real cancellation/restart preservation is covered
+    // by after-response-model-app.test.ts against the app and a controlled HTTP peer.
+    await page.route(`**/api/chats/${chat.id}/reader?*`, async (route) => {
+      const response = await route.fetch();
+      const body = await response.json();
+      body.runs = body.runs.map((item: { id: string }) =>
+        item.id === run.id ? { ...item, partialText: preserved } : item
+      );
+      await route.fulfill({ response, json: body });
+    });
+    await page.setViewportSize({ width: MOBILE_WIDTH, height: 900 });
+    await page.goto(`/?chat=${chat.id}`);
+    await page.getByTestId('turn-activity').first().locator(':scope > summary').click();
+    await page.getByText('보존된 출력 · 확정 원문에 합류하지 않음', { exact: true }).click();
+    await expect(page.locator('.partial-result pre')).toHaveText(preserved);
+    await page.getByRole('button', { name: '출력 복사', exact: true }).click();
+    await expect(page.getByRole('button', { name: '출력 복사됨', exact: true })).toBeVisible();
+    expect(copied).toEqual([preserved]);
+    const finished = await (await request.get(`/api/runs/${run.id}`)).json();
+    expect(finished.status).toBe('cancelled');
+    expect(finished.sourceRevision).toBeNull();
+  } finally {
+    if (runId) await request.post(`/api/runs/${runId}/cancel`);
+    await request.post('/api/test/control', { data: { action: 'release', barrier: 'run' } });
+  }
+});
+
 test('EXTPANELUI01 code action updates its panel and a failed action preserves chat input', async ({
   page,
   request,

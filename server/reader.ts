@@ -170,7 +170,7 @@ export function readerRuns(store: Store, id: string, scope?: string[]) {
         .prepare(`SELECT run_id AS runId,COUNT(*) AS attemptCount,
     SUM(CASE WHEN json_extract(response,'$.estimatedCost.status')='estimated' AND json_type(response,'$.estimatedCost.usd') IN ('integer','real') THEN 0 ELSE 1 END) AS unknownCount,
     SUM(COALESCE(json_extract(response,'$.estimatedCost.usd'),json_extract(response,'$.estimatedCost.subtotalUsd'),0)) AS subtotalUsd
-    FROM attempts WHERE chat_id=? AND run_id IS NOT NULL AND role!='title' ${scope ? 'AND run_id IN (SELECT value FROM json_each(?))' : ''} GROUP BY run_id`)
+    FROM attempts WHERE chat_id=? AND run_id IS NOT NULL AND job_id IS NULL AND story_job_id IS NULL AND role!='title' ${scope ? 'AND run_id IN (SELECT value FROM json_each(?))' : ''} GROUP BY run_id`)
         .all(id, ...(scope ? [JSON.stringify(scope)] : [])) as {
         runId: string;
         attemptCount: number;
@@ -184,7 +184,8 @@ export function readerRuns(store: Store, id: string, scope?: string[]) {
   );
   const runs = (
     store.db
-      .prepare(`SELECT id,chat_id AS chatId,parent_revision AS parentRevision,status,request,source_revision AS sourceRevision,error,usage,partial_text AS partialText,
+      .prepare(`SELECT id,chat_id AS chatId,parent_revision AS parentRevision,status,request,source_revision AS sourceRevision,error,usage,
+    CASE WHEN status IN ('queued','running','waiting_for_state') THEN '' ELSE partial_text END AS partialText,
     json_extract(command,'$.retryOf') AS retryOf,
     CASE WHEN source_revision IS NULL THEN (SELECT newer.id FROM runs newer WHERE newer.chat_id=runs.chat_id AND json_extract(newer.command,'$.retryOf')=runs.id ORDER BY newer.created_at DESC,newer.id DESC LIMIT 1) END AS supersededBy,
     json_extract(snapshot,'$.settingsRevision') AS settingsRevision,CASE WHEN json_extract(snapshot,'$.packageStart.mode')='authored' THEN NULL ELSE json_extract(snapshot,'$.profile.models.main.title') END AS modelTitle,json_extract(snapshot,'$.sourceSegments') AS sourceSegments,COALESCE(json_array_length(snapshot,'$.profile.packageAttachments'),0)>0 AS hasPackages,
@@ -237,7 +238,12 @@ export function readerRuns(store: Store, id: string, scope?: string[]) {
     sourceSegments: row.sourceSegments ? JSON.parse(row.sourceSegments) : undefined,
     usage: row.usage
       ? JSON.parse(row.usage)
-      : { modelCalls: 0, inputTokens: null, outputTokens: null, costUsd: null },
+      : {
+          modelCalls: runCosts.get(row.id)?.attemptCount ?? 0,
+          inputTokens: null,
+          outputTokens: null,
+          costUsd: null,
+        },
     ...(/^HTTP_4\d\d$/u.test(String(row.error ?? ''))
       ? { rejection: attemptRejection(store, 'run_id', row.id) }
       : {}),
