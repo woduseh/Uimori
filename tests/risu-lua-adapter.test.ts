@@ -5,7 +5,7 @@ import { createExtensionVariableSession } from '../server/extension-variables.js
 import { fixtureBotInput } from './fixtures/chat.js';
 import { executeExtensionProgram, type ExtensionHostHandler } from '../server/extension-runtime.js';
 import { adaptRisuLuaTriggers, buildRisuLuaProgram } from '../server/risu-lua-adapter.js';
-import { behaviorActionAllowed } from '../core/package-behavior.js';
+import { behaviorActionAllowed, validatePackageBehavior } from '../core/package-behavior.js';
 import type { RuntimeValue } from '../core/prompt-values.js';
 
 const trigger = (code: string, conditions: unknown[] = []) => ({
@@ -18,17 +18,18 @@ describe('pure Risu Lua adaptation', () => {
   it('selects callbacks independently from start metadata and reports missing phases', () => {
     const source = 'function onOutput(id) setChatVar(id, "seen", "yes") end';
     const converted = adaptRisuLuaTriggers([trigger(source)]);
-    expect(converted.actions.map((action) => [action.id, action.triggers])).toEqual([
-      ['risu-lua-0-output', ['after-turn']],
-      ['risu-lua-0-start', ['before-turn']],
-      ['risu-lua-0-onButtonClick', ['user']],
+    expect(converted.actions.map((action) => [action.id, action.triggers, action.hook])).toEqual([
+      ['risu-lua-0-input', ['before-turn'], 'input'],
+      ['risu-lua-0-output', ['after-turn'], undefined],
+      ['risu-lua-0-start', ['before-turn'], undefined],
+      ['risu-lua-0-onButtonClick', ['user'], undefined],
     ]);
     expect(converted.sources).toEqual([{ triggerIndex: 0, effectIndex: 0, source }]);
     expect(
       converted.findings
         .filter((finding) => finding.code === 'RISU_LUA_PHASE_UNSUPPORTED')
         .map((finding) => finding.event)
-    ).toEqual(['input', 'editRequest', 'editDisplay', 'editInput', 'editOutput']);
+    ).toEqual(['editRequest', 'editDisplay', 'editInput', 'editOutput']);
     for (const action of converted.actions)
       expect(validateExtensionProgram(action.program).language).toBe('lua');
   });
@@ -66,13 +67,36 @@ describe('pure Risu Lua adaptation', () => {
       true
     );
   });
+
+  it('preserves the input callback conditions and empty automatic input', () => {
+    const converted = adaptRisuLuaTriggers([
+      trigger('function onInput(id) end', [
+        { type: 'value', var: 'disabled', operator: '=', value: 'enabled' },
+      ]),
+    ]);
+    expect(() =>
+      validatePackageBehavior({
+        revision: 1,
+        schemaVersion: 1,
+        stateSchema: { type: 'record', properties: {} },
+        initialState: {},
+        actions: converted.actions,
+        outputParsers: [],
+      })
+    ).not.toThrow();
+    const input = converted.actions.find((action) => action.hook === 'input')!;
+    expect(input.automaticInput).toEqual({});
+    expect(behaviorActionAllowed(input, {}, {}, {})).toBe(false);
+  });
 });
 
 describe('Risu Lua automatic conditions', () => {
   const source = 'function onStart(id) error("ONLY_AT_EXECUTION") end';
   const automatic = (conditions: unknown[]) => {
     const converted = adaptRisuLuaTriggers([trigger(source, conditions)]);
-    const action = converted.actions.find((item) => item.triggers?.includes('before-turn'));
+    const action = converted.actions.find(
+      (item) => item.triggers?.includes('before-turn') && item.hook === undefined
+    );
     expect(action).toBeDefined();
     return action!;
   };
@@ -287,6 +311,24 @@ listenEdit("editDisplay", function(id, value) return value .. "!" end)`;
       input: { value: 'text', meta: { suffix: '?' } },
     });
     expect(result.result).toBe('text?!');
+  });
+
+  it('runs onInput independently from onStart without a fabricated value argument', async () => {
+    const fixture = variables();
+    await executeExtensionProgram(
+      buildRisuLuaProgram(
+        `function onInput(id, value)
+  assert(value == nil)
+  setChatVar(id, "phase", "input")
+end
+function onStart(id) error("WRONG_EVENT") end`,
+        'input'
+      ),
+      { state: {}, input: {} },
+      undefined,
+      { host: fixture.host }
+    );
+    expect(fixture.values.phase).toBe('input');
   });
 
   it('Changed compares stored overrides and distinguishes nil, literal null, empty and JSON null', async () => {

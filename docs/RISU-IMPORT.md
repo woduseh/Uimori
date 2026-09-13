@@ -45,15 +45,15 @@
 
 ### Lua 콜백 가져오기
 
-독립 `triggerlua` 효과의 원본 코드를 Lua 프로그램으로 보존해 `onStart`는 생성 전, `onOutput`은 완성 응답 후, `onButtonClick`은 문자열 입력을 받는 사용자 행동으로 연결해요. `trigger.type`만으로 콜백을 추정하지 않으며 실제 호출 때 등록된 함수를 찾아요. 가져오기·일반 미리보기·복원에서는 실행하지 않아요. 공유 변수 쓰기·대화 읽기·모델 호출은 정확한 자료 개정에 대해 채팅별로 각각 허용해야 해요.
+독립 `triggerlua` 효과의 원본 코드를 Lua 프로그램으로 보존해 `onInput`은 입력 단계, `onStart`는 생성 전, `onOutput`은 완성 응답 후, `onButtonClick`은 문자열 입력을 받는 사용자 행동으로 연결해요. `onInput`은 공통 자동 준비의 `hook: 'input'` 단계로 구분해 모든 시작 행동보다 먼저 실행하며, 대화 읽기에는 이번 입력을 덧붙이지 않아요. `onStart`부터 이번 입력을 포함해요. 원래 요청과 예약 snapshot은 보존하고 계산한 상태·변수는 기존 준비 영수증과 본문 성공 시 채택 경계를 사용해요. 실패·건너뛰기·취소도 기존 자동 준비 규칙을 따라요. `trigger.type`만으로 콜백을 추정하지 않으며 실제 호출 때 등록된 함수를 찾아요. 가져오기·일반 미리보기·복원에서는 실행하지 않아요. 공유 변수 쓰기·대화 읽기·모델 호출은 정확한 자료 개정에 대해 채팅별로 각각 허용해야 해요.
 
 `getChatVar/setChatVar/setChatVarChanged`, `getState/setState/setStateChanged`, JSON 모듈·`async`와 `simpleLLM`은 공통 Host API를 사용해요. 없는 변수의 문자열 `"null"`, 빈 값, 저장된 override와 기본값의 차이, Risu JSON의 nil/빈 테이블 의미를 어댑터에서 처리해요. 호출별 Lua 전역은 새로 초기화되므로 영속 상태는 공유 변수/`getState`에 저장해야 해요.
 
-`getChat/getChatMain/getChatData/getChatRole/getChatLength`, `getRecentChats/getRecentChatsMain`, `getFullChat/getFullChatMain`, `getUserLastMessage/getCharacterLastMessage`는 [현재 분기 대화 Host](EXTENSION-PROGRAMS.md#host-api로-현재-분기-대화-읽기)를 사용해요. 모델 문맥 절삭과 무관하게 현재 분기에서 사용자가 볼 수 있는 저장 대화를 읽고, 생성 전·모델 행동은 현재 요청, 응답 후 행동은 현재 요청과 완성 응답을 덧붙여요. 다른 채팅·분기·삭제·대체된 기록과 앱 설정·연결 설정의 API 키는 제공하지 않아요. 사용자가 대화 본문에 직접 쓴 문자열은 원문으로 취급해요. 원본에 없는 시각은 `0`이고 저장되지 않은 첫 인사 대체값은 만들지 않아요. 전체 조회가 실행 한도를 넘으면 일부 결과를 성공으로 반환하지 않아요.
+`getChat/getChatMain/getChatData/getChatRole/getChatLength`, `getRecentChats/getRecentChatsMain`, `getFullChat/getFullChatMain`, `getUserLastMessage/getCharacterLastMessage`는 [현재 분기 대화 Host](EXTENSION-PROGRAMS.md#host-api로-현재-분기-대화-읽기)를 사용해요. 모델 문맥 절삭과 무관하게 현재 분기에서 사용자가 볼 수 있는 저장 대화를 읽고, 입력 단계는 현재 요청을 제외하고, 생성 전·모델 행동은 현재 요청, 응답 후 행동은 현재 요청과 완성 응답을 덧붙여요. 다른 채팅·분기·삭제·대체된 기록과 앱 설정·연결 설정의 API 키는 제공하지 않아요. 사용자가 대화 본문에 직접 쓴 문자열은 원문으로 취급해요. 원본에 없는 시각은 `0`이고 저장되지 않은 첫 인사 대체값은 만들지 않아요. 전체 조회가 실행 한도를 넘으면 일부 결과를 성공으로 반환하지 않아요.
 
-Risu의 `var`·`value` 트리거 조건과 지원하는 비교/CBS 값은 공통 `when` 식으로 변환해 `onStart`·`onOutput` 자동 행동에 적용해요. 변수값 자체에 실행할 CBS가 남아 있거나 조건 종류·연산·CBS 블록을 안전하게 변환할 수 없으면 조건을 버리지 않고 해당 자동 콜백 실행을 보류해요. 다른 효과와 섞인 `triggerlua`도 원래 순서를 바꾸지 않고 소스만 보존해요.
+Risu의 `var`·`value` 트리거 조건과 지원하는 비교/CBS 값은 공통 `when` 식으로 변환해 `onInput`·`onStart`·`onOutput` 자동 행동에 적용해요. 변수값 자체에 실행할 CBS가 남아 있거나 조건 종류·연산·CBS 블록을 안전하게 변환할 수 없으면 조건을 버리지 않고 해당 자동 콜백 실행을 보류해요. 다른 효과와 섞인 `triggerlua`도 원래 순서를 바꾸지 않고 소스만 보존해요.
 
-`onInput`과 `listenEdit`의 `editRequest`·`editInput`·`editOutput`·`editDisplay` 원본 실행 시점, 대화 변경·자료/UI API와 동적 화면은 아직 연결하지 않아요. 해당 부분을 가져오기 안내에 남기고 미지원 API는 성공한 것처럼 처리하지 않아요. Lua 외 트리거·커스텀 표시와 CBS 쓰기 역시 후속 범위예요. 이 연결은 동적인 상태창·선택기나 전체 표본 기능의 완료를 뜻하지 않아요.
+`listenEdit`의 `editRequest`·`editInput`·`editOutput`·`editDisplay` 원본 실행 시점, 대화 변경·자료/UI API와 동적 화면은 아직 연결하지 않아요. 해당 부분을 가져오기 안내에 남기고 미지원 API는 성공한 것처럼 처리하지 않아요. Lua 외 트리거·커스텀 표시와 CBS 쓰기 역시 후속 범위예요. 이 연결은 동적인 상태창·선택기나 전체 표본 기능의 완료를 뜻하지 않아요.
 
 ## 봇·페르소나·모듈
 

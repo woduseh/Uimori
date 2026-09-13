@@ -51,10 +51,11 @@ function validateConversationReceipt(
   ref: PackageAttachment,
   program: ExtensionProgram,
   receipt: { viewHash: string },
-  response?: string
+  response?: string,
+  includeRequest = true
 ): void {
   const view = resolveExtensionConversation(store, snapshot, snapshot.extensionConversation, {
-    request: snapshot.request,
+    ...(includeRequest ? { request: snapshot.request } : {}),
     ...(response !== undefined ? { response } : {}),
   });
   validateExtensionConversationPermission(
@@ -597,7 +598,9 @@ export function validateRunBehaviorArchive(store: Store, checkState: CheckState)
               ownerSnapshot,
               ref,
               action.program,
-              entry.program.conversation
+              entry.program.conversation,
+              undefined,
+              action.hook !== 'input'
             );
           }
           if (entry.program.variables) {
@@ -687,7 +690,8 @@ export function validateRunBehaviorArchive(store: Store, checkState: CheckState)
             action,
             instanceId: `${ref.id}:${ref.role}`,
           }));
-      });
+      })
+      .sort((a, b) => Number(b.action.hook === 'input') - Number(a.action.hook === 'input'));
     const deferred = execution.deferredAutomatic === true;
     if (deferred !== Object.hasOwn(value, 'preparation')) reject('preparation contract');
     const preparationReceipt = deferred
@@ -775,7 +779,9 @@ export function validateRunBehaviorArchive(store: Store, checkState: CheckState)
           snapshot,
           ref,
           action.program,
-          entry.program.conversation
+          entry.program.conversation,
+          undefined,
+          action.hook !== 'input'
         );
       }
       if (entry.program?.variables) {

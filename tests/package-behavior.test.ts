@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { DatabaseSync } from 'node:sqlite';
 import { readFileSync } from 'node:fs';
+import { EXTENSION_PROGRAM_API } from '../core/extension-program.js';
 import {
   parseBehaviorOutput,
   validatePackageBehavior,
@@ -106,6 +107,52 @@ const action = {
   expectedSourceHash: 'source',
   idempotencyKey: 'a',
 };
+describe('package behavior submission hook contracts', () => {
+  function hookBehavior(overrides: Record<string, unknown> = {}) {
+    const candidate = {
+      ...definition(),
+      actions: [
+        {
+          id: 'input-hook',
+          triggers: ['before-turn'],
+          hook: 'input',
+          inputSchema: { type: 'record', properties: {} },
+          automaticInput: {},
+          effects: [],
+          program: {
+            api: EXTENSION_PROGRAM_API,
+            language: 'javascript',
+            source: 'return { state: api.state, result: null };',
+          },
+          ...overrides,
+        },
+      ],
+    };
+    for (const [key, value] of Object.entries(overrides))
+      if (value === undefined) delete (candidate.actions[0] as Record<string, unknown>)[key];
+    return validatePackageBehavior(candidate);
+  }
+
+  it('preserves ordinary start actions and accepts a distinct input phase', () => {
+    expect(hookBehavior().actions[0].hook).toBe('input');
+    expect(hookBehavior({ hook: undefined }).actions[0].hook).toBeUndefined();
+  });
+
+  it.each([
+    [{ hook: 'unknown' }, 'BEHAVIOR_ACTION_HOOK'],
+    [{ hook: null }, 'BEHAVIOR_ACTION_HOOK'],
+    [{ triggers: ['user'] }, 'BEHAVIOR_HOOK_TRIGGER'],
+    [{ triggers: ['model'] }, 'BEHAVIOR_HOOK_TRIGGER'],
+    [{ triggers: ['after-turn'] }, 'BEHAVIOR_HOOK_TRIGGER'],
+    [{ triggers: ['before-turn', 'user'] }, 'BEHAVIOR_HOOK_TRIGGER'],
+    [{ triggers: [] }, 'BEHAVIOR_HOOK_TRIGGER'],
+    [{ triggers: undefined }, 'BEHAVIOR_HOOK_TRIGGER'],
+    [{ program: undefined }, 'BEHAVIOR_HOOK_PROGRAM_REQUIRED'],
+  ])('rejects an invalid hook declaration %j', (overrides, code) => {
+    expect(() => hookBehavior(overrides as Record<string, unknown>)).toThrow(code as string);
+  });
+});
+
 describe('package behavior transactions', () => {
   it('reads independent record lines with shared closing markers and preserves optional prior fields', () => {
     const f = fixture();

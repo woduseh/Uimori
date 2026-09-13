@@ -83,7 +83,12 @@ export function persistedContextSnapshot(
   prepared: RunSnapshot
 ): RunSnapshot {
   const persisted = { ...prepared };
-  for (const key of ['packageStates', 'behaviorExecution', 'packageBehaviorUnavailable'] as const) {
+  for (const key of [
+    'profile',
+    'packageStates',
+    'behaviorExecution',
+    'packageBehaviorUnavailable',
+  ] as const) {
     if (key in reserved) persisted[key] = structuredClone(reserved[key]) as never;
     else delete persisted[key];
   }

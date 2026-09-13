@@ -404,3 +404,8 @@ GPL 코드나 개인 패키지의 본문·스크립트를 복사하지 않고 �
 원본의 조언 자동 로어 저장·주기적 장기 기억 추출·수치화한 성격 우선순위·`strict_directive`와 보조 실패 시 메인 중단은 채택하지 않았어요. 기존 Uimori의 선택 가능한 의견, 메인의 최종 창작·저장, 호출 예산·취소·불확실 실행 계약을 유지해요.
 
 Risu Agents! 페메/뮈토스 JSON 8종은 역할과 실행 설정을 비교했어요. 페메의 인물·대사·출연 선별, 장면·세계 연속성, 전개 줄기를 기본 3역할로 구성하고 장외 관점은 시뮬용 사본에 추가했어요. 원본의 고정 체크리스트·작은 전개·자동 기억·polish를 그대로 옮기지 않고 현재 페메의 요청 단위·서술권·실제 행위 능력·시점에 맞췄어요. 개인 프롬프트 사본과 원본 해시는 ignored `output/pheme-collaborators-uimori-2026-09-11/`에 있으며 제품에는 자료 이름별 분기를 추가하지 않았어요. 실제 창작 품질과 원본 Risu 실행의 동등성은 검증 범위가 아니에요.
+
+
+## Risu 입력 콜백 분리 · 2026-09-14
+
+RisuAI `cad8595aa39620df4246f56918f0962c2aa0263a`의 `src/lib/ChatScreens/DefaultChatScreen.svelte` 입력 제출(`runTrigger(..., 'input')`, 187행)과 `src/ts/process/index.svelte.ts`의 생성 준비(`runTrigger(..., 'start')`, 888행)를 확인했어요. 입력 콜백에서는 새 사용자 메시지가 아직 대화에 없고 생성 시작에서는 포함된다는 원리를 `server/risu-lua-adapter.ts`의 `hook: 'input'`, `server/package-behavior-run.ts`의 단계 순서·대화 범위와 저장/복원 영수증 검사에 적용했어요. `tests/risu-lua-integration.test.ts`에서 두 단계의 조회·상태 연결, 중복 실행 방지, 원문 보존, 실패 후 본문 채택과 백업 무재실행을 확인해요. 원본 코드를 복사하지 않았으며 입력 편집·최종 요청 편집은 이번 작은 구현 단계에서 제외했어요.

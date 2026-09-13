@@ -142,11 +142,13 @@ function definitions(snapshot: RunSnapshot) {
     });
 }
 function automaticActions(snapshot: RunSnapshot) {
-  return definitions(snapshot).flatMap((d) =>
-    d.behavior.actions
-      .filter((action) => behaviorActionTriggers(action).includes('before-turn'))
-      .map((action) => ({ ...d, action }))
-  );
+  return definitions(snapshot)
+    .flatMap((d) =>
+      d.behavior.actions
+        .filter((action) => behaviorActionTriggers(action).includes('before-turn'))
+        .map((action) => ({ ...d, action }))
+    )
+    .sort((a, b) => Number(b.action.hook === 'input') - Number(a.action.hook === 'input'));
 }
 export function runBehaviorProgress(store: Store, runId: string): RunBehaviorProgress | undefined {
   const row = store.db
@@ -284,7 +286,9 @@ function actionResolution(
         snapshot,
         ref,
         action.program!,
-        prior.program.conversation
+        prior.program.conversation,
+        undefined,
+        action.hook !== 'input'
       );
     return { entry: prior };
   }
@@ -309,7 +313,9 @@ function actionResolution(
         snapshot,
         ref,
         action.program!,
-        cached.program.conversation
+        cached.program.conversation,
+        undefined,
+        action.hook !== 'input'
       );
     const replay = { ...structuredClone(cached), trigger };
     applyEntry(progress, replay);
@@ -483,12 +489,15 @@ function prepareRunBehaviorInTransaction(
       )
     );
   });
+  // An explicit input submission owns its callback even without a conversation-read grant.
+  // Keep entropy tied to source/state so changing the request cannot reroll existing draws.
+  const hasInputHooks = automatic.some((d) => d.action.hook === 'input');
   const opportunityId =
-    readsConversation && snapshot.extensionConversation
+    hasInputHooks || (readsConversation && snapshot.extensionConversation)
       ? hash({
           opportunityId: entropyOpportunityId,
           conversation: {
-            messages: snapshot.extensionConversation.messages.map(({ role, hash }) => ({
+            messages: snapshot.extensionConversation?.messages.map(({ role, hash }) => ({
               role,
               hash,
             })),
@@ -825,7 +834,7 @@ export async function prepareAutomaticRunBehavior(
                 reserved.profile,
                 d.ref,
                 step.program!,
-                { request: reserved.request }
+                d.action.hook === 'input' ? {} : { request: reserved.request }
               ),
               assertCurrent,
               assertVariableWriteAccess: () =>
@@ -1175,7 +1184,9 @@ export function commitRunBehaviorVariables(store: Store, run: Run, source: Sourc
       run.snapshot,
       definition!.ref,
       action!.program!,
-      entry.program.conversation
+      entry.program.conversation,
+      undefined,
+      action!.hook !== 'input'
     );
   }
   const entries = progress!.entries.filter((entry) => entry.program?.variables);
