@@ -32,6 +32,7 @@ export function ModelWorkspaceEditor({
         titleModel: workspace.titleModel ?? null,
         helperModel: workspace.helperModel ?? null,
         contextModel: workspace.contextModel ?? null,
+        extensionModel: workspace.extensionModel ?? null,
         routes: workspace.modelRoutes,
         translationPolicy: workspace.translationPolicy,
       });
@@ -123,6 +124,15 @@ export function ModelWorkspaceEditor({
           )}
           <small>
             자동·수동 요약에 사용해요. 미지정하면 압축이 필요한 작업만 멈추며 다른 모델로 대체하지
+            않아요.
+          </small>
+        </div>
+        <div>
+          {selector('확장 호출 모델', draft.extensionModel ?? null, (ref) =>
+            change({ ...draft, extensionModel: ref })
+          )}
+          <small>
+            사용자가 허용한 패키지 코드의 추가 생성 요청에 사용해요. 미지정하면 추가 호출을 시작하지
             않아요.
           </small>
         </div>
@@ -251,6 +261,7 @@ export function ModelWorkspaceEditor({
                   titleModel: draft.titleModel ?? null,
                   helperModel: draft.helperModel ?? null,
                   contextModel: draft.contextModel ?? null,
+                  extensionModel: draft.extensionModel ?? null,
                   translationPolicy: draft.translationPolicy,
                 },
                 'PUT'

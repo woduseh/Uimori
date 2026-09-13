@@ -834,7 +834,12 @@ export async function executeRunBehaviorTool(
   runId: string,
   binding: ToolBinding,
   call: ToolAction,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  services?: {
+    modelGenerate: (args: RuntimeValue, signal: AbortSignal) => Promise<RuntimeValue>;
+    assertModelAccess: () => void | Promise<void>;
+    hostWaitMs: number;
+  }
 ): Promise<ToolEvent> {
   try {
     const prepared = store.transaction(() => {
@@ -897,9 +902,26 @@ export async function executeRunBehaviorTool(
       const work =
         pending?.work ??
         (async () => {
+          let modelResultRead = false;
           const output = await executeExtensionProgram(prepared.program!, prepared.input!, signal, {
-            host: prepared.host,
+            hostWaitMs: prepared.program!.capabilities?.includes('model.generate')
+              ? services?.hostWaitMs
+              : undefined,
+            awaitHostSettlement:
+              prepared.program!.capabilities?.includes('model.generate') === true,
+            host: async (method, args, hostSignal) => {
+              if (method !== 'model.generate') return prepared.host!(method, args, hostSignal);
+              if (!services || !prepared.program!.capabilities?.includes('model.generate'))
+                throw new ExtensionProgramError('BEHAVIOR_HOST_MODEL_DENIED');
+              const current = behaviorToolContext(store, runId, binding, call, signal);
+              if (hash(current.progress) !== prepared.progressHash)
+                fail('BEHAVIOR_OPPORTUNITY_DEPENDENCY_CHANGED');
+              const result = await services.modelGenerate(args, hostSignal);
+              modelResultRead = true;
+              return result;
+            },
           });
+          if (modelResultRead) await services!.assertModelAccess();
           return store.transaction(() => {
             const context = behaviorToolContext(store, runId, binding, call, signal);
             if (hash(context.progress) !== prepared.progressHash)

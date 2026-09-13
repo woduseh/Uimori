@@ -26,6 +26,9 @@ import { managementImpact } from '../server/provider-management.js';
 import { illustrationReferenceCandidates } from '../server/illustrations.js';
 import { helperWritingSnapshot } from '../server/helper-runtime.js';
 import { contextSourceRefs } from '../server/context-planning.js';
+import { EXTENSION_PROGRAM_API } from '../core/extension-program.js';
+import { packageInstanceId } from '../core/execution-context.js';
+import type { Content } from '../core/product.js';
 
 const owned: { path: string; store: Store }[] = [];
 function database() {
@@ -170,6 +173,173 @@ test('optional title model is independent of task routes, strict, CAS protected 
   updatePromptWorkspace(store, { expectedRevision: modelWorkspace(store).revision });
   expect(promptWorkspace(store).titleModel).toEqual({ id: title.id });
   expect(save(null).titleModel).toBeNull();
+});
+
+test('the optional extension model stays outside task routes and freezes its current model revision', () => {
+  const store = database(),
+    chat = createFixtureChat(store, 'Extension model'),
+    extension = model(store, 'Extension');
+  const current = modelWorkspace(store);
+  expect(current.extensionModel).toBeNull();
+  const selected = updateModelWorkspace(store, {
+    expectedRevision: current.revision,
+    routes: current.routes,
+    translationPolicy: current.translationPolicy,
+    extensionModel: { id: extension.id },
+  });
+  expect(selected.extensionModel).toEqual({ id: extension.id });
+  expect(selected.routes).toEqual(emptyModelRoutes());
+  const frozen = store.product.snapshot(chat.id);
+  expect(frozen.extensionModel).toMatchObject({ id: extension.id, revision: extension.revision });
+  store.product.model(
+    {
+      title: 'Extension revised',
+      connectionId: extension.connectionId,
+      modelId: extension.modelId,
+      maxOutputTokens: extension.maxOutputTokens,
+      temperature: extension.temperature,
+      expectedRevision: extension.revision,
+    },
+    extension.id
+  );
+  expect(store.product.snapshot(chat.id).extensionModel).toMatchObject({
+    id: extension.id,
+    revision: extension.revision + 1,
+    title: 'Extension revised',
+  });
+  expect(frozen.extensionModel).toMatchObject({
+    id: extension.id,
+    revision: extension.revision,
+    title: 'Extension',
+  });
+});
+
+function extensionPackage(capability: boolean) {
+  return {
+    version: 1 as const,
+    id: 'placeholder',
+    revision: 1,
+    title: 'Extension package',
+    description: 'Synthetic extension grant fixture',
+    lore: [],
+    instructions: [],
+    controls: [],
+    transforms: [],
+    behavior: {
+      revision: 1,
+      schemaVersion: 1,
+      stateSchema: { type: 'record' as const, properties: {} },
+      initialState: {},
+      actions: [
+        {
+          id: 'ask',
+          triggers: ['model' as const],
+          inputSchema: { type: 'record' as const, properties: {} },
+          effects: [],
+          program: {
+            api: EXTENSION_PROGRAM_API,
+            source: 'return {state: api.state, result: {ok: true}};',
+            ...(capability ? { capabilities: ['model.generate' as const] } : {}),
+          },
+        },
+      ],
+      outputParsers: [],
+    },
+  };
+}
+
+test('extension grants bind to one attached package revision, do not roll forward and clean removed attachments', () => {
+  const store = database(),
+    chat = createFixtureChat(store, 'Extension grant'),
+    content = store.product.content({
+      kind: 'module',
+      title: 'Extension package',
+      description: 'Synthetic extension grant fixture',
+      text: '',
+      loading: 'pinned',
+      relatedIds: [],
+      package: extensionPackage(true),
+    }) as Content;
+  const attach = (profile: ChatProfile, packageAttachments: ChatProfile['packageAttachments']) =>
+    store.product.updateProfile(chat.id, {
+      expectedRevision: profile.revision,
+      attachments: profile.attachments,
+      image: profile.image,
+      packageAttachments,
+    });
+  const initial = store.product.profile(chat.id),
+    moduleAttachment = { id: content.id, revision: content.revision, role: 'module' as const },
+    attached = attach(initial, [...(initial.packageAttachments ?? []), moduleAttachment]),
+    instanceId = packageInstanceId(moduleAttachment);
+  const granted = store.product.updateProfile(chat.id, {
+    expectedRevision: attached.revision,
+    attachments: attached.attachments,
+    image: attached.image,
+    packageAttachments: attached.packageAttachments,
+    extensionGrants: {
+      [instanceId]: { packageRevision: content.revision, capabilities: ['model.generate'] },
+    },
+  });
+  expect(granted.extensionGrants?.[instanceId]).toEqual({
+    packageRevision: content.revision,
+    capabilities: ['model.generate'],
+  });
+  const cleared = store.product.updateProfile(chat.id, {
+    expectedRevision: granted.revision,
+    attachments: granted.attachments,
+    image: granted.image,
+    packageAttachments: granted.packageAttachments,
+    extensionGrants: {},
+  });
+  expect(cleared.extensionGrants).toBeUndefined();
+  const regranted = store.product.updateProfile(chat.id, {
+    expectedRevision: cleared.revision,
+    attachments: cleared.attachments,
+    image: cleared.image,
+    packageAttachments: cleared.packageAttachments,
+    extensionGrants: {
+      [instanceId]: { packageRevision: content.revision, capabilities: ['model.generate'] },
+    },
+  });
+  const revised = store.product.content(
+    {
+      kind: content.kind,
+      title: content.title,
+      description: content.description,
+      text: content.text,
+      loading: content.loading,
+      relatedIds: content.relatedIds,
+      package: extensionPackage(false),
+      expectedRevision: content.revision,
+    },
+    content.id
+  ) as Content;
+  const stale = store.product.updateProfile(chat.id, {
+    expectedRevision: regranted.revision,
+    attachments: regranted.attachments,
+    image: regranted.image,
+    packageAttachments: regranted.packageAttachments,
+  });
+  expect(stale.packageAttachments?.find((item) => item.id === content.id)?.revision).toBe(
+    revised.revision
+  );
+  expect(stale.extensionGrants?.[instanceId]?.packageRevision).toBe(content.revision);
+  expect(() =>
+    store.product.updateProfile(chat.id, {
+      expectedRevision: stale.revision,
+      attachments: stale.attachments,
+      image: stale.image,
+      packageAttachments: stale.packageAttachments,
+      extensionGrants: {
+        [instanceId]: { packageRevision: revised.revision, capabilities: ['model.generate'] },
+      },
+    })
+  ).toThrow('Invalid extension model grant');
+  const removed = attach(
+    stale,
+    stale.packageAttachments?.filter((item) => item.id !== content.id)
+  );
+  expect(removed.extensionGrants).toBeUndefined();
 });
 
 test('current global selection is shared, CAS protected and frozen in prior Runs and reservations', () => {
@@ -345,6 +515,7 @@ test('workspace role resolution keeps optional and refusal selections separate f
     'image',
     'helper',
     'context',
+    'extension',
     'title',
     'refusal',
   ] as const;
@@ -352,6 +523,7 @@ test('workspace role resolution keeps optional and refusal selections separate f
   workspace.modelRoutes.main = { id: 'main' };
   workspace.helperModel = { id: 'helper' };
   workspace.contextModel = { id: 'context' };
+  workspace.extensionModel = { id: 'extension' };
   workspace.titleModel = { id: 'title' };
   workspace.translationPolicy.refusalModel = { id: 'refusal' };
   expect(roles.map((role) => workspaceModelRef(workspace, role)?.id ?? null)).toEqual([
@@ -361,6 +533,7 @@ test('workspace role resolution keeps optional and refusal selections separate f
     null,
     'helper',
     'context',
+    'extension',
     'title',
     'refusal',
   ]);

@@ -39,6 +39,9 @@ import {
   type BehaviorToolBinding,
 } from '../core/package-behavior-tools.js';
 import { createAgentCollaboration } from './agent-collaboration.js';
+import { createExtensionModelService } from './extension-model.js';
+import type { ExtensionModelBinding } from '../core/extension-model.js';
+import type { RuntimeValue } from '../core/prompt-values.js';
 import { compactableRead, compactToolReads } from './context-tool-compaction.js';
 import { BehaviorError } from '../core/package-behavior.js';
 import { PromptEvaluationError } from '../core/prompt-values.js';
@@ -58,8 +61,15 @@ export type MainHooks = {
   onToolEvent: (event: ToolEvent) => void | Promise<void>;
   onBehaviorTool?: (
     binding: Pick<BehaviorToolBinding, 'instanceId' | 'actionId'>,
-    action: ToolAction
+    action: ToolAction,
+    host?: {
+      modelGenerate: (args: RuntimeValue, signal: AbortSignal) => Promise<RuntimeValue>;
+      assertModelAccess: () => void | Promise<void>;
+      hostWaitMs: number;
+    }
   ) => ToolEvent | Promise<ToolEvent>;
+  /** User-owned live grant/connection checks, separate from the frozen authored capability. */
+  authorizeExtensionModel?: (binding: ExtensionModelBinding) => void | Promise<void>;
   /** Durable owner of model-written context checkpoints; absent owners deny context.write/new. */
   persistContext?: ContextPersistence;
   approvedOrigins: readonly string[];
@@ -72,6 +82,17 @@ export type MainHooks = {
     progress: ProviderProgress & { attemptId: string; segment: number }
   ) => void | Promise<void>;
 };
+
+/** Carries accounting out of fatal host failures without exposing the host exception to guests. */
+export class ModelRunError extends Error {
+  constructor(
+    cause: unknown,
+    readonly usage: Usage
+  ) {
+    super('MODEL_EXECUTION_FAILED', { cause });
+    this.name = 'ModelRunError';
+  }
+}
 
 function addUsage(total: Usage, result: ProviderResult) {
   for (const key of ['inputTokens', 'outputTokens', 'costUsd'] as const) {
@@ -131,6 +152,7 @@ export async function runMain(snapshot: RunSnapshot, hooks: MainHooks): Promise<
   const usage: Usage = structuredClone(
     hooks.initialUsage ?? { modelCalls: 0, inputTokens: 0, outputTokens: 0, costUsd: 0 }
   );
+  const extensionModels = createExtensionModelService(snapshot, hooks, usage);
   let opaqueState: Json | undefined;
   const fail = (
     error: string,
@@ -459,14 +481,20 @@ export async function runMain(snapshot: RunSnapshot, hooks: MainHooks): Promise<
                 }
               : await hooks.onBehaviorTool(
                   { instanceId: binding.instanceId, actionId: binding.actionId },
-                  action
+                  action,
+                  {
+                    modelGenerate: (args, signal) =>
+                      extensionModels.generate(binding, args, signal),
+                    assertModelAccess: () => hooks.authorizeExtensionModel?.(binding),
+                    hostWaitMs: extensionModels.hostWaitMs,
+                  }
                 );
         } catch (error) {
           // Fatal host/ownership/cancellation errors still terminate this run. Returning the
           // accumulated usage lets the caller settle a cancelled run without losing accounting.
           if (error instanceof BehaviorError || error instanceof PromptEvaluationError)
             return fail(error.message);
-          throw error;
+          throw new ModelRunError(error, structuredClone(usage));
         }
         if (event.denied) event = compactBehaviorDenial(event, action);
         if (event.denied && event.errorKind === 'recoverable') disabledBehaviorTools.add(call.name);

@@ -4,7 +4,9 @@ import { createPanelPackage } from './fixtures/panel-package.js';
 import {
   createLibraryContent,
   navigationAction,
+  openChatSettings,
   revealLibraryEditor,
+  selectChatSettingsSection,
   selectPackageSection,
 } from './ui-navigation.js';
 import { waitForContentDraftSave } from './fixtures/edit-draft-save.js';
@@ -29,13 +31,17 @@ test('PROGTOOLUI01 creators enable model code actions and model-only actions hav
   await methods.getByRole('checkbox', { name: /^모델이 필요할 때 요청/ }).check();
   await methods.getByRole('checkbox', { name: /^사용자 버튼/ }).uncheck();
   await fields.getByRole('checkbox', { name: /^자기 자료 읽기/ }).check();
+  await fields.getByRole('checkbox', { name: /^추가 모델 호출/ }).check();
   await fields.getByRole('button', { name: '동작 검증 후 적용', exact: true }).click();
   const saving = waitForContentDraftSave(page);
   await library.getByRole('button', { name: '자료 등록', exact: true }).click();
   const content = await saving;
   expect(content.package!.behavior!.actions[0]).toMatchObject({
     triggers: ['model'],
-    program: { api: 'uimori-state-action-v1', capabilities: ['materials.read.self'] },
+    program: {
+      api: 'uimori-state-action-v1',
+      capabilities: ['materials.read.self', 'model.generate'],
+    },
   });
   const created = await request.post('/api/chats', {
     data: { title: 'Synthetic model code', botId: content.id },
@@ -49,6 +55,28 @@ test('PROGTOOLUI01 creators enable model code actions and model-only actions hav
   await expect(panel.getByRole('button', { name: '중복 없는 항목 세기', exact: true })).toHaveCount(
     0
   );
+  await openChatSettings(page);
+  await selectChatSettingsSection(page, '봇·페르소나·모듈');
+  const settings = page.getByRole('dialog', { name: '채팅 설정', exact: true });
+  const attachment = settings
+    .locator('.package-attachment')
+    .filter({ has: page.getByRole('heading', { name: content.title, exact: true }) });
+  const grant = attachment.getByRole('switch', {
+    name: `${content.title} 추가 모델 호출 허용`,
+    exact: true,
+  });
+  await expect(grant).toBeVisible();
+  await expect(attachment.getByText(/전역 설정에서 확장 호출 모델을 선택/)).toBeVisible();
+  await grant.check();
+  await settings.getByRole('button', { name: '채팅 설정 저장', exact: true }).click();
+  await expect(settings.getByText('채팅 설정을 저장했어요.', { exact: true })).toBeVisible();
+  const savedChat = await (await request.get(`/api/chats/${chat.id}`)).json();
+  expect(savedChat.profile.extensionGrants).toEqual({
+    [`${content.id}:bot`]: {
+      packageRevision: content.revision,
+      capabilities: ['model.generate'],
+    },
+  });
   const detail = await (await request.get(`/api/chats/${chat.id}/package-behaviors`)).json();
   expect(detail.instances[0].stateRevision).toBe(0);
 });

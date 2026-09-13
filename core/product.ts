@@ -81,6 +81,7 @@ export type ModelWorkspace = {
   titleModel?: ModelRef | null;
   helperModel?: ModelRef | null;
   contextModel?: ModelRef | null;
+  extensionModel?: ModelRef | null;
   revision: number;
   routes: Record<TaskRole, ModelRef | null>;
   translationPolicy: PromptWorkspace['translationPolicy'];
@@ -89,6 +90,7 @@ export type PromptWorkspace = {
   titleModel?: ModelRef | null;
   helperModel?: ModelRef | null;
   contextModel?: ModelRef | null;
+  extensionModel?: ModelRef | null;
   modelRoutes: Record<TaskRole, ModelRef | null>;
   revision: number;
   main: CurrentPrompt;
@@ -113,7 +115,10 @@ export const MODEL_ROLES = [
 ] as const;
 export type ModelRole = (typeof MODEL_ROLES)[number];
 // Refusal checks execute within a translation job; state and illustration own separate settings.
-export type WorkspaceModelRole = Exclude<ModelRole, 'state' | 'illustration'> | 'refusal';
+export type WorkspaceModelRole =
+  | Exclude<ModelRole, 'state' | 'illustration'>
+  | 'extension'
+  | 'refusal';
 export function workspaceModelRef(
   workspace: PromptWorkspace,
   role: WorkspaceModelRole
@@ -123,6 +128,8 @@ export function workspaceModelRef(
       return workspace.helperModel ?? null;
     case 'context':
       return workspace.contextModel ?? null;
+    case 'extension':
+      return workspace.extensionModel ?? null;
     case 'title':
       return workspace.titleModel ?? null;
     case 'refusal':
@@ -204,12 +211,16 @@ export type ChatProfile = {
   imageTranslation?: boolean;
   packageAttachments?: import('./content-package.js').PackageAttachment[];
   packageValues?: Record<string, Record<string, import('./prompt-program.js').PromptValue>>;
+  /** User grants keyed by the chat-local package instance ID. A grant binds one exact revision. */
+  extensionGrants?: Record<string, { packageRevision: number; capabilities: 'model.generate'[] }>;
 };
 export type ProfileSnapshot = ChatProfile & {
   chatOptions?: import('./chat-options.js').ChatOptionResolution;
   /** Text-only per-link projection; the original packages below remain revision-exact. */
   chatOverrides?: import('./chat-overrides.js').ChatOverrideSnapshot;
   contextModel?: ModelSnapshot;
+  /** Global extension model resolved and frozen at reservation time. */
+  extensionModel?: ModelSnapshot;
   /** Historical execution scope only. Current settings and new snapshots omit this field. */
   personaReference?: boolean;
   /** Self-contained execution evidence; never a live library dependency. */

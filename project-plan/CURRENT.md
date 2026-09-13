@@ -6,11 +6,13 @@
 
 ## 현재 계약
 
-- **확장 Host 자료 조회**는 `program.capabilities`의 자기 자료 읽기 선언과 `api.host.call`을 사용해요. 고정된 자기 패키지의 본문·로어를 기존 이름/옵션·채팅 변경과 같은 경로로 투영하고 목록/조각을 읽어요. 사용자·자동·모델 행동이 같은 broker를 사용하며 매 읽기의 소유권·취소와 게스트 호출/자원 한도를 유지해요. 모델/통신 메서드·다른 자료 권한은 후속 범위예요. [Host API](../docs/EXTENSION-PROGRAMS.md#host-api로-자기-자료-읽기)
+- **확장 코드의 추가 모델 요청**은 모델이 호출한 행동에서 `model.generate`를 사용해요. 전역 확장 모델 선택과 자료 개정에 묶인 채팅별 허용이 필요하며, 호출은 Run 전체 예산·전송 전 attempt·취소·사용량 경로를 공유해요. 마지막 본문 호출을 남기고 원문은 main만 저장해요. 일반 채팅 백업의 과거 실행/허가 기록은 보존하되 새 채팅의 호출 권한은 다시 선택해요. 사용자 버튼·자동 준비의 추가 호출, 일반 HTTP·응답 후 hook은 후속 범위예요. [확장 모델 계약](../docs/EXTENSION-PROGRAMS.md#모델-호출-host-api와-명시-권한)
+
+- **확장 Host 자료 조회**는 `program.capabilities`의 자기 자료 읽기 선언과 `api.host.call`을 사용해요. 고정된 자기 패키지의 본문·로어를 기존 이름/옵션·채팅 변경과 같은 경로로 투영하고 목록/조각을 읽어요. 사용자·자동·모델 행동이 같은 broker를 사용하며 매 읽기의 소유권·취소와 게스트 호출/자원 한도를 유지해요. 일반 통신 메서드·다른 자료 권한은 후속 범위예요. [Host API](../docs/EXTENSION-PROGRAMS.md#host-api로-자기-자료-읽기)
 
 - **생성 전 자동 코드 준비**는 같은 before-turn/action 계약을 사용해요. 코드가 있는 자동 준비 묶음은 예약 후 계산하고 모두 ready이면 문맥/프롬프트에 투영해요. 원래 요청과 예약 상태는 유지하고 상태의 실제 게시는 원문 성공 때예요. 작업 상세에서 건너뛸 수 있으며 실패·skip의 부분 결과와 늦은 계산은 게시하지 않아요. [자동 준비 계약](../docs/EXTENSION-PROGRAMS.md#생성-전-자동-준비).
 
-- 패키지 사용자·모델 행동은 [상태 계산 코드](../docs/EXTENSION-PROGRAMS.md)로 알고리즘을 표현할 수 있어요. JavaScript는 해당 상태/입력 사본과 제한된 Host API를 받고 별도 Worker의 고정 메모리 WASM에서 실행돼요. 기본 버튼·커스텀 패널의 결과는 schema·개정 검사 후 journal에 남고, 모델 호출은 공통 async 진입점에서 임시 상태를 계산한 뒤 원문 성공 때 게시해요. 복원은 코드를 재실행하지 않아요. 응답 후 코드 처리·코드에서의 모델/통신 호출·Lua·확장 설치 관리는 후속 범위예요.
+- 패키지 사용자·모델 행동은 [상태 계산 코드](../docs/EXTENSION-PROGRAMS.md)로 알고리즘을 표현할 수 있어요. JavaScript는 해당 상태/입력 사본과 제한된 Host API를 받고 별도 Worker의 고정 메모리 WASM에서 실행돼요. 기본 버튼·커스텀 패널의 결과는 schema·개정 검사 후 journal에 남고, 모델 호출은 공통 async 진입점에서 임시 상태를 계산한 뒤 원문 성공 때 게시해요. 복원은 코드를 재실행하지 않아요. 응답 후 코드 처리·일반 통신 호출·Lua·확장 설치 관리는 후속 범위예요.
 
 - **DB schema는 v17, JSON archive는 v15**예요. 새 DB와 지원하는 v15/v16에서 migration을 순서대로 적용하고 내부 ledger를 기록해요. v17은 native 자료 이동의 출처·중복 방지 영수증을 추가해요. 원문·상태·이미지·snapshot은 보존하고 모든 과거 개발 DB·archive 이관을 의미하지 않아요. 이 작업은 운영 앱을 배포하지 않았으며 Oracle v15는 과거 배포 기록이에요. [DB migration](../docs/DATA-MIGRATIONS.md) · [운영 배포](../docs/ORACLE-RELEASE.md)
 - **작문·번역 프롬프트와 역할 모델은 전역이 기본**이며, 채팅은 작문 프리셋 ID와 본문 모델 ID를 고정할 수 있어요. 고정한 ID의 최신 저장본을 새 요청에 사용하고 삭제·비활성 대상을 임의로 대체하지 않아요. 번역과 보조 역할은 전역을 유지해요. `workspaceModelRef`가 역할 선택 규칙을 소유하며 이미 예약한 snapshot은 바꾸지 않아요. [전역 역할 모델](../docs/GLOBAL-MODELS.md) · [현재 프롬프트](../docs/RUNTIME-SIMPLIFICATION.md)

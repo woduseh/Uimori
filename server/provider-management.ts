@@ -104,6 +104,7 @@ export function managementImpact(
     title: workspaceModelRef(workspace, 'title'),
     helper: workspaceModelRef(workspace, 'helper'),
     context: workspaceModelRef(workspace, 'context'),
+    extension: workspace.extensionModel ?? null,
   })
     .filter(([, ref]) => matches(ref))
     .map(([role]) => role);

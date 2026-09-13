@@ -114,6 +114,7 @@ export function ProfileEditor({
     imageTranslation: next.imageTranslation !== false,
     ...(next.packageAttachments ? { packageAttachments: next.packageAttachments } : {}),
     ...(next.packageValues ? { packageValues: next.packageValues } : {}),
+    extensionGrants: next.extensionGrants ?? {},
     ...(next.loreContext ? { loreContext: next.loreContext } : {}),
   });
   const promptId = value.pinned?.mainPromptPresetId;
@@ -191,6 +192,7 @@ export function ProfileEditor({
                 ownerBotId={ownerBotId}
                 profile={value}
                 library={library}
+                extensionModelConfigured={!!workspace?.extensionModel}
                 onChange={change}
                 onError={onError}
                 onPendingChange={setAttachmentPending}
