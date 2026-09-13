@@ -20,6 +20,8 @@ import {
 } from './package-identity.js';
 import { PromptBudget } from './prompt-values.js';
 
+export const GENERATED_PACKAGE_START_MAX_CHARS = 4000;
+
 /** One explicitly selected opening; optional authored templates preserve their source text. */
 export type PackageStart = {
   id: string;
@@ -135,11 +137,10 @@ export function validatePackageStarts(
     if (ids.has(start.id)) fail('PACKAGE_START_DUPLICATE_ID');
     ids.add(start.id);
     text(start.title, 200);
-    text(start.text, start.mode === 'generate' ? 4000 : 100_000);
+    text(start.text, start.mode === 'generate' ? GENERATED_PACKAGE_START_MAX_CHARS : 100_000);
     if (start.description !== undefined) text(start.description, 2000, true);
     if (start.mode !== 'authored' && start.mode !== 'generate') fail('PACKAGE_START_INVALID_MODE');
     if (start.template !== undefined) {
-      if (start.mode !== 'authored') fail('PACKAGE_START_TEMPLATE_AUTHORED_ONLY');
       identityTemplate(start.template, context.controls);
     }
     const values = resolvePromptValues(
@@ -202,7 +203,7 @@ export function resolvePackageStart(
         }
       )
     : start.text;
-  text(rendered, start.mode === 'generate' ? 4000 : 100_000);
+  text(rendered, start.mode === 'generate' ? GENERATED_PACKAGE_START_MAX_CHARS : 100_000);
   return {
     packageId: pkg.id,
     packageRevision: pkg.revision,

@@ -9,7 +9,11 @@ import { Store } from '../server/store.js';
 import { createPackageStart } from '../server/package-start.js';
 import { behaviorDetail } from '../server/package-behavior-host.js';
 import { packageControlKey } from '../core/content-package.js';
-import { resolvePackageStart, validatePackageStarts } from '../core/package-start.js';
+import {
+  GENERATED_PACKAGE_START_MAX_CHARS,
+  resolvePackageStart,
+  validatePackageStarts,
+} from '../core/package-start.js';
 import {
   packageIdentityFromContents,
   packageIdentityFromProfile,
@@ -163,7 +167,7 @@ function fixture(pkg = packageData()) {
   };
 }
 
-test('authored templates render selected names and controls once while rejecting other runtime access', () => {
+test('start templates render selected names and controls once while rejecting other runtime access', () => {
   const pkg = packageData();
   pkg.identity = { name: 'Aster', description: '' };
   pkg.starts![0].template = [
@@ -198,9 +202,17 @@ test('authored templates render selected names and controls once while rejecting
   expect(() =>
     validatePackageStarts([{ ...pkg.starts![0], template: [{ kind: 'slot', name: 'input' }] }], pkg)
   ).toThrow('PACKAGE_START_TEMPLATE_SLOT');
-  expect(() => validatePackageStarts([{ ...pkg.starts![0], mode: 'generate' }], pkg)).toThrow(
-    'PACKAGE_START_TEMPLATE_AUTHORED_ONLY'
+  expect(validatePackageStarts([{ ...pkg.starts![0], mode: 'generate' }], pkg)[0].template).toEqual(
+    pkg.starts![0].template
   );
+  expect(
+    resolvePackageStart(
+      { ...pkg, starts: [{ ...pkg.starts![0], mode: 'generate' }] },
+      'arrival',
+      {},
+      identity
+    ).text
+  ).toBe('\r\nAster meets {{char}} (researcher).\n');
 });
 
 test('templated openings freeze persona names across replay, later edits, archive and fork', () => {
@@ -407,6 +419,126 @@ test('generated opening uses the existing queue once; cancellation and retry nev
   ).toThrow('PACKAGE_START_ALREADY_CONFIRMED');
   expect(f.store.db.prepare('SELECT 1 FROM package_behavior_journal').all()).toHaveLength(1);
   expect(f.store.detail(f.chat.id).sources).toHaveLength(0);
+});
+
+test('generated templates freeze the preview as the queued request across profile changes, archive and fork', () => {
+  const pkg = packageData();
+  pkg.identity = { name: 'Aster', description: '' };
+  pkg.starts![1].template = [
+    { kind: 'text', text: 'Write ' },
+    { kind: 'value', expression: { context: ['bot', 'name'] } },
+    { kind: 'text', text: ' meeting ' },
+    { kind: 'value', expression: { context: ['user', 'name'] } },
+    { kind: 'text', text: ' as a ' },
+    { kind: 'value', expression: { control: 'job' } },
+    { kind: 'text', text: '.' },
+  ];
+  const f = fixture(pkg);
+  const persona = f.store.product.content({
+    kind: 'persona',
+    title: 'Mira',
+    description: '',
+    text: 'Synthetic persona description.',
+    loading: 'pinned',
+    relatedIds: [],
+  }) as Content;
+  const { chatId: _chatId, revision, ...profileBody } = f.profile;
+  const saved = updateTestProfile(f.store.product, f.chat.id, {
+    ...profileBody,
+    expectedRevision: revision,
+    attachments: [...profileBody.attachments, { id: persona.id, revision: persona.revision }],
+  });
+  const command = {
+    ...f.command,
+    startId: 'generated',
+    expectedProfileRevision: saved.revision,
+  };
+  const preview = resolvePackageStart(
+    f.content.package!,
+    'generated',
+    saved.packageValues?.[packageControlKey(saved.packageAttachments![0])],
+    packageIdentityFromProfile(f.store.product.snapshot(f.chat.id))
+  );
+  let generatedValidations = 0;
+  const result = createPackageStart(f.store, f.chat.id, command, (snapshot) => {
+    generatedValidations++;
+    expect(snapshot.request).toBe(preview.text);
+  });
+  expect(result.run).toMatchObject({
+    status: 'queued',
+    request: preview.text,
+    snapshot: {
+      request: preview.text,
+      packageStart: { text: preview.text, mode: 'generate' },
+    },
+  });
+  expect(result.run.snapshot.packageStart).toEqual(preview);
+  expect(result.run.inputs).toHaveLength(0);
+  expect(f.store.product.attempts(f.chat.id)).toHaveLength(0);
+
+  const current = f.store.product.profile(f.chat.id);
+  const { chatId: _currentChatId, revision: currentRevision, ...currentBody } = current;
+  updateTestProfile(f.store.product, f.chat.id, {
+    ...currentBody,
+    expectedRevision: currentRevision,
+    packageValues: {
+      ...currentBody.packageValues,
+      [packageControlKey(currentBody.packageAttachments![0])]: { job: 'guard' },
+    },
+  });
+  expect(
+    createPackageStart(f.store, f.chat.id, command, () => generatedValidations++)
+  ).toMatchObject({ created: false, run: { id: result.run.id, request: preview.text } });
+  expect(generatedValidations).toBe(1);
+
+  expect(f.store.startRun(result.run.id)).toBe(true);
+  const source = f.store.completeRun(
+    result.run.id,
+    '{"job":"researcher"}',
+    { modelCalls: 1, inputTokens: 10, outputTokens: 5, costUsd: null },
+    result.run.snapshot.settings
+  );
+  const fork = forkChat(f.store, f.chat.id, {
+    fromRevision: source.id,
+    idempotencyKey: 'generated-template-fork',
+  });
+  const restored = database();
+  restored.product.import(f.store.product.export());
+  expect(restored.run(result.run.id)).toMatchObject({
+    request: preview.text,
+    snapshot: { request: preview.text, packageStart: preview },
+  });
+  expect(restored.detail(fork.id).sources[0].text).toBe(source.text);
+  expect(restored.run(restored.detail(fork.id).sources[0].runId).snapshot.packageStart).toEqual(
+    preview
+  );
+});
+
+test('an oversized rendered generated request fails before run and initial state writes', () => {
+  const pkg = packageData();
+  const boundary = {
+    ...pkg,
+    starts: [
+      {
+        ...pkg.starts![1],
+        template: [{ kind: 'text' as const, text: 'x'.repeat(GENERATED_PACKAGE_START_MAX_CHARS) }],
+      },
+    ],
+  };
+  expect(resolvePackageStart(boundary, 'generated').text).toHaveLength(
+    GENERATED_PACKAGE_START_MAX_CHARS
+  );
+  pkg.starts![1].template = [
+    { kind: 'text', text: 'x'.repeat(GENERATED_PACKAGE_START_MAX_CHARS + 1) },
+  ];
+  const f = fixture(pkg);
+  const before = f.store.product.export().tables;
+  expect(() =>
+    createPackageStart(f.store, f.chat.id, { ...f.command, startId: 'generated' })
+  ).toThrow('PACKAGE_START_INVALID_TEXT');
+  expect(f.store.product.export().tables).toEqual(before);
+  expect(f.store.db.prepare('SELECT 1 FROM runs').all()).toHaveLength(0);
+  expect(f.store.db.prepare('SELECT 1 FROM package_behavior_journal').all()).toHaveLength(0);
 });
 
 test('authored source state and authorship survive archive and fork without a second initial action', () => {
