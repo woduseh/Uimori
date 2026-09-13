@@ -26,5 +26,6 @@ await runBrowserVerification({
     'PANELUI01',
     'PANELUI02',
     'EXTPANELUI01',
+    'PROGTOOLUI01',
   ],
 });

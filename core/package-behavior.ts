@@ -334,8 +334,7 @@ export function validatePackageBehavior(value: unknown): PackageBehavior {
         if (error instanceof ExtensionProgramError) bad(error.code);
         throw error;
       }
-      if (triggers.some((trigger) => trigger !== 'user'))
-        bad('BEHAVIOR_PROGRAM_REQUIRES_USER_ACTION');
+      if (triggers.includes('before-turn')) bad('BEHAVIOR_PROGRAM_AUTOMATIC_UNSUPPORTED');
       if (
         !Array.isArray(a.effects) ||
         a.effects.length !== 0 ||

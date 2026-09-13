@@ -89,11 +89,14 @@ describe('bounded extension state program contract', () => {
       expect(() => validateExtensionProgramResult(result)).toThrow();
   });
 
-  it('keeps program actions user-triggered and separate from declarative effects and draws', () => {
+  it('allows user/model program actions while keeping automatic execution and mixed effects separate', () => {
     expect(validatePackageBehavior(definition())).toEqual(definition());
     const disabled = definition();
     disabled.actions[0].triggers = [];
     expect(validatePackageBehavior(disabled).actions[0].triggers).toEqual([]);
+    const model = definition();
+    model.actions[0].triggers = ['user', 'model'];
+    expect(validatePackageBehavior(model).actions[0].triggers).toEqual(['user', 'model']);
     expect(() =>
       validatePackageStarts(
         [
@@ -114,7 +117,6 @@ describe('bounded extension state program contract', () => {
       { draws: [] },
       { automaticInput: { amount: 1 } },
       { triggers: ['before-turn'] },
-      { triggers: ['user', 'model'] },
     ]) {
       const b = definition();
       Object.assign(b.actions[0], change);

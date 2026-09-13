@@ -549,7 +549,7 @@ test('BETA-BEH10 master PromptProgram evaluation remains distinct from optional 
   expect(work).toEqual(before);
 });
 
-test('BETA-BEH03 database failures are not swallowed by behavior admission or tool execution', () => {
+test('BETA-BEH03 database failures are not swallowed by behavior admission or tool execution', async () => {
   const f = fixture();
   const failure = new Error('Synthetic database failure');
   const read = vi.spyOn(f.store.behavior, 'read').mockImplementation(() => {
@@ -561,7 +561,7 @@ test('BETA-BEH03 database failures are not swallowed by behavior admission or to
   const reading = vi.spyOn(f.store.behavior, 'read').mockImplementation(() => {
     throw failure;
   });
-  expect(() => call(f, run)).toThrow(failure);
+  await expect(call(f, run)).rejects.toThrow(failure);
   reading.mockRestore();
   f.store.finishRun(run.id, 'cancelled', 'Synthetic corruption check');
   f.store.db
@@ -615,7 +615,7 @@ test('BETA-BEH11 only fresh input, expression and parsed-value failures carry th
 
 test.each(['scope', 'runtime', 'database'] as const)(
   'BETA-BEH13 %s failure during tool execution and source completion propagates and rolls back',
-  (kind) => {
+  async (kind) => {
     const f = fixture(),
       run = start(f);
     const failure =
@@ -628,7 +628,7 @@ test.each(['scope', 'runtime', 'database'] as const)(
       throw failure;
     });
     try {
-      expect(() => call(f, run)).toThrow(failure);
+      await expect(call(f, run)).rejects.toThrow(failure);
       expect(() => finish(f, run)).toThrow(failure);
       expect(f.store.run(run.id).status).toBe('running');
       expect(f.store.chat(f.chat.id).headRevision).toBeNull();
@@ -642,12 +642,12 @@ test.each(['scope', 'runtime', 'database'] as const)(
   }
 );
 
-test('BETA-BEH14 rejected binding never consumes state or draws, while a missing journal remains fatal', () => {
+test('BETA-BEH14 rejected binding never consumes state or draws, while a missing journal remains fatal', async () => {
   const f = fixture(),
     run = start(f),
     binding = listBehaviorTools(run.snapshot)[0];
   const before = runBehaviorProgress(f.store, run.id);
-  const event = executeRunBehaviorTool(
+  const event = await executeRunBehaviorTool(
     f.store,
     run.id,
     { ...binding, actionId: 'not-allowed' },
@@ -664,19 +664,19 @@ test('BETA-BEH14 rejected binding never consumes state or draws, while a missing
   expect(runBehaviorProgress(f.store, run.id)).toEqual(before);
   expect(current(f).stateRevision).toBe(0);
   f.store.db.prepare('DELETE FROM package_behavior_runs WHERE run_id=?').run(run.id);
-  expect(() => call(f, run)).toThrow('BEHAVIOR_RUN_JOURNAL_MISSING');
+  await expect(call(f, run)).rejects.toThrow('BEHAVIOR_RUN_JOURNAL_MISSING');
   expect(() => finish(f, run)).toThrow('BEHAVIOR_RUN_JOURNAL_MISSING');
   expect(f.store.chat(f.chat.id).headRevision).toBeNull();
 });
 
 test.each(['input', 'runtime'] as const)(
   'BETA-BEH15 corrupt recorded %s cannot become a recoverable output failure',
-  (kind) => {
+  async (kind) => {
     const f = fixture((b) => {
         b.actions[1].result = { op: 'add', args: [{ context: ['time', 'unix'] }, 1] };
       }),
       run = start(f);
-    expect(call(f, run).denied).toBe(false);
+    expect((await call(f, run)).denied).toBe(false);
     const progress = runBehaviorProgress(f.store, run.id)!;
     const entry = progress.entries.find((item) => item.trigger === 'model')!;
     if (kind === 'input') entry.input = { bonus: 999 };
@@ -771,18 +771,18 @@ test('BETA-BEH06 a pre-prose user state survives schema change, unavailable writ
   expect(() => exportChatBackup(target, copy.chat.id)).not.toThrow();
 });
 
-test('BETA-BEH04 invalid action input is recoverable without applying state or concealing cancellation', () => {
+test('BETA-BEH04 invalid action input is recoverable without applying state or concealing cancellation', async () => {
   const f = fixture(),
     run = start(f);
   const before = runBehaviorProgress(f.store, run.id);
-  expect(call(f, run, 999)).toMatchObject({
+  expect(await call(f, run, 999)).toMatchObject({
     denied: true,
     errorKind: 'recoverable',
     result: { unavailable: true, continueWithoutAction: true },
   });
   expect(runBehaviorProgress(f.store, run.id)).toEqual(before);
   const binding = listBehaviorTools(run.snapshot)[0];
-  expect(() =>
+  await expect(
     executeRunBehaviorTool(
       f.store,
       run.id,
@@ -790,7 +790,7 @@ test('BETA-BEH04 invalid action input is recoverable without applying state or c
       { callId: randomUUID(), name: binding.tool.name, args: { bonus: 1 } },
       AbortSignal.abort()
     )
-  ).toThrow('BEHAVIOR_RUN_CANCELLED');
+  ).rejects.toThrow('BEHAVIOR_RUN_CANCELLED');
 });
 function dependentModule(f: Fixture, trigger: 'before-turn' | 'model') {
   const content = f.store.product.content({
@@ -887,20 +887,20 @@ test('BRUN01 previews have no draws or writes; automatic actions are staged and 
   ).toEqual(['before-turn']);
 });
 
-test('BRUN02 one domain tool resolves effects and returns a compact result; repeated call IDs cannot reroll', () => {
+test('BRUN02 one domain tool resolves effects and returns a compact result; repeated call IDs cannot reroll', async () => {
   const f = fixture(),
     run = start(f),
-    first = call(f, run);
+    first = await call(f, run);
   expect(first.denied).toBe(false);
   expect(first.result).toMatchObject({ score: expect.any(Number), die: expect.any(Number) });
-  const second = call(f, run);
+  const second = await call(f, run);
   expect(second.result).toEqual(first.result);
   expect(runBehaviorProgress(f.store, run.id)!.entries.map((e) => e.actionId)).toEqual([
     'day',
     'check',
   ]);
   expect(current(f).state).toEqual({ days: 0, score: 0, die: 0 });
-  const changed = call(f, run, 2);
+  const changed = await call(f, run, 2);
   expect(changed).toMatchObject({
     denied: true,
     result: { code: 'BEHAVIOR_OPPORTUNITY_INPUT_CHANGED' },
@@ -918,12 +918,12 @@ test('BRUN02 one domain tool resolves effects and returns a compact result; repe
   );
 });
 
-test('BRUN03 cancellation leaves no applied state and a new request at the same source reuses the recorded opportunity', () => {
+test('BRUN03 cancellation leaves no applied state and a new request at the same source reuses the recorded opportunity', async () => {
   const f = fixture(),
     first = start(f),
-    result = call(f, first);
+    result = await call(f, first);
   f.store.finishRun(first.id, 'cancelled', 'Synthetic cancellation');
-  expect(() => call(f, first)).toThrow('BEHAVIOR_RUN_NOT_RUNNING');
+  await expect(call(f, first)).rejects.toThrow('BEHAVIOR_RUN_NOT_RUNNING');
   expect(current(f).state).toEqual({ days: 0, score: 0, die: 0 });
   expect(f.store.db.prepare('SELECT COUNT(*) n FROM package_behavior_journal').get()).toMatchObject(
     { n: 0 }
@@ -932,21 +932,21 @@ test('BRUN03 cancellation leaves no applied state and a new request at the same 
   expect(retry.snapshot.behaviorExecution!.opportunityId).toBe(
     first.snapshot.behaviorExecution!.opportunityId
   );
-  expect(call(f, retry).result).toEqual(result.result);
+  expect((await call(f, retry)).result).toEqual(result.result);
   finish(f, retry);
   expect(current(f).stateRevision).toBe(2);
 });
 
-test('BRUN04 candidate uses the original dice and pre-automatic state without applying the automatic action twice', () => {
+test('BRUN04 candidate uses the original dice and pre-automatic state without applying the automatic action twice', async () => {
   const f = fixture(),
     original = start(f),
-    result = call(f, original);
+    result = await call(f, original);
   finish(f, original);
   const candidate = f.store.candidate(original.id, randomUUID(), 'Alternative').run;
   expect(current(f, candidate.snapshot.branchId).stateRevision).toBe(0);
   expect(candidate.snapshot.packageStates![0].stateRevision).toBe(1);
   start(f, candidate);
-  expect(call(f, candidate).result).toEqual(result.result);
+  expect((await call(f, candidate)).result).toEqual(result.result);
   finish(f, candidate, 'Alternate fiction.');
   expect(current(f, candidate.snapshot.branchId)).toMatchObject({
     stateRevision: 2,
@@ -976,7 +976,7 @@ test('BRUN05 UI cannot invoke a model/automatic-only action even through the API
   );
 });
 
-test('BRUN06 failed output parsing rolls all staged effects back while preserving the completed original source', () => {
+test('BRUN06 failed output parsing rolls all staged effects back while preserving the completed original source', async () => {
   const f = fixture((b) => {
       b.outputParsers = [
         {
@@ -989,7 +989,7 @@ test('BRUN06 failed output parsing rolls all staged effects back while preservin
       ];
     }),
     run = start(f);
-  call(f, run);
+  await call(f, run);
   const source = finish(f, run, 'Fiction with a broken state payload.');
   expect(f.store.run(run.id).status).toBe('completed');
   expect(f.store.source(source.id).text).toBe('Fiction with a broken state payload.');
@@ -1006,19 +1006,19 @@ test('BRUN06 failed output parsing rolls all staged effects back while preservin
   expect(next.snapshot.packageBehaviorUnavailable).toHaveLength(1);
 });
 
-test('BRUN07 source edits reject subsequent actions and fence stale completion without changing original prose', () => {
+test('BRUN07 source edits reject subsequent actions and fence stale completion without changing original prose', async () => {
   const f = fixture(),
     prior = start(f),
     source = finish(f, prior);
   const run = start(f);
   f.store.editSource(source.id, { text: 'Author changed the source.', expectedRevision: 0 });
-  expect(() => call(f, run)).toThrow('BEHAVIOR_SOURCE_DEPENDENCY_CHANGED');
+  await expect(call(f, run)).rejects.toThrow('BEHAVIOR_SOURCE_DEPENDENCY_CHANGED');
   const completed = finish(f, run, 'Original completion at the old basis.');
   expect(f.store.source(completed.id).text).toBe('Original completion at the old basis.');
   expect(current(f)).toMatchObject({ stateRevision: 1, state: { days: 1 }, status: 'stale' });
 });
 
-test('BRUN08 automatic when=false does not draw; dual-trigger action can be requested once later', () => {
+test('BRUN08 automatic when=false does not draw; dual-trigger action can be requested once later', async () => {
   const f = fixture((b) => {
       b.actions[0].when = false;
       b.actions[1].triggers = ['before-turn', 'model'];
@@ -1027,14 +1027,14 @@ test('BRUN08 automatic when=false does not draw; dual-trigger action can be requ
     run = start(f);
   const before = runBehaviorProgress(f.store, run.id)!;
   expect(before.entries.map((e) => e.actionId)).toEqual(['check']);
-  const result = call(f, run);
+  const result = await call(f, run);
   expect(result.result).toEqual(before.entries[0].result);
   expect(runBehaviorProgress(f.store, run.id)!.entries).toHaveLength(1);
   finish(f, run);
   expect(current(f)).toMatchObject({ stateRevision: 1, state: { days: 0 } });
 });
 
-test('BRUN09 state CAS rejects tool execution and rolls completion effects back', () => {
+test('BRUN09 state CAS rejects tool execution and rolls completion effects back', async () => {
   const f = fixture((b) => {
       b.actions.push({
         id: 'user',
@@ -1060,7 +1060,10 @@ test('BRUN09 state CAS rejects tool execution and rolls completion effects back'
     expectedSourceHash: null,
     idempotencyKey: 'synthetic-race',
   });
-  expect(call(f, run)).toMatchObject({ denied: true, result: { code: 'BEHAVIOR_STATE_STALE' } });
+  expect(await call(f, run)).toMatchObject({
+    denied: true,
+    result: { code: 'BEHAVIOR_STATE_STALE' },
+  });
   finish(f, run);
   expect(current(f)).toMatchObject({
     stateRevision: 1,
@@ -1069,13 +1072,13 @@ test('BRUN09 state CAS rejects tool execution and rolls completion effects back'
   });
 });
 
-test('BRUN10 cancelling a request before its first tool does not expose or commit hidden state', () => {
+test('BRUN10 cancelling a request before its first tool does not expose or commit hidden state', async () => {
   const f = fixture(),
     run = start(f),
     controller = new AbortController();
   controller.abort();
   const binding = listBehaviorTools(run.snapshot)[0];
-  expect(() =>
+  await expect(
     executeRunBehaviorTool(
       f.store,
       run.id,
@@ -1083,15 +1086,15 @@ test('BRUN10 cancelling a request before its first tool does not expose or commi
       { callId: 'late', name: binding.tool.name, args: { bonus: 1 } },
       controller.signal
     )
-  ).toThrow('BEHAVIOR_RUN_CANCELLED');
+  ).rejects.toThrow('BEHAVIOR_RUN_CANCELLED');
   expect(runBehaviorProgress(f.store, run.id)!.entries.map((e) => e.actionId)).toEqual(['day']);
   expect(current(f).stateRevision).toBe(0);
 });
 
-test('BRUN11 current-format archive and chat fork retain staged outcomes and independent successor state', () => {
+test('BRUN11 current-format archive and chat fork retain staged outcomes and independent successor state', async () => {
   const f = fixture(),
     run = start(f),
-    result = call(f, run),
+    result = await call(f, run),
     source = finish(f, run);
   const fork = forkChat(f.store, f.chat.id, {
       fromRevision: source.id,
@@ -1178,24 +1181,24 @@ test('BRUN13 annotation parse failure preserves the shared action facts and does
   ]);
 });
 
-test('BRUN14 a cached result cannot be reused before its cross-package dependencies have been applied', () => {
+test('BRUN14 a cached result cannot be reused before its cross-package dependencies have been applied', async () => {
   const f = fixture((b) => {
     b.actions[0].triggers = ['model'];
   });
   dependentModule(f, 'model');
   const original = start(f);
-  expect(namedCall(f, original, 'day').denied).toBe(false);
-  expect(namedCall(f, original, 'copy')).toMatchObject({ denied: false, result: 1 });
+  expect((await namedCall(f, original, 'day')).denied).toBe(false);
+  expect(await namedCall(f, original, 'copy')).toMatchObject({ denied: false, result: 1 });
   finish(f, original);
   const candidate = f.store.candidate(original.id, randomUUID(), 'Changed order').run;
   start(f, candidate);
-  expect(namedCall(f, candidate, 'copy')).toMatchObject({
+  expect(await namedCall(f, candidate, 'copy')).toMatchObject({
     denied: true,
     result: { code: 'BEHAVIOR_OPPORTUNITY_DEPENDENCY_CHANGED' },
   });
   expect(runBehaviorProgress(f.store, candidate.id)!.entries).toHaveLength(0);
-  expect(namedCall(f, candidate, 'day')).toMatchObject({ denied: false, result: 1 });
-  expect(namedCall(f, candidate, 'copy')).toMatchObject({ denied: false, result: 1 });
+  expect(await namedCall(f, candidate, 'day')).toMatchObject({ denied: false, result: 1 });
+  expect(await namedCall(f, candidate, 'copy')).toMatchObject({ denied: false, result: 1 });
   finish(f, candidate);
   expect(
     behaviorDetail(f.store, f.chat.id, candidate.snapshot.branchId).instances.map((i) => i.state)
@@ -1236,7 +1239,7 @@ test('BRUN15 result-only user functions expose the persisted result without requ
   ).toEqual(first.instances[0].lastAction);
 });
 
-test('BRUN16 the published hybrid fixture executes all three invocation paths with one local engine', () => {
+test('BRUN16 the published hybrid fixture executes all three invocation paths with one local engine', async () => {
   const definition = validatePackageBehavior(
     JSON.parse(
       readFileSync(new URL('../fixtures/hybrid-actions-behavior.json', import.meta.url), 'utf8')
@@ -1262,7 +1265,7 @@ test('BRUN16 the published hybrid fixture executes all three invocation paths wi
     },
   ]);
   const binding = listBehaviorTools(run.snapshot)[0];
-  const result = executeRunBehaviorTool(f.store, run.id, binding, {
+  const result = await executeRunBehaviorTool(f.store, run.id, binding, {
     callId: 'example-persuasion',
     name: binding.tool.name,
     args: { target: 'gatekeeper' },

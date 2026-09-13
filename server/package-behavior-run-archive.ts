@@ -3,15 +3,18 @@ import { HttpError } from './request-validation.js';
 import { createHash } from 'node:crypto';
 import { isDeepStrictEqual } from 'node:util';
 import {
+  behaviorActionAllowed,
   behaviorActionTriggers,
   behaviorRecord,
   evaluateBehaviorAction,
+  validateBehaviorValue,
   validatePackageBehavior,
 } from '../core/package-behavior.js';
 import { inspectRuntimeValue } from '../core/prompt-values.js';
 import { executionContext, type PackageExecutionState } from '../core/execution-context.js';
 import type { RunSnapshot } from '../core/types.js';
 import { behaviorPayloadHash, recordDraws } from './package-behavior-store.js';
+import { validateExtensionProgramReceipt } from './extension-program-receipt.js';
 import type {
   OpportunityEntropy,
   RunBehaviorEntry,
@@ -95,18 +98,22 @@ export function validateRunBehaviorArchive(store: Store, checkState: CheckState)
     list(value.entries);
     const seen = new Set<string>();
     for (const raw of value.entries) {
-      const entry = object(raw, [
-        'instanceId',
-        'actionId',
-        'trigger',
-        'input',
-        'before',
-        'after',
-        'result',
-        'draws',
-        'drawSeed',
-        'hostRuntime',
-      ]) as RunBehaviorEntry;
+      const entry = object(
+        raw,
+        [
+          'instanceId',
+          'actionId',
+          'trigger',
+          'input',
+          'before',
+          'after',
+          'result',
+          'draws',
+          'drawSeed',
+          'hostRuntime',
+        ],
+        ['program']
+      ) as RunBehaviorEntry;
       text(entry.instanceId);
       text(entry.actionId);
       if (!['before-turn', 'model'].includes(entry.trigger)) reject('trigger');
@@ -137,6 +144,13 @@ export function validateRunBehaviorArchive(store: Store, checkState: CheckState)
       behaviorRecord(entry.hostRuntime);
       inspectRuntimeValue(entry.hostRuntime);
       behaviorRecord(entry.draws);
+      try {
+        validateBehaviorValue(action.inputSchema, entry.input);
+        if (!behaviorActionAllowed(action, before.state, entry.input, entry.hostRuntime))
+          reject('action contract');
+      } catch {
+        reject('action contract');
+      }
       same(entry.hostRuntime.state, before.state, 'host state');
       same(entry.hostRuntime.draws, before.draws, 'host draws');
       if (action.draws?.length) {
@@ -156,16 +170,32 @@ export function validateRunBehaviorArchive(store: Store, checkState: CheckState)
         Object.keys(entry.draws).length ? entry.draws : before.draws,
         'projected draws'
       );
-      const evaluated = evaluateBehaviorAction(
-        behavior,
-        action,
-        before.state,
-        entry.input,
-        entry.draws,
-        entry.hostRuntime
-      );
-      same(evaluated.state, after.state, 'calculated state');
-      same(evaluated.result, entry.result, 'calculated result');
+      if (action.program !== undefined) {
+        if (entry.trigger !== 'model' || entry.program === undefined)
+          reject('program receipt missing');
+        try {
+          validateExtensionProgramReceipt(entry.program, {
+            programHash: behaviorPayloadHash(action.program),
+            stateSchema: behavior.stateSchema,
+            state: after.state,
+            result: entry.result,
+          });
+        } catch {
+          reject('program receipt');
+        }
+      } else {
+        if (entry.program !== undefined) reject('unexpected program receipt');
+        const evaluated = evaluateBehaviorAction(
+          behavior,
+          action,
+          before.state,
+          entry.input,
+          entry.draws,
+          entry.hostRuntime
+        );
+        same(evaluated.state, after.state, 'calculated state');
+        same(evaluated.result, entry.result, 'calculated result');
+      }
     }
     opportunities.set(row.id, { row, seed: value.seed, entries: value.entries, originEntropy });
   }
@@ -201,18 +231,22 @@ export function validateRunBehaviorArchive(store: Store, checkState: CheckState)
       reject('duplicate base state');
     let modelSeen = false;
     for (const raw of value.entries) {
-      const entry = object(raw, [
-        'instanceId',
-        'actionId',
-        'trigger',
-        'input',
-        'before',
-        'after',
-        'result',
-        'draws',
-        'drawSeed',
-        'hostRuntime',
-      ]) as RunBehaviorEntry;
+      const entry = object(
+        raw,
+        [
+          'instanceId',
+          'actionId',
+          'trigger',
+          'input',
+          'before',
+          'after',
+          'result',
+          'draws',
+          'drawSeed',
+          'hostRuntime',
+        ],
+        ['program']
+      ) as RunBehaviorEntry;
       if (!['before-turn', 'model'].includes(entry.trigger)) reject('progress trigger');
       if (seen.has(key(entry))) reject('duplicate run action');
       seen.add(key(entry));

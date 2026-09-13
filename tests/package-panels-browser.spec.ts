@@ -1,6 +1,56 @@
 import { test, expect, type APIRequestContext } from '@playwright/test';
 import { MOBILE_WIDTH, DESKTOP_WIDTH } from './fixtures/browser-viewports.js';
 import { createPanelPackage } from './fixtures/panel-package.js';
+import {
+  createLibraryContent,
+  navigationAction,
+  revealLibraryEditor,
+  selectPackageSection,
+} from './ui-navigation.js';
+import { waitForContentDraftSave } from './fixtures/edit-draft-save.js';
+
+test('PROGTOOLUI01 creators enable model code actions and model-only actions have no user button', async ({
+  page,
+  request,
+}) => {
+  await page.setViewportSize({ width: MOBILE_WIDTH, height: 900 });
+  await page.goto('/');
+  await navigationAction(page, '서재');
+  const library = page.getByTestId('library-panel');
+  await createLibraryContent(page);
+  await revealLibraryEditor(page);
+  await library.getByLabel('자료 이름', { exact: true }).fill('Synthetic model code creator');
+  await library.getByLabel('자료 본문', { exact: true }).fill('Synthetic only.');
+  await selectPackageSection(page, '상태와 행동');
+  const fields = library.getByRole('region', { name: '패키지 구성', exact: true });
+  await fields.getByRole('button', { name: '코드 계산 예제 넣기', exact: true }).click();
+  const methods = fields.getByRole('group', { name: '중복 없는 항목 세기 호출 방법', exact: true });
+  await expect(methods.getByRole('checkbox', { name: /^생성 전 자동 실행/ })).toBeDisabled();
+  await methods.getByRole('checkbox', { name: /^모델이 필요할 때 요청/ }).check();
+  await methods.getByRole('checkbox', { name: /^사용자 버튼/ }).uncheck();
+  await fields.getByRole('button', { name: '동작 검증 후 적용', exact: true }).click();
+  const saving = waitForContentDraftSave(page);
+  await library.getByRole('button', { name: '자료 등록', exact: true }).click();
+  const content = await saving;
+  expect(content.package!.behavior!.actions[0]).toMatchObject({
+    triggers: ['model'],
+    program: { api: 'uimori-state-action-v1' },
+  });
+  const created = await request.post('/api/chats', {
+    data: { title: 'Synthetic model code', botId: content.id },
+  });
+  expect(created.ok(), await created.text()).toBe(true);
+  const chat = await created.json();
+  await page.goto(`/?chat=${chat.id}`);
+  const panel = page.getByRole('region', { name: '패키지 상태와 행동', exact: true });
+  await expect(panel.getByText('모델 요청', { exact: true })).toBeVisible();
+  await expect(panel.getByText('코드 계산', { exact: true })).toBeVisible();
+  await expect(panel.getByRole('button', { name: '중복 없는 항목 세기', exact: true })).toHaveCount(
+    0
+  );
+  const detail = await (await request.get(`/api/chats/${chat.id}/package-behaviors`)).json();
+  expect(detail.instances[0].stateRevision).toBe(0);
+});
 
 async function seed(request: APIRequestContext, hostile = false, program = false) {
   const pkg = createPanelPackage();

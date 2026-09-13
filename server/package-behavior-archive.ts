@@ -12,10 +12,6 @@ import {
   validatePackageBehavior,
   type PackageBehavior,
 } from '../core/package-behavior.js';
-import {
-  EXTENSION_PROGRAM_API,
-  validateExtensionProgramResult,
-} from '../core/extension-program.js';
 import { evaluatePromptExpression } from '../core/prompt-program.js';
 import { inspectRuntimeValue } from '../core/prompt-values.js';
 import type { PackageExecutionState } from '../core/execution-context.js';
@@ -25,6 +21,7 @@ import {
   MAX_MODEL_BEHAVIOR_ACTIONS,
 } from '../core/package-behavior-tools.js';
 import { behaviorPayloadHash, recordDraws, type BehaviorScope } from './package-behavior-store.js';
+import { validateExtensionProgramReceipt } from './extension-program-receipt.js';
 import type { Store } from './store.js';
 import {
   packageBehaviorRunTables,
@@ -476,29 +473,21 @@ export function validatePackageBehaviorArchive(store: Store): void {
         same(recordDraws(action.draws, r.drawSeed), r.draws, 'recorded draws');
       } else if (r.drawSeed !== null || Object.keys(r.draws).length) reject('unexpected draws');
       if (action.program !== undefined) {
-        if (r.provenance !== 'ui-action') reject('program action provenance');
+        if (!['ui-action', 'model-tool'].includes(r.provenance))
+          reject('program action provenance');
         if (r.drawSeed !== null || Object.keys(r.draws).length) reject('program action draws');
         // Restore verifies the accepted host receipt and committed values. It intentionally does
         // not execute untrusted guest source, so the archive is not semantic re-evaluation proof.
-        const receipt = object(payload.program, [
-          'api',
-          'programHash',
-          'engine',
-          'state',
-          'result',
-        ]);
-        if (receipt.api !== EXTENSION_PROGRAM_API) reject('program receipt API');
-        digest(receipt.programHash);
-        if (receipt.programHash !== behaviorPayloadHash(action.program))
-          reject('program receipt hash');
-        text(receipt.engine);
-        const evaluated = validateExtensionProgramResult({
-          state: receipt.state,
-          result: receipt.result,
-        });
-        validateBehaviorValue(b.stateSchema, evaluated.state);
-        same(evaluated.state, r.state, 'program action state');
-        same(evaluated.result, r.actionResult, 'program action result');
+        try {
+          validateExtensionProgramReceipt(payload.program, {
+            programHash: behaviorPayloadHash(action.program),
+            stateSchema: b.stateSchema,
+            state: r.state,
+            result: r.actionResult,
+          });
+        } catch {
+          reject('program receipt');
+        }
       } else {
         if (Object.hasOwn(payload, 'program')) reject('unexpected program receipt');
         const evaluated = evaluateBehaviorAction(
@@ -550,6 +539,7 @@ export function validatePackageBehaviorArchive(store: Store): void {
             entry.drawSeed,
             entry.hostRuntime,
             entry.result,
+            entry.program,
           ],
           [
             r.provenance === 'before-turn' ? 'before-turn' : 'model',
@@ -562,6 +552,7 @@ export function validatePackageBehaviorArchive(store: Store): void {
             r.drawSeed,
             hostRuntime,
             r.actionResult,
+            payload.program,
           ],
           'run journal receipt'
         );
