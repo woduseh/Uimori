@@ -17,6 +17,6 @@
 
 ## 검증
 
-`npm run quality:full` 이후 `npm run verify:turn-activity`로 격리 DB·포트의 합성 브라우저 검사를 실행해요. 응답별 독립 펼침, 지연 진단 조회, 미저장 메모 유지, 현재 작업과 과거 기록 구분, 생성 완료 전환, 390px 화면, 접기·펼치기 중 쓰기 요청 없음이 검사 대상이에요. 결과는 `output/playwright/turn-activity-ui-*/summary.json`에 남아요.
+[검사 시점](QUALITY.md#실행-시점)에 따라 일치하는 앱 빌드에서 `npm run verify:turn-activity`로 격리 DB·포트의 합성 브라우저 검사를 실행해요. 응답별 독립 펼침, 지연 진단 조회, 미저장 메모 유지, 현재 작업과 과거 기록 구분, 생성 완료 전환, 390px 화면, 접기·펼치기 중 쓰기 요청 없음이 검사 대상이에요. 결과는 `output/playwright/turn-activity-ui-*/summary.json`에 남아요.
 
 기존 전역 알림과 요청 재시도 회귀는 `node scripts/verify-activity.mjs`, `node scripts/verify-run-retry.mjs`로 검사해요. 실제 외부 모델이나 물리적 휴대폰 검증을 의미하지 않아요.
