@@ -73,6 +73,11 @@ describe('bounded extension state program contract', () => {
       capabilities: ['materials.read.self'],
     };
     expect(validateExtensionProgram(readable)).toEqual(readable);
+    const allCapabilities = {
+      ...definition().actions[0].program!,
+      capabilities: ['materials.read.self', 'model.generate', 'response.read.current'],
+    };
+    expect(validateExtensionProgram(allCapabilities)).toEqual(allCapabilities);
     for (const capabilities of [
       ['network'],
       ['materials.read.self', 'materials.read.self'],
@@ -116,6 +121,16 @@ describe('bounded extension state program contract', () => {
     automatic.actions[0].triggers = ['before-turn'];
     automatic.actions[0].automaticInput = { amount: 1 };
     expect(validatePackageBehavior(automatic)).toEqual(automatic);
+    const afterTurn = definition();
+    afterTurn.actions[0].triggers = ['after-turn'];
+    afterTurn.actions[0].automaticInput = { amount: 1 };
+    expect(validatePackageBehavior(afterTurn)).toEqual(afterTurn);
+    const declarativeAfterTurn = definition();
+    delete declarativeAfterTurn.actions[0].program;
+    declarativeAfterTurn.actions[0].triggers = ['after-turn'];
+    expect(() => validatePackageBehavior(declarativeAfterTurn)).toThrow(
+      'BEHAVIOR_AFTER_TURN_PROGRAM_REQUIRED'
+    );
     expect(() =>
       validatePackageStarts(
         [

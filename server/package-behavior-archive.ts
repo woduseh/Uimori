@@ -293,7 +293,8 @@ export function validatePackageBehaviorRunSnapshot(store: Store, snapshot: RunSn
         ?.find((pkg) => pkg.id === ref.id && pkg.revision === ref.revision)
         ?.behavior?.actions.some((action) =>
           behaviorActionTriggers(action).some(
-            (trigger) => trigger === 'before-turn' || trigger === 'model'
+            (trigger) =>
+              trigger === 'before-turn' || trigger === 'after-turn' || trigger === 'model'
           )
         )
   );
@@ -472,7 +473,7 @@ export function validatePackageBehaviorArchive(store: Store): void {
     same(payload.provenance, r.provenance, 'journal provenance');
     behaviorRecord(r.draws);
     inspectRuntimeValue(r.draws);
-    if (['ui-action', 'before-turn', 'model-tool'].includes(r.provenance)) {
+    if (['ui-action', 'before-turn', 'after-turn', 'model-tool'].includes(r.provenance)) {
       if (
         payload.expectedStateRevision !== r.beforeStateRevision ||
         payload.expectedSourceHash !== r.sourceHash
@@ -487,16 +488,19 @@ export function validatePackageBehaviorArchive(store: Store): void {
             ? 'user'
             : r.provenance === 'before-turn'
               ? 'before-turn'
-              : 'model'
+              : r.provenance === 'after-turn'
+                ? 'after-turn'
+                : 'model'
         )
       )
         reject('action trigger');
+      if (r.provenance === 'after-turn' && action.draws?.length) reject('after-turn action draws');
       if (action.draws?.length) {
         digest(r.drawSeed);
         same(recordDraws(action.draws, r.drawSeed), r.draws, 'recorded draws');
       } else if (r.drawSeed !== null || Object.keys(r.draws).length) reject('unexpected draws');
       if (action.program !== undefined) {
-        if (!['ui-action', 'before-turn', 'model-tool'].includes(r.provenance))
+        if (!['ui-action', 'before-turn', 'after-turn', 'model-tool'].includes(r.provenance))
           reject('program action provenance');
         if (r.drawSeed !== null || Object.keys(r.draws).length) reject('program action draws');
         // Restore verifies the accepted host receipt and committed values. It intentionally does
@@ -530,13 +534,21 @@ export function validatePackageBehaviorArchive(store: Store): void {
           progressRow = db
             .prepare('SELECT body FROM package_behavior_runs WHERE run_id=?')
             .get(runId) as Row | undefined;
-        const entry = progressRow
-          ? (JSON.parse(progressRow.body).entries as Row[]).find(
-              (entry) =>
-                entry.instanceId === scope.attachmentInstanceId &&
-                entry.actionId === payload.actionId
-            )
-          : undefined;
+        const progress = progressRow ? JSON.parse(progressRow.body) : undefined;
+        const entry =
+          r.provenance === 'after-turn'
+            ? (progress?.afterResponse?.packages as Row[] | undefined)
+                ?.flatMap((pkg) => pkg.entries as Row[])
+                .find(
+                  (entry) =>
+                    entry.instanceId === scope.attachmentInstanceId &&
+                    entry.actionId === payload.actionId
+                )
+            : (progress?.entries as Row[] | undefined)?.find(
+                (entry) =>
+                  entry.instanceId === scope.attachmentInstanceId &&
+                  entry.actionId === payload.actionId
+              );
         if (
           !entry ||
           run.chatId !== scope.chatId ||
@@ -547,7 +559,9 @@ export function validatePackageBehaviorArchive(store: Store): void {
           reject('run journal owner');
         if (
           r.idempotencyKey !==
-          `run:${runId}:${behaviorPayloadHash(JSON.stringify([entry.instanceId, entry.actionId]))}`
+          `${r.provenance === 'after-turn' ? 'after' : 'run'}:${runId}:${behaviorPayloadHash(
+            JSON.stringify([entry.instanceId, entry.actionId])
+          )}`
         )
           reject('run journal key');
         same(
@@ -565,7 +579,11 @@ export function validatePackageBehaviorArchive(store: Store): void {
             entry.program,
           ],
           [
-            r.provenance === 'before-turn' ? 'before-turn' : 'model',
+            r.provenance === 'before-turn'
+              ? 'before-turn'
+              : r.provenance === 'after-turn'
+                ? 'after-turn'
+                : 'model',
             payload.input,
             r.beforeStateRevision,
             r.beforeState,
@@ -712,7 +730,10 @@ export function validatePackageBehaviorArchive(store: Store): void {
     const actionCount = progress
       ? (progress.entries as { instanceId: string }[]).filter(
           (entry) => entry.instanceId === row.instance_id
-        ).length
+        ).length +
+        ((progress.afterResponse?.packages as Row[] | undefined)
+          ?.filter((pkg) => pkg.instanceId === row.instance_id && pkg.status === 'ready')
+          .flatMap((pkg) => pkg.entries as Row[]).length ?? 0)
       : 0;
     if (out.status === 'failed') {
       const behavior = run.snapshot.profile?.packages?.find(

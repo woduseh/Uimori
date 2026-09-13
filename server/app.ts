@@ -42,6 +42,7 @@ import {
   runBehaviorProgress,
 } from './package-behavior-run.js';
 import { createExtensionModelService } from './extension-model.js';
+import { prepareAfterResponse } from './package-after-response.js';
 import { freezeLoreContext } from './lore-context.js';
 import { runAuxiliaryJob } from './product-auxiliary.js';
 import { auxiliaryBridge } from './auxiliary-bridge.js';
@@ -803,6 +804,17 @@ export async function createApp(options: AppOptions): Promise<App> {
               result.status === 'partial' ? result.text : '',
               result.usage
             );
+            publish(run.chatId);
+            return;
+          }
+          // Response hooks compute outside the source transaction; only verified state receipts
+          // are adopted with the unchanged main text. Keep provider accounting on fatal host errors.
+          priorUsage = structuredClone(result.usage);
+          await prepareAfterResponse(store, id, result.text, controller.signal, () =>
+            publish(run.chatId)
+          );
+          if (controller.signal.aborted) {
+            store.settleCancelledUsage(id, result.usage);
             publish(run.chatId);
             return;
           }

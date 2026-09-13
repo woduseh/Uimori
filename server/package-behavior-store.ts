@@ -9,14 +9,14 @@ import {
   behaviorActionAllowed,
   behaviorActionTriggers,
   evaluateBehaviorAction,
-  behaviorOutputConditions,
-  parseBehaviorOutput,
   validatePackageBehavior,
   validateBehaviorValue,
   type PackageBehavior,
   type BehaviorDraw,
 } from '../core/package-behavior.js';
+import { projectBehaviorOutputs } from '../core/behavior-output.js';
 import type { RunBehaviorEntry } from './package-behavior-run.js';
+import type { AfterResponseEntry } from '../core/after-response.js';
 import {
   ExtensionProgramReceiptError,
   validateExtensionProgramReceipt,
@@ -65,7 +65,13 @@ export interface BehaviorOutputGroupCommand {
 export interface BehaviorJournalResult extends BehaviorState {
   beforeStateRevision: number;
   beforeState: RuntimeValue;
-  provenance: 'ui-action' | 'before-turn' | 'model-tool' | 'local-output-parser' | 'explicit-reset';
+  provenance:
+    | 'ui-action'
+    | 'before-turn'
+    | 'after-turn'
+    | 'model-tool'
+    | 'local-output-parser'
+    | 'explicit-reset';
   idempotencyKey: string;
   sourceHash: string | null;
   draws: Record<string, RuntimeValue>;
@@ -352,7 +358,7 @@ export class PackageBehaviorStore {
   commitRunActionInTransaction(
     scope: BehaviorScope,
     b: PackageBehavior,
-    entry: RunBehaviorEntry,
+    entry: RunBehaviorEntry | AfterResponseEntry,
     sourceHash: string,
     idempotencyKey: string
   ): BehaviorJournalResult {
@@ -363,6 +369,8 @@ export class PackageBehaviorStore {
     if (!action) throw new BehaviorError(409, 'BEHAVIOR_TRIGGER_NOT_ALLOWED');
     if (!behaviorActionTriggers(action).includes(entry.trigger))
       conflict('BEHAVIOR_TRIGGER_NOT_ALLOWED');
+    if (entry.trigger === 'after-turn' && action.draws?.length)
+      conflict('BEHAVIOR_AFTER_TURN_DRAWS_NOT_ALLOWED');
     if (action.draws?.length) {
       if (!entry.drawSeed || hash(recordDraws(action.draws, entry.drawSeed)) !== hash(entry.draws))
         conflict('BEHAVIOR_DRAW_MISMATCH');
@@ -377,7 +385,7 @@ export class PackageBehaviorStore {
     let evaluated: { state: RuntimeValue; result: RuntimeValue };
     let program: ExtensionProgramReceipt | undefined;
     if (action.program !== undefined) {
-      if (!['before-turn', 'model'].includes(entry.trigger))
+      if (!['before-turn', 'after-turn', 'model'].includes(entry.trigger))
         conflict('BEHAVIOR_PROGRAM_TRIGGER_NOT_ALLOWED');
       if (entryProgram === undefined) conflict('BEHAVIOR_PROGRAM_RECEIPT_REQUIRED');
       try {
@@ -413,7 +421,12 @@ export class PackageBehaviorStore {
       )
         conflict('BEHAVIOR_RESULT_MISMATCH');
     }
-    const provenance = entry.trigger === 'before-turn' ? 'before-turn' : 'model-tool';
+    const provenance =
+      entry.trigger === 'before-turn'
+        ? 'before-turn'
+        : entry.trigger === 'after-turn'
+          ? 'after-turn'
+          : 'model-tool';
     const payload = {
       scope,
       provenance,
@@ -483,32 +496,13 @@ export class PackageBehaviorStore {
     if (cached) return cached;
     const state = this.read(scope, b);
     this.expect(state, command.baseStateRevision, command.sourceHash);
-    if (
-      !Array.isArray(command.parserIds) ||
-      !command.parserIds.length ||
-      new Set(command.parserIds).size !== command.parserIds.length
-    )
-      bad('BEHAVIOR_PARSER_IDS');
-    const selected = command.parserIds.map((id) => {
-      const parser = b.outputParsers.find((p) => p.id === id);
-      if (!parser) bad('BEHAVIOR_PARSER_UNKNOWN');
-      return parser!;
-    });
-    const paths = selected.flatMap((p) => p.fields.map((f) => f.path.join('/')));
-    for (let i = 0; i < paths.length; i++)
-      for (let j = i + 1; j < paths.length; j++)
-        if (
-          paths[i] === paths[j] ||
-          paths[i].startsWith(paths[j] + '/') ||
-          paths[j].startsWith(paths[i] + '/')
-        )
-          bad('BEHAVIOR_OVERLAPPING_PARSERS');
-    let next = state.state;
-    const allowed = behaviorOutputConditions(b, selected, state.state, hostRuntime);
-    for (const [index, parser] of selected.entries()) {
-      if (!allowed[index]) continue;
-      next = parseBehaviorOutput(b, parser, next, command.text);
-    }
+    const next = projectBehaviorOutputs(
+      b,
+      command.parserIds,
+      state.state,
+      command.text,
+      hostRuntime
+    );
     return this.commit(
       scope,
       b,

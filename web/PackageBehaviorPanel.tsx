@@ -61,6 +61,7 @@ const named = (value: object, fallback: string) => (value as { label?: string })
 const methodLabels = {
   user: '사용자 버튼',
   'before-turn': '생성 전 자동',
+  'after-turn': '응답 후 자동',
   model: '모델 요청',
 } as const;
 function ActionMethods({ action }: { action: BehaviorAction }) {

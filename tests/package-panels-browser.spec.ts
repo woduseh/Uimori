@@ -11,7 +11,7 @@ import {
 } from './ui-navigation.js';
 import { waitForContentDraftSave } from './fixtures/edit-draft-save.js';
 
-test('PROGTOOLUI01 creators enable model code actions and model-only actions have no user button', async ({
+test('PROGTOOLUI01 creators enable model and response code hooks without a user button', async ({
   page,
   request,
 }) => {
@@ -30,19 +30,26 @@ test('PROGTOOLUI01 creators enable model code actions and model-only actions hav
   await expect(methods.getByRole('checkbox', { name: /^생성 전 자동 실행/ })).toBeEnabled();
   await methods.getByRole('checkbox', { name: /^모델이 필요할 때 요청/ }).check();
   await methods.getByRole('checkbox', { name: /^사용자 버튼/ }).uncheck();
+  await methods.getByRole('checkbox', { name: /^생성 후 자동 실행/ }).check();
+  await fields
+    .getByLabel('중복 없는 항목 세기 자동 실행 입력 JSON', { exact: true })
+    .fill('{"text":"synthetic response hook input"}');
   await fields.getByRole('checkbox', { name: /^자기 자료 읽기/ }).check();
   await fields.getByRole('checkbox', { name: /^추가 모델 호출/ }).check();
+  await fields.getByRole('checkbox', { name: /^방금 생성한 원문 읽기/ }).check();
   await fields.getByRole('button', { name: '동작 검증 후 적용', exact: true }).click();
   const saving = waitForContentDraftSave(page);
   await library.getByRole('button', { name: '자료 등록', exact: true }).click();
   const content = await saving;
   expect(content.package!.behavior!.actions[0]).toMatchObject({
-    triggers: ['model'],
+    triggers: expect.arrayContaining(['model', 'after-turn']),
+    automaticInput: { text: 'synthetic response hook input' },
     program: {
       api: 'uimori-state-action-v1',
-      capabilities: ['materials.read.self', 'model.generate'],
+      capabilities: ['materials.read.self', 'model.generate', 'response.read.current'],
     },
   });
+  expect(content.package!.behavior!.actions[0].triggers).toHaveLength(2);
   const created = await request.post('/api/chats', {
     data: { title: 'Synthetic model code', botId: content.id },
   });
@@ -51,6 +58,7 @@ test('PROGTOOLUI01 creators enable model code actions and model-only actions hav
   await page.goto(`/?chat=${chat.id}`);
   const panel = page.getByRole('region', { name: '패키지 상태와 행동', exact: true });
   await expect(panel.getByText('모델 요청', { exact: true })).toBeVisible();
+  await expect(panel.getByText('응답 후 자동', { exact: true })).toBeVisible();
   await expect(panel.getByText('코드 계산', { exact: true })).toBeVisible();
   await expect(panel.getByRole('button', { name: '중복 없는 항목 세기', exact: true })).toHaveCount(
     0

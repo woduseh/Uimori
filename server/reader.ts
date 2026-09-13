@@ -156,6 +156,12 @@ export function readerRuns(store: Store, id: string, scope?: string[]) {
         .all(id, ...(scope ? [JSON.stringify(scope)] : [])) as { id: string }[]
     ).map((row) => row.id)
   );
+  for (const row of store.db
+    .prepare(`SELECT DISTINCT entity_id AS id FROM events
+      WHERE chat_id=? AND kind='run.package-after-response.unavailable'
+      ${scope ? 'AND entity_id IN (SELECT value FROM json_each(?))' : ''}`)
+    .all(id, ...(scope ? [JSON.stringify(scope)] : [])) as { id: string }[])
+    behaviorFailures.add(row.id);
   store.chat(id);
   // JSON projection happens in SQLite: do not parse quadratic history or diagnostic bodies.
   const runCosts = new Map(
@@ -185,6 +191,7 @@ export function readerRuns(store: Store, id: string, scope?: string[]) {
     CASE WHEN json_type(snapshot,'$.packageStart') IS NOT NULL THEN json_object('mode',json_extract(snapshot,'$.packageStart.mode'),'title',json_extract(snapshot,'$.packageStart.title')) END AS packageStart,
     CASE WHEN json_type(snapshot,'$.story.preparation')='object' THEN json_object('status',json_extract(snapshot,'$.story.preparation.status'),'reason',json_extract(snapshot,'$.story.preparation.reason'),'missingSources',json_array_length(snapshot,'$.story.preparation.missing'),'lastSourceRevision',json_extract(snapshot,'$.story.preparation.fallback.sourceRevision'),'hasState',json_type(snapshot,'$.story.state')='object' OR json_type(snapshot,'$.story.preparation.fallback')='object') END AS statePreparation,
     CASE WHEN json_type(behavior_progress.body,'$.preparation')='object' THEN json_object('status',json_extract(behavior_progress.body,'$.preparation.status'),'completed',json_extract(behavior_progress.body,'$.preparation.completed'),'total',json_extract(behavior_progress.body,'$.preparation.total'),'code',json_extract(behavior_progress.body,'$.preparation.code')) END AS packagePreparation,
+    CASE WHEN json_type(behavior_progress.body,'$.afterResponse')='object' THEN json_object('status',json_extract(behavior_progress.body,'$.afterResponse.status'),'completed',json_extract(behavior_progress.body,'$.afterResponse.completed'),'total',json_extract(behavior_progress.body,'$.afterResponse.total'),'failed',(SELECT COUNT(*) FROM json_each(behavior_progress.body,'$.afterResponse.packages') WHERE json_extract(value,'$.status')='failed')) END AS packageAfterResponse,
     (COALESCE(json_array_length(snapshot,'$.packageBehaviorUnavailable'),0)>0 OR EXISTS(SELECT 1 FROM json_each(snapshot,'$.promptCompilation.warnings') WHERE value GLOB 'PACKAGE_INSTRUCTION_UNAVAILABLE:*')) AS hasPackageIssues,
     CASE WHEN json_type(snapshot,'$.contextPlan')='object' THEN json_object('status',json_extract(snapshot,'$.contextPlan.status'),'inputTokenLimit',json_extract(snapshot,'$.contextPlan.budget.inputTokenLimit'),'estimatedInputTokens',json_extract(snapshot,'$.contextPlan.estimatedInputTokens'),'compactedSources',json_array_length(snapshot,'$.contextPlan.compacted'),'summaryCalls',json_extract(snapshot,'$.contextPlan.summaryCalls'),'error',json_extract(snapshot,'$.contextPlan.error')) END AS contextSummary,
     json_object('loreContextReset',json_extract(snapshot,'$.loreContextReset'),'branchId',branch_id,'candidateOf',json_extract(snapshot,'$.candidateOf'),'forkedFrom',json_extract(snapshot,'$.forkedFrom')) AS snapshot
@@ -224,6 +231,9 @@ export function readerRuns(store: Store, id: string, scope?: string[]) {
         })()
       : undefined,
     packageStart: row.packageStart ? JSON.parse(row.packageStart) : undefined,
+    packageAfterResponse: row.packageAfterResponse
+      ? JSON.parse(row.packageAfterResponse)
+      : undefined,
     sourceSegments: row.sourceSegments ? JSON.parse(row.sourceSegments) : undefined,
     usage: row.usage
       ? JSON.parse(row.usage)

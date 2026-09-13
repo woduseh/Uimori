@@ -1,6 +1,6 @@
 # 상태 계산 코드
 
-현재 [베타 계획](../project-plan/BETA-PLAN.md)의 2~3단계 구현이에요. 봇·페르소나·모듈의 사용자 버튼, 생성 전 자동 준비, 모델이 호출하는 행동에 JavaScript 계산을 연결할 수 있어요. `program.capabilities: ['model.generate']`는 제작자가 요청하는 capability이며, 실제 호출에는 전역 `extensionModel` 선택과 채팅별 정확한 자료 개정 권한이 모두 필요해요. 자료별 알고리즘은 코드에 두고 상태 schema·소유권·충돌·저장은 Uimori가 담당해요. Risu/Lua 직접 실행, 일반 HTTP, 게스트가 모델·키·endpoint·옵션을 고르는 권한, 확장 설치 관리 전체를 지원한다는 뜻은 아니에요.
+현재 [베타 계획](../project-plan/BETA-PLAN.md)의 2~3단계 구현이에요. 봇·페르소나·모듈의 사용자 버튼, 생성 전 자동 준비, 모델이 호출하는 행동과 응답 후 처리에 JavaScript 계산을 연결할 수 있어요. `program.capabilities: ['model.generate']`는 제작자가 요청하는 capability이며, 실제 호출에는 전역 `extensionModel` 선택과 채팅별 정확한 자료 개정 권한이 모두 필요해요. 자료별 알고리즘은 코드에 두고 상태 schema·소유권·충돌·저장은 Uimori가 담당해요. Risu/Lua 직접 실행, 일반 HTTP, 게스트가 모델·키·endpoint·옵션을 고르는 권한, 확장 설치 관리 전체를 지원한다는 뜻은 아니에요.
 
 ## 제작과 사용
 
@@ -77,6 +77,28 @@ return {state: api.state, result: {preview: material?.text ?? ''}};
 
 저장된 프롬프트의 복원 검사는 예약 기본 상태에 준비 영수증의 적용 결과를 투영해 당시 입력과 대조해요. 이때도 예약 snapshot은 바꾸지 않고 자동 준비 코드를 다시 실행하지 않아요.
 
+## 응답 후 코드 처리
+
+행동의 `triggers: ['after-turn']`과 schema에 맞는 `automaticInput`을 지정하면 본문 모델의 성공 응답을 받은 뒤 코드를 실행해요. 첫 범위는 코드 행동이며 선언형 효과·추첨은 섞지 않아요. 같은 행동을 사용자/모델/생성 전에도 허용할 수 있지만 응답 읽기는 `after-turn` 호출에서만 제공해요. 코드 예제의 자료별 계산은 제작자가 바꾸고 별도 자료 전용 서버 함수를 만들지 않아요.
+
+`program.capabilities: ['response.read.current']`를 선언하면 `api.host.call('response.read', {offset, limit})`로 이번 완성 응답을 읽어요. offset은 기본 0, limit은 기본 8,000·최대 16,000 UTF-16 문자이며 반환값은 `{text, offset, nextOffset, totalChars, contentHash}`예요. 반환한 `nextOffset`으로 다음 조각을 읽고 끝이면 null이에요. 원문 전체를 Worker 입력/영수증에 중복 저장하지 않아요. `contentHash`는 실제 저장할 본문 텍스트의 SHA-256이고, 다른 채팅·과거 원문·경로·키를 지정할 인자는 없어요. 게스트의 일반 호출·프레임 한도도 유지해요.
+
+```js
+const response = await api.host.call('response.read', {limit: 4000});
+return {
+  state: {...api.state, count: api.state.count + 1},
+  result: {observedChars: response.text.length, hasMore: response.nextOffset !== null}
+};
+```
+
+입력 상태는 생성 전/모델 행동과 기존 출력 파서를 적용한 뒤의 상태예요. 출력 파서의 사전 계산과 저장은 같은 순수 함수를 사용해요. 한 자료 안의 후처리 행동은 선언 순서대로 자기 임시 상태를 이어받고, 다른 자료는 파서 적용 시점의 고정 상태를 참고해요. 코드는 transaction 밖의 제한된 Worker에서 계산하며, source transaction에서는 기록된 코드/상태 영수증과 현재 상태·원문 귀속을 다시 검사해 채택해요. 본문 텍스트는 바꾸지 않아요.
+
+코드 오류·시간/메모리/출력 제한은 그 자료 후처리 묶음을 적용하지 않는 실패로 남기고 다른 자료와 원문 저장을 계속해요. 이미 성공한 생성 전/모델 행동·출력 파서의 상태는 보존해요. 기존 authoritative 출력 파서가 실패하면 기존 실패 계약을 따르며 후처리로 이를 성공으로 덮지 않아요. 정상 계산은 기다리고, 이번 로컬 코드 묶음은 전체 10초 상한을 사용해요. 전체 Run 취소·원문 소유권 상실은 결과 채택을 닫고, DB 오류는 코드 실패로 숨기지 않아요. 작업 상세에는 진행 수와 실패 사실만 표시해요.
+
+후처리는 `RunBehaviorProgress.afterResponse`에 Run·응답 hash별로 보관해요. 모델 입력 시점의 `entries/states`와 같은 판정 기회 캐시에 섞지 않아요. 후보는 자신의 새 응답으로 후처리를 다시 계산하고, 포크·백업 복원은 기록된 결과를 보존하며 코드를 실행하지 않아요. 중단된 처리를 재시작 시 자동 재생하지 않아요. 현재 후처리 Host는 자기 자료 읽기와 이번 응답 읽기만 제공하며 추가 모델·HTTP 호출은 후속 범위예요.
+
+영수증은 패키지당 100개 행동·100만 문자로 제한하고 기존 Run journal의 합산 한도도 지켜요. 합산 한도를 넘으면 후처리 기록만 제외하고 기존 생성 전/모델 행동의 기록은 보존해요. 이 제외를 기존 작업 이벤트와 화면의 미적용 안내로 남기며 같은 Run에서 코드를 다시 실행하지 않아요.
+
 ## 모델 호출과 상태 저장
 
 ### 모델 호출 Host API와 명시 권한
@@ -121,4 +143,4 @@ return {state: api.state, result: {preview: material?.text ?? ''}};
 
 프로그램은 패키지 개정에 속하므로 기존 자료 이동·snapshot·백업에 함께 들어가요. 저장한 행동 영수증에는 API·코드 지문·엔진 식별자·상태/결과를 보존해요. 모델 호출의 영수증은 opportunity·Run progress·최종 journal 사이에도 결합해요. 일반 채팅 백업으로 새 채팅을 복원할 때는 다른 사람의 백업이 목적지에서 선택한 `extensionModel`에 자동 과금 권한을 주지 않도록 live profile의 `extensionGrants`를 제거하고, 사용자가 그 채팅에서 다시 허용하게 해요. source/grant 이력은 과거 Run snapshot과 attempt 귀속 영수증에 보존해 복원 검증에 사용해요. 같은 workspace 안의 fork는 기존 허가를 보존하고, 자료 native transfer는 grant를 처음부터 만들지 않아요. 전체 DB archive는 전역 연결을 disabled·비밀 제거하는 기존 복구 경계를 따르며 이 계약에서 별도 grant 삭제를 추가하지 않아요. 커밋·포크·복원은 고정한 source/revision·입력 schema·호스트 조건과 영수증·저장 결과의 일치를 확인하며 코드를 다시 실행하지 않아요. 이것은 승인된 결과의 보존이며 복원 때 계산의 의미를 재평가했다는 증거가 아니에요. 공유용 진단에는 이 코드나 입력/출력을 자동 포함하지 않아요.
 
-엔진 실행, `uimori-state-action-v1` 입력 계약, 상태 저장 호스트는 별도 모듈이에요. 자동 준비와 모델 행동은 `server/package-behavior-run.ts`에서 행동 해석·영수증·효과 채택과 `model.generate` broker를 공유해요. 사용자 버튼에서의 추가 모델 호출, 일반 HTTP, 응답 후 코드 처리, 실행 설치·의존성 권한 관리와 Lua 어댑터는 후속 작업이에요. 자료별 함수명을 서버 분기로 옮기지 않아요.
+엔진 실행, `uimori-state-action-v1` 입력 계약, 상태 저장 호스트는 별도 모듈이에요. 자동 준비와 모델 행동은 `server/package-behavior-run.ts`에서 행동 해석·영수증·효과 채택과 `model.generate` broker를 공유해요. 응답 후 코드는 `server/package-after-response.ts`가 별도 응답 귀속 영수증으로 같은 Worker·상태 저장 경계를 사용해요. 사용자 버튼/응답 후의 추가 모델 호출, 일반 HTTP, 실행 설치·의존성 권한 관리와 Lua 어댑터는 후속 작업이에요. 자료별 함수명을 서버 분기로 옮기지 않아요.

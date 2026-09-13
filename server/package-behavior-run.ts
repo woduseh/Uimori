@@ -32,6 +32,7 @@ import {
   type ResolvedExtensionProgram,
 } from '../core/extension-program.js';
 import type { ExtensionModelBinding } from '../core/extension-model.js';
+import type { AfterResponseProgress } from '../core/after-response.js';
 import { executeExtensionProgram } from './extension-runtime.js';
 import { createPackageExtensionHost } from './extension-materials.js';
 import type { ToolAction } from '../core/provider.js';
@@ -58,6 +59,8 @@ export type RunBehaviorProgress = {
   opportunityId: string;
   entries: RunBehaviorEntry[];
   states: PackageExecutionState[];
+  /** Response-bound receipts never enter the reusable before/model opportunity. */
+  afterResponse?: AfterResponseProgress;
   preparation?: {
     status: 'pending' | 'running' | 'ready' | 'failed' | 'skipped';
     completed: number;
@@ -135,7 +138,7 @@ export function runBehaviorProgress(store: Store, runId: string): RunBehaviorPro
     .get(runId) as Row | undefined;
   return row ? JSON.parse(row.body) : undefined;
 }
-function saveProgress(store: Store, runId: string, progress: RunBehaviorProgress) {
+export function saveProgress(store: Store, runId: string, progress: RunBehaviorProgress) {
   store.db
     .prepare(
       'INSERT INTO package_behavior_runs VALUES(?,?) ON CONFLICT(run_id) DO UPDATE SET body=excluded.body'
@@ -395,7 +398,10 @@ function prepareRunBehaviorInTransaction(
   const automatic = automaticActions(snapshot);
   const modelTools = listBehaviorTools(snapshot);
   assertBehaviorToolCapability(snapshot, modelTools);
-  if (!automatic.length && !modelTools.length) return snapshot;
+  const afterTurn = definitions(snapshot).some((d) =>
+    d.behavior.actions.some((action) => behaviorActionTriggers(action).includes('after-turn'))
+  );
+  if (!automatic.length && !modelTools.length && !afterTurn) return snapshot;
   if (automatic.length > MAX_RUN_BEHAVIOR_ACTIONS) fail('BEHAVIOR_RUN_ACTION_LIMIT');
   const baseStates = structuredClone(snapshot.packageStates ?? []);
   // A cancelled run and a fresh request at this unchanged source/state share one opportunity.
@@ -489,6 +495,7 @@ export function copyCandidateBehavior(
       entry.after
     );
   const preparation = previous!.preparation;
+  // afterResponse belongs to the original text; a candidate runs its own response hooks.
   saveProgress(store, newRunId, {
     version: 1,
     opportunityId: previous!.opportunityId,
@@ -503,7 +510,7 @@ export function copyCandidateBehavior(
       : {}),
   });
 }
-function validateOwner(store: Store, run: Run) {
+export function validateOwner(store: Store, run: Run) {
   if (run.status !== 'running') fail('BEHAVIOR_RUN_NOT_RUNNING');
   const branch = store.product.branch(run.chatId, run.snapshot.branchId);
   if (branch.headRevision !== run.parentRevision) fail('BEHAVIOR_SOURCE_STALE');

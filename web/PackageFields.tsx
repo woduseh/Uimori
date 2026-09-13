@@ -651,6 +651,11 @@ const actionMethods = [
     description: '새 장면을 생성하기 전에 정해 둔 입력으로 실행해요.',
   },
   {
+    id: 'after-turn',
+    label: '생성 후 자동 실행',
+    description: '완성된 장면을 보존한 뒤 정해 둔 입력으로 코드 행동을 실행해요.',
+  },
+  {
     id: 'model',
     label: '모델이 필요할 때 요청',
     description: '이야기 문맥에 따라 모델이 입력을 정하고 요청해요.',
@@ -749,7 +754,10 @@ function BehaviorEditor({
         item.id === method ? checked : behaviorActionTriggers(action).includes(item.id)
       )
       .map((item) => item.id);
-    if (method === 'before-turn' && !checked) {
+    const remainingAutomatic = triggers.some(
+      (trigger) => trigger === 'before-turn' || trigger === 'after-turn'
+    );
+    if ((method === 'before-turn' || method === 'after-turn') && !checked && !remainingAutomatic) {
       setAutomaticDrafts((current) => ({
         ...current,
         [action.id]: current[action.id] ?? JSON.stringify(action.automaticInput ?? {}, null, 2),
@@ -772,8 +780,9 @@ function BehaviorEditor({
       const candidate = JSON.parse(draft) as PackageBehavior;
       if (Array.isArray(candidate.actions))
         candidate.actions = candidate.actions.map((action) =>
-          behaviorActionTriggers(action).includes('before-turn') &&
-          Object.hasOwn(automaticDrafts, action.id)
+          behaviorActionTriggers(action).some(
+            (trigger) => trigger === 'before-turn' || trigger === 'after-turn'
+          ) && Object.hasOwn(automaticDrafts, action.id)
             ? { ...action, automaticInput: JSON.parse(automaticDrafts[action.id]) }
             : action
         );
@@ -927,6 +936,7 @@ function BehaviorEditor({
                   <label className="check behavior-method-choice" key={method.id}>
                     <SelectionCheckbox
                       checked={triggers.includes(method.id)}
+                      disabled={method.id === 'after-turn' && !action.program}
                       onChange={(e) => toggleMethod(index, action, method.id, e.target.checked)}
                     />
                     <span>
@@ -938,8 +948,8 @@ function BehaviorEditor({
                 {action.program && (
                   <>
                     <small>
-                      코드 계산은 사용자 버튼, 생성 전 자동 행동 또는 모델 요청에서 실행해요. 자동
-                      행동은 준비가 모두 끝난 뒤 원문 생성을 시작해요.
+                      코드 계산은 사용자 버튼, 생성 전·후 자동 행동 또는 모델 요청에서 실행해요.
+                      생성 후 코드가 실패해도 완성된 원문은 보존해요.
                     </small>
                     <label className="check behavior-method-choice">
                       <SelectionCheckbox
@@ -965,6 +975,33 @@ function BehaviorEditor({
                         <small>
                           이 자료의 본문·로어를 코드에서 조회할 수 있어요. 다른 자료나 채팅 기록은
                           포함하지 않아요.
+                        </small>
+                      </span>
+                    </label>
+                    <label className="check behavior-method-choice">
+                      <SelectionCheckbox
+                        checked={
+                          action.program.capabilities?.includes('response.read.current') ?? false
+                        }
+                        onChange={(e) =>
+                          updateAction(index, {
+                            program: {
+                              ...action.program!,
+                              capabilities: [
+                                ...(action.program!.capabilities ?? []).filter(
+                                  (item) => item !== 'response.read.current'
+                                ),
+                                ...(e.target.checked ? ['response.read.current' as const] : []),
+                              ],
+                            },
+                          })
+                        }
+                      />
+                      <span>
+                        방금 생성한 원문 읽기
+                        <small>
+                          생성 후 자동 실행에서만 방금 완성된 원문의 고정 사본을 나누어 읽을 수
+                          있어요. 다른 장면이나 채팅 기록은 포함하지 않아요.
                         </small>
                       </span>
                     </label>
@@ -996,7 +1033,9 @@ function BehaviorEditor({
                     </label>
                   </>
                 )}
-                {triggers.includes('before-turn') && (
+                {triggers.some(
+                  (trigger) => trigger === 'before-turn' || trigger === 'after-turn'
+                ) && (
                   <label>
                     자동 실행 입력 · JSON
                     <textarea

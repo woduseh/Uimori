@@ -76,6 +76,19 @@ export function RunTaskDetails({
           계속해요.
         </p>
       )}
+      {run.packageAfterResponse?.status === 'running' && (
+        <p role="status" className="muted">
+          {canCancel
+            ? `응답을 읽고 자료 상태를 갱신하고 있어요. ${run.packageAfterResponse.completed}/${run.packageAfterResponse.total} 완료했어요.`
+            : '자료의 응답 후 처리가 끝나기 전에 작업이 중단됐어요. 미완료 결과는 적용하지 않았어요.'}
+        </p>
+      )}
+      {!!run.packageAfterResponse?.failed && (
+        <p role="status" className="muted">
+          일부 자료의 응답 후 처리를 적용하지 못했어요. 해당 후처리 전의 유효한 상태를 유지하며
+          원문은 그대로 보존해요.
+        </p>
+      )}
       {run.statePreparation && ['failed', 'skipped'].includes(run.statePreparation.status) && (
         <p role="status" className="muted">
           {run.statePreparation.status === 'skipped'
