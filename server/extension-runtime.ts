@@ -15,11 +15,55 @@ export const EXTENSION_RUNTIME_LIMITS = Object.freeze({
   inputBytes: 128 * 1024,
   outputBytes: 128 * 1024,
   timeoutMs: 1_000,
+  hostMethodChars: 80,
+  hostCalls: 32,
+  hostPending: 8,
+  hostValueBytes: 128 * 1024,
+  hostResultBytes: 512 * 1024,
 });
 
-type WorkerReply = { ok: true; json: string } | { ok: false; code: string };
+export type ExtensionHostHandler = (
+  method: string,
+  args: RuntimeValue,
+  signal: AbortSignal
+) => Promise<RuntimeValue>;
+
+export type ExtensionRuntimeOptions = {
+  waitForSlot?: boolean;
+  host?: ExtensionHostHandler;
+};
+
+type WorkerResult =
+  | { type: 'result'; ok: true; json: string }
+  | { type: 'result'; ok: false; code: string };
+type WorkerHostCall = { type: 'host-call'; id: number; method: string; argsJson: string };
+type HostReply =
+  | { type: 'host-result'; id: number; ok: true; json: string }
+  | { type: 'host-result'; id: number; ok: false; code: string };
+
+const safeHostCodes = new Set([
+  'BEHAVIOR_HOST_CALL_FAILED',
+  'BEHAVIOR_HOST_DENIED',
+  'BEHAVIOR_HOST_ARGUMENTS',
+  'BEHAVIOR_HOST_MATERIAL_UNAVAILABLE',
+  'BEHAVIOR_HOST_ABORTED',
+  'BEHAVIOR_HOST_RESULT_LIMIT',
+]);
+const workerResultCodes = new Set([
+  'BEHAVIOR_PROGRAM_INPUT_SIZE',
+  'BEHAVIOR_PROGRAM_RUNTIME_FAILED',
+  'BEHAVIOR_PROGRAM_FAILED',
+  'BEHAVIOR_PROGRAM_TIMEOUT',
+  'BEHAVIOR_PROGRAM_RESULT_VALUE',
+  'BEHAVIOR_PROGRAM_OUTPUT_SIZE',
+]);
 let active = 0;
 const waiting: { wake: () => void }[] = [];
+
+function fail(code: string): ExtensionProgramError {
+  return new ExtensionProgramError(code);
+}
+
 async function acquireSlot(signal?: AbortSignal, wait = false) {
   if (signal?.aborted) throw fail('BEHAVIOR_PROGRAM_ABORTED');
   if (active < EXTENSION_RUNTIME_LIMITS.concurrent) {
@@ -44,13 +88,33 @@ async function acquireSlot(signal?: AbortSignal, wait = false) {
     signal?.addEventListener('abort', abort, { once: true });
   });
 }
+
 function releaseSlot() {
   active--;
   waiting.shift()?.wake();
 }
 
-function fail(code: string): ExtensionProgramError {
-  return new ExtensionProgramError(code);
+function inspectJSON(value: unknown, maxBytes: number, code: string): string {
+  let json: string;
+  try {
+    inspectRuntimeValue(
+      value,
+      new PromptBudget(
+        {
+          maxCollectionLength: 2_000,
+          maxSteps: 100_000,
+          maxValueChars: maxBytes,
+          maxValueNodes: 30_000,
+        },
+        'deterministic'
+      )
+    );
+    json = JSON.stringify(value);
+  } catch {
+    throw fail(code);
+  }
+  if (Buffer.byteLength(json) > maxBytes) throw fail(code);
+  return json;
 }
 
 function inputJSON(value: { state: RuntimeValue; input: RuntimeValue }) {
@@ -77,20 +141,42 @@ function inputJSON(value: { state: RuntimeValue; input: RuntimeValue }) {
   return json;
 }
 
+function exactRecord(value: unknown, keys: string[]): value is Record<string, unknown> {
+  return (
+    !!value &&
+    typeof value === 'object' &&
+    !Array.isArray(value) &&
+    Object.getPrototypeOf(value) === Object.prototype &&
+    Object.getOwnPropertySymbols(value).length === 0 &&
+    Object.keys(value).length === keys.length &&
+    keys.every((key) => Object.hasOwn(value, key))
+  );
+}
+
+function validCode(value: unknown): value is string {
+  return typeof value === 'string' && workerResultCodes.has(value);
+}
+
+function publicHostCode(error: unknown) {
+  return error instanceof ExtensionProgramError && safeHostCodes.has(error.code)
+    ? error.code
+    : 'BEHAVIOR_HOST_CALL_FAILED';
+}
+
 /**
- * Runs one data-only extension in a fresh Worker and a fresh fixed-memory QuickJS module.
- * The worker returns a bounded JSON string; this process never inspects guest objects.
+ * Runs one extension in a fresh Worker and fixed-memory QuickJS module. Host reads cross an
+ * explicit JSON RPC boundary; neither the Worker nor a guest object enters the host broker.
  */
 export async function executeExtensionProgram(
   value: ExtensionProgram,
   input: { state: RuntimeValue; input: RuntimeValue },
   signal?: AbortSignal,
-  options?: { waitForSlot?: boolean }
+  options: ExtensionRuntimeOptions = {}
 ): Promise<ExtensionProgramResult & { engine: string }> {
   const program = validateExtensionProgram(value);
   const encodedInput = inputJSON(input);
   if (signal?.aborted) throw fail('BEHAVIOR_PROGRAM_ABORTED');
-  await acquireSlot(signal, options?.waitForSlot);
+  await acquireSlot(signal, options.waitForSlot);
   try {
     if (signal?.aborted) throw fail('BEHAVIOR_PROGRAM_ABORTED');
     const compiled = new URL('./extension-worker.js', import.meta.url);
@@ -109,54 +195,135 @@ export async function executeExtensionProgram(
     });
     return await new Promise((resolve, reject) => {
       let settled = false;
-      const finish = (error?: ExtensionProgramError, result?: ExtensionProgramResult) => {
+      let hostCalls = 0;
+      let hostResultBytes = 0;
+      const hostPending = new Set<number>();
+      const hostController = new AbortController();
+      const post = (message: HostReply) => {
+        if (!settled) worker.postMessage(message);
+      };
+      const finish = (outcome: { error: unknown } | { result: ExtensionProgramResult }) => {
         if (settled) return;
         settled = true;
         clearTimeout(timer);
         signal?.removeEventListener('abort', abort);
+        hostController.abort();
         void worker
           .terminate()
           .catch(() => undefined)
           .finally(() => {
             worker.removeAllListeners();
-            if (error) reject(error);
-            else resolve({ ...result!, engine: EXTENSION_RUNTIME_ENGINE });
+            if ('error' in outcome) reject(outcome.error);
+            else resolve({ ...outcome.result, engine: EXTENSION_RUNTIME_ENGINE });
           });
       };
-      const abort = () => finish(fail('BEHAVIOR_PROGRAM_ABORTED'));
+      const finishError = (error: unknown) => finish({ error });
+      const finishResult = (result: ExtensionProgramResult) => finish({ result });
+      const abort = () => finishError(fail('BEHAVIOR_PROGRAM_ABORTED'));
       const timer = setTimeout(
-        () => finish(fail('BEHAVIOR_PROGRAM_TIMEOUT')),
+        () => finishError(fail('BEHAVIOR_PROGRAM_TIMEOUT')),
         EXTENSION_RUNTIME_LIMITS.timeoutMs
       );
       signal?.addEventListener('abort', abort, { once: true });
-      worker.once('message', (message: WorkerReply) => {
-        if (!message || typeof message !== 'object' || typeof message.ok !== 'boolean') {
-          finish(fail('BEHAVIOR_PROGRAM_RUNTIME_FAILED'));
-          return;
-        }
-        if (!message.ok) {
-          finish(fail(typeof message.code === 'string' ? message.code : 'BEHAVIOR_PROGRAM_FAILED'));
+      worker.on('message', (message: WorkerResult | WorkerHostCall) => {
+        if (settled) return;
+        if (
+          exactRecord(message, ['type', 'id', 'method', 'argsJson']) &&
+          message.type === 'host-call'
+        ) {
+          const { id, method, argsJson } = message;
+          if (
+            !Number.isSafeInteger(id) ||
+            id < 1 ||
+            id > EXTENSION_RUNTIME_LIMITS.hostCalls ||
+            hostPending.has(id) ||
+            hostCalls >= EXTENSION_RUNTIME_LIMITS.hostCalls ||
+            hostPending.size >= EXTENSION_RUNTIME_LIMITS.hostPending ||
+            typeof method !== 'string' ||
+            !method.length ||
+            method.length > EXTENSION_RUNTIME_LIMITS.hostMethodChars ||
+            typeof argsJson !== 'string' ||
+            Buffer.byteLength(argsJson) > EXTENSION_RUNTIME_LIMITS.hostValueBytes
+          ) {
+            finishError(fail('BEHAVIOR_PROGRAM_RUNTIME_FAILED'));
+            return;
+          }
+          let args: RuntimeValue;
+          try {
+            args = JSON.parse(argsJson) as RuntimeValue;
+            inspectJSON(args, EXTENSION_RUNTIME_LIMITS.hostValueBytes, 'BEHAVIOR_HOST_CALL_FAILED');
+          } catch {
+            finishError(fail('BEHAVIOR_PROGRAM_RUNTIME_FAILED'));
+            return;
+          }
+          hostCalls++;
+          hostPending.add(id);
+          void (async () => {
+            try {
+              if (!options.host) throw fail('BEHAVIOR_HOST_CALL_FAILED');
+              const result = await options.host(
+                method,
+                structuredClone(args),
+                hostController.signal
+              );
+              const json = inspectJSON(
+                result,
+                EXTENSION_RUNTIME_LIMITS.hostValueBytes,
+                'BEHAVIOR_HOST_RESULT_LIMIT'
+              );
+              hostResultBytes += Buffer.byteLength(json);
+              if (hostResultBytes > EXTENSION_RUNTIME_LIMITS.hostResultBytes)
+                throw fail('BEHAVIOR_HOST_RESULT_LIMIT');
+              post({ type: 'host-result', id, ok: true, json });
+            } catch (error) {
+              if (error instanceof ExtensionProgramError && safeHostCodes.has(error.code))
+                post({ type: 'host-result', id, ok: false, code: publicHostCode(error) });
+              else
+                finishError(
+                  error instanceof Error ? error : new Error('BEHAVIOR_HOST_RUNTIME_FAILED')
+                );
+            } finally {
+              hostPending.delete(id);
+            }
+          })();
           return;
         }
         if (
-          typeof message.json !== 'string' ||
-          Buffer.byteLength(message.json) > EXTENSION_RUNTIME_LIMITS.outputBytes
+          exactRecord(message, ['type', 'ok', 'json']) &&
+          message.type === 'result' &&
+          message.ok === true
         ) {
-          finish(fail('BEHAVIOR_PROGRAM_OUTPUT_SIZE'));
+          if (
+            typeof message.json !== 'string' ||
+            Buffer.byteLength(message.json) > EXTENSION_RUNTIME_LIMITS.outputBytes
+          ) {
+            finishError(fail('BEHAVIOR_PROGRAM_OUTPUT_SIZE'));
+            return;
+          }
+          try {
+            finishResult(validateExtensionProgramResult(JSON.parse(message.json)));
+          } catch (error) {
+            finishError(
+              error instanceof ExtensionProgramError ? error : fail('BEHAVIOR_PROGRAM_RESULT_VALUE')
+            );
+          }
           return;
         }
-        try {
-          finish(undefined, validateExtensionProgramResult(JSON.parse(message.json)));
-        } catch (error) {
-          finish(
-            error instanceof ExtensionProgramError ? error : fail('BEHAVIOR_PROGRAM_RESULT_VALUE')
-          );
+        if (
+          exactRecord(message, ['type', 'ok', 'code']) &&
+          message.type === 'result' &&
+          message.ok === false &&
+          validCode(message.code)
+        ) {
+          finishError(fail(message.code));
+          return;
         }
+        finishError(fail('BEHAVIOR_PROGRAM_RUNTIME_FAILED'));
       });
-      worker.once('messageerror', () => finish(fail('BEHAVIOR_PROGRAM_RUNTIME_FAILED')));
-      worker.once('error', () => finish(fail('BEHAVIOR_PROGRAM_RUNTIME_FAILED')));
+      worker.once('messageerror', () => finishError(fail('BEHAVIOR_PROGRAM_RUNTIME_FAILED')));
+      worker.once('error', () => finishError(fail('BEHAVIOR_PROGRAM_RUNTIME_FAILED')));
       worker.once('exit', () => {
-        if (!settled) finish(fail('BEHAVIOR_PROGRAM_RUNTIME_FAILED'));
+        if (!settled) finishError(fail('BEHAVIOR_PROGRAM_RUNTIME_FAILED'));
       });
     });
   } finally {

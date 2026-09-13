@@ -68,6 +68,21 @@ describe('bounded extension state program contract', () => {
     expect(validateExtensionProgram(definition().actions[0].program)).toEqual(
       definition().actions[0].program
     );
+    const readable = {
+      ...definition().actions[0].program!,
+      capabilities: ['materials.read.self'],
+    };
+    expect(validateExtensionProgram(readable)).toEqual(readable);
+    for (const capabilities of [
+      ['network'],
+      ['materials.read.self', 'materials.read.self'],
+      'materials.read.self',
+      [undefined],
+      null,
+    ])
+      expect(() => validateExtensionProgram({ ...readable, capabilities })).toThrow(
+        'BEHAVIOR_PROGRAM_CAPABILITIES'
+      );
     for (const program of [
       { api: 'uimori-state-action-v2', source: 'return null;' },
       { api: EXTENSION_PROGRAM_API, source: '' },

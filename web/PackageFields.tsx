@@ -848,6 +848,33 @@ function BehaviorEditor({
           >
             코드 계산 예제 넣기
           </button>
+          <button
+            type="button"
+            className="secondary"
+            onClick={() => {
+              const example = structuredClone(neutralBehavior);
+              example.actions = [
+                {
+                  id: 'inspect_materials',
+                  label: '자료 목록 살펴보기',
+                  inputSchema: { type: 'record', properties: {} },
+                  effects: [],
+                  program: {
+                    api: 'uimori-state-action-v1',
+                    capabilities: ['materials.read.self'],
+                    source:
+                      'const page = await api.host.call("materials.list", {limit: 5});\nconst first = page.items[0];\nconst preview = first ? (await api.host.call("materials.read", {id: first.id, limit: 120})).text : "";\nreturn {state: {count: page.items.length}, result: {titles: page.items.map(item => item.title), preview, nextOffset: page.nextOffset}};',
+                  },
+                },
+              ];
+              setDraft(JSON.stringify(example, null, 2));
+              setNotice(
+                '이 자료의 본문·로어를 읽고 목록과 미리보기를 반환하는 예제예요. 확인 후 적용해 주세요.'
+              );
+            }}
+          >
+            자료 읽기 예제 넣기
+          </button>
         </div>
       )}
       {editable && editable.actions.length > 0 && (
@@ -877,11 +904,34 @@ function BehaviorEditor({
                   </label>
                 ))}
                 {action.program && (
-                  <small>
-                    코드 계산은 사용자 버튼, 생성 전 자동 행동 또는 모델 요청에서 실행해요. 이
-                    자료의 상태와 입력만 코드에 전달하며 자동 행동은 준비가 모두 끝난 뒤 원문 생성을
-                    시작해요.
-                  </small>
+                  <>
+                    <small>
+                      코드 계산은 사용자 버튼, 생성 전 자동 행동 또는 모델 요청에서 실행해요. 자동
+                      행동은 준비가 모두 끝난 뒤 원문 생성을 시작해요.
+                    </small>
+                    <label className="check behavior-method-choice">
+                      <SelectionCheckbox
+                        checked={
+                          action.program.capabilities?.includes('materials.read.self') ?? false
+                        }
+                        onChange={(e) =>
+                          updateAction(index, {
+                            program: {
+                              ...action.program!,
+                              capabilities: e.target.checked ? ['materials.read.self'] : [],
+                            },
+                          })
+                        }
+                      />
+                      <span>
+                        자기 자료 읽기
+                        <small>
+                          이 자료의 본문·로어를 코드에서 조회할 수 있어요. 다른 자료나 채팅 기록은
+                          포함하지 않아요.
+                        </small>
+                      </span>
+                    </label>
+                  </>
                 )}
                 {triggers.includes('before-turn') && (
                   <label>
@@ -916,8 +966,8 @@ function BehaviorEditor({
         <summary>제작자용 동작 JSON 편집</summary>
         <p className="muted">
           선언형 계산 또는 행동의 program에 JavaScript 계산을 넣을 수 있어요. 코드에는 이 자료의
-          상태와 행동 입력만 전달하며 반환한 상태는 저장 전에 검사해요. Lua와 Risu 스크립트의 직접
-          실행은 지원하지 않아요.
+          상태와 행동 입력을 전달하며 선택한 읽기 권한으로 본문·로어도 조회해요. 반환한 상태는 저장
+          전에 검사해요. Lua와 Risu 스크립트의 직접 실행은 지원하지 않아요.
         </p>
         <label>
           동작 정의 JSON

@@ -28,13 +28,14 @@ test('PROGTOOLUI01 creators enable model code actions and model-only actions hav
   await expect(methods.getByRole('checkbox', { name: /^생성 전 자동 실행/ })).toBeEnabled();
   await methods.getByRole('checkbox', { name: /^모델이 필요할 때 요청/ }).check();
   await methods.getByRole('checkbox', { name: /^사용자 버튼/ }).uncheck();
+  await fields.getByRole('checkbox', { name: /^자기 자료 읽기/ }).check();
   await fields.getByRole('button', { name: '동작 검증 후 적용', exact: true }).click();
   const saving = waitForContentDraftSave(page);
   await library.getByRole('button', { name: '자료 등록', exact: true }).click();
   const content = await saving;
   expect(content.package!.behavior!.actions[0]).toMatchObject({
     triggers: ['model'],
-    program: { api: 'uimori-state-action-v1' },
+    program: { api: 'uimori-state-action-v1', capabilities: ['materials.read.self'] },
   });
   const created = await request.post('/api/chats', {
     data: { title: 'Synthetic model code', botId: content.id },
@@ -59,8 +60,9 @@ async function seed(request: APIRequestContext, hostile = false, program = false
     note.effects = [];
     note.program = {
       api: 'uimori-state-action-v1',
+      capabilities: ['materials.read.self'],
       source:
-        'const words = [...new Set(api.input.note.trim().split(/\\s+/).filter(Boolean))].sort(); return {state: {...api.state, note: words.join(" ")}, result: {count: words.length}};',
+        'const listed = await api.host.call("materials.list", {}); const body = listed.items.find(item => item.id.endsWith(":body")); const own = await api.host.call("materials.read", {id: body.id}); const words = [...new Set(api.input.note.trim().split(/\\s+/).filter(Boolean))].sort(); return {state: {...api.state, note: own.text + "|" + words.join(" ")}, result: {count: words.length, materialHash: own.contentHash}};',
     };
     const again = pkg.behavior!.actions.find((action) => action.id === 'again')!;
     again.effects = [];
@@ -181,11 +183,11 @@ test('EXTPANELUI01 code action updates its panel and a failed action preserves c
   await iframe.getByRole('textbox', { name: '준비 메모', exact: true }).fill('pear apple pear');
   await iframe.getByRole('button', { name: '메모 반영', exact: true }).click();
   await expect(iframe.getByRole('textbox', { name: '준비 메모', exact: true })).toHaveValue(
-    'apple pear'
+    'Synthetic adult explorers.|apple pear'
   );
   await page.reload();
   await expect(iframe.getByRole('textbox', { name: '준비 메모', exact: true })).toHaveValue(
-    'apple pear'
+    'Synthetic adult explorers.|apple pear'
   );
   await iframe.getByRole('button', { name: '경로 선택', exact: true }).click();
   await expect(iframe.locator('#route')).toHaveText('harbor');

@@ -9,6 +9,8 @@ export const EXTENSION_PROGRAM_MAX_VALUE_CHARS = 128 * 1024;
 
 export interface ExtensionProgram {
   api: typeof EXTENSION_PROGRAM_API;
+  /** Requested native capabilities. The host independently binds their scope per invocation. */
+  capabilities?: 'materials.read.self'[];
   /** Function body evaluated by a host-owned isolated guest runtime. */
   source: string;
 }
@@ -40,7 +42,11 @@ function fail(code: string): never {
   throw new ExtensionProgramError(code);
 }
 
-function exactRecord(value: unknown, allowed: readonly string[]): Record<string, unknown> {
+function exactRecord(
+  value: unknown,
+  required: readonly string[],
+  optional: readonly string[] = []
+): Record<string, unknown> {
   if (
     value === null ||
     typeof value !== 'object' ||
@@ -50,9 +56,9 @@ function exactRecord(value: unknown, allowed: readonly string[]): Record<string,
   )
     fail('BEHAVIOR_PROGRAM_EXPECTED_RECORD');
   const record = value as Record<string, unknown>;
+  const allowed = [...required, ...optional];
   const names = Object.getOwnPropertyNames(record);
-  if (names.length !== allowed.length || allowed.some((key) => !Object.hasOwn(record, key)))
-    fail('BEHAVIOR_PROGRAM_FIELDS');
+  if (required.some((key) => !Object.hasOwn(record, key))) fail('BEHAVIOR_PROGRAM_FIELDS');
   for (const key of names) {
     if (!allowed.includes(key)) fail('BEHAVIOR_PROGRAM_FIELDS');
     const descriptor = Object.getOwnPropertyDescriptor(record, key)!;
@@ -63,7 +69,7 @@ function exactRecord(value: unknown, allowed: readonly string[]): Record<string,
 }
 
 export function validateExtensionProgram(value: unknown): ExtensionProgram {
-  const program = exactRecord(value, ['api', 'source']);
+  const program = exactRecord(value, ['api', 'source'], ['capabilities']);
   if (program.api !== EXTENSION_PROGRAM_API) fail('BEHAVIOR_PROGRAM_API');
   if (
     typeof program.source !== 'string' ||
@@ -71,6 +77,20 @@ export function validateExtensionProgram(value: unknown): ExtensionProgram {
     program.source.length > EXTENSION_PROGRAM_MAX_SOURCE_CHARS
   )
     fail('BEHAVIOR_PROGRAM_SOURCE_SIZE');
+  if (Object.hasOwn(program, 'capabilities')) {
+    // Validate plain JSON before inspecting author-provided collections/getters.
+    try {
+      inspectRuntimeValue(program.capabilities, new PromptBudget({}, 'deterministic'));
+    } catch {
+      fail('BEHAVIOR_PROGRAM_CAPABILITIES');
+    }
+    if (
+      !Array.isArray(program.capabilities) ||
+      program.capabilities.length > 1 ||
+      program.capabilities.some((capability) => capability !== 'materials.read.self')
+    )
+      fail('BEHAVIOR_PROGRAM_CAPABILITIES');
+  }
   return structuredClone(program) as unknown as ExtensionProgram;
 }
 
