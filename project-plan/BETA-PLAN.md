@@ -114,3 +114,9 @@ authored 시작문에 기존 `PromptTemplate`를 연결하고 미리보기·확�
 기존 RisuToki 프로젝트 추출의 `module.json`을 독립적으로 해석해 로어·이름 템플릿·정적 표시 정규식·JSON 내 이미지와 사용자용 설명을 모듈로 가져와요. 같은 파일 검토/영수증 경로를 쓰되 봇·채팅·기억은 만들지 않고, namespace·트리거·Lua·외부 에셋 등 미지원 부분은 먼저 표시해요. RPack 바이너리 직접 해석은 남아 있어요. quality·빌드, 가져오기/자료 이동 집중 33개, 기존 `verify:native-transfer`의 4개 화면 흐름이 PASS예요. 화면 결과는 `native-transfer-2026-09-12T23-43-34-544Z-e564dc5f`에 있고 실제 원본 `.risum`의 전체 인수 결과는 아니에요.
 
 후속 단위로 모듈 프로젝트 ZIP의 `module.json`·`.risutoki/workspace.json`·분리된 이미지 파일을 연결했어요. 상위 폴더 하나를 포함하는 ZIP도 읽고 파일 목록의 순서를 보존해요. 누락 에셋은 미지원으로 알리고 외부 경로/여러 정의는 거절하며 선택한 ZIP을 원본 영수증에 보관해요. 기존 제한된 ZIP reader와 이미지 저장을 재사용했고 RPack/제3자 ZIP 구현은 추가하지 않았어요. 관련 가져오기 8개와 quality가 PASS예요. 이 경로의 안내는 [RISU-IMPORT](../docs/RISU-IMPORT.md)에 있어요.
+
+### 시작 선택의 종속 옵션 · 2026-09-13
+
+기존 `controls/visibleWhen`을 새 채팅의 시작 선택 영역에 연결했어요. 직접 요청과 각 시작문 사이를 오갈 때 사용자가 바꾼 옵션을 각각 기억하고, 처음 고른 시작에만 제작자 기본값을 적용해요. 미리보기와 확정 snapshot은 같은 최종 값을 사용해요. `__direct__`라는 실제 시작 ID도 직접 요청과 충돌하지 않아요.
+
+quality·빌드가 PASS이며 `package-panels-2026-09-13T00-22-01-541Z-b3e0e772`의 NSUI01과 기존 PREQUESTUI01/02는 PASS예요. 같은 실행의 새 패널 검사는 실패했으므로 실행 전체를 PASS로 해석하지 않아요. 이번 단위는 공통 시작 UI 연결이며 TVoN의 원래 선택 트리·전체 이식 완료는 아니에요.

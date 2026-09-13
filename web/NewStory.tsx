@@ -37,6 +37,8 @@ type StorySelection = {
 };
 
 const selectedId = (key: string) => key.slice(0, key.lastIndexOf('@'));
+const startValuesKey = (packageKey: string, startId: string) =>
+  JSON.stringify([packageKey, startId]);
 
 export function NewStory({
   library,
@@ -76,6 +78,7 @@ export function NewStory({
   const [packageValues, setPackageValues] = useState<Record<string, Record<string, PromptValue>>>(
     {}
   );
+  const rememberedStartValues = useRef<Record<string, Record<string, PromptValue>>>({});
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const created = useRef<Chat | null>(null);
@@ -347,6 +350,15 @@ export function NewStory({
       openingError = (caught as Error).message;
     }
   }
+  const rememberPackageValues = (
+    role: PackageRole,
+    item: Content,
+    values: Record<string, PromptValue>
+  ) => {
+    const packageKey = `${refValue(item)}:${role}`;
+    if (role === 'bot') rememberedStartValues.current[startValuesKey(packageKey, start)] = values;
+    setPackageValues((previous) => ({ ...previous, [packageKey]: values }));
+  };
   const packageSettings = (
     [
       ['bot', activeBot, '봇'],
@@ -362,12 +374,7 @@ export function NewStory({
           values={packageValues[`${refValue(item)}:${role}`]}
           labelPrefix={`시작 ${label} 옵션`}
           disabled={locked || packageLoading}
-          onChange={(values) =>
-            setPackageValues((previous) => ({
-              ...previous,
-              [`${refValue(item)}:${role}`]: values,
-            }))
-          }
+          onChange={(values) => rememberPackageValues(role, item, values)}
         />
       </fieldset>
     ) : null
@@ -460,19 +467,29 @@ export function NewStory({
               disabled={locked || packageLoading}
               onChange={(event) => {
                 const id = event.target.value;
+                if (id === start) return;
                 setStart(id);
                 const pkg = activeBot.package!;
-                const values = id
-                  ? resolvePackageStart(
-                      pkg,
-                      id,
-                      {},
-                      packageIdentityFromContents(activeBot, activePersona)
-                    ).values
-                  : resolvePromptValues({ version: 1, controls: pkg.controls, blocks: [] });
+                const packageKey = `${refValue(activeBot)}:bot`;
+                const currentValues = resolvePromptValues(
+                  { version: 1, controls: pkg.controls, blocks: [] },
+                  packageValues[packageKey]
+                );
+                rememberedStartValues.current[startValuesKey(packageKey, start)] = currentValues;
+                const values =
+                  rememberedStartValues.current[startValuesKey(packageKey, id)] ??
+                  (id
+                    ? resolvePackageStart(
+                        pkg,
+                        id,
+                        {},
+                        packageIdentityFromContents(activeBot, activePersona)
+                      ).values
+                    : resolvePromptValues({ version: 1, controls: pkg.controls, blocks: [] }));
+                rememberedStartValues.current[startValuesKey(packageKey, id)] = values;
                 setPackageValues((previous) => ({
                   ...previous,
-                  [`${refValue(activeBot)}:bot`]: values,
+                  [packageKey]: values,
                 }));
               }}
             >
@@ -484,6 +501,7 @@ export function NewStory({
               ))}
             </select>
           </label>
+          {packageSettings[0]}
           {opening && (
             <>
               <p className="muted">
@@ -516,7 +534,7 @@ export function NewStory({
           )}
         </fieldset>
       )}
-      {packageSettings[0]}
+      {!activeBot?.package?.starts?.length && packageSettings[0]}
       <details className="new-story-options">
         <summary>
           <span>추가 설정</span>
