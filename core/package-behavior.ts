@@ -43,13 +43,19 @@ export interface BehaviorOutputParser {
   required?: boolean;
   when?: PromptExpression;
   format: 'json' | 'delimited';
+  /** Omitted/block keeps the original whole-text marker contract. Line matches one complete record line. */
+  scope?: 'block' | 'line';
   start?: string;
   end?: string;
   delimiter?: string;
+  /** Exact accepted lengths for a delimited record, including deliberately supported older shapes. */
+  fieldCount?: number | number[];
   fields: {
     path: string[];
     from: string[];
     valueType?: 'string' | 'number' | 'boolean' | 'json';
+    /** An absent input path preserves the prior state value; present invalid values still fail. */
+    optional?: boolean;
   }[];
 }
 export interface PackageBehavior {
@@ -358,11 +364,23 @@ export function validatePackageBehavior(value: unknown): PackageBehavior {
     }
   }
   for (const p of b.outputParsers) {
-    keys(p, ['id', 'required', 'when', 'format', 'start', 'end', 'delimiter', 'fields']);
+    keys(p, [
+      'id',
+      'required',
+      'when',
+      'format',
+      'scope',
+      'start',
+      'end',
+      'delimiter',
+      'fieldCount',
+      'fields',
+    ]);
     if (p.required !== undefined && typeof p.required !== 'boolean')
       bad('BEHAVIOR_PARSER_REQUIRED');
     if (p.when !== undefined) validatePromptExpression(p.when);
     if (!['json', 'delimited'].includes(p.format)) bad('BEHAVIOR_PARSER_FORMAT');
+    if (p.scope !== undefined && !['block', 'line'].includes(p.scope)) bad('BEHAVIOR_PARSER_SCOPE');
     for (const marker of [p.start, p.end, p.delimiter])
       if (
         marker !== undefined &&
@@ -374,10 +392,25 @@ export function validatePackageBehavior(value: unknown): PackageBehavior {
       (p.format === 'delimited' && !p.delimiter)
     )
       bad('BEHAVIOR_PARSER_MARKER');
+    if (p.scope === 'line' && (!p.start || /[\r\n]/u.test(p.start + p.end)))
+      bad('BEHAVIOR_PARSER_MARKER');
+    if (p.fieldCount !== undefined) {
+      const counts = Array.isArray(p.fieldCount) ? p.fieldCount : [p.fieldCount];
+      if (
+        p.format !== 'delimited' ||
+        !counts.length ||
+        counts.length > 20 ||
+        new Set(counts).size !== counts.length
+      )
+        bad('BEHAVIOR_PARSER_FIELD_COUNT');
+      for (const count of counts) boundedInt(count, 1, 100);
+    }
     if (!Array.isArray(p.fields) || !p.fields.length || p.fields.length > 100)
       bad('BEHAVIOR_PARSER_FIELDS');
     for (const f of p.fields) {
-      keys(f, ['path', 'from', 'valueType']);
+      keys(f, ['path', 'from', 'valueType', 'optional']);
+      if (f.optional !== undefined && typeof f.optional !== 'boolean')
+        bad('BEHAVIOR_PARSER_OPTIONAL_FIELD');
       atSchema(b.stateSchema, validateBehaviorPath(f.path));
       validateBehaviorPath(f.from);
       if (
@@ -508,22 +541,38 @@ export function parseBehaviorOutput(
   return evaluate(() => {
     if (typeof text !== 'string' || text.length > 500_000) bad('BEHAVIOR_OUTPUT_SIZE');
     let body = text;
-    if (
-      parser.required === false &&
-      parser.start &&
-      parser.end &&
-      !text.includes(parser.start) &&
-      !text.includes(parser.end)
-    )
-      return structuredClone(state);
-    if (parser.start && parser.end) {
-      const start = text.indexOf(parser.start);
-      if (start < 0 || text.indexOf(parser.start, start + parser.start.length) >= 0)
+    if (parser.scope === 'line') {
+      const lines = text.split(/\r\n|[\r\n]/u).map((line) => line.trim());
+      const selected = lines.filter((line) => line.startsWith(parser.start!));
+      if (!selected.length && parser.required === false && !text.includes(parser.start!))
+        return structuredClone(state);
+      if (selected.length !== 1) bad('BEHAVIOR_OUTPUT_MARKER');
+      const line = selected[0];
+      if (
+        !line.endsWith(parser.end!) ||
+        line.length < parser.start!.length + parser.end!.length ||
+        line.indexOf(parser.start!, parser.start!.length) >= 0
+      )
         bad('BEHAVIOR_OUTPUT_MARKER');
-      const end = text.indexOf(parser.end, start + parser.start.length);
-      if (end < 0 || text.indexOf(parser.end, end + parser.end.length) >= 0)
-        bad('BEHAVIOR_OUTPUT_MARKER');
-      body = text.slice(start + parser.start.length, end);
+      body = line.slice(parser.start!.length, -parser.end!.length);
+    } else {
+      if (
+        parser.required === false &&
+        parser.start &&
+        parser.end &&
+        !text.includes(parser.start) &&
+        !text.includes(parser.end)
+      )
+        return structuredClone(state);
+      if (parser.start && parser.end) {
+        const start = text.indexOf(parser.start);
+        if (start < 0 || text.indexOf(parser.start, start + parser.start.length) >= 0)
+          bad('BEHAVIOR_OUTPUT_MARKER');
+        const end = text.indexOf(parser.end, start + parser.start.length);
+        if (end < 0 || text.indexOf(parser.end, end + parser.end.length) >= 0)
+          bad('BEHAVIOR_OUTPUT_MARKER');
+        body = text.slice(start + parser.start.length, end);
+      }
     }
     let data: unknown;
     if (parser.format === 'json') {
@@ -533,13 +582,22 @@ export function parseBehaviorOutput(
         bad('BEHAVIOR_OUTPUT_JSON');
       }
       inspectData(data);
-    } else data = body.split(parser.delimiter!).map((v) => v.trim());
+    } else {
+      data = body.split(parser.delimiter!).map((v) => v.trim());
+      if (parser.fieldCount !== undefined) {
+        const counts = Array.isArray(parser.fieldCount) ? parser.fieldCount : [parser.fieldCount];
+        if (!counts.includes((data as unknown[]).length)) bad('BEHAVIOR_OUTPUT_FIELD_COUNT');
+      }
+    }
     const next = structuredClone(state);
-    for (const field of parser.fields) {
+    fields: for (const field of parser.fields) {
       let value: any = data;
       for (const key of field.from) {
-        if (value === null || typeof value !== 'object' || !Object.hasOwn(value, key))
+        if (value === null || typeof value !== 'object') bad('BEHAVIOR_OUTPUT_FIELD');
+        if (!Object.hasOwn(value, key)) {
+          if (field.optional) continue fields;
           bad('BEHAVIOR_OUTPUT_FIELD');
+        }
         value = value[key];
       }
       if (field.valueType === 'number') {

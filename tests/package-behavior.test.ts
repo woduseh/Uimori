@@ -1,7 +1,11 @@
 import { describe, it, expect } from 'vitest';
 import { DatabaseSync } from 'node:sqlite';
 import { readFileSync } from 'node:fs';
-import { validatePackageBehavior, type PackageBehavior } from '../core/package-behavior.js';
+import {
+  parseBehaviorOutput,
+  validatePackageBehavior,
+  type PackageBehavior,
+} from '../core/package-behavior.js';
 import {
   PackageBehaviorStore,
   recordDraws,
@@ -103,6 +107,116 @@ const action = {
   idempotencyKey: 'a',
 };
 describe('package behavior transactions', () => {
+  it('reads independent record lines with shared closing markers and preserves optional prior fields', () => {
+    const f = fixture();
+    try {
+      const b = definition();
+      b.outputParsers = [
+        {
+          id: 'status',
+          format: 'delimited',
+          scope: 'line',
+          start: '[S:',
+          end: ']',
+          delimiter: '|',
+          fieldCount: 2,
+          fields: [
+            { path: ['hp'], from: ['0'], valueType: 'number' },
+            { path: ['alive'], from: ['1'], valueType: 'boolean' },
+          ],
+        },
+        {
+          id: 'ledger',
+          format: 'delimited',
+          scope: 'line',
+          start: '[L:',
+          end: ']',
+          delimiter: '|',
+          fieldCount: [1, 2],
+          fields: [
+            { path: ['name'], from: ['0'] },
+            { path: ['items'], from: ['1'], valueType: 'json', optional: true },
+          ],
+        },
+      ];
+      validatePackageBehavior(b);
+      const c = {
+        parserIds: ['status', 'ledger'],
+        text: 'Story [an ordinary aside].\r\n[S: 0 | false]\r\n[L: N | ["map"]]',
+        baseStateRevision: 0,
+        sourceHash: 'source',
+        idempotencyKey: 'records',
+      };
+      const result = f.store.applyOutputs(scope, b, c);
+      expect(result.state).toEqual({ hp: 0, alive: false, name: 'N', items: ['map'] });
+      const oldShape = f.store.applyOutputs(scope, b, {
+        ...c,
+        text: '[S: 7 | true]\n[L: Previous]',
+        baseStateRevision: 1,
+        idempotencyKey: 'short-record',
+      });
+      expect(oldShape.state).toEqual({ hp: 7, alive: true, name: 'Previous', items: ['map'] });
+      const before = f.store.journal(scope);
+      for (const body of [
+        '[S: 8 | true]\n[L: N | nope]',
+        '[S: 8 | true]\n[L: N | [] | extra]',
+        '[S: 8 | true]\n[S: 9 | true]\n[L: N]',
+        '[S: 8 | true\n[L: N]',
+      ])
+        expect(() =>
+          f.store.applyOutputs(scope, b, {
+            ...c,
+            text: body,
+            baseStateRevision: 2,
+            idempotencyKey: 'bad-record',
+          })
+        ).toThrow();
+      expect(f.store.journal(scope)).toEqual(before);
+      expect(f.store.read(scope, b).state).toEqual(oldShape.state);
+      expect(() =>
+        parseBehaviorOutput(b, { ...b.outputParsers[0], scope: 'block' }, oldShape.state, c.text)
+      ).toThrow('MARKER');
+    } finally {
+      f.db.close();
+    }
+  });
+  it('line parser optional absence ignores unrelated terminators but refuses incomplete or duplicate records', () => {
+    const b = definition();
+    const p = { ...b.outputParsers[2], scope: 'line' as const, required: false, fieldCount: 2 };
+    for (const body of ['A [note].\n[L: independent]', 'ordinary story'])
+      expect(parseBehaviorOutput(b, p, b.initialState, body)).toEqual(b.initialState);
+    for (const body of [
+      '[S: 1 | true',
+      '[S: 1 | true]\n[S: 2 | true]',
+      'quoted [S: 1 | true]',
+      '[S: 1 | true] trailing',
+    ])
+      expect(() => parseBehaviorOutput(b, p, b.initialState, body)).toThrow('MARKER');
+  });
+  it('validates line scope and declared record lengths without weakening present optional values', () => {
+    const b = definition();
+    for (const invalid of [
+      { scope: 'line', start: undefined, end: undefined },
+      { scope: 'line', start: '[S:\n' },
+      { scope: 'anything' },
+      { fieldCount: [] },
+      { fieldCount: [2, 2] },
+      { fieldCount: [0, 2] },
+      { fieldCount: 2.5 },
+      { format: 'json', fieldCount: 2 },
+    ])
+      expect(() =>
+        validatePackageBehavior({ ...b, outputParsers: [{ ...b.outputParsers[2], ...invalid }] })
+      ).toThrow();
+    const p = {
+      ...b.outputParsers[1],
+      fields: [{ path: ['name'], from: ['name'], optional: true }],
+    };
+    expect(parseBehaviorOutput(b, p, b.initialState, '{}')).toEqual(b.initialState);
+    expect(() => parseBehaviorOutput(b, p, b.initialState, '{"name":null}')).toThrow(
+      'STRING_VALUE'
+    );
+  });
   it('runs the published daily-state fixture with typed inventory, costs, stable dice and a new dated schedule', () => {
     const f = fixture();
     try {
