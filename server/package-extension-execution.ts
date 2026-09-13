@@ -32,6 +32,8 @@ type Options = {
   conversation?: { read: () => FrozenExtensionConversation; assertReadAccess: () => void };
   waitForSlot?: boolean;
   hostWaitMs?: number;
+  /** Raised only for host-owned edit hooks, whose result is one bounded text. */
+  maxResultChars?: number;
   /** Preserve completed computation only; authorization and state adoption have not finished. */
   onExecuted?: (result: ExecutionResult) => void;
 };
@@ -66,6 +68,7 @@ export async function executePackageExtensionProgram(
   let conversation: { host: ExtensionHostHandler; viewHash: string } | undefined;
   const computed = await executeExtensionProgram(program, input, signal, {
     waitForSlot: options.waitForSlot,
+    ...(options.maxResultChars === undefined ? {} : { maxResultChars: options.maxResultChars }),
     hostWaitMs: options.hostWaitMs ?? services?.hostWaitMs,
     // A model-capable guest must wait for paid Host work to settle even when it is cancelled.
     awaitHostSettlement: usesModel,

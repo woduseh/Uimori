@@ -27,7 +27,20 @@ export type BehaviorDraw = { id: string } & (
   | { type: 'choice' | 'shuffle'; values: RuntimeValue[] }
 );
 export type BehaviorActionTrigger = 'user' | 'before-turn' | 'after-turn' | 'model';
-export type BehaviorActionHook = 'input';
+export type BehaviorActionHook = 'input' | 'edit-input';
+export const BEHAVIOR_ACTION_HOOKS: BehaviorActionHook[] = ['input', 'edit-input'];
+/** The host supplies this exact input to an edit hook, so the declared schema is fixed. */
+export const BEHAVIOR_EDIT_VALUE_MAX_CHARS = 100_000;
+export const BEHAVIOR_EDIT_INPUT_SCHEMA: BehaviorSchema = {
+  type: 'record',
+  properties: {
+    value: { type: 'string', maxLength: BEHAVIOR_EDIT_VALUE_MAX_CHARS },
+    meta: {
+      type: 'record',
+      properties: { index: { type: 'number', min: -1, max: 1_000_000, integer: true } },
+    },
+  },
+};
 export interface BehaviorAction {
   id: string;
   label?: string;
@@ -276,6 +289,20 @@ function pathsDisjoint(paths: string[][]) {
 export function behaviorActionTriggers(action: BehaviorAction): BehaviorActionTrigger[] {
   return action.triggers === undefined ? ['user'] : [...action.triggers];
 }
+/** Host-owned phases run around the ordinary start phase; declaration order holds inside each. */
+export function behaviorHookOrder(action: BehaviorAction): number {
+  return action.hook === 'input' ? 0 : action.hook === 'edit-input' ? 1 : 2;
+}
+/** Input phases run before the request joins the conversation a guest is allowed to read. */
+export function behaviorHookBeforeRequest(action: BehaviorAction): boolean {
+  return action.hook !== undefined;
+}
+/** The edited text stays a bounded string; a guest cannot widen it into another value. */
+export function behaviorEditResultText(result: RuntimeValue): string {
+  if (typeof result !== 'string' || result.length > BEHAVIOR_EDIT_VALUE_MAX_CHARS)
+    throw new BehaviorEvaluationError(400, 'BEHAVIOR_EDIT_RESULT_VALUE');
+  return result;
+}
 export function validatePackageBehavior(value: unknown): PackageBehavior {
   const b = keys(value, [
     'revision',
@@ -346,9 +373,15 @@ export function validatePackageBehavior(value: unknown): PackageBehavior {
       bad('BEHAVIOR_ACTION_TRIGGERS');
     const triggers = behaviorActionTriggers(a);
     if (a.hook !== undefined) {
-      if (a.hook !== 'input') bad('BEHAVIOR_ACTION_HOOK');
+      if (!BEHAVIOR_ACTION_HOOKS.includes(a.hook)) bad('BEHAVIOR_ACTION_HOOK');
       if (triggers.length !== 1 || triggers[0] !== 'before-turn') bad('BEHAVIOR_HOOK_TRIGGER');
       if (a.program === undefined) bad('BEHAVIOR_HOOK_PROGRAM_REQUIRED');
+      // The edited text is host-owned: a declaration cannot substitute its own value or schema.
+      if (a.hook === 'edit-input') {
+        if (Object.hasOwn(a, 'automaticInput')) bad('BEHAVIOR_EDIT_INPUT_HOST_OWNED');
+        if (JSON.stringify(a.inputSchema) !== JSON.stringify(BEHAVIOR_EDIT_INPUT_SCHEMA))
+          bad('BEHAVIOR_EDIT_INPUT_SCHEMA');
+      }
     }
     if (triggers.includes('after-turn') && a.program === undefined)
       bad('BEHAVIOR_AFTER_TURN_PROGRAM_REQUIRED');
@@ -376,7 +409,7 @@ export function validatePackageBehavior(value: unknown): PackageBehavior {
       bad('BEHAVIOR_MODEL_INPUT_ROOT');
     const automatic = triggers.includes('before-turn') || triggers.includes('after-turn');
     if (Object.hasOwn(a, 'automaticInput') && !automatic) bad('BEHAVIOR_AUTOMATIC_INPUT_TRIGGER');
-    if (automatic)
+    if (automatic && a.hook !== 'edit-input')
       validateBehaviorValue(
         a.inputSchema,
         Object.hasOwn(a, 'automaticInput') ? a.automaticInput : {}

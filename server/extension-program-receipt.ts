@@ -53,7 +53,8 @@ function exactReceipt(value: unknown): Record<string, unknown> {
 /** Validate a bounded computation receipt without asserting that its state was adopted. */
 export function validateExtensionComputationReceipt(
   value: unknown,
-  expectedProgramHash: string
+  expectedProgramHash: string,
+  maxResultChars?: number
 ): ExtensionProgramReceipt {
   const receipt = exactReceipt(value);
   if (receipt.api !== EXTENSION_PROGRAM_API) fail('BEHAVIOR_PROGRAM_RECEIPT_API');
@@ -87,7 +88,10 @@ export function validateExtensionComputationReceipt(
   }
   let output: ExtensionProgramResult;
   try {
-    output = validateExtensionProgramResult({ state: receipt.state, result: receipt.result });
+    output = validateExtensionProgramResult(
+      { state: receipt.state, result: receipt.result },
+      maxResultChars
+    );
   } catch {
     fail('BEHAVIOR_PROGRAM_RECEIPT_VALUE');
   }
@@ -109,13 +113,14 @@ export function validateExtensionComputationReceipt(
 /** Bind a fresh computation to its authored action before a caller adopts the resulting state. */
 export function createExtensionProgramReceipt(
   computed: ResolvedExtensionProgram,
-  binding: { programHash: string; stateSchema: BehaviorSchema }
+  binding: { programHash: string; stateSchema: BehaviorSchema; maxResultChars?: number }
 ): ExtensionProgramReceipt {
   let receipt: ExtensionProgramReceipt;
   try {
     receipt = validateExtensionComputationReceipt(
       { api: EXTENSION_PROGRAM_API, ...computed },
-      binding.programHash
+      binding.programHash,
+      binding.maxResultChars
     );
   } catch (error) {
     if (!(error instanceof ExtensionProgramReceiptError)) throw error;
@@ -139,9 +144,14 @@ export function validateExtensionProgramReceipt(
     stateSchema: BehaviorSchema;
     state: RuntimeValue;
     result: RuntimeValue;
+    maxResultChars?: number;
   }
 ): ExtensionProgramReceipt {
-  const receipt = validateExtensionComputationReceipt(value, binding.programHash);
+  const receipt = validateExtensionComputationReceipt(
+    value,
+    binding.programHash,
+    binding.maxResultChars
+  );
   try {
     validateBehaviorValue(binding.stateSchema, receipt.state);
   } catch {

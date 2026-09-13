@@ -32,6 +32,8 @@ export type ExtensionHostHandler = (
 
 export type ExtensionRuntimeOptions = {
   waitForSlot?: boolean;
+  /** Edit hooks return one bounded text; other programs keep the small projection limit. */
+  maxResultChars?: number;
   host?: ExtensionHostHandler;
   hostWaitMs?: number;
   awaitHostSettlement?: boolean;
@@ -395,7 +397,9 @@ export async function executeExtensionProgram(
             return;
           }
           try {
-            finishResult(validateExtensionProgramResult(JSON.parse(message.json)));
+            finishResult(
+              validateExtensionProgramResult(JSON.parse(message.json), options.maxResultChars)
+            );
           } catch (error) {
             finishError(
               error instanceof ExtensionProgramError ? error : fail('BEHAVIOR_PROGRAM_RESULT_VALUE')

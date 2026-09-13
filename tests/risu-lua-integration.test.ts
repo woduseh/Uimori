@@ -198,9 +198,10 @@ end`,
   expect(progress.preparation?.status).toBe('ready');
   expect(progress.entries.map((entry) => entry.actionId)).toEqual([
     'risu-lua-0-input',
+    'risu-lua-0-editInput',
     'risu-lua-0-start',
   ]);
-  expect(execute).toHaveBeenCalledTimes(2);
+  expect(execute).toHaveBeenCalledTimes(3);
   expect(progress.entries[0].program?.conversation?.viewHash).not.toBe(
     progress.entries[1].program?.conversation?.viewHash
   );
@@ -232,7 +233,7 @@ end`,
     readChatVariables(fixture.store, copy.chat.id, fixture.store.product.branch(copy.chat.id).id)
       .values
   ).toEqual({ phase: 'input:start', beforeInput: '', afterInput: 'New input.' });
-  expect(execute).toHaveBeenCalledTimes(2);
+  expect(execute).toHaveBeenCalledTimes(3);
 });
 
 test('an onInput failure keeps the input and discards the optional preparation cohort', async () => {
@@ -255,6 +256,101 @@ function onStart(id) setChatVar(id, "phase", "must-not-run") end`);
     run.snapshot.settings
   );
   expect(readChatVariables(fixture.store, fixture.chat.id, fixture.branchId).values).toEqual({});
+  expect(database().store.product.import(fixture.store.product.export())).toMatchObject({
+    restored: true,
+  });
+});
+
+test('editInput rewrites the transmitted copy while the stored request and reads stay original', async () => {
+  const fixture = imported(
+    `listenEdit("editInput", function(id, value, meta)
+  setChatVar(id, "editedIndex", tostring(meta.index))
+  return value .. " [checked]"
+end)
+function onStart(id)
+  setChatVar(id, "startSees", getUserLastMessage(id))
+end`,
+    'START={{getvar::startSees}} INDEX={{getvar::editedIndex}}'
+  );
+  grantVariableWrites(fixture, true);
+  const run = generation(fixture, 'Original request.');
+  const reserved = structuredClone(fixture.store.run(run.id).snapshot);
+  const execute = vi.spyOn(extensionRuntime, 'executeExtensionProgram');
+  await prepareAutomaticRunBehavior(fixture.store, run.id);
+  const progress = runBehaviorProgress(fixture.store, run.id)!;
+  expect(progress.entries.map((entry) => entry.actionId)).toEqual([
+    'risu-lua-0-input',
+    'risu-lua-0-editInput',
+    'risu-lua-0-start',
+  ]);
+  // The reserved Run keeps the request the user submitted; only the projection carries the edit.
+  expect(fixture.store.run(run.id).snapshot).toEqual(reserved);
+  const prepared = preparedBehaviorSnapshot(fixture.store, run.id);
+  expect(prepared.request).toBe('Original request.');
+  expect(prepared.extensionRequestEdit).toMatchObject({
+    version: 1,
+    text: 'Original request. [checked]',
+  });
+  expect(prepared.behaviorExecution!.automaticResults.map((item) => item.actionId)).toEqual([
+    'risu-lua-0-input',
+    'risu-lua-0-start',
+  ]);
+  const compiled = JSON.stringify(compileSnapshotPrompt(prepared).promptCompilation!.messages);
+  expect(compiled).toContain('Original request. [checked]');
+  // Conversation reads keep the stored original, and the edit does not re-enter the prompt twice.
+  expect(compiled).toContain('START=Original request. INDEX=-1');
+  expect(compiled.split('Original request. [checked]')).toHaveLength(2);
+  fixture.store.completeRun(
+    run.id,
+    'Response.',
+    { modelCalls: 0, inputTokens: null, outputTokens: null, costUsd: null },
+    run.snapshot.settings
+  );
+  expect(fixture.store.run(run.id).request).toBe('Original request.');
+  const sourceId = fixture.store.product.branch(fixture.chat.id).headRevision!;
+  const presentation = await injectWithFixtureBot(fixture.app, {
+    method: 'GET',
+    url: `/api/chats/${fixture.chat.id}/sources/${sourceId}/presentation`,
+  });
+  expect(presentation.statusCode).toBe(200);
+  expect(presentation.json()).toMatchObject({
+    request: { text: 'Original request.' },
+    inputTransform: { text: 'Original request. [checked]', changed: true },
+  });
+  expect(database().store.product.import(fixture.store.product.export())).toMatchObject({
+    restored: true,
+  });
+  const copy = importChatBackup(fixture.store, {
+    backup: exportChatBackup(fixture.store, fixture.chat.id),
+    idempotencyKey: 'edit-input-copy',
+  });
+  expect(copy.chat.id).not.toBe(fixture.chat.id);
+  expect(execute).toHaveBeenCalledTimes(3);
+});
+
+test('an editInput result that is not bounded text keeps the submitted request', async () => {
+  const fixture = imported(
+    'listenEdit("editInput", function(id, value) return {replaced = value} end)'
+  );
+  const run = generation(fixture, 'Keep this request.');
+  await prepareAutomaticRunBehavior(fixture.store, run.id);
+  const progress = runBehaviorProgress(fixture.store, run.id)!;
+  expect(progress.preparation).toMatchObject({
+    status: 'failed',
+    code: 'BEHAVIOR_EDIT_RESULT_VALUE',
+  });
+  const prepared = preparedBehaviorSnapshot(fixture.store, run.id);
+  expect(prepared.request).toBe('Keep this request.');
+  expect(prepared.extensionRequestEdit).toBeUndefined();
+  expect(JSON.stringify(compileSnapshotPrompt(prepared).promptCompilation!.messages)).toContain(
+    'Keep this request.'
+  );
+  fixture.store.completeRun(
+    run.id,
+    'Main response survives.',
+    { modelCalls: 0, inputTokens: null, outputTokens: null, costUsd: null },
+    run.snapshot.settings
+  );
   expect(database().store.product.import(fixture.store.product.export())).toMatchObject({
     restored: true,
   });
@@ -293,6 +389,7 @@ test('Risu import and passive restores preserve native Lua actions and source by
     ['risu-lua-0-output', ['after-turn'], 'lua'],
     ['risu-lua-0-start', ['before-turn'], 'lua'],
     ['risu-lua-0-onButtonClick', ['user'], 'lua'],
+    ['risu-lua-0-editInput', ['before-turn'], 'lua'],
   ]);
   expect(
     fixture.content.package!.behavior!.actions.every(
@@ -310,6 +407,7 @@ test('Risu import and passive restores preserve native Lua actions and source by
     .snapshot(fixture.chat.id)!
     .packages!.find((pkg) => pkg.id === fixture.content.id)!;
   expect(restoredPackage.behavior!.actions.map((action) => action.program?.language)).toEqual([
+    'lua',
     'lua',
     'lua',
     'lua',
@@ -457,7 +555,11 @@ end`,
   expect(JSON.stringify(prepared.promptCompilation!.messages)).toContain('PHASE=start');
   await prepareAfterResponse(fixture.store, run.id, 'Synthetic response.');
   const progress = runBehaviorProgress(fixture.store, run.id)!;
-  expect(progress.entries.map((entry) => entry.trigger)).toEqual(['before-turn', 'before-turn']);
+  expect(progress.entries.map((entry) => entry.trigger)).toEqual([
+    'before-turn',
+    'before-turn',
+    'before-turn',
+  ]);
   expect(progress.afterResponse!.packages[0].entries.map((entry) => entry.trigger)).toEqual([
     'after-turn',
   ]);
