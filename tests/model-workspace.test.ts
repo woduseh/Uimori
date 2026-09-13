@@ -214,7 +214,7 @@ test('the optional extension model stays outside task routes and freezes its cur
   });
 });
 
-function extensionPackage(capability: boolean) {
+function extensionPackage(capability: boolean, variableWrite = false) {
   return {
     version: 1 as const,
     id: 'placeholder',
@@ -239,7 +239,14 @@ function extensionPackage(capability: boolean) {
           program: {
             api: EXTENSION_PROGRAM_API,
             source: 'return {state: api.state, result: {ok: true}};',
-            ...(capability ? { capabilities: ['model.generate' as const] } : {}),
+            ...(capability || variableWrite
+              ? {
+                  capabilities: [
+                    ...(capability ? ['model.generate' as const] : []),
+                    ...(variableWrite ? ['variables.write' as const] : []),
+                  ],
+                }
+              : {}),
           },
         },
       ],
@@ -334,12 +341,112 @@ test('extension grants bind to one attached package revision, do not roll forwar
         [instanceId]: { packageRevision: revised.revision, capabilities: ['model.generate'] },
       },
     })
-  ).toThrow('Invalid extension model grant');
+  ).toThrow('Invalid extension grant');
   const removed = attach(
     stale,
     stale.packageAttachments?.filter((item) => item.id !== content.id)
   );
   expect(removed.extensionGrants).toBeUndefined();
+});
+
+test('extension grants accept unique requested capabilities and preserve unchanged stale authority', () => {
+  const store = database(),
+    chat = createFixtureChat(store, 'Extension variable grant'),
+    content = store.product.content({
+      kind: 'module',
+      title: 'Variable extension package',
+      description: 'Synthetic extension grant fixture',
+      text: '',
+      loading: 'pinned',
+      relatedIds: [],
+      package: extensionPackage(true, true),
+    }) as Content;
+  const attachment = { id: content.id, revision: content.revision, role: 'module' as const };
+  const initial = store.product.profile(chat.id);
+  const attached = store.product.updateProfile(chat.id, {
+    expectedRevision: initial.revision,
+    attachments: initial.attachments,
+    image: initial.image,
+    packageAttachments: [...(initial.packageAttachments ?? []), attachment],
+  });
+  const instanceId = packageInstanceId(attachment);
+  const grant = (capabilities: unknown[]) => ({
+    [instanceId]: { packageRevision: content.revision, capabilities },
+  });
+  const granted = store.product.updateProfile(chat.id, {
+    expectedRevision: attached.revision,
+    attachments: attached.attachments,
+    image: attached.image,
+    packageAttachments: attached.packageAttachments,
+    extensionGrants: grant(['model.generate', 'variables.write']),
+  });
+  expect(granted.extensionGrants?.[instanceId]).toEqual({
+    packageRevision: content.revision,
+    capabilities: ['model.generate', 'variables.write'],
+  });
+  for (const capabilities of [[], ['variables.write', 'variables.write'], ['variables.read']])
+    expect(() =>
+      store.product.updateProfile(chat.id, {
+        expectedRevision: granted.revision,
+        attachments: granted.attachments,
+        image: granted.image,
+        packageAttachments: granted.packageAttachments,
+        extensionGrants: grant(capabilities),
+      })
+    ).toThrow('Invalid extension');
+
+  const revised = store.product.content(
+    {
+      kind: content.kind,
+      title: content.title,
+      description: content.description,
+      text: content.text,
+      loading: content.loading,
+      relatedIds: content.relatedIds,
+      package: extensionPackage(true),
+      expectedRevision: content.revision,
+    },
+    content.id
+  ) as Content;
+  const stale = store.product.updateProfile(chat.id, {
+    expectedRevision: granted.revision,
+    attachments: granted.attachments,
+    image: granted.image,
+    packageAttachments: granted.packageAttachments?.map((item) =>
+      item.id === content.id ? { ...item, revision: revised.revision } : item
+    ),
+  });
+  expect(stale.extensionGrants?.[instanceId]).toEqual(granted.extensionGrants?.[instanceId]);
+  expect(() =>
+    store.product.updateProfile(chat.id, {
+      expectedRevision: stale.revision,
+      attachments: stale.attachments,
+      image: stale.image,
+      packageAttachments: stale.packageAttachments,
+      extensionGrants: {
+        [instanceId]: {
+          packageRevision: revised.revision,
+          capabilities: ['variables.write'],
+        },
+      },
+    })
+  ).toThrow('Invalid extension grant');
+  const currentModelOnly = store.product.updateProfile(chat.id, {
+    expectedRevision: stale.revision,
+    attachments: stale.attachments,
+    image: stale.image,
+    packageAttachments: stale.packageAttachments,
+    extensionGrants: {
+      [instanceId]: {
+        packageRevision: revised.revision,
+        capabilities: ['model.generate'],
+      },
+    },
+  });
+  expect(currentModelOnly.extensionGrants?.[instanceId]).toEqual({
+    packageRevision: revised.revision,
+    capabilities: ['model.generate'],
+  });
 });
 
 test('current global selection is shared, CAS protected and frozen in prior Runs and reservations', () => {

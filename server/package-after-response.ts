@@ -28,6 +28,13 @@ import {
 } from './package-behavior-run.js';
 import { behaviorPayloadHash } from './package-behavior-store.js';
 import type { Run, Store } from './store.js';
+import {
+  variableStateFromProfile,
+  profileWithExtensionVariables,
+  projectExtensionVariableMutation,
+  assertExtensionVariableWriteAccess,
+  adoptExtensionVariableMutation,
+} from './extension-variables.js';
 
 const DEADLINE_MS = 10_000;
 const active = new WeakMap<
@@ -219,6 +226,7 @@ export async function prepareAfterResponse(
           if (d.behavior.mode !== 'annotation') authoritativeFailure = true;
         }
       }
+      let variables = variableStateFromProfile(snapshot.profile);
       for (const d of hooks) {
         assertOwner();
         if (skipped()) return;
@@ -232,6 +240,7 @@ export async function prepareAfterResponse(
           after: structuredClone(before),
           entries: [],
         };
+        let packageVariables = structuredClone(variables);
         try {
           if (authoritativeFailure || parserFailures.has(d.instanceId))
             throw new ExtensionProgramError('BEHAVIOR_AFTER_RESPONSE_PARSER_FAILED');
@@ -240,9 +249,11 @@ export async function prepareAfterResponse(
             if (skipped()) return;
             if (expired) throw new ExtensionProgramError('BEHAVIOR_AFTER_RESPONSE_TIMEOUT');
             const input = action.automaticInput ?? {};
+            const profile = profileWithExtensionVariables(snapshot.profile, packageVariables);
             const hostRuntime = executionContext(
               {
                 ...snapshot,
+                profile,
                 packageStates: parserStates.map((state) =>
                   state.instanceId === d.instanceId ? receipt.after : state
                 ),
@@ -287,9 +298,11 @@ export async function prepareAfterResponse(
               controller.signal,
               {
                 waitForSlot: true,
-                profile: snapshot.profile,
+                profile,
                 attachment: d.ref,
                 assertCurrent,
+                assertVariableWriteAccess: () =>
+                  assertExtensionVariableWriteAccess(store, profile, d.ref, action.program!),
                 modelServices: services,
                 responseHost: response,
                 hostWaitMs: services
@@ -335,6 +348,11 @@ export async function prepareAfterResponse(
               program,
             });
             receipt.after = after;
+            if (program.variables)
+              packageVariables = projectExtensionVariableMutation(
+                packageVariables,
+                program.variables
+              );
             // Guest receipts include host context; bound the whole cohort, not just one result.
             if (receipt.entries.length > 100 || JSON.stringify(receipt).length > 1_000_000)
               throw new ExtensionProgramError('BEHAVIOR_AFTER_RESPONSE_RECEIPT_LIMIT');
@@ -361,6 +379,7 @@ export async function prepareAfterResponse(
           receipt.after = structuredClone(before);
           receipt.entries = [];
         }
+        if (receipt.status === 'ready') variables = packageVariables;
         progress.packages.push(receipt);
         progress.completed++;
         persist();
@@ -447,6 +466,23 @@ export function commitAfterResponseInstance(
       sourceHash,
       `after:${run.id}:${behaviorPayloadHash(JSON.stringify([instanceId, entry.actionId]))}`
     );
+    if (entry.program.variables) {
+      if (Object.keys(entry.program.variables.changes).length)
+        assertExtensionVariableWriteAccess(
+          store,
+          run.snapshot.profile,
+          definition.ref,
+          definition.actions[actionIndex].program!
+        );
+      adoptExtensionVariableMutation(
+        store,
+        run.chatId,
+        scope.branchId,
+        sourceHash,
+        `after-vars:${run.id}:${behaviorPayloadHash(JSON.stringify([instanceId, entry.actionId]))}`,
+        entry.program.variables
+      );
+    }
     expected = entry.after;
   }
   if (!isDeepStrictEqual(expected, receipt.after)) fail('BEHAVIOR_AFTER_RESPONSE_RECEIPT_INVALID');

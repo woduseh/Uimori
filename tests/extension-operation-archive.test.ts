@@ -41,7 +41,7 @@ function database() {
   stores.push({ store, directory });
   return store;
 }
-function fixture() {
+function fixture(variableCapability?: 'variables.read' | 'variables.write') {
   const store = database(),
     input = fixtureBotInput();
   input.package.behavior = {
@@ -58,7 +58,7 @@ function fixture() {
         effects: [],
         program: {
           api: 'uimori-state-action-v1',
-          capabilities: ['model.generate'],
+          capabilities: ['model.generate', ...(variableCapability ? [variableCapability] : [])],
           source: 'throw new Error("archive must never execute");',
         },
       },
@@ -70,6 +70,13 @@ function fixture() {
   const profile = store.product.snapshot(chat.id, 'inspect'),
     ref = profile.packageAttachments![0],
     pkg = profile.packages!.find((p) => p.id === ref.id)!;
+  if (variableCapability === 'variables.write')
+    profile.extensionGrants = {
+      [`${ref.id}:${ref.role}`]: {
+        packageRevision: ref.revision,
+        capabilities: ['variables.write'],
+      },
+    };
   const snapshot: ExtensionOperationSnapshot = {
     version: 1,
     scope: {
@@ -315,6 +322,112 @@ test.each([1, 11])(
     ).toThrow('Archive data or references invalid');
   }
 );
+
+test.each(['variables.read', 'variables.write'] as const)(
+  'unadopted %s receipts validate frozen permissions and base without live grants',
+  (capability) => {
+    const { store, chat, operation, pkg } = fixture(capability);
+    const claimed = claimExtensionOperation(store, operation.id, 'variables-owner')!;
+    const changes: Record<string, string | null> =
+      capability === 'variables.write' ? { phase: 'written' } : {};
+    const result = {
+      state: { n: 1 },
+      result: 'unadopted',
+      engine: 'synthetic',
+      programHash: behaviorPayloadHash(pkg.behavior!.actions[0].program),
+      variables: {
+        beforeRevision: 0,
+        beforeHash: behaviorPayloadHash({ revision: 0, values: {} }),
+        changes,
+      },
+    };
+    store.transaction(() =>
+      finishExtensionOperationInTransaction(
+        store,
+        claimed,
+        'failed',
+        result,
+        { modelCalls: 0, inputTokens: null, outputTokens: null, costUsd: null },
+        'BEHAVIOR_STATE_STALE'
+      )
+    );
+    expect(store.product.profile(chat.id).extensionGrants ?? {}).toEqual({});
+    const archive = store.product.export();
+    database().product.import(archive);
+    const backup = exportChatBackup(store, chat.id);
+    expect(importChatBackup(store, { backup, idempotencyKey: 'variables-copy' }).created).toBe(
+      true
+    );
+    for (const change of ['hash', 'permission']) {
+      const forged = structuredClone(archive),
+        row = forged.tables.package_extension_operations[0];
+      if (change === 'hash') {
+        const value = JSON.parse(row.result);
+        value.variables.beforeHash = 'f'.repeat(64);
+        row.result = JSON.stringify(value);
+      } else {
+        const value = JSON.parse(row.snapshot);
+        if (capability === 'variables.write') value.profile.extensionGrants = {};
+        else {
+          const outcome = JSON.parse(row.result);
+          outcome.variables.changes = { phase: 'forged write' };
+          row.result = JSON.stringify(outcome);
+        }
+        row.snapshot = JSON.stringify(value);
+      }
+      const target = database();
+      expect(() => target.product.import(forged)).toThrow();
+      expect(target.chats()).toEqual([]);
+    }
+  }
+);
+
+test('standalone ui variable receipts require declared capability and captured runtime revision without live grants', () => {
+  const { store, operation, snapshot, command, pkg } = fixture('variables.read');
+  const claimed = claimExtensionOperation(store, operation.id, 'ui-owner')!;
+  const result = {
+    state: { n: 1 },
+    result: 'read',
+    engine: 'synthetic',
+    programHash: behaviorPayloadHash(pkg.behavior!.actions[0].program),
+    variables: {
+      beforeRevision: 0,
+      beforeHash: behaviorPayloadHash({ revision: 0, values: {} }),
+      changes: {},
+    },
+  };
+  store.transaction(() => {
+    store.behavior.executeInTransaction(
+      snapshot.scope,
+      pkg.behavior!,
+      command,
+      snapshot.runtime,
+      result
+    );
+    finishExtensionOperationInTransaction(
+      store,
+      claimed,
+      'completed',
+      result,
+      { modelCalls: 0, inputTokens: null, outputTokens: null, costUsd: null },
+      null
+    );
+  });
+  const archive = store.product.export();
+  database().product.import(archive);
+  archive.tables.package_extension_operations = [];
+  database().product.import(archive);
+  for (const change of ['revision', 'capability']) {
+    const forged = structuredClone(archive),
+      row = forged.tables.package_behavior_journal[0],
+      payload = JSON.parse(row.payload);
+    if (change === 'revision') payload.program.variables.beforeRevision = 1;
+    else payload.program.variables.changes = { phase: 'not declared' };
+    row.payload = JSON.stringify(payload);
+    row.payload_hash = behaviorPayloadHash(payload);
+    expect(() => database().product.import(forged)).toThrow('program receipt');
+  }
+});
 
 test('an operation cannot claim failure while its ui action journal records adoption', () => {
   const { store, chat, operation, snapshot, command, pkg } = fixture();

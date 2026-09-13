@@ -1007,6 +1007,56 @@ function BehaviorEditor({
                     </label>
                     <label className="check behavior-method-choice">
                       <SelectionCheckbox
+                        checked={action.program.capabilities?.includes('variables.read') ?? false}
+                        onChange={(e) =>
+                          updateAction(index, {
+                            program: {
+                              ...action.program!,
+                              capabilities: [
+                                ...(action.program!.capabilities ?? []).filter(
+                                  (item) => item !== 'variables.read'
+                                ),
+                                ...(e.target.checked ? ['variables.read' as const] : []),
+                              ],
+                            },
+                          })
+                        }
+                      />
+                      <span>
+                        공유 변수 읽기
+                        <small>
+                          이 행동이 실행되는 채팅 분기의 공유 변수 고정 사본을 코드에서 읽을 수
+                          있어요. 정확히 장착된 이 자료의 실행 범위에만 제공해요.
+                        </small>
+                      </span>
+                    </label>
+                    <label className="check behavior-method-choice">
+                      <SelectionCheckbox
+                        checked={action.program.capabilities?.includes('variables.write') ?? false}
+                        onChange={(e) =>
+                          updateAction(index, {
+                            program: {
+                              ...action.program!,
+                              capabilities: [
+                                ...(action.program!.capabilities ?? []).filter(
+                                  (item) => item !== 'variables.write'
+                                ),
+                                ...(e.target.checked ? ['variables.write' as const] : []),
+                              ],
+                            },
+                          })
+                        }
+                      />
+                      <span>
+                        공유 변수 변경 요청
+                        <small>
+                          코드가 현재 채팅 분기의 공유 변수 변경을 요청할 수 있어요. 사용할 채팅에서
+                          이 자료의 현재 버전에 변경 권한을 별도로 허용해야 해요.
+                        </small>
+                      </span>
+                    </label>
+                    <label className="check behavior-method-choice">
+                      <SelectionCheckbox
                         checked={action.program.capabilities?.includes('model.generate') ?? false}
                         onChange={(e) =>
                           updateAction(index, {

@@ -517,12 +517,22 @@ export function validatePackageBehaviorArchive(store: Store): void {
         // Restore verifies the accepted host receipt and committed values. It intentionally does
         // not execute untrusted guest source, so the archive is not semantic re-evaluation proof.
         try {
-          validateExtensionProgramReceipt(payload.program, {
+          const receipt = validateExtensionProgramReceipt(payload.program, {
             programHash: behaviorPayloadHash(action.program),
             stateSchema: b.stateSchema,
             state: r.state,
             result: r.actionResult,
           });
+          if (r.provenance === 'ui-action' && receipt.variables) {
+            const capability = Object.keys(receipt.variables.changes).length
+              ? 'variables.write'
+              : 'variables.read';
+            if (
+              !action.program.capabilities?.includes(capability) ||
+              receipt.variables.beforeRevision !== (hostRuntime.variableStateRevision ?? 0)
+            )
+              reject('user variable receipt');
+          }
         } catch {
           reject('program receipt');
         }
@@ -646,12 +656,13 @@ export function validatePackageBehaviorArchive(store: Store): void {
       } else if (payload.mode === 'program') {
         if (!b.migration || !Object.hasOwn(r, 'actionResult')) reject('upgrade program');
         try {
-          validateExtensionProgramReceipt(payload.program, {
+          const receipt = validateExtensionProgramReceipt(payload.program, {
             programHash: behaviorPayloadHash(b.migration),
             stateSchema: b.stateSchema,
             state: r.state,
             result: r.actionResult,
           });
+          if (receipt.variables) reject('migration variable receipt');
         } catch {
           reject('upgrade program receipt');
         }

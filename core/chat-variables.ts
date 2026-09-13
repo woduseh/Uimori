@@ -6,6 +6,13 @@ export interface ChatVariableState {
   values: Record<string, string>;
 }
 
+/** One invocation's Host-authored read dependency and staged writes; null removes an override. */
+export type ChatVariableMutation = {
+  beforeRevision: number;
+  beforeHash: string;
+  changes: Record<string, string | null>;
+};
+
 export const CHAT_VARIABLE_LIMITS = {
   maxEntries: 2000,
   maxValueChars: 200_000,
@@ -54,4 +61,42 @@ export function validateChatVariableState(value: unknown): ChatVariableState {
   const values = validateChatVariableValues(descriptors.values.value);
   if (revision === 0 && Object.keys(values).length) evaluationFail('CHAT_VARIABLE_STATE_INVALID');
   return { revision, values };
+}
+
+export function validateChatVariableMutation(value: unknown): ChatVariableMutation {
+  const fail = (): never => evaluationFail('CHAT_VARIABLE_MUTATION_INVALID');
+  if (!value || typeof value !== 'object' || Array.isArray(value)) fail();
+  if (![Object.prototype, null].includes(Object.getPrototypeOf(value))) fail();
+  const fields = Object.getOwnPropertyDescriptors(value);
+  if (Reflect.ownKeys(value as object).length !== 3) fail();
+  for (const key of ['beforeRevision', 'beforeHash', 'changes'])
+    if (!fields[key] || !Object.hasOwn(fields[key], 'value') || !fields[key].enumerable) fail();
+  const beforeRevision = fields.beforeRevision.value;
+  const beforeHash = fields.beforeHash.value;
+  if (
+    !Number.isSafeInteger(beforeRevision) ||
+    beforeRevision < 0 ||
+    typeof beforeHash !== 'string' ||
+    !/^[a-f0-9]{64}$/u.test(beforeHash)
+  )
+    fail();
+  const changes = fields.changes.value;
+  inspectRuntimeValue(
+    changes,
+    new PromptBudget(
+      {
+        maxCollectionLength: CHAT_VARIABLE_LIMITS.maxEntries,
+        maxValueChars: CHAT_VARIABLE_LIMITS.maxTotalChars,
+      },
+      'deterministic'
+    )
+  );
+  if (!changes || typeof changes !== 'object' || Array.isArray(changes)) fail();
+  for (const text of Object.values(changes))
+    if (
+      text !== null &&
+      (typeof text !== 'string' || text.length > CHAT_VARIABLE_LIMITS.maxValueChars)
+    )
+      fail();
+  return { beforeRevision, beforeHash, changes: structuredClone(changes) };
 }

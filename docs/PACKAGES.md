@@ -38,7 +38,7 @@ DB schema와 전체 archive의 현재 버전은 [현재 계약](../project-plan/
 - `body`, 선택적 `identity: {name, description}`, 선택적 `roleBindings`는 원문 그대로 보관해요. 역할별 binding은 작성자가 직접 넣는 지침이에요.
 - 선택적 `bodyTemplate`와 로어의 `template`은 기존 `PromptTemplate` AST로 선택한 봇·페르소나 이름과 자료 옵션을 읽어요. 허용된 context는 `bot.name`·`user.name`·`variables`이며 외부 slot·상태·시간은 읽지 않아요. 저장 문자열과 AST는 보존하고 새 예약·조회·원문 시점의 보조 처리에는 같은 고정 문맥을 사용해요. 직접 본문 편집이나 채팅 로어 text override는 해당 AST를 해제하여 사용자 글을 적용해요. 템플릿 처리 실패는 원문으로 되돌리고 `PACKAGE_TEXT_TEMPLATE_FALLBACK`으로 알려요.
 - 선택적 `variableDefaults: {values: Record<string,string>, attachmentRoles?: PackageRole[]}`는 [공통 템플릿 기본 변수](PROMPT-RUNTIME.md#템플릿-기본-변수)를 선언해요. 상태 초기화나 쓰기 권한을 부여하지 않으며 선언한 역할로 장착했을 때만 읽기 기본값에 참여해요. 일반 JSON 편집·자료 이동·Run의 고정 profile에 함께 보존돼요.
-- 사용자가 명시 편집한 [분기 공유 변수](PROMPT-RUNTIME.md#분기-공유-변수)는 봇·모듈·main 프리셋의 기본값보다 우선하고 같은 고정 Run 문맥에서 템플릿·지침·패널에 적용돼요. 패키지별 행동 상태와 섞지 않으며, 가져온 trigger·Lua·Host의 공유 변수 쓰기는 아직 연결하지 않았어요.
+- 사용자가 명시 편집한 [분기 공유 변수](PROMPT-RUNTIME.md#분기-공유-변수)는 봇·모듈·main 프리셋의 기본값보다 우선하고 같은 고정 Run 문맥에서 템플릿·지침·패널에 적용돼요. 패키지별 행동 상태와 섞지 않으며, 제작자 행동은 명시 허용된 [공유 변수 Host API](EXTENSION-PROGRAMS.md#host-api로-분기-공유-변수-읽기와-쓰기)로 같은 값을 변경해요. 가져온 trigger·Lua 어댑터는 아직 연결하지 않았어요.
 - 로어는 패키지 내부 배열이에요. `pinned`는 고정 공급, `discoverable`은 모델이 검색·조회할 자료예요. 내부 `relatedIds`는 같은 패키지의 실제 로어 ID만 참조해요. Risu 트리거 키를 자동 실행하지 않아요.
 - `loreContext`로 고정 로어의 배경/장면 배치·그룹·순서를 정해요. 실제 읽은 자동 로어의 다음 턴 유지와 정리 정책은 [로어 문맥](LORE-CONTEXT.md)에 있어요.
 - `instructions.target`은 `main`, `translation`, `state`, `status`, `image` 중 하나예요. `attachmentRoles`로 적용할 부착 역할을 선택할 수 있어요. 생략하면 모든 부착 역할에 적용돼요.

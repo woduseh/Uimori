@@ -6,11 +6,20 @@ export const EXTENSION_PROGRAM_MAX_SOURCE_CHARS = 64 * 1024;
 export const EXTENSION_PROGRAM_MAX_RESULT_CHARS = 8_000;
 /** JSON character cap; the guest runtime separately enforces a stricter 128 KiB UTF-8 cap. */
 export const EXTENSION_PROGRAM_MAX_VALUE_CHARS = 128 * 1024;
+export const EXTENSION_CAPABILITIES = [
+  'materials.read.self',
+  'model.generate',
+  'response.read.current',
+  'variables.read',
+  'variables.write',
+] as const;
+export const EXTENSION_GRANT_CAPABILITIES = ['model.generate', 'variables.write'] as const;
+export type ExtensionGrantCapability = (typeof EXTENSION_GRANT_CAPABILITIES)[number];
 
 export interface ExtensionProgram {
   api: typeof EXTENSION_PROGRAM_API;
   /** Requested native capabilities. The host independently binds their scope per invocation. */
-  capabilities?: ('materials.read.self' | 'model.generate' | 'response.read.current')[];
+  capabilities?: (typeof EXTENSION_CAPABILITIES)[number][];
   /** Function body evaluated by a host-owned isolated guest runtime. */
   source: string;
 }
@@ -24,6 +33,8 @@ export interface ExtensionProgramResult {
 export interface ResolvedExtensionProgram extends ExtensionProgramResult {
   programHash: string;
   engine: string;
+  /** Added only by the Host broker; a guest cannot return effects or authority. */
+  variables?: import('./chat-variables.js').ChatVariableMutation;
 }
 
 export interface ExtensionProgramReceipt extends ResolvedExtensionProgram {
@@ -86,12 +97,9 @@ export function validateExtensionProgram(value: unknown): ExtensionProgram {
     }
     if (
       !Array.isArray(program.capabilities) ||
-      program.capabilities.length > 3 ||
+      program.capabilities.length > EXTENSION_CAPABILITIES.length ||
       new Set(program.capabilities).size !== program.capabilities.length ||
-      program.capabilities.some(
-        (capability) =>
-          !['materials.read.self', 'model.generate', 'response.read.current'].includes(capability)
-      )
+      program.capabilities.some((capability) => !EXTENSION_CAPABILITIES.includes(capability))
     )
       fail('BEHAVIOR_PROGRAM_CAPABILITIES');
   }

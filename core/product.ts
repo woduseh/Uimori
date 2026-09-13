@@ -212,7 +212,13 @@ export type ChatProfile = {
   packageAttachments?: import('./content-package.js').PackageAttachment[];
   packageValues?: Record<string, Record<string, import('./prompt-program.js').PromptValue>>;
   /** User grants keyed by the chat-local package instance ID. A grant binds one exact revision. */
-  extensionGrants?: Record<string, { packageRevision: number; capabilities: 'model.generate'[] }>;
+  extensionGrants?: Record<
+    string,
+    {
+      packageRevision: number;
+      capabilities: import('./extension-program.js').ExtensionGrantCapability[];
+    }
+  >;
 };
 export type ProfileSnapshot = ChatProfile & {
   /** Branch overrides frozen at reservation; absent in historical snapshots. */

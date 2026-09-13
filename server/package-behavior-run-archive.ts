@@ -29,6 +29,14 @@ import type {
 } from './package-behavior-run.js';
 import { preparedBehaviorSnapshot } from './package-behavior-run.js';
 import type { Run, Store } from './store.js';
+import { validateChatVariableState } from '../core/chat-variables.js';
+import {
+  profileWithExtensionVariables,
+  projectExtensionVariableMutation,
+  variableStateFromProfile,
+  validateExtensionVariablePermission,
+} from './extension-variables.js';
+import { resolveTemplateVariableContext } from '../core/template-variables.js';
 
 export const packageBehaviorRunTables = [
   'package_behavior_entropy',
@@ -266,6 +274,7 @@ function validateAfterResponseProgress(
       parserStates[index] = before;
     }
 
+  let variableState = progress.variableState ?? variableStateFromProfile(snapshot.profile);
   for (const [packageIndex, rawPackage] of receipt.packages.entries()) {
     const definition = hooks[packageIndex];
     if (!definition) reject('after-response package count');
@@ -332,6 +341,7 @@ function validateAfterResponseProgress(
       const expectedRuntime = executionContext(
         {
           ...projectedSnapshot,
+          profile: profileWithExtensionVariables(projectedSnapshot.profile, variableState),
           packageStates: parserStates.map((state) =>
             state.instanceId === definition.instanceId ? current : state
           ),
@@ -364,6 +374,8 @@ function validateAfterResponseProgress(
         same(entry.hostRuntime.packages, expectedRuntime.packages, 'after-response packages');
       same(entry.hostRuntime.package, expectedRuntime.package, 'after-response package');
       same(entry.hostRuntime.options, expectedRuntime.options, 'after-response options');
+      for (const field of ['variables', 'variableStateRevision', 'variableDefaultsError'])
+        same(entry.hostRuntime[field], expectedRuntime[field], 'after-response variables');
       try {
         validateBehaviorValue(action.inputSchema, entry.input);
         if (!behaviorActionAllowed(action, current.state, entry.input, entry.hostRuntime))
@@ -374,6 +386,15 @@ function validateAfterResponseProgress(
           state: entryAfter.state,
           result: entry.result,
         });
+        if (entry.program.variables) {
+          validateExtensionVariablePermission(
+            entry.program.variables,
+            snapshot.profile,
+            definition.ref,
+            action.program
+          );
+          variableState = projectExtensionVariableMutation(variableState, entry.program.variables);
+        }
       } catch {
         reject('after-response program receipt');
       }
@@ -416,6 +437,13 @@ export function validateRunBehaviorArchive(store: Store, checkState: CheckState)
     }
     list(value.entries);
     const seen = new Set<string>();
+    const owner = store.db
+      .prepare(
+        "SELECT snapshot FROM runs WHERE json_extract(snapshot,'$.behaviorExecution.opportunityId')=? ORDER BY created_at,id LIMIT 1"
+      )
+      .get(row.id);
+    const ownerSnapshot = owner ? (JSON.parse(String(owner.snapshot)) as RunSnapshot) : undefined;
+    let opportunityVariables = variableStateFromProfile(ownerSnapshot?.profile);
     for (const raw of value.entries) {
       const entry = object(
         raw,
@@ -462,6 +490,17 @@ export function validateRunBehaviorArchive(store: Store, checkState: CheckState)
         reject('action permission');
       behaviorRecord(entry.hostRuntime);
       inspectRuntimeValue(entry.hostRuntime);
+      if (ownerSnapshot) {
+        const variables = resolveTemplateVariableContext(
+          profileWithExtensionVariables(ownerSnapshot.profile, opportunityVariables)
+        );
+        for (const field of [
+          'variables',
+          'variableStateRevision',
+          'variableDefaultsError',
+        ] as const)
+          same(entry.hostRuntime[field], variables[field], 'opportunity variable dependency');
+      }
       behaviorRecord(entry.draws);
       try {
         validateBehaviorValue(action.inputSchema, entry.input);
@@ -499,6 +538,23 @@ export function validateRunBehaviorArchive(store: Store, checkState: CheckState)
             state: after.state,
             result: entry.result,
           });
+          if (entry.program.variables) {
+            if (!ownerSnapshot) reject('variable opportunity owner');
+            const ref = ownerSnapshot.profile?.packageAttachments?.find(
+              (ref) => `${ref.id}:${ref.role}` === entry.instanceId
+            );
+            if (!ref) reject('opportunity variable attachment');
+            validateExtensionVariablePermission(
+              entry.program.variables,
+              ownerSnapshot.profile,
+              ref,
+              action.program
+            );
+            opportunityVariables = projectExtensionVariableMutation(
+              opportunityVariables,
+              entry.program.variables
+            );
+          }
         } catch {
           reject('program receipt');
         }
@@ -528,7 +584,7 @@ export function validateRunBehaviorArchive(store: Store, checkState: CheckState)
     const value = object(
       body(row),
       ['version', 'opportunityId', 'entries', 'states'],
-      ['preparation', 'afterResponse']
+      ['preparation', 'afterResponse', 'variableState']
     );
     if (value.version !== 1 || execution.version !== 1) reject('version');
     digest(value.opportunityId);
@@ -594,6 +650,8 @@ export function validateRunBehaviorArchive(store: Store, checkState: CheckState)
     if (new Set(base.map((state) => state.instanceId)).size !== base.length)
       reject('duplicate base state');
     let modelSeen = false;
+    let variableState = variableStateFromProfile(snapshot.profile);
+    let variablesUsed = snapshot.profile?.variableState !== undefined;
     for (const raw of value.entries) {
       const entry = object(
         raw,
@@ -634,10 +692,35 @@ export function validateRunBehaviorArchive(store: Store, checkState: CheckState)
         reject('frozen permission');
       const index = states.findIndex((state) => state.instanceId === entry.instanceId);
       if (index < 0) reject('state missing');
-      const runtime = executionContext({ ...snapshot, packageStates: states }, 'main', ref);
+      const runtime = executionContext(
+        {
+          ...snapshot,
+          profile: profileWithExtensionVariables(snapshot.profile, variableState),
+          packageStates: states,
+        },
+        'main',
+        ref
+      );
       same(entry.hostRuntime.packages, runtime.packages, 'package dependency projection');
       same(entry.hostRuntime.package, runtime.package, 'selected package projection');
       same(entry.hostRuntime.options, runtime.options, 'selected options');
+      for (const field of ['variables', 'variableStateRevision', 'variableDefaultsError'])
+        same(entry.hostRuntime[field], runtime[field], 'variable dependency projection');
+      if (entry.program?.variables) {
+        try {
+          if (!action.program) reject('variable program missing');
+          validateExtensionVariablePermission(
+            entry.program.variables,
+            snapshot.profile,
+            ref,
+            action.program
+          );
+          variableState = projectExtensionVariableMutation(variableState, entry.program.variables);
+        } catch {
+          reject('variable state chain');
+        }
+        variablesUsed = true;
+      }
       same(states[index], entry.before, 'progress state chain');
       states[index] = structuredClone(entry.after);
       if (entry.trigger === 'before-turn') {
@@ -656,6 +739,9 @@ export function validateRunBehaviorArchive(store: Store, checkState: CheckState)
       }
     }
     same(states, value.states, 'progress states');
+    if (variablesUsed)
+      same(validateChatVariableState(value.variableState), variableState, 'progress variables');
+    else if (Object.hasOwn(value, 'variableState')) reject('unexpected progress variables');
     const afterResponseReceipt = Object.hasOwn(value, 'afterResponse')
       ? validateAfterResponseProgress(
           store,

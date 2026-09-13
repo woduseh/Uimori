@@ -8,11 +8,64 @@ import type { PackageRequest } from '../core/package-request.js';
 import { behaviorPayloadHash, type BehaviorJournalResult } from './package-behavior-store.js';
 import type { Content } from '../core/product.js';
 import type { Store } from './store.js';
+import type { TemplateVariableContext } from '../core/template-variables.js';
+import {
+  validateChatVariableMutation,
+  validateChatVariableValues,
+} from '../core/chat-variables.js';
 
 type Row = Record<string, any>;
 const reject = (message: string): never => {
   throw new HttpError(409, message);
 };
+function variableContext(value: unknown, rawMutation: unknown): TemplateVariableContext {
+  const mutation = validateChatVariableMutation(rawMutation);
+  if (!value || typeof value !== 'object' || Array.isArray(value))
+    reject('PACKAGE_REQUEST_VARIABLE_CONTEXT_INVALID');
+  const prototype = Object.getPrototypeOf(value),
+    descriptors = Object.getOwnPropertyDescriptors(value);
+  if (
+    (prototype !== Object.prototype && prototype !== null) ||
+    Reflect.ownKeys(value as object).some(
+      (key) =>
+        typeof key !== 'string' ||
+        !['variables', 'variableStateRevision', 'variableDefaultsError'].includes(key)
+    ) ||
+    Object.values(descriptors).some((field) => !field.enumerable || !Object.hasOwn(field, 'value'))
+  )
+    reject('PACKAGE_REQUEST_VARIABLE_CONTEXT_INVALID');
+  const context = value as TemplateVariableContext;
+  if (
+    !Number.isSafeInteger(context.variableStateRevision) ||
+    context.variableStateRevision !== mutation.beforeRevision + 1 ||
+    !Object.keys(mutation.changes).length ||
+    Object.hasOwn(context, 'variables') === Object.hasOwn(context, 'variableDefaultsError')
+  )
+    reject('PACKAGE_REQUEST_VARIABLE_CONTEXT_INVALID');
+  if (Object.hasOwn(context, 'variableDefaultsError')) {
+    if (context.variableDefaultsError !== 'TEMPLATE_VARIABLE_DEFAULTS_LIMIT')
+      reject('PACKAGE_REQUEST_VARIABLE_CONTEXT_INVALID');
+  } else {
+    const values = validateChatVariableValues(context.variables);
+    for (const [key, text] of Object.entries(mutation.changes))
+      if (text !== null && (!Object.hasOwn(values, key) || values[key] !== text))
+        reject('PACKAGE_REQUEST_VARIABLE_CONTEXT_INVALID');
+  }
+  return structuredClone(context);
+}
+function requestRuntime(
+  runtime: Record<string, RuntimeValue>,
+  context?: TemplateVariableContext
+): Record<string, RuntimeValue> {
+  if (context === undefined) return runtime;
+  const {
+    variables: _variables,
+    variableStateRevision: _revision,
+    variableDefaultsError: _error,
+    ...rest
+  } = runtime;
+  return { ...rest, ...context };
+}
 export function initPackageRequests(store: Store) {
   store.db.exec(`CREATE TABLE IF NOT EXISTS package_requests(
     id TEXT PRIMARY KEY,chat_id TEXT NOT NULL REFERENCES chats(id),branch_id TEXT NOT NULL REFERENCES branches(id),
@@ -63,7 +116,8 @@ export function reservePackageRequestInTransaction(
   action: BehaviorAction,
   receipt: BehaviorJournalResult,
   input: RuntimeValue,
-  hostRuntime: Record<string, RuntimeValue>
+  hostRuntime: Record<string, RuntimeValue>,
+  capturedVariables?: TemplateVariableContext
 ): PackageRequest {
   const cached = store.db
     .prepare(
@@ -73,6 +127,18 @@ export function reservePackageRequestInTransaction(
     | Row
     | undefined;
   if (cached) return JSON.parse(cached.body);
+  let variables: TemplateVariableContext | undefined;
+  if (capturedVariables !== undefined) {
+    const journal = store.db
+      .prepare(
+        'SELECT payload FROM package_behavior_journal WHERE chat_id=? AND branch_id=? AND instance_id=? AND idempotency_key=?'
+      )
+      .get(receipt.chatId, receipt.branchId, receipt.attachmentInstanceId, receipt.idempotencyKey);
+    variables = variableContext(
+      capturedVariables,
+      journal ? JSON.parse(String(journal.payload)).program?.variables : undefined
+    );
+  }
   const branch = store.product.branch(receipt.chatId, receipt.branchId),
     profile = store.product.profile(receipt.chatId);
   const source = branch.headRevision ? store.source(branch.headRevision) : null;
@@ -86,12 +152,13 @@ export function reservePackageRequestInTransaction(
     instanceId: receipt.attachmentInstanceId,
     actionId: action.id,
     actionKey: receipt.idempotencyKey,
-    request: projectPackageRequest(action, receipt, input, hostRuntime),
+    request: projectPackageRequest(action, receipt, input, requestRuntime(hostRuntime, variables)),
     label: action.label || action.id,
     profileRevision: profile.revision,
     sourceRevision: source?.id ?? null,
     sourceHash: source?.hash ?? null,
     stateRevision: receipt.stateRevision,
+    ...(variables === undefined ? {} : { variableContext: variables }),
   };
   const replaced = store.db
     .prepare("SELECT id FROM package_requests WHERE chat_id=? AND branch_id=? AND status='pending'")
@@ -236,6 +303,7 @@ export function validatePackageRequests(store: Store) {
       'sourceHash',
       'stateRevision',
       ...(Object.hasOwn(value ?? {}, 'origin') ? ['origin'] : []),
+      ...(Object.hasOwn(value ?? {}, 'variableContext') ? ['variableContext'] : []),
     ];
     if (
       !value ||
@@ -373,9 +441,21 @@ export function validatePackageRequests(store: Store) {
       payload.hostRuntime?.sourceDependenciesHash !== behaviorPayloadHash(runtimeOwner.dependencies)
     )
       invalid();
+    let variables: TemplateVariableContext | undefined;
+    if (Object.hasOwn(value, 'variableContext')) {
+      try {
+        variables = variableContext(value.variableContext, payload.program?.variables);
+      } catch {
+        invalid();
+      }
+    }
     if (
-      projectPackageRequest(action!, receipt, payload.input, payload.hostRuntime) !==
-        value.request ||
+      projectPackageRequest(
+        action!,
+        receipt,
+        payload.input,
+        requestRuntime(payload.hostRuntime, variables)
+      ) !== value.request ||
       value.label !== (action!.label || action!.id)
     )
       invalid();

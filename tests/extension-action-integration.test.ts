@@ -20,6 +20,8 @@ import { forkChat } from '../server/chat-fork.js';
 import { EXTENSION_PROGRAM_API } from '../core/extension-program.js';
 import type { RuntimeValue } from '../core/prompt-values.js';
 import * as extensionRuntime from '../server/extension-runtime.js';
+import { readChatVariables, writeChatVariables } from '../server/chat-variables.js';
+import { exportChatBackup, importChatBackup } from '../server/chat-backup.js';
 
 const owned: { store: Store; app: FastifyInstance; dir: string }[] = [];
 
@@ -135,9 +137,8 @@ function packageDefinition(): ContentPackage {
   });
 }
 
-function fixture() {
+function fixture(pkg = packageDefinition()) {
   const { dir, store, app } = database();
-  const pkg = packageDefinition();
   const content = store.product.content({
     kind: 'bot',
     title: pkg.title,
@@ -190,6 +191,118 @@ function postAction(f: Fixture, payload: Record<string, unknown>) {
     payload,
   });
 }
+
+test('user variable mutation reserves the adopted next request once and preserves its projection through archive and chat backup', async () => {
+  const pkg = packageDefinition(),
+    action = pkg.behavior!.actions[0];
+  pkg.variableDefaults = { values: { fallback: 'authored default' } };
+  action.inputSchema = {
+    type: 'record',
+    properties: {
+      amount: { type: 'number', min: 1, max: 100, integer: true },
+      target: { type: 'string', maxLength: 200 },
+    },
+  };
+  action.program = {
+    api: EXTENSION_PROGRAM_API,
+    capabilities: ['variables.read', 'variables.write'],
+    source:
+      'await api.host.call("variables.set", {key:"target",value:api.input.target}); await api.host.call("variables.delete", {key:"fallback"}); return {state:{count:api.state.count+api.input.amount}, result:null};',
+  };
+  action.nextRequest = {
+    op: 'join',
+    args: [
+      {
+        op: 'array',
+        args: [{ context: ['variables', 'target'] }, { context: ['variables', 'fallback'] }],
+      },
+      '|',
+    ],
+  };
+  const f = fixture(pkg),
+    profile = f.store.product.profile(f.chat.id);
+  f.store.product.updateProfile(f.chat.id, {
+    expectedRevision: profile.revision,
+    attachments: profile.attachments,
+    packageAttachments: profile.packageAttachments,
+    image: profile.image,
+    extensionGrants: {
+      [f.instanceId]: { packageRevision: f.content.revision, capabilities: ['variables.write'] },
+    },
+  });
+  writeChatVariables(f.store, f.chat.id, f.branchId, {
+    expectedRevision: 0,
+    expectedSourceHash: null,
+    idempotencyKey: 'request-variable-base',
+    values: { target: 'before', fallback: 'temporary override' },
+  });
+  // ID-shaped text is user data and must not change when backup ownership IDs are remapped.
+  const payload = command(f, 'compute', { amount: 1, target: f.chat.id }, 'variable-next-request');
+  const first = await postAction(f, payload);
+  expect(first.statusCode, first.body).toBe(200);
+  const request = first.json().pendingRequest;
+  expect(request).toMatchObject({
+    request: `${f.chat.id}|authored default`,
+    variableContext: {
+      variableStateRevision: 2,
+      variables: { target: f.chat.id, fallback: 'authored default' },
+    },
+  });
+  expect(readChatVariables(f.store, f.chat.id, f.branchId)).toEqual({
+    revision: 2,
+    values: { target: f.chat.id },
+  });
+  const replay = await postAction(f, payload);
+  expect(replay.statusCode, replay.body).toBe(200);
+  expect(replay.json().pendingRequest).toEqual(request);
+  expect(readChatVariables(f.store, f.chat.id, f.branchId).revision).toBe(2);
+  expect(f.store.db.prepare('SELECT count(*) AS n FROM package_requests').get()!.n).toBe(1);
+  const archive = f.store.product.export(),
+    restored = database();
+  restored.store.product.import(archive);
+  expect(behaviorDetail(restored.store, f.chat.id).pendingRequest).toEqual(request);
+  expect(readChatVariables(restored.store, f.chat.id, f.branchId)).toEqual({
+    revision: 2,
+    values: { target: f.chat.id },
+  });
+  for (const alter of [
+    (context: any) => {
+      context.variableStateRevision++;
+    },
+    (context: any) => {
+      context.variables.target = 'forged';
+    },
+    (context: any) => {
+      context.variableDefaultsError = 'TEMPLATE_VARIABLE_DEFAULTS_LIMIT';
+    },
+    (context: any) => {
+      context.extra = true;
+    },
+    (context: any) => {
+      context.variables.target = 'x'.repeat(200001);
+    },
+  ]) {
+    const changed = structuredClone(archive),
+      row = changed.tables.package_requests[0],
+      body = JSON.parse(row.body);
+    alter(body.variableContext);
+    row.body = JSON.stringify(body);
+    const target = database(),
+      before = target.store.product.export().tables;
+    expect(() => target.store.product.import(changed)).toThrow();
+    expect(target.store.product.export().tables).toEqual(before);
+  }
+  const copied = importChatBackup(f.store, {
+    backup: exportChatBackup(f.store, f.chat.id),
+    idempotencyKey: 'copy-variable-request',
+  });
+  const imported = behaviorDetail(f.store, copied.chat.id).pendingRequest;
+  expect(imported?.request).toBe(request.request);
+  expect(imported?.variableContext).toEqual(request.variableContext);
+  expect(
+    readChatVariables(f.store, copied.chat.id, f.store.product.branch(copied.chat.id).id)
+  ).toEqual({ revision: 2, values: { target: f.chat.id } });
+});
 
 function createPendingRun(f: Fixture): Run {
   const chat = f.store.chat(f.chat.id);

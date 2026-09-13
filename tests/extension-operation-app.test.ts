@@ -17,6 +17,7 @@ import { extensionOperation } from '../server/extension-operations.js';
 import { updateModelWorkspace, modelWorkspace } from '../server/prompt-workspace.js';
 import { exportChatBackup, importChatBackup } from '../server/chat-backup.js';
 import * as extensionRuntime from '../server/extension-runtime.js';
+import { readChatVariables } from '../server/chat-variables.js';
 
 const MAIN_MODEL_ID = 'fixture-extension-main';
 const EXTENSION_MODEL_ID = 'fixture-extension-host';
@@ -48,7 +49,7 @@ afterEach(async () => {
   }
 });
 
-function definition(): ContentPackage {
+function definition(sharedVariables = false): ContentPackage {
   return {
     version: 1,
     id: 'extension-model-app-fixture',
@@ -77,9 +78,16 @@ function definition(): ContentPackage {
           effects: [],
           program: {
             api: EXTENSION_PROGRAM_API,
-            capabilities: ['model.generate'],
+            capabilities: [
+              'model.generate',
+              ...(sharedVariables ? ['variables.read' as const, 'variables.write' as const] : []),
+            ],
             source:
-              'const generated = await api.host.call("model.generate", {prompt: "Return one synthetic token."}); return {state: {count: generated.status === "completed" ? api.state.count + 1 : api.state.count}, result: generated};',
+              'const generated = await api.host.call("model.generate", {prompt: "Return one synthetic token."});' +
+              (sharedVariables
+                ? 'await api.host.call("variables.set", {key: "generated", value: generated.text}); const shared = await api.host.call("variables.read", {key: "generated"}); if (shared.value !== generated.text) throw new Error("staged variable missing");'
+                : '') +
+              'return {state: {count: generated.status === "completed" ? api.state.count + 1 : api.state.count}, result: generated};',
           },
         },
       ],
@@ -88,7 +96,7 @@ function definition(): ContentPackage {
   };
 }
 
-type FixtureOptions = { maxCalls?: number; holdExtension?: boolean };
+type FixtureOptions = { maxCalls?: number; holdExtension?: boolean; sharedVariables?: boolean };
 
 async function fixture(options: FixtureOptions = {}) {
   let app: App | undefined;
@@ -125,7 +133,7 @@ async function fixture(options: FixtureOptions = {}) {
   });
   owned.push({ directory, app, closeProvider: provider.close });
   await app.ready();
-  const pkg = definition();
+  const pkg = definition(options.sharedVariables);
   const content = app.store.product.content({
     kind: 'bot',
     title: pkg.title,
@@ -178,7 +186,13 @@ async function fixture(options: FixtureOptions = {}) {
     packageAttachments: profile.packageAttachments,
     image: false,
     extensionGrants: {
-      [instanceId]: { packageRevision: attachment.revision, capabilities: ['model.generate'] },
+      [instanceId]: {
+        packageRevision: attachment.revision,
+        capabilities: [
+          'model.generate',
+          ...(options.sharedVariables ? ['variables.write' as const] : []),
+        ],
+      },
     },
   });
   return {
@@ -254,69 +268,89 @@ function count(store: Store, table: 'runs' | 'sources' | 'package_behavior_journ
   return Number(store.db.prepare(`SELECT count(*) AS n FROM ${table}`).get()!.n);
 }
 
-test('user button completes through the local provider and existing state journal without creating prose', async () => {
-  const f = await fixture({ maxCalls: 1 });
-  const payload = command(f);
-  const admitted = await action(f, payload);
-  expect(admitted.statusCode, admitted.body).toBe(200);
-  const id = admitted.json().operation.operationId as string;
-  const result = await operationTerminal(f, id);
-  expect(result.status, result.error ?? '').toBe('completed');
-  expect(result.usage).toMatchObject({ modelCalls: 1, inputTokens: 6, outputTokens: 4 });
-  expect(state(f)).toMatchObject({ stateRevision: 1, state: { count: 1 } });
-  expect(count(f.app.store, 'package_behavior_journal')).toBe(1);
-  expect(count(f.app.store, 'runs')).toBe(0);
-  expect(count(f.app.store, 'sources')).toBe(0);
-  expect(
-    f.app.store.db
-      .prepare(
-        'SELECT a.run_id,a.job_id FROM attempts a JOIN package_extension_operation_attempts e ON e.attempt_id=a.id WHERE e.operation_id=?'
-      )
-      .get(id)
-  ).toMatchObject({ run_id: null, job_id: null });
-  const repeated = await action(f, payload);
-  expect(repeated.statusCode, repeated.body).toBe(200);
-  expect(repeated.json().operation).toEqual({ operationId: id, reused: true });
-  const changed = await action(f, { ...payload, expectedStateRevision: 1 });
-  expect(changed.statusCode).toBe(409);
-  expect(f.provider.requests).toHaveLength(1);
-  const metadata = await f.app.inject({
-    method: 'GET',
-    url: `/api/chats/${f.chat.id}/package-behaviors`,
-  });
-  expect(metadata.json().operations).toEqual([
-    expect.objectContaining({
-      id,
-      status: 'completed',
-      usage: expect.objectContaining({ modelCalls: 1 }),
-    }),
-  ]);
-  const publicResult = await f.app.inject({
-    method: 'GET',
-    url: `/api/chats/${f.chat.id}/extension-operations/${id}?includeResult=1`,
-  });
-  expect(Object.keys(publicResult.json()).sort()).toEqual([
-    'error',
-    'generation',
-    'hasResult',
-    'id',
-    'result',
-    'status',
-  ]);
-  const copied = importChatBackup(f.app.store, {
-    backup: exportChatBackup(f.app.store, f.chat.id),
-    idempotencyKey: randomUUID(),
-  });
-  expect(behaviorDetail(f.app.store, copied.chat.id).instances[0]).toMatchObject({
-    state: { count: 1 },
-  });
-  expect(
-    f.app.store.db
-      .prepare('SELECT status FROM package_extension_operations WHERE chat_id=?')
-      .get(copied.chat.id)
-  ).toMatchObject({ status: 'completed' });
-  expect(f.provider.requests).toHaveLength(1);
-});
+test.each([false, true])(
+  'user button completes through the local provider and existing state journal without creating prose (shared variables: %s)',
+  async (sharedVariables) => {
+    const f = await fixture({ maxCalls: 1, sharedVariables });
+    const payload = command(f);
+    const admitted = await action(f, payload);
+    expect(admitted.statusCode, admitted.body).toBe(200);
+    const id = admitted.json().operation.operationId as string;
+    const result = await operationTerminal(f, id);
+    expect(result.status, result.error ?? '').toBe('completed');
+    expect(result.usage).toMatchObject({ modelCalls: 1, inputTokens: 6, outputTokens: 4 });
+    expect(state(f)).toMatchObject({ stateRevision: 1, state: { count: 1 } });
+    const variableState = sharedVariables
+      ? { revision: 1, values: { generated: EXTENSION_TEXT } }
+      : { revision: 0, values: {} };
+    expect(
+      readChatVariables(f.app.store, f.chat.id, f.app.store.product.branch(f.chat.id).id)
+    ).toEqual(variableState);
+    expect(count(f.app.store, 'package_behavior_journal')).toBe(1);
+    expect(count(f.app.store, 'runs')).toBe(0);
+    expect(count(f.app.store, 'sources')).toBe(0);
+    expect(
+      f.app.store.db
+        .prepare(
+          'SELECT a.run_id,a.job_id FROM attempts a JOIN package_extension_operation_attempts e ON e.attempt_id=a.id WHERE e.operation_id=?'
+        )
+        .get(id)
+    ).toMatchObject({ run_id: null, job_id: null });
+    const repeated = await action(f, payload);
+    expect(repeated.statusCode, repeated.body).toBe(200);
+    expect(repeated.json().operation).toEqual({ operationId: id, reused: true });
+    expect(
+      readChatVariables(f.app.store, f.chat.id, f.app.store.product.branch(f.chat.id).id)
+    ).toEqual(variableState);
+    expect(
+      f.app.store.db
+        .prepare('SELECT count(*) AS n FROM chat_variable_journal WHERE chat_id=?')
+        .get(f.chat.id)!.n
+    ).toBe(sharedVariables ? 1 : 0);
+    const changed = await action(f, { ...payload, expectedStateRevision: 1 });
+    expect(changed.statusCode).toBe(409);
+    expect(f.provider.requests).toHaveLength(1);
+    const metadata = await f.app.inject({
+      method: 'GET',
+      url: `/api/chats/${f.chat.id}/package-behaviors`,
+    });
+    expect(metadata.json().operations).toEqual([
+      expect.objectContaining({
+        id,
+        status: 'completed',
+        usage: expect.objectContaining({ modelCalls: 1 }),
+      }),
+    ]);
+    const publicResult = await f.app.inject({
+      method: 'GET',
+      url: `/api/chats/${f.chat.id}/extension-operations/${id}?includeResult=1`,
+    });
+    expect(Object.keys(publicResult.json()).sort()).toEqual([
+      'error',
+      'generation',
+      'hasResult',
+      'id',
+      'result',
+      'status',
+    ]);
+    const copied = importChatBackup(f.app.store, {
+      backup: exportChatBackup(f.app.store, f.chat.id),
+      idempotencyKey: randomUUID(),
+    });
+    expect(behaviorDetail(f.app.store, copied.chat.id).instances[0]).toMatchObject({
+      state: { count: 1 },
+    });
+    expect(
+      readChatVariables(f.app.store, copied.chat.id, f.app.store.product.branch(copied.chat.id).id)
+    ).toEqual(variableState);
+    expect(
+      f.app.store.db
+        .prepare('SELECT status FROM package_extension_operations WHERE chat_id=?')
+        .get(copied.chat.id)
+    ).toMatchObject({ status: 'completed' });
+    expect(f.provider.requests).toHaveLength(1);
+  }
+);
 
 test('model disabled after real guest completion leaves an unadopted result and settled usage', async () => {
   const f = await fixture();

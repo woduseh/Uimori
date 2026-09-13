@@ -29,6 +29,7 @@ await runBrowserVerification({
     'PANELUI01',
     'PANELUI02',
     'EXTPANELUI01',
+    'VARWRITEUI01',
     'PROGTOOLUI01',
     'PROGPREPUI01',
     'RISUPRESETUI01',
