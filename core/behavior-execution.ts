@@ -7,4 +7,6 @@ export interface BehaviorRunSnapshot {
   opportunityId: string;
   baseStates: PackageExecutionState[];
   automaticResults: { instanceId: string; actionId: string; result: RuntimeValue }[];
+  /** Reserved at admission when the complete before-turn cohort needs asynchronous preparation. */
+  deferredAutomatic?: true;
 }

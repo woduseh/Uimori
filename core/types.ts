@@ -223,6 +223,13 @@ export type ChatDetail = {
 export type ReaderRun = Omit<Run, 'snapshot' | 'inputs' | 'toolEvents'> & {
   /** Metadata only; excluded package state and instruction bodies stay in explicit diagnostics. */
   hasPackageIssues?: boolean;
+  /** Bounded progress projection; extension code, state and inputs remain in explicit diagnostics. */
+  packagePreparation?: {
+    status: 'pending' | 'running' | 'ready' | 'failed' | 'skipped';
+    completed: number;
+    total: number;
+    code?: string;
+  };
   statePreparation?: {
     status: import('./story.js').StoryPreparation['status'];
     reason?: string;

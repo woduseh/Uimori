@@ -867,7 +867,6 @@ function BehaviorEditor({
                 {actionMethods.map((method) => (
                   <label className="check behavior-method-choice" key={method.id}>
                     <SelectionCheckbox
-                      disabled={!!action.program && method.id === 'before-turn'}
                       checked={triggers.includes(method.id)}
                       onChange={(e) => toggleMethod(index, action, method.id, e.target.checked)}
                     />
@@ -879,8 +878,9 @@ function BehaviorEditor({
                 ))}
                 {action.program && (
                   <small>
-                    코드 계산은 사용자 버튼이나 모델 요청으로 실행하며 이 자료의 상태와 입력만
-                    사용해요. 모델 요청의 상태 변경은 원문 생성이 끝나면 반영해요.
+                    코드 계산은 사용자 버튼, 생성 전 자동 행동 또는 모델 요청에서 실행해요. 이
+                    자료의 상태와 입력만 코드에 전달하며 자동 행동은 준비가 모두 끝난 뒤 원문 생성을
+                    시작해요.
                   </small>
                 )}
                 {triggers.includes('before-turn') && (

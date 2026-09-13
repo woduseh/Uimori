@@ -8,8 +8,21 @@ import {
 } from './package-behavior-host.js';
 import type { BehaviorActionCommand } from './package-behavior-store.js';
 import { cancelPackageRequest } from './package-requests.js';
+import { skipAutomaticRunBehavior } from './package-behavior-run.js';
 
-export function packageBehaviorRoutes(app: FastifyInstance, store: Store) {
+export function packageBehaviorRoutes(
+  app: FastifyInstance,
+  store: Store,
+  publish?: (chatId: string) => void
+) {
+  app.post<{ Params: { id: string } }>(
+    '/api/runs/:id/skip-package-preparation',
+    async (request) => {
+      const result = skipAutomaticRunBehavior(store, request.params.id, request.body);
+      publish?.(store.run(request.params.id).chatId);
+      return result;
+    }
+  );
   app.delete<{ Params: { id: string; requestId: string } }>(
     '/api/chats/:id/package-requests/:requestId',
     async (request) => {

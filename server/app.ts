@@ -28,8 +28,14 @@ import {
   contextSourceRefs,
   validateContextPlan,
   candidateCompilationSnapshot,
+  persistedContextSnapshot,
 } from './context-planning.js';
-import { executeRunBehaviorTool } from './package-behavior-run.js';
+import {
+  executeRunBehaviorTool,
+  prepareAutomaticRunBehavior,
+  preparedBehaviorSnapshot,
+} from './package-behavior-run.js';
+import { freezeLoreContext } from './lore-context.js';
 import { runAuxiliaryJob } from './product-auxiliary.js';
 import { auxiliaryBridge } from './auxiliary-bridge.js';
 import { productRoutes } from './product-routes.js';
@@ -549,6 +555,9 @@ export async function createApp(options: AppOptions): Promise<App> {
           requireModel(run.snapshot.profile?.models.main, 'main');
           publish(run.chatId);
           await controls.wait('run', controller.signal);
+          await prepareAutomaticRunBehavior(store, id, controller.signal, () =>
+            publish(run.chatId)
+          );
           const hooks: MainHooks = {
             signal: controller.signal,
             onResponseProgress: response.progress,
@@ -600,31 +609,48 @@ export async function createApp(options: AppOptions): Promise<App> {
             },
             onAttemptFinish: (attempt, result) => store.product.finishAttempt(attempt, result),
           };
-          let executionSnapshot = run.snapshot;
-          if (executionSnapshot.contextPlan) {
-            const assertCurrent = () => {
-              if (controller.signal.aborted || store.run(id).status !== 'running')
-                throw new Error('CONTEXT_CANCELLED');
-              if (
-                store.product.branch(run.chatId, run.snapshot.branchId).headRevision !==
-                  run.parentRevision ||
-                JSON.stringify(contextSourceRefs(run.snapshot)) !==
-                  JSON.stringify(
-                    contextSourceRefs({
-                      ...run.snapshot,
-                      history: store.history(run.parentRevision),
-                    })
-                  ) ||
-                (run.snapshot.story &&
-                  store.story.notes.canonHash({
-                    chatId: run.chatId,
-                    history: run.snapshot.history,
-                  }) !== run.snapshot.story.canonHash)
-              )
-                throw new Error('CONTEXT_DEPENDENCIES_CHANGED');
-            };
+          const assertCurrent = () => {
+            if (controller.signal.aborted || store.run(id).status !== 'running')
+              throw new Error('CONTEXT_CANCELLED');
+            if (
+              store.product.branch(run.chatId, run.snapshot.branchId).headRevision !==
+                run.parentRevision ||
+              JSON.stringify(contextSourceRefs(run.snapshot)) !==
+                JSON.stringify(
+                  contextSourceRefs({
+                    ...run.snapshot,
+                    history: store.history(run.parentRevision),
+                  })
+                ) ||
+              (run.snapshot.story &&
+                store.story.notes.canonHash({
+                  chatId: run.chatId,
+                  history: run.snapshot.history,
+                }) !== run.snapshot.story.canonHash)
+            )
+              throw new Error('CONTEXT_DEPENDENCIES_CHANGED');
+          };
+          const reservedCompilationSnapshot = candidateCompilationSnapshot(store, run.snapshot, id);
+          let executionSnapshot = preparedBehaviorSnapshot(store, id, run.snapshot),
+            compilationSnapshot = preparedBehaviorSnapshot(store, id, reservedCompilationSnapshot);
+          if (run.snapshot.behaviorExecution?.deferredAutomatic && !executionSnapshot.contextPlan) {
             assertCurrent();
-            const compilationSnapshot = candidateCompilationSnapshot(store, executionSnapshot, id);
+            executionSnapshot = freezeLoreContext(store, executionSnapshot);
+            compilationSnapshot =
+              reservedCompilationSnapshot === run.snapshot
+                ? executionSnapshot
+                : freezeLoreContext(store, compilationSnapshot);
+            const contextBase = run.snapshot.contextBase;
+            executionSnapshot = store.context.prepareRun(executionSnapshot);
+            compilationSnapshot =
+              reservedCompilationSnapshot === run.snapshot
+                ? executionSnapshot
+                : store.context.prepareRun(compilationSnapshot);
+            executionSnapshot.contextBase = contextBase;
+            compilationSnapshot.contextBase = contextBase;
+          }
+          if (executionSnapshot.contextPlan) {
+            assertCurrent();
             const reuse =
               executionSnapshot.candidateOf &&
               executionSnapshot.contextPlan.status === 'ready' &&
@@ -646,13 +672,16 @@ export async function createApp(options: AppOptions): Promise<App> {
                     store.transaction(() => {
                       assertCurrent();
                       const current = store.run(id);
-                      store.db
-                        .prepare('UPDATE runs SET snapshot=?,updated_at=? WHERE id=?')
-                        .run(
-                          JSON.stringify({ ...current.snapshot, contextPlan: plan }),
-                          new Date().toISOString(),
-                          id
-                        );
+                      store.db.prepare('UPDATE runs SET snapshot=?,updated_at=? WHERE id=?').run(
+                        JSON.stringify(
+                          persistedContextSnapshot(current.snapshot, {
+                            ...executionSnapshot,
+                            contextPlan: plan,
+                          })
+                        ),
+                        new Date().toISOString(),
+                        id
+                      );
                       store.event(run.chatId, 'run.context.updated', id);
                     });
                     publish(run.chatId);
@@ -669,7 +698,13 @@ export async function createApp(options: AppOptions): Promise<App> {
                 validateContextPlan(prepared.snapshot);
                 store.db
                   .prepare('UPDATE runs SET snapshot=?,updated_at=? WHERE id=?')
-                  .run(JSON.stringify(prepared.snapshot), new Date().toISOString(), id);
+                  .run(
+                    JSON.stringify(
+                      persistedContextSnapshot(store.run(id).snapshot, prepared.snapshot)
+                    ),
+                    new Date().toISOString(),
+                    id
+                  );
                 store.event(run.chatId, 'run.context.updated', id);
               });
               executionSnapshot = prepared.snapshot;

@@ -76,6 +76,19 @@ export function candidateCompilationSnapshot(
   return original === snapshot ? snapshot : { ...snapshot, branchId: original.branchId };
 }
 
+/** Persist context work without replacing the immutable behavior reservation with its runtime view. */
+export function persistedContextSnapshot(
+  reserved: RunSnapshot,
+  prepared: RunSnapshot
+): RunSnapshot {
+  const persisted = { ...prepared };
+  for (const key of ['packageStates', 'behaviorExecution', 'packageBehaviorUnavailable'] as const) {
+    if (key in reserved) persisted[key] = structuredClone(reserved[key]) as never;
+    else delete persisted[key];
+  }
+  return persisted;
+}
+
 const hash = (value: unknown) => createHash('sha256').update(JSON.stringify(value)).digest('hex');
 export const contextSourceRefs = (snapshot: RunSnapshot) =>
   snapshot.history.map((source) => ({

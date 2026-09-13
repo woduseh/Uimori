@@ -36,6 +36,7 @@ import type { ToolAction } from '../core/provider.js';
 import type { RunSnapshot, ToolEvent } from '../core/types.js';
 import { behaviorPayloadHash, recordDraws } from './package-behavior-store.js';
 import type { Run, Store } from './store.js';
+import { fields, record, text, HttpError } from './request-validation.js';
 
 export type RunBehaviorEntry = {
   instanceId: string;
@@ -55,6 +56,13 @@ export type RunBehaviorProgress = {
   opportunityId: string;
   entries: RunBehaviorEntry[];
   states: PackageExecutionState[];
+  preparation?: {
+    status: 'pending' | 'running' | 'ready' | 'failed' | 'skipped';
+    completed: number;
+    total: number;
+    code?: string;
+    skipKey?: string;
+  };
 };
 export type OpportunityEntropy = { opportunityId: string; seed: string };
 type Opportunity = {
@@ -111,6 +119,13 @@ function definitions(snapshot: RunSnapshot) {
         },
       ];
     });
+}
+function automaticActions(snapshot: RunSnapshot) {
+  return definitions(snapshot).flatMap((d) =>
+    d.behavior.actions
+      .filter((action) => behaviorActionTriggers(action).includes('before-turn'))
+      .map((action) => ({ ...d, action }))
+  );
 }
 export function runBehaviorProgress(store: Store, runId: string): RunBehaviorProgress | undefined {
   const row = store.db
@@ -375,12 +390,7 @@ function prepareRunBehaviorInTransaction(
   runId: string,
   snapshot: RunSnapshot
 ): RunSnapshot {
-  const defs = definitions(snapshot),
-    automatic = defs.flatMap((d) =>
-      d.behavior.actions
-        .filter((a) => behaviorActionTriggers(a).includes('before-turn'))
-        .map((action) => ({ ...d, action }))
-    );
+  const automatic = automaticActions(snapshot);
   const modelTools = listBehaviorTools(snapshot);
   assertBehaviorToolCapability(snapshot, modelTools);
   if (!automatic.length && !modelTools.length) return snapshot;
@@ -420,6 +430,20 @@ function prepareRunBehaviorInTransaction(
     states: structuredClone(baseStates),
   };
   const automaticResults: { instanceId: string; actionId: string; result: RuntimeValue }[] = [];
+  if (automatic.some((d) => d.action.program)) {
+    progress.preparation = { status: 'pending', completed: 0, total: automatic.length };
+    saveProgress(store, runId, progress);
+    return {
+      ...snapshot,
+      behaviorExecution: {
+        version: 1,
+        opportunityId,
+        baseStates,
+        automaticResults,
+        deferredAutomatic: true,
+      },
+    };
+  }
   for (const d of automatic) {
     const input = d.action.automaticInput ?? {};
     const before = progress.states.find((s) => s.instanceId === d.instanceId)!;
@@ -456,11 +480,25 @@ export function copyCandidateBehavior(
   if (!snapshot.behaviorExecution) return;
   const previous = runBehaviorProgress(store, original.id);
   if (!previous) fail('BEHAVIOR_RUN_JOURNAL_MISSING');
+  const automaticEntries = previous!.entries.filter((e) => e.trigger === 'before-turn');
+  const states = structuredClone(snapshot.behaviorExecution.baseStates);
+  for (const entry of automaticEntries)
+    states[states.findIndex((s) => s.instanceId === entry.instanceId)] = structuredClone(
+      entry.after
+    );
+  const preparation = previous!.preparation;
   saveProgress(store, newRunId, {
     version: 1,
     opportunityId: previous!.opportunityId,
-    entries: previous!.entries.filter((e) => e.trigger === 'before-turn'),
-    states: structuredClone(snapshot.packageStates ?? []),
+    entries: automaticEntries,
+    states,
+    ...(preparation
+      ? {
+          preparation: ['pending', 'running'].includes(preparation.status)
+            ? { status: 'pending' as const, completed: 0, total: preparation.total }
+            : structuredClone(preparation),
+        }
+      : {}),
   });
 }
 function validateOwner(store: Store, run: Run) {
@@ -495,6 +533,260 @@ function validateOwner(store: Store, run: Run) {
       fail('BEHAVIOR_STATE_STALE');
   }
 }
+/** The reserved Run stays immutable; derived preparation is applied only to an execution view. */
+export function preparedBehaviorSnapshot(
+  store: Store,
+  runId: string,
+  base = store.run(runId).snapshot
+): RunSnapshot {
+  if (!base.behaviorExecution?.deferredAutomatic) return base;
+  const progress = runBehaviorProgress(store, runId);
+  if (!progress?.preparation) fail('BEHAVIOR_RUN_JOURNAL_MISSING');
+  const preparation = progress!.preparation!;
+  if (['pending', 'running'].includes(preparation.status)) fail('BEHAVIOR_PREPARATION_PENDING');
+  if (preparation.status !== 'ready') {
+    const refs = automaticActions(base).map((d) => d.ref);
+    if (!refs.length) return base;
+    return withoutPackageBehavior(
+      base,
+      refs,
+      'preparation',
+      preparation.code!,
+      base.behaviorExecution.baseStates
+    );
+  }
+  const entries = progress!.entries.filter((e) => e.trigger === 'before-turn');
+  const states = structuredClone(base.behaviorExecution.baseStates);
+  for (const entry of entries)
+    states[states.findIndex((s) => s.instanceId === entry.instanceId)] = structuredClone(
+      entry.after
+    );
+  const automaticResults = entries.map(({ instanceId, actionId, result }) => ({
+    instanceId,
+    actionId,
+    result,
+  }));
+  if (
+    isDeepStrictEqual(states, base.packageStates) &&
+    isDeepStrictEqual(automaticResults, base.behaviorExecution.automaticResults)
+  )
+    return base;
+  return {
+    ...base,
+    packageStates: states,
+    behaviorExecution: { ...base.behaviorExecution, automaticResults },
+    promptCompilation: undefined,
+  };
+}
+const automaticWork = new WeakMap<
+  Store,
+  Map<string, { controller: AbortController; work: Promise<void> }>
+>();
+function preparationProgress(store: Store, runId: string) {
+  const progress = runBehaviorProgress(store, runId);
+  if (!progress?.preparation) fail('BEHAVIOR_RUN_JOURNAL_MISSING');
+  return progress as RunBehaviorProgress & {
+    preparation: NonNullable<RunBehaviorProgress['preparation']>;
+  };
+}
+function notifyPreparation(store: Store, runId: string) {
+  const run = store.run(runId);
+  store.event(run.chatId, 'run.package-preparation', runId);
+}
+/** Close adoption promptly even if a future engine/host operation settles after cancellation. */
+async function cancellablePreparation<T>(work: Promise<T>, signal: AbortSignal): Promise<T> {
+  let abort!: () => void;
+  const cancelled = new Promise<never>((_resolve, reject) => {
+    abort = () => reject(new BehaviorError(409, 'BEHAVIOR_RUN_CANCELLED'));
+    if (signal.aborted) abort();
+    else signal.addEventListener('abort', abort, { once: true });
+  });
+  try {
+    return await Promise.race([work, cancelled]);
+  } finally {
+    signal.removeEventListener('abort', abort);
+  }
+}
+/** Sequential preparation of one dependency cohort. Successful prefixes are never published alone. */
+export async function prepareAutomaticRunBehavior(
+  store: Store,
+  runId: string,
+  signal?: AbortSignal,
+  onProgress?: () => void
+): Promise<void> {
+  const reserved = store.run(runId).snapshot;
+  if (!reserved.behaviorExecution?.deferredAutomatic) return;
+  let active = automaticWork.get(store);
+  if (!active) {
+    active = new Map();
+    automaticWork.set(store, active);
+  }
+  const existing = active.get(runId);
+  if (existing) return existing.work;
+  const controller = new AbortController();
+  const abort = () => controller.abort();
+  signal?.addEventListener('abort', abort, { once: true });
+  if (signal?.aborted) abort();
+  const work = (async () => {
+    const local = store.transaction(() => {
+      const run = store.run(runId);
+      const progress = preparationProgress(store, runId);
+      if (!['pending', 'running'].includes(progress.preparation.status)) return null;
+      validateOwner(store, run);
+      if (signal?.aborted) fail('BEHAVIOR_RUN_CANCELLED');
+      progress.preparation = { ...progress.preparation, status: 'running', completed: 0 };
+      saveProgress(store, runId, progress);
+      notifyPreparation(store, runId);
+      return structuredClone(progress);
+    });
+    if (!local) return;
+    onProgress?.();
+    try {
+      const actions = automaticActions(reserved);
+      for (const d of actions) {
+        const input = d.action.automaticInput ?? {};
+        const step = store.transaction(() => {
+          const current = preparationProgress(store, runId);
+          if (current.preparation.status !== 'running') return null;
+          if (controller.signal.aborted) fail('BEHAVIOR_RUN_CANCELLED');
+          validateOwner(store, store.run(runId));
+          const before = local.states.find((s) => s.instanceId === d.instanceId)!;
+          if (
+            !behaviorActionAllowed(
+              d.action,
+              before.state,
+              input,
+              executionContext({ ...reserved, packageStates: local.states }, 'main', d.ref)
+            )
+          )
+            return { skipped: true as const };
+          const resolution = actionResolution(
+            store,
+            reserved,
+            local,
+            d.ref,
+            d.action,
+            input,
+            'before-turn'
+          );
+          if (resolution.entry || !d.action.program) {
+            finishActionResolution(store, local, d.action, input, 'before-turn', resolution);
+            return { skipped: true as const };
+          }
+          return { program: d.action.program, state: resolution.before.state };
+        });
+        if (!step) return;
+        if ('program' in step) {
+          const output = await cancellablePreparation(
+            executeExtensionProgram(
+              step.program!,
+              { state: step.state!, input },
+              controller.signal,
+              { waitForSlot: true }
+            ),
+            controller.signal
+          );
+          const adopted = store.transaction(() => {
+            const current = preparationProgress(store, runId);
+            if (current.preparation.status !== 'running') return false;
+            if (controller.signal.aborted) fail('BEHAVIOR_RUN_CANCELLED');
+            validateOwner(store, store.run(runId));
+            resolveAction(store, reserved, local, d.ref, d.action, input, 'before-turn', {
+              ...output,
+              programHash: hash(step.program),
+            });
+            return true;
+          });
+          if (!adopted) return;
+        }
+        store.transaction(() => {
+          const current = preparationProgress(store, runId);
+          if (current.preparation.status !== 'running') return;
+          current.preparation.completed++;
+          saveProgress(store, runId, current);
+          notifyPreparation(store, runId);
+        });
+        onProgress?.();
+      }
+      store.transaction(() => {
+        const current = preparationProgress(store, runId);
+        if (current.preparation.status !== 'running') return;
+        if (controller.signal.aborted) fail('BEHAVIOR_RUN_CANCELLED');
+        validateOwner(store, store.run(runId));
+        saveProgress(store, runId, {
+          ...local,
+          preparation: {
+            status: 'ready',
+            completed: current.preparation.total,
+            total: current.preparation.total,
+          },
+        });
+        notifyPreparation(store, runId);
+      });
+      onProgress?.();
+    } catch (error) {
+      const skipped = preparationProgress(store, runId).preparation.status === 'skipped';
+      if (skipped && !signal?.aborted) return;
+      const recoverable =
+        error instanceof ExtensionProgramError || isRecoverableBehaviorExecutionError(error);
+      if (!recoverable && !signal?.aborted) throw error;
+      store.transaction(() => {
+        const current = preparationProgress(store, runId);
+        if (current.preparation.status !== 'running') return;
+        current.preparation = {
+          ...current.preparation,
+          status: 'failed',
+          code: signal?.aborted ? 'BEHAVIOR_RUN_CANCELLED' : (error as Error).message,
+        };
+        saveProgress(store, runId, current);
+        notifyPreparation(store, runId);
+      });
+      onProgress?.();
+      if (signal?.aborted) fail('BEHAVIOR_RUN_CANCELLED');
+    }
+  })();
+  active.set(runId, { controller, work });
+  try {
+    await work;
+  } finally {
+    signal?.removeEventListener('abort', abort);
+    if (active.get(runId)?.work === work) active.delete(runId);
+  }
+}
+export function skipAutomaticRunBehavior(store: Store, runId: string, value: unknown) {
+  const result = store.transaction(() => {
+    const body = record(value);
+    fields(body, ['chatId', 'branchId', 'expectedRevision', 'idempotencyKey']);
+    const run = store.run(runId);
+    const chatId = text(body.chatId, 'chat ID', 200),
+      branchId = text(body.branchId, 'branch ID', 200),
+      key = text(body.idempotencyKey, 'idempotency key', 200);
+    if (
+      chatId !== run.chatId ||
+      branchId !== (run.snapshot.branchId ?? `main:${run.chatId}`) ||
+      body.expectedRevision !== run.parentRevision
+    )
+      throw new HttpError(409, 'BEHAVIOR_PREPARATION_OWNER_MISMATCH');
+    const progress = preparationProgress(store, runId);
+    if (progress.preparation.skipKey === key)
+      return { skipped: true, preparation: progress.preparation };
+    if (!['pending', 'running'].includes(progress.preparation.status))
+      return { skipped: false, preparation: progress.preparation };
+    if (!['queued', 'running', 'waiting_for_state'].includes(run.status))
+      throw new HttpError(409, 'BEHAVIOR_PREPARATION_FINISHED');
+    progress.preparation = {
+      ...progress.preparation,
+      status: 'skipped',
+      code: 'BEHAVIOR_PREPARATION_SKIPPED',
+      skipKey: key,
+    };
+    saveProgress(store, runId, progress);
+    notifyPreparation(store, runId);
+    return { skipped: true, preparation: progress.preparation };
+  });
+  if (result.skipped) automaticWork.get(store)?.get(runId)?.controller.abort();
+  return result;
+}
 type ToolBinding = { instanceId: string; actionId: string };
 function behaviorToolContext(
   store: Store,
@@ -504,7 +796,8 @@ function behaviorToolContext(
   signal?: AbortSignal
 ) {
   if (signal?.aborted) fail('BEHAVIOR_RUN_CANCELLED');
-  const run = store.run(runId);
+  const reserved = store.run(runId);
+  const run = { ...reserved, snapshot: preparedBehaviorSnapshot(store, runId, reserved.snapshot) };
   validateOwner(store, run);
   const permitted = listBehaviorTools(run.snapshot).find(
     (item) =>
@@ -657,7 +950,9 @@ export function commitRunBehaviorInstance(
   const progress = runBehaviorProgress(store, run.id);
   if (!run.snapshot.behaviorExecution) return;
   if (!progress) fail('BEHAVIOR_RUN_JOURNAL_MISSING');
-  const definition = definitions(run.snapshot).find((d) => d.instanceId === instanceId);
+  const definition = definitions(preparedBehaviorSnapshot(store, run.id, run.snapshot)).find(
+    (d) => d.instanceId === instanceId
+  );
   if (!definition) return;
   const scope = {
     chatId: run.chatId,
@@ -683,9 +978,16 @@ export function commitRunBehaviorInstance(
 }
 export function completedRunBehaviorView(store: Store, run: Run): RunSnapshot {
   const progress = runBehaviorProgress(store, run.id);
+  const base = preparedBehaviorSnapshot(store, run.id, run.snapshot);
   return progress
-    ? { ...run.snapshot, packageStates: structuredClone(progress.states) }
-    : run.snapshot;
+    ? {
+        ...base,
+        packageStates: structuredClone(progress.states).filter(
+          (state) =>
+            !base.packageBehaviorUnavailable?.some((item) => item.instanceId === state.instanceId)
+        ),
+      }
+    : base;
 }
 
 /** A fork keeps recorded facts; subsequent turns obtain the new branch's independent opportunity. */

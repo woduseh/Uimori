@@ -89,7 +89,7 @@ describe('bounded extension state program contract', () => {
       expect(() => validateExtensionProgramResult(result)).toThrow();
   });
 
-  it('allows user/model program actions while keeping automatic execution and mixed effects separate', () => {
+  it('allows explicit program triggers and validates automatic input without mixed effects', () => {
     expect(validatePackageBehavior(definition())).toEqual(definition());
     const disabled = definition();
     disabled.actions[0].triggers = [];
@@ -97,6 +97,10 @@ describe('bounded extension state program contract', () => {
     const model = definition();
     model.actions[0].triggers = ['user', 'model'];
     expect(validatePackageBehavior(model).actions[0].triggers).toEqual(['user', 'model']);
+    const automatic = definition();
+    automatic.actions[0].triggers = ['before-turn'];
+    automatic.actions[0].automaticInput = { amount: 1 };
+    expect(validatePackageBehavior(automatic)).toEqual(automatic);
     expect(() =>
       validatePackageStarts(
         [

@@ -19,6 +19,35 @@ export const EXTENSION_RUNTIME_LIMITS = Object.freeze({
 
 type WorkerReply = { ok: true; json: string } | { ok: false; code: string };
 let active = 0;
+const waiting: { wake: () => void }[] = [];
+async function acquireSlot(signal?: AbortSignal, wait = false) {
+  if (signal?.aborted) throw fail('BEHAVIOR_PROGRAM_ABORTED');
+  if (active < EXTENSION_RUNTIME_LIMITS.concurrent) {
+    active++;
+    return;
+  }
+  if (!wait || waiting.length >= 32) throw fail('BEHAVIOR_PROGRAM_BUSY');
+  await new Promise<void>((resolve, reject) => {
+    const abort = () => {
+      const at = waiting.indexOf(item);
+      if (at >= 0) waiting.splice(at, 1);
+      reject(fail('BEHAVIOR_PROGRAM_ABORTED'));
+    };
+    const item = {
+      wake: () => {
+        signal?.removeEventListener('abort', abort);
+        active++;
+        resolve();
+      },
+    };
+    waiting.push(item);
+    signal?.addEventListener('abort', abort, { once: true });
+  });
+}
+function releaseSlot() {
+  active--;
+  waiting.shift()?.wake();
+}
 
 function fail(code: string): ExtensionProgramError {
   return new ExtensionProgramError(code);
@@ -55,14 +84,15 @@ function inputJSON(value: { state: RuntimeValue; input: RuntimeValue }) {
 export async function executeExtensionProgram(
   value: ExtensionProgram,
   input: { state: RuntimeValue; input: RuntimeValue },
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  options?: { waitForSlot?: boolean }
 ): Promise<ExtensionProgramResult & { engine: string }> {
   const program = validateExtensionProgram(value);
   const encodedInput = inputJSON(input);
   if (signal?.aborted) throw fail('BEHAVIOR_PROGRAM_ABORTED');
-  if (active >= EXTENSION_RUNTIME_LIMITS.concurrent) throw fail('BEHAVIOR_PROGRAM_BUSY');
-  active++;
+  await acquireSlot(signal, options?.waitForSlot);
   try {
+    if (signal?.aborted) throw fail('BEHAVIOR_PROGRAM_ABORTED');
     const compiled = new URL('./extension-worker.js', import.meta.url);
     const source = existsSync(compiled)
       ? compiled
@@ -130,6 +160,6 @@ export async function executeExtensionProgram(
       });
     });
   } finally {
-    active--;
+    releaseSlot();
   }
 }

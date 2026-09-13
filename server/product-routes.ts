@@ -51,7 +51,7 @@ export function productRoutes(
   chatOrganizationRoutes(app, store, options.publish);
   libraryOrganizationRoutes(app, store);
   packagePresentationRoutes(app, store);
-  packageBehaviorRoutes(app, store);
+  packageBehaviorRoutes(app, store, options.publish);
   app.post<{ Params: { id: string } }>('/api/chats/:id/fork', async (request) => {
     const chat = forkChat(store, request.params.id, request.body);
     options.publish(chat.id);

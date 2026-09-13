@@ -1,6 +1,6 @@
 # 확장 실행 경계 · 설계 초안
 
-상태: 공통 경계와 후속 확장 설계예요. 현재 구현된 화면과 상태 계산 코드의 계약은 각각 [커스텀 패널](PACKAGE-PANELS.md)과 [상태 계산 코드](EXTENSION-PROGRAMS.md)가 소유해요. 확장 설치·자동 hook·비동기 broker 전체의 완료 문서는 아니에요. 제품 원칙은 [베타 결정](DECISIONS-2026-09-12-BETA.md), 진행과 표본 근거는 [베타 계획](../project-plan/BETA-PLAN.md) · [표본 기준](../project-plan/BETA-SAMPLES.md)이 소유해요.
+상태: 공통 경계와 후속 확장 설계예요. 현재 구현된 화면과 상태 계산 코드·생성 전 자동 준비의 계약은 각각 [커스텀 패널](PACKAGE-PANELS.md)과 [상태 계산 코드](EXTENSION-PROGRAMS.md)가 소유해요. 확장 설치·모든 hook·비동기 broker 전체의 완료 문서는 아니에요. 제품 원칙은 [베타 결정](DECISIONS-2026-09-12-BETA.md), 진행과 표본 근거는 [베타 계획](../project-plan/BETA-PLAN.md) · [표본 기준](../project-plan/BETA-SAMPLES.md)이 소유해요.
 
 2026-09-13 첫 화면 경계는 [커스텀 패널](PACKAGE-PANELS.md)로 구현했어요. 현재 상태/옵션에서 읽기 전용 HTML을 만들고, 격리된 패널의 실제 사용자 행동만 기존 상태 API로 전달해요. 사용자·모델 행동의 JavaScript 상태 계산을 별도 Worker/고정 크기 QuickJS WASM과 기존 저장 경계에 연결했어요. 모델 행동은 공통 async 경로에서 계산하고 성공 원문 저장 때만 현재 상태에 게시해요. Lua·제공자 어댑터와 비동기 host broker는 후속 범위예요. 아래 before-request 제안을 이미 지원하는 SDK로 읽지 않아요.
 
@@ -63,6 +63,8 @@ flowchart LR
 2026-09-12 후보 검증에서는 QuickJS 자체의 heap-limit 기대를 충족하지 못한 사례를 확인했어요. 별도의 Linux Docker 합성 실험에서는 실제 cgroup OOM 종료와 새 컨테이너의 정상 실행을 확인했어요. 두 결과를 합쳐 엔진의 격리가 완성됐다고 판단하지 않아요. 정확한 성공·실패·미실행 구분과 근거는 [베타 기록](../project-plan/BETA-PLAN.md)에 있어요.
 
 ## 첫 host 흐름의 구현 제안
+
+2026-09-13: 이 흐름 중 생성 전 상태 계산·순서·별도 진행 기록·실패/건너뛰기·원문 성공 때 효과 게시는 기존 before-turn/action API 위에 구현했어요. 예약된 요청/기본 상태를 보존하고 실제 상태 투영 뒤 문맥/프롬프트를 계산해요. 아래의 요청 본문 가공·모델/HTTP broker·의존성 권한 전체는 계속 설계 범위예요.
 
 아래는 다음 구현을 위한 초안이며 현재 앱에 설치 가능한 SDK가 아니에요. 기존 상태 대기를 마친 같은 Run의 `running` 단계에서, 본문 문맥 준비 직전에 비동기 확장 준비를 수행하는 방향이에요. `waiting_for_state`를 모든 확장 작업으로 재해석하거나 state job을 복제하지 않아요. 예약 transaction에서는 코드·API·엔진·해석한 의존성 hash·권한 상한·소유 상태 개정만 고정하고 외부 호출은 그 밖에서 진행해요.
 
