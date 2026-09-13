@@ -12,6 +12,8 @@ import { applyPackageTransforms } from '../server/package-transforms.js';
 import { resolvePackageStart } from '../core/package-start.js';
 import { createPackageStart } from '../server/package-start.js';
 import { compilePackageAttachment } from '../core/package-runtime.js';
+import { modelWorkspace, updatePromptWorkspace } from '../server/prompt-workspace.js';
+import { compileSnapshotPrompt } from '../server/prompt-snapshot.js';
 
 const owned: { directory: string; store: Store }[] = [];
 afterEach(() => {
@@ -59,6 +61,91 @@ const sourceOf = (value: unknown) => ({
   name: 'synthetic-card.json',
   base64: Buffer.from(JSON.stringify(value)).toString('base64'),
 });
+
+test.each(['{{original}}\nGive {{char}} room to act.', '{{original}}'])(
+  'card guidance supplements the selected prompt; excluded legacy fields stay only in source: %s',
+  (globalNote) => {
+    const store = database();
+    const workspace = modelWorkspace(store);
+    updatePromptWorkspace(store, {
+      expectedRevision: workspace.revision,
+      main: {
+        title: 'Selected prompt',
+        program: {
+          version: 1,
+          controls: [],
+          blocks: [
+            {
+              id: 'main',
+              title: 'Main',
+              kind: 'message',
+              role: 'system',
+              template: [{ kind: 'text', text: 'KEEP_SELECTED_MAIN' }],
+            },
+            { id: 'current', title: 'Input', kind: 'current' },
+          ],
+        },
+        values: {},
+      },
+    });
+    const before = modelWorkspace(store),
+      original = card();
+    const source = sourceOf({
+      ...original,
+      data: {
+        ...original.data,
+        personality: 'EXCLUDED_PERSONALITY {{setvar::x::1}}',
+        scenario: 'EXCLUDED_SCENARIO',
+        system_prompt: 'EXCLUDED_MAIN',
+        post_history_instructions: globalNote,
+      },
+    });
+    const preview = prepareRisuImport({ source });
+    expect(preview.findings.filter((finding) => finding.level === 'unsupported')).toEqual([]);
+    expect(preview.findings.map((finding) => finding.code)).toEqual(
+      expect.arrayContaining([
+        'legacy-character-fields',
+        'main-prompt-override',
+        'global-note-as-guidance',
+      ])
+    );
+    const saved = applyRisuImport(store, {
+      source,
+      digest: preview.digest,
+      memoryIds: [],
+      allowPartial: false,
+      idempotencyKey: 'guidance',
+    });
+    const content = store.product.get<Content>('content', saved.receipt.items[0].id),
+      chat = saved.chat!;
+    const profile = store.product.snapshot(chat.id)!;
+    const compiled = compileSnapshotPrompt({
+      chatId: chat.id,
+      parentRevision: null,
+      settingsRevision: chat.settingsRevision,
+      settings: chat.settings,
+      request: 'Continue.',
+      history: [],
+      logicalHistory: [],
+      profile,
+      resources: store.product.resources(chat.id, profile),
+    });
+    const delivered = JSON.stringify(compiled.promptCompilation!.messages);
+    expect(delivered.match(/KEEP_SELECTED_MAIN/gu)).toHaveLength(1);
+    expect(delivered).not.toMatch(/EXCLUDED_|\{\{original\}\}/u);
+    if (globalNote.includes('Give')) {
+      expect(delivered).toContain('Give Synthetic Pilot room to act.');
+      expect(content.package!.instructions[0]).toMatchObject({
+        id: 'writing-guidance',
+        target: 'main',
+      });
+    } else expect(content.package!.instructions).toEqual([]);
+    expect(modelWorkspace(store)).toEqual(before);
+    expect(nativeTransferOriginal(store, saved.receipt.id).sourceFiles![0].base64).toBe(
+      source.base64
+    );
+  }
+);
 
 test('module JSON registers a reusable module without a bot, chat or memory', async () => {
   const store = database();
