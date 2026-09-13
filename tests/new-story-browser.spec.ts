@@ -41,7 +41,29 @@ test('NSUI01 global model reaches an empty chat on mobile and optional choices s
         identity: { name: 'Harbor', description: '' },
         lore: [],
         instructions: [],
-        controls: [],
+        controls: [
+          {
+            id: 'route',
+            label: '출발 경로',
+            type: 'select',
+            default: 'harbor',
+            options: [
+              { label: '항구', value: 'harbor' },
+              { label: '야간 도로', value: 'night' },
+            ],
+          },
+          {
+            id: 'district',
+            label: '야간 구역',
+            type: 'select',
+            default: 'north',
+            options: [
+              { label: '북쪽', value: 'north' },
+              { label: '동쪽', value: 'east' },
+            ],
+            visibleWhen: { op: 'equal', args: [{ control: 'route' }, 'night'] },
+          },
+        ],
         transforms: [],
         images: [
           {
@@ -65,6 +87,21 @@ test('NSUI01 global model reaches an empty chat on mobile and optional choices s
               { kind: 'value', expression: { context: ['user', 'name'] } },
               { kind: 'text', text: `.${imageText}` },
             ],
+            values: { route: 'harbor', district: 'north' },
+          },
+          {
+            id: 'night-watch',
+            title: '야간 순찰',
+            mode: 'authored',
+            text: 'Night watch begins.',
+            values: { route: 'night', district: 'north' },
+          },
+          {
+            id: '__direct__',
+            title: '예약어처럼 보이는 시작',
+            mode: 'authored',
+            text: 'A distinct authored opening.',
+            values: { route: 'harbor', district: 'north' },
           },
         ],
       },
@@ -176,7 +213,30 @@ test('NSUI01 global model reaches an empty chat on mobile and optional choices s
   await expect(dialog.getByLabel('새 채팅 이름', { exact: true })).toHaveValue(customTitle);
   await expect(dialog.getByLabel('시작 번역 모델', { exact: true })).toHaveCount(0);
   expect(executionRequests).toEqual([]);
+  const route = dialog.getByLabel('시작 봇 옵션 출발 경로', { exact: true });
+  const district = dialog.getByLabel('시작 봇 옵션 야간 구역', { exact: true });
+  await route.selectOption('1');
+  await district.selectOption('1');
   await dialog.getByLabel('사용할 시작', { exact: true }).selectOption('greeting');
+  await expect(route).toHaveValue('0');
+  await expect(district).toHaveCount(0);
+  await route.selectOption('1');
+  await expect(district).toHaveValue('0');
+  await district.selectOption('1');
+  await dialog.getByLabel('사용할 시작', { exact: true }).selectOption('night-watch');
+  await expect(route).toHaveValue('1');
+  await expect(district).toHaveValue('0');
+  await dialog.getByLabel('사용할 시작', { exact: true }).selectOption('__direct__');
+  await expect(route).toHaveValue('0');
+  await expect(district).toHaveCount(0);
+  await dialog.getByLabel('사용할 시작', { exact: true }).selectOption('');
+  await expect(route).toHaveValue('1');
+  await expect(district).toHaveValue('1');
+  await dialog.getByLabel('사용할 시작', { exact: true }).selectOption('greeting');
+  await expect(route).toHaveValue('1');
+  await expect(district).toHaveValue('1');
+  await dialog.getByLabel('사용할 시작', { exact: true }).selectOption('greeting');
+  await expect(district).toHaveValue('1');
   await expect(dialog.getByLabel('시작 미리보기', { exact: true })).toHaveText(
     'Harbor greets User.'
   );
@@ -201,6 +261,7 @@ test('NSUI01 global model reaches an empty chat on mobile and optional choices s
   await dialog.getByRole('button', { name: '도입문 확정하고 채팅 만들기', exact: true }).click();
   const opening = await (await confirmed).json();
   expect(opening.run.snapshot.packageStart.text).toBe(`Harbor greets ${personaTitle}.${imageText}`);
+  expect(opening.run.snapshot.packageStart.values).toEqual({ route: 'night', district: 'east' });
   expect(opening.run.usage.modelCalls).toBe(0);
   await expect(dialog).toBeHidden();
   const readerImage = page
