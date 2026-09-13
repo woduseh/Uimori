@@ -6,7 +6,7 @@
 
 OpenAI의 [GPT-6 Astra prompting best practices](https://developers.openai.com/api/docs/guides/latest-model/gpt-6-astra.md#prompting-best-practices)를 검색한 뒤 본문을 읽었어요. 가이드는 자율적인 완료와 실제 필요한 질문의 구분, 스킬/AGENTS 충돌 점검, 간결한 설명, 목적에 맞는 병렬 위임, 변경에 비례한 검증을 권해요. 아래 파일 분리와 탐색 방식은 이 원리를 Uimori에 적용한 판단이며 OpenAI가 이 저장소의 구조나 특정 줄 수를 지정한 것은 아니에요.
 
-[Codex의 프로젝트 지침 읽기](https://learn.chatgpt.com/docs/agent-configuration/agents-md#how-codex-discovers-guidance)는 `project_doc_max_bytes`의 기본 한도를 32 KiB로 설명해요. 수정 전 작업트리의 AGENTS는 43,254 bytes로 상세 구현·과거 결과·현재 규칙이 섞여 있었어요. 실제 호스트의 설정이나 이 세션의 잘림 여부를 측정한 것은 아니에요. 한도를 올리는 전역 설정 변경 대신 루트 지침을 **7,448 bytes**로 줄이고 필요한 계약을 찾아 읽게 했어요. 코드 지도는 필요한 작업에서 별도로 읽어요.
+[Codex의 프로젝트 지침 읽기](https://learn.chatgpt.com/docs/agent-configuration/agents-md#how-codex-discovers-guidance)는 `project_doc_max_bytes`의 기본 한도를 32 KiB로 설명해요. 최초 정리 전 작업트리의 AGENTS는 43,254 bytes로 상세 구현·과거 결과·현재 규칙이 섞여 있었어요. 실제 호스트의 설정이나 이 세션의 잘림 여부를 측정한 것은 아니에요. 한도를 올리는 전역 설정 변경 대신 `54f62e7`에서 루트 지침을 **7,448 bytes**로 줄이고 필요한 계약을 찾아 읽게 했어요. 코드 지도는 필요한 작업에서 별도로 읽어요.
 
 | 발견한 부담·불일치 | 적용한 변경 |
 | --- | --- |
@@ -16,6 +16,9 @@ OpenAI의 [GPT-6 Astra prompting best practices](https://developers.openai.com/a
 | 도구/자료 이식 절차가 승인된 베타 개발까지 중단시킬 수 있음 | 제한된 읽기 범위는 유지하며 기존 승인된 해독·공통 API 구현 경로와 수동 자료 이식을 구분 |
 | 개발 안내의 Risu API 없음·추정 비용 없음·v17 표기 | 현재 소유 문서·스키마에 맞춰 수정하고 현황 복제보다 계약 링크를 사용 |
 | 고정 모델 등급·중복 전수 검토·결과 문서 누적 위험 | 독립 업무와 담당 파일·완료 근거를 정해 위임하고 모델/추론은 난도·위험·비용으로 선택. 현재 계약과 진행 문서만 필요한 부분 갱신 |
+| 이어가기/독립 검토 지시가 초기 M0/M1·CURRENT를 현재 진행 기준으로 사용 | 현재 요청·베타 6단계·BETA-PLAN·관련 계약으로 연결하고 검토 대상을 요청한 변경에 한정 |
+| 검사 기준의 중복과 의존성이 없는 상태의 반복 검사 | QUALITY에 테스트 추가 판단·병렬 작업의 의존 순서를 명시하고 AGENTS/DEVELOPMENT의 중복 검사 절차는 링크로 통합 |
+| 알고 있는 경로도 다시 지도부터 탐색하거나 매번 환경 준비할 가능성 | 관련 진입점을 바로 사용하고 설치·doctor는 첫 준비나 해당 환경 문제에 맞춰 선택 |
 
 ## 유지한 경계와 확인 범위
 
@@ -23,4 +26,4 @@ OpenAI의 [GPT-6 Astra prompting best practices](https://developers.openai.com/a
 
 검사 시점은 직전 승인한 [QUALITY](../docs/QUALITY.md#실행-시점)를 따르며 검사·릴리스 영수증의 판정 규칙을 낮추지 않았어요. 오래된 AGENTS 전문은 Git `1c055ef:AGENTS.md`로 보존돼요. 이를 현재 지침으로 다시 로드할 사본은 추가하지 않았어요.
 
-변경한 Markdown 7개, 로컬 링크 63개, 코드 지도 경로 92개와 npm 명령 존재·`git diff --check`가 통과했어요. 별도 읽기 검토에서 보존 경계 누락/충돌을 확인하고 승인 목적 범위와 경로 표기의 모호성을 고쳤어요. 앱 코드·빌드 입력·검사 설정을 바꾸지 않았으며 앱 빌드·전체 테스트·유료 모델 비교는 수행하지 않았어요. 파일 크기 감소는 직접 확인할 수 있지만 실제 처리 시간·모델 품질·토큰 절약률의 개선 수치로 환산하지 않아요.
+`54f62e7`의 확인은 Markdown 7개, 로컬 링크 63개, 코드 지도 경로 92개와 npm 명령 존재·`git diff --check`가 통과한 결과예요. 별도 읽기 검토에서 보존 경계 누락/충돌을 확인하고 승인 목적 범위와 경로 표기의 모호성을 고쳤어요. 앱 코드·빌드 입력·검사 설정을 바꾸지 않았으며 앱 빌드·전체 테스트·유료 모델 비교는 수행하지 않았어요. 파일 크기 감소는 직접 확인할 수 있지만 실제 처리 시간·모델 품질·토큰 절약률의 개선 수치로 환산하지 않아요.
