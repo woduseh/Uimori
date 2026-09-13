@@ -1,17 +1,19 @@
 import { HttpError, fields, number, record, text } from './request-validation.js';
 import { isDeepStrictEqual } from 'node:util';
-import type { Content } from '../core/product.js';
+import type { Content, ProfileSnapshot } from '../core/product.js';
 import type { Run, RunSnapshot, Source } from '../core/types.js';
 import { packageInstanceId, executionContext } from '../core/execution-context.js';
 import {
+  GENERATED_PACKAGE_START_MAX_CHARS,
   resolvePackageStart,
   validatePackageStartRef,
   validatePackageStarts,
   type PackageStartRef,
+  type PackageStartSnapshot,
 } from '../core/package-start.js';
 import { packageIdentityFromProfile } from '../core/package-identity.js';
 import type { Store } from './store.js';
-import { packageControlKey } from '../core/content-package.js';
+import { packageControlKey, type PackageAttachment } from '../core/content-package.js';
 import { freezePackageStates } from './package-behavior-host.js';
 import type { BehaviorScope } from './package-behavior-store.js';
 
@@ -119,8 +121,51 @@ export function createPackageStart(
     packageRevision: command.packageRevision,
     startId: command.startId,
   };
-  const request = start.mode === 'authored' ? `[작성된 도입문] ${start.title}` : start.text;
   return store.transaction(() => {
+    const prior = store.db
+      .prepare('SELECT command FROM runs WHERE chat_id=? AND request_key=?')
+      .get(chatId, command.idempotencyKey) as { command: string } | undefined;
+    let prepared:
+      | {
+          profile: ProfileSnapshot;
+          attachment: PackageAttachment;
+          selected: PackageStartSnapshot;
+        }
+      | undefined;
+    let request: string;
+    if (prior) {
+      // A lost response reuses the already frozen dynamic request. Store still compares every
+      // other canonical command field before returning the prior Run.
+      request = text(
+        record(JSON.parse(prior.command)).request,
+        'request',
+        start.mode === 'generate' ? GENERATED_PACKAGE_START_MAX_CHARS : 4000
+      );
+    } else {
+      const chat = store.chat(chatId);
+      const profile = store.product.snapshot(chatId);
+      const attachment = profile?.packageAttachments?.find(
+        (item) =>
+          item.role === 'bot' &&
+          item.id === command.packageId &&
+          item.revision === command.packageRevision
+      );
+      if (!profile || !attachment || chat.botId !== command.packageId)
+        throw new HttpError(409, 'PACKAGE_START_OWNER_CHANGED');
+      const selected = resolvePackageStart(
+        content.package!,
+        command.startId,
+        profile.packageValues?.[packageControlKey(attachment)],
+        packageIdentityFromProfile(profile)
+      );
+      const storedValues = profile.packageValues?.[packageControlKey(attachment)];
+      if (
+        Object.entries(selected.values).some(([key, v]) => !storedValues || storedValues[key] !== v)
+      )
+        throw new HttpError(409, 'PACKAGE_START_VALUES_NOT_SAVED');
+      prepared = { profile, attachment, selected };
+      request = selected.mode === 'authored' ? `[작성된 도입문] ${selected.title}` : selected.text;
+    }
     // Store applies the shared run/authored reservation phases after this callback's
     // optional initial action, inside the same transaction as an authored source commit.
     const result = store.createRunInTransaction(
@@ -137,29 +182,10 @@ export function createPackageStart(
         // Check after idempotency lookup. A lost successful response may replay even after the head advanced.
         if (store.db.prepare('SELECT 1 FROM runs WHERE chat_id=? LIMIT 1').get(chatId))
           throw new HttpError(409, 'PACKAGE_START_ALREADY_CONFIRMED');
-        const profile = store.product.snapshot(chatId);
-        const attachment = profile?.packageAttachments?.find(
-          (item) =>
-            item.role === 'bot' &&
-            item.id === command.packageId &&
-            item.revision === command.packageRevision
-        );
-        if (!profile || !attachment || chat.botId !== command.packageId)
+        if (!prepared) throw new HttpError(409, 'PACKAGE_START_REPLAY_MISSING');
+        const { profile, attachment, selected } = prepared;
+        if (chat.botId !== command.packageId)
           throw new HttpError(409, 'PACKAGE_START_OWNER_CHANGED');
-        const selected = resolvePackageStart(
-          content.package!,
-          command.startId,
-          profile.packageValues?.[packageControlKey(attachment)],
-          packageIdentityFromProfile(profile)
-        );
-        // The profile stores the same complete selection shown in the opening preview.
-        const storedValues = profile.packageValues?.[packageControlKey(attachment)];
-        if (
-          Object.entries(selected.values).some(
-            ([key, v]) => !storedValues || storedValues[key] !== v
-          )
-        )
-          throw new HttpError(409, 'PACKAGE_START_VALUES_NOT_SAVED');
         const iso = new Date().toISOString();
         let snapshot: RunSnapshot = {
           chatId,

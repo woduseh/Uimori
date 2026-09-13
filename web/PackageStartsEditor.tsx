@@ -3,7 +3,11 @@ import { useEffect, useState } from 'react';
 import { useBufferedEditorState, useUnappliedEditorField } from './editor-workspace-context.js';
 import type { ContentPackage } from '../core/content-package.js';
 import { behaviorActionTriggers, type BehaviorSchema } from '../core/package-behavior.js';
-import { validatePackageStarts, type PackageStart } from '../core/package-start.js';
+import {
+  GENERATED_PACKAGE_START_MAX_CHARS,
+  validatePackageStarts,
+  type PackageStart,
+} from '../core/package-start.js';
 import type { PromptExpression, RuntimeValue } from '../core/prompt-program.js';
 import { PackageControlValues } from './PackageControlValues.js';
 
@@ -132,8 +136,9 @@ export function PackageStartsEditor({
           </label>
           {active.template && (
             <p className="muted full" role="status">
-              이 도입문은 선택한 봇·페르소나 이름과 옵션을 템플릿으로 적용해요. 본문을 직접
-              수정하거나 시작 방식을 바꾸면 템플릿이 해제되고 입력한 글을 그대로 사용해요.
+              이 {active.mode === 'authored' ? '도입문' : '생성 요청'}은 선택한 봇·페르소나 이름과
+              옵션을 템플릿으로 적용해요. 본문을 직접 수정하거나 시작 방식을 바꾸면 템플릿이
+              해제되고 현재 입력한 글을 그대로 사용해요.
             </p>
           )}
           <label className="full">
@@ -151,7 +156,7 @@ export function PackageStartsEditor({
               aria-label="시작 본문"
               value={active.text}
               rows={8}
-              maxLength={active.mode === 'generate' ? 4000 : 100000}
+              maxLength={active.mode === 'generate' ? GENERATED_PACKAGE_START_MAX_CHARS : 100000}
               onChange={(event) => {
                 const { template: _template, ...plain } = active;
                 update({ ...plain, text: event.target.value });

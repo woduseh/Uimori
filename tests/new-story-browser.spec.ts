@@ -77,6 +77,21 @@ test('NSUI01 global model reaches an empty chat on mobile and optional choices s
         ],
         starts: [
           {
+            id: 'generated-route',
+            title: '경로에 맞춰 생성',
+            mode: 'generate',
+            text: 'Preserved request source.',
+            template: [
+              { kind: 'text', text: 'Write an opening for ' },
+              { kind: 'value', expression: { context: ['user', 'name'] } },
+              { kind: 'text', text: ' via ' },
+              { kind: 'value', expression: { control: 'route' } },
+              { kind: 'text', text: '/' },
+              { kind: 'value', expression: { control: 'district' } },
+              { kind: 'text', text: '.' },
+            ],
+          },
+          {
             id: 'greeting',
             title: '인사',
             mode: 'authored',
@@ -255,6 +270,17 @@ test('NSUI01 global model reaches an empty chat on mobile and optional choices s
   await expect(dialog.getByLabel('시작 미리보기', { exact: true })).toHaveText(
     `Harbor greets ${personaTitle}.`
   );
+  await dialog.getByLabel('사용할 시작', { exact: true }).selectOption('generated-route');
+  await expect(dialog.getByLabel('시작 미리보기', { exact: true })).toHaveText(
+    `Write an opening for ${personaTitle} via harbor/north.`
+  );
+  await route.selectOption('1');
+  await district.selectOption('1');
+  await expect(dialog.getByLabel('시작 미리보기', { exact: true })).toHaveText(
+    `Write an opening for ${personaTitle} via night/east.`
+  );
+  expect(executionRequests).toEqual([]);
+  await dialog.getByLabel('사용할 시작', { exact: true }).selectOption('greeting');
   const confirmed = page.waitForResponse(
     (response) => /\/package-start$/.test(response.url()) && response.request().method() === 'POST'
   );
