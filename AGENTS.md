@@ -1,6 +1,6 @@
 # 작업 지도
 
-- Risu 프리셋은 `docs/RISU-IMPORT.md`, `server/risu-preset-file.ts`·`risu-preset-program.ts`·`risu-preset-import.ts`, `web/RisuPresetImport.tsx`를 봐요. `.risup`·구형 `.risupreset`/JSON/프로젝트 ZIP을 읽어 기존 native transfer로 프롬프트·토글과 원본 바이트를 등록해요. RPack 포함과 AGPL-3.0-only는 사용자의 후속 승인으로 적용했어요. 프리셋 정규식 실행은 아직 미연결이며, memory 슬롯의 위치·래퍼는 직접 적용하지 않고 Uimori 요약·메모 문맥과의 차이를 안내해요. 모델·파라미터·도구는 별도 관리하며 미지원 손실로 계산하지 않아요. 다음 작업은 같은 프리셋 흐름의 전송 전·표시 정규식 연결이에요.
+- Risu 프리셋은 `docs/RISU-IMPORT.md`, `server/risu-preset-file.ts`·`risu-preset-program.ts`·`risu-preset-import.ts`, `web/RisuPresetImport.tsx`를 봐요. `.risup`·구형 `.risupreset`/JSON/프로젝트 ZIP을 읽어 기존 native transfer로 프롬프트·토글과 원본 바이트를 등록해요. RPack 포함과 AGPL-3.0-only는 사용자의 후속 승인으로 적용했어요. 프리셋 `editprocess`·`editdisplay`는 공통 `PromptProgram.transforms`로 가져와요. `docs/PROMPT-TRANSFORMS.md`, `server/prompt-transforms.ts`·`text-transforms.ts`를 봐요. 전송 변환은 원문과 별도 계산 영수증을 문맥 측정·전송·후보·복원에서 공유하며 실패도 원문 fallback으로 보존해요. memory 슬롯의 위치·래퍼는 직접 적용하지 않고 Uimori 요약·메모 문맥과의 차이를 안내해요. 모델·파라미터·도구는 별도 관리하며 미지원 손실로 계산하지 않아요. 프리셋 파일→검토→저장·옵션/변환 편집→미리보기·본문 전송·Reader 표시 흐름을 연결했으며 전체 표본·실모델 품질 인수와 구분해요.
 
 - 확장 행동의 공통 Host 연결은 `server/package-extension-execution.ts`의 `executePackageExtensionProgram`을 사용해요. 성공한 모델 결과를 받은 뒤 guest 계산이 끝나면 모델 접근을 다시 확인하며, 실패 호출을 처리한 로컬 대체 상태는 허용해요. `onExecuted`는 채택 전 계산 보존 전용이고 단계별 진행·취소·CAS·저장은 호출자가 소유해요. 새 상태 영수증은 `server/extension-program-receipt.ts`의 `createExtensionProgramReceipt`로 생성하며 보관 검증과 계산 한도를 공유해요.
 

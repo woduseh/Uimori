@@ -1,6 +1,15 @@
 .request-message-wrap {
   margin-bottom: 14px;
 }
+.request-transform-details {
+  margin-top: 6px;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+.request-transform-details dd {
+  margin: 4px 0 12px;
+  white-space: pre-wrap;
+}
 .request-message-wrap > .request-message {
   margin-bottom: 0;
 }

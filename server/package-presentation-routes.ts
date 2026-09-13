@@ -25,9 +25,13 @@ export function packagePresentationRoutes(app: FastifyInstance, store: Store) {
         };
       }
       const issues: string[] = [];
+      let skipSourceTransforms = false;
       if (
         snapshot.sourceSegments &&
-        snapshot.profile?.packages?.some((p) => p.transforms.some((t) => t.target === 'source')) &&
+        (snapshot.profile?.packages?.some((p) => p.transforms.some((t) => t.target === 'source')) ||
+          snapshot.profile?.promptPresets?.main?.program.transforms?.some(
+            (t) => t.enabled !== false && t.stage === 'display' && t.role !== 'user'
+          )) &&
         hasSourceSegmentBoundaries(
           { sourceRevision: source.id, sourceHash: source.hash, text: source.text },
           snapshot.sourceSegments
@@ -35,10 +39,11 @@ export function packagePresentationRoutes(app: FastifyInstance, store: Store) {
       ) {
         // This source carries segment boundaries; a source transform could replace the markers the
         // reader uses for visibility. Translation transforms never touch them and stay applied.
-        for (const pkg of snapshot.profile.packages)
+        skipSourceTransforms = true;
+        for (const pkg of snapshot.profile?.packages ?? [])
           pkg.transforms = pkg.transforms.filter((t) => t.target !== 'source');
         issues.push(
-          '이 장면의 원문에 구간 경계가 있어 원문 대상 패키지 정규식 표시는 적용하지 않았어요. 번역 대상 표시는 그대로 적용해요.'
+          '이 장면의 원문에 구간 경계가 있어 원문 대상 정규식 표시는 적용하지 않았어요. 요청과 번역 대상 표시는 그대로 적용해요.'
         );
       }
       const detail = store.story.sourceDetail(source.id);
@@ -46,15 +51,17 @@ export function packagePresentationRoutes(app: FastifyInstance, store: Store) {
         detail.status === 'ready' && detail.state?.sourceHash === source.hash
           ? { sourceRevision: source.id, sourceHash: source.hash, values: detail.state.values }
           : undefined;
+      const presentation = await buildPackagePresentation(
+        snapshot,
+        { ...source, ...(translation ? { translation } : {}) },
+        state,
+        { skipSourceTransforms }
+      );
       return {
-        ...(await buildPackagePresentation(
-          snapshot,
-          { ...source, ...(translation ? { translation } : {}) },
-          state
-        )),
+        ...presentation,
         translationId: translation ? job!.id : null,
         translationRevision: translation ? (job!.revision ?? 0) : null,
-        issues,
+        issues: [...issues, ...presentation.issues],
       };
     }
   );

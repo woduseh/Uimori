@@ -8,6 +8,8 @@ export type PackagePresentation = {
   /** Registered inline images from this source's frozen packages only. */
   inlineImageUrls?: string[];
   original: { text: string; changed: boolean; applied: string[] };
+  request?: { text: string; changed: boolean; applied: string[] };
+  inputTransform?: { text: string; changed: boolean; applied: string[] };
   translation?: { text: string; changed: boolean; applied: string[] };
   translationId: string | null;
   translationRevision: number | null;
@@ -64,7 +66,7 @@ export function usePackagePresentation(
         if (!controller.signal.aborted && sequence.current === requestId)
           setResult({
             key,
-            error: `패키지 표시를 적용하지 못해 저장된 본문을 표시해요. ${error instanceof Error ? error.message : ''}`,
+            error: `표시 변환을 적용하지 못해 저장된 본문을 표시해요. ${error instanceof Error ? error.message : ''}`,
           });
       }
     })();

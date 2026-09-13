@@ -16,6 +16,7 @@ import { DEFAULT_MAIN_PROMPT } from '../core/prompts.js';
 import { compiledPackages, type ResolvedPackage } from '../core/package-context.js';
 import { executionContext } from '../core/execution-context.js';
 import { projectedLogicalHistory } from '../core/context-projection.js';
+import { projectPromptInputTransforms } from './prompt-transforms.js';
 
 /** Pair each exact source version with its actual user request; never infer roles from prose. */
 export function captureLogicalHistory(store: Store, snapshot: RunSnapshot): PromptHistoryMessage[] {
@@ -56,10 +57,19 @@ export function captureLogicalHistory(store: Store, snapshot: RunSnapshot): Prom
     ];
   });
 }
-export function promptContext(snapshot: RunSnapshot) {
-  return contextFromPackages(snapshot, compiledPackages(snapshot, 'main'));
+export function promptContext(
+  snapshot: RunSnapshot,
+  program?: PromptProgram,
+  values?: Record<string, PromptValue>
+) {
+  return contextFromPackages(snapshot, compiledPackages(snapshot, 'main'), program, values);
 }
-function contextFromPackages(snapshot: RunSnapshot, packages: readonly ResolvedPackage[]) {
+function contextFromPackages(
+  snapshot: RunSnapshot,
+  packages: readonly ResolvedPackage[],
+  program?: PromptProgram,
+  values?: Record<string, PromptValue>
+) {
   const input = buildMainInput(snapshot);
   const contents = snapshot.profile?.contents ?? [];
   const body = (slot: string) =>
@@ -116,17 +126,28 @@ function contextFromPackages(snapshot: RunSnapshot, packages: readonly ResolvedP
     (message) =>
       snapshot.contextPlan || !message.sourceRevision || inputHistoryIds.has(message.sourceRevision)
   );
+  const transformed = projectPromptInputTransforms(
+    snapshot,
+    [
+      ...sourceLogicalHistoryForRequest(snapshot, logical),
+      { id: 'current-input', role: 'user' as const, text: snapshot.request, current: true },
+    ],
+    program,
+    values
+  );
+  const current = transformed.history.at(-1)!;
   const history = [
     ...loreHistory(
-      projectedLogicalHistory(snapshot, sourceLogicalHistoryForRequest(snapshot, logical)),
+      projectedLogicalHistory(snapshot, transformed.history.slice(0, -1)),
       snapshot.loreContext
     ),
-    { id: 'current-input', role: 'user' as const, text: snapshot.request, current: true },
+    current,
   ];
   const preset = snapshot.profile?.promptPresets?.main;
   return {
     slots,
     history,
+    transformWarnings: transformed.warnings,
     runtime: executionContext(snapshot),
     values: preset
       ? snapshot.profile?.promptControls?.[`${preset.id}@${preset.revision}`]?.values
@@ -177,11 +198,12 @@ export function compileSnapshotPrompt(
       });
     }
   }
-  const context = contextFromPackages(snapshot, packages);
+  const context = contextFromPackages(snapshot, packages, selected, values);
   const promptCompilation = compilePromptProgram(selected, {
     ...context,
     ...(values ? { values } : {}),
   });
+  promptCompilation.warnings.push(...context.transformWarnings);
   for (const pkg of packages)
     for (const item of pkg.unavailableInstructions ?? [])
       promptCompilation.warnings.push(

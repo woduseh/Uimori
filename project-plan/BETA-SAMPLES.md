@@ -18,7 +18,7 @@
 
 | 공통 구현 | 현재 범위와 표본 적용 한계 |
 | --- | --- |
-| [프리셋 직접 가져오기](../docs/RISU-IMPORT.md#risu-프리셋) | 2026-09-13 후속 구현으로 `.risup`·구형 `.risupreset`/JSON/프로젝트 ZIP을 읽고 프롬프트·토글을 native 저장·편집·적용에 연결했어요. 실제 Phēmē 두 파일의 디코딩·부분 가져오기·원본 보존·archive 복원을 확인해 `currentRisuImport`는 `partial`이에요. 정규식 실행은 미완이고 memory 위치/래퍼 차이를 안내해요. 모델·파라미터·도구는 판정 대상에서 제외하며 전체 인수는 계속 `not-run`이에요. |
+| [프리셋 직접 가져오기](../docs/RISU-IMPORT.md#risu-프리셋) | 2026-09-13 후속 구현으로 `.risup`·구형 `.risupreset`/JSON/프로젝트 ZIP을 읽고 프롬프트·토글을 native 저장·편집·적용에 연결했어요. 실제 Phēmē 두 파일의 디코딩·부분 가져오기·원본 보존·archive 복원을 확인해 `currentRisuImport`는 `partial`이에요. 후속 구현에서 두 파일의 전송 전 3개·표시 2개 정규식을 공통 변환으로 실행했고, 실제 원문 보존·미리보기·전송·Reader 연결은 별도 합성 흐름으로 확인해요. memory 위치/래퍼와 전체 CBS 실행 차이를 안내해요. 모델·파라미터·도구는 판정 대상에서 제외하며 전체 인수는 계속 `not-run`이에요. |
 | [카드 가져오기](../docs/RISU-IMPORT.md) | 카드 `.charx`/JSON의 설명·시작문·로어·지원 이미지·이름 템플릿·정적 표시 정규식을 가져와요. Hinano·TVON·Vela의 `currentRisuImport`만 이 기본 경로의 존재를 뜻하는 `partial`로 갱신하고 이전 값은 `baselineRisuImport`로 보존해요. 고정 파일 전체 가져오기 성공이나 스크립트 이식을 확인한 것은 아니에요. Merry 원본은 140,785,373 bytes로 카드 입력 한도 24 MiB를 넘어 이 경로로 직접 가져올 수 없어요. |
 | [모듈 JSON/프로젝트 ZIP 가져오기](../docs/RISU-IMPORT.md#구조화된-risu-모듈-json) | RisuToki가 추출한 `module.json`과 `.risutoki` 에셋의 기본 자료를 모듈로 등록해요. 원본 `.risum`·모듈용 `.charx`의 직접 지원이 아니므로 히든 스토리·라이트보드 원본의 `currentRisuImport`는 `missing`을 유지해요. JS 플러그인 직접 가져오기도 미구현이에요. |
 | [확장 코드·Host API](../docs/EXTENSION-PROGRAMS.md) | `user`·`model`·`before-turn`·`after-turn` JavaScript, 자기 자료 읽기와 허가된 모델 호출, 응답 후 완성 본문 읽기, 사용자 독립 모델 작업, 명시적 상태 변환을 구현했어요. Risu 스크립트 자동 변환·Lua·일반 HTTP·공유 자료 권한·확장 설치 관리는 미구현이에요. |

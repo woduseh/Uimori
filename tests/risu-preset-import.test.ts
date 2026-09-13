@@ -100,7 +100,7 @@ test('unsupported prompt semantics and regex require explicit partial import wit
   const source = sourceOf({
     ...document(),
     promptTemplate: [{ type: 'plain', role: 'system', text: '{{setvar::x::1}}' }],
-    regex: [{ type: 'editprocess', in: 'x', out: 'y' }],
+    regex: [{ type: 'editoutput', in: 'x', out: 'y' }],
   });
   const preview = prepareRisuPresetImport({ source });
   const before = store.product.export().tables;
@@ -115,6 +115,37 @@ test('unsupported prompt semantics and regex require explicit partial import wit
   const result = applyRisuPresetImport(store, { ...command, allowPartial: true });
   expect(result.preset.program.blocks[0].enabled).toBe(false);
   expect(nativeTransferOriginal(store, result.receipt.id).sourceFiles![0].base64).toBe(
+    source.base64
+  );
+});
+
+test('supported preset text stages import without partial consent and preserve original bytes', () => {
+  const { store } = fixture();
+  const source = sourceOf({
+    ...document(),
+    regex: [
+      {
+        type: 'editprocess',
+        in: '^again$',
+        out: '{{#if {{equal::{{chatindex}}::{{lastmessageid}}}}}}continue{{/if}}',
+      },
+      { type: 'editdisplay', in: '^again$', out: 'Continue scene' },
+    ],
+  });
+  const preview = prepareRisuPresetImport({ source });
+  expect(preview.findings.filter((finding) => finding.level === 'unsupported')).toEqual([]);
+  const imported = applyRisuPresetImport(store, {
+    source,
+    digest: preview.digest,
+    allowPartial: false,
+    idempotencyKey: 'supported-regex',
+  });
+  expect(imported.preset.program.transforms?.map((rule) => rule.stage)).toEqual([
+    'input',
+    'display',
+  ]);
+  expect(imported.preset.program.transforms?.[0].replacementTemplate).toBeDefined();
+  expect(nativeTransferOriginal(store, imported.receipt.id).sourceFiles![0].base64).toBe(
     source.base64
   );
 });

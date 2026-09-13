@@ -5,6 +5,7 @@ import { CONTEXT_CONTINUATION_GUIDANCE } from '../core/context-summary-policy.js
 import { STORY_READ_TOOLS } from '../core/story-read-tools.js';
 import { compileSnapshotPrompt } from './prompt-snapshot.js';
 import { attachMainHostContext, requestInput } from './main-host-context.js';
+import { hasPromptInputTransforms, validatePromptInputTransforms } from './prompt-transforms.js';
 import { buildMainInput, type MainInput } from '../core/provider.js';
 import type { RunSnapshot, ToolEvent } from '../core/types.js';
 import type { Connection, ModelPreset } from '../core/product.js';
@@ -115,6 +116,14 @@ export function buildMainProviderRequest(
     completedToolHistory?: readonly ToolEvent[];
   } = {}
 ): { snapshot: RunSnapshot; input: MainInput; request: ProviderRequest } {
+  if (hasPromptInputTransforms(snapshot)) {
+    if (
+      !snapshot.promptInputTransforms ||
+      snapshot.promptCompilation?.warnings.includes('PROMPT_INPUT_TRANSFORMS_PENDING')
+    )
+      throw new ProviderContractError('PROMPT_INPUT_TRANSFORMS_PENDING');
+    validatePromptInputTransforms(snapshot);
+  }
   snapshot = admitBehaviorTools(snapshot);
   const behaviorTools = listBehaviorTools(snapshot).filter(
     (binding) => !options.disabledBehaviorTools?.includes(binding.tool.name)

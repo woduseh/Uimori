@@ -63,8 +63,11 @@ function tokenAt(text: string, start: number): { body: string; end: number } {
   throw new UnsupportedCbs('닫히지 않은 CBS');
 }
 
-class PresetCbs {
-  constructor(private controls: Map<string, PromptControl>) {}
+export class PresetCbs {
+  constructor(
+    private controls: Map<string, PromptControl>,
+    private messageContext = false
+  ) {}
 
   private control(key: string): PromptExpression {
     if (!this.controls.has(key)) throw new UnsupportedCbs('정의되지 않은 토글 읽기');
@@ -78,6 +81,12 @@ class PresetCbs {
     const token = tokenAt(source, 0);
     if (token.end !== source.length) throw new UnsupportedCbs('CBS 인수의 텍스트 결합');
     const [command, ...raw] = argumentsOf(token.body);
+    if (this.messageContext && raw.length === 0) {
+      if (command === 'chatindex' || command === 'chat_index')
+        return { context: ['message', 'index'] };
+      if (command === 'lastmessageid' || command === 'lastmessageindex')
+        return { context: ['message', 'lastIndex'] };
+    }
     if (command === 'getglobalvar' && raw.length === 1 && raw[0].startsWith('toggle_'))
       return this.control(raw[0].slice(7));
     if (['getvar', 'setvar', 'setdefaultvar', 'addvar'].includes(command))
@@ -169,15 +178,27 @@ class PresetCbs {
         const token = tokenAt(source, start);
         cursor = token.end;
         const header = token.body;
-        if (header === ':else' || header === '/when' || header === '/') {
+        if (header === ':else' || header === '/when' || header === '/if' || header === '/') {
           if (!nested) throw new UnsupportedCbs('짝이 없는 CBS 블록');
           return { nodes, end: header };
         }
-        if (header.startsWith('#when::') || header.startsWith('#when ')) {
+        if (this.messageContext && (header.startsWith('#if ') || header.startsWith('#if_pure '))) {
+          const pure = header.startsWith('#if_pure ');
+          const condition = exactTrue(this.expression(header.slice(pure ? 9 : 4)));
+          const yes = walk(true, depth + 1);
+          if (yes.end !== '/if' && yes.end !== '/')
+            throw new UnsupportedCbs('지원하지 않는 if 블록 또는 닫기');
+          nodes.push({
+            kind: 'if',
+            condition,
+            then: yes.nodes,
+            ...(!pure ? { trimIndent: true } : {}),
+          });
+        } else if (header.startsWith('#when::') || header.startsWith('#when ')) {
           const condition = this.condition(header);
           const yes = walk(true, depth + 1);
           const no = yes.end === ':else' ? walk(true, depth + 1) : undefined;
-          if (!(no?.end ?? yes.end)?.startsWith('/'))
+          if (!['/when', '/'].includes(no?.end ?? yes.end ?? ''))
             throw new UnsupportedCbs('닫히지 않은 조건 블록');
           nodes.push({
             kind: 'if',

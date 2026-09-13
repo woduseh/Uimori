@@ -31,5 +31,6 @@ await runBrowserVerification({
     'PROGPREPUI01',
     'RISUPRESETUI01',
     'RISUPRESETUI02',
+    'RISUPRESETUI03',
   ],
 });

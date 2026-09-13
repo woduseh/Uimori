@@ -2,6 +2,8 @@ import { expect, test } from '@playwright/test';
 import { createDefaultPromptProgram } from '../core/prompt-defaults.js';
 import type { RisuPresetImportApply } from '../core/risu-preset.js';
 import { navigationAction, selectPromptSection } from './ui-navigation.js';
+import { postFixtureChat } from './fixtures/chat.js';
+import type { ChatDetail } from '../core/types.js';
 
 test('RISUPRESETUI01 preserves a reviewed file and exact uncertain submission through dialog close', async ({
   page,
@@ -137,5 +139,77 @@ test('RISUPRESETUI02 imports a real preset document into the existing prompt edi
   await expect(page.getByLabel('Imported Mood', { exact: true })).toHaveValue('null');
   await page.getByLabel('Imported Mood', { exact: true }).selectOption('"1"');
   await expect(page.getByLabel('Imported Mood', { exact: true })).toHaveValue('"1"');
+  await selectPromptSection(
+    page.getByRole('region', { name: '프롬프트 구성', exact: true }),
+    '텍스트 변환'
+  );
+  await page.getByRole('button', { name: '변환 추가', exact: true }).click();
+  const rule = page.getByRole('group', { name: '텍스트 변환 1', exact: true });
+  await rule.getByLabel('변환 이름', { exact: true }).fill('요청 치환');
+  await rule.getByLabel('변환 적용 단계', { exact: true }).selectOption('input');
+  await rule.getByLabel('변환 대상', { exact: true }).selectOption('user');
+  await rule.getByLabel('변환 정규식 패턴', { exact: true }).fill('원래');
+  await rule.getByLabel('변환 치환문', { exact: true }).fill('전송');
+  await rule.getByRole('checkbox', { name: '사용', exact: true }).check();
+  await page.getByRole('button', { name: '프리셋 저장', exact: true }).click();
+  await expect(page.getByText('프롬프트를 저장했어요.', { exact: true })).toBeVisible();
+  await navigationAction(page, '프롬프트');
+  await page.getByRole('button', { name: `${title} 프롬프트 편집`, exact: true }).click();
+  await selectPromptSection(
+    page.getByRole('region', { name: '프롬프트 구성', exact: true }),
+    '텍스트 변환'
+  );
+  await expect(rule.getByLabel('변환 정규식 패턴', { exact: true })).toHaveValue('원래');
+  await expect(rule.getByLabel('변환 치환문', { exact: true })).toHaveValue('전송');
+  await expect(rule.getByLabel('변환 적용 단계', { exact: true })).toHaveValue('input');
+  await expect(rule.getByRole('checkbox', { name: '사용', exact: true })).toBeChecked();
   expect(await (await request.get('/api/model-workspace')).json()).toEqual(before);
+});
+
+test('RISUPRESETUI03 request projection keeps the original edit value and exposes transmission text', async ({
+  page,
+  request,
+}) => {
+  const response = await postFixtureChat(request, {
+    data: { title: `RISUPRESETUI03 ${Date.now()}` },
+  });
+  expect(response.ok()).toBe(true);
+  const chat = await response.json();
+  const runResponse = await request.post(`/api/chats/${chat.id}/runs`, {
+    data: {
+      request: '원래 요청',
+      expectedRevision: null,
+      expectedSettingsRevision: chat.settingsRevision,
+      idempotencyKey: crypto.randomUUID(),
+    },
+  });
+  expect(runResponse.ok()).toBe(true);
+  const run = await runResponse.json();
+  await expect
+    .poll(async () => {
+      const detail = (await (await request.get(`/api/chats/${chat.id}`)).json()) as ChatDetail;
+      return detail.runs.find((item) => item.id === run.id)?.status;
+    })
+    .toBe('completed');
+  // Synthetic presentation isolates the UI contract; server transformation has separate coverage.
+  await page.route('**/api/chats/*/sources/*/presentation', async (route) => {
+    const result = await (await route.fetch()).json();
+    await route.fulfill({
+      json: {
+        ...result,
+        request: { text: '화면 요청', applied: ['display'], changed: true },
+        inputTransform: { text: '전송 요청', applied: ['input'], changed: true },
+      },
+    });
+  });
+  await page.goto(`/?chat=${chat.id}`);
+  const source = page.getByTestId('source').first();
+  await expect(source.getByTestId('source-request')).toHaveText('화면 요청');
+  await source.getByText('전송 시 변환됨 · 원문과 전송문 보기', { exact: true }).click();
+  await expect(source.locator('.request-transform-details')).toContainText('원래 요청');
+  await expect(source.locator('.request-transform-details')).toContainText('전송 요청');
+  await source.getByRole('button', { name: '요청 편집', exact: true }).click();
+  await expect(source.getByLabel('요청 수정 내용', { exact: true })).toHaveValue('원래 요청');
+  await source.getByRole('button', { name: '요청 수정 취소', exact: true }).click();
+  await expect(source.getByTestId('source-request')).toHaveText('화면 요청');
 });

@@ -5,6 +5,15 @@
   min-width: 0;
   margin: 12px 0 20px;
 }
+.prompt-transform-fields,
+.prompt-transform-fields > fieldset {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+.prompt-transform-fields > fieldset {
+  margin: 0;
+}
 /* A block's menu can be a viewport sheet. Its ancestor must clear the sticky save bar,
    otherwise the bar intercepts sheet actions even though the menu itself has a z-index. */
 .prompt-composer:has(.action-menu[open]) {

@@ -9,6 +9,7 @@ import { freezePackageStates } from './package-behavior-host.js';
 import { prepareRunBehavior } from './package-behavior-run.js';
 import { freezeLoreContext } from './lore-context.js';
 import { captureLogicalHistory, compileSnapshotPrompt } from './prompt-snapshot.js';
+import { hasPromptInputTransforms } from './prompt-transforms.js';
 
 export type ReservationPurpose =
   | { purpose: 'run' | 'authored'; runId: string; sceneCommandId?: string }
@@ -31,7 +32,7 @@ export function freezeReservationSnapshot(
   options: ReservationPurpose
 ): RunSnapshot {
   if (options.purpose === 'resume-state')
-    return base.behaviorExecution?.deferredAutomatic
+    return base.behaviorExecution?.deferredAutomatic || hasPromptInputTransforms(base)
       ? base
       : compileSnapshotPrompt(freezeLoreContext(store, base));
 
@@ -85,7 +86,10 @@ export function freezeReservationSnapshot(
     frozen = { ...frozen, executionClock: options.executionClock() };
   frozen = freezePackageStates(store, frozen, reserved);
   if (options.purpose === 'run') frozen = prepareRunBehavior(store, options.runId, frozen);
-  if (options.purpose === 'run' && frozen.behaviorExecution?.deferredAutomatic) {
+  if (
+    options.purpose === 'run' &&
+    (frozen.behaviorExecution?.deferredAutomatic || hasPromptInputTransforms(frozen))
+  ) {
     const { contextBase } = store.context.prepareRun(frozen);
     return { ...frozen, contextBase };
   }

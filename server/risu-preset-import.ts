@@ -12,20 +12,15 @@ import { applyNativeTransfer, prepareNativeTransfer } from './native-transfer.js
 import { fields, HttpError, record, text } from './request-validation.js';
 import { readRisuPresetFile } from './risu-preset-file.js';
 import { importRisuPresetProgram } from './risu-preset-program.js';
+import { importRisuPresetRegex } from './risu-preset-regex.js';
 import type { Store } from './store.js';
 
 function analyze(value: unknown) {
   const input = readRisuPresetFile(value);
   const converted = importRisuPresetProgram(input.preset);
-  const findings = [...converted.findings];
   const regex = input.preset.regex ?? input.preset.presetRegex;
-  if (regex !== undefined && (!Array.isArray(regex) || regex.length > 0))
-    findings.push({
-      code: 'RISU_PRESET_REGEX_UNSUPPORTED',
-      level: 'unsupported',
-      message:
-        '이 프리셋의 정규식 처리는 아직 연결되지 않았어요. 원본 파일에 보존하며 자동 적용하지 않아요.',
-    });
+  const importedRegex = importRisuPresetRegex(regex, converted.program.controls);
+  const findings = [...converted.findings, ...importedRegex.findings];
   const preset: PromptPreset = {
     id: `risu-preset-${input.hash.slice(0, 24)}`,
     revision: 1,
@@ -33,10 +28,11 @@ function analyze(value: unknown) {
     role: 'main',
     program: {
       ...converted.program,
+      ...(importedRegex.transforms.length ? { transforms: importedRegex.transforms } : {}),
       provenance: {
         sourceHash: input.hash,
         variant: input.format,
-        conversionVersion: '1',
+        conversionVersion: '2',
         notes: [...new Set(findings.map((finding) => finding.code))],
       },
     },

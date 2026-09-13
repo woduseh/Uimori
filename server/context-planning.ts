@@ -26,6 +26,7 @@ export function candidateCompilationSnapshot(
     branchId: _branch,
     candidateOf: _candidate,
     promptCompilation: _compiled,
+    promptInputTransforms: _transforms,
     contextPlan: _plan,
     loreContext: _lore,
     ...input

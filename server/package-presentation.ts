@@ -5,6 +5,7 @@ import { renderPackageStateView } from '../core/package-runtime.js';
 import type { RunSnapshot } from '../core/types.js';
 import { applyPackageTransforms } from './package-transforms.js';
 import { packageImages } from '../core/package-images.js';
+import { applyPromptDisplayTransforms, currentPromptInputTransform } from './prompt-transforms.js';
 
 export type PackagePresentationSource = {
   id: string;
@@ -17,7 +18,8 @@ export type PackagePresentationSource = {
 export async function buildPackagePresentation(
   snapshot: RunSnapshot,
   source: PackagePresentationSource,
-  state?: { sourceRevision: string; sourceHash: string; values: Record<string, unknown> }
+  state?: { sourceRevision: string; sourceHash: string; values: Record<string, unknown> },
+  options: { skipSourceTransforms?: boolean } = {}
 ) {
   if (
     source.chatId !== snapshot.chatId ||
@@ -35,7 +37,28 @@ export async function buildPackagePresentation(
   // Presentation uses all attachments even when persona reference is disabled for main writing.
   const packages = compiledPackages(snapshot, 'status');
   const rules = packages.flatMap((p) => p.transforms);
-  const original = await applyPackageTransforms(source.text, rules, 'source');
+  const issues: string[] = [];
+  const display = async (text: string, role: 'user' | 'assistant') => {
+    try {
+      return await applyPromptDisplayTransforms(snapshot, text, role);
+    } catch {
+      issues.push('프롬프트의 표시 변환을 적용하지 못해 원래 내용을 표시해요.');
+      return { text, changed: false, applied: [] as string[] };
+    }
+  };
+  const presetDisplay = options.skipSourceTransforms
+    ? { text: source.text, changed: false, applied: [] as string[] }
+    : await display(source.text, 'assistant');
+  const packageDisplay = await applyPackageTransforms(presetDisplay.text, rules, 'source');
+  const original = {
+    text: packageDisplay.text,
+    changed: packageDisplay.text !== source.text,
+    applied: [...presetDisplay.applied, ...packageDisplay.applied],
+  };
+  const request = await display(snapshot.request, 'user');
+  const inputTransform = currentPromptInputTransform(snapshot);
+  if (snapshot.promptInputTransforms?.error)
+    issues.push('전송 전 텍스트 변환에 실패해 원래 입력으로 진행했어요.');
   const translation = source.translation
     ? await applyPackageTransforms(source.translation.text, rules, 'translation')
     : undefined;
@@ -63,6 +86,9 @@ export async function buildPackagePresentation(
     format: 'plain-text' as const,
     ...(inlineImageUrls.length ? { inlineImageUrls } : {}),
     original,
+    request,
+    ...(inputTransform ? { inputTransform } : {}),
+    issues,
     ...(translation ? { translation } : {}),
     stateViews: views,
   };
