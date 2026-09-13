@@ -322,8 +322,11 @@ export function validatePackageBehaviorRunSnapshot(store: Store, snapshot: RunSn
       'opportunityId',
       'baseStates',
       'automaticResults',
+      'deferredAutomatic',
     ]);
     if (e.version !== 1) reject('execution version');
+    if (Object.hasOwn(e, 'deferredAutomatic') && e.deferredAutomatic !== true)
+      reject('deferred automatic marker');
     digest(e.opportunityId);
     if (
       !Array.isArray(e.baseStates) ||
@@ -332,6 +335,26 @@ export function validatePackageBehaviorRunSnapshot(store: Store, snapshot: RunSn
       e.automaticResults.length > 100
     )
       reject('execution lists');
+    const automaticActions = (snapshot.profile?.packageAttachments ?? [])
+      .filter(
+        (ref) =>
+          !unavailable.has(`${ref.id}:${ref.role}`) &&
+          !historicalPersonaExcluded(snapshot.profile, ref.role)
+      )
+      .flatMap(
+        (ref) =>
+          snapshot.profile?.packages
+            ?.find((pkg) => pkg.id === ref.id && pkg.revision === ref.revision)
+            ?.behavior?.actions.filter((action) =>
+              behaviorActionTriggers(action).includes('before-turn')
+            ) ?? []
+      );
+    const requiresDeferred = automaticActions.some((action) => action.program !== undefined);
+    if ((e.deferredAutomatic === true) !== requiresDeferred) reject('deferred automatic contract');
+    if (e.deferredAutomatic === true) {
+      same(snapshot.packageStates, e.baseStates, 'deferred automatic base state');
+      if (e.automaticResults.length) reject('deferred automatic results');
+    }
     const ids = new Set<string>();
     for (const state of e.baseStates) {
       const s = executionState(
@@ -473,7 +496,7 @@ export function validatePackageBehaviorArchive(store: Store): void {
         same(recordDraws(action.draws, r.drawSeed), r.draws, 'recorded draws');
       } else if (r.drawSeed !== null || Object.keys(r.draws).length) reject('unexpected draws');
       if (action.program !== undefined) {
-        if (!['ui-action', 'model-tool'].includes(r.provenance))
+        if (!['ui-action', 'before-turn', 'model-tool'].includes(r.provenance))
           reject('program action provenance');
         if (r.drawSeed !== null || Object.keys(r.draws).length) reject('program action draws');
         // Restore verifies the accepted host receipt and committed values. It intentionally does

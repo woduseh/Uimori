@@ -31,7 +31,9 @@ export function freezeReservationSnapshot(
   options: ReservationPurpose
 ): RunSnapshot {
   if (options.purpose === 'resume-state')
-    return compileSnapshotPrompt(freezeLoreContext(store, base));
+    return base.behaviorExecution?.deferredAutomatic
+      ? base
+      : compileSnapshotPrompt(freezeLoreContext(store, base));
 
   const reserved = options.purpose === 'run' || options.purpose === 'authored';
   const authored = options.purpose === 'authored';
@@ -83,6 +85,10 @@ export function freezeReservationSnapshot(
     frozen = { ...frozen, executionClock: options.executionClock() };
   frozen = freezePackageStates(store, frozen, reserved);
   if (options.purpose === 'run') frozen = prepareRunBehavior(store, options.runId, frozen);
+  if (options.purpose === 'run' && frozen.behaviorExecution?.deferredAutomatic) {
+    const { contextBase } = store.context.prepareRun(frozen);
+    return { ...frozen, contextBase };
+  }
   if (!translationPreview) frozen = freezeLoreContext(store, frozen);
 
   if (helper) {

@@ -64,6 +64,7 @@ export function validateRunSnapshot(store: Store, snapshot: RunSnapshot, runId?:
     if (!isDeepStrictEqual(expected.promptCompilation, p)) reject('compiled prompt mismatch');
   } else if (
     !snapshot.story?.waiting &&
+    snapshot.behaviorExecution?.deferredAutomatic !== true &&
     !['pending', 'failed'].includes(snapshot.contextPlan?.status ?? '')
   )
     reject('compiled prompt missing');

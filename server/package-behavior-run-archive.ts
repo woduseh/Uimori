@@ -28,6 +28,7 @@ export const packageBehaviorRunTables = [
   'package_behavior_runs',
 ];
 type Row = Record<string, any>;
+type AutomaticPreparation = NonNullable<RunBehaviorProgress['preparation']>;
 type CheckState = (
   value: unknown,
   chatId: string,
@@ -55,6 +56,9 @@ function text(value: unknown): asserts value is string {
 function list(value: unknown, max = 100): asserts value is any[] {
   if (!Array.isArray(value) || value.length > max) reject('list');
 }
+function count(value: unknown, min: number, max: number): asserts value is number {
+  if (!Number.isSafeInteger(value) || Number(value) < min || Number(value) > max) reject('count');
+}
 const same = (a: unknown, b: unknown, message: string) => {
   if (!isDeepStrictEqual(a, b)) reject(message);
 };
@@ -64,6 +68,49 @@ function body(row: Row): Row {
 }
 const key = (entry: Pick<RunBehaviorEntry, 'instanceId' | 'actionId'>) =>
   JSON.stringify([entry.instanceId, entry.actionId]);
+
+function preparation(value: unknown, total: number): AutomaticPreparation {
+  const receipt = object(value, ['status', 'completed', 'total'], ['code', 'skipKey']);
+  if (!['pending', 'running', 'ready', 'failed', 'skipped'].includes(receipt.status))
+    reject('preparation status');
+  count(receipt.completed, 0, total);
+  count(receipt.total, 1, 100);
+  if (receipt.total !== total) reject('preparation total');
+  const hasCode = Object.hasOwn(receipt, 'code');
+  const hasSkipKey = Object.hasOwn(receipt, 'skipKey');
+  switch (receipt.status) {
+    case 'pending':
+      if (receipt.completed !== 0 || hasCode || hasSkipKey) reject('pending preparation');
+      break;
+    case 'running':
+      if (receipt.completed >= total || hasCode || hasSkipKey) reject('running preparation');
+      break;
+    case 'ready':
+      if (receipt.completed !== total || hasCode || hasSkipKey) reject('ready preparation');
+      break;
+    case 'failed':
+      if (
+        receipt.completed >= total ||
+        !hasCode ||
+        typeof receipt.code !== 'string' ||
+        receipt.code.length > 200 ||
+        !/^(BEHAVIOR|PROMPT)_[A-Z0-9_]+$/u.test(receipt.code) ||
+        hasSkipKey
+      )
+        reject('failed preparation');
+      break;
+    case 'skipped':
+      if (
+        receipt.completed >= total ||
+        receipt.code !== 'BEHAVIOR_PREPARATION_SKIPPED' ||
+        !hasSkipKey
+      )
+        reject('skipped preparation');
+      text(receipt.skipKey);
+      break;
+  }
+  return receipt as AutomaticPreparation;
+}
 
 /** Receipt validation replays deterministic calculations over recorded host facts, including copied fork facts. */
 export function validateRunBehaviorArchive(store: Store, checkState: CheckState): void {
@@ -171,7 +218,7 @@ export function validateRunBehaviorArchive(store: Store, checkState: CheckState)
         'projected draws'
       );
       if (action.program !== undefined) {
-        if (entry.trigger !== 'model' || entry.program === undefined)
+        if (!['before-turn', 'model'].includes(entry.trigger) || entry.program === undefined)
           reject('program receipt missing');
         try {
           validateExtensionProgramReceipt(entry.program, {
@@ -206,7 +253,11 @@ export function validateRunBehaviorArchive(store: Store, checkState: CheckState)
       snapshot = run.snapshot,
       execution = snapshot.behaviorExecution;
     if (!execution) reject('unexpected progress');
-    const value = object(body(row), ['version', 'opportunityId', 'entries', 'states']);
+    const value = object(
+      body(row),
+      ['version', 'opportunityId', 'entries', 'states'],
+      ['preparation']
+    );
     if (value.version !== 1 || execution.version !== 1) reject('version');
     digest(value.opportunityId);
     if (value.opportunityId !== execution.opportunityId) reject('opportunity binding');
@@ -224,9 +275,50 @@ export function validateRunBehaviorArchive(store: Store, checkState: CheckState)
     const base = execution.baseStates.map((state) =>
       checkState(state, run.chatId, snapshot.branchId ?? `main:${run.chatId}`, snapshot.profile)
     );
+    const automaticDefinitions = (snapshot.profile?.packageAttachments ?? [])
+      .filter(
+        (ref) =>
+          !historicalPersonaExcluded(snapshot.profile, ref.role) &&
+          !snapshot.packageBehaviorUnavailable?.some(
+            (item) => item.instanceId === `${ref.id}:${ref.role}`
+          )
+      )
+      .flatMap((ref) => {
+        const pkg = snapshot.profile?.packages?.find(
+          (candidate) => candidate.id === ref.id && candidate.revision === ref.revision
+        );
+        if (!pkg?.behavior) return [];
+        const behavior = validatePackageBehavior(pkg.behavior);
+        return behavior.actions
+          .filter((action) => behaviorActionTriggers(action).includes('before-turn'))
+          .map((action) => ({
+            ref,
+            behavior,
+            action,
+            instanceId: `${ref.id}:${ref.role}`,
+          }));
+      });
+    const deferred = execution.deferredAutomatic === true;
+    if (deferred !== Object.hasOwn(value, 'preparation')) reject('preparation contract');
+    const preparationReceipt = deferred
+      ? preparation(value.preparation, automaticDefinitions.length)
+      : undefined;
+    if (
+      preparationReceipt &&
+      ['pending', 'running'].includes(preparationReceipt.status) &&
+      value.entries.length
+    )
+      reject('unfinished preparation entries');
+    if (
+      preparationReceipt &&
+      ['pending', 'running'].includes(preparationReceipt.status) &&
+      run.status === 'completed'
+    )
+      reject('completed unfinished preparation');
     const states = structuredClone(base),
       seen = new Set<string>(),
       automatic: RunBehaviorEntry[] = [];
+    const automaticInstances = new Set(automaticDefinitions.map((item) => item.instanceId));
     if (new Set(base.map((state) => state.instanceId)).size !== base.length)
       reject('duplicate base state');
     let modelSeen = false;
@@ -277,21 +369,53 @@ export function validateRunBehaviorArchive(store: Store, checkState: CheckState)
       same(states[index], entry.before, 'progress state chain');
       states[index] = structuredClone(entry.after);
       if (entry.trigger === 'before-turn') {
+        if (deferred && preparationReceipt?.status !== 'ready')
+          reject('unpublished automatic entry');
         if (modelSeen) reject('automatic order');
         automatic.push(entry);
-      } else modelSeen = true;
+      } else {
+        if (
+          deferred &&
+          ['failed', 'skipped'].includes(preparationReceipt!.status) &&
+          automaticInstances.has(entry.instanceId)
+        )
+          reject('disabled automatic cohort');
+        modelSeen = true;
+      }
     }
     same(states, value.states, 'progress states');
-    const autoStates = structuredClone(base);
-    for (const entry of automatic)
-      autoStates[autoStates.findIndex((state) => state.instanceId === entry.instanceId)] =
-        structuredClone(entry.after);
-    same(autoStates, snapshot.packageStates, 'frozen automatic states');
-    same(
-      automatic.map(({ instanceId, actionId, result }) => ({ instanceId, actionId, result })),
-      execution.automaticResults,
-      'automatic results'
-    );
+    if (deferred) {
+      same(snapshot.packageStates, base, 'deferred snapshot states');
+      same(execution.automaticResults, [], 'deferred snapshot results');
+      if (preparationReceipt!.status === 'ready') {
+        // Accepted predicates were checked against their recorded hostRuntime above.
+        // A copied branch must not reinterpret omitted predicates under its new identity.
+        let previousIndex = -1;
+        for (const entry of automatic) {
+          const index = automaticDefinitions.findIndex(
+            (d) => d.instanceId === entry.instanceId && d.action.id === entry.actionId
+          );
+          if (index <= previousIndex) reject('automatic declaration order');
+          same(
+            entry.input,
+            automaticDefinitions[index].action.automaticInput ?? {},
+            'automatic input'
+          );
+          previousIndex = index;
+        }
+      } else if (automatic.length) reject('terminal automatic entry');
+    } else {
+      const autoStates = structuredClone(base);
+      for (const entry of automatic)
+        autoStates[autoStates.findIndex((state) => state.instanceId === entry.instanceId)] =
+          structuredClone(entry.after);
+      same(autoStates, snapshot.packageStates, 'frozen automatic states');
+      same(
+        automatic.map(({ instanceId, actionId, result }) => ({ instanceId, actionId, result })),
+        execution.automaticResults,
+        'automatic results'
+      );
+    }
     if (run.status === 'completed' && !snapshot.forkedFrom) {
       for (const entry of value.entries as RunBehaviorEntry[]) {
         const output = store.db

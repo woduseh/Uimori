@@ -25,7 +25,7 @@ test('PROGTOOLUI01 creators enable model code actions and model-only actions hav
   const fields = library.getByRole('region', { name: '패키지 구성', exact: true });
   await fields.getByRole('button', { name: '코드 계산 예제 넣기', exact: true }).click();
   const methods = fields.getByRole('group', { name: '중복 없는 항목 세기 호출 방법', exact: true });
-  await expect(methods.getByRole('checkbox', { name: /^생성 전 자동 실행/ })).toBeDisabled();
+  await expect(methods.getByRole('checkbox', { name: /^생성 전 자동 실행/ })).toBeEnabled();
   await methods.getByRole('checkbox', { name: /^모델이 필요할 때 요청/ }).check();
   await methods.getByRole('checkbox', { name: /^사용자 버튼/ }).uncheck();
   await fields.getByRole('button', { name: '동작 검증 후 적용', exact: true }).click();
@@ -96,6 +96,78 @@ async function seed(request: APIRequestContext, hostile = false, program = false
   expect(created.ok(), await created.text()).toBe(true);
   return (await created.json()) as { id: string };
 }
+test('PROGPREPUI01 a user can skip pending automatic code preparation and continue the same chat request', async ({
+  page,
+  request,
+}) => {
+  const pkg = createPanelPackage();
+  pkg.behavior!.actions.push({
+    id: 'prepare',
+    triggers: ['before-turn'],
+    automaticInput: {},
+    inputSchema: { type: 'record', properties: {} },
+    effects: [],
+    program: {
+      api: 'uimori-state-action-v1',
+      source: 'return {state:{...api.state,note:"prepared"},result:null};',
+    },
+  });
+  const added = await request.post('/api/content', {
+    data: {
+      kind: 'bot',
+      title: 'Synthetic automatic panel',
+      description: '',
+      text: pkg.body,
+      loading: 'pinned',
+      relatedIds: [],
+      package: pkg,
+    },
+  });
+  expect(added.ok(), await added.text()).toBe(true);
+  const content = await added.json();
+  const created = await request.post('/api/chats', {
+    data: { title: 'Synthetic preparation skip', botId: content.id },
+  });
+  expect(created.ok(), await created.text()).toBe(true);
+  const chat = await created.json();
+  await request.post('/api/test/control', { data: { action: 'hold', barrier: 'run' } });
+  try {
+    const admitted = await request.post(`/api/chats/${chat.id}/runs`, {
+      data: {
+        request: 'Write a quiet arrival.',
+        expectedRevision: null,
+        expectedSettingsRevision: chat.settingsRevision,
+        idempotencyKey: crypto.randomUUID(),
+      },
+    });
+    expect(admitted.ok(), await admitted.text()).toBe(true);
+    const run = await admitted.json();
+    await page.setViewportSize({ width: MOBILE_WIDTH, height: 900 });
+    await page.goto(`/?chat=${chat.id}`);
+    await page
+      .getByTestId('pending-run')
+      .getByTestId('turn-activity')
+      .locator(':scope > summary')
+      .click();
+    const skip = page.getByRole('button', { name: '자료 자동 준비 건너뛰기', exact: true });
+    await expect(skip).toBeVisible();
+    await skip.click();
+    await expect(
+      page.getByText('자료의 자동 행동 준비를 건너뛰었어요.', { exact: false })
+    ).toBeVisible();
+    await request.post('/api/test/control', { data: { action: 'release', barrier: 'run' } });
+    await expect
+      .poll(async () => (await (await request.get(`/api/runs/${run.id}`)).json()).status)
+      .toBe('completed');
+    const detail = await (await request.get(`/api/chats/${chat.id}/package-behaviors`)).json();
+    expect(detail.instances[0].state.note).toBe('');
+    const finished = await (await request.get(`/api/runs/${run.id}`)).json();
+    expect(finished.request).toBe('Write a quiet arrival.');
+    await expect(page.getByLabel('다음 장면 요청', { exact: true })).toBeEnabled();
+  } finally {
+    await request.post('/api/test/control', { data: { action: 'release', barrier: 'run' } });
+  }
+});
 test('EXTPANELUI01 code action updates its panel and a failed action preserves chat input', async ({
   page,
   request,

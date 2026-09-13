@@ -163,4 +163,35 @@ describe('fixed-memory QuickJS extension runtime', () => {
       )
     ).toBe('BEHAVIOR_PROGRAM_INPUT_SIZE');
   });
+  it('automatic preparation can wait for capacity and cancellation removes a queued invocation', async () => {
+    const a = new AbortController(),
+      b = new AbortController(),
+      queued = new AbortController();
+    const first = code(
+      executeExtensionProgram(program('while(true){}'), { state: {}, input: {} }, a.signal)
+    );
+    const second = code(
+      executeExtensionProgram(program('while(true){}'), { state: {}, input: {} }, b.signal)
+    );
+    const cancelled = code(
+      executeExtensionProgram(
+        program('return {state:{},result:null};'),
+        { state: {}, input: {} },
+        queued.signal,
+        { waitForSlot: true }
+      )
+    );
+    const waiting = executeExtensionProgram(
+      program('return {state:api.state,result:"ready"};'),
+      { state: { ok: true }, input: {} },
+      undefined,
+      { waitForSlot: true }
+    );
+    queued.abort();
+    a.abort();
+    b.abort();
+    expect(await cancelled).toBe('BEHAVIOR_PROGRAM_ABORTED');
+    await Promise.all([first, second]);
+    await expect(waiting).resolves.toMatchObject({ state: { ok: true }, result: 'ready' });
+  });
 });

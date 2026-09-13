@@ -29,8 +29,12 @@ export function RunTaskDetails({
 }) {
   const [cancelling, setCancelling] = useState(false);
   const [skipping, setSkipping] = useState(false);
-  const skipKey = useRef<string | null>(null);
+  const stateSkipKey = useRef<string | null>(null);
+  const packageSkipKey = useRef<string | null>(null);
   const canCancel = ['queued', 'running', 'waiting_for_state'].includes(run.status);
+  const packagePreparing =
+    !!run.packagePreparation && ['pending', 'running'].includes(run.packagePreparation.status);
+  const packagePreparationInterrupted = packagePreparing && !canCancel;
   return (
     <div className="run-task-details">
       <div className="task-heading">
@@ -46,6 +50,30 @@ export function RunTaskDetails({
         <p role="status" className="muted">
           일부 자료의 자동 처리나 지침을 적용하지 못했어요. 원본 자료와 기록을 보존하고 채팅을
           계속해요. 자세한 내용은 진단에서 확인할 수 있어요.
+        </p>
+      )}
+      {packagePreparing && !packagePreparationInterrupted && (
+        <p role="status" className="muted">
+          자료의 자동 행동을 준비하고 있어요. {run.packagePreparation!.completed}/
+          {run.packagePreparation!.total} 완료했어요. 준비가 끝나면 원문 생성을 시작해요.
+        </p>
+      )}
+      {packagePreparationInterrupted && (
+        <p role="status" className="muted">
+          자료의 자동 행동 준비가 끝나기 전에 원문 작업이 중단됐어요. 준비 중인 결과는 채택하지
+          않았어요.
+        </p>
+      )}
+      {run.packagePreparation?.status === 'failed' && (
+        <p role="status" className="muted">
+          자료의 자동 행동을 준비하지 못해 해당 결과를 적용하지 않았어요. 원문 생성은 계속할 수
+          있어요.
+        </p>
+      )}
+      {run.packagePreparation?.status === 'skipped' && (
+        <p role="status" className="muted">
+          자료의 자동 행동 준비를 건너뛰었어요. 준비 중이던 결과는 적용하지 않고 원문 생성을
+          계속해요.
         </p>
       )}
       {run.statePreparation && ['failed', 'skipped'].includes(run.statePreparation.status) && (
@@ -78,6 +106,34 @@ export function RunTaskDetails({
       )}
       {canCancel && (
         <div className="form-actions">
+          {packagePreparing && run.snapshot.branchId && (
+            <button
+              type="button"
+              className="secondary"
+              disabled={skipping || cancelling}
+              onClick={async () => {
+                if (skipping || cancelling) return;
+                setSkipping(true);
+                packageSkipKey.current ??= crypto.randomUUID();
+                onError('');
+                try {
+                  await api(`/runs/${run.id}/skip-package-preparation`, {
+                    chatId: run.chatId,
+                    branchId: run.snapshot.branchId,
+                    expectedRevision: run.parentRevision,
+                    idempotencyKey: packageSkipKey.current,
+                  });
+                  await refresh();
+                } catch (error) {
+                  onError((error as Error).message);
+                } finally {
+                  setSkipping(false);
+                }
+              }}
+            >
+              자료 자동 준비 건너뛰기
+            </button>
+          )}
           {run.status === 'waiting_for_state' && run.snapshot.branchId && (
             <button
               type="button"
@@ -86,14 +142,14 @@ export function RunTaskDetails({
               onClick={async () => {
                 if (skipping || cancelling) return;
                 setSkipping(true);
-                skipKey.current ??= crypto.randomUUID();
+                stateSkipKey.current ??= crypto.randomUUID();
                 onError('');
                 try {
                   await api(`/runs/${run.id}/skip-state-wait`, {
                     chatId: run.chatId,
                     branchId: run.snapshot.branchId,
                     expectedRevision: run.parentRevision,
-                    idempotencyKey: skipKey.current,
+                    idempotencyKey: stateSkipKey.current,
                   });
                   await refresh();
                 } catch (error) {

@@ -527,7 +527,14 @@ export async function performBehaviorActionWithProgram(
  * Annotation parsing is a separate overlay; its failure preserves already validated action facts. */
 export function completePackageOutputs(store: Store, run: Run, source: Source) {
   const branchId = run.snapshot.branchId ?? `main:${run.chatId}`;
-  const defs = definitions(store, run.chatId, branchId, run.snapshot)
+  let projected = completedRunBehaviorView(store, run);
+  const defs = definitions(store, run.chatId, branchId, projected)
+    .filter(
+      (d) =>
+        !projected.packageBehaviorUnavailable?.some(
+          (item) => item.instanceId === d.scope.attachmentInstanceId
+        )
+    )
     .map((d) => ({
       d,
       before: (run.snapshot.behaviorExecution?.baseStates ?? run.snapshot.packageStates)?.find(
@@ -536,7 +543,6 @@ export function completePackageOutputs(store: Store, run: Run, source: Source) {
     }))
     .filter((item): item is { d: Definition; before: PackageExecutionState } => !!item.before);
   if (!defs.length) return;
-  let projected = run.snapshot;
   const parse = (d: Definition, before: PackageExecutionState) => {
     const expected =
       projected.packageStates?.find((s) => s.instanceId === d.scope.attachmentInstanceId)

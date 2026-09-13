@@ -184,10 +184,12 @@ export function readerRuns(store: Store, id: string, scope?: string[]) {
     json_extract(snapshot,'$.settingsRevision') AS settingsRevision,CASE WHEN json_extract(snapshot,'$.packageStart.mode')='authored' THEN NULL ELSE json_extract(snapshot,'$.profile.models.main.title') END AS modelTitle,json_extract(snapshot,'$.sourceSegments') AS sourceSegments,COALESCE(json_array_length(snapshot,'$.profile.packageAttachments'),0)>0 AS hasPackages,
     CASE WHEN json_type(snapshot,'$.packageStart') IS NOT NULL THEN json_object('mode',json_extract(snapshot,'$.packageStart.mode'),'title',json_extract(snapshot,'$.packageStart.title')) END AS packageStart,
     CASE WHEN json_type(snapshot,'$.story.preparation')='object' THEN json_object('status',json_extract(snapshot,'$.story.preparation.status'),'reason',json_extract(snapshot,'$.story.preparation.reason'),'missingSources',json_array_length(snapshot,'$.story.preparation.missing'),'lastSourceRevision',json_extract(snapshot,'$.story.preparation.fallback.sourceRevision'),'hasState',json_type(snapshot,'$.story.state')='object' OR json_type(snapshot,'$.story.preparation.fallback')='object') END AS statePreparation,
+    CASE WHEN json_type(behavior_progress.body,'$.preparation')='object' THEN json_object('status',json_extract(behavior_progress.body,'$.preparation.status'),'completed',json_extract(behavior_progress.body,'$.preparation.completed'),'total',json_extract(behavior_progress.body,'$.preparation.total'),'code',json_extract(behavior_progress.body,'$.preparation.code')) END AS packagePreparation,
     (COALESCE(json_array_length(snapshot,'$.packageBehaviorUnavailable'),0)>0 OR EXISTS(SELECT 1 FROM json_each(snapshot,'$.promptCompilation.warnings') WHERE value GLOB 'PACKAGE_INSTRUCTION_UNAVAILABLE:*')) AS hasPackageIssues,
     CASE WHEN json_type(snapshot,'$.contextPlan')='object' THEN json_object('status',json_extract(snapshot,'$.contextPlan.status'),'inputTokenLimit',json_extract(snapshot,'$.contextPlan.budget.inputTokenLimit'),'estimatedInputTokens',json_extract(snapshot,'$.contextPlan.estimatedInputTokens'),'compactedSources',json_array_length(snapshot,'$.contextPlan.compacted'),'summaryCalls',json_extract(snapshot,'$.contextPlan.summaryCalls'),'error',json_extract(snapshot,'$.contextPlan.error')) END AS contextSummary,
     json_object('loreContextReset',json_extract(snapshot,'$.loreContextReset'),'branchId',branch_id,'candidateOf',json_extract(snapshot,'$.candidateOf'),'forkedFrom',json_extract(snapshot,'$.forkedFrom')) AS snapshot
-    FROM runs WHERE chat_id=? ${scope ? 'AND id IN (SELECT value FROM json_each(?))' : ''} ORDER BY created_at,id`)
+    FROM runs LEFT JOIN package_behavior_runs behavior_progress ON behavior_progress.run_id=runs.id
+    WHERE runs.chat_id=? ${scope ? 'AND runs.id IN (SELECT value FROM json_each(?))' : ''} ORDER BY runs.created_at,runs.id`)
       .all(id, ...(scope ? [JSON.stringify(scope)] : [])) as (Record<string, any> & {
       id: string;
       request: string;
@@ -209,6 +211,17 @@ export function readerRuns(store: Store, id: string, scope?: string[]) {
           ...JSON.parse(row.statePreparation),
           hasState: !!JSON.parse(row.statePreparation).hasState,
         }
+      : undefined,
+    packagePreparation: row.packagePreparation
+      ? (() => {
+          const preparation = JSON.parse(row.packagePreparation);
+          return {
+            status: preparation.status,
+            completed: preparation.completed,
+            total: preparation.total,
+            ...(typeof preparation.code === 'string' ? { code: preparation.code } : {}),
+          };
+        })()
       : undefined,
     packageStart: row.packageStart ? JSON.parse(row.packageStart) : undefined,
     sourceSegments: row.sourceSegments ? JSON.parse(row.sourceSegments) : undefined,

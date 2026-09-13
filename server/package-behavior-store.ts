@@ -377,7 +377,8 @@ export class PackageBehaviorStore {
     let evaluated: { state: RuntimeValue; result: RuntimeValue };
     let program: ExtensionProgramReceipt | undefined;
     if (action.program !== undefined) {
-      if (entry.trigger !== 'model') conflict('BEHAVIOR_PROGRAM_TRIGGER_NOT_ALLOWED');
+      if (!['before-turn', 'model'].includes(entry.trigger))
+        conflict('BEHAVIOR_PROGRAM_TRIGGER_NOT_ALLOWED');
       if (entryProgram === undefined) conflict('BEHAVIOR_PROGRAM_RECEIPT_REQUIRED');
       try {
         program = validateExtensionProgramReceipt(entryProgram, {
