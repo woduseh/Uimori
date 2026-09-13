@@ -19,13 +19,15 @@ type PromptTextTransform = {
 
 - `server/text-transforms.ts`의 `applyTextTransformBatch`/`applyTextTransforms`가 공통 Worker를 소유해요. 기존 패키지 `applyPackageTransforms`와 작은 표시 미리보기 `presentText`도 같은 실행기에 연결해요. 이전 표시 미리보기의 리터럴 치환·한도·오류 계약은 facade에서 유지해요.
 - 순서대로 ECMAScript 패턴·문자열 캡처를 치환해요. 플래그는 `gimsuy`, 최대 32개 규칙, 패턴 4,096자·치환문 16,384자예요. 한 Worker batch는 최대 2,000개 메시지·입력 합계 2,000,000자, 출력 합계 2,000,000자·기본 1초예요. 데이터는 Worker 인자로만 전달하고 제작자 JavaScript를 평가하지 않아요.
-- `preparePromptInputTransforms`는 예약 transaction 밖에서 계산하고 `RunSnapshot.promptInputTransforms`에 입력·설정 hash와 변경된 출력·적용 규칙을 보관해요. 설정 hash에는 DB ID가 아니라 규칙·옵션·이름이 들어가요. `projectPromptInputTransforms`는 저장된 결과만 동기 적용하므로 문맥 측정·실제 전송·후보·포크·복원에서 같은 결과를 사용해요. 원문 대화가 줄어드는 문맥 투영에서도 원래 메시지 index를 유지해요.
+- `preparePromptInputTransforms`는 예약 transaction 밖에서 계산하고 `RunSnapshot.promptInputTransforms`에 입력·설정 hash와 변경된 출력·적용 규칙을 보관해요. 설정 hash에는 DB ID가 아니라 규칙·옵션·이름과 선언이 있을 때의 공통 템플릿 변수가 들어가요. 선언 없는 과거 설정에는 빈 변수 필드를 추가하지 않아요. `projectPromptInputTransforms`는 저장된 결과만 동기 적용하므로 문맥 측정·실제 전송·후보·포크·복원에서 같은 결과를 사용해요. 원문 대화가 줄어드는 문맥 투영에서도 원래 메시지 index를 유지해요.
 - 준비 실패는 원 입력과 오류 코드로 고정해 채팅을 계속해요. 같은 입력의 후보·복원에서 실패한 정규식을 다시 시도하지 않아요. 명시적인 새 요청이나 규칙 변경은 새 계산이에요. 취소 후 늦은 계산은 채택하지 않아요.
 - 복원은 입력·설정·출력 hash, 구조와 한도를 검증해요. Worker를 다시 실행하지 않으므로 과거 계산의 실행시간이나 창작 의미를 재판정하지 않아요. 실제 전송 기록이 있는 Run의 영수증 누락은 거절해요. 이 선택적 snapshot 필드는 기존 DB 18·archive 15·채팅 백업 1로 보존하며 새 DB 표나 이관은 필요 없어요.
 
 ## 템플릿과 Risu 대응
 
-동적 치환은 기존 `PromptTemplate` AST를 사용해요. 옵션 값, `bot.name`, `user.name`, `message.text/role/index/lastIndex/current`만 읽어요. index는 요약 전 전송 가능 원문 메시지 목록의 0부터 시작하는 위치예요. input의 마지막은 현재 요청, display의 마지막은 해당 시점의 완성 응답이에요. `message.text`는 앞선 규칙의 출력이 아닌 원래 대상 텍스트예요. `char` 슬롯은 봇 이름, `slot`은 빈 문자열이에요. 임의 DB·상태·통신 접근은 없어요. 계산된 값의 `$`는 리터럴로 처리하며 제작자가 text 노드에 작성한 캡처 토큰은 유지해요. 치환문을 직접 수정하면 이전 동적 템플릿이 해제되고 안내해요. 복잡한 AST는 기존 전체 구성 JSON 편집을 사용해요.
+변수 조회는 본문과 같은 공통 resolver를 사용하고 별도 평가 프로그램은 자신의 기본값을 사용해요. 합산 변수 한도를 넘은 변수 참조 변환은 기존 오류 영수증과 원문 fallback으로 보존해요.
+
+동적 치환은 기존 `PromptTemplate` AST를 사용해요. 옵션 값, `bot.name`, `user.name`, `variables`, `message.text/role/index/lastIndex/current`만 읽어요. index는 요약 전 전송 가능 원문 메시지 목록의 0부터 시작하는 위치예요. input의 마지막은 현재 요청, display의 마지막은 해당 시점의 완성 응답이에요. `message.text`는 앞선 규칙의 출력이 아닌 원래 대상 텍스트예요. `char` 슬롯은 봇 이름, `slot`은 빈 문자열이에요. 임의 DB·상태·통신 접근은 없어요. 계산된 값의 `$`는 리터럴로 처리하며 제작자가 text 노드에 작성한 캡처 토큰은 유지해요. 치환문을 직접 수정하면 이전 동적 템플릿이 해제되고 안내해요. 복잡한 AST는 기존 전체 구성 JSON 편집을 사용해요.
 
 `server/risu-preset-regex.ts`는 고정 Risu 구현의 `editprocess`→`input`, `editdisplay`→`display`, order·기본 flags·개행·캡처·지원 CBS 조건을 이 구조로 변환해요. Risu `#if`의 줄 들여쓰기 제거는 일반 AST의 `trimIndent`로 표현해요. 프리셋 이름·특정 패턴·봇 전용 분기는 없어요.
 

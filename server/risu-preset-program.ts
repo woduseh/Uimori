@@ -3,12 +3,12 @@ import {
   validatePromptProgram,
   type PromptBlock,
   type PromptControl,
-  type PromptExpression,
-  type PromptOperation,
   type PromptRoleName,
-  type PromptTemplate,
 } from '../core/prompt-program.js';
 import type { RisuPresetFinding, RisuPresetProgramImport } from '../core/risu-preset.js';
+
+import { RisuCbs, UnsupportedCbs } from './risu-cbs.js';
+import { importRisuVariableDefaults } from './risu-variable-defaults.js';
 
 type RecordValue = Record<string, unknown>;
 const record = (value: unknown): RecordValue => {
@@ -17,211 +17,6 @@ const record = (value: unknown): RecordValue => {
   return value as RecordValue;
 };
 const string = (value: unknown) => (typeof value === 'string' ? value : '');
-const op = (name: PromptOperation, ...args: PromptExpression[]): PromptExpression => ({
-  op: name,
-  args,
-});
-const exactTrue = (value: PromptExpression) =>
-  op('any', op('equal', value, '1'), op('equal', value, 'true'));
-class UnsupportedCbs extends Error {}
-
-/** Split at the current CBS nesting level; arguments can themselves contain CBS. */
-function argumentsOf(text: string): string[] {
-  const parts: string[] = [];
-  let depth = 0,
-    start = 0;
-  for (let i = 0; i < text.length; i++) {
-    if (text.slice(i, i + 2) === '{{') {
-      depth++;
-      i++;
-    } else if (text.slice(i, i + 2) === '}}') {
-      depth--;
-      i++;
-    } else if (!depth && text.slice(i, i + 2) === '::') {
-      parts.push(text.slice(start, i));
-      start = i + 2;
-      i++;
-    }
-  }
-  parts.push(text.slice(start));
-  return parts;
-}
-
-function tokenAt(text: string, start: number): { body: string; end: number } {
-  let depth = 1;
-  for (let i = start + 2; i < text.length - 1; i++) {
-    const pair = text.slice(i, i + 2);
-    if (pair === '{{') {
-      depth++;
-      i++;
-    } else if (pair === '}}') {
-      depth--;
-      if (!depth) return { body: text.slice(start + 2, i), end: i + 2 };
-      i++;
-    }
-  }
-  throw new UnsupportedCbs('닫히지 않은 CBS');
-}
-
-export class PresetCbs {
-  constructor(
-    private controls: Map<string, PromptControl>,
-    private messageContext = false
-  ) {}
-
-  private control(key: string): PromptExpression {
-    if (!this.controls.has(key)) throw new UnsupportedCbs('정의되지 않은 토글 읽기');
-    return { control: key };
-  }
-
-  expression(source: string, depth = 0): PromptExpression {
-    if (depth > 40) throw new UnsupportedCbs('CBS 중첩 한도');
-    if (!source.includes('{{')) return source;
-    if (!source.startsWith('{{')) throw new UnsupportedCbs('CBS 인수의 텍스트 결합');
-    const token = tokenAt(source, 0);
-    if (token.end !== source.length) throw new UnsupportedCbs('CBS 인수의 텍스트 결합');
-    const [command, ...raw] = argumentsOf(token.body);
-    if (this.messageContext && raw.length === 0) {
-      if (command === 'chatindex' || command === 'chat_index')
-        return { context: ['message', 'index'] };
-      if (command === 'lastmessageid' || command === 'lastmessageindex')
-        return { context: ['message', 'lastIndex'] };
-    }
-    if (command === 'getglobalvar' && raw.length === 1 && raw[0].startsWith('toggle_'))
-      return this.control(raw[0].slice(7));
-    if (['getvar', 'setvar', 'setdefaultvar', 'addvar'].includes(command))
-      throw new UnsupportedCbs('지속 채팅 변수 읽기·변경');
-    const args = raw.map((arg) => this.expression(arg, depth + 1));
-    const binary: Record<string, PromptOperation> = {
-      equal: 'equal',
-      notequal: 'notEqual',
-      not_equal: 'notEqual',
-      greater: 'greater',
-      greaterequal: 'greaterEqual',
-      greater_equal: 'greaterEqual',
-    };
-    if (binary[command] && args.length === 2) return op(binary[command], ...args);
-    if (
-      (command === 'less' || command === 'lessequal' || command === 'less_equal') &&
-      args.length === 2
-    )
-      return op(command === 'less' ? 'greater' : 'greaterEqual', args[1], args[0]);
-    if (command === 'length' && args.length === 1) return op('length', ...args);
-    if (command === 'replace' && args.length === 3) return op('replace', ...args);
-    if ((command === 'and' || command === 'or') && args.length === 2)
-      return op(command === 'and' ? 'all' : 'any', ...args.map((arg) => op('equal', arg, '1')));
-    if (command === 'any' && args.length > 1)
-      return op('any', ...args.map((arg) => op('equal', arg, '1')));
-    if (command === 'not' && args.length === 1) return op('not', op('equal', args[0], '1'));
-    throw new UnsupportedCbs('지원하지 않는 CBS 명령 또는 인수');
-  }
-
-  private condition(header: string): { condition: PromptExpression; trimLines: boolean } {
-    const raw = header.startsWith('#when ') ? [header.slice(6)] : argumentsOf(header).slice(1);
-    let trimLines = true;
-    if (raw[0] === 'keep') {
-      trimLines = false;
-      raw.shift();
-    }
-    if (raw[0] === 'legacy') throw new UnsupportedCbs('legacy 공백 처리');
-    if (raw.length === 1) return { condition: exactTrue(this.expression(raw[0])), trimLines };
-    if (raw.length === 2 && raw[0] === 'toggle')
-      return { condition: exactTrue(this.control(raw[1])), trimLines };
-    if (raw.length === 2 && raw[0] === 'not')
-      return { condition: op('not', exactTrue(this.expression(raw[1]))), trimLines };
-    if (raw.length === 3) {
-      const [left, operator, right] = raw;
-      if (operator === 'tis' || operator === 'tisnot')
-        return {
-          condition: op(
-            operator === 'tis' ? 'equal' : 'notEqual',
-            this.control(left),
-            this.expression(right)
-          ),
-          trimLines,
-        };
-      if (operator === 'is' || operator === 'isnot')
-        return {
-          condition: op(
-            operator === 'is' ? 'equal' : 'notEqual',
-            this.expression(left),
-            this.expression(right)
-          ),
-          trimLines,
-        };
-      if (operator === 'and' || operator === 'or')
-        return {
-          condition: op(
-            operator === 'and' ? 'all' : 'any',
-            exactTrue(this.expression(left)),
-            exactTrue(this.expression(right))
-          ),
-          trimLines,
-        };
-    }
-    throw new UnsupportedCbs('지원하지 않는 조건 연산');
-  }
-
-  template(source: string, slotName = 'slot'): PromptTemplate {
-    let cursor = 0;
-    const walk = (nested: boolean, depth: number): { nodes: PromptTemplate; end?: string } => {
-      if (depth > 40) throw new UnsupportedCbs('CBS 중첩 한도');
-      const nodes: PromptTemplate = [];
-      while (cursor < source.length) {
-        const start = source.indexOf('{{', cursor);
-        if (start < 0) {
-          nodes.push({ kind: 'text', text: source.slice(cursor) });
-          cursor = source.length;
-          break;
-        }
-        if (start > cursor) nodes.push({ kind: 'text', text: source.slice(cursor, start) });
-        const token = tokenAt(source, start);
-        cursor = token.end;
-        const header = token.body;
-        if (header === ':else' || header === '/when' || header === '/if' || header === '/') {
-          if (!nested) throw new UnsupportedCbs('짝이 없는 CBS 블록');
-          return { nodes, end: header };
-        }
-        if (this.messageContext && (header.startsWith('#if ') || header.startsWith('#if_pure '))) {
-          const pure = header.startsWith('#if_pure ');
-          const condition = exactTrue(this.expression(header.slice(pure ? 9 : 4)));
-          const yes = walk(true, depth + 1);
-          if (yes.end !== '/if' && yes.end !== '/')
-            throw new UnsupportedCbs('지원하지 않는 if 블록 또는 닫기');
-          nodes.push({
-            kind: 'if',
-            condition,
-            then: yes.nodes,
-            ...(!pure ? { trimIndent: true } : {}),
-          });
-        } else if (header.startsWith('#when::') || header.startsWith('#when ')) {
-          const condition = this.condition(header);
-          const yes = walk(true, depth + 1);
-          const no = yes.end === ':else' ? walk(true, depth + 1) : undefined;
-          if (!['/when', '/'].includes(no?.end ?? yes.end ?? ''))
-            throw new UnsupportedCbs('닫히지 않은 조건 블록');
-          nodes.push({
-            kind: 'if',
-            ...condition,
-            then: yes.nodes,
-            ...(no ? { else: no.nodes } : {}),
-          });
-        } else if (header === 'slot' || header === 'char') {
-          nodes.push({ kind: 'slot', name: header === 'slot' ? slotName : 'char' });
-        } else {
-          nodes.push({
-            kind: 'value',
-            expression: this.expression(source.slice(start, token.end)),
-          });
-        }
-      }
-      if (nested) throw new UnsupportedCbs('닫히지 않은 조건 블록');
-      return { nodes };
-    };
-    return walk(false, 0).nodes;
-  }
-}
-
 function promptRole(value: unknown): PromptRoleName {
   if (value === undefined || value === 'system') return 'system';
   if (value === 'bot' || value === 'assistant') return 'assistant';
@@ -286,7 +81,7 @@ export function importRisuPresetProgram(value: unknown): RisuPresetProgramImport
         : {}),
     });
   }
-  const cbs = new PresetCbs(controls);
+  const cbs = new RisuCbs(controls);
   const blocks: PromptBlock[] = [];
   const settings = preset.promptSettings ? record(preset.promptSettings) : {};
   for (const [index, raw] of preset.promptTemplate.entries()) {
@@ -373,13 +168,24 @@ export function importRisuPresetProgram(value: unknown): RisuPresetProgramImport
       message:
         'Risu 프리셋에는 현재 전역 토글 값이 포함되지 않아요. 미설정 값으로 시작하며, 기본 변수는 전역 토글 값으로 바꾸지 않아요.',
     });
-  if (preset.templateDefaultVariables)
+  let variableDefaults: Record<string, string> | undefined;
+  try {
+    variableDefaults = importRisuVariableDefaults(preset.templateDefaultVariables);
+    if (variableDefaults !== undefined)
+      findings.push({
+        code: 'RISU_PRESET_CHAT_VARIABLE_DEFAULTS',
+        level: 'warning',
+        message:
+          '기본 변수는 공통 템플릿의 읽기 기본값으로 가져와요. 봇의 기본값이 우선하고 프리셋은 빈 키를 보충해요. 전역 토글·저장된 채팅 상태와 별개이며 setvar·Lua 등의 변경은 아직 실행하지 않아요.',
+      });
+  } catch {
     findings.push({
-      code: 'RISU_PRESET_CHAT_VARIABLE_DEFAULTS',
-      level: 'warning',
+      code: 'RISU_PRESET_CHAT_VARIABLE_DEFAULTS_INVALID',
+      level: 'unsupported',
       message:
-        '지속 채팅 변수 기본값은 전역 토글과 별개예요. 이 가져오기는 채팅 변수를 만들지 않아요.',
+        '기본 변수의 형식·이름·크기가 지원 범위를 벗어나 자동 적용하지 않아요. 원본 파일에 보존해요.',
     });
+  }
   if (settings.postEndInnerFormat)
     findings.push({
       code: 'RISU_PRESET_POST_END',
@@ -398,11 +204,12 @@ export function importRisuPresetProgram(value: unknown): RisuPresetProgramImport
   const program = validatePromptProgram({
     version: 1,
     controls: [...controls.values()],
+    ...(variableDefaults !== undefined ? { variableDefaults } : {}),
     blocks,
     provenance: {
       sourceHash: createHash('sha256').update(JSON.stringify(value)).digest('hex'),
       variant: 'risu-preset',
-      conversionVersion: '1',
+      conversionVersion: '3',
       notes: findings.map((finding) => finding.code),
     },
   });

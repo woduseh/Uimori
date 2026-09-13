@@ -19,6 +19,7 @@ import {
   type PackageIdentityContext,
 } from './package-identity.js';
 import { PromptBudget } from './prompt-values.js';
+import { templateReadsVariables } from './template-variables.js';
 
 export const GENERATED_PACKAGE_START_MAX_CHARS = 4000;
 
@@ -35,6 +36,7 @@ export type PackageStart = {
 };
 export type PackageStartRef = { packageId: string; packageRevision: number; startId: string };
 export type PackageStartSnapshot = PackageStartRef & {
+  templateWarning?: 'TEMPLATE_VARIABLE_DEFAULTS_LIMIT';
   mode: PackageStart['mode'];
   title: string;
   text: string;
@@ -193,17 +195,22 @@ export function resolvePackageStart(
       ),
     };
   }
-  const rendered = start.template
-    ? renderPromptTemplate(
-        start.template,
-        values,
-        {},
-        {
-          runtime: identity,
-          budget: new PromptBudget({ maxOutputChars: 100_000 }, 'deterministic'),
-        }
-      )
-    : start.text;
+  const templateWarning =
+    identity.variableDefaultsError && templateReadsVariables(start.template)
+      ? identity.variableDefaultsError
+      : undefined;
+  const rendered =
+    start.template && !templateWarning
+      ? renderPromptTemplate(
+          start.template,
+          values,
+          {},
+          {
+            runtime: identity,
+            budget: new PromptBudget({ maxOutputChars: 100_000 }, 'deterministic'),
+          }
+        )
+      : start.text;
   text(rendered, start.mode === 'generate' ? GENERATED_PACKAGE_START_MAX_CHARS : 100_000);
   return {
     packageId: pkg.id,
@@ -213,6 +220,7 @@ export function resolvePackageStart(
     title: start.title,
     text: rendered,
     values,
+    ...(templateWarning ? { templateWarning } : {}),
     ...(initialAction ? { initialAction } : {}),
   };
 }

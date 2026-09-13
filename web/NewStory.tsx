@@ -17,8 +17,10 @@ import { packageIdentityFromContents } from '../core/package-identity.js';
 import {
   reconcilePromptValues,
   resolvePromptValues,
+  type PromptProgram,
   type PromptValue,
 } from '../core/prompt-program.js';
+import { resolveTemplateVariableContext } from '../core/template-variables.js';
 import './package-authoring.css';
 import { useTestMode } from './useTestMode.js';
 import { ContentAvatar } from './ContentAvatar.js';
@@ -33,12 +35,34 @@ type StorySelection = {
   bot: Content | null;
   persona: Content | null;
   modules: Content[];
+  mainPromptProgram: PromptProgram | null;
   profile: NewStoryProfileIntent | null;
 };
 
 const selectedId = (key: string) => key.slice(0, key.lastIndexOf('@'));
 const startValuesKey = (packageKey: string, startId: string) =>
   JSON.stringify([packageKey, startId]);
+const packageIdentityForSelection = (
+  bot: Content,
+  persona: Content | null | undefined,
+  modules: Content[],
+  mainPromptProgram: PromptProgram | null | undefined
+) => {
+  const contents: [PackageRole, Content | null | undefined][] = [
+    ['bot', bot],
+    ['persona', persona],
+    ...modules.map((item): [PackageRole, Content] => ['module', item]),
+  ];
+  const packages = contents.flatMap(([, item]) => (item?.package ? [item.package] : []));
+  const variableContext = resolveTemplateVariableContext({
+    packageAttachments: contents.flatMap(([role, item]) =>
+      item?.package ? [{ id: item.id, revision: item.revision, role }] : []
+    ),
+    packages,
+    ...(mainPromptProgram ? { promptPresets: { main: { program: mainPromptProgram } } } : {}),
+  });
+  return { ...packageIdentityFromContents(bot, persona), ...variableContext };
+};
 
 export function NewStory({
   library,
@@ -219,7 +243,12 @@ export function NewStory({
             selectedBot.package,
             start,
             values[`${refValue(selectedBot)}:bot`],
-            packageIdentityFromContents(selectedBot, selectedPersona)
+            packageIdentityForSelection(
+              selectedBot,
+              selectedPersona,
+              selectedModules,
+              workspace?.main.program
+            )
           )
         : null;
     if (start && !opening) throw new Error('선택한 시작을 다시 확인해 주세요.');
@@ -235,6 +264,7 @@ export function NewStory({
       bot: selectedBot ?? null,
       persona: selectedPersona ?? null,
       modules: selectedModules,
+      mainPromptProgram: workspace?.main.program ?? null,
       profile:
         selectedBot || selectedPersona
           ? {
@@ -336,6 +366,7 @@ export function NewStory({
       : null;
   const activeModules =
     frozen?.modules ?? modules.map((key) => loadedContents[key]).filter(Boolean);
+  const activeMainPromptProgram = frozen ? frozen.mainPromptProgram : workspace?.main.program;
   let opening: PackageStartSnapshot | null = null,
     openingError = '';
   if (start && activeBot?.package) {
@@ -344,7 +375,12 @@ export function NewStory({
         activeBot.package,
         start,
         packageValues[`${refValue(activeBot)}:bot`],
-        packageIdentityFromContents(activeBot, activePersona)
+        packageIdentityForSelection(
+          activeBot,
+          activePersona,
+          activeModules,
+          activeMainPromptProgram
+        )
       );
     } catch (caught) {
       openingError = (caught as Error).message;
@@ -483,7 +519,12 @@ export function NewStory({
                         pkg,
                         id,
                         {},
-                        packageIdentityFromContents(activeBot, activePersona)
+                        packageIdentityForSelection(
+                          activeBot,
+                          activePersona,
+                          activeModules,
+                          activeMainPromptProgram
+                        )
                       ).values
                     : resolvePromptValues({ version: 1, controls: pkg.controls, blocks: [] }));
                 rememberedStartValues.current[startValuesKey(packageKey, id)] = values;
@@ -525,6 +566,11 @@ export function NewStory({
                   : '확정하면 이 요청으로 선택한 본문 모델을 호출해요.'}
                 {opening.initialAction && ' 초기 행동은 확정할 때 한 번 실행해요.'}
               </p>
+              {opening.templateWarning && (
+                <p role="status">
+                  기본 변수의 전체 크기가 한도를 넘어 템플릿 치환 없이 원문을 사용해요.
+                </p>
+              )}
             </>
           )}
           {openingError && (

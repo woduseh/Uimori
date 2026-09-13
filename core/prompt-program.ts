@@ -1,6 +1,7 @@
 /** A data-only prompt language. Content cannot create tools, wire objects or executable code. */
 import { validateAgentCollaboration } from './agent-collaboration.js';
 import { validateTextTransformRule, type TextTransformRule } from './text-transform.js';
+import { validateTemplateVariableDefaults } from './template-variables.js';
 import {
   PromptBudget,
   evaluationFail,
@@ -146,6 +147,7 @@ export type PromptTextTransform = TextTransformRule & {
 };
 export type PromptProgram = {
   version: 1;
+  variableDefaults?: Record<string, string>;
   controls: PromptControl[];
   blocks: PromptBlock[];
   transforms?: PromptTextTransform[];
@@ -511,6 +513,7 @@ export function validatePromptProgram(value: unknown): PromptProgram {
   inspectAst(value);
   const raw = object(value, [
     'version',
+    'variableDefaults',
     'controls',
     'blocks',
     'transforms',
@@ -518,6 +521,7 @@ export function validatePromptProgram(value: unknown): PromptProgram {
     'collaboration',
     'provenance',
   ]);
+  if (raw.variableDefaults !== undefined) validateTemplateVariableDefaults(raw.variableDefaults);
   if (
     raw.version !== 1 ||
     !Array.isArray(raw.controls) ||
@@ -848,7 +852,29 @@ class PromptEvaluator {
       if (!Object.hasOwn(descriptor, 'value')) evaluationFail('PROMPT_INVALID_RUNTIME_VALUE');
       primitive(descriptor.value);
     }
-    inspectRuntimeValue(options.runtime ?? {}, this.budget);
+    const runtime = options.runtime ?? {};
+    const variableDescriptor = Object.getOwnPropertyDescriptor(runtime, 'variables');
+    const variableErrorDescriptor = Object.getOwnPropertyDescriptor(
+      runtime,
+      'variableDefaultsError'
+    );
+    if (variableDescriptor || variableErrorDescriptor) {
+      if (
+        (variableDescriptor && !Object.hasOwn(variableDescriptor, 'value')) ||
+        (variableErrorDescriptor && !Object.hasOwn(variableErrorDescriptor, 'value'))
+      )
+        evaluationFail('PROMPT_INVALID_RUNTIME_VALUE');
+      // Frozen declarations have their own bounded namespace. Historical runtime without it
+      // keeps the original whole-object validation, including its exact size accounting.
+      const descriptors = Object.getOwnPropertyDescriptors(runtime);
+      delete descriptors.variables;
+      delete descriptors.variableDefaultsError;
+      inspectRuntimeValue(Object.create(Object.getPrototypeOf(runtime), descriptors), this.budget);
+      if (variableDescriptor) {
+        inspectRuntimeValue(variableDescriptor.value, this.budget);
+      }
+      if (variableErrorDescriptor) inspectRuntimeValue(variableErrorDescriptor.value, this.budget);
+    } else inspectRuntimeValue(runtime, this.budget);
     inspectRuntimeValue(options.locals ?? {}, this.budget);
     this.runtime = structuredClone(options.runtime ?? {});
     this.locals = structuredClone(options.locals ?? {});

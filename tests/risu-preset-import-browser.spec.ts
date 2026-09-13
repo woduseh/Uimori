@@ -92,12 +92,13 @@ test('RISUPRESETUI02 imports a real preset document into the existing prompt edi
   const source = {
     name: title,
     customPromptTemplateToggle: 'mood=Imported Mood=select=Calm,Vivid',
+    templateDefaultVariables: 'location=DECLARED_LOCATION',
     promptTemplate: [
       {
         type: 'plain',
         role: 'system',
         type2: 'normal',
-        text: '{{#when::mood::tis::1}}VIVID{{:else}}CALM{{/when}}',
+        text: '{{#when::mood::tis::1}}VIVID{{:else}}CALM{{/when}} {{getvar::location}}',
       },
       { type: 'chat', rangeStart: 0, rangeEnd: 'end' },
     ],
@@ -139,6 +140,10 @@ test('RISUPRESETUI02 imports a real preset document into the existing prompt edi
   await expect(page.getByLabel('Imported Mood', { exact: true })).toHaveValue('null');
   await page.getByLabel('Imported Mood', { exact: true }).selectOption('"1"');
   await expect(page.getByLabel('Imported Mood', { exact: true })).toHaveValue('"1"');
+  const composer = page.getByRole('region', { name: '프롬프트 구성', exact: true });
+  await selectPromptSection(composer, '미리보기');
+  await composer.getByRole('button', { name: '미리보기 갱신', exact: true }).click();
+  await expect(composer.locator('.pc-message-list')).toContainText('VIVID DECLARED_LOCATION');
   await selectPromptSection(
     page.getByRole('region', { name: '프롬프트 구성', exact: true }),
     '텍스트 변환'

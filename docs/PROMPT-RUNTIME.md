@@ -26,6 +26,16 @@ compilePromptProgram(program, { values, slots, history, runtime, limits }): Prom
 
 `runtime`와 `locals`는 `Record<string, RuntimeValue>`예요. 평가 입력은 검증 후 복사하며 반환하는 구조화 값도 분리된 복사본이에요. `context` 경로에는 **host가 명시적으로 제공한 필드만** 존재해요. 이름이 있다고 DB·환경 변수·파일을 조회하지 않아요. `slots`는 기존 원문 문자열 삽입 계약으로 유지하며 context와 혼용하지 않아요.
 
+## 템플릿 기본 변수
+
+`PromptProgram.variableDefaults?: Record<string,string>`와 `ContentPackage.variableDefaults?: {values: Record<string,string>, attachmentRoles?: PackageRole[]}`는 쓰기 권한이 없는 읽기 기본값이에요. `core/template-variables.ts`의 `resolveTemplateVariableContext`가 고정 profile에서 허용 역할의 attachment 선언을 순서대로 읽고, 먼저 나온 키를 유지한 뒤 main 프롬프트 기본값으로 없는 키를 보충해요. `resolveTemplateVariables`는 같은 결과의 값만 돌려주는 facade예요. 본문·로어·시작문·지침·실행 문맥·모델의 자료 읽기·프리셋 정규식은 이 계산을 공유해요.
+
+Host가 `context.variables`를 제공하면 `{op:'get',args:[{context:['variables']},'key']}`로 읽어요. 없는 값은 native null이며 빈 문자열은 그대로 유지해요. JSON 데이터는 재해석하지 않아요. 선언 자체는 자료/프롬프트 개정과 Run profile에 보존하고 별도의 상태 표를 만들지 않아요. 이후 자료를 수정해도 과거 예약·시작문·복원의 해석은 바뀌지 않아요. 선언이 없는 과거 profile에는 빈 변수 필드를 추가하지 않아요.
+
+선언은 최대 2,000개 키·값당 200,000자·JSON 합계 1,000,000자이며 기존 unsafe key/JSON 검사를 공유해요. 여러 자료의 합산이 한도를 넘으면 일부 키만 채택하지 않고 변수층 전체를 미적용해요. 본문·로어와 변수 참조 시작문은 보존 원문, 지침은 기존 사용 불가 경고, main 프롬프트는 `TEMPLATE_VARIABLE_DEFAULTS_LIMIT` 경고와 없는 변수 조회로 계속해요. 시작문 경고는 미리보기에서 표시하고 snapshot에도 보존해요. 기존 상태를 초기화하거나 본문 채팅을 금지하지 않아요.
+
+평가기에서 `variables`와 해당 오류 metadata는 나머지 runtime과 독립된 기존 크기 한도로 검사해요. 이미 허용된 대화 문맥이 새 선언 때문에 한도를 넘는 일을 피하며 총 namespace 크기는 유한해요. 일반 AST 연산 결과·출력·단계 한도는 그대로 유지해요. 선언 없는 기존 runtime은 이전 전체 객체 검사를 유지해요. Risu 어댑터의 `getvar`·기본값 우선순위 및 아직 없는 공유 상태 쓰기는 [Risu 가져오기](RISU-IMPORT.md#기본-변수와-읽기-cbs)를 봐요.
+
 ## 데이터 AST
 
 ```json

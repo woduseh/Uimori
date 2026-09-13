@@ -11,6 +11,7 @@ import { validateSourceSegmentPolicy, type SourceSegmentPolicy } from './source-
 import { validatePackageModules, type PackageModuleRef } from './package-features.js';
 import { validatePackageIdentityTemplate } from './package-identity.js';
 import { validatePackagePanels, type PackagePanel } from './package-panels.js';
+import { validateTemplateVariableDefaults } from './template-variables.js';
 
 export const PACKAGE_ROLES = ['bot', 'persona', 'module'] as const;
 export type PackageRole = (typeof PACKAGE_ROLES)[number];
@@ -61,6 +62,7 @@ export type ContentPackage = {
   description: string;
   body?: string;
   bodyTemplate?: PromptTemplate;
+  variableDefaults?: { values: Record<string, string>; attachmentRoles?: PackageRole[] };
   identity?: { name: string; description: string };
   roleBindings?: Partial<Record<PackageRole, string>>;
   images?: PackageImage[];
@@ -148,6 +150,7 @@ export function validateContentPackage(value: unknown): ContentPackage {
     'description',
     'body',
     'bodyTemplate',
+    'variableDefaults',
     'identity',
     'roleBindings',
     'images',
@@ -170,6 +173,19 @@ export function validateContentPackage(value: unknown): ContentPackage {
   string(p.title, 200);
   string(p.description, 4000);
   if (p.body !== undefined) string(p.body, 1_000_000);
+  if (p.variableDefaults !== undefined) {
+    const declaration = object(p.variableDefaults, ['values', 'attachmentRoles']);
+    validateTemplateVariableDefaults(declaration.values);
+    if (declaration.attachmentRoles !== undefined) {
+      list(declaration.attachmentRoles, 3);
+      if (
+        !declaration.attachmentRoles.length ||
+        declaration.attachmentRoles.some((role) => !PACKAGE_ROLES.includes(role as PackageRole))
+      )
+        fail('PACKAGE_VARIABLE_DEFAULTS_ROLE');
+      unique(declaration.attachmentRoles as string[]);
+    }
+  }
   if (p.identity !== undefined) {
     const v = object(p.identity, ['name', 'description']);
     string(v.name, 200);

@@ -204,6 +204,8 @@ export function compileSnapshotPrompt(
     ...(values ? { values } : {}),
   });
   promptCompilation.warnings.push(...context.transformWarnings);
+  if (context.runtime.variableDefaultsError === 'TEMPLATE_VARIABLE_DEFAULTS_LIMIT')
+    promptCompilation.warnings.push('TEMPLATE_VARIABLE_DEFAULTS_LIMIT');
   for (const pkg of packages)
     for (const item of pkg.unavailableInstructions ?? [])
       promptCompilation.warnings.push(

@@ -1,5 +1,7 @@
 # 작업 지도
 
+- 기본 변수와 CBS 읽기는 `docs/PROMPT-RUNTIME.md`·`docs/RISU-IMPORT.md`, `core/template-variables.ts`·`server/risu-cbs.ts`를 봐요. 카드/프리셋/프리셋 정규식은 공통 CBS 파서를 사용하고, 자료·프리셋의 읽기 기본값은 고정 profile의 같은 resolver로 본문·로어·시작문·지침·프리셋/정규식/미리보기에 제공해요. Risu 카드 선언은 bot 역할에만 참여하고 토글이나 behavior 초기 state로 복사하지 않아요. 선언 없는 과거 runtime/정규식 hash는 유지하며 합산 초과는 전체 변수층 미적용과 기존 경고·원문 fallback이에요. 저장된 공유 변수 쓰기·Lua/트리거는 미완이며 코드 실행·DB 이관을 이 구현의 완료로 해석하지 않아요.
+
 - CharX 내부 모듈은 `server/risu-module-file.ts`의 `readEmbeddedRisuModule`로 해독하고 `character-card-file.ts`에서 같은 카드의 lore/regex/trigger로 정규화해요. regex/trigger는 내부 값 또는 빈 배열, lore는 누락/null일 때만 카드 fallback이며 두 목록을 합치거나 별도 패키지로 추가하지 않아요. 카드 소유 metadata·이미지는 유지해요. 모듈 JSON과 `moduleLoreEntries`를 공유하며 실제 트리거/Lua 실행은 미연결이에요. `kind` 선택은 검토·저장 digest에 포함하고 모듈 JSON/프로젝트는 모듈로만 등록해요. 파일명만으로 CharX 역할을 확정하지 않아요.
 
 - 2026-09-13 CharX 후속 사용자 선택: 메인 프롬프트 덮어쓰기·성격·시나리오는 제외 안내와 원본 보존만 해요. 글로벌 노트는 기존 공통 `PackageInstruction(target:main)`으로 봇의 추가 작문 지침에 연결하며 `{{original}}`는 중복 삽입하지 않아요. 기존 저장 자료·과거 Run을 일괄 수정하지 않아요. 독립 `.risum` 가져오기는 목표에서 제외하고 CharX 내장 모듈 해독과 구분해요. 결정은 `docs/DECISIONS-2026-09-12-BETA.md`, 현재 구현은 `docs/RISU-IMPORT.md`를 봐요.
@@ -32,7 +34,7 @@
 
 - 자료 이름·옵션 텍스트는 `bodyTemplate`·`lore.template`·authored `starts.template`과 기존 `PromptTemplate` AST를 사용해요. `core/package-identity.ts`의 고정 이름 문맥과 호스트 전용 결정적 예산으로 예약·모델 참고·복원을 일치시키고 직접 text 편집은 템플릿을 해제해요. Reader·시작문 이미지 표시는 원문 시점 패키지의 허용된 로컬 blob 참조만 사용해요. `docs/PACKAGES.md`·`docs/RISU-IMPORT.md`가 현재 범위예요.
 
-- 기본 Risu 카드 가져오기는 `docs/RISU-IMPORT.md`, `server/risu-import.ts`·`server/character-card-file.ts`, `web/RisuImport.tsx`예요. `.charx`·카드 JSON을 단방향 변환하고 새 봇·채팅을 함께 저장해요. 로어 보존이 기본이며 기억 분리는 선택한 경우에만 기존 notes 저장소의 출처 있는 `imported-memory`로 보관해요. 내장 모듈·스크립트는 미지원 안내 후 부분 가져오기이며 전체 호환 완료가 아니에요. 원본 바이트는 native transfer `sourceFiles`에만 보존해요. 사용자의 2026-09-13 지시에 따라 새 검증·진단 기반을 확장하지 말고 실제 기능 구현과 해당 흐름의 필요한 확인을 우선해요.
+- 기본 Risu 카드 가져오기는 `docs/RISU-IMPORT.md`, `server/risu-import.ts`·`server/character-card-file.ts`, `web/RisuImport.tsx`예요. `.charx`·카드 JSON을 단방향 변환하고 새 봇·채팅을 함께 저장해요. 로어 보존이 기본이며 기억 분리는 선택한 경우에만 기존 notes 저장소의 출처 있는 `imported-memory`로 보관해요. CharX 내부 모듈의 canonical 자료는 읽고 봇·모듈 등록을 선택하며, 미지원 스크립트는 안내 후 부분 가져오기예요. 전체 호환 완료가 아니에요. 원본 바이트는 native transfer `sourceFiles`에만 보존해요. 사용자의 2026-09-13 지시에 따라 새 검증·진단 기반을 확장하지 말고 실제 기능 구현과 해당 흐름의 필요한 확인을 우선해요.
 
 - v0.1.0 베타 방향은 `docs/DECISIONS-2026-09-12-BETA.md`, 승인된 실행 순서·진행 상태는 `project-plan/BETA-PLAN.md`, 표본의 기능/근거는 `project-plan/BETA-SAMPLES.md`·`.json`이 소유해요. 선언형 전용·Risu 직접 가져오기 영구 미지원·공개 이후 DB 비이관·부가 실패의 채팅 차단은 새 방향으로 대체돼요. 현재 미구현은 지원으로 표시하지 않으며, 기술 세부·사용 사례의 수치를 사용자 확정 원칙으로 만들지 않아요. 사용자 판단은 실제 경험·의미·지원 범위의 선택이 생기면 구체안을 준비해 요청해요.
 

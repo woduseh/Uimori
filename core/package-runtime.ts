@@ -21,6 +21,7 @@ import {
 import type { Resource } from './types.js';
 import { PromptBudget, PromptEvaluationError } from './prompt-values.js';
 import { packageIdentityFromContents, type PackageIdentityContext } from './package-identity.js';
+import { templateReadsVariables } from './template-variables.js';
 
 export type CompiledPackageAttachment = {
   unavailableInstructions?: { id: string; code: string }[];
@@ -76,6 +77,8 @@ export function compilePackageAttachment(
   const renderedText = (id: string, original: string, template?: PromptTemplate) => {
     if (!template) return original;
     try {
+      if (identity.variableDefaultsError && templateReadsVariables(template))
+        throw new PromptEvaluationError(identity.variableDefaultsError);
       return renderPromptTemplate(template, values, {}, { runtime: identity, budget: textBudget });
     } catch (error) {
       if (!(error instanceof PromptProgramError) && !(error instanceof PromptEvaluationError))
@@ -166,6 +169,11 @@ export function compilePackageAttachment(
   let outputChars = 0;
   for (const instruction of selected) {
     try {
+      if (
+        identity.variableDefaultsError &&
+        templateReadsVariables([instruction.template, instruction.when])
+      )
+        throw new PromptEvaluationError(identity.variableDefaultsError);
       const compilation = compilePromptProgram(
         {
           version: 1,
@@ -184,7 +192,10 @@ export function compilePackageAttachment(
         },
         {
           values,
-          runtime: context.runtime,
+          runtime:
+            identity.variables === undefined
+              ? context.runtime
+              : { ...context.runtime, variables: identity.variables },
           slots: context.slots ?? {},
           history: [{ id: '__package_input__', role: 'user', text: '', current: true }],
           budget,

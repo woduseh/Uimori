@@ -4,6 +4,7 @@ import type { PackageAttachment, PackageTarget } from './content-package.js';
 import { resolvePromptValues, type RuntimeValue } from './prompt-program.js';
 import type { RunSnapshot } from './types.js';
 import { storyInputState } from './story.js';
+import { resolveTemplateVariableContext } from './template-variables.js';
 
 export type PackageExecutionState = {
   instanceId: string;
@@ -114,6 +115,7 @@ export function executionContext(
       refs.some((ref) => r.id.startsWith(`package:${ref.id}:${ref.role}:`))
   );
   return {
+    ...resolveTemplateVariableContext(profile, target),
     chat: {
       id: snapshot.chatId,
       branchId: snapshot.branchId ?? `main:${snapshot.chatId}`,
