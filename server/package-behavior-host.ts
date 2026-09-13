@@ -29,6 +29,7 @@ import {
 } from './package-behavior-store.js';
 import type { ResolvedExtensionProgram } from '../core/extension-program.js';
 import { executeExtensionProgram } from './extension-runtime.js';
+import { createPackageExtensionHost } from './extension-materials.js';
 import type { Store, Run, Source } from './store.js';
 import { captureLogicalHistory } from './prompt-snapshot.js';
 import { freezeSourceSegments } from '../core/package-source-segments.js';
@@ -475,12 +476,31 @@ export async function performBehaviorActionWithProgram(
     const runtime = actionRuntime(store, chatId, branch.id, d.ref);
     if (!behaviorActionAllowed(action, state.state, command.input, runtime))
       throw new HttpError(409, 'BEHAVIOR_ACTION_DISABLED');
+    const guard = actionGuard(store, d);
     return {
       branchId: branch.id,
       program: action.program,
       input: { state: state.state, input: command.input },
       runtime,
-      guard: actionGuard(store, d),
+      guard,
+      host: createPackageExtensionHost(
+        action.program,
+        store.product.snapshot(chatId),
+        d.ref,
+        () => {
+          const current = actionContext(
+            store,
+            chatId,
+            branch.id,
+            instanceId,
+            command,
+            false,
+            panel
+          );
+          if (actionGuard(store, current.d) !== guard)
+            throw new HttpError(409, 'BEHAVIOR_PROGRAM_CONTEXT_CHANGED');
+        }
+      ),
     };
   });
   if (!preparation)
@@ -499,7 +519,9 @@ export async function performBehaviorActionWithProgram(
     return pending.promise;
   }
   const promise = (async () => {
-    const result = await executeExtensionProgram(preparation.program, preparation.input, signal);
+    const result = await executeExtensionProgram(preparation.program, preparation.input, signal, {
+      host: preparation.host,
+    });
     if (signal?.aborted) throw new HttpError(409, 'EXTENSION_CANCELLED');
     return performBehaviorAction(
       store,

@@ -32,6 +32,7 @@ import {
   type ResolvedExtensionProgram,
 } from '../core/extension-program.js';
 import { executeExtensionProgram } from './extension-runtime.js';
+import { createPackageExtensionHost } from './extension-materials.js';
 import type { ToolAction } from '../core/provider.js';
 import type { RunSnapshot, ToolEvent } from '../core/types.js';
 import { behaviorPayloadHash, recordDraws } from './package-behavior-store.js';
@@ -682,7 +683,14 @@ export async function prepareAutomaticRunBehavior(
               step.program!,
               { state: step.state!, input },
               controller.signal,
-              { waitForSlot: true }
+              {
+                waitForSlot: true,
+                host: createPackageExtensionHost(step.program!, reserved.profile, d.ref, () => {
+                  validateOwner(store, store.run(runId));
+                  if (preparationProgress(store, runId).preparation.status !== 'running')
+                    fail('BEHAVIOR_RUN_CANCELLED');
+                }),
+              }
             ),
             controller.signal
           );
@@ -862,6 +870,16 @@ export async function executeRunBehaviorTool(
         program: action.program,
         input: { state: resolution.before.state, input: call.args as RuntimeValue },
         progressHash: hash(progress),
+        host: createPackageExtensionHost(
+          action.program,
+          run.snapshot.profile,
+          definition.ref,
+          () => {
+            const current = behaviorToolContext(store, runId, binding, call, signal);
+            if (hash(current.progress) !== hash(progress))
+              fail('BEHAVIOR_OPPORTUNITY_DEPENDENCY_CHANGED');
+          }
+        ),
       };
     });
     let entry: RunBehaviorEntry;
@@ -879,7 +897,9 @@ export async function executeRunBehaviorTool(
       const work =
         pending?.work ??
         (async () => {
-          const output = await executeExtensionProgram(prepared.program!, prepared.input!, signal);
+          const output = await executeExtensionProgram(prepared.program!, prepared.input!, signal, {
+            host: prepared.host,
+          });
           return store.transaction(() => {
             const context = behaviorToolContext(store, runId, binding, call, signal);
             if (hash(context.progress) !== prepared.progressHash)

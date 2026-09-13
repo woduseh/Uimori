@@ -32,7 +32,10 @@ describe('fixed-memory QuickJS extension runtime', () => {
               console: typeof console,
               webAssembly: typeof WebAssembly,
               date: typeof Date,
-              random: typeof Math.random
+              random: typeof Math.random,
+              asyncConstructor: typeof Object.getPrototypeOf(async function() {}).constructor,
+              generatorConstructor: typeof Object.getPrototypeOf(function*() {}).constructor,
+              asyncGeneratorConstructor: typeof Object.getPrototypeOf(async function*() {}).constructor
             }
           }
         };
@@ -52,6 +55,9 @@ describe('fixed-memory QuickJS extension runtime', () => {
           webAssembly: 'undefined',
           date: 'undefined',
           random: 'undefined',
+          asyncConstructor: 'undefined',
+          generatorConstructor: 'undefined',
+          asyncGeneratorConstructor: 'undefined',
         },
       },
       engine: EXTENSION_RUNTIME_ENGINE,
@@ -193,5 +199,233 @@ describe('fixed-memory QuickJS extension runtime', () => {
     expect(await cancelled).toBe('BEHAVIOR_PROGRAM_ABORTED');
     await Promise.all([first, second]);
     await expect(waiting).resolves.toMatchObject({ state: { ok: true }, result: 'ready' });
+  });
+
+  it('roundtrips async host reads and excludes bounded host wait from guest CPU time', async () => {
+    const calls: { method: string; args: unknown; aborted: boolean }[] = [];
+    const started = performance.now();
+    const result = await executeExtensionProgram(
+      program(`
+        const listed = await api.host.call('materials.list', {});
+        const material = await api.host.call('materials.read', { id: listed[0].id });
+        return {
+          state: { count: api.state.count + material.weight },
+          result: { title: material.title, apiKeys: Object.keys(api).sort() }
+        };
+      `),
+      { state: { count: 2 }, input: {} },
+      undefined,
+      {
+        host: async (method, args, signal) => {
+          calls.push({ method, args, aborted: signal.aborted });
+          if (method === 'materials.list') {
+            await new Promise((resolve) => setTimeout(resolve, 120));
+            return [{ id: 'material-1' }];
+          }
+          return { title: 'Synthetic material', weight: 3 };
+        },
+      }
+    );
+
+    expect(performance.now() - started).toBeGreaterThanOrEqual(100);
+    expect(calls).toEqual([
+      { method: 'materials.list', args: {}, aborted: false },
+      { method: 'materials.read', args: { id: 'material-1' }, aborted: false },
+    ]);
+    expect(result).toMatchObject({
+      state: { count: 5 },
+      result: { title: 'Synthetic material', apiKeys: ['input', 'state'] },
+    });
+  });
+
+  it('exposes only allowlisted host denial codes and cannot let guest code hide host faults', async () => {
+    const denied = await executeExtensionProgram(
+      program(`
+        try {
+          await api.host.call('materials.read', { id: 'denied' });
+          return { state: api.state, result: null };
+        } catch (error) {
+          return { state: api.state, result: { code: error.code, message: error.message } };
+        }
+      `),
+      { state: {}, input: {} },
+      undefined,
+      {
+        host: async () => {
+          throw new ExtensionProgramError('BEHAVIOR_HOST_DENIED');
+        },
+      }
+    );
+    expect(denied.result).toEqual({
+      code: 'BEHAVIOR_HOST_DENIED',
+      message: 'BEHAVIOR_HOST_DENIED',
+    });
+
+    const unavailable = await executeExtensionProgram(
+      program(`
+        try { await api.host.call('materials.list', {}); }
+        catch (error) { return { state: api.state, result: error.code }; }
+      `),
+      { state: {}, input: {} }
+    );
+    expect(unavailable.result).toBe('BEHAVIOR_HOST_CALL_FAILED');
+
+    const privateFailure = new Error('PRIVATE_DATABASE_FAILURE');
+    const work = executeExtensionProgram(
+      program(`
+        try { await api.host.call('materials.list', {}); }
+        catch (error) { return { state: api.state, result: String(error) }; }
+      `),
+      { state: {}, input: {} },
+      undefined,
+      { host: async () => Promise.reject(privateFailure) }
+    );
+    await expect(work).rejects.toBe(privateFailure);
+  });
+
+  it('aborts in-flight host work and rejects its late result', async () => {
+    const controller = new AbortController();
+    let entered!: () => void;
+    const started = new Promise<void>((resolve) => (entered = resolve));
+    let hostAborted = false;
+    const work = executeExtensionProgram(
+      program(`
+        const value = await api.host.call('materials.read', { id: 'slow' });
+        return { state: api.state, result: value };
+      `),
+      { state: {}, input: {} },
+      controller.signal,
+      {
+        host: async (_method, _args, signal) => {
+          entered();
+          return await new Promise((resolve, reject) => {
+            signal.addEventListener(
+              'abort',
+              () => {
+                hostAborted = true;
+                reject(new Error('PRIVATE_LATE_HOST_RESULT'));
+              },
+              { once: true }
+            );
+            setTimeout(() => resolve({ late: true }), 500);
+          });
+        },
+      }
+    );
+    const resultCode = code(work);
+    await started;
+    controller.abort();
+    await expect(resultCode).resolves.toBe('BEHAVIOR_PROGRAM_ABORTED');
+    expect(hostAborted).toBe(true);
+  });
+
+  it('bounds host method, argument, result and cumulative result sizes', async () => {
+    let calls = 0;
+    const invalidArguments = await executeExtensionProgram(
+      program(`
+        const codes = [];
+        for (const [method, args] of [
+          ['x'.repeat(81), {}],
+          ['materials.read', { text: '가'.repeat(50000) }]
+        ]) {
+          try { await api.host.call(method, args); }
+          catch (error) { codes.push(error.code); }
+        }
+        return { state: api.state, result: codes };
+      `),
+      { state: {}, input: {} },
+      undefined,
+      {
+        host: async () => {
+          calls++;
+          return null;
+        },
+      }
+    );
+    expect(invalidArguments.result).toEqual(['BEHAVIOR_HOST_ARGUMENTS', 'BEHAVIOR_HOST_ARGUMENTS']);
+    expect(calls).toBe(0);
+
+    const singleResult = await executeExtensionProgram(
+      program(`
+        let code = null;
+        try { await api.host.call('materials.read', {}); }
+        catch (error) { code = error.code; }
+        return { state: api.state, result: code };
+      `),
+      { state: {}, input: {} },
+      undefined,
+      { host: async () => ({ text: '가'.repeat(50_000) }) }
+    );
+    expect(singleResult.result).toBe('BEHAVIOR_HOST_RESULT_LIMIT');
+
+    calls = 0;
+    const cumulative = await executeExtensionProgram(
+      program(`
+        let code = null;
+        try {
+          for (let index = 0; index < 5; index++) await api.host.call('materials.read', { index });
+        } catch (error) { code = error.code; }
+        return { state: api.state, result: code };
+      `),
+      { state: {}, input: {} },
+      undefined,
+      {
+        host: async () => {
+          calls++;
+          return { text: '가'.repeat(43_000) };
+        },
+      }
+    );
+    expect(cumulative.result).toBe('BEHAVIOR_HOST_RESULT_LIMIT');
+    expect(calls).toBe(5);
+  });
+
+  it('bounds total and concurrently pending host invocations', async () => {
+    let sequentialCalls = 0;
+    const sequential = await executeExtensionProgram(
+      program(`
+        let code = null;
+        for (let index = 0; index < 33; index++) {
+          try { await api.host.call('materials.read', { index }); }
+          catch (error) { code = error.code; break; }
+        }
+        return { state: api.state, result: code };
+      `),
+      { state: {}, input: {} },
+      undefined,
+      {
+        host: async () => {
+          sequentialCalls++;
+          return null;
+        },
+      }
+    );
+    expect(sequential.result).toBe('BEHAVIOR_HOST_CALL_LIMIT');
+    expect(sequentialCalls).toBe(32);
+
+    let pendingCalls = 0;
+    const concurrent = await executeExtensionProgram(
+      program(`
+        let code = null;
+        try {
+          await Promise.all(Array.from({ length: 9 }, (_, index) =>
+            api.host.call('materials.read', { index })
+          ));
+        } catch (error) { code = error.code; }
+        return { state: api.state, result: code };
+      `),
+      { state: {}, input: {} },
+      undefined,
+      {
+        host: async (_method, _args, signal) => {
+          pendingCalls++;
+          return await new Promise((_, reject) =>
+            signal.addEventListener('abort', () => reject(new Error('stopped')), { once: true })
+          );
+        },
+      }
+    );
+    expect(concurrent.result).toBe('BEHAVIOR_HOST_PENDING_LIMIT');
+    expect(pendingCalls).toBe(8);
   });
 });
