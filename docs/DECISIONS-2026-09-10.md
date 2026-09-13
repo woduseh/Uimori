@@ -46,6 +46,8 @@ Q04는 "150k~200k 누적 토큰 규모에서 수동 요약·새 채팅 없이 �
 
 ### 3. 검증 게이트를 층으로 나눠요
 
+> 아래는 당시 결정 원문이에요. 2026-09-13 사용자 요청으로 검사 시점을 작은 구현·커밋과 사용 흐름 완료·통합으로 다시 나눴으며, 현재는 [QUALITY](QUALITY.md#실행-시점)를 따라요. 과거 실행 결과와 릴리스의 지문·실패 판정은 보존해요.
+
 - 매 변경의 완료 조건: `npm run quality:full` + `npm run verify:smoke` + 변경 영역의 `verify:*` 하나. 영역 대응은 [TESTING-AUDIT.md](TESTING-AUDIT.md)를 따라요.
 - 전체 `npm run verify:redesign`은 릴리스 전 1회로 내려요. 그 실패는 "다음 릴리스 전에 볼 것"으로 분류해요.
 - Windows에서 전체 회귀 1회 재측정으로 남은 실패가 macOS·Edge 한정인지 가르고, 지연 원인 조사([회귀 브리프](../project-plan/BRIEF-FULL-RUN-REGRESSION-2026-09-10.md))는 릴리스 주기로 해요.

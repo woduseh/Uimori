@@ -1,6 +1,6 @@
 # 개발과 검증
 
-현재 DB는 **v17**, 전체 JSON archive는 **v15**, 채팅 백업은 **v1**이에요. 알려진 v15 DB를 보존하며 올리는 [migration](DATA-MIGRATIONS.md)을 제공하고 공개 베타의 보존·업데이트를 [베타 계획](../project-plan/BETA-PLAN.md)에 따라 준비해요. 모든 과거 개발 버전의 이관을 약속하지 않아요. 테스트용 개발 DB를 다시 시작하려면 서버를 종료한 뒤 `npm run reset:dev`를 실행해요. 이 명령은 저장소의 `.local/narrative.sqlite`와 해당 SQLite 부속 파일·알려진 구형 자동 백업만 삭제해요. 서버가 DB를 사용 중이거나 경로가 저장소 밖으로 연결되면 중단해요. 다른 검증 산출물과 credential 파일은 대상으로 삼지 않아요.
+현재 DB는 **v18**, 전체 JSON archive는 **v15**, 채팅 백업은 **v1**이에요. 알려진 v15 DB를 보존하며 올리는 [migration](DATA-MIGRATIONS.md)을 제공하고 공개 베타의 보존·업데이트를 [베타 계획](../project-plan/BETA-PLAN.md)에 따라 준비해요. 모든 과거 개발 버전의 이관을 약속하지 않아요. 테스트용 개발 DB를 다시 시작하려면 서버를 종료한 뒤 `npm run reset:dev`를 실행해요. 이 명령은 저장소의 `.local/narrative.sqlite`와 해당 SQLite 부속 파일·알려진 구형 자동 백업만 삭제해요. 서버가 DB를 사용 중이거나 경로가 저장소 밖으로 연결되면 중단해요. 다른 검증 산출물과 credential 파일은 대상으로 삼지 않아요.
 
 [시작하기](../README.md) · [코드 품질](QUALITY.md) · [검증 계약](../project-plan/VERIFICATION.md)
 
@@ -18,7 +18,7 @@ npm run verify:smoke
 
 2026-09-08 Windows의 현재 제한 환경에서는 새 소스 사본의 오프라인 설치와 품질·하네스 회귀가 통과했지만, Node/Chrome 자식 실행은 `EPERM`으로 차단됐어요. `verify:smoke`가 제품 검사를 시작하지 않고 BLOCKED·nonzero와 cleanup 근거를 남기는 것까지 확인했어요. 권한을 변경하지 않았으며, 이 결과는 브라우저 흐름 통과의 증거가 아니에요.
 
-수정 중에는 `npm run quality`를 실행해요. 매 변경의 완료 조건은 `npm run quality:full` + `npm run verify:smoke` + 변경 영역의 `verify:*` 하나예요. `quality`는 서식·lint·모듈 경계·타입을 검사하고, `quality:full`은 전체 Vitest와 빌드를 더해요. 전체 `verify:redesign`은 릴리스 전 1회이고 매 변경에는 돌리지 않아요([검사 안내](QUALITY.md)). 아래는 작업에 따라 선택하는 명령이며 전체 목록을 매번 실행하는 절차가 아니에요.
+작은 코드 구현·커밋은 `npm run quality`와 영향받는 집중 검사로 확인해요. 사용자 사용 흐름 하나를 완성·통합했을 때 `npm run quality:full` + `npm run verify:smoke` + 관련 `verify:*` 하나를 실행해요. 저장·권한·공통 실행 경계의 회귀는 즉시 확인하고 영향이 넓거나 불확실하면 검사 범위를 확대해요. 문서만 바꾸면 내용·참조·명령·일관성과 `git diff --check`를 확인해요. 빌드 조건, 작은 후속 수정의 재검사와 릴리스 기준은 [검사 시점](QUALITY.md#실행-시점)이 소유해요. 아래는 작업에 따라 선택하는 명령이며 전체 목록을 매번 실행하는 절차가 아니에요.
 
 ```powershell
 npm run quality
@@ -45,7 +45,7 @@ npm run cleanup -- --run <summary에 나온 run-id>
 
 `check`는 TypeScript 타입 검사이고, `build`는 실행 파일과 빌드 식별 정보를 만들어요. `verify:ui`는 **현재 소스와 일치하는 최신 빌드가 이미 있어야 실행**되며 스스로 빌드하지 않아요. 별도 파일 DB·포트에서 안전한 원고 렌더링 단위 검사와 UI 브라우저 검사를 실행하고 소스·빌드 동일성, 새 reporter의 필수 검사·skip·실패, 소유 프로세스와 임시 파일 정리를 확인해요. 보고서와 화면은 `output/playwright/ui-<run-id>/`에 남아요. 이 명령은 M0/M1-local 회귀, 별도의 시각적 검토·성능 측정·실제 기기 검증을 대체하지 않아요.
 
-`verify:redesign`은 최신 일치 빌드에서 봇별 채팅·폴더, 패키지 편집·표시, 프롬프트 옵션 조합과 기존 브라우저 회귀를 통합 검사해요. 새 DB·포트와 합성 공급자 등록 fixture를 사용하고 `output/playwright/redesign-<run-id>/`에 reporter·화면·summary를 남겨요. 코드·테스트가 바뀌면 다시 빌드해야 하며, 실제 사용자 자료·유료 호출·기기 검증을 수행하는 명령은 아니에요.
+`verify:redesign`은 최신 일치 빌드에서 봇별 채팅·폴더, 패키지 편집·표시, 프롬프트 옵션 조합과 기존 브라우저 회귀를 통합 검사해요. 새 DB·포트와 합성 공급자 등록 fixture를 사용하고 `output/playwright/redesign-<run-id>/`에 reporter·화면·summary를 남겨요. 앱 소스·빌드 입력이 바뀌면 현재 빌드를 준비하고 테스트만 바뀌면 기존 일치 빌드에서 해당 검사를 다시 실행해요. 실제 사용자 자료·유료 호출·기기 검증을 수행하는 명령은 아니에요.
 
 `verify:selfhost`는 새 DB·포트·공개 합성 TLS 인증서로 HTTPS 프록시를 만들고 데스크톱/390px Chromium의 로그인·쿠키·원문 공유·SSE·탭 재진입·세션 해제 후 재로그인을 검사해요. 인증서 오류 무시는 이 검증에만 적용하며 실제 도메인·Linux·Docker·Nginx 실행이나 휴대폰 검증을 대신하지 않아요. `output/playwright/self-host-<run-id>/`에 summary·reporter·화면과 격리 DB 근거를 남겨요. Chromium이 없다면 Playwright의 브라우저를 설치하거나 `NR_BROWSER_PATH`로 지정해요. 서버 배포에는 브라우저 설치가 필요하지 않아요.
 
@@ -67,7 +67,7 @@ node scripts/verify-worktrees.mjs --a '<준비된 작업트리 A>' --b '<준비�
 
 `verify:evaluation`도 최신 빌드를 먼저 준비해야 해요. `M2-local`은 S01–S07 합성 검사를 실행하며, `--milestone M2`는 로컬 검사가 통과해도 실제 Q04 평가를 수행하지 않으므로 BLOCKED로 종료해요. 지정 자료 이식은 `nativePort: SEPARATE_EVIDENCE`로 구분하며 이 하네스가 이식 완료 여부를 판정하지 않아요.
 
-그 밖의 전용 검증도 최신 소스와 일치하는 빌드를 먼저 준비해요. 변경과 관련된 검사를 선택하고, 위 명령을 매번 전부 실행할 필요는 없어요.
+`dist`를 실행하는 전용 검증에는 최신 소스와 일치하는 빌드가 필요해요. 소스 모듈만 읽는 집중 단위 검사는 빌드 없이 실행해요. 변경과 관련된 검사를 선택하고, 위 명령을 매번 전부 실행할 필요는 없어요.
 
 | 명령 | 범위 |
 | --- | --- |
