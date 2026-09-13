@@ -3,6 +3,11 @@ import { illustrationErrorMessage } from './illustration-labels.js';
 type ApiErrorDiagnostic = { code: string | null; message: string };
 
 const messages: Record<string, string> = {
+  RISU_PRESET_INVALID_FILE:
+    '지원하는 Risu 프리셋 파일인지 확인해 주세요. 프로젝트 ZIP에는 preset.json·manifest.json과 분리된 텍스트 파일이 함께 있어야 해요.',
+  RISU_PRESET_INVALID: '프리셋의 프롬프트 구성과 옵션 형식을 확인해 주세요.',
+  RISU_PRESET_VERSION_UNSUPPORTED:
+    '이 프리셋 바이너리 버전은 아직 지원하지 않아요. RisuToki에서 프로젝트로 추출한 ZIP도 가져올 수 있어요.',
   RISU_IMPORT_INVALID_FILE:
     '지원하는 캐릭터 카드·Risu 모듈 JSON 또는 올바른 .charx 파일인지 확인해 주세요.',
   RISU_IMPORT_TOO_LARGE: '캐릭터 카드 파일은 24 MiB 이하여야 해요.',

@@ -51,6 +51,7 @@ import { outlineRoutes } from './outline-routes.js';
 import { packageImageRoutes } from './package-images.js';
 import { nativeTransferRoutes } from './native-transfer.js';
 import { risuImportRoutes } from './risu-import.js';
+import { risuPresetImportRoutes } from './risu-preset-import.js';
 import { NativeTransferError } from '../core/native-transfer-validation.js';
 import { diagnosticReportRoutes } from './diagnostic-report.js';
 import { packageFeatureRoutes } from './package-features.js';
@@ -1136,6 +1137,7 @@ export async function createApp(options: AppOptions): Promise<App> {
   packageFeatureRoutes(app, store);
   nativeTransferRoutes(app, store);
   risuImportRoutes(app, store);
+  risuPresetImportRoutes(app, store);
   diagnosticReportRoutes(app, store, { buildId: options.buildId, testMode: options.testMode });
   app.post<{ Params: { id: string } }>('/api/chats/:id/package-start', async (request) => {
     const result = createPackageStart(store, request.params.id, request.body, (snapshot) =>

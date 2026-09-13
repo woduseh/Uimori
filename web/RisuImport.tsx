@@ -1,3 +1,4 @@
+import { readImportSource as readSource } from './import-source.js';
 import { useRef, useState } from 'react';
 import { RISU_IMPORT_MAX_BYTES } from '../core/risu-import.js';
 import type {
@@ -12,23 +13,6 @@ import { Dialog } from './Dialog.js';
 import { IconButton } from './IconButton.js';
 import { UploadIcon } from './ui-icons.js';
 import './risu-import.css';
-
-function readSource(file: File): Promise<RisuImportSource> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onerror = () => reject(new Error('파일을 읽지 못했어요. 다시 선택해 주세요.'));
-    reader.onabort = () => reject(new Error('파일 읽기가 취소됐어요.'));
-    reader.onload = () => {
-      const data = reader.result;
-      if (typeof data !== 'string' || !data.includes(',')) {
-        reject(new Error('파일 내용을 읽지 못했어요.'));
-        return;
-      }
-      resolve({ name: file.name, base64: data.slice(data.indexOf(',') + 1) });
-    };
-    reader.readAsDataURL(file);
-  });
-}
 
 function memorySelectionIssue(entry: RisuImportPreview['lore'][number]): string {
   if (!entry.enabled) return '사용하지 않는 로어는 진행 기억으로 옮길 수 없어요.';

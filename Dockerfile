@@ -20,6 +20,8 @@ RUN if [ -n "$UIMORI_CODEX_VERSION" ]; then npm install --global "@openai/codex@
 ENV NODE_ENV=production NR_HOST=0.0.0.0 NR_PORT=4310 NR_DB=/data/narrative.sqlite
 COPY --from=production-dependencies /app/node_modules ./node_modules
 COPY --from=build /app/package.json ./package.json
+COPY --from=build /app/LICENSE /app/THIRD_PARTY_NOTICES.md ./
+COPY --from=build /app/third_party ./third_party
 COPY --from=build /app/dist ./dist
 # An empty named volume receives this directory's initial content and ownership.
 RUN mkdir -p /data && touch /data/.uimori-data && chown -R node:node /data

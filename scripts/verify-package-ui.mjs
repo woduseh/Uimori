@@ -11,6 +11,7 @@ await runBrowserVerification({
     'tests/package-request-browser.spec.ts',
     'tests/package-features-browser.spec.ts',
     'tests/package-panels-browser.spec.ts',
+    'tests/risu-preset-import-browser.spec.ts',
   ],
   requiredCases: [
     'NUI01',
@@ -28,5 +29,7 @@ await runBrowserVerification({
     'EXTPANELUI01',
     'PROGTOOLUI01',
     'PROGPREPUI01',
+    'RISUPRESETUI01',
+    'RISUPRESETUI02',
   ],
 });
