@@ -11,6 +11,12 @@ Uimori 프로젝트 소스의 라이선스는 **GNU Affero General Public Licens
 - 적용 조건: 원본은 RisuAI 내부 사용에 MIT 선택을 허용하지만 다른 앱에는 AGPL-3.0을 요구해요. Uimori에는 **AGPL-3.0** 경로를 적용해요. [원본 조건](third_party/rpack/LICENSE), [AGPL 전문](third_party/rpack/LICENSE_AGPL), [원저작권·MIT 고지](third_party/rpack/LICENSE_MIT), [원본 README](third_party/rpack/README)를 보존해요. MIT 문서 보존은 Uimori에서 MIT 조건으로 사용한다는 뜻이 아니에요.
 - 변경: 2026-09-13, 바이너리 치환표의 해독 부분을 TypeScript 상수로 옮겨 프리셋 파일 가져오기에 사용했어요. Risu 런타임이나 내부 DB에 의존하지 않아요.
 
+## Wasmoon
+
+- 출처: [Wasmoon](https://github.com/ceifa/wasmoon), npm `wasmoon@1.16.0`과 포함된 Lua WebAssembly 실행기.
+- 적용 조건: MIT. 패키지의 원저작권 고지와 전문을 [third_party/wasmoon/LICENSE](third_party/wasmoon/LICENSE)에 보존해요.
+- 사용: 별도 Worker에서 Lua 코드를 실행하고 Uimori의 공통 Host API로 JSON 요청·결과만 교환해요. Uimori의 Worker는 포함된 WASM의 메모리 상한을 제한하며 원본 npm 패키지 파일은 수정하지 않아요.
+
 ## 배포와 소스 제공
 
 프로젝트 소스 저장소는 [woduseh/Uimori](https://github.com/woduseh/Uimori)예요. 배포자는 실행·배포한 빌드와 일치하는 대응 소스, 로컬 수정 사항, 빌드·설치에 필요한 파일과 라이선스 고지를 제공해야 해요. 네트워크 이용자에게도 해당 소스를 받을 수 있는 안내를 쉽게 찾을 수 있게 제공해요. 다른 revision이나 미공개 변경을 포함하지 않은 저장소 링크만으로 배포본의 대응 소스가 제공됐다고 보지 않아요. 실제 절차는 [개인 서버 안내](docs/SELF-HOST.md#라이선스와-대응-소스)를 따라요.

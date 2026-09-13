@@ -64,6 +64,28 @@ function database() {
 }
 
 describe('bounded extension state program contract', () => {
+  it('keeps legacy program hashes stable and explicitly preserves the selected language', () => {
+    const legacy = definition().actions[0].program!;
+    expect(validateExtensionProgram(legacy)).not.toHaveProperty('language');
+    expect(behaviorPayloadHash(validateExtensionProgram(legacy))).toBe(behaviorPayloadHash(legacy));
+    const lua = {
+      api: EXTENSION_PROGRAM_API,
+      language: 'lua',
+      source: 'return {state=api.state, result=api.json.null}',
+    };
+    expect(validateExtensionProgram(lua)).toEqual(lua);
+    expect(behaviorPayloadHash(lua)).not.toBe(
+      behaviorPayloadHash({ ...lua, language: 'javascript' })
+    );
+    for (const language of [null, undefined, 'python', 'Lua', 1])
+      expect(() => validateExtensionProgram({ ...legacy, language })).toThrow(
+        'BEHAVIOR_PROGRAM_LANGUAGE'
+      );
+    expect(
+      validateExtensionProgram({ ...lua, source: '--' + 'x'.repeat(400_000) }).source.length
+    ).toBe(400_002);
+  });
+
   it('accepts a pure state migration but grants it no material, response, or model access', () => {
     const behavior = definition();
     behavior.migration = {

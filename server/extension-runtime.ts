@@ -10,6 +10,7 @@ import {
 import { inspectRuntimeValue, PromptBudget, type RuntimeValue } from '../core/prompt-values.js';
 
 export const EXTENSION_RUNTIME_ENGINE = 'quickjs-emscripten@0.32.0';
+export const EXTENSION_LUA_RUNTIME_ENGINE = 'wasmoon@1.16.0';
 export const EXTENSION_RUNTIME_LIMITS = Object.freeze({
   concurrent: 2,
   inputBytes: 128 * 1024,
@@ -185,7 +186,7 @@ function expectedHostCancellation(error: unknown, signal: AbortSignal) {
 }
 
 /**
- * Runs one extension in a fresh Worker and fixed-memory QuickJS module. Host reads cross an
+ * Runs one extension in a fresh Worker and bounded guest runtime. Host reads cross an
  * explicit JSON RPC boundary; neither the Worker nor a guest object enters the host broker.
  */
 export async function executeExtensionProgram(
@@ -209,10 +210,11 @@ export async function executeExtensionProgram(
   await acquireSlot(signal, options.waitForSlot);
   try {
     if (signal?.aborted) throw fail('BEHAVIOR_PROGRAM_ABORTED');
-    const compiled = new URL('./extension-worker.js', import.meta.url);
-    const source = existsSync(compiled)
-      ? compiled
-      : new URL('./extension-worker.ts', import.meta.url);
+    const workerName = program.language === 'lua' ? 'extension-lua-worker' : 'extension-worker';
+    const engine =
+      program.language === 'lua' ? EXTENSION_LUA_RUNTIME_ENGINE : EXTENSION_RUNTIME_ENGINE;
+    const compiled = new URL(`./${workerName}.js`, import.meta.url);
+    const source = existsSync(compiled) ? compiled : new URL(`./${workerName}.ts`, import.meta.url);
     const worker = new Worker(source, {
       execArgv: source.pathname.endsWith('.ts') ? ['--experimental-strip-types'] : undefined,
       workerData: {
@@ -258,7 +260,7 @@ export async function executeExtensionProgram(
           worker.removeAllListeners();
           if (settlementFatalError) reject(settlementFatalError);
           else if ('error' in outcome) reject(outcome.error);
-          else resolve({ ...outcome.result, engine: EXTENSION_RUNTIME_ENGINE });
+          else resolve({ ...outcome.result, engine });
         });
       };
       const finishError = (error: unknown) => finish({ error });

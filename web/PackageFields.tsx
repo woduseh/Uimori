@@ -948,8 +948,9 @@ function BehaviorEditor({
                 {action.program && (
                   <>
                     <small>
-                      코드 계산은 사용자 버튼, 생성 전·후 자동 행동 또는 모델 요청에서 실행해요.
-                      생성 후 코드가 실패해도 완성된 원문은 보존해요.
+                      {action.program.language === 'lua' ? 'Lua' : 'JavaScript'} 코드 계산은 사용자
+                      버튼, 생성 전·후 자동 행동 또는 모델 요청에서 실행해요. 생성 후 코드가
+                      실패해도 완성된 원문은 보존해요.
                     </small>
                     <label className="check behavior-method-choice">
                       <SelectionCheckbox
@@ -1117,9 +1118,10 @@ function BehaviorEditor({
       <details>
         <summary>제작자용 동작 JSON 편집</summary>
         <p className="muted">
-          선언형 계산 또는 행동의 program에 JavaScript 계산을 넣을 수 있어요. 코드에는 이 자료의
+          선언형 계산 또는 행동의 program에 JavaScript·Lua 계산을 넣을 수 있어요. 코드에는 이 자료의
           상태와 행동 입력을 전달하며 선택한 읽기 권한으로 본문·로어도 조회해요. 반환한 상태는 저장
-          전에 검사해요. Lua와 Risu 스크립트의 직접 실행은 지원하지 않아요.
+          전에 검사해요. Lua는 program의 language를 lua로 지정해요. Risu 스크립트는 가져오기에서
+          안내하는 지원 이벤트와 API 범위로 실행해요.
         </p>
         <label>
           동작 정의 JSON
