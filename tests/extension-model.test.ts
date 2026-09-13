@@ -51,7 +51,11 @@ function model(endpoint: string, timeoutMs?: number): ModelSnapshot {
 function snapshot(
   target: ModelSnapshot,
   maxCalls = 6,
-  options: { trigger?: 'model' | 'before-turn'; deferredAutomatic?: boolean } = {}
+  options: {
+    trigger?: 'model' | 'before-turn' | 'after-turn';
+    deferredAutomatic?: boolean;
+    behaviorExecution?: boolean;
+  } = {}
 ): RunSnapshot {
   const pkg: ContentPackage = {
     version: 1,
@@ -87,8 +91,13 @@ function snapshot(
   };
   return {
     settings: { maxCalls },
-    ...(options.deferredAutomatic
-      ? { behaviorExecution: { deferredAutomatic: true, automaticResults: [] } }
+    ...(options.deferredAutomatic || options.behaviorExecution
+      ? {
+          behaviorExecution: {
+            ...(options.deferredAutomatic ? { deferredAutomatic: true } : {}),
+            automaticResults: [],
+          },
+        }
       : {}),
     profile: {
       packageAttachments: [{ id: pkg.id, revision: pkg.revision, role: 'module' }],
@@ -264,6 +273,97 @@ test('keeps legacy attribution valid and rejects forged or undeferred trigger ma
     ).toThrow('BEHAVIOR_HOST_MODEL_ATTRIBUTION');
 });
 
+test('admits only a frozen permitted after-turn target and validates its durable marker', () => {
+  const target = model('http://127.0.0.1:1');
+  const afterTurnBinding = { ...binding, trigger: 'after-turn' as const };
+  const frozen = snapshot(target, 6, {
+    trigger: 'after-turn',
+    behaviorExecution: true,
+  });
+  const attribution = extensionModelTarget(frozen, afterTurnBinding).attribution;
+
+  expect(attribution).toEqual({
+    instanceId: binding.instanceId,
+    actionId: binding.actionId,
+    packageId: 'extension-model',
+    packageRevision: 1,
+    trigger: 'after-turn',
+  });
+  expect(validateExtensionModelAttribution(frozen, attribution).attribution).toEqual(attribution);
+  expect(() =>
+    extensionModelTarget(snapshot(target, 6, { trigger: 'after-turn' }), afterTurnBinding)
+  ).toThrow('BEHAVIOR_HOST_MODEL_DENIED');
+
+  const wrongGrant = structuredClone(frozen);
+  wrongGrant.profile!.extensionGrants![binding.instanceId]!.packageRevision = 2;
+  expect(() => extensionModelTarget(wrongGrant, afterTurnBinding)).toThrow(
+    'BEHAVIOR_HOST_MODEL_DENIED'
+  );
+  const noTarget = structuredClone(frozen);
+  delete noTarget.profile!.extensionModel;
+  expect(() => extensionModelTarget(noTarget, afterTurnBinding)).toThrow(
+    'BEHAVIOR_HOST_MODEL_UNAVAILABLE'
+  );
+});
+
+test('uses the post-response budget only for after-turn and keeps generation main-call reserve', async () => {
+  const provider = await loopbackProvider(async (_request, response) => {
+    await writeSse(response, [
+      { type: 'text_delta', delta: 'after result' },
+      { type: 'usage', inputTokens: 2, outputTokens: 3, costUsd: 0 },
+      { type: 'done', reason: 'stop' },
+    ]);
+  });
+  servers.push(provider);
+  const target = model(provider.endpoint);
+  const afterTurnBinding = { ...binding, trigger: 'after-turn' as const };
+  const frozen = snapshot(target, 2, {
+    trigger: 'after-turn',
+    behaviorExecution: true,
+  });
+  const log = observed();
+  const usage: Usage = { modelCalls: 1, inputTokens: 0, outputTokens: 0, costUsd: 0 };
+  const afterResponse = createExtensionModelService(frozen, hooks(target, log), usage, {
+    phase: 'after-response',
+  });
+  const signal = new AbortController().signal;
+  expect(afterResponse.hostWaitMs).toBe(120_000);
+
+  await expect(
+    afterResponse.generate(afterTurnBinding, { prompt: 'after response' }, signal)
+  ).resolves.toMatchObject({ status: 'completed', text: 'after result' });
+  await expect(
+    afterResponse.generate(binding, { prompt: 'wrong binding' }, signal)
+  ).rejects.toThrow('BEHAVIOR_HOST_MODEL_DENIED');
+  await expect(
+    afterResponse.generate(afterTurnBinding, { prompt: 'over budget' }, signal)
+  ).rejects.toThrow('BEHAVIOR_HOST_MODEL_BUDGET_EXHAUSTED');
+  expect(usage).toEqual({ modelCalls: 2, inputTokens: 2, outputTokens: 3, costUsd: 0 });
+  expect(log.attempts[0].extensionAction).toMatchObject({ trigger: 'after-turn' });
+
+  const generationUsage: Usage = {
+    modelCalls: 1,
+    inputTokens: 0,
+    outputTokens: 0,
+    costUsd: 0,
+  };
+  await expect(
+    createExtensionModelService(
+      snapshot(target, 2),
+      hooks(target, observed()),
+      generationUsage
+    ).generate(binding, { prompt: 'reserved for main prose' }, signal)
+  ).rejects.toThrow('BEHAVIOR_HOST_MODEL_BUDGET_EXHAUSTED');
+  await expect(
+    createExtensionModelService(frozen, hooks(target, observed()), generationUsage).generate(
+      afterTurnBinding,
+      { prompt: 'wrong phase' },
+      signal
+    )
+  ).rejects.toThrow('BEHAVIOR_HOST_MODEL_DENIED');
+  expect(provider.requests).toHaveLength(1);
+});
+
 test('reserves concurrent calls before awaiting and keeps one call for final prose', async () => {
   const provider = await loopbackProvider(async (_request, response) => {
     await writeSse(response, [
@@ -322,6 +422,9 @@ test('denies missing permission and guest-selected request fields before any pro
         prompt: 'try to redirect',
         modelId: 'guest-model',
         endpoint: 'https://example.invalid',
+        temperature: 2,
+        maxCalls: 99,
+        phase: 'after-response',
       } as RuntimeValue,
       new AbortController().signal
     )

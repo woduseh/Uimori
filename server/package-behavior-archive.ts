@@ -537,7 +537,11 @@ export function validatePackageBehaviorArchive(store: Store): void {
         const progress = progressRow ? JSON.parse(progressRow.body) : undefined;
         const entry =
           r.provenance === 'after-turn'
-            ? (progress?.afterResponse?.packages as Row[] | undefined)
+            ? (
+                (progress?.afterResponse?.status === 'skipped'
+                  ? []
+                  : progress?.afterResponse?.packages) as Row[] | undefined
+              )
                 ?.flatMap((pkg) => pkg.entries as Row[])
                 .find(
                   (entry) =>
@@ -731,7 +735,11 @@ export function validatePackageBehaviorArchive(store: Store): void {
       ? (progress.entries as { instanceId: string }[]).filter(
           (entry) => entry.instanceId === row.instance_id
         ).length +
-        ((progress.afterResponse?.packages as Row[] | undefined)
+        ((
+          (progress.afterResponse?.status === 'skipped' ? [] : progress.afterResponse?.packages) as
+            | Row[]
+            | undefined
+        )
           ?.filter((pkg) => pkg.instanceId === row.instance_id && pkg.status === 'ready')
           .flatMap((pkg) => pkg.entries as Row[]).length ?? 0)
       : 0;

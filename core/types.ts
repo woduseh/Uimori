@@ -232,7 +232,7 @@ export type ReaderRun = Omit<Run, 'snapshot' | 'inputs' | 'toolEvents'> & {
   };
   /** Response hook progress only; no text, state or guest error messages. */
   packageAfterResponse?: {
-    status: 'running' | 'completed';
+    status: 'running' | 'completed' | 'skipped';
     completed: number;
     total: number;
     failed: number;

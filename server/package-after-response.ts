@@ -12,6 +12,9 @@ import {
   validateBehaviorValue,
 } from '../core/package-behavior.js';
 import { historicalPersonaExcluded } from '../core/persona-scope.js';
+import type { ExtensionModelBinding } from '../core/extension-model.js';
+import type { RuntimeValue } from '../core/prompt-values.js';
+import { fields, record, text as requestText, HttpError } from './request-validation.js';
 import type { RunSnapshot } from '../core/types.js';
 import { createPackageExtensionHost } from './extension-materials.js';
 import { createResponseExtensionHost } from './extension-response.js';
@@ -26,7 +29,10 @@ import { behaviorPayloadHash } from './package-behavior-store.js';
 import type { Run, Store } from './store.js';
 
 const DEADLINE_MS = 10_000;
-const active = new WeakMap<Store, Map<string, { sourceHash: string; work: Promise<void> }>>();
+const active = new WeakMap<
+  Store,
+  Map<string, { sourceHash: string; work: Promise<void>; controller: AbortController }>
+>();
 function fail(code: string): never {
   throw new BehaviorError(409, code);
 }
@@ -64,7 +70,12 @@ export async function prepareAfterResponse(
   runId: string,
   text: string,
   signal?: AbortSignal,
-  onProgress?: () => void
+  onProgress?: () => void,
+  modelServices?: (binding: ExtensionModelBinding) => {
+    modelGenerate: (args: RuntimeValue, signal: AbortSignal) => Promise<RuntimeValue>;
+    assertModelAccess: () => void | Promise<void>;
+    hostWaitMs: number;
+  }
 ): Promise<void> {
   const run = store.run(runId);
   const snapshot = completedRunBehaviorView(store, run);
@@ -82,24 +93,34 @@ export async function prepareAfterResponse(
     if (pending.sourceHash !== sourceHash) fail('BEHAVIOR_AFTER_RESPONSE_SOURCE_CHANGED');
     return pending.work;
   }
-  const work = compute().catch((error: unknown) => {
-    if (!(error instanceof BehaviorError) || error.message !== 'BEHAVIOR_RUN_JOURNAL_LIMIT')
-      throw error;
-    // This pure optional computation cannot consume the existing journal's remaining capacity
-    // at the expense of committing its source. Preserve every before/model/preparation fact.
-    store.transaction(() => {
-      assertCurrentRun();
-      const current = runBehaviorProgress(store, runId);
-      if (!current) fail('BEHAVIOR_RUN_JOURNAL_MISSING');
-      if (current.afterResponse && current.afterResponse.sourceHash !== sourceHash)
-        fail('BEHAVIOR_AFTER_RESPONSE_SOURCE_CHANGED');
-      delete current.afterResponse;
-      saveProgress(store, runId, current);
-      store.event(run.chatId, 'run.package-after-response.unavailable', runId);
-    });
-    onProgress?.();
+  const controller = new AbortController();
+  // Register ownership before computation can persist and synchronously notify a skip caller.
+  let resolveWork!: () => void;
+  let rejectWork!: (error: unknown) => void;
+  const work = new Promise<void>((resolve, reject) => {
+    resolveWork = resolve;
+    rejectWork = reject;
   });
-  workByRun.set(runId, { sourceHash, work });
+  workByRun.set(runId, { sourceHash, work, controller });
+  void compute()
+    .catch((error: unknown) => {
+      if (!(error instanceof BehaviorError) || error.message !== 'BEHAVIOR_RUN_JOURNAL_LIMIT')
+        throw error;
+      // This optional computation cannot consume the existing journal's remaining capacity
+      // at the expense of committing its source. Preserve every before/model/preparation fact.
+      store.transaction(() => {
+        assertCurrentRun();
+        const current = runBehaviorProgress(store, runId);
+        if (!current) fail('BEHAVIOR_RUN_JOURNAL_MISSING');
+        if (current.afterResponse && current.afterResponse.sourceHash !== sourceHash)
+          fail('BEHAVIOR_AFTER_RESPONSE_SOURCE_CHANGED');
+        delete current.afterResponse;
+        saveProgress(store, runId, current);
+        store.event(run.chatId, 'run.package-after-response.unavailable', runId);
+      });
+      onProgress?.();
+    })
+    .then(resolveWork, rejectWork);
   try {
     await work;
   } finally {
@@ -115,7 +136,6 @@ export async function prepareAfterResponse(
   }
 
   async function compute() {
-    const controller = new AbortController();
     let ownerFailure: unknown;
     let expired = false;
     const assertOwner = () => {
@@ -134,7 +154,7 @@ export async function prepareAfterResponse(
     const prior = runBehaviorProgress(store, runId)?.afterResponse;
     if (prior) {
       if (prior.sourceHash !== sourceHash) fail('BEHAVIOR_AFTER_RESPONSE_SOURCE_CHANGED');
-      if (prior.status === 'completed') return;
+      if (prior.status === 'completed' || prior.status === 'skipped') return;
       // A durable unfinished receipt belongs to an interrupted computation, never a replay.
       fail('BEHAVIOR_AFTER_RESPONSE_INTERRUPTED');
     }
@@ -153,6 +173,7 @@ export async function prepareAfterResponse(
         if (!current) fail('BEHAVIOR_RUN_JOURNAL_MISSING');
         if (current.afterResponse && current.afterResponse.sourceHash !== sourceHash)
           fail('BEHAVIOR_AFTER_RESPONSE_SOURCE_CHANGED');
+        if (current.afterResponse?.status === 'skipped') return;
         saveProgress(store, runId, { ...current, afterResponse: structuredClone(progress) });
         store.event(run.chatId, 'run.package-after-response', runId);
       });
@@ -161,10 +182,14 @@ export async function prepareAfterResponse(
     persist();
     const abort = () => controller.abort();
     signal?.addEventListener('abort', abort, { once: true });
-    const deadline = setTimeout(() => {
+    const started = Date.now();
+    let hostBudget = 0;
+    const expire = () => {
       expired = true;
       controller.abort();
-    }, DEADLINE_MS);
+    };
+    let deadline = setTimeout(expire, DEADLINE_MS);
+    const skipped = () => runBehaviorProgress(store, runId)?.afterResponse?.status === 'skipped';
     const ownerCheck = setInterval(() => {
       try {
         assertOwner();
@@ -199,6 +224,7 @@ export async function prepareAfterResponse(
       }
       for (const d of hooks) {
         assertOwner();
+        if (skipped()) return;
         const before = structuredClone(
           parserStates.find((item) => item.instanceId === d.instanceId)!
         );
@@ -214,6 +240,7 @@ export async function prepareAfterResponse(
             throw new ExtensionProgramError('BEHAVIOR_AFTER_RESPONSE_PARSER_FAILED');
           for (const action of d.actions) {
             assertOwner();
+            if (skipped()) return;
             if (expired) throw new ExtensionProgramError('BEHAVIOR_AFTER_RESPONSE_TIMEOUT');
             const input = action.automaticInput ?? {};
             const hostRuntime = executionContext(
@@ -229,9 +256,31 @@ export async function prepareAfterResponse(
             if (!behaviorActionAllowed(action, receipt.after.state, input, hostRuntime)) continue;
             if (!action.program || action.draws?.length)
               fail('BEHAVIOR_AFTER_RESPONSE_PROGRAM_REQUIRED');
+            const usesModel = action.program.capabilities?.includes('model.generate') === true;
+            const services = usesModel
+              ? modelServices?.({
+                  instanceId: d.instanceId,
+                  actionId: action.id,
+                  trigger: 'after-turn',
+                })
+              : undefined;
+            if (services) {
+              const bounded = Math.min(
+                30 * 60_000,
+                Math.max(0, Number.isFinite(services.hostWaitMs) ? services.hostWaitMs : 0)
+              );
+              if (bounded > hostBudget) {
+                hostBudget = bounded;
+                clearTimeout(deadline);
+                deadline = setTimeout(
+                  expire,
+                  Math.max(0, started + DEADLINE_MS + hostBudget - Date.now())
+                );
+              }
+            }
             const assertCurrent = () => {
               assertOwner();
-              if (controller.signal.aborted)
+              if (controller.signal.aborted || skipped())
                 throw new ExtensionProgramError('BEHAVIOR_HOST_ABORTED');
             };
             const materials = createPackageExtensionHost(
@@ -241,20 +290,35 @@ export async function prepareAfterResponse(
               assertCurrent
             );
             const response = createResponseExtensionHost(action.program, text, assertCurrent);
+            let modelResultRead = false;
             const resolved = await executeExtensionProgram(
               action.program,
               { state: receipt.after.state, input },
               controller.signal,
               {
                 waitForSlot: true,
-                hostWaitMs: DEADLINE_MS,
-                host: (method, args, hostSignal) =>
-                  method.startsWith('response.')
+                hostWaitMs: services
+                  ? Math.max(1, Math.min(30 * 60_000, services.hostWaitMs))
+                  : DEADLINE_MS,
+                awaitHostSettlement: usesModel,
+                host: async (method, args, hostSignal) => {
+                  if (method === 'model.generate') {
+                    if (!services) throw new ExtensionProgramError('BEHAVIOR_HOST_MODEL_DENIED');
+                    assertCurrent();
+                    const result = await services.modelGenerate(args, hostSignal);
+                    modelResultRead = true;
+                    return result;
+                  }
+                  return method.startsWith('response.')
                     ? response(method, args, hostSignal)
-                    : materials(method, args, hostSignal),
+                    : materials(method, args, hostSignal);
+                },
               }
             );
             assertOwner();
+            if (skipped()) return;
+            if (modelResultRead) await services!.assertModelAccess();
+            assertCurrent();
             if (expired) throw new ExtensionProgramError('BEHAVIOR_AFTER_RESPONSE_TIMEOUT');
             try {
               validateBehaviorValue(d.behavior.stateSchema, resolved.state);
@@ -291,12 +355,18 @@ export async function prepareAfterResponse(
               throw new ExtensionProgramError('BEHAVIOR_AFTER_RESPONSE_RECEIPT_LIMIT');
           }
         } catch (error) {
-          assertOwner();
+          const expectedAbort =
+            controller.signal.aborted &&
+            (error === controller.signal.reason ||
+              (error instanceof Error && error.name === 'AbortError'));
           if (
             !(error instanceof ExtensionProgramError) &&
-            !(error instanceof BehaviorEvaluationError)
+            !(error instanceof BehaviorEvaluationError) &&
+            !expectedAbort
           )
             throw error;
+          assertOwner();
+          if (skipped()) return;
           receipt.status = 'failed';
           receipt.code = expired
             ? 'BEHAVIOR_AFTER_RESPONSE_TIMEOUT'
@@ -331,6 +401,10 @@ export function commitAfterResponseInstance(
 ): void {
   const progress = runBehaviorProgress(store, run.id)?.afterResponse;
   if (!progress) return;
+  if (progress.status === 'skipped') {
+    if (progress.sourceHash !== sourceHash) fail('BEHAVIOR_AFTER_RESPONSE_SOURCE_CHANGED');
+    return;
+  }
   if (
     progress.version !== 1 ||
     progress.status !== 'completed' ||
@@ -391,4 +465,37 @@ export function commitAfterResponseInstance(
     expected = entry.after;
   }
   if (!isDeepStrictEqual(expected, receipt.after)) fail('BEHAVIOR_AFTER_RESPONSE_RECEIPT_INVALID');
+}
+
+/** Close optional adoption immediately; the owning preparation still awaits host settlement. */
+export function skipAfterResponse(store: Store, runId: string, value: unknown) {
+  const result = store.transaction(() => {
+    const body = record(value);
+    fields(body, ['chatId', 'branchId', 'expectedRevision', 'idempotencyKey']);
+    const run = store.run(runId);
+    const chatId = requestText(body.chatId, 'chat ID', 200),
+      branchId = requestText(body.branchId, 'branch ID', 200),
+      key = requestText(body.idempotencyKey, 'idempotency key', 200);
+    if (
+      chatId !== run.chatId ||
+      branchId !== (run.snapshot.branchId ?? `main:${run.chatId}`) ||
+      body.expectedRevision !== run.parentRevision
+    )
+      throw new HttpError(409, 'BEHAVIOR_AFTER_RESPONSE_OWNER_MISMATCH');
+    const progress = runBehaviorProgress(store, runId);
+    const afterResponse = progress?.afterResponse;
+    if (!progress || !afterResponse)
+      throw new HttpError(409, 'BEHAVIOR_AFTER_RESPONSE_NOT_RUNNING');
+    if (afterResponse.skipKey === key) return { skipped: true, afterResponse };
+    if (afterResponse.status !== 'running') return { skipped: false, afterResponse };
+    if (!['queued', 'running', 'waiting_for_state'].includes(run.status))
+      throw new HttpError(409, 'BEHAVIOR_AFTER_RESPONSE_FINISHED');
+    validateOwner(store, run);
+    progress.afterResponse = { ...afterResponse, status: 'skipped', skipKey: key };
+    saveProgress(store, runId, progress);
+    store.event(run.chatId, 'run.package-after-response', runId);
+    return { skipped: true, afterResponse: progress.afterResponse };
+  });
+  if (result.skipped) active.get(store)?.get(runId)?.controller.abort();
+  return result;
 }

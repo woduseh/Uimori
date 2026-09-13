@@ -7,8 +7,8 @@ import { Store, type Run } from '../server/store.js';
 import type { Content } from '../core/product.js';
 import type { ContentPackage } from '../core/content-package.js';
 import type { RunSnapshot } from '../core/types.js';
-import { EXTENSION_PROGRAM_API } from '../core/extension-program.js';
-import { prepareAfterResponse } from '../server/package-after-response.js';
+import { EXTENSION_PROGRAM_API, ExtensionProgramError } from '../core/extension-program.js';
+import { prepareAfterResponse, skipAfterResponse } from '../server/package-after-response.js';
 import { runBehaviorProgress } from '../server/package-behavior-run.js';
 import * as behaviorRuntime from '../server/package-behavior-run.js';
 import { BehaviorError } from '../core/package-behavior.js';
@@ -374,4 +374,135 @@ test('combined journal size failure drops only after receipts and still commits 
   const source = finish(f, run, 'hello');
   expect(source.text).toBe('hello');
   expect(current(f)[0]).toMatchObject({ stateRevision: 1, state: { count: 1 } });
+});
+
+function skipBody(f: Fixture, run: Run, key = 'skip-after') {
+  return {
+    chatId: f.chat.id,
+    branchId: run.snapshot.branchId,
+    expectedRevision: run.parentRevision,
+    idempotencyKey: key,
+  };
+}
+function modelFixture() {
+  return fixture((pkg) => {
+    pkg.behavior!.actions[0].program = {
+      api: EXTENSION_PROGRAM_API,
+      capabilities: ['model.generate'],
+      source:
+        "const result = await api.host.call('model.generate', {prompt:'synthetic'}); return {state:{count:7},result};",
+    };
+  });
+}
+
+test('synchronous progress skip closes adoption before the first guest and retries by exact ownership', async () => {
+  const f = fixture(),
+    run = start(f);
+  const execute = vi.spyOn(runtime, 'executeExtensionProgram');
+  await prepareAfterResponse(f.store, run.id, 'hello', undefined, () => {
+    expect(() =>
+      skipAfterResponse(f.store, run.id, { ...skipBody(f, run), branchId: 'foreign' })
+    ).toThrow('OWNER_MISMATCH');
+    expect(skipAfterResponse(f.store, run.id, skipBody(f, run)).skipped).toBe(true);
+  });
+  expect(execute).not.toHaveBeenCalled();
+  expect(receipt(f, run)).toMatchObject({ status: 'skipped', completed: 0, skipKey: 'skip-after' });
+  finish(f, run, 'hello');
+  expect(current(f)[0].state).toEqual({ count: 0 });
+  expect(skipAfterResponse(f.store, run.id, skipBody(f, run)).skipped).toBe(true);
+  expect(skipAfterResponse(f.store, run.id, skipBody(f, run, 'different')).skipped).toBe(false);
+});
+
+test('after model results reauthorize before adoption and use a bounded host wait', async () => {
+  const f = modelFixture(),
+    run = start(f);
+  const execute = vi.spyOn(runtime, 'executeExtensionProgram');
+  const assertModelAccess = vi.fn();
+  const services = vi.fn(() => ({
+    modelGenerate: async () => 'result',
+    assertModelAccess,
+    hostWaitMs: 40 * 60_000,
+  }));
+  await prepareAfterResponse(f.store, run.id, 'hello', undefined, undefined, services);
+  expect(services).toHaveBeenCalledWith({
+    instanceId: f.instanceId,
+    actionId: 'after',
+    trigger: 'after-turn',
+  });
+  expect(execute.mock.calls[0][3]).toMatchObject({
+    awaitHostSettlement: true,
+    hostWaitMs: 30 * 60_000,
+  });
+  expect(assertModelAccess).toHaveBeenCalledOnce();
+  finish(f, run, 'hello');
+  expect(current(f)[0].state).toEqual({ count: 7 });
+});
+
+test.each([false, true])(
+  'skip waits for paid host settlement and preserves fatal errors (%s)',
+  async (fatal) => {
+    const f = modelFixture(),
+      run = start(f);
+    let entered!: () => void;
+    const admitted = new Promise<void>((resolve) => {
+      entered = resolve;
+    });
+    let settle!: () => void;
+    const settlement = new Promise<void>((resolve) => {
+      settle = resolve;
+    });
+    let settled = false;
+    const work = prepareAfterResponse(f.store, run.id, 'hello', undefined, undefined, () => ({
+      modelGenerate: async () => {
+        entered();
+        await settlement;
+        if (fatal) throw new Error('fatal settlement');
+        return 'late';
+      },
+      assertModelAccess: () => {},
+      hostWaitMs: 30_000,
+    }));
+    const outcome = work.then(
+      () => {
+        settled = true;
+        return null;
+      },
+      (error: unknown) => {
+        settled = true;
+        return error;
+      }
+    );
+    await admitted;
+    skipAfterResponse(f.store, run.id, skipBody(f, run));
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(settled).toBe(false);
+    expect(receipt(f, run).status).toBe('skipped');
+    settle();
+    const error = await outcome;
+    if (fatal) expect(error).toMatchObject({ message: 'fatal settlement' });
+    else {
+      expect(error).toBeNull();
+      finish(f, run, 'hello');
+      expect(current(f)[0].state).toEqual({ count: 0 });
+    }
+  }
+);
+
+test('revoked model access discards after state while preserving the raw source', async () => {
+  const f = modelFixture(),
+    run = start(f);
+  await prepareAfterResponse(f.store, run.id, 'hello', undefined, undefined, () => ({
+    modelGenerate: async () => 'result',
+    assertModelAccess: () => {
+      throw new ExtensionProgramError('BEHAVIOR_HOST_MODEL_DENIED');
+    },
+    hostWaitMs: 30_000,
+  }));
+  expect(receipt(f, run).packages[0]).toMatchObject({
+    status: 'failed',
+    code: 'BEHAVIOR_HOST_MODEL_DENIED',
+    entries: [],
+  });
+  finish(f, run, 'hello');
+  expect(current(f)[0].state).toEqual({ count: 0 });
 });

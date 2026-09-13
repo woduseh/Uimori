@@ -8,13 +8,13 @@ export type ExtensionModelBinding = {
   instanceId: string;
   actionId: string;
   /** Omitted preserves the original model-triggered tool contract. */
-  trigger?: 'model' | 'before-turn';
+  trigger?: 'model' | 'before-turn' | 'after-turn';
 };
 export type ExtensionModelAttribution = Pick<ExtensionModelBinding, 'instanceId' | 'actionId'> & {
   packageId: string;
   packageRevision: number;
-  /** Only deferred automatic execution needs a marker; legacy model receipts stay unchanged. */
-  trigger?: 'before-turn';
+  /** Automatic execution needs a marker; legacy model receipts stay unchanged. */
+  trigger?: 'before-turn' | 'after-turn';
 };
 
 /** Author capability requests do not grant access to a user's model connection. */
@@ -34,9 +34,10 @@ export function extensionModelTarget(snapshot: RunSnapshot, binding: ExtensionMo
     !action ||
     historicalPersonaExcluded(profile, ref.role) ||
     snapshot.packageBehaviorUnavailable?.some((item) => item.instanceId === binding.instanceId) ||
-    !['model', 'before-turn'].includes(trigger) ||
+    !['model', 'before-turn', 'after-turn'].includes(trigger) ||
     !behaviorActionTriggers(action).includes(trigger) ||
     (trigger === 'before-turn' && snapshot.behaviorExecution?.deferredAutomatic !== true) ||
+    (trigger === 'after-turn' && snapshot.behaviorExecution === undefined) ||
     !action.program?.capabilities?.includes('model.generate') ||
     grant?.packageRevision !== ref.revision ||
     !grant.capabilities.includes('model.generate')
@@ -52,7 +53,7 @@ export function extensionModelTarget(snapshot: RunSnapshot, binding: ExtensionMo
       actionId: binding.actionId,
       packageId: ref.id,
       packageRevision: ref.revision,
-      ...(trigger === 'before-turn' ? { trigger } : {}),
+      ...(trigger === 'before-turn' || trigger === 'after-turn' ? { trigger } : {}),
     } satisfies ExtensionModelAttribution,
   };
 }
@@ -80,7 +81,7 @@ export function validateExtensionModelAttribution(snapshot: RunSnapshot, value: 
         return (
           !descriptor?.enumerable ||
           !Object.hasOwn(descriptor, 'value') ||
-          descriptor.value !== 'before-turn'
+          !['before-turn', 'after-turn'].includes(descriptor.value as string)
         );
       })())
   )

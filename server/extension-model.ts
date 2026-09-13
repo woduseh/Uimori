@@ -94,7 +94,8 @@ function sameConnection(current: Connection, frozen: Connection) {
 export function createExtensionModelService(
   snapshot: RunSnapshot,
   hooks: MainHooks,
-  totalUsage: Usage
+  totalUsage: Usage,
+  options: { phase?: 'generation' | 'after-response' } = {}
 ): {
   generate(
     binding: ExtensionModelBinding,
@@ -103,8 +104,13 @@ export function createExtensionModelService(
   ): Promise<RuntimeValue>;
   hostWaitMs: number;
 } {
+  const phase = options.phase ?? 'generation';
+  const reservedMainCalls = phase === 'generation' ? 1 : 0;
   let pendingReservations = 0;
-  const remainingAtCreation = Math.max(1, snapshot.settings.maxCalls - totalUsage.modelCalls - 1);
+  const remainingAtCreation = Math.max(
+    1,
+    snapshot.settings.maxCalls - totalUsage.modelCalls - reservedMainCalls
+  );
   const previewTarget = snapshot.profile?.extensionModel;
   const perCallTimeout = callTimeout(previewTarget?.timeoutMs);
   const hostWaitMs = Math.min(MAX_HOST_WAIT_MS, perCallTimeout * remainingAtCreation);
@@ -115,9 +121,14 @@ export function createExtensionModelService(
     runtimeSignal: AbortSignal
   ): Promise<RuntimeValue> => {
     const args = argumentsFor(value);
+    if ((binding.trigger === 'after-turn') !== (phase === 'after-response'))
+      fail('BEHAVIOR_HOST_MODEL_DENIED');
     const { target, attribution } = extensionModelTarget(snapshot, binding);
     if (!hooks.authorizeExtensionModel) fail('BEHAVIOR_HOST_MODEL_DENIED');
-    if (totalUsage.modelCalls + pendingReservations >= snapshot.settings.maxCalls - 1)
+    if (
+      totalUsage.modelCalls + pendingReservations >=
+      snapshot.settings.maxCalls - reservedMainCalls
+    )
       fail('BEHAVIOR_HOST_MODEL_BUDGET_EXHAUSTED');
     pendingReservations++;
     let reserved = true;
