@@ -22,10 +22,7 @@ import { chatActivities } from './chat-activity.js';
 import { readerRoutes } from './reader-routes.js';
 import { Controls, type Barrier, type FailurePoint } from './controls.js';
 import { runMain, ModelRunError, type MainHooks } from './model-runner.js';
-import {
-  extensionModelTarget,
-  validateExtensionModelAttribution,
-} from '../core/extension-model.js';
+import { validateExtensionModelAttribution } from '../core/extension-model.js';
 import { ExtensionProgramError } from '../core/extension-program.js';
 import { prepareInputContext, ContextCompactionError } from './context-compaction.js';
 import {
@@ -41,7 +38,8 @@ import {
   preparedBehaviorSnapshot,
   runBehaviorProgress,
 } from './package-behavior-run.js';
-import { createExtensionModelService } from './extension-model.js';
+import { authorizeExtensionModelAccess, createExtensionModelService } from './extension-model.js';
+import { createExtensionOperationRunner } from './extension-operation-runner.js';
 import { prepareAfterResponse } from './package-after-response.js';
 import { freezeLoreContext } from './lore-context.js';
 import { runAuxiliaryJob } from './product-auxiliary.js';
@@ -585,29 +583,7 @@ export async function createApp(options: AppOptions): Promise<App> {
             authorizeExtensionModel: (binding) => {
               assertCurrent();
               assertExtensionPhase(binding.trigger);
-              const live = store.product.profile(run.chatId);
-              const { target } = extensionModelTarget(
-                {
-                  ...run.snapshot,
-                  profile: {
-                    ...run.snapshot.profile!,
-                    packageAttachments: live.packageAttachments,
-                    extensionGrants: live.extensionGrants,
-                  },
-                },
-                binding
-              );
-              try {
-                store.product.assertAvailable('model', target.id);
-                store.product.assertAvailable('connection', target.connectionId);
-                const currentModel = store.product.get<{ enabled?: boolean }>('model', target.id);
-                if (currentModel.enabled === false)
-                  throw new ExtensionProgramError('BEHAVIOR_HOST_MODEL_UNAVAILABLE');
-              } catch (error) {
-                if (error instanceof HttpError && error.statusCode === 404)
-                  throw new ExtensionProgramError('BEHAVIOR_HOST_MODEL_UNAVAILABLE');
-                throw error;
-              }
+              authorizeExtensionModelAccess(store, run.snapshot, binding);
             },
             persistContext: (prepared, own) =>
               store.transaction(() => {
@@ -684,7 +660,10 @@ export async function createApp(options: AppOptions): Promise<App> {
             )
               throw new Error('CONTEXT_DEPENDENCIES_CHANGED');
           };
-          const assertExtensionPhase = (trigger?: 'model' | 'before-turn' | 'after-turn') => {
+          const assertExtensionPhase = (
+            trigger?: 'model' | 'before-turn' | 'after-turn' | 'user'
+          ) => {
+            if (trigger === 'user') throw new ExtensionProgramError('BEHAVIOR_HOST_MODEL_DENIED');
             const progress = runBehaviorProgress(store, id);
             if (
               (trigger === 'before-turn' && progress?.preparation?.status !== 'running') ||
@@ -1046,7 +1025,18 @@ export async function createApp(options: AppOptions): Promise<App> {
             : 'Request failed',
     });
   });
+  const extensionOperations = createExtensionOperationRunner(store, {
+    signal: stopping.signal,
+    owner: instanceId,
+    approvedOrigins,
+    resolveCredential,
+    executeCodex,
+    vertexRequestTier: options.vertexRequestTier,
+    publish,
+    track,
+  });
   const session = productRoutes(app, store, {
+    extensionOperations,
     credentials,
     codex,
     approvedOrigins,

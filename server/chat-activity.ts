@@ -5,6 +5,8 @@ import type { Store } from './store.js';
 export function chatActivities(store: Store): ChatActivityCount[] {
   return store.db
     .prepare(`WITH active AS (
+      SELECT chat_id AS chatId,'extension' AS kind FROM package_extension_operations WHERE status IN ('queued','running')
+      UNION ALL
       SELECT chat_id AS chatId,'main' AS kind FROM runs
         WHERE status IN ('queued','running','waiting_for_state')
       UNION ALL

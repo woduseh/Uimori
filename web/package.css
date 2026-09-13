@@ -274,7 +274,8 @@
   display: block;
   margin-bottom: 8px;
 }
-.behavior-upgrade-json {
+.behavior-upgrade-json,
+.extension-operation-result {
   max-height: 18rem;
   overflow: auto;
   white-space: pre-wrap;

@@ -12,12 +12,43 @@ import type { BehaviorActionCommand } from './package-behavior-store.js';
 import { cancelPackageRequest } from './package-requests.js';
 import { skipAutomaticRunBehavior } from './package-behavior-run.js';
 import { skipAfterResponse } from './package-after-response.js';
+import type { ExtensionOperationController } from './extension-operation-runner.js';
+import { extensionOperation } from './extension-operations.js';
 
 export function packageBehaviorRoutes(
   app: FastifyInstance,
   store: Store,
-  publish?: (chatId: string) => void
+  publish?: (chatId: string) => void,
+  operations?: ExtensionOperationController
 ) {
+  app.get<{ Params: { id: string; operationId: string }; Querystring: { includeResult?: string } }>(
+    '/api/chats/:id/extension-operations/:operationId',
+    async (request) => {
+      const op = extensionOperation(store, request.params.operationId);
+      if (op.chatId !== request.params.id)
+        throw new HttpError(404, 'EXTENSION_OPERATION_NOT_FOUND');
+      return {
+        id: op.id,
+        status: op.status,
+        error: op.error,
+        generation: op.generation,
+        hasResult: op.result !== null,
+        ...(request.query.includeResult === '1'
+          ? {
+              result: op.result ? { state: op.result.state, result: op.result.result } : null,
+            }
+          : {}),
+      };
+    }
+  );
+  app.post<{ Params: { id: string; operationId: string } }>(
+    '/api/chats/:id/extension-operations/:operationId/cancel',
+    async (request) => {
+      fields(record(request.body), []);
+      if (!operations) throw new HttpError(503, 'EXTENSION_OPERATION_UNAVAILABLE');
+      return operations.cancel(request.params.id, request.params.operationId);
+    }
+  );
   app.post<{ Params: { id: string } }>(
     '/api/runs/:id/skip-package-after-response',
     async (request) => {
@@ -154,6 +185,26 @@ export function packageBehaviorRoutes(
             command,
             true
           );
+        const operationCommand = {
+          ...(command as BehaviorActionCommand),
+          ...(panel ? { panel } : {}),
+        };
+        if (
+          operations?.requiresOperation(
+            request.params.id,
+            branchId,
+            request.params.instanceId,
+            operationCommand
+          )
+        ) {
+          const operation = operations.enqueue(
+            request.params.id,
+            branchId,
+            request.params.instanceId,
+            operationCommand
+          );
+          return { ...behaviorDetail(store, request.params.id, branchId), operation };
+        }
         const abort = new AbortController();
         const cancel = () => {
           if (!reply.raw.writableEnded) abort.abort();

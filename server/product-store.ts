@@ -1,4 +1,9 @@
 import {
+  EXTENSION_OPERATION_TABLES,
+  normalizeExtensionOperationArchiveRow,
+  validateExtensionOperationArchive,
+} from './extension-operation-archive.js';
+import {
   HttpError,
   archiveId,
   archiveList,
@@ -1300,7 +1305,12 @@ export class ProductStore {
       throw new HttpError(400, 'Unsupported archive');
     const tables = record(a.tables);
     // Illustration and outline tables were added to schema 15 later; older archives restore normally.
-    for (const table of [...ILLUSTRATION_TABLES, ...OUTLINE_TABLES, 'native_transfer_receipts'])
+    for (const table of [
+      ...ILLUSTRATION_TABLES,
+      ...OUTLINE_TABLES,
+      ...EXTENSION_OPERATION_TABLES,
+      'native_transfer_receipts',
+    ])
       tables[table] ??= [];
     fields(tables, archiveTables);
     if (archiveTables.some((t) => !Array.isArray(tables[t]) || tables[t].length > 100000))
@@ -1465,6 +1475,7 @@ export class ProductStore {
               if (row.raw_usage !== null)
                 row.raw_usage = json(scrubArchiveSecrets(parse(row.raw_usage)));
             }
+            normalizeExtensionOperationArchiveRow(table, row);
             normalizeStoryArchiveRow(table, row);
             normalizeHelperArchiveRow(table, row);
             normalizeResponseStreamArchiveRow(table, row);
@@ -1542,6 +1553,7 @@ const archiveTables = [
   ...organizationTables,
   ...libraryOrganizationTables,
   ...packageBehaviorTables,
+  ...EXTENSION_OPERATION_TABLES,
   ...ILLUSTRATION_TABLES,
   ...OUTLINE_TABLES,
   'native_transfer_receipts',
@@ -2291,6 +2303,9 @@ function validateArchiveGraph(product: ProductStore) {
         entries: result.display,
       });
   }
+  const extensionOwners = validateExtensionOperationArchive(product.store, (profile, chatId) => {
+    validateArchiveProfile(product, profile, chatId, true);
+  });
   const illustrationOwners = validateIllustrationArchive(product.store);
   for (const attempt of rows('attempts')) {
     const request = record(parse(attempt.request));
@@ -2302,6 +2317,7 @@ function validateArchiveGraph(product: ProductStore) {
     const contextOwner = product.db
       .prepare('SELECT job_id FROM context_job_attempts WHERE attempt_id=?')
       .get(attempt.id);
+    const extensionOwner = extensionOwners.has(attempt.id);
     const illustrationOwner = illustrationOwners.get(attempt.id);
     const primaryOwners = [attempt.run_id, attempt.job_id, attempt.story_job_id].filter(
       (id) => id !== null
@@ -2310,7 +2326,8 @@ function validateArchiveGraph(product: ProductStore) {
       primaryOwners +
         Number(!!helperOwner) +
         Number(!!contextOwner) +
-        Number(!!illustrationOwner) !==
+        Number(!!illustrationOwner) +
+        Number(!!extensionOwner) !==
       1
     )
       throw new HttpError(400, 'Attempt target mismatch');
@@ -2356,6 +2373,7 @@ function validateArchiveGraph(product: ProductStore) {
       !helperOwner &&
       !contextOwner &&
       !illustrationOwner &&
+      !extensionOwner &&
       (attempt.run_id !== null
         ? attempt.role !== 'main' &&
           attempt.role !== 'title' &&
@@ -2364,7 +2382,7 @@ function validateArchiveGraph(product: ProductStore) {
         : jobs.get(attempt.job_id)?.kind !== attempt.role)
     )
       throw new HttpError(400, 'Attempt role mismatch');
-    if (request.extensionAction !== undefined) {
+    if (request.extensionAction !== undefined && !extensionOwner) {
       if (
         attempt.run_id === null ||
         attempt.role !== 'state' ||

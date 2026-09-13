@@ -29,6 +29,7 @@ const chatTables = [
   'outline_nodes',
   'scene_commands',
   'package_requests',
+  'package_extension_operations',
   'package_behavior_states',
   'package_behavior_journal',
   'package_behavior_heads',
@@ -85,7 +86,14 @@ function assertIdle(store: Store, chatId: string) {
       .get(chatId)
   )
     throw new HttpError(409, '진행 중인 도우미 작업을 취소하거나 완료한 뒤 삭제해 주세요.');
-  for (const table of ['runs', 'jobs', 'story_jobs', 'context_jobs', 'illustration_jobs'])
+  for (const table of [
+    'runs',
+    'jobs',
+    'story_jobs',
+    'context_jobs',
+    'illustration_jobs',
+    'package_extension_operations',
+  ])
     if (
       store.db
         .prepare(
@@ -151,6 +159,7 @@ export function deleteChat(store: Store, chatId: string, value: unknown) {
       (store.db.prepare(`SELECT id FROM ${table} WHERE chat_id=?`).all(chatId) as Row[]).map(
         (row) => String(row.id)
       );
+    removeExtensionOperations(store, chatId);
     removeRunArtifacts(store, ids('runs'), ids('sources'), ids('jobs'));
     store.db
       .prepare(
@@ -162,6 +171,28 @@ export function deleteChat(store: Store, chatId: string, value: unknown) {
     store.db.prepare('DELETE FROM chats WHERE id=?').run(chatId);
     return { deleted: true };
   });
+}
+
+function removeExtensionOperations(store: Store, chatId: string, branchId?: string) {
+  const where = branchId ? 'chat_id=? AND branch_id=?' : 'chat_id=?';
+  const args = branchId ? [chatId, branchId] : [chatId];
+  const attempts = store.db
+    .prepare(
+      `SELECT attempt_id FROM package_extension_operation_attempts WHERE operation_id IN (SELECT id FROM package_extension_operations WHERE ${where})`
+    )
+    .all(...args) as Row[];
+  store.db
+    .prepare(
+      `DELETE FROM package_extension_operation_attempts WHERE operation_id IN (SELECT id FROM package_extension_operations WHERE ${where})`
+    )
+    .run(...args);
+  removeIds(
+    store,
+    'attempts',
+    'id',
+    attempts.map((row) => row.attempt_id)
+  );
+  store.db.prepare(`DELETE FROM package_extension_operations WHERE ${where}`).run(...args);
 }
 
 function removeBranchHelpers(store: Store, chatId: string, branchId: string) {
@@ -249,6 +280,10 @@ export function deleteBranch(store: Store, chatId: string, branchId: string, val
         .all(chatId, branchId) as Row[])
         for (const column of ['body', 'result', 'dependencies', 'ancestry'])
           if (row[column] && references(JSON.parse(row[column]), dependencies)) conflict();
+    for (const row of store.db
+      .prepare('SELECT snapshot FROM package_extension_operations WHERE chat_id=? AND branch_id<>?')
+      .all(chatId, branchId) as Row[])
+      if (sourceSet.has(JSON.parse(row.snapshot).sourceRevision)) conflict();
     const ownScope = store.context.scope(chatId, branchId).scopeKey;
     const helperScopes = new Set<string>();
     const helperTasks = store.db
@@ -318,6 +353,7 @@ export function deleteBranch(store: Store, chatId: string, branchId: string, val
       .filter((row) => sourceSet.has(row.source_revision))
       .map((row) => String(row.id));
     store.db.exec('PRAGMA defer_foreign_keys=ON');
+    removeExtensionOperations(store, chatId, branchId);
     removeBranchHelpers(store, chatId, branchId);
     removeRunArtifacts(store, runIds, sourceIds, jobIds);
     deleteChatOverrideSourcesInTransaction(store, chatId, sourceSet);

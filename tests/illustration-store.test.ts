@@ -296,7 +296,7 @@ describe('integrated illustration audit regressions', () => {
   });
 });
 
-describe('illustration storage on schema 17', () => {
+describe('illustration storage on schema 18', () => {
   test('fresh databases create the tables and legacy schema 15 gains them during upgrade', () => {
     const store = databases.create();
     const tables = () =>
@@ -313,18 +313,18 @@ describe('illustration storage on schema 17', () => {
       'illustration_references',
       'illustration_settings',
     ]);
-    expect(store.db.prepare('PRAGMA user_version').get()).toEqual({ user_version: 17 });
+    expect(store.db.prepare('PRAGMA user_version').get()).toEqual({ user_version: 18 });
     expect(illustrationSettings(store)).toMatchObject({ revision: 1, generator: 'none' });
     const path = store.path;
     store.close();
     const raw = new DatabaseSync(path);
     raw.exec(
-      'DROP TABLE illustration_images; DROP TABLE illustration_jobs; DROP TABLE illustration_references; DROP TABLE illustration_settings; DROP TABLE native_transfer_receipts; DROP TABLE schema_migrations; PRAGMA user_version=15;'
+      'DROP TABLE illustration_images; DROP TABLE illustration_jobs; DROP TABLE illustration_references; DROP TABLE illustration_settings; DROP TABLE package_extension_operation_attempts; DROP TABLE package_extension_operations; DROP TABLE native_transfer_receipts; DROP TABLE schema_migrations; PRAGMA user_version=15;'
     );
     raw.close();
     const reopened = new Store(path);
     try {
-      expect(reopened.db.prepare('PRAGMA user_version').get()).toEqual({ user_version: 17 });
+      expect(reopened.db.prepare('PRAGMA user_version').get()).toEqual({ user_version: 18 });
       expect(illustrationSettings(reopened).generator).toBe('none');
       expect(reopened.db.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
     } finally {

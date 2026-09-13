@@ -45,6 +45,7 @@ import {
   latestImageJob,
 } from './package-images.js';
 import { recoverIllustrations, scheduleAutomaticIllustration } from './illustrations.js';
+import { recoverExtensionOperations } from './extension-operations.js';
 import type {
   Settings,
   Chat as BaseChat,
@@ -1125,6 +1126,7 @@ export class Store {
   }
   recover() {
     this.transaction(() => {
+      recoverExtensionOperations(this);
       for (const row of this.db
         .prepare("SELECT id FROM runs WHERE status IN ('queued','running','waiting_for_state')")
         .all() as Row[]) {

@@ -66,11 +66,11 @@ function reset(
   return { ...result, body: line ? JSON.parse(line) : undefined };
 }
 
-test('BASE01 a fresh database creates schema 17 and a current database reopens directly', () => {
+test('BASE01 a fresh database creates schema 18 and a current database reopens directly', () => {
   const f = fixture(),
     store = new Store(f.path);
   f.owner.store = store;
-  expect(store.db.prepare('PRAGMA user_version').get()).toEqual({ user_version: 17 });
+  expect(store.db.prepare('PRAGMA user_version').get()).toEqual({ user_version: 18 });
   expect(
     store.db.prepare("SELECT name FROM sqlite_schema WHERE type='table' AND name='resources'").get()
   ).toBeUndefined();
@@ -123,10 +123,10 @@ test('BASE03 fresh initialization rolls back as one transaction and releases its
     db.close();
   }
   f.owner.store = new Store(f.path);
-  expect(f.owner.store.db.prepare('PRAGMA user_version').get()).toEqual({ user_version: 17 });
+  expect(f.owner.store.db.prepare('PRAGMA user_version').get()).toEqual({ user_version: 18 });
 });
 
-test('BASE04 archive format 15 remains independent from database schema 17', () => {
+test('BASE04 archive format 15 remains independent from database schema 18', () => {
   const source = fixture(),
     target = fixture();
   source.owner.store = new Store(source.path);

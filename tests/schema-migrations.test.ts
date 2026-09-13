@@ -84,6 +84,8 @@ function withoutLedger(db: DatabaseSync) {
   const {
     schema_migrations: _ledger,
     native_transfer_receipts: _transfers,
+    package_extension_operations: _extensionOperations,
+    package_extension_operation_attempts: _extensionAttempts,
     ...data
   } = snapshot(db);
   return data;
@@ -103,6 +105,7 @@ test('MIG01 fresh initialization and reopening agree with the frozen v15 shape p
   expect(ledger(store.db)).toEqual([
     { version: 16, name: 'schema-16-beta-baseline', applied_at: expect.any(String) },
     { version: 17, name: 'schema-17-native-transfer-receipts', applied_at: expect.any(String) },
+    { version: 18, name: 'schema-18-package-extension-operations', applied_at: expect.any(String) },
   ]);
   const before = snapshot(store.db),
     beforeSchema = schema(store.db);
@@ -127,7 +130,13 @@ test('MIG02 an actual frozen v15 preserves every stored row, source, image, stat
   expect(withoutLedger(store.db)).toEqual(before);
   expect(
     schema(store.db).filter(
-      (entry) => !['schema_migrations', 'native_transfer_receipts'].includes(String(entry.name))
+      (entry) =>
+        ![
+          'schema_migrations',
+          'native_transfer_receipts',
+          'package_extension_operations',
+          'package_extension_operation_attempts',
+        ].includes(String(entry.tbl_name))
     )
   ).toEqual(beforeSchema);
   const firstLedger = ledger(store.db);
@@ -248,7 +257,7 @@ test.each(['after DDL', 'after ledger'] as const)(
     expect(snapshot(unchanged)).toEqual(before);
     expect(unchanged.prepare('PRAGMA user_version').get()).toEqual({ user_version: 15 });
     unchanged.close();
-    expect(ledger(f.open().db)).toHaveLength(2);
+    expect(ledger(f.open().db)).toHaveLength(3);
   }
 );
 
@@ -268,7 +277,7 @@ test('MIG07 final foreign-key validation rolls back all additions', () => {
   expect(schema(after)).toEqual(beforeSchema);
 });
 
-test.each([0, 14, 18])(
+test.each([0, 14, 19])(
   'MIG08 unsupported version %s leaves the original SQLite bytes and data intact',
   (version) => {
     const f = fixture(),
@@ -290,7 +299,7 @@ test.each([
   'DELETE FROM schema_migrations',
   "UPDATE schema_migrations SET name='unknown'",
   "UPDATE schema_migrations SET applied_at='not-a-time'",
-  "INSERT INTO schema_migrations VALUES(18,'unknown','2026-09-12T00:00:00.000Z')",
+  "INSERT INTO schema_migrations VALUES(19,'unknown','2026-09-12T00:00:00.000Z')",
   'ALTER TABLE schema_migrations ADD COLUMN unexpected TEXT',
   'PRAGMA user_version=15',
 ])('MIG09 inconsistent ledger is rejected without repair: %s', (sql) => {
@@ -341,7 +350,7 @@ test('MIG11 SQLite backup retains migration history; archive15 and chat-backup1 
   expect(globalThis.fetch).not.toHaveBeenCalled();
 });
 
-test('MIG12 frozen schema16 upgrades only the transfer receipt table; failed schema17 rolls back its ledger and DDL', () => {
+test('MIG12 frozen schema16 adds transfer and extension storage; failed schema17 rolls back its ledger and DDL', () => {
   const f = fixture(),
     raw = f.frozen();
   raw.exec(
@@ -359,7 +368,7 @@ test('MIG12 frozen schema16 upgrades only the transfer receipt table; failed sch
     return exec.call(this, sql);
   });
   expect(() => f.open()).toThrow(
-    'DATABASE_MIGRATION_FAILED:16->17:schema-17-native-transfer-receipts'
+    'DATABASE_MIGRATION_FAILED:16->18:schema-17-native-transfer-receipts'
   );
   injected.mockRestore();
   const unchanged = f.raw();
@@ -371,7 +380,55 @@ test('MIG12 frozen schema16 upgrades only the transfer receipt table; failed sch
   for (const [table, rows] of Object.entries(before))
     if (table !== 'schema_migrations') expect(snapshot(store.db)[table]).toEqual(rows);
   expect(store.db.prepare('SELECT * FROM native_transfer_receipts').all()).toEqual([]);
-  expect(ledger(store.db)).toHaveLength(2);
+  expect(ledger(store.db)).toHaveLength(3);
+});
+
+test('MIG14 schema17 upgrades atomically and preserves every previous table and ledger row', () => {
+  const f = fixture(),
+    old = f.open();
+  old.db.exec(
+    'DROP TABLE package_extension_operation_attempts; DROP TABLE package_extension_operations; DELETE FROM schema_migrations WHERE version=18; PRAGMA user_version=17'
+  );
+  const before = snapshot(old.db),
+    beforeSchema = schema(old.db);
+  old.close();
+  const exec = DatabaseSync.prototype.exec;
+  const injected = vi.spyOn(DatabaseSync.prototype, 'exec').mockImplementation(function (
+    this: DatabaseSync,
+    sql: string
+  ) {
+    if (sql === 'PRAGMA user_version=18') throw new Error('Synthetic schema18 failure');
+    return exec.call(this, sql);
+  });
+  expect(() => f.open()).toThrow(
+    'DATABASE_MIGRATION_FAILED:17->18:schema-18-package-extension-operations'
+  );
+  injected.mockRestore();
+  const unchanged = f.raw();
+  expect(snapshot(unchanged)).toEqual(before);
+  expect(schema(unchanged)).toEqual(beforeSchema);
+  expect(unchanged.prepare('PRAGMA user_version').get()!.user_version).toBe(17);
+  unchanged.close();
+  const current = f.open();
+  for (const [table, rows] of Object.entries(before))
+    if (table !== 'schema_migrations') expect(snapshot(current.db)[table]).toEqual(rows);
+  expect(ledger(current.db).slice(0, 2)).toEqual(before.schema_migrations);
+  expect(current.db.prepare('SELECT * FROM package_extension_operations').all()).toEqual([]);
+  expect(current.db.prepare('SELECT * FROM package_extension_operation_attempts').all()).toEqual(
+    []
+  );
+});
+
+test('MIG15 schema18 rejects a weakened extension active-owner index without repairing it', () => {
+  const f = fixture(),
+    store = f.open();
+  store.db.exec(
+    "DROP INDEX package_extension_one_active; CREATE INDEX package_extension_one_active ON package_extension_operations(chat_id,branch_id,attachment_instance_id) WHERE status='running'"
+  );
+  const before = schema(store.db);
+  store.close();
+  expect(() => f.open()).toThrow('DATABASE_SCHEMA_MISMATCH:package_extension_one_active');
+  expect(schema(f.raw())).toEqual(before);
 });
 
 test.each(['missing', 'partial'] as const)(

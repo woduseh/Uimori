@@ -13,7 +13,7 @@
 3. 채팅에서 장착한 자료의 **추가 모델 호출 허용**을 켜요. 이 허용은 그 자료의 현재 revision에만 적용돼요.
 4. 생성 전·응답 후 자동 처리 또는 본문(main) 모델이 요청한 행동에서 코드가 `model.generate`를 사용할 수 있어요.
 
-사용자 버튼의 코드는 자기 상태 계산과 자료 읽기를 지원하며, 버튼에서 추가 모델을 호출하는 기능은 후속 범위예요.
+사용자 버튼의 코드는 자기 상태 계산·자료 읽기와 허용된 추가 모델 호출을 지원해요. 모델 capability를 선언한 버튼은 같은 actions API에서 영구 작업으로 접수해요.
 
 ```json
 {
@@ -118,7 +118,7 @@ return {
 
 후처리는 `RunBehaviorProgress.afterResponse`에 Run·응답 hash별로 보관해요. 모델 입력 시점의 `entries/states`와 같은 판정 기회 캐시에 섞지 않아요. 후보는 자신의 새 응답으로 후처리를 다시 계산하고, 포크·백업 복원은 기록된 결과를 보존하며 코드를 실행하지 않아요. 중단된 처리를 재시작 시 자동 재생하지 않아요. 후처리 Host는 자기 자료·이번 응답 읽기와 명시 허용된 `model.generate`를 제공하며 HTTP 호출은 후속 범위예요.
 
-후처리의 모델 호출도 전역 `extensionModel`과 정확한 자료 개정의 채팅별 grant를 사용해요. 이미 본문 호출이 끝났으므로 별도 본문 호출을 예약하지 않고 Run의 남은 호출 한도만 사용해요. 사용량·가격·전송 전 attempt는 본문과 합산하고 attempt에는 `trigger: 'after-turn'` 귀속을 남겨요. 사용자 버튼의 모델 호출은 아직 제공하지 않아요.
+후처리의 모델 호출도 전역 `extensionModel`과 정확한 자료 개정의 채팅별 grant를 사용해요. 이미 본문 호출이 끝났으므로 별도 본문 호출을 예약하지 않고 Run의 남은 호출 한도만 사용해요. 사용량·가격·전송 전 attempt는 본문과 합산하고 attempt에는 `trigger: 'after-turn'` 귀속을 남겨요. 사용자 버튼은 아래의 영구 작업 경로에서 같은 모델 Host API를 사용해요.
 
 작업 상세의 **응답 후 처리 건너뛰기**는 후처리 전체의 상태 채택을 즉시 닫아요. 이미 계산한 일부 결과도 현재 상태에 게시하지 않고 영수증만 보존해요. 진행 중인 Host 호출의 취소·정산이 끝나면 같은 요청의 완성 본문을 그대로 저장해요. 전체 Run 취소와 대상이 다르며, 중복 명령은 원래 결과를 돌려주고 다른 분기/부모 원문의 명령은 거절해요. 최신 grant 철회나 원문 소유권 상실 후 새 호출·늦은 상태 반영을 막아요. 건너뛰기/취소 중 발생한 DB·정산 오류는 부가 실패로 숨기지 않아요.
 
@@ -128,13 +128,13 @@ return {
 
 ### 모델 호출 Host API와 명시 권한
 
-`program.capabilities: ['model.generate']`는 자료 제작자가 요청하는 capability일 뿐이에요. 행동이 해당 호출 방법(`model`, `before-turn`, `after-turn`)을 허용하고, 전역 역할 모델 설정의 `extensionModel`이 선택되어 있어야 하며, 채팅 profile에 `extensionGrants[packageInstanceId] = {packageRevision, capabilities: ['model.generate']}`가 있어야 호출할 수 있어요. `before-turn`은 예약된 `deferredAutomatic` 실행의 준비 중에만 허용해요. 전역 `extensionModel`의 기본값은 `null`이고, 이 모델은 확장 행동의 추가 생성에만 사용해요. 예약할 때 모델·연결·자료 source/revision·허용을 Run에 고정하고 실행 중 전역 설정을 다시 읽지 않지만, 매 호출과 결과 채택에서 최신 grant·connection·소유권을 다시 확인해요.
+`program.capabilities: ['model.generate']`는 자료 제작자가 요청하는 capability일 뿐이에요. 행동이 해당 호출 방법(`user`, `model`, `before-turn`, `after-turn`)을 허용하고, 전역 역할 모델 설정의 `extensionModel`이 선택되어 있어야 하며, 채팅 profile에 `extensionGrants[packageInstanceId] = {packageRevision, capabilities: ['model.generate']}`가 있어야 호출할 수 있어요. `before-turn`은 예약된 `deferredAutomatic` 실행의 준비 중에만 허용해요. 전역 `extensionModel`의 기본값은 `null`이고, 이 모델은 확장 행동의 추가 생성에만 사용해요. 예약할 때 모델·연결·자료 source/revision·허용을 Run에 고정하고 실행 중 전역 설정을 다시 읽지 않지만, 매 호출과 결과 채택에서 최신 grant·connection·소유권을 다시 확인해요.
 
 허용은 정확히 장착한 자료 revision에 묶여요. 자료가 새 revision이 되면 예전 grant를 자동 승계하지 않으며, 사용자가 허용을 철회하면 새 호출을 막고 이미 끝난 늦은 결과도 채택하지 않아요. 자료 native transfer는 확장 grant를 옮기지 않아요. 순수 코드 행동에는 모델 선택이나 추가 호출 허용이 필요하지 않아요.
 
 코드는 `await api.host.call('model.generate', {prompt})`만 요청할 수 있어요. `prompt`는 비어 있지 않은 문자열이고 최대 16,000자예요. 모델 ID·키·endpoint·옵션은 게스트가 지정할 수 없고, 예약된 확장 호출 모델의 generation·context budget·pricing snapshot을 호스트가 사용해요. 출력 토큰 한도도 선택한 모델 설정을 따르며 코드에서 늘릴 수 없어요. 반환값은 `status`, `text`, `truncated`, `error` 필드이며 `text`는 최대 6,000자예요.
 
-추가 호출은 Run 전체 `maxCalls`를 공유해요. 생성 전/본문 행동은 마지막 본문(main) 호출 한 번을 남기고, 응답 후 처리는 이미 본문 호출을 마쳤으므로 남은 한도만 사용해요. 이 단계는 호스트가 지정하며 게스트가 바꿀 수 없어요. 동시에 여러 호출해도 pending 예약을 함께 세어 한도를 지켜요. 확장 호출을 자동 재시도하거나 임의 도구를 제공하지 않아요. 전송 전에 `role: 'state'`와 `extensionAction` 자료 귀속을 포함한 attempt를 기록하고, 사용량과 가격 snapshot은 기존 모델 실행 경로로 보존해요. 확장 결과는 행동 결과·opportunity/progress·영수증으로 보존하며 원문은 기존 main 호출만 저장해요. 복원에서는 모델이나 코드를 재실행하지 않아요.
+Run에 속한 추가 호출은 Run 전체 `maxCalls`를 공유해요. 생성 전/본문 행동은 마지막 본문(main) 호출 한 번을 남기고, 응답 후 처리는 이미 본문 호출을 마쳤으므로 남은 한도만 사용해요. 이 단계는 호스트가 지정하며 게스트가 바꿀 수 없어요. 동시에 여러 호출해도 pending 예약을 함께 세어 한도를 지켜요. 확장 호출을 자동 재시도하거나 임의 도구를 제공하지 않아요. 전송 전에 `role: 'state'`와 `extensionAction` 자료 귀속을 포함한 attempt를 기록하고, 사용량과 가격 snapshot은 기존 모델 실행 경로로 보존해요. 확장 결과는 행동 결과·opportunity/progress·영수증으로 보존하며 원문은 기존 main 호출만 저장해요. 복원에서는 모델이나 코드를 재실행하지 않아요.
 
 자동 준비의 attempt는 `extensionAction.trigger: 'before-turn'`으로 구분하고 기존 모델 행동의 영수증 형식은 유지해요. 준비에서 사용한 호출·토큰·비용은 뒤의 문맥 정리·본문과 합산해요. 문맥 정리는 이미 사용한 준비 호출을 제외한 남은 한도를 사용하며 자기 `summaryCalls`에는 요약 호출만 기록해요. 준비를 건너뛰면 결과 채택은 즉시 닫고 이미 전송한 호출의 취소·사용량 정산 후 같은 본문 요청을 계속해요. 후보가 완료된 준비 결과를 재사용할 때는 모델을 재호출하거나 원래 준비 사용량을 다시 더하지 않아요.
 
@@ -148,11 +148,23 @@ return {
 
 ## 권한과 실행
 
-버튼 실행은 이 자료의 상태/입력 읽기와 반환한 상태의 반영을 요청하는 동작이에요. 선택한 권한으로 자기 자료를 읽을 수 있지만 채팅 전체·다른 자료·키·환경변수·DB 객체·앱 DOM을 받지 않아요. ID나 권한을 결과에 추가해도 권한이 늘어나지 않아요. 사용자 버튼에서의 추가 모델 호출, 파일·일반 HTTP·동적 모듈 import는 연결하지 않았어요. `model.generate`는 생성 전·응답 후 자동 처리와 모델이 호출한 행동에서 사용할 수 있어요.
+버튼 실행은 이 자료의 상태/입력 읽기와 반환한 상태의 반영을 요청하는 동작이에요. 선택한 권한으로 자기 자료를 읽을 수 있지만 채팅 전체·다른 자료·키·환경변수·DB 객체·앱 DOM을 받지 않아요. ID나 권한을 결과에 추가해도 권한이 늘어나지 않아요. 파일·일반 HTTP·동적 모듈 import는 연결하지 않았어요. `model.generate`는 사용자 버튼·생성 전·응답 후 자동 처리와 모델이 호출한 행동에서 같은 API로 사용할 수 있어요.
 
 사용자 버튼에서는 호스트가 현재 장착 자료와 행동·패널 허용 목록, 입력·상태 개정·원문 의존성을 확인한 뒤 transaction 밖에서 계산해요. 계산이 끝나면 자료/프로필·분기/원문·상태와 진행 중 Run을 다시 확인하고, 같은 경계에서 결과 검사와 journal 저장을 수행해요. 계산 중 다른 작업이 바뀌면 늦은 결과는 반영하지 않아요. 같은 명령 키의 동시 실행은 합치고, 이미 저장된 명령은 원래 영수증을 반환해요. 같은 키의 다른 명령은 충돌이에요.
 
-무한 계산·메모리/출력 초과·잘못된 결과·취소는 해당 행동을 실패시켜요. 기존 상태·원문은 유지하며 새 채팅 요청을 막는 실패 상태를 만들지 않아요. 실제 DB 저장 실패를 성공으로 숨기지는 않아요. 버튼 요청의 HTTP 연결 종료 또는 Run 취소는 해당 계산을 취소하고, 종료 후 결과를 채택하지 않아요.
+무한 계산·메모리/출력 초과·잘못된 결과·취소는 해당 행동을 실패시켜요. 기존 상태·원문은 유지하며 새 채팅 요청을 막는 실패 상태를 만들지 않아요. 실제 DB 저장 실패를 성공으로 숨기지는 않아요. 모델 capability가 없는 동기 버튼 요청의 HTTP 연결 종료 또는 Run 취소는 해당 계산을 취소하고, 종료 후 결과를 채택하지 않아요. 영구 사용자 작업은 아래의 명시적 취소 경계를 따라요.
+
+## 사용자 버튼의 모델 작업
+
+기본 버튼과 커스텀 패널은 기존 actions endpoint를 그대로 사용해요. `user` 행동의 프로그램이 `model.generate` capability를 선언하면 서버가 영구 작업으로 접수하고 `{operationId}`를 반환해요. 클릭 시점의 자료·입력·상태·프로필·모델 설정을 고정하며 별도 본문 Run이나 가짜 본문 snapshot을 만들지 않아요. 브라우저 이동이나 HTTP 연결 종료 뒤에도 서버 작업은 유지돼요.
+
+`server/extension-operation-runner.ts`는 기존 `createExtensionModelService`와 `authorizeExtensionModelAccess`, `api.host.call('model.generate', {prompt})`를 사용해요. 실제 모델 호출에는 전역 `extensionModel`과 정확한 자료 source/revision의 grant가 필요해요. capability 선언만으로 모델이 필수인 것은 아니며, 코드가 모델 사용 불가 결과를 처리하고 상태만 반환할 수 있어요. 호출 전 최신 권한·연결·소유권을 확인하고 기존 product attempt에 `trigger: 'user'`를 기록해요. 작업에 고정한 `maxCalls`를 사용하며 본문 호출 몫을 예약하지 않아요. 전송된 호출의 사용량은 해당 작업에 귀속하고 미정산 토큰·비용은 `null`로 표시해요.
+
+완성 상태는 기존 `performBehaviorAction`의 schema·CAS 검사와 `ui-action` journal로만 채택하며 작업 완료와 한 transaction으로 저장해요. 계산 중 현재 자료·프로필·분기·원문·상태가 달라지거나 본문 실행과 충돌하면 늦은 상태를 반영하지 않아요. 본문은 계속 진행할 수 있고 원문을 이 작업의 결과로 바꾸지 않아요. 계산은 끝났지만 채택에 실패한 결과는 **상태에 미반영**으로 보존해요. 이 기록은 새 상태 schema에 맞지 않을 수도 있으므로 제한된 계산 영수증의 무결성과 실제 상태 채택 검증을 구분해요.
+
+기존 자료 패널과 작업 활동의 **자료 코드 작업**에서 진행 상태·호출 수·명시적 취소와 **계산 결과 보기**를 제공해요. 목록은 결과 유무와 metadata만 반환하며 결과는 `GET /api/chats/:id/extension-operations/:operationId?includeResult=1`로 명시적으로 조회해요. 취소는 `/cancel`에 POST하고 늦은 채택을 닫은 뒤 전송된 attempt를 정산해요. 서버 재시작·복원은 queued/running을 interrupted로 보존하고 자동 재실행하지 않아요. 같은 명령 키는 취소·실패·중단을 포함한 원래 작업을 반환하고, 사용자가 새로 실행한 행동은 새 키를 사용해요.
+
+DB v18의 작업·attempt 연결 표와 archive15/chat-backup1의 선택적 collection에 기록을 보존해요. 과거 백업의 collection 누락은 빈 목록으로 처리하며 복원에서 코드나 모델을 재호출하지 않아요. 복원한 채팅의 live grant 제거 원칙은 그대로예요.
 
 ## 실행 엔진의 경계
 
@@ -168,4 +180,4 @@ return {
 
 프로그램은 패키지 개정에 속하므로 기존 자료 이동·snapshot·백업에 함께 들어가요. 저장한 행동 영수증에는 API·코드 지문·엔진 식별자·상태/결과를 보존해요. 모델 호출의 영수증은 opportunity·Run progress·최종 journal 사이에도 결합해요. 일반 채팅 백업으로 새 채팅을 복원할 때는 다른 사람의 백업이 목적지에서 선택한 `extensionModel`에 자동 과금 권한을 주지 않도록 live profile의 `extensionGrants`를 제거하고, 사용자가 그 채팅에서 다시 허용하게 해요. source/grant 이력은 과거 Run snapshot과 attempt 귀속 영수증에 보존해 복원 검증에 사용해요. 같은 workspace 안의 fork는 기존 허가를 보존하고, 자료 native transfer는 grant를 처음부터 만들지 않아요. 전체 DB archive는 전역 연결을 disabled·비밀 제거하는 기존 복구 경계를 따르며 이 계약에서 별도 grant 삭제를 추가하지 않아요. 커밋·포크·복원은 고정한 source/revision·입력 schema·호스트 조건과 영수증·저장 결과의 일치를 확인하며 코드를 다시 실행하지 않아요. 이것은 승인된 결과의 보존이며 복원 때 계산의 의미를 재평가했다는 증거가 아니에요. 공유용 진단에는 이 코드나 입력/출력을 자동 포함하지 않아요.
 
-엔진 실행, `uimori-state-action-v1` 입력 계약, 상태 저장 호스트는 별도 모듈이에요. 자동 준비와 모델 행동은 `server/package-behavior-run.ts`에서 행동 해석·영수증·효과 채택과 `model.generate` broker를 공유해요. 응답 후 코드는 `server/package-after-response.ts`가 별도 응답 귀속 영수증으로 같은 Worker·상태 저장 경계를 사용해요. 사용자 버튼의 추가 모델 호출, 일반 HTTP, 실행 설치·의존성 권한 관리와 Lua 어댑터는 후속 작업이에요. 자료별 함수명을 서버 분기로 옮기지 않아요.
+엔진 실행, `uimori-state-action-v1` 입력 계약, 상태 저장 호스트는 별도 모듈이에요. 자동 준비와 모델 행동은 `server/package-behavior-run.ts`에서 행동 해석·영수증·효과 채택과 `model.generate` broker를 공유해요. 응답 후 코드는 `server/package-after-response.ts`가 별도 응답 귀속 영수증으로 같은 Worker·상태 저장 경계를 사용해요. 일반 HTTP, 실행 설치·의존성 권한 관리와 Lua 어댑터는 후속 작업이에요. 자료별 함수명을 서버 분기로 옮기지 않아요.

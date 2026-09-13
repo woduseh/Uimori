@@ -1,5 +1,11 @@
 import { contextBudgetForModel } from '../core/context-budget.js';
-import { extensionModelTarget, type ExtensionModelBinding } from '../core/extension-model.js';
+import {
+  extensionModelTarget,
+  extensionUserModelTarget,
+  type ExtensionModelBinding,
+  type ExtensionModelSnapshot,
+  type ExtensionUserModelBinding,
+} from '../core/extension-model.js';
 import { ExtensionProgramError } from '../core/extension-program.js';
 import { generationFromModel } from '../core/model-capabilities.js';
 import type { Connection } from '../core/product.js';
@@ -13,6 +19,7 @@ import {
 import type { RunSnapshot, Usage } from '../core/types.js';
 import { HttpError } from './request-validation.js';
 import type { MainHooks } from './model-runner.js';
+import type { Store } from './store.js';
 
 const DEFAULT_CALL_TIMEOUT_MS = 120_000;
 const MAX_HOST_WAIT_MS = 1_800_000;
@@ -21,6 +28,42 @@ const MAX_TEXT_CHARS = 6_000;
 
 function fail(code: string): never {
   throw new ExtensionProgramError(code);
+}
+
+/** Recheck live grants and availability without replacing the frozen model or authored package. */
+export function authorizeExtensionModelAccess(
+  store: Store,
+  snapshot: ExtensionModelSnapshot,
+  binding: ExtensionModelBinding,
+  userAction?: ExtensionUserModelBinding
+): void {
+  if (!snapshot.profile) fail('BEHAVIOR_HOST_MODEL_DENIED');
+  if (
+    userAction &&
+    (binding.trigger !== 'user' ||
+      binding.instanceId !== userAction.instanceId ||
+      binding.actionId !== userAction.actionId)
+  )
+    fail('BEHAVIOR_HOST_MODEL_DENIED');
+  const live = store.product.profile(snapshot.profile.chatId);
+  const profile = {
+    ...snapshot.profile,
+    packageAttachments: live.packageAttachments,
+    extensionGrants: live.extensionGrants,
+  };
+  const { target } = userAction
+    ? extensionUserModelTarget(profile, userAction)
+    : extensionModelTarget({ ...snapshot, profile }, binding);
+  try {
+    store.product.assertAvailable('model', target.id);
+    store.product.assertAvailable('connection', target.connectionId);
+    if (store.product.get<{ enabled?: boolean }>('model', target.id).enabled === false)
+      fail('BEHAVIOR_HOST_MODEL_UNAVAILABLE');
+  } catch (error) {
+    if (error instanceof HttpError && error.statusCode === 404)
+      fail('BEHAVIOR_HOST_MODEL_UNAVAILABLE');
+    throw error;
+  }
 }
 
 function argumentsFor(value: RuntimeValue): { prompt: string } {
@@ -87,15 +130,31 @@ function sameConnection(current: Connection, frozen: Connection) {
   );
 }
 
+export type ExtensionModelHooks = Pick<
+  MainHooks,
+  | 'signal'
+  | 'approvedOrigins'
+  | 'authorize'
+  | 'authorizeExtensionModel'
+  | 'resolveCredential'
+  | 'executeCodex'
+  | 'vertexRequestTier'
+  | 'onAttemptStart'
+  | 'onAttemptFinish'
+>;
+export type ExtensionModelServiceOptions =
+  | { phase?: 'generation' | 'after-response'; userAction?: never }
+  | { phase: 'user-action'; userAction: ExtensionUserModelBinding };
+
 /**
  * Binds extension model calls to one frozen Run. The guest supplies only a prompt; model identity,
  * generation, context budget, credentials, attempt ownership and aggregate usage stay host-owned.
  */
 export function createExtensionModelService(
-  snapshot: RunSnapshot,
-  hooks: MainHooks,
+  snapshot: ExtensionModelSnapshot & Pick<RunSnapshot, 'settings'>,
+  hooks: ExtensionModelHooks,
   totalUsage: Usage,
-  options: { phase?: 'generation' | 'after-response' } = {}
+  options: ExtensionModelServiceOptions = {}
 ): {
   generate(
     binding: ExtensionModelBinding,
@@ -105,6 +164,7 @@ export function createExtensionModelService(
   hostWaitMs: number;
 } {
   const phase = options.phase ?? 'generation';
+  const userAction = options.phase === 'user-action' ? { ...options.userAction } : undefined;
   const reservedMainCalls = phase === 'generation' ? 1 : 0;
   let pendingReservations = 0;
   const remainingAtCreation = Math.max(
@@ -121,9 +181,19 @@ export function createExtensionModelService(
     runtimeSignal: AbortSignal
   ): Promise<RuntimeValue> => {
     const args = argumentsFor(value);
-    if ((binding.trigger === 'after-turn') !== (phase === 'after-response'))
+    if (userAction) {
+      if (
+        binding.trigger !== 'user' ||
+        binding.instanceId !== userAction.instanceId ||
+        binding.actionId !== userAction.actionId
+      )
+        fail('BEHAVIOR_HOST_MODEL_DENIED');
+    } else if ((binding.trigger === 'after-turn') !== (phase === 'after-response')) {
       fail('BEHAVIOR_HOST_MODEL_DENIED');
-    const { target, attribution } = extensionModelTarget(snapshot, binding);
+    }
+    const { target, attribution } = userAction
+      ? extensionUserModelTarget(snapshot.profile, userAction)
+      : extensionModelTarget(snapshot, binding);
     if (!hooks.authorizeExtensionModel) fail('BEHAVIOR_HOST_MODEL_DENIED');
     if (
       totalUsage.modelCalls + pendingReservations >=

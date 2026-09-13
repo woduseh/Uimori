@@ -749,10 +749,10 @@ describe('hierarchical composition', () => {
     initOutline(restored.db);
     initOutline(restored.db);
     expect(restored.chat(chat.id)).toEqual(store.chat(chat.id));
-    expect(restored.db.prepare('PRAGMA user_version').get()).toMatchObject({ user_version: 17 });
+    expect(restored.db.prepare('PRAGMA user_version').get()).toMatchObject({ user_version: 18 });
     expect(restored.db.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
     restored.db.exec(
-      'DROP TABLE IF EXISTS outline_batches; DROP TABLE outline_nodes; DROP TABLE native_transfer_receipts; DROP TABLE schema_migrations; PRAGMA user_version=15;'
+      'DROP TABLE IF EXISTS outline_batches; DROP TABLE outline_nodes; DROP TABLE package_extension_operation_attempts; DROP TABLE package_extension_operations; DROP TABLE native_transfer_receipts; DROP TABLE schema_migrations; PRAGMA user_version=15;'
     );
     restored.close();
     const reopened = new Store(restored.path);
@@ -760,7 +760,7 @@ describe('hierarchical composition', () => {
     expect(reopened.source(source.id)).toEqual(store.source(source.id));
     expect(reopened.chat(chat.id)).toEqual(store.chat(chat.id));
     expect(reopened.outline.detail(chat.id).nodes).toEqual([]);
-    expect(reopened.db.prepare('PRAGMA user_version').get()).toMatchObject({ user_version: 17 });
+    expect(reopened.db.prepare('PRAGMA user_version').get()).toMatchObject({ user_version: 18 });
   });
 
   test('receipts survive restore after deletion and reject forged references to another chat', async () => {

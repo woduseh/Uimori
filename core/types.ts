@@ -275,7 +275,15 @@ export type ReaderActivity = {
   superseded?: boolean;
   executionUncertain?: boolean;
   id: string;
-  kind: 'main' | 'translation' | 'image' | 'status' | 'state' | 'context' | 'illustration';
+  kind:
+    | 'main'
+    | 'translation'
+    | 'image'
+    | 'status'
+    | 'state'
+    | 'context'
+    | 'illustration'
+    | 'extension';
   status: string;
   createdAt: string;
   updatedAt: string;
