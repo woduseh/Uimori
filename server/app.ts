@@ -815,6 +815,7 @@ export async function createApp(options: AppOptions): Promise<App> {
           // Response hooks compute outside the source transaction; only verified state receipts
           // are adopted with the unchanged main text. Keep provider accounting on fatal host errors.
           priorUsage = structuredClone(result.usage);
+          store.stageRunOutput(id, result.text);
           const responseModels = createExtensionModelService(run.snapshot, hooks, priorUsage, {
             phase: 'after-response',
           });
@@ -862,7 +863,7 @@ export async function createApp(options: AppOptions): Promise<App> {
                 id,
                 controller.signal.aborted ? 'cancelled' : 'failed',
                 error.message,
-                '',
+                undefined,
                 usage
               );
               if (controller.signal.aborted) store.settleCancelledUsage(id, usage);
@@ -874,7 +875,7 @@ export async function createApp(options: AppOptions): Promise<App> {
                 id,
                 controller.signal.aborted ? 'cancelled' : 'failed',
                 controller.signal.aborted ? 'Run cancelled' : error.message,
-                '',
+                undefined,
                 error.usage
               );
               if (controller.signal.aborted) store.settleCancelledUsage(id, error.usage);
@@ -895,7 +896,7 @@ export async function createApp(options: AppOptions): Promise<App> {
               id,
               controller.signal.aborted ? 'cancelled' : 'failed',
               safeError,
-              '',
+              undefined,
               priorUsage.modelCalls ? priorUsage : undefined
             );
             if (controller.signal.aborted && priorUsage.modelCalls)

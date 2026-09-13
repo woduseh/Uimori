@@ -29,6 +29,7 @@ export function RunTaskDetails({
 }) {
   const [cancelling, setCancelling] = useState(false);
   const [skipping, setSkipping] = useState(false);
+  const [copiedOutput, setCopiedOutput] = useState(false);
   const stateSkipKey = useRef<string | null>(null);
   const packageSkipKey = useRef<string | null>(null);
   const afterResponseSkipKey = useRef<string | null>(null);
@@ -118,9 +119,26 @@ export function RunTaskDetails({
       {run.status === 'refused' && (
         <p className="error">요청에 대한 생성이 거절됐어요. 대체 원고를 자동 생성하지 않았어요.</p>
       )}
-      {run.partialText && (
+      {!canCancel && run.partialText && (
         <details className="partial-result">
-          <summary>보존된 부분 출력 · 확정 원문에 합류하지 않음</summary>
+          <summary>보존된 출력 · 확정 원문에 합류하지 않음</summary>
+          <div className="form-actions">
+            <button
+              type="button"
+              className="secondary"
+              onClick={async () => {
+                onError('');
+                try {
+                  await navigator.clipboard.writeText(run.partialText!);
+                  setCopiedOutput(true);
+                } catch {
+                  onError('출력을 복사하지 못했어요. 아래 글을 직접 선택해 복사해 주세요.');
+                }
+              }}
+            >
+              {copiedOutput ? '출력 복사됨' : '출력 복사'}
+            </button>
+          </div>
           <pre>{run.partialText}</pre>
         </details>
       )}

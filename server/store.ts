@@ -587,9 +587,15 @@ export class Store {
   run(id: string): Run {
     const row = this.db.prepare('SELECT * FROM runs WHERE id=?').get(id) as Row | undefined;
     if (!row) throw new HttpError(404, 'Run not found');
-    const calls = this.db
-      .prepare('SELECT count(*) AS count FROM model_inputs WHERE run_id=?')
-      .get(id) as Row;
+    // Until aggregate settlement, count durable attempts rather than prepared main inputs.
+    // Extension/context calls have no model_inputs row; title generation is a separate task.
+    const calls = row.usage
+      ? undefined
+      : (this.db
+          .prepare(
+            "SELECT count(*) AS count FROM attempts WHERE run_id=? AND job_id IS NULL AND story_job_id IS NULL AND role!='title'"
+          )
+          .get(id) as Row | undefined);
     return {
       id: row.id,
       chatId: row.chat_id,
@@ -601,7 +607,7 @@ export class Store {
       sourceRevision: row.source_revision,
       error: row.error,
       usage: parse(row.usage) ?? {
-        modelCalls: calls.count,
+        modelCalls: calls?.count ?? 0,
         inputTokens: null,
         outputTokens: null,
         costUsd: null,
@@ -636,11 +642,30 @@ export class Store {
   tool(id: string, event: ToolEvent) {
     this.db.prepare('INSERT INTO tool_events(run_id,event) VALUES(?,?)').run(id, json(event));
   }
+  stageRunOutput(id: string, output: string): Run {
+    if (typeof output !== 'string') throw new HttpError(400, 'Invalid run output');
+    return this.transaction(() => {
+      const row = this.db
+        .prepare('SELECT chat_id,status,partial_text FROM runs WHERE id=?')
+        .get(id) as Row | undefined;
+      if (!row) throw new HttpError(404, 'Run not found');
+      if (row.status !== 'running') throw new HttpError(409, 'Run no longer owns output');
+      if (row.partial_text !== null) {
+        if (row.partial_text !== output) throw new HttpError(409, 'Run output is already staged');
+        return this.run(id);
+      }
+      this.db
+        .prepare('UPDATE runs SET partial_text=?,updated_at=? WHERE id=?')
+        .run(output, now(), id);
+      this.event(row.chat_id, 'run.output.staged', id);
+      return this.run(id);
+    });
+  }
   finishRun(
     id: string,
     status: 'failed' | 'cancelled' | 'interrupted' | 'refused' | 'partial',
     error: string,
-    partialText = '',
+    partialText?: string,
     usage?: Usage
   ) {
     return this.transaction(() => {
@@ -648,9 +673,16 @@ export class Store {
       if (!['queued', 'running', 'waiting_for_state'].includes(run.status)) return run;
       this.db
         .prepare(
-          'UPDATE runs SET status=?,error=?,partial_text=?,usage=COALESCE(?,usage),updated_at=? WHERE id=?'
+          'UPDATE runs SET status=?,error=?,partial_text=COALESCE(?,partial_text),usage=COALESCE(?,usage),updated_at=? WHERE id=?'
         )
-        .run(status, error, partialText, usage ? json(usage) : null, now(), id);
+        .run(
+          status,
+          error,
+          partialText === undefined ? null : partialText,
+          usage ? json(usage) : null,
+          now(),
+          id
+        );
       this.story.finishCommandInTransaction(id, status === 'cancelled' ? 'cancelled' : 'failed');
       this.event(run.chatId, `run.${status}`, id);
       return this.run(id);
@@ -716,7 +748,7 @@ export class Store {
       );
     this.db
       .prepare(
-        "UPDATE runs SET status='completed',source_revision=?,usage=?,updated_at=? WHERE id=?"
+        "UPDATE runs SET status='completed',source_revision=?,partial_text=NULL,usage=?,updated_at=? WHERE id=?"
       )
       .run(source.id, json(usage), now(), id);
     controls?.fail('source-transaction');
