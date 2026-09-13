@@ -1,6 +1,6 @@
 # v0.1.0 표본 기준과 기능 대응표
 
-작성일: 2026-09-12. **단계 A 기준과 Merry 후속 정적 조사를 담은 목록이며 구현 완료·native 호환 PASS가 아니에요.** 기계가 읽는 원본은 [BETA-SAMPLES.json](BETA-SAMPLES.json)이에요. [베타 결정](../docs/DECISIONS-2026-09-12-BETA.md)을 따르며, 책임 영역은 후속 설계의 후보예요.
+작성일: 2026-09-12. **단계 A 기준과 Merry 후속 정적 조사를 담은 목록이며 구현 완료·native 호환 PASS가 아니에요.** 12개 파일·31개 기능군·246개 기능의 원본 조사와 기능별 `currentSupport`는 당시 기준으로 보존하고, 이후 공통 구현은 아래 ‘현재 구현 보충’에서 구분해요. 기계가 읽는 원본은 [BETA-SAMPLES.json](BETA-SAMPLES.json)이에요. [베타 결정](../docs/DECISIONS-2026-09-12-BETA.md)을 따르며, 책임 영역은 후속 설계의 후보예요.
 
 ## 공개 조건과 읽는 방법
 
@@ -11,6 +11,19 @@
 - 이 표는 **현재 발견한 246개 추적 항목**이에요. `coverage-gap`도 포함하며 완전한 세부 동작 전수표는 아직 아니에요. 같은 고정 표본에서 미조회 기능이 발견되면 기존 공개 조건의 누락을 보완해요.
 - `현재 지원 기반`은 관련 Uimori 구현의 존재, `부분`은 일부 기반만 존재, `미구현`은 완성 경로 없음, `미확인`은 근거 부족이에요. **모든 항목의 표본 native 인수와 사용자 인수는 `not-run`**이에요.
 - JSON의 `currentSupport`, `originalEvidence`, `requiredVerification`, `nativeAcceptance`를 별개로 유지해요. 정적 분석·hash·일반 회귀를 표본 인수로 바꾸지 않아요.
+
+## 현재 구현 보충 · 2026-09-13
+
+이 절과 JSON의 `currentImplementation`은 초기 조사 뒤 추가된 공통 구현을 설명해요. 원본 지문·기능 ID·정적 근거·기능별 기준 상태를 바꾸거나 실제 표본의 실행을 새로 확인한 기록은 아니에요. **모든 표본·기능의 native 인수와 사용자 인수는 계속 `not-run`이에요.** 현재 완료 판단과 잔여 작업은 [베타 계획](BETA-PLAN.md#작업과-완료-기준)을 따라요.
+
+| 공통 구현 | 현재 범위와 표본 적용 한계 |
+| --- | --- |
+| [카드 가져오기](../docs/RISU-IMPORT.md) | 카드 `.charx`/JSON의 설명·시작문·로어·지원 이미지·이름 템플릿·정적 표시 정규식을 가져와요. Hinano·TVON·Vela의 `currentRisuImport`만 이 기본 경로의 존재를 뜻하는 `partial`로 갱신하고 이전 값은 `baselineRisuImport`로 보존해요. 고정 파일 전체 가져오기 성공이나 스크립트 이식을 확인한 것은 아니에요. Merry 원본은 140,785,373 bytes로 카드 입력 한도 24 MiB를 넘어 이 경로로 직접 가져올 수 없어요. |
+| [모듈 JSON/프로젝트 ZIP 가져오기](../docs/RISU-IMPORT.md#구조화된-risu-모듈-json) | RisuToki가 추출한 `module.json`과 `.risutoki` 에셋의 기본 자료를 모듈로 등록해요. 원본 `.risum`·모듈용 `.charx`의 직접 지원이 아니므로 히든 스토리·라이트보드 원본의 `currentRisuImport`는 `missing`을 유지해요. `.risup`와 JS 플러그인 직접 가져오기도 미구현이에요. |
+| [확장 코드·Host API](../docs/EXTENSION-PROGRAMS.md) | `user`·`model`·`before-turn`·`after-turn` JavaScript, 자기 자료 읽기와 허가된 모델 호출, 응답 후 완성 본문 읽기, 사용자 독립 모델 작업, 명시적 상태 변환을 구현했어요. Risu 스크립트 자동 변환·Lua·일반 HTTP·공유 자료 권한·확장 설치 관리는 미구현이에요. |
+| [보존과 이동](../docs/DATA-MIGRATIONS.md) | DB 18·archive 15·채팅 백업 1을 사용하며 [native 자료 이동](../docs/NATIVE-TRANSFER.md)과 작업·상태 보존 경계를 구현했어요. 고정 표본 전체의 복원·업그레이드 인수로 간주하지 않아요. |
+
+기능별 표의 ‘현재 기반’과 `U-*` 근거는 초기 조사 시점의 판정이에요. 공통 구현이 늘었다는 이유만으로 246개 기능을 일괄 완료 처리하지 않으며, 후속 표본 작업에서 실제로 연결하고 확인한 항목만 그 근거와 함께 갱신해요.
 
 ## 기준 소스와 파일 지문
 

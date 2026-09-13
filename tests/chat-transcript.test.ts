@@ -6,6 +6,7 @@ import { randomUUID } from 'node:crypto';
 import { Store, HttpError } from '../server/store.js';
 import { createFixtureChat } from './fixtures/chat.js';
 import { exportChatTranscript, importChatTranscript } from '../server/chat-transcript.js';
+import { exportChatBackup, importChatBackup } from '../server/chat-backup.js';
 import {
   CHAT_TRANSCRIPT_FORMAT,
   CHAT_TRANSCRIPT_LIMITS,
@@ -268,11 +269,128 @@ describe('chat transcript export and import', () => {
     expect(partial.chat.title).toBe('Restored');
     expect(partial.skippedAttachments).toEqual([{ id: 'missing-module', revision: 3 }]);
     expect(store.product.profile(partial.chat.id).attachments).toEqual([]);
+    expect(
+      importChatTranscript(store, {
+        transcript: withUnknown,
+        title: 'Restored',
+        idempotencyKey: 'partial',
+      })
+    ).toEqual({ ...partial, created: false });
 
     const withoutBot = { ...transcript, packageAttachments: [] };
     expect(() =>
       importChatTranscript(store, { transcript: withoutBot, idempotencyKey: 'no-bot' })
     ).toThrow(new HttpError(400, 'CHAT_TRANSCRIPT_BOT_REQUIRED'));
+  });
+
+  test('import keys bind validated content and effective title across edits and archive restore', async () => {
+    const store = await database();
+    const { chat } = authoredChat(store);
+    const transcript = exportChatTranscript(store, chat.id);
+    const command = { transcript, title: 'Imported title', idempotencyKey: 'bound' };
+    const first = importChatTranscript(store, command);
+    const source = store.history(first.chat.headRevision)[0];
+    store.editSource(source.revision, { text: 'Edited later', expectedRevision: 0 });
+    store.db.prepare('UPDATE chats SET title=? WHERE id=?').run('Renamed later', first.chat.id);
+    const fresh = await database();
+    fresh.product.import(store.product.export());
+    const before = fresh.product.export().tables;
+    // Property order, export metadata and an overridden file title are not effective changes.
+    const equivalent = {
+      ...command,
+      transcript: {
+        ...transcript,
+        title: 'Ignored file title',
+        exportedAt: '2020-01-01T00:00:00.000Z',
+        entries: transcript.entries.map(({ request, text, translation }) => ({
+          translation,
+          text,
+          request,
+        })),
+      },
+    };
+    expect(importChatTranscript(fresh, equivalent)).toEqual({
+      chat: fresh.chat(first.chat.id),
+      created: false,
+      skippedAttachments: [],
+    });
+    for (const changed of [
+      { ...command, title: 'Another title' },
+      {
+        ...command,
+        transcript: {
+          ...transcript,
+          entries: [{ ...transcript.entries[0], text: 'Different content' }],
+        },
+      },
+    ])
+      expect(() => importChatTranscript(fresh, changed)).toThrow(
+        new HttpError(409, 'CHAT_TRANSCRIPT_IMPORT_CONFLICT')
+      );
+    expect(fresh.product.export().tables).toEqual(before);
+  });
+
+  test('legacy key-only receipts reject unverifiable retries without changing the original chat', async () => {
+    const store = await database();
+    const { chat } = authoredChat(store);
+    const transcript = exportChatTranscript(store, chat.id);
+    const command = { transcript, idempotencyKey: 'legacy' };
+    const first = importChatTranscript(store, command);
+    store.db
+      .prepare('DELETE FROM events WHERE kind=? AND chat_id=?')
+      .run('chat.transcript-import-receipt', first.chat.id);
+    const before = store.product.export().tables;
+    for (const title of [undefined, 'Changed title'])
+      expect(() => importChatTranscript(store, { ...command, title })).toThrow(
+        new HttpError(409, 'CHAT_TRANSCRIPT_IMPORT_UNVERIFIABLE')
+      );
+    expect(store.product.export().tables).toEqual(before);
+    expect(
+      importChatTranscript(store, { ...command, idempotencyKey: 'explicit-new' }).created
+    ).toBe(true);
+  });
+
+  test('a failed receipt write rolls back the entire import and leaves its key reusable', async () => {
+    const store = await database();
+    const { chat } = authoredChat(store);
+    const transcript = exportChatTranscript(store, chat.id);
+    const command = { transcript, idempotencyKey: 'atomic' };
+    const before = store.product.export().tables;
+    store.db.exec(`CREATE TRIGGER fail_transcript_receipt BEFORE INSERT ON events
+      WHEN NEW.kind='chat.transcript-import-receipt'
+      BEGIN SELECT RAISE(ABORT, 'synthetic receipt failure'); END`);
+    expect(() => importChatTranscript(store, command)).toThrow('synthetic receipt failure');
+    expect(store.product.export().tables).toEqual(before);
+    store.db.exec('DROP TRIGGER fail_transcript_receipt');
+    expect(importChatTranscript(store, command).created).toBe(true);
+  });
+
+  test('chat backup restores transcript receipts as history without claiming destination keys', async () => {
+    const store = await database();
+    const { chat } = authoredChat(store);
+    const transcript = exportChatTranscript(store, chat.id);
+    const first = importChatTranscript(store, { transcript, idempotencyKey: 'portable-key' });
+    const fresh = await database();
+    const restored = importChatBackup(fresh, {
+      backup: exportChatBackup(store, first.chat.id),
+      idempotencyKey: 'restore',
+    });
+    const historical = fresh.db
+      .prepare('SELECT kind,entity_id FROM events WHERE chat_id=? AND kind LIKE ? ORDER BY seq')
+      .all(restored.chat.id, 'chat.transcript-import%');
+    expect(historical).toEqual(
+      store.db
+        .prepare('SELECT kind,entity_id FROM events WHERE chat_id=? AND kind LIKE ? ORDER BY seq')
+        .all(first.chat.id, 'chat.transcript-import%')
+        .map((row) => ({ ...row, kind: `${row.kind}.history` }))
+    );
+    const imported = importChatTranscript(fresh, {
+      transcript: exportChatTranscript(fresh, restored.chat.id),
+      title: 'New destination import',
+      idempotencyKey: 'portable-key',
+    });
+    expect(imported.created).toBe(true);
+    expect(imported.chat.id).not.toBe(restored.chat.id);
   });
 
   test('foreign formats, other versions and unknown fields are rejected before any write', async () => {

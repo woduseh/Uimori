@@ -165,7 +165,7 @@ export function listBehaviorTools(snapshot: RunSnapshot): BehaviorToolBinding[] 
         actionId: action.id,
         tool: {
           name,
-          description: `${pkg.title}: ${(action.label ?? action.id).slice(0, 200)}. ${action.description ?? 'Resolve the configured story action.'} The host validates eligibility and records the outcome. One opportunity per action in this run; repeated requests reuse its outcome.`,
+          description: `${pkg.title}: ${(action.label ?? action.id).slice(0, 200)}. ${action.description ?? 'Resolve the configured action.'} The host validates eligibility and records the outcome. One opportunity per action in this run; repeated requests reuse its outcome.`,
           inputSchema: behaviorInputJsonSchema(action.inputSchema),
         },
       });

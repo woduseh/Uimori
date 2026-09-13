@@ -1,6 +1,6 @@
 # Linux/Docker 업데이트 · 구현 제안
 
-상태: 2026-09-12 읽기 전용 설계 검토에 따른 초안이에요. 일반 설치자의 Update 버튼·controller·maintenance 모드가 구현됐거나 특정 설치 방식이 사용자 확정이라는 뜻은 아니에요. 이번 작업은 실제 배포 요청이 아니며 제품 코드와 운영 서버는 변경하지 않았어요. 베타 방향은 [결정](DECISIONS-2026-09-12-BETA.md), 진행은 [베타 계획](../project-plan/BETA-PLAN.md), 현재 수동 실행은 [SELF-HOST](SELF-HOST.md)가 소유해요.
+상태: 2026-09-12 설계 검토를 바탕으로 한 구현 제안이에요. 사용자가 선택한 일반 설치 방향은 Linux/Docker이며, 일반 설치자의 Update 버튼·controller·maintenance 모드는 아직 미구현이에요. 이 문서의 설계 검토에서는 제품 코드와 운영 서버를 변경하지 않았어요. 베타 방향은 [결정](DECISIONS-2026-09-12-BETA.md), 진행은 [베타 계획](../project-plan/BETA-PLAN.md), 현재 수동 실행은 [SELF-HOST](SELF-HOST.md)가 소유해요.
 
 ## 현재 있는 기반과 없는 경계
 

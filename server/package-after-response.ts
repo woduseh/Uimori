@@ -3,22 +3,23 @@ import { isDeepStrictEqual } from 'node:util';
 import type { AfterResponsePackage, AfterResponseProgress } from '../core/after-response.js';
 import { projectBehaviorOutputs } from '../core/behavior-output.js';
 import { executionContext, packageInstanceId } from '../core/execution-context.js';
-import { EXTENSION_PROGRAM_API, ExtensionProgramError } from '../core/extension-program.js';
+import { ExtensionProgramError, type ExtensionProgramReceipt } from '../core/extension-program.js';
+import { createExtensionProgramReceipt } from './extension-program-receipt.js';
 import {
   BehaviorError,
   BehaviorEvaluationError,
   behaviorActionAllowed,
   behaviorActionTriggers,
-  validateBehaviorValue,
 } from '../core/package-behavior.js';
 import { historicalPersonaExcluded } from '../core/persona-scope.js';
 import type { ExtensionModelBinding } from '../core/extension-model.js';
-import type { RuntimeValue } from '../core/prompt-values.js';
 import { fields, record, text as requestText, HttpError } from './request-validation.js';
 import type { RunSnapshot } from '../core/types.js';
-import { createPackageExtensionHost } from './extension-materials.js';
 import { createResponseExtensionHost } from './extension-response.js';
-import { executeExtensionProgram } from './extension-runtime.js';
+import {
+  executePackageExtensionProgram,
+  type PackageExtensionModelServices,
+} from './package-extension-execution.js';
 import {
   completedRunBehaviorView,
   runBehaviorProgress,
@@ -71,11 +72,7 @@ export async function prepareAfterResponse(
   text: string,
   signal?: AbortSignal,
   onProgress?: () => void,
-  modelServices?: (binding: ExtensionModelBinding) => {
-    modelGenerate: (args: RuntimeValue, signal: AbortSignal) => Promise<RuntimeValue>;
-    assertModelAccess: () => void | Promise<void>;
-    hostWaitMs: number;
-  }
+  modelServices?: (binding: ExtensionModelBinding) => PackageExtensionModelServices
 ): Promise<void> {
   const run = store.run(runId);
   const snapshot = completedRunBehaviorView(store, run);
@@ -283,45 +280,37 @@ export async function prepareAfterResponse(
               if (controller.signal.aborted || skipped())
                 throw new ExtensionProgramError('BEHAVIOR_HOST_ABORTED');
             };
-            const materials = createPackageExtensionHost(
-              action.program,
-              snapshot.profile,
-              d.ref,
-              assertCurrent
-            );
             const response = createResponseExtensionHost(action.program, text, assertCurrent);
-            let modelResultRead = false;
-            const resolved = await executeExtensionProgram(
+            const resolved = await executePackageExtensionProgram(
               action.program,
               { state: receipt.after.state, input },
               controller.signal,
               {
                 waitForSlot: true,
+                profile: snapshot.profile,
+                attachment: d.ref,
+                assertCurrent,
+                modelServices: services,
+                responseHost: response,
                 hostWaitMs: services
                   ? Math.max(1, Math.min(30 * 60_000, services.hostWaitMs))
                   : DEADLINE_MS,
-                awaitHostSettlement: usesModel,
-                host: async (method, args, hostSignal) => {
-                  if (method === 'model.generate') {
-                    if (!services) throw new ExtensionProgramError('BEHAVIOR_HOST_MODEL_DENIED');
-                    assertCurrent();
-                    const result = await services.modelGenerate(args, hostSignal);
-                    modelResultRead = true;
-                    return result;
-                  }
-                  return method.startsWith('response.')
-                    ? response(method, args, hostSignal)
-                    : materials(method, args, hostSignal);
-                },
               }
             );
             assertOwner();
             if (skipped()) return;
-            if (modelResultRead) await services!.assertModelAccess();
             assertCurrent();
             if (expired) throw new ExtensionProgramError('BEHAVIOR_AFTER_RESPONSE_TIMEOUT');
+            let program: ExtensionProgramReceipt;
             try {
-              validateBehaviorValue(d.behavior.stateSchema, resolved.state);
+              const programHash = behaviorPayloadHash(action.program);
+              program = createExtensionProgramReceipt(
+                { ...resolved, programHash },
+                {
+                  programHash,
+                  stateSchema: d.behavior.stateSchema,
+                }
+              );
             } catch (error) {
               if (error instanceof BehaviorError)
                 throw new ExtensionProgramError('BEHAVIOR_AFTER_RESPONSE_STATE_INVALID');
@@ -329,7 +318,7 @@ export async function prepareAfterResponse(
             }
             const after = {
               ...structuredClone(receipt.after),
-              state: resolved.state,
+              state: program.state,
               stateRevision: receipt.after.stateRevision + 1,
             };
             receipt.entries.push({
@@ -339,15 +328,11 @@ export async function prepareAfterResponse(
               input: structuredClone(input),
               before: structuredClone(receipt.after),
               after,
-              result: resolved.result,
+              result: program.result,
               draws: {},
               drawSeed: null,
               hostRuntime,
-              program: {
-                ...resolved,
-                api: EXTENSION_PROGRAM_API,
-                programHash: behaviorPayloadHash(action.program),
-              },
+              program,
             });
             receipt.after = after;
             // Guest receipts include host context; bound the whole cohort, not just one result.

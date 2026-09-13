@@ -35,7 +35,7 @@ npm run dev
 | --- | --- |
 | [사용 안내](docs/USAGE.md) | 봇별 채팅·폴더, 패키지, 프롬프트·창작 프리셋, 번역·포크, 백업 |
 | [서재와 프롬프트](docs/LIBRARY.md) · [항목 삭제](docs/DELETION.md) | 자료 분류·폴더·대표 이미지, 삭제 위치와 참조 보호 |
-| [Native JSON 가져오기](docs/RISU-IMPORT.md) | 자료·프롬프트 편집기에서 검증·검토 후 저장 |
+| [Risu·Native JSON 가져오기](docs/RISU-IMPORT.md) | 카드 `.charx`·JSON, 추출한 모듈 JSON·프로젝트 ZIP의 기본 자료와 native 자료·프롬프트 가져오기. 원본 스크립트·전체 호환은 미지원 |
 | [자료 파일 이동](docs/NATIVE-TRANSFER.md) | 저장된 자료·연결 모듈·이미지·프롬프트 옵션을 함께 옮기고 새 사본으로 가져오기 |
 | [문제 보고용 진단](docs/DIAGNOSTICS.md) | 원문·키를 제외한 보고서 미리보기와 다운로드 |
 | [에이전트의 Risu 자료 이식](docs/RISU-PORTING.md) | RisuToki MCP·스킬로 조사하고 native JSON·손실 보고·검증 결과 작성 |

@@ -111,7 +111,12 @@ export function remapBackupRecords(ctx: BackupRemap): void {
   // Events and raw provider request/response bodies are historical evidence. Only known event
   // identity envelopes are remapped; authored strings and provider payload bytes are unchanged.
   for (const row of ctx.tables.events) {
-    if (row.kind === 'chat.backup-imported') row.kind = 'chat.backup-imported.history';
+    if (
+      row.kind === 'chat.backup-imported' ||
+      row.kind === 'chat.transcript-imported' ||
+      row.kind === 'chat.transcript-import-receipt'
+    )
+      row.kind = `${row.kind}.history`;
     else if (ctx.ids.has(row.entity_id)) row.entity_id = ctx.id(row.entity_id);
     else if (row.kind === 'chat.forked') {
       try {

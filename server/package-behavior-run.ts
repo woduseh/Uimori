@@ -25,16 +25,17 @@ import {
 import type { PackageAttachment } from '../core/content-package.js';
 import type { RuntimeValue } from '../core/prompt-program.js';
 import {
-  EXTENSION_PROGRAM_API,
   ExtensionProgramError,
-  validateExtensionProgramResult,
   type ExtensionProgramReceipt,
   type ResolvedExtensionProgram,
 } from '../core/extension-program.js';
 import type { ExtensionModelBinding } from '../core/extension-model.js';
+import { createExtensionProgramReceipt } from './extension-program-receipt.js';
 import type { AfterResponseProgress } from '../core/after-response.js';
-import { executeExtensionProgram } from './extension-runtime.js';
-import { createPackageExtensionHost } from './extension-materials.js';
+import {
+  executePackageExtensionProgram,
+  type PackageExtensionModelServices,
+} from './package-extension-execution.js';
 import type { ToolAction } from '../core/provider.js';
 import type { RunSnapshot, ToolEvent } from '../core/types.js';
 import { behaviorPayloadHash, recordDraws } from './package-behavior-store.js';
@@ -292,20 +293,20 @@ function finishActionResolution(
   let program: ExtensionProgramReceipt | undefined;
   if (action.program) {
     if (!resolvedProgram) fail('BEHAVIOR_PROGRAM_REQUIRES_HOST');
-    if (resolvedProgram!.programHash !== hash(action.program))
-      fail('BEHAVIOR_PROGRAM_HASH_MISMATCH');
-    const output = validateExtensionProgramResult({
-      state: resolvedProgram!.state,
-      result: resolvedProgram!.result,
-    });
     try {
-      validateBehaviorValue(behavior.stateSchema, output.state);
+      program = createExtensionProgramReceipt(resolvedProgram!, {
+        programHash: hash(action.program),
+        stateSchema: behavior.stateSchema,
+      });
     } catch (error) {
-      if (error instanceof BehaviorError)
+      if (
+        error instanceof BehaviorError &&
+        error.message !== 'BEHAVIOR_PROGRAM_HASH_MISMATCH' &&
+        error.message !== 'BEHAVIOR_PROGRAM_ENGINE'
+      )
         throw new BehaviorEvaluationError(error.statusCode, error.message);
       throw error;
     }
-    program = { api: EXTENSION_PROGRAM_API, ...resolvedProgram!, ...output };
   } else if (resolvedProgram) fail('BEHAVIOR_PROGRAM_RESULT_UNEXPECTED');
   const evaluated =
     program ?? evaluateBehaviorAction(behavior, action, before.state, input, draws, hostRuntime);
@@ -622,11 +623,7 @@ export async function prepareAutomaticRunBehavior(
   runId: string,
   signal?: AbortSignal,
   onProgress?: () => void,
-  modelServices?: (binding: ExtensionModelBinding) => {
-    modelGenerate: (args: RuntimeValue, signal: AbortSignal) => Promise<RuntimeValue>;
-    assertModelAccess: () => void | Promise<void>;
-    hostWaitMs: number;
-  }
+  modelServices?: (binding: ExtensionModelBinding) => PackageExtensionModelServices
 ): Promise<void> {
   const reserved = store.run(runId).snapshot;
   if (!reserved.behaviorExecution?.deferredAutomatic) return;
@@ -703,30 +700,16 @@ export async function prepareAutomaticRunBehavior(
             if (preparationProgress(store, runId).preparation.status !== 'running')
               fail('BEHAVIOR_RUN_CANCELLED');
           };
-          const packageHost = createPackageExtensionHost(
-            step.program!,
-            reserved.profile,
-            d.ref,
-            assertCurrent
-          );
-          let modelResultRead = false;
-          const execution = executeExtensionProgram(
+          const execution = executePackageExtensionProgram(
             step.program!,
             { state: step.state!, input },
             controller.signal,
             {
               waitForSlot: true,
-              hostWaitMs: usesModel ? services?.hostWaitMs : undefined,
-              awaitHostSettlement: usesModel,
-              host: async (method, args, hostSignal) => {
-                if (method !== 'model.generate') return packageHost(method, args, hostSignal);
-                if (!usesModel || !services)
-                  throw new ExtensionProgramError('BEHAVIOR_HOST_MODEL_DENIED');
-                assertCurrent();
-                const result = await services.modelGenerate(args, hostSignal);
-                modelResultRead = true;
-                return result;
-              },
+              profile: reserved.profile,
+              attachment: d.ref,
+              assertCurrent,
+              modelServices: services,
             }
           );
           // Paid host work owns durable attempt and usage settlement. Do not let a skip/cancel
@@ -734,10 +717,6 @@ export async function prepareAutomaticRunBehavior(
           const output = usesModel
             ? await execution
             : await cancellablePreparation(execution, controller.signal);
-          if (modelResultRead) {
-            await services!.assertModelAccess();
-            assertCurrent();
-          }
           const adopted = store.transaction(() => {
             const current = preparationProgress(store, runId);
             if (current.preparation.status !== 'running') return false;
@@ -892,11 +871,7 @@ export async function executeRunBehaviorTool(
   binding: ToolBinding,
   call: ToolAction,
   signal?: AbortSignal,
-  services?: {
-    modelGenerate: (args: RuntimeValue, signal: AbortSignal) => Promise<RuntimeValue>;
-    assertModelAccess: () => void | Promise<void>;
-    hostWaitMs: number;
-  }
+  services?: PackageExtensionModelServices
 ): Promise<ToolEvent> {
   try {
     const prepared = store.transaction(() => {
@@ -932,16 +907,8 @@ export async function executeRunBehaviorTool(
         program: action.program,
         input: { state: resolution.before.state, input: call.args as RuntimeValue },
         progressHash: hash(progress),
-        host: createPackageExtensionHost(
-          action.program,
-          run.snapshot.profile,
-          definition.ref,
-          () => {
-            const current = behaviorToolContext(store, runId, binding, call, signal);
-            if (hash(current.progress) !== hash(progress))
-              fail('BEHAVIOR_OPPORTUNITY_DEPENDENCY_CHANGED');
-          }
-        ),
+        profile: run.snapshot.profile,
+        attachment: definition.ref,
       };
     });
     let entry: RunBehaviorEntry;
@@ -959,26 +926,21 @@ export async function executeRunBehaviorTool(
       const work =
         pending?.work ??
         (async () => {
-          let modelResultRead = false;
-          const output = await executeExtensionProgram(prepared.program!, prepared.input!, signal, {
-            hostWaitMs: prepared.program!.capabilities?.includes('model.generate')
-              ? services?.hostWaitMs
-              : undefined,
-            awaitHostSettlement:
-              prepared.program!.capabilities?.includes('model.generate') === true,
-            host: async (method, args, hostSignal) => {
-              if (method !== 'model.generate') return prepared.host!(method, args, hostSignal);
-              if (!services || !prepared.program!.capabilities?.includes('model.generate'))
-                throw new ExtensionProgramError('BEHAVIOR_HOST_MODEL_DENIED');
-              const current = behaviorToolContext(store, runId, binding, call, signal);
-              if (hash(current.progress) !== prepared.progressHash)
-                fail('BEHAVIOR_OPPORTUNITY_DEPENDENCY_CHANGED');
-              const result = await services.modelGenerate(args, hostSignal);
-              modelResultRead = true;
-              return result;
-            },
-          });
-          if (modelResultRead) await services!.assertModelAccess();
+          const output = await executePackageExtensionProgram(
+            prepared.program!,
+            prepared.input!,
+            signal,
+            {
+              profile: prepared.profile,
+              attachment: prepared.attachment!,
+              modelServices: services,
+              assertCurrent: () => {
+                const current = behaviorToolContext(store, runId, binding, call, signal);
+                if (hash(current.progress) !== prepared.progressHash)
+                  fail('BEHAVIOR_OPPORTUNITY_DEPENDENCY_CHANGED');
+              },
+            }
+          );
           return store.transaction(() => {
             const context = behaviorToolContext(store, runId, binding, call, signal);
             if (hash(context.progress) !== prepared.progressHash)

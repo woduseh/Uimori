@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import {
   CHAT_TRANSCRIPT_FORMAT,
   CHAT_TRANSCRIPT_VERSION,
@@ -14,6 +14,7 @@ import { successfulTranslation } from './source-editing.js';
 import type { Chat, Store } from './store.js';
 
 const IMPORT_EVENT = 'chat.transcript-imported';
+const IMPORT_RECEIPT_EVENT = 'chat.transcript-import-receipt';
 const zeroUsage = { modelCalls: 0, inputTokens: null, outputTokens: null, costUsd: null };
 
 /** The authored history of one branch; runs, snapshots, state and attempts stay behind. */
@@ -83,11 +84,44 @@ export function importChatTranscript(store: Store, value: unknown): ChatTranscri
   }
   const title =
     body.title === undefined ? transcript.title : text(body.title, 'title', CHAT_TITLE_MAX_CHARS);
+  // Validation reconstructs every object in a fixed order. Export time and the overridden file
+  // title do not affect the imported chat; references are bound before current-library lookup.
+  const digest = createHash('sha256')
+    .update(JSON.stringify({ ...transcript, exportedAt: undefined, title }))
+    .digest('hex');
   return store.transaction(() => {
     const prior = store.db
       .prepare('SELECT chat_id FROM events WHERE kind=? AND entity_id=?')
       .get(IMPORT_EVENT, key) as { chat_id: string } | undefined;
-    if (prior) return { chat: store.chat(prior.chat_id), created: false, skippedAttachments: [] };
+    if (prior) {
+      const row = store.db
+        .prepare('SELECT entity_id FROM events WHERE kind=? AND chat_id=?')
+        .get(IMPORT_RECEIPT_EVENT, prior.chat_id) as { entity_id: string } | undefined;
+      let receipt: {
+        requestKey: string;
+        digest: string;
+        skippedAttachments: ChatTranscriptImport['skippedAttachments'];
+      } | null;
+      try {
+        receipt = row ? JSON.parse(row.entity_id) : null;
+      } catch {
+        receipt = null;
+      }
+      // Old key-only events cannot prove request equality. Never reconstruct it from a chat
+      // whose title, sources, notes or references may have been edited since the import.
+      if (
+        receipt?.requestKey !== key ||
+        typeof receipt.digest !== 'string' ||
+        !Array.isArray(receipt.skippedAttachments)
+      )
+        throw new HttpError(409, 'CHAT_TRANSCRIPT_IMPORT_UNVERIFIABLE');
+      if (receipt.digest !== digest) throw new HttpError(409, 'CHAT_TRANSCRIPT_IMPORT_CONFLICT');
+      return {
+        chat: store.chat(prior.chat_id),
+        created: false,
+        skippedAttachments: receipt.skippedAttachments,
+      };
+    }
     const skippedAttachments: ChatTranscriptImport['skippedAttachments'] = [];
     const current = (reference: ContentRef): Content | null => {
       try {
@@ -192,6 +226,11 @@ export function importChatTranscript(store: Store, value: unknown): ChatTranscri
       notesAt(index, source.id);
     }
     store.event(id, IMPORT_EVENT, key);
+    store.event(
+      id,
+      IMPORT_RECEIPT_EVENT,
+      JSON.stringify({ requestKey: key, digest, skippedAttachments })
+    );
     return { chat: store.chat(id), created: true, skippedAttachments };
   });
 }

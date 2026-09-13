@@ -34,7 +34,9 @@
 - 번역은 사용자 직접 편집과 같은 완료 job(`manual: true`, revision 1)으로 넣어요.
 - 메모는 `atIndex`에 해당하는 원문이 머리일 때 기록해서 원래 위치에 붙어요.
 - 봇 패키지는 이 서재에 있어야 해요. 없으면 `CHAT_TRANSCRIPT_BOT_REQUIRED`로 거절해요. 다른 자료·패키지 참조는 같은 ID의 **현재 저장본**으로 장착하고, 서재에 없는 것은 `skippedAttachments`로 돌려주며 채팅은 만들어요.
-- 같은 `idempotencyKey`의 재요청은 이미 만든 채팅을 `created: false`로 돌려줘요. 새 키의 같은 파일은 새 채팅이에요. 기록은 `events`의 `chat.transcript-imported`예요.
+- 같은 `idempotencyKey`와 같은 유효 요청의 재요청은 이미 만든 채팅을 `created: false`로 돌려주며 최초 `skippedAttachments`도 유지해요. 검증된 본문·번역·메모·자료 참조와 실제 적용 제목을 비교하고, JSON 속성 순서·내보낸 시각·명시 제목으로 덮인 파일 제목은 비교에서 제외해요. 같은 키의 내용이나 적용 제목이 다르면 `409 CHAT_TRANSCRIPT_IMPORT_CONFLICT`예요. 현재 서재나 가져온 채팅을 나중에 편집해도 최초 요청의 비교 기준은 변하지 않아요.
+- 새 키의 같은 파일은 새 채팅이에요. 기존 `events`의 `chat.transcript-imported` 키 기록을 보존하고, 같은 transaction의 `chat.transcript-import-receipt`에 요청 SHA-256과 누락 자료 결과를 저장해요. DB 스키마는 바꾸지 않아요. 과거 키만 있는 기록은 요청이 같았는지 증명할 수 없어 `409 CHAT_TRANSCRIPT_IMPORT_UNVERIFIABLE`로 재사용을 거절해요. 기존 채팅을 확인하고 실제 새 복사본이 필요할 때만 새 키로 가져와요.
+- 전체 JSON archive 복원은 영수증을 그대로 보존해요. 새 ID로 만드는 채팅 백업 복원은 두 transcript 이벤트를 `.history`로 보존하며 목적지의 가져오기 키로 사용하지 않아요.
 - 검증 실패는 아무것도 쓰지 않고 400으로 끝나요. 오류 코드는 `CHAT_TRANSCRIPT_*`예요.
 
 모든 항목은 하나의 transaction으로 저장해요. 검사는 `tests/chat-transcript.test.ts`에서 최대 원문·제목, 저장 증가 구조, 수정 뒤 ancestry, 포크·archive·다음 예약, HTTP 경로를 확인해요. 반복 측정 스크립트는 `scripts/measure-transcript-import.mjs`이며 실행 결과와 통합 검증 상태는 [안정화 기록](STABILIZATION-2026-09-11.md)에 기록해요. 실제 공급자 호출이나 작품 의미 품질은 이 가져오기 검사의 범위가 아니에요.
