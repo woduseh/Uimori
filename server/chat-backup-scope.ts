@@ -56,7 +56,11 @@ export function chatBackupTables(store: Store, chatId: string): BackupTables {
         : (indirect[table] ??
           (fields.some((field) => field.column === 'chat_id') ? 'chat_id=?' : undefined));
     tables[table] = where
-      ? (db.prepare(`SELECT * FROM ${table} WHERE ${where}`).all(chatId) as Row[])
+      ? (db
+          .prepare(
+            `SELECT * FROM ${table} WHERE ${where}${table === 'runs' ? ' ORDER BY rowid' : ''}`
+          )
+          .all(chatId) as Row[])
       : GLOBAL.has(table)
         ? (db.prepare(`SELECT * FROM ${table}`).all() as Row[])
         : [];

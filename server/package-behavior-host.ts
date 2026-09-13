@@ -11,6 +11,12 @@ import {
   type TemplateVariableContext,
 } from '../core/template-variables.js';
 import { executePackageExtensionProgram } from './package-extension-execution.js';
+import {
+  captureUserConversation,
+  conversationScopeFromRefs,
+  packageConversationExecution,
+} from './package-conversation.js';
+import { assertExtensionConversationReadAccess } from './extension-conversation-access.js';
 import { HttpError } from './request-validation.js';
 import {
   executionContext,
@@ -670,6 +676,13 @@ export function performBehaviorAction(
         priorAction?.program ?? prepared?.result
       );
       const action = d.pkg.behavior!.actions.find((action) => action.id === command.actionId)!;
+      if (!priorAction && prepared?.result.conversation)
+        assertExtensionConversationReadAccess(
+          store,
+          chatVariableProfile(store, chatId, branch.id),
+          d.ref,
+          action.program!
+        );
       let afterRuntime = runtime;
       let variableContext: TemplateVariableContext | undefined;
       const mutation = prepared?.result.variables;
@@ -750,6 +763,14 @@ export function prepareUserBehaviorProgram(
       sourceHash,
       branchId: branch.id,
       program: action.program,
+      extensionConversation: captureUserConversation(
+        store,
+        profile,
+        d.ref,
+        action.program,
+        branch.id,
+        branch.headRevision
+      ),
       input: { state: state.state, input: command.input },
       runtime,
       guard,
@@ -815,6 +836,18 @@ export async function performBehaviorActionWithProgram(
       {
         profile: preparation.profile,
         attachment: ref,
+        conversation: packageConversationExecution(
+          store,
+          () =>
+            conversationScopeFromRefs(store, preparation.extensionConversation, {
+              chatId,
+              branchId: preparation.branchId,
+              parentRevision: preparation.sourceRevision,
+            }),
+          preparation.profile,
+          ref,
+          preparation.program
+        ),
         assertCurrent: () =>
           assertUserBehaviorProgramCurrent(
             store,
@@ -830,6 +863,7 @@ export async function performBehaviorActionWithProgram(
       }
     );
     if (signal?.aborted) throw new HttpError(409, 'EXTENSION_CANCELLED');
+    if (result.conversation) throw new HttpError(409, 'BEHAVIOR_PROGRAM_DURABLE_REQUIRED');
     return performBehaviorAction(
       store,
       chatId,
@@ -986,7 +1020,8 @@ export function copyPackageFork(
   chatId: string,
   branchId: string,
   sourceIds: Map<string, string>,
-  selectedSourceId: string
+  selectedSourceId: string,
+  runIds?: Map<string, string>
 ) {
   for (const [oldId, newId] of sourceIds) {
     for (const row of store.db
@@ -996,7 +1031,7 @@ export function copyPackageFork(
         .prepare('INSERT INTO package_behavior_outputs VALUES(?,?,?)')
         .run(newId, row.instance_id, row.body);
   }
-  copyForkRunBehaviors(store, chatId, branchId, sourceIds);
+  copyForkRunBehaviors(store, chatId, branchId, sourceIds, runIds);
   branchPackageStates(store, chatId, branchId, selectedSourceId);
 }
 /** Restore the state at a source boundary, including its failure status, without applying current-branch actions. */

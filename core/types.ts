@@ -91,6 +91,8 @@ export type RunSnapshot = {
   packageStates?: import('./execution-context.js').PackageExecutionState[];
   sourceSegments?: import('./source-segments.js').SourceSegmentPolicy;
   logicalHistory?: import('./prompt-program.js').PromptHistoryMessage[];
+  /** Optional, permission-bound conversation read set; never filled from today's branch on replay. */
+  extensionConversation?: import('./extension-conversation.js').ExtensionConversationSnapshot;
   promptCompilation?: import('./prompt-program.js').PromptCompilation;
   promptInputTransforms?: import('./prompt-input-transforms.js').PromptInputTransformReceipt;
   chatId: string;
@@ -108,7 +110,12 @@ export type RunSnapshot = {
   branchId?: string;
   profile?: import('./product.js').ProfileSnapshot;
   candidateOf?: string;
-  forkedFrom?: { chatId: string; runId: string; sourceRevision: string };
+  forkedFrom?: {
+    chatId: string;
+    runId: string;
+    sourceRevision: string | null;
+    requestOrder?: number;
+  };
   /** The source was read from a chat transcript file as authored history; no model was called. */
   transcriptImport?: { index: number; storage?: 'source-only-v1' };
   story?: import('./story.js').StorySnapshot;

@@ -1262,7 +1262,11 @@ export class ProductStore {
     const tables = Object.fromEntries(
       archiveTables.map((t) => [
         t,
-        (this.db.prepare(`SELECT * FROM ${t}`).all() as Row[]).map((r) =>
+        (
+          this.db
+            .prepare(`SELECT * FROM ${t}${t === 'runs' ? ' ORDER BY rowid' : ''}`)
+            .all() as Row[]
+        ).map((r) =>
           t === 'assets' || t === 'illustration_images'
             ? { ...r, bytes: Buffer.from(r.bytes).toString('base64') }
             : r
@@ -2165,10 +2169,19 @@ function validateArchiveGraph(product: ProductStore) {
       throw new HttpError(400, 'Run snapshot identity mismatch');
     if (snapshot.forkedFrom !== undefined) {
       const origin = record(snapshot.forkedFrom);
-      fields(origin, ['chatId', 'runId', 'sourceRevision']);
+      fields(origin, ['chatId', 'runId', 'sourceRevision', 'requestOrder']);
       archiveId(origin.chatId);
       archiveId(origin.runId);
-      archiveId(origin.sourceRevision);
+      if (origin.sourceRevision === null) {
+        if (run.source_revision !== null || run.status === 'completed')
+          throw new HttpError(400, 'Fork source provenance mismatch');
+      } else {
+        archiveId(origin.sourceRevision);
+        if (run.source_revision === null || run.status !== 'completed')
+          throw new HttpError(400, 'Fork source provenance mismatch');
+      }
+      if (origin.requestOrder !== undefined)
+        number(origin.requestOrder, 'fork request order', Number.MIN_SAFE_INTEGER, -1);
     }
     archiveSettings(snapshot.settings);
     number(snapshot.settingsRevision, 'snapshot settings revision');

@@ -12,8 +12,13 @@ export const EXTENSION_CAPABILITIES = [
   'response.read.current',
   'variables.read',
   'variables.write',
+  'conversation.read',
 ] as const;
-export const EXTENSION_GRANT_CAPABILITIES = ['model.generate', 'variables.write'] as const;
+export const EXTENSION_GRANT_CAPABILITIES = [
+  'model.generate',
+  'variables.write',
+  'conversation.read',
+] as const;
 export type ExtensionGrantCapability = (typeof EXTENSION_GRANT_CAPABILITIES)[number];
 
 export interface ExtensionProgram {
@@ -37,6 +42,8 @@ export interface ResolvedExtensionProgram extends ExtensionProgramResult {
   engine: string;
   /** Added only by the Host broker; a guest cannot return effects or authority. */
   variables?: import('./chat-variables.js').ChatVariableMutation;
+  /** Host-only proof of the exact frozen conversation view consumed by this computation. */
+  conversation?: { viewHash: string };
 }
 
 export interface ExtensionProgramReceipt extends ResolvedExtensionProgram {

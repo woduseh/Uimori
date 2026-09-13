@@ -6,7 +6,7 @@ import { splitSource } from '../core/auxiliary.js';
 import type { Resource, RunSnapshot } from '../core/types.js';
 import type { Store, Chat, Source } from './store.js';
 import { successfulTranslation, validateTranslationArtifact } from './source-editing.js';
-import { mapForkSnapshot } from './snapshot-archive.js';
+import { mapForkSnapshot, validateRunSnapshot } from './snapshot-archive.js';
 import { contextDependencyKey, measureMainContext } from './context-planning.js';
 import { compileSnapshotPrompt } from './prompt-snapshot.js';
 import { copyStoryFork } from './story-archive.js';
@@ -18,6 +18,7 @@ import { copyChatVariableFork } from './chat-variables-archive.js';
 import { historicalRunLoreReads } from './lore-context-archive.js';
 import type { RetainedLore } from '../core/lore-context.js';
 import { isSourceOnlyTranscript } from '../core/authored-history.js';
+import { readerRequestOrder } from '../core/reader-conversation.js';
 
 type Row = Record<string, any>;
 const json = JSON.stringify;
@@ -99,9 +100,67 @@ export function forkChat(store: Store, chatId: string, value: unknown): Chat {
       )
         throw new HttpError(400, 'Invalid completed fork source');
     }
+    // Conversation reads also depend on visible failed requests with no adopted source.
+    // Follow only the frozen references; never collect unrelated chat or branch activity.
+    for (const run of originalRuns.values()) {
+      if (!run.snapshot.extensionConversation) continue;
+      validateRunSnapshot(store, run.snapshot, run.id);
+      for (const ref of run.snapshot.extensionConversation.messages) {
+        if (originalRuns.has(ref.runId)) continue;
+        const dependency = store.run(ref.runId);
+        if (
+          dependency.chatId !== chatId ||
+          dependency.sourceRevision !== null ||
+          (dependency.parentRevision !== null && !sourceIds.has(dependency.parentRevision)) ||
+          dependency.snapshot.history.some((item) => !sourceIds.has(item.revision))
+        )
+          throw new HttpError(400, 'Invalid fork conversation dependency');
+        originalRuns.set(dependency.id, dependency);
+        runIds.set(dependency.id, randomUUID());
+      }
+    }
+    const admissionOrder = new Map(
+      (
+        store.db
+          .prepare('SELECT id,rowid AS position FROM runs WHERE chat_id=?')
+          .all(chatId) as Row[]
+      ).map((row) => [row.id as string, Number(row.position)])
+    );
+    const orderedRuns = [...originalRuns.values()].sort(
+      (a, b) => admissionOrder.get(a.id)! - admissionOrder.get(b.id)!
+    );
+    const orderingMetadata = new Map(
+      (
+        store.db
+          .prepare(
+            "SELECT id,rowid AS admissionOrder,json_extract(command,'$.retryOf') AS retryOf,json_extract(snapshot,'$.forkedFrom.requestOrder') AS forkRequestOrder FROM runs WHERE chat_id=?"
+          )
+          .all(chatId) as Row[]
+      ).map((row) => [
+        row.id as string,
+        {
+          id: String(row.id),
+          admissionOrder: Number(row.admissionOrder),
+          retryOf: row.retryOf as string | null,
+          forkRequestOrder: row.forkRequestOrder as number | null,
+        },
+      ])
+    );
+    const logicalOrder = (runId: string) => readerRequestOrder(orderingMetadata, runId);
+    // Relative logical ranks survive a portable backup into a database with fresh rowids.
+    const logicalOrders = [...new Set(orderedRuns.map((run) => logicalOrder(run.id)))].sort(
+      (a, b) => a - b
+    );
+    const orderRanks = new Map(
+      logicalOrders.map((order, index) => [order, index - logicalOrders.length])
+    );
+    const sourceByRun = new Map(ancestors.map((source) => [source.runId, source]));
     // Preserve proven historical reads; current source/ancestor/canon checks still govern later reuse.
     const originalLoreReads = new Map(
-      [...originalRuns].map(([runId, run]) => [runId, historicalRunLoreReads(store, run)])
+      [...originalRuns].map(([runId, run]) => [
+        runId,
+        run.sourceRevision ? historicalRunLoreReads(store, run) : [],
+      ])
     );
     const loreEntry = (entry: RetainedLore): RetainedLore => {
       const originSource = sourceIds.get(entry.origin.sourceRevision),
@@ -160,13 +219,11 @@ export function forkChat(store: Store, chatId: string, value: unknown): Chat {
       const copied = { ...asset, id: newId, chatId: id, url: '/api/assets/' + newId };
       store.db.prepare('INSERT INTO assets VALUES(?,?,?,?)').run(newId, id, json(copied), bytes);
     }
-    for (const original of ancestors) {
-      const run = originalRuns.get(original.runId)!;
+    for (const run of orderedRuns) {
+      const original = sourceByRun.get(run.id);
       const runId = runIds.get(run.id)!;
-      const sourceId = sourceIds.get(original.id)!;
-      const parentRevision = original.parentRevision
-        ? sourceIds.get(original.parentRevision)!
-        : null;
+      const sourceId = original ? sourceIds.get(original.id)! : null;
+      const parentRevision = run.parentRevision ? sourceIds.get(run.parentRevision)! : null;
       const snapshot: RunSnapshot = {
         ...structuredClone(run.snapshot),
         chatId: id,
@@ -176,7 +233,12 @@ export function forkChat(store: Store, chatId: string, value: unknown): Chat {
           ...item,
           revision: sourceIds.get(item.revision)!,
         })),
-        forkedFrom: { chatId, runId: run.id, sourceRevision: original.id },
+        forkedFrom: {
+          chatId,
+          runId: run.id,
+          sourceRevision: original?.id ?? null,
+          requestOrder: orderRanks.get(logicalOrder(run.id))!,
+        },
       };
       delete snapshot.candidateOf;
       delete snapshot.forkedLoreReads;
@@ -191,24 +253,39 @@ export function forkChat(store: Store, chatId: string, value: unknown): Chat {
         snapshot.profile.chatId = id;
         snapshot.resources = store.product.resources(id, snapshot.profile);
       } else snapshot.resources = snapshot.resources.map(resource);
+      const originalCommand = parse(
+        String(store.db.prepare('SELECT command FROM runs WHERE id=?').get(run.id)!.command)
+      );
+      const retryOf =
+        typeof originalCommand.retryOf === 'string'
+          ? runIds.get(originalCommand.retryOf)
+          : undefined;
       store.db
         .prepare(
-          "INSERT INTO runs(id,chat_id,parent_revision,status,request,snapshot,request_key,command,source_revision,usage,created_at,updated_at,branch_id) VALUES(?,?,?,'completed',?,?,?,?,?,?,?,?,?)"
+          'INSERT INTO runs(id,chat_id,parent_revision,status,request,snapshot,request_key,command,source_revision,usage,created_at,updated_at,branch_id,partial_text,error) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)'
         )
         .run(
           runId,
           id,
           parentRevision,
+          original
+            ? 'completed'
+            : ['queued', 'running', 'waiting_for_state'].includes(run.status)
+              ? 'interrupted'
+              : run.status,
           run.request,
           json(snapshot),
-          'fork:' + original.id,
-          json({ forkedFrom: { chatId, runId: run.id, sourceRevision: original.id } }),
+          'fork:' + run.id,
+          json({ forkedFrom: snapshot.forkedFrom, ...(retryOf ? { retryOf } : {}) }),
           sourceId,
           json(zeroUsage),
-          original.createdAt,
-          original.createdAt,
-          branchId
+          run.createdAt,
+          run.createdAt,
+          branchId,
+          original ? null : (run.partialText ?? null),
+          original ? null : (run.error ?? null)
         );
+      if (!original) continue;
       const baseline = store.sourceOriginal(original.id);
       store.db
         .prepare('INSERT INTO sources VALUES(?,?,?,?,?,?,?)')
@@ -219,7 +296,7 @@ export function forkChat(store: Store, chatId: string, value: unknown): Chat {
         store.db
           .prepare('INSERT INTO source_edits VALUES(?,?,?,?,?)')
           .run(sourceId, edit.revision, edit.text, edit.hash, edit.created_at);
-      const copiedSource = store.source(sourceId);
+      const copiedSource = store.source(sourceId!);
       const oldBlocks = splitSource(original);
       const newBlocks = splitSource(copiedSource);
       const anchors = new Map(
@@ -350,7 +427,7 @@ export function forkChat(store: Store, chatId: string, value: unknown): Chat {
       branchId,
       storyFork.commands
     );
-    copyPackageFork(store, id, branchId, sourceIds, head);
+    copyPackageFork(store, id, branchId, sourceIds, head, runIds);
     copyChatVariableFork(store, id, branchId, sourceIds, head);
     const canonHashes = new Map<string, string>();
     for (const original of originalRuns.values()) {

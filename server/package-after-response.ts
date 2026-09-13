@@ -17,6 +17,10 @@ import { fields, record, text as requestText, HttpError } from './request-valida
 import type { RunSnapshot } from '../core/types.js';
 import { createResponseExtensionHost } from './extension-response.js';
 import {
+  packageConversationExecution,
+  assertRunConversationReceipt,
+} from './package-conversation.js';
+import {
   executePackageExtensionProgram,
   type PackageExtensionModelServices,
 } from './package-extension-execution.js';
@@ -305,6 +309,14 @@ export async function prepareAfterResponse(
                   assertExtensionVariableWriteAccess(store, profile, d.ref, action.program!),
                 modelServices: services,
                 responseHost: response,
+                conversation: packageConversationExecution(
+                  store,
+                  run.snapshot,
+                  profile,
+                  d.ref,
+                  action.program!,
+                  { request: run.snapshot.request, response: text }
+                ),
                 hostWaitMs: services
                   ? Math.max(1, Math.min(30 * 60_000, services.hostWaitMs))
                   : DEADLINE_MS,
@@ -459,6 +471,20 @@ export function commitAfterResponseInstance(
       fail('BEHAVIOR_AFTER_RESPONSE_RECEIPT_INVALID');
     ids.add(entry.actionId);
     previousAction = actionIndex;
+    if (entry.program.conversation) {
+      const completedSource = store.run(run.id).sourceRevision;
+      if (!completedSource) fail('BEHAVIOR_SOURCE_STALE');
+      const response = store.sourceOriginal(completedSource!);
+      if (response.hash !== sourceHash) fail('BEHAVIOR_SOURCE_STALE');
+      assertRunConversationReceipt(
+        store,
+        run.snapshot,
+        definition.ref,
+        definition.actions[actionIndex].program!,
+        entry.program.conversation,
+        response.text
+      );
+    }
     store.behavior.commitRunActionInTransaction(
       scope,
       definition.behavior,

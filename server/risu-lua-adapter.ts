@@ -4,6 +4,12 @@ import {
   type ExtensionProgram,
 } from '../core/extension-program.js';
 import type { BehaviorAction, BehaviorActionTrigger } from '../core/package-behavior.js';
+import {
+  validatePromptExpression,
+  type PromptExpression,
+  type PromptOperation,
+} from '../core/prompt-program.js';
+import { RisuCbs, UnsupportedCbs } from './risu-cbs.js';
 
 export const RISU_LUA_EVENTS = [
   'input',
@@ -42,12 +48,6 @@ const unavailableApis = [
   'alertInput',
   'alertSelect',
   'alertConfirm',
-  'getChat',
-  'getChatMain',
-  'getChatData',
-  'getChatRole',
-  'getRecentChats',
-  'getRecentChatsMain',
   'setChat',
   'setChatRole',
   'cutChat',
@@ -55,9 +55,6 @@ const unavailableApis = [
   'addChat',
   'insertChat',
   'getTokens',
-  'getChatLength',
-  'getFullChat',
-  'getFullChatMain',
   'sleep',
   'cbs',
   'setFullChat',
@@ -94,8 +91,6 @@ const unavailableApis = [
   'upsertLocalLoreBook',
   'loadLoreBooks',
   'loadLoreBooksMain',
-  'getCharacterLastMessage',
-  'getUserLastMessage',
 ] as const;
 
 const shim = `local __host = api.host.call
@@ -165,6 +160,105 @@ end
 function getState(id, name) return json.decode(getChatVar(id, "__" .. name)) end
 function setState(id, name, value) setChatVar(id, "__" .. name, json.encode(value)) end
 function setStateChanged(id, name, value) return setChatVarChanged(id, "__" .. name, json.encode(value)) end
+local __conversationTotal = nil
+local __conversationPages, __conversationItems, __conversationText, __conversationChunks = {}, {}, {}, {}
+local function __conversationPage(offset)
+  if not __conversationPages[offset] then
+    local page = __host("conversation.list", {offset=offset, limit=50})
+    __conversationTotal = page.total
+    for _, item in ipairs(page.items) do __conversationItems[item.index] = item end
+    __conversationPages[offset] = true
+  end
+end
+local function __conversationLength()
+  if __conversationTotal == nil then __conversationPage(0) end
+  return __conversationTotal
+end
+local function __conversationIndex(index)
+  -- Array.at uses ToIntegerOrInfinity; the authored API's index domain is numeric.
+  if index == nil then index = 0 end
+  if type(index) ~= "number" then error("RISU_LUA_CONVERSATION_INDEX") end
+  if index ~= index then index = 0 end
+  if index == math.huge or index == -math.huge then return nil end
+  index = index < 0 and math.ceil(index) or math.floor(index)
+  local total = __conversationLength()
+  if index < 0 then index = total + index end
+  if index < 0 or index >= total then return nil end
+  if __conversationItems[index] == nil then __conversationPage(math.floor(index / 50) * 50) end
+  return index
+end
+local function __conversationFragment(fragment)
+  local index = fragment.index
+  __conversationItems[index] = {index=index, role=fragment.role, totalChars=fragment.totalChars}
+  if __conversationText[index] ~= nil then return end
+  local pending = __conversationChunks[index] or {parts={}, offset=0}
+  if fragment.offset ~= pending.offset then error("RISU_LUA_CONVERSATION_FRAGMENT") end
+  pending.parts[#pending.parts + 1] = fragment.text
+  if fragment.nextOffset == nil or fragment.nextOffset == __null then
+    __conversationText[index] = table.concat(pending.parts)
+    __conversationChunks[index] = nil
+  else
+    pending.offset = fragment.nextOffset
+    __conversationChunks[index] = pending
+  end
+end
+local function __conversationRead(index)
+  while __conversationText[index] == nil do
+    local pending = __conversationChunks[index]
+    __conversationFragment(__host("conversation.read", {index=index, offset=pending and pending.offset or 0, limit=16000}))
+  end
+  return __conversationText[index]
+end
+local function __conversationBatch(index)
+  while __conversationText[index] == nil do
+    local pending = __conversationChunks[index]
+    local page = __host("conversation.page", {index=index, offset=pending and pending.offset or 0, limit=16000})
+    if #page.items == 0 then error("RISU_LUA_CONVERSATION_FRAGMENT") end
+    for _, fragment in ipairs(page.items) do __conversationFragment(fragment) end
+  end
+end
+local function __risuChat(index)
+  if index == nil then return nil end
+  return {role=__conversationItems[index].role == "assistant" and "char" or "user", data=__conversationRead(index), time=0}
+end
+function getChat(id, index) return __risuChat(__conversationIndex(index)) end
+function getChatMain(id, index) return json.encode(getChat(id, index)) end
+function getChatData(id, index)
+  index = __conversationIndex(index)
+  if index == nil then return "" end
+  return __conversationRead(index)
+end
+function getChatRole(id, index)
+  index = __conversationIndex(index)
+  if index == nil then return "" end
+  return __conversationItems[index].role == "assistant" and "char" or "user"
+end
+function getChatLength(id) return __conversationLength() end
+function getRecentChats(id, count)
+  if count == nil then count = 0 end
+  if type(count) ~= "number" then error("RISU_LUA_CONVERSATION_COUNT") end
+  if count ~= count then count = 0 end
+  count = math.max(0, math.floor(count))
+  local total, result = __conversationLength(), {}
+  for index = math.max(0, total - count), total - 1 do
+    __conversationBatch(index)
+    result[#result + 1] = __risuChat(index)
+  end
+  return result
+end
+function getRecentChatsMain(id, count) return json.encode(getRecentChats(id, count)) end
+function getFullChat(id) return getRecentChats(id, __conversationLength()) end
+function getFullChatMain(id) return json.encode(getFullChat(id)) end
+local function __lastConversation(role)
+  for index = __conversationLength() - 1, 0, -1 do
+    if __conversationItems[index] == nil then __conversationPage(math.floor(index / 50) * 50) end
+    if __conversationItems[index].role == role then return __conversationRead(index) end
+  end
+  if role == "assistant" then error("RISU_LUA_FIRST_MESSAGE_UNAVAILABLE") end
+  return ""
+end
+function getUserLastMessage(id) return __lastConversation("user") end
+function getCharacterLastMessage(id) return __lastConversation("assistant") end
 function simpleLLM(id, prompt)
   local response = __host("model.generate", {prompt=prompt})
   local value = {success=response.status == "completed", result=response.text}
@@ -208,7 +302,7 @@ return {state=__state, result=__null}`;
   return {
     api: EXTENSION_PROGRAM_API,
     language: 'lua',
-    capabilities: ['variables.read', 'variables.write', 'model.generate'],
+    capabilities: ['variables.read', 'variables.write', 'model.generate', 'conversation.read'],
     source: body,
   };
 }
@@ -217,6 +311,110 @@ function record(value: unknown): Record<string, unknown> | undefined {
   return value !== null && typeof value === 'object' && !Array.isArray(value)
     ? (value as Record<string, unknown>)
     : undefined;
+}
+
+const operation = (op: PromptOperation, ...args: PromptExpression[]): PromptExpression => ({
+  op,
+  args,
+});
+const displayed = (value: PromptExpression) => operation('replace', value, '', '');
+
+/** Reuses CBS compilation; runtime-authored CBS needs a separate, bounded evaluation phase. */
+function compileLuaConditions(raw: unknown): { when?: PromptExpression; runtimeCbsGuard: boolean } {
+  if (!Array.isArray(raw)) throw new UnsupportedCbs('트리거 조건 목록이 올바르지 않아요.');
+  if (!raw.length) return { runtimeCbsGuard: false };
+  if (raw.length > 100)
+    throw new UnsupportedCbs('트리거 조건이 네이티브 조건 개수 한도를 넘었어요.');
+  const cbs = new RisuCbs(new Map(), { names: 'context' });
+  let runtimeCbsGuard = false;
+  const parsedText = (text: string): PromptExpression => {
+    const nodes = cbs.template(text);
+    const parts = nodes.map((node): PromptExpression => {
+      if (node.kind === 'text') return node.text;
+      if (node.kind === 'value') return displayed(node.expression);
+      throw new UnsupportedCbs('조건 안의 CBS 블록은 아직 지원하지 않아요.');
+    });
+    return parts.length === 1 ? parts[0] : operation('join', operation('array', ...parts), '');
+  };
+  const conditions = raw.map((item): PromptExpression => {
+    const condition = record(item);
+    if (!condition || !['var', 'value'].includes(String(condition.type))) {
+      if (condition?.type === 'chatindex' || condition?.type === 'exists')
+        throw new UnsupportedCbs(
+          '대화 개수·기록 검색 조건은 조회 범위가 정해질 때까지 연결하지 않아요.'
+        );
+      throw new UnsupportedCbs('지원하지 않는 트리거 조건 종류가 있어요.');
+    }
+    if (typeof condition.var !== 'string' || typeof condition.value !== 'string')
+      throw new UnsupportedCbs('트리거 조건의 비교값이 문자열이 아니에요.');
+    const left =
+      condition.type === 'var'
+        ? operation('coalesce', operation('get', { context: ['variables'] }, condition.var), 'null')
+        : parsedText(condition.var);
+    // Risu parses both operands even for unary operators; reject unsupported RHS CBS too.
+    const right = parsedText(condition.value);
+    let comparison: PromptExpression;
+    switch (condition.operator) {
+      case '=':
+        comparison = operation('equal', left, right);
+        break;
+      case '!=':
+        comparison = operation('notEqual', left, right);
+        break;
+      case 'true':
+        comparison = operation(
+          'any',
+          operation('equal', left, 'true'),
+          operation('equal', left, '1')
+        );
+        break;
+      case 'null':
+        comparison = operation('equal', left, 'null');
+        break;
+      // Risu rejects the inverse comparison. Preserve JS Number coercion and NaN passing.
+      case '>':
+        comparison = operation('not', operation('greaterEqual', right, left));
+        break;
+      case '<':
+        comparison = operation('not', operation('greaterEqual', left, right));
+        break;
+      case '>=':
+        comparison = operation('not', operation('greater', right, left));
+        break;
+      case '<=':
+        comparison = operation('not', operation('greater', left, right));
+        break;
+      default:
+        throw new UnsupportedCbs('지원하지 않는 트리거 비교 연산자가 있어요.');
+    }
+    const dynamicReads = new Map<string, PromptExpression>();
+    const inspect = (expression: PromptExpression) => {
+      if (!expression || typeof expression !== 'object' || !('op' in expression)) return;
+      const collection = expression.args[0];
+      if (
+        expression.op === 'get' &&
+        collection !== null &&
+        typeof collection === 'object' &&
+        'context' in collection &&
+        collection.context.length === 1 &&
+        collection.context[0] === 'variables'
+      )
+        dynamicReads.set(JSON.stringify(expression), operation('coalesce', expression, 'null'));
+      expression.args.forEach(inspect);
+    };
+    inspect(left);
+    inspect(right);
+    if (!dynamicReads.size) return comparison;
+    runtimeCbsGuard = true;
+    return operation(
+      'all',
+      ...[...dynamicReads.values()].map((value) =>
+        operation('not', operation('contains', displayed(value), '{{'))
+      ),
+      comparison
+    );
+  });
+  return { when: validatePromptExpression(operation('all', ...conditions)), runtimeCbsGuard };
 }
 
 /** Import adapter for independent Lua triggers. Mixed effects are preserved, never reordered. */
@@ -263,18 +461,30 @@ export function adaptRisuLuaTriggers(
       }
       report(
         'RISU_LUA_PARTIAL_HOST',
-        '채팅 변수와 simpleLLM은 허용된 범위에서 실행해요. 나머지 Risu API는 아직 지원하지 않아 호출하면 오류를 표시해요.'
+        '채팅 변수·대화 읽기·simpleLLM은 허용된 범위에서 실행해요. 나머지 Risu API는 아직 지원하지 않아 호출하면 오류를 표시해요.'
       );
       report(
         'RISU_LUA_FRESH_INVOCATION',
         'Lua 전역값은 호출마다 초기화돼요. 호출 사이에 유지할 값은 getState/setState로 저장해야 해요.'
       );
-      const hasConditions = !Array.isArray(trigger.conditions) || trigger.conditions.length > 0;
-      if (hasConditions)
+      report(
+        'RISU_LUA_CONVERSATION_PROJECTION',
+        '대화 읽기는 현재 분기에 저장된 대화를 사용해요. 시간 정보가 없으면 0을 반환하며, 저장되지 않은 첫 인사 대체값은 지원하지 않아요. 전체 조회가 실행 한도를 넘으면 일부만 반환하지 않고 오류를 표시해요.'
+      );
+      let conditionPlan: ReturnType<typeof compileLuaConditions> | undefined;
+      try {
+        conditionPlan = compileLuaConditions(trigger.conditions);
+        if (conditionPlan.runtimeCbsGuard)
+          report(
+            'RISU_LUA_CONDITION_RUNTIME_CBS',
+            '조건에서 읽은 변수값 안에 CBS가 있으면 자동 실행을 보류해요. 일반 문자열 값과 가져올 때 해석 가능한 CBS 조건은 지원해요.'
+          );
+      } catch (error) {
         report(
           'RISU_LUA_CONDITIONS_UNSUPPORTED',
-          '트리거 조건을 아직 재현하지 못해 자동 콜백을 연결하지 않았어요.'
+          `${error instanceof UnsupportedCbs ? error.message : '트리거 조건이 네이티브 실행 한도를 넘었어요.'} 조건 전체를 유지하기 위해 자동 콜백을 연결하지 않았어요.`
         );
+      }
       for (const event of RISU_LUA_EVENTS) {
         if (event.startsWith('edit')) {
           report(
@@ -293,7 +503,7 @@ export function adaptRisuLuaTriggers(
           );
           continue;
         }
-        if (event !== 'onButtonClick' && hasConditions) continue;
+        if (event !== 'onButtonClick' && !conditionPlan) continue;
         try {
           const button = event === 'onButtonClick';
           actions.push({
@@ -304,6 +514,7 @@ export function adaptRisuLuaTriggers(
               : { type: 'record', properties: {} },
             triggers: [nativeTrigger],
             ...(button ? {} : { automaticInput: {} }),
+            ...(!button && conditionPlan?.when ? { when: conditionPlan.when } : {}),
             effects: [],
             program: buildRisuLuaProgram(effect.code, event),
           });

@@ -12,6 +12,7 @@ import { sealOutlineSnapshot } from '../core/outline.js';
 import { isSourceOnlyTranscript, validateSourceOnlyTranscript } from '../core/authored-history.js';
 import { preparedBehaviorSnapshot } from './package-behavior-run.js';
 import { hasPromptInputTransforms, validatePromptInputTransforms } from './prompt-transforms.js';
+import { resolveExtensionConversation } from './extension-conversation.js';
 
 const reject = (message: string): never => {
   throw new HttpError(400, `Invalid snapshot archive: ${message}`);
@@ -38,6 +39,15 @@ export function validateRunSnapshot(
   snapshot: RunSnapshot,
   runId?: string
 ): RunSnapshot {
+  if (snapshot.extensionConversation !== undefined) {
+    try {
+      if (runId && snapshot.extensionConversation.admissionRunId !== runId)
+        reject('conversation admission owner');
+      resolveExtensionConversation(store, snapshot, snapshot.extensionConversation);
+    } catch {
+      reject('conversation reference mismatch');
+    }
+  }
   if (isSourceOnlyTranscript(snapshot)) {
     validateSourceOnlyTranscript(snapshot);
     if (!isDeepStrictEqual(snapshot.sourceSegments, freezeSourceSegments(snapshot.profile)))
@@ -143,6 +153,22 @@ export function mapForkSnapshot(
     id ? (sources.get(id) ?? reject('fork source dependency')) : undefined;
   const run = (id: string | undefined) =>
     id ? (runs.get(id) ?? reject('fork run dependency')) : undefined;
+  if (snapshot.extensionConversation) {
+    const captured = snapshot.extensionConversation;
+    if (!snapshot.branchId) reject('fork conversation branch');
+    snapshot.extensionConversation = {
+      ...captured,
+      chatId: snapshot.chatId,
+      branchId: snapshot.branchId!,
+      parentRevision: snapshot.parentRevision,
+      admissionRunId: captured.admissionRunId ? run(captured.admissionRunId)! : null,
+      messages: captured.messages.map((ref) => ({
+        ...ref,
+        runId: run(ref.runId)!,
+        ...(ref.kind === 'source' ? { sourceRevision: source(ref.sourceRevision)! } : {}),
+      })),
+    };
+  }
   if (snapshot.logicalHistory)
     snapshot.logicalHistory = snapshot.logicalHistory.map((item) => ({
       ...item,

@@ -13,6 +13,7 @@ import {
   type ExtensionModelHooks,
 } from './extension-model.js';
 import { executePackageExtensionProgram } from './package-extension-execution.js';
+import { conversationScopeFromRefs, packageConversationExecution } from './package-conversation.js';
 import {
   cancelExtensionOperation,
   claimExtensionOperation,
@@ -139,6 +140,18 @@ export function createExtensionOperationRunner(store: Store, options: Options) {
             {
               profile: snapshot.profile,
               attachment: ref,
+              conversation: packageConversationExecution(
+                store,
+                () =>
+                  conversationScopeFromRefs(store, snapshot.extensionConversation, {
+                    chatId: snapshot.scope.chatId,
+                    branchId: snapshot.scope.branchId,
+                    parentRevision: snapshot.sourceRevision,
+                  }),
+                snapshot.profile,
+                ref,
+                program
+              ),
               assertCurrent,
               assertVariableWriteAccess: () =>
                 assertExtensionVariableWriteAccess(store, snapshot.profile, ref, program),
@@ -230,7 +243,9 @@ export function createExtensionOperationRunner(store: Store, options: Options) {
       return (
         pkg?.behavior?.actions
           .find((item) => item.id === command.actionId)
-          ?.program?.capabilities?.includes('model.generate') === true
+          ?.program?.capabilities?.some(
+            (capability) => capability === 'model.generate' || capability === 'conversation.read'
+          ) === true
       );
     },
     enqueue(
@@ -277,6 +292,9 @@ export function createExtensionOperationRunner(store: Store, options: Options) {
         settings: prepared.settings,
         sourceRevision: prepared.sourceRevision,
         sourceHash: prepared.sourceHash,
+        ...(prepared.extensionConversation
+          ? { extensionConversation: prepared.extensionConversation }
+          : {}),
       };
       const admitted = createExtensionOperation(store, input, snapshot);
       if (!admitted.reused) queueMicrotask(pump);

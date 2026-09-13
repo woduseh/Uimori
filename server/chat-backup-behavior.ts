@@ -27,6 +27,8 @@ export function remapBackupBehavior(ctx: BackupRemap): void {
     snapshot.scope = ownership(snapshot.scope);
     snapshot.profile = ctx.structured(snapshot.profile);
     snapshot.sourceRevision = id(snapshot.sourceRevision);
+    if (snapshot.extensionConversation !== undefined)
+      snapshot.extensionConversation = ctx.structured(snapshot.extensionConversation);
     // Runtime, authored command inputs, guard and result are original execution evidence.
     row.snapshot = JSON.stringify(snapshot);
   }

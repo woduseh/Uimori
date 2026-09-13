@@ -41,6 +41,10 @@ import type { RunSnapshot, ToolEvent } from '../core/types.js';
 import { behaviorPayloadHash, recordDraws } from './package-behavior-store.js';
 import type { Run, Store } from './store.js';
 import { fields, record, text, HttpError } from './request-validation.js';
+import {
+  packageConversationExecution,
+  assertRunConversationReceipt,
+} from './package-conversation.js';
 import type { ChatVariableState } from '../core/chat-variables.js';
 import {
   adoptExtensionVariableMutation,
@@ -274,6 +278,14 @@ function actionResolution(
     if (!isDeepStrictEqual(prior.input, input)) fail('BEHAVIOR_OPPORTUNITY_INPUT_CHANGED');
     if (prior.program?.variables && Object.keys(prior.program.variables.changes).length)
       assertExtensionVariableWriteAccess(store, snapshot.profile, ref, action.program!);
+    if (prior.program?.conversation)
+      assertRunConversationReceipt(
+        store,
+        snapshot,
+        ref,
+        action.program!,
+        prior.program.conversation
+      );
     return { entry: prior };
   }
   if (progress.entries.length >= MAX_RUN_BEHAVIOR_ACTIONS) fail('BEHAVIOR_RUN_ACTION_LIMIT');
@@ -291,6 +303,14 @@ function actionResolution(
         fail('BEHAVIOR_OPPORTUNITY_DEPENDENCY_CHANGED');
     if (cached.program?.variables && Object.keys(cached.program.variables.changes).length)
       assertExtensionVariableWriteAccess(store, snapshot.profile, ref, action.program!);
+    if (cached.program?.conversation)
+      assertRunConversationReceipt(
+        store,
+        snapshot,
+        ref,
+        action.program!,
+        cached.program.conversation
+      );
     const replay = { ...structuredClone(cached), trigger };
     applyEntry(progress, replay);
     return { entry: replay };
@@ -436,9 +456,8 @@ function prepareRunBehaviorInTransaction(
   if (!automatic.length && !modelTools.length && !afterTurn) return snapshot;
   if (automatic.length > MAX_RUN_BEHAVIOR_ACTIONS) fail('BEHAVIOR_RUN_ACTION_LIMIT');
   const baseStates = structuredClone(snapshot.packageStates ?? []);
-  // A cancelled run and a fresh request at this unchanged source/state share one opportunity.
-  // Model-supplied call IDs, request text and wall-clock time cannot request a reroll.
-  const opportunityId = hash({
+  // Source/state determines entropy. A different request cannot ask for new dice.
+  const entropyOpportunityId = hash({
     chatId: snapshot.chatId,
     branchId: snapshot.branchId,
     parentRevision: snapshot.parentRevision,
@@ -448,21 +467,56 @@ function prepareRunBehaviorInTransaction(
     values: snapshot.profile?.packageValues,
     ...(snapshot.profile?.variableState ? { variableState: snapshot.profile.variableState } : {}),
   });
+  // Conversation-dependent calculations need their own receipt when visible input changes.
+  // Keep the original entropy derivation so unrelated draws are not rerolled with that work.
+  const readsConversation = definitions(snapshot).some((d) => {
+    const grant = snapshot.profile?.extensionGrants?.[d.instanceId];
+    return (
+      grant?.packageRevision === d.ref.revision &&
+      grant.capabilities.includes('conversation.read') &&
+      d.behavior.actions.some(
+        (action) =>
+          action.program?.capabilities?.includes('conversation.read') &&
+          behaviorActionTriggers(action).some(
+            (trigger) => trigger === 'before-turn' || trigger === 'model'
+          )
+      )
+    );
+  });
+  const opportunityId =
+    readsConversation && snapshot.extensionConversation
+      ? hash({
+          opportunityId: entropyOpportunityId,
+          conversation: {
+            messages: snapshot.extensionConversation.messages.map(({ role, hash }) => ({
+              role,
+              hash,
+            })),
+            request: hash(snapshot.request),
+          },
+        })
+      : entropyOpportunityId;
   if (
     !store.db.prepare('SELECT 1 FROM package_behavior_opportunities WHERE id=?').get(opportunityId)
   ) {
     const master = store.db
       .prepare('SELECT seed FROM package_behavior_entropy WHERE id=1')
       .get() as Row;
-    const seed = createHash('sha256').update(`${master.seed}:${opportunityId}`).digest('hex');
-    store.db
-      .prepare('INSERT INTO package_behavior_opportunities VALUES(?,?,?,?)')
-      .run(
-        opportunityId,
-        snapshot.chatId,
-        snapshot.branchId ?? `main:${snapshot.chatId}`,
-        encode({ seed, entries: [] })
-      );
+    const seed = createHash('sha256')
+      .update(`${master.seed}:${entropyOpportunityId}`)
+      .digest('hex');
+    store.db.prepare('INSERT INTO package_behavior_opportunities VALUES(?,?,?,?)').run(
+      opportunityId,
+      snapshot.chatId,
+      snapshot.branchId ?? `main:${snapshot.chatId}`,
+      encode({
+        seed,
+        entries: [],
+        ...(opportunityId !== entropyOpportunityId
+          ? { originEntropy: { opportunityId: entropyOpportunityId, seed: master.seed } }
+          : {}),
+      })
+    );
   }
   const progress: RunBehaviorProgress = {
     version: 1,
@@ -765,6 +819,14 @@ export async function prepareAutomaticRunBehavior(
               waitForSlot: true,
               profile: progressSnapshot(reserved, local).profile,
               attachment: d.ref,
+              conversation: packageConversationExecution(
+                store,
+                reserved,
+                reserved.profile,
+                d.ref,
+                step.program!,
+                { request: reserved.request }
+              ),
               assertCurrent,
               assertVariableWriteAccess: () =>
                 assertExtensionVariableWriteAccess(store, reserved.profile, d.ref, step.program!),
@@ -970,6 +1032,7 @@ export async function executeRunBehaviorTool(
         progressHash: hash(progress),
         profile: progressSnapshot(run.snapshot, progress).profile,
         attachment: definition.ref,
+        snapshot: run.snapshot,
       };
     });
     let entry: RunBehaviorEntry;
@@ -994,6 +1057,14 @@ export async function executeRunBehaviorTool(
             {
               profile: prepared.profile,
               attachment: prepared.attachment!,
+              conversation: packageConversationExecution(
+                store,
+                prepared.snapshot!,
+                prepared.profile,
+                prepared.attachment!,
+                prepared.program!,
+                { request: prepared.snapshot!.request }
+              ),
               modelServices: services,
               assertVariableWriteAccess: () =>
                 assertExtensionVariableWriteAccess(
@@ -1092,6 +1163,21 @@ export function commitRunBehaviorVariables(store: Store, run: Run, source: Sourc
     branch.headRevision !== source.id
   )
     fail('BEHAVIOR_SOURCE_STALE');
+  for (const entry of progress!.entries) {
+    if (!entry.program?.conversation) continue;
+    const definition = definitions(run.snapshot).find(
+      (item) => item.instanceId === entry.instanceId
+    );
+    const action = definition?.behavior.actions.find((item) => item.id === entry.actionId);
+    if (!definition || !action?.program) fail('BEHAVIOR_TOOL_NOT_ALLOWED');
+    assertRunConversationReceipt(
+      store,
+      run.snapshot,
+      definition!.ref,
+      action!.program!,
+      entry.program.conversation
+    );
+  }
   const entries = progress!.entries.filter((entry) => entry.program?.variables);
   if (!entries.length) return;
   let state = variableStateFromProfile(run.snapshot.profile);
@@ -1182,12 +1268,14 @@ export function copyForkRunBehaviors(
   store: Store,
   chatId: string,
   branchId: string,
-  sourceIds: Map<string, string>
+  sourceIds: Map<string, string>,
+  runIds?: Map<string, string>
 ) {
   const copied = new Map<string, string>();
-  for (const [oldSourceId, newSourceId] of sourceIds) {
-    const oldRunId = store.source(oldSourceId).runId,
-      newRunId = store.source(newSourceId).runId;
+  const pairs = new Map(runIds);
+  for (const [oldSourceId, newSourceId] of sourceIds)
+    pairs.set(store.source(oldSourceId).runId, store.source(newSourceId).runId);
+  for (const [oldRunId, newRunId] of pairs) {
     const snapshot = store.run(newRunId).snapshot,
       progress = runBehaviorProgress(store, oldRunId);
     if (!snapshot.behaviorExecution || !progress) continue;

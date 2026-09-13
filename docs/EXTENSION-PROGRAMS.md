@@ -1,6 +1,6 @@
 # 상태 계산 코드
 
-현재 [베타 계획](../project-plan/BETA-PLAN.md)의 2~3단계 구현이에요. 봇·페르소나·모듈의 사용자 버튼, 생성 전 자동 준비, 모델이 호출하는 행동과 응답 후 처리에 JavaScript·Lua 계산을 연결할 수 있어요. `program.capabilities: ['model.generate']`는 제작자가 요청하는 capability이며, 실제 호출에는 전역 `extensionModel` 선택과 채팅별 정확한 자료 개정 권한이 모두 필요해요. 자료별 알고리즘은 코드에 두고 상태 schema·소유권·충돌·저장은 Uimori가 담당해요. Risu 어댑터의 이벤트/API 범위는 [가져오기](RISU-IMPORT.md#lua-콜백-가져오기)를 따르며 일반 HTTP, 게스트가 모델·키·endpoint·옵션을 고르는 권한, 확장 설치 관리 전체는 아직 지원하지 않아요.
+현재 [베타 계획](../project-plan/BETA-PLAN.md)의 2~3단계 구현이에요. 봇·페르소나·모듈의 사용자 버튼, 생성 전 자동 준비, 모델이 호출하는 행동과 응답 후 처리에 JavaScript·Lua 계산을 연결할 수 있어요. `model.generate`와 `conversation.read`는 제작자가 요청하고 사용자가 채팅에서 정확한 자료 개정에 별도로 허용하는 capability예요. 추가 모델 호출에는 전역 `extensionModel` 선택도 필요해요. 자료별 알고리즘은 코드에 두고 상태 schema·소유권·충돌·저장은 Uimori가 담당해요. Risu 어댑터의 이벤트/API 범위는 [가져오기](RISU-IMPORT.md#lua-콜백-가져오기)를 따르며 일반 HTTP, 게스트가 모델·키·endpoint·옵션을 고르는 권한, 확장 설치 관리 전체는 아직 지원하지 않아요.
 
 ## 제작과 사용
 
@@ -110,6 +110,22 @@ return {state: api.state, result: {preview: material?.text ?? ''}};
 
 원래 Run snapshot은 바꾸지 않아요. 파생 profile의 공유 상태가 이후 행동·생성 전 지침·자료 읽기에 적용되며 이미 주 모델에 전송한 프롬프트를 자동으로 다시 작성하지 않아요. 취소·skip·권한 철회·상태 충돌은 늦은 채택을 차단하고, 실패한 외부 작업을 재시작·복원에서 자동 재전송하지 않아요. 과거 영수증에는 변수 필드를 추가하지 않으며 새 영수증도 백업·포크·복원에서 보관과 의존성만 검증하고 코드를 재실행하지 않아요. 이 공통 Host 지원은 가져온 특정 자료의 전체 trigger/Lua 실행 완료를 의미하지 않아요.
 
+## Host API로 현재 분기 대화 읽기
+
+행동이 `program.capabilities: ['conversation.read']`를 선언하고 사용자가 채팅에서 그 자료의 정확한 현재 개정에 **대화 읽기 허용**을 켜면, 코드가 현재 선택 분기에서 사용자가 볼 수 있는 대화를 읽을 수 있어요. 모델 전송용 문맥 절삭·요약과는 별도 범위라 Reader에서 펼칠 수 있는 접힌 원문도 포함해요. 다른 채팅·다른 분기·삭제되거나 새 요청으로 대체된 기록은 포함하지 않으며 앱 설정·연결 설정의 API 키·모델 입력·진단도 제공하지 않아요. 사용자가 대화 본문에 직접 쓴 문자열은 다른 메시지 내용과 같은 원문으로 취급해요.
+
+| 메서드 | 인자 | 반환 |
+| --- | --- | --- |
+| `conversation.list` | `offset` 기본 0, `limit` 기본 20·최대 50 | `items[{index,role,totalChars}]`, `nextOffset`, `total` |
+| `conversation.read` | `index`, `offset` 기본 0, `limit` 기본 8000·최대 16000 | 한 메시지의 `{index,role,text,offset,nextOffset,totalChars}` |
+| `conversation.page` | `index`·`offset` 기본 0, `limit` 기본·최대 16000 | 여러 메시지의 연속 조각 `items`, 다음 `{index,offset}` 또는 null, `total` |
+
+호출자가 chatId·branchId·runId·source ID를 인자로 고를 수 없어요. 생성 전과 모델 행동에는 예약된 현재 요청을 마지막 사용자 메시지로 덧붙이고, 응답 후에는 같은 요청과 방금 완성된 응답을 덧붙여요. 사용자 버튼은 클릭 때 이미 보이는 대화만 사용해요. 대화 참조가 고정되지 않은 경우 실행 시점의 현재 DB를 다시 읽어 보충하지 않으며, 고정된 빈 대화는 정상적인 빈 목록이에요.
+
+Run과 영구 사용자 작업에는 본문 대신 run/source hash 참조를 고정해요. Host는 그 참조가 가리키는 정확한 본문만 해석하고, 실제로 대화를 읽은 계산에는 `program.conversation: {viewHash}`를 Host 전용 영수증으로 남겨요. 실행 시작 때의 grant와 채택 직전 최신 grant·자료 개정·분기/원문 소유권을 모두 확인하므로 허용 철회나 문맥 변경 뒤 늦은 상태·변수 결과는 반영하지 않아요. fork·전체 archive·채팅 백업은 참조와 영수증을 ID에 맞게 보존·검증하며 복원에서 대화 읽기나 코드를 실행하지 않아요. 채팅 백업으로 만든 새 채팅의 live grant는 다른 확장 grant와 같이 제거해 다시 허용하게 해요.
+
+대화 읽기를 허용받은 자동 행동이 있으면 판정 기회는 고정한 대화의 역할/본문 hash와 현재 요청 hash도 포함해요. 요청이나 사용자에게 보이는 실패 기록이 달라지면 선언 순서와 의존성을 유지하기 위해 같은 자동 행동 묶음을 다시 계산하며, 그 묶음의 대화를 읽지 않는 행동도 함께 실행될 수 있어요. 기존 추첨의 원래 entropy는 보존하므로 같은 상태의 draw seed는 바뀌지 않아요. 대화 읽기 선언·grant가 없으면 기존 source/state 기반 캐시를 유지해요.
+
 ## 생성 전 자동 준비
 
 기존 `before-turn` 행동 중 코드가 하나라도 있으면 해당 Run의 **모든 자동 행동**을 예약 후에 처리해요. 자료 장착과 행동의 선언 순서를 유지하므로 선언형 계산과 코드가 앞선 임시 상태를 이어받아요. 코드가 없는 기존 자동 행동의 예약 방식은 유지해요.
@@ -146,7 +162,7 @@ return {
 
 코드 오류·시간/메모리/출력 제한은 그 자료 후처리 묶음을 적용하지 않는 실패로 남기고 다른 자료와 원문 저장을 계속해요. 이미 성공한 생성 전/모델 행동·출력 파서의 상태는 보존해요. 기존 authoritative 출력 파서가 실패하면 기존 실패 계약을 따르며 후처리로 이를 성공으로 덮지 않아요. 정상 계산은 기다리고, 로컬 코드 묶음의 10초 상한에 모델 설정에 따른 Host 대기 예산(최대 30분)을 별도로 반영해요. 전체 Run 취소·원문 소유권 상실은 결과 채택을 닫고, DB 오류는 코드 실패로 숨기지 않아요. 후처리 진행 정보에는 진행 수와 실패 사실을 표시해요.
 
-후처리는 `RunBehaviorProgress.afterResponse`에 Run·응답 hash별로 보관해요. 모델 입력 시점의 `entries/states`와 같은 판정 기회 캐시에 섞지 않아요. 후보는 자신의 새 응답으로 후처리를 다시 계산하고, 포크·백업 복원은 기록된 결과를 보존하며 코드를 실행하지 않아요. 중단된 처리를 재시작 시 자동 재생하지 않아요. 후처리 Host는 자기 자료·이번 응답·공유 변수 읽기와 명시 허용된 `variables.write`·`model.generate`를 제공하며 HTTP 호출은 후속 범위예요.
+후처리는 `RunBehaviorProgress.afterResponse`에 Run·응답 hash별로 보관해요. 모델 입력 시점의 `entries/states`와 같은 판정 기회 캐시에 섞지 않아요. 후보는 자신의 새 응답으로 후처리를 다시 계산하고, 포크·백업 복원은 기록된 결과를 보존하며 코드를 실행하지 않아요. 중단된 처리를 재시작 시 자동 재생하지 않아요. 후처리 Host는 자기 자료·이번 응답·공유 변수·허용된 현재 분기 대화를 읽고 명시 허용된 `variables.write`·`model.generate`를 제공하며 HTTP 호출은 후속 범위예요.
 
 후처리의 모델 호출도 전역 `extensionModel`과 정확한 자료 개정의 채팅별 grant를 사용해요. 이미 본문 호출이 끝났으므로 별도 본문 호출을 예약하지 않고 Run의 남은 호출 한도만 사용해요. 사용량·가격·전송 전 attempt는 본문과 합산하고 attempt에는 `trigger: 'after-turn'` 귀속을 남겨요. 사용자 버튼은 아래의 영구 작업 경로에서 같은 모델 Host API를 사용해요.
 
@@ -178,17 +194,17 @@ Run에 속한 추가 호출은 Run 전체 `maxCalls`를 공유해요. 생성 전
 
 ## 권한과 실행
 
-버튼 실행은 이 자료의 상태/입력 읽기와 반환한 상태의 반영을 요청하는 동작이에요. 선택한 권한으로 자기 자료를 읽을 수 있지만 채팅 전체·다른 자료·키·환경변수·DB 객체·앱 DOM을 받지 않아요. ID나 권한을 결과에 추가해도 권한이 늘어나지 않아요. 파일·일반 HTTP·동적 모듈 import는 연결하지 않았어요. `model.generate`는 사용자 버튼·생성 전·응답 후 자동 처리와 모델이 호출한 행동에서 같은 API로 사용할 수 있어요.
+버튼 실행은 이 자료의 상태/입력 읽기와 반환한 상태의 반영을 요청하는 동작이에요. 선택한 capability와 채팅별 grant에 따라 자기 자료나 현재 분기 대화를 읽을 수 있지만 다른 자료·키·환경변수·DB 객체·앱 DOM을 받지 않아요. ID나 권한을 결과에 추가해도 권한이 늘어나지 않아요. 파일·일반 HTTP·동적 모듈 import는 연결하지 않았어요. `model.generate`와 `conversation.read`는 사용자 버튼·생성 전·응답 후 자동 처리와 모델이 호출한 행동에서 같은 공통 실행 경계를 사용해요.
 
 사용자 버튼에서는 호스트가 현재 장착 자료와 행동·패널 허용 목록, 입력·상태 개정·원문 의존성을 확인한 뒤 transaction 밖에서 계산해요. 계산이 끝나면 자료/프로필·분기/원문·상태와 진행 중 Run을 다시 확인하고, 같은 경계에서 결과 검사와 journal 저장을 수행해요. 계산 중 다른 작업이 바뀌면 늦은 결과는 반영하지 않아요. 같은 명령 키의 동시 실행은 합치고, 이미 저장된 명령은 원래 영수증을 반환해요. 같은 키의 다른 명령은 충돌이에요.
 
 무한 계산·메모리/출력 초과·잘못된 결과·취소는 해당 행동을 실패시켜요. 기존 상태·원문은 유지하며 새 채팅 요청을 막는 실패 상태를 만들지 않아요. 실제 DB 저장 실패를 성공으로 숨기지는 않아요. 모델 capability가 없는 동기 버튼 요청의 HTTP 연결 종료 또는 Run 취소는 해당 계산을 취소하고, 종료 후 결과를 채택하지 않아요. 영구 사용자 작업은 아래의 명시적 취소 경계를 따라요.
 
-## 사용자 버튼의 모델 작업
+## 사용자 버튼의 영구 작업
 
-기본 버튼과 커스텀 패널은 기존 actions endpoint를 그대로 사용해요. `user` 행동의 프로그램이 `model.generate` capability를 선언하면 서버가 영구 작업으로 접수하고 `{operationId}`를 반환해요. 클릭 시점의 자료·입력·상태·프로필·모델 설정을 고정하며 별도 본문 Run이나 가짜 본문 snapshot을 만들지 않아요. 브라우저 이동이나 HTTP 연결 종료 뒤에도 서버 작업은 유지돼요.
+기본 버튼과 커스텀 패널은 기존 actions endpoint를 그대로 사용해요. `user` 행동의 프로그램이 `model.generate` 또는 `conversation.read` capability를 선언하면 서버가 영구 작업으로 접수하고 `{operationId}`를 반환해요. 클릭 시점의 자료·입력·상태·프로필과 필요한 모델 설정·대화 참조를 고정하며 별도 본문 Run이나 가짜 본문 snapshot을 만들지 않아요. 브라우저 이동이나 HTTP 연결 종료 뒤에도 서버 작업은 유지돼요.
 
-`server/extension-operation-runner.ts`는 기존 `createExtensionModelService`와 `authorizeExtensionModelAccess`, `api.host.call('model.generate', {prompt})`를 사용해요. 실제 모델 호출에는 전역 `extensionModel`과 정확한 자료 source/revision의 grant가 필요해요. capability 선언만으로 모델이 필수인 것은 아니며, 코드가 모델 사용 불가 결과를 처리하고 상태만 반환할 수 있어요. 호출 전 최신 권한·연결·소유권을 확인하고 기존 product attempt에 `trigger: 'user'`를 기록해요. 작업에 고정한 `maxCalls`를 사용하며 본문 호출 몫을 예약하지 않아요. 전송된 호출의 사용량은 해당 작업에 귀속하고 미정산 토큰·비용은 `null`로 표시해요.
+`server/extension-operation-runner.ts`는 모델 호출과 대화 읽기 모두 `executePackageExtensionProgram`의 공통 Host 경계를 사용해요. 실제 모델 호출에는 전역 `extensionModel`과 정확한 자료 source/revision의 grant가 필요하고, 대화 읽기에는 별도의 정확한 자료 개정 grant가 필요해요. capability 선언만으로 모델 호출이 필수인 것은 아니에요. 호출 전 최신 권한·연결·소유권을 확인하고 모델 전송에는 기존 product attempt에 `trigger: 'user'`를 기록해요. 작업에 고정한 `maxCalls`를 사용하며 본문 호출 몫을 예약하지 않아요. 전송된 호출의 사용량은 해당 작업에 귀속하고 미정산 토큰·비용은 `null`로 표시해요.
 
 완성 상태는 기존 `performBehaviorAction`의 schema·CAS 검사와 `ui-action` journal로만 채택하며 작업 완료와 한 transaction으로 저장해요. 계산 중 현재 자료·프로필·분기·원문·상태가 달라지거나 본문 실행과 충돌하면 늦은 상태를 반영하지 않아요. 본문은 계속 진행할 수 있고 원문을 이 작업의 결과로 바꾸지 않아요. 계산은 끝났지만 채택에 실패한 결과는 **상태에 미반영**으로 보존해요. 이 기록은 새 상태 schema에 맞지 않을 수도 있으므로 제한된 계산 영수증의 무결성과 실제 상태 채택 검증을 구분해요.
 
@@ -212,6 +228,6 @@ JavaScript는 `quickjs-emscripten-core`와 `@jitl/quickjs-wasmfile-release-sync`
 
 ## 보존과 후속 확장
 
-프로그램은 패키지 개정에 속하므로 기존 자료 이동·snapshot·백업에 함께 들어가요. 저장한 행동 영수증에는 API·코드 지문·엔진 식별자·상태/결과를 보존해요. 모델 호출의 영수증은 opportunity·Run progress·최종 journal 사이에도 결합해요. 일반 채팅 백업으로 새 채팅을 복원할 때는 다른 사람의 백업이 목적지에서 선택한 `extensionModel`에 자동 과금 권한을 주지 않도록 live profile의 `extensionGrants`를 제거하고, 사용자가 그 채팅에서 다시 허용하게 해요. source/grant 이력은 과거 Run snapshot과 attempt 귀속 영수증에 보존해 복원 검증에 사용해요. 같은 workspace 안의 fork는 기존 허가를 보존하고, 자료 native transfer는 grant를 처음부터 만들지 않아요. 전체 DB archive는 전역 연결을 disabled·비밀 제거하는 기존 복구 경계를 따르며 이 계약에서 별도 grant 삭제를 추가하지 않아요. 커밋·포크·복원은 고정한 source/revision·입력 schema·호스트 조건과 영수증·저장 결과의 일치를 확인하며 코드를 다시 실행하지 않아요. 이것은 승인된 결과의 보존이며 복원 때 계산의 의미를 재평가했다는 증거가 아니에요. 공유용 진단에는 이 코드나 입력/출력을 자동 포함하지 않아요.
+프로그램은 패키지 개정에 속하므로 기존 자료 이동·snapshot·백업에 함께 들어가요. 저장한 행동 영수증에는 API·코드 지문·엔진 식별자·상태/결과와 사용한 대화의 `viewHash`를 보존해요. 모델 호출의 영수증은 opportunity·Run progress·최종 journal 사이에도 결합해요. 일반 채팅 백업으로 새 채팅을 복원할 때는 다른 사람의 백업이 목적지에서 모델 호출이나 대화 읽기 권한을 자동으로 주지 않도록 live profile의 `extensionGrants`를 제거하고, 사용자가 그 채팅에서 다시 허용하게 해요. source/grant 이력과 대화 참조는 과거 Run snapshot·영구 작업·attempt 귀속 영수증에 보존해 복원 검증에 사용해요. 같은 workspace 안의 fork는 기존 허가를 보존하고, 자료 native transfer는 grant를 처음부터 만들지 않아요. 전체 DB archive는 전역 연결을 disabled·비밀 제거하는 기존 복구 경계를 따르며 이 계약에서 별도 grant 삭제를 추가하지 않아요. 커밋·포크·복원은 고정한 source/revision·입력 schema·호스트 조건과 영수증·저장 결과의 일치를 확인하며 코드를 다시 실행하지 않아요. 이것은 승인된 결과의 보존이며 복원 때 계산의 의미를 재평가했다는 증거가 아니에요. 공유용 진단에는 이 코드나 입력/출력을 자동 포함하지 않아요.
 
-엔진 실행, `uimori-state-action-v1` 입력 계약, 상태 저장 호스트는 별도 모듈이에요. 자동 준비와 모델 행동은 `server/package-behavior-run.ts`에서 행동 해석·영수증·효과 채택과 `model.generate` broker를 공유해요. 응답 후 코드는 `server/package-after-response.ts`가 별도 응답 귀속 영수증으로 같은 Worker·상태 저장 경계를 사용해요. 일반 HTTP, 설치·의존성 권한 관리와 Lua의 미연결 이벤트/API는 후속 작업이에요. 자료별 함수명을 서버 분기로 옮기지 않아요.
+엔진 실행, `uimori-state-action-v1` 입력 계약, 상태 저장 호스트는 별도 모듈이에요. 자동 준비와 모델 행동은 `server/package-behavior-run.ts`에서 행동 해석·영수증·효과 채택과 공통 Host를 공유해요. 응답 후 코드는 `server/package-after-response.ts`가 별도 응답 귀속 영수증으로 같은 Worker·상태 저장 경계를 사용해요. 일반 HTTP, 설치·의존성 권한 관리와 Lua의 입력·요청/출력·표시 이벤트 등 미연결 API는 후속 작업이에요. 자료별 함수명을 서버 분기로 옮기지 않아요.

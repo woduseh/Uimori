@@ -40,6 +40,7 @@ export interface ExtensionOperationSnapshot {
   settings: Settings;
   sourceRevision: string | null;
   sourceHash: string | null;
+  extensionConversation?: import('./extension-conversation.js').ExtensionConversationSnapshot;
 }
 
 export interface ExtensionOperation {

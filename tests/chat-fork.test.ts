@@ -426,6 +426,7 @@ describe('independent stored-story fork without generation', () => {
         chatId: fixture.chat.id,
         runId: oldSource.runId,
         sourceRevision: oldSource.id,
+        requestOrder: oldSource.id === fixture.first.id ? -2 : -1,
       });
       expect(run.usage).toEqual({
         modelCalls: 0,

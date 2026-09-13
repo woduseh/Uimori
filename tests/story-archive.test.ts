@@ -135,7 +135,7 @@ function fork(store: Store, chatId: string, fromRevision: string) {
     const runs = new Map<string, string>();
     for (const row of all(store, 'runs').filter((row) => row.chat_id === copy.id)) {
       const origin = (JSON.parse(row.snapshot) as RunSnapshot).forkedFrom!;
-      sources.set(origin.sourceRevision, row.source_revision);
+      if (origin.sourceRevision !== null) sources.set(origin.sourceRevision, row.source_revision);
       runs.set(origin.runId, row.id);
     }
     store.transaction(() => copyStoryFork(store, chatId, copy.id, sources, runs));
