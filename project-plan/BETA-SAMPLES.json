@@ -40,11 +40,11 @@
     }
   },
   "currentImplementation": {
-    "recordedOn": "2026-09-13",
+    "recordedOn": "2026-09-14",
     "sourceCommit": "a9190f4",
-    "scope": "공통 구현과 후속 파일 가져오기 보충이에요. sourceCommit은 초기 구현 기록이며 이후 결과는 BETA-PLAN의 작업별 근거를 따라요. baselines와 기능별 currentSupport는 초기 조사 기준을 보존해요.",
+    "scope": "공통 구현과 후속 파일 가져오기 보충이에요. sourceCommit은 초기 구현 기록이며 이후 결과는 BETA-PLAN의 작업별 근거를 따라요. baselines와 기능별 currentSupport는 초기 조사 기준을 보존해요. 2026-09-14 보충은 검토 후속 계획(A·V·B·E)의 결과이며 support 항목과 표본별 currentRisuImport만 갱신했고 기능별 currentSupport는 그대로예요.",
     "versions": {
-      "database": 18,
+      "database": 20,
       "archive": 15,
       "chatBackup": 1
     },
@@ -52,7 +52,7 @@
       {
         "area": "card-import",
         "status": "partial",
-        "basis": "카드 .charx/JSON 기본 자료와 CharX 내부 module.risum의 canonical lore/regex/trigger를 읽고 지원 표시 변환을 연결해요. 파일 24 MiB 등 현재 한도를 유지하며 원본 스크립트 전체 실행은 미완이에요.",
+        "basis": "카드 .charx/JSON 기본 자료와 CharX 내부 module.risum의 canonical lore/regex/trigger를 읽고 지원 표시 변환을 연결해요. 24 MiB 이하 파일은 원본을 보존하고 그보다 큰 파일은 대용량 경로로 받으며 원본 스크립트 전체 실행은 미완이에요.",
         "evidence": [
           "docs/RISU-IMPORT.md",
           "server/risu-import.ts",
@@ -71,7 +71,7 @@
       {
         "area": "extension-runtime",
         "status": "partial",
-        "basis": "user/model/before-turn/after-turn JavaScript·자기 자료 읽기·허가된 model.generate·응답 후 완성 본문 읽기·사용자 독립 모델 작업·명시적 상태 변환이 있어요. 일반 HTTP·Lua·공유 자료 권한·확장 설치 관리와 원본 스크립트 자동 이식은 미구현이에요.",
+        "basis": "user/model/before-turn/after-turn JavaScript·자기 자료 읽기·허가된 model.generate·응답 후 완성 본문 읽기·사용자 독립 모델 작업·명시적 상태 변환이 있어요. Risu Lua 콜백(onInput·onStart·onOutput·onButtonClick, listenEdit 4종)과 트리거 효과 일부(선언형 setvar·혼합 트리거·runLLM·extractRegex)도 같은 경계에서 실행해요. 일반 HTTP·공유 자료 권한·확장 설치 관리·나머지 트리거 효과·동적 화면은 미구현이에요.",
         "evidence": [
           "docs/EXTENSION-PROGRAMS.md",
           "docs/PACKAGE-BEHAVIOR.md",
@@ -104,18 +104,49 @@
       {
         "area": "template-variable-read",
         "status": "partial",
-        "basis": "기본 변수 선언과 지원 CBS 읽기/조건을 공통 AST로 가져와 본문·로어·시작문·프리셋·정규식에서 고정 profile 값을 공유해요. 저장된 공유 변수 쓰기와 Lua/트리거 전체 실행은 미완이에요.",
+        "basis": "기본 변수 선언과 지원 CBS 읽기/조건을 공통 AST로 가져와 본문·로어·시작문·프리셋·정규식에서 고정 profile 값을 공유해요. 변환할 수 없는 CBS는 compat.risuCbs 원문으로 보존해 예약 시점에 Risu 스냅샷 평가기로 평가하고, setvar류 쓰기는 영수증을 거쳐 공유 변수 변경 허용 아래 분기에 채택해요. 동적 상태창 전체 재현은 미완이에요.",
         "evidence": [
           "core/template-variables.ts",
           "server/risu-cbs.ts",
           "docs/RISU-IMPORT.md",
           "tests/risu-import.test.ts",
-          "project-plan/BETA-PLAN.md"
+          "project-plan/BETA-PLAN.md",
+          "core/risu-compat.ts",
+          "server/compat/risu/cbs.ts"
+        ]
+      },
+      {
+        "area": "lore-activation",
+        "status": "partial",
+        "basis": "Risu에서 가져온 로어는 키워드 활성화가 기본이며 @@ 활성화 지시문을 규칙으로 보존해 예약 시점에 한 번 실행하고 영수증으로 고정해요. 예산은 채팅 설정의 조회 로어 문자 한도이고 위치·삽입 지시문은 미지원 안내예요.",
+        "evidence": [
+          "docs/LORE-CONTEXT.md",
+          "server/compat/risu/lore-activation.ts",
+          "core/lore-activation.ts"
+        ]
+      },
+      {
+        "area": "plugin-import",
+        "status": "partial",
+        "basis": "플러그인 .js를 같은 가져오기 화면에서 모듈로 등록하고 훅·인자·저장소 세 축을 이벤트별 재실행 shim으로 연결해요. Provider Manager·LogPlus 실제 파일은 실행하지 않았고 제공자·MCP·음성·일반 HTTP API는 범위 밖이에요.",
+        "evidence": [
+          "docs/RISU-IMPORT.md",
+          "server/risu-plugin-adapter.ts",
+          "server/risu-plugin-import.ts"
+        ]
+      },
+      {
+        "area": "large-file-import",
+        "status": "partial",
+        "basis": "24 MiB를 넘는 카드·모듈은 staged 업로드로 256 MiB까지 받고 원본 사본 대신 이름·SHA-256 지문을 남겨요. 합성 70 MiB 컨테이너로 확인했고 실제 Merry 파일은 실행하지 않았어요.",
+        "evidence": [
+          "docs/RISU-IMPORT.md",
+          "tests/risu-import.test.ts"
         ]
       }
     ],
     "sampleLimitations": {
-      "merry": "고정 원본 140785373 bytes는 카드 입력 한도 24 MiB를 초과하므로 currentRisuImport missing을 유지해요.",
+      "merry": "고정 원본 140,785,373 bytes는 대용량 경로(256 MiB)로 받을 수 있지만 실제 파일은 사용자 자료라 실행하지 않았어요. currentRisuImport는 경로 존재를 뜻하는 partial이며 인수는 not-run이에요.",
       "originalModules": "라이트보드 3종 원본 CharX는 부분 등록·원본 보존을 확인했어요. 독립 .risum의 히든 스토리는 직접 파일 지원 대상에서 제외하며 기능은 다른 지원 형식으로 연결해요."
     },
     "acceptance": "모든 표본과 기능의 nativeAcceptance/userAcceptance는 not-run을 유지해요."
@@ -985,8 +1016,13 @@
       "dependencies": [],
       "scopeExclusions": [],
       "currentRisuImport": {
-        "status": "missing",
-        "basis": "현재 원본 직접 가져오기·선택형 호환 실행 경로는 구현 전이에요. native 기반 존재와 구분해요."
+        "status": "partial",
+        "basis": "플러그인 .js 가져오기 경로와 훅·인자·저장소 어댑터가 있어요. 실제 파일은 실행하지 않았고 제공자 등록·라우팅·인증 같은 제공자 어댑터 계열 기능은 현재 범위 밖이라 부분 이상으로 보지 않아요.",
+        "evidenceRefs": [
+          "docs/RISU-IMPORT.md",
+          "server/risu-plugin-adapter.ts",
+          "project-plan/BETA-PLAN.md"
+        ]
       },
       "nativeAcceptance": {
         "status": "not-run",
@@ -4625,7 +4661,11 @@
             }
           ]
         }
-      ]
+      ],
+      "baselineRisuImport": {
+        "status": "missing",
+        "basis": "현재 원본 직접 가져오기·선택형 호환 실행 경로는 구현 전이에요. native 기반 존재와 구분해요."
+      }
     },
     {
       "id": "hinano",
@@ -5878,8 +5918,13 @@
       "dependencies": [],
       "scopeExclusions": [],
       "currentRisuImport": {
-        "status": "missing",
-        "basis": "현재 원본 직접 가져오기·선택형 호환 실행 경로는 구현 전이에요. native 기반 존재와 구분해요."
+        "status": "partial",
+        "basis": "24 MiB 초과 파일을 받는 대용량 경로가 있어요. 실제 파일은 사용자 자료라 실행하지 않았고 Lua 40 section의 실행·전체 기능 인수는 미완이에요.",
+        "evidenceRefs": [
+          "docs/RISU-IMPORT.md",
+          "server/risu-import.ts",
+          "project-plan/BETA-PLAN.md"
+        ]
       },
       "nativeAcceptance": {
         "status": "not-run",
@@ -8160,7 +8205,11 @@
             }
           ]
         }
-      ]
+      ],
+      "baselineRisuImport": {
+        "status": "missing",
+        "basis": "현재 원본 직접 가져오기·선택형 호환 실행 경로는 구현 전이에요. native 기반 존재와 구분해요."
+      }
     },
     {
       "id": "logplus",
@@ -8199,8 +8248,13 @@
         "원본에 없는 PDF/PNG/Markdown/JSON 파일 출력, 전체 DB/분기 백업, 진단 로그, 일반 개인정보 자동 탐지, 설정 파일 import/export를 이 표본의 기존 기능이라고 추가하지 않아요."
       ],
       "currentRisuImport": {
-        "status": "missing",
-        "basis": "현재 원본 직접 가져오기·선택형 호환 실행 경로는 구현 전이에요. native 기반 존재와 구분해요."
+        "status": "partial",
+        "basis": "플러그인 .js 가져오기 경로와 훅·인자·저장소 어댑터가 있어요. 실제 파일은 실행하지 않았고 공유 HTML 출력·clipboard 같은 화면 기능은 미지원 API 안내로 남아요.",
+        "evidenceRefs": [
+          "docs/RISU-IMPORT.md",
+          "server/risu-plugin-adapter.ts",
+          "project-plan/BETA-PLAN.md"
+        ]
       },
       "nativeAcceptance": {
         "status": "not-run",
@@ -9334,7 +9388,11 @@
             }
           ]
         }
-      ]
+      ],
+      "baselineRisuImport": {
+        "status": "missing",
+        "basis": "현재 원본 직접 가져오기·선택형 호환 실행 경로는 구현 전이에요. native 기반 존재와 구분해요."
+      }
     },
     {
       "id": "lightboard",
