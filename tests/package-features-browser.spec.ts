@@ -9,6 +9,7 @@ import {
   type APIRequestContext,
   type Locator,
   type Page,
+  type Route,
   type TestInfo,
 } from '@playwright/test';
 import type { ContentPackage } from '../core/content-package.js';
@@ -480,15 +481,26 @@ test('CHATVARUI01 shared variable overrides save explicitly, restore defaults an
   await expect(restoredEditor).toHaveValue(localDraft);
 
   server = (await (await request.get(`/api/chats/${chat.id}/variables`)).json()) as typeof server;
-  const competing = await request.put(`/api/chats/${chat.id}/variables`, {
-    data: {
-      expectedRevision: server.revision,
-      expectedSourceHash: server.sourceHash,
-      idempotencyKey: `competing-${stamp}`,
-      values: { mood: 'remote' },
-    },
-  });
-  expect(competing.ok(), await competing.text()).toBe(true);
+  // The competing write lands only after the page has sent its own PUT. Writing it first would
+  // let the live event refresh the panel into conflict mode, disable the button and skip the 409.
+  let competingWrite: string | null = null;
+  const raceCompetingWrite = async (route: Route) => {
+    if (route.request().method() !== 'PUT' || competingWrite !== null) {
+      await route.continue();
+      return;
+    }
+    const competing = await request.put(`/api/chats/${chat.id}/variables`, {
+      data: {
+        expectedRevision: server.revision,
+        expectedSourceHash: server.sourceHash,
+        idempotencyKey: `competing-${stamp}`,
+        values: { mood: 'remote' },
+      },
+    });
+    competingWrite = competing.ok() ? 'ok' : await competing.text();
+    await route.continue();
+  };
+  await page.route(`**/api/chats/${chat.id}/variables`, raceCompetingWrite);
   const rejected = page.waitForResponse(
     (response) =>
       response.url().endsWith(`/api/chats/${chat.id}/variables`) &&
@@ -496,6 +508,8 @@ test('CHATVARUI01 shared variable overrides save explicitly, restore defaults an
   );
   await restoredVariables.getByRole('button', { name: '공유 변수 저장', exact: true }).click();
   expect((await rejected).status()).toBe(409);
+  expect(competingWrite).toBe('ok');
+  await page.unroute(`**/api/chats/${chat.id}/variables`, raceCompetingWrite);
   await expect(
     restoredVariables.getByText(
       '서버의 변수 개정이나 현재 원문이 바뀌었어요. 입력한 초안은 그대로 보존했어요.',
