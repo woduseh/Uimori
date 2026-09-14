@@ -17,6 +17,7 @@ export function moduleLoreEntries(lorebook: unknown) {
       'insertorder',
       'alwaysActive',
       'selective',
+      'useRegex',
       'folder',
       'enabled',
       'bookVersion',
@@ -36,23 +37,23 @@ export function moduleLoreEntries(lorebook: unknown) {
               .map((key: string) => key.trim())
               .filter(Boolean)
           : [],
+      // Module lore is already in Risu's database shape, so its activation fields map onto the card
+      // fields the lorebook conversion reads rather than into an extension bag nothing reads back.
+      secondary_keys:
+        typeof entry.secondkey === 'string'
+          ? entry.secondkey
+              .split(',')
+              .map((key: string) => key.trim())
+              .filter(Boolean)
+          : [],
       constant: entry.alwaysActive === true,
       enabled: entry.enabled !== false && entry.mode !== 'folder',
       selective: entry.selective === true,
+      use_regex: entry.useRegex === true,
       insertion_order: entry.insertorder,
-      ...(Object.keys(extra).length ||
-      (entry.mode && !['normal', 'folder'].includes(entry.mode)) ||
-      entry.secondkey ||
-      entry.folder
-        ? {
-            extensions: {
-              ...extra,
-              mode: entry.mode,
-              secondkey: entry.secondkey,
-              folder: entry.folder,
-            },
-          }
-        : {}),
+      ...(typeof entry.mode === 'string' ? { mode: entry.mode } : {}),
+      ...(typeof entry.folder === 'string' ? { folder: entry.folder } : {}),
+      ...(Object.keys(extra).length ? { extensions: extra } : {}),
     };
   });
 }

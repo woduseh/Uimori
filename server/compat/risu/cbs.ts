@@ -1,8 +1,8 @@
-import { createHash } from 'node:crypto';
 import {
   createRisuCbs,
   type RisuCbsDeps,
 } from '../../../third_party/risuai/cad8595a/cbs-parser.js';
+import { seededRandom, sha256 } from './entropy.js';
 import type { Database, LLMModel } from '../../../third_party/risuai/cad8595a/cbs-support.js';
 import type { Chat, Message, character } from '../../../third_party/risuai/cad8595a/types.js';
 import type { ContentPackage, PackageAttachment } from '../../../core/content-package.js';
@@ -113,22 +113,6 @@ export type RisuCompatContext = {
   package: ContentPackage;
   runId: string;
 };
-
-const sha256 = (value: string) => createHash('sha256').update(value, 'utf8').digest('hex');
-
-/**
- * mulberry32, seeded from the entry key. {{random}} and {{roll}} must give the same answer every time
- * this exact field of this exact run is evaluated, and a different one for the next run.
- */
-function seededRandom(seed: string): () => number {
-  let state = Number.parseInt(seed.slice(0, 8), 16) >>> 0;
-  return () => {
-    state = (state + 0x6d2b79f5) >>> 0;
-    let t = Math.imul(state ^ (state >>> 15), 1 | state);
-    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-}
 
 /** The end of the `{{...}}` token that starts at `start`, or -1 when it is never closed. */
 function tokenEnd(source: string, start: number): number {

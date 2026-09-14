@@ -375,6 +375,57 @@ test('module JSON registers a reusable module without a bot, chat or memory', as
   });
 });
 
+test('module lorebook keys, secondary keys and mode reach the preserved activation rule', () => {
+  const store = database();
+  // Module lore is already in Risu's database shape, so these fields are the entry's own, not
+  // extensions another frontend wrote.
+  const source = {
+    ...sourceOf({
+      type: 'risuModule',
+      module: {
+        name: 'Keyed module',
+        description: '',
+        lorebook: [
+          {
+            id: 'docks',
+            comment: 'Docks',
+            // Risu keeps `useRegex` only for a key written as a regex literal.
+            key: '/harbor/i',
+            useRegex: true,
+            content: 'The docks are loud.',
+            insertorder: 1,
+          },
+          {
+            id: 'weather',
+            comment: 'Weather',
+            key: 'storm',
+            secondkey: 'rain',
+            selective: true,
+            mode: 'child',
+            content: 'Rain follows the storm.',
+            insertorder: 2,
+          },
+        ],
+      },
+    }),
+    name: 'module.json',
+  };
+  const preview = prepareRisuImport({ source });
+  const result = applyRisuImport(store, {
+    source,
+    digest: preview.digest,
+    memoryIds: [],
+    allowPartial: true,
+    idempotencyKey: 'module-keyed',
+  });
+  const pkg = store.product.get<Content>('content', result.receipt.items[0].id).package!;
+  expect(pkg.loreActivation).toEqual({ mode: 'keyword' });
+  expect(pkg.lore.map((item) => item.activation)).toEqual([
+    { keys: '/harbor/i', regex: true },
+    { keys: 'storm', secondaryKeys: 'rain', selective: true, child: true },
+  ]);
+});
+
 test('module scripts remain explicit unsupported findings and module import cannot create memory', () => {
   const store = database();
   const source = sourceOf({
@@ -1150,22 +1201,31 @@ test('lore directives decide activation and never reach the model as prose', () 
     'Migrated body.',
   ]);
   expect(lore.Migrated.text).toBe(converted.at(-1));
+  // The keys travel with the entry so the import screen can say what turns it on.
+  expect(lore.Migrated.keys).toBe('harbor');
+  expect(lore.Plain.keys).toBeUndefined();
   const levels = Object.fromEntries(
     preview.findings.map((finding) => [finding.code, finding.level])
   );
   expect(levels['lore-not-activated']).toBe('warning');
+  // The keyword rules are carried now, so neither notice about dropping them is raised any more.
+  expect(levels['lore-keyword']).toBe('info');
+  expect(levels).not.toHaveProperty('lore-discovery');
+  expect(levels).not.toHaveProperty('lore-rules');
   expect(levels['lore-decorator-position']).toBe('unsupported');
   // One finding per decorator the lorebook carries, instead of one aggregate notice for all of them.
   expect(levels).not.toHaveProperty('lore-decorators');
+  // Only the decorators the keyword engine cannot apply are still reported; the ones it settles at
+  // reservation - the key, recursion and probability lines - carry no finding at all.
   expect(levels['lore-decorator:depth']).toBe('unsupported');
   expect(levels['lore-decorator:role']).toBe('unsupported');
-  expect(levels['lore-decorator:exclude_keys_all']).toBe('unsupported');
-  expect(levels['lore-decorator:recursive']).toBe('info');
+  expect(levels).not.toHaveProperty('lore-decorator:exclude_keys_all');
+  expect(levels).not.toHaveProperty('lore-decorator:recursive');
   expect(levels).not.toHaveProperty('lore-decorator:activate');
   expect(levels).not.toHaveProperty('lore-decorator:dont_activate');
   const depth = preview.findings.find((finding) => finding.code === 'lore-decorator:depth');
   expect(depth?.message).toContain('@@depth');
-  expect(depth?.message).toContain('지금은 적용하지 않아요');
+  expect(depth?.message).toContain('아직 적용하지 않아요');
   const unknown = preview.findings.find((finding) => finding.code === 'lore-decorator-unknown');
   expect(unknown?.level).toBe('unsupported');
   expect(unknown?.message).toContain('@@ACTIVATE');

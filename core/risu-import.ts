@@ -39,6 +39,8 @@ export type RisuImportPreview = {
     enabled: boolean;
     loading: 'pinned' | 'discoverable';
     memoryCandidate: boolean;
+    /** The preserved Risu activation keys, when the entry has any, so the screen can name them. */
+    keys?: string;
   }[];
   findings: RisuImportFinding[];
 };

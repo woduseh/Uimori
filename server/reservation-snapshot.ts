@@ -10,6 +10,7 @@ import { prepareRunBehavior } from './package-behavior-run.js';
 import { freezeLoreContext } from './lore-context.js';
 import { captureLogicalHistory, compileSnapshotPrompt } from './prompt-snapshot.js';
 import { prepareRisuCompatReceipt } from './compat/risu/cbs.js';
+import { prepareLoreActivationReceipt } from './compat/risu/lore-activation.js';
 import { hasPromptInputTransforms } from './prompt-transforms.js';
 import { chatVariableProfile } from './chat-variable-context.js';
 import { captureRunConversation } from './package-conversation.js';
@@ -106,6 +107,10 @@ export function freezeReservationSnapshot(
   if (options.purpose === 'run') {
     const risuCompat = prepareRisuCompatReceipt(frozen, options.runId);
     if (risuCompat) frozen = { ...frozen, risuCompat };
+    // The keyword scan reads the same frozen history and request, so it freezes here for the same
+    // reason: which lore a run sent must not change when the run is compiled again.
+    const loreActivation = prepareLoreActivationReceipt(frozen, options.runId);
+    if (loreActivation) frozen = { ...frozen, loreActivation };
   }
   if (
     options.purpose === 'run' &&

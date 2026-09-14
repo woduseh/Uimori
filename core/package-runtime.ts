@@ -49,6 +49,8 @@ export function compilePackageAttachment(
     behaviorUnavailable?: string;
     /** Frozen Risu CBS results for the fields this package declares, by field id. */
     compat?: Record<string, string>;
+    /** Activated lore ids frozen for this run; undefined = no decision, follow `loading`. */
+    loreActivation?: ReadonlySet<string>;
     /** Host-only shared budget for all optional instruction evaluations. */
     budget?: PromptBudget;
   }
@@ -124,18 +126,34 @@ export function compilePackageAttachment(
   const ordered = [...groups.values()].flatMap((group) =>
     [...group].sort((a, b) => (a.loreContext?.order ?? 0) - (b.loreContext?.order ?? 0))
   );
-  const resources = ordered.map((lore) => ({
-    ...resource(
-      `lore:${lore.id}`,
-      lore.title,
-      lore.description,
-      renderedText(`lore:${lore.id}`, lore.text, lore.template),
-      lore.loading,
-      'lore'
-    ),
-    ...(lore.loreContext ? { loreContext: structuredClone(lore.loreContext) } : {}),
-    ...(lore.relatedIds ? { relatedIds: lore.relatedIds.map((id) => `${prefix}:lore:${id}`) } : {}),
-  }));
+  // A keyword-mode package with a frozen decision does not offer its scanned lore for discovery: the
+  // run either sends an activated entry or leaves the entry out of this compilation entirely, so it is
+  // neither pinned, nor catalogued, nor readable by id. Without a decision - a preview, a path that
+  // compiles resources only - every entry keeps its own `loading`.
+  const decided =
+    pkg.loreActivation?.mode === 'keyword' && context.loreActivation !== undefined
+      ? context.loreActivation
+      : undefined;
+  const resources = ordered.flatMap((lore) => {
+    const scanned = decided !== undefined && lore.activation !== undefined;
+    if (scanned && !decided.has(lore.id)) return [];
+    return [
+      {
+        ...resource(
+          `lore:${lore.id}`,
+          lore.title,
+          lore.description,
+          renderedText(`lore:${lore.id}`, lore.text, lore.template),
+          scanned ? 'pinned' : lore.loading,
+          'lore'
+        ),
+        ...(lore.loreContext ? { loreContext: structuredClone(lore.loreContext) } : {}),
+        ...(lore.relatedIds
+          ? { relatedIds: lore.relatedIds.map((id) => `${prefix}:lore:${id}`) }
+          : {}),
+      },
+    ];
+  });
   if (pkg.body !== undefined)
     resources.unshift(
       resource(
