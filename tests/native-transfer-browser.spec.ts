@@ -362,7 +362,7 @@ test('NATIVEUI04 Risu module JSON registers a library module without creating a 
   await expect(dialog.getByRole('heading', { name: title, exact: true })).toBeVisible();
   await expect(dialog.locator('.risu-import-memory')).toHaveCount(0);
   await expect(
-    dialog.getByText('.risum 파일 직접 가져오기는 아직 지원하지 않아요.', { exact: true })
+    dialog.getByText('.risum 파일 직접 가져오기는 지원하지 않아요.', { exact: true })
   ).toBeVisible();
   const applied = page.waitForResponse(
     (response) =>
