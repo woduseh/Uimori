@@ -94,7 +94,7 @@ docker compose --env-file .env.self-host restart proxy
 
 ### 유지보수 모드
 
-업데이트 전후로 **새 저장·생성·가져오기만 잠시 멈추는** 유지보수 모드를 앱이 직접 제공해요. 상태 조회는 `GET /api/maintenance`, 전환은 `POST /api/maintenance`의 `{"status":"closed","reason":"update"}`·`{"status":"open"}`이에요. 접속 토큰이 필요한 다른 API와 같은 인증을 사용해요.
+업데이트 전후로 **새 저장·생성·가져오기만 잠시 멈추는** 유지보수 모드를 앱이 직접 제공해요. 설정의 **내보내기와 복원 → 유지보수 모드**에서 현재 상태를 보고 시작·재개할 수 있어요. 상태 조회는 `GET /api/maintenance`, 전환은 `POST /api/maintenance`의 `{"status":"closed","reason":"update"}`·`{"status":"open"}`이에요. 접속 토큰이 필요한 다른 API와 같은 인증을 사용해요.
 
 ```sh
 curl -sS -X POST https://story.example.com/api/maintenance \
