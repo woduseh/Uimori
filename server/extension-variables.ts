@@ -99,6 +99,30 @@ function granted(profile: ProfileSnapshot | undefined, ref: PackageAttachment) {
   );
 }
 
+/**
+ * The same captured-and-live grant pair `assertExtensionVariableWriteAccess` demands, for a writer
+ * that carries no program: a card's preserved Risu CBS asks for nothing and declares nothing, so the
+ * chat's own grant for that exact material revision is the only thing that admits its writes.
+ */
+export function hasExtensionVariableWriteGrant(
+  store: Store,
+  profile: ProfileSnapshot | undefined,
+  ref: PackageAttachment
+): boolean {
+  if (!granted(profile, ref)) return false;
+  const live = store.product.profile(profile!.chatId);
+  return (
+    granted(
+      {
+        ...profile!,
+        packageAttachments: live.packageAttachments,
+        extensionGrants: live.extensionGrants,
+      },
+      ref
+    ) === true
+  );
+}
+
 /** Frozen receipt admission used by archive readers; never checks today's live grants. */
 export function validateExtensionVariablePermission(
   mutation: ChatVariableMutation,

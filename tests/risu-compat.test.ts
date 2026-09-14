@@ -9,6 +9,7 @@ import {
   projectRisuCompatReceipt,
   risuCompatFields,
   risuCompatKey,
+  risuCompatRequestsVariableWrite,
   validateRisuCompatReceipt,
   type RisuCompatReceipt,
 } from '../core/risu-compat.js';
@@ -247,6 +248,24 @@ describe('receipt contract', () => {
       { fieldId: 'lore:city', text: 'LORE' },
       { fieldId: 'instruction:style', text: 'STYLE' },
     ]);
+  });
+
+  it('asks for the variable write grant only when a declared field calls a write function', () => {
+    expect(risuCompatRequestsVariableWrite(pkg('{{getvar::hp}} and {{calc::1+2}}'))).toBe(false);
+    const writing = pkg('{{getvar::hp}}', ['body', 'lore:city']);
+    writing.lore = [
+      { id: 'city', title: 'City', description: '', text: '{{setvar::hp::20}}', loading: 'pinned' },
+    ];
+    expect(risuCompatRequestsVariableWrite(writing)).toBe(true);
+  });
+
+  it('resolves a write name the way Risu does, and ignores an undeclared field', () => {
+    expect(risuCompatRequestsVariableWrite(pkg('{{ set_var :: hp :: 20 }}'))).toBe(true);
+    const undeclared = pkg('{{getvar::hp}}', ['body']);
+    undeclared.lore = [
+      { id: 'city', title: 'City', description: '', text: '{{addvar::hp::1}}', loading: 'pinned' },
+    ];
+    expect(risuCompatRequestsVariableWrite(undeclared)).toBe(false);
   });
 
   it('projects only the entries belonging to one attachment', () => {
