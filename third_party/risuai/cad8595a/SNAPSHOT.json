@@ -100,6 +100,16 @@
         "src/ts/util.ts": "c8caa9f92b7f7f07b9ada9b1869f0d557e67546ecd65d4246d55b0ae5561616e"
       },
       "modifications": "`convertCharbook` copied whole and exported, with `checkNullish` inlined, so the `@@` lines it prepends are byte-identical to Risu's; it still mutates the entries it is given. It reads no app state upstream, so nothing became a parameter. The decorator hook of `getLoreBook` becomes the pure `interpretLoreDecorators(content)`: every mutation of the activation loop's locals is recorded in a returned record instead, and the activation loop itself (key search, recursion, token budget, chat-variable reads and writes) is not copied. Hook return values (`return` vs `return false`) are kept exactly so the `@@@` fallback chain still works. One added guard: a bare `@@position` is rejected instead of throwing a TypeError. Type-checks under strict; no @ts-nocheck."
+    },
+    {
+      "path": "lore-activation.ts",
+      "license": "GPL-3.0-only",
+      "licenseFiles": ["LICENSE"],
+      "upstreamSha256": {
+        "src/ts/process/lorebook.svelte.ts": "e743418179eb53f96b4c7a45c7a9cea84c5c5a49e11c60152192102ff5b1a4e0",
+        "src/ts/storage/database.svelte.ts": "41b1f744ba21635e1ca5a09563c37c511b6e1fba3fb925bb4407cac41fc7b8d4"
+      },
+      "modifications": "`loadLoreBookV3Prompt` as the pure, synchronous `activateLore`: matching rules, query order, recursion, sort, greedy token filter and inject merge copied statement for statement, with every app-state read turned into a field of LoreActivationInput/LoreActivationDeps. The decorator switch is not re-copied; lorebook.ts's `interpretLoreDecorators` record is read back into the upstream locals. matchLog is not returned, so its `prompt` field and everything feeding it (db.username, msg.name, findCharacterbyId, char.name) is dropped; only `source` survives, as the input to the added `matchedBy`. setChatVar becomes `variableWrites`, the :637 console.log is dropped, and `index`/`matchedBy`/`omitted` are added. Type-checks under strict; no @ts-nocheck."
     }
   ]
 }
