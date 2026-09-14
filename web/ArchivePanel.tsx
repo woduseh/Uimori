@@ -3,6 +3,7 @@ import { api, saveDownload } from './api.js';
 import { IconButton } from './IconButton.js';
 import { CloseIcon, DownloadIcon, RefreshIcon, UploadIcon } from './ui-icons.js';
 import { ChatBackupImport } from './ChatBackupImport.js';
+import { MaintenanceControl } from './MaintenanceControl.js';
 
 type ImportStatus = 'loading' | 'allowed' | 'occupied' | 'failed';
 type ArchiveOperation = 'json' | 'sqlite' | 'import';
@@ -176,6 +177,7 @@ export function ArchivePanel({
         onDirtyChange={setChatBackupDirty}
         disabled={busy !== null || transcriptBusy}
       />
+      {expanded && <MaintenanceControl />}
       <section aria-label="백업 받기">
         <h3>백업 받기</h3>
         <div className="archive-backup-options">
