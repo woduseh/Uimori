@@ -1,4 +1,3 @@
-import { createHash } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
 import {
   RISU_PLUGIN_API_SUPPORT,
@@ -6,7 +5,8 @@ import {
   type RisuPluginArgument,
   type RisuPluginPreview,
 } from '../core/risu-plugin.js';
-import { fields, HttpError, record, text } from './request-validation.js';
+import { readImportEnvelope } from './import-envelope.js';
+import { HttpError, record } from './request-validation.js';
 
 const invalid = (): never => {
   throw new HttpError(400, 'RISU_PLUGIN_INVALID_FILE');
@@ -16,17 +16,14 @@ const MEMBER = /(?:^|[^\w$.])(?:risuai|Risuai)\s*\.\s*([A-Za-z_$][\w$]*)/gu;
 const DESTRUCTURED = /\{([^{}]{0,2000})\}\s*=\s*(?:await\s+)?(?:risuai|Risuai)\b/gu;
 
 export function readRisuPlugin(value: unknown): RisuPluginPreview {
-  const input = record(value);
-  fields(input, ['name', 'base64']);
-  const name = text(input.name, 'file name', 255);
-  if (!/\.js$/iu.test(name)) invalid();
   // A plugin never reaches the staged upload path: the client stages only above the far larger
   // import limit, so anything staged would exceed RISU_PLUGIN_MAX_BYTES and be refused here.
-  const base64 = text(input.base64, 'file bytes', Math.ceil(RISU_PLUGIN_MAX_BYTES / 3) * 4);
-  const bytes = Buffer.from(base64, 'base64');
-  if (bytes.toString('base64') !== base64) invalid();
-  if (!bytes.length || bytes.length > RISU_PLUGIN_MAX_BYTES)
-    throw new HttpError(413, 'RISU_PLUGIN_TOO_LARGE');
+  const { bytes, sha256 } = readImportEnvelope(value, {
+    maxBytes: RISU_PLUGIN_MAX_BYTES,
+    extensions: /\.js$/iu,
+    invalid: 'RISU_PLUGIN_INVALID_FILE',
+    tooLarge: 'RISU_PLUGIN_TOO_LARGE',
+  });
   const source = bytes.toString('utf8').replace(/^\uFEFF/u, '');
   if (source.includes('\u0000')) invalid();
   const findings: RisuPluginPreview['findings'] = [];
@@ -119,7 +116,7 @@ export function readRisuPlugin(value: unknown): RisuPluginPreview {
     unknownApis: unknownApis.slice(0, 200),
     findings,
     bytes: bytes.length,
-    sha256: createHash('sha256').update(bytes).digest('hex'),
+    sha256,
   };
 }
 

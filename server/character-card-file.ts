@@ -1,12 +1,12 @@
 import { crc32, inflateRawSync } from 'node:zlib';
-import { createHash } from 'node:crypto';
 import {
   RISU_IMPORT_MAX_BYTES,
   type RisuImportSource,
   type RisuImportStagedSource,
   type RisuImportKind,
 } from '../core/risu-import.js';
-import { fields, HttpError, record, text } from './request-validation.js';
+import { readImportEnvelope } from './import-envelope.js';
+import { HttpError, record } from './request-validation.js';
 import { moduleJsonDocument, moduleLoreEntries } from './risu-module-json.js';
 import { readEmbeddedRisuModule } from './risu-module-file.js';
 
@@ -117,26 +117,17 @@ export function readCharacterCard(
 ) {
   if (kind !== undefined && kind !== 'bot' && kind !== 'module')
     throw new HttpError(400, 'RISU_IMPORT_KIND');
-  const input = record(value);
-  const staged = Object.hasOwn(input, 'uploadId');
-  fields(input, staged ? ['name', 'uploadId'] : ['name', 'base64']);
-  const name = text(input.name, 'file name', 255);
-  let bytes: Buffer;
-  let source: RisuImportSource | RisuImportStagedSource;
-  if (staged) {
-    const uploadId = text(input.uploadId, 'upload ID', 100);
-    if (!readStaged) throw new HttpError(400, 'RISU_IMPORT_INVALID_FILE');
-    bytes = readStaged(uploadId);
-    if (bytes.length < 2) return invalid();
-    source = { name, uploadId };
-  } else {
-    const base64 = text(input.base64, 'file bytes', Math.ceil(RISU_IMPORT_MAX_BYTES / 3) * 4);
-    bytes = Buffer.from(base64, 'base64');
-    if (bytes.length > RISU_IMPORT_MAX_BYTES) throw new HttpError(413, 'RISU_IMPORT_TOO_LARGE');
-    if (bytes.toString('base64') !== base64 || bytes.length < 2) return invalid();
-    source = { name, base64 };
-  }
-  const hash = createHash('sha256').update(bytes).digest('hex');
+  const envelope = readImportEnvelope(value, {
+    maxBytes: RISU_IMPORT_MAX_BYTES,
+    // A card declares its format in its bytes, so every name the shared rule allows is read.
+    extensions: /./u,
+    invalid: 'RISU_IMPORT_INVALID_FILE',
+    tooLarge: 'RISU_IMPORT_TOO_LARGE',
+    minBytes: 2,
+    staged: readStaged,
+  });
+  const { name, bytes, sha256: hash } = envelope;
+  const source: RisuImportSource | RisuImportStagedSource = envelope.source;
   const zipped = /\.(?:charx|zip)$/iu.test(name) || bytes.readUInt16LE(0) === 0x4b50;
   let members = zipped ? cardZip(bytes) : new Map<string, () => Buffer>();
   const projectFiles = [...members.keys()].filter((path) => /(?:^|\/)module\.json$/u.test(path));
