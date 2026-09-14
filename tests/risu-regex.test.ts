@@ -39,3 +39,15 @@ test('unsupported actions and HTML remain findings rather than executable displa
   expect(result.findings).toHaveLength(examples.length);
   expect(result.findings.every((item) => item.level === 'unsupported')).toBe(true);
 });
+
+test('send-time stages and the no_end_nl action stay out of the display-only import', () => {
+  const result = importRisuDisplayRegex([
+    { type: 'editprocess', in: '.', out: 'sent before the request' },
+    { type: 'editdisplay', in: '.', out: 'trailing>', ableFlag: true, flag: 'g<no_end_nl>' },
+  ]);
+  expect(result.transforms).toEqual([]);
+  expect(result.findings.map((item) => item.code)).toEqual([
+    'regex-0-unsupported',
+    'regex-1-unsupported',
+  ]);
+});
