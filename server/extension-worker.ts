@@ -7,46 +7,47 @@ import {
   type QuickJSHandle,
 } from 'quickjs-emscripten-core';
 import { parentPort, workerData } from 'node:worker_threads';
+import type {
+  ExtensionGuestHostErrorCode,
+  ExtensionHostReply,
+  ExtensionWorkerInput,
+  ExtensionWorkerLimits,
+  ExtensionWorkerMessage,
+  ExtensionWorkerPhase,
+  ExtensionWorkerResultCode,
+} from './extension-worker-protocol.js';
 
 type SyncVariant = Extract<Parameters<typeof newVariant>[0], { type: 'sync' }>;
 const releaseVariant = variant as unknown as SyncVariant;
 const WASM_PAGES = 256;
 const WASM_BYTES = WASM_PAGES * 65_536;
-const QUICKJS_MEMORY_BYTES = 8 * 1024 * 1024;
-const QUICKJS_STACK_BYTES = 256 * 1024;
-const CPU_MS = 100;
-const MAX_JSON_BYTES = 128 * 1024;
-// Defence in depth behind core's EXTENSION_PROGRAM_MAX_SOURCE_BYTES, repeated as a literal because
-// the host also starts this worker as raw TypeScript, where Node cannot resolve core's specifiers.
-// tests/extension-runtime.test.ts pins this to the value core declares.
-const MAX_SOURCE_BYTES = 512 * 1024;
-const MAX_HOST_METHOD_CHARS = 80;
-const MAX_HOST_CALLS = 32;
-const MAX_HOST_PENDING = 8;
-const MAX_HOST_RESULT_BYTES = 512 * 1024;
-const HOST_ERROR_CODES = [
-  ...(workerData as WorkerInput).hostErrorCodes,
-  'BEHAVIOR_HOST_CALL_LIMIT',
-  'BEHAVIOR_HOST_PENDING_LIMIT',
+const LIMIT_KEYS: (keyof ExtensionWorkerLimits)[] = [
+  'cpuMs',
+  'guestJsonBytes',
+  'sourceBytes',
+  'hostMethodChars',
+  'hostCalls',
+  'hostPending',
+  'hostResultBytes',
+  'valueDepth',
+  'valueNodes',
+  'valueEntries',
+  'quickjsMemoryBytes',
+  'quickjsStackBytes',
+  'luaMemoryBytes',
 ];
-
-type WorkerInput = { source: string; inputJSON: string; hostErrorCodes: string[] };
-type WorkerResult =
-  | { type: 'result'; ok: true; json: string }
-  | { type: 'result'; ok: false; code: string };
-type WorkerHostCall = { type: 'host-call'; id: number; method: string; argsJson: string };
-type WorkerPhase = {
-  type: 'phase';
-  phase: 'active' | 'host-wait';
-  sequence: number;
-  hostIds: number[];
-};
-type HostReply =
-  | { type: 'host-result'; id: number; ok: true; json: string }
-  | { type: 'host-result'; id: number; ok: false; code: string };
+/** The runtime owns every bound; this worker refuses to start rather than invent a fallback. */
+function validLimits(value: unknown): value is ExtensionWorkerLimits {
+  if (!value || typeof value !== 'object') return false;
+  const limits = value as Record<string, unknown>;
+  return LIMIT_KEYS.every((key) => {
+    const limit = limits[key];
+    return typeof limit === 'number' && Number.isSafeInteger(limit) && limit > 0;
+  });
+}
 
 let replied = false;
-function reply(value: WorkerResult | WorkerHostCall | WorkerPhase) {
+function reply(value: ExtensionWorkerMessage) {
   if (value.type === 'result') {
     if (replied) return;
     replied = true;
@@ -65,7 +66,9 @@ function exactRecord(value: unknown, keys: string[]): value is Record<string, un
   );
 }
 
-const HARNESS = `(() => {
+/** Builds the in-guest harness. Every bound is interpolated from the runtime-owned limits. */
+function harnessSource(limits: ExtensionWorkerLimits, hostErrorCodes: string[]) {
+  return `(() => {
   'use strict';
   const array = Array.isArray;
   const finite = Number.isFinite;
@@ -86,7 +89,7 @@ const HARNESS = `(() => {
   const apply = Reflect.apply;
   const charCodeAt = String.prototype.charCodeAt;
   const ErrorCtor = Error;
-  const hostErrorCodes = new SetCtor(${JSON.stringify(HOST_ERROR_CODES)});
+  const hostErrorCodes = new SetCtor(${JSON.stringify(hostErrorCodes)});
   let hostCalls = 0;
   let hostPending = 0;
   let hostResultBytes = 0;
@@ -110,13 +113,13 @@ const HARNESS = `(() => {
           index++;
         } else bytes += 3;
       } else bytes += 3;
-      if (bytes > ${MAX_HOST_RESULT_BYTES}) return bytes;
+      if (bytes > ${limits.hostResultBytes}) return bytes;
     }
     return bytes;
   }
 
   function check(value, seen, depth, budget) {
-    if (depth > 32 || ++budget.nodes > 30000) throw hostError('BEHAVIOR_HOST_ARGUMENTS');
+    if (depth > ${limits.valueDepth} || ++budget.nodes > ${limits.valueNodes}) throw hostError('BEHAVIOR_HOST_ARGUMENTS');
     if (value === null || typeof value === 'string' || typeof value === 'boolean') return;
     if (typeof value === 'number') {
       if (!finite(value)) throw hostError('BEHAVIOR_HOST_ARGUMENTS');
@@ -128,7 +131,7 @@ const HARNESS = `(() => {
     const names = ownKeys(value);
     const props = descriptors(value);
     if (array(value)) {
-      if (getPrototypeOf(value) !== arrayPrototype || value.length > 2000)
+      if (getPrototypeOf(value) !== arrayPrototype || value.length > ${limits.valueEntries})
         throw hostError('BEHAVIOR_HOST_ARGUMENTS');
       if (names.some((key) => typeof key !== 'string'))
         throw hostError('BEHAVIOR_HOST_ARGUMENTS');
@@ -145,7 +148,7 @@ const HARNESS = `(() => {
     } else {
       if (getPrototypeOf(value) !== objectPrototype && getPrototypeOf(value) !== null)
         throw hostError('BEHAVIOR_HOST_ARGUMENTS');
-      if (names.length > 2000 || names.some((key) => typeof key !== 'string'))
+      if (names.length > ${limits.valueEntries} || names.some((key) => typeof key !== 'string'))
         throw hostError('BEHAVIOR_HOST_ARGUMENTS');
       for (const key of names) {
         const descriptor = props[key];
@@ -158,13 +161,13 @@ const HARNESS = `(() => {
   }
 
   async function hostCall(nativeCall, method, args) {
-    if (typeof method !== 'string' || !method.length || method.length > ${MAX_HOST_METHOD_CHARS})
+    if (typeof method !== 'string' || !method.length || method.length > ${limits.hostMethodChars})
       throw hostError('BEHAVIOR_HOST_ARGUMENTS');
-    if (++hostCalls > ${MAX_HOST_CALLS}) throw hostError('BEHAVIOR_HOST_CALL_LIMIT');
-    if (hostPending >= ${MAX_HOST_PENDING}) throw hostError('BEHAVIOR_HOST_PENDING_LIMIT');
+    if (++hostCalls > ${limits.hostCalls}) throw hostError('BEHAVIOR_HOST_CALL_LIMIT');
+    if (hostPending >= ${limits.hostPending}) throw hostError('BEHAVIOR_HOST_PENDING_LIMIT');
     check(args, new SetCtor(), 0, { nodes: 0 });
     const argsJson = stringify(args);
-    if (typeof argsJson !== 'string' || utf8Bytes(argsJson) > ${MAX_JSON_BYTES})
+    if (typeof argsJson !== 'string' || utf8Bytes(argsJson) > ${limits.guestJsonBytes})
       throw hostError('BEHAVIOR_HOST_ARGUMENTS');
     hostPending++;
     try {
@@ -172,7 +175,7 @@ const HARNESS = `(() => {
       if (typeof resultJson !== 'string') throw hostError('BEHAVIOR_HOST_CALL_FAILED');
       const bytes = utf8Bytes(resultJson);
       hostResultBytes += bytes;
-      if (bytes > ${MAX_JSON_BYTES} || hostResultBytes > ${MAX_HOST_RESULT_BYTES})
+      if (bytes > ${limits.guestJsonBytes} || hostResultBytes > ${limits.hostResultBytes})
         throw hostError('BEHAVIOR_HOST_RESULT_LIMIT');
       const result = parse(resultJson);
       check(result, new SetCtor(), 0, { nodes: 0 });
@@ -213,26 +216,36 @@ const HARNESS = `(() => {
       ) return 'V';
       check(value, new SetCtor(), 0, { nodes: 0 });
       const json = stringify(value);
-      if (typeof json !== 'string' || utf8Bytes(json) > ${MAX_JSON_BYTES}) return 'L';
+      if (typeof json !== 'string' || utf8Bytes(json) > ${limits.guestJsonBytes}) return 'L';
       return 'O' + json;
     } catch {
       return 'V';
     }
   };
 })()`;
+}
 
 async function run() {
-  const input = workerData as WorkerInput;
+  const input = workerData as ExtensionWorkerInput;
   if (
     !input ||
+    typeof input !== 'object' ||
+    !validLimits(input.limits) ||
     typeof input.source !== 'string' ||
     typeof input.inputJSON !== 'string' ||
-    Buffer.byteLength(input.source) > MAX_SOURCE_BYTES ||
-    Buffer.byteLength(input.inputJSON) > MAX_JSON_BYTES
+    !Array.isArray(input.hostErrorCodes) ||
+    Buffer.byteLength(input.source) > input.limits.sourceBytes ||
+    Buffer.byteLength(input.inputJSON) > input.limits.guestJsonBytes
   ) {
     reply({ type: 'result', ok: false, code: 'BEHAVIOR_PROGRAM_INPUT_SIZE' });
     return;
   }
+  const limits = input.limits;
+  const guestHostErrorCodes: ExtensionGuestHostErrorCode[] = [
+    'BEHAVIOR_HOST_CALL_LIMIT',
+    'BEHAVIOR_HOST_PENDING_LIMIT',
+  ];
+  const hostErrorCodes = [...input.hostErrorCodes, ...guestHostErrorCodes];
 
   const memory = new WebAssembly.Memory({ initial: WASM_PAGES, maximum: WASM_PAGES });
   const quickjs = await newQuickJSWASMModuleFromVariant(
@@ -248,12 +261,12 @@ async function run() {
   const runtime = quickjs.newRuntime({
     interruptHandler: () => {
       if (!cpuActive) return false;
-      if (cpuUsed + performance.now() - cpuStarted < CPU_MS) return false;
+      if (cpuUsed + performance.now() - cpuStarted < limits.cpuMs) return false;
       cpuTimedOut = true;
       return true;
     },
-    maxStackSizeBytes: QUICKJS_STACK_BYTES,
-    memoryLimitBytes: QUICKJS_MEMORY_BYTES,
+    maxStackSizeBytes: limits.quickjsStackBytes,
+    memoryLimitBytes: limits.quickjsMemoryBytes,
   });
   runtime.removeModuleLoader();
   const context = runtime.newContext({
@@ -274,13 +287,13 @@ async function run() {
   let json: QuickJSHandle | undefined;
   let nativeHostCall: QuickJSHandle | undefined;
   let promise: QuickJSHandle | undefined;
-  let fatalCode: string | undefined;
+  let fatalCode: ExtensionWorkerResultCode | undefined;
   let wake: (() => void) | undefined;
   let hostResultBytes = 0;
   const hostPending = new Map<number, QuickJSDeferredPromise>();
-  let phase: 'active' | 'host-wait' = 'active';
+  let phase: ExtensionWorkerPhase = 'active';
   let phaseSequence = 0;
-  const enterPhase = (next: 'active' | 'host-wait') => {
+  const enterPhase = (next: ExtensionWorkerPhase) => {
     if (phase === next) return;
     phase = next;
     reply({
@@ -308,7 +321,7 @@ async function run() {
       Number.isSafeInteger(message.id) &&
       Number(message.id) >= 1
     ) {
-      const response = message as unknown as Extract<HostReply, { ok: true }>;
+      const response = message as unknown as Extract<ExtensionHostReply, { ok: true }>;
       const deferred = hostPending.get(response.id);
       if (!deferred) {
         protocolFailure();
@@ -317,8 +330,8 @@ async function run() {
       hostPending.delete(response.id);
       if (
         typeof response.json !== 'string' ||
-        Buffer.byteLength(response.json) > MAX_JSON_BYTES ||
-        (hostResultBytes += Buffer.byteLength(response.json)) > MAX_HOST_RESULT_BYTES
+        Buffer.byteLength(response.json) > limits.guestJsonBytes ||
+        (hostResultBytes += Buffer.byteLength(response.json)) > limits.hostResultBytes
       ) {
         protocolFailure();
         return;
@@ -337,14 +350,14 @@ async function run() {
       Number.isSafeInteger(message.id) &&
       Number(message.id) >= 1
     ) {
-      const response = message as unknown as Extract<HostReply, { ok: false }>;
+      const response = message as unknown as Extract<ExtensionHostReply, { ok: false }>;
       const deferred = hostPending.get(response.id);
       if (!deferred) {
         protocolFailure();
         return;
       }
       hostPending.delete(response.id);
-      if (typeof response.code !== 'string' || !HOST_ERROR_CODES.includes(response.code)) {
+      if (typeof response.code !== 'string' || !hostErrorCodes.includes(response.code)) {
         protocolFailure();
         return;
       }
@@ -380,7 +393,10 @@ async function run() {
     }
     hardened.value.dispose();
 
-    const harnessResult = context.evalCode(HARNESS, 'uimori-harness.js');
+    const harnessResult = context.evalCode(
+      harnessSource(limits, hostErrorCodes),
+      'uimori-harness.js'
+    );
     if (harnessResult.error) {
       harnessResult.error.dispose();
       reply({ type: 'result', ok: false, code: 'BEHAVIOR_PROGRAM_RUNTIME_FAILED' });
@@ -410,8 +426,8 @@ async function run() {
       if (
         context.typeof(methodHandle) !== 'string' ||
         context.typeof(argsHandle) !== 'string' ||
-        hostPending.size >= MAX_HOST_PENDING ||
-        nextHostId >= MAX_HOST_CALLS
+        hostPending.size >= limits.hostPending ||
+        nextHostId >= limits.hostCalls
       ) {
         const rejected = context.newPromise();
         const error = context.newError('BEHAVIOR_HOST_CALL_FAILED');
@@ -423,8 +439,8 @@ async function run() {
       const argsJson = context.getString(argsHandle);
       if (
         !method.length ||
-        method.length > MAX_HOST_METHOD_CHARS ||
-        Buffer.byteLength(argsJson) > MAX_JSON_BYTES
+        method.length > limits.hostMethodChars ||
+        Buffer.byteLength(argsJson) > limits.guestJsonBytes
       ) {
         const rejected = context.newPromise();
         const error = context.newError('BEHAVIOR_HOST_CALL_FAILED');
@@ -474,7 +490,7 @@ async function run() {
         const lengthHandle = context.getProp(state.value, 'length');
         const length = context.getNumber(lengthHandle);
         lengthHandle.dispose();
-        if (!Number.isSafeInteger(length) || length < 1 || length > MAX_JSON_BYTES + 1) {
+        if (!Number.isSafeInteger(length) || length < 1 || length > limits.guestJsonBytes + 1) {
           state.value.dispose();
           fatalCode = 'BEHAVIOR_PROGRAM_OUTPUT_SIZE';
           break;

@@ -1,18 +1,37 @@
 import { LuaFactory, LuaLibraries, LuaReturn, LuaType } from 'wasmoon';
 import { parentPort, workerData } from 'node:worker_threads';
+import type {
+  ExtensionHostReply,
+  ExtensionWorkerInput,
+  ExtensionWorkerLimits,
+  ExtensionWorkerPhase,
+  ExtensionWorkerResultCode,
+} from './extension-worker-protocol.js';
 
-const MAX_JSON_BYTES = 128 * 1024;
-// Defence in depth behind core's EXTENSION_PROGRAM_MAX_SOURCE_BYTES, repeated as a literal because
-// the host also starts this worker as raw TypeScript, where Node cannot resolve core's specifiers.
-// tests/extension-runtime.test.ts pins this to the value core declares.
-const MAX_SOURCE_BYTES = 512 * 1024;
-const MAX_HOST_RESULT_BYTES = 512 * 1024;
-const LUA_MEMORY_BYTES = 8 * 1024 * 1024;
-const CPU_MS = 100;
-type Input = { source: string; inputJSON: string; hostErrorCodes: string[] };
-type HostReply =
-  | { type: 'host-result'; id: number; ok: true; json: string }
-  | { type: 'host-result'; id: number; ok: false; code: string };
+const LIMIT_KEYS: (keyof ExtensionWorkerLimits)[] = [
+  'cpuMs',
+  'guestJsonBytes',
+  'sourceBytes',
+  'hostMethodChars',
+  'hostCalls',
+  'hostPending',
+  'hostResultBytes',
+  'valueDepth',
+  'valueNodes',
+  'valueEntries',
+  'quickjsMemoryBytes',
+  'quickjsStackBytes',
+  'luaMemoryBytes',
+];
+/** The runtime owns every bound; this worker refuses to start rather than invent a fallback. */
+function validLimits(value: unknown): value is ExtensionWorkerLimits {
+  if (!value || typeof value !== 'object') return false;
+  const limits = value as Record<string, unknown>;
+  return LIMIT_KEYS.every((key) => {
+    const limit = limits[key];
+    return typeof limit === 'number' && Number.isSafeInteger(limit) && limit > 0;
+  });
+}
 
 // wasmoon 1.16.0 does not expose Emscripten instantiate options. Its shipped memory
 // section declares 256 initial / 32768 maximum pages. Restrict that declaration
@@ -83,7 +102,9 @@ async function createEngine() {
 
 // Original, private Lua codec. JSON crosses the engine boundary only as strings;
 // Wasmoon's getValue/assertOk/run helpers must never inspect guest objects/errors.
-const HARNESS = String.raw`
+// Every bound below is interpolated from the runtime-owned limits.
+function harnessSource(limits: ExtensionWorkerLimits) {
+  return String.raw`
 local source, inputJSON = ...
 local type, next, rawget, rawset = type, next, rawget, rawset
 local getmetatable, setmetatable = getmetatable, setmetatable
@@ -105,11 +126,11 @@ local function encode(value)
   local chunks, size, nodes, seen = {}, 0, 0, {}
   local function emit(text)
     size = size + #text
-    if size > 131072 then error('JSON_SIZE', 0) end
+    if size > ${limits.guestJsonBytes} then error('JSON_SIZE', 0) end
     chunks[#chunks + 1] = text
   end
   local function quote(text)
-    if #text > 131072 - size then error('JSON_SIZE', 0) end
+    if #text > ${limits.guestJsonBytes} - size then error('JSON_SIZE', 0) end
     emit('"')
     for _, code in utfcodes(text, true) do
       if code == 34 then emit('\\"')
@@ -123,7 +144,7 @@ local function encode(value)
   local visit
   visit = function(item, depth)
     nodes = nodes + 1
-    if depth > 32 or nodes > 30000 then error('JSON_VALUE', 0) end
+    if depth > ${limits.valueDepth} or nodes > ${limits.valueNodes} then error('JSON_VALUE', 0) end
     local kind = type(item)
     if item == null then emit('null')
     elseif kind == 'string' then quote(item)
@@ -137,7 +158,7 @@ local function encode(value)
       local count, maximum, numeric = 0, 0, true
       for key in next, item do
         count = count + 1
-        if count > 2000 then error('JSON_VALUE', 0) end
+        if count > ${limits.valueEntries} then error('JSON_VALUE', 0) end
         if type(key) ~= 'number' or key < 1 or key ~= floor(key) then numeric = false
         elseif key > maximum then maximum = key end
       end
@@ -171,7 +192,7 @@ local function encode(value)
   return concat(chunks)
 end
 local function decode(text)
-  if type(text) ~= 'string' or #text > 131072 then error('JSON_VALUE', 0) end
+  if type(text) ~= 'string' or #text > ${limits.guestJsonBytes} then error('JSON_VALUE', 0) end
   local at, nodes = 1, 0
   local function bad() error('JSON_VALUE', 0) end
   local function ws()
@@ -222,7 +243,7 @@ local function decode(text)
   local parse
   parse = function(depth)
     ws(); nodes = nodes + 1
-    if depth > 32 or nodes > 30000 then bad() end
+    if depth > ${limits.valueDepth} or nodes > ${limits.valueNodes} then bad() end
     local c = sub(text, at, at)
     if c == '"' then return str()
     elseif c == '{' or c == '[' then
@@ -234,7 +255,7 @@ local function decode(text)
       local count = 0
       while true do
         count = count + 1
-        if count > 2000 then bad() end
+        if count > ${limits.valueEntries} then bad() end
         local key = count
         if not isarray then
           if sub(text, at, at) ~= '"' then bad() end
@@ -284,15 +305,15 @@ local api = decode(inputJSON)
 local calls, resultBytes = 0, 0
 api.json = {encode=encode, decode=decode, null=null, object=object, array=array}
 api.host = {call=function(method, args)
-  if type(method) ~= 'string' or #method == 0 or #method > 80 then error('BEHAVIOR_HOST_ARGUMENTS', 0) end
+  if type(method) ~= 'string' or #method == 0 or #method > ${limits.hostMethodChars} then error('BEHAVIOR_HOST_ARGUMENTS', 0) end
   calls = calls + 1
-  if calls > 32 then error('BEHAVIOR_HOST_CALL_LIMIT', 0) end
+  if calls > ${limits.hostCalls} then error('BEHAVIOR_HOST_CALL_LIMIT', 0) end
   local ok, argsJSON = pcall(encode, args)
   if not ok then error('BEHAVIOR_HOST_ARGUMENTS', 0) end
   local success, text = yield(method, argsJSON)
   if not success then error(text, 0) end
   resultBytes = resultBytes + #text
-  if #text > 131072 or resultBytes > 524288 then error('BEHAVIOR_HOST_RESULT_LIMIT', 0) end
+  if #text > ${limits.guestJsonBytes} or resultBytes > ${limits.hostResultBytes} then error('BEHAVIOR_HOST_RESULT_LIMIT', 0) end
   return decode(text)
 end}
 local env = {
@@ -331,27 +352,32 @@ local valid, encoded = pcall(encode, value)
 if not valid then return encoded == 'JSON_SIZE' and 'L' or 'V' end
 return 'O' .. encoded
 `;
+}
 
 async function run() {
-  const input = workerData as Input;
+  const input = workerData as ExtensionWorkerInput;
   const port = parentPort;
   if (!port) return;
-  const fail = (code: string) => port.postMessage({ type: 'result', ok: false, code });
+  const fail = (code: ExtensionWorkerResultCode) =>
+    port.postMessage({ type: 'result', ok: false, code });
   if (
     !input ||
+    typeof input !== 'object' ||
+    !validLimits(input.limits) ||
     typeof input.source !== 'string' ||
     typeof input.inputJSON !== 'string' ||
-    Buffer.byteLength(input.source) > MAX_SOURCE_BYTES ||
-    Buffer.byteLength(input.inputJSON) > MAX_JSON_BYTES ||
+    Buffer.byteLength(input.source) > input.limits.sourceBytes ||
+    Buffer.byteLength(input.inputJSON) > input.limits.guestJsonBytes ||
     !Array.isArray(input.hostErrorCodes)
   ) {
     fail('BEHAVIOR_PROGRAM_INPUT_SIZE');
     return;
   }
+  const limits = input.limits;
   const engine = await createEngine();
   const global = engine.global;
   const lua = global.lua;
-  global.setMemoryMax(LUA_MEMORY_BYTES);
+  global.setMemoryMax(limits.luaMemoryBytes);
   for (const library of [
     LuaLibraries.Base,
     LuaLibraries.Coroutine,
@@ -366,7 +392,7 @@ async function run() {
   // The engine opens JS userdata metatables internally but no instance, function,
   // proxy, object, or global from that bridge is passed into this guest sandbox.
   const thread = global.newThread();
-  let cpuRemaining = CPU_MS;
+  let cpuRemaining = limits.cpuMs;
   let deadline = 0;
   let timedOut = false;
   const hook = lua.module.addFunction((state: number) => {
@@ -377,14 +403,14 @@ async function run() {
     }
   }, 'vii');
   lua.lua_sethook(thread.address, hook, 8, 1000);
-  thread.loadString(HARNESS, 'uimori-lua-harness');
+  thread.loadString(harnessSource(limits), 'uimori-lua-harness');
   thread.pushValue(input.source);
   thread.pushValue(input.inputJSON);
   let args = 2;
   let phaseSequence = 0;
   let hostId = 0;
   let hostResultBytes = 0;
-  const phase = (value: 'active' | 'host-wait', hostIds: number[]) =>
+  const phase = (value: ExtensionWorkerPhase, hostIds: number[]) =>
     port.postMessage({ type: 'phase', phase: value, sequence: ++phaseSequence, hostIds });
   while (true) {
     phase('active', []);
@@ -412,7 +438,7 @@ async function run() {
     };
     if (status.result === LuaReturn.Ok) {
       if (status.resultCount !== 1) throw new Error('LUA_PROTOCOL');
-      const result = stringAt(-1, MAX_JSON_BYTES + 1);
+      const result = stringAt(-1, limits.guestJsonBytes + 1);
       if (result.startsWith('O'))
         port.postMessage({ type: 'result', ok: true, json: result.slice(1) });
       else
@@ -425,13 +451,13 @@ async function run() {
         );
       return;
     }
-    if (status.resultCount !== 2 || ++hostId > 32) throw new Error('LUA_PROTOCOL');
-    const method = stringAt(-2, 80);
-    const argsJson = stringAt(-1, MAX_JSON_BYTES);
+    if (status.resultCount !== 2 || ++hostId > limits.hostCalls) throw new Error('LUA_PROTOCOL');
+    const method = stringAt(-2, limits.hostMethodChars);
+    const argsJson = stringAt(-1, limits.guestJsonBytes);
     thread.pop(2);
     const id = hostId;
-    const response = new Promise<HostReply>((resolve, reject) => {
-      port.once('message', (value: HostReply) => {
+    const response = new Promise<ExtensionHostReply>((resolve, reject) => {
+      port.once('message', (value: ExtensionHostReply) => {
         if (
           !value ||
           value.type !== 'host-result' ||
@@ -449,8 +475,8 @@ async function run() {
       if (typeof result.json !== 'string') throw new Error('LUA_PROTOCOL');
       hostResultBytes += Buffer.byteLength(result.json);
       if (
-        Buffer.byteLength(result.json) > MAX_JSON_BYTES ||
-        hostResultBytes > MAX_HOST_RESULT_BYTES
+        Buffer.byteLength(result.json) > limits.guestJsonBytes ||
+        hostResultBytes > limits.hostResultBytes
       ) {
         thread.pushValue(false);
         thread.pushValue('BEHAVIOR_HOST_RESULT_LIMIT');
