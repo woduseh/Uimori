@@ -2,15 +2,17 @@
 
 구현은 `server/schema-migrations.ts`, DB 시작 경계는 `server/store.ts`예요. 베타의 보존 원칙은 [방향 결정](DECISIONS-2026-09-12-BETA.md)을 따르고 일반 설치자의 Update·사전 백업·컨테이너 전환·복구는 [베타 계획](../project-plan/BETA-PLAN.md)의 후속 범위예요.
 
-## 현재 버전과 지원 경로
+## 현재 버전
 
-| 구분 | 현재 버전 | 의미 |
-| --- | --- | --- |
-| 앱 | 0.0.1 | 베타 준비 중인 개발 버전 |
-| SQLite DB | 20 | 버전별 migration 이력, 자료 이동 영수증·사용자 확장 작업·분기 공유 변수·유지보수 상태 |
-| 전체 JSON archive | 15 | DB 내부 migration 이력과 독립인 기존 작품 교환 구조 |
-| 채팅 전체 백업 | 1 | `uimori-chat-backup` 공개 교환 형식 |
-| 자료 파일 이동 | 1 | `uimori-native-transfer` 공개 교환 형식 |
+| 구분 | 현재 버전 | 소유 코드 | 의미 |
+| --- | --- | --- | --- |
+| 앱 | 0.0.1 | `package.json` | 베타 준비 중인 개발 버전 |
+| SQLite DB | 20 | `server/schema-migrations.ts`의 `DATABASE_SCHEMA_VERSION` | 버전별 migration 이력, 자료 이동 영수증·사용자 확장 작업·분기 공유 변수·유지보수 상태 |
+| 전체 JSON archive | 15 | `server/product-store.ts` | DB 내부 migration 이력과 독립인 기존 작품 교환 구조 |
+| 채팅 전체 백업 | 1 | `core/chat-backup.ts`의 `CHAT_BACKUP_VERSION` | `uimori-chat-backup` 공개 교환 형식 |
+| 자료 파일 이동 | 1 | `core/native-transfer.ts`의 `NATIVE_TRANSFER_VERSION` | `uimori-native-transfer` 공개 교환 형식 |
+
+지원하는 DB migration 범위는 **15→20**이에요. 이 표가 프로젝트의 유일한 현재 버전 선언이며, 다른 문서는 숫자를 다시 적지 않고 이 절을 링크해요.
 
 빈 DB는 기존 자료 구조를 초기화하고 같은 migration 경로로 v20에 도달해요. 고정된 15→16 단계는 알려진 삽화/구성 표와 `helper_tasks.started_at`의 누락만 보충해요. 16→17 단계는 `native_transfer_receipts`와 전체 요청 키 UNIQUE 제약을 추가해요. 17→18 단계는 `package_extension_operations`와 `package_extension_operation_attempts`를 추가해 사용자 확장 작업과 기존 attempt의 귀속을 보존해요. 18→19 단계는 `chat_variable_states`·`chat_variable_journal`·`chat_variable_outputs`를 추가해 분기 공유 변수·쓰기 영수증·source 시점 상태를 보존해요. 19→20 단계는 [유지보수 상태](SELF-HOST.md#유지보수-모드)를 보관하는 `maintenance` 한 행 표를 추가해요. 이전 migration의 SQL·기본값은 변경하지 않아요. 기존 행·원문·이미지·상태·난수·snapshot은 바꾸지 않으며 기본 변수 선언을 새 상태 표로 복사하지 않아요. 정상 v20을 다시 열 때는 migration이나 기본값 설치를 반복하지 않아요.
 
