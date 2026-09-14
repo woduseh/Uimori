@@ -54,7 +54,7 @@ import { packageImageRoutes } from './package-images.js';
 import { nativeTransferRoutes } from './native-transfer.js';
 import { risuImportRoutes } from './risu-import.js';
 import { pruneUploads, uploadRoutes } from './uploads.js';
-import { admissionOpen, maintenanceRoutes } from './maintenance.js';
+import { admissionOpen, maintenanceRoutes, maintenanceStatus } from './maintenance.js';
 import { risuPresetImportRoutes } from './risu-preset-import.js';
 import { NativeTransferError } from '../core/native-transfer-validation.js';
 import { diagnosticReportRoutes } from './diagnostic-report.js';
@@ -1076,6 +1076,7 @@ export async function createApp(options: AppOptions): Promise<App> {
     track,
   });
   const session = productRoutes(app, store, {
+    maintenance: () => maintenanceStatus(store, forcedClosed),
     extensionOperations,
     credentials,
     codex,

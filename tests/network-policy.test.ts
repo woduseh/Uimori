@@ -142,7 +142,7 @@ describe('self-host network policy', () => {
   it('enforces policy on actual session/data routes and never trusts forwarded host or protocol', async () => {
     const app = await fixture();
     const headers = { host: 'story.example.test', origin: publicOrigin };
-    expect((await app.inject({ url: '/api/session', headers })).json()).toEqual({
+    expect((await app.inject({ url: '/api/session', headers })).json()).toMatchObject({
       required: true,
       authenticated: false,
     });

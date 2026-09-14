@@ -29,6 +29,7 @@ import {
 } from '../core/product.js';
 import { providerOriginApproval } from '../core/provider-origin-policy.js';
 import { assertLibraryVisible, libraryDeletionRoutes } from './library-deletion.js';
+import type { MaintenanceStatus } from './maintenance.js';
 
 export function productRoutes(
   app: FastifyInstance,
@@ -43,6 +44,8 @@ export function productRoutes(
     onAuthChanged?: () => void;
     onChatDeleted?: (chatId: string) => void;
     extensionOperations?: ExtensionOperationController;
+    /** The maintenance gate travels with the session read, so no surface polls for it. */
+    maintenance?: () => MaintenanceStatus;
   }
 ) {
   const product = store.product;
@@ -98,9 +101,11 @@ export function productRoutes(
       throw new HttpError(401, 'Authentication required');
   });
   app.get('/api/session', async (request, reply) =>
-    reply
-      .header('Cache-Control', 'no-store')
-      .send({ required: sessions.required, authenticated: authenticated(request.headers.cookie) })
+    reply.header('Cache-Control', 'no-store').send({
+      required: sessions.required,
+      authenticated: authenticated(request.headers.cookie),
+      ...(options.maintenance ? { maintenance: options.maintenance() } : {}),
+    })
   );
   app.post('/api/session', async (request, reply) => {
     reply.header('Cache-Control', 'no-store');
@@ -112,7 +117,11 @@ export function productRoutes(
       const session = sessions.login(value);
       if (session.revoked) options.onAuthChanged?.();
       reply.header('Set-Cookie', session.cookie);
-      return { required: sessions.required, authenticated: true };
+      return {
+        required: sessions.required,
+        authenticated: true,
+        ...(options.maintenance ? { maintenance: options.maintenance() } : {}),
+      };
     } catch (error) {
       if (error instanceof AccessSessionRateLimitError)
         reply.header('Retry-After', String(error.retryAfterSeconds));

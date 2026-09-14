@@ -1,7 +1,13 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { api, ApiError, sessionRequiredEvent } from './api.js';
+import {
+  api,
+  ApiError,
+  rememberMaintenance,
+  sessionRequiredEvent,
+  type MaintenanceStatus,
+} from './api.js';
 
-type Session = { required: boolean; authenticated: boolean };
+type Session = { required: boolean; authenticated: boolean; maintenance?: MaintenanceStatus };
 
 export function SessionGate({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
@@ -17,6 +23,7 @@ export function SessionGate({ children }: { children: ReactNode }) {
       const expected = ++revision.current;
       try {
         const next = await api<Session>('/session');
+        rememberMaintenance(next.maintenance);
         if (alive && revision.current === expected) {
           setSession(next);
           setError(
@@ -77,7 +84,9 @@ export function SessionGate({ children }: { children: ReactNode }) {
             try {
               await api('/session', { token });
               setToken('');
-              setSession(await api<Session>('/session'));
+              const next = await api<Session>('/session');
+              rememberMaintenance(next.maintenance);
+              setSession(next);
             } catch (error) {
               setToken('');
               setError(

@@ -34,6 +34,10 @@ test('a closed gate blocks new writes, keeps reads and cancellation, and survive
   const chat = createFixtureChat(app.store, 'Maintenance fixture', 'calm');
   const opened = await app.inject({ method: 'GET', url: '/api/maintenance' });
   expect(opened.json()).toMatchObject({ status: 'open', epoch: 0, forcedClosed: false });
+  // The session read carries the same gate, so no screen polls while the app is open.
+  expect((await app.inject({ method: 'GET', url: '/api/session' })).json()).toMatchObject({
+    maintenance: { status: 'open', epoch: 0, forcedClosed: false },
+  });
 
   const closed = await app.inject({
     method: 'POST',
@@ -42,6 +46,13 @@ test('a closed gate blocks new writes, keeps reads and cancellation, and survive
   });
   expect(closed.json()).toMatchObject({ status: 'closed', epoch: 1, reason: 'update' });
 
+  expect((await app.inject({ method: 'GET', url: '/api/session' })).json().maintenance).toEqual({
+    status: 'closed',
+    epoch: 1,
+    reason: 'update',
+    updatedAt: expect.any(String),
+    forcedClosed: false,
+  });
   const write = await app.inject({
     method: 'POST',
     url: `/api/chats/${chat.id}/runs`,

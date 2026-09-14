@@ -70,6 +70,18 @@ export function setMaintenance(
   });
 }
 
+export type MaintenanceStatus = MaintenanceState & { forcedClosed: boolean };
+/** The public shape every surface reads: the gate plus whether a boot flag forced it. */
+export function maintenanceStatus(store: Store, forcedClosed: boolean): MaintenanceStatus {
+  const current = maintenanceState(store);
+  return {
+    ...(forcedClosed && current.status === 'open'
+      ? { ...current, status: 'closed' as const, reason: 'MAINTENANCE_BOOT' }
+      : current),
+    forcedClosed,
+  };
+}
+
 /** One admission answer for HTTP writes, worker claims and new external work. */
 export const admissionOpen = (store: Store, forcedClosed: boolean): boolean =>
   !forcedClosed && maintenanceState(store).status === 'open';
@@ -79,12 +91,7 @@ export function maintenanceRoutes(
   store: Store,
   options: { forcedClosed: boolean; activeWork: () => number }
 ) {
-  const state = () => {
-    const current = maintenanceState(store);
-    return options.forcedClosed && current.status === 'open'
-      ? { ...current, status: 'closed' as const, reason: 'MAINTENANCE_BOOT' }
-      : current;
-  };
+  const state = () => maintenanceStatus(store, options.forcedClosed);
   app.addHook('onRequest', async (request) => {
     if (
       MUTATING.has(request.method) &&
@@ -94,9 +101,7 @@ export function maintenanceRoutes(
       throw new HttpError(503, 'MAINTENANCE_CLOSED');
   });
   app.get('/api/maintenance', async (_request, reply) =>
-    reply
-      .header('Cache-Control', 'no-store')
-      .send({ ...state(), activeWork: options.activeWork(), forcedClosed: options.forcedClosed })
+    reply.header('Cache-Control', 'no-store').send({ ...state(), activeWork: options.activeWork() })
   );
   app.post('/api/maintenance', async (request) => {
     const body = record(request.body);
@@ -109,6 +114,6 @@ export function maintenanceRoutes(
       closed: status === 'closed',
       ...(reason === undefined ? {} : { reason }),
     });
-    return { ...next, activeWork: options.activeWork(), forcedClosed: options.forcedClosed };
+    return { ...state(), ...next, activeWork: options.activeWork() };
   });
 }
