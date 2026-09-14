@@ -21,7 +21,7 @@ import {
 import type { ProviderTool, Json } from '../core/transport.js';
 import { HelperWorkspace } from './helper-workspace.js';
 import { chatPromptWorkspace } from './prompt-workspace.js';
-import { fields, HttpError, number, record, text } from './request-validation.js';
+import { fields, HttpError, isSha256Hex, number, record, text } from './request-validation.js';
 import type { Store } from './store.js';
 
 type Row = Record<string, string | number | null>;
@@ -67,7 +67,7 @@ const readBinding = (value: unknown): OptionBinding => {
     owner: text(b.owner, 'prompt owner', 200),
     definitionHash: text(b.definitionHash, 'option definition hash', 64),
   };
-  if (!/^[a-f0-9]{64}$/u.test(result.definitionHash))
+  if (!isSha256Hex(result.definitionHash))
     throw new HttpError(400, 'Invalid option definition hash');
   return result;
 };
@@ -1048,7 +1048,7 @@ export function validateChatOptionArchive(store: Store): void {
     text(row.request_id, 'option request', 200);
     if (
       typeof row.command_hash !== 'string' ||
-      !/^[a-f0-9]{64}$/u.test(row.command_hash) ||
+      !isSha256Hex(row.command_hash) ||
       !Number.isFinite(Date.parse(String(row.created_at)))
     )
       throw new HttpError(400, 'Invalid option operation receipt');

@@ -40,6 +40,7 @@ import { freezeReservationSnapshot } from './reservation-snapshot.js';
 import { checkpointChatVariablesInTransaction } from './chat-variables.js';
 import { restoreCandidateChatVariables } from './chat-variables-archive.js';
 import { splitSource, validateSourceIdentity } from '../core/auxiliary.js';
+import { IDENTITY_PATTERN } from '../core/identity.js';
 import {
   imageJobInput,
   mergedReaderAssets,
@@ -236,8 +237,7 @@ export class Store {
     internalId?: string
   ): Chat {
     const id = internalId === undefined ? randomUUID() : text(internalId, 'internal chat ID', 100);
-    if (!/^[A-Za-z0-9][A-Za-z0-9._:-]*$/u.test(id))
-      throw new HttpError(400, 'Invalid internal chat ID');
+    if (!IDENTITY_PATTERN.test(id)) throw new HttpError(400, 'Invalid internal chat ID');
     const settings: Settings = {
       preset,
       mode: 'direct',

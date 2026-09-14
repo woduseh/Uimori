@@ -1,4 +1,4 @@
-import { HttpError, fields, record, text } from './request-validation.js';
+import { HttpError, fields, isSha256Hex, record, text } from './request-validation.js';
 import { createHash, randomUUID } from 'node:crypto';
 import { isDeepStrictEqual } from 'node:util';
 import type { FastifyInstance } from 'fastify';
@@ -278,7 +278,7 @@ export function imageTargetSource(
         ? ['mode', 'textHash']
         : ['mode', 'textHash', 'translationJobId', 'translationRevision']
     );
-    if (typeof target.textHash !== 'string' || !/^[a-f0-9]{64}$/u.test(target.textHash))
+    if (typeof target.textHash !== 'string' || !isSha256Hex(target.textHash))
       throw new HttpError(400, 'Invalid image target hash');
     if (
       target.mode === 'translation' &&

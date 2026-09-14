@@ -1,4 +1,5 @@
 import { validateContentPackage, type ContentPackage } from './content-package.js';
+import { IDENTITY_PATTERN } from './identity.js';
 import { resolvePackageGraph } from './package-graph.js';
 import { PACKAGE_IMAGE_MIMES } from './package-images.js';
 import { createDefaultPromptProgram } from './prompt-defaults.js';
@@ -51,7 +52,7 @@ function list(value: unknown, max: number): any[] {
 }
 function identity(value: unknown) {
   text(value, 100);
-  if (!/^[A-Za-z0-9][A-Za-z0-9._:-]*$/u.test(value)) fail('IDENTITY');
+  if (!IDENTITY_PATTERN.test(value)) fail('IDENTITY');
 }
 function revision(value: unknown) {
   if (!Number.isSafeInteger(value) || Number(value) < 1) fail('REVISION');

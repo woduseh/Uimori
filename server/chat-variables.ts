@@ -4,7 +4,7 @@ import {
   type ChatVariableState,
 } from '../core/chat-variables.js';
 import { behaviorPayloadHash } from './package-behavior-store.js';
-import { fields, HttpError, number, record, text } from './request-validation.js';
+import { fields, HttpError, isSha256Hex, number, record, text } from './request-validation.js';
 import type { Store } from './store.js';
 
 export const chatVariableTables = [
@@ -31,7 +31,7 @@ export function validateChatVariableCommand(value: unknown): ChatVariableCommand
   );
   const expectedSourceHash =
     body.expectedSourceHash === null ? null : text(body.expectedSourceHash, 'source hash', 64);
-  if (expectedSourceHash !== null && !/^[a-f0-9]{64}$/u.test(expectedSourceHash))
+  if (expectedSourceHash !== null && !isSha256Hex(expectedSourceHash))
     throw new HttpError(400, 'Invalid source hash');
   return {
     expectedRevision,

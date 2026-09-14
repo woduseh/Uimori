@@ -1,4 +1,5 @@
 import { isDeepStrictEqual } from 'node:util';
+import { IDENTITY_PATTERN } from '../core/identity.js';
 
 export class HttpError extends Error {
   constructor(
@@ -42,7 +43,7 @@ export const boolean = (v: unknown): boolean => {
 };
 export const archiveId = (value: unknown) => {
   const id = text(value, 'archive ID', 200);
-  if (!/^[A-Za-z0-9][A-Za-z0-9._:-]*$/.test(id)) throw new HttpError(400, 'Invalid archive ID');
+  if (!IDENTITY_PATTERN.test(id)) throw new HttpError(400, 'Invalid archive ID');
   return id;
 };
 export function archiveList(value: unknown, maximum = 300): any[] {

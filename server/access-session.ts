@@ -1,4 +1,4 @@
-import { HttpError } from './request-validation.js';
+import { HttpError, isSha256Hex } from './request-validation.js';
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
 
 const SESSION_LIFETIME_MS = 12 * 60 * 60 * 1000;
@@ -48,7 +48,7 @@ export class AccessSessions {
       .filter((value) => value.startsWith('nr_session='));
     if (values?.length !== 1) return undefined;
     const token = values[0].slice('nr_session='.length);
-    return /^[a-f0-9]{64}$/u.test(token) ? digest(token).toString('hex') : undefined;
+    return isSha256Hex(token) ? digest(token).toString('hex') : undefined;
   }
 
   private discardExpired(now: number): void {

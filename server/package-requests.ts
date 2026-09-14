@@ -1,4 +1,4 @@
-import { HttpError } from './request-validation.js';
+import { HttpError, isSha256Hex } from './request-validation.js';
 import { randomUUID } from 'node:crypto';
 import { isDeepStrictEqual } from 'node:util';
 import { evaluatePromptExpression, type RuntimeValue } from '../core/prompt-program.js';
@@ -342,7 +342,7 @@ export function validatePackageRequests(store: Store) {
       invalid();
     if (
       (value.sourceRevision === null) !== (value.sourceHash === null) ||
-      (value.sourceHash !== null && !/^[a-f0-9]{64}$/u.test(value.sourceHash))
+      (value.sourceHash !== null && !isSha256Hex(value.sourceHash))
     )
       invalid();
     const deps = JSON.parse(row.dependencies) as { id: string; hash: string }[];
@@ -355,7 +355,7 @@ export function validatePackageRequests(store: Store) {
           !dep ||
           Object.keys(dep).length !== 2 ||
           dep.id !== ancestry[index].revision ||
-          !/^[a-f0-9]{64}$/u.test(dep.hash)
+          !isSha256Hex(dep.hash)
       )
     )
       invalid();
