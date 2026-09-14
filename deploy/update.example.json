@@ -1,0 +1,10 @@
+{
+  "composeFile": "/opt/uimori/app/compose.yaml",
+  "envFile": "/opt/uimori/app/.env.self-host",
+  "releaseRoot": "/opt/uimori/updates",
+  "dataVolume": "uimori_data",
+  "image": "ghcr.io/team/uimori@sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "appOrigin": "https://story.example.com",
+  "appService": "app",
+  "drainTimeoutMs": 1800000
+}

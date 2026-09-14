@@ -20,6 +20,7 @@
     "quality": "biome check . --error-on-warnings && tsc --noEmit",
     "quality:full": "npm run quality && npm run test:tooling && npm run build && npm test",
     "release:check": "node scripts/release-check.mjs",
+    "update": "node scripts/uimori-update.mjs",
     "release:oracle": "node scripts/release-oracle.mjs",
     "release:smoke": "node scripts/oracle-smoke.mjs",
     "build": "node scripts/build.mjs",

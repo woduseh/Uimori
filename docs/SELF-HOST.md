@@ -92,6 +92,10 @@ docker compose --env-file .env.self-host restart proxy
 
 프로그램과 Docker 서비스가 정상적으로 재시작되면 `restart: unless-stopped`가 앱·프록시를 다시 시작해요. 서버 중지로 끊긴 모델 작업은 자동 재호출하지 않아요. 브라우저만 닫았다면 서버의 생성 작업은 계속 진행되고, 다시 로그인해 저장된 진행 상태와 결과를 볼 수 있어요.
 
+### 한 번의 업데이트
+
+새 이미지로 옮길 때는 `npm run update -- start --config <설정> --image <참조> --key <요청 키>`를 사용해요. 유지보수 게이트를 닫고, 진행 중인 작업이 끝나기를 기다리고, 앱을 정지해 data volume을 백업한 뒤, 그 백업으로 만든 **새 volume**에서 후보 이미지의 migration·읽기만 확인하고, 확인이 끝나야 이미지와 volume을 함께 바꾸고 쓰기를 다시 열어요. 쓰기를 다시 열기 전까지는 실패·취소가 이전 이미지와 volume으로 되돌아가요. 절차와 설정 예시는 [업데이트](UPDATES.md#2-운영자-cli-controller--2026-09-14-구현-실제-docker-검증은-남음)를 봐요. 실제 Docker 호스트에서의 검증은 아직 남아 있어요.
+
 ### 유지보수 모드
 
 업데이트 전후로 **새 저장·생성·가져오기만 잠시 멈추는** 유지보수 모드를 앱이 직접 제공해요. 설정의 **내보내기와 복원 → 유지보수 모드**에서 현재 상태를 보고 시작·재개할 수 있어요. 상태 조회는 `GET /api/maintenance`, 전환은 `POST /api/maintenance`의 `{"status":"closed","reason":"update"}`·`{"status":"open"}`이에요. 접속 토큰이 필요한 다른 API와 같은 인증을 사용해요.

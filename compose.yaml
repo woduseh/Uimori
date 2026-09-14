@@ -6,7 +6,8 @@ services:
       context: .
       args:
         UIMORI_CODEX_VERSION: ${UIMORI_CODEX_VERSION:-}
-    image: uimori:local
+    # The updater sets this to the exact candidate reference; the default keeps a local build.
+    image: ${UIMORI_IMAGE:-uimori:local}
     # A single process owns this SQLite database and its background workers.
     scale: 1
     init: true
