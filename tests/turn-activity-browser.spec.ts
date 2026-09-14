@@ -356,8 +356,12 @@ test(`TURNUI03 failed response without source keeps inline diagnostics readable 
   const bounds = await panel.boundingBox();
   expect(bounds).not.toBeNull();
   expect(bounds!.x).toBeGreaterThanOrEqual(0);
-  expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(391);
+  // Same bound as the other mobile panels: inside the viewport, with no scroll of its own.
+  expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(MOBILE_WIDTH);
   expect(await panel.evaluate((element) => element.scrollWidth <= element.clientWidth + 1)).toBe(
+    true
+  );
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(
     true
   );
   if (visualReview) await page.screenshot({ path: info.outputPath('turn-activity-mobile.png') });
