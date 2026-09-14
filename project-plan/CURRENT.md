@@ -58,7 +58,7 @@
 
 ## 검증 기록 안내
 
-최신 베타 구현과 검증은 [BETA-PLAN의 작업별 기록](BETA-PLAN.md#날짜별-구현검증-기록)이, 그 이전 단계의 수치·환경·실패는 각 결과 문서가 당시 근거로 소유해요. 2026-09-12 베타 기반은 [첫 기반 구현 기록](BETA-PLAN.md#첫-기반-구현-완료), 2026-09-11 하네스 후속 개선은 [후속 개선 결과](HARNESS-OPTIMIZATION-RESULTS.md), 2026-09-11 안정화는 [안정화 결과](STABILIZATION-RESULTS-2026-09-11.md), 2026-09-10 `main` 병합과 전체 브라우저 회귀는 [통합 후속 결과](DECISION-FOLLOWUP-RESULTS-2026-09-10.md) · [전체 회귀 지연 브리프](BRIEF-FULL-RUN-REGRESSION-2026-09-10.md), Gemini 장기 문맥 평가는 [기억 평가](LIVE-MEMORY-RESULTS-2026-09-10.md) · [하네스 효율](HARNESS-EFFICIENCY-2026-09-10.md)을 봐요. 이 문서에는 검사 수를 다시 적지 않으며 과거 결과를 현재 소스의 PASS로 재사용하지 않아요.
+최신 베타 구현과 검증은 [BETA-PLAN의 작업별 기록](history/BETA-PLAN-2026-09.md#날짜별-구현검증-기록)이, 그 이전 단계의 수치·환경·실패는 각 결과 문서가 당시 근거로 소유해요. 2026-09-12 베타 기반은 [첫 기반 구현 기록](history/BETA-PLAN-2026-09.md#첫-기반-구현-완료), 2026-09-11 하네스 후속 개선은 [후속 개선 결과](HARNESS-OPTIMIZATION-RESULTS.md), 2026-09-11 안정화는 [안정화 결과](STABILIZATION-RESULTS-2026-09-11.md), 2026-09-10 `main` 병합과 전체 브라우저 회귀는 [통합 후속 결과](DECISION-FOLLOWUP-RESULTS-2026-09-10.md) · [전체 회귀 지연 브리프](BRIEF-FULL-RUN-REGRESSION-2026-09-10.md), Gemini 장기 문맥 평가는 [기억 평가](LIVE-MEMORY-RESULTS-2026-09-10.md) · [하네스 효율](HARNESS-EFFICIENCY-2026-09-10.md)을 봐요. 이 문서에는 검사 수를 다시 적지 않으며 과거 결과를 현재 소스의 PASS로 재사용하지 않아요.
 
 ## 남은 범위
 
