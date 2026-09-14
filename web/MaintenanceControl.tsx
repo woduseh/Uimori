@@ -1,13 +1,7 @@
 import { useCallback, useEffect, useId, useState } from 'react';
-import { api, maintenanceChangedEvent } from './api.js';
+import { api, rememberMaintenance, type MaintenanceStatus } from './api.js';
 
-type Maintenance = {
-  status: 'open' | 'closed';
-  epoch: number;
-  reason?: string;
-  activeWork: number;
-  forcedClosed: boolean;
-};
+type Maintenance = MaintenanceStatus & { activeWork?: number };
 
 /** The operator's own gate for an update: it pauses new work without stopping the app. */
 export function MaintenanceControl() {
@@ -30,9 +24,10 @@ export function MaintenanceControl() {
     setBusy(true);
     setError('');
     try {
-      setState(await api<Maintenance>('/maintenance', { status }));
+      const next = await api<Maintenance>('/maintenance', { status });
+      setState(next);
       setConfirming(false);
-      window.dispatchEvent(new Event(maintenanceChangedEvent));
+      rememberMaintenance(next);
     } catch (caught) {
       setError((caught as Error).message);
     } finally {
@@ -51,7 +46,7 @@ export function MaintenanceControl() {
       <p role="status">
         현재 <strong>{closed ? '닫힘 · 새 작업을 받지 않아요' : '열림 · 정상 사용 중'}</strong>
         {closed && ` · 유지보수 ${state.epoch}회차`}
-        {state.activeWork > 0 && ` · 정리 중인 작업 ${state.activeWork}개`}
+        {!!state.activeWork && ` · 정리 중인 작업 ${state.activeWork}개`}
       </p>
       {state.forcedClosed ? (
         <p className="muted">

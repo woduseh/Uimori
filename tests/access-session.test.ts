@@ -180,13 +180,13 @@ test('a successful remote login resets prior failures and local mode does not th
 test('session routes preserve optional local access and do not cache authentication state', async () => {
   const { app } = fixture();
   const status = await injectWithFixtureBot(app, { method: 'GET', url: '/api/session' });
-  expect(status.json()).toEqual({ required: false, authenticated: true });
+  expect(status.json()).toMatchObject({ required: false, authenticated: true });
   expect(status.headers['cache-control']).toBe('no-store');
   expect((await injectWithFixtureBot(app, { method: 'GET', url: '/api/library' })).statusCode).toBe(
     200
   );
   const logout = await injectWithFixtureBot(app, { method: 'DELETE', url: '/api/session' });
-  expect(logout.json()).toEqual({ required: false, authenticated: true });
+  expect(logout.json()).toMatchObject({ required: false, authenticated: true });
   expect(logout.headers['set-cookie']).not.toContain('; Secure');
 });
 
@@ -205,7 +205,7 @@ test('remote session routes protect API resources, revoke logout and emit matchi
     payload: { token: accessToken },
   });
   expect(login.statusCode).toBe(200);
-  expect(login.json()).toEqual({ required: true, authenticated: true });
+  expect(login.json()).toMatchObject({ required: true, authenticated: true });
   expect(login.headers['cache-control']).toBe('no-store');
   expect(login.headers['set-cookie']).toContain('; Secure');
   expect(login.body).not.toContain(accessToken);
@@ -218,13 +218,13 @@ test('remote session routes protect API resources, revoke logout and emit matchi
     (
       await injectWithFixtureBot(app, { method: 'GET', url: '/api/session', headers: { cookie } })
     ).json()
-  ).toEqual({ required: true, authenticated: true });
+  ).toMatchObject({ required: true, authenticated: true });
   const logout = await injectWithFixtureBot(app, {
     method: 'DELETE',
     url: '/api/session',
     headers: { cookie },
   });
-  expect(logout.json()).toEqual({ required: true, authenticated: false });
+  expect(logout.json()).toMatchObject({ required: true, authenticated: false });
   expect(logout.headers['set-cookie']).toBe(
     'nr_session=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0; Secure'
   );
@@ -331,7 +331,7 @@ test.each([false, true])(
       headers,
     });
     expect(session.statusCode).toBe(200);
-    expect(session.json()).toEqual({ required: true, authenticated: false });
+    expect(session.json()).toMatchObject({ required: true, authenticated: false });
     const login = await injectWithFixtureBot(app, {
       method: 'POST',
       url: '/api/session',

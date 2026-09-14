@@ -58,7 +58,7 @@
 
 ### 1. admission/drain과 유지보수 부팅 — 2026-09-14 구현
 
-`server/maintenance.ts`가 `maintenance` 표에 status·epoch·reason을 보관하고 `GET/POST /api/maintenance`로 상태를 조회·전환해요. 닫힌 상태는 재시작에도 유지되며 epoch는 유지보수 구간마다 하나씩 늘어요. 인증 hook 다음의 공통 `onRequest` 경계가 POST·PUT·PATCH·DELETE를 `503 MAINTENANCE_CLOSED`로 거절하고, 제어·로그인·진단·진행 중 작업의 취소/건너뛰기 경로만 허용 목록으로 남겨요. 브라우저는 유지보수 안내를 표시하고 작성 중인 입력을 지우지 않으며, 설정의 백업 화면에서 상태 확인과 시작·재개를 할 수 있어요. 공유 진단의 시스템 범위에도 열림/닫힘과 구간 번호가 들어가요.
+`server/maintenance.ts`가 `maintenance` 표에 status·epoch·reason을 보관하고 `GET/POST /api/maintenance`로 상태를 조회·전환해요. 닫힌 상태는 재시작에도 유지되며 epoch는 유지보수 구간마다 하나씩 늘어요. 인증 hook 다음의 공통 `onRequest` 경계가 POST·PUT·PATCH·DELETE를 `503 MAINTENANCE_CLOSED`로 거절하고, 제어·로그인·진단·진행 중 작업의 취소/건너뛰기 경로만 허용 목록으로 남겨요. 브라우저는 유지보수 안내를 표시하고 작성 중인 입력을 지우지 않으며, 설정의 백업 화면에서 상태 확인과 시작·재개를 할 수 있어요. 상태는 기존 세션 조회에 함께 실어 보내므로 정상 사용 중에는 어떤 화면도 이 상태를 따로 조회하지 않고, 닫힌 동안과 거절된 쓰기 뒤에만 다시 읽어요. 공유 진단의 시스템 범위에도 열림/닫힘과 구간 번호가 들어가요.
 
 worker 쪽은 같은 `admissionOpen`을 사용해 job·삽화·story 큐와 확장 operation의 **새 claim**을 멈추고, 이미 승인된 실행의 완료·결과 저장·상태 대기 재개는 계속해요. 완료가 만든 후속 제목 생성도 닫힌 동안 시작하지 않아요. `NR_MAINTENANCE=1` 부팅은 migration·읽기만 수행하고 복구·worker를 건너뛰며 API로 열 수 없어요. 검사는 `tests/maintenance.test.ts`예요.
 

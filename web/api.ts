@@ -12,6 +12,26 @@ export class ApiError extends Error {
 }
 export const sessionRequiredEvent = 'uimori-session-required';
 export const maintenanceChangedEvent = 'uimori-maintenance-changed';
+export type MaintenanceStatus = {
+  status: 'open' | 'closed';
+  epoch: number;
+  reason?: string;
+  forcedClosed: boolean;
+};
+let maintenance: MaintenanceStatus | null = null;
+export const knownMaintenance = () => maintenance;
+/** The session read already carries the gate, so no screen polls while the app is open. */
+export function rememberMaintenance(next: MaintenanceStatus | undefined): void {
+  if (!next) return;
+  const previous = maintenance;
+  maintenance = next;
+  // An open workspace is the normal answer: only a closed gate or a real change wakes a screen.
+  const changed =
+    next.status === 'closed' ||
+    (previous !== null && (previous.status !== next.status || previous.epoch !== next.epoch));
+  if (changed && typeof window !== 'undefined')
+    window.dispatchEvent(new Event(maintenanceChangedEvent));
+}
 export const libraryChangedKey = 'uimori:library-change';
 
 export async function api<T>(
