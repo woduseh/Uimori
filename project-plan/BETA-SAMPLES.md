@@ -20,14 +20,25 @@
 
 | 공통 구현 | 현재 범위와 표본 적용 한계 |
 | --- | --- |
-| [기본 변수·CBS 읽기](../docs/RISU-IMPORT.md#기본-변수와-읽기-cbs) | 카드/프리셋의 기본값을 공통 템플릿으로 가져와 봇·모듈·프리셋이 같은 읽기 문맥을 사용해요. 실제 히나노 6개 기본값·4개 변수 템플릿, TVoN 27개·8개를 확인했어요. 저장된 공유 변수 쓰기·Lua/트리거·상태창 전체 인수는 미완이에요. |
+| [기본 변수·CBS 읽기](../docs/RISU-IMPORT.md#기본-변수와-읽기-cbs) | 카드/프리셋의 기본값을 공통 템플릿으로 가져와 봇·모듈·프리셋이 같은 읽기 문맥을 사용해요. 실제 히나노 6개 기본값·4개 변수 템플릿, TVoN 27개·8개를 확인했어요. 저장된 공유 변수 쓰기·Lua/트리거는 [2026-09-14 보충](#현재-구현-보충--2026-09-14)에서 연결했고 상태창 전체 인수는 미완이에요. |
 | [프리셋 직접 가져오기](../docs/RISU-IMPORT.md#risu-프리셋) | 2026-09-13 후속 구현으로 `.risup`·구형 `.risupreset`/JSON/프로젝트 ZIP을 읽고 프롬프트·토글을 native 저장·편집·적용에 연결했어요. 실제 Phēmē 두 파일의 디코딩·부분 가져오기·원본 보존·archive 복원을 확인해 `currentRisuImport`는 `partial`이에요. 후속 구현에서 두 파일의 전송 전 3개·표시 2개 정규식을 공통 변환으로 실행했고, 실제 원문 보존·미리보기·전송·Reader 연결은 별도 합성 흐름으로 확인해요. memory 위치/래퍼와 전체 CBS 실행 차이를 안내해요. 모델·파라미터·도구는 판정 대상에서 제외하며 전체 인수는 계속 `not-run`이에요. |
-| [카드 가져오기](../docs/RISU-IMPORT.md) | 카드 `.charx`/JSON의 설명·시작문·로어·지원 이미지·이름 템플릿·정적 표시 정규식을 가져와요. Hinano·TVON·Vela의 `currentRisuImport`만 이 기본 경로의 존재를 뜻하는 `partial`로 갱신하고 이전 값은 `baselineRisuImport`로 보존해요. 후속 구현에서 히나노·TVoN·벨라 원본 CharX의 내부 자료 해독·부분 등록·원본 바이트 보존을 확인했어요. 스크립트 전체 실행의 근거는 아니에요. Merry 원본은 140,785,373 bytes로 카드 입력 한도 24 MiB를 넘어 이 경로로 직접 가져올 수 없어요. |
-| [모듈 JSON/프로젝트 ZIP 가져오기](../docs/RISU-IMPORT.md#구조화된-risu-모듈-json) | RisuToki가 추출한 `module.json`과 `.risutoki` 에셋의 기본 자료를 모듈로 등록해요. 후속 구현에서 모듈로 선택한 CharX를 등록하며 라이트보드 3종의 내부 자료 해독·부분 등록·원본 보존을 확인해 `currentRisuImport`를 `partial`로 기록했어요. 독립 `.risum`은 사용자 선택으로 지원 목표에서 제외하고 히든 스토리는 지원 형식으로 기능을 옮겨요. JS 플러그인 직접 가져오기도 미구현이에요. |
+| [카드 가져오기](../docs/RISU-IMPORT.md) | 카드 `.charx`/JSON의 설명·시작문·로어·지원 이미지·이름 템플릿·정적 표시 정규식을 가져와요. Hinano·TVON·Vela의 `currentRisuImport`만 이 기본 경로의 존재를 뜻하는 `partial`로 갱신하고 이전 값은 `baselineRisuImport`로 보존해요. 후속 구현에서 히나노·TVoN·벨라 원본 CharX의 내부 자료 해독·부분 등록·원본 바이트 보존을 확인했어요. 스크립트 전체 실행의 근거는 아니에요. Merry 원본은 140,785,373 bytes로 24 MiB를 넘어 [대용량 자료](../docs/RISU-IMPORT.md#대용량-자료) 경로로 받으며 실제 파일은 실행하지 않았어요. |
+| [모듈 JSON/프로젝트 ZIP 가져오기](../docs/RISU-IMPORT.md#구조화된-risu-모듈-json) | RisuToki가 추출한 `module.json`과 `.risutoki` 에셋의 기본 자료를 모듈로 등록해요. 후속 구현에서 모듈로 선택한 CharX를 등록하며 라이트보드 3종의 내부 자료 해독·부분 등록·원본 보존을 확인해 `currentRisuImport`를 `partial`로 기록했어요. 독립 `.risum`은 사용자 선택으로 지원 목표에서 제외하고 히든 스토리는 지원 형식으로 기능을 옮겨요. 플러그인 `.js`는 [2026-09-14 보충](#현재-구현-보충--2026-09-14)의 경로로 모듈로 가져와요. |
 | [확장 코드·Host API](../docs/EXTENSION-PROGRAMS.md) | `user`·`model`·`before-turn`·`after-turn` JavaScript, 자기 자료 읽기와 허가된 모델 호출, 응답 후 완성 본문 읽기, 사용자 독립 모델 작업, 명시적 상태 변환을 구현했어요. Risu Lua 콜백도 같은 격리 경계에서 실행하며 `editInput`·`editRequest`·`editOutput`·`editDisplay` 네 편집 hook과 선언형 `setvar`·혼합 트리거·`runLLM`·`extractRegex`를 연결했어요([Lua 콜백 가져오기](../docs/RISU-IMPORT.md#lua-콜백-가져오기)). 원본 스크립트 전체의 자동 변환·일반 HTTP·공유 자료 권한·확장 설치 관리는 미구현이에요. |
 | [보존과 이동](../docs/DATA-MIGRATIONS.md) | 현재 [DB·archive·백업 버전](../docs/DATA-MIGRATIONS.md#현재-버전)을 사용하며 [native 자료 이동](../docs/NATIVE-TRANSFER.md)과 작업·상태 보존 경계를 구현했어요. 고정 표본 전체의 복원·업그레이드 인수로 간주하지 않아요. |
 
 기능별 표의 ‘현재 기반’과 `U-*` 근거는 초기 조사 시점의 판정이에요. 공통 구현이 늘었다는 이유만으로 246개 기능을 일괄 완료 처리하지 않으며, 후속 표본 작업에서 실제로 연결하고 확인한 항목만 그 근거와 함께 갱신해요.
+
+## 현재 구현 보충 · 2026-09-14
+
+2026-09-14 [검토 후속 계획](BETA-PLAN.md#현재-작업-검토-후속-계획--2026-09-14)의 결과예요. 2026-09-13 표의 원문은 당시 상태로 두고 달라진 사실만 이 절에 적어요. 기능별 246개 `currentSupport`는 실제 표본으로 확인하지 않았으므로 갱신하지 않고, 모든 표본·기능의 native 인수와 사용자 인수는 계속 `not-run`이에요.
+
+| 공통 구현 | 현재 범위와 표본 적용 한계 |
+| --- | --- |
+| [호환 CBS 평가와 쓰기](../docs/RISU-IMPORT.md#기본-변수와-읽기-cbs) | 공통 AST로 옮길 수 없는 CBS는 `compat.risuCbs` 원문으로 보존해 예약 시점에 Risu 스냅샷 평가기로 한 번 평가하고 영수증으로 고정해요. 원문의 `setvar`류 쓰기는 영수증에 남아 원문 저장 때 공유 변수 변경 허용 아래에서 분기에 채택돼요. 미지원 CBS를 모델에 그대로 보내는 fallback은 없어요. 실제 카드의 평가는 실행하지 않았어요. |
+| [키워드 로어 활성화](../docs/LORE-CONTEXT.md#키워드-활성화) | Risu에서 가져온 로어는 키워드 활성화가 기본이고 `@@` 활성화 지시문을 규칙으로 보존해 예약 시점에 한 번 실행해요. 예산은 채팅 설정의 조회 로어 문자 한도이며 위치·삽입 지시문은 미지원 안내예요. |
+| [플러그인 `.js`](../docs/RISU-IMPORT.md#risu-플러그인-파일) | 같은 가져오기 화면에서 모듈로 등록하고 훅·인자·저장소 세 축을 이벤트별 재실행 shim으로 연결했어요. `provider-manager`·`logplus`의 `currentRisuImport`를 경로 존재를 뜻하는 `partial`로 갱신하고 이전 값은 `baselineRisuImport`에 보존했어요. 실제 두 파일은 실행하지 않았고, 제공자·MCP·음성·일반 HTTP API는 범위 밖이에요. |
+| [대용량 자료](../docs/RISU-IMPORT.md#대용량-자료) | 24 MiB를 넘는 카드·모듈은 staged 업로드로 256 MiB까지 받고 원본 사본 대신 이름·SHA-256 지문을 남겨요. `merry`의 `currentRisuImport`를 같은 이유로 `partial`로 갱신했어요. 합성 70 MiB 컨테이너로 확인했고 실제 Merry 파일은 실행하지 않았어요. |
 
 ## 기준 소스와 파일 지문
 
