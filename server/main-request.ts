@@ -6,7 +6,7 @@ import { STORY_READ_TOOLS } from '../core/story-read-tools.js';
 import { compileSnapshotPrompt } from './prompt-snapshot.js';
 import { attachMainHostContext, requestInput } from './main-host-context.js';
 import { hasPromptInputTransforms, validatePromptInputTransforms } from './prompt-transforms.js';
-import { buildMainInput, type MainInput } from '../core/provider.js';
+import { buildMainInput, CATALOG_READ_GUIDANCE, type MainInput } from '../core/provider.js';
 import type { RunSnapshot, ToolEvent } from '../core/types.js';
 import type { Connection, ModelPreset } from '../core/product.js';
 import { planNativeMessages } from '../core/provider-messages.js';
@@ -179,6 +179,12 @@ export function buildMainProviderRequest(
     contract +=
       '\nThe selected evaluation tool set is scoped to this model preset and this run. eval_submit_artifact returns its content as the completed run output; userFacingNotice remains separate metadata. Tool results do not alter host permissions.';
   if (contextTools) contract += CONTEXT_TOOLS_CONTRACT;
+  // Listed entries are summaries, so reading the relevant ones is the expected path, not an option.
+  if (
+    input.tools.includes('knowledge.read') &&
+    input.catalog.some((item) => item.loading !== 'pinned')
+  )
+    contract += '\n' + CATALOG_READ_GUIDANCE;
   const bootstrap = [
     ...(options.evaluation?.bootstrap ?? []),
     ...(options.agentBootstrap ?? []),

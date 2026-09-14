@@ -21,12 +21,38 @@ const ALLOWED_TOOLS = Object.freeze([
   'skills.list',
   'skills.load',
 ]);
+/** Per-entry summary length in the main catalog; the body stays behind the read tools. */
+export const CATALOG_SUMMARY_CHARS = 160;
+/** Serialized length budget for the whole catalog list, which rides in every main request. */
+export const CATALOG_CHARS = 24_000;
+export const CATALOG_READ_GUIDANCE =
+  'The catalog lists reference summaries, not their text. Before writing, choose the entries the current request needs and read them with knowledge.read; use knowledge.search for entries the catalog does not list. Skip entries unrelated to the request.';
 
 const metadata = ({ text: _text, chatId: _chatId, ...item }: Resource) => item;
 const scopedMetadata = (item: Resource, allowedIds: Set<string>) => ({
   ...metadata(item),
   ...(item.relatedIds ? { relatedIds: item.relatedIds.filter((id) => allowedIds.has(id)) } : {}),
 });
+const summary = (text: string) =>
+  text.length > CATALOG_SUMMARY_CHARS ? text.slice(0, CATALOG_SUMMARY_CHARS - 1) + '…' : text;
+/** Discovery metadata only: identity, a short summary and the scoped relations. */
+const catalogEntry = (
+  item: Resource,
+  allowedIds: Set<string>
+): Omit<Resource, 'text' | 'chatId'> => {
+  const pinned = item.loading === 'pinned';
+  return {
+    id: item.id,
+    revision: item.revision,
+    kind: item.kind,
+    title: item.title,
+    // A pinned body already reaches the request; its summary would only repeat it.
+    description: pinned ? '' : summary(item.description),
+    ...(item.sourceKind ? { sourceKind: item.sourceKind } : {}),
+    ...(pinned ? { loading: 'pinned' as const } : {}),
+    ...(item.relatedIds ? { relatedIds: item.relatedIds.filter((id) => allowedIds.has(id)) } : {}),
+  };
+};
 const hash = (text: string) => createHash('sha256').update(text).digest('hex');
 export function roleResources(
   snapshot: RunSnapshot,
@@ -127,7 +153,7 @@ export function buildMainInput(
     preset: snapshot.settings.preset,
     facts: [],
     history: structuredClone(snapshot.history),
-    catalog: resources.map((item) => scopedMetadata(item, allowedIds)),
+    catalog: resources.map((item) => catalogEntry(item, allowedIds)),
     prefetch: [],
     tools: [...ALLOWED_TOOLS],
     results: structuredClone([...results]),
@@ -226,14 +252,24 @@ export function buildMainInput(
     input.outline = structuredClone(snapshot.outline);
     input.contract += `\n${OUTLINE_CONTRACT}`;
   }
-  if (input.catalog.length > 100) {
+  // The catalog rides uncached in every request, so a large library is listed only up to a
+  // character budget. The rest stays reachable through the read tools.
+  const total = input.catalog.length;
+  let used = 1, // the enclosing brackets, less the separator the first entry does not need
+    listed = 0;
+  for (const item of input.catalog) {
+    used += JSON.stringify(item).length + 1;
+    if (listed && used > CATALOG_CHARS) break;
+    listed++;
+  }
+  if (listed < total) {
     input.catalogPage = {
-      total: input.catalog.length,
-      listed: 100,
+      total,
+      listed,
       remaining:
         'Use knowledge.search or skills.list with pagination to discover the full approved scope.',
     };
-    input.catalog = input.catalog.slice(0, 100);
+    input.catalog = input.catalog.slice(0, listed);
   }
   const behaviorTools = listBehaviorTools(snapshot);
   if (behaviorTools.length) {

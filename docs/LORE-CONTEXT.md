@@ -17,6 +17,8 @@
 
 기본 PromptProgram은 **고정 배경 자료 → 이전 대화와 조회 자료 → 메모·고정 장면 자료 → 변동 host 정보 → 현재 입력** 순서예요. 사용자 정의 PromptProgram의 역할·순서·cache anchor는 유지해요. 실제 실행한 `references`, `bot`/`description`, `persona`, `lore`/`lorebook`, `backgroundLore`, `sceneLore` 슬롯이 이미 제공한 자료는 자동 삽입에서 제외해요. 꺼진 블록이나 선택되지 않은 조건 분기는 자료를 제공한 것으로 계산하지 않아요. 사용자가 같은 본문을 여러 슬롯에 직접 작성한 중복까지 제거하지는 않아요.
 
+변동 host 정보에는 `discoverable` 로어가 **목록**으로만 실려요. 항목마다 ID·revision·종류·제목과 설명을 160자로 줄인 요약이 들어가고 본문과 `loreContext`는 빠져요. 고정 자료는 이미 본문을 보내므로 목록에는 제목만 남기고 요약은 비워요. 목록 전체는 직렬화 기준 24,000자 예산 안에서 앞에서부터 싣고, 예산을 넘어 빠진 항목은 `catalogPage`로 개수를 알리며 `knowledge.search`로 찾도록 안내해요. 요청 contract에는 쓰기 전에 이번 요청에 필요한 항목을 골라 `knowledge.read`로 읽으라는 안내를 함께 넣어요.
+
 ## 키워드 활성화
 
 [패키지](PACKAGES.md)가 `loreActivation.mode = 'keyword'`이면 `activation` 규칙이 있는 로어는 `loading`이 아니라 Risu 스냅샷의 활성화 엔진(`activateLore`, RisuAI `loadLoreBookV3Prompt`의 순수 함수판)이 정해요. 예약 시점에 고정된 대화(오래된 순, 이번 요청이 마지막)를 패키지의 `scanDepth`만큼 뒤에서 훑어 키·보조 키·selective·정규식·`@@` 규칙을 Risu와 같은 규칙으로 판정하고, 재귀 검색과 확률·우선순위·`insertorder` 정렬까지 같아요. 켜진 항목은 그 Run의 고정 자료가 되어 `loreContext` 배치를 따르고, 켜지지 않은 항목은 그 Run의 조회 목록과 읽기 도구에서도 빠져요. 규칙이 없는 로어와 `discoverable` 모드 패키지는 이 절의 영향을 받지 않아요.
