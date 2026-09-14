@@ -3,7 +3,8 @@ import { createRequire } from 'node:module';
 import { gunzipSync, inflateRawSync, inflateSync } from 'node:zlib';
 import { RISU_IMPORT_MAX_BYTES, type RisuImportSource } from '../core/risu-import.js';
 import { cardZip } from './character-card-file.js';
-import { fields, HttpError, record } from './request-validation.js';
+import { hasControl, readImportEnvelope } from './import-envelope.js';
+import { HttpError, record } from './request-validation.js';
 import { decodeRPack } from './rpack.js';
 
 // The no-eval export ships without its own TypeScript declaration.
@@ -15,8 +16,6 @@ const { unpack } = createRequire(import.meta.url)('msgpackr/index-no-eval') as P
 const invalid = (): never => {
   throw new HttpError(400, 'RISU_PRESET_INVALID_FILE');
 };
-const hasControl = (value: string) =>
-  [...value].some((character) => character.charCodeAt(0) < 32 || character.charCodeAt(0) === 127);
 const scalarBytes = new Map([
   [0xca, 4],
   [0xcb, 8],
@@ -195,27 +194,18 @@ export function readRisuPresetFile(value: unknown): {
   hash: string;
   format: 'risu-preset-json' | 'risu-preset-project-zip' | 'risu-preset-binary';
 } {
-  const input = record(value);
-  fields(input, ['name', 'base64']);
-  const { name, base64 } = input;
-  if (
-    typeof name !== 'string' ||
-    !name.trim() ||
-    name.length > 255 ||
-    hasControl(name) ||
-    /[/\\:]/u.test(name) ||
-    name !== name.trim() ||
-    typeof base64 !== 'string' ||
-    !base64
-  )
-    return invalid();
-  if (base64.length > Math.ceil(RISU_IMPORT_MAX_BYTES / 3) * 4)
-    throw new HttpError(413, 'RISU_IMPORT_TOO_LARGE');
-  const bytes = Buffer.from(base64, 'base64');
-  if (bytes.length > RISU_IMPORT_MAX_BYTES) throw new HttpError(413, 'RISU_IMPORT_TOO_LARGE');
-  if (bytes.length < 2 || bytes.toString('base64') !== base64) return invalid();
-  const source = { name, base64 };
-  const hash = createHash('sha256').update(bytes).digest('hex');
+  const {
+    name,
+    bytes,
+    sha256: hash,
+    source,
+  } = readImportEnvelope(value, {
+    maxBytes: RISU_IMPORT_MAX_BYTES,
+    extensions: /\.(?:risup(?:reset)?|zip|json|preset)$/iu,
+    invalid: 'RISU_PRESET_INVALID_FILE',
+    tooLarge: 'RISU_IMPORT_TOO_LARGE',
+    minBytes: 2,
+  });
   if (/\.risup(?:reset)?$/iu.test(name))
     return {
       preset: binaryPreset(bytes, /\.risup$/iu.test(name)),
@@ -223,10 +213,9 @@ export function readRisuPresetFile(value: unknown): {
       hash,
       format: 'risu-preset-binary',
     };
-  if (!/\.zip$/iu.test(name)) {
-    if (!/\.(?:json|preset)$/iu.test(name)) return invalid();
+  // The envelope already limited the name to this reader's extensions, so JSON is what is left.
+  if (!/\.zip$/iu.test(name))
     return { preset: presetDocument(json(bytes)), source, hash, format: 'risu-preset-json' };
-  }
   const members = cardZip(bytes);
   const paths = [...members.keys()];
   if (paths.some((path) => hasControl(path) || /[:\ufffd]/u.test(path))) return invalid();
