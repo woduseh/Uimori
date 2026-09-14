@@ -31,6 +31,8 @@ export function importRisuAssets({
   const packageImages: NonNullable<ContentPackage['images']> = [];
   const assetUrls = new Map<string, string>();
   let portraitImageId: string | undefined;
+  // A package image carries no role field, so a typed asset keeps only its bytes and its name.
+  let typedAsset = false;
   const assets = Array.isArray(card.assets) ? card.assets : [];
   if (assets.length > RISU_IMPORT_MAX_ASSETS) throw new HttpError(400, 'RISU_IMPORT_INVALID_FILE');
   for (const [index, raw] of assets.entries()) {
@@ -93,6 +95,7 @@ export function importRisuAssets({
       mime: image.mime,
       allowedUse: 'both',
     });
+    if (asset.type === 'emotion' || asset.type === 'background') typedAsset = true;
     if ((kind === 'bot' || asset.type === 'icon') && (!portraitImageId || name === 'main'))
       portraitImageId = id;
     const url = `/api/package-image-blobs/${image.hash}`;
@@ -101,5 +104,11 @@ export function importRisuAssets({
     assetUrls.set(`{{image::${name}}}`, `![${name.replace(/[\[\]]/gu, '')}](${url})`);
     assetUrls.set(`{{img::${name}}}`, `![${name.replace(/[\[\]]/gu, '')}](${url})`);
   }
+  if (typedAsset)
+    findings.add(
+      'asset-role',
+      'info',
+      '감정·배경으로 표시된 첨부는 역할 없이 일반 이미지로 가져와요. 이름은 그대로 두지만 어떤 감정이나 배경인지는 자료에 남기지 않아요.'
+    );
   return { images, packageImages, assetUrls, ...(portraitImageId ? { portraitImageId } : {}) };
 }
