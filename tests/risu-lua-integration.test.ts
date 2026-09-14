@@ -401,6 +401,88 @@ end)`;
   });
 });
 
+test('editOutput and editDisplay change the display copy while the stored source stays original', async () => {
+  const fixture = imported(
+    `listenEdit("editOutput", function(id, value, meta)
+  setChatVar(id, "outputIndex", tostring(meta.index))
+  return value:gsub("%[internal%].-%[/internal%]", "")
+end)
+listenEdit("editDisplay", function(id, value) return value .. " ✦" end)
+function onOutput(id)
+  setChatVar(id, "sawResponse", getCharacterLastMessage(id))
+end`
+  );
+  grantVariableWrites(fixture, true);
+  const run = generation(fixture, 'Ask something.');
+  await prepareAutomaticRunBehavior(fixture.store, run.id);
+  const response = 'Visible answer.[internal]hidden[/internal]';
+  fixture.store.stageRunOutput(run.id, response);
+  await prepareAfterResponse(fixture.store, run.id, response);
+  const progress = runBehaviorProgress(fixture.store, run.id)!;
+  expect(progress.afterResponse!.status).toBe('completed');
+  expect(progress.afterResponse!.packages[0].entries.map((entry) => entry.actionId)).toEqual([
+    'risu-lua-0-editOutput',
+    'risu-lua-0-output',
+    'risu-lua-0-editDisplay',
+  ]);
+  fixture.store.completeRun(
+    run.id,
+    response,
+    { modelCalls: 0, inputTokens: null, outputTokens: null, costUsd: null },
+    run.snapshot.settings
+  );
+  const sourceId = fixture.store.product.branch(fixture.chat.id).headRevision!;
+  // The stored source keeps the model text, and later turns read that original.
+  expect(fixture.store.source(sourceId).text).toBe(response);
+  expect(readChatVariables(fixture.store, fixture.chat.id, fixture.branchId).values).toMatchObject({
+    outputIndex: '1',
+    sawResponse: response,
+  });
+  const presentation = await injectWithFixtureBot(fixture.app, {
+    method: 'GET',
+    url: `/api/chats/${fixture.chat.id}/sources/${sourceId}/presentation`,
+  });
+  expect(presentation.statusCode).toBe(200);
+  expect(presentation.json()).toMatchObject({
+    original: { text: 'Visible answer. ✦', changed: true },
+  });
+  const execute = vi.spyOn(extensionRuntime, 'executeExtensionProgram');
+  const again = await injectWithFixtureBot(fixture.app, {
+    method: 'GET',
+    url: `/api/chats/${fixture.chat.id}/sources/${sourceId}/presentation`,
+  });
+  // Reading the stored receipt again never runs the imported code a second time.
+  expect(again.json().original.text).toBe('Visible answer. ✦');
+  expect(execute).not.toHaveBeenCalled();
+  expect(database().store.product.import(fixture.store.product.export())).toMatchObject({
+    restored: true,
+  });
+});
+
+test('an editOutput result that is not bounded text keeps the stored response and its display', async () => {
+  const fixture = imported('listenEdit("editOutput", function(id, value) return 42 end)');
+  const run = generation(fixture, 'Keep the answer.');
+  await prepareAutomaticRunBehavior(fixture.store, run.id);
+  const response = 'Unchanged answer.';
+  fixture.store.stageRunOutput(run.id, response);
+  await prepareAfterResponse(fixture.store, run.id, response);
+  const receipt = runBehaviorProgress(fixture.store, run.id)!.afterResponse!.packages[0];
+  expect(receipt.status).toBe('failed');
+  expect(receipt.entries).toEqual([]);
+  fixture.store.completeRun(
+    run.id,
+    response,
+    { modelCalls: 0, inputTokens: null, outputTokens: null, costUsd: null },
+    run.snapshot.settings
+  );
+  const sourceId = fixture.store.product.branch(fixture.chat.id).headRevision!;
+  const presentation = await injectWithFixtureBot(fixture.app, {
+    method: 'GET',
+    url: `/api/chats/${fixture.chat.id}/sources/${sourceId}/presentation`,
+  });
+  expect(presentation.json()).toMatchObject({ original: { text: response, changed: false } });
+});
+
 test('the transmitted copy handed to a request hook stays inside the guest limits', () => {
   const message = (text: string, index = 0) => ({
     id: `m${index}`,
@@ -484,10 +566,16 @@ test('Risu import and passive restores preserve native Lua actions and source by
   expect(fixture.preview.findings).toContainEqual(
     expect.objectContaining({ code: 'lua-actions', level: 'warning' })
   );
+  // Every Risu callback phase is connected now; the remaining notices are API and scope limits.
+  expect(
+    fixture.preview.findings.some((finding) =>
+      finding.code.startsWith('RISU_LUA_PHASE_UNSUPPORTED:')
+    )
+  ).toBe(false);
   expect(
     fixture.preview.findings.some(
       (finding) =>
-        finding.level === 'unsupported' && finding.code.startsWith('RISU_LUA_PHASE_UNSUPPORTED:')
+        finding.level === 'unsupported' && finding.code.startsWith('RISU_LUA_PARTIAL_HOST:')
     )
   ).toBe(true);
   expect(
@@ -502,7 +590,9 @@ test('Risu import and passive restores preserve native Lua actions and source by
     ['risu-lua-0-start', ['before-turn'], 'lua'],
     ['risu-lua-0-onButtonClick', ['user'], 'lua'],
     ['risu-lua-0-editRequest', ['before-turn'], 'lua'],
+    ['risu-lua-0-editDisplay', ['after-turn'], 'lua'],
     ['risu-lua-0-editInput', ['before-turn'], 'lua'],
+    ['risu-lua-0-editOutput', ['after-turn'], 'lua'],
   ]);
   expect(
     fixture.content.package!.behavior!.actions.every(
@@ -519,14 +609,9 @@ test('Risu import and passive restores preserve native Lua actions and source by
   const restoredPackage = restored.product
     .snapshot(fixture.chat.id)!
     .packages!.find((pkg) => pkg.id === fixture.content.id)!;
-  expect(restoredPackage.behavior!.actions.map((action) => action.program?.language)).toEqual([
-    'lua',
-    'lua',
-    'lua',
-    'lua',
-    'lua',
-    'lua',
-  ]);
+  expect(restoredPackage.behavior!.actions.map((action) => action.program?.language)).toEqual(
+    Array.from({ length: 8 }, () => 'lua')
+  );
 
   const copied = importChatBackup(fixture.store, {
     backup: exportChatBackup(fixture.store, fixture.chat.id),
@@ -674,8 +759,10 @@ end`,
     'before-turn',
     'before-turn',
   ]);
-  expect(progress.afterResponse!.packages[0].entries.map((entry) => entry.trigger)).toEqual([
-    'after-turn',
+  expect(progress.afterResponse!.packages[0].entries.map((entry) => entry.actionId)).toEqual([
+    'risu-lua-0-editOutput',
+    'risu-lua-0-output',
+    'risu-lua-0-editDisplay',
   ]);
   expect(readChatVariables(fixture.store, fixture.chat.id, fixture.branchId)).toEqual({
     revision: 0,

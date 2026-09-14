@@ -444,13 +444,17 @@ export function adaptRisuLuaTriggers(
     editInput: 'before-turn',
     start: 'before-turn',
     editRequest: 'before-turn',
+    editOutput: 'after-turn',
     output: 'after-turn',
+    editDisplay: 'after-turn',
     onButtonClick: 'user',
   };
   const hooks: Partial<Record<RisuLuaEvent, BehaviorActionHook>> = {
     input: 'input',
     editInput: 'edit-input',
     editRequest: 'edit-request',
+    editOutput: 'edit-output',
+    editDisplay: 'edit-display',
   };
   triggers.forEach((value, triggerIndex) => {
     const trigger = record(value);
@@ -501,14 +505,6 @@ export function adaptRisuLuaTriggers(
         );
       }
       for (const event of RISU_LUA_EVENTS) {
-        if (event === 'editDisplay' || event === 'editOutput') {
-          report(
-            'RISU_LUA_PHASE_UNSUPPORTED',
-            `${event} 변환은 원문이나 표시 결과를 안전하게 반영할 공통 실행 단계가 필요해 아직 연결하지 않았어요.`,
-            event
-          );
-          continue;
-        }
         const nativeTrigger = mapping[event];
         if (!nativeTrigger) {
           report(
@@ -519,11 +515,17 @@ export function adaptRisuLuaTriggers(
           continue;
         }
         // Risu runs listenEdit callbacks from the edit path itself, which ignores trigger conditions.
-        const edit = event === 'editInput' || event === 'editRequest';
+        const edit = event.startsWith('edit');
         if (event === 'editInput')
           report(
             'RISU_LUA_EDIT_INPUT_PROJECTION',
             'editInput은 저장한 요청 원문을 바꾸지 않고 이번 전송 사본에만 적용해요. 원문과 전송문은 Reader에서 비교할 수 있어요. Risu와 같이 트리거 조건은 이 콜백에 적용하지 않고, 대화 읽기에는 이번 입력을 덧붙이지 않아요.',
+            event
+          );
+        if (event === 'editOutput' || event === 'editDisplay')
+          report(
+            'RISU_LUA_EDIT_DISPLAY_PROJECTION',
+            `${event}는 완성 응답을 저장한 뒤 한 번 계산해 이 응답의 표시 사본에만 적용해요. 저장 원문과 다음 턴의 문맥·대화 읽기는 바뀌지 않고, 새로고침·분기·복원은 저장한 결과를 읽어요. Risu와 같이 트리거 조건은 적용하지 않아요.`,
             event
           );
         if (event === 'editRequest')
@@ -540,10 +542,10 @@ export function adaptRisuLuaTriggers(
             label: `Lua ${event}`,
             inputSchema: button
               ? { type: 'string', maxLength: 8000 }
-              : event === 'editInput'
-                ? structuredClone(BEHAVIOR_EDIT_INPUT_SCHEMA)
-                : event === 'editRequest'
-                  ? structuredClone(BEHAVIOR_EDIT_REQUEST_SCHEMA)
+              : event === 'editRequest'
+                ? structuredClone(BEHAVIOR_EDIT_REQUEST_SCHEMA)
+                : edit
+                  ? structuredClone(BEHAVIOR_EDIT_INPUT_SCHEMA)
                   : { type: 'record', properties: {} },
             triggers: [nativeTrigger],
             ...(hooks[event] ? { hook: hooks[event]! } : {}),

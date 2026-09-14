@@ -17,12 +17,19 @@ export const EXTENSION_REQUEST_EDIT_MAX_INPUT_CHARS = 100_000;
 
 const hash = (value: string) => createHash('sha256').update(value).digest('hex');
 
-/** Risu hands an edit callback the submitted text and its chat index; the host owns this shape. */
-export function extensionEditHookInput(value: string): {
-  value: string;
-  meta: { index: number };
-} {
-  return { value, meta: { index: -1 } };
+/** Risu hands an edit callback the text and its chat index; the host owns this shape. */
+export function extensionEditHookInput(
+  value: string,
+  index = -1
+): { value: string; meta: { index: number } } {
+  return { value, meta: { index } };
+}
+/** Position of this turn's response in the conversation a guest may read. */
+export function responseMessageIndex(snapshot: {
+  logicalHistory?: unknown[];
+  history: unknown[];
+}): number {
+  return (snapshot.logicalHistory ?? snapshot.history).length + 1;
 }
 function reject(): never {
   throw new HttpError(400, 'EXTENSION_REQUEST_EDIT_INVALID');

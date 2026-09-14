@@ -20,6 +20,7 @@ import {
   extensionEditHookInput,
   extensionEditRequestInput,
   requestEditMessages,
+  responseMessageIndex,
 } from './extension-request-edit.js';
 import type {
   AfterResponseEntry,
@@ -219,9 +220,9 @@ function validateAfterResponseProgress(
   const hooks = definitions
     .map((definition) => ({
       ...definition,
-      actions: definition.behavior.actions.filter((action) =>
-        behaviorActionTriggers(action).includes('after-turn')
-      ),
+      actions: definition.behavior.actions
+        .filter((action) => behaviorActionTriggers(action).includes('after-turn'))
+        .sort((a, b) => behaviorHookOrder(a) - behaviorHookOrder(b)),
     }))
     .filter((definition) => definition.actions.length);
   count(receipt.total, 1, 100);
@@ -314,6 +315,9 @@ function validateAfterResponseProgress(
     }
 
   let variableState = progress.variableState ?? variableStateFromProfile(snapshot.profile);
+  // Host-owned output/display hooks chain over the display copy; the stored response never changes.
+  let displayText = source?.text;
+  const responseIndex = responseMessageIndex(snapshot);
   for (const [packageIndex, rawPackage] of receipt.packages.entries()) {
     const definition = hooks[packageIndex];
     if (!definition) reject('after-response package count');
@@ -388,10 +392,30 @@ function validateAfterResponseProgress(
         'main',
         definition.ref
       );
-      const input = action.automaticInput ?? {};
       if (entry.instanceId !== definition.instanceId || entry.trigger !== 'after-turn')
         reject('after-response action order');
-      same(entry.input, input, 'after-response automatic input');
+      if (action.hook) {
+        const value = behaviorRecord(entry.input).value;
+        // A copied fork has no stored response text; bind the chain to the recorded hash instead.
+        if (displayText === undefined) {
+          if (
+            typeof value !== 'string' ||
+            createHash('sha256').update(value).digest('hex') !== receipt.sourceHash
+          )
+            reject('after-response display chain');
+          displayText = value;
+        }
+        same(
+          entry.input,
+          extensionEditHookInput(displayText, responseIndex),
+          'after-response automatic input'
+        );
+        try {
+          displayText = behaviorEditResultText(entry.result);
+        } catch {
+          reject('after-response display result');
+        }
+      } else same(entry.input, action.automaticInput ?? {}, 'after-response automatic input');
       same(entry.before, current, 'after-response state chain');
       const entryAfter = checkState(entry.after, run.chatId, branchId, snapshot.profile);
       same(

@@ -19,7 +19,11 @@ export async function buildPackagePresentation(
   snapshot: RunSnapshot,
   source: PackagePresentationSource,
   state?: { sourceRevision: string; sourceHash: string; values: Record<string, unknown> },
-  options: { skipSourceTransforms?: boolean } = {}
+  options: {
+    skipSourceTransforms?: boolean;
+    /** Stored output/display hook result for this exact response; never recomputed here. */
+    displayEdit?: { text: string; changed: boolean; applied: string[] };
+  } = {}
 ) {
   if (
     source.chatId !== snapshot.chatId ||
@@ -46,14 +50,16 @@ export async function buildPackagePresentation(
       return { text, changed: false, applied: [] as string[] };
     }
   };
+  // Risu applies the imported output/display callbacks before its display regex; keep that order.
+  const edited = options.skipSourceTransforms ? undefined : options.displayEdit;
   const presetDisplay = options.skipSourceTransforms
     ? { text: source.text, changed: false, applied: [] as string[] }
-    : await display(source.text, 'assistant');
+    : await display(edited?.text ?? source.text, 'assistant');
   const packageDisplay = await applyPackageTransforms(presetDisplay.text, rules, 'source');
   const original = {
     text: packageDisplay.text,
     changed: packageDisplay.text !== source.text,
-    applied: [...presetDisplay.applied, ...packageDisplay.applied],
+    applied: [...(edited?.applied ?? []), ...presetDisplay.applied, ...packageDisplay.applied],
   };
   const request = await display(snapshot.request, 'user');
   const inputTransform = currentPromptInputTransform(snapshot);
