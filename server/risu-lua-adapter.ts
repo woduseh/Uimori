@@ -11,6 +11,7 @@ import {
   type BehaviorActionHook,
   type BehaviorActionTrigger,
 } from '../core/package-behavior.js';
+import { HOST_TEXT_PAGE_MAX } from '../core/paging.js';
 import {
   validatePromptExpression,
   type PromptExpression,
@@ -103,6 +104,13 @@ const unavailableApis = [
   'loadLoreBooksMain',
 ] as const;
 
+/**
+ * The one paged Host call the Lua prelude emits. The prelude cannot import, so the shared page
+ * size reaches the guest through this template instead of a literal per loop.
+ */
+const pagedCall = (method: string, argument: string, offset: string) =>
+  `__host("${method}", {${argument}, offset=${offset}, limit=${HOST_TEXT_PAGE_MAX}})`;
+
 const shim = `local __host = api.host.call
 local __json = api.json
 local __state = api.state
@@ -140,13 +148,13 @@ function async(callback)
   return function(...) return callback(...) end
 end
 local function __readVariable(key)
-  local page = __host("variables.read", {key=key, offset=0, limit=16000})
+  local page = ${pagedCall('variables.read', 'key=key', '0')}
   local overridden, parts = page.overridden, {}
   if page.value == __null or page.value == nil then return nil, overridden end
   while true do
     parts[#parts + 1] = page.value
     if page.nextOffset == nil or page.nextOffset == __null then break end
-    page = __host("variables.read", {key=key, offset=page.nextOffset, limit=16000})
+    page = ${pagedCall('variables.read', 'key=key', 'page.nextOffset')}
   end
   return table.concat(parts), overridden
 end
@@ -215,14 +223,14 @@ end
 local function __conversationRead(index)
   while __conversationText[index] == nil do
     local pending = __conversationChunks[index]
-    __conversationFragment(__host("conversation.read", {index=index, offset=pending and pending.offset or 0, limit=16000}))
+    __conversationFragment(${pagedCall('conversation.read', 'index=index', 'pending and pending.offset or 0')})
   end
   return __conversationText[index]
 end
 local function __conversationBatch(index)
   while __conversationText[index] == nil do
     local pending = __conversationChunks[index]
-    local page = __host("conversation.page", {index=index, offset=pending and pending.offset or 0, limit=16000})
+    local page = ${pagedCall('conversation.page', 'index=index', 'pending and pending.offset or 0')}
     if #page.items == 0 then error("RISU_LUA_CONVERSATION_FRAGMENT") end
     for _, fragment in ipairs(page.items) do __conversationFragment(fragment) end
   end

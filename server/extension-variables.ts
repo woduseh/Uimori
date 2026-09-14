@@ -2,6 +2,14 @@ import type { PackageAttachment } from '../core/content-package.js';
 import { packageInstanceId } from '../core/execution-context.js';
 import { ExtensionProgramError, type ExtensionProgram } from '../core/extension-program.js';
 import { BehaviorError } from '../core/package-behavior.js';
+import {
+  HOST_LIST_PAGE_DEFAULT,
+  HOST_LIST_PAGE_MAX,
+  HOST_TEXT_PAGE_DEFAULT,
+  HOST_TEXT_PAGE_MAX,
+  pageSlice,
+  pageText,
+} from '../core/paging.js';
 import { historicalPersonaExcluded } from '../core/persona-scope.js';
 import type { ProfileSnapshot } from '../core/product.js';
 import { PromptEvaluationError, type RuntimeValue } from '../core/prompt-values.js';
@@ -278,34 +286,32 @@ export function createExtensionVariableSession(
       const offset = integer(args.offset, 0, Number.MAX_SAFE_INTEGER);
       const limit = integer(
         args.limit,
-        method === 'variables.list' ? 20 : 8000,
-        method === 'variables.list' ? 50 : 16000
+        method === 'variables.list' ? HOST_LIST_PAGE_DEFAULT : HOST_TEXT_PAGE_DEFAULT,
+        method === 'variables.list' ? HOST_LIST_PAGE_MAX : HOST_TEXT_PAGE_MAX
       );
       if (limit === 0) fail('BEHAVIOR_HOST_ARGUMENTS');
       used = true;
       if (method === 'variables.list') {
-        const keys = Object.keys(resolved).sort();
-        const items = keys.slice(offset, offset + limit).map((key) => ({
-          key,
-          totalChars: resolved[key].length,
-          overridden: Object.hasOwn(state.values, key),
-        }));
+        const page = pageSlice(Object.keys(resolved).sort(), offset, limit);
         return {
-          items,
-          nextOffset: offset + items.length < keys.length ? offset + items.length : null,
-          total: keys.length,
+          items: page.items.map((key) => ({
+            key,
+            totalChars: resolved[key].length,
+            overridden: Object.hasOwn(state.values, key),
+          })),
+          nextOffset: page.nextOffset,
+          total: page.total,
         };
       }
       if (!Object.hasOwn(resolved, key))
         return { value: null, offset: 0, nextOffset: null, totalChars: 0, overridden: false };
-      const text = resolved[key];
-      const chunk = text.slice(offset, offset + limit);
+      const page = pageText(resolved[key], offset, limit);
       return {
-        value: chunk,
+        value: page.text,
         overridden: Object.hasOwn(state.values, key),
-        offset,
-        nextOffset: offset + chunk.length < text.length ? offset + chunk.length : null,
-        totalChars: text.length,
+        offset: page.offset,
+        nextOffset: page.nextOffset,
+        totalChars: page.totalChars,
       };
     },
   };

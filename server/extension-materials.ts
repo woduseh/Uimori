@@ -4,6 +4,14 @@ import { packageControlKey, type PackageAttachment } from '../core/content-packa
 import { ExtensionProgramError, type ExtensionProgram } from '../core/extension-program.js';
 import { packageIdentityFromProfile } from '../core/package-identity.js';
 import { compilePackageAttachment } from '../core/package-runtime.js';
+import {
+  HOST_LIST_PAGE_DEFAULT,
+  HOST_LIST_PAGE_MAX,
+  HOST_TEXT_PAGE_DEFAULT,
+  HOST_TEXT_PAGE_MAX,
+  pageSlice,
+  pageText,
+} from '../core/paging.js';
 import { historicalPersonaExcluded } from '../core/persona-scope.js';
 import type { ProfileSnapshot } from '../core/product.js';
 import type { RuntimeValue } from '../core/prompt-values.js';
@@ -95,31 +103,28 @@ export function createPackageExtensionHost(
     const offset = integer(args.offset, 0, 0, Number.MAX_SAFE_INTEGER);
     const limit = integer(
       args.limit,
-      method === 'materials.list' ? 20 : 8000,
+      method === 'materials.list' ? HOST_LIST_PAGE_DEFAULT : HOST_TEXT_PAGE_DEFAULT,
       1,
-      method === 'materials.list' ? 50 : 16000
+      method === 'materials.list' ? HOST_LIST_PAGE_MAX : HOST_TEXT_PAGE_MAX
     );
     if (method === 'materials.read' && (typeof args.id !== 'string' || args.id.length > 1000))
       fail('BEHAVIOR_HOST_ARGUMENTS');
     frozen ??= materials();
     if (method === 'materials.list') {
       if (offset > frozen.length) fail('BEHAVIOR_HOST_ARGUMENTS');
-      const items = frozen.slice(offset, offset + limit).map((item) => item.metadata);
-      return {
-        items,
-        nextOffset: offset + items.length < frozen.length ? offset + items.length : null,
-      };
+      const page = pageSlice(frozen, offset, limit);
+      return { items: page.items.map((item) => item.metadata), nextOffset: page.nextOffset };
     }
     // Absent and out-of-scope IDs intentionally have the same result.
     const material = frozen.find((item) => item.metadata.id === args.id);
     if (!material) fail('BEHAVIOR_HOST_MATERIAL_UNAVAILABLE');
     if (offset > material.text.length) fail('BEHAVIOR_HOST_ARGUMENTS');
-    const end = Math.min(material.text.length, offset + limit);
+    const page = pageText(material.text, offset, limit);
     return {
       ...material.metadata,
-      text: material.text.slice(offset, end),
-      offset,
-      nextOffset: end < material.text.length ? end : null,
+      text: page.text,
+      offset: page.offset,
+      nextOffset: page.nextOffset,
     };
   };
 }

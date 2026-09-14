@@ -1,4 +1,5 @@
 import { EXTENSION_PROGRAM_API, type ExtensionProgram } from '../core/extension-program.js';
+import { HOST_TEXT_PAGE_MAX } from '../core/paging.js';
 import type { PromptExpression } from '../core/prompt-program.js';
 import { RisuCbs, UnsupportedCbs } from './risu-cbs.js';
 
@@ -13,7 +14,7 @@ const OPERATORS: Record<string, (left: string, right: string) => string> = {
 const PRELUDE = `const __read = async (key) => {
   let text = '', offset = 0;
   for (;;) {
-    const page = await api.host.call('variables.read', {key, offset, limit: 16000});
+    const page = await api.host.call('variables.read', {key, offset, limit: ${HOST_TEXT_PAGE_MAX}});
     if (page.value === null || page.value === undefined) return offset === 0 ? 'null' : text;
     text += page.value;
     if (page.nextOffset === null || page.nextOffset === undefined) return text;

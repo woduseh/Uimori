@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
 import { ExtensionProgramError, type ExtensionProgram } from '../core/extension-program.js';
+import { HOST_TEXT_PAGE_DEFAULT, HOST_TEXT_PAGE_MAX, pageText } from '../core/paging.js';
 import type { RuntimeValue } from '../core/prompt-values.js';
 import type { ExtensionHostHandler } from './extension-runtime.js';
 
@@ -49,15 +50,8 @@ export function createResponseExtensionHost(
     if (signal.aborted) fail('BEHAVIOR_HOST_ABORTED');
     const args = exactArguments(value);
     const offset = integer(args.offset, 0, 0, Number.MAX_SAFE_INTEGER);
-    const limit = integer(args.limit, 8000, 1, 16000);
+    const limit = integer(args.limit, HOST_TEXT_PAGE_DEFAULT, 1, HOST_TEXT_PAGE_MAX);
     if (offset > captured.length) fail('BEHAVIOR_HOST_ARGUMENTS');
-    const end = Math.min(captured.length, offset + limit);
-    return {
-      text: captured.slice(offset, end),
-      offset,
-      nextOffset: end < captured.length ? end : null,
-      totalChars: captured.length,
-      contentHash,
-    };
+    return { ...pageText(captured, offset, limit), contentHash };
   };
 }
