@@ -79,6 +79,27 @@
         "https://cdn.jsdelivr.net/npm/@risuai/ccardlib@0.4.2/dist/index.d.ts": "e91c0791c3d9b2956c93d14f3cfb6c0957c25742fe59c3452ccb6a34e23f72d4"
       },
       "modifications": "Character-card spec types of the @risuai/ccardlib 0.4.2 package RisuAI depends on; the package's runtime declarations and CharacterCardV1 are dropped and the inline asset literal is named CharacterCardV3Asset. The package ships no LICENSE file, so its package.json \"license\": \"MIT\" is the licensing statement on record."
+    },
+    {
+      "path": "ccardlib-decorator.ts",
+      "license": "MIT",
+      "licenseFiles": [],
+      "upstreamSha256": {
+        "https://cdn.jsdelivr.net/npm/@risuai/ccardlib@0.4.2/dist/index.js": "6570967d77e20c26981a54c833b10c9d983d27954422658c76535422e8e2556b",
+        "https://cdn.jsdelivr.net/npm/@risuai/ccardlib@0.4.2/dist/index.d.ts": "e91c0791c3d9b2956c93d14f3cfb6c0957c25742fe59c3452ccb6a34e23f72d4"
+      },
+      "modifications": "Only `parseDecorators` of the @risuai/ccardlib 0.4.2 bundle RisuAI calls as `CCardLib.decorator.parse`; the card version checks and the V1/V2/V3 and lorebook converters are not copied. The published file is minified, so the function was expanded back to readable form with its one-letter locals renamed and the published declaration's types applied; no statement, condition or order changed. The package ships no LICENSE file, so its package.json \"license\": \"MIT\" is the licensing statement on record."
+    },
+    {
+      "path": "lorebook.ts",
+      "license": "GPL-3.0-only",
+      "licenseFiles": ["LICENSE"],
+      "upstreamSha256": {
+        "src/ts/characterCards.ts": "7579189692aab34ee673d8600b2b4b2f5f4be33563c8b8caae5e225389b35443",
+        "src/ts/process/lorebook.svelte.ts": "e743418179eb53f96b4c7a45c7a9cea84c5c5a49e11c60152192102ff5b1a4e0",
+        "src/ts/util.ts": "c8caa9f92b7f7f07b9ada9b1869f0d557e67546ecd65d4246d55b0ae5561616e"
+      },
+      "modifications": "`convertCharbook` copied whole and exported, with `checkNullish` inlined, so the `@@` lines it prepends are byte-identical to Risu's; it still mutates the entries it is given. It reads no app state upstream, so nothing became a parameter. The decorator hook of `getLoreBook` becomes the pure `interpretLoreDecorators(content)`: every mutation of the activation loop's locals is recorded in a returned record instead, and the activation loop itself (key search, recursion, token budget, chat-variable reads and writes) is not copied. Hook return values (`return` vs `return false`) are kept exactly so the `@@@` fallback chain still works. One added guard: a bare `@@position` is rejected instead of throwing a TypeError. Type-checks under strict; no @ts-nocheck."
     }
   ]
 }
