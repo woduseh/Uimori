@@ -1,5 +1,7 @@
 # Lua 봇 선언형 이식 검토 · 2026-09-10
 
+> 역사적 기록 · 2026-09-14 보충: 이 검토는 Lua 런타임 없이 선언형 수동 이식만 고려하던 2026-09-10 시점의 결론이에요. 2026-09-12 [베타 결정](../docs/DECISIONS-2026-09-12-BETA.md)이 격리된 코드 실행을 허용했고, 이후 Lua 실행기와 `editInput`·`editRequest`·`editOutput`·`editDisplay` 편집 hook, 선언형 트리거 변환을 구현했어요. 현재 지원 범위와 한계는 [Lua 콜백 가져오기](../docs/RISU-IMPORT.md#lua-콜백-가져오기)가 소유하며, 아래의 ‘원본 전체 동작을 그대로 옮길 수 없다’는 판단과 우선순위는 그 시점의 기록으로 읽어요.
+
 ## 판단
 
 사용자가 지정한 **`Merry Sisters! - Final.charx` 한 개**를 [이식 절차](../docs/RISU-PORTING.md)에 따라 정적으로 검토했어요. [결정 5](../docs/DECISIONS-2026-09-10.md)의 미지원 동작 보고이며, 이번 요청에서 두 번째 봇은 요구하지 않아요.
@@ -32,7 +34,7 @@
 
 정규식 단계의 목록 집계는 `editdisplay` **16**, `editoutput` **38**, `editprocess` **4**, `editinput` **3**, `edittrans` **1**, `disabled` **2**예요. `editinput` 3개 중 2개는 find/replace가 빈 구분 항목이에요. `ableFlag: false`는 비활성 표시가 아니라 기본 플래그 사용이므로 비활성으로 세지 않았어요.
 
-RisuToki의 `using-mcp-tools`, `authoring-bots`, `writing-lua-scripts`, `writing-trigger-scripts`, `writing-regex-scripts`, `writing-cbs-syntax`, `writing-lorebooks`, `writing-html-css` 안내를 읽었어요. 정확한 실행 시점은 [Lua API 안내](C:/Users/wodus/ai-workspace/RisuToki/risu/common/skills/writing-lua-scripts/API_REFERENCE.md)와 [런타임 상호작용 안내](C:/Users/wodus/ai-workspace/RisuToki/risu/common/skills/writing-trigger-scripts/RUNTIME_INTEROP.md)를 사용했어요. 두 안내의 검증 기준은 **RisuAI 2026.8.250 / `984f46b7306ca38312a043e0ef28d447f2a92766`**예요. 현재 사용자의 Risu 실행 버전·권한·공급자에서 직접 관찰한 결과는 아니에요.
+RisuToki의 `using-mcp-tools`, `authoring-bots`, `writing-lua-scripts`, `writing-trigger-scripts`, `writing-regex-scripts`, `writing-cbs-syntax`, `writing-lorebooks`, `writing-html-css` 안내를 읽었어요. 정확한 실행 시점은 RisuToki 로컬 체크아웃의 Lua API 안내 `risu/common/skills/writing-lua-scripts/API_REFERENCE.md`와 런타임 상호작용 안내 `risu/common/skills/writing-trigger-scripts/RUNTIME_INTEROP.md`를 사용했어요. 두 파일은 이 저장소에 없어요. 두 안내의 검증 기준은 **RisuAI 2026.8.250 / `984f46b7306ca38312a043e0ef28d447f2a92766`**예요. 현재 사용자의 Risu 실행 버전·권한·공급자에서 직접 관찰한 결과는 아니에요.
 
 ## 확인한 실행 흐름
 

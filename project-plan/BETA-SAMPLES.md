@@ -2,9 +2,11 @@
 
 작성일: 2026-09-12. **단계 A 기준과 Merry 후속 정적 조사를 담은 목록이며 구현 완료·native 호환 PASS가 아니에요.** 12개 파일·31개 기능군·246개 기능의 원본 조사와 기능별 `currentSupport`는 당시 기준으로 보존하고, 이후 공통 구현은 아래 ‘현재 구현 보충’에서 구분해요. 기계가 읽는 원본은 [BETA-SAMPLES.json](BETA-SAMPLES.json)이에요. [베타 결정](../docs/DECISIONS-2026-09-12-BETA.md)을 따르며, 책임 영역은 후속 설계의 후보예요.
 
+> 갱신 · 2026-09-14: 이 문서가 처음 적은 v0.1.0 공개 조건은 [베타 결정의 문서와 공개 조건](../docs/DECISIONS-2026-09-12-BETA.md#문서와-공개-조건)에 기록된 2026-09-13 후속 선택이 대체했어요. ‘개발 에이전트가 모든 표본 전체 기능을 완성·검증한 뒤 공개’ 대신, 공개 여부는 사용자가 직접 평가한 결과와 실제 지원 범위로 판단해요. 아래의 표본 지문·기능 ID·근거·`not-run` 표시는 참고 자료로 그대로 유지해요.
+
 ## 공개 조건과 읽는 방법
 
-- 사용자가 지정한 **12개 파일의 해당 버전에서 필요한 모든 기능을 완성하고 검증**하는 것을 v0.1.0 공개 조건으로 유지해요. 미래 Risu/RisuAI-Next·추가 표본을 자동 추종하지 않아요.
+- 사용자가 지정한 **12개 파일의 해당 버전**을 지원 목표의 고정 범위로 유지해요. 다만 ‘그 전체 기능을 완성·검증해야 공개’라는 조건은 2026-09-13 후속 선택이 대체했고, 공개 여부는 사용자가 직접 평가한 결과와 실제 지원 범위로 판단해요. 미래 Risu/RisuAI-Next·추가 표본을 자동 추종하지 않아요.
 - Uimori 자체 데이터와 확장 API를 기준으로 가져오기·표현 변환·선택형 호환 실행을 조합해요. 기술 구현·픽셀·원본 코드 무수정의 동일성은 일괄 요구하지 않아요. 특정 자료명 전용 본체 기능을 만들지 않아요.
 - 원본 보존과 코드 실행 허가는 별개예요. 제작자 코드·확장 소유 화면을 지원할 공통 경계를 준비하되 주 앱 DOM 전체 접근은 범위에서 제외해요.
 - 정상 준비·개입·건너뛰기를 구분하고 부가 기능 실패가 채팅을 막지 않게 해요. 사용자의 명시적 변경이 자동 변경보다 우선해요.
@@ -22,7 +24,7 @@
 | [프리셋 직접 가져오기](../docs/RISU-IMPORT.md#risu-프리셋) | 2026-09-13 후속 구현으로 `.risup`·구형 `.risupreset`/JSON/프로젝트 ZIP을 읽고 프롬프트·토글을 native 저장·편집·적용에 연결했어요. 실제 Phēmē 두 파일의 디코딩·부분 가져오기·원본 보존·archive 복원을 확인해 `currentRisuImport`는 `partial`이에요. 후속 구현에서 두 파일의 전송 전 3개·표시 2개 정규식을 공통 변환으로 실행했고, 실제 원문 보존·미리보기·전송·Reader 연결은 별도 합성 흐름으로 확인해요. memory 위치/래퍼와 전체 CBS 실행 차이를 안내해요. 모델·파라미터·도구는 판정 대상에서 제외하며 전체 인수는 계속 `not-run`이에요. |
 | [카드 가져오기](../docs/RISU-IMPORT.md) | 카드 `.charx`/JSON의 설명·시작문·로어·지원 이미지·이름 템플릿·정적 표시 정규식을 가져와요. Hinano·TVON·Vela의 `currentRisuImport`만 이 기본 경로의 존재를 뜻하는 `partial`로 갱신하고 이전 값은 `baselineRisuImport`로 보존해요. 후속 구현에서 히나노·TVoN·벨라 원본 CharX의 내부 자료 해독·부분 등록·원본 바이트 보존을 확인했어요. 스크립트 전체 실행의 근거는 아니에요. Merry 원본은 140,785,373 bytes로 카드 입력 한도 24 MiB를 넘어 이 경로로 직접 가져올 수 없어요. |
 | [모듈 JSON/프로젝트 ZIP 가져오기](../docs/RISU-IMPORT.md#구조화된-risu-모듈-json) | RisuToki가 추출한 `module.json`과 `.risutoki` 에셋의 기본 자료를 모듈로 등록해요. 후속 구현에서 모듈로 선택한 CharX를 등록하며 라이트보드 3종의 내부 자료 해독·부분 등록·원본 보존을 확인해 `currentRisuImport`를 `partial`로 기록했어요. 독립 `.risum`은 사용자 선택으로 지원 목표에서 제외하고 히든 스토리는 지원 형식으로 기능을 옮겨요. JS 플러그인 직접 가져오기도 미구현이에요. |
-| [확장 코드·Host API](../docs/EXTENSION-PROGRAMS.md) | `user`·`model`·`before-turn`·`after-turn` JavaScript, 자기 자료 읽기와 허가된 모델 호출, 응답 후 완성 본문 읽기, 사용자 독립 모델 작업, 명시적 상태 변환을 구현했어요. Risu 스크립트 자동 변환·Lua·일반 HTTP·공유 자료 권한·확장 설치 관리는 미구현이에요. |
+| [확장 코드·Host API](../docs/EXTENSION-PROGRAMS.md) | `user`·`model`·`before-turn`·`after-turn` JavaScript, 자기 자료 읽기와 허가된 모델 호출, 응답 후 완성 본문 읽기, 사용자 독립 모델 작업, 명시적 상태 변환을 구현했어요. Risu Lua 콜백도 같은 격리 경계에서 실행하며 `editInput`·`editRequest`·`editOutput`·`editDisplay` 네 편집 hook과 선언형 `setvar`·혼합 트리거·`runLLM`·`extractRegex`를 연결했어요([Lua 콜백 가져오기](../docs/RISU-IMPORT.md#lua-콜백-가져오기)). 원본 스크립트 전체의 자동 변환·일반 HTTP·공유 자료 권한·확장 설치 관리는 미구현이에요. |
 | [보존과 이동](../docs/DATA-MIGRATIONS.md) | 현재 [DB·archive·백업 버전](../docs/DATA-MIGRATIONS.md#현재-버전)을 사용하며 [native 자료 이동](../docs/NATIVE-TRANSFER.md)과 작업·상태 보존 경계를 구현했어요. 고정 표본 전체의 복원·업그레이드 인수로 간주하지 않아요. |
 
 기능별 표의 ‘현재 기반’과 `U-*` 근거는 초기 조사 시점의 판정이에요. 공통 구현이 늘었다는 이유만으로 246개 기능을 일괄 완료 처리하지 않으며, 후속 표본 작업에서 실제로 연결하고 확인한 항목만 그 근거와 함께 갱신해요.
@@ -676,22 +678,22 @@ Provider Manager는 8줄 압축 파일이므로 `8행 · offset N`을 사용해�
 
 | 근거 ID | 위치 | 의미와 한계 |
 | --- | --- | --- |
-| `U-IMPORT` | [docs/RISU-IMPORT.md:3](../docs/RISU-IMPORT.md#L3), [docs/RISU-PORTING.md:35](../docs/RISU-PORTING.md#L35) | 현재 native JSON 가져오기와 외부 이식 경계. 원본 Risu 직접 가져오기/실행 완료 증거가 아님. |
-| `U-PROMPT` | [core/prompt-program.ts:1429](../core/prompt-program.ts#L1429), [docs/PROMPT-RUNTIME.md:77](../docs/PROMPT-RUNTIME.md#L77) | 역할·순서·옵션·계산 AST의 현재 기반. |
+| `U-IMPORT` | [docs/RISU-IMPORT.md:3](../docs/RISU-IMPORT.md), [docs/RISU-PORTING.md:35](../docs/RISU-PORTING.md) | 현재 native JSON 가져오기와 외부 이식 경계. 원본 Risu 직접 가져오기/실행 완료 증거가 아님. |
+| `U-PROMPT` | [core/prompt-program.ts:1429](../core/prompt-program.ts#L1429), [docs/PROMPT-RUNTIME.md:77](../docs/PROMPT-RUNTIME.md) | 역할·순서·옵션·계산 AST의 현재 기반. |
 | `U-SEGMENT` | [core/source-segments.ts](../core/source-segments.ts), [docs/SOURCE-SEGMENTS.md](../docs/SOURCE-SEGMENTS.md) | 표시·요청 projection 구간 기반. 자료별 의미나 전용 패널을 보장하지 않음. |
-| `U-RUNTIME` | [docs/DECISIONS-2026-09-10.md:60](../docs/DECISIONS-2026-09-10.md#L60), [core/package-behavior.ts:23](../core/package-behavior.ts#L23), [core/content-package.ts:48](../core/content-package.ts#L48) | 선언형 기반만 구현된 조사 시점. 새 베타 결정은 코드 실행을 허용하지만 구현 완료를 의미하지 않음. |
-| `U-PROVIDER` | [core/provider-definitions.ts:52](../core/provider-definitions.ts#L52), [web/ProviderManagement.tsx:318](../web/ProviderManagement.tsx#L318), [docs/GLOBAL-MODELS.md:17](../docs/GLOBAL-MODELS.md#L17) | 고정 adapter 정의, 모델·연결 편집, 역할 모델. 모든 PM 옵션/플랫폼/라우터를 뜻하지 않음. |
+| `U-RUNTIME` | [docs/DECISIONS-2026-09-10.md:60](../docs/DECISIONS-2026-09-10.md), [core/package-behavior.ts:23](../core/package-behavior.ts#L23), [core/content-package.ts:48](../core/content-package.ts#L48) | 선언형 기반만 구현된 조사 시점. 새 베타 결정은 코드 실행을 허용하지만 구현 완료를 의미하지 않음. |
+| `U-PROVIDER` | [core/provider-definitions.ts:52](../core/provider-definitions.ts#L52), [web/ProviderManagement.tsx:318](../web/ProviderManagement.tsx#L318), [docs/GLOBAL-MODELS.md:17](../docs/GLOBAL-MODELS.md) | 고정 adapter 정의, 모델·연결 편집, 역할 모델. 모든 PM 옵션/플랫폼/라우터를 뜻하지 않음. |
 | `U-JOBS` | [server/model-runner.ts:82](../server/model-runner.ts#L82), [server/model-runner.ts:123](../server/model-runner.ts#L123), [server/provider-connection-test.ts](../server/provider-connection-test.ts) | 시도·작업·불확실 실행 보호와 Run 내부 continuation. 외부 Batch/background 재개와 다른 범위. |
-| `U-BEHAVIOR` | [core/package-behavior.ts:23](../core/package-behavior.ts#L23), [core/package-behavior.ts:40](../core/package-behavior.ts#L40), [docs/PACKAGE-BEHAVIOR.md:48](../docs/PACKAGE-BEHAVIOR.md#L48) | 구조화 상태·기록된 추첨·사용자/자동/모델 행동. 동일 실행 시점과 순차 효과는 별도 대조 필요. |
-| `U-SOURCE` | [server/source-editing.ts](../server/source-editing.ts), [docs/CHAT-BACKUP.md:25](../docs/CHAT-BACKUP.md#L25) | 원문·명시 수정본·분기와 보존 기반. 확장의 메시지 수정 API는 미완. |
+| `U-BEHAVIOR` | [core/package-behavior.ts:23](../core/package-behavior.ts#L23), [core/package-behavior.ts:40](../core/package-behavior.ts#L40), [docs/PACKAGE-BEHAVIOR.md:48](../docs/PACKAGE-BEHAVIOR.md) | 구조화 상태·기록된 추첨·사용자/자동/모델 행동. 동일 실행 시점과 순차 효과는 별도 대조 필요. |
+| `U-SOURCE` | [server/source-editing.ts](../server/source-editing.ts), [docs/CHAT-BACKUP.md:25](../docs/CHAT-BACKUP.md) | 원문·명시 수정본·분기와 보존 기반. 확장의 메시지 수정 API는 미완. |
 | `U-MEMORY` | [docs/LORE-CONTEXT.md](../docs/LORE-CONTEXT.md), [docs/CONTEXT-LIMITS.md](../docs/CONTEXT-LIMITS.md), [server/story-notes.ts](../server/story-notes.ts) | 자료 조회·원문·사용자 메모·문맥 기반. 표본의 기억 출처 판단과 의미 품질은 별도. |
-| `U-BACKUP` | [docs/CHAT-BACKUP.md:15](../docs/CHAT-BACKUP.md#L15), [docs/RISU-IMPORT.md:11](../docs/RISU-IMPORT.md#L11) | 현재 채팅 백업과 자료 참조. 새 확장 상태/의존 자료의 이동을 보증하지 않음. |
-| `U-READING` | [docs/READING.md:5](../docs/READING.md#L5), [docs/READING.md:29](../docs/READING.md#L29) | 브라우저 표시용 읽기 스타일이며 공유 문서 스타일이 아님. |
+| `U-BACKUP` | [docs/CHAT-BACKUP.md:15](../docs/CHAT-BACKUP.md), [docs/RISU-IMPORT.md:11](../docs/RISU-IMPORT.md) | 현재 채팅 백업과 자료 참조. 새 확장 상태/의존 자료의 이동을 보증하지 않음. |
+| `U-READING` | [docs/READING.md:5](../docs/READING.md), [docs/READING.md:29](../docs/READING.md) | 브라우저 표시용 읽기 스타일이며 공유 문서 스타일이 아님. |
 | `U-COPY` | [web/SourceReader.tsx:438](../web/SourceReader.tsx#L438) | 원문 또는 유효 번역 한 항목의 저장 텍스트 복사. |
-| `U-TRANSCRIPT` | [docs/CHAT-TRANSCRIPT.md:3](../docs/CHAT-TRANSCRIPT.md#L3), [docs/CHAT-TRANSCRIPT.md:23](../docs/CHAT-TRANSCRIPT.md#L23) | 한 분기 본문 JSON 교환. 공유 HTML·전체 백업과 구분. |
-| `U-IMAGES` | [docs/ILLUSTRATIONS.md](../docs/ILLUSTRATIONS.md), [docs/PACKAGES.md:77](../docs/PACKAGES.md#L77), [core/package-images.ts:3](../core/package-images.ts#L3) | 이미지 catalog·source anchor·삽화 작업 기반. 외부 자산 전체/표본 renderer 인수가 아님. |
-| `U-CACHE` | [docs/MODEL-PARAMETERS.md:55](../docs/MODEL-PARAMETERS.md#L55), [core/provider-cache.ts:19](../core/provider-cache.ts#L19) | 요청 캐시 경계/TTL. Gemini cachedContents lifecycle과 Advisor는 없음. |
-| `U-PRICING` | [docs/MODEL-PRICING.md:28](../docs/MODEL-PRICING.md#L28) | 실제/추정/미확인 비용을 분리한 호출별 기록. |
+| `U-TRANSCRIPT` | [docs/CHAT-TRANSCRIPT.md:3](../docs/CHAT-TRANSCRIPT.md), [docs/CHAT-TRANSCRIPT.md:23](../docs/CHAT-TRANSCRIPT.md) | 한 분기 본문 JSON 교환. 공유 HTML·전체 백업과 구분. |
+| `U-IMAGES` | [docs/ILLUSTRATIONS.md](../docs/ILLUSTRATIONS.md), [docs/PACKAGES.md:77](../docs/PACKAGES.md), [core/package-images.ts:3](../core/package-images.ts#L3) | 이미지 catalog·source anchor·삽화 작업 기반. 외부 자산 전체/표본 renderer 인수가 아님. |
+| `U-CACHE` | [docs/MODEL-PARAMETERS.md:55](../docs/MODEL-PARAMETERS.md), [core/provider-cache.ts:19](../core/provider-cache.ts#L19) | 요청 캐시 경계/TTL. Gemini cachedContents lifecycle과 Advisor는 없음. |
+| `U-PRICING` | [docs/MODEL-PRICING.md:28](../docs/MODEL-PRICING.md) | 실제/추정/미확인 비용을 분리한 호출별 기록. |
 | `MERRY-LUA-20260912` | ignored 로컬 구조화 조회 영수증·검토 기록; JSON의 section ID/hash 목록 | 32개 응답 수신·40개 hash 대조와 제한적 정적 검토. 원본 응답은 공개하지 않으며 native/전체 의미 검증은 아님. |
 
 ## 조합과 공개 완료 판단
