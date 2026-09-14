@@ -2,10 +2,11 @@ import type { ContentPackage } from '../core/content-package.js';
 import { RISU_IMPORT_MAX_LORE_ENTRIES, type RisuImportPreview } from '../core/risu-import.js';
 import { HttpError, record } from './request-validation.js';
 import {
-  parseRisuLoreContent,
-  risuLoreAlwaysActivates,
-  risuLoreNeverActivates,
-} from './risu-lore-decorators.js';
+  convertCharbook,
+  interpretLoreDecorators,
+  type LoreDecorators,
+  type RisuCharBookEntry,
+} from './compat/risu/lorebook.js';
 import {
   object,
   present,
@@ -15,6 +16,111 @@ import {
 } from './risu-import-card.js';
 import type { RisuImportFindings } from './risu-import-findings.js';
 import type { RisuImportText } from './risu-import-text.js';
+
+/**
+ * Every decorator Risu records, and what leaving it unapplied costs. 'unsupported' marks the ones that
+ * decide what the model receives or when it receives it; 'info' marks the ones Risu itself does nothing
+ * with in the prompt. `activate` and `dont_activate` carry no finding because the import applies both.
+ */
+const DECORATOR_LEVELS = {
+  end: 'unsupported',
+  activate_only_after: 'unsupported',
+  activate_only_every: 'unsupported',
+  keep_activate_after_match: 'unsupported',
+  dont_activate_after_match: 'unsupported',
+  depth: 'unsupported',
+  reverse_depth: 'unsupported',
+  role: 'unsupported',
+  scan_depth: 'unsupported',
+  is_greeting: 'unsupported',
+  position: 'unsupported',
+  inject_lore: 'unsupported',
+  inject_at: 'unsupported',
+  inject_replace: 'unsupported',
+  inject_prepend: 'unsupported',
+  ignore_on_max_context: 'unsupported',
+  additional_keys: 'unsupported',
+  exclude_keys: 'unsupported',
+  exclude_keys_all: 'unsupported',
+  match_full_word: 'unsupported',
+  match_partial_word: 'unsupported',
+  probability: 'unsupported',
+  priority: 'unsupported',
+  instruct_depth: 'info',
+  is_user_icon: 'info',
+  disable_ui_prompt: 'info',
+  recursive: 'info',
+  unrecursive: 'info',
+  no_recursive_search: 'info',
+  activate: null,
+  dont_activate: null,
+} satisfies Record<keyof LoreDecorators, 'unsupported' | 'info' | null>;
+/** Unknown names come from the file, so the notice lists a bounded number of bounded names. */
+const MAX_UNKNOWN_DECORATORS = 20;
+const MAX_UNKNOWN_DECORATOR_LENGTH = 40;
+
+/** An absent decorator reads back as `null`, `false` or `[]`; anything else a line wrote. */
+const carries = (value: LoreDecorators[keyof LoreDecorators]) =>
+  Array.isArray(value) ? value.length > 0 : value !== null && value !== false;
+
+/** The decorators one entry carries, minus the two the import acts on itself. */
+function reportedDecorators(decorators: LoreDecorators) {
+  const found: { decorator: string; level: 'unsupported' | 'info' }[] = [];
+  for (const decorator of Object.keys(DECORATOR_LEVELS) as (keyof LoreDecorators)[]) {
+    const level = DECORATOR_LEVELS[decorator];
+    if (level === null || !carries(decorators[decorator])) continue;
+    // `@@end` and `@@ignore_on_max_context` write depth and priority through the upstream locals they
+    // share, so those two values are that decorator's own doing rather than a line the entry carried.
+    if (decorator === 'depth' && decorators.end && decorators.depth === 0) continue;
+    if (
+      decorator === 'priority' &&
+      decorators.ignore_on_max_context &&
+      decorators.priority === -1000
+    )
+      continue;
+    found.push({ decorator, level });
+  }
+  return found;
+}
+
+const decoratorMessage = (decorator: string, level: 'unsupported' | 'info') =>
+  level === 'info'
+    ? `로어의 \`@@${decorator}\` 지시문은 모델에 보내는 내용을 바꾸지 않아요. 나중 키워드 활성화 작업을 위해 기록해 두고 지금은 적용하지 않아요.`
+    : `로어의 \`@@${decorator}\` 지시문은 로어가 모델에 들어가는 내용과 시점을 바꿔요. 나중 키워드 활성화 작업을 위해 기록해 두고 지금은 적용하지 않아요.`;
+
+/**
+ * The card's lorebook as Risu normalizes it on import: the entry `extensions` another frontend wrote
+ * (position/depth/role, selectiveLogic with secondary keys, probability, delay, match_whole_words)
+ * become the `@@` lines Risu reads. Only each entry's content is taken from here; the book-level
+ * settings the conversion also derives have no reader yet.
+ *
+ * The entries handed over are copies, because the conversion writes back onto the entry and deletes
+ * the keys it migrates from its `extensions`, and the card has to stay as the file wrote it.
+ */
+function risuLoreContents(book: Record<string, unknown>, entries: RisuCardLoreEntry[]): string[] {
+  const strings = (value: unknown) =>
+    Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : [];
+  return convertCharbook({
+    lorebook: [],
+    loresettings: undefined,
+    loreExt: undefined,
+    charbook: {
+      extensions: { ...object(book.extensions) },
+      entries: entries.map(
+        (entry): RisuCharBookEntry => ({
+          keys: strings(entry.keys),
+          secondary_keys: strings(entry.secondary_keys),
+          content: string(entry.content),
+          extensions: { ...object(entry.extensions) },
+          selective: entry.selective === true,
+          use_regex: entry.use_regex === true,
+          enabled: entry.enabled !== false,
+          insertion_order: typeof entry.insertion_order === 'number' ? entry.insertion_order : 0,
+        })
+      ),
+    },
+  }).lorebook.map((converted) => converted.content);
+}
 
 /**
  * Reads the card's lorebook. Every entry appears in the preview so the import screen can offer it
@@ -35,17 +141,19 @@ export function importRisuLore({
     throw new HttpError(400, 'RISU_IMPORT_INVALID_FILE');
   const preview: RisuImportPreview['lore'] = [];
   const lore: ContentPackage['lore'] = [];
-  for (const [index, raw] of entries.entries()) {
-    const entry = record(raw) as RisuCardLoreEntry;
+  const read = entries.map((raw) => record(raw) as RisuCardLoreEntry);
+  const contents = risuLoreContents(book, read);
+  const unknown = new Set<string>();
+  for (const [index, entry] of read.entries()) {
     const id = `lore-${index}`;
     const name = string(entry.name) || string(entry.comment) || `로어 ${index + 1}`;
-    const parsed = parseRisuLoreContent(string(entry.content));
-    const content = parsed.text;
+    const parsed = interpretLoreDecorators(contents[index]);
+    const content = parsed.body;
     // Risu never sends an entry it never activates; that content belongs to the material's own use.
-    const executable = risuLoreNeverActivates(parsed);
+    const executable = parsed.decorators.dont_activate;
     const enabled = entry.enabled !== false && !executable;
     const loading =
-      entry.constant === true || risuLoreAlwaysActivates(parsed)
+      entry.constant === true || parsed.decorators.activate
         ? ('pinned' as const)
         : ('discoverable' as const);
     preview.push({
@@ -62,13 +170,11 @@ export function importRisuLore({
         'warning',
         '활성화하지 않는 로어는 모델에 보내지 않아요. 자료가 스스로 쓰는 자료·코드로 보고 원본 파일에만 보존해요.'
       );
-    if (parsed.decorators.some((item) => !['dont_activate', 'activate'].includes(item.name)))
-      findings.add(
-        'lore-decorators',
-        'warning',
-        '로어의 `@@` 지시문 중 활성 여부 외의 위치·깊이·확률 규칙은 그대로 재현하지 않고 본문에서 제거해요.'
-      );
-    if (parsed.trailing)
+    for (const { decorator, level } of reportedDecorators(parsed.decorators))
+      findings.add(`lore-decorator:${decorator}`, level, decoratorMessage(decorator, level));
+    for (const found of parsed.unknown) unknown.add(found.slice(0, MAX_UNKNOWN_DECORATOR_LENGTH));
+    // Risu reads a decorator only in the leading block, so a later `@@` line stays in the body.
+    if (content.split('\n').some((line) => line.trim().startsWith('@@')))
       findings.add(
         'lore-decorator-position',
         'unsupported',
@@ -111,6 +217,15 @@ export function importRisuLore({
         ? { loreContext: { placement: 'background' as const, order } }
         : {}),
     });
+  }
+  if (unknown.size) {
+    const names = [...unknown].slice(0, MAX_UNKNOWN_DECORATORS).map((item) => `@@${item}`);
+    const rest = unknown.size - names.length;
+    findings.add(
+      'lore-decorator-unknown',
+      'unsupported',
+      `Risu가 모르는 \`@@\` 지시문은 본문에서 빠진 채 사라져요: ${names.join(', ')}${rest ? ` 외 ${rest}개` : ''}`
+    );
   }
   if (preview.some((item) => !item.enabled))
     findings.add('disabled-lore', 'info', '비활성 로어는 적용하지 않고 원본 파일에 보존해요.');

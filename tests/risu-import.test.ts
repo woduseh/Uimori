@@ -15,6 +15,7 @@ import { compilePackageAttachment } from '../core/package-runtime.js';
 import { modelWorkspace, updatePromptWorkspace } from '../server/prompt-workspace.js';
 import { compileSnapshotPrompt } from '../server/prompt-snapshot.js';
 import { decodeRPack } from '../server/compat/risu/rpack.js';
+import { convertCharbook } from '../server/compat/risu/lorebook.js';
 import { fixtureBotInput } from './fixtures/chat.js';
 import { buildPackagePresentation } from '../server/package-presentation.js';
 import { createHash } from 'node:crypto';
@@ -531,8 +532,9 @@ test('card routes import a usable bot and chat; memory separation is opt-in, exa
     expect(resources.find((item) => item.id.endsWith(':body'))?.text).toBe(
       'Synthetic Pilot explores an imaginary planet.'
     );
+    // Risu's decorator reader trims an entry's body, blank lines around it included.
     expect(resources.find((item) => item.id.endsWith(':lore:lore-1'))?.text).toBe(
-      '\nEarlier travel with User.\n'
+      'Earlier travel with User.'
     );
     expect(store.story.notes.revision(result.chat.id)).toBe(0);
     expect(JSON.stringify(bot)).not.toContain(source.base64);
@@ -545,7 +547,7 @@ test('card routes import a usable bot and chat; memory separation is opt-in, exa
     expect(notes).toHaveLength(1);
     expect(notes[0]).toMatchObject({
       kind: 'imported-memory',
-      text: '\nEarlier travel with {{user}}.\n',
+      text: 'Earlier travel with {{user}}.',
       atRevision: null,
       atHash: null,
       origin: { entryId: 'lore-1', title: 'History' },
@@ -1072,9 +1074,23 @@ test('a CBS block opener is not mistaken for a legacy lore directive', () => {
   expect(legacy.findings.map((item) => item.code)).toContain('dynamic-markup');
 });
 
+// An entry another frontend wrote as CCv3 `extensions`, which Risu migrates into `@@` lines on import.
+const migratedEntry = () => ({
+  name: 'Migrated',
+  content: 'Migrated body.',
+  keys: ['harbor'],
+  secondary_keys: ['storm'],
+  selective: true,
+  insertion_order: 100,
+  // Risu reads position 4 as "at depth" and the role as an index into system/user/assistant.
+  extensions: { position: 4, depth: 3, role: 2, selectiveLogic: 1 },
+  constant: false,
+  enabled: true,
+});
+
 test('lore directives decide activation and never reach the model as prose', () => {
   const value = card();
-  value.data.character_book.entries = [
+  const entries = [
     {
       name: 'Engine data',
       content: '@@dont_activate\n{"boards":["news"]}',
@@ -1083,14 +1099,14 @@ test('lore directives decide activation and never reach the model as prose', () 
     },
     {
       name: 'Always on',
-      content: '@@activate\n@@depth 3\nThe harbor is busy.',
+      content: '@@activate\n@@depth 3\n@@recursive\nThe harbor is busy.',
       constant: false,
       enabled: true,
     },
     { name: 'Plain', content: 'No directive here.', constant: true, enabled: true },
     {
       name: 'Upper directive',
-      content: '@@ACTIVATE\nThe market opens.',
+      content: '@@ACTIVATE\n@@Depth 3\nThe market opens.',
       constant: false,
       enabled: true,
     },
@@ -1100,7 +1116,9 @@ test('lore directives decide activation and never reach the model as prose', () 
       constant: true,
       enabled: true,
     },
+    migratedEntry(),
   ];
+  value.data.character_book.entries = entries;
   const preview = prepareRisuImport({
     source: {
       name: 'directives.json',
@@ -1113,14 +1131,52 @@ test('lore directives decide activation and never reach the model as prose', () 
   expect(lore['Always on']).toMatchObject({ enabled: true, loading: 'pinned' });
   expect(lore['Always on'].text).toBe('The harbor is busy.');
   expect(lore.Plain.text).toBe('No directive here.');
-  // Risu compares decorator names with lowercase labels, so an uppercase line stays prose.
+  // Risu's decorator names are case-sensitive, so an uppercase line is a decorator it does not know:
+  // the line leaves the body without deciding anything.
   expect(lore['Upper directive']).toMatchObject({ loading: 'discoverable' });
-  expect(lore['Upper directive'].text).toBe('@@ACTIVATE\nThe market opens.');
+  expect(lore['Upper directive'].text).toBe('The market opens.');
   expect(lore['Late directive'].text).toBe('Opening line.\n@@depth 2\nMore text.');
-  const codes = preview.findings.map((finding) => finding.code);
-  expect(codes).toContain('lore-not-activated');
-  expect(codes).toContain('lore-decorators');
-  expect(codes).toContain('lore-decorator-position');
+  // The body and the `@@` lines are the ones Risu's own conversion produces for the same entry.
+  const converted = convertCharbook({
+    lorebook: [],
+    loresettings: undefined,
+    loreExt: undefined,
+    charbook: { extensions: {}, entries: [migratedEntry()] },
+  }).lorebook[0].content.split('\n');
+  expect(converted).toEqual([
+    '@@exclude_keys_all storm',
+    '@@depth 3',
+    '@@role assistant',
+    'Migrated body.',
+  ]);
+  expect(lore.Migrated.text).toBe(converted.at(-1));
+  const levels = Object.fromEntries(
+    preview.findings.map((finding) => [finding.code, finding.level])
+  );
+  expect(levels['lore-not-activated']).toBe('warning');
+  expect(levels['lore-decorator-position']).toBe('unsupported');
+  // One finding per decorator the lorebook carries, instead of one aggregate notice for all of them.
+  expect(levels).not.toHaveProperty('lore-decorators');
+  expect(levels['lore-decorator:depth']).toBe('unsupported');
+  expect(levels['lore-decorator:role']).toBe('unsupported');
+  expect(levels['lore-decorator:exclude_keys_all']).toBe('unsupported');
+  expect(levels['lore-decorator:recursive']).toBe('info');
+  expect(levels).not.toHaveProperty('lore-decorator:activate');
+  expect(levels).not.toHaveProperty('lore-decorator:dont_activate');
+  const depth = preview.findings.find((finding) => finding.code === 'lore-decorator:depth');
+  expect(depth?.message).toContain('@@depth');
+  expect(depth?.message).toContain('지금은 적용하지 않아요');
+  const unknown = preview.findings.find((finding) => finding.code === 'lore-decorator-unknown');
+  expect(unknown?.level).toBe('unsupported');
+  expect(unknown?.message).toContain('@@ACTIVATE');
+  expect(unknown?.message).toContain('@@Depth');
+});
+
+test('a lorebook without directives reports nothing about decorators', () => {
+  const preview = prepareRisuImport({ source: sourceOf(card()) });
+  expect(preview.findings.filter((finding) => finding.code.startsWith('lore-decorator'))).toEqual(
+    []
+  );
 });
 
 // Every surface the card carries and the import does not reproduce has to reach the reader.
