@@ -17,7 +17,10 @@ import { compiledPackages, type ResolvedPackage } from '../core/package-context.
 import { executionContext } from '../core/execution-context.js';
 import { projectedLogicalHistory } from '../core/context-projection.js';
 import { projectPromptInputTransforms } from './prompt-transforms.js';
-import { projectExtensionRequestEdit } from './extension-request-edit.js';
+import {
+  projectExtensionMessageEdits,
+  projectExtensionRequestEdit,
+} from './extension-request-edit.js';
 
 /** Pair each exact source version with its actual user request; never infer roles from prose. */
 export function captureLogicalHistory(store: Store, snapshot: RunSnapshot): PromptHistoryMessage[] {
@@ -127,20 +130,16 @@ function contextFromPackages(
     (message) =>
       snapshot.contextPlan || !message.sourceRevision || inputHistoryIds.has(message.sourceRevision)
   );
-  const transformed = projectPromptInputTransforms(
-    snapshot,
-    [
-      ...sourceLogicalHistoryForRequest(snapshot, logical),
-      {
-        id: 'current-input',
-        role: 'user' as const,
-        text: projectExtensionRequestEdit(snapshot).text,
-        current: true,
-      },
-    ],
-    program,
-    values
-  );
+  const edited = projectExtensionMessageEdits(snapshot, [
+    ...sourceLogicalHistoryForRequest(snapshot, logical),
+    {
+      id: 'current-input',
+      role: 'user' as const,
+      text: projectExtensionRequestEdit(snapshot).text,
+      current: true,
+    },
+  ]);
+  const transformed = projectPromptInputTransforms(snapshot, edited.history, program, values);
   const current = transformed.history.at(-1)!;
   const history = [
     ...loreHistory(
@@ -153,7 +152,7 @@ function contextFromPackages(
   return {
     slots,
     history,
-    transformWarnings: transformed.warnings,
+    transformWarnings: [...edited.warnings, ...transformed.warnings],
     runtime: executionContext(snapshot),
     values: preset
       ? snapshot.profile?.promptControls?.[`${preset.id}@${preset.revision}`]?.values

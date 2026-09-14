@@ -97,6 +97,8 @@ export type RunSnapshot = {
   promptInputTransforms?: import('./prompt-input-transforms.js').PromptInputTransformReceipt;
   /** Derived projection of host-owned input hooks; the reserved request stays unchanged. */
   extensionRequestEdit?: import('./extension-request-edit.js').ExtensionRequestEditReceipt;
+  /** Derived projection of host-owned request hooks over the transmitted conversation copy. */
+  extensionMessageEdit?: import('./extension-request-edit.js').ExtensionMessageEditReceipt;
   chatId: string;
   parentRevision: string | null;
   settingsRevision: number;

@@ -21,6 +21,7 @@ import {
 } from '../server/package-behavior-run.js';
 import { productRoutes } from '../server/product-routes.js';
 import { compileSnapshotPrompt } from '../server/prompt-snapshot.js';
+import { extensionEditRequestInput } from '../server/extension-request-edit.js';
 import { applyRisuImport, prepareRisuImport } from '../server/risu-import.js';
 import { Store } from '../server/store.js';
 import { injectWithFixtureBot } from './fixtures/chat.js';
@@ -200,8 +201,9 @@ end`,
     'risu-lua-0-input',
     'risu-lua-0-editInput',
     'risu-lua-0-start',
+    'risu-lua-0-editRequest',
   ]);
-  expect(execute).toHaveBeenCalledTimes(3);
+  expect(execute).toHaveBeenCalledTimes(4);
   expect(progress.entries[0].program?.conversation?.viewHash).not.toBe(
     progress.entries[1].program?.conversation?.viewHash
   );
@@ -233,7 +235,7 @@ end`,
     readChatVariables(fixture.store, copy.chat.id, fixture.store.product.branch(copy.chat.id).id)
       .values
   ).toEqual({ phase: 'input:start', beforeInput: '', afterInput: 'New input.' });
-  expect(execute).toHaveBeenCalledTimes(3);
+  expect(execute).toHaveBeenCalledTimes(4);
 });
 
 test('an onInput failure keeps the input and discards the optional preparation cohort', async () => {
@@ -282,6 +284,7 @@ end`,
     'risu-lua-0-input',
     'risu-lua-0-editInput',
     'risu-lua-0-start',
+    'risu-lua-0-editRequest',
   ]);
   // The reserved Run keeps the request the user submitted; only the projection carries the edit.
   expect(fixture.store.run(run.id).snapshot).toEqual(reserved);
@@ -325,7 +328,116 @@ end`,
     idempotencyKey: 'edit-input-copy',
   });
   expect(copy.chat.id).not.toBe(fixture.chat.id);
-  expect(execute).toHaveBeenCalledTimes(3);
+  expect(execute).toHaveBeenCalledTimes(4);
+});
+
+test('editRequest edits the transmitted conversation copy only with a conversation grant', async () => {
+  const lua = `listenEdit("editRequest", function(id, value)
+  local edited = {}
+  for index, message in ipairs(value) do
+    edited[index] = {role = message.role, content = message.role .. ":" .. message.content}
+  end
+  return edited
+end)`;
+  const denied = imported(lua);
+  const withoutGrant = generation(denied, 'Send as written.');
+  await prepareAutomaticRunBehavior(denied.store, withoutGrant.id);
+  const skipped = preparedBehaviorSnapshot(denied.store, withoutGrant.id);
+  expect(runBehaviorProgress(denied.store, withoutGrant.id)!.preparation?.status).toBe('ready');
+  expect(skipped.extensionMessageEdit).toEqual({
+    version: 1,
+    entries: [],
+    applied: [],
+    skipped: true,
+  });
+  expect(JSON.stringify(compileSnapshotPrompt(skipped).promptCompilation!.messages)).toContain(
+    'Send as written.'
+  );
+  denied.store.completeRun(
+    withoutGrant.id,
+    'Response without the grant.',
+    { modelCalls: 0, inputTokens: null, outputTokens: null, costUsd: null },
+    withoutGrant.snapshot.settings
+  );
+  const deniedSource = denied.store.product.branch(denied.chat.id).headRevision!;
+  const deniedPresentation = await injectWithFixtureBot(denied.app, {
+    method: 'GET',
+    url: `/api/chats/${denied.chat.id}/sources/${deniedSource}/presentation`,
+  });
+  expect(deniedPresentation.json().issues).toContainEqual(
+    expect.stringContaining('전송문 편집은 대화 읽기 허용이 없거나')
+  );
+
+  const fixture = imported(lua);
+  grantVariableWrites(fixture, true);
+  const run = generation(fixture, 'Second request.');
+  const reserved = structuredClone(fixture.store.run(run.id).snapshot);
+  await prepareAutomaticRunBehavior(fixture.store, run.id);
+  expect(fixture.store.run(run.id).snapshot).toEqual(reserved);
+  const prepared = preparedBehaviorSnapshot(fixture.store, run.id);
+  expect(prepared.request).toBe('Second request.');
+  expect(prepared.extensionMessageEdit).toMatchObject({
+    version: 1,
+    entries: [{ index: 0, role: 'user', text: 'user:Second request.' }],
+  });
+  expect(JSON.stringify(compileSnapshotPrompt(prepared).promptCompilation!.messages)).toContain(
+    'user:Second request.'
+  );
+  fixture.store.completeRun(
+    run.id,
+    'Response.',
+    { modelCalls: 0, inputTokens: null, outputTokens: null, costUsd: null },
+    run.snapshot.settings
+  );
+  expect(fixture.store.run(run.id).request).toBe('Second request.');
+  const sourceId = fixture.store.product.branch(fixture.chat.id).headRevision!;
+  const presentation = await injectWithFixtureBot(fixture.app, {
+    method: 'GET',
+    url: `/api/chats/${fixture.chat.id}/sources/${sourceId}/presentation`,
+  });
+  expect(presentation.json()).toMatchObject({ request: { text: 'Second request.' } });
+  expect(database().store.product.import(fixture.store.product.export())).toMatchObject({
+    restored: true,
+  });
+});
+
+test('the transmitted copy handed to a request hook stays inside the guest limits', () => {
+  const message = (text: string, index = 0) => ({
+    id: `m${index}`,
+    role: 'user' as const,
+    text,
+  });
+  expect(extensionEditRequestInput([message('short')])).toEqual({
+    value: [{ role: 'user', content: 'short' }],
+    meta: {},
+  });
+  expect(extensionEditRequestInput([message('x'.repeat(100_001))])).toBeUndefined();
+  expect(
+    extensionEditRequestInput(Array.from({ length: 1_001 }, (_, index) => message('x', index)))
+  ).toBeUndefined();
+  expect(
+    extensionEditRequestInput(
+      Array.from({ length: 200 }, (_, index) => message('x'.repeat(1_000), index))
+    )
+  ).toBeUndefined();
+});
+
+test('an editRequest result that changes the message shape keeps the transmitted copy', async () => {
+  const fixture = imported(
+    'listenEdit("editRequest", function(id, value) return {value[1], value[1]} end)'
+  );
+  grantVariableWrites(fixture, true);
+  const run = generation(fixture, 'Structure must hold.');
+  await prepareAutomaticRunBehavior(fixture.store, run.id);
+  expect(runBehaviorProgress(fixture.store, run.id)!.preparation).toMatchObject({
+    status: 'failed',
+    code: 'BEHAVIOR_EDIT_RESULT_VALUE',
+  });
+  const prepared = preparedBehaviorSnapshot(fixture.store, run.id);
+  expect(prepared.extensionMessageEdit).toBeUndefined();
+  expect(JSON.stringify(compileSnapshotPrompt(prepared).promptCompilation!.messages)).toContain(
+    'Structure must hold.'
+  );
 });
 
 test('an editInput result that is not bounded text keeps the submitted request', async () => {
@@ -389,6 +501,7 @@ test('Risu import and passive restores preserve native Lua actions and source by
     ['risu-lua-0-output', ['after-turn'], 'lua'],
     ['risu-lua-0-start', ['before-turn'], 'lua'],
     ['risu-lua-0-onButtonClick', ['user'], 'lua'],
+    ['risu-lua-0-editRequest', ['before-turn'], 'lua'],
     ['risu-lua-0-editInput', ['before-turn'], 'lua'],
   ]);
   expect(
@@ -407,6 +520,7 @@ test('Risu import and passive restores preserve native Lua actions and source by
     .snapshot(fixture.chat.id)!
     .packages!.find((pkg) => pkg.id === fixture.content.id)!;
   expect(restoredPackage.behavior!.actions.map((action) => action.program?.language)).toEqual([
+    'lua',
     'lua',
     'lua',
     'lua',

@@ -1,6 +1,5 @@
 import { createHash } from 'node:crypto';
 import { executionContext } from '../core/execution-context.js';
-import { sourceLogicalHistoryForRequest } from '../core/source-context.js';
 import {
   renderPromptTemplate,
   resolvePromptValues,
@@ -21,7 +20,11 @@ import {
   templateReadsVariables,
 } from '../core/template-variables.js';
 import { applyTextTransformBatch } from './text-transforms.js';
-import { projectExtensionRequestEdit } from './extension-request-edit.js';
+import {
+  projectExtensionMessageEdits,
+  projectExtensionRequestEdit,
+  requestEditMessages,
+} from './extension-request-edit.js';
 
 const hash = (value: string) => createHash('sha256').update(value).digest('hex');
 const digest = (value: unknown) => hash(JSON.stringify(value));
@@ -77,26 +80,15 @@ function configuration(
     ...variableContext,
   };
 }
-function rawMessages(snapshot: RunSnapshot): PromptHistoryMessage[] {
-  return [
-    ...(snapshot.logicalHistory ??
-      snapshot.history.map((entry) => ({
-        id: `source:${entry.revision}`,
-        role: 'assistant' as const,
-        text: entry.text,
-        sourceRevision: entry.revision,
-        ...(entry.contentHash ? { sourceHash: entry.contentHash } : {}),
-      }))),
-    {
-      id: 'current-input',
-      role: 'user',
-      text: projectExtensionRequestEdit(snapshot).text,
-      current: true,
-    },
-  ];
-}
-function inputMessages(snapshot: RunSnapshot) {
-  return sourceLogicalHistoryForRequest(snapshot, rawMessages(snapshot));
+/** Transmittable message count, including the current request. Text edits never change it. */
+const messageCount = (snapshot: RunSnapshot) =>
+  (snapshot.logicalHistory ?? snapshot.history).length + 1;
+/** The transmitted conversation after host-owned input and request edits, before this stage. */
+function inputMessages(snapshot: RunSnapshot): PromptHistoryMessage[] {
+  return projectExtensionMessageEdits(
+    snapshot,
+    requestEditMessages(snapshot, projectExtensionRequestEdit(snapshot).text)
+  ).history;
 }
 function stageConfiguration(
   snapshot: RunSnapshot,
@@ -298,7 +290,7 @@ export function projectPromptInputTransforms(
   validateReceiptShape(receipt);
   const config = stageConfiguration(snapshot, program, values);
   if (receipt.configurationHash !== digest(config)) reject();
-  const indices = new Map(rawMessages(snapshot).map((message, index) => [message.id, index]));
+  const indices = new Map(inputMessages(snapshot).map((message, index) => [message.id, index]));
   const rules = new Set(config.rules.map((rule) => rule.id));
   const projected = history.map((message) => {
     const index = indices.get(message.id),
@@ -346,7 +338,7 @@ export async function applyPromptDisplayTransforms(
   if (authoredStart && role === 'user') return { text, changed: false, applied: [] };
   const config = configuration(snapshot),
     // An authored opening has no preceding user request in the actual conversation.
-    lastIndex = rawMessages(snapshot).length - (authoredStart ? 1 : 0),
+    lastIndex = messageCount(snapshot) - (authoredStart ? 1 : 0),
     index = lastIndex - (role === 'user' ? 1 : 0);
   const message: PromptHistoryMessage = {
     id: 'display',

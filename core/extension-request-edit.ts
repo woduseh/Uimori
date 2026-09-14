@@ -7,3 +7,19 @@ export type ExtensionRequestEditReceipt = {
   text: string;
   applied: string[];
 };
+
+/** A frozen send-time edit of the transmitted conversation copy. Roles and message count stay fixed. */
+export type ExtensionMessageEditReceipt = {
+  version: 1;
+  entries: {
+    index: number;
+    role: 'user' | 'assistant';
+    inputHash: string;
+    outputHash: string;
+    /** Present only for a message whose transmitted text differs from its input. */
+    text?: string;
+  }[];
+  applied: string[];
+  /** A declared edit that the host could not run: no conversation grant, over the limit, or a false condition. */
+  skipped?: true;
+};

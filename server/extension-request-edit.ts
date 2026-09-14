@@ -1,8 +1,19 @@
 import { createHash } from 'node:crypto';
-import { BEHAVIOR_EDIT_VALUE_MAX_CHARS } from '../core/package-behavior.js';
-import type { ExtensionRequestEditReceipt } from '../core/extension-request-edit.js';
+import {
+  BEHAVIOR_EDIT_MESSAGES_MAX,
+  BEHAVIOR_EDIT_VALUE_MAX_CHARS,
+} from '../core/package-behavior.js';
+import type {
+  ExtensionMessageEditReceipt,
+  ExtensionRequestEditReceipt,
+} from '../core/extension-request-edit.js';
+import type { PromptHistoryMessage } from '../core/prompt-program.js';
+import { sourceLogicalHistoryForRequest } from '../core/source-context.js';
 import type { RunSnapshot } from '../core/types.js';
 import { HttpError } from './request-validation.js';
+
+/** Bounded by the guest input limit, so a long conversation is skipped instead of half sent. */
+export const EXTENSION_REQUEST_EDIT_MAX_INPUT_CHARS = 100_000;
 
 const hash = (value: string) => createHash('sha256').update(value).digest('hex');
 
@@ -13,9 +24,9 @@ export function extensionEditHookInput(value: string): {
 } {
   return { value, meta: { index: -1 } };
 }
-const reject = (): never => {
+function reject(): never {
   throw new HttpError(400, 'EXTENSION_REQUEST_EDIT_INVALID');
-};
+}
 
 export function validateExtensionRequestEditShape(receipt: ExtensionRequestEditReceipt): void {
   if (
@@ -75,5 +86,136 @@ export function buildExtensionRequestEdit(
     applied,
   };
   validateExtensionRequestEditShape(receipt);
+  return receipt;
+}
+
+/** The transmittable conversation and the current request, before any send-time message edit. */
+export function requestEditMessages(
+  snapshot: RunSnapshot,
+  request: string
+): PromptHistoryMessage[] {
+  return sourceLogicalHistoryForRequest(snapshot, [
+    ...(snapshot.logicalHistory ??
+      snapshot.history.map((entry) => ({
+        id: `source:${entry.revision}`,
+        role: 'assistant' as const,
+        text: entry.text,
+        sourceRevision: entry.revision,
+        ...(entry.contentHash ? { sourceHash: entry.contentHash } : {}),
+      }))),
+    { id: 'current-input', role: 'user' as const, text: request, current: true },
+  ]);
+}
+
+/** The exact bounded value a request hook receives, or undefined when it cannot be handed over. */
+export function extensionEditRequestInput(
+  messages: PromptHistoryMessage[]
+):
+  | { value: { role: 'user' | 'assistant'; content: string }[]; meta: Record<string, never> }
+  | undefined {
+  if (messages.length > BEHAVIOR_EDIT_MESSAGES_MAX) return undefined;
+  if (messages.some((message) => message.text.length > BEHAVIOR_EDIT_VALUE_MAX_CHARS))
+    return undefined;
+  const input = {
+    value: messages.map((message) => ({ role: message.role, content: message.text })),
+    meta: {},
+  };
+  if (JSON.stringify(input).length > EXTENSION_REQUEST_EDIT_MAX_INPUT_CHARS) return undefined;
+  return input;
+}
+
+export function validateExtensionMessageEditShape(receipt: ExtensionMessageEditReceipt): void {
+  if (
+    !receipt ||
+    receipt.version !== 1 ||
+    !Array.isArray(receipt.entries) ||
+    receipt.entries.length > BEHAVIOR_EDIT_MESSAGES_MAX ||
+    !Array.isArray(receipt.applied) ||
+    receipt.applied.length > 100 ||
+    receipt.applied.some((id) => typeof id !== 'string' || !id.length || id.length > 300) ||
+    new Set(receipt.applied).size !== receipt.applied.length ||
+    (receipt.skipped !== undefined && receipt.skipped !== true) ||
+    (!receipt.applied.length && receipt.skipped !== true) ||
+    Object.keys(receipt).some((key) => !['version', 'entries', 'applied', 'skipped'].includes(key))
+  )
+    reject();
+  for (const [index, entry] of receipt.entries.entries()) {
+    if (!entry) reject();
+    if (
+      entry.index !== index ||
+      !['user', 'assistant'].includes(entry.role) ||
+      !/^[a-f0-9]{64}$/u.test(entry.inputHash) ||
+      !/^[a-f0-9]{64}$/u.test(entry.outputHash) ||
+      Object.keys(entry).some(
+        (key) => !['index', 'role', 'inputHash', 'outputHash', 'text'].includes(key)
+      )
+    )
+      reject();
+    if (entry.text === undefined) {
+      if (entry.inputHash !== entry.outputHash) reject();
+    } else if (
+      typeof entry.text !== 'string' ||
+      entry.text.length > BEHAVIOR_EDIT_VALUE_MAX_CHARS ||
+      hash(entry.text) !== entry.outputHash
+    )
+      reject();
+  }
+  if (receipt.skipped && receipt.entries.length) reject();
+}
+
+/** Projects the stored calculation onto any transmitted subset; original indices stay frozen. */
+export function projectExtensionMessageEdits(
+  snapshot: RunSnapshot,
+  history: PromptHistoryMessage[]
+): { history: PromptHistoryMessage[]; warnings: string[] } {
+  const receipt = snapshot.extensionMessageEdit;
+  if (!receipt) return { history, warnings: [] };
+  validateExtensionMessageEditShape(receipt);
+  if (receipt.skipped) return { history, warnings: ['EXTENSION_MESSAGE_EDIT_SKIPPED'] };
+  const indices = new Map(
+    requestEditMessages(snapshot, projectExtensionRequestEdit(snapshot).text).map(
+      (message, index) => [message.id, index]
+    )
+  );
+  if (indices.size !== receipt.entries.length) reject();
+  return {
+    history: history.map((message) => {
+      const index = indices.get(message.id);
+      const entry = index === undefined ? undefined : receipt.entries[index];
+      if (!entry) reject();
+      if (entry.role !== message.role || entry.inputHash !== hash(message.text)) reject();
+      return entry.text === undefined ? message : { ...message, text: entry.text };
+    }),
+    warnings: ['EXTENSION_MESSAGE_EDIT_APPLIED'],
+  };
+}
+
+/** Builds the derived receipt from the recorded hook chain over the transmitted messages. */
+export function buildExtensionMessageEdit(
+  base: PromptHistoryMessage[],
+  chain: { id: string; texts: string[] }[],
+  skipped: boolean
+): ExtensionMessageEditReceipt | undefined {
+  const applied: string[] = [];
+  let texts = base.map((message) => message.text);
+  for (const step of chain) {
+    if (step.texts.length !== texts.length) reject();
+    if (step.texts.some((text, index) => text !== texts[index])) applied.push(step.id);
+    texts = step.texts;
+  }
+  if (!applied.length)
+    return skipped ? { version: 1, entries: [], applied: [], skipped } : undefined;
+  const receipt: ExtensionMessageEditReceipt = {
+    version: 1,
+    entries: base.map((message, index) => ({
+      index,
+      role: message.role,
+      inputHash: hash(message.text),
+      outputHash: hash(texts[index]),
+      ...(texts[index] === message.text ? {} : { text: texts[index] }),
+    })),
+    applied,
+  };
+  validateExtensionMessageEditShape(receipt);
   return receipt;
 }

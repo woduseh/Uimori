@@ -6,6 +6,7 @@ import {
   BehaviorError,
   behaviorActionAllowed,
   behaviorActionTriggers,
+  behaviorEditResultMessages,
   behaviorEditResultText,
   behaviorHookBeforeRequest,
   behaviorHookOrder,
@@ -15,7 +16,11 @@ import {
   validatePackageBehavior,
 } from '../core/package-behavior.js';
 import { EXTENSION_PROGRAM_MAX_EDIT_RESULT_CHARS } from '../core/extension-program.js';
-import { extensionEditHookInput } from './extension-request-edit.js';
+import {
+  extensionEditHookInput,
+  extensionEditRequestInput,
+  requestEditMessages,
+} from './extension-request-edit.js';
 import type {
   AfterResponseEntry,
   AfterResponsePackage,
@@ -591,9 +596,9 @@ export function validateRunBehaviorArchive(store: Store, checkState: CheckState)
             stateSchema: behavior.stateSchema,
             state: after.state,
             result: entry.result,
-            ...(action.hook === 'edit-input'
-              ? { maxResultChars: EXTENSION_PROGRAM_MAX_EDIT_RESULT_CHARS }
-              : {}),
+            ...(action.hook === undefined
+              ? {}
+              : { maxResultChars: EXTENSION_PROGRAM_MAX_EDIT_RESULT_CHARS }),
           });
           if (entry.program.conversation) {
             if (!ownerSnapshot) reject('conversation opportunity owner');
@@ -845,8 +850,9 @@ export function validateRunBehaviorArchive(store: Store, checkState: CheckState)
         // Accepted predicates were checked against their recorded hostRuntime above.
         // A copied branch must not reinterpret omitted predicates under its new identity.
         let previousIndex = -1;
-        // Host-owned edit hooks chain over the request text instead of a declared input.
+        // Host-owned edit hooks chain over the transmitted copy instead of a declared input.
         let editedRequest = snapshot.request;
+        let editedMessages = requestEditMessages(snapshot, editedRequest);
         for (const entry of automatic) {
           const index = automaticDefinitions.findIndex(
             (d) => d.instanceId === entry.instanceId && d.action.id === entry.actionId
@@ -857,15 +863,25 @@ export function validateRunBehaviorArchive(store: Store, checkState: CheckState)
             entry.input,
             hooked.hook === 'edit-input'
               ? extensionEditHookInput(editedRequest)
-              : (hooked.automaticInput ?? {}),
+              : hooked.hook === 'edit-request'
+                ? extensionEditRequestInput(editedMessages)
+                : (hooked.automaticInput ?? {}),
             'automatic input'
           );
-          if (hooked.hook === 'edit-input') {
-            try {
+          try {
+            if (hooked.hook === 'edit-input') {
               editedRequest = behaviorEditResultText(entry.result);
-            } catch {
-              reject('automatic edit result');
+              editedMessages = requestEditMessages(snapshot, editedRequest);
             }
+            if (hooked.hook === 'edit-request') {
+              const texts = behaviorEditResultMessages(entry.result, editedMessages);
+              editedMessages = editedMessages.map((message, at) => ({
+                ...message,
+                text: texts[at],
+              }));
+            }
+          } catch {
+            reject('automatic edit result');
           }
           previousIndex = index;
         }
