@@ -69,7 +69,8 @@ describe('pure Risu Lua adaptation', () => {
     ]);
     expect(mixed.actions).toEqual([]);
     expect(mixed.sources[0].source).toBe(source);
-    expect(mixed.findings[0].code).toBe('RISU_LUA_MIXED_EFFECTS_UNSUPPORTED');
+    // The sibling effect has no operator, so the whole trigger keeps its original declaration.
+    expect(mixed.findings.some((f) => f.code === 'RISU_TRIGGER_EFFECTS_UNSUPPORTED')).toBe(true);
   });
 
   it('preserves oversized source and reports the bounded program failure', () => {
@@ -893,5 +894,66 @@ describe('Risu declarative trigger effects', () => {
         outputParsers: [],
       })
     ).not.toThrow();
+  });
+});
+
+describe('Risu triggers that mix effects with a script', () => {
+  const script = 'function onStart(id) setChatVar(id, "phase", "script") end';
+  const setvar = (name: string, value: string) => ({
+    type: 'setvar',
+    operator: '=',
+    var: name,
+    value,
+  });
+
+  it('keeps the declared order of effects around the script inside the trigger mode', () => {
+    const converted = adaptRisuLuaTriggers([
+      {
+        type: 'start',
+        conditions: [],
+        effect: [setvar('before', '1'), { type: 'triggerlua', code: script }, setvar('after', '2')],
+      },
+    ]);
+    expect(converted.actions.map((action) => [action.id, action.triggers, action.hook])).toEqual([
+      ['risu-lua-0-effects-before', ['before-turn'], undefined],
+      ['risu-lua-0-start', ['before-turn'], undefined],
+      ['risu-lua-0-effects-after', ['before-turn'], undefined],
+    ]);
+    expect(converted.sources).toEqual([{ triggerIndex: 0, effectIndex: 1, source: script }]);
+    expect(
+      converted.findings.some((finding) => finding.code === 'RISU_LUA_MIXED_EFFECTS_UNSUPPORTED')
+    ).toBe(false);
+  });
+
+  it('preserves a trigger whose effects would change its own condition or run in every mode', () => {
+    const selfWriting = adaptRisuLuaTriggers([
+      {
+        type: 'start',
+        conditions: [{ type: 'var', var: 'phase', operator: '=', value: 'ready' }],
+        effect: [setvar('phase', 'changed'), { type: 'triggerlua', code: script }],
+      },
+    ]);
+    expect(selfWriting.actions).toEqual([]);
+    expect(selfWriting.findings.some((f) => f.code === 'RISU_TRIGGER_CONDITION_WRITE')).toBe(true);
+    const scriptFirst = adaptRisuLuaTriggers([
+      {
+        type: 'start',
+        conditions: [],
+        effect: [{ type: 'triggerlua', code: script }, setvar('after', '1')],
+      },
+    ]);
+    expect(scriptFirst.actions).toEqual([]);
+    expect(scriptFirst.findings.some((f) => f.code === 'RISU_LUA_MIXED_EFFECTS_UNSUPPORTED')).toBe(
+      true
+    );
+    const manual = adaptRisuLuaTriggers([
+      {
+        type: 'manual',
+        conditions: [],
+        effect: [setvar('before', '1'), { type: 'triggerlua', code: script }],
+      },
+    ]);
+    expect(manual.actions).toEqual([]);
+    expect(manual.findings.some((f) => f.code === 'RISU_LUA_MIXED_EFFECTS_UNSUPPORTED')).toBe(true);
   });
 });
