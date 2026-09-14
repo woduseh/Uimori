@@ -23,6 +23,11 @@ import { adaptRisuLuaTriggers } from './risu-lua-adapter.js';
 import { applyNativeTransfer, prepareNativeTransfer } from './native-transfer.js';
 import { decodeImage } from './package-images.js';
 import { deleteUpload, readUpload } from './uploads.js';
+import {
+  parseRisuLoreContent,
+  risuLoreAlwaysActivates,
+  risuLoreNeverActivates,
+} from './risu-lore-decorators.js';
 import { fields, HttpError, record, text } from './request-validation.js';
 import type { Store } from './store.js';
 
@@ -284,9 +289,15 @@ function analyze(
     const entry = record(raw);
     const id = `lore-${index}`;
     const name = string(entry.name) || string(entry.comment) || `로어 ${index + 1}`;
-    const content = string(entry.content);
-    const enabled = entry.enabled !== false;
-    const loading = entry.constant === true ? ('pinned' as const) : ('discoverable' as const);
+    const parsed = parseRisuLoreContent(string(entry.content));
+    const content = parsed.text;
+    // Risu never sends an entry it never activates; that content belongs to the material's own use.
+    const executable = risuLoreNeverActivates(parsed);
+    const enabled = entry.enabled !== false && !executable;
+    const loading =
+      entry.constant === true || risuLoreAlwaysActivates(parsed)
+        ? ('pinned' as const)
+        : ('discoverable' as const);
     lore.push({
       id,
       title: name.slice(0, 200),
@@ -295,6 +306,24 @@ function analyze(
       loading,
       memoryCandidate: false,
     });
+    if (executable)
+      finding(
+        'lore-not-activated',
+        'warning',
+        '활성화하지 않는 로어는 모델에 보내지 않아요. 자료가 스스로 쓰는 자료·코드로 보고 원본 파일에만 보존해요.'
+      );
+    if (parsed.decorators.some((item) => !['dont_activate', 'activate'].includes(item.name)))
+      finding(
+        'lore-decorators',
+        'warning',
+        '로어의 `@@` 지시문 중 활성 여부 외의 위치·깊이·확률 규칙은 그대로 재현하지 않고 본문에서 제거해요.'
+      );
+    if (parsed.trailing)
+      finding(
+        'lore-decorator-position',
+        'unsupported',
+        '본문 중간의 `@@` 지시문은 해석하지 않고 그대로 남겨요. 원래 규칙과 다르게 동작할 수 있어요.'
+      );
     if (!enabled || !content.trim()) continue;
     if (loading === 'discoverable')
       finding(

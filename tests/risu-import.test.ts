@@ -1009,3 +1009,44 @@ test('an expansion bomb and an oversized member stay refused whatever the contai
   );
   expect(() => cardZip(oversized)).toThrow('RISU_IMPORT_INVALID_FILE');
 });
+
+test('lore directives decide activation and never reach the model as prose', () => {
+  const value = card();
+  value.data.character_book.entries = [
+    {
+      name: 'Engine data',
+      content: '@@dont_activate\n{"boards":["news"]}',
+      constant: true,
+      enabled: true,
+    },
+    {
+      name: 'Always on',
+      content: '@@activate\n@@depth 3\nThe harbor is busy.',
+      enabled: true,
+    },
+    { name: 'Plain', content: 'No directive here.', constant: true, enabled: true },
+    {
+      name: 'Late directive',
+      content: 'Opening line.\n@@depth 2\nMore text.',
+      constant: true,
+      enabled: true,
+    },
+  ];
+  const preview = prepareRisuImport({
+    source: {
+      name: 'directives.json',
+      base64: Buffer.from(JSON.stringify(value)).toString('base64'),
+    },
+  });
+  const lore = Object.fromEntries(preview.lore.map((item) => [item.title, item]));
+  // The material's own data stays out of the imported prompt material.
+  expect(lore['Engine data']).toMatchObject({ enabled: false, text: '{"boards":["news"]}' });
+  expect(lore['Always on']).toMatchObject({ enabled: true, loading: 'pinned' });
+  expect(lore['Always on'].text).toBe('The harbor is busy.');
+  expect(lore.Plain.text).toBe('No directive here.');
+  expect(lore['Late directive'].text).toBe('Opening line.\n@@depth 2\nMore text.');
+  const codes = preview.findings.map((finding) => finding.code);
+  expect(codes).toContain('lore-not-activated');
+  expect(codes).toContain('lore-decorators');
+  expect(codes).toContain('lore-decorator-position');
+});
