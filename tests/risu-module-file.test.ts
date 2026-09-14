@@ -136,3 +136,14 @@ test('asset count, JSON bytes and total container bytes are bounded', () => {
   oversized[oversized.length - 1] = 0;
   expectInvalid(oversized);
 });
+
+test('the RPack decode table matches the published map and stays a bijection', () => {
+  // Fixed vector from rpack_map.bin bytes 256..511 (first four entries and the last four); the
+  // helpers above derive the encoder from the decoder, so this is the one assertion that would
+  // notice a corrupted table.
+  expect([...decodeRPack(Buffer.from([0, 1, 2, 3, 252, 253, 254, 255]))]).toEqual([
+    44, 247, 132, 139, 8, 166, 128, 64,
+  ]);
+  const decoded = decodeRPack(Buffer.from(Array.from({ length: 256 }, (_, i) => i)));
+  expect(new Set(decoded).size).toBe(256);
+});
