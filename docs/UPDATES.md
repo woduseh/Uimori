@@ -1,6 +1,6 @@
 # Linux/Docker 업데이트 · 구현 제안
 
-상태: 2026-09-12 설계 검토를 바탕으로 한 구현 제안이에요. 사용자가 선택한 일반 설치 방향은 Linux/Docker이며, 일반 설치자의 Update 버튼·controller·maintenance 모드는 아직 미구현이에요. 이 문서의 설계 검토에서는 제품 코드와 운영 서버를 변경하지 않았어요. 베타 방향은 [결정](DECISIONS-2026-09-12-BETA.md), 진행은 [베타 계획](../project-plan/BETA-PLAN.md), 현재 수동 실행은 [SELF-HOST](SELF-HOST.md)가 소유해요.
+상태: 2026-09-12 설계 검토를 바탕으로 한 구현 제안이며, 1단계(admission/drain·유지보수 부팅)는 2026-09-14에 구현했어요. 사용자가 선택한 일반 설치 방향은 Linux/Docker이며, 일반 설치자의 Update 버튼·controller·maintenance 모드는 아직 미구현이에요. 이 문서의 설계 검토에서는 제품 코드와 운영 서버를 변경하지 않았어요. 베타 방향은 [결정](DECISIONS-2026-09-12-BETA.md), 진행은 [베타 계획](../project-plan/BETA-PLAN.md), 현재 수동 실행은 [SELF-HOST](SELF-HOST.md)가 소유해요.
 
 ## 현재 있는 기반과 없는 경계
 
@@ -56,7 +56,13 @@
 
 ## 다음 구현의 최소 두 단계
 
-### 1. admission/drain과 유지보수 부팅
+### 1. admission/drain과 유지보수 부팅 — 2026-09-14 구현
+
+`server/maintenance.ts`가 `maintenance` 표에 status·epoch·reason을 보관하고 `GET/POST /api/maintenance`로 상태를 조회·전환해요. 닫힌 상태는 재시작에도 유지되며 epoch는 유지보수 구간마다 하나씩 늘어요. 인증 hook 다음의 공통 `onRequest` 경계가 POST·PUT·PATCH·DELETE를 `503 MAINTENANCE_CLOSED`로 거절하고, 제어·로그인·진단·진행 중 작업의 취소/건너뛰기 경로만 허용 목록으로 남겨요. 브라우저는 유지보수 안내를 표시하고 작성 중인 입력을 지우지 않아요.
+
+worker 쪽은 같은 `admissionOpen`을 사용해 job·삽화·story 큐와 확장 operation의 **새 claim**을 멈추고, 이미 승인된 실행의 완료·결과 저장·상태 대기 재개는 계속해요. 완료가 만든 후속 제목 생성도 닫힌 동안 시작하지 않아요. `NR_MAINTENANCE=1` 부팅은 migration·읽기만 수행하고 복구·worker를 건너뛰며 API로 열 수 없어요. 검사는 `tests/maintenance.test.ts`예요.
+
+남은 부분은 아래 2단계의 controller와 image/volume 전환, 그리고 앱 안의 Update 버튼이에요. 아래 설명은 그 다음 구현의 기준으로 유지해요.
 
 새 업데이트 UI나 Docker 제어보다 먼저 앱의 admission 상태·epoch·허용 작업 종류와 작업 집계를 구현해요. 새 요청/설정/자료/원문 저장·백업 import를 차단하고 이미 진행 중인 작업의 결과 저장과 취소는 구분해요. worker claim, 외부 attempt 시작, helper·삽화·확장 효과에도 같은 경계를 연결해요. 후보 부팅은 migration·읽기 health만 수행하고 정상 worker 시작을 건너뛰어요.
 

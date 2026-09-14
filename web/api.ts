@@ -11,6 +11,7 @@ export class ApiError extends Error {
   }
 }
 export const sessionRequiredEvent = 'uimori-session-required';
+export const maintenanceChangedEvent = 'uimori-maintenance-changed';
 export const libraryChangedKey = 'uimori:library-change';
 
 export async function api<T>(
@@ -38,6 +39,12 @@ export async function api<T>(
     )
       window.dispatchEvent(new Event(sessionRequiredEvent));
     const payload = (await response.json().catch(() => null)) as { error?: unknown } | null;
+    if (
+      response.status === 503 &&
+      payload?.error === 'MAINTENANCE_CLOSED' &&
+      typeof window !== 'undefined'
+    )
+      window.dispatchEvent(new Event(maintenanceChangedEvent));
     const diagnostic = apiErrorDiagnostic(payload?.error, response.status, method);
     throw new ApiError(diagnostic.message, response.status, diagnostic.code);
   }

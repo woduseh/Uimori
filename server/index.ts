@@ -27,6 +27,8 @@ if (
   !['0', '1'].includes(process.env.NR_CODEX_ENABLED)
 )
   throw new Error('NR_CODEX_ENABLED must be 0 or 1');
+if (process.env.NR_MAINTENANCE !== undefined && !['0', '1'].includes(process.env.NR_MAINTENANCE))
+  throw new Error('NR_MAINTENANCE must be 0 or 1');
 const codex = {
   enabled: process.env.NR_CODEX_ENABLED === '1',
   executable: process.env.NR_CODEX_EXECUTABLE,
@@ -40,6 +42,7 @@ const app = await createApp({
   approvedOrigins,
   vertexRequestTier: parseVertexRequestTier(process.env.NR_VERTEX_REQUEST_TIER),
   codex,
+  maintenance: process.env.NR_MAINTENANCE === '1',
 });
 let closing = false;
 const close = async () => {

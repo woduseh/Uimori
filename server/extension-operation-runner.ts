@@ -43,12 +43,14 @@ type Options = Pick<
   owner: string;
   publish: (chatId: string) => void;
   track: (work: Promise<void>) => void;
+  /** Maintenance keeps admitted operations settling but claims no new ones. */
+  admitted?: () => boolean;
 };
 
 export function createExtensionOperationRunner(store: Store, options: Options) {
   const active = new Map<string, AbortController>();
   function pump() {
-    if (options.signal.aborted) return;
+    if (options.signal.aborted || options.admitted?.() === false) return;
     for (const id of queuedExtensionOperations(store)) {
       if (active.size >= 2) break;
       if (active.has(id)) continue;

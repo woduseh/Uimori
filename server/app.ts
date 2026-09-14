@@ -53,6 +53,7 @@ import { outlineRoutes } from './outline-routes.js';
 import { packageImageRoutes } from './package-images.js';
 import { nativeTransferRoutes } from './native-transfer.js';
 import { risuImportRoutes } from './risu-import.js';
+import { admissionOpen, maintenanceRoutes } from './maintenance.js';
 import { risuPresetImportRoutes } from './risu-preset-import.js';
 import { NativeTransferError } from '../core/native-transfer-validation.js';
 import { diagnosticReportRoutes } from './diagnostic-report.js';
@@ -92,6 +93,8 @@ export type AppOptions = {
   vertexRequestTier?: 'standard' | 'flex';
   codex?: CodexRuntimeOptions;
   codexRuntime?: CodexRuntimeService;
+  /** Boots with writes closed and no worker start: a candidate only proves migration and reads. */
+  maintenance?: boolean;
 };
 export type App = FastifyInstance & { store: Store; controls: Controls };
 type RecordBody = Record<string, unknown>;
@@ -410,8 +413,11 @@ export async function createApp(options: AppOptions): Promise<App> {
     track,
     publish,
   });
+  // Maintenance keeps admitted work finishing but starts no new external work.
+  const forcedClosed = options.maintenance === true;
+  const admitted = () => admissionOpen(store, forcedClosed);
   const pumpJobs = () => {
-    if (stopping.signal.aborted) return;
+    if (stopping.signal.aborted || !admitted()) return;
     for (const id of store.queuedJobs()) {
       if (jobs.has(id)) continue;
       jobs.add(id);
@@ -484,7 +490,7 @@ export async function createApp(options: AppOptions): Promise<App> {
   };
   /** Illustration work never shares a queue, slot or transaction with story text jobs. */
   const pumpIllustrations = () => {
-    if (stopping.signal.aborted) return;
+    if (stopping.signal.aborted || !admitted()) return;
     for (const id of queuedIllustrations(store)) {
       if (illustrations.has(id)) continue;
       illustrations.add(id);
@@ -854,8 +860,10 @@ export async function createApp(options: AppOptions): Promise<App> {
           pumpJobs();
           pumpIllustrations();
           pumpStory();
-          titles.afterSource(id);
-          branchTitles.afterSource(id);
+          if (admitted()) {
+            titles.afterSource(id);
+            branchTitles.afterSource(id);
+          }
         } catch (error) {
           if (!stopping.signal.aborted) {
             if (error instanceof ContextCompactionError) {
@@ -929,6 +937,7 @@ export async function createApp(options: AppOptions): Promise<App> {
     for (const [id, controller] of storyControllers)
       if (!['queued', 'running'].includes(store.story.job(id).status)) controller.abort();
     for (const runId of store.story.resumeWaiting()) execute(runId);
+    if (!admitted()) return;
     for (const id of store.story.queued()) {
       if (storyControllers.size >= 2) break;
       if (storyControllers.has(id)) continue;
@@ -1055,6 +1064,7 @@ export async function createApp(options: AppOptions): Promise<App> {
     });
   });
   const extensionOperations = createExtensionOperationRunner(store, {
+    admitted,
     signal: stopping.signal,
     owner: instanceId,
     approvedOrigins,
@@ -1534,10 +1544,15 @@ export async function createApp(options: AppOptions): Promise<App> {
     await Promise.allSettled([...work]);
   });
   app.addHook('onClose', async () => store.close());
-  store.recover();
-  store.story.recover();
-  helper.workspace.interrupt();
-  streams.recover();
+  // Authentication answers first; a maintenance gate never tells an anonymous caller the state.
+  maintenanceRoutes(app, store, { forcedClosed, activeWork: () => work.size });
+  // A maintenance boot proves migration and reads only: it neither recovers nor starts work.
+  if (!forcedClosed) {
+    store.recover();
+    store.story.recover();
+    helper.workspace.interrupt();
+    streams.recover();
+  }
   app.addHook('onListen', async () => {
     pumpJobs();
     pumpIllustrations();
