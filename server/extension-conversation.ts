@@ -4,17 +4,15 @@ import type {
   ExtensionConversationRef,
   ExtensionConversationSnapshot,
 } from '../core/extension-conversation.js';
-import {
-  HOST_LIST_PAGE_DEFAULT,
-  HOST_LIST_PAGE_MAX,
-  HOST_TEXT_PAGE_DEFAULT,
-  HOST_TEXT_PAGE_MAX,
-  pageSlice,
-  pageText,
-} from '../core/paging.js';
+import { pageSlice, pageText } from '../core/paging.js';
 import { readerConversation, readerRequestOrder } from '../core/reader-conversation.js';
-import type { RuntimeValue } from '../core/prompt-values.js';
 import type { ReaderRun, RunSnapshot, Source } from '../core/types.js';
+import {
+  createHostDispatcher,
+  exactHostArguments,
+  hostInteger,
+  type HostMethodOf,
+} from './extension-host-methods.js';
 import type { ExtensionHostHandler } from './extension-runtime.js';
 import type { Store } from './store.js';
 
@@ -391,35 +389,6 @@ export function resolveExtensionConversation(
   return Object.freeze(messages.map((message) => Object.freeze(message)));
 }
 
-function argumentsFor(value: RuntimeValue, keys: readonly string[]) {
-  if (
-    !value ||
-    typeof value !== 'object' ||
-    Array.isArray(value) ||
-    ![Object.prototype, null].includes(Object.getPrototypeOf(value)) ||
-    Object.getOwnPropertySymbols(value).length
-  )
-    fail('BEHAVIOR_HOST_ARGUMENTS');
-  const args = value as Record<string, RuntimeValue>;
-  for (const key of Object.getOwnPropertyNames(args)) {
-    const descriptor = Object.getOwnPropertyDescriptor(args, key)!;
-    if (!keys.includes(key) || !Object.hasOwn(descriptor, 'value') || !descriptor.enumerable)
-      fail('BEHAVIOR_HOST_ARGUMENTS');
-  }
-  return args;
-}
-function integer(
-  value: RuntimeValue | undefined,
-  fallback: number | undefined,
-  max: number,
-  min = 0
-) {
-  if (value === undefined && fallback !== undefined) return fallback;
-  if (typeof value !== 'number' || !Number.isSafeInteger(value) || value < min || value > max)
-    fail('BEHAVIOR_HOST_ARGUMENTS');
-  return value;
-}
-
 /** Every disclosure checks live grant/owner state, while the captured content never changes. */
 export function createConversationExtensionHost(
   program: ExtensionProgram,
@@ -427,7 +396,6 @@ export function createConversationExtensionHost(
   assertReadAccess: () => void,
   assertCurrent: () => void
 ): ExtensionHostHandler {
-  const permitted = program.capabilities?.includes('conversation.read') === true;
   const captured = frozenView.map(({ role, text }) => {
     if ((role !== 'user' && role !== 'assistant') || typeof text !== 'string') fail();
     return { role, text };
@@ -437,63 +405,54 @@ export function createConversationExtensionHost(
     if (offset > message.text.length) fail('BEHAVIOR_HOST_ARGUMENTS');
     return { index, role: message.role, ...pageText(message.text, offset, limit) };
   };
-  return async (method, value, signal): Promise<RuntimeValue> => {
-    if (signal.aborted) fail('BEHAVIOR_HOST_ABORTED');
-    if (
-      !permitted ||
-      !['conversation.list', 'conversation.read', 'conversation.page'].includes(method)
-    )
-      fail('BEHAVIOR_HOST_DENIED');
-    assertReadAccess();
-    assertCurrent();
-    if (signal.aborted) fail('BEHAVIOR_HOST_ABORTED');
-    const list = method === 'conversation.list';
-    const page = method === 'conversation.page';
-    const args = argumentsFor(value, list ? ['offset', 'limit'] : ['index', 'offset', 'limit']);
-    const offset = integer(args.offset, 0, Number.MAX_SAFE_INTEGER);
-    const limit = integer(
-      args.limit,
-      list ? HOST_LIST_PAGE_DEFAULT : page ? HOST_TEXT_PAGE_MAX : HOST_TEXT_PAGE_DEFAULT,
-      list ? HOST_LIST_PAGE_MAX : HOST_TEXT_PAGE_MAX,
-      1
-    );
-    if (list) {
-      if (offset > captured.length) fail('BEHAVIOR_HOST_ARGUMENTS');
-      const listing = pageSlice(captured, offset, limit);
-      return {
-        items: listing.items.map((message, index) => ({
-          index: offset + index,
-          role: message.role,
-          totalChars: message.text.length,
-        })),
-        nextOffset: listing.nextOffset,
-        total: listing.total,
-      };
-    }
-    if (page) {
-      let index = integer(args.index, 0, captured.length);
-      let nextOffset = offset;
-      let remaining = limit;
-      const items: ReturnType<typeof slice>[] = [];
-      if (index === captured.length && offset !== 0) fail('BEHAVIOR_HOST_ARGUMENTS');
-      while (index < captured.length && items.length < 50 && remaining > 0) {
-        const item = slice(index, nextOffset, remaining);
-        items.push(item);
-        remaining -= item.text.length;
-        if (item.nextOffset !== null) {
-          nextOffset = item.nextOffset;
-          break;
+  return createHostDispatcher<HostMethodOf<'conversation'>>({
+    denied: 'BEHAVIOR_HOST_DENIED',
+    granted: (entry) => program.capabilities?.includes(entry.capability) === true,
+    screen: exactHostArguments,
+    gate: (_entry, signal) => {
+      assertReadAccess();
+      assertCurrent();
+      if (signal.aborted) fail('BEHAVIOR_HOST_ABORTED');
+    },
+    handlers: {
+      'conversation.list': async ({ offset, limit }) => {
+        if (offset > captured.length) fail('BEHAVIOR_HOST_ARGUMENTS');
+        const listing = pageSlice(captured, offset, limit);
+        return {
+          items: listing.items.map((message, index) => ({
+            index: offset + index,
+            role: message.role,
+            totalChars: message.text.length,
+          })),
+          nextOffset: listing.nextOffset,
+          total: listing.total,
+        };
+      },
+      'conversation.page': async ({ args, offset, limit }) => {
+        let index = hostInteger(args.index, 0, 0, captured.length);
+        let nextOffset = offset;
+        let remaining = limit;
+        const items: ReturnType<typeof slice>[] = [];
+        if (index === captured.length && offset !== 0) fail('BEHAVIOR_HOST_ARGUMENTS');
+        while (index < captured.length && items.length < 50 && remaining > 0) {
+          const item = slice(index, nextOffset, remaining);
+          items.push(item);
+          remaining -= item.text.length;
+          if (item.nextOffset !== null) {
+            nextOffset = item.nextOffset;
+            break;
+          }
+          index++;
+          nextOffset = 0;
         }
-        index++;
-        nextOffset = 0;
-      }
-      return {
-        items,
-        next: index < captured.length ? { index, offset: nextOffset } : null,
-        total: captured.length,
-      };
-    }
-    const index = integer(args.index, undefined, captured.length - 1);
-    return slice(index, offset, limit);
-  };
+        return {
+          items,
+          next: index < captured.length ? { index, offset: nextOffset } : null,
+          total: captured.length,
+        };
+      },
+      'conversation.read': async ({ args, offset, limit }) =>
+        slice(hostInteger(args.index, undefined, 0, captured.length - 1), offset, limit),
+    },
+  });
 }
