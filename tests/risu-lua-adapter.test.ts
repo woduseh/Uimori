@@ -957,3 +957,100 @@ describe('Risu triggers that mix effects with a script', () => {
     expect(manual.findings.some((f) => f.code === 'RISU_LUA_MIXED_EFFECTS_UNSUPPORTED')).toBe(true);
   });
 });
+
+describe('Risu trigger effects that need low level access', () => {
+  const trigger = (effect: unknown[]) => [{ type: 'start', conditions: [], effect }];
+  const model = {
+    type: 'runLLM',
+    value: 'Summarize {{getvar::topic}}.',
+    inputVar: 'summary',
+  };
+  const extract = {
+    type: 'extractRegex',
+    value: '{{getvar::answer}}',
+    regex: 'score:\\s*(\\d+)',
+    flags: '',
+    result: 'score $1 of $&',
+    inputVar: 'score',
+  };
+
+  it('leaves the effects unexecuted without the card declaration, exactly like Risu', () => {
+    const denied = adaptRisuLuaTriggers(trigger([model]));
+    expect(denied.actions).toEqual([]);
+    expect(denied.findings[0].code).toBe('RISU_TRIGGER_EFFECTS_UNSUPPORTED');
+    const mixedWithSetvar = adaptRisuLuaTriggers(
+      trigger([{ type: 'setvar', operator: '=', var: 'phase', value: 'ready' }, model])
+    );
+    // The skipped model effect leaves the declared setvar running on its own, as Risu does.
+    expect(mixedWithSetvar.actions).toHaveLength(1);
+    expect(validateExtensionProgram(mixedWithSetvar.actions[0].program).capabilities).toEqual([
+      'variables.read',
+      'variables.write',
+    ]);
+  });
+
+  it('runs an allowed model request and regex extraction through the common hosts', async () => {
+    const converted = adaptRisuLuaTriggers(trigger([model, extract]), { lowLevelAccess: true });
+    expect(converted.actions).toHaveLength(1);
+    expect(validateExtensionProgram(converted.actions[0].program).capabilities).toEqual([
+      'variables.read',
+      'variables.write',
+      'model.generate',
+    ]);
+    expect(converted.findings.some((f) => f.code === 'RISU_TRIGGER_MODEL_CALL')).toBe(true);
+    const values: Record<string, string> = { topic: 'the harbor', answer: 'score: 42' };
+    const prompts: unknown[] = [];
+    const host: ExtensionHostHandler = async (method, raw): Promise<RuntimeValue> => {
+      const args = raw as { key: string; value?: string; prompt?: string };
+      if (method === 'model.generate') {
+        prompts.push(args.prompt);
+        return { status: 'completed', text: 'A short summary.', error: null, truncated: false };
+      }
+      if (method === 'variables.set') {
+        values[args.key] = args.value!;
+        return null;
+      }
+      return { value: values[args.key] ?? null, nextOffset: null, overridden: true };
+    };
+    await executeExtensionProgram(
+      converted.actions[0].program!,
+      { state: {}, input: {} },
+      undefined,
+      { host }
+    );
+    expect(prompts).toEqual(['Summarize the harbor.']);
+    expect(values.summary).toBe('A short summary.');
+    expect(values.score).toBe('score 42 of score: 42');
+  });
+
+  it('reports a failed model call and never fakes an unsupported ChatML request', async () => {
+    const converted = adaptRisuLuaTriggers(trigger([model]), { lowLevelAccess: true });
+    const values: Record<string, string> = { topic: 'the harbor' };
+    const failing: ExtensionHostHandler = async (method, raw): Promise<RuntimeValue> => {
+      const args = raw as { key: string; value?: string };
+      if (method === 'model.generate')
+        return { status: 'failed', text: '', error: 'MODEL_UNAVAILABLE', truncated: false };
+      if (method === 'variables.set') {
+        values[args.key] = args.value!;
+        return null;
+      }
+      return { value: values[args.key] ?? null, nextOffset: null, overridden: true };
+    };
+    await executeExtensionProgram(
+      converted.actions[0].program!,
+      { state: {}, input: {} },
+      undefined,
+      { host: failing }
+    );
+    expect(values.summary).toBe('Error: MODEL_UNAVAILABLE');
+    const chatml = adaptRisuLuaTriggers(
+      trigger([{ ...model, value: '<|im_start|>user<|im_sep|>hello<|im_end|>' }]),
+      { lowLevelAccess: true }
+    );
+    await expect(
+      executeExtensionProgram(chatml.actions[0].program!, { state: {}, input: {} }, undefined, {
+        host: failing,
+      })
+    ).rejects.toMatchObject({ code: 'BEHAVIOR_PROGRAM_FAILED' });
+  });
+});

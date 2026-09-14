@@ -327,7 +327,9 @@ function analyze(value: unknown, requestedKind?: RisuImportKind) {
   const regex = importRisuDisplayRegex(risu.customScripts);
   pkg.transforms = regex.transforms;
   findings.push(...regex.findings);
-  const lua = adaptRisuLuaTriggers(risu.triggerscript);
+  const lua = adaptRisuLuaTriggers(risu.triggerscript, {
+    ...(risu.lowLevelAccess === true ? { lowLevelAccess: true } : {}),
+  });
   if (lua.actions.length && lua.actions.length <= 100) {
     pkg.behavior = {
       revision: 1,
