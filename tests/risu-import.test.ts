@@ -1022,6 +1022,7 @@ test('lore directives decide activation and never reach the model as prose', () 
     {
       name: 'Always on',
       content: '@@activate\n@@depth 3\nThe harbor is busy.',
+      constant: false,
       enabled: true,
     },
     { name: 'Plain', content: 'No directive here.', constant: true, enabled: true },
