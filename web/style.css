@@ -1277,6 +1277,17 @@ input[type="checkbox"] {
 .settings-stack > label {
   gap: 8px;
 }
+.maintenance-banner {
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--line);
+  background: var(--accent-soft);
+  color: var(--text);
+  font-size: 14px;
+  line-height: 21px;
+}
+.maintenance-banner strong {
+  margin-right: 4px;
+}
 .login {
   margin: 8vh auto;
   max-width: 540px;

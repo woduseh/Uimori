@@ -3,6 +3,8 @@ import { illustrationErrorMessage } from './illustration-labels.js';
 type ApiErrorDiagnostic = { code: string | null; message: string };
 
 const messages: Record<string, string> = {
+  MAINTENANCE_CLOSED:
+    '업데이트 유지보수 중이라 새 저장·생성을 잠시 받지 않아요. 작성한 내용은 그대로 두고 유지보수가 끝난 뒤 다시 보내 주세요.',
   RISU_PRESET_INVALID_FILE:
     '지원하는 Risu 프리셋 파일인지 확인해 주세요. 프로젝트 ZIP에는 preset.json·manifest.json과 분리된 텍스트 파일이 함께 있어야 해요.',
   RISU_PRESET_INVALID: '프리셋의 프롬프트 구성과 옵션 형식을 확인해 주세요.',

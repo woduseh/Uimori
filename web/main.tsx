@@ -55,6 +55,7 @@ import { SourceReader } from './SourceReader.js';
 import { TurnActivity } from './TurnActivity.js';
 import { PackageBehaviorPanel } from './PackageBehaviorPanel.js';
 import { SessionGate } from './SessionGate.js';
+import { MaintenanceBanner } from './MaintenanceBanner.js';
 import { Dialog } from './Dialog.js';
 import { DeleteButton } from './DeleteButton.js';
 import { BotNavigation, NavigationQuickActions, type ChatFolder } from './BotTreeNavigation.js';
@@ -1720,6 +1721,7 @@ function App() {
 }
 createRoot(document.getElementById('root')!).render(
   <SessionGate>
+    <MaintenanceBanner />
     <App />
   </SessionGate>
 );

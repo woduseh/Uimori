@@ -33,6 +33,7 @@ import {
   branchPackageStates,
 } from './package-behavior-host.js';
 import { initRunBehavior, copyCandidateBehavior } from './package-behavior-run.js';
+import { initMaintenance } from './maintenance.js';
 import { completeAuthoredPackageStartStatesInTransaction } from './package-start.js';
 import { ContextStore } from './context-store.js';
 import { freezeReservationSnapshot } from './reservation-snapshot.js';
@@ -147,6 +148,7 @@ export class Store {
         initChatOverrides(this);
         initChatOptions(this);
         initResponseStreams(this.db);
+        initMaintenance(this);
       });
     } catch (error) {
       this.db.close();

@@ -92,6 +92,20 @@ docker compose --env-file .env.self-host restart proxy
 
 프로그램과 Docker 서비스가 정상적으로 재시작되면 `restart: unless-stopped`가 앱·프록시를 다시 시작해요. 서버 중지로 끊긴 모델 작업은 자동 재호출하지 않아요. 브라우저만 닫았다면 서버의 생성 작업은 계속 진행되고, 다시 로그인해 저장된 진행 상태와 결과를 볼 수 있어요.
 
+### 유지보수 모드
+
+업데이트 전후로 **새 저장·생성·가져오기만 잠시 멈추는** 유지보수 모드를 앱이 직접 제공해요. 상태 조회는 `GET /api/maintenance`, 전환은 `POST /api/maintenance`의 `{"status":"closed","reason":"update"}`·`{"status":"open"}`이에요. 접속 토큰이 필요한 다른 API와 같은 인증을 사용해요.
+
+```sh
+curl -sS -X POST https://story.example.com/api/maintenance \
+  -H 'Content-Type: application/json' -H 'Origin: https://story.example.com' \
+  -b "$COOKIE" -d '{"status":"closed","reason":"update"}'
+```
+
+닫힌 상태에서는 읽기와 진행 중인 작업의 **취소·건너뛰기**만 받고, 새 요청은 `503 MAINTENANCE_CLOSED`로 거절해 브라우저 화면에 유지보수 안내를 표시해요. 이미 승인된 실행은 계속 끝나고 결과를 저장하며, 그 결과가 만든 후속 작업은 큐에 남고 새 외부 호출로 시작하지 않아요. 닫힌 상태는 DB에 남으므로 재시작해도 유지돼요. `activeWork`로 아직 정리 중인 작업 수를 확인한 뒤 앱을 정지해요.
+
+`NR_MAINTENANCE=1`로 시작하면 **후보 검증 부팅**이에요. migration과 읽기만 수행하고 작업 복구·worker를 시작하지 않으며, 이 모드는 API로 열 수 없어요(`409 MAINTENANCE_BOOT`). 복사한 data로 새 이미지의 migration·읽기 경로를 확인할 때 사용해요.
+
 앱의 **내보내기와 복원 → SQLite 백업 다운로드**로 일관된 백업을 받아 별도로 보관할 수 있어요. 현재 지원 migration과 모든 과거 개발 버전의 이관은 구분하며, 백업·컨테이너 전환을 포함한 자동 업데이트는 [베타 계획](../project-plan/BETA-PLAN.md)에서 준비해요. 실행 중 DB 파일 하나만 복사하면 WAL의 변경분을 놓칠 수 있어요.
 
 ## 프록시와 접속 조건
