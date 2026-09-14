@@ -8,9 +8,21 @@ import {
   type ExtensionProgramResult,
 } from '../core/extension-program.js';
 import { inspectRuntimeValue, PromptBudget, type RuntimeValue } from '../core/prompt-values.js';
+import type {
+  ExtensionHostErrorCode,
+  ExtensionHostReply,
+  ExtensionWorkerLimits,
+  ExtensionWorkerMessage,
+  ExtensionWorkerPhase,
+  ExtensionWorkerResultCode,
+} from './extension-worker-protocol.js';
 
 export const EXTENSION_RUNTIME_ENGINE = 'quickjs-emscripten@0.32.0';
 export const EXTENSION_LUA_RUNTIME_ENGINE = 'wasmoon@1.16.0';
+/**
+ * The one place the guest bounds live. Both workers receive this object as `workerData.limits`
+ * and keep no numeric literal of their own, because neither can import this module.
+ */
 export const EXTENSION_RUNTIME_LIMITS = Object.freeze({
   concurrent: 2,
   inputBytes: 128 * 1024,
@@ -22,7 +34,17 @@ export const EXTENSION_RUNTIME_LIMITS = Object.freeze({
   hostPending: 8,
   hostValueBytes: 128 * 1024,
   hostResultBytes: 512 * 1024,
-});
+  cpuMs: 100,
+  guestJsonBytes: 128 * 1024,
+  /** Defence in depth behind core's EXTENSION_PROGRAM_MAX_SOURCE_BYTES. */
+  sourceBytes: 512 * 1024,
+  valueDepth: 32,
+  valueNodes: 30_000,
+  valueEntries: 2_000,
+  quickjsMemoryBytes: 8 * 1024 * 1024,
+  quickjsStackBytes: 256 * 1024,
+  luaMemoryBytes: 8 * 1024 * 1024,
+}) satisfies ExtensionWorkerLimits;
 
 export type ExtensionHostHandler = (
   method: string,
@@ -39,21 +61,7 @@ export type ExtensionRuntimeOptions = {
   awaitHostSettlement?: boolean;
 };
 
-type WorkerResult =
-  | { type: 'result'; ok: true; json: string }
-  | { type: 'result'; ok: false; code: string };
-type WorkerHostCall = { type: 'host-call'; id: number; method: string; argsJson: string };
-type WorkerPhase = {
-  type: 'phase';
-  phase: 'active' | 'host-wait';
-  sequence: number;
-  hostIds: number[];
-};
-type HostReply =
-  | { type: 'host-result'; id: number; ok: true; json: string }
-  | { type: 'host-result'; id: number; ok: false; code: string };
-
-const safeHostCodes = new Set([
+const safeHostCodes = new Set<string>([
   'BEHAVIOR_HOST_CALL_FAILED',
   'BEHAVIOR_HOST_DENIED',
   'BEHAVIOR_HOST_ARGUMENTS',
@@ -67,15 +75,15 @@ const safeHostCodes = new Set([
   'BEHAVIOR_HOST_VARIABLES_LIMIT',
   'BEHAVIOR_HOST_CONVERSATION_DENIED',
   'BEHAVIOR_HOST_CONVERSATION_UNAVAILABLE',
-]);
-const workerResultCodes = new Set([
+] satisfies ExtensionHostErrorCode[]);
+const workerResultCodes = new Set<string>([
   'BEHAVIOR_PROGRAM_INPUT_SIZE',
   'BEHAVIOR_PROGRAM_RUNTIME_FAILED',
   'BEHAVIOR_PROGRAM_FAILED',
   'BEHAVIOR_PROGRAM_TIMEOUT',
   'BEHAVIOR_PROGRAM_RESULT_VALUE',
   'BEHAVIOR_PROGRAM_OUTPUT_SIZE',
-]);
+] satisfies ExtensionWorkerResultCode[]);
 let active = 0;
 const waiting: { wake: () => void }[] = [];
 
@@ -120,10 +128,10 @@ function inspectJSON(value: unknown, maxBytes: number, code: string): string {
       value,
       new PromptBudget(
         {
-          maxCollectionLength: 2_000,
+          maxCollectionLength: EXTENSION_RUNTIME_LIMITS.valueEntries,
           maxSteps: 100_000,
           maxValueChars: maxBytes,
-          maxValueNodes: 30_000,
+          maxValueNodes: EXTENSION_RUNTIME_LIMITS.valueNodes,
         },
         'deterministic'
       )
@@ -143,10 +151,10 @@ function inputJSON(value: { state: RuntimeValue; input: RuntimeValue }) {
       value,
       new PromptBudget(
         {
-          maxCollectionLength: 2_000,
+          maxCollectionLength: EXTENSION_RUNTIME_LIMITS.valueEntries,
           maxSteps: 100_000,
           maxValueChars: EXTENSION_RUNTIME_LIMITS.inputBytes,
-          maxValueNodes: 30_000,
+          maxValueNodes: EXTENSION_RUNTIME_LIMITS.valueNodes,
         },
         'deterministic'
       )
@@ -172,7 +180,7 @@ function exactRecord(value: unknown, keys: string[]): value is Record<string, un
   );
 }
 
-function validCode(value: unknown): value is string {
+function validCode(value: unknown): value is ExtensionWorkerResultCode {
   return typeof value === 'string' && workerResultCodes.has(value);
 }
 
@@ -227,6 +235,7 @@ export async function executeExtensionProgram(
         source: program.source,
         inputJSON: encodedInput,
         hostErrorCodes: [...safeHostCodes],
+        limits: EXTENSION_RUNTIME_LIMITS,
       },
       resourceLimits: {
         codeRangeSizeMb: 16,
@@ -241,7 +250,7 @@ export async function executeExtensionProgram(
       let hostResultBytes = 0;
       let activeRemainingMs = EXTENSION_RUNTIME_LIMITS.timeoutMs;
       let hostWaitRemainingMs = hostWaitMs;
-      let watchdogPhase: 'active' | 'host-wait' = 'active';
+      let watchdogPhase: ExtensionWorkerPhase = 'active';
       let watchdogStarted = performance.now();
       let phaseSequence = 0;
       let settlementFatalError: Error | undefined;
@@ -249,7 +258,7 @@ export async function executeExtensionProgram(
       const hostPending = new Set<number>();
       const hostWork = new Set<Promise<void>>();
       const hostController = new AbortController();
-      const post = (message: HostReply) => {
+      const post = (message: ExtensionHostReply) => {
         if (!settled) worker.postMessage(message);
       };
       const finish = (outcome: { error: unknown } | { result: ExtensionProgramResult }) => {
@@ -281,7 +290,7 @@ export async function executeExtensionProgram(
           Math.max(0, remaining)
         );
       };
-      const enterPhase = (next: 'active' | 'host-wait') => {
+      const enterPhase = (next: ExtensionWorkerPhase) => {
         if (watchdogPhase === next) return;
         const elapsed = performance.now() - watchdogStarted;
         if (watchdogPhase === 'active') activeRemainingMs -= elapsed;
@@ -291,7 +300,7 @@ export async function executeExtensionProgram(
       };
       armWatchdog();
       signal?.addEventListener('abort', abort, { once: true });
-      worker.on('message', (message: WorkerResult | WorkerHostCall | WorkerPhase) => {
+      worker.on('message', (message: ExtensionWorkerMessage) => {
         if (settled) return;
         if (
           exactRecord(message, ['type', 'phase', 'sequence', 'hostIds']) &&

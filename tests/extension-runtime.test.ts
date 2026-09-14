@@ -6,25 +6,47 @@ import {
   type ExtensionProgram,
   ExtensionProgramError,
 } from '../core/extension-program.js';
-import { executeExtensionProgram, EXTENSION_RUNTIME_ENGINE } from '../server/extension-runtime.js';
+import {
+  executeExtensionProgram,
+  EXTENSION_LUA_RUNTIME_ENGINE,
+  EXTENSION_RUNTIME_ENGINE,
+  EXTENSION_RUNTIME_LIMITS,
+} from '../server/extension-runtime.js';
+import type { ExtensionResultEnvelope } from '../server/extension-worker-protocol.js';
 
 const program = (source: string): ExtensionProgram => ({
   api: 'uimori-state-action-v1',
   source,
 });
 
+type WorkerResultMessage = { type: string; ok?: boolean; json?: string; code?: string };
+const EMPTY_INPUT = JSON.stringify({ state: {}, input: {} });
+
 /** Starts a worker the way the runtime does, bypassing the core validation in front of it. */
-function spawnWorkerCode(name: string, source: string): Promise<string> {
+function spawnWorker(name: string, data: Record<string, unknown>): Promise<WorkerResultMessage> {
   const compiled = new URL(`../server/${name}.js`, import.meta.url);
   const file = existsSync(compiled) ? compiled : new URL(`../server/${name}.ts`, import.meta.url);
   const worker = new Worker(file, {
     execArgv: file.pathname.endsWith('.ts') ? ['--experimental-strip-types'] : undefined,
-    workerData: { source, inputJSON: JSON.stringify({ state: {}, input: {} }), hostErrorCodes: [] },
+    workerData: data,
   });
-  return new Promise<string>((resolve, reject) => {
-    worker.on('message', (message: { code?: string }) => resolve(message.code ?? 'OK'));
+  return new Promise<WorkerResultMessage>((resolve, reject) => {
+    // A worker reports its watchdog phase before the result; only the result ends this.
+    worker.on('message', (message: WorkerResultMessage) => {
+      if (message.type === 'result') resolve(message);
+    });
     worker.on('error', reject);
   }).finally(() => worker.terminate());
+}
+
+/** `null` limits leave the key out of workerData entirely. */
+function runWorker(name: string, source: string, limits: unknown = EXTENSION_RUNTIME_LIMITS) {
+  return spawnWorker(name, {
+    source,
+    inputJSON: EMPTY_INPUT,
+    hostErrorCodes: [],
+    ...(limits === null ? {} : { limits }),
+  });
 }
 
 async function code(work: Promise<unknown>) {
@@ -193,7 +215,71 @@ describe('fixed-memory QuickJS extension runtime', () => {
   it('both guest workers guard the source limit core declares, without core validation', async () => {
     const over = 'x'.repeat(EXTENSION_PROGRAM_MAX_SOURCE_BYTES + 1);
     for (const name of ['extension-worker', 'extension-lua-worker'])
-      expect(await spawnWorkerCode(name, over)).toBe('BEHAVIOR_PROGRAM_INPUT_SIZE');
+      expect((await runWorker(name, over)).code).toBe('BEHAVIOR_PROGRAM_INPUT_SIZE');
+  });
+
+  it('both guest workers refuse to start without well-formed runtime limits', async () => {
+    const runnable = {
+      'extension-worker': 'return { state: {}, result: null };',
+      'extension-lua-worker': 'return {state={}, result=false}',
+    };
+    for (const [name, source] of Object.entries(runnable)) {
+      expect((await runWorker(name, source, null)).code).toBe('BEHAVIOR_PROGRAM_INPUT_SIZE');
+      expect(
+        (await runWorker(name, source, { ...EXTENSION_RUNTIME_LIMITS, guestJsonBytes: 0 })).code
+      ).toBe('BEHAVIOR_PROGRAM_INPUT_SIZE');
+    }
+  });
+
+  it('encodes one identical result envelope in both guest workers', async () => {
+    // The two harnesses own separate encoders that cannot share code, so identical input and
+    // semantically identical programs are pinned against each other here, byte for byte.
+    const failureCodes: Record<string, string> = {
+      E: 'BEHAVIOR_PROGRAM_FAILED',
+      V: 'BEHAVIOR_PROGRAM_RESULT_VALUE',
+      L: 'BEHAVIOR_PROGRAM_OUTPUT_SIZE',
+    };
+    const cases: { envelope: ExtensionResultEnvelope; javascript: string; lua: string }[] = [
+      {
+        envelope: 'O{"result":{"list":[1,2],"text":"ok"},"state":{"count":1}}',
+        javascript: `return { result: { list: [1, 2], text: 'ok' }, state: { count: 1 } };`,
+        lua: `return {result={list={1,2}, text='ok'}, state={count=1}}`,
+      },
+      {
+        envelope: 'E',
+        javascript: `throw new Error('private guest detail');`,
+        lua: `error('private guest detail')`,
+      },
+      { envelope: 'V', javascript: `return 5;`, lua: `return 5` },
+      {
+        envelope: 'L',
+        javascript: `return { result: 'x'.repeat(200000), state: {} };`,
+        lua: `return {result=string.rep('x', 200000), state={}}`,
+      },
+    ];
+    for (const { envelope, javascript, lua } of cases) {
+      const expected = envelope.startsWith('O')
+        ? { type: 'result', ok: true, json: envelope.slice(1) }
+        : { type: 'result', ok: false, code: failureCodes[envelope] };
+      const [fromJavaScript, fromLua] = await Promise.all([
+        runWorker('extension-worker', javascript),
+        runWorker('extension-lua-worker', lua),
+      ]);
+      expect(fromJavaScript).toEqual(expected);
+      expect(fromLua).toEqual(expected);
+      expect(Buffer.from(fromLua.json ?? '')).toEqual(Buffer.from(fromJavaScript.json ?? ''));
+    }
+
+    const decoded = { state: { count: 1 }, result: { list: [1, 2], text: 'ok' } };
+    await expect(
+      executeExtensionProgram(program(cases[0].javascript), { state: {}, input: {} })
+    ).resolves.toEqual({ ...decoded, engine: EXTENSION_RUNTIME_ENGINE });
+    await expect(
+      executeExtensionProgram(
+        { api: 'uimori-state-action-v1', language: 'lua', source: cases[0].lua },
+        { state: {}, input: {} }
+      )
+    ).resolves.toEqual({ ...decoded, engine: EXTENSION_LUA_RUNTIME_ENGINE });
   });
 
   it('automatic preparation can wait for capacity and cancellation removes a queued invocation', async () => {
