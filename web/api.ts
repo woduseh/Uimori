@@ -76,6 +76,29 @@ export async function api<T>(
   return result;
 }
 
+/** Streams one chosen file as the request body, so a large container never becomes base64. */
+export async function apiBinary<T>(path: string, body: Blob): Promise<T> {
+  const response = await fetch(`/api${path}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/octet-stream' },
+    body,
+  });
+  if (!response.ok) {
+    if (response.status === 401 && typeof window !== 'undefined')
+      window.dispatchEvent(new Event(sessionRequiredEvent));
+    const payload = (await response.json().catch(() => null)) as { error?: unknown } | null;
+    if (
+      response.status === 503 &&
+      payload?.error === 'MAINTENANCE_CLOSED' &&
+      typeof window !== 'undefined'
+    )
+      window.dispatchEvent(new Event(maintenanceChangedEvent));
+    const diagnostic = apiErrorDiagnostic(payload?.error, response.status, 'POST');
+    throw new ApiError(diagnostic.message, response.status, diagnostic.code);
+  }
+  return (await response.json()) as T;
+}
+
 export const labels: Record<string, string> = {
   waiting_for_state: '상태 확인 대기',
   queued: '대기',

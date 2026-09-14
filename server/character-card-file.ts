@@ -3,6 +3,7 @@ import { createHash } from 'node:crypto';
 import {
   RISU_IMPORT_MAX_BYTES,
   type RisuImportSource,
+  type RisuImportStagedSource,
   type RisuImportKind,
 } from '../core/risu-import.js';
 import { fields, HttpError, record, text } from './request-validation.js';
@@ -13,9 +14,13 @@ const invalid = (): never => {
   throw new HttpError(400, 'RISU_IMPORT_INVALID_FILE');
 };
 const expandedLimit = 64 * 1024 * 1024;
+/** One member never expands past this, so a large container cannot hold a single huge entry. */
+const memberLimit = 64 * 1024 * 1024;
 
 /** Read bounded ZIP members in memory. No extraction, code execution, or remote assets. */
 export function cardZip(bytes: Buffer): Map<string, () => Buffer> {
+  // A big container may declare its own contents; an expansion far beyond its size stays refused.
+  const totalLimit = Math.max(expandedLimit, bytes.length * 4);
   let end = bytes.length - 22;
   for (; end >= Math.max(0, bytes.length - 65_557); end--)
     if (
@@ -51,7 +56,8 @@ export function cardZip(bytes: Buffer): Map<string, () => Buffer> {
     expanded += length;
     if (
       next > end ||
-      expanded > expandedLimit ||
+      length > memberLimit ||
+      expanded > totalLimit ||
       flags & 0x41 ||
       ![0, 8].includes(method) ||
       bytes.readUInt16LE(cursor + 34) !== 0 ||
@@ -103,17 +109,33 @@ export function cardZip(bytes: Buffer): Map<string, () => Buffer> {
   return members;
 }
 
-export function readCharacterCard(value: unknown, kind?: RisuImportKind) {
+export function readCharacterCard(
+  value: unknown,
+  kind?: RisuImportKind,
+  /** Reads a file the app staged for this import; a large container never enters the body. */
+  readStaged?: (uploadId: string) => Buffer
+) {
   if (kind !== undefined && kind !== 'bot' && kind !== 'module')
     throw new HttpError(400, 'RISU_IMPORT_KIND');
   const input = record(value);
-  fields(input, ['name', 'base64']);
+  const staged = Object.hasOwn(input, 'uploadId');
+  fields(input, staged ? ['name', 'uploadId'] : ['name', 'base64']);
   const name = text(input.name, 'file name', 255);
-  const base64 = text(input.base64, 'file bytes', Math.ceil(RISU_IMPORT_MAX_BYTES / 3) * 4);
-  const bytes = Buffer.from(base64, 'base64');
-  if (bytes.length > RISU_IMPORT_MAX_BYTES) throw new HttpError(413, 'RISU_IMPORT_TOO_LARGE');
-  if (bytes.toString('base64') !== base64 || bytes.length < 2) return invalid();
-  const source: RisuImportSource = { name, base64 };
+  let bytes: Buffer;
+  let source: RisuImportSource | RisuImportStagedSource;
+  if (staged) {
+    const uploadId = text(input.uploadId, 'upload ID', 100);
+    if (!readStaged) throw new HttpError(400, 'RISU_IMPORT_INVALID_FILE');
+    bytes = readStaged(uploadId);
+    if (bytes.length < 2) return invalid();
+    source = { name, uploadId };
+  } else {
+    const base64 = text(input.base64, 'file bytes', Math.ceil(RISU_IMPORT_MAX_BYTES / 3) * 4);
+    bytes = Buffer.from(base64, 'base64');
+    if (bytes.length > RISU_IMPORT_MAX_BYTES) throw new HttpError(413, 'RISU_IMPORT_TOO_LARGE');
+    if (bytes.toString('base64') !== base64 || bytes.length < 2) return invalid();
+    source = { name, base64 };
+  }
   const hash = createHash('sha256').update(bytes).digest('hex');
   const zipped = /\.(?:charx|zip)$/iu.test(name) || bytes.readUInt16LE(0) === 0x4b50;
   let members = zipped ? cardZip(bytes) : new Map<string, () => Buffer>();

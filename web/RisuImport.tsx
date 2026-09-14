@@ -1,12 +1,13 @@
-import { readImportSource as readSource } from './import-source.js';
+import { readLargeImportSource as readSource } from './import-source.js';
 import { useRef, useState } from 'react';
-import { RISU_IMPORT_MAX_BYTES } from '../core/risu-import.js';
+import { RISU_IMPORT_MAX_BYTES, RISU_IMPORT_MAX_UPLOAD_BYTES } from '../core/risu-import.js';
 import type {
   RisuImportApply,
   RisuImportKind,
   RisuImportPreview,
   RisuImportResult,
   RisuImportSource,
+  RisuImportStagedSource,
 } from '../core/risu-import.js';
 import { ApiError, api } from './api.js';
 import { SelectionCheckbox } from './BooleanControls.js';
@@ -40,7 +41,7 @@ export function RisuImport({
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const active = useRef(false);
-  const [source, setSource] = useState<RisuImportSource | null>(null);
+  const [source, setSource] = useState<RisuImportSource | RisuImportStagedSource | null>(null);
   const [kind, setKind] = useState<RisuImportKind | ''>('');
   const [preview, setPreview] = useState<RisuImportPreview | null>(null);
   const [memoryIds, setMemoryIds] = useState<string[]>([]);
@@ -71,7 +72,14 @@ export function RisuImport({
       if (!/\.(charx|json|zip)$/i.test(file.name))
         throw new Error('.charx, 카드·모듈 JSON 또는 모듈 프로젝트 ZIP을 선택해 주세요.');
       if (file.size === 0) throw new Error('빈 파일은 가져올 수 없어요.');
-      if (file.size > RISU_IMPORT_MAX_BYTES) throw new Error('파일은 24 MiB 이하여야 해요.');
+      if (file.size > RISU_IMPORT_MAX_UPLOAD_BYTES)
+        throw new Error(
+          `파일은 ${Math.round(RISU_IMPORT_MAX_UPLOAD_BYTES / 1024 / 1024)} MiB 이하여야 해요.`
+        );
+      if (file.size > RISU_IMPORT_MAX_BYTES)
+        setNotice(
+          `${Math.round(RISU_IMPORT_MAX_BYTES / 1024 / 1024)} MiB가 넘는 파일이라 먼저 올린 뒤 확인해요. 원본 사본은 앱에 보관하지 않아요.`
+        );
       const nextSource = await readSource(file);
       const nextPreview = await api<RisuImportPreview>('/risu-imports/prepare', {
         source: nextSource,

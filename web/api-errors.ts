@@ -12,7 +12,12 @@ const messages: Record<string, string> = {
     '이 프리셋 바이너리 버전은 아직 지원하지 않아요. RisuToki에서 프로젝트로 추출한 ZIP도 가져올 수 있어요.',
   RISU_IMPORT_INVALID_FILE:
     '지원하는 캐릭터 카드·Risu 모듈 JSON 또는 올바른 .charx 파일인지 확인해 주세요.',
-  RISU_IMPORT_TOO_LARGE: '캐릭터 카드 파일은 24 MiB 이하여야 해요.',
+  RISU_IMPORT_TOO_LARGE: '캐릭터 카드 파일은 256 MiB 이하여야 해요.',
+  UPLOAD_TOO_LARGE: '올릴 수 있는 파일은 256 MiB 이하예요.',
+  UPLOAD_EMPTY: '빈 파일은 올릴 수 없어요. 파일을 다시 선택해 주세요.',
+  UPLOAD_NOT_FOUND:
+    '올려 둔 파일을 찾을 수 없어요. 검토 시간이 길어져 정리됐을 수 있으니 파일을 다시 선택해 주세요.',
+  UPLOAD_CONTENT_TYPE: '파일 업로드 형식이 올바르지 않아요.',
   RISU_IMPORT_KIND:
     '가져올 자료 종류를 확인해 주세요. 모듈 JSON·프로젝트 ZIP은 모듈로만 가져올 수 있어요.',
   RISU_IMPORT_DRAFT_CHANGED: '확인한 파일이 달라졌어요. 파일을 다시 선택해 주세요.',

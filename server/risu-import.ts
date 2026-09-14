@@ -22,6 +22,7 @@ import { importRisuVariableDefaults } from './risu-variable-defaults.js';
 import { adaptRisuLuaTriggers } from './risu-lua-adapter.js';
 import { applyNativeTransfer, prepareNativeTransfer } from './native-transfer.js';
 import { decodeImage } from './package-images.js';
+import { deleteUpload, readUpload } from './uploads.js';
 import { fields, HttpError, record, text } from './request-validation.js';
 import type { Store } from './store.js';
 
@@ -42,8 +43,12 @@ const present = (value: unknown): boolean =>
       : true);
 
 /** A one-way format adapter. No Risu runtime or source-specific behavior enters the package. */
-function analyze(value: unknown, requestedKind?: RisuImportKind) {
-  const input = readCharacterCard(value, requestedKind);
+function analyze(
+  value: unknown,
+  requestedKind?: RisuImportKind,
+  readStaged?: (uploadId: string) => Buffer
+) {
+  const input = readCharacterCard(value, requestedKind, readStaged);
   const { card, hash, source, members, kind } = input;
   const findings: RisuImportFinding[] = [];
   const finding = (code: string, level: RisuImportFinding['level'], message: string) => {
@@ -68,6 +73,12 @@ function analyze(value: unknown, requestedKind?: RisuImportKind) {
     starts: [],
     images: [],
   };
+  if (source.base64 === undefined)
+    finding(
+      'source-file-not-retained',
+      'warning',
+      `원본 파일이 ${Math.ceil(RISU_IMPORT_MAX_BYTES / 1024 / 1024)} MiB를 넘어 앱에 사본을 보관하지 않아요. 가져온 자료만 저장하므로 원본 파일은 직접 보관해 주세요. 확인용 지문은 ${source.name} · SHA-256 ${hash}예요.`
+    );
   const risu = object(object(card.extensions).risuai);
   try {
     const values = importRisuVariableDefaults(risu.defaultVariables);
@@ -434,18 +445,23 @@ function analyze(value: unknown, requestedKind?: RisuImportKind) {
     ],
     prompts: [],
     images,
-    sourceFiles: [
-      {
-        entryKey: kind,
-        name: source.name,
-        mediaType:
-          input.format === 'charx' || input.format === 'risu-module-project-zip'
-            ? 'application/zip'
-            : 'application/json',
-        hash,
-        base64: source.base64,
-      },
-    ],
+    // A staged container stays outside the receipt; its identity is reported instead of copied.
+    ...(source.base64 === undefined
+      ? {}
+      : {
+          sourceFiles: [
+            {
+              entryKey: kind,
+              name: source.name,
+              mediaType:
+                input.format === 'charx' || input.format === 'risu-module-project-zip'
+                  ? 'application/zip'
+                  : 'application/json',
+              hash,
+              base64: source.base64,
+            },
+          ],
+        }),
   };
   const transfer = prepareNativeTransfer({ file });
   const digest = createHash('sha256')
@@ -464,17 +480,28 @@ function analyze(value: unknown, requestedKind?: RisuImportKind) {
   return { file, preview, hash };
 }
 
-export function prepareRisuImport(value: unknown): RisuImportPreview {
+export function prepareRisuImport(
+  value: unknown,
+  readStaged?: (uploadId: string) => Buffer
+): RisuImportPreview {
   const body = record(value);
   fields(body, ['source', 'kind']);
-  return analyze(body.source, body.kind as RisuImportKind | undefined).preview;
+  return analyze(body.source, body.kind as RisuImportKind | undefined, readStaged).preview;
 }
 
-export function applyRisuImport(store: Store, value: unknown): RisuImportResult {
+export function applyRisuImport(
+  store: Store,
+  value: unknown,
+  readStaged?: (uploadId: string) => Buffer
+): RisuImportResult {
   const body = record(value);
   fields(body, ['source', 'kind', 'digest', 'memoryIds', 'allowPartial', 'idempotencyKey']);
   const requestKey = text(body.idempotencyKey, 'request key', 100);
-  const { file, preview, hash } = analyze(body.source, body.kind as RisuImportKind | undefined);
+  const { file, preview, hash } = analyze(
+    body.source,
+    body.kind as RisuImportKind | undefined,
+    readStaged
+  );
   if (body.digest !== preview.digest) throw new HttpError(409, 'RISU_IMPORT_DRAFT_CHANGED');
   if (typeof body.allowPartial !== 'boolean') throw new HttpError(400, 'RISU_IMPORT_INVALID_FILE');
   if (preview.findings.some((item) => item.level === 'unsupported') && !body.allowPartial)
@@ -529,11 +556,16 @@ export function applyRisuImport(store: Store, value: unknown): RisuImportResult 
 
 export function risuImportRoutes(app: FastifyInstance, store: Store) {
   const bodyLimit = Math.ceil(RISU_IMPORT_MAX_BYTES / 3) * 4 + 1024 * 1024;
+  const readStaged = (uploadId: string) => readUpload(store.path, uploadId);
   app.post('/api/risu-imports/prepare', { bodyLimit }, async (request) =>
-    prepareRisuImport(request.body)
+    prepareRisuImport(request.body, readStaged)
   );
   app.post('/api/risu-imports/apply', { bodyLimit }, async (request, reply) => {
-    const result = applyRisuImport(store, request.body);
+    const result = applyRisuImport(store, request.body, readStaged);
+    const source = record(record(request.body).source);
+    // The staged file has served its purpose once the material is registered.
+    if (result.receipt.created && typeof source.uploadId === 'string')
+      deleteUpload(store.path, source.uploadId);
     return reply.code(result.receipt.created ? 201 : 200).send(result);
   });
 }

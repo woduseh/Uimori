@@ -72,7 +72,7 @@ docker compose --env-file .env.self-host -f compose.yaml -f deploy/compose.verte
 
 ## 저장과 운영
 
-DB는 Compose의 `data` named volume 안의 `/data/narrative.sqlite`에 저장돼요. 실제 볼륨 이름은 `.env.self-host`의 `UIMORI_DATA_VOLUME`이며 기본값은 기존 `uimori_data`예요. 초기 volume은 이미지에서 준비한 UID 1000 소유 디렉터리를 사용해요. 프로그램 이미지를 다시 빌드하거나 컨테이너를 교체해도 volume은 유지돼요. 같은 DB를 여러 앱 프로세스에 연결하거나 `app`을 복제하지 마세요. [Docker volume의 수명과 초기 복사](https://docs.docker.com/engine/storage/volumes/)
+DB는 Compose의 `data` named volume 안의 `/data/narrative.sqlite`에 저장돼요. 큰 자료를 가져오는 동안에는 같은 볼륨의 `/data/uploads`에 임시 파일을 두고 등록이 끝나면 지워요. 실제 볼륨 이름은 `.env.self-host`의 `UIMORI_DATA_VOLUME`이며 기본값은 기존 `uimori_data`예요. 초기 volume은 이미지에서 준비한 UID 1000 소유 디렉터리를 사용해요. 프로그램 이미지를 다시 빌드하거나 컨테이너를 교체해도 volume은 유지돼요. 같은 DB를 여러 앱 프로세스에 연결하거나 `app`을 복제하지 마세요. [Docker volume의 수명과 초기 복사](https://docs.docker.com/engine/storage/volumes/)
 
 ```sh
 # 중지: DB volume 유지

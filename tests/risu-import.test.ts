@@ -19,6 +19,11 @@ import { fixtureBotInput } from './fixtures/chat.js';
 import { buildPackagePresentation } from '../server/package-presentation.js';
 import { createHash } from 'node:crypto';
 import { importRisuPresetProgram } from '../server/risu-preset-program.js';
+import { cardZip } from '../server/character-card-file.js';
+import { uploadDirectory, uploadRoutes } from '../server/uploads.js';
+import { RISU_IMPORT_MAX_BYTES } from '../core/risu-import.js';
+import { randomBytes } from 'node:crypto';
+import { existsSync, readFileSync } from 'node:fs';
 
 const owned: { directory: string; store: Store }[] = [];
 afterEach(() => {
@@ -904,4 +909,103 @@ test('charx keeps card-owned images while reading its embedded module; corrupt f
   expect(() => prepareRisuImport({ source: { name: 'bad.json', base64: 'eA==' } })).toThrow(
     'RISU_IMPORT_INVALID_FILE'
   );
+});
+
+test('a container beyond the inline limit is staged on disk, imported, and never copied into the receipt', async () => {
+  const store = database();
+  const app = Fastify();
+  uploadRoutes(app, store.path);
+  risuImportRoutes(app, store);
+  try {
+    // Incompressible filler makes the staged container exceed the inline request limit, and its
+    // uncompressed contents pass the old fixed expansion cap only because the container is large.
+    const container = Buffer.from(
+      zip([
+        ['card.json', Buffer.from(JSON.stringify(card()))],
+        ['assets/first.bin', randomBytes(40 * 1024 * 1024)],
+        ['assets/second.bin', randomBytes(30 * 1024 * 1024)],
+      ])
+    );
+    expect(container.length).toBeGreaterThan(RISU_IMPORT_MAX_BYTES);
+    const inline = await app.inject({
+      method: 'POST',
+      url: '/api/risu-imports/prepare',
+      payload: { source: { name: 'huge.charx', base64: container.toString('base64') } },
+    });
+    // The inline route refuses it before any parse; the staged route is the only way in.
+    expect(inline.statusCode).toBe(413);
+
+    const uploaded = await app.inject({
+      method: 'POST',
+      url: '/api/uploads',
+      headers: { 'content-type': 'application/octet-stream' },
+      payload: container,
+    });
+    expect(uploaded.statusCode).toBe(200);
+    const { uploadId, bytes, sha256 } = uploaded.json();
+    expect(bytes).toBe(container.length);
+    expect(sha256).toBe(createHash('sha256').update(container).digest('hex'));
+    expect(readFileSync(join(uploadDirectory(store.path), `${uploadId}.bin`)).length).toBe(bytes);
+
+    const source = { name: 'huge.charx', uploadId };
+    const prepared = await app.inject({
+      method: 'POST',
+      url: '/api/risu-imports/prepare',
+      payload: { source },
+    });
+    expect(prepared.statusCode).toBe(200);
+    const preview = prepared.json();
+    expect(preview.title).toBe('Synthetic Pilot');
+    const notRetained = preview.findings.find(
+      (finding: { code: string }) => finding.code === 'source-file-not-retained'
+    );
+    expect(notRetained.level).toBe('warning');
+    expect(notRetained.message).toContain(sha256);
+
+    const applied = await app.inject({
+      method: 'POST',
+      url: '/api/risu-imports/apply',
+      payload: {
+        source,
+        digest: preview.digest,
+        memoryIds: [],
+        allowPartial: true,
+        idempotencyKey: 'staged-import',
+      },
+    });
+    expect(applied.statusCode).toBe(201);
+    const receipt = applied.json().receipt;
+    const content = store.product.get<Content>('content', receipt.items[0].id);
+    expect(content.title).toBe('Synthetic Pilot');
+    // The registered material carries no copy of the original container.
+    expect(nativeTransferOriginal(store, receipt.id).sourceFiles).toBeUndefined();
+    expect(existsSync(join(uploadDirectory(store.path), `${uploadId}.bin`))).toBe(false);
+    expect(
+      (
+        await app.inject({
+          method: 'POST',
+          url: '/api/risu-imports/prepare',
+          payload: { source },
+        })
+      ).statusCode
+    ).toBe(404);
+  } finally {
+    await app.close();
+  }
+});
+
+test('an expansion bomb and an oversized member stay refused whatever the container size', () => {
+  const compressible = Buffer.alloc(70 * 1024 * 1024, 0);
+  // A small container that declares far more than its own size is still an expansion bomb.
+  const bomb = Buffer.from(zip([['card.json', compressible]]));
+  expect(bomb.length).toBeLessThan(1024 * 1024);
+  expect(() => cardZip(bomb)).toThrow('RISU_IMPORT_INVALID_FILE');
+  // A large container cannot smuggle one member past the per-member cap either.
+  const oversized = Buffer.from(
+    zip([
+      ['card.json', Buffer.from('{}')],
+      ['assets/one.bin', compressible],
+    ])
+  );
+  expect(() => cardZip(oversized)).toThrow('RISU_IMPORT_INVALID_FILE');
 });
