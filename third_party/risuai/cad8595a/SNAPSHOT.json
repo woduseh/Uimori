@@ -16,6 +16,37 @@
         "src/ts/rpack/LICENSE": "8d3db146e1b8721eb44373db0b85ce3035a4e3b9515ddd79af870b8c6803f7f5"
       },
       "modifications": "Decode table (map bytes 256..511) as a TypeScript constant with a synchronous Buffer decode; no encoder, no fetch."
+    },
+    {
+      "path": "types.ts",
+      "license": "GPL-3.0-only",
+      "licenseFiles": ["LICENSE"],
+      "upstreamSha256": {
+        "src/ts/storage/database.svelte.ts": "41b1f744ba21635e1ca5a09563c37c511b6e1fba3fb925bb4407cac41fc7b8d4",
+        "src/ts/process/triggers.ts": "cd29540c83187ed99c1131e36d77632322ccea60cbc468e4546886091833db6f",
+        "src/ts/process/prompt.ts": "42db2f25b447e8cf830294884cbb3c37b11b2c1aa91cc458393848a0f27885c2",
+        "src/ts/process/modules.ts": "ff7ff0e393a2a4321afb47f6b70ed309b4440e7ade92356a00c37fe64c5d14ca",
+        "src/ts/process/index.svelte.ts": "c752be30fa969b0344dae6f64a0d0afd285e182cfe0859913533619e1e8c39ad",
+        "src/ts/process/transformers.ts": "f454397d4b3d82a2797d9d76fec840ef0fb5882a554de86bbf90ec1a3fff255c",
+        "src/ts/process/models/nai.ts": "575ee5f527a94bb3cbcbcdaead0aeec001c4ca9ad01ad9cd1e8aec8bbe151da8",
+        "src/ts/process/memory/hypav2.ts": "86719e3c73cb2ec2eec5e7bbbbf37a1a6b140c0ed8c311e7e3ab1b3300c1608a",
+        "src/ts/process/memory/hypav3.ts": "f2bf112c585f13df5db5689feb270c9b3be6810bb02f8a38cca4e99d3fcc36c2",
+        "src/ts/model/ooba.ts": "fcf1d3787543642a3419bdfe9525cc0c79d9aef8049104561d684f9bc5505393",
+        "src/ts/model/types.ts": "15f809c270e8677a82d7c69f0fc2d399a359f61c8259330560fb31bb0a65286d",
+        "src/lib/Others/HypaV3Modal/types.ts": "3a8d4deffba14ff6f8e242c2d341e0656208658aa19e5a91c41343b6f9d9a848",
+        "src/ts/characterCards.ts": "7579189692aab34ee673d8600b2b4b2f5f4be33563c8b8caae5e225389b35443",
+        "src/ts/plugins/plugins.svelte.ts": "7b2d5d0c3503b2604a206083f70cdf008081ce9ee75732e266d82f6e3384200e"
+      },
+      "modifications": "Type-only extraction of Risu's file-format shapes; enums and `as const` maps reduced to literal unions, the `triggerscript` alias resolved, no runtime code, and the MIT character-card spec types split out into ccardlib-types.ts."
+    },
+    {
+      "path": "ccardlib-types.ts",
+      "license": "MIT",
+      "licenseFiles": [],
+      "upstreamSha256": {
+        "https://cdn.jsdelivr.net/npm/@risuai/ccardlib@0.4.2/dist/index.d.ts": "e91c0791c3d9b2956c93d14f3cfb6c0957c25742fe59c3452ccb6a34e23f72d4"
+      },
+      "modifications": "Character-card spec types of the @risuai/ccardlib 0.4.2 package RisuAI depends on; the package's runtime declarations and CharacterCardV1 are dropped and the inline asset literal is named CharacterCardV3Asset. The package ships no LICENSE file, so its package.json \"license\": \"MIT\" is the licensing statement on record."
     }
   ]
 }
