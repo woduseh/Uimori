@@ -1,9 +1,15 @@
 import { createHash } from 'node:crypto';
 import { isValidIllustrationImage } from '../core/illustration.js';
 import type { Store } from './store.js';
-import { HttpError, fields, number, record, text } from './request-validation.js';
+import {
+  HttpError,
+  fields,
+  number,
+  record,
+  text,
+  type ArchiveRow as Row,
+} from './request-validation.js';
 
-type Row = Record<string, any>;
 export type IllustrationAttemptOwner = {
   jobId: string;
   chatId: string;

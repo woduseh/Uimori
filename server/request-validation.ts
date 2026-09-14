@@ -1,3 +1,5 @@
+import { isDeepStrictEqual } from 'node:util';
+
 export class HttpError extends Error {
   constructor(
     readonly statusCode: number,
@@ -48,6 +50,25 @@ export function archiveList(value: unknown, maximum = 300): any[] {
     throw new HttpError(400, 'Invalid archive list');
   return value;
 }
+/** A row read back from an archived table; its columns are only known once validated. */
+export type ArchiveRow = Record<string, any>;
+/** Refuses one archive's contents. Every archive kind has its own message opening. */
+export type ArchiveReject = (reason: string) => never;
+/** Builds the rejector an archive validator throws with; `label` opens each of its messages. */
+export const archiveRejector =
+  (label: string): ArchiveReject =>
+  (reason: string) => {
+    throw new HttpError(400, `${label}: ${reason}`);
+  };
+/** Builds the deep-equality guard that refuses through one archive's own rejector. */
+export const archiveComparer =
+  (reject: ArchiveReject) =>
+  (a: unknown, b: unknown, reason: string): void => {
+    if (!isDeepStrictEqual(a, b)) reject(reason);
+  };
+/** Archives record every hash as a lowercase sha256 digest. */
+export const isSha256Hex = (value: unknown): value is string =>
+  typeof value === 'string' && /^[a-f0-9]{64}$/u.test(value);
 /** An archive row's parsed body, checked against the row identity every archive kind shares. */
 export function archiveVersionBody(row: Record<string, any>): Record<string, any> {
   const body = record(parse(row.body));

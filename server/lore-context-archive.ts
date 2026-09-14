@@ -1,4 +1,4 @@
-import { HttpError } from './request-validation.js';
+import { archiveRejector, isSha256Hex, type ArchiveReject } from './request-validation.js';
 import { createHash } from 'node:crypto';
 import { isDeepStrictEqual } from 'node:util';
 import {
@@ -12,9 +12,7 @@ import { loreDependencies, selectLoreContext } from './lore-context.js';
 import type { Store } from './store.js';
 
 const hash = (value: string) => createHash('sha256').update(value).digest('hex');
-const reject = (reason: string): never => {
-  throw new HttpError(400, `Invalid lore context archive: ${reason}`);
-};
+const reject: ArchiveReject = archiveRejector('Invalid lore context archive');
 const object = (value: unknown, keys: string[], name: string): Record<string, any> => {
   if (
     !value ||
@@ -27,7 +25,6 @@ const object = (value: unknown, keys: string[], name: string): Record<string, an
 };
 const identifier = (value: unknown) =>
   typeof value === 'string' && value.length > 0 && value.length <= 200;
-const digest = (value: unknown) => typeof value === 'string' && /^[a-f0-9]{64}$/u.test(value);
 
 function entryShape(value: unknown, resources: readonly Resource[]): RetainedLore {
   const entry = object(
@@ -46,8 +43,8 @@ function entryShape(value: unknown, resources: readonly Resource[]): RetainedLor
     !identifier(origin.runId) ||
     !identifier(origin.callId) ||
     !identifier(entry.lastUsed) ||
-    !digest(entry.hash) ||
-    !digest(origin.sourceHash) ||
+    !isSha256Hex(entry.hash) ||
+    !isSha256Hex(origin.sourceHash) ||
     typeof entry.title !== 'string' ||
     typeof entry.text !== 'string'
   )
@@ -185,7 +182,7 @@ export function validateArchivedLoreContext(store: Store, snapshot: RunSnapshot)
   );
   if (
     context.version !== 1 ||
-    !digest(context.canonHash) ||
+    !isSha256Hex(context.canonHash) ||
     !isDeepStrictEqual(context.dependencies, loreDependencies(snapshot))
   )
     reject('context scope');

@@ -1,4 +1,3 @@
-import { isDeepStrictEqual } from 'node:util';
 import { packageInstanceId } from '../core/execution-context.js';
 import { validateExtensionUserModelAttribution } from '../core/extension-model.js';
 import type { ExtensionOperationSnapshot } from '../core/extension-operation.js';
@@ -20,7 +19,16 @@ import {
   validateExtensionComputationReceipt,
 } from './extension-program-receipt.js';
 import { behaviorPayloadHash } from './package-behavior-store.js';
-import { fields, HttpError, number, record, text } from './request-validation.js';
+import {
+  archiveComparer,
+  archiveRejector,
+  fields,
+  number,
+  record,
+  text,
+  type ArchiveReject,
+  type ArchiveRow as Row,
+} from './request-validation.js';
 import type { Store } from './store.js';
 import { validateExtensionConversationPermission } from './extension-conversation-access.js';
 import {
@@ -29,13 +37,8 @@ import {
 } from './extension-conversation.js';
 
 export { EXTENSION_OPERATION_TABLES } from './extension-operations.js';
-type Row = Record<string, any>;
-const fail = (reason: string): never => {
-  throw new HttpError(400, `Invalid extension operation archive: ${reason}`);
-};
-const same = (a: unknown, b: unknown, reason: string) => {
-  if (!isDeepStrictEqual(a, b)) fail(reason);
-};
+const fail: ArchiveReject = archiveRejector('Invalid extension operation archive');
+const same = archiveComparer(fail);
 export function normalizeExtensionOperationArchiveRow(table: string, row: Row): void {
   if (table !== 'package_extension_operations') return;
   const snapshot = record(JSON.parse(row.snapshot));

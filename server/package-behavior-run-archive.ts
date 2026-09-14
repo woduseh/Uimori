@@ -1,7 +1,12 @@
 import { historicalPersonaExcluded } from '../core/persona-scope.js';
-import { HttpError } from './request-validation.js';
+import {
+  archiveComparer,
+  archiveRejector,
+  isSha256Hex,
+  type ArchiveReject,
+  type ArchiveRow as Row,
+} from './request-validation.js';
 import { createHash } from 'node:crypto';
-import { isDeepStrictEqual } from 'node:util';
 import {
   BehaviorError,
   behaviorActionAllowed,
@@ -83,7 +88,6 @@ export const packageBehaviorRunTables = [
   'package_behavior_opportunities',
   'package_behavior_runs',
 ];
-type Row = Record<string, any>;
 type AutomaticPreparation = NonNullable<RunBehaviorProgress['preparation']>;
 type CheckState = (
   value: unknown,
@@ -91,9 +95,7 @@ type CheckState = (
   branchId: string,
   profile?: RunSnapshot['profile']
 ) => PackageExecutionState;
-function reject(message: string): never {
-  throw new HttpError(400, `Invalid run behavior archive: ${message}`);
-}
+const reject: ArchiveReject = archiveRejector('Invalid run behavior archive');
 function object(value: unknown, fields: string[], optional: string[] = []): Row {
   const record = behaviorRecord(value);
   if (
@@ -104,7 +106,7 @@ function object(value: unknown, fields: string[], optional: string[] = []): Row 
   return record;
 }
 function digest(value: unknown): asserts value is string {
-  if (typeof value !== 'string' || !/^[a-f0-9]{64}$/u.test(value)) reject('hash');
+  if (!isSha256Hex(value)) reject('hash');
 }
 function text(value: unknown): asserts value is string {
   if (typeof value !== 'string' || !value.length || value.length > 200) reject('identity');
@@ -115,9 +117,7 @@ function list(value: unknown, max = 100): asserts value is any[] {
 function count(value: unknown, min: number, max: number): asserts value is number {
   if (!Number.isSafeInteger(value) || Number(value) < min || Number(value) > max) reject('count');
 }
-const same = (a: unknown, b: unknown, message: string) => {
-  if (!isDeepStrictEqual(a, b)) reject(message);
-};
+const same = archiveComparer(reject);
 function body(row: Row): Row {
   if (typeof row.body !== 'string' || row.body.length > 4_000_000) reject('body size');
   return behaviorRecord(JSON.parse(row.body));
@@ -194,10 +194,8 @@ function validateAfterResponseProgress(
   digest(receipt.sourceHash);
   if (!['running', 'completed', 'skipped'].includes(receipt.status))
     reject('after-response status');
-  if (receipt.status === 'skipped') {
-    text(receipt.skipKey);
-    if (receipt.skipKey.length > 200) reject('after-response skip key');
-  } else if (Object.hasOwn(receipt, 'skipKey')) reject('after-response skip key');
+  if (receipt.status === 'skipped') text(receipt.skipKey);
+  else if (Object.hasOwn(receipt, 'skipKey')) reject('after-response skip key');
   list(receipt.packages);
 
   const branchId = snapshot.branchId ?? `main:${run.chatId}`;

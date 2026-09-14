@@ -4,15 +4,20 @@ import type { RunSnapshot } from '../core/types.js';
 import { validateModelSnapshot } from './provider-archive.js';
 import { validateRunSnapshot } from './snapshot-archive.js';
 import { validateHelperContexts, helperHistory } from './helper-context.js';
-import { fields, HttpError, number, record, text } from './request-validation.js';
+import {
+  archiveRejector,
+  fields,
+  number,
+  record,
+  text,
+  type ArchiveReject,
+  type ArchiveRow as Row,
+} from './request-validation.js';
 import { HELPER_PERSONA_MAX_CHARS } from '../core/content-limits.js';
 import { disableArchivedConnection } from '../core/product.js';
 import type { Store } from './store.js';
 
-type Row = Record<string, any>;
-const reject = (reason: string): never => {
-  throw new HttpError(400, `Invalid helper archive: ${reason}`);
-};
+const reject: ArchiveReject = archiveRejector('Invalid helper archive');
 const terminal = ['completed', 'failed', 'cancelled', 'interrupted'];
 function disableModel(raw: unknown) {
   if (!raw) return;
