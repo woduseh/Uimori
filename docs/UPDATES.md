@@ -68,7 +68,27 @@ worker 쪽은 같은 `admissionOpen`을 사용해 job·삽화·story 큐와 확�
 
 합성 검증은 새 요청과 drain 경합, 두 기기의 저장·import, 진행 중 모델 continuation, 완료 직후 후속 job, 취소/중단 후 늦은 결과, 재시작 후 닫힌 gate 유지, 브라우저 초안 보존을 다뤄요. 이 단계는 Docker 없이 로컬 fixture로 검증할 수 있어요. 기존 원문·state·난수·idempotency와 불확실 재전송 금지 회귀를 유지해요.
 
-### 2. 제한 controller와 두 image/volume fixture
+### 2. 운영자 CLI controller — 2026-09-14 구현, 실제 Docker 검증은 남음
+
+`scripts/update-controller.mjs`가 한 번의 전환을 `prepare → close → drain → stop → backup → candidate → switch → reopen` 순서로 수행하고, `scripts/uimori-update.mjs`가 `start`·`status`·`cancel` 명령으로 감싸요. Docker 명령과 HTTP 호출은 주입값이라 실제 Docker 없이도 결정 로직을 검사할 수 있어요(`scripts/update-controller.test.mjs`, `npm run test:tooling`에 포함). 실제 image·volume·컨테이너 동작 검증은 Docker 호스트에서 수행해야 하며 이 저장소의 검사에 포함되지 않아요.
+
+```sh
+cp deploy/update.example.json .local/update.json   # 절대 경로를 채워요
+NR_ACCESS_TOKEN=... npm run update -- start --config .local/update.json \
+  --image ghcr.io/team/uimori@sha256:... --key update-2026-09-14
+npm run update -- status --config .local/update.json
+npm run update -- cancel --config .local/update.json --key update-2026-09-14
+```
+
+- admission은 앱의 [유지보수 게이트](SELF-HOST.md#유지보수-모드)를 그대로 사용해요. controller가 컨테이너 상태만 보고 추측하지 않아요.
+- drain은 `activeWork`가 0이 될 때까지 기다리고, 제한 시간이나 취소로 끝나면 게이트를 다시 열어요.
+- 백업은 data volume 전체를 `releaseRoot`의 tar로 만들고 목록으로 확인해요. 후보는 그 백업에서 만든 **새 volume**에 `NR_MAINTENANCE=1`로 부팅해 migration과 읽기 health만 확인해요. 두 앱이 같은 volume을 동시에 열지 않아요.
+- 전환은 `.env.self-host`의 `UIMORI_IMAGE`·`UIMORI_DATA_VOLUME` 두 줄만 바꾸고 나머지 바이트는 그대로 둬요. 전환 뒤 health가 실패하면 원래 바이트를 되돌리고 이전 image·volume으로 복귀한 뒤 게이트를 열어요.
+- **쓰기 재개(`switch` 완료) 이후에는 자동 복귀도 취소도 하지 않아요.** 그 시점 이후의 되돌리기는 복구 결정이며 손실 범위를 먼저 보여 줘야 해요.
+- journal은 `releaseRoot/update-journal.json`에 있어 앱 image와 active DB 밖에 있어요. 같은 request key를 다시 보내면 이미 끝난 영수증을 그대로 돌려주고, 다른 key는 진행 중인 전환을 밀어내지 않아요.
+- 남은 일: 실제 Docker 호스트의 두 image/volume fixture 검증, 디스크 부족·중단 주입, 앱 안 Update 버튼과 릴리스 게시 파이프라인 연결이에요.
+
+### 2-1. 원래 계획의 fixture 검증
 
 고정된 합성 v1/v2 image와 독립 data volume으로 `prepare → drain → stop/backup → migrate/probe → switch → reopen`을 검증해요. 기본 API는 `start/status/cancel-before-cutover` 정도로 좁히고 작업이 완료된 뒤 같은 요청 키를 보내도 다시 업데이트하지 않게 해요.
 
