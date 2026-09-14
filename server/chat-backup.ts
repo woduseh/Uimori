@@ -23,6 +23,7 @@ import { remapBackupContext } from './chat-backup-context.js';
 import { remapChatBackupHelper } from './chat-backup-helper.js';
 import { remapBackupBehavior } from './chat-backup-behavior.js';
 import { fields, HttpError, record, text } from './request-validation.js';
+import { CONNECTION_CREDENTIAL_FIELDS } from '../core/product.js';
 import { Store } from './store.js';
 
 const receiptKind = 'chat.backup-imported';
@@ -58,10 +59,8 @@ function recordedEnvironment(tables: BackupTables): string {
     }),
     providerDefinitions: tables.provider_settings.map((row) => {
       const definition = JSON.parse(row.body);
-      if (row.kind === 'connection') {
-        delete definition.credentialEnv;
-        delete definition.catalogCredentialEnv;
-      }
+      if (row.kind === 'connection')
+        for (const key of CONNECTION_CREDENTIAL_FIELDS) delete definition[key];
       return definition;
     }),
     libraryOrganization: {

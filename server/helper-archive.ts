@@ -6,6 +6,7 @@ import { validateRunSnapshot } from './snapshot-archive.js';
 import { validateHelperContexts, helperHistory } from './helper-context.js';
 import { fields, HttpError, number, record, text } from './request-validation.js';
 import { HELPER_PERSONA_MAX_CHARS } from '../core/content-limits.js';
+import { disableArchivedConnection } from '../core/product.js';
 import type { Store } from './store.js';
 
 type Row = Record<string, any>;
@@ -15,10 +16,7 @@ const reject = (reason: string): never => {
 const terminal = ['completed', 'failed', 'cancelled', 'interrupted'];
 function disableModel(raw: unknown) {
   if (!raw) return;
-  const model = record(raw),
-    connection = record(model.connection);
-  for (const key of ['credentialEnv', 'secret', 'apiKey', 'accessToken']) delete connection[key];
-  connection.enabled = false;
+  disableArchivedConnection(record(record(raw).connection));
 }
 function disableWriting(raw: unknown) {
   if (!raw) return;

@@ -176,6 +176,17 @@ export type Connection = ContentRef & {
   catalogError: string | null;
   catalogUpdatedAt?: string | null;
 };
+/**
+ * Connection fields that reference server-side credentials. Archives, backups and frozen
+ * snapshots drop exactly these so a restored copy cannot name the origin's secrets. Keep in step
+ * with the Connection type above; archive validation rejects any other connection field.
+ */
+export const CONNECTION_CREDENTIAL_FIELDS = ['credentialEnv', 'catalogCredentialEnv'] as const;
+/** Strips credential references from an archived connection copy and disables it. */
+export function disableArchivedConnection(connection: Record<string, unknown>): void {
+  for (const key of CONNECTION_CREDENTIAL_FIELDS) delete connection[key];
+  connection.enabled = false;
+}
 export type ModelPreset = ContentRef &
   ModelGeneration & {
     title: string;
