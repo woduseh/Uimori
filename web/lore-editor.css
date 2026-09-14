@@ -35,6 +35,14 @@
   grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) minmax(0, 1fr);
   gap: 8px;
 }
+.lore-activation-mode {
+  display: grid;
+  gap: 8px;
+}
+.lore-activation-mode p {
+  margin: 0;
+  font-size: 12px;
+}
 .lore-manager .lore-search {
   display: flex;
   align-items: center;
@@ -170,6 +178,27 @@
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr);
   gap: 10px;
+}
+.lore-activation-rule {
+  display: grid;
+  gap: 6px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  font-size: 12px;
+}
+.lore-activation-rule p {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.lore-activation-rule summary {
+  font-size: 12px;
+}
+.lore-activation-rule pre {
+  overflow-x: auto;
+  margin: 0;
+  max-width: 100%;
+  min-width: 0;
 }
 .lore-detail textarea {
   resize: vertical;

@@ -8,6 +8,13 @@ import './lore-editor.css';
 import './lore-context.css';
 
 const PAGE_SIZE = 50;
+/** The preserved Risu flags, named as the import read them, for the read-only rule summary. */
+const activationTags = (activation: NonNullable<PackageLore['activation']>) =>
+  [
+    activation.selective ? 'selective' : '',
+    activation.regex ? '정규식' : '',
+    activation.child ? 'child' : '',
+  ].filter(Boolean);
 export function LoreEditor({
   value,
   onChange,
@@ -18,6 +25,10 @@ export function LoreEditor({
   onDraftChange?: (dirty: boolean) => void;
 }) {
   const folders = value.loreFolders ?? [];
+  // Absent means the model looks an entry up; the preserved Risu rules stay either way.
+  const activationMode = value.loreActivation?.mode ?? 'discoverable';
+  const showActivationMode =
+    value.loreActivation !== undefined || value.lore.some((row) => row.activation);
   const [folder, setFolder] = useState('*');
   const [query, setQuery] = useState('');
   const [loading, setLoading] = useState('*');
@@ -234,6 +245,34 @@ export function LoreEditor({
               <option value="discoverable">필요할 때 읽기</option>
             </select>
           </div>
+          {showActivationMode && (
+            <div className="lore-activation-mode">
+              <label>
+                로어 활성화 방식
+                <select
+                  aria-label="로어 활성화 방식"
+                  value={activationMode}
+                  onChange={(event) =>
+                    onChange({
+                      loreActivation: {
+                        ...(value.loreActivation ?? {}),
+                        mode: event.target.value as 'keyword' | 'discoverable',
+                      },
+                    })
+                  }
+                >
+                  <option value="keyword">키워드 · Risu 규칙으로 켜기</option>
+                  <option value="discoverable">모델 조회 · 필요할 때 읽기</option>
+                </select>
+              </label>
+              {activationMode === 'keyword' && (
+                <p className="muted" role="status">
+                  규칙이 있는 로어는 생성마다 최근 대화의 키워드로 켜지고, 켜진 로어만 그 생성의
+                  고정 자료가 돼요. 예산은 채팅 설정의 조회 로어 문자 한도를 따라요.
+                </p>
+              )}
+            </div>
+          )}
           {activeFolder && (
             <div className="lore-folder-bar">
               <span>
@@ -314,6 +353,7 @@ export function LoreEditor({
                   <span className="lore-row-meta">
                     {folders.find((entry) => entry.id === row.folderId)?.name ?? '미분류'} ·{' '}
                     {row.loading === 'pinned' ? '항상 포함' : '필요할 때'}
+                    {row.activation && ' · 키워드'}
                   </span>
                 </button>
               </div>
@@ -424,6 +464,29 @@ export function LoreEditor({
                   </select>
                 </label>
               </div>
+              {item.activation && (
+                <div className="lore-activation-rule">
+                  <p className="muted">활성 키: {item.activation.keys || '(없음)'}</p>
+                  {item.activation.secondaryKeys && (
+                    <p className="muted">보조 키: {item.activation.secondaryKeys}</p>
+                  )}
+                  {activationTags(item.activation).length > 0 && (
+                    <p className="muted">{activationTags(item.activation).join(' · ')}</p>
+                  )}
+                  {item.activation.rules && (
+                    <details>
+                      <summary>@@ 규칙 {item.activation.rules.split('\n').length}줄</summary>
+                      <pre>{item.activation.rules}</pre>
+                    </details>
+                  )}
+                  {activationMode === 'keyword' && (
+                    <p className="muted">
+                      이 로어는 패키지의 키워드 활성화를 따라요. 고정이면 항상 켜지고(지시문은
+                      적용), 자동이면 키워드가 맞을 때 켜져요.
+                    </p>
+                  )}
+                </div>
+              )}
 
               <label>
                 검색용 설명

@@ -25,6 +25,14 @@ function memorySelectionIssue(entry: RisuImportPreview['lore'][number]): string 
   return '';
 }
 
+/** Names how the entry reaches the model: pinned entries always, keyword rules on their own keys. */
+function loreLoadingLabel(entry: RisuImportPreview['lore'][number]): string {
+  if (entry.loading === 'pinned') return '항상 포함';
+  const keys = entry.keys?.trim() ?? '';
+  if (!keys) return '필요할 때 조회';
+  return `키워드 활성화 · 키: ${keys.length > 120 ? `${keys.slice(0, 120)}…` : keys}`;
+}
+
 const importedModule = (result: RisuImportResult) =>
   result.receipt.items.some((item) => item.root && item.category === 'module');
 
@@ -361,8 +369,7 @@ export function RisuImport({
                         </summary>
                         <div className="risu-import-lore-content">
                           <small className="muted">
-                            {entry.enabled ? '사용 중' : '사용 안 함'} ·{' '}
-                            {entry.loading === 'pinned' ? '항상 포함' : '필요할 때 조회'}
+                            {entry.enabled ? '사용 중' : '사용 안 함'} · {loreLoadingLabel(entry)}
                           </small>
                           <p className="risu-import-lore-text">{entry.text || '(내용 없음)'}</p>
                           <label className="risu-import-choice">
