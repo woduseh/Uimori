@@ -62,6 +62,17 @@ test('one CBS parser reads names and defaults with strict truth and nested compa
   ).toBe('{{setvar::x::1}}');
 });
 
+test('a comment renders as nothing and never fails the field it sits in', () => {
+  const cbs = new RisuCbs(new Map(), { names: 'context' });
+  const name = [{ kind: 'value', expression: { context: ['bot', 'name'] } }];
+  expect(cbs.template('{{// note}}{{char}}')).toEqual(name);
+  expect(cbs.template('{{comment::note}}{{char}}')).toEqual(name);
+  expect(cbs.expression('{{equal::{{// note}}::{{comment::note}}}}')).toEqual({
+    op: 'equal',
+    args: ['', ''],
+  });
+});
+
 test('invalid preset defaults remain explicit partial import instead of unsafe declarations', () => {
   const imported = importRisuPresetProgram({
     templateDefaultVariables: 'constructor=bad',
