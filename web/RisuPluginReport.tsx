@@ -22,12 +22,18 @@ export function RisuPluginReport({ preview }: { preview: RisuPluginPreview }) {
     <section className="risu-import-summary" aria-label="플러그인 지원 범위">
       <h3>{preview.displayName}</h3>
       <small className="muted">
-        플러그인 · API {preview.apiVersion} · {Math.max(1, Math.round(preview.bytes / 1024))} KiB
+        플러그인 · API {preview.apiVersion}
+        {preview.pluginVersion ? ` · 버전 ${preview.pluginVersion}` : ''} ·{' '}
+        {Math.max(1, Math.round(preview.bytes / 1024))} KiB
       </small>
       <p className="muted">
         코드를 실행하지 않고 파일이 선언한 내용만 읽었어요. 이 화면은 지원 범위 확인용이고 자료로
         등록하지 않아요.
       </p>
+      {preview.updateUrl && <p className="muted">업데이트 주소: {preview.updateUrl}</p>}
+      {preview.allowedIpc.length > 0 && (
+        <p className="muted">선언한 플러그인 채널: {preview.allowedIpc.join(', ')}</p>
+      )}
       {preview.arguments.length > 0 && (
         <dl>
           {preview.arguments.map((argument) => (

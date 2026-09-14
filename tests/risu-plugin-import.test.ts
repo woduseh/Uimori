@@ -40,13 +40,15 @@ test('reads the declared plugin identity, arguments and links without running th
 test('keeps the last declared name and leaves a clean plugin without an unsupported finding', () => {
   // RisuAI assigns on every //@name line, so a repeated header keeps the last value.
   const preview = readRisuPlugin(
-    source(['//@name first', '//@name second', '//@api 3.0', 'risuai.log("ready");'].join('\n'))
+    source(['//@name first', '//@name second', '//@api 3.0', 'risuai.getRuntimeInfo();'].join('\n'))
   );
   expect(preview.name).toBe('second');
   expect(preview.findings.map((finding) => finding.level)).not.toContain('unsupported');
   expect(preview.findings).toEqual([
     expect.objectContaining({ code: 'plugin-not-executed', level: 'info' }),
+    expect.objectContaining({ code: 'plugin-api-detection', level: 'info' }),
   ]);
+  expect(preview).toMatchObject({ pluginVersion: '', updateUrl: '', allowedIpc: [] });
 });
 
 test('judges every mentioned API against the current contracts and reports the rest', () => {
@@ -64,7 +66,7 @@ test('judges every mentioned API against the current contracts and reports the r
   const support = Object.fromEntries(preview.apis.map((api) => [api.name, api.support]));
   expect(support).toMatchObject({
     addRisuReplacer: 'mapped',
-    pluginStorage: 'mapped',
+    pluginStorage: 'unimplemented',
     nativeFetch: 'unimplemented',
     registerButton: 'out-of-scope',
     getRootDocument: 'out-of-scope',
@@ -77,6 +79,105 @@ test('judges every mentioned API against the current contracts and reports the r
   // Every judgement names a support level the classification table owns.
   for (const api of preview.apis)
     expect(RISU_PLUGIN_API_SUPPORT[api.name].support).toBe(api.support);
+});
+
+test('reads the version, update URL and IPC headers and calls the plugin channel unimplemented', () => {
+  const preview = readRisuPlugin(
+    source(
+      [
+        '//@name channel-plugin',
+        '//@api 3.0',
+        '//@version 1.4.2',
+        '//@update-url https://example.test/plugin.js',
+        '//@allowed-ipc sibling-a sibling-b',
+        '//@allowed-ipc sibling-a',
+        'risuai.getRuntimeInfo();',
+      ].join('\n')
+    )
+  );
+  expect(preview).toMatchObject({
+    pluginVersion: '1.4.2',
+    updateUrl: 'https://example.test/plugin.js',
+    allowedIpc: ['sibling-a', 'sibling-b'],
+  });
+  const ipc = preview.findings.find((finding) => finding.code === 'plugin-allowed-ipc');
+  expect(ipc?.level).toBe('unsupported');
+  expect(ipc?.message).toContain('아직 구현하지 않아서');
+  // An http update URL is not a Risu update URL, so the preview reports none.
+  const insecure = readRisuPlugin(
+    source(['//@name plain', '//@update-url http://example.test/plugin.js'].join('\n'))
+  );
+  expect(insecure.updateUrl).toBe('');
+});
+
+test('classifies the members the earlier table missed or judged too optimistically', () => {
+  const preview = readRisuPlugin(
+    source(
+      plugin(`
+        risuai.risuFetch('https://example.test');
+        risuai.installPlugin('other');
+        risuai.setChatPanel('<p></p>');
+        risuai.alert('hi'); risuai.alertConfirm('sure?'); risuai.alertError('no');
+        risuai.setArg('key', 1);
+        risuai.pluginStorage.getItem('key');
+        risuai.safeLocalStorage.getItem('key');
+        risuai.getLocalPluginStorage();
+        risuai.parseRisuChat('text');
+        risuai.onUnload(() => {});
+        risuai.log('note');
+        risuai.getChatFromIndex(0);
+        risuai.getCurrentChatIndex();
+        risuai.getCurrentCharacterIndex();
+        risuai.getCharacterFromIndex(0);
+        risuai.getDatabase();
+      `)
+    )
+  );
+  expect(Object.fromEntries(preview.apis.map((api) => [api.name, api.support]))).toEqual({
+    risuFetch: 'unimplemented',
+    installPlugin: 'unimplemented',
+    setChatPanel: 'out-of-scope',
+    alert: 'out-of-scope',
+    alertConfirm: 'out-of-scope',
+    alertError: 'out-of-scope',
+    setArg: 'unimplemented',
+    pluginStorage: 'unimplemented',
+    safeLocalStorage: 'unimplemented',
+    getLocalPluginStorage: 'unimplemented',
+    parseRisuChat: 'unimplemented',
+    onUnload: 'unimplemented',
+    log: 'unimplemented',
+    getChatFromIndex: 'out-of-scope',
+    getCurrentChatIndex: 'out-of-scope',
+    getCurrentCharacterIndex: 'out-of-scope',
+    getCharacterFromIndex: 'out-of-scope',
+    getDatabase: 'out-of-scope',
+  });
+  const note = (name: string) => RISU_PLUGIN_API_SUPPORT[name].note;
+  expect(note('risuFetch')).toContain('nativeFetch');
+  expect(note('onUnload')).toContain('상주 인스턴스');
+  expect(note('getDatabase')).toContain('읽기 전용 허용 목록 프록시');
+  expect(note('getChatFromIndex')).toContain('주소 공간');
+  expect(note('addRisuScriptHandler')).toContain('메시지 수와 역할');
+  // The main-app UI rule covers a dialog exactly as it covers a registered part.
+  expect(note('alert')).toBe(note('registerButton'));
+});
+
+test('says that API detection is textual and names a binding that renames risuai', () => {
+  const plain = readRisuPlugin(source(plugin('risuai.getRuntimeInfo();')));
+  const notice = plain.findings.find((finding) => finding.code === 'plugin-api-detection');
+  expect(notice?.level).toBe('info');
+  expect(notice?.message).toContain('글자만 대조해서');
+  expect(notice?.message).not.toContain('다른 이름으로 받는 곳');
+
+  const aliased = readRisuPlugin(
+    source(plugin('const risuApi = risuai;\nrisuApi.nativeFetch("https://example.test");'))
+  );
+  const aliasNotice = aliased.findings.find((finding) => finding.code === 'plugin-api-detection');
+  expect(aliasNotice?.message).toContain('risuApi');
+  // The alias is only named, never resolved, so its member stays out of the judged list.
+  expect(aliased.apis).toEqual([]);
+  expect(aliased.unknownApis).toEqual([]);
 });
 
 test('refuses a file that is not a plugin and reports an older API declaration', async () => {
