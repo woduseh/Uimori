@@ -37,6 +37,18 @@ test('reads the declared plugin identity, arguments and links without running th
   expect(preview.findings.map((finding) => finding.code)).toContain('plugin-not-executed');
 });
 
+test('keeps the last declared name and leaves a clean plugin without an unsupported finding', () => {
+  // RisuAI assigns on every //@name line, so a repeated header keeps the last value.
+  const preview = readRisuPlugin(
+    source(['//@name first', '//@name second', '//@api 3.0', 'risuai.log("ready");'].join('\n'))
+  );
+  expect(preview.name).toBe('second');
+  expect(preview.findings.map((finding) => finding.level)).not.toContain('unsupported');
+  expect(preview.findings).toEqual([
+    expect.objectContaining({ code: 'plugin-not-executed', level: 'info' }),
+  ]);
+});
+
 test('judges every mentioned API against the current contracts and reports the rest', () => {
   const preview = readRisuPlugin(
     source(
@@ -79,7 +91,7 @@ test('refuses a file that is not a plugin and reports an older API declaration',
   expect(legacy.findings.map((finding) => finding.code)).toContain('plugin-api-version');
 
   const app = Fastify();
-  risuPluginRoutes(app, 'unused.sqlite');
+  risuPluginRoutes(app);
   try {
     const response = await app.inject({
       method: 'POST',

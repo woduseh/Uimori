@@ -1,4 +1,4 @@
-import { readLargeImportSource as readSource } from './import-source.js';
+import { readImportSource, readLargeImportSource as readSource } from './import-source.js';
 import { useRef, useState } from 'react';
 import { RISU_IMPORT_MAX_BYTES, RISU_IMPORT_MAX_UPLOAD_BYTES } from '../core/risu-import.js';
 import type {
@@ -9,7 +9,7 @@ import type {
   RisuImportSource,
   RisuImportStagedSource,
 } from '../core/risu-import.js';
-import type { RisuPluginPreview } from '../core/risu-plugin.js';
+import { RISU_PLUGIN_MAX_BYTES, type RisuPluginPreview } from '../core/risu-plugin.js';
 import { ApiError, api } from './api.js';
 import { RisuPluginReport } from './RisuPluginReport.js';
 import { SelectionCheckbox } from './BooleanControls.js';
@@ -77,6 +77,11 @@ export function RisuImport({
           '.charx, 카드·모듈 JSON, 모듈 프로젝트 ZIP 또는 플러그인 .js를 선택해 주세요.'
         );
       if (file.size === 0) throw new Error('빈 파일은 가져올 수 없어요.');
+      const isPlugin = /\.js$/iu.test(file.name);
+      if (isPlugin && file.size > RISU_PLUGIN_MAX_BYTES)
+        throw new Error(
+          `플러그인 .js 파일은 ${Math.round(RISU_PLUGIN_MAX_BYTES / 1024 / 1024)} MiB 이하여야 해요.`
+        );
       if (file.size > RISU_IMPORT_MAX_UPLOAD_BYTES)
         throw new Error(
           `파일은 ${Math.round(RISU_IMPORT_MAX_UPLOAD_BYTES / 1024 / 1024)} MiB 이하여야 해요.`
@@ -85,8 +90,9 @@ export function RisuImport({
         setNotice(
           `${Math.round(RISU_IMPORT_MAX_BYTES / 1024 / 1024)} MiB가 넘는 파일이라 먼저 올린 뒤 확인해요. 원본 사본은 앱에 보관하지 않아요.`
         );
-      const nextSource = await readSource(file);
-      if (/\.js$/i.test(file.name)) {
+      // A plugin stays under the size the request body carries, so it never uses the staged path.
+      const nextSource = isPlugin ? await readImportSource(file) : await readSource(file);
+      if (isPlugin) {
         // A plugin is read for its declared support only; nothing is registered or executed.
         setPlugin(
           await api<RisuPluginPreview>('/risu-plugin-imports/prepare', { source: nextSource })
@@ -258,7 +264,8 @@ export function RisuImport({
             쓰려면 모듈을 선택해 주세요. 모듈은 새 채팅을 만들지 않아요.
           </p>
           <label className="risu-import-file">
-            .charx · 카드·모듈 JSON · 모듈 프로젝트 ZIP · 플러그인 .js · 최대 256 MiB
+            .charx · 카드·모듈 JSON · 모듈 프로젝트 ZIP · 최대 256 MiB · 플러그인 .js는{' '}
+            {Math.round(RISU_PLUGIN_MAX_BYTES / 1024 / 1024)} MiB
             <input
               type="file"
               aria-label="Risu 파일 선택"

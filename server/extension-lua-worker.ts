@@ -2,6 +2,10 @@ import { LuaFactory, LuaLibraries, LuaReturn, LuaType } from 'wasmoon';
 import { parentPort, workerData } from 'node:worker_threads';
 
 const MAX_JSON_BYTES = 128 * 1024;
+// Defence in depth behind core's EXTENSION_PROGRAM_MAX_SOURCE_BYTES, repeated as a literal because
+// the host also starts this worker as raw TypeScript, where Node cannot resolve core's specifiers.
+// tests/extension-runtime.test.ts pins this to the value core declares.
+const MAX_SOURCE_BYTES = 512 * 1024;
 const MAX_HOST_RESULT_BYTES = 512 * 1024;
 const LUA_MEMORY_BYTES = 8 * 1024 * 1024;
 const CPU_MS = 100;
@@ -337,7 +341,7 @@ async function run() {
     !input ||
     typeof input.source !== 'string' ||
     typeof input.inputJSON !== 'string' ||
-    Buffer.byteLength(input.source) > 4 * 1024 * 1024 ||
+    Buffer.byteLength(input.source) > MAX_SOURCE_BYTES ||
     Buffer.byteLength(input.inputJSON) > MAX_JSON_BYTES ||
     !Array.isArray(input.hostErrorCodes)
   ) {

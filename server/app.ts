@@ -1180,7 +1180,7 @@ export async function createApp(options: AppOptions): Promise<App> {
   nativeTransferRoutes(app, store);
   uploadRoutes(app, store.path);
   risuImportRoutes(app, store);
-  risuPluginRoutes(app, store.path);
+  risuPluginRoutes(app);
   risuPresetImportRoutes(app, store);
   diagnosticReportRoutes(app, store, { buildId: options.buildId, testMode: options.testMode });
   app.post<{ Params: { id: string } }>('/api/chats/:id/package-start', async (request) => {

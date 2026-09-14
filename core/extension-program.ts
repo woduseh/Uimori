@@ -2,7 +2,10 @@ import type { RuntimeValue } from './prompt-values.js';
 import { inspectRuntimeValue, PromptBudget } from './prompt-values.js';
 
 export const EXTENSION_PROGRAM_API = 'uimori-state-action-v1' as const;
+/** Superseded by EXTENSION_PROGRAM_MAX_SOURCE_BYTES; kept while callers still count UTF-16 units. */
 export const EXTENSION_PROGRAM_MAX_SOURCE_CHARS = 512 * 1024;
+/** The single program-source limit: UTF-8 bytes, shared by core validation and both guest workers. */
+export const EXTENSION_PROGRAM_MAX_SOURCE_BYTES = 512 * 1024;
 export const EXTENSION_PROGRAM_MAX_RESULT_CHARS = 8_000;
 /** Edit hooks return one bounded text back to the host instead of a small projection. */
 export const EXTENSION_PROGRAM_MAX_EDIT_RESULT_CHARS = 128 * 1024;
@@ -64,6 +67,12 @@ function fail(code: string): never {
   throw new ExtensionProgramError(code);
 }
 
+const sourceEncoder = new TextEncoder();
+/** Measured in UTF-8 bytes so a multibyte source costs the same here as in the guest workers. */
+export function extensionProgramSourceBytes(source: string): number {
+  return sourceEncoder.encode(source).length;
+}
+
 function exactRecord(
   value: unknown,
   required: readonly string[],
@@ -102,7 +111,7 @@ export function validateExtensionProgram(value: unknown): ExtensionProgram {
   if (
     typeof program.source !== 'string' ||
     !program.source.length ||
-    program.source.length > EXTENSION_PROGRAM_MAX_SOURCE_CHARS
+    extensionProgramSourceBytes(program.source) > EXTENSION_PROGRAM_MAX_SOURCE_BYTES
   )
     fail('BEHAVIOR_PROGRAM_SOURCE_SIZE');
   if (Object.hasOwn(program, 'capabilities')) {
