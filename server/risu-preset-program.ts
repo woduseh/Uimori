@@ -17,6 +17,9 @@ const record = (value: unknown): RecordValue => {
   return value as RecordValue;
 };
 const string = (value: unknown) => (typeof value === 'string' ? value : '');
+/** A disabled block keeps its prompt text; the AST caps one text node at 200,000 characters and
+ * the whole program at 1MB, so a longer block stays empty rather than failing the import. */
+const KEPT_BLOCK_TEXT_LIMIT = 20_000;
 function promptRole(value: unknown): PromptRoleName {
   if (value === undefined || value === 'system') return 'system';
   if (value === 'bot' || value === 'assistant') return 'assistant';
@@ -152,13 +155,28 @@ export function importRisuPresetProgram(value: unknown): RisuPresetProgramImport
       } else throw new UnsupportedCbs('지원하지 않는 프롬프트 블록');
     } catch (error) {
       if (!(error instanceof UnsupportedCbs)) throw error;
+      // A text node is never parsed again at render time, so `{{` in the kept prompt text stays
+      // visible in the editor instead of running as CBS.
+      const original = string(item.text);
+      const kept = original.length > 0 && original.length <= KEPT_BLOCK_TEXT_LIMIT;
+      const keptNotice = kept
+        ? '원문은 꺼진 블록 안에 텍스트로 남겨 편집기에서 고칠 수 있어요. '
+        : original
+          ? '원문이 길어 꺼진 블록에는 남기지 않아요. '
+          : '';
       findings.push({
         code: 'RISU_PRESET_BLOCK_UNSUPPORTED',
         level: 'unsupported',
         blockIndex: index,
-        message: `${index + 1}번 블록: ${error.message}. 원본은 가져온 파일에 보존돼요.`,
+        message: `${index + 1}번 블록: ${error.message}. ${keptNotice}원본은 가져온 파일에 보존돼요.`,
       });
-      blocks.push({ ...common, kind: 'message', role: 'system', enabled: false, template: [] });
+      blocks.push({
+        ...common,
+        kind: 'message',
+        role: 'system',
+        enabled: false,
+        template: kept ? [{ kind: 'text', text: original }] : [],
+      });
     }
   }
   if (controls.size)

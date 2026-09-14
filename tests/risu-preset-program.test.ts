@@ -115,6 +115,20 @@ describe('Risu preset program conversion', () => {
     expect(converted.findings.some((finding) => finding.level === 'unsupported')).toBe(true);
   });
 
+  it('keeps the text of an unsupported block inside the disabled block for repair', () => {
+    const source = '{{setvar::counter::1}} keep me';
+    const { converted, text } = render(preset(source));
+    expect(text).toBe('');
+    expect(converted.program.blocks[0]).toMatchObject({
+      enabled: false,
+      template: [{ kind: 'text', text: source }],
+    });
+    expect(
+      converted.findings.find((finding) => finding.code === 'RISU_PRESET_BLOCK_UNSUPPORTED')
+        ?.message
+    ).toContain('꺼진 블록');
+  });
+
   it('does not disguise Risu memory as native notes or enable model connections', () => {
     const converted = importRisuPresetProgram(
       preset('', {

@@ -2,8 +2,6 @@ import type { RuntimeValue } from './prompt-values.js';
 import { inspectRuntimeValue, PromptBudget } from './prompt-values.js';
 
 export const EXTENSION_PROGRAM_API = 'uimori-state-action-v1' as const;
-/** Superseded by EXTENSION_PROGRAM_MAX_SOURCE_BYTES; kept while callers still count UTF-16 units. */
-export const EXTENSION_PROGRAM_MAX_SOURCE_CHARS = 512 * 1024;
 /** The single program-source limit: UTF-8 bytes, shared by core validation and both guest workers. */
 export const EXTENSION_PROGRAM_MAX_SOURCE_BYTES = 512 * 1024;
 export const EXTENSION_PROGRAM_MAX_RESULT_CHARS = 8_000;

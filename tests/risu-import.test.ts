@@ -1010,6 +1010,50 @@ test('an expansion bomb and an oversized member stay refused whatever the contai
   expect(() => cardZip(oversized)).toThrow('RISU_IMPORT_INVALID_FILE');
 });
 
+test('the unhandled trigger notice follows only what the adapter left unconnected', () => {
+  const codes = (triggerscript: unknown) => {
+    const original = card();
+    return prepareRisuImport({
+      source: sourceOf({
+        ...original,
+        data: { ...original.data, extensions: { risuai: { triggerscript } } },
+      }),
+    }).findings.map((item) => item.code);
+  };
+  const connected = {
+    type: 'start',
+    conditions: [],
+    effect: [{ type: 'setvar', operator: '=', var: 'phase', value: 'ready' }],
+  };
+  expect(codes([connected])).not.toContain('trigger-effects-unsupported');
+  expect(codes([{ ...connected, effect: [{ type: 'cutchat', start: '0', end: '1' }] }])).toContain(
+    'trigger-effects-unsupported'
+  );
+  expect(codes([{ ...connected, type: 'display' }])).toContain('trigger-effects-unsupported');
+  expect(codes([null])).toContain('trigger-effects-unsupported');
+  expect(codes('one inline trigger')).toContain('trigger-effects-unsupported');
+});
+
+test('a comment in card text keeps the whole field converted instead of names only', () => {
+  const store = database(),
+    original = card();
+  const source = sourceOf({
+    ...original,
+    data: { ...original.data, description: '{{// hidden}}{{char}} reads {{getvar::flag}}.' },
+  });
+  const preview = prepareRisuImport({ source });
+  expect(preview.findings.map((item) => item.code)).not.toContain('dynamic-text');
+  const saved = applyRisuImport(store, {
+    source,
+    digest: preview.digest,
+    memoryIds: [],
+    allowPartial: false,
+    idempotencyKey: 'comment',
+  });
+  const bot = store.product.get<Content>('content', saved.receipt.items[0].id);
+  expect(JSON.stringify(bot.package!.bodyTemplate)).not.toContain('{{');
+});
+
 test('lore directives decide activation and never reach the model as prose', () => {
   const value = card();
   value.data.character_book.entries = [
@@ -1026,6 +1070,12 @@ test('lore directives decide activation and never reach the model as prose', () 
       enabled: true,
     },
     { name: 'Plain', content: 'No directive here.', constant: true, enabled: true },
+    {
+      name: 'Upper directive',
+      content: '@@ACTIVATE\nThe market opens.',
+      constant: false,
+      enabled: true,
+    },
     {
       name: 'Late directive',
       content: 'Opening line.\n@@depth 2\nMore text.',
@@ -1045,6 +1095,9 @@ test('lore directives decide activation and never reach the model as prose', () 
   expect(lore['Always on']).toMatchObject({ enabled: true, loading: 'pinned' });
   expect(lore['Always on'].text).toBe('The harbor is busy.');
   expect(lore.Plain.text).toBe('No directive here.');
+  // Risu compares decorator names with lowercase labels, so an uppercase line stays prose.
+  expect(lore['Upper directive']).toMatchObject({ loading: 'discoverable' });
+  expect(lore['Upper directive'].text).toBe('@@ACTIVATE\nThe market opens.');
   expect(lore['Late directive'].text).toBe('Opening line.\n@@depth 2\nMore text.');
   const codes = preview.findings.map((finding) => finding.code);
   expect(codes).toContain('lore-not-activated');

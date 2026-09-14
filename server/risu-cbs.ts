@@ -35,6 +35,12 @@ function argumentsOf(text: string): string[] {
   return parts;
 }
 
+/** Risu normalizes a command before looking it up: parser.svelte.ts:1088 lowercases and drops
+ * spaces, underscores and hyphens. `{{//…}}` is matched on the raw body instead, as a prefix. */
+const commandName = (command: string) => command.toLowerCase().replace(/[\s_-]/gu, '');
+const isCommentCbs = (body: string, command: string) =>
+  body.startsWith('//') || commandName(command) === 'comment';
+
 function tokenAt(text: string, start: number): { body: string; end: number } {
   let depth = 1;
   for (let i = start + 2; i < text.length - 1; i++) {
@@ -95,6 +101,8 @@ export class RisuCbs {
     const token = tokenAt(source, 0);
     if (token.end !== source.length) throw new UnsupportedCbs('CBS 인수의 텍스트 결합');
     const [command, ...raw] = argumentsOf(token.body);
+    // A comment contributes nothing to the value it sits in, so it never fails the whole field.
+    if (isCommentCbs(token.body, command)) return '';
     if (raw.length === 0 && (command.toLowerCase() === 'char' || command.toLowerCase() === 'user'))
       return { context: [command.toLowerCase() === 'char' ? 'bot' : 'user', 'name'] };
     if (this.options.messageContext && raw.length === 0) {
@@ -234,6 +242,8 @@ export class RisuCbs {
             then: yes.nodes,
             ...(no ? { else: no.nodes } : {}),
           });
+        } else if (isCommentCbs(header, argumentsOf(header)[0])) {
+          // Risu renders a comment as nothing outside the display path, so no node is emitted.
         } else if (this.options.names !== 'context' && (header === 'slot' || header === 'char')) {
           nodes.push({ kind: 'slot', name: header === 'slot' ? slotName : 'char' });
         } else {

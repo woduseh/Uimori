@@ -1,6 +1,7 @@
 import {
   EXTENSION_PROGRAM_API,
-  EXTENSION_PROGRAM_MAX_SOURCE_CHARS,
+  EXTENSION_PROGRAM_MAX_SOURCE_BYTES,
+  extensionProgramSourceBytes,
   type ExtensionProgram,
 } from '../core/extension-program.js';
 import {
@@ -308,7 +309,8 @@ if callback ~= nil then
 end
 return {state=__state, result=__null}`;
   const body = `${shim}\n${denials}\ndo\nlocal function __initialize()\n${source}\nend\n__initialize()\nend\n${dispatcher}`;
-  if (body.length > EXTENSION_PROGRAM_MAX_SOURCE_CHARS) throw new Error('RISU_LUA_SOURCE_LIMIT');
+  if (extensionProgramSourceBytes(body) > EXTENSION_PROGRAM_MAX_SOURCE_BYTES)
+    throw new Error('RISU_LUA_SOURCE_LIMIT');
   return {
     api: EXTENSION_PROGRAM_API,
     language: 'lua',
@@ -457,7 +459,7 @@ function adaptDeclarativeTrigger(
   actions: BehaviorAction[],
   findings: RisuLuaFinding[],
   options: RisuEffectOptions
-) {
+): boolean {
   const report = (code: string, message: string) => {
     findings.push({ code, triggerIndex, message });
   };
@@ -467,7 +469,7 @@ function adaptDeclarativeTrigger(
       'RISU_TRIGGER_MODE_UNSUPPORTED',
       `${String(trigger.type)} 트리거는 같은 실행 시점의 공통 훅이 없어 아직 연결하지 않았어요. 원본 선언은 보존해요.`
     );
-    return;
+    return false;
   }
   let effect: ReturnType<typeof buildRisuEffectProgram>;
   let conditionPlan: ReturnType<typeof compileLuaConditions>;
@@ -478,7 +480,7 @@ function adaptDeclarativeTrigger(
       'RISU_TRIGGER_EFFECTS_UNSUPPORTED',
       `${error instanceof UnsupportedCbs ? error.message : '트리거 효과를 네이티브 실행으로 옮길 수 없어요.'} 이 트리거는 연결하지 않고 원본 선언을 보존해요.`
     );
-    return;
+    return false;
   }
   try {
     conditionPlan = compileLuaConditions(trigger.conditions);
@@ -487,7 +489,7 @@ function adaptDeclarativeTrigger(
       'RISU_TRIGGER_CONDITIONS_UNSUPPORTED',
       `${error instanceof UnsupportedCbs ? error.message : '트리거 조건이 네이티브 실행 한도를 넘었어요.'} 조건 전체를 유지하기 위해 이 트리거를 연결하지 않았어요.`
     );
-    return;
+    return false;
   }
   if (conditionPlan.runtimeCbsGuard)
     report(
@@ -518,6 +520,7 @@ function adaptDeclarativeTrigger(
     effects: [],
     program: effect.program,
   });
+  return true;
 }
 
 const MODE_EVENTS: Record<string, RisuLuaEvent> = {
@@ -593,14 +596,18 @@ export function adaptRisuLuaTriggers(
   actions: BehaviorAction[];
   findings: RisuLuaFinding[];
   sources: RisuLuaSource[];
+  /** Indexes of triggers the adapter left wholly or partly unconnected, in declaration order. */
+  unconnectedTriggers: number[];
 } {
   const actions: BehaviorAction[] = [],
     findings: RisuLuaFinding[] = [],
     sources: RisuLuaSource[] = [];
+  const unconnected = new Set<number>();
   const prefix = options.idPrefix ?? 'risu-lua';
   const effectOptions: RisuEffectOptions = options.lowLevelAccess ? { lowLevelAccess: true } : {};
   if (!/^[A-Za-z0-9_][A-Za-z0-9_.-]{0,49}$/u.test(prefix)) throw new Error('RISU_LUA_ID_PREFIX');
-  if (!Array.isArray(triggers)) return { actions, findings, sources };
+  if (!Array.isArray(triggers))
+    return { actions, findings, sources, unconnectedTriggers: [...unconnected] };
   const mapping: Partial<Record<RisuLuaEvent, BehaviorActionTrigger>> = {
     input: 'before-turn',
     editInput: 'before-turn',
@@ -620,11 +627,15 @@ export function adaptRisuLuaTriggers(
   };
   triggers.forEach((value, triggerIndex) => {
     const trigger = record(value);
-    if (!trigger || !Array.isArray(trigger.effect)) return;
+    if (!trigger || !Array.isArray(trigger.effect)) {
+      unconnected.add(triggerIndex);
+      return;
+    }
     const effects = trigger.effect;
+    const leaveUnconnected = () => unconnected.add(triggerIndex);
     // Risu bypasses the mode gate only for a script trigger; declarative effects keep their type.
-    if (effects.length && !effects.some((raw) => record(raw)?.type === 'triggerlua'))
-      adaptDeclarativeTrigger(
+    if (effects.length && !effects.some((raw) => record(raw)?.type === 'triggerlua')) {
+      const connected = adaptDeclarativeTrigger(
         trigger,
         effects,
         triggerIndex,
@@ -633,6 +644,8 @@ export function adaptRisuLuaTriggers(
         findings,
         effectOptions
       );
+      if (!connected) leaveUnconnected();
+    }
     effects.forEach((rawEffect, effectIndex) => {
       const effect = record(rawEffect);
       if (effect?.type !== 'triggerlua') return;
@@ -641,6 +654,7 @@ export function adaptRisuLuaTriggers(
       };
       if (typeof effect.code !== 'string' || !effect.code.trim()) {
         report('RISU_LUA_SOURCE_INVALID', 'Lua 소스가 없거나 비어 있어요.');
+        leaveUnconnected();
         return;
       }
       sources.push({ triggerIndex, effectIndex, source: effect.code });
@@ -655,6 +669,7 @@ export function adaptRisuLuaTriggers(
           'RISU_LUA_MIXED_EFFECTS_UNSUPPORTED',
           '이 트리거의 효과 순서와 실행 시점을 그대로 옮길 경로가 아직 없어요. 소스와 원본 선언만 보존했어요.'
         );
+        leaveUnconnected();
         return;
       }
       report(
@@ -685,7 +700,10 @@ export function adaptRisuLuaTriggers(
       }
       let segments: { before?: BehaviorAction; after?: BehaviorAction } = {};
       if (mixed) {
-        if (!conditionPlan) return;
+        if (!conditionPlan) {
+          leaveUnconnected();
+          return;
+        }
         const built = mixedSegments(
           effects,
           effectIndex,
@@ -696,7 +714,10 @@ export function adaptRisuLuaTriggers(
           mode!,
           effectOptions
         );
-        if (!built) return;
+        if (!built) {
+          leaveUnconnected();
+          return;
+        }
         segments = built;
       }
       if (segments.before) actions.push(segments.before);
@@ -708,6 +729,7 @@ export function adaptRisuLuaTriggers(
             `${event} 콜백은 같은 실행 시점의 공통 훅이 없어 아직 연결하지 않았어요.`,
             event
           );
+          leaveUnconnected();
           continue;
         }
         // Risu runs listenEdit callbacks from the edit path itself, which ignores trigger conditions.
@@ -730,7 +752,10 @@ export function adaptRisuLuaTriggers(
             'editRequest는 전송용 원문 대화와 이번 요청만 {role,content} 목록으로 받아요. 시스템 프롬프트·로어·다른 자료의 지침은 넘기지 않고 메시지 수와 역할도 바꿀 수 없어요. 이 채팅에서 해당 자료 개정에 대화 읽기를 허용해야 실행하며, 대화가 실행 한도를 넘으면 편집을 건너뛰고 원문 그대로 보내요.',
             event
           );
-        if (!edit && event !== 'onButtonClick' && !conditionPlan) continue;
+        if (!edit && event !== 'onButtonClick' && !conditionPlan) {
+          leaveUnconnected();
+          continue;
+        }
         try {
           const button = event === 'onButtonClick';
           actions.push({
@@ -756,10 +781,16 @@ export function adaptRisuLuaTriggers(
             'Lua 소스를 네이티브 실행 한도 안에서 구성할 수 없어 해당 콜백을 연결하지 않았어요.',
             event
           );
+          leaveUnconnected();
         }
       }
       if (segments.after) actions.push(segments.after);
     });
   });
-  return { actions, findings, sources };
+  return {
+    actions,
+    findings,
+    sources,
+    unconnectedTriggers: [...unconnected].sort((a, b) => a - b),
+  };
 }

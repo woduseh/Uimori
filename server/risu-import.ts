@@ -382,7 +382,7 @@ function analyze(
     finding(
       'lua-actions',
       'warning',
-      'Lua의 생성 전·응답 후·버튼 콜백을 격리된 행동으로 가져와요. 가져오기 중에는 코드를 실행하지 않아요. 공유 변수 변경과 추가 모델 호출은 채팅에서 각각 허용해야 하며 아직 연결되지 않은 이벤트·API는 아래 안내를 확인해 주세요.'
+      '트리거와 Lua의 생성 전·입력·응답 후·버튼 행동을 격리된 행동으로 가져와요. 가져오기 중에는 코드를 실행하지 않아요. 공유 변수 변경과 추가 모델 호출은 채팅에서 각각 허용해야 하며 아직 연결되지 않은 이벤트·API는 아래 안내를 확인해 주세요.'
     );
   } else if (lua.actions.length > 100) {
     finding(
@@ -397,19 +397,16 @@ function analyze(
       issue.code === 'RISU_LUA_FRESH_INVOCATION' ? 'warning' : 'unsupported',
       `트리거 ${issue.triggerIndex + 1}${issue.event ? ` · ${issue.event}` : ''}: ${issue.message}`
     );
+  // The adapter connects declarative effects and mixed triggers too, so only what it left behind
+  // is unhandled. A triggerscript it cannot read at all still counts as preserved-only.
   const unhandledTriggers = Array.isArray(risu.triggerscript)
-    ? risu.triggerscript.some((raw) => {
-        const effects = object(raw).effect;
-        return (
-          !Array.isArray(effects) || effects.some((effect) => object(effect).type !== 'triggerlua')
-        );
-      })
+    ? lua.unconnectedTriggers.length > 0
     : present(risu.triggerscript);
   if (unhandledTriggers)
     finding(
       'trigger-effects-unsupported',
       'unsupported',
-      'Lua 외의 트리거 효과나 해석하지 못한 트리거가 있어요. 실행 순서를 임의로 바꾸지 않고 원본 파일에 보존해요.'
+      '아직 연결하지 못한 트리거나 효과가 있어요. 실행 순서를 임의로 바꾸지 않고 원본 파일에 보존해요.'
     );
   // Traverse data only to identify executable/configured extension surfaces, never to execute them.
   const pending: unknown[] = [card.extensions];
