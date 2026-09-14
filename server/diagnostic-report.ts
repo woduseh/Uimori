@@ -15,6 +15,7 @@ import {
 import { HttpError, fields, record, text } from './request-validation.js';
 import type { Store } from './store.js';
 import { DATABASE_SCHEMA_VERSION } from './schema-migrations.js';
+import { maintenanceState } from './maintenance.js';
 
 type Environment = { buildId: string; testMode?: boolean };
 type Row = Record<string, unknown>;
@@ -101,6 +102,7 @@ export function createDiagnosticReport(
       platform: platform(),
       architecture: arch(),
       testMode: environment.testMode === true,
+      maintenance: (({ status, epoch }) => ({ status, epoch }))(maintenanceState(store)),
     },
     scope: scope.scope === 'system' ? 'system' : scope.runId ? 'run' : 'chat',
     coverage: {
