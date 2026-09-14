@@ -806,3 +806,92 @@ end)`,
     ).rejects.toMatchObject({ code: 'BEHAVIOR_PROGRAM_FAILED' });
   });
 });
+
+describe('Risu declarative trigger effects', () => {
+  const declarative = (type: string, effect: unknown[], conditions: unknown[] = []) =>
+    adaptRisuLuaTriggers([{ type, conditions, effect, comment: '수동 실행' }]);
+
+  it('connects setvar effects to one native action with JavaScript number semantics', async () => {
+    const converted = declarative('start', [
+      { type: 'setvar', operator: '=', var: 'phase', value: 'opening' },
+      { type: 'setvar', operator: '+=', var: 'count', value: '2' },
+      { type: 'setvar', operator: '=', var: 'copy', value: 'x{{getvar::phase}}' },
+    ]);
+    expect(converted.actions.map((action) => [action.id, action.triggers, action.hook])).toEqual([
+      ['risu-lua-0-effects', ['before-turn'], undefined],
+    ]);
+    const program = validateExtensionProgram(converted.actions[0].program);
+    expect(program.language).toBeUndefined();
+    expect(program.capabilities).toEqual(['variables.read', 'variables.write']);
+    const values: Record<string, string> = { count: '0.1' };
+    const calls: string[] = [];
+    const host: ExtensionHostHandler = async (method, raw) => {
+      const args = raw as { key: string; value?: string; offset?: number };
+      calls.push(method);
+      if (method === 'variables.set') {
+        values[args.key] = args.value!;
+        return null;
+      }
+      return { value: values[args.key] ?? null, nextOffset: null, overridden: true };
+    };
+    const result = await executeExtensionProgram(
+      converted.actions[0].program!,
+      { state: {}, input: {} },
+      undefined,
+      { host }
+    );
+    expect(result.result).toBeNull();
+    // Risu adds with JavaScript numbers and keeps the resulting string exactly.
+    expect(values).toEqual({ phase: 'opening', count: '2.1', copy: 'xopening' });
+    expect(calls.filter((method) => method === 'variables.set')).toHaveLength(3);
+  });
+
+  it('keeps an unsupported effect, mode or dynamic key declarative instead of guessing', () => {
+    const unsupportedEffect = declarative('start', [{ type: 'cutchat', start: '0', end: '1' }]);
+    expect(unsupportedEffect.actions).toEqual([]);
+    expect(unsupportedEffect.findings[0].code).toBe('RISU_TRIGGER_EFFECTS_UNSUPPORTED');
+    const dynamicKey = declarative('start', [
+      { type: 'setvar', operator: '=', var: '{{getvar::name}}', value: '1' },
+    ]);
+    expect(dynamicKey.actions).toEqual([]);
+    expect(dynamicKey.findings[0].code).toBe('RISU_TRIGGER_EFFECTS_UNSUPPORTED');
+    const unsupportedMode = declarative('display', [
+      { type: 'setvar', operator: '=', var: 'phase', value: '1' },
+    ]);
+    expect(unsupportedMode.actions).toEqual([]);
+    expect(unsupportedMode.findings[0].code).toBe('RISU_TRIGGER_MODE_UNSUPPORTED');
+  });
+
+  it('keeps the manual name, input phase and conditions of a declarative trigger', () => {
+    const manual = declarative('manual', [
+      { type: 'setvar', operator: '=', var: 'phase', value: 'clicked' },
+    ]);
+    expect(manual.actions[0]).toMatchObject({ triggers: ['user'], label: '수동 실행' });
+    expect(manual.actions[0].automaticInput).toBeUndefined();
+    const input = declarative(
+      'input',
+      [{ type: 'setvar', operator: '=', var: 'phase', value: 'typed' }],
+      [{ type: 'var', var: 'ready', operator: '=', value: 'yes' }]
+    );
+    expect(input.actions[0]).toMatchObject({ triggers: ['before-turn'], hook: 'input' });
+    expect(behaviorActionAllowed(input.actions[0], {}, {}, { variables: { ready: 'yes' } })).toBe(
+      true
+    );
+    expect(behaviorActionAllowed(input.actions[0], {}, {}, { variables: { ready: 'no' } })).toBe(
+      false
+    );
+    expect(() =>
+      validatePackageBehavior({
+        revision: 1,
+        schemaVersion: 1,
+        stateSchema: { type: 'record', properties: {} },
+        initialState: {},
+        actions: [
+          ...manual.actions,
+          ...input.actions.map((action) => ({ ...action, id: `${action.id}-input` })),
+        ],
+        outputParsers: [],
+      })
+    ).not.toThrow();
+  });
+});

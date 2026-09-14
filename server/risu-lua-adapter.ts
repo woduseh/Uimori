@@ -16,6 +16,7 @@ import {
   type PromptOperation,
 } from '../core/prompt-program.js';
 import { RisuCbs, UnsupportedCbs } from './risu-cbs.js';
+import { buildRisuEffectProgram } from './risu-trigger-effects.js';
 
 export const RISU_LUA_EVENTS = [
   'input',
@@ -424,6 +425,82 @@ function compileLuaConditions(raw: unknown): { when?: PromptExpression; runtimeC
   return { when: validatePromptExpression(operation('all', ...conditions)), runtimeCbsGuard };
 }
 
+/** Risu runs a declarative trigger only in its own mode, with the same conditions as a script. */
+const DECLARATIVE_MODES: Record<
+  string,
+  { trigger: BehaviorActionTrigger; hook?: BehaviorActionHook }
+> = {
+  start: { trigger: 'before-turn' },
+  input: { trigger: 'before-turn', hook: 'input' },
+  output: { trigger: 'after-turn' },
+  manual: { trigger: 'user' },
+};
+
+function adaptDeclarativeTrigger(
+  trigger: Record<string, unknown>,
+  effects: unknown[],
+  triggerIndex: number,
+  prefix: string,
+  actions: BehaviorAction[],
+  findings: RisuLuaFinding[]
+) {
+  const report = (code: string, message: string) => {
+    findings.push({ code, triggerIndex, message });
+  };
+  const mode = DECLARATIVE_MODES[String(trigger.type)];
+  if (!mode) {
+    report(
+      'RISU_TRIGGER_MODE_UNSUPPORTED',
+      `${String(trigger.type)} 트리거는 같은 실행 시점의 공통 훅이 없어 아직 연결하지 않았어요. 원본 선언은 보존해요.`
+    );
+    return;
+  }
+  let effect: ReturnType<typeof buildRisuEffectProgram>;
+  let conditionPlan: ReturnType<typeof compileLuaConditions>;
+  try {
+    effect = buildRisuEffectProgram(effects);
+  } catch (error) {
+    report(
+      'RISU_TRIGGER_EFFECTS_UNSUPPORTED',
+      `${error instanceof UnsupportedCbs ? error.message : '트리거 효과를 네이티브 실행으로 옮길 수 없어요.'} 이 트리거는 연결하지 않고 원본 선언을 보존해요.`
+    );
+    return;
+  }
+  try {
+    conditionPlan = compileLuaConditions(trigger.conditions);
+  } catch (error) {
+    report(
+      'RISU_TRIGGER_CONDITIONS_UNSUPPORTED',
+      `${error instanceof UnsupportedCbs ? error.message : '트리거 조건이 네이티브 실행 한도를 넘었어요.'} 조건 전체를 유지하기 위해 이 트리거를 연결하지 않았어요.`
+    );
+    return;
+  }
+  if (conditionPlan.runtimeCbsGuard)
+    report(
+      'RISU_LUA_CONDITION_RUNTIME_CBS',
+      '조건에서 읽은 변수값 안에 CBS가 있으면 자동 실행을 보류해요. 일반 문자열 값과 가져올 때 해석 가능한 CBS 조건은 지원해요.'
+    );
+  report(
+    'RISU_TRIGGER_VARIABLE_WRITES',
+    '이 트리거는 분기 공유 변수를 바꿔요. 채팅에서 이 자료 개정에 공유 변수 변경을 허용해야 실행하고, 허용이 없으면 실행하지 않아요.'
+  );
+  const user = mode.trigger === 'user';
+  actions.push({
+    id: `${prefix}-${triggerIndex}-effects`,
+    label:
+      user && typeof trigger.comment === 'string' && trigger.comment.trim()
+        ? trigger.comment.slice(0, 2000)
+        : `Risu 트리거 ${triggerIndex + 1}`,
+    inputSchema: { type: 'record', properties: {} },
+    triggers: [mode.trigger],
+    ...(mode.hook ? { hook: mode.hook } : {}),
+    ...(user ? {} : { automaticInput: {} }),
+    ...(conditionPlan.when ? { when: conditionPlan.when } : {}),
+    effects: [],
+    program: effect.program,
+  });
+}
+
 /** Import adapter for independent Lua triggers. Mixed effects are preserved, never reordered. */
 export function adaptRisuLuaTriggers(
   triggers: unknown,
@@ -460,6 +537,9 @@ export function adaptRisuLuaTriggers(
     const trigger = record(value);
     if (!trigger || !Array.isArray(trigger.effect)) return;
     const effects = trigger.effect;
+    // Risu bypasses the mode gate only for a script trigger; declarative effects keep their type.
+    if (effects.length && !effects.some((raw) => record(raw)?.type === 'triggerlua'))
+      adaptDeclarativeTrigger(trigger, effects, triggerIndex, prefix, actions, findings);
     effects.forEach((rawEffect, effectIndex) => {
       const effect = record(rawEffect);
       if (effect?.type !== 'triggerlua') return;
