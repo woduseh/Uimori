@@ -19,6 +19,7 @@ import {
   resolveTemplateVariableContext,
   templateReadsVariables,
 } from '../core/template-variables.js';
+import { isSha256Hex } from './request-validation.js';
 import { applyTextTransformBatch } from './text-transforms.js';
 import {
   projectExtensionMessageEdits,
@@ -150,8 +151,8 @@ function validateReceiptShape(receipt: PromptInputTransformReceipt) {
   if (
     !receipt ||
     receipt.version !== 1 ||
-    !/^[a-f0-9]{64}$/u.test(receipt.configurationHash) ||
-    !/^[a-f0-9]{64}$/u.test(receipt.inputHash) ||
+    !isSha256Hex(receipt.configurationHash) ||
+    !isSha256Hex(receipt.inputHash) ||
     !Array.isArray(receipt.entries) ||
     receipt.entries.length > 100_000 ||
     Object.keys(receipt).some(
@@ -167,8 +168,8 @@ function validateReceiptShape(receipt: PromptInputTransformReceipt) {
       !entry ||
       entry.index !== index ||
       !['user', 'assistant'].includes(entry.role) ||
-      !/^[a-f0-9]{64}$/u.test(entry.inputHash) ||
-      !/^[a-f0-9]{64}$/u.test(entry.outputHash) ||
+      !isSha256Hex(entry.inputHash) ||
+      !isSha256Hex(entry.outputHash) ||
       Object.keys(entry).some(
         (key) => !['index', 'role', 'inputHash', 'outputHash', 'text', 'applied'].includes(key)
       ) ||

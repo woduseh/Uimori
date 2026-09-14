@@ -12,7 +12,7 @@ import {
   type DiagnosticReport,
   type DiagnosticScope,
 } from '../core/diagnostic-report.js';
-import { HttpError, fields, record, text } from './request-validation.js';
+import { HttpError, fields, isSha256Hex, record, text } from './request-validation.js';
 import type { Store } from './store.js';
 import { DATABASE_SCHEMA_VERSION } from './schema-migrations.js';
 import { maintenanceState } from './maintenance.js';
@@ -95,7 +95,7 @@ export function createDiagnosticReport(
     version: DIAGNOSTIC_REPORT_VERSION,
     generatedAt: new Date().toISOString(),
     environment: {
-      buildId: /^[a-f0-9]{64}$/u.test(environment.buildId) ? environment.buildId : null,
+      buildId: isSha256Hex(environment.buildId) ? environment.buildId : null,
       schemaVersion: Number(store.db.prepare('PRAGMA user_version').get()!.user_version),
       supportedSchemaVersion: DATABASE_SCHEMA_VERSION,
       node: process.versions.node,

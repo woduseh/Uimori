@@ -1,9 +1,12 @@
+import {
+  RISU_IMPORT_MAX_ASSETS,
+  RISU_IMPORT_MAX_CONTAINER_BYTES,
+  RISU_IMPORT_MAX_ENTRY_BYTES,
+  RISU_IMPORT_MAX_JSON_BYTES,
+} from '../core/risu-import.js';
 import { HttpError } from './request-validation.js';
 import { decodeRPack } from './compat/risu/rpack.js';
 
-const jsonLimit = 8 * 1024 * 1024;
-const expandedLimit = 64 * 1024 * 1024;
-const assetLimit = 2000;
 const invalid = (): never => {
   throw new HttpError(400, 'RISU_IMPORT_INVALID_FILE');
 };
@@ -17,7 +20,7 @@ export function readEmbeddedRisuModule(bytes: Buffer): {
   module: Record<string, unknown>;
   assets: Buffer[];
 } {
-  if (bytes.length > expandedLimit) return invalid();
+  if (bytes.length > RISU_IMPORT_MAX_CONTAINER_BYTES) return invalid();
   let cursor = 0;
   const byte = () => {
     if (cursor >= bytes.length) return invalid();
@@ -33,7 +36,7 @@ export function readEmbeddedRisuModule(bytes: Buffer): {
     return decodeRPack(value);
   };
   if (byte() !== 111 || byte() !== 0) return invalid();
-  const main = payload(jsonLimit);
+  const main = payload(RISU_IMPORT_MAX_JSON_BYTES);
   let document: unknown;
   try {
     document = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(main));
@@ -46,7 +49,7 @@ export function readEmbeddedRisuModule(bytes: Buffer): {
   const metadata = module.assets === undefined ? [] : module.assets;
   if (
     !Array.isArray(metadata) ||
-    metadata.length > assetLimit ||
+    metadata.length > RISU_IMPORT_MAX_ASSETS ||
     metadata.some(
       (asset: unknown) =>
         !Array.isArray(asset) ||
@@ -61,7 +64,7 @@ export function readEmbeddedRisuModule(bytes: Buffer): {
     const mark = byte();
     if (mark === 0) break;
     if (mark !== 1 || assets.length >= metadata.length) return invalid();
-    assets.push(payload(expandedLimit));
+    assets.push(payload(RISU_IMPORT_MAX_ENTRY_BYTES));
   }
   if (cursor !== bytes.length || assets.length !== metadata.length) return invalid();
   return { module, assets };

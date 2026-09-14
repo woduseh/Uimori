@@ -1,6 +1,11 @@
 import { crc32, inflateRawSync } from 'node:zlib';
 import {
+  RISU_IMPORT_MAX_ASSETS,
   RISU_IMPORT_MAX_BYTES,
+  RISU_IMPORT_MAX_CONTAINER_BYTES,
+  RISU_IMPORT_MAX_ENTRY_BYTES,
+  RISU_IMPORT_MAX_JSON_BYTES,
+  RISU_IMPORT_MAX_ZIP_MEMBERS,
   type RisuImportSource,
   type RisuImportStagedSource,
   type RisuImportKind,
@@ -13,14 +18,11 @@ import { readEmbeddedRisuModule } from './risu-module-file.js';
 const invalid = (): never => {
   throw new HttpError(400, 'RISU_IMPORT_INVALID_FILE');
 };
-const expandedLimit = 64 * 1024 * 1024;
-/** One member never expands past this, so a large container cannot hold a single huge entry. */
-const memberLimit = 64 * 1024 * 1024;
 
 /** Read bounded ZIP members in memory. No extraction, code execution, or remote assets. */
 export function cardZip(bytes: Buffer): Map<string, () => Buffer> {
   // A big container may declare its own contents; an expansion far beyond its size stays refused.
-  const totalLimit = Math.max(expandedLimit, bytes.length * 4);
+  const totalLimit = Math.max(RISU_IMPORT_MAX_CONTAINER_BYTES, bytes.length * 4);
   let end = bytes.length - 22;
   for (; end >= Math.max(0, bytes.length - 65_557); end--)
     if (
@@ -35,7 +37,7 @@ export function cardZip(bytes: Buffer): Map<string, () => Buffer> {
   if (
     bytes.readUInt32LE(end + 4) !== 0 ||
     bytes.readUInt16LE(end + 8) !== count ||
-    count > 4096 ||
+    count > RISU_IMPORT_MAX_ZIP_MEMBERS ||
     central + centralSize !== end
   )
     return invalid();
@@ -56,7 +58,7 @@ export function cardZip(bytes: Buffer): Map<string, () => Buffer> {
     expanded += length;
     if (
       next > end ||
-      length > memberLimit ||
+      length > RISU_IMPORT_MAX_ENTRY_BYTES ||
       expanded > totalLimit ||
       flags & 0x41 ||
       ![0, 8].includes(method) ||
@@ -148,7 +150,7 @@ export function readCharacterCard(
       ? ('charx' as const)
       : ('character-card-json' as const);
   const cardBytes = zipped ? members.get(moduleProject ? 'module.json' : 'card.json')?.() : bytes;
-  if (!cardBytes || cardBytes.length > 8 * 1024 * 1024) return invalid();
+  if (!cardBytes || cardBytes.length > RISU_IMPORT_MAX_JSON_BYTES) return invalid();
   let document: unknown;
   try {
     document = JSON.parse(cardBytes.toString('utf8').replace(/^\uFEFF/u, ''));
@@ -172,7 +174,10 @@ export function readCharacterCard(
         if (marker.sourceFileType !== undefined && marker.sourceFileType !== 'risum')
           return invalid();
         if (marker.risumAssetFiles !== undefined) {
-          if (!Array.isArray(marker.risumAssetFiles) || marker.risumAssetFiles.length > 2000)
+          if (
+            !Array.isArray(marker.risumAssetFiles) ||
+            marker.risumAssetFiles.length > RISU_IMPORT_MAX_ASSETS
+          )
             return invalid();
           assetFiles = marker.risumAssetFiles;
         }

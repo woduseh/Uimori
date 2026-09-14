@@ -1,8 +1,9 @@
+import { RISU_IMPORT_MAX_ASSETS, RISU_IMPORT_MAX_LORE_ENTRIES } from '../core/risu-import.js';
 import { HttpError, record, text } from './request-validation.js';
 
 /** One lore mapping for extracted projects and the canonical lore in CharX containers. */
 export function moduleLoreEntries(lorebook: unknown) {
-  if (!Array.isArray(lorebook) || lorebook.length > 2000)
+  if (!Array.isArray(lorebook) || lorebook.length > RISU_IMPORT_MAX_LORE_ENTRIES)
     throw new HttpError(400, 'RISU_IMPORT_INVALID_FILE');
   return lorebook.map((raw) => {
     const entry = record(raw);
@@ -83,7 +84,7 @@ export function moduleJsonDocument(
     assets.push({ name: title, uri, type });
   };
   if (module.assets !== undefined) {
-    if (!Array.isArray(module.assets) || module.assets.length > 2000)
+    if (!Array.isArray(module.assets) || module.assets.length > RISU_IMPORT_MAX_ASSETS)
       throw new HttpError(400, 'RISU_IMPORT_INVALID_FILE');
     for (const [index, asset] of module.assets.entries()) {
       if (!Array.isArray(asset) || asset.length < 2)
