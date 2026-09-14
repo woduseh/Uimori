@@ -12,11 +12,11 @@
 
 [기존 M2 결과](M2-RESULTS.md)의 S07은 활성 source **6개** 중 단일 오래된 원고를 **10,000 → 200,000자**로 늘리고 페이지 회수·문맥 준비 등을 확인했어요. 장기간 분산된 사실을 모델이 이해·추출·회수하는 20만 **토큰** 의미 평가가 아니에요. 기존 문서도 Q04를 BLOCKED로 표시하고 있어요.
 
-이번 하네스는 [production memory](../core/memory.ts)와 [story context 도구](../core/story-context.ts)를 직접 사용해요. DB persistence·retcon·archive/fork 계약은 기존 [기억 저장 회귀](../tests/story-memory.test.ts)와 [archive 회귀](../tests/story-archive.test.ts)를 별도로 실행했어요. 긴 corpus runner 자체는 순수 core 경로이며 DB·HTTP·브라우저·provider를 실행하지 않아요.
+이번 하네스는 production memory `core/memory.ts`(삭제됨)와 [story context 도구](../core/story-context.ts)를 직접 사용해요. DB persistence·retcon·archive/fork 계약은 기존 기억 저장 회귀 `tests/story-memory.test.ts`(삭제됨)와 [archive 회귀](../tests/story-archive.test.ts)를 별도로 실행했어요. 긴 corpus runner 자체는 순수 core 경로이며 DB·HTTP·브라우저·provider를 실행하지 않아요.
 
 ## 자료와 정답
 
-[생성기·채점·preflight](../scripts/memory-evaluation-data.mjs), [CLI](../scripts/memory-evaluation.mjs), [채점 실패 탐지 검사](../scripts/memory-evaluation.test.mjs)를 추가했어요. 버전 1 자료는 영어 합성 기록이며 개인 작품을 포함하지 않아요.
+생성기·채점·preflight `scripts/memory-evaluation-data.mjs`, CLI `scripts/memory-evaluation.mjs`, 채점 실패 탐지 검사 `scripts/memory-evaluation.test.mjs`를 추가했어요. 세 파일은 모두 이후 삭제됐어요. 버전 1 자료는 영어 합성 기록이며 개인 작품을 포함하지 않아요.
 
 최종 corpus hash: `34718275a56ecff302cbbeed42faa77e1d884619b4478f382f3c2e09d950b097`.
 

@@ -131,7 +131,7 @@
 
 ### 시안 검토와 보정 항목
 
-실제 채팅 표시 순서는 [시안 1](../output/design/uimori-ui-2026-09-08/01-reading-list.png), [시안 2](../output/design/uimori-ui-2026-09-08/02-master-detail.png), [시안 3](../output/design/uimori-ui-2026-09-08/03-light-collection.png)이에요. 내장 Image Gen으로 생성했으며 정확한 프롬프트·참고 이미지 목록은 [prompts.json](../output/design/uimori-ui-2026-09-08/prompts.json), 이미지 크기와 SHA-256은 [artifacts.json](../output/design/uimori-ui-2026-09-08/artifacts.json)에 있어요.
+실제 채팅 표시 순서는 [시안 1](../output/design/uimori-ui-2026-09-08/01-reading-list.png), [시안 2](../output/design/uimori-ui-2026-09-08/02-master-detail.png), [시안 3](../output/design/uimori-ui-2026-09-08/03-light-collection.png)이에요. 내장 Image Gen으로 생성했으며 정확한 프롬프트·참고 이미지 목록은 [prompts.json](../output/design/uimori-ui-2026-09-08/prompts.json), 이미지 크기와 SHA-256은 [artifacts.json](../output/design/uimori-ui-2026-09-08/artifacts.json)에 있어요. 이 문단의 `output/` 링크는 Git에 포함하지 않는 로컬 근거라 저장소에서는 열리지 않아요.
 
 - 세 이미지에서 서재의 목록/미리보기/컬렉션 구조, 데스크톱 설정의 항목 목록, 모바일 설정 상세의 한 줄 탐색을 확인했어요. 실제 클릭·반응형·초점 동작의 검증은 아니에요.
 - 이미지 안의 `1440×1024`, `390×844` 표시는 요청한 목표 화면 크기예요. 생성된 화면 비율·픽셀 치수와 일치하는 실측 캡처가 아니므로 여백·글자·터치 영역을 이미지에서 측정해 합격 판정하지 않아요.

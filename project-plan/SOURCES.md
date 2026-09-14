@@ -200,7 +200,7 @@ REST 필드의 직접 근거도 확인했어요: [streamGenerateContent](https:/
 
 ### Provider Manager 1.16.2 읽기 전용 분석
 
-지정된 [로컬 bundle](C:/Users/wodus/ai-workspace/RisuToki/risu/plugins/provider-manager-v1.16.2.js)의 header와 정적 AST, 관련 함수의 호출 관계만 확인했어요. 플러그인 실행, 인증 설정·개인 대화 열람, 실 provider 요청은 하지 않았어요.
+지정된 로컬 bundle(RisuToki 체크아웃의 `risu/plugins/provider-manager-v1.16.2.js`, 이 저장소에는 없어요)의 header와 정적 AST, 관련 함수의 호출 관계만 확인했어요. 플러그인 실행, 인증 설정·개인 대화 열람, 실 provider 요청은 하지 않았어요.
 
 - header version `1.16.2`, API `3.0`/`2.1`/`2.0`, UTF-8 1,016,732 bytes, SHA-256 `FD5F599BD19BFE66837EA558FC717D907C890E6F4BCB5D16207059FA7B81B7A8`이며 분석 뒤 hash도 같았어요.
 - 소유 저장소 HEAD는 `45048b1139361cd0fded462683dd30fd7df7ce98`였지만 bundle은 `.gitignore`의 `risu/plugins/**`에 해당하고 추적되지 않으므로, 이 HEAD를 bundle의 원본 revision으로 인용하지 않아요.

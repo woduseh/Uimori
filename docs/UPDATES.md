@@ -1,6 +1,6 @@
 # Linux/Docker 업데이트 · 구현 제안
 
-상태: 2026-09-12 설계 검토를 바탕으로 한 구현 제안이며, 1단계(admission/drain·유지보수 부팅)는 2026-09-14에 구현했어요. 사용자가 선택한 일반 설치 방향은 Linux/Docker이며, 일반 설치자의 Update 버튼·controller·maintenance 모드는 아직 미구현이에요. 이 문서의 설계 검토에서는 제품 코드와 운영 서버를 변경하지 않았어요. 베타 방향은 [결정](DECISIONS-2026-09-12-BETA.md), 진행은 [베타 계획](../project-plan/BETA-PLAN.md), 현재 수동 실행은 [SELF-HOST](SELF-HOST.md)가 소유해요.
+상태: 2026-09-12 설계 검토를 바탕으로 한 구현 제안이며, 1단계(admission/drain·유지보수 부팅)와 2단계(운영자 CLI controller)는 2026-09-14에 구현했어요. 사용자가 선택한 일반 설치 방향은 Linux/Docker예요. maintenance 모드와 운영자 controller는 이제 있고, 일반 설치자가 앱 안에서 누르는 Update 버튼만 아직 미구현이에요. 실제 Docker 호스트에서의 controller 검증도 남아 있어요. 이 문서의 설계 검토 자체로는 제품 코드와 운영 서버를 변경하지 않았어요. 베타 방향은 [결정](DECISIONS-2026-09-12-BETA.md), 진행은 [베타 계획](../project-plan/BETA-PLAN.md), 현재 수동 실행은 [SELF-HOST](SELF-HOST.md)가 소유해요.
 
 ## 현재 있는 기반과 없는 경계
 

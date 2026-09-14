@@ -1,5 +1,7 @@
 # Risu 전용 변환기 정리 · 2026-09-07
 
+> 역사적 기록 · 2026-09-14 보충: 이 문서는 원본 Risu 변환을 앱 밖의 수동 이식에 맡기기로 하고 전용 변환기를 제거한 2026-09-07 시점의 정리예요. 2026-09-12 [베타 결정](../docs/DECISIONS-2026-09-12-BETA.md)으로 방향이 바뀌어 카드·모듈·프리셋 가져오기와 선언형 트리거·Lua 콜백의 격리 실행을 앱 안에 다시 구현했어요. 현재 가져오기 범위와 한계는 [Risu·Native JSON 가져오기](../docs/RISU-IMPORT.md)가 소유하며, 아래 내용은 당시 제거 근거로만 읽어요.
+
 ## 후속: 원본 변환을 앱 밖으로 분리
 
 통합 ‘자료 가져오기’ 버튼/Dialog, `/api/imports/risu/inspect`, JSON/CHARX 부분 변환기와 전용 시험을 제거했어요. 기존 `LibraryPanel`의 native 패키지 JSON과 `PromptComposer`의 PromptProgram JSON 검증·초안·명시 저장은 유지해요. Risu 원본은 [이식 가이드](../docs/RISU-PORTING.md)를 따르는 외부 에이전트가 RisuToki 구조화 도구로 조사·변환해요. 별도 프로그램이나 새 skill은 추가하지 않았어요.
