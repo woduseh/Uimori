@@ -20,6 +20,16 @@ import {
   loreActivationLore,
   validateLoreActivationReceipt,
 } from '../core/lore-activation.js';
+import {
+  loreSelectionKey,
+  loreSelectionLore,
+  validateLoreSelectionReceipt,
+} from '../core/lore-selection.js';
+import {
+  loreSelectionInputHash,
+  loreSelectionPending,
+  loreSelectionTargets,
+} from './lore-selection.js';
 import { resolveExtensionConversation } from './extension-conversation.js';
 
 const reject: ArchiveReject = archiveRejector('Invalid snapshot archive');
@@ -92,6 +102,48 @@ function validateLoreActivation(store: Store, snapshot: RunSnapshot, runId?: str
   }
 }
 
+/**
+ * Bind the frozen model selection to the reserved inputs without asking a model again: the answer is
+ * not reproducible, so only its inputs are recomputed. Every entry must name an attached model-mode
+ * package, carry the input hash this snapshot still produces, and select or budget-omit only lore
+ * that package offers. `unknown` omissions are exempt by definition - they record ids the answer
+ * invented - and they decide nothing, because only `selected` reaches compilation.
+ */
+function validateLoreSelection(store: Store, snapshot: RunSnapshot, runId?: string): void {
+  const receipt = snapshot.loreSelection;
+  const targets = loreSelectionTargets(snapshot);
+  if (!receipt) {
+    if (targets.length && runId && store.run(runId).inputs.length)
+      reject('lore selection receipt missing');
+    return;
+  }
+  try {
+    validateLoreSelectionReceipt(receipt);
+  } catch {
+    reject('lore selection receipt mismatch');
+  }
+  const expected = new Map(
+    targets.map((target) => [
+      loreSelectionKey(target.attachment),
+      {
+        inputHash: loreSelectionInputHash(target),
+        lore: new Set(loreSelectionLore(target.package).map((item) => item.id)),
+      },
+    ])
+  );
+  if (receipt.entries.length !== expected.size) reject('lore selection receipt mismatch');
+  for (const entry of receipt.entries) {
+    const target = expected.get(entry.key);
+    if (!target || target.inputHash !== entry.inputHash) reject('lore selection receipt mismatch');
+    const decided = [
+      ...entry.selected,
+      ...entry.omitted.filter((item) => item.reason === 'budget').map((item) => item.id),
+    ];
+    for (const id of decided)
+      if (!target!.lore.has(id)) reject('lore selection decided an unknown lore');
+  }
+}
+
 function behaviorExecutionProjection(
   store: Store,
   snapshot: RunSnapshot,
@@ -142,6 +194,7 @@ export function validateRunSnapshot(
   // so it is checked against the stored reservation rather than the execution view.
   validateRisuCompat(store, snapshot, runId);
   validateLoreActivation(store, snapshot, runId);
+  validateLoreSelection(store, snapshot, runId);
   const executionSnapshot = behaviorExecutionProjection(store, snapshot, runId);
   try {
     validatePromptInputTransforms(executionSnapshot);
@@ -213,6 +266,8 @@ export function validateRunSnapshot(
       !snapshot.promptInputTransforms &&
       (!runId || !store.run(runId).inputs.length)
     ) &&
+    // A snapshot still owing the selection call reserved uncompiled on purpose.
+    !loreSelectionPending(snapshot) &&
     !['pending', 'failed'].includes(snapshot.contextPlan?.status ?? '')
   )
     reject('compiled prompt missing');

@@ -13,6 +13,7 @@ import { projectChatPackageCompilation } from './chat-overrides.js';
 import { packageIdentityFromProfile } from './package-identity.js';
 import { projectRisuCompatReceipt } from './risu-compat.js';
 import { projectLoreActivationReceipt } from './lore-activation.js';
+import { loreSelectionKey, projectLoreSelectionReceipt } from './lore-selection.js';
 
 export type ResolvedPackage = CompiledPackageAttachment & {
   attachment: PackageAttachment;
@@ -22,6 +23,7 @@ export function compiledPackages(snapshot: RunSnapshot, target: PackageTarget): 
   const profile = snapshot.profile;
   const receipt = snapshot.risuCompat;
   const activation = snapshot.loreActivation;
+  const selection = snapshot.loreSelection;
   return (profile?.packageAttachments ?? []).flatMap((attachment) => {
     const pkg = profile?.packages?.find(
       (p) => p.id === attachment.id && p.revision === attachment.revision
@@ -34,6 +36,10 @@ export function compiledPackages(snapshot: RunSnapshot, target: PackageTarget): 
     // An abandoned scan projects as undefined, which is the same as no receipt at all: the
     // attachment's lore keeps its own `loading`.
     const decided = activation ? projectLoreActivationReceipt(activation, attachment) : undefined;
+    // An abandoned selection projects the same way: the attachment's lore keeps its own `loading`.
+    const chosen = selection
+      ? projectLoreSelectionReceipt(selection, loreSelectionKey(attachment))
+      : undefined;
     const compiled = compilePackageAttachment(pkg, attachment, {
       chatId: snapshot.chatId,
       target,
@@ -46,6 +52,7 @@ export function compiledPackages(snapshot: RunSnapshot, target: PackageTarget): 
         profile?.packageValues?.[`${attachment.id}@${attachment.revision}:${attachment.role}`],
       ...(receipt ? { compat: projectRisuCompatReceipt(receipt, attachment) } : {}),
       ...(decided ? { loreActivation: decided } : {}),
+      ...(chosen ? { loreSelection: chosen } : {}),
     });
     const projected = projectChatPackageCompilation(
       profile!,
@@ -54,7 +61,8 @@ export function compiledPackages(snapshot: RunSnapshot, target: PackageTarget): 
       compiled,
       (role) => !historicalPersonaExcluded(profile, role, target),
       packageIdentityFromProfile(profile!, target),
-      decided
+      decided,
+      chosen
     );
     // Historical exclusions still validate the frozen package above.
     return [

@@ -27,8 +27,9 @@ export function LoreEditor({
   const folders = value.loreFolders ?? [];
   // Absent means the model looks an entry up; the preserved Risu rules stay either way.
   const activationMode = value.loreActivation?.mode ?? 'discoverable';
-  const showActivationMode =
-    value.loreActivation !== undefined || value.lore.some((row) => row.activation);
+  // Keyword mode needs a preserved rule to apply; the other two modes are offered to any lorebook.
+  const keywordAvailable = value.lore.some((row) => row.activation);
+  const showActivationMode = value.lore.length > 0;
   const [folder, setFolder] = useState('*');
   const [query, setQuery] = useState('');
   const [loading, setLoading] = useState('*');
@@ -256,19 +257,27 @@ export function LoreEditor({
                     onChange({
                       loreActivation: {
                         ...(value.loreActivation ?? {}),
-                        mode: event.target.value as 'keyword' | 'discoverable',
+                        mode: event.target.value as 'keyword' | 'discoverable' | 'model',
                       },
                     })
                   }
                 >
-                  <option value="keyword">키워드 · Risu 규칙으로 켜기</option>
+                  {keywordAvailable && <option value="keyword">키워드 · Risu 규칙으로 켜기</option>}
                   <option value="discoverable">모델 조회 · 필요할 때 읽기</option>
+                  <option value="model">모델 선별 · 생성 전에 골라 넣기</option>
                 </select>
               </label>
               {activationMode === 'keyword' && (
                 <p className="muted" role="status">
                   규칙이 있는 로어는 생성마다 최근 대화의 키워드로 켜지고, 켜진 로어만 그 생성의
                   고정 자료가 돼요. 예산은 채팅 설정의 조회 로어 문자 한도를 따라요.
+                </p>
+              )}
+              {activationMode === 'model' && (
+                <p className="muted" role="status">
+                  생성마다 문맥 정리 모델이 최근 대화와 이번 요청을 보고 필요한 로어를 고르고, 고른
+                  로어만 그 생성의 고정 자료가 돼요. 예산은 채팅 설정의 조회 로어 문자 한도를
+                  따르고, 고르지 않은 로어는 계속 필요할 때 읽어요.
                 </p>
               )}
             </div>
