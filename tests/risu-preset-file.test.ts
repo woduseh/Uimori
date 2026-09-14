@@ -4,7 +4,7 @@ import { pack } from 'msgpackr';
 import { expect, test } from 'vitest';
 import { RISU_IMPORT_MAX_BYTES } from '../core/risu-import.js';
 import { readRisuPresetFile } from '../server/risu-preset-file.js';
-import { decodeRPack } from '../server/rpack.js';
+import { decodeRPack } from '../server/compat/risu/rpack.js';
 
 const document = () => ({
   name: 'Synthetic preset',

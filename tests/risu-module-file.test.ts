@@ -1,7 +1,7 @@
 import { expect, test } from 'vitest';
 import { HttpError } from '../server/request-validation.js';
 import { readEmbeddedRisuModule } from '../server/risu-module-file.js';
-import { decodeRPack } from '../server/rpack.js';
+import { decodeRPack } from '../server/compat/risu/rpack.js';
 
 const encodeMap = Buffer.alloc(256);
 for (const [encoded, plain] of decodeRPack(

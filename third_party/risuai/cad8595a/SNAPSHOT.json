@@ -1,0 +1,21 @@
+{
+  "upstream": {
+    "repository": "https://github.com/kwaroran/RisuAI",
+    "commit": "cad8595aa39620df4246f56918f0962c2aa0263a",
+    "license": "GPL-3.0-only",
+    "licenseFile": "LICENSE"
+  },
+  "files": [
+    {
+      "path": "rpack.ts",
+      "license": "AGPL-3.0-only",
+      "licenseFiles": ["rpack/LICENSE", "rpack/LICENSE_AGPL", "rpack/LICENSE_MIT", "rpack/README"],
+      "upstreamSha256": {
+        "src/ts/rpack/rpack_map.bin": "428e939c41617140ef2fad0420d9163cc80ce7c9b2f5e620223a25acc8afd498",
+        "src/ts/rpack/rpack_js.js": "a01e748bcb4b36b31ebd4d53b7cc4ff14b549a92bba822b7ebc91a9442acd95d",
+        "src/ts/rpack/LICENSE": "8d3db146e1b8721eb44373db0b85ce3035a4e3b9515ddd79af870b8c6803f7f5"
+      },
+      "modifications": "Decode table (map bytes 256..511) as a TypeScript constant with a synchronous Buffer decode; no encoder, no fetch."
+    }
+  ]
+}

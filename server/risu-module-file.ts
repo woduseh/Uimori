@@ -1,5 +1,5 @@
 import { HttpError } from './request-validation.js';
-import { decodeRPack } from './rpack.js';
+import { decodeRPack } from './compat/risu/rpack.js';
 
 const jsonLimit = 8 * 1024 * 1024;
 const expandedLimit = 64 * 1024 * 1024;

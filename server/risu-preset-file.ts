@@ -5,7 +5,7 @@ import { RISU_IMPORT_MAX_BYTES, type RisuImportSource } from '../core/risu-impor
 import { cardZip } from './character-card-file.js';
 import { hasControl, readImportEnvelope } from './import-envelope.js';
 import { HttpError, record } from './request-validation.js';
-import { decodeRPack } from './rpack.js';
+import { decodeRPack } from './compat/risu/rpack.js';
 
 // The no-eval export ships without its own TypeScript declaration.
 const { unpack } = createRequire(import.meta.url)('msgpackr/index-no-eval') as Pick<

@@ -14,7 +14,7 @@ import { createPackageStart } from '../server/package-start.js';
 import { compilePackageAttachment } from '../core/package-runtime.js';
 import { modelWorkspace, updatePromptWorkspace } from '../server/prompt-workspace.js';
 import { compileSnapshotPrompt } from '../server/prompt-snapshot.js';
-import { decodeRPack } from '../server/rpack.js';
+import { decodeRPack } from '../server/compat/risu/rpack.js';
 import { fixtureBotInput } from './fixtures/chat.js';
 import { buildPackagePresentation } from '../server/package-presentation.js';
 import { createHash } from 'node:crypto';
