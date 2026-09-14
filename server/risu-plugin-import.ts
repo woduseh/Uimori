@@ -14,6 +14,8 @@ const invalid = (): never => {
 /** Plugin code is never executed, compiled or transformed; only its declared metadata is read. */
 const MEMBER = /(?:^|[^\w$.])(?:risuai|Risuai)\s*\.\s*([A-Za-z_$][\w$]*)/gu;
 const DESTRUCTURED = /\{([^{}]{0,2000})\}\s*=\s*(?:await\s+)?(?:risuai|Risuai)\b/gu;
+/** Only the plain `const r = risuai` shape; the alias is named, never resolved. */
+const ALIAS = /\b(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*(?:risuai|Risuai)\s*(?![\w$.[])/gu;
 
 export function readRisuPlugin(value: unknown): RisuPluginPreview {
   // A plugin never reaches the staged upload path: the client stages only above the far larger
@@ -37,6 +39,9 @@ export function readRisuPlugin(value: unknown): RisuPluginPreview {
   let pluginName = '';
   let displayName = '';
   let apiVersion = '2.0';
+  let pluginVersion = '';
+  let updateUrl = '';
+  const allowedIpc: string[] = [];
   const links: RisuPluginPreview['links'] = [];
   const args: RisuPluginArgument[] = [];
   for (const raw of source.split('\n')) {
@@ -58,6 +63,16 @@ export function readRisuPlugin(value: unknown): RisuPluginPreview {
           ...(parts.length > 2 ? { hoverText: parts.slice(2).join(' ').slice(0, 200) } : {}),
         });
     }
+    // Risu's own version of the plugin, kept apart from the //@api line it reads separately.
+    if (line.startsWith('//@version')) pluginVersion = line.slice(10).trim().slice(0, 100);
+    if (line.startsWith('//@update-url')) {
+      const url = line.trim().split(/\s+/u)[1] ?? '';
+      if (url.startsWith('https://')) updateUrl = url.slice(0, 2000);
+    }
+    if (line.startsWith('//@allowed-ipc'))
+      for (const channel of line.trim().split(/\s+/u).slice(1))
+        if (allowedIpc.length < 50 && !allowedIpc.includes(channel))
+          allowedIpc.push(channel.slice(0, 100));
     if (line.startsWith('//@arg') || line.startsWith('//@risu-arg')) {
       const parts = line.trim().split(/\s+/u);
       const type = parts[2];
@@ -80,11 +95,27 @@ export function readRisuPlugin(value: unknown): RisuPluginPreview {
     .sort()
     .map((member) => ({ name: member, ...RISU_PLUGIN_API_SUPPORT[member] }));
   const unknownApis = [...used].filter((member) => !RISU_PLUGIN_API_SUPPORT[member]).sort();
+  const aliases = [...new Set([...source.matchAll(ALIAS)].map((match) => match[1]))].slice(0, 10);
   finding(
     'plugin-not-executed',
     'info',
     '플러그인 코드는 실행하지 않고 선언한 정보만 읽어요. 지금은 자료로 등록하지도 않으므로 이 화면은 지원 범위 확인용이에요.'
   );
+  finding(
+    'plugin-api-detection',
+    'info',
+    `사용 API는 글자만 대조해서 찾아요. 별칭(const r = risuai), 계산된 접근, 이름을 바꾼 구조 분해는 놓치니 "미구현" 목록이 비어도 쓰지 않는다는 증거는 아니에요.${
+      aliases.length
+        ? ` risuai를 다른 이름으로 받는 곳이 있어요: ${aliases.join(', ')}. 이 이름으로 부른 멤버는 판정하지 않았어요.`
+        : ''
+    }`
+  );
+  if (allowedIpc.length)
+    finding(
+      'plugin-allowed-ipc',
+      'unsupported',
+      `//@allowed-ipc로 플러그인 사이 통신 채널 ${allowedIpc.length}개를 선언해요. 플러그인 채널은 아직 구현하지 않아서 이 선언은 동작하지 않아요.`
+    );
   if (apiVersion !== '3.0')
     finding(
       'plugin-api-version',
@@ -110,6 +141,9 @@ export function readRisuPlugin(value: unknown): RisuPluginPreview {
     name: pluginName.slice(0, 200),
     displayName: (displayName || pluginName).slice(0, 200),
     apiVersion,
+    pluginVersion,
+    updateUrl,
+    allowedIpc,
     links,
     arguments: args,
     apis,
