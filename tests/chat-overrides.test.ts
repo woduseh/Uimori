@@ -498,3 +498,39 @@ test('override versions, operation receipts and frozen original/projection snaps
   expect(() => target.product.import(malformed)).toThrow();
   expect(target.chats()).toHaveLength(0);
 });
+
+test('a chat lore override keeps the run keyword decision instead of restoring every entry', () => {
+  const store = database(),
+    bot = save(store, 'Keyed bot', {
+      loreActivation: { mode: 'keyword' },
+      lore: [
+        {
+          id: 'fact',
+          title: 'Fact',
+          description: '',
+          text: 'Original lore',
+          loading: 'discoverable',
+          // The fixture request is 'Continue synthetic story', so this key matches and the next does not.
+          activation: { keys: 'synthetic' },
+        },
+        {
+          id: 'quiet',
+          title: 'Quiet',
+          description: '',
+          text: 'Never mentioned',
+          loading: 'discoverable',
+          activation: { keys: 'dragon' },
+        },
+      ],
+    }),
+    chat = store.createChat('Keyword override', 'calm', { botId: bot.id });
+  profile(store, chat.id, [ref(bot, 'bot')]);
+  patch(store, chat.id, selector(bot), 'Manual harbor text');
+  const generated = run(store, chat.id);
+  const resources = roleResources(generated.snapshot);
+  expect(resources.find((item) => item.id === `package:${bot.id}:bot:lore:fact`)).toMatchObject({
+    text: 'Manual harbor text',
+    loading: 'pinned',
+  });
+  expect(resources.some((item) => item.id === `package:${bot.id}:bot:lore:quiet`)).toBe(false);
+});

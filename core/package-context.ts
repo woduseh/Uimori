@@ -12,6 +12,7 @@ import { executionContext, packageInstanceId } from './execution-context.js';
 import { projectChatPackageCompilation } from './chat-overrides.js';
 import { packageIdentityFromProfile } from './package-identity.js';
 import { projectRisuCompatReceipt } from './risu-compat.js';
+import { projectLoreActivationReceipt } from './lore-activation.js';
 
 export type ResolvedPackage = CompiledPackageAttachment & {
   attachment: PackageAttachment;
@@ -20,6 +21,7 @@ export type ResolvedPackage = CompiledPackageAttachment & {
 export function compiledPackages(snapshot: RunSnapshot, target: PackageTarget): ResolvedPackage[] {
   const profile = snapshot.profile;
   const receipt = snapshot.risuCompat;
+  const activation = snapshot.loreActivation;
   return (profile?.packageAttachments ?? []).flatMap((attachment) => {
     const pkg = profile?.packages?.find(
       (p) => p.id === attachment.id && p.revision === attachment.revision
@@ -29,6 +31,9 @@ export function compiledPackages(snapshot: RunSnapshot, target: PackageTarget): 
       validateContentPackage(pkg);
       return [];
     }
+    // An abandoned scan projects as undefined, which is the same as no receipt at all: the
+    // attachment's lore keeps its own `loading`.
+    const decided = activation ? projectLoreActivationReceipt(activation, attachment) : undefined;
     const compiled = compilePackageAttachment(pkg, attachment, {
       chatId: snapshot.chatId,
       target,
@@ -40,6 +45,7 @@ export function compiledPackages(snapshot: RunSnapshot, target: PackageTarget): 
       values:
         profile?.packageValues?.[`${attachment.id}@${attachment.revision}:${attachment.role}`],
       ...(receipt ? { compat: projectRisuCompatReceipt(receipt, attachment) } : {}),
+      ...(decided ? { loreActivation: decided } : {}),
     });
     const projected = projectChatPackageCompilation(
       profile!,
@@ -47,7 +53,8 @@ export function compiledPackages(snapshot: RunSnapshot, target: PackageTarget): 
       pkg,
       compiled,
       (role) => !historicalPersonaExcluded(profile, role, target),
-      packageIdentityFromProfile(profile!, target)
+      packageIdentityFromProfile(profile!, target),
+      decided
     );
     // Historical exclusions still validate the frozen package above.
     return [

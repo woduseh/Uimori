@@ -30,6 +30,8 @@ preview는 기존대로 채팅 옵션 freeze와 context seed를 실행하지 않
 
 `RunSnapshot.risuCompat`은 [가져온 카드가 보존한 Risu CBS](RISU-IMPORT.md#기본-변수와-읽기-cbs)를 예약 시점에 한 번 평가한 영수증이에요. `prepareRisuCompatReceipt`가 before-turn 행동 예약 직후, 즉 시각·profile·대화가 모두 고정되고 compile이 시작되기 전에 계산하므로 예약이 만든 프롬프트부터 평가문을 담아요. 항목마다 필드 key, 평가문, 서비스할 수 없는 함수 이름, 그리고 그 평가가 읽은 내용을 묶는 `inputHash`를 보관해요. 이후 compile·후보·문맥 축약·포크·복원은 저장된 평가문만 투영하고 카드를 다시 평가하지 않아요. `inputHash`는 원문·이름·변수·대화·요청·예약 시각만 덮고 run ID는 덮지 않아요. 추첨 seed는 run에서 뽑지만, 포크와 채팅 백업 복원이 같은 영수증을 새 run ID로 옮겨도 검증이 성립해야 하기 때문이에요. 평가문 자체는 그 영수증이 만든 compile 결과가 묶어요. `server/snapshot-archive.ts`는 복원에서 영수증 구조와 각 `inputHash`를 평가 없이 다시 계산하고, 장착 패키지가 선언하지 않은 key나 값이 다른 항목을 거절해요. 전송 기록이 있는 Run에서 영수증이 사라지면 [전송 변환 영수증](PROMPT-TRANSFORMS.md#실행과-보존)과 같은 규칙으로 거절해요.
 
+`RunSnapshot.loreActivation`은 같은 자리에서 계산하는 두 번째 영수증이에요. `prepareLoreActivationReceipt`가 `keyword` 모드인 장착 패키지마다 [키워드 활성화](LORE-CONTEXT.md#키워드-활성화) 엔진을 고정된 대화·요청·채팅 로어 정책에 대해 한 번 실행하고, 항목마다 패키지 key, 적용한 문자 예산, 활성화된 로어 ID 목록, 제외된 ID와 이유(`budget`·`probability`·`decorator`·`inactive`), 그리고 규칙·본문 hash·대화 hash·설정을 묶는 `inputHash`를 보관해요. 확률 지시문의 seed는 CBS 영수증과 같은 이유로 run에서 뽑되 hash에는 넣지 않아요. compile은 이 목록만 투영해 활성 항목을 고정 자료로, 나머지 규칙 있는 항목을 제외하며, 엔진이 실패한 항목은 결정 없음으로 보고 `loading`대로 돌아가요. 복원 검증은 CBS 영수증과 같은 규칙으로 구조·key 집합·`inputHash`·ID 소속을 다시 계산하고 전송 기록이 있는 Run의 누락을 거절해요.
+
 ## 전체 체인을 다시 실행하지 않는 경로
 
 - `createPackageStart`의 초기 행동은 기존 callback 안에서 먼저 실행하고, 이어지는 Store 예약이 `run` 또는 `authored` 체인을 실행해요. 작성된 도입문은 초기 행동·예약·정확한 원문 완료가 같은 transaction에 남아요.

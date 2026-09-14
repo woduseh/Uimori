@@ -22,6 +22,19 @@ export type PackageAttachment = { id: string; revision: number; role: PackageRol
 export const packageControlKey = (r: PackageAttachment) => `${r.id}@${r.revision}:${r.role}`;
 /** Flat authoring folders only; folder membership does not change loading or runtime order. */
 export type PackageLoreFolder = { id: string; name: string };
+/** One lore entry's preserved Risu activation rule, as the import read it off the card. */
+export type PackageLoreActivation = {
+  /** Risu's `loreBook.key`: the comma-separated keyword list. An empty list never activates. */
+  keys: string;
+  /** Risu's `loreBook.secondkey`, read only when `selective` is set. */
+  secondaryKeys?: string;
+  selective?: boolean;
+  regex?: boolean;
+  /** Risu's `mode === 'child'`: the entry takes the content of the entry declared before it. */
+  child?: boolean;
+  /** The leading `@@` decorator block Risu reads, lines joined by '\n'. */
+  rules?: string;
+};
 export type PackageLore = {
   id: string;
   title: string;
@@ -32,6 +45,8 @@ export type PackageLore = {
   relatedIds?: string[];
   folderId?: string;
   loreContext?: import('./lore-context.js').LorePlacement;
+  /** Applied only while the package is in keyword mode; kept as data when it is not. */
+  activation?: PackageLoreActivation;
 };
 export type PackageInstruction = {
   id: string;
@@ -78,6 +93,18 @@ export type ContentPackage = {
   panels?: PackagePanel[];
   behavior?: PackageBehavior;
   transforms: PackageTransform[];
+  /**
+   * How this package's lore reaches the model. Absent means 'discoverable': the model looks an entry
+   * up when it needs it. 'keyword' hands the decision to the preserved Risu rules instead, which are
+   * kept either way, so the mode can be switched off and back on without losing them.
+   */
+  loreActivation?: {
+    mode: 'keyword' | 'discoverable';
+    /** Risu's own lorebook settings; the defaults below are Risu's. */
+    scanDepth?: number;
+    recursiveScanning?: boolean;
+    fullWordMatching?: boolean;
+  };
   /**
    * Fields whose authored text keeps its original Risu CBS instead of a converted template. The
    * declaration is data: the text is evaluated once at reservation by the compat evaluator, and a
@@ -135,6 +162,40 @@ export function validatePackageTransform(value: unknown): PackageTransform {
   return structuredClone(t) as PackageTransform;
 }
 
+/**
+ * Validate the preserved activation rule as data. The keys are Risu's own comma-separated strings and
+ * the rules are its `@@` lines; neither is parsed here, because the engine owns both grammars.
+ */
+export function validatePackageLoreActivation(
+  value: unknown,
+  loreId: string
+): PackageLoreActivation {
+  const a = object(value, ['keys', 'secondaryKeys', 'selective', 'regex', 'child', 'rules']);
+  if (typeof a.keys !== 'string' || a.keys.length > 4000)
+    fail('PACKAGE_LORE_ACTIVATION_KEYS', loreId);
+  if (
+    a.secondaryKeys !== undefined &&
+    (typeof a.secondaryKeys !== 'string' || a.secondaryKeys.length > 4000)
+  )
+    fail('PACKAGE_LORE_ACTIVATION_KEYS', loreId);
+  for (const flag of ['selective', 'regex', 'child'] as const)
+    if (a[flag] !== undefined && typeof a[flag] !== 'boolean')
+      fail('PACKAGE_LORE_ACTIVATION_FLAG', loreId);
+  if (a.rules !== undefined) {
+    const lines = typeof a.rules === 'string' ? a.rules.split('\n') : [];
+    if (
+      typeof a.rules !== 'string' ||
+      a.rules.length > 4000 ||
+      lines.length > 64 ||
+      // Risu stops reading decorators at the first line that is not one, so a rule block that carries
+      // anything else would silently become body text the engine scans instead.
+      lines.some((line) => line.trim() && !line.trim().startsWith('@@'))
+    )
+      fail('PACKAGE_LORE_ACTIVATION_RULES', loreId);
+  }
+  return structuredClone(a) as PackageLoreActivation;
+}
+
 export function validatePackageAttachment(value: unknown): PackageAttachment {
   const a = object(value, ['id', 'revision', 'role']);
   id(a.id);
@@ -172,6 +233,7 @@ export function validateContentPackage(value: unknown): ContentPackage {
     'panels',
     'behavior',
     'transforms',
+    'loreActivation',
     'compat',
   ]);
   if (p.version !== 1) fail('PACKAGE_VERSION_UNSUPPORTED');
@@ -228,6 +290,7 @@ export function validateContentPackage(value: unknown): ContentPackage {
       'relatedIds',
       'folderId',
       'loreContext',
+      'activation',
     ]);
     id(l.id);
     loreIds.push(l.id);
@@ -255,6 +318,7 @@ export function validateContentPackage(value: unknown): ContentPackage {
       l.relatedIds.forEach(id);
       unique(l.relatedIds as string[]);
     }
+    if (l.activation !== undefined) validatePackageLoreActivation(l.activation, l.id);
   }
   unique(loreIds);
   for (const raw of p.lore) {
@@ -364,6 +428,26 @@ export function validateContentPackage(value: unknown): ContentPackage {
   } catch (error) {
     if (error instanceof ContentPackageError) throw error;
     fail(error instanceof Error ? error.message : 'PACKAGE_FEATURE_INVALID');
+  }
+  if (p.loreActivation !== undefined) {
+    const activation = object(p.loreActivation, [
+      'mode',
+      'scanDepth',
+      'recursiveScanning',
+      'fullWordMatching',
+    ]);
+    if (activation.mode !== 'keyword' && activation.mode !== 'discoverable')
+      fail('PACKAGE_LORE_ACTIVATION_MODE');
+    if (
+      activation.scanDepth !== undefined &&
+      (!Number.isSafeInteger(activation.scanDepth) ||
+        Number(activation.scanDepth) < 0 ||
+        Number(activation.scanDepth) > 1000)
+    )
+      fail('PACKAGE_LORE_ACTIVATION_SCAN_DEPTH');
+    for (const flag of ['recursiveScanning', 'fullWordMatching'] as const)
+      if (activation[flag] !== undefined && typeof activation[flag] !== 'boolean')
+        fail('PACKAGE_LORE_ACTIVATION_FLAG');
   }
   if (p.compat !== undefined) {
     const declaration = object(p.compat, ['risuCbs']);

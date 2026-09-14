@@ -48,6 +48,7 @@ function analyze(
   pkg.starts = importRisuGreetings({ card, cardText, findings });
   const lore = importRisuLore({ card, cardText, findings });
   pkg.lore.push(...lore.lore);
+  if (lore.loreActivation) pkg.loreActivation = lore.loreActivation;
   const regex = importRisuDisplayRegex(risu.customScripts);
   pkg.transforms = regex.transforms;
   findings.append(regex.findings);

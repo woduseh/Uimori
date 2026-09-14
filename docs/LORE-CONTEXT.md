@@ -17,6 +17,12 @@
 
 기본 PromptProgram은 **고정 배경 자료 → 이전 대화와 조회 자료 → 메모·고정 장면 자료 → 변동 host 정보 → 현재 입력** 순서예요. 사용자 정의 PromptProgram의 역할·순서·cache anchor는 유지해요. 실제 실행한 `references`, `bot`/`description`, `persona`, `lore`/`lorebook`, `backgroundLore`, `sceneLore` 슬롯이 이미 제공한 자료는 자동 삽입에서 제외해요. 꺼진 블록이나 선택되지 않은 조건 분기는 자료를 제공한 것으로 계산하지 않아요. 사용자가 같은 본문을 여러 슬롯에 직접 작성한 중복까지 제거하지는 않아요.
 
+## 키워드 활성화
+
+[패키지](PACKAGES.md)가 `loreActivation.mode = 'keyword'`이면 `activation` 규칙이 있는 로어는 `loading`이 아니라 Risu 스냅샷의 활성화 엔진(`activateLore`, RisuAI `loadLoreBookV3Prompt`의 순수 함수판)이 정해요. 예약 시점에 고정된 대화(오래된 순, 이번 요청이 마지막)를 패키지의 `scanDepth`만큼 뒤에서 훑어 키·보조 키·selective·정규식·`@@` 규칙을 Risu와 같은 규칙으로 판정하고, 재귀 검색과 확률·우선순위·`insertorder` 정렬까지 같아요. 켜진 항목은 그 Run의 고정 자료가 되어 `loreContext` 배치를 따르고, 켜지지 않은 항목은 그 Run의 조회 목록과 읽기 도구에서도 빠져요. 규칙이 없는 로어와 `discoverable` 모드 패키지는 이 절의 영향을 받지 않아요.
+
+활성 예산은 위 표의 **조회 자료 문자**(`maxRetainedChars`)예요. Risu가 토큰으로 세는 자리에 UTF-16 코드 단위 길이를 넣으므로 켜진 항목을 `insertorder` 순으로 더해 이 값을 넘는 항목부터 제외하고, 값이 0이면 규칙 있는 로어는 하나도 켜지지 않아요. 켜진 로어는 고정 자료 합계에도 포함되므로 고정 자료 문자 한도를 넘으면 같은 `LORE_PINNED_BUDGET_EXCEEDED`로 알려요. 조회 자료 유지 기능과 수치를 공유할 뿐 켜진 로어가 유지 구간을 소비하지는 않아요. 결과는 [snapshot 영수증](RESERVATION-SNAPSHOTS.md#snapshot-영수증)에 고정되어 후보·포크·복원에서 다시 판정하지 않고, 확률 지시문은 run seed로 결정적이에요. `keep_activate_after_match` 계열이 남기는 활성 상태 변수는 저장하지 않으며 위치 지시문은 적용하지 않아요.
+
 ## 턴 사이 조회 자료 유지
 
 완료된 메인 Run의 성공한 `knowledge.read` 결과를 당시 불변 자료로 다시 계산해 검증해요. 실제 읽은 UTF-16 구간만 다음 Run에 고정하고 검색 metadata, 읽지 않은 나머지 본문, 실패·취소된 Run, 다른 분기, 보조 역할의 읽기는 가져오지 않아요. `skills.load`, `notes.read`, `story.read`는 이 로어 유지 기능의 대상이 아니에요.

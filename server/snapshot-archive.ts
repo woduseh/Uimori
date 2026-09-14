@@ -14,6 +14,12 @@ import { preparedBehaviorSnapshot } from './package-behavior-run.js';
 import { hasPromptInputTransforms, validatePromptInputTransforms } from './prompt-transforms.js';
 import { risuCompatInputHash, risuCompatTargets } from './compat/risu/cbs.js';
 import { risuCompatKey, validateRisuCompatReceipt } from '../core/risu-compat.js';
+import { loreActivationInputHash, loreActivationTargets } from './compat/risu/lore-activation.js';
+import {
+  loreActivationKey,
+  loreActivationLore,
+  validateLoreActivationReceipt,
+} from '../core/lore-activation.js';
 import { resolveExtensionConversation } from './extension-conversation.js';
 
 const reject: ArchiveReject = archiveRejector('Invalid snapshot archive');
@@ -46,6 +52,44 @@ function validateRisuCompat(store: Store, snapshot: RunSnapshot, runId?: string)
   if (receipt.entries.length !== expected.size) reject('risu compat receipt mismatch');
   for (const entry of receipt.entries)
     if (expected.get(entry.key) !== entry.inputHash) reject('risu compat receipt mismatch');
+}
+
+/**
+ * Bind the frozen keyword scan to the reserved inputs without scanning again: every entry must name an
+ * attached keyword-mode package, carry the input hash this snapshot still produces, and decide only
+ * lore that package actually offers for scanning. Which entries the decision pinned is bound by the
+ * prompt it compiled.
+ */
+function validateLoreActivation(store: Store, snapshot: RunSnapshot, runId?: string): void {
+  const receipt = snapshot.loreActivation;
+  // The input hash covers content only, so the run id it is recomputed under does not matter.
+  const targets = loreActivationTargets(snapshot, runId ?? '');
+  if (!receipt) {
+    if (targets.length && runId && store.run(runId).inputs.length)
+      reject('lore activation receipt missing');
+    return;
+  }
+  try {
+    validateLoreActivationReceipt(receipt);
+  } catch {
+    reject('lore activation receipt mismatch');
+  }
+  const expected = new Map(
+    targets.map((context) => [
+      loreActivationKey(context.attachment),
+      {
+        inputHash: loreActivationInputHash(context),
+        lore: new Set(loreActivationLore(context.package).map((item) => item.id)),
+      },
+    ])
+  );
+  if (receipt.entries.length !== expected.size) reject('lore activation receipt mismatch');
+  for (const entry of receipt.entries) {
+    const target = expected.get(entry.key);
+    if (!target || target.inputHash !== entry.inputHash) reject('lore activation receipt mismatch');
+    for (const id of [...entry.activated, ...entry.omitted.map((item) => item.id)])
+      if (!target!.lore.has(id)) reject('lore activation receipt mismatch');
+  }
 }
 
 function behaviorExecutionProjection(
@@ -97,6 +141,7 @@ export function validateRunSnapshot(
   // The receipt froze on the reserved snapshot, before any behavior projection reached the profile,
   // so it is checked against the stored reservation rather than the execution view.
   validateRisuCompat(store, snapshot, runId);
+  validateLoreActivation(store, snapshot, runId);
   const executionSnapshot = behaviorExecutionProjection(store, snapshot, runId);
   try {
     validatePromptInputTransforms(executionSnapshot);

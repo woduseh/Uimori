@@ -16,6 +16,7 @@ import { createDefaultPromptProgram } from '../core/prompt-defaults.js';
 import { DEFAULT_MAIN_PROMPT } from '../core/prompts.js';
 import { builtinPromptTemplate, builtinPromptTemplates } from './builtin-prompts.js';
 import { prepareRisuCompatReceipt } from './compat/risu/cbs.js';
+import { prepareLoreActivationReceipt } from './compat/risu/lore-activation.js';
 import { preparePromptInputTransforms } from './prompt-transforms.js';
 
 /** A read-only preview, including unsaved draft blocks. No provider call or Run is created. */
@@ -167,6 +168,8 @@ export function promptRoutes(app: FastifyInstance, store: Store) {
         // reader still sees evaluated text rather than the card's literal `{{...}}`.
         const risuCompat = prepareRisuCompatReceipt(snapshot, 'preview');
         if (risuCompat) snapshot = { ...snapshot, risuCompat };
+        const loreActivation = prepareLoreActivationReceipt(snapshot, 'preview');
+        if (loreActivation) snapshot = { ...snapshot, loreActivation };
         snapshot = await preparePromptInputTransforms(snapshot, program, values);
         const context = promptContext(snapshot, program, values);
         compilation = !snapshot.story?.waiting

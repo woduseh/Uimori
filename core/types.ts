@@ -97,6 +97,8 @@ export type RunSnapshot = {
   promptInputTransforms?: import('./prompt-input-transforms.js').PromptInputTransformReceipt;
   /** Frozen evaluation of the declared Risu CBS fields; a replay projects it, never recomputes it. */
   risuCompat?: import('./risu-compat.js').RisuCompatReceipt;
+  /** Frozen keyword scan of the packages in keyword mode; a replay projects it, never rescans. */
+  loreActivation?: import('./lore-activation.js').LoreActivationReceipt;
   /** Derived projection of host-owned input hooks; the reserved request stays unchanged. */
   extensionRequestEdit?: import('./extension-request-edit.js').ExtensionRequestEditReceipt;
   /** Derived projection of host-owned request hooks over the transmitted conversation copy. */
