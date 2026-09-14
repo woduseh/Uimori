@@ -46,7 +46,7 @@ export function createPackageExtensionHost(
     if (!pkg) fail('BEHAVIOR_HOST_DENIED');
     return { profile: captured, pkg };
   };
-  const materials = () => {
+  const compile = () => {
     const { profile: owner, pkg } = owned();
     const identity = packageIdentityFromProfile(owner, 'main');
     const compiled = compilePackageAttachment(pkg, ref, {
@@ -56,28 +56,34 @@ export function createPackageExtensionHost(
       identity,
       resourcesOnly: true,
     });
-    return projectChatPackageCompilation(
+    const projected = projectChatPackageCompilation(
       owner,
       ref,
       pkg,
       compiled,
       (role) => !historicalPersonaExcluded(owner, role),
       identity
-    ).compiled.resources.map((resource) => ({
-      metadata: {
-        id: resource.id,
-        title: resource.title.slice(0, 256),
-        description: resource.description.slice(0, 512),
-        kind: resource.sourceKind ?? 'lore',
-        revision: resource.revision,
-        contentHash: createHash('sha256').update(resource.text).digest('hex'),
-        totalChars: resource.text.length,
-      },
-      text: resource.text,
-    }));
+    ).compiled;
+    return {
+      // The same resolved control values the body and lore templates substituted just above.
+      values: projected.values,
+      materials: projected.resources.map((resource) => ({
+        metadata: {
+          id: resource.id,
+          title: resource.title.slice(0, 256),
+          description: resource.description.slice(0, 512),
+          kind: resource.sourceKind ?? 'lore',
+          revision: resource.revision,
+          contentHash: createHash('sha256').update(resource.text).digest('hex'),
+          totalChars: resource.text.length,
+        },
+        text: resource.text,
+      })),
+    };
   };
-  let frozen: ReturnType<typeof materials> | undefined;
-  const read = () => (frozen ??= materials());
+  let frozen: ReturnType<typeof compile> | undefined;
+  const compiled = () => (frozen ??= compile());
+  const read = () => compiled().materials;
   return createHostDispatcher<HostMethodOf<'materials'>>({
     denied: 'BEHAVIOR_HOST_DENIED',
     granted: (entry) => program.capabilities?.includes(entry.capability) === true,
@@ -90,6 +96,8 @@ export function createPackageExtensionHost(
         const identity = packageIdentityFromProfile(owned().profile, 'main');
         return { botName: identity.bot.name, userName: identity.user.name };
       },
+      // Control defaults overlaid by the chat's saved values, read from the same frozen snapshot.
+      'options.read': async () => ({ values: structuredClone(compiled().values) }),
       'materials.list': async ({ offset, limit }) => {
         const items = read();
         if (offset > items.length) fail('BEHAVIOR_HOST_ARGUMENTS');

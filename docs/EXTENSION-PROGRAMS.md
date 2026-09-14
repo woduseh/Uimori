@@ -81,8 +81,11 @@ return {state: api.state, result: {preview: material?.text ?? ''}};
 | `materials.list` | `offset` 기본 0, `limit` 기본 20·최대 50 | `items`와 `nextOffset`(끝이면 null) |
 | `materials.read` | 목록에서 얻은 `id`, `offset` 기본 0, `limit` 기본 8000·최대 16000 | 항목 정보와 `text`, `offset`, `nextOffset` |
 | `identity.read` | 없음 | 고정 profile의 `botName`과 `userName` |
+| `options.read` | 없음 | 이 장착의 확정된 옵션값 `{values}` |
 
 `identity.read`는 같은 고정 profile이 본문·로어 템플릿의 `bot.name`·`user.name`에 넣는 두 이름만 돌려줘요. 페르소나 본문·변수·다른 profile 항목은 포함하지 않고, 같은 `materials.read.self` 선언과 소유권·취소 확인을 사용해요.
+
+`options.read`는 같은 고정 profile이 본문·로어 템플릿에 넣은 것과 같은 옵션값을 `values`에 담아 돌려줘요. 자료가 선언한 옵션의 기본값 위에 사용자가 이 채팅에서 저장한 값을 덮은 결과이며, 자료 옵션 그대로의 문자열·숫자·참거짓·null만 들어 있어요. 인자는 없고 다른 장착이나 다른 채팅의 값은 읽을 수 없어요. 같은 실행 안에서는 자기 자료 읽기와 같은 고정 snapshot을 사용하므로 호출 사이에 값이 달라지지 않아요. Risu 플러그인의 `getArgument`도 이 경로를 사용해요.
 
 항목 정보는 `id/title/description/kind/revision/contentHash/totalChars`예요. 제목은 256자, 설명은 512자까지인 목록용 요약이며 본문은 조각 읽기로 보존해요. `revision`은 패키지 개정, `contentHash`는 실제 읽을 전체 텍스트의 SHA-256이에요. 목록 offset은 항목 수, 본문 offset·limit은 UTF-16 문자 단위예요. 다음 조각은 반환한 `nextOffset`을 사용해요. 필요하다면 코드에서 목록을 분류·검색하고 읽을 항목을 선택해요. 자료별 선택 알고리즘은 호스트에 추가하지 않아요.
 
@@ -243,4 +246,4 @@ JavaScript는 `quickjs-emscripten-core`와 `@jitl/quickjs-wasmfile-release-sync`
 
 프로그램은 패키지 개정에 속하므로 기존 자료 이동·snapshot·백업에 함께 들어가요. 저장한 행동 영수증에는 API·코드 지문·엔진 식별자·상태/결과와 사용한 대화의 `viewHash`를 보존해요. 모델 호출의 영수증은 opportunity·Run progress·최종 journal 사이에도 결합해요. 일반 채팅 백업으로 새 채팅을 복원할 때는 다른 사람의 백업이 목적지에서 모델 호출이나 대화 읽기 권한을 자동으로 주지 않도록 live profile의 `extensionGrants`를 제거하고, 사용자가 그 채팅에서 다시 허용하게 해요. source/grant 이력과 대화 참조는 과거 Run snapshot·영구 작업·attempt 귀속 영수증에 보존해 복원 검증에 사용해요. 같은 workspace 안의 fork는 기존 허가를 보존하고, 자료 native transfer는 grant를 처음부터 만들지 않아요. 전체 DB archive는 전역 연결을 disabled·비밀 제거하는 기존 복구 경계를 따르며 이 계약에서 별도 grant 삭제를 추가하지 않아요. 커밋·포크·복원은 고정한 source/revision·입력 schema·호스트 조건과 영수증·저장 결과의 일치를 확인하며 코드를 다시 실행하지 않아요. 이것은 승인된 결과의 보존이며 복원 때 계산의 의미를 재평가했다는 증거가 아니에요. 공유용 진단에는 이 코드나 입력/출력을 자동 포함하지 않아요.
 
-엔진 실행, `uimori-state-action-v1` 입력 계약, 상태 저장 호스트는 별도 모듈이에요. 자동 준비와 모델 행동은 `server/package-behavior-run.ts`에서 행동 해석·영수증·효과 채택과 공통 Host를 공유해요. 응답 후 코드는 `server/package-after-response.ts`가 별도 응답 귀속 영수증으로 같은 Worker·상태 저장 경계를 사용해요. Lua의 입력·요청 편집과 출력·표시 편집 hook은 `server/risu-lua-adapter.ts`와 `server/extension-lua-worker.ts`가 같은 격리·영수증 경계로 연결했어요. 일반 HTTP와 설치·의존성 권한 관리는 아직 미연결이며 후속 작업이에요. 자료별 함수명을 서버 분기로 옮기지 않아요.
+엔진 실행, `uimori-state-action-v1` 입력 계약, 상태 저장 호스트는 별도 모듈이에요. 자동 준비와 모델 행동은 `server/package-behavior-run.ts`에서 행동 해석·영수증·효과 채택과 공통 Host를 공유해요. 응답 후 코드는 `server/package-after-response.ts`가 별도 응답 귀속 영수증으로 같은 Worker·상태 저장 경계를 사용해요. Lua의 입력·요청 편집과 출력·표시 편집 hook은 `server/risu-lua-adapter.ts`와 `server/extension-lua-worker.ts`가 같은 격리·영수증 경계로 연결했어요. Risu 플러그인 파일의 훅·인자·저장소도 `server/risu-plugin-adapter.ts`가 같은 방식으로 옮겨, 플러그인 소스를 `risuai` shim으로 감싼 JavaScript 프로그램 행동으로 만들어요. 일반 HTTP와 설치·의존성 권한 관리는 아직 미연결이며 후속 작업이에요. 자료별 함수명을 서버 분기로 옮기지 않아요.

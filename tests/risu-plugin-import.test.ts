@@ -1,7 +1,6 @@
 import { createHash } from 'node:crypto';
 import { expect, test } from 'vitest';
-import Fastify from 'fastify';
-import { readRisuPlugin, risuPluginRoutes } from '../server/risu-plugin-import.js';
+import { readRisuPlugin } from '../server/risu-plugin-import.js';
 import { RISU_PLUGIN_API_SUPPORT } from '../core/risu-plugin.js';
 
 const plugin = (body: string) =>
@@ -66,7 +65,7 @@ test('judges every mentioned API against the current contracts and reports the r
   const support = Object.fromEntries(preview.apis.map((api) => [api.name, api.support]));
   expect(support).toMatchObject({
     addRisuReplacer: 'mapped',
-    pluginStorage: 'unimplemented',
+    pluginStorage: 'mapped',
     nativeFetch: 'unimplemented',
     registerButton: 'out-of-scope',
     getRootDocument: 'out-of-scope',
@@ -141,12 +140,13 @@ test('classifies the members the earlier table missed or judged too optimistical
     alertConfirm: 'out-of-scope',
     alertError: 'out-of-scope',
     setArg: 'unimplemented',
-    pluginStorage: 'unimplemented',
-    safeLocalStorage: 'unimplemented',
-    getLocalPluginStorage: 'unimplemented',
+    // The three storages now reach branch shared variables through the plugin adapter.
+    pluginStorage: 'mapped',
+    safeLocalStorage: 'mapped',
+    getLocalPluginStorage: 'mapped',
     parseRisuChat: 'unimplemented',
-    onUnload: 'unimplemented',
-    log: 'unimplemented',
+    onUnload: 'mapped',
+    log: 'mapped',
     getChatFromIndex: 'out-of-scope',
     getCurrentChatIndex: 'out-of-scope',
     getCurrentCharacterIndex: 'out-of-scope',
@@ -155,7 +155,9 @@ test('classifies the members the earlier table missed or judged too optimistical
   });
   const note = (name: string) => RISU_PLUGIN_API_SUPPORT[name].note;
   expect(note('risuFetch')).toContain('nativeFetch');
-  expect(note('onUnload')).toContain('상주 인스턴스');
+  expect(note('onUnload')).toContain('부르지 않아요');
+  expect(note('pluginStorage')).toContain('공유 변수');
+  expect(note('setArgument')).toContain('읽기만 해요');
   expect(note('getDatabase')).toContain('읽기 전용 허용 목록 프록시');
   expect(note('getChatFromIndex')).toContain('주소 공간');
   expect(note('addRisuScriptHandler')).toContain('메시지 수와 역할');
@@ -180,7 +182,7 @@ test('says that API detection is textual and names a binding that renames risuai
   expect(aliased.unknownApis).toEqual([]);
 });
 
-test('refuses a file that is not a plugin and reports an older API declaration', async () => {
+test('refuses a file that is not a plugin and reports an older API declaration', () => {
   expect(() => readRisuPlugin(source('const x = 1;'))).toThrow('RISU_PLUGIN_INVALID_FILE');
   expect(() => readRisuPlugin(source(plugin(''), 'plugin.txt'))).toThrow(
     'RISU_PLUGIN_INVALID_FILE'
@@ -190,18 +192,4 @@ test('refuses a file that is not a plugin and reports an older API declaration',
   );
   expect(legacy.apiVersion).toBe('2.0');
   expect(legacy.findings.map((finding) => finding.code)).toContain('plugin-api-version');
-
-  const app = Fastify();
-  risuPluginRoutes(app);
-  try {
-    const response = await app.inject({
-      method: 'POST',
-      url: '/api/risu-plugin-imports/prepare',
-      payload: { source: source(plugin('risuai.log("ready");')) },
-    });
-    expect(response.statusCode).toBe(200);
-    expect(response.json().name).toBe('synthetic-plugin');
-  } finally {
-    await app.close();
-  }
 });

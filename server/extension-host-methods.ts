@@ -50,6 +50,9 @@ export const HOST_METHODS = {
   },
   /** The two projected names the fixed profile already gives the body and lore templates. */
   'identity.read': { owner: 'materials', capability: 'materials.read.self', args: [] },
+  /** The control values the fixed profile resolved for this attachment; the same values the
+   * body and lore templates substitute. No other profile field and no other attachment. */
+  'options.read': { owner: 'materials', capability: 'materials.read.self', args: [] },
   'variables.list': {
     owner: 'variables',
     capability: 'variables.read',
