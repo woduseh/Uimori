@@ -7,14 +7,14 @@
 | 구분 | 현재 버전 | 의미 |
 | --- | --- | --- |
 | 앱 | 0.0.1 | 베타 준비 중인 개발 버전 |
-| SQLite DB | 19 | 버전별 migration 이력, 자료 이동 영수증·사용자 확장 작업·분기 공유 변수 |
+| SQLite DB | 20 | 버전별 migration 이력, 자료 이동 영수증·사용자 확장 작업·분기 공유 변수·유지보수 상태 |
 | 전체 JSON archive | 15 | DB 내부 migration 이력과 독립인 기존 작품 교환 구조 |
 | 채팅 전체 백업 | 1 | `uimori-chat-backup` 공개 교환 형식 |
 | 자료 파일 이동 | 1 | `uimori-native-transfer` 공개 교환 형식 |
 
-빈 DB는 기존 자료 구조를 초기화하고 같은 migration 경로로 v19에 도달해요. 고정된 15→16 단계는 알려진 삽화/구성 표와 `helper_tasks.started_at`의 누락만 보충해요. 16→17 단계는 `native_transfer_receipts`와 전체 요청 키 UNIQUE 제약을 추가해요. 17→18 단계는 `package_extension_operations`와 `package_extension_operation_attempts`를 추가해 사용자 확장 작업과 기존 attempt의 귀속을 보존해요. 18→19 단계는 `chat_variable_states`·`chat_variable_journal`·`chat_variable_outputs`를 추가해 분기 공유 변수·쓰기 영수증·source 시점 상태를 보존해요. 이전 migration의 SQL·기본값은 변경하지 않아요. 기존 행·원문·이미지·상태·난수·snapshot은 바꾸지 않으며 기본 변수 선언을 새 상태 표로 복사하지 않아요. 정상 v19를 다시 열 때는 migration이나 기본값 설치를 반복하지 않아요.
+빈 DB는 기존 자료 구조를 초기화하고 같은 migration 경로로 v20에 도달해요. 고정된 15→16 단계는 알려진 삽화/구성 표와 `helper_tasks.started_at`의 누락만 보충해요. 16→17 단계는 `native_transfer_receipts`와 전체 요청 키 UNIQUE 제약을 추가해요. 17→18 단계는 `package_extension_operations`와 `package_extension_operation_attempts`를 추가해 사용자 확장 작업과 기존 attempt의 귀속을 보존해요. 18→19 단계는 `chat_variable_states`·`chat_variable_journal`·`chat_variable_outputs`를 추가해 분기 공유 변수·쓰기 영수증·source 시점 상태를 보존해요. 19→20 단계는 [유지보수 상태](SELF-HOST.md#유지보수-모드)를 보관하는 `maintenance` 한 행 표를 추가해요. 이전 migration의 SQL·기본값은 변경하지 않아요. 기존 행·원문·이미지·상태·난수·snapshot은 바꾸지 않으며 기본 변수 선언을 새 상태 표로 복사하지 않아요. 정상 v20을 다시 열 때는 migration이나 기본값 설치를 반복하지 않아요.
 
-더 오래된 개발 버전, 비어 있지 않은 무버전 DB, 미래 버전, 현재 버전과 적용 이력의 불일치, 알려진 구조와 충돌하는 표는 명시적으로 거절해요. DB를 지우거나 버전을 낮춰서 여는 경로는 제공하지 않아요. 현재 v15~v19 지원을 모든 과거 개발 archive reader의 호환으로 확대하지 않아요.
+더 오래된 개발 버전, 비어 있지 않은 무버전 DB, 미래 버전, 현재 버전과 적용 이력의 불일치, 알려진 구조와 충돌하는 표는 명시적으로 거절해요. DB를 지우거나 버전을 낮춰서 여는 경로는 제공하지 않아요. 현재 v15~v20 지원을 모든 과거 개발 archive reader의 호환으로 확대하지 않아요.
 
 자료 이동 영수증은 본문을 복제하지 않고 불변 자료 개정과 원래 참조·새 ID 매핑을 연결해요. 전체 archive 15에는 검증되는 선택적 collection으로 포함하고 과거 archive의 누락은 빈 목록으로 처리해요. [자료 이동 계약](NATIVE-TRANSFER.md)을 봐요. DB migration 이력은 계속 archive와 독립이에요.
 

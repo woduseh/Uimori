@@ -86,7 +86,7 @@
 
 **현재 상태의 기준은 이 절과 아래 단계 표예요(2026-09-14).** 날짜별 구현·검증 기록의 ‘현재’·‘남아 있음’은 해당 작업 당시의 상태이며, 이후 구현과 상충하면 이 절을 따라요. 과거 검사 수·run ID·hash는 당시 근거로 보존하며 현재 소스의 새 검증 결과로 재사용하지 않아요.
 
-현재 DB는 **19**, 전체 archive는 **15**, 채팅 백업은 **1**이에요. `user`·`model`·`before-turn`·`after-turn`의 JavaScript·Lua 격리 계산과 공통 변수·자기 자료·현재 분기 대화·모델 Host API를 제공해요. 카드/모듈 가져오기의 독립 Lua는 `onInput`·`onStart`·`onOutput`·`onButtonClick`과 `listenEdit`의 `editInput`·`editRequest`·`editOutput`·`editDisplay` 전부, 지원하는 조건과 대화 조회 함수를 기존 행동 경로에 연결했어요. 기본 변수·지원 CBS 읽기·사용자 공유 변수·예약 고정·분기/백업 보존은 기존 공통 경로를 사용해요. **현재 남은 구현은 혼합 트리거, 나머지 자료/UI API와 동적 화면 연결**이에요. 입력·전송문 편집(`editInput`·`editRequest`)은 전송 사본 투영으로, 출력·표시 편집(`editOutput`·`editDisplay`)은 응답 후 한 번 계산하는 표시 사본 투영으로 연결했어요. 일반 HTTP·공유 자료 권한·확장 설치 관리도 아직 미완이며 필요한 기능만 현재 흐름에 보완해요. Plugin v3 주요 스펙, 대용량 자료·Linux/Docker Update·배포는 별도 후속 범위이고 전체 표본 실사용은 사용자가 평가해요. 현재 연결을 요청 전체·전체 표본·베타 완료로 표시하지 않아요.
+현재 DB는 **20**, 전체 archive는 **15**, 채팅 백업은 **1**이에요. `user`·`model`·`before-turn`·`after-turn`의 JavaScript·Lua 격리 계산과 공통 변수·자기 자료·현재 분기 대화·모델 Host API를 제공해요. 카드/모듈 가져오기의 독립 Lua는 `onInput`·`onStart`·`onOutput`·`onButtonClick`과 `listenEdit`의 `editInput`·`editRequest`·`editOutput`·`editDisplay` 전부, 지원하는 조건과 대화 조회 함수를 기존 행동 경로에 연결했어요. 기본 변수·지원 CBS 읽기·사용자 공유 변수·예약 고정·분기/백업 보존은 기존 공통 경로를 사용해요. **현재 남은 구현은 나머지 트리거 효과 종류, 자료/UI API와 동적 화면 연결**이에요. 선언형 `setvar` 트리거와 스크립트가 첫 효과가 아닌 혼합 트리거는 연결했어요. 입력·전송문 편집(`editInput`·`editRequest`)은 전송 사본 투영으로, 출력·표시 편집(`editOutput`·`editDisplay`)은 응답 후 한 번 계산하는 표시 사본 투영으로 연결했어요. 일반 HTTP·공유 자료 권한·확장 설치 관리도 아직 미완이며 필요한 기능만 현재 흐름에 보완해요. Plugin v3 주요 스펙, 대용량 자료·Linux/Docker Update·배포는 별도 후속 범위이고 전체 표본 실사용은 사용자가 평가해요. 현재 연결을 요청 전체·전체 표본·베타 완료로 표시하지 않아요.
 
 | 단계 | 해야 할 일 | 얻어야 할 결과 | 현재 상태 |
 | --- | --- | --- | --- |
