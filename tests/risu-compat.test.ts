@@ -126,7 +126,9 @@ describe('risu compat evaluation', () => {
     expect(evaluate('{{random::a::b::c::d::e}}{{roll::20}}').text).toBe(first.text);
     const other = evaluate('{{random::a::b::c::d::e}}{{roll::20}}', 'run-2');
     expect(other.text).not.toBe(first.text);
-    expect(other.inputHash).not.toBe(first.inputHash);
+    // The hash covers the content the snapshot froze, not the run that drew the entropy, so a fork
+    // or a restored backup can still reproduce it for the receipt it carries.
+    expect(other.inputHash).toBe(first.inputHash);
   });
 
   it('reads the frozen clock, and refuses to evaluate without one', () => {

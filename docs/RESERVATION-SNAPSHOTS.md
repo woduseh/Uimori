@@ -14,7 +14,7 @@
 
 | purpose | 호출 위치 | 고정 순서 |
 | --- | --- | --- |
-| `run` | `Store.createRunInTransaction` | 옵션 소비 → override·package resources → source segments → story → 선택된 outline → logical history → 패키지 상태 초기화 → before-turn 행동·추첨 예약 → lore → context → compile |
+| `run` | `Store.createRunInTransaction` | 옵션 소비 → override·package resources → source segments → story → 선택된 outline → logical history → 패키지 상태 초기화 → before-turn 행동·추첨 예약 → Risu 호환 CBS 평가 → lore → context → compile |
 | `authored` | 같은 Store 경로의 작성된 도입문·transcript import | 옵션 소비 → override·package resources → source segments → 선택된 outline → logical history → 패키지 상태 초기화 → lore → compile |
 | `helper-artifact` | `helperWritingSnapshot(..., 'artifact')` | caller의 고정 옵션·resources → source segments → story → logical history → 패키지 상태 읽기 → lore → context → 적합한 이전 요약 |
 | `helper-context` | `helperWritingSnapshot(..., 'context')` | helper artifact와 같은 읽기 순서이며 `executionPurpose: 'artifact'` 표시는 붙이지 않아요. |
@@ -25,6 +25,10 @@
 `authored`는 실제 `packageStart.mode === 'authored'` 또는 `transcriptImport` 표식과 일치해야 해요. story·before-turn 행동·context 준비를 생략하지만 기존 compile은 유지해요. 일반 `run`도 상태 또는 context가 대기 중이면 기존 `compileSnapshotPrompt` 정책에 따라 최종 compile을 미뤄요.
 
 preview는 기존대로 채팅 옵션 freeze와 context seed를 실행하지 않아요. 이 통합은 미리보기의 의미를 새로 바꾸지 않아요. 기존 원문의 번역 미리보기는 그 원문 Run의 snapshot과 source hash를 사용해요.
+
+## snapshot 영수증
+
+`RunSnapshot.risuCompat`은 [가져온 카드가 보존한 Risu CBS](RISU-IMPORT.md#기본-변수와-읽기-cbs)를 예약 시점에 한 번 평가한 영수증이에요. `prepareRisuCompatReceipt`가 before-turn 행동 예약 직후, 즉 시각·profile·대화가 모두 고정되고 compile이 시작되기 전에 계산하므로 예약이 만든 프롬프트부터 평가문을 담아요. 항목마다 필드 key, 평가문, 서비스할 수 없는 함수 이름, 그리고 그 평가가 읽은 내용을 묶는 `inputHash`를 보관해요. 이후 compile·후보·문맥 축약·포크·복원은 저장된 평가문만 투영하고 카드를 다시 평가하지 않아요. `inputHash`는 원문·이름·변수·대화·요청·예약 시각만 덮고 run ID는 덮지 않아요. 추첨 seed는 run에서 뽑지만, 포크와 채팅 백업 복원이 같은 영수증을 새 run ID로 옮겨도 검증이 성립해야 하기 때문이에요. 평가문 자체는 그 영수증이 만든 compile 결과가 묶어요. `server/snapshot-archive.ts`는 복원에서 영수증 구조와 각 `inputHash`를 평가 없이 다시 계산하고, 장착 패키지가 선언하지 않은 key나 값이 다른 항목을 거절해요. 전송 기록이 있는 Run에서 영수증이 사라지면 [전송 변환 영수증](PROMPT-TRANSFORMS.md#실행과-보존)과 같은 규칙으로 거절해요.
 
 ## 전체 체인을 다시 실행하지 않는 경로
 

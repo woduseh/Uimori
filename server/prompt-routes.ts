@@ -15,6 +15,7 @@ import { validateLoreContextPolicy } from '../core/lore-context.js';
 import { createDefaultPromptProgram } from '../core/prompt-defaults.js';
 import { DEFAULT_MAIN_PROMPT } from '../core/prompts.js';
 import { builtinPromptTemplate, builtinPromptTemplates } from './builtin-prompts.js';
+import { prepareRisuCompatReceipt } from './compat/risu/cbs.js';
 import { preparePromptInputTransforms } from './prompt-transforms.js';
 
 /** A read-only preview, including unsaved draft blocks. No provider call or Run is created. */
@@ -162,6 +163,10 @@ export function promptRoutes(app: FastifyInstance, store: Store) {
           sourceHash: source.hash,
         };
       } else {
+        // A preview has no run to seed from, so it draws its entropy from one fixed source; the
+        // reader still sees evaluated text rather than the card's literal `{{...}}`.
+        const risuCompat = prepareRisuCompatReceipt(snapshot, 'preview');
+        if (risuCompat) snapshot = { ...snapshot, risuCompat };
         snapshot = await preparePromptInputTransforms(snapshot, program, values);
         const context = promptContext(snapshot, program, values);
         compilation = !snapshot.story?.waiting

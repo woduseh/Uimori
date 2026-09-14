@@ -95,6 +95,8 @@ export type RunSnapshot = {
   extensionConversation?: import('./extension-conversation.js').ExtensionConversationSnapshot;
   promptCompilation?: import('./prompt-program.js').PromptCompilation;
   promptInputTransforms?: import('./prompt-input-transforms.js').PromptInputTransformReceipt;
+  /** Frozen evaluation of the declared Risu CBS fields; a replay projects it, never recomputes it. */
+  risuCompat?: import('./risu-compat.js').RisuCompatReceipt;
   /** Derived projection of host-owned input hooks; the reserved request stays unchanged. */
   extensionRequestEdit?: import('./extension-request-edit.js').ExtensionRequestEditReceipt;
   /** Derived projection of host-owned request hooks over the transmitted conversation copy. */

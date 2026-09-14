@@ -12,9 +12,41 @@ import { sealOutlineSnapshot } from '../core/outline.js';
 import { isSourceOnlyTranscript, validateSourceOnlyTranscript } from '../core/authored-history.js';
 import { preparedBehaviorSnapshot } from './package-behavior-run.js';
 import { hasPromptInputTransforms, validatePromptInputTransforms } from './prompt-transforms.js';
+import { risuCompatInputHash, risuCompatTargets } from './compat/risu/cbs.js';
+import { risuCompatKey, validateRisuCompatReceipt } from '../core/risu-compat.js';
 import { resolveExtensionConversation } from './extension-conversation.js';
 
 const reject: ArchiveReject = archiveRejector('Invalid snapshot archive');
+
+/**
+ * Bind the frozen evaluation to the reserved inputs without running a single CBS token again: every
+ * entry must name a declared field of an attached package and carry the input hash this snapshot
+ * still produces. The evaluated text itself is bound by the prompt it compiled.
+ */
+function validateRisuCompat(store: Store, snapshot: RunSnapshot, runId?: string): void {
+  const receipt = snapshot.risuCompat;
+  // The input hash covers content only, so the run id it is recomputed under does not matter.
+  const targets = risuCompatTargets(snapshot, runId ?? '');
+  if (!receipt) {
+    if (targets.length && runId && store.run(runId).inputs.length)
+      reject('risu compat receipt missing');
+    return;
+  }
+  try {
+    validateRisuCompatReceipt(receipt);
+  } catch {
+    reject('risu compat receipt mismatch');
+  }
+  const expected = new Map(
+    targets.map(({ context, field }) => [
+      risuCompatKey(context.attachment, field.fieldId),
+      risuCompatInputHash(context, field),
+    ])
+  );
+  if (receipt.entries.length !== expected.size) reject('risu compat receipt mismatch');
+  for (const entry of receipt.entries)
+    if (expected.get(entry.key) !== entry.inputHash) reject('risu compat receipt mismatch');
+}
 
 function behaviorExecutionProjection(
   store: Store,
@@ -62,6 +94,9 @@ export function validateRunSnapshot(
     }
     return snapshot;
   }
+  // The receipt froze on the reserved snapshot, before any behavior projection reached the profile,
+  // so it is checked against the stored reservation rather than the execution view.
+  validateRisuCompat(store, snapshot, runId);
   const executionSnapshot = behaviorExecutionProjection(store, snapshot, runId);
   try {
     validatePromptInputTransforms(executionSnapshot);
