@@ -53,6 +53,7 @@ import { outlineRoutes } from './outline-routes.js';
 import { packageImageRoutes } from './package-images.js';
 import { nativeTransferRoutes } from './native-transfer.js';
 import { risuImportRoutes } from './risu-import.js';
+import { pruneUploads, uploadRoutes } from './uploads.js';
 import { admissionOpen, maintenanceRoutes } from './maintenance.js';
 import { risuPresetImportRoutes } from './risu-preset-import.js';
 import { NativeTransferError } from '../core/native-transfer-validation.js';
@@ -1175,6 +1176,7 @@ export async function createApp(options: AppOptions): Promise<App> {
   });
   packageFeatureRoutes(app, store);
   nativeTransferRoutes(app, store);
+  uploadRoutes(app, store.path);
   risuImportRoutes(app, store);
   risuPresetImportRoutes(app, store);
   diagnosticReportRoutes(app, store, { buildId: options.buildId, testMode: options.testMode });
@@ -1547,6 +1549,7 @@ export async function createApp(options: AppOptions): Promise<App> {
   // Authentication answers first; a maintenance gate never tells an anonymous caller the state.
   maintenanceRoutes(app, store, { forcedClosed, activeWork: () => work.size });
   // A maintenance boot proves migration and reads only: it neither recovers nor starts work.
+  pruneUploads(store.path);
   if (!forcedClosed) {
     store.recover();
     store.story.recover();
