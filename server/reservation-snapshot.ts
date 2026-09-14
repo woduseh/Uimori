@@ -9,6 +9,7 @@ import { freezePackageStates } from './package-behavior-host.js';
 import { prepareRunBehavior } from './package-behavior-run.js';
 import { freezeLoreContext } from './lore-context.js';
 import { captureLogicalHistory, compileSnapshotPrompt } from './prompt-snapshot.js';
+import { prepareRisuCompatReceipt } from './compat/risu/cbs.js';
 import { hasPromptInputTransforms } from './prompt-transforms.js';
 import { chatVariableProfile } from './chat-variable-context.js';
 import { captureRunConversation } from './package-conversation.js';
@@ -99,6 +100,13 @@ export function freezeReservationSnapshot(
   if (options.purpose === 'run')
     frozen = captureRunConversation(store, frozen, options.runId, options.supersedesRunId);
   if (options.purpose === 'run') frozen = prepareRunBehavior(store, options.runId, frozen);
+  // The compat evaluation is an input, so it freezes here: the clock, profile and history it reads
+  // are final, and every later compilation - reservation's own, a deferred one, a candidate's clone
+  // or an archive replay - projects this receipt instead of evaluating the card again.
+  if (options.purpose === 'run') {
+    const risuCompat = prepareRisuCompatReceipt(frozen, options.runId);
+    if (risuCompat) frozen = { ...frozen, risuCompat };
+  }
   if (
     options.purpose === 'run' &&
     (frozen.behaviorExecution?.deferredAutomatic || hasPromptInputTransforms(frozen))

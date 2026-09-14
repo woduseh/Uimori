@@ -240,11 +240,12 @@ export function scanRisuCompatUnsupported(text: string): string[] {
   return [...new Set(result.unsupported)].sort();
 }
 
-/** Evaluates one declared field against the reserved snapshot and returns its frozen entry. */
-export function evaluateRisuCompat(
-  context: RisuCompatContext,
-  field: { fieldId: string; text: string }
-): RisuCompatEntry {
+/**
+ * Everything one evaluation reads, resolved from the reserved snapshot alone, plus the hash that
+ * binds the entry to exactly these inputs. Archive validation recomputes the hash through this same
+ * function, so the canonical JSON below is the single definition of what an entry was evaluated over.
+ */
+function evaluationInputs(context: RisuCompatContext, field: { fieldId: string; text: string }) {
   const { snapshot, attachment, package: pkg, runId } = context;
   const profile = snapshot.profile;
   const key = risuCompatKey(attachment, field.fieldId);
@@ -266,6 +267,10 @@ export function evaluateRisuCompat(
     ...snapshot.history.map((entry) => ({ role: 'char' as const, data: entry.text, time: 0 })),
     ...(snapshot.request ? [{ role: 'user' as const, data: snapshot.request, time: 0 }] : []),
   ];
+  // The run id seeds the entropy but is deliberately outside the hash: a fork or a chat-backup
+  // restore copies the frozen receipt onto a new run id, and the hash has to keep binding the
+  // content the snapshot froze so those copies stay verifiable. The drawn text itself is bound by
+  // the prompt it compiled, not by this hash.
   const inputHash = sha256(
     JSON.stringify({
       source: field.text,
@@ -274,8 +279,29 @@ export function evaluateRisuCompat(
       history: history.map((message) => ({ role: message.role, text: sha256(message.data) })),
       request: sha256(snapshot.request ?? ''),
       clock: snapshot.executionClock?.iso ?? '',
-      seed,
     })
+  );
+  return { key, seed, characterName, userName, variables, history, inputHash };
+}
+
+/** The frozen inputs of one declared field, recomputed without evaluating a single CBS token. */
+export function risuCompatInputHash(
+  context: RisuCompatContext,
+  field: { fieldId: string; text: string }
+): string {
+  return evaluationInputs(context, field).inputHash;
+}
+
+/** Evaluates one declared field against the reserved snapshot and returns its frozen entry. */
+export function evaluateRisuCompat(
+  context: RisuCompatContext,
+  field: { fieldId: string; text: string }
+): RisuCompatEntry {
+  const { snapshot, package: pkg } = context;
+  const profile = snapshot.profile;
+  const { key, seed, characterName, userName, variables, history, inputHash } = evaluationInputs(
+    context,
+    field
   );
   const abandoned = (error: string): RisuCompatEntry => ({
     key,
@@ -408,15 +434,16 @@ export function evaluateRisuCompat(
 }
 
 /**
- * Every declared field of every attached package, evaluated once. A pure function of the reserved
- * snapshot and the run id; the caller decides where the receipt is stored.
+ * Every declared field of every attached package this snapshot owes an entry for, in attachment then
+ * declaration order. Preparation evaluates these; archive validation recomputes their input hashes
+ * and rejects any receipt key outside the set.
  */
-export function prepareRisuCompatReceipt(
+export function risuCompatTargets(
   snapshot: RunSnapshot,
   runId: string
-): RisuCompatReceipt | undefined {
+): { context: RisuCompatContext; field: { fieldId: string; text: string } }[] {
   const profile = snapshot.profile;
-  const entries: RisuCompatEntry[] = [];
+  const targets: { context: RisuCompatContext; field: { fieldId: string; text: string } }[] = [];
   for (const attachment of profile?.packageAttachments ?? []) {
     if (historicalPersonaExcluded(profile, attachment.role, 'main')) continue;
     const pkg = profile?.packages?.find(
@@ -424,9 +451,23 @@ export function prepareRisuCompatReceipt(
     );
     if (!pkg?.compat?.risuCbs.fields.length) continue;
     for (const field of risuCompatFields(pkg)) {
-      if (entries.length >= RISU_COMPAT_LIMITS.entries) break;
-      entries.push(evaluateRisuCompat({ snapshot, attachment, package: pkg, runId }, field));
+      if (targets.length >= RISU_COMPAT_LIMITS.entries) return targets;
+      targets.push({ context: { snapshot, attachment, package: pkg, runId }, field });
     }
   }
+  return targets;
+}
+
+/**
+ * Every declared field of every attached package, evaluated once. A pure function of the reserved
+ * snapshot and the run id; the caller decides where the receipt is stored.
+ */
+export function prepareRisuCompatReceipt(
+  snapshot: RunSnapshot,
+  runId: string
+): RisuCompatReceipt | undefined {
+  const entries: RisuCompatEntry[] = risuCompatTargets(snapshot, runId).map(({ context, field }) =>
+    evaluateRisuCompat(context, field)
+  );
   return entries.length ? { version: 1, entries } : undefined;
 }
