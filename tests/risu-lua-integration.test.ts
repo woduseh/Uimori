@@ -504,6 +504,51 @@ test('the transmitted copy handed to a request hook stays inside the guest limit
   ).toBeUndefined();
 });
 
+test('one skipped request hook still reports itself beside the edit that ran', async () => {
+  const fixture = imported(
+    'listenEdit("editRequest", function(id, value)\n  local edited = {}\n  for index, message in ipairs(value) do\n    edited[index] = {role = message.role, content = "kept:" .. message.content}\n  end\n  return edited\nend)'
+  );
+  grantVariableWrites(fixture, true);
+  // A second attached material declares the same hook but has no conversation grant of its own.
+  const other = fixture.store.product.content({
+    kind: 'module',
+    title: 'Second request hook',
+    description: '',
+    text: 'Synthetic second hook',
+    loading: 'pinned',
+    relatedIds: [],
+    package: {
+      ...structuredClone(fixture.content.package!),
+      id: 'second-request-hook',
+      revision: 1,
+      title: 'Second request hook',
+    },
+  }) as Content;
+  const profile = fixture.store.product.profile(fixture.chat.id);
+  fixture.store.product.updateProfile(fixture.chat.id, {
+    expectedRevision: profile.revision,
+    attachments: profile.attachments,
+    packageAttachments: [
+      ...(profile.packageAttachments ?? []),
+      { id: other.id, revision: other.revision, role: 'module' },
+    ],
+    image: profile.image,
+    extensionGrants: profile.extensionGrants,
+  });
+  const run = generation(fixture, 'Two hooks.');
+  await prepareAutomaticRunBehavior(fixture.store, run.id);
+  const prepared = preparedBehaviorSnapshot(fixture.store, run.id);
+  // The granted hook still edits the copy, and the skipped one is still announced.
+  expect(prepared.extensionMessageEdit).toMatchObject({
+    version: 1,
+    skipped: true,
+    entries: [{ index: 0, role: 'user', text: 'kept:Two hooks.' }],
+  });
+  expect(JSON.stringify(compileSnapshotPrompt(prepared).promptCompilation!.messages)).toContain(
+    'kept:Two hooks.'
+  );
+});
+
 test('an editRequest result that changes the message shape keeps the transmitted copy', async () => {
   const fixture = imported(
     'listenEdit("editRequest", function(id, value) return {value[1], value[1]} end)'

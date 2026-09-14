@@ -142,7 +142,7 @@ export function validateExtensionMessageEditShape(receipt: ExtensionMessageEditR
     receipt.applied.some((id) => typeof id !== 'string' || !id.length || id.length > 300) ||
     new Set(receipt.applied).size !== receipt.applied.length ||
     (receipt.skipped !== undefined && receipt.skipped !== true) ||
-    (!receipt.applied.length && receipt.skipped !== true) ||
+    (!receipt.applied.length && (receipt.skipped !== true || receipt.entries.length)) ||
     Object.keys(receipt).some((key) => !['version', 'entries', 'applied', 'skipped'].includes(key))
   )
     reject();
@@ -167,7 +167,6 @@ export function validateExtensionMessageEditShape(receipt: ExtensionMessageEditR
     )
       reject();
   }
-  if (receipt.skipped && receipt.entries.length) reject();
 }
 
 /** Projects the stored calculation onto any transmitted subset; original indices stay frozen. */
@@ -178,7 +177,12 @@ export function projectExtensionMessageEdits(
   const receipt = snapshot.extensionMessageEdit;
   if (!receipt) return { history, warnings: [] };
   validateExtensionMessageEditShape(receipt);
-  if (receipt.skipped) return { history, warnings: ['EXTENSION_MESSAGE_EDIT_SKIPPED'] };
+  // A partial skip still applies what did run, and still says a hook was left out.
+  const warnings = [
+    ...(receipt.applied.length ? ['EXTENSION_MESSAGE_EDIT_APPLIED'] : []),
+    ...(receipt.skipped ? ['EXTENSION_MESSAGE_EDIT_SKIPPED'] : []),
+  ];
+  if (!receipt.entries.length) return { history, warnings };
   const indices = new Map(
     requestEditMessages(snapshot, projectExtensionRequestEdit(snapshot).text).map(
       (message, index) => [message.id, index]
@@ -193,7 +197,7 @@ export function projectExtensionMessageEdits(
       if (entry.role !== message.role || entry.inputHash !== hash(message.text)) reject();
       return entry.text === undefined ? message : { ...message, text: entry.text };
     }),
-    warnings: ['EXTENSION_MESSAGE_EDIT_APPLIED'],
+    warnings,
   };
 }
 
@@ -211,7 +215,7 @@ export function buildExtensionMessageEdit(
     texts = step.texts;
   }
   if (!applied.length)
-    return skipped ? { version: 1, entries: [], applied: [], skipped } : undefined;
+    return skipped ? { version: 1, entries: [], applied: [], skipped: true } : undefined;
   const receipt: ExtensionMessageEditReceipt = {
     version: 1,
     entries: base.map((message, index) => ({
@@ -222,6 +226,7 @@ export function buildExtensionMessageEdit(
       ...(texts[index] === message.text ? {} : { text: texts[index] }),
     })),
     applied,
+    ...(skipped ? { skipped: true as const } : {}),
   };
   validateExtensionMessageEditShape(receipt);
   return receipt;
