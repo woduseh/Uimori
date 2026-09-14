@@ -1,4 +1,4 @@
-import { HttpError } from './request-validation.js';
+import { archiveRejector, type ArchiveReject } from './request-validation.js';
 import { freezeSourceSegments } from '../core/package-source-segments.js';
 import { isDeepStrictEqual } from 'node:util';
 import { validateProviderPrompt } from '../core/prompt-program.js';
@@ -14,9 +14,7 @@ import { preparedBehaviorSnapshot } from './package-behavior-run.js';
 import { hasPromptInputTransforms, validatePromptInputTransforms } from './prompt-transforms.js';
 import { resolveExtensionConversation } from './extension-conversation.js';
 
-const reject = (message: string): never => {
-  throw new HttpError(400, `Invalid snapshot archive: ${message}`);
-};
+const reject: ArchiveReject = archiveRejector('Invalid snapshot archive');
 
 function behaviorExecutionProjection(
   store: Store,

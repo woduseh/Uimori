@@ -2,13 +2,16 @@ import { isDeepStrictEqual } from 'node:util';
 import { validateChatVariableState, type ChatVariableState } from '../core/chat-variables.js';
 import { behaviorPayloadHash } from './package-behavior-store.js';
 import { validateChatVariableCommand } from './chat-variables.js';
-import { HttpError, text } from './request-validation.js';
+import {
+  archiveRejector,
+  HttpError,
+  text,
+  type ArchiveReject,
+  type ArchiveRow as Row,
+} from './request-validation.js';
 import type { Store } from './store.js';
 
-type Row = Record<string, any>;
-const invalid = (reason: string): never => {
-  throw new HttpError(400, `Invalid chat variables archive: ${reason}`);
-};
+const invalid: ArchiveReject = archiveRejector('Invalid chat variables archive');
 
 /** A selected source owns its historical state; later branch edits are never copied. */
 export function restoreChatVariablesAtSource(

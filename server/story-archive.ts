@@ -1,4 +1,10 @@
-import { HttpError } from './request-validation.js';
+import {
+  archiveComparer,
+  archiveRejector,
+  HttpError,
+  type ArchiveReject,
+  type ArchiveRow as Row,
+} from './request-validation.js';
 import { randomUUID } from 'node:crypto';
 import { isDeepStrictEqual } from 'node:util';
 import type { Store } from './store.js';
@@ -22,11 +28,8 @@ import { validateModelSnapshot } from './provider-archive.js';
 import type { RunSnapshot } from '../core/types.js';
 import { disableArchivedConnection } from '../core/product.js';
 
-type Row = Record<string, any>;
 const parse = (value: unknown): any => (typeof value === 'string' ? JSON.parse(value) : value);
-function reject(reason: string): never {
-  throw new HttpError(400, `Story archive: ${reason}`);
-}
+const reject: ArchiveReject = archiveRejector('Story archive');
 function object(value: unknown): Row {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return reject('invalid object');
   return value as Row;
@@ -47,9 +50,7 @@ function integer(value: unknown, min = 0, max = 1e9): asserts value is number {
   if (!Number.isSafeInteger(value) || Number(value) < min || Number(value) > max)
     reject('invalid integer');
 }
-function same(left: unknown, right: unknown, reason: string) {
-  if (!isDeepStrictEqual(left, right)) reject(reason);
-}
+const same = archiveComparer(reject);
 const rows = (store: Store, table: string): Row[] =>
   store.db.prepare(`SELECT * FROM ${table}`).all() as Row[];
 const canonHash = (entries: AuthorNote[]) =>

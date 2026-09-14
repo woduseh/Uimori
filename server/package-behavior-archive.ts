@@ -1,5 +1,11 @@
 import { historicalPersonaExcluded } from '../core/persona-scope.js';
-import { HttpError } from './request-validation.js';
+import {
+  archiveComparer,
+  archiveRejector,
+  isSha256Hex,
+  type ArchiveReject,
+  type ArchiveRow as Row,
+} from './request-validation.js';
 import { createHash } from 'node:crypto';
 import { isDeepStrictEqual } from 'node:util';
 import {
@@ -43,10 +49,7 @@ export const packageBehaviorTables = [
   'package_behavior_outputs',
   ...packageBehaviorRunTables,
 ];
-type Row = Record<string, any>;
-function reject(message: string): never {
-  throw new HttpError(400, `Invalid package behavior archive: ${message}`);
-}
+const reject: ArchiveReject = archiveRejector('Invalid package behavior archive');
 function object(value: unknown, allowed: string[]): Row {
   const v = behaviorRecord(value);
   if (Object.keys(v).some((k) => !allowed.includes(k))) reject('unknown fields');
@@ -59,11 +62,9 @@ function revision(value: unknown, min = 0): asserts value is number {
   if (!Number.isSafeInteger(value) || Number(value) < min) reject('revision');
 }
 function digest(value: unknown): asserts value is string {
-  if (typeof value !== 'string' || !/^[a-f0-9]{64}$/u.test(value)) reject('hash');
+  if (!isSha256Hex(value)) reject('hash');
 }
-const same = (a: unknown, b: unknown, message: string) => {
-  if (!isDeepStrictEqual(a, b)) reject(message);
-};
+const same = archiveComparer(reject);
 function definition(store: Store, scope: BehaviorScope): PackageBehavior {
   text(scope.chatId);
   text(scope.branchId);
