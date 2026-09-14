@@ -525,6 +525,15 @@ listenEdit("editDisplay", function(id, value)
   local loaded, failure = pcall(function() require("socket") end)
   assert(not loaded and string.find(failure, "RISU_LUA_MODULE_UNSUPPORTED:socket", 1, true))
   assert(require("json") == json)
+  -- The persona description needs a persona read, and the three setters a write path.
+  local absent = {
+    getPersonaDescription=getPersonaDescription, setName=setName,
+    setDescription=setDescription, setCharacterFirstMessage=setCharacterFirstMessage
+  }
+  for name, unsupported in pairs(absent) do
+    local ran, refusal = pcall(unsupported, id, "value")
+    assert(not ran and string.find(refusal, "RISU_LUA_API_UNSUPPORTED:" .. name, 1, true))
+  end
   return value
 end)`;
     const result = await executeExtensionProgram(buildRisuLuaProgram(source, 'editDisplay'), {
@@ -532,6 +541,88 @@ end)`;
       input: { value: 'unchanged', meta: {} },
     });
     expect(result.result).toBe('unchanged');
+  });
+});
+
+describe('Risu identity and description readers through the native Host', () => {
+  /** The fake answers with the Host's own page shapes, so the expectations measure the adapter. */
+  function selfMaterials(
+    names: { botName: string; userName: string },
+    materials: { id: string; kind: string; text: string }[]
+  ) {
+    const calls: { method: string; args: unknown }[] = [];
+    const host: ExtensionHostHandler = async (method, raw): Promise<RuntimeValue> => {
+      const args = raw as { id?: string; offset?: number; limit?: number };
+      calls.push({ method, args });
+      if (method === 'identity.read') return { ...names };
+      if (method === 'materials.list') {
+        const listing = pageSlice(materials, args.offset ?? 0, args.limit ?? HOST_LIST_PAGE_MAX);
+        return {
+          items: listing.items.map((item) => ({
+            id: item.id,
+            kind: item.kind,
+            totalChars: item.text.length,
+          })),
+          nextOffset: listing.nextOffset,
+        };
+      }
+      if (method !== 'materials.read') throw new Error('Unexpected Host method');
+      const material = materials.find((item) => item.id === args.id);
+      if (!material) throw new ExtensionProgramError('BEHAVIOR_HOST_MATERIAL_UNAVAILABLE');
+      return {
+        id: material.id,
+        kind: material.kind,
+        ...pageText(material.text, args.offset ?? 0, args.limit ?? HOST_TEXT_PAGE_DEFAULT),
+      };
+    };
+    return { host, calls };
+  }
+
+  const offsets = (calls: { method: string; args: unknown }[], method: string) =>
+    calls
+      .filter((call) => call.method === method)
+      .map((call) => (call.args as { offset: number }).offset);
+
+  it('reads the projected names and pages the package body, each fetched once', async () => {
+    // A lore item may also end in ":body"; only the body resource reports the package role kind.
+    const fixture = selfMaterials({ botName: 'Aster', userName: 'Rin' }, [
+      { id: 'package:card:bot:identity', kind: 'bot', text: 'IDENTITY' },
+      { id: 'package:card:bot:lore:body', kind: 'lore', text: 'LORE' },
+      { id: 'package:card:bot:body', kind: 'bot', text: 'x'.repeat(18000) },
+    ]);
+    const program = buildRisuLuaProgram(
+      `
+function onStart(id)
+  assert(getName("foreign-chat") == "Aster")
+  assert(getPersonaName(id) == "Rin")
+  local description = getDescription(id)
+  assert(description == string.rep("x", 18000))
+  -- A cached copy costs no further Host call.
+  assert(getDescription(id) == description and getName(id) == "Aster")
+end`,
+      'start'
+    );
+    await executeExtensionProgram(program, { state: {}, input: {} }, undefined, {
+      host: fixture.host,
+    });
+    expect(program.capabilities).toContain('materials.read.self');
+    expect(fixture.calls.filter((call) => call.method === 'identity.read')).toHaveLength(1);
+    expect(offsets(fixture.calls, 'materials.list')).toEqual([0]);
+    expect(offsets(fixture.calls, 'materials.read')).toEqual([0, HOST_TEXT_PAGE_MAX]);
+  });
+
+  it('returns an empty description when the package holds no body material', async () => {
+    const fixture = selfMaterials({ botName: 'Aster', userName: 'Rin' }, [
+      { id: 'package:card:bot:lore:intro', kind: 'lore', text: 'LORE' },
+    ]);
+    await executeExtensionProgram(
+      buildRisuLuaProgram('function onStart(id) assert(getDescription(id) == "") end', 'start'),
+      { state: {}, input: {} },
+      undefined,
+      { host: fixture.host }
+    );
+    expect(offsets(fixture.calls, 'materials.list')).toEqual([0]);
+    expect(fixture.calls.filter((call) => call.method === 'materials.read')).toEqual([]);
   });
 });
 

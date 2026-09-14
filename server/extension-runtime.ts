@@ -30,7 +30,7 @@ export const EXTENSION_RUNTIME_LIMITS = Object.freeze({
   timeoutMs: 1_000,
   hostWaitMs: 1_800_000,
   hostMethodChars: 80,
-  hostCalls: 32,
+  hostCalls: 128,
   hostPending: 8,
   hostValueBytes: 128 * 1024,
   hostResultBytes: 512 * 1024,

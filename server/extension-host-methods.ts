@@ -48,6 +48,8 @@ export const HOST_METHODS = {
     args: ['id', 'offset', 'limit'],
     page: TEXT_PAGE,
   },
+  /** The two projected names the fixed profile already gives the body and lore templates. */
+  'identity.read': { owner: 'materials', capability: 'materials.read.self', args: [] },
   'variables.list': {
     owner: 'variables',
     capability: 'variables.read',
