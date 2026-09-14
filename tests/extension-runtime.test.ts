@@ -696,7 +696,7 @@ describe('fixed-memory QuickJS extension runtime', () => {
     const sequential = await executeExtensionProgram(
       program(`
         let code = null;
-        for (let index = 0; index < 33; index++) {
+        for (let index = 0; index < ${EXTENSION_RUNTIME_LIMITS.hostCalls + 1}; index++) {
           try { await api.host.call('materials.read', { index }); }
           catch (error) { code = error.code; break; }
         }
@@ -712,7 +712,7 @@ describe('fixed-memory QuickJS extension runtime', () => {
       }
     );
     expect(sequential.result).toBe('BEHAVIOR_HOST_CALL_LIMIT');
-    expect(sequentialCalls).toBe(32);
+    expect(sequentialCalls).toBe(EXTENSION_RUNTIME_LIMITS.hostCalls);
 
     let pendingCalls = 0;
     const concurrent = await executeExtensionProgram(

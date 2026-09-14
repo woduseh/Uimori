@@ -11,7 +11,7 @@ import {
   type BehaviorActionHook,
   type BehaviorActionTrigger,
 } from '../core/package-behavior.js';
-import { HOST_TEXT_PAGE_MAX } from '../core/paging.js';
+import { HOST_LIST_PAGE_MAX, HOST_TEXT_PAGE_MAX } from '../core/paging.js';
 import {
   validatePromptExpression,
   type PromptExpression,
@@ -86,13 +86,10 @@ const unavailableApis = [
   'LLMMain',
   'axLLM',
   'axLLMMain',
-  'getName',
   'setName',
-  'getDescription',
   'setDescription',
   'getCharacterFirstMessage',
   'setCharacterFirstMessage',
-  'getPersonaName',
   'getPersonaDescription',
   'getAuthorsNote',
   'getBackgroundEmbedding',
@@ -277,6 +274,41 @@ local function __lastConversation(role)
 end
 function getUserLastMessage(id) return __lastConversation("user") end
 function getCharacterLastMessage(id) return __lastConversation("assistant") end
+local __identity = nil
+local function __identityRead()
+  if __identity == nil then __identity = __host("identity.read", {}) end
+  return __identity
+end
+function getName(id) return __identityRead().botName end
+function getPersonaName(id) return __identityRead().userName end
+local function __materialText(id)
+  local parts, page = {}, ${pagedCall('materials.read', 'id=id', '0')}
+  while true do
+    parts[#parts + 1] = page.text
+    if page.nextOffset == nil or page.nextOffset == __null then break end
+    page = ${pagedCall('materials.read', 'id=id', 'page.nextOffset')}
+  end
+  return table.concat(parts)
+end
+local __description = nil
+function getDescription(id)
+  if __description ~= nil then return __description end
+  local offset = 0
+  while __description == nil do
+    local page = __host("materials.list", {offset=offset, limit=${HOST_LIST_PAGE_MAX}})
+    for _, item in ipairs(page.items) do
+      -- The package's own body resource. A lore item always reports the "lore" kind instead.
+      if item.kind ~= "lore" and string.sub(item.id, -5) == ":body" then
+        __description = __materialText(item.id)
+        break
+      end
+    end
+    if page.nextOffset == nil or page.nextOffset == __null then break end
+    offset = page.nextOffset
+  end
+  if __description == nil then __description = "" end
+  return __description
+end
 function simpleLLM(id, prompt)
   local response = __host("model.generate", {prompt=prompt})
   local value = {success=response.status == "completed", result=response.text}
@@ -322,7 +354,13 @@ return {state=__state, result=__null}`;
   return {
     api: EXTENSION_PROGRAM_API,
     language: 'lua',
-    capabilities: ['variables.read', 'variables.write', 'model.generate', 'conversation.read'],
+    capabilities: [
+      'variables.read',
+      'variables.write',
+      'model.generate',
+      'conversation.read',
+      'materials.read.self',
+    ],
     source: body,
   };
 }
@@ -682,7 +720,7 @@ export function adaptRisuLuaTriggers(
       }
       report(
         'RISU_LUA_PARTIAL_HOST',
-        '채팅 변수·대화 읽기·simpleLLM은 허용된 범위에서 실행해요. 나머지 Risu API는 아직 지원하지 않아 호출하면 오류를 표시해요.'
+        '채팅 변수·대화 읽기·이름과 본문 읽기·simpleLLM은 허용된 범위에서 실행해요. 나머지 Risu API는 아직 지원하지 않아 호출하면 오류를 표시해요.'
       );
       report(
         'RISU_LUA_FRESH_INVOCATION',

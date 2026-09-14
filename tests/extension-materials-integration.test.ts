@@ -88,6 +88,10 @@ return {
   }
 };`;
 
+const readOwnIdentity = `
+const identity = await api.host.call('identity.read', {});
+return {state: {count: api.state.count + 1}, result: identity};`;
+
 const program = (source: string, capability = true): ExtensionProgram => ({
   api: EXTENSION_PROGRAM_API,
   ...(capability ? { capabilities: ['materials.read.self'] } : {}),
@@ -150,6 +154,20 @@ function packageDefinition(): ContentPackage {
           inputSchema: { type: 'record', properties: {} },
           effects: [],
           program: program(readOwnMaterials),
+        },
+        {
+          id: 'identity-read',
+          triggers: ['user'],
+          inputSchema: { type: 'record', properties: {} },
+          effects: [],
+          program: program(readOwnIdentity),
+        },
+        {
+          id: 'undeclared-identity',
+          triggers: ['user'],
+          inputSchema: { type: 'record', properties: {} },
+          effects: [],
+          program: program(readOwnIdentity, false),
         },
         {
           id: 'undeclared-read',
@@ -453,10 +471,25 @@ test('model Guest reads the same frozen self projection and stages its receipt u
   });
 });
 
+test('the Guest reads the same projected names its own body and lore templates substitute', async () => {
+  const f = fixture();
+  const detail = await performBehaviorActionWithProgram(
+    f.store,
+    f.chat.id,
+    f.branchId,
+    f.instanceId,
+    command(f, 'identity-read')
+  );
+  // 'Aster' is the package identity name the body template renders; no persona is attached.
+  expect(detail.instances[0].lastAction!.result).toEqual({ botName: 'Aster', userName: 'User' });
+  expect(detail.instances[0]).toMatchObject({ stateRevision: 1, state: { count: 1 } });
+});
+
 test('undeclared capability, foreign material IDs and unknown fields disclose nothing or mutate state', async () => {
   const f = fixture();
   const attempts = [
     command(f, 'undeclared-read'),
+    command(f, 'undeclared-identity'),
     command(f, 'arbitrary-read', { id: 'package:foreign:module:body' }),
     command(f, 'unknown-field'),
   ];

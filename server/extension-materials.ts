@@ -30,7 +30,8 @@ export function createPackageExtensionHost(
   // Private copies prevent in-flight changes from changing an invocation's read set.
   const captured = permitted && profile ? structuredClone(profile) : undefined;
   const ref = structuredClone(attachment);
-  const materials = () => {
+  /** The captured attachment this program owns, refused when the fixed profile no longer holds it. */
+  const owned = () => {
     if (
       !captured ||
       historicalPersonaExcluded(captured, ref.role) ||
@@ -43,20 +44,24 @@ export function createPackageExtensionHost(
       (item) => item.id === ref.id && item.revision === ref.revision
     );
     if (!pkg) fail('BEHAVIOR_HOST_DENIED');
-    const identity = packageIdentityFromProfile(captured, 'main');
+    return { profile: captured, pkg };
+  };
+  const materials = () => {
+    const { profile: owner, pkg } = owned();
+    const identity = packageIdentityFromProfile(owner, 'main');
     const compiled = compilePackageAttachment(pkg, ref, {
-      chatId: captured.chatId,
+      chatId: owner.chatId,
       target: 'main',
-      values: captured.packageValues?.[packageControlKey(ref)],
+      values: owner.packageValues?.[packageControlKey(ref)],
       identity,
       resourcesOnly: true,
     });
     return projectChatPackageCompilation(
-      captured,
+      owner,
       ref,
       pkg,
       compiled,
-      (role) => !historicalPersonaExcluded(captured, role),
+      (role) => !historicalPersonaExcluded(owner, role),
       identity
     ).compiled.resources.map((resource) => ({
       metadata: {
@@ -80,6 +85,11 @@ export function createPackageExtensionHost(
     // Recheck the action owner before each disclosure, including cached reads.
     gate: () => assertCurrent(),
     handlers: {
+      // The same projected names the body and lore templates substitute; no other profile field.
+      'identity.read': async () => {
+        const identity = packageIdentityFromProfile(owned().profile, 'main');
+        return { botName: identity.bot.name, userName: identity.user.name };
+      },
       'materials.list': async ({ offset, limit }) => {
         const items = read();
         if (offset > items.length) fail('BEHAVIOR_HOST_ARGUMENTS');

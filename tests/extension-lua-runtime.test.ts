@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { ExtensionProgramError, type ExtensionProgram } from '../core/extension-program.js';
-import { executeExtensionProgram } from '../server/extension-runtime.js';
+import { EXTENSION_RUNTIME_LIMITS, executeExtensionProgram } from '../server/extension-runtime.js';
 
 const program = (source: string): ExtensionProgram => ({
   api: 'uimori-state-action-v1',
@@ -217,7 +217,7 @@ describe('isolated native Lua extension runtime', () => {
     const output = await executeExtensionProgram(
       program(`
       local ok, err
-      for i=1,33 do ok,err=pcall(api.host.call,'variables.read',{}) end
+      for i=1,${EXTENSION_RUNTIME_LIMITS.hostCalls + 1} do ok,err=pcall(api.host.call,'variables.read',{}) end
       return {state={},result={ok=ok,error=err}}
     `),
       empty(),
@@ -230,7 +230,7 @@ describe('isolated native Lua extension runtime', () => {
         hostWaitMs: 3000,
       }
     );
-    expect(calls).toBe(32);
+    expect(calls).toBe(EXTENSION_RUNTIME_LIMITS.hostCalls);
     expect(output.result).toEqual({ ok: false, error: 'BEHAVIOR_HOST_CALL_LIMIT' });
     const invalid = await executeExtensionProgram(
       program(`
