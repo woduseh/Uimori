@@ -25,8 +25,10 @@ import { extensionEditRequestInput } from '../server/extension-request-edit.js';
 import { applyRisuImport, prepareRisuImport } from '../server/risu-import.js';
 import { Store } from '../server/store.js';
 import { injectWithFixtureBot } from './fixtures/chat.js';
+import { luaActionIds } from './fixtures/risu-lua.js';
 
 const owned: { store: Store; app: FastifyInstance; directory: string }[] = [];
+const [buttonAction] = luaActionIds(['onButtonClick']);
 
 afterEach(async () => {
   vi.restoreAllMocks();
@@ -139,7 +141,7 @@ function grantVariableWrites(fixture: Fixture, conversation = false) {
 function buttonCommand(fixture: Fixture, input: string, idempotencyKey: string = randomUUID()) {
   const detail = behaviorDetail(fixture.store, fixture.chat.id);
   return {
-    actionId: 'risu-lua-0-onButtonClick',
+    actionId: buttonAction,
     input,
     expectedStateRevision: detail.instances[0].stateRevision,
     expectedSourceHash: detail.sourceHash,
@@ -197,12 +199,9 @@ end`,
   await prepareAutomaticRunBehavior(fixture.store, run.id);
   const progress = runBehaviorProgress(fixture.store, run.id)!;
   expect(progress.preparation?.status).toBe('ready');
-  expect(progress.entries.map((entry) => entry.actionId)).toEqual([
-    'risu-lua-0-input',
-    'risu-lua-0-editInput',
-    'risu-lua-0-start',
-    'risu-lua-0-editRequest',
-  ]);
+  expect(progress.entries.map((entry) => entry.actionId)).toEqual(
+    luaActionIds(['input', 'editInput', 'start', 'editRequest'])
+  );
   expect(execute).toHaveBeenCalledTimes(4);
   expect(progress.entries[0].program?.conversation?.viewHash).not.toBe(
     progress.entries[1].program?.conversation?.viewHash
@@ -280,12 +279,9 @@ end`,
   const execute = vi.spyOn(extensionRuntime, 'executeExtensionProgram');
   await prepareAutomaticRunBehavior(fixture.store, run.id);
   const progress = runBehaviorProgress(fixture.store, run.id)!;
-  expect(progress.entries.map((entry) => entry.actionId)).toEqual([
-    'risu-lua-0-input',
-    'risu-lua-0-editInput',
-    'risu-lua-0-start',
-    'risu-lua-0-editRequest',
-  ]);
+  expect(progress.entries.map((entry) => entry.actionId)).toEqual(
+    luaActionIds(['input', 'editInput', 'start', 'editRequest'])
+  );
   // The reserved Run keeps the request the user submitted; only the projection carries the edit.
   expect(fixture.store.run(run.id).snapshot).toEqual(reserved);
   const prepared = preparedBehaviorSnapshot(fixture.store, run.id);
@@ -294,10 +290,9 @@ end`,
     version: 1,
     text: 'Original request. [checked]',
   });
-  expect(prepared.behaviorExecution!.automaticResults.map((item) => item.actionId)).toEqual([
-    'risu-lua-0-input',
-    'risu-lua-0-start',
-  ]);
+  expect(prepared.behaviorExecution!.automaticResults.map((item) => item.actionId)).toEqual(
+    luaActionIds(['input', 'start'])
+  );
   const compiled = JSON.stringify(compileSnapshotPrompt(prepared).promptCompilation!.messages);
   expect(compiled).toContain('Original request. [checked]');
   // Conversation reads keep the stored original, and the edit does not re-enter the prompt twice.
@@ -364,9 +359,9 @@ end)`;
     method: 'GET',
     url: `/api/chats/${denied.chat.id}/sources/${deniedSource}/presentation`,
   });
-  expect(deniedPresentation.json().issues).toContainEqual(
-    expect.stringContaining('전송문 편집은 대화 읽기 허용이 없거나')
-  );
+  // The notice text belongs to server/package-presentation.ts; what this test owns is that the
+  // missing grant is what makes the reader see one, and that the granted run shows none.
+  expect(deniedPresentation.json().issues).toHaveLength(1);
 
   const fixture = imported(lua);
   grantVariableWrites(fixture, true);
@@ -395,7 +390,7 @@ end)`;
     method: 'GET',
     url: `/api/chats/${fixture.chat.id}/sources/${sourceId}/presentation`,
   });
-  expect(presentation.json()).toMatchObject({ request: { text: 'Second request.' } });
+  expect(presentation.json()).toMatchObject({ request: { text: 'Second request.' }, issues: [] });
   expect(database().store.product.import(fixture.store.product.export())).toMatchObject({
     restored: true,
   });
@@ -420,11 +415,9 @@ end`
   await prepareAfterResponse(fixture.store, run.id, response);
   const progress = runBehaviorProgress(fixture.store, run.id)!;
   expect(progress.afterResponse!.status).toBe('completed');
-  expect(progress.afterResponse!.packages[0].entries.map((entry) => entry.actionId)).toEqual([
-    'risu-lua-0-editOutput',
-    'risu-lua-0-output',
-    'risu-lua-0-editDisplay',
-  ]);
+  expect(progress.afterResponse!.packages[0].entries.map((entry) => entry.actionId)).toEqual(
+    luaActionIds(['editOutput', 'output', 'editDisplay'])
+  );
   fixture.store.completeRun(
     run.id,
     response,
@@ -623,22 +616,24 @@ test('Risu import and passive restores preserve native Lua actions and source by
         finding.level === 'unsupported' && finding.code.startsWith('RISU_LUA_PARTIAL_HOST:')
     )
   ).toBe(true);
+  const phases = [
+    ['input', ['before-turn']],
+    ['output', ['after-turn']],
+    ['start', ['before-turn']],
+    ['onButtonClick', ['user']],
+    ['editRequest', ['before-turn']],
+    ['editDisplay', ['after-turn']],
+    ['editInput', ['before-turn']],
+    ['editOutput', ['after-turn']],
+  ] as const;
+  const phaseIds = luaActionIds(phases.map(([event]) => event));
   expect(
     fixture.content.package!.behavior!.actions.map((action) => [
       action.id,
       action.triggers,
       action.program?.language,
     ])
-  ).toEqual([
-    ['risu-lua-0-input', ['before-turn'], 'lua'],
-    ['risu-lua-0-output', ['after-turn'], 'lua'],
-    ['risu-lua-0-start', ['before-turn'], 'lua'],
-    ['risu-lua-0-onButtonClick', ['user'], 'lua'],
-    ['risu-lua-0-editRequest', ['before-turn'], 'lua'],
-    ['risu-lua-0-editDisplay', ['after-turn'], 'lua'],
-    ['risu-lua-0-editInput', ['before-turn'], 'lua'],
-    ['risu-lua-0-editOutput', ['after-turn'], 'lua'],
-  ]);
+  ).toEqual(phases.map(([, triggers], at) => [phaseIds[at], triggers, 'lua']));
   expect(
     fixture.content.package!.behavior!.actions.every(
       (action) => action.program?.api === 'uimori-state-action-v1'
@@ -655,7 +650,7 @@ test('Risu import and passive restores preserve native Lua actions and source by
     .snapshot(fixture.chat.id)!
     .packages!.find((pkg) => pkg.id === fixture.content.id)!;
   expect(restoredPackage.behavior!.actions.map((action) => action.program?.language)).toEqual(
-    Array.from({ length: 8 }, () => 'lua')
+    phases.map(() => 'lua')
   );
 
   const copied = importChatBackup(fixture.store, {
@@ -686,7 +681,7 @@ end`,
     stateRevision: 1,
     state: {},
     lastAction: {
-      actionId: 'risu-lua-0-onButtonClick',
+      actionId: buttonAction,
       trigger: 'user',
       result: null,
     },
@@ -804,11 +799,9 @@ end`,
     'before-turn',
     'before-turn',
   ]);
-  expect(progress.afterResponse!.packages[0].entries.map((entry) => entry.actionId)).toEqual([
-    'risu-lua-0-editOutput',
-    'risu-lua-0-output',
-    'risu-lua-0-editDisplay',
-  ]);
+  expect(progress.afterResponse!.packages[0].entries.map((entry) => entry.actionId)).toEqual(
+    luaActionIds(['editOutput', 'output', 'editDisplay'])
+  );
   expect(readChatVariables(fixture.store, fixture.chat.id, fixture.branchId)).toEqual({
     revision: 0,
     values: {},
