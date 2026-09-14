@@ -102,9 +102,9 @@ describe('key matching', () => {
       []
     );
     // @@match_full_word / @@match_partial_word override the book setting (:461-468).
-    expect(
-      activatedBodies([entry({ content: '@@match_full_word\nBody' })], { messages })
-    ).toEqual([]);
+    expect(activatedBodies([entry({ content: '@@match_full_word\nBody' })], { messages })).toEqual(
+      []
+    );
     expect(
       activatedBodies([entry({ content: '@@match_partial_word\nBody' })], {
         messages,
@@ -281,7 +281,11 @@ describe('placement, priority and the token budget', () => {
   test('@@position, @@depth and @@role reach the result (:302-305,347-356,363-369,384-390)', () => {
     const result = run([
       entry({ key: 'alpha', content: '@@depth 3\n@@role user\nAt depth' }),
-      entry({ key: 'alpha', content: '@@position after_desc\nAfter the description', insertorder: 200 }),
+      entry({
+        key: 'alpha',
+        content: '@@position after_desc\nAfter the description',
+        insertorder: 200,
+      }),
       entry({ key: 'alpha', content: '@@end\nAt the end', insertorder: 300 }),
     ]);
 
