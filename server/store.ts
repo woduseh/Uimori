@@ -148,8 +148,9 @@ export class Store {
         initChatOverrides(this);
         initChatOptions(this);
         initResponseStreams(this.db);
-        initMaintenance(this);
       });
+      // The maintenance row belongs to every boot, not only to a fresh database.
+      initMaintenance(this);
     } catch (error) {
       this.db.close();
       this.ownership.close();

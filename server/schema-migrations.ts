@@ -1,7 +1,7 @@
 import type { DatabaseSync } from 'node:sqlite';
 import { SCHEMA_15_COLUMNS } from './schema-v15-contract.js';
 
-export const DATABASE_SCHEMA_VERSION = 19;
+export const DATABASE_SCHEMA_VERSION = 20;
 const BASELINE_VERSION = 15;
 const LEDGER = 'schema_migrations';
 const ADDITIVE_TABLES = new Set([
@@ -154,6 +154,10 @@ const CHAT_VARIABLE_SCHEMA = [
   'CREATE TABLE chat_variable_outputs(source_id TEXT PRIMARY KEY,body TEXT NOT NULL)',
 ] as const;
 
+const MAINTENANCE_SCHEMA = [
+  "CREATE TABLE maintenance(id INTEGER PRIMARY KEY CHECK(id=1),epoch INTEGER NOT NULL,status TEXT NOT NULL CHECK(status IN ('open','closed')),reason TEXT,updated_at TEXT NOT NULL)",
+] as const;
+
 const migrations: readonly Migration[] = [
   {
     version: 16,
@@ -222,6 +226,22 @@ const migrations: readonly Migration[] = [
         const actual = db.prepare('SELECT type,sql FROM sqlite_schema WHERE name=?').get(name);
         if (actual?.type !== 'table' || actual.sql !== sql)
           throw new SchemaMigrationError(`DATABASE_SCHEMA_MISMATCH:${name}`, 19);
+      }
+    },
+  },
+  {
+    version: 20,
+    name: 'schema-20-maintenance',
+    apply: (db) => {
+      for (const sql of MAINTENANCE_SCHEMA) db.exec(sql);
+    },
+    validate: (db) => {
+      migrations.find((migration) => migration.version === 19)!.validate(db);
+      for (const sql of MAINTENANCE_SCHEMA) {
+        const name = /^CREATE TABLE ([a-z_]+)/u.exec(sql)![1];
+        const actual = db.prepare('SELECT type,sql FROM sqlite_schema WHERE name=?').get(name);
+        if (actual?.type !== 'table' || actual.sql !== sql)
+          throw new SchemaMigrationError(`DATABASE_SCHEMA_MISMATCH:${name}`, 20);
       }
     },
   },

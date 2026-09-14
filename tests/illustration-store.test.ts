@@ -322,7 +322,7 @@ describe('illustration storage on the current schema', () => {
     store.close();
     const raw = new DatabaseSync(path);
     raw.exec(
-      'DROP TABLE illustration_images; DROP TABLE illustration_jobs; DROP TABLE illustration_references; DROP TABLE illustration_settings; DROP TABLE chat_variable_outputs; DROP TABLE chat_variable_journal; DROP TABLE chat_variable_states; DROP TABLE package_extension_operation_attempts; DROP TABLE package_extension_operations; DROP TABLE native_transfer_receipts; DROP TABLE schema_migrations; PRAGMA user_version=15;'
+      'DROP TABLE illustration_images; DROP TABLE illustration_jobs; DROP TABLE illustration_references; DROP TABLE illustration_settings; DROP TABLE maintenance; DROP TABLE chat_variable_outputs; DROP TABLE chat_variable_journal; DROP TABLE chat_variable_states; DROP TABLE package_extension_operation_attempts; DROP TABLE package_extension_operations; DROP TABLE native_transfer_receipts; DROP TABLE schema_migrations; PRAGMA user_version=15;'
     );
     raw.close();
     const reopened = new Store(path);

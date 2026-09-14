@@ -755,7 +755,7 @@ describe('hierarchical composition', () => {
     });
     expect(restored.db.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
     restored.db.exec(
-      'DROP TABLE IF EXISTS outline_batches; DROP TABLE outline_nodes; DROP TABLE chat_variable_outputs; DROP TABLE chat_variable_journal; DROP TABLE chat_variable_states; DROP TABLE package_extension_operation_attempts; DROP TABLE package_extension_operations; DROP TABLE native_transfer_receipts; DROP TABLE schema_migrations; PRAGMA user_version=15;'
+      'DROP TABLE IF EXISTS outline_batches; DROP TABLE outline_nodes; DROP TABLE maintenance; DROP TABLE chat_variable_outputs; DROP TABLE chat_variable_journal; DROP TABLE chat_variable_states; DROP TABLE package_extension_operation_attempts; DROP TABLE package_extension_operations; DROP TABLE native_transfer_receipts; DROP TABLE schema_migrations; PRAGMA user_version=15;'
     );
     restored.close();
     const reopened = new Store(restored.path);

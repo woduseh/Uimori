@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { realpath } from 'node:fs/promises';
 import { afterEach, expect, test } from 'vitest';
+import { DatabaseSync } from 'node:sqlite';
 import { createApp, type App } from '../server/app.js';
 import { maintenanceState, setMaintenance } from '../server/maintenance.js';
 import { createFixtureChat } from './fixtures/chat.js';
@@ -132,4 +133,47 @@ test('repeating the same gate change keeps one epoch and a maintenance boot cann
   });
   expect(reopen.statusCode).toBe(409);
   expect(reopen.json()).toEqual({ error: 'MAINTENANCE_BOOT' });
+});
+
+test('an existing database gains the gate through its schema migration', async () => {
+  const directory = await mkdtemp(join(await realpath(tmpdir()), 'uimori-maintenance-upgrade-'));
+  const dbPath = join(directory, 'story.sqlite');
+  const first = await createApp({ dbPath, buildId: 'maintenance-upgrade' });
+  await first.ready();
+  const chat = createFixtureChat(first.store, 'Upgrade fixture', 'calm');
+  await first.close();
+  // Reopen the same database the way an installed app upgrades in place.
+  const database = new DatabaseSync(dbPath);
+  database.exec('DROP TABLE maintenance');
+  database.exec('DELETE FROM schema_migrations WHERE version=20');
+  database.exec('PRAGMA user_version=19');
+  database.close();
+
+  const upgraded = await createApp({ dbPath, buildId: 'maintenance-upgrade' });
+  owned.push({ app: upgraded, directory });
+  await upgraded.ready();
+  expect((await upgraded.inject({ method: 'GET', url: '/api/maintenance' })).json()).toMatchObject({
+    status: 'open',
+    epoch: 0,
+  });
+  const write = await upgraded.inject({
+    method: 'POST',
+    url: '/api/maintenance',
+    payload: { status: 'closed' },
+  });
+  expect(write.json()).toMatchObject({ status: 'closed', epoch: 1 });
+  expect(
+    (
+      await upgraded.inject({
+        method: 'POST',
+        url: `/api/chats/${chat.id}/runs`,
+        payload: {
+          request: 'Blocked after upgrade.',
+          expectedRevision: null,
+          expectedSettingsRevision: chat.settingsRevision,
+          idempotencyKey: 'upgrade-blocked',
+        },
+      })
+    ).statusCode
+  ).toBe(503);
 });
