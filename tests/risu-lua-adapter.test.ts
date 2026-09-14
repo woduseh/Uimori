@@ -12,6 +12,14 @@ import {
 } from '../core/package-behavior.js';
 import { extensionEditHookInput } from '../server/extension-request-edit.js';
 import type { RuntimeValue } from '../core/prompt-values.js';
+import {
+  HOST_LIST_PAGE_MAX,
+  HOST_TEXT_PAGE_DEFAULT,
+  HOST_TEXT_PAGE_MAX,
+  pageSlice,
+  pageText,
+} from '../core/paging.js';
+import { luaActionIds } from './fixtures/risu-lua.js';
 
 const trigger = (code: string, conditions: unknown[] = []) => ({
   type: 'start',
@@ -19,20 +27,33 @@ const trigger = (code: string, conditions: unknown[] = []) => ({
   effect: [{ type: 'triggerlua', code }],
 });
 
+/** Every connected callback of one script trigger, with the native trigger and hook it keeps. */
+const luaPhases = [
+  ['input', ['before-turn'], 'input'],
+  ['output', ['after-turn'], undefined],
+  ['start', ['before-turn'], undefined],
+  ['onButtonClick', ['user'], undefined],
+  ['editRequest', ['before-turn'], 'edit-request'],
+  ['editDisplay', ['after-turn'], 'edit-display'],
+  ['editInput', ['before-turn'], 'edit-input'],
+  ['editOutput', ['after-turn'], 'edit-output'],
+] as const;
+const phaseIds = luaActionIds(luaPhases.map(([event]) => event));
+/**
+ * Risu runs the button and edit callbacks from paths that never evaluate trigger conditions, so
+ * they stay connected even when the conditions themselves cannot be preserved.
+ */
+const conditionFreeActions = luaPhases
+  .filter(([event]) => event === 'onButtonClick' || event.startsWith('edit'))
+  .map(([event, , hook]) => [...luaActionIds([event]), hook]);
+
 describe('pure Risu Lua adaptation', () => {
   it('selects callbacks independently from start metadata and reports missing phases', () => {
     const source = 'function onOutput(id) setChatVar(id, "seen", "yes") end';
     const converted = adaptRisuLuaTriggers([trigger(source)]);
-    expect(converted.actions.map((action) => [action.id, action.triggers, action.hook])).toEqual([
-      ['risu-lua-0-input', ['before-turn'], 'input'],
-      ['risu-lua-0-output', ['after-turn'], undefined],
-      ['risu-lua-0-start', ['before-turn'], undefined],
-      ['risu-lua-0-onButtonClick', ['user'], undefined],
-      ['risu-lua-0-editRequest', ['before-turn'], 'edit-request'],
-      ['risu-lua-0-editDisplay', ['after-turn'], 'edit-display'],
-      ['risu-lua-0-editInput', ['before-turn'], 'edit-input'],
-      ['risu-lua-0-editOutput', ['after-turn'], 'edit-output'],
-    ]);
+    expect(converted.actions.map((action) => [action.id, action.triggers, action.hook])).toEqual(
+      luaPhases.map(([, triggers, hook], at) => [phaseIds[at], triggers, hook])
+    );
     expect(converted.sources).toEqual([{ triggerIndex: 0, effectIndex: 0, source }]);
     expect(
       converted.findings.filter((finding) => finding.code === 'RISU_LUA_PHASE_UNSUPPORTED')
@@ -48,13 +69,9 @@ describe('pure Risu Lua adaptation', () => {
     const converted = adaptRisuLuaTriggers(input);
     expect(input).toEqual(before);
     // Risu runs edit callbacks from the edit path, which never evaluates trigger conditions.
-    expect(converted.actions.map((action) => [action.id, action.hook])).toEqual([
-      ['risu-lua-0-onButtonClick', undefined],
-      ['risu-lua-0-editRequest', 'edit-request'],
-      ['risu-lua-0-editDisplay', 'edit-display'],
-      ['risu-lua-0-editInput', 'edit-input'],
-      ['risu-lua-0-editOutput', 'edit-output'],
-    ]);
+    expect(converted.actions.map((action) => [action.id, action.hook])).toEqual(
+      conditionFreeActions
+    );
     expect(
       converted.findings.some((finding) => finding.code === 'RISU_LUA_CONDITIONS_UNSUPPORTED')
     ).toBe(true);
@@ -268,13 +285,9 @@ describe('Risu Lua automatic conditions', () => {
       const converted = adaptRisuLuaTriggers([
         trigger(source, [{ type: 'value', var: '1', operator: '=', value: '1' }, unsupported]),
       ]);
-      expect(converted.actions.map((action) => [action.id, action.hook])).toEqual([
-        ['risu-lua-0-onButtonClick', undefined],
-        ['risu-lua-0-editRequest', 'edit-request'],
-        ['risu-lua-0-editDisplay', 'edit-display'],
-        ['risu-lua-0-editInput', 'edit-input'],
-        ['risu-lua-0-editOutput', 'edit-output'],
-      ]);
+      expect(converted.actions.map((action) => [action.id, action.hook])).toEqual(
+        conditionFreeActions
+      );
       expect(converted.actions.every((action) => action.when === undefined)).toBe(true);
       expect(
         converted.findings.some((finding) => finding.code === 'RISU_LUA_CONDITIONS_UNSUPPORTED')
@@ -292,13 +305,7 @@ describe('Risu Lua automatic conditions', () => {
     const input = [trigger(source, conditions)],
       before = structuredClone(input);
     const converted = adaptRisuLuaTriggers(input);
-    expect(converted.actions.map((item) => [item.id, item.hook])).toEqual([
-      ['risu-lua-0-onButtonClick', undefined],
-      ['risu-lua-0-editRequest', 'edit-request'],
-      ['risu-lua-0-editDisplay', 'edit-display'],
-      ['risu-lua-0-editInput', 'edit-input'],
-      ['risu-lua-0-editOutput', 'edit-output'],
-    ]);
+    expect(converted.actions.map((item) => [item.id, item.hook])).toEqual(conditionFreeActions);
     expect(input).toEqual(before);
     expect(
       converted.findings.some((finding) => finding.code === 'RISU_LUA_CONDITIONS_UNSUPPORTED')
@@ -318,14 +325,15 @@ describe('Risu callbacks through the native Lua Host bridge', () => {
         return null;
       }
       if (method !== 'variables.read') throw new Error('Unexpected Host method');
-      const value = values[args.key] ?? defaults[args.key],
-        offset = args.offset ?? 0,
-        limit = args.limit ?? 16000;
+      const value = values[args.key] ?? defaults[args.key];
+      // The page shape is the Host's own, so the adapter is measured against it and not arithmetic
+      // written here. A missing variable still reports a null value.
+      const page = pageText(value ?? '', args.offset ?? 0, args.limit ?? HOST_TEXT_PAGE_DEFAULT);
       return {
-        value: value === undefined ? null : value.slice(offset, offset + limit),
-        offset,
-        nextOffset: value !== undefined && offset + limit < value.length ? offset + limit : null,
-        totalChars: value?.length ?? 0,
+        value: value === undefined ? null : page.text,
+        offset: page.offset,
+        nextOffset: page.nextOffset,
+        totalChars: page.totalChars,
         overridden: Object.hasOwn(values, args.key),
       };
     };
@@ -528,52 +536,41 @@ end)`;
 });
 
 describe('Risu conversation readers through the native Host', () => {
+  // The fake answers with the Host's own page shape (core/paging.ts) so every expectation below
+  // measures the adapter, not arithmetic written here.
   function conversation(messages: { role: 'user' | 'assistant'; text: string }[]) {
     const calls: { method: string; args: unknown }[] = [];
+    const fragment = (index: number, offset: number, limit: number) => ({
+      index,
+      role: messages[index].role,
+      ...pageText(messages[index].text, offset, limit),
+    });
     const host: ExtensionHostHandler = async (method, raw): Promise<RuntimeValue> => {
       const args = raw as { index?: number; offset: number; limit: number };
       calls.push({ method, args });
       if (method === 'conversation.list') {
-        const items = messages.slice(args.offset, args.offset + args.limit).map((message, at) => ({
-          index: args.offset + at,
-          role: message.role,
-          totalChars: message.text.length,
-        }));
+        const listing = pageSlice(messages, args.offset, args.limit);
         return {
-          items,
-          nextOffset:
-            args.offset + items.length < messages.length ? args.offset + items.length : null,
-          total: messages.length,
+          items: listing.items.map((message, at) => ({
+            index: args.offset + at,
+            role: message.role,
+            totalChars: message.text.length,
+          })),
+          nextOffset: listing.nextOffset,
+          total: listing.total,
         };
       }
       if (method === 'conversation.page') {
-        const items: {
-          index: number;
-          role: 'user' | 'assistant';
-          text: string;
-          offset: number;
-          nextOffset: number | null;
-          totalChars: number;
-        }[] = [];
+        const items: ReturnType<typeof fragment>[] = [];
         let remaining = args.limit,
           index = args.index ?? 0,
           offset = args.offset;
-        while (index < messages.length && remaining > 0 && items.length < 50) {
-          const message = messages[index],
-            text = message.text.slice(offset, offset + remaining);
-          const nextOffset =
-            offset + text.length < message.text.length ? offset + text.length : null;
-          items.push({
-            index,
-            role: message.role,
-            text,
-            offset,
-            nextOffset,
-            totalChars: message.text.length,
-          });
-          remaining -= text.length;
-          if (nextOffset !== null) {
-            offset = nextOffset;
+        while (index < messages.length && remaining > 0 && items.length < HOST_LIST_PAGE_MAX) {
+          const item = fragment(index, offset, remaining);
+          items.push(item);
+          remaining -= item.text.length;
+          if (item.nextOffset !== null) {
+            offset = item.nextOffset;
             break;
           }
           index++;
@@ -586,20 +583,31 @@ describe('Risu conversation readers through the native Host', () => {
         };
       }
       if (method !== 'conversation.read') throw new Error('Unexpected Host method');
-      const message = messages[args.index!];
-      const text = message.text.slice(args.offset, args.offset + args.limit);
-      return {
-        index: args.index!,
-        role: message.role,
-        text,
-        offset: args.offset,
-        nextOffset:
-          args.offset + text.length < message.text.length ? args.offset + text.length : null,
-        totalChars: message.text.length,
-      };
+      return fragment(args.index!, args.offset, args.limit);
     };
-    return { host, calls };
+    return { host, calls, messages };
   }
+
+  /** The page offsets the Host was asked for, per message, in call order. */
+  function fetchedPages(calls: { method: string; args: unknown }[], method: string) {
+    const pages = new Map<number, number[]>();
+    for (const call of calls) {
+      if (call.method !== method) continue;
+      const { index, offset } = call.args as { index: number; offset: number };
+      pages.set(index, [...(pages.get(index) ?? []), offset]);
+    }
+    return pages;
+  }
+
+  /**
+   * The most Host calls the shared page caps can require for one full pass over a conversation:
+   * metadata pages, one batch per item cap, and one text page per HOST_TEXT_PAGE_MAX characters.
+   */
+  const hostCallBudget = (messages: { text: string }[]) =>
+    2 * Math.ceil(messages.length / HOST_LIST_PAGE_MAX) +
+    Math.ceil(
+      messages.reduce((total, message) => total + message.text.length, 0) / HOST_TEXT_PAGE_MAX
+    );
 
   it('preserves zero-based and negative at indices, Risu shape, strings and cached copies', async () => {
     const fixture = conversation([
@@ -638,8 +646,19 @@ end`,
       host: fixture.host,
     });
     expect(program.capabilities).toContain('conversation.read');
-    expect(fixture.calls).toHaveLength(6);
+    // Only the messages the script asked for are fetched, each paged forward from its start, and a
+    // cached copy costs no further call.
+    expect(fetchedPages(fixture.calls, 'conversation.read')).toEqual(
+      new Map([
+        [0, [0]],
+        [1, [0]],
+        [2, [0, HOST_TEXT_PAGE_MAX]],
+        [3, [0]],
+      ])
+    );
     expect(fixture.calls.filter((call) => call.method === 'conversation.list')).toHaveLength(1);
+    // The whole chat is cached by then, so reading it again asks the Host for nothing.
+    expect(fixture.calls.filter((call) => call.method === 'conversation.page')).toHaveLength(0);
     expect(fixture.calls.every((call) => !JSON.stringify(call.args).includes('foreign-chat'))).toBe(
       true
     );
@@ -669,7 +688,10 @@ end`,
       undefined,
       { host: fixture.host }
     );
-    expect(fixture.calls).toHaveLength(3);
+    // The empty counts ask the Host for nothing, and the batches fetch each message once: no
+    // per-message read and no more calls than the shared page caps require.
+    expect(fixture.calls.filter((call) => call.method === 'conversation.read')).toHaveLength(0);
+    expect(fixture.calls.length).toBeLessThanOrEqual(hostCallBudget(fixture.messages));
   });
 
   it('reuses metadata pages while looking backward without reading unrelated message text', async () => {
@@ -724,9 +746,22 @@ end`,
       undefined,
       { host: fixture.host }
     );
-    expect(fixture.calls.filter((call) => call.method === 'conversation.page')).toHaveLength(3);
+    const pages = fixture.calls
+      .filter((call) => call.method === 'conversation.page')
+      .map((call) => call.args as { index: number; offset: number; limit: number });
+    // The batch walks the whole chat forward from the start, asking for a full text page each time
+    // and never returning to a position it already passed.
+    expect(pages[0]).toMatchObject({ index: 0, offset: 0 });
+    expect(pages.every((page) => page.limit === HOST_TEXT_PAGE_MAX)).toBe(true);
+    expect(
+      pages.every(
+        (page, at) =>
+          at === 0 || page.index > pages[at - 1].index || page.offset > pages[at - 1].offset
+      )
+    ).toBe(true);
     expect(fixture.calls.filter((call) => call.method === 'conversation.read')).toHaveLength(0);
-    expect(fixture.calls).toHaveLength(4);
+    // Reading the same chat twice stays inside one pass over the page caps.
+    expect(fixture.calls.length).toBeLessThanOrEqual(hostCallBudget(fixture.messages));
   });
 
   it('starts a recent batch at the requested tail without disclosing older message text', async () => {
@@ -751,7 +786,7 @@ end`,
       { host: fixture.host }
     );
     expect(fixture.calls.filter((call) => call.method === 'conversation.page')).toEqual([
-      { method: 'conversation.page', args: { index: 63, offset: 0, limit: 16000 } },
+      { method: 'conversation.page', args: { index: 63, offset: 0, limit: HOST_TEXT_PAGE_MAX } },
     ]);
     expect(fixture.calls.filter((call) => call.method === 'conversation.read')).toHaveLength(0);
   });
