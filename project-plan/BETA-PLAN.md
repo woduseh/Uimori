@@ -72,6 +72,8 @@
 
 배포 항목의 **운영자 CLI controller**를 구현했어요. `prepare → close → drain → stop → backup → candidate → switch → reopen`을 한 번의 요청 키로 수행하고, admission은 앱의 유지보수 게이트를 그대로 사용해요. 후보는 백업에서 만든 새 volume에 `NR_MAINTENANCE=1`로 부팅해 migration·읽기만 확인하고, 전환은 `.env.self-host`의 `UIMORI_IMAGE`·`UIMORI_DATA_VOLUME` 두 줄만 바꿔요. 쓰기 재개 전 실패·취소는 이전 바이트·이미지·volume으로 되돌리고 게이트를 열며, 재개 뒤에는 자동 복귀도 취소도 하지 않아요. journal은 앱 DB·이미지 밖에 두고 같은 키의 재요청은 기존 영수증을 돌려줘요. Docker·HTTP는 주입값이라 `scripts/update-controller.test.mjs` 6개(정상 전환·idempotency·후보 migration 실패·백업 실패·전환 health 실패·취소·동시 키 거절)가 `npm run test:tooling`에서 통과해요. **실제 Docker 호스트의 image/volume 전환 검증은 사용자가 맡기로 했고 이 세션에서 실행하지 않았어요.** compose의 `image:`를 `${UIMORI_IMAGE:-uimori:local}`로 바꿔 기본 동작은 그대로 유지했어요.
 
+**이 세션의 검사 수치 정정.** 위 기록들이 적은 `23 FAIL`은 코드 결과가 아니라 지정 Node가 아닌 26에서 vitest를 돌린 결과예요([개발 안내](../docs/DEVELOPMENT.md)에 이미 적힌 환경 차이). 저장소가 고정한 **Node 24.14.0에서 전체 `npm test`는 2,539 PASS · 1 skipped · 0 FAIL**이에요. 각 묶음의 PASS 수는 그대로 유효하고 FAIL 수만 이 문장을 따라요.
+
 대화 권한은 이미 결정됐어요. 정확한 자료 개정에 별도 허용한 **현재 선택 분기의 사용자 가시 대화 전체**가 범위이며 모델 문맥 절삭과 별도예요. [대화 Host](../docs/EXTENSION-PROGRAMS.md#host-api로-현재-분기-대화-읽기)의 고정 참조·최신 권한·영수증·복원 경계를 사용해요. 새 요청으로 가시 대화가 달라지면 자동 동작 묶음을 재계산하지만 source/state에 따른 추첨 entropy는 유지해요. 진행 대기와 여러 채팅의 동시 사용도 기존 기능이에요.
 
 지금 답을 기다리는 제품 결정은 없어요. 새 대화 변경·삭제, 다른 자료 읽기·외부 전송처럼 기존 허가보다 넓은 권한이 실제로 필요해지면 효과·보존 방식·대안과 추천을 준비해 사용자에게 물어요. 기존 원문 보존과 변경 안내 안의 API 배치·실행 연결은 구현자가 결정해요. 미지원 API를 성공한 것처럼 처리하거나 모든 봇의 로어북에서 기억을 자동 분리하지 않아요.
