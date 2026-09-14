@@ -28,6 +28,16 @@
 //     because upstream's `matcher` swallows callback exceptions (parser.svelte.ts:1078-1099).
 //   - The two `console.log` debug statements inside risuChatParser (on `{{/func}}` and `{{call::}}`) are
 //     dropped.
+//   - Safety hooks (Uimori addition). Upstream has no bound on how long one evaluation runs or how much
+//     text it produces; `{{#each}}` splices its expansion back into the source, so a hostile card can
+//     grow both without end. `deps.maxOutputChars` bounds the produced output - the nested buffers plus
+//     the growth of `da` past its original length - checked once per main-loop iteration, and
+//     `deps.checkBudget()` is called every 256 iterations and at every recursive risuChatParser entry so
+//     the host can abort on its own clock by throwing. Both abort through one sticky instance flag, which
+//     the main loop re-raises: `matcher` swallows callback exceptions (parser.svelte.ts:1078-1099), so an
+//     abort raised inside a callback would otherwise be lost. `parse` turns an abort into
+//     `RisuCbsResult.error` with `text` left as the input it was given, never a thrown exception. Neither
+//     hook runs when it is absent, and nothing about evaluation changes while both stay under budget.
 //   - No evaluation semantics were changed otherwise: `::` before `:` argument splitting, `{{? }}` via
 //     calcString, the `<user>/<char>/<bot>` rewrite, the private-use escape characters, the block matchers
 //     (#if / #if_pure / #when with every operator and keep|legacy, #pure, #puredisplay, #code, #escape,
@@ -141,6 +151,16 @@ export type RisuCbsDeps = {
      * normalised. A hit makes the tag evaluate to '' and adds the name to the parse's `unsupported`.
      */
     unsupportedNames: Set<string>
+    /**
+     * Uimori addition. Upper bound on the characters one parse may produce. Exceeding it aborts the
+     * evaluation with the error 'RISU_CBS_OUTPUT_LIMIT'. Absent means unbounded, as upstream.
+     */
+    maxOutputChars?: number
+    /**
+     * Uimori addition. Called every 256 parser iterations and at every recursive risuChatParser entry.
+     * Throw to abort the evaluation; the thrown message becomes RisuCbsResult.error.
+     */
+    checkBudget?: () => void
     isTauri: boolean
     isNodeServer: boolean
     isMobile: boolean
@@ -181,6 +201,9 @@ const normalizeCbsName = (name: string): string => {
     return name.toLocaleLowerCase().replace(/[\s_-]/g, '')
 }
 
+/** Uimori addition: the only exception `parse` converts into a result instead of an error string. */
+class RisuCbsAbort extends Error {}
+
 // ---------------------------------------------------------------------------
 // The evaluator instance. Bodies below are parser.svelte.ts's, closed over `deps`.
 // ---------------------------------------------------------------------------
@@ -188,6 +211,28 @@ const normalizeCbsName = (name: string): string => {
 export function createRisuCbs(deps: RisuCbsDeps): RisuCbs {
     const matcherMap = new Map<string, RegisterCallback>()
     let unsupportedCollector: string[] | null = null
+    // Uimori addition: sticky, so an abort raised inside a callback that `matcher` swallowed is still
+    // re-raised by the main loop on its next iteration.
+    let abortReason: string | null = null
+
+    const abortWith = (reason: string): never => {
+        abortReason = reason
+        throw new RisuCbsAbort(reason)
+    }
+
+    const checkBudget = () => {
+        if(abortReason){
+            throw new RisuCbsAbort(abortReason)
+        }
+        if(!deps.checkBudget){
+            return
+        }
+        try {
+            deps.checkBudget()
+        } catch (error) {
+            abortWith(error instanceof Error ? error.message : String(error))
+        }
+    }
 
     const recordUnsupported = (name: string): string => {
         if(unsupportedCollector && !unsupportedCollector.includes(name)){
@@ -757,6 +802,8 @@ export function createRisuCbs(deps: RisuCbsDeps): RisuCbs {
 
     // parser.svelte.ts:1574-1849
     function risuChatParser(da:string, arg:RisuCbsParseArg = {}):string{
+        checkBudget() // Uimori addition: every entry, including the recursive ones.
+        const inputLength = da.length
         const chatID = arg.chatID ?? -1
         const db = arg.db ?? deps.getDatabase()
         const aChara = arg.chara
@@ -840,7 +887,26 @@ export function createRisuCbs(deps: RisuCbsDeps): RisuCbs {
             return pureModeNest.size > 0
         }
 
+        // Uimori addition: the two safety checks, before each iteration's work.
+        let iterations = 0
         while(pointer < da.length){
+            if(abortReason){
+                throw new RisuCbsAbort(abortReason)
+            }
+            if((iterations % 256) === 0){
+                checkBudget()
+            }
+            iterations++
+            if(deps.maxOutputChars !== undefined){
+                // What this frame produced: the nested buffers, plus whatever {{#each}} spliced into `da`.
+                let produced = da.length - inputLength
+                for(const part of nested){
+                    produced += part.length
+                }
+                if(produced > deps.maxOutputChars){
+                    abortWith('RISU_CBS_OUTPUT_LIMIT')
+                }
+            }
             switch(da[pointer]){
                 case '{':{
                     if(da[pointer + 1] !== '{' && da[pointer + 1] !== '#'){
@@ -1018,19 +1084,23 @@ export function createRisuCbs(deps: RisuCbsDeps): RisuCbs {
 
     const parse = (text: string, arg: RisuCbsParseArg = {}): RisuCbsResult => {
         const previous = unsupportedCollector
+        const previousAbort = abortReason
         const collected: string[] = []
         unsupportedCollector = collected
+        abortReason = null
         try {
             // risuChatParser mutates arg.callStack, so parse never hands the caller's object to it.
             return { text: risuChatParser(text, { ...arg }), unsupported: collected }
         } catch (error) {
             return {
-                text: '',
+                // An aborted evaluation produced nothing usable, so the caller gets its input back.
+                text: error instanceof RisuCbsAbort ? text : '',
                 unsupported: collected,
                 error: error instanceof Error ? error.message : String(error),
             }
         } finally {
             unsupportedCollector = previous
+            abortReason = previousAbort
         }
     }
 

@@ -1042,7 +1042,7 @@ test('a comment in card text keeps the whole field converted instead of names on
     data: { ...original.data, description: '{{// hidden}}{{char}} reads {{getvar::flag}}.' },
   });
   const preview = prepareRisuImport({ source });
-  expect(preview.findings.map((item) => item.code)).not.toContain('dynamic-text');
+  expect(preview.findings.map((item) => item.code)).not.toContain('compat-evaluation');
   const saved = applyRisuImport(store, {
     source,
     digest: preview.digest,
@@ -1052,6 +1052,24 @@ test('a comment in card text keeps the whole field converted instead of names on
   });
   const bot = store.product.get<Content>('content', saved.receipt.items[0].id);
   expect(JSON.stringify(bot.package!.bodyTemplate)).not.toContain('{{');
+});
+
+test('a CBS block opener is not mistaken for a legacy lore directive', () => {
+  const original = card();
+  const cbsOnly = prepareRisuImport({
+    source: sourceOf({
+      ...original,
+      data: { ...original.data, description: '{{#if {{getvar::flag}}}}armed{{/if}} {{char}}' },
+    }),
+  });
+  expect(cbsOnly.findings.map((item) => item.code)).not.toContain('dynamic-markup');
+  const legacy = prepareRisuImport({
+    source: sourceOf({
+      ...original,
+      data: { ...original.data, description: '{#if flag#}armed{#/if#} {{char}}' },
+    }),
+  });
+  expect(legacy.findings.map((item) => item.code)).toContain('dynamic-markup');
 });
 
 test('lore directives decide activation and never reach the model as prose', () => {
