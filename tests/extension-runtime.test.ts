@@ -1,11 +1,31 @@
+import { existsSync } from 'node:fs';
+import { Worker } from 'node:worker_threads';
 import { describe, expect, it } from 'vitest';
-import { type ExtensionProgram, ExtensionProgramError } from '../core/extension-program.js';
+import {
+  EXTENSION_PROGRAM_MAX_SOURCE_BYTES,
+  type ExtensionProgram,
+  ExtensionProgramError,
+} from '../core/extension-program.js';
 import { executeExtensionProgram, EXTENSION_RUNTIME_ENGINE } from '../server/extension-runtime.js';
 
 const program = (source: string): ExtensionProgram => ({
   api: 'uimori-state-action-v1',
   source,
 });
+
+/** Starts a worker the way the runtime does, bypassing the core validation in front of it. */
+function spawnWorkerCode(name: string, source: string): Promise<string> {
+  const compiled = new URL(`../server/${name}.js`, import.meta.url);
+  const file = existsSync(compiled) ? compiled : new URL(`../server/${name}.ts`, import.meta.url);
+  const worker = new Worker(file, {
+    execArgv: file.pathname.endsWith('.ts') ? ['--experimental-strip-types'] : undefined,
+    workerData: { source, inputJSON: JSON.stringify({ state: {}, input: {} }), hostErrorCodes: [] },
+  });
+  return new Promise<string>((resolve, reject) => {
+    worker.on('message', (message: { code?: string }) => resolve(message.code ?? 'OK'));
+    worker.on('error', reject);
+  }).finally(() => worker.terminate());
+}
 
 async function code(work: Promise<unknown>) {
   try {
@@ -169,6 +189,13 @@ describe('fixed-memory QuickJS extension runtime', () => {
       )
     ).toBe('BEHAVIOR_PROGRAM_INPUT_SIZE');
   });
+
+  it('both guest workers guard the source limit core declares, without core validation', async () => {
+    const over = 'x'.repeat(EXTENSION_PROGRAM_MAX_SOURCE_BYTES + 1);
+    for (const name of ['extension-worker', 'extension-lua-worker'])
+      expect(await spawnWorkerCode(name, over)).toBe('BEHAVIOR_PROGRAM_INPUT_SIZE');
+  });
+
   it('automatic preparation can wait for capacity and cancellation removes a queued invocation', async () => {
     const a = new AbortController(),
       b = new AbortController(),

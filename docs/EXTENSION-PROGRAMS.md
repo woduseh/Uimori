@@ -220,7 +220,7 @@ Run에 속한 추가 호출은 Run 전체 `maxCalls`를 공유해요. 생성 전
 
 기존 자료 패널과 작업 활동의 **자료 코드 작업**에서 진행 상태·호출 수·명시적 취소와 **계산 결과 보기**를 제공해요. 목록은 결과 유무와 metadata만 반환하며 결과는 `GET /api/chats/:id/extension-operations/:operationId?includeResult=1`로 명시적으로 조회해요. 취소는 `/cancel`에 POST하고 늦은 채택을 닫은 뒤 전송된 attempt를 정산해요. 서버 재시작·복원은 queued/running을 interrupted로 보존하고 자동 재실행하지 않아요. 같은 명령 키는 취소·실패·중단을 포함한 원래 작업을 반환하고, 사용자가 새로 실행한 행동은 새 키를 사용해요.
 
-DB v18의 작업·attempt 연결 표와 archive15/chat-backup1의 선택적 collection에 기록을 보존해요. 과거 백업의 collection 누락은 빈 목록으로 처리하며 복원에서 코드나 모델을 재호출하지 않아요. 복원한 채팅의 live grant 제거 원칙은 그대로예요.
+DB v18에서 추가한 작업·attempt 연결 표와 전체 archive·채팅 백업의 선택적 collection에 기록을 보존하며, 현재 버전은 [DB·archive·백업 버전](DATA-MIGRATIONS.md#현재-버전)을 봐요. 과거 백업의 collection 누락은 빈 목록으로 처리하며 복원에서 코드나 모델을 재호출하지 않아요. 복원한 채팅의 live grant 제거 원칙은 그대로예요.
 
 ## 실행 엔진의 경계
 
@@ -232,7 +232,7 @@ JavaScript는 `quickjs-emscripten-core`와 `@jitl/quickjs-wasmfile-release-sync`
 
 엔진 내부 allocator 한도와 별개로 **16 MiB 고정 WASM 선형 메모리**를 제공해요. 게스트 계산은 CPU 100ms와 active wall 1초, Worker 동시 2슬롯의 기존 제한을 유지해요. 과거 후보 실험에서 실패했던 `setMemoryLimit`만을 격리 근거로 사용하지 않아요. 엔진 계산 중단, 부모의 실행 종료, 입력/출력 상한도 적용해요. 실제 Host 대기에서만 별도의 `hostWaitMs` 예산을 사용하며 최대 1,800,000ms예요. `hostWaitMs`가 생략되거나 0이면 자료 읽기 Host await를 즉시 timeout으로 만들지 않고 기존 전체 wall 1초를 유지해요. 자동 준비의 슬롯 대기는 호스트만 선택하는 제한된 대기열이며 취소하면 제거해요. Worker의 V8 heap 제한은 WASM 메모리와 별도예요. 이 구성은 OS의 전체 RSS 제한이나 모든 엔진 취약점에 대한 보증이 아니에요. Linux/Docker 실제 실행·전체 컨테이너 자원 제한은 5~6단계 검증에 남아 있어요.
 
-소스는 최대 524,288 UTF-16 문자, 결과 `result`는 JSON 8,000자예요. 전체 상태/결과 계약은 JSON 131,072자 이내이며 실행기의 입력/출력 프레임은 **128 KiB UTF-8** 이하라 비ASCII 문자열에는 더 작은 한도가 적용돼요. 제한은 자료가 변경할 수 없어요. 정확한 실행 한도와 오류 코드는 [서버 실행기](../server/extension-runtime.ts)가 소유해요.
+소스는 최대 512 KiB(UTF-8 바이트), 결과 `result`는 JSON 8,000자예요. 전체 상태/결과 계약은 JSON 131,072자 이내이며 실행기의 입력/출력 프레임은 **128 KiB UTF-8** 이하라 비ASCII 문자열에는 더 작은 한도가 적용돼요. 제한은 자료가 변경할 수 없어요. 정확한 실행 한도와 오류 코드는 [서버 실행기](../server/extension-runtime.ts)가 소유해요.
 
 실행기 의존성은 MIT이며 Uimori 소스의 AGPL-3.0-only와 개별 제3자 조건은 [제3자 고지](../THIRD_PARTY_NOTICES.md)를 따라요. 메모리 전달 API는 [QuickJS variant API](https://github.com/justjake/quickjs-emscripten), Worker 제한의 범위는 [Node Worker 문서](https://nodejs.org/docs/latest-v24.x/api/worker_threads.html)를 참고해요.
 

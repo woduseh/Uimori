@@ -16,6 +16,10 @@ const QUICKJS_MEMORY_BYTES = 8 * 1024 * 1024;
 const QUICKJS_STACK_BYTES = 256 * 1024;
 const CPU_MS = 100;
 const MAX_JSON_BYTES = 128 * 1024;
+// Defence in depth behind core's EXTENSION_PROGRAM_MAX_SOURCE_BYTES, repeated as a literal because
+// the host also starts this worker as raw TypeScript, where Node cannot resolve core's specifiers.
+// tests/extension-runtime.test.ts pins this to the value core declares.
+const MAX_SOURCE_BYTES = 512 * 1024;
 const MAX_HOST_METHOD_CHARS = 80;
 const MAX_HOST_CALLS = 32;
 const MAX_HOST_PENDING = 8;
@@ -223,7 +227,7 @@ async function run() {
     !input ||
     typeof input.source !== 'string' ||
     typeof input.inputJSON !== 'string' ||
-    Buffer.byteLength(input.source) > 256 * 1024 ||
+    Buffer.byteLength(input.source) > MAX_SOURCE_BYTES ||
     Buffer.byteLength(input.inputJSON) > MAX_JSON_BYTES
   ) {
     reply({ type: 'result', ok: false, code: 'BEHAVIOR_PROGRAM_INPUT_SIZE' });

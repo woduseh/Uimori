@@ -7,7 +7,6 @@ import {
   type RisuPluginPreview,
 } from '../core/risu-plugin.js';
 import { fields, HttpError, record, text } from './request-validation.js';
-import { readUpload } from './uploads.js';
 
 const invalid = (): never => {
   throw new HttpError(400, 'RISU_PLUGIN_INVALID_FILE');
@@ -16,24 +15,16 @@ const invalid = (): never => {
 const MEMBER = /(?:^|[^\w$.])(?:risuai|Risuai)\s*\.\s*([A-Za-z_$][\w$]*)/gu;
 const DESTRUCTURED = /\{([^{}]{0,2000})\}\s*=\s*(?:await\s+)?(?:risuai|Risuai)\b/gu;
 
-export function readRisuPlugin(
-  value: unknown,
-  readStaged?: (id: string) => Buffer
-): RisuPluginPreview {
+export function readRisuPlugin(value: unknown): RisuPluginPreview {
   const input = record(value);
-  const staged = Object.hasOwn(input, 'uploadId');
-  fields(input, staged ? ['name', 'uploadId'] : ['name', 'base64']);
+  fields(input, ['name', 'base64']);
   const name = text(input.name, 'file name', 255);
   if (!/\.js$/iu.test(name)) invalid();
-  let bytes: Buffer;
-  if (staged) {
-    if (!readStaged) invalid();
-    bytes = readStaged!(text(input.uploadId, 'upload ID', 100));
-  } else {
-    const base64 = text(input.base64, 'file bytes', Math.ceil(RISU_PLUGIN_MAX_BYTES / 3) * 4);
-    bytes = Buffer.from(base64, 'base64');
-    if (bytes.toString('base64') !== base64) invalid();
-  }
+  // A plugin never reaches the staged upload path: the client stages only above the far larger
+  // import limit, so anything staged would exceed RISU_PLUGIN_MAX_BYTES and be refused here.
+  const base64 = text(input.base64, 'file bytes', Math.ceil(RISU_PLUGIN_MAX_BYTES / 3) * 4);
+  const bytes = Buffer.from(base64, 'base64');
+  if (bytes.toString('base64') !== base64) invalid();
   if (!bytes.length || bytes.length > RISU_PLUGIN_MAX_BYTES)
     throw new HttpError(413, 'RISU_PLUGIN_TOO_LARGE');
   const source = bytes.toString('utf8').replace(/^\uFEFF/u, '');
@@ -53,7 +44,8 @@ export function readRisuPlugin(
   const args: RisuPluginArgument[] = [];
   for (const raw of source.split('\n')) {
     const line = raw.replace(/\r$/u, '');
-    if (line.startsWith('//@name') && !pluginName) pluginName = line.slice(7).trim();
+    // Risu assigns on every header line, so the last //@name wins; match that reading exactly.
+    if (line.startsWith('//@name')) pluginName = line.slice(7).trim();
     if (line.startsWith('//@display-name')) displayName = line.slice(16).trim();
     if (line.startsWith('//@api')) {
       const declared = line.slice(6).trim().split(/\s+/u).filter(Boolean);
@@ -93,7 +85,7 @@ export function readRisuPlugin(
   const unknownApis = [...used].filter((member) => !RISU_PLUGIN_API_SUPPORT[member]).sort();
   finding(
     'plugin-not-executed',
-    'unsupported',
+    'info',
     '플러그인 코드는 실행하지 않고 선언한 정보만 읽어요. 지금은 자료로 등록하지도 않으므로 이 화면은 지원 범위 확인용이에요.'
   );
   if (apiVersion !== '3.0')
@@ -131,10 +123,10 @@ export function readRisuPlugin(
   };
 }
 
-export function risuPluginRoutes(app: FastifyInstance, dbPath: string) {
+export function risuPluginRoutes(app: FastifyInstance) {
   app.post(
     '/api/risu-plugin-imports/prepare',
     { bodyLimit: Math.ceil(RISU_PLUGIN_MAX_BYTES / 3) * 4 + 1024 * 1024 },
-    async (request) => readRisuPlugin(record(request.body).source, (id) => readUpload(dbPath, id))
+    async (request) => readRisuPlugin(record(request.body).source)
   );
 }

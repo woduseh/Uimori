@@ -3,7 +3,7 @@ import { validatePackageStarts } from '../core/package-start.js';
 import { describe, expect, it } from 'vitest';
 import {
   EXTENSION_PROGRAM_API,
-  EXTENSION_PROGRAM_MAX_SOURCE_CHARS,
+  EXTENSION_PROGRAM_MAX_SOURCE_BYTES,
   validateExtensionProgram,
   validateExtensionProgramResult,
 } from '../core/extension-program.js';
@@ -137,7 +137,7 @@ describe('bounded extension state program contract', () => {
     for (const program of [
       { api: 'uimori-state-action-v2', source: 'return null;' },
       { api: EXTENSION_PROGRAM_API, source: '' },
-      { api: EXTENSION_PROGRAM_API, source: 'x'.repeat(EXTENSION_PROGRAM_MAX_SOURCE_CHARS + 1) },
+      { api: EXTENSION_PROGRAM_API, source: 'x'.repeat(EXTENSION_PROGRAM_MAX_SOURCE_BYTES + 1) },
       { api: EXTENSION_PROGRAM_API, source: 'return null;', extra: true },
     ])
       expect(() => validateExtensionProgram(program)).toThrow();
@@ -153,6 +153,19 @@ describe('bounded extension state program contract', () => {
       { state: { count: 1 }, result: undefined },
     ])
       expect(() => validateExtensionProgramResult(result)).toThrow();
+  });
+
+  it('measures the program source limit in UTF-8 bytes rather than UTF-16 units', () => {
+    const validate = (source: string) =>
+      validateExtensionProgram({ api: EXTENSION_PROGRAM_API, source });
+    const ascii = 'x'.repeat(EXTENSION_PROGRAM_MAX_SOURCE_BYTES);
+    expect(validate(ascii).source).toHaveLength(EXTENSION_PROGRAM_MAX_SOURCE_BYTES);
+    expect(() => validate(`${ascii}x`)).toThrow('BEHAVIOR_PROGRAM_SOURCE_SIZE');
+    // Korean costs three UTF-8 bytes per character, so counting characters would accept a source
+    // three times over the limit. Filling the limit exactly still passes.
+    const korean = '가'.repeat(Math.floor(EXTENSION_PROGRAM_MAX_SOURCE_BYTES / 3));
+    expect(validate(`${korean}xx`).source).toHaveLength(korean.length + 2);
+    expect(() => validate(`${korean}가`)).toThrow('BEHAVIOR_PROGRAM_SOURCE_SIZE');
   });
 
   it('allows explicit program triggers and validates automatic input without mixed effects', () => {

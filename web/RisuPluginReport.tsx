@@ -1,5 +1,12 @@
 import type { RisuPluginApiSupport, RisuPluginPreview } from '../core/risu-plugin.js';
 
+/** Only a finding that blocks the plugin reads as an error; the rest stay quiet. */
+const LEVEL_CLASS: Record<RisuPluginPreview['findings'][number]['level'], string | undefined> = {
+  info: 'muted',
+  warning: undefined,
+  unsupported: 'error',
+};
+
 const SUPPORT: Record<RisuPluginApiSupport, string> = {
   mapped: '대응 가능',
   unimplemented: '미구현',
@@ -52,7 +59,7 @@ export function RisuPluginReport({ preview }: { preview: RisuPluginPreview }) {
       )}
       <ul>
         {preview.findings.map((finding) => (
-          <li key={finding.code} className={finding.level === 'unsupported' ? 'error' : undefined}>
+          <li key={finding.code} className={LEVEL_CLASS[finding.level]}>
             {finding.message}
           </li>
         ))}
