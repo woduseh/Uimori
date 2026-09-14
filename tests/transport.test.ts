@@ -18,7 +18,7 @@ import {
 } from '../core/transport.js';
 import { loopbackProvider, sse, writeSse } from './fixtures/loopback-provider.js';
 import { defaultProfile, type Content, type Connection } from '../core/product.js';
-import { buildMainInput } from '../core/provider.js';
+import { buildMainInput, CATALOG_READ_GUIDANCE } from '../core/provider.js';
 import type { ModelInput, RunSnapshot, ToolEvent } from '../core/types.js';
 import { runMain, type MainHooks } from '../server/model-runner.js';
 
@@ -1017,7 +1017,8 @@ test('custom main prompt remains literal across tools after the caller changes i
   expect(server.requests).toHaveLength(2);
   for (const captured of server.requests) {
     const wire = JSON.parse(captured.body);
-    expect(wire.stable.contract).toBe('');
+    // The authored prompt stays literal; the host contract carries only its catalog read guidance.
+    expect(wire.stable.contract).toBe('\n' + CATALOG_READ_GUIDANCE);
     expect(wire.prompt.messages[0].content[0].text).toBe(custom);
     expect(wire.stable.tools.map((tool: { name: string }) => tool.name)).toEqual([
       'knowledge.search',

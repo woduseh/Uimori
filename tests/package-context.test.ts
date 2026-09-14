@@ -171,7 +171,8 @@ describe('source-time package role context', () => {
     p.lore[0].loreContext = { placement: 'scene', group: 'original', order: 1 };
     const main = buildMainInput(s),
       id = 'package:pkg:bot:lore:facts';
-    main.catalog.find((item) => item.id === id)!.loreContext!.group = 'changed';
+    // The main catalog is discovery metadata; placement travels with the pinned body only.
+    expect(main.catalog.find((item) => item.id === id)).not.toHaveProperty('loreContext');
     expect(main.pinnedSources!.find((item) => item.id === id)!.loreContext!.group).toBe('original');
     const source = {
       id: 'source',

@@ -17,7 +17,7 @@ import {
 import { performance } from 'node:perf_hooks';
 import { randomUUID } from 'node:crypto';
 import { Store } from '../server/store.js';
-import { buildMainInput, executeTool } from '../core/provider.js';
+import { buildMainInput, CATALOG_CHARS, executeTool } from '../core/provider.js';
 import { sourceHash as memoryHash } from '../core/source-history.js';
 import { resolveAsset, searchAssets } from '../core/asset-manifest.js';
 import type { RunSnapshot } from '../core/types.js';
@@ -360,10 +360,15 @@ function validateOutput(
   expect(
     result.snapshot.resources.filter((resource) => resource.sourceKind === 'lore')
   ).toHaveLength(counts.loreCount);
-  expect(result.input.catalog).toHaveLength(Math.min(100, counts.loreCount + 1));
+  expect(result.input.catalog).toHaveLength(
+    result.input.catalogPage?.listed ?? counts.loreCount + 1
+  );
   expect(result.input.catalog.every((item) => !Object.hasOwn(item, 'text'))).toBe(true);
   if (counts.loreCount > 100) {
-    expect(result.input.catalogPage).toMatchObject({ total: counts.loreCount + 1, listed: 100 });
+    expect(result.input.catalogPage).toMatchObject({ total: counts.loreCount + 1 });
+    expect(result.input.catalogPage!.listed).toBeGreaterThan(0);
+    expect(result.input.catalogPage!.listed).toBeLessThan(counts.loreCount + 1);
+    expect(JSON.stringify(result.input.catalog).length).toBeLessThanOrEqual(CATALOG_CHARS);
     expect(
       result.input.catalog.some((item) =>
         item.id.endsWith(`:lore-${String(counts.loreCount - 1).padStart(4, '0')}`)
