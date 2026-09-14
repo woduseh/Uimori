@@ -66,38 +66,106 @@ export type RisuEffectProgram = {
   program: ExtensionProgram;
   /** Statically known variable names this program writes; a dynamic key is reported instead. */
   writes: string[];
+  /** True when the program asks for the chat's extra model call permission. */
+  usesModel: boolean;
+};
+export type RisuEffectOptions = {
+  /** Risu skips these effects entirely unless the card declares low level access. */
+  lowLevelAccess?: boolean;
 };
 
 /** Pure source construction for Risu's declarative trigger effects. Nothing is evaluated here. */
-export function buildRisuEffectProgram(effects: unknown[]): RisuEffectProgram {
+export function buildRisuEffectProgram(
+  effects: unknown[],
+  options: RisuEffectOptions = {}
+): RisuEffectProgram {
   if (!effects.length) throw new UnsupportedCbs('효과가 없는 트리거예요.');
   const cbs = new RisuCbs(new Map(), { names: 'context' });
   const writes: string[] = [];
-  const statements = effects.map((raw) => {
-    const effect = record(raw);
-    if (effect?.type !== 'setvar')
-      throw new UnsupportedCbs('아직 연결하지 않은 트리거 효과 종류가 있어요.');
-    const operator = OPERATORS[String(effect.operator)];
-    if (!operator) throw new UnsupportedCbs('지원하지 않는 변수 연산자가 있어요.');
-    if (typeof effect.var !== 'string' || typeof effect.value !== 'string')
-      throw new UnsupportedCbs('트리거 효과의 변수 이름이나 값이 문자열이 아니에요.');
-    const key = template(cbs, effect.var),
-      value = template(cbs, effect.value);
+  let usesModel = false;
+  const target = (effect: Record<string, unknown>) => {
+    if (typeof effect.inputVar !== 'string' || !effect.inputVar)
+      throw new UnsupportedCbs('트리거 효과의 결과 변수 이름이 없어요.');
+    const key = template(cbs, effect.inputVar);
     if (key.literal === undefined)
       throw new UnsupportedCbs('실행 시점에 정해지는 변수 이름은 아직 지원하지 않아요.');
     writes.push(key.literal);
-    return `{
+    return key.source;
+  };
+  const statements = effects.flatMap((raw) => {
+    const effect = record(raw);
+    const type = String(effect?.type);
+    if (!effect) throw new UnsupportedCbs('트리거 효과가 올바르지 않아요.');
+    // Risu leaves these effects unexecuted unless the card declares low level access.
+    if (['runLLM', 'extractRegex'].includes(type) && options.lowLevelAccess !== true) return [];
+    if (type === 'setvar') {
+      const operator = OPERATORS[String(effect.operator)];
+      if (!operator) throw new UnsupportedCbs('지원하지 않는 변수 연산자가 있어요.');
+      if (typeof effect.var !== 'string' || typeof effect.value !== 'string')
+        throw new UnsupportedCbs('트리거 효과의 변수 이름이나 값이 문자열이 아니에요.');
+      const key = template(cbs, effect.var),
+        value = template(cbs, effect.value);
+      if (key.literal === undefined)
+        throw new UnsupportedCbs('실행 시점에 정해지는 변수 이름은 아직 지원하지 않아요.');
+      writes.push(key.literal);
+      return [
+        `{
   const __key = ${key.source};
   const __value = ${value.source};
   await api.host.call('variables.set', {key: __key, value: ${operator('await __read(__key)', '__value')}});
-}`;
+}`,
+      ];
+    }
+    if (type === 'runLLM') {
+      if (typeof effect.value !== 'string')
+        throw new UnsupportedCbs('트리거 효과의 모델 요청 값이 문자열이 아니에요.');
+      const prompt = template(cbs, effect.value),
+        key = target(effect);
+      usesModel = true;
+      return [
+        `{
+  const __prompt = ${prompt.source};
+  if (__prompt.trim().startsWith('<|im_start|>')) throw new Error('RISU_TRIGGER_CHATML_UNSUPPORTED');
+  const __response = await api.host.call('model.generate', {prompt: __prompt});
+  await api.host.call('variables.set', {key: ${key}, value: __response.status === 'completed' ? __response.text : 'Error: ' + String(__response.error)});
+}`,
+      ];
+    }
+    if (type === 'extractRegex') {
+      if (
+        typeof effect.value !== 'string' ||
+        typeof effect.regex !== 'string' ||
+        typeof effect.flags !== 'string' ||
+        typeof effect.result !== 'string'
+      )
+        throw new UnsupportedCbs('트리거 정규식 효과의 필드가 문자열이 아니에요.');
+      const value = template(cbs, effect.value),
+        key = target(effect);
+      return [
+        `{
+  const __value = ${value.source};
+  const __match = new RegExp(${JSON.stringify(effect.regex)}, ${JSON.stringify(effect.flags)}).exec(__value);
+  if (!__match) throw new Error('RISU_TRIGGER_REGEX_NO_MATCH');
+  const __result = ${JSON.stringify(effect.result)}
+    .replace(/\\$[0-9]+/g, (__token) => String(__match[Number(__token.slice(1))]))
+    .replace(/\\$&/g, __match[0])
+    .replace(/\\$\\$/g, '$');
+  await api.host.call('variables.set', {key: ${key}, value: __result});
+}`,
+      ];
+    }
+    throw new UnsupportedCbs('아직 연결하지 않은 트리거 효과 종류가 있어요.');
   });
+  if (!statements.length) throw new UnsupportedCbs('실행할 수 있는 효과가 없는 트리거예요.');
   return {
     program: {
       api: EXTENSION_PROGRAM_API,
-      capabilities: ['variables.read', 'variables.write'],
+      capabilities: usesModel
+        ? ['variables.read', 'variables.write', 'model.generate']
+        : ['variables.read', 'variables.write'],
       source: `${PRELUDE}\n${statements.join('\n')}\nreturn {state: api.state, result: null};`,
     },
     writes: [...new Set(writes)],
+    usesModel,
   };
 }

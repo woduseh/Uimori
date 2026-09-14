@@ -16,7 +16,7 @@ import {
   type PromptOperation,
 } from '../core/prompt-program.js';
 import { RisuCbs, UnsupportedCbs } from './risu-cbs.js';
-import { buildRisuEffectProgram } from './risu-trigger-effects.js';
+import { buildRisuEffectProgram, type RisuEffectOptions } from './risu-trigger-effects.js';
 
 export const RISU_LUA_EVENTS = [
   'input',
@@ -43,6 +43,8 @@ export interface RisuLuaSource {
 }
 export interface RisuLuaAdapterOptions {
   idPrefix?: string;
+  /** Risu leaves model and regex effects unexecuted unless the card declares low level access. */
+  lowLevelAccess?: boolean;
 }
 
 // These APIs have no equivalent scoped Host contract yet. A named denial is preferable to
@@ -453,7 +455,8 @@ function adaptDeclarativeTrigger(
   triggerIndex: number,
   prefix: string,
   actions: BehaviorAction[],
-  findings: RisuLuaFinding[]
+  findings: RisuLuaFinding[],
+  options: RisuEffectOptions
 ) {
   const report = (code: string, message: string) => {
     findings.push({ code, triggerIndex, message });
@@ -469,7 +472,7 @@ function adaptDeclarativeTrigger(
   let effect: ReturnType<typeof buildRisuEffectProgram>;
   let conditionPlan: ReturnType<typeof compileLuaConditions>;
   try {
-    effect = buildRisuEffectProgram(effects);
+    effect = buildRisuEffectProgram(effects, options);
   } catch (error) {
     report(
       'RISU_TRIGGER_EFFECTS_UNSUPPORTED',
@@ -490,6 +493,11 @@ function adaptDeclarativeTrigger(
     report(
       'RISU_LUA_CONDITION_RUNTIME_CBS',
       '조건에서 읽은 변수값 안에 CBS가 있으면 자동 실행을 보류해요. 일반 문자열 값과 가져올 때 해석 가능한 CBS 조건은 지원해요.'
+    );
+  if (effect.usesModel)
+    report(
+      'RISU_TRIGGER_MODEL_CALL',
+      '이 트리거는 추가 모델 호출을 사용해요. 설정의 확장 호출 모델과 채팅의 추가 모델 호출 허용이 필요하고, ChatML 형식 프롬프트는 아직 보내지 않고 오류로 표시해요.'
     );
   report(
     'RISU_TRIGGER_VARIABLE_WRITES',
@@ -527,7 +535,8 @@ function mixedSegments(
   triggerIndex: number,
   prefix: string,
   report: (code: string, message: string) => void,
-  mode: { trigger: BehaviorActionTrigger; hook?: BehaviorActionHook }
+  mode: { trigger: BehaviorActionTrigger; hook?: BehaviorActionHook },
+  options: RisuEffectOptions
 ): { before?: BehaviorAction; after?: BehaviorAction } | undefined {
   // One user button cannot carry a script and separate effects without splitting the click.
   if (mode.trigger === 'user') {
@@ -546,7 +555,7 @@ function mixedSegments(
     if (!part.list.length) continue;
     let compiled: ReturnType<typeof buildRisuEffectProgram>;
     try {
-      compiled = buildRisuEffectProgram(part.list);
+      compiled = buildRisuEffectProgram(part.list, options);
     } catch (error) {
       report(
         'RISU_TRIGGER_EFFECTS_UNSUPPORTED',
@@ -589,6 +598,7 @@ export function adaptRisuLuaTriggers(
     findings: RisuLuaFinding[] = [],
     sources: RisuLuaSource[] = [];
   const prefix = options.idPrefix ?? 'risu-lua';
+  const effectOptions: RisuEffectOptions = options.lowLevelAccess ? { lowLevelAccess: true } : {};
   if (!/^[A-Za-z0-9_][A-Za-z0-9_.-]{0,49}$/u.test(prefix)) throw new Error('RISU_LUA_ID_PREFIX');
   if (!Array.isArray(triggers)) return { actions, findings, sources };
   const mapping: Partial<Record<RisuLuaEvent, BehaviorActionTrigger>> = {
@@ -614,7 +624,15 @@ export function adaptRisuLuaTriggers(
     const effects = trigger.effect;
     // Risu bypasses the mode gate only for a script trigger; declarative effects keep their type.
     if (effects.length && !effects.some((raw) => record(raw)?.type === 'triggerlua'))
-      adaptDeclarativeTrigger(trigger, effects, triggerIndex, prefix, actions, findings);
+      adaptDeclarativeTrigger(
+        trigger,
+        effects,
+        triggerIndex,
+        prefix,
+        actions,
+        findings,
+        effectOptions
+      );
     effects.forEach((rawEffect, effectIndex) => {
       const effect = record(rawEffect);
       if (effect?.type !== 'triggerlua') return;
@@ -675,7 +693,8 @@ export function adaptRisuLuaTriggers(
           triggerIndex,
           prefix,
           report,
-          mode!
+          mode!,
+          effectOptions
         );
         if (!built) return;
         segments = built;
