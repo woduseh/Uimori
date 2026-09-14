@@ -3,6 +3,7 @@ import { packageInstanceId } from '../core/execution-context.js';
 import { validateExtensionUserModelAttribution } from '../core/extension-model.js';
 import type { ExtensionOperationSnapshot } from '../core/extension-operation.js';
 import { EXTENSION_PROGRAM_API } from '../core/extension-program.js';
+import { disableArchivedConnection } from '../core/product.js';
 import {
   validateExtensionVariablePermission,
   projectExtensionVariableMutation,
@@ -46,9 +47,7 @@ export function normalizeExtensionOperationArchiveRow(table: string, row: Row): 
     profile.extensionModel,
   ]) {
     if (!model) continue;
-    const connection = record(record(model).connection);
-    for (const key of ['credentialEnv', 'secret', 'apiKey', 'accessToken']) delete connection[key];
-    connection.enabled = false;
+    disableArchivedConnection(record(record(model).connection));
   }
   row.snapshot = JSON.stringify(snapshot);
   row.owner = null;

@@ -294,7 +294,13 @@ describe('M2 archive graph and selected-ancestry fork with actual isolated file 
     const snapshot = {
       profile: {
         models: {
-          main: { connection: { enabled: true, credentialEnv: 'NARRATIVE_PROVIDER_PRIVATE' } },
+          main: {
+            connection: {
+              enabled: true,
+              credentialEnv: 'NARRATIVE_PROVIDER_PRIVATE',
+              catalogCredentialEnv: 'NARRATIVE_PROVIDER_PRIVATE_LIST',
+            },
+          },
         },
       },
       story: {
@@ -344,7 +350,7 @@ describe('M2 archive graph and selected-ancestry fork with actual isolated file 
     expect(row.snapshot).not.toContain('NARRATIVE_PROVIDER_PRIVATE');
     const restored = JSON.parse(row.snapshot);
     expect(restored.story.models.state.connection.enabled).toBe(false);
-    expect(restored.profile.models.main.connection.enabled).toBe(false);
+    expect(restored.profile.models.main.connection).toEqual({ enabled: false });
     expect(restored.history[0].text).toBe(snapshot.history[0].text);
     expect(JSON.parse(row.tool_events)[0].result.continuation).toEqual({ offset: 10 });
     expect(JSON.parse(row.inputs)[0].source.text).toBe('Original prose');

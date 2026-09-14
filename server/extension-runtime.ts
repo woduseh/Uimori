@@ -221,6 +221,8 @@ export async function executeExtensionProgram(
     const source = existsSync(compiled) ? compiled : new URL(`./${workerName}.ts`, import.meta.url);
     const worker = new Worker(source, {
       execArgv: source.pathname.endsWith('.ts') ? ['--experimental-strip-types'] : undefined,
+      // The guest never needs the host environment; do not inherit provider keys into the worker.
+      env: {},
       workerData: {
         source: program.source,
         inputJSON: encodedInput,

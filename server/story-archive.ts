@@ -20,6 +20,7 @@ import { sourceHash, type SourceScope } from '../core/source-history.js';
 import { validateAuthorNote, type AuthorNote } from '../core/notes.js';
 import { validateModelSnapshot } from './provider-archive.js';
 import type { RunSnapshot } from '../core/types.js';
+import { disableArchivedConnection } from '../core/product.js';
 
 type Row = Record<string, any>;
 const parse = (value: unknown): any => (typeof value === 'string' ? JSON.parse(value) : value);
@@ -530,12 +531,8 @@ function normalizeSnapshot(value: unknown): Row {
         const model = object(raw);
         stripEnvelope(model);
         const connection = object(model.connection);
-        delete connection.credentialEnv;
-        delete connection.secret;
-        delete connection.apiKey;
-        delete connection.accessToken;
         stripEnvelope(connection);
-        connection.enabled = false;
+        disableArchivedConnection(connection);
       }
     }
   return snapshot;
