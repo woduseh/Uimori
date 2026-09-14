@@ -9,7 +9,9 @@ import type {
   RisuImportSource,
   RisuImportStagedSource,
 } from '../core/risu-import.js';
+import type { RisuPluginPreview } from '../core/risu-plugin.js';
 import { ApiError, api } from './api.js';
+import { RisuPluginReport } from './RisuPluginReport.js';
 import { SelectionCheckbox } from './BooleanControls.js';
 import { Dialog } from './Dialog.js';
 import { IconButton } from './IconButton.js';
@@ -42,6 +44,7 @@ export function RisuImport({
   const [busy, setBusy] = useState(false);
   const active = useRef(false);
   const [source, setSource] = useState<RisuImportSource | RisuImportStagedSource | null>(null);
+  const [plugin, setPlugin] = useState<RisuPluginPreview | null>(null);
   const [kind, setKind] = useState<RisuImportKind | ''>('');
   const [preview, setPreview] = useState<RisuImportPreview | null>(null);
   const [memoryIds, setMemoryIds] = useState<string[]>([]);
@@ -69,8 +72,10 @@ export function RisuImport({
     setError('');
     setNotice('');
     try {
-      if (!/\.(charx|json|zip)$/i.test(file.name))
-        throw new Error('.charx, 카드·모듈 JSON 또는 모듈 프로젝트 ZIP을 선택해 주세요.');
+      if (!/\.(charx|json|zip|js)$/i.test(file.name))
+        throw new Error(
+          '.charx, 카드·모듈 JSON, 모듈 프로젝트 ZIP 또는 플러그인 .js를 선택해 주세요.'
+        );
       if (file.size === 0) throw new Error('빈 파일은 가져올 수 없어요.');
       if (file.size > RISU_IMPORT_MAX_UPLOAD_BYTES)
         throw new Error(
@@ -81,10 +86,21 @@ export function RisuImport({
           `${Math.round(RISU_IMPORT_MAX_BYTES / 1024 / 1024)} MiB가 넘는 파일이라 먼저 올린 뒤 확인해요. 원본 사본은 앱에 보관하지 않아요.`
         );
       const nextSource = await readSource(file);
+      if (/\.js$/i.test(file.name)) {
+        // A plugin is read for its declared support only; nothing is registered or executed.
+        setPlugin(
+          await api<RisuPluginPreview>('/risu-plugin-imports/prepare', { source: nextSource })
+        );
+        setSource(null);
+        setPreview(null);
+        setResult(null);
+        return;
+      }
       const nextPreview = await api<RisuImportPreview>('/risu-imports/prepare', {
         source: nextSource,
         ...(kind ? { kind } : {}),
       });
+      setPlugin(null);
       setSource(nextSource);
       setPreview(nextPreview);
       setMemoryIds([]);
@@ -242,11 +258,11 @@ export function RisuImport({
             쓰려면 모듈을 선택해 주세요. 모듈은 새 채팅을 만들지 않아요.
           </p>
           <label className="risu-import-file">
-            .charx · 카드·모듈 JSON · 모듈 프로젝트 ZIP · 최대 24 MiB
+            .charx · 카드·모듈 JSON · 모듈 프로젝트 ZIP · 플러그인 .js · 최대 256 MiB
             <input
               type="file"
               aria-label="Risu 파일 선택"
-              accept=".charx,.json,.zip,application/json,application/zip"
+              accept=".charx,.json,.zip,.js,application/json,application/zip,text/javascript"
               disabled={busy || uncertain}
               onChange={(event) => {
                 const file = event.target.files?.[0];
@@ -256,6 +272,7 @@ export function RisuImport({
             />
           </label>
           <p className="muted">.risum 파일 직접 가져오기는 지원하지 않아요.</p>
+          {plugin && <RisuPluginReport preview={plugin} />}
           {preview && (
             <>
               <div className="risu-import-summary">
