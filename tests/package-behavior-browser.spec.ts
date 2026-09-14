@@ -296,7 +296,8 @@ test(`BUI03 invocation methods persist, validate automatic input drafts and show
   await expect(panel.getByText('횟수 기록', { exact: true })).toBeVisible();
   await expect(panel.getByText('모델 요청', { exact: true })).toBeVisible();
   await expect(panel.getByRole('button', { name: '횟수 기록', exact: true })).toHaveCount(0);
-  await expect(panel.locator('form')).toHaveCount(0);
+  // The shared variable editor owns its own form; a model-only action contributes none.
+  await expect(panel.locator('form.behavior-action')).toHaveCount(0);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(
     true
   );

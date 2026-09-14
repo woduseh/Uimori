@@ -1850,7 +1850,15 @@ test('UI common dialogs center on desktop and fill mobile without changing dismi
       await expect(dialog).toBeVisible();
       // The task list adds its inspector after loading; wait until the tab order is ready.
       if (title === '작업 현황') await expect(dialog.getByTestId('usage-inspector')).toBeVisible();
-      const box = (await dialog.boundingBox())!;
+      // A dialog that re-renders as its content loads can report no box for one frame.
+      let measured = await dialog.boundingBox();
+      await expect
+        .poll(async () => {
+          measured = await dialog.boundingBox();
+          return measured !== null;
+        })
+        .toBe(true);
+      const box = measured!;
       expect(box.x).toBeGreaterThanOrEqual(0);
       expect(box.y).toBeGreaterThanOrEqual(0);
       expect(box.x + box.width).toBeLessThanOrEqual(width);
