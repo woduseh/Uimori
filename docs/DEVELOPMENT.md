@@ -1,6 +1,6 @@
 # 개발과 검증
 
-현재 DB는 **v19**, 전체 JSON archive는 **v15**, 채팅 백업은 **v1**이에요. 알려진 v15 DB를 보존하며 올리는 [migration](DATA-MIGRATIONS.md)을 제공하고 공개 베타의 보존·업데이트를 [베타 계획](../project-plan/BETA-PLAN.md)에 따라 준비해요. 모든 과거 개발 버전의 이관을 약속하지 않아요. 테스트용 개발 DB를 다시 시작하려면 서버를 종료한 뒤 `npm run reset:dev`를 실행해요. 이 명령은 저장소의 `.local/narrative.sqlite`와 해당 SQLite 부속 파일·알려진 구형 자동 백업만 삭제해요. 서버가 DB를 사용 중이거나 경로가 저장소 밖으로 연결되면 중단해요. 다른 검증 산출물과 credential 파일은 대상으로 삼지 않아요.
+현재 버전은 [DB·archive·백업 버전](DATA-MIGRATIONS.md#현재-버전)을 봐요. 지원하는 이전 DB를 보존하며 올리는 migration을 제공하고 공개 베타의 보존·업데이트를 [베타 계획](../project-plan/BETA-PLAN.md)에 따라 준비해요. 모든 과거 개발 버전의 이관을 약속하지 않아요. 테스트용 개발 DB를 다시 시작하려면 서버를 종료한 뒤 `npm run reset:dev`를 실행해요. 이 명령은 저장소의 `.local/narrative.sqlite`와 해당 SQLite 부속 파일·알려진 구형 자동 백업만 삭제해요. 서버가 DB를 사용 중이거나 경로가 저장소 밖으로 연결되면 중단해요. 다른 검증 산출물과 credential 파일은 대상으로 삼지 않아요.
 
 [시작하기](../README.md) · [코드 품질](QUALITY.md) · [검증 계약](../project-plan/VERIFICATION.md)
 
@@ -117,7 +117,7 @@ console.log(w.main.program.controls.map((c) => c.id));
 
 - `web/`: 서재·프롬프트 관리, 봇별 탐색·채팅·패키지 편집, 안전한 원고 표시, 탭별 URL/초안/독서 위치, 페이지 읽기·SSE 갱신과 늦은 HTTP 응답 폐기.
 - `core/`: 공통 ContentPackage와 역할별 문맥, PromptProgram 데이터 AST·선택형 문법·TypeScript 제작 API, native JSON 검증, 공급자 adapter와 상태·문맥 요약·메모·원문 조회, 번역·표현 검증. 개발용 지침과 앱 자료는 별개예요.
-- `server/`: DB schema v19 / archive v15, SQLite WAL, revision/idempotency, 봇 소속·채팅 폴더·서재 분류와 폴더, 분기, Run/job/chunk/attempt 수명, 판정 기회·임시 행동 상태, 인증·SSE·현재 형식 백업. DB 트랜잭션은 모델이나 브라우저를 기다리지 않아요.
+- `server/`: 현재 [DB·archive·백업 버전](DATA-MIGRATIONS.md#현재-버전)의 저장 구조, SQLite WAL, revision/idempotency, 봇 소속·채팅 폴더·서재 분류와 폴더, 분기, Run/job/chunk/attempt 수명, 판정 기회·임시 행동 상태, 인증·SSE·현재 형식 백업. DB 트랜잭션은 모델이나 브라우저를 기다리지 않아요.
 - `tests/`: 실제 파일 DB/HTTP/프로세스 재시작과 Playwright 브라우저 검사. `scripts/`는 기존 reporter와 작은 수명주기 코드를 연결해요.
 
 원문·Run 완료·적격 보조 예약은 한 트랜잭션에 저장하고 worker는 커밋 뒤에 실행해요. job 결과·완료도 한 트랜잭션이며 source/hash와 worker generation/owner를 검사해요. 재시작은 완료 원문을 다시 생성하지 않아요. 실행 중이던 메인 요청은 `interrupted`로 남고, 로컬 결정적 모의 job만 재개해요. 표시 상태는 다음 원고의 사실로 주입하지 않아요.

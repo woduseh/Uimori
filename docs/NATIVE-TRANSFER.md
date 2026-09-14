@@ -1,6 +1,6 @@
 # 자료 파일 이동 v1
 
-`uimori-native-transfer` v1은 저장한 봇·페르소나·모듈·프롬프트 프리셋을 다른 설치에 새 사본으로 옮기는 교환 형식이에요. DB schema 18, 전체 보관 archive 15, 채팅 전체 백업 v1과 버전을 공유하지 않아요. Risu `.charx`·`.risum`·`.risup` 컨테이너 해석이나 원본 스크립트 실행은 이 기능의 범위가 아니에요.
+`uimori-native-transfer` v1은 저장한 봇·페르소나·모듈·프롬프트 프리셋을 다른 설치에 새 사본으로 옮기는 교환 형식이에요. DB schema·전체 보관 archive·채팅 전체 백업과 버전을 공유하지 않으며, 각각의 현재 버전은 [DB·archive·백업 버전](DATA-MIGRATIONS.md#현재-버전)을 봐요. Risu `.charx`·`.risum`·`.risup` 컨테이너 해석이나 원본 스크립트 실행은 이 기능의 범위가 아니에요.
 
 선택적 `sourceFiles`는 각 자료에 귀속된 원본 파일의 이름·MIME·SHA256·base64를 보존해요. 전체 64 MiB 한도를 공유하고 영수증 원본·재내보내기·전체 archive에서 유지하지만 모델 입력에는 복사하지 않아요. [Risu 카드 가져오기](RISU-IMPORT.md)는 이 저장 경로를 재사용해요.
 
