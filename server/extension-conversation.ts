@@ -4,6 +4,14 @@ import type {
   ExtensionConversationRef,
   ExtensionConversationSnapshot,
 } from '../core/extension-conversation.js';
+import {
+  HOST_LIST_PAGE_DEFAULT,
+  HOST_LIST_PAGE_MAX,
+  HOST_TEXT_PAGE_DEFAULT,
+  HOST_TEXT_PAGE_MAX,
+  pageSlice,
+  pageText,
+} from '../core/paging.js';
 import { readerConversation, readerRequestOrder } from '../core/reader-conversation.js';
 import type { RuntimeValue } from '../core/prompt-values.js';
 import type { ReaderRun, RunSnapshot, Source } from '../core/types.js';
@@ -427,15 +435,7 @@ export function createConversationExtensionHost(
   const slice = (index: number, offset: number, limit: number) => {
     const message = captured[index];
     if (offset > message.text.length) fail('BEHAVIOR_HOST_ARGUMENTS');
-    const end = Math.min(message.text.length, offset + limit);
-    return {
-      index,
-      role: message.role,
-      text: message.text.slice(offset, end),
-      offset,
-      nextOffset: end < message.text.length ? end : null,
-      totalChars: message.text.length,
-    };
+    return { index, role: message.role, ...pageText(message.text, offset, limit) };
   };
   return async (method, value, signal): Promise<RuntimeValue> => {
     if (signal.aborted) fail('BEHAVIOR_HOST_ABORTED');
@@ -451,18 +451,23 @@ export function createConversationExtensionHost(
     const page = method === 'conversation.page';
     const args = argumentsFor(value, list ? ['offset', 'limit'] : ['index', 'offset', 'limit']);
     const offset = integer(args.offset, 0, Number.MAX_SAFE_INTEGER);
-    const limit = integer(args.limit, list ? 20 : page ? 16000 : 8000, list ? 50 : 16000, 1);
+    const limit = integer(
+      args.limit,
+      list ? HOST_LIST_PAGE_DEFAULT : page ? HOST_TEXT_PAGE_MAX : HOST_TEXT_PAGE_DEFAULT,
+      list ? HOST_LIST_PAGE_MAX : HOST_TEXT_PAGE_MAX,
+      1
+    );
     if (list) {
       if (offset > captured.length) fail('BEHAVIOR_HOST_ARGUMENTS');
-      const end = Math.min(captured.length, offset + limit);
+      const listing = pageSlice(captured, offset, limit);
       return {
-        items: captured.slice(offset, end).map((message, index) => ({
+        items: listing.items.map((message, index) => ({
           index: offset + index,
           role: message.role,
           totalChars: message.text.length,
         })),
-        nextOffset: end < captured.length ? end : null,
-        total: captured.length,
+        nextOffset: listing.nextOffset,
+        total: listing.total,
       };
     }
     if (page) {

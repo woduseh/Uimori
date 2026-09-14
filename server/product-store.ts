@@ -22,6 +22,7 @@ import {
   EXTENSION_GRANT_CAPABILITIES,
   type ExtensionGrantCapability,
 } from '../core/extension-program.js';
+import { HOST_LIST_PAGE_DEFAULT, HOST_LIST_PAGE_MAX, pageSlice } from '../core/paging.js';
 import { estimateCost } from '../core/pricing-estimate.js';
 import { translationPolicy } from '../core/translation-settings.js';
 import {
@@ -269,7 +270,10 @@ export class ProductStore {
       body.offset === undefined
         ? 0
         : number(body.offset, 'library offset', 0, Number.MAX_SAFE_INTEGER);
-    const limit = body.limit === undefined ? 20 : number(body.limit, 'library limit', 1, 50);
+    const limit =
+      body.limit === undefined
+        ? HOST_LIST_PAGE_DEFAULT
+        : number(body.limit, 'library limit', 1, HOST_LIST_PAGE_MAX);
     const metadata = this.libraryMetadata();
     const found = [
       ...metadata.contents.map(({ kind, ...item }) => ({
@@ -287,13 +291,8 @@ export class ProductStore {
       const searchable = fold(`${item.title} ${item.id} ${item.category}`);
       return terms.every((term) => searchable.includes(term));
     });
-    const items = found.slice(offset, offset + limit);
-    return {
-      items,
-      total: found.length,
-      offset,
-      nextOffset: offset + items.length < found.length ? offset + items.length : null,
-    };
+    const page = pageSlice(found, offset, limit);
+    return { items: page.items, total: page.total, offset, nextOffset: page.nextOffset };
   }
   isHidden(kind: string, id: string): boolean {
     return !!this.db.prepare('SELECT 1 FROM library_hidden WHERE kind=? AND id=?').get(kind, id);
