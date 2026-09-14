@@ -40,6 +40,38 @@
       "modifications": "Type-only extraction of Risu's file-format shapes; enums and `as const` maps reduced to literal unions, the `triggerscript` alias resolved, no runtime code, and the MIT character-card spec types split out into ccardlib-types.ts."
     },
     {
+      "path": "cbs.ts",
+      "license": "GPL-3.0-only",
+      "licenseFiles": ["LICENSE"],
+      "upstreamSha256": {
+        "src/ts/cbs.ts": "06671c4edca286e17b6affe113300455a94839a761dc011850cf630873788d04"
+      },
+      "modifications": "The CBS function registry, copied from `matcherArg` onward. `defaultCBSRegisterArg` and the svelte-store imports are dropped; CBSRegisterArg gains getTriggerId(), now(), random() and unsupported(name), so the trigger store, every bare `new Date()`, every `Math.random()`, `window.inner*` and `navigator.language` go through injected dependencies; Node's `Buffer` in {{file}}, {{xor}} and {{xordecrypt}} is replaced by the base64 helpers in cbs-support.ts. Evaluation semantics are unchanged; `@ts-nocheck` keeps the non-strict upstream bodies intact."
+    },
+    {
+      "path": "cbs-parser.ts",
+      "license": "GPL-3.0-only",
+      "licenseFiles": ["LICENSE"],
+      "upstreamSha256": {
+        "src/ts/parser/parser.svelte.ts": "26940de93b3421e84531b520d9ff13b9441bba7bd6b114c0e56847aaa3009bcd"
+      },
+      "modifications": "Only the CBS evaluator of parser.svelte.ts: risuEscape/risuUnescape, initMatcher, matcher, dateTimeFormat, legacyBlockMatcher, parseArray/parseDict/makeArray, blockStartMatcher, trimLines, blockEndMatcher and risuChatParser. Markdown, DOMPurify, katex, highlight.js and asset rendering are not copied. The module-level matcher map becomes one map per `createRisuCbs(deps)` instance, every app-state and environment read becomes a member of the injected RisuCbsDeps, and an added unsupported-name channel reports names listed in deps.unsupportedNames as well as names with no registration (which stay literal, as upstream). `@ts-nocheck` keeps the non-strict upstream bodies intact."
+    },
+    {
+      "path": "cbs-support.ts",
+      "license": "GPL-3.0-only",
+      "licenseFiles": ["LICENSE"],
+      "upstreamSha256": {
+        "src/ts/process/infunctions.ts": "3bfb42088ec0042249ab55cd4339b407499a494bd9b47b6fc4c79e99e52eef7d",
+        "src/ts/util.ts": "c8caa9f92b7f7f07b9ada9b1869f0d557e67546ecd65d4246d55b0ae5561616e",
+        "src/ts/parser/chatVar.svelte.ts": "f05da816b4c3dfcc9e65a8c36ac3503df058023ca0f628eb6312c34656905b1f",
+        "src/ts/polyfill.ts": "b5ef763677ee2abc3c9b565980698ecde831dd15d53c7d8b40772d1d4be91c8a",
+        "src/ts/model/types.ts": "15f809c270e8677a82d7c69f0fc2d399a359f61c8259330560fb31bb0a65286d",
+        "src/ts/storage/database.svelte.ts": "41b1f744ba21635e1ca5a09563c37c511b6e1fba3fb925bb4407cac41fc7b8d4"
+      },
+      "modifications": "Pure helpers the CBS evaluator needs: parseKeyValue, sfc32, pickHashRand and safeStructuredClone (its rfdc fallback replaced by a JSON deep copy), calcString as createCalcString(accessors), and chatVar.svelte.ts's default-variable fallback as createChatVarAccessors(store). Adds base64 helpers that replace Node's Buffer in cbs.ts, and declares the narrowed `Database` and `LLMModel` shapes the evaluator reads, neither of which is in types.ts. Type-checks under strict; no @ts-nocheck."
+    },
+    {
       "path": "ccardlib-types.ts",
       "license": "MIT",
       "licenseFiles": [],
