@@ -2,14 +2,20 @@
 
 Uimori 프로젝트 소스의 라이선스는 **GNU Affero General Public License version 3 only (`AGPL-3.0-only`)**예요. 전문은 [LICENSE](LICENSE)에 있어요. 별도 라이선스가 명시된 제3자 구성 요소에는 각자의 조건이 적용돼요. 사용자 봇·프롬프트·이미지·채팅·생성 결과의 권리는 해당 자료의 권리자와 이용 조건에 따르며, 앱을 사용하거나 파일을 가져왔다는 이유만으로 Uimori 소스 라이선스를 부여하지 않아요.
 
+## RisuAI 스냅샷
+
+- 출처: [RisuAI](https://github.com/kwaroran/RisuAI), 기준 revision `cad8595aa39620df4246f56918f0962c2aa0263a`. 원저작권은 Kwaroran과 RisuAI 기여자에게 있어요.
+- 적용 조건: RisuAI 본체는 **GPL-3.0-only**예요. 가져온 파일은 GPL-3.0으로 남고 Uimori의 AGPL-3.0-only 소스와는 AGPL-3.0 13조에 따라 결합해요. 전문은 [third_party/risuai/cad8595a/LICENSE](third_party/risuai/cad8595a/LICENSE)에 있고, 다른 조건이 붙은 파일(아래 RPack)은 자기 고지를 따로 둬요.
+- 포함 부분과 변경: 파일별 원본 경로·원본 SHA-256·변경 요약은 [SNAPSHOT.json](third_party/risuai/cad8595a/SNAPSHOT.json)이, 경계와 갱신 절차는 [스냅샷 README](third_party/risuai/cad8595a/README.md)가 소유해요. Uimori 코드는 `server/compat/risu/`를 통해서만 이 디렉터리를 import하고 자동 갱신은 하지 않아요. 도입 결정은 [2026-09-14 후속 선택](docs/DECISIONS-2026-09-12-BETA.md#호환-실행의-범위--2026-09-14-후속-선택)을 봐요.
+
 ## RPack
 
-- 출처: [RisuAI의 RPack](https://github.com/kwaroran/RisuAI/tree/cad8595aa39620df4246f56918f0962c2aa0263a/src/ts/rpack), 기준 revision `cad8595aa39620df4246f56918f0962c2aa0263a`.
+- 출처: [RisuAI의 RPack](https://github.com/kwaroran/RisuAI/tree/cad8595aa39620df4246f56918f0962c2aa0263a/src/ts/rpack), 기준 revision `cad8595aa39620df4246f56918f0962c2aa0263a`. 위 스냅샷의 일부이며 자기 조건을 따로 가져요.
 - 원저작권 고지: Copyright (c) 2026 Kwaroran.
-- 포함 부분: `rpack_map.bin`의 해독용 256바이트 치환표를 [server/rpack.ts](server/rpack.ts)에 배열로 표현하고 Uimori의 입력 검증 경로에 연결했어요. 인코더나 원본 실행 모듈 전체를 포함하지 않아요.
+- 포함 부분: `rpack_map.bin`의 해독용 256바이트 치환표를 [third_party/risuai/cad8595a/rpack.ts](third_party/risuai/cad8595a/rpack.ts)에 배열로 표현하고 `server/compat/risu/rpack.ts`를 거쳐 Uimori의 입력 검증 경로에 연결했어요. 인코더나 원본 실행 모듈 전체를 포함하지 않아요.
 - 원본 512바이트 파일 SHA-256: `428e939c41617140ef2fad0420d9163cc80ce7c9b2f5e620223a25acc8afd498`.
-- 적용 조건: 원본은 RisuAI 내부 사용에 MIT 선택을 허용하지만 다른 앱에는 AGPL-3.0을 요구해요. Uimori에는 **AGPL-3.0** 경로를 적용해요. [원본 조건](third_party/rpack/LICENSE), [AGPL 전문](third_party/rpack/LICENSE_AGPL), [원저작권·MIT 고지](third_party/rpack/LICENSE_MIT), [원본 README](third_party/rpack/README)를 보존해요. MIT 문서 보존은 Uimori에서 MIT 조건으로 사용한다는 뜻이 아니에요.
-- 변경: 2026-09-13, 바이너리 치환표의 해독 부분을 TypeScript 상수로 옮겨 프리셋 파일 가져오기에 사용했어요. Risu 런타임이나 내부 DB에 의존하지 않아요.
+- 적용 조건: 원본은 RisuAI 내부 사용에 MIT 선택을 허용하지만 다른 앱에는 AGPL-3.0을 요구해요. Uimori에는 **AGPL-3.0** 경로를 적용해요. [원본 조건](third_party/risuai/cad8595a/rpack/LICENSE), [AGPL 전문](third_party/risuai/cad8595a/rpack/LICENSE_AGPL), [원저작권·MIT 고지](third_party/risuai/cad8595a/rpack/LICENSE_MIT), [원본 README](third_party/risuai/cad8595a/rpack/README)를 보존해요. MIT 문서 보존은 Uimori에서 MIT 조건으로 사용한다는 뜻이 아니에요.
+- 변경: 2026-09-13, 바이너리 치환표의 해독 부분을 TypeScript 상수로 옮겨 프리셋 파일 가져오기에 사용했어요. 2026-09-14, 위 스냅샷 디렉터리로 옮겼어요. Risu 런타임이나 내부 DB에 의존하지 않아요.
 
 ## Wasmoon
 
