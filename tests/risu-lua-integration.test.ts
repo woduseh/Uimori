@@ -664,6 +664,32 @@ test('Risu import and passive restores preserve native Lua actions and source by
   expect(execute).not.toHaveBeenCalled();
 });
 
+test('imported Lua reads the projected character name, persona name and body description', async () => {
+  const fixture = imported(
+    `function onButtonClick(id, data)
+  setChatVar(id, "name", getName(id))
+  setChatVar(id, "persona", getPersonaName(id))
+  setChatVar(id, "description", getDescription(id))
+end`,
+    'Pilot of {{char}} for {{user}}.'
+  );
+  grantVariableWrites(fixture);
+  const response = await postButton(
+    fixture,
+    buttonCommand(fixture, 'read-identity', 'lua-identity')
+  );
+  expect(response.statusCode, response.body).toBe(200);
+  expect(readChatVariables(fixture.store, fixture.chat.id, fixture.branchId)).toEqual({
+    revision: 1,
+    values: {
+      name: 'Synthetic Lua Pilot',
+      persona: 'User',
+      // Risu hands back the stored `desc`; the Host reads the same projected body the prompt uses.
+      description: 'Pilot of Synthetic Lua Pilot for User.',
+    },
+  });
+});
+
 test('imported onButtonClick reads defaults and missing values, then commits variables for the next prompt', async () => {
   const fixture = imported(
     `function onButtonClick(id, data)
