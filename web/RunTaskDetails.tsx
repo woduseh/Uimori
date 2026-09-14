@@ -8,6 +8,35 @@ import { ProviderRejectionNotice } from './provider-rejection.js';
 import { JobCard } from './SourceReader.js';
 import { DiagnosticReport } from './DiagnosticReport.js';
 
+/**
+ * One line per attached package the 모델 선별 step decided for. The receipt records ids, so the chars
+ * are summed from the run's own frozen resources rather than counted again.
+ */
+function LoreSelectionStatus({ snapshot }: { snapshot: Run['snapshot'] }) {
+  const receipt = snapshot.loreSelection;
+  if (!receipt?.entries.length) return null;
+  const chars = (key: string, ids: string[]) => {
+    const [reference, role] = key.split(':');
+    const prefix = `package:${reference.split('@')[0]}:${role}:lore:`;
+    return ids.reduce(
+      (total, id) =>
+        total + (snapshot.resources.find((item) => item.id === `${prefix}${id}`)?.text.length ?? 0),
+      0
+    );
+  };
+  return (
+    <ul className="muted" aria-label="로어 선별 결과">
+      {receipt.entries.map((entry) => (
+        <li key={entry.key}>
+          {entry.error
+            ? `로어 선별을 건너뛰었어요 (${entry.error})`
+            : `로어 선별 · ${entry.selected.length}개 선택 · 문자 ${chars(entry.key, entry.selected).toLocaleString()} / 예산 ${entry.budget.toLocaleString()} · 제외 ${entry.omitted.length}`}
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 export function RunTaskDetails({
   run,
   jobs,
@@ -291,6 +320,7 @@ export function RunTaskDetails({
               snapshot={full.snapshot.loreContext}
               reset={full.snapshot.loreContextReset}
             />
+            <LoreSelectionStatus snapshot={full.snapshot} />
             <pre>
               {JSON.stringify(
                 { snapshot: full.snapshot, inputs: full.inputs, toolEvents: full.toolEvents },

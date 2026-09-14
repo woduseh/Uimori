@@ -43,6 +43,7 @@ import { authorizeExtensionModelAccess, createExtensionModelService } from './ex
 import { createExtensionOperationRunner } from './extension-operation-runner.js';
 import { prepareAfterResponse } from './package-after-response.js';
 import { freezeLoreContext } from './lore-context.js';
+import { loreSelectionPending, prepareLoreSelection } from './lore-selection.js';
 import { hasPromptInputTransforms, preparePromptInputTransforms } from './prompt-transforms.js';
 import { runAuxiliaryJob } from './product-auxiliary.js';
 import { auxiliaryBridge } from './auxiliary-bridge.js';
@@ -702,9 +703,37 @@ export async function createApp(options: AppOptions): Promise<App> {
           const reservedCompilationSnapshot = candidateCompilationSnapshot(store, run.snapshot, id);
           let executionSnapshot = preparedBehaviorSnapshot(store, id, run.snapshot),
             compilationSnapshot = preparedBehaviorSnapshot(store, id, reservedCompilationSnapshot);
+          // The selection reads the reserved snapshot, exactly as archive validation recomputes its
+          // inputs, and freezes before the lore context and the input plan measure what is pinned.
+          if (loreSelectionPending(run.snapshot)) {
+            assertCurrent();
+            const selection = await prepareLoreSelection(run.snapshot, hooks, {
+              reserveCalls: 1 + priorUsage.modelCalls,
+            });
+            priorUsage = mergeUsage(priorUsage, selection.usage);
+            hooks.initialUsage = structuredClone(priorUsage);
+            const receipt = selection.snapshot.loreSelection;
+            executionSnapshot = { ...executionSnapshot, loreSelection: receipt };
+            compilationSnapshot = { ...compilationSnapshot, loreSelection: receipt };
+            store.transaction(() => {
+              assertCurrent();
+              store.db
+                .prepare('UPDATE runs SET snapshot=?,updated_at=? WHERE id=?')
+                .run(
+                  JSON.stringify(
+                    persistedContextSnapshot(store.run(id).snapshot, executionSnapshot)
+                  ),
+                  new Date().toISOString(),
+                  id
+                );
+              store.event(run.chatId, 'run.context.updated', id);
+            });
+            publish(run.chatId);
+          }
           if (
             (run.snapshot.behaviorExecution?.deferredAutomatic ||
-              hasPromptInputTransforms(executionSnapshot)) &&
+              hasPromptInputTransforms(executionSnapshot) ||
+              executionSnapshot.loreSelection !== undefined) &&
             !executionSnapshot.contextPlan
           ) {
             assertCurrent();

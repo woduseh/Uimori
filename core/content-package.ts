@@ -96,10 +96,12 @@ export type ContentPackage = {
   /**
    * How this package's lore reaches the model. Absent means 'discoverable': the model looks an entry
    * up when it needs it. 'keyword' hands the decision to the preserved Risu rules instead, which are
-   * kept either way, so the mode can be switched off and back on without losing them.
+   * kept either way, so the mode can be switched off and back on without losing them. 'model' asks
+   * the chat's context model once per generation which discoverable entries this turn needs, and
+   * pins those; the rest stay discoverable.
    */
   loreActivation?: {
-    mode: 'keyword' | 'discoverable';
+    mode: 'keyword' | 'discoverable' | 'model';
     /** Risu's own lorebook settings; the defaults below are Risu's. */
     scanDepth?: number;
     recursiveScanning?: boolean;
@@ -436,7 +438,7 @@ export function validateContentPackage(value: unknown): ContentPackage {
       'recursiveScanning',
       'fullWordMatching',
     ]);
-    if (activation.mode !== 'keyword' && activation.mode !== 'discoverable')
+    if (!['keyword', 'discoverable', 'model'].includes(activation.mode as string))
       fail('PACKAGE_LORE_ACTIVATION_MODE');
     if (
       activation.scanDepth !== undefined &&

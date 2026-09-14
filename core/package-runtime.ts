@@ -51,6 +51,8 @@ export function compilePackageAttachment(
     compat?: Record<string, string>;
     /** Activated lore ids frozen for this run; undefined = no decision, follow `loading`. */
     loreActivation?: ReadonlySet<string>;
+    /** Model-selected lore ids frozen for this run; undefined = no decision, follow `loading`. */
+    loreSelection?: ReadonlySet<string>;
     /** Host-only shared budget for all optional instruction evaluations. */
     budget?: PromptBudget;
   }
@@ -134,9 +136,16 @@ export function compilePackageAttachment(
     pkg.loreActivation?.mode === 'keyword' && context.loreActivation !== undefined
       ? context.loreActivation
       : undefined;
+  // A model-mode package removes nothing: the chosen entries are pinned for this run and the rest
+  // keep their own `loading`, so the model can still read a miss through the catalog.
+  const chosen =
+    pkg.loreActivation?.mode === 'model' && context.loreSelection !== undefined
+      ? context.loreSelection
+      : undefined;
   const resources = ordered.flatMap((lore) => {
     const scanned = decided !== undefined && lore.activation !== undefined;
     if (scanned && !decided.has(lore.id)) return [];
+    const selected = chosen !== undefined && lore.loading === 'discoverable' && chosen.has(lore.id);
     return [
       {
         ...resource(
@@ -144,7 +153,7 @@ export function compilePackageAttachment(
           lore.title,
           lore.description,
           renderedText(`lore:${lore.id}`, lore.text, lore.template),
-          scanned ? 'pinned' : lore.loading,
+          scanned || selected ? 'pinned' : lore.loading,
           'lore'
         ),
         ...(lore.loreContext ? { loreContext: structuredClone(lore.loreContext) } : {}),

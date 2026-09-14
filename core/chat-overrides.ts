@@ -224,7 +224,9 @@ export function projectChatPackageCompilation(
   includeRoot: (role: PackageRole) => boolean = () => true,
   identity: PackageIdentityContext = packageIdentityFromProfile(profile),
   /** The run's frozen keyword decision, so an override projection gates its lore the same way. */
-  loreActivation?: ReadonlySet<string>
+  loreActivation?: ReadonlySet<string>,
+  /** The run's frozen model selection, applied to the override projection for the same reason. */
+  loreSelection?: ReadonlySet<string>
 ): { package: ContentPackage; compiled: CompiledPackageAttachment } {
   const projections =
     profile.chatOverrides?.projections.filter(
@@ -255,6 +257,7 @@ export function projectChatPackageCompilation(
         resourcesOnly: true,
         identity,
         ...(loreActivation ? { loreActivation } : {}),
+        ...(loreSelection ? { loreSelection } : {}),
       });
       for (const failure of projected.unavailableTextTemplates ?? [])
         if (failure.id !== 'body')

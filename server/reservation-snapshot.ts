@@ -11,6 +11,7 @@ import { freezeLoreContext } from './lore-context.js';
 import { captureLogicalHistory, compileSnapshotPrompt } from './prompt-snapshot.js';
 import { prepareRisuCompatReceipt } from './compat/risu/cbs.js';
 import { prepareLoreActivationReceipt } from './compat/risu/lore-activation.js';
+import { loreSelectionPending } from './lore-selection.js';
 import { hasPromptInputTransforms } from './prompt-transforms.js';
 import { chatVariableProfile } from './chat-variable-context.js';
 import { captureRunConversation } from './package-conversation.js';
@@ -41,7 +42,9 @@ export function freezeReservationSnapshot(
   options: ReservationPurpose
 ): RunSnapshot {
   if (options.purpose === 'resume-state')
-    return base.behaviorExecution?.deferredAutomatic || hasPromptInputTransforms(base)
+    return base.behaviorExecution?.deferredAutomatic ||
+      hasPromptInputTransforms(base) ||
+      loreSelectionPending(base)
       ? base
       : compileSnapshotPrompt(freezeLoreContext(store, base));
 
@@ -115,9 +118,13 @@ export function freezeReservationSnapshot(
     const loreActivation = prepareLoreActivationReceipt(frozen, options.runId);
     if (loreActivation) frozen = { ...frozen, loreActivation };
   }
+  // The model selection needs a provider call, which a reservation transaction must not make, so a
+  // snapshot that still owes one reserves uncompiled and the worker compiles after the answer lands.
   if (
     options.purpose === 'run' &&
-    (frozen.behaviorExecution?.deferredAutomatic || hasPromptInputTransforms(frozen))
+    (frozen.behaviorExecution?.deferredAutomatic ||
+      hasPromptInputTransforms(frozen) ||
+      loreSelectionPending(frozen))
   ) {
     const { contextBase } = store.context.prepareRun(frozen);
     return { ...frozen, contextBase };

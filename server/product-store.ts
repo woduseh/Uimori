@@ -2222,7 +2222,15 @@ function validateArchiveGraph(product: ProductStore) {
             "SELECT status,response FROM attempts WHERE run_id=? AND role='context' ORDER BY rowid"
           )
           .all(run.id) as Row[];
-        if (summaries.length !== context.summaryCalls)
+        // 모델 선별 calls share the context role and are made before any compaction call, so a Run
+        // carrying that receipt may hold more context attempts than the compaction receipt counts -
+        // but only as many as the receipt itself records, one per entry that reached a model. An
+        // entry without a model made no request, and without the receipt the count must match.
+        const selectionCalls = ((snapshot as RunSnapshot).loreSelection?.entries ?? []).filter(
+          (entry) => entry.model !== undefined
+        ).length;
+        const extraCalls = summaries.length - context.summaryCalls;
+        if (extraCalls < 0 || extraCalls > selectionCalls)
           throw new HttpError(400, 'Context attempt count mismatch');
         if (context.summaryCalls) {
           const last = summaries.at(-1)!;

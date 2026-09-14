@@ -99,6 +99,8 @@ export type RunSnapshot = {
   risuCompat?: import('./risu-compat.js').RisuCompatReceipt;
   /** Frozen keyword scan of the packages in keyword mode; a replay projects it, never rescans. */
   loreActivation?: import('./lore-activation.js').LoreActivationReceipt;
+  /** Frozen model choice for the packages in model mode; a replay projects it, never reselects. */
+  loreSelection?: import('./lore-selection.js').LoreSelectionReceipt;
   /** Derived projection of host-owned input hooks; the reserved request stays unchanged. */
   extensionRequestEdit?: import('./extension-request-edit.js').ExtensionRequestEditReceipt;
   /** Derived projection of host-owned request hooks over the transmitted conversation copy. */
