@@ -328,13 +328,18 @@ const operation = (op: PromptOperation, ...args: PromptExpression[]): PromptExpr
 const displayed = (value: PromptExpression) => operation('replace', value, '', '');
 
 /** Reuses CBS compilation; runtime-authored CBS needs a separate, bounded evaluation phase. */
-function compileLuaConditions(raw: unknown): { when?: PromptExpression; runtimeCbsGuard: boolean } {
+function compileLuaConditions(raw: unknown): {
+  when?: PromptExpression;
+  runtimeCbsGuard: boolean;
+  reads: string[];
+} {
   if (!Array.isArray(raw)) throw new UnsupportedCbs('트리거 조건 목록이 올바르지 않아요.');
-  if (!raw.length) return { runtimeCbsGuard: false };
+  if (!raw.length) return { runtimeCbsGuard: false, reads: [] };
   if (raw.length > 100)
     throw new UnsupportedCbs('트리거 조건이 네이티브 조건 개수 한도를 넘었어요.');
   const cbs = new RisuCbs(new Map(), { names: 'context' });
   let runtimeCbsGuard = false;
+  const reads = new Set<string>();
   const parsedText = (text: string): PromptExpression => {
     const nodes = cbs.template(text);
     const parts = nodes.map((node): PromptExpression => {
@@ -406,8 +411,10 @@ function compileLuaConditions(raw: unknown): { when?: PromptExpression; runtimeC
         'context' in collection &&
         collection.context.length === 1 &&
         collection.context[0] === 'variables'
-      )
+      ) {
         dynamicReads.set(JSON.stringify(expression), operation('coalesce', expression, 'null'));
+        if (typeof expression.args[1] === 'string') reads.add(expression.args[1]);
+      }
       expression.args.forEach(inspect);
     };
     inspect(left);
@@ -422,7 +429,11 @@ function compileLuaConditions(raw: unknown): { when?: PromptExpression; runtimeC
       comparison
     );
   });
-  return { when: validatePromptExpression(operation('all', ...conditions)), runtimeCbsGuard };
+  return {
+    when: validatePromptExpression(operation('all', ...conditions)),
+    runtimeCbsGuard,
+    reads: [...reads],
+  };
 }
 
 /** Risu runs a declarative trigger only in its own mode, with the same conditions as a script. */
@@ -501,6 +512,70 @@ function adaptDeclarativeTrigger(
   });
 }
 
+const MODE_EVENTS: Record<string, RisuLuaEvent> = {
+  start: 'start',
+  input: 'input',
+  output: 'output',
+  manual: 'onButtonClick',
+};
+
+/** Declarative effects around a script keep their order, and never change a condition they gate. */
+function mixedSegments(
+  effects: unknown[],
+  scriptIndex: number,
+  conditionPlan: { when?: PromptExpression; reads: string[] },
+  triggerIndex: number,
+  prefix: string,
+  report: (code: string, message: string) => void,
+  mode: { trigger: BehaviorActionTrigger; hook?: BehaviorActionHook }
+): { before?: BehaviorAction; after?: BehaviorAction } | undefined {
+  // One user button cannot carry a script and separate effects without splitting the click.
+  if (mode.trigger === 'user') {
+    report(
+      'RISU_LUA_MIXED_EFFECTS_UNSUPPORTED',
+      '수동 트리거의 효과와 스크립트를 한 번의 클릭으로 묶을 경로가 아직 없어요. 소스와 원본 선언만 보존했어요.'
+    );
+    return undefined;
+  }
+  const segments: { before?: BehaviorAction; after?: BehaviorAction } = {};
+  const reads = new Set(conditionPlan.reads);
+  for (const part of [
+    { key: 'before' as const, list: effects.slice(0, scriptIndex) },
+    { key: 'after' as const, list: effects.slice(scriptIndex + 1) },
+  ]) {
+    if (!part.list.length) continue;
+    let compiled: ReturnType<typeof buildRisuEffectProgram>;
+    try {
+      compiled = buildRisuEffectProgram(part.list);
+    } catch (error) {
+      report(
+        'RISU_TRIGGER_EFFECTS_UNSUPPORTED',
+        `${error instanceof UnsupportedCbs ? error.message : '트리거 효과를 네이티브 실행으로 옮길 수 없어요.'} 이 트리거는 연결하지 않고 원본 선언을 보존해요.`
+      );
+      return undefined;
+    }
+    if (compiled.writes.some((name) => reads.has(name))) {
+      report(
+        'RISU_TRIGGER_CONDITION_WRITE',
+        'Risu는 트리거 조건을 효과보다 먼저 한 번만 판정해요. 이 트리거는 자신의 조건이 읽는 변수를 바꾸므로 같은 의미로 옮길 수 없어 연결하지 않았어요.'
+      );
+      return undefined;
+    }
+    segments[part.key] = {
+      id: `${prefix}-${triggerIndex}-effects-${part.key}`,
+      label: `Risu 트리거 ${triggerIndex + 1} 효과`,
+      inputSchema: { type: 'record', properties: {} },
+      triggers: [mode.trigger],
+      ...(mode.hook ? { hook: mode.hook } : {}),
+      automaticInput: {},
+      ...(conditionPlan.when ? { when: conditionPlan.when } : {}),
+      effects: [],
+      program: compiled.program,
+    };
+  }
+  return segments;
+}
+
 /** Import adapter for independent Lua triggers. Mixed effects are preserved, never reordered. */
 export function adaptRisuLuaTriggers(
   triggers: unknown,
@@ -551,10 +626,16 @@ export function adaptRisuLuaTriggers(
         return;
       }
       sources.push({ triggerIndex, effectIndex, source: effect.code });
-      if (effectIndex !== 0 || effects.length !== 1) {
+      // A script at the first position makes Risu run the whole trigger in every mode; a later
+      // one keeps the trigger's own mode, so its declarative siblings stay in the same order.
+      const mixed = effects.length > 1;
+      const singleScript = effects.filter((raw) => record(raw)?.type === 'triggerlua').length === 1;
+      const mode = DECLARATIVE_MODES[String(trigger.type)];
+      const modeEvent = mode && MODE_EVENTS[String(trigger.type)];
+      if (mixed && (effectIndex === 0 || !singleScript || !modeEvent)) {
         report(
           'RISU_LUA_MIXED_EFFECTS_UNSUPPORTED',
-          '여러 효과가 섞인 트리거는 원래 순서와 조건을 유지할 실행 경로가 필요해요. 소스만 보존했어요.'
+          '이 트리거의 효과 순서와 실행 시점을 그대로 옮길 경로가 아직 없어요. 소스와 원본 선언만 보존했어요.'
         );
         return;
       }
@@ -584,7 +665,23 @@ export function adaptRisuLuaTriggers(
           `${error instanceof UnsupportedCbs ? error.message : '트리거 조건이 네이티브 실행 한도를 넘었어요.'} 조건 전체를 유지하기 위해 자동 콜백을 연결하지 않았어요.`
         );
       }
-      for (const event of RISU_LUA_EVENTS) {
+      let segments: { before?: BehaviorAction; after?: BehaviorAction } = {};
+      if (mixed) {
+        if (!conditionPlan) return;
+        const built = mixedSegments(
+          effects,
+          effectIndex,
+          conditionPlan,
+          triggerIndex,
+          prefix,
+          report,
+          mode!
+        );
+        if (!built) return;
+        segments = built;
+      }
+      if (segments.before) actions.push(segments.before);
+      for (const event of mixed ? [modeEvent!] : RISU_LUA_EVENTS) {
         const nativeTrigger = mapping[event];
         if (!nativeTrigger) {
           report(
@@ -642,6 +739,7 @@ export function adaptRisuLuaTriggers(
           );
         }
       }
+      if (segments.after) actions.push(segments.after);
     });
   });
   return { actions, findings, sources };
