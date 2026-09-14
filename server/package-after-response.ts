@@ -10,6 +10,8 @@ import {
   BehaviorEvaluationError,
   behaviorActionAllowed,
   behaviorActionTriggers,
+  behaviorEditResultText,
+  behaviorHookOrder,
 } from '../core/package-behavior.js';
 import { historicalPersonaExcluded } from '../core/persona-scope.js';
 import type { ExtensionModelBinding } from '../core/extension-model.js';
@@ -31,6 +33,12 @@ import {
   validateOwner,
 } from './package-behavior-run.js';
 import { behaviorPayloadHash } from './package-behavior-store.js';
+import {
+  buildExtensionRequestEdit,
+  extensionEditHookInput,
+  responseMessageIndex,
+} from './extension-request-edit.js';
+import { EXTENSION_PROGRAM_MAX_EDIT_RESULT_CHARS } from '../core/extension-program.js';
 import type { Run, Store } from './store.js';
 import {
   variableStateFromProfile,
@@ -67,9 +75,9 @@ function definitions(snapshot: RunSnapshot) {
             instanceId,
             behavior,
             before,
-            actions: behavior.actions.filter((action) =>
-              behaviorActionTriggers(action).includes('after-turn')
-            ),
+            actions: behavior.actions
+              .filter((action) => behaviorActionTriggers(action).includes('after-turn'))
+              .sort((a, b) => behaviorHookOrder(a) - behaviorHookOrder(b)),
           },
         ]
       : [];
@@ -231,6 +239,9 @@ export async function prepareAfterResponse(
         }
       }
       let variables = variableStateFromProfile(snapshot.profile);
+      // Risu chains editOutput and editDisplay over the running text; the stored source never changes.
+      let displayText = text;
+      const responseIndex = responseMessageIndex(snapshot);
       for (const d of hooks) {
         assertOwner();
         if (skipped()) return;
@@ -245,6 +256,7 @@ export async function prepareAfterResponse(
           entries: [],
         };
         let packageVariables = structuredClone(variables);
+        let packageText = displayText;
         try {
           if (authoritativeFailure || parserFailures.has(d.instanceId))
             throw new ExtensionProgramError('BEHAVIOR_AFTER_RESPONSE_PARSER_FAILED');
@@ -252,7 +264,9 @@ export async function prepareAfterResponse(
             assertOwner();
             if (skipped()) return;
             if (expired) throw new ExtensionProgramError('BEHAVIOR_AFTER_RESPONSE_TIMEOUT');
-            const input = action.automaticInput ?? {};
+            const input = action.hook
+              ? extensionEditHookInput(packageText, responseIndex)
+              : (action.automaticInput ?? {});
             const profile = profileWithExtensionVariables(snapshot.profile, packageVariables);
             const hostRuntime = executionContext(
               {
@@ -302,6 +316,7 @@ export async function prepareAfterResponse(
               controller.signal,
               {
                 waitForSlot: true,
+                ...(action.hook ? { maxResultChars: EXTENSION_PROGRAM_MAX_EDIT_RESULT_CHARS } : {}),
                 profile,
                 attachment: d.ref,
                 assertCurrent,
@@ -334,6 +349,9 @@ export async function prepareAfterResponse(
                 {
                   programHash,
                   stateSchema: d.behavior.stateSchema,
+                  ...(action.hook
+                    ? { maxResultChars: EXTENSION_PROGRAM_MAX_EDIT_RESULT_CHARS }
+                    : {}),
                 }
               );
             } catch (error) {
@@ -341,6 +359,7 @@ export async function prepareAfterResponse(
                 throw new ExtensionProgramError('BEHAVIOR_AFTER_RESPONSE_STATE_INVALID');
               throw error;
             }
+            if (action.hook) packageText = behaviorEditResultText(program.result);
             const after = {
               ...structuredClone(receipt.after),
               state: program.state,
@@ -391,7 +410,10 @@ export async function prepareAfterResponse(
           receipt.after = structuredClone(before);
           receipt.entries = [];
         }
-        if (receipt.status === 'ready') variables = packageVariables;
+        if (receipt.status === 'ready') {
+          variables = packageVariables;
+          displayText = packageText;
+        }
         progress.packages.push(receipt);
         progress.completed++;
         persist();
@@ -545,4 +567,36 @@ export function skipAfterResponse(store: Store, runId: string, value: unknown) {
   });
   if (result.skipped) active.get(store)?.get(runId)?.controller.abort();
   return result;
+}
+
+/** The display copy of a completed response after host-owned output and display hooks.
+ *  Derived from the stored receipt: reading or restoring never runs the code again. */
+export function projectAfterResponseDisplayEdit(
+  store: Store,
+  runId: string,
+  sourceHash: string
+): { text: string; changed: boolean; applied: string[] } | undefined {
+  const run = store.run(runId);
+  const progress = runBehaviorProgress(store, runId)?.afterResponse;
+  if (!progress || progress.sourceHash !== sourceHash) return undefined;
+  const source = run.sourceRevision ? store.sourceOriginal(run.sourceRevision) : undefined;
+  if (!source || source.hash !== sourceHash) return undefined;
+  const hookOf = (instanceId: string, actionId: string) => {
+    const ref = run.snapshot.profile?.packageAttachments?.find(
+      (item) => packageInstanceId(item) === instanceId
+    );
+    return run.snapshot.profile?.packages
+      ?.find((pkg) => pkg.id === ref?.id && pkg.revision === ref?.revision)
+      ?.behavior?.actions.find((action) => action.id === actionId)?.hook;
+  };
+  const chain = progress.packages
+    .filter((item) => item.status === 'ready')
+    .flatMap((item) => item.entries)
+    .filter((entry) => hookOf(entry.instanceId, entry.actionId) !== undefined)
+    .map((entry) => ({
+      id: `${entry.instanceId}:${entry.actionId}`,
+      text: behaviorEditResultText(entry.result),
+    }));
+  const receipt = buildExtensionRequestEdit(source.text, chain);
+  return receipt ? { text: receipt.text, changed: true, applied: receipt.applied } : undefined;
 }

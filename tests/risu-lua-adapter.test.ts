@@ -29,14 +29,14 @@ describe('pure Risu Lua adaptation', () => {
       ['risu-lua-0-start', ['before-turn'], undefined],
       ['risu-lua-0-onButtonClick', ['user'], undefined],
       ['risu-lua-0-editRequest', ['before-turn'], 'edit-request'],
+      ['risu-lua-0-editDisplay', ['after-turn'], 'edit-display'],
       ['risu-lua-0-editInput', ['before-turn'], 'edit-input'],
+      ['risu-lua-0-editOutput', ['after-turn'], 'edit-output'],
     ]);
     expect(converted.sources).toEqual([{ triggerIndex: 0, effectIndex: 0, source }]);
     expect(
-      converted.findings
-        .filter((finding) => finding.code === 'RISU_LUA_PHASE_UNSUPPORTED')
-        .map((finding) => finding.event)
-    ).toEqual(['editDisplay', 'editOutput']);
+      converted.findings.filter((finding) => finding.code === 'RISU_LUA_PHASE_UNSUPPORTED')
+    ).toEqual([]);
     for (const action of converted.actions)
       expect(validateExtensionProgram(action.program).language).toBe('lua');
   });
@@ -51,7 +51,9 @@ describe('pure Risu Lua adaptation', () => {
     expect(converted.actions.map((action) => [action.id, action.hook])).toEqual([
       ['risu-lua-0-onButtonClick', undefined],
       ['risu-lua-0-editRequest', 'edit-request'],
+      ['risu-lua-0-editDisplay', 'edit-display'],
       ['risu-lua-0-editInput', 'edit-input'],
+      ['risu-lua-0-editOutput', 'edit-output'],
     ]);
     expect(
       converted.findings.some((finding) => finding.code === 'RISU_LUA_CONDITIONS_UNSUPPORTED')
@@ -268,7 +270,9 @@ describe('Risu Lua automatic conditions', () => {
       expect(converted.actions.map((action) => [action.id, action.hook])).toEqual([
         ['risu-lua-0-onButtonClick', undefined],
         ['risu-lua-0-editRequest', 'edit-request'],
+        ['risu-lua-0-editDisplay', 'edit-display'],
         ['risu-lua-0-editInput', 'edit-input'],
+        ['risu-lua-0-editOutput', 'edit-output'],
       ]);
       expect(converted.actions.every((action) => action.when === undefined)).toBe(true);
       expect(
@@ -290,7 +294,9 @@ describe('Risu Lua automatic conditions', () => {
     expect(converted.actions.map((item) => [item.id, item.hook])).toEqual([
       ['risu-lua-0-onButtonClick', undefined],
       ['risu-lua-0-editRequest', 'edit-request'],
+      ['risu-lua-0-editDisplay', 'edit-display'],
       ['risu-lua-0-editInput', 'edit-input'],
+      ['risu-lua-0-editOutput', 'edit-output'],
     ]);
     expect(input).toEqual(before);
     expect(

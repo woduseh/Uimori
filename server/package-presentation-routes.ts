@@ -5,6 +5,7 @@ import { successfulTranslation, validateTranslationArtifact } from './source-edi
 import { buildPackagePresentation } from './package-presentation.js';
 import { hasSourceSegmentBoundaries } from '../core/source-segments.js';
 import { preparedBehaviorSnapshot } from './package-behavior-run.js';
+import { projectAfterResponseDisplayEdit } from './package-after-response.js';
 
 export function packagePresentationRoutes(app: FastifyInstance, store: Store) {
   app.get<{ Params: { id: string; sourceId: string } }>(
@@ -56,11 +57,16 @@ export function packagePresentationRoutes(app: FastifyInstance, store: Store) {
         detail.status === 'ready' && detail.state?.sourceHash === source.hash
           ? { sourceRevision: source.id, sourceHash: source.hash, values: detail.state.values }
           : undefined;
+      const displayEdit = projectAfterResponseDisplayEdit(store, source.runId, source.hash);
+      if (displayEdit && skipSourceTransforms)
+        issues.push(
+          '이 장면의 원문에 구간 경계가 있어 가져온 자료의 표시 편집도 적용하지 않았어요.'
+        );
       const presentation = await buildPackagePresentation(
         snapshot,
         { ...source, ...(translation ? { translation } : {}) },
         state,
-        { skipSourceTransforms }
+        { skipSourceTransforms, ...(displayEdit ? { displayEdit } : {}) }
       );
       return {
         ...presentation,
